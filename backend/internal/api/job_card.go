@@ -33,6 +33,16 @@ func RegisterJobCardRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.JobC
 	g.POST("/image", h.UploadImage)
 }
 
+// Get 我的简历 GET /api/resume（未建时 404）
+// @Summary 我的简历
+// @Description 学员查看自己的简历卡（未建时 404，契约内空态）
+// @Tags 学员端-简历卡
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.R "简历"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "简历不存在"
+// @Router /resume [get]
 func (h *JobCardHandler) Get(c *gin.Context) {
 	Endpoint[resumeGetReq, service.JobCardDTO]{
 		Parse: func(c *gin.Context) (*resumeGetReq, error) {
@@ -55,6 +65,18 @@ func (h *JobCardHandler) Get(c *gin.Context) {
 	}.Handle(c)
 }
 
+// Upsert 保存简历 PUT /api/resume（整页保存）
+// @Summary 保存简历
+// @Description 学员整页保存简历卡（real_name/contact_phone/wechat/region/expected_specialty_id/expected_regions/salary/experience 等）
+// @Tags 学员端-简历卡
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body service.JobCardInput true "简历内容"
+// @Success 200 {object} response.R "已保存"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /resume [put]
 func (h *JobCardHandler) Upsert(c *gin.Context) {
 	Endpoint[resumeUpsertReq, service.JobCardDTO]{
 		Parse: func(c *gin.Context) (*resumeUpsertReq, error) {
@@ -78,6 +100,18 @@ func (h *JobCardHandler) Upsert(c *gin.Context) {
 	}.Handle(c)
 }
 
+// UpdateVisibility 切换简历公开 PUT /api/resume/visibility
+// @Summary 切换简历公开
+// @Description 学员切换简历 visibility（hidden/open）；visibility 仅管控 L2 被动浏览面，不影响投递
+// @Tags 学员端-简历卡
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "可见性 {visibility: hidden|open}"
+// @Success 200 {object} response.R "已切换"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /resume/visibility [put]
 func (h *JobCardHandler) UpdateVisibility(c *gin.Context) {
 	uid := middleware.CurrentUserID(c)
 	var body struct {
@@ -95,6 +129,18 @@ func (h *JobCardHandler) UpdateVisibility(c *gin.Context) {
 	response.Success(c, dto)
 }
 
+// UploadPDF 上传简历 PDF POST /api/resume/pdf
+// @Summary 上传简历 PDF
+// @Description 上传简历 PDF（file，仅 PDF ≤50MB）
+// @Tags 学员端-简历卡
+// @Accept multipart/form-data
+// @Produce json
+// @Security BearerAuth
+// @Param file formData file true "PDF 简历"
+// @Success 200 {object} response.R "上传成功 {url}"
+// @Failure 400 {object} response.R "文件错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /resume/pdf [post]
 func (h *JobCardHandler) UploadPDF(c *gin.Context) {
 	file, err := c.FormFile("file")
 	if err != nil {
@@ -124,6 +170,18 @@ func (h *JobCardHandler) UploadPDF(c *gin.Context) {
 	response.SuccessWithMsg(c, "上传成功", gin.H{"url": url})
 }
 
+// UploadImage 上传工作照 POST /api/resume/image
+// @Summary 上传工作照
+// @Description 上传工作照（file，图片 ≤20MB，≤6 张）
+// @Tags 学员端-简历卡
+// @Accept multipart/form-data
+// @Produce json
+// @Security BearerAuth
+// @Param file formData file true "工作照"
+// @Success 200 {object} response.R "上传成功 {url}"
+// @Failure 400 {object} response.R "文件错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /resume/image [post]
 func (h *JobCardHandler) UploadImage(c *gin.Context) {
 	file, err := c.FormFile("file")
 	if err != nil {

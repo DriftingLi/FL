@@ -698,6 +698,14 @@ func (h *TrainingCatalogHandler) SetQuestionTags(c *gin.Context) {
 // ===== 目标证件 =====
 
 // ListPublicCredentials 目标证件列表（公开，仅启用项）GET /api/credentials
+// ListPublicCredentials 证件列表 GET /api/credentials
+// @Summary 证件列表
+// @Description 学员端公开证件列表（目标证件，仅启用项）
+// @Tags 学员端-目录
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.R "证件列表"
+// @Router /credentials [get]
 func (h *TrainingCatalogHandler) ListPublicCredentials(c *gin.Context) {
 	Endpoint[struct{}, []service.CredentialDict]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*[]service.CredentialDict, error) {
@@ -711,6 +719,14 @@ func (h *TrainingCatalogHandler) ListPublicCredentials(c *gin.Context) {
 }
 
 // ListGroupedCredentials 分组目标证件（公开）GET /api/credentials/grouped
+// ListGroupedCredentials 证件分组列表 GET /api/credentials/grouped
+// @Summary 证件分组列表
+// @Description 学员端公开证件列表（按类别分组）
+// @Tags 学员端-目录
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.R "分组列表"
+// @Router /credentials/grouped [get]
 func (h *TrainingCatalogHandler) ListGroupedCredentials(c *gin.Context) {
 	Endpoint[struct{}, map[string][]service.CredentialDict]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*map[string][]service.CredentialDict, error) {
@@ -870,6 +886,15 @@ func (h *TrainingCatalogHandler) SwapCredentialSort(c *gin.Context) {
 }
 
 // GetCurrentCredential 获取当前证件 GET /api/me/credential
+// GetCurrentCredential 当前证件 GET /api/me/credential
+// @Summary 当前证件
+// @Description 查询当前目标证件（hrwai_user/admin/tutor 均可查询）
+// @Tags 学员端-目录
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.R "当前证件"
+// @Failure 401 {object} response.R "未认证"
+// @Router /me/credential [get]
 func (h *TrainingCatalogHandler) GetCurrentCredential(c *gin.Context) {
 	uid := middleware.CurrentUserID(c)
 	if uid <= 0 {
@@ -889,6 +914,18 @@ func (h *TrainingCatalogHandler) GetCurrentCredential(c *gin.Context) {
 }
 
 // SetCurrentCredential 设置当前证件 PATCH /api/me/credential
+// SetCurrentCredential 切换当前证件 PATCH /api/me/credential
+// @Summary 切换当前证件
+// @Description 学员切换当前目标证件（仅 hrwai_user；切换即全局过滤器）
+// @Tags 学员端-目录
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "证件 ID {credential_id: int}"
+// @Success 200 {object} response.R "已切换"
+// @Failure 400 {object} response.R "证件不存在"
+// @Failure 401 {object} response.R "未认证"
+// @Router /me/credential [patch]
 func (h *TrainingCatalogHandler) SetCurrentCredential(c *gin.Context) {
 	uid := middleware.CurrentUserID(c)
 	if uid <= 0 {

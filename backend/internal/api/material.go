@@ -50,6 +50,7 @@ func RegisterMaterialRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Mat
 // @Success 200 {object} response.R "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /materials [get]
+// @Router /student/materials [get]
 func (h *MaterialHandler) List(c *gin.Context) {
 	resp, err := h.svc.ListMaterials(
 		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 20),

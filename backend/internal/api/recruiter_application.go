@@ -36,6 +36,18 @@ func NewRecruiterApplicationHandler(svc *service.JobApplicationService) *Recruit
 }
 
 // ListByJob 按职位分页查看投递 GET /api/recruit/jobs/:id/applications
+// @Summary 按职位查看投递
+// @Description 企业按职位分页查看投递（只能看自己的职位，越权 403；含未读投递数；候选人脱敏——姓名打码、无手机/微信/PDF/证书原图）
+// @Tags 招聘域-投递处理
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "职位 ID"
+// @Param page query int false "页码"
+// @Param page_size query int false "每页数量"
+// @Success 200 {object} response.R "列表（含 unread_count）"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 403 {object} response.R "越权"
+// @Router /recruit/jobs/{id}/applications [get]
 func (h *RecruiterApplicationHandler) ListByJob(c *gin.Context) {
 	Endpoint[struct{}, service.RecruiterApplicationListResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.RecruiterApplicationListResult, error) {
@@ -58,6 +70,16 @@ func (h *RecruiterApplicationHandler) ListByJob(c *gin.Context) {
 }
 
 // GetDetail 投递详情 GET /api/recruit/applications/:id（记录已读）
+// @Summary 投递详情
+// @Description 企业查看投递详情（打开即记录已读 employer_viewed_at；回显投递时刻简历更新时间，内容读最新不落快照；脱敏候选人）
+// @Tags 招聘域-投递处理
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "投递 ID"
+// @Success 200 {object} response.R "详情"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 403 {object} response.R "越权"
+// @Router /recruit/applications/{id} [get]
 func (h *RecruiterApplicationHandler) GetDetail(c *gin.Context) {
 	Endpoint[struct{}, service.ApplicationDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.ApplicationDTO, error) {
@@ -78,6 +100,17 @@ func (h *RecruiterApplicationHandler) GetDetail(c *gin.Context) {
 }
 
 // Reject 标记不合适 POST /api/recruit/applications/:id/reject
+// @Summary 标记不合适
+// @Description 企业把投递标记为不合适 → 终态 rejected（仅 applied 可拒；同一学员 30 天内不能再投）
+// @Tags 招聘域-投递处理
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "投递 ID"
+// @Success 200 {object} response.R "已标记"
+// @Failure 400 {object} response.R "状态不允许"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 403 {object} response.R "越权"
+// @Router /recruit/applications/{id}/reject [post]
 func (h *RecruiterApplicationHandler) Reject(c *gin.Context) {
 	Endpoint[struct{}, service.ApplicationDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.ApplicationDTO, error) {

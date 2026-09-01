@@ -8,6 +8,411 @@
     },
     "basePath": "/api",
     "paths": {
+        "/admin/forum/replies/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理端删除任意回复（若为被采纳回答则按 rollback 对冲回收，封底 0，幂等）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-论坛"
+                ],
+                "summary": "管理员删除回复",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "回复 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "已删除",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "删除失败",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/forum/reports/{id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理端处理论坛举报（status: 1 标记已处理）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-论坛"
+                ],
+                "summary": "处理论坛举报",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "举报 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "处理状态 {status: int16}",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "已更新",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/forum/topics/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理端只读查看帖子详情（含回复）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-论坛"
+                ],
+                "summary": "管理员查看帖子",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "主题 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "详情",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "主题不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理端删除帖子（若曾发分则按 rollback 对冲扣减，封底 0，幂等）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-论坛"
+                ],
+                "summary": "管理员删除帖子",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "主题 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "已删除",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "删除失败",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/job-reports": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理端查看待处理举报队列",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "招聘域-内容治理"
+                ],
+                "summary": "举报队列",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "列表",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/job-reports/{id}/handle": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理端把举报标记为已处理（处理后不再出现在待处理队列）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "招聘域-内容治理"
+                ],
+                "summary": "标记举报已处理",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "举报 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "已处理",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "举报不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/jobs": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理端只读巡检职位（全量含 closed/强制下架，可按企业筛）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "招聘域-内容治理"
+                ],
+                "summary": "职位巡检",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "企业 ID",
+                        "name": "recruiter_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "专业方向 ID",
+                        "name": "specialty_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "列表",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/jobs/{id}/force-offline": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理端带原因强制下架职位（学员侧立即不可见；企业不能自行重新上架；处置入审计日志、邮件通知企业）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "招聘域-内容治理"
+                ],
+                "summary": "强制下架职位",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "职位 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "下架原因 {reason: string}",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "已强制下架",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "原因不能为空",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "职位不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/ai-assistant/chat": {
             "post": {
                 "description": "可选认证的 SSE 流式响应，不走统一 JSON 信封；事件 message/error/done",
@@ -1959,6 +2364,56 @@
                 }
             }
         },
+        "/credentials": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "学员端公开证件列表（目标证件，仅启用项）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-目录"
+                ],
+                "summary": "证件列表",
+                "responses": {
+                    "200": {
+                        "description": "证件列表",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/credentials/grouped": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "学员端公开证件列表（按类别分组）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-目录"
+                ],
+                "summary": "证件分组列表",
+                "responses": {
+                    "200": {
+                        "description": "分组列表",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/favorites": {
             "get": {
                 "security": [
@@ -2751,7 +3206,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "支持 scope=all|general|chapter，按 chapter_id/keyword/sort=latest|hot 过滤",
+                "description": "支持 scope=all|general|chapter，按 category=all|discussion|question、chapter_id/keyword/sort=latest|hot 过滤",
                 "consumes": [
                     "application/json"
                 ],
@@ -2767,6 +3222,12 @@
                         "type": "string",
                         "description": "范围 all|general|chapter",
                         "name": "scope",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "类别 discussion|question，省略表示不过滤（向后兼容）",
+                        "name": "category",
                         "in": "query"
                     },
                     {
@@ -2827,6 +3288,12 @@
                             ]
                         }
                     },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
                     "401": {
                         "description": "未认证",
                         "schema": {
@@ -2841,7 +3308,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "chapter_id 为空表示综合讨论区；images 最多 9 张 URL",
+                "description": "chapter_id 为空表示综合讨论区；category=question 时不得带 chapter_id；images 最多 9 张 URL",
                 "consumes": [
                     "application/json"
                 ],
@@ -2883,7 +3350,7 @@
                         }
                     },
                     "400": {
-                        "description": "参数错误",
+                        "description": "参数错误（含类别非法、问答帖带章节）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -2998,6 +3465,117 @@
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/forum/topics/{id}/accept": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "仅楼主可采纳；首次采纳给答主+40/楼主+5（每帖只发一次分），更换不发分，楼主采纳自己零分",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-论坛"
+                ],
+                "summary": "采纳回答",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "主题ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "采纳",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "无权限",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "仅楼主可取消；状态回到未解决，已发分不回滚",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-论坛"
+                ],
+                "summary": "取消采纳",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "主题ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "无权限",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -3278,6 +3856,243 @@
                 }
             }
         },
+        "/jobs": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "学员浏览职位广场（仅 open 且未强制下架，按新鲜度排序；支持专业方向/地区/薪资/经验筛选）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "招聘域-职位"
+                ],
+                "summary": "职位广场",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "专业方向 ID",
+                        "name": "specialty_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "地区",
+                        "name": "region",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "最低薪资",
+                        "name": "salary_min",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "最高薪资",
+                        "name": "salary_max",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "经验要求",
+                        "name": "experience",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "列表",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证（L1 不公开）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "学员查看职位详情（含企业名/主营/联系人；不含电话/邮箱/信用代码）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "招聘域-职位"
+                ],
+                "summary": "职位详情",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "职位 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "详情",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "不存在或已下架",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs/{id}/apply": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "投递即授权：同事务写投递记录 + 写/复活 approved 联系方式授权（source=application），企业当场可取得明文联系方式。hidden 简历可投递；缺真实姓名/电话 400；applied 唯一；30 天冷却；日限 10。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "招聘域-投递"
+                ],
+                "summary": "投递职位（投递即授权）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "职位 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "投递成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "重复投递/冷却/日限/简历不完整",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "职位不可投递",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs/{id}/report": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "学员举报可疑职位（同一学员对同一职位唯一，重复举报合并；不挂论坛举报表）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "招聘域-内容治理"
+                ],
+                "summary": "举报职位",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "职位 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "举报原因",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/service.ReportInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "举报已提交",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "原因不能为空",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "职位不存在或已下架",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/levels": {
             "get": {
                 "description": "仅启用项",
@@ -3445,6 +4260,86 @@
                     },
                     "404": {
                         "description": "不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/me/credential": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "查询当前目标证件（hrwai_user/admin/tutor 均可查询）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-目录"
+                ],
+                "summary": "当前证件",
+                "responses": {
+                    "200": {
+                        "description": "当前证件",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "学员切换当前目标证件（仅 hrwai_user；切换即全局过滤器）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-目录"
+                ],
+                "summary": "切换当前证件",
+                "parameters": [
+                    {
+                        "description": "证件 ID {credential_id: int}",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "已切换",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "证件不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -3984,6 +4879,251 @@
                 }
             }
         },
+        "/points/balance": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "学员查看自己的积分余额",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-积分"
+                ],
+                "summary": "积分余额",
+                "responses": {
+                    "200": {
+                        "description": "余额",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/points/ledger": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "学员查看自己的积分流水（分页）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-积分"
+                ],
+                "summary": "积分流水",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "流水",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/points/shop/course/{courseId}/redeem": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "学员用积分兑换课程（锁 + 已拥有校验 + 幂等）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-积分"
+                ],
+                "summary": "兑换课程",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "课程 ID",
+                        "name": "courseId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "兑换成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "余额不足/已拥有",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/points/shop/{sku}/redeem": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "学员用积分兑换商城商品（锁 + 已拥有校验 + 幂等）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-积分"
+                ],
+                "summary": "兑换商城商品",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "商品 SKU",
+                        "name": "sku",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "兑换成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "余额不足/已拥有",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/points/tasks": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "学员查看积分任务列表（todo/claimable/claimed 三态）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-积分"
+                ],
+                "summary": "积分任务中心",
+                "responses": {
+                    "200": {
+                        "description": "任务列表",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/points/tasks/{code}/claim": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "学员领取积分任务奖励（防双领 + 幂等）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-积分"
+                ],
+                "summary": "领取任务积分",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "任务编码",
+                        "name": "code",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "已领取",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "已领取/额度不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/practice-mode/free": {
             "get": {
                 "security": [
@@ -4190,7 +5330,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "按 mode 查询断点续练进度；mode 为空默认为 sequential",
+                "description": "按 mode 查询断点续练进度；mode 为空默认为 sequential，未知 mode 返回 400（#386）",
                 "consumes": [
                     "application/json"
                 ],
@@ -4229,6 +5369,12 @@
                             ]
                         }
                     },
+                    "400": {
+                        "description": "参数错误（含未知练习模式）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
                     "401": {
                         "description": "未认证",
                         "schema": {
@@ -4243,7 +5389,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "支持顺序/标签等练习的断点续练",
+                "description": "支持顺序/标签/按卷练习的断点续练；未知 practice_mode 返回 400（#386）",
                 "consumes": [
                     "application/json"
                 ],
@@ -4273,7 +5419,7 @@
                         }
                     },
                     "400": {
-                        "description": "参数错误",
+                        "description": "参数错误（含未知练习模式）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -4813,6 +5959,1342 @@
                 }
             }
         },
+        "/real-exam/papers": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "按当前证件返回上架套卷，附兑换状态与单价",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-真题"
+                ],
+                "summary": "真题套卷列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "目标证件ID",
+                        "name": "credential_id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/service.RealExamPaperDTO"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/real-exam/papers/{paper_id}/exam": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "固定题集+卷时长建 mock_exam 记录；之后的保存/交卷/结果复用 /mock-exam 端点",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-真题"
+                ],
+                "summary": "按卷开考",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "真题卷ID",
+                        "name": "paper_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.MockExamStartDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误或未兑换",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/real-exam/papers/{paper_id}/practice": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "返回卷内题目（固定卷序）与断点游标；未兑换拒绝",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-真题"
+                ],
+                "summary": "按卷练习",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "真题卷ID",
+                        "name": "paper_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.PracticeStartResultDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误或未兑换",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/real-exam/papers/{paper_id}/redeem": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "按套扣积分并写入权益，重复兑换报\"已兑换\"",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-真题"
+                ],
+                "summary": "兑换真题卷",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "真题卷ID",
+                        "name": "paper_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.RedeemResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误或积分不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/recruit/applications/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "企业查看投递详情（打开即记录已读 employer_viewed_at；回显投递时刻简历更新时间，内容读最新不落快照；脱敏候选人）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "招聘域-投递处理"
+                ],
+                "summary": "投递详情",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "投递 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "详情",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "越权",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/recruit/applications/{id}/reject": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "企业把投递标记为不合适 → 终态 rejected（仅 applied 可拒；同一学员 30 天内不能再投）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "招聘域-投递处理"
+                ],
+                "summary": "标记不合适",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "投递 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "已标记",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "状态不允许",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "越权",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/recruit/contact-requests": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "企业招聘者查看自己发出的交换申请（pending/approved/rejected/expired/revoked）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "招聘域-联系方式交换"
+                ],
+                "summary": "我的申请",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "列表",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "企业招聘者带附言向学员发起联系方式交换申请（pending 唯一、30 天冷却、日限 20）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "招聘域-联系方式交换"
+                ],
+                "summary": "发起交换申请",
+                "parameters": [
+                    {
+                        "description": "申请 {student_user_id, message(1-200)}",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "申请已提交",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误/唯一/冷却/日限",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/recruit/jobs": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "企业查看自己的职位（含 closed/强制下架历史，按新鲜度排序）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "招聘域-职位"
+                ],
+                "summary": "我的职位列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "列表",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "企业发布职位（职位名 + 必填专业方向 + 地区/薪资/经验要求/描述）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "招聘域-职位"
+                ],
+                "summary": "发布职位",
+                "parameters": [
+                    {
+                        "description": "职位信息",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/service.JobPostingInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "发布成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/recruit/jobs/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "企业查看自己的职位详情（closed/强制下架历史仍可见）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "招聘域-职位"
+                ],
+                "summary": "我的职位详情",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "职位 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "详情",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "无权操作",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "企业编辑自己的职位（改别人的 403）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "招聘域-职位"
+                ],
+                "summary": "编辑职位",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "职位 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "职位信息",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/service.JobPostingInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "更新成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "无权操作",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/recruit/jobs/{id}/applications": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "企业按职位分页查看投递（只能看自己的职位，越权 403；含未读投递数；候选人脱敏——姓名打码、无手机/微信/PDF/证书原图）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "招聘域-投递处理"
+                ],
+                "summary": "按职位查看投递",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "职位 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "列表（含 unread_count）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "越权",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/recruit/jobs/{id}/toggle-status": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "企业上架/下架自己的职位（open↔closed；被强制下架的职位不能自行重新上架）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "招聘域-职位"
+                ],
+                "summary": "上架/下架职位",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "职位 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "操作成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "被强制下架或超上限",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "无权操作",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/recruit/resumes/{id}/contact": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "企业读取学员明文联系方式与 PDF（仅 approved 授权有效时可用；投递产生的授权同样放行；实时校验无缓存）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "招聘域-联系方式交换"
+                ],
+                "summary": "明文联系方式",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "学员 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "明文 {real_name, contact_phone, wechat, resume_file_url}",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "无有效授权",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/resume": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "学员查看自己的简历卡（未建时 404，契约内空态）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-简历卡"
+                ],
+                "summary": "我的简历",
+                "responses": {
+                    "200": {
+                        "description": "简历",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "简历不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "学员整页保存简历卡（real_name/contact_phone/wechat/region/expected_specialty_id/expected_regions/salary/experience 等）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-简历卡"
+                ],
+                "summary": "保存简历",
+                "parameters": [
+                    {
+                        "description": "简历内容",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/service.JobCardInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "已保存",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/resume/applications": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "学员查看自己的投递（applied/rejected/withdrawn 三态 + 企业是否已查看）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "招聘域-投递"
+                ],
+                "summary": "我的投递",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "列表",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/resume/applications/{id}/withdraw": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "撤回投递；revoke_contact 默认 false 不连带收回联系方式授权，true 则授权置 revoked（明文端点 403）。撤回后可立即重新投递。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "招聘域-投递"
+                ],
+                "summary": "撤回投递",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "投递 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "撤回选项 {revoke_contact?: boolean}",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "已撤回",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "状态不允许",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "无权操作",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/resume/contact-requests": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "学员查看收到的交换申请（含企业名/联系人/附言，不含企业电话）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-联系方式交换"
+                ],
+                "summary": "收到的申请",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "列表",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/resume/contact-requests/{id}/approve": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "学员同意交换申请（status → approved，招聘方收邮件通知）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-联系方式交换"
+                ],
+                "summary": "同意申请",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "申请 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "已同意",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "状态不允许/已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/resume/contact-requests/{id}/reject": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "学员拒绝交换申请（status → rejected，30 天冷却）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-联系方式交换"
+                ],
+                "summary": "拒绝申请",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "申请 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "已拒绝",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "状态不允许",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/resume/contact-requests/{id}/revoke": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "学员撤回已同意的授权（status → revoked，实时生效，明文端点随即 403）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-联系方式交换"
+                ],
+                "summary": "撤回授权",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "申请 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "已撤回",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "状态不允许",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/resume/image": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "上传工作照（file，图片 ≤20MB，≤6 张）",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-简历卡"
+                ],
+                "summary": "上传工作照",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "工作照",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "上传成功 {url}",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "文件错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/resume/pdf": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "上传简历 PDF（file，仅 PDF ≤50MB）",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-简历卡"
+                ],
+                "summary": "上传简历 PDF",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "PDF 简历",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "上传成功 {url}",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "文件错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/resume/view-stats": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "学员查看近 7 天查看过自己简历的企业数（按企业去重，仅聚合数，不含企业名）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-简历卡"
+                ],
+                "summary": "简历查看留痕",
+                "responses": {
+                    "200": {
+                        "description": "聚合数 {count}",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/resume/visibility": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "学员切换简历 visibility（hidden/open）；visibility 仅管控 L2 被动浏览面，不影响投递",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-简历卡"
+                ],
+                "summary": "切换简历公开",
+                "parameters": [
+                    {
+                        "description": "可见性 {visibility: hidden|open}",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "已切换",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/search": {
             "get": {
                 "description": "公开访问，keyword 模糊匹配 course/question/content/topic，type 可选过滤",
@@ -4971,6 +7453,62 @@
                     },
                     "404": {
                         "description": "课程不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/student/materials": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "基于 chapter_file 的聚合视图，支持按 course_id 过滤；与 /student/materials 同数据",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-资料"
+                ],
+                "summary": "学习资料列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "课程ID",
+                        "name": "course_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "每页条数",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -5239,6 +7777,12 @@
                         "default": "time_desc",
                         "description": "排序 time_desc/time_asc",
                         "name": "sort",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "目标证件ID（按题目所属证件分区）",
+                        "name": "credential_id",
                         "in": "query"
                     }
                 ],
@@ -5740,6 +8284,9 @@
                 "name": {
                     "type": "string"
                 },
+                "points_price": {
+                    "type": "integer"
+                },
                 "practice_hours": {
                     "type": "integer"
                 },
@@ -5908,6 +8455,9 @@
                         "type": "string"
                     }
                 },
+                "is_accepted": {
+                    "type": "boolean"
+                },
                 "liked_by_me": {
                     "type": "boolean"
                 },
@@ -5929,11 +8479,18 @@
         "service.ForumTopicDTO": {
             "type": "object",
             "properties": {
+                "accepted_reply_id": {
+                    "type": "integer"
+                },
                 "author": {
                     "$ref": "#/definitions/service.ForumAuthor"
                 },
                 "can_delete": {
                     "type": "boolean"
+                },
+                "category": {
+                    "description": "discussion | question（#364）",
+                    "type": "string"
                 },
                 "chapter_id": {
                     "type": "integer"
@@ -5967,6 +8524,12 @@
                 },
                 "reply_count": {
                     "type": "integer"
+                },
+                "reward_issued": {
+                    "type": "boolean"
+                },
+                "solved_at": {
+                    "type": "string"
                 },
                 "title": {
                     "type": "string"
@@ -6042,6 +8605,38 @@
                 },
                 "total": {
                     "type": "integer"
+                }
+            }
+        },
+        "service.JobCardInput": {
+            "type": "object"
+        },
+        "service.JobPostingInput": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "experience_req": {
+                    "type": "string"
+                },
+                "region": {
+                    "type": "string"
+                },
+                "salary_max": {
+                    "type": "integer"
+                },
+                "salary_min": {
+                    "type": "integer"
+                },
+                "salary_text": {
+                    "type": "string"
+                },
+                "specialty_id": {
+                    "type": "integer"
+                },
+                "title": {
+                    "type": "string"
                 }
             }
         },
@@ -6131,6 +8726,10 @@
                     "type": "integer"
                 },
                 "id": {
+                    "type": "integer"
+                },
+                "paper_id": {
+                    "description": "PaperID 真题卷来源（#386）：按卷开考时写入 mock_exam.paper_id，随机模考为 nil\n（omitempty——既有消费者对随机模考的响应零差异，向后兼容）。",
                     "type": "integer"
                 },
                 "question_ids": {},
@@ -6347,6 +8946,10 @@
                 "current_index": {
                     "type": "integer"
                 },
+                "pool_total": {
+                    "description": "PoolTotal 实时题库池总数（#413）：当前证件分区口径，与开始练习返回的题目数一致；\nTotal 语义退回「上次会话数组长度」，仅供断点续练游标使用（字段名不变，新增字段零 diff）。",
+                    "type": "integer"
+                },
                 "total": {
                     "type": "integer"
                 }
@@ -6370,6 +8973,10 @@
                 },
                 "created_by_type": {
                     "type": "string"
+                },
+                "credential_id": {
+                    "description": "CredentialID 题目归属的目标证件（#412）：讲师端题库管理用证件列区分分区，学员侧形状不变。",
+                    "type": "integer"
                 },
                 "explanation": {
                     "type": "string"
@@ -6403,6 +9010,60 @@
                     "type": "string"
                 },
                 "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.RealExamPaperDTO": {
+            "type": "object",
+            "properties": {
+                "duration_minutes": {
+                    "type": "integer"
+                },
+                "entitled": {
+                    "type": "boolean"
+                },
+                "paper_id": {
+                    "type": "integer"
+                },
+                "price": {
+                    "type": "integer"
+                },
+                "question_count": {
+                    "type": "integer"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "year": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.RedeemResult": {
+            "type": "object",
+            "properties": {
+                "balance": {
+                    "type": "integer"
+                },
+                "ref_id": {
+                    "type": "string"
+                },
+                "sku": {
+                    "type": "string"
+                },
+                "total_earned": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.ReportInput": {
+            "type": "object",
+            "properties": {
+                "reason": {
                     "type": "string"
                 }
             }

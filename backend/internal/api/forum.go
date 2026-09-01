@@ -395,6 +395,17 @@ func (h *ForumHandler) DeleteReply(c *gin.Context) {
 }
 
 // AdminGetTopic 管理员查看帖子详情（含回复）GET /api/admin/forum/topics/:id?sort=time|hot
+// AdminGetTopic 管理员查看帖子详情 GET /api/admin/forum/topics/:id
+// @Summary 管理员查看帖子
+// @Description 管理端只读查看帖子详情（含回复）
+// @Tags 管理端-论坛
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "主题 ID"
+// @Success 200 {object} response.R "详情"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "主题不存在"
+// @Router /admin/forum/topics/{id} [get]
 func (h *ForumHandler) AdminGetTopic(c *gin.Context) {
 	Endpoint[topicGetReq, map[string]any]{
 		Parse: func(c *gin.Context) (*topicGetReq, error) {
@@ -428,6 +439,17 @@ func (h *ForumHandler) AdminGetTopic(c *gin.Context) {
 }
 
 // AdminDeleteTopic 管理员删除任意主题 DELETE /api/admin/forum/topics/:id
+// AdminDeleteTopic 管理员删除帖子 DELETE /api/admin/forum/topics/:id
+// @Summary 管理员删除帖子
+// @Description 管理端删除帖子（若曾发分则按 rollback 对冲扣减，封底 0，幂等）
+// @Tags 管理端-论坛
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "主题 ID"
+// @Success 200 {object} response.R "已删除"
+// @Failure 400 {object} response.R "删除失败"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/forum/topics/{id} [delete]
 func (h *ForumHandler) AdminDeleteTopic(c *gin.Context) {
 	Endpoint[topicIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*topicIDReq, error) {
@@ -454,6 +476,17 @@ func (h *ForumHandler) AdminDeleteTopic(c *gin.Context) {
 }
 
 // AdminDeleteReply 管理员删除任意回复 DELETE /api/admin/forum/replies/:id
+// AdminDeleteReply 管理员删除回复 DELETE /api/admin/forum/replies/:id
+// @Summary 管理员删除回复
+// @Description 管理端删除任意回复（若为被采纳回答则按 rollback 对冲回收，封底 0，幂等）
+// @Tags 管理端-论坛
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "回复 ID"
+// @Success 200 {object} response.R "已删除"
+// @Failure 400 {object} response.R "删除失败"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/forum/replies/{id} [delete]
 func (h *ForumHandler) AdminDeleteReply(c *gin.Context) {
 	Endpoint[replyIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*replyIDReq, error) {
@@ -719,6 +752,19 @@ func (h *ForumHandler) ListReports(c *gin.Context) {
 }
 
 // HandleReport 处理举报 PUT /api/admin/forum/reports/:id
+// HandleReport 处理举报 PUT /api/admin/forum/reports/:id
+// @Summary 处理论坛举报
+// @Description 管理端处理论坛举报（status: 1 标记已处理）
+// @Tags 管理端-论坛
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "举报 ID"
+// @Param body body object true "处理状态 {status: int16}"
+// @Success 200 {object} response.R "已更新"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/forum/reports/{id} [put]
 func (h *ForumHandler) HandleReport(c *gin.Context) {
 	id, err := pathInt64(c, "id", "举报 ID 无效")
 	if err != nil {

@@ -42,6 +42,19 @@ func NewJobReportHandler(svc *service.JobReportService, jobSvc *service.JobPosti
 }
 
 // Report 学员举报职位 POST /api/jobs/:id/report
+// @Summary 举报职位
+// @Description 学员举报可疑职位（同一学员对同一职位唯一，重复举报合并；不挂论坛举报表）
+// @Tags 招聘域-内容治理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "职位 ID"
+// @Param body body service.ReportInput true "举报原因"
+// @Success 201 {object} response.R "举报已提交"
+// @Failure 400 {object} response.R "原因不能为空"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "职位不存在或已下架"
+// @Router /jobs/{id}/report [post]
 func (h *JobReportHandler) Report(c *gin.Context) {
 	Endpoint[service.ReportInput, service.ReportDTO]{
 		Parse: func(c *gin.Context) (*service.ReportInput, error) {
@@ -65,6 +78,18 @@ func (h *JobReportHandler) Report(c *gin.Context) {
 }
 
 // ListAll 管理端职位列表（只读巡检，可按企业筛）GET /api/admin/jobs
+// @Summary 职位巡检
+// @Description 管理端只读巡检职位（全量含 closed/强制下架，可按企业筛）
+// @Tags 招聘域-内容治理
+// @Produce json
+// @Security BearerAuth
+// @Param recruiter_id query int false "企业 ID"
+// @Param specialty_id query int false "专业方向 ID"
+// @Param page query int false "页码"
+// @Param page_size query int false "每页数量"
+// @Success 200 {object} response.R "列表"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/jobs [get]
 func (h *JobReportHandler) ListAll(c *gin.Context) {
 	Endpoint[struct{}, service.JobListResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.JobListResult, error) {
@@ -86,6 +111,16 @@ func (h *JobReportHandler) ListAll(c *gin.Context) {
 }
 
 // ListReports 管理端举报队列 GET /api/admin/job-reports
+// @Summary 举报队列
+// @Description 管理端查看待处理举报队列
+// @Tags 招聘域-内容治理
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码"
+// @Param page_size query int false "每页数量"
+// @Success 200 {object} response.R "列表"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/job-reports [get]
 func (h *JobReportHandler) ListReports(c *gin.Context) {
 	Endpoint[struct{}, service.ReportListResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.ReportListResult, error) {
@@ -101,6 +136,16 @@ func (h *JobReportHandler) ListReports(c *gin.Context) {
 }
 
 // MarkHandled 管理端标记举报已处理 POST /api/admin/job-reports/:id/handle
+// @Summary 标记举报已处理
+// @Description 管理端把举报标记为已处理（处理后不再出现在待处理队列）
+// @Tags 招聘域-内容治理
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "举报 ID"
+// @Success 200 {object} response.R "已处理"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "举报不存在"
+// @Router /admin/job-reports/{id}/handle [post]
 func (h *JobReportHandler) MarkHandled(c *gin.Context) {
 	Endpoint[struct{}, service.ReportDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.ReportDTO, error) {
@@ -121,6 +166,19 @@ func (h *JobReportHandler) MarkHandled(c *gin.Context) {
 }
 
 // ForceOffline 管理端强制下架职位 POST /api/admin/jobs/:id/force-offline
+// @Summary 强制下架职位
+// @Description 管理端带原因强制下架职位（学员侧立即不可见；企业不能自行重新上架；处置入审计日志、邮件通知企业）
+// @Tags 招聘域-内容治理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "职位 ID"
+// @Param body body object false "下架原因 {reason: string}"
+// @Success 200 {object} response.R "已强制下架"
+// @Failure 400 {object} response.R "原因不能为空"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "职位不存在"
+// @Router /admin/jobs/{id}/force-offline [post]
 // body: { reason: string }。处置动作经 AuditLog 中间件自动记入审计日志。
 func (h *JobReportHandler) ForceOffline(c *gin.Context) {
 	Endpoint[struct{}, service.JobPostingDTO]{

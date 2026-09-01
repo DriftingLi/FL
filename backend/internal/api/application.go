@@ -38,6 +38,17 @@ func NewApplicationHandler(svc *service.JobApplicationService) *ApplicationHandl
 }
 
 // Apply 学员投递职位 POST /api/jobs/:id/apply
+// @Summary 投递职位（投递即授权）
+// @Description 投递即授权：同事务写投递记录 + 写/复活 approved 联系方式授权（source=application），企业当场可取得明文联系方式。hidden 简历可投递；缺真实姓名/电话 400；applied 唯一；30 天冷却；日限 10。
+// @Tags 招聘域-投递
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "职位 ID"
+// @Success 201 {object} response.R "投递成功"
+// @Failure 400 {object} response.R "重复投递/冷却/日限/简历不完整"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "职位不可投递"
+// @Router /jobs/{id}/apply [post]
 func (h *ApplicationHandler) Apply(c *gin.Context) {
 	Endpoint[struct{}, service.ApplicationDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.ApplicationDTO, error) {
@@ -58,6 +69,16 @@ func (h *ApplicationHandler) Apply(c *gin.Context) {
 }
 
 // ListMine 我的投递列表 GET /api/resume/applications
+// @Summary 我的投递
+// @Description 学员查看自己的投递（applied/rejected/withdrawn 三态 + 企业是否已查看）
+// @Tags 招聘域-投递
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码"
+// @Param page_size query int false "每页数量"
+// @Success 200 {object} response.R "列表"
+// @Failure 401 {object} response.R "未认证"
+// @Router /resume/applications [get]
 func (h *ApplicationHandler) ListMine(c *gin.Context) {
 	Endpoint[struct{}, service.ApplicationListResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.ApplicationListResult, error) {
@@ -73,6 +94,19 @@ func (h *ApplicationHandler) ListMine(c *gin.Context) {
 }
 
 // Withdraw 撤回投递 POST /api/resume/applications/:id/withdraw
+// @Summary 撤回投递
+// @Description 撤回投递；revoke_contact 默认 false 不连带收回联系方式授权，true 则授权置 revoked（明文端点 403）。撤回后可立即重新投递。
+// @Tags 招聘域-投递
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "投递 ID"
+// @Param body body object false "撤回选项 {revoke_contact?: boolean}"
+// @Success 200 {object} response.R "已撤回"
+// @Failure 400 {object} response.R "状态不允许"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 403 {object} response.R "无权操作"
+// @Router /resume/applications/{id}/withdraw [post]
 // body: { revoke_contact?: boolean } 默认 false——撤回投递默认不连带收回联系方式授权。
 func (h *ApplicationHandler) Withdraw(c *gin.Context) {
 	Endpoint[struct{}, service.ApplicationDTO]{
