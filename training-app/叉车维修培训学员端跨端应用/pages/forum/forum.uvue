@@ -95,14 +95,14 @@
             </view>
         </view>
 
-        <!-- 广场/短视频/备考经验 Tab 内容 -->
-        <scroll-view v-if="currentTab == 'square' || (currentTab == 'recruit' && recruitSubTab == 'job') || currentTab == 'hot'" class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
+        <!-- 广场/知识问答 Tab 内容 -->
+        <scroll-view v-if="currentTab == 'square' || currentTab == 'hot'" class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
             <!-- 打卡活动卡片 -->
             <view v-if="currentTab === 'square'" class="checkin-card" @click="onCheckInClick">
                 <view class="checkin-card-left">
                     <text class="checkin-card-title">8月学习打卡</text>
                     <text class="checkin-card-date">2026.08.01</text>
-                    <text class="checkin-card-players">{{ checkinPlayers }}人已参与打卡</text>
+                    <text class="checkin-card-players">{{ formatCountCompact(checkinPlayers) }}人已参与打卡</text>
                 </view>
                 <view class="checkin-card-btn">
                     <text class="checkin-card-btn-text">开始打卡</text>
@@ -146,15 +146,15 @@
                         <view class="qa-stats">
                             <view class="qa-stat">
                                 <text class="qa-stat-icon">👁</text>
-                                <text class="qa-stat-text">{{ item.views_count }}</text>
+                                <text class="qa-stat-text">{{ formatCountCompact(item.views_count) }}</text>
                             </view>
                             <view class="qa-stat" @click.stop="onReply(item.id)">
                                 <text class="qa-stat-icon">💬</text>
-                                <text class="qa-stat-text">{{ item.replies_count }}</text>
+                                <text class="qa-stat-text">{{ formatCountCompact(item.replies_count) }}</text>
                             </view>
                             <view class="qa-stat">
                                 <text class="qa-stat-icon">👍</text>
-                                <text class="qa-stat-text">{{ item.likes_count }}</text>
+                                <text class="qa-stat-text">{{ formatCountCompact(item.likes_count) }}</text>
                             </view>
                         </view>
                     </view>
@@ -173,15 +173,15 @@
                     <view class="topic-action-bar">
                         <view class="action-item">
                             <text class="action-icon">👍</text>
-                            <text class="action-text">{{ item.likes_count }}</text>
+                            <text class="action-text">{{ formatCountCompact(item.likes_count) }}</text>
                         </view>
                         <view class="action-item" @click.stop="onReply(item.id)">
                             <text class="action-icon"></text>
-                            <text class="action-text">{{ item.replies_count }}</text>
+                            <text class="action-text">{{ formatCountCompact(item.replies_count) }}</text>
                         </view>
                         <view class="action-item">
                             <text class="action-icon"></text>
-                            <text class="action-text">{{ item.views_count }}</text>
+                            <text class="action-text">{{ formatCountCompact(item.views_count) }}</text>
                         </view>
                     </view>
                     </template>
@@ -192,6 +192,39 @@
             </view>
             <view v-if="noMore && topics.length > 0" class="loading-more">
                 <text class="loading-text">没有更多了</text>
+            </view>
+        </scroll-view>
+
+        <!-- 招聘职位 Tab 内容（专属卡片） -->
+        <scroll-view v-if="currentTab == 'recruit' && recruitSubTab == 'job'" class="content-scroll" scroll-y="true">
+            <view v-if="mockJobs.length == 0" class="empty-tip">
+                <text class="empty-icon">💼</text>
+                <text class="empty-text">暂无职位信息</text>
+            </view>
+            <view class="job-list">
+                <view v-for="job in mockJobs" :key="job.id" class="job-card">
+                    <view class="job-card-header">
+                        <text class="job-company">{{ job.company }}</text>
+                        <view class="job-type-tag">
+                            <text class="job-type-text">{{ job.jobType }}</text>
+                        </view>
+                    </view>
+                    <text class="job-title">{{ job.title }}</text>
+                    <view class="job-info-row">
+                        <text class="job-salary">{{ job.salary }}</text>
+                        <text class="job-location">📍 {{ job.location }}</text>
+                    </view>
+                    <text class="job-desc">{{ job.description }}</text>
+                    <view class="job-divider"></view>
+                    <view class="job-actions">
+                        <view class="job-action-btn job-action-detail" @click="onJobDetail(job.id)">
+                            <text class="job-action-text job-action-detail-text">查看详情</text>
+                        </view>
+                        <view class="job-action-btn job-action-apply" @click="onJobApply(job.id)">
+                            <text class="job-action-text job-action-apply-text">立即投递</text>
+                        </view>
+                    </view>
+                </view>
             </view>
         </scroll-view>
 
@@ -214,7 +247,7 @@
                     </view>
                     <view class="res-coin-info">
                         <text class="res-coin-label">我的金币</text>
-                        <text class="res-coin-value">{{ coinBalance }}</text>
+                        <text class="res-coin-value">{{ formatCountCompact(coinBalance) }}</text>
                     </view>
                 </view>
                 <view class="res-coin-right">
@@ -265,9 +298,19 @@
     import { getForumTopicsApi, getCheckInCalendarApi } from '../../api/forum'
     import { getProfileApi } from '../../api/student'
     import { getUnreadCountApi } from '../../api/notification'
-    import { formatDateStr, resolveFileUrl } from '../../utils/format'
+    import { formatDateStr, resolveFileUrl, formatCountCompact } from '../../utils/format'
     import { UNAVAILABLE_TOAST } from '../../constants/app'
     import type { ForumTopic, StudentProfile } from '../../types/index'
+
+    type RecruitJob = {
+        id : number
+        company : string
+        title : string
+        salary : string
+        location : string
+        jobType : string
+        description : string
+    }
 
     const authStore = useAuthStore()
     const statusBarHeight = useStatusBarHeight()
@@ -296,6 +339,18 @@
     // 知识问答筛选：recommend（mock，暂以热度代替） | hot | latest
     const qaSort = ref<string>('recommend')
     const recruitSubTab = ref<string>('job') // notice | job（招聘子Tab）
+
+    // ---- 招聘职位 Mock 数据 ----
+    const mockJobs = ref<RecruitJob[]>([
+        { id: 1, company: '杭州叉车集团', title: '叉车维修技师', salary: '8000-15000 元/月', location: '浙江杭州', jobType: '全职', description: '负责电动叉车、内燃叉车的日常维护与故障排除，需持有叉车维修相关证书。' },
+        { id: 2, company: '安徽合力股份', title: '液压系统维护员', salary: '7000-12000 元/月', location: '安徽合肥', jobType: '全职', description: '专注叉车液压系统检修与保养，熟悉各类液压元件者优先。' },
+        { id: 3, company: '中力叉车', title: '叉车电路工程师', salary: '9000-16000 元/月', location: '浙江杭州', jobType: '全职', description: '负责新能源电动叉车电控系统调试与维修，需具备电路基础。' },
+        { id: 4, company: '龙工叉车', title: '叉车学徒', salary: '4000-6000 元/月', location: '福建龙岩', jobType: '全职', description: '跟随师傅学习叉车维修技术，零基础可培养，有师傅带教。' },
+        { id: 5, company: '永恒力叉车', title: '仓储设备维修员', salary: '7500-13000 元/月', location: '上海', jobType: '全职', description: '负责仓储搬运设备的定期保养与应急维修，需适应出差。' },
+        { id: 6, company: '杭叉集团', title: '叉车底盘维修工', salary: '7000-11000 元/月', location: '浙江杭州', jobType: '全职', description: '叉车底盘部件检修与更换，有相关经验者优先录用。' },
+        { id: 7, company: '柳工叉车', title: '售后技术支持', salary: '8000-14000 元/月', location: '广西柳州', jobType: '全职', description: '为客户提供叉车维修技术咨询与现场支持，沟通能力强。' },
+        { id: 8, company: '诺力叉车', title: '兼职叉车检修', salary: '200-300 元/天', location: '浙江湖州', jobType: '兼职', description: '按项目结算，负责叉车到厂检修，时间灵活，需有经验。' },
+    ])
 
     // ---- 打卡相关 ----
     const checkinPlayers = ref<number>(0)
@@ -340,7 +395,7 @@
         } else if (key === 'my-uploads') {
             uni.navigateTo({ url: '/pages/resources/my-uploads' })
         } else if (key === 'upload-resource') {
-            uni.navigateTo({ url: '/pages/resources/upload-resource' })
+            uni.navigateTo({ url: '/pages/forum/forum-create?scope=resource' })
         } else {
             uni.showToast({ title: UNAVAILABLE_TOAST, icon: 'none' })
         }
@@ -419,9 +474,14 @@
     function onRecruitSubChange(sub : string) : void {
         if (recruitSubTab.value === sub) return
         recruitSubTab.value = sub
-        if (sub === 'job') {
-            loadTopics(true)
-        }
+    }
+
+    function onJobDetail(jobId : number) : void {
+        uni.showToast({ title: '功能开发中', icon: 'none' })
+    }
+
+    function onJobApply(jobId : number) : void {
+        uni.showToast({ title: '功能开发中', icon: 'none' })
     }
 
     async function loadTopics(reset : boolean = false) : Promise<void> {
@@ -436,8 +496,9 @@
         try {
             // 后端 scope 白名单仅 all|general|chapter（旧值 hot/recruit 会被静默当 all），
             // category 白名单 all|discussion|question
+            // 广场/招聘只出普通帖（discussion），知识问答帖（question）仅在问答 Tab 展示
             let scope = 'general'
-            let category = ''
+            let category = 'discussion'
             let sort = sortField.value
             let order = sortOrder.value
             if (currentTab.value === 'recruit') {
@@ -1222,5 +1283,115 @@
     .qa-stat-text {
         font-size: 24rpx;
         color: #999999;
+    }
+
+    /* ===== 招聘职位卡片 ===== */
+    .job-list {
+        flex-direction: column;
+        padding: 16rpx 24rpx;
+    }
+
+    .job-card {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 24rpx;
+        margin-bottom: 16rpx;
+        border: 1rpx solid #eeeeee;
+        flex-direction: column;
+    }
+
+    .job-card-header {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12rpx;
+    }
+
+    .job-company {
+        font-size: 24rpx;
+        color: #666666;
+        flex: 1;
+    }
+
+    .job-type-tag {
+        padding: 4rpx 16rpx;
+        border-radius: 8rpx;
+        background-color: #e8f0fe;
+    }
+
+    .job-type-text {
+        font-size: 22rpx;
+        color: #2979ff;
+    }
+
+    .job-title {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 12rpx;
+    }
+
+    .job-info-row {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12rpx;
+    }
+
+    .job-salary {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #ff6b35;
+    }
+
+    .job-location {
+        font-size: 24rpx;
+        color: #999999;
+    }
+
+    .job-desc {
+        font-size: 26rpx;
+        color: #666666;
+        line-height: 1.5;
+        margin-bottom: 16rpx;
+    }
+
+    .job-divider {
+        height: 1rpx;
+        background-color: #f0f0f0;
+        margin-bottom: 16rpx;
+    }
+
+    .job-actions {
+        flex-direction: row;
+        align-items: center;
+        justify-content: flex-end;
+    }
+
+    .job-action-btn {
+        padding: 12rpx 32rpx;
+        border-radius: 24rpx;
+        margin-left: 16rpx;
+    }
+
+    .job-action-detail {
+        background-color: #f5f5f5;
+    }
+
+    .job-action-apply {
+        background-color: #2979ff;
+    }
+
+    .job-action-text {
+        font-size: 26rpx;
+        font-weight: 500;
+    }
+
+    .job-action-detail-text {
+        color: #666666;
+    }
+
+    .job-action-apply-text {
+        color: #ffffff;
     }
 </style>
