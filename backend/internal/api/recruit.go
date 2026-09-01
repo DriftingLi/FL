@@ -34,7 +34,7 @@ func RegisterRecruitRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Recr
 }
 
 // ListResumes 招聘端脱敏简历列表 GET /api/recruit/resumes
-// 过滤轴：region / specialty_id / credential_id / salary_min / salary_max / experience_years / available_in
+// 过滤轴：region / position_id / credential_id / salary_min / salary_max / experience_years / available_in
 // 默认排序 updated_at DESC（service 层保证）；读写最新，无缓存；读取后审计留痕。
 func (h *RecruitHandler) ListResumes(c *gin.Context) {
 	params := service.RecruitListParams{
@@ -43,8 +43,8 @@ func (h *RecruitHandler) ListResumes(c *gin.Context) {
 		Region:      c.Query("region"),
 		AvailableIn: c.Query("available_in"),
 	}
-	if v := queryIDPtr(c, "specialty_id"); v != nil {
-		params.SpecialtyID = v
+	if v := queryIDPtr(c, "position_id"); v != nil {
+		params.PositionID = v
 	}
 	if v := queryIDPtr(c, "credential_id"); v != nil {
 		params.CredentialID = v

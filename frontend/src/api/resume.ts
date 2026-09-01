@@ -5,8 +5,8 @@ export interface ResumeData {
   contact_phone: string
   wechat: string
   region: string
-  expected_specialty_id?: number | null
-  expected_specialty_extra: string
+  expected_position_id?: number | null
+  expected_position_extra: string
   expected_regions: string[]
   salary_min?: number | null
   salary_max?: number | null

@@ -1,5 +1,5 @@
 // Package service 招聘域：职位（job posting，spec #449 T2 #451）。
-// 企业供给侧表达「我在招什么人」：职位名（自由文本）+ 专业方向（必填，复用培训域 specialty 字典）
+// 企业供给侧表达「我在招什么人」：职位名（岗位字典 + 可选自由细化）+ 地区/薪资/经验要求/职位描述
 // + 地区/薪资/经验要求/职位描述，open/closed 二态，按发布新鲜度排序。
 // 学员侧只见 open 且未被强制下架的职位；closed/强制下架职位企业自己仍能看到历史。
 package service
@@ -26,8 +26,8 @@ var (
 	ErrJobActiveLimit = errors.New("活跃职位数已达上限（50 个），请先下架部分职位")
 	// ErrJobForcedOffline 被管理员强制下架的职位不能自行重新上架。
 	ErrJobForcedOffline = errors.New("该职位已被强制下架，不能自行重新上架，请联系平台处理")
-	// ErrJobSpecialtyRequired 专业方向在业务层必填。
-	ErrJobSpecialtyRequired = errors.New("专业方向不能为空")
+	// ErrJobPositionRequired 岗位字典在业务层必填（问题4：与专业方向解绑）。
+	ErrJobPositionRequired = errors.New("岗位不能为空")
 )
 
 // JobPostingService 职位服务。
@@ -47,7 +47,7 @@ const maxActiveJobs = 50
 // JobPostingInput 职位创建/编辑入参。
 type JobPostingInput struct {
 	Title         string `json:"title"`
-	SpecialtyID   *int   `json:"specialty_id"`
+	PositionID    *int   `json:"position_id"`
 	Region        string `json:"region"`
 	SalaryMin     *int   `json:"salary_min"`
 	SalaryMax     *int   `json:"salary_max"`
@@ -61,8 +61,8 @@ type JobPostingDTO struct {
 	ID            int    `json:"id"`
 	RecruiterID   int    `json:"recruiter_id"`
 	Title         string `json:"title"`
-	SpecialtyID   *int   `json:"specialty_id,omitempty"`
-	SpecialtyName string `json:"specialty_name,omitempty"`
+	PositionID    *int   `json:"position_id,omitempty"`
+	PositionName  string `json:"position_name,omitempty"`
 	Region        string `json:"region"`
 	SalaryMin     *int   `json:"salary_min,omitempty"`
 	SalaryMax     *int   `json:"salary_max,omitempty"`
@@ -81,7 +81,7 @@ type JobPostingDTO struct {
 	ContactName   string `json:"contact_name,omitempty"`
 }
 
-// validate 校验职位入参（专业方向业务层必填）。
+// validate 校验职位入参（岗位字典业务层必填）。
 func validateJobPostingInput(in *JobPostingInput) error {
 	if strings.TrimSpace(in.Title) == "" {
 		return errors.New("职位名不能为空")
@@ -89,8 +89,8 @@ func validateJobPostingInput(in *JobPostingInput) error {
 	if len([]rune(in.Title)) > 100 {
 		return errors.New("职位名不能超过 100 字")
 	}
-	if in.SpecialtyID == nil || *in.SpecialtyID <= 0 {
-		return ErrJobSpecialtyRequired
+	if in.PositionID == nil || *in.PositionID <= 0 {
+		return ErrJobPositionRequired
 	}
 	if len([]rune(in.Description)) > 5000 {
 		return errors.New("职位描述不能超过 5000 字")
@@ -107,7 +107,7 @@ func (s *JobPostingService) toDTO(m *model.JobPosting) JobPostingDTO {
 		ID:            m.ID,
 		RecruiterID:   m.RecruiterID,
 		Title:         m.Title,
-		SpecialtyID:   m.SpecialtyID,
+		PositionID:    m.PositionID,
 		Region:        m.Region,
 		SalaryMin:     m.SalaryMin,
 		SalaryMax:     m.SalaryMax,
@@ -121,10 +121,10 @@ func (s *JobPostingService) toDTO(m *model.JobPosting) JobPostingDTO {
 		CreatedAt:     m.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:     m.UpdatedAt.Format(time.RFC3339),
 	}
-	if m.SpecialtyID != nil {
-		var sp model.Specialty
-		if err := s.db.First(&sp, *m.SpecialtyID).Error; err == nil {
-			dto.SpecialtyName = sp.Name
+	if m.PositionID != nil {
+		var pos model.Position
+		if err := s.db.First(&pos, *m.PositionID).Error; err == nil {
+			dto.PositionName = pos.Name
 		}
 	}
 	var rec model.RecruiterUser
@@ -153,7 +153,7 @@ func (s *JobPostingService) Create(recruiterID int, in *JobPostingInput) (*JobPo
 	m := model.JobPosting{
 		RecruiterID:   recruiterID,
 		Title:         strings.TrimSpace(in.Title),
-		SpecialtyID:   in.SpecialtyID,
+		PositionID:    in.PositionID,
 		Region:        strings.TrimSpace(in.Region),
 		SalaryMin:     in.SalaryMin,
 		SalaryMax:     in.SalaryMax,
@@ -172,7 +172,7 @@ func (s *JobPostingService) Create(recruiterID int, in *JobPostingInput) (*JobPo
 	return &dto, nil
 }
 
-// Update 企业编辑自己的职位（title/专业方向/地区/薪资/经验/描述；状态走 ToggleStatus）。
+// Update 企业编辑自己的职位（title/岗位/地区/薪资/经验/描述；状态走 ToggleStatus）。
 func (s *JobPostingService) Update(recruiterID, jobID int, in *JobPostingInput) (*JobPostingDTO, error) {
 	if err := validateJobPostingInput(in); err != nil {
 		return nil, err
@@ -186,7 +186,7 @@ func (s *JobPostingService) Update(recruiterID, jobID int, in *JobPostingInput) 
 	}
 	updates := map[string]any{
 		"title":          strings.TrimSpace(in.Title),
-		"specialty_id":   in.SpecialtyID,
+		"position_id":    in.PositionID,
 		"region":         strings.TrimSpace(in.Region),
 		"salary_min":     in.SalaryMin,
 		"salary_max":     in.SalaryMax,
@@ -240,13 +240,13 @@ func (s *JobPostingService) ToggleStatus(recruiterID, jobID int) (*JobPostingDTO
 
 // JobListParams 职位列表筛选参数（学员侧与企业管理侧共用）。
 type JobListParams struct {
-	Page        int
-	PageSize    int
-	SpecialtyID *int
-	Region      string
-	SalaryMin   *int
-	SalaryMax   *int
-	Experience  string
+	Page       int
+	PageSize   int
+	PositionID *int
+	Region     string
+	SalaryMin  *int
+	SalaryMax  *int
+	Experience string
 	// MineOnly 只看自己的职位（企业管理侧）。
 	MineOnly bool
 	// RecruiterID 按企业过滤（管理端巡检用；>0 时生效）。
@@ -285,8 +285,8 @@ func (s *JobPostingService) List(recruiterID int, p JobListParams) (*JobListResu
 	} else {
 		q = q.Where("status = ? AND forced_offline = ?", "open", false)
 	}
-	if p.SpecialtyID != nil {
-		q = q.Where("specialty_id = ?", *p.SpecialtyID)
+	if p.PositionID != nil {
+		q = q.Where("position_id = ?", *p.PositionID)
 	}
 	if p.Region != "" {
 		q = q.Where("region LIKE ?", "%"+p.Region+"%")

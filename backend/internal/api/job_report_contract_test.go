@@ -55,10 +55,10 @@ func assertJobReportContract(t *testing.T, db *gorm.DB) {
 	_ = json.Unmarshal(login.Body.Bytes(), &lr)
 	recToken := lr.Data.Token
 
-	db.Exec("INSERT INTO specialty (code, name, status) VALUES (?, ?, ?)", "maint", "叉车维修", 1)
+	db.Exec("INSERT INTO positions (code, name, status) VALUES (?, ?, ?)", "maint_tech", "叉车维修技师", 1)
 	var spID int
-	db.Raw("SELECT specialty_id FROM specialty WHERE code = ?", "maint").Scan(&spID)
-	jobBody := map[string]any{"title": "可疑职位", "specialty_id": spID, "region": "上海", "description": "交培训费包分配"}
+	db.Raw("SELECT position_id FROM positions WHERE code = ?", "maint_tech").Scan(&spID)
+	jobBody := map[string]any{"title": "可疑职位", "position_id": spID, "region": "上海", "description": "交培训费包分配"}
 	rec = doWithToken(t, r, recToken, http.MethodPost, "/api/recruit/jobs", jobBody)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("create job: %d %s", rec.Code, rec.Body.String())

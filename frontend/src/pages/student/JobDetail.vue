@@ -16,7 +16,7 @@
     <div v-else class="rounded-card border border-line bg-panel p-6">
       <h1 class="text-lg font-bold text-ink">{{ data.title }}</h1>
       <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-3">
-        <span v-if="data.specialty_name">{{ data.specialty_name }}</span>
+        <span v-if="data.position_name">{{ data.position_name }}</span>
         <span v-if="data.region">{{ data.region }}</span>
         <span v-if="data.salary_text">{{ data.salary_text }}</span>
         <span v-if="data.experience_req">经验：{{ data.experience_req }}</span>

@@ -41,7 +41,7 @@ describe('ResumePage 未建简历空态（#415）', () => {
   it('已建简历：渲染编辑表单（真实姓名输入框存在）', async () => {
     vi.mocked(resumeApi.get).mockResolvedValue({
       user_id: 1, real_name: '张三', contact_phone: '13800000001', wechat: '', region: '上海',
-      expected_specialty_extra: '', expected_regions: [], salary_negotiable: false,
+      expected_position_extra: '', expected_regions: [], salary_negotiable: false,
       available_in: '', job_nature: '', experience_years: 1, self_intro: '',
       resume_experiences: [], resume_certifications: [], resume_file_url: '', photos: [],
       visibility: 'hidden', created_at: '', updated_at: '',

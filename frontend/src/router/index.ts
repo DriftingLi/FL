@@ -314,6 +314,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/admin/Credentials.vue')
       },
       {
+        path: 'positions',
+        name: 'PositionManage',
+        component: () => import('@/pages/admin/PositionManage.vue')
+      },
+      {
         path: 'question-tags',
         name: 'QuestionTags',
         component: () => import('@/pages/admin/QuestionTags.vue')

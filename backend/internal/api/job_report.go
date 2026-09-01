@@ -101,8 +101,8 @@ func (h *JobReportHandler) ListAll(c *gin.Context) {
 			if v := queryIDPtr(c, "recruiter_id"); v != nil {
 				params.RecruiterID = *v
 			}
-			if v := queryIDPtr(c, "specialty_id"); v != nil {
-				params.SpecialtyID = v
+			if v := queryIDPtr(c, "position_id"); v != nil {
+				params.PositionID = v
 			}
 			// 管理端跨企业全量（recruiterID=0 且非 MineOnly 时服务层不加企业过滤）
 			return h.jobSvc.List(0, params)

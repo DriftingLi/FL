@@ -191,6 +191,7 @@ const adminNav: NavItem[] = [
     icon: FolderOpened,
     children: [
       { key: 'course-catalog', label: '课程管理', routeName: 'CourseCatalog', icon: FolderOpened },
+      { key: 'positions', label: '岗位管理', routeName: 'PositionManage', icon: CollectionTag },
       { key: 'credentials', label: '证件管理', routeName: 'CredentialManage', icon: CollectionTag },
       { key: 'question-review', label: '题库审核', routeName: 'QuestionReview', icon: EditPen },
       { key: 'question-tags', label: '题库标签', routeName: 'QuestionTags', icon: CollectionTag }

@@ -36,6 +36,8 @@ func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *serv
 	rg.GET("/tags", h.ListPublicTags)
 	rg.GET("/credentials", h.ListPublicCredentials)
 	rg.GET("/credentials/grouped", h.ListGroupedCredentials)
+	// 岗位字典公开读（学员端/招聘端共用，仅启用项）
+	rg.GET("/positions", h.ListPublicPositions)
 	// 当前证件（需登录，hrwai_user / admin / tutor 均可查询，切换仅 hrwai_user）
 	rg.GET("/me/credential", middleware.JWTAuth(rd.Session), h.GetCurrentCredential)
 	rg.PATCH("/me/credential", middleware.JWTAuth(rd.Session), h.SetCurrentCredential)
@@ -43,6 +45,13 @@ func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *serv
 	// ===== 管理端 CRUD =====
 	g := rg.Group("/admin", middleware.JWTAuth(rd.Session), middleware.RoleRequired("admin"))
 	g.GET("/catalog/tree", h.GetAdminCatalogTree)
+
+	// ---- 岗位字典（问题4：与专业方向解绑） ----
+	g.GET("/positions", h.ListPositions)
+	g.POST("/position", h.CreatePosition)
+	g.PUT("/position/:position_id", h.UpdatePosition)
+	g.PUT("/position/:position_id/sort", h.SwapPositionSort)
+	g.DELETE("/position/:position_id", h.DeletePosition)
 
 	// ---- 专业方向 ----
 	g.GET("/specialties", h.ListSpecialties)
@@ -949,4 +958,192 @@ func (h *TrainingCatalogHandler) SetCurrentCredential(c *gin.Context) {
 		return
 	}
 	response.SuccessWithMsg(c, "当前证件已切换", gin.H{"credential": dict})
+}
+
+// ListPositions 岗位列表（管理端含停用项）GET /api/admin/positions
+// @Summary 岗位列表
+// @Description 管理端岗位字典列表（含停用项）
+// @Tags 管理端-岗位字典
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.R "岗位列表"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/positions [get]
+func (h *TrainingCatalogHandler) ListPositions(c *gin.Context) {
+	items := h.svc.ListPositions(false)
+	response.Success(c, gin.H{"positions": items})
+}
+
+// CreatePosition 创建岗位 POST /api/admin/position
+// @Summary 创建岗位
+// @Description 管理员创建岗位字典项
+// @Tags 管理端-岗位字典
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body service.PositionInput true "岗位信息"
+// @Success 201 {object} response.R "创建成功"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/position [post]
+func (h *TrainingCatalogHandler) CreatePosition(c *gin.Context) {
+	Endpoint[service.PositionInput, service.PositionDict]{
+		Parse: func(c *gin.Context) (*service.PositionInput, error) {
+			var in service.PositionInput
+			if err := c.ShouldBindJSON(&in); err != nil {
+				return nil, badRequest("请求数据无效")
+			}
+			return &in, nil
+		},
+		Invoke: func(ctx context.Context, in *service.PositionInput) (*service.PositionDict, error) {
+			result, err := h.svc.CreatePosition(*in)
+			if err != nil {
+				return nil, err
+			}
+			return &result, nil
+		},
+		Render: func(c *gin.Context, _ *service.PositionInput, resp *service.PositionDict, err error) {
+			if err != nil {
+				response.BadRequest(c, err.Error())
+				return
+			}
+			response.Created(c, "岗位创建成功", deref(resp))
+		},
+	}.Handle(c)
+}
+
+// UpdatePosition 更新岗位 PUT /api/admin/position/:position_id
+// @Summary 更新岗位
+// @Description 管理员更新岗位字典项
+// @Tags 管理端-岗位字典
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param position_id path int true "岗位 ID"
+// @Param body body service.PositionInput true "岗位信息"
+// @Success 200 {object} response.R "更新成功"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/position/{position_id} [put]
+func (h *TrainingCatalogHandler) UpdatePosition(c *gin.Context) {
+	Endpoint[service.PositionInput, service.PositionDict]{
+		Parse: func(c *gin.Context) (*service.PositionInput, error) {
+			var in service.PositionInput
+			if err := c.ShouldBindJSON(&in); err != nil {
+				return nil, badRequest("请求数据无效")
+			}
+			return &in, nil
+		},
+		Invoke: func(ctx context.Context, in *service.PositionInput) (*service.PositionDict, error) {
+			id, err := pathInt(c, "position_id", "岗位 ID 无效")
+			if err != nil {
+				return nil, err
+			}
+			result, err := h.svc.UpdatePosition(id, *in)
+			if err != nil {
+				return nil, err
+			}
+			return &result, nil
+		},
+		Render: func(c *gin.Context, _ *service.PositionInput, resp *service.PositionDict, err error) {
+			if err != nil {
+				response.BadRequest(c, err.Error())
+				return
+			}
+			response.SuccessWithMsg(c, "岗位已更新", deref(resp))
+		},
+	}.Handle(c)
+}
+
+// SwapPositionSort 交换岗位排序 PUT /api/admin/position/:position_id/sort
+// @Summary 交换岗位排序
+// @Description 管理员交换两个岗位的排序位置
+// @Tags 管理端-岗位字典
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param position_id path int true "岗位 ID"
+// @Param body body object true "交换目标 {swap_with: int}"
+// @Success 200 {object} response.R "已交换"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/position/{position_id}/sort [put]
+func (h *TrainingCatalogHandler) SwapPositionSort(c *gin.Context) {
+	Endpoint[struct{}, struct{}]{
+		Parse: func(c *gin.Context) (*struct{}, error) {
+			return &struct{}{}, nil
+		},
+		Invoke: func(ctx context.Context, _ *struct{}) (*struct{}, error) {
+			id, err := pathInt(c, "position_id", "岗位 ID 无效")
+			if err != nil {
+				return nil, err
+			}
+			var body struct {
+				SwapWith int `json:"swap_with"`
+			}
+			if err := c.ShouldBindJSON(&body); err != nil {
+				return nil, badRequest("请求数据无效")
+			}
+			if err := h.svc.SwapPositionSort(id, body.SwapWith); err != nil {
+				return nil, err
+			}
+			return &struct{}{}, nil
+		},
+		Render: func(c *gin.Context, _ *struct{}, _ *struct{}, err error) {
+			if err != nil {
+				response.BadRequest(c, err.Error())
+				return
+			}
+			response.SuccessWithMsg(c, "排序已更新", nil)
+		},
+	}.Handle(c)
+}
+
+// DeletePosition 删除岗位 DELETE /api/admin/position/:position_id
+// @Summary 删除岗位
+// @Description 管理员删除岗位字典项（已关联职位/简历置空 position_id，不级联删除）
+// @Tags 管理端-岗位字典
+// @Produce json
+// @Security BearerAuth
+// @Param position_id path int true "岗位 ID"
+// @Success 200 {object} response.R "已删除"
+// @Failure 400 {object} response.R "删除失败"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/position/{position_id} [delete]
+func (h *TrainingCatalogHandler) DeletePosition(c *gin.Context) {
+	Endpoint[struct{}, struct{}]{
+		Parse: func(c *gin.Context) (*struct{}, error) {
+			return &struct{}{}, nil
+		},
+		Invoke: func(ctx context.Context, _ *struct{}) (*struct{}, error) {
+			id, err := pathInt(c, "position_id", "岗位 ID 无效")
+			if err != nil {
+				return nil, err
+			}
+			if err := h.svc.DeletePosition(id); err != nil {
+				return nil, err
+			}
+			return &struct{}{}, nil
+		},
+		Render: func(c *gin.Context, _ *struct{}, _ *struct{}, err error) {
+			if err != nil {
+				response.BadRequest(c, err.Error())
+				return
+			}
+			response.SuccessWithMsg(c, "岗位已删除", nil)
+		},
+	}.Handle(c)
+}
+
+// ListPublicPositions 岗位字典公开列表 GET /api/positions
+// @Summary 岗位字典
+// @Description 学员端/招聘端可用的岗位字典（仅启用项）
+// @Tags 招聘域-岗位字典
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.R "岗位列表"
+// @Router /positions [get]
+func (h *TrainingCatalogHandler) ListPublicPositions(c *gin.Context) {
+	items := h.svc.ListPositions(true)
+	response.Success(c, gin.H{"positions": items})
 }

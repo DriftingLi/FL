@@ -25,50 +25,50 @@ func NewJobCardService(db *gorm.DB, fileSvc *FileStore, logger *zap.Logger) *Job
 }
 
 type JobCardDTO struct {
-	UserID                 int             `json:"user_id"`
-	RealName               string          `json:"real_name"`
-	ContactPhone           string          `json:"contact_phone"`
-	Wechat                 string          `json:"wechat"`
-	Region                 string          `json:"region"`
-	ExpectedSpecialtyID    *int            `json:"expected_specialty_id,omitempty"`
-	ExpectedSpecialtyExtra string          `json:"expected_specialty_extra"`
-	ExpectedRegions        json.RawMessage `json:"expected_regions"`
-	SalaryMin              *int            `json:"salary_min,omitempty"`
-	SalaryMax              *int            `json:"salary_max,omitempty"`
-	SalaryNegotiable       bool            `json:"salary_negotiable"`
-	AvailableIn            string          `json:"available_in"`
-	JobNature              string          `json:"job_nature"`
-	ExperienceYears        int             `json:"experience_years"`
-	SelfIntro              string          `json:"self_intro"`
-	ResumeExperiences      json.RawMessage `json:"resume_experiences"`
-	ResumeCertifications   json.RawMessage `json:"resume_certifications"`
-	ResumeFileURL          string          `json:"resume_file_url"`
-	Photos                 json.RawMessage `json:"photos"`
-	Visibility             string          `json:"visibility"`
-	CreatedAt              string          `json:"created_at"`
-	UpdatedAt              string          `json:"updated_at"`
+	UserID                int             `json:"user_id"`
+	RealName              string          `json:"real_name"`
+	ContactPhone          string          `json:"contact_phone"`
+	Wechat                string          `json:"wechat"`
+	Region                string          `json:"region"`
+	ExpectedPositionID    *int            `json:"expected_position_id,omitempty"`
+	ExpectedPositionExtra string          `json:"expected_position_extra"`
+	ExpectedRegions       json.RawMessage `json:"expected_regions"`
+	SalaryMin             *int            `json:"salary_min,omitempty"`
+	SalaryMax             *int            `json:"salary_max,omitempty"`
+	SalaryNegotiable      bool            `json:"salary_negotiable"`
+	AvailableIn           string          `json:"available_in"`
+	JobNature             string          `json:"job_nature"`
+	ExperienceYears       int             `json:"experience_years"`
+	SelfIntro             string          `json:"self_intro"`
+	ResumeExperiences     json.RawMessage `json:"resume_experiences"`
+	ResumeCertifications  json.RawMessage `json:"resume_certifications"`
+	ResumeFileURL         string          `json:"resume_file_url"`
+	Photos                json.RawMessage `json:"photos"`
+	Visibility            string          `json:"visibility"`
+	CreatedAt             string          `json:"created_at"`
+	UpdatedAt             string          `json:"updated_at"`
 }
 
 type JobCardInput struct {
-	RealName               *string          `json:"real_name"`
-	ContactPhone           *string          `json:"contact_phone"`
-	Wechat                 *string          `json:"wechat"`
-	Region                 *string          `json:"region"`
-	ExpectedSpecialtyID    *int             `json:"expected_specialty_id"`
-	ExpectedSpecialtyExtra *string          `json:"expected_specialty_extra"`
-	ExpectedRegions        *json.RawMessage `json:"expected_regions"`
-	SalaryMin              *int             `json:"salary_min"`
-	SalaryMax              *int             `json:"salary_max"`
-	SalaryNegotiable       *bool            `json:"salary_negotiable"`
-	AvailableIn            *string          `json:"available_in"`
-	JobNature              *string          `json:"job_nature"`
-	ExperienceYears        *int             `json:"experience_years"`
-	SelfIntro              *string          `json:"self_intro"`
-	ResumeExperiences      *json.RawMessage `json:"resume_experiences"`
-	ResumeCertifications   *json.RawMessage `json:"resume_certifications"`
-	ResumeFileURL          *string          `json:"resume_file_url"`
-	Photos                 *json.RawMessage `json:"photos"`
-	Visibility             *string          `json:"visibility"`
+	RealName              *string          `json:"real_name"`
+	ContactPhone          *string          `json:"contact_phone"`
+	Wechat                *string          `json:"wechat"`
+	Region                *string          `json:"region"`
+	ExpectedPositionID    *int             `json:"expected_position_id"`
+	ExpectedPositionExtra *string          `json:"expected_position_extra"`
+	ExpectedRegions       *json.RawMessage `json:"expected_regions"`
+	SalaryMin             *int             `json:"salary_min"`
+	SalaryMax             *int             `json:"salary_max"`
+	SalaryNegotiable      *bool            `json:"salary_negotiable"`
+	AvailableIn           *string          `json:"available_in"`
+	JobNature             *string          `json:"job_nature"`
+	ExperienceYears       *int             `json:"experience_years"`
+	SelfIntro             *string          `json:"self_intro"`
+	ResumeExperiences     *json.RawMessage `json:"resume_experiences"`
+	ResumeCertifications  *json.RawMessage `json:"resume_certifications"`
+	ResumeFileURL         *string          `json:"resume_file_url"`
+	Photos                *json.RawMessage `json:"photos"`
+	Visibility            *string          `json:"visibility"`
 }
 
 type resumeCertificationRow struct {
@@ -197,16 +197,16 @@ func applyInput(card *model.JobCard, in JobCardInput) {
 	if in.Region != nil {
 		card.Region = strings.TrimSpace(*in.Region)
 	}
-	if in.ExpectedSpecialtyID != nil {
-		if *in.ExpectedSpecialtyID <= 0 {
-			card.ExpectedSpecialtyID = nil
+	if in.ExpectedPositionID != nil {
+		if *in.ExpectedPositionID <= 0 {
+			card.ExpectedPositionID = nil
 		} else {
-			v := *in.ExpectedSpecialtyID
-			card.ExpectedSpecialtyID = &v
+			v := *in.ExpectedPositionID
+			card.ExpectedPositionID = &v
 		}
 	}
-	if in.ExpectedSpecialtyExtra != nil {
-		card.ExpectedSpecialtyExtra = strings.TrimSpace(*in.ExpectedSpecialtyExtra)
+	if in.ExpectedPositionExtra != nil {
+		card.ExpectedPositionExtra = strings.TrimSpace(*in.ExpectedPositionExtra)
 	}
 	if in.ExpectedRegions != nil {
 		if len(*in.ExpectedRegions) == 0 || string(*in.ExpectedRegions) == "null" {
@@ -266,9 +266,9 @@ func (s *JobCardService) validateInput(in JobCardInput) error {
 	if in.SelfIntro != nil && len([]rune(*in.SelfIntro)) > 1000 {
 		return errors.New("自我介绍不能超过 1000 字")
 	}
-	if in.ExpectedSpecialtyID != nil && *in.ExpectedSpecialtyID > 0 {
+	if in.ExpectedPositionID != nil && *in.ExpectedPositionID > 0 {
 		var cnt int64
-		if err := s.db.Model(&model.Specialty{}).Where("specialty_id = ?", *in.ExpectedSpecialtyID).Count(&cnt).Error; err != nil {
+		if err := s.db.Model(&model.Position{}).Where("position_id = ?", *in.ExpectedPositionID).Count(&cnt).Error; err != nil {
 			return err
 		}
 		if cnt == 0 {
@@ -342,28 +342,28 @@ func (s *JobCardService) validateInput(in JobCardInput) error {
 
 func toJobCardDTO(m *model.JobCard) JobCardDTO {
 	return JobCardDTO{
-		UserID:                 m.UserID,
-		RealName:               m.RealName,
-		ContactPhone:           m.ContactPhone,
-		Wechat:                 m.Wechat,
-		Region:                 m.Region,
-		ExpectedSpecialtyID:    m.ExpectedSpecialtyID,
-		ExpectedSpecialtyExtra: m.ExpectedSpecialtyExtra,
-		ExpectedRegions:        json.RawMessage(m.ExpectedRegions),
-		SalaryMin:              m.SalaryMin,
-		SalaryMax:              m.SalaryMax,
-		SalaryNegotiable:       m.SalaryNegotiable,
-		AvailableIn:            m.AvailableIn,
-		JobNature:              m.JobNature,
-		ExperienceYears:        m.ExperienceYears,
-		SelfIntro:              m.SelfIntro,
-		ResumeExperiences:      json.RawMessage(m.ResumeExperiences),
-		ResumeCertifications:   json.RawMessage(m.ResumeCertifications),
-		ResumeFileURL:          m.ResumeFileURL,
-		Photos:                 json.RawMessage(m.Photos),
-		Visibility:             m.Visibility,
-		CreatedAt:              m.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:              m.UpdatedAt.Format(time.RFC3339),
+		UserID:                m.UserID,
+		RealName:              m.RealName,
+		ContactPhone:          m.ContactPhone,
+		Wechat:                m.Wechat,
+		Region:                m.Region,
+		ExpectedPositionID:    m.ExpectedPositionID,
+		ExpectedPositionExtra: m.ExpectedPositionExtra,
+		ExpectedRegions:       json.RawMessage(m.ExpectedRegions),
+		SalaryMin:             m.SalaryMin,
+		SalaryMax:             m.SalaryMax,
+		SalaryNegotiable:      m.SalaryNegotiable,
+		AvailableIn:           m.AvailableIn,
+		JobNature:             m.JobNature,
+		ExperienceYears:       m.ExperienceYears,
+		SelfIntro:             m.SelfIntro,
+		ResumeExperiences:     json.RawMessage(m.ResumeExperiences),
+		ResumeCertifications:  json.RawMessage(m.ResumeCertifications),
+		ResumeFileURL:         m.ResumeFileURL,
+		Photos:                json.RawMessage(m.Photos),
+		Visibility:            m.Visibility,
+		CreatedAt:             m.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:             m.UpdatedAt.Format(time.RFC3339),
 	}
 }
 

@@ -146,6 +146,7 @@ import { Plus, Search, ArrowDown } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { adminApi, type AdminRecruiter } from '@/api/admin'
+import { usernameRules } from '@/utils/validate'
 import { useAdminTable } from '@/composables/useAdminTable'
 import { formatDateTime } from '@/utils/format'
 
@@ -159,7 +160,7 @@ const formData = reactive({
 // 必填校验与后端 ValidateRecruiterInput 逐条同源（#416：前后端校验口径单点，不各写一套）
 const required = (msg: string) => ({ required: true, message: msg, trigger: 'blur' })
 const formRules: FormRules = {
-  username: [required('账号不能为空')],
+  username: usernameRules,
   password: [
     { required: true, message: '密码不能为空', trigger: 'blur' },
     { min: 6, max: 20, message: '密码长度需为 6-20 位', trigger: 'blur' },
@@ -175,7 +176,7 @@ const formRules: FormRules = {
 const editDialogVisible = ref(false)
 const editing = ref(false)
 const editFormRef = ref<FormInstance>()
-const editForm = reactive({ id: 0, company_name: '', credit_code: '', business_scope: '', contact_name: '', contact_phone: '', contact_email: '' })
+const editForm = reactive({ id: 0, username: '', company_name: '', credit_code: '', business_scope: '', contact_name: '', contact_phone: '', contact_email: '' })
 
 const pwdDialogVisible = ref(false)
 const pwdSubmitting = ref(false)
@@ -190,6 +191,7 @@ const pwdRules: FormRules = {
 
 function openEditDialog(row: AdminRecruiter) {
   editForm.id = row.id
+  editForm.username = row.username
   editForm.company_name = row.company_name
   editForm.credit_code = row.credit_code
   editForm.business_scope = row.business_scope
@@ -212,6 +214,7 @@ async function handleEditSubmit() {
   editing.value = true
   try {
     await adminApi.editRecruiter(editForm.id, {
+      username: editForm.username,
       company_name: editForm.company_name,
       credit_code: editForm.credit_code,
       business_scope: editForm.business_scope,

@@ -52,17 +52,31 @@
           <el-input v-model="form.wechat" maxlength="50" placeholder="微信号" />
         </el-form-item>
         <el-form-item label="现居地">
-          <el-input v-model="form.region" maxlength="50" placeholder="现居城市" />
+          <el-cascader
+            v-model="regionCascader"
+            :options="regionData"
+            :props="{ value: 'label', label: 'label', children: 'children' }"
+            placeholder="选择省/市"
+            clearable
+            class="!w-full"
+            @change="onRegionChange"
+          />
         </el-form-item>
         <el-form-item label="期望岗位">
-          <el-select v-model="form.expected_specialty_id" clearable placeholder="选择岗位">
-            <el-option v-for="s in specialties" :key="s.specialty_id" :label="s.name" :value="s.specialty_id" />
+          <el-select v-model="form.expected_position_id" clearable placeholder="选择岗位">
+            <el-option v-for="p in positions" :key="p.position_id" :label="p.name" :value="p.position_id" />
           </el-select>
         </el-form-item>
         <el-form-item label="意向地区">
-          <el-select v-model="form.expected_regions" multiple filterable allow-create placeholder="输入地区后回车">
-            <el-option v-for="r in regionOptions" :key="r" :label="r" :value="r" />
-          </el-select>
+          <el-cascader
+            v-model="expectedRegionsCascader"
+            :options="regionData"
+            :props="{ value: 'label', label: 'label', children: 'children', multiple: true }"
+            placeholder="选择省/市（可多选）"
+            clearable
+            class="!w-full"
+            @change="onRegionsChange"
+          />
         </el-form-item>
         <el-form-item label="期望薪资">
           <div class="flex items-center gap-2">
@@ -153,6 +167,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { resumeApi } from '@/api/resume'
+import { regionData } from 'element-china-area-data'
 import { unwrappedRequest } from '@/api/request'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
@@ -172,7 +187,7 @@ const form = reactive<any>({
   contact_phone: '',
   wechat: '',
   region: '',
-  expected_specialty_id: null,
+  expected_position_id: null,
   expected_regions: [],
   salary_min: null,
   salary_max: null,
@@ -188,9 +203,10 @@ const form = reactive<any>({
   visibilityOpen: false
 })
 
-const specialties = ref<any[]>([])
+const positions = ref<any[]>([])
 const credentials = ref<any[]>([])
-const regionOptions = ref<string[]>([])
+const regionCascader = ref<string[]>([])
+const expectedRegionsCascader = ref<string[][]>([])
 const viewCount = ref(0)
 
 function goBack() {
@@ -283,8 +299,11 @@ async function load() {
     form.contact_phone = data.contact_phone || ''
     form.wechat = data.wechat || ''
     form.region = data.region || ''
-    form.expected_specialty_id = data.expected_specialty_id ?? null
+    form.expected_position_id = data.expected_position_id ?? null
     form.expected_regions = data.expected_regions || []
+    // 回填地区级联：现居地（省/市）与意向地区（多选）
+    regionCascader.value = data.region ? String(data.region).split('/') : []
+    expectedRegionsCascader.value = (data.expected_regions || []).map((r: string) => [r])
     form.salary_min = data.salary_min ?? null
     form.salary_max = data.salary_max ?? null
     form.salary_negotiable = !!data.salary_negotiable
@@ -307,8 +326,8 @@ async function load() {
     }
   }
   try {
-    const res: any = await unwrappedRequest.get('/catalog/tree')
-    if (res?.specialties) specialties.value = res.specialties
+    const res: any = await unwrappedRequest.get('/positions', { headers: { 'X-Silent': '1' } })
+    if (res?.positions) positions.value = res.positions
   } catch {}
   try {
     const res: any = await unwrappedRequest.get('/credentials')
@@ -328,7 +347,7 @@ async function save() {
       contact_phone: form.contact_phone,
       wechat: form.wechat,
       region: form.region,
-      expected_specialty_id: form.expected_specialty_id,
+      expected_position_id: form.expected_position_id,
       expected_regions: form.expected_regions,
       salary_min: form.salary_min,
       salary_max: form.salary_max,
@@ -370,6 +389,28 @@ async function revokeReq(id: number) {
   try { await resumeApi.revokeContactRequest(id); ElMessage.success('已撤回'); loadContactRequests() } catch (e: any) { ElMessage.error(e?.message || '操作失败') }
 }
 
-onMounted(() => { load(); loadContactRequests() })
+
+// 地区选择器联动：现居地单选（存省/市字符串，兼容旧字段）
+function onRegionChange(val: any) {
+  if (Array.isArray(val) && val.length) {
+    form.region = val.join('/')
+  } else {
+    form.region = ''
+  }
+}
+
+// 意向地区多选：每项为 [省, 市] 数组，存「省/市」字符串数组（兼容 expected_regions 既有契约）
+function onRegionsChange(val: any) {
+  form.expected_regions = (val || []).map((item: any) => (Array.isArray(item) ? item.join('/') : item))
+}
+
+onMounted(async () => {
+  try {
+    const res: any = await unwrappedRequest.get('/positions', { headers: { 'X-Silent': '1' } })
+    positions.value = res?.positions || []
+  } catch {}
+  load()
+  loadContactRequests()
+})
 </script>
 

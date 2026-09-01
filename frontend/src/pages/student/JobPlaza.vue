@@ -3,8 +3,8 @@
     <h1 class="text-xl font-bold text-ink">职位广场</h1>
 
     <div class="rounded-card border border-line bg-panel p-4 flex flex-wrap gap-2">
-      <el-select v-model="filters.specialty_id" clearable placeholder="专业方向" class="!w-40" @change="load">
-        <el-option v-for="s in specialties" :key="s.specialty_id" :label="s.name" :value="s.specialty_id" />
+      <el-select v-model="filters.position_id" clearable placeholder="岗位" class="!w-40" @change="load">
+        <el-option v-for="p in positions" :key="p.position_id" :label="p.name" :value="p.position_id" />
       </el-select>
       <el-input v-model="filters.region" placeholder="地区" clearable class="!w-32" @change="load" />
       <el-input v-model.number="filters.salary_min" placeholder="最低薪资" type="number" clearable class="!w-28" @change="load" />
@@ -34,7 +34,7 @@
           <div class="min-w-0 flex-1">
             <div class="text-sm font-semibold text-ink">{{ item.title }}</div>
             <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-3">
-              <span v-if="item.specialty_name">{{ item.specialty_name }}</span>
+              <span v-if="item.position_name">{{ item.position_name }}</span>
               <span v-if="item.region">{{ item.region }}</span>
               <span v-if="item.salary_text">{{ item.salary_text }}</span>
               <span v-if="item.experience_req">经验：{{ item.experience_req }}</span>
@@ -63,22 +63,27 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { jobApi, type JobPosting } from '@/api/job'
-import { trainingApi, type CatalogDirection } from '@/api/training'
+import { unwrappedRequest } from '@/api/request'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 
 const items = ref<JobPosting[]>([])
-const specialties = ref<CatalogDirection[]>([])
+interface PositionItem {
+  position_id: number
+  name: string
+}
+
+const positions = ref<PositionItem[]>([])
 
 const filters = reactive<{
-  specialty_id: number | null
+  position_id: number | null
   region: string
   salary_min: number | null
   salary_max: number | null
   experience: string
 }>({
-  specialty_id: null,
+  position_id: null,
   region: '',
   salary_min: null,
   salary_max: null,
@@ -97,7 +102,7 @@ const {
   handlePageChange
 } = useAsyncPage(async () => {
   const params: any = { page: page.value, page_size: pageSize.value }
-  if (filters.specialty_id) params.specialty_id = filters.specialty_id
+  if (filters.position_id) params.position_id = filters.position_id
   if (filters.region) params.region = filters.region
   if (filters.salary_min != null) params.salary_min = filters.salary_min
   if (filters.salary_max != null) params.salary_max = filters.salary_max
@@ -109,8 +114,8 @@ const {
 
 onMounted(async () => {
   try {
-    const tree: any = await trainingApi.getCatalogTree()
-    specialties.value = tree?.specialties || []
+    const res: any = await unwrappedRequest.get('/positions', { headers: { 'X-Silent': '1' } })
+    positions.value = res?.positions || []
   } catch {}
   load()
 })
