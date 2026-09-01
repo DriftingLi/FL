@@ -1,10 +1,14 @@
 name: CD - 持续部署
 
 on:
-  # CI 通过后由 ci-summary job 主动调用 workflow_dispatch 触发（确保部署的是已测试的代码）
-  # 不再使用 workflow_run 被动触发:被取消的 CI 也会触发 workflow_run(conclusion=cancelled),
-  # 导致 CD 先失败一次;且短时间内多次 CI 完成时 workflow_run 事件可能被 GitHub 去重抑制,
-  # 导致成功的 CI 不再触发 CD。
+  # 1) master 合并（push）→ 直发 production。不重跑 CI,由 gate job 校验来源 PR 的
+  #    ci-summary 结论与 testing 冒烟部署结论（见 jobs.gate）。
+  push:
+    branches: [master]
+  # 2) 分支 CI 全绿后由 ci.yml 的 ci-summary job 主动 workflow_dispatch 触发 testing;
+  #    也可人工 dispatch（应急放行生产时 environment=production,天然跳过 gate 校验）。
+  #    不用 workflow_run 被动触发:被取消的 CI 也会触发 workflow_run(conclusion=cancelled),
+  #    导致 CD 先失败一次;且短时间内多次 CI 完成时 workflow_run 事件可能被 GitHub 去重抑制。
   workflow_dispatch:
     inputs:
       # 触发 CD 的 commit SHA(由 ci-summary 传入,确保部署的就是 CI 验证过的代码)
@@ -34,11 +38,13 @@ on:
 
 concurrency:
   # 同一环境同时只允许一条部署（串行，避免部署互相抢占 Docker 资源/竞争 .env）。
-  # 仅按环境分组、不按 ref：连续合并多个 PR 时不同 ref 的 CD 若不互斥会并发部署
-  # 同一目标（曾致两条 production CD 并发竞争 .env.tmp，.env 丢失后 compose 回退
-  # Docker Hub 默认镜像名拉取超时，栈停机）。代价：卡死的 run 会阻塞后续部署，
-  # 需手动 cancel（github.com/*/actions 页面）。
-  group: cd-${{ inputs.environment }}
+  # 按「解析后的环境名」分组：push 事件下 inputs.environment 为空,必须回退到
+  # github.ref 判断,否则生产部署会落进 cd- 组,与人工 dispatch 的 cd-production 不互斥
+  # （曾致两条 production CD 并发竞争 .env.tmp，.env 丢失后 compose 回退 Docker Hub
+  # 默认镜像名拉取超时，栈停机）。
+  # 不同环境（testing / production 两台机器）分属不同组,互不阻塞。
+  # 代价：卡死的 run 会阻塞同环境后续部署,需手动 cancel（github.com/*/actions 页面）。
+  group: cd-${{ inputs.environment || (github.ref == 'refs/heads/master' && 'production' || 'testing') }}
   cancel-in-progress: false
 
 env:
@@ -57,9 +63,128 @@ env:
 
 jobs:
   # ============================================================
+  # Stage 0: 解析部署目标 + 生产门禁
+  #   push master        → environment=production,并校验来源 PR 的 CI 与 testing 冒烟
+  #   workflow_dispatch  → environment=inputs.environment,人工授权,不经门禁(应急通道)
+  #
+  #   为什么必须有门禁:squash 合并在 master 上生成的是从未跑过 CI 的新 SHA,
+  #   「PR 分支的 head SHA 测过」与「master 的 commit 测过」只能靠回查 PR 对齐。
+  #   配合 ruleset 的必检 ci-summary + 要求分支 up-to-date,保证测过的树 == 合入的树。
+  # ============================================================
+  gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      deployments: read
+    outputs:
+      environment: ${{ steps.target.outputs.environment }}
+    steps:
+      - name: 解析目标环境
+        id: target
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            echo "environment=production" >> "$GITHUB_OUTPUT"
+            echo "master push → production(需过门禁)"
+          else
+            echo "environment=${{ inputs.environment }}" >> "$GITHUB_OUTPUT"
+            echo "dispatch → ${{ inputs.environment }}(人工/CI 触发,不经门禁)"
+          fi
+
+      - uses: actions/checkout@v4
+        if: github.event_name == 'push'
+        with:
+          fetch-depth: 1
+
+      - name: 校验来源 PR 的 CI 与 testing 冒烟
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          MANUAL="手动 dispatch cd.yml(environment=production, ref=$GITHUB_SHA)"
+
+          SUBJECT=$(git log -1 --pretty=%s)
+          PR=$(printf '%s' "$SUBJECT" | grep -oE '\(#[0-9]+\)$' | tr -dc '0-9' || true)
+          if [ -z "$PR" ]; then
+            echo "::error::无法从 commit 主题解析 PR 号:[$SUBJECT]。squash 合并默认带 (#N) 后缀;确需放行请$MANUAL"
+            exit 1
+          fi
+
+          # 独立赋值以便 set -e 捕获 gh 调用失败（放进 read 的替换里会被 read 的退出码吞掉）
+          TSV=$(gh pr view "$PR" --json state,headRefOid,mergeCommit \
+                  --jq '[.state, .headRefOid, .mergeCommit.oid] | @tsv')
+          IFS=$'\t' read -r PSTATE SHA MERGE <<EOF
+          $TSV
+          EOF
+          echo ">>> PR #$PR state=$PSTATE head=$SHA merge=$MERGE"
+          [ "$PSTATE" = "MERGED" ] || { echo "::error::PR #$PR 状态为 $PSTATE,非 MERGED"; exit 1; }
+          if [ "$MERGE" != "$GITHUB_SHA" ]; then
+            echo "::error::PR #$PR 的 merge commit 与本次部署 HEAD 不一致(可能有多个 commit 一起进 master),请对每个 PR 单独 $MANUAL"
+            exit 1
+          fi
+
+          # 1) CI 结论:同一 SHA 可能有多条 ci-summary 记录(旧版 push+pull_request 双跑),
+          #    按「任一 failure 即失败 / 有 success 即通过」聚合,避免 head -1 取到 skipped 误判
+          CI=$(gh api "repos/$GITHUB_REPOSITORY/commits/$SHA/check-runs?per_page=100" --jq '
+            [.check_runs[] | select(.name=="ci-summary") | .conclusion]
+            | if any(. == "failure") then "failure"
+              elif any(. == "success") then "success"
+              elif length == 0 then "missing"
+              else "other" end')
+          if [ "$CI" != "success" ]; then
+            echo "::error::PR #$PR head $SHA 的 ci-summary 结论为 $CI,阻断生产部署"
+            echo "    missing/other 通常说明该分支跑的还是旧版流水线(ci-summary 仅 master 上报),merge master 后重推分支即可"
+            echo "    确需放行请$MANUAL"
+            exit 1
+          fi
+
+          # 2) testing 冒烟:部署记录在 CD 的 deploy job 启动时才创建,而合并可能早于冒烟结束,
+          #    故轮询等待(上限 15 分钟);冒烟明确失败则立即阻断,不再白等。
+          #    聚合一律下推到 --jq（避免 `| head -1` 在 pipefail 下因 SIGPIPE 误杀步骤）;
+          #    瞬时 API 失败按「未就绪」处理继续轮询,不直接判死。
+          DEADLINE=$(( $(date +%s) + 900 ))
+          while :; do
+            DEP_ID=$(gh api "repos/$GITHUB_REPOSITORY/deployments?per_page=100" \
+                       --jq "[.[] | select(.sha==\"$SHA\" and .environment==\"testing\")] | (.[0].id // empty)" || true)
+            STATE=""
+            if [ -n "$DEP_ID" ]; then
+              STATE=$(gh api "repos/$GITHUB_REPOSITORY/deployments/$DEP_ID/statuses" \
+                        --jq 'if length == 0 then "none" else (sort_by(.created_at) | last | .state) end' || true)
+            fi
+            case "$STATE" in
+              success)
+                echo "✅ testing 冒烟通过(deployment $DEP_ID)"
+                break ;;
+              failure|error)
+                echo "::error::commit $SHA 的 testing 冒烟为 $STATE,阻断生产部署"
+                echo "    出口 A:到 Actions 重跑该分支的 testing CD run,通过后重新合并"
+                echo "    出口 B:确认无需冒烟时$MANUAL"
+                exit 1 ;;
+            esac
+            if [ "$(date +%s)" -ge "$DEADLINE" ]; then
+              echo "::error::等不到 commit $SHA 的 testing 冒烟成功(deployment=${DEP_ID:-无记录} 状态=${STATE:-未知}),阻断生产部署"
+              if [ -z "$DEP_ID" ]; then
+                echo "    无部署记录多半是「分支 CI 变绿时还没有开 PR」造成的(ci-summary 只在有 open PR 时派发冒烟)。"
+                echo "    出口 A:到 Actions 重跑该分支的 CI run → ci-summary 会补发 testing 冒烟"
+              else
+                echo "    出口 A:到 Actions 重跑该分支的 testing CD run"
+              fi
+              echo "    出口 B:冒烟通过后(或确认无需冒烟时)$MANUAL"
+              exit 1
+            fi
+            echo "testing 冒烟未就绪(deployment=${DEP_ID:-无记录} 状态=${STATE:-未知}),30s 后重试..."
+            sleep 30
+          done
+
+          echo "✅ 门禁通过:PR #$PR / ci-summary=success / testing 冒烟=success"
+          echo "| 门禁 | PR #$PR · ci-summary ✅ · testing 冒烟 ✅ |" >> "$GITHUB_STEP_SUMMARY"
+
+  # ============================================================
   # Stage 1: 构建后端 Docker 镜像并推送 ghcr.io
   # ============================================================
   build-backend:
+    needs: gate
     if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_backend) }}
     runs-on: ubuntu-latest
     permissions:
@@ -123,6 +248,7 @@ jobs:
   # Stage 1.5: 构建前端 Docker 镜像并推送 ghcr.io（与后端并行）
   # ============================================================
   build-frontend:
+    needs: gate
     if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_frontend) }}
     runs-on: ubuntu-latest
     permissions:
@@ -186,6 +312,7 @@ jobs:
   # 拆分自 backend，使 backend 镜像从 ~500MB 减小到 ~50MB
   # ============================================================
   build-libreoffice:
+    needs: gate
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -247,15 +374,18 @@ jobs:
   # Stage 2: 通过公网 SSH 部署全栈到自托管服务器
   # ============================================================
   deploy:
-    needs: [build-backend, build-frontend, build-libreoffice]
+    needs: [gate, build-backend, build-frontend, build-libreoffice]
     if: |
       always() &&
+      needs.gate.result == 'success' &&
       needs.build-backend.result == 'success' &&
       needs.build-frontend.result == 'success' &&
       needs.build-libreoffice.result == 'success'
     runs-on: ubuntu-latest
     environment:
-      name: ${{ inputs.environment || 'production' }}
+      # 环境名统一由 gate 解析(push→production / dispatch→inputs)，
+      # 保证 push 事件下 inputs.environment 为空时也能正确落到 production
+      name: ${{ needs.gate.outputs.environment }}
     env:
       # 镜像信息（来自 build-backend/build-frontend/build-libreoffice outputs：
       # 内容哈希标签，未变更的镜像跳过构建/拉取；缺失时回退 commit SHA）
@@ -291,7 +421,7 @@ jobs:
       # 登录态 Cookie（父域名共享登录；production 走 HTTPS 时 Secure=true）
       AUTH_COOKIE_NAME: ${{ secrets.AUTH_COOKIE_NAME || 'hrwai_token' }}
       AUTH_COOKIE_DOMAIN: ${{ secrets.AUTH_COOKIE_DOMAIN }}
-      AUTH_COOKIE_SECURE: ${{ inputs.environment == 'production' && 'true' || 'false' }}
+      AUTH_COOKIE_SECURE: ${{ needs.gate.outputs.environment == 'production' && 'true' || 'false' }}
       # SMTP 邮件（验证码通道；腾讯企业邮 SSL 465）
       SMTP_HOST: ${{ secrets.SMTP_HOST }}
       SMTP_PORT: ${{ secrets.SMTP_PORT || '465' }}
@@ -362,14 +492,14 @@ jobs:
       REDIS_VOLUME: ${{ secrets.REDIS_VOLUME || '' }}
       UPLOADS_VOLUME: ${{ secrets.UPLOADS_VOLUME || '' }}
       REPORTS_VOLUME: ${{ secrets.REPORTS_VOLUME || '' }}
-      # ===== testing 加速参数（按环境注入）=====
+      # ===== testing 加速参数（按环境注入,环境名取自 gate outputs 以兼容 push 事件）=====
       # testing 跳过部署期 pg_dump 备份（回滚保障由 RBD 快照+每日备份承担）
-      SKIP_BACKUP: ${{ (inputs.environment || 'production') == 'testing' && 'true' || 'false' }}
+      SKIP_BACKUP: ${{ needs.gate.outputs.environment == 'testing' && 'true' || 'false' }}
       # testing 不启用 libreoffice profile（省 500MB 镜像传输）；production 必须 full
-      COMPOSE_PROFILES: ${{ (inputs.environment || 'production') == 'production' && 'full' || '' }}
+      COMPOSE_PROFILES: ${{ needs.gate.outputs.environment == 'production' && 'full' || '' }}
       # testing 缩短健康检查轮询与 compose --wait 超时，快速通过即停容器
-      HEALTH_CHECK_RETRIES: ${{ (inputs.environment || 'production') == 'testing' && '8' || '20' }}
-      UP_WAIT_TIMEOUT: ${{ (inputs.environment || 'production') == 'testing' && '30' || '60' }}
+      HEALTH_CHECK_RETRIES: ${{ needs.gate.outputs.environment == 'testing' && '8' || '20' }}
+      UP_WAIT_TIMEOUT: ${{ needs.gate.outputs.environment == 'testing' && '30' || '60' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -553,9 +683,11 @@ jobs:
 
       # --------------------------------------------------------
       # Step 2.4: 测试环境部署成功后停止容器（避免空转占用资源）
+      #   testing CD 定位为冒烟验证：起栈 → 健康检查 → 立即 down，
+      #   环境名取自 gate outputs（push 事件下 inputs.environment 为空）
       # --------------------------------------------------------
       - name: 测试环境停止容器
-        if: success() && inputs.environment == 'testing'
+        if: success() && needs.gate.outputs.environment == 'testing'
         run: |
           echo "测试环境部署成功，停止容器以释放资源..."
           ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
@@ -575,7 +707,7 @@ jobs:
   # Stage 6: 部署汇总
   # ============================================================
   notify:
-    needs: deploy
+    needs: [gate, deploy]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -587,6 +719,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| 项目 | 状态 |" >> $GITHUB_STEP_SUMMARY
           echo "|------|------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 目标环境 | ${{ needs.gate.outputs.environment }} |" >> $GITHUB_STEP_SUMMARY
           echo "| 全栈部署 (公网 SSH) | $([ "$DEPLOY_STATUS" = 'success' ] && echo '✅' || ([ "$DEPLOY_STATUS" = 'skipped' ] && echo '⏭️') || echo '❌') |" >> $GITHUB_STEP_SUMMARY
           echo "| 前端 | $([ "$DEPLOY_STATUS" = 'success' ] && echo '✅ 已部署' || echo '⚠️') |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -594,28 +727,6 @@ jobs:
           echo "- 前端: ${{ vars.FRONTEND_URL || '未配置' }}" >> $GITHUB_STEP_SUMMARY
         shell: bash
 
-  # ============================================================
-  # Stage 7: 生产发布（testing 验证通过后，链式触发 production 部署）
-  # master 合并后先部署 testing；测试通过 → 本 job 触发 production，
-  # 保证生产部署的就是测试验证过的代码
-  # ============================================================
-  promote:
-    needs: notify
-    if: success() && inputs.environment == 'testing' && github.ref == 'refs/heads/master'
-    runs-on: ubuntu-latest
-    permissions:
-      actions: write
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: 触发生产部署
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo ">>> testing 验证通过，触发 production 部署（ref=${{ inputs.ref || github.sha }}）"
-          gh workflow run cd.yml \
-            --ref master \
-            -f ref="${{ inputs.ref || github.sha }}" \
-            -f environment=production
-          echo "✅ 已触发 production 部署"
+  # 注：生产发布不再有 promote job。旧链路是「master → testing → promote → production」，
+  # 现链路是「分支 push → testing 冒烟」+「master 合并 → 直接 production」，
+  # production 由 cd.yml 的 push 触发器进入，前置校验见 Stage 0 的 gate job。

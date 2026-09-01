@@ -1,9 +1,12 @@
 name: CI - 持续集成
 
+# 只在「非 master 分支 push」时跑 CI：
+#   - master push 不跑：合并后由 cd.yml 的 push 触发器直发 production（gate 校验来源 PR 的 CI 结论）
+#   - pull_request 不跑：同一 commit 上 push 事件产生的 job check run 已经出现在 PR 的
+#     Checks 面板并能满足 ruleset 必检，无需再跑第二遍全量 CI（历史上一次 push 要等 8m×2）
 on:
-  pull_request:
-    branches: [master, develop]
   push:
+    branches-ignore: [master]
   workflow_dispatch:
 
 concurrency:
@@ -16,7 +19,7 @@ env:
 
 jobs:
   # ============================================================
-  # Stage 1: 代码变更检测（仅 PR 时跳过无关 job，push 全量运行）
+  # Stage 1: 代码变更检测（backend/frontend 无关变更时跳过对应 job，但 ci-summary 仍会上报结论）
   # ============================================================
   changes:
     runs-on: ubuntu-latest
@@ -252,20 +255,21 @@ jobs:
           echo "迁移文件完整性检查通过"
 
   # ============================================================
-  # Stage 7: CI 汇总（作为 CD 流水线的依赖门禁）
-  # CI 全部通过后,主动调用 CD workflow 的 workflow_dispatch 触发部署
+  # Stage 7: CI 汇总 + testing 冒烟部署门禁
+  #   1) 汇总各 job 结论。本 job 的 check run 名（ci-summary）是 ruleset 配置的
+  #      必检状态检查，必须在每次分支 push 上运行并上报 success/failure，
+  #      不能被 skip —— skipped 不满足必检，PR 会永远停在 pending 无法合并。
+  #   2) CI 全绿且该分支有开启中的 PR 时，派发 CD workflow 部署 testing 冒烟。
   # ============================================================
   ci-summary:
     needs: [backend-lint, backend-test, frontend-check, security-scan, migration-check]
-    # 仅 master 合并（push）后触发 CD：非 master 分支/PR 只跑 CI 不部署，
-    # 避免每次 push 都等待 testing 部署（合并前门禁由此前的 required_deployments
-    # testing 改为合并后统一部署 testing → production 验证）
-    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master'
+    if: always()
     runs-on: ubuntu-latest
-    # 触发 CD workflow_dispatch 需要 actions:write 权限
+    # 触发 CD workflow_dispatch 需要 actions:write；查分支 open PR 需要 pull-requests:read
     permissions:
       actions: write
       contents: read
+      pull-requests: read
     steps:
       - name: 检查是否全部通过
         run: |
@@ -307,20 +311,40 @@ jobs:
       # CI 全部通过后,主动触发 CD workflow
       # gh CLI 需要 git 仓库上下文,必须先 checkout 代码
       - uses: actions/checkout@v4
-        if: success()
+        if: success() && github.event_name == 'push'
 
-      - name: 触发 CD 部署
-        if: success()
+      - name: 判定是否部署 testing
+        if: success() && github.event_name == 'push'
+        id: deploy-gate
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # master 合并后：先部署 testing 验证，testing 成功后由 CD 的 promote job
-          # 再触发 production（见 cd.yml），保证生产部署的是测试通过的代码
-          echo ">>> 触发 CD workflow (testing),ref=${{ github.sha }}"
+          set -euo pipefail
+          # 只有开了 PR 的分支才值得占 testing 机器做冒烟：孤儿分支/试验分支直接跳过。
+          # 用 REST head=<owner>:<branch> 精确匹配（gh pr list --head 的 owner 前缀写法
+          # 在不同 gh 版本上表现不一致，已实测）
+          PR=$(gh api "repos/$GITHUB_REPOSITORY/pulls?state=open&head=$GITHUB_REPOSITORY_OWNER:$GITHUB_REF_NAME" \
+                 --jq '(.[0].number // empty)')
+          if [ -z "$PR" ]; then
+            echo "分支 $GITHUB_REF_NAME 无开启中的 PR,跳过 testing 部署" >> "$GITHUB_STEP_SUMMARY"
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "deploy=true" >> "$GITHUB_OUTPUT"
+          echo ">>> 目标:PR #$PR → testing" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 触发 testing 部署
+        if: steps.deploy-gate.outputs.deploy == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # --ref 用分支名而非 master:让 CD run 的 head_sha == 被测 SHA,
+          # 生产 gate 之后能按这个 SHA 反查 testing 部署结论
+          echo ">>> 触发 CD workflow (testing), ref=$GITHUB_REF_NAME sha=$GITHUB_SHA"
           gh workflow run cd.yml \
-            --ref master \
-            -f ref="${{ github.sha }}" \
+            --ref "$GITHUB_REF_NAME" \
+            -f ref="$GITHUB_SHA" \
             -f environment=testing
           echo "✅ CD workflow 已触发 (env: testing)"
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**已触发 CD 部署 (commit: \`${{ github.sha }}\`, env: testing)**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**已触发 testing 冒烟部署 (commit: \`$GITHUB_SHA\`)**" >> "$GITHUB_STEP_SUMMARY"

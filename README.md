@@ -317,8 +317,10 @@ docker compose -f docker-compose.prod.yml up -d
 
 ### CI/CD（GitHub Actions）
 
-- `ci.yml`：gofmt / go vet / golangci-lint → 测试（race + cover）→ 前端 type-check + build → 安全扫描 → 迁移校验
-- `cd.yml`：构建并推送镜像（ghcr.io）→ 公网 SSH 部署 → 健康检查 → 失败自动回滚
+触发模型：**非 master 分支 push → 全量 CI →（CI 绿且分支有开 PR）testing 冒烟部署**；**PR 事件不触发流水线**（PR 页显示的是分支 push 的同 commit 检查，`ci-summary` 为合并必检）；**master 合并（push）不跑 CI，直接 CD 到 production**，前置由 `gate` job 回查来源 PR 的 `ci-summary` 结论与该 commit 的 testing 冒烟结论。
+
+- `ci.yml`：gofmt / go vet / golangci-lint → 测试（race + cover）→ 前端 type-check + build → 安全扫描 → 迁移校验 → `ci-summary` 汇总并派发 testing 部署
+- `cd.yml`：`gate`（解析目标环境 + 生产门禁）→ 构建并推送镜像（ghcr.io，内容未变则跳过）→ 公网 SSH 部署 → 健康检查 → 失败自动回滚；testing 环境探活通过后停容器
 
 ## 许可证
 
