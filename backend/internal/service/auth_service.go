@@ -18,6 +18,12 @@ import (
 	"forklift-training/internal/security"
 )
 
+// 招聘者账号域业务错误哨兵（ADR-0024 / spec #449 决定 4）：handler 以 errors.Is 映射状态码，不做字符串比对。
+var (
+	// ErrCreditCodeTaken 统一社会信用代码已被占用（同一企业只能有一个招聘者账号，账号即企业）。
+	ErrCreditCodeTaken = errors.New("该企业已存在招聘者账号")
+)
+
 // AuthService 认证服务，处理学员/管理员/导师的登录、注册与令牌签发。
 type AuthService struct {
 	db        *gorm.DB
@@ -388,6 +394,12 @@ func (s *AuthService) CreateRecruiter(in RecruiterCreateInput) (*model.Recruiter
 	if count > 0 {
 		return nil, errors.New("用户名已被注册")
 	}
+	// #450：同一企业 1:1 —— 统一社会信用代码唯一，一个信用代码开不出第二个号。
+	var creditCnt int64
+	s.db.Model(&model.RecruiterUser{}).Where("credit_code = ?", in.CreditCode).Count(&creditCnt)
+	if creditCnt > 0 {
+		return nil, ErrCreditCodeTaken
+	}
 	hashed, err := HashPassword(in.Password)
 	if err != nil {
 		return nil, err
@@ -517,6 +529,15 @@ func (s *AuthService) EditRecruiter(id int, in RecruiterEditInput) (*model.Recru
 	var r model.RecruiterUser
 	if err := s.db.First(&r, id).Error; err != nil {
 		return nil, errors.New("招聘者不存在")
+	}
+	// #450：编辑把信用代码改成别家已占用的值 → 同样被拒（自己保持原值不算占用）。
+	credit := strings.TrimSpace(in.CreditCode)
+	if credit != r.CreditCode {
+		var creditCnt int64
+		s.db.Model(&model.RecruiterUser{}).Where("credit_code = ? AND id <> ?", credit, id).Count(&creditCnt)
+		if creditCnt > 0 {
+			return nil, ErrCreditCodeTaken
+		}
 	}
 	updates := map[string]any{
 		"company_name":   strings.TrimSpace(in.CompanyName),
