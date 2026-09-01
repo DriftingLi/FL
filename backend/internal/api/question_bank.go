@@ -3,6 +3,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -375,7 +376,7 @@ func (h *QuestionBankHandler) RejectQuestion(c *gin.Context) {
 		},
 		Render: func(c *gin.Context, _ *rejectQuestionReq, resp *service.QuestionDTO, err error) {
 			if err != nil {
-				if err.Error() == "题目不存在" {
+				if errors.Is(err, service.ErrQuestionNotFound) {
 					response.NotFound(c, err.Error())
 				} else {
 					response.BadRequest(c, err.Error())

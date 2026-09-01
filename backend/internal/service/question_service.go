@@ -15,6 +15,9 @@ import (
 	"forklift-training/pkg/paging"
 )
 
+// ErrQuestionNotFound 题目不存在（题库域哨兵，ADR-0024）：handler 以 errors.Is 映射 404。
+var ErrQuestionNotFound = errors.New("题目不存在")
+
 // 题型与课程分类常量（已取消等级制度）。
 var (
 	validQuestionTypes  = []string{"single_choice", "multi_choice", "true_false", "fault_image", "short_answer"}
@@ -359,7 +362,7 @@ func (s *QuestionBankService) CreateQuestion(data map[string]any, createdBy *int
 func (s *QuestionBankService) GetQuestion(id int) (QuestionDTO, error) {
 	var q model.Question
 	if err := s.db.First(&q, id).Error; err != nil {
-		return QuestionDTO{}, errors.New("题目不存在")
+		return QuestionDTO{}, ErrQuestionNotFound
 	}
 	d := newQuestionDTO(&q, true)
 	d.Tags = s.loadTagsByQuestion(q.ID)
@@ -371,7 +374,7 @@ func (s *QuestionBankService) GetQuestion(id int) (QuestionDTO, error) {
 func (s *QuestionBankService) UpdateQuestion(id int, data map[string]any) (QuestionDTO, error) {
 	var q model.Question
 	if err := s.db.First(&q, id).Error; err != nil {
-		return QuestionDTO{}, errors.New("题目不存在")
+		return QuestionDTO{}, ErrQuestionNotFound
 	}
 	if t, ok := data["type"].(string); ok && !containsString(validQuestionTypes, t) {
 		return QuestionDTO{}, errors.New("无效的题型")
@@ -410,7 +413,7 @@ func (s *QuestionBankService) DeleteQuestion(id int) error {
 	var q model.Question
 	if err := s.db.First(&q, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("题目不存在")
+			return ErrQuestionNotFound
 		}
 		return err
 	}
@@ -523,7 +526,7 @@ func (s *QuestionBankService) loadTagsBatch(questionIDs []int) map[int][]map[str
 func (s *QuestionBankService) PublishQuestion(id int) (QuestionDTO, error) {
 	var q model.Question
 	if err := s.db.First(&q, id).Error; err != nil {
-		return QuestionDTO{}, errors.New("题目不存在")
+		return QuestionDTO{}, ErrQuestionNotFound
 	}
 	q.Status = "published"
 	q.RejectReason = ""
@@ -554,7 +557,7 @@ func (s *QuestionBankService) RejectQuestion(id int, reason string) (QuestionDTO
 	}
 	var q model.Question
 	if err := s.db.First(&q, id).Error; err != nil {
-		return QuestionDTO{}, errors.New("题目不存在")
+		return QuestionDTO{}, ErrQuestionNotFound
 	}
 	q.Status = "draft"
 	q.RejectReason = reason

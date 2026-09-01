@@ -146,6 +146,33 @@ type claimDecision struct {
 // 调用方据此把「二次提交」映射为各自的既有语义（已兑换/已领取/跳过回收等），整笔事务回滚。
 var ErrPointsProcessed = errors.New("积分事件已处理")
 
+// 积分域业务错误哨兵（ADR-0024）：一语义一哨兵，文案是哨兵属性而非契约。
+// handler 以 errors.Is 映射状态码；禁止 err.Error() == "…" 字符串比对。
+var (
+	// ErrAlreadyClaimed 终身已领（newbie 一次性任务重复领取）。
+	ErrAlreadyClaimed = errors.New("已领取")
+	// ErrDailyClaimLimit 今日已领（每日任务重复领取）。
+	ErrDailyClaimLimit = errors.New("今日已领取")
+	// ErrAlreadyRedeemed 已兑换（兑换权益重复/幂等冲突，service 内三处统一）。
+	ErrAlreadyRedeemed = errors.New("已兑换")
+	// ErrTaskNotFound 任务不存在。
+	ErrTaskNotFound = errors.New("任务不存在")
+	// ErrCourseNotFound 课程不存在。
+	ErrCourseNotFound = errors.New("课程不存在")
+	// ErrCourseNotRedeemable 该课程无需兑换。
+	ErrCourseNotRedeemable = errors.New("该课程无需兑换")
+	// ErrRealPaperUnavailable 真题卷不存在或已下架。
+	ErrRealPaperUnavailable = errors.New("真题卷不存在或已下架")
+	// ErrShopItemUnavailable 商城商品不存在或已下架。
+	ErrShopItemUnavailable = errors.New("商品不存在或已下架")
+	// ErrInvalidPenalty 扣罚分值非法。
+	ErrInvalidPenalty = errors.New("扣罚分值需在 1-500 之间")
+	// ErrEmptyPenaltyReason 扣罚事由为空。
+	ErrEmptyPenaltyReason = errors.New("扣罚事由不能为空")
+	// ErrUserNotFound 用户不存在。
+	ErrUserNotFound = errors.New("用户不存在")
+)
+
 // PointsEntry 单笔积分簿记的参数面（ADR-0023 事务内簿记核心 applyTx 的唯一入参）。
 type PointsEntry struct {
 	UserID  int
@@ -430,7 +457,7 @@ func (s *PointsService) GetTasks(userID int) (*PointsTasksResult, error) {
 func (s *PointsService) Claim(ctx context.Context, userID int, taskCode string) (*PointsClaimResult, error) {
 	var cfg model.PointsTaskConfig
 	if err := s.db.Where("code = ?", taskCode).First(&cfg).Error; err != nil {
-		return nil, errors.New("任务不存在")
+		return nil, ErrTaskNotFound
 	}
 	today := s.shanghaiDate()
 	// 读取计数：与 GetTasks 同一分组取数形态，写路径不另写一套「是否已领」判定
@@ -441,9 +468,9 @@ func (s *PointsService) Claim(ctx context.Context, userID int, taskCode string) 
 	// 额度判定单点（#410）：写路径与读路径共用 canClaim，语义按配置 daily_limit/total_limit 驱动
 	if !s.canClaim(cfg, cc[taskCode].Today, cc[taskCode].Lifetime).Claimable {
 		if cfg.Group == "newbie" {
-			return nil, errors.New("已领取")
+			return nil, ErrAlreadyClaimed
 		}
-		return nil, errors.New("今日已领取")
+		return nil, ErrDailyClaimLimit
 	}
 	// Redis 锁（进程内双领护栏；最终裁决仍由唯一索引承担）
 	lockKey := fmt.Sprintf("points:grant:%d:%s", userID, taskCode)
@@ -467,9 +494,9 @@ func (s *PointsService) Claim(ctx context.Context, userID int, taskCode string) 
 		if err := tx.Create(&claim).Error; err != nil {
 			if isDuplicateError(err) {
 				if cfg.Group == "newbie" {
-					return errors.New("已领取")
+					return ErrAlreadyClaimed
 				}
-				return errors.New("今日已领取")
+				return ErrDailyClaimLimit
 			}
 			return err
 		}
@@ -533,7 +560,7 @@ func (s *PointsService) redeem(ctx context.Context, userID int, o redeemOpts) (*
 	var entCnt int64
 	_ = s.db.Model(&model.UserEntitlement{}).Where("user_id = ? AND sku = ? AND ref_id = ?", userID, o.sku, o.refID).Count(&entCnt).Error
 	if entCnt > 0 {
-		return nil, errors.New("已兑换")
+		return nil, ErrAlreadyRedeemed
 	}
 	// 余额预检
 	var user model.HrwaiUser
@@ -547,7 +574,7 @@ func (s *PointsService) redeem(ctx context.Context, userID int, o redeemOpts) (*
 		ent := model.UserEntitlement{UserID: userID, SKU: o.sku, RefID: o.refID}
 		if err := tx.Create(&ent).Error; err != nil {
 			if isDuplicateError(err) {
-				return errors.New("已兑换")
+				return ErrAlreadyRedeemed
 			}
 			return err
 		}
@@ -560,7 +587,7 @@ func (s *PointsService) redeem(ctx context.Context, userID int, o redeemOpts) (*
 		return nil
 	})
 	if errors.Is(err, ErrPointsProcessed) {
-		return nil, errors.New("已兑换")
+		return nil, ErrAlreadyRedeemed
 	}
 	if err != nil {
 		return nil, err
@@ -578,10 +605,10 @@ func (s *PointsService) redeem(ctx context.Context, userID int, o redeemOpts) (*
 func (s *PointsService) RedeemCourse(ctx context.Context, userID, courseID int) (*RedeemResult, error) {
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
-		return nil, errors.New("课程不存在")
+		return nil, ErrCourseNotFound
 	}
 	if course.PointsPrice == nil || *course.PointsPrice <= 0 {
-		return nil, errors.New("该课程无需兑换")
+		return nil, ErrCourseNotRedeemable
 	}
 	return s.redeem(ctx, userID, redeemOpts{
 		lockKey: fmt.Sprintf("shop:course:%d:%d", userID, courseID),
@@ -618,7 +645,7 @@ func (s *PointsService) realPaperPrice() int {
 func (s *PointsService) RedeemRealPaper(ctx context.Context, userID, paperID int) (*RedeemResult, error) {
 	var paper model.RealExamPaper
 	if err := s.db.Where("paper_id = ? AND status = 1", paperID).First(&paper).Error; err != nil {
-		return nil, errors.New("真题卷不存在或已下架")
+		return nil, ErrRealPaperUnavailable
 	}
 	return s.redeem(ctx, userID, redeemOpts{
 		lockKey: fmt.Sprintf("shop:real_paper:%d:%d", userID, paperID),
@@ -634,7 +661,7 @@ func (s *PointsService) RedeemRealPaper(ctx context.Context, userID, paperID int
 func (s *PointsService) RedeemShop(ctx context.Context, userID int, sku string) (*RedeemResult, error) {
 	var item model.PointsShopItem
 	if err := s.db.Where("sku = ? AND enabled = true", sku).First(&item).Error; err != nil {
-		return nil, errors.New("商品不存在或已下架")
+		return nil, ErrShopItemUnavailable
 	}
 	return s.redeem(ctx, userID, redeemOpts{
 		lockKey: fmt.Sprintf("shop:sku:%d:%s", userID, sku),
@@ -761,10 +788,10 @@ func (s *PointsService) aiTokensResult(points, total, prompt, completion, userID
 // AdminPenalty 管理员扣罚（自定义 1-500，截断到 0）
 func (s *PointsService) AdminPenalty(ctx context.Context, adminID, userID, delta int, reason string) (int, error) {
 	if delta <= 0 || delta > 500 {
-		return 0, errors.New("扣罚分值需在 1-500 之间")
+		return 0, ErrInvalidPenalty
 	}
 	if reason == "" {
-		return 0, errors.New("扣罚事由不能为空")
+		return 0, ErrEmptyPenaltyReason
 	}
 	lockKey := fmt.Sprintf("points:penalty:%d", userID)
 	if ok, err := cache.SetNX(ctx, lockKey, "1", 5*time.Second); err == nil && ok {
@@ -772,7 +799,7 @@ func (s *PointsService) AdminPenalty(ctx context.Context, adminID, userID, delta
 	}
 	var user model.HrwaiUser
 	if err := s.db.First(&user, userID).Error; err != nil {
-		return 0, errors.New("用户不存在")
+		return 0, ErrUserNotFound
 	}
 	actualDeduct := delta
 	if user.PointsBalance < delta {
