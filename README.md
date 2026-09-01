@@ -322,6 +322,8 @@ docker compose -f docker-compose.prod.yml up -d
 - `ci.yml`：gofmt / go vet / golangci-lint → 测试（race + cover）→ 前端 type-check + build → 安全扫描 → 迁移校验 → `ci-summary` 汇总并派发 testing 部署
 - `cd.yml`：`gate`（解析目标环境 + 生产门禁）→ 构建并推送镜像（ghcr.io，内容未变则跳过）→ 公网 SSH 部署 → 健康检查 → 失败自动回滚；testing 环境探活通过后停容器
 
+合并门禁：ruleset「protect master」要求必检 `ci-summary` 通过且分支与 master 同步 —— squash 会在 master 生成从未跑过 CI 的新 SHA，生产 `gate` 靠回查来源 PR 的结论对齐。
+
 ## 许可证
 
 本项目为**和润天下人工智能科技有限公司**内部系统，**未声明开源许可证**，仅供公司内部使用与授权合作方访问。未经授权，不得复制、分发、部署或修改本项目的任何部分。
