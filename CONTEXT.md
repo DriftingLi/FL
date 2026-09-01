@@ -34,7 +34,8 @@
   _Avoid_: 首选证件、初始化选择
 - **占位证件（placeholder credential）**：已建档但课程/题库为 0 的目标证件，可被选为当前证件，视图呈空状态"内容建设中"。
 - **课程目录（course catalog）**：目标证件内的 `专业方向 → 课程等级 → 课程` 三层组织视图（虚拟树，实时由 credential/specialty/course_level/course 计算，无物理 catalog 表）。未挂方向/等级的课程不出现在学员端目录与列表（口径统一）；课程必归属一个目标证件（`credential_id` 必填）。
-- **专业方向（specialty）**：课程目录二级维度（证件内），全局共享（操作/维修/安全/电池等），管理员维护。
+- **专业方向（specialty）**：课程目录二级维度（证件内），全局共享（操作/维修/安全/电池等），管理员维护。招聘域职位必挂专业方向（复用同一字典）。
+  **术语别名登记**：专业方向为 canonical 中文名；简历侧「期望岗位」（`expected_specialty_id`）是它的历史别名——前端文案本期不改，新代码一律用「专业方向」。
 - **课程等级（course level）**：课程目录三级维度，**全局共享**（不归属方向，入门/进阶/专项/认证），任意方向的课程可挂任意等级。
 - **课程（course）/ 章节（chapter）**：PPT/视频/图文混排内容；PPT 经 LibreOffice sidecar 转 WebP。课程必挂目标证件 + 专业方向 + 课程等级（创建/编辑必填），可关联证书模板与前置课程。
 - **收藏（favorite）**：多态收藏（target_type+target_id：course/chapter/question/featured/topic；user+type+id 唯一幂等），列表实时回填目标快照、目标删除即条目消失，见 ADR-0018；其中 course/question 分区按当前证件过滤。
@@ -62,9 +63,16 @@
 - **每日打卡（check-in）**：学员按 `Asia/Shanghai` 自然日签到，独立 `CheckInService` 模块承载（与论坛帖子/回复解耦，共享 `ForumAuthor` 展示名 seam，路由 `/api/forum/check-in/*` 契约不变）。能力四件套：签到（幂等 `forum_checkin` PK(user_id, check_date)）、日历（按年月查 `check_date BETWEEN`，`Asia/Shanghai` 口径）、连击（streak，从今日/昨日连续往前计数）、排行榜（累计总榜 `total DESC, last_date ASC`，`streak/todayChecked` 经批量聚合回填，`Me` 名次合并查询）。日历与连击跨时区一致性由 `Asia/Shanghai` 统一承载。
 - **问答采纳奖励（Q&A accept reward）**：问答帖采纳触发的积分流水直记（非任务领取制）：答主被采纳 +40（`accepted_bonus`）、楼主采纳动作 +5（`accept_action`），即时入账、站内信到达；每帖只发一次分（幂等键 `ref_type='forum_topic', ref_id=topic_id, reason='accepted_bonus'`，取消/更换/并发均只发一次），自答零分，防刷乙档（答主日 3 次、楼主日 5 次、同一楼主↔答主配对 1-3 次满分、4-5 次减半、6 次起零分），删帖不回滚、违规回收走 `rollback` 对冲（封底 0）。
 - **简历卡（resume card / job card）**：1:1 挂在学员账号上的常驻实体（`job_cards`，`user_id` 主键，`ON DELETE CASCADE`），资料直接长在卡上，无发布/快照/有效期；含身份与联系（`real_name`/`contact_phone`/`wechat`/`region`，后者与登录手机号分离）、求职意向（`expected_specialty_id`→`specialty`、`expected_regions` JSONB、`salary_min/max`/`salary_negotiable`、`available_in`/`job_nature`）、资历（`experience_years`/`self_intro`≤1000、`resume_experiences` JSONB、`resume_certifications` JSONB 含 `credential_id`/`cert_no`/`expire_date`/`image_urls`）、附件（`resume_file_url` 单 PDF ≤50MB、`photos` ≤6）、状态（`visibility` 默认 `hidden`，公开后招聘端可见）。改一次即最新，无缓存快照。
-- **企业招聘者（recruiter）**：第四角色（`recruiter_users` 独立表，不进 `hrwai_users`；`status` 禁用位），邀约制（仅管理员创建，企业信息必填：`company_name`/`credit_code`/`business_scope`/`contact_name`/`contact_phone`/`contact_email`），独立子域 `recruit.` + 独立布局 `RecruitLayout` + `role=recruiter` 鉴权，登录态 `recruiter_token` host-only（与学员侧 `hrwai_token` 父域共享隔离，防静默恢复串角色），会话仍归 `security.Session` 单例。三层漏斗：L1 未登录不可见（无公开列表/详情/SEO）、L2 脱敏卡（岗位/地区/薪资/年限/经历/自评/持证标签可见，姓名打码，无手机/微信/精确现居地/PDF/证书原图）、L3 交换后明文。
+- **企业招聘者（recruiter）**：第四角色（`recruiter_users` 独立表，不进 `hrwai_users`；`status` 禁用位），邀约制（仅管理员创建，企业信息必填：`company_name`/`credit_code`/`business_scope`/`contact_name`/`contact_phone`/`contact_email`），独立子域 `recruit.` + 独立布局 `RecruitLayout` + `role=recruiter` 鉴权，登录态 `recruiter_token` host-only（与学员侧 `hrwai_token` 父域共享隔离，防静默恢复串角色），会话仍归 `security.Session` 单例。三层漏斗：L1 未登录不可见（无公开列表/详情/SEO，**职位本身同样不公开**——无 token 访问职位列表/详情一律 401，含搜索引擎爬虫）、L2 脱敏卡（岗位/地区/薪资/年限/经历/自评/持证标签可见，姓名打码，无手机/微信/精确现居地/PDF/证书原图）、L3 交换后明文。
+  **`visibility` 口径**：仅管控 L2 被动浏览面（简历库可被搜到与否），不是招聘可见性的总开关。投递是学员的主动点对点动作（最强的一次同意），`hidden` 简历同样可投递——同一个学员可能**在简历库里搜不到、却出现在某企业自己职位的投递列表中**；两条读路径的门禁条件不同（简历库按 `visibility=open`，投递列表按「投递即授权」）。
 - **联系方式交换（contact exchange）**：L3 闭环，招聘方带附言（1-200 字）发起 `contact_requests`（`pending`→`approved`/`rejected`/`expired`/`revoked`，`pending` 14 天过期、`rejected`/`revoked` 后 30 天冷却、同一企业对同一学员 `pending` 唯一、单企业日限 20），学员站内信收到申请（企业名/联系人/附言，不含企业电话，`link=/training/resume`）后可同意/拒绝/撤回（永久授权、撤回实时生效、明文不缓存现查 `approved` 状态），招聘方同意后邮件通知并可在「我的申请」列表查看状态，学员注销时申请与授权一并失效。「企业」粒度与招聘者账号 1:1，由 `recruiter_users.credit_code` 唯一索引保证（spec #449 决定 4）。
+  **授权双来源（`source`）**：`recruiter`（企业发起）与 `application`（投递产生）——投递在学员点下那一刻于同一事务写入/复活一条 `approved` 的授权，明文载体**仍然只有联系方式交换这一个**（GetContact 与授权撤回实现不变）；投递产生的授权不计入企业日限、不受冷却限制。撤回投递默认**不连带**收回授权（学员显式选择才置 `revoked`）。
 - **简历查看留痕（resume view trail）**：招聘方每次查看含个人信息的脱敏卡即写入 `recruit_resume_views`（`recruiter_id`/`resume_user_id`/`viewed_at`，粒度同一招聘方对同一学员每日一次，健康检查与自身访问不写），学员侧仅见聚合数「近 7 天 N 家企业查看过你的简历」（按企业去重，`WHERE resume_user_id=? AND viewed_at>=now-7d` 走 `(resume_user_id, viewed_at)` 索引，不返回企业名），招聘方无法反查。
+- **职位（job posting）**：企业招聘者在平台上的供给侧表达「我在招什么人」（`job_postings` 表，spec #449）。职位名是自由文本，**不叫「岗位」**——本系统「岗位」已是专业方向的历史别名（术语登记见下）；专业方向必填（复用培训域 `specialty` 字典，业务层必填、库层可空——字典项删除置空不级联），另带地区/薪资/经验要求/职位描述。生命周期二态 `open`/`closed`（无草稿态、无有效期自动过期、**无招聘人数 headcount**——砍掉录用后「招满」无事实来源），另记首次发布时间 `published_at` 用于新鲜度排序。单企业活跃职位上限 50（宽松值只防误操作）。先发后审：学员可举报，管理员可带原因强制下架（见「职位举报与强制下架」）；被强制下架的职位学员侧不可见、企业不能自行重新上架（只能新发或等平台处理）。
+  _Avoid_: 岗位、招聘岗位
+- **投递（application）**：学员对某个职位的定向申请（`job_applications`，spec #449），三态 `applied`/`rejected`/`withdrawn`，不发明「意向」等无条款中间态。**投递即定向授权**：投递在学员点下那一刻，同一事务内写入/复活一条 `approved` 的联系方式交换授权（`source=application`），该企业当场可取得学员明文联系方式——不再需要先发交换申请、学员再点同意；`hidden` 简历同样能投（`visibility` 仅管控被动浏览面）。同一学员对同一职位 `applied` 期间唯一（部分唯一索引，与联系方式交换 `pending` 唯一同构）；被企业标记不合适后 30 天内不能再投（拒绝是有记忆的）；学员自行撤回后**可立即重投**（他自己的犹豫不该罚）；学员每日投递上限 10。撤回投递默认不连带收回联系方式授权（授权生命周期出口只有两个：学员显式撤回、学员注销）。投递不落简历快照，只存投递那一刻的简历更新时间（版本指针，内容永远读最新）；企业打开投递详情即记录已读（`employer_viewed_at`，未读计数的事实源），学员侧据此看到「已查看」。「企业已查看你的投递」或「不合适」是学员侧仅有的两种正反馈。
+  _Avoid_: 简历投递、求职申请、意向
+- **职位举报与强制下架（job report & force offline）**：招聘域的内容治理（`job_reports` 表，spec #449）——企业由纯读者变成内容生产者后，「邀约制即可信」不再自足。学员可举报职位（同一学员对同一职位唯一，重复举报合并而非堆叠；举报用招聘域自己的存储，不挂论坛举报表——那是论坛域的形状），管理员在只读巡检中看举报队列、带原因强制下架（处置动作入审计日志、邮件通知企业）；下架后学员侧立即不可见（列表与详情都取不到），企业不能自行重新上架。举报可标记已处理。
 
 ## 残值评估（valuation）
 
