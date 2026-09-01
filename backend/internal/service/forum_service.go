@@ -1485,16 +1485,15 @@ func (s *ForumService) AcceptReply(userID int, topicID, replyID int64) (*ForumTo
 				return err
 			}
 		}
-		// 站内信：答主/楼主（#369），payload 带实际分值，link 锚到回答
+		// 站内信：答主/楼主（#369），payload 带实际分值，link 锚到回答（ADR-0024 C3 事件构造器单点构造）
 		if bonusDelta > 0 || actionDelta > 0 {
-			link := fmt.Sprintf("/training/forum/%d#reply-%d", topicID, replyID)
 			if bonusDelta > 0 {
-				if err := s.notificationSvc.CreateWithTx(tx, reply.UserID, NotifTypeForumAcceptAnswerer, "你的回答被采纳", fmt.Sprintf("你在问答「%s」中的回答被采纳，+%d 分已到账", topic.Title, bonusDelta), link, forumAcceptPayload(topicID, replyID, bonusDelta, ReasonAcceptedBonus), now); err != nil {
+				if err := s.notificationSvc.CreateForumAcceptEvent(tx, NewAnswererAcceptEvent(reply.UserID, topic.Title, topicID, replyID, bonusDelta), now); err != nil {
 					return err
 				}
 			}
 			if actionDelta > 0 {
-				if err := s.notificationSvc.CreateWithTx(tx, userID, NotifTypeForumAcceptOwner, "你采纳了答案", fmt.Sprintf("你在问答「%s」中采纳了回答，+%d 分已到账", topic.Title, actionDelta), link, forumAcceptPayload(topicID, replyID, actionDelta, ReasonAcceptAction), now); err != nil {
+				if err := s.notificationSvc.CreateForumAcceptEvent(tx, NewOwnerAcceptEvent(userID, topic.Title, topicID, replyID, actionDelta), now); err != nil {
 					return err
 				}
 			}
