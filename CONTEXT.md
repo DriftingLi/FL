@@ -21,7 +21,7 @@
 
 ## 通知与审计
 
-- **站内信（notification）**：站内信通知基础设施，当前唯一渠道；资料审核、论坛互动（帖子被回复/楼中楼被回复/举报处理结果/管理端删帖删回复，link 指向 `/training/forum/:id`、payload 携带 topic_id）等业务事件通过站内信模块发出。
+- **站内信（notification）**：站内信通知基础设施，当前唯一渠道；资料审核、论坛互动（帖子被回复/楼中楼被回复/举报处理结果/管理端删帖删回复，link 指向 `/training/forum/:id`、payload 携带 topic_id）等业务事件通过站内信模块发出。事件构造（title/content/link/payload 口径）内聚为站内信域的 typed event constructors（首个：问答采纳奖励双事件，ADR-0024），业务方一行触发，不在调用点手拼文案。
 - **审计日志（audit log）**：管理员/讲师写操作由中间件统一记录，落库留痕（合规用途，与系统运行日志区分）。
 - **系统运行日志（app log）**：zap 统一日志栈（`internal/logger`），排查用——级别过滤、敏感字段脱敏、访问日志（request_id/user_id/role）、生产文件轮转持久化（`/data/logs`）。与「审计日志」的边界：前者是运行期诊断输出（console/文件），后者是业务写操作的持久化记录（DB 表），两者互不替代。
 
@@ -52,6 +52,10 @@
 - **标签练习（tag practice）**：按题库标签抽题的练习模式（原「章节练习」已退役并入）。
 - **AI 助手**：大模型流式对话（DeepSeek 默认，可配置 OpenAI 兼容模型）。归属 training 子域名（学员工作区功能），由主域名迁入。
 - **AI 计费（AI billing）**：仅 AI 助手对话按 tokens 后计量扣费；刷题 AI 解析、简答评分、章节内容生成均免费——有意决策，扩计费面需单独立项。口径：tokens 按字符长度估算（prompt+completion /4，兜底单点）；积分 = ceil(tokens/1000)×10，下限 5 上限 100；余额预检与扣费下限同源于积分域（不可在调用侧另立常量）；幂等键 `ai_tokens:{requestID}`（ADR-0023），同请求重试/重放只扣一次。
+- **积分（points）**：学员激励与消耗的统一账务域（PointsService 单点承载）：余额、流水（points_ledger，delta≠0 必写）、幂等占坑（points_entry_idem，ADR-0023）。入账/扣费来源：任务领取、问答采纳奖励、兑换（课程/真题卷/商城）、AI 按 tokens 计量扣费、管理员扣罚与违规回收对冲（封底 0）。
+- **积分任务中心（points task center）**：按行为计数实时计算任务状态（todo/claimable/claimed）的任务列表；额度判定（终身 total_limit / 当日 daily_limit）读写共用 canClaim 单实现；领取经 Redis 防双领 + points_task_claim 唯一索引幂等。
+- **积分商城（points shop）**：课程/真题卷/商城商品三类兑换统一走 redeem 单管线（锁 + 已拥有校验 + 余额预检 + 幂等键 `redeem:<sku>`）；已拥有判定（HasEntitlement）供各域门禁复用。
+- **积分错误哨兵（points error sentinel）**：积分域业务错误的唯一契约形态——一语义一哨兵（ErrAlreadyClaimed 终身已领 / ErrDailyClaimLimit 今日已领 / ErrAlreadyRedeemed / ErrTaskNotFound / ErrCourseNotFound / ErrRealPaperUnavailable / ErrShopItemUnavailable / ErrUserNotFound / ErrInvalidPenalty），文案是哨兵的属性而非契约本身；handler 以 errors.Is 映射 HTTP 状态码，禁止 `err.Error() == "…"` 字符串比对（ADR-0024）。
 - **论坛（forum）**：含类别 `category`（`discussion` | `question`）与采纳状态（`accepted_reply_id`/`solved_at`，问答帖仅楼主可采纳一条回答，被采纳回复恒置顶）的图文分离论坛。**图文分离**——主题与回复可携带 `images` 图片 URL 数组（JSONB），正文保持纯文本，不做 markdown 渲染。坐标与意图双维度：`discussion`+NULL=综合讨论区、`discussion`+N=章节讨论区（均为现状）、`question`+NULL=全局问答（新增）、`question`+N=非法（`CHECK (category <> 'question' OR chapter_id IS NULL)` 兜底 + service 400）。**判类别看 `category`，判区域看 `chapter_id`，两者不可互相替代**——`scope=general` 的定义是 `chapter_id IS NULL`，而问答帖的 `chapter_id` 同样为 NULL，故列表查询必须让 `category` 与 `scope` 共存在同一条 WHERE 里，否则问答帖会整片灌进讨论 Tab（管理端综合区同理）。互动（ADR-0018）：主题点赞（forum_topic_like，幂等，计数经 `likes_count` 反范式列维护，热度排序走索引）、举报（forum_report，待处理/已处理二态，管理端处置沿用删帖/删回复流）、我的帖子/我的回复；问答筛选 `solved`（all/solved/unsolved，仅对 question 有意义）与列表 `reward_issued` 标记。问答帖一律 `chapter_id=NULL`，提问不选章节，章节页不产生问答。
 - **综合讨论区（general forum）**：**非章节讨论帖**（`category='discussion' AND chapter_id IS NULL`）。注意与旧定义区分：旧定义为"所有非章节帖"（`chapter_id IS NULL`），本次收窄后问答帖虽 `chapter_id` 同为 NULL 但**不属于**综合讨论区。
 - **论坛图片（forum image）**：先经 `POST /api/forum/upload-image` 上传到 `images/forum/` 子目录拿 URL，随发帖/回复提交；删除主题/回复时图片存储一并清理；上传后未发帖的**悬空图片**由进程内定时任务（每 6 小时，通用守护 runner 托管，panic 恢复 + jitter 错峰 + 注入式 ticker + context 取消贯穿存储）扫描差集、回收超过 24h 未被引用的文件。
