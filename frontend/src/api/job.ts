@@ -39,6 +39,27 @@ export interface JobPostingInput {
   description?: string
 }
 
+export interface JobApplication {
+  id: number
+  job_posting_id: number
+  job_title?: string
+  recruiter_id: number
+  student_user_id: number
+  status: 'applied' | 'rejected' | 'withdrawn'
+  resume_updated_at: string
+  employer_viewed_at?: string | null
+  created_at: string
+  updated_at: string
+  company_name?: string
+}
+
+export interface ApplicationListResp {
+  items: JobApplication[]
+  total: number
+  page: number
+  page_size: number
+}
+
 export const jobApi = {
   // 企业侧
   createJob(data: JobPostingInput) {
@@ -62,5 +83,16 @@ export const jobApi = {
   },
   getPublicJob(id: number) {
     return unwrappedRequest.get<JobPosting>(`/jobs/${id}`)
+  },
+  // 投递（投递即授权）
+  applyJob(id: number) {
+    return unwrappedRequest.post<JobApplication>(`/jobs/${id}/apply`)
+  },
+  // 我的投递
+  listMyApplications(params?: { page?: number; page_size?: number }) {
+    return unwrappedRequest.get<ApplicationListResp>('/resume/applications', { params })
+  },
+  withdrawApplication(id: number, revokeContact: boolean) {
+    return unwrappedRequest.post<JobApplication>(`/resume/applications/${id}/withdraw`, { revoke_contact: revokeContact })
   }
 }
