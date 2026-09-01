@@ -94,5 +94,9 @@ export const jobApi = {
   },
   withdrawApplication(id: number, revokeContact: boolean) {
     return unwrappedRequest.post<JobApplication>(`/resume/applications/${id}/withdraw`, { revoke_contact: revokeContact })
+  },
+  // 举报
+  reportJob(id: number, reason: string) {
+    return unwrappedRequest.post<{ id: number }>(`/jobs/${id}/report`, { reason })
   }
 }

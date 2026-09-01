@@ -159,6 +159,9 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 	if d.JobApplicationSvc != nil && mailSender != nil {
 		d.JobApplicationSvc.SetMailer(mailSender)
 	}
+	if d.JobReportSvc != nil && mailSender != nil {
+		d.JobReportSvc.SetMailer(mailSender)
+	}
 	d.AuthH = NewAuthHandler(d.Session, authSvc, fileSvc, st, reviewSvc, logger)
 	return d
 }

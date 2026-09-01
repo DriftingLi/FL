@@ -32,8 +32,9 @@
 
       <div class="mt-4 text-sm text-ink-2 whitespace-pre-wrap">{{ data.description || '-' }}</div>
 
-      <div class="mt-6">
+      <div class="mt-6 flex items-center gap-2">
         <UiButton variant="primary" :loading="applying" @click="showApplyDialog = true">投递</UiButton>
+        <UiButton variant="danger" plain :loading="reporting" @click="showReportDialog = true">举报</UiButton>
         <p v-if="applyError" class="mt-2 text-xs text-red-500">{{ applyError }}</p>
       </div>
     </div>
@@ -46,6 +47,15 @@
       <template #footer>
         <UiButton @click="showApplyDialog = false">取消</UiButton>
         <UiButton variant="primary" :loading="applying" @click="confirmApply">确认投递</UiButton>
+      </template>
+    </el-dialog>
+
+    <!-- 举报弹窗 -->
+    <el-dialog v-model="showReportDialog" title="举报职位" width="440px">
+      <el-input v-model="reportReason" type="textarea" :rows="3" maxlength="500" show-word-limit placeholder="请填写举报原因（如：交培训费包分配、冒用别家公司名义）" />
+      <template #footer>
+        <UiButton @click="showReportDialog = false">取消</UiButton>
+        <UiButton variant="danger" :loading="reporting" @click="confirmReport">提交举报</UiButton>
       </template>
     </el-dialog>
   </div>
@@ -66,6 +76,9 @@ const data = ref<JobPosting | null>(null)
 const showApplyDialog = ref(false)
 const applying = ref(false)
 const applyError = ref('')
+const showReportDialog = ref(false)
+const reporting = ref(false)
+const reportReason = ref('')
 
 const {
   loading,
@@ -79,6 +92,25 @@ const {
   data.value = (res as any) || null
 })
 
+
+async function confirmReport() {
+  if (!data.value) return
+  if (!reportReason.value.trim()) {
+    ElMessage.warning('举报原因不能为空')
+    return
+  }
+  reporting.value = true
+  try {
+    await jobApi.reportJob(data.value.id, reportReason.value.trim())
+    ElMessage.success('举报已提交，感谢你的反馈')
+    showReportDialog.value = false
+    reportReason.value = ''
+  } catch (e: any) {
+    ElMessage.error(e?.message || '举报提交失败')
+  } finally {
+    reporting.value = false
+  }
+}
 
 async function confirmApply() {
   if (!data.value) return

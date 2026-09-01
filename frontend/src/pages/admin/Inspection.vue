@@ -88,11 +88,86 @@
         />
       </div>
     </div>
+
+    <div class="rounded-card border border-line bg-panel p-4">
+      <div class="flex items-center gap-2 mb-3">
+        <span class="text-sm font-semibold text-ink">招聘职位巡检</span>
+        <el-input v-model="jobFilterRecruiter" placeholder="按企业 ID 筛" clearable class="!w-32" @change="loadJobs" />
+        <UiButton size="small" @click="loadJobs">刷新</UiButton>
+      </div>
+      <div v-if="jobsLoading" class="text-sm text-ink-3">加载中...</div>
+      <div v-else-if="jobs.length === 0" class="text-sm text-ink-3">暂无数据</div>
+      <div v-else class="grid gap-2">
+        <div v-for="item in jobs" :key="String(item.id)" class="border border-line rounded p-2 text-xs">
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <span class="font-semibold text-ink">{{ item.title }}</span>
+              <span v-if="item.forced_offline" class="ml-2 text-red-500">已强制下架：{{ item.offline_reason }}</span>
+              <span v-else-if="item.status === 'closed'" class="ml-2 text-ink-3">已下架</span>
+              <span class="ml-2 text-ink-3">企业 {{ item.recruiter_id }} · {{ item.region }}</span>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <UiButton v-if="!item.forced_offline" size="small" @click="openForceOffline(item)">强制下架</UiButton>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="mt-3 flex justify-end">
+        <el-pagination
+          v-model:current-page="jobsPage"
+          :page-size="20"
+          :total="jobsTotal"
+          layout="total, prev, pager, next"
+          @current-change="loadJobs"
+        />
+      </div>
+    </div>
+
+    <div class="rounded-card border border-line bg-panel p-4">
+      <div class="flex items-center gap-2 mb-3">
+        <span class="text-sm font-semibold text-ink">职位举报队列</span>
+        <UiButton size="small" @click="loadReports">刷新</UiButton>
+      </div>
+      <div v-if="reportsLoading" class="text-sm text-ink-3">加载中...</div>
+      <div v-else-if="reports.length === 0" class="text-sm text-ink-3">暂无待处理举报</div>
+      <div v-else class="grid gap-2">
+        <div v-for="item in reports" :key="String(item.id)" class="border border-line rounded p-2 text-xs">
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <span class="font-semibold text-ink">{{ item.job_title }}</span>
+              <span class="ml-2 text-ink-3">职位 #{{ item.job_posting_id }} · 举报人 {{ item.student_user_id }}</span>
+              <div class="text-ink-3">{{ item.reason }}</div>
+              <div class="text-ink-3">{{ item.created_at }}</div>
+            </div>
+            <UiButton size="small" @click="markHandled(item)">标记已处理</UiButton>
+          </div>
+        </div>
+      </div>
+      <div class="mt-3 flex justify-end">
+        <el-pagination
+          v-model:current-page="reportsPage"
+          :page-size="20"
+          :total="reportsTotal"
+          layout="total, prev, pager, next"
+          @current-change="loadReports"
+        />
+      </div>
+    </div>
+
+    <el-dialog v-model="forceOfflineVisible" title="强制下架职位" width="440px">
+      <div class="text-sm text-ink">职位「{{ forceOfflineJob?.title }}」将被强制下架，学员侧立即不可见，企业不能自行重新上架。</div>
+      <el-input v-model="forceOfflineReason" type="textarea" :rows="3" maxlength="500" show-word-limit placeholder="请填写下架原因（将邮件通知企业）" />
+      <template #footer>
+        <UiButton @click="forceOfflineVisible = false">取消</UiButton>
+        <UiButton variant="danger" :loading="forceOfflineing" @click="confirmForceOffline">确认下架</UiButton>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
+import { ElMessage } from 'element-plus'
 import { unwrappedRequest } from '@/api/request'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
@@ -219,10 +294,88 @@ async function loadRequests() {
   requestsLoading.value = false
 }
 
+// #454：招聘职位巡检 + 举报队列（职位治理）
+const jobs = ref<any[]>([])
+const jobsLoading = ref(false)
+const jobsPage = ref(1)
+const jobsTotal = ref(0)
+const jobFilterRecruiter = ref('')
+const reports = ref<any[]>([])
+const reportsLoading = ref(false)
+const reportsPage = ref(1)
+const reportsTotal = ref(0)
+const forceOfflineVisible = ref(false)
+const forceOfflineJob = ref<any>(null)
+const forceOfflineReason = ref('')
+const forceOfflineing = ref(false)
+
+async function loadJobs() {
+  jobsLoading.value = true
+  try {
+    const params: Record<string, any> = { page: jobsPage.value, page_size: 20 }
+    if (jobFilterRecruiter.value) params.recruiter_id = jobFilterRecruiter.value
+    const res: any = await unwrappedRequest.get('/admin/jobs', { params, headers: { 'X-Silent': '1' } })
+    jobs.value = res?.items || []
+    jobsTotal.value = res?.total ?? 0
+  } catch {}
+  jobsLoading.value = false
+}
+
+async function loadReports() {
+  reportsLoading.value = true
+  try {
+    const res: any = await unwrappedRequest.get('/admin/job-reports', {
+      params: { page: reportsPage.value, page_size: 20 },
+      headers: { 'X-Silent': '1' },
+    })
+    reports.value = res?.items || []
+    reportsTotal.value = res?.total ?? 0
+  } catch {}
+  reportsLoading.value = false
+}
+
+function openForceOffline(item: any) {
+  forceOfflineJob.value = item
+  forceOfflineReason.value = ''
+  forceOfflineVisible.value = true
+}
+
+async function confirmForceOffline() {
+  if (!forceOfflineJob.value) return
+  if (!forceOfflineReason.value.trim()) {
+    ElMessage.warning('下架原因不能为空')
+    return
+  }
+  forceOfflineing.value = true
+  try {
+    await unwrappedRequest.post(`/admin/jobs/${forceOfflineJob.value.id}/force-offline`, { reason: forceOfflineReason.value.trim() })
+    ElMessage.success('职位已强制下架')
+    forceOfflineVisible.value = false
+    loadJobs()
+    loadReports()
+  } catch (e: any) {
+    ElMessage.error(e?.message || '操作失败')
+  } finally {
+    forceOfflineing.value = false
+  }
+}
+
+async function markHandled(item: any) {
+  try {
+    await unwrappedRequest.post(`/admin/job-reports/${item.id}/handle`)
+    ElMessage.success('举报已标记为已处理')
+    loadReports()
+  } catch (e: any) {
+    ElMessage.error(e?.message || '操作失败')
+  }
+}
+
 onMounted(() => {
   loadCount()
   loadLedger()
   loadViews()
   loadRequests()
+  loadJobs()
+  loadReports()
 })
 </script>
