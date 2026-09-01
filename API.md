@@ -1183,6 +1183,45 @@ multipart/form-data：`file`。响应 200：data 为 `{ "url": "/static/uploads/
 
 积分流水 `reason` 取值：`accepted_bonus`（答主 +40）、`accept_action`（楼主 +5）、`rollback`（违规回收，对冲）、`admin_penalty` 等既有值；学员侧 `GET /api/points/ledger` 按人返回，管理端 `GET /api/admin/points/ledger` 可按 `reason` 全局筛选。
 
+### 16.8.6 职位发布与职位广场（spec #449 T2 #451）
+
+| 方法 | 路径 | 鉴权 | 说明 |
+|---|---|---|---|
+| POST | `/api/recruit/jobs` | recruiter | 发布职位 `{title, specialty_id(必填), region?, salary_min?, salary_max?, salary_text?, experience_req?, description?}`（活跃职位上限 50） |
+| PUT | `/api/recruit/jobs/:id` | recruiter | 编辑自己的职位（改别人的 403） |
+| POST | `/api/recruit/jobs/:id/toggle-status` | recruiter | 上架/下架（`open`↔`closed`；被强制下架的职位不能自行重新上架） |
+| GET | `/api/recruit/jobs?page=&page_size=&specialty_id=` | recruiter | 我的职位列表（含 closed/强制下架历史） |
+| GET | `/api/recruit/jobs/:id` | recruiter | 我的职位详情 |
+| GET | `/api/jobs?specialty_id=&region=&salary_min=&salary_max=&experience=&page=&page_size=` | hrwai_user | 职位广场（仅 `open` 且未强制下架，按 `published_at` 新鲜度排序） |
+| GET | `/api/jobs/:id` | hrwai_user | 职位详情（含企业名/主营/联系人；**不含**电话/邮箱/信用代码） |
+
+**L1 延伸**：无 token 访问职位列表/详情一律 401（职位不进入任何未登录面，无 SEO）。
+
+### 16.8.7 投递即授权（spec #449 T3 #452）
+
+| 方法 | 路径 | 鉴权 | 说明 |
+|---|---|---|---|
+| POST | `/api/jobs/:id/apply` | hrwai_user | 投递职位（同事务写投递 + 写/复活 `approved` 授权 `source=application`；投递后该企业明文端点当场放行；`hidden` 简历可投递；缺真实姓名/电话 400；applied 唯一；30 天冷却；日限 10） |
+| GET | `/api/resume/applications?page=&page_size=` | hrwai_user | 我的投递（含 `job_title`/`company_name`/`employer_viewed_at`） |
+| POST | `/api/resume/applications/:id/withdraw` | hrwai_user | 撤回投递 `{revoke_contact?: boolean}`（默认 false 不连带收回授权；true 则授权置 `revoked`，明文端点 403） |
+
+**投递状态轴**：`applied → rejected | withdrawn`。`rejected` 终态（企业标记不合适，30 天冷却）；`withdrawn` 后可立即重投同一职位。
+
+**授权来源轴（`contact_requests.source`）**：`recruiter`（企业发起交换申请）/ `application`（投递产生）。明文载体唯一（GetContact 查 `approved` 状态，与来源无关）；投递产生的授权不计入企业日限、不受冷却限制；撤回投递默认不动授权。
+
+### 16.8.8 企业处理投递与内容治理（spec #449 T4 #453 / T5 #454）
+
+| 方法 | 路径 | 鉴权 | 说明 |
+|---|---|---|---|
+| GET | `/api/recruit/jobs/:id/applications?page=&page_size=` | recruiter | 按职位查看投递（只能看自己的职位，越权 403；含 `unread_count` 未读投递数；候选人脱敏——姓名打码、无手机/微信/PDF/证书原图） |
+| GET | `/api/recruit/applications/:id` | recruiter | 投递详情（打开即记录已读 `employer_viewed_at`；回显投递时刻简历更新时间，内容读最新不落快照） |
+| POST | `/api/recruit/applications/:id/reject` | recruiter | 标记不合适 → `rejected`（仅 applied 可拒；30 天冷却） |
+| POST | `/api/jobs/:id/report` | hrwai_user | 举报职位 `{reason}`（同一学员对同一职位唯一，重复举报合并） |
+| GET | `/api/admin/jobs?recruiter_id=&page=&page_size=` | admin | 职位巡检（全量含 closed/强制下架，可按企业筛） |
+| GET | `/api/admin/job-reports?page=&page_size=` | admin | 待处理举报队列 |
+| POST | `/api/admin/job-reports/:id/handle` | admin | 标记举报已处理 |
+| POST | `/api/admin/jobs/:id/force-offline` | admin | 带原因强制下架 `{reason}`（学员侧立即不可见；企业不能自行重新上架；处置入审计日志、邮件通知企业） |
+
 ---
 
 ## 17. 残值评估子模块 `/api/valuation`
