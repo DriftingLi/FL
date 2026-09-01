@@ -328,6 +328,20 @@
             }
         },
         {
+            "path": "pages/jobs/job-list",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "职位广场"
+            }
+        },
+        {
+            "path": "pages/jobs/job-detail",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "职位详情"
+            }
+        },
+        {
             "path": "pages/mall/mall",
             "style": {
                 "navigationStyle": "custom",

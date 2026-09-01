@@ -1,0 +1,148 @@
+/**
+ * 职位相关 API
+ */
+import { get, post } from './request'
+
+/** 职位详情 */
+export type JobPosting = {
+    id : number
+    title : string
+    region : string
+    salary_min ?: number
+    salary_max ?: number
+    salary_text : string
+    experience_req : string
+    description : string
+    specialty_id ?: number
+    published_at : string
+    company_name : string
+    status : string
+    forced_offline : boolean
+}
+
+/** 职位列表查询参数 */
+export type JobListParams = {
+    page ?: number
+    page_size ?: number
+    specialty_id ?: number
+    region ?: string
+    salary_min ?: number
+    salary_max ?: number
+    experience ?: string
+}
+
+/** 职位列表查询结果 */
+export type JobListResult = {
+    items : JobPosting[]
+    total : number
+}
+
+/** 举报原因预设选项 */
+export type ReportReason = {
+    key : string
+    label : string
+}
+
+/** 预设举报原因列表 */
+export const REPORT_REASONS : ReportReason[] = [
+    { key: 'fake', label: '虚假信息' },
+    { key: 'illegal', label: '违法内容' },
+    { key: 'harassment', label: '骚扰信息' },
+    { key: 'other', label: '其他' },
+]
+
+/**
+ * 获取职位详情
+ * @param jobId 职位 ID
+ */
+export function getJobDetailApi(jobId : number) : Promise<JobPosting> {
+    return get('/jobs/' + jobId).then((data : UTSJSONObject) : JobPosting => {
+        return {
+            id: data['id'] as number,
+            title: (data['title'] as string) ?? '',
+            region: (data['region'] as string) ?? '',
+            salary_min: data['salary_min'] as number | undefined,
+            salary_max: data['salary_max'] as number | undefined,
+            salary_text: (data['salary_text'] as string) ?? '',
+            experience_req: (data['experience_req'] as string) ?? '',
+            description: (data['description'] as string) ?? '',
+            specialty_id: data['specialty_id'] as number | undefined,
+            published_at: (data['published_at'] as string) ?? '',
+            company_name: (data['company_name'] as string) ?? '',
+            status: (data['status'] as string) ?? 'open',
+            forced_offline: (data['forced_offline'] as boolean) ?? false,
+        } as JobPosting
+    })
+}
+
+/**
+ * 举报职位
+ * @param jobId 职位 ID
+ * @param reason 举报原因（1-500 字）
+ */
+export function reportJobApi(jobId : number, reason : string) : Promise<void> {
+    const url = '/jobs/' + jobId + '/report'
+    const payload : UTSJSONObject = { reason: reason } as UTSJSONObject
+    return post(url, payload).then(() : void => {
+        // 举报成功，无返回数据
+    })
+}
+
+/**
+ * 投递职位
+ * @param jobId 职位 ID
+ */
+export function applyJobApi(jobId : number) : Promise<void> {
+    const url = '/jobs/' + jobId + '/apply'
+    return post(url).then(() : void => {
+        // 投递成功，无返回数据
+    })
+}
+
+/**
+ * 职位广场列表（学员侧，仅 open 且未强制下架）
+ * @param params 查询参数（可选）
+ */
+export function getJobListApi(params : JobListParams = {}) : Promise<JobListResult> {
+    const query : UTSJSONObject = {} as UTSJSONObject
+    if (params.page != null && params.page! > 0) query['page'] = params.page!.toString()
+    if (params.page_size != null && params.page_size! > 0) query['page_size'] = params.page_size!.toString()
+    if (params.specialty_id != null && params.specialty_id! > 0) query['specialty_id'] = params.specialty_id!.toString()
+    if (params.region != null && params.region!.length > 0) query['region'] = params.region!
+    if (params.salary_min != null) query['salary_min'] = params.salary_min!.toString()
+    if (params.salary_max != null) query['salary_max'] = params.salary_max!.toString()
+    if (params.experience != null && params.experience!.length > 0) query['experience'] = params.experience!
+
+    const keys = Object.keys(query)
+    const qsParts : string[] = []
+    for (const k of keys) {
+        qsParts.push(encodeURIComponent(k) + '=' + encodeURIComponent(query[k]!))
+    }
+    const qs = qsParts.join('&')
+    const url = '/jobs' + (qs.length > 0 ? '?' + qs : '')
+
+    return get(url).then((data : UTSJSONObject) : JobListResult => {
+        const itemsRaw = (data['items'] as UTSJSONObject[]) ?? []
+        const items : JobPosting[] = itemsRaw.map((obj : UTSJSONObject) : JobPosting => {
+            return {
+                id: obj['id'] as number,
+                title: (obj['title'] as string) ?? '',
+                region: (obj['region'] as string) ?? '',
+                salary_min: obj['salary_min'] as number | undefined,
+                salary_max: obj['salary_max'] as number | undefined,
+                salary_text: (obj['salary_text'] as string) ?? '',
+                experience_req: (obj['experience_req'] as string) ?? '',
+                description: (obj['description'] as string) ?? '',
+                specialty_id: obj['specialty_id'] as number | undefined,
+                published_at: (obj['published_at'] as string) ?? '',
+                company_name: (obj['company_name'] as string) ?? '',
+                status: (obj['status'] as string) ?? 'open',
+                forced_offline: (obj['forced_offline'] as boolean) ?? false,
+            } as JobPosting
+        })
+        return {
+            items: items,
+            total: data['total'] as number,
+        } as JobListResult
+    })
+}
