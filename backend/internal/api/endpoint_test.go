@@ -29,8 +29,8 @@ func doEndpoint(t *testing.T, e Endpoint[int, string]) *httptest.ResponseRecorde
 	return w
 }
 
-// renderAsDefault 测试用显式 Render：复刻既有默认渲染语义（err==nil → 200；
-// *ParseError → 其状态码；其他 → 500）。原 defaultRender 删除后，测试改用显式 Render 断言同一行为。
+// renderAsDefault 测试用显式 Render：复刻默认信封语义（err==nil → 200；
+// *ParseError → 其状态码；其他 → 500）。用于对照断言「省略 Render 时默认信封行为一致」。
 func renderAsDefault[Resp any](c *gin.Context, _ *int, resp *Resp, err error) {
 	var pe *ParseError
 	switch {
@@ -49,7 +49,7 @@ func TestEndpoint_ParseFailure_BadRequest(t *testing.T) {
 		Parse: func(c *gin.Context) (*int, error) {
 			return nil, badRequest("参数非法")
 		},
-		Render: renderAsDefault[string],
+		// Render 省略：走默认信封（ADR-0024 C2）
 	}
 	w := doEndpoint(t, e)
 	if w.Code != http.StatusBadRequest {
@@ -66,7 +66,7 @@ func TestEndpoint_InvokeServiceError_ServerError(t *testing.T) {
 		Invoke: func(ctx context.Context, req *int) (*string, error) {
 			return nil, errors.New("服务崩了")
 		},
-		Render: renderAsDefault[string],
+		// Render 省略：invoke 错误 → 500
 	}
 	w := doEndpoint(t, e)
 	if w.Code != http.StatusInternalServerError {
@@ -83,7 +83,7 @@ func TestEndpoint_ParseNotFound(t *testing.T) {
 		Parse: func(c *gin.Context) (*int, error) {
 			return nil, &ParseError{Status: http.StatusNotFound, Message: "不存在"}
 		},
-		Render: renderAsDefault[string],
+		// Render 省略：ParseError 404 → 404
 	}
 	w := doEndpoint(t, e)
 	if w.Code != http.StatusNotFound {
@@ -98,7 +98,7 @@ func TestEndpoint_Success_200(t *testing.T) {
 			v := "ok"
 			return &v, nil
 		},
-		Render: renderAsDefault[string],
+		// Render 省略：成功 → 200 统一信封
 	}
 	w := doEndpoint(t, e)
 	if w.Code != http.StatusOK {
@@ -115,7 +115,7 @@ func TestEndpoint_PanicRecovery_ServerError(t *testing.T) {
 		Invoke: func(ctx context.Context, req *int) (*string, error) {
 			panic("boom")
 		},
-		Render: renderAsDefault[string],
+		// Render 省略：panic 兜底 500
 	}
 	w := doEndpoint(t, e)
 	if w.Code != http.StatusInternalServerError {
@@ -136,10 +136,51 @@ func TestEndpoint_NilParse_UsesZeroReq(t *testing.T) {
 			v := "zero"
 			return &v, nil
 		},
-		Render: renderAsDefault[string],
+		// Render 省略：Parse nil 用零值 Req
 	}
 	w := doEndpoint(t, e)
 	if w.Code != http.StatusOK {
 		t.Fatalf("状态码 = %d, 期望 200", w.Code)
+	}
+}
+
+// TestEndpoint_DefaultRender_ByteEquivalent 默认信封与显式纯样板 Render 字节级等价（ADR-0024 C2）：
+// 成功 → 200 统一信封、*ParseError → 其状态码、其他错误 → 500，三种路径均逐字节一致。
+func TestEndpoint_DefaultRender_ByteEquivalent(t *testing.T) {
+	// 成功路径
+	okInvoke := func(ctx context.Context, req *int) (*string, error) {
+		v := "ok"
+		return &v, nil
+	}
+	explicit := Endpoint[int, string]{
+		Invoke: okInvoke,
+		Render: renderAsDefault[string],
+	}
+	implicit := Endpoint[int, string]{
+		Invoke: okInvoke,
+		// Render 省略 → 默认信封
+	}
+	if a, b := doEndpoint(t, explicit).Body.String(), doEndpoint(t, implicit).Body.String(); a != b {
+		t.Fatalf("成功信封不一致:\n显式=%s\n默认=%s", a, b)
+	}
+
+	// 服务错误路径
+	errInvoke := func(ctx context.Context, req *int) (*string, error) {
+		return nil, errors.New("服务崩了")
+	}
+	explicit = Endpoint[int, string]{Invoke: errInvoke, Render: renderAsDefault[string]}
+	implicit = Endpoint[int, string]{Invoke: errInvoke}
+	if a, b := doEndpoint(t, explicit).Body.String(), doEndpoint(t, implicit).Body.String(); a != b {
+		t.Fatalf("500 信封不一致:\n显式=%s\n默认=%s", a, b)
+	}
+
+	// 解析错误路径
+	parseErr := func(c *gin.Context) (*int, error) {
+		return nil, badRequest("参数非法")
+	}
+	explicit = Endpoint[int, string]{Parse: parseErr, Render: renderAsDefault[string]}
+	implicit = Endpoint[int, string]{Parse: parseErr}
+	if a, b := doEndpoint(t, explicit).Body.String(), doEndpoint(t, implicit).Body.String(); a != b {
+		t.Fatalf("400 信封不一致:\n显式=%s\n默认=%s", a, b)
 	}
 }
