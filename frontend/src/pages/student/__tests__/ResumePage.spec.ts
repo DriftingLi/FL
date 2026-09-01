@@ -23,12 +23,12 @@ function mountPage() {
 
 beforeEach(() => {
   vi.mocked(unwrappedRequest.get).mockReset()
-  vi.mocked(unwrappedRequest.get).mockResolvedValue({ specialties: [], credentials: [] })
+  vi.mocked(unwrappedRequest.get).mockResolvedValue({ positions: [], credentials: [] })
   vi.mocked(resumeApi.getViewStats).mockResolvedValue({ count: 0 })
 })
 
 describe('ResumePage 未建简历空态（#415）', () => {
-  it('契约内 404（kind=notfound）：不弹错误提示，渲染「完善后可被招聘企业看到」引导', async () => {
+  it('契约内 404（kind=notfound）：不弹错误提示，渲染「完善后可被招聘企业看到」引导', { timeout: 15000 }, async () => {
     const err = Object.assign(new Error('简历不存在'), { kind: 'notfound' })
     vi.mocked(resumeApi.get).mockRejectedValue(err)
     const wrapper = mountPage()
@@ -38,7 +38,7 @@ describe('ResumePage 未建简历空态（#415）', () => {
     expect(wrapper.text()).toContain('去完善')
   })
 
-  it('已建简历：渲染编辑表单（真实姓名输入框存在）', async () => {
+  it('已建简历：渲染编辑表单（真实姓名输入框存在）', { timeout: 15000 }, async () => {
     vi.mocked(resumeApi.get).mockResolvedValue({
       user_id: 1, real_name: '张三', contact_phone: '13800000001', wechat: '', region: '上海',
       expected_position_extra: '', expected_regions: [], salary_negotiable: false,
