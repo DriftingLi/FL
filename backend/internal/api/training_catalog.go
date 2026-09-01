@@ -73,12 +73,6 @@ func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *serv
 	g.PUT("/certificate-template/:id", h.UpdateCertificateTemplate)
 	g.DELETE("/certificate-template/:id", h.DeleteCertificateTemplate)
 
-	// ---- 题库标签 ----
-	g.GET("/question-tags", h.ListQuestionTags)
-	g.POST("/question-tag", h.CreateQuestionTag)
-	g.PUT("/question-tag/:id", h.UpdateQuestionTag)
-	g.DELETE("/question-tag/:id", h.DeleteQuestionTag)
-
 	// ---- 目标证件 ----
 	g.GET("/credentials", h.ListCredentials)
 	g.POST("/credential", h.CreateCredential)
@@ -86,8 +80,13 @@ func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *serv
 	g.PUT("/credential/:id/sort", h.SwapCredentialSort)
 	g.DELETE("/credential/:id", h.DeleteCredential)
 
-	// ---- 题目打标 ----
-	g.PUT("/question/:question_id/tags", h.SetQuestionTags)
+	// ===== 题库标签与题目打标（admin + tutor，#问题2：导师端题库管理需要） =====
+	tagG := rg.Group("/admin", middleware.JWTAuth(rd.Session), middleware.RoleRequired("admin", "tutor"))
+	tagG.GET("/question-tags", h.ListQuestionTags)
+	tagG.POST("/question-tag", h.CreateQuestionTag)
+	tagG.PUT("/question-tag/:id", h.UpdateQuestionTag)
+	tagG.DELETE("/question-tag/:id", h.DeleteQuestionTag)
+	tagG.PUT("/question/:question_id/tags", h.SetQuestionTags)
 }
 
 // GetCatalogTree 培训目录树

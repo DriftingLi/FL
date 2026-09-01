@@ -73,7 +73,7 @@ describe('导航配置的详情页归属', () => {
     AIAssistant: ['AIAssistantFeature'],
     JobPlaza: ['JobDetail'],
     TutorCourses: ['TutorChapterManage', 'TutorChapterEdit'],
-    TutorQuestionManage: ['TutorQuestionCreate']
+    TutorQuestionManage: ['TutorQuestionCreate', 'TutorQuestionTags']
   }
 
   const scoped = [...collect(roleNavigation.student), ...collect(roleNavigation.tutor)]

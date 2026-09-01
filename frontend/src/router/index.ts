@@ -183,6 +183,11 @@ const routes: RouteRecordRaw[] = [
         name: 'TutorQuestionCreate',
         component: () => import('@/pages/tutor/QuestionCreate.vue')
       },
+      {
+        path: 'question-tags',
+        name: 'TutorQuestionTags',
+        component: () => import('@/pages/tutor/QuestionTags.vue')
+      },
 
     ]
   },
@@ -317,11 +322,6 @@ const routes: RouteRecordRaw[] = [
         path: 'positions',
         name: 'PositionManage',
         component: () => import('@/pages/admin/PositionManage.vue')
-      },
-      {
-        path: 'question-tags',
-        name: 'QuestionTags',
-        component: () => import('@/pages/admin/QuestionTags.vue')
       },
       {
         path: 'question-review',
