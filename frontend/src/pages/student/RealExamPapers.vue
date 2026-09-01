@@ -11,7 +11,14 @@
       </div>
     </div>
 
-    <div v-if="loading" class="empty-wrap rounded-card border border-line bg-panel py-6">
+    <UiErrorState
+      v-if="loadError"
+      title="真题卷加载失败"
+      description="网络或服务端异常，可重试"
+      :retrying="retrying"
+      @retry="handleRetry"
+    />
+    <div v-else-if="loading" class="empty-wrap rounded-card border border-line bg-panel py-6">
       <el-skeleton :rows="4" animated />
     </div>
     <div v-else-if="papers.length === 0" class="empty-wrap rounded-card border border-line bg-panel py-6">
@@ -62,8 +69,10 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useCredentialStore } from '@/stores/credential'
 import { realExamApi, type RealExamPaper } from '@/api/realExam'
 import { useCredentialRefetch } from '@/composables/useCredentialRefetch'
+import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useStagger } from '@/composables/useStagger'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 
@@ -73,25 +82,24 @@ const credentialStore = useCredentialStore()
 const staggerStyle = useStagger(12)
 
 const papers = ref<RealExamPaper[]>([])
-const loading = ref(true)
 const redeemingId = ref<number | null>(null)
+
+// 三态收编 useAsyncPage（#439）：loader 纯装配，错误收敛 loadError
+const {
+  loading,
+  loadError,
+  retrying,
+  retry: handleRetry,
+  run: loadPapers
+} = useAsyncPage(async () => {
+  papers.value = (await realExamApi.listPapers()) || []
+})
 
 const currentCredentialName = computed(() => credentialStore.current?.name || '')
 
 const emptyDescription = computed(() =>
   currentCredentialName.value ? `${currentCredentialName.value} 真题建设中，敬请期待` : '真题建设中，敬请期待'
 )
-
-async function loadPapers() {
-  loading.value = true
-  try {
-    papers.value = (await realExamApi.listPapers()) || []
-  } catch {
-    papers.value = []
-  } finally {
-    loading.value = false
-  }
-}
 
 // 首屏加载 + 证件切换即重拉（单点：watch store.current.id，见 useCredentialRefetch；
 // 列表按 current_credential 分区）

@@ -28,11 +28,14 @@
       </el-select>
     </div>
 
-    <div v-if="loading" class="rounded-card border border-line bg-panel p-8 text-center text-ink-3">加载中...</div>
-    <div v-else-if="error" class="rounded-card border border-line bg-panel p-8 text-center">
-      <p class="text-sm text-ink-2">{{ error }}</p>
-      <UiButton class="mt-3" size="small" @click="load">重试</UiButton>
-    </div>
+    <UiErrorState
+      v-if="loadError"
+      title="简历加载失败"
+      description="网络或服务端异常，可重试"
+      :retrying="retrying"
+      @retry="handleRetry"
+    />
+    <UiSkeleton v-else-if="loading" variant="list" :count="4" />
     <div v-else-if="items.length === 0" class="rounded-card border border-line bg-panel p-8 text-center text-ink-3">
       暂无公开简历
     </div>
@@ -78,12 +81,34 @@
 import { ref, reactive, onMounted, watch } from 'vue'
 import { recruitApi, type RecruitResumeItem } from '@/api/recruit'
 import { unwrappedRequest } from '@/api/request'
+import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiErrorState from '@/components/ui/UiErrorState.vue'
+import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 
-const loading = ref(false)
-const error = ref('')
 const items = ref<RecruitResumeItem[]>([])
-const total = ref(0)
+
+// 三态收编 useAsyncPage（#439）：loader 纯装配，错误收敛 loadError（拦截器已 toast）
+const {
+  loading,
+  loadError,
+  retrying,
+  retry: handleRetry,
+  total,
+  run: load
+} = useAsyncPage(async () => {
+  const params: any = { page: 1, page_size: 20 }
+  if (filters.region) params.region = filters.region
+  if (filters.specialty_id) params.specialty_id = filters.specialty_id
+  if (filters.credential_id) params.credential_id = filters.credential_id
+  if (filters.salary_min != null) params.salary_min = filters.salary_min
+  if (filters.salary_max != null) params.salary_max = filters.salary_max
+  if (filters.experience_years != null) params.experience_years = filters.experience_years
+  if (filters.available_in) params.available_in = filters.available_in
+  const res = await recruitApi.listResumes(params)
+  items.value = res?.items || []
+  total.value = res?.total || 0
+})
 
 const specialties = ref<any[]>([])
 const credentials = ref<any[]>([])
@@ -119,28 +144,6 @@ function jobNatureLabel(v: string) {
 function certTag(c: any) {
   if (!c || typeof c !== 'object') return ''
   return c.credential_id ? `持证#${c.credential_id}` : c.cert_no || '持证'
-}
-
-async function load() {
-  loading.value = true
-  error.value = ''
-  try {
-    const params: any = { page: 1, page_size: 20 }
-    if (filters.region) params.region = filters.region
-    if (filters.specialty_id) params.specialty_id = filters.specialty_id
-    if (filters.credential_id) params.credential_id = filters.credential_id
-    if (filters.salary_min != null) params.salary_min = filters.salary_min
-    if (filters.salary_max != null) params.salary_max = filters.salary_max
-    if (filters.experience_years != null) params.experience_years = filters.experience_years
-    if (filters.available_in) params.available_in = filters.available_in
-    const res = await recruitApi.listResumes(params)
-    items.value = res?.items || []
-    total.value = res?.total || 0
-  } catch (e: any) {
-    error.value = e?.message || '加载失败'
-  } finally {
-    loading.value = false
-  }
 }
 
 async function loadMeta() {

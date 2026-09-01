@@ -4,11 +4,14 @@
       <router-link to="/recruit/resumes" class="text-sm text-ui-600 hover:text-ui-700">← 返回简历库</router-link>
     </div>
 
-    <div v-if="loading" class="rounded-card border border-line bg-panel p-8 text-center text-ink-3">加载中...</div>
-    <div v-else-if="error" class="rounded-card border border-line bg-panel p-8 text-center">
-      <p class="text-sm text-ink-2">{{ error }}</p>
-      <UiButton class="mt-3" size="small" @click="load">重试</UiButton>
-    </div>
+    <UiErrorState
+      v-if="loadError"
+      title="简历加载失败"
+      description="网络或服务端异常，可重试"
+      :retrying="retrying"
+      @retry="handleRetry"
+    />
+    <UiSkeleton v-else-if="loading" variant="list" :count="4" />
     <div v-else-if="!data" class="rounded-card border border-line bg-panel p-8 text-center text-ink-3">未找到该简历</div>
     <div v-else class="rounded-card border border-line bg-panel p-6">
       <h1 class="text-lg font-bold text-ink">{{ data.real_name || data.real_name_masked || '学员简历' }}</h1>
@@ -61,11 +64,12 @@ import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { recruitApi, type RecruitResumeItem } from '@/api/recruit'
+import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiErrorState from '@/components/ui/UiErrorState.vue'
+import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 
 const route = useRoute()
-const loading = ref(false)
-const error = ref('')
 const data = ref<RecruitResumeItem | null>(null)
 const showDialog = ref(false)
 const message = ref('')
@@ -74,25 +78,19 @@ const contact = ref<any>(null)
 const contactLoading = ref(false)
 const contactError = ref('')
 
-async function load() {
-  loading.value = true
-  error.value = ''
-  try {
-    const id = String(route.params.id)
-    const res = await recruitApi.getResume(id)
-    data.value = res as any || null
-    loadContact()
-  } catch (e: any) {
-    if (e?.response?.status === 404 || String(e?.message || '').includes('不存在')) {
-      data.value = null
-      error.value = ''
-    } else {
-      error.value = e?.message || '加载失败'
-    }
-  } finally {
-    loading.value = false
-  }
-}
+// 三态收编 useAsyncPage（#439）：404 契约内空态保留（data 置 null），真实故障收敛 loadError
+const {
+  loading,
+  loadError,
+  retrying,
+  retry: handleRetry,
+  run: load
+} = useAsyncPage(async () => {
+  const id = String(route.params.id)
+  const res = await recruitApi.getResume(id)
+  data.value = res as any || null
+  loadContact()
+})
 
 async function loadContact() {
   if (!data.value) return
