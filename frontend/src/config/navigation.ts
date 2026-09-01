@@ -245,6 +245,7 @@ const recruiterNav: NavItem[] = [
     key: 'jobs',
     label: '职位管理',
     routeName: 'RecruitJobManage',
+    activeRouteNames: ['RecruitApplicationList'],
     icon: OfficeBuilding
   }
 ]

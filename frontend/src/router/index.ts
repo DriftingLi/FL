@@ -406,6 +406,11 @@ const routes: RouteRecordRaw[] = [
         path: 'jobs',
         name: 'RecruitJobManage',
         component: () => import('@/pages/recruit/JobManage.vue')
+      },
+      {
+        path: 'jobs/:id/applications',
+        name: 'RecruitApplicationList',
+        component: () => import('@/pages/recruit/ApplicationList.vue')
       }
     ]
   },

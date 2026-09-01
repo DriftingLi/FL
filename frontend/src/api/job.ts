@@ -51,6 +51,10 @@ export interface JobApplication {
   created_at: string
   updated_at: string
   company_name?: string
+  // 企业侧脱敏字段（唯一脱敏路径）
+  student_real_name_masked?: string
+  student_resume_updated_at?: string
+  resume_updated_at_snapshot?: string
 }
 
 export interface ApplicationListResp {
@@ -58,6 +62,15 @@ export interface ApplicationListResp {
   total: number
   page: number
   page_size: number
+}
+
+export interface RecruiterApplicationListResp {
+  items: JobApplication[]
+  total: number
+  page: number
+  page_size: number
+  unread_count: number
+  job_title: string
 }
 
 export const jobApi = {
@@ -98,5 +111,15 @@ export const jobApi = {
   // 举报
   reportJob(id: number, reason: string) {
     return unwrappedRequest.post<{ id: number }>(`/jobs/${id}/report`, { reason })
+  },
+  // 企业侧投递处理
+  listJobApplications(jobId: number, params?: { page?: number; page_size?: number }) {
+    return unwrappedRequest.get<RecruiterApplicationListResp>(`/recruit/jobs/${jobId}/applications`, { params })
+  },
+  getApplicationDetail(id: number) {
+    return unwrappedRequest.get<JobApplication>(`/recruit/applications/${id}`)
+  },
+  rejectApplication(id: number) {
+    return unwrappedRequest.post<JobApplication>(`/recruit/applications/${id}/reject`)
   }
 }
