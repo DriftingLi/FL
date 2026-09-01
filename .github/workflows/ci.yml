@@ -310,11 +310,13 @@ jobs:
 
       # CI 全部通过后,主动触发 CD workflow
       # gh CLI 需要 git 仓库上下文,必须先 checkout 代码
+      # !cancelled()：run 被并发取消时,if: always() 的 ci-summary 仍会执行,
+      # 不加这道判断会让「已被放弃的旧提交」照常派发部署（实测发生过）
       - uses: actions/checkout@v4
-        if: success() && github.event_name == 'push'
+        if: success() && !cancelled() && github.event_name == 'push'
 
       - name: 判定是否部署 testing
-        if: success() && github.event_name == 'push'
+        if: success() && !cancelled() && github.event_name == 'push'
         id: deploy-gate
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

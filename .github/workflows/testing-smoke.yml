@@ -1,0 +1,71 @@
+name: PR - testing 冒烟补齐
+
+# 为什么需要这条 workflow：
+# ci.yml 的 testing 冒烟只在「分支 push 且该分支当时已有 open PR」时派发。
+# 但开发流程是「先 push、再开 PR」——纯文档改动的 CI 只要 ~20 秒就结束，
+# 那一刻 PR 还不存在，冒烟就被跳过，该 commit 因此永远缺少冒烟记录；
+# 而 cd.yml 的生产 gate 要求这条记录，合并后会被阻断（实测复现于 PR #473）。
+#
+# 本 workflow 在 PR 开启时补齐这条记录。它只在「CI 已绿 且 尚无冒烟记录」时动作，
+# 不重跑 CI、不重复部署，因此不违背「PR 不触发 CI/CD」的初衷：
+# 它补的是缺失的那一次，正常流程下都是空跑（秒级退出）。
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+    branches: [master]
+
+permissions:
+  contents: read
+  actions: write
+  pull-requests: read
+  deployments: read
+
+concurrency:
+  group: smoke-${{ github.event.pull_request.head.sha }}
+  cancel-in-progress: false
+
+jobs:
+  ensure-testing-smoke:
+    # 跳过草稿 PR：草稿阶段不该占 testing 机器
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: 判定并补发 testing 冒烟
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          set -euo pipefail
+
+          if [ "$HEAD_REPO" != "$GITHUB_REPOSITORY" ]; then
+            echo "fork 来源的 PR（$HEAD_REPO），无法在本仓库按 ref 派发冒烟，交由 CI 处理" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # 与 cd.yml gate 同款的聚合判定：同一 SHA 可能有多条 ci-summary 记录
+          CI=$(gh api "repos/$GITHUB_REPOSITORY/commits/$SHA/check-runs?per_page=100" --jq '
+            [.check_runs[] | select(.name=="ci-summary") | .conclusion]
+            | if any(. == "failure") then "failure"
+              elif any(. == "success") then "success"
+              elif length == 0 then "missing"
+              else "other" end')
+          if [ "$CI" != "success" ]; then
+            # 含 CI 仍在跑（missing/other）与 CI 失败（failure）两种情况：
+            # 前者跑完会自己派发冒烟，后者本就不该部署
+            echo "ci-summary=$CI，无需补发（CI 未跑完或已失败）" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          DEP=$(gh api "repos/$GITHUB_REPOSITORY/deployments?per_page=100" \
+                 --jq "[.[] | select(.sha==\"$SHA\" and .environment==\"testing\")] | length")
+          if [ "$DEP" != "0" ]; then
+            echo "commit ${SHA:0:8} 已有 testing 冒烟记录，无需补发" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo ">>> CI 已绿但缺冒烟记录（CI 跑完早于开 PR），补发 testing 部署" | tee -a "$GITHUB_STEP_SUMMARY"
+          # 与 ci.yml 的派发方式保持一致：--ref 用分支名，使 CD run 与部署记录的 sha == 被测 SHA
+          gh workflow run cd.yml --ref "$REF" -f ref="$SHA" -f environment=testing
+          echo "| 补发 | PR #${GITHUB_EVENT_PULL_REQUEST_NUMBER} · commit \`${SHA:0:8}\` → testing |" >> "$GITHUB_STEP_SUMMARY"
