@@ -120,3 +120,16 @@ $font-size-md: 28rpx;
 $font-size-lg: 32rpx;
 $font-size-xl: 36rpx;
 $font-size-xxl: 44rpx;
+
+/* ==================== 扩展 Token（UI 规范新增） ==================== */
+
+/* 页面渐变（tabBar 页面专用） */
+$gradient-start: #CFE9FB;
+$gradient-mid: #D0EBFD;
+$gradient-end: #F5F5F5;
+
+/* 危险操作色 */
+$danger-color: #ff3b30;
+
+/* 输入框边框 */
+$input-border: #e5e5e5;

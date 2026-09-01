@@ -62,28 +62,28 @@
 
 	/* 全局公共样式 */
 	.page-base {
-		background-color: #f8f8f8;
-		font-size: 28rpx;
-		color: #333333;
+		background-color: $bg-color;
+		font-size: $font-size-md;
+		color: $text-color;
 	}
 
 	/* 通用卡片 */
 	.card {
-		background-color: #ffffff;
-		border-radius: 24rpx;
-		padding: 24rpx;
-		margin: 24rpx;
+		background-color: $card-bg;
+		border-radius: $radius-lg;
+		padding: $spacing-md;
+		margin: $spacing-md;
 	}
 
 	/* 通用按钮 */
 	.btn-primary {
-		background-color: #2979ff;
-		color: #ffffff;
-		border-radius: 48rpx;
+		background-color: $primary-color;
+		color: $text-color-inverse;
+		border-radius: $radius-pill;
 		height: 88rpx;
 		line-height: 88rpx;
 		text-align: center;
-		font-size: 32rpx;
+		font-size: $font-size-lg;
 		font-weight: bold;
 	}
 
@@ -94,10 +94,10 @@
 	/* 通用输入框 */
 	.input-base {
 		height: 88rpx;
-		border: 1rpx solid #e5e5e5;
-		border-radius: 12rpx;
-		padding: 0 24rpx;
-		font-size: 28rpx;
-		background-color: #ffffff;
+		border: 1rpx solid $input-border;
+		border-radius: $radius-sm;
+		padding: 0 $spacing-md;
+		font-size: $font-size-md;
+		background-color: $card-bg;
 	}
 </style>
