@@ -10,88 +10,103 @@
         </view>
 
         <scroll-view class="content-scroll" scroll-y="true">
-            <!-- 积分余额卡片 -->
+            <!-- 积分卡片 -->
             <view class="balance-card">
-                <view class="balance-side">
-                    <text class="balance-rule">积分规则</text>
-                </view>
-                <text class="balance-value">{{ pointsBalance }}</text>
-                <view class="balance-side"></view>
-            </view>
-
-            <!-- 过期积分提示 -->
-            <view class="expire-tip">
-                <text class="expire-text">本月暂无过期积分，去积分商城挑选心仪商品</text>
-                <text class="expire-arrow">></text>
-            </view>
-
-            <!-- 重点任务卡片 -->
-            <view class="task-card">
-                <view class="task-main">
-                    <view class="task-left">
-                        <view class="task-title-row">
-                            <text class="task-title">任务奖励</text>
-                            <view class="task-title-underline"></view>
-                        </view>
-                        <text class="task-desc">在广场发布帖数不少于10字的帖子</text>
+                <view class="balance-top">
+                    <view class="balance-coin">
+                        <text class="coin-icon">🪙</text>
                     </view>
-                        <view class="task-button" @click="goForumCreate">
-                            <text class="task-button-text">去发表</text>
-                        </view>
+                    <view class="balance-info">
+                        <text class="balance-label">可用积分</text>
+                        <text class="balance-value">{{ pointsBalance }}</text>
+                    </view>
+                    <view class="balance-exchange" @click="goExchange">
+                        <text class="exchange-text">去兑换</text>
+                    </view>
+                </view>
+                <view class="balance-bottom">
+                    <text class="balance-stats">今日可得  +{{ todayEarned }}，累计获得 {{ totalEarned }}</text>
                 </view>
             </view>
 
-            <!-- 任务列表卡片 -->
-            <view class="task-card">
-                <view v-for="(task, idx) in taskList" :key="idx"
-                    :class="['task-item', { 'task-item-last': idx == taskList.length - 1 }]">
-                    <view class="task-main">
-                        <view class="task-left">
-                            <text class="task-title">{{ task.title }}</text>
-                            <view class="task-desc-row">
-                                <text class="task-desc">{{ task.desc }}</text>
+            <!-- 每日任务分组 -->
+            <view class="section">
+                <view class="section-header">
+                    <text class="section-title">每日任务</text>
+                    <view class="section-underline"></view>
+                </view>
+                <view class="task-card">
+                    <view v-for="(task, idx) in dailyTasks" :key="idx"
+                        :class="['task-item', { 'task-item-last': idx === dailyTasks.length - 1 }]">
+                        <view class="task-icon-wrap" :style="{ backgroundColor: task.iconBg }">
+                            <text class="task-icon">{{ task.icon }}</text>
+                        </view>
+                        <view class="task-content">
+                            <view class="task-title-row">
+                                <text class="task-title">{{ task.title }}</text>
                                 <text class="task-progress">（{{ task.done }}/{{ task.total }}）</text>
                             </view>
+                            <text class="task-desc">{{ task.desc }}</text>
                         </view>
-                        <view class="task-button" @click="onTaskAction(task.action)">
-                            <text class="task-button-text">{{ task.buttonText }}</text>
+                        <view class="task-btn" :class="{ 'task-btn-done': task.done >= task.total }"
+                            @click="onTaskAction(task)">
+                            <text class="task-btn-text">{{ task.done >= task.total ? '已完成' : '去完成' }}</text>
                         </view>
                     </view>
                 </view>
             </view>
 
-            <!-- 知识问答任务卡片 -->
-            <view class="task-card">
-                <view class="task-item task-item-last">
-                    <view class="task-main">
-                        <view class="task-left">
-                            <text class="task-title">{{ qaTask.title }}</text>
-                            <view class="task-desc-row">
-                                <text class="task-desc">{{ qaTask.desc }}</text>
-                                <text class="task-progress">（{{ qaTask.done }}/{{ qaTask.total }}）</text>
-                            </view>
+            <!-- 福利任务分组 -->
+            <view class="section">
+                <view class="section-header">
+                    <text class="section-title">福利任务</text>
+                    <view class="section-underline"></view>
+                </view>
+                <view class="task-card">
+                    <view v-for="(task, idx) in welfareTasks" :key="idx"
+                        :class="['task-item', { 'task-item-last': idx === welfareTasks.length - 1 }]">
+                        <view class="task-icon-wrap" :style="{ backgroundColor: task.iconBg }">
+                            <text class="task-icon">{{ task.icon }}</text>
                         </view>
-                        <view class="task-button" @click="onTaskAction(qaTask.action)">
-                            <text class="task-button-text">{{ qaTask.buttonText }}</text>
+                        <view class="task-content">
+                            <text class="task-title">{{ task.title }}</text>
+                            <text class="task-desc">{{ task.desc }}</text>
+                        </view>
+                        <view class="task-btn" :class="{ 'task-btn-done': task.completed }"
+                            @click="onWelfareAction(task)">
+                            <text class="task-btn-text">{{ task.completed ? '已完成' : '去完成' }}</text>
                         </view>
                     </view>
                 </view>
             </view>
+
+            <view class="bottom-spacer"></view>
         </scroll-view>
     </view>
 </template>
 
 <script setup lang="uts">
     import { ref } from 'vue'
+    import { onShow } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
 
-    type TaskItem = {
+    type DailyTask = {
         title : string
         desc : string
         done : number
         total : number
-        buttonText : string
+        icon : string
+        iconBg : string
+        action : string
+    }
+
+    type WelfareTask = {
+        title : string
+        desc : string
+        completed : boolean
+        icon : string
+        iconBg : string
         action : string
     }
 
@@ -99,30 +114,85 @@
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     const pointsBalance = ref<number>(42)
+    const todayEarned = ref<number>(80)
+    const totalEarned = ref<number>(42)
 
-    const taskList = ref<TaskItem[]>([
-        { title: '发布帖子', desc: '在广场发布帖数不少于10字的帖子', done: 0, total: 1, buttonText: '去发表', action: 'create' },
-        { title: '发布评论', desc: '在广场发布不少于10字的评论', done: 0, total: 1, buttonText: '去评论', action: 'comment' },
-        { title: '转发帖子', desc: '转发帖子、文章、招聘等内容，转发字数不少于10字', done: 0, total: 2, buttonText: '去转发', action: 'forward' },
+    const dailyTasks = ref<DailyTask[]>([
+        { title: '每日登录', desc: '登录小程序获得', done: 1, total: 1, icon: '👆', iconBg: '#FFF3E0', action: 'login' },
+        { title: '每日答题', desc: '完成容易题库练习', done: 0, total: 1, icon: '📝', iconBg: '#E3F2FD', action: 'daily-quiz' },
+        { title: '发布帖子', desc: '完成一次打卡签到', done: 1, total: 1, icon: '📋', iconBg: '#E8F5E9', action: 'create-post' },
+        { title: '浏览帖子', desc: '去广场浏览3篇帖子，立得任务奖励', done: 1, total: 3, icon: '📖', iconBg: '#FFF8E1', action: 'browse-posts' },
+        { title: '浏览课程', desc: '去游览课程查看3个课程，立得任务奖励', done: 1, total: 3, icon: '📚', iconBg: '#F3E5F5', action: 'browse-courses' },
+        { title: '浏览商城', desc: '去商城浏览3个商品，立得任务奖励', done: 1, total: 3, icon: '🏪', iconBg: '#E0F7FA', action: 'browse-mall' },
+        { title: '发表评论', desc: '在广场发布不少于10字的评论', done: 0, total: 3, icon: '💬', iconBg: '#FBE9E7', action: 'comment' },
+        { title: '完成1次题库练习', desc: '完成任务模拟考试并提交', done: 0, total: 1, icon: '✅', iconBg: '#E8F5E9', action: 'quiz-practice' },
+        { title: '完成1次模拟考试', desc: '完成任务模拟考试并提交', done: 0, total: 1, icon: '📊', iconBg: '#EDE7F6', action: 'mock-exam' },
     ])
 
-    const qaTask = ref<TaskItem>({ title: '去参与知识问答', desc: '去提问或回复信息，立得任务奖励', done: 0, total: 1, buttonText: '去参与', action: 'qa' })
+    const welfareTasks = ref<WelfareTask[]>([
+        { title: '完善个人信息', desc: '上传头像并完善昵称', completed: true, icon: '👤', iconBg: '#E3F2FD', action: 'profile' },
+        { title: '选定考试目标证件', desc: '转发帖子、文章、招聘等内容，转发字数不少于10字', completed: false, icon: '🎯', iconBg: '#FFF3E0', action: 'select-cert' },
+        { title: '完成首节课程', desc: '观看任意课程首页并完成', completed: false, icon: '🎬', iconBg: '#E8F5E9', action: 'first-chapter' },
+        { title: '完成积分兑礼', desc: '去商城兑换好礼', completed: false, icon: '🎁', iconBg: '#FCE4EC', action: 'exchange' },
+        { title: '邀请好友注册', desc: '去邀请好友得奖励', completed: false, icon: '👥', iconBg: '#F3E5F5', action: 'invite' },
+        { title: '分享给好友', desc: '去邀请好友得奖励', completed: false, icon: '🔗', iconBg: '#E0F7FA', action: 'share' },
+    ])
 
     function onBack() : void {
         goBack()
     }
 
-    function goForumCreate() : void {
-        uni.navigateTo({ url: '/pages/forum/forum-create' })
+    function goExchange() : void {
+        uni.showToast({ title: '功能开发中', icon: 'none' })
     }
 
-    function onTaskAction(action : string) : void {
-        if (action == 'create') {
-            uni.navigateTo({ url: '/pages/forum/forum-create' })
-        } else {
-            uni.navigateTo({ url: '/pages/forum/forum' })
+    function onTaskAction(task : DailyTask) : void {
+        if (task.done >= task.total) return
+        switch (task.action) {
+            case 'create-post':
+                uni.navigateTo({ url: '/pages/forum/forum-create' })
+                break
+            case 'browse-posts':
+                uni.navigateTo({ url: '/pages/forum/forum' })
+                break
+            case 'browse-courses':
+                uni.reLaunch({ url: '/pages/courses/courses' })
+                break
+            case 'browse-mall':
+                uni.navigateTo({ url: '/pages/mall/mall' })
+                break
+            case 'comment':
+                uni.navigateTo({ url: '/pages/forum/forum' })
+                break
+            case 'quiz-practice':
+            case 'mock-exam':
+                uni.navigateTo({ url: '/pages/practice/practice' })
+                break
+            default:
+                uni.showToast({ title: '功能开发中', icon: 'none' })
         }
     }
+
+    function onWelfareAction(task : WelfareTask) : void {
+        if (task.completed) return
+        switch (task.action) {
+            case 'profile':
+                uni.navigateTo({ url: '/pages/profile/personal-info' })
+                break
+            case 'first-chapter':
+                uni.reLaunch({ url: '/pages/courses/courses' })
+                break
+            case 'exchange':
+                uni.showToast({ title: '功能开发中', icon: 'none' })
+                break
+            default:
+                uni.showToast({ title: '功能开发中', icon: 'none' })
+        }
+    }
+
+    onShow(() => {
+        // TODO: 从后端加载任务进度
+    })
 </script>
 
 <style>
@@ -169,133 +239,183 @@
         flex: 1;
     }
 
+    /* 积分卡片 */
     .balance-card {
-        margin: 24rpx 24rpx 0;
-        padding: 28rpx 32rpx;
+        margin: 24rpx;
+        padding: 32rpx;
         border-radius: 16rpx;
         background-color: #ffffff;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
+        flex-direction: column;
     }
 
-    .balance-side {
-        width: 120rpx;
+    .balance-top {
         flex-direction: row;
-        justify-content: flex-start;
+        align-items: center;
+    }
+
+    .balance-coin {
+        width: 80rpx;
+        height: 80rpx;
+        border-radius: 40rpx;
+        background: linear-gradient(135deg, #FFD700, #FFA000);
+        align-items: center;
+        justify-content: center;
+        margin-right: 24rpx;
+    }
+
+    .coin-icon {
+        font-size: 48rpx;
+    }
+
+    .balance-info {
+        flex: 1;
+        flex-direction: column;
+    }
+
+    .balance-label {
+        font-size: 24rpx;
+        color: #999999;
     }
 
     .balance-value {
-        flex: 1;
-        font-size: 48rpx;
+        font-size: 56rpx;
         font-weight: bold;
         color: #333333;
-        text-align: center;
+        margin-top: 4rpx;
     }
 
-    .balance-rule {
+    .balance-exchange {
+        padding: 16rpx 32rpx;
+        border-radius: 32rpx;
+        background-color: #f5f5f5;
+    }
+
+    .exchange-text {
         font-size: 26rpx;
-        color: #2979ff;
-    }
-
-    .expire-tip {
-        margin: 24rpx;
-        padding: 20rpx 24rpx;
-        border-radius: 12rpx;
-        background-color: #fff8e6;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-    }
-
-    .expire-text {
-        font-size: 24rpx;
         color: #666666;
-        flex: 1;
     }
 
-    .expire-arrow {
+    .balance-bottom {
+        margin-top: 20rpx;
+        padding-top: 20rpx;
+        border-top: 1rpx solid #f0f0f0;
+        align-items: center;
+    }
+
+    .balance-stats {
         font-size: 24rpx;
         color: #999999;
-        margin-left: 16rpx;
     }
 
+    /* 分组 */
+    .section {
+        margin-bottom: 16rpx;
+    }
+
+    .section-header {
+        padding: 16rpx 32rpx 12rpx;
+        flex-direction: column;
+    }
+
+    .section-title {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .section-underline {
+        width: 64rpx;
+        height: 8rpx;
+        border-radius: 4rpx;
+        background-color: #2979ff;
+        margin-top: 8rpx;
+    }
+
+    /* 任务卡片 */
     .task-card {
-        margin: 0 24rpx 24rpx;
-        padding: 8rpx 24rpx;
+        margin: 0 24rpx;
+        padding: 0 24rpx;
         border-radius: 16rpx;
         background-color: #ffffff;
         flex-direction: column;
     }
 
     .task-item {
-        padding: 28rpx 0;
+        padding: 24rpx 0;
         border-bottom: 1rpx solid #f0f0f0;
+        flex-direction: row;
+        align-items: center;
     }
 
     .task-item-last {
         border-bottom-width: 0;
     }
 
-    .task-main {
-        flex-direction: row;
+    .task-icon-wrap {
+        width: 72rpx;
+        height: 72rpx;
+        border-radius: 16rpx;
         align-items: center;
-        justify-content: space-between;
+        justify-content: center;
+        margin-right: 20rpx;
     }
 
-    .task-left {
+    .task-icon {
+        font-size: 36rpx;
+    }
+
+    .task-content {
         flex: 1;
         flex-direction: column;
-        margin-right: 24rpx;
+        margin-right: 16rpx;
     }
 
     .task-title-row {
-        flex-direction: column;
+        flex-direction: row;
+        align-items: center;
     }
 
     .task-title {
-        font-size: 32rpx;
-        font-weight: bold;
+        font-size: 30rpx;
+        font-weight: 500;
         color: #333333;
-    }
-
-    .task-title-underline {
-        width: 64rpx;
-        height: 8rpx;
-        border-radius: 4rpx;
-        background-color: #2979ff;
-        margin-top: 6rpx;
-    }
-
-    .task-desc-row {
-        flex-direction: row;
-        flex-wrap: wrap;
-        margin-top: 10rpx;
-    }
-
-    .task-desc {
-        font-size: 24rpx;
-        color: #999999;
-        line-height: 36rpx;
     }
 
     .task-progress {
         font-size: 24rpx;
         color: #2979ff;
-        line-height: 36rpx;
+        margin-left: 8rpx;
     }
 
-    .task-button {
-        padding: 0 32rpx;
-        height: 64rpx;
-        border-radius: 32rpx;
+    .task-desc {
+        font-size: 24rpx;
+        color: #999999;
+        margin-top: 8rpx;
+        lines: 1;
+        text-overflow: ellipsis;
+    }
+
+    .task-btn {
+        padding: 12rpx 28rpx;
+        border-radius: 28rpx;
         background-color: #2979ff;
-        align-items: center;
-        justify-content: center;
+        flex-shrink: 0;
     }
 
-    .task-button-text {
-        font-size: 26rpx;
+    .task-btn-done {
+        background-color: #f5f5f5;
+    }
+
+    .task-btn-text {
+        font-size: 24rpx;
         color: #ffffff;
+    }
+
+    .task-btn-done .task-btn-text {
+        color: #999999;
+    }
+
+    .bottom-spacer {
+        height: 48rpx;
     }
 </style>

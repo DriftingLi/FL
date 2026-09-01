@@ -26,11 +26,14 @@
 
             <!-- Tab 切换 -->
             <view class="tab-bar">
-                <view :class="['tab-item', { active: currentTab == 'detail' }]" @click="onTabClick('detail')">
-                    <text class="tab-text">积分明细</text>
+                <view :class="['tab-item', { active: currentTab == 'income' }]" @click="onTabClick('income')">
+                    <text class="tab-text">积分收入</text>
                 </view>
-                <view :class="['tab-item', { active: currentTab == 'exchange' }]" @click="onTabClick('exchange')">
-                    <text class="tab-text">兑换记录</text>
+                <view :class="['tab-item', { active: currentTab == 'expense' }]" @click="onTabClick('expense')">
+                    <text class="tab-text">积分支出</text>
+                </view>
+                <view :class="['tab-item', { active: currentTab == 'expiring' }]" @click="onTabClick('expiring')">
+                    <text class="tab-text">即将过期</text>
                 </view>
             </view>
 
@@ -98,7 +101,7 @@
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     const pointsBalance = ref<number>(42)
-    const currentTab = ref<string>('detail')
+    const currentTab = ref<string>('income')
     const currentFilter = ref<string>('all')
     const pointsList = ref<PointsItem[]>([])
     const page = ref<number>(1)
