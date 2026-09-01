@@ -12,109 +12,133 @@
             <!-- 统计卡片 -->
             <view class="stats-card">
                 <view class="stat-item">
-                    <text class="stat-num">{{ stats.total }}</text>
                     <text class="stat-label">我的错题</text>
+                    <view class="stat-num-row">
+                        <text class="stat-num">{{ stats.total }}</text>
+                        <text class="stat-unit">道</text>
+                    </view>
                 </view>
                 <view class="stat-divider"></view>
                 <view class="stat-item">
-                    <text class="stat-num">{{ todayCount }}</text>
                     <text class="stat-label">今日错题</text>
+                    <view class="stat-num-row">
+                        <text class="stat-num">{{ todayCount }}</text>
+                        <text class="stat-unit">道</text>
+                    </view>
                 </view>
             </view>
 
-            <!-- 筛选栏 -->
+            <!-- 筛选栏：时间/收藏为下拉，错多次为开关，重置在右 -->
             <view class="filter-bar">
-                <scroll-view class="filter-scroll" scroll-x="true">
-                    <view class="filter-list">
-                        <view v-for="(opt, idx) in filterOptions" :key="idx"
-                            :class="['filter-chip', { active: currentFilter == opt.value }]"
-                            @click="onFilterClick(opt.value)">
-                            <text class="filter-chip-text">{{ opt.label }}</text>
-                        </view>
+                <view class="filter-left">
+                    <view class="filter-chip" :class="{ active: sortMode == 'time_asc' }" @click="onTimeTap">
+                        <text class="filter-chip-text">{{ sortMode == 'time_asc' ? '最早在前 ▾' : '时间 ▾' }}</text>
                     </view>
-                </scroll-view>
+                    <view class="filter-chip" :class="{ active: onlyFav }" @click="onFavTap">
+                        <text class="filter-chip-text">{{ onlyFav ? '仅收藏 ▾' : '收藏 ▾' }}</text>
+                    </view>
+                    <view class="filter-chip" :class="{ active: onlyWrongMany }" @click="onWrongManyTap">
+                        <text class="filter-chip-text">错多次</text>
+                    </view>
+                </view>
+                <view class="filter-reset" @click="onResetFilter">
+                    <text class="filter-reset-text">重置</text>
+                </view>
             </view>
 
-            <!-- 错题列表 -->
-            <view v-if="records.length == 0 && !loading" class="empty-tip">
-                <text class="empty-text">暂无错题</text>
-            </view>
-            <view class="record-list">
-                <view v-for="(item, idx) in records" :key="idx" class="record-card">
-                    <view class="record-header">
-                        <text class="record-type-tag">{{ getTypeName(item.type) }}</text>
-                        <text class="record-wrong-count">错 {{ item.wrong_count }} 次</text>
-                        <text class="record-date">{{ formatDateStr(item.created_at) }}</text>
-                    </view>
-                    <text class="record-title">{{ item.title }}</text>
-
-                    <!-- 折叠态：显示用户答案与正确答案 -->
-                    <!-- <view v-if="!isExpanded(item.question_id)" class="record-answers">
-                        <view class="answer-row wrong">
-                            <text class="answer-label">我的答案：</text>
-                            <text class="answer-value">{{ item.user_answer.length > 0 ? item.user_answer : '未作答' }}</text>
+            <!-- 分组视图（默认）：按题型分组 -->
+            <view v-if="grouped">
+                <view v-if="groups.length == 0" class="empty-tip">
+                    <text class="empty-text">暂无错题</text>
+                </view>
+                <view class="group-list">
+                    <view v-for="(g, idx) in groups" :key="idx" class="group-card" @click="onGroupClick(g.typeKey)">
+                        <view class="group-icon">
+                            <text class="group-icon-text">›</text>
                         </view>
-                        <view class="answer-row correct">
-                            <text class="answer-label">正确答案：</text>
-                            <text class="answer-value">{{ item.correct_answer }}</text>
-                        </view>
-                    </view> -->
-
-                    <!-- 展开态：重做交互 -->
-                    <view v-if="isExpanded(item.question_id)" class="redo-section">
-                        <view class="option-list">
-                            <view v-for="(opt, oidx) in item.options" :key="oidx"
-                                class="option-item" :class="getOptionClass(item, opt.key)"
-                                @click="onOptionClick(item, opt.key)">
-                                <view class="option-key" :class="getOptionKeyClass(item, opt.key)">
-                                    <text class="option-key-text">{{ opt.key }}</text>
-                                </view>
-                                <text class="option-text">{{ opt.text }}</text>
-                            </view>
-                        </view>
-
-                        <!-- 重做结果 -->
-                        <view v-if="hasRedoResult()" class="redo-result"
-                            :class="redoResultClass()">
-                            <text class="redo-result-text">{{ redoResultLabel() }}</text>
-                            <text class="redo-result-answer">我的答案：{{ redoResultUserAnswer() }}</text>
-                            <text class="redo-result-answer">正确答案：{{ redoResultAnswer() }}</text>
-                            <text v-if="redoResultLocalMatch()" class="redo-result-hint">提示：选项内容一致，可能因答案格式差异被判错</text>
-                        </view>
-
-                        <!-- 操作按钮 -->
-                        <view class="redo-actions">
-                            <view v-if="!hasRedoResult()" class="redo-btn redo-btn-primary"
-                                @click="onSubmitRedo(item)">
-                                <text class="redo-btn-text">提交答案</text>
-                            </view>
-                            <view v-if="hasRedoResult() && redoResultCorrect()" class="redo-btn redo-btn-success"
-                                @click="onRemove(item)">
-                                <text class="redo-btn-text">移出错题本</text>
-                            </view>
-                            <view v-else class="redo-btn redo-btn-danger" @click="onRemove(item)">
-                                <text class="redo-btn-text">移出错题本</text>
-                            </view>
-                        </view>
-                    </view>
-
-                    <!-- 折叠态操作按钮 -->
-                    <view v-if="!isExpanded(item.question_id)" class="card-actions">
-                        <view class="card-action-btn" @click="onToggleExpand(item.question_id)">
-                            <text class="card-action-text">重做</text>
-                        </view>
-                        <view class="card-action-btn card-action-danger" @click="onRemove(item)">
-                            <text class="card-action-text card-action-danger-text">移出</text>
-                        </view>
+                        <text class="group-name">{{ g.label }}</text>
+                        <text class="group-count">{{ g.count }}道</text>
+                        <text class="group-chevron">›</text>
                     </view>
                 </view>
             </view>
-            <view v-if="loading" class="loading-more">
-                <text class="loading-text">加载中...</text>
-            </view>
-            <view v-if="noMore && records.length > 0" class="loading-more">
-                <text class="loading-text">没有更多了</text>
-            </view>
+
+            <!-- 列表视图（组内下钻） -->
+            <template v-else>
+                <view class="group-back" @click="backToGroups">
+                    <text class="group-back-icon">‹</text>
+                    <text class="group-back-text">{{ activeLabel }}</text>
+                    <text class="group-back-hint">返回分组</text>
+                </view>
+                <view v-if="records.length == 0 && !loading" class="empty-tip">
+                    <text class="empty-text">该分组暂无错题</text>
+                </view>
+                <view class="record-list">
+                    <view v-for="(item, idx) in records" :key="idx" class="record-card">
+                        <view class="record-header">
+                            <text class="record-type-tag">{{ getTypeName(item.type) }}</text>
+                            <text class="record-wrong-count">错 {{ item.wrong_count }} 次</text>
+                            <text v-if="item.favorited" class="record-fav-tag">收藏</text>
+                            <text class="record-date">{{ formatDateStr(item.created_at) }}</text>
+                        </view>
+                        <text class="record-title">{{ item.title }}</text>
+
+                        <!-- 展开态：重做交互 -->
+                        <view v-if="isExpanded(item.question_id)" class="redo-section">
+                            <view class="option-list">
+                                <view v-for="(opt, oidx) in item.options" :key="oidx"
+                                    class="option-item" :class="getOptionClass(item, opt.key)"
+                                    @click="onOptionClick(item, opt.key)">
+                                    <view class="option-key" :class="getOptionKeyClass(item, opt.key)">
+                                        <text class="option-key-text">{{ opt.key }}</text>
+                                    </view>
+                                    <text class="option-text">{{ opt.text }}</text>
+                                </view>
+                            </view>
+
+                            <!-- 重做结果 -->
+                            <view v-if="hasRedoResult()" class="redo-result"
+                                :class="redoResultClass()">
+                                <text class="redo-result-text">{{ redoResultLabel() }}</text>
+                                <text class="redo-result-answer">我的答案：{{ redoResultUserAnswer() }}</text>
+                                <text class="redo-result-answer">正确答案：{{ redoResultAnswer() }}</text>
+                                <text v-if="redoResultLocalMatch()" class="redo-result-hint">提示：选项内容一致，可能因答案格式差异被判错</text>
+                            </view>
+
+                            <!-- 操作按钮 -->
+                            <view class="redo-actions">
+                                <view v-if="!hasRedoResult()" class="redo-btn redo-btn-primary"
+                                    @click="onSubmitRedo(item)">
+                                    <text class="redo-btn-text">提交答案</text>
+                                </view>
+                                <view v-if="hasRedoResult() && redoResultCorrect()" class="redo-btn redo-btn-success"
+                                    @click="onRemove(item)">
+                                    <text class="redo-btn-text">移出错题本</text>
+                                </view>
+                                <view v-else class="redo-btn redo-btn-danger" @click="onRemove(item)">
+                                    <text class="redo-btn-text">移出错题本</text>
+                                </view>
+                            </view>
+                        </view>
+
+                        <!-- 折叠态操作按钮 -->
+                        <view v-if="!isExpanded(item.question_id)" class="card-actions">
+                            <view class="card-action-btn" @click="onToggleExpand(item.question_id)">
+                                <text class="card-action-text">重做</text>
+                            </view>
+                            <view class="card-action-btn card-action-danger" @click="onRemove(item)">
+                                <text class="card-action-text card-action-danger-text">移出</text>
+                            </view>
+                        </view>
+                    </view>
+                </view>
+                <view v-if="loading" class="loading-more">
+                    <text class="loading-text">加载中...</text>
+                </view>
+                <view v-if="noMore && records.length > 0" class="loading-more">
+                    <text class="loading-text">没有更多了</text>
+                </view>
+            </template>
         </scroll-view>
     </view>
 </template>
@@ -124,20 +148,21 @@
     import { onShow } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
-    import { useAuthStore } from '../../stores/auth'
     import {
         getWrongQuestionsApi,
         getWrongQuestionStatsApi,
         redoWrongQuestionApi,
         removeWrongQuestionApi,
     } from '../../api/wrongQuestion'
-    import { API_BASE_URL } from '../../config/env'
-    import type { WrongQuestionItem, WrongQuestionStats, QuestionOption } from '../../types/index'
+    import type { WrongQuestionQuery } from '../../api/wrongQuestion'
+    import type { WrongQuestionItem, WrongQuestionStats } from '../../types/index'
     import { formatDateStr } from '../../utils/format'
 
-    type TypeOption = {
+    /** 题型分组行 */
+    type GroupRow = {
         label : string
-        value : string
+        typeKey : string
+        count : number
     }
 
     /** 重做结果 */
@@ -149,17 +174,16 @@
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
-    const authStore = useAuthStore()
 
-    const filterOptions : TypeOption[] = [
-        { label: '时间', value: 'time' },
-        { label: '收藏', value: 'favorite' },
-        { label: '错多次', value: 'wrong_many' },
-        { label: '重置', value: 'reset' },
-        { label: '答对移除', value: 'auto_remove' },
-    ]
+    // ===== 视图状态：分组视图 ⇄ 组内列表视图 =====
+    const grouped = ref<boolean>(true)
+    const activeType = ref<string>('')
 
-    const currentFilter = ref<string>('time')
+    // ===== 筛选（可组合，映射后端 sort/favorited/min_wrong_count） =====
+    const sortMode = ref<string>('desc')      // 'desc' 默认 | 'time_asc'
+    const onlyFav = ref<boolean>(false)
+    const onlyWrongMany = ref<boolean>(false)
+
     const records = ref<WrongQuestionItem[]>([])
     const page = ref<number>(1)
     const pageSize = 20
@@ -174,6 +198,9 @@
         by_knowledge_point: {} as UTSJSONObject,
     } as WrongQuestionStats)
 
+    // 今日错题（后端无 today_count，用一次大页拉取按 created_at 统计）
+    const todayCount = ref<number>(0)
+
     // 当前展开的题目 ID（0 表示都折叠）。同一时间只展开一道题，
     // 因此选中答案与重做结果用单值 ref，避免 UTSJSONObject 索引/null 赋值在 uvue 模板中的兼容性问题。
     const expandedId = ref<number>(0)
@@ -181,28 +208,67 @@
     const lastRedoAnswer = ref<string>('')
     const redoResult = ref<RedoResult | null>(null)
 
-    /** 从 by_type 统计中取某题型数量 */
-    function countByType(type : string) : number {
-        const byType = stats.value.by_type
-        const v = byType[type]
-        if (v == null) return 0
-        const s = `${v}`
-        const n = parseFloat(s)
-        if (isNaN(n)) return 0
-        return n
-    }
-
-    /** 今日新增错题数（暂时用0，后续对接后端 today_count） */
-    const todayCount = computed<number>(() : number => {
-        return 0
-    })
-
     /** 题型名称 */
     function getTypeName(type : string) : string {
         if (type == 'single' || type == 'single_choice') return '单选题'
         if (type == 'multi' || type == 'multiple_choice' || type == 'multi_choice') return '多选题'
         if (type == 'judge' || type == 'true_false') return '判断题'
         return '其他'
+    }
+
+    /** 分组行：stats.by_type → {label, typeKey, count}，按数量降序 */
+    const groups = computed<GroupRow[]>(() : GroupRow[] => {
+        const rows : GroupRow[] = []
+        const byType = stats.value.by_type
+        for (const k in byType) {
+            const v = byType[k]
+            if (v == null) continue
+            const n = parseFloat(`${v}`)
+            if (isNaN(n) || n <= 0) continue
+            rows.push({ label: getTypeName(k), typeKey: k, count: n } as GroupRow)
+        }
+        rows.sort((a : GroupRow, b : GroupRow) : number => b.count - a.count)
+        return rows
+    })
+
+    const activeLabel = computed<string>(() : string => {
+        return getTypeName(activeType.value)
+    })
+
+    /** 组装当前筛选查询 */
+    function buildQuery() : WrongQuestionQuery {
+        return {
+            type: activeType.value,
+            sort: sortMode.value == 'time_asc' ? 'time_asc' : '',
+            favorited: onlyFav.value,
+            minWrongCount: onlyWrongMany.value ? 2 : 0,
+        } as WrongQuestionQuery
+    }
+
+    function padZero(n : number) : string {
+        if (n < 10) return '0' + n
+        return '' + n
+    }
+
+    function todayStr() : string {
+        const d = new Date()
+        return d.getFullYear() + '-' + padZero(d.getMonth() + 1) + '-' + padZero(d.getDate())
+    }
+
+    /** 今日错题：拉一大页按 created_at 前缀统计（后端无 today_count 的近似，500 内准确） */
+    function loadTodayCount() : void {
+        const q : WrongQuestionQuery = { type: '', sort: '', favorited: false, minWrongCount: 0 } as WrongQuestionQuery
+        getWrongQuestionsApi(1, 500, q).then((res) : void => {
+            const target = todayStr()
+            let n = 0
+            const items = res.items
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].created_at.length >= 10 && items[i].created_at.substring(0, 10) == target) {
+                    n += 1
+                }
+            }
+            todayCount.value = n
+        }).catch(() => {})
     }
 
     /** 是否多选题 */
@@ -348,7 +414,7 @@
             const data = await getWrongQuestionStatsApi()
             stats.value = data
         } catch (e) {
-            uni.__f__('error','at pages/profile/wrong-questions.uvue:356','[wrong-questions] load stats failed:', e)
+            console.error('[wrong-questions] load stats failed:', e)
         }
     }
 
@@ -362,7 +428,7 @@
 
         loading.value = true
         try {
-            const result = await getWrongQuestionsApi(page.value, pageSize, currentFilter.value)
+            const result = await getWrongQuestionsApi(page.value, pageSize, buildQuery())
             if (reset) {
                 records.value = result.items
             } else {
@@ -375,34 +441,71 @@
                 page.value = page.value + 1
             }
         } catch (e) {
-            uni.__f__('error','at pages/profile/wrong-questions.uvue:383','[wrong-questions] load failed:', e)
+            console.error('[wrong-questions] load failed:', e)
             uni.showToast({ title: '加载错题失败', icon: 'none' })
         } finally {
             loading.value = false
         }
     }
 
-    function onFilterClick(val : string) : void {
-        if (val == 'reset') {
-            // 重置所有筛选
-            currentFilter.value = 'time'
-            expandedId.value = 0
-            selectedKeys.value = [] as string[]
-            lastRedoAnswer.value = ''
-            redoResult.value = null
-            loadRecords(true)
-            return
-        }
-        if (currentFilter.value == val) return
-        currentFilter.value = val
+    function resetRedoState() : void {
         expandedId.value = 0
         selectedKeys.value = [] as string[]
         lastRedoAnswer.value = ''
         redoResult.value = null
+    }
+
+    // ===== 分组下钻 =====
+    function onGroupClick(typeKey : string) : void {
+        activeType.value = typeKey
+        grouped.value = false
+        records.value = [] as WrongQuestionItem[]
+        resetRedoState()
         loadRecords(true)
     }
 
+    function backToGroups() : void {
+        activeType.value = ''
+        grouped.value = true
+        records.value = [] as WrongQuestionItem[]
+        resetRedoState()
+    }
+
+    // ===== 筛选交互 =====
+    function onTimeTap() : void {
+        uni.showActionSheet({
+            itemList: ['最近错误在前', '最早错误在前'],
+            success: (res) => {
+                sortMode.value = res.tapIndex == 1 ? 'time_asc' : 'desc'
+                if (!grouped.value) loadRecords(true)
+            }
+        })
+    }
+
+    function onFavTap() : void {
+        uni.showActionSheet({
+            itemList: ['全部错题', '仅看收藏'],
+            success: (res) => {
+                onlyFav.value = res.tapIndex == 1
+                if (!grouped.value) loadRecords(true)
+            }
+        })
+    }
+
+    function onWrongManyTap() : void {
+        onlyWrongMany.value = !onlyWrongMany.value
+        if (!grouped.value) loadRecords(true)
+    }
+
+    function onResetFilter() : void {
+        sortMode.value = 'desc'
+        onlyFav.value = false
+        onlyWrongMany.value = false
+        if (!grouped.value) loadRecords(true)
+    }
+
     function onLoadMore() : void {
+        if (grouped.value) return
         loadRecords(false)
     }
 
@@ -453,20 +556,9 @@
                 try {
                     await removeWrongQuestionApi(item.question_id)
                 } catch (e) {
-                    uni.__f__('error','at pages/profile/wrong-questions.uvue:461','[wrong-questions] auto remove failed:', e)
+                    console.error('[wrong-questions] auto remove failed:', e)
                 }
-                // 从列表中移除
-                const newRecords : WrongQuestionItem[] = []
-                for (let i = 0; i < records.value.length; i++) {
-                    if (records.value[i].question_id != item.question_id) {
-                        newRecords.push(records.value[i])
-                    }
-                }
-                records.value = newRecords
-                total.value = Math.max(0, total.value - 1)
-                expandedId.value = 0
-                selectedKeys.value = [] as string[]
-                redoResult.value = null
+                removeFromList(item.question_id)
                 uni.showToast({ title: '回答正确，已移出错题本', icon: 'success' })
                 // 刷新统计
                 loadStats()
@@ -480,10 +572,27 @@
                 redoResult.value = result
             }
         } catch (e) {
-            uni.__f__('error','at pages/profile/wrong-questions.uvue:488','[wrong-questions] redo failed:', e)
+            console.error('[wrong-questions] redo failed:', e)
             uni.showToast({ title: '提交失败', icon: 'none' })
         } finally {
             uni.hideLoading()
+        }
+    }
+
+    /** 从本地列表移除指定题目并修正计数 */
+    function removeFromList(questionId : number) : void {
+        const newRecords : WrongQuestionItem[] = []
+        for (let i = 0; i < records.value.length; i++) {
+            if (records.value[i].question_id != questionId) {
+                newRecords.push(records.value[i])
+            }
+        }
+        records.value = newRecords
+        total.value = Math.max(0, total.value - 1)
+        if (expandedId.value == questionId) {
+            expandedId.value = 0
+            selectedKeys.value = [] as string[]
+            redoResult.value = null
         }
     }
 
@@ -493,24 +602,11 @@
         try {
             await removeWrongQuestionApi(item.question_id)
             uni.showToast({ title: '已移出错题本', icon: 'success' })
-            // 从列表中移除
-            const newRecords : WrongQuestionItem[] = []
-            for (let i = 0; i < records.value.length; i++) {
-                if (records.value[i].question_id != item.question_id) {
-                    newRecords.push(records.value[i])
-                }
-            }
-            records.value = newRecords
-            total.value = Math.max(0, total.value - 1)
-            if (expandedId.value == item.question_id) {
-                expandedId.value = 0
-                selectedKeys.value = [] as string[]
-                redoResult.value = null
-            }
+            removeFromList(item.question_id)
             // 刷新统计
             loadStats()
         } catch (e) {
-            uni.__f__('error','at pages/profile/wrong-questions.uvue:518','[wrong-questions] remove failed:', e)
+            console.error('[wrong-questions] remove failed:', e)
             uni.showToast({ title: '移出失败', icon: 'none' })
         } finally {
             uni.hideLoading()
@@ -530,52 +626,20 @@
         })
     }
 
-    /** 导出错题本（使用 downloadFile 处理 .txt 附件） */
-    function onExport() : void {
-        const token = authStore.token.value
-        if (token.length == 0) {
-            uni.showToast({ title: '请先登录', icon: 'none' })
+    function onBack() : void {
+        if (!grouped.value) {
+            backToGroups()
             return
         }
-        uni.showLoading({ title: '导出中...' })
-        uni.downloadFile({
-            url: API_BASE_URL + '/wrong-questions/export',
-            header: {
-                'Authorization': 'Bearer ' + token,
-            },
-            success: (res) => {
-                if (res.statusCode == 200) {
-                    uni.openDocument({
-                        filePath: res.tempFilePath,
-                        success: () => {
-                            uni.showToast({ title: '导出成功', icon: 'success' })
-                        },
-                        fail: () => {
-                            uni.showToast({ title: '已下载，打开文件失败', icon: 'none' })
-                        }
-                    })
-                } else {
-                    uni.showToast({ title: '导出失败 (' + res.statusCode + ')', icon: 'none' })
-                }
-            },
-            fail: () => {
-                uni.showToast({ title: '导出失败，请检查网络', icon: 'none' })
-            },
-            complete: () => {
-                uni.hideLoading()
-            }
-        })
-    }
-
-    function onBack() : void {
         goBack()
     }
 
     onShow(() => {
-        if (records.value.length == 0) {
+        loadStats()
+        loadTodayCount()
+        if (!grouped.value) {
             loadRecords(true)
         }
-        loadStats()
     })
 </script>
 
@@ -619,7 +683,6 @@
 
     .header-right {
         width: 80rpx;
-        align-items: center;
     }
 
     .content-scroll {
@@ -644,16 +707,28 @@
         align-items: center;
     }
 
+    .stat-num-row {
+        flex-direction: row;
+        align-items: baseline;
+        justify-content: center;
+    }
+
     .stat-num {
         font-size: 48rpx;
         font-weight: bold;
         color: #333333;
-        margin-bottom: 8rpx;
+    }
+
+    .stat-unit {
+        font-size: 24rpx;
+        color: #999999;
+        margin-left: 8rpx;
     }
 
     .stat-label {
         font-size: 24rpx;
         color: #999999;
+        margin-bottom: 8rpx;
     }
 
     .stat-divider {
@@ -661,28 +736,30 @@
         background-color: #f0f0f0;
     }
 
-    /* 筛选条 */
+    /* 筛选栏 */
     .filter-bar {
         background-color: #ffffff;
-        margin: 0 0 16rpx;
-        padding: 16rpx 24rpx;
-        border-bottom: 1rpx solid #f0f0f0;
-    }
-
-    .filter-scroll {
-        white-space: nowrap;
-    }
-
-    .filter-list {
+        margin: 0 24rpx;
+        padding: 16rpx 20rpx;
+        border-radius: 16rpx;
+        border: 1rpx solid #eeeeee;
         flex-direction: row;
         align-items: center;
+        justify-content: space-between;
+    }
+
+    .filter-left {
+        flex-direction: row;
+        align-items: center;
+        flex: 1;
     }
 
     .filter-chip {
-        padding: 12rpx 28rpx;
+        padding: 10rpx 24rpx;
         border-radius: 32rpx;
         background-color: #f5f5f5;
-        margin-right: 16rpx;
+        margin-right: 14rpx;
+        flex-shrink: 0;
     }
 
     .filter-chip.active {
@@ -691,7 +768,7 @@
     }
 
     .filter-chip-text {
-        font-size: 26rpx;
+        font-size: 24rpx;
         color: #666666;
     }
 
@@ -699,10 +776,98 @@
         color: #2979ff;
     }
 
+    .filter-reset {
+        padding: 10rpx 8rpx;
+        flex-shrink: 0;
+    }
+
+    .filter-reset-text {
+        font-size: 24rpx;
+        color: #666666;
+    }
+
+    /* 分组卡片 */
+    .group-list {
+        padding: 24rpx;
+        flex-direction: column;
+    }
+
+    .group-card {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 32rpx 24rpx;
+        margin-bottom: 20rpx;
+        flex-direction: row;
+        align-items: center;
+        border: 1rpx solid #f0f0f0;
+    }
+
+    .group-icon {
+        width: 48rpx;
+        height: 48rpx;
+        border-radius: 24rpx;
+        border: 3rpx solid #2979ff;
+        align-items: center;
+        justify-content: center;
+        margin-right: 20rpx;
+        flex-shrink: 0;
+    }
+
+    .group-icon-text {
+        font-size: 30rpx;
+        color: #2979ff;
+        font-weight: bold;
+    }
+
+    .group-name {
+        flex: 1;
+        font-size: 30rpx;
+        color: #333333;
+    }
+
+    .group-count {
+        font-size: 26rpx;
+        color: #999999;
+        margin-right: 12rpx;
+    }
+
+    .group-chevron {
+        font-size: 32rpx;
+        color: #cccccc;
+    }
+
+    /* 组内返回条 */
+    .group-back {
+        flex-direction: row;
+        align-items: center;
+        margin: 24rpx 24rpx 0;
+        padding: 16rpx 24rpx;
+        background-color: #ffffff;
+        border-radius: 12rpx;
+        border: 1rpx solid #eeeeee;
+    }
+
+    .group-back-icon {
+        font-size: 32rpx;
+        color: #2979ff;
+        margin-right: 8rpx;
+    }
+
+    .group-back-text {
+        font-size: 26rpx;
+        color: #333333;
+        flex: 1;
+    }
+
+    .group-back-hint {
+        font-size: 24rpx;
+        color: #2979ff;
+    }
+
     /* 错题列表 */
     .record-list {
         flex-direction: column;
-        padding: 0 24rpx;
+        padding: 16rpx 24rpx 0;
     }
 
     .record-card {
@@ -738,6 +903,15 @@
         margin-right: 12rpx;
     }
 
+    .record-fav-tag {
+        font-size: 20rpx;
+        color: #2979ff;
+        background-color: #e3f2fd;
+        padding: 4rpx 12rpx;
+        border-radius: 6rpx;
+        margin-right: 12rpx;
+    }
+
     .record-date {
         font-size: 22rpx;
         color: #cccccc;
@@ -748,39 +922,6 @@
         color: #333333;
         line-height: 1.5;
         margin-bottom: 16rpx;
-    }
-
-    .record-answers {
-        flex-direction: column;
-        background-color: #fafafa;
-        padding: 16rpx;
-        border-radius: 8rpx;
-        margin-bottom: 16rpx;
-    }
-
-    .answer-row {
-        flex-direction: row;
-        align-items: center;
-        padding: 4rpx 0;
-    }
-
-    .answer-label {
-        font-size: 24rpx;
-        color: #999999;
-        margin-right: 8rpx;
-    }
-
-    .answer-value {
-        font-size: 24rpx;
-        font-weight: bold;
-    }
-
-    .answer-row.wrong .answer-value {
-        color: #f44336;
-    }
-
-    .answer-row.correct .answer-value {
-        color: #4caf50;
     }
 
     /* 重做区域 */

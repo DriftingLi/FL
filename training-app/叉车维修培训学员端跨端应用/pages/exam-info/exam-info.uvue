@@ -9,12 +9,9 @@
             <view class="header-right"></view>
         </view>
         <scroll-view class="tab-bar" direction="horizontal" :show-scrollbar="false">
-            <view class="tab-track">
-                <view v-for="(tab, idx) in mainTabs" :key="idx" class="tab-item"
-                    :class="{ active: activeMainTab === idx }" @click="onMainTabChange(idx)">
-                    <text class="tab-text" :class="{ 'tab-text-active': activeMainTab === idx }" lines="1">{{ tab }}</text>
-                    <view v-if="activeMainTab === idx" class="tab-underline"></view>
-                </view>
+            <view v-for="(tab, idx) in mainTabs" :key="idx" class="tab-item" @click="onMainTabChange(idx)">
+                <text class="tab-text" :class="{ 'tab-text-active': activeMainTab === idx }" lines="1">{{ tab }}</text>
+                <view v-if="activeMainTab === idx" class="tab-underline"></view>
             </view>
         </scroll-view>
         <view class="filter-bar">
@@ -168,19 +165,13 @@
 
     .tab-bar {
         height: 80rpx;
+        flex-direction: row;
         background-color: #ffffff;
         border-bottom: 1rpx solid #f0f0f0;
     }
 
-    .tab-track {
-        flex-direction: row;
-        flex-wrap: nowrap;
-        align-items: center;
-    }
-
     .tab-item {
-        width: 140rpx;
-        padding: 0 16rpx;
+        width: 160rpx;
         align-items: center;
         position: relative;
         flex-shrink: 0;

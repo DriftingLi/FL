@@ -22,6 +22,12 @@ export type UserInfo = {
     name : string
     role : string
     avatar_url : string
+    account ?: string            // 登录账号（GET /auth/me 返回）
+    phone ?: string              // 已绑手机号（后端已脱敏，如 137****1234）
+    email ?: string              // 已绑邮箱
+    company ?: string            // 单位（PUT /auth/profile 直接生效）
+    has_password ?: boolean      // 是否已设密码（微信注册用户可能未设）
+    has_pending_change ?: boolean // 是否有待审核的资料修改（昵称/头像）
 }
 
 /** 登录参数 */
@@ -80,11 +86,12 @@ export type EmailRegisterParams = {
 
 /** 忘记密码重置参数（验证码制，POST /auth/{email|phone}/reset-password） */
 /**
- * 更新个人资料参数（昵称）
- * @note 后端 PUT /auth/profile 仅支持 nickname 字段，走资料审核流（提交→审核→生效）
+ * 更新个人资料参数（昵称走审核；单位直接更新）
+ * @note 后端 PUT /auth/profile：nickname 提交审核流，company 直接生效
  */
 export type UpdateProfileParams = {
     nickname ?: string   // 昵称（提交审核用）
+    company ?: string    // 单位（直接更新）
 }
 
 /** 资料修改审核请求（后端返回，status 为 pending 表示待审） */
@@ -227,6 +234,7 @@ export type MockExamInfo = {
     questions : ExamQuestion[]
     duration : number          // 考试时长（分钟）
     remaining_time : number    // 剩余时间（秒）
+    answers ?: UTSJSONObject   // 续考时后端返回的已存答案 { 题目ID字符串: 答案 }
 }
 
 /** 模拟考试保存参数 */
@@ -291,6 +299,7 @@ export type WrongQuestionItem = {
     user_answer : string
     wrong_count : number
     created_at : string
+    favorited : boolean      // 是否已收藏（后端 JOIN favorite 回填）
 }
 
 /** 错题列表结果 */
@@ -643,10 +652,18 @@ export type PracticeHistoryResult = {
 
 /** 练习进度 */
 export type PracticeProgress = {
-    index : number             // 当前题序号
-    practice_mode : string     // 练习模式
+    index : number             // 当前题序号（后端 current_index）
+    completed : number         // 已完成题数（后端 completed）
+    practice_mode : string     // 练习模式（sequential / tag:<id> / paper:<id>）
     total : number             // 总题量
     answers_state : UTSJSONObject // 已答题状态
+}
+
+/** 刷题数据统计（GET /practice-mode/practice-stats，按证件分区聚合） */
+export type PracticeOverview = {
+    today_count : number   // 今日做题
+    total_count : number   // 累计做题
+    total_days : number    // 累计做题天数
 }
 
 /** 答题状态（用于做题页面跟踪每题作答情况） */

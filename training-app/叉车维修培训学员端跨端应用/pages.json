@@ -181,6 +181,13 @@
             }
         },
         {
+            "path": "pages/practice/practice-report",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "数据报告"
+            }
+        },
+        {
             "path": "pages/forum/forum",
             "style": {
                 "navigationStyle": "custom",
@@ -300,6 +307,27 @@
             }
         },
         {
+            "path": "pages/resume/resume",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "简历"
+            }
+        },
+        {
+            "path": "pages/resume/resume-edit",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "在线简历"
+            }
+        },
+        {
+            "path": "pages/resume/resume-attach",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "附件简历"
+            }
+        },
+        {
             "path": "pages/mall/mall",
             "style": {
                 "navigationStyle": "custom",
@@ -337,7 +365,7 @@
     },
     "tabBar": {
         "color": "#999999",
-        "selectedColor": "#2979ff",
+        "selectedColor": "#239EDD",
         "backgroundColor": "#ffffff",
         "borderStyle": "black",
         "list": [{

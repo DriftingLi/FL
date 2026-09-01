@@ -81,6 +81,9 @@
     const pointsPerDay = ref<number>(7)
     const calendarDays = ref<CheckInCalendarDay[]>([])
     const todayChecked = ref<boolean>(false)
+    // 自动打卡：进入页面即代打卡一次（仅真实数据下触发，每次访问尝试一次）
+    const usingMock = ref<boolean>(false)
+    const autoCheckInTried = ref<boolean>(false)
 
     type CalendarCell = {
         day : number
@@ -168,6 +171,7 @@
         try {
             const result = await getCheckInCalendarApi(displayYear.value, displayMonth.value)
             console.log('[check-in] API result:', JSON.stringify(result))
+            usingMock.value = false
             consecutiveDays.value = result.consecutive_days
             totalPoints.value = result.total_points
             pointsPerDay.value = result.points_per_day
@@ -189,8 +193,9 @@
         }
     }
 
-    /** mock 日历数据（后端接口未就绪时回退） */
+    /** mock 日历数据（后端接口未就绪时回退；mock 态不触发自动打卡） */
     function loadMockCalendar() : void {
+        usingMock.value = true
         const year = displayYear.value
         const month = displayMonth.value
         const daysInMonth = new Date(year, month, 0).getDate()
@@ -219,9 +224,11 @@
         }
     }
 
-    async function onCheckIn() : Promise<void> {
+    async function doCheckIn(auto : boolean) : Promise<void> {
         if (todayChecked.value) {
-            uni.showToast({ title: '你已经打卡过了', icon: 'none' })
+            if (!auto) {
+                uni.showToast({ title: '你已经打卡过了', icon: 'none' })
+            }
             return
         }
         try {
@@ -229,11 +236,19 @@
             todayChecked.value = true
             consecutiveDays.value = result.consecutive_days
             totalPoints.value = result.total_points
-            uni.showToast({ title: '打卡成功 +' + result.points_earned + '积分', icon: 'success' })
+            if (auto) {
+                uni.showToast({ title: '已自动为你打卡 +' + result.points_earned + '积分', icon: 'none' })
+            } else {
+                uni.showToast({ title: '打卡成功 +' + result.points_earned + '积分', icon: 'success' })
+            }
             loadCalendar()
         } catch (e) {
             console.error('[check-in] checkIn failed:', e)
         }
+    }
+
+    function onCheckIn() : void {
+        doCheckIn(false)
     }
 
     function onPrevMonth() : void {
@@ -264,7 +279,13 @@
     }
 
     onLoad(() => {
-        loadCalendar()
+        loadCalendar().then(() => {
+            // 进入页面自动代打卡一次：仅真实日历加载成功、今日未打卡时触发
+            if (!usingMock.value && !todayChecked.value && !autoCheckInTried.value) {
+                autoCheckInTried.value = true
+                doCheckIn(true)
+            }
+        })
     })
 </script>
 

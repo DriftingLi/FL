@@ -1,0 +1,358 @@
+<template>
+    <view class="page" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+        <view class="nav-bar">
+            <view class="nav-left" @click="onBack">
+                <text class="back-icon">‹</text>
+            </view>
+            <text class="nav-title">附件简历</text>
+            <view class="nav-right"></view>
+        </view>
+
+        <scroll-view class="body" scroll-y="true">
+            <!-- 已上传：文件卡片 -->
+            <view v-if="attachName.length > 0" class="card file-card">
+                <view class="file-icon-wrap">
+                    <text class="file-icon">📄</text>
+                </view>
+                <view class="file-meta">
+                    <text class="file-name" lines="1">{{ attachName }}</text>
+                    <text class="file-desc">{{ fileSizeText }}{{ attachTime.length > 0 ? ' · ' + attachTime : '' }}</text>
+                </view>
+                <text class="file-status">已上传</text>
+            </view>
+
+            <!-- 上传/更换入口 -->
+            <view v-if="attachName.length > 0" class="action-row">
+                <view class="action-btn action-btn-ghost" @click="onChoose">
+                    <text class="action-btn-text-ghost">更换文件</text>
+                </view>
+                <view class="action-btn action-btn-danger" @click="onRemove">
+                    <text class="action-btn-text-danger">删除</text>
+                </view>
+            </view>
+            <view v-else class="upload-area" @click="onChoose">
+                <text class="upload-plus">+</text>
+                <text class="upload-main-text">点击选择文件上传</text>
+                <text class="upload-sub-text">支持 PDF / Word / 简历照片，20MB 以内</text>
+            </view>
+
+            <!-- 制作提示 -->
+            <view class="card">
+                <text class="card-title">简历文件建议</text>
+                <view class="tip-row">
+                    <text class="tip-dot">·</text>
+                    <text class="tip-text">优先 PDF 格式，避免企业端打开乱码</text>
+                </view>
+                <view class="tip-row">
+                    <text class="tip-dot">·</text>
+                    <text class="tip-text">文件名建议：姓名-叉车维修-年限，如"张三-叉车技师-5年.pdf"</text>
+                </view>
+                <view class="tip-row">
+                    <text class="tip-dot">·</text>
+                    <text class="tip-text">内容与在线简历保持一致，重点写维修机型与故障案例</text>
+                </view>
+            </view>
+        </scroll-view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref, computed } from 'vue'
+    import { onLoad } from '@dcloudio/uni-app'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { goBack } from '../../utils/navigation'
+    import { setStorageJSON, getStorageJSON, removeStorage } from '../../utils/storage'
+    import { STORAGE_KEY_RESUME_ATTACH } from '../../constants/app'
+    import { toStr, toNumber } from '../../api/helpers'
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    const attachName = ref<string>('')
+    const attachSize = ref<number>(0)
+    const attachTime = ref<string>('')
+
+    const fileSizeText = computed<string>(() : string => {
+        const bytes = attachSize.value
+        if (bytes <= 0) return '文件大小未知'
+        if (bytes < 1024) return bytes.toString() + 'B'
+        if (bytes < 1024 * 1024) return Math.round(bytes / 1024).toString() + 'KB'
+        return (Math.round(bytes / (1024 * 1024) * 10) / 10).toString() + 'MB'
+    })
+
+    function nowText() : string {
+        const d = new Date()
+        const m = d.getMonth() + 1
+        const day = d.getDate()
+        return d.getFullYear().toString() + '-' + (m < 10 ? '0' : '') + m + '-' + (day < 10 ? '0' : '') + day
+    }
+
+    /** 选择结果落地本地（后端 /resume/attachment 接口就绪后此处换真实上传） */
+    function saveAttachment(name : string, size : number) : void {
+        if (size > 20 * 1024 * 1024) {
+            uni.showToast({ title: '文件超过 20MB，请压缩后再上传', icon: 'none' })
+            return
+        }
+        const data : UTSJSONObject = {
+            name: name,
+            size: size,
+            time: nowText(),
+        } as UTSJSONObject
+        setStorageJSON(STORAGE_KEY_RESUME_ATTACH, data)
+        attachName.value = name
+        attachSize.value = size
+        attachTime.value = nowText()
+        uni.showToast({ title: '附件已保存', icon: 'success', duration: 1000 })
+    }
+
+    function onChoose() : void {
+        // #ifdef MP-WEIXIN
+        uni.chooseMessageFile({
+            count: 1,
+            type: 'file',
+            success: (res) => {
+                if (res.tempFiles.length > 0) {
+                    const f = res.tempFiles[0]
+                    saveAttachment(f.name, f.size)
+                }
+            }
+        })
+        // #endif
+        // #ifndef MP-WEIXIN
+        uni.chooseFile({
+            count: 1,
+            extension: ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png'],
+            success: (res) => {
+                if (res.tempFiles.length > 0) {
+                    const f = res.tempFiles[0]
+                    saveAttachment(f.name, f.size)
+                }
+            }
+        })
+        // #endif
+    }
+
+    function onRemove() : void {
+        uni.showModal({
+            title: '删除附件简历',
+            content: '删除后企业将无法查看你的附件简历，确认删除？',
+            confirmText: '删除',
+            confirmColor: '#fa3534',
+            success: (res) => {
+                if (res.confirm) {
+                    removeStorage(STORAGE_KEY_RESUME_ATTACH)
+                    attachName.value = ''
+                    attachSize.value = 0
+                    attachTime.value = ''
+                    uni.showToast({ title: '已删除', icon: 'none' })
+                }
+            }
+        })
+    }
+
+    function loadAttachment() : void {
+        const saved = getStorageJSON(STORAGE_KEY_RESUME_ATTACH)
+        if (saved == null) return
+        attachName.value = toStr(saved['name'])
+        attachSize.value = toNumber(saved['size'])
+        attachTime.value = toStr(saved['time'])
+    }
+
+    function onBack() : void {
+        goBack('/pages/resume/resume')
+    }
+
+    onLoad(() => {
+        loadAttachment()
+    })
+</script>
+
+<style>
+    .page {
+        flex: 1;
+        background-color: #f5f6fa;
+        flex-direction: column;
+    }
+
+    .status-bar {
+        background-color: #ffffff;
+    }
+
+    .nav-bar {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12rpx 32rpx;
+        background-color: #ffffff;
+        border-bottom: 1rpx solid #f0f0f0;
+    }
+
+    .nav-left {
+        width: 100rpx;
+    }
+
+    .back-icon {
+        font-size: 52rpx;
+        color: #333333;
+    }
+
+    .nav-title {
+        font-size: 34rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .nav-right {
+        width: 100rpx;
+    }
+
+    .body {
+        flex: 1;
+        height: 0;
+        padding: 0 24rpx;
+    }
+
+    /* ===== 文件卡片 ===== */
+    .card {
+        background-color: #ffffff;
+        border-radius: 20rpx;
+        padding: 28rpx;
+        margin-top: 24rpx;
+    }
+
+    .file-card {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .file-icon-wrap {
+        width: 88rpx;
+        height: 88rpx;
+        border-radius: 16rpx;
+        background-color: #E8F3FF;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .file-icon {
+        font-size: 44rpx;
+    }
+
+    .file-meta {
+        flex: 1;
+        margin-left: 20rpx;
+        margin-right: 16rpx;
+    }
+
+    .file-name {
+        font-size: 28rpx;
+        color: #333333;
+        font-weight: bold;
+        text-overflow: ellipsis;
+    }
+
+    .file-desc {
+        margin-top: 8rpx;
+        font-size: 22rpx;
+        color: #999999;
+    }
+
+    .file-status {
+        font-size: 24rpx;
+        color: #16a34a;
+        flex-shrink: 0;
+    }
+
+    /* ===== 操作按钮 ===== */
+    .action-row {
+        flex-direction: row;
+        margin-top: 24rpx;
+    }
+
+    .action-btn {
+        flex: 1;
+        height: 88rpx;
+        border-radius: 44rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .action-btn-ghost {
+        background-color: #2979ff;
+        margin-right: 20rpx;
+    }
+
+    .action-btn-text-ghost {
+        font-size: 30rpx;
+        color: #ffffff;
+        font-weight: bold;
+    }
+
+    .action-btn-danger {
+        background-color: #ffffff;
+        border: 2rpx solid #fadcd9;
+    }
+
+    .action-btn-text-danger {
+        font-size: 30rpx;
+        color: #fa3534;
+    }
+
+    /* ===== 上传区 ===== */
+    .upload-area {
+        margin-top: 24rpx;
+        background-color: #ffffff;
+        border: 2rpx dashed #c8cdd8;
+        border-radius: 20rpx;
+        padding: 72rpx 32rpx;
+        align-items: center;
+    }
+
+    .upload-plus {
+        font-size: 72rpx;
+        color: #2979ff;
+        font-weight: 300;
+    }
+
+    .upload-main-text {
+        margin-top: 16rpx;
+        font-size: 30rpx;
+        color: #333333;
+        font-weight: bold;
+    }
+
+    .upload-sub-text {
+        margin-top: 12rpx;
+        font-size: 24rpx;
+        color: #999999;
+    }
+
+    /* ===== 建议卡 ===== */
+    .card-title {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 16rpx;
+    }
+
+    .tip-row {
+        flex-direction: row;
+        align-items: flex-start;
+        margin-bottom: 12rpx;
+    }
+
+    .tip-dot {
+        font-size: 28rpx;
+        color: #2979ff;
+        margin-right: 12rpx;
+    }
+
+    .tip-text {
+        flex: 1;
+        font-size: 26rpx;
+        color: #666666;
+        line-height: 40rpx;
+    }
+</style>

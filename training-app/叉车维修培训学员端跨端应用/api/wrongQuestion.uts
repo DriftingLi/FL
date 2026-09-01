@@ -3,13 +3,22 @@
  * @note 后端返回的错题结构：
  *   items[].question_id = 题目ID
  *   items[].question = { id, type, content, options:{Map}, answer, explanation }
+ *   items[].favorited / items[].favorite_id = 收藏状态（后端 JOIN favorite 回填）
  *   需要从嵌套的 question 对象中提取题目信息
+ * @note 后端 GET /wrong-questions 支持 type / min_wrong_count / favorited / sort(time_asc)，
+ *   不支持 knowledge_point 维度（分组只按题型）
  */
 import { get, post } from './request'
-import { toNumber, toStr } from './helpers'
+import { toNumber, toStr, toBool } from './helpers'
 import type { WrongQuestionItem, WrongQuestionListResult, WrongQuestionStats, QuestionOption } from '../types/index'
 
-
+/** 列表查询条件（对应后端 query 参数，空值不发送） */
+export type WrongQuestionQuery = {
+    type : string          // 题型筛选（single_choice 等），空为全部
+    sort : string          // 'time_asc' = 最早在前；空 = 默认（最近错误时间倒序）
+    favorited : boolean    // true = 仅收藏
+    minWrongCount : number // >0 = 错误次数 >= N（"错多次"用 2）
+}
 
 /**
  * 将后端 options Map 转换为前端 Array<{key, text}>
@@ -59,6 +68,7 @@ function buildWrongQuestionItem(obj : UTSJSONObject) : WrongQuestionItem {
 		user_answer: toStr(obj['user_answer']),
 		wrong_count: toNumber(obj['wrong_count']),
 		created_at: toStr(obj['created_at']),
+		favorited: toBool(obj['favorited'], false),
 	} as WrongQuestionItem
 	return item
 }
@@ -89,43 +99,38 @@ function buildWrongQuestionStats(obj : UTSJSONObject) : WrongQuestionStats {
 	if (byTypeRaw != null) {
 		by_type = byTypeRaw as UTSJSONObject
 	}
-	const byKpRaw = obj['by_knowledge_point']
-	let by_knowledge_point : UTSJSONObject = {}
-	if (byKpRaw != null) {
-		by_knowledge_point = byKpRaw as UTSJSONObject
-	}
 	const stats : WrongQuestionStats = {
 		total: toNumber(obj['total']),
 		by_type: by_type,
-		by_knowledge_point: by_knowledge_point,
+		by_knowledge_point: {} as UTSJSONObject,
 	} as WrongQuestionStats
 	return stats
 }
 
 /**
- * 获取错题列表
- * @param page 页码，默认 1
- * @param pageSize 每页条数，默认 20
- * @param type 题型筛选（可选，空字符串表示不筛选）
- * @param knowledgePointId 知识点筛选（可选，0 表示不筛选）
- * @param minWrongCount 最少错误次数筛选（可选，0 表示不筛选）
+ * 获取错题列表（page/pageSize + 可组合筛选条件）
  */
-export function getWrongQuestionsApi(page : number = 1, pageSize : number = 20, type : string = '', knowledgePointId : number = 0, minWrongCount : number = 0) : Promise<WrongQuestionListResult> {
+export function getWrongQuestionsApi(page : number = 1, pageSize : number = 20, query : WrongQuestionQuery | null = null) : Promise<WrongQuestionListResult> {
 	const params : UTSJSONObject = {
 		page: page.toString(),
 		page_size: pageSize.toString(),
 	} as UTSJSONObject
-	if (type.length > 0) {
-		params['type'] = type
-	}
-	if (knowledgePointId > 0) {
-		params['knowledge_point_id'] = knowledgePointId.toString()
-	}
-	if (minWrongCount > 0) {
-		params['min_wrong_count'] = minWrongCount.toString()
+	if (query != null) {
+		const q = query as WrongQuestionQuery
+		if (q.type.length > 0) {
+			params['type'] = q.type
+		}
+		if (q.sort.length > 0) {
+			params['sort'] = q.sort
+		}
+		if (q.favorited) {
+			params['favorited'] = 'true'
+		}
+		if (q.minWrongCount > 0) {
+			params['min_wrong_count'] = q.minWrongCount.toString()
+		}
 	}
 	return get('/wrong-questions', params).then((data : UTSJSONObject) : WrongQuestionListResult => {
-		console.log('[getWrongQuestionsApi] raw data:', JSON.stringify(data))
 		return buildWrongQuestionListResult(data)
 	}).catch((e) : WrongQuestionListResult => {
 		console.error('[getWrongQuestionsApi] failed:', e)
@@ -166,7 +171,6 @@ export function removeWrongQuestionApi(questionId : number) : Promise<UTSJSONObj
 /** 获取错题统计 */
 export function getWrongQuestionStatsApi() : Promise<WrongQuestionStats> {
 	return get('/wrong-questions/stats').then((data : UTSJSONObject) : WrongQuestionStats => {
-		console.log('[getWrongQuestionStatsApi] raw data:', JSON.stringify(data))
 		return buildWrongQuestionStats(data)
 	}).catch((e) : WrongQuestionStats => {
 		console.error('[getWrongQuestionStatsApi] failed:', e)
@@ -181,4 +185,3 @@ export function getWrongQuestionStatsApi() : Promise<WrongQuestionStats> {
 		throw new Error(msg)
 	})
 }
-

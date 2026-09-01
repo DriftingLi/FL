@@ -86,6 +86,7 @@
         { label: '资源', value: 'resource' },
         { label: '短视频', value: 'video' },
         { label: '备考经验', value: 'exam' },
+        { label: '知识问答', value: 'question' },
     ]
 
     // ===== 表单状态 =====

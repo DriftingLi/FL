@@ -37,12 +37,10 @@
         <!-- 题型筛选 -->
         <view class="filter-bar">
             <scroll-view class="filter-scroll" scroll-x="true">
-                <view class="filter-list">
-                    <view v-for="(opt, idx) in typeOptions" :key="idx"
-                        :class="['filter-chip', { active: currentType == opt.value }]"
-                        @click="onTypeClick(opt.value)">
-                        <text class="filter-chip-text">{{ opt.label }}</text>
-                    </view>
+                <view v-for="(opt, idx) in typeOptions" :key="idx"
+                    :class="['filter-chip', { active: currentType == opt.value }]"
+                    @click="onTypeClick(opt.value)">
+                    <text class="filter-chip-text">{{ opt.label }}</text>
                 </view>
             </scroll-view>
         </view>
@@ -276,11 +274,9 @@
 
     .filter-scroll {
         white-space: nowrap;
-    }
-
-    .filter-list {
-        padding: 20rpx 24rpx;
         flex-direction: row;
+        align-items: center;
+        padding: 20rpx 24rpx;
     }
 
     .filter-chip {
@@ -288,6 +284,7 @@
         border-radius: 32rpx;
         background-color: #f5f5f5;
         margin-right: 16rpx;
+        flex-shrink: 0;
     }
 
     .filter-chip.active {

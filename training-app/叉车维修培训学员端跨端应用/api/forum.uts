@@ -215,7 +215,7 @@ function buildTopicDetail(obj : UTSJSONObject) : ForumTopicDetail {
  * @param sort 排序字段，默认 latest
  * @param order 排序方向，默认 desc
  */
-export function getForumTopicsApi(page : number = 1, pageSize : number = 10, scope : string = 'general', sort : string = 'latest', order : string = 'desc') : Promise<ForumTopicListResult> {
+export function getForumTopicsApi(page : number = 1, pageSize : number = 10, scope : string = 'general', sort : string = 'latest', order : string = 'desc', category : string = '') : Promise<ForumTopicListResult> {
     const params : UTSJSONObject = {
         scope: scope,
         sort: sort,
@@ -223,6 +223,10 @@ export function getForumTopicsApi(page : number = 1, pageSize : number = 10, sco
         page: page.toString(),
         page_size: pageSize.toString(),
     } as UTSJSONObject
+    // 帖子类别（后端 all|discussion|question），空为不筛选
+    if (category.length > 0) {
+        params['category'] = category
+    }
     return get('/forum/topics', params).then((data : UTSJSONObject) : ForumTopicListResult => {
         console.log('[getForumTopicsApi] raw data:', JSON.stringify(data))
         return buildTopicListResult(data)

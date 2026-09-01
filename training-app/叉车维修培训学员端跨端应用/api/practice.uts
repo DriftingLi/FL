@@ -15,7 +15,7 @@
  */
 import { get, post } from './request'
 import { toNumber, toStr, toBool } from './helpers'
-import type { Question, SubmitAnswerResult, SubmitAnswerParams, QuestionOption, PracticeStats, PracticeHistoryItem, PracticeHistoryResult, PracticeProgress } from '../types/index'
+import type { Question, SubmitAnswerResult, SubmitAnswerParams, QuestionOption, PracticeStats, PracticeOverview, PracticeHistoryItem, PracticeHistoryResult, PracticeProgress } from '../types/index'
 
 
 
@@ -128,7 +128,8 @@ function buildHistoryResult(data : UTSJSONObject) : PracticeHistoryResult {
 function buildPracticeProgress(data : UTSJSONObject) : PracticeProgress {
 	const answersState = data['answers_state']
 	const progress : PracticeProgress = {
-		index: toNumber(data['index']),
+		index: toNumber(data['current_index'], toNumber(data['index'])),
+		completed: toNumber(data['completed']),
 		practice_mode: toStr(data['practice_mode'], toStr(data['mode'], 'sequential')),
 		total: toNumber(data['total']),
 		answers_state: answersState != null ? (answersState as UTSJSONObject) : {} as UTSJSONObject,
@@ -229,15 +230,50 @@ export function submitAnswerApi(params : SubmitAnswerParams) : Promise<SubmitAns
 
 /**
  * 保存练习进度（断点续练）
+ * @param practiceMode 后端封闭枚举：'sequential' | 'tag:<id>' | 'paper:<id>'，其他值 400
  */
 export function savePracticeProgressApi(index : number, practiceMode : string, total : number, answersState : UTSJSONObject) : Promise<UTSJSONObject> {
 	const payload : UTSJSONObject = {
-		mode: practiceMode,
+		practice_mode: practiceMode,
 		index: index,
 		total: total,
 		answers_state: answersState,
 	} as UTSJSONObject
 	return post('/practice-mode/progress', payload)
+}
+
+/**
+ * 查询练习进度
+ * @param mode 'sequential' | 'tag:<id>' | 'paper:<id>'
+ */
+export function getPracticeProgressApi(mode : string) : Promise<PracticeProgress> {
+	const params : UTSJSONObject = {
+		mode: mode,
+	} as UTSJSONObject
+	return get('/practice-mode/progress', params).then((data : UTSJSONObject) : PracticeProgress => {
+		return buildPracticeProgress(data)
+	})
+}
+
+/**
+ * 数据报告原始数据（GET /practice-mode/stats）
+ * @returns { total, correct, wrong, accuracy, by_type: { 题型: {total, correct, accuracy} } }
+ * @note 与 getPracticeStatsApi 的区别：此处透传后端原始结构（含 by_type 明细），供报告页自由渲染
+ */
+export function getPracticeReportApi() : Promise<UTSJSONObject> {
+	return get('/practice-mode/stats')
+}
+
+/** 刷题数据统计：今日做题/累计做题/累计天数（GET /practice-mode/practice-stats） */
+export function getPracticeOverviewApi() : Promise<PracticeOverview> {
+	return get('/practice-mode/practice-stats').then((data : UTSJSONObject) : PracticeOverview => {
+		const overview : PracticeOverview = {
+			today_count: toNumber(data['today_count']),
+			total_count: toNumber(data['total_count']),
+			total_days: toNumber(data['total_days']),
+		} as PracticeOverview
+		return overview
+	})
 }
 
 // ========== 统计与历史 ==========

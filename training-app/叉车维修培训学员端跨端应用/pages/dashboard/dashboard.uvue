@@ -97,27 +97,9 @@
         </view>
 
         <scroll-view class="content-scroll" scroll-y="true">
-            <!-- Banner 横幅 -->
+            <!-- Banner 海报（图内含标题与"实际教学·案例分析·考核发证"文案） -->
             <view class="banner" @click="onBannerClick">
-                <view class="banner-bg" :style="{ backgroundColor: bannerList[currentBanner].bgColor }">
-                    <view class="banner-content">
-                        <text class="banner-title">{{ bannerList[currentBanner].title }}</text>
-                        <text class="banner-subtitle">{{ bannerList[currentBanner].subtitle }}</text>
-                        <view class="banner-cta">
-                            <text class="banner-cta-text">{{ bannerList[currentBanner].ctaText }}</text>
-                        </view>
-                    </view>
-                    <view class="banner-decoration">
-                        <text class="banner-icon">️</text>
-                    </view>
-                </view>
-                <view class="banner-tags">
-                    <text class="banner-tag">线上入门</text>
-                    <text class="banner-tag-dot">·</text>
-                    <text class="banner-tag">理论精讲</text>
-                    <text class="banner-tag-dot">·</text>
-                    <text class="banner-tag">线上考试</text>
-                </view>
+                <image class="banner-img" src="/static/Rectangle_39.png" mode="widthFix"></image>
             </view>
 
             <!-- 功能入口网格 -->
@@ -492,26 +474,6 @@
         stopUnreadPolling()
     })
 
-    // ---- Banner 数据 ----
-    type BannerItem = {
-        id : number
-        title : string
-        subtitle : string
-        ctaText : string
-        bgColor : string
-    }
-
-    const bannerList : BannerItem[] = [
-        {
-            id: 1,
-            title: '叉车维修培训',
-            subtitle: '掌握维修技巧，保障作业安全',
-            ctaText: '立即报名',
-            bgColor: '#1E88E5'
-        }
-    ]
-    const currentBanner = ref<number>(0)
-
     // ---- 功能入口 ----
     type MenuItem = {
         key : string
@@ -732,81 +694,15 @@
         font-weight: 600;
     }
 
-    /* Banner 横幅 */
+    /* Banner 海报 */
     .banner {
         margin: 24rpx;
         border-radius: 16rpx;
         overflow: hidden;
     }
 
-    .banner-bg {
-        height: 280rpx;
-        padding: 32rpx;
-        flex-direction: row;
-        justify-content: space-between;
-        align-items: center;
-    }
-
-    .banner-content {
-        flex: 1;
-        flex-direction: column;
-        justify-content: center;
-    }
-
-    .banner-title {
-        font-size: 40rpx;
-        font-weight: bold;
-        color: #FFFFFF;
-        margin-bottom: 12rpx;
-    }
-
-    .banner-subtitle {
-        font-size: 26rpx;
-        color: rgba(255, 255, 255, 0.9);
-        margin-bottom: 24rpx;
-    }
-
-    .banner-cta {
-        background-color: #FFFFFF;
-        padding: 16rpx 40rpx;
-        border-radius: 32rpx;
-        align-self: flex-start;
-    }
-
-    .banner-cta-text {
-        font-size: 28rpx;
-        font-weight: 600;
-        color: #1E88E5;
-    }
-
-    .banner-decoration {
-        width: 160rpx;
-        height: 160rpx;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .banner-icon {
-        font-size: 120rpx;
-    }
-
-    .banner-tags {
-        flex-direction: row;
-        align-items: center;
-        justify-content: center;
-        padding: 16rpx 0;
-        background-color: #FFFFFF;
-    }
-
-    .banner-tag {
-        font-size: 22rpx;
-        color: #666666;
-    }
-
-    .banner-tag-dot {
-        font-size: 22rpx;
-        color: #CCCCCC;
-        margin: 0 8rpx;
+    .banner-img {
+        width: 100%;
     }
 
     /* 功能入口网格 */
