@@ -97,7 +97,10 @@ layout="total, sizes, prev, pager, next"
 </el-dialog>
 
 <el-dialog v-model="editDialogVisible" title="编辑企业信息" width="520px" destroy-on-close>
-<el-form ref="editFormRef" :model="editForm" :rules="formRules" label-width="110px">
+<el-form ref="editFormRef" :model="editForm" :rules="editFormRules" label-width="110px">
+<el-form-item label="用户名" prop="username">
+<el-input v-model="editForm.username" placeholder="请输入用户名（4-20位字母/数字/下划线）" maxlength="20" />
+</el-form-item>
 <el-form-item label="企业名称" prop="company_name">
 <el-input v-model="editForm.company_name" placeholder="请输入企业名称" />
 </el-form-item>
@@ -144,7 +147,7 @@ layout="total, sizes, prev, pager, next"
 import { ref, reactive, onMounted } from 'vue'
 import { Plus, Search, ArrowDown } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { FormInstance, FormRules } from 'element-plus'
+import type { FormInstance, FormItemRule, FormRules } from 'element-plus'
 import { adminApi, type AdminRecruiter } from '@/api/admin'
 import { usernameRules } from '@/utils/validate'
 import { useAdminTable } from '@/composables/useAdminTable'
@@ -159,6 +162,18 @@ const formData = reactive({
 
 // 必填校验与后端 ValidateRecruiterInput 逐条同源（#416：前后端校验口径单点，不各写一套）
 const required = (msg: string) => ({ required: true, message: msg, trigger: 'blur' })
+// 编辑弹窗用户名规则：可选（空 = 不改用户名）；填写时校验格式。
+// 与创建弹窗 usernameRules 的差异：不强制必填——历史数据可能存在 <4 位用户名，保持原值不校验。
+const editUsernameRules: FormItemRule[] = [
+  { validator: (_r, v, cb) => {
+    const s = String(v ?? '').trim()
+    if (s === '') { cb() ; return }
+    if (s.length < 4 || s.length > 20) { cb(new Error('长度在4到20个字符')); return }
+    if (!/^[a-zA-Z0-9_]+$/.test(s)) { cb(new Error('只能包含字母、数字和下划线')); return }
+    cb()
+  }, trigger: 'blur' }
+]
+
 const formRules: FormRules = {
   username: usernameRules,
   password: [
@@ -176,6 +191,16 @@ const formRules: FormRules = {
 const editDialogVisible = ref(false)
 const editing = ref(false)
 const editFormRef = ref<FormInstance>()
+const editFormRules: FormRules = {
+  username: editUsernameRules,
+  company_name: formRules.company_name,
+  credit_code: formRules.credit_code,
+  business_scope: formRules.business_scope,
+  contact_name: formRules.contact_name,
+  contact_phone: formRules.contact_phone,
+  contact_email: formRules.contact_email,
+}
+
 const editForm = reactive({ id: 0, username: '', company_name: '', credit_code: '', business_scope: '', contact_name: '', contact_phone: '', contact_email: '' })
 
 const pwdDialogVisible = ref(false)
@@ -213,15 +238,16 @@ async function handleEditSubmit() {
   await editFormRef.value.validate()
   editing.value = true
   try {
-    await adminApi.editRecruiter(editForm.id, {
-      username: editForm.username,
+    const payload: any = {
       company_name: editForm.company_name,
       credit_code: editForm.credit_code,
       business_scope: editForm.business_scope,
       contact_name: editForm.contact_name,
       contact_phone: editForm.contact_phone,
       contact_email: editForm.contact_email,
-    })
+    }
+    if (editForm.username.trim()) payload.username = editForm.username.trim()
+    await adminApi.editRecruiter(editForm.id, payload)
     ElMessage.success('企业信息已更新')
     editDialogVisible.value = false
     load()
