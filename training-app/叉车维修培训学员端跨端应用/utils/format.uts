@@ -111,3 +111,25 @@ export function formatDateTimeStr(dateStr : string) : string {
 	if (dateStr == null || dateStr.length < 16) return dateStr
 	return dateStr.substring(0, 16).replace('T', ' ')
 }
+
+/**
+ * 数字格式化：列表/卡片紧凑格式
+ * - <100: 原值
+ * - 100-999: "99+"
+ * - 1000-9999: "999+"
+ * - ≥10000: "9999+"
+ */
+export function formatCountCompact(n : number) : string {
+	if (n < 100) return n.toString()
+	if (n < 1000) return '99+'
+	if (n < 10000) return '999+'
+	return '9999+'
+}
+
+/**
+ * 数字格式化：详情页完整格式（千分位）
+ * 12345 → "12,345"
+ */
+export function formatCountFull(n : number) : string {
+	return n.toLocaleString()
+}
