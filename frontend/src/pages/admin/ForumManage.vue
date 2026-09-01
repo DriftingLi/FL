@@ -201,16 +201,19 @@ const {
   pageSize,
   run: loadList,
   handlePageChange
-} = useAsyncPage(async () => {
-  const res = await adminForumApi.listTopics({
-    ...forumTabQuery(activeTab.value),
-    page: currentPage.value,
-    page_size: pageSize.value,
-    keyword: keyword.value || undefined
-  })
-  topics.value = res.topics || []
-  total.value = res.total || 0
-})
+} = useAsyncPage(
+  async () => {
+    const res = await adminForumApi.listTopics({
+      ...forumTabQuery(activeTab.value),
+      page: currentPage.value,
+      page_size: pageSize.value,
+      keyword: keyword.value || undefined
+    })
+    topics.value = res.topics || []
+    total.value = res.total || 0
+  },
+  { defaultPageSize: 10 }
+)
 // 管理端筛选轴：all=全部帖子、discussion=综合讨论区、question=问答区。
 // 三个值都交给 forumTabQuery 翻译成查询参数——"综合讨论区必须带 category=discussion"
 // 这条规则只在 api 层写一遍，学员端与管理端共用同一份映射。

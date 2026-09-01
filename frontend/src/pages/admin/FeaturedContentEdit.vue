@@ -105,6 +105,7 @@ import type { FormInstance, FormRules } from 'element-plus'
 import MarkdownEditor from '@/components/tutor/MarkdownEditor.vue'
 import { adminFeaturedApi, featuredCategoryOptions } from '@/api/featured'
 import { resolveFileUrl } from '@/utils/fileUrl'
+import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
 
 const route = useRoute()
@@ -112,8 +113,26 @@ const router = useRouter()
 
 const formRef = ref<FormInstance | null>(null)
 const markdownEditorRef = ref<{ getValue: () => string } | null>(null)
-const loading = ref(false)
 const saving = ref(false)
+
+// 编辑详情加载三态收编 useAsyncPage（#439）：错误仍由拦截器 toast 并回列表，loading 由 composable 驱动
+const { loading, run: loadDetail } = useAsyncPage(async () => {
+  if (!isEdit.value) return
+  try {
+    const d = await adminFeaturedApi.getDetail(editId.value)
+    form.title = d.title || ''
+    form.category = d.category || ''
+    form.source = d.source || ''
+    form.summary = d.summary || ''
+    form.cover_image = d.cover_image || ''
+    form.content = d.content || ''
+    form.sort_order = d.sort_order || 0
+    form.status = d.status ?? 0
+  } catch (e) {
+    // 错误已由全局拦截器提示；行为冻结：失败回列表
+    router.push({ name: 'AdminFeaturedContentList' })
+  }
+})
 
 const isEdit = computed(() => !!route.params.id)
 const editId = computed(() => Number(route.params.id))
@@ -140,27 +159,6 @@ const rules: FormRules = {
   category: [
     { required: true, message: '请选择分类', trigger: 'change' }
   ]
-}
-
-async function loadDetail() {
-  if (!isEdit.value) return
-  loading.value = true
-  try {
-    const d = await adminFeaturedApi.getDetail(editId.value)
-    form.title = d.title || ''
-    form.category = d.category || ''
-    form.source = d.source || ''
-    form.summary = d.summary || ''
-    form.cover_image = d.cover_image || ''
-    form.content = d.content || ''
-    form.sort_order = d.sort_order || 0
-    form.status = d.status ?? 0
-  } catch (e: any) {
-    // 错误已由全局拦截器提示
-    router.push({ name: 'AdminFeaturedContentList' })
-  } finally {
-    loading.value = false
-  }
 }
 
 async function handleCoverUpload(option: any) {
