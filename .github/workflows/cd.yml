@@ -86,9 +86,21 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = "push" ]; then
             echo "environment=production" >> "$GITHUB_OUTPUT"
             echo "master push → production(需过门禁)"
-          else
-            echo "environment=${{ inputs.environment }}" >> "$GITHUB_OUTPUT"
-            echo "dispatch → ${{ inputs.environment }}(人工/CI 触发,不经门禁)"
+            exit 0
+          fi
+
+          echo "environment=${{ inputs.environment }}" >> "$GITHUB_OUTPUT"
+          echo "dispatch → ${{ inputs.environment }}(人工/CI 触发,不经门禁)"
+
+          # 冒烟证据必须与内容严格对应：workflow_dispatch 的 --ref 只能是分支名,
+          # run 的 head_sha 取「派发那一刻的分支 tip」,而被部署的内容是 inputs.ref。
+          # 若两者不同（CI 跑完后分支又前进了）,部署记录会把「旧内容的测试」记到
+          # 「新 SHA」头上,生产 gate 就会被这份假证据放行。此处直接失败,
+          # 由新 tip 自己的 CI 重新派发一份真实冒烟。
+          if [ "${{ inputs.environment }}" = "testing" ] && [ -n "${{ inputs.ref }}" ] \
+             && [ "${{ inputs.ref }}" != "$GITHUB_SHA" ]; then
+            echo "::error::inputs.ref=${{ inputs.ref }} 与本 run head_sha=$GITHUB_SHA 不一致：分支在 CI 与派发之间前进过,拒绝生成错位的冒烟记录（等最新 CI 重新派发即可）"
+            exit 1
           fi
 
       - uses: actions/checkout@v4
