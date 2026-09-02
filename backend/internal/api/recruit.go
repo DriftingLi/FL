@@ -65,6 +65,8 @@ func (h *RecruitHandler) ListResumes(c *gin.Context) {
 			params.ExperienceMax = v
 		}
 	}
+	// #489：当前招聘者上下文用于 contact_state 回填
+	params.RecruiterID = middleware.CurrentUserID(c)
 	result, err := h.svc.List(params)
 	if err != nil {
 		response.ServerError(c, err.Error())
@@ -91,7 +93,7 @@ func (h *RecruitHandler) GetResume(c *gin.Context) {
 		response.BadRequest(c, "简历 ID 无效")
 		return
 	}
-	card, err := h.svc.Get(uid)
+	card, err := h.svc.GetForRecruiter(uid, middleware.CurrentUserID(c))
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			response.NotFound(c, "简历不存在")

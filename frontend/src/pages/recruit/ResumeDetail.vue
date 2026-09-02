@@ -23,14 +23,30 @@
       </div>
 
       <div class="mt-6">
-        <UiButton variant="primary" :loading="contactLoading" @click="showDialog = true">申请交换联系方式</UiButton>
-        <UiButton v-if="contact" size="small" class="ml-2" @click="loadContact">刷新联系方式</UiButton>
-        <p v-if="contactError" class="mt-2 text-xs text-red-500">{{ contactError }}</p>
+        <!-- #489：按钮状态机 none/pending/approved -->
+        <template v-if="!contact">
+          <UiButton v-if="data.contact_state !== 'pending'" variant="primary" :loading="contactLoading" @click="showDialog = true">申请交换联系方式</UiButton>
+          <UiButton v-else disabled>等待学员处理中</UiButton>
+          <p v-if="contactError" class="mt-2 text-xs text-red-500">{{ contactError }}</p>
+          <p v-else-if="data.contact_state === 'pending'" class="mt-2 text-xs text-ink-3">申请已提交，学员处理后即可查看联系方式</p>
+        </template>
         <div v-if="contact" class="mt-3 rounded border border-line bg-panel p-3 text-sm">
+          <div class="mb-2 text-xs font-semibold text-ink-3">已授权联系信息</div>
           <div><span class="text-ink-3">姓名：</span>{{ contact.real_name }}</div>
           <div><span class="text-ink-3">电话：</span>{{ contact.contact_phone }}</div>
           <div><span class="text-ink-3">微信：</span>{{ contact.wechat }}</div>
           <div v-if="contact.resume_file_url"><span class="text-ink-3">PDF：</span><a :href="contact.resume_file_url" target="_blank" class="text-ui-600">查看 PDF</a></div>
+          <!-- #489：授权后补齐证书原图与工作照 -->
+          <div v-if="contactPhotos.length" class="mt-2"><span class="text-ink-3">工作照：</span>
+            <div class="mt-1 flex flex-wrap gap-2">
+              <img v-for="(p, i) in contactPhotos" :key="i" :src="p" class="h-16 w-16 rounded object-cover" />
+            </div>
+          </div>
+          <div v-if="certImages.length" class="mt-2"><span class="text-ink-3">证书原图：</span>
+            <div class="mt-1 flex flex-wrap gap-2">
+              <img v-for="(c, i) in certImages" :key="i" :src="c" class="h-16 w-16 rounded object-cover" />
+            </div>
+          </div>
         </div>
       </div>
       <el-dialog v-model="showDialog" title="申请交换联系方式" width="420px">
@@ -45,7 +61,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { recruitApi, type RecruitResumeItem } from '@/api/recruit'
@@ -76,6 +92,7 @@ const {
     const res = await recruitApi.getResume(id)
     data.value = res as any || null
     loadContact()
+    startApprovedPolling()
   } catch (e: any) {
     if (e?.response?.status === 404 || String(e?.message || '').includes('不存在')) {
       data.value = null
@@ -83,6 +100,23 @@ const {
       throw e
     }
   }
+})
+
+// #489：授权后透出的工作照与证书原图
+const contactPhotos = computed(() => {
+  try {
+    return (contact.value?.photos || []).filter(Boolean)
+  } catch { return [] }
+})
+const certImages = computed(() => {
+  try {
+    const certs = contact.value?.resume_certifications || []
+    const imgs: string[] = []
+    for (const c of certs) {
+      if (Array.isArray(c.image_urls)) imgs.push(...c.image_urls.filter(Boolean))
+    }
+    return imgs
+  } catch { return [] }
 })
 
 async function loadContact() {
@@ -101,6 +135,34 @@ async function loadContact() {
     }
   } finally {
     contactLoading.value = false
+  }
+}
+
+// #489：学员同意后无需手动刷新——approved 状态时轮询明文（10s 间隔，最多 6 次）
+let pollTimer: any = null
+function startApprovedPolling() {
+  stopApprovedPolling()
+  if (data.value?.contact_state !== 'approved') return
+  let count = 0
+  pollTimer = setInterval(async () => {
+    count++
+    if (count > 6) {
+      stopApprovedPolling()
+      return
+    }
+    try {
+      const res = await recruitApi.getContact(data.value!.user_id)
+      if (res) {
+        contact.value = res as any
+        stopApprovedPolling()
+      }
+    } catch {}
+  }, 10000)
+}
+function stopApprovedPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
   }
 }
 
@@ -128,4 +190,5 @@ async function submitRequest() {
 }
 
 onMounted(load)
+onBeforeUnmount(stopApprovedPolling)
 </script>
