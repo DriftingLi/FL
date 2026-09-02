@@ -513,7 +513,7 @@ BEGIN
     FOR rec IN SELECT user_id, expected_regions, region FROM job_cards LOOP
         new_arr := '[]'::jsonb;
         IF jsonb_typeof(rec.expected_regions) = 'array' THEN
-            FOR elem IN SELECT jsonb_array_elements_text(rec.expected_regions) LOOP
+            FOR elem IN SELECT value FROM jsonb_array_elements_text(rec.expected_regions) AS t(value) LOOP
                 IF elem IS NULL OR elem = '' THEN CONTINUE; END IF;
                 parts := string_to_array(elem, '/');
                 IF array_length(parts, 1) IS NULL THEN CONTINUE; END IF;
