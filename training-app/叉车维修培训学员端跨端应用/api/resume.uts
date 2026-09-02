@@ -183,15 +183,15 @@ function buildSavePayload(p : SaveResumeParams) : UTSJSONObject {
  * 已建 → ResumeData；未建（404）→ throw {kind:'notfound'}
  */
 export function getResumeApi() : Promise<ResumeData> {
-	const opts : RequestOptions = { silent: true } as RequestOptions
+	const opts : RequestOptions = { url: '/resume', silent: true } as RequestOptions
 	return get('/resume', null, opts).then((data : UTSJSONObject) : ResumeData => {
 		return buildResumeData(data)
-	}).catch((e : any) : never => {
+	}).catch((e : any) : ResumeData => {
 		const msg = errMsg(e, '')
 		if (msg.indexOf('不存在') >= 0 || msg.indexOf('404') >= 0) {
-			throw { kind: 'notfound', message: '简历不存在' } as UTSJSONObject
+			throw new Error('RESUME_NOT_FOUND: 简历不存在')
 		}
-		throw e
+		throw new Error(msg)
 	})
 }
 
@@ -201,7 +201,7 @@ export function getResumeApi() : Promise<ResumeData> {
  */
 export function saveResumeApi(params : SaveResumeParams) : Promise<ResumeData> {
 	// silent: 由调用方统一提示保存结果，避免 request 层与页面双重 toast
-	const opts : RequestOptions = { silent: true } as RequestOptions
+	const opts : RequestOptions = { url: '/resume', silent: true } as RequestOptions
 	const body = buildSavePayload(params)
 	return put('/resume', body, opts).then((data : UTSJSONObject) : ResumeData => {
 		return buildResumeData(data)
@@ -214,7 +214,7 @@ export function saveResumeApi(params : SaveResumeParams) : Promise<ResumeData> {
  * @param visibility - "open" 公开 / "hidden" 隐藏
  */
 export function setVisibilityApi(visibility : string) : Promise<string> {
-	const opts : RequestOptions = { silent: true } as RequestOptions
+	const opts : RequestOptions = { url: '/resume/visibility', silent: true } as RequestOptions
 	return put('/resume/visibility', { visibility: visibility }, opts).then((data : UTSJSONObject) : string => {
 		return toStr(data['visibility'])
 	})
@@ -225,7 +225,7 @@ export function setVisibilityApi(visibility : string) : Promise<string> {
  * GET /resume/view-stats
  */
 export function getViewStatsApi() : Promise<number> {
-	const opts : RequestOptions = { silent: true } as RequestOptions
+	const opts : RequestOptions = { url: '/resume/view-stats', silent: true } as RequestOptions
 	return get('/resume/view-stats', null, opts).then((data : UTSJSONObject) : number => {
 		return toNumber(data['count'])
 	})
@@ -236,7 +236,7 @@ export function getViewStatsApi() : Promise<number> {
  * GET /positions
  */
 export function getPositionsApi() : Promise<PositionItem[]> {
-	const opts : RequestOptions = { silent: true } as RequestOptions
+	const opts : RequestOptions = { url: '/positions', silent: true } as RequestOptions
 	return get('/positions', null, opts).then((data : UTSJSONObject) : PositionItem[] => {
 		const list : PositionItem[] = []
 		const raw = data['positions']
