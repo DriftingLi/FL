@@ -142,12 +142,15 @@ function getMockResumeData() : ResumeData {
 /**
  * 获取我的简历
  * GET /resume
+ * @note 学员尚未创建简历时后端返回 404（HTTP），此处静默处理并回退空简历，
+ *       由调用方据 name 等字段判定"未填写"，不弹错误 toast。
  */
 export function getResumeApi() : Promise<ResumeData> {
-    return get('/resume').then((data : UTSJSONObject) : ResumeData => {
+    const opts : RequestOptions = { silent: true } as RequestOptions
+    return get('/resume', null, opts).then((data : UTSJSONObject) : ResumeData => {
         return buildResumeData(data)
     }).catch((e) : ResumeData => {
-        console.warn('[getResumeApi] network failed, using mock data:', e)
+        console.warn('[getResumeApi] network/404, using empty resume:', e)
         return getMockResumeData()
     })
 }
