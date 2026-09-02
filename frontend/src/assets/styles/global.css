@@ -1,7 +1,18 @@
+/*
+ * 全局最小重置 —— 仅包含确实需要的几项，刻意不全量引入 Tailwind preflight（详见
+ * tailwind.css 顶部注释）：preflight 的 h1/img/button 重置会破坏既有外观。
+ *
+ * ⚠️ `border:0 solid` 是必须的兜底：项目没有 preflight 的 `*{border:0 solid}`，浏览器
+ * 默认 border-width=medium(3px)。一旦模板上只挂 `border-dashed` / `border-solid` /
+ * `border-double` 等只改样式的工具类、却没在四条边都挂宽度工具，那三条没宽度的边就会
+ * 以 3px 显示出来——典型的"ui 卡片外莫名包了一圈虚线框"就是这条引出来的。
+ * 因为 global.css 在 reset 层（低于 vendor），不会压过 Element Plus 自己的边框。
+ */
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  border: 0 solid;
 }
 
 body {

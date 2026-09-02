@@ -274,8 +274,11 @@ services:
     # (13: Permission denied)"，对外 80/443 无响应），必须解除 AppArmor 限制
     security_opt:
       - apparmor=unconfined
-    # 禁用镜像内置 healthcheck（原 healthcheck 访问 127.0.0.1:8080/api/health，
-    # 但 host 网络模式下容器内 wget 行为异常导致误报 unhealthy，实际服务正常）
+    # healthcheck 保持禁用：host 网络模式下容器内没有独立网络命名空间，
+    # 真实探活由 deploy-remote.sh 在宿主机侧执行（HTTPS 443 /health，PR #483）。
+    # 历史注：早期「host 网络下 wget 行为异常导致误报 unhealthy」的归因有误——
+    # 真实原因是 80 端口 server 级 return 301 抢在 location 匹配前执行（issue #496），
+    # /health 实际返回 301，wget 跟随重定向后因证书不匹配而失败。
     healthcheck:
       disable: true
     environment:
