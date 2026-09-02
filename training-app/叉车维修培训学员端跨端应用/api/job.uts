@@ -113,10 +113,9 @@ export function getJobListApi(params : JobListParams = {}) : Promise<JobListResu
     if (params.salary_max != null) query['salary_max'] = params.salary_max!.toString()
     if (params.experience != null && params.experience!.length > 0) query['experience'] = params.experience!
 
-    const keys = Object.keys(query)
     const qsParts : string[] = []
-    for (const k of keys) {
-        qsParts.push(encodeURIComponent(k) + '=' + encodeURIComponent(query[k]!))
+    for (const k in query) {
+        qsParts.push(encodeURIComponent(k) + '=' + encodeURIComponent(query[k] as string))
     }
     const qs = qsParts.join('&')
     const url = '/jobs' + (qs.length > 0 ? '?' + qs : '')
