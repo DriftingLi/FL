@@ -228,9 +228,8 @@ export function request<T>(options : RequestOptions) : Promise<UTSJSONObject> {
             console.log('[request] >>>', method, fullURL, 'data:', options.data)
         }
 
-        /** 单次请求；401 刷新成功后带新 token 重试一次（isRetry=true 时不再刷新） */
-        let send : (reqHeader : UTSJSONObject, isRetry : boolean) => void
-        send = (reqHeader : UTSJSONObject, isRetry : boolean) => {
+        /** 单次 HTTP 请求 */
+        const doRequest = (reqHeader : UTSJSONObject, isRetry : boolean) => {
             uni.request({
                 url: fullURL,
                 method: method,
@@ -242,8 +241,6 @@ export function request<T>(options : RequestOptions) : Promise<UTSJSONObject> {
                         console.log('[request] <<<', res.statusCode, fullURL)
                     }
                     const statusCode = res.statusCode
-                    // 响应体可能是 HTML（如 nginx 502 错误页），as UTSJSONObject 会抛 ClassCastException
-                    // 用 try/catch 包裹，确保异常时 reject 而非让 Promise 悬挂
                     let body : UTSJSONObject
                     try {
                         body = res.data as UTSJSONObject
@@ -261,11 +258,10 @@ export function request<T>(options : RequestOptions) : Promise<UTSJSONObject> {
                         logoutAndReject(silent, reject)
                         return
                     }
-                    // 注意：success 回调非 async，uts 中禁止使用 await，改用 .then 链
+                    // 401 自动刷新：刷新成功后带新 token 重试一次
                     tryAutoRefresh().then((refreshed : boolean) => {
-                        // 刷新成功后重新 buildHeader（token 已更新到 storage）
                         if (refreshed && getStorage(STORAGE_KEY_TOKEN).length > 0) {
-                            send(buildHeader(options.header, silent), true)
+                            doRequest(buildHeader(options.header, silent), true)
                         } else {
                             logoutAndReject(silent, reject)
                         }
@@ -277,7 +273,7 @@ export function request<T>(options : RequestOptions) : Promise<UTSJSONObject> {
                 },
             })
         }
-        send(header, false)
+        doRequest(header, false)
     })
 }
 

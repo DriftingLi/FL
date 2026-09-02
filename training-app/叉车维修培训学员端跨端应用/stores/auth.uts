@@ -237,6 +237,7 @@ function updateUser(patch : UpdateProfileParams) : void {
         username: current.username,
         name: current.name,
         role: current.role,
+        avatar_url: '',
     } as UserInfo
     const currentavatar_url = current.avatar_url
     if (currentavatar_url != null && currentavatar_url.length > 0) {
@@ -310,7 +311,7 @@ export function useAuthStore() : AuthStore {
         loginProvider,
         getRefreshToken: () : string => getRefreshToken(),
         tryRefreshToken: () : Promise<boolean> => tryRefreshToken(),
-        setAuthData: (t : string, u : UserInfo, rt : string = '') : void => setAuthData(t, u, rt),
+        setAuthData: (t : string, u : UserInfo, rt : string) : void => setAuthData(t, u, rt),
         clearAuthData: () : void => clearAuthData(),
         restoreFromStorage: () : boolean => restoreFromStorage(),
         validateToken: () : Promise<void> => validateToken(),

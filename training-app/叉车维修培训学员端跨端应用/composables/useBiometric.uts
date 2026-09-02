@@ -29,7 +29,7 @@ export function useBiometric() {
 
         // #ifdef APP || MP-WEIXIN
         try {
-            const res = await uni.checkIsSupportSoterAuthentication()
+            const res = await uni.checkIsSupportSoterAuthentication({})
             const supportItems = res.supportMode
             if (supportItems != null && supportItems.length > 0) {
                 isSupported.value = true
