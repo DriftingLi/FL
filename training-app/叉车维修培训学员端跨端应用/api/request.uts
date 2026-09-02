@@ -236,7 +236,7 @@ export function request<T>(options : RequestOptions) : Promise<UTSJSONObject> {
 function doSingleRequest(
     url : string,
     method : string,
-    data : UTSJSONObject | null,
+    data : any | null,
     reqHeader : UTSJSONObject,
     timeout : number,
     options : RequestOptions,
