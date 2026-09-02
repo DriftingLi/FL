@@ -1,0 +1,103 @@
+/**
+ * 生物认证封装 composable
+ *
+ * 统一封装 uni.checkIsSupportSoterAuthentication / uni.startSoterAuthentication，
+ * 在 H5 端用 showModal 模拟，保证浏览器也能跑通 demo。
+ *
+ * @note startSoterAuthentication 的 requestAuthModes 支持：
+ *       - 'fingerPrint'  (Android / iOS / 微信小程序)
+ *       - 'facial'       (Android 指纹 / iOS 面容 / 微信小程序)
+ *       - 'speech'       (暂不使用)
+ */
+import { ref, type Ref } from 'vue'
+
+export type UseBiometricResult = {
+    isSupported : Ref<boolean>
+    checkSupport : () => Promise<void>
+    authenticate : (content : string) => Promise<boolean>
+}
+
+export function useBiometric() {
+    const isSupported = ref<boolean>(false)
+
+    /** 检测设备是否支持生物认证（SOTER） */
+    async function checkSupport() : Promise<void> {
+        // #ifdef H5
+        isSupported.value = true
+        return
+        // #endif
+
+        // #ifdef APP || MP-WEIXIN
+        try {
+            const res = await uni.checkIsSupportSoterAuthentication()
+            const supportItems = res.supportMode
+            if (supportItems != null && supportItems.length > 0) {
+                isSupported.value = true
+            }
+        } catch (e) {
+            console.warn('[useBiometric] checkSupport failed:', e)
+            isSupported.value = false
+        }
+        // #endif
+    }
+
+    /**
+     * 触发生物认证
+     * @param content 提示文案（H5 模拟弹窗用）
+     * @returns 认证结果
+     */
+    async function authenticate(content : string = '请验证身份') : Promise<boolean> {
+        // #ifdef H5
+        return new Promise<boolean>((resolve) => {
+            uni.showModal({
+                title: '生物认证（模拟）',
+                content: content + '\n点击"确定"模拟认证成功',
+                confirmText: '确定',
+                cancelText: '取消',
+                success: (res) => {
+                    if (res.confirm) {
+                        resolve(true)
+                    } else {
+                        resolve(false)
+                    }
+                },
+                fail: () => {
+                    resolve(false)
+                },
+            })
+        })
+        // #endif
+
+        // #ifdef APP || MP-WEIXIN
+        return new Promise<boolean>((resolve) => {
+            uni.startSoterAuthentication({
+                requestAuthModes: ['fingerPrint', 'facial'],
+                challenge: '123456',
+                authContent: content,
+                success: (res) => {
+                    const authMode = res.authMode
+                    if (authMode == 'fingerPrint' || authMode == 'facial') {
+                        resolve(true)
+                    } else {
+                        resolve(false)
+                    }
+                },
+                fail: (err) => {
+                    console.warn('[useBiometric] authenticate failed:', err)
+                    resolve(false)
+                },
+            })
+        })
+        // #endif
+
+        // #ifndef H5 || APP || MP-WEIXIN
+        return false
+        // #endif
+    }
+
+    return {
+        isSupported: isSupported,
+        checkSupport: () => checkSupport(),
+        authenticate: (content : string = '请验证身份') => authenticate(content),
+    } as UseBiometricResult
+}
