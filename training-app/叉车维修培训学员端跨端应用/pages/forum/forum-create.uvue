@@ -71,9 +71,17 @@
     import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
     import { createForumTopicApi, updateForumTopicApi, uploadForumImageApi, getForumTopicDetailApi } from '../../api/forum'
-    import { resolveFileUrl } from '../../utils/format'
     import { useAuthStore } from '../../stores/auth'
     import type { ForumTopicDetail } from '../../types/index'
+
+    /** 补全后端返回的相对文件 URL */
+    function resolveFileUrl(url : string) : string {
+        if (url.length == 0) return ''
+        if (url.startsWith('http://') || url.startsWith('https://')) {
+            return url
+        }
+        return url
+    }
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight

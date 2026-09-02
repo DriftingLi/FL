@@ -88,7 +88,12 @@
     import { goBack } from '../../utils/navigation'
     import { getMockExamHistoryApi } from '../../api/mockExam'
     import type { MockExamHistoryItem } from '../../types/index'
-    import { formatDateTimeStr } from '../../utils/format'
+
+    /** ISO 日期字符串 → YYYY-MM-DD HH:mm */
+    function formatDateTimeStr(dateStr : string) : string {
+        if (dateStr == null || dateStr.length < 16) return dateStr
+        return dateStr.substring(0, 16).replace('T', ' ')
+    }
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight

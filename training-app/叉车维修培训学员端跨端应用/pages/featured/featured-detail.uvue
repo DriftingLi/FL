@@ -73,7 +73,12 @@
     import { checkFavoriteApi, addFavoriteApi, removeFavoriteApi } from '../../api/favorite'
     import { parseMarkdown } from '../../utils/markdown'
     import type { FeaturedContentDetail, FeaturedContentItem, MarkdownBlock } from '../../types/index'
-    import { formatDateStr } from '../../utils/format'
+
+    /** ISO 日期字符串 → YYYY-MM-DD */
+    function formatDateStr(dateStr : string) : string {
+        if (dateStr == null || dateStr.length < 10) return dateStr
+        return dateStr.substring(0, 10)
+    }
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
@@ -152,8 +157,9 @@
         goBack()
     }
 
-    onLoad((options) : void => {
-        const id = options?.id
+    onLoad((_options : any) : void => {
+        const opts = _options as UTSJSONObject | null
+        const id = opts != null ? opts['id'] : null
         if (id != null) {
             contentId.value = parseInt(id as string)
         }

@@ -129,10 +129,11 @@
     const hasApplied = ref<boolean>(false)
 
     // ---- 页面加载 ----
-    onLoad((options) => {
-        const id = options?.['id']
-        if (id != null && id.length > 0) {
-            jobId.value = parseInt(id)
+    onLoad((_options : any) => {
+        const opts = _options as UTSJSONObject | null
+        const id = opts != null ? opts['id'] : null
+        if (id != null && (id as string).length > 0) {
+            jobId.value = parseInt(id as string)
             loadJobDetail()
         } else {
             uni.showToast({ title: '职位不存在', icon: 'none' })
