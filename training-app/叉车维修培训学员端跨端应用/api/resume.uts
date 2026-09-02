@@ -1,7 +1,7 @@
 /**
  * 简历模块 API
  */
-import { get, put, post } from './request'
+import { get, put, post, uploadFile } from './request'
 import { toStr, toNumber, toList } from './helpers'
 import type { ResumeData, SaveResumeParams, ResumeEduItem, ResumeExpItem, ResumeViewStat, ResumeViewStatsResult } from '../types/index'
 
@@ -178,20 +178,20 @@ export function saveResumeApi(params : SaveResumeParams) : Promise<void> {
 
 /**
  * 上传工作照
- * POST /resume/image
+ * POST /resume/image (multipart/form-data)
  */
 export function uploadWorkPhotoApi(filePath : string) : Promise<string> {
-    return post('/resume/image', { filePath: filePath }).then((data : UTSJSONObject) : string => {
+    return uploadFile('/resume/image', filePath, 'file').then((data : UTSJSONObject) : string => {
         return toStr(data['url'])
     })
 }
 
 /**
  * 上传简历 PDF
- * POST /resume/pdf
+ * POST /resume/pdf (multipart/form-data)
  */
 export function uploadResumePdfApi(filePath : string) : Promise<string> {
-    return post('/resume/pdf', { filePath: filePath }).then((data : UTSJSONObject) : string => {
+    return uploadFile('/resume/pdf', filePath, 'file').then((data : UTSJSONObject) : string => {
         return toStr(data['url'])
     })
 }
@@ -220,9 +220,10 @@ export function getViewStatsApi() : Promise<ResumeViewStatsResult> {
 /**
  * 切换简历公开状态
  * PUT /resume/visibility
+ * @param visibility - "public" 公开 / "hidden" 隐藏
  */
-export function toggleVisibilityApi() : Promise<string> {
-    return put('/resume/visibility').then((data : UTSJSONObject) : string => {
+export function setVisibilityApi(visibility : string) : Promise<string> {
+    return put('/resume/visibility', { visibility: visibility }).then((data : UTSJSONObject) : string => {
         return toStr(data['visibility'])
     })
 }
