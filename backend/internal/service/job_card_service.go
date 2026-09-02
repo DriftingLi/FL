@@ -367,6 +367,20 @@ func toJobCardDTO(m *model.JobCard) JobCardDTO {
 	}
 }
 
+// DeleteResumeFile 删除上传的 PDF 附件（#491：预览页操作区「删除 PDF 附件」）。
+func (s *JobCardService) DeleteResumeFile(userID int) error {
+	var card model.JobCard
+	if err := s.db.First(&card, "user_id = ?", userID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil // 无卡即无附件，幂等成功
+		}
+		return err
+	}
+	card.ResumeFileURL = ""
+	card.UpdatedAt = time.Now()
+	return s.db.Save(&card).Error
+}
+
 func (s *JobCardService) ValidateAndStorePDF(filename string, size int64, content []byte) (string, error) {
 	ext := fileExtension(filename)
 	if ext != "pdf" {

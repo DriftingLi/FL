@@ -45,38 +45,25 @@ describe('ResumePage 未建简历空态（#415）', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('简历尚未创建')
     expect(wrapper.text()).toContain('完善后可被招聘企业看到')
-    expect(wrapper.text()).toContain('去完善')
+    expect(wrapper.text()).toContain('去填写')
   })
 
-  it('已建简历：渲染编辑表单（真实姓名输入框存在）', { timeout: 15000 }, async () => {
+  it('已建简历：预览页展示编辑按钮/我的联系方式/内嵌 PDF（#491）', { timeout: 15000 }, async () => {
     vi.mocked(resumeApi.get).mockResolvedValue({
-      user_id: 1, real_name: '张三', contact_phone: '13800000001', wechat: '', region: '上海',
+      user_id: 1, real_name: '张三', contact_phone: '13800000001', wechat: 'wx_zhang', region: '上海',
       expected_position_extra: '', expected_regions: [], salary_negotiable: false,
       available_in: '', job_nature: '', experience_years: 1, self_intro: '',
-      resume_experiences: [], resume_certifications: [], resume_file_url: '', photos: [],
-      visibility: 'hidden', created_at: '', updated_at: '',
+      resume_experiences: [], resume_certifications: [], resume_file_url: '/static/uploads/x.pdf', photos: [],
+      visibility: 'open', created_at: '', updated_at: '',
     })
     const wrapper = mountPage()
     await flushPromises()
-    expect(wrapper.text()).toContain('真实姓名')
+    expect(wrapper.text()).toContain('编辑简历')
+    expect(wrapper.text()).toContain('我的联系方式（企业授权后可见）')
+    expect(wrapper.text()).toContain('张三')
+    expect(wrapper.text()).toContain('13800000001')
+    expect(wrapper.text()).toContain('查看上传简历')
     expect(wrapper.text()).not.toContain('简历尚未创建')
-  })
-})
-
-describe('ResumePage 意向地区回显（#486）', () => {
-  it('已存两段「省/市」数据回显为级联路径（重进不丢失）', { timeout: 15000 }, async () => {
-    vi.mocked(resumeApi.get).mockResolvedValue({
-      user_id: 1, real_name: '张三', contact_phone: '13800000001', wechat: '', region: '江苏省/苏州市',
-      expected_position_extra: '', expected_regions: ['江苏省/苏州市', '浙江省/杭州市'], salary_negotiable: false,
-      available_in: '', job_nature: '', experience_years: 1, self_intro: '',
-      resume_experiences: [], resume_certifications: [], resume_file_url: '', photos: [],
-      visibility: 'hidden', created_at: '', updated_at: '',
-    })
-    const wrapper = mountPage()
-    await flushPromises()
-    const vm: any = wrapper.vm
-    expect(vm.expectedRegionsCascader).toEqual([['江苏省', '苏州市'], ['浙江省', '杭州市']])
-    expect(vm.regionCascader).toEqual(['江苏省', '苏州市'])
   })
 })
 

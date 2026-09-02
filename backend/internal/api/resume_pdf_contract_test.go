@@ -48,7 +48,7 @@ func TestResumePDFContract(t *testing.T) {
 		AvailableIn: "immediate", JobNature: "fulltime", ExperienceYears: 5, SelfIntro: "5年叉车维修经验，熟悉电动叉车故障诊断",
 		ResumeExperiences:    model.JSONB([]byte(`[{"company":"A公司","role":"维修工","start_month":"2020-01","end_month":"2023-01","desc":"负责叉车日常维修"}]`)),
 		ResumeCertifications: model.JSONB([]byte(`[{"credential_id":` + strconv.Itoa(cred1.ID) + `,"cert_no":"CERT001","expire_date":"2028-01-01","image_urls":["http://example.com/cert1.jpg"]}]`)),
-		ResumeFileURL: "/static/uploads/resumes/stu1.pdf", Photos: model.JSONB([]byte(`["http://example.com/photo1.jpg"]`)), Visibility: "open",
+		ResumeFileURL:        "/static/uploads/resumes/stu1.pdf", Photos: model.JSONB([]byte(`["http://example.com/photo1.jpg"]`)), Visibility: "open",
 		CreatedAt: now, UpdatedAt: now,
 	}
 	card2 := model.JobCard{
@@ -276,4 +276,48 @@ func indexBytes(data, needle []byte, from int) int {
 		return -1
 	}
 	return from + idx
+}
+
+// #491：PDF 附件删除端点（学员本人；删除后 resume_file_url 置空）。
+func TestResumePDFDeleteContract(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := testutil.NewMemoryDB(t)
+	pwd, _ := service.HashPassword("pass1234")
+	stu := testutil.SeedStudent(t, db, "stuPdfDel", pwd)
+	now := time.Now()
+	card := model.JobCard{
+		UserID: stu.ID, RealName: "张三", ContactPhone: "13800000001", Region: "江苏省/苏州市",
+		ExpectedRegions: model.JSONB([]byte(`["江苏省/苏州市"]`)), ResumeFileURL: "/static/uploads/resumes/a.pdf",
+		Visibility: "hidden", CreatedAt: now, UpdatedAt: now,
+	}
+	if err := db.Create(&card).Error; err != nil {
+		t.Fatalf("create card: %v", err)
+	}
+	cfg := &config.Config{
+		JWTSecretKey:          "contract-test-secret",
+		JWTExpiresHours:       2,
+		JWTRefreshExpiresDays: 7,
+		AuthCookie:            config.AuthCookieConfig{Name: "hrwai_token", Domain: "example.com", Secure: false},
+		RecruiterCookie:       config.RecruiterCookieConfig{Name: "recruiter_token", Domain: "", Secure: false},
+	}
+	r := NewRouter(newContractDeps(t, db, cfg))
+	studentSess := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{Name: cfg.AuthCookie.Name})
+	studentToken, _ := studentSess.Issue(stu.ID, stu.Account, "hrwai_user")
+	// 删除附件
+	rec := doWithToken(t, r, studentToken, http.MethodDelete, "/api/resume/pdf", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("删除附件应 200, 实际 %d %s", rec.Code, rec.Body.String())
+	}
+	var got model.JobCard
+	if err := db.First(&got, "user_id = ?", stu.ID).Error; err != nil {
+		t.Fatalf("read card: %v", err)
+	}
+	if got.ResumeFileURL != "" {
+		t.Fatalf("删除后 resume_file_url 应置空, 实际 %q", got.ResumeFileURL)
+	}
+	// 未登录 401
+	rec = doWithoutToken(t, r, http.MethodDelete, "/api/resume/pdf")
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("未登录删除应 401, 实际 %d", rec.Code)
+	}
 }
