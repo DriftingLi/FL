@@ -459,7 +459,7 @@
         right: 0;
         bottom: 0;
         padding: 20rpx 32rpx;
-        padding-bottom: calc(20rpx + env(safe-area-inset-bottom));
+        padding-bottom: 20rpx;
         background-color: #FFFFFF;
     }
 

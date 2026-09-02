@@ -1270,7 +1270,7 @@
         padding: 40rpx 32rpx;
         padding-bottom: 48rpx;
         flex-direction: column;
-        max-height: 70%;
+        max-height: 960rpx;
     }
 
     .answer-card-header {

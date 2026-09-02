@@ -62,8 +62,12 @@ export type RefreshTokenResult = {
 /**
  * 小程序微信一键登录响应（POST /auth/wx-login）
  * @note 老用户与新用户共用同一形状；新用户 isNew=true 用于前端弹"已为您自动注册"提示
+ * @note UTS 不支持交叉类型 + 内联对象字面量（如 LoginResult & { ... }），必须展平所有字段
  */
-export type WechatLoginResult = LoginResult & {
+export type WechatLoginResult = {
+    token : string
+    user : UserInfo
+    refresh_token : string
     isNew ?: boolean
 }
 

@@ -964,7 +964,7 @@
         background-color: #FFFFFF;
         border-top-left-radius: 28rpx;
         border-top-right-radius: 28rpx;
-        padding-bottom: calc(32rpx + env(safe-area-inset-bottom));
+        padding-bottom: 32rpx;
     }
 
     .filter-header {
@@ -1140,7 +1140,7 @@
         background-color: #F5F7FA;
         border-bottom-left-radius: 28rpx;
         border-bottom-right-radius: 28rpx;
-        max-height: 75vh;
+        max-height: 800rpx;
         box-shadow: 0 8rpx 32rpx rgba(0, 0, 0, 0.15);
     }
 
@@ -1173,7 +1173,7 @@
     }
 
     .cert-dropdown-scroll {
-        max-height: calc(75vh - 100rpx);
+        max-height: 700rpx;
     }
 
     /* ---- 分组区块 ---- */
