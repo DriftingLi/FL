@@ -48,6 +48,62 @@ AI 安全审计用 DeepSec（Shield）。See `docs/agents/security-scan.md`.
 - `--color-brand-*` 属**残值域**专用（`assets/styles/valuation-tokens.css` 在 `.valuation-root` 内定义），**禁止提升为全局变量** —— 会击穿 `layouts/ValuationLayout.vue` 与 `pages/ai-assistant/*` 两处依赖「变量未定义 → 走 fallback」的写法。培训域品牌色用 `--color-primary-*`。
 - 残值模块（`pages/student/valuation/**`、`components/valuation/**`）本轮冻结，批量替换色值等机械操作时记得排除。
 
+### uni-app-x (uvue) CSS 兼容性规则
+
+本项目使用 uni-app-x (uvue 模式) 编译到 Android/iOS 原生端。uvue 的 CSS 引擎是**原生渲染器**，仅支持 CSS 属性的子集，与 Web CSS 有显著差异。编写 `.uvue` 文件的 `<style>` 时必须遵守：
+
+#### 必须使用 `<style lang="scss">`
+
+`.uvue` 文件的 `<style>` 块**必须**声明 `lang="scss"`，否则 SCSS 变量（如 `$bg-color`、`$font-size-md`）不会被预处理，直接传递给 uvue CSS 引擎会报错。
+
+```vue
+<!-- 正确 -->
+<style lang="scss">
+.page { background-color: $bg-color; }
+</style>
+
+<!-- 错误 —— SCSS 变量不会被编译 -->
+<style>
+.page { background-color: $bg-color; }
+</style>
+```
+
+#### 不支持的 CSS 属性与值
+
+| 不支持的语法 | 替代方案 | 说明 |
+|---|---|---|
+| `gap` / `row-gap` / `column-gap` | 子元素 `margin-left`/`margin-right`/`margin-bottom` | flex 布局中间距必须用 margin |
+| `text-decoration` | `border-bottom` 模拟 | 如 `border-bottom-width: 1rpx; border-bottom-style: solid; border-bottom-color: currentColor;` |
+| `calc() + env()` | 固定 rpx 值 | 安全区域需通过 `uni.getSystemInfoSync()` 动态获取 |
+| `vh` / `vw` 单位 | 固定 rpx 值 | 仅支持 `number` 和 `pixel`（含 `rpx`） |
+| `align-items: baseline` | `flex-start` 或 `center` | 仅支持 `center`/`flex-start`/`flex-end`/`stretch` |
+| `max-height: 百分比` | 固定 rpx 值 | 仅支持 `number` 和 `pixel` |
+| CSS 自定义属性 `var(--xxx)` | 直接写色值或用 SCSS 变量 | uvue 原生端不支持 CSS 变量 |
+| `display: grid` / `grid-*` | flex 布局 | grid 布局不支持 |
+| `transition` / `animation` | uni-app API 动画 | 原生端不支持 CSS 动画 |
+
+#### `gap` 替换模式速查
+
+```css
+/* 非换行水平排列 → 兄弟选择器加 margin-left */
+.flex-row > view + view { margin-left: 16rpx; }
+
+/* 换行排列 → 所有子元素加 margin-right + margin-bottom */
+.flex-wrap > view { margin-right: 16rpx; margin-bottom: 16rpx; }
+```
+
+#### UTS 类型系统限制
+
+UTS（uni-app-x 的 TypeScript 变体）不支持以下 TypeScript 语法：
+- **交叉类型 + 内联对象字面量**：`type C = A & { field: type }` → 必须展平为独立类型定义
+- **联合字面量类型用于运行时强转**：`'student' | 'tutor'` 编译到 Kotlin 后无法用 `as` 强转 → 统一用 `string`
+
+#### 编译验证
+
+修改 `.uvue` 文件后，在 HBuilderX 中重新编译，检查控制台：
+- **ERROR** = 阻断编译，必须修复
+- **WARNING** = 不阻断但原生端可能不生效（如 `gap` 被静默忽略，布局会坏）
+
 ## 测试与检查流程
 
 改动后**必须**跑完对应栈的检查，全绿才能提交：
