@@ -15,16 +15,24 @@
         class="!w-44"
         @change="load"
       />
-      <el-select v-model="filters.specialty_id" clearable placeholder="期望岗位" class="!w-36" @change="load">
-        <el-option v-for="s in specialties" :key="s.specialty_id" :label="s.name" :value="s.specialty_id" />
+      <el-select v-model="filters.position_id" clearable placeholder="期望岗位" class="!w-36" @change="load">
+        <!-- #492：期望岗位选项与学员简历同源（positions 岗位字典），参数 position_id -->
+        <el-option v-for="p in positions" :key="p.position_id" :label="p.name" :value="p.position_id" />
       </el-select>
       <el-select v-model="filters.credential_id" clearable placeholder="证书" class="!w-36" @change="load">
         <el-option v-for="c in credentials" :key="c.id" :label="c.name" :value="c.id" />
       </el-select>
       <el-input v-model.number="filters.salary_min" placeholder="最低薪资" type="number" clearable class="!w-28" @change="load" />
       <el-input v-model.number="filters.salary_max" placeholder="最高薪资" type="number" clearable class="!w-28" @change="load" />
-      <el-select v-model="filters.experience_years" clearable placeholder="经验年限" class="!w-28" @change="load">
-        <el-option v-for="n in experienceOptions" :key="String(n)" :label="`${n}年`" :value="n" />
+      <el-select v-model="filters.experience_min" clearable placeholder="经验年限" class="!w-32" @change="load">
+        <!-- #492：经验年限档位「N 年及以上」（后端 >= 匹配） -->
+        <el-option v-for="n in experienceOptions" :key="String(n)" :label="`${n}年及以上`" :value="n" />
+      </el-select>
+      <el-select v-model="filters.job_nature" clearable placeholder="用工性质" class="!w-32" @change="load">
+        <!-- #492：新增用工性质筛选 -->
+        <el-option label="全职" value="fulltime" />
+        <el-option label="兼职" value="parttime" />
+        <el-option label="合同" value="contract" />
       </el-select>
       <el-select v-model="filters.available_in" clearable placeholder="到岗时间" class="!w-32" @change="load">
         <el-option label="随时" value="immediate" />
@@ -112,38 +120,43 @@ const {
 } = useAsyncPage(async () => {
   const params: any = { page: 1, page_size: 20 }
   if (filters.region_path.length) params.region = joinRegionPath(filters.region_path)
-  if (filters.specialty_id) params.specialty_id = filters.specialty_id
+  if (filters.position_id) params.position_id = filters.position_id
   if (filters.credential_id) params.credential_id = filters.credential_id
   if (filters.salary_min != null) params.salary_min = filters.salary_min
   if (filters.salary_max != null) params.salary_max = filters.salary_max
-  if (filters.experience_years != null) params.experience_years = filters.experience_years
+  if (filters.experience_min != null) params.experience_min = filters.experience_min
+  if (filters.job_nature) params.job_nature = filters.job_nature
   if (filters.available_in) params.available_in = filters.available_in
   const res = await recruitApi.listResumes(params)
   items.value = res?.items || []
   total.value = res?.total || 0
 })
 
-const specialties = ref<any[]>([])
+// #492：期望岗位选项与简历编辑同源（/positions 岗位字典）
+const positions = ref<any[]>([])
 const credentials = ref<any[]>([])
 // #486：地区筛选项与录入同源（省→市两级级联，value 取 label），参数传市级
 const regionOptions = buildCityLevelRegionOptions()
-const experienceOptions = [0, 1, 2, 3, 5, 10]
+// #492：经验档位「N 年及以上」
+const experienceOptions = [1, 3, 5, 10]
 
 const filters = reactive<{
   region_path: string[]
-  specialty_id: number | null
+  position_id: number | null
   credential_id: number | null
   salary_min: number | null
   salary_max: number | null
-  experience_years: number | null
+  experience_min: number | null
+  job_nature: string
   available_in: string
 }>({
   region_path: [],
-  specialty_id: null,
+  position_id: null,
   credential_id: null,
   salary_min: null,
   salary_max: null,
-  experience_years: null,
+  experience_min: null,
+  job_nature: '',
   available_in: ''
 })
 
@@ -162,8 +175,8 @@ function certTag(c: any) {
 
 async function loadMeta() {
   try {
-    const res: any = await unwrappedRequest.get('/catalog/tree')
-    if (res?.specialties) specialties.value = res.specialties
+    const res: any = await unwrappedRequest.get('/positions')
+    if (res?.positions) positions.value = res.positions
   } catch {}
   try {
     const res: any = await unwrappedRequest.get('/credentials')

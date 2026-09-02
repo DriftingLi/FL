@@ -42,6 +42,7 @@ func (h *RecruitHandler) ListResumes(c *gin.Context) {
 		PageSize:    atoiDefault(c.Query("page_size"), 20),
 		Region:      c.Query("region"),
 		AvailableIn: c.Query("available_in"),
+		JobNature:   c.Query("job_nature"),
 	}
 	if v := queryIDPtr(c, "position_id"); v != nil {
 		params.PositionID = v

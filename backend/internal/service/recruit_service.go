@@ -41,6 +41,8 @@ type RecruitListParams struct {
 	ExperienceMax   *int
 	ExperienceYears *int
 	AvailableIn     string
+	// JobNature 用工性质（#492：fulltime/parttime/contract 精确匹配）
+	JobNature string
 	// RecruiterID 当前招聘者（#489：>0 时批量回填 contact_state）
 	RecruiterID int
 }
@@ -214,6 +216,10 @@ func (s *RecruitService) applyFilters(q *gorm.DB, p RecruitListParams) *gorm.DB 
 	}
 	if v := strings.TrimSpace(p.AvailableIn); v != "" {
 		q = q.Where("available_in = ?", v)
+	}
+	if v := strings.TrimSpace(p.JobNature); v != "" {
+		// #492：用工性质精确匹配（fulltime/parttime/contract）
+		q = q.Where("job_nature = ?", v)
 	}
 	return q
 }
