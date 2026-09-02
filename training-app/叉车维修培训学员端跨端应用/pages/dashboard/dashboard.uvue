@@ -270,8 +270,9 @@
     }
 
     function stopUnreadPolling() : void {
-        if (unreadTimer != null) {
-            clearInterval(unreadTimer)
+        const t = unreadTimer
+        if (t != null) {
+            clearInterval(t)
             unreadTimer = null
         }
     }
@@ -308,10 +309,8 @@
     async function loadCredentials() : Promise<void> {
         try {
             // 并发加载当前证件 + 全部证件列表
-            const [current, groups] = await Promise.all([
-                getCurrentCredentialApi(),
-                getAllCredentialsApi(),
-            ])
+            const current = await getCurrentCredentialApi()
+            const groups = await getAllCredentialsApi()
             credentialGroups.value = groups
 
             if (current != null) {
