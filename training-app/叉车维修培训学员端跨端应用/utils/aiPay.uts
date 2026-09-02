@@ -16,16 +16,16 @@ const PRO_PAID_KEY = 'ai_pro_paid'
 export const PRO_PRICE_MONTH = '¥19.9/月'
 export const PRO_PRICE_YEAR = '¥199/年'
 
-/** 当前版本类型 */
-export type AiVersion = '' | 'basic' | 'pro'
+/** 当前版本类型（UTS 不支持联合字面量类型用于 as 强转，统一用 string） */
+export type AiVersion = string
 
 /** 读取当前版本，未选择返回 '' */
 export function getVersion() : AiVersion {
 	const v = getStorage(VERSION_KEY)
 	if (v == 'basic' || v == 'pro') {
-		return v as AiVersion
+		return v
 	}
-	return '' as AiVersion
+	return ''
 }
 
 /** 记录当前版本 */
