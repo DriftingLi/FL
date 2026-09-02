@@ -1,0 +1,128 @@
+/**
+ * 积分模块 API
+ * - 获取积分余额
+ * - 获取积分明细列表
+ * - 上报浏览课程章节积分
+ */
+import { get, post } from './request'
+import { toNumber, toStr } from './helpers'
+import type { PointsBalance, PointsRecord, PointsRecordListResult } from '../types/index'
+
+/** 从 UTSJSONObject 构造 PointsBalance */
+function buildPointsBalance(obj : UTSJSONObject) : PointsBalance {
+	return {
+		total_points: toNumber(obj['total_points']),
+		today_earned: toNumber(obj['today_earned']),
+		level: toStr(obj['level']),
+		level_name: toStr(obj['level_name']),
+		next_level_points: toNumber(obj['next_level_points']),
+	} as PointsBalance
+}
+
+/** 从 UTSJSONObject 构造 PointsRecord */
+function buildPointsRecord(obj : UTSJSONObject) : PointsRecord {
+	return {
+		record_id: toNumber(obj['record_id']),
+		action: toStr(obj['action']),
+		points: toNumber(obj['points']),
+		description: toStr(obj['description']),
+		created_at: toStr(obj['created_at']),
+		source_type: toStr(obj['source_type']),
+		source_id: toNumber(obj['source_id']),
+	} as PointsRecord
+}
+
+/** 从 UTSJSONObject 构造 PointsRecordListResult */
+function buildPointsRecordListResult(obj : UTSJSONObject) : PointsRecordListResult {
+	const records : PointsRecord[] = []
+	const recordsRaw = obj['records']
+	if (recordsRaw != null) {
+		const arr = recordsRaw as Array<UTSJSONObject>
+		for (let i = 0; i < arr.length; i++) {
+			records.push(buildPointsRecord(arr[i]))
+		}
+	}
+	return {
+		records: records,
+		total: toNumber(obj['total']),
+		page: toNumber(obj['page']),
+		page_size: toNumber(obj['page_size']),
+	} as PointsRecordListResult
+}
+
+/** mock 积分余额（网络不可用时回退） */
+function getMockPointsBalance() : PointsBalance {
+	return {
+		total_points: 42,
+		today_earned: 7,
+		level: 'bronze',
+		level_name: '青铜学员',
+		next_level_points: 100,
+	} as PointsBalance
+}
+
+/** mock 积分明细列表（网络不可用时回退） */
+function getMockPointsRecordList() : PointsRecordListResult {
+	return {
+		records: [
+			{ record_id: 1, action: '签到', points: 7, description: '每日签到', created_at: '2026-08-22', source_type: 'check_in', source_id: 0 } as PointsRecord,
+			{ record_id: 2, action: '浏览课程', points: 2, description: '浏览课程《叉车基础操作》第一章', created_at: '2026-08-21', source_type: 'course_view', source_id: 1 } as PointsRecord,
+			{ record_id: 3, action: '签到', points: 7, description: '每日签到', created_at: '2026-08-20', source_type: 'check_in', source_id: 0 } as PointsRecord,
+		],
+		total: 3,
+		page: 1,
+		page_size: 20,
+	} as PointsRecordListResult
+}
+
+/**
+ * 获取积分余额
+ */
+export function getPointsBalanceApi() : Promise<PointsBalance> {
+	return get('/points/balance').then((data : UTSJSONObject) : PointsBalance => {
+		return buildPointsBalance(data)
+	}).catch((e) : PointsBalance => {
+		console.warn('[getPointsBalanceApi] network failed, using mock data:', e)
+		return getMockPointsBalance()
+	})
+}
+
+/**
+ * 获取积分明细列表
+ * @param page 页码，默认 1
+ * @param pageSize 每页条数，默认 20
+ * @param type 类型过滤：'all' 全部，'income' 收入，'expense' 支出
+ * @param sourceType 来源过滤：'all' 全部，'check_in' 签到，'course_view' 浏览课程
+ */
+export function getPointsRecordListApi(
+	page : number = 1,
+	pageSize : number = 20,
+	type : string = 'all',
+	sourceType : string = 'all'
+) : Promise<PointsRecordListResult> {
+	const params : UTSJSONObject = {
+		page: page.toString(),
+		page_size: pageSize.toString(),
+		type: type,
+		source_type: sourceType,
+	}
+	return get('/points/records', params).then((data : UTSJSONObject) : PointsRecordListResult => {
+		return buildPointsRecordListResult(data)
+	}).catch((e) : PointsRecordListResult => {
+		console.warn('[getPointsRecordListApi] network failed, using mock data:', e)
+		return getMockPointsRecordList()
+	})
+}
+
+/**
+ * 上报浏览课程章节积分
+ * @param courseId 课程 ID
+ * @param chapterId 章节 ID
+ */
+export function reportCourseViewPointsApi(courseId : number, chapterId : number) : Promise<UTSJSONObject> {
+	const payload : UTSJSONObject = {
+		course_id: courseId,
+		chapter_id: chapterId,
+	}
+	return post('/points/course-view', payload)
+}
