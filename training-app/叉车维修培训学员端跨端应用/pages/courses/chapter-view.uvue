@@ -129,6 +129,7 @@
     import { goBack } from '../../utils/navigation'
     import { parseMarkdown } from '../../utils/markdown'
     import { getCourseDetailApi, getChapterDetailApi, updateCourseProgressApi } from '../../api/course'
+    import { reportCourseViewPointsApi } from '../../api/points'
     import type { ChapterDetail, ChapterFile, CourseDetail, MarkdownBlock } from '../../types/index'
 
     const statusBarHeight = useStatusBarHeight()
@@ -275,11 +276,27 @@
             }
             updateNavTitles()
             beginStudy()
+            // 上报浏览课程章节积分
+            reportCourseViewPoints()
         } catch (e) {
             console.error('[chapter-view] load failed:', e)
         } finally {
             loading.value = false
         }
+    }
+
+    // 上报浏览课程章节积分（静默上报，不打扰用户）
+    function reportCourseViewPoints() : void {
+        if (courseId.value <= 0 || chapterId.value <= 0) return
+        reportCourseViewPointsApi(courseId.value, chapterId.value).then((res) => {
+            const pointsEarned = res['points_earned']
+            if (pointsEarned != null && pointsEarned as number > 0) {
+                console.log('[chapter-view] 获得浏览积分:', pointsEarned)
+                // 可以在这里显示一个轻提示，但为了不打扰用户学习，只打印日志
+            }
+        }).catch((e) => {
+            console.warn('[chapter-view] 上报浏览积分失败:', e)
+        })
     }
 
     function onBack() : void {

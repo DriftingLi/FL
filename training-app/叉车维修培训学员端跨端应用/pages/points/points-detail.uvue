@@ -12,6 +12,7 @@
         <scroll-view class="content-scroll" scroll-y="true">
             <!-- 积分余额卡片 -->
             <view class="balance-card">
+                <text class="balance-title">我的积分</text>
                 <text class="balance-value">{{ pointsBalance }}</text>
                 <view class="balance-right">
                     <text class="balance-label">积分规则</text>
@@ -31,9 +32,6 @@
                 </view>
                 <view :class="['tab-item', { active: currentTab == 'expense' }]" @click="onTabClick('expense')">
                     <text class="tab-text">积分支出</text>
-                </view>
-                <view :class="['tab-item', { active: currentTab == 'expiring' }]" @click="onTabClick('expiring')">
-                    <text class="tab-text">即将过期</text>
                 </view>
             </view>
 
@@ -55,12 +53,21 @@
                 </view>
                 <view class="detail-list">
                     <view v-for="(item, idx) in pointsList" :key="idx" class="detail-item">
-                        <view class="detail-left">
-                            <text class="detail-action">{{ item.action }}</text>
-                            <text class="detail-date">{{ item.date }}</text>
+                        <view class="detail-icon-wrap" :class="'icon-' + item.source_type">
+                            <text class="detail-icon">{{ getSourceTypeIcon(item.source_type) }}</text>
                         </view>
-                        <view class="detail-right">
-                            <text class="detail-points">{{ item.points > 0 ? '+' : '' }}{{ item.points }}</text>
+                        <view class="detail-content">
+                            <view class="detail-row">
+                                <text class="detail-action">{{ item.action }}</text>
+                                <text class="detail-points">{{ item.points > 0 ? '+' : '' }}{{ item.points }}</text>
+                            </view>
+                            <view class="detail-row">
+                                <text class="detail-desc">{{ item.description }}</text>
+                            </view>
+                            <view class="detail-row">
+                                <text class="detail-source">{{ getSourceTypeText(item.source_type) }}</text>
+                                <text class="detail-date">{{ item.created_at }}</text>
+                            </view>
                         </view>
                     </view>
                 </view>
@@ -81,61 +88,94 @@
 </template>
 
 <script setup lang="uts">
-    import { ref } from 'vue'
+    import { ref, computed } from 'vue'
     import { onShow } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
+    import { getPointsBalanceApi, getPointsRecordListApi } from '../../api/points'
+    import type { PointsBalance, PointsRecord } from '../../types/index'
 
     type FilterOption = {
         label : string
         value : string
     }
 
-    type PointsItem = {
-        action : string
-        date : string
-        points : number
-    }
-
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
-    const pointsBalance = ref<number>(42)
+    const pointsBalance = ref<number>(0)
     const currentTab = ref<string>('income')
     const currentFilter = ref<string>('all')
-    const pointsList = ref<PointsItem[]>([])
+    const pointsList = ref<PointsRecord[]>([])
     const page = ref<number>(1)
     const pageSize = 20
     const loading = ref<boolean>(false)
     const noMore = ref<boolean>(false)
+    const loadingBalance = ref<boolean>(false)
 
     const filterOptions : FilterOption[] = [
         { label: '全部', value: 'all' },
-        { label: '已获得', value: 'earned' },
-        { label: '已消耗', value: 'spent' },
-        { label: '已过期', value: 'expired' },
+        { label: '签到', value: 'check_in' },
+        { label: '浏览课程', value: 'course_view' },
     ]
 
-    // 模拟数据
-    function loadMockData() : void {
-        pointsList.value = [
-            { action: '签到', date: '2026/08/22', points: 7 },
-            { action: '签到', date: '2026/08/22', points: 7 },
-            { action: '签到', date: '2026/08/21', points: 7 },
-            { action: '签到', date: '2026/08/20', points: 7 },
-            { action: '签到', date: '2026/08/19', points: 7 },
-            { action: '签到', date: '2026/08/18', points: 7 },
-        ]
+    /** 根据当前 Tab 计算查询类型 */
+    const queryType = computed<string>(() : string => {
+        if (currentTab.value == 'income') return 'income'
+        if (currentTab.value == 'expense') return 'expense'
+        return 'all'
+    })
+
+    /** 加载积分余额 */
+    function loadBalance() : void {
+        loadingBalance.value = true
+        getPointsBalanceApi().then((data : PointsBalance) => {
+            pointsBalance.value = data.total_points
+        }).catch((e) => {
+            console.warn('[points-detail] load balance failed:', e)
+        }).finally(() => {
+            loadingBalance.value = false
+        })
+    }
+
+    /** 加载积分明细列表 */
+    function loadRecords(isRefresh : boolean = false) : void {
+        if (loading.value) return
+        if (isRefresh) {
+            page.value = 1
+            noMore.value = false
+            pointsList.value = [] as PointsRecord[]
+        }
+        if (noMore.value) return
+
+        loading.value = true
+        getPointsRecordListApi(page.value, pageSize, queryType.value, currentFilter.value).then((data) => {
+            if (isRefresh) {
+                pointsList.value = data.records
+            } else {
+                pointsList.value = pointsList.value.concat(data.records)
+            }
+            if (pointsList.value.length >= data.total || data.records.length < pageSize) {
+                noMore.value = true
+            }
+            page.value++
+        }).catch((e) => {
+            console.warn('[points-detail] load records failed:', e)
+        }).finally(() => {
+            loading.value = false
+        })
     }
 
     function onTabClick(tab : string) : void {
         if (currentTab.value == tab) return
         currentTab.value = tab
+        loadRecords(true)
     }
 
     function onFilterClick(filter : string) : void {
         if (currentFilter.value == filter) return
         currentFilter.value = filter
+        loadRecords(true)
     }
 
     function onBack() : void {
@@ -146,8 +186,27 @@
         uni.navigateTo({ url: '/pages/points/task-center' })
     }
 
+    /** 获取来源类型显示文本 */
+    function getSourceTypeText(sourceType : string) : string {
+        if (sourceType == 'check_in') return '签到'
+        if (sourceType == 'course_view') return '浏览课程'
+        if (sourceType == 'exam_pass') return '通过考试'
+        if (sourceType == 'course_complete') return '完成课程'
+        return '其他'
+    }
+
+    /** 获取来源类型图标 */
+    function getSourceTypeIcon(sourceType : string) : string {
+        if (sourceType == 'check_in') return ''
+        if (sourceType == 'course_view') return ''
+        if (sourceType == 'exam_pass') return ''
+        if (sourceType == 'course_complete') return ''
+        return ''
+    }
+
     onShow(() => {
-        loadMockData()
+        loadBalance()
+        loadRecords(true)
     })
 </script>
 
@@ -199,31 +258,35 @@
         margin: 24rpx;
         padding: 32rpx;
         border-radius: 16rpx;
-        background-color: #ffffff;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.05);
+        background: linear-gradient(135deg, #2979ff, #1565c0);
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .balance-title {
+        font-size: 26rpx;
+        color: rgba(255, 255, 255, 0.8);
+        margin-bottom: 12rpx;
     }
 
     .balance-value {
         font-size: 56rpx;
         font-weight: bold;
-        color: #333333;
-        letter-spacing: 2rpx;
+        color: #ffffff;
+        margin-bottom: 16rpx;
     }
 
     .balance-right {
         flex-direction: row;
         align-items: center;
+        background-color: rgba(255, 255, 255, 0.2);
+        padding: 8rpx 16rpx;
+        border-radius: 16rpx;
     }
 
     .balance-label {
-        font-size: 26rpx;
-        color: #2979ff;
-        padding: 8rpx 16rpx;
-        border: 1rpx solid #2979ff;
-        border-radius: 24rpx;
+        font-size: 24rpx;
+        color: #ffffff;
     }
 
     .expire-tip {
@@ -325,37 +388,81 @@
         padding: 32rpx;
         margin-bottom: 16rpx;
         flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.03);
+        align-items: flex-start;
     }
 
-    .detail-left {
-        flex-direction: column;
+    .detail-icon-wrap {
+        width: 72rpx;
+        height: 72rpx;
+        border-radius: 12rpx;
+        align-items: center;
+        justify-content: center;
+        margin-right: 20rpx;
+        flex-shrink: 0;
+    }
+
+    .icon-check_in {
+        background-color: #e8f5e9;
+    }
+
+    .icon-course_view {
+        background-color: #e3f2fd;
+    }
+
+    .icon-exam_pass {
+        background-color: #fff3e0;
+    }
+
+    .icon-course_complete {
+        background-color: #fce4ec;
+    }
+
+    .detail-icon {
+        font-size: 36rpx;
+    }
+
+    .detail-content {
         flex: 1;
+        flex-direction: column;
+    }
+
+    .detail-row {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8rpx;
     }
 
     .detail-action {
-        font-size: 32rpx;
+        font-size: 30rpx;
+        font-weight: bold;
         color: #333333;
-        margin-bottom: 12rpx;
-        font-weight: 500;
-    }
-
-    .detail-date {
-        font-size: 24rpx;
-        color: #999999;
-    }
-
-    .detail-right {
-        flex-direction: row;
-        align-items: center;
     }
 
     .detail-points {
-        font-size: 36rpx;
+        font-size: 32rpx;
         font-weight: bold;
         color: #2979ff;
+    }
+
+    .detail-desc {
+        font-size: 26rpx;
+        color: #666666;
+        lines: 2;
+        text-overflow: ellipsis;
+    }
+
+    .detail-source {
+        font-size: 22rpx;
+        color: #999999;
+        background-color: #f5f5f5;
+        padding: 4rpx 12rpx;
+        border-radius: 6rpx;
+    }
+
+    .detail-date {
+        font-size: 22rpx;
+        color: #999999;
     }
 
     .empty-tip {

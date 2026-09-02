@@ -1038,6 +1038,36 @@ export type CredentialSwitchResult = {
     credential : CredentialItem | null  // 切换后的当前证件
 }
 
+// ========== 积分模块类型 ======
+
+/** 积分余额 */
+export type PointsBalance = {
+    total_points : number      // 总积分
+    today_earned : number      // 今日获得积分
+    level : string             // 积分等级代码
+    level_name : string        // 积分等级名称
+    next_level_points : number // 升级到下一等级所需积分
+}
+
+/** 积分明细记录 */
+export type PointsRecord = {
+    record_id : number         // 记录 ID
+    action : string            // 行为描述（签到、浏览课程等）
+    points : number            // 获得的积分（正数为获得，负数为消耗）
+    description : string       // 详细描述
+    created_at : string        // 创建时间
+    source_type : string       // 来源类型：check_in, course_view, exam_pass 等
+    source_id : number         // 来源 ID（课程 ID、考试 ID 等）
+}
+
+/** 积分明细列表结果 */
+export type PointsRecordListResult = {
+    records : PointsRecord[]   // 记录列表
+    total : number             // 总记录数
+    page : number              // 当前页码
+    page_size : number         // 每页条数
+}
+
 // ========== 简历模块（GET/PUT /resume，对齐后端 JobCardDTO / JobCardInput） ==========
 
 /** 工作经历项（对齐后端 resume_experiences） */
