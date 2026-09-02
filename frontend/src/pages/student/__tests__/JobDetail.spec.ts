@@ -54,3 +54,28 @@ describe('JobDetail 投递确认弹窗（#452 决定 1 UI 落点）', () => {
     expect(jobApi.applyJob).toHaveBeenCalledWith(1)
   })
 })
+
+describe('JobDetail 投递按钮三态（#488）', () => {
+  it('已投递：按钮禁用并提示「你已投递过该职位」', async () => {
+    vi.mocked(jobApi.getPublicJob).mockResolvedValue({ ...job, apply_state: 'applied' } as any)
+    const wrapper = mountPage()
+    await flushPromises()
+    expect(wrapper.text()).toContain('你已投递过该职位')
+    expect(wrapper.text()).not.toContain('确认投递')
+  })
+
+  it('未录用冷却中：按钮禁用并提示剩余天数', async () => {
+    vi.mocked(jobApi.getPublicJob).mockResolvedValue({ ...job, apply_state: 'not_hired', cooldown_days: 5 } as any)
+    const wrapper = mountPage()
+    await flushPromises()
+    expect(wrapper.text()).toContain('企业标记为不合适，5 天后可再次投递')
+  })
+
+  it('可投递：显示投递按钮并弹确认框', async () => {
+    vi.mocked(jobApi.getPublicJob).mockResolvedValue({ ...job, apply_state: 'none' } as any)
+    const wrapper = mountPage()
+    await flushPromises()
+    const applyBtn = wrapper.findAll('button').find((b) => b.text().trim() === '投递')!
+    expect(applyBtn.exists()).toBe(true)
+  })
+})

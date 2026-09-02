@@ -79,6 +79,9 @@ type JobPostingDTO struct {
 	CompanyName   string `json:"company_name,omitempty"`
 	BusinessScope string `json:"business_scope,omitempty"`
 	ContactName   string `json:"contact_name,omitempty"`
+	// 学员视角投递状态（#488）：none 可投递 / applied 已投递 / not_hired 未录用（30 天冷却中）
+	ApplyState   string `json:"apply_state,omitempty"`
+	CooldownDays int    `json:"cooldown_days,omitempty"` // not_hired 时距可再投天数（向上取整）
 }
 
 // validate 校验职位入参（岗位字典业务层必填）。
@@ -238,6 +241,29 @@ func (s *JobPostingService) ToggleStatus(recruiterID, jobID int) (*JobPostingDTO
 	return &dto, nil
 }
 
+// GetForStudent 学员职位详情（#488）：仅 open 且未强制下架，回填学员视角投递状态。
+// jobVisibleToStudent 学员可见性谓词：open 且未被强制下架（Get 与 GetForStudent 共用）。
+func jobVisibleToStudent(m *model.JobPosting) bool {
+	return m.Status == "open" && !m.ForcedOffline
+}
+
+func (s *JobPostingService) GetForStudent(studentUserID, jobID int) (*JobPostingDTO, error) {
+	var m model.JobPosting
+	if err := s.db.First(&m, jobID).Error; err != nil {
+		return nil, ErrJobNotFound
+	}
+	if !jobVisibleToStudent(&m) {
+		return nil, ErrJobNotFound
+	}
+	dto := s.toDTO(&m)
+	if studentUserID > 0 {
+		list := []JobPostingDTO{dto}
+		s.fillApplyStates(studentUserID, list)
+		dto = list[0]
+	}
+	return &dto, nil
+}
+
 // JobListParams 职位列表筛选参数（学员侧与企业管理侧共用）。
 type JobListParams struct {
 	Page       int
@@ -247,6 +273,8 @@ type JobListParams struct {
 	SalaryMin  *int
 	SalaryMax  *int
 	Experience string
+	// StudentUserID 学员视角（#488）：>0 时列表项回填 apply_state/cooldown_days。
+	StudentUserID int
 	// MineOnly 只看自己的职位（企业管理侧）。
 	MineOnly bool
 	// RecruiterID 按企业过滤（管理端巡检用；>0 时生效）。
@@ -312,7 +340,56 @@ func (s *JobPostingService) List(recruiterID int, p JobListParams) (*JobListResu
 	for i := range rows {
 		items = append(items, s.toDTO(&rows[i]))
 	}
+	// #488：学员视角批量回填投递状态
+	s.fillApplyStates(p.StudentUserID, items)
 	return &JobListResult{Items: items, Total: total}, nil
+}
+
+// fillApplyStates 批量回填学员视角投递状态（#488：单次批量 join，禁止 N+1）。
+// 入参 dtos 为学员可见的职位列表；对每个职位批量查该学员的投递记录判定状态。
+func (s *JobPostingService) fillApplyStates(studentUserID int, dtos []JobPostingDTO) {
+	if studentUserID <= 0 || len(dtos) == 0 {
+		return
+	}
+	ids := make([]int, 0, len(dtos))
+	for _, d := range dtos {
+		ids = append(ids, d.ID)
+	}
+	// 批量 join：该学员对这些职位的最近投递（applied 或 rejected-with-cooldown）
+	var apps []model.JobApplication
+	if err := s.db.Where("job_posting_id IN ? AND student_user_id = ?", ids, studentUserID).
+		Order("created_at DESC").Find(&apps).Error; err != nil {
+		return
+	}
+	byJob := make(map[int][]model.JobApplication, len(dtos))
+	for _, a := range apps {
+		byJob[a.JobPostingID] = append(byJob[a.JobPostingID], a)
+	}
+	now := clock.Now()
+	for i := range dtos {
+		appList := byJob[dtos[i].ID]
+		if len(appList) == 0 {
+			continue
+		}
+		// 只取最新一条投递判定（created_at DESC 首行）：withdrawn 后可立即重投（恢复可投状态），
+		// 若回看更早的 applied 行会把「已撤回」错标成 applied（Standards 审查 #488 high）。
+		latest := appList[0]
+		switch latest.Status {
+		case "applied":
+			dtos[i].ApplyState = "applied"
+		case "rejected":
+			// 冷却 30 天（沿用既有规则），冷却期内 not_hired，期满恢复可投
+			if latest.RejectedAt != nil {
+				remaining := 30*24*time.Hour - now.Sub(*latest.RejectedAt)
+				if remaining > 0 {
+					dtos[i].ApplyState = "not_hired"
+					dtos[i].CooldownDays = int(remaining.Hours()/24) + 1
+				}
+			}
+		case "withdrawn":
+			// 撤回后可立即重投：不设状态（none）
+		}
+	}
 }
 
 // Get 职位详情。recruiterID>0 表示企业侧（可看自己的 closed/强制下架历史），
@@ -326,7 +403,7 @@ func (s *JobPostingService) Get(recruiterID, jobID int) (*JobPostingDTO, error) 
 		if m.RecruiterID != recruiterID {
 			return nil, ErrJobNotYours
 		}
-	} else if m.Status != "open" || m.ForcedOffline {
+	} else if !jobVisibleToStudent(&m) {
 		return nil, ErrJobNotFound
 	}
 	dto := s.toDTO(&m)
