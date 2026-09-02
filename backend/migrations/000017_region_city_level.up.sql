@@ -10,6 +10,7 @@
 CREATE OR REPLACE FUNCTION normalize_job_card_regions() RETURNS void AS $$
 DECLARE
     rec RECORD;
+    elem TEXT;
     new_arr JSONB := '[]'::jsonb;
     out_region TEXT;
     parts TEXT[];
