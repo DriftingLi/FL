@@ -54,7 +54,7 @@
                                 <!-- 双行（技能等级证） -->
                                 <view v-else class="cert-dropdown-chip-double">
                                     <text class="cert-dropdown-chip-level"
-                                        :class="{ 'cert-dropdown-chip-text--active': currentCredentialId === item.id }">{{ levelNames[item.level!] }}</text>
+                                        :class="{ 'cert-dropdown-chip-text--active': currentCredentialId === item.id }">{{ levelNames[item.level!.toString()] }}</text>
                                     <!-- <text class="cert-dropdown-chip-desc"
                                         :class="{ 'cert-dropdown-chip-desc--active': currentCredentialId === item.id }">{{ item.name }}</text> -->
                                 </view>
@@ -258,7 +258,7 @@
 
     // ---- 通知未读数 ----
     const unreadCount = ref<number>(0)
-    let unreadTimer : any | null = null
+    let unreadTimer : number | null = null
 
     async function loadUnreadCount() : Promise<void> {
         try {
@@ -296,12 +296,12 @@
     const isSwitching = ref<boolean>(false)
 
     // 等级数字转中文
-    const levelNames : Record<number, string> = {
-        5: '五级',
-        4: '四级',
-        3: '三级',
-        2: '二级',
-        1: '一级',
+    const levelNames : UTSJSONObject = {
+        '5': '五级',
+        '4': '四级',
+        '3': '三级',
+        '2': '二级',
+        '1': '一级',
     }
 
     /** 加载证件数据 */
