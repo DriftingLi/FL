@@ -229,7 +229,8 @@ export function request<T>(options : RequestOptions) : Promise<UTSJSONObject> {
         }
 
         /** 单次请求；401 刷新成功后带新 token 重试一次（isRetry=true 时不再刷新） */
-        const send = (reqHeader : UTSJSONObject, isRetry : boolean) => {
+        let send : (reqHeader : UTSJSONObject, isRetry : boolean) => void
+        send = (reqHeader : UTSJSONObject, isRetry : boolean) => {
             uni.request({
                 url: fullURL,
                 method: method,

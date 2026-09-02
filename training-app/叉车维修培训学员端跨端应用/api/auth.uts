@@ -25,6 +25,7 @@ function buildUserInfo(obj : UTSJSONObject) : UserInfo {
 			username: username,
 			name: name,
 			role: role,
+			avatar_url: '',
 		} as UserInfo
 		// 兼容两种后端字段名：/auth/me 返回 avatar_url，/auth/wx-login 返回 avatar
 		const avatarUrlRaw = obj['avatar_url']
