@@ -257,6 +257,10 @@ func cityLevelRegion(region string) string {
 		return "-"
 	}
 	parts := strings.Split(r, "/")
+	// #486：直辖市一段式——即使存量出现「北京市/东城区」等两段，也只保留一段（区不入 PDF）
+	if regionMunicipalities[parts[0]] {
+		return parts[0]
+	}
 	if len(parts) >= 2 {
 		return strings.Join(parts[:2], "/")
 	}

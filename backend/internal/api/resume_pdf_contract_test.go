@@ -126,7 +126,7 @@ func TestResumePDFContract(t *testing.T) {
 	}
 
 	// ===== 招聘者正常取流：打码口径 =====
-	rec = doWithToken(t, r, recruiterToken, http.MethodGet, "/api/recruit/resumes/"+strconv.Itoa(stu1.ID)+"/pdf?test_compress=false", nil)
+	rec = doWithToken(t, r, recruiterToken, http.MethodGet, "/api/recruit/resumes/"+strconv.Itoa(stu1.ID)+"/pdf", nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("招聘者 PDF 应 200, 实际 %d %s", rec.Code, rec.Body.String())
 	}
@@ -164,7 +164,7 @@ func TestResumePDFContract(t *testing.T) {
 	}
 
 	// ===== 学员本人端点 =====
-	rec = doWithToken(t, r, studentToken, http.MethodGet, "/api/resume/pdf?test_compress=false", nil)
+	rec = doWithToken(t, r, studentToken, http.MethodGet, "/api/resume/pdf", nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("学员本人 PDF 应 200, 实际 %d %s", rec.Code, rec.Body.String())
 	}

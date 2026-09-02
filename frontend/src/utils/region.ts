@@ -10,18 +10,22 @@ export interface RegionOption {
   children?: RegionOption[]
 }
 
+// 直辖市名单：存储/展示只有一段（北京市/天津市/上海市/重庆市），二级区名不进入市级级联。
+const MUNICIPALITY_NAMES = ['北京市', '天津市', '上海市', '重庆市']
+
 /** 省级级联选项（省 → 市；直辖市叶子）。value 取 label（与存储契约一致）。 */
 export function buildCityLevelRegionOptions(): RegionOption[] {
   return (pcTextArr || []).map((prov: any) => {
-    const children = (prov.children || [])
-      // 直辖市二级「市辖区/区」不展开为市级（#486 特判：直辖市只有一段）
-      .filter((c: any) => c.label !== '市辖区')
-      .map((c: any) => ({ label: c.label, value: c.label }))
+    // #486：直辖市按名单特判为叶子——pcTextArr 中其 children 是区名（非市），
+    // 若展开会让学员存出「北京市/东城区」两段，回显与筛选契约（一段式）双双击穿。
+    if (MUNICIPALITY_NAMES.includes(prov.label)) {
+      return { label: prov.label, value: prov.label }
+    }
+    const children = (prov.children || []).map((c: any) => ({ label: c.label, value: c.label }))
     return {
       label: prov.label,
       value: prov.label,
-      // 直辖市无 children（叶子）：北京/上海/天津/重庆
-      ...(children.length ? { children } : {})
+      children
     }
   })
 }
@@ -29,10 +33,15 @@ export function buildCityLevelRegionOptions(): RegionOption[] {
 /** 按 / 拆分存储串为路径段（回显用；直辖市一段）。 */
 export function splitRegionPath(region: string): string[] {
   if (!region) return []
-  return region
+  const parts = region
     .split('/')
     .map((s) => s.trim())
     .filter(Boolean)
+  // #486：直辖市只有一段——存量若存「北京市/东城区」两段，回显只取直辖市节点（区不入级联路径）
+  if (parts.length >= 2 && MUNICIPALITY_NAMES.includes(parts[0])) {
+    return [parts[0]]
+  }
+  return parts
 }
 
 /** 路径段 → 存储串。 */

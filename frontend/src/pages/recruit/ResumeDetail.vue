@@ -138,15 +138,17 @@ async function loadContact() {
   }
 }
 
-// #489：学员同意后无需手动刷新——approved 状态时轮询明文（10s 间隔，最多 6 次）
+// #489：学员同意后无需手动刷新——pending/approved 时轮询明文（10s 间隔，pending 等待同意最长 60 次）
 let pollTimer: any = null
 function startApprovedPolling() {
   stopApprovedPolling()
-  if (data.value?.contact_state !== 'approved') return
+  const st = data.value?.contact_state
+  if (st !== 'approved' && st !== 'pending') return
+  const maxTries = st === 'pending' ? 60 : 6
   let count = 0
   pollTimer = setInterval(async () => {
     count++
-    if (count > 6) {
+    if (count > maxTries) {
       stopApprovedPolling()
       return
     }
@@ -156,7 +158,13 @@ function startApprovedPolling() {
         contact.value = res as any
         stopApprovedPolling()
       }
-    } catch {}
+    } catch (e: any) {
+      // 学员撤回授权 → 403：明文立即消失并停止轮询（撤回实时生效，Standards 审查）
+      if (e?.response?.status === 403 || String(e?.message || '').includes('无有效授权')) {
+        contact.value = null
+        stopApprovedPolling()
+      }
+    }
   }, 10000)
 }
 function stopApprovedPolling() {

@@ -242,12 +242,17 @@ func (s *JobPostingService) ToggleStatus(recruiterID, jobID int) (*JobPostingDTO
 }
 
 // GetForStudent 学员职位详情（#488）：仅 open 且未强制下架，回填学员视角投递状态。
+// jobVisibleToStudent 学员可见性谓词：open 且未被强制下架（Get 与 GetForStudent 共用）。
+func jobVisibleToStudent(m *model.JobPosting) bool {
+	return m.Status == "open" && !m.ForcedOffline
+}
+
 func (s *JobPostingService) GetForStudent(studentUserID, jobID int) (*JobPostingDTO, error) {
 	var m model.JobPosting
 	if err := s.db.First(&m, jobID).Error; err != nil {
 		return nil, ErrJobNotFound
 	}
-	if m.Status != "open" || m.ForcedOffline {
+	if !jobVisibleToStudent(&m) {
 		return nil, ErrJobNotFound
 	}
 	dto := s.toDTO(&m)
@@ -366,21 +371,23 @@ func (s *JobPostingService) fillApplyStates(studentUserID int, dtos []JobPosting
 		if len(appList) == 0 {
 			continue
 		}
-		// 取最新的 applied 或 rejected 判定
-		for _, a := range appList {
-			if a.Status == "applied" {
-				dtos[i].ApplyState = "applied"
-				break
-			}
-			if a.Status == "rejected" && a.RejectedAt != nil {
-				// 冷却 30 天（沿用既有规则），冷却期内 not_hired，期满恢复可投
-				remaining := 30*24*time.Hour - now.Sub(*a.RejectedAt)
+		// 只取最新一条投递判定（created_at DESC 首行）：withdrawn 后可立即重投（恢复可投状态），
+		// 若回看更早的 applied 行会把「已撤回」错标成 applied（Standards 审查 #488 high）。
+		latest := appList[0]
+		switch latest.Status {
+		case "applied":
+			dtos[i].ApplyState = "applied"
+		case "rejected":
+			// 冷却 30 天（沿用既有规则），冷却期内 not_hired，期满恢复可投
+			if latest.RejectedAt != nil {
+				remaining := 30*24*time.Hour - now.Sub(*latest.RejectedAt)
 				if remaining > 0 {
 					dtos[i].ApplyState = "not_hired"
 					dtos[i].CooldownDays = int(remaining.Hours()/24) + 1
 				}
-				break
 			}
+		case "withdrawn":
+			// 撤回后可立即重投：不设状态（none）
 		}
 	}
 }
@@ -396,7 +403,7 @@ func (s *JobPostingService) Get(recruiterID, jobID int) (*JobPostingDTO, error) 
 		if m.RecruiterID != recruiterID {
 			return nil, ErrJobNotYours
 		}
-	} else if m.Status != "open" || m.ForcedOffline {
+	} else if !jobVisibleToStudent(&m) {
 		return nil, ErrJobNotFound
 	}
 	dto := s.toDTO(&m)

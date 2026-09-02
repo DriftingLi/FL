@@ -29,7 +29,10 @@ func TestStudentSeesCompanyContactContract(t *testing.T) {
 	card := model.JobCard{
 		UserID: stu.ID, RealName: "张三丰", ContactPhone: "13800009999", Wechat: "zhang_wx", Region: "江苏省/苏州市",
 		ExpectedRegions: model.JSONB([]byte(`["江苏省/苏州市"]`)), Visibility: "open",
-		CreatedAt: now, UpdatedAt: now,
+		ResumeFileURL:        "/static/uploads/resumes/see.pdf",
+		Photos:               model.JSONB([]byte(`["http://example.com/work1.jpg"]`)),
+		ResumeCertifications: model.JSONB([]byte(`[{"credential_id":1,"cert_no":"N1","expire_date":"2028-01-01","image_urls":["http://example.com/cert1.jpg"]}]`)),
+		CreatedAt:            now, UpdatedAt: now,
 	}
 	if err := db.Create(&card).Error; err != nil {
 		t.Fatalf("create card: %v", err)
@@ -121,6 +124,15 @@ func TestStudentSeesCompanyContactContract(t *testing.T) {
 	}
 	if !stringsContains(rawApproved, "recruiter") {
 		t.Fatalf("approved 应含 source=recruiter")
+	}
+
+	// #489：授权后 GetContact 透出上传附件/工作照/证书原图（明文面）
+	rec = doWithToken(t, r, recruiterToken, http.MethodGet, "/api/recruit/resumes/"+strconv.Itoa(stu.ID)+"/contact", nil)
+	rawFull := rec.Body.String()
+	for _, needle := range []string{"/static/uploads/resumes/see.pdf", "http://example.com/work1.jpg", "http://example.com/cert1.jpg"} {
+		if !stringsContains(rawFull, needle) {
+			t.Fatalf("授权后 GetContact 应透出 %q, body=%s", needle, rawFull)
+		}
 	}
 
 	// 撤回 → revoked：联系方式消失

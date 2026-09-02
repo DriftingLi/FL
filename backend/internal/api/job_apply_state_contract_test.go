@@ -56,6 +56,22 @@ func TestJobApplyStateContract(t *testing.T) {
 	if err := db.Create(&appC).Error; err != nil {
 		t.Fatalf("create appC: %v", err)
 	}
+	// 第 5 个职位 E：withdrawn（撤回后可立即重投 → none）
+	jE := model.JobPosting{RecruiterID: 1, Title: "职位E", PositionID: &pos.PositionID, Status: "open", PublishedAt: now, CreatedAt: now, UpdatedAt: now}
+	if err := db.Create(&jE).Error; err != nil {
+		t.Fatalf("create jobE: %v", err)
+	}
+	var e model.JobPosting
+	db.First(&e, "title = ?", "职位E")
+	appE := model.JobApplication{JobPostingID: e.ID, RecruiterID: 1, StudentUserID: stu.ID, Status: "withdrawn", ResumeUpdatedAt: now, WithdrawnAt: &now, CreatedAt: now, UpdatedAt: now}
+	if err := db.Create(&appE).Error; err != nil {
+		t.Fatalf("create appE: %v", err)
+	}
+	// 但历史上 E 曾 applied（先 applied 后 withdrawn 的正常时序）——模拟先 applied 行存在
+	appE0 := model.JobApplication{JobPostingID: e.ID, RecruiterID: 1, StudentUserID: stu.ID, Status: "applied", ResumeUpdatedAt: now, CreatedAt: now.Add(-2 * time.Hour), UpdatedAt: now.Add(-2 * time.Hour)}
+	if err := db.Create(&appE0).Error; err != nil {
+		t.Fatalf("create appE0: %v", err)
+	}
 	// 第 4 个职位 D：rejected 31 天前 → 冷却期满可重投（none）
 	jD := model.JobPosting{RecruiterID: 1, Title: "职位D", PositionID: &pos.PositionID, Status: "open", PublishedAt: now, CreatedAt: now, UpdatedAt: now}
 	if err := db.Create(&jD).Error; err != nil {
@@ -112,6 +128,9 @@ func TestJobApplyStateContract(t *testing.T) {
 	}
 	if state[d.ID] != "" && state[d.ID] != "none" {
 		t.Fatalf("职位D 冷却期满应可投(none), 实际 %s", state[d.ID])
+	}
+	if state[e.ID] != "" && state[e.ID] != "none" {
+		t.Fatalf("职位E 撤回后应可投(none), 实际 %s", state[e.ID])
 	}
 
 	// 详情：已投职位 C 带 cooldown_days

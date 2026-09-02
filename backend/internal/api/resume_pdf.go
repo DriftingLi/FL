@@ -40,6 +40,15 @@ func RegisterResumePDFRoutes(rg *gin.RouterGroup, rd RouterDeps, recruitSvc *ser
 	studentG.GET("/pdf", h.MyResumePDF)
 }
 
+// pdfCompress 决定是否压缩：测试模式（gin.TestMode）关闭压缩便于契约测试做字节级文本断言；
+// 生产/开发默认压缩（体积小）。不暴露公共 query 钩子（Standards 审查 #485）。
+func pdfCompress(c *gin.Context) bool {
+	if gin.Mode() == gin.TestMode {
+		return false
+	}
+	return true
+}
+
 // serveResumePDF 公共 PDF 响应出口：渲染 → inline 字节流。
 func (h *ResumePDFHandler) serveResumePDF(c *gin.Context, card *model.JobCard, compress bool) {
 	content, err := h.renderer.RenderResumePDF(card, compress)
@@ -82,7 +91,7 @@ func (h *ResumePDFHandler) RecruiterResumePDF(c *gin.Context) {
 	}
 	// 审计留痕：预览即一次查看
 	h.recruitSvc.LogView(middleware.CurrentUserID(c), uid)
-	h.serveResumePDF(c, card, c.Query("test_compress") != "false")
+	h.serveResumePDF(c, card, pdfCompress(c))
 }
 
 // MyResumePDF 学员预览自己的在线简历 GET /api/resume/pdf
@@ -106,5 +115,5 @@ func (h *ResumePDFHandler) MyResumePDF(c *gin.Context) {
 		response.ServerError(c, err.Error())
 		return
 	}
-	h.serveResumePDF(c, card, c.Query("test_compress") != "false")
+	h.serveResumePDF(c, card, pdfCompress(c))
 }
