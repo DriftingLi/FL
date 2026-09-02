@@ -30,8 +30,7 @@ export function useBiometric() {
         // #ifdef APP || MP-WEIXIN
         try {
             const res = await uni.checkIsSupportSoterAuthentication({})
-            const supportItems = res.supportMode
-            if (supportItems != null && supportItems.length > 0) {
+            if (res != null) {
                 isSupported.value = true
             }
         } catch (e) {
@@ -46,7 +45,7 @@ export function useBiometric() {
      * @param content 提示文案（H5 模拟弹窗用）
      * @returns 认证结果
      */
-    async function authenticate(content : string = '请验证身份') : Promise<boolean> {
+    async function authenticate(content : string) : Promise<boolean> {
         // #ifdef H5
         return new Promise<boolean>((resolve) => {
             uni.showModal({
@@ -98,6 +97,6 @@ export function useBiometric() {
     return {
         isSupported: isSupported,
         checkSupport: () => checkSupport(),
-        authenticate: (content : string = '请验证身份') => authenticate(content),
+        authenticate: (content : string) => authenticate(content),
     } as UseBiometricResult
 }

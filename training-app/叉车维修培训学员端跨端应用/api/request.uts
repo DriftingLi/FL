@@ -222,58 +222,70 @@ export function request<T>(options : RequestOptions) : Promise<UTSJSONObject> {
         const silent = options.silent ?? false
         const timeout = options.timeout ?? REQUEST_TIMEOUT
         const fullURL = resolveURL(options.url)
-        const header = buildHeader(options.header, silent)
 
         if (ENABLE_DEBUG_LOG) {
             console.log('[request] >>>', method, fullURL, 'data:', options.data)
         }
 
-        /** 单次 HTTP 请求 */
-        const doRequest = (reqHeader : UTSJSONObject, isRetry : boolean) => {
-            uni.request({
-                url: fullURL,
-                method: method,
-                data: options.data,
-                header: reqHeader,
-                timeout: timeout,
-                success: (res) => {
-                    if (ENABLE_DEBUG_LOG) {
-                        console.log('[request] <<<', res.statusCode, fullURL)
-                    }
-                    const statusCode = res.statusCode
-                    let body : UTSJSONObject
-                    try {
-                        body = res.data as UTSJSONObject
-                    } catch (e) {
-                        const msg = `请求失败 (${statusCode})`
-                        showError(msg, silent)
-                        reject(new Error(msg))
-                        return
-                    }
+        // 单次 HTTP 请求；401 刷新成功后带新 token 重试一次
+        doSingleRequest(fullURL, method, options.data, buildHeader(options.header, silent), timeout, options, false, resolve, reject)
+    })
+}
 
-                    if (handleStatus(statusCode, body, silent, '请求失败', resolve, reject)) return
+/** 单次 HTTP 请求（模块级函数，支持 401 刷新后重试） */
+function doSingleRequest(
+    url : string,
+    method : string,
+    data : UTSJSONObject | null,
+    reqHeader : UTSJSONObject,
+    timeout : number,
+    options : RequestOptions,
+    isRetry : boolean,
+    resolve : (value : UTSJSONObject) => void,
+    reject : (reason : any) => void
+) : void {
+    const silent = options.silent ?? false
+    uni.request({
+        url: url,
+        method: method,
+        data: data,
+        header: reqHeader,
+        timeout: timeout,
+        success: (res) => {
+            if (ENABLE_DEBUG_LOG) {
+                console.log('[request] <<<', res.statusCode, url)
+            }
+            const statusCode = res.statusCode
+            let body : UTSJSONObject
+            try {
+                body = res.data as UTSJSONObject
+            } catch (e) {
+                const msg = `请求失败 (${statusCode})`
+                showError(msg, silent)
+                reject(new Error(msg))
+                return
+            }
 
-                    // HTTP 401：刷新接口自身 401、重试后仍 401、或无刷新回调 → 直接登出
-                    if (isRetry || options.url.includes('/auth/refresh') || _refreshTokenHandler == null) {
-                        logoutAndReject(silent, reject)
-                        return
-                    }
-                    // 401 自动刷新：刷新成功后带新 token 重试一次
-                    tryAutoRefresh().then((refreshed : boolean) => {
-                        if (refreshed && getStorage(STORAGE_KEY_TOKEN).length > 0) {
-                            doRequest(buildHeader(options.header, silent), true)
-                        } else {
-                            logoutAndReject(silent, reject)
-                        }
-                    })
-                },
-                fail: (err) => {
-                    console.error('[request] <<< FAIL errMsg=', err.errMsg)
-                    networkError(err.errMsg, '网络连接失败，请检查网络后重试', '请求超时，请稍后重试', silent, reject)
-                },
+            if (handleStatus(statusCode, body, silent, '请求失败', resolve, reject)) return
+
+            // HTTP 401：刷新接口自身 401、重试后仍 401、或无刷新回调 → 直接登出
+            if (isRetry || options.url.includes('/auth/refresh') || _refreshTokenHandler == null) {
+                logoutAndReject(silent, reject)
+                return
+            }
+            // 401 自动刷新：刷新成功后带新 token 重试一次
+            tryAutoRefresh().then((refreshed : boolean) => {
+                if (refreshed && getStorage(STORAGE_KEY_TOKEN).length > 0) {
+                    doSingleRequest(url, method, data, buildHeader(options.header, silent), timeout, options, true, resolve, reject)
+                } else {
+                    logoutAndReject(silent, reject)
+                }
             })
-        }
-        doRequest(header, false)
+        },
+        fail: (err) => {
+            console.error('[request] <<< FAIL errMsg=', err.errMsg)
+            networkError(err.errMsg, '网络连接失败，请检查网络后重试', '请求超时，请稍后重试', silent, reject)
+        },
     })
 }
 
