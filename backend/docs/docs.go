@@ -420,6 +420,248 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/position": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员创建岗位字典项",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-岗位字典"
+                ],
+                "summary": "创建岗位",
+                "parameters": [
+                    {
+                        "description": "岗位信息",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/service.PositionInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "创建成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/position/{position_id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员更新岗位字典项",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-岗位字典"
+                ],
+                "summary": "更新岗位",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "岗位 ID",
+                        "name": "position_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "岗位信息",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/service.PositionInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "更新成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员删除岗位字典项（已关联职位/简历置空 position_id，不级联删除）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-岗位字典"
+                ],
+                "summary": "删除岗位",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "岗位 ID",
+                        "name": "position_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "已删除",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "删除失败",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/position/{position_id}/sort": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员交换两个岗位的排序位置",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-岗位字典"
+                ],
+                "summary": "交换岗位排序",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "岗位 ID",
+                        "name": "position_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "交换目标 {swap_with: int}",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "已交换",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/positions": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理端岗位字典列表（含停用项）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-岗位字典"
+                ],
+                "summary": "岗位列表",
+                "responses": {
+                    "200": {
+                        "description": "岗位列表",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/ai-assistant/chat": {
             "post": {
                 "description": "可选认证的 SSE 流式响应，不走统一 JSON 信封；事件 message/error/done",
@@ -3870,7 +4112,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "学员浏览职位广场（仅 open 且未强制下架，按新鲜度排序；支持专业方向/地区/薪资/经验筛选）",
+                "description": "学员浏览职位广场（仅 open 且未强制下架，按新鲜度排序；支持岗位/地区/薪资/经验筛选）",
                 "produces": [
                     "application/json"
                 ],
@@ -3881,8 +4123,8 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "专业方向 ID",
-                        "name": "specialty_id",
+                        "description": "岗位 ID",
+                        "name": "position_id",
                         "in": "query"
                     },
                     {
@@ -5124,6 +5366,31 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/positions": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "学员端/招聘端可用的岗位字典（仅启用项）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "招聘域-岗位字典"
+                ],
+                "summary": "岗位字典",
+                "responses": {
+                    "200": {
+                        "description": "岗位列表",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -6437,7 +6704,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "企业发布职位（职位名 + 必填专业方向 + 地区/薪资/经验要求/描述）",
+                "description": "企业发布职位（职位名 + 必填岗位 + 地区/薪资/经验要求/描述）",
                 "consumes": [
                     "application/json"
                 ],
@@ -6738,6 +7005,52 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "无有效授权",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/recruit/resumes/{id}/pdf": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "招聘者未授权即可内嵌预览学员的在线简历（姓名打码、无电话/微信、地址到市、无工作照/证书原图）；隐藏卡 404",
+                "produces": [
+                    "application/pdf"
+                ],
+                "tags": [
+                    "招聘域-简历"
+                ],
+                "summary": "在线简历 PDF（打码版）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "学员 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "PDF 字节流",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "简历不存在",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -7172,6 +7485,41 @@ const docTemplate = `{
             }
         },
         "/resume/pdf": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "学员查看自己的打码在线简历（与招聘者所见同一份；本人鉴权；未建简历 404）",
+                "produces": [
+                    "application/pdf"
+                ],
+                "tags": [
+                    "学员端-简历卡"
+                ],
+                "summary": "我的在线简历 PDF",
+                "responses": {
+                    "200": {
+                        "description": "PDF 字节流",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "简历不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
             "post": {
                 "security": [
                     {
@@ -7207,6 +7555,35 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "文件错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "学员删除自己简历卡的上传 PDF 附件（resume_file_url 置空）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-简历卡"
+                ],
+                "summary": "删除 PDF 附件",
+                "responses": {
+                    "200": {
+                        "description": "已删除",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -8627,6 +9004,9 @@ const docTemplate = `{
                 "experience_req": {
                     "type": "string"
                 },
+                "position_id": {
+                    "type": "integer"
+                },
                 "region": {
                     "type": "string"
                 },
@@ -8638,9 +9018,6 @@ const docTemplate = `{
                 },
                 "salary_text": {
                     "type": "string"
-                },
-                "specialty_id": {
-                    "type": "integer"
                 },
                 "title": {
                     "type": "string"
@@ -8866,6 +9243,26 @@ const docTemplate = `{
                 },
                 "total_score": {
                     "type": "number"
+                }
+            }
+        },
+        "service.PositionInput": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
                 }
             }
         },

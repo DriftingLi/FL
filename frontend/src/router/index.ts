@@ -124,6 +124,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/student/ResumePage.vue')
       },
       {
+        // #491：独立编辑入口（表单内不含 PDF 上传项，保存后回预览）
+        path: 'resume/edit',
+        name: 'StudentResumeEdit',
+        component: () => import('@/pages/student/ResumeEdit.vue')
+      },
+      {
         path: 'jobs',
         name: 'JobPlaza',
         component: () => import('@/pages/student/JobPlaza.vue')

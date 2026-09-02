@@ -3,13 +3,13 @@
     <h1 class="text-xl font-bold text-ink">职位广场</h1>
 
     <div class="rounded-card border border-line bg-panel p-4 flex flex-wrap gap-2">
-      <el-select v-model="filters.position_id" clearable placeholder="岗位" class="!w-40" @change="load">
+      <el-select v-model="filters.position_id" clearable placeholder="岗位" class="!w-40" @change="resetAndLoad">
         <el-option v-for="p in positions" :key="p.position_id" :label="p.name" :value="p.position_id" />
       </el-select>
-      <el-input v-model="filters.region" placeholder="地区" clearable class="!w-32" @change="load" />
-      <el-input v-model.number="filters.salary_min" placeholder="最低薪资" type="number" clearable class="!w-28" @change="load" />
-      <el-input v-model.number="filters.salary_max" placeholder="最高薪资" type="number" clearable class="!w-28" @change="load" />
-      <el-input v-model="filters.experience" placeholder="经验要求" clearable class="!w-28" @change="load" />
+      <el-input v-model="filters.region" placeholder="地区" clearable class="!w-32" @change="resetAndLoad" />
+      <el-input v-model.number="filters.salary_min" placeholder="最低薪资" type="number" clearable class="!w-28" @change="resetAndLoad" />
+      <el-input v-model.number="filters.salary_max" placeholder="最高薪资" type="number" clearable class="!w-28" @change="resetAndLoad" />
+      <el-input v-model="filters.experience" placeholder="经验要求" clearable class="!w-28" @change="resetAndLoad" />
     </div>
 
     <UiErrorState
@@ -19,44 +19,43 @@
       :retrying="retrying"
       @retry="handleRetry"
     />
-    <UiSkeleton v-else-if="loading" variant="list" :count="4" />
+    <UiSkeleton v-else-if="loading && items.length === 0" variant="list" :count="4" />
     <div v-else-if="items.length === 0" class="rounded-card border border-line bg-panel p-8 text-center text-ink-3">
       暂无招聘中的职位
     </div>
-    <div v-else class="grid gap-3">
+
+    <!-- #493：响应式方形网格（手机 1 列 → 平板 2-3 列 → 桌面 4 列） -->
+    <div v-else class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       <router-link
         v-for="item in items"
         :key="String(item.id)"
         :to="`/training/jobs/${item.id}`"
-        class="rounded-card border border-line bg-panel p-4 hover:border-ui-200 transition-colors block"
+        class="flex aspect-[4/3] flex-col rounded-card border border-line bg-panel p-4 hover:border-ui-200 hover:shadow-card transition-colors"
       >
-        <div class="flex items-start justify-between gap-3">
-          <div class="min-w-0 flex-1">
-            <div class="text-sm font-semibold text-ink">{{ item.title }}</div>
-            <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-3">
-              <span v-if="item.position_name">{{ item.position_name }}</span>
-              <span v-if="item.region">{{ item.region }}</span>
-              <span v-if="item.salary_text">{{ item.salary_text }}</span>
-              <span v-if="item.experience_req">经验：{{ item.experience_req }}</span>
-            </div>
-            <div class="mt-2 text-xs text-ink-2 line-clamp-2">{{ item.description }}</div>
-          </div>
-          <div class="shrink-0 text-right">
-            <div v-if="item.company_name" class="text-xs text-ink-2">{{ item.company_name }}</div>
-            <div class="mt-1 text-[10px] text-ink-3">{{ item.published_at.slice(0, 10) }}</div>
-          </div>
+        <div class="flex items-start justify-between gap-2">
+          <div class="min-w-0 flex-1 text-sm font-semibold text-ink line-clamp-1">{{ item.title }}</div>
+          <!-- #488：状态角标 -->
+          <el-tag v-if="item.apply_state === 'applied'" type="success" size="small">已投递</el-tag>
+          <el-tag v-else-if="item.apply_state === 'not_hired'" type="danger" size="small">未录用</el-tag>
+        </div>
+        <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-3">
+          <span v-if="item.position_name">{{ item.position_name }}</span>
+          <span v-if="item.region">{{ item.region }}</span>
+          <span v-if="item.salary_text">{{ item.salary_text }}</span>
+          <span v-if="item.experience_req">经验：{{ item.experience_req }}</span>
+        </div>
+        <div class="mt-auto pt-2">
+          <div v-if="item.company_name" class="text-xs text-ink-2 truncate">{{ item.company_name }}</div>
+          <div class="mt-1 text-[10px] text-ink-3">发布于 {{ item.published_at.slice(0, 10) }}</div>
         </div>
       </router-link>
     </div>
-    <div v-if="total > 0" class="flex justify-center">
-      <el-pagination
-        v-model:current-page="page"
-        :page-size="pageSize"
-        :total="total"
-        layout="prev, pager, next"
-        @current-change="handlePageChange"
-      />
+
+    <!-- 加载更多（#493）：每批 20，不足一批即到底 -->
+    <div v-if="hasMore" class="flex justify-center">
+      <UiButton :loading="loadingMore" @click="loadMore">加载更多</UiButton>
     </div>
+    <div v-else-if="items.length > 0" class="text-center text-xs text-ink-3 pb-2">没有更多了</div>
   </div>
 </template>
 
@@ -65,10 +64,15 @@ import { ref, reactive, onMounted } from 'vue'
 import { jobApi, type JobPosting } from '@/api/job'
 import { unwrappedRequest } from '@/api/request'
 import { useAsyncPage } from '@/composables/useAsyncPage'
+import UiButton from '@/components/ui/UiButton.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 
 const items = ref<JobPosting[]>([])
+const loadingMore = ref(false)
+const hasMore = ref(true)
+const BATCH = 20
+
 interface PositionItem {
   position_id: number
   name: string
@@ -90,27 +94,45 @@ const filters = reactive<{
   experience: ''
 })
 
-const {
-  loading,
-  loadError,
-  retrying,
-  retry: handleRetry,
-  total,
-  page,
-  pageSize,
-  run: load,
-  handlePageChange
-} = useAsyncPage(async () => {
-  const params: any = { page: page.value, page_size: pageSize.value }
+function buildParams(page: number) {
+  const params: any = { page, page_size: BATCH }
   if (filters.position_id) params.position_id = filters.position_id
   if (filters.region) params.region = filters.region
   if (filters.salary_min != null) params.salary_min = filters.salary_min
   if (filters.salary_max != null) params.salary_max = filters.salary_max
   if (filters.experience) params.experience = filters.experience
-  const res = await jobApi.listPublicJobs(params)
+  return params
+}
+
+const { loading, loadError, retrying, retry: handleRetry, run: load } = useAsyncPage(async () => {
+  const res = await jobApi.listPublicJobs(buildParams(1))
   items.value = res?.items || []
-  total.value = res?.total || 0
+  hasMore.value = (res?.items?.length || 0) >= BATCH
 })
+
+// #493：筛选变化 → 清空已累积列表并回第一页
+function resetAndLoad() {
+  items.value = []
+  hasMore.value = true
+  load()
+}
+
+// #493：加载更多（append 第 N+1 批）
+async function loadMore() {
+  if (loadingMore.value) return
+  loadingMore.value = true
+  try {
+    const nextPage = Math.floor(items.value.length / BATCH) + 1
+    const res = await jobApi.listPublicJobs(buildParams(nextPage))
+    const batch = res?.items || []
+    items.value.push(...batch)
+    if (batch.length < BATCH) hasMore.value = false
+  } catch {
+    /* 拦截器已 toast */
+  } finally {
+    loadingMore.value = false
+  }
+}
 
 onMounted(async () => {
   try {

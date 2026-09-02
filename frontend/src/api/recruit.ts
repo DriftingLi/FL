@@ -17,6 +17,9 @@ export interface RecruitResumeItem {
   resume_experiences: any[]
   resume_certifications: any[]
   updated_at: string
+  // #489：企业视角联系状态
+  contact_state?: 'none' | 'pending' | 'approved'
+  contact_source?: 'recruiter' | 'application'
 }
 
 export interface RecruitResumeListResp {

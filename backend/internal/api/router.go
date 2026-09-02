@@ -146,6 +146,7 @@ func NewRouter(deps *Deps) *gin.Engine {
 	RegisterMaterialRoutes(api, rd, deps.MaterialSvc)
 	RegisterJobCardRoutes(api, rd, deps.JobCardSvc, deps.FileSvc)
 	RegisterResumeViewRoutes(api, rd, deps.RecruitSvc)
+	RegisterResumePDFRoutes(api, rd, deps.RecruitSvc, deps.ResumePDFRenderer)
 	RegisterContactRoutes(api, rd, deps.ContactSvc)
 	RegisterJobRoutes(api, rd, deps.JobPostingSvc)
 	RegisterApplicationRoutes(api, rd, deps.JobApplicationSvc)

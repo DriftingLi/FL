@@ -7,8 +7,12 @@ import ElementPlus from 'element-plus'
 vi.mock('@/api/job', () => ({
   jobApi: { listMyApplications: vi.fn(), withdrawApplication: vi.fn() },
 }))
+vi.mock('@/api/resume', () => ({
+  resumeApi: { listContactRequests: vi.fn() },
+}))
 
 import { jobApi } from '@/api/job'
+import { resumeApi } from '@/api/resume'
 import MyApplications from '../MyApplications.vue'
 
 const app = {
@@ -26,6 +30,7 @@ beforeEach(() => {
   vi.mocked(jobApi.listMyApplications).mockResolvedValue({ items: [app], total: 1, page: 1, page_size: 20 } as any)
   vi.mocked(jobApi.withdrawApplication).mockReset()
   vi.mocked(jobApi.withdrawApplication).mockResolvedValue({ ...app, status: 'withdrawn' } as any)
+  vi.mocked(resumeApi.listContactRequests).mockResolvedValue({ items: [], total: 0 } as any)
 })
 
 describe('MyApplications 撤回弹窗（#452 决定 10 UI 落点）', () => {
