@@ -167,13 +167,13 @@
             <!-- 证书技能 -->
             <view class="card">
                 <text class="card-title">证书与技能</text>
-                <textarea class="area-input" :maxlength="300" v-model="certs" placeholder="每行一条，如：&#10;叉车作业操作证（N1）&#10;低压电工证&#10;液压/电气系统故障诊断" :auto-height="true"></textarea>
+                <textarea class="area-input" :maxlength="300" v-model="certs" :placeholder="'每行一条，如：\n叉车作业操作证（N1）\n低压电工证\n液压/电气系统故障诊断'" :auto-height="true"></textarea>
             </view>
 
             <!-- 自我介绍 -->
             <view class="card">
                 <text class="card-title">自我介绍</text>
-                <textarea class="area-input" :maxlength="500" v-model="selfIntro" placeholder="简单介绍你的维修经验、擅长机型、求职意向…" :auto-height="true"></textarea>
+                <textarea class="area-input" :maxlength="500" v-model="selfIntro" placeholder="简单介绍你的维修经验、擅长机型、求职意向" :auto-height="true"></textarea>
             </view>
 
             <view class="bottom-space"></view>
