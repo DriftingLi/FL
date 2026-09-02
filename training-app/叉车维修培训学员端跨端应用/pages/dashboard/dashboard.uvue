@@ -462,6 +462,32 @@
         'combo_cert': '配套取证'
     }
 
+    // ---- 继续学习 ----
+    const continueLearning = ref<StudentCourse | null>(null)
+    const myCourses = ref<StudentCourse[]>([])
+
+    async function loadMyCourses() : Promise<void> {
+        try {
+            const result = await getStudentCoursesApi()
+            myCourses.value = result.courses
+            continueLearning.value = result.continue_learning
+        } catch (e) {
+            console.warn('[dashboard] loadMyCourses failed:', e)
+        }
+    }
+
+    // ---- 精选内容（从 API 加载） ----
+    const newsList = ref<FeaturedContentItem[]>([])
+
+    async function loadFeaturedContents() : Promise<void> {
+        try {
+            const result = await getFeaturedContentsApi(1, 5)
+            newsList.value = result.items
+        } catch (e) {
+            console.warn('[dashboard] loadFeaturedContents failed:', e)
+        }
+    }
+
     // 页面显示时刷新数据
     onShow(() => {
         loadCredentials()
@@ -491,32 +517,6 @@
         { key: 'material-course', title: '资料下载', icon: '', color: '#45B7D1', path: '', available: false },
         { key: 'exam-info', title: '考情资讯', icon: '', color: '#96CEB4', path: '/pages/exam-info/exam-info', available: true },
     ]
-
-    // ---- 继续学习 ----
-    const continueLearning = ref<StudentCourse | null>(null)
-    const myCourses = ref<StudentCourse[]>([])
-
-    async function loadMyCourses() : Promise<void> {
-        try {
-            const result = await getStudentCoursesApi()
-            myCourses.value = result.courses
-            continueLearning.value = result.continue_learning
-        } catch (e) {
-            console.warn('[dashboard] loadMyCourses failed:', e)
-        }
-    }
-
-    // ---- 精选内容（从 API 加载） ----
-    const newsList = ref<FeaturedContentItem[]>([])
-
-    async function loadFeaturedContents() : Promise<void> {
-        try {
-            const result = await getFeaturedContentsApi(1, 5)
-            newsList.value = result.items
-        } catch (e) {
-            console.warn('[dashboard] loadFeaturedContents failed:', e)
-        }
-    }
 
     // ---- 内容 Tab ----
     const contentTabs : string[] = ['热门课程', '精品课程']
