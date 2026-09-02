@@ -30,6 +30,7 @@ func RegisterJobCardRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.JobC
 	g.PUT("", h.Upsert)
 	g.PUT("/visibility", h.UpdateVisibility)
 	g.POST("/pdf", h.UploadPDF)
+	g.DELETE("/pdf", h.DeletePDF)
 	g.POST("/image", h.UploadImage)
 }
 
@@ -168,6 +169,23 @@ func (h *JobCardHandler) UploadPDF(c *gin.Context) {
 		return
 	}
 	response.SuccessWithMsg(c, "上传成功", gin.H{"url": url})
+}
+
+// DeletePDF 删除 PDF 附件 DELETE /api/resume/pdf（#491）
+// @Summary 删除 PDF 附件
+// @Description 学员删除自己简历卡的上传 PDF 附件（resume_file_url 置空）
+// @Tags 学员端-简历卡
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.R "已删除"
+// @Failure 401 {object} response.R "未认证"
+// @Router /resume/pdf [delete]
+func (h *JobCardHandler) DeletePDF(c *gin.Context) {
+	if err := h.svc.DeleteResumeFile(middleware.CurrentUserID(c)); err != nil {
+		response.ServerError(c, err.Error())
+		return
+	}
+	response.SuccessWithMsg(c, "附件已删除", gin.H{})
 }
 
 // UploadImage 上传工作照 POST /api/resume/image

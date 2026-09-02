@@ -259,6 +259,7 @@ export interface AdminRecruiter {
   contact_name: string
   contact_phone: string
   contact_email: string
+  wechat?: string
   status: number
   created_at?: string
 }
@@ -278,6 +279,7 @@ export interface AddRecruiterPayload {
   contact_name: string
   contact_phone: string
   contact_email: string
+  wechat?: string
 }
 
 export const adminApi = {

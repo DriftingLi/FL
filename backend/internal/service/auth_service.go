@@ -349,6 +349,8 @@ type RecruiterCreateInput struct {
 	ContactName   string `json:"contact_name"`
 	ContactPhone  string `json:"contact_phone"`
 	ContactEmail  string `json:"contact_email"`
+	// Wechat 企业微信（#487：可空，管理员录入）
+	Wechat string `json:"wechat"`
 }
 
 // ValidateRecruiterInput 校验企业信息字段全部必填（缺任一项 400）。
@@ -385,6 +387,9 @@ func ValidateRecruiterInput(in RecruiterCreateInput) error {
 	if strings.TrimSpace(in.ContactEmail) == "" {
 		return errors.New("联系邮箱不能为空")
 	}
+	if len([]rune(strings.TrimSpace(in.Wechat))) > 100 {
+		return errors.New("微信号过长（最多 100 字符）")
+	}
 	return nil
 }
 
@@ -400,6 +405,7 @@ func (s *AuthService) CreateRecruiter(in RecruiterCreateInput) (*model.Recruiter
 	in.ContactName = strings.TrimSpace(in.ContactName)
 	in.ContactPhone = strings.TrimSpace(in.ContactPhone)
 	in.ContactEmail = strings.TrimSpace(in.ContactEmail)
+	in.Wechat = strings.TrimSpace(in.Wechat)
 	var count int64
 	s.db.Model(&model.RecruiterUser{}).Where("username = ?", in.Username).Count(&count)
 	if count > 0 {
@@ -424,6 +430,7 @@ func (s *AuthService) CreateRecruiter(in RecruiterCreateInput) (*model.Recruiter
 		ContactName:   in.ContactName,
 		ContactPhone:  in.ContactPhone,
 		ContactEmail:  in.ContactEmail,
+		Wechat:        in.Wechat,
 		Status:        1,
 		CreatedAt:     beijingNow(),
 		UpdatedAt:     beijingNow(),
@@ -460,6 +467,7 @@ type RecruiterListItem struct {
 	ContactName   string    `json:"contact_name"`
 	ContactPhone  string    `json:"contact_phone"`
 	ContactEmail  string    `json:"contact_email"`
+	Wechat        string    `json:"wechat"`
 	Status        int16     `json:"status"`
 	CreatedAt     time.Time `json:"created_at"`
 }
@@ -504,6 +512,7 @@ func (s *AuthService) ListRecruiters(page, pageSize int, keyword string) (*Recru
 			ContactName:   r.ContactName,
 			ContactPhone:  r.ContactPhone,
 			ContactEmail:  r.ContactEmail,
+			Wechat:        r.Wechat,
 			Status:        r.Status,
 			CreatedAt:     r.CreatedAt,
 		})
@@ -520,6 +529,8 @@ type RecruiterEditInput struct {
 	ContactName   string `json:"contact_name"`
 	ContactPhone  string `json:"contact_phone"`
 	ContactEmail  string `json:"contact_email"`
+	// Wechat 企业微信（#487：可空，管理员编辑时录入）
+	Wechat string `json:"wechat"`
 }
 
 // EditRecruiter 编辑招聘者企业信息与联系人（#417）：与创建同源校验（必填判定单点），
@@ -535,6 +546,7 @@ func (s *AuthService) EditRecruiter(id int, in RecruiterEditInput) (*model.Recru
 		ContactName:   in.ContactName,
 		ContactPhone:  in.ContactPhone,
 		ContactEmail:  in.ContactEmail,
+		Wechat:        in.Wechat,
 	}); err != nil {
 		return nil, err
 	}
@@ -568,6 +580,7 @@ func (s *AuthService) EditRecruiter(id int, in RecruiterEditInput) (*model.Recru
 		"credit_code":    strings.TrimSpace(in.CreditCode),
 		"business_scope": strings.TrimSpace(in.BusinessScope),
 		"contact_name":   strings.TrimSpace(in.ContactName),
+		"wechat":         strings.TrimSpace(in.Wechat),
 		"contact_phone":  strings.TrimSpace(in.ContactPhone),
 		"contact_email":  strings.TrimSpace(in.ContactEmail),
 		"updated_at":     beijingNow(),

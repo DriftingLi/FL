@@ -30,6 +30,7 @@ export const resumeApi = {
   save(data: any) { return unwrappedRequest.put<ResumeData>('/resume', data) },
   updateVisibility(visibility: 'hidden' | 'open') { return unwrappedRequest.put<ResumeData>('/resume/visibility', { visibility }) },
   uploadPdf(formData: FormData) { return unwrappedRequest.post<{ url: string }>('/resume/pdf', formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120000 }) },
+  deletePdf() { return unwrappedRequest.delete('/resume/pdf') },
   uploadImage(formData: FormData) { return unwrappedRequest.post<{ url: string }>('/resume/image', formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120000 }) },
   getViewStats() { return unwrappedRequest.get<{ count: number }>('/resume/view-stats') },
   listContactRequests(params?: { page?: number; page_size?: number }) {

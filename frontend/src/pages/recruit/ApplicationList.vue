@@ -51,19 +51,36 @@
       />
     </div>
 
-    <!-- 投递详情（脱敏）：只显示打码姓名与简历更新时间，明文只经联系方式端点取得 -->
-    <el-dialog v-model="detailVisible" title="投递详情" width="460px">
-      <div v-if="current" class="text-sm">
-        <div class="flex justify-between"><span class="text-ink-3">候选人</span><span class="text-ink">{{ current.student_real_name_masked || '匿名' }}</span></div>
-        <div class="mt-2 flex justify-between"><span class="text-ink-3">投递时间</span><span class="text-ink">{{ current.created_at }}</span></div>
-        <div class="mt-2 flex justify-between"><span class="text-ink-3">简历更新</span><span class="text-ink">{{ current.student_resume_updated_at || '-' }}</span></div>
-        <div v-if="resumeUpdated(current)" class="mt-3 text-xs text-orange-500">该候选人自你收到投递后又更新过简历</div>
-        <div class="mt-3 text-xs text-ink-3">联系方式与简历 PDF 请通过简历库的「申请交换联系方式」取得。</div>
+    <!-- 投递详情抽屉（#490）：内嵌在线简历 PDF + 明文联系方式（投递即授权）+ 标记不合适 -->
+    <el-drawer v-model="detailVisible" title="投递详情" size="480px">
+      <div v-if="current" class="flex flex-col gap-3 text-sm">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="font-semibold text-ink">{{ current.student_real_name_masked || '匿名学员' }}</span>
+            <el-tag :type="tagType(current.status)" size="small">{{ statusLabel(current.status) }}</el-tag>
+          </div>
+        </div>
+        <div class="text-xs text-ink-3">投递于 {{ current.created_at }}</div>
+        <div v-if="resumeUpdated(current)" class="text-xs text-orange-500">该候选人自你收到投递后又更新过简历</div>
+
+        <!-- 内嵌在线简历 PDF（复用 #485 能力） -->
+        <OnlineResumePdf v-if="current.student_user_id" :endpoint="`/api/recruit/resumes/${current.student_user_id}/pdf`" />
+
+        <!-- 明文联系区块（投递即授权，当场可取） -->
+        <div v-if="contact" class="rounded-card border border-line bg-panel p-3">
+          <div class="mb-1 text-xs font-semibold text-ink-3">联系方式（投递即授权）</div>
+          <div><span class="text-ink-3">姓名：</span>{{ contact.real_name }}</div>
+          <div><span class="text-ink-3">电话：</span>{{ contact.contact_phone }}</div>
+          <div><span class="text-ink-3">微信：</span>{{ contact.wechat }}</div>
+          <div v-if="contact.resume_file_url"><span class="text-ink-3">附件：</span><a :href="contact.resume_file_url" target="_blank" class="text-ui-600">下载上传简历</a></div>
+        </div>
+        <div v-else-if="contactLoading" class="text-xs text-ink-3">联系方式加载中…</div>
+        <div v-else-if="contactError" class="text-xs text-red-500">{{ contactError }}</div>
+
+        <!-- 标记不合适（仅 applied） -->
+        <UiButton v-if="current.status === 'applied'" variant="danger" :loading="rejecting" @click="rejectItem(current)">标记不合适</UiButton>
       </div>
-      <template #footer>
-        <UiButton @click="detailVisible = false">关闭</UiButton>
-      </template>
-    </el-dialog>
+    </el-drawer>
   </div>
 </template>
 
@@ -72,10 +89,12 @@ import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { jobApi, type JobApplication } from '@/api/job'
+import { recruitApi } from '@/api/recruit'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import OnlineResumePdf from '@/components/recruit/OnlineResumePdf.vue'
 
 const route = useRoute()
 const items = ref<JobApplication[]>([])
@@ -83,6 +102,10 @@ const jobTitle = ref('')
 const unreadCount = ref(0)
 const detailVisible = ref(false)
 const current = ref<JobApplication | null>(null)
+const contact = ref<any>(null)
+const contactLoading = ref(false)
+const contactError = ref('')
+const rejecting = ref(false)
 
 const jobId = Number(route.params.id)
 
@@ -122,6 +145,8 @@ function resumeUpdated(item: JobApplication) {
 
 async function openDetail(item: JobApplication) {
   current.value = item
+  contact.value = null
+  contactError.value = ''
   detailVisible.value = true
   try {
     const res = await jobApi.getApplicationDetail(item.id)
@@ -130,15 +155,36 @@ async function openDetail(item: JobApplication) {
       load()
     }
   } catch {}
+  // #490：投递即授权 → 直接取明文联系方式
+  loadContact()
+}
+
+async function loadContact() {
+  if (!current.value) return
+  contactLoading.value = true
+  contactError.value = ''
+  try {
+    const res = await recruitApi.getContact(current.value.student_user_id)
+    contact.value = res as any
+  } catch (e: any) {
+    contact.value = null
+    contactError.value = e?.message || '联系方式不可用'
+  } finally {
+    contactLoading.value = false
+  }
 }
 
 async function rejectItem(item: JobApplication) {
+  rejecting.value = true
   try {
     await jobApi.rejectApplication(item.id)
     ElMessage.success('已标记为不合适')
+    if (current.value) current.value.status = 'rejected'
     load()
   } catch (e: any) {
     ElMessage.error(e?.message || '操作失败')
+  } finally {
+    rejecting.value = false
   }
 }
 

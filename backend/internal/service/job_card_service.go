@@ -367,6 +367,38 @@ func toJobCardDTO(m *model.JobCard) JobCardDTO {
 	}
 }
 
+// DeleteResumeFile 删除上传的 PDF 附件（#491：预览页操作区「删除 PDF 附件」）。
+// DB 置空为事实源；对象存储文件 best-effort 回收（沿用论坛「删除即清理」惯例，失败仅日志）。
+func (s *JobCardService) DeleteResumeFile(userID int) error {
+	var card model.JobCard
+	if err := s.db.First(&card, "user_id = ?", userID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil // 无卡即无附件，幂等成功
+		}
+		return err
+	}
+	oldURL := card.ResumeFileURL
+	card.ResumeFileURL = ""
+	card.UpdatedAt = time.Now()
+	if err := s.db.Save(&card).Error; err != nil {
+		return err
+	}
+	// 存储文件回收：best-effort 且绝不让清理失败反噬业务（测试环境 storage 可为 nil）。
+	if oldURL != "" && s.fileSvc != nil {
+		func() {
+			defer func() {
+				if r := recover(); r != nil && s.logger != nil {
+					s.logger.Warn("resume pdf 文件删除 panic（DB 已置空）", zap.Any("panic", r), zap.String("url", oldURL), zap.Int("user", userID))
+				}
+			}()
+			if err := s.fileSvc.Delete(oldURL); err != nil && s.logger != nil {
+				s.logger.Warn("resume pdf 文件删除失败（DB 已置空）", zap.Error(err), zap.String("url", oldURL), zap.Int("user", userID))
+			}
+		}()
+	}
+	return nil
+}
+
 func (s *JobCardService) ValidateAndStorePDF(filename string, size int64, content []byte) (string, error) {
 	ext := fileExtension(filename)
 	if ext != "pdf" {
