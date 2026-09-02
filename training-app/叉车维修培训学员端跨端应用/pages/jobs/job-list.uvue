@@ -220,9 +220,12 @@
     .filter-row {
         flex-direction: row;
         padding: 16rpx 24rpx;
-        gap: 16rpx;
         background-color: #ffffff;
         border-bottom: 1rpx solid #f0f0f0;
+    }
+
+    .filter-row > view + view {
+        margin-left: 16rpx;
     }
 
     .filter-tag {

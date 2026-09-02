@@ -29,7 +29,10 @@
 <style>
     .app-tabs {
         flex-direction: row;
-        gap: 16rpx;
+    }
+
+    .app-tabs > view + view {
+        margin-left: 16rpx;
     }
 
     .app-tab-item {

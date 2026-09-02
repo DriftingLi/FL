@@ -527,7 +527,11 @@
 	.history-tags {
 		flex-direction: row;
 		flex-wrap: wrap;
-		gap: 16rpx;
+	}
+
+	.history-tags > view {
+		margin-right: 16rpx;
+		margin-bottom: 16rpx;
 	}
 
 	.history-tag {

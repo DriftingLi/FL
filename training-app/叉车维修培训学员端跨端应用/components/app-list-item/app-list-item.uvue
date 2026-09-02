@@ -55,7 +55,20 @@
     .app-list-item-right {
         flex-direction: row;
         align-items: center;
-        gap: 8rpx;
+    }
+
+    .app-list-item-right > view + view,
+    .app-list-item-right > view + text,
+    .app-list-item-right > text + view,
+    .app-list-item-right > text + text {
+        margin-left: 8rpx;
+    }
+
+    .app-list-item-right > view + image,
+    .app-list-item-right > text + image,
+    .app-list-item-right > image + view,
+    .app-list-item-right > image + text {
+        margin-left: 8rpx;
     }
 
     .app-list-item-label {
