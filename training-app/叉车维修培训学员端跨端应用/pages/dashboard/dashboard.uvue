@@ -15,7 +15,7 @@
                         <text class="unread-badge-text">{{ unreadCount > 99 ? '99+' : unreadCount.toString() }}</text>
                     </view>
                 </view>
-                <view class="nav-icon-btn" @click="onCartClick">
+                <view class="nav-icon-btn ml-16" @click="onCartClick">
                     <text class="nav-icon-text"></text>
                 </view>
             </view>
@@ -43,7 +43,7 @@
                         </view>
                         <!-- 胶囊标签 -->
                         <view class="cert-dropdown-chips">
-                            <view v-for="(item, idx) in group.items" :key="idx" class="cert-dropdown-chip"
+                            <view v-for="(item, idx) in group.items" :key="idx" class="cert-dropdown-chip mr-16 mb-16"
                                 :class="{ 'cert-dropdown-chip--active': currentCredentialId === item.id }"
                                 @click="onSelectCredential(item)">
                                 <!-- 单行（特种作业证） -->
@@ -69,7 +69,8 @@
                             <view class="cert-dropdown-hot-line"></view>
                         </view>
                         <view class="cert-dropdown-hot-grid">
-                            <view v-for="(item, idx) in hotCertList" :key="idx" class="cert-dropdown-hot-card">
+                            <view v-for="(item, idx) in hotCertList" :key="idx" class="cert-dropdown-hot-card"
+                                :class="idx > 0 ? 'ml-16' : ''">
                                 <view class="cert-dropdown-hot-card-header">
                                     <text class="cert-dropdown-hot-card-star">⭐</text>
                                     <text class="cert-dropdown-hot-card-title">{{ item.title }}</text>
@@ -207,7 +208,7 @@
                 <view class="filter-section">
                     <text class="filter-label">价格</text>
                     <view class="filter-options">
-                        <view v-for="(opt, idx) in priceOptions" :key="idx" class="filter-chip"
+                        <view v-for="(opt, idx) in priceOptions" :key="idx" class="filter-chip mr-20 mb-20"
                             :class="{ 'filter-chip--active': selectedPrice === idx }" @click="selectedPrice = idx">
                             <text class="filter-chip-text"
                                 :class="{ 'filter-chip-text--active': selectedPrice === idx }">{{ opt }}</text>
@@ -219,7 +220,7 @@
                 <view class="filter-section">
                     <text class="filter-label">类型</text>
                     <view class="filter-options">
-                        <view v-for="(opt, idx) in typeOptions" :key="idx" class="filter-chip"
+                        <view v-for="(opt, idx) in typeOptions" :key="idx" class="filter-chip mr-20 mb-20"
                             :class="{ 'filter-chip--active': selectedType === idx }" @click="selectedType = idx">
                             <text class="filter-chip-text"
                                 :class="{ 'filter-chip-text--active': selectedType === idx }">{{ opt }}</text>
@@ -232,7 +233,7 @@
                     <view class="filter-btn-reset" @click="onFilterReset">
                         <text class="filter-btn-reset-text">重置</text>
                     </view>
-                    <view class="filter-btn-confirm" @click="onFilterConfirm">
+                    <view class="filter-btn-confirm ml-24" @click="onFilterConfirm">
                         <text class="filter-btn-confirm-text">确定</text>
                     </view>
                 </view>
@@ -660,7 +661,6 @@
     .nav-right {
         flex-direction: row;
         align-items: center;
-        gap: 16rpx;
     }
 
     .nav-icon-btn {
@@ -1008,7 +1008,6 @@
     .filter-options {
         flex-direction: row;
         flex-wrap: wrap;
-        gap: 20rpx;
     }
 
     .filter-chip {
@@ -1036,7 +1035,6 @@
 
     .filter-actions {
         flex-direction: row;
-        gap: 24rpx;
         padding: 36rpx 32rpx 0;
     }
 
@@ -1214,7 +1212,6 @@
     .cert-dropdown-chips {
         flex-direction: row;
         flex-wrap: wrap;
-        gap: 16rpx;
     }
 
     .cert-dropdown-chip {
@@ -1294,7 +1291,6 @@
     /* ---- 热门考证卡片 ---- */
     .cert-dropdown-hot-grid {
         flex-direction: row;
-        gap: 16rpx;
     }
 
     .cert-dropdown-hot-card {
@@ -1362,4 +1358,12 @@
         line-height: 36rpx;
         padding-left: 32rpx;
     }
+
+    /* ---- 间距工具类（替代 gap） ---- */
+    .ml-16 { margin-left: 16rpx; }
+    .ml-24 { margin-left: 24rpx; }
+    .mr-16 { margin-right: 16rpx; }
+    .mr-20 { margin-right: 20rpx; }
+    .mb-16 { margin-bottom: 16rpx; }
+    .mb-20 { margin-bottom: 20rpx; }
 </style>
