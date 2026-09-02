@@ -283,7 +283,6 @@
             loadUnreadCount()
         }, 30000)
     }
-    }
 
     function onNotificationClick() : void {
         uni.navigateTo({ url: '/pages/notifications/notifications' })
