@@ -21,6 +21,9 @@ export interface JobPosting {
   company_name?: string
   business_scope?: string
   contact_name?: string
+  // #488：学员视角投递状态（可投递/已投递/未录用冷却中）
+  apply_state?: 'none' | 'applied' | 'not_hired'
+  cooldown_days?: number
 }
 
 export interface JobListResp {
