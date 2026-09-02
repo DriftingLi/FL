@@ -818,7 +818,10 @@
     .biometric-link {
         font-size: 26rpx;
         color: #2979ff;
-        text-decoration: underline;
+        border-bottom-width: 1rpx;
+        border-bottom-style: solid;
+        border-bottom-color: #2979ff;
+        padding-bottom: 2rpx;
     }
 
     .register-sep {
@@ -915,6 +918,9 @@
     .back-password-link {
         font-size: 26rpx;
         color: #2979ff;
-        text-decoration: underline;
+        border-bottom-width: 1rpx;
+        border-bottom-style: solid;
+        border-bottom-color: #2979ff;
+        padding-bottom: 2rpx;
     }
 </style>
