@@ -384,7 +384,7 @@
     /* 底部投递按钮 */
     .bottom-bar {
         padding: 16rpx 24rpx;
-        padding-bottom: calc(16rpx + env(safe-area-inset-bottom));
+        padding-bottom: 16rpx;
         background-color: #ffffff;
         border-top: 1rpx solid #f0f0f0;
     }

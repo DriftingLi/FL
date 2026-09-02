@@ -709,7 +709,7 @@
 
     .stat-num-row {
         flex-direction: row;
-        align-items: baseline;
+        align-items: flex-start;
         justify-content: center;
     }
 
