@@ -912,7 +912,10 @@
         flex-direction: row;
         align-items: center;
         justify-content: center;
-        gap: 24rpx;
+    }
+
+    .nav-center > text + text {
+        margin-left: 24rpx;
     }
 
     .nav-timer {
@@ -1161,7 +1164,11 @@
     .tag-row {
         flex-direction: row;
         flex-wrap: wrap;
-        gap: 12rpx;
+    }
+
+    .tag-row > view {
+        margin-right: 12rpx;
+        margin-bottom: 12rpx;
     }
 
     .knowledge-tag {
@@ -1186,7 +1193,10 @@
     .bottom-actions {
         flex-direction: row;
         align-items: center;
-        gap: 16rpx;
+    }
+
+    .bottom-actions > view + view {
+        margin-left: 16rpx;
     }
 
     .bottom-icon-btn {
@@ -1289,8 +1299,12 @@
     .answer-card-grid {
         flex-direction: row;
         flex-wrap: wrap;
-        gap: 20rpx;
         justify-content: flex-start;
+    }
+
+    .answer-card-grid > view {
+        margin-right: 20rpx;
+        margin-bottom: 20rpx;
     }
 
     .answer-card-item {

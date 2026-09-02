@@ -266,7 +266,10 @@
     .category-row {
         flex-direction: row;
         padding: 12rpx 32rpx 16rpx;
-        gap: 20rpx;
+    }
+
+    .category-row > view + view {
+        margin-left: 20rpx;
     }
 
     .category-card {
@@ -351,7 +354,10 @@
 
     .sub-tab-row {
         flex-direction: row;
-        gap: 16rpx;
+    }
+
+    .sub-tab-row > view + view {
+        margin-left: 16rpx;
     }
 
     .sub-tab {
@@ -380,7 +386,10 @@
     .filter-row {
         flex-direction: row;
         padding: 0 32rpx 16rpx;
-        gap: 16rpx;
+    }
+
+    .filter-row > view + view {
+        margin-left: 16rpx;
     }
 
     .filter-tag {

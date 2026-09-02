@@ -324,7 +324,11 @@
     .option-row {
         flex-direction: row;
         flex-wrap: wrap;
-        gap: 18rpx;
+    }
+
+    .option-row > view {
+        margin-right: 18rpx;
+        margin-bottom: 18rpx;
     }
 
     .option-chip {
@@ -376,7 +380,10 @@
     /* ---- 热门考证卡片（横排两列） ---- */
     .hot-grid {
         flex-direction: row;
-        gap: 18rpx;
+    }
+
+    .hot-grid > view + view {
+        margin-left: 18rpx;
     }
 
     .hot-card {
