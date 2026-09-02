@@ -176,21 +176,32 @@ describe('论坛类别分流', () => {
     expect(wrapper.text()).toMatch(/提问|问答/)
   })
 
-  it('个人视图（我的帖子）是跨类别的，不掺入 category 参数', async () => {
+  it('「我的」Tab 是跨类别的，不掺入 category 参数', async () => {
     vi.mocked(forumApi.getMyTopics).mockResolvedValue({ topics: [], total: 0, page: 1, pages: 0 } as never)
     const wrapper = await mountPage()
     listTopics.mockClear()
 
+    // 一级 Tab 切到「我的」会立刻拉一次（默认二级 = 我的帖子）
+    const catGroup = wrapper
+      .findAllComponents(ElRadioGroup)
+      .find((c) => c.classes().includes('forum-category'))
+    if (!catGroup) throw new Error('找不到一级分段控件')
+    catGroup.vm.$emit('update:modelValue', 'mine')
+    await flushPromises()
+    expect(forumApi.getMyTopics).toHaveBeenCalledTimes(1)
+    expect(listTopics).not.toHaveBeenCalled()
+
+    // 二次切到「我的回复」走二级控件（forum-mode 仅在「我的」下渲染）
+    vi.mocked(forumApi.getMyReplies).mockResolvedValue({ replies: [], total: 0, page: 1, pages: 0 } as never)
+    listTopics.mockClear()
     const modeGroup = wrapper
       .findAllComponents(ElRadioGroup)
       .find((c) => c.classes().includes('forum-mode'))
-    if (!modeGroup) throw new Error('找不到模式控件')
-    // el-radio-group 真实交互会同时发这两个事件：update:modelValue 改状态、change 触发重新加载。
-    modeGroup.vm.$emit('update:modelValue', 'my-topics')
-    modeGroup.vm.$emit('change', 'my-topics')
+    if (!modeGroup) throw new Error('找不到「我的」二级控件')
+    modeGroup.vm.$emit('update:modelValue', 'my-replies')
+    modeGroup.vm.$emit('change', 'my-replies')
     await flushPromises()
-
-    expect(forumApi.getMyTopics).toHaveBeenCalled()
+    expect(forumApi.getMyReplies).toHaveBeenCalled()
     expect(listTopics).not.toHaveBeenCalled()
   })
 
