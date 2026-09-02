@@ -14,8 +14,8 @@ export const STORAGE_KEY_USER = 'auth_user'
 /** 存储 key: 登录来源（wechat / phone / email / password） */
 export const STORAGE_KEY_LOGIN_PROVIDER = 'auth_login_provider'
 
-/** 存储 key: 记住的登录账号（仅用户名，密码不落地） */
-export const STORAGE_KEY_LAST_USERNAME = 'auth_last_username'
+/** 存储 key: 安全凭据（生物识别回填用，JSON 格式 { u, p, has }） */
+export const STORAGE_KEY_CREDENTIALS = 'auth_secure_credentials'
 
 /** 存储 key: 在线简历草稿（JSON；后端 /resume 接口就绪前的本地落地） */
 export const STORAGE_KEY_RESUME = 'user_resume_draft'

@@ -76,8 +76,9 @@
     import { goBack } from '../../utils/navigation'
     import { getStorageJSON } from '../../utils/storage'
     import { toStr } from '../../api/helpers'
+    import { getResumeApi } from '../../api/resume'
     import { STORAGE_KEY_RESUME } from '../../constants/app'
-    import type { StudentProfile, FavoriteListResult } from '../../types/index'
+    import type { StudentProfile, FavoriteListResult, ResumeData } from '../../types/index'
 
     const auth = useAuthStore()
     const statusBarHeight = useStatusBarHeight()
@@ -87,7 +88,7 @@
     const noticeFavCount = ref<number>(0)
     const jobFavCount = ref<number>(0)
     const collectionFavCount = ref<number>(0)
-    // 在线简历是否已填写（本地草稿判定，后端接口就绪后换服务端状态）
+    // 在线简历是否已填写（以服务端数据为准）
     const resumeFilled = ref<boolean>(false)
 
     const userName = computed<string>(() : string => {
@@ -137,14 +138,29 @@
         uni.navigateTo({ url: '/pages/resume/resume-attach' })
     }
 
-    /** 草稿存在且含姓名 → 视为已填写，隐藏"去完善"引导 */
+    /** 以服务端数据为准判定简历是否已填写；kind=notfound → 未填写；其他错误不改状态 */
     function refreshResumeFilled() : void {
+        // 先用本地草稿做即时初步推断
         const saved = getStorageJSON(STORAGE_KEY_RESUME)
-        if (saved == null) {
-            resumeFilled.value = false
-            return
+        if (saved != null) {
+            resumeFilled.value = toStr(saved['real_name'], '').length > 0
         }
-        resumeFilled.value = toStr(saved['name'], '').length > 0
+        // 以服务端为准
+        getResumeApi().then((r : ResumeData) : void => {
+            resumeFilled.value = r.real_name.length > 0
+        }).catch((e : any) : void => {
+            let isNotFound = false
+            try {
+                const obj = e as UTSJSONObject
+                if (obj['kind'] != null && `${obj['kind']}` == 'notfound') {
+                    isNotFound = true
+                }
+            } catch (_ex) {}
+            if (isNotFound) {
+                resumeFilled.value = false
+            }
+            // 其他错误不改 resumeFilled，保持上次状态
+        })
     }
 
     onLoad(() => {

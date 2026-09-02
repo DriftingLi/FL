@@ -1,0 +1,81 @@
+/**
+ * 安全凭据存储抽象层（demo 阶段）
+ *
+ * 交互闭环验证用：跑通"记住密码 → 生物识别 → 回填"链路。
+ * 生产环境需替换为：
+ *   - Android: EncryptedSharedPreferences / AndroidKeyStore
+ *   - iOS:     Keychain Services
+ *   - 小程序:  不适用（微信无本地密钥存储，需服务端下发 token）
+ *
+ * 当前实现基于 setStorageJSON / getStorageJSON，明文落盘仅供 demo。
+ */
+import { setStorageJSON, getStorageJSON, removeStorage } from './storage'
+import { STORAGE_KEY_CREDENTIALS } from '../constants/app'
+
+/** 凭据载体结构（UTS 不支持 inline interface 作返回类型，用 type alias） */
+export type StoredCredentials = {
+    u : string
+    p : string
+    has : boolean
+}
+
+/**
+ * 是否存在已保存凭据（不解密内容，仅检查 has 字段）
+ * 注意：UTS 要求函数内用局部 var 接收后再判空，不能对 nullable 直接属性访问
+ */
+export function hasStoredCredentials() : boolean {
+    const obj = getStorageJSON(STORAGE_KEY_CREDENTIALS)
+    if (obj == null) {
+        return false
+    }
+    const has = obj['has']
+    if (has !== true) {
+        return false
+    }
+    const u = obj['u']
+    const p = obj['p']
+    if (u == null || p == null) {
+        return false
+    }
+    return (u as string).length > 0 && (p as string).length > 0
+}
+
+/** 保存凭据（demo 阶段明文，生产环境须加密后写入） */
+export function saveSecureCredentials(username : string, password : string) : void {
+    const data : StoredCredentials = {
+        u: username,
+        p: password,
+        has: true,
+    }
+    setStorageJSON(STORAGE_KEY_CREDENTIALS, data)
+}
+
+/** 读取已保存凭据，不存在或格式异常返回 null */
+export function loadSecureCredentials() : StoredCredentials | null {
+    const obj = getStorageJSON(STORAGE_KEY_CREDENTIALS)
+    if (obj == null) {
+        return null
+    }
+    const u = obj['u']
+    const p = obj['p']
+    const has = obj['has']
+    if (has !== true || u == null || p == null) {
+        return null
+    }
+    const uStr = u as string
+    const pStr = p as string
+    if (uStr.length == 0 || pStr.length == 0) {
+        return null
+    }
+    const result : StoredCredentials = {
+        u: uStr,
+        p: pStr,
+        has: true,
+    }
+    return result
+}
+
+/** 清除已保存凭据 */
+export function clearSecureCredentials() : void {
+    removeStorage(STORAGE_KEY_CREDENTIALS)
+}

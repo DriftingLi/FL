@@ -64,7 +64,8 @@
     import { goBack } from '../../utils/navigation'
     import { setStorageJSON, getStorageJSON, removeStorage } from '../../utils/storage'
     import { STORAGE_KEY_RESUME_ATTACH } from '../../constants/app'
-    import { toStr, toNumber } from '../../api/helpers'
+    import { toStr, toNumber, errMsg } from '../../api/helpers'
+    import { uploadResumePdfApi, deleteAttachmentApi } from '../../api/resume'
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
@@ -72,6 +73,7 @@
     const attachName = ref<string>('')
     const attachSize = ref<number>(0)
     const attachTime = ref<string>('')
+    const uploading = ref<boolean>(false)
 
     const fileSizeText = computed<string>(() : string => {
         const bytes = attachSize.value
@@ -88,25 +90,37 @@
         return d.getFullYear().toString() + '-' + (m < 10 ? '0' : '') + m + '-' + (day < 10 ? '0' : '') + day
     }
 
-    /** 选择结果落地本地（后端 /resume/attachment 接口就绪后此处换真实上传） */
-    function saveAttachment(name : string, size : number) : void {
+    /** 选择文件后真实上传到服务器 */
+    function handleFile(path : string, name : string, size : number) : void {
         if (size > 20 * 1024 * 1024) {
             uni.showToast({ title: '文件超过 20MB，请压缩后再上传', icon: 'none' })
             return
         }
-        const data : UTSJSONObject = {
-            name: name,
-            size: size,
-            time: nowText(),
-        } as UTSJSONObject
-        setStorageJSON(STORAGE_KEY_RESUME_ATTACH, data)
-        attachName.value = name
-        attachSize.value = size
-        attachTime.value = nowText()
-        uni.showToast({ title: '附件已保存', icon: 'success', duration: 1000 })
+        uploading.value = true
+        uni.showLoading({ title: '上传中...', mask: true })
+        uploadResumePdfApi(path).then((url : string) : void => {
+            uploading.value = false
+            uni.hideLoading()
+            const data : UTSJSONObject = {
+                name: name,
+                size: size,
+                time: nowText(),
+                url: url,
+            } as UTSJSONObject
+            setStorageJSON(STORAGE_KEY_RESUME_ATTACH, data)
+            attachName.value = name
+            attachSize.value = size
+            attachTime.value = nowText()
+            uni.showToast({ title: '附件已上传', icon: 'success', duration: 1000 })
+        }).catch((e) : void => {
+            uploading.value = false
+            uni.hideLoading()
+            uni.showToast({ title: errMsg(e, '上传失败'), icon: 'none' })
+        })
     }
 
     function onChoose() : void {
+        if (uploading.value) return
         // #ifdef MP-WEIXIN
         uni.chooseMessageFile({
             count: 1,
@@ -114,7 +128,7 @@
             success: (res) => {
                 if (res.tempFiles.length > 0) {
                     const f = res.tempFiles[0]
-                    saveAttachment(f.name, f.size)
+                    handleFile(f.path, f.name, f.size)
                 }
             }
         })
@@ -126,7 +140,7 @@
             success: (res) => {
                 if (res.tempFiles.length > 0) {
                     const f = res.tempFiles[0]
-                    saveAttachment(f.name, f.size)
+                    handleFile(f.path, f.name, f.size)
                 }
             }
         })
@@ -134,6 +148,7 @@
     }
 
     function onRemove() : void {
+        if (uploading.value) return
         uni.showModal({
             title: '删除附件简历',
             content: '删除后企业将无法查看你的附件简历，确认删除？',
@@ -141,11 +156,15 @@
             confirmColor: '#fa3534',
             success: (res) => {
                 if (res.confirm) {
-                    removeStorage(STORAGE_KEY_RESUME_ATTACH)
-                    attachName.value = ''
-                    attachSize.value = 0
-                    attachTime.value = ''
-                    uni.showToast({ title: '已删除', icon: 'none' })
+                    deleteAttachmentApi('pdf').then(() : void => {
+                        removeStorage(STORAGE_KEY_RESUME_ATTACH)
+                        attachName.value = ''
+                        attachSize.value = 0
+                        attachTime.value = ''
+                        uni.showToast({ title: '已删除', icon: 'none' })
+                    }).catch((e) : void => {
+                        uni.showToast({ title: errMsg(e, '删除失败'), icon: 'none' })
+                    })
                 }
             }
         })

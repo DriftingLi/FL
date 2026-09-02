@@ -26,6 +26,10 @@
                         <text class="pwd-toggle" @click="togglePasswordVisible">{{ passwordVisible ? '隐藏' : '显示' }}</text>
                     </view>
                 </view>
+                <!-- 生物识别回填入口：有已存凭据 + 设备支持时才展示 -->
+                <view class="form-item biometric-row" v-if="showedStored && biometric.isSupported.value">
+                    <text class="biometric-link" @click="onBiometricUnlock">🔐 指纹/面容解锁填充</text>
+                </view>
             </template>
 
             <!-- ===== 手机号验证码登录 ===== -->
@@ -141,7 +145,7 @@
                     <view class="checkbox" :class="{ 'checkbox-checked': rememberMe }">
                         <text v-if="rememberMe" class="check-mark">✓</text>
                     </view>
-                    <text class="register-text">记住账号</text>
+                    <text class="register-text">记住密码</text>
                 </view>
                 <view class="register-links">
                     <text class="register-text">若手机号未注册，</text>
@@ -177,10 +181,11 @@
     import { ref, computed } from 'vue'
     import { useAuthStore } from '../../stores/auth'
     import { sendCodeApi, getCaptchaApi } from '../../api/auth'
-    import { setStorage, getStorage, removeStorage } from '../../utils/storage'
-    import { STORAGE_KEY_LAST_USERNAME } from '../../constants/app'
+    import { hasStoredCredentials, loadSecureCredentials, saveSecureCredentials, clearSecureCredentials } from '../../utils/secureStorage'
+    import { useBiometric } from '../../composables/useBiometric'
 
     const auth = useAuthStore()
+    const biometric = useBiometric()
 
     // 登录方式：password（账号密码，默认） | phone（手机验证码） | wechat（微信一键） | email（邮箱验证码）
     const mode = ref<string>('phone')
@@ -194,9 +199,11 @@
     // 账号 + 密码
     const username = ref<string>('')
     const password = ref<string>('')
-    // 密码明文切换 + 记住账号（仅存用户名，密码不落地）
+    // 密码明文切换 + 记住密码（勾选后保存凭据，下次通过生物识别回填）
     const passwordVisible = ref<boolean>(false)
     const rememberMe = ref<boolean>(false)
+    // 生物识别回填入口：有已存凭据且验证通过才展示
+    const showedStored = ref<boolean>(false)
     // 邮箱 + 验证码
     const email = ref<string>('')
     const emailCode = ref<string>('')
@@ -258,10 +265,9 @@
             uni.reLaunch({ url: '/pages/dashboard/dashboard' })
             return
         }
-        const lastUsername = getStorage(STORAGE_KEY_LAST_USERNAME)
-        if (lastUsername.length > 0) {
-            username.value = lastUsername
-            rememberMe.value = true
+        biometric.checkSupport()
+        if (hasStoredCredentials()) {
+            showedStored.value = true
         }
         loadCaptcha()
     })
@@ -298,11 +304,30 @@
         passwordVisible.value = !passwordVisible.value
     }
 
-    /** 取消勾选立即清除已记住的账号 */
+    /** 取消勾选立即清除已保存的安全凭据 */
     function toggleRemember() : void {
         rememberMe.value = !rememberMe.value
         if (!rememberMe.value) {
-            removeStorage(STORAGE_KEY_LAST_USERNAME)
+            clearSecureCredentials()
+            showedStored.value = false
+        }
+    }
+
+    /** 点击"指纹/面容解锁填充"：触发生物识别 → 成功则回填表单 */
+    async function onBiometricUnlock() : Promise<void> {
+        const ok = await biometric.authenticate('验证身份以填充已保存的账号密码')
+        if (ok) {
+            const cred = loadSecureCredentials()
+            if (cred != null) {
+                username.value = cred.u
+                password.value = cred.p
+                rememberMe.value = true
+                showedStored.value = false
+            } else {
+                uni.showToast({ title: '未找到保存的凭据', icon: 'none' })
+            }
+        } else {
+            uni.showToast({ title: '认证未通过', icon: 'none' })
         }
     }
 
@@ -469,15 +494,15 @@
                 loading.value = false
                 return
             } else {
+                const uname = username.value.trim()
                 await auth.login({
-                    username: username.value,
+                    username: uname,
                     password: password.value,
                 })
-                const uname = username.value.trim()
                 if (rememberMe.value && uname.length > 0) {
-                    setStorage(STORAGE_KEY_LAST_USERNAME, uname)
+                    saveSecureCredentials(uname, password.value)
                 } else {
-                    removeStorage(STORAGE_KEY_LAST_USERNAME)
+                    clearSecureCredentials()
                 }
             }
             uni.hideLoading()
@@ -782,6 +807,18 @@
 
     .register-link {
         color: #2979ff;
+    }
+
+    /* 生物识别回填入口 */
+    .biometric-row {
+        margin-top: -12rpx;
+        margin-bottom: 20rpx;
+    }
+
+    .biometric-link {
+        font-size: 26rpx;
+        color: #2979ff;
+        text-decoration: underline;
     }
 
     .register-sep {
