@@ -53,9 +53,15 @@ type ContactRequestDTO struct {
 	UpdatedAt     string  `json:"updated_at"`
 	DecidedAt     *string `json:"decided_at,omitempty"`
 	ExpiresAt     string  `json:"expires_at"`
-	// 企业信息（学员侧可见，不含电话）
+	// 企业信息（学员侧可见）
 	CompanyName string `json:"company_name,omitempty"`
 	ContactName string `json:"contact_name,omitempty"`
+	// 企业联系信息（#487：仅 status=approved 时透出——电话/邮箱/微信；其余状态一律缺失）
+	ContactPhone string `json:"contact_phone,omitempty"`
+	ContactEmail string `json:"contact_email,omitempty"`
+	Wechat       string `json:"wechat,omitempty"`
+	// Source 授权来源（recruiter 企业发起 / application 投递产生）
+	Source string `json:"source,omitempty"`
 }
 
 // toDTO 转换 DB 行为 DTO，带企业信息（学员侧用）。
@@ -82,6 +88,15 @@ func (s *ContactService) toDTO(m *model.ContactRequest) ContactRequestDTO {
 		dto.CompanyName = rec.CompanyName
 		dto.ContactName = rec.ContactName
 	}
+	// #487：仅 approved 时透出企业联系信息（含投递产生的授权）；其余状态不透出
+	if m.Status == "approved" {
+		if err := s.db.First(&rec, m.RecruiterID).Error; err == nil {
+			dto.ContactPhone = rec.ContactPhone
+			dto.ContactEmail = rec.ContactEmail
+			dto.Wechat = rec.Wechat
+		}
+	}
+	dto.Source = m.Source
 	return dto
 }
 

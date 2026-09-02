@@ -13,17 +13,29 @@
       </div>
       <div v-if="contactRequests.length > 0" class="rounded-card border border-line bg-panel p-4 mb-4">
         <div class="text-sm font-semibold text-ink mb-2">收到的简历查看申请</div>
-        <div v-for="req in contactRequests" :key="req.id" class="border-t border-line py-2 flex items-center justify-between gap-2">
-          <div class="text-sm text-ink">
-            <div>{{ req.company_name }} · {{ req.contact_name }}</div>
-            <div class="text-xs text-ink-3">附言：{{ req.message }}</div>
-            <div class="text-xs text-ink-3">{{ req.status }} · {{ req.created_at }}</div>
+        <div v-for="req in contactRequests" :key="req.id" class="border-t border-line py-2">
+          <div class="flex items-center justify-between gap-2">
+            <div class="text-sm text-ink">
+              <div>{{ req.company_name }} · {{ req.contact_name }}</div>
+              <div class="text-xs text-ink-3">附言：{{ req.message }}</div>
+              <div class="text-xs text-ink-3">{{ statusLabel(req.status) }} · {{ req.created_at }}</div>
+            </div>
+            <div class="flex gap-1">
+              <UiButton variant="primary" v-if="req.status === 'pending'" size="small" @click="approveReq(req.id)">同意</UiButton>
+              <UiButton v-if="req.status === 'pending'" size="small" @click="rejectReq(req.id)">拒绝</UiButton>
+              <UiButton variant="danger" v-if="req.status === 'approved'" size="small" @click="revokeReq(req.id)">撤回</UiButton>
+            </div>
           </div>
-          <div class="flex gap-1">
-            <UiButton variant="primary" v-if="req.status === 'pending'" size="small" @click="approveReq(req.id)">同意</UiButton>
-            <UiButton v-if="req.status === 'pending'" size="small" @click="rejectReq(req.id)">拒绝</UiButton>
-            <UiButton variant="danger" v-if="req.status === 'approved'" size="small" @click="revokeReq(req.id)">撤回</UiButton>
-          </div>
+          <!-- #487：已同意条目就地展开企业联系方式（含电话一键复制） -->
+          <CompanyContactInfo
+            v-if="req.status === 'approved'"
+            :approved="true"
+            :company-name="req.company_name"
+            :contact-name="req.contact_name"
+            :phone="req.contact_phone"
+            :email="req.contact_email"
+            :wechat="req.wechat"
+          />
         </div>
       </div>
       <!-- #415：未建简历（契约内 404）呈空态引导；真实故障走可重试错误态 -->
@@ -173,6 +185,7 @@ import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiCard from '@/components/ui/UiCard.vue'
+import CompanyContactInfo from '@/components/recruit/CompanyContactInfo.vue'
 
 const router = useRouter()
 const saving = ref(false)
@@ -212,6 +225,11 @@ const viewCount = ref(0)
 
 function goBack() {
   router.push({ name: 'StudentProfile' })
+}
+
+function statusLabel(s: string) {
+  const m: Record<string, string> = { pending: '待处理', approved: '已同意', rejected: '已拒绝', revoked: '已撤回', expired: '已过期' }
+  return m[s] || s
 }
 
 function addExp() {

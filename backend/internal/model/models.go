@@ -111,18 +111,20 @@ func (Tutor) TableName() string { return "tutor" }
 // RecruiterUser 企业招聘者账号，独立于 hrwai_users / admin / tutor。
 // 邀约制：仅管理员创建，企业信息字段全部必填；支持禁用位。
 type RecruiterUser struct {
-	ID            int       `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	Username      string    `gorm:"column:username;uniqueIndex" json:"username"`
-	Password      string    `gorm:"column:password" json:"-"`
-	CompanyName   string    `gorm:"column:company_name" json:"company_name"`
-	CreditCode    string    `gorm:"column:credit_code" json:"credit_code"`
-	BusinessScope string    `gorm:"column:business_scope" json:"business_scope"`
-	ContactName   string    `gorm:"column:contact_name" json:"contact_name"`
-	ContactPhone  string    `gorm:"column:contact_phone" json:"contact_phone"`
-	ContactEmail  string    `gorm:"column:contact_email" json:"contact_email"`
-	Status        int16     `gorm:"column:status;default:1" json:"status"`
-	CreatedAt     time.Time `gorm:"column:created_at" json:"created_at"`
-	UpdatedAt     time.Time `gorm:"column:updated_at" json:"updated_at"`
+	ID            int    `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	Username      string `gorm:"column:username;uniqueIndex" json:"username"`
+	Password      string `gorm:"column:password" json:"-"`
+	CompanyName   string `gorm:"column:company_name" json:"company_name"`
+	CreditCode    string `gorm:"column:credit_code" json:"credit_code"`
+	BusinessScope string `gorm:"column:business_scope" json:"business_scope"`
+	ContactName   string `gorm:"column:contact_name" json:"contact_name"`
+	ContactPhone  string `gorm:"column:contact_phone" json:"contact_phone"`
+	ContactEmail  string `gorm:"column:contact_email" json:"contact_email"`
+	// Wechat 企业微信（#487：可空；学员侧交换授权 approved 后透出）
+	Wechat    string    `gorm:"column:wechat;default:''" json:"wechat"`
+	Status    int16     `gorm:"column:status;default:1" json:"status"`
+	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt time.Time `gorm:"column:updated_at" json:"updated_at"`
 }
 
 func (RecruiterUser) TableName() string { return "recruiter_users" }

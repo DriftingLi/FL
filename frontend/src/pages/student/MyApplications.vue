@@ -24,6 +24,16 @@
               <span v-if="item.company_name">{{ item.company_name }}</span>
               <span>投递于 {{ item.created_at }}</span>
             </div>
+            <!-- #487：投递即授权（source=application approved）→ 展示企业联系方式 -->
+            <CompanyContactInfo
+              v-if="approvedContactFor(item)"
+              :approved="true"
+              :company-name="approvedContactFor(item)?.company_name"
+              :contact-name="approvedContactFor(item)?.contact_name"
+              :phone="approvedContactFor(item)?.contact_phone"
+              :email="approvedContactFor(item)?.contact_email"
+              :wechat="approvedContactFor(item)?.wechat"
+            />
           </div>
           <UiButton v-if="item.status === 'applied'" size="small" @click="openWithdraw(item)">撤回</UiButton>
         </div>
@@ -55,12 +65,16 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { jobApi, type JobApplication } from '@/api/job'
+import { resumeApi } from '@/api/resume'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import CompanyContactInfo from '@/components/recruit/CompanyContactInfo.vue'
 
 const items = ref<JobApplication[]>([])
+// #487：approved 的联系方式交换（投递产生/企业发起）用于企业联系方式展示
+const approvedContacts = ref<any[]>([])
 const withdrawVisible = ref(false)
 const withdrawing = ref(false)
 const revokeContact = ref(false) // 默认不勾选（决定 10）
@@ -80,7 +94,16 @@ const {
   const res = await jobApi.listMyApplications({ page: page.value, page_size: pageSize.value })
   items.value = res?.items || []
   total.value = res?.total || 0
+  try {
+    const reqs: any = await resumeApi.listContactRequests({ page: 1, page_size: 100 })
+    approvedContacts.value = (reqs?.items || []).filter((r: any) => r.status === 'approved')
+  } catch {}
 })
+
+// 找该投递对应企业的已授权联系方式（按 recruiter_id 匹配）
+function approvedContactFor(item: JobApplication) {
+  return approvedContacts.value.find((r: any) => r.recruiter_id === item.recruiter_id) || null
+}
 
 function statusLabel(s: string) {
   const m: Record<string, string> = { applied: '待处理', rejected: '不合适', withdrawn: '已撤回' }
