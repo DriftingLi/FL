@@ -986,7 +986,42 @@ health_check() {
         log_error "前端容器未运行!"
         return 1
     fi
-    log_ok "前端容器运行中"
+
+    # ⚠️ 容器"在跑"不等于 nginx 在服务：frontend 用 network_mode: host，容器内没有自己的
+    #    网络命名空间，healthcheck 被显式禁用（原 healthcheck 在 host 网络下 wget 行为异常，
+    #    会误报 unhealthy，见 docker-compose.prod.yml 注释）。因此 `compose --wait` 恒对它
+    #    超时，`docker compose ps` 也永远只会显示 running——nginx 即使完全起不来，部署照样
+    #    报绿。必须像后端一样做真实 HTTP 探活。
+    #
+    # 探活走宿主机侧而非容器内：nginx 直连宿主机 80/443（host 网络），localhost:80 就是它；
+    # 且 `location /health` 在 80 端口被排除在 301→HTTPS 之外，返回 200 "ok"
+    # （见 frontend/nginx-host.conf）。curl 是本脚本的硬依赖（check_dependency curl）。
+    FRONTEND_PORT="${NGINX_PORT:-80}"
+    FE_RETRY=0
+    FE_HTTP_CODE="000"
+    while [ $FE_RETRY -lt $HEALTH_CHECK_RETRIES ]; do
+        FE_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "http://localhost:${FRONTEND_PORT}/health" 2>/dev/null || echo "000")
+        if [ "$FE_HTTP_CODE" = "200" ]; then
+            break
+        fi
+        FE_RETRY=$((FE_RETRY + 1))
+        if [ $((FE_RETRY % 5)) -eq 0 ]; then
+            log_warn "等待前端就绪... ($FE_HTTP_CODE) [$FE_RETRY/$HEALTH_CHECK_RETRIES]"
+        fi
+        sleep "$HEALTH_CHECK_INTERVAL"
+    done
+
+    if [ "$FE_HTTP_CODE" != "200" ]; then
+        log_error "前端健康检查失败 (HTTP $FE_HTTP_CODE)!"
+        echo ""
+        echo "=== 前端容器日志（最后 30 行）==="
+        docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" logs --tail 30 "$FRONTEND_SERVICE" 2>&1 || echo "无法获取日志"
+        echo ""
+        echo "=== 容器状态 ==="
+        docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" ps 2>&1
+        return 1
+    fi
+    log_ok "前端健康检查通过 ($FE_HTTP_CODE)"
 }
 
 # ======================================================================
