@@ -48,8 +48,8 @@ func TestRecruitResumesContract_Full(t *testing.T) {
 	newer := now.Add(-30 * time.Minute)
 	ip := func(v int) *int { return &v }
 	card1 := model.JobCard{
-		UserID: stu1.ID, RealName: "张三丰", ContactPhone: "13800000001", Wechat: "zhang_wx", Region: "江苏苏州精确地址123号",
-		ExpectedPositionID: &spec1.PositionID, ExpectedPositionExtra: "叉车维修", ExpectedRegions: model.JSONB([]byte(`["江苏苏州"]`)),
+		UserID: stu1.ID, RealName: "张三丰", ContactPhone: "13800000001", Wechat: "zhang_wx", Region: "江苏省/苏州市",
+		ExpectedPositionID: &spec1.PositionID, ExpectedPositionExtra: "叉车维修", ExpectedRegions: model.JSONB([]byte(`["江苏省/苏州市"]`)),
 		SalaryMin: ip(8000), SalaryMax: ip(12000), SalaryNegotiable: false,
 		AvailableIn: "immediate", JobNature: "fulltime", ExperienceYears: 5, SelfIntro: "5年经验自我介绍",
 		ResumeExperiences:    model.JSONB([]byte(`[{"company":"A公司","role":"维修工","start_month":"2020-01","end_month":"2023-01","desc":"修叉车"}]`)),
@@ -58,8 +58,8 @@ func TestRecruitResumesContract_Full(t *testing.T) {
 		CreatedAt: older, UpdatedAt: older,
 	}
 	card2 := model.JobCard{
-		UserID: stu2.ID, RealName: "李四", ContactPhone: "13900000002", Wechat: "li_wx", Region: "浙江杭州精确地址",
-		ExpectedPositionID: &spec2.PositionID, ExpectedPositionExtra: "电工", ExpectedRegions: model.JSONB([]byte(`["浙江杭州"]`)),
+		UserID: stu2.ID, RealName: "李四", ContactPhone: "13900000002", Wechat: "li_wx", Region: "浙江省/杭州市",
+		ExpectedPositionID: &spec2.PositionID, ExpectedPositionExtra: "电工", ExpectedRegions: model.JSONB([]byte(`["浙江省/杭州市"]`)),
 		SalaryMin: ip(10000), SalaryMax: ip(15000), SalaryNegotiable: false,
 		AvailableIn: "1w", JobNature: "parttime", ExperienceYears: 2, SelfIntro: "2年电工经验",
 		ResumeExperiences:    model.JSONB([]byte(`[{"company":"B公司","role":"电工","start_month":"2021-01","end_month":"2024-01","desc":"电气"}]`)),
@@ -68,8 +68,8 @@ func TestRecruitResumesContract_Full(t *testing.T) {
 		CreatedAt: newer, UpdatedAt: newer,
 	}
 	cardHidden := model.JobCard{
-		UserID: stu3.ID, RealName: "王五", ContactPhone: "13700000003", Wechat: "wang_wx", Region: "上海精确地址",
-		ExpectedPositionID: &spec1.PositionID, ExpectedPositionExtra: "叉车维修", ExpectedRegions: model.JSONB([]byte(`["上海"]`)),
+		UserID: stu3.ID, RealName: "王五", ContactPhone: "13700000003", Wechat: "wang_wx", Region: "上海市",
+		ExpectedPositionID: &spec1.PositionID, ExpectedPositionExtra: "叉车维修", ExpectedRegions: model.JSONB([]byte(`["上海市"]`)),
 		SalaryMin: ip(9000), SalaryMax: ip(13000), AvailableIn: "immediate", ExperienceYears: 3, SelfIntro: "隐藏简历",
 		ResumeExperiences: model.JSONB([]byte(`[]`)), ResumeCertifications: model.JSONB([]byte(`[]`)), Visibility: "hidden",
 		CreatedAt: now, UpdatedAt: now,
@@ -221,7 +221,7 @@ func TestRecruitResumesContract_Full(t *testing.T) {
 	}
 
 	// 筛选轴：region
-	rec = doWithToken(t, r, recruiterToken, http.MethodGet, "/api/recruit/resumes?region=浙江杭州", nil)
+	rec = doWithToken(t, r, recruiterToken, http.MethodGet, "/api/recruit/resumes?region=杭州市", nil)
 	var filt struct {
 		Code int `json:"code"`
 		Data struct {

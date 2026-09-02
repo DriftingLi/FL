@@ -33,7 +33,15 @@
       <div class="mt-4 text-sm text-ink-2 whitespace-pre-wrap">{{ data.description || '-' }}</div>
 
       <div class="mt-6 flex items-center gap-2">
-        <UiButton variant="primary" :loading="applying" @click="showApplyDialog = true">投递</UiButton>
+        <!-- #488：投递按钮三态 -->
+        <UiButton
+          v-if="canApply"
+          variant="primary"
+          :loading="applying"
+          @click="showApplyDialog = true"
+        >投递</UiButton>
+        <UiButton v-else-if="data.apply_state === 'applied'" disabled>你已投递过该职位</UiButton>
+        <UiButton v-else-if="data.apply_state === 'not_hired'" disabled>企业标记为不合适，{{ data.cooldown_days }} 天后可再次投递</UiButton>
         <UiButton variant="danger" plain :loading="reporting" @click="showReportDialog = true">举报</UiButton>
         <p v-if="applyError" class="mt-2 text-xs text-red-500">{{ applyError }}</p>
       </div>
@@ -62,7 +70,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { jobApi, type JobPosting } from '@/api/job'
@@ -90,6 +98,12 @@ const {
   const id = Number(route.params.id)
   const res = await jobApi.getPublicJob(id)
   data.value = (res as any) || null
+})
+
+// #488：可投递 = 无记录或冷却期满/已撤回
+const canApply = computed(() => {
+  const s = data.value?.apply_state
+  return s !== 'applied' && s !== 'not_hired'
 })
 
 

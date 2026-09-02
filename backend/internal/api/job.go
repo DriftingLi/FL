@@ -243,6 +243,8 @@ func (h *JobHandler) ListPublic(c *gin.Context) {
 			}
 			params.Region = c.Query("region")
 			params.Experience = c.Query("experience")
+			// #488：学员视角回填投递状态（applied/not_hired）
+			params.StudentUserID = middleware.CurrentUserID(c)
 			return h.svc.List(0, params)
 		},
 	}.Handle(c)
@@ -266,7 +268,8 @@ func (h *JobHandler) GetPublic(c *gin.Context) {
 			if err != nil {
 				return nil, err
 			}
-			return h.svc.Get(0, id)
+			// #488：详情带学员视角投递状态
+			return h.svc.GetForStudent(middleware.CurrentUserID(c), id)
 		},
 		Render: func(c *gin.Context, _ *struct{}, resp *service.JobPostingDTO, err error) {
 			if err != nil {

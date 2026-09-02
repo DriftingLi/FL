@@ -56,6 +56,7 @@ func (h *AdminRecruiterHandler) Create(c *gin.Context) {
 				"contact_name":   rec.ContactName,
 				"contact_phone":  rec.ContactPhone,
 				"contact_email":  rec.ContactEmail,
+				"wechat":         rec.Wechat,
 				"status":         rec.Status,
 			}
 			return &m, nil
@@ -130,6 +131,7 @@ func (h *AdminRecruiterHandler) Edit(c *gin.Context) {
 				"contact_name":   rec.ContactName,
 				"contact_phone":  rec.ContactPhone,
 				"contact_email":  rec.ContactEmail,
+				"wechat":         rec.Wechat,
 			}
 			return &m, nil
 		},

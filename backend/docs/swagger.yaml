@@ -382,6 +382,8 @@ definitions:
         type: string
       experience_req:
         type: string
+      position_id:
+        type: integer
       region:
         type: string
       salary_max:
@@ -390,8 +392,6 @@ definitions:
         type: integer
       salary_text:
         type: string
-      specialty_id:
-        type: integer
       title:
         type: string
     type: object
@@ -544,6 +544,19 @@ definitions:
         type: integer
       total_score:
         type: number
+    type: object
+  service.PositionInput:
+    properties:
+      code:
+        type: string
+      description:
+        type: string
+      name:
+        type: string
+      sort_order:
+        type: integer
+      status:
+        type: integer
     type: object
   service.PracticePracticeStatsDTO:
     properties:
@@ -1186,6 +1199,159 @@ paths:
       summary: 强制下架职位
       tags:
       - 招聘域-内容治理
+  /admin/position:
+    post:
+      consumes:
+      - application/json
+      description: 管理员创建岗位字典项
+      parameters:
+      - description: 岗位信息
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/service.PositionInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 创建成功
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 创建岗位
+      tags:
+      - 管理端-岗位字典
+  /admin/position/{position_id}:
+    delete:
+      description: 管理员删除岗位字典项（已关联职位/简历置空 position_id，不级联删除）
+      parameters:
+      - description: 岗位 ID
+        in: path
+        name: position_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已删除
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 删除失败
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 删除岗位
+      tags:
+      - 管理端-岗位字典
+    put:
+      consumes:
+      - application/json
+      description: 管理员更新岗位字典项
+      parameters:
+      - description: 岗位 ID
+        in: path
+        name: position_id
+        required: true
+        type: integer
+      - description: 岗位信息
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/service.PositionInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新成功
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 更新岗位
+      tags:
+      - 管理端-岗位字典
+  /admin/position/{position_id}/sort:
+    put:
+      consumes:
+      - application/json
+      description: 管理员交换两个岗位的排序位置
+      parameters:
+      - description: 岗位 ID
+        in: path
+        name: position_id
+        required: true
+        type: integer
+      - description: '交换目标 {swap_with: int}'
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已交换
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 交换岗位排序
+      tags:
+      - 管理端-岗位字典
+  /admin/positions:
+    get:
+      description: 管理端岗位字典列表（含停用项）
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 岗位列表
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 岗位列表
+      tags:
+      - 管理端-岗位字典
   /ai-assistant/chat:
     post:
       consumes:
@@ -3365,11 +3531,11 @@ paths:
       - 学员端-论坛
   /jobs:
     get:
-      description: 学员浏览职位广场（仅 open 且未强制下架，按新鲜度排序；支持专业方向/地区/薪资/经验筛选）
+      description: 学员浏览职位广场（仅 open 且未强制下架，按新鲜度排序；支持岗位/地区/薪资/经验筛选）
       parameters:
-      - description: 专业方向 ID
+      - description: 岗位 ID
         in: query
-        name: specialty_id
+        name: position_id
         type: integer
       - description: 地区
         in: query
@@ -4152,6 +4318,21 @@ paths:
       summary: 领取任务积分
       tags:
       - 学员端-积分
+  /positions:
+    get:
+      description: 学员端/招聘端可用的岗位字典（仅启用项）
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 岗位列表
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 岗位字典
+      tags:
+      - 招聘域-岗位字典
   /practice-mode/free:
     get:
       consumes:
@@ -4941,7 +5122,7 @@ paths:
     post:
       consumes:
       - application/json
-      description: 企业发布职位（职位名 + 必填专业方向 + 地区/薪资/经验要求/描述）
+      description: 企业发布职位（职位名 + 必填岗位 + 地区/薪资/经验要求/描述）
       parameters:
       - description: 职位信息
         in: body
@@ -5137,6 +5318,35 @@ paths:
       summary: 明文联系方式
       tags:
       - 招聘域-联系方式交换
+  /recruit/resumes/{id}/pdf:
+    get:
+      description: 招聘者未授权即可内嵌预览学员的在线简历（姓名打码、无电话/微信、地址到市、无工作照/证书原图）；隐藏卡 404
+      parameters:
+      - description: 学员 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/pdf
+      responses:
+        "200":
+          description: PDF 字节流
+          schema:
+            type: string
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 简历不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 在线简历 PDF（打码版）
+      tags:
+      - 招聘域-简历
   /resume:
     get:
       description: 学员查看自己的简历卡（未建时 404，契约内空态）
@@ -5408,6 +5618,46 @@ paths:
       tags:
       - 学员端-简历卡
   /resume/pdf:
+    delete:
+      description: 学员删除自己简历卡的上传 PDF 附件（resume_file_url 置空）
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已删除
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 删除 PDF 附件
+      tags:
+      - 学员端-简历卡
+    get:
+      description: 学员查看自己的打码在线简历（与招聘者所见同一份；本人鉴权；未建简历 404）
+      produces:
+      - application/pdf
+      responses:
+        "200":
+          description: PDF 字节流
+          schema:
+            type: string
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 简历不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 我的在线简历 PDF
+      tags:
+      - 学员端-简历卡
     post:
       consumes:
       - multipart/form-data

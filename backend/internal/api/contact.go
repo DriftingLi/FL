@@ -121,12 +121,15 @@ func (h *ContactHandler) GetContact(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
-	// 仅返回明文字段（phone/wechat/real_name/pdf），不返回其他已脱敏字段（保持 L2 口径）
+	// 授权后补齐面（#489）：明文核心字段 + 上传附件 + 工作照 + 证书原图（含 image_urls）。
+	// 仅 approved 授权可到达本响应（service GetContact 实时校验），未授权 403。
 	response.Success(c, gin.H{
-		"real_name":       dto.RealName,
-		"contact_phone":   dto.ContactPhone,
-		"wechat":          dto.Wechat,
-		"resume_file_url": dto.ResumeFileURL,
+		"real_name":             dto.RealName,
+		"contact_phone":         dto.ContactPhone,
+		"wechat":                dto.Wechat,
+		"resume_file_url":       dto.ResumeFileURL,
+		"photos":                dto.Photos,
+		"resume_certifications": dto.ResumeCertifications,
 	})
 }
 

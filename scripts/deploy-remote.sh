@@ -986,7 +986,50 @@ health_check() {
         log_error "前端容器未运行!"
         return 1
     fi
-    log_ok "前端容器运行中"
+
+    # ⚠️ 容器"在跑"不等于 nginx 在服务：frontend 用 network_mode: host，容器内没有自己的
+    #    网络命名空间，healthcheck 被显式禁用（原 healthcheck 在 host 网络下 wget 行为异常，
+    #    会误报 unhealthy，见 docker-compose.prod.yml 注释）。因此 `compose --wait` 恒对它
+    #    超时，`docker compose ps` 也永远只会显示 running——nginx 即使完全起不来，部署照样
+    #    报绿。必须像后端一样做真实 HTTP 探活。
+    #
+    # 探活走宿主机侧而非容器内（curl 是本脚本硬依赖，check_dependency curl）：
+    # - 首选 HTTPS 443：`location /health` 挂在 443 的 default_server（server_name _）上，
+    #   `return 200 "ok"`。用 -k 跳过证书校验——证书 CN 是公网域名，走 localhost 回环必然
+    #   不匹配。已在生产机实测：https://<ip>/health → 200。
+    # - 兜底 HTTP 80：⚠️ 仓库 nginx-host.conf 注释称 80 端口的 /health 豁免 301→HTTPS，
+    #   但生效配置实测并非如此（2026-09-02 生产与 testing 均返回 301，曾因此误杀一次
+    #   testing 冒烟）。所以 80 只作兜底且仅认 200，301 一律视为不通。
+    FRONTEND_HTTPS_PORT="${NGINX_HTTPS_PORT:-443}"
+    FRONTEND_HTTP_PORT="${NGINX_HTTP_PORT:-80}"
+    FE_RETRY=0
+    FE_HTTP_CODE="000"
+    while [ $FE_RETRY -lt $HEALTH_CHECK_RETRIES ]; do
+        FE_HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" --max-time 5 "https://localhost:${FRONTEND_HTTPS_PORT}/health" 2>/dev/null || echo "000")
+        if [ "$FE_HTTP_CODE" != "200" ]; then
+            FE_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "http://localhost:${FRONTEND_HTTP_PORT}/health" 2>/dev/null || echo "000")
+        fi
+        if [ "$FE_HTTP_CODE" = "200" ]; then
+            break
+        fi
+        FE_RETRY=$((FE_RETRY + 1))
+        if [ $((FE_RETRY % 5)) -eq 0 ]; then
+            log_warn "等待前端就绪... ($FE_HTTP_CODE) [$FE_RETRY/$HEALTH_CHECK_RETRIES]"
+        fi
+        sleep "$HEALTH_CHECK_INTERVAL"
+    done
+
+    if [ "$FE_HTTP_CODE" != "200" ]; then
+        log_error "前端健康检查失败 (HTTP $FE_HTTP_CODE)!"
+        echo ""
+        echo "=== 前端容器日志（最后 30 行）==="
+        docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" logs --tail 30 "$FRONTEND_SERVICE" 2>&1 || echo "无法获取日志"
+        echo ""
+        echo "=== 容器状态 ==="
+        docker compose -f "$DEPLOY_PATH/$COMPOSE_FILE" ps 2>&1
+        return 1
+    fi
+    log_ok "前端健康检查通过 ($FE_HTTP_CODE)"
 }
 
 # ======================================================================

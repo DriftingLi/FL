@@ -26,6 +26,9 @@ style="width: 280px"
 <el-table-column prop="credit_code" label="统一社会信用代码" min-width="180" />
 <el-table-column prop="contact_name" label="联系人" min-width="120" />
 <el-table-column prop="contact_phone" label="联系电话" min-width="140" />
+<el-table-column prop="wechat" label="企业微信" min-width="120">
+<template #default="{ row }">{{ row.wechat || '-' }}</template>
+</el-table-column>
 <el-table-column label="状态" width="100" align="center">
 <template #default="{ row }">
 <el-tag :type="row.status === 1 ? 'success' : 'danger'" size="small">{{ row.status === 1 ? '正常' : '禁用' }}</el-tag>
@@ -89,6 +92,9 @@ layout="total, sizes, prev, pager, next"
 <el-form-item label="联系邮箱" prop="contact_email">
 <el-input v-model="formData.contact_email" placeholder="请输入联系邮箱" />
 </el-form-item>
+<el-form-item label="企业微信">
+<el-input v-model="formData.wechat" placeholder="选填，学员同意交换后可加" maxlength="100" />
+</el-form-item>
 </el-form>
 <template #footer>
 <el-button @click="dialogVisible = false">取消</el-button>
@@ -118,6 +124,9 @@ layout="total, sizes, prev, pager, next"
 </el-form-item>
 <el-form-item label="联系邮箱" prop="contact_email">
 <el-input v-model="editForm.contact_email" placeholder="请输入联系邮箱" />
+</el-form-item>
+<el-form-item label="企业微信">
+<el-input v-model="editForm.wechat" placeholder="选填，学员同意交换后可加" maxlength="100" />
 </el-form-item>
 </el-form>
 <template #footer>
@@ -157,7 +166,7 @@ const dialogVisible = ref(false)
 const submitting = ref(false)
 const formRef = ref<FormInstance>()
 const formData = reactive({
-  username: '', password: '', company_name: '', credit_code: '', business_scope: '', contact_name: '', contact_phone: '', contact_email: ''
+  username: '', password: '', company_name: '', credit_code: '', business_scope: '', contact_name: '', contact_phone: '', contact_email: '', wechat: ''
 })
 
 // 必填校验与后端 ValidateRecruiterInput 逐条同源（#416：前后端校验口径单点，不各写一套）
@@ -201,7 +210,7 @@ const editFormRules: FormRules = {
   contact_email: formRules.contact_email,
 }
 
-const editForm = reactive({ id: 0, username: '', company_name: '', credit_code: '', business_scope: '', contact_name: '', contact_phone: '', contact_email: '' })
+const editForm = reactive({ id: 0, username: '', company_name: '', credit_code: '', business_scope: '', contact_name: '', contact_phone: '', contact_email: '', wechat: '' })
 
 const pwdDialogVisible = ref(false)
 const pwdSubmitting = ref(false)
@@ -223,6 +232,7 @@ function openEditDialog(row: AdminRecruiter) {
   editForm.contact_name = row.contact_name
   editForm.contact_phone = row.contact_phone
   editForm.contact_email = row.contact_email
+  editForm.wechat = row.wechat || ''
   editDialogVisible.value = true
 }
 
@@ -245,6 +255,7 @@ async function handleEditSubmit() {
       contact_name: editForm.contact_name,
       contact_phone: editForm.contact_phone,
       contact_email: editForm.contact_email,
+      wechat: editForm.wechat,
     }
     if (editForm.username.trim()) payload.username = editForm.username.trim()
     await adminApi.editRecruiter(editForm.id, payload)
@@ -311,7 +322,7 @@ const { loading, list, total, currentPage, pageSize, searchKeyword, load, search
 
 function openAddDialog() {
   formData.username = ''; formData.password = ''; formData.company_name = ''; formData.credit_code = '';
-  formData.business_scope = ''; formData.contact_name = ''; formData.contact_phone = ''; formData.contact_email = '';
+  formData.business_scope = ''; formData.contact_name = ''; formData.contact_phone = ''; formData.contact_email = ''; formData.wechat = '';
   dialogVisible.value = true
 }
 
