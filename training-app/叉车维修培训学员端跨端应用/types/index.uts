@@ -1037,3 +1037,81 @@ export type CredentialSwitchResult = {
     success : boolean
     credential : CredentialItem | null  // 切换后的当前证件
 }
+
+// ========== 简历模块（GET/PUT /resume） ==========
+
+/** 教育经历项 */
+export type ResumeEduItem = {
+    school : string
+    major : string
+    degree : string
+    start : string
+    end : string
+}
+
+/** 工作经历项 */
+export type ResumeExpItem = {
+    company : string
+    position : string
+    start : string
+    end : string
+    desc : string
+}
+
+/** 简历数据（GET /resume 返回） */
+export type ResumeData = {
+    id : number
+    user_id : number
+    name : string
+    gender : string
+    phone : string
+    email : string
+    years : string              // 工作年限
+    job_title : string          // 意向岗位
+    job_city : string           // 意向城市
+    salary : string             // 期望薪资
+    job_type : string           // 工作类型
+    certs : string              // 证书与技能
+    self_intro : string         // 自我介绍
+    edu : ResumeEduItem[]       // 教育经历
+    exp : ResumeExpItem[]       // 工作经历
+    photo_url : string          // 工作照 URL
+    pdf_url : string            // 附件简历 PDF URL
+    visibility : string         // 公开状态：public / hidden
+    completion : number         // 完善度百分比
+    view_count : number         // 被查看次数
+    created_at : string
+    updated_at : string
+}
+
+/** 保存简历参数（PUT /resume） */
+export type SaveResumeParams = {
+    name : string
+    gender : string
+    phone : string
+    email : string
+    years : string
+    job_title : string
+    job_city : string
+    salary : string
+    job_type : string
+    certs : string
+    self_intro : string
+    edu : ResumeEduItem[]
+    exp : ResumeExpItem[]
+}
+
+/** 简历查看留痕项 */
+export type ResumeViewStat = {
+    id : number
+    recruiter_name : string     // 招聘者名称
+    company_name : string       // 企业名称
+    job_title : string          // 查看的职位
+    viewed_at : string          // 查看时间
+}
+
+/** 简历查看留痕列表响应 */
+export type ResumeViewStatsResult = {
+    items : ResumeViewStat[]
+    total : number
+}

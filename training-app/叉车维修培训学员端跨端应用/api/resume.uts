@@ -1,0 +1,228 @@
+/**
+ * 简历模块 API
+ */
+import { get, put, post } from './request'
+import { toStr, toNumber, toList } from './helpers'
+import type { ResumeData, SaveResumeParams, ResumeEduItem, ResumeExpItem, ResumeViewStat, ResumeViewStatsResult } from '../types/index'
+
+// ========== 内部构建函数 ==========
+
+function buildEduItem(obj : UTSJSONObject) : ResumeEduItem {
+    return {
+        school: toStr(obj['school']),
+        major: toStr(obj['major']),
+        degree: toStr(obj['degree']),
+        start: toStr(obj['start']),
+        end: toStr(obj['end']),
+    }
+}
+
+function buildExpItem(obj : UTSJSONObject) : ResumeExpItem {
+    return {
+        company: toStr(obj['company']),
+        position: toStr(obj['position']),
+        start: toStr(obj['start']),
+        end: toStr(obj['end']),
+        desc: toStr(obj['desc']),
+    }
+}
+
+function buildResumeData(obj : UTSJSONObject) : ResumeData {
+    const eduList : ResumeEduItem[] = []
+    const eduRaw = obj['edu']
+    if (eduRaw != null) {
+        const arr = eduRaw as Array<UTSJSONObject>
+        for (let i = 0; i < arr.length; i++) {
+            eduList.push(buildEduItem(arr[i]))
+        }
+    }
+
+    const expList : ResumeExpItem[] = []
+    const expRaw = obj['exp']
+    if (expRaw != null) {
+        const arr = expRaw as Array<UTSJSONObject>
+        for (let i = 0; i < arr.length; i++) {
+            expList.push(buildExpItem(arr[i]))
+        }
+    }
+
+    return {
+        id: toNumber(obj['id']),
+        user_id: toNumber(obj['user_id']),
+        name: toStr(obj['name']),
+        gender: toStr(obj['gender']),
+        phone: toStr(obj['phone']),
+        email: toStr(obj['email']),
+        years: toStr(obj['years']),
+        job_title: toStr(obj['job_title']),
+        job_city: toStr(obj['job_city']),
+        salary: toStr(obj['salary']),
+        job_type: toStr(obj['job_type']),
+        certs: toStr(obj['certs']),
+        self_intro: toStr(obj['self_intro']),
+        edu: eduList,
+        exp: expList,
+        photo_url: toStr(obj['photo_url']),
+        pdf_url: toStr(obj['pdf_url']),
+        visibility: toStr(obj['visibility']),
+        completion: toNumber(obj['completion']),
+        view_count: toNumber(obj['view_count']),
+        created_at: toStr(obj['created_at']),
+        updated_at: toStr(obj['updated_at']),
+    }
+}
+
+function buildViewStat(obj : UTSJSONObject) : ResumeViewStat {
+    return {
+        id: toNumber(obj['id']),
+        recruiter_name: toStr(obj['recruiter_name']),
+        company_name: toStr(obj['company_name']),
+        job_title: toStr(obj['job_title']),
+        viewed_at: toStr(obj['viewed_at']),
+    }
+}
+
+// ========== Mock 数据 ==========
+
+function getMockResumeData() : ResumeData {
+    return {
+        id: 1,
+        user_id: 1,
+        name: '',
+        gender: '',
+        phone: '',
+        email: '',
+        years: '',
+        job_title: '',
+        job_city: '',
+        salary: '',
+        job_type: '',
+        certs: '',
+        self_intro: '',
+        edu: [],
+        exp: [],
+        photo_url: '',
+        pdf_url: '',
+        visibility: 'hidden',
+        completion: 0,
+        view_count: 0,
+        created_at: '',
+        updated_at: '',
+    }
+}
+
+// ========== 对外 API 函数 ==========
+
+/**
+ * 获取我的简历
+ * GET /resume
+ */
+export function getResumeApi() : Promise<ResumeData> {
+    return get('/resume').then((data : UTSJSONObject) : ResumeData => {
+        return buildResumeData(data)
+    }).catch((e) : ResumeData => {
+        console.warn('[getResumeApi] network failed, using mock data:', e)
+        return getMockResumeData()
+    })
+}
+
+/**
+ * 保存简历
+ * PUT /resume
+ */
+export function saveResumeApi(params : SaveResumeParams) : Promise<void> {
+    const eduArr : UTSJSONObject[] = []
+    for (let i = 0; i < params.edu.length; i++) {
+        const e = params.edu[i]
+        eduArr.push({
+            school: e.school,
+            major: e.major,
+            degree: e.degree,
+            start: e.start,
+            end: e.end,
+        } as UTSJSONObject)
+    }
+
+    const expArr : UTSJSONObject[] = []
+    for (let i = 0; i < params.exp.length; i++) {
+        const e = params.exp[i]
+        expArr.push({
+            company: e.company,
+            position: e.position,
+            start: e.start,
+            end: e.end,
+            desc: e.desc,
+        } as UTSJSONObject)
+    }
+
+    const body : UTSJSONObject = {
+        name: params.name,
+        gender: params.gender,
+        phone: params.phone,
+        email: params.email,
+        years: params.years,
+        job_title: params.job_title,
+        job_city: params.job_city,
+        salary: params.salary,
+        job_type: params.job_type,
+        certs: params.certs,
+        self_intro: params.self_intro,
+        edu: eduArr,
+        exp: expArr,
+    }
+
+    return put('/resume', body).then(() : void => {
+        // 保存成功
+    })
+}
+
+/**
+ * 上传工作照
+ * POST /resume/image
+ */
+export function uploadWorkPhotoApi(filePath : string) : Promise<string> {
+    return post('/resume/image', { filePath: filePath }).then((data : UTSJSONObject) : string => {
+        return toStr(data['url'])
+    })
+}
+
+/**
+ * 上传简历 PDF
+ * POST /resume/pdf
+ */
+export function uploadResumePdfApi(filePath : string) : Promise<string> {
+    return post('/resume/pdf', { filePath: filePath }).then((data : UTSJSONObject) : string => {
+        return toStr(data['url'])
+    })
+}
+
+/**
+ * 获取简历查看留痕
+ * GET /resume/view-stats
+ */
+export function getViewStatsApi() : Promise<ResumeViewStatsResult> {
+    return get('/resume/view-stats').then((data : UTSJSONObject) : ResumeViewStatsResult => {
+        const items : ResumeViewStat[] = []
+        const itemsRaw = data['items']
+        if (itemsRaw != null) {
+            const arr = itemsRaw as Array<UTSJSONObject>
+            for (let i = 0; i < arr.length; i++) {
+                items.push(buildViewStat(arr[i]))
+            }
+        }
+        return {
+            items: items,
+            total: toNumber(data['total']),
+        }
+    })
+}
+
+/**
+ * 切换简历公开状态
+ * PUT /resume/visibility
+ */
+export function toggleVisibilityApi() : Promise<string> {
+    return put('/resume/visibility').then((data : UTSJSONObject) : string => {
+        return toStr(data['visibility'])
+    })
+}
