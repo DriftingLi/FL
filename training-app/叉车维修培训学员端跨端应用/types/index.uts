@@ -839,7 +839,20 @@ export type StudentCourseChapterProgress = {
 }
 
 /** 学员单课程学习详情（GET /student/courses/:course_id） */
-export type StudentCourseDetail = StudentCourse & {
+export type StudentCourseDetail = {
+    course_id : number
+    course_name : string
+    cover : string
+    specialty_id : number
+    level_id : number
+    progress : number               // 0-100
+    completed_chapters : number
+    total_chapters : number
+    study_duration : number         // 分钟
+    last_chapter_id : number
+    last_chapter_title : string
+    last_position : number          // 秒
+    last_studied_at : string
     chapters : StudentCourseChapterProgress[]
 }
 
@@ -869,7 +882,19 @@ export type FeaturedContentListResult = {
 }
 
 /** 精选内容详情 */
-export type FeaturedContentDetail = FeaturedContentItem & {
+export type FeaturedContentDetail = {
+    content_id : number
+    title : string
+    category : string
+    category_label : string
+    summary : string
+    cover_image : string
+    source : string
+    status : string
+    sort_order : number
+    view_count : number
+    published_at : string
+    created_at : string
     content : string
     related : FeaturedContentItem[]
     prev : FeaturedContentItem | null
