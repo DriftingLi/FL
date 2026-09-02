@@ -9,7 +9,7 @@
             </view>
             <view class="nav-center">
                 <text class="nav-timer">⏱ {{ timerText }}</text>
-                <text class="nav-progress">{{ currentIndex + 1 }}/{{ questions.length }}</text>
+                <text class="nav-progress ml-24">{{ currentIndex + 1 }}/{{ questions.length }}</text>
             </view>
             <view class="nav-right"></view>
         </view>
@@ -123,7 +123,7 @@
                         <text class="section-title">考点</text>
                     </view>
                     <view v-if="knowledgeTags.length > 0" class="tag-row">
-                        <view v-for="tag in knowledgeTags" :key="tag.id" class="knowledge-tag">
+                        <view v-for="tag in knowledgeTags" :key="tag.id" class="knowledge-tag mr-12-mb-12">
                             <text class="knowledge-tag-text">{{ tag.name }}</text>
                         </view>
                     </view>
@@ -161,14 +161,14 @@
                     <image class="bottom-icon-img" src="/static/icons/answer-card.png" mode="aspectFit" />
                     <text class="bottom-icon-label">答题卡</text>
                 </view>
-                <view class="bottom-icon-btn" @click="onToggleFavorite">
+                <view class="bottom-icon-btn ml-16" @click="onToggleFavorite">
                     <image class="bottom-icon-img" :src="isFavorited ? '/static/icons/star-filled.png' : '/static/icons/star.png'" mode="aspectFit" />
                     <text class="bottom-icon-label">{{ isFavorited ? '已收藏' : '收藏' }}</text>
                 </view>
-                <view v-if="!showResult" class="submit-btn" @click="onSubmit">
+                <view v-if="!showResult" class="submit-btn ml-16" @click="onSubmit">
                     <text class="submit-btn-text">提交答案</text>
                 </view>
-                <view v-else class="submit-btn next-btn" @click="onNext">
+                <view v-else class="submit-btn next-btn ml-16" @click="onNext">
                     <text class="submit-btn-text">{{ currentIndex >= questions.length - 1 ? '查看结果' : '下一题' }}</text>
                 </view>
             </view>
@@ -182,7 +182,7 @@
                 </view>
                 <view class="answer-card-grid">
                     <view v-for="(q, idx) in questions" :key="idx"
-                        class="answer-card-item"
+                        class="answer-card-item mr-20-mb-20"
                         :class="getAnswerCardClass(idx)"
                         @click="onJumpToQuestion(idx)">
                         <text class="answer-card-num" :class="getAnswerCardNumClass(idx)">{{ idx + 1 }}</text>
@@ -912,7 +912,6 @@
         flex-direction: row;
         align-items: center;
         justify-content: center;
-        gap: 24rpx;
     }
 
     .nav-timer {
@@ -1161,7 +1160,6 @@
     .tag-row {
         flex-direction: row;
         flex-wrap: wrap;
-        gap: 12rpx;
     }
 
     .knowledge-tag {
@@ -1186,7 +1184,6 @@
     .bottom-actions {
         flex-direction: row;
         align-items: center;
-        gap: 16rpx;
     }
 
     .bottom-icon-btn {
@@ -1289,7 +1286,6 @@
     .answer-card-grid {
         flex-direction: row;
         flex-wrap: wrap;
-        gap: 20rpx;
         justify-content: flex-start;
     }
 
@@ -1579,4 +1575,9 @@
         font-size: 26rpx;
         color: #cccccc;
     }
+
+    .ml-16 { margin-left: 16rpx; }
+    .ml-24 { margin-left: 24rpx; }
+    .mr-12-mb-12 { margin-right: 12rpx; margin-bottom: 12rpx; }
+    .mr-20-mb-20 { margin-right: 20rpx; margin-bottom: 20rpx; }
 </style>

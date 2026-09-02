@@ -30,7 +30,7 @@
                     <text class="section-title">特种作业配套上岗证</text>
                 </view>
                 <view class="option-row">
-                    <view v-for="(item, idx) in specialCerts" :key="idx" class="option-chip"
+                    <view v-for="(item, idx) in specialCerts" :key="idx" class="option-chip mr-18-mb-18"
                         :class="{ 'option-chip--active': selectedCert === item.key }" @click="onSelectCert(item.key)">
                         <text class="option-text"
                             :class="{ 'option-text--active': selectedCert === item.key }">{{ item.name }}</text>
@@ -48,7 +48,7 @@
                         (叉车维修方向技能等级证)</text>
                 </view>
                 <view class="option-row">
-                    <view v-for="(item, idx) in skillLevels" :key="idx" class="option-chip option-chip--skill"
+                    <view v-for="(item, idx) in skillLevels" :key="idx" class="option-chip option-chip--skill mr-18-mb-18"
                         :class="{ 'option-chip--active': selectedCert === item.key }" @click="onSelectCert(item.key)">
                         <text class="option-text option-text--level"
                             :class="{ 'option-text--active': selectedCert === item.key }">{{ item.level }}</text>
@@ -65,7 +65,8 @@
                     <view class="hot-header-line"></view>
                 </view>
                 <view class="hot-grid">
-                    <view v-for="(item, idx) in hotItems" :key="idx" class="hot-card">
+                    <view v-for="(item, idx) in hotItems" :key="idx"
+                        :class="{ 'hot-card': true, 'ml-18': idx > 0 }">
                         <view class="hot-card-header">
                             <text class="hot-card-star">⭐</text>
                             <text class="hot-card-title">{{ item.title }}</text>
@@ -324,7 +325,6 @@
     .option-row {
         flex-direction: row;
         flex-wrap: wrap;
-        gap: 18rpx;
     }
 
     .option-chip {
@@ -376,7 +376,6 @@
     /* ---- 热门考证卡片（横排两列） ---- */
     .hot-grid {
         flex-direction: row;
-        gap: 18rpx;
     }
 
     .hot-card {
@@ -480,4 +479,7 @@
         font-weight: 600;
         color: #FFFFFF;
     }
+
+    .ml-18 { margin-left: 18rpx; }
+    .mr-18-mb-18 { margin-right: 18rpx; margin-bottom: 18rpx; }
 </style>

@@ -382,7 +382,6 @@
     .category-row {
         flex-direction: row;
         flex-wrap: wrap;
-        gap: 16rpx;
     }
 
     .category-chip {
