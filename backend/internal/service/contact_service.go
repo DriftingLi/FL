@@ -82,15 +82,12 @@ func (s *ContactService) toDTO(m *model.ContactRequest) ContactRequestDTO {
 		DecidedAt:     decided,
 		ExpiresAt:     m.ExpiresAt.Format(time.RFC3339),
 	}
-	// 回填企业信息（尽力而为，不让查询失败阻塞）
+	// 回填企业信息（尽力而为，不让查询失败阻塞）；#487：仅 approved 时透出联系信息
 	var rec model.RecruiterUser
 	if err := s.db.First(&rec, m.RecruiterID).Error; err == nil {
 		dto.CompanyName = rec.CompanyName
 		dto.ContactName = rec.ContactName
-	}
-	// #487：仅 approved 时透出企业联系信息（含投递产生的授权）；其余状态不透出
-	if m.Status == "approved" {
-		if err := s.db.First(&rec, m.RecruiterID).Error; err == nil {
+		if m.Status == "approved" {
 			dto.ContactPhone = rec.ContactPhone
 			dto.ContactEmail = rec.ContactEmail
 			dto.Wechat = rec.Wechat
