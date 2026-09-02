@@ -215,6 +215,26 @@ func (s *RecruitService) Get(userID int) (*RecruitResumeCard, error) {
 	return &dto, nil
 }
 
+// GetRaw 取原始简历卡（在线简历 PDF 渲染用）。
+// 招聘者路径：仅 open 卡可见（与 Get 同门禁）；学员本人路径由 handler 保证本人鉴权，不受 visibility 限制。
+// 返回原始模型（含敏感字段），调用方负责打码口径（本包 RenderResumePDF 统一处理）。
+func (s *RecruitService) GetRaw(userID int) (*model.JobCard, error) {
+	var card model.JobCard
+	if err := s.db.Where("user_id = ? AND visibility = ?", userID, "open").First(&card).Error; err != nil {
+		return nil, err
+	}
+	return &card, nil
+}
+
+// GetRawAny 取原始简历卡（学员本人路径：本人鉴权，不校验 visibility）。
+func (s *RecruitService) GetRawAny(userID int) (*model.JobCard, error) {
+	var card model.JobCard
+	if err := s.db.Where("user_id = ?", userID).First(&card).Error; err != nil {
+		return nil, err
+	}
+	return &card, nil
+}
+
 // LogView 写入浏览审计（best-effort，失败仅日志）。
 // 粒度为同一招聘方对同一学员每日一次（Asia/Shanghai 自然日），避免翻页刷量。
 func (s *RecruitService) LogView(recruiterID, resumeUserID int) {

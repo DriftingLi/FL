@@ -15,28 +15,13 @@
     <div v-else-if="!data" class="rounded-card border border-line bg-panel p-8 text-center text-ink-3">未找到该简历</div>
     <div v-else class="rounded-card border border-line bg-panel p-6">
       <h1 class="text-lg font-bold text-ink">{{ data.real_name || data.real_name_masked || '学员简历' }}</h1>
-      <p class="mt-1 text-sm text-ink-3">用户 ID：{{ data.user_id }} · 更新于 {{ data.updated_at }}</p>
-      <div class="mt-4 grid gap-3 text-sm">
-        <div class="flex gap-2"><span class="w-20 shrink-0 text-ink-3">期望岗位</span><span class="text-ink">{{ data.expected_specialty_extra || '-' }}</span></div>
-        <div class="flex gap-2"><span class="w-20 shrink-0 text-ink-3">意向地区</span><span class="text-ink">{{ (data.expected_regions as any)?.join('、') || '-' }}</span></div>
-        <div class="flex gap-2"><span class="w-20 shrink-0 text-ink-3">薪资</span><span class="text-ink">{{ data.salary_negotiable ? '面议' : `${data.salary_min ?? '-'} - ${data.salary_max ?? '-'}` }}</span></div>
-        <div class="flex gap-2"><span class="w-20 shrink-0 text-ink-3">经验</span><span class="text-ink">{{ data.experience_years }} 年</span></div>
-        <div class="flex gap-2"><span class="w-20 shrink-0 text-ink-3">到岗时间</span><span class="text-ink">{{ data.available_in || '-' }}</span></div>
-        <div class="flex gap-2"><span class="w-20 shrink-0 text-ink-3">用工性质</span><span class="text-ink">{{ data.job_nature || '-' }}</span></div>
-        <div class="flex gap-2"><span class="w-20 shrink-0 text-ink-3">自我介绍</span><span class="text-ink">{{ data.self_intro || '-' }}</span></div>
-        <div class="flex gap-2"><span class="w-20 shrink-0 text-ink-3">工作经历</span>
-          <ul v-if="data.resume_experiences && data.resume_experiences.length" class="flex-1 list-disc pl-4">
-            <li v-for="(exp, i) in data.resume_experiences" :key="i" class="text-ink">{{ exp.company }} · {{ exp.role }}（{{ exp.start_month }} ~ {{ exp.end_month }}） - {{ exp.desc }}</li>
-          </ul>
-          <span v-else class="text-ink">-</span>
-        </div>
-        <div class="flex gap-2"><span class="w-20 shrink-0 text-ink-3">持证</span>
-          <div v-if="data.resume_certifications && data.resume_certifications.length" class="flex flex-wrap gap-1">
-            <span v-for="(c, i) in data.resume_certifications" :key="i" class="rounded bg-ui-50 px-1.5 py-0.5 text-xs text-ink-3">{{ c.credential_id ? `证件#${c.credential_id} ${c.cert_no || ''}` : (c.cert_no || '持证') }}</span>
-          </div>
-          <span v-else class="text-ink">-</span>
-        </div>
+      <p class="mt-1 text-sm text-ink-3">更新于 {{ data.updated_at }}</p>
+
+      <!-- 在线简历 PDF 内嵌（#485：未授权即可预览打码版） -->
+      <div class="mt-4">
+        <OnlineResumePdf :endpoint="`/api/recruit/resumes/${data.user_id}/pdf`" error-text="简历 PDF 加载失败" />
       </div>
+
       <div class="mt-6">
         <UiButton variant="primary" :loading="contactLoading" @click="showDialog = true">申请交换联系方式</UiButton>
         <UiButton v-if="contact" size="small" class="ml-2" @click="loadContact">刷新联系方式</UiButton>
@@ -68,6 +53,7 @@ import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import OnlineResumePdf from '@/components/recruit/OnlineResumePdf.vue'
 
 const route = useRoute()
 const data = ref<RecruitResumeItem | null>(null)
@@ -78,7 +64,6 @@ const contact = ref<any>(null)
 const contactLoading = ref(false)
 const contactError = ref('')
 
-// 三态收编 useAsyncPage（#439）：404 契约内空态保留（data 置 null 走「未找到该简历」），真实故障收敛 loadError
 const {
   loading,
   loadError,
@@ -92,7 +77,6 @@ const {
     data.value = res as any || null
     loadContact()
   } catch (e: any) {
-    // #415 契约：404 表示简历不存在，置空态（loadError 不置位）；其余故障上抛收敛为可重试错误态
     if (e?.response?.status === 404 || String(e?.message || '').includes('不存在')) {
       data.value = null
     } else {
@@ -110,7 +94,6 @@ async function loadContact() {
     contact.value = res as any
   } catch (e: any) {
     contact.value = null
-    // 403 等表示无授权，不显示错误
     if (e?.response?.status === 403 || String(e?.message || '').includes('无有效授权')) {
       contactError.value = ''
     } else {
