@@ -1,6 +1,7 @@
 // Package api 在线简历 PDF 端点（spec #484 / 子票 #485）。
 //   - GET /api/recruit/resumes/:id/pdf：招聘者未授权即可内嵌预览（recruiter 鉴权；隐藏卡 404）
 //   - GET /api/resume/pdf：学员预览自己的打码在线简历（本人 JWT；所见即招聘者所见）
+//
 // 响应 inline PDF（Content-Type: application/pdf），前端以带鉴权的 blob 取流内嵌。
 package api
 

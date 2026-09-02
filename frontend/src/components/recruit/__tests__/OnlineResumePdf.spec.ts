@@ -1,5 +1,5 @@
 // #485 在线简历 PDF 内嵌组件：带鉴权 blob 取流、加载骨架、失败可重试。
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 
