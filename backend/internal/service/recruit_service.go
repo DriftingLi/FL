@@ -141,8 +141,11 @@ func desensitize(m *model.JobCard) RecruitResumeCard {
 // applyFilters 在查询上叠加筛选轴（visibility=open 已由调用方保证）。
 func (s *RecruitService) applyFilters(q *gorm.DB, p RecruitListParams) *gorm.DB {
 	if v := strings.TrimSpace(p.Region); v != "" {
-		// expected_regions JSON 数组包含该地区串（CAST 兼容 pg 与 sqlite 内存库：sqlite 上 JSONB 为 BLOB，LIKE 需 CAST）
-		q = q.Where("CAST(expected_regions AS TEXT) LIKE ?", "%"+v+"%")
+		// #486：地区筛选改为与录入同源的市级精确匹配——候选 expected_regions 任一元素
+		// 的「市名」（第 2 段；直辖市取整段）等于筛选值（即市名）。
+		// 存储格式：两段「省/市」（直辖市一段），筛选参数为市级值（可能带「市」后缀也可能不带）。
+		// 实现：CAST 全文后按 JSON 元素解析匹配市名（兼容 pg 与 sqlite 内存库）。
+		q = q.Where(applyRegionCityFilter(p.Region))
 	}
 	if p.PositionID != nil && *p.PositionID > 0 {
 		q = q.Where("expected_position_id = ?", *p.PositionID)
@@ -175,6 +178,31 @@ func (s *RecruitService) applyFilters(q *gorm.DB, p RecruitListParams) *gorm.DB 
 		q = q.Where("available_in = ?", v)
 	}
 	return q
+}
+
+// applyRegionCityFilter 构造地区市级精确匹配的 WHERE 子句（#486）。
+// 数据契约：expected_regions 数组元素为两段「省/市」中文串（直辖市一段）。
+// 筛选值归一为规范市全名（「苏州」→「苏州市」）后精确匹配元素第 2 段：
+//   - 普通市：模式 %/苏州市" 命中元素 "江苏省/苏州市" 结尾
+//   - 直辖市：模式 %"北京市" 命中一段式元素
+// CAST AS TEXT 兼容 pg(jsonb) 与 sqlite 内存库(BLOB)；LIKE 用于跨引擎等价，
+// 模式两侧锚定（斜杠/引号）实现「精确匹配第 2 段」而非任意子串。
+func applyRegionCityFilter(region string) any {
+	city := strings.TrimSpace(region)
+	if city == "" {
+		return nil
+	}
+	// 归一：短名 → 规范市全名（苏州市）
+	city = RegionCityName(city)
+	if city == "" {
+		return nil
+	}
+	if regionMunicipalities[city] {
+		// 直辖市一段式元素：["北京市"]
+		return gorm.Expr("CAST(expected_regions AS TEXT) LIKE ?", `%"`+city+`"%`)
+	}
+	// 普通市两段式元素：["江苏省/苏州市"] → 匹配 /苏州市"
+	return gorm.Expr("CAST(expected_regions AS TEXT) LIKE ?", `%/`+city+`"%`)
 }
 
 // List 脱敏列表：仅 open，叠筛选，updated_at DESC，分页，无缓存（读最新）。

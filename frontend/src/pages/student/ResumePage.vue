@@ -54,7 +54,7 @@
         <el-form-item label="现居地">
           <el-cascader
             v-model="regionCascader"
-            :options="regionData"
+            :options="regionOptions"
             :props="{ value: 'label', label: 'label', children: 'children' }"
             placeholder="选择省/市"
             clearable
@@ -70,7 +70,7 @@
         <el-form-item label="意向地区">
           <el-cascader
             v-model="expectedRegionsCascader"
-            :options="regionData"
+            :options="regionOptions"
             :props="{ value: 'label', label: 'label', children: 'children', multiple: true }"
             placeholder="选择省/市（可多选）"
             clearable
@@ -167,7 +167,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { resumeApi } from '@/api/resume'
-import { regionData } from 'element-china-area-data'
+import { buildCityLevelRegionOptions, splitRegionPath, regionElementsToPaths, cascaderToRegionStrings } from '@/utils/region'
 import { unwrappedRequest } from '@/api/request'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
@@ -205,6 +205,7 @@ const form = reactive<any>({
 
 const positions = ref<any[]>([])
 const credentials = ref<any[]>([])
+const regionOptions = buildCityLevelRegionOptions()
 const regionCascader = ref<string[]>([])
 const expectedRegionsCascader = ref<string[][]>([])
 const viewCount = ref(0)
@@ -301,9 +302,9 @@ async function load() {
     form.region = data.region || ''
     form.expected_position_id = data.expected_position_id ?? null
     form.expected_regions = data.expected_regions || []
-    // 回填地区级联：现居地（省/市）与意向地区（多选）
-    regionCascader.value = data.region ? String(data.region).split('/') : []
-    expectedRegionsCascader.value = (data.expected_regions || []).map((r: string) => [r])
+    // 回填地区级联（#486）：现居地按 / 拆路径（直辖市一段）；意向地区每个元素拆成路径
+    regionCascader.value = data.region ? splitRegionPath(String(data.region)) : []
+    expectedRegionsCascader.value = regionElementsToPaths(data.expected_regions || [])
     form.salary_min = data.salary_min ?? null
     form.salary_max = data.salary_max ?? null
     form.salary_negotiable = !!data.salary_negotiable
@@ -401,7 +402,8 @@ function onRegionChange(val: any) {
 
 // 意向地区多选：每项为 [省, 市] 数组，存「省/市」字符串数组（兼容 expected_regions 既有契约）
 function onRegionsChange(val: any) {
-  form.expected_regions = (val || []).map((item: any) => (Array.isArray(item) ? item.join('/') : item))
+  // #486：级联选择值为路径数组（如 ['江苏省','苏州市']），按 / 拼回存储串；直辖市为单段
+  form.expected_regions = cascaderToRegionStrings(val || [])
 }
 
 onMounted(async () => {

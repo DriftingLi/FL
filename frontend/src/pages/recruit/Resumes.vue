@@ -6,9 +6,15 @@
     </div>
 
     <div class="rounded-card border border-line bg-panel p-4 flex flex-wrap gap-2">
-      <el-select v-model="filters.region" clearable placeholder="意向地区" class="!w-32" @change="load">
-        <el-option v-for="r in regionOptions" :key="r" :label="r" :value="r" />
-      </el-select>
+      <el-cascader
+        v-model="filters.region_path"
+        :options="regionOptions"
+        :props="{ value: 'label', label: 'label', children: 'children' }"
+        placeholder="意向地区（市）"
+        clearable
+        class="!w-44"
+        @change="load"
+      />
       <el-select v-model="filters.specialty_id" clearable placeholder="期望岗位" class="!w-36" @change="load">
         <el-option v-for="s in specialties" :key="s.specialty_id" :label="s.name" :value="s.specialty_id" />
       </el-select>
@@ -78,8 +84,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { recruitApi, type RecruitResumeItem } from '@/api/recruit'
+import { buildCityLevelRegionOptions, joinRegionPath } from '@/utils/region'
 import { unwrappedRequest } from '@/api/request'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
@@ -98,7 +105,7 @@ const {
   run: load
 } = useAsyncPage(async () => {
   const params: any = { page: 1, page_size: 20 }
-  if (filters.region) params.region = filters.region
+  if (filters.region_path.length) params.region = joinRegionPath(filters.region_path)
   if (filters.specialty_id) params.specialty_id = filters.specialty_id
   if (filters.credential_id) params.credential_id = filters.credential_id
   if (filters.salary_min != null) params.salary_min = filters.salary_min
@@ -112,11 +119,12 @@ const {
 
 const specialties = ref<any[]>([])
 const credentials = ref<any[]>([])
-const regionOptions = ref<string[]>(['江苏苏州', '浙江杭州', '江苏南京', '上海', '北京'])
+// #486：地区筛选项与录入同源（省→市两级级联，value 取 label），参数传市级
+const regionOptions = buildCityLevelRegionOptions()
 const experienceOptions = [0, 1, 2, 3, 5, 10]
 
 const filters = reactive<{
-  region: string
+  region_path: string[]
   specialty_id: number | null
   credential_id: number | null
   salary_min: number | null
@@ -124,7 +132,7 @@ const filters = reactive<{
   experience_years: number | null
   available_in: string
 }>({
-  region: '',
+  region_path: [],
   specialty_id: null,
   credential_id: null,
   salary_min: null,
@@ -157,10 +165,7 @@ async function loadMeta() {
   } catch {}
 }
 
-watch(
-  () => [filters.region, filters.specialty_id, filters.credential_id, filters.available_in],
-  () => {}
-)
+// #492：清空空 watch 死代码
 
 onMounted(() => {
   loadMeta()

@@ -1,3 +1,12 @@
+vi.mock('element-china-area-data', () => ({
+  pcTextArr: [
+    { label: '江苏省', children: [{ label: '苏州市' }, { label: '南京市' }] },
+    { label: '浙江省', children: [{ label: '杭州市' }] },
+    { label: '北京市', children: [] },
+    { label: '上海市', children: [] },
+  ],
+}))
+
 // #415 简历未建空态：未建（契约内 404）时不弹报错、渲染空态引导；已建时渲染表单。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
@@ -50,5 +59,22 @@ describe('ResumePage 未建简历空态（#415）', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('真实姓名')
     expect(wrapper.text()).not.toContain('简历尚未创建')
+  })
+})
+
+describe('ResumePage 意向地区回显（#486）', () => {
+  it('已存两段「省/市」数据回显为级联路径（重进不丢失）', { timeout: 15000 }, async () => {
+    vi.mocked(resumeApi.get).mockResolvedValue({
+      user_id: 1, real_name: '张三', contact_phone: '13800000001', wechat: '', region: '江苏省/苏州市',
+      expected_position_extra: '', expected_regions: ['江苏省/苏州市', '浙江省/杭州市'], salary_negotiable: false,
+      available_in: '', job_nature: '', experience_years: 1, self_intro: '',
+      resume_experiences: [], resume_certifications: [], resume_file_url: '', photos: [],
+      visibility: 'hidden', created_at: '', updated_at: '',
+    })
+    const wrapper = mountPage()
+    await flushPromises()
+    const vm: any = wrapper.vm
+    expect(vm.expectedRegionsCascader).toEqual([['江苏省', '苏州市'], ['浙江省', '杭州市']])
+    expect(vm.regionCascader).toEqual(['江苏省', '苏州市'])
   })
 })
