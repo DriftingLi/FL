@@ -660,7 +660,10 @@
     .nav-right {
         flex-direction: row;
         align-items: center;
-        gap: 16rpx;
+    }
+
+    .nav-right > view + view {
+        margin-left: 16rpx;
     }
 
     .nav-icon-btn {
@@ -1008,7 +1011,11 @@
     .filter-options {
         flex-direction: row;
         flex-wrap: wrap;
-        gap: 20rpx;
+    }
+
+    .filter-options > view {
+        margin-right: 20rpx;
+        margin-bottom: 20rpx;
     }
 
     .filter-chip {
@@ -1036,8 +1043,11 @@
 
     .filter-actions {
         flex-direction: row;
-        gap: 24rpx;
         padding: 36rpx 32rpx 0;
+    }
+
+    .filter-actions > view + view {
+        margin-left: 24rpx;
     }
 
     .filter-btn-reset {
@@ -1214,7 +1224,11 @@
     .cert-dropdown-chips {
         flex-direction: row;
         flex-wrap: wrap;
-        gap: 16rpx;
+    }
+
+    .cert-dropdown-chips > view {
+        margin-right: 16rpx;
+        margin-bottom: 16rpx;
     }
 
     .cert-dropdown-chip {
@@ -1294,7 +1308,10 @@
     /* ---- 热门考证卡片 ---- */
     .cert-dropdown-hot-grid {
         flex-direction: row;
-        gap: 16rpx;
+    }
+
+    .cert-dropdown-hot-grid > view + view {
+        margin-left: 16rpx;
     }
 
     .cert-dropdown-hot-card {
