@@ -30,67 +30,83 @@
                 <text class="card-title">基本信息</text>
                 <view class="field-row">
                     <text class="field-label">姓名<text class="field-req">*</text></text>
-                    <input class="field-input" type="text" :maxlength="20" v-model="name" placeholder="请输入姓名" />
-                </view>
-                <view class="divider"></view>
-                <view class="field-row" @click="onGenderTap">
-                    <text class="field-label">性别</text>
-                    <view class="field-picker">
-                        <text :class="gender.length > 0 ? 'field-value' : 'field-ph'">{{ gender.length > 0 ? gender : '请选择' }}</text>
-                        <text class="field-arrow">›</text>
-                    </view>
+                    <input class="field-input" type="text" :maxlength="20" v-model="realName" placeholder="请输入姓名" />
                 </view>
                 <view class="divider"></view>
                 <view class="field-row">
                     <text class="field-label">手机号<text class="field-req">*</text></text>
-                    <input class="field-input" type="number" :maxlength="11" v-model="phone" placeholder="用于企业联系你" />
+                    <input class="field-input" type="number" :maxlength="11" v-model="contactPhone" placeholder="用于企业联系你" />
                 </view>
                 <view class="divider"></view>
                 <view class="field-row">
-                    <text class="field-label">邮箱</text>
-                    <input class="field-input" type="text" :maxlength="50" v-model="email" placeholder="选填" />
+                    <text class="field-label">微信</text>
+                    <input class="field-input" type="text" :maxlength="50" v-model="wechat" placeholder="选填" />
                 </view>
                 <view class="divider"></view>
-                <view class="field-row" @click="onYearsTap">
-                    <text class="field-label">工作年限</text>
-                    <view class="field-picker">
-                        <text :class="years.length > 0 ? 'field-value' : 'field-ph'">{{ years.length > 0 ? years : '请选择' }}</text>
-                        <text class="field-arrow">›</text>
-                    </view>
+                <view class="field-row">
+                    <text class="field-label">现居地</text>
+                    <input class="field-input" type="text" :maxlength="20" v-model="region" placeholder="如：杭州" />
                 </view>
             </view>
 
             <!-- 求职期望 -->
             <view class="card">
                 <text class="card-title">求职期望</text>
-                <view class="field-row">
+                <view class="field-row" @click="onPositionTap">
                     <text class="field-label">意向岗位<text class="field-req">*</text></text>
-                    <input class="field-input" type="text" :maxlength="30" v-model="jobTitle" placeholder="如：叉车维修技师" />
-                </view>
-                <view class="divider"></view>
-                <view class="field-row">
-                    <text class="field-label">意向城市</text>
-                    <input class="field-input" type="text" :maxlength="20" v-model="jobCity" placeholder="如：杭州" />
-                </view>
-                <view class="divider"></view>
-                <view class="field-row" @click="onSalaryTap">
-                    <text class="field-label">期望薪资</text>
                     <view class="field-picker">
-                        <text :class="salary.length > 0 ? 'field-value' : 'field-ph'">{{ salary.length > 0 ? salary : '请选择' }}</text>
+                        <text :class="selectedPositionName.length > 0 ? 'field-value' : 'field-ph'">{{ selectedPositionName.length > 0 ? selectedPositionName : '请选择' }}</text>
                         <text class="field-arrow">›</text>
                     </view>
                 </view>
                 <view class="divider"></view>
-                <view class="field-row" @click="onJobTypeTap">
+                <view class="field-row">
+                    <text class="field-label">岗位补充</text>
+                    <input class="field-input" type="text" :maxlength="50" v-model="expectedPositionExtra" placeholder="如：柴油叉车维修" />
+                </view>
+                <view class="divider"></view>
+                <view class="field-row">
+                    <text class="field-label">意向地区</text>
+                    <input class="field-input" type="text" :maxlength="50" v-model="expectedRegionsText" placeholder="多个用逗号分隔，如：杭州,上海" />
+                </view>
+                <view class="divider"></view>
+                <view class="field-row">
+                    <text class="field-label">薪资(K)</text>
+                    <view class="field-range">
+                        <input class="field-range-input" type="number" v-model="salaryMin" placeholder="最低" />
+                        <text class="field-range-sep">-</text>
+                        <input class="field-range-input" type="number" v-model="salaryMax" placeholder="最高" />
+                    </view>
+                </view>
+                <view class="divider"></view>
+                <view class="field-row" @click="toggleSalaryNegotiable">
+                    <text class="field-label">薪资面议</text>
+                    <text :class="salaryNegotiable ? 'field-value' : 'field-ph'">{{ salaryNegotiable ? '是' : '否' }}</text>
+                </view>
+                <view class="divider"></view>
+                <view class="field-row" @click="onJobNatureTap">
                     <text class="field-label">工作类型</text>
                     <view class="field-picker">
-                        <text :class="jobType.length > 0 ? 'field-value' : 'field-ph'">{{ jobType.length > 0 ? jobType : '请选择' }}</text>
+                        <text :class="jobNature.length > 0 ? 'field-value' : 'field-ph'">{{ jobNatureLabel.length > 0 ? jobNatureLabel : '请选择' }}</text>
                         <text class="field-arrow">›</text>
                     </view>
+                </view>
+                <view class="divider"></view>
+                <view class="field-row" @click="onAvailableInTap">
+                    <text class="field-label">到岗时间</text>
+                    <view class="field-picker">
+                        <text :class="availableIn.length > 0 ? 'field-value' : 'field-ph'">{{ availableInLabel.length > 0 ? availableInLabel : '请选择' }}</text>
+                        <text class="field-arrow">›</text>
+                    </view>
+                </view>
+                <view class="divider"></view>
+                <view class="field-row">
+                    <text class="field-label">工作年限</text>
+                    <input class="field-input" type="number" v-model="experienceYears" placeholder="如：3" />
                 </view>
             </view>
 
-            <!-- 教育经历 -->
+            <!-- 教育经历（纯本地，不提交后端） -->
             <view class="card">
                 <text class="card-title">教育经历</text>
                 <view v-for="(item, idx) in eduItems" :key="idx" class="sub-card">
@@ -145,15 +161,15 @@
                     <view class="divider"></view>
                     <view class="field-row">
                         <text class="field-label">职位</text>
-                        <input class="field-input" type="text" :maxlength="30" v-model="item.position" placeholder="如：叉车维修工" />
+                        <input class="field-input" type="text" :maxlength="30" v-model="item.role" placeholder="如：叉车维修工" />
                     </view>
                     <view class="divider"></view>
                     <view class="field-row">
                         <text class="field-label">时间</text>
                         <view class="field-range">
-                            <input class="field-range-input" type="text" :maxlength="7" v-model="item.start" placeholder="2023.07" />
+                            <input class="field-range-input" type="text" :maxlength="7" v-model="item.start_month" placeholder="2023.07" />
                             <text class="field-range-sep">至</text>
-                            <input class="field-range-input" type="text" :maxlength="7" v-model="item.end" placeholder="至今" />
+                            <input class="field-range-input" type="text" :maxlength="7" v-model="item.end_month" placeholder="至今" />
                         </view>
                     </view>
                     <view class="divider"></view>
@@ -164,16 +180,17 @@
                 </view>
             </view>
 
-            <!-- 证书技能 -->
+            <!-- 证书技能（本地展示，resume_certifications 提交空数组） -->
             <view class="card">
                 <text class="card-title">证书与技能</text>
-                <textarea class="area-input" :maxlength="300" v-model="certs" :placeholder="'每行一条，如：\n叉车作业操作证（N1）\n低压电工证\n液压/电气系统故障诊断'" :auto-height="true"></textarea>
+                <textarea class="area-input" :maxlength="300" v-model="certs" placeholder="每行一条，如：叉车作业操作证（N1）、低压电工证" :auto-height="true"></textarea>
             </view>
 
             <!-- 自我介绍 -->
             <view class="card">
                 <text class="card-title">自我介绍</text>
-                <textarea class="area-input" :maxlength="500" v-model="selfIntro" placeholder="简单介绍你的维修经验、擅长机型、求职意向" :auto-height="true"></textarea>
+                <textarea class="area-input" :maxlength="1000" v-model="selfIntro" placeholder="简单介绍你的维修经验、擅长机型、求职意向" :auto-height="true"></textarea>
+                <text class="area-counter">{{ selfIntro.length }}/1000</text>
             </view>
 
             <view class="bottom-space"></view>
@@ -195,7 +212,12 @@
     import { goBack } from '../../utils/navigation'
     import { setStorage, getStorageJSON } from '../../utils/storage'
     import { STORAGE_KEY_RESUME } from '../../constants/app'
-    import { toStr } from '../../api/helpers'
+    import { toStr, toNumber, toBool, errMsg } from '../../api/helpers'
+    import { getResumeApi, saveResumeApi, getPositionsApi } from '../../api/resume'
+    import type { ResumeData, SaveResumeParams, ResumeExperience, PositionItem } from '../../types/index'
+
+    /** 教育经历独立存储 key（纯本地，不提交后端） */
+    const STORAGE_KEY_RESUME_EDU = 'user_resume_edu_draft'
 
     type EduItem = {
         school : string
@@ -207,9 +229,9 @@
 
     type ExpItem = {
         company : string
-        position : string
-        start : string
-        end : string
+        role : string
+        start_month : string
+        end_month : string
         desc : string
     }
 
@@ -217,38 +239,73 @@
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     // 基本信息
-    const name = ref<string>('')
-    const gender = ref<string>('')
-    const phone = ref<string>('')
-    const email = ref<string>('')
-    const years = ref<string>('')
+    const realName = ref<string>('')
+    const contactPhone = ref<string>('')
+    const wechat = ref<string>('')
+    const region = ref<string>('')
+
     // 求职期望
-    const jobTitle = ref<string>('')
-    const jobCity = ref<string>('')
-    const salary = ref<string>('')
-    const jobType = ref<string>('')
+    const experienceYears = ref<string>('')
+    const expectedPositionId = ref<number>(0)
+    const expectedPositionExtra = ref<string>('')
+    const selectedPositionName = ref<string>('')
+    const salaryMin = ref<string>('')
+    const salaryMax = ref<string>('')
+    const salaryNegotiable = ref<boolean>(false)
+    const availableIn = ref<string>('')
+    const jobNature = ref<string>('')
+
+    // 公开状态（新简历默认 hidden；保存时不硬编码 hidden，避免把已公开简历误置为隐藏）
+    const currentVisibility = ref<string>('hidden')
+
     // 多段经历
     const eduItems = ref<EduItem[]>([])
     const expItems = ref<ExpItem[]>([])
+
     // 文本块
     const certs = ref<string>('')
     const selfIntro = ref<string>('')
+    const expectedRegionsText = ref<string>('')
 
-    /** 完善度：12 项关键内容，任一教育/经历段有内容即计 1 */
+    // 岗位字典
+    const positions = ref<PositionItem[]>([])
+
+    // ---- 枚举选项 ----
+    const availableInOptions : string[] = ['随时', '1周内', '2周内', '1月内']
+    const availableInValues : string[] = ['immediate', '1w', '2w', '1m']
+    const jobNatureOptions : string[] = ['全职', '兼职', '合同']
+    const jobNatureValues : string[] = ['fulltime', 'parttime', 'contract']
+    const degreeOptions : string[] = ['初中及以下', '高中/中专/技校', '大专', '本科', '硕士及以上']
+
+    const availableInLabel = computed<string>(() : string => {
+        for (let i = 0; i < availableInValues.length; i++) {
+            if (availableInValues[i] == availableIn.value) return availableInOptions[i]
+        }
+        return ''
+    })
+
+    const jobNatureLabel = computed<string>(() : string => {
+        for (let i = 0; i < jobNatureValues.length; i++) {
+            if (jobNatureValues[i] == jobNature.value) return jobNatureOptions[i]
+        }
+        return ''
+    })
+
+    /** 完善度：12 项关键内容 */
     const completion = computed<number>(() : number => {
         let filled = 0
-        if (name.value.trim().length > 0) filled += 1
-        if (gender.value.length > 0) filled += 1
-        if (phone.value.length == 11) filled += 1
-        if (email.value.trim().length > 0) filled += 1
-        if (years.value.length > 0) filled += 1
-        if (jobTitle.value.trim().length > 0) filled += 1
-        if (jobCity.value.trim().length > 0) filled += 1
-        if (salary.value.length > 0) filled += 1
-        if (jobType.value.length > 0) filled += 1
+        if (realName.value.trim().length > 0) filled += 1
+        if (contactPhone.value.length == 11) filled += 1
+        if (wechat.value.trim().length > 0) filled += 1
+        if (region.value.trim().length > 0) filled += 1
+        if (toNumber(experienceYears.value) > 0) filled += 1
+        if (expectedPositionId.value > 0 || expectedPositionExtra.value.trim().length > 0) filled += 1
+        if (toNumber(salaryMin.value) > 0 || toNumber(salaryMax.value) > 0 || salaryNegotiable.value) filled += 1
+        if (jobNature.value.length > 0) filled += 1
+        if (availableIn.value.length > 0) filled += 1
         if (hasEduContent()) filled += 1
         if (hasExpContent()) filled += 1
-        if (selfIntro.value.trim().length > 0 || certs.value.trim().length > 0) filled += 1
+        if (selfIntro.value.trim().length > 0) filled += 1
         return Math.round(filled * 100 / 12)
     })
 
@@ -263,7 +320,7 @@
     function hasExpContent() : boolean {
         for (let i = 0; i < expItems.value.length; i++) {
             const e = expItems.value[i]
-            if (e.company.trim().length > 0 || e.position.trim().length > 0) return true
+            if (e.company.trim().length > 0 || e.role.trim().length > 0) return true
         }
         return false
     }
@@ -278,26 +335,46 @@
         })
     }
 
-    const genderOptions : string[] = ['男', '女']
-    const yearsOptions : string[] = ['1年以下', '1-3年', '3-5年', '5-10年', '10年以上']
-    const salaryOptions : string[] = ['3-5K', '5-7K', '7-9K', '9-12K', '12K以上', '面议']
-    const jobTypeOptions : string[] = ['全职', '兼职', '实习']
-    const degreeOptions : string[] = ['初中及以下', '高中/中专/技校', '大专', '本科', '硕士及以上']
-
-    function onGenderTap() : void {
-        pick(genderOptions, (v : string) : void => { gender.value = v })
+    function onPositionTap() : void {
+        if (positions.value.length == 0) {
+            uni.showToast({ title: '岗位列表加载中', icon: 'none' })
+            return
+        }
+        const names : string[] = []
+        for (let i = 0; i < positions.value.length; i++) {
+            names.push(positions.value[i].name)
+        }
+        pick(names, (v : string) : void => {
+            selectedPositionName.value = v
+            for (let i = 0; i < positions.value.length; i++) {
+                if (positions.value[i].name == v) {
+                    expectedPositionId.value = positions.value[i].position_id
+                    break
+                }
+            }
+        })
     }
 
-    function onYearsTap() : void {
-        pick(yearsOptions, (v : string) : void => { years.value = v })
+    function onAvailableInTap() : void {
+        pick(availableInOptions, (v : string) : void => {
+            for (let i = 0; i < availableInOptions.length; i++) {
+                if (availableInOptions[i] == v) {
+                    availableIn.value = availableInValues[i]
+                    break
+                }
+            }
+        })
     }
 
-    function onSalaryTap() : void {
-        pick(salaryOptions, (v : string) : void => { salary.value = v })
-    }
-
-    function onJobTypeTap() : void {
-        pick(jobTypeOptions, (v : string) : void => { jobType.value = v })
+    function onJobNatureTap() : void {
+        pick(jobNatureOptions, (v : string) : void => {
+            for (let i = 0; i < jobNatureOptions.length; i++) {
+                if (jobNatureOptions[i] == v) {
+                    jobNature.value = jobNatureValues[i]
+                    break
+                }
+            }
+        })
     }
 
     function onDegreeTap(idx : number) : void {
@@ -306,6 +383,10 @@
                 eduItems.value[idx].degree = v
             }
         })
+    }
+
+    function toggleSalaryNegotiable() : void {
+        salaryNegotiable.value = !salaryNegotiable.value
     }
 
     // ---- 多段经历增删 ----
@@ -318,105 +399,237 @@
     }
 
     function addExp() : void {
-        expItems.value.push({ company: '', position: '', start: '', end: '', desc: '' } as ExpItem)
+        expItems.value.push({ company: '', role: '', start_month: '', end_month: '', desc: '' } as ExpItem)
     }
 
     function removeExp(idx : number) : void {
         expItems.value.splice(idx, 1)
     }
 
-    // ---- 草稿加载（后端 /resume 接口就绪前本地落地） ----
+    // ---- 草稿加载 ----
     function loadDraft() : void {
         const saved = getStorageJSON(STORAGE_KEY_RESUME)
-        if (saved == null) return
-        name.value = toStr(saved['name'])
-        gender.value = toStr(saved['gender'])
-        phone.value = toStr(saved['phone'])
-        email.value = toStr(saved['email'])
-        years.value = toStr(saved['years'])
-        jobTitle.value = toStr(saved['job_title'])
-        jobCity.value = toStr(saved['job_city'])
-        salary.value = toStr(saved['salary'])
-        jobType.value = toStr(saved['job_type'])
-        certs.value = toStr(saved['certs'])
-        selfIntro.value = toStr(saved['self_intro'])
-        const eduRaw = saved['edu']
-        if (eduRaw != null) {
-            const arr = eduRaw as Array<UTSJSONObject>
-            for (let i = 0; i < arr.length; i++) {
-                const o = arr[i]
-                eduItems.value.push({
-                    school: toStr(o['school']),
-                    major: toStr(o['major']),
-                    degree: toStr(o['degree']),
-                    start: toStr(o['start']),
-                    end: toStr(o['end']),
-                } as EduItem)
+        if (saved != null) {
+            realName.value = toStr(saved['real_name'])
+            contactPhone.value = toStr(saved['contact_phone'])
+            wechat.value = toStr(saved['wechat'])
+            region.value = toStr(saved['region'])
+            experienceYears.value = toStr(saved['experience_years'])
+            expectedPositionId.value = toNumber(saved['expected_position_id'])
+            expectedPositionExtra.value = toStr(saved['expected_position_extra'])
+            selectedPositionName.value = toStr(saved['selected_position_name'])
+            salaryMin.value = toStr(saved['salary_min'])
+            salaryMax.value = toStr(saved['salary_max'])
+            salaryNegotiable.value = toBool(saved['salary_negotiable'])
+            availableIn.value = toStr(saved['available_in'])
+            jobNature.value = toStr(saved['job_nature'])
+            certs.value = toStr(saved['certs'])
+            selfIntro.value = toStr(saved['self_intro'])
+            expectedRegionsText.value = toStr(saved['expected_regions_text'])
+            const expRaw = saved['resume_experiences']
+            if (expRaw != null) {
+                try {
+                    const arr = expRaw as Array<UTSJSONObject>
+                    for (let i = 0; i < arr.length; i++) {
+                        const o = arr[i]
+                        expItems.value.push({
+                            company: toStr(o['company']),
+                            role: toStr(o['role']),
+                            start_month: toStr(o['start_month']),
+                            end_month: toStr(o['end_month']),
+                            desc: toStr(o['desc']),
+                        } as ExpItem)
+                    }
+                } catch (_e) {}
             }
         }
-        const expRaw = saved['exp']
-        if (expRaw != null) {
-            const arr = expRaw as Array<UTSJSONObject>
-            for (let i = 0; i < arr.length; i++) {
-                const o = arr[i]
-                expItems.value.push({
-                    company: toStr(o['company']),
-                    position: toStr(o['position']),
-                    start: toStr(o['start']),
-                    end: toStr(o['end']),
-                    desc: toStr(o['desc']),
-                } as ExpItem)
+        const eduSaved = getStorageJSON(STORAGE_KEY_RESUME_EDU)
+        if (eduSaved != null) {
+            const eduRaw = eduSaved['edu']
+            if (eduRaw != null) {
+                try {
+                    const arr = eduRaw as Array<UTSJSONObject>
+                    for (let i = 0; i < arr.length; i++) {
+                        const o = arr[i]
+                        eduItems.value.push({
+                            school: toStr(o['school']),
+                            major: toStr(o['major']),
+                            degree: toStr(o['degree']),
+                            start: toStr(o['start']),
+                            end: toStr(o['end']),
+                        } as EduItem)
+                    }
+                } catch (_e) {}
             }
         }
     }
 
+    // ---- 从服务端回显 ----
+    function loadFromServer() : void {
+        getResumeApi().then((r : ResumeData) : void => {
+            realName.value = r.real_name
+            contactPhone.value = r.contact_phone
+            wechat.value = r.wechat
+            region.value = r.region
+            experienceYears.value = r.experience_years > 0 ? r.experience_years.toString() : ''
+            expectedPositionId.value = r.expected_position_id
+            expectedPositionExtra.value = r.expected_position_extra
+            salaryMin.value = r.salary_min > 0 ? r.salary_min.toString() : ''
+            salaryMax.value = r.salary_max > 0 ? r.salary_max.toString() : ''
+            salaryNegotiable.value = r.salary_negotiable
+            availableIn.value = r.available_in
+            jobNature.value = r.job_nature
+            selfIntro.value = r.self_intro
+            currentVisibility.value = r.visibility.length > 0 ? r.visibility : 'hidden'
+            // 意向地区回显
+            if (r.expected_regions.length > 0) {
+                expectedRegionsText.value = r.expected_regions.join(',')
+            }
+            // 工作经历回显
+            expItems.value = []
+            for (let i = 0; i < r.resume_experiences.length; i++) {
+                const e = r.resume_experiences[i]
+                expItems.value.push({
+                    company: e.company,
+                    role: e.role,
+                    start_month: e.start_month,
+                    end_month: e.end_month,
+                    desc: e.desc,
+                } as ExpItem)
+            }
+            // 回填岗位名称
+            if (r.expected_position_id > 0) {
+                for (let i = 0; i < positions.value.length; i++) {
+                    if (positions.value[i].position_id == r.expected_position_id) {
+                        selectedPositionName.value = positions.value[i].name
+                        break
+                    }
+                }
+            }
+            if (expItems.value.length == 0) addExp()
+        }).catch((e : any) : void => {
+            let isNotFound = false
+            try {
+                const obj = e as UTSJSONObject
+                if (obj['kind'] != null && `${obj['kind']}` == 'notfound') {
+                    isNotFound = true
+                }
+            } catch (_ex) {}
+            if (!isNotFound) {
+                const msg = errMsg(e, '')
+                if (msg.length > 0) {
+                    uni.showToast({ title: '简历加载失败', icon: 'none' })
+                }
+            }
+        })
+    }
+
     // ---- 保存 ----
     function onSave() : void {
-        if (name.value.trim().length == 0) {
+        if (realName.value.trim().length == 0) {
             uni.showToast({ title: '请填写姓名', icon: 'none' })
             return
         }
-        if (phone.value.length != 11) {
-            uni.showToast({ title: '请填写 11 位手机号', icon: 'none' })
+        if (contactPhone.value.length != 11) {
+            uni.showToast({ title: '请填写11位手机号', icon: 'none' })
             return
         }
-        if (jobTitle.value.trim().length == 0) {
-            uni.showToast({ title: '请填写意向岗位', icon: 'none' })
+        if (selfIntro.value.length > 1000) {
+            uni.showToast({ title: '自我介绍不超过1000字', icon: 'none' })
             return
         }
-        const eduArr : Array<UTSJSONObject> = []
-        for (let i = 0; i < eduItems.value.length; i++) {
-            const e = eduItems.value[i]
-            if (e.school.trim().length == 0 && e.major.trim().length == 0) continue
-            eduArr.push({ school: e.school, major: e.major, degree: e.degree, start: e.start, end: e.end } as UTSJSONObject)
+        if (!salaryNegotiable.value) {
+            const sMin = toNumber(salaryMin.value)
+            const sMax = toNumber(salaryMax.value)
+            if (sMin < 0 || sMax < 0) {
+                uni.showToast({ title: '薪资不能为负数', icon: 'none' })
+                return
+            }
+            if (sMin > 0 && sMax > 0 && sMin > sMax) {
+                uni.showToast({ title: '最低薪资不能高于最高薪资', icon: 'none' })
+                return
+            }
         }
-        const expArr : Array<UTSJSONObject> = []
+
+        const expList : ResumeExperience[] = []
         for (let i = 0; i < expItems.value.length; i++) {
             const e = expItems.value[i]
-            if (e.company.trim().length == 0 && e.position.trim().length == 0) continue
-            expArr.push({ company: e.company, position: e.position, start: e.start, end: e.end, desc: e.desc } as UTSJSONObject)
+            if (e.company.trim().length == 0 && e.role.trim().length == 0) continue
+            expList.push({
+                company: e.company,
+                role: e.role,
+                start_month: e.start_month,
+                end_month: e.end_month,
+                desc: e.desc,
+            })
         }
-        const data : UTSJSONObject = {
-            name: name.value.trim(),
-            gender: gender.value,
-            phone: phone.value,
-            email: email.value.trim(),
-            years: years.value,
-            job_title: jobTitle.value.trim(),
-            job_city: jobCity.value.trim(),
-            salary: salary.value,
-            job_type: jobType.value,
-            certs: certs.value,
+
+        // 意向地区拆分
+        const regions : string[] = []
+        const trimmed = expectedRegionsText.value.trim()
+        if (trimmed.length > 0) {
+            const parts = trimmed.split(',')
+            for (let i = 0; i < parts.length; i++) {
+                const s = parts[i].trim()
+                if (s.length > 0) regions.push(s)
+            }
+        }
+
+        const params : SaveResumeParams = {
+            real_name: realName.value.trim(),
+            contact_phone: contactPhone.value,
+            wechat: wechat.value.trim(),
+            region: region.value.trim(),
+            expected_position_id: expectedPositionId.value,
+            expected_position_extra: expectedPositionExtra.value.trim(),
+            expected_regions: regions,
+            salary_min: toNumber(salaryMin.value),
+            salary_max: toNumber(salaryMax.value),
+            salary_negotiable: salaryNegotiable.value,
+            available_in: availableIn.value,
+            job_nature: jobNature.value,
+            experience_years: toNumber(experienceYears.value),
             self_intro: selfIntro.value,
-            edu: eduArr,
-            exp: expArr,
-            updated_at: new Date().toISOString(),
-        } as UTSJSONObject
-        setStorage(STORAGE_KEY_RESUME, JSON.stringify(data))
-        uni.showToast({ title: '已保存', icon: 'success', duration: 800 })
-        setTimeout(() => {
+            resume_experiences: expList,
+            resume_certifications: [],
+            resume_file_url: '',
+            photos: [],
+            visibility: currentVisibility.value,
+        }
+
+        uni.showLoading({ title: '保存中' })
+        saveResumeApi(params).then((_r : ResumeData) : void => {
+            // 保存草稿到本地（含岗位名称显示值）
+            const draft : UTSJSONObject = {
+                real_name: params.real_name,
+                contact_phone: params.contact_phone,
+                wechat: params.wechat,
+                region: params.region,
+                experience_years: params.experience_years.toString(),
+                expected_position_id: params.expected_position_id,
+                expected_position_extra: params.expected_position_extra,
+                selected_position_name: selectedPositionName.value,
+                salary_min: params.salary_min.toString(),
+                salary_max: params.salary_max.toString(),
+                salary_negotiable: params.salary_negotiable,
+                available_in: params.available_in,
+                job_nature: params.job_nature,
+                self_intro: params.self_intro,
+                certs: certs.value,
+                expected_regions_text: expectedRegionsText.value,
+                resume_experiences: expItems.value as any,
+            } as UTSJSONObject
+            setStorage(STORAGE_KEY_RESUME, JSON.stringify(draft))
+            // 教育经历独立保存（纯本地）
+            const eduData : UTSJSONObject = { edu: eduItems.value } as UTSJSONObject
+            setStorage(STORAGE_KEY_RESUME_EDU, JSON.stringify(eduData))
+            uni.hideLoading()
+            uni.showToast({ title: '保存成功', icon: 'success', duration: 800 })
             goBack('/pages/resume/resume')
-        }, 900)
+        }).catch((e : any) : void => {
+            uni.hideLoading()
+            uni.showToast({ title: errMsg(e, '保存失败'), icon: 'none' })
+        })
     }
 
     function onBack() : void {
@@ -425,6 +638,10 @@
 
     onLoad(() => {
         loadDraft()
+        getPositionsApi().then((list : PositionItem[]) : void => {
+            positions.value = list
+        }).catch(() => {})
+        loadFromServer()
         if (eduItems.value.length == 0) addEdu()
         if (expItems.value.length == 0) addExp()
     })
@@ -630,6 +847,13 @@
         color: #333333;
         background-color: #f7f8fa;
         border-radius: 12rpx;
+    }
+
+    .area-counter {
+        margin-top: 8rpx;
+        font-size: 22rpx;
+        color: #999999;
+        text-align: right;
     }
 
     /* ===== 多段经历子卡 ===== */

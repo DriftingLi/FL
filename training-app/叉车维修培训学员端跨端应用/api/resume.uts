@@ -1,140 +1,178 @@
 /**
- * 简历模块 API
+ * 简历模块 API（对齐后端 JobCardDTO / JobCardInput 契约）
  */
-import { get, put, post, del, uploadFile } from './request'
+import { get, put, del, uploadFile } from './request'
 import type { RequestOptions } from './request'
-import { toStr, toNumber, toList, errMsg } from './helpers'
-import type { ResumeData, SaveResumeParams, ResumeEduItem, ResumeExpItem, ResumeViewStat, ResumeViewStatsResult, ResumeApiError } from '../types/index'
+import { toStr, toNumber, toBool, errMsg } from './helpers'
+import type { ResumeData, SaveResumeParams, ResumeExperience, ResumeCertification, PositionItem } from '../types/index'
 
 // ========== 内部构建函数 ==========
 
-/**
- * 检查对象是否为 ResumeData 格式
- */
-function isValidResumeData(obj : UTSJSONObject) : boolean {
-    return obj['id'] != null && obj['name'] != null && obj['edu'] != null && obj['exp'] != null
+function buildExperience(obj : UTSJSONObject) : ResumeExperience {
+	return {
+		company: toStr(obj['company']),
+		role: toStr(obj['role']),
+		start_month: toStr(obj['start_month']),
+		end_month: toStr(obj['end_month']),
+		desc: toStr(obj['desc']),
+	}
 }
 
-function buildEduItem(obj : UTSJSONObject) : ResumeEduItem {
-    return {
-        school: toStr(obj['school']),
-        major: toStr(obj['major']),
-        degree: toStr(obj['degree']),
-        start: toStr(obj['start']),
-        end: toStr(obj['end']),
-    }
-}
-
-function buildExpItem(obj : UTSJSONObject) : ResumeExpItem {
-    return {
-        company: toStr(obj['company']),
-        position: toStr(obj['position']),
-        start: toStr(obj['start']),
-        end: toStr(obj['end']),
-        desc: toStr(obj['desc']),
-    }
+function buildCertification(obj : UTSJSONObject) : ResumeCertification {
+	const imgList : string[] = []
+	const imgRaw = obj['image_urls']
+	if (imgRaw != null) {
+		try {
+			const arr = imgRaw as Array<any>
+			for (let i = 0; i < arr.length; i++) {
+				imgList.push(toStr(arr[i]))
+			}
+		} catch (_e) {}
+	}
+	return {
+		credential_id: toNumber(obj['credential_id']),
+		cert_no: toStr(obj['cert_no']),
+		expire_date: toStr(obj['expire_date']),
+		image_urls: imgList,
+	}
 }
 
 function buildResumeData(obj : UTSJSONObject) : ResumeData {
-    const eduList : ResumeEduItem[] = []
-    const eduRaw = obj['edu']
-    if (eduRaw != null) {
-        const arr = eduRaw as Array<UTSJSONObject>
-        for (let i = 0; i < arr.length; i++) {
-            eduList.push(buildEduItem(arr[i]))
-        }
-    }
+	const expList : ResumeExperience[] = []
+	const expRaw = obj['resume_experiences']
+	if (expRaw != null) {
+		try {
+			const arr = expRaw as Array<UTSJSONObject>
+			for (let i = 0; i < arr.length; i++) {
+				expList.push(buildExperience(arr[i]))
+			}
+		} catch (_e) {}
+	}
 
-    const expList : ResumeExpItem[] = []
-    const expRaw = obj['exp']
-    if (expRaw != null) {
-        const arr = expRaw as Array<UTSJSONObject>
-        for (let i = 0; i < arr.length; i++) {
-            expList.push(buildExpItem(arr[i]))
-        }
-    }
+	const certList : ResumeCertification[] = []
+	const certRaw = obj['resume_certifications']
+	if (certRaw != null) {
+		try {
+			const arr = certRaw as Array<UTSJSONObject>
+			for (let i = 0; i < arr.length; i++) {
+				certList.push(buildCertification(arr[i]))
+			}
+		} catch (_e) {}
+	}
 
-    return {
-        id: toNumber(obj['id']),
-        user_id: toNumber(obj['user_id']),
-        name: toStr(obj['name']),
-        gender: toStr(obj['gender']),
-        phone: toStr(obj['phone']),
-        email: toStr(obj['email']),
-        years: toStr(obj['years']),
-        job_title: toStr(obj['job_title']),
-        job_city: toStr(obj['job_city']),
-        salary: toStr(obj['salary']),
-        job_type: toStr(obj['job_type']),
-        certs: toStr(obj['certs']),
-        self_intro: toStr(obj['self_intro']),
-        edu: eduList,
-        exp: expList,
-        photo_url: toStr(obj['photo_url']),
-        pdf_url: toStr(obj['pdf_url']),
-        visibility: toStr(obj['visibility']),
-        completion: toNumber(obj['completion']),
-        view_count: toNumber(obj['view_count']),
-        created_at: toStr(obj['created_at']),
-        updated_at: toStr(obj['updated_at']),
-    }
+	const regionList : string[] = []
+	const regionRaw = obj['expected_regions']
+	if (regionRaw != null) {
+		try {
+			const arr = regionRaw as Array<any>
+			for (let i = 0; i < arr.length; i++) {
+				regionList.push(toStr(arr[i]))
+			}
+		} catch (_e) {}
+	}
+
+	const photoList : string[] = []
+	const photoRaw = obj['photos']
+	if (photoRaw != null) {
+		try {
+			const arr = photoRaw as Array<any>
+			for (let i = 0; i < arr.length; i++) {
+				photoList.push(toStr(arr[i]))
+			}
+		} catch (_e) {}
+	}
+
+	return {
+		real_name: toStr(obj['real_name']),
+		contact_phone: toStr(obj['contact_phone']),
+		wechat: toStr(obj['wechat']),
+		region: toStr(obj['region']),
+		expected_position_id: toNumber(obj['expected_position_id']),
+		expected_position_extra: toStr(obj['expected_position_extra']),
+		expected_regions: regionList,
+		salary_min: toNumber(obj['salary_min']),
+		salary_max: toNumber(obj['salary_max']),
+		salary_negotiable: toBool(obj['salary_negotiable']),
+		available_in: toStr(obj['available_in']),
+		job_nature: toStr(obj['job_nature']),
+		experience_years: toNumber(obj['experience_years']),
+		self_intro: toStr(obj['self_intro']),
+		resume_experiences: expList,
+		resume_certifications: certList,
+		resume_file_url: toStr(obj['resume_file_url']),
+		photos: photoList,
+		visibility: toStr(obj['visibility']),
+		created_at: toStr(obj['created_at']),
+		updated_at: toStr(obj['updated_at']),
+	}
 }
 
-function buildViewStat(obj : UTSJSONObject) : ResumeViewStat {
-    return {
-        id: toNumber(obj['id']),
-        recruiter_name: toStr(obj['recruiter_name']),
-        company_name: toStr(obj['company_name']),
-        job_title: toStr(obj['job_title']),
-        viewed_at: toStr(obj['viewed_at']),
-    }
-}
+function buildSavePayload(p : SaveResumeParams) : UTSJSONObject {
+	const expArr : UTSJSONObject[] = []
+	for (let i = 0; i < p.resume_experiences.length; i++) {
+		const e = p.resume_experiences[i]
+		expArr.push({
+			company: e.company,
+			role: e.role,
+			start_month: e.start_month,
+			end_month: e.end_month,
+			desc: e.desc,
+		} as UTSJSONObject)
+	}
 
-/**
- * 构建 API 错误对象
- */
-function buildApiError(e : any) : ResumeApiError {
-    if (typeof e === 'object' && e != null) {
-        const err = e as UTSJSONObject
-        return {
-            code: toNumber(err['code'], -1),
-            message: toStr(err['message'], '未知错误'),
-            details: toStr(err['details']),
-        }
-    }
-    return {
-        code: -1,
-        message: errMsg(e, '网络请求失败'),
-    }
-}
+	const certArr : UTSJSONObject[] = []
+	for (let i = 0; i < p.resume_certifications.length; i++) {
+		const c = p.resume_certifications[i]
+		certArr.push({
+			credential_id: c.credential_id,
+			cert_no: c.cert_no,
+			expire_date: c.expire_date,
+		} as UTSJSONObject)
+	}
 
-// ========== Mock 数据 ==========
+	const body : UTSJSONObject = {
+		real_name: p.real_name,
+		contact_phone: p.contact_phone,
+		wechat: p.wechat,
+		region: p.region,
+		expected_position_extra: p.expected_position_extra,
+		salary_negotiable: p.salary_negotiable,
+		available_in: p.available_in,
+		job_nature: p.job_nature,
+		experience_years: p.experience_years,
+		self_intro: p.self_intro,
+		resume_experiences: expArr,
+		resume_certifications: certArr,
+		resume_file_url: p.resume_file_url,
+		visibility: p.visibility,
+	}
 
-function getMockResumeData() : ResumeData {
-    return {
-        id: 1,
-        user_id: 1,
-        name: '',
-        gender: '',
-        phone: '',
-        email: '',
-        years: '',
-        job_title: '',
-        job_city: '',
-        salary: '',
-        job_type: '',
-        certs: '',
-        self_intro: '',
-        edu: [],
-        exp: [],
-        photo_url: '',
-        pdf_url: '',
-        visibility: 'hidden',
-        completion: 0,
-        view_count: 0,
-        created_at: '',
-        updated_at: '',
-    }
+	if (p.expected_position_id > 0) {
+		body['expected_position_id'] = p.expected_position_id
+	} else {
+		body['expected_position_id'] = null
+	}
+
+	if (p.salary_min > 0) {
+		body['salary_min'] = p.salary_min
+	} else {
+		body['salary_min'] = null
+	}
+
+	if (p.salary_max > 0) {
+		body['salary_max'] = p.salary_max
+	} else {
+		body['salary_max'] = null
+	}
+
+	// expected_regions / photos 由后端以 json.RawMessage 接收，
+	// 直接提交数组（勿 JSON.stringify，否则后端按字符串解析 JSONB 数组会失败）。
+	// 整页 upsert：空数组也显式提交 []，否则键被省略会让后端保留旧值而无法清空。
+	body['expected_regions'] = p.expected_regions
+
+	body['photos'] = p.photos
+
+	return body
 }
 
 // ========== 对外 API 函数 ==========
@@ -142,67 +180,80 @@ function getMockResumeData() : ResumeData {
 /**
  * 获取我的简历
  * GET /resume
- * @note 学员尚未创建简历时后端返回 404（HTTP），此处静默处理并回退空简历，
- *       由调用方据 name 等字段判定"未填写"，不弹错误 toast。
+ * 已建 → ResumeData；未建（404）→ throw {kind:'notfound'}
  */
 export function getResumeApi() : Promise<ResumeData> {
-    const opts : RequestOptions = { silent: true } as RequestOptions
-    return get('/resume', null, opts).then((data : UTSJSONObject) : ResumeData => {
-        return buildResumeData(data)
-    }).catch((e) : ResumeData => {
-        console.warn('[getResumeApi] network/404, using empty resume:', e)
-        return getMockResumeData()
-    })
+	const opts : RequestOptions = { silent: true } as RequestOptions
+	return get('/resume', null, opts).then((data : UTSJSONObject) : ResumeData => {
+		return buildResumeData(data)
+	}).catch((e : any) : never => {
+		const msg = errMsg(e, '')
+		if (msg.indexOf('不存在') >= 0 || msg.indexOf('404') >= 0) {
+			throw { kind: 'notfound', message: '简历不存在' } as UTSJSONObject
+		}
+		throw e
+	})
 }
 
 /**
- * 保存简历
- * PUT /resume
+ * 保存简历（PUT /resume 整页 upsert）
+ * @returns 服务端返回的最新简历数据
  */
-export function saveResumeApi(params : SaveResumeParams) : Promise<void> {
-    const eduArr : UTSJSONObject[] = []
-    for (let i = 0; i < params.edu.length; i++) {
-        const e = params.edu[i]
-        eduArr.push({
-            school: e.school,
-            major: e.major,
-            degree: e.degree,
-            start: e.start,
-            end: e.end,
-        } as UTSJSONObject)
-    }
+export function saveResumeApi(params : SaveResumeParams) : Promise<ResumeData> {
+	// silent: 由调用方统一提示保存结果，避免 request 层与页面双重 toast
+	const opts : RequestOptions = { silent: true } as RequestOptions
+	const body = buildSavePayload(params)
+	return put('/resume', body, opts).then((data : UTSJSONObject) : ResumeData => {
+		return buildResumeData(data)
+	})
+}
 
-    const expArr : UTSJSONObject[] = []
-    for (let i = 0; i < params.exp.length; i++) {
-        const e = params.exp[i]
-        expArr.push({
-            company: e.company,
-            position: e.position,
-            start: e.start,
-            end: e.end,
-            desc: e.desc,
-        } as UTSJSONObject)
-    }
+/**
+ * 切换简历公开状态
+ * PUT /resume/visibility
+ * @param visibility - "open" 公开 / "hidden" 隐藏
+ */
+export function setVisibilityApi(visibility : string) : Promise<string> {
+	const opts : RequestOptions = { silent: true } as RequestOptions
+	return put('/resume/visibility', { visibility: visibility }, opts).then((data : UTSJSONObject) : string => {
+		return toStr(data['visibility'])
+	})
+}
 
-    const body : UTSJSONObject = {
-        name: params.name,
-        gender: params.gender,
-        phone: params.phone,
-        email: params.email,
-        years: params.years,
-        job_title: params.job_title,
-        job_city: params.job_city,
-        salary: params.salary,
-        job_type: params.job_type,
-        certs: params.certs,
-        self_intro: params.self_intro,
-        edu: eduArr,
-        exp: expArr,
-    }
+/**
+ * 获取简历被查看次数
+ * GET /resume/view-stats
+ */
+export function getViewStatsApi() : Promise<number> {
+	const opts : RequestOptions = { silent: true } as RequestOptions
+	return get('/resume/view-stats', null, opts).then((data : UTSJSONObject) : number => {
+		return toNumber(data['count'])
+	})
+}
 
-    return put('/resume', body).then(() : void => {
-        // 保存成功
-    })
+/**
+ * 获取岗位字典
+ * GET /positions
+ */
+export function getPositionsApi() : Promise<PositionItem[]> {
+	const opts : RequestOptions = { silent: true } as RequestOptions
+	return get('/positions', null, opts).then((data : UTSJSONObject) : PositionItem[] => {
+		const list : PositionItem[] = []
+		const raw = data['positions']
+		if (raw != null) {
+			try {
+				const arr = raw as Array<UTSJSONObject>
+				for (let i = 0; i < arr.length; i++) {
+					list.push({
+						position_id: toNumber(arr[i]['position_id']),
+						code: toStr(arr[i]['code']),
+						name: toStr(arr[i]['name']),
+					})
+				}
+			} catch (_e) {}
+		}
+		return list
+	})
 }
 
 /**
@@ -210,9 +261,9 @@ export function saveResumeApi(params : SaveResumeParams) : Promise<void> {
  * POST /resume/image (multipart/form-data)
  */
 export function uploadWorkPhotoApi(filePath : string) : Promise<string> {
-    return uploadFile('/resume/image', filePath, 'file').then((data : UTSJSONObject) : string => {
-        return toStr(data['url'])
-    })
+	return uploadFile('/resume/image', filePath, 'file').then((data : UTSJSONObject) : string => {
+		return toStr(data['url'])
+	})
 }
 
 /**
@@ -220,51 +271,20 @@ export function uploadWorkPhotoApi(filePath : string) : Promise<string> {
  * POST /resume/pdf (multipart/form-data)
  */
 export function uploadResumePdfApi(filePath : string) : Promise<string> {
-    return uploadFile('/resume/pdf', filePath, 'file').then((data : UTSJSONObject) : string => {
-        return toStr(data['url'])
-    })
+	return uploadFile('/resume/pdf', filePath, 'file').then((data : UTSJSONObject) : string => {
+		return toStr(data['url'])
+	})
 }
 
 /**
  * 删除附件（工作照或 PDF）
  * DELETE /resume/attachment
  * @param type - "photo" 删除工作照 / "pdf" 删除 PDF
+ * @note 保留此函数以兼容 resume-attach.uvue 的调用
  */
 export function deleteAttachmentApi(type : string) : Promise<void> {
-    const opts : RequestOptions = { url: '/resume/attachment', data: { type: type } } as RequestOptions
-    return del('/resume/attachment', opts).then(() : void => {
-        // 删除成功
-    })
-}
-
-/**
- * 获取简历查看留痕
- * GET /resume/view-stats
- */
-export function getViewStatsApi() : Promise<ResumeViewStatsResult> {
-    return get('/resume/view-stats').then((data : UTSJSONObject) : ResumeViewStatsResult => {
-        const items : ResumeViewStat[] = []
-        const itemsRaw = data['items']
-        if (itemsRaw != null) {
-            const arr = itemsRaw as Array<UTSJSONObject>
-            for (let i = 0; i < arr.length; i++) {
-                items.push(buildViewStat(arr[i]))
-            }
-        }
-        return {
-            items: items,
-            total: toNumber(data['total']),
-        }
-    })
-}
-
-/**
- * 切换简历公开状态
- * PUT /resume/visibility
- * @param visibility - "public" 公开 / "hidden" 隐藏
- */
-export function setVisibilityApi(visibility : string) : Promise<string> {
-    return put('/resume/visibility', { visibility: visibility }).then((data : UTSJSONObject) : string => {
-        return toStr(data['visibility'])
-    })
+	const opts : RequestOptions = { url: '/resume/attachment', data: { type: type } } as RequestOptions
+	return del('/resume/attachment', opts).then(() : void => {
+		// 删除成功
+	})
 }
