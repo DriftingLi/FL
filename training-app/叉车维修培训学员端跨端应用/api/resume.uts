@@ -2,6 +2,7 @@
  * 简历模块 API
  */
 import { get, put, post, del, uploadFile } from './request'
+import type { RequestOptions } from './request'
 import { toStr, toNumber, toList, errMsg } from './helpers'
 import type { ResumeData, SaveResumeParams, ResumeEduItem, ResumeExpItem, ResumeViewStat, ResumeViewStatsResult, ResumeApiError } from '../types/index'
 
@@ -227,7 +228,8 @@ export function uploadResumePdfApi(filePath : string) : Promise<string> {
  * @param type - "photo" 删除工作照 / "pdf" 删除 PDF
  */
 export function deleteAttachmentApi(type : string) : Promise<void> {
-    return del('/resume/attachment', { type: type }).then(() : void => {
+    const opts : RequestOptions = { url: '/resume/attachment', data: { type: type } } as RequestOptions
+    return del('/resume/attachment', opts).then(() : void => {
         // 删除成功
     })
 }

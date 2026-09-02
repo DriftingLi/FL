@@ -76,8 +76,9 @@
     import { goBack } from '../../utils/navigation'
     import { getStorageJSON } from '../../utils/storage'
     import { toStr } from '../../api/helpers'
+    import { getResumeApi } from '../../api/resume'
     import { STORAGE_KEY_RESUME } from '../../constants/app'
-    import type { StudentProfile, FavoriteListResult } from '../../types/index'
+    import type { StudentProfile, FavoriteListResult, ResumeData } from '../../types/index'
 
     const auth = useAuthStore()
     const statusBarHeight = useStatusBarHeight()
@@ -145,6 +146,12 @@
             return
         }
         resumeFilled.value = toStr(saved['name'], '').length > 0
+        // 服务端简历存在则同样视为已填写（优先级更高）
+        getResumeApi().then((r : ResumeData) : void => {
+            if (r.name.length > 0 || r.job_title.length > 0) {
+                resumeFilled.value = true
+            }
+        }).catch(() => {})
     }
 
     onLoad(() => {
