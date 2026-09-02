@@ -380,7 +380,7 @@
     })
 
     async function loadProfile() : Promise<void> {
-        try { profile.value = await getProfileApi() } catch (e) { uni.__f__('error','at pages/forum/forum.uvue:255','[forum] loadProfile failed:', e) }
+        try { profile.value = await getProfileApi() } catch (e) { console.error('[forum] loadProfile failed:', e) }
     }
     function onPointsTodetail() : void {
         uni.navigateTo({
@@ -523,7 +523,7 @@
                 page.value = page.value + 1
             }
         } catch (e) {
-            uni.__f__('error','at pages/forum/forum.uvue:369','[forum] load failed:', e)
+            console.error('[forum] load failed:', e)
             uni.showToast({ title: '加载帖子失败', icon: 'none' })
         } finally {
             loading.value = false
@@ -566,7 +566,7 @@
         try {
             unreadCount.value = await getUnreadCountApi()
         } catch (e) {
-            uni.__f__('error','at pages/forum/forum.uvue:412','[forum] loadUnreadCount failed:', e)
+            console.error('[forum] loadUnreadCount failed:', e)
         }
     }
 

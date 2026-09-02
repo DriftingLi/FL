@@ -110,7 +110,7 @@
                 favoriteId.value = res.favorite_id
             }).catch(() : void => {})
         } catch (e) {
-            uni.__f__('error','at pages/featured/featured-detail.uvue:117','[featured-detail] load failed:', e)
+            console.error('[featured-detail] load failed:', e)
         } finally {
             loading.value = false
         }

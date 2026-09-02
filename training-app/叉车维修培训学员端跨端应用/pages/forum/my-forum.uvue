@@ -148,7 +148,7 @@
                 page.value = page.value + 1
             }
         } catch (e) {
-            uni.__f__('error','at pages/forum/my-forum.uvue:155','[my-forum] load failed:', e)
+            console.error('[my-forum] load failed:', e)
             uni.showToast({ title: '加载失败', icon: 'none' })
         } finally {
             loading.value = false

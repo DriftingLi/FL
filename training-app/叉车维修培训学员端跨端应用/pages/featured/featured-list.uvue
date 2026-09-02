@@ -106,7 +106,7 @@
                 page.value = page.value + 1
             }
         } catch (e) {
-            uni.__f__('error','at pages/featured/featured-list.uvue:115','[featured-list] load failed:', e)
+            console.error('[featured-list] load failed:', e)
         } finally {
             loading.value = false
         }

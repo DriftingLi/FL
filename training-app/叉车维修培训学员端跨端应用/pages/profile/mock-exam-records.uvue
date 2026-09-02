@@ -190,7 +190,7 @@
                 page.value = page.value + 1
             }
         } catch (e) {
-            uni.__f__('error','at pages/profile/mock-exam-records.uvue:197','[mock-exam-records] load failed:', e)
+            console.error('[mock-exam-records] load failed:', e)
             uni.showToast({ title: '加载模考历史失败', icon: 'none' })
         } finally {
             loading.value = false

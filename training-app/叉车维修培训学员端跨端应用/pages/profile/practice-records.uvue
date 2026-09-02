@@ -145,7 +145,7 @@
         try {
             stats.value = await getPracticeStatsApi()
         } catch (e) {
-            uni.__f__('error','at pages/profile/practice-records.uvue:149','[practice-records] loadStats failed:', e)
+            console.error('[practice-records] loadStats failed:', e)
         }
     }
 
@@ -190,7 +190,7 @@
                 page.value = page.value + 1
             }
         } catch (e) {
-            uni.__f__('error','at pages/profile/practice-records.uvue:199','[practice-records] load failed:', e)
+            console.error('[practice-records] load failed:', e)
             uni.showToast({ title: '加载练习记录失败', icon: 'none' })
         } finally {
             loading.value = false

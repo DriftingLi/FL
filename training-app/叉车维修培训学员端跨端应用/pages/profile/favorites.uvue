@@ -131,7 +131,7 @@
                 page.value = page.value + 1
             }
         } catch (e) {
-            uni.__f__('error','at pages/profile/favorites.uvue:140','[favorites] load failed:', e)
+            console.error('[favorites] load failed:', e)
         } finally {
             loading.value = false
         }
@@ -183,7 +183,7 @@
             items.value = newList
             total.value = Math.max(0, total.value - 1)
         } catch (e) {
-            uni.__f__('error','at pages/profile/favorites.uvue:192','[favorites] remove failed:', e)
+            console.error('[favorites] remove failed:', e)
             uni.showToast({ title: '取消失败', icon: 'none' })
         } finally {
             uni.hideLoading()

@@ -506,6 +506,18 @@
         }
     }
 
+    // ---- 精选内容（从 API 加载） ----
+    const newsList = ref<FeaturedContentItem[]>([])
+
+    async function loadFeaturedContents() : Promise<void> {
+        try {
+            const result = await getFeaturedContentsApi(1, 5)
+            newsList.value = result.items
+        } catch (e) {
+            console.warn('[dashboard] loadFeaturedContents failed:', e)
+        }
+    }
+
     // ---- 内容 Tab ----
     const contentTabs : string[] = ['热门课程', '精品课程']
     const activeTab = ref<number>(0)
@@ -530,18 +542,6 @@
         { id: 3, title: '叉车安全规范专题课', tags: ['法规解读', '案例分析'], price: 0, sales: 1234, isHot: false },
         { id: 4, title: '叉车维修高级进阶课', tags: ['直播回放', '电子资料'], price: 199, sales: 234, isHot: false },
     ]
-
-    // ---- 精选内容（从 API 加载） ----
-    const newsList = ref<FeaturedContentItem[]>([])
-
-    async function loadFeaturedContents() : Promise<void> {
-        try {
-            const result = await getFeaturedContentsApi(1, 5)
-            newsList.value = result.items
-        } catch (e) {
-            console.warn('[dashboard] loadFeaturedContents failed:', e)
-        }
-    }
 
     function onContinueLearning() : void {
         const cl = continueLearning.value

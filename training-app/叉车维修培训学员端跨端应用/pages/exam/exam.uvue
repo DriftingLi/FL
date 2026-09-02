@@ -172,9 +172,9 @@
         try {
             const list = await getAvailableLevelExamsApi()
             availableExams.value = list
-            uni.__f__('log','at pages/exam/exam.uvue:180','[exam] available level exams:', list.length)
+            console.log('[exam] available level exams:', list.length)
         } catch (e) {
-            uni.__f__('error','at pages/exam/exam.uvue:182','[exam] load available level exams failed:', e)
+            console.error('[exam] load available level exams failed:', e)
         } finally {
             levelLoading.value = false
         }
@@ -202,7 +202,7 @@
                 historyPage.value = historyPage.value + 1
             }
         } catch (e) {
-            uni.__f__('error','at pages/exam/exam.uvue:210','[exam] load level history failed:', e)
+            console.error('[exam] load level history failed:', e)
         } finally {
             historyLoading.value = false
         }

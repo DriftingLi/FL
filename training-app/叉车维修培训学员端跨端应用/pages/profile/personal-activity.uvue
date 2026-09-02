@@ -331,7 +331,7 @@
                 await loadViewHistory(reset)
             }
         } catch (e) {
-            uni.__f__('error','at pages/profile/personal-activity.uvue:338','[personal-activity] load failed:', e)
+            console.error('[personal-activity] load failed:', e)
             uni.showToast({ title: '加载失败', icon: 'none' })
         } finally {
             loading.value = false
