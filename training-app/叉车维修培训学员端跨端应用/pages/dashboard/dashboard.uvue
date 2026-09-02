@@ -269,6 +269,13 @@
         }
     }
 
+    function stopUnreadPolling() : void {
+        if (unreadTimer != null) {
+            clearInterval(unreadTimer)
+            unreadTimer = null
+        }
+    }
+
     function startUnreadPolling() : void {
         stopUnreadPolling()
         loadUnreadCount()
@@ -276,12 +283,6 @@
             loadUnreadCount()
         }, 30000)
     }
-
-    function stopUnreadPolling() : void {
-        if (unreadTimer != null) {
-            clearInterval(unreadTimer)
-            unreadTimer = null
-        }
     }
 
     function onNotificationClick() : void {

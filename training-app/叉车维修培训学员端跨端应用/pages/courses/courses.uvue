@@ -126,6 +126,44 @@
         activeSubTab.value = idx
     }
 
+    // ---- 课程数据 ----
+    const courses = ref<CourseItem[]>([])
+    const loading = ref<boolean>(false)
+    const page = ref<number>(1)
+    const pageSize = 12
+    const total = ref<number>(0)
+    const noMore = ref<boolean>(false)
+
+    async function loadCourses(reset : boolean) : Promise<void> {
+        if (loading.value) return
+        if (reset) {
+            page.value = 1
+            noMore.value = false
+        }
+        if (noMore.value && !reset) return
+
+        loading.value = true
+        try {
+            const result = await getCourseListApi(page.value, pageSize, 0, 0)
+            if (reset) {
+                courses.value = result.items
+            } else {
+                courses.value = courses.value.concat(result.items)
+            }
+            total.value = result.total
+            if (courses.value.length >= result.total || result.items.length == 0) {
+                noMore.value = true
+            } else {
+                page.value = page.value + 1
+            }
+        } catch (e) {
+            console.error('[courses] load failed:', e)
+            uni.showToast({ title: '加载课程失败', icon: 'none' })
+        } finally {
+            loading.value = false
+        }
+    }
+
     // ---- 筛选标签 ----
     const filterTags : string[] = ['已完结', '进行中', '全部']
     const activeFilter = ref<number>(0)
@@ -134,14 +172,6 @@
         activeFilter.value = idx
         loadCourses(true)
     }
-
-    // ---- 课程数据 ----
-    const courses = ref<CourseItem[]>([])
-    const loading = ref<boolean>(false)
-    const page = ref<number>(1)
-    const pageSize = 12
-    const total = ref<number>(0)
-    const noMore = ref<boolean>(false)
 
     const specialties = ref<SpecialtyItem[]>([])
     const levels = ref<LevelItem[]>([])
@@ -188,36 +218,6 @@
         if (text == '进阶' || text == '专项') return '#e6a23c'
         if (text == '实操') return '#67c23a'
         return '#909399'
-    }
-
-    async function loadCourses(reset : boolean = false) : Promise<void> {
-        if (loading.value) return
-        if (reset) {
-            page.value = 1
-            noMore.value = false
-        }
-        if (noMore.value && !reset) return
-
-        loading.value = true
-        try {
-            const result = await getCourseListApi(page.value, pageSize, 0, 0)
-            if (reset) {
-                courses.value = result.items
-            } else {
-                courses.value = courses.value.concat(result.items)
-            }
-            total.value = result.total
-            if (courses.value.length >= result.total || result.items.length == 0) {
-                noMore.value = true
-            } else {
-                page.value = page.value + 1
-            }
-        } catch (e) {
-            console.error('[courses] load failed:', e)
-            uni.showToast({ title: '加载课程失败', icon: 'none' })
-        } finally {
-            loading.value = false
-        }
     }
 
     function onLoadMore() : void {

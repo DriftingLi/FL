@@ -186,7 +186,7 @@ export function getResumeApi() : Promise<ResumeData> {
 	const opts : RequestOptions = { url: '/resume', silent: true } as RequestOptions
 	return get('/resume', null, opts).then((data : UTSJSONObject) : ResumeData => {
 		return buildResumeData(data)
-	}).catch((e : any) : ResumeData => {
+	}).catch((e : Any?) : ResumeData => {
 		const msg = errMsg(e, '')
 		if (msg.indexOf('不存在') >= 0 || msg.indexOf('404') >= 0) {
 			throw new Error('RESUME_NOT_FOUND: 简历不存在')
