@@ -1115,3 +1115,10 @@ export type ResumeViewStatsResult = {
     items : ResumeViewStat[]
     total : number
 }
+
+/** 简历 API 错误类型 */
+export type ResumeApiError = {
+    code : number         // 错误码
+    message : string      // 错误信息
+    details ?: string     // 详细错误信息（可选）
+}

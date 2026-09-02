@@ -1,11 +1,18 @@
 /**
  * 简历模块 API
  */
-import { get, put, post, uploadFile } from './request'
-import { toStr, toNumber, toList } from './helpers'
-import type { ResumeData, SaveResumeParams, ResumeEduItem, ResumeExpItem, ResumeViewStat, ResumeViewStatsResult } from '../types/index'
+import { get, put, post, del, uploadFile } from './request'
+import { toStr, toNumber, toList, errMsg } from './helpers'
+import type { ResumeData, SaveResumeParams, ResumeEduItem, ResumeExpItem, ResumeViewStat, ResumeViewStatsResult, ResumeApiError } from '../types/index'
 
 // ========== 内部构建函数 ==========
+
+/**
+ * 检查对象是否为 ResumeData 格式
+ */
+function isValidResumeData(obj : UTSJSONObject) : boolean {
+    return obj['id'] != null && obj['name'] != null && obj['edu'] != null && obj['exp'] != null
+}
 
 function buildEduItem(obj : UTSJSONObject) : ResumeEduItem {
     return {
@@ -79,6 +86,24 @@ function buildViewStat(obj : UTSJSONObject) : ResumeViewStat {
         company_name: toStr(obj['company_name']),
         job_title: toStr(obj['job_title']),
         viewed_at: toStr(obj['viewed_at']),
+    }
+}
+
+/**
+ * 构建 API 错误对象
+ */
+function buildApiError(e : any) : ResumeApiError {
+    if (typeof e === 'object' && e != null) {
+        const err = e as UTSJSONObject
+        return {
+            code: toNumber(err['code'], -1),
+            message: toStr(err['message'], '未知错误'),
+            details: toStr(err['details']),
+        }
+    }
+    return {
+        code: -1,
+        message: errMsg(e, '网络请求失败'),
     }
 }
 
@@ -193,6 +218,17 @@ export function uploadWorkPhotoApi(filePath : string) : Promise<string> {
 export function uploadResumePdfApi(filePath : string) : Promise<string> {
     return uploadFile('/resume/pdf', filePath, 'file').then((data : UTSJSONObject) : string => {
         return toStr(data['url'])
+    })
+}
+
+/**
+ * 删除附件（工作照或 PDF）
+ * DELETE /resume/attachment
+ * @param type - "photo" 删除工作照 / "pdf" 删除 PDF
+ */
+export function deleteAttachmentApi(type : string) : Promise<void> {
+    return del('/resume/attachment', { type: type }).then(() : void => {
+        // 删除成功
     })
 }
 
