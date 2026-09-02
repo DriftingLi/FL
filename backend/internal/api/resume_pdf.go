@@ -43,10 +43,9 @@ func RegisterResumePDFRoutes(rg *gin.RouterGroup, rd RouterDeps, recruitSvc *ser
 // pdfCompress 决定是否压缩：测试模式（gin.TestMode）关闭压缩便于契约测试做字节级文本断言；
 // 生产/开发默认压缩（体积小）。不暴露公共 query 钩子（Standards 审查 #485）。
 func pdfCompress(c *gin.Context) bool {
-	if gin.Mode() == gin.TestMode {
-		return false
-	}
-	return true
+	// 测试模式关闭压缩便于契约测试做字节级文本断言；生产/开发默认压缩（体积小）。
+	// 不暴露公共 query 钩子（Standards 审查 #485）。
+	return gin.Mode() != gin.TestMode
 }
 
 // serveResumePDF 公共 PDF 响应出口：渲染 → inline 字节流。
