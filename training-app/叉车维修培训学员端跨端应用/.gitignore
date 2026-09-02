@@ -1,3 +1,7 @@
 unpackage/
 .DS_Store
 .hbuilderx/
+
+# 本地 AI 辅助 agent 配置（不随项目共享）
+.opencode/agents/
+.opencode/node_modules/

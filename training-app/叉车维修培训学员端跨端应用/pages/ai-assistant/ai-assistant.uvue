@@ -3,7 +3,7 @@
 		<!-- 自定义导航栏 -->
 		<view class="custom-nav" :style="{ paddingTop: statusBarHeight + 'px' }">
 			<view class="nav-content">
-				<text class="nav-icon" @click="toggleSidebarLeft">&#9776;</text>
+				<text class="nav-icon" @click="toggleSidebarLeft">☰</text>
 				<view class="nav-center">
                     <text class="nav-title">维修助手</text>
 					<view class="version-tabs">
@@ -12,7 +12,7 @@
 					</view>
 					
 				</view>
-				<text class="nav-icon" @click="toggleSidebarRight">&#9636;</text>
+				<text class="nav-icon" @click="toggleSidebarRight">▦</text>
 			</view>
 		</view>
 
@@ -34,7 +34,7 @@
 				<view class="prompt-list">
 					<view v-for="(p, idx) in quickPrompts" :key="idx" class="prompt-card" @click="sendText(p)">
 						<text class="prompt-text">{{ p }}</text>
-						<text class="prompt-arrow">&#8250;</text>
+						<text class="prompt-arrow">›</text>
 					</view>
 				</view>
 
@@ -59,18 +59,18 @@
 		<view class="input-area">
 			<view class="model-bar">
 				<view class="model-selector" @click="showModelPicker = true">
-					<text class="model-icon">&#9733;</text>
+					<text class="model-icon">★</text>
 					<text class="model-name">{{ currentModelName }}</text>
-					<text class="model-arrow">&#9662;</text>
+					<text class="model-arrow">▾</text>
 				</view>
 			</view>
 			<view class="input-row">
-				<text class="tool-icon" @click="chooseImage()">&#128206;</text>
+				<text class="tool-icon" @click="chooseImage()">📎</text>
 				<view class="input-box">
 					<input v-model="inputText" class="chat-input" placeholder="提出你想要知道的问题" confirm-type="send" @confirm="onSend" />
 				</view>
-				<text class="tool-icon" @click="startVoice">&#127908;</text>
-				<text class="send-btn" :class="{ disabled: inputText.length == 0 }" @click="onSend">&#10148;</text>
+				<text class="tool-icon" @click="startVoice">🎙</text>
+				<text class="send-btn" :class="{ disabled: inputText.length == 0 }" @click="onSend">➤</text>
 			</view>
 		</view>
 
@@ -82,7 +82,7 @@
 		<view v-if="sidebarLeft" class="drawer drawer-left">
 			<view class="drawer-header" :style="{ paddingTop: statusBarHeight + 'px' }">
 				<text class="drawer-title">最近对话</text>
-				<text class="drawer-close" @click="sidebarLeft = false">&#10005;</text>
+				<text class="drawer-close" @click="sidebarLeft = false">✕</text>
 			</view>
 			<scroll-view scroll-y class="drawer-body">
 				<view class="drawer-new" @click="startNewChat">
@@ -92,7 +92,7 @@
 				<view v-if="sessions.length == 0" class="empty-tip">暂无历史对话</view>
 				<view v-for="(s, idx) in sessions" :key="idx" class="drawer-item" @click="loadSession(s)">
 					<text class="drawer-item-title">{{ s.title }}</text>
-					<text class="drawer-item-del" @click.stop="onDeleteSession(s.id)">&#10005;</text>
+					<text class="drawer-item-del" @click.stop="onDeleteSession(s.id)">✕</text>
 				</view>
 			</scroll-view>
 		</view>
@@ -102,7 +102,7 @@
 		<view v-if="sidebarRight" class="drawer drawer-right">
 			<view class="drawer-header" :style="{ paddingTop: statusBarHeight + 'px' }">
 				<text class="drawer-title">功能菜单</text>
-				<text class="drawer-close" @click="sidebarRight = false">&#10005;</text>
+				<text class="drawer-close" @click="sidebarRight = false">✕</text>
 			</view>
 			<scroll-view scroll-y class="drawer-body">
 				<view class="menu-item" @click="startNewChat">

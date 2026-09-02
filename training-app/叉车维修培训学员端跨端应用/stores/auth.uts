@@ -64,6 +64,9 @@ function clearAuthData() : void {
     removeStorage(STORAGE_KEY_REFRESH_TOKEN)
     removeStorage(STORAGE_KEY_USER)
     removeStorage(STORAGE_KEY_LOGIN_PROVIDER)
+
+    // 安全凭据（STORAGE_KEY_CREDENTIALS）故意不移除：
+    // 生物识别门控回填，退出登录不清理，下次登录时可通过生物识别恢复。
     syncDerived()
 }
 

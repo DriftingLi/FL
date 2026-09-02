@@ -1067,3 +1067,77 @@ export type PointsRecordListResult = {
     page : number              // 当前页码
     page_size : number         // 每页条数
 }
+
+// ========== 简历模块（GET/PUT /resume，对齐后端 JobCardDTO / JobCardInput） ==========
+
+/** 工作经历项（对齐后端 resume_experiences） */
+export type ResumeExperience = {
+    company : string
+    role : string
+    start_month : string
+    end_month : string
+    desc : string
+}
+
+/** 持证信息项（对齐后端 resume_certifications） */
+export type ResumeCertification = {
+    credential_id : number
+    cert_no : string
+    expire_date : string
+    image_urls : string[]
+}
+
+/** 简历数据（GET /resume 返回，对齐 JobCardDTO） */
+export type ResumeData = {
+    real_name : string
+    contact_phone : string
+    wechat : string
+    region : string
+    expected_position_id : number
+    expected_position_extra : string
+    expected_regions : string[]
+    salary_min : number
+    salary_max : number
+    salary_negotiable : boolean
+    available_in : string
+    job_nature : string
+    experience_years : number
+    self_intro : string
+    resume_experiences : ResumeExperience[]
+    resume_certifications : ResumeCertification[]
+    resume_file_url : string
+    photos : string[]
+    visibility : string
+    created_at : string
+    updated_at : string
+}
+
+/** 保存简历参数（PUT /resume，对齐 JobCardInput，全字段可选） */
+export type SaveResumeParams = {
+    real_name : string
+    contact_phone : string
+    wechat : string
+    region : string
+    expected_position_id : number
+    expected_position_extra : string
+    expected_regions : string[]
+    salary_min : number
+    salary_max : number
+    salary_negotiable : boolean
+    available_in : string
+    job_nature : string
+    experience_years : number
+    self_intro : string
+    resume_experiences : ResumeExperience[]
+    resume_certifications : ResumeCertification[]
+    resume_file_url : string
+    photos : string[]
+    visibility : string
+}
+
+/** 岗位字典项（GET /positions 返回） */
+export type PositionItem = {
+    position_id : number
+    code : string
+    name : string
+}
