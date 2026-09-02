@@ -10,14 +10,11 @@
 CREATE OR REPLACE FUNCTION normalize_job_card_regions() RETURNS void AS $$
 DECLARE
     rec RECORD;
-    elem TEXT;
     new_arr JSONB := '[]'::jsonb;
     out_region TEXT;
     parts TEXT[];
     prov_name TEXT;
-    cur_prov TEXT;
     cur_city TEXT;
-    cur_city_short TEXT;
 BEGIN
     -- 省市字典（省全名 + 市全名/短名，短名用于无分隔串拆分）
     CREATE TEMP TABLE IF NOT EXISTS _reg_prov (name TEXT PRIMARY KEY);
@@ -539,9 +536,7 @@ BEGIN
                         new_arr := new_arr || to_jsonb(CASE parts[1] WHEN '北京' THEN '北京市' WHEN '天津' THEN '天津市' WHEN '上海' THEN '上海市' ELSE '重庆市' END);
                     ELSE
                         prov_name := NULL;
-                        FOR cur_prov IN SELECT name FROM _reg_prov WHERE position(name in parts[1]) = 1 ORDER BY length(name) DESC LIMIT 1 LOOP
-                            prov_name := cur_prov;
-                        END LOOP;
+                        SELECT name INTO prov_name FROM _reg_prov WHERE position(name in parts[1]) = 1 ORDER BY length(name) DESC LIMIT 1;
                         IF prov_name IS NOT NULL THEN
                             IF prov_name IN ('北京市','天津市','上海市','重庆市') THEN
                                 -- 直辖市只有一段：剩余区级信息不产生第二段
@@ -580,9 +575,7 @@ BEGIN
                     out_region := CASE parts[1] WHEN '北京' THEN '北京市' WHEN '天津' THEN '天津市' WHEN '上海' THEN '上海市' ELSE '重庆市' END;
                 ELSIF parts[1] NOT IN ('北京市', '天津市', '上海市', '重庆市') THEN
                     prov_name := NULL;
-                    FOR cur_prov IN SELECT name FROM _reg_prov WHERE position(name in parts[1]) = 1 ORDER BY length(name) DESC LIMIT 1 LOOP
-                        prov_name := cur_prov;
-                    END LOOP;
+                    SELECT name INTO prov_name FROM _reg_prov WHERE position(name in parts[1]) = 1 ORDER BY length(name) DESC LIMIT 1;
                     IF prov_name IS NOT NULL THEN
                         IF prov_name IN ('北京市','天津市','上海市','重庆市') THEN
                             out_region := prov_name;
