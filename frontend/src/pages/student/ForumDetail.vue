@@ -28,19 +28,11 @@
             <span class="topic-time text-xs text-ink-3">{{ formatLocaleDateTime(topic.created_at, '') }}</span>
           </div>
           <div class="topic-actions ml-auto flex items-center gap-1">
-            <el-tooltip :content="topic?.liked_by_me ? '取消点赞' : '点赞'" placement="top">
-              <UiButton :type="topic?.liked_by_me ? 'danger' : 'default'" circle size="small" @click="toggleTopicLike">
-                <span class="heart-btn text-sm leading-none">{{ topic?.liked_by_me ? '♥' : '♡' }}</span>
-              </UiButton>
-            </el-tooltip>
-            <span v-if="topic" class="like-count min-w-4 text-left text-xs text-bad">{{ topic.likes_count || 0 }}</span>
-            <el-tooltip :content="topicFavorited ? '取消收藏' : '收藏'" placement="top">
-              <UiButton :icon="topicFavorited ? StarFilled : Star" :type="topicFavorited ? 'warning' : 'default'" circle size="small" @click="toggleFavorite"/>
-            </el-tooltip>
-            <UiButton variant="text" size="small" @click="openReport('topic')">举报</UiButton>
-            <UiButton variant="text" v-if="topic.can_delete" class="delete-btn ml-auto text-bad" size="small" @click="removeTopic">
-              删除
-            </UiButton>
+            <!-- #511：UiActionChip 统一互动/治理操作（图标内置、激活态填充） -->
+            <UiActionChip icon="like" :label="topic?.liked_by_me ? '已赞' : '点赞'" :count="topic.likes_count" tone="like" :active="!!topic?.liked_by_me" @click="toggleTopicLike" />
+            <UiActionChip icon="fav" :label="topicFavorited ? '已收藏' : '收藏'" tone="fav" :active="topicFavorited" @click="toggleFavorite" />
+            <UiActionChip icon="report" label="举报" tone="neutral" @click="openReport('topic')" />
+            <UiActionChip v-if="topic.can_delete" icon="delete" label="删除" tone="danger" @click="removeTopic" />
           </div>
         </div>
         <div class="topic-body mt-4">
@@ -63,7 +55,7 @@
             <el-icon><View /></el-icon>
             {{ topic.view_count }} 次浏览
             <span class="like-stat ml-3 inline-flex items-center gap-0.5 text-bad">
-              <span class="heart text-xs leading-none">{{ topic.liked_by_me ? '♥' : '♡' }}</span>
+              <svg class="size-3.5" viewBox="0 0 24 24" :fill="topic.liked_by_me ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
               {{ topic.likes_count || 0 }} 点赞
             </span>
             <el-icon class="reply-icon ml-3"><ChatDotRound /></el-icon>
@@ -108,16 +100,10 @@
                 <UiButton variant="primary" class="reply-btn" size="small" @click="startReplyTo(reply)">
                   回复
                 </UiButton>
-                <UiButton variant="text" class="reply-btn" size="small" @click="openReport('reply', reply.id)">
-                  举报
-                </UiButton>
-                <UiButton variant="text" class="like-btn" :type="reply.liked_by_me ? 'danger' : 'default'" size="small" @click="toggleReplyLike(reply)">
-                  <span class="heart text-[13px] leading-none">{{ reply.liked_by_me ? '♥' : '♡' }}</span>
-                  <span v-if="(reply.likes_count || 0) > 0" class="like-count-inline ml-0.5 text-xs">{{ reply.likes_count }}</span>
-                </UiButton>
-                <UiButton variant="text" v-if="reply.can_delete" class="delete-btn ml-auto text-bad" size="small" @click="removeReply(reply.id)">
-                  删除
-                </UiButton>
+                <!-- #511：回复互动/治理统一药丸形态 -->
+                <UiActionChip icon="like" :label="reply.liked_by_me ? '已赞' : '点赞'" :count="reply.likes_count" tone="like" compact :active="!!reply.liked_by_me" @click="toggleReplyLike(reply)" />
+                <UiActionChip icon="report" label="举报" tone="neutral" compact @click="openReport('reply', reply.id)" />
+                <UiActionChip v-if="reply.can_delete" icon="delete" label="删除" tone="danger" compact class="ml-auto" @click="removeReply(reply.id)" />
               </div>
               <div v-if="reply.parent_id && reply.parent_name" class="reply-quote mb-1 inline-block rounded-[6px] bg-canvas px-2 py-0.5 text-xs text-ink-3">
                 回复 @{{ reply.parent_name }}
@@ -174,7 +160,7 @@
 import { ref, computed, nextTick, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, View, ChatDotRound, Star, StarFilled, ArrowUp, ArrowDown } from '@element-plus/icons-vue'
+import { ArrowLeft, View, ChatDotRound, ArrowUp, ArrowDown } from '@element-plus/icons-vue'
 import { forumApi, type ForumTopicItem, type ForumReplyItem } from '@/api/forum'
 import { favoriteApi } from '@/api/favorite'
 import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
@@ -194,6 +180,7 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiTag from '@/components/ui/UiTag.vue'
+import UiActionChip from '@/components/ui/UiActionChip.vue'
 
 const route = useRoute()
 const router = useRouter()

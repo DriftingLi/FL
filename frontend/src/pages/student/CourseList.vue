@@ -1,10 +1,12 @@
 <template>
   <div class="flex flex-col gap-6">
-    <el-tabs v-model="activeTab" class="cc-tabs mb-2" @tab-change="handleTabChange">
-      <el-tab-pane label="热门" name="hot" />
-      <el-tab-pane label="精品" name="featured" />
-      <el-tab-pane label="所有" name="all" />
-    </el-tabs>
+    <!-- #511：榜单/全部切换统一分段控件 -->
+    <UiSegmentTabs
+      :model-value="activeTab"
+      :options="tabOptions"
+      @update:model-value="(v: string) => { activeTab = v as 'hot' | 'featured' | 'all'; handleTabChange() }"
+      class="mb-2"
+    />
     <div class="flex items-start gap-5 max-[900px]:flex-col max-[900px]:items-stretch">
       <aside class="flex w-[200px] shrink-0 flex-col gap-3 max-[900px]:w-full">
         <FacetCard v-if="activeTab === 'all'" title="专业方向">
@@ -241,6 +243,7 @@ import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiProgress from '@/components/ui/UiProgress.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 
 const stagger = useStagger()
 
@@ -255,6 +258,13 @@ try {
 
 const courses = ref<CourseSummary[]>([])
 const activeTab = ref<'hot' | 'featured' | 'all'>('hot')
+
+// #511：榜单/全部切换分段选项
+const tabOptions = [
+  { label: '热门', value: 'hot' },
+  { label: '精品', value: 'featured' },
+  { label: '所有', value: 'all' }
+]
 
 // 三态 + 分页三件套收编（#388）：loader 只负责拉数据与写响应
 const {
