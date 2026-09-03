@@ -1,8 +1,9 @@
 // UI 基础组件层冒烟测试。
 // 目的不是覆盖样式，而是守住「能挂载、关键 props 生效、事件能发出」这条底线——
 // 组件层一旦有人漏了 import 或改坏 props 默认值，这里会先炸。
-import { describe, it, expect } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { describe, it, expect, afterEach } from 'vitest'
+import { mount, flushPromises } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import type { Component } from 'vue'
 import ElementPlus from 'element-plus'
 
@@ -10,6 +11,7 @@ import UiBadge from '../UiBadge.vue'
 import UiButton from '../UiButton.vue'
 import UiCard from '../UiCard.vue'
 import UiCountTo from '../UiCountTo.vue'
+import UiDialog from '../UiDialog.vue'
 import UiDivider from '../UiDivider.vue'
 import UiEmptyState from '../UiEmptyState.vue'
 import UiErrorState from '../UiErrorState.vue'
@@ -182,5 +184,84 @@ describe('UiInput / UiSelect', () => {
   it('下拉按 options 渲染选项', () => {
     const w = mountWith(UiSelect, { options: OPTIONS })
     expect(w.html()).toContain('el-select')
+  })
+})
+
+// el-dialog 把内容 teleport 到 body，有两个坑：
+// 1. wrapper.html() 抓不到 teleport 内容，必须 attachTo: document.body 后直接查 document；
+// 2. 首帧 DOM 未必就位（v-if + transition），mount 后要 flushPromises 才能断言；
+//    且 unmount 后 transition 节点会残留，不清干净会让后续用例的 querySelectorAll 串到上一个弹窗。
+describe('UiDialog', () => {
+  afterEach(() => {
+    document.body.innerHTML = ''
+  })
+
+  async function mountDialog(props: Record<string, unknown> = {}) {
+    const w = mount(UiDialog, {
+      props: { modelValue: true, ...props },
+      attachTo: document.body,
+      global: { plugins: [ElementPlus] }
+    })
+    await flushPromises()
+    await nextTick()
+    return w
+  }
+
+  function footerButtons() {
+    return Array.from(document.querySelectorAll('.el-dialog__footer button'))
+  }
+
+  function findButton(text: string) {
+    return footerButtons().find((b) => b.textContent?.includes(text))
+  }
+
+  it('渲染标题、副标题与默认页脚按钮', async () => {
+    const w = await mountDialog({ title: '发布新帖', subtitle: '请遵守社区规范' })
+    const body = document.body.textContent ?? ''
+    expect(body).toContain('发布新帖')
+    expect(body).toContain('请遵守社区规范')
+    expect(body).toContain('取消')
+    expect(body).toContain('确定')
+    w.unmount()
+  })
+
+  // 注意 EP 的 .el-dialog__header 容器总会渲染（右上角关闭按钮要挂在里面），
+  // 我们的 v-if 控制的是**标题内容**，不是容器本身。
+  it('不传 title / subtitle / icon 时头部没有标题区', async () => {
+    const w = await mountDialog()
+    expect(document.querySelector('.el-dialog__header h3')).toBeNull()
+    w.unmount()
+  })
+
+  it('hideFooter 时不渲染页脚', async () => {
+    const w = await mountDialog({ title: '举报', hideFooter: true })
+    expect(document.querySelector('.el-dialog__footer')).toBeNull()
+    w.unmount()
+  })
+
+  it('点确定发 confirm，且不会顺带发 cancel', async () => {
+    const w = await mountDialog({ title: '举报', confirmText: '提交' })
+    findButton('提交')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await nextTick()
+    expect(w.emitted('confirm')).toBeTruthy()
+    expect(w.emitted('cancel')).toBeFalsy()
+    w.unmount()
+  })
+
+  it('点取消发 cancel 并同步关闭 v-model', async () => {
+    const w = await mountDialog({ title: '举报', cancelText: '取消' })
+    findButton('取消')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await nextTick()
+    expect(w.emitted('cancel')).toBeTruthy()
+    expect(w.emitted('update:modelValue')?.[0]).toEqual([false])
+    w.unmount()
+  })
+
+  it('showCancel=false 时页脚只剩确定按钮', async () => {
+    const w = await mountDialog({ title: '提示', showCancel: false, confirmText: '知道了' })
+    const labels = footerButtons().map((b) => b.textContent?.trim())
+    expect(labels).toHaveLength(1)
+    expect(labels[0]).toContain('知道了')
+    w.unmount()
   })
 })
