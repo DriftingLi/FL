@@ -1,33 +1,38 @@
 <template>
-  <el-dialog v-model="visible" title="每日打卡" width="560px" @open="onOpen">
+  <UiDialog v-model="visible" title="每日打卡" width="560px" hide-footer @open="onOpen">
     <el-tabs v-model="activeTab" @tab-change="handleTabChange">
       <el-tab-pane label="日历签到" name="calendar">
-        <div class="calendar-header">
-          <div class="streak-info">
-            已连续打卡 <span class="num">{{ calendar.streak }}</span> 天
-            <span class="divider">|</span>
-            累计打卡 <span class="num">{{ calendar.total }}</span> 天
+        <div class="mb-3 flex items-center justify-between gap-3">
+          <div class="text-[13px] text-ink">
+            已连续打卡 <span class="font-semibold text-ui-600">{{ calendar.streak }}</span> 天
+            <span class="mx-1.5 text-line-strong">|</span>
+            累计打卡 <span class="font-semibold text-ui-600">{{ calendar.total }}</span> 天
           </div>
-          <div class="month-nav">
+          <div class="flex items-center gap-1">
             <UiButton variant="text" size="small" @click="prevMonth">‹</UiButton>
-            <span class="month-label">{{ calendarYear }}年{{ calendarMonth }}月</span>
+            <span class="min-w-20 text-center text-[13px] text-ink-2">{{ calendarYear }}年{{ calendarMonth }}月</span>
             <UiButton variant="text" size="small" @click="nextMonth">›</UiButton>
           </div>
         </div>
 
-        <div class="calendar-grid">
-          <div class="weekday-row">
-            <span v-for="w in weekdays" :key="w" class="weekday">{{ w }}</span>
+        <div class="mb-4 overflow-hidden rounded-[8px] border border-line">
+          <div class="grid grid-cols-7 bg-canvas">
+            <span v-for="w in weekdays" :key="w" class="py-1.5 text-center text-xs text-ink-3">{{ w }}</span>
           </div>
-          <div class="days-grid">
+          <div class="grid grid-cols-7">
+            <!--
+              每格都显式给出 border-b / border-r：本项目不引 Tailwind preflight，
+              浏览器默认 border-width 是 medium(3px)，只给方向不挂宽度会翻车。
+            -->
             <span
               v-for="cell in calendarCells"
               :key="cell.key"
-              class="day-cell"
+              class="border-b border-r border-canvas py-2.5 text-center text-[13px] text-ink [&:nth-child(7n)]:border-r-0"
               :class="{
-                'other-month': !cell.isCurrentMonth,
-                'today': cell.isToday,
-                'checked': cell.checked,
+                'bg-canvas text-ink-muted': !cell.isCurrentMonth,
+                'bg-ui-50 font-semibold': cell.isToday && !cell.checked,
+                'bg-ui-500 text-panel': cell.checked && !cell.isToday,
+                'bg-ui-600 text-panel': cell.checked && cell.isToday
               }"
             >
               {{ cell.day }}
@@ -35,7 +40,7 @@
           </div>
         </div>
 
-        <div class="calendar-action">
+        <div class="flex justify-center">
           <UiButton variant="primary" :loading="checking" :disabled="calendar.today_checked" @click="doCheckIn">
             {{ calendar.today_checked ? '今日已打卡' : '立即打卡' }}
           </UiButton>
@@ -43,12 +48,12 @@
       </el-tab-pane>
 
       <el-tab-pane label="打卡排行" name="rank">
-        <div v-if="rankMe" class="my-rank-card">
-          我的排名：<span class="rank-num">NO.{{ rankMe.rank }}</span>
-          <span class="divider">|</span>
-          累计 <span class="num">{{ rankMe.total }}</span> 天
-          <span class="divider">|</span>
-          连续 <span class="num">{{ rankMe.streak }}</span> 天
+        <div v-if="rankMe" class="mb-3 rounded-[8px] border border-ui-100 bg-ui-50 px-3 py-2.5 text-center text-[13px] text-ink">
+          我的排名：<span class="font-bold text-ui-600">NO.{{ rankMe.rank }}</span>
+          <span class="mx-1.5 text-line-strong">|</span>
+          累计 <span class="font-semibold">{{ rankMe.total }}</span> 天
+          <span class="mx-1.5 text-line-strong">|</span>
+          连续 <span class="font-semibold">{{ rankMe.streak }}</span> 天
         </div>
         <el-table :data="rankItems" stripe size="small" v-loading="rankLoading" max-height="320">
           <el-table-column label="排名" width="70">
@@ -56,17 +61,17 @@
           </el-table-column>
           <el-table-column label="学员">
             <template #default="{ row }">
-              <div class="rank-user">
+              <div class="flex items-center gap-2">
                 <el-avatar :size="24" :src="row.user.avatar_url || undefined">{{ (row.user.username || '?').charAt(0).toUpperCase() }}</el-avatar>
-                <span class="rank-name">{{ row.user.username }}</span>
-                <el-tag v-if="row.today_checked" size="small" type="success" class="today-tag">今日已打卡</el-tag>
+                <span class="text-[13px] text-ink">{{ row.user.username }}</span>
+                <UiTag v-if="row.today_checked" tone="success" class="ml-1.5">今日已打卡</UiTag>
               </div>
             </template>
           </el-table-column>
           <el-table-column label="累计" width="80" prop="total" />
           <el-table-column label="连续" width="80" prop="streak" />
         </el-table>
-        <div v-if="rankTotal > rankPageSize" class="rank-pagination">
+        <div v-if="rankTotal > rankPageSize" class="mt-3 flex justify-center">
           <el-pagination
             v-model:current-page="rankPage"
             :page-size="rankPageSize"
@@ -78,7 +83,7 @@
         </div>
       </el-tab-pane>
     </el-tabs>
-  </el-dialog>
+  </UiDialog>
 </template>
 
 <script setup lang="ts">
@@ -86,6 +91,8 @@ import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { forumApi, type CheckInRankItem, type CheckInRankMe } from '@/api/forum'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
+import UiTag from '@/components/ui/UiTag.vue'
 
 const visible = defineModel<boolean>({ default: false })
 const props = withDefaults(defineProps<{ initialTab?: 'calendar' | 'rank' }>(), { initialTab: 'calendar' })
@@ -238,145 +245,3 @@ watch(
 
 defineExpose({ loadCalendar, loadRank })
 </script>
-
-<style scoped>
-.calendar-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.streak-info {
-  font-size: 13px;
-  color: var(--color-text-primary);
-}
-
-.streak-info .num {
-  font-weight: 600;
-  color: var(--color-primary-500);
-}
-
-.divider {
-  margin: 0 6px;
-  color: var(--color-border);
-}
-
-.month-nav {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.month-label {
-  font-size: 13px;
-  color: var(--color-text-secondary);
-  min-width: 80px;
-  text-align: center;
-}
-
-.calendar-grid {
-  border: 1px solid var(--color-border-light);
-  border-radius: 8px;
-  overflow: hidden;
-  margin-bottom: 16px;
-}
-
-.weekday-row {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  background: var(--color-bg-page);
-}
-
-.weekday {
-  text-align: center;
-  font-size: 12px;
-  color: var(--color-text-tertiary);
-  padding: 6px 0;
-}
-
-.days-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-}
-
-.day-cell {
-  text-align: center;
-  font-size: 13px;
-  color: var(--color-text-primary);
-  padding: 10px 0;
-  border-right: 1px solid var(--color-bg-page);
-  border-bottom: 1px solid var(--color-bg-page);
-  position: relative;
-}
-
-.day-cell:nth-child(7n) {
-  border-right: none;
-}
-
-.day-cell.other-month {
-  color: var(--color-text-disabled);
-  background: var(--color-bg-page);
-}
-
-.day-cell.today {
-  background: var(--color-primary-50);
-  font-weight: 600;
-}
-
-.day-cell.checked {
-  background: var(--color-primary-500);
-  color: #fff;
-}
-
-.day-cell.checked.today {
-  background: var(--color-primary-600);
-}
-
-.calendar-action {
-  display: flex;
-  justify-content: center;
-}
-
-.my-rank-card {
-  background: var(--color-primary-50);
-  border: 1px solid var(--color-primary-100);
-  border-radius: 8px;
-  padding: 10px 12px;
-  font-size: 13px;
-  color: var(--color-text-primary);
-  margin-bottom: 12px;
-  text-align: center;
-}
-
-.my-rank-card .rank-num {
-  font-weight: 700;
-  color: var(--color-primary-500);
-}
-
-.my-rank-card .num {
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-
-.rank-user {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.rank-name {
-  font-size: 13px;
-  color: var(--color-text-primary);
-}
-
-.today-tag {
-  margin-left: 6px;
-}
-
-.rank-pagination {
-  display: flex;
-  justify-content: center;
-  margin-top: 12px;
-}
-</style>
