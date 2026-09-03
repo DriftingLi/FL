@@ -16,21 +16,24 @@ import (
 	"forklift-training/pkg/response"
 )
 
-// PointsBalanceResult 余额结果
+// PointsBalanceResult 余额结果。TotalSpent 为流水支出绝对值聚合（#509 明细页累计支出）。
 type PointsBalanceResult struct {
 	Balance     int `json:"balance"`
 	TotalEarned int `json:"total_earned"`
+	TotalSpent  int `json:"total_spent"`
 }
 
-// PointsLedgerItem 流水条目
+// PointsLedgerItem 流水条目。ExpiresAt 过期时间设计位（#509）：首版恒 nil（永久有效），
+// 未来启用过期策略后随模型列 expires_at 点亮。
 type PointsLedgerItem struct {
-	ID        int64     `json:"id"`
-	UserID    int       `json:"user_id"`
-	Delta     int       `json:"delta"`
-	Reason    string    `json:"reason"`
-	RefType   string    `json:"ref_type"`
-	RefID     string    `json:"ref_id"`
-	CreatedAt time.Time `json:"created_at"`
+	ID        int64      `json:"id"`
+	UserID    int        `json:"user_id"`
+	Delta     int        `json:"delta"`
+	Reason    string     `json:"reason"`
+	RefType   string     `json:"ref_type"`
+	RefID     string     `json:"ref_id"`
+	CreatedAt time.Time  `json:"created_at"`
+	ExpiresAt *time.Time `json:"expires_at"`
 }
 
 // PointsLedgerResult 流水分页
@@ -258,12 +261,22 @@ func (s *PointsService) GetBalance(userID int) (*PointsBalanceResult, error) {
 	}
 	var totalEarned int64
 	_ = s.db.Model(&model.PointsLedger{}).Where("user_id = ? AND delta > 0", userID).Select("COALESCE(SUM(delta),0)").Scan(&totalEarned).Error
-	return &PointsBalanceResult{Balance: user.PointsBalance, TotalEarned: int(totalEarned)}, nil
+	// #509：累计支出 = delta<0 流水绝对值聚合（兑换/AI/违规扣减；rollback 为 + 方向对冲不计入）
+	var totalSpent int64
+	_ = s.db.Model(&model.PointsLedger{}).Where("user_id = ? AND delta < 0", userID).Select("COALESCE(SUM(-delta),0)").Scan(&totalSpent).Error
+	return &PointsBalanceResult{Balance: user.PointsBalance, TotalEarned: int(totalEarned), TotalSpent: int(totalSpent)}, nil
 }
 
 // GetLedger 流水分页。userID=0 不过滤用户（admin 巡检全量视角）；reason 可选筛选
 // （空=不过滤，变参保持既有调用方零 diff，同 AdminCourseService.GetCourses 的 filter 惯例）。
+// 委托 GetLedgerFiltered（direction 空串）。
 func (s *PointsService) GetLedger(userID, page, pageSize int, reason string, refType ...string) (*PointsLedgerResult, error) {
+	return s.GetLedgerFiltered(userID, page, pageSize, reason, "", refType...)
+}
+
+// GetLedgerFiltered 流水分页 + 收支方向筛选（#512 积分明细页）——direction: "" 全部 /
+// "in" 仅收入(delta>0) / "out" 仅支出(delta<0)；其余参数语义同 GetLedger。
+func (s *PointsService) GetLedgerFiltered(userID, page, pageSize int, reason, direction string, refType ...string) (*PointsLedgerResult, error) {
 	if page <= 0 {
 		page = 1
 	}
@@ -277,6 +290,13 @@ func (s *PointsService) GetLedger(userID, page, pageSize int, reason string, ref
 		}
 		if reason != "" {
 			q = q.Where("reason = ?", reason)
+		}
+		// #512：收支方向——in 仅收入（delta>0）、out 仅支出（delta<0）
+		switch direction {
+		case "in":
+			q = q.Where("delta > 0")
+		case "out":
+			q = q.Where("delta < 0")
 		}
 		// #411：按业务域（ref_type）过滤——问答域一行锁死，不维护原因白名单。
 		if len(refType) > 0 && refType[0] != "" {
@@ -307,6 +327,7 @@ func (s *PointsService) GetLedger(userID, page, pageSize int, reason string, ref
 			RefType:   r.RefType,
 			RefID:     r.RefID,
 			CreatedAt: r.CreatedAt,
+			ExpiresAt: r.ExpiresAt,
 		})
 	}
 	return &PointsLedgerResult{Items: items, Total: total, Page: page, Pages: pages}, nil

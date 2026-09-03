@@ -4,6 +4,8 @@ import type { TaskGroup, TaskStatus } from '@/utils/taskCenter'
 export interface PointsBalance {
   balance: number
   total_earned: number
+  /** 累计支出（#509：delta<0 流水绝对值聚合） */
+  total_spent: number
 }
 
 export interface PointsLedgerItem {
@@ -13,6 +15,8 @@ export interface PointsLedgerItem {
   ref_type: string
   ref_id: string
   created_at: string
+  /** 过期时间（#509 设计位）：首版恒 null（永久有效） */
+  expires_at: string | null
 }
 
 export interface PointsLedgerData {
@@ -52,7 +56,7 @@ export const pointsApi = {
   getBalance() {
     return unwrappedRequest.get<PointsBalance>('/points/balance', SILENT)
   },
-  getLedger(params: { page?: number; page_size?: number }) {
+  getLedger(params: { page?: number; page_size?: number; direction?: 'in' | 'out' }) {
     return unwrappedRequest.get<PointsLedgerData>('/points/ledger', { params })
   },
   getTasks() {

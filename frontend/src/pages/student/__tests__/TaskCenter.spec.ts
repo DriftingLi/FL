@@ -38,7 +38,7 @@ function claimableTask(over: Partial<PointsTaskItem> = {}): PointsTaskItem {
 }
 
 beforeEach(() => {
-  vi.mocked(pointsApi.getBalance).mockResolvedValue({ balance: 12, total_earned: 340 })
+  vi.mocked(pointsApi.getBalance).mockResolvedValue({ balance: 12, total_earned: 340, total_spent: 120 })
   vi.mocked(pointsApi.getTasks).mockResolvedValue({
     tasks: [claimableTask()],
   })

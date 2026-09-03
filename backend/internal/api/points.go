@@ -68,7 +68,9 @@ func (h *PointsHandler) GetLedger(c *gin.Context) {
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.PointsLedgerResult, error) {
 			page := atoiDefault(c.Query("page"), 1)
 			pageSize := atoiDefault(c.Query("page_size"), 20)
-			return h.svc.GetLedger(middleware.CurrentUserID(c), page, pageSize, "")
+			// #512：direction 收支方向筛选（"" 全部 / "in" 收入 / "out" 支出）
+			direction := c.Query("direction")
+			return h.svc.GetLedgerFiltered(middleware.CurrentUserID(c), page, pageSize, "", direction)
 		},
 	}.Handle(c)
 }
