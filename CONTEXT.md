@@ -40,7 +40,9 @@
 - **课程（course）/ 章节（chapter）**：PPT/视频/图文混排内容；PPT 经 LibreOffice sidecar 转 WebP。课程必挂目标证件 + 专业方向 + 课程等级（创建/编辑必填），可关联证书模板与前置课程。
 - **收藏（favorite）**：多态收藏（target_type+target_id：course/chapter/question/featured/topic；user+type+id 唯一幂等），列表实时回填目标快照、目标删除即条目消失，见 ADR-0018；其中 course/question 分区按当前证件过滤。
 - **全局搜索（search）**：course/question/content/topic 四类 LOWER LIKE 聚合（type 缺省各分区 top5），可见性与业务口径一致（挂载不变式/published/已发布），见 ADR-0018；course/question 分区按当前证件过滤，question 分区另走题库池口径（排除真题题）。
-- **学习资料（material）**：已发布课程下章节附件（chapter_file）的聚合视图，不建独立资料库；file_url 为静态直链，见 ADR-0018。
+- **学习资料（material）**：**课程来源**的资料——已发布课程下章节附件（chapter_file）的聚合视图，file_url 为静态直链，见 ADR-0018。注意：系统的资料供给有两个来源（课程附件 material ＋学员过审投稿 contribution），但 material 一词**只指前者**，不要把投稿叫 material。
+  _Avoid_: 资料（泛称）、资料库条目
+- **资料投稿（contribution）**：学员自主上传、经审核通过后才对全学员公开可下载的**非课程来源**资料（`user_contribution`，投稿区列表为独立浏览面）。与 material 的区别是供给侧而非形态：material 长在课程章节上（由讲师/管理员发布），contribution 长在学员账号上（由学员提交、平台审核）。积分激励买的是这份供给——**未过审不产生任何积分**，见「投稿审核（contribution review）」。
 - **学习位置（learning position）**：学员在某课程的最后学习状态——最后章节（last_chapter_id）、章节播放位置（video_position，秒）、最后学习时间戳（last_studied_at），挂在 study_record 双轨记录上（课程级承载 last_*、章节级承载位置）；章节完成以 progress≥100 为单一事实源（时长自动完成与显式 completed 收敛于此），见 ADR-0017。
 - **证书模板（certificate template）**：课程可选关联的培训合格证书（结业证），含有效期（天）；课程挂靠后学员完成学习可获证。与"目标证件"语义严格区分。
 - **前置课程（course prerequisite）**：课程间的依赖关系（A 完成才能学 B），防自指防成环；编辑回填 prerequisite_course_ids 避免误清空。
@@ -54,6 +56,14 @@
 - **AI 助手**：大模型流式对话（DeepSeek 默认，可配置 OpenAI 兼容模型）。归属 training 子域名（学员工作区功能），由主域名迁入。
 - **AI 计费（AI billing）**：仅 AI 助手对话按 tokens 后计量扣费；刷题 AI 解析、简答评分、章节内容生成均免费——有意决策，扩计费面需单独立项。口径：tokens 按字符长度估算（prompt+completion /4，兜底单点）；积分 = ceil(tokens/1000)×10，下限 5 上限 100；余额预检与扣费下限同源于积分域（不可在调用侧另立常量）；幂等键 `ai_tokens:{requestID}`（ADR-0023），同请求重试/重放只扣一次。
 - **积分（points）**：学员激励与消耗的统一账务域（PointsService 单点承载）：余额、流水（points_ledger，delta≠0 必写）、幂等占坑（points_entry_idem，ADR-0023）。入账/扣费来源：任务领取、问答采纳奖励、兑换（课程/真题卷/商城）、AI 按 tokens 计量扣费、管理员扣罚与违规回收对冲（封底 0）。
+- **资料投稿（contribution）**：学员自主上传、经审核通过后才对全学员公开可下载的**非课程来源**资料（`user_contribution`，投稿区列表为独立浏览面）。与 material 的区别是供给侧而非形态：material 长在课程章节上（由讲师/管理员发布），contribution 长在学员账号上（由学员提交、平台审核）。积分激励买的是这份供给——**未过审不产生任何积分**，见「投稿审核（contribution review）」。形态：**一份投稿＝1–5 个文件**（白名单 pdf/doc/docx/ppt/pptx/xls/xlsx/zip/mp4；单文件 ≤20MB、单投稿合计 ≤50MB，扩展名＋MIME 双校验）＋标题＋简介（均必填）。必挂**目标证件**（`credential_id`，与课程/题库同构，V1 1:N 预留 M:N），投稿区跟随当前证件过滤——与「证件即全局过滤器」的既有约定一致。
+- **投稿审核（contribution review）**：`pending → approved / rejected`，**管理员与讲师同为审核者**（投稿是内容事务，讲师具备专业判断；审核动作天然落审计日志）。rejected 可修改后重提 = 新建一条投稿（新行新审核，不复用旧行、不改写历史）。approved 后仍可被下架进 `archived`（文件立即不可下载），下架时用 **rollback 对冲追回**过审分与达阶分（封底 0）并站内信告知原因——口径同问答采纳奖励的「删帖不回滚、违规回收走对冲」，但投稿相反：**违规下架必须追回**，因为过审分是审核时点即发的预付奖励。作者主动撤回 `pending` 稿为 `withdrawn`（未发过分，无需回滚）。
+- **投稿配额（contribution quota）**：供给侧背压，两臂——自然日（Asia/Shanghai）每学员最多提交 3 份；名下 pending 积压达 5 份时不能再投（把刷量上限与审核吞吐绑定）。计数以 user_contribution 表为事实源，不另建计数。**投稿资格**：仅学员角色，且须已选定当前证件（讲师/管理员走课程附件通道，不投投稿——审核队列自己审自己很怪；证件门槛顺带淘汰未过 onboarding 的空白号，对真实学员零摩擦）。
+- **匿名投稿（anonymous contribution）**：投稿表单的可选开关——列表/详情以「匿名学员」替作者昵称。匿名不匿名积分（流水 ref 指向投稿行，不涉身份）。默认署名（昵称，与论坛同口径）。
+- **投稿举报（contribution report）**：学员对已过审投稿的治理发现渠道（`contribution_report`，同一学员对同一投稿唯一、重复合并，带理由：盗版/内容错误/违规/已失效）。照 job_reports 先例**不挂论坛举报表**——那是论坛域的形状。处置动作与管理员主动下架同一条路径（archived＋rollback 追回），举报只是入口。
+- **投稿文件（contribution file）**：先传后提交——文件先落暂存前缀拿 URL，随表单提交转正式位；传而不交的孤儿文件由既有悬空扫描模式回收（24h 口径，扫描面加 contributions 前缀）。
+- **投稿下载（contribution download）**：学员取走一份已过审投稿的动作。`contribution_download`（`user_id`+`contribution_id` 唯一）是下载量的**唯一事实源**——每人每稿终身计一次、作者本人不计、重复点击不叠加。计数的用途是达阶奖励与排序，**V1 不向下载者收积分**（下载不是消耗事件，redeem 管线仍是学员→平台的单向消耗）。
+- **投稿达阶奖励（contribution tier bonus）**：某投稿的下载量跨过阈值时给作者的一次性追加积分，**直记即时入账**（非任务领取制，照问答采纳奖励形状）：与下载记录同一请求内判定“是否刚好跨过档”，跨过即写流水，幂等键 `ref_type='contribution', ref_id=contribution_id, reason='contribution_tier'`（一天然只发一档），并发站内信。与过审奖励是**两笔独立流水**（reason 不同），不合并。
 - **积分任务中心（points task center）**：按行为计数实时计算任务状态（todo/claimable/claimed）的任务列表；额度判定（终身 total_limit / 当日 daily_limit）读写共用 canClaim 单实现；领取经 Redis 防双领 + points_task_claim 唯一索引幂等。
 - **积分商城（points shop）**：课程/真题卷/商城商品三类兑换统一走 redeem 单管线（锁 + 已拥有校验 + 余额预检 + 幂等键 `redeem:<sku>`）；已拥有判定（HasEntitlement）供各域门禁复用。
 - **积分错误哨兵（points error sentinel）**：积分域业务错误的唯一契约形态——一语义一哨兵（ErrAlreadyClaimed 终身已领 / ErrDailyClaimLimit 今日已领 / ErrAlreadyRedeemed / ErrTaskNotFound / ErrCourseNotFound / ErrRealPaperUnavailable / ErrShopItemUnavailable / ErrUserNotFound / ErrInvalidPenalty），文案是哨兵的属性而非契约本身；handler 以 errors.Is 映射 HTTP 状态码，禁止 `err.Error() == "…"` 字符串比对（ADR-0024）。
