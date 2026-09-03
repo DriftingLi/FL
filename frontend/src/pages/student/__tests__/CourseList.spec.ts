@@ -88,7 +88,10 @@ describe('CourseList 左右分栏课程中心', () => {
     await flushPromises()
 
     // Spec #326 Q10：顶部 Tab 顺序 热门/精品/所有（所有最右），默认热门时隐藏 FacetCard
-    expect(wrapper.find('.cc-tabs').exists()).toBe(true)
+    // #511：顶部 tab 已换 UiSegmentTabs（role=tablist，含 3 个分段）
+    const tabs = wrapper.find('[role="tablist"]')
+    expect(tabs.exists()).toBe(true)
+    expect(tabs.findAll('[role="tab"]')).toHaveLength(3)
     expect(wrapper.findAll('.cc-filter-card').length).toBe(0)
 
     // 切到「所有」后展示双卡片导航

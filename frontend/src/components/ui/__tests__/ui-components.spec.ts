@@ -24,6 +24,8 @@ import UiSelect from '../UiSelect.vue'
 import UiSkeleton from '../UiSkeleton.vue'
 import UiStatCard from '../UiStatCard.vue'
 import UiTag from '../UiTag.vue'
+import UiActionChip from '../UiActionChip.vue'
+import UiSegmentTabs from '../UiSegmentTabs.vue'
 
 const OPTIONS = [
   { label: '全部', value: 'all' },
@@ -263,5 +265,71 @@ describe('UiDialog', () => {
     expect(labels).toHaveLength(1)
     expect(labels[0]).toContain('知道了')
     w.unmount()
+  })
+})
+
+
+describe('UiActionChip（操作药丸）', () => {
+  it('渲染 label + count，点击发 click 事件', async () => {
+    const w = mountWith(UiActionChip, { label: '点赞', count: 12, tone: 'like' })
+    expect(w.text()).toContain('点赞')
+    expect(w.text()).toContain('12')
+    await w.trigger('click')
+    expect(w.emitted('click')).toBeTruthy()
+  })
+
+  it('tone=like 且 active 时带玫红激活类', () => {
+    const w = mountWith(UiActionChip, { label: '点赞', count: 12, tone: 'like', active: true })
+    expect(w.classes()).toContain('bg-rose-soft')
+    expect(w.classes()).toContain('text-rose')
+  })
+
+  it('tone=danger 未激活时无红（hover 才显），激活样式仅互动类有', () => {
+    const w = mountWith(UiActionChip, { label: '删除', tone: 'danger' })
+    expect(w.classes()).not.toContain('bg-bad-soft')
+    expect(w.classes()).toContain('text-ink-3')
+  })
+
+  it('compact 不渲染可见 label，但保留 sr-only 可访问名', () => {
+    const w = mountWith(UiActionChip, { label: '收藏', count: 3, compact: true })
+    // 可见文本区：只有计数（label 进 sr-only，不参与可见层）
+    expect(w.find('.sr-only').exists()).toBe(true)
+    expect(w.find('.sr-only').text()).toContain('收藏')
+    const visible = w.find('button').text().replace(w.find('.sr-only').text(), '')
+    expect(visible).toContain('3')
+  })
+
+  it('disabled 不发 click', async () => {
+    const w = mountWith(UiActionChip, { label: '点赞', disabled: true })
+    await w.trigger('click')
+    expect(w.emitted('click')).toBeFalsy()
+  })
+})
+
+describe('UiSegmentTabs（分段选项卡）', () => {
+  const opts = [
+    { label: '近7天', value: '7d' },
+    { label: '近30天', value: '30d' }
+  ]
+
+  it('渲染选项并标记激活项 aria-selected', () => {
+    const w = mountWith(UiSegmentTabs, { modelValue: '7d', options: opts })
+    const btns = w.findAll('button')
+    expect(btns).toHaveLength(2)
+    expect(btns[0].attributes('aria-selected')).toBe('true')
+    expect(btns[1].attributes('aria-selected')).toBe('false')
+  })
+
+  it('点击选项发 update:modelValue + change', async () => {
+    const w = mountWith(UiSegmentTabs, { modelValue: '7d', options: opts })
+    await w.findAll('button')[1].trigger('click')
+    expect(w.emitted('update:modelValue')?.[0]).toEqual(['30d'])
+    expect(w.emitted('change')?.[0]).toEqual(['30d'])
+  })
+
+  it('disabled 时点击不发事件', async () => {
+    const w = mountWith(UiSegmentTabs, { modelValue: '7d', options: opts, disabled: true })
+    await w.findAll('button')[1].trigger('click')
+    expect(w.emitted('update:modelValue')).toBeFalsy()
   })
 })
