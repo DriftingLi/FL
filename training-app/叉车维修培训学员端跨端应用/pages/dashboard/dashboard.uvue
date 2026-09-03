@@ -10,15 +10,22 @@
             </view>
             <view class="nav-right">
                 <view class="nav-icon-btn" @click="onNotificationClick">
-                    <text class="nav-icon-text"></text>
+                    <text class="nav-icon-text">🔔</text>
                     <view v-if="unreadCount > 0" class="unread-badge">
                         <text class="unread-badge-text">{{ unreadCount > 99 ? '99+' : unreadCount.toString() }}</text>
                     </view>
                 </view>
-                <view class="nav-icon-btn ml-16" @click="onCartClick">
-                    <text class="nav-icon-text"></text>
+                <view class="nav-icon-btn" @click="onCartClick">
+                    <text class="nav-icon-text">🛒</text>
                 </view>
             </view>
+        </view>
+
+        <!-- 公告栏 -->
+        <view class="notice-bar" @click="onNoticeClick">
+            <text class="notice-icon">📢</text>
+            <text class="notice-text">叉车维修培训开课通知，欢迎报名学习</text>
+            <text class="notice-arrow">›</text>
         </view>
 
         <!-- 证件下拉选择器（选择学习阶段风格） -->
@@ -105,7 +112,8 @@
 
             <!-- 功能入口网格 -->
             <view class="menu-grid">
-                <view v-for="(item, idx) in menuItems" :key="idx" class="menu-item" @click="onMenuClick(item)">
+                <view v-for="(item, idx) in menuItems" :key="idx" class="menu-item"
+                    :class="{ 'menu-item--col4': idx < 4 }" @click="onMenuClick(item)">
                     <view class="menu-icon-box" :style="{ backgroundColor: item.color }">
                         <text class="menu-icon-text">{{ item.icon }}</text>
                     </view>
@@ -139,6 +147,7 @@
                     <text class="section-title">新闻资讯</text>
                     <text class="section-more" @click="onMoreNews">更多</text>
                 </view>
+                <view class="section-underline"></view>
                 <view class="news-list">
                     <view v-for="(news, idx) in newsList" :key="idx" class="news-item" @click="onNewsClick(news)">
                         <text class="news-icon">+</text>
@@ -150,8 +159,7 @@
 
             <!-- Tab 切换 -->
             <view class="tab-row">
-                <view v-for="(tab, idx) in contentTabs" :key="idx" class="tab-item"
-                    :class="{ 'tab-active': activeTab == idx }" @click="onTabChange(idx)">
+                <view v-for="(tab, idx) in contentTabs" :key="idx" class="tab-item" @click="onTabChange(idx)">
                     <text class="tab-text" :class="{ 'tab-text-active': activeTab == idx }">{{ tab }}</text>
                     <view v-if="activeTab == idx" class="tab-underline"></view>
                 </view>
@@ -187,10 +195,13 @@
                     </view>
                     <view class="course-footer">
                         <text class="course-price">¥ {{ course.price }}</text>
-                        <text class="course-sales">{{ course.sales }}+人购买</text>
+                        <text class="course-sales">已售 {{ course.sales }}+</text>
                     </view>
                 </view>
             </view>
+
+            <!-- 底部留白（tabBar 悬浮遮挡） -->
+            <view class="page-footer-space"></view>
         </scroll-view>
 
         <!-- 筛选底部弹窗 -->
@@ -511,11 +522,10 @@
     }
 
     const menuItems : MenuItem[] = [
-        { key: 'course-mall', title: '课程商城', icon: '', color: '#FF6B35', path: '/pages/mall/mall', available: true },
-        { key: 'question-bank', title: '题库练习', icon: '', color: '#4ECDC4', path: '/pages/practice/practice', available: true },
-        { key: 'exam-center', title: '考试中心', icon: '', color: '#2979ff', path: '/pages/exam/exam', available: true },
-        { key: 'material-course', title: '资料下载', icon: '', color: '#45B7D1', path: '', available: false },
-        { key: 'exam-info', title: '考情资讯', icon: '', color: '#96CEB4', path: '/pages/exam-info/exam-info', available: true },
+        { key: 'course-mall', title: '课程商城', icon: '🛒', color: '#FF6B35', path: '/pages/mall/mall', available: true },
+        { key: 'question-bank', title: '题库练习', icon: '📚', color: '#4ECDC4', path: '/pages/practice/practice', available: true },
+        { key: 'exam-center', title: '考试中心', icon: '📝', color: '#2979ff', path: '/pages/exam/exam', available: true },
+        { key: 'exam-info', title: '考情资讯', icon: '📣', color: '#96CEB4', path: '/pages/exam-info/exam-info', available: true },
     ]
 
     // ---- 内容 Tab ----
@@ -610,6 +620,11 @@
         uni.navigateTo({ url: '/pages/featured/featured-list' })
     }
 
+    // ---- 公告栏点击 ----
+    function onNoticeClick() : void {
+        uni.navigateTo({ url: '/pages/featured/featured-list' })
+    }
+
     // ---- 课程点击 ----
     function onCourseClick(course : CourseItem) : void {
         uni.navigateTo({ url: `/pages/courses/course-detail?id=${course.id}` })
@@ -668,10 +683,38 @@
         height: 64rpx;
         align-items: center;
         justify-content: center;
+        margin-left: 48rpx;
     }
 
     .nav-icon-text {
-        font-size: 44rpx;
+        font-size: 40rpx;
+    }
+
+    /* 公告栏 */
+    .notice-bar {
+        flex-direction: row;
+        align-items: center;
+        margin: 8rpx 40rpx 0;
+        padding: 10rpx 20rpx;
+    }
+
+    .notice-icon {
+        font-size: 30rpx;
+        margin-right: 12rpx;
+    }
+
+    .notice-text {
+        flex: 1;
+        font-size: 24rpx;
+        color: #333333;
+        lines: 1;
+        text-overflow: ellipsis;
+    }
+
+    .notice-arrow {
+        font-size: 30rpx;
+        color: #333333;
+        margin-left: 12rpx;
     }
 
     .unread-badge {
@@ -695,7 +738,7 @@
 
     /* Banner 海报 */
     .banner {
-        margin: 24rpx;
+        margin: 24rpx 40rpx;
         border-radius: 16rpx;
         overflow: hidden;
     }
@@ -718,21 +761,26 @@
         align-items: center;
     }
 
+    /* 截图稿为四列宫格：前四项各占四分之一宽 */
+    .menu-item--col4 {
+        width: 25%;
+    }
+
     .menu-icon-box {
-        width: 80rpx;
-        height: 80rpx;
-        border-radius: 16rpx;
-        margin-bottom: 8rpx;
+        width: 88rpx;
+        height: 88rpx;
+        border-radius: 20rpx;
+        margin-bottom: 12rpx;
         align-items: center;
         justify-content: center;
     }
 
     .menu-icon-text {
-        font-size: 40rpx;
+        font-size: 44rpx;
     }
 
     .menu-label {
-        font-size: 22rpx;
+        font-size: 24rpx;
         color: #333333;
     }
 
@@ -760,6 +808,15 @@
     .section-more {
         font-size: 24rpx;
         color: #999999;
+    }
+
+    /* 标题下蓝色短划线（对照截图稿） */
+    .section-underline {
+        width: 40rpx;
+        height: 6rpx;
+        border-radius: 3rpx;
+        background-color: #239EDD;
+        margin-bottom: 16rpx;
     }
 
     .news-list {
@@ -838,16 +895,14 @@
     }
 
     .filter-tag {
-        padding: 8rpx 24rpx;
-        border-radius: 24rpx;
-        border: 1rpx solid #e0e0e0;
-        margin-right: 16rpx;
-        background-color: #ffffff;
+        padding: 14rpx 28rpx;
+        border-radius: 999rpx;
+        background-color: #ECECEC;
+        margin-right: 24rpx;
     }
 
     .filter-tag-active {
-        border-color: #2979ff;
-        background-color: #e8f0fe;
+        background-color: #EBF9FF;
     }
 
     .filter-tag-text {
@@ -856,14 +911,13 @@
     }
 
     .filter-tag-text-active {
-        color: #2979ff;
+        color: #239EDD;
     }
 
     .filter-btn {
-        padding: 8rpx 24rpx;
-        border-radius: 24rpx;
-        border: 1rpx solid #e0e0e0;
-        background-color: #ffffff;
+        padding: 14rpx 28rpx;
+        border-radius: 999rpx;
+        background-color: #ECECEC;
     }
 
     .filter-btn-text {
@@ -890,10 +944,10 @@
     }
 
     .course-tag-hot {
-        background-color: #FF6B35;
-        padding: 4rpx 12rpx;
-        border-radius: 8rpx;
-        margin-right: 12rpx;
+        background-color: #00A443;
+        padding: 8rpx 20rpx;
+        border-radius: 999rpx;
+        margin-right: 16rpx;
     }
 
     .course-tag-hot-text {
@@ -918,7 +972,6 @@
     }
 
     .course-tag-sm {
-        background-color: #F5F7FA;
         padding: 8rpx 16rpx;
         border-radius: 8rpx;
         margin-right: 12rpx;
@@ -927,7 +980,7 @@
 
     .course-tag-sm-text {
         font-size: 22rpx;
-        color: #666666;
+        color: #999999;
     }
 
     .course-footer {
@@ -939,12 +992,17 @@
     .course-price {
         font-size: 36rpx;
         font-weight: bold;
-        color: #FF4D4F;
+        color: #FF2424;
     }
 
     .course-sales {
         font-size: 24rpx;
         color: #999999;
+    }
+
+    /* ---- 页面底部留白 ---- */
+    .page-footer-space {
+        height: 120rpx;
     }
 
     /* ---- 筛选底部弹窗 ---- */
@@ -1329,9 +1387,7 @@
         margin-bottom: 20rpx;
     }
 
-    .cert-dropdown-detail-item:last-child {
-        margin-bottom: 0;
-    }
+    /* uvue 原生端不支持 last-child 伪类；末项收尾由内容区底部留白承担 */
 
     .cert-dropdown-detail-title-row {
         flex-direction: row;
