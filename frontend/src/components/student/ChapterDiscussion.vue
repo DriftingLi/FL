@@ -1,138 +1,37 @@
-<template>
-  <div class="chapter-discussion">
-    <div class="discussion-header">
-      <div>
-        <h3 class="discussion-title">章节讨论</h3>
-        <p class="discussion-subtitle">针对本章内容提问或交流</p>
-      </div>
-      <UiButton variant="primary" size="small" :icon="EditPen" @click="openCreate">发新帖</UiButton>
-    </div>
-
-    <div v-loading="listLoading" class="discussion-list">
-      <template v-if="topics.length > 0">
-        <div v-for="topic in topics" :key="topic.id" class="discussion-item">
-          <div class="discussion-item-main" @click="toggleTopic(topic.id)">
-            <div class="discussion-title-row">
-              <h4 class="discussion-item-title">{{ topic.title }}</h4>
-              <span class="discussion-count">{{ topic.reply_count }} 回复</span>
-            </div>
-            <div class="discussion-meta">
-              <el-avatar :size="24" :src="topic.author.avatar_url || undefined" class="meta-avatar">
-                {{ authorLetter(topic.author) }}
-              </el-avatar>
-              <span class="discussion-author">{{ displayName(topic.author) }}</span>
-              <span class="discussion-time">{{ formatRelativeTime(topic.created_at) }}</span>
-              <el-icon class="expand-icon">
-                <ArrowDown v-if="expandedTopicId !== topic.id" />
-                <ArrowUp v-else />
-              </el-icon>
-            </div>
-          </div>
-
-          <div v-if="expandedTopicId === topic.id" v-loading="detailLoading" class="discussion-detail">
-            <div class="detail-content">{{ detailContent }}</div>
-            <ForumImageGallery :images="expandedTopic?.images" />
-
-            <div class="detail-replies">
-              <template v-if="replies.length > 0">
-                <div v-for="reply in replies" :key="reply.id" class="detail-reply">
-                  <div class="reply-head">
-                    <el-avatar :size="26" :src="reply.author.avatar_url || undefined" class="meta-avatar">
-                      {{ authorLetter(reply.author) }}
-                    </el-avatar>
-                    <span class="reply-author">{{ displayName(reply.author) }}</span>
-                    <span class="reply-time">{{ formatRelativeTime(reply.created_at) }}</span>
-                    <div class="reply-actions">
-                      <UiButton variant="primary" size="small" @click="startReplyTo(reply)">回复</UiButton>
-                      <UiButton variant="danger" text v-if="reply.can_delete" size="small" @click="removeReply(reply.id)">
-                        删除
-                      </UiButton>
-                    </div>
-                  </div>
-                  <div v-if="reply.parent_id && reply.parent_name" class="reply-quote">
-                    回复 @{{ reply.parent_name }}
-                  </div>
-                  <div class="reply-content">{{ reply.content }}</div>
-                  <ForumImageGallery :images="reply.images" />
-                </div>
-              </template>
-              <el-empty v-else description="还没有回复" :image-size="60" />
-            </div>
-
-            <div class="reply-input-bar">
-              <el-tag v-if="replyingTo" closable size="small" type="info" @close="replyingTo = null">
-                回复 @{{ replyingTo.username }}
-              </el-tag>
-              <div class="reply-input-row">
-                <el-input
-                  v-model="replyContent"
-                  type="textarea"
-                  :rows="2"
-                  maxlength="5000"
-                  placeholder="写下你的回复…"
-                />
-                <UiButton variant="primary" :loading="replying" @click="submitReply(topic.id)">发表</UiButton>
-              </div>
-              <ForumImageUploader v-model="replyImages" :max="3" />
-            </div>
-
-            <div class="detail-actions">
-              <UiButton variant="danger" text v-if="expandedTopic?.can_delete" size="small" @click="removeTopic(topic.id)">
-                删除本帖
-              </UiButton>
-            </div>
-          </div>
-        </div>
-      </template>
-      <el-empty v-else-if="!listLoading" description="本章还没有讨论，来发第一帖吧" :image-size="80" />
-    </div>
-
-    <el-dialog v-model="createVisible" title="发布章节讨论" width="620px">
-      <el-form label-width="70px">
-        <el-form-item label="标题" required>
-          <el-input v-model="createForm.title" maxlength="100" show-word-limit placeholder="请输入标题（1-100 字）" />
-        </el-form-item>
-        <el-form-item label="内容" required>
-          <el-input
-            v-model="createForm.content"
-            type="textarea"
-            :rows="6"
-            maxlength="10000"
-            show-word-limit
-            placeholder="请输入内容（1-10000 字）"
-          />
-        </el-form-item>
-        <el-form-item label="图片">
-          <ForumImageUploader v-model="createForm.images" :max="9" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <UiButton @click="createVisible = false">取消</UiButton>
-        <UiButton variant="primary" :loading="creating" @click="submitCreate">发布</UiButton>
-      </template>
-    </el-dialog>
-  </div>
-</template>
-
 <script setup lang="ts">
+/**
+ * 章节讨论（章节页内嵌）
+ *
+ * 改造记录（2026-09-02）：原来 495 行里约 200 行 scoped CSS 全部迁移为原子类，
+ * 老变量（--color-text-primary 等）换成语义 token（ink/canvas/panel/line），
+ * 发帖表单与回复输入改为复用 ForumPostForm / ForumComposer，
+ * 列表补齐四段式（错误态+retry → 骨架 → 内容 → 空态）。
+ *
+ * 状态机：章节列表与展开详情是两级加载 —— 列表轻（只拉标题），详情按需拉取。
+ */
 import { ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { EditPen, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 import { forumApi, type ForumTopicItem, type ForumReplyItem } from '@/api/forum'
 import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
-import ForumImageUploader from '@/components/student/ForumImageUploader.vue'
+import ForumPostForm from '@/components/student/ForumPostForm.vue'
+import ForumComposer from '@/components/student/ForumComposer.vue'
 import { formatRelativeTime } from '@/utils/format'
 import { displayName, authorLetter } from '@/utils/forumDisplay'
+import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
+import UiTag from '@/components/ui/UiTag.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiErrorState from '@/components/ui/UiErrorState.vue'
+import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 
 const props = defineProps<{
   chapterId: number
 }>()
 
-const listLoading = ref(false)
 const detailLoading = ref(false)
 const replying = ref(false)
-const creating = ref(false)
 const topics = ref<ForumTopicItem[]>([])
 const expandedTopicId = ref<number | null>(null)
 const expandedTopic = ref<ForumTopicItem | null>(null)
@@ -141,26 +40,30 @@ const replies = ref<ForumReplyItem[]>([])
 const replyContent = ref('')
 const replyImages = ref<string[]>([])
 const replyingTo = ref<{ id: number; username: string } | null>(null)
-const createVisible = ref(false)
-const createForm = ref<{ title: string; content: string; images: string[] }>({ title: '', content: '', images: [] })
 
-async function loadTopics() {
+// ===== 发帖对话框（复用 ForumPostForm，与论坛页同一套表单）=====
+const createVisible = ref(false)
+const postForm = ref<InstanceType<typeof ForumPostForm> | null>(null)
+
+// ===== 列表三态（四段式的骨架/错误/内容/空态由此驱动）=====
+async function loadTopicsOnce() {
   if (!props.chapterId) return
-  listLoading.value = true
-  try {
-    const res = await forumApi.listTopics({
-      scope: 'chapter',
-      chapter_id: props.chapterId,
-      page: 1,
-      page_size: 50
-    })
-    topics.value = res.topics || []
-  } catch (e) {
-    console.error('加载章节讨论失败:', e)
-  } finally {
-    listLoading.value = false
-  }
+  const res = await forumApi.listTopics({
+    scope: 'chapter',
+    chapter_id: props.chapterId,
+    page: 1,
+    page_size: 50
+  })
+  topics.value = res.topics || []
 }
+
+const {
+  loading: listLoading,
+  loadError,
+  retrying,
+  retry: retryLoad,
+  run: loadTopics
+} = useAsyncPage(loadTopicsOnce)
 
 async function toggleTopic(topicId: number) {
   if (expandedTopicId.value === topicId) {
@@ -192,29 +95,13 @@ async function loadDetail(topicId: number) {
 }
 
 function openCreate() {
-  createForm.value = { title: '', content: '', images: [] }
+  postForm.value?.reset()
   createVisible.value = true
 }
 
-async function submitCreate() {
-  const title = createForm.value.title.trim()
-  const content = createForm.value.content.trim()
-  if (!title || !content) {
-    ElMessage.warning('请填写标题和内容')
-    return
-  }
-  creating.value = true
-  try {
-    await forumApi.createTopic({ chapter_id: props.chapterId, title, content, images: createForm.value.images })
-    ElMessage.success('发布成功')
-    createVisible.value = false
-    await loadTopics()
-  } catch (e) {
-    console.error('发布失败:', e)
-    /* 错误已由拦截器提示 */
-  } finally {
-    creating.value = false
-  }
+async function onTopicCreated() {
+  createVisible.value = false
+  await loadTopics()
 }
 
 function startReplyTo(reply: ForumReplyItem) {
@@ -252,10 +139,10 @@ async function removeTopic(topicId: number) {
   try {
     await forumApi.deleteTopic(topicId)
     ElMessage.success('已删除')
-  if (expandedTopicId.value === topicId) {
-    expandedTopicId.value = null
-    expandedTopic.value = null
-    replies.value = []
+    if (expandedTopicId.value === topicId) {
+      expandedTopicId.value = null
+      expandedTopic.value = null
+      replies.value = []
     }
     await loadTopics()
   } catch (e) {
@@ -290,206 +177,155 @@ watch(() => props.chapterId, () => {
 }, { immediate: true })
 </script>
 
-<style scoped>
-.chapter-discussion {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-  padding: 20px;
-  margin-bottom: 20px;
-}
+<template>
+  <div class="rounded-card border border-line bg-panel p-5 shadow-card max-md:p-3.5">
+    <!-- 头部 -->
+    <div class="mb-4 flex items-center justify-between gap-3">
+      <h3 class="m-0 text-[17px] font-semibold text-ink">章节讨论</h3>
+      <UiButton variant="primary" size="small" :icon="EditPen" @click="openCreate">发新帖</UiButton>
+    </div>
 
-.discussion-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 14px;
-}
+    <!-- 列表四段式：错误态 → 骨架 → 内容 → 空态 -->
+    <UiErrorState
+      v-if="loadError"
+      title="讨论加载失败"
+      description="网络或服务端异常，可重试"
+      :retrying="retrying"
+      @retry="retryLoad"
+    />
 
-.discussion-title {
-  font-size: 17px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin: 0 0 4px;
-}
+    <UiSkeleton v-else-if="listLoading" variant="list" :count="3" />
 
-.discussion-subtitle {
-  font-size: 13px;
-  color: var(--color-text-tertiary);
-  margin: 0;
-}
+    <template v-else-if="topics.length > 0">
+      <div
+        v-for="topic in topics"
+        :key="topic.id"
+        class="mb-3 overflow-hidden rounded-[10px] border border-line last:mb-0"
+      >
+        <div
+          class="cursor-pointer px-3.5 py-3 transition-colors duration-[var(--duration-tap)] ease-[var(--ease-default)] hover:bg-canvas"
+          @click="toggleTopic(topic.id)"
+        >
+          <div class="flex items-center justify-between gap-2.5">
+            <h4 class="m-0 truncate text-sm font-semibold text-ink">{{ topic.title }}</h4>
+            <span class="shrink-0 text-xs text-ink-3">{{ topic.reply_count }} 回复</span>
+          </div>
+          <div class="mt-2 flex items-center gap-2 text-xs text-ink-3">
+            <el-avatar :size="24" :src="topic.author.avatar_url || undefined">
+              {{ authorLetter(topic.author) }}
+            </el-avatar>
+            <span class="text-ink-2">{{ displayName(topic.author) }}</span>
+            <span>{{ formatRelativeTime(topic.created_at) }}</span>
+            <el-icon class="ml-auto">
+              <ArrowUp v-if="expandedTopicId === topic.id" />
+              <ArrowDown v-else />
+            </el-icon>
+          </div>
+        </div>
 
-.discussion-item {
-  border: 1px solid var(--color-bg-page);
-  border-radius: 10px;
-  margin-bottom: 12px;
-  overflow: hidden;
-}
+        <!-- 展开详情：两级加载，按需拉取 -->
+        <div v-if="expandedTopicId === topic.id" class="border-t border-line bg-canvas p-3.5 max-md:p-2.5">
+          <UiSkeleton v-if="detailLoading" variant="list" :count="2" />
 
-.discussion-item:last-child {
-  margin-bottom: 0;
-}
+          <template v-else>
+            <div class="mb-3.5 whitespace-pre-wrap break-words text-sm leading-[1.7] text-ink">
+              {{ detailContent }}
+            </div>
+            <ForumImageGallery :images="expandedTopic?.images" />
 
-.discussion-item-main {
-  padding: 12px 14px;
-  cursor: pointer;
-  transition: background var(--duration-base) var(--ease-default);
-}
+            <!-- 回复流 -->
+            <div class="rounded-[8px] bg-panel px-3 py-1 max-md:px-2">
+              <template v-if="replies.length > 0">
+                <div
+                  v-for="reply in replies"
+                  :key="reply.id"
+                  class="border-b border-line py-3 last:border-b-0"
+                >
+                  <div class="flex items-center gap-2">
+                    <el-avatar :size="26" :src="reply.author.avatar_url || undefined">
+                      {{ authorLetter(reply.author) }}
+                    </el-avatar>
+                    <span class="text-[13px] font-semibold text-ink">{{ displayName(reply.author) }}</span>
+                    <UiTag
+                      v-if="expandedTopic && reply.author.user_id === expandedTopic.author.user_id"
+                      tone="neutral"
+                      effect="plain"
+                      class="ml-1"
+                    >
+                      楼主
+                    </UiTag>
+                    <span class="text-xs text-ink-3">{{ formatRelativeTime(reply.created_at) }}</span>
+                    <div class="ml-auto flex items-center gap-1">
+                      <UiButton variant="primary" size="small" @click="startReplyTo(reply)">回复</UiButton>
+                      <UiButton v-if="reply.can_delete" variant="danger" text size="small" @click="removeReply(reply.id)">
+                        删除
+                      </UiButton>
+                    </div>
+                  </div>
+                  <div
+                    v-if="reply.parent_id && reply.parent_name"
+                    class="my-1.5 inline-block rounded-[6px] bg-canvas px-2 py-0.5 text-xs text-ink-3"
+                  >
+                    回复 @{{ reply.parent_name }}
+                  </div>
+                  <div class="whitespace-pre-wrap break-words text-[13px] leading-[1.6] text-ink">
+                    {{ reply.content }}
+                  </div>
+                  <ForumImageGallery :images="reply.images" />
+                </div>
+              </template>
+              <UiEmptyState v-else description="还没有回复" />
+            </div>
 
-.discussion-item-main:hover {
-  background: var(--color-bg-page);
-}
+            <!-- 回复输入（与帖子详情页共用 ForumComposer） -->
+            <div class="mt-3">
+              <ForumComposer
+                v-model="replyContent"
+                v-model:images="replyImages"
+                v-model:replying-to="replyingTo"
+                :submitting="replying"
+                :max-images="3"
+                :rows="2"
+                placeholder="写下你的回复…"
+                @submit="submitReply(topic.id)"
+              />
+            </div>
 
-.discussion-title-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-}
+            <div v-if="expandedTopic?.can_delete" class="mt-2 text-right">
+              <UiButton variant="danger" text size="small" @click="removeTopic(topic.id)">
+                删除本帖
+              </UiButton>
+            </div>
+          </template>
+        </div>
+      </div>
+    </template>
 
-.discussion-item-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+    <UiEmptyState
+      v-else
+      description="本章还没有讨论，来发第一帖吧"
+      action-text="发新帖"
+      @action="openCreate"
+    />
 
-.discussion-count {
-  font-size: 12px;
-  color: var(--color-text-tertiary);
-  flex-shrink: 0;
-}
-
-.discussion-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--color-text-tertiary);
-}
-
-.discussion-author {
-  color: var(--color-text-secondary);
-}
-
-.expand-icon {
-  margin-left: auto;
-}
-
-.discussion-detail {
-  border-top: 1px solid var(--color-bg-page);
-  background: var(--color-bg-page);
-  padding: 14px;
-}
-
-.detail-content {
-  font-size: 14px;
-  line-height: 1.7;
-  color: var(--color-text-primary);
-  white-space: pre-wrap;
-  word-break: break-word;
-  margin-bottom: 14px;
-}
-
-.detail-replies {
-  background: #fff;
-  border-radius: 8px;
-  padding: 4px 12px;
-}
-
-.detail-reply {
-  padding: 12px 0;
-  border-bottom: 1px solid var(--color-bg-page);
-}
-
-.detail-reply:last-child {
-  border-bottom: none;
-}
-
-.reply-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.reply-author {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-
-.reply-time {
-  font-size: 12px;
-  color: var(--color-text-tertiary);
-}
-
-.reply-actions {
-  margin-left: auto;
-}
-
-.reply-quote {
-  display: inline-block;
-  font-size: 12px;
-  color: var(--color-text-tertiary);
-  background: var(--color-bg-page);
-  border-radius: 6px;
-  padding: 2px 8px;
-  margin: 6px 0 2px;
-}
-
-.reply-content {
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--color-text-primary);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.reply-input-bar {
-  margin-top: 12px;
-}
-
-.reply-input-row {
-  display: flex;
-  gap: 10px;
-  align-items: flex-end;
-  margin-top: 8px;
-}
-
-.reply-input-row .el-input {
-  flex: 1;
-}
-
-.detail-actions {
-  margin-top: 8px;
-  text-align: right;
-}
-
-@media screen and (max-width: 768px) {
-  .chapter-discussion {
-    padding: 14px;
-  }
-
-  .discussion-item-main {
-    padding: 10px 12px;
-  }
-
-  .discussion-detail {
-    padding: 10px;
-  }
-
-  .detail-replies {
-    padding: 4px 8px;
-  }
-
-  .reply-input-row {
-    flex-direction: column;
-    align-items: stretch;
-  }
-}
-</style>
+    <!-- 发帖对话框：表单与论坛页共用 ForumPostForm，只保留壳 -->
+    <UiDialog
+      v-model="createVisible"
+      title="发布章节讨论"
+      subtitle="发表后将在本章讨论列表中展示"
+      width="620px"
+      confirm-text="发布"
+      :confirm-loading="postForm?.submitting"
+      :confirm-disabled="!postForm?.canSubmit"
+      @confirm="postForm?.submit()"
+    >
+      <ForumPostForm
+        ref="postForm"
+        category="discussion"
+        :chapter-id="chapterId"
+        success-message="发布成功"
+        @success="onTopicCreated"
+      />
+    </UiDialog>
+  </div>
+</template>

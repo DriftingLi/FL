@@ -179,13 +179,17 @@
       />
     </div>
 
-    <el-dialog v-model="createDialogVisible" title="发布新帖" width="640px">
+    <UiDialog
+      v-model="createDialogVisible"
+      title="发布新帖"
+      :icon="EditPen"
+      width="640px"
+      confirm-text="发布"
+      :confirm-loading="postForm?.submitting"
+      @confirm="postForm?.submit()"
+    >
       <ForumPostForm ref="postForm" category="discussion" @success="onTopicCreated" />
-      <template #footer>
-        <UiButton @click="createDialogVisible = false">取消</UiButton>
-        <UiButton variant="primary" :loading="postForm?.submitting" @click="postForm?.submit()">发布</UiButton>
-      </template>
-    </el-dialog>
+    </UiDialog>
   </div>
 </template>
 
@@ -211,6 +215,7 @@ import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiCard from '@/components/ui/UiCard.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
 
 const router = useRouter()
 const route = useRoute()
