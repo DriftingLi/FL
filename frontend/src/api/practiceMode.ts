@@ -1,5 +1,15 @@
 import { unwrappedRequest } from './request'
+import { useCredentialStore } from '@/stores/credential'
 import type { PracticeProgress, Question, SubmitResult } from '@/types/question'
+
+/** 惰性读取当前证件 id（无 Pinia 环境/未选证件返回 undefined；容错不阻断保存） */
+function currentCredentialId(): number | undefined {
+  try {
+    return useCredentialStore().current?.id
+  } catch {
+    return undefined
+  }
+}
 
 /** 练习进度（断点续练用，含答题状态；与后端 ProgressResultDTO 对齐） */
 export interface PracticeProgressData extends PracticeProgress {
@@ -72,8 +82,12 @@ export const practiceModeApi = {
     return unwrappedRequest.get<PracticeProgress>('/practice-mode/sequential-progress', { params: params || {} })
   },
   // 保存练习游标和答题状态（顺序/标签/按卷练习）
+  // #505：顺序练习进度按证件分桶（#414），保存 body 必须携带当前证件 id——拦截器只注入
+  // GET query 不触碰 POST body，漏带会把游标写进 NULL 孤儿行（断点回跳根因）。非 sequential
+  // 模式（标签/按卷）不分桶，不携带。
   saveProgress(index: number, mode: PracticeModeKey = 'sequential', total: number = 0, answersState: Record<string, unknown> = {}) {
-    return unwrappedRequest.post<null>('/practice-mode/progress', { index, practice_mode: mode, total, answers_state: answersState })
+    const credentialId = mode === 'sequential' ? currentCredentialId() : undefined
+    return unwrappedRequest.post<null>('/practice-mode/progress', { index, practice_mode: mode, total, answers_state: answersState, credential_id: credentialId })
   },
   // 查询任意模式的练习进度和答题状态（断点续练用）
   getProgress(mode: PracticeModeKey = 'sequential') {

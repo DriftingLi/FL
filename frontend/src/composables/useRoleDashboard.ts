@@ -64,6 +64,9 @@ export function useRoleDashboard(options: RoleDashboardOptions) {
     } finally {
       statsLoading.value = false
     }
+    // #506：数据就绪后自动重绘（容器若仍被骨架隐藏则跳过，等 watch(chartRef) 补渲染）
+    await nextTick()
+    renderChart()
   }
 
   function renderChart() {
@@ -159,11 +162,17 @@ export function useRoleDashboard(options: RoleDashboardOptions) {
     })
   }
 
-  // tab 切换时重新加载并重绘
+  // #506 渲染自治：容器一旦挂载且已有 stats 即补渲染——首屏骨架包裹图表（chartRef
+  // 晚于数据出现）不再需要调用方手动编排渲染时机。渲染条件与 renderChart 内一致。
+  watch(chartRef, (el) => {
+    if (el && stats.value && !statsEmpty.value) {
+      renderChart()
+    }
+  })
+
+  // tab 切换时重新加载并重绘（loadStats 尾部已自动重绘，此处不再手动 render）
   watch(currentTab, async () => {
     await loadStats()
-    await nextTick()
-    renderChart()
   })
 
   return {
