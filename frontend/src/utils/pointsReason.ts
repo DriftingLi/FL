@@ -15,6 +15,8 @@ const REASON_LABELS: Record<string, LedgerReasonMeta> = {
   redeem_real_paper: { label: '兑换真题卷', kind: 'out' },
   accepted_bonus: { label: '问答被采纳奖励', kind: 'in' },
   accept_action: { label: '采纳回答奖励', kind: 'in' },
+  contribution_approved: { label: '投稿审核通过', kind: 'in' },
+  contribution_tier: { label: '投稿下载达阶', kind: 'in' },
   admin_penalty: { label: '违规扣减', kind: 'out' },
   rollback: { label: '系统退回', kind: 'in' }
 }
