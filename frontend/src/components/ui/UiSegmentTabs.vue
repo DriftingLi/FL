@@ -33,9 +33,10 @@ const emit = defineEmits<{
 }>()
 
 const barRef = ref<HTMLElement | null>(null)
-const indicator = ref({ width: 0, x: 0 })
+interface Indicator { width: number; height: number; x: number; y: number }
+const indicator = ref<Indicator>({ width: 0, height: 0, x: 0, y: 0 })
 
-/** 定位指示条到激活选项 */
+/** 定位指示条贴齐激活项几何（offsetLeft/Top/Width/Height 直接给绝对定位元素用，免疫 token 漂移） */
 function placeIndicator() {
   const bar = barRef.value
   if (!bar) return
@@ -43,7 +44,9 @@ function placeIndicator() {
   if (!active) return
   indicator.value = {
     width: active.offsetWidth,
-    x: active.offsetLeft
+    height: active.offsetHeight,
+    x: active.offsetLeft,
+    y: active.offsetTop
   }
 }
 
@@ -79,11 +82,15 @@ onMounted(() => {
     :class="disabled ? 'opacity-60' : ''"
     role="tablist"
   >
-    <!-- 滑动指示条（激活项白底浮起） -->
+    <!-- 滑动指示条：left/top 归零，translate 跟随激活项几何，避免 Tailwind 原子类计算偏差 -->
     <div
       aria-hidden="true"
-      class="absolute top-1 bottom-1 rounded-[7px] bg-panel shadow-sm transition-[transform,width] duration-200 ease-out motion-reduce:transition-none"
-      :style="{ width: indicator.width + 'px', transform: 'translateX(' + indicator.x + 'px)' }"
+      class="absolute left-0 top-0 rounded-[7px] bg-panel shadow-sm transition-[transform,width,height] duration-200 ease-out motion-reduce:transition-none"
+      :style="{
+        width: indicator.width + 'px',
+        height: indicator.height + 'px',
+        transform: 'translate(' + indicator.x + 'px,' + indicator.y + 'px)'
+      }"
     />
     <button
       v-for="opt in options"
@@ -96,7 +103,10 @@ onMounted(() => {
       :style="equal ? { flex: '1 1 0' } : undefined"
       @click="select(opt)"
     >
-      {{ opt.label }}
+      <!-- 自定义富 label（如带图标/计数）：覆盖默认 opt.label；不传则按 opt.label 渲染，向后兼容 -->
+      <slot name="option" :option="opt" :is-active="modelValue === opt.value">
+        {{ opt.label }}
+      </slot>
     </button>
   </div>
 </template>

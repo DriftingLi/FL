@@ -38,60 +38,61 @@
       </div>
 
       <div class="chapter-content-area mb-5 min-h-[300px] rounded-card bg-panel p-6 shadow-card max-md:p-4">
-        <el-tabs v-if="chapterDetail.content || chapterFiles.length > 0" v-model="activeTab" class="content-tabs min-h-[400px]">
-          <el-tab-pane
-            v-if="chapterDetail.content"
-            label="图文"
-            name="content"
-          >
-            <div class="content-text mb-5 text-[15px] leading-[1.8] text-ink markdown-body" v-html="renderedContent"></div>
-          </el-tab-pane>
+        <UiSegmentTabs
+          v-if="chapterDetail.content || chapterFiles.length > 0"
+          v-model="activeTab"
+          :options="tabOptions"
+          class="mb-4"
+        >
+          <template #option="{ option }">
+            <span v-if="option.value === 'content'" class="inline-flex items-center gap-1.5">
+              <el-icon :size="16"><Document /></el-icon>
+              {{ option.label }}
+            </span>
+            <span v-else class="inline-flex items-center gap-1.5">
+              <el-icon :size="16" :style="{ color: optionColor(option as any) }">
+                <component :is="optionIcon(option as any)" />
+              </el-icon>
+              {{ option.label }}
+              <el-tag size="small" type="info" class="ml-0.5 scale-[0.85]">{{ optionCount(option as any) }}</el-tag>
+            </span>
+          </template>
+        </UiSegmentTabs>
 
-          <el-tab-pane
-            v-for="group in fileGroups"
-            :key="group.type"
-            :name="group.type"
-          >
-            <template #label>
-              <span class="tab-label inline-flex items-center gap-1.5">
-                <el-icon :size="16" :style="{ color: group.color }">
-                  <component :is="group.icon" />
-                </el-icon>
-                {{ group.label }}
-                <el-tag size="small" type="info" class="tab-count ml-0.5 scale-[0.85]">{{ group.files.length }}</el-tag>
-              </span>
+        <template v-if="activeTab === 'content' && chapterDetail.content">
+          <div class="content-text mb-5 text-[15px] leading-[1.8] text-ink markdown-body" v-html="renderedContent"></div>
+        </template>
+
+        <template v-else-if="activeGroup">
+          <div class="section-content w-full">
+            <template v-if="activeGroup.type === 'video'">
+              <div v-for="(file, idx) in activeGroup.files" :key="file.file_id" class="media-item mb-5 last:mb-0">
+                <VideoPlayer
+                  :src="file.file_url"
+                  :initial-position="idx === 0 ? chapterVideoPosition : 0"
+                  @position-update="onVideoPositionUpdate"
+                />
+              </div>
             </template>
-
-            <div class="section-content w-full">
-              <template v-if="group.type === 'video'">
-                <div v-for="(file, idx) in group.files" :key="file.file_id" class="media-item mb-5 last:mb-0">
-                  <VideoPlayer
-                    :src="file.file_url"
-                    :initial-position="idx === 0 ? chapterVideoPosition : 0"
-                    @position-update="onVideoPositionUpdate"
-                  />
+            <template v-else-if="activeGroup.type === 'document'">
+              <div v-for="file in activeGroup.files" :key="file.file_id" class="media-item mb-5 last:mb-0">
+                <DocumentViewer :src="file.file_url" :fileName="file.file_name" />
+              </div>
+            </template>
+            <template v-else-if="activeGroup.type === 'ppt'">
+              <div v-for="file in activeGroup.files" :key="file.file_id" class="media-item mb-5 last:mb-0">
+                <PptViewer :src="file.file_url" :fileName="file.file_name" :chapterId="chapterDetail.chapter_id" />
+              </div>
+            </template>
+            <template v-else-if="activeGroup.type === 'image'">
+              <div class="image-gallery grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4 max-md:grid-cols-1">
+                <div v-for="file in activeGroup.files" :key="file.file_id" class="gallery-item overflow-hidden rounded-[8px]">
+                  <ImageViewer :src="file.file_url" :fileName="file.file_name" />
                 </div>
-              </template>
-              <template v-else-if="group.type === 'document'">
-                <div v-for="file in group.files" :key="file.file_id" class="media-item mb-5 last:mb-0">
-                  <DocumentViewer :src="file.file_url" :fileName="file.file_name" />
-                </div>
-              </template>
-              <template v-else-if="group.type === 'ppt'">
-                <div v-for="file in group.files" :key="file.file_id" class="media-item mb-5 last:mb-0">
-                  <PptViewer :src="file.file_url" :fileName="file.file_name" :chapterId="chapterDetail.chapter_id" />
-                </div>
-              </template>
-              <template v-else-if="group.type === 'image'">
-                <div class="image-gallery grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4 max-md:grid-cols-1">
-                  <div v-for="file in group.files" :key="file.file_id" class="gallery-item overflow-hidden rounded-[8px]">
-                    <ImageViewer :src="file.file_url" :fileName="file.file_name" />
-                  </div>
-                </div>
-              </template>
-            </div>
-          </el-tab-pane>
-        </el-tabs>
+              </div>
+            </template>
+          </div>
+        </template>
 
         <UiEmptyState
           v-if="!chapterDetail.content && chapterFiles.length === 0"
@@ -147,6 +148,7 @@ import DocumentViewer from '@/components/student/DocumentViewer.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 import PptViewer from '@/components/student/PptViewer.vue'
 import ImageViewer from '@/components/student/ImageViewer.vue'
 import ChapterDiscussion from '@/components/student/ChapterDiscussion.vue'
@@ -300,6 +302,29 @@ const fileGroups = computed(() => {
     }))
 })
 
+// UiSegmentTabs 的选项：图文在前（若有），文件组按 TYPE_ORDER 排列，富 label 由模板 slot 渲染
+const tabOptions = computed(() => {
+  const opts: Array<{ value: string; label: string; icon?: any; color?: string; count?: number }> = []
+  if (chapterDetail.value?.content) {
+    opts.push({ value: 'content', label: '图文' })
+  }
+  for (const g of fileGroups.value) {
+    opts.push({ value: g.type, label: g.label, icon: g.icon, color: g.color, count: g.files.length })
+  }
+  return opts
+})
+
+// 当前激活的内容文件组（图文走模板前置分支，此处仅返回媒体组）
+const activeGroup = computed(() => {
+  if (!activeTab.value || activeTab.value === 'content') return null
+  return fileGroups.value.find(g => g.type === activeTab.value) || null
+})
+
+// slot 内访问 UiSegmentOption 扩展字段的窄化助手
+function optionIcon(opt: { icon?: any }): any { return opt.icon }
+function optionColor(opt: { color?: string }): string | undefined { return opt.color }
+function optionCount(opt: { count?: number }): number { return opt.count ?? 0 }
+
 const renderedContent = computed(() => {
   if (!chapterDetail.value?.content) return ''
   return marked.parse(chapterDetail.value.content)
@@ -436,23 +461,8 @@ onBeforeUnmount(() => {
 <style scoped>
 /*
  * 仅保留 :deep 的 EP 内部覆盖（R1 允许，无法用原子类表达）：
- * - 内容 Tab 头：滚动吸顶 + 吸顶时面板色底（防止透出下层内容）
  * - 上一章/下一章按钮：导航按钮需要更大的可点击区（padding 12/16，高度自适应）
- * - 分隔线高度 1px（EP 默认 2px）
  */
-.content-tabs :deep(.el-tabs__header) {
-  margin-bottom: 20px;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  background: var(--color-bg-card);
-  padding-top: 8px;
-}
-
-.content-tabs :deep(.el-tabs__nav-wrap)::after {
-  height: 1px;
-}
-
 .nav-prev :deep(.el-button),
 .nav-next :deep(.el-button) {
   padding: 12px 16px;

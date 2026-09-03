@@ -68,10 +68,14 @@
         <div class="replies-header mb-2 flex items-center justify-between">
           <h3 class="replies-title m-0 text-base font-semibold text-ink">全部回复（{{ replies.length }}）</h3>
           <div class="flex items-center gap-2">
-            <el-radio-group v-model="replySort" size="small" @change="handleReplySortChange">
-              <el-radio-button value="latest">最新</el-radio-button>
-              <el-radio-button value="hot">热门</el-radio-button>
-            </el-radio-group>
+            <UiSegmentTabs
+              :model-value="replySort"
+              :options="[
+                { label: '最新', value: 'latest' },
+                { label: '热门', value: 'hot' }
+              ]"
+              @update:model-value="(v: string) => { replySort = v as 'latest' | 'hot'; handleReplySortChange() }"
+            />
             <UiButton size="small" :icon="replyOrder==='asc'? ArrowUp : ArrowDown" @click="toggleReplyOrder">{{ replyOrder==='asc' ? '正序' : '逆序' }}</UiButton>
           </div>
         </div>
@@ -177,6 +181,7 @@ import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiTag from '@/components/ui/UiTag.vue'
