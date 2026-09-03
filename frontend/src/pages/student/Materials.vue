@@ -1,9 +1,17 @@
 <template>
   <div class="mx-auto max-w-[960px] p-5">
-    <div class="mb-3">
+    <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
       <h2 class="text-[22px] text-ink">学习资料</h2>
+      <UiSegmentTabs
+        v-model="activeTab"
+        :options="[
+          { label: '课程资料', value: 'material' },
+          { label: '学员投稿', value: 'contribution' }
+        ]"
+      />
     </div>
 
+    <template v-if="activeTab === 'material'">
     <div class="mb-4">
       <el-select
         v-model="courseFilter"
@@ -73,6 +81,11 @@
         @current-change="handlePageChange"
       />
     </div>
+    </template>
+
+    <template v-else>
+      <ContributionTab :credential-id="credentialIdForContribution" />
+    </template>
   </div>
 </template>
 
@@ -85,10 +98,20 @@ import { resolveFileUrl } from '@/utils/fileUrl'
 import { formatLocaleDateTime } from '@/utils/format'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useStagger } from '@/composables/useStagger'
+import { computed } from 'vue'
+import { useCredentialStore } from '@/stores/credential'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
+import ContributionTab from './ContributionTab.vue'
+
+const activeTab = ref<'material' | 'contribution'>('material')
+
+// 投稿区跟随当前证件过滤（#517 与练习分桶同构）；course filter 仍只用于课程资料 tab
+const credentialStore = useCredentialStore()
+const credentialIdForContribution = computed(() => credentialStore.current?.id ?? null)
 
 const materials = ref<MaterialItem[]>([])
 const courseFilter = ref<number | undefined>(undefined)

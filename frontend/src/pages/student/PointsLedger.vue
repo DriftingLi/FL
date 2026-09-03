@@ -106,8 +106,12 @@
           <p class="text-xs leading-relaxed text-ink-3">积分商城兑换课程与真题卷、AI 学习助手按 token 计费扣减；兑换失败自动退回。</p>
         </section>
         <section>
+          <h4 class="mb-1.5 text-sm font-semibold text-ink">上传资料赚分</h4>
+          <p class="text-xs leading-relaxed text-ink-3">学员投稿通过审核 +50；下载量达 10/50/200 次分别追加 +30/+80/+200。匿名投稿不影响积分。投稿违规下架将按平台规则回收该稿已发奖励（明细中「系统退回」可追溯）。</p>
+        </section>
+        <section>
           <h4 class="mb-1.5 text-sm font-semibold text-ink">违规扣减</h4>
-          <p class="text-xs leading-relaxed text-ink-3">论坛违规内容经管理员核实后扣减，可在明细中追溯。</p>
+          <p class="text-xs leading-relaxed text-ink-3">论坛违规内容与违规投稿经管理员核实后扣减，可在明细中追溯。</p>
         </section>
         <section>
           <h4 class="mb-1.5 text-sm font-semibold text-ink">有效期</h4>
