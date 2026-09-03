@@ -155,6 +155,7 @@ func main() {
 	daemonCtx, daemonCancel := context.WithCancel(context.Background())
 	defer daemonCancel()
 	startForumImageCleanup(daemonCtx, deps, logger)
+	startContributionCleanup(daemonCtx, deps, logger)
 
 	// 7.5 装配残值评估子模块（注册 /api/valuation/* 路由）
 	cleanup := setupValuation(router, cfg, deps.AuthSvc, deps.Session, vpool, st, logger, deps.AuditSvc)
@@ -273,6 +274,21 @@ func startForumImageCleanup(ctx context.Context, deps *api.Deps, logger *zap.Log
 	})
 	runner.Start(ctx)
 	logger.Info("论坛悬空图片清理任务已启动", zap.String("interval", interval.String()))
+}
+
+// startContributionCleanup 启动投稿悬空文件清理定时任务：
+// 每 6 小时对 contributions/ 前缀 List，与全量引用集做差集，删除超过 24h 未被引用的文件。
+// 由通用守护 runner 托管（与论坛图片清理同一模式）。
+func startContributionCleanup(ctx context.Context, deps *api.Deps, logger *zap.Logger) {
+	const interval = 6 * time.Hour
+	runner := daemon.NewRunner("contribution-file-cleanup", interval, logger, func(runCtx context.Context) {
+		cleaned := deps.ContributionSvc.CleanupOrphanFiles(runCtx)
+		if cleaned > 0 {
+			logger.Info("投稿悬空文件清理完成", zap.Int("cleaned", cleaned))
+		}
+	})
+	runner.Start(ctx)
+	logger.Info("投稿悬空文件清理任务已启动", zap.String("interval", interval.String()))
 }
 
 // createStorage 根据配置创建文件存储实例。
