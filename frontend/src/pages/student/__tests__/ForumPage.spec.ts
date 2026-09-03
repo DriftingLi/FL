@@ -6,7 +6,8 @@
 // 灌进讨论 Tab（后端 scope=general 的定义恰好是 chapter_id IS NULL）。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import ElementPlus, { ElRadioGroup } from 'element-plus'
+import ElementPlus from 'element-plus'
+import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 
 // 只替换网络层，保留 forumTabQuery 的真实实现：
 // 页面现在通过 forumTabQuery 把 Tab 翻成查询参数，若连它一起 mock 掉，
@@ -84,14 +85,25 @@ async function mountPage(total = 3, options: { attachTo?: HTMLElement } = {}) {
   return wrapper
 }
 
-/** 类别分段控件：用 class 定位，避免与其它 el-radio-group（模式 / 排序）混淆。 */
-function categoryGroup(wrapper: Awaited<ReturnType<typeof mountPage>>) {
-  const found = wrapper
-    .findAllComponents(ElRadioGroup)
-    .find((c) => c.classes().includes('forum-category'))
-  if (!found) throw new Error('找不到类别分段控件（class="forum-category"）')
-  return found
+/**
+ * 按 options 的 value 集合定位分段控件——避免用 class 名（forum-category/forum-mode 已随重构删除），
+ * 也避免按渲染顺序取索引（页面里的 UiSegmentTabs 还有 solved-filter、topicSort 会共页）。
+ */
+function tabbarByValues(wrapper: Awaited<ReturnType<typeof mountPage>>, mustInclude: string[]) {
+  for (const bar of wrapper.findAllComponents(UiSegmentTabs)) {
+    const opts = bar.props('options') as Array<{ value: string }>
+    if (mustInclude.every((v) => opts.some((o) => o.value === v))) return bar
+  }
+  throw new Error(`找不到含 [${mustInclude.join(', ')}] 的分段控件`)
 }
+
+/** 主分段控件（讨论 / 问答 / 我的） */
+const categoryGroup = (wrapper: Awaited<ReturnType<typeof mountPage>>) =>
+  tabbarByValues(wrapper, ['discussion', 'question', 'mine'])
+
+/** 「我的」二级控件（我的帖子 / 我的回复 / 浏览记录） */
+const modeGroup = (wrapper: Awaited<ReturnType<typeof mountPage>>) =>
+  tabbarByValues(wrapper, ['my-topics', 'my-replies', 'history'])
 
 async function switchCategory(wrapper: Awaited<ReturnType<typeof mountPage>>, next: 'discussion' | 'question') {
   categoryGroup(wrapper).vm.$emit('update:modelValue', next)
@@ -114,7 +126,7 @@ describe('论坛类别分流', () => {
 
   it('顶部有「讨论 / 问答」分段控件，且渲染出两个选项', async () => {
     const wrapper = await mountPage()
-    const labels = categoryGroup(wrapper).findAll('label').map((l) => l.text())
+    const labels = categoryGroup(wrapper).findAll('[role="tab"]').map((b) => b.text().trim())
     expect(labels).toEqual(expect.arrayContaining(['讨论', '问答']))
   })
 
@@ -182,11 +194,7 @@ describe('论坛类别分流', () => {
     listTopics.mockClear()
 
     // 一级 Tab 切到「我的」会立刻拉一次（默认二级 = 我的帖子）
-    const catGroup = wrapper
-      .findAllComponents(ElRadioGroup)
-      .find((c) => c.classes().includes('forum-category'))
-    if (!catGroup) throw new Error('找不到一级分段控件')
-    catGroup.vm.$emit('update:modelValue', 'mine')
+    categoryGroup(wrapper).vm.$emit('update:modelValue', 'mine')
     await flushPromises()
     expect(forumApi.getMyTopics).toHaveBeenCalledTimes(1)
     expect(listTopics).not.toHaveBeenCalled()
@@ -194,12 +202,7 @@ describe('论坛类别分流', () => {
     // 二次切到「我的回复」走二级控件（forum-mode 仅在「我的」下渲染）
     vi.mocked(forumApi.getMyReplies).mockResolvedValue({ replies: [], total: 0, page: 1, pages: 0 } as never)
     listTopics.mockClear()
-    const modeGroup = wrapper
-      .findAllComponents(ElRadioGroup)
-      .find((c) => c.classes().includes('forum-mode'))
-    if (!modeGroup) throw new Error('找不到「我的」二级控件')
-    modeGroup.vm.$emit('update:modelValue', 'my-replies')
-    modeGroup.vm.$emit('change', 'my-replies')
+    modeGroup(wrapper).vm.$emit('update:modelValue', 'my-replies')
     await flushPromises()
     expect(forumApi.getMyReplies).toHaveBeenCalled()
     expect(listTopics).not.toHaveBeenCalled()

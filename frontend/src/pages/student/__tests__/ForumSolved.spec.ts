@@ -1,7 +1,8 @@
 // #367 问答状态可见：求助/已解决与采纳置顶
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import ElementPlus, { ElRadioGroup } from 'element-plus'
+import ElementPlus from 'element-plus'
+import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 
 vi.mock('@/api/request', () => ({
   unwrappedRequest: { get: vi.fn(), post: vi.fn(), delete: vi.fn(), put: vi.fn() }
@@ -100,18 +101,29 @@ async function mountForumPage() {
   return wrapper
 }
 
+/**
+ * 按 options 的 value 集合定位分段控件——避免与页面里其它 UiSegmentTabs（topicSort 等）混淆。
+ */
+function tabbarByValues(wrapper: ReturnType<typeof mount>, mustInclude: string[]) {
+  for (const bar of wrapper.findAllComponents(UiSegmentTabs)) {
+    const opts = bar.props('options') as Array<{ value: string }>
+    if (mustInclude.every((v) => opts.some((o) => o.value === v))) return bar
+  }
+  throw new Error(`找不到含 [${mustInclude.join(', ')}] 的分段控件`)
+}
+
 describe('问答状态可见 #367', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('问答 Tab 显示求助/已解决筛选，且只有这一条筛选轴', async () => {
     const wrapper = await mountForumPage()
     // 切换到问答
-    const catGroup = wrapper.findAllComponents(ElRadioGroup).find(c => c.classes().includes('forum-category'))!
+    const catGroup = tabbarByValues(wrapper, ['discussion', 'question', 'mine'])
     catGroup.vm.$emit('update:modelValue', 'question')
     await flushPromises()
-    // 应出现 solved-filter
+    // 应出现 solved-filter（含 {all,unsolved,solved} 的分段控件）
     expect(wrapper.find('.solved-filter').exists()).toBe(true)
-    const solvedGroup = wrapper.find('.solved-filter').findComponent(ElRadioGroup)
+    const solvedGroup = tabbarByValues(wrapper, ['all', 'unsolved', 'solved'])
     expect(solvedGroup.exists()).toBe(true)
     const labels = wrapper.find('.solved-filter').text()
     expect(labels).toContain('求助')
@@ -124,7 +136,7 @@ describe('问答状态可见 #367', () => {
 
   it('问答列表每条显示 ✓ 已解决 或 求助 标记 + 回答数', async () => {
     const wrapper = await mountForumPage()
-    const catGroup = wrapper.findAllComponents(ElRadioGroup).find(c => c.classes().includes('forum-category'))!
+    const catGroup = tabbarByValues(wrapper, ['discussion', 'question', 'mine'])
     catGroup.vm.$emit('update:modelValue', 'question')
     await flushPromises()
     // 列表应含两种标记
@@ -136,14 +148,13 @@ describe('问答状态可见 #367', () => {
 
   it('求助/已解决筛选切换时请求带 solved 参数', async () => {
     const wrapper = await mountForumPage()
-    const catGroup = wrapper.findAllComponents(ElRadioGroup).find(c => c.classes().includes('forum-category'))!
+    const catGroup = tabbarByValues(wrapper, ['discussion', 'question', 'mine'])
     catGroup.vm.$emit('update:modelValue', 'question')
     await flushPromises()
     listTopics.mockClear()
-    const solvedGroup = wrapper.find('.solved-filter').findComponent(ElRadioGroup)
+    const solvedGroup = tabbarByValues(wrapper, ['all', 'unsolved', 'solved'])
     // 切到已解决
     solvedGroup.vm.$emit('update:modelValue', 'solved')
-    // el-radio-group 会同时触发 change 事件，组件内 @change 会触发 load
     solvedGroup.vm.$emit('change', 'solved')
     await flushPromises()
     expect(listTopics).toHaveBeenCalled()

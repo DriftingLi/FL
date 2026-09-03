@@ -32,26 +32,38 @@
          讨论 / 问答 看的是"内容类别"（含排序/求助筛选），点击我的帖子/我的回复/浏览记录只是
          把过滤维度从"看哪一类"换成了"看谁的"——原本同时存在的两套 Tab 会互相覆盖消失。
          这里把"看谁的"下沉成"我的"的二级 Tab，正交的三个维度就此拆开。 -->
-    <el-radio-group v-model="mainTab" class="forum-category mb-3">
-      <el-radio-button value="discussion">讨论</el-radio-button>
-      <el-radio-button value="question">问答</el-radio-button>
-      <el-radio-button value="mine">我的</el-radio-button>
-    </el-radio-group>
+    <UiSegmentTabs
+      v-model="mainTab"
+      :options="[
+        { label: '讨论', value: 'discussion' },
+        { label: '问答', value: 'question' },
+        { label: '我的', value: 'mine' }
+      ]"
+      class="mb-3"
+    />
 
     <!-- 排序 / 求助筛选（讨论、问答）：讨论仅排序，问答额外叠求助/已解决 -->
     <div v-if="mainTab !== 'mine'" class="mb-3 flex flex-wrap items-center justify-between gap-3">
       <div v-if="mainTab === 'question'" class="solved-filter">
-        <el-radio-group v-model="solvedFilter" size="small" @change="handleSolvedChange">
-          <el-radio-button value="all">全部</el-radio-button>
-          <el-radio-button value="unsolved">求助</el-radio-button>
-          <el-radio-button value="solved">已解决</el-radio-button>
-        </el-radio-group>
+        <UiSegmentTabs
+          :model-value="solvedFilter"
+          :options="[
+            { label: '全部', value: 'all' },
+            { label: '求助', value: 'unsolved' },
+            { label: '已解决', value: 'solved' }
+          ]"
+          @update:model-value="(v: string) => { solvedFilter = v as 'all' | 'unsolved' | 'solved'; handleSolvedChange() }"
+        />
       </div>
       <div class="ml-auto flex items-center gap-2">
-        <el-radio-group v-model="topicSort" size="small" @change="handleSortChange">
-          <el-radio-button value="latest">最新</el-radio-button>
-          <el-radio-button value="hot">热门</el-radio-button>
-        </el-radio-group>
+        <UiSegmentTabs
+          :model-value="topicSort"
+          :options="[
+            { label: '最新', value: 'latest' },
+            { label: '热门', value: 'hot' }
+          ]"
+          @update:model-value="(v: string) => { topicSort = v as 'latest' | 'hot'; handleSortChange() }"
+        />
         <UiButton size="small" :icon="topicOrder === 'asc' ? ArrowUp : ArrowDown" @click="toggleTopicOrder">
           {{ topicOrder === 'asc' ? '正序' : '逆序' }}
         </UiButton>
@@ -59,11 +71,17 @@
     </div>
 
     <!-- 我的 二级 Tab（无排序，天然跨类别） -->
-    <el-radio-group v-else v-model="mineTab" class="forum-mode mb-3" @change="handleMineTabChange">
-      <el-radio-button value="my-topics">我的帖子</el-radio-button>
-      <el-radio-button value="my-replies">我的回复</el-radio-button>
-      <el-radio-button value="history">浏览记录</el-radio-button>
-    </el-radio-group>
+    <UiSegmentTabs
+      v-else
+      :model-value="mineTab"
+      :options="[
+        { label: '我的帖子', value: 'my-topics' },
+        { label: '我的回复', value: 'my-replies' },
+        { label: '浏览记录', value: 'history' }
+      ]"
+      @update:model-value="(v: string) => { mineTab = v as 'my-topics' | 'my-replies' | 'history'; handleMineTabChange() }"
+      class="mb-3"
+    />
 
     <CheckInDialog v-model="checkInDialogVisible" :initial-tab="checkInTab" @checked="onCheckInChecked" />
 
@@ -214,6 +232,7 @@ import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 
