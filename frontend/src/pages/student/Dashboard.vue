@@ -139,7 +139,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ArrowRight } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import QuickCard from '@/components/dashboard/QuickCard.vue'
@@ -188,8 +188,7 @@ const {
   statsLoading,
   statsEmpty,
   summary,
-  loadStats: loadStudyStats,
-  renderChart: renderStudyChart
+  loadStats: loadStudyStats
 } = useRoleDashboard({
   statsFetcher: async (days) => {
     const res = await studentApi.getStudyStats({ days })
@@ -278,9 +277,8 @@ async function loadRecentLearning() {
 const { loading: pageLoading, loadError: pageError, retrying, retry: handleRetry, run: loadAll } = useAsyncPage(
   async () => {
     // 三路并行：课程 / 最近学习 / 统计
+    // #506：统计图渲染由 useRoleDashboard 自治（容器挂载即绘），此处不再手动编排
     await Promise.all([loadCourses(), loadRecentLearning(), loadStudyStats()])
-    await nextTick()
-    renderStudyChart()
   }
 )
 

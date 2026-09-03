@@ -149,17 +149,39 @@ func SaveSet(db *gorm.DB, studentID int, mode string, credentialID *int, ids []i
 		}
 		return db.Create(&prog).Error
 	}
-	updates := map[string]any{"current_index": startIdx, "updated_at": beijingNow()}
 	if ids != nil {
+		// 开始/续练协商流：游标与顺序由协商产物决定，直接落库
+		updates := map[string]any{"current_index": startIdx, "updated_at": beijingNow()}
 		updates["question_ids"] = model.JSONB(marshalIDs(ids))
 		updates["total"] = total
-	} else if total > 0 {
-		updates["total"] = total
+		if answers != nil {
+			updates["answers_state"] = model.JSONB(answers)
+		}
+		return db.Model(&prog).Updates(updates).Error
+	}
+	// 进度保存流（#504）：游标只进不退——用 WHERE current_index <= ? 条件实现原子更新，
+	// 避免「先读后写」read-modify-write 竞态（两并发保存同读旧值后小游标覆盖大游标）；
+	// 条件不满足（写小游标）时 0 行受影响，游标不变。answers_state / total 无条件更新。
+	if err := db.Model(&prog).
+		Where("current_index <= ?", startIdx).
+		Updates(map[string]any{
+			"current_index": startIdx,
+			"updated_at":    beijingNow(),
+		}).Error; err != nil {
+		return err
+	}
+	// answers_state / total 无条件独立落库（游标守卫不影响答题状态与总量）
+	aux := map[string]any{"updated_at": beijingNow()}
+	if total > prog.Total && total > 0 {
+		aux["total"] = total
 	}
 	if answers != nil {
-		updates["answers_state"] = model.JSONB(answers)
+		aux["answers_state"] = model.JSONB(answers)
 	}
-	return db.Model(&prog).Updates(updates).Error
+	if len(aux) > 1 {
+		return db.Model(&prog).Updates(aux).Error
+	}
+	return nil
 }
 
 // credentialClause 证件分区 WHERE 片段（#414）：nil → `credential_id IS NULL`（PG 不支持 IS 参数占位）。
