@@ -3,6 +3,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
+import { createPinia } from 'pinia'
 
 vi.mock('@/api/auth', () => ({
   authApi: {
@@ -36,7 +37,7 @@ describe('Login 按钮初始状态', () => {
   })
 
   it('挂载后主登录按钮显示「登 录」且不带 loading 态', async () => {
-    const wrapper = mount(Login, { global: { plugins: [ElementPlus] } })
+    const wrapper = mount(Login, { global: { plugins: [ElementPlus, createPinia()] } })
     await flushPromises()
     const btn = wrapper.find('button.auth-btn')
     expect(btn.exists()).toBe(true)
@@ -46,7 +47,7 @@ describe('Login 按钮初始状态', () => {
   })
 
   it('点击登录后按钮不残留 loading 态', async () => {
-    const wrapper = mount(Login, { global: { plugins: [ElementPlus] } })
+    const wrapper = mount(Login, { global: { plugins: [ElementPlus, createPinia()] } })
     await flushPromises()
     await wrapper.find('button.auth-btn').trigger('click')
     await flushPromises()
