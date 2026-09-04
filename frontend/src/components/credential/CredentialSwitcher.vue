@@ -218,7 +218,7 @@ onMounted(async () => {
 }
 
 .credential-switcher.is-dark .current-name {
-  color: #f1f5f9;
+  color: var(--color-text-on-dark, #f1f5f9);
 }
 
 .credential-switcher.is-dark .current-badge.special_operation {

@@ -313,7 +313,7 @@ const isValid = computed(
 }
 .form-error {
   font-size: var(--fs-sm);
-  color: #cf1322;
+  color: var(--color-danger, #cf1322);
 }
 .btn-primary {
   background: var(--color-primary);

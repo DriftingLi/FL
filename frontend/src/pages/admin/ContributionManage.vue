@@ -267,6 +267,6 @@ onMounted(() => {
 .pagination-wrapper { display: flex; justify-content: center; margin-top: 16px; }
 .file-link { display: block; color: var(--el-color-primary); font-size: 12px; line-height: 1.8; }
 .file-link:hover { text-decoration: underline; }
-.report-done { color: #999; }
-.text-muted { color: #909399; margin-top: 2px; }
+.report-done { color: var(--color-text-muted, #999999); }
+.text-muted { color: var(--color-text-muted, #909399); margin-top: 2px; }
 </style>
