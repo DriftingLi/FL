@@ -320,6 +320,11 @@ const routes: RouteRecordRaw[] = [
           name: 'ForumManage',
           component: () => import('@/pages/admin/ForumManage.vue')
         },
+        {
+          path: 'contribution-manage',
+          name: 'ContributionManage',
+          component: () => import('@/pages/admin/ContributionManage.vue')
+        },
       {
         path: 'course-catalog',
         name: 'CourseCatalog',
