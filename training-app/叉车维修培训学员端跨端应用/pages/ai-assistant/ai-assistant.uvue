@@ -202,9 +202,11 @@
 		} else if (currentModelSource.value == 'user') {
 			params['user_model_id'] = currentModelId.value
 		} else {
-			params['custom_api_key'] = customApiKey.value
-			params['custom_base_url'] = customBaseUrl.value
-			params['custom_model'] = customModel.value
+			// trim 兜底：用户粘贴 Base URL 常带首尾空白，原样传给后端会让 url.Parse 报
+			// "first path segment in URL cannot contain colon"（自定义模型调用失败）
+			params['custom_api_key'] = customApiKey.value.trim()
+			params['custom_base_url'] = customBaseUrl.value.trim()
+			params['custom_model'] = customModel.value.trim()
 		}
 		return params
 	}
@@ -367,6 +369,10 @@
 			uni.showToast({ title: '请输入 API Key', icon: 'none' })
 			return
 		}
+		// 归一化：确认时一次性 trim 掉首尾空白，避免脏值流入水合/落盘/发送
+		customModel.value = customModel.value.trim()
+		customBaseUrl.value = customBaseUrl.value.trim()
+		customApiKey.value = customApiKey.value.trim()
 		currentModelSource.value = 'custom'
 		currentModelId.value = 0
 		showCustomForm.value = false
