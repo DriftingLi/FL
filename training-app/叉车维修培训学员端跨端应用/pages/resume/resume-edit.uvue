@@ -507,7 +507,7 @@
                 }
             }
             if (expItems.value.length == 0) addExp()
-        }).catch((e : any) : void => {
+        }).catch((e) : void => {
             let isNotFound = false
             try {
                 const obj = e as UTSJSONObject
@@ -626,7 +626,7 @@
             uni.hideLoading()
             uni.showToast({ title: '保存成功', icon: 'success', duration: 800 })
             goBack('/pages/resume/resume')
-        }).catch((e : any) : void => {
+        }).catch((e) : void => {
             uni.hideLoading()
             uni.showToast({ title: errMsg(e, '保存失败'), icon: 'none' })
         })

@@ -63,7 +63,7 @@
                         <view v-for="(item, idx) in mustBuyList" :key="idx" class="must-buy-card"
                             @click="onProductClick(item)">
                             <view class="must-buy-img-wrap">
-                                <image v-if="item.coverUrl" :src="item.coverUrl" class="must-buy-img"
+                                <image v-if="item.cover_url" :src="item.cover_url" class="must-buy-img"
                                     mode="aspectFill" />
                                 <view v-else class="must-buy-img-placeholder"></view>
                             </view>
@@ -78,22 +78,22 @@
                 </view>
                 <view v-for="(item, idx) in products" :key="idx" class="product-item" @click="onProductClick(item)">
                     <view class="product-img-wrap">
-                        <image v-if="item.coverUrl" :src="item.coverUrl" class="product-img" mode="aspectFill" />
+                        <image v-if="item.cover_url" :src="item.cover_url" class="product-img" mode="aspectFill" />
                         <view v-else class="product-img-placeholder"></view>
                     </view>
                     <view class="product-info">
                         <text class="product-name">{{ item.title }}</text>
                         <view class="product-meta-row">
-                            <text v-if="item.price == 0" class="product-price-free">免费</text>
-                            <text v-else class="product-price">¥{{ item.price }}</text>
-                            <text class="product-sales">已有{{ item.enrollCount || 0 }}人参与学习</text>
+                            <text v-if="(item.price ?? 0) == 0" class="product-price-free">免费</text>
+                            <text v-else class="product-price">¥{{ item.price ?? 0 }}</text>
+                            <text class="product-sales">已有{{ item.enrollCount ?? 0 }}人参与学习</text>
                         </view>
                         <!-- 数量选择器（付费商品） -->
-                        <view v-if="item.price > 0" class="quantity-selector">
+                        <view v-if="(item.price ?? 0) > 0" class="quantity-selector">
                             <view class="qty-btn" @click.stop="decreaseQty(item)">
                                 <text class="qty-btn-text">-</text>
                             </view>
-                            <text class="qty-value">{{ item.quantity || 1 }}</text>
+                            <text class="qty-value">{{ item.quantity ?? 1 }}</text>
                             <view class="qty-btn" @click.stop="increaseQty(item)">
                                 <text class="qty-btn-text">+</text>
                             </view>
@@ -264,18 +264,13 @@
     }
 
     function increaseQty(item : CourseItem) : void {
-        if (item.quantity === undefined) {
-            item.quantity = 1
-        }
-        item.quantity = (item.quantity || 0) + 1
+        const q = item.quantity ?? 0
+        item.quantity = q + 1
     }
 
     function decreaseQty(item : CourseItem) : void {
-        if (item.quantity === undefined || item.quantity <= 1) {
-            item.quantity = 1
-        } else {
-            item.quantity = (item.quantity || 1) - 1
-        }
+        const q = item.quantity ?? 1
+        item.quantity = q > 1 ? q - 1 : 1
     }
 
     // onLoad 必须带 options 形参：Kotlin Function1<OnLoadOptions, Unit>，零参即 error17

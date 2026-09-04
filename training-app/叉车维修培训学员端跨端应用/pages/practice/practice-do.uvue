@@ -295,7 +295,7 @@
     const totalSeconds = ref<number>(0)
     const questionStartTime = ref<number>(0)
     const questionElapsed = ref<number>(0)
-    let timerInterval : any = null
+    let timerInterval : number | null = null
 
     // 评论状态
     const showComments = ref<boolean>(false)
@@ -308,7 +308,7 @@
     // 笔记状态
     const showNote = ref<boolean>(false)
     const noteContent = ref<string>('')
-    let noteSaveTimer : any = null
+    let noteSaveTimer : number | null = null
 
     // 模拟数据（实际应从后端获取）
     const siteAccuracy = ref<number>(85)
@@ -463,8 +463,9 @@
     }
 
     function stopTimer() {
-        if (timerInterval != null) {
-            clearInterval(timerInterval)
+        const t = timerInterval
+        if (t != null) {
+            clearInterval(t)
             timerInterval = null
         }
     }
@@ -661,7 +662,7 @@
                     isFavorited.value = false
                     favoriteId.value = 0
                     uni.showToast({ title: '已取消收藏', icon: 'none' })
-                }).catch((e : any) => {
+                }).catch((e) => {
                     console.warn('[practice-do] removeFavorite failed:', e)
                     uni.showToast({ title: '操作失败', icon: 'none' })
                 })
@@ -672,7 +673,7 @@
                 isFavorited.value = true
                 favoriteId.value = item.favorite_id
                 uni.showToast({ title: '已收藏', icon: 'none' })
-            }).catch((e : any) => {
+            }).catch((e) => {
                 console.warn('[practice-do] addFavorite failed:', e)
                 uni.showToast({ title: '操作失败', icon: 'none' })
             })
@@ -733,7 +734,7 @@
                     deleteCommentApi(commentId).then((_ : UTSJSONObject) => {
                         comments.value = comments.value.filter((c) => c.id != commentId)
                         uni.showToast({ title: '已删除', icon: 'none' })
-                    }).catch((e : any) => {
+                    }).catch((e) => {
                         console.warn('[practice-do] deleteComment failed:', e)
                         uni.showToast({ title: '删除失败', icon: 'none' })
                     })
@@ -766,9 +767,10 @@
         const qid = currentQuestion.value.question_id
         if (qid <= 0) return
         // 防抖 500ms 保存
-        if (noteSaveTimer != null) clearTimeout(noteSaveTimer)
+        const nt = noteSaveTimer
+        if (nt != null) clearTimeout(nt)
         noteSaveTimer = setTimeout(() => {
-            saveNoteApi(qid, noteContent.value).catch((e : any) => {
+            saveNoteApi(qid, noteContent.value).catch((e) => {
                 console.warn('[practice-do] saveNote failed:', e)
             })
         }, 500)
@@ -785,7 +787,7 @@
                         noteContent.value = ''
                         showNote.value = false
                         uni.showToast({ title: '笔记已删除', icon: 'none' })
-                    }).catch((e : any) => {
+                    }).catch((e) => {
                         console.warn('[practice-do] deleteNote failed:', e)
                     })
                 }

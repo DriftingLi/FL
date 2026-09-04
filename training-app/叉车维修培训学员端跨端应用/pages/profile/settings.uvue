@@ -113,7 +113,7 @@
     function calculateCacheSize() : void {
         try {
             const info = uni.getStorageInfoSync()
-            const size = info.currentSize || 0
+            const size = info.currentSize
             if (size > 1024) {
                 cacheSize.value = (size / 1024).toFixed(1) + ' MB'
             } else {
@@ -168,9 +168,9 @@
                         uni.clearStorageSync()
 
                         // 恢复必要信息
-                        if (token) uni.setStorageSync(STORAGE_KEY_TOKEN, token)
-                        if (userInfo) uni.setStorageSync(STORAGE_KEY_USER, userInfo)
-                        if (careMode) uni.setStorageSync('care_mode', careMode)
+                        if (token != null) uni.setStorageSync(STORAGE_KEY_TOKEN, token as any)
+                        if (userInfo != null) uni.setStorageSync(STORAGE_KEY_USER, userInfo as any)
+                        if (careMode != null) uni.setStorageSync('care_mode', careMode as any)
 
                         calculateCacheSize()
                         uni.showToast({ title: '清理完成', icon: 'success' })
@@ -185,16 +185,15 @@
     }
 
     function onFeature(type : string) : void {
-        const titles : Record<string, string> = {
-            'address': '收货地址',
-            'notification': '通知设置',
-            'general': '通用设置',
-            'device': '登录设备管理',
-            'privacy': '隐私政策',
-            'info-collection': '个人信息收集清单',
-            'third-party': '第三方收集清单'
-        }
-        const title = titles[type] || type
+        const titles = new Map<string, string>()
+        titles.set('address', '收货地址')
+        titles.set('notification', '通知设置')
+        titles.set('general', '通用设置')
+        titles.set('device', '登录设备管理')
+        titles.set('privacy', '隐私政策')
+        titles.set('info-collection', '个人信息收集清单')
+        titles.set('third-party', '第三方收集清单')
+        const title = titles.get(type) ?? type
         uni.showToast({ title: title + '（开发中）', icon: 'none' })
     }
 

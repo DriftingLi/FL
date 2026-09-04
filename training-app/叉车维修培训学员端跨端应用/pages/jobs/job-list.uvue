@@ -112,7 +112,7 @@
             const result = await getJobListApi({
                 page: page.value,
                 page_size: PAGE_SIZE,
-                specialty_id: specialtyId > 0 ? specialtyId : undefined,
+                specialty_id: specialtyId > 0 ? specialtyId : null,
             })
             if (reset) {
                 jobs.value = result.items

@@ -6,7 +6,7 @@
                 <view class="msg-icon-wrap" @click="onMsgClick">
                     <text class="msg-icon">✉️</text>
                     <view v-if="unreadCount > 0" class="msg-badge">
-                        <text class="msg-badge-text">{{ unreadCount > 99 ? '99+' : String(unreadCount) }}</text>
+                        <text class="msg-badge-text">{{ unreadCount > 99 ? '99+' : unreadCount.toString() }}</text>
                     </view>
                 </view>
             </view>

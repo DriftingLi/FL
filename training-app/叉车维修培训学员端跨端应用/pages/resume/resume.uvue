@@ -148,7 +148,7 @@
         // 以服务端为准
         getResumeApi().then((r : ResumeData) : void => {
             resumeFilled.value = r.real_name.length > 0
-        }).catch((e : any) : void => {
+        }).catch((e) : void => {
             let isNotFound = false
             try {
                 const obj = e as UTSJSONObject
