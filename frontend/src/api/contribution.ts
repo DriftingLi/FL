@@ -76,11 +76,17 @@ export interface ContributionUploadData {
 }
 
 export const contributionApi = {
-  /** 先传文件（multipart），返回暂存 URL 与元数据 */
+  /** 先传文件（multipart），返回暂存 URL 与元数据。
+   *  显式 multipart 头：共享 client 默认 Content-Type 为 application/json，
+   *  不覆盖则 FormData 不会带 boundary，后端 FormFile 解析不到文件（同 forum.uploadImage 口径）。
+   *  大文件（≤20MB/投稿 ≤50MB）上传耗时超默认 30s，超时放宽到 120s。 */
   uploadFile(file: File) {
     const fd = new FormData()
     fd.append('file', file)
-    return unwrappedRequest.post<ContributionUploadData>('/contributions/upload-file', fd)
+    return unwrappedRequest.post<ContributionUploadData>('/contributions/upload-file', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000
+    })
   },
   /** 创建投稿 */
   create(payload: {
