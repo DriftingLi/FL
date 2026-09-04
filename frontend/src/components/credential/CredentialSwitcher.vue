@@ -187,8 +187,8 @@ onMounted(async () => {
   color: var(--color-primary-600);
 }
 .current-badge.skill_level {
-  background: #ECFDF5;
-  color: #059669;
+  background: var(--color-success-light);
+  color: var(--color-success-strong);
 }
 .collapsed-view {
   display: flex;

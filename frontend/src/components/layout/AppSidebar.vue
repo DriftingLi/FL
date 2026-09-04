@@ -464,13 +464,13 @@ async function handleUserCommand(command: string) {
 }
 
 .role-badge.tutor {
-  background: #ECFDF5;
-  color: #059669;
+  background: var(--color-success-light);
+  color: var(--color-success-strong);
 }
 
 .role-badge.admin {
-  background: #F5F3FF;
-  color: #7C3AED;
+  background: var(--color-violet-50);
+  color: var(--color-violet-500);
 }
 
 /* 分隔线 */
@@ -745,7 +745,7 @@ async function handleUserCommand(command: string) {
 }
 
 .app-sidebar.is-dark .user-name {
-  color: #f1f5f9;
+  color: var(--color-text-on-dark);
 }
 
 .app-sidebar.is-dark .user-dropdown-arrow {
@@ -807,7 +807,7 @@ async function handleUserCommand(command: string) {
 
 .app-sidebar.is-dark .footer-btn:hover {
   background: rgba(255, 255, 255, 0.06);
-  color: #f1f5f9;
+  color: var(--color-text-on-dark);
 }
 
 /* compact：收紧纵向间距 */
