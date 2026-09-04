@@ -1,30 +1,44 @@
+<!--
+  样式全走原子类（R4：scoped 块已删）。
+  ⚠️ 不引 Tailwind preflight，浏览器默认 border-width 是 medium(3px)，
+  所以下面凡是虚线边框都写成 `border border-dashed` —— 只写 border-dashed
+  而不给宽度，其余三条边会渲染成 3px。
+-->
 <template>
-  <div class="forum-image-uploader">
+  <div class="flex w-full flex-col gap-2">
     <!-- 已选图片缩略图 -->
-    <div v-if="props.modelValue.length > 0" class="img-thumbs">
-      <div v-for="(url, index) in props.modelValue" :key="url + index" class="img-thumb">
-        <el-image :src="resolveFileUrl(url)" fit="cover" class="thumb-img" />
-        <button type="button" class="thumb-remove" @click="removeImage(index)">
+    <div v-if="props.modelValue.length > 0" class="flex flex-wrap gap-1.5">
+      <div
+        v-for="(url, index) in props.modelValue"
+        :key="url + index"
+        class="relative size-12 shrink-0 overflow-hidden rounded-[6px] border border-line"
+      >
+        <el-image :src="resolveFileUrl(url)" fit="cover" class="h-full w-full" />
+        <button
+          type="button"
+          class="absolute right-0 top-0 flex size-4 items-center justify-center rounded-bl-[6px] border-0 bg-black/55 p-0 text-[10px] text-panel transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-bad/90"
+          @click="removeImage(index)"
+        >
           <el-icon><Close /></el-icon>
         </button>
       </div>
     </div>
 
     <!-- 上传入口：小图标按钮（达到上限后隐藏） -->
-    <div class="upload-row">
+    <div class="flex items-center gap-2">
       <button
         v-if="props.modelValue.length < props.max"
         type="button"
-        class="upload-btn"
+        class="inline-flex items-center gap-1 rounded-[6px] border border-dashed border-line-strong bg-canvas px-2.5 py-[5px] text-ink-2 transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)] hover:border-ui-500 hover:bg-ui-50 hover:text-ui-600 disabled:cursor-not-allowed disabled:opacity-60"
         :disabled="uploading"
         title="添加图片（也可直接粘贴图片）"
         @click="triggerSelect"
       >
-        <el-icon class="btn-icon" :class="{ spinning: uploading }">
+        <el-icon class="text-base" :class="{ 'animate-spin': uploading }">
           <Loading v-if="uploading" />
           <Picture v-else />
         </el-icon>
-        <span class="btn-count" v-if="props.modelValue.length > 0">
+        <span v-if="props.modelValue.length > 0" class="text-xs text-ink-3">
           {{ props.modelValue.length }}/{{ props.max }}
         </span>
       </button>
@@ -35,7 +49,7 @@
       type="file"
       :accept="accept"
       multiple
-      style="display: none"
+      class="hidden"
       @change="handleSelect"
     />
   </div>
@@ -90,105 +104,3 @@ onBeforeUnmount(() => {
   document.removeEventListener('paste', handlePaste)
 })
 </script>
-
-<style scoped>
-.forum-image-uploader {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-/* 已选图片缩略图 */
-.img-thumbs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.img-thumb {
-  position: relative;
-  width: 48px;
-  height: 48px;
-  border-radius: 6px;
-  overflow: hidden;
-  border: 1px solid var(--color-border-light);
-  flex-shrink: 0;
-}
-
-.thumb-img {
-  width: 100%;
-  height: 100%;
-}
-
-.thumb-remove {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 16px;
-  height: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: 0 0 0 6px;
-  background: rgba(0, 0, 0, 0.55);
-  color: #fff;
-  cursor: pointer;
-  padding: 0;
-  font-size: 10px;
-}
-
-.thumb-remove:hover {
-  background: rgba(245, 108, 108, 0.9);
-}
-
-/* 上传入口 */
-.upload-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.upload-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 5px 10px;
-  border: 1px dashed var(--color-text-disabled);
-  border-radius: 6px;
-  background: var(--color-bg-page);
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  transition: all var(--duration-base) var(--ease-default);
-}
-
-.upload-btn:hover {
-  border-color: var(--color-primary-500);
-  color: var(--color-primary-500);
-  background: var(--color-primary-50);
-}
-
-.upload-btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.btn-icon {
-  font-size: 16px;
-}
-
-.btn-count {
-  font-size: 12px;
-  color: var(--color-text-tertiary);
-}
-
-.spinning {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-</style>

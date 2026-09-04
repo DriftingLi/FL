@@ -110,21 +110,12 @@
       <section class="rounded-card border border-line bg-panel p-5">
         <UiSectionHeader title="学习统计" :subtitle="summary || undefined">
           <template #actions>
-            <div class="flex items-center gap-1 rounded-ctl bg-canvas p-1">
-              <button
-                v-for="tab in timeTabs"
-                :key="tab.value"
-                class="rounded-ctl px-3 py-1 text-xs transition-colors duration-150"
-                :class="
-                  currentTab === tab.value
-                    ? 'bg-panel text-ui-700 shadow-card'
-                    : 'text-ink-3 hover:text-ink-2'
-                "
-                @click="currentTab = tab.value"
-              >
-                {{ tab.label }}
-              </button>
-            </div>
+            <!-- #511：时间范围分段控件（滑动指示） -->
+            <UiSegmentTabs
+              :model-value="currentTab"
+              :options="timeTabOptions"
+              @update:model-value="currentTab = $event"
+            />
           </template>
         </UiSectionHeader>
 
@@ -139,7 +130,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ArrowRight } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import QuickCard from '@/components/dashboard/QuickCard.vue'
@@ -148,6 +139,7 @@ import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiStatCard from '@/components/ui/UiStatCard.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSectionHeader from '@/components/ui/UiSectionHeader.vue'
+import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import { useRoleDashboard } from '@/composables/useRoleDashboard'
 import { useAsyncPage } from '@/composables/useAsyncPage'
@@ -188,8 +180,7 @@ const {
   statsLoading,
   statsEmpty,
   summary,
-  loadStats: loadStudyStats,
-  renderChart: renderStudyChart
+  loadStats: loadStudyStats
 } = useRoleDashboard({
   statsFetcher: async (days) => {
     const res = await studentApi.getStudyStats({ days })
@@ -206,6 +197,9 @@ const {
     { label: '近30天', value: '30d', days: 30 }
   ]
 })
+
+// #511：UiSegmentTabs 只消费 {label,value}，剥离 timeTabs 的 days 字段
+const timeTabOptions = computed(() => timeTabs.map((t) => ({ label: t.label, value: t.value })))
 
 /** 顶部概览三指标：时长 / 活跃天数 / 日均。跟随 statsLoading 一起进骨架 */
 const overviewStats = computed(() => {
@@ -278,9 +272,8 @@ async function loadRecentLearning() {
 const { loading: pageLoading, loadError: pageError, retrying, retry: handleRetry, run: loadAll } = useAsyncPage(
   async () => {
     // 三路并行：课程 / 最近学习 / 统计
+    // #506：统计图渲染由 useRoleDashboard 自治（容器挂载即绘），此处不再手动编排
     await Promise.all([loadCourses(), loadRecentLearning(), loadStudyStats()])
-    await nextTick()
-    renderStudyChart()
   }
 )
 

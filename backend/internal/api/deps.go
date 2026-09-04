@@ -77,6 +77,7 @@ type Deps struct {
 	JobPostingSvc        *service.JobPostingService
 	JobApplicationSvc    *service.JobApplicationService
 	JobReportSvc         *service.JobReportService
+	ContributionSvc      *service.ContributionService
 }
 
 // NewDeps 构建全部 service 单实例。进程启动早期由 main 调用一次。
@@ -156,6 +157,7 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		JobPostingSvc:        service.NewJobPostingService(db, logger),
 		JobApplicationSvc:    service.NewJobApplicationService(db, logger, notificationSvc),
 		JobReportSvc:         service.NewJobReportService(db, logger),
+		ContributionSvc:      service.NewContributionService(db, fileSvc, notificationSvc, pointsSvc, logger, clock.Real()),
 	}
 	// 投递通知与联系方式交换共用邮件单点（spec #449 决定 15）
 	if d.JobApplicationSvc != nil && mailSender != nil {

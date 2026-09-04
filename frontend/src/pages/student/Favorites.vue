@@ -4,12 +4,13 @@
       <h2 class="text-[22px] text-ink">我的收藏</h2>
     </div>
 
-    <el-tabs v-model="activeType" @tab-change="handleTabChange">
-      <el-tab-pane label="全部" name="all" />
-      <el-tab-pane label="课程" name="course" />
-      <el-tab-pane label="题目" name="question" />
-      <el-tab-pane label="帖子" name="topic" />
-    </el-tabs>
+    <!-- #511：分类 tab 统一分段控件 -->
+    <UiSegmentTabs
+      :model-value="activeType"
+      :options="typeTabOptions"
+      @update:model-value="(v: string) => { activeType = v as 'all' | FavoriteTargetType; handleTabChange() }"
+      class="mb-3"
+    />
 
     <div class="min-h-[200px] rounded-card bg-panel shadow-card">
       <UiErrorState
@@ -94,6 +95,7 @@ import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 
 const router = useRouter()
 
@@ -130,6 +132,14 @@ const TYPE_LABELS: Record<string, string> = {
   featured: '资讯',
   topic: '帖子'
 }
+
+// #511：UiSegmentTabs 分类选项（顶部 tab 轴：全部/课程/题目/帖子）
+const typeTabOptions = [
+  { label: '全部', value: 'all' },
+  { label: '课程', value: 'course' },
+  { label: '题目', value: 'question' },
+  { label: '帖子', value: 'topic' }
+]
 
 const TYPE_COLORS: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = {
   course: 'primary',

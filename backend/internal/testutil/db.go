@@ -120,6 +120,10 @@ func allModels() []interface{} {
 		&model.JobPosting{},
 		&model.JobApplication{},
 		&model.JobReport{},
+		&model.UserContribution{},
+		&model.UserContributionFile{},
+		&model.ContributionDownload{},
+		&model.ContributionReport{},
 	}
 }
 

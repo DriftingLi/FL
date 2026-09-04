@@ -28,30 +28,22 @@
             <span class="topic-time text-xs text-ink-3">{{ formatLocaleDateTime(topic.created_at, '') }}</span>
           </div>
           <div class="topic-actions ml-auto flex items-center gap-1">
-            <el-tooltip :content="topic?.liked_by_me ? '取消点赞' : '点赞'" placement="top">
-              <UiButton :type="topic?.liked_by_me ? 'danger' : 'default'" circle size="small" @click="toggleTopicLike">
-                <span class="heart-btn text-sm leading-none">{{ topic?.liked_by_me ? '♥' : '♡' }}</span>
-              </UiButton>
-            </el-tooltip>
-            <span v-if="topic" class="like-count min-w-4 text-left text-xs text-bad">{{ topic.likes_count || 0 }}</span>
-            <el-tooltip :content="topicFavorited ? '取消收藏' : '收藏'" placement="top">
-              <UiButton :icon="topicFavorited ? StarFilled : Star" :type="topicFavorited ? 'warning' : 'default'" circle size="small" @click="toggleFavorite"/>
-            </el-tooltip>
-            <UiButton variant="text" size="small" @click="openReport('topic')">举报</UiButton>
-            <UiButton variant="text" v-if="topic.can_delete" class="delete-btn ml-auto text-bad" size="small" @click="removeTopic">
-              删除
-            </UiButton>
+            <!-- #511：UiActionChip 统一互动/治理操作（图标内置、激活态填充） -->
+            <UiActionChip icon="like" :label="topic?.liked_by_me ? '已赞' : '点赞'" :count="topic.likes_count" tone="like" :active="!!topic?.liked_by_me" @click="toggleTopicLike" />
+            <UiActionChip icon="fav" :label="topicFavorited ? '已收藏' : '收藏'" tone="fav" :active="topicFavorited" @click="toggleFavorite" />
+            <UiActionChip icon="report" label="举报" tone="neutral" @click="openReport('topic')" />
+            <UiActionChip v-if="topic.can_delete" icon="delete" label="删除" tone="danger" @click="removeTopic" />
           </div>
         </div>
         <div class="topic-body mt-4">
           <div class="topic-title-row mb-3 flex flex-wrap items-center gap-2">
-            <el-tag v-if="topic.category === 'question'" size="small" type="success">问答</el-tag>
-            <el-tag v-else-if="topic.chapter_id" size="small" type="warning">
+            <UiTag v-if="topic.category === 'question'" tone="success">问答</UiTag>
+            <UiTag v-else-if="topic.chapter_id" tone="warning">
               {{ topic.chapter_title || '章节讨论' }}
-            </el-tag>
-            <el-tag v-else size="small" type="info">综合</el-tag>
-            <el-tag v-if="topic.category === 'question' && (topic.accepted_reply_id || topic.solved_at)" size="small" type="success" effect="dark">✓ 已解决</el-tag>
-            <el-tag v-else-if="topic.category === 'question'" size="small" type="info" effect="plain">求助</el-tag>
+            </UiTag>
+            <UiTag v-else tone="neutral">综合</UiTag>
+            <UiTag v-if="topic.category === 'question' && (topic.accepted_reply_id || topic.solved_at)" tone="success" effect="dark">✓ 已解决</UiTag>
+            <UiTag v-else-if="topic.category === 'question'" tone="neutral" effect="plain">求助</UiTag>
             <h1 class="topic-title m-0 text-xl font-semibold text-ink">{{ topic.title }}</h1>
           </div>
           <div v-if="topic.category === 'question' && isTopicOwner && topic.accepted_reply_id" class="accept-actions mb-3">
@@ -63,7 +55,7 @@
             <el-icon><View /></el-icon>
             {{ topic.view_count }} 次浏览
             <span class="like-stat ml-3 inline-flex items-center gap-0.5 text-bad">
-              <span class="heart text-xs leading-none">{{ topic.liked_by_me ? '♥' : '♡' }}</span>
+              <svg class="size-3.5" viewBox="0 0 24 24" :fill="topic.liked_by_me ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
               {{ topic.likes_count || 0 }} 点赞
             </span>
             <el-icon class="reply-icon ml-3"><ChatDotRound /></el-icon>
@@ -76,10 +68,14 @@
         <div class="replies-header mb-2 flex items-center justify-between">
           <h3 class="replies-title m-0 text-base font-semibold text-ink">全部回复（{{ replies.length }}）</h3>
           <div class="flex items-center gap-2">
-            <el-radio-group v-model="replySort" size="small" @change="handleReplySortChange">
-              <el-radio-button value="latest">最新</el-radio-button>
-              <el-radio-button value="hot">热门</el-radio-button>
-            </el-radio-group>
+            <UiSegmentTabs
+              :model-value="replySort"
+              :options="[
+                { label: '最新', value: 'latest' },
+                { label: '热门', value: 'hot' }
+              ]"
+              @update:model-value="(v: string) => { replySort = v as 'latest' | 'hot'; handleReplySortChange() }"
+            />
             <UiButton size="small" :icon="replyOrder==='asc'? ArrowUp : ArrowDown" @click="toggleReplyOrder">{{ replyOrder==='asc' ? '正序' : '逆序' }}</UiButton>
           </div>
         </div>
@@ -91,7 +87,7 @@
             class="reply-item stagger-in flex gap-3 border-b border-line py-4 last:border-b-0"
             :class="
               reply.is_accepted
-                ? 'is-accepted my-1.5 -mx-3 rounded-[8px] border-2 border-ok bg-ok-soft p-3'
+                ? 'is-accepted relative my-1.5 -mx-2 rounded-[8px] bg-ok-soft p-3 pl-4 before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:rounded-full before:bg-ok'
                 : ''
             "
             :style="staggerStyle(i)"
@@ -102,28 +98,19 @@
             <div class="reply-main min-w-0 flex-1">
               <div class="reply-meta mb-1.5 flex flex-wrap items-center gap-2">
                 <span class="author-name text-sm font-semibold text-ink">{{ displayName(reply.author) }}</span>
-                <el-tag v-if="topic && reply.author.user_id === topic.author.user_id" size="small" type="info" effect="plain" class="owner-tag ml-1.5">楼主</el-tag>
-                <el-tag v-if="reply.is_accepted" size="small" type="success" effect="dark" class="accepted-inline ml-1.5">✓ 已采纳</el-tag>
+                <UiTag v-if="topic && reply.author.user_id === topic.author.user_id" tone="neutral" effect="plain" class="ml-1.5">楼主</UiTag>
+                <UiTag v-if="reply.is_accepted" tone="success" effect="dark" class="ml-1.5">✓ 已采纳</UiTag>
                 <span class="reply-time text-xs text-ink-3">{{ formatLocaleDateTime(reply.created_at, '') }}</span>
                 <UiButton variant="primary" class="reply-btn" size="small" @click="startReplyTo(reply)">
                   回复
                 </UiButton>
-                <UiButton variant="text" class="reply-btn" size="small" @click="openReport('reply', reply.id)">
-                  举报
-                </UiButton>
-                <UiButton variant="text" class="like-btn" :type="reply.liked_by_me ? 'danger' : 'default'" size="small" @click="toggleReplyLike(reply)">
-                  <span class="heart text-[13px] leading-none">{{ reply.liked_by_me ? '♥' : '♡' }}</span>
-                  <span v-if="(reply.likes_count || 0) > 0" class="like-count-inline ml-0.5 text-xs">{{ reply.likes_count }}</span>
-                </UiButton>
-                <UiButton variant="text" v-if="reply.can_delete" class="delete-btn ml-auto text-bad" size="small" @click="removeReply(reply.id)">
-                  删除
-                </UiButton>
+                <!-- #511：回复互动/治理统一药丸形态 -->
+                <UiActionChip icon="like" :label="reply.liked_by_me ? '已赞' : '点赞'" :count="reply.likes_count" tone="like" compact :active="!!reply.liked_by_me" @click="toggleReplyLike(reply)" />
+                <UiActionChip icon="report" label="举报" tone="neutral" compact @click="openReport('reply', reply.id)" />
+                <UiActionChip v-if="reply.can_delete" icon="delete" label="删除" tone="danger" compact class="ml-auto" @click="removeReply(reply.id)" />
               </div>
               <div v-if="reply.parent_id && reply.parent_name" class="reply-quote mb-1 inline-block rounded-[6px] bg-canvas px-2 py-0.5 text-xs text-ink-3">
                 回复 @{{ reply.parent_name }}
-              </div>
-              <div v-if="reply.is_accepted" class="accepted-badge my-1.5">
-                <el-tag size="small" type="success" effect="dark">✓ 已采纳答案</el-tag>
               </div>
               <div class="reply-content whitespace-pre-wrap break-words text-sm leading-[1.7] text-ink">{{ reply.content }}</div>
               <ForumImageGallery :images="reply.images" />
@@ -140,71 +127,53 @@
       </div>
 
       <!-- 举报对话框（帖子/回复共用，ADR-0018） -->
-      <el-dialog v-model="reportVisible" title="举报" width="440px">
-        <el-input
+      <UiDialog
+        v-model="reportVisible"
+        title="举报"
+        width="440px"
+        confirm-text="提交"
+        :confirm-loading="reportSubmitting"
+        @confirm="submitReport"
+      >
+        <UiInput
           v-model="reportReason"
           type="textarea"
           :rows="4"
-          maxlength="500"
+          :maxlength="500"
           show-word-limit
           placeholder="请填写举报理由（1-500 字）"
         />
-        <template #footer>
-          <UiButton @click="reportVisible = false">取消</UiButton>
-          <UiButton variant="primary" :loading="reportSubmitting" @click="submitReport">提交</UiButton>
-        </template>
-      </el-dialog>
+      </UiDialog>
 
-      <div class="reply-editor mb-4 rounded-card bg-panel p-5 shadow-card">
-        <div v-if="replyingTo" class="replying-bar mb-2.5">
-          <el-tag closable type="info" size="small" @close="replyingTo = null">
-            回复 @{{ replyingTo.username }}
-          </el-tag>
-        </div>
-        <div class="reply-box rounded-[8px] border border-[var(--color-border-dark)] bg-panel p-2 transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)] focus-within:border-ui-500">
-          <div v-if="replyImages.length > 0" class="reply-images-bar mb-2 flex flex-wrap gap-1.5">
-            <div v-for="(url, index) in replyImages" :key="url + index" class="reply-thumb relative size-12 shrink-0 overflow-hidden rounded-[6px] border border-line">
-              <el-image :src="resolveFileUrl(url)" fit="cover" class="reply-thumb-img h-full w-full" />
-              <button type="button" class="reply-thumb-remove absolute right-0 top-0 flex size-4 items-center justify-center rounded-bl-[6px] border-0 bg-black/55 p-0 text-[10px] text-panel hover:bg-bad/90" @click="removeReplyImage(index)">
-                <el-icon><Close /></el-icon>
-              </button>
-            </div>
-          </div>
-          <el-input
-            v-model="replyContent"
-            type="textarea"
-            :rows="3"
-            maxlength="5000"
-            show-word-limit
-            placeholder="写下你的回复…"
-            class="reply-textarea"
-          />
-          <div class="reply-box-footer mt-1.5 flex items-center justify-between">
-            <UiButton variant="text" :icon="Paperclip" circle size="small" :disabled="replyImages.length >= 3" title="添加图片" @click="triggerReplyFile"/>
-            <UiButton variant="primary" :icon="Promotion" circle size="small" :loading="submitting" :disabled="!canSubmitReply" title="发表回复" @click="submitReply"/>
-          </div>
-        </div>
-        <input ref="replyFileInput" type="file" accept="image/*" multiple class="hidden" @change="handleReplyFileSelect" />
+      <div class="reply-editor mb-4">
+        <ForumComposer
+          v-model="replyContent"
+          v-model:images="replyImages"
+          v-model:replying-to="replyingTo"
+          :submitting="submitting"
+          :max-images="3"
+          placeholder="写下你的回复…"
+          @submit="submitReply"
+        />
       </div>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, nextTick, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, View, ChatDotRound, Star, StarFilled, Paperclip, Promotion, Close, ArrowUp, ArrowDown } from '@element-plus/icons-vue'
+import { ArrowLeft, View, ChatDotRound, ArrowUp, ArrowDown } from '@element-plus/icons-vue'
 import { forumApi, type ForumTopicItem, type ForumReplyItem } from '@/api/forum'
 import { favoriteApi } from '@/api/favorite'
 import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
+import ForumComposer from '@/components/student/ForumComposer.vue'
 import { formatLocaleDateTime } from '@/utils/format'
-import { resolveFileUrl } from '@/utils/fileUrl'
 import { displayName, authorLetter } from '@/utils/forumDisplay'
 import { pushHistory, toHistoryItem } from '@/utils/forumHistory'
 import { useAuthStore } from '@/stores/auth'
 import { useAsyncPage } from '@/composables/useAsyncPage'
-import { useForumImageUpload } from '@/composables/useForumImageUpload'
 import { useForumSort } from '@/composables/useForumSort'
 import { useLike } from '@/composables/useLike'
 import { useStagger } from '@/composables/useStagger'
@@ -212,6 +181,11 @@ import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
+import UiInput from '@/components/ui/UiInput.vue'
+import UiTag from '@/components/ui/UiTag.vue'
+import UiActionChip from '@/components/ui/UiActionChip.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -224,12 +198,8 @@ const topic = ref<ForumTopicItem | null>(null)
 const replies = ref<ForumReplyItem[]>([])
 const replyContent = ref('')
 const replyingTo = ref<{ id: number; username: string } | null>(null)
-const replyFileInput = ref<HTMLInputElement | null>(null)
-const canSubmitReply = computed(() => replyContent.value.trim().length > 0 || replyImages.value.length > 0)
-
-// 回复图片上传（#389：上限/20MB/FormData/粘贴收编进 useForumImageUpload，UI 形态留在本页）
-const { urls: replyImages, uploadFiles: uploadReplyFiles, removeImage: removeReplyImage, handlePaste } =
-  useForumImageUpload(3)
+// 已上传图片 URL 由 ForumComposer 内部经 useForumImageUpload 维护，这里只持有结果
+const replyImages = ref<string[]>([])
 
 // 排序双轴收编（#389）：详情回复口径为「热门逆序、最新正序」，切维度时按此映射
 const { sort: replySort, order: replyOrder, flipOrder: flipReplyOrder } = useForumSort('asc')
@@ -356,17 +326,6 @@ async function submitReply() {
   } finally {
     submitting.value = false
   }
-}
-
-function triggerReplyFile() {
-  replyFileInput.value?.click()
-}
-
-function handleReplyFileSelect(event: Event) {
-  const target = event.target as HTMLInputElement
-  const files = Array.from(target.files ?? [])
-  if (files.length > 0) void uploadReplyFiles(files)
-  target.value = ''
 }
 
 function startReplyTo(reply: ForumReplyItem) {
@@ -513,23 +472,5 @@ watch(
 onMounted(() => {
   loadDetail()
   loadFavoriteState()
-  document.addEventListener('paste', handlePaste)
-})
-
-onBeforeUnmount(() => {
-  document.removeEventListener('paste', handlePaste)
 })
 </script>
-
-<style scoped>
-/*
- * 仅保留 :deep 的 EP 内部覆盖（R1 允许）：回复文本框去边框/阴影（无边框模式），
- * 让边框交给外层 .reply-box 的 focus-within 原子类呈现。
- */
-.reply-textarea :deep(.el-textarea__inner) {
-  border: none !important;
-  box-shadow: none !important;
-  padding: 4px 0;
-  resize: none;
-}
-</style>

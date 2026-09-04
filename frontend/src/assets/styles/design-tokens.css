@@ -52,6 +52,14 @@
   --color-danger-strong: #B91C1C;
   --color-info-strong: #374151;
 
+  /* 互动语义色 - 玫红（点赞等热互动）。与 ok/warn/bad 同构三元组：
+   * -soft 浅底 / 主色 / -strong 深字；暖红区别于 bad 的正红，承担「热互动」识别。
+   * 命名 --rose-*（非 --color-rose-*）：@theme 桥接键占用 --color-rose-* 命名空间，
+   * 同键 var(--color-rose-*) 会构成自引用循环（见 tailwind.css 顶部命名约束）。 */
+  --rose: #E11D48;
+  --rose-soft: #FFF1F2;
+  --rose-strong: #BE123C;
+
   /*
    * 辅助分类色 - 紫罗兰。管理端统计卡/快捷入口的第 4 分类色（蓝/绿/琥珀/紫并列），
    * 承担区分度职责，故不能并入 accent（天蓝与 primary 青绿同系，会撞色）。
@@ -210,6 +218,9 @@
   --color-danger-strong: #FCA5A5;
   --color-info-light: #1F2937;
   --color-info-strong: #D1D5DB;
+  --rose: #FB7185;
+  --rose-soft: #3D111F;
+  --rose-strong: #FDA4AF;
 
   /* ===== 阴影：深底上投影变「泛光」，弱化 + 拉高 ===== */
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);

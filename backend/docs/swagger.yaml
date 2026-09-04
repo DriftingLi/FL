@@ -7,6 +7,46 @@ definitions:
       image:
         type: string
     type: object
+  api.contributionRejectReq:
+    properties:
+      reason:
+        type: string
+    type: object
+  api.createContributionReq:
+    properties:
+      credential_id:
+        type: integer
+      files:
+        items:
+          properties:
+            content_type:
+              type: string
+            file_name:
+              type: string
+            file_size:
+              type: integer
+            file_url:
+              type: string
+          type: object
+        type: array
+      intro:
+        type: string
+      is_anonymous:
+        type: boolean
+      title:
+        type: string
+    type: object
+  api.handleReportReq:
+    properties:
+      action:
+        description: archive=下架被举报投稿 / dismiss=驳回举报
+        type: string
+    type: object
+  api.reportContributionReq:
+    properties:
+      reason:
+        type: string
+    type: object
   response.R:
     properties:
       code:
@@ -115,6 +155,99 @@ definitions:
         items:
           type: string
         type: array
+    type: object
+  service.ContributionAuthor:
+    properties:
+      anonymous:
+        type: boolean
+      user_id:
+        type: integer
+      username:
+        type: string
+    type: object
+  service.ContributionFileDTO:
+    properties:
+      content_type:
+        type: string
+      file_id:
+        type: integer
+      file_name:
+        type: string
+      file_size:
+        type: integer
+      file_url:
+        type: string
+    type: object
+  service.ContributionItemDTO:
+    properties:
+      author:
+        $ref: '#/definitions/service.ContributionAuthor'
+      created_at:
+        type: string
+      credential_id:
+        type: integer
+      downloads_count:
+        type: integer
+      files:
+        items:
+          $ref: '#/definitions/service.ContributionFileDTO'
+        type: array
+      id:
+        type: integer
+      intro:
+        type: string
+      is_anonymous:
+        type: boolean
+      reject_reason:
+        type: string
+      status:
+        type: string
+      title:
+        type: string
+    type: object
+  service.ContributionPageResult:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/service.ContributionItemDTO'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+    type: object
+  service.ContributionReportItemDTO:
+    properties:
+      contribution_id:
+        type: integer
+      contribution_title:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      reason:
+        type: string
+      reporter_id:
+        type: integer
+      status:
+        description: 0 待处理 / 1 已处理
+        type: integer
+    type: object
+  service.ContributionReportPageResult:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/service.ContributionReportItemDTO'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
     type: object
   service.CourseBriefDTO:
     properties:
@@ -247,6 +380,15 @@ definitions:
         type: integer
       name:
         type: string
+    type: object
+  service.DownloadResult:
+    properties:
+      is_new:
+        description: 是否新增一次计数（重复点击=false）
+        type: boolean
+      tier_awarded:
+        description: 本次触发的达阶奖励（0=未触发）
+        type: integer
     type: object
   service.ForumAuthor:
     properties:
@@ -937,12 +1079,213 @@ definitions:
     type: object
 info:
   contact: {}
-  description: '学员端与公开端点：认证/验证码/微信登录/学员学习中心/课程/练习/考试/收藏/搜索/资料/论坛/通知/精选/AI助手/培训目录；鉴权：`Authorization:
+  description: '学员端与公开端点：认证/验证码/微信登录/学员学习中心/课程/练习/考试/收藏/搜索/资料（课程附件 + 学员投稿）/论坛/通知/精选/AI助手/积分/培训目录；鉴权：`Authorization:
     Bearer <access JWT>`（access 2h，`POST /api/auth/refresh` 换新双令牌）。响应统一 `{code,message,data}`（见
     ADR-0005）。不含导师端、管理端与残值评估模块。'
   title: 叉车维修培训系统-学员端 API
   version: "1.0"
 paths:
+  /admin/contributions/{id}/approve:
+    post:
+      description: pending → approved，直记 +50 积分（幂等占坑防双发）+ 站内信，同事务
+      parameters:
+      - description: 投稿ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已通过
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ContributionItemDTO'
+              type: object
+        "400":
+          description: 非 pending
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 审核通过（发分 +50）
+      tags:
+      - 管理端-投稿
+  /admin/contributions/{id}/archive:
+    post:
+      consumes:
+      - application/json
+      description: approved → archived，必填原因；追回该稿累计投稿分（过审+达阶，rollback 对冲封底 0）+ 站内信
+      parameters:
+      - description: 投稿ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 下架原因
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/api.contributionRejectReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已下架
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ContributionItemDTO'
+              type: object
+        "400":
+          description: 原因必填或非 approved
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 下架投稿（追回积分）
+      tags:
+      - 管理端-投稿
+  /admin/contributions/{id}/reject:
+    post:
+      consumes:
+      - application/json
+      description: pending → rejected，原因必填（送达作者站内信）。不发分。重提=新建投稿
+      parameters:
+      - description: 投稿ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 驳回原因
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/api.contributionRejectReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已驳回
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ContributionItemDTO'
+              type: object
+        "400":
+          description: 原因必填或非 pending
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 驳回投稿
+      tags:
+      - 管理端-投稿
+  /admin/contributions/pending:
+    get:
+      description: 管理端/讲师端（tutor+admin 鉴权）；V1 仅管理端有 UI
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ContributionPageResult'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 待审核投稿队列
+      tags:
+      - 管理端-投稿
+  /admin/contributions/reports:
+    get:
+      description: status 0 待处理 / 1 已处理，缺省全部
+      parameters:
+      - description: 状态 0|1
+        in: query
+        name: status
+        type: integer
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ContributionReportPageResult'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 投稿举报队列
+      tags:
+      - 管理端-投稿
+  /admin/contributions/reports/{id}/handle:
+    post:
+      consumes:
+      - application/json
+      description: action=archive 下架被举报投稿（追回积分）并标记处理；action=dismiss 驳回举报
+      parameters:
+      - description: 举报ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 处置动作
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/api.handleReportReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已处理
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 处置投稿举报
+      tags:
+      - 管理端-投稿
   /admin/forum/replies/{id}:
     delete:
       description: 管理端删除任意回复（若为被采纳回答则按 rollback 对冲回收，封底 0，幂等）
@@ -2414,6 +2757,281 @@ paths:
       summary: 重新生成幻灯片
       tags:
       - 学员端-课程
+  /contributions:
+    get:
+      description: 仅 approved 投稿，按目标证件过滤，sort=latest|hot（hot 走下载量降序）。分页
+      parameters:
+      - description: 目标证件ID
+        in: query
+        name: credential_id
+        required: true
+        type: integer
+      - default: latest
+        description: 排序 latest|hot
+        in: query
+        name: sort
+        type: string
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ContributionPageResult'
+              type: object
+        "400":
+          description: credential_id 必填
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 投稿公开广场列表
+      tags:
+      - 学员端-投稿
+    post:
+      consumes:
+      - application/json
+      description: 学员提交资料投稿（1–5 个文件，合计 ≤50MB，必挂当前证件）。资格：仅学员且已选证件；配额：日 ≤3 份、pending
+        积压 ≤5 份。未过审不产生积分
+      parameters:
+      - description: 投稿表单
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/api.createContributionReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ContributionItemDTO'
+              type: object
+        "400":
+          description: 校验失败/配额已满/未选证件
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 创建投稿（pending）
+      tags:
+      - 学员端-投稿
+  /contributions/{id}:
+    delete:
+      description: 仅作者本人、仅 pending 可撤回（withdrawn，未发分故无需回滚）
+      parameters:
+      - description: 投稿ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已撤回
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 非本人或非 pending
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 撤回待审投稿
+      tags:
+      - 学员端-投稿
+    get:
+      description: 公开仅 approved 可看；作者本人可看全部状态（含驳回原因）。匿名投稿作者显示「匿名学员」
+      parameters:
+      - description: 投稿ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ContributionItemDTO'
+              type: object
+        "404":
+          description: 不存在或非公开
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 投稿详情（含文件清单）
+      tags:
+      - 学员端-投稿
+  /contributions/{id}/download:
+    post:
+      description: 每人每稿终身计一次（唯一约束幂等），作者本人不计；跨 10/50/200 档当场直记达阶奖励。返回是否新增计数与本次达阶分值
+      parameters:
+      - description: 投稿ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.DownloadResult'
+              type: object
+        "400":
+          description: 非已上架状态
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 下载投稿（计数）
+      tags:
+      - 学员端-投稿
+  /contributions/{id}/report:
+    post:
+      consumes:
+      - application/json
+      description: 四理由：piracy/content_error/violation/stale；同一学员对同一投稿唯一，重复举报合并
+      parameters:
+      - description: 投稿ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 举报理由
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/api.reportContributionReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 举报已提交
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 理由非法或非已上架
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 举报已上架投稿
+      tags:
+      - 学员端-投稿
+  /contributions/mine:
+    get:
+      description: 作者本人视角，含 pending/rejected/archived/withdrawn 及驳回/下架原因
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ContributionPageResult'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 我的投稿列表（全部状态）
+      tags:
+      - 学员端-投稿
+  /contributions/upload-file:
+    post:
+      consumes:
+      - multipart/form-data
+      description: 先传后交：逐个文件上传到暂存位，返回 URL 与元数据，随投稿表单提交时引用。扩展名白名单 pdf/doc/docx/ppt/pptx/xls/xlsx/zip/mp4，单文件
+        ≤20MB
+      parameters:
+      - description: 投稿文件
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ContributionFileDTO'
+              type: object
+        "400":
+          description: 格式/大小不合规
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 上传投稿文件（暂存）
+      tags:
+      - 学员端-投稿
   /course/{course_id}:
     get:
       consumes:

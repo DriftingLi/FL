@@ -114,6 +114,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/student/TaskCenter.vue')
       },
       {
+        // #512：任务中心二级页——积分明细（含流水与规则抽屉）
+        path: 'task-center/points',
+        name: 'PointsLedger',
+        component: () => import('@/pages/student/PointsLedger.vue')
+      },
+      {
         path: 'profile',
         name: 'StudentProfile',
         component: () => import('@/pages/student/Profile.vue')
@@ -313,6 +319,11 @@ const routes: RouteRecordRaw[] = [
           path: 'forum-manage',
           name: 'ForumManage',
           component: () => import('@/pages/admin/ForumManage.vue')
+        },
+        {
+          path: 'contribution-manage',
+          name: 'ContributionManage',
+          component: () => import('@/pages/admin/ContributionManage.vue')
         },
       {
         path: 'course-catalog',

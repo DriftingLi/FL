@@ -182,7 +182,8 @@ const adminNav: NavItem[] = [
       { key: 'profile-review', label: '资料审核', routeName: 'ProfileReview', icon: CircleCheck },
       { key: 'tutors', label: '导师管理', routeName: 'TutorManage', icon: UserFilled },
       { key: 'recruiters', label: '招聘者管理', routeName: 'RecruiterManage', icon: OfficeBuilding },
-      { key: 'forum-manage', label: '论坛管理', routeName: 'ForumManage', icon: ChatDotRound }
+      { key: 'forum-manage', label: '论坛管理', routeName: 'ForumManage', icon: ChatDotRound },
+      { key: 'contribution-manage', label: '投稿管理', routeName: 'ContributionManage', icon: Document }
     ]
   },
   {

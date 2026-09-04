@@ -156,9 +156,8 @@
       <el-card v-if="currentQuestion" class="mb-[15px]">
         <div class="mb-[15px] flex items-center gap-2">
           <el-tag size="small">{{ typeMap[currentQuestion.type] || '题目' }}</el-tag>
-          <el-icon class="fav-star cursor-pointer text-lg text-ink-muted hover:text-warn" :class="favorited ? 'text-warn' : ''" @click="toggleFavorite">
-            <StarFilled v-if="favorited" /><Star v-else />
-          </el-icon>
+          <!-- #511：收藏统一药丸（激活琥珀填充） -->
+          <UiActionChip icon="fav" :label="favorited ? '已收藏' : '收藏'" tone="fav" :active="favorited" compact @click="toggleFavorite" />
         </div>
         <img v-if="currentQuestion.image_url" :src="currentQuestion.image_url" class="mb-2.5 max-h-[250px] max-w-full rounded-[8px]" loading="lazy" decoding="async" />
         <p class="mb-[15px] whitespace-pre-wrap text-base leading-[1.8]">{{ currentQuestion.content }}</p>
@@ -223,7 +222,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
-import { Sort, MagicStick, Filter, CollectionTag, Star, StarFilled } from '@element-plus/icons-vue'
+import { Sort, MagicStick, Filter, CollectionTag } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { questionBankApi } from '@/api/questionBank'
 import { favoriteApi } from '@/api/favorite'
@@ -232,6 +231,7 @@ import { trainingApi } from '@/api/training'
 import type { QuestionTag } from '@/api/training'
 import { useStagger } from '@/composables/useStagger'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiActionChip from '@/components/ui/UiActionChip.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiSectionHeader from '@/components/ui/UiSectionHeader.vue'
 import UiStatCard from '@/components/ui/UiStatCard.vue'

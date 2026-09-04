@@ -138,4 +138,8 @@
   --color-ok-strong: var(--color-success-strong);
   --color-warn-strong: var(--color-warning-strong);
   --color-bad-strong: var(--color-danger-strong);
+  /* 互动玫红（点赞热互动），与 ok/warn/bad 同构 */
+  --color-rose: var(--rose);
+  --color-rose-soft: var(--rose-soft);
+  --color-rose-strong: var(--rose-strong);
 }

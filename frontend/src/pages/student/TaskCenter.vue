@@ -19,6 +19,13 @@
         <span class="text-[11px] tracking-[0.04em] text-ink-3">累计获得</span>
         <span class="font-heading text-base font-extrabold text-ink">{{ points.totalEarned }}</span>
       </div>
+      <RouterLink
+        to="/training/task-center/points"
+        class="ml-auto inline-flex items-center gap-1 rounded-pill border border-line-strong bg-panel px-3 py-1.5 text-xs font-semibold text-ink-2 transition-colors duration-150 hover:border-ui-300 hover:text-ui-600"
+      >
+        积分明细
+        <el-icon><ArrowRight /></el-icon>
+      </RouterLink>
     </div>
 
     <UiErrorState
@@ -92,7 +99,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { CircleCheckFilled, Trophy, List } from '@element-plus/icons-vue'
+import { CircleCheckFilled, Trophy, List, ArrowRight } from '@element-plus/icons-vue'
 import { pointsApi, type PointsTaskItem } from '@/api/points'
 import { groupLabelMap, groupDescMap, claimDupMessage, isClaimExhausted } from '@/utils/taskCenter'
 import type { TaskGroup } from '@/utils/taskCenter'

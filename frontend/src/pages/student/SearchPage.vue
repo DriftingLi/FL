@@ -22,13 +22,13 @@
     </div>
 
     <template v-if="searched">
-      <el-tabs v-model="activeType" @tab-change="handleTabChange">
-        <el-tab-pane label="全部" name="all" />
-        <el-tab-pane label="课程" name="course" />
-        <el-tab-pane label="题目" name="question" />
-        <el-tab-pane label="资讯" name="content" />
-        <el-tab-pane label="帖子" name="topic" />
-      </el-tabs>
+      <!-- #511：分类 tab 统一分段控件 -->
+      <UiSegmentTabs
+        :model-value="activeType"
+        :options="typeTabOptions"
+        @update:model-value="(v: string) => { activeType = v as 'all' | SearchType; handleTabChange() }"
+        class="mb-3"
+      />
 
       <div class="min-h-[200px] rounded-card bg-panel px-5 pb-4 shadow-card">
         <UiErrorState
@@ -119,12 +119,22 @@ import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 
 const router = useRouter()
 
 const keyword = ref('')
 const searched = ref(false)
 const activeType = ref<'all' | SearchType>('all')
+
+// #511：UiSegmentTabs 选项（全部分类 tab）
+const typeTabOptions = [
+  { label: '全部', value: 'all' },
+  { label: '课程', value: 'course' },
+  { label: '题目', value: 'question' },
+  { label: '资讯', value: 'content' },
+  { label: '帖子', value: 'topic' }
+]
 const allResult = ref<SearchAllResult | null>(null)
 const pageResult = ref<SearchPageResult | null>(null)
 
