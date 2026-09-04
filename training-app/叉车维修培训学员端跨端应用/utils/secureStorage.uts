@@ -90,7 +90,8 @@ function parseEnvelope(json : string) : StoredCredentials | null {
         if (obj == null) {
             return null
         }
-        return fromJSON(obj)
+        // fromJSON 要 UTSJSONObject，JSON.parse 给 Any：必须显式 as（error17 Any≠UTSJSONObject）
+        return fromJSON(obj as UTSJSONObject)
     } catch (e) {
         return null
     }
