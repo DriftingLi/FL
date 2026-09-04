@@ -328,9 +328,7 @@ func (s *RecruitService) LogView(recruiterID, resumeUserID int) {
 	}
 	now := clock.Now()
 	// 当日 0 点（Shanghai）
-	loc := clock.Location()
-	y, m, d := now.In(loc).Date()
-	dayStart := time.Date(y, m, d, 0, 0, 0, 0, loc)
+	dayStart := clock.DayStart(now)
 	// 已存在当日记录则跳过（幂等，避免刷量）
 	var cnt int64
 	if err := s.db.Model(&model.RecruitResumeView{}).

@@ -1,0 +1,7 @@
+/**
+ * uni-secure-storage 平台入口分发
+ *
+ * HBuilderX 依据 utssdk/{app-android,app-ios,web,...} 目录做条件编译，
+ * 平台实现各自从对应目录的 index.uts 提供；本文件为文档性入口说明。
+ * interface.uts 为跨平台共享类型与签名契约。
+ */

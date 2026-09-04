@@ -9,24 +9,25 @@ import {
   isIpDirectMode
 } from '@/utils/subdomain'
 import { resolveWorkspaceForRole } from '@/utils/authRedirect'
+import { routeNames } from '@/config/routeNames'
 
 const routes: RouteRecordRaw[] = [
   // ========== 登录 / 注册 ==========
   {
     path: '/login',
-    name: 'Login',
+    name: routeNames.Login,
     component: () => import('@/pages/auth/Login.vue'),
     meta: { requiresAuth: false, authPage: true }
   },
   {
     path: '/register',
-    name: 'Register',
+    name: routeNames.Register,
     component: () => import('@/pages/auth/Register.vue'),
     meta: { requiresAuth: false, authPage: true }
   },
   {
     path: '/forgot-password',
-    name: 'ForgotPassword',
+    name: routeNames.ForgotPassword,
     component: () => import('@/pages/auth/ForgotPassword.vue'),
     meta: { requiresAuth: false, authPage: true }
   },
@@ -39,120 +40,120 @@ const routes: RouteRecordRaw[] = [
     children: [
       {
         path: '',
-        name: 'StudentDashboard',
+        name: routeNames.StudentDashboard,
         component: () => import('@/pages/student/Dashboard.vue')
       },
       {
         path: 'courses',
-        name: 'CourseList',
+        name: routeNames.CourseList,
         component: () => import('@/pages/student/CourseList.vue')
       },
       {
         path: 'search',
-        name: 'StudentSearch',
+        name: routeNames.StudentSearch,
         component: () => import('@/pages/student/SearchPage.vue')
       },
       {
         path: 'materials',
-        name: 'StudentMaterials',
+        name: routeNames.StudentMaterials,
         component: () => import('@/pages/student/Materials.vue')
       },
       {
         path: 'favorites',
-        name: 'StudentFavorites',
+        name: routeNames.StudentFavorites,
         component: () => import('@/pages/student/Favorites.vue')
       },
       {
         path: 'forum',
-        name: 'ForumPage',
+        name: routeNames.ForumPage,
         component: () => import('@/pages/student/ForumPage.vue')
       },
       {
         path: 'forum/ask',
-        name: 'ForumAsk',
+        name: routeNames.ForumAsk,
         component: () => import('@/pages/student/ForumAskPage.vue')
       },
       {
         path: 'forum/:topicId',
-        name: 'ForumDetail',
+        name: routeNames.ForumDetail,
         component: () => import('@/pages/student/ForumDetail.vue')
       },
       {
         path: 'course/:courseId/chapter/:chapterId',
-        name: 'ChapterView',
+        name: routeNames.ChapterView,
         component: () => import('@/pages/student/ChapterView.vue')
       },
       {
         path: 'question-bank',
-        name: 'QuestionBank',
+        name: routeNames.QuestionBank,
         component: () => import('@/pages/student/QuestionBank.vue')
       },
       {
         path: 'mock-exam',
-        name: 'MockExam',
+        name: routeNames.MockExam,
         component: () => import('@/pages/student/MockExam.vue')
       },
       {
         path: 'wrong-questions',
-        name: 'WrongQuestions',
+        name: routeNames.WrongQuestions,
         component: () => import('@/pages/student/WrongQuestions.vue')
       },
       {
         path: 'real-exam',
-        name: 'RealExamPapers',
+        name: routeNames.RealExamPapers,
         component: () => import('@/pages/student/RealExamPapers.vue')
       },
       {
         // 真题卷按卷练习（不进侧栏，从真题列表进入）
         path: 'real-exam/practice/:paperId',
-        name: 'RealExamPractice',
+        name: routeNames.RealExamPractice,
         component: () => import('@/pages/student/RealExamPractice.vue')
       },
       {
         path: 'task-center',
-        name: 'TaskCenter',
+        name: routeNames.TaskCenter,
         component: () => import('@/pages/student/TaskCenter.vue')
       },
       {
         // #512：任务中心二级页——积分明细（含流水与规则抽屉）
         path: 'task-center/points',
-        name: 'PointsLedger',
+        name: routeNames.PointsLedger,
         component: () => import('@/pages/student/PointsLedger.vue')
       },
       {
         path: 'profile',
-        name: 'StudentProfile',
+        name: routeNames.StudentProfile,
         component: () => import('@/pages/student/Profile.vue')
       },
       {
         path: 'resume',
-        name: 'StudentResume',
+        name: routeNames.StudentResume,
         component: () => import('@/pages/student/ResumePage.vue')
       },
       {
         // #491：独立编辑入口（表单内不含 PDF 上传项，保存后回预览）
         path: 'resume/edit',
-        name: 'StudentResumeEdit',
+        name: routeNames.StudentResumeEdit,
         component: () => import('@/pages/student/ResumeEdit.vue')
       },
       {
         path: 'jobs',
-        name: 'JobPlaza',
+        name: routeNames.JobPlaza,
         component: () => import('@/pages/student/JobPlaza.vue')
       },
       {
         path: 'jobs/:id',
-        name: 'JobDetail',
+        name: routeNames.JobDetail,
         component: () => import('@/pages/student/JobDetail.vue')
       },
       {
         path: 'applications',
-        name: 'MyApplications',
+        name: routeNames.MyApplications,
         component: () => import('@/pages/student/MyApplications.vue')
       },
       {
         path: 'onboarding/credential',
-        name: 'CredentialOnboarding',
+        name: routeNames.CredentialOnboarding,
         component: () => import('@/pages/onboarding/CredentialOnboarding.vue'),
         meta: { requiresAuth: true, role: 'hrwai_user' }
       }
@@ -167,37 +168,37 @@ const routes: RouteRecordRaw[] = [
     children: [
       {
         path: '',
-        name: 'TutorDashboard',
+        name: routeNames.TutorDashboard,
         component: () => import('@/pages/tutor/Dashboard.vue')
       },
       {
         path: 'courses',
-        name: 'TutorCourses',
+        name: routeNames.TutorCourses,
         component: () => import('@/pages/tutor/TutorCourses.vue')
       },
       {
         path: 'course/:id/chapters',
-        name: 'TutorChapterManage',
+        name: routeNames.TutorChapterManage,
         component: () => import('@/pages/tutor/ChapterManage.vue')
       },
       {
         path: 'course/:courseId/chapter/:chapterId',
-        name: 'TutorChapterEdit',
+        name: routeNames.TutorChapterEdit,
         component: () => import('@/pages/tutor/TutorChapterEdit.vue')
       },
       {
         path: 'question-manage',
-        name: 'TutorQuestionManage',
+        name: routeNames.TutorQuestionManage,
         component: () => import('@/pages/tutor/QuestionManage.vue')
       },
       {
         path: 'question-create',
-        name: 'TutorQuestionCreate',
+        name: routeNames.TutorQuestionCreate,
         component: () => import('@/pages/tutor/QuestionCreate.vue')
       },
       {
         path: 'question-tags',
-        name: 'TutorQuestionTags',
+        name: routeNames.TutorQuestionTags,
         component: () => import('@/pages/tutor/QuestionTags.vue')
       },
 
@@ -212,42 +213,42 @@ const routes: RouteRecordRaw[] = [
     children: [
       {
         path: '',
-        name: 'ValuationHome',
+        name: routeNames.ValuationHome,
         component: () => import('@/pages/student/valuation/ValuationHome.vue'),
         meta: { requiresAuth: false }
       },
       {
         // 设计稿将表单提升为首页：访问 /valuation/input 等同于 /valuation
         path: 'input',
-        redirect: { name: 'ValuationHome' }
+        redirect: { name: routeNames.ValuationHome }
       },
       {
         path: 'result',
-        name: 'ValuationResult',
+        name: routeNames.ValuationResult,
         component: () => import('@/pages/student/valuation/ValuationResultView.vue'),
         meta: { requiresAuth: false }
       },
       {
         path: 'report/:id',
-        name: 'ValuationReport',
+        name: routeNames.ValuationReport,
         component: () => import('@/pages/student/valuation/ValuationReportView.vue'),
         meta: { requiresAuth: false }
       },
       {
         path: 'battery',
-        name: 'ValuationBatteryInput',
+        name: routeNames.ValuationBatteryInput,
         component: () => import('@/pages/student/valuation/BatteryInputView.vue'),
         meta: { requiresAuth: false }
       },
       {
         path: 'battery/result',
-        name: 'ValuationBatteryResult',
+        name: routeNames.ValuationBatteryResult,
         component: () => import('@/pages/student/valuation/BatteryResultView.vue'),
         meta: { requiresAuth: false }
       },
       {
         path: 'history',
-        name: 'ValuationHistory',
+        name: routeNames.ValuationHistory,
         component: () => import('@/pages/student/valuation/ValuationHistoryView.vue'),
         meta: { requiresAuth: true, roles: ['hrwai_user'] }
       }
@@ -257,19 +258,19 @@ const routes: RouteRecordRaw[] = [
   // ========== 残值评估独立登录 / 注册（独立全屏页，不挂 ValuationLayout）==========
   {
     path: '/valuation/login',
-    name: 'ValuationLogin',
+    name: routeNames.ValuationLogin,
     component: () => import('@/pages/auth/Login.vue'),
     meta: { requiresAuth: false, isValuationAuthPage: true, authPage: true }
   },
   {
     path: '/valuation/register',
-    name: 'ValuationRegister',
+    name: routeNames.ValuationRegister,
     component: () => import('@/pages/auth/Register.vue'),
     meta: { requiresAuth: false, isValuationAuthPage: true, authPage: true }
   },
   {
     path: '/valuation/forgot-password',
-    name: 'ValuationForgotPassword',
+    name: routeNames.ValuationForgotPassword,
     component: () => import('@/pages/auth/ForgotPassword.vue'),
     meta: { requiresAuth: false, isValuationAuthPage: true, authPage: true }
   },
@@ -278,14 +279,14 @@ const routes: RouteRecordRaw[] = [
   // 官网门户重构后（ADR-0001），AI 助手归属学员工作区：由 www 迁至 training 子域名
   {
     path: '/ai-assistant',
-    name: 'AIAssistant',
+    name: routeNames.AIAssistant,
     component: () => import('@/pages/ai-assistant/AIAssistantPage.vue'),
     meta: { requiresAuth: false }
   },
   // 专项功能页（故障咨询/故障代码查询/维保知识/图纸识别/习题解答）
   {
     path: '/ai-assistant/:featureKey(fault-consult|fault-code|maintenance|drawing|exercise)',
-    name: 'AIAssistantFeature',
+    name: routeNames.AIAssistantFeature,
     component: () => import('@/pages/ai-assistant/FeatureChatPage.vue'),
     meta: { requiresAuth: false }
   },
@@ -302,97 +303,97 @@ const routes: RouteRecordRaw[] = [
       },
       {
         path: 'dashboard',
-        name: 'AdminDashboard',
+        name: routeNames.AdminDashboard,
         component: () => import('@/pages/admin/Dashboard.vue')
       },
         {
           path: 'hrwai-users',
-          name: 'HrwaiUserManage',
+          name: routeNames.HrwaiUserManage,
           component: () => import('@/pages/admin/HrwaiUserManage.vue')
         },
         {
           path: 'profile-review',
-          name: 'ProfileReview',
+          name: routeNames.ProfileReview,
           component: () => import('@/pages/admin/ProfileReview.vue')
         },
         {
           path: 'forum-manage',
-          name: 'ForumManage',
+          name: routeNames.ForumManage,
           component: () => import('@/pages/admin/ForumManage.vue')
         },
         {
           path: 'contribution-manage',
-          name: 'ContributionManage',
+          name: routeNames.ContributionManage,
           component: () => import('@/pages/admin/ContributionManage.vue')
         },
       {
         path: 'course-catalog',
-        name: 'CourseCatalog',
+        name: routeNames.CourseCatalog,
         component: () => import('@/pages/admin/CourseCatalog.vue')
       },
       {
         path: 'credentials',
-        name: 'CredentialManage',
+        name: routeNames.CredentialManage,
         component: () => import('@/pages/admin/Credentials.vue')
       },
       {
         path: 'positions',
-        name: 'PositionManage',
+        name: routeNames.PositionManage,
         component: () => import('@/pages/admin/PositionManage.vue')
       },
       {
         path: 'question-review',
-        name: 'QuestionReview',
+        name: routeNames.QuestionReview,
         component: () => import('@/pages/admin/QuestionReview.vue')
       },
       {
         path: 'statistics',
-        name: 'Statistics',
+        name: routeNames.Statistics,
         component: () => import('@/pages/admin/Statistics.vue')
       },
       {
         path: 'audit-logs',
-        name: 'AuditLogs',
+        name: routeNames.AuditLogs,
         component: () => import('@/pages/admin/AuditLogs.vue')
       },
       {
         path: 'inspection',
-        name: 'AdminInspection',
+        name: routeNames.AdminInspection,
         component: () => import('@/pages/admin/Inspection.vue')
       },
       {
         path: 'content-generate',
-        name: 'ContentGenerate',
+        name: routeNames.ContentGenerate,
         component: () => import('@/pages/admin/ContentGenerate.vue')
       },
       {
         path: 'featured-content',
-        name: 'AdminFeaturedContentList',
+        name: routeNames.AdminFeaturedContentList,
         component: () => import('@/pages/admin/FeaturedContentList.vue')
       },
       {
         path: 'featured-content/edit/:id?',
-        name: 'AdminFeaturedContentEdit',
+        name: routeNames.AdminFeaturedContentEdit,
         component: () => import('@/pages/admin/FeaturedContentEdit.vue')
       },
       {
         path: 'tutors',
-        name: 'TutorManage',
+        name: routeNames.TutorManage,
         component: () => import('@/pages/admin/TutorManage.vue')
       },
       {
         path: 'recruiters',
-        name: 'RecruiterManage',
+        name: routeNames.RecruiterManage,
         component: () => import('@/pages/admin/RecruiterManage.vue')
       },
       {
         path: 'valuation-config',
-        name: 'ValuationConfigManage',
+        name: routeNames.ValuationConfigManage,
         component: () => import('@/pages/admin/ValuationConfigManage.vue')
       },
       {
         path: 'ai-settings',
-        name: 'AISettings',
+        name: routeNames.AISettings,
         component: () => import('@/pages/admin/AISettings.vue')
       }
     ]
@@ -406,32 +407,32 @@ const routes: RouteRecordRaw[] = [
     children: [
       {
         path: '',
-        name: 'RecruitDashboard',
+        name: routeNames.RecruitDashboard,
         component: () => import('@/pages/recruit/Dashboard.vue')
       },
       {
         path: 'resumes',
-        name: 'RecruitResumes',
+        name: routeNames.RecruitResumes,
         component: () => import('@/pages/recruit/Resumes.vue')
       },
       {
         path: 'resumes/:id',
-        name: 'RecruitResumeDetail',
+        name: routeNames.RecruitResumeDetail,
         component: () => import('@/pages/recruit/ResumeDetail.vue')
       },
       {
         path: 'requests',
-        name: 'RecruitRequests',
+        name: routeNames.RecruitRequests,
         component: () => import('@/pages/recruit/MyRequests.vue')
       },
       {
         path: 'jobs',
-        name: 'RecruitJobManage',
+        name: routeNames.RecruitJobManage,
         component: () => import('@/pages/recruit/JobManage.vue')
       },
       {
         path: 'jobs/:id/applications',
-        name: 'RecruitApplicationList',
+        name: routeNames.RecruitApplicationList,
         component: () => import('@/pages/recruit/ApplicationList.vue')
       }
     ]
@@ -626,7 +627,7 @@ router.beforeEach(async (to, _from, next) => {
   if (userRole === 'hrwai_user' && !isIpDirectMode()) {
     const targetSubdomain = getTargetSubdomainForPath(to.path)
     const isTrainingPath = targetSubdomain === 'training' || to.path.startsWith('/training')
-    const isOnboarding = to.name === 'CredentialOnboarding'
+    const isOnboarding = to.name === routeNames.CredentialOnboarding
     if (isTrainingPath) {
       try {
         const credStore = useCredentialStore()
@@ -634,7 +635,7 @@ router.beforeEach(async (to, _from, next) => {
           await credStore.loadCurrent()
         }
         if (credStore.current === null && !isOnboarding) {
-          next({ name: 'CredentialOnboarding' })
+          next({ name: routeNames.CredentialOnboarding })
           return
         }
         if (credStore.current !== null && isOnboarding) {

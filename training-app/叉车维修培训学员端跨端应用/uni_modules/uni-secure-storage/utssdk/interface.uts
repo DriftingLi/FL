@@ -1,0 +1,66 @@
+/**
+ * uni-secure-storage 统一接口定义
+ *
+ * 能力面固定为 5 API + 能力查询（ADR-0005，契约测试钉此接口）：
+ * setSecureItem / getSecureItem / removeSecureItem / hasSecureItem / clearSecureItems
+ * + getSecureStorageCapabilities
+ *
+ * 各平台实现语义：
+ * - Android: Keystore AES-GCM 主密钥，密文落应用私有 SharedPreferences（API 23+）
+ * - iOS:     Keychain GenericPassword，kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+ * - 非 App:  全部返回不支持（调用方据此降级）
+ *
+ * UTS 约束：平台字符串统一 string；nullable 先局部接收再判空。
+ */
+
+/** 写入结果：ok=false 时 errMsg 说明原因 */
+export type SecureSetResult = {
+    ok : boolean
+    errMsg : string
+}
+
+/** 读取结果：found 区分"不存在"与"错误"，value 仅 found=true 时有效 */
+export type SecureGetResult = {
+    ok : boolean
+    found : boolean
+    value : string
+    errMsg : string
+}
+
+/** 删除/清空/存在性判断的通用结果 */
+export type SecureOpResult = {
+    ok : boolean
+    /** hasSecureItem 使用：条目是否存在 */
+    exists : boolean
+    errMsg : string
+}
+
+/** 平台能力（调用方降级分支的判定依据） */
+export type SecureStorageCapabilities = {
+    /** 当前平台是否支持安全存储 */
+    supported : boolean
+    /** 平台标识：android | ios | unsupported */
+    platform : string
+    /** 是否支持卸载重装后保留（iOS Keychain 特性，默认不启用） */
+    supportsSurviveReinstall : boolean
+    /** 底层实现说明（日志/诊断用） */
+    backend : string
+}
+
+/** 写入安全条目（覆盖写） */
+export function setSecureItem(key : string, value : string) : SecureSetResult
+
+/** 读取安全条目；不存在时 ok=true、found=false、value='' */
+export function getSecureItem(key : string) : SecureGetResult
+
+/** 删除指定条目；条目不存在也返回 ok=true（幂等） */
+export function removeSecureItem(key : string) : SecureOpResult
+
+/** 判断条目是否存在（不解密内容） */
+export function hasSecureItem(key : string) : SecureOpResult
+
+/** 清空本插件写入的全部条目 */
+export function clearSecureItems() : SecureOpResult
+
+/** 查询当前平台能力与实现状态 */
+export function getSecureStorageCapabilities() : SecureStorageCapabilities

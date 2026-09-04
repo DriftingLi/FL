@@ -133,6 +133,14 @@ func (s *FileStore) ListWithContext(ctx context.Context, prefix string) ([]strin
 	return s.storage.List(ctx2, prefix)
 }
 
+// ListWithInfoWithContext 按 key 前缀列出文件并携带存储侧原生修改时间（ADR-0027 C2 悬空回收 TTL 判定用），
+// ctx 取消语义贯穿到 storage 调用。
+func (s *FileStore) ListWithInfoWithContext(ctx context.Context, prefix string) ([]storage.FileInfo, error) {
+	ctx2, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	return s.storage.ListWithInfo(ctx2, prefix)
+}
+
 // ValidateImage 校验图片文件格式与大小。
 func (s *FileStore) ValidateImage(filename string, size int64) (bool, string) {
 	ext := fileExtension(filename)

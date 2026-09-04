@@ -1,16 +1,25 @@
 /**
- * 安全凭据存储抽象层（demo 阶段）
+ * 安全凭据存储抽象层
  *
- * 交互闭环验证用：跑通"记住密码 → 生物识别 → 回填"链路。
- * 生产环境需替换为：
- *   - Android: EncryptedSharedPreferences / AndroidKeyStore
- *   - iOS:     Keychain Services
- *   - 小程序:  不适用（微信无本地密钥存储，需服务端下发 token）
+ * 对外语义固定（契约测试 utils/secureStorage.test.js 钉住）：
+ * - hasStoredCredentials:  has=true 且账号密码均非空才算"存在"
+ * - saveSecureCredentials: 账号+密码完整保存
+ * - loadSecureCredentials: 与包络判定同口径；无完整凭据返回 null
+ * - clearSecureCredentials: 清除（幂等）
+ * - saveAccountOnly / loadSavedAccount: 凭据降级（仅记住账号，ADR-0004 决策 A）
  *
- * 当前实现基于 setStorageJSON / getStorageJSON，明文落盘仅供 demo。
+ * 存储后端按平台分流（T3, ADR-0005）：
+ * - App 端（Android/iOS）: uni-secure-storage 插件加密落盘（Keystore/Keychain）
+ * - 非 App 端（H5/小程序）: uni.setStorage 明文（H5 生产策略另行评估）
+ *
+ * 迁移说明：App 端切换到加密存储后，首次运行会把旧明文条目迁移为加密条目并删除明文。
  */
 import { setStorageJSON, getStorageJSON, removeStorage } from './storage'
 import { STORAGE_KEY_CREDENTIALS } from '../constants/app'
+
+// #ifdef APP
+import * as secStore from '@/uni_modules/uni-secure-storage'
+// #endif
 
 /** 凭据载体结构（UTS 不支持 inline interface 作返回类型，用 type alias） */
 export type StoredCredentials = {
@@ -19,63 +28,164 @@ export type StoredCredentials = {
     has : boolean
 }
 
+/** 当前平台是否可用加密存储（App 端 true） */
+function secureBackendAvailable() : boolean {
+    // #ifdef APP
+    return secStore.getSecureStorageCapabilities().supported
+    // #endif
+    // #ifndef APP
+    return false
+    // #endif
+}
+
+/** 读原始载体：App 端优先加密条目，并顺带完成旧明文迁移 */
+function readEnvelope() : StoredCredentials | null {
+    // #ifdef APP
+    if (secureBackendAvailable()) {
+        const enc = secStore.getSecureItem(STORAGE_KEY_CREDENTIALS)
+        if (enc.ok && enc.found) {
+            const parsed = parseEnvelope(enc.value)
+            if (parsed != null) {
+                return parsed
+            }
+        }
+        // 加密条目不存在时检查旧明文残留 → 迁移后删除
+        const legacy = getStorageJSON(STORAGE_KEY_CREDENTIALS)
+        if (legacy != null) {
+            const migrated = fromJSON(legacy)
+            if (migrated != null) {
+                secStore.setSecureItem(STORAGE_KEY_CREDENTIALS, JSON.stringify(migrated))
+            }
+            removeStorage(STORAGE_KEY_CREDENTIALS)
+            return migrated
+        }
+        return null
+    }
+    // #endif
+
+    // 非 App 平台：明文路径（H5 生产策略另行评估）
+    const obj = getStorageJSON(STORAGE_KEY_CREDENTIALS)
+    if (obj == null) {
+        return null
+    }
+    return fromJSON(obj)
+}
+
+/** 写原始载体：App 端写加密条目；非 App 写明文 */
+function writeEnvelope(data : StoredCredentials) : void {
+    // #ifdef APP
+    if (secureBackendAvailable()) {
+        secStore.setSecureItem(STORAGE_KEY_CREDENTIALS, JSON.stringify(data))
+        return
+    }
+    // #endif
+    setStorageJSON(STORAGE_KEY_CREDENTIALS, data)
+}
+
+/** JSON 字符串 → StoredCredentials（字段齐全且类型正确才返回） */
+function parseEnvelope(json : string) : StoredCredentials | null {
+    try {
+        const obj = JSON.parse(json)
+        if (obj == null) {
+            return null
+        }
+        return fromJSON(obj)
+    } catch (e) {
+        return null
+    }
+}
+
+/** UTSJSONObject → StoredCredentials（字段校验） */
+function fromJSON(obj : UTSJSONObject) : StoredCredentials | null {
+    const u = obj['u']
+    const p = obj['p']
+    const has = obj['has']
+    if (u == null || p == null || has == null) {
+        return null
+    }
+    const result : StoredCredentials = {
+        u: u as string,
+        p: p as string,
+        has: has as boolean,
+    }
+    return result
+}
+
 /**
  * 是否存在已保存凭据（不解密内容，仅检查 has 字段）
  * 注意：UTS 要求函数内用局部 var 接收后再判空，不能对 nullable 直接属性访问
  */
 export function hasStoredCredentials() : boolean {
-    const obj = getStorageJSON(STORAGE_KEY_CREDENTIALS)
-    if (obj == null) {
+    const env = readEnvelope()
+    if (env == null) {
         return false
     }
-    const has = obj['has']
-    if (has !== true) {
+    if (env.has !== true) {
         return false
     }
-    const u = obj['u']
-    const p = obj['p']
-    if (u == null || p == null) {
-        return false
-    }
-    return (u as string).length > 0 && (p as string).length > 0
+    return env.u.length > 0 && env.p.length > 0
 }
 
-/** 保存凭据（demo 阶段明文，生产环境须加密后写入） */
+/** 保存凭据（App 端加密落盘） */
 export function saveSecureCredentials(username : string, password : string) : void {
     const data : StoredCredentials = {
         u: username,
         p: password,
         has: true,
     }
-    setStorageJSON(STORAGE_KEY_CREDENTIALS, data)
+    writeEnvelope(data)
+}
+
+/**
+ * 凭据降级：仅记住账号（生物识别不可用平台用，ADR-0004 决策 A）
+ *
+ * 密码字段落空串、has 落 false——存储内容不构成完整凭据包络，
+ * hasStoredCredentials()/loadSecureCredentials() 均判定为"无已保存凭据"，
+ * 脱敏入口因此不出现；账号回填走独立的 loadSavedAccount()。
+ */
+export function saveAccountOnly(username : string) : void {
+    const data : StoredCredentials = {
+        u: username,
+        p: '',
+        has: false,
+    }
+    writeEnvelope(data)
+}
+
+/** 读取降级保存的账号（仅记住账号模式），无则返回空串 */
+export function loadSavedAccount() : string {
+    const env = readEnvelope()
+    if (env == null) {
+        return ''
+    }
+    // 仅记住账号模式：has=false 且账号非空
+    if (env.has === true) {
+        return ''
+    }
+    return env.u.length > 0 ? env.u : ''
 }
 
 /** 读取已保存凭据，不存在或格式异常返回 null */
 export function loadSecureCredentials() : StoredCredentials | null {
-    const obj = getStorageJSON(STORAGE_KEY_CREDENTIALS)
-    if (obj == null) {
+    const env = readEnvelope()
+    if (env == null) {
         return null
     }
-    const u = obj['u']
-    const p = obj['p']
-    const has = obj['has']
-    if (has !== true || u == null || p == null) {
+    if (env.has !== true) {
         return null
     }
-    const uStr = u as string
-    const pStr = p as string
-    if (uStr.length == 0 || pStr.length == 0) {
+    if (env.u.length == 0 || env.p.length == 0) {
         return null
     }
-    const result : StoredCredentials = {
-        u: uStr,
-        p: pStr,
-        has: true,
-    }
-    return result
+    return env
 }
 
 /** 清除已保存凭据 */
 export function clearSecureCredentials() : void {
+    // #ifdef APP
+    if (secureBackendAvailable()) {
+        secStore.removeSecureItem(STORAGE_KEY_CREDENTIALS)
+    }
+    // #endif
     removeStorage(STORAGE_KEY_CREDENTIALS)
 }

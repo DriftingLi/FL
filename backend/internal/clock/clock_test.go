@@ -42,3 +42,37 @@ func TestFakeAtFrozen(t *testing.T) {
 		t.Fatalf("推进 Fake 后应返回新时刻, got %v", got)
 	}
 }
+
+func TestDayStart(t *testing.T) {
+	// 业务时区内的非 0 点时刻 → 当日 00:00。
+	noon := time.Date(2026, 8, 20, 15, 4, 5, 0, Location())
+	want := time.Date(2026, 8, 20, 0, 0, 0, 0, Location())
+	if got := DayStart(noon); !got.Equal(want) {
+		t.Fatalf("DayStart 应返回上海当日 00:00, want %v got %v", want, got)
+	}
+	// UTC 入参（上海已是次日）也要按业务时区归一。
+	utcEvening := time.Date(2026, 8, 20, 0, 30, 0, 0, time.UTC) // 上海 08:30
+	if got := DayStart(utcEvening); !got.Equal(want) {
+		t.Fatalf("DayStart 应把 UTC 入参归一为上海自然日, want %v got %v", want, got)
+	}
+	// 午前时刻 → 同为当日 00:00（不漂移到前一天）。
+	early := time.Date(2026, 8, 20, 0, 1, 0, 0, Location())
+	if got := DayStart(early); !got.Equal(want) {
+		t.Fatalf("DayStart 午前瞬间应仍归当日, want %v got %v", want, got)
+	}
+	if got := DayStart(noon); got.Location() != Location() {
+		t.Fatalf("DayStart 应保留业务时区, got %v", got.Location())
+	}
+}
+
+func TestDayKey(t *testing.T) {
+	noon := time.Date(2026, 8, 20, 15, 4, 5, 0, Location())
+	if got := DayKey(noon); got != "2026-08-20" {
+		t.Fatalf("DayKey 应输出 2006-01-02, got %q", got)
+	}
+	// UTC 入参归一。
+	utcEvening := time.Date(2026, 8, 20, 0, 30, 0, 0, time.UTC)
+	if got := DayKey(utcEvening); got != "2026-08-20" {
+		t.Fatalf("DayKey 应把 UTC 入参归一为上海日期, got %q", got)
+	}
+}

@@ -13,6 +13,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/storage"
 	"forklift-training/internal/testutil"
 )
 
@@ -35,6 +36,15 @@ func (m *memContributionStorage) Exists(context.Context, string) (bool, error) {
 
 func (m *memContributionStorage) List(_ context.Context, _ string) ([]string, error) {
 	return m.files, nil
+}
+
+// ListWithInfo 模拟存储侧元数据：LastModified 由测试文件 URL 的命名契约推导（见 fileStampToTime）。
+func (m *memContributionStorage) ListWithInfo(_ context.Context, _ string) ([]storage.FileInfo, error) {
+	infos := make([]storage.FileInfo, 0, len(m.files))
+	for _, u := range m.files {
+		infos = append(infos, storage.FileInfo{URL: u, LastModified: fileStampToTime(u)})
+	}
+	return infos, nil
 }
 
 func (m *memContributionStorage) Get(_ context.Context, url string) (io.ReadCloser, error) {

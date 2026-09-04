@@ -106,6 +106,8 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 	contentGenSvc := service.NewContentGenerateService(db, aiSvc, logger)
 	// 积分服务唯一实例：积分端点与真题卷权益校验共用
 	pointsSvc := service.NewPointsService(db, logger, clock.Real())
+	// 联系方式交换唯一实例：申请/授权状态机（EnsureApproved）与投递侧共用（ADR-0027 C5）
+	contactSvc := service.NewContactService(db, logger, notificationSvc, mailSender)
 
 	d := &Deps{
 		Cfg:                  cfg,
@@ -153,9 +155,9 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		JobCardSvc:           service.NewJobCardService(db, fileSvc, logger),
 		ResumePDFRenderer:    service.NewResumePDFRenderer(),
 		RecruitSvc:           service.NewRecruitService(db, logger),
-		ContactSvc:           service.NewContactService(db, logger, notificationSvc, mailSender),
+		ContactSvc:           contactSvc,
 		JobPostingSvc:        service.NewJobPostingService(db, logger),
-		JobApplicationSvc:    service.NewJobApplicationService(db, logger, notificationSvc),
+		JobApplicationSvc:    service.NewJobApplicationService(db, logger, notificationSvc, contactSvc),
 		JobReportSvc:         service.NewJobReportService(db, logger),
 		ContributionSvc:      service.NewContributionService(db, fileSvc, notificationSvc, pointsSvc, logger, clock.Real()),
 	}

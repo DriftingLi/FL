@@ -17,6 +17,8 @@ import (
 	"time"
 
 	"go.uber.org/zap"
+
+	"forklift-training/internal/storage"
 )
 
 // memStorage 内存存储替身：满足 storage.Storage，key → 内容。
@@ -57,6 +59,11 @@ func (s *memStorage) Exists(_ context.Context, url string) (bool, error) {
 }
 
 func (s *memStorage) List(context.Context, string) ([]string, error) { return nil, nil }
+
+// ListWithInfo 适配 storage.Storage 新增接口（ADR-0027 C2）；本域不消费列表。
+func (s *memStorage) ListWithInfo(context.Context, string) ([]storage.FileInfo, error) {
+	return nil, nil
+}
 
 func (s *memStorage) Get(_ context.Context, url string) (io.ReadCloser, error) {
 	s.mu.Lock()
