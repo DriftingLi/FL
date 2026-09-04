@@ -1,0 +1,167 @@
+/**
+ * Android 平台实现：Keystore AES-GCM 主密钥 + 应用私有密文存储
+ *
+ * 安全模型（ADR-0005）：
+ * - 主密钥由 AndroidKeyStore 生成，不可导出（硬件 TEE 保护时尤甚）
+ * - 密文 + IV 存应用私有 SharedPreferences；拿到文件≠拿到明文
+ * - 条目索引（key→条目名映射）用于 clearSecureItems 枚举
+ *
+ * 能力下限 API 23（Keystore AES-GCM 起始版本）。
+ */
+import { UTSAndroid } from "io.dcloud.uts";
+import Context from "android.content.Context";
+import KeyStore from "java.security.KeyStore";
+import KeyGenerator from "javax.crypto.KeyGenerator";
+import Cipher from "javax.crypto.Cipher";
+import SecretKey from "javax.crypto.SecretKey";
+import GCMParameterSpec from "javax.crypto.spec.GCMParameterSpec";
+import KeyGenParameterSpec from "android.security.keystore.KeyGenParameterSpec";
+import KeyProperties from "android.security.keystore.KeyProperties";
+import Base64 from "android.util.Base64";
+import JSONObject from "org.json.JSONObject";
+
+const KEYSTORE_PROVIDER = "AndroidKeyStore";
+const MASTER_KEY_ALIAS = "uni_secure_storage_master";
+const TRANSFORMATION = "AES/GCM/NoPadding";
+const GCM_TAG_BITS = 128;
+const PREFS_NAME = "uni_secure_storage";
+const KEY_INDEX = "__index__";
+
+/** 应用私有 SharedPreferences 访问器 */
+function prefs() : android.content.SharedPreferences {
+    const ctx = UTSAndroid.getUniActivity()!;
+    return ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+}
+
+/** 确保主密钥存在（不存在则生成；Keystore 内密钥不可导出） */
+function ensureMasterKey() : SecretKey {
+    const ks = KeyStore.getInstance(KEYSTORE_PROVIDER);
+    ks.load(null);
+    if (ks.containsAlias(MASTER_KEY_ALIAS)) {
+        const entry = ks.getEntry(MASTER_KEY_ALIAS, null) as KeyStore.SecretKeyEntry;
+        return entry.getSecretKey();
+    }
+    const generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KEYSTORE_PROVIDER);
+    generator.init(
+        new KeyGenParameterSpec.Builder(MASTER_KEY_ALIAS,
+            KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
+            .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+            .setKeySize(256)
+            .build()
+    );
+    return generator.generateKey();
+}
+
+/** 读取索引（本插件管理过的条目名集合），JSON 数组存储 */
+function readIndex() : Array<string> {
+    const raw = prefs().getString(KEY_INDEX, null);
+    const out : Array<string> = [];
+    if (raw == null || raw.length == 0) {
+        return out;
+    }
+    const arr = JSON.parse(raw);
+    if (arr == null) {
+        return out;
+    }
+    const ja = arr as Array<any>;
+    for (let i = 0; i < ja.length; i++) {
+        const item = ja[i];
+        if (item != null) {
+            out.push(item as string);
+        }
+    }
+    return out;
+}
+
+function writeIndex(keys : Array<string>) {
+    prefs().edit().putString(KEY_INDEX, JSON.stringify(keys)).apply();
+}
+
+function addIndex(name : string) {
+    const keys = readIndex();
+    if (keys.indexOf(name) == -1) {
+        keys.push(name);
+        writeIndex(keys);
+    }
+}
+
+function removeIndex(name : string) {
+    const keys = readIndex();
+    const idx = keys.indexOf(name);
+    if (idx != -1) {
+        keys.splice(idx, 1);
+        writeIndex(keys);
+    }
+}
+
+export function setSecureItem(key : string, value : string) : SecureSetResult {
+    if (key.length == 0) {
+        return { ok: false, errMsg: "key 不能为空" } as SecureSetResult;
+    }
+    try {
+        const cipher = Cipher.getInstance(TRANSFORMATION);
+        cipher.init(Cipher.ENCRYPT_MODE, ensureMasterKey());
+        const iv = cipher.getIV();
+        const cipherText = cipher.doFinal(value.toByteArray("UTF-8"));
+
+        const jo = new JSONObject();
+        jo.put("iv", Base64.encodeToString(iv, Base64.NO_WRAP));
+        jo.put("ct", Base64.encodeToString(cipherText, Base64.NO_WRAP));
+        prefs().edit().putString(key, jo.toString()).apply();
+        addIndex(key);
+        return { ok: true, errMsg: "" } as SecureSetResult;
+    } catch (e) {
+        return { ok: false, errMsg: `加密写入失败: ${e.message}` } as SecureSetResult;
+    }
+}
+
+export function getSecureItem(key : string) : SecureGetResult {
+    if (key.length == 0) {
+        return { ok: false, found: false, value: "", errMsg: "key 不能为空" } as SecureGetResult;
+    }
+    try {
+        const raw = prefs().getString(key, null);
+        if (raw == null) {
+            return { ok: true, found: false, value: "", errMsg: "" } as SecureGetResult;
+        }
+        const jo = new JSONObject(raw);
+        const iv = Base64.decode(jo.getString("iv"), Base64.NO_WRAP);
+        const ct = Base64.decode(jo.getString("ct"), Base64.NO_WRAP);
+        const cipher = Cipher.getInstance(TRANSFORMATION);
+        cipher.init(Cipher.DECRYPT_MODE, ensureMasterKey(), new GCMParameterSpec(GCM_TAG_BITS, iv));
+        const plain = cipher.doFinal(ct);
+        return { ok: true, found: true, value: plain.toString("UTF-8"), errMsg: "" } as SecureGetResult;
+    } catch (e) {
+        return { ok: false, found: false, value: "", errMsg: `解密读取失败: ${e.message}` } as SecureGetResult;
+    }
+}
+
+export function removeSecureItem(key : string) : SecureOpResult {
+    prefs().edit().remove(key).apply();
+    removeIndex(key);
+    return { ok: true, exists: false, errMsg: "" } as SecureOpResult;
+}
+
+export function hasSecureItem(key : string) : SecureOpResult {
+    const exists = prefs().contains(key);
+    return { ok: true, exists: exists, errMsg: "" } as SecureOpResult;
+}
+
+export function clearSecureItems() : SecureOpResult {
+    const keys = readIndex();
+    for (let i = 0; i < keys.length; i++) {
+        prefs().edit().remove(keys[i]).apply();
+    }
+    prefs().edit().remove(KEY_INDEX).apply();
+    return { ok: true, exists: false, errMsg: "" } as SecureOpResult;
+}
+
+export function getSecureStorageCapabilities() : SecureStorageCapabilities {
+    return {
+        supported: true,
+        platform: "android",
+        supportsSurviveReinstall: false,
+        backend: "AndroidKeyStore AES-GCM + SharedPreferences",
+    } as SecureStorageCapabilities;
+}

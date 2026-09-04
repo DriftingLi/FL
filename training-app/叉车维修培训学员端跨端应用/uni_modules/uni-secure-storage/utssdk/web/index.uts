@@ -1,0 +1,38 @@
+/**
+ * 非 App 平台实现（H5 / 各小程序）：恒定不支持
+ *
+ * 全部 API 返回 ok=false / supported=false，调用方据此走降级路径
+ * （uni.setStorage 或禁用功能），绝不崩溃。
+ */
+import type { SecureSetResult, SecureGetResult, SecureOpResult, SecureStorageCapabilities } from '../interface.uts'
+
+const UNSUPPORTED = "当前平台不支持安全存储（仅 App 端可用）"
+
+export function setSecureItem(key : string, value : string) : SecureSetResult {
+    return { ok: false, errMsg: UNSUPPORTED } as SecureSetResult
+}
+
+export function getSecureItem(key : string) : SecureGetResult {
+    return { ok: false, found: false, value: "", errMsg: UNSUPPORTED } as SecureGetResult
+}
+
+export function removeSecureItem(key : string) : SecureOpResult {
+    return { ok: false, exists: false, errMsg: UNSUPPORTED } as SecureOpResult
+}
+
+export function hasSecureItem(key : string) : SecureOpResult {
+    return { ok: false, exists: false, errMsg: UNSUPPORTED } as SecureOpResult
+}
+
+export function clearSecureItems() : SecureOpResult {
+    return { ok: false, exists: false, errMsg: UNSUPPORTED } as SecureOpResult
+}
+
+export function getSecureStorageCapabilities() : SecureStorageCapabilities {
+    return {
+        supported: false,
+        platform: "unsupported",
+        supportsSurviveReinstall: false,
+        backend: "none",
+    } as SecureStorageCapabilities
+}

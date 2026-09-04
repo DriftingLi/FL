@@ -1,0 +1,39 @@
+{
+  "id": "uni-secure-storage",
+  "displayName": "UTS 安全存储（Keychain/Keystore）",
+  "version": "1.0.0",
+  "description": "基于 iOS Keychain 与 Android Keystore 的本地安全键值存储，用于凭据等敏感数据（ADR-0005 自研方案）",
+  "keywords": ["安全存储", "Keychain", "Keystore", "凭据"],
+  "uni_modules": {
+    "dependencies": [],
+    "encrypt": [],
+    "platforms": {
+      "cloud": {
+        "tcb": "n",
+        "aliyun": "n",
+        "alipay": "n"
+      },
+      "client": {
+        "Vue": {
+          "vue2": "n",
+          "vue3": "y"
+        },
+        "App": {
+          "app-android": {
+            "minVersion": "21"
+          },
+          "app-ios": {
+            "minVersion": "12"
+          },
+          "app-harmony": "n"
+        },
+        "H5-mobile": { "Safari": "n", "Chrome": "n", "WebKit": "n" },
+        "H5-pc": { "Chrome": "n", "Edge": "n", "Firefox": "n", "Safari": "n" },
+        "小程序": {
+          "微信": "n",
+          "支付宝": "n"
+        }
+      }
+    }
+  }
+}
