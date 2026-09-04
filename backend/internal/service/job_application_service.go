@@ -160,10 +160,8 @@ func (s *JobApplicationService) Apply(studentUserID, jobPostingID int) (*Applica
 	}
 	_ = lastRejected
 	// 学员每日投递上限
-	loc := clock.Location()
 	now := clock.Now()
-	y, m, d := now.In(loc).Date()
-	dayStart := time.Date(y, m, d, 0, 0, 0, 0, loc)
+	dayStart := clock.DayStart(now)
 	var todayCnt int64
 	if err := s.db.Model(&model.JobApplication{}).Where("student_user_id = ? AND created_at >= ?", studentUserID, dayStart).Count(&todayCnt).Error; err != nil {
 		return nil, err

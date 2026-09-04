@@ -1,4 +1,5 @@
 import type { Component } from 'vue'
+import { routeNames, type RouteName } from './routeNames'
 import {
   HomeFilled,
   Notebook,
@@ -28,8 +29,8 @@ import {
 export interface NavItem {
   key: string
   label: string
-  /** 目标路由的 name（见 src/router/index.ts 各路由的 name 字段），而非硬编码路径。 */
-  routeName?: string
+  /** 目标路由的 name（见 routeNames.ts 常量表，而非硬编码字符串）。 */
+  routeName?: RouteName
   /**
    * 除 `routeName` 外，还应让本项高亮的路由 name。
    *
@@ -39,7 +40,7 @@ export interface NavItem {
    * TutorQuestionManage → TutorQuestionCreate。
    * 不配的话，进入详情后侧栏整条（含父分组）都不高亮。
    */
-  activeRouteNames?: string[]
+  activeRouteNames?: RouteName[]
   /** 目标路由需要的动态参数（如章节页 ChapterView 需要 courseId/chapterId）。 */
   routeParams?: Record<string, string | number>
   icon?: Component
@@ -71,7 +72,7 @@ export function isNavRouteActive(
 ): boolean {
   if (!item.routeName) return false
 
-  const names = [item.routeName, ...(item.activeRouteNames ?? [])]
+  const names = [item.routeName, ...(item.activeRouteNames ?? [])].map(String)
   if (!names.includes(String(routeName ?? ''))) return false
 
   if (item.routeParams) {
@@ -90,16 +91,16 @@ const studentNav: NavItem[] = [
     label: '学习中心',
     icon: HomeFilled,
     children: [
-      { key: 'dashboard', label: '仪表盘', routeName: 'StudentDashboard', icon: HomeFilled, exact: true },
+      { key: 'dashboard', label: '仪表盘', routeName: routeNames.StudentDashboard, icon: HomeFilled, exact: true },
       {
         key: 'courses',
         label: '课程中心',
-        routeName: 'CourseList',
-        activeRouteNames: ['ChapterView'],
+        routeName: routeNames.CourseList,
+        activeRouteNames: [routeNames.ChapterView],
         icon: Notebook
       },
-      { key: 'materials', label: '学习资料', routeName: 'StudentMaterials', icon: Files },
-      { key: 'search', label: '全局搜索', routeName: 'StudentSearch', icon: Search }
+      { key: 'materials', label: '学习资料', routeName: routeNames.StudentMaterials, icon: Files },
+      { key: 'search', label: '全局搜索', routeName: routeNames.StudentSearch, icon: Search }
     ]
   },
   {
@@ -110,12 +111,12 @@ const studentNav: NavItem[] = [
       {
         key: 'question-bank',
         label: '题库练习',
-        routeName: 'QuestionBank',
+        routeName: routeNames.QuestionBank,
         icon: EditPen,
-        children: [{ key: 'real-exam', label: '真题练习', routeName: 'RealExamPapers', icon: Document }]
+        children: [{ key: 'real-exam', label: '真题练习', routeName: routeNames.RealExamPapers, icon: Document }]
       },
-      { key: 'mock-exam', label: '模拟考试', routeName: 'MockExam', icon: Document },
-      { key: 'wrong-questions', label: '错题本', routeName: 'WrongQuestions', icon: CircleCloseFilled }
+      { key: 'mock-exam', label: '模拟考试', routeName: routeNames.MockExam, icon: Document },
+      { key: 'wrong-questions', label: '错题本', routeName: routeNames.WrongQuestions, icon: CircleCloseFilled }
     ]
   },
   {
@@ -126,17 +127,17 @@ const studentNav: NavItem[] = [
       {
         key: 'forum',
         label: '学员论坛',
-        routeName: 'ForumPage',
-        activeRouteNames: ['ForumDetail'],
+        routeName: routeNames.ForumPage,
+        activeRouteNames: [routeNames.ForumDetail],
         icon: ChatDotRound
       },
       {
         key: 'ai-assistant',
         label: 'AI助手',
-        routeName: 'AIAssistant',
+        routeName: routeNames.AIAssistant,
         // 专项功能页（故障咨询/故障代码/维保知识/图纸识别/习题解答）是 AIAssistant 的
         // 兄弟路由（router 里未嵌套），由 AIAssistantPage 的卡片 router.push 进入
-        activeRouteNames: ['AIAssistantFeature'],
+        activeRouteNames: [routeNames.AIAssistantFeature],
         icon: MagicStick
       },
       { key: 'featured', label: '内容精选', icon: Document, externalUrl: 'https://www.gccsmile.com/news' }
@@ -147,18 +148,18 @@ const studentNav: NavItem[] = [
     label: '个人',
     icon: User,
     children: [
-      { key: 'task-center', label: '任务中心', routeName: 'TaskCenter', icon: Trophy },
-      { key: 'favorites', label: '我的收藏', routeName: 'StudentFavorites', icon: Star },
-      { key: 'profile', label: '个人资料', routeName: 'StudentProfile', icon: User },
-      { key: 'resume', label: '我的简历', routeName: 'StudentResume', icon: Document },
+      { key: 'task-center', label: '任务中心', routeName: routeNames.TaskCenter, icon: Trophy },
+      { key: 'favorites', label: '我的收藏', routeName: routeNames.StudentFavorites, icon: Star },
+      { key: 'profile', label: '个人资料', routeName: routeNames.StudentProfile, icon: User },
+      { key: 'resume', label: '我的简历', routeName: routeNames.StudentResume, icon: Document },
       {
         key: 'jobs',
         label: '职位广场',
-        routeName: 'JobPlaza',
-        activeRouteNames: ['JobDetail'],
+        routeName: routeNames.JobPlaza,
+        activeRouteNames: [routeNames.JobDetail],
         icon: OfficeBuilding
       },
-      { key: 'applications', label: '我的投递', routeName: 'MyApplications', icon: Document }
+      { key: 'applications', label: '我的投递', routeName: routeNames.MyApplications, icon: Document }
     ]
   }
 ]
@@ -169,8 +170,8 @@ const adminNav: NavItem[] = [
     label: '总览',
     icon: DataAnalysis,
     children: [
-      { key: 'dashboard', label: '仪表盘', routeName: 'AdminDashboard', icon: DataAnalysis },
-      { key: 'statistics', label: '统计分析', routeName: 'Statistics', icon: TrendCharts }
+      { key: 'dashboard', label: '仪表盘', routeName: routeNames.AdminDashboard, icon: DataAnalysis },
+      { key: 'statistics', label: '统计分析', routeName: routeNames.Statistics, icon: TrendCharts }
     ]
   },
   {
@@ -178,12 +179,12 @@ const adminNav: NavItem[] = [
     label: '用户与内容',
     icon: User,
     children: [
-      { key: 'hrwai-users', label: '用户管理', routeName: 'HrwaiUserManage', icon: User },
-      { key: 'profile-review', label: '资料审核', routeName: 'ProfileReview', icon: CircleCheck },
-      { key: 'tutors', label: '导师管理', routeName: 'TutorManage', icon: UserFilled },
-      { key: 'recruiters', label: '招聘者管理', routeName: 'RecruiterManage', icon: OfficeBuilding },
-      { key: 'forum-manage', label: '论坛管理', routeName: 'ForumManage', icon: ChatDotRound },
-      { key: 'contribution-manage', label: '投稿管理', routeName: 'ContributionManage', icon: Document }
+      { key: 'hrwai-users', label: '用户管理', routeName: routeNames.HrwaiUserManage, icon: User },
+      { key: 'profile-review', label: '资料审核', routeName: routeNames.ProfileReview, icon: CircleCheck },
+      { key: 'tutors', label: '导师管理', routeName: routeNames.TutorManage, icon: UserFilled },
+      { key: 'recruiters', label: '招聘者管理', routeName: routeNames.RecruiterManage, icon: OfficeBuilding },
+      { key: 'forum-manage', label: '论坛管理', routeName: routeNames.ForumManage, icon: ChatDotRound },
+      { key: 'contribution-manage', label: '投稿管理', routeName: routeNames.ContributionManage, icon: Document }
     ]
   },
   {
@@ -191,10 +192,10 @@ const adminNav: NavItem[] = [
     label: '教学管理',
     icon: FolderOpened,
     children: [
-      { key: 'course-catalog', label: '课程管理', routeName: 'CourseCatalog', icon: FolderOpened },
-      { key: 'positions', label: '岗位管理', routeName: 'PositionManage', icon: CollectionTag },
-      { key: 'credentials', label: '证件管理', routeName: 'CredentialManage', icon: CollectionTag },
-      { key: 'question-review', label: '题库审核', routeName: 'QuestionReview', icon: EditPen },
+      { key: 'course-catalog', label: '课程管理', routeName: routeNames.CourseCatalog, icon: FolderOpened },
+      { key: 'positions', label: '岗位管理', routeName: routeNames.PositionManage, icon: CollectionTag },
+      { key: 'credentials', label: '证件管理', routeName: routeNames.CredentialManage, icon: CollectionTag },
+      { key: 'question-review', label: '题库审核', routeName: routeNames.QuestionReview, icon: EditPen },
     ]
   },
   {
@@ -202,52 +203,52 @@ const adminNav: NavItem[] = [
     label: '系统',
     icon: Setting,
     children: [
-      { key: 'audit-logs', label: '审计日志', routeName: 'AuditLogs', icon: Memo },
-      { key: 'inspection', label: '巡检视图', routeName: 'AdminInspection', icon: DataAnalysis },
-      { key: 'valuation-config', label: '残值配置', routeName: 'ValuationConfigManage', icon: PriceTag },
-      { key: 'ai-settings', label: 'AI 配置', routeName: 'AISettings', icon: Setting },
-      { key: 'content-generate', label: '内容生成', routeName: 'ContentGenerate', icon: MagicStick },
-      { key: 'featured-content', label: '内容精选', routeName: 'AdminFeaturedContentList', icon: Document }
+      { key: 'audit-logs', label: '审计日志', routeName: routeNames.AuditLogs, icon: Memo },
+      { key: 'inspection', label: '巡检视图', routeName: routeNames.AdminInspection, icon: DataAnalysis },
+      { key: 'valuation-config', label: '残值配置', routeName: routeNames.ValuationConfigManage, icon: PriceTag },
+      { key: 'ai-settings', label: 'AI 配置', routeName: routeNames.AISettings, icon: Setting },
+      { key: 'content-generate', label: '内容生成', routeName: routeNames.ContentGenerate, icon: MagicStick },
+      { key: 'featured-content', label: '内容精选', routeName: routeNames.AdminFeaturedContentList, icon: Document }
     ]
   }
 ]
 
 const tutorNav: NavItem[] = [
-  { key: 'dashboard', label: '仪表盘', routeName: 'TutorDashboard', icon: HomeFilled, exact: true },
+  { key: 'dashboard', label: '仪表盘', routeName: routeNames.TutorDashboard, icon: HomeFilled, exact: true },
   {
     key: 'courses',
     label: '我的课程',
-    routeName: 'TutorCourses',
+    routeName: routeNames.TutorCourses,
     // 章节列表与章节编辑都在「我的课程」之下，两级都没有独立导航项
-    activeRouteNames: ['TutorChapterManage', 'TutorChapterEdit'],
+    activeRouteNames: [routeNames.TutorChapterManage, routeNames.TutorChapterEdit],
     icon: Notebook
   },
   {
     key: 'question-manage',
     label: '题库管理',
-    routeName: 'TutorQuestionManage',
+    routeName: routeNames.TutorQuestionManage,
     // 新增题目 / 编辑题目共用 TutorQuestionCreate（带 query.id 即编辑）；标签管理同组
-    activeRouteNames: ['TutorQuestionCreate', 'TutorQuestionTags'],
+    activeRouteNames: [routeNames.TutorQuestionCreate, routeNames.TutorQuestionTags],
     icon: EditPen
   },
-  { key: 'question-tags', label: '标签管理', routeName: 'TutorQuestionTags', icon: CollectionTag }
+  { key: 'question-tags', label: '标签管理', routeName: routeNames.TutorQuestionTags, icon: CollectionTag }
 ]
 
 const recruiterNav: NavItem[] = [
-  { key: 'dashboard', label: '首页', routeName: 'RecruitDashboard', icon: HomeFilled, exact: true },
+  { key: 'dashboard', label: '首页', routeName: routeNames.RecruitDashboard, icon: HomeFilled, exact: true },
   {
     key: 'resumes',
     label: '简历库',
-    routeName: 'RecruitResumes',
-    activeRouteNames: ['RecruitResumeDetail'],
+    routeName: routeNames.RecruitResumes,
+    activeRouteNames: [routeNames.RecruitResumeDetail],
     icon: Document
   },
-  { key: 'requests', label: '我的申请', routeName: 'RecruitRequests', icon: Document },
+  { key: 'requests', label: '我的申请', routeName: routeNames.RecruitRequests, icon: Document },
   {
     key: 'jobs',
     label: '职位管理',
-    routeName: 'RecruitJobManage',
-    activeRouteNames: ['RecruitApplicationList'],
+    routeName: routeNames.RecruitJobManage,
+    activeRouteNames: [routeNames.RecruitApplicationList],
     icon: OfficeBuilding
   }
 ]

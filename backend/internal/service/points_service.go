@@ -82,13 +82,14 @@ func NewPointsService(db *gorm.DB, logger *zap.Logger, clk clock.Clock) *PointsS
 	return &PointsService{db: db, logger: logger, clk: clk}
 }
 
+// shanghaiDate 当前业务自然日日期字符串（Asia/Shanghai）。
 func (s *PointsService) shanghaiDate() string {
-	return s.clk.Now().In(clock.Location()).Format("2006-01-02")
+	return clock.DayKey(s.clk.Now())
 }
 
+// shanghaiDateTime 当前业务自然日起点（Asia/Shanghai）。
 func (s *PointsService) shanghaiDateTime() time.Time {
-	t := s.clk.Now().In(clock.Location())
-	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, clock.Location())
+	return clock.DayStart(s.clk.Now())
 }
 
 // claimCounts 单用户领取计数：按 task_code 分组一次取「终身计数 + 当日计数」。
