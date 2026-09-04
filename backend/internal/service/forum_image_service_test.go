@@ -8,13 +8,16 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/storage"
 	"forklift-training/internal/testutil"
 )
 
@@ -45,8 +48,41 @@ func (m *forumImgStorage) Exists(context.Context, string) (bool, error) { return
 
 func (m *forumImgStorage) List(_ context.Context, _ string) ([]string, error) { return m.files, nil }
 
+// ListWithInfo 模拟存储侧元数据：LastModified 由测试文件 URL 的命名契约（<name>_<ms>.<ext>）推导，
+// 等价于真实实现的「时间戳即修改时刻」（FileStore.Save 命名约定；时间戳知识归位见 ADR-0027 C2）。
+func (m *forumImgStorage) ListWithInfo(_ context.Context, _ string) ([]storage.FileInfo, error) {
+	infos := make([]storage.FileInfo, 0, len(m.files))
+	for _, u := range m.files {
+		infos = append(infos, storage.FileInfo{URL: u, LastModified: fileStampToTime(u)})
+	}
+	return infos, nil
+}
+
 func (m *forumImgStorage) Get(_ context.Context, url string) (io.ReadCloser, error) {
 	return io.NopCloser(bytes.NewReader([]byte(url))), nil
+}
+
+// fileStampToTime 测试 helper：从测试文件 URL 的命名契约（<name>_<ms>.<ext>）解析毫秒时间戳
+// 作为 LastModified；无法解析（无内嵌时间戳）返回零值（sweep 对零值保守保留）。
+// 仅测试用——生产代码时间戳来自 storage 层真实元数据，不反向解析文件名（ADR-0027 C2）。
+func fileStampToTime(url string) time.Time {
+	base := url
+	if i := strings.LastIndex(base, "/"); i >= 0 {
+		base = base[i+1:]
+	}
+	dot := strings.LastIndex(base, ".")
+	if dot < 0 {
+		return time.Time{}
+	}
+	underscore := strings.LastIndex(base[:dot], "_")
+	if underscore < 0 {
+		return time.Time{}
+	}
+	ms, err := strconv.ParseInt(base[underscore+1:dot], 10, 64)
+	if err != nil || ms <= 0 {
+		return time.Time{}
+	}
+	return time.UnixMilli(ms)
 }
 
 // newForumImageTestSvc 构造论坛图片服务 + 内存存储。
@@ -101,8 +137,8 @@ func TestForumImage_Upload_Success(t *testing.T) {
 		t.Fatalf("应保存到 %s/ 前缀，得到 %q", ForumImageDirPrefix, key)
 	}
 	name := strings.TrimPrefix(key, ForumImageDirPrefix+"/")
-	if ms, ok := forumFileTimestamp(name); !ok || ms <= 0 {
-		t.Fatalf("文件名应内嵌毫秒时间戳，得到 %q (ok=%v, ms=%d)", name, ok, ms)
+	if tm := fileStampToTime(name); tm.IsZero() {
+		t.Fatalf("文件名应内嵌毫秒时间戳，得到 %q", name)
 	}
 	if !strings.HasSuffix(name, ".png") {
 		t.Fatalf("应保留原扩展名 .png，得到 %q", name)

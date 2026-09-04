@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/storage"
 	"forklift-training/internal/testutil"
 )
 
@@ -31,6 +32,11 @@ func (m *memReviewStorage) Delete(_ context.Context, url string) error {
 func (m *memReviewStorage) Exists(context.Context, string) (bool, error) { return true, nil }
 
 func (m *memReviewStorage) List(context.Context, string) ([]string, error) { return nil, nil }
+
+// ListWithInfo 测试用：本域不使用列表，恒空。
+func (m *memReviewStorage) ListWithInfo(context.Context, string) ([]storage.FileInfo, error) {
+	return nil, nil
+}
 
 func (m *memReviewStorage) Get(_ context.Context, url string) (io.ReadCloser, error) {
 	return io.NopCloser(bytes.NewReader([]byte(url))), nil

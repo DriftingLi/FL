@@ -63,33 +63,55 @@ func TestNotificationService_CreateAndList(t *testing.T) {
 	}
 }
 
-// TestNotificationService_ProfileReviewPayload 审核通知结构标记（Ticket #228）：
-// ProfileReviewNotification 在标题不变的前提下，payload 携带结构化 review_status 判定。
-func TestNotificationService_ProfileReviewPayload(t *testing.T) {
-	svc := NewNotificationService(nil, zap.NewNop())
+// TestNotificationService_ProfileReviewEvent 审核通知结构化标记（Ticket #228；ADR-0027 C1 对齐事件形状后）：
+// NewProfileReviewEvent + CreateProfileReviewEvent 在标题不变的前提下，payload 携带结构化 review_status 判定。
+func TestNotificationService_ProfileReviewEvent(t *testing.T) {
+	req := &model.ProfileChangeRequest{UserID: 1, FieldType: ProfileFieldNickname}
+	ev := NewProfileReviewEvent(req, ProfileStatusApproved, "")
+	if ev.UserID != 1 || ev.FieldType != ProfileFieldNickname || ev.Status != ProfileStatusApproved {
+		t.Errorf("通过事件字段不符: %+v", ev)
+	}
+	// 构造器仅收数据；文案/payload 由 CreateProfileReviewEvent 单点（用内存 DB 落库校验）
+	db := testutil.NewMemoryDB(t)
+	svc := NewNotificationService(db, zap.NewNop())
+	if err := svc.CreateProfileReviewEvent(db, ev, time.Now()); err != nil {
+		t.Fatalf("创建审核通知失败: %v", err)
+	}
+	var n model.Notification
+	if err := db.Where("user_id = ?", 1).First(&n).Error; err != nil {
+		t.Fatalf("查询审核通知失败: %v", err)
+	}
+	if n.Type != "profile_review" || n.Title != "资料审核通过" {
+		t.Errorf("审核通过通知 type/title 不符: type=%s title=%s", n.Type, n.Title)
+	}
+	if !strings.Contains(n.Content, "您的昵称修改已通过审核") {
+		t.Errorf("通过通知正文不符: %s", n.Content)
+	}
+	if n.Link != "" {
+		t.Errorf("审核通知不应带链接: %s", n.Link)
+	}
+	if string(n.Payload) != "{\"review_status\":\"approved\"}" {
+		t.Errorf("通过通知 payload 应为 approved，得到: %s", n.Payload)
+	}
 
-	req := &model.ProfileChangeRequest{FieldType: ProfileFieldNickname}
-	typ, title, content, payload := svc.ProfileReviewNotification(req, ProfileStatusApproved, "")
-	if typ != "profile_review" || title != "资料审核通过" {
-		t.Errorf("审核通过通知 type/title 不符: type=%s title=%s", typ, title)
+	req2 := &model.ProfileChangeRequest{UserID: 2, FieldType: ProfileFieldAvatar}
+	ev2 := NewProfileReviewEvent(req2, ProfileStatusRejected, "照片不清晰")
+	if err := svc.CreateProfileReviewEvent(db, ev2, time.Now()); err != nil {
+		t.Fatalf("创建驳回通知失败: %v", err)
 	}
-	if !strings.Contains(content, "您的昵称修改已通过审核") {
-		t.Errorf("通过通知正文不符: %s", content)
+	// 清零后再查（GORM First 对带主键的实例复用会附加主键条件）
+	n = model.Notification{}
+	if err := db.Where("user_id = ?", 2).First(&n).Error; err != nil {
+		t.Fatalf("查询驳回通知失败: %v", err)
 	}
-	if string(payload) != "{\"review_status\":\"approved\"}" {
-		t.Errorf("通过通知 payload 应为 approved，得到: %s", payload)
+	if n.Type != "profile_review" || n.Title != "资料审核被驳回" {
+		t.Errorf("审核驳回通知 type/title 不符: type=%s title=%s", n.Type, n.Title)
 	}
-
-	req.FieldType = ProfileFieldAvatar
-	typ, title, content, payload = svc.ProfileReviewNotification(req, ProfileStatusRejected, "照片不清晰")
-	if typ != "profile_review" || title != "资料审核被驳回" {
-		t.Errorf("审核驳回通知 type/title 不符: type=%s title=%s", typ, title)
+	if !strings.Contains(n.Content, "您的头像修改申请未通过审核，原因：照片不清晰。") {
+		t.Errorf("驳回通知正文不符: %s", n.Content)
 	}
-	if !strings.Contains(content, "您的头像修改申请未通过审核，原因：照片不清晰。") {
-		t.Errorf("驳回通知正文不符: %s", content)
-	}
-	if string(payload) != "{\"review_status\":\"rejected\"}" {
-		t.Errorf("驳回通知 payload 应为 rejected，得到: %s", payload)
+	if string(n.Payload) != "{\"review_status\":\"rejected\"}" {
+		t.Errorf("驳回通知 payload 应为 rejected，得到: %s", n.Payload)
 	}
 }
 

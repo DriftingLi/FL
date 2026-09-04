@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"go.uber.org/zap"
+
+	"forklift-training/internal/storage"
 )
 
 // fileStoreMemStorage 内存 storage adapter：记录 Save/Delete/List 调用。
@@ -35,6 +37,15 @@ func (m *fileStoreMemStorage) Get(context.Context, string) (io.ReadCloser, error
 }
 func (m *fileStoreMemStorage) List(_ context.Context, _ string) ([]string, error) {
 	return append([]string(nil), m.files...), nil
+}
+
+// ListWithInfo 测试用：LastModified 由文件 URL 命名契约推导（见 fileStampToTime）。
+func (m *fileStoreMemStorage) ListWithInfo(_ context.Context, _ string) ([]storage.FileInfo, error) {
+	infos := make([]storage.FileInfo, 0, len(m.files))
+	for _, u := range m.files {
+		infos = append(infos, storage.FileInfo{URL: u, LastModified: fileStampToTime(u)})
+	}
+	return infos, nil
 }
 
 func TestFileStoreInterface(t *testing.T) {
