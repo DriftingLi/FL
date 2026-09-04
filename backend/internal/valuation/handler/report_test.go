@@ -17,6 +17,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/storage"
 	"forklift-training/internal/valuation/model"
 )
 
@@ -66,6 +67,19 @@ func (m *memStorage) List(_ context.Context, prefix string) ([]string, error) {
 		}
 	}
 	return urls, nil
+}
+
+// ListWithInfo 适配 storage.Storage 新增接口（ADR-0027 C2）；valuation 域不消费时间元数据。
+func (m *memStorage) ListWithInfo(ctx context.Context, prefix string) ([]storage.FileInfo, error) {
+	urls, err := m.List(ctx, prefix)
+	if err != nil {
+		return nil, err
+	}
+	infos := make([]storage.FileInfo, 0, len(urls))
+	for _, u := range urls {
+		infos = append(infos, storage.FileInfo{URL: u, LastModified: time.Now()})
+	}
+	return infos, nil
 }
 
 func (m *memStorage) Get(_ context.Context, url string) (io.ReadCloser, error) {

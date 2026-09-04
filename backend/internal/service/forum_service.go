@@ -591,24 +591,18 @@ func (s *ForumService) ReplyTopic(userID int, topicID int64, content string, par
 			}).Error; err != nil {
 			return err
 		}
-		// 站内信通知（与回复同事务提交，避免通知丢失；与资料审核同模式）：
+		// 站内信通知（与回复同事务提交，避免通知丢失；事件构造器单点，ADR-0027 C1）：
 		// 1) 楼主被回复（回复人是楼主本人时不通知）
 		// 2) 楼中楼被回复人（非自己、非楼主——楼主已由 1) 覆盖，避免重复通知）
-		link := fmt.Sprintf("/training/forum/%d", topicID)
-		payload := forumTopicPayload(topicID)
 		if topic.UserID != userID {
-			if err := s.notificationSvc.CreateWithTx(tx, topic.UserID, "forum_reply",
-				"你的帖子有新回复",
-				fmt.Sprintf("%s 回复了你的帖子「%s」", replierName, topic.Title),
-				link, payload, now); err != nil {
+			if err := s.notificationSvc.CreateForumReplyEvent(tx,
+				NewTopicReplierEvent(topic.UserID, replierName, topic.Title, topicID), now); err != nil {
 				return err
 			}
 		}
 		if parentAuthorID != 0 && parentAuthorID != userID && parentAuthorID != topic.UserID {
-			if err := s.notificationSvc.CreateWithTx(tx, parentAuthorID, "forum_reply",
-				"你的回复有新回复",
-				fmt.Sprintf("%s 在帖子「%s」中回复了你", replierName, topic.Title),
-				link, payload, now); err != nil {
+			if err := s.notificationSvc.CreateForumReplyEvent(tx,
+				NewReplyReplierEvent(parentAuthorID, replierName, topic.Title, topicID), now); err != nil {
 				return err
 			}
 		}
@@ -692,13 +686,8 @@ func (s *ForumService) AdminDeleteTopic(topicID int64) error {
 	}
 	// 清理文件（事务外，尽力而为）
 	s.deleteImages(urls)
-	// 通知作者（尽力而为：内容已删，通知失败不回滚，仅记日志）
-	if err := s.notificationSvc.Create(topic.UserID, "forum_topic_deleted",
-		"你的帖子已被删除",
-		"管理员删除了你的帖子「"+topic.Title+"」。",
-		"", nil); err != nil {
-		s.logger.Warn("删帖通知发送失败", zap.Int64("topic_id", topicID), zap.Error(err))
-	}
+	// 通知作者（尽力而为：内容已删，通知失败不回滚，仅记日志；ADR-0027 C1 收编）
+	s.notificationSvc.TryCreateForumTopicDeletedEvent(NewForumTopicDeletedEvent(topic.UserID, topic.Title))
 	return nil
 }
 
@@ -817,14 +806,8 @@ func (s *ForumService) AdminDeleteReply(replyID int64) error {
 	if err := s.deleteReplyWithImages(replyID, reply.TopicID); err != nil {
 		return err
 	}
-	// 通知回复作者（尽力而为：内容已删，通知失败不回滚，仅记日志）
-	if err := s.notificationSvc.Create(reply.UserID, "forum_reply_deleted",
-		"你的回复已被删除",
-		"管理员删除了你在帖子「"+topicTitle+"」中的回复。",
-		fmt.Sprintf("/training/forum/%d", reply.TopicID),
-		forumTopicPayload(reply.TopicID)); err != nil {
-		s.logger.Warn("删回复通知发送失败", zap.Int64("reply_id", replyID), zap.Error(err))
-	}
+	// 通知回复作者（尽力而为：内容已删，通知失败不回滚，仅记日志；ADR-0027 C1 收编）
+	s.notificationSvc.TryCreateForumReplyDeletedEvent(NewForumReplyDeletedEvent(reply.UserID, topicTitle, reply.TopicID))
 	return nil
 }
 
@@ -1193,26 +1176,17 @@ func (s *ForumService) HandleReport(reportID int64, status int16) error {
 }
 
 // notifyReportHandled 举报处理完成站内信。举报对象可能已被删除：
-// 主题已删时降级文案（不带标题与链接）。
+// 主题已删时降级文案（不带标题与链接）；文案/链接/payload 由事件构造器单点（ADR-0027 C1）。
 func (s *ForumService) notifyReportHandled(report *model.ForumReport) {
-	target := "帖子"
-	if report.ReplyID != nil {
-		target = "回复"
-	}
-	content := "你举报的" + target + "已处理完毕。"
-	link := ""
-	var payload model.JSONB
+	topicID := report.TopicID
+	topicTitle := ""
 	if report.TopicID != nil {
 		var topic model.ForumTopic
 		if err := s.db.Select("title").First(&topic, *report.TopicID).Error; err == nil {
-			content = fmt.Sprintf("你举报的%s「%s」已处理完毕。", target, topic.Title)
-			link = fmt.Sprintf("/training/forum/%d", *report.TopicID)
-			payload = forumTopicPayload(*report.TopicID)
+			topicTitle = topic.Title
 		}
 	}
-	if err := s.notificationSvc.Create(report.ReporterID, "forum_report", "举报已处理", content, link, payload); err != nil {
-		s.logger.Warn("举报处理通知发送失败", zap.Int64("report_id", report.ID), zap.Error(err))
-	}
+	s.notificationSvc.TryCreateForumReportHandledEvent(NewForumReportHandledEvent(report.ReporterID, report.ReplyID != nil, topicID, topicTitle))
 }
 
 // MyTopics 我的帖子（复用主题列表行装配，按最后活跃倒序）。
@@ -1408,7 +1382,7 @@ func (s *ForumService) AcceptReply(userID int, topicID, replyID int64) (*ForumTo
 	// 首次采纳：CAS + 积分直记（同一事务）
 	isSelf := reply.UserID == userID
 	now := beijingNow()
-	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, clock.Location())
+	todayStart := clock.DayStart(now)
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		// CAS：仅当仍未采纳时才写入状态
 		res := tx.Model(&model.ForumTopic{}).Where("id = ? AND accepted_reply_id IS NULL", topicID).Updates(map[string]any{

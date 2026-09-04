@@ -67,29 +67,6 @@ func (s *NotificationService) CreateWithTx(tx GormCreator, userID int, typ, titl
 	return tx.Create(&n).Error
 }
 
-// ProfileReviewNotification 构造资料审核结果站内信参数（type=profile_review）。
-// 返回 (type, title, content, payload)：标题保持人读文案；payload 为结构化判定标记
-// （如 {"review_status":"approved"|"rejected"}），供前端确定性消费，不依赖标题文案。
-func (s *NotificationService) ProfileReviewNotification(req *model.ProfileChangeRequest, status, reason string) (typ, title, content string, payload model.JSONB) {
-	fieldLabel := "昵称"
-	if req.FieldType == ProfileFieldAvatar {
-		fieldLabel = "头像"
-	}
-	title = "资料审核通过"
-	content = "您的" + fieldLabel + "修改已通过审核，修改已生效。"
-	payload = reviewStatusPayload(ProfileStatusApproved)
-	if status == ProfileStatusRejected {
-		title = "资料审核被驳回"
-		content = "您的" + fieldLabel + "修改申请未通过审核"
-		if reason != "" {
-			content += "，原因：" + reason
-		}
-		content += "。"
-		payload = reviewStatusPayload(ProfileStatusRejected)
-	}
-	return "profile_review", title, content, payload
-}
-
 // 论坛采纳通知类型（#369）。
 const (
 	NotifTypeForumAcceptAnswerer = "forum_accept_answerer" // 答主：你的回答被采纳 +40

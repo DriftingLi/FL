@@ -12,14 +12,11 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
 	"path/filepath"
-	"regexp"
-	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -29,6 +26,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/storage"
 	"forklift-training/pkg/paging"
 )
 
@@ -241,27 +239,6 @@ func contributionURLKey(u string) string {
 	return u[idx:]
 }
 
-// contributionFileTimestampRe 匹配 FileStore.Save 写入的毫秒时间戳（<name>_<ms>.<ext>）。
-var contributionFileTimestampRe = regexp.MustCompile(`_([0-9]{10,})\.`)
-
-// contributionFileTimestamp 从 URL 提取内嵌毫秒时间戳（悬空回收 TTL 判定用）。
-func contributionFileTimestamp(url string) (int64, bool) {
-	idx := strings.LastIndex(url, "/")
-	name := url
-	if idx >= 0 {
-		name = url[idx+1:]
-	}
-	m := contributionFileTimestampRe.FindStringSubmatch(name)
-	if len(m) < 2 {
-		return 0, false
-	}
-	ms, err := strconv.ParseInt(m[1], 10, 64)
-	if err != nil || ms <= 0 {
-		return 0, false
-	}
-	return ms, true
-}
-
 // collectReferencedContributionFiles 收集全部投稿引用文件 key 集合（悬空回收差集用）。
 func (s *ContributionService) collectReferencedContributionFiles() map[string]bool {
 	ref := map[string]bool{}
@@ -276,56 +253,33 @@ func (s *ContributionService) collectReferencedContributionFiles() map[string]bo
 	return ref
 }
 
-// CleanupOrphanFiles 清理投稿悬空文件：List(contributions/) 与全量引用集差集，
-// 仅删除文件名时间戳超过 ContributionOrphanTTL 且未被任何投稿文件行引用的文件。
+// CleanupOrphanFiles 清理投稿悬空文件（薄配置壳，算法单点见 orphan_sweep.go / ADR-0027 C2）：
+// ListWithInfo(contributions/) 与全量引用集差集，仅删存储侧 LastModified 超过
+// ContributionOrphanTTL 且未被任何投稿文件行引用的文件。
 // 返回清理数（尽力而为，存储错误不中断）；ctx 取消语义贯穿到存储调用。
 func (s *ContributionService) CleanupOrphanFiles(ctx context.Context) int {
 	if s.fileSvc == nil {
 		return 0
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	stored, err := s.fileSvc.ListWithContext(ctx, ContributionFileDirPrefix)
-	if err != nil {
-		if s.logger != nil {
-			s.logger.Warn("[contribution] List 失败", zap.Error(err))
-		}
-		return 0
-	}
-	if len(stored) == 0 {
-		return 0
-	}
-	referenced := s.collectReferencedContributionFiles()
-	cleaned := 0
-	cutoff := time.Now().Add(-ContributionOrphanTTL)
-	for _, u := range stored {
-		select {
-		case <-ctx.Done():
-			return cleaned
-		default:
-		}
-		key := contributionURLKey(u)
-		if key == "" || referenced[key] {
-			continue
-		}
-		if ms, ok := contributionFileTimestamp(u); ok && time.UnixMilli(ms).Before(cutoff) {
-			if err := s.fileSvc.DeleteWithContext(ctx, u); err == nil {
-				cleaned++
-			} else if ctx.Err() != nil {
-				return cleaned
-			}
-		}
-	}
-	return cleaned
+	return runOrphanSweep(ctx, orphanSweepConfig{
+		domain: "contribution",
+		ttl:    ContributionOrphanTTL,
+		list: func(c context.Context) ([]storage.FileInfo, error) {
+			return s.fileSvc.ListWithInfoWithContext(c, ContributionFileDirPrefix)
+		},
+		referenced: s.collectReferencedContributionFiles,
+		keyOf:      contributionURLKey,
+		deleteFile: s.fileSvc.DeleteWithContext,
+		logger:     s.logger,
+	})
 }
 
 // ===== 资格与配额 =====
 
 // startOfShanghaiDay 返回业务时区（Asia/Shanghai）自然日起点 00:00。
+// 实现委托 clock.DayStart（ADR-0027 自然日边界单点收编）。
 func (s *ContributionService) startOfShanghaiDay(t time.Time) time.Time {
-	t = t.In(clock.Location())
-	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, clock.Location())
+	return clock.DayStart(t)
 }
 
 // countDaily 当日提交数（Asia/Shanghai 自然日起点之后的行数；time.Time 边界双方言可用）。
@@ -637,30 +591,6 @@ func (s *ContributionService) Withdraw(userID int, contributionID int64) error {
 
 // ===== 审核（T2：approve/reject 与积分直记）=====
 
-// contributionPayload 构造投稿事件结构化标记（contribution_id + title + points + reason），
-// 加性扩展，不依赖标题文案判定（照 forumAcceptPayload 形状）。
-func contributionPayload(contributionID int64, title string, points int, reason string) model.JSONB {
-	b, err := json.Marshal(struct {
-		ContributionID int64  `json:"contribution_id"`
-		Title          string `json:"title"`
-		Points         int    `json:"points"`
-		Reason         string `json:"reason"`
-	}{ContributionID: contributionID, Title: title, Points: points, Reason: reason})
-	if err != nil {
-		return nil
-	}
-	return model.JSONB(b)
-}
-
-// 投稿站内信通知类型（#517 typed event constructor 形状：业务侧一行触发，
-// 不在调用点手拼文案）。
-const (
-	NotifTypeContributionApproved = "contribution_approved" // 投稿过审（作者）
-	NotifTypeContributionRejected = "contribution_rejected" // 投稿被驳回（作者）
-	NotifTypeContributionArchived = "contribution_archived" // 投稿被下架（作者，含追回）
-	NotifTypeContributionTier     = "contribution_tier"     // 投稿达阶（作者）
-)
-
 // ListPending 审核队列（pending 分页；管理端/讲师端共用）。
 func (s *ContributionService) ListPending(page, pageSize int) (*ContributionPageResult, error) {
 	items, total, page, pageSize := paging.QueryWithMax[model.UserContribution](
@@ -714,13 +644,9 @@ func (s *ContributionService) Approve(reviewerID int, contributionID int64) (*Co
 		}); err != nil {
 			return err
 		}
-		// 站内信（与入账同事务）
-		if err := s.notificationSvc.CreateWithTx(tx, c.UserID, NotifTypeContributionApproved,
-			"资料投稿通过审核",
-			fmt.Sprintf("你的投稿「%s」已通过审核，+%d 分已到账", c.Title, ContributionApprovedPoints),
-			"/training/materials?tab=contribution",
-			contributionPayload(contributionID, c.Title, ContributionApprovedPoints, ReasonContributionApproved),
-			now); err != nil {
+		// 站内信（与入账同事务；事件构造器单点，ADR-0027 C1）
+		if err := s.notificationSvc.CreateContributionApprovedEvent(tx,
+			NewContributionApprovedEvent(c.UserID, c.Title, contributionID, ContributionApprovedPoints), now); err != nil {
 			return err
 		}
 		return nil
@@ -763,12 +689,9 @@ func (s *ContributionService) Reject(reviewerID int, contributionID int64, reaso
 	if res.RowsAffected == 0 {
 		return nil, ErrContributionNotPending
 	}
-	// 驳回站内信（含原因；link 到我的投稿）
-	if err := s.notificationSvc.Create(c.UserID, NotifTypeContributionRejected,
-		"资料投稿被驳回",
-		fmt.Sprintf("你的投稿「%s」未通过审核：%s", c.Title, reason),
-		"/training/materials?tab=contribution&view=mine",
-		contributionPayload(contributionID, c.Title, 0, "")); err != nil {
+	// 驳回站内信（含原因；link 到我的投稿；维持「通知失败返回 error」的强一致语义）
+	if err := s.notificationSvc.CreateContributionRejectedEvent(s.db,
+		NewContributionRejectedEvent(c.UserID, c.Title, contributionID, reason), now); err != nil {
 		return nil, err
 	}
 	return s.GetDetail(contributionID, c.UserID)
@@ -832,12 +755,8 @@ func (s *ContributionService) Download(userID int, contributionID int64) (*Downl
 					return err
 				}
 				result.TierAwarded = tier.Points
-				if err := s.notificationSvc.CreateWithTx(tx, c.UserID, NotifTypeContributionTier,
-					"资料投稿下载量达阶",
-					fmt.Sprintf("你的投稿「%s」下载量达 %d 次，+%d 分已到账", c.Title, tier.Threshold, tier.Points),
-					"/training/materials?tab=contribution",
-					contributionPayload(contributionID, c.Title, tier.Points, ReasonContributionTier),
-					now); err != nil {
+				if err := s.notificationSvc.CreateContributionTierEvent(tx,
+					NewContributionTierEvent(c.UserID, c.Title, contributionID, tier.Threshold, tier.Points), now); err != nil {
 					return err
 				}
 				break
@@ -1053,16 +972,9 @@ func (s *ContributionService) Archive(reviewerID int, contributionID int64, reas
 			}
 			clawedBack = int(earned)
 		}
-		// 下架站内信（含原因与扣减；同事务）
-		msg := fmt.Sprintf("你的投稿「%s」已下架：%s", c.Title, reason)
-		if clawedBack > 0 {
-			msg = fmt.Sprintf("你的投稿「%s」已下架：%s（已回收该稿奖励 %d 分）", c.Title, reason, clawedBack)
-		}
-		if err := s.notificationSvc.CreateWithTx(tx, c.UserID, NotifTypeContributionArchived,
-			"资料投稿已下架", msg,
-			"/training/materials?tab=contribution&view=mine",
-			contributionPayload(contributionID, c.Title, -clawedBack, ReasonRollback),
-			now); err != nil {
+		// 下架站内信（含原因与扣减；同事务；事件构造器单点）
+		if err := s.notificationSvc.CreateContributionArchivedEvent(tx,
+			NewContributionArchivedEvent(c.UserID, c.Title, contributionID, reason, clawedBack), now); err != nil {
 			return err
 		}
 		return nil

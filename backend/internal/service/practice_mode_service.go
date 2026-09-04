@@ -414,7 +414,7 @@ func (s *PracticeModeService) GetPracticeStats(studentID int, credentialID *int)
 	}
 	loc := clock.Location()
 	nowInLoc := clk.Now().In(loc)
-	todayStart := time.Date(nowInLoc.Year(), nowInLoc.Month(), nowInLoc.Day(), 0, 0, 0, 0, loc)
+	todayStart := clock.DayStart(nowInLoc)
 	tomorrow := todayStart.AddDate(0, 0, 1)
 
 	base := func() *gorm.DB {
@@ -445,7 +445,7 @@ func (s *PracticeModeService) GetPracticeStats(studentID int, credentialID *int)
 	}
 	daySet := make(map[string]struct{}, len(timestamps))
 	for _, t := range timestamps {
-		daySet[t.In(loc).Format("2006-01-02")] = struct{}{}
+		daySet[clock.DayKey(t)] = struct{}{}
 	}
 
 	return &PracticePracticeStatsDTO{

@@ -86,14 +86,15 @@ func NewCheckInService(db *gorm.DB, logger *zap.Logger, clk clock.Clock) *CheckI
 }
 
 // startOfShanghaiDay 返回 t 在业务时区（Asia/Shanghai）的自然日起点 00:00。
+// 实现委托 clock.DayStart（ADR-0027 自然日边界单点收编）。
 func startOfShanghaiDay(t time.Time) time.Time {
-	t = t.In(clock.Location())
-	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, clock.Location())
+	return clock.DayStart(t)
 }
 
 // shanghaiDayStr 归一化为业务时区日期字符串，避免 UTC 偏移导致跨日错位。
+// 实现委托 clock.DayKey（ADR-0027）。
 func shanghaiDayStr(t time.Time) string {
-	return t.In(clock.Location()).Format("2006-01-02")
+	return clock.DayKey(t)
 }
 
 // ComputeStreakMetrics 纯函数：由已签日期集合计算连击指标。

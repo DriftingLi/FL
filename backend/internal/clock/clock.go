@@ -34,6 +34,19 @@ func (realClock) Now() time.Time { return time.Now().In(loc) }
 // 供未注入 Clock 的遗留调用方委托使用；新代码请经 Clock 注入。
 func Now() time.Time { return time.Now().In(loc) }
 
+// DayStart 返回 t 在业务时区（Asia/Shanghai）下所在自然日的 00:00 起点。
+// 打卡 / 投稿配额 / 问答防刷 / 任务当日额度等「上海自然日」边界统一收编于此（ADR-0027）。
+func DayStart(t time.Time) time.Time {
+	t = t.In(loc)
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, loc)
+}
+
+// DayKey 返回 t 在业务时区（Asia/Shanghai）下的日期字符串 "2006-01-02"。
+// 与 DayStart 同口径的两形态之一，供日期字符串键（forum_topic_views.view_date 等）使用。
+func DayKey(t time.Time) string {
+	return t.In(loc).Format("2006-01-02")
+}
+
 // Fake 测试用时钟，定格在 T；T 可变以便跨日场景推进。
 type Fake struct{ T time.Time }
 

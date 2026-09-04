@@ -1,7 +1,7 @@
 // Package service 实现业务服务层。
 // 本文件：论坛图片模块——上传（校验 + 命名）与悬空图片生命周期（孤儿清理）。
-// 命名契约（文件名内嵌毫秒时间戳）由 FileStore.Save 写入；本模块自行解析该契约，
-// 不再依赖 FileStore 暴露 ExtractTimestamp（ADR-0015）。
+// 命名契约（文件名内嵌毫秒时间戳）由 FileStore.Save 写入；时间戳知识归位存储 seam，
+// 悬空 TTL 判定不再解析文件名（ADR-0027 C2），见 orphan_sweep.go。
 package service
 
 import (
@@ -9,8 +9,6 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
-	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -18,6 +16,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/storage"
 )
 
 // 论坛图片常量（模块契约，单一事实源）。
@@ -73,56 +72,25 @@ func (s *ForumImageService) Upload(ctx context.Context, fileHeader *multipart.Fi
 	return url, nil
 }
 
-// CleanupOrphans 清理论坛悬空图片：List(images/forum/) 与全量引用集差集，
-// 仅删除文件名时间戳超过 ForumImageOrphanTTL 且未被任何主题/回复引用的文件。
-// 返回清理的文件数（尽力而为，存储错误不中断）；ctx 取消语义贯穿到存储调用，优雅退出时及时让路。
+// CleanupOrphans 清理论坛悬空图片（薄配置壳，算法单点见 orphan_sweep.go / ADR-0027 C2）：
+// ListWithInfo(images/forum/) 与全量引用集差集，仅删存储侧 LastModified 超过
+// ForumImageOrphanTTL 且未被任何主题/回复引用的文件。
+// 返回清理的文件数（尽力而为，存储错误不中断）；ctx 取消语义贯穿到存储调用。
 func (s *ForumImageService) CleanupOrphans(ctx context.Context) int {
 	if s.fileSvc == nil {
 		return 0
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	// context 贯穿到存储 List 调用；失败则中止本轮清理，避免在存储不可用时误删
-	stored, err := s.fileSvc.ListWithContext(ctx, ForumImageDirPrefix)
-	if err != nil {
-		if s.logger != nil {
-			s.logger.Warn("[forum_image] List 失败", zap.Error(err))
-		}
-		// 若是取消导致，直接返回；否则本轮不清理，避免误判
-		return 0
-	}
-	if len(stored) == 0 {
-		return 0
-	}
-
-	referenced := s.collectReferencedImages()
-	cleaned := 0
-	cutoff := time.Now().Add(-ForumImageOrphanTTL)
-	for _, u := range stored {
-		// 优雅退出：检查取消
-		select {
-		case <-ctx.Done():
-			return cleaned
-		default:
-		}
-		key := forumImageKey(u)
-		if key == "" {
-			continue
-		}
-		if referenced[key] {
-			continue
-		}
-		if ms, ok := forumFileTimestamp(u); ok && time.UnixMilli(ms).Before(cutoff) {
-			if err := s.fileSvc.DeleteWithContext(ctx, u); err == nil {
-				cleaned++
-			} else if ctx.Err() != nil {
-				// 取消导致失败，立即返回
-				return cleaned
-			}
-		}
-	}
-	return cleaned
+	return runOrphanSweep(ctx, orphanSweepConfig{
+		domain: "forum_image",
+		ttl:    ForumImageOrphanTTL,
+		list: func(c context.Context) ([]storage.FileInfo, error) {
+			return s.fileSvc.ListWithInfoWithContext(c, ForumImageDirPrefix)
+		},
+		referenced: s.collectReferencedImages,
+		keyOf:      forumImageKey,
+		deleteFile: s.fileSvc.DeleteWithContext,
+		logger:     s.logger,
+	})
 }
 
 // forumImageKey 提取 images/forum/ 后的对象 key（兼容 local 与 R2 两种 URL 形态）
@@ -165,28 +133,6 @@ func (s *ForumImageService) collectReferencedImages() map[string]bool {
 		}
 	}
 	return ref
-}
-
-// forumFileTimestampRe 匹配 FileStore.Save 写入的毫秒时间戳（<name>_<ms>.<ext>）。
-var forumFileTimestampRe = regexp.MustCompile(`_(\d{10,})\.`)
-
-// forumFileTimestamp 从文件名/URL 提取 FileStore.Save 内嵌的毫秒时间戳。
-// 解析失败或时间戳非正数时返回 ok=false。
-func forumFileTimestamp(filename string) (int64, bool) {
-	idx := strings.LastIndex(filename, "/")
-	name := filename
-	if idx >= 0 {
-		name = filename[idx+1:]
-	}
-	m := forumFileTimestampRe.FindStringSubmatch(name)
-	if len(m) < 2 {
-		return 0, false
-	}
-	ms, err := strconv.ParseInt(m[1], 10, 64)
-	if err != nil || ms <= 0 {
-		return 0, false
-	}
-	return ms, true
 }
 
 // isForumImageURL 判断 URL 是否指向本站 images/forum/ 子目录。

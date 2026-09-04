@@ -3,7 +3,6 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -148,9 +147,7 @@ func (s *ContactService) Create(recruiterID, studentUserID int, message string) 
 	}
 	_ = lastRejected
 	// 日限：单个企业每日发起申请数有上限（默认 20）
-	loc := clock.Location()
-	y, m, d := now.In(loc).Date()
-	dayStart := time.Date(y, m, d, 0, 0, 0, 0, loc)
+	dayStart := clock.DayStart(now)
 	var todayCnt int64
 	if err := s.db.Model(&model.ContactRequest{}).Where("recruiter_id = ? AND created_at >= ?", recruiterID, dayStart).Count(&todayCnt).Error; err != nil {
 		return nil, err
@@ -171,15 +168,66 @@ func (s *ContactService) Create(recruiterID, studentUserID int, message string) 
 	if err := s.db.Create(&mdl).Error; err != nil {
 		return nil, err
 	}
-	// 站内信通知学员（不含企业电话）
-	if s.notificationSvc != nil {
-		payloadMap := map[string]any{"contact_request_id": mdl.ID, "recruiter_id": recruiterID}
-		b, _ := json.Marshal(payloadMap)
-		content := fmt.Sprintf("企业「%s」联系人 %s 申请查看你的联系方式，附言：%s", rec.CompanyName, rec.ContactName, msg)
-		_ = s.notificationSvc.Create(studentUserID, "contact_request", "收到联系方式交换申请", content, "/training/resume", model.JSONB(b))
-	}
+	// 站内信通知学员（不含企业电话；尽力而为，接收器 nil 与失败均吞；ADR-0027 C1 收编）
+	s.notificationSvc.TryCreateContactRequestEvent(NewContactRequestEvent(studentUserID, rec.CompanyName, rec.ContactName, msg, mdl.ID, recruiterID))
 	dto := s.toDTO(&mdl)
 	return &dto, nil
+}
+
+// EnsureApproved 投递即授权（ADR-0025/ADR-0027 C5）：事务内将企业对该学员的
+// 联系方式交换授权状态迁移为 approved，三分支收口 contact 域单点——
+//  1. 已有 pending 申请 → 覆盖为 approved（学员主动投递优先于待决申请）；
+//  2. 无 pending → 新写一条 approved（source=application，投递产生的授权）；
+//  3. 已有 revoked 的授权 → 复活为 approved（学员重新投递即重新授权）。
+//
+// 与既有投递事务语义一致：三分支顺序执行（1/2 为互斥分支，3 独立判定），
+// ExpiresAt 统一为 now+14 天；仅在事务内调用（tx 传入，不带新事务边界）。
+func (s *ContactService) EnsureApproved(tx *gorm.DB, recruiterID, studentUserID int, message string, now time.Time) error {
+	// 1/2. pending 覆盖 or 新建 approved
+	var pending model.ContactRequest
+	pendingErr := tx.Where("recruiter_id = ? AND student_user_id = ? AND status = ?", recruiterID, studentUserID, "pending").First(&pending).Error
+	switch {
+	case pendingErr == nil:
+		if err := tx.Model(&model.ContactRequest{}).Where("id = ?", pending.ID).Updates(map[string]any{
+			"status":     "approved",
+			"decided_at": now,
+			"updated_at": now,
+			"source":     "application",
+		}).Error; err != nil {
+			return err
+		}
+	case errors.Is(pendingErr, gorm.ErrRecordNotFound):
+		req := model.ContactRequest{
+			RecruiterID:   recruiterID,
+			StudentUserID: studentUserID,
+			Message:       message,
+			Status:        "approved",
+			Source:        "application",
+			CreatedAt:     now,
+			UpdatedAt:     now,
+			DecidedAt:     &now,
+			ExpiresAt:     now.Add(14 * 24 * time.Hour),
+		}
+		if err := tx.Create(&req).Error; err != nil {
+			return err
+		}
+	default:
+		return pendingErr
+	}
+	// 3. 已存在 revoked 的授权 → 复活为 approved（学员重新投递即重新授权）
+	var revoked model.ContactRequest
+	revokedErr := tx.Where("recruiter_id = ? AND student_user_id = ? AND status = ?", recruiterID, studentUserID, "revoked").Order("decided_at DESC").First(&revoked).Error
+	if revokedErr == nil {
+		return tx.Model(&model.ContactRequest{}).Where("id = ?", revoked.ID).Updates(map[string]any{
+			"status":     "approved",
+			"decided_at": now,
+			"updated_at": now,
+		}).Error
+	}
+	if !errors.Is(revokedErr, gorm.ErrRecordNotFound) {
+		return revokedErr
+	}
+	return nil
 }
 
 // ListForRecruiter 招聘方查看我的申请列表。

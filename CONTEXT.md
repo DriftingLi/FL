@@ -21,7 +21,7 @@
 
 ## 通知与审计
 
-- **站内信（notification）**：站内信通知基础设施，当前唯一渠道；资料审核、论坛互动（帖子被回复/楼中楼被回复/举报处理结果/管理端删帖删回复，link 指向 `/training/forum/:id`、payload 携带 topic_id）等业务事件通过站内信模块发出。事件构造（title/content/link/payload 口径）内聚为站内信域的 typed event constructors（首个：问答采纳奖励双事件，ADR-0024），业务方一行触发，不在调用点手拼文案。
+- **站内信（notification）**：站内信通知基础设施，当前唯一渠道；资料审核、论坛互动（帖子被回复/楼中楼被回复/举报处理结果/管理端删帖删回复，link 指向 `/training/forum/:id`、payload 携带 topic_id）、投稿全生命周期、联系方式交换申请等业务事件通过站内信模块发出。事件构造（title/content/link/payload 口径）**全部**内聚为站内信域的 typed event constructors（ADR-0024 试点、ADR-0027 全域收编），业务方一行触发，不在调用点手拼文案；错误语义两族——与业务写同事务的**强一致**（失败回滚）与**尽力而为**（失败记日志不回滚），由方法族显式区分。
 - **审计日志（audit log）**：管理员/讲师写操作由中间件统一记录，落库留痕（合规用途，与系统运行日志区分）。
 - **系统运行日志（app log）**：zap 统一日志栈（`internal/logger`），排查用——级别过滤、敏感字段脱敏、访问日志（request_id/user_id/role）、生产文件轮转持久化（`/data/logs`）。与「审计日志」的边界：前者是运行期诊断输出（console/文件），后者是业务写操作的持久化记录（DB 表），两者互不替代。
 

@@ -37,6 +37,7 @@ var (
 
 // JobApplicationService 投递服务。
 type JobApplicationService struct {
+	contactSvc      *ContactService
 	db              *gorm.DB
 	logger          *zap.Logger
 	notificationSvc *NotificationService
@@ -44,9 +45,9 @@ type JobApplicationService struct {
 	dailyLimit      int
 }
 
-// NewJobApplicationService 创建投递服务。mailer 可为 nil（测试或未配置时降级为日志）。
-func NewJobApplicationService(db *gorm.DB, logger *zap.Logger, notificationSvc *NotificationService) *JobApplicationService {
-	return &JobApplicationService{db: db, logger: logger, notificationSvc: notificationSvc, dailyLimit: 10}
+// NewJobApplicationService 创建投递服务。contact 收口授权状态机（ADR-0027 C5）；mailer 可为 nil。
+func NewJobApplicationService(db *gorm.DB, logger *zap.Logger, notificationSvc *NotificationService, contact *ContactService) *JobApplicationService {
+	return &JobApplicationService{db: db, logger: logger, notificationSvc: notificationSvc, contactSvc: contact, dailyLimit: 10}
 }
 
 // SetDailyLimit 测试用：覆盖每日投递上限。
@@ -160,10 +161,8 @@ func (s *JobApplicationService) Apply(studentUserID, jobPostingID int) (*Applica
 	}
 	_ = lastRejected
 	// 学员每日投递上限
-	loc := clock.Location()
 	now := clock.Now()
-	y, m, d := now.In(loc).Date()
-	dayStart := time.Date(y, m, d, 0, 0, 0, 0, loc)
+	dayStart := clock.DayStart(now)
 	var todayCnt int64
 	if err := s.db.Model(&model.JobApplication{}).Where("student_user_id = ? AND created_at >= ?", studentUserID, dayStart).Count(&todayCnt).Error; err != nil {
 		return nil, err
@@ -187,52 +186,10 @@ func (s *JobApplicationService) Apply(studentUserID, jobPostingID int) (*Applica
 		if err := tx.Create(&app).Error; err != nil {
 			return err
 		}
-		// 2. 授权：同一事务内写入/复活一条 approved 的联系方式交换记录（source=application）
-		//    该企业对该学员已有 pending 申请 → 覆盖为 approved（学员主动投递优先于待决申请）。
-		var pending model.ContactRequest
-		pendingErr := tx.Where("recruiter_id = ? AND student_user_id = ? AND status = ?", job.RecruiterID, studentUserID, "pending").First(&pending).Error
-		if pendingErr == nil {
-			// 覆盖 pending → approved
-			if err := tx.Model(&model.ContactRequest{}).Where("id = ?", pending.ID).Updates(map[string]any{
-				"status":     "approved",
-				"decided_at": now,
-				"updated_at": now,
-				"source":     "application",
-			}).Error; err != nil {
-				return err
-			}
-		} else if errors.Is(pendingErr, gorm.ErrRecordNotFound) {
-			// 无 pending → 新写一条 approved（投递产生的授权）
-			req := model.ContactRequest{
-				RecruiterID:   job.RecruiterID,
-				StudentUserID: studentUserID,
-				Message:       applyMessage(job.Title),
-				Status:        "approved",
-				Source:        "application",
-				CreatedAt:     now,
-				UpdatedAt:     now,
-				DecidedAt:     &now,
-				ExpiresAt:     now.Add(14 * 24 * time.Hour),
-			}
-			if err := tx.Create(&req).Error; err != nil {
-				return err
-			}
-		} else {
-			return pendingErr
-		}
-		// 3. 已存在 revoked 的授权 → 复活为 approved（学员重新投递即重新授权）
-		var revoked model.ContactRequest
-		revokedErr := tx.Where("recruiter_id = ? AND student_user_id = ? AND status = ?", job.RecruiterID, studentUserID, "revoked").Order("decided_at DESC").First(&revoked).Error
-		if revokedErr == nil {
-			if err := tx.Model(&model.ContactRequest{}).Where("id = ?", revoked.ID).Updates(map[string]any{
-				"status":     "approved",
-				"decided_at": now,
-				"updated_at": now,
-			}).Error; err != nil {
-				return err
-			}
-		} else if !errors.Is(revokedErr, gorm.ErrRecordNotFound) {
-			return revokedErr
+		// 2. 授权：投递即授权（ADR-0025）。pending 覆盖 / 新建 approved / revoked 复活
+		//    三分支状态迁移收口 contact 域单点（ADR-0027 C5），此处一行声明意图。
+		if err := s.contactSvc.EnsureApproved(tx, job.RecruiterID, studentUserID, applyMessage(job.Title), now); err != nil {
+			return err
 		}
 		dto = s.toDTO(&app)
 		return nil

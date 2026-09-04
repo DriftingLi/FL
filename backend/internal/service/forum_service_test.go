@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/storage"
 	"forklift-training/internal/testutil"
 )
 
@@ -33,6 +34,15 @@ func (m *memForumStorage) Delete(_ context.Context, url string) error {
 func (m *memForumStorage) Exists(context.Context, string) (bool, error) { return true, nil }
 
 func (m *memForumStorage) List(_ context.Context, _ string) ([]string, error) { return m.files, nil }
+
+// ListWithInfo 测试用：LastModified 由文件 URL 命名契约推导（见 fileStampToTime）。
+func (m *memForumStorage) ListWithInfo(_ context.Context, _ string) ([]storage.FileInfo, error) {
+	infos := make([]storage.FileInfo, 0, len(m.files))
+	for _, u := range m.files {
+		infos = append(infos, storage.FileInfo{URL: u, LastModified: fileStampToTime(u)})
+	}
+	return infos, nil
+}
 
 func (m *memForumStorage) Get(_ context.Context, url string) (io.ReadCloser, error) {
 	return io.NopCloser(bytes.NewReader([]byte(url))), nil
