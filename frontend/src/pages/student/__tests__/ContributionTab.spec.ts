@@ -8,6 +8,7 @@ vi.mock('@/api/contribution', () => ({
   contributionApi: {
     listPublic: vi.fn(),
     listMine: vi.fn(),
+    detail: vi.fn(),
     uploadFile: vi.fn(),
     create: vi.fn(),
     download: vi.fn(),
@@ -46,14 +47,16 @@ function contributionItem(over: Record<string, unknown> = {}): import('@/api/con
     downloads_count: 12,
     created_at: '2026-09-01T10:00:00+08:00',
     author: { user_id: 7, username: '小明' },
-    files: [{ file_id: 1, file_name: 'a.pdf', file_url: '/static/uploads/contributions/a.pdf', file_size: 1024, content_type: 'document' }],
-    ...over
+    // 列表契约：ListPublic 不加载 files（摘要形状）——详情靠 detail 懒加载（回归守卫见详情用例）
+    ...(over as object)
   }
 }
 
 beforeEach(() => {
   vi.mocked(contributionApi.listPublic).mockResolvedValue({ items: [contributionItem()], total: 1, page: 1, page_size: 20 })
   vi.mocked(contributionApi.listMine).mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20 })
+  vi.mocked(contributionApi.detail).mockResolvedValue(contributionItem({ files: [{ file_id: 1, file_name: '液压手册.pdf', file_url: '/static/uploads/contributions/a.pdf', file_size: 1024, content_type: 'document' }] }))
+  vi.mocked(contributionApi.download).mockResolvedValue({ is_new: true, tier_awarded: 0 })
 })
 
 describe('ContributionTab 学员投稿（#517）', () => {
@@ -96,6 +99,35 @@ describe('ContributionTab 学员投稿（#517）', () => {
     const w = mountTab()
     await flushPromises()
     expect(w.text()).toContain('匿名学员')
+  })
+
+  it('广场卡片有「查看」入口（列表不带 files 也不受影响——回归守卫）', async () => {
+    const w = mountTab()
+    await flushPromises()
+    const viewBtn = w.findAll('button').find((b) => b.text().includes('查看'))
+    expect(viewBtn).toBeTruthy()
+    expect(vi.mocked(contributionApi.detail)).not.toHaveBeenCalled()
+    await viewBtn!.trigger('click')
+    await flushPromises()
+    expect(vi.mocked(contributionApi.detail)).toHaveBeenCalledWith(1)
+    // 详情对话框（append-to-body）含文件名与下载按钮
+    expect(document.body.textContent).toContain('液压手册.pdf')
+  })
+
+  it('详情内下载：先计端点再开直链', async () => {
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
+    const w = mountTab()
+    await flushPromises()
+    await w.findAll('button').find((b) => b.text().includes('查看'))!.trigger('click')
+    await flushPromises()
+    const btns = Array.from(document.querySelectorAll('button'))
+    const dlBtn = btns.find((b) => b.textContent?.includes('下载'))
+    expect(dlBtn).toBeTruthy()
+    dlBtn!.dispatchEvent(new MouseEvent('click'))
+    await flushPromises()
+    expect(vi.mocked(contributionApi.download)).toHaveBeenCalledWith(1)
+    expect(openSpy).toHaveBeenCalled()
+    openSpy.mockRestore()
   })
 
   it('上传抽屉：空标题被拦（不调 create）', async () => {
