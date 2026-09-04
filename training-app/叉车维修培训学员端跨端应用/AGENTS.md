@@ -119,6 +119,22 @@ UTS（uni-app-x 的 TypeScript 变体）不支持以下 TypeScript 语法：
 - **交叉类型 + 内联对象字面量**：`type C = A & { field: type }` → 必须展平为独立类型定义
 - **联合字面量类型用于运行时强转**：`'student' | 'tutor'` 编译到 Kotlin 后无法用 `as` 强转 → 统一用 `string`
 
+##### Kotlin 编译期常见错误（云打包 / 发行模式全量编译会暴露）
+
+| 错误写法 | 报错 | 正确写法 |
+|---|---|---|
+| `undefined` | 找不到名称 undefined | 空值统一 `null` |
+| `String(x)` | None of the following candidates is applicable | `x.toString()` |
+| `let x : any = null` | Null cannot be a value of non-null 'Any' | `let x : number \| null = null` 等可空类型 |
+| `.catch((e : any) => …)` | None of the following candidates is applicable | `.catch((e) => …)` 或 `.catch((e : any \| null) => …)` |
+| `Record<string,string> = {a:1}` | Cannot create an instance of an abstract class | `new Map<string,string>()` + `.set()` |
+| 事件回调 `(e : any)` 访问 `e.detail` | Unresolved reference 'detail' | `e as UTSJSONObject` + `e['detail']` 索引 |
+| 函数定义引用后声明的变量 | Unresolved reference（无 hoisting） | 变量声明前置到函数之前 |
+| 模板对可空 `?:` 字段做 `>`/`<` 比较 | Operator call is prohibited on nullable receiver | `(x ?? 0) > 0` 兜底 |
+| `getStorageSync` 返回值传给 `setStorageSync` | Argument type mismatch: Any? vs Any | `if (x != null) setStorageSync(k, x as any)` |
+
+> `any` 在 UTS 编译成 Kotlin 的**非空** `Any`；需要可空时用 `any | null` 或具体可空类型。模板属性访问走宽松路径不报错，但 `<script>` 是严格 Kotlin 检查——报错全在 script，别被模板的"安静"误导。
+
 #### 编译验证
 
 修改 `.uvue` 文件后，在 HBuilderX 中重新编译，检查控制台：

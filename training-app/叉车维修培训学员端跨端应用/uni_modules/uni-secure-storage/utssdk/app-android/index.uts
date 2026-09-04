@@ -19,11 +19,18 @@ import KeyGenParameterSpec from "android.security.keystore.KeyGenParameterSpec";
 import KeyProperties from "android.security.keystore.KeyProperties";
 import Base64 from "android.util.Base64";
 import JSONObject from "org.json.JSONObject";
+import Charset from "java.nio.charset.Charset";
+// interface.uts 的类型必须显式 import 才会参与本平台编译（error3：
+// 仅在 interface.uts 定义、平台文件不引用的类型不会打包 → error18 找不到名称）
+import { SecureSetResult, SecureGetResult, SecureOpResult, SecureStorageCapabilities } from "../interface.uts";
 
 const KEYSTORE_PROVIDER = "AndroidKeyStore";
 const MASTER_KEY_ALIAS = "uni_secure_storage_master";
 const TRANSFORMATION = "AES/GCM/NoPadding";
-const GCM_TAG_BITS = 128;
+// GCM_TAG_BITS 必须显式注解为 Int：无注解的 `const X = 128` 会被 UTS
+// 推断为 number（Kotlin Number），传给 GCMParameterSpec(int, byte[])
+// 即报 error17（Number≠Int）。本文件仅参与 app-android 编译，Int 可用。
+const GCM_TAG_BITS : Int = 128;
 const PREFS_NAME = "uni_secure_storage";
 const KEY_INDEX = "__index__";
 
@@ -103,7 +110,8 @@ export function setSecureItem(key : string, value : string) : SecureSetResult {
         const cipher = Cipher.getInstance(TRANSFORMATION);
         cipher.init(Cipher.ENCRYPT_MODE, ensureMasterKey());
         const iv = cipher.getIV();
-        const cipherText = cipher.doFinal(value.toByteArray("UTF-8"));
+        // Kotlin toByteArray 只收 Charset 重载，传字符串会报 error17（String≠Charset）
+        const cipherText = cipher.doFinal(value.toByteArray(Charset.forName("UTF-8")));
 
         const jo = new JSONObject();
         jo.put("iv", Base64.encodeToString(iv, Base64.NO_WRAP));
@@ -131,7 +139,8 @@ export function getSecureItem(key : string) : SecureGetResult {
         const cipher = Cipher.getInstance(TRANSFORMATION);
         cipher.init(Cipher.DECRYPT_MODE, ensureMasterKey(), new GCMParameterSpec(GCM_TAG_BITS, iv));
         const plain = cipher.doFinal(ct);
-        return { ok: true, found: true, value: plain.toString("UTF-8"), errMsg: "" } as SecureGetResult;
+        // 同上：ByteArray.toString 只收 Charset，不能传字符串字面量
+        return { ok: true, found: true, value: plain.toString(Charset.forName("UTF-8")), errMsg: "" } as SecureGetResult;
     } catch (e) {
         return { ok: false, found: false, value: "", errMsg: `解密读取失败: ${e.message}` } as SecureGetResult;
     }

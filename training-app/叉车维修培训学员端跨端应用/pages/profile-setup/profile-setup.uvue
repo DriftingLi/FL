@@ -65,12 +65,13 @@
     /** 微信头像选择回调（button open-type="chooseAvatar"） */
     function onChooseAvatar(e : any) : void {
         console.log('[profile-setup] onChooseAvatar e:', JSON.stringify(e))
-        const detail = e.detail
+        const evt = e as UTSJSONObject
+        const detail = evt['detail'] as UTSJSONObject
         if (detail == null) {
             console.log('[profile-setup] detail is null')
             return
         }
-        const url = detail.avatarUrl
+        const url = detail['avatarUrl']
         console.log('[profile-setup] url:', url)
         if (url != null && (url as string).length > 0) {
             avatarUrl.value = url as string
@@ -99,9 +100,10 @@
     }
 
     function onNicknameInput(e : any) : void {
-        const detail = e.detail
+        const evt = e as UTSJSONObject
+        const detail = evt['detail'] as UTSJSONObject
         if (detail == null) return
-        const val = detail.value
+        const val = detail['value']
         nickName.value = val != null ? (val as string) : ''
     }
 

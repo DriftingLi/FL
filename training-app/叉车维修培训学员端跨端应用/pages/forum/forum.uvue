@@ -6,7 +6,7 @@
                 <view class="msg-icon-wrap" @click="onMsgClick">
                     <text class="msg-icon">✉️</text>
                     <view v-if="unreadCount > 0" class="msg-badge">
-                        <text class="msg-badge-text">{{ unreadCount > 99 ? '99+' : String(unreadCount) }}</text>
+                        <text class="msg-badge-text">{{ unreadCount > 99 ? '99+' : unreadCount.toString() }}</text>
                     </view>
                 </view>
             </view>
@@ -456,6 +456,52 @@
         return colors[authorId % colors.length]
     }
 
+    async function loadTopics(reset : boolean = false) : Promise<void> {
+        if (loading.value) return
+        if (reset) {
+            page.value = 1
+            noMore.value = false
+        }
+        if (noMore.value && !reset) return
+
+        loading.value = true
+        try {
+            // 后端 scope 白名单仅 all|general|chapter（旧值 hot/recruit 会被静默当 all），
+            // category 白名单 all|discussion|question
+            // 广场/招聘只出普通帖（discussion），知识问答帖（question）仅在问答 Tab 展示
+            let scope = 'general'
+            let category = 'discussion'
+            let sort = sortField.value
+            let order = sortOrder.value
+            if (currentTab.value === 'recruit') {
+                scope = 'all'
+            } else if (currentTab.value === 'hot') {
+                // 知识问答：只列提问帖；推荐/最热都映射后端 hot（推荐暂无独立算法，mock 占位），最新映射 latest
+                scope = 'all'
+                category = 'question'
+                order = 'desc'
+                sort = qaSort.value == 'latest' ? 'latest' : 'hot'
+            }
+            const result = await getForumTopicsApi(page.value, pageSize, scope, sort, order, category)
+            if (reset) {
+                topics.value = result.items
+            } else {
+                topics.value = topics.value.concat(result.items)
+            }
+            total.value = result.total
+            if (topics.value.length >= result.total || result.items.length == 0) {
+                noMore.value = true
+            } else {
+                page.value = page.value + 1
+            }
+        } catch (e) {
+            console.error('[forum] load failed:', e)
+            uni.showToast({ title: '加载帖子失败', icon: 'none' })
+        } finally {
+            loading.value = false
+        }
+    }
+
     function onSwitchTab(tab : string) : void {
         if (currentTab.value === tab) return
         currentTab.value = tab
@@ -504,52 +550,6 @@
 
     function onJobApply(jobId : number) : void {
         uni.showToast({ title: '功能开发中', icon: 'none' })
-    }
-
-    async function loadTopics(reset : boolean = false) : Promise<void> {
-        if (loading.value) return
-        if (reset) {
-            page.value = 1
-            noMore.value = false
-        }
-        if (noMore.value && !reset) return
-
-        loading.value = true
-        try {
-            // 后端 scope 白名单仅 all|general|chapter（旧值 hot/recruit 会被静默当 all），
-            // category 白名单 all|discussion|question
-            // 广场/招聘只出普通帖（discussion），知识问答帖（question）仅在问答 Tab 展示
-            let scope = 'general'
-            let category = 'discussion'
-            let sort = sortField.value
-            let order = sortOrder.value
-            if (currentTab.value === 'recruit') {
-                scope = 'all'
-            } else if (currentTab.value === 'hot') {
-                // 知识问答：只列提问帖；推荐/最热都映射后端 hot（推荐暂无独立算法，mock 占位），最新映射 latest
-                scope = 'all'
-                category = 'question'
-                order = 'desc'
-                sort = qaSort.value == 'latest' ? 'latest' : 'hot'
-            }
-            const result = await getForumTopicsApi(page.value, pageSize, scope, sort, order, category)
-            if (reset) {
-                topics.value = result.items
-            } else {
-                topics.value = topics.value.concat(result.items)
-            }
-            total.value = result.total
-            if (topics.value.length >= result.total || result.items.length == 0) {
-                noMore.value = true
-            } else {
-                page.value = page.value + 1
-            }
-        } catch (e) {
-            console.error('[forum] load failed:', e)
-            uni.showToast({ title: '加载帖子失败', icon: 'none' })
-        } finally {
-            loading.value = false
-        }
     }
 
     function onLoadMore() : void {

@@ -365,6 +365,10 @@ export type ForumReply = {
     can_delete : boolean
     likes_count : number
     liked : boolean
+    /** 后端未来可能直接返回：兼容读取时判空使用（forum-detail 本地态回退） */
+    liked_by_me ?: boolean
+    /** 后端未来可能直接返回：兼容读取时判空使用（forum-detail 本地态回退） */
+    like_count ?: number
 }
 
 /** 帖子详情（含回复列表） */
@@ -421,6 +425,12 @@ export type CourseItem = {
     specialty_id : number
     /** 课程等级 ID（0 表示未设置） */
     level_id : number
+    /** 购物车本地数量（非后端字段，选填） */
+    quantity ?: number
+    /** 商城价格（0=免费；后端课程接口暂未返回，选填） */
+    price ?: number
+    /** 报名人数（后端课程接口暂未返回，选填） */
+    enrollCount ?: number
 }
 
 /** 专业方向（筛选项） */

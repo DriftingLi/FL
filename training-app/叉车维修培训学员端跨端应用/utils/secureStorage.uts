@@ -18,7 +18,8 @@ import { setStorageJSON, getStorageJSON, removeStorage } from './storage'
 import { STORAGE_KEY_CREDENTIALS } from '../constants/app'
 
 // #ifdef APP
-import * as secStore from '@/uni_modules/uni-secure-storage'
+// 具名导入：error15 规定 export 函数 + import * 即 Kotlin 编译失败，插件必须逐个具名引入
+import { getSecureStorageCapabilities, getSecureItem, setSecureItem, removeSecureItem } from '@/uni_modules/uni-secure-storage'
 // #endif
 
 /** 凭据载体结构（UTS 不支持 inline interface 作返回类型，用 type alias） */
@@ -31,7 +32,7 @@ export type StoredCredentials = {
 /** 当前平台是否可用加密存储（App 端 true） */
 function secureBackendAvailable() : boolean {
     // #ifdef APP
-    return secStore.getSecureStorageCapabilities().supported
+    return getSecureStorageCapabilities().supported
     // #endif
     // #ifndef APP
     return false
@@ -42,7 +43,7 @@ function secureBackendAvailable() : boolean {
 function readEnvelope() : StoredCredentials | null {
     // #ifdef APP
     if (secureBackendAvailable()) {
-        const enc = secStore.getSecureItem(STORAGE_KEY_CREDENTIALS)
+        const enc = getSecureItem(STORAGE_KEY_CREDENTIALS)
         if (enc.ok && enc.found) {
             const parsed = parseEnvelope(enc.value)
             if (parsed != null) {
@@ -54,7 +55,7 @@ function readEnvelope() : StoredCredentials | null {
         if (legacy != null) {
             const migrated = fromJSON(legacy)
             if (migrated != null) {
-                secStore.setSecureItem(STORAGE_KEY_CREDENTIALS, JSON.stringify(migrated))
+                setSecureItem(STORAGE_KEY_CREDENTIALS, JSON.stringify(migrated))
             }
             removeStorage(STORAGE_KEY_CREDENTIALS)
             return migrated
@@ -75,7 +76,7 @@ function readEnvelope() : StoredCredentials | null {
 function writeEnvelope(data : StoredCredentials) : void {
     // #ifdef APP
     if (secureBackendAvailable()) {
-        secStore.setSecureItem(STORAGE_KEY_CREDENTIALS, JSON.stringify(data))
+        setSecureItem(STORAGE_KEY_CREDENTIALS, JSON.stringify(data))
         return
     }
     // #endif
@@ -89,7 +90,8 @@ function parseEnvelope(json : string) : StoredCredentials | null {
         if (obj == null) {
             return null
         }
-        return fromJSON(obj)
+        // fromJSON 要 UTSJSONObject，JSON.parse 给 Any：必须显式 as（error17 Any≠UTSJSONObject）
+        return fromJSON(obj as UTSJSONObject)
     } catch (e) {
         return null
     }
@@ -184,7 +186,7 @@ export function loadSecureCredentials() : StoredCredentials | null {
 export function clearSecureCredentials() : void {
     // #ifdef APP
     if (secureBackendAvailable()) {
-        secStore.removeSecureItem(STORAGE_KEY_CREDENTIALS)
+        removeSecureItem(STORAGE_KEY_CREDENTIALS)
     }
     // #endif
     removeStorage(STORAGE_KEY_CREDENTIALS)

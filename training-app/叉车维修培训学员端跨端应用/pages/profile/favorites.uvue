@@ -162,18 +162,6 @@
         }
     }
 
-    function onRemove(item : FavoriteItem) : void {
-        uni.showModal({
-            title: '提示',
-            content: '确定取消收藏？',
-            success: (res) => {
-                if (res.confirm) {
-                    doRemove(item)
-                }
-            }
-        })
-    }
-
     async function doRemove(item : FavoriteItem) : Promise<void> {
         uni.showLoading({ title: '处理中...' })
         try {
@@ -193,6 +181,18 @@
         } finally {
             uni.hideLoading()
         }
+    }
+
+    function onRemove(item : FavoriteItem) : void {
+        uni.showModal({
+            title: '提示',
+            content: '确定取消收藏？',
+            success: (res) => {
+                if (res.confirm) {
+                    doRemove(item)
+                }
+            }
+        })
     }
 
     function onBack() : void {
