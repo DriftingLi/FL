@@ -27,7 +27,10 @@ import { SecureSetResult, SecureGetResult, SecureOpResult, SecureStorageCapabili
 const KEYSTORE_PROVIDER = "AndroidKeyStore";
 const MASTER_KEY_ALIAS = "uni_secure_storage_master";
 const TRANSFORMATION = "AES/GCM/NoPadding";
-const GCM_TAG_BITS = 128;
+// GCM_TAG_BITS 必须显式注解为 Int：无注解的 `const X = 128` 会被 UTS
+// 推断为 number（Kotlin Number），传给 GCMParameterSpec(int, byte[])
+// 即报 error17（Number≠Int）。本文件仅参与 app-android 编译，Int 可用。
+const GCM_TAG_BITS : Int = 128;
 const PREFS_NAME = "uni_secure_storage";
 const KEY_INDEX = "__index__";
 

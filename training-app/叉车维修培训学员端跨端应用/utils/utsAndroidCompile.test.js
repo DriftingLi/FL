@@ -1,7 +1,7 @@
 /**
  * uni-app x App-Android（Kotlin）编译静态守护
  *
- * 背景：HBuilderX 5.24 无线调试全量编译 kotlin 失败，四类根因 H5 端不报、
+ * 背景：HBuilderX 5.24 无线调试全量编译 kotlin 失败，五类根因 H5 端不报、
  * 只会在 App 端暴露（error 编号对应 DCloud 编译器已知问题文档）：
  *   A. <script setup lang="uts"> 顶层函数编译为 Kotlin 局部函数，无提升——
  *      调用出现在定义之前即 error18「找不到名称」（error13 同源）
@@ -11,6 +11,8 @@
  *      error17（String ≠ Charset）
  *   D. interface.uts 中无函数体的 ambient 函数声明，被平台文件 value-import
  *      后整体编译时因无实现而失败
+ *   E. 原生互操作文件里无注解的数字常量——UTS 推断为 number（Kotlin
+ *      Number），流入 Java/Kotlin 的 Int 形参即 error17，须显式注解 Int
  *
  * 设计：每类扫描都是纯函数，先各跑一个「注入违规」自检用例证明检测有效
  * （防止空跑假绿），再对全工程源码跑断言零命中（真正守护）。
@@ -122,6 +124,18 @@ function scanAmbientFunction(cleanText) {
   return hits;
 }
 
+/** E：原生互操作文件里无注解的数字常量（推断为 number，流入 Int 形参即 error17） */
+function scanUntypedNumericConst(cleanText) {
+  const hits = [];
+  const lines = cleanText.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    if (/^\s*(?:export\s+)?(?:const|let)\s+[A-Za-z_$][\w$]*\s*=\s*-?\d+(\.\d+)?\s*;?\s*$/.test(lines[i])) {
+      hits.push(lines[i].trim());
+    }
+  }
+  return hits;
+}
+
 /** B：跨文件 export type/interface 未 import 就引用（需全工程导出表） */
 function buildExportedTypeMap() {
   const exported = new Map();
@@ -170,6 +184,12 @@ describe('守护自检：检测逻辑对已知违规样本必须报出', () => {
     expect(scanAmbientFunction('export function setSecureItem(key : string) : SecureSetResult {')).toEqual([]);
   });
 
+  it('E 能报出无注解数字常量', () => {
+    expect(scanUntypedNumericConst('const GCM_TAG_BITS = 128;')).toHaveLength(1);
+    expect(scanUntypedNumericConst('const GCM_TAG_BITS : Int = 128;')).toEqual([]);
+    expect(scanUntypedNumericConst('const GCM_TAG_BITS : number = 128;')).toEqual([]);
+  });
+
   it('B 检测表能识别导出类型（导出表非空）', () => {
     const map = buildExportedTypeMap();
     expect(map.has('SecureSetResult')).toBe(true);
@@ -178,7 +198,7 @@ describe('守护自检：检测逻辑对已知违规样本必须报出', () => {
 });
 
 // ── 全工程真实扫描（守护本体，回归即红）────────────────────────────────
-describe('全工程守护：四类 Kotlin 编译地雷零命中', () => {
+describe('全工程守护：五类 Kotlin 编译地雷零命中', () => {
   const scopeInfo = { uvue: ALL_FILES.filter((f) => f.endsWith('.uvue')).length, uts: ALL_FILES.filter((f) => f.endsWith('.uts')).length };
 
   it('扫描范围非空（.uvue/.uts 全覆盖）', () => {
@@ -239,6 +259,17 @@ describe('全工程守护：四类 Kotlin 编译地雷零命中', () => {
     const violations = [];
     for (const file of ALL_FILES.filter((f) => f.endsWith('interface.uts'))) {
       for (const h of scanAmbientFunction(blank(fs.readFileSync(file, 'utf8')))) {
+        violations.push(`${path.relative(ROOT, file)}: ${h}`);
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it('E：原生互操作文件无未注解数字常量（number 流入 Int 形参 → error17）', () => {
+    const violations = [];
+    const isNativeFile = (f) => f.includes('utssdk') && (f.includes('app-android') || f.includes('app-ios') || f.includes('app-harmony'));
+    for (const file of ALL_FILES.filter((f) => f.endsWith('.uts') && isNativeFile(f))) {
+      for (const h of scanUntypedNumericConst(blank(fs.readFileSync(file, 'utf8')))) {
         violations.push(`${path.relative(ROOT, file)}: ${h}`);
       }
     }
