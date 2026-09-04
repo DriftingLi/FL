@@ -123,7 +123,7 @@
 				<text class="history-clear" @click="onClearHistory">清空</text>
 			</view>
 			<view class="history-tags">
-				<view v-for="(kw, idx) in searchHistory" :key="idx" class="history-tag" @click="onHistoryClick(kw)">
+				<view v-for="(kw, idx) in searchHistory" :key="idx" class="history-tag mr-16-mb-16" @click="onHistoryClick(kw)">
 					<text class="history-tag-text">{{ kw }}</text>
 				</view>
 			</view>
@@ -527,7 +527,6 @@
 	.history-tags {
 		flex-direction: row;
 		flex-wrap: wrap;
-		gap: 16rpx;
 	}
 
 	.history-tag {
@@ -540,4 +539,6 @@
 		font-size: 26rpx;
 		color: #666666;
 	}
+
+	.mr-16-mb-16 { margin-right: 16rpx; margin-bottom: 16rpx; }
 </style>

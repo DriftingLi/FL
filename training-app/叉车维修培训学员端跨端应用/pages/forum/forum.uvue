@@ -298,9 +298,31 @@
     import { getForumTopicsApi, getCheckInCalendarApi } from '../../api/forum'
     import { getProfileApi } from '../../api/student'
     import { getUnreadCountApi } from '../../api/notification'
-    import { formatDateStr, resolveFileUrl, formatCountCompact } from '../../utils/format'
     import { UNAVAILABLE_TOAST } from '../../constants/app'
     import type { ForumTopic, StudentProfile } from '../../types/index'
+
+    /** ISO 日期字符串 → YYYY-MM-DD */
+    function formatDateStr(dateStr : string) : string {
+        if (dateStr == null || dateStr.length < 10) return dateStr
+        return dateStr.substring(0, 10)
+    }
+
+    /** 补全后端返回的相对文件 URL */
+    function resolveFileUrl(url : string) : string {
+        if (url.length == 0) return ''
+        if (url.startsWith('http://') || url.startsWith('https://')) {
+            return url
+        }
+        return url
+    }
+
+    /** 数字紧凑格式 */
+    function formatCountCompact(n : number) : string {
+        if (n < 100) return n.toString()
+        if (n < 1000) return '99+'
+        if (n < 10000) return '999+'
+        return '9999+'
+    }
 
     type RecruitJob = {
         id : number
@@ -380,7 +402,7 @@
     })
 
     async function loadProfile() : Promise<void> {
-        try { profile.value = await getProfileApi() } catch (e) { uni.__f__('error','at pages/forum/forum.uvue:255','[forum] loadProfile failed:', e) }
+        try { profile.value = await getProfileApi() } catch (e) { console.error('[forum] loadProfile failed:', e) }
     }
     function onPointsTodetail() : void {
         uni.navigateTo({
@@ -523,7 +545,7 @@
                 page.value = page.value + 1
             }
         } catch (e) {
-            uni.__f__('error','at pages/forum/forum.uvue:369','[forum] load failed:', e)
+            console.error('[forum] load failed:', e)
             uni.showToast({ title: '加载帖子失败', icon: 'none' })
         } finally {
             loading.value = false
@@ -566,7 +588,7 @@
         try {
             unreadCount.value = await getUnreadCountApi()
         } catch (e) {
-            uni.__f__('error','at pages/forum/forum.uvue:412','[forum] loadUnreadCount failed:', e)
+            console.error('[forum] loadUnreadCount failed:', e)
         }
     }
 

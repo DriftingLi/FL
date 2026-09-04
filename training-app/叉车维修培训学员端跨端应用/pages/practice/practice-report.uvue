@@ -271,7 +271,7 @@
     /* 整体正确率 */
     .acc-row {
         flex-direction: row;
-        align-items: baseline;
+        align-items: flex-start;
     }
 
     .acc-num {

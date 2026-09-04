@@ -10,15 +10,22 @@
             </view>
             <view class="nav-right">
                 <view class="nav-icon-btn" @click="onNotificationClick">
-                    <text class="nav-icon-text"></text>
+                    <text class="nav-icon-text">🔔</text>
                     <view v-if="unreadCount > 0" class="unread-badge">
                         <text class="unread-badge-text">{{ unreadCount > 99 ? '99+' : unreadCount.toString() }}</text>
                     </view>
                 </view>
                 <view class="nav-icon-btn" @click="onCartClick">
-                    <text class="nav-icon-text"></text>
+                    <text class="nav-icon-text">🛒</text>
                 </view>
             </view>
+        </view>
+
+        <!-- 公告栏 -->
+        <view class="notice-bar" @click="onNoticeClick">
+            <text class="notice-icon">📢</text>
+            <text class="notice-text">叉车维修培训开课通知，欢迎报名学习</text>
+            <text class="notice-arrow">›</text>
         </view>
 
         <!-- 证件下拉选择器（选择学习阶段风格） -->
@@ -43,7 +50,7 @@
                         </view>
                         <!-- 胶囊标签 -->
                         <view class="cert-dropdown-chips">
-                            <view v-for="(item, idx) in group.items" :key="idx" class="cert-dropdown-chip"
+                            <view v-for="(item, idx) in group.items" :key="idx" class="cert-dropdown-chip mr-16 mb-16"
                                 :class="{ 'cert-dropdown-chip--active': currentCredentialId === item.id }"
                                 @click="onSelectCredential(item)">
                                 <!-- 单行（特种作业证） -->
@@ -54,7 +61,7 @@
                                 <!-- 双行（技能等级证） -->
                                 <view v-else class="cert-dropdown-chip-double">
                                     <text class="cert-dropdown-chip-level"
-                                        :class="{ 'cert-dropdown-chip-text--active': currentCredentialId === item.id }">{{ levelNames[item.level!] }}</text>
+                                        :class="{ 'cert-dropdown-chip-text--active': currentCredentialId === item.id }">{{ levelNames[item.level!.toString()] }}</text>
                                     <!-- <text class="cert-dropdown-chip-desc"
                                         :class="{ 'cert-dropdown-chip-desc--active': currentCredentialId === item.id }">{{ item.name }}</text> -->
                                 </view>
@@ -69,7 +76,8 @@
                             <view class="cert-dropdown-hot-line"></view>
                         </view>
                         <view class="cert-dropdown-hot-grid">
-                            <view v-for="(item, idx) in hotCertList" :key="idx" class="cert-dropdown-hot-card">
+                            <view v-for="(item, idx) in hotCertList" :key="idx" class="cert-dropdown-hot-card"
+                                :class="idx > 0 ? 'ml-16' : ''">
                                 <view class="cert-dropdown-hot-card-header">
                                     <text class="cert-dropdown-hot-card-star">⭐</text>
                                     <text class="cert-dropdown-hot-card-title">{{ item.title }}</text>
@@ -104,7 +112,8 @@
 
             <!-- 功能入口网格 -->
             <view class="menu-grid">
-                <view v-for="(item, idx) in menuItems" :key="idx" class="menu-item" @click="onMenuClick(item)">
+                <view v-for="(item, idx) in menuItems" :key="idx" class="menu-item"
+                    :class="{ 'menu-item--col4': idx < 4 }" @click="onMenuClick(item)">
                     <view class="menu-icon-box" :style="{ backgroundColor: item.color }">
                         <text class="menu-icon-text">{{ item.icon }}</text>
                     </view>
@@ -138,6 +147,7 @@
                     <text class="section-title">新闻资讯</text>
                     <text class="section-more" @click="onMoreNews">更多</text>
                 </view>
+                <view class="section-underline"></view>
                 <view class="news-list">
                     <view v-for="(news, idx) in newsList" :key="idx" class="news-item" @click="onNewsClick(news)">
                         <text class="news-icon">+</text>
@@ -149,8 +159,7 @@
 
             <!-- Tab 切换 -->
             <view class="tab-row">
-                <view v-for="(tab, idx) in contentTabs" :key="idx" class="tab-item"
-                    :class="{ 'tab-active': activeTab == idx }" @click="onTabChange(idx)">
+                <view v-for="(tab, idx) in contentTabs" :key="idx" class="tab-item" @click="onTabChange(idx)">
                     <text class="tab-text" :class="{ 'tab-text-active': activeTab == idx }">{{ tab }}</text>
                     <view v-if="activeTab == idx" class="tab-underline"></view>
                 </view>
@@ -186,10 +195,13 @@
                     </view>
                     <view class="course-footer">
                         <text class="course-price">¥ {{ course.price }}</text>
-                        <text class="course-sales">{{ course.sales }}+人购买</text>
+                        <text class="course-sales">已售 {{ course.sales }}+</text>
                     </view>
                 </view>
             </view>
+
+            <!-- 底部留白（tabBar 悬浮遮挡） -->
+            <view class="page-footer-space"></view>
         </scroll-view>
 
         <!-- 筛选底部弹窗 -->
@@ -207,7 +219,7 @@
                 <view class="filter-section">
                     <text class="filter-label">价格</text>
                     <view class="filter-options">
-                        <view v-for="(opt, idx) in priceOptions" :key="idx" class="filter-chip"
+                        <view v-for="(opt, idx) in priceOptions" :key="idx" class="filter-chip mr-20 mb-20"
                             :class="{ 'filter-chip--active': selectedPrice === idx }" @click="selectedPrice = idx">
                             <text class="filter-chip-text"
                                 :class="{ 'filter-chip-text--active': selectedPrice === idx }">{{ opt }}</text>
@@ -219,7 +231,7 @@
                 <view class="filter-section">
                     <text class="filter-label">类型</text>
                     <view class="filter-options">
-                        <view v-for="(opt, idx) in typeOptions" :key="idx" class="filter-chip"
+                        <view v-for="(opt, idx) in typeOptions" :key="idx" class="filter-chip mr-20 mb-20"
                             :class="{ 'filter-chip--active': selectedType === idx }" @click="selectedType = idx">
                             <text class="filter-chip-text"
                                 :class="{ 'filter-chip-text--active': selectedType === idx }">{{ opt }}</text>
@@ -232,7 +244,7 @@
                     <view class="filter-btn-reset" @click="onFilterReset">
                         <text class="filter-btn-reset-text">重置</text>
                     </view>
-                    <view class="filter-btn-confirm" @click="onFilterConfirm">
+                    <view class="filter-btn-confirm ml-24" @click="onFilterConfirm">
                         <text class="filter-btn-confirm-text">确定</text>
                     </view>
                 </view>
@@ -257,7 +269,7 @@
 
     // ---- 通知未读数 ----
     const unreadCount = ref<number>(0)
-    let unreadTimer : any | null = null
+    let unreadTimer : number | null = null
 
     async function loadUnreadCount() : Promise<void> {
         try {
@@ -268,19 +280,20 @@
         }
     }
 
+    function stopUnreadPolling() : void {
+        const t = unreadTimer
+        if (t != null) {
+            clearInterval(t)
+            unreadTimer = null
+        }
+    }
+
     function startUnreadPolling() : void {
         stopUnreadPolling()
         loadUnreadCount()
         unreadTimer = setInterval(() => {
             loadUnreadCount()
         }, 30000)
-    }
-
-    function stopUnreadPolling() : void {
-        if (unreadTimer != null) {
-            clearInterval(unreadTimer)
-            unreadTimer = null
-        }
     }
 
     function onNotificationClick() : void {
@@ -295,22 +308,20 @@
     const isSwitching = ref<boolean>(false)
 
     // 等级数字转中文
-    const levelNames : Record<number, string> = {
-        5: '五级',
-        4: '四级',
-        3: '三级',
-        2: '二级',
-        1: '一级',
+    const levelNames : UTSJSONObject = {
+        '5': '五级',
+        '4': '四级',
+        '3': '三级',
+        '2': '二级',
+        '1': '一级',
     }
 
     /** 加载证件数据 */
     async function loadCredentials() : Promise<void> {
         try {
             // 并发加载当前证件 + 全部证件列表
-            const [current, groups] = await Promise.all([
-                getCurrentCredentialApi(),
-                getAllCredentialsApi(),
-            ])
+            const current = await getCurrentCredentialApi()
+            const groups = await getAllCredentialsApi()
             credentialGroups.value = groups
 
             if (current != null) {
@@ -462,6 +473,32 @@
         'combo_cert': '配套取证'
     }
 
+    // ---- 继续学习 ----
+    const continueLearning = ref<StudentCourse | null>(null)
+    const myCourses = ref<StudentCourse[]>([])
+
+    async function loadMyCourses() : Promise<void> {
+        try {
+            const result = await getStudentCoursesApi()
+            myCourses.value = result.courses
+            continueLearning.value = result.continue_learning
+        } catch (e) {
+            console.warn('[dashboard] loadMyCourses failed:', e)
+        }
+    }
+
+    // ---- 精选内容（从 API 加载） ----
+    const newsList = ref<FeaturedContentItem[]>([])
+
+    async function loadFeaturedContents() : Promise<void> {
+        try {
+            const result = await getFeaturedContentsApi(1, 5)
+            newsList.value = result.items
+        } catch (e) {
+            console.warn('[dashboard] loadFeaturedContents failed:', e)
+        }
+    }
+
     // 页面显示时刷新数据
     onShow(() => {
         loadCredentials()
@@ -485,26 +522,11 @@
     }
 
     const menuItems : MenuItem[] = [
-        { key: 'course-mall', title: '课程商城', icon: '', color: '#FF6B35', path: '/pages/mall/mall', available: true },
-        { key: 'question-bank', title: '题库练习', icon: '', color: '#4ECDC4', path: '/pages/practice/practice', available: true },
-        { key: 'exam-center', title: '考试中心', icon: '', color: '#2979ff', path: '/pages/exam/exam', available: true },
-        { key: 'material-course', title: '资料下载', icon: '', color: '#45B7D1', path: '', available: false },
-        { key: 'exam-info', title: '考情资讯', icon: '', color: '#96CEB4', path: '/pages/exam-info/exam-info', available: true },
+        { key: 'course-mall', title: '课程商城', icon: '🛒', color: '#FF6B35', path: '/pages/mall/mall', available: true },
+        { key: 'question-bank', title: '题库练习', icon: '📚', color: '#4ECDC4', path: '/pages/practice/practice', available: true },
+        { key: 'exam-center', title: '考试中心', icon: '📝', color: '#2979ff', path: '/pages/exam/exam', available: true },
+        { key: 'exam-info', title: '考情资讯', icon: '📣', color: '#96CEB4', path: '/pages/exam-info/exam-info', available: true },
     ]
-
-    // ---- 继续学习 ----
-    const continueLearning = ref<StudentCourse | null>(null)
-    const myCourses = ref<StudentCourse[]>([])
-
-    async function loadMyCourses() : Promise<void> {
-        try {
-            const result = await getStudentCoursesApi()
-            myCourses.value = result.courses
-            continueLearning.value = result.continue_learning
-        } catch (e) {
-            console.warn('[dashboard] loadMyCourses failed:', e)
-        }
-    }
 
     // ---- 内容 Tab ----
     const contentTabs : string[] = ['热门课程', '精品课程']
@@ -530,18 +552,6 @@
         { id: 3, title: '叉车安全规范专题课', tags: ['法规解读', '案例分析'], price: 0, sales: 1234, isHot: false },
         { id: 4, title: '叉车维修高级进阶课', tags: ['直播回放', '电子资料'], price: 199, sales: 234, isHot: false },
     ]
-
-    // ---- 精选内容（从 API 加载） ----
-    const newsList = ref<FeaturedContentItem[]>([])
-
-    async function loadFeaturedContents() : Promise<void> {
-        try {
-            const result = await getFeaturedContentsApi(1, 5)
-            newsList.value = result.items
-        } catch (e) {
-            console.warn('[dashboard] loadFeaturedContents failed:', e)
-        }
-    }
 
     function onContinueLearning() : void {
         const cl = continueLearning.value
@@ -610,6 +620,11 @@
         uni.navigateTo({ url: '/pages/featured/featured-list' })
     }
 
+    // ---- 公告栏点击 ----
+    function onNoticeClick() : void {
+        uni.navigateTo({ url: '/pages/featured/featured-list' })
+    }
+
     // ---- 课程点击 ----
     function onCourseClick(course : CourseItem) : void {
         uni.navigateTo({ url: `/pages/courses/course-detail?id=${course.id}` })
@@ -660,7 +675,6 @@
     .nav-right {
         flex-direction: row;
         align-items: center;
-        gap: 16rpx;
     }
 
     .nav-icon-btn {
@@ -669,10 +683,38 @@
         height: 64rpx;
         align-items: center;
         justify-content: center;
+        margin-left: 48rpx;
     }
 
     .nav-icon-text {
-        font-size: 44rpx;
+        font-size: 40rpx;
+    }
+
+    /* 公告栏 */
+    .notice-bar {
+        flex-direction: row;
+        align-items: center;
+        margin: 8rpx 40rpx 0;
+        padding: 10rpx 20rpx;
+    }
+
+    .notice-icon {
+        font-size: 30rpx;
+        margin-right: 12rpx;
+    }
+
+    .notice-text {
+        flex: 1;
+        font-size: 24rpx;
+        color: #333333;
+        lines: 1;
+        text-overflow: ellipsis;
+    }
+
+    .notice-arrow {
+        font-size: 30rpx;
+        color: #333333;
+        margin-left: 12rpx;
     }
 
     .unread-badge {
@@ -696,7 +738,7 @@
 
     /* Banner 海报 */
     .banner {
-        margin: 24rpx;
+        margin: 24rpx 40rpx;
         border-radius: 16rpx;
         overflow: hidden;
     }
@@ -719,21 +761,26 @@
         align-items: center;
     }
 
+    /* 截图稿为四列宫格：前四项各占四分之一宽 */
+    .menu-item--col4 {
+        width: 25%;
+    }
+
     .menu-icon-box {
-        width: 80rpx;
-        height: 80rpx;
-        border-radius: 16rpx;
-        margin-bottom: 8rpx;
+        width: 88rpx;
+        height: 88rpx;
+        border-radius: 20rpx;
+        margin-bottom: 12rpx;
         align-items: center;
         justify-content: center;
     }
 
     .menu-icon-text {
-        font-size: 40rpx;
+        font-size: 44rpx;
     }
 
     .menu-label {
-        font-size: 22rpx;
+        font-size: 24rpx;
         color: #333333;
     }
 
@@ -761,6 +808,15 @@
     .section-more {
         font-size: 24rpx;
         color: #999999;
+    }
+
+    /* 标题下蓝色短划线（对照截图稿） */
+    .section-underline {
+        width: 40rpx;
+        height: 6rpx;
+        border-radius: 3rpx;
+        background-color: #239EDD;
+        margin-bottom: 16rpx;
     }
 
     .news-list {
@@ -839,16 +895,14 @@
     }
 
     .filter-tag {
-        padding: 8rpx 24rpx;
-        border-radius: 24rpx;
-        border: 1rpx solid #e0e0e0;
-        margin-right: 16rpx;
-        background-color: #ffffff;
+        padding: 14rpx 28rpx;
+        border-radius: 999rpx;
+        background-color: #ECECEC;
+        margin-right: 24rpx;
     }
 
     .filter-tag-active {
-        border-color: #2979ff;
-        background-color: #e8f0fe;
+        background-color: #EBF9FF;
     }
 
     .filter-tag-text {
@@ -857,14 +911,13 @@
     }
 
     .filter-tag-text-active {
-        color: #2979ff;
+        color: #239EDD;
     }
 
     .filter-btn {
-        padding: 8rpx 24rpx;
-        border-radius: 24rpx;
-        border: 1rpx solid #e0e0e0;
-        background-color: #ffffff;
+        padding: 14rpx 28rpx;
+        border-radius: 999rpx;
+        background-color: #ECECEC;
     }
 
     .filter-btn-text {
@@ -891,10 +944,10 @@
     }
 
     .course-tag-hot {
-        background-color: #FF6B35;
-        padding: 4rpx 12rpx;
-        border-radius: 8rpx;
-        margin-right: 12rpx;
+        background-color: #00A443;
+        padding: 8rpx 20rpx;
+        border-radius: 999rpx;
+        margin-right: 16rpx;
     }
 
     .course-tag-hot-text {
@@ -919,7 +972,6 @@
     }
 
     .course-tag-sm {
-        background-color: #F5F7FA;
         padding: 8rpx 16rpx;
         border-radius: 8rpx;
         margin-right: 12rpx;
@@ -928,7 +980,7 @@
 
     .course-tag-sm-text {
         font-size: 22rpx;
-        color: #666666;
+        color: #999999;
     }
 
     .course-footer {
@@ -940,12 +992,17 @@
     .course-price {
         font-size: 36rpx;
         font-weight: bold;
-        color: #FF4D4F;
+        color: #FF2424;
     }
 
     .course-sales {
         font-size: 24rpx;
         color: #999999;
+    }
+
+    /* ---- 页面底部留白 ---- */
+    .page-footer-space {
+        height: 120rpx;
     }
 
     /* ---- 筛选底部弹窗 ---- */
@@ -964,7 +1021,7 @@
         background-color: #FFFFFF;
         border-top-left-radius: 28rpx;
         border-top-right-radius: 28rpx;
-        padding-bottom: calc(32rpx + env(safe-area-inset-bottom));
+        padding-bottom: 32rpx;
     }
 
     .filter-header {
@@ -1008,7 +1065,6 @@
     .filter-options {
         flex-direction: row;
         flex-wrap: wrap;
-        gap: 20rpx;
     }
 
     .filter-chip {
@@ -1036,7 +1092,6 @@
 
     .filter-actions {
         flex-direction: row;
-        gap: 24rpx;
         padding: 36rpx 32rpx 0;
     }
 
@@ -1140,7 +1195,7 @@
         background-color: #F5F7FA;
         border-bottom-left-radius: 28rpx;
         border-bottom-right-radius: 28rpx;
-        max-height: 75vh;
+        max-height: 800rpx;
         box-shadow: 0 8rpx 32rpx rgba(0, 0, 0, 0.15);
     }
 
@@ -1173,7 +1228,7 @@
     }
 
     .cert-dropdown-scroll {
-        max-height: calc(75vh - 100rpx);
+        max-height: 700rpx;
     }
 
     /* ---- 分组区块 ---- */
@@ -1214,7 +1269,6 @@
     .cert-dropdown-chips {
         flex-direction: row;
         flex-wrap: wrap;
-        gap: 16rpx;
     }
 
     .cert-dropdown-chip {
@@ -1294,7 +1348,6 @@
     /* ---- 热门考证卡片 ---- */
     .cert-dropdown-hot-grid {
         flex-direction: row;
-        gap: 16rpx;
     }
 
     .cert-dropdown-hot-card {
@@ -1334,9 +1387,7 @@
         margin-bottom: 20rpx;
     }
 
-    .cert-dropdown-detail-item:last-child {
-        margin-bottom: 0;
-    }
+    /* uvue 原生端不支持 last-child 伪类；末项收尾由内容区底部留白承担 */
 
     .cert-dropdown-detail-title-row {
         flex-direction: row;
@@ -1362,4 +1413,12 @@
         line-height: 36rpx;
         padding-left: 32rpx;
     }
+
+    /* ---- 间距工具类（替代 gap） ---- */
+    .ml-16 { margin-left: 16rpx; }
+    .ml-24 { margin-left: 24rpx; }
+    .mr-16 { margin-right: 16rpx; }
+    .mr-20 { margin-right: 20rpx; }
+    .mb-16 { margin-bottom: 16rpx; }
+    .mb-20 { margin-bottom: 20rpx; }
 </style>

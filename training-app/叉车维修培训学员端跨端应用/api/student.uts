@@ -327,7 +327,19 @@ export function getStudentCourseDetailApi(courseId : number) : Promise<StudentCo
 			}
 		}
 		const detail : StudentCourseDetail = {
-			...base,
+			course_id: base.course_id,
+			course_name: base.course_name,
+			cover: base.cover,
+			specialty_id: base.specialty_id,
+			level_id: base.level_id,
+			progress: base.progress,
+			completed_chapters: base.completed_chapters,
+			total_chapters: base.total_chapters,
+			study_duration: base.study_duration,
+			last_chapter_id: base.last_chapter_id,
+			last_chapter_title: base.last_chapter_title,
+			last_position: base.last_position,
+			last_studied_at: base.last_studied_at,
 			chapters: chapters,
 		} as StudentCourseDetail
 		return detail

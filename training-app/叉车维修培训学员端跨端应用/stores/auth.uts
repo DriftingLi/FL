@@ -9,6 +9,7 @@ import { ref } from 'vue'
 import { loginApi, phoneLoginApi, emailLoginApi, mpWechatLoginApi, logoutApi, getUserInfoApi, refreshTokenApi } from '../api/auth'
 import { registerRefreshTokenHandler } from '../api/request'
 import { setStorage, setStorageJSON, getStorage, getStorageJSON, removeStorage } from '../utils/storage'
+import { errMsg } from '../api/helpers'
 import { STORAGE_KEY_TOKEN, STORAGE_KEY_REFRESH_TOKEN, STORAGE_KEY_USER, STORAGE_KEY_LOGIN_PROVIDER } from '../constants/app'
 import type { LoginParams, CodeLoginParams, UserInfo, AuthStore, UpdateProfileParams, WechatLoginResult } from '../types/index'
 
@@ -88,6 +89,7 @@ function restoreFromStorage() : boolean {
         username: username,
         name: name,
         role: role,
+        avatar_url: '',
     } as UserInfo
     const avatar_url = uObj['avatar_url']
     if (avatar_url != null) {
@@ -235,6 +237,7 @@ function updateUser(patch : UpdateProfileParams) : void {
         username: current.username,
         name: current.name,
         role: current.role,
+        avatar_url: '',
     } as UserInfo
     const currentavatar_url = current.avatar_url
     if (currentavatar_url != null && currentavatar_url.length > 0) {
@@ -308,7 +311,7 @@ export function useAuthStore() : AuthStore {
         loginProvider,
         getRefreshToken: () : string => getRefreshToken(),
         tryRefreshToken: () : Promise<boolean> => tryRefreshToken(),
-        setAuthData: (t : string, u : UserInfo, rt : string = '') : void => setAuthData(t, u, rt),
+        setAuthData: (t : string, u : UserInfo, rt : string) : void => setAuthData(t, u, rt),
         clearAuthData: () : void => clearAuthData(),
         restoreFromStorage: () : boolean => restoreFromStorage(),
         validateToken: () : Promise<void> => validateToken(),

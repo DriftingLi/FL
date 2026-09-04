@@ -13,8 +13,8 @@
 
         <!-- 筛选标签 -->
         <view class="filter-row">
-            <view v-for="(tag, idx) in filterTags" :key="idx" class="filter-tag"
-                :class="{ 'filter-tag-active': activeFilter == idx }" @click="onFilterChange(idx)">
+            <view v-for="(tag, idx) in filterTags" :key="idx"
+                :class="{ 'filter-tag': true, 'ml-16': idx > 0, 'filter-tag-active': activeFilter == idx }" @click="onFilterChange(idx)">
                 <text class="filter-tag-text" :class="{ 'filter-tag-text-active': activeFilter == idx }">{{ tag.label }}</text>
             </view>
         </view>
@@ -220,7 +220,6 @@
     .filter-row {
         flex-direction: row;
         padding: 16rpx 24rpx;
-        gap: 16rpx;
         background-color: #ffffff;
         border-bottom: 1rpx solid #f0f0f0;
     }
@@ -372,4 +371,6 @@
         font-size: 24rpx;
         color: #999999;
     }
+
+    .ml-16 { margin-left: 16rpx; }
 </style>

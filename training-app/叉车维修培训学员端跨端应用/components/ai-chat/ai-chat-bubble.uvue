@@ -1,0 +1,86 @@
+<template>
+	<view class="message-row" :class="role">
+		<view class="message-bubble">
+			<text class="message-text">{{ content }}</text>
+		</view>
+		<view v-if="showActions" class="message-actions">
+			<text class="action-btn" @click="onCopy">&#x1F4CB; 复制</text>
+			<text v-if="isLast" class="action-btn" @click="onRetry">&#x1F504; 重试</text>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	withDefaults(defineProps<{
+		role?: string
+		content?: string
+		showActions?: boolean
+		isLast?: boolean
+	}>(), {
+		role: 'assistant',
+		content: '',
+		showActions: false,
+		isLast: false
+	})
+
+	const emit = defineEmits(['copy', 'retry'])
+
+	function onCopy() : void {
+		emit('copy')
+	}
+
+	function onRetry() : void {
+		emit('retry')
+	}
+</script>
+
+<style>
+	.message-row {
+		flex-direction: column;
+		margin-bottom: 20rpx;
+	}
+
+	.message-row.user {
+		align-items: flex-end;
+	}
+
+	.message-row.assistant {
+		align-items: flex-start;
+	}
+
+	.message-bubble {
+		max-width: 600rpx;
+		padding: 20rpx 24rpx;
+		border-radius: 16rpx;
+	}
+
+	.message-row.user .message-bubble {
+		background-color: #2979ff;
+	}
+
+	.message-row.assistant .message-bubble {
+		background-color: #ffffff;
+	}
+
+	.message-text {
+		font-size: 28rpx;
+		color: #333333;
+		line-height: 1.6;
+	}
+
+	.message-row.user .message-text {
+		color: #ffffff;
+	}
+
+	.message-actions {
+		flex-direction: row;
+		margin-top: 8rpx;
+	}
+
+	.action-btn {
+		font-size: 22rpx;
+		color: #999999;
+		margin-right: 20rpx;
+		padding: 4rpx 0;
+	}
+</style>

@@ -189,9 +189,23 @@
         reportReplyApi,
     } from '../../api/forum'
     import { checkFavoriteApi, addFavoriteApi, removeFavoriteApi } from '../../api/favorite'
-    import { formatDateTimeStr, resolveFileUrl } from '../../utils/format'
     import { getStorageJSON, setStorageJSON } from '../../utils/storage'
     import type { ForumTopicDetail, ForumReply } from '../../types/index'
+
+    /** ISO 日期字符串 → YYYY-MM-DD HH:mm */
+    function formatDateTimeStr(dateStr : string) : string {
+        if (dateStr == null || dateStr.length < 16) return dateStr
+        return dateStr.substring(0, 16).replace('T', ' ')
+    }
+
+    /** 补全后端返回的相对文件 URL */
+    function resolveFileUrl(url : string) : string {
+        if (url.length == 0) return ''
+        if (url.startsWith('http://') || url.startsWith('https://')) {
+            return url
+        }
+        return url
+    }
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
@@ -243,7 +257,7 @@
     function persistReplyLikeState() : void {
         try {
             if (topicId.value > 0) setStorageJSON(replyLikeStorageKey(), replyLikeState.value as object)
-        } catch (e) { uni.__f__('warn','at pages/forum/forum-detail.uvue:246','[forum-detail] persistReplyLikeState failed:', e) }
+        } catch (e) { console.warn('[forum-detail] persistReplyLikeState failed:', e) }
     }
 
     function restoreReplyLikeState() : void {
@@ -257,7 +271,7 @@
                 for (const k in replyLikeState.value) merged[k] = replyLikeState.value[k]
                 replyLikeState.value = merged
             }
-        } catch (e) { uni.__f__('warn','at pages/forum/forum-detail.uvue:260','[forum-detail] restoreReplyLikeState failed:', e) }
+        } catch (e) { console.warn('[forum-detail] restoreReplyLikeState failed:', e) }
     }
 
     function hydrateReplyLikesFromReplies() : void {
@@ -347,7 +361,7 @@
             t.favorited = result.favorited
             topicFavoriteId.value = result.favorite_id
         } catch (e) {
-            uni.__f__('warn','at pages/forum/forum-detail.uvue:355','[forum-detail] loadTopicFavorite failed:', e)
+            console.warn('[forum-detail] loadTopicFavorite failed:', e)
         }
     }
 
@@ -368,7 +382,7 @@
         } catch (e) {
             // 回滚
             t.favorited = wasFavorited
-            uni.__f__('error','at pages/forum/forum-detail.uvue:376','[forum-detail] toggleFavorite failed:', e)
+            console.error('[forum-detail] toggleFavorite failed:', e)
             uni.showToast({ title: '操作失败', icon: 'none' })
         }
     }
@@ -380,13 +394,13 @@
             const data = await getForumTopicDetailApi(topicId.value, replySortField.value, replySortOrder.value)
             topic.value = data
             replies.value = data.replies
-            uni.__f__('log','at pages/forum/forum-detail.uvue:388','[forum-detail] DIAG can_delete=', data.can_delete, 'author_id=', data.author_id, 'currentUserId=', currentUserId.value, 'user=', JSON.stringify(authStore.user.value), 'canDelete=', canDelete.value)
+            console.log('[forum-detail] DIAG can_delete=', data.can_delete, 'author_id=', data.author_id, 'currentUserId=', currentUserId.value, 'user=', JSON.stringify(authStore.user.value), 'canDelete=', canDelete.value)
             // 回填回复点赞态（后端暂未下发时靠本地存储恢复，避免刷新后数据/样式丢失）
             hydrateReplyLikesFromReplies()
             // 刷新收藏状态（获取 favorite_id 供取消收藏使用）
             loadTopicFavorite()
         } catch (e) {
-            uni.__f__('error','at pages/forum/forum-detail.uvue:394','[forum-detail] load failed:', e)
+            console.error('[forum-detail] load failed:', e)
             uni.showToast({ title: '加载帖子失败', icon: 'none' })
         } finally {
             loading.value = false
@@ -413,7 +427,7 @@
             }
             uni.showToast({ title: '回复成功', icon: 'success' })
         } catch (e) {
-            uni.__f__('error','at pages/forum/forum-detail.uvue:421','[forum-detail] reply failed:', e)
+            console.error('[forum-detail] reply failed:', e)
             uni.showToast({ title: '回复失败', icon: 'none' })
         } finally {
             submitting.value = false
@@ -430,7 +444,7 @@
                 goBack()
             }, 1000)
         } catch (e) {
-            uni.__f__('error','at pages/forum/forum-detail.uvue:438','[forum-detail] delete topic failed:', e)
+            console.error('[forum-detail] delete topic failed:', e)
             uni.showToast({ title: '删除失败', icon: 'none' })
         } finally {
             uni.hideLoading()
@@ -470,7 +484,7 @@
             }
             uni.showToast({ title: '已删除', icon: 'success' })
         } catch (e) {
-            uni.__f__('error','at pages/forum/forum-detail.uvue:478','[forum-detail] delete reply failed:', e)
+            console.error('[forum-detail] delete reply failed:', e)
             uni.showToast({ title: '删除失败', icon: 'none' })
         } finally {
             uni.hideLoading()
@@ -525,7 +539,7 @@
                 const url = await uploadForumImageApi(paths[i])
                 replyImages.value.push(url)
             } catch (e) {
-                uni.__f__('error','at pages/forum/forum-detail.uvue:533','[forum-detail] upload reply image failed:', e)
+                console.error('[forum-detail] upload reply image failed:', e)
                 failed = failed + 1
             }
         }
@@ -554,7 +568,7 @@
                 uploadReplyImages(paths)
             },
             fail: (err) => {
-                uni.__f__('log','at pages/forum/forum-detail.uvue:562','[forum-detail] chooseImage canceled/failed:', err)
+                console.log('[forum-detail] chooseImage canceled/failed:', err)
             },
         })
     }
@@ -632,7 +646,7 @@
             }
         } catch (e) {
             setReplyLikeState(reply.id, wasLiked, oldCount)
-            uni.__f__('error','at pages/forum/forum-detail.uvue:640','[forum-detail] toggle reply like failed:', e)
+            console.error('[forum-detail] toggle reply like failed:', e)
             let msg = '操作失败'
             if (e instanceof Error) {
                 const m = (e as Error).message
@@ -668,7 +682,7 @@
         } catch (e) {
             t.liked = wasLiked
             t.likes_count = oldCount
-            uni.__f__('error','at pages/forum/forum-detail.uvue:676','[forum-detail] toggle like failed:', e)
+            console.error('[forum-detail] toggle like failed:', e)
         }
     }
 
@@ -716,7 +730,7 @@
             uni.showToast({ title: '举报已提交，感谢反馈', icon: 'success' })
             onCloseReport()
         } catch (e) {
-            uni.__f__('error','at pages/forum/forum-detail.uvue:724','[forum-detail] report failed:', e)
+            console.error('[forum-detail] report failed:', e)
             let msg = '举报失败'
             if (e instanceof Error) {
                 const errObj = e as Error

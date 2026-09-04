@@ -94,6 +94,11 @@
         isEmpty : boolean
     }
 
+    function padZero(n : number) : string {
+        if (n < 10) return '0' + n
+        return '' + n
+    }
+
     const calendarCells = computed<CalendarCell[]>(() : CalendarCell[] => {
         const cells : CalendarCell[] = []
         const year = displayYear.value
@@ -147,11 +152,6 @@
         console.log('[calendarCells] checked days:', checkedDays.join(', '))
         return cells
     })
-
-    function padZero(n : number) : string {
-        if (n < 10) return '0' + n
-        return '' + n
-    }
 
     function getCellClass(cell : CalendarCell) : string {
         if (cell.isToday) return 'cell-today'

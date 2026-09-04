@@ -48,6 +48,83 @@ AI 安全审计用 DeepSec（Shield）。See `docs/agents/security-scan.md`.
 - `--color-brand-*` 属**残值域**专用（`assets/styles/valuation-tokens.css` 在 `.valuation-root` 内定义），**禁止提升为全局变量** —— 会击穿 `layouts/ValuationLayout.vue` 与 `pages/ai-assistant/*` 两处依赖「变量未定义 → 走 fallback」的写法。培训域品牌色用 `--color-primary-*`。
 - 残值模块（`pages/student/valuation/**`、`components/valuation/**`）本轮冻结，批量替换色值等机械操作时记得排除。
 
+### uni-app-x (uvue) CSS 兼容性规则
+
+本项目使用 uni-app-x (uvue 模式) 编译到 Android/iOS 原生端。uvue 的 CSS 引擎是**原生渲染器**，仅支持 CSS 属性的子集，与 Web CSS 有显著差异。编写 `.uvue` 文件的 `<style>` 时必须遵守：
+
+#### 必须使用 `<style lang="scss">`
+
+`.uvue` 文件的 `<style>` 块**必须**声明 `lang="scss"`，否则 SCSS 变量不会被预处理，直接传递给 uvue CSS 引擎会报错。
+
+#### 选择器限制（严格）
+
+uvue 原生端**只支持 class 选择器**，以下选择器均不可用：
+
+| 选择器类型 | 示例 | 是否支持 |
+|---|---|---|
+| class 选择器 | `.className {}` | ✅ 支持 |
+| group 选择器 | `.a, .b {}` | ✅ 支持 |
+| descendant（后代） | `.parent .child {}` | ⚠️ 支持但有运行时性能损耗，Vapor 不支持 |
+| child combinator | `.parent > .child {}` | ⚠️ 支持但有运行时性能损耗 |
+| adjacent sibling | `.a + .b {}` | ⚠️ 支持但有运行时性能损耗，Vapor 不支持 |
+| **tag 选择器** | `view {}`, `text {}` | ❌ **不支持** |
+| **tag + combinator** | `> view + view` | ❌ **不支持** |
+| ID 选择器 | `#id {}` | ❌ 不支持 |
+| 伪类/伪元素 | `:first-child`, `::before` | ❌ 不支持 |
+| 属性选择器 | `[attr] {}` | ❌ 不支持 |
+
+**编写 CSS 时只能使用 `.class-name` 形式的选择器。** 模板中的 `view`、`text` 等标签名不能出现在选择器中。
+
+#### 不支持的 CSS 属性与值
+
+| 不支持的语法 | 替代方案 | 说明 |
+|---|---|---|
+| `gap` / `row-gap` / `column-gap` | 子元素加 margin class | 在 template 的子元素上添加 `ml-N`、`mr-N mb-N` 等 class |
+| `text-decoration` | `border-bottom` 模拟 | 用具体颜色值（不支持 `currentColor`） |
+| `calc() + env()` | 固定 rpx 值 | 安全区域需通过 `uni.getSystemInfoSync()` 动态获取 |
+| `vh` / `vw` 单位 | 固定 rpx 值 | 仅支持 `number` 和 `pixel`（含 `rpx`） |
+| `align-items: baseline` | `flex-start` 或 `center` | 仅支持 `center`/`flex-start`/`flex-end`/`stretch` |
+| `max-height: 百分比` | 固定 rpx 值 | 仅支持 `number` 和 `pixel` |
+| CSS 自定义属性 `var(--xxx)` | 直接写色值或用 SCSS 变量 | uvue 原生端不支持 CSS 变量 |
+| `currentColor` | 具体颜色值 | 如 `#2979ff`、`#999999` |
+| `display: grid` / `grid-*` | flex 布局 | grid 布局不支持 |
+| `transition` / `animation` | uni-app API 动画 | 原生端不支持 CSS 动画 |
+
+#### `gap` 替换模式
+
+由于 uvue 不支持 tag 选择器，`gap` 替换必须在 **template 的子元素上直接添加 margin class**：
+
+```vue
+<template>
+  <view class="flex-row">
+    <view class="item">A</view>
+    <view class="item ml-16">B</view>
+    <view class="item ml-16">C</view>
+  </view>
+</template>
+
+<style lang="scss">
+  .flex-row { flex-direction: row; }
+  .ml-16 { margin-left: 16rpx; }
+</style>
+```
+
+- **非换行水平排列**：首个子元素不加 class，后续子元素加 `ml-N`
+- **换行排列**：所有子元素加 `mr-N mb-N`
+- **v-for 循环**：用 `:class="{ 'base': true, 'ml-N': idx > 0 }"` 条件添加
+
+#### UTS 类型系统限制
+
+UTS（uni-app-x 的 TypeScript 变体）不支持以下 TypeScript 语法：
+- **交叉类型 + 内联对象字面量**：`type C = A & { field: type }` → 必须展平为独立类型定义
+- **联合字面量类型用于运行时强转**：`'student' | 'tutor'` 编译到 Kotlin 后无法用 `as` 强转 → 统一用 `string`
+
+#### 编译验证
+
+修改 `.uvue` 文件后，在 HBuilderX 中重新编译，检查控制台：
+- **ERROR** = 阻断编译，必须修复
+- **WARNING** = 不阻断但原生端可能不生效（如 `gap` 被静默忽略，布局会坏）
+
 ## 测试与检查流程
 
 改动后**必须**跑完对应栈的检查，全绿才能提交：

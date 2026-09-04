@@ -8,11 +8,19 @@ import { get, post } from './request'
 import { toNumber, toStr } from './helpers'
 import type { PointsBalance, PointsRecord, PointsRecordListResult } from '../types/index'
 
-/** 从 UTSJSONObject 构造 PointsBalance */
+/**
+ * 从 UTSJSONObject 构造 PointsBalance
+ * 后端 GET /points/balance 返回 { balance, total_earned }；
+ * 保留对早期字段名 total_points / today_earned 的读取，缺失时回退。
+ */
 function buildPointsBalance(obj : UTSJSONObject) : PointsBalance {
+	const totalRaw = obj['total_points']
+	const balanceRaw = obj['balance']
+	const todayRaw = obj['today_earned']
+	const earnedRaw = obj['total_earned']
 	return {
-		total_points: toNumber(obj['total_points']),
-		today_earned: toNumber(obj['today_earned']),
+		total_points: totalRaw != null ? toNumber(totalRaw) : toNumber(balanceRaw),
+		today_earned: todayRaw != null ? toNumber(todayRaw) : toNumber(earnedRaw),
 		level: toStr(obj['level']),
 		level_name: toStr(obj['level_name']),
 		next_level_points: toNumber(obj['next_level_points']),

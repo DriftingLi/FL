@@ -188,5 +188,5 @@
     .btn-submit { width: 100%; height: 96rpx; border-radius: 48rpx; background-color: #2979ff; align-items: center; justify-content: center; }
     .btn-submit-text { font-size: 34rpx; font-weight: bold; color: #ffffff; }
     .btn-disabled { opacity: 0.5; }
-    .skip-hint { font-size: 26rpx; color: #999999; margin-top: 32rpx; text-decoration: underline; }
+    .skip-hint { font-size: 26rpx; color: #999999; margin-top: 32rpx; border-bottom-width: 1rpx; border-bottom-style: solid; border-bottom-color: #999999; padding-bottom: 2rpx; }
 </style>

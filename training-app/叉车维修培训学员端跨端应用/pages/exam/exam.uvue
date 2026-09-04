@@ -103,7 +103,12 @@
     import { goBack } from '../../utils/navigation'
     import { getAvailableLevelExamsApi, getLevelExamHistoryApi } from '../../api/levelExam'
     import type { LevelExamSession, LevelExamHistoryItem } from '../../types/index'
-    import { formatDateStr } from '../../utils/format'
+
+    /** ISO 日期字符串 → YYYY-MM-DD */
+    function formatDateStr(dateStr : string) : string {
+        if (dateStr == null || dateStr.length < 10) return dateStr
+        return dateStr.substring(0, 10)
+    }
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
@@ -172,9 +177,9 @@
         try {
             const list = await getAvailableLevelExamsApi()
             availableExams.value = list
-            uni.__f__('log','at pages/exam/exam.uvue:180','[exam] available level exams:', list.length)
+            console.log('[exam] available level exams:', list.length)
         } catch (e) {
-            uni.__f__('error','at pages/exam/exam.uvue:182','[exam] load available level exams failed:', e)
+            console.error('[exam] load available level exams failed:', e)
         } finally {
             levelLoading.value = false
         }
@@ -202,7 +207,7 @@
                 historyPage.value = historyPage.value + 1
             }
         } catch (e) {
-            uni.__f__('error','at pages/exam/exam.uvue:210','[exam] load level history failed:', e)
+            console.error('[exam] load level history failed:', e)
         } finally {
             historyLoading.value = false
         }

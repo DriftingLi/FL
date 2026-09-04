@@ -1,0 +1,103 @@
+<template>
+	<view v-if="visible" class="drawer-mask" @click="onMaskClick"></view>
+	<view v-if="visible" class="drawer drawer-right">
+		<view class="drawer-header" :style="{ paddingTop: statusBarHeight + 'px' }">
+			<text class="drawer-title">功能菜单</text>
+			<text class="drawer-close" @click="onClose">&#10005;</text>
+		</view>
+		<scroll-view scroll-y class="drawer-body">
+			<view v-for="(item, idx) in menuItems" :key="idx" class="menu-item" @click="onAction(item.key)">
+				<text class="menu-item-text">{{ item.label }}</text>
+			</view>
+		</scroll-view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	type MenuItem = { key: string; label: string }
+
+	withDefaults(defineProps<{
+		visible?: boolean
+		menuItems?: MenuItem[]
+		statusBarHeight?: number
+	}>(), {
+		visible: false,
+		menuItems: () => [] as MenuItem[],
+		statusBarHeight: 20
+	})
+
+	const emit = defineEmits(['close', 'action'])
+
+	function onMaskClick() : void {
+		emit('close')
+	}
+
+	function onClose() : void {
+		emit('close')
+	}
+
+	function onAction(key : string) : void {
+		emit('action', key)
+	}
+</script>
+
+<style>
+	.drawer-mask {
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background-color: rgba(0, 0, 0, 0.4);
+		z-index: 100;
+	}
+
+	.drawer {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		width: 70%;
+		background-color: #ffffff;
+		z-index: 101;
+		flex-direction: column;
+	}
+
+	.drawer-right {
+		right: 0;
+	}
+
+	.drawer-header {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		padding: 24rpx;
+		border-bottom: 1rpx solid #f0f0f0;
+	}
+
+	.drawer-title {
+		font-size: 32rpx;
+		font-weight: 600;
+		color: #333333;
+	}
+
+	.drawer-close {
+		font-size: 36rpx;
+		color: #999999;
+		padding: 8rpx;
+	}
+
+	.drawer-body {
+		flex: 1;
+		padding: 24rpx;
+	}
+
+	.menu-item {
+		padding: 28rpx 0;
+		border-bottom: 1rpx solid #f5f5f5;
+	}
+
+	.menu-item-text {
+		font-size: 28rpx;
+		color: #333333;
+	}
+</style>
