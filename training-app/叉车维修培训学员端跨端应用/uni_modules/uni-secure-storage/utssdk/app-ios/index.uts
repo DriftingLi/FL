@@ -9,6 +9,8 @@
  * 索引（kSecAttrService 前缀约定）用于 clearSecureItems 枚举。
  */
 import { UTSiOS } from "DCloudUTSFoundation";
+// interface.uts 的类型必须显式 import 才会参与本平台编译（同 app-android，error3/18）
+import { SecureSetResult, SecureGetResult, SecureOpResult, SecureStorageCapabilities } from "../interface.uts";
 
 const SERVICE_PREFIX = "com.uni.secure-storage.";
 

@@ -83,7 +83,7 @@
 	} from '../../api/aiAssistant'
 	import { useAiChat } from '../../composables/useAiChat'
 	import type { ChatBodyBuilder } from '../../composables/useAiChat'
-	import type { AiModel, AiChatMessage } from '../../types/index'
+	import type { AiModel, AiChatMessage, AiSession } from '../../types/index'
 	import {
 		isProPaid,
 		setVersion,
