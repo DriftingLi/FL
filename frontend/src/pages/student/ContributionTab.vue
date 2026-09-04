@@ -6,8 +6,8 @@
  */
 import { ref, watch, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Download, UploadFilled, Plus, Document, Warning } from '@element-plus/icons-vue'
-import { contributionApi, type ContributionItem, type ContributionStatus } from '@/api/contribution'
+import { Download, UploadFilled, Plus, Document, Warning, View } from '@element-plus/icons-vue'
+import { contributionApi, type ContributionFile, type ContributionItem, type ContributionStatus } from '@/api/contribution'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import { formatLocaleDateTime } from '@/utils/format'
 import UiButton from '@/components/ui/UiButton.vue'
@@ -210,16 +210,38 @@ async function onWithdraw(item: ContributionItem) {
   }
 }
 
-/** 下载（触发后端计数） */
-async function onDownload(item: ContributionItem) {
-  if (!item.files || item.files.length === 0) return
+// ===== 详情与下载 =====
+// 形状契约：列表接口只回摘要（后端 ListPublic 不加载 files，避免 N+1），
+// 「查看」打开详情对话框时拉 detail 拿文件清单，逐个文件下载。
+const detailVisible = ref(false)
+const detailLoading = ref(false)
+const detailItem = ref<ContributionItem | null>(null)
+
+async function openDetail(item: ContributionItem) {
+  detailVisible.value = true
+  detailLoading.value = true
+  detailItem.value = null
   try {
-    // 先打计数端点（幂等），再打开文件
-    await contributionApi.download(item.id)
-  } catch {
-    /* 计数失败不阻断下载（下载本身走静态直链） */
+    detailItem.value = await contributionApi.detail(item.id)
+  } catch (e: any) {
+    ElMessage.error(e?.message || '加载详情失败')
+    detailVisible.value = false
+  } finally {
+    detailLoading.value = false
   }
-  window.open(resolveFileUrl(item.files[0].file_url), '_blank')
+}
+
+/** 下载单个文件：先打计数端点（幂等），再开静态直链；成功后乐观 +1 */
+async function downloadFile(file: ContributionFile) {
+  const item = detailItem.value
+  if (!item) return
+  try {
+    await contributionApi.download(item.id)
+    item.downloads_count += 1
+  } catch {
+    /* 计数失败不阻断下载（下载走静态直链） */
+  }
+  window.open(resolveFileUrl(file.file_url), '_blank')
 }
 
 const REPORT_REASONS = [
@@ -322,13 +344,12 @@ defineExpose({ loadMine })
                   <span>{{ item.author?.anonymous ? '匿名学员' : item.author?.username || '—' }}</span>
                   <span>{{ item.downloads_count }} 次下载</span>
                   <span>{{ formatLocaleDateTime(item.created_at) }}</span>
-                  <span v-if="item.files?.length">{{ item.files!.length }} 个文件</span>
                 </div>
               </div>
               <div class="flex shrink-0 flex-col items-end gap-1.5">
-                <UiButton v-if="item.files?.length" variant="primary" link size="small" @click="onDownload(item)">
-                  <el-icon><Download /></el-icon>
-                  下载
+                <UiButton variant="primary" link size="small" @click="openDetail(item)">
+                  <el-icon><View /></el-icon>
+                  查看
                 </UiButton>
                 <UiButton link size="small" @click="onReport(item)">
                   <el-icon><Warning /></el-icon>
@@ -362,6 +383,7 @@ defineExpose({ loadMine })
               </div>
               <div class="flex shrink-0 items-center gap-2">
                 <UiButton v-if="item.status === 'pending'" size="small" @click="onWithdraw(item)">撤回</UiButton>
+                <UiButton v-else link size="small" @click="openDetail(item)">查看</UiButton>
               </div>
             </div>
           </div>
@@ -405,6 +427,39 @@ defineExpose({ loadMine })
         </div>
       </div>
     </el-drawer>
+    <!-- 投稿详情：元信息 + 文件清单逐个下载（列表不带 files，打开时拉 detail） -->
+    <el-dialog v-model="detailVisible" title="投稿详情" width="520px" append-to-body>
+      <el-skeleton v-if="detailLoading" :rows="5" animated />
+      <div v-else-if="detailItem" class="flex flex-col gap-3.5">
+        <div>
+          <div class="text-[16px] font-medium text-ink">{{ detailItem.title }}</div>
+          <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-3">
+            <span>{{ detailItem.author?.anonymous ? '匿名学员' : detailItem.author?.username || '—' }}</span>
+            <span>{{ detailItem.downloads_count }} 次下载</span>
+            <span>{{ formatLocaleDateTime(detailItem.created_at) }}</span>
+          </div>
+        </div>
+        <p class="whitespace-pre-wrap text-sm leading-relaxed text-ink-2">{{ detailItem.intro }}</p>
+        <div>
+          <div class="mb-1.5 text-xs text-ink-3">文件（{{ detailItem.files?.length || 0 }}）</div>
+          <div class="flex flex-col gap-1.5">
+            <div v-for="file in (detailItem.files || [])" :key="file.file_id"
+              class="flex items-center justify-between gap-2 rounded-lg bg-canvas px-3 py-2">
+              <span class="flex min-w-0 items-center gap-2 text-sm text-ink">
+                <el-icon class="shrink-0" :size="16"><Document /></el-icon>
+                <span class="truncate">{{ file.file_name }}</span>
+                <span class="shrink-0 text-xs text-ink-3">{{ formatSize(file.file_size) }}</span>
+              </span>
+              <UiButton variant="primary" link size="small" @click="downloadFile(file)">
+                <el-icon><Download /></el-icon>
+                下载
+              </UiButton>
+            </div>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
+
     <!-- 举报对话框（四理由） -->
     <UiDialog v-model="reportVisible" title="举报投稿" width="440px" :confirm-text="'提交举报'" :confirm-loading="reportSubmitting" @confirm="submitReport">
       <div class="flex flex-col gap-2">
