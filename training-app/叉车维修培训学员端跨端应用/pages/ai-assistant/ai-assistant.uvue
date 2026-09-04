@@ -1,24 +1,10 @@
 <template>
 	<view class="ai-page">
 		<!-- 自定义导航栏 -->
-		<view class="custom-nav" :style="{ paddingTop: statusBarHeight + 'px' }">
-			<view class="nav-content">
-				<text class="nav-icon" @click="toggleSidebarLeft">☰</text>
-				<view class="nav-center">
-                    <text class="nav-title">维修助手</text>
-					<view class="version-tabs">
-						<text class="version-tab" @click="goBasic">基础版</text>
-						<text class="version-tab active">专业版</text>
-					</view>
-					
-				</view>
-				<text class="nav-icon" @click="toggleSidebarRight">▦</text>
-			</view>
-		</view>
+		<AiChatNav :version="'pro'" :status-bar-height="statusBarHeight" @left-click="toggleSidebarLeft" @menu-click="toggleSidebarRight" @tab-change="onTabChange" />
 
 		<!-- 主内容区 -->
 		<view class="main">
-			<!-- 专业版 -->
 			<scroll-view scroll-y class="pro-scroll" :scroll-into-view="scrollIntoViewId" scroll-with-animation>
 				<!-- 功能入口 -->
 				<view class="function-grid">
@@ -34,17 +20,13 @@
 				<view class="prompt-list">
 					<view v-for="(p, idx) in quickPrompts" :key="idx" class="prompt-card" @click="sendText(p)">
 						<text class="prompt-text">{{ p }}</text>
-						<text class="prompt-arrow">›</text>
+						<text class="prompt-arrow">&#8250;</text>
 					</view>
 				</view>
 
 				<!-- 聊天消息 -->
 				<view v-if="messages.length > 0" class="chat-area">
-					<view v-for="(msg, idx) in messages" :id="'msg-' + idx" :key="idx" class="message-row" :class="msg.role">
-						<view class="message-bubble">
-							<text class="message-text">{{ msg.content }}</text>
-						</view>
-					</view>
+					<AiChatBubble v-for="(msg, idx) in messages" :key="idx" :role="msg.role" :content="msg.content" :show-actions="msg.role == 'assistant'" :is-last="idx == messages.length - 1" @copy="onCopyText(msg.content)" @retry="onRetry" />
 					<view v-if="thinking" class="message-row assistant">
 						<view class="message-bubble thinking">
 							<text class="message-text">思考中...</text>
@@ -55,73 +37,17 @@
 			</scroll-view>
 		</view>
 
-		<!-- 底部输入区 -->
-		<view class="input-area">
-			<view class="model-bar">
-				<view class="model-selector" @click="showModelPicker = true">
-					<text class="model-icon">★</text>
-					<text class="model-name">{{ currentModelName }}</text>
-					<text class="model-arrow">▾</text>
-				</view>
-			</view>
-			<view class="input-row">
-				<text class="tool-icon" @click="chooseImage()">📎</text>
-				<view class="input-box">
-					<input v-model="inputText" class="chat-input" placeholder="提出你想要知道的问题" confirm-type="send" @confirm="onSend" />
-				</view>
-				<text class="tool-icon" @click="startVoice">🎙</text>
-				<text class="send-btn" :class="{ disabled: inputText.length == 0 }" @click="onSend">➤</text>
-			</view>
-		</view>
+		<!-- 底部输入区（专业版带模型选择器） -->
+		<AiChatInput :show-model-bar="true" :model-name="currentModelName" @send="onInputSend" @model-click="showModelPicker = true" />
 
-		<!-- 底部导航栏（保持 tab 切换可用） -->
+		<!-- 底部导航栏 -->
 		<TabBar :active-index="2"></TabBar>
 
 		<!-- 左侧会话抽屉 -->
-		<view v-if="sidebarLeft" class="drawer-mask" @click="sidebarLeft = false"></view>
-		<view v-if="sidebarLeft" class="drawer drawer-left">
-			<view class="drawer-header" :style="{ paddingTop: statusBarHeight + 'px' }">
-				<text class="drawer-title">最近对话</text>
-				<text class="drawer-close" @click="sidebarLeft = false">✕</text>
-			</view>
-			<scroll-view scroll-y class="drawer-body">
-				<view class="drawer-new" @click="startNewChat">
-					<text class="drawer-new-icon">+</text>
-					<text class="drawer-new-text">新建对话</text>
-				</view>
-				<view v-if="sessions.length == 0" class="empty-tip">暂无历史对话</view>
-				<view v-for="(s, idx) in sessions" :key="idx" class="drawer-item" @click="loadSession(s)">
-					<text class="drawer-item-title">{{ s.title }}</text>
-					<text class="drawer-item-del" @click.stop="onDeleteSession(s.id)">✕</text>
-				</view>
-			</scroll-view>
-		</view>
+		<AiChatDrawerLeft :visible="sidebarLeft" :sessions="sessions" :current-session-id="currentSession?.id ?? 0" :status-bar-height="statusBarHeight" @close="sidebarLeft = false" @new-chat="onNewChat" @select="onSelectSession" @delete="onDeleteSession" />
 
-		<!-- 右侧菜单抽屉（占位） -->
-		<view v-if="sidebarRight" class="drawer-mask" @click="sidebarRight = false"></view>
-		<view v-if="sidebarRight" class="drawer drawer-right">
-			<view class="drawer-header" :style="{ paddingTop: statusBarHeight + 'px' }">
-				<text class="drawer-title">功能菜单</text>
-				<text class="drawer-close" @click="sidebarRight = false">✕</text>
-			</view>
-			<scroll-view scroll-y class="drawer-body">
-				<view class="menu-item" @click="startNewChat">
-					<text class="menu-item-text">新对话</text>
-				</view>
-				<view class="menu-item" @click="goBasic">
-					<text class="menu-item-text">切换到基础版</text>
-				</view>
-				<view class="menu-item" @click="goSettings">
-					<text class="menu-item-text">对话设置</text>
-				</view>
-				<view class="menu-item" @click="goManageModels">
-					<text class="menu-item-text">自定义模型</text>
-				</view>
-				<view class="menu-item" @click="goProfile">
-					<text class="menu-item-text">个人中心</text>
-				</view>
-			</scroll-view>
-		</view>
+		<!-- 右侧菜单抽屉 -->
+		<AiChatDrawerRight :visible="sidebarRight" :menu-items="rightMenuItems" :status-bar-height="statusBarHeight" @close="sidebarRight = false" @action="onMenuAction" />
 
 		<!-- 模型选择弹窗 -->
 		<view v-if="showModelPicker" class="picker-mask" @click="showModelPicker = false"></view>
@@ -183,17 +109,23 @@
 	} from '../../api/aiAssistant'
 	import { useAiChat } from '../../composables/useAiChat'
 	import type { ChatBodyBuilder } from '../../composables/useAiChat'
-	import type { AiModel, AiUserModel, AIModelOption, AIFunctionItem, AiChatMessage } from '../../types/index'
+	import type { AiModel, AiUserModel, AIModelOption, AIFunctionItem, AiChatMessage, AiSession } from '../../types/index'
 	import { isProPaid, getVersion, setVersion } from '../../utils/aiPay'
 	import { STORAGE_KEY_AI_SELECTED_USER_MODEL } from '../../constants/app'
+	import AiChatNav from '../../components/ai-chat/ai-chat-nav.uvue'
+	import AiChatBubble from '../../components/ai-chat/ai-chat-bubble.uvue'
+	import AiChatDrawerLeft from '../../components/ai-chat/ai-chat-drawer-left.uvue'
+	import AiChatDrawerRight from '../../components/ai-chat/ai-chat-drawer-right.uvue'
+	import AiChatInput from '../../components/ai-chat/ai-chat-input.uvue'
 	import TabBar from '../../components/tab-bar/tab-bar.uvue'
 
 	const auth = useAuthStore()
 
-	// 聊天核心逻辑（基础版/专业版共用，包含会话/消息/输入/侧栏/发送状态与方法）
+	// 聊天核心逻辑
 	const {
 		statusBarHeight,
 		sessions,
+		currentSession,
 		messages,
 		inputText,
 		thinking,
@@ -211,8 +143,6 @@
 
 	// 视图状态
 	const showModelPicker = ref<boolean>(false)
-
-	// 自定义 API Key 临时使用
 	const showCustomForm = ref<boolean>(false)
 	const customModel = ref<string>('')
 	const customBaseUrl = ref<string>('')
@@ -220,29 +150,23 @@
 
 	// 数据（模型）
 	const models = ref<AiModel[]>([])
-
 	const userModels = ref<AiUserModel[]>([])
-
 	const currentModelId = ref<number>(0)
 	const currentModelSource = ref<'admin' | 'user' | 'custom'>('admin')
+
 	const allModels = computed<AIModelOption[]>(() : AIModelOption[] => {
 		const arr : AIModelOption[] = []
 		for (let i = 0; i < models.value.length; i++) {
 			const m = models.value[i]
-			const item : AIModelOption = {
-				id: m.id, name: m.name, model: m.model, source: m.source, description: m.description,
-			}
-			arr.push(item)
+			arr.push({ id: m.id, name: m.name, model: m.model, source: m.source, description: m.description })
 		}
 		for (let i = 0; i < userModels.value.length; i++) {
 			const m = userModels.value[i]
-			const item : AIModelOption = {
-				id: m.id, name: m.name, model: m.model, source: 'user', base_url: m.base_url,
-			}
-			arr.push(item)
+			arr.push({ id: m.id, name: m.name, model: m.model, source: 'user', base_url: m.base_url })
 		}
 		return arr
 	})
+
 	const currentModelName = computed<string>(() : string => {
 		if (currentModelSource.value == 'custom') {
 			return customModel.value.length > 0 ? customModel.value : '自定义'
@@ -256,7 +180,17 @@
 		return '选择模型'
 	})
 
-	// 专业版请求体：按 model_source 分支构造（admin / user / custom）
+	// 右侧菜单项
+	type MenuItem = { key: string; label: string }
+	const rightMenuItems : MenuItem[] = [
+		{ key: 'new-chat', label: '新对话' },
+		{ key: 'switch-basic', label: '切换到基础版' },
+		{ key: 'settings', label: '对话设置' },
+		{ key: 'custom-models', label: '自定义模型' },
+		{ key: 'profile', label: '个人中心' },
+	]
+
+	// 专业版请求体
 	const buildBody : ChatBodyBuilder = (history : AiChatMessage[], sessionID : number) : UTSJSONObject => {
 		const params : UTSJSONObject = {
 			session_id: sessionID,
@@ -275,8 +209,8 @@
 		return params
 	}
 
-	// 发送前校验（专业版需有可用模型或已配置自定义模型），通过后走公共 sendInput
-	function onSend() : void {
+	// 发送
+	function onInputSend(text : string) : void {
 		if (models.value.length == 0 && userModels.value.length == 0 && currentModelSource.value != 'custom') {
 			uni.showToast({ title: '暂无可用的 AI 模型', icon: 'none' })
 			return
@@ -285,20 +219,77 @@
 			uni.showToast({ title: '请先配置自定义模型', icon: 'none' })
 			return
 		}
+		inputText.value = text
 		sendInput(currentModelName.value, buildBody)
 	}
 
-	// 功能入口 / 快捷提示语点击：填入输入框并发送
 	function sendText(text : string) : void {
 		inputText.value = text
-		onSend()
+		onInputSend(text)
 	}
 
+	// 消息操作
+	function onCopyText(content : string) : void {
+		uni.setClipboardData({ data: content, success: () => { uni.showToast({ title: '已复制', icon: 'success' }) } })
+	}
+
+	function onRetry() : void {
+		// 专业版重试：重新发送最后一条用户消息
+		const lastUserMsg = getLastUserMessage()
+		if (lastUserMsg.length > 0) {
+			inputText.value = lastUserMsg
+			onInputSend(lastUserMsg)
+		}
+	}
+
+	function getLastUserMessage() : string {
+		for (let i = messages.value.length - 1; i >= 0; i--) {
+			if (messages.value[i].role == 'user') {
+				return messages.value[i].content
+			}
+		}
+		return ''
+	}
+
+	// 版本切换
+	function onTabChange(v : string) : void {
+		if (v == 'basic') {
+			goBasic()
+		}
+	}
+
+	// 会话操作
+	function onNewChat() : void {
+		startNewChat()
+		sidebarLeft.value = false
+	}
+
+	function onSelectSession(s : AiSession) : void {
+		loadSession(s)
+	}
+
+	// 右侧菜单操作
+	function onMenuAction(key : string) : void {
+		sidebarRight.value = false
+		if (key == 'new-chat') {
+			startNewChat()
+		} else if (key == 'switch-basic') {
+			goBasic()
+		} else if (key == 'settings') {
+			uni.navigateTo({ url: '/pages/ai-assistant/ai-settings' })
+		} else if (key == 'custom-models') {
+			uni.navigateTo({ url: '/pages/ai-assistant/custom-models' })
+		} else if (key == 'profile') {
+			uni.switchTab({ url: '/pages/profile/profile' })
+		}
+	}
+
+	// 功能入口
 	const functionItems : AIFunctionItem[] = [
-		{ key: 'fault-code', title: '故障代码查询', icon: '', prompt: '帮我查询叉车故障代码含义' },
-		{ key: 'drawing', title: '图纸识别', icon: '', prompt: '请识别这张叉车图纸' },
-		{ key: 'exercise', title: '习题解答', icon: '', prompt: '请解答这道叉车维修题目' },
-		{ key: 'knowledge', title: '维保知识', icon: '', prompt: '请介绍叉车维保相关知识' },
+		{ key: 'fault-code', title: '故障代码查询', icon: '\uD83D\uDD27', prompt: '帮我查询叉车故障代码含义' },
+		{ key: 'drawing', title: '图纸识别', icon: '\uD83D\uDCD0', prompt: '请识别这张叉车图纸' },
+		{ key: 'exercise', title: '习题解答', icon: '\uD83D\uDCDD', prompt: '请解答这道叉车维修题目' },
+		{ key: 'knowledge', title: '维保知识', icon: '\uD83D\uDCDA', prompt: '请介绍叉车维保相关知识' },
 	]
 
 	const quickPrompts : string[] = [
@@ -307,141 +298,11 @@
 		'叉车日常保养的检查要点有哪些？',
 	]
 
-
-	/**
-	 * 把本地'对话设置'(ai_chat_settings)水合到当前模型选择。
-	 * 页面任何修改都会立即落盘(persistSettings)，因此'保存的设置 === 最新意图'，
-	 * 这里可安全重复水合：冷启动时模型列表未就绪会回落到平台模型，待 loadModels
-	 * 完成后再次水合即收敛。各来源都有护栏：保存模型已被删除/字段缺失时自动回落。
-	 */
-	function hydrateFromSettings() : void {
-		const saved = loadAiChatSettings()
-		const src = saved.model_source
-		if (src == 'user') {
-			for (let i = 0; i < userModels.value.length; i++) {
-				if (userModels.value[i].id == saved.model_id) {
-					currentModelId.value = saved.model_id
-					currentModelSource.value = 'user'
-					return
-				}
-			}
-		} else if (src == 'custom') {
-			if (saved.base_url.length > 0 && saved.model.length > 0 && saved.api_key.length > 0) {
-				customModel.value = saved.model
-				customBaseUrl.value = saved.base_url
-				customApiKey.value = saved.api_key
-				currentModelSource.value = 'custom'
-				currentModelId.value = 0
-				return
-			}
-		} else if (src == 'admin') {
-			for (let i = 0; i < models.value.length; i++) {
-				if (models.value[i].id == saved.model_id) {
-					currentModelId.value = saved.model_id
-					currentModelSource.value = 'admin'
-					return
-				}
-			}
-		}
-		// 兜底：默认第一个平台模型
-		if (models.value.length > 0 && currentModelId.value == 0) {
-			currentModelId.value = models.value[0].id
-		}
-		currentModelSource.value = 'admin'
-	}
-
-	// 数据加载
-	async function loadModels() : Promise<void> {
-		try {
-			models.value = await getAiModelsApi()
-		} catch (e) {
-			console.error('loadModels failed:', e)
-			models.value = [] as AiModel[]
-		}
-		// 登录用户同时加载自定义模型
-		if (auth.isLoggedIn.value) {
-			try {
-				userModels.value = await getAiUserModelsApi()
-			} catch (e) {
-				console.error('loadUserModels failed:', e)
-				userModels.value = [] as AiUserModel[]
-			}
-		}
-		// 平台与自定义模型均加载后，把'对话设置'里保存的选择落地到当前会话
-		hydrateFromSettings()
-	}
-
-	/** 把当前模型选择落盘到'对话设置'，供重进页面/其它端保持生效 */
-	function persistSettings() : void {
-		const s = loadAiChatSettings()
-		s.model_source = currentModelSource.value
-		s.model_id = currentModelId.value
-		if (currentModelSource.value == 'custom') {
-			s.model_name = customModel.value.length > 0 ? customModel.value : s.model_name
-			s.model = customModel.value
-			s.base_url = customBaseUrl.value
-			s.api_key = customApiKey.value
-			s.model_id = 0
-		} else if (currentModelSource.value == 'user') {
-			// 用用户自定义模型的实际字段覆盖（model 名/base_url）
-			for (let i = 0; i < userModels.value.length; i++) {
-				const um = userModels.value[i]
-				if (um.id == currentModelId.value) {
-					s.model_name = um.name
-					s.model = um.model
-					s.base_url = um.base_url
-					s.api_key = '' // 后端按 user_model_id 鉴权，本地不落明文 key
-					break
-				}
-			}
-		} else {
-			// admin：用平台模型的实际字段覆盖
-			for (let i = 0; i < models.value.length; i++) {
-				const pm = models.value[i]
-				if (pm.id == currentModelId.value) {
-					s.model_name = pm.name
-					s.model = pm.model
-					break
-				}
-			}
-			s.base_url = ''
-			s.api_key = ''
-		}
-		saveAiChatSettings(s)
-	}
-
-	function goBasic() : void {
-		sidebarRight.value = false
-		setVersion('basic')
-		uni.reLaunch({ url: '/pages/ai-assistant/ai-basic' })
-	}
-
-	function chooseImage(promptText : string = '') : void {
-		uni.chooseImage({
-			count: 1,
-			sizeType: ['compressed'],
-			sourceType: ['album', 'camera'],
-			success: (res) => {
-				const tempFilePaths = res.tempFilePaths as string[]
-				uni.showToast({ title: '图片已选择：' + tempFilePaths[0].substring(tempFilePaths[0].lastIndexOf('/') + 1), icon: 'none' })
-				if (promptText.length > 0) {
-					sendText(promptText + '（已选择图片）')
-				}
-			},
-			fail: () => {
-				uni.showToast({ title: '选择图片失败', icon: 'none' })
-			},
-		})
-	}
-
 	function onFunctionClick(item : AIFunctionItem) : void {
-		if (item.key == 'drawing') {
-			chooseImage(item.prompt)
-			return
-		}
 		sendText(item.prompt)
 	}
 
+	// 模型选择
 	function selectModel(m : AIModelOption) : void {
 		currentModelId.value = m.id
 		let isUser = false
@@ -457,7 +318,6 @@
 	}
 
 	function selectUserModelById(id : number, name : string) : void {
-		// 从自定义模型管理页选中的模型
 		for (let i = 0; i < userModels.value.length; i++) {
 			if (userModels.value[i].id == id) {
 				currentModelId.value = id
@@ -468,7 +328,6 @@
 				return
 			}
 		}
-		// 列表尚未加载时仅记录 id，待加载后匹配
 		currentModelId.value = id
 		currentModelSource.value = 'user'
 		showModelPicker.value = false
@@ -480,6 +339,7 @@
 		uni.navigateTo({ url: '/pages/ai-assistant/custom-models' })
 	}
 
+	// 自定义 API Key
 	function closeCustomForm() : void {
 		showCustomForm.value = false
 	}
@@ -514,23 +374,101 @@
 		persistSettings()
 	}
 
-	function startVoice() : void {
-		// 语音输入能力占位
-		uni.showModal({
-			title: '语音输入',
-			content: '当前环境暂不支持语音输入，请使用文字提问',
-			showCancel: false,
-		})
+	// 水合 & 持久化
+	function hydrateFromSettings() : void {
+		const saved = loadAiChatSettings()
+		const src = saved.model_source
+		if (src == 'user') {
+			for (let i = 0; i < userModels.value.length; i++) {
+				if (userModels.value[i].id == saved.model_id) {
+					currentModelId.value = saved.model_id
+					currentModelSource.value = 'user'
+					return
+				}
+			}
+		} else if (src == 'custom') {
+			if (saved.base_url.length > 0 && saved.model.length > 0 && saved.api_key.length > 0) {
+				customModel.value = saved.model
+				customBaseUrl.value = saved.base_url
+				customApiKey.value = saved.api_key
+				currentModelSource.value = 'custom'
+				currentModelId.value = 0
+				return
+			}
+		} else if (src == 'admin') {
+			for (let i = 0; i < models.value.length; i++) {
+				if (models.value[i].id == saved.model_id) {
+					currentModelId.value = saved.model_id
+					currentModelSource.value = 'admin'
+					return
+				}
+			}
+		}
+		if (models.value.length > 0 && currentModelId.value == 0) {
+			currentModelId.value = models.value[0].id
+		}
+		currentModelSource.value = 'admin'
 	}
 
-	function goProfile() : void {
-		sidebarRight.value = false
-		uni.switchTab({ url: '/pages/profile/profile' })
+	function persistSettings() : void {
+		const s = loadAiChatSettings()
+		s.model_source = currentModelSource.value
+		s.model_id = currentModelId.value
+		if (currentModelSource.value == 'custom') {
+			s.model_name = customModel.value.length > 0 ? customModel.value : s.model_name
+			s.model = customModel.value
+			s.base_url = customBaseUrl.value
+			s.api_key = customApiKey.value
+			s.model_id = 0
+		} else if (currentModelSource.value == 'user') {
+			for (let i = 0; i < userModels.value.length; i++) {
+				const um = userModels.value[i]
+				if (um.id == currentModelId.value) {
+					s.model_name = um.name
+					s.model = um.model
+					s.base_url = um.base_url
+					s.api_key = ''
+					break
+				}
+			}
+		} else {
+			for (let i = 0; i < models.value.length; i++) {
+				const pm = models.value[i]
+				if (pm.id == currentModelId.value) {
+					s.model_name = pm.name
+					s.model = pm.model
+					break
+				}
+			}
+			s.base_url = ''
+			s.api_key = ''
+		}
+		saveAiChatSettings(s)
 	}
 
-	function goSettings() : void {
-		sidebarRight.value = false
-		uni.navigateTo({ url: '/pages/ai-assistant/ai-settings' })
+	// 版本切换
+	function goBasic() : void {
+		setVersion('basic')
+		uni.reLaunch({ url: '/pages/ai-assistant/ai-basic' })
+	}
+
+	// 数据加载
+	async function loadModels() : Promise<void> {
+		try {
+			models.value = await getAiModelsApi()
+		} catch (e) {
+			console.error('loadModels failed:', e)
+			models.value = [] as AiModel[]
+		}
+		if (auth.isLoggedIn.value) {
+			try {
+				userModels.value = await getAiUserModelsApi()
+			} catch (e) {
+				console.error('loadUserModels failed:', e)
+				userModels.value = [] as AiUserModel[]
+			}
+		}
+		hydrateFromSettings()
 	}
 
 	// 生命周期
@@ -544,13 +482,11 @@
 			return
 		}
 
-		// 专业版需付费解锁：未付费直接回到版本选择页引导
 		if (!isProPaid()) {
 			uni.reLaunch({ url: '/pages/ai-assistant/version-select' })
 			return
 		}
 
-		// 已选基础版（降级状态）则进入基础版页面
 		if (getVersion() == 'basic') {
 			uni.reLaunch({ url: '/pages/ai-assistant/ai-basic' })
 			return
@@ -564,10 +500,8 @@
 		if (auth.isLoggedIn.value) {
 			loadSessions()
 		}
-		// 从'对话设置/自定义模型'页返回时，让保存的选择也落到当前会话
 		hydrateFromSettings()
 
-		// 从自定义模型管理页选择返回时，选中对应模型
 		const selectedRaw = uni.getStorageSync(STORAGE_KEY_AI_SELECTED_USER_MODEL) as string
 		if (selectedRaw.length > 0) {
 			uni.removeStorageSync(STORAGE_KEY_AI_SELECTED_USER_MODEL)
@@ -589,62 +523,10 @@
 		background-color: #f8f8f8;
 	}
 
-	/* 自定义导航栏 */
-	.custom-nav {
-		background-color: #ffffff;
-		border-bottom: 1rpx solid #f0f0f0;
-	}
-
-	.nav-content {
-		flex-direction: row;
-		align-items: center;
-		justify-content: space-between;
-		height: 88rpx;
-		padding: 0 24rpx;
-	}
-
-	.nav-icon {
-		font-size: 40rpx;
-		color: #333333;
-		padding: 12rpx;
-	}
-
-	.nav-center {
-		flex: 1;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-	}
-
-	.version-tabs {
-		flex-direction: row;
-		align-items: center;
-		margin-bottom: 4rpx;
-	}
-
-	.version-tab {
-		font-size: 24rpx;
-		color: #999999;
-		padding: 4rpx 16rpx;
-	}
-
-	.version-tab.active {
-		color: #2979ff;
-		font-weight: 600;
-	}
-
-	.nav-title {
-		font-size: 28rpx;
-		color: #2979ff;
-		font-weight: 500;
-	}
-
-	/* 主内容 */
 	.main {
 		flex: 1;
 	}
 
-	/* 专业版 */
 	.pro-scroll {
 		flex: 1;
 		padding: 24rpx;
@@ -708,7 +590,6 @@
 		margin-left: 16rpx;
 	}
 
-	/* 聊天区 */
 	.chat-area {
 		flex-direction: column;
 		margin-bottom: 24rpx;
@@ -719,10 +600,6 @@
 		margin-bottom: 20rpx;
 	}
 
-	.message-row.user {
-		justify-content: flex-end;
-	}
-
 	.message-row.assistant {
 		justify-content: flex-start;
 	}
@@ -731,13 +608,6 @@
 		max-width: 600rpx;
 		padding: 20rpx 24rpx;
 		border-radius: 16rpx;
-	}
-
-	.message-row.user .message-bubble {
-		background-color: #2979ff;
-	}
-
-	.message-row.assistant .message-bubble {
 		background-color: #ffffff;
 	}
 
@@ -749,188 +619,6 @@
 		font-size: 28rpx;
 		color: #333333;
 		line-height: 1.6;
-	}
-
-	.message-row.user .message-text {
-		color: #ffffff;
-	}
-
-	/* 底部输入区 */
-	.input-area {
-		background-color: #ffffff;
-		border-top: 1rpx solid #f0f0f0;
-		padding: 16rpx 24rpx;
-	}
-
-	.model-bar {
-		flex-direction: row;
-		align-items: center;
-		justify-content: space-between;
-		margin-bottom: 16rpx;
-	}
-
-	.model-selector {
-		flex-direction: row;
-		align-items: center;
-		background-color: #f5f5f5;
-		border-radius: 24rpx;
-		padding: 10rpx 20rpx;
-	}
-
-	.model-icon {
-		font-size: 24rpx;
-		color: #2979ff;
-		margin-right: 8rpx;
-	}
-
-	.model-name {
-		font-size: 24rpx;
-		color: #333333;
-		margin-right: 8rpx;
-		max-width: 300rpx;
-	}
-
-	.model-arrow {
-		font-size: 20rpx;
-		color: #999999;
-	}
-
-	.input-row {
-		flex-direction: row;
-		align-items: center;
-	}
-
-	.tool-icon {
-		font-size: 40rpx;
-		color: #666666;
-		padding: 12rpx;
-	}
-
-	.input-box {
-		flex: 1;
-		background-color: #f5f5f5;
-		border-radius: 36rpx;
-		padding: 0 24rpx;
-		margin: 0 12rpx;
-	}
-
-	.chat-input {
-		height: 72rpx;
-		font-size: 28rpx;
-		color: #333333;
-	}
-
-	.send-btn {
-		font-size: 40rpx;
-		color: #2979ff;
-		padding: 12rpx;
-	}
-
-	.send-btn.disabled {
-		color: #cccccc;
-	}
-
-	/* 抽屉 */
-	.drawer-mask {
-		position: absolute;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		background-color: rgba(0, 0, 0, 0.4);
-		z-index: 100;
-	}
-
-	.drawer {
-		position: absolute;
-		top: 0;
-		bottom: 0;
-		width: 70%;
-		background-color: #ffffff;
-		z-index: 101;
-		flex-direction: column;
-	}
-
-	.drawer-left {
-		left: 0;
-	}
-
-	.drawer-right {
-		right: 0;
-	}
-
-	.drawer-header {
-		flex-direction: row;
-		align-items: center;
-		justify-content: space-between;
-		padding: 24rpx;
-		border-bottom: 1rpx solid #f0f0f0;
-	}
-
-	.drawer-title {
-		font-size: 32rpx;
-		font-weight: 600;
-		color: #333333;
-	}
-
-	.drawer-close {
-		font-size: 36rpx;
-		color: #999999;
-		padding: 8rpx;
-	}
-
-	.drawer-body {
-		flex: 1;
-		padding: 24rpx;
-	}
-
-	.drawer-new {
-		flex-direction: row;
-		align-items: center;
-		background-color: #2979ff;
-		border-radius: 12rpx;
-		padding: 24rpx;
-		margin-bottom: 24rpx;
-	}
-
-	.drawer-new-text {
-		color: #ffffff;
-		font-size: 28rpx;
-	}
-
-	.drawer-new-icon {
-		font-size: 32rpx;
-		margin-right: 12rpx;
-	}
-
-	.drawer-item {
-		flex-direction: row;
-		align-items: center;
-		justify-content: space-between;
-		padding: 24rpx 0;
-		border-bottom: 1rpx solid #f5f5f5;
-	}
-
-	.drawer-item-title {
-		flex: 1;
-		font-size: 28rpx;
-		color: #333333;
-	}
-
-	.drawer-item-del {
-		font-size: 28rpx;
-		color: #999999;
-		padding: 8rpx;
-	}
-
-	.menu-item {
-		padding: 28rpx 0;
-		border-bottom: 1rpx solid #f5f5f5;
-	}
-
-	.menu-item-text {
-		font-size: 28rpx;
-		color: #333333;
 	}
 
 	/* 模型选择弹窗 */
@@ -992,7 +680,6 @@
 		margin-top: 6rpx;
 	}
 
-	/* 模型选择器动作行 */
 	.picker-action {
 		flex-direction: row;
 		align-items: center;

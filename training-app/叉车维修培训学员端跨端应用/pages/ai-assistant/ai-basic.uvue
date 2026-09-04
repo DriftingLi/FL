@@ -1,20 +1,7 @@
 <template>
 	<view class="ai-page">
 		<!-- 自定义导航栏 -->
-		<view class="custom-nav" :style="{ paddingTop: statusBarHeight + 'px' }">
-			<view class="nav-content">
-				<text class="nav-icon" @click="toggleSidebarLeft">☰</text>
-				<view class="nav-center">
-                        <text class="nav-title">维修助手</text>
-					<view class="version-tabs">
-						<text class="version-tab active">基础版</text>
-						<text class="version-tab" @click="goPro">专业版</text>
-					</view>
-				
-				</view>
-				<text class="nav-icon" @click="toggleSidebarRight">▦</text>
-			</view>
-		</view>
+		<AiChatNav :version="'basic'" :status-bar-height="statusBarHeight" @left-click="toggleSidebarLeft" @menu-click="toggleSidebarRight" @tab-change="onTabChange" />
 
 		<!-- 主内容区 -->
 		<view class="main">
@@ -30,11 +17,7 @@
 
 				<!-- 聊天区 -->
 				<view v-else class="chat-area">
-					<view v-for="(msg, idx) in messages" :id="'msg-' + idx" :key="idx" class="message-row" :class="msg.role">
-						<view class="message-bubble">
-							<text class="message-text">{{ msg.content }}</text>
-						</view>
-					</view>
+					<AiChatBubble v-for="(msg, idx) in messages" :key="idx" :role="msg.role" :content="msg.content" :show-actions="msg.role == 'assistant'" :is-last="idx == messages.length - 1" @copy="onCopyText(msg.content)" @retry="onRetry" />
 					<view v-if="thinking" class="message-row assistant">
 						<view class="message-bubble thinking">
 							<text class="message-text">思考中...</text>
@@ -46,60 +29,16 @@
 		</view>
 
 		<!-- 底部输入区 -->
-		<view class="input-area">
-			<view class="input-row">
-				<view class="input-box">
-					<input v-model="inputText" class="chat-input" placeholder="提出你想要知道的问题" confirm-type="send" @confirm="onSend" />
-				</view>
-				<text class="send-btn" :class="{ disabled: inputText.length == 0 }" @click="onSend">➤</text>
-			</view>
-		</view>
+		<AiChatInput :status-bar-height="statusBarHeight" @send="onInputSend" />
 
-		<!-- 底部导航栏（保持 tab 切换可用） -->
+		<!-- 底部导航栏 -->
 		<TabBar :active-index="2"></TabBar>
 
 		<!-- 左侧会话抽屉 -->
-		<view v-if="sidebarLeft" class="drawer-mask" @click="sidebarLeft = false"></view>
-		<view v-if="sidebarLeft" class="drawer drawer-left">
-			<view class="drawer-header" :style="{ paddingTop: statusBarHeight + 'px' }">
-				<text class="drawer-title">最近对话</text>
-				<text class="drawer-close" @click="sidebarLeft = false">✕</text>
-			</view>
-			<scroll-view scroll-y class="drawer-body">
-				<view class="drawer-new" @click="startNewChat">
-					<text class="drawer-new-icon">+</text>
-					<text class="drawer-new-text">新建对话</text>
-				</view>
-				<view v-if="sessions.length == 0" class="empty-tip">暂无历史对话</view>
-				<view v-for="(s, idx) in sessions" :key="idx" class="drawer-item" @click="loadSession(s)">
-					<text class="drawer-item-title">{{ s.title }}</text>
-					<text class="drawer-item-del" @click.stop="onDeleteSession(s.id)">✕</text>
-				</view>
-			</scroll-view>
-		</view>
+		<AiChatDrawerLeft :visible="sidebarLeft" :sessions="sessions" :current-session-id="currentSession?.id ?? 0" :status-bar-height="statusBarHeight" @close="sidebarLeft = false" @new-chat="onNewChat" @select="onSelectSession" @delete="onDeleteSession" />
 
 		<!-- 右侧功能菜单抽屉 -->
-		<view v-if="sidebarRight" class="drawer-mask" @click="sidebarRight = false"></view>
-		<view v-if="sidebarRight" class="drawer drawer-right">
-			<view class="drawer-header" :style="{ paddingTop: statusBarHeight + 'px' }">
-				<text class="drawer-title">功能菜单</text>
-				<text class="drawer-close" @click="sidebarRight = false">✕</text>
-			</view>
-			<scroll-view scroll-y class="drawer-body">
-				<view class="menu-item" @click="goPro">
-					<text class="menu-item-text">切换到专业版</text>
-				</view>
-				<view class="menu-item" @click="goSettings">
-					<text class="menu-item-text">对话设置</text>
-				</view>
-				<view class="menu-item" @click="goManageModels">
-					<text class="menu-item-text">自定义模型</text>
-				</view>
-				<view class="menu-item" @click="goProfile">
-					<text class="menu-item-text">个人中心</text>
-				</view>
-			</scroll-view>
-		</view>
+		<AiChatDrawerRight :visible="sidebarRight" :menu-items="rightMenuItems" :status-bar-height="statusBarHeight" @close="sidebarRight = false" @action="onMenuAction" />
 
 		<!-- mock 付费弹窗 -->
 		<view v-if="payVisible" class="pay-mask" @click="closePay"></view>
@@ -153,14 +92,20 @@
 		PRO_PRICE_MONTH,
 		PRO_PRICE_YEAR,
 	} from '../../utils/aiPay'
+	import AiChatNav from '../../components/ai-chat/ai-chat-nav.uvue'
+	import AiChatBubble from '../../components/ai-chat/ai-chat-bubble.uvue'
+	import AiChatDrawerLeft from '../../components/ai-chat/ai-chat-drawer-left.uvue'
+	import AiChatDrawerRight from '../../components/ai-chat/ai-chat-drawer-right.uvue'
+	import AiChatInput from '../../components/ai-chat/ai-chat-input.uvue'
 	import TabBar from '../../components/tab-bar/tab-bar.uvue'
 
 	const auth = useAuthStore()
 
-	// 聊天核心逻辑（基础版/专业版共用，包含会话/消息/输入/侧栏/发送状态与方法）
+	// 聊天核心逻辑
 	const {
 		statusBarHeight,
 		sessions,
+		currentSession,
 		messages,
 		inputText,
 		thinking,
@@ -183,9 +128,16 @@
 
 	// 数据（模型）
 	const models = ref<AiModel[]>([])
-
-	// 基础版固定使用平台模型，默认第一个；可从'对话设置'里保存的 admin 选择水合
 	const currentModelId = ref<number>(0)
+
+	// 右侧菜单项
+	type MenuItem = { key: string; label: string }
+	const rightMenuItems : MenuItem[] = [
+		{ key: 'switch-pro', label: '切换到专业版' },
+		{ key: 'settings', label: '对话设置' },
+		{ key: 'custom-models', label: '自定义模型' },
+		{ key: 'profile', label: '个人中心' },
+	]
 
 	/** 基础版请求体：固定使用平台模型（admin） */
 	const buildBody : ChatBodyBuilder = (history : AiChatMessage[], sessionID : number) : UTSJSONObject => {
@@ -198,19 +150,60 @@
 		return params
 	}
 
-	// 发送前校验（基础版仅需存在平台模型），通过后走公共 sendInput
-	function onSend() : void {
+	// 发送前校验
+	function onInputSend(text : string) : void {
 		if (models.value.length == 0) {
 			uni.showToast({ title: '暂无可用的 AI 模型', icon: 'none' })
 			return
 		}
+		inputText.value = text
 		sendInput('基础版', buildBody)
 	}
 
-	// 快捷提示语点击：填入输入框并发送
+	// 快捷提示语点击
 	function sendText(text : string) : void {
 		inputText.value = text
-		onSend()
+		onInputSend(text)
+	}
+
+	// 消息操作
+	function onCopyText(content : string) : void {
+		uni.setClipboardData({ data: content, success: () => { uni.showToast({ title: '已复制', icon: 'success' }) } })
+	}
+
+	function onRetry() : void {
+		uni.showToast({ title: '基础版暂不支持重试', icon: 'none' })
+	}
+
+	// 版本切换
+	function onTabChange(v : string) : void {
+		if (v == 'pro') {
+			goPro()
+		}
+	}
+
+	// 会话操作
+	function onNewChat() : void {
+		startNewChat()
+		sidebarLeft.value = false
+	}
+
+	function onSelectSession(s : AiSession) : void {
+		loadSession(s)
+	}
+
+	// 右侧菜单操作
+	function onMenuAction(key : string) : void {
+		sidebarRight.value = false
+		if (key == 'switch-pro') {
+			goPro()
+		} else if (key == 'settings') {
+			uni.navigateTo({ url: '/pages/ai-assistant/ai-settings' })
+		} else if (key == 'custom-models') {
+			uni.navigateTo({ url: '/pages/ai-assistant/custom-models' })
+		} else if (key == 'profile') {
+			uni.switchTab({ url: '/pages/profile/profile' })
+		}
 	}
 
 	// 快捷提示语
@@ -220,13 +213,11 @@
 		'叉车日常保养的检查要点有哪些？',
 	]
 
-
 	// 数据加载
 	async function loadModels() : Promise<void> {
 		try {
 			const list = await getAiModelsApi()
 			models.value = list
-			// 基础版只走平台模型：优先采用'对话设置'中保存的 admin 选择，其次默认第一个
 			const saved = loadAiChatSettings()
 			let applied = false
 			if (saved.model_source == 'admin' && saved.model_id > 0) {
@@ -240,7 +231,6 @@
 			}
 			if (!applied && currentModelId.value == 0 && list.length > 0) {
 				currentModelId.value = list[0].id
-				// 记录为当前 admin 选择，便于设置页保持同口径
 				const s = loadAiChatSettings()
 				s.model_source = 'admin'
 				s.model_id = currentModelId.value
@@ -258,8 +248,6 @@
 	}
 
 	function goPro() : void {
-		sidebarRight.value = false
-		// 未付费则先引导开通专业版
 		if (!isProPaid()) {
 			openPay()
 			return
@@ -290,21 +278,6 @@
 		}
 	}
 
-	function goSettings() : void {
-		sidebarRight.value = false
-		uni.navigateTo({ url: '/pages/ai-assistant/ai-settings' })
-	}
-
-	function goManageModels() : void {
-		sidebarRight.value = false
-		uni.navigateTo({ url: '/pages/ai-assistant/custom-models' })
-	}
-
-	function goProfile() : void {
-		sidebarRight.value = false
-		uni.switchTab({ url: '/pages/profile/profile' })
-	}
-
 	// 生命周期
 	onLoad((options : OnLoadOptions) => {
 		const sysInfo = uni.getSystemInfoSync()
@@ -333,67 +306,14 @@
 		background-color: #f8f8f8;
 	}
 
-	/* 自定义导航栏 */
-	.custom-nav {
-		background-color: #ffffff;
-		border-bottom: 1rpx solid #f0f0f0;
-	}
-
-	.nav-content {
-		flex-direction: row;
-		align-items: center;
-		justify-content: space-between;
-		height: 88rpx;
-		padding: 0 24rpx;
-	}
-
-	.nav-icon {
-		font-size: 40rpx;
-		color: #333333;
-		padding: 12rpx;
-	}
-
-	.nav-center {
-		flex: 1;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-	}
-
-	.version-tabs {
-		flex-direction: row;
-		align-items: center;
-		margin-bottom: 4rpx;
-	}
-
-	.version-tab {
-		font-size: 24rpx;
-		color: #999999;
-		padding: 4rpx 16rpx;
-	}
-
-	.version-tab.active {
-		color: #2979ff;
-		font-weight: 600;
-	}
-
-	.nav-title {
-		font-size: 28rpx;
-		color: #2979ff;
-		font-weight: 500;
-	}
-
-	/* 主内容 */
 	.main {
 		flex: 1;
 	}
 
-	/* 基础版首页 */
 	.welcome-panel {
 		padding: 24rpx;
 	}
 
-	/* 快捷提示语 */
 	.prompt-list {
 		flex-direction: column;
 		margin-bottom: 24rpx;
@@ -415,14 +335,6 @@
 		color: #333333;
 	}
 
-	.empty-tip {
-		text-align: center;
-		font-size: 26rpx;
-		color: #999999;
-		padding: 32rpx 0;
-	}
-
-	/* 聊天区 */
 	.pro-scroll {
 		flex: 1;
 		padding: 24rpx;
@@ -438,10 +350,6 @@
 		margin-bottom: 20rpx;
 	}
 
-	.message-row.user {
-		justify-content: flex-end;
-	}
-
 	.message-row.assistant {
 		justify-content: flex-start;
 	}
@@ -450,13 +358,6 @@
 		max-width: 600rpx;
 		padding: 20rpx 24rpx;
 		border-radius: 16rpx;
-	}
-
-	.message-row.user .message-bubble {
-		background-color: #2979ff;
-	}
-
-	.message-row.assistant .message-bubble {
 		background-color: #ffffff;
 	}
 
@@ -468,149 +369,6 @@
 		font-size: 28rpx;
 		color: #333333;
 		line-height: 1.6;
-	}
-
-	.message-row.user .message-text {
-		color: #ffffff;
-	}
-
-	/* 底部输入区 */
-	.input-area {
-		background-color: #ffffff;
-		border-top: 1rpx solid #f0f0f0;
-		padding: 16rpx 24rpx;
-	}
-
-	.input-row {
-		flex-direction: row;
-		align-items: center;
-	}
-
-	.input-box {
-		flex: 1;
-		background-color: #f5f5f5;
-		border-radius: 36rpx;
-		padding: 0 24rpx;
-		margin: 0 12rpx;
-	}
-
-	.chat-input {
-		height: 72rpx;
-		font-size: 28rpx;
-		color: #333333;
-	}
-
-	.send-btn {
-		font-size: 40rpx;
-		color: #2979ff;
-		padding: 12rpx;
-	}
-
-	.send-btn.disabled {
-		color: #cccccc;
-	}
-
-	/* 抽屉 */
-	.drawer-mask {
-		position: absolute;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		background-color: rgba(0, 0, 0, 0.4);
-		z-index: 100;
-	}
-
-	.drawer {
-		position: absolute;
-		top: 0;
-		bottom: 0;
-		width: 70%;
-		background-color: #ffffff;
-		z-index: 101;
-		flex-direction: column;
-	}
-
-	.drawer-left {
-		left: 0;
-	}
-
-	.drawer-right {
-		right: 0;
-	}
-
-	.drawer-header {
-		flex-direction: row;
-		align-items: center;
-		justify-content: space-between;
-		padding: 24rpx;
-		border-bottom: 1rpx solid #f0f0f0;
-	}
-
-	.drawer-title {
-		font-size: 32rpx;
-		font-weight: 600;
-		color: #333333;
-	}
-
-	.drawer-close {
-		font-size: 36rpx;
-		color: #999999;
-		padding: 8rpx;
-	}
-
-	.drawer-body {
-		flex: 1;
-		padding: 24rpx;
-	}
-
-	.drawer-new {
-		flex-direction: row;
-		align-items: center;
-		background-color: #2979ff;
-		border-radius: 12rpx;
-		padding: 24rpx;
-		margin-bottom: 24rpx;
-	}
-
-	.drawer-new-text {
-		color: #ffffff;
-		font-size: 28rpx;
-	}
-
-	.drawer-new-icon {
-		font-size: 32rpx;
-		margin-right: 12rpx;
-	}
-
-	.drawer-item {
-		flex-direction: row;
-		align-items: center;
-		justify-content: space-between;
-		padding: 24rpx 0;
-		border-bottom: 1rpx solid #f5f5f5;
-	}
-
-	.drawer-item-title {
-		flex: 1;
-		font-size: 28rpx;
-		color: #333333;
-	}
-
-	.drawer-item-del {
-		font-size: 28rpx;
-		color: #999999;
-		padding: 8rpx;
-	}
-
-	.menu-item {
-		padding: 28rpx 0;
-		border-bottom: 1rpx solid #f5f5f5;
-	}
-
-	.menu-item-text {
-		font-size: 28rpx;
-		color: #333333;
 	}
 
 	/* mock 付费弹窗 */
