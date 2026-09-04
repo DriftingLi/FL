@@ -360,6 +360,7 @@ npm run test:android
 
 ## 相关文档
 
+- **ADRs（移动端独立编号）**：`docs/adr/` —— `0001`-`0006`：SSE 流式传输、轻量状态管理、手动 JSON 类型映射、生物识别门控、自研安全存储、改密不吊销会话缺口；与根仓库 `docs/adr/`（`ADR-0001`+ 编号）互不相关，引用时注意区分
 - **Git 工作流**：`docs/GIT_WORKFLOW.md`
 - **UI 规范**：`docs/ui-spec.md`
 - **技术规范**：`docs/technical-spec.md`
