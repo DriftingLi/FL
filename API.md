@@ -4,7 +4,7 @@
 
 > **在线交互文档（gin-swagger，C 方案）**：开发/测试环境 `GET /swagger/index.html`（需 BasicAuth `SWAGGER_USER`/`SWAGGER_PASS`，见 `.secret/swagger-credentials.pem` 与 GitHub Secrets）；生产默认关闭（`SWAGGER_ENABLED=false`）。本清单保留作离线对照，以 Swagger UI 为准。
 
-> **准确性基准**：本清单以 `backend/internal/api` 实际注册的路由与 `backend/internal/service` 的 typed DTO 契约为准（2026-08-19，6c0dfec）。与历史文档的差异（已下线端点等）见文末「变更记录」。
+> **准确性基准**：本清单以 `backend/internal/api` 实际注册的路由与 `backend/internal/service` 的 typed DTO 契约为准（2026-09-04，#517 投稿域后）。与历史文档的差异（已下线端点等）见文末「变更记录」。
 
 ## 0. 通用约定
 
@@ -902,6 +902,50 @@ multipart/form-data：`file`。响应 200：data 为 `{ "url": "/static/uploads/
 
 ---
 
+## 14d. 资料投稿 `/api/contributions`（role=hrwai_user，#517 / ADR-0026）
+
+资料投稿（contribution）= 学员自主上传、经审核通过后对全学员公开免费下载的**非课程来源**资料，与 14c 学习资料（material，课程附件）严格区分。形态：一份投稿 1–5 个文件（白名单 pdf/doc/docx/ppt/pptx/xls/xlsx/zip/mp4；单文件 ≤20MB、合计 ≤50MB），必挂目标证件、跟随全局证件过滤器。生命周期 `pending → approved / rejected`；`pending → withdrawn`（作者撤回）；`approved → archived`（下架）。先审后发，**未过审不产生积分**。
+
+积分：过审直记 +50（`contribution_approved`）；下载量每人每稿终身计一次为事实源，跨 10/50/200 档追加 +30/+80/+200（`contribution_tier`）；违规下架走 rollback 追回（封底 0）。
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| POST | `/api/contributions/upload-file` | 上传暂存文件（multipart `file`），返回 `{ file_url, file_name, file_size, content_type }` |
+| POST | `/api/contributions` | 创建投稿（`credential_id/title/intro/is_anonymous/files[]`），返回 pending 条目 |
+| GET | `/api/contributions?credential_id=&sort=latest\|hot&page=&page_size=` | 公开广场（仅 approved，按证件过滤） |
+| GET | `/api/contributions/mine` | 我的投稿（全部状态，含驳回/下架原因） |
+| GET | `/api/contributions/:id` | 详情（含文件清单；匿名投稿作者显示「匿名学员」） |
+| POST | `/api/contributions/:id/download` | 下载计数（幂等：每人每稿终身一次，作者不计；跨档当场直记达阶奖励），返回 `{ is_new, tier_awarded }` |
+| DELETE | `/api/contributions/:id` | 撤回 pending（→ withdrawn） |
+| POST | `/api/contributions/:id/report` | 举报已上架投稿（`reason` ∈ piracy/content_error/violation/stale；同人同稿合并） |
+
+管理端审核（`/api/admin/contributions`，role=tutor+admin；V1 仅管理端有 UI）：
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/admin/contributions/pending` | 待审核队列（分页） |
+| POST | `/api/admin/contributions/:id/approve` | 通过（直记 +50 + 站内信，同事务） |
+| POST | `/api/admin/contributions/:id/reject` | 驳回（`reason` 必填） |
+| POST | `/api/admin/contributions/:id/archive` | 下架（`reason` 必填；追回该稿累计投稿分） |
+| GET | `/api/admin/contributions/reports?status=` | 举报队列（status 0 待处理 / 1 已处理） |
+| POST | `/api/admin/contributions/reports/:id/handle` | 处置举报（`action` ∈ archive/dismiss） |
+
+**POST /api/contributions** 请求体：
+
+```json
+{ "credential_id": 1, "title": "叉车液压故障排查手册", "intro": "整理自一线维修笔记", "is_anonymous": false, "files": [ { "file_url": "/static/uploads/contributions/a.pdf", "file_name": "a.pdf", "file_size": 10240, "content_type": "document" } ] }
+```
+
+**GET /api/contributions** 响应 200：
+
+```json
+{ "code": 200, "message": "success", "data": { "items": [ { "id": 1, "credential_id": 1, "title": "叉车液压故障排查手册", "intro": "...", "status": "approved", "is_anonymous": false, "downloads_count": 12, "files": [ { "file_id": 1, "file_name": "a.pdf", "file_url": "/static/uploads/contributions/a.pdf", "file_size": 10240, "content_type": "document" } ], "author": { "user_id": 7, "username": "小明", "anonymous": false }, "created_at": "2026-09-01 10:00:00" } ], "total": 1, "page": 1, "page_size": 20 } }
+```
+
+> 上传/文件访问注意：R2 模式下 `file_url` 为 `https://www.gccsmile.com/contributions/...` 公开直链，需 nginx 对象存储反代登记 `contributions`（与 `resumes`）顶层前缀（见 PR #530）；未登记会落进门户兜底被 Nuxt 报 404。
+
+---
+
 ## 15. 通知 `/api/notifications`（JWT）
 
 | 方法 | 路径 | 说明 |
@@ -911,7 +955,7 @@ multipart/form-data：`file`。响应 200：data 为 `{ "url": "/static/uploads/
 | POST | `/api/notifications/:id/read` | 单条标记已读 |
 | POST | `/api/notifications/read-all` | 全部标记已读 |
 
-`type` 取值：`system`（系统）/ `profile_review`（资料审核，payload 含 review_status）/ `forum_reply`（帖子被回复或楼中楼被回复）/ `forum_report`（举报处理结果）/ `forum_topic_deleted`（帖子被管理端删除）/ `forum_reply_deleted`（回复被管理端删除）。论坛类通知 `link` 为 `/training/forum/:topic_id`、payload 携带 `topic_id`（帖子已删除时无 link）。
+`type` 取值：`system`（系统）/ `profile_review`（资料审核，payload 含 review_status）/ `contribution_approved`（投稿过审）/ `contribution_rejected`（投稿驳回）/ `contribution_archived`（投稿下架，含追回分值）/ `contribution_tier`（投稿下载达阶）/ `forum_reply`（帖子被回复或楼中楼被回复）/ `forum_report`（举报处理结果）/ `forum_topic_deleted`（帖子被管理端删除）/ `forum_reply_deleted`（回复被管理端删除）。论坛类通知 `link` 为 `/training/forum/:topic_id`、payload 携带 `topic_id`（帖子已删除时无 link）。
 
 **GET /api/notifications?page=1&page_size=10**
 
@@ -1359,4 +1403,5 @@ multipart/form-data：`file`。响应 200：data 为 `{ "url": "/static/uploads/
 - 全部端点补充请求格式（path/query/body）与返回格式（JSON 示例）
 - **新增（ADR-0018）**：论坛互动（like/report/my-topics/my-replies + 管理端举报）、通用收藏 `/api/favorites`、全局搜索 `/api/search`、学习资料 `/api/materials`
 - **新增（ADR-0022，#364-#376）**：论坛类别 `category` + 问答筛选 `solved` + 采纳 `accept`、学员侧简历 `/api/resume`（含 `view-stats`）、招聘端 `/api/recruit/*`（脱敏列表/详情、`/contact-requests`、`/resumes/:id/contact` 明文）、学员侧交换 `/api/resume/contact-requests/*`、管理端 `recruiters`/`points/ledger`/`inspection`/`recruit/views|requests` 巡检；积分流水 `reason` 新增 `accepted_bonus`/`accept_action`/`rollback`；`recruit.` 子域复用 catch-all（DNS + SAN 为主要运维工作，无新增 server block）
+- **新增（#517，ADR-0026）**：资料投稿域 `/api/contributions`（学员：upload-file/create/list/mine/detail/download/withdraw/report）+ 管理端 `/api/admin/contributions/*`（pending/approve/reject/archive/reports/handle）；积分流水 `reason` 新增 `contribution_approved`/`contribution_tier`，站内信 `type` 新增投稿四种；material（课程附件）与 contribution（学员投稿）两词分域
 - **未覆盖**：uni-app `training-app` 端契约漂移（ADR-0019）本次未覆盖，继续挂账

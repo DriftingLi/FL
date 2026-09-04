@@ -77,6 +77,17 @@ func currentUserID(c *gin.Context) (int, error) {
 }
 
 // UploadFile 上传投稿暂存文件 POST /api/contributions/upload-file
+// @Summary 上传投稿文件（暂存）
+// @Description 先传后交：逐个文件上传到暂存位，返回 URL 与元数据，随投稿表单提交时引用。扩展名白名单 pdf/doc/docx/ppt/pptx/xls/xlsx/zip/mp4，单文件 ≤20MB
+// @Tags 学员端-投稿
+// @Accept multipart/form-data
+// @Produce json
+// @Security BearerAuth
+// @Param file formData file true "投稿文件"
+// @Success 200 {object} response.R{data=service.ContributionFileDTO} "success"
+// @Failure 400 {object} response.R "格式/大小不合规"
+// @Failure 401 {object} response.R "未认证"
+// @Router /contributions/upload-file [post]
 func (h *ContributionHandler) UploadFile(c *gin.Context) {
 	Endpoint[struct{}, service.ContributionFileDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.ContributionFileDTO, error) {
@@ -111,6 +122,17 @@ type createContributionReq struct {
 }
 
 // Create 创建投稿 POST /api/contributions
+// @Summary 创建投稿（pending）
+// @Description 学员提交资料投稿（1–5 个文件，合计 ≤50MB，必挂当前证件）。资格：仅学员且已选证件；配额：日 ≤3 份、pending 积压 ≤5 份。未过审不产生积分
+// @Tags 学员端-投稿
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body createContributionReq true "投稿表单"
+// @Success 200 {object} response.R{data=service.ContributionItemDTO} "success"
+// @Failure 400 {object} response.R "校验失败/配额已满/未选证件"
+// @Failure 401 {object} response.R "未认证"
+// @Router /contributions [post]
 func (h *ContributionHandler) Create(c *gin.Context) {
 	Endpoint[createContributionReq, service.ContributionItemDTO]{
 		Parse: func(c *gin.Context) (*createContributionReq, error) {
@@ -150,7 +172,20 @@ type listPublicReq struct {
 	PageSize     int    `json:"page_size"`
 }
 
-// ListPublic 公开广场 GET /api/contributions?credential_id=&sort=&page=&page_size=
+// ListPublic 公开广场 GET /api/contributions
+// @Summary 投稿公开广场列表
+// @Description 仅 approved 投稿，按目标证件过滤，sort=latest|hot（hot 走下载量降序）。分页
+// @Tags 学员端-投稿
+// @Produce json
+// @Security BearerAuth
+// @Param credential_id query int true "目标证件ID"
+// @Param sort query string false "排序 latest|hot" default(latest)
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(20)
+// @Success 200 {object} response.R{data=service.ContributionPageResult} "success"
+// @Failure 400 {object} response.R "credential_id 必填"
+// @Failure 401 {object} response.R "未认证"
+// @Router /contributions [get]
 func (h *ContributionHandler) ListPublic(c *gin.Context) {
 	Endpoint[listPublicReq, service.ContributionPageResult]{
 		Parse: func(c *gin.Context) (*listPublicReq, error) {
@@ -181,6 +216,16 @@ func (h *ContributionHandler) ListPublic(c *gin.Context) {
 }
 
 // ListMine 我的投稿 GET /api/contributions/mine
+// @Summary 我的投稿列表（全部状态）
+// @Description 作者本人视角，含 pending/rejected/archived/withdrawn 及驳回/下架原因
+// @Tags 学员端-投稿
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(20)
+// @Success 200 {object} response.R{data=service.ContributionPageResult} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /contributions/mine [get]
 func (h *ContributionHandler) ListMine(c *gin.Context) {
 	Endpoint[struct{}, service.ContributionPageResult]{
 		Parse: func(c *gin.Context) (*struct{}, error) { return &struct{}{}, nil },
@@ -202,6 +247,15 @@ func (h *ContributionHandler) ListMine(c *gin.Context) {
 }
 
 // GetDetail 投稿详情 GET /api/contributions/:id
+// @Summary 投稿详情（含文件清单）
+// @Description 公开仅 approved 可看；作者本人可看全部状态（含驳回原因）。匿名投稿作者显示「匿名学员」
+// @Tags 学员端-投稿
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "投稿ID"
+// @Success 200 {object} response.R{data=service.ContributionItemDTO} "success"
+// @Failure 404 {object} response.R "不存在或非公开"
+// @Router /contributions/{id} [get]
 func (h *ContributionHandler) GetDetail(c *gin.Context) {
 	Endpoint[struct{}, service.ContributionItemDTO]{
 		Parse: func(c *gin.Context) (*struct{}, error) { return &struct{}{}, nil },
@@ -224,6 +278,15 @@ func (h *ContributionHandler) GetDetail(c *gin.Context) {
 }
 
 // Download 下载投稿 POST /api/contributions/:id/download
+// @Summary 下载投稿（计数）
+// @Description 每人每稿终身计一次（唯一约束幂等），作者本人不计；跨 10/50/200 档当场直记达阶奖励。返回是否新增计数与本次达阶分值
+// @Tags 学员端-投稿
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "投稿ID"
+// @Success 200 {object} response.R{data=service.DownloadResult} "success"
+// @Failure 400 {object} response.R "非已上架状态"
+// @Router /contributions/{id}/download [post]
 func (h *ContributionHandler) Download(c *gin.Context) {
 	Endpoint[struct{}, service.DownloadResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.DownloadResult, error) {
@@ -248,6 +311,15 @@ func (h *ContributionHandler) Download(c *gin.Context) {
 }
 
 // Withdraw 撤回投稿 DELETE /api/contributions/:id
+// @Summary 撤回待审投稿
+// @Description 仅作者本人、仅 pending 可撤回（withdrawn，未发分故无需回滚）
+// @Tags 学员端-投稿
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "投稿ID"
+// @Success 200 {object} response.R "已撤回"
+// @Failure 400 {object} response.R "非本人或非 pending"
+// @Router /contributions/{id} [delete]
 func (h *ContributionHandler) Withdraw(c *gin.Context) {
 	Endpoint[struct{}, struct{}]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*struct{}, error) {
@@ -279,7 +351,18 @@ type reportContributionReq struct {
 	Reason string `json:"reason"`
 }
 
-// Report 举报 POST /api/contributions/:id/report
+// Report 举报投稿 POST /api/contributions/:id/report
+// @Summary 举报已上架投稿
+// @Description 四理由：piracy/content_error/violation/stale；同一学员对同一投稿唯一，重复举报合并
+// @Tags 学员端-投稿
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "投稿ID"
+// @Param body body reportContributionReq true "举报理由"
+// @Success 200 {object} response.R "举报已提交"
+// @Failure 400 {object} response.R "理由非法或非已上架"
+// @Router /contributions/{id}/report [post]
 func (h *ContributionHandler) Report(c *gin.Context) {
 	Endpoint[reportContributionReq, struct{}]{
 		Parse: func(c *gin.Context) (*reportContributionReq, error) {
@@ -309,7 +392,16 @@ func (h *ContributionHandler) Report(c *gin.Context) {
 	}.Handle(c)
 }
 
-// ListPending 审核队列 GET /api/admin/contributions/pending
+// ListPending 待审核队列 GET /api/admin/contributions/pending
+// @Summary 待审核投稿队列
+// @Description 管理端/讲师端（tutor+admin 鉴权）；V1 仅管理端有 UI
+// @Tags 管理端-投稿
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(20)
+// @Success 200 {object} response.R{data=service.ContributionPageResult} "success"
+// @Router /admin/contributions/pending [get]
 func (h *ContributionHandler) ListPending(c *gin.Context) {
 	Endpoint[struct{}, service.ContributionPageResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.ContributionPageResult, error) {
@@ -336,6 +428,15 @@ func reviewerID(c *gin.Context) (int, error) {
 }
 
 // Approve 通过投稿 POST /api/admin/contributions/:id/approve
+// @Summary 审核通过（发分 +50）
+// @Description pending → approved，直记 +50 积分（幂等占坑防双发）+ 站内信，同事务
+// @Tags 管理端-投稿
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "投稿ID"
+// @Success 200 {object} response.R{data=service.ContributionItemDTO} "已通过"
+// @Failure 400 {object} response.R "非 pending"
+// @Router /admin/contributions/{id}/approve [post]
 func (h *ContributionHandler) Approve(c *gin.Context) {
 	Endpoint[struct{}, service.ContributionItemDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.ContributionItemDTO, error) {
@@ -364,7 +465,18 @@ type contributionRejectReq struct {
 	Reason string `json:"reason"`
 }
 
-// Reject 驳回 POST /api/admin/contributions/:id/reject
+// Reject 驳回投稿 POST /api/admin/contributions/:id/reject
+// @Summary 驳回投稿
+// @Description pending → rejected，原因必填（送达作者站内信）。不发分。重提=新建投稿
+// @Tags 管理端-投稿
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "投稿ID"
+// @Param body body contributionRejectReq true "驳回原因"
+// @Success 200 {object} response.R{data=service.ContributionItemDTO} "已驳回"
+// @Failure 400 {object} response.R "原因必填或非 pending"
+// @Router /admin/contributions/{id}/reject [post]
 func (h *ContributionHandler) Reject(c *gin.Context) {
 	Endpoint[contributionRejectReq, service.ContributionItemDTO]{
 		Parse: func(c *gin.Context) (*contributionRejectReq, error) { return bindJSON[contributionRejectReq](c) },
@@ -390,6 +502,17 @@ func (h *ContributionHandler) Reject(c *gin.Context) {
 }
 
 // Archive 下架投稿 POST /api/admin/contributions/:id/archive
+// @Summary 下架投稿（追回积分）
+// @Description approved → archived，必填原因；追回该稿累计投稿分（过审+达阶，rollback 对冲封底 0）+ 站内信
+// @Tags 管理端-投稿
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "投稿ID"
+// @Param body body contributionRejectReq true "下架原因"
+// @Success 200 {object} response.R{data=service.ContributionItemDTO} "已下架"
+// @Failure 400 {object} response.R "原因必填或非 approved"
+// @Router /admin/contributions/{id}/archive [post]
 func (h *ContributionHandler) Archive(c *gin.Context) {
 	Endpoint[contributionRejectReq, service.ContributionItemDTO]{
 		Parse: func(c *gin.Context) (*contributionRejectReq, error) { return bindJSON[contributionRejectReq](c) },
@@ -414,7 +537,17 @@ func (h *ContributionHandler) Archive(c *gin.Context) {
 	}.Handle(c)
 }
 
-// ListReports 举报队列 GET /api/admin/contributions/reports?status=
+// ListReports 举报队列 GET /api/admin/contributions/reports
+// @Summary 投稿举报队列
+// @Description status 0 待处理 / 1 已处理，缺省全部
+// @Tags 管理端-投稿
+// @Produce json
+// @Security BearerAuth
+// @Param status query int false "状态 0|1"
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(20)
+// @Success 200 {object} response.R{data=service.ContributionReportPageResult} "success"
+// @Router /admin/contributions/reports [get]
 func (h *ContributionHandler) ListReports(c *gin.Context) {
 	Endpoint[struct{}, service.ContributionReportPageResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.ContributionReportPageResult, error) {
@@ -446,6 +579,16 @@ type handleReportReq struct {
 }
 
 // HandleReport 处置举报 POST /api/admin/contributions/reports/:id/handle
+// @Summary 处置投稿举报
+// @Description action=archive 下架被举报投稿（追回积分）并标记处理；action=dismiss 驳回举报
+// @Tags 管理端-投稿
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "举报ID"
+// @Param body body handleReportReq true "处置动作"
+// @Success 200 {object} response.R "已处理"
+// @Router /admin/contributions/reports/{id}/handle [post]
 func (h *ContributionHandler) HandleReport(c *gin.Context) {
 	Endpoint[handleReportReq, struct{}]{
 		Parse: func(c *gin.Context) (*handleReportReq, error) { return bindJSON[handleReportReq](c) },
