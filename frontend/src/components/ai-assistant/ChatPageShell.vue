@@ -653,8 +653,8 @@ watch(() => store.streamingContent, () => scrollToBottom(), { flush: 'post' })
 }
 
 .session-delete:hover {
-  color: #ef4444;
-  background: #fef2f2;
+  color: var(--color-danger, #ef4444);
+  background: var(--color-danger-light, #fef2f2);
 }
 
 .session-item.editing {
@@ -694,7 +694,7 @@ watch(() => store.streamingContent, () => scrollToBottom(), { flush: 'post' })
   width: 72px;
   height: 72px;
   border-radius: 20px;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  background: linear-gradient(135deg, var(--color-violet-500, #6366f1), #8b5cf6);
   display: inline-flex;
   align-items: center;
   justify-content: center;

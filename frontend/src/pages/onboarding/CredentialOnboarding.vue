@@ -208,8 +208,8 @@ onMounted(() => {
   color: var(--color-primary-600);
 }
 .badge.skill {
-  background: #ECFDF5;
-  color: #059669;
+  background: var(--color-success-light, #ECFDF5);
+  color: var(--color-success-strong, #059669);
 }
 .check-icon {
   color: var(--color-primary-500);

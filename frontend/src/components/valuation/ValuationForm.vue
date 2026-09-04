@@ -891,18 +891,18 @@ function onConditionSelect(rating: ConditionRating) {
   color: var(--color-text-muted, #94A3B8);
 }
 .form-control:hover:not(:disabled) {
-  border-color: #CBD5E1;
+  border-color: var(--color-border-strong, #CBD5E1);
 }
 .form-control:focus {
   border-color: var(--color-brand-500, #0EA5E9);
   box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.15);
 }
 .form-control:disabled {
-  background: #F8FAFC;
+  background: var(--color-bg-muted, #F8FAFC);
   color: var(--color-text-muted, #94A3B8);
   cursor: not-allowed;
   border-style: dashed;
-  border-color: #E2E8F0;
+  border-color: var(--color-border, #E2E8F0);
 }
 
 /* ===== Select wrapper with chevron icon ===== */
