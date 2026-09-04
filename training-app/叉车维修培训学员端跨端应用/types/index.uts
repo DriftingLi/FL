@@ -365,6 +365,10 @@ export type ForumReply = {
     can_delete : boolean
     likes_count : number
     liked : boolean
+    /** 后端未来可能直接返回：兼容读取时判空使用（forum-detail 本地态回退） */
+    liked_by_me ?: boolean
+    /** 后端未来可能直接返回：兼容读取时判空使用（forum-detail 本地态回退） */
+    like_count ?: number
 }
 
 /** 帖子详情（含回复列表） */
