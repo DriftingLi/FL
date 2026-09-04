@@ -117,7 +117,7 @@
         uni.showToast({ title: '详情开发中', icon: 'none' })
     }
 
-    onLoad(() => {
+    onLoad((_options : any) => {
         loadItems(true)
     })
 </script>

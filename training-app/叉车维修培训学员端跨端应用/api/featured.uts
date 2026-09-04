@@ -87,7 +87,18 @@ export function getFeaturedContentDetailApi(contentId : number) : Promise<Featur
 			}
 		}
 		return {
-			...base,
+			content_id: base.content_id,
+			title: base.title,
+			category: base.category,
+			category_label: base.category_label,
+			summary: base.summary,
+			cover_image: base.cover_image,
+			source: base.source,
+			status: base.status,
+			sort_order: base.sort_order,
+			view_count: base.view_count,
+			published_at: base.published_at,
+			created_at: base.created_at,
 			content: toStr(data['content']),
 			related: related,
 			prev: prev,

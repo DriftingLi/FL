@@ -1,0 +1,92 @@
+<template>
+	<view class="ai-chat-nav" :style="{ paddingTop: statusBarHeight + 'px' }">
+		<view class="nav-content">
+			<text class="nav-icon" @click="onLeftClick">&#9776;</text>
+			<view class="nav-center">
+				<text class="nav-title">维修助手</text>
+				<view class="version-tabs">
+					<text class="version-tab" :class="{ active: version == 'basic' }" @click="onTabChange('basic')">基础版</text>
+					<text class="version-tab" :class="{ active: version == 'pro' }" @click="onTabChange('pro')">专业版</text>
+				</view>
+			</view>
+			<text class="nav-icon" @click="onMenuClick">&#9638;</text>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	const props = withDefaults(defineProps<{
+		version?: string
+		statusBarHeight?: number
+	}>(), {
+		version: 'basic',
+		statusBarHeight: 20
+	})
+
+	const emit = defineEmits(['leftClick', 'menuClick', 'tabChange'])
+
+	function onLeftClick() : void {
+		emit('leftClick')
+	}
+
+	function onMenuClick() : void {
+		emit('menuClick')
+	}
+
+	function onTabChange(v : string) : void {
+		if (v != props.version) {
+			emit('tabChange', v)
+		}
+	}
+</script>
+
+<style>
+	.ai-chat-nav {
+		background-color: #ffffff;
+		border-bottom: 1rpx solid #f0f0f0;
+	}
+
+	.nav-content {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		height: 88rpx;
+		padding: 0 24rpx;
+	}
+
+	.nav-icon {
+		font-size: 40rpx;
+		color: #333333;
+		padding: 12rpx;
+	}
+
+	.nav-center {
+		flex: 1;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.version-tabs {
+		flex-direction: row;
+		align-items: center;
+		margin-bottom: 4rpx;
+	}
+
+	.version-tab {
+		font-size: 24rpx;
+		color: #999999;
+		padding: 4rpx 16rpx;
+	}
+
+	.version-tab.active {
+		color: #2979ff;
+		font-weight: 600;
+	}
+
+	.nav-title {
+		font-size: 28rpx;
+		color: #2979ff;
+		font-weight: 500;
+	}
+</style>

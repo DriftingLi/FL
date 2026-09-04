@@ -13,7 +13,7 @@
  *
  * 回复对象：{ id, content, created_at, author: { user_id, username, name, nickname, avatar_url } }
  */
-import { get, post, del, uploadFile } from './request'
+import { get, post, put, del, uploadFile } from './request'
 import { toNumber, toStr, toBool, errMsg } from './helpers'
 import type { ForumTopic, ForumTopicListResult, ForumTopicDetail, ForumReply, CheckInResult, CheckInCalendarResult, CheckInCalendarDay, LikeTopicResult, MyRepliesResult } from '../types/index'
 
@@ -607,7 +607,11 @@ function buildCheckInCalendarDay(obj : UTSJSONObject) : CheckInCalendarDay {
  * 构造 CheckInCalendarResult（从 UTSJSONObject）
  */
 function buildCheckInCalendarResult(obj : UTSJSONObject) : CheckInCalendarResult {
-    console.log('[buildCheckInCalendarResult] obj keys:', Object.keys(obj).join(','))
+    const objKeys : string[] = []
+    for (const k in obj) {
+        objKeys.push(k)
+    }
+    console.log('[buildCheckInCalendarResult] obj keys:', objKeys.join(','))
     const days : CheckInCalendarDay[] = []
 
     // ===== 核心：处理 API 返回的 dates 字符串数组 =====

@@ -1,130 +1,87 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
         <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+
+        <!-- 顶部标题（原型：居中「我的」） -->
+        <view class="nav-bar">
+            <text class="nav-title">我的</text>
+        </view>
+
         <scroll-view class="content-scroll" scroll-y>
-            <!-- 顶部用户信息区（简洁） -->
-            <view class="header">
-                <view class="user-card" @click="onEditNickname">
-                    <view class="user-avatar" @click.stop="onChangeAvatar">
-                        <image v-if="avatarUrl.length > 0" class="avatar-img" :src="avatarUrl" mode="aspectFill">
-                        </image>
-                        <text v-else class="avatar-icon">👤</text>
+            <!-- 用户行：头像 + 昵称/等级 + 段位星级 + 签到胶囊 -->
+            <view class="user-row">
+                <view class="user-avatar" @click.stop="onChangeAvatar">
+                    <image v-if="avatarUrl.length > 0" class="avatar-img" :src="avatarUrl" mode="aspectFill">
+                    </image>
+                    <text v-else class="avatar-icon">👤</text>
+                </view>
+                <view class="user-info" @click="onEditNickname">
+                    <view class="name-row">
+                        <text class="user-name">{{ userName }}</text>
+                        <text class="user-lv">Lv{{ userLevel }}</text>
                     </view>
-                    <view class="user-info">
-                        <view class="name-row">
-                            <text class="user-name">{{ userName }}</text>
-                            <view class="lv-badge">
-                                <text class="lv-badge-text">Lv{{ userLevel }}</text>
-                            </view>
-                        </view>
-                        <view class="role-row">
-                            <text class="user-role">{{ rankName }}</text>
-                            <view class="stars-row">
-                                <text v-for="(s, i) in starList" :key="i"
-                                    :class="['star', { 'star-active': i < starCount }]">★</text>
-                            </view>
+                    <view class="role-row">
+                        <text class="role-icon">🏅</text>
+                        <text class="user-role">{{ rankName }}</text>
+                        <view class="stars-row">
+                            <text v-for="(s, i) in starList" :key="i"
+                                :class="['star', { 'star-active': i < starCount }]">★</text>
                         </view>
                     </view>
                 </view>
-            </view>
-
-            <!-- 签到卡片（醒目） -->
-            <view class="checkin-card" @click="onGoCheckIn">
-                <view class="checkin-left">
-                    <text class="checkin-icon">📅</text>
-                    <view class="checkin-info">
-                        <text class="checkin-title">今日签到</text>
-                        <text class="checkin-desc">已连续签到 {{ consecutiveDays }} 天，每天打卡得 {{ pointsPerDay }} 积分</text>
-                    </view>
-                </view>
-                <view class="checkin-right">
-                    <text class="checkin-btn-text">{{ todayChecked ? '已打卡 ✓' : '去签到 →' }}</text>
+                <view class="checkin-pill" @click="onGoCheckIn">
+                    <text class="checkin-pill-text">{{ todayChecked ? '已签到' : '签到' }}</text>
                 </view>
             </view>
 
-            <!-- 学习数据统计 -->
+            <!-- 学习数据：三张独立卡片 -->
             <view class="stats-row">
                 <view class="stats-card">
-                    <text class="stats-num">{{ totalHours }}</text>
+                    <text class="stats-num stats-num-green">{{ totalHours }}</text>
                     <text class="stats-label">学习时长</text>
                 </view>
-                <view class="stats-card">
-                    <text class="stats-num">{{ streakDays }}</text>
+                <view class="stats-card stats-card-gap">
+                    <text class="stats-num stats-num-green">{{ streakDays }}</text>
                     <text class="stats-label">坚持天数</text>
                 </view>
-                <view class="stats-card">
-                    <text class="stats-num">{{ points }}</text>
-                    <text class="stats-label">积分</text>
+                <view class="stats-card stats-card-gap" @click="onPointsTap">
+                    <view class="stats-value-row">
+                        <text class="stats-num stats-num-blue">{{ pointsText }}</text>
+                        <text class="stats-arrow">›</text>
+                    </view>
+                    <text class="stats-label">可用积分</text>
                 </view>
             </view>
 
             <!-- 我的课程 -->
-            <view class="course-section" @click="onMenuClick('courses')">
-                <view class="course-left">
-                    <text class="course-icon">📁</text>
-                    <text class="course-title">我的课程</text>
-                </view>
+            <view class="course-card" @click="onMyCourses">
+                <text class="course-icon">📁</text>
+                <text class="course-title">我的课程</text>
                 <view class="course-right">
                     <text class="course-count">{{ courseCount }}个</text>
                     <text class="course-arrow">›</text>
                 </view>
             </view>
 
-            <!-- 功能宫格 -->
-            <view class="grid-section">
+            <!-- 工具宫格 -->
+            <view class="section-card">
+                <text class="section-title">工具</text>
                 <view class="grid-body">
-                    <view v-for="(item, idx) in gridItems" :key="idx" class="grid-item" @click="onGridClick(item)">
-                        <view class="grid-icon-wrap">
-                            <text class="grid-icon">{{ item.icon }}</text>
-                        </view>
+                    <view v-for="(item, idx) in toolItems" :key="idx" class="grid-item" @click="onEntryClick(item)">
+                        <text class="grid-icon">{{ item.icon }}</text>
                         <text class="grid-text">{{ item.title }}</text>
                     </view>
                 </view>
             </view>
 
-            <!-- 菜单列表 -->
-            <view class="menu-section">
-                <view class="menu-item" @click="onMenuClick('orders')">
-                    <view class="menu-left">
-                        <text class="menu-icon">📋</text>
-                        <text class="menu-text">订单</text>
+            <!-- 服务宫格 -->
+            <view class="section-card section-card-last">
+                <text class="section-title">服务</text>
+                <view class="grid-body">
+                    <view v-for="(item, idx) in serviceItems" :key="idx" class="grid-item" @click="onEntryClick(item)">
+                        <text class="grid-icon">{{ item.icon }}</text>
+                        <text class="grid-text">{{ item.title }}</text>
                     </view>
-                    <text class="menu-arrow">›</text>
-                </view>
-                <view class="menu-item" @click="onMenuClick('wallet')">
-                    <view class="menu-left">
-                        <text class="menu-icon">💰</text>
-                        <text class="menu-text">我的钱包</text>
-                    </view>
-                    <text class="menu-arrow">›</text>
-                </view>
-                <view class="menu-item" @click="onMenuClick('exam-goal')">
-                    <view class="menu-left">
-                        <text class="menu-icon">🎯</text>
-                        <text class="menu-text">我的考试目标</text>
-                    </view>
-                    <text class="menu-arrow">›</text>
-                </view>
-                <view class="menu-item" @click="onMenuClick('settings')">
-                    <view class="menu-left">
-                        <text class="menu-icon">⚙</text>
-                        <text class="menu-text">设置</text>
-                    </view>
-                    <text class="menu-arrow">›</text>
-                </view>
-                <!-- <view class="menu-item" @click="onMenuClick('notifications')">
-                    <view class="menu-left">
-                        <text class="menu-icon">🔔</text>
-                        <text class="menu-text">通知</text>
-                    </view>
-                    <text class="menu-arrow">›</text>
-                </view> -->
-                <view class="menu-item" @click="onMenuClick('about')">
-                    <view class="menu-left">
-                        <text class="menu-icon">ℹ</text>
-                        <text class="menu-text">关于</text>
-                    </view>
-                    <text class="menu-arrow">›</text>
                 </view>
             </view>
         </scroll-view>
@@ -138,9 +95,19 @@
     import { getProfileApi, getStudyStatsApi } from '../../api/student'
     import { updateProfileApi, uploadAvatarApi } from '../../api/auth'
     import { getCheckInCalendarApi } from '../../api/forum'
+    import { getPointsBalanceApi } from '../../api/points'
     import { useStatusBarHeight } from '../../utils/system'
     import { UNAVAILABLE_TOAST } from '../../constants/app'
-    import type { StudentProfile, UpdateProfileParams, GridItem, CheckInCalendarDay } from '../../types/index'
+    import type { StudentProfile, UpdateProfileParams } from '../../types/index'
+
+    /** 宫格入口：path 为空或 available=false 时走占位提示 */
+    type ProfileEntry = {
+        key : string
+        title : string
+        icon : string
+        path : string
+        available : boolean
+    }
 
     const authStore = useAuthStore()
     const statusBarHeight = useStatusBarHeight()
@@ -148,10 +115,9 @@
     const profile = ref<StudentProfile | null>(null)
     const uploadingAvatar = ref<boolean>(false)
     const streakDays = ref<number>(0)
+    const pointsTotal = ref<number>(0)
 
-    // 签到相关数据
-    const consecutiveDays = ref<number>(0)
-    const pointsPerDay = ref<number>(7)
+    /** 签到状态（原型：签到胶囊只区分今日是否已签到） */
     const todayChecked = ref<boolean>(false)
 
     const userName = computed<string>(() : string => {
@@ -171,23 +137,59 @@
         return ''
     })
 
-    const totalHours = computed<string>(() : string => {
-        if (profile.value != null) {
-            const minutes = profile.value.total_study_duration
-            const hours = Math.floor(minutes / 60)
-            const mins = minutes % 60
-            if (hours > 0) {
-                if (mins > 0) {
-                    return hours + 'h' + mins + 'm'
-                }
-                return hours + 'h'
-            }
-            return mins + 'm'
-        }
-        return '0h'
-    })
+    function padZero(n : number) : string {
+        if (n < 10) return '0' + n
+        return '' + n
+    }
 
-    /** 学习分钟数（计算 Lv / 积分用） */
+    /** 学习分钟数 → 展示文本：48h / 1h30m / 45m */
+    function formatStudyDuration(minutes : number) : string {
+        if (minutes <= 0) return '0m'
+        const hours = Math.floor(minutes / 60)
+        const mins = minutes % 60
+        if (hours <= 0) return mins + 'm'
+        if (mins <= 0) return hours + 'h'
+        return hours + 'h' + mins + 'm'
+    }
+
+    /**
+     * 学员等级 Lv：按累计学时本地推导（后端无等级字段）
+     * <5h → Lv1，<20h → Lv2，<50h → Lv3，<100h → Lv4，其余 Lv5
+     */
+    function levelFromHours(hours : number) : number {
+        if (hours < 5) return 1
+        if (hours < 20) return 2
+        if (hours < 50) return 3
+        if (hours < 100) return 4
+        return 5
+    }
+
+    /**
+     * 段位：按已完成课程数本地推导（后端无段位字段）
+     * 0 → 初级工，1 → 中级技师，2 → 高级技师，>=3 → 技师
+     */
+    function rankNameFromCompleted(completed : number) : string {
+        if (completed <= 0) return '初级工'
+        if (completed == 1) return '中级技师'
+        if (completed == 2) return '高级技师'
+        return '技师'
+    }
+
+    /** 等级 → 点亮星数（共 5 颗） */
+    function starCountFromLevel(level : number) : number {
+        if (level <= 0) return 0
+        if (level > 5) return 5
+        return level
+    }
+
+    /** 积分展示：非正数归零，超过 9999 折叠 */
+    function formatPoints(total : number) : string {
+        if (total <= 0) return '0'
+        if (total > 9999) return '9999+'
+        return total.toString()
+    }
+
+    /** 学习分钟数（计算 Lv / 星级用；须定义在使用它的 computed 之前，UTS 不支持前向引用） */
     const studyMinutes = computed<number>(() : number => {
         if (profile.value != null) {
             return profile.value.total_study_duration
@@ -195,7 +197,7 @@
         return 0
     })
 
-    /** 已完成课程数（供段位/积分推导；须定义在使用它的 computed 之前，UTS 不支持前向引用） */
+    /** 已完成课程数（供段位推导） */
     const completedCourses = computed<number>(() : number => {
         if (profile.value != null) {
             return profile.value.completed_courses
@@ -203,46 +205,26 @@
         return 0
     })
 
-    /**
-     * 学员等级 Lv：按累计学时本地推导（后端无等级字段）
-     * <5h → Lv1，<20h → Lv2，<50h → Lv3，<100h → Lv4，其余 Lv5
-     */
+    const totalHours = computed<string>(() : string => {
+        return formatStudyDuration(studyMinutes.value)
+    })
+
     const userLevel = computed<number>(() : number => {
-        const hours = studyMinutes.value / 60
-        if (hours < 5) return 1
-        if (hours < 20) return 2
-        if (hours < 50) return 3
-        if (hours < 100) return 4
-        return 5
+        return levelFromHours(studyMinutes.value / 60)
     })
 
-    /**
-     * 段位：按已完成课程数本地推导（后端无段位字段）
-     * 0 → 初级工，1 → 中级技师，2 → 高级技师，>=3 → 技师
-     */
     const rankName = computed<string>(() : string => {
-        const completed = completedCourses.value
-        if (completed <= 0) return '初级工'
-        if (completed == 1) return '中级技师'
-        if (completed == 2) return '高级技师'
-        return '技师'
+        return rankNameFromCompleted(completedCourses.value)
     })
 
-    /** 星级：5 颗，点亮数 = Lv（Lv3 点亮 3 颗） */
     const starList : number[] = [1, 2, 3, 4, 5]
+
     const starCount = computed<number>(() : number => {
-        const n = userLevel.value
-        if (n > 5) return 5
-        return n
+        return starCountFromLevel(userLevel.value)
     })
 
-    /**
-     * 积分：本地换算展示（后端无积分字段）
-     * 每学时 3 分 + 每完成 1 门课程 20 分
-     */
-    const points = computed<number>(() : number => {
-        const hours = Math.floor(studyMinutes.value / 60)
-        return hours * 3 + completedCourses.value * 20
+    const pointsText = computed<string>(() : string => {
+        return formatPoints(pointsTotal.value)
     })
 
     /** 我的课程数：学习中（有进度）的课程数 */
@@ -253,25 +235,26 @@
         return 0
     })
 
-    /**
-     * 功能宫格：匹配原型图布局
-     */
-    const gridItems : GridItem[] = [
-        { key: 'records', title: '学习记录', icon: '📖', color: '#2979ff', path: '/pages/profile/records', available: true },
-        { key: 'favorites', title: '收藏夹', icon: '⭐', color: '#ffb800', path: '/pages/profile/favorites', available: true },
-        { key: 'wrong-questions', title: '错题集', icon: '❓', color: '#ff5722', path: '/pages/profile/wrong-questions', available: true },
-        { key: 'notebook', title: '笔记本', icon: '📝', color: '#9c27b0', path: '', available: false },
-        { key: 'download', title: '资料下载', icon: '📥', color: '#00bcd4', path: '', available: false },
-        { key: 'help', title: '帮助中心', icon: '❓', color: '#607d8b', path: '', available: false },
-        { key: 'study-plan', title: '学习计划', icon: '📋', color: '#ff9900', path: '', available: false },
-        { key: 'materials', title: '学习资料', icon: '📚', color: '#19be6b', path: '', available: false },
-        { key: 'jobs', title: '就业在线', icon: '💼', color: '#dd524d', path: '/pages/jobs/job-list', available: true },
+    /** 工具宫格：条目与顺序对齐原型图 */
+    const toolItems : ProfileEntry[] = [
+        { key: 'records', title: '学习记录', icon: '📖', path: '/pages/profile/records', available: true },
+        { key: 'favorites', title: '收藏夹', icon: '⭐', path: '/pages/profile/favorites', available: true },
+        { key: 'wrong-questions', title: '错题本', icon: '📕', path: '/pages/profile/wrong-questions', available: true },
+        { key: 'notebook', title: '笔记本', icon: '📔', path: '', available: false },
+        { key: 'study-plan', title: '学练计划', icon: '🎯', path: '', available: false },
+        { key: 'materials', title: '学习资料', icon: '📚', path: '', available: false },
+        { key: 'jobs', title: '就业在线', icon: '💼', path: '/pages/jobs/job-list', available: true },
+        { key: 'task-center', title: '任务中心', icon: '✅', path: '/pages/points/task-center', available: true },
     ]
 
-    function padZero(n : number) : string {
-        if (n < 10) return '0' + n
-        return '' + n
-    }
+    /** 服务宫格：按原型「设置」落在第二行首列 */
+    const serviceItems : ProfileEntry[] = [
+        { key: 'orders', title: '我的订单', icon: '📋', path: '', available: false },
+        { key: 'help', title: '帮助中心', icon: '🎧', path: '', available: false },
+        { key: 'address', title: '地址管理', icon: '📍', path: '', available: false },
+        { key: 'messages', title: '消息中心', icon: '🔔', path: '/pages/notifications/notifications', available: true },
+        { key: 'settings', title: '设置', icon: '⚙', path: '/pages/profile/settings', available: true },
+    ]
 
     async function loadProfile() {
         try {
@@ -292,16 +275,23 @@
         }
     }
 
-    /** 加载签到状态（今日是否已签到、连续天数） */
+    /** 可用积分：取积分余额 */
+    async function loadPoints() {
+        try {
+            const data = await getPointsBalanceApi()
+            pointsTotal.value = data.total_points
+        } catch (e) {
+            console.error('[profile] loadPoints failed:', e)
+        }
+    }
+
+    /** 加载签到状态（今日是否已签到） */
     async function loadCheckInStatus() {
         try {
             const now = new Date()
             const year = now.getFullYear()
             const month = now.getMonth() + 1
             const result = await getCheckInCalendarApi(year, month)
-            consecutiveDays.value = result.consecutive_days
-            pointsPerDay.value = result.points_per_day
-            // 检查今日是否已签到
             const todayStr = year + '-' + padZero(month) + '-' + padZero(now.getDate())
             todayChecked.value = false
             for (let i = 0; i < result.days.length; i++) {
@@ -409,7 +399,16 @@
         uni.navigateTo({ url: '/pages/forum/check-in' })
     }
 
-    function onGridClick(item : GridItem) : void {
+    /** 跳转到积分明细 */
+    function onPointsTap() : void {
+        uni.navigateTo({ url: '/pages/points/points-detail' })
+    }
+
+    function onMyCourses() : void {
+        uni.switchTab({ url: '/pages/courses/courses' })
+    }
+
+    function onEntryClick(item : ProfileEntry) : void {
         if (item.available && item.path.length > 0) {
             uni.navigateTo({ url: item.path })
             return
@@ -417,27 +416,10 @@
         uni.showToast({ title: UNAVAILABLE_TOAST, icon: 'none' })
     }
 
-    function onMenuClick(type : string) : void {
-        if (type == 'settings') {
-            uni.navigateTo({ url: '/pages/profile/settings' })
-        } else if (type == 'courses') {
-            uni.switchTab({ url: '/pages/courses/courses' })
-        } else if (type == 'notifications') {
-            uni.navigateTo({ url: '/pages/notifications/notifications' })
-        } else if (type == 'about') {
-            uni.showToast({ title: '叉车维修培训 v1.0.0', icon: 'none' })
-        } else if (type == 'orders') {
-            uni.showToast({ title: UNAVAILABLE_TOAST, icon: 'none' })
-        } else if (type == 'wallet') {
-            uni.showToast({ title: UNAVAILABLE_TOAST, icon: 'none' })
-        } else if (type == 'exam-goal') {
-            uni.showToast({ title: UNAVAILABLE_TOAST, icon: 'none' })
-        }
-    }
-
     onShow(() => {
         loadProfile()
         loadStreak()
+        loadPoints()
         loadCheckInStatus()
     })
 </script>
@@ -445,7 +427,7 @@
 <style>
     .container {
         flex: 1;
-        background: linear-gradient(180deg, #CFE9FB 1%, #D0EBFD 16%, #F5F5F5 100%);
+        background: linear-gradient(180deg, #6ECCFD 20%, #0CA2EF 72%, #0CA2EF 100%);
         flex-direction: column;
     }
 
@@ -453,204 +435,194 @@
         background-color: transparent;
     }
 
+    .nav-bar {
+        height: 88rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .nav-title {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
     .content-scroll {
         flex: 1;
     }
 
-    /* 顶部用户信息区（简洁） */
-    .header {
-        background-color: transparent;
-        padding: 24rpx 32rpx 40rpx;
-    }
-
-    .user-card {
+    /* 用户行 */
+    .user-row {
         flex-direction: row;
         align-items: center;
+        padding: 24rpx 48rpx 0 24rpx;
     }
 
     .user-avatar {
-        width: 128rpx;
-        height: 128rpx;
-        border-radius: 64rpx;
-        background-color: #f0f0f0;
+        width: 116rpx;
+        height: 116rpx;
+        border-radius: 58rpx;
+        background-color: #F5F5F5;
+        border: 4rpx solid #ffffff;
         align-items: center;
         justify-content: center;
-        margin-right: 24rpx;
         overflow: hidden;
-        border: 4rpx solid #ffffff;
-        box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.08);
     }
 
     .avatar-img {
-        width: 128rpx;
-        height: 128rpx;
-        border-radius: 64rpx;
+        width: 116rpx;
+        height: 116rpx;
+        border-radius: 58rpx;
     }
 
     .avatar-icon {
-        font-size: 60rpx;
+        font-size: 56rpx;
     }
 
     .user-info {
         flex: 1;
         flex-direction: column;
+        margin-left: 24rpx;
     }
 
     .name-row {
         flex-direction: row;
         align-items: center;
-        margin-bottom: 8rpx;
     }
 
     .user-name {
-        font-size: 36rpx;
+        font-size: 40rpx;
         font-weight: bold;
         color: #333333;
     }
 
-    .lv-badge {
-        background-color: #E8F0FE;
-        border-radius: 16rpx;
-        padding: 4rpx 14rpx;
-        margin-left: 16rpx;
-    }
-
-    .lv-badge-text {
+    .user-lv {
         font-size: 22rpx;
-        color: #2979ff;
         font-weight: bold;
+        color: #333333;
+        margin-left: 16rpx;
     }
 
     .role-row {
         flex-direction: row;
         align-items: center;
+        margin-top: 8rpx;
+    }
+
+    .role-icon {
+        font-size: 26rpx;
+        margin-right: 8rpx;
     }
 
     .user-role {
-        font-size: 26rpx;
+        font-size: 28rpx;
         color: #666666;
-        margin-right: 12rpx;
     }
 
     .stars-row {
         flex-direction: row;
         align-items: center;
+        margin-left: 24rpx;
     }
 
     .star {
-        font-size: 24rpx;
-        color: #cccccc;
-        margin-right: 2rpx;
+        font-size: 26rpx;
+        color: #FFFFFF;
+        margin-right: 4rpx;
     }
 
     .star-active {
-        color: #ffd700;
+        color: #FDE03B;
     }
 
-    /* 签到卡片（醒目） */
-    .checkin-card {
-        background-color: #ffffff;
-        margin: 0 24rpx 20rpx;
-        border-radius: 16rpx;
-        padding: 28rpx 24rpx;
-        flex-direction: row;
+    .checkin-pill {
+        height: 52rpx;
+        padding: 0 24rpx;
+        border-radius: 26rpx;
+        background-color: #EBF9FF;
         align-items: center;
-        justify-content: space-between;
-        border-left: 8rpx solid #3a8dff;
-    }
-
-    .checkin-left {
-        flex: 1;
-        flex-direction: row;
-        align-items: center;
-    }
-
-    .checkin-icon {
-        font-size: 48rpx;
-        margin-right: 20rpx;
-    }
-
-    .checkin-info {
-        flex: 1;
-        flex-direction: column;
-    }
-
-    .checkin-title {
-        font-size: 30rpx;
-        font-weight: bold;
-        color: #333333;
-        margin-bottom: 6rpx;
-    }
-
-    .checkin-desc {
-        font-size: 22rpx;
-        color: #999999;
-    }
-
-    .checkin-right {
+        justify-content: center;
         margin-left: 16rpx;
+        flex-shrink: 0;
     }
 
-    .checkin-btn-text {
+    .checkin-pill-text {
         font-size: 26rpx;
         font-weight: bold;
-        color: #3a8dff;
+        color: #239EDD;
     }
 
-    /* 学习数据统计卡片 */
+    /* 学习数据：三张独立卡片 */
     .stats-row {
         flex-direction: row;
-        justify-content: space-between;
-        padding: 0 24rpx;
-        margin-bottom: 20rpx;
+        padding: 0 48rpx;
+        margin-top: 40rpx;
     }
 
     .stats-card {
         flex: 1;
+        height: 100rpx;
         background-color: #ffffff;
-        border-radius: 16rpx;
-        padding: 24rpx 16rpx;
-        margin: 0 8rpx;
+        border-radius: 24rpx;
         flex-direction: column;
         align-items: center;
-        border: 1rpx solid #eeeeee;
+        justify-content: center;
+    }
+
+    .stats-card-gap {
+        margin-left: 24rpx;
+    }
+
+    .stats-value-row {
+        flex-direction: row;
+        align-items: center;
     }
 
     .stats-num {
         font-size: 40rpx;
         font-weight: bold;
-        color: #333333;
-        margin-bottom: 8rpx;
+        line-height: 48rpx;
+    }
+
+    .stats-num-green {
+        color: #14AE50;
+    }
+
+    .stats-num-blue {
+        color: #239EDD;
+    }
+
+    .stats-arrow {
+        font-size: 32rpx;
+        color: #239EDD;
+        margin-left: 4rpx;
     }
 
     .stats-label {
-        font-size: 22rpx;
-        color: #999999;
+        font-size: 26rpx;
+        color: #8C8C8C;
+        margin-top: 4rpx;
     }
 
-    /* 我的课程入口 */
-    .course-section {
+    /* 我的课程 */
+    .course-card {
+        flex-direction: row;
+        align-items: center;
+        height: 138rpx;
         background-color: #ffffff;
-        margin: 0 24rpx 20rpx;
-        border-radius: 16rpx;
-        padding: 28rpx 24rpx;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-    }
-
-    .course-left {
-        flex-direction: row;
-        align-items: center;
+        border-radius: 24rpx;
+        margin: 40rpx 24rpx 0 24rpx;
+        padding: 0 40rpx;
     }
 
     .course-icon {
-        font-size: 36rpx;
-        margin-right: 16rpx;
+        font-size: 56rpx;
+        margin-right: 26rpx;
     }
 
     .course-title {
-        font-size: 30rpx;
+        flex: 1;
+        font-size: 32rpx;
         font-weight: bold;
         color: #333333;
     }
@@ -662,21 +634,32 @@
 
     .course-count {
         font-size: 26rpx;
-        color: #999999;
-        margin-right: 8rpx;
+        color: #666666;
     }
 
     .course-arrow {
         font-size: 32rpx;
-        color: #cccccc;
+        color: #CCCCCC;
+        margin-left: 8rpx;
     }
 
-    /* 功能宫格 */
-    .grid-section {
+    /* 工具 / 服务 分区卡片 */
+    .section-card {
         background-color: #ffffff;
-        margin: 0 24rpx 20rpx;
-        border-radius: 16rpx;
-        padding: 24rpx 16rpx;
+        border-radius: 24rpx;
+        margin: 24rpx 24rpx 0 24rpx;
+        padding-bottom: 24rpx;
+    }
+
+    .section-card-last {
+        margin-bottom: 40rpx;
+    }
+
+    .section-title {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #333333;
+        padding: 24rpx 0 40rpx 40rpx;
     }
 
     .grid-body {
@@ -688,65 +671,17 @@
         width: 25%;
         flex-direction: column;
         align-items: center;
-        padding: 20rpx 0;
-    }
-
-    .grid-icon-wrap {
-        width: 80rpx;
-        height: 80rpx;
-        border-radius: 20rpx;
-        background-color: #f5f7fa;
-        align-items: center;
-        justify-content: center;
-        margin-bottom: 12rpx;
+        padding: 12rpx 0;
     }
 
     .grid-icon {
-        font-size: 40rpx;
+        font-size: 60rpx;
+        line-height: 68rpx;
     }
 
     .grid-text {
-        font-size: 22rpx;
-        color: #333333;
-    }
-
-    /* 菜单列表 */
-    .menu-section {
-        background-color: #ffffff;
-        margin: 0 24rpx 24rpx;
-        border-radius: 16rpx;
-        overflow: hidden;
-    }
-
-    .menu-item {
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        padding: 28rpx 24rpx;
-        border-bottom: 1rpx solid #f5f5f5;
-    }
-
-    .menu-item:last-child {
-        border-bottom-width: 0;
-    }
-
-    .menu-left {
-        flex-direction: row;
-        align-items: center;
-    }
-
-    .menu-icon {
-        font-size: 36rpx;
-        margin-right: 20rpx;
-    }
-
-    .menu-text {
-        font-size: 30rpx;
-        color: #333333;
-    }
-
-    .menu-arrow {
-        font-size: 32rpx;
-        color: #cccccc;
+        font-size: 26rpx;
+        color: #666666;
+        margin-top: 10rpx;
     }
 </style>

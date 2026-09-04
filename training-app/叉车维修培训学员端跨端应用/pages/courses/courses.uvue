@@ -14,7 +14,7 @@
                 <text class="category-card-icon">📚</text>
                 <text class="category-card-text">资料课</text>
             </view>
-            <view class="category-card" :class="{ 'category-card--active': activeCategory == 'course' }"
+            <view class="category-card ml-20" :class="{ 'category-card--active': activeCategory == 'course' }"
                 @click="onCategoryTap('course')">
                 <text class="category-card-icon">📥</text>
                 <text class="category-card-text">课程</text>
@@ -36,8 +36,8 @@
             <view class="section-card">
                 <text class="section-card-title">课程</text>
                 <view class="sub-tab-row">
-                    <view v-for="(tab, idx) in subTabs" :key="idx" class="sub-tab"
-                        :class="{ 'sub-tab--active': activeSubTab == idx }" @click="onSubTabTap(idx)">
+                    <view v-for="(tab, idx) in subTabs" :key="idx"
+                        :class="{ 'sub-tab': true, 'ml-16': idx > 0, 'sub-tab--active': activeSubTab == idx }" @click="onSubTabTap(idx)">
                         <text class="sub-tab-text" :class="{ 'sub-tab-text--active': activeSubTab == idx }">{{ tab }}</text>
                     </view>
                 </view>
@@ -45,8 +45,8 @@
 
             <!-- 筛选标签 -->
             <view class="filter-row">
-                <view v-for="(tag, idx) in filterTags" :key="idx" class="filter-tag"
-                    :class="{ 'filter-tag--active': activeFilter == idx }" @click="onFilterTap(idx)">
+                <view v-for="(tag, idx) in filterTags" :key="idx"
+                    :class="{ 'filter-tag': true, 'ml-16': idx > 0, 'filter-tag--active': activeFilter == idx }" @click="onFilterTap(idx)">
                     <text class="filter-tag-text" :class="{ 'filter-tag-text--active': activeFilter == idx }">{{ tag }}</text>
                 </view>
             </view>
@@ -126,6 +126,44 @@
         activeSubTab.value = idx
     }
 
+    // ---- 课程数据 ----
+    const courses = ref<CourseItem[]>([])
+    const loading = ref<boolean>(false)
+    const page = ref<number>(1)
+    const pageSize = 12
+    const total = ref<number>(0)
+    const noMore = ref<boolean>(false)
+
+    async function loadCourses(reset : boolean) : Promise<void> {
+        if (loading.value) return
+        if (reset) {
+            page.value = 1
+            noMore.value = false
+        }
+        if (noMore.value && !reset) return
+
+        loading.value = true
+        try {
+            const result = await getCourseListApi(page.value, pageSize, 0, 0)
+            if (reset) {
+                courses.value = result.items
+            } else {
+                courses.value = courses.value.concat(result.items)
+            }
+            total.value = result.total
+            if (courses.value.length >= result.total || result.items.length == 0) {
+                noMore.value = true
+            } else {
+                page.value = page.value + 1
+            }
+        } catch (e) {
+            console.error('[courses] load failed:', e)
+            uni.showToast({ title: '加载课程失败', icon: 'none' })
+        } finally {
+            loading.value = false
+        }
+    }
+
     // ---- 筛选标签 ----
     const filterTags : string[] = ['已完结', '进行中', '全部']
     const activeFilter = ref<number>(0)
@@ -134,14 +172,6 @@
         activeFilter.value = idx
         loadCourses(true)
     }
-
-    // ---- 课程数据 ----
-    const courses = ref<CourseItem[]>([])
-    const loading = ref<boolean>(false)
-    const page = ref<number>(1)
-    const pageSize = 12
-    const total = ref<number>(0)
-    const noMore = ref<boolean>(false)
 
     const specialties = ref<SpecialtyItem[]>([])
     const levels = ref<LevelItem[]>([])
@@ -190,36 +220,6 @@
         return '#909399'
     }
 
-    async function loadCourses(reset : boolean = false) : Promise<void> {
-        if (loading.value) return
-        if (reset) {
-            page.value = 1
-            noMore.value = false
-        }
-        if (noMore.value && !reset) return
-
-        loading.value = true
-        try {
-            const result = await getCourseListApi(page.value, pageSize, 0, 0)
-            if (reset) {
-                courses.value = result.items
-            } else {
-                courses.value = courses.value.concat(result.items)
-            }
-            total.value = result.total
-            if (courses.value.length >= result.total || result.items.length == 0) {
-                noMore.value = true
-            } else {
-                page.value = page.value + 1
-            }
-        } catch (e) {
-            console.error('[courses] load failed:', e)
-            uni.showToast({ title: '加载课程失败', icon: 'none' })
-        } finally {
-            loading.value = false
-        }
-    }
-
     function onLoadMore() : void {
         loadCourses(false)
     }
@@ -266,7 +266,6 @@
     .category-row {
         flex-direction: row;
         padding: 12rpx 32rpx 16rpx;
-        gap: 20rpx;
     }
 
     .category-card {
@@ -351,7 +350,6 @@
 
     .sub-tab-row {
         flex-direction: row;
-        gap: 16rpx;
     }
 
     .sub-tab {
@@ -380,7 +378,6 @@
     .filter-row {
         flex-direction: row;
         padding: 0 32rpx 16rpx;
-        gap: 16rpx;
     }
 
     .filter-tag {
@@ -491,4 +488,7 @@
         font-size: 24rpx;
         color: #999999;
     }
+
+    .ml-16 { margin-left: 16rpx; }
+    .ml-20 { margin-left: 20rpx; }
 </style>

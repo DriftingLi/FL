@@ -1,7 +1,7 @@
 <template>
     <view class="app-tabs">
-        <view v-for="(tab, idx) in tabs" :key="idx" class="app-tab-item"
-            :class="{ 'app-tab-item--active': activeIndex == idx }" @click="onChange(idx)">
+        <view v-for="(tab, idx) in tabs" :key="idx"
+            :class="{ 'app-tab-item': true, 'ml-16': idx > 0, 'app-tab-item--active': activeIndex == idx }" @click="onChange(idx)">
             <text class="app-tab-text" :class="{ 'app-tab-text--active': activeIndex == idx }">{{ tab }}</text>
             <view v-if="activeIndex == idx && style == 'underline'" class="app-tab-underline"></view>
         </view>
@@ -29,7 +29,6 @@
 <style>
     .app-tabs {
         flex-direction: row;
-        gap: 16rpx;
     }
 
     .app-tab-item {
@@ -55,4 +54,6 @@
         border-radius: 2rpx;
         margin-top: 8rpx;
     }
+
+    .ml-16 { margin-left: 16rpx; }
 </style>

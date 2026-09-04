@@ -1,0 +1,160 @@
+<template>
+	<view v-if="visible" class="drawer-mask" @click="onMaskClick"></view>
+	<view v-if="visible" class="drawer drawer-left">
+		<view class="drawer-header" :style="{ paddingTop: statusBarHeight + 'px' }">
+			<text class="drawer-title">最近对话</text>
+			<text class="drawer-close" @click="onClose">&#10005;</text>
+		</view>
+		<scroll-view scroll-y class="drawer-body">
+			<view class="drawer-new" @click="onNewChat">
+				<text class="drawer-new-icon">+</text>
+				<text class="drawer-new-text">新建对话</text>
+			</view>
+			<view v-if="sessions.length == 0" class="empty-tip">暂无历史对话</view>
+			<view v-for="(s, idx) in sessions" :key="idx" class="drawer-item" :class="{ active: currentSessionId == s.id }" @click="onSelect(s)">
+				<text class="drawer-item-title">{{ s.title }}</text>
+				<text class="drawer-item-del" @click.stop="onDelete(s.id)">&#10005;</text>
+			</view>
+		</scroll-view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	import type { AiSession } from '../../types/index'
+
+	withDefaults(defineProps<{
+		visible?: boolean
+		sessions?: AiSession[]
+		currentSessionId?: number
+		statusBarHeight?: number
+	}>(), {
+		visible: false,
+		sessions: () => [] as AiSession[],
+		currentSessionId: 0,
+		statusBarHeight: 20
+	})
+
+	const emit = defineEmits(['close', 'newChat', 'select', 'delete'])
+
+	function onMaskClick() : void {
+		emit('close')
+	}
+
+	function onClose() : void {
+		emit('close')
+	}
+
+	function onNewChat() : void {
+		emit('newChat')
+	}
+
+	function onSelect(s : AiSession) : void {
+		emit('select', s)
+	}
+
+	function onDelete(id : number) : void {
+		emit('delete', id)
+	}
+</script>
+
+<style>
+	.drawer-mask {
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background-color: rgba(0, 0, 0, 0.4);
+		z-index: 100;
+	}
+
+	.drawer {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		width: 70%;
+		background-color: #ffffff;
+		z-index: 101;
+		flex-direction: column;
+	}
+
+	.drawer-left {
+		left: 0;
+	}
+
+	.drawer-header {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		padding: 24rpx;
+		border-bottom: 1rpx solid #f0f0f0;
+	}
+
+	.drawer-title {
+		font-size: 32rpx;
+		font-weight: 600;
+		color: #333333;
+	}
+
+	.drawer-close {
+		font-size: 36rpx;
+		color: #999999;
+		padding: 8rpx;
+	}
+
+	.drawer-body {
+		flex: 1;
+		padding: 24rpx;
+	}
+
+	.drawer-new {
+		flex-direction: row;
+		align-items: center;
+		background-color: #2979ff;
+		border-radius: 12rpx;
+		padding: 24rpx;
+		margin-bottom: 24rpx;
+	}
+
+	.drawer-new-text {
+		color: #ffffff;
+		font-size: 28rpx;
+	}
+
+	.drawer-new-icon {
+		font-size: 32rpx;
+		margin-right: 12rpx;
+		color: #ffffff;
+	}
+
+	.empty-tip {
+		text-align: center;
+		font-size: 26rpx;
+		color: #999999;
+		padding: 32rpx 0;
+	}
+
+	.drawer-item {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		padding: 24rpx 0;
+		border-bottom: 1rpx solid #f5f5f5;
+	}
+
+	.drawer-item.active {
+		background-color: #f0f7ff;
+	}
+
+	.drawer-item-title {
+		flex: 1;
+		font-size: 28rpx;
+		color: #333333;
+	}
+
+	.drawer-item-del {
+		font-size: 28rpx;
+		color: #999999;
+		padding: 8rpx;
+	}
+</style>

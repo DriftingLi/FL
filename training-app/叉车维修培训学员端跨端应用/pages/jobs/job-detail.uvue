@@ -129,10 +129,11 @@
     const hasApplied = ref<boolean>(false)
 
     // ---- 页面加载 ----
-    onLoad((options) => {
-        const id = options?.['id']
-        if (id != null && id.length > 0) {
-            jobId.value = parseInt(id)
+    onLoad((_options : any) => {
+        const opts = _options as UTSJSONObject | null
+        const id = opts != null ? opts['id'] : null
+        if (id != null && (id as string).length > 0) {
+            jobId.value = parseInt(id as string)
             loadJobDetail()
         } else {
             uni.showToast({ title: '职位不存在', icon: 'none' })
@@ -384,7 +385,7 @@
     /* 底部投递按钮 */
     .bottom-bar {
         padding: 16rpx 24rpx;
-        padding-bottom: calc(16rpx + env(safe-area-inset-bottom));
+        padding-bottom: 16rpx;
         background-color: #ffffff;
         border-top: 1rpx solid #f0f0f0;
     }

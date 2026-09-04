@@ -154,6 +154,16 @@ export function createAiSessionApi(title : string = '新对话', modelName : str
 	})
 }
 
+/** 重命名会话 */
+export function renameAiSessionApi(id : number, title : string) : Promise<AiSession> {
+	const payload : UTSJSONObject = { title: title }
+	return patch('/ai-assistant/sessions/' + id + '/title', payload).then((data : UTSJSONObject) : AiSession => {
+		const s = data['session']
+		if (s != null) return buildSession(s as UTSJSONObject)
+		return buildSession(data)
+	})
+}
+
 /** 删除会话 */
 export function deleteAiSessionApi(id : number) : Promise<void> {
 	return del('/ai-assistant/sessions/' + id).then((_d : UTSJSONObject) : void => { })

@@ -61,12 +61,12 @@ export function getJobDetailApi(jobId : number) : Promise<JobPosting> {
             id: data['id'] as number,
             title: (data['title'] as string) ?? '',
             region: (data['region'] as string) ?? '',
-            salary_min: data['salary_min'] as number | undefined,
-            salary_max: data['salary_max'] as number | undefined,
+            salary_min: data['salary_min'] != null ? data['salary_min'] as number : null,
+            salary_max: data['salary_max'] != null ? data['salary_max'] as number : null,
             salary_text: (data['salary_text'] as string) ?? '',
             experience_req: (data['experience_req'] as string) ?? '',
             description: (data['description'] as string) ?? '',
-            specialty_id: data['specialty_id'] as number | undefined,
+            specialty_id: data['specialty_id'] != null ? data['specialty_id'] as number : null,
             published_at: (data['published_at'] as string) ?? '',
             company_name: (data['company_name'] as string) ?? '',
             status: (data['status'] as string) ?? 'open',
@@ -113,10 +113,9 @@ export function getJobListApi(params : JobListParams = {}) : Promise<JobListResu
     if (params.salary_max != null) query['salary_max'] = params.salary_max!.toString()
     if (params.experience != null && params.experience!.length > 0) query['experience'] = params.experience!
 
-    const keys = Object.keys(query)
     const qsParts : string[] = []
-    for (const k of keys) {
-        qsParts.push(encodeURIComponent(k) + '=' + encodeURIComponent(query[k]!))
+    for (const k in query) {
+        qsParts.push(encodeURIComponent(k) + '=' + encodeURIComponent(query[k] as string))
     }
     const qs = qsParts.join('&')
     const url = '/jobs' + (qs.length > 0 ? '?' + qs : '')
@@ -128,12 +127,12 @@ export function getJobListApi(params : JobListParams = {}) : Promise<JobListResu
                 id: obj['id'] as number,
                 title: (obj['title'] as string) ?? '',
                 region: (obj['region'] as string) ?? '',
-                salary_min: obj['salary_min'] as number | undefined,
-                salary_max: obj['salary_max'] as number | undefined,
+                salary_min: obj['salary_min'] != null ? obj['salary_min'] as number : null,
+                salary_max: obj['salary_max'] != null ? obj['salary_max'] as number : null,
                 salary_text: (obj['salary_text'] as string) ?? '',
                 experience_req: (obj['experience_req'] as string) ?? '',
                 description: (obj['description'] as string) ?? '',
-                specialty_id: obj['specialty_id'] as number | undefined,
+                specialty_id: obj['specialty_id'] != null ? obj['specialty_id'] as number : null,
                 published_at: (obj['published_at'] as string) ?? '',
                 company_name: (obj['company_name'] as string) ?? '',
                 status: (obj['status'] as string) ?? 'open',

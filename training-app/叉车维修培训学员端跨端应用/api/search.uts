@@ -50,12 +50,16 @@ function buildSearchCategoryResult(obj : UTSJSONObject | null) : SearchCategoryR
 export function searchAllApi(keyword : string) : Promise<SearchResult> {
 	const params : UTSJSONObject = { keyword: keyword } as UTSJSONObject
 	return get('/search', params).then((data : UTSJSONObject) : SearchResult => {
+		const coursesRaw = data['courses']
+		const questionsRaw = data['questions']
+		const contentsRaw = data['contents']
+		const topicsRaw = data['topics']
 		return {
 			keyword: toStr(data['keyword'], keyword),
-			courses: buildSearchCategoryResult(data['courses'] as UTSJSONObject | null),
-			questions: buildSearchCategoryResult(data['questions'] as UTSJSONObject | null),
-			contents: buildSearchCategoryResult(data['contents'] as UTSJSONObject | null),
-			topics: buildSearchCategoryResult(data['topics'] as UTSJSONObject | null),
+			courses: buildSearchCategoryResult(coursesRaw != null ? coursesRaw as UTSJSONObject : null),
+			questions: buildSearchCategoryResult(questionsRaw != null ? questionsRaw as UTSJSONObject : null),
+			contents: buildSearchCategoryResult(contentsRaw != null ? contentsRaw as UTSJSONObject : null),
+			topics: buildSearchCategoryResult(topicsRaw != null ? topicsRaw as UTSJSONObject : null),
 		} as SearchResult
 	})
 }

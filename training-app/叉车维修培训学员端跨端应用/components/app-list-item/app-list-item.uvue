@@ -4,9 +4,9 @@
             <text v-if="label.length > 0" class="app-list-item-label">{{ label }}</text>
         </view>
         <view class="app-list-item-right">
-            <text v-if="value.length > 0" class="app-list-item-value">{{ value }}</text>
-            <image v-if="avatar.length > 0" class="app-list-item-avatar" :src="avatar" mode="aspectFill" />
-            <text v-if="showArrow" class="app-list-item-arrow">›</text>
+            <text v-if="value.length > 0" class="app-list-item-value ml-8">{{ value }}</text>
+            <image v-if="avatar.length > 0" class="app-list-item-avatar ml-8" :src="avatar" mode="aspectFill" />
+            <text v-if="showArrow" class="app-list-item-arrow ml-8">›</text>
         </view>
     </view>
 </template>
@@ -55,7 +55,6 @@
     .app-list-item-right {
         flex-direction: row;
         align-items: center;
-        gap: 8rpx;
     }
 
     .app-list-item-label {
@@ -82,4 +81,6 @@
         font-size: 32rpx;
         color: $text-placeholder;
     }
+
+    .ml-8 { margin-left: 8rpx; }
 </style>

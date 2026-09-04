@@ -85,7 +85,12 @@
     import { goBack } from '../../utils/navigation'
     import { getMyTopicsApi, getMyRepliesApi } from '../../api/forum'
     import type { ForumTopic, ForumReply } from '../../types/index'
-    import { formatDateStr } from '../../utils/format'
+
+    /** ISO 日期字符串 → YYYY-MM-DD */
+    function formatDateStr(dateStr : string) : string {
+        if (dateStr == null || dateStr.length < 10) return dateStr
+        return dateStr.substring(0, 10)
+    }
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
@@ -148,7 +153,7 @@
                 page.value = page.value + 1
             }
         } catch (e) {
-            uni.__f__('error','at pages/forum/my-forum.uvue:155','[my-forum] load failed:', e)
+            console.error('[my-forum] load failed:', e)
             uni.showToast({ title: '加载失败', icon: 'none' })
         } finally {
             loading.value = false
