@@ -62,7 +62,9 @@ export default defineConfig({
   plugins: [vue(), tailwindcss(), vditorStaticPlugin()],
   test: {
     environment: 'happy-dom',
-    globals: true
+    globals: true,
+    // Node 25+ localStorage 遮蔽兜底（见 vitest.setup.ts）；Node ≤24 环境实现正常时零影响
+    setupFiles: ['./vitest.setup.ts']
   },
   resolve: {
     alias: {
