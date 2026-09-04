@@ -286,60 +286,12 @@
         return single.substring(0, 80) + '...'
     }
 
-    // ---- Tab 切换 ----
-    function onSwitchTab(tab : string) : void {
-        if (currentTab.value === tab) return
-        currentTab.value = tab
-        loadData(true)
-    }
-
-    function onSwitchLikesSubTab(subTab : string) : void {
-        if (likesSubTab.value === subTab) return
-        likesSubTab.value = subTab
-        loadData(true)
-    }
-
-    function onSwitchInteractSubTab(subTab : string) : void {
-        if (interactSubTab.value === subTab) return
-        interactSubTab.value = subTab
-        loadData(true)
-    }
-
     // ---- 数据加载 ----
-    async function loadData(reset : boolean = false) : Promise<void> {
-        if (loading.value) return
-        if (reset) {
-            page.value = 1
-            noMore.value = false
-        }
-        if (noMore.value && !reset) return
-
-        loading.value = true
-        try {
-            if (currentTab.value === 'posts') {
-                await loadMyTopics(reset)
-            } else if (currentTab.value === 'likes') {
-                if (likesSubTab.value === 'liked') {
-                    await loadLikedTopics(reset)
-                } else {
-                    await loadFavorites(reset)
-                }
-            } else if (currentTab.value === 'interact') {
-                if (interactSubTab.value === 'replies') {
-                    await loadMyReplies(reset)
-                } else if (interactSubTab.value === 'questions') {
-                    await loadMyQuestions(reset)
-                } else {
-                    await loadObservedTopics(reset)
-                }
-            } else if (currentTab.value === 'views') {
-                await loadViewHistory(reset)
-            }
-        } catch (e) {
-            console.error('[personal-activity] load failed:', e)
-            uni.showToast({ title: '加载失败', icon: 'none' })
-        } finally {
-            loading.value = false
+    function checkNoMore(itemsCount : number, total : number) : void {
+        if (itemsCount === 0 || (page.value * pageSize >= total && total > 0)) {
+            noMore.value = true
+        } else {
+            page.value = page.value + 1
         }
     }
 
@@ -413,12 +365,60 @@
         checkNoMore(result.items.length, result.total)
     }
 
-    function checkNoMore(itemsCount : number, total : number) : void {
-        if (itemsCount === 0 || (page.value * pageSize >= total && total > 0)) {
-            noMore.value = true
-        } else {
-            page.value = page.value + 1
+    async function loadData(reset : boolean = false) : Promise<void> {
+        if (loading.value) return
+        if (reset) {
+            page.value = 1
+            noMore.value = false
         }
+        if (noMore.value && !reset) return
+
+        loading.value = true
+        try {
+            if (currentTab.value === 'posts') {
+                await loadMyTopics(reset)
+            } else if (currentTab.value === 'likes') {
+                if (likesSubTab.value === 'liked') {
+                    await loadLikedTopics(reset)
+                } else {
+                    await loadFavorites(reset)
+                }
+            } else if (currentTab.value === 'interact') {
+                if (interactSubTab.value === 'replies') {
+                    await loadMyReplies(reset)
+                } else if (interactSubTab.value === 'questions') {
+                    await loadMyQuestions(reset)
+                } else {
+                    await loadObservedTopics(reset)
+                }
+            } else if (currentTab.value === 'views') {
+                await loadViewHistory(reset)
+            }
+        } catch (e) {
+            console.error('[personal-activity] load failed:', e)
+            uni.showToast({ title: '加载失败', icon: 'none' })
+        } finally {
+            loading.value = false
+        }
+    }
+
+    // ---- Tab 切换 ----
+    function onSwitchTab(tab : string) : void {
+        if (currentTab.value === tab) return
+        currentTab.value = tab
+        loadData(true)
+    }
+
+    function onSwitchLikesSubTab(subTab : string) : void {
+        if (likesSubTab.value === subTab) return
+        likesSubTab.value = subTab
+        loadData(true)
+    }
+
+    function onSwitchInteractSubTab(subTab : string) : void {
+        if (interactSubTab.value === subTab) return
+        interactSubTab.value = subTab
+        loadData(true)
     }
 
     // ---- 事件处理 ----

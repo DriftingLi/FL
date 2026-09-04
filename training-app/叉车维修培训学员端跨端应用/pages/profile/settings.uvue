@@ -110,14 +110,6 @@
     // 缓存大小
     const cacheSize = ref<string>('0 KB')
 
-    onMounted(() => {
-        // 读取关怀模式状态
-        const careMode = uni.getStorageSync('care_mode')
-        careModeEnabled.value = careMode === 'true'
-        // 计算缓存大小
-        calculateCacheSize()
-    })
-
     function calculateCacheSize() : void {
         try {
             const info = uni.getStorageInfoSync()
@@ -131,6 +123,14 @@
             cacheSize.value = '0 KB'
         }
     }
+
+    onMounted(() => {
+        // 读取关怀模式状态
+        const careMode = uni.getStorageSync('care_mode')
+        careModeEnabled.value = careMode === 'true'
+        // 计算缓存大小
+        calculateCacheSize()
+    })
 
     function onBack() : void {
         goBack()

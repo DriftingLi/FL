@@ -291,6 +291,22 @@
         return ''
     })
 
+    function hasEduContent() : boolean {
+        for (let i = 0; i < eduItems.value.length; i++) {
+            const e = eduItems.value[i]
+            if (e.school.trim().length > 0 || e.major.trim().length > 0) return true
+        }
+        return false
+    }
+
+    function hasExpContent() : boolean {
+        for (let i = 0; i < expItems.value.length; i++) {
+            const e = expItems.value[i]
+            if (e.company.trim().length > 0 || e.role.trim().length > 0) return true
+        }
+        return false
+    }
+
     /** 完善度：12 项关键内容 */
     const completion = computed<number>(() : number => {
         let filled = 0
@@ -308,22 +324,6 @@
         if (selfIntro.value.trim().length > 0) filled += 1
         return Math.round(filled * 100 / 12)
     })
-
-    function hasEduContent() : boolean {
-        for (let i = 0; i < eduItems.value.length; i++) {
-            const e = eduItems.value[i]
-            if (e.school.trim().length > 0 || e.major.trim().length > 0) return true
-        }
-        return false
-    }
-
-    function hasExpContent() : boolean {
-        for (let i = 0; i < expItems.value.length; i++) {
-            const e = expItems.value[i]
-            if (e.company.trim().length > 0 || e.role.trim().length > 0) return true
-        }
-        return false
-    }
 
     // ---- 选项选择 ----
     function pick(options : string[], onPick : (v : string) => void) : void {

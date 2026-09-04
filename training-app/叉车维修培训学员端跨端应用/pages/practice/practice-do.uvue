@@ -477,6 +477,28 @@
         questionStartTime.value = now
     }
 
+    async function checkFavorite() : Promise<void> {
+        const qid = currentQuestion.value.question_id
+        if (qid <= 0) return
+        try {
+            const result = await checkFavoriteApi('question', qid)
+            isFavorited.value = result.favorited
+            favoriteId.value = result.favorite_id
+        } catch (e) {
+            console.warn('[practice-do] checkFavorite failed:', e)
+        }
+    }
+
+    async function loadKnowledge() : Promise<void> {
+        const qid = currentQuestion.value.question_id
+        if (qid <= 0) return
+        try {
+            knowledgeTags.value = await getKnowledgeApi(qid)
+        } catch (e) {
+            console.warn('[practice-do] loadKnowledge failed:', e)
+        }
+    }
+
     async function loadQuestions() {
         loading.value = true
         try {
@@ -657,30 +679,11 @@
         }
     }
 
-    async function checkFavorite() : Promise<void> {
-        const qid = currentQuestion.value.question_id
-        if (qid <= 0) return
-        try {
-            const result = await checkFavoriteApi('question', qid)
-            isFavorited.value = result.favorited
-            favoriteId.value = result.favorite_id
-        } catch (e) {
-            console.warn('[practice-do] checkFavorite failed:', e)
-        }
-    }
-
     function onShareExplanation() : void {
         uni.showToast({ title: '分享功能开发中', icon: 'none' })
     }
 
     // ========== 评论方法 ==========
-
-    function toggleComments() : void {
-        showComments.value = !showComments.value
-        if (showComments.value && comments.value.length == 0) {
-            loadComments()
-        }
-    }
 
     async function loadComments() : Promise<void> {
         const qid = currentQuestion.value.question_id
@@ -696,6 +699,13 @@
             comments.value = list
         } catch (e) {
             console.warn('[practice-do] loadComments failed:', e)
+        }
+    }
+
+    function toggleComments() : void {
+        showComments.value = !showComments.value
+        if (showComments.value && comments.value.length == 0) {
+            loadComments()
         }
     }
 
@@ -732,26 +742,7 @@
         })
     }
 
-    // ========== 考点方法 ==========
-
-    async function loadKnowledge() : Promise<void> {
-        const qid = currentQuestion.value.question_id
-        if (qid <= 0) return
-        try {
-            knowledgeTags.value = await getKnowledgeApi(qid)
-        } catch (e) {
-            console.warn('[practice-do] loadKnowledge failed:', e)
-        }
-    }
-
     // ========== 笔记方法 ==========
-
-    function toggleNote() : void {
-        showNote.value = !showNote.value
-        if (showNote.value) {
-            loadNote()
-        }
-    }
 
     async function loadNote() : Promise<void> {
         const qid = currentQuestion.value.question_id
@@ -761,6 +752,13 @@
             noteContent.value = note.content
         } catch (e) {
             console.warn('[practice-do] loadNote failed:', e)
+        }
+    }
+
+    function toggleNote() : void {
+        showNote.value = !showNote.value
+        if (showNote.value) {
+            loadNote()
         }
     }
 

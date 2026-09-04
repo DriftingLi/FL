@@ -167,32 +167,6 @@
         return ''
     }
 
-    async function loadCalendar() : Promise<void> {
-        try {
-            const result = await getCheckInCalendarApi(displayYear.value, displayMonth.value)
-            console.log('[check-in] API result:', JSON.stringify(result))
-            usingMock.value = false
-            consecutiveDays.value = result.consecutive_days
-            totalPoints.value = result.total_points
-            pointsPerDay.value = result.points_per_day
-            calendarDays.value = result.days
-            console.log('[check-in] days count:', result.days.length, 'consecutive:', result.consecutive_days)
-            // 从 days 数组中查找今日签到状态
-            const today = new Date()
-            const todayStr = today.getFullYear() + '-' + padZero(today.getMonth() + 1) + '-' + padZero(today.getDate())
-            todayChecked.value = false
-            for (let i = 0; i < result.days.length; i++) {
-                if (result.days[i].date == todayStr && result.days[i].checked) {
-                    todayChecked.value = true
-                    break
-                }
-            }
-        } catch (e) {
-            console.error('[check-in] loadCalendar failed, using mock:', e)
-            loadMockCalendar()
-        }
-    }
-
     /** mock 日历数据（后端接口未就绪时回退；mock 态不触发自动打卡） */
     function loadMockCalendar() : void {
         usingMock.value = true
@@ -221,6 +195,32 @@
                 todayChecked.value = true
                 break
             }
+        }
+    }
+
+    async function loadCalendar() : Promise<void> {
+        try {
+            const result = await getCheckInCalendarApi(displayYear.value, displayMonth.value)
+            console.log('[check-in] API result:', JSON.stringify(result))
+            usingMock.value = false
+            consecutiveDays.value = result.consecutive_days
+            totalPoints.value = result.total_points
+            pointsPerDay.value = result.points_per_day
+            calendarDays.value = result.days
+            console.log('[check-in] days count:', result.days.length, 'consecutive:', result.consecutive_days)
+            // 从 days 数组中查找今日签到状态
+            const today = new Date()
+            const todayStr = today.getFullYear() + '-' + padZero(today.getMonth() + 1) + '-' + padZero(today.getDate())
+            todayChecked.value = false
+            for (let i = 0; i < result.days.length; i++) {
+                if (result.days[i].date == todayStr && result.days[i].checked) {
+                    todayChecked.value = true
+                    break
+                }
+            }
+        } catch (e) {
+            console.error('[check-in] loadCalendar failed, using mock:', e)
+            loadMockCalendar()
         }
     }
 

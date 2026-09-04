@@ -70,13 +70,6 @@
         goBack()
     }
 
-    /** 下拉刷新 */
-    async function onRefresh() : Promise<void> {
-        refreshing.value = true
-        await loadList(true)
-        refreshing.value = false
-    }
-
     /** 加载通知列表 */
     async function loadList(reset : boolean = false) : Promise<void> {
         if (loading.value) return
@@ -107,23 +100,15 @@
         }
     }
 
-    function onLoadMore() : void {
-        loadList(false)
+    /** 下拉刷新 */
+    async function onRefresh() : Promise<void> {
+        refreshing.value = true
+        await loadList(true)
+        refreshing.value = false
     }
 
-    /** 点击通知项 */
-    function onItemClick(item : NotificationItem) : void {
-        // 标记已读
-        if (!item.is_read) {
-            item.is_read = true
-            markNotificationReadApi(item.id).catch((e : any | null) => {
-                console.error('[notifications] markRead failed:', e)
-            })
-        }
-        // 有 link 时跳转
-        if (item.link.length > 0) {
-            navigateByLink(item.link, item)
-        }
+    function onLoadMore() : void {
+        loadList(false)
     }
 
     /** 根据 link 跳转 */
@@ -145,6 +130,21 @@
         // 其他通知：直接使用 link（如有）
         if (link.length > 0) {
             uni.navigateTo({ url: link })
+        }
+    }
+
+    /** 点击通知项 */
+    function onItemClick(item : NotificationItem) : void {
+        // 标记已读
+        if (!item.is_read) {
+            item.is_read = true
+            markNotificationReadApi(item.id).catch((e : any | null) => {
+                console.error('[notifications] markRead failed:', e)
+            })
+        }
+        // 有 link 时跳转
+        if (item.link.length > 0) {
+            navigateByLink(item.link, item)
         }
     }
 

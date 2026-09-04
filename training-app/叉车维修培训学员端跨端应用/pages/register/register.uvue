@@ -163,6 +163,33 @@
 		mode.value == 'email' ? '邮箱注册，验证码通过后自动登录' : '手机号注册，验证码通过后自动登录'
 	)
 
+	/** 加载图形验证码（进入页面/点击图片刷新）；失败展示"点击重试"占位 */
+	async function loadCaptcha() : Promise<void> {
+		if (captchaLoading.value) return
+		captchaLoading.value = true
+		try {
+			const data = await getCaptchaApi()
+			captchaId.value = data['id'] as string
+			captchaImage.value = data['image'] as string
+			captchaValue.value = ''
+			captchaFailed.value = false
+		} catch (e) {
+			console.error('[register] load captcha failed:', e)
+			captchaFailed.value = true
+		} finally {
+			captchaLoading.value = false
+		}
+	}
+
+	/** 清理倒计时定时器（局部副本承接：Kotlin 禁止对闭包中修改的 var 智能转换） */
+	function clearCountdownTimer() : void {
+		const timer = countdownTimer
+		if (timer != null) {
+			clearInterval(timer)
+			countdownTimer = null
+		}
+	}
+
 	/** 切换注册方式：清空已收验证码（通道间不通用）、重置倒计时并刷新图形验证码 */
 	function switchMode(m : string) : void {
 		if (m == mode.value) return
@@ -213,24 +240,6 @@
 	const captchaLoading = ref<boolean>(false)
 	const captchaFailed = ref<boolean>(false)
 
-	/** 加载图形验证码（进入页面/点击图片刷新）；失败展示"点击重试"占位 */
-	async function loadCaptcha() : Promise<void> {
-		if (captchaLoading.value) return
-		captchaLoading.value = true
-		try {
-			const data = await getCaptchaApi()
-			captchaId.value = data['id'] as string
-			captchaImage.value = data['image'] as string
-			captchaValue.value = ''
-			captchaFailed.value = false
-		} catch (e) {
-			console.error('[register] load captcha failed:', e)
-			captchaFailed.value = true
-		} finally {
-			captchaLoading.value = false
-		}
-	}
-
 	function refreshCaptcha() : void {
 		loadCaptcha()
 	}
@@ -240,14 +249,6 @@
 	// 验证码倒计时（秒）
 	const countdown = ref<number>(0)
 	let countdownTimer : number | null = null
-	/** 清理倒计时定时器（局部副本承接：Kotlin 禁止对闭包中修改的 var 智能转换） */
-	function clearCountdownTimer() : void {
-		const timer = countdownTimer
-		if (timer != null) {
-			clearInterval(timer)
-			countdownTimer = null
-		}
-	}
 	// 连续输错次数（对齐后端：错误上限 5 次，发新码或重新输入时清零）
 	const wrongAttempts = ref<number>(0)
 

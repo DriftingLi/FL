@@ -528,6 +528,23 @@
     }
 
     /** 提交重做 */
+    /** 从本地列表移除指定题目并修正计数（声明在 onSubmitRedo 之前，避免 Kotlin 局部函数前向引用） */
+    function removeFromList(questionId : number) : void {
+        const newRecords : WrongQuestionItem[] = []
+        for (let i = 0; i < records.value.length; i++) {
+            if (records.value[i].question_id != questionId) {
+                newRecords.push(records.value[i])
+            }
+        }
+        records.value = newRecords
+        total.value = Math.max(0, total.value - 1)
+        if (expandedId.value == questionId) {
+            expandedId.value = 0
+            selectedKeys.value = [] as string[]
+            redoResult.value = null
+        }
+    }
+
     async function onSubmitRedo(item : WrongQuestionItem) : Promise<void> {
         if (selectedKeys.value.length == 0) {
             uni.showToast({ title: '请选择答案', icon: 'none' })
@@ -581,23 +598,6 @@
             uni.showToast({ title: '提交失败', icon: 'none' })
         } finally {
             uni.hideLoading()
-        }
-    }
-
-    /** 从本地列表移除指定题目并修正计数 */
-    function removeFromList(questionId : number) : void {
-        const newRecords : WrongQuestionItem[] = []
-        for (let i = 0; i < records.value.length; i++) {
-            if (records.value[i].question_id != questionId) {
-                newRecords.push(records.value[i])
-            }
-        }
-        records.value = newRecords
-        total.value = Math.max(0, total.value - 1)
-        if (expandedId.value == questionId) {
-            expandedId.value = 0
-            selectedKeys.value = [] as string[]
-            redoResult.value = null
         }
     }
 

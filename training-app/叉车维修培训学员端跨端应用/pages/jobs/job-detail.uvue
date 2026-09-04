@@ -128,19 +128,6 @@
     // ---- 投递相关 ----
     const hasApplied = ref<boolean>(false)
 
-    // ---- 页面加载 ----
-    onLoad((_options : any) => {
-        const opts = _options as UTSJSONObject | null
-        const id = opts != null ? opts['id'] : null
-        if (id != null && (id as string).length > 0) {
-            jobId.value = parseInt(id as string)
-            loadJobDetail()
-        } else {
-            uni.showToast({ title: '职位不存在', icon: 'none' })
-            setTimeout(() => { uni.navigateBack() }, 1500)
-        }
-    })
-
     async function loadJobDetail() : Promise<void> {
         loading.value = true
         try {
@@ -154,6 +141,19 @@
             loading.value = false
         }
     }
+
+    // ---- 页面加载 ----
+    onLoad((_options : any) => {
+        const opts = _options as UTSJSONObject | null
+        const id = opts != null ? opts['id'] : null
+        if (id != null && (id as string).length > 0) {
+            jobId.value = parseInt(id as string)
+            loadJobDetail()
+        } else {
+            uni.showToast({ title: '职位不存在', icon: 'none' })
+            setTimeout(() => { uni.navigateBack() }, 1500)
+        }
+    })
 
     // ---- 薪资格式化 ----
     function formatSalary() : string {

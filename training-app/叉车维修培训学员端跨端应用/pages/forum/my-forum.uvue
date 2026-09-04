@@ -110,12 +110,6 @@
         return single.substring(0, 80) + '...'
     }
 
-    function onSwitchTab(tab : string) : void {
-        if (currentTab.value === tab) return
-        currentTab.value = tab
-        loadData(true)
-    }
-
     async function loadData(reset : boolean = false) : Promise<void> {
         if (loading.value) return
         if (reset) {
@@ -158,6 +152,12 @@
         } finally {
             loading.value = false
         }
+    }
+
+    function onSwitchTab(tab : string) : void {
+        if (currentTab.value === tab) return
+        currentTab.value = tab
+        loadData(true)
     }
 
     function onLoadMore() : void {
