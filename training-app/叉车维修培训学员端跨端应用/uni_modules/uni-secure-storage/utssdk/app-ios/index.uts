@@ -1,0 +1,113 @@
+/**
+ * iOS 平台实现：Keychain GenericPassword
+ *
+ * 安全模型（ADR-0005）：
+ * - 条目存 Keychain（kSecClassGenericPassword），由系统加密保护
+ * - kSecAttrAccessibleWhenUnlockedThisDeviceOnly：设备解锁才可读，且不随备份迁移
+ * - 卸载重装默认清除（与 Android 行为对齐）
+ *
+ * 索引（kSecAttrService 前缀约定）用于 clearSecureItems 枚举。
+ */
+import { UTSiOS } from "DCloudUTSFoundation";
+
+const SERVICE_PREFIX = "com.uni.secure-storage.";
+
+/** Keychain 查询基础字典 */
+func baseQuery(account : string) : NSDictionary {
+    return [
+        kSecClass as string: kSecClassGenericPassword,
+        kSecAttrService as string: SERVICE_PREFIX + account,
+        kSecAttrAccount as string: account,
+    ] as NSDictionary
+}
+
+export function setSecureItem(key : string, value : string) : SecureSetResult {
+    if (key.length == 0) {
+        return { ok: false, errMsg: "key 不能为空" } as SecureSetResult;
+    }
+    let data : Data = value.data(using: .utf8)!
+    let query : NSDictionary = baseQuery(key)
+    let update : NSDictionary = [
+        kSecValueData as string: data,
+        kSecAttrAccessible as string: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+    ]
+
+    let status : OSStatus = SecItemUpdate(query, update)
+    if (status == errSecItemNotFound) {
+        var add : NSDictionary = [
+            kSecClass as string: kSecClassGenericPassword,
+            kSecAttrService as string: SERVICE_PREFIX + key,
+            kSecAttrAccount as string: key,
+            kSecValueData as string: data,
+            kSecAttrAccessible as string: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+        ]
+        status = SecItemAdd(add, nil)
+    }
+    if (status == errSecSuccess) {
+        return { ok: true, errMsg: "" } as SecureSetResult
+    }
+    return { ok: false, errMsg: "Keychain 写入失败: \(status)" } as SecureSetResult
+}
+
+export function getSecureItem(key : string) : SecureGetResult {
+    if (key.length == 0) {
+        return { ok: false, found: false, value: "", errMsg: "key 不能为空" } as SecureGetResult
+    }
+    var query : NSDictionary = baseQuery(key)
+    query[kSecReturnData as string] = kCFBooleanTrue
+    query[kSecMatchLimit as string] = kSecMatchLimitOne
+
+    var result : AnyObject?
+    let status : OSStatus = SecItemCopyMatching(query, &result)
+
+    if (status == errSecSuccess) {
+        let data = result as! Data
+        let value = String(data: data, encoding: .utf8) ?? ""
+        return { ok: true, found: true, value: value, errMsg: "" } as SecureGetResult
+    }
+    if (status == errSecItemNotFound) {
+        return { ok: true, found: false, value: "", errMsg: "" } as SecureGetResult
+    }
+    return { ok: false, found: false, value: "", errMsg: "Keychain 读取失败: \(status)" } as SecureGetResult
+}
+
+export function removeSecureItem(key : string) : SecureOpResult {
+    let status : OSStatus = SecItemDelete(baseQuery(key))
+    // 不存在也算删除成功（幂等语义）
+    if (status == errSecSuccess || status == errSecItemNotFound) {
+        return { ok: true, exists: false, errMsg: "" } as SecureOpResult
+    }
+    return { ok: false, exists: true, errMsg: "Keychain 删除失败: \(status)" } as SecureOpResult
+}
+
+export function hasSecureItem(key : string) : SecureOpResult {
+    var query : NSDictionary = baseQuery(key)
+    query[kSecReturnData as string] = kCFBooleanFalse
+    query[kSecMatchLimit as string] = kSecMatchLimitOne
+
+    var result : AnyObject?
+    let status : OSStatus = SecItemCopyMatching(query, &result)
+    return { ok: true, exists: status == errSecSuccess, errMsg: "" } as SecureOpResult
+}
+
+export function clearSecureItems() : SecureOpResult {
+    // 按 service 前缀批量删除本插件管理的条目
+    let query : NSDictionary = [
+        kSecClass as string: kSecClassGenericPassword,
+        kSecAttrService as string: SERVICE_PREFIX,
+    ]
+    let status : OSStatus = SecItemDelete(query)
+    if (status == errSecSuccess || status == errSecItemNotFound) {
+        return { ok: true, exists: false, errMsg: "" } as SecureOpResult
+    }
+    return { ok: false, exists: false, errMsg: "Keychain 清空失败: \(status)" } as SecureOpResult
+}
+
+export function getSecureStorageCapabilities() : SecureStorageCapabilities {
+    return {
+        supported: true,
+        platform: "ios",
+        supportsSurviveReinstall: true,
+        backend: "iOS Keychain (WhenUnlockedThisDeviceOnly)",
+    } as SecureStorageCapabilities
+}

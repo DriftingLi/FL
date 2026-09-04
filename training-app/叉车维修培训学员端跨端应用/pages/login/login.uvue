@@ -181,7 +181,7 @@
     import { ref, computed } from 'vue'
     import { useAuthStore } from '../../stores/auth'
     import { sendCodeApi, getCaptchaApi } from '../../api/auth'
-    import { hasStoredCredentials, loadSecureCredentials, saveSecureCredentials, clearSecureCredentials } from '../../utils/secureStorage'
+    import { hasStoredCredentials, loadSecureCredentials, saveSecureCredentials, saveAccountOnly, loadSavedAccount, clearSecureCredentials } from '../../utils/secureStorage'
     import { useBiometric } from '../../composables/useBiometric'
 
     const auth = useAuthStore()
@@ -268,6 +268,13 @@
         biometric.checkSupport()
         if (hasStoredCredentials()) {
             showedStored.value = true
+        } else {
+            // 凭据降级：生物识别不可用平台仅记住账号（无门控回填），直接回显账号
+            const savedAccount = loadSavedAccount()
+            if (savedAccount.length > 0) {
+                username.value = savedAccount
+                rememberMe.value = true
+            }
         }
         loadCaptcha()
     })
@@ -500,7 +507,13 @@
                     password: password.value,
                 })
                 if (rememberMe.value && uname.length > 0) {
-                    saveSecureCredentials(uname, password.value)
+                    if (biometric.isSupported.value) {
+                        // 生物识别可用：账号+密码完整保存，走门控回填
+                        saveSecureCredentials(uname, password.value)
+                    } else {
+                        // 凭据降级（ADR-0004 决策 A）：仅记住账号，密码不落盘
+                        saveAccountOnly(uname)
+                    }
                 } else {
                     clearSecureCredentials()
                 }
@@ -589,7 +602,7 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     .login-page {
         flex: 1;
         background-color: #ffffff;
