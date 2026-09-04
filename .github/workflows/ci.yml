@@ -164,6 +164,13 @@ jobs:
       - name: 前端单元测试
         run: npm test
 
+      # 只查相对默认分支的新增行：存量裸 hex 由专项批次清理，不阻塞日常 PR
+      - name: 硬编码色值检查（仅新增行）
+        working-directory: ${{ github.workspace }}
+        run: |
+          git fetch origin "${{ github.event.repository.default_branch }}" --depth=1
+          bash scripts/check-bare-hex.sh --diff "origin/${{ github.event.repository.default_branch }}"
+
       - name: 生产构建
         run: npm run build
 
