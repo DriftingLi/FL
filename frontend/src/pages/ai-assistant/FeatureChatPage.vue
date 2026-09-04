@@ -288,7 +288,7 @@ onMounted(() => {
 }
 
 .pending-image-remove:hover {
-  background: #ef4444;
+  background: var(--color-danger, #ef4444);
 }
 
 .pending-image-mask {

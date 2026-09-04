@@ -234,14 +234,14 @@ async function handleLogout() {
 }
 
 .btn-profile {
-  border-color: #BFDBFE;
-  color: #0284C7;
+  border-color: var(--color-brand-200, #BFDBFE);
+  color: var(--color-brand-600, #0284C7);
 }
 
 /* 登录按钮：主按钮样式（品牌色渐变） */
 .btn-login {
-  background: linear-gradient(135deg, #0EA5E9 0%, #0284C7 100%);
-  color: #FFFFFF;
+  background: linear-gradient(135deg, var(--color-brand-500, #0EA5E9) 0%, var(--color-brand-600, #0284C7) 100%);
+  color: var(--color-text-inverse, #FFFFFF);
   border-color: transparent;
   box-shadow: 0 2px 6px rgba(14, 165, 233, 0.2);
 }
@@ -270,10 +270,12 @@ async function handleLogout() {
   border-color: var(--color-border-dark, #CBD5E1);
 }
 
+/* 危险态走培训域全局语义 token：topbar 在 .valuation-root 作用域外，
+     引用残值 token 只会恒走 fallback，深色不会跟随；全局 token 深色自动翻转 */
 .btn-logout:hover {
-  border-color: #F87171;
-  color: #DC2626;
-  background: #FEF2F2;
+  border-color: var(--color-danger, #F87171);
+  color: var(--color-danger-strong, #DC2626);
+  background: var(--color-danger-light, #FEF2F2);
 }
 
 .btn-back {

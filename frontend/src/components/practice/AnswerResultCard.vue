@@ -6,15 +6,15 @@
     <div class="result-stats">
       <div class="stat-item">
         <span class="stat-label">个人答题用时</span>
-        <span class="stat-value" :style="{ color: '#67c23a' }">{{ durationText }}</span>
+        <span class="stat-value" :style="{ color: 'var(--color-success)' }">{{ durationText }}</span>
       </div>
       <div class="stat-item">
         <span class="stat-label">全站正确率</span>
-        <span class="stat-value" :style="{ color: '#67c23a' }">{{ accuracyText }}</span>
+        <span class="stat-value" :style="{ color: 'var(--color-success)' }">{{ accuracyText }}</span>
       </div>
       <div class="stat-item">
         <span class="stat-label">易错项</span>
-        <span class="stat-value" :style="{ color: commonWrong ? '#f56c6c' : '#909399' }">{{ commonWrong || '—' }}</span>
+        <span class="stat-value" :style="{ color: commonWrong ? 'var(--color-danger)' : 'var(--color-text-muted)' }">{{ commonWrong || '—' }}</span>
       </div>
     </div>
   </div>
@@ -51,18 +51,19 @@ const accuracyText = computed(() => {
 </script>
 
 <style scoped>
+/* 色值全部走全局语义 token（#554）：EP 默认调色板残留清零，深浅主题自动跟随 */
 .result-card {
-  border: 1px solid #ebeef5;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 16px;
-  background: #fff;
+  background: var(--color-bg-card);
   margin-bottom: 12px;
 }
-.result-header { font-size: 14px; color: #303133; margin-bottom: 16px; }
-.result-header .correct { color: #67c23a; }
-.result-header .wrong { color: #f56c6c; }
+.result-header { font-size: 14px; color: var(--color-text-primary); margin-bottom: 16px; }
+.result-header .correct { color: var(--color-success); }
+.result-header .wrong { color: var(--color-danger); }
 .result-stats { display: flex; justify-content: space-between; text-align: center; }
 .stat-item { flex: 1; display: flex; flex-direction: column; gap: 4px; }
-.stat-label { font-size: 12px; color: #909399; }
+.stat-label { font-size: 12px; color: var(--color-text-muted); }
 .stat-value { font-size: 15px; font-weight: 600; }
 </style>

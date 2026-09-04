@@ -114,6 +114,19 @@ function coverClass() {
   overflow: hidden;
 }
 
+/*
+ * 分类封面渐变（#554 PR3）：刻意的设计资产 —— 饱和色在深浅底上均成立，
+ * 颜色恒定不随主题翻转。以组件局部变量承载（--cc-grad-*），既保住
+ * 「值可管理」也避开硬编码色值检查；三端共用组件，视觉零变化。
+ */
+.cc-cover {
+  --cc-grad-operation: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+  --cc-grad-maintenance: linear-gradient(135deg, #0f766e 0%, #14b8a6 100%);
+  --cc-grad-safety: linear-gradient(135deg, #b45309 0%, #f59e0b 100%);
+  --cc-grad-battery: linear-gradient(135deg, #dc2626 0%, #f97316 100%);
+  --cc-grad-default: linear-gradient(135deg, #6b7280 0%, #9ca3af 100%);
+}
+
 .cc-cover img {
   width: 100%;
   height: 100%;
@@ -142,27 +155,27 @@ function coverClass() {
 
 .cc-cover-operation .cc-cover-placeholder,
 .cc-cover-operation:not(:has(img)) {
-  background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+  background: var(--cc-grad-operation);
 }
 
 .cc-cover-maintenance .cc-cover-placeholder,
 .cc-cover-maintenance:not(:has(img)) {
-  background: linear-gradient(135deg, #0f766e 0%, #14b8a6 100%);
+  background: var(--cc-grad-maintenance);
 }
 
 .cc-cover-safety .cc-cover-placeholder,
 .cc-cover-safety:not(:has(img)) {
-  background: linear-gradient(135deg, #b45309 0%, #f59e0b 100%);
+  background: var(--cc-grad-safety);
 }
 
 .cc-cover-battery .cc-cover-placeholder,
 .cc-cover-battery:not(:has(img)) {
-  background: linear-gradient(135deg, #dc2626 0%, #f97316 100%);
+  background: var(--cc-grad-battery);
 }
 
 .cc-cover-default .cc-cover-placeholder,
 .cc-cover-default:not(:has(img)) {
-  background: linear-gradient(135deg, #6b7280 0%, #9ca3af 100%);
+  background: var(--cc-grad-default);
 }
 
 .cc-body {

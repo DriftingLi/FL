@@ -140,7 +140,7 @@ defineExpose({ open })
   flex-shrink: 0;
   font-size: 28px;
   background: var(--gradient-brand);
-  color: #fff;
+  color: var(--color-text-inverse);
 }
 
 .avatar-actions {
@@ -151,7 +151,7 @@ defineExpose({ open })
 
 .hint {
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-muted);
   margin: 0;
 }
 
@@ -164,7 +164,7 @@ defineExpose({ open })
 .nickname-label {
   font-size: 14px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 
 .nickname-actions {

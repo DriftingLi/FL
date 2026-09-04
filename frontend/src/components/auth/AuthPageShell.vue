@@ -3,17 +3,41 @@
   主次分离：白底极简卡片 + 角色 badge + 主表单（密码为主）+「或使用以下方式登录」分隔线 + 图标按钮切换。
   切换方式：点击图标按钮/返回链接更新 activeAlt，当前为空(null)=主方式，非空=对应 alt 方式视图。
   slot：main（主表单）、#alt-key（各 alt 方式表单）、footer（页脚链接区）。
+  样式：模板走原子类（R1），scoped 仅保留局部变量、badge 动态分类色、divider 伪元素。
 -->
 <template>
-  <div class="auth-page">
-    <div class="auth-card">
-      <header class="card-header">
-        <span class="badge" :class="`badge-${badgeTone}`">{{ badgeText }}</span>
-        <h1 class="title">{{ title }}</h1>
-        <p class="subtitle">{{ subtitle }}</p>
+  <div class="auth-page flex min-h-screen items-center justify-center bg-panel p-6 max-[480px]:p-4">
+    <div
+      class="auth-card w-full max-w-[420px] rounded-card border border-line bg-panel px-10 pt-11 pb-7 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-8px_rgba(15,23,42,0.08)] max-[480px]:px-[22px] max-[480px]:pt-8 max-[480px]:pb-[22px]"
+    >
+      <!-- 明暗模式切换（三态），与 SidebarLayout 同构。认证页是独立布局、不走 SidebarLayout，
+           曾漏装导致深色偏好用户在登录页看到崩坏画面且无法切回（#554），故补于此。 -->
+      <button
+        class="theme-toggle fixed right-4 top-4 z-[var(--z-sticky)] flex h-9 w-9 cursor-pointer items-center justify-center rounded-pill border border-line bg-panel text-ink shadow-raised transition-[background,box-shadow,transform] duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas active:scale-[0.94]"
+        :aria-label="themeLabel"
+        :title="themeLabel"
+        @click="themeStore.cycle()"
+      >
+        <el-icon v-if="themeStore.resolved === 'dark'" :size="18"><Moon /></el-icon>
+        <svg v-else-if="themeStore.mode === 'system'" class="theme-half-icon h-[18px] w-[18px]" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 3a9 9 0 0 0 0 18V3Z" fill="currentColor" opacity="0.9"/>
+          <path d="M12 6a6 6 0 0 0 0 12 8 8 0 0 1 0-12Z" fill="var(--color-bg-card)"/>
+          <path d="M12 3a9 9 0 0 1 9 9 9 9 0 0 1-9 9V3Z" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M16.8 6.2l1.4-1.4M21 12h2M16.8 17.8l1.4 1.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <el-icon v-else :size="18"><Sunny /></el-icon>
+      </button>
+
+      <header class="card-header mb-5 text-center">
+        <span
+          class="badge mb-3.5 inline-block rounded-pill px-3 py-1 text-xs font-semibold tracking-[0.02em]"
+          :class="`badge-${badgeTone}`"
+        >{{ badgeText }}</span>
+        <h1 class="title m-0 mb-2 text-2xl font-bold tracking-[-0.02em] text-ink">{{ title }}</h1>
+        <p class="subtitle m-0 text-sm leading-normal text-ink-3">{{ subtitle }}</p>
       </header>
 
-      <main v-show="activeAlt === null" class="view">
+      <main v-show="activeAlt === null" class="view mt-1">
         <slot name="main" />
       </main>
 
@@ -21,31 +45,42 @@
         v-for="m in altModes"
         :key="m.key"
         v-show="activeAlt === m.key"
-        class="view alt-view"
+        class="view alt-view mt-1 w-full"
       >
-        <button type="button" class="back" @click="goMain">← {{ backLabel }}</button>
+        <button
+          type="button"
+          class="back inline-block cursor-pointer border-0 bg-transparent p-0 pb-4 text-[13px] text-ui-600 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:text-ui-700"
+          @click="goMain"
+        >← {{ backLabel }}</button>
         <slot :name="`alt-${m.key}`" />
       </main>
 
-      <section v-if="altModes.length" class="alt-area">
-        <div class="divider">{{ dividerText }}</div>
-        <div class="alt-row">
+      <section v-if="altModes.length" class="alt-area mt-[22px]">
+        <div class="divider mb-4 flex items-center gap-2.5 text-xs text-ink-muted">{{ dividerText }}</div>
+        <div class="alt-row flex justify-center gap-[22px]">
           <button
             v-for="m in altModes"
             :key="m.key"
             type="button"
-            class="alt"
-            :class="[`alt-${m.key}`, { active: activeAlt === m.key }]"
+            class="alt group flex cursor-pointer flex-col items-center gap-1.5 border-0 bg-transparent p-1 text-xs transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] aria-pressed:font-semibold"
+            :class="m.key === 'wechat' ? 'aria-pressed:text-[var(--wechat-green)]' : 'aria-pressed:text-ui-600'"
             :aria-pressed="activeAlt === m.key"
             @click="selectAlt(m.key)"
           >
-            <span class="ic"><component :is="m.icon" :size="19" /></span>
+            <span
+              class="ic flex h-11 w-11 items-center justify-center rounded-card border border-line bg-panel text-ink-3 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] group-hover:border-ui-300 group-hover:text-ui-600"
+              :class="m.key === 'wechat'
+                ? 'group-aria-pressed:border-[var(--wechat-green)] group-aria-pressed:bg-[var(--wechat-green)] group-aria-pressed:text-white group-aria-pressed:shadow-[0_4px_10px_rgba(7,193,96,0.28)]'
+                : 'group-aria-pressed:border-ui-500 group-aria-pressed:bg-ui-500 group-aria-pressed:text-white group-aria-pressed:shadow-[0_4px_10px_rgba(13,148,136,0.28)]'"
+            >
+              <component :is="m.icon" :size="19" />
+            </span>
             <span>{{ m.label }}</span>
           </button>
         </div>
       </section>
 
-      <footer v-if="$slots.footer" class="card-footer">
+      <footer v-if="$slots.footer" class="card-footer mt-6 text-center">
         <slot name="footer" />
       </footer>
     </div>
@@ -53,7 +88,10 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { Component } from 'vue'
+import { Moon, Sunny } from '@element-plus/icons-vue'
+import { useThemeStore } from '@/stores/theme'
 
 export type AltModeKey = 'email' | 'phone' | 'wechat'
 
@@ -90,6 +128,13 @@ const emit = defineEmits<{
   (e: 'select-alt', key: AltModeKey | null): void
 }>()
 
+const themeStore = useThemeStore()
+
+const themeLabel = computed(() => {
+  if (themeStore.mode === 'system') return '跟随系统（点击切换为浅色）'
+  return themeStore.resolved === 'dark' ? '深色模式（点击切换为跟随系统）' : '浅色模式（点击切换为深色）'
+})
+
 const altModes = props.altModes
 
 function selectAlt(key: AltModeKey) {
@@ -102,105 +147,27 @@ function goMain() {
 </script>
 
 <style scoped>
+/* R1 允许保留的三类：组件局部变量、动态分类色、伪元素。其余样式已全部原子化。 */
 .auth-page {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #fff;
-  padding: 24px;
+  /* 微信品牌绿：品牌恒定色，深浅底上都成立、不随主题翻转。
+     用组件局部变量承载，供模板 bg-[var(--wechat-green)] 引用。 */
+  --wechat-green: #07c160;
 }
 
-.auth-card {
-  width: 100%;
-  max-width: 420px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.04),
-    0 8px 24px -8px rgba(15, 23, 42, 0.08);
-  padding: 44px 40px 28px;
-}
-
-.card-header {
-  text-align: center;
-  margin-bottom: 20px;
-}
-
-.badge {
-  display: inline-block;
-  padding: 4px 12px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  margin-bottom: 14px;
-}
-
+/* badge 分类色底：color-mix 透明叠底（写死 rgba 无法跟随深浅主题切换） */
 .badge-student {
-  background: rgba(37, 99, 235, 0.08);
-  color: #1d4ed8;
+  background: color-mix(in srgb, var(--color-accent-500) 10%, transparent);
+  color: var(--color-accent-700);
 }
 
 .badge-tutor {
-  background: rgba(13, 148, 136, 0.08);
-  color: #0f766e;
+  background: color-mix(in srgb, var(--color-primary-500) 10%, transparent);
+  color: var(--color-primary-700);
 }
 
 .badge-admin {
-  background: rgba(124, 58, 237, 0.08);
-  color: #6d28d9;
-}
-
-.title {
-  font-size: 24px;
-  font-weight: 700;
-  color: #0f172a;
-  margin: 0 0 8px;
-  letter-spacing: -0.02em;
-}
-
-.subtitle {
-  font-size: 14px;
-  color: #64748b;
-  margin: 0;
-  line-height: 1.5;
-}
-
-.view {
-  margin-top: 4px;
-}
-
-.alt-view {
-  width: 100%;
-}
-
-.back {
-  display: inline-block;
-  border: none;
-  background: none;
-  padding: 0 0 16px;
-  font-size: 13px;
-  color: #2563eb;
-  cursor: pointer;
-}
-
-.back:hover {
-  color: #1d4ed8;
-}
-
-.alt-area {
-  margin-top: 22px;
-}
-
-.divider {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: #94a3b8;
-  font-size: 12px;
-  margin-bottom: 16px;
+  background: color-mix(in srgb, var(--color-violet-500) 10%, transparent);
+  color: var(--color-violet-500);
 }
 
 .divider::before,
@@ -208,189 +175,6 @@ function goMain() {
   content: '';
   flex: 1;
   height: 1px;
-  background: #e2e8f0;
-}
-
-.alt-row {
-  display: flex;
-  justify-content: center;
-  gap: 22px;
-}
-
-.alt {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  background: none;
-  border: none;
-  padding: 4px;
-  color: #64748b;
-  font-size: 12px;
-}
-
-.alt .ic {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #64748b;
-  transition: all var(--duration-fast) var(--ease-default);
-}
-
-.alt:hover .ic {
-  border-color: #93c5fd;
-  color: #2563eb;
-}
-
-.alt.active .ic {
-  background: #2563eb;
-  border-color: #2563eb;
-  color: #fff;
-  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.28);
-}
-
-.alt.active {
-  color: #2563eb;
-  font-weight: 600;
-}
-
-.alt-wechat.active .ic {
-  background: #07c160;
-  border-color: #07c160;
-}
-
-.alt-wechat.active {
-  color: #07c160;
-}
-
-.card-footer {
-  text-align: center;
-  margin-top: 24px;
-}
-
-@media screen and (max-width: 480px) {
-  .auth-page {
-    padding: 16px;
-  }
-
-  .auth-card {
-    padding: 32px 22px 22px;
-    border-radius: 12px;
-  }
-
-  .title {
-    font-size: 21px;
-  }
-}
-
-/* ===== 认证表单共享样式（Login / Register / ForgotPassword 三页收敛于此外壳）=====
-   页面把 el-form/el-input/el-button 等经 slot 注入，故此处用 :deep 触达 slot 内容。
-   视觉与三页原 scoped 样式逐字节一致（像素级不变）；Login 特有的 6px input 内边距
-   由其页面内覆盖（见 Login.vue .auth-form .form-input :deep(.el-input__wrapper)）。 */
-
-.auth-form {
-  margin-top: 4px;
-}
-
-.code-row {
-  display: flex;
-  gap: 10px;
-  width: 100%;
-}
-
-.code-input {
-  flex: 1;
-}
-
-.code-btn {
-  min-width: 124px;
-}
-
-.captcha-row {
-  display: flex;
-  gap: 10px;
-  width: 100%;
-  align-items: center;
-}
-
-.captcha-input {
-  flex: 1;
-}
-
-.captcha-img {
-  height: 40px;
-  width: 110px;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
-  cursor: pointer;
-  background: #f8fafc;
-  flex-shrink: 0;
-}
-
-.auth-btn {
-  width: 100%;
-  height: 48px;
-  font-size: 16px;
-  font-weight: 600;
-  border-radius: 12px;
-  letter-spacing: 0.08em;
-  margin-top: 8px;
-  --el-button-bg-color: #2563eb;
-  --el-button-border-color: #2563eb;
-  --el-button-text-color: #fff;
-  --el-button-hover-bg-color: #1d4ed8;
-  --el-button-hover-border-color: #1d4ed8;
-  --el-button-active-bg-color: #1d4ed8;
-  --el-button-active-border-color: #1d4ed8;
-}
-
-.form-input :deep(.el-input__wrapper) {
-  border-radius: 12px;
-  padding: 4px 14px;
-  box-shadow: 0 0 0 1px #e2e8f0 inset;
-  transition: all var(--duration-base) var(--ease-default);
-  background: #f8fafc;
-}
-
-.form-input :deep(.el-input__wrapper:hover) {
-  box-shadow: 0 0 0 1px #cbd5e1 inset;
-  background: #fff;
-}
-
-.form-input :deep(.el-input__wrapper.is-focus) {
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2) inset;
-  background: #fff;
-}
-
-.form-input :deep(.el-input__prefix-inner) {
-  color: #94a3b8;
-}
-
-.form-footer {
-  text-align: center;
-}
-
-.footer-text {
-  font-size: 14px;
-  color: #94a3b8;
-}
-
-.footer-link {
-  font-size: 14px;
-  font-weight: 600;
-  color: #2563eb;
-  text-decoration: none;
-  margin-left: 4px;
-  transition: color var(--duration-fast) var(--ease-default);
-}
-
-.footer-link:hover {
-  color: #1d4ed8;
+  background: var(--color-border);
 }
 </style>

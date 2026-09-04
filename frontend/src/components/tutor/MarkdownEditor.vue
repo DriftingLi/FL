@@ -1,11 +1,11 @@
 <template>
-  <div class="md-editor" :style="{ height: bodyHeight }">
+  <div class="md-editor flex flex-col overflow-hidden rounded-[6px] border border-line-strong bg-panel" :style="{ height: bodyHeight }">
     <!-- 模式切换 Tab -->
-    <div class="md-mode-tabs">
+    <div class="md-mode-tabs flex shrink-0 border-b border-line bg-canvas">
       <button
         type="button"
-        class="md-mode-tab"
-        :class="{ active: mode === 'ir' }"
+        class="md-mode-tab cursor-pointer border-0 bg-transparent px-[18px] py-2 text-sm font-[inherit] text-ink-2 border-b-2 border-transparent transition-all duration-[var(--duration-base)] ease-[var(--ease-default)] not-disabled:hover:text-ui-500 disabled:cursor-not-allowed disabled:opacity-50"
+        :class="mode === 'ir' ? 'text-ui-500 border-ui-500 bg-panel' : ''"
         :disabled="!isReady"
         @click="switchMode('ir')"
       >
@@ -13,8 +13,8 @@
       </button>
       <button
         type="button"
-        class="md-mode-tab"
-        :class="{ active: mode === 'sv' }"
+        class="md-mode-tab cursor-pointer border-0 bg-transparent px-[18px] py-2 text-sm font-[inherit] text-ink-2 border-b-2 border-transparent transition-all duration-[var(--duration-base)] ease-[var(--ease-default)] not-disabled:hover:text-ui-500 disabled:cursor-not-allowed disabled:opacity-50"
+        :class="mode === 'sv' ? 'text-ui-500 border-ui-500 bg-panel' : ''"
         :disabled="!isReady"
         @click="switchMode('sv')"
       >
@@ -22,9 +22,9 @@
       </button>
     </div>
     <!-- vditor 挂载点 -->
-    <div ref="vditorRef" class="md-vditor-host"></div>
+    <div ref="vditorRef" class="md-vditor-host flex-1 overflow-hidden relative"></div>
     <!-- 加载中遮罩：Vditor 内部模块未就绪前覆盖，避免用户在未 ready 时切换模式触发 VditorIRDOM2Md undefined -->
-    <div v-if="!isReady" class="md-loading">
+    <div v-if="!isReady" class="md-loading absolute inset-0 z-10 flex items-center justify-center text-sm text-ink-muted pointer-events-all">
       <span>编辑器加载中…</span>
     </div>
   </div>
@@ -210,72 +210,15 @@ defineExpose({
 </script>
 
 <style scoped>
-.md-editor {
-  border: 1px solid #dcdfe6;
-  border-radius: 6px;
-  background: #fff;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
+/* R1 允许：EP/vditor 内部覆盖 + 半透明主题色底。其余样式已全部原子化。 */
 
-.md-mode-tabs {
-  display: flex;
-  border-bottom: 1px solid #ebeef5;
-  background: #fafbfc;
-  flex-shrink: 0;
-}
-
-.md-mode-tab {
-  padding: 8px 18px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-size: 14px;
-  color: #606266;
-  border-bottom: 2px solid transparent;
-  transition: all var(--duration-base) var(--ease-default);
-  font-family: inherit;
-}
-
-.md-mode-tab:hover:not(:disabled) {
-  color: #409eff;
-}
-
-.md-mode-tab:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.md-mode-tab.active {
-  color: #409eff;
-  border-bottom-color: #409eff;
-  background: #fff;
-}
-
-.md-vditor-host {
-  flex: 1;
-  overflow: hidden;
-  position: relative;
-}
-
-/* 让 vditor 内部填满容器 */
 .md-vditor-host :deep(.vditor) {
   border: none !important;
   border-radius: 0 !important;
 }
 
-/* 加载中遮罩：覆盖编辑器区域，防止 Vditor 未 ready 时用户误操作 */
+/* 加载中遮罩底：color-mix 半透明卡色，深浅主题自动跟随（原 rgba(255,255,255,.85) 深色下会发白） */
 .md-loading {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.85);
-  color: #909399;
-  font-size: 14px;
-  z-index: 10;
-  pointer-events: all;
+  background: color-mix(in srgb, var(--color-bg-card) 85%, transparent);
 }
 </style>
