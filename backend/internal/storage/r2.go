@@ -152,6 +152,20 @@ func (s *R2Storage) Get(ctx context.Context, url string) (io.ReadCloser, error) 
 // List 按 key 前缀列出 R2 中的文件，返回 https://<publicDomain>/<key> 形式的 URL 列表。
 // 前缀为空时列出 bucket 全部文件；前缀按 key 字符前缀匹配（如 "images/forum" 匹配 "images/forum/xxx.webp"）。
 func (s *R2Storage) List(ctx context.Context, prefix string) ([]string, error) {
+	infos, err := s.ListWithInfo(ctx, prefix)
+	if err != nil {
+		return nil, err
+	}
+	urls := make([]string, 0, len(infos))
+	for _, f := range infos {
+		urls = append(urls, f.URL)
+	}
+	return urls, nil
+}
+
+// ListWithInfo 按 key 前缀列出 R2 中的文件，LastModified 取对象存储原生元数据（ADR-0027 C2）。
+// 语义与 List 一致；LastModified 为 S3 ListObjectsV2 返回的 LastModified（对象不存在时为零值）。
+func (s *R2Storage) ListWithInfo(ctx context.Context, prefix string) ([]FileInfo, error) {
 	prefix = strings.Trim(prefix, "/")
 	input := &s3.ListObjectsV2Input{
 		Bucket: aws.String(s.bucket),
@@ -159,7 +173,7 @@ func (s *R2Storage) List(ctx context.Context, prefix string) ([]string, error) {
 	if prefix != "" {
 		input.Prefix = aws.String(prefix + "/")
 	}
-	var urls []string
+	var infos []FileInfo
 	paginator := s3.NewListObjectsV2Paginator(s.client, input)
 	for paginator.HasMorePages() {
 		page, err := paginator.NextPage(ctx)
@@ -171,8 +185,12 @@ func (s *R2Storage) List(ctx context.Context, prefix string) ([]string, error) {
 			if key == "" {
 				continue
 			}
-			urls = append(urls, s.publicDomain+"/"+key)
+			info := FileInfo{URL: s.publicDomain + "/" + key}
+			if obj.LastModified != nil {
+				info.LastModified = *obj.LastModified
+			}
+			infos = append(infos, info)
 		}
 	}
-	return urls, nil
+	return infos, nil
 }

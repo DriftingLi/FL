@@ -12,7 +12,16 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
+
+// FileInfo 列出文件的信息：可访问 URL + 存储侧原生修改时间（ADR-0027 C2）。
+// LastModified 来自存储层真实元数据（local=文件 ModTime / R2=对象 LastModified），
+// 不依赖文件名内嵌时间戳——存储产物命名约定是 implementation detail，收回存储 seam。
+type FileInfo struct {
+	URL          string    // 与 Save 返回格式一致的完整 URL
+	LastModified time.Time // 存储侧原生修改时间（local=ModTime / R2=LastModified）
+}
 
 // Storage 文件存储接口。
 //
@@ -31,6 +40,9 @@ type Storage interface {
 	// List 按 key 前缀列出所有文件，返回可访问的 URL 列表（与 Save 返回格式一致）。
 	// 前缀为空时列出全部文件；prefix 与 key 分隔符（/）对齐，如 "images/forum" 匹配 "images/forum/xxx.webp"。
 	List(ctx context.Context, prefix string) ([]string, error)
+	// ListWithInfo 按 key 前缀列出文件并携带存储侧原生修改时间（语义与 List 一致）。
+	// 供悬空回收（TTL 判定）等需要时间元数据的消费者使用（ADR-0027 C2）。
+	ListWithInfo(ctx context.Context, prefix string) ([]FileInfo, error)
 	// Get 按 URL 读取文件内容（流式），调用方负责关闭返回的 ReadCloser。
 	// 用于代理下载等需要后端中转内容的场景（绕开对象存储的浏览器跨域限制）。
 	Get(ctx context.Context, url string) (io.ReadCloser, error)
@@ -110,6 +122,20 @@ func (s *LocalStorage) Get(ctx context.Context, url string) (io.ReadCloser, erro
 // List 按 key 前缀列出本地文件，返回 /static/uploads/<key> 形式的 URL 列表。
 // 前缀为空时列出 baseDir 下全部文件；返回的 URL 与 Save 返回格式一致。
 func (s *LocalStorage) List(ctx context.Context, prefix string) ([]string, error) {
+	infos, err := s.ListWithInfo(ctx, prefix)
+	if err != nil {
+		return nil, err
+	}
+	urls := make([]string, 0, len(infos))
+	for _, f := range infos {
+		urls = append(urls, f.URL)
+	}
+	return urls, nil
+}
+
+// ListWithInfo 按 key 前缀列出本地文件，LastModified 取文件系统原生 ModTime（ADR-0027 C2）。
+// 语义与 List 一致：空前缀列全部、目录缺失返回空列表。
+func (s *LocalStorage) ListWithInfo(ctx context.Context, prefix string) ([]FileInfo, error) {
 	root := s.baseDir
 	relPrefix := strings.Trim(prefix, "/")
 	if relPrefix != "" {
@@ -117,11 +143,11 @@ func (s *LocalStorage) List(ctx context.Context, prefix string) ([]string, error
 	}
 	if _, err := os.Stat(root); err != nil {
 		if os.IsNotExist(err) {
-			return []string{}, nil
+			return []FileInfo{}, nil
 		}
 		return nil, err
 	}
-	var urls []string
+	var infos []FileInfo
 	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -133,11 +159,18 @@ func (s *LocalStorage) List(ctx context.Context, prefix string) ([]string, error
 		if err != nil {
 			return err
 		}
-		urls = append(urls, "/static/uploads/"+filepath.ToSlash(rel))
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		infos = append(infos, FileInfo{
+			URL:          "/static/uploads/" + filepath.ToSlash(rel),
+			LastModified: info.ModTime(),
+		})
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	return urls, nil
+	return infos, nil
 }
