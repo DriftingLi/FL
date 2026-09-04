@@ -1,6 +1,6 @@
 <template>
-  <div class="file-upload">
-    <div class="filter-bar">
+  <div class="file-upload border border-line rounded-ctl bg-panel p-5">
+    <div class="filter-bar mb-4 overflow-x-auto whitespace-nowrap">
       <el-radio-group v-model="activeFilter" size="small" @change="handleFilterChange">
         <el-radio-button
           v-for="item in filterOptions"
@@ -13,17 +13,17 @@
     </div>
 
     <div
-      class="upload-area"
-      :class="{ 'is-dragover': isDragover }"
+      class="upload-area border-2 border-dashed border-line-strong rounded-ctl px-5 py-[30px] text-center cursor-pointer transition-[border-color,background-color] duration-[var(--duration-normal)] ease-[var(--ease-default)] hover:border-ui-500 hover:bg-canvas"
+      :class="isDragover ? 'border-ui-500 bg-canvas' : ''"
       @dragover.prevent="isDragover = true"
       @dragleave.prevent="isDragover = false"
       @drop.prevent="handleDrop"
       @click="triggerSelect"
     >
-      <el-icon class="upload-icon" :size="40"><UploadFilled /></el-icon>
-      <p class="upload-text">将文件拖到此处，或<em>点击上传</em></p>
-      <p class="upload-tip">支持格式：PDF 文档、PPT、MP4、WebM（图片请粘贴到图文正文）</p>
-      <p class="upload-tip">视频文件最大200MB，其他文件最大50MB</p>
+      <el-icon class="upload-icon mb-2 text-[var(--color-text-disabled)]" :size="40"><UploadFilled /></el-icon>
+      <p class="upload-text text-ink-2 text-sm mb-2">将文件拖到此处，或<em class="not-italic text-ui-500">点击上传</em></p>
+      <p class="upload-tip text-ink-muted text-xs my-1">支持格式：PDF 文档、PPT、MP4、WebM（图片请粘贴到图文正文）</p>
+      <p class="upload-tip text-ink-muted text-xs my-1">视频文件最大200MB，其他文件最大50MB</p>
     </div>
 
     <input
@@ -31,13 +31,13 @@
       type="file"
       :accept="currentAccept"
       multiple
-      style="display: none"
+      class="hidden"
       @change="handleSelect"
     />
 
-    <div v-if="fileList.length > 0" class="file-list-section">
-      <div class="file-list-header">
-        <span class="summary-text">
+    <div v-if="fileList.length > 0" class="file-list-section mt-5">
+      <div class="file-list-header flex items-center justify-between mb-3 pb-3 border-b border-line">
+        <span class="summary-text text-sm text-ink-2 font-medium">
           已上传 {{ successCount }}/{{ fileList.length }} 个文件
         </span>
         <UiButton variant="primary" v-if="fileList.some(f => f.status === 'pending')" size="small" :loading="isUploading" @click="startUploadAll">
@@ -48,55 +48,55 @@
         </UiButton>
       </div>
 
-      <div class="file-list">
+      <div class="file-list flex flex-col gap-2.5 max-h-[400px] overflow-y-auto">
         <div
           v-for="file in fileList"
           :key="file.uid"
-          class="file-item"
-          :class="{ 'is-error': file.status === 'error', 'is-success': file.status === 'success' }"
+          class="file-item flex items-center gap-3 p-3 border border-line rounded-[6px] transition-[border-color,background-color] duration-[var(--duration-normal)] ease-[var(--ease-default)] max-[768px]:flex-wrap max-[768px]:gap-2"
+          :class="file.status === 'error' ? 'border-bad bg-bad-soft' : file.status === 'success' ? 'border-ok bg-ok-soft' : ''"
         >
-          <div class="file-info">
-            <el-icon class="file-type-icon" :size="20">
+          <div class="file-info flex items-center gap-2.5 flex-1 min-w-0 max-[768px]:basis-full">
+            <el-icon class="file-type-icon text-ink-muted shrink-0" :size="20">
               <component :is="getFileIcon(file.ext)" />
             </el-icon>
-            <div class="file-detail">
-              <div class="file-name-row">
-                <span class="file-name" :title="file.name">{{ file.name }}</span>
-                <el-tag size="small" :type="getFileTypeTagType(file.category)" class="file-type-tag">
+            <div class="file-detail flex-1 min-w-0">
+              <div class="file-name-row flex items-center gap-2">
+                <span class="file-name text-sm text-ink overflow-hidden text-ellipsis whitespace-nowrap max-w-[260px] max-[768px]:max-w-[160px]" :title="file.name">{{ file.name }}</span>
+                <el-tag size="small" :type="getFileTypeTagType(file.category)" class="file-type-tag shrink-0">
                   {{ getFileTypeLabel(file.category) }}
                 </el-tag>
               </div>
-              <span class="file-size">{{ formatSize(file.size) }}</span>
+              <span class="file-size text-xs text-ink-muted mt-0.5">{{ formatSize(file.size) }}</span>
             </div>
           </div>
 
-          <div class="file-status-area">
+          <div class="file-status-area w-[180px] shrink-0 max-[768px]:flex-[1_1_calc(100%-80px)] max-[768px]:w-auto">
             <template v-if="file.status === 'pending'">
-              <span class="status-text status-pending">等待上传</span>
+              <span class="status-text status-pending text-[13px] text-ink-muted">等待上传</span>
             </template>
             <template v-else-if="file.status === 'uploading'">
               <el-progress
                 :percentage="file.percentage"
                 :stroke-width="6"
                 :show-text="true"
-                class="file-progress"
+                class="file-progress w-full"
               />
             </template>
             <template v-else-if="file.status === 'success'">
-              <div class="status-done">
-                <el-icon class="status-icon success-icon"><CircleCheck /></el-icon>
-                <span class="status-text status-success">上传成功</span>
+              <div class="status-done flex items-center gap-1.5">
+                <el-icon class="status-icon success-icon text-[18px] text-ok"><CircleCheck /></el-icon>
+                <span class="status-text status-success text-[13px] text-ok">上传成功</span>
               </div>
             </template>
             <template v-else-if="file.status === 'error'">
-              <div class="status-done">
-                <el-icon class="status-icon error-icon"><CircleClose /></el-icon>
-                <span class="status-text status-error">上传失败</span>
+              <div class="status-done flex items-center gap-1.5">
+                <el-icon class="status-icon error-icon text-[18px] text-bad"><CircleClose /></el-icon>
+                <span class="status-text status-error text-[13px] text-bad">上传失败</span>
               </div>
             </template>
           </div>
 
-          <div class="file-actions">
+          <div class="file-actions flex items-center gap-1.5 shrink-0">
             <UiButton variant="warning" v-if="file.status === 'error'" size="small" circle @click.stop="retryFile(file)">
               <el-icon><RefreshRight /></el-icon>
             </UiButton>
@@ -390,215 +390,8 @@ defineExpose({
 </script>
 
 <style scoped>
-.file-upload {
-  border: 1px solid #ebeef5;
-  border-radius: 8px;
-  padding: 20px;
-  background: #fff;
-}
-
-.filter-bar {
-  margin-bottom: 16px;
-  overflow-x: auto;
-  white-space: nowrap;
-}
-
-.upload-area {
-  border: 2px dashed #dcdfe6;
-  border-radius: 8px;
-  padding: 30px 20px;
-  text-align: center;
-  transition: border-color var(--duration-normal) var(--ease-default), background-color var(--duration-normal) var(--ease-default);
-  cursor: pointer;
-}
-
-.upload-area:hover,
-.upload-area.is-dragover {
-  border-color: #409eff;
-  background-color: #f5f7fa;
-}
-
-.upload-icon {
-  color: #c0c4cc;
-  margin-bottom: 8px;
-}
-
-.upload-text {
-  color: #606266;
-  font-size: 14px;
-  margin-bottom: 8px;
-}
-
-.upload-text em {
-  color: #409eff;
-  font-style: normal;
-}
-
-.upload-tip {
-  color: #909399;
-  font-size: 12px;
-  margin: 4px 0;
-}
-
-.file-list-section {
-  margin-top: 20px;
-}
-
-.file-list-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #ebeef5;
-}
-
-.summary-text {
-  font-size: 14px;
-  color: #606266;
-  font-weight: 500;
-}
-
-.file-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  max-height: 400px;
-  overflow-y: auto;
-}
-
-.file-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-  border: 1px solid #ebeef5;
-  border-radius: 6px;
-  transition: border-color var(--duration-normal) var(--ease-default), background-color var(--duration-normal) var(--ease-default);
-}
-
-.file-item.is-error {
-  border-color: #f56c6c;
-  background-color: #fef0f0;
-}
-
-.file-item.is-success {
-  border-color: #67c23a;
-  background-color: #f0f9eb;
-}
-
-.file-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-  min-width: 0;
-}
-
-.file-type-icon {
-  color: #909399;
-  flex-shrink: 0;
-}
-
-.file-detail {
-  flex: 1;
-  min-width: 0;
-}
-
-.file-name-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.file-name {
-  font-size: 14px;
-  color: #303133;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 260px;
-}
-
-.file-type-tag {
-  flex-shrink: 0;
-}
-
-.file-size {
-  font-size: 12px;
-  color: #909399;
-  margin-top: 2px;
-}
-
-.file-status-area {
-  width: 180px;
-  flex-shrink: 0;
-}
-
-.file-progress {
-  width: 100%;
-}
-
-.status-done {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.status-icon {
-  font-size: 18px;
-}
-
-.success-icon {
-  color: #67c23a;
-}
-
-.error-icon {
-  color: #f56c6c;
-}
-
-.status-text {
-  font-size: 13px;
-}
-
-.status-pending {
-  color: #909399;
-}
-
-.status-success {
-  color: #67c23a;
-}
-
-.status-error {
-  color: #f56c6c;
-}
-
-.file-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
+/* R1 允许：EP 内部覆盖。其余样式已全部原子化。 */
 @media screen and (max-width: 768px) {
-  .file-item {
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .file-info {
-    flex: 1 1 100%;
-  }
-
-  .file-status-area {
-    flex: 1 1 calc(100% - 80px);
-    width: auto;
-  }
-
-  .file-name {
-    max-width: 160px;
-  }
-
   .filter-bar :deep(.el-radio-group) {
     flex-wrap: wrap;
   }
