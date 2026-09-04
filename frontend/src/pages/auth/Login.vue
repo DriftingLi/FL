@@ -183,11 +183,11 @@
     </template>
 
     <template #alt-wechat>
-      <div class="wechat-box">
-        <div class="wechat-qr-placeholder">
+      <div class="wechat-box w-full">
+        <div class="wechat-qr-placeholder flex flex-col items-center gap-2.5 border-2 border-dashed border-line-strong rounded-card bg-canvas px-4 py-7 text-ink-muted">
           <el-icon :size="42"><ChatDotRound /></el-icon>
-          <p class="wechat-title">扫码登录（即将开放）</p>
-          <span class="wechat-tip">微信授权暂未配置，待开放平台配置完成后开放</span>
+          <p class="wechat-title m-0 text-[15px] font-semibold text-ink-3">扫码登录（即将开放）</p>
+          <span class="wechat-tip text-center text-xs leading-normal text-ink-muted">微信授权暂未配置，待开放平台配置完成后开放</span>
         </div>
       </div>
     </template>
@@ -196,7 +196,7 @@
       <div class="form-footer" v-if="isStudentSubdomain">
         <span class="footer-text">还没有账号？</span>
         <router-link to="/register" class="footer-link">立即注册</router-link>
-        <span class="footer-sep">·</span>
+        <span class="footer-sep mx-2.5 text-[var(--color-text-disabled)]">·</span>
         <router-link to="/forgot-password" class="footer-link">忘记密码？</router-link>
       </div>
     </template>
@@ -372,44 +372,9 @@ async function handleLogin() {
 </script>
 
 <style scoped>
-/* 表单共享样式已在 AuthPageShell 外壳收敛（:deep 触达 slot） */
-.wechat-box {
-  width: 100%;
-}
-
-.wechat-qr-placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding: 28px 16px;
-  border: 2px dashed #cbd5e1;
-  border-radius: 12px;
-  color: #94a3b8;
-  background: #f8fafc;
-}
-
-.wechat-title {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  color: #64748b;
-}
-
-.wechat-tip {
-  font-size: 12px;
-  color: #94a3b8;
-  text-align: center;
-  line-height: 1.5;
-}
-
-/* Login 独有：input 内边距 6px（其余认证页为 4px，由外壳统一），此处覆盖保持像素级不变 */
+/* Login 独有：input 内边距 6px。注：外壳里针对 slot 的同名规则因 Vue scoped
+   不命中 slot 注入内容而从未生效，其余认证页实为 EP 默认 padding（#554 时发现）。 */
 .auth-form .form-input :deep(.el-input__wrapper) {
   padding: 6px 14px;
-}
-
-.footer-sep {
-  margin: 0 10px;
-  color: #cbd5e1;
 }
 </style>
