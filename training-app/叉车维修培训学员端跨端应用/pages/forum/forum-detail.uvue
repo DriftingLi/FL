@@ -286,7 +286,7 @@
             if (existing == null) {
                 const next : UTSJSONObject = {} as UTSJSONObject
                 for (const k in replyLikeState.value) next[k] = replyLikeState.value[k]
-                next[key] = { liked: r.liked, likes_count: r.likes_count } as unknown as UTSJSONObject
+                next[key] = { liked: r.liked, likes_count: r.likes_count } as UTSJSONObject
                 replyLikeState.value = next
             }
         }
@@ -625,7 +625,7 @@
         for (const k in replyLikeState.value) {
             next[k] = replyLikeState.value[k]
         }
-        next[key] = { liked: liked, likes_count: likesCount } as unknown as UTSJSONObject
+        next[key] = { liked: liked, likes_count: likesCount } as UTSJSONObject
         replyLikeState.value = next
         persistReplyLikeState()
     }
