@@ -636,7 +636,8 @@
         goBack('/pages/resume/resume')
     }
 
-    onLoad(() => {
+    // onLoad 必须带 options 形参：Kotlin Function1<OnLoadOptions, Unit>，零参即 error17
+    onLoad((options : OnLoadOptions) => {
         loadDraft()
         getPositionsApi().then((list : PositionItem[]) : void => {
             positions.value = list

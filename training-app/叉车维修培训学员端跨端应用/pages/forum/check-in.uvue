@@ -278,7 +278,8 @@
         goBack()
     }
 
-    onLoad(() => {
+    // onLoad 必须带 options 形参：Kotlin Function1<OnLoadOptions, Unit>，零参即 error17
+    onLoad((options : OnLoadOptions) => {
         loadCalendar().then(() => {
             // 进入页面自动代打卡一次：仅真实日历加载成功、今日未打卡时触发
             if (!usingMock.value && !todayChecked.value && !autoCheckInTried.value) {
