@@ -323,9 +323,9 @@ func (s *ContributionService) CleanupOrphanFiles(ctx context.Context) int {
 // ===== 资格与配额 =====
 
 // startOfShanghaiDay 返回业务时区（Asia/Shanghai）自然日起点 00:00。
+// 实现委托 clock.DayStart（ADR-0027 自然日边界单点收编）。
 func (s *ContributionService) startOfShanghaiDay(t time.Time) time.Time {
-	t = t.In(clock.Location())
-	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, clock.Location())
+	return clock.DayStart(t)
 }
 
 // countDaily 当日提交数（Asia/Shanghai 自然日起点之后的行数；time.Time 边界双方言可用）。

@@ -1408,7 +1408,7 @@ func (s *ForumService) AcceptReply(userID int, topicID, replyID int64) (*ForumTo
 	// 首次采纳：CAS + 积分直记（同一事务）
 	isSelf := reply.UserID == userID
 	now := beijingNow()
-	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, clock.Location())
+	todayStart := clock.DayStart(now)
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		// CAS：仅当仍未采纳时才写入状态
 		res := tx.Model(&model.ForumTopic{}).Where("id = ? AND accepted_reply_id IS NULL", topicID).Updates(map[string]any{

@@ -148,9 +148,7 @@ func (s *ContactService) Create(recruiterID, studentUserID int, message string) 
 	}
 	_ = lastRejected
 	// 日限：单个企业每日发起申请数有上限（默认 20）
-	loc := clock.Location()
-	y, m, d := now.In(loc).Date()
-	dayStart := time.Date(y, m, d, 0, 0, 0, 0, loc)
+	dayStart := clock.DayStart(now)
 	var todayCnt int64
 	if err := s.db.Model(&model.ContactRequest{}).Where("recruiter_id = ? AND created_at >= ?", recruiterID, dayStart).Count(&todayCnt).Error; err != nil {
 		return nil, err

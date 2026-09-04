@@ -4,7 +4,11 @@
 // 调用方只保留各自 SQL 聚合出的 day→count map（ADR-0013 候选 5）。
 package service
 
-import "time"
+import (
+	"time"
+
+	"forklift-training/internal/clock"
+)
 
 // dailySeriesStart 返回最近 days 天的起点（把 days 钳制、startOfDay 归零、起点推导藏在一起）。
 // SQL 聚合方（study_date/graded_at >= start）与 BuildDailySeries 序列共用同一起点，避免两处漂移。
@@ -51,7 +55,7 @@ func BuildDailySeries(days int, byDay map[string]int64) DailySeries {
 	// start 由 beijingNow() 派生，携带 Asia/Shanghai 时区，AddDate 保留时区。
 	for i := 0; i < days; i++ {
 		d := start.AddDate(0, 0, i)
-		key := d.Format("2006-01-02")
+		key := clock.DayKey(d)
 		cnt := byDay[key]
 		if cnt > 0 {
 			activeDays++
