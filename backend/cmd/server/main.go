@@ -5,7 +5,7 @@
 //
 // @title 叉车维修培训系统-学员端 API
 // @version 1.0
-// @description 学员端与公开端点：认证/验证码/微信登录/学员学习中心/课程/练习/考试/收藏/搜索/资料/论坛/通知/精选/AI助手/培训目录；鉴权：`Authorization: Bearer <access JWT>`（access 2h，`POST /api/auth/refresh` 换新双令牌）。响应统一 `{code,message,data}`（见 ADR-0005）。不含导师端、管理端与残值评估模块。
+// @description 学员端与公开端点：认证/验证码/微信登录/学员学习中心/课程/练习/考试/收藏/搜索/资料（课程附件 + 学员投稿）/论坛/通知/精选/AI助手/积分/培训目录；鉴权：`Authorization: Bearer <access JWT>`（access 2h，`POST /api/auth/refresh` 换新双令牌）。响应统一 `{code,message,data}`（见 ADR-0005）。不含导师端、管理端与残值评估模块。
 // @BasePath /api
 // @securityDefinitions.apikey BearerAuth
 // @in header

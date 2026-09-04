@@ -9,6 +9,8 @@
 - **课程管理**：课程 CRUD、章节内容编排、PPT / 视频 / 图文混排
 - **考试系统**：课程考试、模拟考试、等级考试，自动判分与成绩统计
 - **练习中心**：自由练习、知识点练习、错题本、练习统计
+- **资料投稿**：学员上传资料（1–5 个文件，先审后发）换取积分，过审 +50、下载达阶追加，公开广场按目标证件过滤（与课程附件「学习资料」区分，见 ADR-0026）
+- **激励与积分**：任务中心（每日/新手/成长任务）、积分商城（兑换课程/真题卷）、问答采纳奖励、AI 按 token 计费、积分明细与流水对账
 - **AI 助手**：基于大模型的智能问答与内容生成
 
 ### 残值评估模块
@@ -36,10 +38,10 @@
 | 子域名 | 工作区 | 主要角色 | 功能 |
 | --- | --- | --- | --- |
 | `www`（根域名 / localhost） | 官网门户 | 访客 | 首页、派单（`/dispatch` 占位） |
-| `training.` | 培训学习 | 学员 | 课程、考试、练习、AI 助手 |
+| `training.` | 培训学习 | 学员 | 课程、考试、练习、资料投稿、积分、AI 助手 |
 | `mentor.` | 导师工作区 | 讲师 | 课程管理、题库、阅卷 |
 | `valuation.` | 残值评估 | 访客 / 估值用户 | 整机残值、电池 RUL、报告 |
-| `manage.` | 管理后台 | 管理员 | 学员 / 讲师 / 课程 / 题库 / 残值配置 |
+| `manage.` | 管理后台 | 管理员 | 学员 / 讲师 / 课程 / 题库 / 投稿审核 / 残值配置 |
 
 不同子域名的 `localStorage` token **不共享**，切换需重新登录。
 
@@ -50,7 +52,7 @@
 - **培训体系**：`JWT_SECRET_KEY`，用户为 `student` / `tutor` / `admin`，路径前缀 `/api/*`（除 `/api/valuation/*`）。
 - **残值体系**：`VALUATION_JWT_SECRET_KEY`，用户为 `valuation_user`，独立用户表与登录接口 `/api/valuation/auth/*`。
 
-统一响应结构：`{ "code": 0, "message": "...", "data": ... }`（code=0 表示成功）。
+统一响应结构：`{ "code": <HTTP状态码>, "message": "...", "data": ... }`（`code` 即 HTTP 状态码，`200` 表示成功，见 ADR-0005）。
 
 ## 技术栈
 
@@ -110,7 +112,7 @@
 │   ├── pkg/
 │   │   ├── response/             # 统一响应结构
 │   │   └── pdf/                  # 中文 PDF 报告（gofpdf + SimHei）
-│   ├── migrations/               # 迁移脚本（000001 ~ 000004）
+│   ├── migrations/               # 迁移脚本（000001 ~ 000020，含投稿域 000020）
 │   ├── queries/ sqlc.yaml         # 残值子模块 SQL 与代码生成配置
 │   ├── Dockerfile
 │   ├── Makefile
@@ -120,7 +122,8 @@
 ├── frontend/                     # Vue3 前端（forklift-training-frontend）
 │   ├── src/                      # 源码（api/pages/components/stores/router/utils）
 │   ├── Dockerfile
-│   ├── nginx.default.conf        # 多子域名 Nginx 站点配置
+│   ├── nginx.default.conf        # 镜像内置 Nginx 配置（template，envsubst 渲染）
+│   ├── nginx-host.conf           # 生产 host 网络模式 Nginx 配置（compose 挂载覆盖，SSL+反代+门户分流）
 │   ├── docker-entrypoint.sh
 │   ├── wrangler.jsonc            # Cloudflare Pages 备选部署
 │   ├── .env.example
@@ -165,7 +168,7 @@ make run                      # 启动服务，默认 :8080
 
 ```bash
 curl http://localhost:8080/api/health
-# {"code":0,"message":"...","data":{...}}
+# {"code":200,"message":"success","data":{...}}
 ```
 
 ### 3. 启动前端
