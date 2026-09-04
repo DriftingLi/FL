@@ -3,8 +3,8 @@
 面向叉车维修培训与叉车残值评估的全栈系统。架构、领域词汇与评审记录见下方文件：
 
 - **领域词汇表**：`CONTEXT.md`（repo 根）
-- **架构决策记录（ADRs）**：`docs/adr/`
-- **AI/agent 工作约定**：`docs/agents/`
+- **架构决策记录（ADRs）**：根仓库 `docs/adr/`（编号 `ADR-0001-…`）；**移动端项目**（`training-app/叉车维修培训学员端跨端应用/docs/adr/`）**另有一套独立 ADR**（`0001-…` 起编号，记录 uni-app-x 侧决策：SSE 流式传输、轻量状态管理、手动 JSON 映射、生物识别、安全存储等）——两套编号体系互不相关，引用时注明「根仓库 / 移动端」
+- **AI/agent 工作约定**：`docs/agents/`（根仓库暂无该目录时，现存文件在移动端项目 `docs/agents/`：issue-tracker / triage-labels / domain）
 
 ## Agent skills
 
