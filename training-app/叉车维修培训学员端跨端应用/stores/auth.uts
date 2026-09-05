@@ -292,6 +292,42 @@ async function tryRefreshToken() : Promise<boolean> {
     return false
 }
 
+/**
+ * 快捷登录：用生物门控解锁的 refresh_token 静默续登（ADR-0004 增补）
+ *
+ * 与 tryRefreshToken 的区别：接受外部传入的令牌（来自加密凭据包络而非常规会话存储）。
+ * 到达登录页的路径均执行过 clearAuthData（登出/401），本地 user 必为空，
+ * 故 refresh 成功后经 /auth/me 拉取用户信息，不以"本地已有 user"为前提。
+ *
+ * @returns 轮换出的新 refresh_token（供调用方回写加密凭据包络，维持跨登出滑动续期）；
+ *          失败返回空串，调用方降级回填
+ */
+async function quickLogin(rt : string) : Promise<string> {
+    if (rt.length == 0) return ''
+    try {
+        const result = await refreshTokenApi(rt)
+        if (result == null || result.token.length == 0) return ''
+        // 先落新 access token：/auth/me 经 request 层从 STORAGE_KEY_TOKEN 取凭据
+        setStorage(STORAGE_KEY_TOKEN, result.token)
+        let u = user.value
+        if (u == null) {
+            try {
+                u = await getUserInfoApi()
+            } catch (e) {
+                // 用户信息拉取失败：回滚 token，避免残留"有 token 无 user"的脏状态
+                removeStorage(STORAGE_KEY_TOKEN)
+                console.warn('[auth] quickLogin fetchUser failed:', e)
+                return ''
+            }
+        }
+        setAuthData(result.token, u, result.refresh_token)
+        return result.refresh_token
+    } catch (e) {
+        console.warn('[auth] quickLogin failed:', e)
+        return ''
+    }
+}
+
 let _refreshRegistered = false
 
 export function useAuthStore() : AuthStore {
@@ -311,6 +347,7 @@ export function useAuthStore() : AuthStore {
         loginProvider,
         getRefreshToken: () : string => getRefreshToken(),
         tryRefreshToken: () : Promise<boolean> => tryRefreshToken(),
+        quickLogin: (rt : string) : Promise<string> => quickLogin(rt),
         setAuthData: (t : string, u : UserInfo, rt : string) : void => setAuthData(t, u, rt),
         clearAuthData: () : void => clearAuthData(),
         restoreFromStorage: () : boolean => restoreFromStorage(),

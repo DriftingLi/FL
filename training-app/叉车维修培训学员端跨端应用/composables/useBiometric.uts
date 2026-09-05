@@ -11,37 +11,85 @@
  */
 import { ref, type Ref } from 'vue'
 
+/** 支持性检测结果（supported/definitive 二维：结果值 × 结果可信度，见 checkSupport） */
+export type SupportCheckResult = {
+    supported : boolean      // 设备支持至少一种生物识别方式
+    definitive : boolean     // 结果是否来自确定性的 success 响应；false = API 调用失败，支持性未知
+    modes : string[]         // 设备支持的认证方式（'fingerPrint' | 'facial'；API 失败时为空）
+}
+
 export type UseBiometricResult = {
     isSupported : Ref<boolean>
-    checkSupport : () => Promise<void>
+    supportModes : Ref<string[]>
+    checkSupport : () => Promise<SupportCheckResult>
     authenticate : (content : string) => Promise<boolean>
 }
 
 export function useBiometric() {
     const isSupported = ref<boolean>(false)
+    const supportModes = ref<string[]>([])
 
-    /** 检测设备是否支持生物认证（SOTER） */
-    async function checkSupport() : Promise<void> {
+    /**
+     * 检测设备是否支持生物认证（SOTER）
+     *
+     * @note 结果三态（孤儿凭据自愈依赖 definitive 区分，ADR-0004）：
+     *       - supported=true                    → 正常开放快捷登录入口
+     *       - supported=false, definitive=true  → 确定性不支持（未录入/平台无 SOTER），可触发自愈
+     *       - supported=false, definitive=false → API 调用失败，支持性未知，不得清理任何本地数据
+     */
+    async function checkSupport() : Promise<SupportCheckResult> {
         // #ifdef H5
+        const h5Modes : string[] = ['fingerPrint', 'facial']
+        supportModes.value = h5Modes
         isSupported.value = true
-        return
+        return {
+            supported: true,
+            definitive: true,
+            modes: h5Modes,
+        } as SupportCheckResult
         // #endif
 
         // #ifdef APP || MP-WEIXIN
         // 原生端该 API 为回调式，await 返回值得到 kotlin.Unit（无法强转 UTSJSONObject），
         // 必须通过 success/fail 回调取结果
-        uni.checkIsSupportSoterAuthentication({
-            success: (res) => {
-                console.log('[useBiometric] 设备支持的生物认证模式:', res.supportMode)
-                console.log('[useBiometric] 含面容:', res.supportMode.indexOf('facial') >= 0)
-                console.log('[useBiometric] 含指纹:', res.supportMode.indexOf('fingerPrint') >= 0)
-                isSupported.value = res.supportMode.length > 0
-            },
-            fail: (err) => {
-                console.warn('[useBiometric] checkSupport failed:', err)
-                isSupported.value = false
-            },
+        return new Promise<SupportCheckResult>((resolve) => {
+            uni.checkIsSupportSoterAuthentication({
+                success: (res) => {
+                    const modes = res.supportMode
+                    console.log('[useBiometric] 设备支持的生物认证模式:', modes)
+                    console.log('[useBiometric] 含面容:', modes.indexOf('facial') >= 0)
+                    console.log('[useBiometric] 含指纹:', modes.indexOf('fingerPrint') >= 0)
+                    supportModes.value = modes
+                    isSupported.value = modes.length > 0
+                    resolve({
+                        supported: modes.length > 0,
+                        definitive: true,
+                        modes: modes,
+                    } as SupportCheckResult)
+                },
+                fail: (err) => {
+                    console.warn('[useBiometric] checkSupport failed:', err)
+                    supportModes.value = []
+                    isSupported.value = false
+                    resolve({
+                        supported: false,
+                        definitive: false,
+                        modes: new Array<string>(),
+                    } as SupportCheckResult)
+                },
+            })
         })
+        // #endif
+
+        // #ifndef H5 || APP || MP-WEIXIN
+        // 无 SOTER 能力的平台（MP-ALIPAY 等）：确定性不支持
+        isSupported.value = false
+        supportModes.value = []
+        return {
+            supported: false,
+            definitive: true,
+            modes: new Array<string>(),
+        } as SupportCheckResult
         // #endif
     }
 
@@ -102,6 +150,7 @@ export function useBiometric() {
 
     return {
         isSupported: isSupported,
+        supportModes: supportModes,
         checkSupport: () => checkSupport(),
         authenticate: (content : string) => authenticate(content),
     } as UseBiometricResult
