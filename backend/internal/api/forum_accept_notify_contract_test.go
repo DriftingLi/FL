@@ -41,7 +41,7 @@ func TestForumAcceptNotifyContract(t *testing.T) {
 	r := gin.New()
 	apiGroup := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
-	RegisterForumRoutes(apiGroup, deps.RouterDeps(), deps.ForumSvc, deps.CheckInSvc, deps.ForumImageSvc)
+	RegisterForumRoutes(apiGroup, deps.RouterDeps(), deps.ForumSvc, deps.ForumImageSvc)
 	RegisterPointsRoutes(apiGroup, deps.RouterDeps(), deps.PointsSvc)
 	RegisterFavoriteRoutes(apiGroup, deps.RouterDeps(), deps.FavoriteSvc)
 	RegisterSearchRoutes(apiGroup, deps.RouterDeps(), deps.SearchSvc)

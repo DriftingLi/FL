@@ -228,20 +228,22 @@ func TestDeductAIStableRequestIdempotent(t *testing.T) {
 func TestClaimThroughApplyTx(t *testing.T) {
 	svc, db := newPointsSvc(t)
 	uid := seedUserWithBalance(t, db, 0)
-	if err := db.Create(&model.PointsTaskConfig{Code: "daily_checkin", Title: "每日打卡", Group: "daily", Points: 5, DailyLimit: 1, EventType: "check_in"}).Error; err != nil {
+	if err := db.Create(&model.PointsTaskConfig{Code: "daily_login", Title: "每日登录", Group: "daily", Points: 5, DailyLimit: 1, EventType: "login"}).Error; err != nil {
 		t.Fatalf("建任务配置失败: %v", err)
 	}
 	ctx := context.Background()
-	if _, err := svc.Claim(ctx, uid, "daily_checkin"); err != nil {
+	// 行为达成（今日登录落表）后才能领（ADR-0028 空领防护）
+	svc.MarkDailyLogin(uid)
+	if _, err := svc.Claim(ctx, uid, "daily_login"); err != nil {
 		t.Fatalf("首次领取失败: %v", err)
 	}
-	if _, err := svc.Claim(ctx, uid, "daily_checkin"); err == nil || !errors.Is(err, ErrDailyClaimLimit) {
+	if _, err := svc.Claim(ctx, uid, "daily_login"); err == nil || !errors.Is(err, ErrDailyClaimLimit) {
 		t.Fatalf("重复领取应报「今日已领取」, got %v", err)
 	}
 	if got := userBalance(t, db, uid); got != 5 {
 		t.Fatalf("领取后余额应为 5, got %d", got)
 	}
-	if got := ledgerCount(t, db, "user_id = ? AND reason = ?", uid, "daily_checkin"); got != 1 {
+	if got := ledgerCount(t, db, "user_id = ? AND reason = ?", uid, "daily_login"); got != 1 {
 		t.Fatalf("领取流水应恰一行, got %d", got)
 	}
 }

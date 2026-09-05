@@ -18,17 +18,27 @@ func shDay(y int, m time.Month, d int) time.Time {
 	return time.Date(y, m, d, 0, 0, 0, 0, clock.Location())
 }
 
-// newCheckInSvcAt 构造内存库 + 定格时钟服务，返回 Fake 以便跨日推进。
+// newCheckInSvcAt 构造内存库 + 定格时钟服务（不带积分簿记，纯记录口径），返回 Fake 以便跨日推进。
 func newCheckInSvcAt(t *testing.T, now time.Time) (*CheckInService, *clock.Fake) {
 	t.Helper()
 	f := clock.At(now)
-	svc := NewCheckInService(testutil.NewMemoryDB(t), zap.NewNop(), f)
+	svc := NewCheckInService(testutil.NewMemoryDB(t), zap.NewNop(), f, nil)
 	return svc, f
+}
+
+// newCheckInSvcWithPointsAt 构造带积分簿记的打卡服务（ADR-0028 直记发分口径）。
+func newCheckInSvcWithPointsAt(t *testing.T, now time.Time) (*CheckInService, *clock.Fake, *PointsService) {
+	t.Helper()
+	f := clock.At(now)
+	db := testutil.NewMemoryDB(t)
+	points := NewPointsService(db, zap.NewNop(), f)
+	svc := NewCheckInService(db, zap.NewNop(), f, points)
+	return svc, f, points
 }
 
 func TestNewCheckInService_NilClockFallsBackToReal(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewCheckInService(db, zap.NewNop(), nil)
+	svc := NewCheckInService(db, zap.NewNop(), nil, nil)
 	if svc == nil || svc.clk == nil {
 		t.Fatal("nil Clock 应回退生产实钟，svc/clk 不应为 nil")
 	}
@@ -103,11 +113,23 @@ func TestGetCheckInCalendar_BETWEEN(t *testing.T) {
 	if err != nil {
 		t.Fatalf("日历查询失败: %v", err)
 	}
-	if len(cal.Dates) != 2 {
-		t.Fatalf("2026-08 日历应恰 2 天, got %v", cal.Dates)
+	// 契约（ADR-0028）：逐日返回整月 31 天（未打卡日 checked=false）
+	if len(cal.Days) != 31 {
+		t.Fatalf("2026-08 日历应返整月 31 天, got %d", len(cal.Days))
 	}
-	if cal.Dates[0] != "2026-08-01" || cal.Dates[1] != "2026-08-15" {
-		t.Fatalf("日历日期与期望不符: %v", cal.Dates)
+	byDate := map[string]CheckInDay{}
+	for _, d := range cal.Days {
+		byDate[d.Date] = d
+	}
+	if !byDate["2026-08-01"].Checked || !byDate["2026-08-15"].Checked {
+		t.Fatalf("8-01/8-15 应已打卡: %+v", cal.Days)
+	}
+	if byDate["2026-08-02"].Checked {
+		t.Fatalf("8-02 应未打卡: %+v", cal.Days)
+	}
+	// 无积分簿记（points=nil）时历史打卡 points 为 0
+	if byDate["2026-08-01"].Points != 0 || byDate["2026-08-15"].Points != 0 {
+		t.Fatalf("无流水历史打卡 points 应为 0: %+v", cal.Days)
 	}
 	// total 为全生命周期计数（不受月窗口限制），含 7-31
 	if cal.Total != 3 {
@@ -184,5 +206,128 @@ func TestStreakWindow400_CapsAndTotalFull(t *testing.T) {
 	streak2, _ := svc2.streakInWindow(u2.ID, now)
 	if streak2 != 1 {
 		t.Fatalf("远古孤立记录不应抬高 streak, got %d", streak2)
+	}
+}
+
+func TestCheckInTierBonusFor(t *testing.T) {
+	cases := []struct{ streak, want int }{
+		{1, 0}, {2, 0}, {3, 5}, {4, 0}, {6, 0}, {7, 10}, {8, 0}, {29, 0}, {30, 50}, {31, 0},
+	}
+	for _, c := range cases {
+		if got := CheckInTierBonusFor(c.streak); got != c.want {
+			t.Fatalf("CheckInTierBonusFor(%d)=%d want %d", c.streak, got, c.want)
+		}
+	}
+}
+
+// TestCheckIn_AwardsBaseAndTier 打卡即发分（ADR-0028）：首签 +5；
+// 连击满 3/7 天当日基础+阶梯合并一笔；同日重复/并发只发一次；断签后重新跨档再发。
+func TestCheckIn_AwardsBaseAndTier(t *testing.T) {
+	now := shDay(2026, 8, 3).Add(10 * time.Hour)
+	svc, fake, points := newCheckInSvcWithPointsAt(t, now)
+	u := testutil.SeedStudent(t, svc.db, "打卡积分生", "x")
+
+	// day1 (8-03)：首签基础 5
+	r, err := svc.CheckIn(u.ID)
+	if err != nil {
+		t.Fatalf("day1 checkin: %v", err)
+	}
+	if r.Points != 5 {
+		t.Fatalf("day1 应发 5 分, got %d", r.Points)
+	}
+	// 同日重复：不再发分（幂等）
+	r, _ = svc.CheckIn(u.ID)
+	if r.Points != 0 {
+		t.Fatalf("同日重复打卡不应再发分, got %d", r.Points)
+	}
+	// day2 (8-04)：连续第 2 天，基础 5
+	fake.T = shDay(2026, 8, 4).Add(10 * time.Hour)
+	r, _ = svc.CheckIn(u.ID)
+	if r.Streak != 2 || r.Points != 5 {
+		t.Fatalf("day2 应 streak=2 且发 5 分, got %+v", r)
+	}
+	// day3 (8-05)：连续满 3 → 基础 5 + 阶梯 5 = 10
+	fake.T = shDay(2026, 8, 5).Add(10 * time.Hour)
+	r, _ = svc.CheckIn(u.ID)
+	if r.Streak != 3 || r.Points != 10 {
+		t.Fatalf("day3 应 streak=3 且发 10 分, got %+v", r)
+	}
+	// day4-6 (8-06..08)：基础 5（8-03 首签、8-04/8-05 已在前面签到）
+	for _, d := range []int{6, 7, 8} {
+		fake.T = shDay(2026, 8, d).Add(10 * time.Hour)
+		r, _ = svc.CheckIn(u.ID)
+		if r.Points != 5 {
+			t.Fatalf("8-%02d 应发 5 分, got %+v", d, r)
+		}
+	}
+	// day7 (8-09)：连击满 7 → 5+10=15
+	fake.T = shDay(2026, 8, 9).Add(10 * time.Hour)
+	r, _ = svc.CheckIn(u.ID)
+	if r.Streak != 7 || r.Points != 15 {
+		t.Fatalf("day7 应 streak=7 且发 15 分, got %+v", r)
+	}
+	// 流水：7 笔正流水（7 天），累计 5+5+10+5+5+5+15 = 50
+	bal, _ := points.GetBalance(u.ID)
+	if bal.Balance != 50 {
+		t.Fatalf("7 天累计应 50 分, got %d", bal.Balance)
+	}
+	var cnt int64
+	if err := svc.db.Model(&model.PointsLedger{}).Where("user_id = ? AND reason = ?", u.ID, checkInReason).Count(&cnt).Error; err != nil {
+		t.Fatalf("流水计数失败: %v", err)
+	}
+	if cnt != 7 {
+		t.Fatalf("应恰 7 笔打卡流水, got %d", cnt)
+	}
+
+	// 断签：跳过 8-10，8-11 重签 streak=1 基础 5
+	fake.T = shDay(2026, 8, 11).Add(10 * time.Hour)
+	r, _ = svc.CheckIn(u.ID)
+	if r.Streak != 1 || r.Points != 5 {
+		t.Fatalf("断签重签应 streak=1 发 5 分, got %+v", r)
+	}
+	// 新连续段再跨 3 档（8-11,12,13）：8-13 发 10
+	fake.T = shDay(2026, 8, 12).Add(10 * time.Hour)
+	_, _ = svc.CheckIn(u.ID)
+	fake.T = shDay(2026, 8, 13).Add(10 * time.Hour)
+	r, _ = svc.CheckIn(u.ID)
+	if r.Streak != 3 || r.Points != 10 {
+		t.Fatalf("新连续段跨 3 档应发 10 分, got %+v", r)
+	}
+}
+
+// TestCheckInCalendar_PointsFromLedger 日历逐日带实发积分：无流水的历史打卡 0，有流水按 delta。
+func TestCheckInCalendar_PointsFromLedger(t *testing.T) {
+	now := shDay(2026, 9, 10).Add(10 * time.Hour)
+	svc, _, _ := newCheckInSvcWithPointsAt(t, now)
+	u := testutil.SeedStudent(t, svc.db, "日历积分生", "x")
+
+	// 历史打卡两天：8-01（未发分：无流水模拟旧数据）、9-01（发 10 分）
+	for _, d := range []time.Time{shDay(2026, 9, 1)} {
+		svc.db.Create(&model.ForumCheckIn{UserID: u.ID, CheckDate: d, CreatedAt: d})
+	}
+	svc.db.Create(&model.PointsLedger{
+		UserID: u.ID, Delta: 10, Reason: checkInReason, RefType: checkInRefType,
+		RefID: "2026-09-01", CreatedAt: shDay(2026, 9, 1),
+	})
+	svc.db.Create(&model.ForumCheckIn{UserID: u.ID, CheckDate: shDay(2026, 8, 1), CreatedAt: shDay(2026, 8, 1)})
+
+	cal, err := svc.GetCheckInCalendar(u.ID, 2026, 9)
+	if err != nil {
+		t.Fatalf("日历查询失败: %v", err)
+	}
+	if len(cal.Days) != 30 {
+		t.Fatalf("2026-09 应返整月 30 天, got %d", len(cal.Days))
+	}
+	sep1 := cal.Days[0]
+	if !sep1.Checked || sep1.Points != 10 || sep1.Date != "2026-09-01" {
+		t.Fatalf("9-01 应 checked 且 points=10, got %+v", sep1)
+	}
+	if cal.Days[1].Checked {
+		t.Fatalf("9-02 应未打卡, got %+v", cal.Days[1])
+	}
+	cal2, _ := svc.GetCheckInCalendar(u.ID, 2026, 8)
+	aug1 := cal2.Days[0]
+	if len(cal2.Days) != 31 || !aug1.Checked || aug1.Points != 0 {
+		t.Fatalf("无流水历史打卡 points 应 0（8-01 checked）: %+v", cal2.Days[:2])
 	}
 }

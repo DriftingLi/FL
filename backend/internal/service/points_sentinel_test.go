@@ -23,10 +23,17 @@ func TestClaimSentinelSemantics(t *testing.T) {
 		t.Fatalf("任务不存在应报 ErrTaskNotFound, got %v", err)
 	}
 
-	// newbie 任务：首次领取成功 → 重复领取报 ErrAlreadyClaimed
+	// newbie 任务：行为未达成 → ErrTaskNotDone；达成后首次领取成功 → 重复领取报 ErrAlreadyClaimed
 	seedTaskConfig(t, db, model.PointsTaskConfig{
 		Code: "newbie_credential", Group: "newbie", Points: 10, DailyLimit: 1, TotalLimit: intPtr(1),
 	})
+	if _, err := svc.Claim(context.Background(), uid, "newbie_credential"); !errors.Is(err, ErrTaskNotDone) {
+		t.Fatalf("未达成行为应报 ErrTaskNotDone, got %v", err)
+	}
+	credentialID := 1
+	if err := db.Model(&model.HrwaiUser{}).Where("id = ?", uid).Update("current_credential_id", credentialID).Error; err != nil {
+		t.Fatalf("设定当前证件失败: %v", err)
+	}
 	if _, err := svc.Claim(context.Background(), uid, "newbie_credential"); err != nil {
 		t.Fatalf("首次领取 newbie 失败: %v", err)
 	}
@@ -34,14 +41,18 @@ func TestClaimSentinelSemantics(t *testing.T) {
 		t.Fatalf("重复领取 newbie 应报 ErrAlreadyClaimed, got %v", err)
 	}
 
-	// daily 任务：首次领取成功 → 重复领取报 ErrDailyClaimLimit
+	// daily 任务：行为未达成 → ErrTaskNotDone；达成（登录落表）后首次领取成功 → 重复领取报 ErrDailyClaimLimit
 	seedTaskConfig(t, db, model.PointsTaskConfig{
-		Code: "daily_checkin", Group: "daily", Points: 5, DailyLimit: 1,
+		Code: "daily_login", Group: "daily", Points: 5, DailyLimit: 1,
 	})
-	if _, err := svc.Claim(context.Background(), uid, "daily_checkin"); err != nil {
+	if _, err := svc.Claim(context.Background(), uid, "daily_login"); !errors.Is(err, ErrTaskNotDone) {
+		t.Fatalf("未登录应报 ErrTaskNotDone, got %v", err)
+	}
+	svc.MarkDailyLogin(uid)
+	if _, err := svc.Claim(context.Background(), uid, "daily_login"); err != nil {
 		t.Fatalf("首次领取 daily 失败: %v", err)
 	}
-	if _, err := svc.Claim(context.Background(), uid, "daily_checkin"); !errors.Is(err, ErrDailyClaimLimit) {
+	if _, err := svc.Claim(context.Background(), uid, "daily_login"); !errors.Is(err, ErrDailyClaimLimit) {
 		t.Fatalf("重复领取 daily 应报 ErrDailyClaimLimit, got %v", err)
 	}
 }

@@ -106,6 +106,8 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 	contentGenSvc := service.NewContentGenerateService(db, aiSvc, logger)
 	// 积分服务唯一实例：积分端点与真题卷权益校验共用
 	pointsSvc := service.NewPointsService(db, logger, clock.Real())
+	// 每日登录事实（ADR-0028）：登录签发与 refresh 续期都算今日到访；回调注入避免循环依赖。
+	authSvc.SetDailyLoginMarker(pointsSvc.MarkDailyLogin)
 	// 联系方式交换唯一实例：申请/授权状态机（EnsureApproved）与投递侧共用（ADR-0027 C5）
 	contactSvc := service.NewContactService(db, logger, notificationSvc, mailSender)
 
@@ -131,7 +133,7 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		AdminSvc:             service.NewAdminService(db, logger),
 		AdminCourseSvc:       service.NewAdminCourseService(db, fileSvc, logger),
 		ForumSvc:             service.NewForumService(db, fileSvc, notificationSvc, forumCnt, pointsSvc, logger),
-		CheckInSvc:           service.NewCheckInService(db, logger, clock.Real()),
+		CheckInSvc:           service.NewCheckInService(db, logger, clock.Real(), pointsSvc),
 		ForumImageSvc:        service.NewForumImageService(db, fileSvc, logger),
 		FeaturedSvc:          service.NewFeaturedService(db, fileSvc, logger),
 		FavoriteSvc:          service.NewFavoriteService(db, logger),

@@ -114,7 +114,7 @@
               </div>
               <div class="reply-content whitespace-pre-wrap break-words text-sm leading-[1.7] text-ink">{{ reply.content }}</div>
               <ForumImageGallery :images="reply.images" />
-              <div v-if="topic && topic.category === 'question' && isTopicOwner && !reply.is_accepted" class="reply-accept-row mt-2">
+              <div v-if="topic && topic.category === 'question' && isTopicOwner && !reply.is_accepted && !isOwnReply(reply)" class="reply-accept-row mt-2">
                 <UiButton variant="success" plain size="small" @click="handleAccept(reply.id)">采纳此回答</UiButton>
               </div>
               <div v-else-if="topic && topic.category === 'question' && isTopicOwner && reply.is_accepted" class="reply-accept-row mt-2">
@@ -219,6 +219,11 @@ function toggleReplyOrder(){
 }
 
 const isTopicOwner = computed(() => !!topic.value && topic.value.author.user_id === authStore.userInfo?.user_id)
+
+/** 回复是否为当前登录用户（楼主自己）所发 —— 自己的回答不可采纳（ADR-0028） */
+function isOwnReply(reply: ForumReplyItem) {
+  return reply.author.user_id === authStore.userInfo?.user_id
+}
 
 const sortedReplies = computed(() => {
   if (!replies.value.length) return []

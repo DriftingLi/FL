@@ -25,9 +25,7 @@ vi.mock('@/api/forum', async (importOriginal) => {
       listTopics: vi.fn(),
       getMyTopics: vi.fn(),
       getMyReplies: vi.fn(),
-      createTopic: vi.fn(),
-      getCheckInCalendar: vi.fn(),
-      checkIn: vi.fn()
+      createTopic: vi.fn()
     }
   }
 })
@@ -71,14 +69,12 @@ async function mountPage(total = 3, options: { attachTo?: HTMLElement } = {}) {
   // total=0 必须同时把 topics 置空，否则 v-else-if="topics.length > 0" 会渲染列表，
   // 空态断言就是在验一个永远走不到的分支。
   listTopics.mockResolvedValue({ topics: total === 0 ? [] : [topic(1, 'discussion')], total } as never)
-  vi.mocked(forumApi.getCheckInCalendar).mockResolvedValue({ dates: [], streak: 0, total: 0, today_checked: false } as never)
   const wrapper = mount(ForumPage, {
     attachTo: options.attachTo,
     global: {
       plugins: [ElementPlus],
-      // 打桩子组件：CheckInDialog 内部也是 el-dialog，且文档顺序在发帖框之前，
-      // 不打桩的话 body 里会同时出现两个 .el-dialog，断言会挑错对象。
-      stubs: { CheckInDialog: true, ForumHistoryPanel: true, ForumImageUploader: true }
+      // 打桩子组件：避免拉起真实网络层与弹窗（打卡已迁独立页，论坛不再内嵌打卡弹窗）。
+      stubs: { ForumHistoryPanel: true, ForumImageUploader: true }
     }
   })
   await flushPromises()
