@@ -688,6 +688,8 @@ jobs:
             printf 'export COMPOSE_PROFILES=%q\n' "${COMPOSE_PROFILES:-}"
             printf 'export HEALTH_CHECK_RETRIES=%q\n' "${HEALTH_CHECK_RETRIES:-20}"
             printf 'export UP_WAIT_TIMEOUT=%q\n' "${UP_WAIT_TIMEOUT:-60}"
+            # 整体超时必须写进远程 env 文件：job env 不会自动传进 ssh 远端 shell
+            printf 'export DEPLOY_CMD_TIMEOUT=%q\n' "${DEPLOY_CMD_TIMEOUT:-600}"
           } > /tmp/deploy-env.sh
 
           echo "环境变量文件已生成（$(wc -l < /tmp/deploy-env.sh) 行）"
