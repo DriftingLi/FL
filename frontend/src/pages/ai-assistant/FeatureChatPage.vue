@@ -181,8 +181,9 @@ function removePendingImage(index: number) {
   pendingImages.value.splice(index, 1)
 }
 
-async function handleNewSession() {
-  await store.createSession('新会话')
+// 只切本地草稿态：会话在首次发消息时才创建（避免没说话就产生空历史）
+function handleNewSession() {
+  store.startDraft()
 }
 
 onMounted(() => {

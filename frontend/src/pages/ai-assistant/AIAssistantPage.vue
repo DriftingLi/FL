@@ -113,9 +113,9 @@ function useSuggestion(text: string) {
   handleSend()
 }
 
-async function handleNewSession() {
-  const label = store.selectedMode === 'expert' ? '专家模式' : '普通模式'
-  await store.createSession('新会话', label)
+// 只切本地草稿态：会话在首次发消息时才创建（避免没说话就产生空历史）
+function handleNewSession() {
+  store.startDraft()
 }
 
 onMounted(() => {

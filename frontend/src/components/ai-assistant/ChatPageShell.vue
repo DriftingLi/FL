@@ -9,44 +9,29 @@
 
     <!-- 左上角悬浮图标组（侧栏不可见时显示：桌面收起态 / 移动端） -->
     <div v-if="isMobile || collapsed" class="fixed left-3 top-3 z-20 flex items-center gap-2">
-      <button
-        class="floating-icon-btn flex h-9 w-9 cursor-pointer items-center justify-center rounded-pill border border-line bg-panel text-ink shadow-card transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas"
-        :title="isMobile ? '打开会话栏' : '展开侧栏'"
-        @click="isMobile ? (mobileDrawerOpen = true) : (collapsed = false)"
-      >
-        <el-icon :size="16"><component :is="isMobile ? Operation : Expand" /></el-icon>
-      </button>
-      <button
-        v-if="store.isLoggedIn"
-        class="floating-icon-btn flex h-9 w-9 cursor-pointer items-center justify-center rounded-pill border border-line bg-panel text-ink shadow-card transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas"
-        title="新建会话"
-        @click="emit('new-session')"
-      >
-        <el-icon :size="16"><Plus /></el-icon>
-      </button>
-      <!-- 主题切换（三态下拉，对齐 DeepSeek 交互） -->
-      <el-dropdown trigger="click" @command="handleThemeCommand">
+      <!-- 胶囊容器：logo + 侧栏开关 + 新建 + 主题（对齐 DeepSeek 收起态） -->
+      <div class="flex items-center gap-1 rounded-pill border border-line bg-panel p-1 shadow-card">
+        <a :href="homeUrl" class="ml-0.5 mr-0.5 flex h-8 w-8 shrink-0 items-center justify-center" title="和润天下">
+          <img :src="logoSrc" alt="和润天下" class="h-7 w-7 rounded-ctl object-cover" />
+        </a>
         <button
-          class="floating-icon-btn flex h-9 w-9 cursor-pointer items-center justify-center rounded-pill border border-line bg-panel text-ink shadow-card transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas"
-          title="切换主题"
+          class="floating-icon-btn flex h-8 w-8 cursor-pointer items-center justify-center rounded-pill border-0 bg-transparent text-ink-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas hover:text-ink"
+          :title="isMobile ? '打开会话栏' : '展开侧栏'"
+          @click="isMobile ? (mobileDrawerOpen = true) : (collapsed = false)"
         >
-          <el-icon v-if="themeStore.resolved === 'dark'" :size="16"><Moon /></el-icon>
-          <svg v-else-if="themeStore.mode === 'system'" class="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 3a9 9 0 0 0 0 18V3Z" fill="currentColor" opacity="0.9"/>
-            <path d="M12 6a6 6 0 0 0 0 12 8 8 0 0 1 0-12Z" fill="var(--color-bg-card)"/>
-            <path d="M12 3a9 9 0 0 1 9 9 9 9 0 0 1-9 9V3Z" fill="none" stroke="currentColor" stroke-width="1.5"/>
-            <path d="M16.8 6.2l1.4-1.4M21 12h2M16.8 17.8l1.4 1.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-          <el-icon v-else :size="16"><Sunny /></el-icon>
+          <el-icon :size="16"><component :is="isMobile ? Operation : Expand" /></el-icon>
         </button>
-        <template #dropdown>
-          <el-dropdown-menu>
-            <el-dropdown-item command="light" :data-checked="themeStore.mode === 'light' || undefined">浅色</el-dropdown-item>
-            <el-dropdown-item command="dark" :data-checked="themeStore.mode === 'dark' || undefined">深色</el-dropdown-item>
-            <el-dropdown-item command="system" :data-checked="themeStore.mode === 'system' || undefined">跟随系统</el-dropdown-item>
-          </el-dropdown-menu>
-        </template>
-      </el-dropdown>
+        <button
+          v-if="store.isLoggedIn"
+          class="floating-icon-btn flex h-8 w-8 cursor-pointer items-center justify-center rounded-pill border-0 bg-transparent text-ink-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas hover:text-ink"
+          title="开启新对话"
+          @click="emit('new-session')"
+        >
+          <el-icon :size="16"><Plus /></el-icon>
+        </button>
+        <!-- 主题切换（三态下拉菜单） -->
+        <ThemeToggle variant="ghost" />
+      </div>
     </div>
 
     <!-- 会话侧栏（登录/未登录都渲染；移动端为抽屉） -->
@@ -65,22 +50,7 @@
           <span class="logo-sub truncate text-[11px] tracking-[0.1em] text-ink-3">{{ logoSub }}</span>
         </a>
         <div class="flex shrink-0 items-center gap-1" v-if="!isMobile">
-          <el-dropdown trigger="click" @command="handleThemeCommand">
-            <button
-              class="flex h-8 w-8 cursor-pointer items-center justify-center rounded-pill border-0 bg-transparent text-ink-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-panel hover:text-ink"
-              title="切换主题"
-            >
-              <el-icon v-if="themeStore.resolved === 'dark'" :size="15"><Moon /></el-icon>
-              <el-icon v-else :size="15"><Sunny /></el-icon>
-            </button>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item command="light" :data-checked="themeStore.mode === 'light' || undefined">浅色</el-dropdown-item>
-                <el-dropdown-item command="dark" :data-checked="themeStore.mode === 'dark' || undefined">深色</el-dropdown-item>
-                <el-dropdown-item command="system" :data-checked="themeStore.mode === 'system' || undefined">跟随系统</el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
+          <ThemeToggle variant="ghost" />
           <button
             class="flex h-8 w-8 cursor-pointer items-center justify-center rounded-pill border-0 bg-transparent text-ink-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-panel hover:text-ink"
             title="收起侧栏"
@@ -164,7 +134,20 @@
       <!-- 侧栏底部：登录态 -->
       <div class="sidebar-footer border-t border-line p-3">
         <template v-if="store.isLoggedIn">
-          <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <!-- 头像（有 avatar_url 显图，否则首字母） -->
+            <img
+              v-if="authStore.userInfo?.avatar_url"
+              :src="String(authStore.userInfo.avatar_url)"
+              alt="头像"
+              class="h-8 w-8 shrink-0 rounded-pill object-cover"
+            />
+            <div
+              v-else
+              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-pill bg-ui-100 text-[13px] font-semibold text-ui-700"
+            >
+              {{ (authStore.userInfo?.username || '?').charAt(0) }}
+            </div>
             <router-link to="/training/profile" class="profile-link min-w-0 truncate text-[13px] font-medium text-ink-2 no-underline transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:text-ui-600">{{ displayName }}</router-link>
             <el-dropdown trigger="click" @command="handleUserCommand">
               <button class="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-pill border-0 bg-transparent text-ink-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-panel hover:text-ink" title="更多">
@@ -189,9 +172,13 @@
     <!-- 右侧对话区 -->
     <main class="chat-main flex min-w-0 flex-1 flex-col overflow-hidden bg-panel">
       <!-- 消息列表 -->
-      <div ref="messageListRef" class="message-list mx-auto w-full max-w-[900px] flex-1 overflow-y-auto p-6 max-[768px]:p-4">
-        <!-- 空状态：欢迎区（差异内容走 welcome 槽位） -->
-        <div v-if="store.messages.length === 0 && !store.streaming" class="welcome-area px-6 py-12 text-center">
+      <div
+        ref="messageListRef"
+        class="message-list mx-auto w-full max-w-[900px] flex-1 overflow-y-auto p-6 max-[768px]:p-4"
+        :class="isWelcome ? 'flex flex-col' : ''"
+      >
+        <!-- 空状态：欢迎区（差异内容走 welcome 槽位；m-auto 垂直居中且不裁切内容） -->
+        <div v-if="isWelcome" class="welcome-area m-auto px-6 py-12 text-center">
           <div class="welcome-icon mb-5 inline-flex h-[72px] w-[72px] items-center justify-center rounded-[20px] bg-[linear-gradient(135deg,var(--color-violet-500,#6366f1),#8b5cf6)] text-white">
             <el-icon :size="36"><component :is="welcomeIcon" /></el-icon>
           </div>
@@ -338,8 +325,6 @@ import {
   ChatDotRound,
   Promotion,
   VideoPause,
-  Moon,
-  Sunny,
   Operation,
   Close,
   More,
@@ -350,7 +335,7 @@ import MarkdownRender from 'markstream-vue'
 import 'markstream-vue/index.css'
 import { useAIAssistantStore } from '@/stores/aiAssistant'
 import { useAuthStore } from '@/stores/auth'
-import { useThemeStore, type ThemeMode } from '@/stores/theme'
+import ThemeToggle from '@/components/ui/ThemeToggle.vue'
 import { authApi } from '@/api/auth'
 import { buildSubdomainUrl } from '@/utils/subdomain'
 import { formatShortDateTime } from '@/utils/format'
@@ -402,19 +387,16 @@ const emit = defineEmits<{
 const slots = useSlots()
 const store = useAIAssistantStore()
 const authStore = useAuthStore()
-const themeStore = useThemeStore()
 const router = useRouter()
 
 const homeUrl = buildSubdomainUrl('main', '/')
 // 运行时绑定（避免测试环境对静态资源 URL 的编译期解析）
 const logoSrc = '/images/HRWAIlogo.jpg'
 const displayName = computed(() => authStore.userInfo?.username || 'HRWAI 用户')
-const messageListRef = ref<HTMLElement>()
+// 空状态判定（欢迎区渲染条件 + 消息列表垂直居中开关）
+const isWelcome = computed(() => store.messages.length === 0 && !store.streaming)
 
-// ===== 主题切换（三态下拉：浅色/深色/跟随系统，对齐 DeepSeek 交互） =====
-function handleThemeCommand(mode: ThemeMode) {
-  themeStore.setMode(mode)
-}
+const messageListRef = ref<HTMLElement>()
 
 // ===== 侧栏状态：桌面收起（localStorage 持久化）+ 移动端抽屉 =====
 const COLLAPSE_KEY = 'ai-sidebar-collapsed'
