@@ -49,3 +49,11 @@ export function formatShortDateTime(iso: string): string {
 
 /** 完整日期时间（formatDateTime 的历史名称，语义一致） */
 export const formatTime = formatDateTime
+
+/**
+ * 业务时区（Asia/Shanghai）自然日字符串 yyyy-MM-dd（打卡/连续签到等跨日边界口径）。
+ * 与后端 clock.DayKey 同口径：本地 UTC 偏移不能代表上海自然日，统一走 Intl 时区。
+ */
+export function shanghaiDateStr(d: Date): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(d)
+}

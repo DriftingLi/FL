@@ -37,11 +37,29 @@ type AuthService struct {
 	reviewSvc *ProfileReviewService
 	forumCnt  ForumCounter // 论坛计数唯一写入口（注销回扣点赞数用，spec #297）
 
+	// dailyLoginMark 每日登录落表回调（ADR-0028）：登录/续期成功后由 issueLogin 统一触发。
+	// 指向 PointsService.MarkDailyLogin（装配根注入），避免 service 层循环依赖。
+	dailyLoginMark func(userID int)
+
 	defaultAdminPwd   string
 	defaultTutorPwd   string
 	defaultStudentPwd string
 
 	logger *zap.Logger
+}
+
+// SetDailyLoginMarker 注入每日登录落表回调（生产指向 PointsService.MarkDailyLogin）。
+// 注入前签发不落表（测试等场景零成本兼容）。
+func (s *AuthService) SetDailyLoginMarker(mark func(userID int)) {
+	s.dailyLoginMark = mark
+}
+
+// RecordDailyLogin 记录「今日到访」事实（ADR-0028：登录签发与 refresh 轮换均计每日登录；
+// 幂等落表、尽力而为不阻断登录主流程；未注入回调时为 no-op）。
+func (s *AuthService) RecordDailyLogin(userID int) {
+	if s.dailyLoginMark != nil && userID > 0 {
+		s.dailyLoginMark(userID)
+	}
 }
 
 // NewAuthService 创建认证服务。sess 为装配根创建的唯一会话实例（签发/校验同实例）；
@@ -196,8 +214,9 @@ func (s *AuthService) verifyAndIssue(plainPassword string, c loginCredentials, r
 	return s.issueLogin(c, role)
 }
 
-// issueLogin 登录骨架后半段：禁用校验 → 签发 → 组结果。
+// issueLogin 登录骨架后半段：禁用校验 → 签发 → 落每日登录事实 → 组结果。
 // 密码三入口与验证码登录/注册共用（ADR-0011 向验证码路径的延伸，ADR-0012 §5）。
+// 仅 hrwai_user 参与每日登录事实（daily_login 任务只有学员端可见；admin/tutor/recruiter 不落表）。
 func (s *AuthService) issueLogin(c loginCredentials, role string) (*LoginResult, error) {
 	if c.status != nil && *c.status != 1 {
 		return nil, errors.New("账号已被禁用，请联系管理员")
@@ -205,6 +224,9 @@ func (s *AuthService) issueLogin(c loginCredentials, role string) (*LoginResult,
 	access, refresh, err := s.session.IssuePair(c.id, c.account, role)
 	if err != nil {
 		return nil, err
+	}
+	if role == HrwaiRole {
+		s.RecordDailyLogin(c.id)
 	}
 	return &LoginResult{
 		Token:        access,
@@ -740,6 +762,8 @@ func (s *AuthService) DeleteAccount(userID int) error {
 		tx.Where("student_id = ?", userID).Delete(&model.PracticeProgress{})
 		tx.Where("student_id = ?", userID).Delete(&model.StudyRecord{})
 		tx.Where("user_id = ?", userID).Delete(&model.ForumCheckIn{})
+		// 每日登录事实（ADR-0028）：与打卡同为「用户 × 自然日」幂等行，注销一并清理
+		tx.Where("user_id = ?", userID).Delete(&model.UserDailyLogin{})
 		tx.Where("user_id = ?", userID).Delete(&model.Notification{})
 		tx.Where("user_id = ?", userID).Delete(&model.ProfileChangeRequest{})
 		tx.Where("user_id = ?", userID).Delete(&model.AIChatSession{})

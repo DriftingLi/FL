@@ -63,6 +63,9 @@ const (
 // ErrNotTopicOwner 只有楼主可采纳/取消/更换。
 var ErrNotTopicOwner = errors.New("只有楼主可以执行此操作")
 
+// ErrAcceptOwnReply 楼主不能采纳自己的回答（自问自答禁止，ADR-0028）。
+var ErrAcceptOwnReply = errors.New("不能采纳自己的回答")
+
 // 论坛发图限制。
 const (
 	ForumTopicMaxImages = 9 // 主题最多图片数
@@ -1363,6 +1366,11 @@ func (s *ForumService) AcceptReply(userID int, topicID, replyID int64) (*ForumTo
 	if reply.TopicID != topicID {
 		return nil, errors.New("回复不属于该主题")
 	}
+	// 禁止采纳自己（ADR-0028）：自问自答在交互层直接拒绝（替代旧「静默零分发」），
+	// 消除「采纳成功却 0 分」的误导；界面层对楼主自己的回答不呈现采纳入口。
+	if reply.UserID == userID {
+		return nil, ErrAcceptOwnReply
+	}
 	// 同一回复重复采纳：幂等直接返回当前状态
 	if topic.AcceptedReplyID != nil && *topic.AcceptedReplyID == replyID {
 		return s.fetchTopicDTO(topicID, userID)
@@ -1379,8 +1387,7 @@ func (s *ForumService) AcceptReply(userID int, topicID, replyID int64) (*ForumTo
 		}
 		return s.fetchTopicDTO(topicID, userID)
 	}
-	// 首次采纳：CAS + 积分直记（同一事务）
-	isSelf := reply.UserID == userID
+	// 首次采纳：CAS + 积分直记（同一事务）。采纳他人回复（自采纳已在上层拒绝）。
 	now := beijingNow()
 	todayStart := clock.DayStart(now)
 	err := s.db.Transaction(func(tx *gorm.DB) error {
@@ -1404,10 +1411,6 @@ func (s *ForumService) AcceptReply(userID int, topicID, replyID int64) (*ForumTo
 		}
 		if cnt > 0 {
 			// 已发过分（取消后重采），只保留状态迁移
-			return nil
-		}
-		if isSelf {
-			// 楼主采纳自己：状态已迁移，发分为 0
 			return nil
 		}
 		// ===== 乙档防刷：日封顶 + 配对衰减（零新表，事务内算完） =====

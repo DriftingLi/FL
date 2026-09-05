@@ -65,12 +65,15 @@ func TestPointsSentinelStatusMapping(t *testing.T) {
 	}
 
 	// 4. 重复领取（newbie 终身已领）→ 400 且文案「已领取」
-	// 播种 newbie 任务并先领一次
+	// 播种 newbie 任务，先达成行为（选定当前证件）再领一次
 	if err := db.Create(&model.PointsTaskConfig{
 		Code: "newbie_credential", Title: "选定目标证件", Group: "newbie", Points: 10,
 		DailyLimit: 1, TotalLimit: intPtr(1), EventType: "credential_onboarding",
 	}).Error; err != nil {
 		t.Fatalf("seed newbie task failed: %v", err)
+	}
+	if err := db.Model(&model.HrwaiUser{}).Where("id = ?", student.ID).Update("current_credential_id", 1).Error; err != nil {
+		t.Fatalf("seed credential behavior failed: %v", err)
 	}
 	rec = doWithToken(t, r, token, http.MethodPost, "/api/points/tasks/newbie_credential/claim", nil)
 	if rec.Code != http.StatusOK {

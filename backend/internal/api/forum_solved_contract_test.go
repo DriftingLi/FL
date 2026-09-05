@@ -42,7 +42,7 @@ func TestForumSolvedContract(t *testing.T) {
 	r := gin.New()
 	apiGroup := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
-	RegisterForumRoutes(apiGroup, deps.RouterDeps(), deps.ForumSvc, deps.CheckInSvc, deps.ForumImageSvc)
+	RegisterForumRoutes(apiGroup, deps.RouterDeps(), deps.ForumSvc, deps.ForumImageSvc)
 
 	issueToken := func(u model.HrwaiUser) string {
 		tok, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).Issue(int(u.ID), u.Account, "hrwai_user")

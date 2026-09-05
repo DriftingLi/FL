@@ -196,6 +196,13 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 		response.Unauthorized(c, "登录已过期，请重新登录")
 		return
 	}
+	// 会话续期 = 今日到访（ADR-0028）：refresh 轮换成功即落每日登录事实。
+	// 轮换前只读验签取 userID/role（轮换后旧 token 已入黑名单，无法再验）；
+	// 并发双刷中失败的一路不记（成功一路已记，幂等落表）。
+	var claims *security.Claims
+	if cc, verr := h.session.ValidateRefresh(req.RefreshToken); verr == nil {
+		claims = cc
+	}
 	// 原子轮换（ADR-0016）：校验/抢占/吊销/签发收敛在会话模块单点，并发双刷恰一成功
 	access, refresh, err := h.session.RotateRefresh(c.Request.Context(), req.RefreshToken)
 	if err != nil {
@@ -205,6 +212,9 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 		}
 		response.ServerError(c, "服务器内部错误")
 		return
+	}
+	if claims != nil && claims.Role == service.HrwaiRole && h.authSvc != nil {
+		h.authSvc.RecordDailyLogin(claims.UserID)
 	}
 	response.Success(c, map[string]string{"token": access, "refresh_token": refresh})
 }
