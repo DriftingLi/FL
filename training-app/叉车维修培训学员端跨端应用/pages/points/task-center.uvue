@@ -120,7 +120,7 @@
     const dailyTasks = ref<DailyTask[]>([
         { title: '每日登录', desc: '登录小程序获得', done: 1, total: 1, icon: '👆', iconBg: '#FFF3E0', action: 'login' },
         { title: '每日答题', desc: '完成容易题库练习', done: 0, total: 1, icon: '📝', iconBg: '#E3F2FD', action: 'daily-quiz' },
-        { title: '发布帖子', desc: '完成一次打卡签到', done: 1, total: 1, icon: '📋', iconBg: '#E8F5E9', action: 'create-post' },
+        { title: '发布帖子', desc: '在广场发布一篇帖子', done: 1, total: 1, icon: '📋', iconBg: '#E8F5E9', action: 'create-post' },
         { title: '浏览帖子', desc: '去广场浏览3篇帖子，立得任务奖励', done: 1, total: 3, icon: '📖', iconBg: '#FFF8E1', action: 'browse-posts' },
         { title: '浏览课程', desc: '去游览课程查看3个课程，立得任务奖励', done: 1, total: 3, icon: '📚', iconBg: '#F3E5F5', action: 'browse-courses' },
         { title: '浏览商城', desc: '去商城浏览3个商品，立得任务奖励', done: 1, total: 3, icon: '🏪', iconBg: '#E0F7FA', action: 'browse-mall' },

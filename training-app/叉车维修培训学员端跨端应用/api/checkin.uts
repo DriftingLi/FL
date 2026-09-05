@@ -3,10 +3,10 @@
  * 路由：POST /check-in、GET /check-in/calendar（旧 /forum/check-in/* 已删除，见根仓库 ADR-0028）
  * @note 后端响应已由 request 层自动解包 data 字段
  *
- * 打卡响应：{ checked, streak, total, today_checked, points }
+ * 打卡响应（新契约）：{ checked_in, consecutive_days, points_earned, total_points }
  *   当日实发分值 = 基础 5 分 + 连击阶梯（满 3/7/30 天当日额外 +5/+10/+50）。
- *   字段名后端未最终定稿，此处做 points / points_earned 双读兜底。
- * 日历响应：{ days: [{ date, checked, points }], streak, total, today_checked }
+ *   分值字段做 points_earned / points 双读兜底；其余字段对新旧名双读过渡。
+ * 日历响应（新契约）：{ year, month, consecutive_days, total_points, points_per_day, days: [{ date, checked, points }] }
  *   points 为该日实发积分（历史无流水的旧打卡为 0）。
  */
 import { get, post } from './request'
@@ -22,14 +22,19 @@ function extractEarnedPoints(obj : UTSJSONObject) : number {
     return 0
 }
 
-/** 构造 CheckInResult（从 UTSJSONObject） */
+/** 可空双读：优先 primary，缺失时读 fallback，均缺失返回 null */
+function readDual(obj : UTSJSONObject, primary : string, fallback : string) : any | null {
+    if (obj[primary] != null) return obj[primary]
+    return obj[fallback]
+}
+
+/** 构造 CheckInResult（从 UTSJSONObject，新旧字段名双读过渡） */
 function buildCheckInResult(obj : UTSJSONObject) : CheckInResult {
     return {
-        checked: toBool(obj['checked']),
-        streak: toNumber(obj['streak']),
-        total: toNumber(obj['total']),
-        today_checked: toBool(obj['today_checked']),
-        points: extractEarnedPoints(obj),
+        checked_in: toBool(readDual(obj, 'checked_in', 'checked')),
+        consecutive_days: toNumber(readDual(obj, 'consecutive_days', 'streak')),
+        points_earned: extractEarnedPoints(obj),
+        total_points: toNumber(readDual(obj, 'total_points', 'total')),
     } as CheckInResult
 }
 
@@ -46,7 +51,7 @@ function buildCheckInCalendarDay(obj : UTSJSONObject) : CheckInCalendarDay {
     } as CheckInCalendarDay
 }
 
-/** 构造 CheckInCalendarResult（从 UTSJSONObject） */
+/** 构造 CheckInCalendarResult（从 UTSJSONObject，新旧字段名双读过渡） */
 function buildCheckInCalendarResult(obj : UTSJSONObject) : CheckInCalendarResult {
     const days : CheckInCalendarDay[] = []
     const daysRaw = obj['days']
@@ -57,10 +62,12 @@ function buildCheckInCalendarResult(obj : UTSJSONObject) : CheckInCalendarResult
         }
     }
     return {
+        year: toNumber(obj['year']),
+        month: toNumber(obj['month']),
+        consecutive_days: toNumber(readDual(obj, 'consecutive_days', 'streak')),
+        total_points: toNumber(readDual(obj, 'total_points', 'total')),
+        points_per_day: toNumber(obj['points_per_day']),
         days: days,
-        streak: toNumber(obj['streak']),
-        total: toNumber(obj['total']),
-        today_checked: toBool(obj['today_checked']),
     } as CheckInCalendarResult
 }
 
