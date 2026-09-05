@@ -10,23 +10,9 @@
     <div
       class="auth-card w-full max-w-[420px] rounded-card border border-line bg-panel px-10 pt-11 pb-7 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-8px_rgba(15,23,42,0.08)] max-[480px]:px-[22px] max-[480px]:pt-8 max-[480px]:pb-[22px]"
     >
-      <!-- 明暗模式切换（三态），与 SidebarLayout 同构。认证页是独立布局、不走 SidebarLayout，
+      <!-- 明暗模式切换（三态下拉菜单）。认证页是独立布局、不走 SidebarLayout，
            曾漏装导致深色偏好用户在登录页看到崩坏画面且无法切回（#554），故补于此。 -->
-      <button
-        class="theme-toggle fixed right-4 top-4 z-[var(--z-sticky)] flex h-9 w-9 cursor-pointer items-center justify-center rounded-pill border border-line bg-panel text-ink shadow-raised transition-[background,box-shadow,transform] duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas active:scale-[0.94]"
-        :aria-label="themeLabel"
-        :title="themeLabel"
-        @click="themeStore.cycle()"
-      >
-        <el-icon v-if="themeStore.resolved === 'dark'" :size="18"><Moon /></el-icon>
-        <svg v-else-if="themeStore.mode === 'system'" class="theme-half-icon h-[18px] w-[18px]" viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M12 3a9 9 0 0 0 0 18V3Z" fill="currentColor" opacity="0.9"/>
-          <path d="M12 6a6 6 0 0 0 0 12 8 8 0 0 1 0-12Z" fill="var(--color-bg-card)"/>
-          <path d="M12 3a9 9 0 0 1 9 9 9 9 0 0 1-9 9V3Z" fill="none" stroke="currentColor" stroke-width="1.5"/>
-          <path d="M16.8 6.2l1.4-1.4M21 12h2M16.8 17.8l1.4 1.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
-        <el-icon v-else :size="18"><Sunny /></el-icon>
-      </button>
+      <ThemeToggle fixed />
 
       <header class="card-header mb-5 text-center">
         <span
@@ -88,10 +74,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
 import type { Component } from 'vue'
-import { Moon, Sunny } from '@element-plus/icons-vue'
-import { useThemeStore } from '@/stores/theme'
+import ThemeToggle from '@/components/ui/ThemeToggle.vue'
 
 export type AltModeKey = 'email' | 'phone' | 'wechat'
 
@@ -127,13 +111,6 @@ const props = withDefaults(
 const emit = defineEmits<{
   (e: 'select-alt', key: AltModeKey | null): void
 }>()
-
-const themeStore = useThemeStore()
-
-const themeLabel = computed(() => {
-  if (themeStore.mode === 'system') return '跟随系统（点击切换为浅色）'
-  return themeStore.resolved === 'dark' ? '深色模式（点击切换为跟随系统）' : '浅色模式（点击切换为深色）'
-})
 
 const altModes = props.altModes
 
@@ -176,5 +153,115 @@ function goMain() {
   flex: 1;
   height: 1px;
   background: var(--color-border);
+}
+</style>
+
+<!--
+  ===== 认证表单共享样式（非 scoped，#569）=====
+  slot 注入内容携带的是页面自己的 scopeId，外壳的 scoped 规则永远命不中
+  （这正是 #569 的根因：这批规则自 2026 年迁移时起从未生效，#568 已删除死代码）。
+  因此这里用「非 scoped + .auth-page 根前缀」：既穿透 slot，又不会泄漏到其他页面
+  （类名 code-row/captcha-img/footer-link 等在 profile 弹窗等处也有同名，但都不在
+  .auth-page 内，天然隔离）。
+
+  与旧死代码的三处刻意差异：
+  1. 色值全部走 design-tokens token（#554 原则），深浅主题自动跟随
+  2. 不再覆盖 .auth-btn 的 --el-button-* 颜色变量 —— 主按钮由 UiButton primary
+     走全站统一的品牌渐变（element-overrides），覆盖回纯色反而是倒退
+  3. 输入框焦点环用 color-mix 品牌色，替代旧的 rgba(37,99,235) 蓝色残留
+-->
+<style>
+.auth-page .auth-form {
+  margin-top: 4px;
+}
+
+.auth-page .code-row {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
+
+.auth-page .code-input {
+  flex: 1;
+}
+
+.auth-page .code-btn {
+  min-width: 124px;
+}
+
+.auth-page .captcha-row {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  align-items: center;
+}
+
+.auth-page .captcha-input {
+  flex: 1;
+}
+
+.auth-page .captcha-img {
+  height: 40px;
+  width: 110px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  background: var(--color-bg-page);
+  flex-shrink: 0;
+}
+
+/* 主按钮：仅布局形态；颜色走 UiButton primary 的全站品牌渐变 */
+.auth-page .auth-btn {
+  width: 100%;
+  height: 48px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 12px;
+  letter-spacing: 0.08em;
+  margin-top: 8px;
+}
+
+.auth-page .form-input .el-input__wrapper {
+  border-radius: 12px;
+  padding: 4px 14px;
+  box-shadow: 0 0 0 1px var(--color-border) inset;
+  transition: all var(--duration-base) var(--ease-default);
+  background: var(--color-bg-page);
+}
+
+.auth-page .form-input .el-input__wrapper:hover {
+  box-shadow: 0 0 0 1px var(--color-border-dark) inset;
+  background: var(--color-bg-card);
+}
+
+.auth-page .form-input .el-input__wrapper.is-focus {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary-500) 20%, transparent) inset;
+  background: var(--color-bg-card);
+}
+
+.auth-page .form-input .el-input__prefix-inner {
+  color: var(--color-text-muted);
+}
+
+.auth-page .form-footer {
+  text-align: center;
+}
+
+.auth-page .footer-text {
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+
+.auth-page .footer-link {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-primary-500);
+  text-decoration: none;
+  margin-left: 4px;
+  transition: color var(--duration-fast) var(--ease-default);
+}
+
+.auth-page .footer-link:hover {
+  color: var(--color-primary-700);
 }
 </style>

@@ -1,66 +1,107 @@
 <template>
-  <div class="ai-chat-shell">
-    <!-- 顶部栏 -->
-    <header class="topbar">
-      <div class="topbar-container">
-        <a :href="homeUrl" class="logo-link">
-          <img :src="logoSrc" alt="和润天下" class="logo-img" />
-          <div class="logo-text-wrap">
-            <span class="logo-text">和润天下</span>
-            <span class="logo-sub">{{ logoSub }}</span>
-          </div>
+  <div class="ai-chat-shell relative flex h-screen overflow-hidden bg-canvas">
+    <!-- 移动端抽屉遮罩 -->
+    <div
+      v-if="isMobile && mobileDrawerOpen"
+      class="fixed inset-0 z-30 bg-black/40"
+      @click="mobileDrawerOpen = false"
+    ></div>
+
+    <!-- 左上角悬浮图标组（侧栏不可见时显示：桌面收起态 / 移动端） -->
+    <div v-if="isMobile || collapsed" class="fixed left-3 top-3 z-20 flex items-center gap-2">
+      <!-- 胶囊容器：logo + 侧栏开关 + 新建 + 主题（对齐 DeepSeek 收起态） -->
+      <div class="flex items-center gap-1 rounded-pill border border-line bg-panel p-1 shadow-card">
+        <a :href="homeUrl" class="ml-0.5 mr-0.5 flex h-8 w-8 shrink-0 items-center justify-center" title="和润天下">
+          <img :src="logoSrc" alt="和润天下" class="h-7 w-7 rounded-ctl object-cover" />
         </a>
-
-        <div class="topbar-actions">
-          <router-link v-if="backLinkTo" :to="backLinkTo" class="back-link">{{ backLinkText }}</router-link>
-
-          <!-- 未登录：显示登录按钮 -->
-          <UiButton variant="primary" v-if="!store.isLoggedIn" size="default" @click="goLogin">
-            登录 HRWAI 账号
-          </UiButton>
-
-          <!-- 已登录：显示用户名 + 退出 -->
-          <template v-else>
-            <router-link to="/training/profile" class="profile-link">个人资料</router-link>
-            <el-dropdown trigger="click" @command="handleUserCommand">
-              <span class="user-trigger">
-                {{ displayName }}
-                <el-icon><ArrowDown /></el-icon>
-              </span>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item command="logout">退出登录</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
-          </template>
-
-          <a :href="homeUrl" class="back-link">返回官网</a>
-        </div>
+        <button
+          class="floating-icon-btn flex h-8 w-8 cursor-pointer items-center justify-center rounded-pill border-0 bg-transparent text-ink-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas hover:text-ink"
+          :title="isMobile ? '打开会话栏' : '展开侧栏'"
+          @click="isMobile ? (mobileDrawerOpen = true) : (collapsed = false)"
+        >
+          <el-icon :size="16"><component :is="isMobile ? Operation : Expand" /></el-icon>
+        </button>
+        <button
+          v-if="store.isLoggedIn"
+          class="floating-icon-btn flex h-8 w-8 cursor-pointer items-center justify-center rounded-pill border-0 bg-transparent text-ink-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas hover:text-ink"
+          title="开启新对话"
+          @click="emit('new-session')"
+        >
+          <el-icon :size="16"><Plus /></el-icon>
+        </button>
+        <!-- 主题切换（三态下拉菜单） -->
+        <ThemeToggle variant="ghost" />
       </div>
-    </header>
+    </div>
 
-    <!-- 主体：侧栏 + 对话区 -->
-    <div class="main-body">
-      <!-- 左侧会话栏（仅登录后显示） -->
-      <aside v-if="store.isLoggedIn" class="session-sidebar">
-        <div class="sidebar-header">
-          <span class="sidebar-title">会话历史</span>
-          <UiButton variant="primary" size="small" :icon="Plus" @click="emit('new-session')">新建</UiButton>
+    <!-- 会话侧栏（登录/未登录都渲染；移动端为抽屉） -->
+    <aside
+      class="session-sidebar flex shrink-0 flex-col bg-canvas"
+      :class="[
+        isMobile
+          ? ['fixed inset-y-0 left-0 z-40 w-[260px] border-r border-line shadow-lg transition-transform duration-[var(--duration-normal)] ease-[var(--ease-default)]', mobileDrawerOpen ? 'translate-x-0' : '-translate-x-full']
+          : ['relative h-full border-r border-line', collapsed ? 'hidden' : 'w-[260px]']
+      ]"
+    >
+      <!-- 侧栏顶部：logo + 侧栏开关 + 主题 -->
+      <div class="sidebar-header flex items-center justify-between px-3 py-3">
+        <a :href="homeUrl" class="flex min-w-0 items-center gap-2 no-underline">
+          <img :src="logoSrc" alt="和润天下" class="logo-img h-8 w-8 shrink-0 rounded-ctl object-cover" />
+          <span class="logo-sub truncate text-[11px] tracking-[0.1em] text-ink-3">{{ logoSub }}</span>
+        </a>
+        <div class="flex shrink-0 items-center gap-1" v-if="!isMobile">
+          <ThemeToggle variant="ghost" />
+          <button
+            class="flex h-8 w-8 cursor-pointer items-center justify-center rounded-pill border-0 bg-transparent text-ink-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-panel hover:text-ink"
+            title="收起侧栏"
+            @click="collapsed = true"
+          >
+            <el-icon :size="16"><Fold /></el-icon>
+          </button>
         </div>
-        <div v-loading="store.sessionsLoading" class="session-list">
-          <div v-if="store.sessions.length === 0 && !store.sessionsLoading" class="empty-sessions">
-            暂无会话，点击"新建"开始对话
-          </div>
+        <button
+          v-else
+          class="flex h-8 w-8 cursor-pointer items-center justify-center rounded-pill border-0 bg-transparent text-ink-3"
+          title="关闭"
+          @click="mobileDrawerOpen = false"
+        >
+          <el-icon :size="16"><Close /></el-icon>
+        </button>
+      </div>
+
+      <!-- 功能页：返回链接 -->
+      <div v-if="backLinkTo" class="px-3 pb-1">
+        <router-link :to="backLinkTo" class="back-link flex items-center gap-1.5 rounded-ctl px-2 py-1.5 text-[13px] text-ink-2 no-underline transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-panel hover:text-ui-600">
+          <el-icon :size="14"><ArrowLeft /></el-icon>{{ backLinkText }}
+        </router-link>
+      </div>
+
+      <!-- 新建会话（登录可见，DeepSeek 胶囊样式） -->
+      <div v-if="store.isLoggedIn" class="px-3 pt-1">
+        <button
+          class="new-chat-btn flex w-full cursor-pointer items-center justify-center gap-2 rounded-pill border border-line bg-panel px-4 py-2.5 text-sm font-medium text-ink shadow-card transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:border-ui-400 hover:bg-panel"
+          @click="emit('new-session')"
+        >
+          <el-icon :size="15"><Plus /></el-icon>开启新对话
+        </button>
+      </div>
+
+      <!-- 会话列表（五档时间分组） -->
+      <div class="sidebar-title px-4 pb-1 pt-4 text-xs font-medium text-ink-3">会话历史</div>
+      <div v-loading="store.sessionsLoading" class="session-list flex-1 overflow-y-auto px-2 pb-2">
+        <div v-if="store.sessions.length === 0 && !store.sessionsLoading" class="empty-sessions px-3 py-8 text-center text-[13px] text-ink-3">
+          {{ store.isLoggedIn ? '暂无会话，点击"开启新对话"开始' : '登录后可查看会话历史' }}
+        </div>
+        <template v-for="g in groupedSessions" :key="g.label">
+          <div class="px-3 pb-1 pt-3 text-[11px] text-ink-3">{{ g.label }}</div>
           <div
-            v-for="s in store.sessions"
+            v-for="s in g.sessions"
             :key="s.id"
-            class="session-item"
-            :class="{ active: store.currentSessionId === s.id, editing: enableRename && editingSessionId === s.id }"
+            class="session-item group mb-1 flex cursor-pointer items-center gap-2 rounded-ctl px-3 py-2.5 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-panel"
+            :class="[store.currentSessionId === s.id ? 'bg-panel' : '', enableRename && editingSessionId === s.id ? 'editing bg-panel cursor-default' : '']"
             @click="handleSelectSession(s.id)"
           >
-            <div class="session-info">
-              <!-- 编辑模式（enableRename） -->
+            <div class="session-info flex min-w-0 flex-1 flex-col gap-0.5">
               <el-input
                 v-if="enableRename && editingSessionId === s.id"
                 v-model="editingTitle"
@@ -73,140 +114,177 @@
                 @keydown.esc.prevent="cancelRename"
                 @blur="commitRename(s.id)"
               />
-              <!-- 展示模式 -->
               <template v-else>
-                <span class="session-title" @dblclick.stop="startRename(s)">{{ s.title || '新会话' }}</span>
-                <span class="session-time">{{ formatShortDateTime(s.updated_at) }}</span>
+                <span class="session-title truncate text-[13px] font-medium text-ink" @dblclick.stop="startRename(s)">{{ s.title || '新会话' }}</span>
+                <span class="session-time text-[11px] text-ink-3">{{ formatShortDateTime(s.updated_at) }}</span>
               </template>
             </div>
-            <div v-if="editingSessionId !== s.id" class="session-actions">
-              <button v-if="enableRename" class="session-rename" title="重命名" @click.stop="startRename(s)">
+            <div v-if="editingSessionId !== s.id" class="session-actions flex gap-0.5">
+              <button v-if="enableRename" class="session-rename shrink-0 cursor-pointer rounded border-0 bg-transparent p-1 opacity-0 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] group-hover:opacity-100 hover:bg-ui-50 hover:text-ui-600" title="重命名" @click.stop="startRename(s)">
                 <el-icon :size="14"><Edit /></el-icon>
               </button>
-              <button class="session-delete" title="删除" @click.stop="handleDeleteSession(s.id)">
+              <button class="session-delete shrink-0 cursor-pointer rounded border-0 bg-transparent p-1 opacity-0 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] group-hover:opacity-100 hover:bg-bad-soft hover:text-bad" title="删除" @click.stop="handleDeleteSession(s.id)">
                 <el-icon :size="14"><Delete /></el-icon>
               </button>
             </div>
           </div>
-        </div>
-      </aside>
+        </template>
+      </div>
 
-      <!-- 右侧对话区 -->
-      <main class="chat-main">
-        <!-- 消息列表 -->
-        <div ref="messageListRef" class="message-list">
-          <!-- 空状态：欢迎区（差异内容走 welcome 槽位） -->
-          <div v-if="store.messages.length === 0 && !store.streaming" class="welcome-area">
-            <div class="welcome-icon">
-              <el-icon :size="36"><component :is="welcomeIcon" /></el-icon>
-            </div>
-            <h2 class="welcome-title">{{ welcomeTitle }}</h2>
-            <p class="welcome-desc">{{ welcomeDesc }}</p>
-
-            <slot name="welcome-top" />
-
-            <!-- 预设提示词（两页共用实现） -->
-            <div v-if="suggestions.length" class="suggestion-grid">
-              <div v-for="s in suggestions" :key="s" class="suggestion-card" @click="emit('suggest', s)">
-                {{ s }}
-              </div>
-            </div>
-
-            <slot name="welcome-bottom" />
-
-            <div v-if="!store.isLoggedIn" class="guest-hint">
-              您当前以游客身份使用，<a href="javascript:void(0)" @click="goLogin">登录</a> 后可保存对话历史
-            </div>
-          </div>
-
-          <!-- 消息列表（安全渲染单点：助手内容统一 markstream escape） -->
-          <div v-for="msg in store.messages" :key="msg.id" class="message-item" :class="msg.role">
-            <div class="message-avatar">
-              <el-icon v-if="msg.role === 'user'" :size="18"><User /></el-icon>
-              <el-icon v-else :size="18"><ChatDotRound /></el-icon>
-            </div>
-            <div class="message-content">
-              <template v-if="msg.role === 'user'">
-                <div v-if="msg.images?.length" class="message-images">
-                  <el-image
-                    v-for="(img, i) in msg.images"
-                    :key="i"
-                    :src="img"
-                    :preview-src-list="msg.images"
-                    :initial-index="i"
-                    fit="cover"
-                    class="message-image-thumb"
-                    preview-teleported
-                  />
-                </div>
-                <div v-if="msg.content" class="message-text">{{ msg.content }}</div>
-              </template>
-              <div v-else class="message-text markstream-vue">
-                <MarkdownRender
-                  mode="chat"
-                  :content="msg.content"
-                  :final="true"
-                  html-policy="escape"
-                  :fade="false"
-                />
-              </div>
-            </div>
-          </div>
-
-          <!-- 流式输出中 -->
-          <div v-if="store.streaming" class="message-item assistant">
-            <div class="message-avatar">
-              <el-icon :size="18"><ChatDotRound /></el-icon>
-            </div>
-            <div class="message-content">
-              <div v-if="store.streamingContent" class="message-text markstream-vue">
-                <MarkdownRender
-                  mode="chat"
-                  :content="store.streamingContent"
-                  :final="!store.streaming"
-                  html-policy="escape"
-                  :fade="false"
-                />
-              </div>
-              <div v-else class="message-loading">
-                <span class="loading-dot"></span>
-                <span class="loading-dot"></span>
-                <span class="loading-dot"></span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 输入区 -->
-        <div class="chat-input-area">
-          <slot name="input-above" />
-          <div class="input-wrap" :class="{ 'input-wrap--raised': raisedInput, 'has-image': !raisedInput && !!slots['input-prefix'] }">
-            <slot v-if="!raisedInput" name="input-prefix" />
-            <el-input
-              :model-value="inputText"
-              type="textarea"
-              :rows="raisedInput ? 4 : 2"
-              :autosize="raisedInput ? { minRows: 3, maxRows: 8 } : { minRows: 1, maxRows: 6 }"
-              :placeholder="inputPlaceholder"
-              resize="none"
-              @keydown.enter="handleEnter"
-              @update:model-value="emit('update:inputText', $event as string)"
-              :disabled="store.streaming"
+      <!-- 侧栏底部：登录态 -->
+      <div class="sidebar-footer border-t border-line p-3">
+        <template v-if="store.isLoggedIn">
+          <div class="flex items-center gap-2">
+            <!-- 头像（有 avatar_url 显图，否则首字母） -->
+            <img
+              v-if="authStore.userInfo?.avatar_url"
+              :src="String(authStore.userInfo.avatar_url)"
+              alt="头像"
+              class="h-8 w-8 shrink-0 rounded-pill object-cover"
             />
-            <div v-if="raisedInput" class="input-footer">
-              <div class="mode-selector">
-                <slot name="input-footer-left" />
-              </div>
-              <div class="input-actions">
-                <UiButton variant="primary" v-if="!store.streaming" :icon="Promotion" :disabled="!canSend" @click="emit('send')">
-                  发送
-                </UiButton>
-                <UiButton variant="danger" v-else :icon="VideoPause" @click="store.stopStreaming">
-                  停止
-                </UiButton>
-              </div>
+            <div
+              v-else
+              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-pill bg-ui-100 text-[13px] font-semibold text-ui-700"
+            >
+              {{ (authStore.userInfo?.username || '?').charAt(0) }}
             </div>
-            <div v-else class="input-actions">
+            <router-link to="/training/profile" class="profile-link min-w-0 truncate text-[13px] font-medium text-ink-2 no-underline transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:text-ui-600">{{ displayName }}</router-link>
+            <el-dropdown trigger="click" @command="handleUserCommand">
+              <button class="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-pill border-0 bg-transparent text-ink-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-panel hover:text-ink" title="更多">
+                <el-icon :size="14"><More /></el-icon>
+              </button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="profile">个人资料</el-dropdown-item>
+                  <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </div>
+        </template>
+        <template v-else>
+          <UiButton variant="primary" class="w-full" @click="goLogin">登录 HRWAI 账号</UiButton>
+          <div class="mt-2 text-center text-xs text-ink-3">登录后可保存对话历史</div>
+        </template>
+      </div>
+    </aside>
+
+    <!-- 右侧对话区 -->
+    <main class="chat-main flex min-w-0 flex-1 flex-col overflow-hidden bg-panel">
+      <!-- 消息列表 -->
+      <div
+        ref="messageListRef"
+        class="message-list mx-auto w-full max-w-[900px] flex-1 overflow-y-auto p-6 max-[768px]:p-4"
+        :class="isWelcome ? 'flex flex-col' : ''"
+      >
+        <!-- 空状态：欢迎区（差异内容走 welcome 槽位；m-auto 垂直居中且不裁切内容） -->
+        <div v-if="isWelcome" class="welcome-area m-auto px-6 py-12 text-center">
+          <div class="welcome-icon mb-5 inline-flex h-[72px] w-[72px] items-center justify-center rounded-[20px] bg-[linear-gradient(135deg,var(--color-violet-500,#6366f1),#8b5cf6)] text-white">
+            <el-icon :size="36"><component :is="welcomeIcon" /></el-icon>
+          </div>
+          <h2 class="welcome-title m-0 mb-2 text-2xl font-bold text-ink">{{ welcomeTitle }}</h2>
+          <p class="welcome-desc mx-auto mb-6 max-w-[560px] text-sm leading-[1.6] text-ink-3">{{ welcomeDesc }}</p>
+
+          <!-- 模式选择 pills（仅主页传入；空状态居中，对齐 DeepSeek） -->
+          <div v-if="slots['welcome-modes']" class="welcome-modes mb-6 flex justify-center">
+            <slot name="welcome-modes" />
+          </div>
+
+          <slot name="welcome-top" />
+
+          <!-- 预设提示词（两页共用实现） -->
+          <div v-if="suggestions.length" class="suggestion-grid mx-auto grid max-w-[600px] grid-cols-2 gap-3 max-[768px]:grid-cols-1">
+            <div v-for="s in suggestions" :key="s" class="suggestion-card cursor-pointer rounded-[10px] border border-line bg-panel px-4 py-3.5 text-left text-[13px] text-ink-2 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:-translate-y-px hover:border-ui-400 hover:bg-ui-50 hover:text-ui-600 hover:shadow-[0_4px_12px_rgba(13,148,136,0.1)]" @click="emit('suggest', s)">
+              {{ s }}
+            </div>
+          </div>
+
+          <slot name="welcome-bottom" />
+
+          <div v-if="!store.isLoggedIn" class="guest-hint mt-8 text-[13px] text-ink-3">
+            您当前以游客身份使用，<a href="javascript:void(0)" class="font-semibold text-ui-600 no-underline hover:underline" @click="goLogin">登录</a> 后可保存对话历史
+          </div>
+        </div>
+
+        <!-- 消息列表（安全渲染单点：助手内容统一 markstream escape） -->
+        <div v-for="msg in store.messages" :key="msg.id" class="message-item mb-6 flex gap-3" :class="[msg.role, msg.role === 'user' ? 'flex-row-reverse' : '']">
+          <div class="message-avatar flex h-9 w-9 shrink-0 items-center justify-center rounded-ctl" :class="msg.role === 'user' ? 'bg-ui-600 text-white' : 'bg-ui-100 text-ui-600'">
+            <el-icon v-if="msg.role === 'user'" :size="18"><User /></el-icon>
+            <el-icon v-else :size="18"><ChatDotRound /></el-icon>
+          </div>
+          <div class="message-content max-w-[75%] max-[768px]:max-w-[85%]">
+            <template v-if="msg.role === 'user'">
+              <div v-if="msg.images?.length" class="message-images mb-2 flex flex-wrap justify-end gap-2">
+                <el-image
+                  v-for="(img, i) in msg.images"
+                  :key="i"
+                  :src="img"
+                  :preview-src-list="msg.images"
+                  :initial-index="i"
+                  fit="cover"
+                  class="message-image-thumb h-[120px] w-[120px] cursor-pointer rounded-ctl border border-line"
+                  preview-teleported
+                />
+              </div>
+              <div v-if="msg.content" class="message-text break-words rounded-card bg-ui-600 px-4 py-3 text-sm leading-[1.7] text-white">{{ msg.content }}</div>
+            </template>
+            <div v-else class="message-text markstream-vue break-words rounded-card border border-line bg-panel px-4 py-3 text-sm leading-[1.7] text-ink">
+              <MarkdownRender
+                mode="chat"
+                :content="msg.content"
+                :final="true"
+                html-policy="escape"
+                :fade="false"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- 流式输出中 -->
+        <div v-if="store.streaming" class="message-item assistant mb-6 flex gap-3">
+          <div class="message-avatar flex h-9 w-9 shrink-0 items-center justify-center rounded-ctl bg-ui-100 text-ui-600">
+            <el-icon :size="18"><ChatDotRound /></el-icon>
+          </div>
+          <div class="message-content max-w-[75%] max-[768px]:max-w-[85%]">
+            <div v-if="store.streamingContent" class="message-text markstream-vue break-words rounded-card border border-line bg-panel px-4 py-3 text-sm leading-[1.7] text-ink">
+              <MarkdownRender
+                mode="chat"
+                :content="store.streamingContent"
+                :final="!store.streaming"
+                html-policy="escape"
+                :fade="false"
+              />
+            </div>
+            <div v-else class="message-loading flex gap-1 py-1">
+              <span class="loading-dot h-2 w-2 rounded-full bg-ui-400"></span>
+              <span class="loading-dot h-2 w-2 rounded-full bg-ui-400"></span>
+              <span class="loading-dot h-2 w-2 rounded-full bg-ui-400"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 输入区 -->
+      <div class="chat-input-area mx-auto w-full max-w-[900px] bg-panel px-6 pb-5 pt-3 max-[768px]:px-3 max-[768px]:pb-3 max-[768px]:pt-2">
+        <slot name="input-above" />
+        <div class="input-wrap flex items-center gap-2 rounded-xl border border-line bg-panel px-3 py-2 shadow-card transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] focus-within:border-ui-400" :class="[raisedInput ? 'input-wrap--raised min-h-[132px] flex-col items-stretch p-3 gap-3' : '', !raisedInput && !!slots['input-prefix'] ? 'has-image items-end' : '']">
+          <slot v-if="!raisedInput" name="input-prefix" />
+          <el-input
+            :model-value="inputText"
+            type="textarea"
+            :rows="raisedInput ? 4 : 2"
+            :autosize="raisedInput ? { minRows: 3, maxRows: 8 } : { minRows: 1, maxRows: 6 }"
+            :placeholder="inputPlaceholder"
+            resize="none"
+            @keydown.enter="handleEnter"
+            @update:model-value="emit('update:inputText', $event as string)"
+            :disabled="store.streaming"
+          />
+          <div v-if="raisedInput" class="input-footer flex items-center justify-between gap-3">
+            <div class="mode-selector flex items-center gap-2">
+              <slot name="input-footer-left" />
+            </div>
+            <div class="input-actions shrink-0">
               <UiButton variant="primary" v-if="!store.streaming" :icon="Promotion" :disabled="!canSend" @click="emit('send')">
                 发送
               </UiButton>
@@ -215,10 +293,18 @@
               </UiButton>
             </div>
           </div>
-          <slot name="input-extra" />
+          <div v-else class="input-actions shrink-0">
+            <UiButton variant="primary" v-if="!store.streaming" :icon="Promotion" :disabled="!canSend" @click="emit('send')">
+              发送
+            </UiButton>
+            <UiButton variant="danger" v-else :icon="VideoPause" @click="store.stopStreaming">
+              停止
+            </UiButton>
+          </div>
         </div>
-      </main>
-    </div>
+        <slot name="input-extra" />
+      </div>
+    </main>
   </div>
 </template>
 
@@ -227,23 +313,29 @@
 // 差异槽位化——主页模式选择器（input-footer-left）与模型告警（input-extra）、
 // 功能页图片队列（input-above/input-prefix）与快捷选项（welcome）。
 // 安全渲染单点：助手内容统一 markstream-vue + html-policy="escape"，AI 域不再有裸 v-html。
-import { ref, computed, useSlots, watch, nextTick, type Component } from 'vue'
+import { ref, computed, useSlots, watch, nextTick, onMounted, onBeforeUnmount, type Component } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Plus,
   Delete,
   Edit,
-  ArrowDown,
+  ArrowLeft,
   User,
   ChatDotRound,
   Promotion,
-  VideoPause
+  VideoPause,
+  Operation,
+  Close,
+  More,
+  Expand,
+  Fold
 } from '@element-plus/icons-vue'
 import MarkdownRender from 'markstream-vue'
 import 'markstream-vue/index.css'
 import { useAIAssistantStore } from '@/stores/aiAssistant'
 import { useAuthStore } from '@/stores/auth'
+import ThemeToggle from '@/components/ui/ThemeToggle.vue'
 import { authApi } from '@/api/auth'
 import { buildSubdomainUrl } from '@/utils/subdomain'
 import { formatShortDateTime } from '@/utils/format'
@@ -301,7 +393,69 @@ const homeUrl = buildSubdomainUrl('main', '/')
 // 运行时绑定（避免测试环境对静态资源 URL 的编译期解析）
 const logoSrc = '/images/HRWAIlogo.jpg'
 const displayName = computed(() => authStore.userInfo?.username || 'HRWAI 用户')
+// 空状态判定（欢迎区渲染条件 + 消息列表垂直居中开关）
+const isWelcome = computed(() => store.messages.length === 0 && !store.streaming)
+
 const messageListRef = ref<HTMLElement>()
+
+// ===== 侧栏状态：桌面收起（localStorage 持久化）+ 移动端抽屉 =====
+const COLLAPSE_KEY = 'ai-sidebar-collapsed'
+const collapsed = ref(localStorage.getItem(COLLAPSE_KEY) === '1')
+const mobileDrawerOpen = ref(false)
+// 视口判定（jsdom/SSR 安全默认桌面）
+const isMobile = ref(false)
+let mql: MediaQueryList | null = null
+
+function syncViewport(e: MediaQueryListEvent | MediaQueryList) {
+  isMobile.value = e.matches
+  if (!e.matches) mobileDrawerOpen.value = false
+}
+
+onMounted(() => {
+  mql = window.matchMedia('(max-width: 768px)')
+  syncViewport(mql)
+  mql.addEventListener('change', syncViewport)
+})
+
+onBeforeUnmount(() => {
+  mql?.removeEventListener('change', syncViewport)
+})
+
+watch(collapsed, v => {
+  localStorage.setItem(COLLAPSE_KEY, v ? '1' : '0')
+})
+
+// 会话时间分组五档（今天/昨天/7天内/30天内/更早），组内 updated_at 倒序
+const groupedSessions = computed(() => {
+  if (!store.isLoggedIn || store.sessions.length === 0) return []
+  const now = new Date()
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const DAY = 86_400_000
+  const groups: Array<{ label: string; sessions: typeof store.sessions }> = [
+    { label: '今天', sessions: [] },
+    { label: '昨天', sessions: [] },
+    { label: '7 天内', sessions: [] },
+    { label: '30 天内', sessions: [] },
+    { label: '更早', sessions: [] }
+  ]
+  const sorted = [...store.sessions].sort(
+    (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+  )
+  for (const s of sorted) {
+    const t = new Date(s.updated_at).getTime()
+    if (Number.isNaN(t)) {
+      groups[4].sessions.push(s)
+      continue
+    }
+    const dayDiff = Math.floor((startOfToday - new Date(t).setHours(0, 0, 0, 0)) / DAY)
+    if (dayDiff <= 0) groups[0].sessions.push(s)
+    else if (dayDiff === 1) groups[1].sessions.push(s)
+    else if (dayDiff < 7) groups[2].sessions.push(s)
+    else if (dayDiff < 30) groups[3].sessions.push(s)
+    else groups[4].sessions.push(s)
+  }
+  return groups.filter(g => g.sessions.length > 0)
+})
 
 // ===== 会话重命名（主页 enableRename 时启用） =====
 const editingSessionId = ref<number | null>(null)
@@ -383,6 +537,10 @@ function goLogin() {
 }
 
 async function handleUserCommand(cmd: string) {
+  if (cmd === 'profile') {
+    router.push('/training/profile')
+    return
+  }
   if (cmd === 'logout') {
     try {
       await authApi.logout()
@@ -417,480 +575,12 @@ watch(() => store.streamingContent, () => scrollToBottom(), { flush: 'post' })
 </script>
 
 <style scoped>
-.ai-chat-shell {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  background: var(--color-bg-page, #f8fafc);
-}
-
-/* ===== 顶部栏 ===== */
-.topbar {
-  background: var(--color-surface, #fff);
-  border-bottom: 1px solid var(--color-border, #e2e8f0);
-  flex-shrink: 0;
-}
-
-.topbar-container {
-  max-width: 1600px;
-  margin: 0 auto;
-  padding: 0 var(--space-6, 24px);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 64px;
-  gap: var(--space-4, 16px);
-}
-
-.logo-link {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3, 12px);
-  text-decoration: none;
-  flex-shrink: 0;
-}
-
-.logo-img {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  object-fit: cover;
-}
-
-.logo-text-wrap {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.1;
-}
-
-.logo-text {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--color-text-primary, #0f172a);
-}
-
-.logo-sub {
-  font-size: 11px;
-  color: var(--color-text-tertiary, #94a3b8);
-  letter-spacing: 0.1em;
-  margin-top: 2px;
-}
-
-.topbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-shrink: 0;
-}
-
-.user-trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--color-text-primary, #0f172a);
-  padding: 6px 12px;
-  border-radius: 8px;
-  transition: background var(--duration-fast) var(--ease-default);
-}
-
-.user-trigger:hover {
-  background: var(--color-bg-page, #f8fafc);
-}
-
-.profile-link {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--color-primary-600, #2563eb);
-  text-decoration: none;
-  transition: opacity var(--duration-fast) var(--ease-default);
-}
-
-.profile-link:hover {
-  opacity: 0.8;
-  text-decoration: underline;
-}
-
-.back-link {
-  font-size: 13px;
-  color: var(--color-text-secondary, #475569);
-  text-decoration: none;
-  padding: 6px 12px;
-  border: 1px solid var(--color-border-dark, #cbd5e1);
-  border-radius: 8px;
-  transition: all var(--duration-fast) var(--ease-default);
-}
-
-.back-link:hover {
-  border-color: var(--color-primary-500);
-  color: var(--color-primary-600);
-}
-
-/* ===== 主体布局 ===== */
-.main-body {
-  flex: 1;
-  display: flex;
-  overflow: hidden;
-}
-
-/* ===== 会话侧栏 ===== */
-.session-sidebar {
-  width: 260px;
-  background: var(--color-surface, #fff);
-  border-right: 1px solid var(--color-border-light, #e2e8f0);
-  display: flex;
-  flex-direction: column;
-  flex-shrink: 0;
-}
-
-.sidebar-header {
-  padding: 12px 16px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--color-border-light, #e2e8f0);
-}
-
-.sidebar-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text-secondary, #475569);
-}
-
-.session-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px;
-}
-
-.empty-sessions {
-  text-align: center;
-  color: var(--color-text-tertiary, #94a3b8);
-  font-size: 13px;
-  padding: 32px 12px;
-}
-
-.session-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-default);
-  margin-bottom: 4px;
-}
-
-.session-item:hover {
-  background: var(--color-bg-page, #f8fafc);
-}
-
-.session-item.active {
-  background: var(--color-primary-50);
-}
-
-.session-info {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.session-title {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--color-text-primary, #0f172a);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.session-time {
-  font-size: 11px;
-  color: var(--color-text-tertiary, #94a3b8);
-}
-
-.session-delete {
-  border: none;
-  background: transparent;
-  color: var(--color-text-tertiary, #94a3b8);
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  opacity: 0;
-  transition: all var(--duration-fast) var(--ease-default);
-  flex-shrink: 0;
-}
-
-.session-rename {
-  border: none;
-  background: transparent;
-  color: var(--color-text-tertiary, #94a3b8);
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  opacity: 0;
-  transition: all var(--duration-fast) var(--ease-default);
-}
-
-.session-actions {
-  display: flex;
-  gap: 2px;
-  opacity: 1;
-}
-
-.session-item:hover .session-rename,
-.session-item:hover .session-delete {
-  opacity: 1;
-}
-
-.session-rename:hover {
-  color: var(--color-primary-600);
-  background: var(--color-primary-50);
-}
-
-.session-delete:hover {
-  color: var(--color-danger, #ef4444);
-  background: var(--color-danger-light, #fef2f2);
-}
-
-.session-item.editing {
-  background: var(--color-primary-50);
-  cursor: default;
-}
-
-.session-item.editing .session-info {
-  gap: 4px;
-}
-
-/* ===== 对话主区 ===== */
-.chat-main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  background: var(--color-bg-page, #f8fafc);
-}
-
-.message-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 24px;
-  max-width: 900px;
-  margin: 0 auto;
-  width: 100%;
-}
-
-/* ===== 欢迎区 ===== */
-.welcome-area {
-  text-align: center;
-  padding: 48px 24px;
-}
-
-.welcome-icon {
-  width: 72px;
-  height: 72px;
-  border-radius: 20px;
-  background: linear-gradient(135deg, var(--color-violet-500, #6366f1), #8b5cf6);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  margin-bottom: 20px;
-}
-
-.welcome-title {
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--color-text-primary, #0f172a);
-  margin: 0 0 8px;
-}
-
-.welcome-desc {
-  font-size: 14px;
-  color: var(--color-text-tertiary, #94a3b8);
-  line-height: 1.6;
-  max-width: 560px;
-  margin: 0 auto 24px;
-}
-
-/* ===== 预设提示词 ===== */
-.suggestion-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-  max-width: 600px;
-  margin: 0 auto;
-}
-
-.suggestion-card {
-  padding: 14px 16px;
-  background: var(--color-surface, #fff);
-  border: 1px solid var(--color-border-light, #e2e8f0);
-  border-radius: 10px;
-  font-size: 13px;
-  color: var(--color-text-secondary, #475569);
-  cursor: pointer;
-  text-align: left;
-  transition: all var(--duration-fast) var(--ease-default);
-}
-
-.suggestion-card:hover {
-  border-color: var(--color-primary-400);
-  background: var(--color-primary-50);
-  color: var(--color-primary-600);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.1);
-}
-
-.guest-hint {
-  margin-top: 32px;
-  font-size: 13px;
-  color: var(--color-text-tertiary, #94a3b8);
-}
-
-.guest-hint a {
-  color: var(--color-primary-600);
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.guest-hint a:hover {
-  text-decoration: underline;
-}
-
-/* ===== 消息项 ===== */
-.message-item {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 24px;
-}
-
-.message-item.user {
-  flex-direction: row-reverse;
-}
-
-.message-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  background: var(--color-primary-100);
-  color: var(--color-primary-600);
-}
-
-.message-item.user .message-avatar {
-  background: var(--color-primary-600);
-  color: white;
-}
-
-.message-content {
-  max-width: 75%;
-}
-
-.message-text {
-  padding: 12px 16px;
-  border-radius: 12px;
-  font-size: 14px;
-  line-height: 1.7;
-  word-break: break-word;
-}
-
-.message-item.assistant .message-text {
-  background: var(--color-surface, #fff);
-  border: 1px solid var(--color-border-light, #e2e8f0);
-  color: var(--color-text-primary, #0f172a);
-}
-
-.message-item.user .message-text {
-  background: var(--color-primary-600);
-  color: white;
-}
-
-/* 用户消息图片 */
-.message-images {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  margin-bottom: 8px;
-}
-
-.message-image-thumb {
-  width: 120px;
-  height: 120px;
-  border-radius: 8px;
-  border: 1px solid var(--color-border-light, #e2e8f0);
-  cursor: pointer;
-}
-
-/* ===== 加载动画 ===== */
-.message-loading {
-  display: flex;
-  gap: 4px;
-  padding: 4px 0;
-}
-
-.loading-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--color-primary-400);
-  animation: dot-bounce 1.4s infinite ease-in-out;
-}
-
-.loading-dot:nth-child(2) { animation-delay: 0.2s; }
-.loading-dot:nth-child(3) { animation-delay: 0.4s; }
-
-@keyframes dot-bounce {
-  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
-  40% { transform: scale(1); opacity: 1; }
-}
-
-/* ===== 输入区 ===== */
-.chat-input-area {
-  padding: 12px 24px 20px;
-  background: var(--color-bg-page, #f8fafc);
-  max-width: 900px;
-  margin: 0 auto;
-  width: 100%;
-}
-
-.input-wrap {
-  background: var(--color-surface, #fff);
-  border: 1px solid var(--color-border-light, #e2e8f0);
-  border-radius: 12px;
-  padding: 8px 12px;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  transition: border-color var(--duration-fast) var(--ease-default);
-}
-
-.input-wrap.has-image {
-  align-items: flex-end;
-}
-
-.input-wrap--raised {
-  flex-direction: column;
-  align-items: stretch;
-  min-height: 132px;
-  padding: 12px;
-  gap: 12px;
-}
+/* R1 允许保留：:deep(EP 内部)、keyframes 与 nth-child 动画延迟。其余样式已全部原子化。
+   语义类名（ai-chat-shell/topbar/session-item/welcome-area 等）全部保留在模板上，
+   是 chat-page-shell.spec.ts 的 DOM 定位钩子，不得删除。 */
 
 .input-wrap--raised :deep(.el-textarea) {
   flex: 1;
-}
-
-.input-wrap:focus-within {
-  border-color: var(--color-primary-400);
 }
 
 .input-wrap :deep(.el-textarea__inner) {
@@ -902,64 +592,15 @@ watch(() => store.streamingContent, () => scrollToBottom(), { flush: 'post' })
   line-height: 1.6;
 }
 
-.input-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+.loading-dot {
+  animation: dot-bounce 1.4s infinite ease-in-out;
 }
 
-.mode-selector {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
+.loading-dot:nth-child(2) { animation-delay: 0.2s; }
+.loading-dot:nth-child(3) { animation-delay: 0.4s; }
 
-.input-actions {
-  flex-shrink: 0;
-}
-
-/* ===== 响应式 ===== */
-@media (max-width: 768px) {
-  .topbar-container {
-    padding: 0 12px;
-    height: 56px;
-  }
-
-  .logo-text {
-    font-size: 14px;
-  }
-
-  .logo-sub {
-    display: none;
-  }
-
-  .topbar-actions {
-    gap: 8px;
-  }
-
-  .back-link {
-    display: none;
-  }
-
-  .session-sidebar {
-    display: none;
-  }
-
-  .message-list {
-    padding: 16px;
-  }
-
-  .message-content {
-    max-width: 85%;
-  }
-
-  .suggestion-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .chat-input-area {
-    padding: 8px 12px 12px;
-  }
+@keyframes dot-bounce {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40% { transform: scale(1); opacity: 1; }
 }
 </style>

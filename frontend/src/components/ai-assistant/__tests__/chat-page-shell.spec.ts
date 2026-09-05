@@ -34,6 +34,15 @@ vi.mock('markstream-vue', () => ({
   }
 }))
 vi.mock('markstream-vue/index.css', () => ({}))
+// 主题 store 是 pinia store 且模块顶层创建 matchMedia —— 测试中 mock 掉
+vi.mock('@/stores/theme', () => ({
+  useThemeStore: () => ({
+    mode: 'system',
+    resolved: 'light',
+    setMode: vi.fn(),
+    cycle: vi.fn()
+  })
+}))
 
 function makeStore(overrides: Record<string, unknown> = {}) {
   return reactive({
@@ -152,21 +161,23 @@ describe('ChatPageShell 安全渲染', () => {
 })
 
 describe('ChatPageShell 侧栏与会话操作', () => {
-  it('未登录不渲染侧栏，登录后渲染', async () => {
+  it('未登录渲染登录引导侧栏（无会话项）；登录后渲染会话项', async () => {
     mocks.store = makeStore({ isLoggedIn: false })
     const guest = mountShell({})
-    expect(guest.find('.session-sidebar').exists()).toBe(false)
+    expect(guest.find('.session-sidebar').exists()).toBe(true)
+    expect(guest.text()).toContain('登录 HRWAI 账号')
+    expect(guest.find('.session-item').exists()).toBe(false)
 
     mocks.store = makeStore()
     const logged = mountShell({})
-    expect(logged.find('.session-sidebar').exists()).toBe(true)
+    expect(logged.find('.session-item').exists()).toBe(true)
   })
 
-  it('点击会话触发 selectSession；新建按钮发出 new-session', async () => {
+  it('点击会话触发 selectSession；开启新对话按钮发出 new-session', async () => {
     const w = mountShell({})
     await w.find('.session-item').trigger('click')
     expect(mocks.store.selectSession).toHaveBeenCalledWith(1)
-    await w.find('.sidebar-header .el-button').trigger('click')
+    await w.find('.new-chat-btn').trigger('click')
     expect(w.emitted('new-session')).toBeTruthy()
   })
 
@@ -207,11 +218,9 @@ describe('ChatPageShell 输入与发送', () => {
     expect(mocks.store.stopStreaming).toHaveBeenCalled()
   })
 
-  it('顶部栏按 props 渲染返回链接与副标题', () => {
+  it('侧栏按 props 渲染副标题与返回链接（顶栏已移除，logo/返回链接均在侧栏）', () => {
     const w = mountShell({ backLinkTo: '/ai-assistant', backLinkText: '返回 AI 助手' })
     expect(w.find('.logo-sub').text()).toBe('AI 叉车助手 · 测试')
-    const links = w.findAll('.back-link').map(l => l.text())
-    expect(links).toContain('返回 AI 助手')
-    expect(links).toContain('返回官网')
+    expect(w.find('.back-link').text()).toContain('返回 AI 助手')
   })
 })

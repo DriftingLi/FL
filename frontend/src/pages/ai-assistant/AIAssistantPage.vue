@@ -31,6 +31,14 @@
       </div>
     </template>
 
+    <!-- 空状态：模式选择 pills（居中，对齐 DeepSeek；会话进行中在输入框 footer 左侧） -->
+    <template #welcome-modes>
+      <el-radio-group v-model="selectedMode" size="small" :disabled="store.streaming">
+        <el-radio-button value="normal" :disabled="!store.modeModels.normal">普通模式</el-radio-button>
+        <el-radio-button value="expert" :disabled="!store.modeModels.expert">专家模式</el-radio-button>
+      </el-radio-group>
+    </template>
+
     <!-- 输入区差异内容：双模式选择 -->
     <template #input-footer-left>
       <el-radio-group v-model="selectedMode" size="small" :disabled="store.streaming">
@@ -105,9 +113,9 @@ function useSuggestion(text: string) {
   handleSend()
 }
 
-async function handleNewSession() {
-  const label = store.selectedMode === 'expert' ? '专家模式' : '普通模式'
-  await store.createSession('新会话', label)
+// 只切本地草稿态：会话在首次发消息时才创建（避免没说话就产生空历史）
+function handleNewSession() {
+  store.startDraft()
 }
 
 onMounted(() => {
@@ -116,7 +124,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* ===== 专项功能入口（本页差异样式） ===== */
+/* ===== 专项功能入口（本页差异样式；#554 原则：色值走 token，深浅主题跟随） ===== */
 .feature-entry-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -131,8 +139,8 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
   padding: 16px 10px;
-  background: var(--color-surface, #fff);
-  border: 1px solid var(--color-border-light, #e2e8f0);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-light);
   border-radius: 10px;
   cursor: pointer;
   transition: all var(--duration-fast) var(--ease-default);
@@ -152,12 +160,12 @@ onMounted(() => {
 .feature-entry-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-text-primary, #0f172a);
+  color: var(--color-text-primary);
 }
 
 .feature-entry-desc {
   font-size: 11px;
-  color: var(--color-text-tertiary, #94a3b8);
+  color: var(--color-text-tertiary);
   text-align: center;
   line-height: 1.4;
 }
@@ -165,7 +173,7 @@ onMounted(() => {
 .model-warning {
   text-align: center;
   font-size: 12px;
-  color: var(--color-text-tertiary, #f59e0b);
+  color: var(--color-warning-strong);
   margin-top: 8px;
 }
 

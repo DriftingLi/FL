@@ -114,6 +114,18 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     if (target) target.title = trimmed
   }
 
+  /**
+   * 开启「新对话草稿态」：只清本地消息并断开当前会话，**不落库**。
+   * 后端仅在 session_id > 0 时持久化，因此不预建会话即可避免「点一下就产生空历史」；
+   * 真正的会话在首次 sendMessage 时才创建（见 sendMessage 懒创建分支）。
+   */
+  function startDraft() {
+    if (streaming.value) return
+    currentSessionId.value = null
+    messages.value = []
+    streamingContent.value = ''
+  }
+
   async function selectSession(id: number) {
     if (!isLoggedIn.value) return
     currentSessionId.value = id
@@ -134,6 +146,13 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     if (!isFeatureMode.value) {
       const modeAvailable = selectedMode.value === 'normal' ? !!modeModels.value.normal : !!modeModels.value.expert
       if (!modeAvailable) throw new Error('当前模式未绑定模型，请联系管理员配置')
+    }
+
+    // 懒创建会话：后端仅在 session_id > 0 时持久化消息，因此「开启新对话」只切本地草稿态，
+    // 真正落库的时机推迟到用户发出第一条消息（避免侧栏出现没说过话的空会话）
+    if (isLoggedIn.value && !currentSessionId.value) {
+      const session = await createSession()
+      if (!session) return
     }
 
     const reqImages = images && images.length > 0 ? images : undefined
@@ -296,6 +315,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     createSession,
     deleteSession,
     renameSession,
+    startDraft,
     selectSession,
     sendMessage,
     stopStreaming,

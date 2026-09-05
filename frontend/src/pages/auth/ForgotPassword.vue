@@ -314,7 +314,3 @@ async function handleSubmit() {
   await flow.handleSubmit(targetRef)
 }
 </script>
-
-<style scoped>
-/* 表单共享样式已在 AuthPageShell 外壳收敛（:deep 触达 slot） */
-</style>

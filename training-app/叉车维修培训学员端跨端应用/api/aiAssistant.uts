@@ -8,7 +8,7 @@
  * @note chat 为 SSE 流：event: delta/done/error + data: {...}
  *       uni.request 不支持增量流式回调，这里整包接收后解析 delta 文本。
  */
-import { get, post, del, patch } from './request'
+import { get, post, del, patch, uploadFile } from './request'
 import { toNumber, toStr } from './helpers'
 import { API_BASE_URL, AI_REQUEST_TIMEOUT } from '../config/env'
 import { STORAGE_KEY_TOKEN } from '../constants/app'
@@ -127,6 +127,37 @@ export function saveAiUserModelApi(payload : UTSJSONObject) : Promise<AiUserMode
 /** 删除自定义模型 */
 export function deleteAiUserModelApi(id : number) : Promise<void> {
 	return del('/ai-assistant/user-models/' + id).then((_d : UTSJSONObject) : void => { })
+}
+
+/**
+ * 上传 AI 对话图片（复用 AI 专用 /ai-assistant/upload-image；严禁复用论坛上传端点）
+ * @param filePath 本地临时图片路径（uni.chooseImage 返回）
+ * @returns 可随消息携带的图片 URL
+ */
+export function uploadAiImageApi(filePath : string) : Promise<string> {
+	return uploadFile('/ai-assistant/upload-image', filePath, 'file').then((data : UTSJSONObject) : string => {
+		const url = toStr(data['url'], '')
+		return url
+	})
+}
+
+/**
+ * 双模式模型列表（normal / expert 各绑定一个平台模型）
+ * @returns { normal?: AiModel|null, expert?: AiModel|null }
+ */
+export function getAiModesApi() : Promise<UTSJSONObject> {
+	return get('/ai-assistant/modes', null).then((data : UTSJSONObject) : UTSJSONObject => {
+		const out : UTSJSONObject = {}
+		const normal = data['normal']
+		if (normal != null) {
+			out['normal'] = buildAiModel(normal as UTSJSONObject)
+		}
+		const expert = data['expert']
+		if (expert != null) {
+			out['expert'] = buildAiModel(expert as UTSJSONObject)
+		}
+		return out
+	})
 }
 
 /** 会话列表 */

@@ -8,6 +8,7 @@
 			</view>
 		</view>
 		<view class="input-row">
+			<text v-if="showImageButton" class="image-btn" @click="onImageClick">&#128206;</text>
 			<view class="input-box">
 				<input v-model="inputText" class="chat-input" :placeholder="placeholder" confirm-type="send" @confirm="onSend" />
 			</view>
@@ -22,14 +23,16 @@
 		showModelBar?: boolean
 		modelName?: string
 		disabled?: boolean
+		showImageButton?: boolean
 	}>(), {
 		placeholder: '提出你想要知道的问题',
 		showModelBar: false,
 		modelName: '',
-		disabled: false
+		disabled: false,
+		showImageButton: false
 	})
 
-	const emit = defineEmits(['send', 'modelClick'])
+	const emit = defineEmits(['send', 'modelClick', 'imageClick'])
 
 	const inputText = ref<string>('')
 
@@ -42,6 +45,10 @@
 
 	function onModelClick() : void {
 		emit('modelClick')
+	}
+
+	function onImageClick() : void {
+		emit('imageClick')
 	}
 </script>
 
@@ -102,6 +109,13 @@
 		height: 72rpx;
 		font-size: 28rpx;
 		color: #333333;
+	}
+
+	.image-btn {
+		font-size: 40rpx;
+		color: #666666;
+		padding: 12rpx;
+		margin-right: 8rpx;
 	}
 
 	.send-btn {

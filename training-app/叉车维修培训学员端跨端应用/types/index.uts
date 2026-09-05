@@ -695,6 +695,7 @@ export type AnswerState = {
 export type AiChatMessage = {
     role : string       // user | assistant | system
     content : string
+    images ?: string[]  // 用户消息附带的图片 URL（仅最后一条用户消息生效，后端 StreamChatReq.Messages[].Images）
 }
 
 /** 平台可用模型 */
@@ -732,6 +733,7 @@ export type AiSessionMessage = {
     role : string
     content : string
     created_at : string
+    images ?: string[]  // 用户消息附带图片 URL（仅最后一条用户消息生效）
 }
 
 /** 对话设置（本地缓存） */
