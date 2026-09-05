@@ -476,7 +476,7 @@ func (s *AIConfigService) loadResolveConfig(ctx context.Context, featureKey stri
 // ResolveAssistantPair AI 助手双模式绑定解析（降级阶梯单点，#397）：
 // ① normal/expert 各自单绑定 → ② 双双未绑定时回退遗留 ai_assistant 多绑定
 // （第一条→normal，第二条→expert，仅一条时 expert 复用 normal）。
-// 展示（ListAssistantModes）与对话解析（resolveModelConfig）共用，不再各写一份阶梯。
+// 展示（ListAssistantModes）与对话凭证解析（ResolveChatSettings）共用，不再各写一份阶梯。
 func (s *AIConfigService) ResolveAssistantPair(ctx context.Context) (normal, expert *model.AIConfig, err error) {
 	normalCfgs, err := s.ListConfigsForFeature(ctx, FeatureAIAssistantNormal)
 	if err != nil {
@@ -510,6 +510,103 @@ func (s *AIConfigService) ResolveAssistantPair(ctx context.Context) (normal, exp
 		expert = &expertCfgs[0]
 	}
 	return normal, expert, nil
+}
+
+// AIConfigResolver 由 *AIConfigService 提供唯一实现（ADR-0029 决策 2：解析知识不泄出配置 service）。
+var _ AIConfigResolver = (*AIConfigService)(nil)
+
+// featureChatKeys 专项对话功能键集合（模型由管理端单绑定解析，用户无需选模型）。
+// （自 ai_assistant_service.go 迁入：唯一消费方是对话凭证解析。）
+var featureChatKeys = map[string]bool{
+	FeatureFaultConsult:         true,
+	FeatureFaultCodeQuery:       true,
+	FeatureMaintenanceKnowledge: true,
+	FeatureDrawingRecognition:   true,
+	FeatureExerciseSolving:      true,
+}
+
+// ResolveFeatureSettings 阻塞栈凭证解析（AIConfigResolver 实现；自 AIService.ensureClient
+// 的解析段迁入）：featureKey → 管理端单绑定；空键/未绑定报错（不再降级到环境变量）。
+func (s *AIConfigService) ResolveFeatureSettings(ctx context.Context, featureKey string) (AISettings, error) {
+	if featureKey == "" {
+		return AISettings{}, fmt.Errorf("AI 功能 %q 未绑定配置，请在管理员后台 AI 配置页面绑定", featureKey)
+	}
+	cur := s.ResolveConfig(ctx, featureKey)
+	if cur.APIKey == "" {
+		return AISettings{}, fmt.Errorf("AI 功能 %q 未绑定配置，请在管理员后台 AI 配置页面绑定", featureKey)
+	}
+	return cur, nil
+}
+
+// ResolveChatSettings 对话凭证解析（AIConfigResolver 实现；自 AIAssistantService.resolveModelConfig
+// 迁入，三重 switch 的知识内聚在配置 service，#606）。
+// 优先级：专项功能（FeatureKey，管理端单绑定）→ Mode 双模式（normal/expert）→ 兼容旧 ModelSource。
+func (s *AIConfigService) ResolveChatSettings(ctx context.Context, sel AIModelSelector) (AISettings, error) {
+	// 专项功能：由管理端单绑定解析，忽略选择子中的模型来源字段（防绕过）
+	if featureChatKeys[sel.FeatureKey] {
+		mc := s.ResolveConfig(ctx, sel.FeatureKey)
+		if mc.APIKey == "" {
+			return AISettings{}, errors.New("管理员未配置该功能的模型，请联系管理员")
+		}
+		return mc, nil
+	}
+	// 通用助手：Mode 双模式（隐藏底层模型）——降级阶梯在 ResolveAssistantPair 单点
+	if sel.Mode == ModeNormal || sel.Mode == ModeExpert {
+		normal, expert, err := s.ResolveAssistantPair(ctx)
+		if err != nil {
+			return AISettings{}, fmt.Errorf("校验可用模型失败: %w", err)
+		}
+		cfg := normal
+		if sel.Mode == ModeExpert {
+			cfg = expert
+		}
+		if cfg == nil {
+			return AISettings{}, errors.New("该模式未绑定模型，请联系管理员配置")
+		}
+		return AISettings{APIKey: cfg.APIKey, BaseURL: cfg.BaseURL, Model: cfg.Model, Source: "binding:" + cfg.Name}, nil
+	}
+	switch sel.ModelSource {
+	case "admin":
+		// 校验该配置是否被管理员绑定到 AI 助手功能（兼容旧前端：同时校验新双绑定的两个 Feature）
+		boundCfgsNormal, _ := s.ListConfigsForFeature(ctx, FeatureAIAssistantNormal)
+		boundCfgsExpert, _ := s.ListConfigsForFeature(ctx, FeatureAIAssistantExpert)
+		boundCfgsLegacy, _ := s.ListConfigsForFeature(ctx, FeatureAIAssistant)
+		allBound := append(append(boundCfgsNormal, boundCfgsExpert...), boundCfgsLegacy...)
+		var cfg *model.AIConfig
+		for i := range allBound {
+			if allBound[i].ID == sel.ConfigID {
+				cfg = &allBound[i]
+				break
+			}
+		}
+		if cfg == nil {
+			return AISettings{}, errors.New("该模型未绑定到 AI 助手，请联系管理员或选择自定义模型")
+		}
+		return AISettings{APIKey: cfg.APIKey, BaseURL: cfg.BaseURL, Model: cfg.Model, Source: "binding:" + cfg.Name}, nil
+	case "user":
+		if sel.UserID == 0 {
+			return AISettings{}, errors.New("未登录不能使用用户自定义模型")
+		}
+		var m model.AIUserModel
+		if err := s.db.WithContext(ctx).Where("id = ? AND user_id = ?", sel.UserModelID, sel.UserID).
+			Limit(1).Find(&m).Error; err != nil {
+			return AISettings{}, err
+		}
+		if m.ID == 0 {
+			return AISettings{}, gorm.ErrRecordNotFound
+		}
+		key, err := security.DecryptSecret(m.APIKey, s.secretKey)
+		if err != nil {
+			return AISettings{}, fmt.Errorf("解密用户自定义模型 API Key 失败: %w", err)
+		}
+		return AISettings{APIKey: key, BaseURL: m.BaseURL, Model: m.Model, Source: "user:" + m.Name}, nil
+	case "custom":
+		if sel.CustomAPIKey == "" || sel.CustomBaseURL == "" || sel.CustomModel == "" {
+			return AISettings{}, errors.New("自定义模型配置不完整")
+		}
+		return AISettings{APIKey: sel.CustomAPIKey, BaseURL: sel.CustomBaseURL, Model: sel.CustomModel, Source: "custom"}, nil
+	}
+	return AISettings{}, fmt.Errorf("未知的 model_source: %s", sel.ModelSource)
 }
 
 // TestConfig 管理端配置连通性测试：解密配置后建 go-openai client 发最小补全请求

@@ -64,9 +64,9 @@ func TestResolveAssistantLadderThreeTiers(t *testing.T) {
 	if modes.Normal == nil || modes.Normal.Name != "legacy0" || modes.Expert == nil || modes.Expert.Name != "legacy1" {
 		t.Fatalf("遗留回退映射异常: %+v", modes)
 	}
-	mc, err := assistant.resolveModelConfig(ctx, 0, StreamChatReq{Mode: ModeExpert})
+	mc, err := cfgSvc.ResolveChatSettings(ctx, AIModelSelector{Mode: ModeExpert})
 	if err != nil {
-		t.Fatalf("resolveModelConfig(expert) 失败: %v", err)
+		t.Fatalf("ResolveChatSettings(expert) 失败: %v", err)
 	}
 	if !strings.Contains(mc.APIKey, "legacy1") {
 		t.Fatalf("expert 模式应解析到遗留第二条配置: %+v", mc)
@@ -84,10 +84,10 @@ func TestResolveAssistantLadderThreeTiers(t *testing.T) {
 	if modes.Normal == nil || modes.Normal.Name != "normal-bind" || modes.Expert != nil {
 		t.Fatalf("双模式解析异常: %+v", modes)
 	}
-	if _, err := assistant.resolveModelConfig(ctx, 0, StreamChatReq{Mode: ModeExpert}); err == nil {
+	if _, err := cfgSvc.ResolveChatSettings(ctx, AIModelSelector{Mode: ModeExpert}); err == nil {
 		t.Fatal("expert 未绑定应报错")
 	}
-	mc, err = assistant.resolveModelConfig(ctx, 0, StreamChatReq{Mode: ModeNormal})
+	mc, err = cfgSvc.ResolveChatSettings(ctx, AIModelSelector{Mode: ModeNormal})
 	if err != nil || !strings.Contains(mc.APIKey, "normal-bind") {
 		t.Fatalf("normal 模式解析异常: %+v err=%v", mc, err)
 	}
@@ -97,7 +97,7 @@ func TestResolveAssistantLadderThreeTiers(t *testing.T) {
 	if err := cfgSvc.SetBinding(ctx, FeatureFaultConsult, faultID); err != nil {
 		t.Fatalf("SetBinding(fault) 失败: %v", err)
 	}
-	mc, err = assistant.resolveModelConfig(ctx, 0, StreamChatReq{
+	mc, err = cfgSvc.ResolveChatSettings(ctx, AIModelSelector{
 		FeatureKey: FeatureFaultConsult, ModelSource: "custom",
 		CustomAPIKey: "sk-bypass", CustomBaseURL: "https://evil.example.com", CustomModel: "evil",
 	})
@@ -106,7 +106,7 @@ func TestResolveAssistantLadderThreeTiers(t *testing.T) {
 	}
 
 	// 专项未绑定 → 报错
-	if _, err := assistant.resolveModelConfig(ctx, 0, StreamChatReq{FeatureKey: FeatureExerciseSolving}); err == nil {
+	if _, err := cfgSvc.ResolveChatSettings(ctx, AIModelSelector{FeatureKey: FeatureExerciseSolving}); err == nil {
 		t.Fatal("专项未绑定应报错")
 	}
 }
@@ -165,13 +165,15 @@ func TestResolveHotCacheInvalidation(t *testing.T) {
 type fakeStreamingTransport struct {
 	mu      sync.Mutex
 	content string
+	gotSel  AIModelSelector
 	gotMsgs []*schema.Message
 	chunks  []string
 }
 
-func (f *fakeStreamingTransport) StreamComplete(_ context.Context, _ AISettings, msgs []*schema.Message, onChunk func(string)) (string, error) {
+func (f *fakeStreamingTransport) StreamComplete(_ context.Context, sel AIModelSelector, msgs []*schema.Message, onChunk func(string)) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.gotSel = sel
 	f.gotMsgs = msgs
 	if onChunk != nil {
 		onChunk(f.content)
@@ -181,10 +183,10 @@ func (f *fakeStreamingTransport) StreamComplete(_ context.Context, _ AISettings,
 }
 
 // snapshot 读取 fake 记录（与后台 goroutine 同步）。
-func (f *fakeStreamingTransport) snapshot() ([]*schema.Message, []string) {
+func (f *fakeStreamingTransport) snapshot() (AIModelSelector, []*schema.Message, []string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.gotMsgs, f.chunks
+	return f.gotSel, f.gotMsgs, f.chunks
 }
 
 // fakeBlockingTransport 阻塞槽位 fake。
@@ -228,9 +230,14 @@ func TestStreamingSlotInjectedEndToEnd(t *testing.T) {
 	}
 
 	// prompt 组装：首位为通用专家系统提示词（FeatureKey 为空），末位为用户消息
-	gotMsgs, gotChunks := fake.snapshot()
+	gotSel, gotMsgs, gotChunks := fake.snapshot()
 	if len(gotChunks) != 1 {
 		t.Fatalf("槽位应仅被主对话调用一次, got %d", len(gotChunks))
+	}
+	// 选择子投影：请求的模型来源字段应原样透传给槽位（解析在槽位内完成）
+	if gotSel.ModelSource != "custom" || gotSel.CustomAPIKey != "sk-custom" ||
+		gotSel.CustomBaseURL != "https://custom.example.com/v1" || gotSel.CustomModel != "gpt-4o" || gotSel.UserID != 7 {
+		t.Fatalf("选择子投影异常: %+v", gotSel)
 	}
 	if len(gotMsgs) != 2 || gotMsgs[0].Role != schema.System || gotMsgs[0].Content != forkliftExpertSystemPrompt {
 		t.Fatalf("系统提示词组装异常: %+v", gotMsgs)
