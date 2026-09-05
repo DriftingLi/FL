@@ -1,0 +1,103 @@
+/**
+ * 打卡 API（独立激励模块，已从论坛域剥离）
+ * 路由：POST /check-in、GET /check-in/calendar（旧 /forum/check-in/* 已删除，见根仓库 ADR-0028）
+ * @note 后端响应已由 request 层自动解包 data 字段
+ *
+ * 打卡响应：{ checked, streak, total, today_checked, points }
+ *   当日实发分值 = 基础 5 分 + 连击阶梯（满 3/7/30 天当日额外 +5/+10/+50）。
+ *   字段名后端未最终定稿，此处做 points / points_earned 双读兜底。
+ * 日历响应：{ days: [{ date, checked, points }], streak, total, today_checked }
+ *   points 为该日实发积分（历史无流水的旧打卡为 0）。
+ */
+import { get, post } from './request'
+import { toNumber, toStr, toBool, errMsg } from './helpers'
+import type { CheckInResult, CheckInCalendarResult, CheckInCalendarDay } from '../types/index'
+
+/** 当日实发积分防御解析：优先 points，兜底 points_earned（字段名未定稿），均缺失为 0 */
+function extractEarnedPoints(obj : UTSJSONObject) : number {
+    const primary = obj['points']
+    if (primary != null) return toNumber(primary)
+    const fallback = obj['points_earned']
+    if (fallback != null) return toNumber(fallback)
+    return 0
+}
+
+/** 构造 CheckInResult（从 UTSJSONObject） */
+function buildCheckInResult(obj : UTSJSONObject) : CheckInResult {
+    return {
+        checked: toBool(obj['checked']),
+        streak: toNumber(obj['streak']),
+        total: toNumber(obj['total']),
+        today_checked: toBool(obj['today_checked']),
+        points: extractEarnedPoints(obj),
+    } as CheckInResult
+}
+
+/** 构造 CheckInCalendarDay（从 UTSJSONObject；date 兼容 RFC3339 带时间后缀，截前 10 位） */
+function buildCheckInCalendarDay(obj : UTSJSONObject) : CheckInCalendarDay {
+    let dateStr = toStr(obj['date'])
+    if (dateStr.length > 10) {
+        dateStr = dateStr.substring(0, 10)
+    }
+    return {
+        date: dateStr,
+        checked: toBool(obj['checked']),
+        points: toNumber(obj['points']),
+    } as CheckInCalendarDay
+}
+
+/** 构造 CheckInCalendarResult（从 UTSJSONObject） */
+function buildCheckInCalendarResult(obj : UTSJSONObject) : CheckInCalendarResult {
+    const days : CheckInCalendarDay[] = []
+    const daysRaw = obj['days']
+    if (daysRaw != null) {
+        const daysArray = daysRaw as Array<UTSJSONObject>
+        for (let i = 0; i < daysArray.length; i++) {
+            days.push(buildCheckInCalendarDay(daysArray[i]))
+        }
+    }
+    return {
+        days: days,
+        streak: toNumber(obj['streak']),
+        total: toNumber(obj['total']),
+        today_checked: toBool(obj['today_checked']),
+    } as CheckInCalendarResult
+}
+
+/**
+ * 每日打卡（打卡即发分，同一自然日幂等）
+ * POST /check-in
+ * @returns 打卡结果（连续/累计天数、当日实发积分）
+ */
+export function checkInApi() : Promise<CheckInResult> {
+    return post('/check-in').then((data : UTSJSONObject) : CheckInResult => {
+        return buildCheckInResult(data)
+    }).catch((e : any | null) : CheckInResult => {
+        console.error('[checkInApi] failed:', e)
+        const msg = errMsg(e, '打卡失败')
+        throw new Error(msg)
+    })
+}
+
+/**
+ * 获取打卡日历（逐日分值）
+ * GET /check-in/calendar
+ * @param year 年份（可选，默认当前年）
+ * @param month 月份（可选，默认当前月）
+ */
+export function getCheckInCalendarApi(year : number = 0, month : number = 0) : Promise<CheckInCalendarResult> {
+    const params : UTSJSONObject = {}
+    if (year > 0) {
+        params['year'] = year.toString()
+    }
+    if (month > 0) {
+        params['month'] = month.toString()
+    }
+    return get('/check-in/calendar', params).then((data : UTSJSONObject) : CheckInCalendarResult => {
+        return buildCheckInCalendarResult(data)
+    }).catch((e : any | null) : CheckInCalendarResult => {
+        console.error('[getCheckInCalendarApi] failed:', e)
+        const msg = errMsg(e, '获取打卡日历失败')
+        throw new Error(msg)
+    })
+}

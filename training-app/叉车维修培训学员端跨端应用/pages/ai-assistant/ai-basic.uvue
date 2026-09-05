@@ -157,7 +157,7 @@
 			return
 		}
 		inputText.value = text
-		sendInput('基础版', buildBody)
+		sendInput('基础版', buildBody, [])
 	}
 
 	// 快捷提示语点击
