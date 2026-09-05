@@ -15,21 +15,20 @@ import (
 	"forklift-training/pkg/response"
 )
 
-// ForumHandler 论坛 handler（帖子/回复由 ForumService，打卡由 CheckInService）。
+// ForumHandler 论坛 handler（帖子/回复/互动；打卡已迁独立蓝图 /api/check-in，ADR-0028）。
 type ForumHandler struct {
-	svc        *service.ForumService
-	checkInSvc *service.CheckInService
-	imageSvc   *service.ForumImageService
+	svc      *service.ForumService
+	imageSvc *service.ForumImageService
 }
 
 // NewForumHandler 创建论坛 handler。
-func NewForumHandler(svc *service.ForumService, checkInSvc *service.CheckInService, imageSvc *service.ForumImageService) *ForumHandler {
-	return &ForumHandler{svc: svc, checkInSvc: checkInSvc, imageSvc: imageSvc}
+func NewForumHandler(svc *service.ForumService, imageSvc *service.ForumImageService) *ForumHandler {
+	return &ForumHandler{svc: svc, imageSvc: imageSvc}
 }
 
 // RegisterForumRoutes 注册 /api/forum 蓝图（需登录，hrwai_user）。
-func RegisterForumRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.ForumService, checkInSvc *service.CheckInService, imageSvc *service.ForumImageService) {
-	h := NewForumHandler(svc, checkInSvc, imageSvc)
+func RegisterForumRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.ForumService, imageSvc *service.ForumImageService) {
+	h := NewForumHandler(svc, imageSvc)
 
 	g := rg.Group("/forum", middleware.JWTAuth(rd.Session), middleware.RoleRequired("hrwai_user"))
 
@@ -62,10 +61,6 @@ func RegisterForumRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.ForumS
 	// GET /api/forum/my-replies 我的回复
 	g.GET("/my-replies", h.MyReplies)
 
-	// ===== 打卡（spec #268）=====
-	g.POST("/check-in", h.CheckIn)
-	g.GET("/check-in/calendar", h.GetCheckInCalendar)
-	g.GET("/check-in/rank", h.GetCheckInRank)
 	// ===== 评论点赞（spec #268）=====
 	g.POST("/replies/:id/like", h.LikeReply)
 	g.DELETE("/replies/:id/like", h.UnlikeReply)
@@ -783,72 +778,6 @@ func (h *ForumHandler) HandleReport(c *gin.Context) {
 		return
 	}
 	response.SuccessWithMsg(c, "举报状态已更新", nil)
-}
-
-// CheckIn 每日打卡
-// @Summary 每日打卡
-// @Description Asia/Shanghai 每日一次，返回连击/排名
-// @Tags 学员端-论坛
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {object} response.R "success"
-// @Failure 400 {object} response.R "已打卡"
-// @Failure 401 {object} response.R "未认证"
-// @Router /forum/check-in [post]
-func (h *ForumHandler) CheckIn(c *gin.Context) {
-	res, err := h.checkInSvc.CheckIn(middleware.CurrentUserID(c))
-	if err != nil {
-		response.BadRequest(c, err.Error())
-		return
-	}
-	response.SuccessWithMsg(c, "打卡成功", res)
-}
-
-// GetCheckInCalendar 打卡日历
-// @Summary 打卡日历
-// @Description 按年月查询打卡日历
-// @Tags 学员端-论坛
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param year query int false "年份"
-// @Param month query int false "月份 1-12"
-// @Success 200 {object} response.R "success"
-// @Failure 401 {object} response.R "未认证"
-// @Router /forum/check-in/calendar [get]
-func (h *ForumHandler) GetCheckInCalendar(c *gin.Context) {
-	year := atoiDefault(c.Query("year"), 0)
-	month := atoiDefault(c.Query("month"), 0)
-	res, err := h.checkInSvc.GetCheckInCalendar(middleware.CurrentUserID(c), year, month)
-	if err != nil {
-		response.BadRequest(c, err.Error())
-		return
-	}
-	response.Success(c, res)
-}
-
-// GetCheckInRank 打卡排行榜
-// @Summary 打卡排行榜
-// @Description 分页查询打卡排行榜
-// @Tags 学员端-论坛
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param page query int false "页码" default(1)
-// @Param page_size query int false "每页条数" default(20)
-// @Success 200 {object} response.R "success"
-// @Failure 401 {object} response.R "未认证"
-// @Router /forum/check-in/rank [get]
-func (h *ForumHandler) GetCheckInRank(c *gin.Context) {
-	page := atoiDefault(c.Query("page"), 1)
-	pageSize := atoiDefault(c.Query("page_size"), 20)
-	res, err := h.checkInSvc.GetCheckInRank(middleware.CurrentUserID(c), page, pageSize)
-	if err != nil {
-		response.BadRequest(c, err.Error())
-		return
-	}
-	response.Success(c, res)
 }
 
 // LikeReply 点赞回复

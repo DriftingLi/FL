@@ -22,6 +22,7 @@ import {
   FolderOpened,
   CollectionTag,
   Trophy,
+  Calendar,
   OfficeBuilding
 } from '@element-plus/icons-vue'
 // 注：MagicStick 仍用于管理员"内容生成"菜单项
@@ -149,6 +150,7 @@ const studentNav: NavItem[] = [
     icon: User,
     children: [
       { key: 'task-center', label: '任务中心', routeName: routeNames.TaskCenter, icon: Trophy },
+      { key: 'check-in', label: '每日打卡', routeName: routeNames.CheckIn, icon: Calendar },
       { key: 'favorites', label: '我的收藏', routeName: routeNames.StudentFavorites, icon: Star },
       { key: 'profile', label: '个人资料', routeName: routeNames.StudentProfile, icon: User },
       { key: 'resume', label: '我的简历', routeName: routeNames.StudentResume, icon: Document },

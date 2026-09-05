@@ -110,6 +110,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/student/RealExamPractice.vue')
       },
       {
+        // 每日打卡独立页（ADR-0028：打卡从任务中心/论坛弹窗剥离为独立激励面）
+        path: 'check-in',
+        name: routeNames.CheckIn,
+        component: () => import('@/pages/student/CheckInPage.vue')
+      },
+      {
         path: 'task-center',
         name: routeNames.TaskCenter,
         component: () => import('@/pages/student/TaskCenter.vue')

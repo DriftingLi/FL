@@ -166,23 +166,6 @@ export const forumApi = {
     return unwrappedRequest.get<MyRepliesData>('/forum/my-replies', { params })
   },
 
-  // ===== 打卡（spec #268）=====
-
-  /** 打卡（幂等） */
-  checkIn() {
-    return unwrappedRequest.post<{ checked: boolean; streak: number; total: number; today_checked: boolean }>('/forum/check-in')
-  },
-
-  /** 日历（按月） */
-  getCheckInCalendar(params: { year: number; month: number }) {
-    return unwrappedRequest.get<{ dates: string[]; streak: number; total: number; today_checked: boolean }>('/forum/check-in/calendar', { params })
-  },
-
-  /** 排行榜（累计总榜） */
-  getCheckInRank(params: { page?: number; page_size?: number }) {
-    return unwrappedRequest.get<{ items: CheckInRankItem[]; total: number; page: number; pages: number; me: CheckInRankMe | null }>('/forum/check-in/rank', { params })
-  },
-
   // ===== 评论点赞（spec #268）=====
 
   /** 点赞评论（幂等） */
@@ -307,23 +290,6 @@ export const adminForumApi = {
   handleReport(id: number, status: number) {
     return unwrappedRequest.put<null>(`/admin/forum/reports/${id}`, { status })
   }
-}
-
-/** 打卡排行榜条目 */
-export interface CheckInRankItem {
-  rank: number
-  user: { user_id: number; username: string; avatar_url: string }
-  total: number
-  streak: number
-  today_checked: boolean
-}
-
-/** 当前用户排名（不在前 N 页时置顶） */
-export interface CheckInRankMe {
-  rank: number
-  total: number
-  streak: number
-  today_checked: boolean
 }
 
 /** 管理端举报条目（与后端 ForumReportDTO 对齐） */

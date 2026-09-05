@@ -10,22 +10,13 @@
       </UiButton>
     </div>
 
-    <!-- 每日打卡卡片（spec #268 A1） -->
-    <UiCard variant="interactive" padding="base" class="mb-3 flex items-center justify-between gap-3" @click="openCheckIn('calendar')">
+    <!-- 每日打卡入口（ADR-0028：打卡已迁独立页 /training/check-in，论坛只留跳转） -->
+    <UiCard variant="interactive" padding="base" class="mb-3 flex items-center justify-between gap-3" @click="goCheckIn">
       <div class="flex items-center gap-2 text-[13px] text-ink">
         <el-icon class="text-base text-ui-500"><Calendar /></el-icon>
-        <span>
-          <template v-if="checkInTodayChecked">今日已打卡</template>
-          <template v-else>今日未打卡</template>
-          <span v-if="checkInTotal > 0" class="ml-1.5 text-xs text-ink-3">｜已连续 {{ checkInStreak }} 天｜累计 {{ checkInTotal }} 天</span>
-        </span>
+        <span>每日打卡赚积分</span>
       </div>
-      <div class="flex items-center gap-1" @click.stop>
-        <UiButton variant="primary" size="small" :loading="checkInChecking" :disabled="checkInTodayChecked" @click="doCheckIn">
-          {{ checkInTodayChecked ? '今日已打卡' : '立即打卡' }}
-        </UiButton>
-        <UiButton variant="text" size="small" @click="openCheckIn('rank')">排行榜</UiButton>
-      </div>
+      <UiButton variant="text" size="small">去看看</UiButton>
     </UiCard>
 
     <!-- 一级 Tab（解耦后的版本）：
@@ -82,8 +73,6 @@
       @update:model-value="(v: string) => { mineTab = v as 'my-topics' | 'my-replies' | 'history'; handleMineTabChange() }"
       class="mb-3"
     />
-
-    <CheckInDialog v-model="checkInDialogVisible" :initial-tab="checkInTab" @checked="onCheckInChecked" />
 
     <!-- 浏览记录（卡片分组，选型 b） -->
     <div v-if="showHistory">
@@ -220,7 +209,6 @@ import { forumApi, forumTabQuery, type ForumCategory, type ForumTopicItem, type 
 import { formatRelativeTime } from '@/utils/format'
 import { displayName, authorLetter } from '@/utils/forumDisplay'
 import ForumPostForm from '@/components/student/ForumPostForm.vue'
-import CheckInDialog from '@/components/student/CheckInDialog.vue'
 import ForumHistoryPanel from '@/components/student/ForumHistoryPanel.vue'
 import { loadHistory, removeHistoryItem, clearHistory } from '@/utils/forumHistory'
 import type { ForumHistoryItem } from '@/utils/forumHistory'
@@ -424,51 +412,9 @@ function goAsk() {
   router.push({ name: 'ForumAsk' })
 }
 
-// ===== 打卡（spec #268 A1-A5）=====
-const checkInStreak = ref(0)
-const checkInTotal = ref(0)
-const checkInTodayChecked = ref(false)
-const checkInChecking = ref(false)
-const checkInDialogVisible = ref(false)
-const checkInTab = ref<'calendar' | 'rank'>('calendar')
-
-async function loadCheckInStatus() {
-  try {
-    const now = new Date()
-    const res = await forumApi.getCheckInCalendar({ year: now.getFullYear(), month: now.getMonth() + 1 })
-    checkInStreak.value = res.streak
-    checkInTotal.value = res.total
-    checkInTodayChecked.value = res.today_checked
-  } catch (e) {
-    console.error('加载打卡状态失败:', e)
-  }
-}
-
-function openCheckIn(tab: 'calendar' | 'rank') {
-  checkInTab.value = tab
-  checkInDialogVisible.value = true
-}
-
-async function doCheckIn() {
-  if (checkInTodayChecked.value) return
-  checkInChecking.value = true
-  try {
-    const res = await forumApi.checkIn()
-    ElMessage.success(`打卡成功，已连续 ${res.streak} 天`)
-    checkInStreak.value = res.streak
-    checkInTotal.value = res.total
-    checkInTodayChecked.value = res.today_checked
-  } catch (e) {
-    console.error('打卡失败:', e)
-  } finally {
-    checkInChecking.value = false
-  }
-}
-
-function onCheckInChecked(data: { streak: number; total: number; today_checked: boolean }) {
-  checkInStreak.value = data.streak
-  checkInTotal.value = data.total
-  checkInTodayChecked.value = data.today_checked
+// 打卡入口跳独立页（ADR-0028：打卡从论坛剥离为独立激励面）
+function goCheckIn() {
+  router.push({ name: 'CheckIn' })
 }
 
 onMounted(() => {
@@ -479,7 +425,6 @@ onMounted(() => {
     mainTab.value = 'mine'
   }
   loadTopics()
-  loadCheckInStatus()
 })
 
 watch(

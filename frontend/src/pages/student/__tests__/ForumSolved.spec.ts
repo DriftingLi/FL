@@ -17,8 +17,6 @@ vi.mock('@/api/forum', async (importOriginal) => {
       getMyTopics: vi.fn(),
       getMyReplies: vi.fn(),
       createTopic: vi.fn(),
-      getCheckInCalendar: vi.fn(),
-      checkIn: vi.fn(),
       getTopic: vi.fn(),
       acceptReply: vi.fn(),
       cancelAccept: vi.fn(),
@@ -93,9 +91,8 @@ function reply(id: number, isAccepted: boolean, userId = 2) {
 
 async function mountForumPage() {
   listTopics.mockResolvedValue({ topics: [topic(1, 'question', false), topic(2, 'question', true)], total: 2 } as never)
-  vi.mocked(forumApi.getCheckInCalendar).mockResolvedValue({ dates: [], streak: 0, total: 0, today_checked: false } as never)
   const wrapper = mount(ForumPage, {
-    global: { plugins: [ElementPlus], stubs: { CheckInDialog: true, ForumHistoryPanel: true, ForumImageUploader: true } }
+    global: { plugins: [ElementPlus], stubs: { ForumHistoryPanel: true, ForumImageUploader: true } }
   })
   await flushPromises()
   return wrapper
