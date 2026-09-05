@@ -36,23 +36,26 @@ const chapterContentSystemPrompt = `你是一名叉车维修培训内容编写�
 5. 可适当使用 Markdown 标题（##、###）、列表、加粗等格式增强可读性`
 
 // AIService 封装 OpenAI 兼容 API 调用、文本生成与简答题评分。
-// 调用时按 feature_key 查找绑定配置（AIConfigService），未绑定时返回错误。
+// 凭证解析经注入的 AIConfigResolver（*AIConfigService 实现）完成，未绑定时返回错误。
 type AIService struct {
-	db          *gorm.DB
-	aiConfigSvc *AIConfigService
-	client      *openai.Client
-	clientSig   string // 当前 client 使用的 "key|url|model" 签名，用于检测配置变化
-	apiKey      string
-	baseURL     string
-	model       string
-	mu          sync.Mutex // 保护 client 重建并发安全
-	logger      *zap.Logger
-	blocking    AIBlockingTransport // 阻塞传输槽位（nil 时自实装；测试可注入 fake）
+	db        *gorm.DB
+	resolver  AIConfigResolver // 凭证解析端口（与流式栈共用同一注入实现，#606）
+	client    *openai.Client
+	clientSig string // 当前 client 使用的 "key|url|model" 签名，用于检测配置变化
+	apiKey    string
+	baseURL   string
+	model     string
+	mu        sync.Mutex // 保护 client 重建并发安全
+	logger    *zap.Logger
+	blocking  AIBlockingTransport // 阻塞传输槽位（nil 时自实装；测试可注入 fake）
 }
 
-// NewAIService 创建 AI 服务。aiConfigSvc 用于按功能查找绑定配置。
+// NewAIService 创建 AI 服务。aiConfigSvc 以 AIConfigResolver 身份注入（解析知识在配置 service）。
 func NewAIService(db *gorm.DB, aiConfigSvc *AIConfigService, logger *zap.Logger) *AIService {
-	svc := &AIService{db: db, aiConfigSvc: aiConfigSvc, logger: logger}
+	svc := &AIService{db: db, logger: logger}
+	if aiConfigSvc != nil {
+		svc.resolver = aiConfigSvc
+	}
 	svc.blocking = svc
 	return svc
 }
@@ -136,12 +139,16 @@ func (s *AIService) GenerateChapterContent(courseName, courseCategory, courseDes
 }
 
 // ensureClient 检查 AI 配置是否变化，必要时重建 openai.Client。
-// featureKey 用于查找该功能绑定的配置；未绑定时返回错误（不再降级到环境变量）。
+// 凭证解析经注入的 resolver（AIConfigResolver）完成；本函数只保留 client 签名缓存
+// 与重建纪律（ADR-0029 T1：生命周期仍留阻塞栈，T2 再迁 adapter）。
 func (s *AIService) ensureClient(ctx context.Context, featureKey string) error {
-	if featureKey == "" || s.aiConfigSvc == nil {
+	if s.resolver == nil {
 		return fmt.Errorf("AI 功能 %q 未绑定配置，请在管理员后台 AI 配置页面绑定", featureKey)
 	}
-	cur := s.aiConfigSvc.ResolveConfig(ctx, featureKey)
+	cur, err := s.resolver.ResolveFeatureSettings(ctx, featureKey)
+	if err != nil {
+		return err
+	}
 	sig := cur.APIKey + "|" + cur.BaseURL + "|" + cur.Model
 
 	s.mu.Lock()
@@ -149,9 +156,6 @@ func (s *AIService) ensureClient(ctx context.Context, featureKey string) error {
 	if sig == s.clientSig && s.client != nil {
 		s.model = cur.Model
 		return nil
-	}
-	if cur.APIKey == "" {
-		return fmt.Errorf("AI 功能 %q 未绑定配置，请在管理员后台 AI 配置页面绑定", featureKey)
 	}
 	s.client = newOpenAIClient(cur.APIKey, cur.BaseURL)
 	s.clientSig = sig
@@ -161,9 +165,9 @@ func (s *AIService) ensureClient(ctx context.Context, featureKey string) error {
 }
 
 // CallModel 阻塞式传输端口实现（AIBlockingTransport 槽位）：调用模型，重试 2 次。
-// featureKey 用于按功能解析绑定的 AI 配置。
+// featureKey 经注入 resolver 解析绑定配置；超时纪律在 transport 文件单点（aiBlockingContext）。
 func (s *AIService) CallModel(messages []openai.ChatCompletionMessage, maxTokens int, temperature float32, featureKey string) (string, error) {
-	ctx, cancel := withTimeout(120 * time.Second)
+	ctx, cancel := aiBlockingContext()
 	defer cancel()
 
 	if err := s.ensureClient(ctx, featureKey); err != nil {

@@ -96,15 +96,6 @@ const exerciseSolvingSystemPrompt = `你是一名叉车维修培训教员，负�
 5. 涉及安全规范的题目，注明依据的标准或规范名称
 6. 不确定时坦诚告知，不编造答案`
 
-// featureChatKeys 专项功能键集合（模型由管理端单绑定解析，用户无需选模型）。
-var featureChatKeys = map[string]bool{
-	FeatureFaultConsult:         true,
-	FeatureFaultCodeQuery:       true,
-	FeatureMaintenanceKnowledge: true,
-	FeatureDrawingRecognition:   true,
-	FeatureExerciseSolving:      true,
-}
-
 // featureSystemPrompt 返回功能对应的系统提示词；未注册的功能回退到通用叉车专家提示词。
 func featureSystemPrompt(featureKey string) string {
 	switch featureKey {
@@ -202,15 +193,16 @@ type StreamChatReq struct {
 type AIAssistantService struct {
 	db          *gorm.DB
 	aiConfigSvc *AIConfigService
-	fileSvc     *FileStore // 图片上传/读取（多模态对话）
-	secretKey   string     // 用于加密用户自定义 API Key 的主密钥（SECRET_KEY）
+	resolver    AIConfigResolver // 凭证解析端口（与阻塞栈共用同一注入实现，#606）
+	fileSvc     *FileStore       // 图片上传/读取（多模态对话）
+	secretKey   string           // 用于加密用户自定义 API Key 的主密钥（SECRET_KEY）
 	logger      *zap.Logger
 	streamer    AIStreamingTransport // 流式传输槽位（nil 时自实装；测试可注入 fake）
 }
 
 // NewAIAssistantService 构造 AIAssistantService。
 func NewAIAssistantService(db *gorm.DB, aiConfigSvc *AIConfigService, fileSvc *FileStore, secretKey string, logger *zap.Logger) *AIAssistantService {
-	return &AIAssistantService{db: db, aiConfigSvc: aiConfigSvc, fileSvc: fileSvc, secretKey: secretKey, logger: logger}
+	return &AIAssistantService{db: db, aiConfigSvc: aiConfigSvc, resolver: aiConfigSvc, fileSvc: fileSvc, secretKey: secretKey, logger: logger}
 }
 
 // ListPublicModels 返回管理员绑定到 AI 助手功能的可用配置列表（不含 api_key）。
@@ -386,7 +378,7 @@ const autoTitlePlaceholder = "新会话"
 // maybeGenerateSessionTitle 异步生成会话标题。
 // 仅当会话标题为占位符 "新会话" 时才生成；已被 AI 命名或用户手动改名后不再覆盖。
 // 失败仅记录日志，不影响主流程。
-func (s *AIAssistantService) maybeGenerateSessionTitle(ctx context.Context, userID, sessionID int, mc AISettings) {
+func (s *AIAssistantService) maybeGenerateSessionTitle(ctx context.Context, userID, sessionID int, sel AIModelSelector) {
 	// 查询会话，校验归属和标题
 	var session model.AIChatSession
 	if err := s.db.WithContext(ctx).
@@ -415,7 +407,7 @@ func (s *AIAssistantService) maybeGenerateSessionTitle(ctx context.Context, user
 		return
 	}
 
-	title, err := s.generateTitleWithModel(ctx, mc, userMsg.Content)
+	title, err := s.generateTitleWithModel(ctx, sel, userMsg.Content)
 	if err != nil {
 		s.logger.Warn("自动命名：调用模型失败", zap.Int("session_id", sessionID), zap.Error(err))
 		return
@@ -440,9 +432,9 @@ func (s *AIAssistantService) maybeGenerateSessionTitle(ctx context.Context, user
 	s.logger.Info("自动命名完成", zap.Int("session_id", sessionID), zap.String("title", title))
 }
 
-// generateTitleWithModel 调用同模型根据用户首条消息生成简短标题
-// （client 构建/超时/收集循环全部在流式槽位单点）。
-func (s *AIAssistantService) generateTitleWithModel(ctx context.Context, mc AISettings, userMessage string) (string, error) {
+// generateTitleWithModel 调用对话同一选择子对应的模型，根据用户首条消息生成简短标题
+// （凭证解析/client 构建/超时/收集循环全部在流式槽位单点）。
+func (s *AIAssistantService) generateTitleWithModel(ctx context.Context, sel AIModelSelector, userMessage string) (string, error) {
 	const titlePrompt = `请根据用户的问题，生成一个简短的中文会话标题。
 要求：
 1. 不超过 20 个字
@@ -457,7 +449,7 @@ func (s *AIAssistantService) generateTitleWithModel(ctx context.Context, mc AISe
 		schema.SystemMessage("你是一个会话标题生成助手，根据用户消息生成简短的中文标题。"),
 		schema.UserMessage(fmt.Sprintf(titlePrompt, userMessage)),
 	}
-	return s.streamingSlot().StreamComplete(ctx, mc, msgs, nil)
+	return s.streamingSlot().StreamComplete(ctx, sel, msgs, nil)
 }
 
 // titleTrimRunes 需要从标题首尾去除的字符集合（使用 map 保证唯一性，避免 SA1024）。
@@ -560,83 +552,22 @@ func (s *AIAssistantService) GetSessionMessages(ctx context.Context, userID, ses
 	return out, nil
 }
 
-// resolveModelConfig 解析模型配置（与 AIService 消费同一 AISettings 形状）。
-// 优先级：专项功能（FeatureKey，管理端单绑定）→ Mode 双模式（normal/expert）→ 兼容旧 ModelSource。
-func (s *AIAssistantService) resolveModelConfig(ctx context.Context, userID int, req StreamChatReq) (AISettings, error) {
-	// 专项功能：由管理端单绑定解析，忽略请求中的模型来源字段（防绕过）
-	if featureChatKeys[req.FeatureKey] {
-		mc := s.aiConfigSvc.ResolveConfig(ctx, req.FeatureKey)
-		if mc.APIKey == "" {
-			return AISettings{}, errors.New("管理员未配置该功能的模型，请联系管理员")
-		}
-		return mc, nil
-	}
-	// 通用助手：Mode 双模式（隐藏底层模型）——降级阶梯在 ResolveAssistantPair 单点
-	if req.Mode == ModeNormal || req.Mode == ModeExpert {
-		normal, expert, err := s.aiConfigSvc.ResolveAssistantPair(ctx)
-		if err != nil {
-			return AISettings{}, fmt.Errorf("校验可用模型失败: %w", err)
-		}
-		cfg := normal
-		if req.Mode == ModeExpert {
-			cfg = expert
-		}
-		if cfg == nil {
-			return AISettings{}, errors.New("该模式未绑定模型，请联系管理员配置")
-		}
-		return AISettings{APIKey: cfg.APIKey, BaseURL: cfg.BaseURL, Model: cfg.Model, Source: "binding:" + cfg.Name}, nil
-	}
-	switch req.ModelSource {
-	case "admin":
-		// 校验该配置是否被管理员绑定到 AI 助手功能（兼容旧前端：同时校验新双绑定的两个 Feature）
-		boundCfgsNormal, _ := s.aiConfigSvc.ListConfigsForFeature(ctx, FeatureAIAssistantNormal)
-		boundCfgsExpert, _ := s.aiConfigSvc.ListConfigsForFeature(ctx, FeatureAIAssistantExpert)
-		boundCfgsLegacy, _ := s.aiConfigSvc.ListConfigsForFeature(ctx, FeatureAIAssistant)
-		allBound := append(append(boundCfgsNormal, boundCfgsExpert...), boundCfgsLegacy...)
-		var cfg *model.AIConfig
-		for i := range allBound {
-			if allBound[i].ID == req.ConfigID {
-				cfg = &allBound[i]
-				break
-			}
-		}
-		if cfg == nil {
-			return AISettings{}, errors.New("该模型未绑定到 AI 助手，请联系管理员或选择自定义模型")
-		}
-		return AISettings{APIKey: cfg.APIKey, BaseURL: cfg.BaseURL, Model: cfg.Model, Source: "binding:" + cfg.Name}, nil
-	case "user":
-		if userID == 0 {
-			return AISettings{}, errors.New("未登录不能使用用户自定义模型")
-		}
-		var m model.AIUserModel
-		if err := s.db.WithContext(ctx).Where("id = ? AND user_id = ?", req.UserModelID, userID).
-			Limit(1).Find(&m).Error; err != nil {
-			return AISettings{}, err
-		}
-		if m.ID == 0 {
-			return AISettings{}, gorm.ErrRecordNotFound
-		}
-		key, err := security.DecryptSecret(m.APIKey, s.secretKey)
-		if err != nil {
-			return AISettings{}, fmt.Errorf("解密用户自定义模型 API Key 失败: %w", err)
-		}
-		return AISettings{APIKey: key, BaseURL: m.BaseURL, Model: m.Model, Source: "user:" + m.Name}, nil
-	case "custom":
-		if req.CustomAPIKey == "" || req.CustomBaseURL == "" || req.CustomModel == "" {
-			return AISettings{}, errors.New("自定义模型配置不完整")
-		}
-		return AISettings{APIKey: req.CustomAPIKey, BaseURL: req.CustomBaseURL, Model: req.CustomModel, Source: "custom"}, nil
-	}
-	return AISettings{}, fmt.Errorf("未知的 model_source: %s", req.ModelSource)
-}
-
 // StreamChat 流式对话。
 // onChunk 回调用于推送增量内容；返回完整回复内容。
-// 传输（建 client/超时/Recv 收集）在流式槽位 StreamComplete 单点；此处留 prompt 组装与持久化真语义。
+// 此处只把请求的模型选择字段投影为 AIModelSelector（纯数据、零解析知识）并组装消息；
+// 凭证解析（专项单绑定 → 双模式 → 旧来源）与传输（建 client/超时/Recv 收集）
+// 全部在流式槽位 StreamComplete 内经注入 resolver 单点完成（#606）。
 func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req StreamChatReq, onChunk func(content string)) (string, error) {
-	mc, err := s.resolveModelConfig(ctx, userID, req)
-	if err != nil {
-		return "", err
+	sel := AIModelSelector{
+		FeatureKey:    req.FeatureKey,
+		Mode:          req.Mode,
+		ModelSource:   req.ModelSource,
+		ConfigID:      req.ConfigID,
+		UserModelID:   req.UserModelID,
+		UserID:        userID,
+		CustomAPIKey:  req.CustomAPIKey,
+		CustomBaseURL: req.CustomBaseURL,
+		CustomModel:   req.CustomModel,
 	}
 
 	// 拼装消息：功能系统提示词 + 历史消息
@@ -668,7 +599,7 @@ func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req Str
 		}
 	}
 
-	fullContent, err := s.streamingSlot().StreamComplete(ctx, mc, msgs, onChunk)
+	fullContent, err := s.streamingSlot().StreamComplete(ctx, sel, msgs, onChunk)
 	if err != nil {
 		return fullContent, err
 	}
@@ -710,8 +641,8 @@ func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req Str
 			}
 
 			// 异步生成会话标题：仅当标题为占位符"新会话"时（首次对话）
-			// 使用独立 context 避免请求结束后被取消；recover 防止 panic 影响主流程
-			mcCopy := mc
+			// 使用独立 context 避免请求结束后被取消；recover 防止 panic 影响主流程。
+			// 凭证随选择子在槽位内经 resolver 解析（与主对话同一路径，#606）。
 			sessionID := req.SessionID
 			uid := userID
 			go func() {
@@ -721,7 +652,7 @@ func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req Str
 					}
 				}()
 				bgCtx := context.Background()
-				s.maybeGenerateSessionTitle(bgCtx, uid, sessionID, mcCopy)
+				s.maybeGenerateSessionTitle(bgCtx, uid, sessionID, sel)
 			}()
 		}
 	}
