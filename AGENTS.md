@@ -91,7 +91,7 @@ master 有仓库 ruleset「protect master」保护（直接 push 会被拒，`pu
 
 > ⚠️ **不要用 `timeout N` 包裹 git/gh 的写操作**（merge / push / rebase / checkout）。被 SIGTERM 杀掉的是**执行到一半**的操作，比失败更糟：曾因 `timeout 180 gh pr merge --squash --delete-branch` 被中断，残留 `.git/index.lock` 且分支清理删了一半，`frontend/src` 下 265 个文件被删。这类操作一律用后台任务跑并等其自然结束。
 
-## 多 Agent 并发与 git 隔离（可选）
+## 多 Agent 并发与 git 隔离（推荐）
 
 多个 agent 会话（含 aider / 自动化监控）若**共用同一份 checkout 操作 git，会互相踩踏**：并发会话可能擅自 `checkout master` 并清掉分支，把另一会话刚 `commit`、尚未 `push` 的提交甩成无引用游离状态；`add`/`commit`/`push` 也会抢 `.git/index.lock`。
 
