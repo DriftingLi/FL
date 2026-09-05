@@ -28,22 +28,20 @@ export function useBiometric() {
         // #endif
 
         // #ifdef APP || MP-WEIXIN
-        try {
-            const res = await uni.checkIsSupportSoterAuthentication({})
-            if (res != null) {
-                const obj = res as UTSJSONObject
-                const modes = obj['supportMode'] as Array<string> | null
-                console.log('[useBiometric] 设备支持的生物认证模式:', modes)
-                if (modes != null) {
-                    console.log('[useBiometric] 含面容:', modes.indexOf('facial') >= 0)
-                    console.log('[useBiometric] 含指纹:', modes.indexOf('fingerPrint') >= 0)
-                }
-                isSupported.value = true
-            }
-        } catch (e) {
-            console.warn('[useBiometric] checkSupport failed:', e)
-            isSupported.value = false
-        }
+        // 原生端该 API 为回调式，await 返回值得到 kotlin.Unit（无法强转 UTSJSONObject），
+        // 必须通过 success/fail 回调取结果
+        uni.checkIsSupportSoterAuthentication({
+            success: (res) => {
+                console.log('[useBiometric] 设备支持的生物认证模式:', res.supportMode)
+                console.log('[useBiometric] 含面容:', res.supportMode.indexOf('facial') >= 0)
+                console.log('[useBiometric] 含指纹:', res.supportMode.indexOf('fingerPrint') >= 0)
+                isSupported.value = res.supportMode.length > 0
+            },
+            fail: (err) => {
+                console.warn('[useBiometric] checkSupport failed:', err)
+                isSupported.value = false
+            },
+        })
         // #endif
     }
 

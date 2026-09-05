@@ -76,6 +76,15 @@ describe('useBiometric 平台分支契约', () => {
       expect(check).toContain('uni.checkIsSupportSoterAuthentication');
       expect(check).toContain('isSupported.value = false');
     });
+
+    it('原生端必须用 success/fail 回调取结果，禁止 await 返回值强转（kotlin.Unit 坑）', () => {
+      const check = between('async function checkSupport', 'async function authenticate');
+      expect(check).toContain('success: (res) =>');
+      expect(check).toContain('fail: (err) =>');
+      // 回归防护：await 该 API 会得到 kotlin.Unit，as UTSJSONObject 运行时 ClassCastException
+      expect(check).not.toContain('await uni.checkIsSupportSoterAuthentication');
+      expect(check).not.toContain('as UTSJSONObject');
+    });
   });
 
   describe('兜底分支（MP-ALIPAY 等未覆盖平台）', () => {
