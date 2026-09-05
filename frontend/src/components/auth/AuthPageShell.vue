@@ -10,23 +10,9 @@
     <div
       class="auth-card w-full max-w-[420px] rounded-card border border-line bg-panel px-10 pt-11 pb-7 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-8px_rgba(15,23,42,0.08)] max-[480px]:px-[22px] max-[480px]:pt-8 max-[480px]:pb-[22px]"
     >
-      <!-- 明暗模式切换（三态），与 SidebarLayout 同构。认证页是独立布局、不走 SidebarLayout，
+      <!-- 明暗模式切换（三态下拉菜单）。认证页是独立布局、不走 SidebarLayout，
            曾漏装导致深色偏好用户在登录页看到崩坏画面且无法切回（#554），故补于此。 -->
-      <button
-        class="theme-toggle fixed right-4 top-4 z-[var(--z-sticky)] flex h-9 w-9 cursor-pointer items-center justify-center rounded-pill border border-line bg-panel text-ink shadow-raised transition-[background,box-shadow,transform] duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas active:scale-[0.94]"
-        :aria-label="themeLabel"
-        :title="themeLabel"
-        @click="themeStore.cycle()"
-      >
-        <el-icon v-if="themeStore.resolved === 'dark'" :size="18"><Moon /></el-icon>
-        <svg v-else-if="themeStore.mode === 'system'" class="theme-half-icon h-[18px] w-[18px]" viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M12 3a9 9 0 0 0 0 18V3Z" fill="currentColor" opacity="0.9"/>
-          <path d="M12 6a6 6 0 0 0 0 12 8 8 0 0 1 0-12Z" fill="var(--color-bg-card)"/>
-          <path d="M12 3a9 9 0 0 1 9 9 9 9 0 0 1-9 9V3Z" fill="none" stroke="currentColor" stroke-width="1.5"/>
-          <path d="M16.8 6.2l1.4-1.4M21 12h2M16.8 17.8l1.4 1.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
-        <el-icon v-else :size="18"><Sunny /></el-icon>
-      </button>
+      <ThemeToggle fixed />
 
       <header class="card-header mb-5 text-center">
         <span
@@ -88,10 +74,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
 import type { Component } from 'vue'
-import { Moon, Sunny } from '@element-plus/icons-vue'
-import { useThemeStore } from '@/stores/theme'
+import ThemeToggle from '@/components/ui/ThemeToggle.vue'
 
 export type AltModeKey = 'email' | 'phone' | 'wechat'
 
@@ -127,13 +111,6 @@ const props = withDefaults(
 const emit = defineEmits<{
   (e: 'select-alt', key: AltModeKey | null): void
 }>()
-
-const themeStore = useThemeStore()
-
-const themeLabel = computed(() => {
-  if (themeStore.mode === 'system') return '跟随系统（点击切换为浅色）'
-  return themeStore.resolved === 'dark' ? '深色模式（点击切换为跟随系统）' : '浅色模式（点击切换为深色）'
-})
 
 const altModes = props.altModes
 
