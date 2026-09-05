@@ -94,7 +94,7 @@
     import { useAuthStore } from '../../stores/auth'
     import { getProfileApi, getStudyStatsApi } from '../../api/student'
     import { updateProfileApi, uploadAvatarApi } from '../../api/auth'
-    import { getCheckInCalendarApi } from '../../api/forum'
+    import { getCheckInCalendarApi } from '../../api/checkin'
     import { getPointsBalanceApi } from '../../api/points'
     import { useStatusBarHeight } from '../../utils/system'
     import { UNAVAILABLE_TOAST } from '../../constants/app'
@@ -136,11 +136,6 @@
         }
         return ''
     })
-
-    function padZero(n : number) : string {
-        if (n < 10) return '0' + n
-        return '' + n
-    }
 
     /** 学习分钟数 → 展示文本：48h / 1h30m / 45m */
     function formatStudyDuration(minutes : number) : string {
@@ -289,17 +284,8 @@
     async function loadCheckInStatus() {
         try {
             const now = new Date()
-            const year = now.getFullYear()
-            const month = now.getMonth() + 1
-            const result = await getCheckInCalendarApi(year, month)
-            const todayStr = year + '-' + padZero(month) + '-' + padZero(now.getDate())
-            todayChecked.value = false
-            for (let i = 0; i < result.days.length; i++) {
-                if (result.days[i].date == todayStr && result.days[i].checked) {
-                    todayChecked.value = true
-                    break
-                }
-            }
+            const result = await getCheckInCalendarApi(now.getFullYear(), now.getMonth() + 1)
+            todayChecked.value = result.today_checked
         } catch (e) {
             console.error('[profile] loadCheckInStatus failed:', e)
         }
