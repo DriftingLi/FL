@@ -1,0 +1,94 @@
+/**
+ * 打卡日历三态计算（纯函数，无 uni API 依赖）
+ *
+ * 三态对齐 Web 端规范（根仓库 ADR-0028 / spec #588）：
+ * - 'streak'：当前连续打卡段（含今日已打卡；今日未打卡则从昨日往回连续回溯）
+ * - 'past'  ：已断开的历史打卡（同色系浅底）
+ * - 'none'  ：未打卡 / 未来日期（灰底）
+ */
+import type { CheckInCalendarDay } from '../types/index'
+
+/** 不足两位补零 */
+export function padZero(n : number) : string {
+    if (n < 10) return '0' + n
+    return '' + n
+}
+
+/** 日期规范化：截取 YYYY-MM-DD（兼容 RFC3339 带时间后缀的返回） */
+export function normalizeDate(date : string) : string {
+    if (date.length > 10) return date.substring(0, 10)
+    return date
+}
+
+/** 解析结果：年 / 月 / 日 */
+export type DateParts = {
+    y : number
+    m : number
+    d : number
+}
+
+/** 解析 YYYY-MM-DD，非法返回 null */
+export function parseDate(date : string) : DateParts | null {
+    const parts = date.split('-')
+    if (parts.length != 3) return null
+    const y = parseInt(parts[0])
+    const m = parseInt(parts[1])
+    const d = parseInt(parts[2])
+    if (isNaN(y) || isNaN(m) || isNaN(d)) return null
+    if (m < 1 || m > 12 || d < 1 || d > 31) return null
+    return { y: y, m: m, d: d } as DateParts
+}
+
+/** 前推/后推 n 天（本地时区日历运算），date 非法时原样返回 */
+export function shiftDate(date : string, deltaDays : number) : string {
+    const p = parseDate(date)
+    if (p == null) return date
+    const dt = new Date(p.y, p.m - 1, p.d + deltaDays)
+    return padZero(dt.getFullYear()) + '-' + padZero(dt.getMonth() + 1) + '-' + padZero(dt.getDate())
+}
+
+/** 取某日实发积分（未打卡/不存在为 0），date 兼容带时间后缀 */
+export function getDayPoints(days : CheckInCalendarDay[], date : string) : number {
+    const key = normalizeDate(date)
+    for (let i = 0; i < days.length; i++) {
+        if (normalizeDate(days[i].date) == key) return days[i].points
+    }
+    return 0
+}
+
+/** 今日实发积分（概览区「今日得分」） */
+export function getTodayPoints(days : CheckInCalendarDay[], today : string) : number {
+    return getDayPoints(days, today)
+}
+
+/**
+ * 三态计算：返回与 days 等长的状态数组（'streak' | 'past' | 'none'）
+ * 连续段锚点：今日已打卡从今日起，否则从昨日起，往回连续回溯所有 checked 天。
+ */
+export function computeDayStates(days : CheckInCalendarDay[], today : string) : string[] {
+    const states : string[] = []
+    const checkedSet = new Map<string, boolean>()
+    for (let i = 0; i < days.length; i++) {
+        if (days[i].checked) {
+            checkedSet.set(normalizeDate(days[i].date), true)
+        }
+    }
+    let anchor = normalizeDate(today)
+    if (!checkedSet.has(anchor)) {
+        anchor = shiftDate(anchor, -1)
+    }
+    const streakSet = new Map<string, boolean>()
+    while (checkedSet.has(anchor)) {
+        streakSet.set(anchor, true)
+        anchor = shiftDate(anchor, -1)
+    }
+    for (let i = 0; i < days.length; i++) {
+        const key = normalizeDate(days[i].date)
+        if (!days[i].checked) {
+            states.push('none')
+            continue
+        }
+        states.push(streakSet.has(key) ? 'streak' : 'past')
+    }
+    return states
+}
