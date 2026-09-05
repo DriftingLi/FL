@@ -17,14 +17,20 @@ _Avoid_: 指纹认证、面容认证、人脸认证（这些是生物识别的�
 
 _Atry_: 自动填充、自动回填（暗示无验证，安全模型不同）
 
+**快捷登录（Quick Login）**：
+生物识别验证通过后，不回填表单，而是用本地加密保存的 refresh_token 静默换取新会话、直接进入应用。与凭据门控回填共享"生物验证通过才解锁本地数据"的门控模型，区别在于解锁的是登录凭证而非表单内容；验证对象是机主本人（本地生物识别），服务端不做生物特征比对。
+
 **凭据降级（Credential Degradation）**：
-当平台不支持生物识别时，回退到较低安全级别的存储策略。当前实现：支付宝等平台降级为"仅记住账号"（不保存密码）。
+当生物识别不可用时（平台不支持 SOTER，或设备未启用任何生物识别方式），回退到较低安全级别的存储策略。当前实现：降级为"仅记住账号"（不保存密码）。
+
+**孤儿凭据（Orphaned Credentials）**：
+已保存的完整凭据（含密码密文）因生物识别在保存之后变得不可用（用户在系统设置中删除指纹/面容、硬件失效）而永远无法解锁的数据。属于应自愈清理的残留状态。
 
 **secureStorage**：
-凭据存储抽象层（`utils/secureStorage.uts`），封装 `hasStoredCredentials`、`saveSecureCredentials`、`loadSecureCredentials`、`clearSecureCredentials` 四个接口。demo 阶段明文存储，生产可替换为加密实现。
+凭据存储抽象层（`utils/secureStorage.uts`），封装 `hasStoredCredentials`、`saveSecureCredentials`、`loadSecureCredentials`、`clearSecureCredentials` 等接口。App 端经 uni-secure-storage 插件加密落盘（Android Keystore / iOS Keychain），非 App 端明文存储（H5 生产策略另行评估）。
 
 **useBiometric**：
-生物识别封装 composable（`composables/useBiometric.uts`），提供 `requestBiometric()` 方法，内部处理平台检测、SOTER 调用、降级逻辑。
+生物识别封装 composable（`composables/useBiometric.uts`），提供 `checkSupport()`（检测设备支持的生物识别方式）与 `authenticate()`（触发一次生物验证）方法，内部处理平台检测、SOTER 调用、降级逻辑。
 
 ## 培训体系
 
