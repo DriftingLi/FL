@@ -152,10 +152,12 @@ jobs:
           fi
 
           # 2) testing 冒烟:部署记录在 CD 的 deploy job 启动时才创建,而合并可能早于冒烟结束,
-          #    故轮询等待(上限 15 分钟);冒烟明确失败则立即阻断,不再白等。
+          #    故轮询等待(上限 8 分钟);冒烟明确失败则立即阻断,不再白等。
+          #    8 分钟 = testing 冒烟正常耗时(2~3 分钟)的近 3 倍余量。曾放宽到 15 分钟,
+          #    结果 pve-01 deploy 卡死时 gate 白白陪等 15 分钟才阻断(2026-09-04 两次事故)。
           #    聚合一律下推到 --jq（避免 `| head -1` 在 pipefail 下因 SIGPIPE 误杀步骤）;
           #    瞬时 API 失败按「未就绪」处理继续轮询,不直接判死。
-          DEADLINE=$(( $(date +%s) + 900 ))
+          DEADLINE=$(( $(date +%s) + 480 ))
           while :; do
             DEP_ID=$(gh api "repos/$GITHUB_REPOSITORY/deployments?per_page=100" \
                        --jq "[.[] | select(.sha==\"$SHA\" and .environment==\"testing\")] | (.[0].id // empty)" || true)
@@ -394,6 +396,10 @@ jobs:
       needs.build-frontend.result == 'success' &&
       needs.build-libreoffice.result == 'success'
     runs-on: ubuntu-latest
+    # fail-fast 兜底：deploy 的 SSH 远程执行曾两次在 pve-01 上卡死 17+ 分钟
+    # （docker daemon/镜像拉取挂起，脚本内各命令虽各有超时但没有整体兜底），
+    # 拖死 gate 的 15 分钟轮询。testing 正常 2~3 分钟、production 正常 5~11 分钟。
+    timeout-minutes: ${{ needs.gate.outputs.environment == 'testing' && 12 || 30 }}
     environment:
       # 环境名统一由 gate 解析(push→production / dispatch→inputs)，
       # 保证 push 事件下 inputs.environment 为空时也能正确落到 production
@@ -512,6 +518,10 @@ jobs:
       # testing 缩短健康检查轮询与 compose --wait 超时，快速通过即停容器
       HEALTH_CHECK_RETRIES: ${{ needs.gate.outputs.environment == 'testing' && '8' || '20' }}
       UP_WAIT_TIMEOUT: ${{ needs.gate.outputs.environment == 'testing' && '30' || '60' }}
+      # 远程部署脚本整体超时（秒）：pve-01 上曾出现 docker 命令挂起导致 ssh 步骤
+      # 卡死 17+ 分钟（脚本内各命令虽有零散超时，但没有整体兜底），拖死 gate 轮询。
+      # testing 正常 2~3 分钟 → 660s 余量 3 倍+；production 正常 5~11 分钟 → 1500s。
+      DEPLOY_CMD_TIMEOUT: ${{ needs.gate.outputs.environment == 'testing' && '660' || '1500' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -689,9 +699,10 @@ jobs:
             "target:/tmp/deploy-env.sh"
 
           # 执行远程部署（脚本在 $DEPLOY_PATH/scripts/ 下，tar 打包上传）
+          # timeout 兜底：脚本内部命令挂死时 fail-fast（DEPLOY_CMD_TIMEOUT），不再挂到被人工取消
           ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
             "target" \
-            "set -e; source /tmp/deploy-env.sh; shred -u /tmp/deploy-env.sh 2>/dev/null || rm -f /tmp/deploy-env.sh; cd \"\$DEPLOY_PATH\" && bash scripts/deploy-remote.sh"
+            "set -e; source /tmp/deploy-env.sh; shred -u /tmp/deploy-env.sh 2>/dev/null || rm -f /tmp/deploy-env.sh; cd \"\$DEPLOY_PATH\" && timeout \"\$DEPLOY_CMD_TIMEOUT\" bash scripts/deploy-remote.sh"
 
       # --------------------------------------------------------
       # Step 2.4: 测试环境部署成功后停止容器（避免空转占用资源）
@@ -704,7 +715,7 @@ jobs:
           echo "测试环境部署成功，停止容器以释放资源..."
           ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
             "target" \
-            "cd $DEPLOY_PATH && docker compose -f docker-compose.prod.yml down 2>&1 || true"
+            "cd $DEPLOY_PATH && timeout 120 docker compose -f docker-compose.prod.yml down 2>&1 || true"
           echo "✅ 测试环境容器已停止"
 
       # --------------------------------------------------------
