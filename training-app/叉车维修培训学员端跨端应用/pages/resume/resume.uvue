@@ -148,7 +148,7 @@
         // 以服务端为准
         getResumeApi().then((r : ResumeData) : void => {
             resumeFilled.value = r.real_name.length > 0
-        }).catch((e : any) : void => {
+        }).catch((e) : void => {
             let isNotFound = false
             try {
                 const obj = e as UTSJSONObject
@@ -163,7 +163,8 @@
         })
     }
 
-    onLoad(() => {
+    // onLoad 必须带 options 形参：Kotlin Function1<OnLoadOptions, Unit>，零参即 error17
+    onLoad((options : OnLoadOptions) => {
         auth.restoreFromStorage()
         getProfileApi().then((p : StudentProfile) : void => {
             profile.value = p

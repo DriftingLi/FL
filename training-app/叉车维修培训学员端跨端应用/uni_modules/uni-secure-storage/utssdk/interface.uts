@@ -47,20 +47,11 @@ export type SecureStorageCapabilities = {
     backend : string
 }
 
-/** 写入安全条目（覆盖写） */
-export function setSecureItem(key : string, value : string) : SecureSetResult
-
-/** 读取安全条目；不存在时 ok=true、found=false、value='' */
-export function getSecureItem(key : string) : SecureGetResult
-
-/** 删除指定条目；条目不存在也返回 ok=true（幂等） */
-export function removeSecureItem(key : string) : SecureOpResult
-
-/** 判断条目是否存在（不解密内容） */
-export function hasSecureItem(key : string) : SecureOpResult
-
-/** 清空本插件写入的全部条目 */
-export function clearSecureItems() : SecureOpResult
-
-/** 查询当前平台能力与实现状态 */
-export function getSecureStorageCapabilities() : SecureStorageCapabilities
+/*
+ * 注意：本文件只放类型，不放无函数体的 `export function` 声明——
+ * 平台实现（app-android/app-ios）value-import 本文件后，interface.uts
+ * 会整体参与 Kotlin/Swift 编译，ambient 函数声明无实现会直接编译失败。
+ * 六函数契约（setSecureItem/getSecureItem/removeSecureItem/hasSecureItem/
+ * clearSecureItems/getSecureStorageCapabilities）由各平台实现文件钉住，
+ * 契约回归由 utils/secureStorage.test.js 源码契约测试守护。
+ */

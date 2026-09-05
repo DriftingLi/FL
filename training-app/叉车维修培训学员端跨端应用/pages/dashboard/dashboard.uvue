@@ -459,19 +459,18 @@
     ]
 
     /** 本地证书名映射（回退用） */
-    const certNameMap : Record<string, string> = {
-        'low_voltage': '低压电工证',
-        'welder': '焊工证',
-        'forklift_n1': '叉车司机N1证',
-        'level_5': '五级初级',
-        'level_4': '四级中级',
-        'level_3': '三级高级',
-        'level_2': '二级技师',
-        'level_1': '一级高级技师',
-        'n2': 'N2维修证',
-        'skill_cert': '技能等级证',
-        'combo_cert': '配套取证'
-    }
+    const certNameMap = new Map<string, string>()
+    certNameMap.set('low_voltage', '低压电工证')
+    certNameMap.set('welder', '焊工证')
+    certNameMap.set('forklift_n1', '叉车司机N1证')
+    certNameMap.set('level_5', '五级初级')
+    certNameMap.set('level_4', '四级中级')
+    certNameMap.set('level_3', '三级高级')
+    certNameMap.set('level_2', '二级技师')
+    certNameMap.set('level_1', '一级高级技师')
+    certNameMap.set('n2', 'N2维修证')
+    certNameMap.set('skill_cert', '技能等级证')
+    certNameMap.set('combo_cert', '配套取证')
 
     // ---- 继续学习 ----
     const continueLearning = ref<StudentCourse | null>(null)

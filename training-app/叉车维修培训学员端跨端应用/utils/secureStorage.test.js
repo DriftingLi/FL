@@ -65,7 +65,7 @@ describe('凭据读写与清除契约', () => {
 
   it('clearSecureCredentials 双后端清除（加密条目 + 明文残留，幂等）', () => {
     const body = fnBody('clearSecureCredentials');
-    expect(body).toContain('secStore.removeSecureItem(STORAGE_KEY_CREDENTIALS)');
+    expect(body).toContain('        removeSecureItem(STORAGE_KEY_CREDENTIALS)');
     expect(body).toContain('removeStorage(STORAGE_KEY_CREDENTIALS)');
   });
 });
@@ -74,7 +74,7 @@ describe('存储 key 唯一性契约', () => {
   it('凭据读写清除全部经由 STORAGE_KEY_CREDENTIALS 常量', () => {
     expect(src).toContain('STORAGE_KEY_CREDENTIALS');
     // 明文路径的存储调用全部使用常量而非字面量（加密路径经插件 API 传同一常量）
-    const storageCalls = src.match(/setStorageJSON\(([^)]*)\)|getStorageJSON\(([^)]*)\)|removeStorage\(([^)]*)\)|secStore\.(setSecureItem|getSecureItem|removeSecureItem|hasSecureItem|clearSecureItems)\(([^)]*)\)/g) || [];
+    const storageCalls = src.match(/setStorageJSON\(([^)]*)\)|getStorageJSON\(([^)]*)\)|removeStorage\(([^)]*)\)|(?<![\w$.])(setSecureItem|getSecureItem|removeSecureItem|hasSecureItem|clearSecureItems)\(([^)]*)\)/g) || [];
     expect(storageCalls.length).toBeGreaterThanOrEqual(4);
     for (const call of storageCalls) {
       expect(call).toContain('STORAGE_KEY_CREDENTIALS');
@@ -82,10 +82,12 @@ describe('存储 key 唯一性契约', () => {
     }
   });
 
-  it('App 端加密后端已接入（uni-secure-storage 插件，条件编译 #ifdef APP）', () => {
+  it('App 端加密后端已接入（uni-secure-storage 插件，条件编译 #ifdef APP，具名导入）', () => {
     expect(src).toContain("from '@/uni_modules/uni-secure-storage'");
     expect(src).toContain('// #ifdef APP');
-    expect(src).toContain('secStore.getSecureStorageCapabilities');
+    expect(src).toContain('    return getSecureStorageCapabilities().supported');
+    // error15：插件具名导出 + import * 即 Kotlin 编译失败，禁止命名空间导入
+    expect(src).not.toContain('import * as secStore');
   });
 
   it('constants 中 STORAGE_KEY_CREDENTIALS 存在且旧 LAST key 已删除', () => {

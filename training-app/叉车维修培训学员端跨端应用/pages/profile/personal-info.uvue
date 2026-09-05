@@ -391,6 +391,11 @@
   }
 
   // ===== 倒计时（各弹窗独立 60s） =====
+  function stopPwdTimer() : void {
+    const t = pwdTimer
+    if (t != null) { clearInterval(t); pwdTimer = null }
+  }
+
   function startPwdCd() : void {
     stopPwdTimer()
     pwdCountdown.value = 60
@@ -400,9 +405,9 @@
     }, 1000) as number
   }
 
-  function stopPwdTimer() : void {
-    const t = pwdTimer
-    if (t != null) { clearInterval(t); pwdTimer = null }
+  function stopPhoneTimer() : void {
+    const t = phoneTimer
+    if (t != null) { clearInterval(t); phoneTimer = null }
   }
 
   function startPhoneCd() : void {
@@ -414,9 +419,9 @@
     }, 1000) as number
   }
 
-  function stopPhoneTimer() : void {
-    const t = phoneTimer
-    if (t != null) { clearInterval(t); phoneTimer = null }
+  function stopEmailTimer() : void {
+    const t = emailTimer
+    if (t != null) { clearInterval(t); emailTimer = null }
   }
 
   function startEmailCd() : void {
@@ -428,9 +433,9 @@
     }, 1000) as number
   }
 
-  function stopEmailTimer() : void {
-    const t = emailTimer
-    if (t != null) { clearInterval(t); emailTimer = null }
+  function stopAccountTimer() : void {
+    const t = accountTimer
+    if (t != null) { clearInterval(t); accountTimer = null }
   }
 
   function startAccountCd() : void {
@@ -440,11 +445,6 @@
       accountCountdown.value = accountCountdown.value - 1
       if (accountCountdown.value <= 0) { stopAccountTimer() }
     }, 1000) as number
-  }
-
-  function stopAccountTimer() : void {
-    const t = accountTimer
-    if (t != null) { clearInterval(t); accountTimer = null }
   }
 
   onUnload(() => {
@@ -706,6 +706,22 @@
   }
 
   // ===== 注销与退出 =====
+  async function doDeleteAccount() : Promise<void> {
+    uni.showLoading({ title: '处理中...' })
+    try {
+      await deleteAccountApi()
+      uni.hideLoading()
+      authStore.clearAuthData()
+      uni.showToast({ title: '账号已注销', icon: 'none' })
+      setTimeout(() => {
+        uni.reLaunch({ url: '/pages/login/login' })
+      }, 800)
+    } catch (e) {
+      uni.hideLoading()
+      uni.showToast({ title: errMsg(e, '注销失败，请稍后重试'), icon: 'none' })
+    }
+  }
+
   function onDeleteAccount() : void {
     uni.showModal({
       title: '确认注销账号？',
@@ -728,22 +744,6 @@
         }
       }
     })
-  }
-
-  async function doDeleteAccount() : Promise<void> {
-    uni.showLoading({ title: '处理中...' })
-    try {
-      await deleteAccountApi()
-      uni.hideLoading()
-      authStore.clearAuthData()
-      uni.showToast({ title: '账号已注销', icon: 'none' })
-      setTimeout(() => {
-        uni.reLaunch({ url: '/pages/login/login' })
-      }, 800)
-    } catch (e) {
-      uni.hideLoading()
-      uni.showToast({ title: errMsg(e, '注销失败，请稍后重试'), icon: 'none' })
-    }
   }
 
   function onLogout() : void {

@@ -187,7 +187,6 @@
 
 	const HISTORY_KEY = 'search_history'
 	const HISTORY_MAX = 10
-	const searchHistory = ref<string[]>(loadHistory())
 
 	function loadHistory(): string[] {
 		const raw = uni.getStorageSync(HISTORY_KEY) as string
@@ -199,6 +198,8 @@
 		}
 	}
 
+	const searchHistory = ref<string[]>(loadHistory())
+
 	function saveHistory(kw: string): void {
 		if (kw.length == 0) return
 		let list = searchHistory.value.filter((s: string): boolean => s != kw)
@@ -208,18 +209,6 @@
 		}
 		searchHistory.value = list
 		uni.setStorageSync(HISTORY_KEY, JSON.stringify(list))
-	}
-
-	async function onSearch(): Promise<void> {
-		const kw = keyword.value.trim()
-		if (kw.length == 0) {
-			uni.showToast({ title: '请输入搜索关键词', icon: 'none' })
-			return
-		}
-		saveHistory(kw)
-		page.value = 1
-		activeTypeIdx.value = 0
-		await doSearch()
 	}
 
 	async function doSearch(): Promise<void> {
@@ -254,6 +243,18 @@
 		} finally {
 			loading.value = false
 		}
+	}
+
+	async function onSearch(): Promise<void> {
+		const kw = keyword.value.trim()
+		if (kw.length == 0) {
+			uni.showToast({ title: '请输入搜索关键词', icon: 'none' })
+			return
+		}
+		saveHistory(kw)
+		page.value = 1
+		activeTypeIdx.value = 0
+		await doSearch()
 	}
 
 	function onLoadMore(): void {

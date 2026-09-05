@@ -5,7 +5,7 @@
 
         <!-- 顶部导航栏 -->
         <view class="nav-bar">
-            <view class="nav-back" @click="goBack">
+            <view class="nav-back" @click="toback">
                 <text class="nav-back-icon">‹</text>
             </view>
             <text class="nav-title">选择学习阶段</text>
@@ -48,7 +48,8 @@
                         (叉车维修方向技能等级证)</text>
                 </view>
                 <view class="option-row">
-                    <view v-for="(item, idx) in skillLevels" :key="idx" class="option-chip option-chip--skill mr-18-mb-18"
+                    <view v-for="(item, idx) in skillLevels" :key="idx"
+                        class="option-chip option-chip--skill mr-18-mb-18"
                         :class="{ 'option-chip--active': selectedCert === item.key }" @click="onSelectCert(item.key)">
                         <text class="option-text option-text--level"
                             :class="{ 'option-text--active': selectedCert === item.key }">{{ item.level }}</text>
@@ -65,8 +66,7 @@
                     <view class="hot-header-line"></view>
                 </view>
                 <view class="hot-grid">
-                    <view v-for="(item, idx) in hotItems" :key="idx"
-                        :class="{ 'hot-card': true, 'ml-18': idx > 0 }">
+                    <view v-for="(item, idx) in hotItems" :key="idx" :class="{ 'hot-card': true, 'ml-18': idx > 0 }">
                         <view class="hot-card-header">
                             <text class="hot-card-star">⭐</text>
                             <text class="hot-card-title">{{ item.title }}</text>
@@ -123,37 +123,54 @@
     const selectedCert = ref('')
 
     // ---- 特种作业配套上岗证 ----
-    const specialCerts = ref([
-        { key: 'low_voltage', name: '低压电工证' },
-        { key: 'welder', name: '焊工证' },
-        { key: 'forklift_n1', name: '叉车司机N1证' }
+    type CertOption = {
+        key : string,
+        name : string
+    }
+    const specialCerts = ref<CertOption[]>([
+        { key: 'low_voltage', name: '低压电工证' } as CertOption,
+        { key: 'welder', name: '焊工证' } as CertOption,
+        { key: 'forklift_n1', name: '叉车司机N1证' } as CertOption
     ])
 
     // ---- 技能等级证（双行：等级 + 说明） ----
-    const skillLevels = ref([
-        { key: 'level_5', level: '五级', desc: '初级' },
-        { key: 'level_4', level: '四级', desc: '中级' },
-        { key: 'level_3', level: '三级', desc: '高级' },
-        { key: 'level_2', level: '二级', desc: '技师' },
-        { key: 'level_1', level: '一级', desc: '高级技师' }
+    type SkillLevel = {
+        key : string,
+        level : string,
+        desc : string
+    }
+    const skillLevels = ref<SkillLevel[]>([
+        { key: 'level_5', level: '五级', desc: '初级' } as SkillLevel,
+        { key: 'level_4', level: '四级', desc: '中级' } as SkillLevel,
+        { key: 'level_3', level: '三级', desc: '高级' } as SkillLevel,
+        { key: 'level_2', level: '二级', desc: '技师' } as SkillLevel,
+        { key: 'level_1', level: '一级', desc: '高级技师' } as SkillLevel
     ])
 
     // ---- 热门考证（纯展示） ----
-    const hotItems = ref([
-        { title: '入门组合', desc: '工程机械维修工（初级）+ 叉车N1证' },
-        { title: '电动叉车维修优选', desc: '工程机械维修工+N1司机证+低压电工证' }
+    type HotItem = {
+        title : string,
+        desc : string
+    }
+    const hotItems = ref<HotItem[]>([
+        { title: '入门组合', desc: '工程机械维修工（初级）+ 叉车N1证' } as HotItem,
+        { title: '电动叉车维修优选', desc: '工程机械维修工+N1司机证+低压电工证' } as HotItem
     ])
 
     // ---- 热门考证详情说明 ----
-    const hotDetails = ref([
+    type HotDetail = {
+        title : string,
+        content : string
+    }
+    const hotDetails = ref<HotDetail[]>([
         {
             title: '1、工程师机械维修工（初级）',
             content: '叉车证N1代表叉车车辆维修，N1是场内专用机动车辆作业叉车司机上岗证，N1是场内专用机动车辆叉车司机资格证，在早期，叉车证N1可以驾驶任何吨位的叉车。叉车证N1代表叉车车辆维修，N1是场内专用机动车辆作业叉车司机上岗证，N1是场内专用机动车辆叉车司机资格证，在早期，叉车证N1可以驾驶任何吨位的叉车。'
-        },
+        } as HotDetail,
         {
             title: '叉车N1证',
             content: '叉车证N1代表叉车车辆维修，N1是场内专用机动车辆作业叉车司机上岗证，N1是场内专用机动车辆叉车司机资格证，在早期，叉车证N1可以驾驶任何吨位的叉车'
-        }
+        } as HotDetail
     ])
 
     // ---- 选中标签（不跳转） ----
@@ -169,6 +186,9 @@
         }
         setStorage('selected_cert', selectedCert.value)
         uni.reLaunch({ url: '/pages/dashboard/dashboard' })
+    }
+    function toback() : void {
+        goBack()
     }
 
     function onProvinceTap() : void {
@@ -480,6 +500,12 @@
         color: #FFFFFF;
     }
 
-    .ml-18 { margin-left: 18rpx; }
-    .mr-18-mb-18 { margin-right: 18rpx; margin-bottom: 18rpx; }
+    .ml-18 {
+        margin-left: 18rpx;
+    }
+
+    .mr-18-mb-18 {
+        margin-right: 18rpx;
+        margin-bottom: 18rpx;
+    }
 </style>

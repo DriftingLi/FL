@@ -286,7 +286,7 @@
             if (existing == null) {
                 const next : UTSJSONObject = {} as UTSJSONObject
                 for (const k in replyLikeState.value) next[k] = replyLikeState.value[k]
-                next[key] = { liked: r.liked, likes_count: r.likes_count } as unknown as UTSJSONObject
+                next[key] = { liked: r.liked, likes_count: r.likes_count } as UTSJSONObject
                 replyLikeState.value = next
             }
         }
@@ -598,10 +598,9 @@
     function isReplyLiked(reply : ForumReply) : boolean {
         const rec = getReplyLikeRecord(reply.id)
         if (rec != null) return rec['liked'] == true
-        // 兼容后端未来在 reply 上直接返回 liked / liked_by_me
-        const raw = reply as unknown as UTSJSONObject
-        if (raw['liked'] == true) return true
-        if (raw['liked_by_me'] == true) return true
+        // 兼容后端未来在 reply 上直接返回 liked / liked_by_me（字段在类型上为可选，直接读，无需 cast）
+        if (reply.liked == true) return true
+        if (reply.liked_by_me == true) return true
         return false
     }
 
@@ -611,11 +610,9 @@
             const n = rec['likes_count'] as number
             if (n != null) return n as number
         }
-        const raw = reply as unknown as UTSJSONObject
-        const v1 = raw['likes_count'] as number
-        if (v1 != null && (v1 as number) >= 0) return v1 as number
-        const v2 = raw['like_count'] as number
-        if (v2 != null && (v2 as number) >= 0) return v2 as number
+        if (reply.likes_count >= 0) return reply.likes_count
+        const lc = reply.like_count
+        if (lc != null && (lc as number) >= 0) return lc as number
         return 0
     }
 
@@ -625,7 +622,7 @@
         for (const k in replyLikeState.value) {
             next[k] = replyLikeState.value[k]
         }
-        next[key] = { liked: liked, likes_count: likesCount } as unknown as UTSJSONObject
+        next[key] = { liked: liked, likes_count: likesCount } as UTSJSONObject
         replyLikeState.value = next
         persistReplyLikeState()
     }

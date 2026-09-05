@@ -83,7 +83,7 @@
 	} from '../../api/aiAssistant'
 	import { useAiChat } from '../../composables/useAiChat'
 	import type { ChatBodyBuilder } from '../../composables/useAiChat'
-	import type { AiModel, AiChatMessage } from '../../types/index'
+	import type { AiModel, AiChatMessage, AiSession } from '../../types/index'
 	import {
 		isProPaid,
 		setVersion,
@@ -175,6 +175,19 @@
 		uni.showToast({ title: '基础版暂不支持重试', icon: 'none' })
 	}
 
+	function openPay() : void {
+		payVisible.value = true
+	}
+
+	function goPro() : void {
+		if (!isProPaid()) {
+			openPay()
+			return
+		}
+		setVersion('pro')
+		uni.reLaunch({ url: '/pages/ai-assistant/ai-assistant' })
+	}
+
 	// 版本切换
 	function onTabChange(v : string) : void {
 		if (v == 'pro') {
@@ -241,19 +254,6 @@
 		} catch (e) {
 			console.error('loadModels failed:', e)
 		}
-	}
-
-	function openPay() : void {
-		payVisible.value = true
-	}
-
-	function goPro() : void {
-		if (!isProPaid()) {
-			openPay()
-			return
-		}
-		setVersion('pro')
-		uni.reLaunch({ url: '/pages/ai-assistant/ai-assistant' })
 	}
 
 	function closePay() : void {

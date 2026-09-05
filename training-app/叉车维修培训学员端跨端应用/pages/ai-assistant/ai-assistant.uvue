@@ -235,15 +235,7 @@
 		uni.setClipboardData({ data: content, success: () => { uni.showToast({ title: '已复制', icon: 'success' }) } })
 	}
 
-	function onRetry() : void {
-		// 专业版重试：重新发送最后一条用户消息
-		const lastUserMsg = getLastUserMessage()
-		if (lastUserMsg.length > 0) {
-			inputText.value = lastUserMsg
-			onInputSend(lastUserMsg)
-		}
-	}
-
+	// 先定义后使用：App 端编译为 Kotlin，脚本顶层函数无提升（error18）
 	function getLastUserMessage() : string {
 		for (let i = messages.value.length - 1; i >= 0; i--) {
 			if (messages.value[i].role == 'user') {
@@ -253,7 +245,21 @@
 		return ''
 	}
 
-	// 版本切换
+	function onRetry() : void {
+		// 专业版重试：重新发送最后一条用户消息
+		const lastUserMsg = getLastUserMessage()
+		if (lastUserMsg.length > 0) {
+			inputText.value = lastUserMsg
+			onInputSend(lastUserMsg)
+		}
+	}
+
+	// 版本切换（goBasic 先定义再被 onTabChange/onMenuAction 引用：Kotlin 无提升）
+	function goBasic() : void {
+		setVersion('basic')
+		uni.reLaunch({ url: '/pages/ai-assistant/ai-basic' })
+	}
+
 	function onTabChange(v : string) : void {
 		if (v == 'basic') {
 			goBasic()
@@ -302,6 +308,43 @@
 
 	function onFunctionClick(item : AIFunctionItem) : void {
 		sendText(item.prompt)
+	}
+
+	// 持久化设置（先定义：被 selectModel 等多处引用，Kotlin 无提升）
+	function persistSettings() : void {
+		const s = loadAiChatSettings()
+		s.model_source = currentModelSource.value
+		s.model_id = currentModelId.value
+		if (currentModelSource.value == 'custom') {
+			s.model_name = customModel.value.length > 0 ? customModel.value : s.model_name
+			s.model = customModel.value
+			s.base_url = customBaseUrl.value
+			s.api_key = customApiKey.value
+			s.model_id = 0
+		} else if (currentModelSource.value == 'user') {
+			for (let i = 0; i < userModels.value.length; i++) {
+				const um = userModels.value[i]
+				if (um.id == currentModelId.value) {
+					s.model_name = um.name
+					s.model = um.model
+					s.base_url = um.base_url
+					s.api_key = ''
+					break
+				}
+			}
+		} else {
+			for (let i = 0; i < models.value.length; i++) {
+				const pm = models.value[i]
+				if (pm.id == currentModelId.value) {
+					s.model_name = pm.name
+					s.model = pm.model
+					break
+				}
+			}
+			s.base_url = ''
+			s.api_key = ''
+		}
+		saveAiChatSettings(s)
 	}
 
 	// 模型选择
@@ -414,48 +457,6 @@
 			currentModelId.value = models.value[0].id
 		}
 		currentModelSource.value = 'admin'
-	}
-
-	function persistSettings() : void {
-		const s = loadAiChatSettings()
-		s.model_source = currentModelSource.value
-		s.model_id = currentModelId.value
-		if (currentModelSource.value == 'custom') {
-			s.model_name = customModel.value.length > 0 ? customModel.value : s.model_name
-			s.model = customModel.value
-			s.base_url = customBaseUrl.value
-			s.api_key = customApiKey.value
-			s.model_id = 0
-		} else if (currentModelSource.value == 'user') {
-			for (let i = 0; i < userModels.value.length; i++) {
-				const um = userModels.value[i]
-				if (um.id == currentModelId.value) {
-					s.model_name = um.name
-					s.model = um.model
-					s.base_url = um.base_url
-					s.api_key = ''
-					break
-				}
-			}
-		} else {
-			for (let i = 0; i < models.value.length; i++) {
-				const pm = models.value[i]
-				if (pm.id == currentModelId.value) {
-					s.model_name = pm.name
-					s.model = pm.model
-					break
-				}
-			}
-			s.base_url = ''
-			s.api_key = ''
-		}
-		saveAiChatSettings(s)
-	}
-
-	// 版本切换
-	function goBasic() : void {
-		setVersion('basic')
-		uni.reLaunch({ url: '/pages/ai-assistant/ai-basic' })
 	}
 
 	// 数据加载
