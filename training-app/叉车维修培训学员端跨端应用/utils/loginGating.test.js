@@ -101,13 +101,11 @@ describe('快捷登录契约（onQuickLogin，ADR-0004 增补）', () => {
     expect(tokenIdx).toBeGreaterThan(authIdx);
   });
 
-  it('静默续登后先回写轮换令牌再进 dashboard（旧 rt 已失效，包络是唯一跨登出副本）', () => {
+  it('静默续登成功后直接 reLaunch 进 dashboard（回写由 auth store 统一负责）', () => {
     const quickIdx = body.indexOf('auth.quickLogin(rt)');
-    const updateIdx = body.indexOf('updateSecureToken(newRt)');
     const reIdx = body.indexOf("uni.reLaunch({ url: '/pages/dashboard/dashboard' })");
     expect(quickIdx).toBeGreaterThan(-1);
-    expect(updateIdx).toBeGreaterThan(quickIdx);
-    expect(reIdx).toBeGreaterThan(updateIdx);
+    expect(reIdx).toBeGreaterThan(quickIdx);
   });
 
   it('续登失败提示过期并降级回填（不静默失败）', () => {
@@ -115,7 +113,8 @@ describe('快捷登录契约（onQuickLogin，ADR-0004 增补）', () => {
     expect(body).toContain('onBiometricUnlock()');
   });
 
-  it('无令牌时走回填兜底（再次验证身份后回填表单）', () => {
+  it('无令牌（升级前旧包络）给出一次性引导并走回填兜底', () => {
+    expect(body).toContain('请先输入密码登录一次，之后可快捷登录');
     const tokenIdx = body.indexOf('loadSecureToken()');
     const fallbackIdx = body.indexOf('onBiometricUnlock()');
     expect(tokenIdx).toBeGreaterThan(-1);

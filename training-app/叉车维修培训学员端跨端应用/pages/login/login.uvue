@@ -181,7 +181,7 @@
     import { ref, computed } from 'vue'
     import { useAuthStore } from '../../stores/auth'
     import { sendCodeApi, getCaptchaApi } from '../../api/auth'
-    import { hasStoredCredentials, loadSecureCredentials, loadSecureToken, updateSecureToken, saveSecureCredentials, saveAccountOnly, loadSavedAccount, clearSecureCredentials } from '../../utils/secureStorage'
+    import { hasStoredCredentials, loadSecureCredentials, loadSecureToken, saveSecureCredentials, saveAccountOnly, loadSavedAccount, clearSecureCredentials } from '../../utils/secureStorage'
     import { useBiometric } from '../../composables/useBiometric'
 
     const auth = useAuthStore()
@@ -379,7 +379,7 @@
 
     /**
      * 快捷登录（ADR-0004 增补）：生物验证 → 解密 refresh_token 静默续登 → 直接进 dashboard。
-     * 成功后把轮换出的新令牌回写加密包络（旧令牌已被轮换失效，不回写则下次快捷登录必败）。
+     * 轮换令牌的包络回写在 auth store 内统一完成（tryRefreshToken/quickLogin 两个同步点）。
      * 令牌失效（超 7 天未用/被互踢/后续改密吊销）或无令牌时，降级为回填流程（onBiometricUnlock，
      * 会再次弹认证框确认身份——降级即退出快捷语义，回归门控回填）。
      */
@@ -394,6 +394,8 @@
         }
         const rt = loadSecureToken()
         if (rt.length == 0) {
+            // 无令牌 = 包络产生于快捷登录上线前（或已降级）：一次密码登录即写入 rt 启用
+            uni.showToast({ title: '请先输入密码登录一次，之后可快捷登录', icon: 'none' })
             onBiometricUnlock()
             return
         }
@@ -403,7 +405,6 @@
         uni.hideLoading()
         quickLogging.value = false
         if (newRt.length > 0) {
-            updateSecureToken(newRt)
             uni.reLaunch({ url: '/pages/dashboard/dashboard' })
         } else {
             uni.showToast({ title: '快捷登录已过期，请验证后登录', icon: 'none' })

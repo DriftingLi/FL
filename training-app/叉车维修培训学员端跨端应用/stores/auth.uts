@@ -9,6 +9,7 @@ import { ref } from 'vue'
 import { loginApi, phoneLoginApi, emailLoginApi, mpWechatLoginApi, logoutApi, getUserInfoApi, refreshTokenApi } from '../api/auth'
 import { registerRefreshTokenHandler } from '../api/request'
 import { setStorage, setStorageJSON, getStorage, getStorageJSON, removeStorage } from '../utils/storage'
+import { updateSecureToken } from '../utils/secureStorage'
 import { errMsg } from '../api/helpers'
 import { STORAGE_KEY_TOKEN, STORAGE_KEY_REFRESH_TOKEN, STORAGE_KEY_USER, STORAGE_KEY_LOGIN_PROVIDER } from '../constants/app'
 import type { LoginParams, CodeLoginParams, UserInfo, AuthStore, UpdateProfileParams, WechatLoginResult } from '../types/index'
@@ -284,6 +285,9 @@ async function tryRefreshToken() : Promise<boolean> {
         const result = await refreshTokenApi(rt)
         if (result != null && result.token.length > 0) {
             setAuthData(result.token, user.value!, result.refresh_token)
+            // 轮换即旧令牌失效：同步回写加密凭据包络，否则包内 rt 立即过期，
+            // 下次快捷登录必 401 降级（ADR-0004 滑动续期依赖此回写）
+            updateSecureToken(result.refresh_token)
             return true
         }
     } catch (e) {
@@ -321,6 +325,8 @@ async function quickLogin(rt : string) : Promise<string> {
             }
         }
         setAuthData(result.token, u, result.refresh_token)
+        // 轮换令牌同步回写加密包络（与 tryRefreshToken 同一套同步点）
+        updateSecureToken(result.refresh_token)
         return result.refresh_token
     } catch (e) {
         console.warn('[auth] quickLogin failed:', e)
