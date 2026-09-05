@@ -83,7 +83,7 @@ func TestForumCategorySplitContract(t *testing.T) {
 	r := gin.New()
 	apiGroup := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
-	RegisterForumRoutes(apiGroup, deps.RouterDeps(), deps.ForumSvc, deps.CheckInSvc, deps.ForumImageSvc)
+	RegisterForumRoutes(apiGroup, deps.RouterDeps(), deps.ForumSvc, deps.ForumImageSvc)
 
 	token, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).
 		Issue(int(author.ID), author.Account, "hrwai_user")

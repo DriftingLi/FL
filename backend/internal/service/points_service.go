@@ -61,6 +61,129 @@ type PointsTasksResult struct {
 	Tasks []PointsTaskItem `json:"tasks"`
 }
 
+// taskMeta 行为判定需要的「聚合行为快照 + 用户资料」一次性取齐（GetTasks/Claim 共用）。
+type taskMeta struct {
+	User model.HrwaiUser
+	// 今日（Asia/Shanghai 自然日）内行为计数
+	TodayQuiz       bool // 完成练习 ≥1（daily_quiz 语义）
+	TodayMock       bool // 完成模考 ≥1（growth_mock 语义）
+	TodayPost       bool // 发布帖子 ≥1
+	TodayOtherReply int  // 回复他人主题数（自帖回复不计，上限 3）
+	TodayBrowse     int  // 浏览他人帖子数（上限 3）
+	CourseDone      bool // 完成过 ≥1 节课程
+	TodayLoggedIn   bool // 每日登录（登录/refresh 落表）达成
+}
+
+// loadTaskMeta 一次查询取齐全部行为判定所需数据（读错误向上传播，沿用 #409 口径）。
+func (s *PointsService) loadTaskMeta(userID int) (*taskMeta, error) {
+	today := s.shanghaiDate()
+	todayStart := s.shanghaiDateTime()
+	var user model.HrwaiUser
+	if err := s.db.First(&user, userID).Error; err != nil {
+		return nil, err
+	}
+	m := &taskMeta{User: user}
+	var n int64
+	if err := s.db.Model(&model.QuestionPracticeRecord{}).Where("student_id = ? AND created_at >= ?", userID, todayStart).Count(&n).Error; err != nil {
+		return nil, err
+	}
+	m.TodayQuiz = n > 0
+	if err := s.db.Model(&model.MockExam{}).Where("student_id = ? AND created_at >= ?", userID, todayStart).Count(&n).Error; err != nil {
+		return nil, err
+	}
+	m.TodayMock = n > 0
+	if err := s.db.Model(&model.ForumTopic{}).Where("user_id = ? AND created_at >= ?", userID, todayStart).Count(&n).Error; err != nil {
+		return nil, err
+	}
+	m.TodayPost = n > 0
+	// growth_reply：只算回复「他人主题」（B 面防自刷，spec：自问自答不可计分；口径照 daily_browse 排除自帖）
+	var otherReplies int64
+	if err := s.db.Table("forum_replies AS r").Joins("JOIN forum_topics AS t ON t.id = r.topic_id").
+		Where("r.user_id = ? AND r.created_at >= ? AND t.user_id <> ?", userID, todayStart, userID).
+		Count(&otherReplies).Error; err != nil {
+		return nil, err
+	}
+	m.TodayOtherReply = int(otherReplies)
+	if m.TodayOtherReply > 3 {
+		m.TodayOtherReply = 3
+	}
+	var browse int64
+	if err := s.db.Raw("SELECT COUNT(*) FROM forum_topic_views v JOIN forum_topics t ON t.id = v.topic_id WHERE v.user_id = ? AND v.view_date = ? AND t.user_id != ?", userID, today, userID).Scan(&browse).Error; err != nil {
+		return nil, err
+	}
+	m.TodayBrowse = int(browse)
+	if m.TodayBrowse > 3 {
+		m.TodayBrowse = 3
+	}
+	if err := s.db.Model(&model.StudyRecord{}).Where("student_id = ? AND progress >= 100", userID).Count(&n).Error; err != nil {
+		return nil, err
+	}
+	m.CourseDone = n > 0
+	m.TodayLoggedIn = s.hasDailyLogin(userID)
+	return m, nil
+}
+
+// taskProgress 行为达成判定的结果：claimable 是否可领；progress/total 展示进度。
+type taskProgress struct {
+	Claimable bool
+	Progress  int
+	Total     int
+}
+
+// profileBasicProgress 完善基础资料进度：头像、昵称（且非登录账号默认值）两个子项。
+func profileBasicProgress(u *model.HrwaiUser) (done int) {
+	if u.AvatarURL != "" {
+		done++
+	}
+	if u.Username != "" && u.Username != u.Account {
+		done++
+	}
+	return done
+}
+
+// profileContactProgress 完善联系资料进度：单位、手机/邮箱 两个子项。
+func profileContactProgress(u *model.HrwaiUser) (done int) {
+	if u.Company != "" {
+		done++
+	}
+	if u.Phone != "" || u.Email != "" {
+		done++
+	}
+	return done
+}
+
+// taskProgressFor 单任务行为达成判定（#410 后 GetTasks 与 Claim 共用同一实现，杜绝「列表可见/接口空领」分叉）。
+// 返回 nil 表示该任务无行为前置（新任务默认可领，照旧 default 分支；GetTasks 顶层显式透出）。
+func taskProgressFor(cfg model.PointsTaskConfig, m *taskMeta) *taskProgress {
+	switch cfg.Code {
+	case "daily_quiz":
+		return &taskProgress{Claimable: m.TodayQuiz || m.TodayMock, Progress: 0, Total: 1}
+	case "daily_browse":
+		return &taskProgress{Claimable: m.TodayBrowse >= 3, Progress: m.TodayBrowse, Total: 3}
+	case "daily_login":
+		return &taskProgress{Claimable: m.TodayLoggedIn, Progress: 0, Total: 1}
+	case "newbie_profile_basic":
+		done := profileBasicProgress(&m.User)
+		return &taskProgress{Claimable: done == 2, Progress: done, Total: 2}
+	case "newbie_profile_contact":
+		done := profileContactProgress(&m.User)
+		return &taskProgress{Claimable: done == 2, Progress: done, Total: 2}
+	case "newbie_credential":
+		return &taskProgress{Claimable: m.User.CurrentCredentialID != nil, Progress: 0, Total: 1}
+	case "newbie_first_course":
+		return &taskProgress{Claimable: m.CourseDone, Progress: 0, Total: 1}
+	case "growth_post":
+		return &taskProgress{Claimable: m.TodayPost, Progress: 0, Total: 1}
+	case "growth_reply":
+		return &taskProgress{Claimable: m.TodayOtherReply >= 3, Progress: m.TodayOtherReply, Total: 3}
+	case "growth_mock":
+		return &taskProgress{Claimable: m.TodayMock, Progress: 0, Total: 1}
+	default:
+		// 未知任务：无行为前置（GetTasks 顶层按可领处理，与旧 default 语义一致）
+		return nil
+	}
+}
+
 // PointsClaimResult 领取结果
 type PointsClaimResult struct {
 	Balance     int    `json:"balance"`
@@ -90,6 +213,32 @@ func (s *PointsService) shanghaiDate() string {
 // shanghaiDateTime 当前业务自然日起点（Asia/Shanghai）。
 func (s *PointsService) shanghaiDateTime() time.Time {
 	return clock.DayStart(s.clk.Now())
+}
+
+// MarkDailyLogin 记录一次「今日到访」（登录成功或 refresh 轮换；(user_id, 日期) 幂等落行）。
+// daily_login 任务的达成判定即当日行是否存在（ADR-0028）。失败不阻断登录主流程。
+func (s *PointsService) MarkDailyLogin(userID int) {
+	if userID <= 0 {
+		return
+	}
+	now := s.clk.Now()
+	err := s.db.Exec(
+		"INSERT INTO user_daily_login (user_id, login_date, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING",
+		userID, clock.DayStart(now), now,
+	).Error
+	if err != nil {
+		s.logger.Warn("记录每日登录失败", zap.Int("user_id", userID), zap.Error(err))
+	}
+}
+
+// hasDailyLogin 今日是否已记录登录（daily_login 任务行为判定/单点）。
+func (s *PointsService) hasDailyLogin(userID int) bool {
+	var cnt int64
+	if err := s.db.Model(&model.UserDailyLogin{}).
+		Where("user_id = ? AND login_date = ?", userID, s.shanghaiDateTime()).Count(&cnt).Error; err != nil {
+		return false
+	}
+	return cnt > 0
 }
 
 // claimCounts 单用户领取计数：按 task_code 分组一次取「终身计数 + 当日计数」。
@@ -173,6 +322,8 @@ var (
 	ErrInvalidPenalty = errors.New("扣罚分值需在 1-500 之间")
 	// ErrEmptyPenaltyReason 扣罚事由为空。
 	ErrEmptyPenaltyReason = errors.New("扣罚事由不能为空")
+	// ErrTaskNotDone 行为未达成（Claim 前校验：todo 任务不可空领）。
+	ErrTaskNotDone = errors.New("任务未完成")
 	// ErrUserNotFound 用户不存在。
 	ErrUserNotFound = errors.New("用户不存在")
 )
@@ -341,38 +492,13 @@ func (s *PointsService) GetTasks(userID int) (*PointsTasksResult, error) {
 		return nil, err
 	}
 	today := s.shanghaiDate()
-	todayStart := s.shanghaiDateTime()
 	cc, err := s.claimCounts(userID, today)
 	if err != nil {
 		return nil, err
 	}
-	// 预查用户与行为数据（减少 N+1）；读错误向上传播（#409），不再静默降级为「没人领过」
-	var user model.HrwaiUser
-	if err := s.db.First(&user, userID).Error; err != nil {
-		return nil, err
-	}
-	var checkinCnt int64
-	if err := s.db.Model(&model.ForumCheckIn{}).Where("user_id = ? AND check_date = ?", userID, todayStart).Count(&checkinCnt).Error; err != nil {
-		return nil, err
-	}
-	var quizCnt int64
-	if err := s.db.Model(&model.QuestionPracticeRecord{}).Where("student_id = ? AND created_at >= ?", userID, todayStart).Count(&quizCnt).Error; err != nil {
-		return nil, err
-	}
-	var mockCnt int64
-	if err := s.db.Model(&model.MockExam{}).Where("student_id = ? AND created_at >= ?", userID, todayStart).Count(&mockCnt).Error; err != nil {
-		return nil, err
-	}
-	var postCnt int64
-	if err := s.db.Model(&model.ForumTopic{}).Where("user_id = ? AND created_at >= ?", userID, todayStart).Count(&postCnt).Error; err != nil {
-		return nil, err
-	}
-	var replyCnt int64
-	if err := s.db.Model(&model.ForumReply{}).Where("user_id = ? AND created_at >= ?", userID, todayStart).Count(&replyCnt).Error; err != nil {
-		return nil, err
-	}
-	var firstCourseDone int64
-	if err := s.db.Model(&model.StudyRecord{}).Where("student_id = ? AND progress >= 100", userID).Count(&firstCourseDone).Error; err != nil {
+	// 行为快照一次取齐（GetTasks/Claim 共用，读错误向上传播 #409）
+	m, err := s.loadTaskMeta(userID)
+	if err != nil {
 		return nil, err
 	}
 
@@ -380,91 +506,35 @@ func (s *PointsService) GetTasks(userID int) (*PointsTasksResult, error) {
 	for _, cfg := range configs {
 		// 额度判定单点（#410）：不可领（当日/终身额度用尽）即视为已领取，不再回落 claimable
 		if !s.canClaim(cfg, cc[cfg.Code].Today, cc[cfg.Code].Lifetime).Claimable {
+			// 已领取时 progress/total 对齐达成口径：资料任务 2/2，其余已达成任务 1/1
+			prog := 1
 			total := 1
-			if cfg.Code == "daily_browse" || cfg.Code == "growth_reply" {
-				total = 3
+			if p := taskProgressFor(cfg, m); p != nil {
+				prog, total = p.Progress, p.Total
+				if prog == 0 {
+					prog = total
+				}
 			}
 			tasks = append(tasks, PointsTaskItem{
 				Code: cfg.Code, Group: cfg.Group, Title: cfg.Title, Desc: cfg.Description,
-				Points: cfg.Points, Status: "claimed", Progress: total, Total: total,
+				Points: cfg.Points, Status: "claimed", Progress: prog, Total: total,
 			})
 			continue
 		}
 		status := "todo"
 		progress := 0
 		total := 1
-		switch cfg.Code {
-		case "daily_checkin":
-			if checkinCnt > 0 {
+		if p := taskProgressFor(cfg, m); p != nil {
+			progress, total = p.Progress, p.Total
+			if p.Claimable {
 				status = "claimable"
-				progress = 1
+				if progress == 0 {
+					progress = total
+				}
 			}
-		case "daily_quiz":
-			if quizCnt > 0 || mockCnt > 0 {
-				status = "claimable"
-				progress = 1
-			}
-		case "daily_browse":
-			total = 3
-			var browseCnt int64
-			_ = s.db.Raw("SELECT COUNT(*) FROM forum_topic_views v JOIN forum_topics t ON t.id = v.topic_id WHERE v.user_id = ? AND v.view_date = ? AND t.user_id != ?", userID, today, userID).Scan(&browseCnt).Error
-			progress = int(browseCnt)
-			if progress > 3 {
-				progress = 3
-			}
-			if browseCnt >= 3 {
-				status = "claimable"
-			} else {
-				status = "todo"
-			}
-		case "newbie_profile_basic":
-			hasAvatar := user.AvatarURL != ""
-			hasName := user.Username != "" && user.Username != user.Account
-			if hasAvatar && hasName {
-				status = "claimable"
-				progress = 1
-			}
-		case "newbie_profile_contact":
-			hasCompany := user.Company != ""
-			hasPhoneOrEmail := user.Phone != "" || user.Email != ""
-			if hasCompany && hasPhoneOrEmail {
-				status = "claimable"
-				progress = 1
-			}
-		case "newbie_credential":
-			if user.CurrentCredentialID != nil {
-				status = "claimable"
-				progress = 1
-			}
-		case "newbie_first_course":
-			if firstCourseDone > 0 {
-				status = "claimable"
-				progress = 1
-			}
-		case "growth_post":
-			if postCnt > 0 {
-				status = "claimable"
-				progress = 1
-			}
-		case "growth_reply":
-			total = 3
-			progress = int(replyCnt)
-			if progress > 3 {
-				progress = 3
-			}
-			if replyCnt >= 3 {
-				status = "claimable"
-			}
-		case "growth_mock":
-			if mockCnt > 0 {
-				status = "claimable"
-				progress = 1
-			}
-		default:
+		} else {
+			// 未知任务无行为前置：照旧默认可领
 			status = "claimable"
-			progress = 1
-		}
-		if status == "claimable" && progress == 0 {
 			progress = 1
 		}
 		tasks = append(tasks, PointsTaskItem{
@@ -493,6 +563,15 @@ func (s *PointsService) Claim(ctx context.Context, userID int, taskCode string) 
 			return nil, ErrAlreadyClaimed
 		}
 		return nil, ErrDailyClaimLimit
+	}
+	// 行为达成校验（ADR-0028）：与 GetTasks 同源判定单实现，未达成（todo）不可空领。
+	// 未知任务（taskProgressFor 返回 nil）无行为前置，放行（与 GetTasks 默认可领口径一致）。
+	meta, err := s.loadTaskMeta(userID)
+	if err != nil {
+		return nil, err
+	}
+	if p := taskProgressFor(cfg, meta); p != nil && !p.Claimable {
+		return nil, ErrTaskNotDone
 	}
 	// Redis 锁（进程内双领护栏；最终裁决仍由唯一索引承担）
 	lockKey := fmt.Sprintf("points:grant:%d:%s", userID, taskCode)

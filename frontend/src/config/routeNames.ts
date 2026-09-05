@@ -27,6 +27,7 @@ export const routeNames = {
   WrongQuestions: 'WrongQuestions',
   RealExamPapers: 'RealExamPapers',
   RealExamPractice: 'RealExamPractice',
+  CheckIn: 'CheckIn',
   TaskCenter: 'TaskCenter',
   PointsLedger: 'PointsLedger',
   StudentProfile: 'StudentProfile',

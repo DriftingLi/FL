@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -100,7 +101,7 @@ func TestForumAcceptContract(t *testing.T) {
 	r := gin.New()
 	apiGroup := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
-	RegisterForumRoutes(apiGroup, deps.RouterDeps(), deps.ForumSvc, deps.CheckInSvc, deps.ForumImageSvc)
+	RegisterForumRoutes(apiGroup, deps.RouterDeps(), deps.ForumSvc, deps.ForumImageSvc)
 	RegisterPointsRoutes(apiGroup, deps.RouterDeps(), deps.PointsSvc)
 
 	issueToken := func(u model.HrwaiUser) string {
@@ -389,7 +390,7 @@ func TestForumAcceptContract(t *testing.T) {
 		t.Fatalf("取消后重采楼主余额应仍 5, got %d", bal)
 	}
 
-	// 6. 楼主采纳自己：状态记为已解决，发分为 0
+	// 6. 楼主采纳自己：直接拒绝（ADR-0028 禁止自问自答；替代旧「静默零分」）
 	// 新开一帖
 	rec = do(authorTok, http.MethodPost, "/api/forum/topics", map[string]any{"category": "question", "title": "自问自答帖", "content": "求助"})
 	if rec.Code != http.StatusCreated {
@@ -408,29 +409,29 @@ func TestForumAcceptContract(t *testing.T) {
 	selfReply := createReply(authorTok, selfTopic, "我自己来回答 self")
 	beforeAuthorBal := getBalance(authorTok)
 	rec = do(authorTok, http.MethodPost, fmt.Sprintf("/api/forum/topics/%d/accept", selfTopic), map[string]any{"reply_id": selfReply})
-	if rec.Code != http.StatusOK {
-		t.Fatalf("自采纳期望 200, got %d %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("自采纳期望 400 拒绝, got %d %s", rec.Code, rec.Body.String())
 	}
-	var selfAcc acceptResp
-	if err := json.Unmarshal(rec.Body.Bytes(), &selfAcc); err != nil {
-		t.Fatalf("解析自采纳失败: %v", err)
-	}
-	if selfAcc.Data.AcceptedReplyID == nil || *selfAcc.Data.AcceptedReplyID != selfReply {
-		t.Fatalf("自采纳 accepted 异常")
+	if !strings.Contains(rec.Body.String(), "不能采纳自己的回答") {
+		t.Fatalf("自采纳文案不符: %s", rec.Body.String())
 	}
 	if getBalance(authorTok) != beforeAuthorBal {
 		t.Fatalf("自采纳不应加分, before %d after %d", beforeAuthorBal, getBalance(authorTok))
 	}
-	// 自采纳的流水不应新增 accepted_*（但之前已有两条流水，需按 total 判断增量为 0）
-	// 检查该 topic 的 ref 是否产生新流水：查询 author 的流水 total 应仍为 2（之前 topic 的 accept 产生的 1 + 自采纳前已有的）
-	// 由于自采纳不产生流水，total 应保持不变
-	// 直接通过 DB 校验更精确：查询该 selfTopic 的流水是否存在
+	// 自采纳不产生流水、不落采纳状态
 	var cnt int64
 	if err := db.Model(&model.PointsLedger{}).Where("ref_type = ? AND ref_id = ?", "forum_topic", fmt.Sprintf("%d", selfTopic)).Count(&cnt).Error; err != nil {
 		t.Fatalf("查询流水失败: %v", err)
 	}
 	if cnt != 0 {
 		t.Fatalf("自采纳不应产生任何流水, got %d 条", cnt)
+	}
+	var selfTopicRow model.ForumTopic
+	if err := db.First(&selfTopicRow, selfTopic).Error; err != nil {
+		t.Fatalf("查询帖子失败: %v", err)
+	}
+	if selfTopicRow.AcceptedReplyID != nil {
+		t.Fatalf("被拒的自采纳不应写入 accepted_reply_id")
 	}
 
 	// 7. 非楼主 403

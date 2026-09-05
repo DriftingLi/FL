@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -84,12 +85,12 @@ func TestForumAcceptCapsContract(t *testing.T) {
 		}
 		return got.Data.ID
 	}
-	t.Run("self_zero", func(t *testing.T) {
+	t.Run("self_rejected", func(t *testing.T) {
 		db := testutil.NewMemoryDB(t)
 		cfg := &config.Config{JWTSecretKey: "caps-contract-secret", AuthCookie: config.AuthCookieConfig{Name: "hrwai_token"}}
 		r := gin.New()
 		deps := newContractDeps(t, db, cfg)
-		RegisterForumRoutes(r.Group("/api"), deps.RouterDeps(), deps.ForumSvc, deps.CheckInSvc, deps.ForumImageSvc)
+		RegisterForumRoutes(r.Group("/api"), deps.RouterDeps(), deps.ForumSvc, deps.ForumImageSvc)
 		RegisterPointsRoutes(r.Group("/api"), deps.RouterDeps(), deps.PointsSvc)
 		author := model.HrwaiUser{Account: "caps_self", Phone: "13800001001", Username: "自答楼主", Status: 1, CreatedAt: testutil.Now()}
 		if err := db.Create(&author).Error; err != nil {
@@ -100,24 +101,28 @@ func TestForumAcceptCapsContract(t *testing.T) {
 		replyID := createReply(r, tok, topicID, "我自己回答")
 		before := getBal(r, tok)
 		rec := doReq(r, tok, http.MethodPost, fmt.Sprintf("/api/forum/topics/%d/accept", topicID), map[string]any{"reply_id": replyID})
-		if rec.Code != http.StatusOK {
-			t.Fatalf("self accept %d %s", rec.Code, rec.Body.String())
+		// ADR-0028：自采纳直接拒绝（400），不再「静默零分发」
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("self accept should be 400, got %d %s", rec.Code, rec.Body.String())
 		}
-		after := getBal(r, tok)
-		if after != before {
-			t.Fatalf("self accept should be zero, before %d after %d", before, after)
+		if !strings.Contains(rec.Body.String(), "不能采纳自己的回答") {
+			t.Fatalf("self accept message mismatch: %s", rec.Body.String())
+		}
+		if after := getBal(r, tok); after != before {
+			t.Fatalf("self accept should not change balance, before %d after %d", before, after)
 		}
 		var cnt int64
 		db.Model(&model.PointsLedger{}).Where("ref_type = ? AND ref_id = ?", "forum_topic", fmt.Sprintf("%d", topicID)).Count(&cnt)
 		if cnt != 0 {
 			t.Fatalf("self accept should create 0 ledger, got %d", cnt)
 		}
-		var got acceptResp
-		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		// 状态未被采纳
+		var topic model.ForumTopic
+		if err := db.First(&topic, topicID).Error; err != nil {
 			t.Fatal(err)
 		}
-		if got.Data.AcceptedReplyID == nil || *got.Data.AcceptedReplyID != replyID {
-			t.Fatalf("self accept status should be solved")
+		if topic.AcceptedReplyID != nil {
+			t.Fatalf("rejected self accept should not mark solved")
 		}
 	})
 	t.Run("answerer_daily_3", func(t *testing.T) {
@@ -125,7 +130,7 @@ func TestForumAcceptCapsContract(t *testing.T) {
 		cfg := &config.Config{JWTSecretKey: "caps-contract-secret", AuthCookie: config.AuthCookieConfig{Name: "hrwai_token"}}
 		r := gin.New()
 		deps := newContractDeps(t, db, cfg)
-		RegisterForumRoutes(r.Group("/api"), deps.RouterDeps(), deps.ForumSvc, deps.CheckInSvc, deps.ForumImageSvc)
+		RegisterForumRoutes(r.Group("/api"), deps.RouterDeps(), deps.ForumSvc, deps.ForumImageSvc)
 		RegisterPointsRoutes(r.Group("/api"), deps.RouterDeps(), deps.PointsSvc)
 		ans := model.HrwaiUser{Account: "caps_ans_daily", Phone: "13800001002", Username: "答主日封", Status: 1, CreatedAt: testutil.Now()}
 		db.Create(&ans)
@@ -163,7 +168,7 @@ func TestForumAcceptCapsContract(t *testing.T) {
 		cfg := &config.Config{JWTSecretKey: "caps-contract-secret", AuthCookie: config.AuthCookieConfig{Name: "hrwai_token"}}
 		r := gin.New()
 		deps := newContractDeps(t, db, cfg)
-		RegisterForumRoutes(r.Group("/api"), deps.RouterDeps(), deps.ForumSvc, deps.CheckInSvc, deps.ForumImageSvc)
+		RegisterForumRoutes(r.Group("/api"), deps.RouterDeps(), deps.ForumSvc, deps.ForumImageSvc)
 		RegisterPointsRoutes(r.Group("/api"), deps.RouterDeps(), deps.PointsSvc)
 		asker := model.HrwaiUser{Account: "caps_asker_daily", Phone: "13800001003", Username: "楼主日封", Status: 1, CreatedAt: testutil.Now()}
 		db.Create(&asker)
@@ -189,7 +194,7 @@ func TestForumAcceptCapsContract(t *testing.T) {
 		cfg := &config.Config{JWTSecretKey: "caps-contract-secret", AuthCookie: config.AuthCookieConfig{Name: "hrwai_token"}}
 		r := gin.New()
 		deps := newContractDeps(t, db, cfg)
-		RegisterForumRoutes(r.Group("/api"), deps.RouterDeps(), deps.ForumSvc, deps.CheckInSvc, deps.ForumImageSvc)
+		RegisterForumRoutes(r.Group("/api"), deps.RouterDeps(), deps.ForumSvc, deps.ForumImageSvc)
 		RegisterPointsRoutes(r.Group("/api"), deps.RouterDeps(), deps.PointsSvc)
 		asker := model.HrwaiUser{Account: "caps_pair_asker", Phone: "13800001004", Username: "配对楼主", Status: 1, CreatedAt: testutil.Now()}
 		db.Create(&asker)

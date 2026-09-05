@@ -112,6 +112,7 @@ func allModels() []interface{} {
 		&model.PointsTaskConfig{},
 		&model.PointsTaskClaim{},
 		&model.PointsUserProgress{},
+		&model.UserDailyLogin{},
 		&model.PointsShopItem{},
 		&model.UserEntitlement{},
 		&model.PointsEntryIdem{},
