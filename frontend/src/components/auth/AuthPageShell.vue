@@ -178,3 +178,113 @@ function goMain() {
   background: var(--color-border);
 }
 </style>
+
+<!--
+  ===== 认证表单共享样式（非 scoped，#569）=====
+  slot 注入内容携带的是页面自己的 scopeId，外壳的 scoped 规则永远命不中
+  （这正是 #569 的根因：这批规则自 2026 年迁移时起从未生效，#568 已删除死代码）。
+  因此这里用「非 scoped + .auth-page 根前缀」：既穿透 slot，又不会泄漏到其他页面
+  （类名 code-row/captcha-img/footer-link 等在 profile 弹窗等处也有同名，但都不在
+  .auth-page 内，天然隔离）。
+
+  与旧死代码的三处刻意差异：
+  1. 色值全部走 design-tokens token（#554 原则），深浅主题自动跟随
+  2. 不再覆盖 .auth-btn 的 --el-button-* 颜色变量 —— 主按钮由 UiButton primary
+     走全站统一的品牌渐变（element-overrides），覆盖回纯色反而是倒退
+  3. 输入框焦点环用 color-mix 品牌色，替代旧的 rgba(37,99,235) 蓝色残留
+-->
+<style>
+.auth-page .auth-form {
+  margin-top: 4px;
+}
+
+.auth-page .code-row {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
+
+.auth-page .code-input {
+  flex: 1;
+}
+
+.auth-page .code-btn {
+  min-width: 124px;
+}
+
+.auth-page .captcha-row {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  align-items: center;
+}
+
+.auth-page .captcha-input {
+  flex: 1;
+}
+
+.auth-page .captcha-img {
+  height: 40px;
+  width: 110px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  background: var(--color-bg-page);
+  flex-shrink: 0;
+}
+
+/* 主按钮：仅布局形态；颜色走 UiButton primary 的全站品牌渐变 */
+.auth-page .auth-btn {
+  width: 100%;
+  height: 48px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 12px;
+  letter-spacing: 0.08em;
+  margin-top: 8px;
+}
+
+.auth-page .form-input .el-input__wrapper {
+  border-radius: 12px;
+  padding: 4px 14px;
+  box-shadow: 0 0 0 1px var(--color-border) inset;
+  transition: all var(--duration-base) var(--ease-default);
+  background: var(--color-bg-page);
+}
+
+.auth-page .form-input .el-input__wrapper:hover {
+  box-shadow: 0 0 0 1px var(--color-border-dark) inset;
+  background: var(--color-bg-card);
+}
+
+.auth-page .form-input .el-input__wrapper.is-focus {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary-500) 20%, transparent) inset;
+  background: var(--color-bg-card);
+}
+
+.auth-page .form-input .el-input__prefix-inner {
+  color: var(--color-text-muted);
+}
+
+.auth-page .form-footer {
+  text-align: center;
+}
+
+.auth-page .footer-text {
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+
+.auth-page .footer-link {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-primary-500);
+  text-decoration: none;
+  margin-left: 4px;
+  transition: color var(--duration-fast) var(--ease-default);
+}
+
+.auth-page .footer-link:hover {
+  color: var(--color-primary-700);
+}
+</style>

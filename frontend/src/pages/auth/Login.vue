@@ -372,8 +372,7 @@ async function handleLogin() {
 </script>
 
 <style scoped>
-/* Login 独有：input 内边距 6px。注：外壳里针对 slot 的同名规则因 Vue scoped
-   不命中 slot 注入内容而从未生效，其余认证页实为 EP 默认 padding（#554 时发现）。 */
+/* Login 独有：input 内边距 6px，覆盖外壳共享样式的 4px（#569 起外壳样式真实生效） */
 .auth-form .form-input :deep(.el-input__wrapper) {
   padding: 6px 14px;
 }
