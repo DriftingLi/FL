@@ -40,7 +40,7 @@ export type UseAiChatResult = {
 	onDeleteSession : (id : number) => Promise<void>
 	toggleSidebarLeft : () => void
 	toggleSidebarRight : () => void
-	sendInput : (sessionTag : string, buildBody : ChatBodyBuilder) => void
+	sendInput : (sessionTag : string, buildBody : ChatBodyBuilder, images ?: string[]) => void
 }
 
 export function useAiChat() {
@@ -152,7 +152,12 @@ export function useAiChat() {
 		for (let i = 0; i < messages.value.length - 1; i++) {
 			const m = messages.value[i]
 			if (m.role == 'user' || m.role == 'assistant') {
-				history.push({ role: m.role, content: m.content })
+				const mItem : AiChatMessage = {
+					role: m.role,
+					content: m.content,
+					images: m.images,
+				}
+				history.push(mItem)
 			}
 		}
 
@@ -204,8 +209,9 @@ export function useAiChat() {
 	 * 从输入框发送当前文本（含非空/思考中校验、追加用户消息、流式对话）
 	 * @param sessionTag 新建会话时写入的模型/版本标签（基础版 '基础版'；专业版当前模型名）
 	 * @param buildBody  构造差异化请求体（接收历史消息与 sessionID，返回完整 body）
+	 * @param images     可选：本条用户消息附带的图片 URL（专业版选图上传后传入）
 	 */
-	function sendInput(sessionTag : string, buildBody : ChatBodyBuilder) : void {
+	function sendInput(sessionTag : string, buildBody : ChatBodyBuilder, images ?: string[]) : void {
 		const text = inputText.value.trim()
 		if (text.length == 0) return
 		if (thinking.value) {
@@ -213,6 +219,9 @@ export function useAiChat() {
 			return
 		}
 		const userMsg : AiSessionMessage = { id: 0, role: 'user', content: text, created_at: '' }
+		if (images != null && images.length > 0) {
+			userMsg.images = images
+		}
 		messages.value.push(userMsg)
 		inputText.value = ''
 		scrollToBottom()
@@ -238,6 +247,6 @@ export function useAiChat() {
 		onDeleteSession: (id : number) => onDeleteSession(id),
 		toggleSidebarLeft: () => toggleSidebarLeft(),
 		toggleSidebarRight: () => toggleSidebarRight(),
-		sendInput: (sessionTag : string, buildBody : ChatBodyBuilder) => sendInput(sessionTag, buildBody),
+		sendInput: (sessionTag : string, buildBody : ChatBodyBuilder, images ?: string[]) => sendInput(sessionTag, buildBody, images),
 	} as UseAiChatResult
 }
