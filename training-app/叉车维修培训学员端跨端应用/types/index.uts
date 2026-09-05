@@ -192,6 +192,11 @@ export type AuthStore = {
     loginProvider : Ref<string>
     getRefreshToken : () => string
     tryRefreshToken : () => Promise<boolean>
+    /**
+     * 快捷登录：用生物门控解锁的 refresh_token 静默续登（ADR-0004 增补）
+     * @returns 轮换出的新 refresh_token（调用方回写加密包络）；失败返回空串（调用方降级回填）
+     */
+    quickLogin : (rt : string) => Promise<string>
     setAuthData : (t : string, u : UserInfo, rt : string) => void
     clearAuthData : () => void
     restoreFromStorage : () => boolean
