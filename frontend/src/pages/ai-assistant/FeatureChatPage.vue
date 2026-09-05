@@ -214,7 +214,7 @@ onMounted(() => {
 
 .quick-option-label {
   font-size: 13px;
-  color: var(--color-text-secondary, #475569);
+  color: var(--color-text-secondary);
   font-weight: 600;
 }
 
@@ -228,9 +228,9 @@ onMounted(() => {
 .quick-option-chip {
   padding: 4px 14px;
   border-radius: 999px;
-  border: 1px solid var(--color-border-light, #e2e8f0);
-  background: var(--color-surface, #fff);
-  color: var(--color-text-secondary, #475569);
+  border: 1px solid var(--color-border-light);
+  background: var(--color-bg-card);
+  color: var(--color-text-secondary);
   font-size: 13px;
   cursor: pointer;
   transition: all var(--duration-fast) var(--ease-default);
@@ -267,7 +267,7 @@ onMounted(() => {
   height: 64px;
   object-fit: cover;
   border-radius: 8px;
-  border: 1px solid var(--color-border-light, #e2e8f0);
+  border: 1px solid var(--color-border-light);
 }
 
 .pending-image-remove {
@@ -288,7 +288,7 @@ onMounted(() => {
 }
 
 .pending-image-remove:hover {
-  background: var(--color-danger, #ef4444);
+  background: var(--color-danger);
 }
 
 .pending-image-mask {
