@@ -96,6 +96,7 @@
     import { updateProfileApi, uploadAvatarApi } from '../../api/auth'
     import { getCheckInCalendarApi } from '../../api/checkin'
     import { getPointsBalanceApi } from '../../api/points'
+    import { isDayChecked, padZero } from '../../utils/checkinCalendar'
     import { useStatusBarHeight } from '../../utils/system'
     import { UNAVAILABLE_TOAST } from '../../constants/app'
     import type { StudentProfile, UpdateProfileParams } from '../../types/index'
@@ -285,7 +286,9 @@
         try {
             const now = new Date()
             const result = await getCheckInCalendarApi(now.getFullYear(), now.getMonth() + 1)
-            todayChecked.value = result.today_checked
+            // 新契约日历无 today_checked 字段，从逐日状态推导今日签到状态
+            const today = padZero(now.getFullYear()) + '-' + padZero(now.getMonth() + 1) + '-' + padZero(now.getDate())
+            todayChecked.value = isDayChecked(result.days, today)
         } catch (e) {
             console.error('[profile] loadCheckInStatus failed:', e)
         }

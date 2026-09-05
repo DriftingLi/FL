@@ -222,7 +222,7 @@
 			return
 		}
 		inputText.value = text
-		sendInput(currentModelName.value, buildBody)
+		sendInput(currentModelName.value, buildBody, new Array<string>())
 	}
 
 	function sendText(text : string) : void {

@@ -35,7 +35,7 @@
                         </view>
                         <view class="topic-footer">
                             <view class="topic-meta">
-                                <text class="meta-like-icon">{{ item.liked ? '❤️' : '' }} {{ item.like_count > 0 ? item.like_count : '' }}</text>
+                                <text class="meta-like-icon">{{ item.liked ? '❤️' : '' }} {{ item.likes_count > 0 ? item.likes_count : '' }}</text>
                                 <text class="meta-item"> {{ item.replies_count }}</text>
                                 <text class="meta-item"> {{ item.views_count }}</text>
                             </view>

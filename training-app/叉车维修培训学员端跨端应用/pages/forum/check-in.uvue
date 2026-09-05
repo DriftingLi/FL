@@ -70,7 +70,7 @@
     import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
     import { checkInApi, getCheckInCalendarApi } from '../../api/checkin'
-    import { computeDayStates, getTodayPoints, normalizeDate, padZero } from '../../utils/checkinCalendar'
+    import { computeDayStates, getTodayPoints, isDayChecked, normalizeDate, padZero } from '../../utils/checkinCalendar'
     import type { CheckInCalendarDay } from '../../types/index'
 
     const statusBarHeight = useStatusBarHeight()
@@ -172,9 +172,9 @@
     async function loadCalendar() : Promise<void> {
         try {
             const result = await getCheckInCalendarApi(displayYear.value, displayMonth.value)
-            streakDays.value = result.streak
-            totalDays.value = result.total
-            todayChecked.value = result.today_checked
+            streakDays.value = result.consecutive_days
+            totalDays.value = result.total_points
+            todayChecked.value = isDayChecked(result.days, todayStr())
             calendarDays.value = result.days
             // 今日得分仅在实际显示当月时更新（切月浏览历史时保留现值）
             const now = new Date()
@@ -196,13 +196,13 @@
         try {
             const result = await checkInApi()
             todayChecked.value = true
-            streakDays.value = result.streak
-            totalDays.value = result.total
-            todayPoints.value = result.points
+            streakDays.value = result.consecutive_days
+            totalDays.value = result.total_points
+            todayPoints.value = result.points_earned
             if (auto) {
-                uni.showToast({ title: '已自动为你打卡 +' + result.points + '积分', icon: 'none' })
+                uni.showToast({ title: '已自动为你打卡 +' + result.points_earned + '积分', icon: 'none' })
             } else {
-                uni.showToast({ title: '打卡成功 +' + result.points + '积分', icon: 'success' })
+                uni.showToast({ title: '打卡成功 +' + result.points_earned + '积分', icon: 'success' })
             }
             loadCalendar()
         } catch (e) {

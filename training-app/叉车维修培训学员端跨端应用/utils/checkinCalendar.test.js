@@ -44,6 +44,14 @@ function getDayPoints(days, date) {
   return 0;
 }
 
+function isDayChecked(days, date) {
+  const key = normalizeDate(date);
+  for (let i = 0; i < days.length; i++) {
+    if (normalizeDate(days[i].date) === key) return days[i].checked;
+  }
+  return false;
+}
+
 function computeDayStates(days, today) {
   const states = [];
   const checkedSet = new Map();
@@ -164,5 +172,23 @@ describe('getDayPoints', () => {
   it('兼容 RFC3339 查询入参', () => {
     const days = [day('2026-09-05', true, 15)];
     expect(getDayPoints(days, '2026-09-05T10:00:00Z')).toBe(15);
+  });
+});
+
+describe('isDayChecked', () => {
+  it('已打卡日期返回 true', () => {
+    const days = [day('2026-09-04', true, 5), day('2026-09-05', false)];
+    expect(isDayChecked(days, '2026-09-04')).toBe(true);
+  });
+
+  it('未打卡/不存在返回 false', () => {
+    const days = [day('2026-09-04', true, 5)];
+    expect(isDayChecked(days, '2026-09-05')).toBe(false);
+    expect(isDayChecked([], '2026-09-05')).toBe(false);
+  });
+
+  it('兼容 RFC3339 日期入参', () => {
+    const days = [day('2026-09-05T00:00:00Z', true, 5)];
+    expect(isDayChecked(days, '2026-09-05')).toBe(true);
   });
 });

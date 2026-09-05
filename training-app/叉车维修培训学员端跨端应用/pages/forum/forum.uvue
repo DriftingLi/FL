@@ -383,7 +383,7 @@
             const now = new Date()
             const result = await getCheckInCalendarApi(now.getFullYear(), now.getMonth() + 1)
             // 统计已签到人数（简化：用累计签到天数近似参与人数）
-            checkinPlayers.value = result.days.length > 0 ? result.streak * 3 + 7 : 10
+            checkinPlayers.value = result.days.length > 0 ? result.consecutive_days * 3 + 7 : 10
         } catch (e) {
             checkinPlayers.value = 10
         }

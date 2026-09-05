@@ -61,6 +61,15 @@ export function getTodayPoints(days : CheckInCalendarDay[], today : string) : nu
     return getDayPoints(days, today)
 }
 
+/** 某日是否已打卡（新契约日历无 today_checked 字段，从逐日状态推导） */
+export function isDayChecked(days : CheckInCalendarDay[], date : string) : boolean {
+    const key = normalizeDate(date)
+    for (let i = 0; i < days.length; i++) {
+        if (normalizeDate(days[i].date) == key) return days[i].checked
+    }
+    return false
+}
+
 /**
  * 三态计算：返回与 days 等长的状态数组（'streak' | 'past' | 'none'）
  * 连续段锚点：今日已打卡从今日起，否则从昨日起，往回连续回溯所有 checked 天。
