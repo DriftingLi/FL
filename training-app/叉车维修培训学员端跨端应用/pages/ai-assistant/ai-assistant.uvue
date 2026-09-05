@@ -37,8 +37,8 @@
 			</scroll-view>
 		</view>
 
-		<!-- 底部输入区（专业版带模型选择器） -->
-		<AiChatInput :show-model-bar="true" :model-name="currentModelName" @send="onInputSend" @model-click="showModelPicker = true" />
+		<!-- 底部输入区（专业版带模型选择器 + 图片入口） -->
+		<AiChatInput :show-model-bar="true" :model-name="currentModelName" :show-image-button="true" @send="onInputSend" @model-click="showModelPicker = true" @image-click="onChooseImage" />
 
 		<!-- 底部导航栏 -->
 		<TabBar :active-index="2"></TabBar>
@@ -104,6 +104,8 @@
 	import {
 		getAiModelsApi,
 		getAiUserModelsApi,
+		getAiModesApi,
+		uploadAiImageApi,
 		loadAiChatSettings,
 		saveAiChatSettings,
 	} from '../../api/aiAssistant'
@@ -148,9 +150,14 @@
 	const customBaseUrl = ref<string>('')
 	const customApiKey = ref<string>('')
 
+	// 待发送图片（选图→上传→随本条消息携带）
+	const pendingImageUrls = ref<string[]>([])
+	const uploadingImage = ref<boolean>(false)
+
 	// 数据（模型）
 	const models = ref<AiModel[]>([])
 	const userModels = ref<AiUserModel[]>([])
+	const modes = ref<UTSJSONObject>({})
 	const currentModelId = ref<number>(0)
 	const currentModelSource = ref<'admin' | 'user' | 'custom'>('admin')
 
@@ -159,6 +166,26 @@
 		for (let i = 0; i < models.value.length; i++) {
 			const m = models.value[i]
 			arr.push({ id: m.id, name: m.name, model: m.model, source: m.source, description: m.description })
+		}
+		// 双模式（T5）：normal/expert 各并入一个平台模型选项，标注来源
+		// 手动 JSON 映射（ADR-0003）：先取 nullable 值判空，再强转，避免对 null 做 as（Kotlin 硬转会抛）
+		const normalRaw = modes.value['normal']
+		if (normalRaw != null) {
+			const normalObj = normalRaw as UTSJSONObject
+			const nName = (normalObj['name'] as string) ?? ''
+			const nModel = (normalObj['model'] as string) ?? ''
+			const nDesc = (normalObj['description'] as string) ?? ''
+			const nId = (normalObj['id'] as number) ?? 0
+			arr.push({ id: nId, name: '普通模式：' + nName, model: nModel, source: 'admin', description: nDesc })
+		}
+		const expertRaw = modes.value['expert']
+		if (expertRaw != null) {
+			const expertObj = expertRaw as UTSJSONObject
+			const eName = (expertObj['name'] as string) ?? ''
+			const eModel = (expertObj['model'] as string) ?? ''
+			const eDesc = (expertObj['description'] as string) ?? ''
+			const eId = (expertObj['id'] as number) ?? 0
+			arr.push({ id: eId, name: '专家模式：' + eName, model: eModel, source: 'admin', description: eDesc })
 		}
 		for (let i = 0; i < userModels.value.length; i++) {
 			const m = userModels.value[i]
@@ -211,7 +238,7 @@
 		return params
 	}
 
-	// 发送
+	// 发送（携带待发送图片）
 	function onInputSend(text : string) : void {
 		if (models.value.length == 0 && userModels.value.length == 0 && currentModelSource.value != 'custom') {
 			uni.showToast({ title: '暂无可用的 AI 模型', icon: 'none' })
@@ -222,12 +249,55 @@
 			return
 		}
 		inputText.value = text
-		sendInput(currentModelName.value, buildBody)
+		const imgs : string[] = pendingImageUrls.value.length > 0 ? pendingImageUrls.value.slice() : []
+		sendInput(currentModelName.value, buildBody, imgs)
+		if (imgs.length > 0) {
+			pendingImageUrls.value = []
+		}
 	}
 
 	function sendText(text : string) : void {
 		inputText.value = text
 		onInputSend(text)
+	}
+
+	// 上传所选图片到 AI 专用端点并暂存 URL（先定义：被 onChooseImage 调用，Kotlin 无提升）
+	// @note UTS 的 Promise 链式 catch/finally 在 Kotlin 端无对应重载（error25/error18），
+	//       故用 async/await + try/catch/finally（UTS 支持 async 体内的三段式）
+	async function onUploadImage(filePath : string) : Promise<void> {
+		uploadingImage.value = true
+		try {
+			const url = await uploadAiImageApi(filePath)
+			if (url.length > 0) {
+				pendingImageUrls.value.push(url)
+				uni.showToast({ title: '图片已就绪，随消息发送', icon: 'none' })
+			} else {
+				uni.showToast({ title: '图片上传失败', icon: 'none' })
+			}
+		} catch (e) {
+			uni.showToast({ title: '图片上传失败', icon: 'none' })
+		} finally {
+			uploadingImage.value = false
+		}
+	}
+
+	// 图片选图→上传（T4：专业版图片随对话发送）
+	function onChooseImage() : void {
+		if (uploadingImage.value) return
+		uni.chooseImage({
+			count: 1,
+			sizeType: ['compressed'],
+			sourceType: ['album', 'camera'],
+			success: (res) => {
+				const tempFilePaths = res.tempFilePaths as string[]
+				if (tempFilePaths.length > 0) {
+					onUploadImage(tempFilePaths[0])
+				}
+			},
+			fail: () => {
+				uni.showToast({ title: '选择图片失败', icon: 'none' })
+			},
+		})
 	}
 
 	// 消息操作
@@ -347,8 +417,49 @@
 		saveAiChatSettings(s)
 	}
 
+	// T5：判断模型 id 是否来自双模式（normal/expert）
+	function isModeModelId(id : number) : boolean {
+		const normalRaw = modes.value['normal']
+		if (normalRaw != null) {
+			const normalObj = normalRaw as UTSJSONObject
+			if (((normalObj['id'] as number) ?? 0) == id) {
+				return true
+			}
+		}
+		const expertRaw = modes.value['expert']
+		if (expertRaw != null) {
+			const expertObj = expertRaw as UTSJSONObject
+			if (((expertObj['id'] as number) ?? 0) == id) {
+				return true
+			}
+		}
+		return false
+	}
+
+	// T5：选择双模式模型（普通/专家）→ model_source='admin' + 对应 config_id
+	function selectMode(key : string) : void {
+		const modeRaw = modes.value[key]
+		if (modeRaw != null) {
+			const modeObj = modeRaw as UTSJSONObject
+			const mId = (modeObj['id'] as number) ?? 0
+			currentModelId.value = mId
+			currentModelSource.value = 'admin'
+			showModelPicker.value = false
+			persistSettings()
+		}
+	}
+
 	// 模型选择
 	function selectModel(m : AIModelOption) : void {
+		// T5：若选中的是双模式项（id 命中 modes 的 normal/expert），转交 selectMode 处理
+		if (isModeModelId(m.id)) {
+			if (m.name.indexOf('普通模式') >= 0) {
+				selectMode('normal')
+			} else if (m.name.indexOf('专家模式') >= 0) {
+				selectMode('expert')
+			}
+			return
+		}
 		currentModelId.value = m.id
 		let isUser = false
 		for (let i = 0; i < userModels.value.length; i++) {
@@ -466,6 +577,12 @@
 		} catch (e) {
 			console.error('loadModels failed:', e)
 			models.value = [] as AiModel[]
+		}
+		try {
+			modes.value = await getAiModesApi()
+		} catch (e) {
+			console.error('loadModes failed:', e)
+			modes.value = {} as UTSJSONObject
 		}
 		if (auth.isLoggedIn.value) {
 			try {
