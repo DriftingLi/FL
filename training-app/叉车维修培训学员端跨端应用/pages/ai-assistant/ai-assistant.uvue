@@ -262,20 +262,23 @@
 	}
 
 	// 上传所选图片到 AI 专用端点并暂存 URL（先定义：被 onChooseImage 调用，Kotlin 无提升）
-	function onUploadImage(filePath : string) : void {
+	// @note UTS 的 Promise 链式 catch/finally 在 Kotlin 端无对应重载（error25/error18），
+	//       故用 async/await + try/catch/finally（UTS 支持 async 体内的三段式）
+	async function onUploadImage(filePath : string) : Promise<void> {
 		uploadingImage.value = true
-		uploadAiImageApi(filePath).then((url : string) => {
+		try {
+			const url = await uploadAiImageApi(filePath)
 			if (url.length > 0) {
 				pendingImageUrls.value.push(url)
 				uni.showToast({ title: '图片已就绪，随消息发送', icon: 'none' })
 			} else {
 				uni.showToast({ title: '图片上传失败', icon: 'none' })
 			}
-		}).catch((_e : any) : void => {
+		} catch (e) {
 			uni.showToast({ title: '图片上传失败', icon: 'none' })
-		}).finally(() => {
+		} finally {
 			uploadingImage.value = false
-		})
+		}
 	}
 
 	// 图片选图→上传（T4：专业版图片随对话发送）
