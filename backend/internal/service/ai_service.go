@@ -14,23 +14,8 @@ import (
 	"forklift-training/internal/model"
 )
 
-// AI 评分系统提示词。
-const gradingSystemPrompt = `你是一名专业的叉车维修培训考试阅卷专家。请根据参考答案和评分标准，对学员的简答题答案进行评分。
-要求：
-1. 严格按照评分标准逐项评分，意思正确但表述不同也应给分
-2. 评分应客观公正，不苛求表述完全一致
-3. 给出具体得分和简要评语，评语需指出得分点和失分点
-4. 只返回JSON格式，不要返回其他内容：{"score": 分数值, "comment": "评语"}
-5. 分数值为数字类型，不要加引号`
-
-// 章节内容生成系统提示词。
-const chapterContentSystemPrompt = `你是一名叉车维修培训内容编写专家。请根据课程信息和章节标题，生成适合培训学员的章节内容。
-要求：
-1. 内容使用 Markdown 格式
-2. 包含概述、核心知识点、操作要点、安全注意事项、小结等部分
-3. 内容专业、准确、实用，字数 800-1500 字
-4. 不要在内容开头重复章节标题（前端会自动显示）
-5. 可适当使用 Markdown 标题（##、###）、列表、加粗等格式增强可读性`
+// 评分/章节生成/题目解析的系统提示词在 ai_feature_registry.go 注册表声明（ADR-0030 决策 1），
+// 经派生面 featureSystemPrompt(featureKey) 取用，不再本地持有常量。
 
 // AIService 封装 AI 模型调用、文本生成与简答题评分。
 // 模型传输统一经注入的 AIModelPort（eino 唯一生产 adapter，ADR-0029 T2）完成；
@@ -66,7 +51,7 @@ func (s *AIService) GradeShortAnswer(questionContent, referenceAnswer, scoringCr
 		questionContent, orDefault(referenceAnswer, "无"), orDefault(scoringCriteria, "无"), maxScore, studentAnswer)
 
 	content, err := s.port.Complete(FeatureGradeShortAnswer, []*schema.Message{
-		schema.SystemMessage(gradingSystemPrompt),
+		schema.SystemMessage(featureSystemPrompt(FeatureGradeShortAnswer)),
 		schema.UserMessage(userPrompt),
 	}, AICompleteOptions{MaxTokens: 1000, Temperature: 0.3})
 
@@ -88,13 +73,11 @@ func (s *AIService) GradeShortAnswer(questionContent, referenceAnswer, scoringCr
 	return result
 }
 
-const questionExplainSystemPrompt = `你是一名叉车维修培训专家，请为以下题目生成详细解析。要求：1. 说明考点（关联知识点）；2. 解释正确选项的原因；3. 说明错误选项为何错误；4. 语言简洁专业，200-400字；5. 直接返回解析文本，不要加额外格式。`
-
 // GenerateQuestionExplanation 为题目生成 AI 解析。
 func (s *AIService) GenerateQuestionExplanation(questionContent, answer, explanation string) (string, error) {
 	userPrompt := fmt.Sprintf("【题目】%s\n\n【正确答案】%s\n\n【参考解析】%s\n\n请生成本题的 AI 解析。", questionContent, orDefault(answer, "无"), orDefault(explanation, "无"))
 	content, err := s.port.Complete(FeatureQuestionExplanation, []*schema.Message{
-		schema.SystemMessage(questionExplainSystemPrompt),
+		schema.SystemMessage(featureSystemPrompt(FeatureQuestionExplanation)),
 		schema.UserMessage(userPrompt),
 	}, AICompleteOptions{MaxTokens: 800, Temperature: 0.5})
 	if err != nil {
@@ -110,7 +93,7 @@ func (s *AIService) GenerateChapterContent(courseName, courseCategory, courseDes
 		courseName, orDefault(courseCategory, "无"), orDefault(courseDescription, "无"), chapterTitle)
 
 	content, err := s.port.Complete(FeatureGenerateChapterContent, []*schema.Message{
-		schema.SystemMessage(chapterContentSystemPrompt),
+		schema.SystemMessage(featureSystemPrompt(FeatureGenerateChapterContent)),
 		schema.UserMessage(userPrompt),
 	}, AICompleteOptions{MaxTokens: 2000, Temperature: 0.5})
 	if err != nil {

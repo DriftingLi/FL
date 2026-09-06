@@ -19,51 +19,8 @@ import (
 	"forklift-training/internal/security"
 )
 
-// AI 功能键（与前端展示一致）。新增功能时在此追加并同步前端。
-const (
-	FeatureGradeShortAnswer       = "grade_short_answer"
-	FeatureGenerateChapterContent = "generate_chapter_content"
-	FeatureAIAssistant            = "ai_assistant" // 遗留：多绑定，已由 normal/expert 双绑定替代，仅作兼容回退
-	FeatureAIAssistantNormal      = "ai_assistant_normal"
-	FeatureAIAssistantExpert      = "ai_assistant_expert"
-	FeatureQuestionExplanation    = "ai_question_analysis"
-	FeatureFaultConsult           = "fault_consult"
-	FeatureFaultCodeQuery         = "fault_code_query"
-	FeatureMaintenanceKnowledge   = "maintenance_knowledge"
-	FeatureDrawingRecognition     = "drawing_recognition"
-	FeatureExerciseSolving        = "exercise_solving"
-)
-
-// AllAIFeatures 全部 AI 功能键列表（用于绑定列表的全量展示）。
-// AI 助手已由 multi 的 ai_assistant 拆为双绑定的 normal/expert 单绑定，其它功能保持单绑定。
-var AllAIFeatures = []string{
-	FeatureGradeShortAnswer,
-	FeatureGenerateChapterContent,
-	FeatureAIAssistantNormal,
-	FeatureAIAssistantExpert,
-	FeatureQuestionExplanation,
-	FeatureFaultConsult,
-	FeatureFaultCodeQuery,
-	FeatureMaintenanceKnowledge,
-	FeatureDrawingRecognition,
-	FeatureExerciseSolving,
-}
-
-// FeatureLabel 功能键对应的中文名称。
-var FeatureLabel = map[string]string{
-	FeatureGradeShortAnswer:       "简答题 AI 评分",
-	FeatureGenerateChapterContent: "课程内容生成",
-	FeatureAIAssistantNormal:      "AI 助手 · 普通模式",
-	FeatureAIAssistantExpert:      "AI 助手 · 专家模式",
-	FeatureQuestionExplanation:    "题目 AI 解析",
-	FeatureFaultConsult:           "故障咨询",
-	FeatureFaultCodeQuery:         "故障代码查询",
-	FeatureMaintenanceKnowledge:   "维保知识",
-	FeatureDrawingRecognition:     "图纸识别",
-	FeatureExerciseSolving:        "习题解答",
-	// 遗留兼容
-	FeatureAIAssistant: "AI 助手对话",
-}
+// AI 功能键常量、AllAIFeatures / FeatureLabel / featureChatKeys / featureSystemPrompt
+// 均为注册表派生面，单点在 ai_feature_registry.go（ADR-0030 决策 1）。
 
 // AIConfigDTO 返回给前端的配置对象（API Key 脱敏）。
 type AIConfigDTO struct {
@@ -516,15 +473,8 @@ func (s *AIConfigService) ResolveAssistantPair(ctx context.Context) (normal, exp
 // AIConfigResolver 由 *AIConfigService 提供唯一实现（ADR-0029 决策 2：解析知识不泄出配置 service）。
 var _ AIConfigResolver = (*AIConfigService)(nil)
 
-// featureChatKeys 专项对话功能键集合（模型由管理端单绑定解析，用户无需选模型）。
-// （自 ai_assistant_service.go 迁入：唯一消费方是对话凭证解析。）
-var featureChatKeys = map[string]bool{
-	FeatureFaultConsult:         true,
-	FeatureFaultCodeQuery:       true,
-	FeatureMaintenanceKnowledge: true,
-	FeatureDrawingRecognition:   true,
-	FeatureExerciseSolving:      true,
-}
+// featureChatKeys 注册表派生面（专项对话功能键集合），声明在 ai_feature_registry.go；
+// 此处唯一消费：对话凭证解析的专项功能优先分支。
 
 // ResolveFeatureSettings 阻塞栈凭证解析（AIConfigResolver 实现；自 AIService.ensureClient
 // 的解析段迁入）：featureKey → 管理端单绑定；空键/未绑定报错（不再降级到环境变量）。
@@ -652,17 +602,4 @@ func MaskKey(k string) string {
 		return string(masked)
 	}
 	return k[:6] + "..." + k[len(k)-4:]
-}
-
-func isValidFeature(key string) bool {
-	for _, f := range AllAIFeatures {
-		if f == key {
-			return true
-		}
-	}
-	// 遗留兼容：ai_assistant 仍视为有效以便旧数据回退/迁移
-	if key == FeatureAIAssistant {
-		return true
-	}
-	return false
 }
