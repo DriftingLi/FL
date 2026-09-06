@@ -3,7 +3,7 @@
  *
  * request.uts 无法在 jest 中 import（.uts 非 JS 模块），沿用项目既有的
  * 「源码契约测试」缝：读取源文本，断言函数体的外部行为语义。
- * 先例：utils/quickLoginContract.test.js、utils/secureStorage.test.js。
+ * 先例：utils/secureStorage.test.js、utils/aiChatModesContract.test.js。
  *
  * 钉住的行为契约（对应 Issue #639 / refactor epic #638）：
  * 1) 出口签名：requestMapped<T>(options, map) —— mapper-callback 形态，
