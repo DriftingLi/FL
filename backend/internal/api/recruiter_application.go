@@ -7,7 +7,7 @@ package api
 
 import (
 	"context"
-	"errors"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 
@@ -15,6 +15,17 @@ import (
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
+
+// recruiterApplicationErrStatus 企业侧投递域哨兵→状态码表（#611）：职位/投递不存在 → 404，
+// 非本企业投递 → 403，其余（状态不允许等业务校验）兜底 400。
+var recruiterApplicationErrStatus = &errStatusTable{
+	entries: []errStatusEntry{
+		{service.ErrJobNotFound, http.StatusNotFound},
+		{service.ErrApplyNotFound, http.StatusNotFound},
+		{service.ErrApplyNotYours, http.StatusForbidden},
+	},
+	fallback: http.StatusBadRequest,
+}
 
 // RegisterRecruiterApplicationRoutes 注册企业侧投递处理路由。
 func RegisterRecruiterApplicationRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.JobApplicationService) {
@@ -59,13 +70,8 @@ func (h *RecruiterApplicationHandler) ListByJob(c *gin.Context) {
 			pageSize := atoiDefault(c.Query("page_size"), 20)
 			return h.svc.ListForRecruiter(middleware.CurrentUserID(c), jobID, page, pageSize)
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.RecruiterApplicationListResult, err error) {
-			if err != nil {
-				renderRecruiterApplicationError(c, err)
-				return
-			}
-			response.Success(c, *resp)
-		},
+		// #611：错误映射收编至 recruiterApplicationErrStatus
+		ErrStatus: recruiterApplicationErrStatus,
 	}.Handle(c)
 }
 
@@ -89,13 +95,8 @@ func (h *RecruiterApplicationHandler) GetDetail(c *gin.Context) {
 			}
 			return h.svc.GetForRecruiter(middleware.CurrentUserID(c), id)
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.ApplicationDTO, err error) {
-			if err != nil {
-				renderRecruiterApplicationError(c, err)
-				return
-			}
-			response.Success(c, *resp)
-		},
+		// #611：错误映射收编至 recruiterApplicationErrStatus
+		ErrStatus: recruiterApplicationErrStatus,
 	}.Handle(c)
 }
 
@@ -122,25 +123,10 @@ func (h *RecruiterApplicationHandler) Reject(c *gin.Context) {
 		},
 		Render: func(c *gin.Context, _ *struct{}, resp *service.ApplicationDTO, err error) {
 			if err != nil {
-				renderRecruiterApplicationError(c, err)
+				recruiterApplicationErrStatus.renderError(c, err) // #611：错误映射退表，成功文案保留定制
 				return
 			}
 			response.SuccessWithMsg(c, "已标记为不合适", *resp)
 		},
 	}.Handle(c)
-}
-
-// renderRecruiterApplicationError 企业侧投递错误映射。
-func renderRecruiterApplicationError(c *gin.Context, err error) {
-	var pe *ParseError
-	switch {
-	case asParseError(err, &pe):
-		renderStatus(c, pe.Status, pe.Message)
-	case errors.Is(err, service.ErrJobNotFound), errors.Is(err, service.ErrApplyNotFound):
-		response.NotFound(c, err.Error())
-	case errors.Is(err, service.ErrApplyNotYours):
-		response.Forbidden(c, err.Error())
-	default:
-		response.BadRequest(c, err.Error())
-	}
 }

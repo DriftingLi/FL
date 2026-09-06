@@ -345,6 +345,9 @@ func (s *AIAssistantService) maybeGenerateSessionTitle(ctx context.Context, user
 
 // generateTitleWithModel 调用对话同一选择子对应的模型，根据用户首条消息生成简短标题
 // （凭证解析/client 构建/超时/收集循环全部在单一模型端口内单点）。
+// 计量意图显式声明免费（ADR-0031 决策 2）：自动命名无独立功能键、随对话选择子发起，
+// 若随注册表默认（其所属对话 billed=true）会与主对话双扣——CONTEXT.md「AI 计费」
+// 免费清单收录本消费，显式声明使其从隐式漏网转为登记。
 func (s *AIAssistantService) generateTitleWithModel(ctx context.Context, sel AIModelSelector, userMessage string) (string, error) {
 	const titlePrompt = `请根据用户的问题，生成一个简短的中文会话标题。
 要求：
@@ -360,7 +363,8 @@ func (s *AIAssistantService) generateTitleWithModel(ctx context.Context, sel AIM
 		schema.SystemMessage("你是一个会话标题生成助手，根据用户消息生成简短的中文标题。"),
 		schema.UserMessage(fmt.Sprintf(titlePrompt, userMessage)),
 	}
-	return s.port.Stream(ctx, sel, msgs, nil)
+	title, _, err := s.port.Stream(withAIMeterFree(ctx), sel, msgs, nil)
+	return title, err
 }
 
 // titleTrimRunes 需要从标题首尾去除的字符集合（使用 map 保证唯一性，避免 SA1024）。
@@ -464,11 +468,12 @@ func (s *AIAssistantService) GetSessionMessages(ctx context.Context, userID, ses
 }
 
 // StreamChat 流式对话。
-// onChunk 回调用于推送增量内容；返回完整回复内容。
-// 此处只把请求的模型选择字段投影为 AIModelSelector（纯数据、零解析知识）并组装消息；
+// onChunk 回调用于推送增量内容；返回完整回复内容与计量产出（*AIUsage，闸门在端口装饰器
+// 内单点，ADR-0031——预检/扣费/prompt 事实/请求标识降级均不在本服务，调用方透传请求标识
+// 即可）。此处只把请求的模型选择字段投影为 AIModelSelector（纯数据、零解析知识）并组装消息；
 // 凭证解析（专项单绑定 → 双模式 → 旧来源）与传输（client 签名缓存/超时/Recv 收集）
 // 全部在单一模型端口 Stream 内经注入 resolver 单点完成（ADR-0029 T2）。
-func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req StreamChatReq, onChunk func(content string)) (string, error) {
+func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req StreamChatReq, onChunk func(content string)) (string, *AIUsage, error) {
 	sel := AIModelSelector{
 		FeatureKey:    req.FeatureKey,
 		Mode:          req.Mode,
@@ -499,7 +504,7 @@ func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req Str
 			if i == lastUserIdx && len(m.Images) > 0 {
 				userMsg, err := s.buildImageUserMessage(ctx, m.Content, m.Images)
 				if err != nil {
-					return "", err
+					return "", nil, err
 				}
 				msgs = append(msgs, userMsg)
 				continue
@@ -510,9 +515,18 @@ func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req Str
 		}
 	}
 
-	fullContent, err := s.port.Stream(ctx, sel, msgs, onChunk)
+	// 计费事实随计费意图声明（口径锚定请求 DTO，与迁移前 handler 取值逐字一致：最后一条
+	// 消息原文长度）。多模态消息经 buildImageUserMessage 重组，图片全部加载失败时注入的
+	// 注记文本只存在于传输层消息——DTO Content 才是口径事实，注记不参与计费。声明经 ctx
+	// 透传给端口上的计量闸门（ADR-0031），meter 优先取声明值、未声明才回退端口消息推导。
+	var promptChars int
+	if len(req.Messages) > 0 {
+		promptChars = len(req.Messages[len(req.Messages)-1].Content)
+	}
+
+	fullContent, usage, err := s.port.Stream(withAIPromptChars(ctx, promptChars), sel, msgs, onChunk)
 	if err != nil {
-		return fullContent, err
+		return fullContent, usage, err
 	}
 
 	// 持久化（仅登录用户且指定了 SessionID）
@@ -538,17 +552,17 @@ func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req Str
 			if err := s.db.WithContext(ctx).Create(&model.AIChatMessage{
 				SessionID: req.SessionID, Role: "user", Content: lastUserMsg, Images: imagesJSON,
 			}).Error; err != nil {
-				return fullContent, fmt.Errorf("保存用户消息失败: %w", err)
+				return fullContent, usage, fmt.Errorf("保存用户消息失败: %w", err)
 			}
 			if err := s.db.WithContext(ctx).Create(&model.AIChatMessage{
 				SessionID: req.SessionID, Role: "assistant", Content: fullContent,
 			}).Error; err != nil {
-				return fullContent, fmt.Errorf("保存助手消息失败: %w", err)
+				return fullContent, usage, fmt.Errorf("保存助手消息失败: %w", err)
 			}
 			if err := s.db.WithContext(ctx).Model(&model.AIChatSession{}).
 				Where("id = ?", req.SessionID).
 				Updates(map[string]any{"updated_at": now}).Error; err != nil {
-				return fullContent, fmt.Errorf("更新会话时间失败: %w", err)
+				return fullContent, usage, fmt.Errorf("更新会话时间失败: %w", err)
 			}
 
 			// 异步生成会话标题：仅当标题为占位符"新会话"时（首次对话）
@@ -568,7 +582,7 @@ func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req Str
 		}
 	}
 
-	return fullContent, nil
+	return fullContent, usage, nil
 }
 
 // buildImageUserMessage 构建带图片的多模态用户消息。

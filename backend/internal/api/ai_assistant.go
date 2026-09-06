@@ -6,11 +6,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -21,21 +19,22 @@ import (
 )
 
 // AIAssistantHandler AI 助手模块 Handler。
+// 计量闸门内移模型端口（ADR-0031）：本 Handler 无预检/扣费编排、无 prompt 事实选取，
+// 只透传请求标识与转发 SSE 事件——积分域依赖不再进入 HTTP 层。
 type AIAssistantHandler struct {
-	svc       *service.AIAssistantService
-	pointsSvc *service.PointsService
+	svc *service.AIAssistantService
 }
 
 // NewAIAssistantHandler 构造 AIAssistantHandler。
-func NewAIAssistantHandler(svc *service.AIAssistantService, pointsSvc *service.PointsService) *AIAssistantHandler {
-	return &AIAssistantHandler{svc: svc, pointsSvc: pointsSvc}
+func NewAIAssistantHandler(svc *service.AIAssistantService) *AIAssistantHandler {
+	return &AIAssistantHandler{svc: svc}
 }
 
 // RegisterAIAssistantRoutes 注册 /api/ai-assistant 路由。
 // 公开路由：GET /models、POST /chat（可选认证）。
 // 登录路由：sessions CRUD、user-models CRUD（强制 middleware.JWTAuth + role=hrwai_user）。
-func RegisterAIAssistantRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.AIAssistantService, pointsSvc *service.PointsService) {
-	h := NewAIAssistantHandler(svc, pointsSvc)
+func RegisterAIAssistantRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.AIAssistantService) {
+	h := NewAIAssistantHandler(svc)
 
 	g := rg.Group("/ai-assistant")
 
@@ -467,38 +466,33 @@ func (h *AIAssistantHandler) StreamChat(c *gin.Context) {
 		c.Writer.Flush()
 	}
 
-	// 积分预检：已登录用户余额不足下限即阻断（预检与下限常量单点在积分域 AIPreflight）
-	if userID > 0 && h.pointsSvc != nil {
-		if err := h.pointsSvc.AIPreflight(userID); err != nil {
-			sendEvent("error", map[string]string{"message": "积分不足，请先去任务中心完成任务"})
-			return
-		}
+	// 计量闸门在模型端口内单点（ADR-0031）：余额预检、后计量扣费、「什么算 prompt」的
+	// 事实选取与请求标识降级键全部在 meter，handler 只透传请求标识（幂等键事实，
+	// RequestID 中间件注入）并按产出转发 SSE 事件。
+	ctx := c.Request.Context()
+	if requestID := c.GetString(string(middleware.CtxRequestID)); requestID != "" {
+		ctx = service.WithAIRequestID(ctx, requestID)
 	}
 
-	fullContent, err := h.svc.StreamChat(c.Request.Context(), userID, req, func(content string) {
+	_, usage, err := h.svc.StreamChat(ctx, userID, req, func(content string) {
 		sendEvent("message", map[string]string{"content": content})
 	})
 
 	if err != nil {
+		if errors.Is(err, service.ErrInsufficientPoints) {
+			// 闸门预检阻断（文案与迁移前 handler 逐字一致）；不扣费、无 done 事件
+			sendEvent("error", map[string]string{"message": "积分不足，请先去任务中心完成任务"})
+			return
+		}
 		sendEvent("error", map[string]string{"message": err.Error()})
 		return
 	}
-	// 后计量扣费：已登录用户按 tokens 扣分，末尾附消耗（估算与换算内聚在积分域）
-	if userID > 0 && h.pointsSvc != nil && fullContent != "" {
-		// 稳定幂等键（ADR-0023 §5）：取 RequestID 中间件注入的请求标识，
-		// 同一请求的重试/重放映射同一键；中间件未覆盖时回退现场生成（仅丧失重试幂等）。
-		requestID := c.GetString(string(middleware.CtxRequestID))
-		if requestID == "" {
-			requestID = fmt.Sprintf("ai-%d-%d", userID, time.Now().UnixNano())
-		}
-		// handler 只传长度事实，tokens 估算与积分换算全部在积分域
-		promptChars := 0
-		if len(req.Messages) > 0 {
-			promptChars = len(req.Messages[len(req.Messages)-1].Content)
-		}
-		if res, err := h.pointsSvc.DeductAI(c.Request.Context(), userID, requestID, promptChars, len(fullContent)); err == nil {
-			sendEvent("usage", res)
-		} else if errors.Is(err, service.ErrInsufficientPoints) {
+	// usage 事件与扣费结果形状不变（移动端契约无感）：扣费失败时沿用迁移前行为——
+	// 余额不足发 error（仍发 done），其余错误静默跳过 usage 事件
+	if usage != nil {
+		if usage.Err == nil {
+			sendEvent("usage", usage.Res)
+		} else if errors.Is(usage.Err, service.ErrInsufficientPoints) {
 			sendEvent("error", map[string]string{"message": "积分不足"})
 		}
 	}

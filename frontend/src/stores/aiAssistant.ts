@@ -11,6 +11,13 @@ import {
 } from '@/api/aiAssistant'
 import { useAuthStore } from '@/stores/auth'
 
+/** 当轮计费消耗（SSE usage 事件负载；ADR-0023 tokens 后计量） */
+export interface TurnUsage {
+  points_cost: number
+  total_tokens: number
+  balance: number
+}
+
 export const useAIAssistantStore = defineStore('aiAssistant', () => {
   // ===== 功能上下文 =====
   // 'ai_assistant'=通用 AI 助手（双模式 normal/expert）；其余为专项功能（管理端单绑定模型）
@@ -33,6 +40,11 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
   const streaming = ref(false)
   const streamingContent = ref('')
   let abortController: AbortController | null = null
+
+  // ===== 当轮计费 usage（#620 显性通道）=====
+  // SSE usage 事件进独立 state，由壳组件渲染当轮脚注；消息正文不再拼接计费文本
+  // （已知取舍：历史回看不显示每轮消耗——后端消息未存 usage，如需回看另立项）。
+  const lastUsage: Ref<TurnUsage | null> = ref(null)
 
   // ===== 登录状态（复用主体系 auth store）=====
   const authStore = useAuthStore()
@@ -124,11 +136,30 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     currentSessionId.value = null
     messages.value = []
     streamingContent.value = ''
+    lastUsage.value = null
+  }
+
+  /**
+   * 清空会话消息（#620）：登出等场景的状态变更走 action，组件不再直改 store 内部数组。
+   * 流式进行中先中止当轮流（中止触发的 onDone 因正文已空不再落消息），再整体复位。
+   */
+  function clearMessages() {
+    if (abortController) {
+      abortController.abort()
+      abortController = null
+    }
+    streaming.value = false
+    messages.value = []
+    currentSessionId.value = null
+    streamingContent.value = ''
+    lastUsage.value = null
   }
 
   async function selectSession(id: number) {
     if (!isLoggedIn.value) return
     currentSessionId.value = id
+    // 切换会话即离开「当轮」上下文，上一轮脚注随之失效
+    lastUsage.value = null
     messagesLoading.value = true
     try {
       messages.value = await aiAssistantApi.getSessionMessages(id)
@@ -174,6 +205,8 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
 
     streaming.value = true
     streamingContent.value = ''
+    // 新一轮开始：清上一轮脚注（usage 仅描述当轮）
+    lastUsage.value = null
     const assistantMsgId = Date.now() + 1
 
     const req: any = {
@@ -188,36 +221,33 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
       messages: historyMessages
     }
 
-    let lastUsage: { points_cost: number; total_tokens: number; balance: number } | null = null
     abortController = aiAssistantApi.streamChat(req, {
       onChunk: (chunk) => {
         streamingContent.value += chunk
       },
+      // usage 进独立 state（当轮脚注由壳渲染），不再拼进消息正文
       onUsage: (data) => {
-        lastUsage = data
+        lastUsage.value = data
       },
       onDone: () => {
-        let finalContent = streamingContent.value
-        if (lastUsage) {
-          finalContent += `\n\n— 本轮消耗 ${lastUsage.points_cost} 分 · ${(lastUsage.total_tokens / 1000).toFixed(1)}k tokens · 余额 ${lastUsage.balance}`
+        // 正文即纯对话内容（计费脚注走 lastUsage 通道，#620）
+        const finalContent = streamingContent.value
+        if (finalContent) {
+          const assistantMsg: ChatMessage = {
+            id: assistantMsgId,
+            role: 'assistant',
+            content: finalContent,
+            created_at: new Date().toISOString()
+          }
+          messages.value.push(assistantMsg)
         }
-        const assistantMsg: ChatMessage = {
-          id: assistantMsgId,
-          role: 'assistant',
-          content: finalContent,
-          created_at: new Date().toISOString()
-        }
-        messages.value.push(assistantMsg)
         streamingContent.value = ''
         streaming.value = false
         abortController = null
+        // 流结束 → 精确重拉一次会话列表（后端 done 前已完成异步命名；
+        // 标题未就绪时显示默认名，下次进入自然命中）。5 秒定时器已删除（#620）。
         if (isLoggedIn.value) {
           loadSessions().catch(() => {})
-          const curSessionId = currentSessionId.value
-          const cur = sessions.value.find(s => s.id === curSessionId)
-          if (cur && (cur.title === '新会话' || cur.title === '')) {
-            setTimeout(() => loadSessions().catch(() => {}), 5000)
-          }
         }
       },
       onError: (message) => {
@@ -251,6 +281,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
       abortController = null
     }
     streaming.value = false
+    lastUsage.value = null
     if (streamingContent.value) {
       const assistantMsg: ChatMessage = {
         id: Date.now(),
@@ -286,6 +317,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     sessions.value = []
     messages.value = []
     currentSessionId.value = null
+    lastUsage.value = null
     if (isLoggedIn.value) {
       await loadSessions()
     }
@@ -305,6 +337,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     messagesLoading,
     streaming,
     streamingContent,
+    lastUsage,
     isLoggedIn,
     // actions
     init,
@@ -316,6 +349,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     deleteSession,
     renameSession,
     startDraft,
+    clearMessages,
     selectSession,
     sendMessage,
     stopStreaming,
