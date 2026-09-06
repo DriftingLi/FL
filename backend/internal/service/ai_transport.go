@@ -1,6 +1,8 @@
-// Package service 传输端口：Blocking/Streaming 双 slot（#397）。
-// 端口承载「凭证解析（经注入 resolver）+ 建 client + 调用 + 超时纪律」；prompt 组装、
-// 响应解析与持久化是各栈的真语义，留在原服务。形状范本：ai_explanation.go 的 ExplanationGenerator。
+// Package service 模型端口：单一 AIModelPort（ADR-0029 T2，#607）。
+// Complete（阻塞补全，一次请求一次完整回复）与 Stream（流式回调）合一；端口承载
+// 「凭证解析（经注入 resolver）+ client 签名缓存 + 调用 + 超时纪律（120s/300s 单点分化）」；
+// prompt 组装、响应解析与持久化是各消费方的真语义，留在原服务。
+// eino 为唯一生产 adapter，测试 fake 为第二 adapter（seam 坐实）。
 package service
 
 import (
@@ -9,11 +11,13 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"time"
 
 	einoopenai "github.com/cloudwego/eino-ext/components/model/openai"
+	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
-	"github.com/sashabaranov/go-openai"
+	"go.uber.org/zap"
 )
 
 // AISettings AI 配置快照。Source 标识配置来源，便于前端展示与诊断。
@@ -25,7 +29,7 @@ type AISettings struct {
 	Source  string `json:"source"` // "binding:*" | "user:*" | "custom" | "unbound" | "decrypt-failed"
 }
 
-// AIModelSelector 对话凭证选择子（流式栈解析输入）：调用方对「用哪个模型」的纯数据
+// AIModelSelector 对话凭证选择子（Stream 路径解析输入）：调用方对「用哪个模型」的纯数据
 // 声明（自 StreamChatReq 投影，不含解析知识）；专项单绑定 → Mode 双模式 → 旧
 // ModelSource 的优先级与降级全部由 AIConfigResolver 实现承载（ADR-0029 决策 2）。
 type AIModelSelector struct {
@@ -41,68 +45,127 @@ type AIModelSelector struct {
 }
 
 // AIConfigResolver 凭证 resolver 端口（ADR-0029 决策 2 的注入通道）：featureKey/选择子 →
-// AISettings 的解析内聚在 *AIConfigService 单实现，阻塞与流式两栈注入同一接口；
-// 两个方法按调用形态分化（与超时纪律同则），解析知识不泄出配置 service。
+// AISettings 的解析内聚在 *AIConfigService 单实现，端口两个方法按调用形态取用；
+// 解析知识不泄出配置 service。
 type AIConfigResolver interface {
-	// ResolveFeatureSettings 阻塞栈流向：featureKey → 管理端单绑定凭证（空键/未绑定报错）。
+	// ResolveFeatureSettings 阻塞补全流向：featureKey → 管理端单绑定凭证（空键/未绑定报错）。
 	ResolveFeatureSettings(ctx context.Context, featureKey string) (AISettings, error)
-	// ResolveChatSettings 流式栈流向：选择子 → 对话凭证（专项单绑定 → 双模式 → 旧来源）。
+	// ResolveChatSettings 流式流向：选择子 → 对话凭证（专项单绑定 → 双模式 → 旧来源）。
 	ResolveChatSettings(ctx context.Context, sel AIModelSelector) (AISettings, error)
 }
 
-// AIBlockingTransport 阻塞式传输端口（go-openai 槽位）：一次请求一次完整回复，
-// 服务评分/解析/章节内容生成。*AIService 为默认 adapter，测试可注入 fake。
-type AIBlockingTransport interface {
-	CallModel(messages []openai.ChatCompletionMessage, maxTokens int, temperature float32, featureKey string) (string, error)
+// AICompleteOptions Complete 的生成参数（对应原阻塞栈逐调用传入的 maxTokens/temperature；
+// 消费方按语义给值：评分 1000/0.3、解析 800/0.5、章节生成 2000/0.5）。
+type AICompleteOptions struct {
+	MaxTokens   int
+	Temperature float32
 }
 
-// AIStreamingTransport 流式传输端口（eino 槽位）：增量经 onChunk 回调透传，
-// 返回累积完整回复。凭证解析收进端口内（经注入 resolver，调用方只传选择子）。
-// *AIAssistantService 为默认 adapter，测试可注入 fake。
-type AIStreamingTransport interface {
-	StreamComplete(ctx context.Context, sel AIModelSelector, msgs []*schema.Message, onChunk func(string)) (string, error)
+// AIModelPort 单一模型端口（ADR-0029 T2）：阻塞补全与流式回调合一，消费方只面对
+// 一套消息类型（eino schema.Message）与一个端口。凭证解析、client 生命周期（签名缓存）、
+// 超时与重试等深知识全部藏进 adapter 单点。*einoAIAdapter 为唯一生产 adapter，测试可注入 fake。
+type AIModelPort interface {
+	// Complete 阻塞补全：服务评分/解析/章节内容生成等一次请求一次完整回复的调用。
+	// featureKey 经注入 resolver 解析绑定配置；生命周期自持（不携带调用方 context，
+	// 与原阻塞栈语义一致——章节生成在后台 goroutine 运行、评分不随请求中断）。
+	Complete(featureKey string, msgs []*schema.Message, opts AICompleteOptions) (string, error)
+	// Stream 流式调用：增量经 onChunk 回调透传，返回累积完整回复。
+	// 选择子经注入 resolver 解析凭证（调用方只传选择子）；沿用调用方 context（SSE
+	// 随请求断连取消是既有语义），超时纪律在 adapter 内单点封顶。
+	Stream(ctx context.Context, sel AIModelSelector, msgs []*schema.Message, onChunk func(string)) (string, error)
 }
 
-// blockingSlot 返回阻塞槽位（默认自实装；测试可注入 fake）。
-func (s *AIService) blockingSlot() AIBlockingTransport {
-	if s.blocking != nil {
-		return s.blocking
-	}
-	return s
-}
-
-// streamingSlot 返回流式槽位（默认自实装；测试可注入 fake）。
-func (s *AIAssistantService) streamingSlot() AIStreamingTransport {
-	if s.streamer != nil {
-		return s.streamer
-	}
-	return s
-}
-
-// 超时纪律单点（ADR-0029 决策 3）：阻塞/流式按调用形态在此分化，两栈不再各自为政。
+// 超时纪律单点（ADR-0029 决策 3）：阻塞/流式按调用形态在此分化，不再各自为政。
 const (
-	// aiBlockingTimeout 阻塞栈总时长上限（评分/解析/章节生成等一次请求一次完整回复的调用）。
+	// aiBlockingTimeout 阻塞补全总时长上限（评分/解析/章节生成等一次请求一次完整回复的调用）。
 	aiBlockingTimeout = 120 * time.Second
-	// aiStreamTimeout 流式栈总时长上限：流式此前无超时纪律（自动命名走
-	// context.Background() 完全无界），在此单点封顶；比阻塞栈宽松（长对话）。
+	// aiStreamTimeout 流式总时长上限：比阻塞宽松（长对话），单点封顶。
 	aiStreamTimeout = 300 * time.Second
 )
 
-// aiBlockingContext 阻塞栈超时纪律包装单点（CallModel 唯一消费）。
+// aiFinishReasonContentFilter 内容审查截断的 finish_reason（eino schema.ResponseMeta 透传）。
+const aiFinishReasonContentFilter = "content_filter"
+
+// aiBlockingContext 阻塞补全超时纪律包装单点（Complete 唯一消费）。
 func aiBlockingContext() (context.Context, context.CancelFunc) {
 	return withTimeout(aiBlockingTimeout)
 }
 
-// StreamComplete 流式槽位默认实现：300s 超时纪律 → 注入 resolver 解析凭证（单点）→
-// 建 eino client → 流式调用 → Recv 收集循环单点。
-func (s *AIAssistantService) StreamComplete(ctx context.Context, sel AIModelSelector, msgs []*schema.Message, onChunk func(string)) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, aiStreamTimeout)
+// einoAIAdapter 单一生产 adapter（ADR-0029 T2）：eino ChatModel 同时承载 Generate 与 Stream。
+// 凭证解析经注入 resolver；client 签名缓存收敛于此（阻塞/流式同一签名复用同一 client，
+// 流式不再每请求重建——原两副面孔的单点归一）。
+type einoAIAdapter struct {
+	resolver AIConfigResolver
+	logger   *zap.Logger
+
+	mu        sync.Mutex            // 保护 client 重建并发安全
+	client    *einoopenai.ChatModel // 当前签名的 eino client
+	clientSig string                // "key|url|model" 签名，用于检测配置变化
+}
+
+// NewEinoAIModel 构建唯一生产 adapter（deps.go 构建一次，注入全部 AI 消费服务，
+// 使阻塞/流式共享同一 client 缓存）。
+func NewEinoAIModel(resolver AIConfigResolver, logger *zap.Logger) *einoAIAdapter {
+	return &einoAIAdapter{resolver: resolver, logger: logger}
+}
+
+var _ AIModelPort = (*einoAIAdapter)(nil)
+
+// Complete 阻塞补全（AIModelPort 实现）：120s 超时纪律 → resolver 解析 → 签名缓存取 client
+// → eino Generate，重试 2 次（错误文案与重试节奏与原阻塞栈逐字一致）。
+func (a *einoAIAdapter) Complete(featureKey string, msgs []*schema.Message, opts AICompleteOptions) (string, error) {
+	ctx, cancel := aiBlockingContext()
 	defer cancel()
-	mc, err := s.resolver.ResolveChatSettings(ctx, sel)
+
+	mc, err := a.resolver.ResolveFeatureSettings(ctx, featureKey)
 	if err != nil {
 		return "", err
 	}
-	chatModel, err := newEinoChatModel(ctx, mc)
+	chatModel, err := a.ensureClient(ctx, mc, featureKey)
+	if err != nil {
+		return "", fmt.Errorf("构建模型失败: %w", err)
+	}
+
+	genOpts := []model.Option{
+		model.WithMaxTokens(opts.MaxTokens),
+		model.WithTemperature(opts.Temperature),
+	}
+	for attempt := 1; attempt <= 2; attempt++ {
+		resp, err := chatModel.Generate(ctx, msgs, genOpts...)
+		if err != nil {
+			a.logger.Error("AI call failed", zap.Int("attempt", attempt), zap.Error(err))
+			if attempt == 2 {
+				return "", err
+			}
+			time.Sleep(time.Second)
+			continue
+		}
+		content, finishReason := responseContent(resp)
+		if content == "" {
+			if finishReason == aiFinishReasonContentFilter {
+				return "", nil
+			}
+			if attempt == 2 {
+				return "", nil
+			}
+			time.Sleep(time.Second)
+			continue
+		}
+		return content, nil
+	}
+	return "", nil
+}
+
+// Stream 流式调用（AIModelPort 实现）：300s 超时纪律 → resolver 解析 → 签名缓存取 client
+// → eino Stream → Recv 收集循环单点（错误文案与原流式栈逐字一致）。
+func (a *einoAIAdapter) Stream(ctx context.Context, sel AIModelSelector, msgs []*schema.Message, onChunk func(string)) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, aiStreamTimeout)
+	defer cancel()
+	mc, err := a.resolver.ResolveChatSettings(ctx, sel)
+	if err != nil {
+		return "", err
+	}
+	chatModel, err := a.ensureClient(ctx, mc, sel.FeatureKey)
 	if err != nil {
 		return "", fmt.Errorf("构建模型失败: %w", err)
 	}
@@ -117,22 +180,43 @@ func (s *AIAssistantService) StreamComplete(ctx context.Context, sel AIModelSele
 	return content, nil
 }
 
-// newEinoChatModel eino 流式 client 构建单点。
+// ensureClient 检查凭证签名是否变化，必要时重建 eino client（阻塞/流式共用，签名缓存单点）。
+func (a *einoAIAdapter) ensureClient(ctx context.Context, cur AISettings, featureKey string) (*einoopenai.ChatModel, error) {
+	sig := cur.APIKey + "|" + cur.BaseURL + "|" + cur.Model
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if sig == a.clientSig && a.client != nil {
+		return a.client, nil
+	}
+	cli, err := newEinoChatModel(ctx, cur)
+	if err != nil {
+		return nil, err
+	}
+	a.client = cli
+	a.clientSig = sig
+	a.logger.Info("AI client 已重建", zap.String("base_url", cur.BaseURL), zap.String("model", cur.Model), zap.String("source", cur.Source), zap.String("feature", featureKey))
+	return cli, nil
+}
+
+// responseContent 提取 eino Generate 响应的正文与 finish_reason（空响应防御）。
+func responseContent(resp *schema.Message) (content, finishReason string) {
+	if resp == nil {
+		return "", ""
+	}
+	if resp.ResponseMeta != nil {
+		finishReason = resp.ResponseMeta.FinishReason
+	}
+	return strings.TrimSpace(resp.Content), finishReason
+}
+
+// newEinoChatModel eino client 构建单点（adapter 签名缓存与 TestConfig 共用）。
 func newEinoChatModel(ctx context.Context, mc AISettings) (*einoopenai.ChatModel, error) {
 	return einoopenai.NewChatModel(ctx, &einoopenai.ChatModelConfig{
 		APIKey:  mc.APIKey,
 		BaseURL: mc.BaseURL,
 		Model:   mc.Model,
 	})
-}
-
-// newOpenAIClient go-openai 阻塞 client 构建单点（ensureClient 与 TestConfig 共用）。
-func newOpenAIClient(apiKey, baseURL string) *openai.Client {
-	cfg := openai.DefaultConfig(apiKey)
-	if baseURL != "" {
-		cfg.BaseURL = baseURL
-	}
-	return openai.NewClientWithConfig(cfg)
 }
 
 // collectStreamReader 流式接收循环单点：EOF 正常结束，增量回调，返回累积内容

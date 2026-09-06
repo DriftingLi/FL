@@ -2,16 +2,13 @@
 package service
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"go.uber.org/zap"
 	"regexp"
 	"strings"
-	"sync"
-	"time"
 
-	"github.com/sashabaranov/go-openai"
+	"github.com/cloudwego/eino/schema"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
@@ -35,27 +32,19 @@ const chapterContentSystemPrompt = `你是一名叉车维修培训内容编写�
 4. 不要在内容开头重复章节标题（前端会自动显示）
 5. 可适当使用 Markdown 标题（##、###）、列表、加粗等格式增强可读性`
 
-// AIService 封装 OpenAI 兼容 API 调用、文本生成与简答题评分。
-// 凭证解析经注入的 AIConfigResolver（*AIConfigService 实现）完成，未绑定时返回错误。
+// AIService 封装 AI 模型调用、文本生成与简答题评分。
+// 模型传输统一经注入的 AIModelPort（eino 唯一生产 adapter，ADR-0029 T2）完成；
+// 本服务只保留各消费功能的真语义：prompt 组装、响应解析与持久化。
 type AIService struct {
-	db        *gorm.DB
-	resolver  AIConfigResolver // 凭证解析端口（与流式栈共用同一注入实现，#606）
-	client    *openai.Client
-	clientSig string // 当前 client 使用的 "key|url|model" 签名，用于检测配置变化
-	apiKey    string
-	baseURL   string
-	model     string
-	mu        sync.Mutex // 保护 client 重建并发安全
-	logger    *zap.Logger
-	blocking  AIBlockingTransport // 阻塞传输槽位（nil 时自实装；测试可注入 fake）
+	db     *gorm.DB
+	port   AIModelPort // 单一模型端口（构造期注入不变量；测试可注入 fake）
+	logger *zap.Logger
 }
 
-// NewAIService 创建 AI 服务。aiConfigSvc 以 AIConfigResolver 身份注入（解析知识在配置 service），
-// 必须非 nil：构造期注入是不变量，与 NewAIAssistantService 一致。
-func NewAIService(db *gorm.DB, aiConfigSvc *AIConfigService, logger *zap.Logger) *AIService {
-	svc := &AIService{db: db, logger: logger, resolver: aiConfigSvc}
-	svc.blocking = svc
-	return svc
+// NewAIService 创建 AI 服务。port 为单一模型端口（NewEinoAIModel 产物与流式侧共享），
+// 必须非 nil：构造期注入是不变量。
+func NewAIService(db *gorm.DB, port AIModelPort, logger *zap.Logger) *AIService {
+	return &AIService{db: db, port: port, logger: logger}
 }
 
 // AIGradeResult 简答题 AI 评分结果。
@@ -76,10 +65,10 @@ func (s *AIService) GradeShortAnswer(questionContent, referenceAnswer, scoringCr
 	userPrompt := fmt.Sprintf("【题目】%s\n\n【参考答案】%s\n\n【评分标准】%s\n\n【满分】%g分\n\n【学员答案】%s\n\n请根据以上信息对学员答案进行评分，返回JSON格式。",
 		questionContent, orDefault(referenceAnswer, "无"), orDefault(scoringCriteria, "无"), maxScore, studentAnswer)
 
-	content, err := s.blockingSlot().CallModel([]openai.ChatCompletionMessage{
-		{Role: openai.ChatMessageRoleSystem, Content: gradingSystemPrompt},
-		{Role: openai.ChatMessageRoleUser, Content: userPrompt},
-	}, 1000, 0.3, FeatureGradeShortAnswer)
+	content, err := s.port.Complete(FeatureGradeShortAnswer, []*schema.Message{
+		schema.SystemMessage(gradingSystemPrompt),
+		schema.UserMessage(userPrompt),
+	}, AICompleteOptions{MaxTokens: 1000, Temperature: 0.3})
 
 	if err != nil || content == "" {
 		s.logger.Error("AI grade_short_answer failed", zap.Error(err))
@@ -104,10 +93,10 @@ const questionExplainSystemPrompt = `你是一名叉车维修培训专家，请�
 // GenerateQuestionExplanation 为题目生成 AI 解析。
 func (s *AIService) GenerateQuestionExplanation(questionContent, answer, explanation string) (string, error) {
 	userPrompt := fmt.Sprintf("【题目】%s\n\n【正确答案】%s\n\n【参考解析】%s\n\n请生成本题的 AI 解析。", questionContent, orDefault(answer, "无"), orDefault(explanation, "无"))
-	content, err := s.blockingSlot().CallModel([]openai.ChatCompletionMessage{
-		{Role: openai.ChatMessageRoleSystem, Content: questionExplainSystemPrompt},
-		{Role: openai.ChatMessageRoleUser, Content: userPrompt},
-	}, 800, 0.5, FeatureQuestionExplanation)
+	content, err := s.port.Complete(FeatureQuestionExplanation, []*schema.Message{
+		schema.SystemMessage(questionExplainSystemPrompt),
+		schema.UserMessage(userPrompt),
+	}, AICompleteOptions{MaxTokens: 800, Temperature: 0.5})
 	if err != nil {
 		return "", err
 	}
@@ -120,10 +109,10 @@ func (s *AIService) GenerateChapterContent(courseName, courseCategory, courseDes
 	userPrompt := fmt.Sprintf("【课程名称】%s\n【课程分类】%s\n【课程简介】%s\n【章节标题】%s\n\n请根据以上信息生成该章节的培训内容（Markdown 格式）。",
 		courseName, orDefault(courseCategory, "无"), orDefault(courseDescription, "无"), chapterTitle)
 
-	content, err := s.blockingSlot().CallModel([]openai.ChatCompletionMessage{
-		{Role: openai.ChatMessageRoleSystem, Content: chapterContentSystemPrompt},
-		{Role: openai.ChatMessageRoleUser, Content: userPrompt},
-	}, 2000, 0.5, FeatureGenerateChapterContent)
+	content, err := s.port.Complete(FeatureGenerateChapterContent, []*schema.Message{
+		schema.SystemMessage(chapterContentSystemPrompt),
+		schema.UserMessage(userPrompt),
+	}, AICompleteOptions{MaxTokens: 2000, Temperature: 0.5})
 	if err != nil {
 		return "", err
 	}
@@ -134,81 +123,6 @@ func (s *AIService) GenerateChapterContent(courseName, courseCategory, courseDes
 		}, truncate(content, 5000), 1)
 	}
 	return content, nil
-}
-
-// ensureClient 检查 AI 配置是否变化，必要时重建 openai.Client。
-// 凭证解析经注入的 resolver（AIConfigResolver）完成；本函数只保留 client 签名缓存
-// 与重建纪律（ADR-0029 T1：生命周期仍留阻塞栈，T2 再迁 adapter）。
-func (s *AIService) ensureClient(ctx context.Context, featureKey string) error {
-	if s.resolver == nil {
-		return fmt.Errorf("AI 功能 %q 未绑定配置，请在管理员后台 AI 配置页面绑定", featureKey)
-	}
-	cur, err := s.resolver.ResolveFeatureSettings(ctx, featureKey)
-	if err != nil {
-		return err
-	}
-	sig := cur.APIKey + "|" + cur.BaseURL + "|" + cur.Model
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if sig == s.clientSig && s.client != nil {
-		s.model = cur.Model
-		return nil
-	}
-	s.client = newOpenAIClient(cur.APIKey, cur.BaseURL)
-	s.clientSig = sig
-	s.apiKey, s.baseURL, s.model = cur.APIKey, cur.BaseURL, cur.Model
-	s.logger.Info("AI client 已重建", zap.String("base_url", cur.BaseURL), zap.String("model", cur.Model), zap.String("source", cur.Source), zap.String("feature", featureKey))
-	return nil
-}
-
-// CallModel 阻塞式传输端口实现（AIBlockingTransport 槽位）：调用模型，重试 2 次。
-// featureKey 经注入 resolver 解析绑定配置；超时纪律在 transport 文件单点（aiBlockingContext）。
-func (s *AIService) CallModel(messages []openai.ChatCompletionMessage, maxTokens int, temperature float32, featureKey string) (string, error) {
-	ctx, cancel := aiBlockingContext()
-	defer cancel()
-
-	if err := s.ensureClient(ctx, featureKey); err != nil {
-		return "", err
-	}
-
-	for attempt := 1; attempt <= 2; attempt++ {
-		req := openai.ChatCompletionRequest{
-			Model:       s.model,
-			Messages:    messages,
-			MaxTokens:   maxTokens,
-			Temperature: temperature,
-		}
-		resp, err := s.client.CreateChatCompletion(ctx, req)
-		if err != nil {
-			s.logger.Error("AI call failed", zap.Int("attempt", attempt), zap.Error(err))
-			if attempt == 2 {
-				return "", err
-			}
-			time.Sleep(time.Second)
-			continue
-		}
-		if len(resp.Choices) == 0 {
-			if attempt == 2 {
-				return "", nil
-			}
-			time.Sleep(time.Second)
-			continue
-		}
-		content := strings.TrimSpace(resp.Choices[0].Message.Content)
-		if content == "" {
-			if resp.Choices[0].FinishReason == "content_filter" {
-				return "", nil
-			}
-			if attempt == 2 {
-				return "", nil
-			}
-			time.Sleep(time.Second)
-			continue
-		}
-		return content, nil
-	}
-	return "", nil
 }
 
 // saveLog 记录 AI 生成日志。

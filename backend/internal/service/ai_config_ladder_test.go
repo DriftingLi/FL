@@ -1,6 +1,6 @@
-// Package service AI 配置解析与传输收敛回归（#397）：
+// Package service AI 配置解析与模型端口回归（#397、ADR-0029 T2）：
 // 降级阶梯三档（专项单绑定/双模式/遗留回退）、热点缓存失效、
-// Blocking/Streaming 双 slot 端口注入与各栈端到端（评分/解析/对话）。
+// 单一 AIModelPort 端口注入与各消费端到端（评分/解析/对话）。
 package service
 
 import (
@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/cloudwego/eino/schema"
-	"github.com/sashabaranov/go-openai"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
@@ -22,8 +21,9 @@ func newAIStack(t *testing.T) (*AIConfigService, *AIAssistantService, *AIService
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
 	cfgSvc := NewAIConfigService(db, "test-master-key", zap.NewNop())
-	assistant := NewAIAssistantService(db, cfgSvc, NewFileStore("", nil, zap.NewNop()), "test-master-key", zap.NewNop())
-	aiSvc := NewAIService(db, cfgSvc, zap.NewNop())
+	port := NewEinoAIModel(cfgSvc, zap.NewNop())
+	assistant := NewAIAssistantService(db, cfgSvc, NewFileStore("", nil, zap.NewNop()), "test-master-key", zap.NewNop(), port)
+	aiSvc := NewAIService(db, port, zap.NewNop())
 	return cfgSvc, assistant, aiSvc, db
 }
 
@@ -160,52 +160,59 @@ func TestResolveHotCacheInvalidation(t *testing.T) {
 	}
 }
 
-// fakeStreamingTransport 流式槽位 fake（端口注入范本验证）。
-// 互斥保护：StreamChat 的异步命名 goroutine 也可能进入槽位（CI -race 下验证）。
-type fakeStreamingTransport struct {
-	mu      sync.Mutex
-	content string
-	gotSel  AIModelSelector
-	gotMsgs []*schema.Message
-	chunks  []string
+// fakeAIModelPort 单一模型端口 fake（第二 adapter，与 eino 生产 adapter 坐实 seam）。
+// 互斥保护：StreamChat 的异步命名 goroutine 也可能进入端口（CI -race 下验证）。
+type fakeAIModelPort struct {
+	mu        sync.Mutex
+	content   string
+	err       error
+	gotSel    AIModelSelector
+	gotMsgs   []*schema.Message
+	gotKey    string
+	gotOpts   AICompleteOptions
+	chunks    []string
+	streamN   int
+	completeN int
 }
 
-func (f *fakeStreamingTransport) StreamComplete(_ context.Context, sel AIModelSelector, msgs []*schema.Message, onChunk func(string)) (string, error) {
+func (f *fakeAIModelPort) Complete(featureKey string, msgs []*schema.Message, opts AICompleteOptions) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.completeN++
+	f.gotKey = featureKey
+	f.gotMsgs = msgs
+	f.gotOpts = opts
+	return f.content, f.err
+}
+
+func (f *fakeAIModelPort) Stream(_ context.Context, sel AIModelSelector, msgs []*schema.Message, onChunk func(string)) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.streamN++
 	f.gotSel = sel
 	f.gotMsgs = msgs
 	if onChunk != nil {
 		onChunk(f.content)
 		f.chunks = append(f.chunks, f.content)
 	}
-	return f.content, nil
+	return f.content, f.err
 }
 
 // snapshot 读取 fake 记录（与后台 goroutine 同步）。
-func (f *fakeStreamingTransport) snapshot() (AIModelSelector, []*schema.Message, []string) {
+func (f *fakeAIModelPort) snapshot() (sel AIModelSelector, msgs []*schema.Message, chunks []string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.gotSel, f.gotMsgs, f.chunks
 }
 
-// fakeBlockingTransport 阻塞槽位 fake。
-type fakeBlockingTransport struct {
-	content string
-}
-
-func (f *fakeBlockingTransport) CallModel(_ []openai.ChatCompletionMessage, _ int, _ float32, _ string) (string, error) {
-	return f.content, nil
-}
-
-// TestStreamingSlotInjectedEndToEnd 对话端到端（fake 流式槽位）：
+// TestStreamingPortInjectedEndToEnd 对话端到端（fake 模型端口）：
 // prompt 组装（功能系统提示词在首位）与持久化真语义不回归。
 // 会话标题用非占位符：阻断异步命名 goroutine 走真实生成路径（其仅做一次 DB 读即退出）。
-func TestStreamingSlotInjectedEndToEnd(t *testing.T) {
+func TestStreamingPortInjectedEndToEnd(t *testing.T) {
 	_, assistant, _, db := newAIStack(t)
 	ctx := context.Background()
-	fake := &fakeStreamingTransport{content: "模拟回复"}
-	assistant.streamer = fake
+	fake := &fakeAIModelPort{content: "模拟回复"}
+	assistant.port = fake
 
 	session, err := assistant.CreateSession(ctx, 7, "已命名会话", "", FeatureFaultConsult)
 	if err != nil {
@@ -230,9 +237,9 @@ func TestStreamingSlotInjectedEndToEnd(t *testing.T) {
 	}
 
 	// prompt 组装：首位为通用专家系统提示词（FeatureKey 为空），末位为用户消息
-	gotSel, gotMsgs, gotChunks := fake.snapshot()
-	if len(gotChunks) != 1 {
-		t.Fatalf("槽位应仅被主对话调用一次, got %d", len(gotChunks))
+	gotSel, gotMsgs, _ := fake.snapshot()
+	if fake.streamN != 1 {
+		t.Fatalf("端口应仅被主对话调用一次, got %d", fake.streamN)
 	}
 	// 选择子投影：请求的模型来源字段应原样透传给槽位（解析在槽位内完成）
 	if gotSel.ModelSource != "custom" || gotSel.CustomAPIKey != "sk-custom" ||
@@ -256,20 +263,30 @@ func TestStreamingSlotInjectedEndToEnd(t *testing.T) {
 	}
 }
 
-// TestBlockingSlotInjectedEndToEnd 评分/解析端到端（fake 阻塞槽位）：
-// 端口注入生效、评分 JSON 解析与解析文本裁剪真语义不回归。
-func TestBlockingSlotInjectedEndToEnd(t *testing.T) {
+// TestBlockingPortInjectedEndToEnd 评分/解析端到端（fake 模型端口）：
+// 端口注入生效、生成参数透传、评分 JSON 解析与解析文本裁剪真语义不回归。
+func TestBlockingPortInjectedEndToEnd(t *testing.T) {
 	_, _, aiSvc, _ := newAIStack(t)
-	aiSvc.blocking = &fakeBlockingTransport{content: `{"score": 8, "comment": "要点齐全"}`}
+	aiSvc.port = &fakeAIModelPort{content: `{"score": 8, "comment": "要点齐全"}`}
 
 	res := aiSvc.GradeShortAnswer("题干", "参考答案", "评分标准", "学员作答", 10, nil)
 	if res == nil || res.Score != 8 || res.Comment != "要点齐全" {
 		t.Fatalf("评分端到端结果异常: %+v", res)
 	}
 
-	aiSvc.blocking = &fakeBlockingTransport{content: "  解析正文  "}
+	fake := &fakeAIModelPort{content: "  解析正文  "}
+	aiSvc.port = fake
 	expl, err := aiSvc.GenerateQuestionExplanation("题干", "答案", "参考解析")
 	if err != nil || expl != "解析正文" {
 		t.Fatalf("解析端到端结果异常: %q err=%v", expl, err)
+	}
+	if fake.completeN != 1 || fake.gotKey != FeatureQuestionExplanation {
+		t.Fatalf("端口调用记录异常: n=%d key=%q", fake.completeN, fake.gotKey)
+	}
+	if fake.gotOpts.MaxTokens != 800 || fake.gotOpts.Temperature != 0.5 {
+		t.Fatalf("生成参数透传异常: %+v", fake.gotOpts)
+	}
+	if len(fake.gotMsgs) != 2 || fake.gotMsgs[0].Role != schema.System || fake.gotMsgs[1].Role != schema.User {
+		t.Fatalf("消息组装异常: %+v", fake.gotMsgs)
 	}
 }
