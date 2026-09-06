@@ -127,6 +127,8 @@ func deref[T any](p *T) any {
 }
 
 // renderStatus 按状态码输出信封（收敛到 response 单点）。
+// 注意：本函数是所有域表状态码的单一咽喉——新增状态码（如 409）必须
+// 在此补 case，否则 default 会把该语义静默渲染成 500。
 func renderStatus(c *gin.Context, status int, msg string) {
 	switch status {
 	case http.StatusBadRequest:
