@@ -225,7 +225,6 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { Sort, MagicStick, Filter, CollectionTag } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { questionBankApi } from '@/api/questionBank'
-import { favoriteApi } from '@/api/favorite'
 import { practiceModeApi, type PracticeModeKey } from '@/api/practiceMode'
 import { trainingApi } from '@/api/training'
 import type { QuestionTag } from '@/api/training'
@@ -244,13 +243,13 @@ import {
   type PracticeMode,
   type PracticeStartData
 } from '@/composables/usePracticeSession'
+import { useQuestionPeripherals, questionPeripheralAdapters } from '@/composables/useQuestionPeripherals'
 import QuestionOptionPicker from '@/components/student/QuestionOptionPicker.vue'
 import AnswerResultCard from '@/components/practice/AnswerResultCard.vue'
 import AIExplanationCard from '@/components/practice/AIExplanationCard.vue'
 import KnowledgeCard from '@/components/practice/KnowledgeCard.vue'
 import CommentCard from '@/components/practice/CommentCard.vue'
 import NoteCard from '@/components/practice/NoteCard.vue'
-import { questionInteractionApi } from '@/api/questionInteraction'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 
 // null = 入口；'sequential' | 'free' | 'tag' = 刷题中
@@ -331,13 +330,7 @@ async function resolveProgress(modeKey: PracticeModeKey | '', total: number): Pr
 }
 
 // 练习会话状态机：三个 start 模式 + 进度保存作为 adapter 注入，页面不触碰 API 层
-const {
-  mode, questions, currentIdx, answers, toggleOption,
-  correctCount, wrongCount,
-  currentQuestion, textAnswer, submitted, lastResult, currentOptions,
-  selectedOptionKeys, canSubmit, loading,
-  start, submitAnswer, nextQuestion, prevQuestion, quit
-} = usePracticeSession({
+const session = usePracticeSession({
   start: async (startMode: PracticeMode): Promise<PracticeStartData | null> => {
     if (startMode === 'sequential') {
       const res = await practiceModeApi.startSequential()
@@ -390,6 +383,20 @@ const {
   }
 })
 
+const {
+  mode, questions, currentIdx, answers, toggleOption,
+  correctCount, wrongCount,
+  currentQuestion, textAnswer, submitted, lastResult, currentOptions,
+  selectedOptionKeys, canSubmit, loading,
+  start, submitAnswer, nextQuestion, prevQuestion, quit
+} = session
+
+// ===== 外围交互：收藏 / 知识点 / 作答计时（#616，页内自建 watch 收敛进 module）=====
+const { favorited, toggleFavorite, knowledgeTags, lastDuration, recordDuration } = useQuestionPeripherals(
+  session,
+  questionPeripheralAdapters({ knowledgeTrigger: 'result' })
+)
+
 // ===== 开始各模式（薄 wrapper：启动会话 + 空题数提示）=====
 async function startSequential() {
   const ok = await start('sequential')
@@ -401,55 +408,8 @@ async function startFree() {
   if (!ok) ElMessage.warning('暂无符合条件的题目')
 }
 
-const questionStartTime = ref<number>(Date.now())
-const lastDuration = ref<number | undefined>(undefined)
-const knowledgeTags = ref<any[]>([])
-const favorited = ref(false)
-const favoriteId = ref(0)
-
-watch(currentQuestion, async (q) => {
-  questionStartTime.value = Date.now()
-  lastDuration.value = undefined
-  favorited.value = false
-  favoriteId.value = 0
-  if (!q) return
-  try {
-    const res = await favoriteApi.check({ target_type: 'question', target_id: q.id })
-    favorited.value = !!res?.favorited
-    favoriteId.value = res?.favorite_id || 0
-  } catch {
-    // 查询失败降级为未收藏
-  }
-})
-
-async function toggleFavorite() {
-  const q = currentQuestion.value
-  if (!q) return
-  try {
-    if (favorited.value) {
-      await favoriteApi.remove(favoriteId.value)
-      favorited.value = false
-      favoriteId.value = 0
-    } else {
-      const res = await favoriteApi.add({ target_type: 'question', target_id: q.id })
-      favorited.value = true
-      favoriteId.value = res?.favorite_id || 0
-    }
-  } catch {
-    /* 错误已由拦截器提示 */
-  }
-}
-
-watch(() => (lastResult.value as any)?.question_id, async (qid: number) => {
-  if (!qid) { knowledgeTags.value = []; return }
-  try {
-    const tags = await questionInteractionApi.listKnowledge(qid)
-    knowledgeTags.value = (tags as any) || []
-  } catch { knowledgeTags.value = [] }
-})
-
 async function handleSubmit() {
-  lastDuration.value = (Date.now() - questionStartTime.value) / 1000
+  recordDuration()
   await submitAnswer()
   loadPracticeStats()
 }

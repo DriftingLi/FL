@@ -14,7 +14,7 @@
         <el-icon
           class="fav-star cursor-pointer text-lg"
           :class="favorited ? 'text-warn' : 'text-ink-muted'"
-          @click="toggleFavorite"
+          @click="handleToggleFavorite"
         >
           <StarFilled v-if="favorited" /><Star v-else />
         </el-icon>
@@ -71,19 +71,18 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Star, StarFilled } from '@element-plus/icons-vue'
 import { realExamApi } from '@/api/realExam'
 import { practiceModeApi } from '@/api/practiceMode'
-import { favoriteApi } from '@/api/favorite'
-import { questionInteractionApi } from '@/api/questionInteraction'
 import { typeMap } from '@/constants/question'
 import {
   usePracticeSession,
   type PracticeStartData
 } from '@/composables/usePracticeSession'
+import { useQuestionPeripherals, questionPeripheralAdapters } from '@/composables/useQuestionPeripherals'
 import QuestionOptionPicker from '@/components/student/QuestionOptionPicker.vue'
 import AnswerResultCard from '@/components/practice/AnswerResultCard.vue'
 import AIExplanationCard from '@/components/practice/AIExplanationCard.vue'
@@ -99,13 +98,7 @@ const paperId = computed(() => Number(route.params.paperId) || 0)
 const paperTitle = computed(() => (route.query.title as string) || '真题练习')
 
 // 真题卷练习：卷序固定，进度键 paper:<paperID>，单题提交 practice_type=paper
-const {
-  questions, currentIdx, answers, toggleOption,
-  correctCount, wrongCount,
-  currentQuestion, textAnswer, submitted, lastResult, currentOptions,
-  selectedOptionKeys, canSubmit, loading,
-  start, submitAnswer, nextQuestion, prevQuestion, quit
-} = usePracticeSession({
+const session = usePracticeSession({
   start: async (): Promise<PracticeStartData | null> => {
     if (!paperId.value) return null
     const res = await realExamApi.startPractice(paperId.value)
@@ -145,55 +138,29 @@ const {
   }
 })
 
-const questionStartTime = ref<number>(Date.now())
-const lastDuration = ref<number | undefined>(undefined)
-const knowledgeTags = ref<any[]>([])
-const favorited = ref(false)
-const favoriteId = ref(0)
+const {
+  questions, currentIdx, answers, toggleOption,
+  correctCount, wrongCount,
+  currentQuestion, textAnswer, submitted, lastResult, currentOptions,
+  selectedOptionKeys, canSubmit, loading,
+  start, submitAnswer, nextQuestion, prevQuestion, quit
+} = session
 
-watch(currentQuestion, async (q) => {
-  questionStartTime.value = Date.now()
-  lastDuration.value = undefined
-  favorited.value = false
-  favoriteId.value = 0
-  knowledgeTags.value = []
-  if (!q) return
-  try {
-    const res = await favoriteApi.check({ target_type: 'question', target_id: q.id })
-    favorited.value = !!res?.favorited
-    favoriteId.value = res?.favorite_id || 0
-  } catch {
-    // 查询失败降级为未收藏
-  }
-  try {
-    knowledgeTags.value = (await questionInteractionApi.listKnowledge(q.id)) || []
-  } catch {
-    // 知识卡查询失败不阻断
-  }
-})
+// ===== 外围交互：收藏 / 知识点 / 作答计时（#616，页内自建 watch 收敛进 module）=====
+const { favorited, toggleFavorite, knowledgeTags, lastDuration, recordDuration } = useQuestionPeripherals(
+  session,
+  // 进题预取知识点（页面既有的触发时机；解析区在提交后渲染，重进已答题立即可见）
+  questionPeripheralAdapters({ knowledgeTrigger: 'enter' })
+)
 
-async function toggleFavorite() {
-  const q = currentQuestion.value
-  if (!q) return
-  try {
-    if (favorited.value && favoriteId.value) {
-      await favoriteApi.remove(favoriteId.value)
-      favorited.value = false
-      favoriteId.value = 0
-      ElMessage.success('已取消收藏')
-    } else {
-      const res = await favoriteApi.add({ target_type: 'question', target_id: q.id })
-      favorited.value = true
-      favoriteId.value = res?.favorite_id || 0
-      ElMessage.success('已收藏')
-    }
-  } catch {
-    // 收藏失败静默
-  }
+async function handleToggleFavorite() {
+  const res = await toggleFavorite()
+  if (res === 'added') ElMessage.success('已收藏')
+  else if (res === 'removed') ElMessage.success('已取消收藏')
 }
 
 async function handleSubmit() {
-  lastDuration.value = (Date.now() - questionStartTime.value) / 1000
+  recordDuration()
   await submitAnswer()
 }
 

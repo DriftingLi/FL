@@ -1,9 +1,11 @@
 // usePracticeSession：练习会话状态机 module 的接口级测试。
 // 断言 external behavior：三态反序列化（null/[]/absent）、断点恢复、
-// 退出清空、序列化 round-trip（经 saveProgress 可观测）、游标推进/进度保存编排。
+// 退出清空、序列化 round-trip（经 saveProgress 可观测）、游标推进/进度保存编排、
+// onQuestionEnter 题目进入生命周期钩子（进入/切题/回退/退出按序触发，同题渲染不误触发）。
 // seam：composable 接口——三个 adapter（start/submit/saveProgress）用内存 stub，
 // API 与进度 key 语义由 adapter 注入，本测试不触达 API 层。
 import { describe, it, expect } from 'vitest'
+import { nextTick } from 'vue'
 import { usePracticeSession } from '@/composables/usePracticeSession'
 import type { PracticeSessionAdapters, PracticeMode } from '@/composables/usePracticeSession'
 import type { Question } from '@/types/question'
@@ -180,5 +182,83 @@ describe('usePracticeSession（start 守卫）', () => {
     expect(await s.start('sequential')).toBe(false)
     expect(s.mode.value).toBeNull()
     expect(s.questions.value).toEqual([])
+  })
+})
+
+describe('usePracticeSession（onQuestionEnter 题目进入钩子）', () => {
+  it('题目变化按序触发：进入会话 → 切题 → 回退 → 退出（多钩子按注册序执行）', async () => {
+    const qs = [q(1), q(2), q(3)]
+    const adapters = makeAdapters({ start: async () => ({ questions: qs, startIndex: 0, answersState: null }) })
+    const s = usePracticeSession(adapters)
+    const entered: (Question | null)[] = []
+    const order: string[] = []
+    s.onQuestionEnter((q) => { order.push('a'); entered.push(q) })
+    s.onQuestionEnter(() => { order.push('b') })
+
+    await s.start('sequential')
+    await nextTick()
+    expect(order).toEqual(['a', 'b'])
+    expect(entered).toEqual([qs[0]])
+
+    await s.nextQuestion()
+    await nextTick()
+    expect(entered).toEqual([qs[0], qs[1]])
+
+    s.prevQuestion()
+    await nextTick()
+    expect(entered).toEqual([qs[0], qs[1], qs[0]])
+
+    await s.quit()
+    await nextTick()
+    expect(entered).toEqual([qs[0], qs[1], qs[0], null])
+  })
+
+  it('切题不误触发：提交/存进度/改作答（同题重复渲染）不触发钩子', async () => {
+    const qs = [q(1), q(2)]
+    const adapters = makeAdapters({ start: async () => ({ questions: qs, startIndex: 0, answersState: null }) })
+    const s = usePracticeSession(adapters)
+    const entered: (Question | null)[] = []
+    s.onQuestionEnter((q) => entered.push(q))
+
+    await s.start('sequential')
+    await nextTick()
+    expect(entered).toEqual([qs[0]])
+
+    s.answers.value[1] = 'A'
+    await s.submitAnswer()
+    await nextTick()
+    await s.saveCurrentProgress(s.currentIdx.value)
+    await nextTick()
+
+    expect(entered).toEqual([qs[0]])
+  })
+
+  it('单题场景进入语义：start 后立即触发一次；断点起始下标进入即触发该题', async () => {
+    const single = [q(1)]
+    const s = usePracticeSession(makeAdapters({ start: async () => ({ questions: single, startIndex: 0, answersState: null }) }))
+    const entered: (Question | null)[] = []
+    s.onQuestionEnter((q) => entered.push(q))
+    await s.start('sequential')
+    await nextTick()
+    expect(entered).toEqual([single[0]])
+
+    const qs = [q(1), q(2), q(3)]
+    const s2 = usePracticeSession(makeAdapters({ start: async () => ({ questions: qs, startIndex: 2, answersState: null }) }))
+    const entered2: (Question | null)[] = []
+    s2.onQuestionEnter((q) => entered2.push(q))
+    await s2.start('sequential')
+    await nextTick()
+    expect(entered2).toEqual([qs[2]])
+  })
+
+  it('解绑函数注销钩子', async () => {
+    const s = usePracticeSession(makeAdapters())
+    const entered: (Question | null)[] = []
+    const unbind = s.onQuestionEnter((q) => entered.push(q))
+    unbind()
+
+    await s.start('sequential')
+    await nextTick()
+    expect(entered).toEqual([])
   })
 })
