@@ -46,3 +46,11 @@ describe('拆包后映射契约', () => {
     expect(body).not.toContain('["data"]');
   });
 });
+
+describe('失败传播契约', () => {
+  it('映射函数抛错不被静默吞掉：出口函数体无 try/catch，异常沿 Promise 链 reject', () => {
+    const body = fnBody('requestMapped');
+    expect(body).not.toMatch(/\btry\s*\{/);
+    expect(body).not.toMatch(/\bcatch\s*\(/);
+  });
+});
