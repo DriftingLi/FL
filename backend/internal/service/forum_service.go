@@ -763,7 +763,7 @@ func (s *ForumService) rollbackAcceptedBonusTx(tx *gorm.DB, topicID int64) error
 	return s.points.SettleRewardTx(tx, PointsEntry{
 		UserID: orig.UserID, Delta: -orig.Delta, Reason: ReasonRollback,
 		RefType: "forum_topic", RefID: fmt.Sprintf("%d", topicID),
-		IdemKey:   "rollback:" + fmt.Sprintf("%d", topicID),
+		IdemKey:   RollbackIdemKey(topicID),
 		FloorZero: true,
 	})
 }
@@ -1448,7 +1448,7 @@ func (s *ForumService) AcceptReply(userID int, topicID, replyID int64) (*ForumTo
 			if err := s.points.SettleRewardTx(tx, PointsEntry{
 				UserID: reply.UserID, Delta: bonusDelta, Reason: ReasonAcceptedBonus,
 				RefType: "forum_topic", RefID: fmt.Sprintf("%d", topicID),
-				IdemKey: "accepted_bonus:" + fmt.Sprintf("%d", topicID),
+				IdemKey: AcceptedBonusIdemKey(topicID),
 			}); err != nil {
 				return err
 			}
@@ -1457,7 +1457,7 @@ func (s *ForumService) AcceptReply(userID int, topicID, replyID int64) (*ForumTo
 			if err := s.points.SettleRewardTx(tx, PointsEntry{
 				UserID: userID, Delta: actionDelta, Reason: ReasonAcceptAction,
 				RefType: "forum_topic", RefID: fmt.Sprintf("%d", topicID),
-				IdemKey: "accept_action:" + fmt.Sprintf("%d", topicID),
+				IdemKey: AcceptActionIdemKey(topicID),
 			}); err != nil {
 				return err
 			}

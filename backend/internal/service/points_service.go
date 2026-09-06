@@ -681,7 +681,7 @@ func (s *PointsService) redeem(ctx context.Context, userID int, o redeemOpts) (*
 		}
 		if _, err := ApplyTx(tx, PointsEntry{
 			UserID: userID, Delta: -o.price, Reason: o.reason, RefType: o.refType, RefID: o.refID,
-			IdemKey: "redeem:" + o.sku,
+			IdemKey: RedeemIdemKey(o.sku),
 		}); err != nil {
 			return err
 		}
@@ -863,7 +863,7 @@ func (s *PointsService) DeductAI(ctx context.Context, userID int, requestID stri
 		// 幂等键 ai_tokens:{requestID}（ADR-0023）：由调用方传稳定请求标识
 		_, err := ApplyTx(tx, PointsEntry{
 			UserID: userID, Delta: -points, Reason: "ai_tokens", RefType: "ai_chat", RefID: requestID,
-			IdemKey: "ai_tokens:" + requestID,
+			IdemKey: AITokensIdemKey(requestID),
 		})
 		if errors.Is(err, ErrPointsProcessed) {
 			// 并发窗口同键已扣：与既有 isDuplicateError 分支语义一致，视为成功
