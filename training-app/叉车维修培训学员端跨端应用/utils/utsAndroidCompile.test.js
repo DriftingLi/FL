@@ -157,6 +157,16 @@ function scanBareStringCall(code) {
   return hits;
 }
 
+/** G：undefined 字面量——UTS 空值统一 null，Kotlin 无 undefined（找不到名称） */
+function scanUndefinedLiteral(code) {
+  const hits = [];
+  const lines = blank(code).split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    if (/\bundefined\b/.test(lines[i])) hits.push(lines[i].trim());
+  }
+  return hits;
+}
+
 /** B：跨文件 export type/interface 未 import 就引用（需全工程导出表） */
 function buildExportedTypeMap() {
   const exported = new Map();
@@ -222,6 +232,14 @@ describe('守护自检：检测逻辑对已知违规样本必须报出', () => {
     expect(scanBareStringCall('const b = x.toString()')).toEqual([]);
     expect(scanBareStringCall('const c = "String(x) in string"')).toEqual([]);
     expect(scanBareStringCall('const d = UTSCString(x)')).toEqual([]);
+  });
+
+  it('G 能报出 undefined 字面量（对照组：null 与注释/字符串内的 undefined 不报）', () => {
+    expect(scanUndefinedLiteral('let x = undefined')).toHaveLength(1);
+    expect(scanUndefinedLiteral('let x = obj ?? undefined')).toHaveLength(1);
+    expect(scanUndefinedLiteral('let x = null')).toEqual([]);
+    expect(scanUndefinedLiteral('// 空值传 undefined 会编译失败')).toEqual([]);
+    expect(scanUndefinedLiteral('const s = "undefined value"')).toEqual([]);
   });
 });
 
@@ -310,6 +328,14 @@ describe('全工程守护：五类 Kotlin 编译地雷零命中', () => {
       // app-ios 原生互操作文件用 Swift 编译：String(data:encoding:) 是合法初始化器，不在本规则靶内
       if (u.file.includes('app-ios')) continue;
       for (const h of scanBareStringCall(u.code)) violations.push(`${path.relative(ROOT, u.file)}: ${h}`);
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it('G：无 undefined 字面量（UTS 空值统一 null，Kotlin 找不到名称 undefined）', () => {
+    const violations = [];
+    for (const u of allCodeUnits()) {
+      for (const h of scanUndefinedLiteral(u.code)) violations.push(`${path.relative(ROOT, u.file)}: ${h}`);
     }
     expect(violations).toEqual([]);
   });
