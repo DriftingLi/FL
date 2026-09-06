@@ -150,6 +150,102 @@ function buildExportedTypeMap() {
   return exported;
 }
 
+/** 全工程代码单元：.uts 取整文件，.uvue 取 script 块（模板表达式不走 Kotlin 严格检查，不参与脚本规则扫描） */
+function allCodeUnits() {
+  const units = [];
+  for (const file of ALL_FILES) {
+    const text = fs.readFileSync(file, 'utf8');
+    if (file.endsWith('.uts')) units.push({ file, code: text });
+    else for (const s of scriptBlocks(text)) units.push({ file, code: s.code });
+  }
+  return units;
+}
+
+/** 顶层逗号切分（深度感知 () [] {}，字符串与注释已被 blank 抹除） */
+function splitTopLevel(text) {
+  const parts = [];
+  let depth = 0;
+  let cur = '';
+  for (const c of text) {
+    if ('([{'.includes(c)) { depth++; cur += c; continue; }
+    if (')]}'.includes(c)) { depth--; cur += c; continue; }
+    if (c === ',' && depth === 0) { parts.push(cur); cur = ''; continue; }
+    cur += c;
+  }
+  if (cur.trim() !== '') parts.push(cur);
+  return parts;
+}
+
+/** 形参串 → 必选形参数；`=` 默认值或 `?` 可选记为可选；含 `...` 变长返回 null（无法静态计数，跳过执法） */
+function parseRequiredParams(paramText) {
+  if (paramText.trim() === '') return 0;
+  let required = 0;
+  for (const p of splitTopLevel(paramText)) {
+    if (p.includes('...')) return null;
+    if (/[=]/.test(p) || /\?\s*:/.test(p)) continue;
+    required++;
+  }
+  return required;
+}
+
+/** 全局函数签名表：.uts 的 function 定义与「name : (params) =>」箭头属性（composable 返回面）、.uvue script 局部 function；同名取最小必选数 */
+function buildFunctionSignatureMap() {
+  const table = new Map();
+  const consider = (name, paramText) => {
+    const required = parseRequiredParams(paramText);
+    if (required === null) return;
+    const prev = table.get(name);
+    table.set(name, prev === undefined ? required : Math.min(prev, required));
+  };
+  const fnRe = /(?:^|\n)\s*(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(([^)]*)\)/g;
+  const arrowRe = /(?<![\w$])([A-Za-z_$][\w$]*)\s*:\s*\(([^)]*)\)\s*=>/g;
+  let m;
+  for (const file of ALL_FILES.filter((f) => f.endsWith('.uts'))) {
+    const clean = blank(fs.readFileSync(file, 'utf8'));
+    while ((m = fnRe.exec(clean)) !== null) consider(m[1], m[2]);
+    while ((m = arrowRe.exec(clean)) !== null) consider(m[1], m[2]);
+  }
+  for (const file of ALL_FILES.filter((f) => f.endsWith('.uvue'))) {
+    for (const s of scriptBlocks(fs.readFileSync(file, 'utf8'))) {
+      const clean = blank(s.code);
+      while ((m = fnRe.exec(clean)) !== null) consider(m[1], m[2]);
+    }
+  }
+  return table;
+}
+
+/** 实参数统计：从 openIdx 的 `(` 做深度游走，depth=1 的顶层逗号计数；未闭合返回 null */
+function countCallArgs(clean, openIdx) {
+  let depth = 0;
+  let args = 1;
+  for (let i = openIdx; i < clean.length; i++) {
+    const c = clean[i];
+    if ('([{'.includes(c)) { depth++; continue; }
+    if (')]}'.includes(c)) { depth--; if (depth === 0) return args; continue; }
+    if (c === ',' && depth === 1) args++;
+  }
+  return null;
+}
+
+/** J：调用实参少于必选形参（Kotlin error: No value passed for parameter）。
+ *  函数定义行与方法调用（前置 .）不报；变长签名不入表不执法 */
+function scanCallArity(code, sigTable) {
+  const clean = blank(code);
+  const hits = [];
+  const callRe = /(?<![\w$.])([A-Za-z_$][\w$]*)\s*\(/g;
+  let m;
+  while ((m = callRe.exec(clean)) !== null) {
+    const name = m[1];
+    const required = sigTable.get(name);
+    if (required === undefined || required === 0) continue;
+    const before = clean.slice(Math.max(0, m.index - 12), m.index);
+    if (/function\s+$/.test(before)) continue;
+    const args = countCallArgs(clean, m.index + m[0].length - 1);
+    if (args !== null && args < required) hits.push(`${name}(...) 实参 ${args} < 必选 ${required}`);
+  }
+  return hits;
+}
+
 // ── 注入违规自检（证明检测函数有效，不是空跑假绿）────────────────────────
 describe('守护自检：检测逻辑对已知违规样本必须报出', () => {
   it('A 能报出 script setup 调用早于定义', () => {
@@ -194,6 +290,20 @@ describe('守护自检：检测逻辑对已知违规样本必须报出', () => {
     const map = buildExportedTypeMap();
     expect(map.has('SecureSetResult')).toBe(true);
     expect(map.has('StoredCredentials')).toBe(true);
+  });
+
+  it('J 能报出实参少于必选形参（对照组：实参齐全与方法调用不报）', () => {
+    const table = new Map([['sendInput', 3]]);
+    const code = 'function sendInput(a : string, b : string, c : string[]) : void {}\nsendInput("x", "y")';
+    expect(scanCallArity(code, table)).toHaveLength(1);
+    expect(scanCallArity('sendInput("x", "y", [])', table)).toEqual([]);
+    expect(scanCallArity('obj.sendInput("x")', table)).toEqual([]);
+  });
+
+  it('J 函数定义行自身不计入调用（定义形参可少于全局表同名签名）', () => {
+    const table = new Map([['helper', 2]]);
+    const code = 'function helper(a : string) : void { }\nconst r = helper("only-one")';
+    expect(scanCallArity(code, table)).toHaveLength(1);
   });
 });
 
@@ -272,6 +382,14 @@ describe('全工程守护：五类 Kotlin 编译地雷零命中', () => {
       for (const h of scanUntypedNumericConst(blank(fs.readFileSync(file, 'utf8')))) {
         violations.push(`${path.relative(ROOT, file)}: ${h}`);
       }
+    }
+    expect(violations).toEqual([]);
+  });
+  it('J：无调用实参少于必选形参（Kotlin error: No value passed for parameter）', () => {
+    const violations = [];
+    const table = buildFunctionSignatureMap();
+    for (const u of allCodeUnits()) {
+      for (const h of scanCallArity(u.code, table)) violations.push(path.relative(ROOT, u.file) + ': ' + h);
     }
     expect(violations).toEqual([]);
   });
