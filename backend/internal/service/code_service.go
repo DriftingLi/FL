@@ -780,7 +780,7 @@ func (s *VerifyCodeService) ChangePassword(ctx context.Context, ch CodeChannel, 
 	if err := s.Verify(ctx, ch, CodePurposeChangePassword, phone, code); err != nil {
 		return err
 	}
-	return s.authSvc.UpdatePassword(userID, password)
+	return s.authSvc.UpdatePassword(ctx, userID, password)
 }
 
 // currentUserPhone 读取当前用户手机号并校验格式（未绑定手机号时报错）。
