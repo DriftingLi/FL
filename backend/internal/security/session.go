@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -209,6 +210,39 @@ func (s *Session) ValidateRefresh(tokenStr string) (*Claims, error) {
 	return claims, nil
 }
 
+// refreshRevocationKey 用户级 refresh 吊销标记键（#622，移动端 ADR-0006 修复方向 2）。
+// 键带角色命名空间：hrwai_users 与 recruiter_users 两套 ID 空间共用本 Session 单例，
+// 裸 userID 会撞键。
+func (s *Session) refreshRevocationKey(role string, userID int) string {
+	return fmt.Sprintf("jwt:pwd_revoked:%s:%d", role, userID)
+}
+
+// RevokeUserRefresh 改密成功后吊销该用户全部 refresh token：写入用户级吊销标记（时间戳），
+// TTL = refresh 有效期——改密前签发的任何 refresh 链（含轮换滑动续期）最长存活不超过它，
+// 标记过期即自然失效，无需清理任务。
+func (s *Session) RevokeUserRefresh(ctx context.Context, role string, userID int) error {
+	return s.blacklist.Set(ctx, s.refreshRevocationKey(role, userID),
+		strconv.FormatInt(time.Now().Unix(), 10), s.refreshExpiry)
+}
+
+// refreshRevoked 检查 refresh 是否不晚于改密吊销标记签发（iat ≤ 标记即拒绝）。
+// 同秒语义：JWT iat 为秒精度（jwt.TimePrecision=Second），标记同一秒内签发的 token
+// 一并拒绝——宁错杀（改密前 token 同秒逃逸后会轮换洗白整条链），合法重登被拒属
+// 自我修复（下次刷新被拒即强制重登，新秒的 token 正常）。
+// 读故障放行（fail-open）：与登录链路「读黑名单失败放行」的取舍一致（ADR-0016），
+// 后续 RotateRefresh 的 PutIfAbsent 抢占仍 fail-closed 兜底，Redis 整体故障时不会真签发。
+func (s *Session) refreshRevoked(ctx context.Context, role string, userID int, issuedAt time.Time) bool {
+	v, err := s.blacklist.Get(ctx, s.refreshRevocationKey(role, userID))
+	if err != nil {
+		return false
+	}
+	ts, err := strconv.ParseInt(v, 10, 64)
+	if err != nil {
+		return false
+	}
+	return !issuedAt.After(time.Unix(ts, 0))
+}
+
 // ErrInvalidRefresh 刷新失败的可判定错误：refresh 无效/过期/类型不符/已吊销/已被并发轮换消费。
 // 刷新端点据此统一按未认证处理（401 防枚举）；其余错误按服务器内部错误处理。
 var ErrInvalidRefresh = errors.New("invalid refresh token")
@@ -225,6 +259,11 @@ func (s *Session) RotateRefresh(ctx context.Context, refreshToken string) (strin
 	}
 	if claims.ExpiresAt == nil || !claims.ExpiresAt.After(time.Now()) {
 		return "", "", fmt.Errorf("%w: expired", ErrInvalidRefresh)
+	}
+	// 改密吊销标记检查（#622）：iat 早于标记的 refresh 一律拒绝——改密后旧会话链
+	// （含快捷登录的静默续登）立即失效；并入 ErrInvalidRefresh 保持 401 防枚举口径。
+	if claims.IssuedAt != nil && s.refreshRevoked(ctx, claims.Role, claims.UserID, claims.IssuedAt.Time) {
+		return "", "", fmt.Errorf("%w: password changed", ErrInvalidRefresh)
 	}
 	won, err := s.blacklist.PutIfAbsent(ctx, s.blacklistKey(refreshToken), "1", time.Until(claims.ExpiresAt.Time))
 	if err != nil {

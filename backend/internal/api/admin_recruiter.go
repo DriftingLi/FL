@@ -162,7 +162,7 @@ func (h *AdminRecruiterHandler) ResetPassword(c *gin.Context) {
 			if err := c.ShouldBindJSON(&body); err != nil || body.Password == "" {
 				return nil, badRequest("新密码不能为空")
 			}
-			if err := h.authSvc.ResetRecruiterPassword(req.ID, body.Password); err != nil {
+			if err := h.authSvc.ResetRecruiterPassword(ctx, req.ID, body.Password); err != nil {
 				return nil, err
 			}
 			return nil, nil
