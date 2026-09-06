@@ -246,6 +246,87 @@ function scanCallArity(code, sigTable) {
   return hits;
 }
 
+/** 全工程类型字段表：.uts 的 export type / interface / type 声明体，取深度 1 的字段名集合（嵌套内层不取，宁漏勿误） */
+function buildTypeFieldMap() {
+  const fields = new Map();
+  const headRe = /(?:export\s+)?(?:type|interface)\s+([A-Za-z_$][\w$]*)[^{]*\{/g;
+  let m;
+  for (const file of ALL_FILES.filter((f) => f.endsWith('.uts'))) {
+    const clean = blank(fs.readFileSync(file, 'utf8'));
+    while ((m = headRe.exec(clean)) !== null) {
+      let depth = 0;
+      let body = '';
+      for (let i = m.index + m[0].length - 1; i < clean.length; i++) {
+        const c = clean[i];
+        if (c === '{') { depth++; if (depth === 1) continue; }
+        else if (c === '}') { depth--; if (depth === 0) break; }
+        if (depth >= 1) body += c;
+      }
+      const set = new Set();
+      depth = 0;
+      for (const rawLine of body.split('\n')) {
+        const fm = /^\s*([A-Za-z_$][\w$]*)\s*\??\s*:/.exec(rawLine);
+        if (fm !== null && depth === 0) set.add(fm[1]);
+        for (const c of rawLine) {
+          if ('{(['.includes(c)) depth++;
+          else if ('})]'.includes(c)) depth--;
+        }
+      }
+      if (!fields.has(m[1])) fields.set(m[1], set);
+    }
+  }
+  return fields;
+}
+
+/** L：类型化参数访问未声明字段（Kotlin error18: 找不到名称）。
+ *  仅执法字段表可解析的单类型参数；可选链 ?. 与未知类型不扫；方法调用（后随括号）不报 */
+function scanTypedParamFieldAccess(code, fieldMap) {
+  const clean = blank(code);
+  const hits = [];
+  const fnRe = /(?:^|\n)\s*(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/g;
+  let m;
+  while ((m = fnRe.exec(clean)) !== null) {
+    const openIdx = clean.indexOf('(', m.index + m[0].length - 1);
+    if (openIdx === -1) continue;
+    let depth = 0;
+    let closeIdx = -1;
+    for (let i = openIdx; i < clean.length; i++) {
+      if ('([{'.includes(clean[i])) depth++;
+      else if (')]}'.includes(clean[i])) { depth--; if (depth === 0) { closeIdx = i; break; } }
+    }
+    if (closeIdx === -1) continue;
+    const tracked = [];
+    for (const p of splitTopLevel(clean.slice(openIdx + 1, closeIdx))) {
+      const pm = /^\s*([A-Za-z_$][\w$]*)\s*:\s*([A-Za-z_$][\w$]*)\s*$/.exec(p);
+      if (pm === null) continue;
+      const set = fieldMap.get(pm[2]);
+      if (set !== undefined) tracked.push([pm[1], pm[2], set]);
+    }
+    if (tracked.length === 0) continue;
+    let bodyStart = -1;
+    for (let i = closeIdx + 1; i < clean.length; i++) {
+      if (clean[i] === '{') { bodyStart = i; break; }
+      if (clean[i] === ';') break;
+    }
+    if (bodyStart === -1) continue;
+    depth = 0;
+    let body = '';
+    for (let i = bodyStart; i < clean.length; i++) {
+      const c = clean[i];
+      if (c === '{') { depth++; if (depth === 1) continue; }
+      else if (c === '}') { depth--; if (depth === 0) break; }
+      if (depth >= 1) body += c;
+    }
+    const accessRe = /(?<![\w$])([A-Za-z_$][\w$]*)\s*\.\s*([A-Za-z_$][\w$]*)\b(?!\s*\()/g;
+    while ((m = accessRe.exec(body)) !== null) {
+      for (const [pname, typeName, set] of tracked) {
+        if (m[1] === pname && !set.has(m[2])) hits.push(`参数 ${pname} : ${typeName} 访问未声明字段 ${m[2]}`);
+      }
+    }
+  }
+  return hits;
+}
+
 // ── 注入违规自检（证明检测函数有效，不是空跑假绿）────────────────────────
 describe('守护自检：检测逻辑对已知违规样本必须报出', () => {
   it('A 能报出 script setup 调用早于定义', () => {
@@ -304,6 +385,14 @@ describe('守护自检：检测逻辑对已知违规样本必须报出', () => {
     const table = new Map([['helper', 2]]);
     const code = 'function helper(a : string) : void { }\nconst r = helper("only-one")';
     expect(scanCallArity(code, table)).toHaveLength(1);
+  });
+
+  it('L 能报出类型化参数访问未声明字段（对照组：已声明字段与未知类型不报）', () => {
+    const fields = new Map([['ForumReply', new Set(['id', 'likes_count', 'liked'])]]);
+    const code = 'function likes(r : ForumReply) : number {\n  return r.like_count\n}';
+    expect(scanTypedParamFieldAccess(code, fields)).toHaveLength(1);
+    expect(scanTypedParamFieldAccess('function likes(r : ForumReply) : number {\n  return r.likes_count\n}', fields)).toEqual([]);
+    expect(scanTypedParamFieldAccess('function f(o : SomeUnknown) : void {\n  return o.whatever\n}', fields)).toEqual([]);
   });
 });
 
@@ -390,6 +479,14 @@ describe('全工程守护：五类 Kotlin 编译地雷零命中', () => {
     const table = buildFunctionSignatureMap();
     for (const u of allCodeUnits()) {
       for (const h of scanCallArity(u.code, table)) violations.push(path.relative(ROOT, u.file) + ': ' + h);
+    }
+    expect(violations).toEqual([]);
+  });
+  it('L：类型化参数无未声明字段访问（Kotlin error18: 找不到名称）', () => {
+    const violations = [];
+    const fieldMap = buildTypeFieldMap();
+    for (const u of allCodeUnits()) {
+      for (const h of scanTypedParamFieldAccess(u.code, fieldMap)) violations.push(path.relative(ROOT, u.file) + ': ' + h);
     }
     expect(violations).toEqual([]);
   });
