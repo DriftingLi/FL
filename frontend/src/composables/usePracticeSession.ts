@@ -19,8 +19,9 @@ import {
   useQuestionAnswer
 } from './useQuestionAnswer'
 
-/** 练习模式：顺序 / 自由（随机或专项）/ 标签 / 真题卷（mode 键 paper:<paperID>） */
-export type PracticeMode = 'sequential' | 'free' | 'tag' | 'paper'
+/** 练习模式：顺序 / 自由（随机或专项）/ 标签 / 真题卷（mode 键 paper:<paperID>）/
+ *  单题即时变体（#617 错题重做）：无推进节奏、无断点进度，提交管线与判分装配与练习同源 */
+export type PracticeMode = 'sequential' | 'free' | 'tag' | 'paper' | 'single'
 
 /** 进入/续练某模式时 adapter 返回的数据（questions + 断点进度） */
 export interface PracticeStartData {
@@ -294,6 +295,8 @@ export function usePracticeSession(adapters: PracticeSessionAdapters) {
     nextQuestion,
     prevQuestion,
     quit,
+    // 返回入口：清空会话状态（不保存进度；单题变体 #617 关闭重做面板用）
+    backToEntry,
     saveCurrentProgress,
     // 题目进入生命周期（外围交互挂载点）
     onQuestionEnter
