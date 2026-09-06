@@ -104,8 +104,9 @@ type einoAIAdapter struct {
 }
 
 // NewEinoAIModel 构建唯一生产 adapter（deps.go 构建一次，注入全部 AI 消费服务，
-// 使阻塞/流式共享同一 client 缓存）。
-func NewEinoAIModel(resolver AIConfigResolver, logger *zap.Logger) *einoAIAdapter {
+// 使阻塞/流式共享同一 client 缓存）。返回接口：caller 只依赖 AIModelPort，
+// adapter 类型保持未导出（seam 收口在 port）。
+func NewEinoAIModel(resolver AIConfigResolver, logger *zap.Logger) AIModelPort {
 	return &einoAIAdapter{resolver: resolver, logger: logger}
 }
 
@@ -181,6 +182,8 @@ func (a *einoAIAdapter) Stream(ctx context.Context, sel AIModelSelector, msgs []
 }
 
 // ensureClient 检查凭证签名是否变化，必要时重建 eino client（阻塞/流式共用，签名缓存单点）。
+// 锁内调用 newEinoChatModel 的安全性前提：eino NewChatModel 是纯构造（装配 config，无 IO/
+// 无拨号），持锁构建只串行化轻量对象创建；若未来该构建引入 IO，须先移出临界区。
 func (a *einoAIAdapter) ensureClient(ctx context.Context, cur AISettings, featureKey string) (*einoopenai.ChatModel, error) {
 	sig := cur.APIKey + "|" + cur.BaseURL + "|" + cur.Model
 

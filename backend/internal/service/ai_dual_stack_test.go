@@ -159,7 +159,7 @@ func newStubOpenAIServer(t *testing.T, h *stubAIHandler) *httptest.Server {
 }
 
 // newPortStack 构建经 recordingResolver 注入的 eino 生产 adapter（契约测试骨架）。
-func newPortStack(t *testing.T) (*AIConfigService, *recordingResolver, *einoAIAdapter, *gorm.DB) {
+func newPortStack(t *testing.T) (*AIConfigService, *recordingResolver, AIModelPort, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
 	if err := db.AutoMigrate(&model.AIConfig{}, &model.AIFeatureBinding{}, &model.AIUserModel{}); err != nil {
@@ -175,7 +175,7 @@ func newPortStack(t *testing.T) (*AIConfigService, *recordingResolver, *einoAIAd
 // Complete 与 Stream 收集结果一致、签名缓存命中（client 不重建）、超时上下文单点分化。
 func TestAIModelPortSharedConfigFromBinding(t *testing.T) {
 	ctx := context.Background()
-	cfgSvc, rec, adapter, _ := newPortStack(t)
+	cfgSvc, rec, adapter, db := newPortStack(t)
 
 	const (
 		apiKey    = "sk-port-test"
@@ -198,6 +198,14 @@ func TestAIModelPortSharedConfigFromBinding(t *testing.T) {
 	}
 	if err := cfgSvc.SetBinding(ctx, FeatureFaultConsult, cfgs[0].ID); err != nil {
 		t.Fatalf("SetBinding(故障咨询) 失败: %v", err)
+	}
+
+	// 阻塞与流式消费方共享同一端口实例（client 签名缓存跨方法复用的前提；
+	// 承接 T1 双栈测试「两栈共用同一 resolver 实例」的断言）
+	aiSvc := NewAIService(db, adapter, zap.NewNop())
+	assistant := NewAIAssistantService(db, cfgSvc, NewFileStore("", nil, zap.NewNop()), "test-master-key", zap.NewNop(), adapter)
+	if aiSvc.port != adapter || assistant.port != adapter {
+		t.Fatal("阻塞与流式消费方应共享同一模型端口实例")
 	}
 
 	// 阻塞补全：resolver 解析 → 签名缓存建 client → stub 完整回复
@@ -258,7 +266,7 @@ func TestAIModelPortSharedConfigFromBinding(t *testing.T) {
 // （observer 计数「AI client 已重建」日志，流式复用阻塞侧已建的 client）。
 func TestAIModelPortClientCacheAcrossMethods(t *testing.T) {
 	ctx := context.Background()
-	cfgSvc, rec, adapter, _ := newPortStack(t)
+	cfgSvc, rec, _, _ := newPortStack(t)
 	h := &stubAIHandler{full: "ok", chunks: []string{"ok"}}
 	baseURL := newStubOpenAIServer(t, h).URL
 
@@ -273,8 +281,9 @@ func TestAIModelPortClientCacheAcrossMethods(t *testing.T) {
 		t.Fatalf("SetBinding(习题) 失败: %v", err)
 	}
 
+	// 重建日志经构造期注入的 observer logger 计数（adapter 经接口返回，不摸具体字段）
 	core, logs := observer.New(zapcore.InfoLevel)
-	adapter.logger = zap.New(core)
+	adapter := NewEinoAIModel(rec, zap.New(core))
 
 	if _, err := adapter.Complete(FeatureGradeShortAnswer, []*schema.Message{schema.UserMessage("q")}, AICompleteOptions{MaxTokens: 8}); err != nil {
 		t.Fatalf("首次 Complete 失败: %v", err)

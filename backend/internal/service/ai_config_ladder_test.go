@@ -17,9 +17,13 @@ import (
 	"forklift-training/internal/testutil"
 )
 
+// newAIStack 构建 AI 消费方测试栈。用文件库而非 :memory:：流式对话端到端会派生
+// 异步命名 goroutine 并发读库，:memory: 每连接独立库（连接池扩连即空库）存在
+// 「no such table」竞态（testutil/db.go NewFileDB 注释自认的风险），文件库以
+// busy_timeout 串行化，CI 高负载下不 flake。
 func newAIStack(t *testing.T) (*AIConfigService, *AIAssistantService, *AIService, *gorm.DB) {
 	t.Helper()
-	db := testutil.NewMemoryDB(t)
+	db := testutil.NewFileDB(t)
 	cfgSvc := NewAIConfigService(db, "test-master-key", zap.NewNop())
 	port := NewEinoAIModel(cfgSvc, zap.NewNop())
 	assistant := NewAIAssistantService(db, cfgSvc, NewFileStore("", nil, zap.NewNop()), "test-master-key", zap.NewNop(), port)
