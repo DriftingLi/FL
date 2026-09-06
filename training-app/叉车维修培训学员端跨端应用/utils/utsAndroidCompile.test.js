@@ -16,6 +16,11 @@
  *
  * 设计：每类扫描都是纯函数，先各跑一个「注入违规」自检用例证明检测有效
  * （防止空跑假绿），再对全工程源码跑断言零命中（真正守护）。
+ *
+ * 2026-09 增补（refactor epic #638 T01）：AGENTS.md 坑位表机械化规则 F–I——
+ *   F. 裸 String() 强转（Kotlin 无此重载，error17）；G. undefined 字面量；
+ *   H. catch 参数显式 : any；I. 事件对象 .detail 直取（应 as UTSJSONObject 索引）
+ * 存量违例走 GUARD_ALLOWLIST 豁免，由后续工单在各自范围清零（见常量注释）。
  */
 const fs = require('fs');
 const path = require('path');
@@ -23,6 +28,23 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const SCAN_DIRS = ['pages', 'components', 'utils', 'composables', 'api', 'stores', 'constants', 'types', 'uni_modules'];
 const SKIP = new Set(['node_modules', 'unpackage', '.git', 'dist', 'hybrid']);
+
+/**
+ * 已知存量违例豁免（expand–contract 的 expand 侧，refactor epic #638 T01 引入）：
+ * 规则上线时已存在的违例按「规则 → 文件」豁免，由后续工单在各自范围清零；
+ * 全部清零后由 epic 收尾票（#654）删除本机制。
+ * 键 = 规则标识（F/G/H/I），值 = 豁免文件的相对路径集合
+ */
+const GUARD_ALLOWLIST = {
+  F: new Set([]),
+  G: new Set([]),
+  H: new Set([
+    'api/forum.uts',
+    'api/checkin.uts',
+    'pages/notifications/notifications.uvue',
+  ]),
+  I: new Set([]),
+};
 
 function walk(dir, out = []) {
   if (!fs.existsSync(dir)) return out;
@@ -167,6 +189,16 @@ function scanUndefinedLiteral(code) {
   return hits;
 }
 
+/** H：catch 参数显式注解 any——Kotlin 无非空 Any 收窄（error17），应 (e) 或 (e : any | null) */
+function scanCatchAnyParam(code) {
+  const hits = [];
+  const lines = blank(code).split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    if (/catch\s*\(\s*\(?\s*[A-Za-z_$][\w$]*\s*:\s*any\b(?!\s*\|)/.test(lines[i])) hits.push(lines[i].trim());
+  }
+  return hits;
+}
+
 /** B：跨文件 export type/interface 未 import 就引用（需全工程导出表） */
 function buildExportedTypeMap() {
   const exported = new Map();
@@ -240,6 +272,13 @@ describe('守护自检：检测逻辑对已知违规样本必须报出', () => {
     expect(scanUndefinedLiteral('let x = null')).toEqual([]);
     expect(scanUndefinedLiteral('// 空值传 undefined 会编译失败')).toEqual([]);
     expect(scanUndefinedLiteral('const s = "undefined value"')).toEqual([]);
+  });
+
+  it('H 能报出 catch 参数显式 : any（对照组：无注解与 any | null 不报）', () => {
+    expect(scanCatchAnyParam('.catch((e : any) => { fail(e) })')).toHaveLength(1);
+    expect(scanCatchAnyParam('try { x } catch (err : any) { log(err) }')).toHaveLength(1);
+    expect(scanCatchAnyParam('.catch((e) => { fail(e) })')).toEqual([]);
+    expect(scanCatchAnyParam('.catch((e : any | null) => { fail(e) })')).toEqual([]);
   });
 });
 
@@ -336,6 +375,16 @@ describe('全工程守护：五类 Kotlin 编译地雷零命中', () => {
     const violations = [];
     for (const u of allCodeUnits()) {
       for (const h of scanUndefinedLiteral(u.code)) violations.push(`${path.relative(ROOT, u.file)}: ${h}`);
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it('H：catch 参数无显式 : any 注解（allowlist 外零命中，应 (e) 或 any | null）', () => {
+    const violations = [];
+    const exempt = GUARD_ALLOWLIST.H;
+    for (const u of allCodeUnits()) {
+      if (exempt.has(path.relative(ROOT, u.file))) continue;
+      for (const h of scanCatchAnyParam(u.code)) violations.push(`${path.relative(ROOT, u.file)}: ${h}`);
     }
     expect(violations).toEqual([]);
   });
