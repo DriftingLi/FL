@@ -951,27 +951,19 @@ func (s *ContributionService) Archive(reviewerID int, contributionID int64, reas
 		if res.RowsAffected == 0 {
 			return ErrContributionNotApproved
 		}
-		// 累计投稿分（过审 + 达阶两 reason 的正向流水合计）
-		var earned int64
-		if err := tx.Model(&model.PointsLedger{}).
-			Where("user_id = ? AND ref_type = ? AND ref_id = ? AND reason IN ? AND delta > 0",
-				c.UserID, RefTypeContribution, fmt.Sprintf("%d", contributionID),
-				[]string{ReasonContributionApproved, ReasonContributionTier}).
-			Select("COALESCE(SUM(delta),0)").Scan(&earned).Error; err != nil {
-			return err
+		// 追回累计投稿分（过审 + 达阶）：声明式回收（#609）——原账 SUM 取反、封底 0、
+		// 占坑防双扣在 PointsService.RollbackByRef 单点；返回值为原账合计（封底截断前）。
+		// 占坑冲突（已追回过）静默放行：CAS 已保证单次下架，此处仅防御重试路径。
+		clawed, rbErr := s.points.RollbackByRef(tx, PointsRollback{
+			RefType: RefTypeContribution,
+			RefID:   fmt.Sprintf("%d", contributionID),
+			Reasons: []string{ReasonContributionApproved, ReasonContributionTier},
+			IdemKey: ContributionRollbackIdemKey(contributionID),
+		})
+		if rbErr != nil && !errors.Is(rbErr, ErrPointsProcessed) {
+			return rbErr
 		}
-		if earned > 0 {
-			// rollback 对冲（封底 0；幂等键防双扣：并发下架/重试只扣一次）
-			if err := s.points.SettleRewardTx(tx, PointsEntry{
-				UserID: c.UserID, Delta: -int(earned), Reason: ReasonRollback,
-				RefType: RefTypeContribution, RefID: fmt.Sprintf("%d", contributionID),
-				IdemKey:   ContributionRollbackIdemKey(contributionID),
-				FloorZero: true,
-			}); err != nil {
-				return err
-			}
-			clawedBack = int(earned)
-		}
+		clawedBack = clawed
 		// 下架站内信（含原因与扣减；同事务；事件构造器单点）
 		if err := s.notificationSvc.CreateContributionArchivedEvent(tx,
 			NewContributionArchivedEvent(c.UserID, c.Title, contributionID, reason, clawedBack), now); err != nil {

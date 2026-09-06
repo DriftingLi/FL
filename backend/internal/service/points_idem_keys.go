@@ -48,9 +48,11 @@ func CheckInIdemKey(userID int, day time.Time) string {
 
 // ===== 回收键（违规回收对冲，封底 0）=====
 
-// RollbackIdemKey 问答采纳违规回收幂等键：`rollback:{topicID}`（forum_topic 域）。
+// ForumRollbackIdemKey 论坛问答采纳违规回收幂等键：`rollback:{topicID}`（forum_topic 域）。
 // 占坑行即「已处理」标记：删帖/违规回收只对冲一次，两次并发删同一帖不双扣。
-func RollbackIdemKey(topicID int64) string { return fmt.Sprintf("rollback:%d", topicID) }
+// 域名入名（#609 review 裁决，原 RollbackIdemKey）：与 ContributionRollbackIdemKey 对称、
+// 消除泛化名歧义；键格式逐字不动——回收事件是终态事件，改格式 = 同一事件重放拿到新键。
+func ForumRollbackIdemKey(topicID int64) string { return fmt.Sprintf("rollback:%d", topicID) }
 
 // ContributionRollbackIdemKey 投稿下架追回幂等键：`contribution_rollback:{contributionID}`。
 // 追回过审分与达阶分合计（封底 0），并发下架/重试只扣一次。
