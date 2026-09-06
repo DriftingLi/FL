@@ -64,15 +64,18 @@ type AICompleteOptions struct {
 // AIModelPort 单一模型端口（ADR-0029 T2）：阻塞补全与流式回调合一，消费方只面对
 // 一套消息类型（eino schema.Message）与一个端口。凭证解析、client 生命周期（签名缓存）、
 // 超时与重试等深知识全部藏进 adapter 单点。*einoAIAdapter 为唯一生产 adapter，测试可注入 fake。
+// 计量闸门（ADR-0031）作为装饰器挂在本端口上（meteredAIModel）：生产装配
+// NewMeteredAIModel(NewEinoAIModel(...), meter)，消费方拿到的端口天然过闸。
 type AIModelPort interface {
 	// Complete 阻塞补全：服务评分/解析/章节内容生成等一次请求一次完整回复的调用。
 	// featureKey 经注入 resolver 解析绑定配置；生命周期自持（不携带调用方 context，
 	// 与原阻塞栈语义一致——章节生成在后台 goroutine 运行、评分不随请求中断）。
 	Complete(featureKey string, msgs []*schema.Message, opts AICompleteOptions) (string, error)
-	// Stream 流式调用：增量经 onChunk 回调透传，返回累积完整回复。
+	// Stream 流式调用：增量经 onChunk 回调透传，返回累积完整回复与计量产出
+	// （*AIUsage，ADR-0031；免费/未登录/未扣费为 nil，内容错误时不扣费）。
 	// 选择子经注入 resolver 解析凭证（调用方只传选择子）；沿用调用方 context（SSE
 	// 随请求断连取消是既有语义），超时纪律在 adapter 内单点封顶。
-	Stream(ctx context.Context, sel AIModelSelector, msgs []*schema.Message, onChunk func(string)) (string, error)
+	Stream(ctx context.Context, sel AIModelSelector, msgs []*schema.Message, onChunk func(string)) (string, *AIUsage, error)
 }
 
 // 超时纪律单点（ADR-0029 决策 3）：阻塞/流式按调用形态在此分化，不再各自为政。
@@ -158,27 +161,28 @@ func (a *einoAIAdapter) Complete(featureKey string, msgs []*schema.Message, opts
 }
 
 // Stream 流式调用（AIModelPort 实现）：300s 超时纪律 → resolver 解析 → 签名缓存取 client
-// → eino Stream → Recv 收集循环单点（错误文案与原流式栈逐字一致）。
-func (a *einoAIAdapter) Stream(ctx context.Context, sel AIModelSelector, msgs []*schema.Message, onChunk func(string)) (string, error) {
+// → eino Stream → Recv 收集循环单点（错误文案与原流式栈逐字一致）。裸传输不产生计量产出
+// （闸门在 meteredAIModel 装饰器内）。
+func (a *einoAIAdapter) Stream(ctx context.Context, sel AIModelSelector, msgs []*schema.Message, onChunk func(string)) (string, *AIUsage, error) {
 	ctx, cancel := context.WithTimeout(ctx, aiStreamTimeout)
 	defer cancel()
 	mc, err := a.resolver.ResolveChatSettings(ctx, sel)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	chatModel, err := a.ensureClient(ctx, mc, sel.FeatureKey)
 	if err != nil {
-		return "", fmt.Errorf("构建模型失败: %w", err)
+		return "", nil, fmt.Errorf("构建模型失败: %w", err)
 	}
 	reader, err := chatModel.Stream(ctx, msgs)
 	if err != nil {
-		return "", fmt.Errorf("调用模型失败: %w", err)
+		return "", nil, fmt.Errorf("调用模型失败: %w", err)
 	}
 	content, err := collectStreamReader(reader, onChunk)
 	if err != nil {
-		return content, fmt.Errorf("流式接收失败: %w", err)
+		return content, nil, fmt.Errorf("流式接收失败: %w", err)
 	}
-	return content, nil
+	return content, nil, nil
 }
 
 // ensureClient 检查凭证签名是否变化，必要时重建 eino client（阻塞/流式共用，签名缓存单点）。

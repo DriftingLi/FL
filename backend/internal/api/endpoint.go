@@ -18,6 +18,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -61,8 +62,13 @@ type Endpoint[Req, Resp any] struct {
 	// Invoke 调用 service。为 nil 时跳过调用（Resp 保持 nil）。
 	Invoke InvokeFunc[Req, Resp]
 	// Render 渲染响应，全权负责写响应（含 err→状态码/信封）。省略时走内置默认信封（ADR-0024 C2）：
-	// 成功 → 200 统一信封；*ParseError → 其状态码；其他错误 → 500。有业务错误映射的端点才需写自定义 Render。
+	// 成功 → 200 统一信封；错误路径经 ErrStatus 域表（未关联表时 ParseError → 其状态码、其余 500）。
+	// 自定义 Render 优先级高于 ErrStatus：设置 Render 后域表对该端点不再生效，
+	// 仍需查表的定制端点在 Render 内显式调用域表 renderError。
 	Render RenderFunc[Req, Resp]
+	// ErrStatus 域级哨兵→状态码表（#610/#611）：Render 省略时错误路径查表兜底——
+	// errors.Is 命中 → 表内状态码；未命中 → 表 fallback（未设 → 500）。
+	ErrStatus *errStatusTable
 }
 
 // Handle 执行端点全链条：10s 超时 → parse → invoke → render，并兜底 panic（保证 500 信封）。
@@ -100,17 +106,13 @@ func (e Endpoint[Req, Resp]) parse(c *gin.Context) (*Req, error) {
 
 func (e Endpoint[Req, Resp]) render(c *gin.Context, req *Req, resp *Resp, err error) {
 	if e.Render == nil {
-		// 默认信封（ADR-0024 C2）：与既有纯样板 Render 逐字等价——成功统一信封、
-		// 解析错误映射其状态码、其余错误 500。仅保留有业务错误映射的端点写自定义 Render。
-		var pe *ParseError
-		switch {
-		case err == nil:
+		// 默认信封（ADR-0024 C2 + #610/#611 域表兜底）：成功统一信封；错误路径走域表
+		//（未关联表时即纯默认：ParseError → 其状态码，其余 500）。
+		if err == nil {
 			response.Success(c, deref(resp))
-		case asParseError(err, &pe):
-			renderStatus(c, pe.Status, pe.Message)
-		default:
-			response.ServerError(c, err.Error())
+			return
 		}
+		e.ErrStatus.renderError(c, err)
 		return
 	}
 	e.Render(c, req, resp, err)
@@ -125,6 +127,8 @@ func deref[T any](p *T) any {
 }
 
 // renderStatus 按状态码输出信封（收敛到 response 单点）。
+// 注意：本函数是所有域表状态码的单一咽喉——新增状态码（如 409）必须
+// 在此补 case，否则 default 会把该语义静默渲染成 500。
 func renderStatus(c *gin.Context, status int, msg string) {
 	switch status {
 	case http.StatusBadRequest:
@@ -140,6 +144,59 @@ func renderStatus(c *gin.Context, status int, msg string) {
 	default:
 		response.ServerError(c, msg)
 	}
+}
+
+// ===== 域级哨兵→状态码表（#610/#611） =====
+//
+// 每域一张「哨兵 → HTTP 状态码」表（pointsErrStatus / contributionErrStatus 等，写在各域文件内）：
+// HTTP 语义归 api 侧（ADR-0024「handler 以 errors.Is 映射状态码」的投影位置），同域端点共用；
+// 不做全仓中央表——同一哨兵跨域可归属不同状态码（如 ErrJobNotFound 同时进 job / application /
+// recruiterApplication 三张表）。
+//
+// 收编后残留的手写映射链仅限表无法表达的真实渲染定制（哨兵→固定文案或定制 500 文案）：
+//   - forum.go GetTopic/AdminGetTopic：gorm.ErrRecordNotFound → 404「主题不存在」（固定文案）
+//   - job_card.go GetJobCard：gorm.ErrRecordNotFound → 404「简历不存在」（固定文案）
+//
+// Render 闭包之外的手写映射（raw handler，非本骨架管辖）不在收编范围：auth.go RotateRefresh、
+// ai_assistant.go SSE 扣分事件、contact.go GetContact、forum.go AcceptReply/CancelAccept、
+// recruit.go ResumeCard、resume_pdf.go 两处、settings.go TestConfig。
+
+// errStatusEntry 域表条目：哨兵 → HTTP 状态码。
+type errStatusEntry struct {
+	sentinel error
+	status   int
+}
+
+// errStatusTable 域级「哨兵 → HTTP 状态码」映射表。
+// entries 按声明顺序 errors.Is 判定、先命中先用（与被收编的 if-chain 语义逐字等价）；
+// fallback 为未命中兜底状态码，0 表示未设——未命中走 500 默认信封。
+type errStatusTable struct {
+	entries  []errStatusEntry
+	fallback int
+}
+
+// renderError 渲染 invoke 错误：*ParseError 优先（解析错误不属业务哨兵）→ 表内命中 →
+// fallback（未设 → 500）。nil 表即纯默认信封（ADR-0024 C2）。
+// 定制端点的 Render 需要复用域表时也直接调用本方法（如 contributionErrStatus.renderError）。
+func (t *errStatusTable) renderError(c *gin.Context, err error) {
+	var pe *ParseError
+	if asParseError(err, &pe) {
+		renderStatus(c, pe.Status, pe.Message)
+		return
+	}
+	if t != nil {
+		for _, entry := range t.entries {
+			if errors.Is(err, entry.sentinel) {
+				renderStatus(c, entry.status, err.Error())
+				return
+			}
+		}
+		if t.fallback != 0 {
+			renderStatus(c, t.fallback, err.Error())
+			return
+		}
+	}
+	response.ServerError(c, err.Error())
 }
 
 // ===== 常用解析器（吸收既有 handler 手写解析链） =====

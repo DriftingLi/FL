@@ -218,7 +218,7 @@ func TestAIModelPortSharedConfigFromBinding(t *testing.T) {
 
 	// 流式：同一配置解析 → Stream → 分片回调 + 累积结果
 	var gotChunks []string
-	gotStream, err := adapter.Stream(ctx, AIModelSelector{FeatureKey: FeatureFaultConsult},
+	gotStream, _, err := adapter.Stream(ctx, AIModelSelector{FeatureKey: FeatureFaultConsult},
 		[]*schema.Message{schema.UserMessage("叉车液压异常")},
 		func(c string) { gotChunks = append(gotChunks, c) })
 	if err != nil || gotStream != full {
@@ -288,10 +288,10 @@ func TestAIModelPortClientCacheAcrossMethods(t *testing.T) {
 	if _, err := adapter.Complete(FeatureGradeShortAnswer, []*schema.Message{schema.UserMessage("q")}, AICompleteOptions{MaxTokens: 8}); err != nil {
 		t.Fatalf("首次 Complete 失败: %v", err)
 	}
-	if _, err := adapter.Stream(ctx, AIModelSelector{FeatureKey: FeatureExerciseSolving}, []*schema.Message{schema.UserMessage("q")}, nil); err != nil {
+	if _, _, err := adapter.Stream(ctx, AIModelSelector{FeatureKey: FeatureExerciseSolving}, []*schema.Message{schema.UserMessage("q")}, nil); err != nil {
 		t.Fatalf("Stream 失败: %v", err)
 	}
-	if _, err := adapter.Stream(ctx, AIModelSelector{FeatureKey: FeatureExerciseSolving}, []*schema.Message{schema.UserMessage("q")}, nil); err != nil {
+	if _, _, err := adapter.Stream(ctx, AIModelSelector{FeatureKey: FeatureExerciseSolving}, []*schema.Message{schema.UserMessage("q")}, nil); err != nil {
 		t.Fatalf("二次 Stream 失败: %v", err)
 	}
 	if _, err := adapter.Complete(FeatureGradeShortAnswer, []*schema.Message{schema.UserMessage("q")}, AICompleteOptions{MaxTokens: 8}); err != nil {
@@ -406,7 +406,7 @@ func TestAIConfigResolverBranchesViaPort(t *testing.T) {
 	}).Error; err != nil {
 		t.Fatalf("插入用户模型失败: %v", err)
 	}
-	gotStream, err := adapter.Stream(ctx, AIModelSelector{ModelSource: "user", UserID: 7, UserModelID: 1},
+	gotStream, _, err := adapter.Stream(ctx, AIModelSelector{ModelSource: "user", UserID: 7, UserModelID: 1},
 		[]*schema.Message{schema.UserMessage("q")}, nil)
 	if err != nil || gotStream != "分支回复" {
 		t.Fatalf("user 来源流式调用异常: %q err=%v", gotStream, err)
@@ -416,12 +416,12 @@ func TestAIConfigResolverBranchesViaPort(t *testing.T) {
 	}
 
 	// 未登录不能使用用户自定义模型
-	if _, err := adapter.Stream(ctx, AIModelSelector{ModelSource: "user", UserModelID: 1}, nil, nil); err == nil || err.Error() != "未登录不能使用用户自定义模型" {
+	if _, _, err := adapter.Stream(ctx, AIModelSelector{ModelSource: "user", UserModelID: 1}, nil, nil); err == nil || err.Error() != "未登录不能使用用户自定义模型" {
 		t.Errorf("未登录使用 user 来源应报原文案: %v", err)
 	}
 
 	// 旧 ModelSource=custom：选择子字段直接透传
-	gotStream, err = adapter.Stream(ctx, AIModelSelector{
+	gotStream, _, err = adapter.Stream(ctx, AIModelSelector{
 		ModelSource:  "custom",
 		CustomAPIKey: "sk-custom", CustomBaseURL: baseURL, CustomModel: "gpt-4o",
 	}, []*schema.Message{schema.UserMessage("q")}, nil)
@@ -433,12 +433,12 @@ func TestAIConfigResolverBranchesViaPort(t *testing.T) {
 	}
 
 	// custom 来源字段不完整 → 报错（文案逐字保留）
-	if _, err := adapter.Stream(ctx, AIModelSelector{ModelSource: "custom", CustomAPIKey: "sk-custom"}, nil, nil); err == nil || err.Error() != "自定义模型配置不完整" {
+	if _, _, err := adapter.Stream(ctx, AIModelSelector{ModelSource: "custom", CustomAPIKey: "sk-custom"}, nil, nil); err == nil || err.Error() != "自定义模型配置不完整" {
 		t.Errorf("custom 配置不完整应报原文案: %v", err)
 	}
 
 	// 未知来源报错（文案逐字保留）
-	if _, err := adapter.Stream(ctx, AIModelSelector{ModelSource: "unknown"}, nil, nil); err == nil || err.Error() != "未知的 model_source: unknown" {
+	if _, _, err := adapter.Stream(ctx, AIModelSelector{ModelSource: "unknown"}, nil, nil); err == nil || err.Error() != "未知的 model_source: unknown" {
 		t.Errorf("未知 model_source 应报原文案: %v", err)
 	}
 
@@ -503,7 +503,7 @@ func TestAIConfigResolverBranchesViaPort(t *testing.T) {
 	}
 
 	// 专项功能未绑定应报错（防绕过：custom 字段不得兜底；文案逐字保留）
-	if _, err := adapter.Stream(ctx, AIModelSelector{FeatureKey: FeatureFaultConsult, ModelSource: "custom", CustomAPIKey: "sk-bypass"}, nil, nil); err == nil || err.Error() != "管理员未配置该功能的模型，请联系管理员" {
+	if _, _, err := adapter.Stream(ctx, AIModelSelector{FeatureKey: FeatureFaultConsult, ModelSource: "custom", CustomAPIKey: "sk-bypass"}, nil, nil); err == nil || err.Error() != "管理员未配置该功能的模型，请联系管理员" {
 		t.Errorf("专项功能未绑定应报原文案: %v", err)
 	}
 
@@ -514,7 +514,7 @@ func TestAIConfigResolverBranchesViaPort(t *testing.T) {
 	}).Error; err != nil {
 		t.Fatalf("插入脏用户模型失败: %v", err)
 	}
-	if _, err := adapter.Stream(ctx, AIModelSelector{ModelSource: "user", UserID: 8, UserModelID: 2}, nil, nil); err == nil || !strings.Contains(err.Error(), "解密用户自定义模型 API Key 失败") {
+	if _, _, err := adapter.Stream(ctx, AIModelSelector{ModelSource: "user", UserID: 8, UserModelID: 2}, nil, nil); err == nil || !strings.Contains(err.Error(), "解密用户自定义模型 API Key 失败") {
 		t.Errorf("用户模型解密失败应报错: %v", err)
 	}
 }
