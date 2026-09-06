@@ -262,6 +262,11 @@
             </div>
           </div>
         </div>
+
+        <!-- 当轮计费脚注（#620：usage 走 store 独立 lastUsage 通道，由壳渲染；消息正文不含计费文本） -->
+        <div v-if="store.lastUsage" class="usage-footnote pb-1 pr-1 text-right text-[11px] text-ink-3">
+          本轮消耗 {{ store.lastUsage.points_cost }} 分 · {{ (store.lastUsage.total_tokens / 1000).toFixed(1) }}k tokens · 余额 {{ store.lastUsage.balance }}
+        </div>
       </div>
 
       <!-- 输入区 -->
@@ -548,9 +553,9 @@ async function handleUserCommand(cmd: string) {
       // 忽略后端错误
     }
     authStore.clearAuthData()
-    store.messages = []
-    store.currentSessionId = null
-    store.sessions = []
+    // 状态变更走 store action（#620）：清消息/会话上下文，未登录 loadSessions 清空侧栏列表
+    store.clearMessages()
+    await store.loadSessions()
     ElMessage.success('已退出登录')
   }
 }

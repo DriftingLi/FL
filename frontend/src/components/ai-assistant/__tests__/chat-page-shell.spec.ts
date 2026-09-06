@@ -1,7 +1,7 @@
 // ChatPageShell 壳测试（#398）：槽位渲染、安全渲染单点（markstream escape、无裸 v-html）、
 // 侧栏会话操作（重命名/删除/选中）、输入区变体与发送事件、自动滚底钩子不回归。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { reactive, nextTick } from 'vue'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import ElementPlus from 'element-plus'
@@ -53,6 +53,10 @@ function makeStore(overrides: Record<string, unknown> = {}) {
     messages: [] as Array<Record<string, unknown>>,
     streaming: false,
     streamingContent: '',
+    // #620：当轮 usage 独立 state + 状态变更 action（壳渲染脚注、登出走 action）
+    lastUsage: null as Record<string, number> | null,
+    clearMessages: vi.fn(),
+    loadSessions: vi.fn().mockResolvedValue(undefined),
     selectSession: vi.fn(),
     deleteSession: vi.fn().mockResolvedValue(undefined),
     renameSession: vi.fn().mockResolvedValue(undefined),
@@ -222,5 +226,42 @@ describe('ChatPageShell 输入与发送', () => {
     const w = mountShell({ backLinkTo: '/ai-assistant', backLinkText: '返回 AI 助手' })
     expect(w.find('.logo-sub').text()).toBe('AI 叉车助手 · 测试')
     expect(w.find('.back-link').text()).toContain('返回 AI 助手')
+  })
+})
+
+describe('ChatPageShell 当轮计费脚注（#620）', () => {
+  it('store.lastUsage 存在时渲染当轮脚注；消息正文不含计费文本（usage 与正文分离）', async () => {
+    mocks.store = makeStore({
+      lastUsage: { points_cost: 5, total_tokens: 1500, balance: 95 },
+      messages: [{ id: 2, role: 'assistant', content: '回答内容' }]
+    })
+    const w = mountShell({})
+    const footnote = w.find('.usage-footnote')
+    expect(footnote.exists()).toBe(true)
+    expect(footnote.text()).toContain('本轮消耗 5 分')
+    expect(footnote.text()).toContain('1.5k tokens')
+    expect(footnote.text()).toContain('余额 95')
+    // 助手正文只有对话内容
+    const body = w.findAll('.message-text').map(d => d.text()).join('')
+    expect(body).not.toContain('本轮消耗')
+  })
+
+  it('无 lastUsage（未发送/已切会话）不渲染脚注', () => {
+    const w = mountShell({})
+    expect(w.find('.usage-footnote').exists()).toBe(false)
+  })
+})
+
+describe('ChatPageShell 登出（#620）', () => {
+  it('退出登录走 store.clearMessages + loadSessions action，不再直改消息数组', async () => {
+    const w = mountShell({})
+    // 侧栏底部的用户菜单（首个 ElDropdown 是主题切换的，需定位到 footer 内）
+    const userMenu = w.find('.sidebar-footer').findComponent({ name: 'ElDropdown' })
+    expect(userMenu.exists()).toBe(true)
+    userMenu.vm.$emit('command', 'logout')
+    await flushPromises()
+
+    expect(mocks.store.clearMessages).toHaveBeenCalledTimes(1)
+    expect(mocks.store.loadSessions).toHaveBeenCalledTimes(1)
   })
 })

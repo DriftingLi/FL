@@ -19,8 +19,9 @@ import {
   useQuestionAnswer
 } from './useQuestionAnswer'
 
-/** 练习模式：顺序 / 自由（随机或专项）/ 标签 / 真题卷（mode 键 paper:<paperID>） */
-export type PracticeMode = 'sequential' | 'free' | 'tag' | 'paper'
+/** 练习模式：顺序 / 自由（随机或专项）/ 标签 / 真题卷（mode 键 paper:<paperID>）/
+ *  单题即时变体（#617 错题重做）：无推进节奏、无断点进度，提交管线与判分装配与练习同源 */
+export type PracticeMode = 'sequential' | 'free' | 'tag' | 'paper' | 'single'
 
 /** 进入/续练某模式时 adapter 返回的数据（questions + 断点进度） */
 export interface PracticeStartData {
@@ -50,7 +51,7 @@ export interface PracticeSavePayload {
 export interface PracticeSessionAdapters {
   /** 进入/续练：拉取题目并解析断点进度；无题目/失败返回 null */
   start: (mode: PracticeMode) => Promise<PracticeStartData | null>
-  /** 提交单题答案并判定，返回结果；失败返回 null */
+  /** 提交单题答案并判定，返回结果；失败语义由调用方 adapter 决定（返回 null 或抛出），页面按需处理 */
   submit: (payload: PracticeSubmitPayload) => Promise<SubmitResult | null>
   /** 保存进度与答题状态；无断点模式（随机）由 adapter 内部跳过，失败静默 */
   saveProgress: (payload: PracticeSavePayload) => Promise<void>
@@ -294,6 +295,8 @@ export function usePracticeSession(adapters: PracticeSessionAdapters) {
     nextQuestion,
     prevQuestion,
     quit,
+    // 返回入口：清空会话状态（不保存进度；单题变体 #617 关闭重做面板用）
+    backToEntry,
     saveCurrentProgress,
     // 题目进入生命周期（外围交互挂载点）
     onQuestionEnter
