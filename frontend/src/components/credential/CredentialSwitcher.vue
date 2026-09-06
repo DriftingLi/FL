@@ -111,7 +111,7 @@ function handleChange(val: number) {
     .then(() => {
       ElMessage.success('已切换证件')
       switcherVisible.value = false
-      // 全局刷新由各页面经 useCredentialRefetch watch store 变化完成（#387 单点）
+      // 受证件过滤页面的失效刷新由 useAsyncPage 内聚 watch store 变化完成（#604 单点）
     })
     .catch((e: any) => {
       ElMessage.error(e?.message || '切换失败')

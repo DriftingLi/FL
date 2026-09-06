@@ -90,21 +90,24 @@ const {
   pageSize,
   run: load,
   handlePageChange
-} = useAsyncPage(async () => {
-  const res = await jobApi.listMyApplications({ page: page.value, page_size: pageSize.value })
-  items.value = res?.items || []
-  total.value = res?.total || 0
-  try {
-    // 后端列表单页上限 20：翻页取全量 approved，避免申请多时较早企业的联系方式缺失（Standards 审查）
-    approvedContacts.value = []
-    for (let p = 1; p <= 10; p++) {
-      const reqs: any = await resumeApi.listContactRequests({ page: p, page_size: 20 })
-      const items = reqs?.items || []
-      approvedContacts.value.push(...items.filter((r: any) => r.status === 'approved'))
-      if (items.length < 20) break
-    }
-  } catch {}
-})
+} = useAsyncPage(
+  async () => {
+    const res = await jobApi.listMyApplications({ page: page.value, page_size: pageSize.value })
+    items.value = res?.items || []
+    total.value = res?.total || 0
+    try {
+      // 后端列表单页上限 20：翻页取全量 approved，避免申请多时较早企业的联系方式缺失（Standards 审查）
+      approvedContacts.value = []
+      for (let p = 1; p <= 10; p++) {
+        const reqs: any = await resumeApi.listContactRequests({ page: p, page_size: 20 })
+        const items = reqs?.items || []
+        approvedContacts.value.push(...items.filter((r: any) => r.status === 'approved'))
+        if (items.length < 20) break
+      }
+    } catch {}
+  },
+  { credentialScoped: false } // 招聘域不受证件过滤（#604 opt-out）
+)
 
 // 找该投递对应企业的已授权联系方式（按 recruiter_id 匹配）
 function approvedContactFor(item: JobApplication) {

@@ -5,7 +5,15 @@ import ElementPlus from 'element-plus'
 
 vi.mock('vue-router', () => ({ useRoute: () => ({ params: { id: '1' } }) }))
 vi.mock('@/api/recruit', () => ({ recruitApi: { getResume: vi.fn(), getContact: vi.fn(), createContactRequest: vi.fn() } }))
-vi.mock('@/api/client', () => ({ getValidAccessToken: vi.fn(() => Promise.resolve('tk')) }))
+// useAsyncPage 内聚证件失效刷新（#604）后 import 链经 stores/credential → api/credential →
+// api/request，需要真实 client 工厂完成模块初始化；仅覆盖 getValidAccessToken 不触网
+vi.mock(import('@/api/client'), async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/client')>()
+  return {
+    ...actual,
+    getValidAccessToken: vi.fn(() => Promise.resolve('tk')),
+  }
+})
 vi.mock('@/components/recruit/OnlineResumePdf.vue', () => ({ default: { template: '<div class="mock-pdf">PDF</div>' } }))
 
 import { recruitApi } from '@/api/recruit'

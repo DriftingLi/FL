@@ -3,6 +3,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
+import { createPinia, setActivePinia } from 'pinia'
 
 vi.mock('@/api/course', () => ({
   courseApi: {
@@ -29,7 +30,13 @@ vi.mock('@/composables/useLazyLoad', () => ({
 
 import { courseApi } from '@/api/course'
 import { trainingApi } from '@/api/training'
+import { useCredentialStore } from '@/stores/credential'
+import type { CredentialDict } from '@/api/credential'
 import CourseList from '../CourseList.vue'
+
+function credentialOf(id: number): CredentialDict {
+  return { id, code: `C${id}`, name: `证件${id}`, description: '', category: 'special_operation', level: null, sort_order: 0, status: 1, created_at: '', updated_at: '' }
+}
 
 function mountPage() {
   return mount(CourseList, {
@@ -152,5 +159,23 @@ describe('CourseList 左右分栏课程中心', () => {
       filter: 'all',
       specialty_id: 2
     })
+  })
+
+  it('切证件后目录 facet 与列表各恰好一次重载（#594 收敛）', async () => {
+    setActivePinia(createPinia())
+    // 计数断言用例：清掉此前用例累积的调用记录
+    vi.mocked(trainingApi.getCatalogTree).mockClear()
+    vi.mocked(courseApi.getCourses).mockClear()
+    mountPage()
+    await flushPromises()
+    expect(trainingApi.getCatalogTree).toHaveBeenCalledTimes(1)
+    expect(courseApi.getCourses).toHaveBeenCalledTimes(1)
+
+    useCredentialStore().current = credentialOf(9)
+    await flushPromises()
+
+    // 目录树重载与列表重载并行各一次：无双触发、也不互相替代
+    expect(trainingApi.getCatalogTree).toHaveBeenCalledTimes(2)
+    expect(courseApi.getCourses).toHaveBeenCalledTimes(2)
   })
 })

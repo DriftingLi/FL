@@ -104,11 +104,15 @@ function buildParams(page: number) {
   return params
 }
 
-const { loading, loadError, retrying, retry: handleRetry, run: load } = useAsyncPage(async () => {
-  const res = await jobApi.listPublicJobs(buildParams(1))
-  items.value = res?.items || []
-  hasMore.value = (res?.items?.length || 0) >= BATCH
-})
+// 招聘域不受证件过滤（client.ts 注入豁免同口径），不随切换重置 load-more 累积列表（#604 opt-out）
+const { loading, loadError, retrying, retry: handleRetry, run: load } = useAsyncPage(
+  async () => {
+    const res = await jobApi.listPublicJobs(buildParams(1))
+    items.value = res?.items || []
+    hasMore.value = (res?.items?.length || 0) >= BATCH
+  },
+  { credentialScoped: false }
+)
 
 // #493：筛选变化 → 清空已累积列表并回第一页
 function resetAndLoad() {

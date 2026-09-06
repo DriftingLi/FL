@@ -340,7 +340,12 @@ const {
   total,
   run: loadTopics,
   handlePageChange
-} = useAsyncPage(loadTopicsOnce, { pageRef: currentPage, defaultPageSize: 10 })
+} = useAsyncPage(loadTopicsOnce, {
+  pageRef: currentPage,
+  defaultPageSize: 10,
+  // 论坛不受证件过滤（CONTEXT.md「当前证件」），不随切换重装/重置页码（#604 opt-out）
+  credentialScoped: false
+})
 
 async function loadTopicsOnce() {
   const params = { page: currentPage.value, page_size: pageSize.value }

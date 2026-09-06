@@ -251,7 +251,7 @@ import KnowledgeCard from '@/components/practice/KnowledgeCard.vue'
 import CommentCard from '@/components/practice/CommentCard.vue'
 import NoteCard from '@/components/practice/NoteCard.vue'
 import { questionInteractionApi } from '@/api/questionInteraction'
-import { useCredentialRefetch } from '@/composables/useCredentialRefetch'
+import { useAsyncPage } from '@/composables/useAsyncPage'
 
 // null = 入口；'sequential' | 'free' | 'tag' = 刷题中
 
@@ -475,12 +475,6 @@ onMounted(() => {
   loadTags()
 })
 
-// 证件切换即重拉（单点：watch store.current.id，见 useCredentialRefetch；
-// loadCardData 已含 getPracticeStats，覆盖原事件通知里的 loadPracticeStats）
-useCredentialRefetch(() => {
-  loadCardData()
-})
-
 async function loadTags() {
   tagsLoading.value = true
   try {
@@ -494,30 +488,29 @@ async function loadTags() {
   }
 }
 
-async function loadCardData() {
-  try {
-    const [statsRes, progRes, practiceRes] = await Promise.all([
-      questionBankApi.getStats().catch(() => null as any),
-      practiceModeApi.getSequentialProgress().catch(() => null as any),
-      practiceModeApi.getPracticeStats().catch(() => null as any)
-    ])
-    if (statsRes) totalQuestions.value = (statsRes.total as number) || 0
-    if (progRes) seqProgress.value = progRes
-    if (practiceRes) {
-      practiceStats.value = {
-        today_count: Number((practiceRes as any)?.today_count ?? 0),
-        total_count: Number((practiceRes as any)?.total_count ?? 0),
-        total_days: Number((practiceRes as any)?.total_days ?? 0)
-      }
-      practiceStatsLoading.value = false
+// 入口卡片聚合装载收编进 useAsyncPage（#605）：loader 纯装配（各并发请求自带降级 catch，
+// 不外抛）；证件切换即重拉由 module 内聚 watch 承担——loadCardData 已含 getPracticeStats，
+// 覆盖原事件通知里的 loadPracticeStats
+const { run: loadCardData } = useAsyncPage(async () => {
+  const [statsRes, progRes, practiceRes] = await Promise.all([
+    questionBankApi.getStats().catch(() => null as any),
+    practiceModeApi.getSequentialProgress().catch(() => null as any),
+    practiceModeApi.getPracticeStats().catch(() => null as any)
+  ])
+  if (statsRes) totalQuestions.value = (statsRes.total as number) || 0
+  if (progRes) seqProgress.value = progRes
+  if (practiceRes) {
+    practiceStats.value = {
+      today_count: Number((practiceRes as any)?.today_count ?? 0),
+      total_count: Number((practiceRes as any)?.total_count ?? 0),
+      total_days: Number((practiceRes as any)?.total_days ?? 0)
     }
-  } catch (e) {
-    // 静默失败，卡片展示降级为默认值
+    practiceStatsLoading.value = false
   }
   // 若第 3 并发失败时 fallback 仍走独立 loader（避免悬在 skeleton）
   if (practiceStatsLoading.value) {
     try { await loadPracticeStats() } catch {}
   }
-}
+})
 </script>
 

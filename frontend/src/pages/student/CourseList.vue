@@ -221,7 +221,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowRight, Star, StarFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -233,7 +233,6 @@ import { pointsApi } from '@/api/points'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useCourseCatalog, treeCatalogAdapter } from '@/composables/useCourseCatalog'
 import { useStagger } from '@/composables/useStagger'
-import { useCredentialRefetch } from '@/composables/useCredentialRefetch'
 import { useCredentialStore } from '@/stores/credential'
 import FacetCard from '@/components/catalog/FacetCard.vue'
 import FacetItem from '@/components/catalog/FacetItem.vue'
@@ -267,6 +266,7 @@ const tabOptions = [
 ]
 
 // 三态 + 分页三件套收编（#388）：loader 只负责拉数据与写响应
+// （#605：证件切换即重拉已内聚进 useAsyncPage——回第一页、tab/方向/等级筛选词原样保留）
 const {
   loading,
   loadError,
@@ -502,6 +502,19 @@ function goToChapter(ch: { chapter_id: number }) {
   })
 }
 
+// #594 目录 facet 收敛（存量缺口修复：master 时代目录树同样只拉一次，切证件后
+// totalAll/scopedTotal/countOf* 停留旧证件口径）：目录树按当前证件分区（credential_id
+// 由拦截器注入），切证件时随装载流与列表并行重载。不并入 useAsyncPage loader——
+// 翻页/筛选变化不应重复拉树；与列表重载也不重复请求（两个 loader 各自恰好一次）。
+// 仅本页树 adapter 受证件过滤；admin/tutor 的目录 adapter 走 /admin、/tutor 豁免域，
+// 且 credential store 对非学员角色结构性为 null，不受此 watch 影响
+watch(
+  () => credentialStore.current?.id,
+  () => {
+    void fetchCatalog()
+  }
+)
+
 onMounted(() => {
   fetchCatalog()
   loadCourses()
@@ -510,12 +523,6 @@ onMounted(() => {
   if (queryCourseId > 0) {
     openDetailById(queryCourseId)
   }
-})
-
-// 证件切换即重拉（单点：watch store.current.id，见 useCredentialRefetch）
-useCredentialRefetch(() => {
-  currentPage.value = 1
-  loadCourses()
 })
 </script>
 

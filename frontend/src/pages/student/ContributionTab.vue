@@ -63,7 +63,8 @@ async function loadMine() {
   }
 }
 
-watch(() => props.credentialId, () => { currentPage.value = 1; loadList() })
+// 证件切换即重拉已内聚进 useAsyncPage（#605）：credentialId prop 是 store.current.id 的
+// 纯投影，module 内聚 watch 承担刷新，此处不得再 watch 重装（会构成双触发）
 watch(sort, () => { currentPage.value = 1; loadList() })
 
 function onViewChange(v: string) {
