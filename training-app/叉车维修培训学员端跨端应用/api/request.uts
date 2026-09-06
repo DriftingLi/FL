@@ -240,8 +240,9 @@ export function request<T>(options : RequestOptions) : Promise<UTSJSONObject> {
  * @throws Error 网络错误、HTTP/业务错误由底层 request reject；map 抛出的异常不被捕获，沿 Promise 链 reject
  */
 export function requestMapped<T>(options : RequestOptions, map : (data : UTSJSONObject) => T) : Promise<T> {
-    // 切片 1：签名契约先行；委派实现在下一切片补齐
-    throw new Error('not implemented')
+    return request<UTSJSONObject>(options).then((data : UTSJSONObject) : T => {
+        return map(data)
+    })
 }
 
 /** 单次 HTTP 请求（模块级函数，支持 401 刷新后重试） */

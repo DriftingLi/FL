@@ -31,3 +31,18 @@ describe('出口签名契约（requestMapped）', () => {
     expect(sig.test(src)).toBe(true);
   });
 });
+
+describe('拆包后映射契约', () => {
+  it('出口复用底层 request 的解包结果，mapper 收到 data 而非信封', () => {
+    const body = fnBody('requestMapped');
+    expect(body).toContain('request<UTSJSONObject>(options)');
+    expect(body).toMatch(/\.then\s*\(/);
+    expect(body).toMatch(/map\s*\(\s*data\s*\)/);
+  });
+
+  it('出口内不二次解包：不得再取信封 data 字段（mapper 收到的已是拆包结果）', () => {
+    const body = fnBody('requestMapped');
+    expect(body).not.toContain("['data']");
+    expect(body).not.toContain('["data"]');
+  });
+});
