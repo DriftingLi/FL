@@ -6,7 +6,7 @@ package api
 
 import (
 	"context"
-	"errors"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 
@@ -14,6 +14,16 @@ import (
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
+
+// jobReportErrStatus 举报治理域哨兵→状态码表（#611）：职位/举报不存在 → 404，
+// 其余（原因为空等业务校验）兜底 400。
+var jobReportErrStatus = &errStatusTable{
+	entries: []errStatusEntry{
+		{service.ErrReportJobNotFound, http.StatusNotFound},
+		{service.ErrReportNotFound, http.StatusNotFound},
+	},
+	fallback: http.StatusBadRequest,
+}
 
 // RegisterJobReportRoutes 注册举报与治理路由。
 // jobSvc 提供职位巡检列表（JobReportService 只管举报与下架动作）。
@@ -69,7 +79,7 @@ func (h *JobReportHandler) Report(c *gin.Context) {
 		},
 		Render: func(c *gin.Context, _ *service.ReportInput, resp *service.ReportDTO, err error) {
 			if err != nil {
-				renderReportError(c, err)
+				jobReportErrStatus.renderError(c, err) // #611：错误映射退表，201 定制成功信封保留
 				return
 			}
 			response.Created(c, "举报已提交，感谢你的反馈", *resp)
@@ -157,7 +167,7 @@ func (h *JobReportHandler) MarkHandled(c *gin.Context) {
 		},
 		Render: func(c *gin.Context, _ *struct{}, resp *service.ReportDTO, err error) {
 			if err != nil {
-				renderReportError(c, err)
+				jobReportErrStatus.renderError(c, err) // #611：错误映射退表，成功文案保留定制
 				return
 			}
 			response.SuccessWithMsg(c, "举报已标记为已处理", *resp)
@@ -198,25 +208,10 @@ func (h *JobReportHandler) ForceOffline(c *gin.Context) {
 		},
 		Render: func(c *gin.Context, _ *struct{}, resp *service.JobPostingDTO, err error) {
 			if err != nil {
-				renderReportError(c, err)
+				jobReportErrStatus.renderError(c, err) // #611：错误映射退表，成功文案保留定制
 				return
 			}
 			response.SuccessWithMsg(c, "职位已强制下架", *resp)
 		},
 	}.Handle(c)
-}
-
-// renderReportError 举报治理错误映射（哨兵 → 状态码，禁文案比对）。
-func renderReportError(c *gin.Context, err error) {
-	var pe *ParseError
-	switch {
-	case asParseError(err, &pe):
-		renderStatus(c, pe.Status, pe.Message)
-	case errors.Is(err, service.ErrReportJobNotFound):
-		response.NotFound(c, err.Error())
-	case errors.Is(err, service.ErrReportNotFound):
-		response.NotFound(c, err.Error())
-	default:
-		response.BadRequest(c, err.Error())
-	}
 }
