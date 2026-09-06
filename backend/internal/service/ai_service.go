@@ -50,12 +50,10 @@ type AIService struct {
 	blocking  AIBlockingTransport // 阻塞传输槽位（nil 时自实装；测试可注入 fake）
 }
 
-// NewAIService 创建 AI 服务。aiConfigSvc 以 AIConfigResolver 身份注入（解析知识在配置 service）。
+// NewAIService 创建 AI 服务。aiConfigSvc 以 AIConfigResolver 身份注入（解析知识在配置 service），
+// 必须非 nil：构造期注入是不变量，与 NewAIAssistantService 一致。
 func NewAIService(db *gorm.DB, aiConfigSvc *AIConfigService, logger *zap.Logger) *AIService {
-	svc := &AIService{db: db, logger: logger}
-	if aiConfigSvc != nil {
-		svc.resolver = aiConfigSvc
-	}
+	svc := &AIService{db: db, logger: logger, resolver: aiConfigSvc}
 	svc.blocking = svc
 	return svc
 }

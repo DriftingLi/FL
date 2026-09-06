@@ -528,9 +528,7 @@ var featureChatKeys = map[string]bool{
 // ResolveFeatureSettings 阻塞栈凭证解析（AIConfigResolver 实现；自 AIService.ensureClient
 // 的解析段迁入）：featureKey → 管理端单绑定；空键/未绑定报错（不再降级到环境变量）。
 func (s *AIConfigService) ResolveFeatureSettings(ctx context.Context, featureKey string) (AISettings, error) {
-	if featureKey == "" {
-		return AISettings{}, fmt.Errorf("AI 功能 %q 未绑定配置，请在管理员后台 AI 配置页面绑定", featureKey)
-	}
+	// 空键查不到绑定（ResolveConfig 返回 unbound），与未绑定共用同一报错分支
 	cur := s.ResolveConfig(ctx, featureKey)
 	if cur.APIKey == "" {
 		return AISettings{}, fmt.Errorf("AI 功能 %q 未绑定配置，请在管理员后台 AI 配置页面绑定", featureKey)
