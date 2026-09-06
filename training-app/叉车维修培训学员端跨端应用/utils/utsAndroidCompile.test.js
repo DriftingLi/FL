@@ -18,8 +18,9 @@
  * （防止空跑假绿），再对全工程源码跑断言零命中（真正守护）。
  *
  * 2026-09 增补（refactor epic #638 T01）：AGENTS.md 坑位表机械化规则 F–I——
- *   F. 裸 String() 强转（Kotlin 无此重载，error17）；G. undefined 字面量；
- *   H. catch 参数显式 : any；I. 事件对象 .detail 直取（应 as UTSJSONObject 索引）
+ *   F. 裸 String() 强转（Kotlin 无此重载，error17；app-ios Swift 互操作文件除外）；
+ *   G. undefined 字面量；H. catch 参数显式 : any；
+ *   I. `: any` 注解参数访问 .detail（类型化事件对象自带 detail 属合法，按组合判定）
  * 存量违例走 GUARD_ALLOWLIST 豁免，由后续工单在各自范围清零（见常量注释）。
  */
 const fs = require('fs');
@@ -33,17 +34,15 @@ const SKIP = new Set(['node_modules', 'unpackage', '.git', 'dist', 'hybrid']);
  * 已知存量违例豁免（expand–contract 的 expand 侧，refactor epic #638 T01 引入）：
  * 规则上线时已存在的违例按「规则 → 文件」豁免，由后续工单在各自范围清零；
  * 全部清零后由 epic 收尾票（#654）删除本机制。
- * 键 = 规则标识（F/G/H/I），值 = 豁免文件的相对路径集合
+ * 仅存量不为零的规则入表（F/G/I 在 master 树上实测零存量，全量执法无豁免）；
+ * 键 = 规则标识，值 = 豁免文件的相对路径集合
  */
 const GUARD_ALLOWLIST = {
-  F: new Set([]),
-  G: new Set([]),
   H: new Set([
     'api/forum.uts',
     'api/checkin.uts',
     'pages/notifications/notifications.uvue',
   ]),
-  I: new Set([]),
 };
 
 function walk(dir, out = []) {
@@ -199,6 +198,22 @@ function scanCatchAnyParam(code) {
   return hits;
 }
 
+/** I：`: any` 注解参数访问 .detail——Kotlin 非空 Any 无 detail 成员（Unresolved reference），应 as UTSJSONObject 后 ['detail'] 索引。
+ *  类型化事件对象（如 InputEvent）自带 detail 属合法用法，故按「any 参数 + 同名接收者」组合判定而非裸扫 .detail */
+function scanAnyParamDetailAccess(code) {
+  const clean = blank(code);
+  const anyParams = new Set();
+  let m;
+  const paramRe = /[(,]\s*([A-Za-z_$][\w$]*)\s*:\s*any\b(?!\s*\|)/g;
+  while ((m = paramRe.exec(clean)) !== null) anyParams.add(m[1]);
+  const hits = [];
+  const accessRe = /(?<![\w$])([A-Za-z_$][\w$]*)\s*\.\s*detail\b/g;
+  while ((m = accessRe.exec(clean)) !== null) {
+    if (anyParams.has(m[1])) hits.push(m[1] + '.detail');
+  }
+  return hits;
+}
+
 /** B：跨文件 export type/interface 未 import 就引用（需全工程导出表） */
 function buildExportedTypeMap() {
   const exported = new Map();
@@ -279,6 +294,14 @@ describe('守护自检：检测逻辑对已知违规样本必须报出', () => {
     expect(scanCatchAnyParam('try { x } catch (err : any) { log(err) }')).toHaveLength(1);
     expect(scanCatchAnyParam('.catch((e) => { fail(e) })')).toEqual([]);
     expect(scanCatchAnyParam('.catch((e : any | null) => { fail(e) })')).toEqual([]);
+  });
+
+  it('I 能报出 : any 参数访问 .detail（对照组：类型化事件对象与其他成员不报）', () => {
+    expect(scanAnyParamDetailAccess('onChange((e : any) => { const v = e.detail.value })')).toHaveLength(1);
+    expect(scanAnyParamDetailAccess('function h(e : any) : void {\n  const v = e.detail\n}')).toHaveLength(1);
+    expect(scanAnyParamDetailAccess('onInput((e) => { const v = e.detail.value })')).toEqual([]);
+    expect(scanAnyParamDetailAccess('onChange((e : any) => { const v = e.value })')).toEqual([]);
+    expect(scanAnyParamDetailAccess('.catch((err : any | null) => { log(err) })')).toEqual([]);
   });
 });
 
@@ -385,6 +408,14 @@ describe('全工程守护：五类 Kotlin 编译地雷零命中', () => {
     for (const u of allCodeUnits()) {
       if (exempt.has(path.relative(ROOT, u.file))) continue;
       for (const h of scanCatchAnyParam(u.code)) violations.push(`${path.relative(ROOT, u.file)}: ${h}`);
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it('I：script 内无 : any 参数访问 .detail（类型化事件对象自带 detail 属合法，按组合判定）', () => {
+    const violations = [];
+    for (const u of allCodeUnits()) {
+      for (const h of scanAnyParamDetailAccess(u.code)) violations.push(`${path.relative(ROOT, u.file)}: ${h}`);
     }
     expect(violations).toEqual([]);
   });
