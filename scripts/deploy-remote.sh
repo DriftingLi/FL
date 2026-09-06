@@ -622,6 +622,44 @@ ensure_proxy_healthy() {
     return 1
 }
 
+# 进度感知拉取看门狗（#635）：docker pull 后台执行，仅当「无新输出」持续超过
+# DOCKER_PULL_IDLE_TIMEOUT（默认 180s）才判定挂起并终止。
+# 动机：总时长 timeout（原 600s）会把「慢但在动」的拉取反复归零——ghcr-cache
+# 逐出后全量回源实测 43 分钟，任何 600s 预算下必然失败循环；registry 真挂起
+# （无输出）仍按 #575 的初衷快速 fail-fast。新输出实时转发 stderr，runner 日志
+# 可见性不变。外层 SSH 若被整体超时掐断，后台 pull 成为孤儿继续缓存层——
+# 属预期行为（下次尝试命中已缓存层）。
+pull_with_watchdog() {
+    local image="$1"
+    local idle_timeout="${DOCKER_PULL_IDLE_TIMEOUT:-180}"
+    local log_file
+    log_file=$(mktemp)
+    docker pull "$image" >"$log_file" 2>&1 &
+    local pull_pid=$!
+    local last_size=0 last_change now size rc=0
+    last_change=$(date +%s)
+    while kill -0 "$pull_pid" 2>/dev/null; do
+        sleep 10
+        now=$(date +%s)
+        size=$(stat -c %s "$log_file" 2>/dev/null || echo 0)
+        if [ "$size" != "$last_size" ]; then
+            tail -c +"$((last_size + 1))" "$log_file" 2>/dev/null >&2
+            last_size=$size
+            last_change=$now
+        elif [ $((now - last_change)) -ge "$idle_timeout" ]; then
+            log_warn "拉取 ${idle_timeout}s 无新输出，判定挂起并终止（进度看门狗）"
+            kill "$pull_pid" 2>/dev/null
+            wait "$pull_pid" 2>/dev/null || true
+            rm -f "$log_file"
+            return 1
+        fi
+    done
+    wait "$pull_pid" || rc=$?
+    tail -c +"$((last_size + 1))" "$log_file" 2>/dev/null >&2
+    rm -f "$log_file"
+    return "$rc"
+}
+
 # 拉取单个镜像：3 次重试；回退链路：国内镜像源（透传 ghcr 认证）→ 直连 ghcr.io 认证拉取
 pull_one() {
     local name="$1"
@@ -629,9 +667,9 @@ pull_one() {
     local retries=3
     for attempt in $(seq 1 $retries); do
         log_info "拉取${name}镜像 (尝试 $attempt/$retries): $image"
-        # docker pull 加超时（默认 600s）：registry 上游挂起时不再无限等待，
-        # 超时后按失败处理 → 重启代理重试 / 走回退链路
-        if timeout "${DOCKER_PULL_TIMEOUT:-600}" docker pull "$image"; then
+        # 进度看门狗（#635）：仅「无输出超时」判定挂起，慢拉取（缓存回源）不再被总时长误杀；
+        # 挂起时按失败处理 → 重启代理重试 / 走回退链路
+        if pull_with_watchdog "$image"; then
             log_ok "${name}镜像: $image"
             return 0
         fi
@@ -659,7 +697,7 @@ pull_one() {
         local mirror_ref="${REGISTRY_MIRROR}/${core}"
         log_warn "代理拉取失败，回退国内镜像源 ${REGISTRY_MIRROR} 认证拉取: ${mirror_ref}"
         echo "$GITHUB_TOKEN" | docker login "$REGISTRY_MIRROR" -u oauth2 --password-stdin >/dev/null 2>&1 || true
-        if timeout "${DOCKER_PULL_TIMEOUT:-600}" docker pull "$mirror_ref"; then
+        if pull_with_watchdog "$mirror_ref"; then
             docker tag "$mirror_ref" "$image"
             docker rmi "$mirror_ref" >/dev/null 2>&1 || true
             log_ok "镜像源拉取成功并补 tag: $image"
@@ -672,7 +710,7 @@ pull_one() {
         local ghcr_ref="${REGISTRY}/${core}"
         log_warn "回退直连 ${REGISTRY} 认证拉取: ${ghcr_ref}"
         echo "$GITHUB_TOKEN" | docker login "$REGISTRY" -u oauth2 --password-stdin >/dev/null 2>&1 || true
-        if timeout "${DOCKER_PULL_TIMEOUT:-600}" docker pull "$ghcr_ref"; then
+        if pull_with_watchdog "$ghcr_ref"; then
             docker tag "$ghcr_ref" "$image"
             docker rmi "$ghcr_ref" >/dev/null 2>&1 || true
             log_ok "直连拉取成功并补 tag: $image"
@@ -687,8 +725,9 @@ pull_images() {
     log_info ">>> 拉取最新镜像..."
     ensure_proxy_healthy || true
 
-    # 单次拉取超时由 pull_one 中的 timeout "${DOCKER_PULL_TIMEOUT:-600}" 控制
-    # （registry 上游挂起时自动失败重试，不再无限等待）
+    # 拉取挂起判定由 pull_one 的进度看门狗控制（DOCKER_PULL_IDLE_TIMEOUT，默认 180s
+    # 无新输出才杀）：慢拉取（ghcr-cache 逐出回源实测 43 分钟）只要持续出层就不会被误杀，
+    # registry 上游挂起仍快速失败走重试/回退链路（#635）
 
     # 拉取后端镜像（本地已有该 tag 则跳过：内容标签命中即零传输）
     if [ -n "$IMAGE_BACKEND" ]; then
