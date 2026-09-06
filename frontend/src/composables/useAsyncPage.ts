@@ -15,7 +15,8 @@ export interface UseAsyncPageOptions {
    * ② 证件切换联动属另案决策的域（证件引导页目录、课程章节学习位置，#594 Out of Scope）。
    * admin/tutor/recruit 三端无需显式关闭：credential store 只对学员角色初始化
    * （路由守卫 + 学员侧栏切换器），current 恒为 null，watch 永不触发。
-   * 切勿在调用方再自行 watch 证件变化重装，会和本机制构成双触发。
+   * 切勿在调用方再自行 watch 证件变化重装本 loader——会构成本机制的双触发；
+   * 同页其他证件口径数据面（如课程目录 facet 由其所属装载流收敛）不在此限。
    */
   credentialScoped?: boolean
 }

@@ -221,7 +221,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowRight, Star, StarFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -501,6 +501,19 @@ function goToChapter(ch: { chapter_id: number }) {
     params: { courseId: detailCourse.value.course_id, chapterId: ch.chapter_id }
   })
 }
+
+// #594 目录 facet 收敛（存量缺口修复：master 时代目录树同样只拉一次，切证件后
+// totalAll/scopedTotal/countOf* 停留旧证件口径）：目录树按当前证件分区（credential_id
+// 由拦截器注入），切证件时随装载流与列表并行重载。不并入 useAsyncPage loader——
+// 翻页/筛选变化不应重复拉树；与列表重载也不重复请求（两个 loader 各自恰好一次）。
+// 仅本页树 adapter 受证件过滤；admin/tutor 的目录 adapter 走 /admin、/tutor 豁免域，
+// 且 credential store 对非学员角色结构性为 null，不受此 watch 影响
+watch(
+  () => credentialStore.current?.id,
+  () => {
+    void fetchCatalog()
+  }
+)
 
 onMounted(() => {
   fetchCatalog()
