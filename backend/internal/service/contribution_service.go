@@ -640,7 +640,7 @@ func (s *ContributionService) Approve(reviewerID int, contributionID int64) (*Co
 		if err := s.points.SettleRewardTx(tx, PointsEntry{
 			UserID: c.UserID, Delta: ContributionApprovedPoints,
 			Reason: ReasonContributionApproved, RefType: RefTypeContribution, RefID: fmt.Sprintf("%d", contributionID),
-			IdemKey: "contribution_approved:" + fmt.Sprintf("%d", contributionID),
+			IdemKey: ContributionApprovedIdemKey(contributionID),
 		}); err != nil {
 			return err
 		}
@@ -750,7 +750,7 @@ func (s *ContributionService) Download(userID int, contributionID int64) (*Downl
 				if err := s.points.SettleRewardTx(tx, PointsEntry{
 					UserID: c.UserID, Delta: tier.Points,
 					Reason: ReasonContributionTier, RefType: RefTypeContribution, RefID: fmt.Sprintf("%d", contributionID),
-					IdemKey: fmt.Sprintf("contribution_tier:%d:%d", contributionID, tier.Threshold),
+					IdemKey: ContributionTierIdemKey(contributionID, tier.Threshold),
 				}); err != nil {
 					return err
 				}
@@ -965,7 +965,7 @@ func (s *ContributionService) Archive(reviewerID int, contributionID int64, reas
 			if err := s.points.SettleRewardTx(tx, PointsEntry{
 				UserID: c.UserID, Delta: -int(earned), Reason: ReasonRollback,
 				RefType: RefTypeContribution, RefID: fmt.Sprintf("%d", contributionID),
-				IdemKey:   "contribution_rollback:" + fmt.Sprintf("%d", contributionID),
+				IdemKey:   ContributionRollbackIdemKey(contributionID),
 				FloorZero: true,
 			}); err != nil {
 				return err
