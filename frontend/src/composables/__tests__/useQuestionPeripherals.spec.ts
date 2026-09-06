@@ -8,8 +8,19 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { nextTick } from 'vue'
 import { usePracticeSession } from '@/composables/usePracticeSession'
 import type { PracticeSessionAdapters } from '@/composables/usePracticeSession'
-import { useQuestionPeripherals } from '@/composables/useQuestionPeripherals'
+import { useQuestionPeripherals, questionPeripheralAdapters } from '@/composables/useQuestionPeripherals'
 import type { Question } from '@/types/question'
+
+vi.mock('@/api/favorite', () => ({
+  favoriteApi: { check: vi.fn(), add: vi.fn(), remove: vi.fn(), list: vi.fn() }
+}))
+
+vi.mock('@/api/questionInteraction', () => ({
+  questionInteractionApi: { listKnowledge: vi.fn() }
+}))
+
+import { favoriteApi } from '@/api/favorite'
+import { questionInteractionApi } from '@/api/questionInteraction'
 
 function q(id: number): Question {
   return { id, type: 'single_choice', content: `题${id}` } as Question
@@ -279,5 +290,30 @@ describe('useQuestionPeripherals（duration：进题起表 / 提交前取用时�
 
     p.recordDuration()
     expect(p.lastDuration.value).toBeUndefined()
+  })
+})
+
+describe('questionPeripheralAdapters（question 域默认 adapter 工厂）', () => {
+  it('favorite/knowledge 绑定 question 域 API；knowledgeTrigger 可声明，默认 result', async () => {
+    const adapters = questionPeripheralAdapters({ knowledgeTrigger: 'enter' })
+    expect(adapters.duration).toBe(true)
+    expect(adapters.knowledge?.trigger).toBe('enter')
+    expect(questionPeripheralAdapters().knowledge?.trigger).toBe('result')
+
+    vi.mocked(favoriteApi.check).mockResolvedValue({ favorited: true, favorite_id: 3 })
+    await adapters.favorite!.check(11)
+    expect(favoriteApi.check).toHaveBeenCalledWith({ target_type: 'question', target_id: 11 })
+
+    vi.mocked(favoriteApi.add).mockResolvedValue({ favorite_id: 4, target_type: 'question', target_id: 11 })
+    await adapters.favorite!.add(11)
+    expect(favoriteApi.add).toHaveBeenCalledWith({ target_type: 'question', target_id: 11 })
+
+    vi.mocked(favoriteApi.remove).mockResolvedValue(null)
+    await adapters.favorite!.remove(4)
+    expect(favoriteApi.remove).toHaveBeenCalledWith(4)
+
+    vi.mocked(questionInteractionApi.listKnowledge).mockResolvedValue([])
+    await adapters.knowledge!.list(12)
+    expect(questionInteractionApi.listKnowledge).toHaveBeenCalledWith(12)
   })
 })

@@ -225,7 +225,6 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { Sort, MagicStick, Filter, CollectionTag } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { questionBankApi } from '@/api/questionBank'
-import { favoriteApi } from '@/api/favorite'
 import { practiceModeApi, type PracticeModeKey } from '@/api/practiceMode'
 import { trainingApi } from '@/api/training'
 import type { QuestionTag } from '@/api/training'
@@ -244,14 +243,13 @@ import {
   type PracticeMode,
   type PracticeStartData
 } from '@/composables/usePracticeSession'
-import { useQuestionPeripherals } from '@/composables/useQuestionPeripherals'
+import { useQuestionPeripherals, questionPeripheralAdapters } from '@/composables/useQuestionPeripherals'
 import QuestionOptionPicker from '@/components/student/QuestionOptionPicker.vue'
 import AnswerResultCard from '@/components/practice/AnswerResultCard.vue'
 import AIExplanationCard from '@/components/practice/AIExplanationCard.vue'
 import KnowledgeCard from '@/components/practice/KnowledgeCard.vue'
 import CommentCard from '@/components/practice/CommentCard.vue'
 import NoteCard from '@/components/practice/NoteCard.vue'
-import { questionInteractionApi } from '@/api/questionInteraction'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 
 // null = 入口；'sequential' | 'free' | 'tag' = 刷题中
@@ -394,19 +392,10 @@ const {
 } = session
 
 // ===== 外围交互：收藏 / 知识点 / 作答计时（#616，页内自建 watch 收敛进 module）=====
-const { favorited, toggleFavorite, knowledgeTags, lastDuration, recordDuration } = useQuestionPeripherals(session, {
-  favorite: {
-    check: (qid) => favoriteApi.check({ target_type: 'question', target_id: qid }),
-    add: (qid) => favoriteApi.add({ target_type: 'question', target_id: qid }),
-    remove: (favoriteId) => favoriteApi.remove(favoriteId)
-  },
-  knowledge: {
-    // 出结果后按结果题目查知识点（页面既有的触发时机）
-    trigger: 'result',
-    list: (qid) => questionInteractionApi.listKnowledge(qid)
-  },
-  duration: true
-})
+const { favorited, toggleFavorite, knowledgeTags, lastDuration, recordDuration } = useQuestionPeripherals(
+  session,
+  questionPeripheralAdapters({ knowledgeTrigger: 'result' })
+)
 
 // ===== 开始各模式（薄 wrapper：启动会话 + 空题数提示）=====
 async function startSequential() {

@@ -11,9 +11,13 @@
 // adapter 只做 API 绑定（允许抛错），失败降级由本 module 统一：收藏查询失败降级为未收藏、
 // 知识点查询失败置空，均不阻断答题。未注入的交互为 no-op（favorited 恒 false、
 // knowledgeTags 恒空、lastDuration 恒 undefined）。
+// composable 本体不 import 任何 api；question 域的标准绑定由文件尾的
+// questionPeripheralAdapters() 工厂提供（两页一行消费，需要差异的页面可逐项覆盖）。
 import { ref, watch } from 'vue'
 import type { Ref } from 'vue'
 import type { Question, SubmitResult } from '@/types/question'
+import { favoriteApi } from '@/api/favorite'
+import { questionInteractionApi } from '@/api/questionInteraction'
 
 /** 外围 module 依赖的会话面（usePracticeSession 返回值的子集） */
 export interface QuestionPeripheralsSession {
@@ -166,5 +170,28 @@ export function useQuestionPeripherals(
     // 作答计时
     lastDuration,
     recordDuration
+  }
+}
+
+/**
+ * question 域默认外围 adapter 工厂：绑定 favoriteApi / questionInteractionApi 的标准实现
+ * （收藏/知识点/计时三件齐发，#617 错题重做等后续接入复用此唯一绑定点）。
+ * 仅知识点触发时机因页面而异，由 knowledgeTrigger 声明（默认 'result' 出结果查）；
+ * 其余需要差异的页面可对返回值逐项覆盖（注入 seam 保留在 useQuestionPeripherals）。
+ */
+export function questionPeripheralAdapters(
+  options: { knowledgeTrigger?: KnowledgeTrigger } = {}
+): QuestionPeripheralsAdapters {
+  return {
+    favorite: {
+      check: (qid) => favoriteApi.check({ target_type: 'question', target_id: qid }),
+      add: (qid) => favoriteApi.add({ target_type: 'question', target_id: qid }),
+      remove: (favoriteId) => favoriteApi.remove(favoriteId)
+    },
+    knowledge: {
+      trigger: options.knowledgeTrigger ?? 'result',
+      list: (qid) => questionInteractionApi.listKnowledge(qid)
+    },
+    duration: true
   }
 }

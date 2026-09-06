@@ -77,14 +77,12 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Star, StarFilled } from '@element-plus/icons-vue'
 import { realExamApi } from '@/api/realExam'
 import { practiceModeApi } from '@/api/practiceMode'
-import { favoriteApi } from '@/api/favorite'
-import { questionInteractionApi } from '@/api/questionInteraction'
 import { typeMap } from '@/constants/question'
 import {
   usePracticeSession,
   type PracticeStartData
 } from '@/composables/usePracticeSession'
-import { useQuestionPeripherals } from '@/composables/useQuestionPeripherals'
+import { useQuestionPeripherals, questionPeripheralAdapters } from '@/composables/useQuestionPeripherals'
 import QuestionOptionPicker from '@/components/student/QuestionOptionPicker.vue'
 import AnswerResultCard from '@/components/practice/AnswerResultCard.vue'
 import AIExplanationCard from '@/components/practice/AIExplanationCard.vue'
@@ -149,19 +147,11 @@ const {
 } = session
 
 // ===== 外围交互：收藏 / 知识点 / 作答计时（#616，页内自建 watch 收敛进 module）=====
-const { favorited, toggleFavorite, knowledgeTags, lastDuration, recordDuration } = useQuestionPeripherals(session, {
-  favorite: {
-    check: (qid) => favoriteApi.check({ target_type: 'question', target_id: qid }),
-    add: (qid) => favoriteApi.add({ target_type: 'question', target_id: qid }),
-    remove: (favoriteId) => favoriteApi.remove(favoriteId)
-  },
-  knowledge: {
-    // 进题预取知识点（页面既有的触发时机；解析区在提交后渲染，重进已答题立即可见）
-    trigger: 'enter',
-    list: (qid) => questionInteractionApi.listKnowledge(qid)
-  },
-  duration: true
-})
+const { favorited, toggleFavorite, knowledgeTags, lastDuration, recordDuration } = useQuestionPeripherals(
+  session,
+  // 进题预取知识点（页面既有的触发时机；解析区在提交后渲染，重进已答题立即可见）
+  questionPeripheralAdapters({ knowledgeTrigger: 'enter' })
+)
 
 async function handleToggleFavorite() {
   const res = await toggleFavorite()
