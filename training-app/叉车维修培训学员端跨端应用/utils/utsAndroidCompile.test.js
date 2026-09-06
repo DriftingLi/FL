@@ -79,6 +79,17 @@ function scriptBlocks(text) {
   return out;
 }
 
+/** 全工程代码单元：.uts 取整文件，.uvue 取 script 块（模板表达式不走 Kotlin 严格检查，不参与脚本规则扫描） */
+function allCodeUnits() {
+  const units = [];
+  for (const file of ALL_FILES) {
+    const text = fs.readFileSync(file, 'utf8');
+    if (file.endsWith('.uts')) units.push({ file, code: text });
+    else for (const s of scriptBlocks(text)) units.push({ file, code: s.code });
+  }
+  return units;
+}
+
 /** A：script setup 顶层函数「调用早于定义」 */
 function scanUseBeforeDefine(scriptCode) {
   const lines = blank(scriptCode).split('\n');
@@ -132,6 +143,16 @@ function scanUntypedNumericConst(cleanText) {
     if (/^\s*(?:export\s+)?(?:const|let)\s+[A-Za-z_$][\w$]*\s*=\s*-?\d+(\.\d+)?\s*;?\s*$/.test(lines[i])) {
       hits.push(lines[i].trim());
     }
+  }
+  return hits;
+}
+
+/** F：裸 String() 强转——Kotlin 无 String(x) 重载（error17），应为 x.toString() */
+function scanBareStringCall(code) {
+  const hits = [];
+  const lines = blank(code).split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    if (/(?<![A-Za-z0-9_$.])String\s*\(/.test(lines[i])) hits.push(lines[i].trim());
   }
   return hits;
 }
@@ -194,6 +215,13 @@ describe('守护自检：检测逻辑对已知违规样本必须报出', () => {
     const map = buildExportedTypeMap();
     expect(map.has('SecureSetResult')).toBe(true);
     expect(map.has('StoredCredentials')).toBe(true);
+  });
+
+  it('F 能报出裸 String() 强转（对照组：toString 与标识符内 String 不报）', () => {
+    expect(scanBareStringCall('const a = String(123)')).toHaveLength(1);
+    expect(scanBareStringCall('const b = x.toString()')).toEqual([]);
+    expect(scanBareStringCall('const c = "String(x) in string"')).toEqual([]);
+    expect(scanBareStringCall('const d = UTSCString(x)')).toEqual([]);
   });
 });
 
@@ -272,6 +300,16 @@ describe('全工程守护：五类 Kotlin 编译地雷零命中', () => {
       for (const h of scanUntypedNumericConst(blank(fs.readFileSync(file, 'utf8')))) {
         violations.push(`${path.relative(ROOT, file)}: ${h}`);
       }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it('F：无裸 String() 强转（Kotlin 无 String(x) 重载，应为 x.toString()）', () => {
+    const violations = [];
+    for (const u of allCodeUnits()) {
+      // app-ios 原生互操作文件用 Swift 编译：String(data:encoding:) 是合法初始化器，不在本规则靶内
+      if (u.file.includes('app-ios')) continue;
+      for (const h of scanBareStringCall(u.code)) violations.push(`${path.relative(ROOT, u.file)}: ${h}`);
     }
     expect(violations).toEqual([]);
   });
