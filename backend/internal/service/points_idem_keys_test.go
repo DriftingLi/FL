@@ -27,7 +27,7 @@ func TestPointsIdemKeyFormats(t *testing.T) {
 		{"contribution_tier", ContributionTierIdemKey(7, 50), "contribution_tier:7:50"},
 		{"checkin", CheckInIdemKey(3, day), "checkin:3:2026-09-05"},
 		// ===== 回收键 =====
-		{"rollback", RollbackIdemKey(101), "rollback:101"},
+		{"rollback", ForumRollbackIdemKey(101), "rollback:101"},
 		{"contribution_rollback", ContributionRollbackIdemKey(7), "contribution_rollback:7"},
 	}
 	for _, tc := range cases {

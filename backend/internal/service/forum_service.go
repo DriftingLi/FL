@@ -52,12 +52,12 @@ func normalizeForumCategory(category string) (string, error) {
 }
 
 // 采纳积分常量（#366）：每帖只发一次分，走流水直记（非任务制）。
+// ReasonRollback（违规回收流水原因）已随回收实现收编移入积分域（#609，points_service.go）。
 const (
 	AcceptBonusPoints   = 40               // 答主采纳奖励
 	AcceptActionPoints  = 5                // 楼主采纳行为奖励
 	ReasonAcceptedBonus = "accepted_bonus" // 流水原因：被采纳奖励
 	ReasonAcceptAction  = "accept_action"  // 流水原因：采纳行为奖励
-	ReasonRollback      = "rollback"       // 流水原因：违规回收（#376）
 )
 
 // ErrNotTopicOwner 只有楼主可采纳/取消/更换。
@@ -736,36 +736,22 @@ func (s *ForumService) incrementDeletedAfterAccepted() error {
 	})
 }
 
-// rollbackAcceptedBonusTx 在事务内执行违规回收：若该帖曾发放 accepted_bonus 且未回滚，则按
-// rollback 原因对冲扣减答主余额（封底 0，幂等）。簿记经 PointsService 事务内通道（ADR-0023）：
-// 占坑键 rollback:{topicID} 即「已处理」标记；余额不足按余额截断、余额为 0 时仅落占坑行
-// （不再写 Delta:0 流水——points_ledger CHECK (delta <> 0)，#384 缺陷修复）。
+// rollbackAcceptedBonusTx 论坛违规回收（#609 收编后的声明式入口）：回收哪个 ref 的哪些
+// reasons 交 PointsService.RollbackByRef 内部完成（原账 SUM 取反、封底 0、占坑防双扣、
+// 存量 rollback 标记防双扣）；占坑键 rollback:{topicID} 即「已处理」标记（格式逐字不动），
+// 余额不足按余额截断、余额为 0 时仅落占坑行（不再写 Delta:0 流水——#384 缺陷修复语义）。
+// 占坑冲突（已回收过）按论坛语义静默放行：删帖动作不因重复回收失败（ADR-0023 映射契约）。
 func (s *ForumService) rollbackAcceptedBonusTx(tx *gorm.DB, topicID int64) error {
-	// 幂等：已存在 rollback 流水（存量数据标记）则跳过；占坑行接管后续幂等
-	var existed int64
-	if err := tx.Model(&model.PointsLedger{}).Where("reason = ? AND ref_type = ? AND ref_id = ?", ReasonRollback, "forum_topic", fmt.Sprintf("%d", topicID)).Count(&existed).Error; err != nil {
-		return err
-	}
-	if existed > 0 {
-		return nil
-	}
-	// 查找原发放流水（取最近一条）
-	var orig model.PointsLedger
-	if err := tx.Where("reason = ? AND ref_type = ? AND ref_id = ?", ReasonAcceptedBonus, "forum_topic", fmt.Sprintf("%d", topicID)).Order("created_at DESC").First(&orig).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil
-		}
-		return err
-	}
-	if orig.Delta <= 0 {
-		return nil
-	}
-	return s.points.SettleRewardTx(tx, PointsEntry{
-		UserID: orig.UserID, Delta: -orig.Delta, Reason: ReasonRollback,
-		RefType: "forum_topic", RefID: fmt.Sprintf("%d", topicID),
-		IdemKey:   RollbackIdemKey(topicID),
-		FloorZero: true,
+	_, err := s.points.RollbackByRef(tx, PointsRollback{
+		RefType: "forum_topic",
+		RefID:   fmt.Sprintf("%d", topicID),
+		Reasons: []string{ReasonAcceptedBonus},
+		IdemKey: ForumRollbackIdemKey(topicID),
 	})
+	if errors.Is(err, ErrPointsProcessed) {
+		return nil
+	}
+	return err
 }
 
 // DeleteReply 删除回复（仅作者本人；其下级回复随外键级联删除）。

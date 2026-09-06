@@ -205,6 +205,17 @@ func NewPointsService(db *gorm.DB, logger *zap.Logger, clk clock.Clock) *PointsS
 	return &PointsService{db: db, logger: logger, clk: clk}
 }
 
+// tryLock 瞬态并发护栏锁单点（#609 内聚，直记入口 Claim/redeem/DeductAI/AdminPenalty 共用，
+// 前奏仅锁键/TTL 不同）：Redis SetNX 占锁成功返回释放函数（调用方 defer）；Redis 不可用或
+// 已被占时不阻断主流程——锁只是进程级双写护栏，最终裁决由唯一索引/占坑表承担（ADR-0023）。
+// 锁键为瞬态锁面（points:grant:* / shop:* / ai:tokens:* / points:penalty:*），不属幂等占坑键，格式保持现状。
+func (s *PointsService) tryLock(ctx context.Context, key string, ttl time.Duration) (release func()) {
+	if ok, err := cache.SetNX(ctx, key, "1", ttl); err == nil && ok {
+		return func() { _ = cache.Del(ctx, key) }
+	}
+	return func() {}
+}
+
 // shanghaiDate 当前业务自然日日期字符串（Asia/Shanghai）。
 func (s *PointsService) shanghaiDate() string {
 	return clock.DayKey(s.clk.Now())
@@ -580,9 +591,8 @@ func (s *PointsService) Claim(ctx context.Context, userID int, taskCode string) 
 	} else {
 		lockKey += ":once"
 	}
-	if ok, err := cache.SetNX(ctx, lockKey, "1", 5*time.Second); err == nil && ok {
-		defer func() { _ = cache.Del(ctx, lockKey) }()
-	}
+	release := s.tryLock(ctx, lockKey, 5*time.Second)
+	defer release()
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		// 1. 占坑（唯一索引并发裁决；幂等冲突按任务臂映射为对应文案）
 		claim := model.PointsTaskClaim{UserID: userID, TaskCode: taskCode}
@@ -631,6 +641,75 @@ func (s *PointsService) SettleRewardTx(tx *gorm.DB, e PointsEntry) error {
 	return err
 }
 
+// ReasonRollback 回收对冲流水的统一 reason（#376 起；#609 起由 RollbackByRef 单点写入）。
+// 常量随回收实现收编移入积分域（原定义在 forum_service）：回收语义归 points 所有，
+// forum/contribution 只是声明方。
+const ReasonRollback = "rollback"
+
+// PointsRollback 回收对冲的声明面（#609）：调用方声明「回收哪个 ref 的哪些 reasons」，
+// 原账聚合取反、封底 0、占坑防双扣全部由 RollbackByRef 内部完成，域内不再手写对冲。
+type PointsRollback struct {
+	RefType string
+	RefID   string
+	// Reasons 要回收的原账流水 reason 集（如 [accepted_bonus]；[contribution_approved, contribution_tier]）。
+	Reasons []string
+	// IdemKey 幂等占坑键（points_entry_idem 主键），由调用方经 #608 域构造器传入
+	// （ForumRollbackIdemKey / ContributionRollbackIdemKey）——回收事件是终态事件，
+	// 键格式逐字节不动（改格式 = 同一事件重放拿到新键 → 双重追回），积分域不感知各域键规则。
+	IdemKey string
+}
+
+// RollbackByRef 回收对冲深方法（#609，ADR-0023 回收臂单点）：按 (refType, refID, reasons)
+// 聚合原账正向流水（SUM，按用户分组）取反入账，封底 0（FloorZero），占坑防双扣，事务内落账。
+// 返回声明回收的分值（原账合计，封底截断前——实际扣减按余额截断、余额为 0 时仅落占坑行无流水）。
+// 幂等三层：同 ref 已有 rollback 流水（存量数据标记，先于占坑表存在）→ 已对冲过跳过不双扣；
+// 原账为零 → 无事可收不占坑；占坑冲突 → ErrPointsProcessed（事件已处理过，调用方按各自
+// 语义映射——ADR-0023 契约）。
+func (s *PointsService) RollbackByRef(tx *gorm.DB, r PointsRollback) (int, error) {
+	// 存量标记：占坑表上线前的 rollback 流水无占坑行，有标记即已对冲过
+	var rolledBack int64
+	if err := tx.Model(&model.PointsLedger{}).
+		Where("reason = ? AND ref_type = ? AND ref_id = ?", ReasonRollback, r.RefType, r.RefID).
+		Count(&rolledBack).Error; err != nil {
+		return 0, err
+	}
+	if rolledBack > 0 {
+		return 0, nil
+	}
+	// 原账聚合：ref 全局唯一、正常恰属一个用户；防御性按用户分组（多组共享同一事件坑，
+	// 坑随首组占，余组不再传键——同事务同键会自冲突）
+	type origUser struct {
+		UserID int
+		Earned int64
+	}
+	var groups []origUser
+	if err := tx.Model(&model.PointsLedger{}).
+		Select("user_id, COALESCE(SUM(delta),0) AS earned").
+		Where("ref_type = ? AND ref_id = ? AND reason IN ? AND delta > 0", r.RefType, r.RefID, r.Reasons).
+		Group("user_id").
+		Scan(&groups).Error; err != nil {
+		return 0, err
+	}
+	if len(groups) == 0 {
+		return 0, nil
+	}
+	clawed := 0
+	for i, g := range groups {
+		entry := PointsEntry{
+			UserID: g.UserID, Delta: -int(g.Earned), Reason: ReasonRollback,
+			RefType: r.RefType, RefID: r.RefID, FloorZero: true,
+		}
+		if i == 0 {
+			entry.IdemKey = r.IdemKey
+		}
+		if _, err := ApplyTx(tx, entry); err != nil {
+			return 0, err
+		}
+		clawed += int(g.Earned)
+	}
+	return clawed, nil
+}
+
 // RedeemResult 兑换结果
 type RedeemResult struct {
 	Balance     int    `json:"balance"`
@@ -654,9 +733,8 @@ type redeemOpts struct {
 // 幂等键 redeem:{sku}（ADR-0023）：占坑冲突映射为「已兑换」，整笔事务回滚；
 // 余额扣减经 ApplyTx 守卫（`points_balance >= ?` + RowsAffected 校验），并发双花不击穿余额。
 func (s *PointsService) redeem(ctx context.Context, userID int, o redeemOpts) (*RedeemResult, error) {
-	if ok, err := cache.SetNX(ctx, o.lockKey, "1", 5*time.Second); err == nil && ok {
-		defer func() { _ = cache.Del(ctx, o.lockKey) }()
-	}
+	release := s.tryLock(ctx, o.lockKey, 5*time.Second)
+	defer release()
 	// 已拥有校验
 	var entCnt int64
 	_ = s.db.Model(&model.UserEntitlement{}).Where("user_id = ? AND sku = ? AND ref_id = ?", userID, o.sku, o.refID).Count(&entCnt).Error
@@ -842,9 +920,8 @@ func (s *PointsService) DeductAI(ctx context.Context, userID int, requestID stri
 	total, prompt, completion := estimateAITokens(promptChars, completionChars)
 	points := aiPointsForTokens(total)
 	lockKey := fmt.Sprintf("ai:tokens:%d:%s", userID, requestID)
-	if ok, err := cache.SetNX(ctx, lockKey, "1", 60*time.Second); err == nil && ok {
-		defer func() { _ = cache.Del(ctx, lockKey) }()
-	}
+	release := s.tryLock(ctx, lockKey, 60*time.Second)
+	defer release()
 	// 幂等：同一 requestId 已扣过则直接返回
 	var cnt int64
 	_ = s.db.Model(&model.PointsLedger{}).Where("user_id = ? AND ref_id = ? AND reason = ?", userID, requestID, "ai_tokens").Count(&cnt).Error
@@ -895,9 +972,8 @@ func (s *PointsService) AdminPenalty(ctx context.Context, adminID, userID, delta
 		return 0, ErrEmptyPenaltyReason
 	}
 	lockKey := fmt.Sprintf("points:penalty:%d", userID)
-	if ok, err := cache.SetNX(ctx, lockKey, "1", 5*time.Second); err == nil && ok {
-		defer func() { _ = cache.Del(ctx, lockKey) }()
-	}
+	release := s.tryLock(ctx, lockKey, 5*time.Second)
+	defer release()
 	var user model.HrwaiUser
 	if err := s.db.First(&user, userID).Error; err != nil {
 		return 0, ErrUserNotFound
