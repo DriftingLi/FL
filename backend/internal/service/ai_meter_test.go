@@ -1,8 +1,8 @@
-// Package service AI 计量闸门测试（ADR-0031，#619）：billed 两分支（注册表驱动 + 借键
-// 逃费防护）、金额等价（同输入同输出）、幂等键透传与降级键、预检阻断短路、自动命名
-// billed=false 不扣费，以及「计费金额 diff=0」迁移契约——迁移前 handler 编排（本文件
-// legacyHandlerBillingPipeline 原样复刻）与迁移后 metered 端口对同一请求序列产生的
-// 扣费流水与 usage 数据面逐行断言一致。
+// Package service AI 计量闸门测试（ADR-0031，#619）：billed 两分支（注册表驱动 + 借键/
+// 空键/未知键逃费防护）、计费事实声明优先（DTO 层 promptChars，注记文本不计费）、金额
+// 等价（同输入同输出）、幂等键透传与降级键、预检阻断短路、自动命名 billed=false 不扣费，
+// 以及「计费金额 diff=0」迁移契约——迁移前 handler 编排（本文件 legacyHandlerBillingPipeline
+// 原样复刻）与迁移后 metered 端口对同一请求序列产生的扣费流水与 usage 数据面逐行断言一致。
 package service
 
 import (
@@ -76,8 +76,8 @@ func newMeteredStack(content string, meter *fakeAIMeter) (AIModelPort, *fakeAIMo
 }
 
 // TestAIMeterBilledBranches billed 两分支：注册表对话功能过闸（预检 + 扣费，事实透传）；
-// 游客与空回复不产生扣费；免费声明（WithAIMeterFree）跳过闸门；借免费功能键发起的
-// 对话不逃费（回退通用对话计费）。
+// 游客与空回复不产生扣费；免费声明（withAIMeterFree）跳过闸门；借免费功能键、空键与
+// 未知键发起的对话不逃费（回退通用对话计费）。
 func TestAIMeterBilledBranches(t *testing.T) {
 	ctx := context.Background()
 	meter := &fakeAIMeter{}
@@ -123,7 +123,7 @@ func TestAIMeterBilledBranches(t *testing.T) {
 	// 显式免费声明：内部二次消费跳过闸门（自动命名路径）
 	meter4 := &fakeAIMeter{}
 	port4, _ := newMeteredStack("标题", meter4)
-	_, usage4, err := port4.Stream(WithAIMeterFree(ctx),
+	_, usage4, err := port4.Stream(withAIMeterFree(ctx),
 		AIModelSelector{FeatureKey: FeatureFaultConsult, UserID: 7}, msgs, nil)
 	if err != nil || usage4 != nil {
 		t.Fatalf("免费声明调用不应计费: usage=%+v err=%v", usage4, err)
@@ -141,6 +141,49 @@ func TestAIMeterBilledBranches(t *testing.T) {
 	}
 	if n1, n2, _, _, _ := meter5.snapshot(); n1 != 1 || n2 != 1 {
 		t.Fatalf("借键对话应过闸: preflight=%d deduct=%d", n1, n2)
+	}
+
+	// 空功能键与未知键：经解析阶梯回退通用对话 → 计费（不逃费，回退口径直测）
+	for name, key := range map[string]string{"空功能键": "", "未知功能键": "no_such_feature"} {
+		m := &fakeAIMeter{}
+		p, _ := newMeteredStack("回复内容", m)
+		_, u, err := p.Stream(ctx, AIModelSelector{FeatureKey: key, UserID: 7}, msgs, nil)
+		if err != nil || u == nil || u.Res == nil {
+			t.Fatalf("%s对话应回退通用计费: usage=%+v err=%v", name, u, err)
+		}
+		if n1, n2, _, _, _ := m.snapshot(); n1 != 1 || n2 != 1 {
+			t.Fatalf("%s对话应过闸: preflight=%d deduct=%d", name, n1, n2)
+		}
+	}
+}
+
+// TestAIMeterDeclaredPromptCharsWins 计费事实声明优先（口径锚定请求 DTO 层）：meter 取调用方
+// 声明的 promptChars，端口消息推导仅作未声明时的回退——传输重组注入的注记文本不参与计费。
+func TestAIMeterDeclaredPromptCharsWins(t *testing.T) {
+	ctx := context.Background()
+	meter := &fakeAIMeter{}
+	port, _ := newMeteredStack("回复", meter)
+	// 端口消息含长文本（推导会取其长度），声明值为 0（DTO 纯图片消息 Content 为空）
+	msgs := []*schema.Message{schema.UserMessage("[部分图片加载失败: 注记文本不参与计费]")}
+
+	_, usage, err := port.Stream(withAIPromptChars(WithAIRequestID(ctx, "req-declared"), 0),
+		AIModelSelector{FeatureKey: FeatureFaultConsult, UserID: 7}, msgs, nil)
+	if err != nil || usage == nil || usage.Res == nil {
+		t.Fatalf("声明路径调用异常: usage=%+v err=%v", usage, err)
+	}
+	if _, _, pc, _, _ := meter.snapshot(); pc != 0 {
+		t.Fatalf("应取声明值 0 而非端口消息推导: promptChars=%d", pc)
+	}
+
+	// 未声明：回退端口消息推导
+	meter2 := &fakeAIMeter{}
+	port2, _ := newMeteredStack("回复", meter2)
+	if _, _, err := port2.Stream(WithAIRequestID(ctx, "req-fallback"),
+		AIModelSelector{FeatureKey: FeatureFaultConsult, UserID: 7}, msgs, nil); err != nil {
+		t.Fatalf("回退路径调用失败: %v", err)
+	}
+	if _, _, pc, _, _ := meter2.snapshot(); pc != len(msgs[0].Content) {
+		t.Fatalf("未声明应回退端口消息推导: promptChars=%d want=%d", pc, len(msgs[0].Content))
 	}
 }
 
@@ -239,7 +282,7 @@ func TestAIMeterPromptChars(t *testing.T) {
 
 // TestAIMeterAutoTitleNoDoubleCharge 自动命名 billed=false 不扣费（端到端）：
 // 主对话（占坑标题会话首次发消息）过闸扣费一次；service 内部追加的标题生成第二次
-// port 调用经 WithAIMeterFree 显式免费——不预检、不扣费，无双扣。
+// port 调用经 withAIMeterFree 显式免费——不预检、不扣费，无双扣。
 func TestAIMeterAutoTitleNoDoubleCharge(t *testing.T) {
 	db := testutil.NewFileDB(t)
 	cfgSvc := NewAIConfigService(db, "test-master-key", zap.NewNop())
@@ -298,7 +341,8 @@ func TestAIMeterAutoTitleNoDoubleCharge(t *testing.T) {
 type billingFacts struct {
 	userID     int
 	requestID  string // RequestID 中间件注入（空 = 现场降级）
-	prompt     string // 最后一条用户消息原文
+	prompt     string // 最后一条用户消息 DTO Content（计费口径事实；纯图片消息为空串）
+	portText   string // 传输层重组后消息中的文本（多模态首文本 part；空 = 同 prompt；图片全加载失败时为注记文本）
 	content    string // 模型回复全文
 	multimodal bool   // 原文以多模态消息首文本 part 承载（图片消息）
 }
@@ -325,21 +369,28 @@ func legacyHandlerBillingPipeline(ctx context.Context, points *PointsService, f 
 }
 
 // meteredHandlerPipeline 迁移后路径：同一请求事实经 metered 端口（真实积分域 meter +
-// fake 传输 adapter）——闸门在端口内单点，调用方不再编排。
+// fake 传输 adapter）——闸门在端口内单点，调用方不再编排。service 在 DTO 可见作用域随
+// 计费意图声明 promptChars（len(最后一条消息 DTO Content)，与迁移前 handler 取值逐字一致），
+// 端口消息中的传输重组文本（portText，如加载失败注记）不参与计费。
 func meteredHandlerPipeline(ctx context.Context, port AIModelPort, f billingFacts, ctxReqID string) (string, *AIUsage, error) {
 	callCtx := ctx
 	if ctxReqID != "" {
 		callCtx = WithAIRequestID(callCtx, ctxReqID)
 	}
+	callCtx = withAIPromptChars(callCtx, len(f.prompt))
 	msgs := []*schema.Message{schema.SystemMessage(forkliftExpertSystemPrompt)}
+	portText := f.prompt
+	if f.portText != "" {
+		portText = f.portText
+	}
 	if f.multimodal {
 		b64 := "aGk="
 		msgs = append(msgs, &schema.Message{Role: schema.User, UserInputMultiContent: []schema.MessageInputPart{
-			{Type: schema.ChatMessagePartTypeText, Text: f.prompt},
+			{Type: schema.ChatMessagePartTypeText, Text: portText},
 			{Type: schema.ChatMessagePartTypeImageURL, Image: &schema.MessageInputImage{MessagePartCommon: schema.MessagePartCommon{Base64Data: &b64}}},
 		}})
 	} else {
-		msgs = append(msgs, schema.UserMessage(f.prompt))
+		msgs = append(msgs, schema.UserMessage(portText))
 	}
 	sel := AIModelSelector{FeatureKey: FeatureFaultConsult, UserID: f.userID}
 	return port.Stream(callCtx, sel, msgs, nil)
@@ -379,6 +430,7 @@ func TestAIMeteringAmountDiffZero(t *testing.T) {
 		requestID   string
 		prompt      string
 		content     string
+		portText    string // 传输层重组文本（空 = 同 prompt；图片全加载失败时为注记）
 		multimodal  bool
 		wantErr     error
 		fallbackKey bool // requestID 缺失 → 两侧各自现场降级，仅比对键格式
@@ -392,6 +444,7 @@ func TestAIMeteringAmountDiffZero(t *testing.T) {
 		{name: "空回复不扣费", balance: 1000, userID: 42, requestID: "req-5", prompt: "空回复提问", content: ""},
 		{name: "余额不足预检阻断", balance: 0, userID: 42, requestID: "req-6", prompt: "余额不足提问", content: "不应到达", wantErr: ErrInsufficientPoints},
 		{name: "多模态图文消息同口径", balance: 1000, userID: 42, requestID: "req-7", prompt: "这张液压图里的部件是什么？", content: "图中是多路阀与先导阀组。", multimodal: true},
+		{name: "纯图片全部加载失败（DTO 零口径，注记不计费）", balance: 1000, userID: 42, requestID: "req-8", prompt: "", portText: "[部分图片加载失败: 模拟解码失败注记]", content: "未能识别图片内容，请重新上传或直接文字描述问题。", multimodal: true},
 	}
 
 	// 两侧同构环境：各自独立 DB + 积分域实现；迁移侧以真实 metered 端口 + fake 传输。
@@ -434,7 +487,7 @@ func TestAIMeteringAmountDiffZero(t *testing.T) {
 		innerNew.content = st.content
 		innerNew.mu.Unlock()
 		contentNew, usageNew, errNew := meteredHandlerPipeline(ctx, portNew, billingFacts{
-			userID: effNew, requestID: st.requestID, prompt: st.prompt, content: st.content, multimodal: st.multimodal,
+			userID: effNew, requestID: st.requestID, prompt: st.prompt, portText: st.portText, content: st.content, multimodal: st.multimodal,
 		}, st.requestID)
 
 		// 错误面等价
@@ -499,9 +552,10 @@ func TestAIMeteringAmountDiffZero(t *testing.T) {
 	for _, r := range oldAll {
 		deltas = append(deltas, r.Delta)
 	}
-	// 预期金额序列：常规(-10) + 降级键(-10) + 兜底(-10) + 大额封顶(-100) + 多模态(-10)；
+	// 预期金额序列：常规(-10) + 降级键(-10) + 兜底(-10) + 大额封顶(-100) + 多模态(-10) +
+	// 纯图片全失败(-10，DTO 零口径、注记文本不计入 prompt)；
 	// 重放幂等无新行、游客/空回复/预检阻断无行
-	wantDeltas := []int{-10, -10, -10, -100, -10}
+	wantDeltas := []int{-10, -10, -10, -100, -10, -10}
 	if len(deltas) != len(wantDeltas) {
 		t.Fatalf("扣费次数不符（重放/游客/空回复/阻断均不得扣费）: %v", deltas)
 	}

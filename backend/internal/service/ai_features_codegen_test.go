@@ -111,6 +111,35 @@ func TestRenderFrontendAIFeaturesKeyShape(t *testing.T) {
 	}
 }
 
+// TestFrontendIncludeMatchesChatKeys 收录谓词与 featureChatKeys 全表互等（消除双写漂移面）：
+// 收录规则唯一编码于 aiFeatureIsChat，本断言钉住组合关系——前端收录行集合恒等于
+// featureChatKeys 键集（任一侧被改动偏离即红）。
+func TestFrontendIncludeMatchesChatKeys(t *testing.T) {
+	var included []string
+	for _, f := range ExportAIFeatureRegistry() {
+		if aiFrontendFeatureInclude(f) {
+			included = append(included, f.Name)
+		}
+	}
+	if len(included) != len(featureChatKeys) {
+		t.Fatalf("前端收录集合与 featureChatKeys 大小不等: included=%v chatKeys=%v", included, featureChatKeys)
+	}
+	for _, k := range included {
+		if !featureChatKeys[k] {
+			t.Fatalf("收录行 %q 不在 featureChatKeys 中", k)
+		}
+	}
+	for k := range featureChatKeys {
+		f, ok := lookupAIFeature(aiFeatureRegistry, k)
+		if !ok {
+			t.Fatalf("featureChatKeys 键 %q 不在注册表中", k)
+		}
+		if !aiFrontendFeatureInclude(AIFeatureExport{Name: f.name, BindingKind: string(f.bindingKind), Billed: f.billed}) {
+			t.Fatalf("featureChatKeys 键 %q 未被收录谓词命中", k)
+		}
+	}
+}
+
 // TestFrontendAIFeaturesTSInSync 生成物一致性契约（ADR-0030 验收 2，#613）：真实注册表渲染
 // 结果与 frontend/src/config/aiFeatures.ts 全等。手改生成物或改注册表未再生成时本测试红，
 // 提示重新生成（go run ./cmd/gen-aifeatures）。行尾归一仅防 Windows 检出差异假红

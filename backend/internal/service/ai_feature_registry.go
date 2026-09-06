@@ -186,16 +186,39 @@ func deriveFeatureLabel(reg []aiFeature) map[string]string {
 	return m
 }
 
-// deriveFeatureChatKeys 派生专项对话功能键集合：管理端单绑定且计费的功能
+// aiFeatureIsChat 专项对话功能判定（规则唯一编码）：管理端单绑定且声明计费。
+// deriveFeatureChatKeys（会话键派生）、前端功能配置收录谓词（ai_features_codegen.go）与
+// 对话计费声明查询（aiFeatureChatBilled 的对话形态分支）全部经本谓词取用，消除规则双写；
+// 组合关系（收录集合 ⟺ featureChatKeys 键集）由 ai_features_codegen_test.go 全表互等断言钉住。
+func aiFeatureIsChat(kind aiBindingKind, billed bool) bool {
+	return kind == bindingAdminSingle && billed
+}
+
+// deriveFeatureChatKeys 派生专项对话功能键集合：aiFeatureIsChat（管理端单绑定且计费）的功能
 // （计费口径 = 仅助手对话，CONTEXT.md「AI 计费」；故 admin-single + billed ⟺ 对话消费）。
 func deriveFeatureChatKeys(reg []aiFeature) map[string]bool {
 	m := make(map[string]bool)
 	for _, f := range reg {
-		if f.bindingKind == bindingAdminSingle && f.billed {
+		if aiFeatureIsChat(f.bindingKind, f.billed) {
 			m[f.name] = true
 		}
 	}
 	return m
+}
+
+// aiFeatureChatBilled 对话计费声明单点（闸门 Stream 流向唯一查询入口，ADR-0031 决策 2）：
+// 对话形态注册行返回其 billed 声明；非对话形态行、未注册键与空键回退 true——空键/未知键/
+// billed=false 的阻塞功能键经 ResolveChatSettings 解析阶梯（专项单绑定 → 双模式 → 旧来源）
+// 最终都落为通用对话，按通用对话计费（CONTEXT.md「AI 计费」：仅助手对话计费），防止借免费
+// 功能键逃费。对话形态 = 双模式绑定 / 遗留兼容位 / 专项聊天（aiFeatureIsChat），与解析阶梯的
+// 对话分支一一对应；判定住注册表文件，meter 不编码绑定形态知识。迁移时全部对话行
+// billed=true（结构上恒真），产品决策把某对话行改为 billed=false 时闸门即跟随。
+func aiFeatureChatBilled(featureKey string) bool {
+	f, ok := lookupAIFeature(aiFeatureRegistry, featureKey)
+	if ok && (f.bindingKind == bindingAssistantMode || f.bindingKind == bindingAssistantLegacy || aiFeatureIsChat(f.bindingKind, f.billed)) {
+		return f.billed
+	}
+	return true
 }
 
 // AllAIFeatures 全部 AI 功能键列表（用于绑定列表的全量展示；遗留 ai_assistant 不进展示）。

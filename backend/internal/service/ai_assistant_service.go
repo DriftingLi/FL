@@ -363,7 +363,7 @@ func (s *AIAssistantService) generateTitleWithModel(ctx context.Context, sel AIM
 		schema.SystemMessage("你是一个会话标题生成助手，根据用户消息生成简短的中文标题。"),
 		schema.UserMessage(fmt.Sprintf(titlePrompt, userMessage)),
 	}
-	title, _, err := s.port.Stream(WithAIMeterFree(ctx), sel, msgs, nil)
+	title, _, err := s.port.Stream(withAIMeterFree(ctx), sel, msgs, nil)
 	return title, err
 }
 
@@ -515,7 +515,16 @@ func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req Str
 		}
 	}
 
-	fullContent, usage, err := s.port.Stream(ctx, sel, msgs, onChunk)
+	// 计费事实随计费意图声明（口径锚定请求 DTO，与迁移前 handler 取值逐字一致：最后一条
+	// 消息原文长度）。多模态消息经 buildImageUserMessage 重组，图片全部加载失败时注入的
+	// 注记文本只存在于传输层消息——DTO Content 才是口径事实，注记不参与计费。声明经 ctx
+	// 透传给端口上的计量闸门（ADR-0031），meter 优先取声明值、未声明才回退端口消息推导。
+	var promptChars int
+	if len(req.Messages) > 0 {
+		promptChars = len(req.Messages[len(req.Messages)-1].Content)
+	}
+
+	fullContent, usage, err := s.port.Stream(withAIPromptChars(ctx, promptChars), sel, msgs, onChunk)
 	if err != nil {
 		return fullContent, usage, err
 	}

@@ -31,11 +31,12 @@ func ExportAIFeatureRegistry() []AIFeatureExport {
 	return out
 }
 
-// aiFrontendFeatureInclude 前端功能配置收录规则 = 管理端单绑定 ∧ 声明计费（deriveFeatureChatKeys
-// 同一口径：学员可直接发起专项对话的功能）。路由/文案/图标等展示数据属前端域，在
-// aiFeatureUI.ts 手写维护，不进生成面。
+// aiFrontendFeatureInclude 前端功能配置收录规则 = aiFeatureIsChat（管理端单绑定 ∧ 声明计费，
+// 规则唯一编码于 ai_feature_registry.go，与 deriveFeatureChatKeys 同一谓词；组合关系由
+// ai_features_codegen_test.go 全表互等断言钉住）：学员可直接发起专项对话的功能。
+// 路由/文案/图标等展示数据属前端域，在 aiFeatureUI.ts 手写维护，不进生成面。
 func aiFrontendFeatureInclude(f AIFeatureExport) bool {
-	return f.BindingKind == string(bindingAdminSingle) && f.Billed
+	return aiFeatureIsChat(aiBindingKind(f.BindingKind), f.Billed)
 }
 
 // aiFeatureKeyPattern 功能键合法形态（snake_case）：生成 TS 联合类型与对象键的前提。
