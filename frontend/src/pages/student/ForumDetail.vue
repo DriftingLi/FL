@@ -205,7 +205,8 @@ const replyImages = ref<string[]>([])
 const { sort: replySort, order: replyOrder, flipOrder: flipReplyOrder } = useForumSort('asc')
 
 // 三态收编（#388，详情页无分页）：loader 抛错即错误态
-const { loading, loadError, retrying, retry: retryLoad, run: loadDetail } = useAsyncPage(loadDetailOnce)
+// 论坛不受证件过滤，不随切换重装（#604 opt-out）
+const { loading, loadError, retrying, retry: retryLoad, run: loadDetail } = useAsyncPage(loadDetailOnce, { credentialScoped: false })
 
 function handleReplySortChange() {
   // 热门默认逆序，最新默认正序

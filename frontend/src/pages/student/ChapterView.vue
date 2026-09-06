@@ -207,7 +207,10 @@ const { loading, loadError, retrying, retry: retryLoadChapter, run: loadChapterD
         throw error
       }
     }
-  }
+  },
+  // 学习位置/进行中学习的证件切换联动属 #594 Out of Scope（另案决策），
+  // 本页保持现状不随切换重装——loader 内含学习计时上报副作用，重装会重复上报（#604 opt-out）
+  { credentialScoped: false }
 )
 
 // 学习状态（ADR-0017）：每课程加载一次（切章不重复请求），

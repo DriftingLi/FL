@@ -63,7 +63,7 @@ const {
   retrying,
   retry: retryLoad,
   run: loadTopics
-} = useAsyncPage(loadTopicsOnce)
+} = useAsyncPage(loadTopicsOnce, { credentialScoped: false }) // 论坛不受证件过滤（#604 opt-out）
 
 async function toggleTopic(topicId: number) {
   if (expandedTopicId.value === topicId) {

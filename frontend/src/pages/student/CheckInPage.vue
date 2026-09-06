@@ -178,11 +178,15 @@ const rankPage = ref(1)
 const rankPageSize = ref(20)
 const rankLoading = ref(false)
 
-const { loading, loadError, retrying, retry: retryLoad, run: refresh } = useAsyncPage(async () => {
-  const cal = await checkInApi.getCalendar({ year: viewYear.value, month: viewMonth.value })
-  calendar.value = cal
-  return true
-})
+// 打卡不按当前证件分区（checkin 服务无 credential 口径），不随切换重装（#604 opt-out）
+const { loading, loadError, retrying, retry: retryLoad, run: refresh } = useAsyncPage(
+  async () => {
+    const cal = await checkInApi.getCalendar({ year: viewYear.value, month: viewMonth.value })
+    calendar.value = cal
+    return true
+  },
+  { credentialScoped: false }
+)
 
 const checkedByDate = computed(() => {
   const m = new Map<string, CheckInDay>()

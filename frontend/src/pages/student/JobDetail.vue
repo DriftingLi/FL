@@ -94,11 +94,14 @@ const {
   retrying,
   retry: handleRetry,
   run: load
-} = useAsyncPage(async () => {
-  const id = Number(route.params.id)
-  const res = await jobApi.getPublicJob(id)
-  data.value = (res as any) || null
-})
+} = useAsyncPage(
+  async () => {
+    const id = Number(route.params.id)
+    const res = await jobApi.getPublicJob(id)
+    data.value = (res as any) || null
+  },
+  { credentialScoped: false } // 招聘域不受证件过滤（#604 opt-out）
+)
 
 // #488：可投递 = 无记录或冷却期满/已撤回
 const canApply = computed(() => {

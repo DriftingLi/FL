@@ -117,7 +117,6 @@ import NoteCard from '@/components/practice/NoteCard.vue'
 import { questionInteractionApi } from '@/api/questionInteraction'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useStagger } from '@/composables/useStagger'
-import { useCredentialRefetch } from '@/composables/useCredentialRefetch'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
@@ -204,11 +203,8 @@ function toggleSelectAll(val: boolean){
 onMounted(() => loadData())
 watch([filterType, sortOrder, filterFavorited, filterMultiWrong], () => { page.value = 1; loadData() })
 
-// 证件切换即重拉（#387：错题本按当前证件分区，后端 credential_id 过滤）
-useCredentialRefetch(() => {
-  page.value = 1
-  loadData()
-})
+// 证件切换即重拉（#605：错题本按当前证件分区，失效刷新已内聚进 useAsyncPage，
+// 回第一页、筛选条件原样保留）
 
 function toggleSort() {
   sortOrder.value = sortOrder.value === 'desc' ? 'asc' : 'desc'

@@ -68,7 +68,6 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useCredentialStore } from '@/stores/credential'
 import { realExamApi, type RealExamPaper } from '@/api/realExam'
-import { useCredentialRefetch } from '@/composables/useCredentialRefetch'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useStagger } from '@/composables/useStagger'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
@@ -101,10 +100,8 @@ const emptyDescription = computed(() =>
   currentCredentialName.value ? `${currentCredentialName.value} 真题建设中，敬请期待` : '真题建设中，敬请期待'
 )
 
-// 首屏加载 + 证件切换即重拉（单点：watch store.current.id，见 useCredentialRefetch；
-// 列表按 current_credential 分区）
+// 首屏加载（#605：证件切换即重拉已内聚进 useAsyncPage——列表按 current_credential 分区）
 onMounted(loadPapers)
-useCredentialRefetch(loadPapers)
 
 const grouped = computed(() => {
   const map = new Map<string, RealExamPaper[]>()

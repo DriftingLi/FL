@@ -157,16 +157,19 @@ const {
   total,
   run: refresh,
   handlePageChange
-} = useAsyncPage(async () => {
-  const [bal, ledgerRes] = await Promise.all([
-    pointsApi.getBalance(),
-    // #512：收支方向由后端分页过滤（direction 透传），前端不跨页漏项
-    pointsApi.getLedger({ page: page.value, page_size: pageSize.value, direction: filter.value === 'all' ? undefined : filter.value })
-  ])
-  balance.value = { ...balance.value, ...bal }
-  ledger.value = ledgerRes
-  total.value = ledgerRes.total || 0
-})
+} = useAsyncPage(
+  async () => {
+    const [bal, ledgerRes] = await Promise.all([
+      pointsApi.getBalance(),
+      // #512：收支方向由后端分页过滤（direction 透传），前端不跨页漏项
+      pointsApi.getLedger({ page: page.value, page_size: pageSize.value, direction: filter.value === 'all' ? undefined : filter.value })
+    ])
+    balance.value = { ...balance.value, ...bal }
+    ledger.value = ledgerRes
+    total.value = ledgerRes.total || 0
+  },
+  { credentialScoped: false } // 积分不按当前证件分区，不随切换重置页码（#604 opt-out）
+)
 
 function ledgerReasonLabel(reason: string, delta: number): string {
   // 未收录 reason 按 delta 方向给默认文案，label 兜底原文

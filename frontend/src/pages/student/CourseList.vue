@@ -233,7 +233,6 @@ import { pointsApi } from '@/api/points'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useCourseCatalog, treeCatalogAdapter } from '@/composables/useCourseCatalog'
 import { useStagger } from '@/composables/useStagger'
-import { useCredentialRefetch } from '@/composables/useCredentialRefetch'
 import { useCredentialStore } from '@/stores/credential'
 import FacetCard from '@/components/catalog/FacetCard.vue'
 import FacetItem from '@/components/catalog/FacetItem.vue'
@@ -267,6 +266,7 @@ const tabOptions = [
 ]
 
 // 三态 + 分页三件套收编（#388）：loader 只负责拉数据与写响应
+// （#605：证件切换即重拉已内聚进 useAsyncPage——回第一页、tab/方向/等级筛选词原样保留）
 const {
   loading,
   loadError,
@@ -510,12 +510,6 @@ onMounted(() => {
   if (queryCourseId > 0) {
     openDetailById(queryCourseId)
   }
-})
-
-// 证件切换即重拉（单点：watch store.current.id，见 useCredentialRefetch）
-useCredentialRefetch(() => {
-  currentPage.value = 1
-  loadCourses()
 })
 </script>
 
