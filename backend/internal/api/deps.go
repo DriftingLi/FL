@@ -102,12 +102,14 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 	reviewSvc := service.NewProfileReviewService(db, notificationSvc, st, logger)
 	authSvc.SetProfileReviewService(reviewSvc)
 	aiConfigSvc := service.NewAIConfigService(db, cfg.SecretKey, logger)
-	// 单一模型端口（ADR-0029 T2）：唯一 eino adapter 实例，阻塞/流式消费方共享同一 client 签名缓存
-	aiModelPort := service.NewEinoAIModel(aiConfigSvc, logger)
-	aiSvc := service.NewAIService(db, aiModelPort, logger)
-	contentGenSvc := service.NewContentGenerateService(db, aiSvc, logger)
 	// 积分服务唯一实例：积分端点与真题卷权益校验共用
 	pointsSvc := service.NewPointsService(db, logger, clock.Real())
+	// 单一模型端口（ADR-0029 T2）：唯一 eino adapter 实例，阻塞/流式消费方共享同一 client 签名缓存。
+	// 计量闸门（ADR-0031）作为装饰器挂在该端口上：所有 LLM 消费（含会话自动命名）过同一道闸，
+	// 生产 meter 即积分域 *PointsService（预检与扣费下限同源），装配单点在此。
+	aiModelPort := service.NewMeteredAIModel(service.NewEinoAIModel(aiConfigSvc, logger), pointsSvc, logger)
+	aiSvc := service.NewAIService(db, aiModelPort, logger)
+	contentGenSvc := service.NewContentGenerateService(db, aiSvc, logger)
 	// 每日登录事实（ADR-0028）：登录签发与 refresh 续期都算今日到访；回调注入避免循环依赖。
 	authSvc.SetDailyLoginMarker(pointsSvc.MarkDailyLogin)
 	// 联系方式交换唯一实例：申请/授权状态机（EnsureApproved）与投递侧共用（ADR-0027 C5）

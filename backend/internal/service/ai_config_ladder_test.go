@@ -189,7 +189,7 @@ func (f *fakeAIModelPort) Complete(featureKey string, msgs []*schema.Message, op
 	return f.content, f.err
 }
 
-func (f *fakeAIModelPort) Stream(_ context.Context, sel AIModelSelector, msgs []*schema.Message, onChunk func(string)) (string, error) {
+func (f *fakeAIModelPort) Stream(_ context.Context, sel AIModelSelector, msgs []*schema.Message, onChunk func(string)) (string, *AIUsage, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.streamN++
@@ -199,7 +199,7 @@ func (f *fakeAIModelPort) Stream(_ context.Context, sel AIModelSelector, msgs []
 		onChunk(f.content)
 		f.chunks = append(f.chunks, f.content)
 	}
-	return f.content, f.err
+	return f.content, nil, f.err
 }
 
 // snapshot 读取 fake 记录（与后台 goroutine 同步）。
@@ -223,7 +223,7 @@ func TestStreamingPortInjectedEndToEnd(t *testing.T) {
 		t.Fatalf("CreateSession 失败: %v", err)
 	}
 	var chunks []string
-	full, err := assistant.StreamChat(ctx, 7, StreamChatReq{
+	full, _, err := assistant.StreamChat(ctx, 7, StreamChatReq{
 		SessionID:    session.ID,
 		ModelSource:  "custom",
 		CustomAPIKey: "sk-custom", CustomBaseURL: "https://custom.example.com/v1", CustomModel: "gpt-4o",

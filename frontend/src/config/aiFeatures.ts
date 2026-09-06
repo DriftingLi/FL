@@ -1,14 +1,29 @@
-// AI 助手专项功能配置（故障咨询/故障代码查询/维保知识/图纸识别/习题解答）。
-// feature_key 与后端 service/ai_config_service.go 的常量一一对应；
-// 模型由管理端按功能单绑定，前端无需选模型。
+// 生成文件，勿手改（ADR-0030 前端 AI 功能配置窄域 codegen 试点，#613）。
+// 唯一事实源：后端 AI 功能注册表 backend/internal/service/ai_feature_registry.go。
+// 再生成：cd backend && go run ./cmd/gen-aifeatures
+// 同步契约：backend/internal/service/ai_features_codegen_test.go 将本文件与注册表渲染结果
+// 全等比对，手改或注册表变更未再生成时后端测试即红。功能键与展示名由注册表派生；
+// 路由/文案/图标等展示数据在 aiFeatureUI.ts 手写维护，新增功能键时需同步补齐。
 import type { Component } from 'vue'
-import {
-  Warning,
-  Search,
-  Reading,
-  Picture,
-  EditPen
-} from '@element-plus/icons-vue'
+import { aiFeatureUI } from './aiFeatureUI'
+
+// 收录规则：注册表中管理端单绑定且声明计费的专项对话功能（与后端 featureChatKeys 同口径），
+// 键序 = 注册表声明序（助手主页入口卡片顺序）。
+export type AIFeatureKey =
+  | 'fault_consult'
+  | 'fault_code_query'
+  | 'maintenance_knowledge'
+  | 'drawing_recognition'
+  | 'exercise_solving'
+
+// 注册表派生对：[功能键, 展示名]（展示名即后端 FeatureLabel）。
+const AI_FEATURE_REGISTRY: ReadonlyArray<readonly [AIFeatureKey, string]> = [
+  ['fault_consult', '故障咨询'],
+  ['fault_code_query', '故障代码查询'],
+  ['maintenance_knowledge', '维保知识'],
+  ['drawing_recognition', '图纸识别'],
+  ['exercise_solving', '习题解答'],
+]
 
 export interface AIFeatureQuickOption {
   label: string
@@ -16,9 +31,9 @@ export interface AIFeatureQuickOption {
 }
 
 export interface AIFeatureConfig {
-  key: string
-  routePath: string
+  key: AIFeatureKey
   title: string
+  routePath: string
   welcome: string
   /** AI 助手欢迎区入口卡片的一句话描述 */
   entryDesc: string
@@ -29,95 +44,11 @@ export interface AIFeatureConfig {
   maxImages?: number
 }
 
-export const AI_FEATURES: AIFeatureConfig[] = [
-  {
-    key: 'fault_consult',
-    routePath: '/ai-assistant/fault-consult',
-    title: '故障咨询',
-    welcome: '描述您遇到的叉车故障现象，我将按「可能原因 → 排查步骤 → 处理方法」为您诊断。',
-    entryDesc: '描述故障现象，按步骤排查',
-    icon: Warning,
-    suggestions: [
-      '叉车启动困难怎么排查？',
-      '液压升降缓慢的可能原因？',
-      '转向沉重是什么问题？',
-      '制动失灵如何应急处理？'
-    ],
-    quickOptions: [
-      { label: '品牌', options: ['林德', '丰田', '杭叉', '合力', '永恒力', '其他'] },
-      { label: '动力类型', options: ['电动', '内燃'] }
-    ]
-  },
-  {
-    key: 'fault_code_query',
-    routePath: '/ai-assistant/fault-code',
-    title: '故障代码查询',
-    welcome: '输入叉车显示的故障代码，我将解读代码含义、严重程度与处理建议。不同品牌代码含义可能不同，建议同时选择品牌。',
-    entryDesc: '解读代码含义与处理建议',
-    icon: Search,
-    suggestions: [
-      '故障代码 E01 是什么意思？',
-      'E24 代码怎么处理？',
-      '报警灯闪烁 5 次代表什么？',
-      '如何查询叉车故障码历史？'
-    ],
-    quickOptions: [
-      { label: '品牌', options: ['林德', '丰田', '杭叉', '合力', '永恒力', '其他'] }
-    ]
-  },
-  {
-    key: 'maintenance_knowledge',
-    routePath: '/ai-assistant/maintenance',
-    title: '维保知识',
-    welcome: '叉车维保专家为您解答保养周期、保养项目、执行标准与注意事项。',
-    entryDesc: '保养周期、项目与标准',
-    icon: Reading,
-    suggestions: [
-      '叉车季度保养项目有哪些？',
-      '日常检查清单是什么？',
-      '液压油多久更换一次？',
-      '电瓶日常维护注意事项？'
-    ],
-    quickOptions: [
-      { label: '保养类型', options: ['日常', '周检', '月度', '季度', '年度'] }
-    ]
-  },
-  {
-    key: 'drawing_recognition',
-    routePath: '/ai-assistant/drawing',
-    title: '图纸识别',
-    welcome: '上传叉车机械图纸、电路图或液压原理图，我将识别图中的部件、符号与参数并解读工作原理。',
-    entryDesc: '上传图纸，识别部件与原理',
-    icon: Picture,
-    suggestions: [
-      '帮我识别这张图纸中的叉车部件',
-      '解释这张电路图的工作原理',
-      '这张液压原理图的油路走向？'
-    ],
-    quickOptions: [
-      { label: '识别模式', options: ['部件识别', '参数解读', '电路分析', '液压分析'] }
-    ],
-    supportsImage: true,
-    maxImages: 4
-  },
-  {
-    key: 'exercise_solving',
-    routePath: '/ai-assistant/exercise',
-    title: '习题解答',
-    welcome: '拍摄或上传叉车培训习题的照片，我将给出答案、解析与考查知识点。',
-    entryDesc: '上传习题照片，给出答案与解析',
-    icon: EditPen,
-    suggestions: [
-      '请解答图片中的习题',
-      '这道题的考点是什么？'
-    ],
-    quickOptions: [
-      { label: '解答模式', options: ['详细步骤', '仅答案', '考点分析'] }
-    ],
-    supportsImage: true,
-    maxImages: 4
-  }
-]
+export const AI_FEATURES: AIFeatureConfig[] = AI_FEATURE_REGISTRY.map(([key, title]) => ({
+  key,
+  title,
+  ...aiFeatureUI[key]
+}))
 
 export function getAIFeatureByRoute(path: string): AIFeatureConfig | undefined {
   return AI_FEATURES.find(f => f.routePath === path)
