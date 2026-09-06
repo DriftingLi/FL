@@ -136,6 +136,15 @@ describe('usage 独立通道（#620）', () => {
     await flush()
     expect(store.lastUsage).toBeNull()
   })
+
+  it('停止流式即复位 lastUsage（中断轮不残留脚注）', async () => {
+    const store = createStore()
+    await sendMessageAndStream(store)
+    expect(store.lastUsage).toEqual(USAGE)
+
+    store.stopStreaming()
+    expect(store.lastUsage).toBeNull()
+  })
 })
 
 describe('done 后精确重拉一次会话列表（#620）', () => {

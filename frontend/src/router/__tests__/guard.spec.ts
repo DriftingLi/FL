@@ -366,8 +366,11 @@ describe('credentialStep', () => {
     ).toEqual({ action: 'redirect', to: '/training' })
   })
 
-  it('证件加载失败（error）→ 放行，避免卡死登录', () => {
-    expect(resolveGuardDecision(input(), state({ credential: 'error' }))).toEqual({ action: 'allow' })
+  it('证件加载失败 → orchestrator 映射为 none → 跳 onboarding（与既有行为一致）', () => {
+    expect(resolveGuardDecision(input(), state({ credential: 'none' }))).toEqual({
+      action: 'redirect',
+      to: { name: routeNames.CredentialOnboarding }
+    })
   })
 })
 

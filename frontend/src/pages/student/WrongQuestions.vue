@@ -209,7 +209,8 @@ const session = usePracticeSession({
       correct_answer: res?.correct_answer ?? '',
       explanation: res?.explanation ?? '',
       question_id: payload.question_id,
-      user_answer: answer
+      // 结果卡按数组渲染多选（「、」分隔），与 master 一致；接口提交用逗号串
+      user_answer: Array.isArray(payload.user_answer) ? payload.user_answer : answer
     }
   },
   // 单题变体无断点进度，不落进度

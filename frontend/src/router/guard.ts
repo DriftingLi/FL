@@ -59,8 +59,8 @@ export interface GuardState {
   subdomain: SubdomainType
   /** IP 直连模式（isIpDirectMode()）：无 DNS 子域名环境，所有工作区经路径访问 */
   ipDirect: boolean
-  /** 当前证件状态（credential store；'unloaded' = 未加载，'error' = 加载失败放行） */
-  credential: 'unloaded' | 'none' | 'present' | 'error'
+  /** 当前证件状态（credential store；'unloaded' = 未加载） */
+  credential: 'unloaded' | 'none' | 'present'
 }
 
 /** 守卫决策（orchestrator 执行） */
@@ -170,7 +170,8 @@ export const roleStep: GuardStep = (input, state) => {
  * 步骤 5：无证件 onboarding 预筛（ADR-0020）——hrwai_user 在 training 工作区且未选证件时
  * 强制进 onboarding；已选证件访问 onboarding → 回 /training。IP 直连旁路。
  * 求值序前置：authRequiredStep 已对无需登录路由放行（预筛不适用于公开页）。
- * 证件未加载 → load-credential 决策交还 orchestrator；加载失败（'error'）放行，避免卡死登录。
+ * 证件未加载 → load-credential 决策交还 orchestrator；加载失败同样落 'none'
+ * （orchestrator 的 state() 映射），走 onboarding 预筛——与既有行为一致。
  */
 export const credentialStep: GuardStep = (input, state) => {
   if (state.role !== 'hrwai_user' || state.ipDirect) return null

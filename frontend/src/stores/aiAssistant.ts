@@ -281,6 +281,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
       abortController = null
     }
     streaming.value = false
+    lastUsage.value = null
     if (streamingContent.value) {
       const assistantMsg: ChatMessage = {
         id: Date.now(),

@@ -51,7 +51,7 @@ export interface PracticeSavePayload {
 export interface PracticeSessionAdapters {
   /** 进入/续练：拉取题目并解析断点进度；无题目/失败返回 null */
   start: (mode: PracticeMode) => Promise<PracticeStartData | null>
-  /** 提交单题答案并判定，返回结果；失败返回 null */
+  /** 提交单题答案并判定，返回结果；失败语义由调用方 adapter 决定（返回 null 或抛出），页面按需处理 */
   submit: (payload: PracticeSubmitPayload) => Promise<SubmitResult | null>
   /** 保存进度与答题状态；无断点模式（随机）由 adapter 内部跳过，失败静默 */
   saveProgress: (payload: PracticeSavePayload) => Promise<void>
