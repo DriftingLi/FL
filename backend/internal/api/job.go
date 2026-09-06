@@ -8,7 +8,6 @@ package api
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -17,6 +16,16 @@ import (
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
+
+// jobErrStatus 职位域哨兵→状态码表（#611）：职位不存在 → 404，非本人职位 → 403，
+// 其余（被强制下架/超上限等业务校验）兜底 400。
+var jobErrStatus = &errStatusTable{
+	entries: []errStatusEntry{
+		{service.ErrJobNotFound, http.StatusNotFound},
+		{service.ErrJobNotYours, http.StatusForbidden},
+	},
+	fallback: http.StatusBadRequest,
+}
 
 // JobHandler 职位 handler。
 type JobHandler struct {
@@ -68,7 +77,7 @@ func (h *JobHandler) Create(c *gin.Context) {
 		},
 		Render: func(c *gin.Context, _ *service.JobPostingInput, resp *service.JobPostingDTO, err error) {
 			if err != nil {
-				renderJobError(c, err)
+				jobErrStatus.renderError(c, err) // #611：错误映射退表，201 定制成功信封保留
 				return
 			}
 			response.Created(c, "职位发布成功", *resp)
@@ -108,7 +117,7 @@ func (h *JobHandler) Update(c *gin.Context) {
 		},
 		Render: func(c *gin.Context, _ *service.JobPostingInput, resp *service.JobPostingDTO, err error) {
 			if err != nil {
-				renderJobError(c, err)
+				jobErrStatus.renderError(c, err) // #611：错误映射退表，成功文案保留定制
 				return
 			}
 			response.SuccessWithMsg(c, "职位已更新", *resp)
@@ -139,7 +148,7 @@ func (h *JobHandler) ToggleStatus(c *gin.Context) {
 		},
 		Render: func(c *gin.Context, _ *struct{}, resp *service.JobPostingDTO, err error) {
 			if err != nil {
-				renderJobError(c, err)
+				jobErrStatus.renderError(c, err) // #611：错误映射退表，成功文案保留定制
 				return
 			}
 			msg := "职位已下架"
@@ -199,13 +208,8 @@ func (h *JobHandler) GetMine(c *gin.Context) {
 			}
 			return h.svc.Get(middleware.CurrentUserID(c), id)
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.JobPostingDTO, err error) {
-			if err != nil {
-				renderJobError(c, err)
-				return
-			}
-			response.Success(c, *resp)
-		},
+		// #611：错误映射收编至 jobErrStatus
+		ErrStatus: jobErrStatus,
 	}.Handle(c)
 }
 
@@ -271,37 +275,7 @@ func (h *JobHandler) GetPublic(c *gin.Context) {
 			// #488：详情带学员视角投递状态
 			return h.svc.GetForStudent(middleware.CurrentUserID(c), id)
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.JobPostingDTO, err error) {
-			if err != nil {
-				renderJobError(c, err)
-				return
-			}
-			response.Success(c, *resp)
-		},
+		// #611：错误映射收编至 jobErrStatus
+		ErrStatus: jobErrStatus,
 	}.Handle(c)
-}
-
-// renderJobError 职位域错误映射（哨兵 → 状态码，禁止文案比对）。
-func renderJobError(c *gin.Context, err error) {
-	switch {
-	case isParseError(err):
-		renderStatus(c, http.StatusBadRequest, err.Error())
-	case isJobNotFound(err):
-		response.NotFound(c, err.Error())
-	case isJobForbidden(err):
-		response.Forbidden(c, err.Error())
-	default:
-		response.BadRequest(c, err.Error())
-	}
-}
-
-func isParseError(err error) bool {
-	var pe *ParseError
-	return asParseError(err, &pe)
-}
-func isJobNotFound(err error) bool {
-	return errors.Is(err, service.ErrJobNotFound)
-}
-func isJobForbidden(err error) bool {
-	return errors.Is(err, service.ErrJobNotYours)
 }

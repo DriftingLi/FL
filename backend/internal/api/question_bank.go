@@ -3,7 +3,7 @@ package api
 
 import (
 	"context"
-	"errors"
+	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -12,6 +12,15 @@ import (
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
+
+// questionBankErrStatus 题库域哨兵→状态码表（#611）：题目不存在 → 404，
+// 其余（状态/原因校验等业务错误）兜底 400。
+var questionBankErrStatus = &errStatusTable{
+	entries: []errStatusEntry{
+		{service.ErrQuestionNotFound, http.StatusNotFound},
+	},
+	fallback: http.StatusBadRequest,
+}
 
 // QuestionBankHandler 题库管理 handler。
 type QuestionBankHandler struct {
@@ -376,11 +385,7 @@ func (h *QuestionBankHandler) RejectQuestion(c *gin.Context) {
 		},
 		Render: func(c *gin.Context, _ *rejectQuestionReq, resp *service.QuestionDTO, err error) {
 			if err != nil {
-				if errors.Is(err, service.ErrQuestionNotFound) {
-					response.NotFound(c, err.Error())
-				} else {
-					response.BadRequest(c, err.Error())
-				}
+				questionBankErrStatus.renderError(c, err) // #611：错误映射退表，成功文案保留定制
 				return
 			}
 			response.SuccessWithMsg(c, "题目已驳回", deref(resp))

@@ -2,7 +2,7 @@ package api
 
 import (
 	"context"
-	"errors"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 
@@ -10,6 +10,21 @@ import (
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
+
+// pointsErrStatus 积分域哨兵→状态码表（#610，ADR-0024）：已领取/额度/余额不足/已兑换等
+// 业务冲突 → 400，不存在类 → 404；未命中兜底 400——积分域 service 错误均为业务错误，不以 500 暴露。
+var pointsErrStatus = &errStatusTable{
+	entries: []errStatusEntry{
+		{service.ErrTaskNotFound, http.StatusNotFound},
+		{service.ErrCourseNotFound, http.StatusBadRequest},
+		{service.ErrCourseNotRedeemable, http.StatusBadRequest},
+		{service.ErrAlreadyClaimed, http.StatusBadRequest},
+		{service.ErrDailyClaimLimit, http.StatusBadRequest},
+		{service.ErrInsufficientPoints, http.StatusBadRequest},
+		{service.ErrAlreadyRedeemed, http.StatusBadRequest},
+	},
+	fallback: http.StatusBadRequest,
+}
 
 // PointsHandler 积分 handler
 type PointsHandler struct {
@@ -115,22 +130,8 @@ func (h *PointsHandler) Claim(c *gin.Context) {
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.PointsClaimResult, error) {
 			return h.svc.Claim(ctx, middleware.CurrentUserID(c), code)
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.PointsClaimResult, err error) {
-			if err != nil {
-				// ADR-0024：哨兵映射状态码（已领取类 400、不存在类 404），文案零漂移
-				if errors.Is(err, service.ErrAlreadyClaimed) || errors.Is(err, service.ErrDailyClaimLimit) {
-					response.BadRequest(c, err.Error())
-					return
-				}
-				if errors.Is(err, service.ErrTaskNotFound) {
-					response.NotFound(c, err.Error())
-					return
-				}
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
+		// #610：哨兵→状态码收编至 pointsErrStatus（已领取类 400、任务不存在 404），文案零漂移
+		ErrStatus: pointsErrStatus,
 	}.Handle(c)
 }
 
@@ -156,25 +157,8 @@ func (h *PointsHandler) RedeemCourse(c *gin.Context) {
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.RedeemResult, error) {
 			return h.svc.RedeemCourse(ctx, middleware.CurrentUserID(c), courseID)
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.RedeemResult, err error) {
-			if err != nil {
-				if errors.Is(err, service.ErrInsufficientPoints) {
-					response.BadRequest(c, err.Error())
-					return
-				}
-				if errors.Is(err, service.ErrAlreadyRedeemed) {
-					response.BadRequest(c, err.Error())
-					return
-				}
-				if errors.Is(err, service.ErrCourseNotFound) || errors.Is(err, service.ErrCourseNotRedeemable) {
-					response.BadRequest(c, err.Error())
-					return
-				}
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
+		// #610：哨兵→状态码收编至 pointsErrStatus（余额不足/已拥有等 → 400），文案零漂移
+		ErrStatus: pointsErrStatus,
 	}.Handle(c)
 }
 
@@ -200,17 +184,8 @@ func (h *PointsHandler) RedeemShop(c *gin.Context) {
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.RedeemResult, error) {
 			return h.svc.RedeemShop(ctx, middleware.CurrentUserID(c), sku)
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.RedeemResult, err error) {
-			if err != nil {
-				if errors.Is(err, service.ErrInsufficientPoints) || errors.Is(err, service.ErrAlreadyRedeemed) {
-					response.BadRequest(c, err.Error())
-					return
-				}
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
+		// #610：哨兵→状态码收编至 pointsErrStatus（余额不足/已拥有等 → 400），文案零漂移
+		ErrStatus: pointsErrStatus,
 	}.Handle(c)
 }
 
