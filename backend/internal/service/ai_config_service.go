@@ -9,8 +9,9 @@ import (
 	"sync"
 	"time"
 
+	einomodel "github.com/cloudwego/eino/components/model"
+	"github.com/cloudwego/eino/schema"
 	"github.com/redis/go-redis/v9"
-	"github.com/sashabaranov/go-openai"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/cache"
@@ -607,8 +608,8 @@ func (s *AIConfigService) ResolveChatSettings(ctx context.Context, sel AIModelSe
 	return AISettings{}, fmt.Errorf("未知的 model_source: %s", sel.ModelSource)
 }
 
-// TestConfig 管理端配置连通性测试：解密配置后建 go-openai client 发最小补全请求
-// （30s 超时纪律单点在 service；此前为 handler 内联建 client）。
+// TestConfig 管理端配置连通性测试：解密配置后建 eino client 发最小补全请求
+// （30s 超时纪律单点在 service；一次性诊断调用，不经 adapter 签名缓存）。
 func (s *AIConfigService) TestConfig(ctx context.Context, id int) error {
 	row, err := s.GetConfigByID(ctx, id)
 	if err != nil {
@@ -616,14 +617,13 @@ func (s *AIConfigService) TestConfig(ctx context.Context, id int) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	client := newOpenAIClient(row.APIKey, row.BaseURL)
-	_, err = client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
-		Model: row.Model,
-		Messages: []openai.ChatCompletionMessage{
-			{Role: openai.ChatMessageRoleUser, Content: "请回复 'OK'"},
-		},
-		MaxTokens: 10,
-	})
+	chatModel, err := newEinoChatModel(ctx, AISettings{APIKey: row.APIKey, BaseURL: row.BaseURL, Model: row.Model})
+	if err != nil {
+		return fmt.Errorf("构建模型失败: %w", err)
+	}
+	_, err = chatModel.Generate(ctx, []*schema.Message{
+		schema.UserMessage("请回复 'OK'"),
+	}, einomodel.WithMaxTokens(10))
 	return err
 }
 

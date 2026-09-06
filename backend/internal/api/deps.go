@@ -102,7 +102,9 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 	reviewSvc := service.NewProfileReviewService(db, notificationSvc, st, logger)
 	authSvc.SetProfileReviewService(reviewSvc)
 	aiConfigSvc := service.NewAIConfigService(db, cfg.SecretKey, logger)
-	aiSvc := service.NewAIService(db, aiConfigSvc, logger)
+	// 单一模型端口（ADR-0029 T2）：唯一 eino adapter 实例，阻塞/流式消费方共享同一 client 签名缓存
+	aiModelPort := service.NewEinoAIModel(aiConfigSvc, logger)
+	aiSvc := service.NewAIService(db, aiModelPort, logger)
 	contentGenSvc := service.NewContentGenerateService(db, aiSvc, logger)
 	// 积分服务唯一实例：积分端点与真题卷权益校验共用
 	pointsSvc := service.NewPointsService(db, logger, clock.Real())
@@ -149,7 +151,7 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		WrongQuestionSvc:     service.NewWrongQuestionService(db, aiSvc, logger),
 		TrainingCatalogSvc:   service.NewTrainingCatalogService(db, logger),
 		AuditSvc:             service.NewAuditService(db),
-		AIAssistantSvc:       service.NewAIAssistantService(db, aiConfigSvc, fileSvc, cfg.SecretKey, logger),
+		AIAssistantSvc:       service.NewAIAssistantService(db, aiConfigSvc, fileSvc, cfg.SecretKey, logger, aiModelPort),
 		QuestionCommentSvc:   service.NewQuestionCommentService(db, logger),
 		QuestionNoteSvc:      service.NewQuestionNoteService(db, logger),
 		QuestionKnowledgeSvc: service.NewQuestionKnowledgeService(db),

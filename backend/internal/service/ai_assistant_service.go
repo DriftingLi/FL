@@ -193,16 +193,16 @@ type StreamChatReq struct {
 type AIAssistantService struct {
 	db          *gorm.DB
 	aiConfigSvc *AIConfigService
-	resolver    AIConfigResolver // 凭证解析端口（与阻塞栈共用同一注入实现，#606）
-	fileSvc     *FileStore       // 图片上传/读取（多模态对话）
-	secretKey   string           // 用于加密用户自定义 API Key 的主密钥（SECRET_KEY）
+	fileSvc     *FileStore // 图片上传/读取（多模态对话）
+	secretKey   string     // 用于加密用户自定义 API Key 的主密钥（SECRET_KEY）
 	logger      *zap.Logger
-	streamer    AIStreamingTransport // 流式传输槽位（nil 时自实装；测试可注入 fake）
+	port        AIModelPort // 单一模型端口（与阻塞侧共享同一 adapter，ADR-0029 T2；测试可注入 fake）
 }
 
-// NewAIAssistantService 构造 AIAssistantService。
-func NewAIAssistantService(db *gorm.DB, aiConfigSvc *AIConfigService, fileSvc *FileStore, secretKey string, logger *zap.Logger) *AIAssistantService {
-	return &AIAssistantService{db: db, aiConfigSvc: aiConfigSvc, resolver: aiConfigSvc, fileSvc: fileSvc, secretKey: secretKey, logger: logger}
+// NewAIAssistantService 构造 AIAssistantService。port 为单一模型端口
+// （NewEinoAIModel 产物与阻塞侧共享同一 client 缓存），必须非 nil：构造期注入是不变量。
+func NewAIAssistantService(db *gorm.DB, aiConfigSvc *AIConfigService, fileSvc *FileStore, secretKey string, logger *zap.Logger, port AIModelPort) *AIAssistantService {
+	return &AIAssistantService{db: db, aiConfigSvc: aiConfigSvc, fileSvc: fileSvc, secretKey: secretKey, logger: logger, port: port}
 }
 
 // ListPublicModels 返回管理员绑定到 AI 助手功能的可用配置列表（不含 api_key）。
@@ -433,7 +433,7 @@ func (s *AIAssistantService) maybeGenerateSessionTitle(ctx context.Context, user
 }
 
 // generateTitleWithModel 调用对话同一选择子对应的模型，根据用户首条消息生成简短标题
-// （凭证解析/client 构建/超时/收集循环全部在流式槽位单点）。
+// （凭证解析/client 构建/超时/收集循环全部在单一模型端口内单点）。
 func (s *AIAssistantService) generateTitleWithModel(ctx context.Context, sel AIModelSelector, userMessage string) (string, error) {
 	const titlePrompt = `请根据用户的问题，生成一个简短的中文会话标题。
 要求：
@@ -449,7 +449,7 @@ func (s *AIAssistantService) generateTitleWithModel(ctx context.Context, sel AIM
 		schema.SystemMessage("你是一个会话标题生成助手，根据用户消息生成简短的中文标题。"),
 		schema.UserMessage(fmt.Sprintf(titlePrompt, userMessage)),
 	}
-	return s.streamingSlot().StreamComplete(ctx, sel, msgs, nil)
+	return s.port.Stream(ctx, sel, msgs, nil)
 }
 
 // titleTrimRunes 需要从标题首尾去除的字符集合（使用 map 保证唯一性，避免 SA1024）。
@@ -555,8 +555,8 @@ func (s *AIAssistantService) GetSessionMessages(ctx context.Context, userID, ses
 // StreamChat 流式对话。
 // onChunk 回调用于推送增量内容；返回完整回复内容。
 // 此处只把请求的模型选择字段投影为 AIModelSelector（纯数据、零解析知识）并组装消息；
-// 凭证解析（专项单绑定 → 双模式 → 旧来源）与传输（建 client/超时/Recv 收集）
-// 全部在流式槽位 StreamComplete 内经注入 resolver 单点完成（#606）。
+// 凭证解析（专项单绑定 → 双模式 → 旧来源）与传输（client 签名缓存/超时/Recv 收集）
+// 全部在单一模型端口 Stream 内经注入 resolver 单点完成（ADR-0029 T2）。
 func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req StreamChatReq, onChunk func(content string)) (string, error) {
 	sel := AIModelSelector{
 		FeatureKey:    req.FeatureKey,
@@ -599,7 +599,7 @@ func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req Str
 		}
 	}
 
-	fullContent, err := s.streamingSlot().StreamComplete(ctx, sel, msgs, onChunk)
+	fullContent, err := s.port.Stream(ctx, sel, msgs, onChunk)
 	if err != nil {
 		return fullContent, err
 	}
@@ -642,7 +642,7 @@ func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req Str
 
 			// 异步生成会话标题：仅当标题为占位符"新会话"时（首次对话）
 			// 使用独立 context 避免请求结束后被取消；recover 防止 panic 影响主流程。
-			// 凭证随选择子在槽位内经 resolver 解析（与主对话同一路径，#606）。
+			// 凭证随选择子在端口内经 resolver 解析（与主对话同一路径）。
 			sessionID := req.SessionID
 			uid := userID
 			go func() {
