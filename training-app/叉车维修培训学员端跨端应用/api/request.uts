@@ -245,6 +245,30 @@ export function requestMapped<T>(options : RequestOptions, map : (data : UTSJSON
     })
 }
 
+/**
+ * GET 请求快捷方法（mapper-callback 出口家族）
+ * params 沿用与历史 get() 逐字一致的手动 query 序列化（不交平台自动序列化，防跨端漂移），
+ * 拆包后 data 经 map 映射为领域 DTO
+ */
+export function getMapped<T>(url : string, params : UTSJSONObject | null = null, map : (data : UTSJSONObject) => T, options : RequestOptions | null = null) : Promise<T> {
+    let finalURL = url
+    if (params != null) {
+        const pairs : string[] = []
+        // 用 for...in 遍历 UTSJSONObject 的字段名（跨端通用，Android 端不支持 Object.keys）
+        for (const k in params) {
+            const v = params[k]
+            pairs.push(`${encodeURIComponent(k)}=${encodeURIComponent(v as string)}`)
+        }
+        if (pairs.length > 0) {
+            finalURL = url + (url.includes('?') ? '&' : '?') + pairs.join('&')
+        }
+    }
+    const opts : RequestOptions = options != null ? options! : { url: finalURL } as RequestOptions
+    opts.url = finalURL
+    opts.method = 'GET'
+    return requestMapped<T>(opts, map)
+}
+
 /** 单次 HTTP 请求（模块级函数，支持 401 刷新后重试） */
 function doSingleRequest(
     url : string,

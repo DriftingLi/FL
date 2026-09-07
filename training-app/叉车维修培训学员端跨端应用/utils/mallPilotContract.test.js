@@ -66,10 +66,10 @@ describe('模块私有组件接线契约（Q17 安置：pages/<module>/component
     expect(page).toContain(`./components/${name}.uvue`);
   });
 
-  it('主页面模板实际使用三个组件标签（非只 import 不用）', () => {
-    expect(page).toMatch(/<mall-sort-bar[\s>]/);
-    expect(page).toMatch(/<mall-category-sidebar[\s>]/);
-    expect(page).toMatch(/<mall-float-actions[\s>]/);
+  it('主页面模板实际使用三个组件标签（非只 import 不用；PascalCase 先例同 AiChatNav）', () => {
+    expect(page).toMatch(/<MallSortBar[\s/>]/);
+    expect(page).toMatch(/<MallCategorySidebar[\s/>]/);
+    expect(page).toMatch(/<MallFloatActions[\s/>]/);
   });
 });
 
