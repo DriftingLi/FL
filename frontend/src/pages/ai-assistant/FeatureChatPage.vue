@@ -129,21 +129,8 @@
       />
     </template>
 
-    <!-- 输入区差异内容：当轮来源面板与图片队列（叠放非互斥，见内层注释） -->
+    <!-- 输入区差异内容：图片待发队列（诊断来源只在回答下方逐轮展示，不在输入框上方残留） -->
     <template #input-above>
-      <!-- 当轮来源面板（SSE sources 事件内存态；落库后由逐轮回放接管） -->
-      <!-- 与图片队列叠放（非互斥）：诊断页上传图后不断流也能看到待发送队列 -->
-      <div v-if="isDiagnosis && store.lastSources.length" class="mb-2 flex flex-col gap-2.5">
-        <SourcesFoldHeader
-          title="资料来源（可从资料链接跳转原文）"
-          :count="store.lastSources.length"
-          :open="sourcesOpen"
-          @toggle="sourcesOpen = !sourcesOpen"
-        />
-        <template v-if="sourcesOpen">
-          <DiagnosisSources :sources="store.lastSources" embedded />
-        </template>
-      </div>
       <div v-if="pendingImages.length" class="pending-images">
         <div v-for="(p, i) in pendingImages" :key="p.url" class="pending-image-item">
           <img :src="p.previewUrl" class="pending-image-thumb" alt="待发送图片" />
@@ -175,7 +162,7 @@
 <script setup lang="ts">
 // 专项功能聊天页（#398）：壳（顶栏/侧栏/消息/输入/滚底）收敛进 ChatPageShell，
 // 本页仅保留快捷选项、图片队列等功能差异；助手内容随壳统一 markstream escape 安全渲染。
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { UploadFile } from 'element-plus'
@@ -185,7 +172,6 @@ import { useAIAssistantStore } from '@/stores/aiAssistant'
 import { getAIFeatureByRoute } from '@/config/aiFeatures'
 import { aiAssistantApi, type DiagnosisBrandOption, type DiagnosisFaultCodeItem } from '@/api/aiAssistant'
 import DiagnosisSources from '@/components/ai-assistant/DiagnosisSources.vue'
-import SourcesFoldHeader from '@/components/ai-assistant/SourcesFoldHeader.vue'
 import UiCapsule from '@/components/ai-assistant/UiCapsule.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 
@@ -287,14 +273,6 @@ function useFaultCode(item: DiagnosisFaultCodeItem) {
   inputText.value = `故障码 ${item.fault_code}（${item.fault_name}），怎么处理？`
   handleSend()
 }
-
-// ===== 当轮来源展开态（默认折叠；新一轮开始自动收起）=====
-// 解析函数已收敛进 DiagnosisSources 组件；本页只保留展开态。
-const sourcesOpen = ref(false)
-// 新一轮开始自动收起（sourcesOpen 只描述当轮展开态，不跟随历史）
-watch(() => store.lastSources, () => {
-  sourcesOpen.value = false
-})
 
 interface PendingImage {
   url: string          // 上传成功后的服务器 URL
