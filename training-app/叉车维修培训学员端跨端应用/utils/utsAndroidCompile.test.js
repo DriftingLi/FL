@@ -16,6 +16,15 @@
  *
  * 设计：每类扫描都是纯函数，先各跑一个「注入违规」自检用例证明检测有效
  * （防止空跑假绿），再对全工程源码跑断言零命中（真正守护）。
+ *
+ * 2026-09 增补（refactor epic #638 T01 + 编译门红修）：AGENTS.md 坑位表机械化规则 F–L——
+ *   F. 裸 String() 强转（Kotlin 无此重载，error17；app-ios Swift 互操作文件除外）；
+ *   G. undefined 字面量；H. catch 参数显式 : any；
+ *   I. `: any` 注解参数访问 .detail（类型化事件对象自带 detail 属合法，按组合判定）
+ *   J. 调用实参少于必选形参（No value passed for parameter；函数定义行与方法调用不报）
+ *   K. 模板 v-for 别名字段越界（error18；标签游走做块级作用域归属，页面本地类型声明优先于全局表）
+ *   L. 类型化参数访问未声明字段（error18；script 侧，字段表可解析的单类型参数）
+ * 存量违例走 GUARD_ALLOWLIST 豁免，由后续工单在各自范围清零（见常量注释）。
  */
 const fs = require('fs');
 const path = require('path');
@@ -23,6 +32,21 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const SCAN_DIRS = ['pages', 'components', 'utils', 'composables', 'api', 'stores', 'constants', 'types', 'uni_modules'];
 const SKIP = new Set(['node_modules', 'unpackage', '.git', 'dist', 'hybrid']);
+
+/**
+ * 已知存量违例豁免（expand–contract 的 expand 侧，refactor epic #638 T01 引入）：
+ * 规则上线时已存在的违例按「规则 → 文件」豁免，由后续工单在各自范围清零；
+ * 全部清零后由 epic 收尾票（#654）删除本机制。
+ * 仅存量不为零的规则入表（F/G/I 在 master 树上实测零存量，全量执法无豁免）；
+ * 键 = 规则标识，值 = 豁免文件的相对路径集合
+ */
+const GUARD_ALLOWLIST = {
+  H: new Set([
+    'api/forum.uts',
+    'api/checkin.uts',
+    'pages/notifications/notifications.uvue',
+  ]),
+};
 
 function walk(dir, out = []) {
   if (!fs.existsSync(dir)) return out;
@@ -77,6 +101,17 @@ function scriptBlocks(text) {
     out.push({ code: m[1], tag: m[0].slice(0, m[0].indexOf('>') + 1) });
   }
   return out;
+}
+
+/** 全工程代码单元：.uts 取整文件，.uvue 取 script 块（模板表达式不走 Kotlin 严格检查，不参与脚本规则扫描） */
+function allCodeUnits() {
+  const units = [];
+  for (const file of ALL_FILES) {
+    const text = fs.readFileSync(file, 'utf8');
+    if (file.endsWith('.uts')) units.push({ file, code: text });
+    else for (const s of scriptBlocks(text)) units.push({ file, code: s.code });
+  }
+  return units;
 }
 
 /** A：script setup 顶层函数「调用早于定义」 */
@@ -136,6 +171,52 @@ function scanUntypedNumericConst(cleanText) {
   return hits;
 }
 
+/** F：裸 String() 强转——Kotlin 无 String(x) 重载（error17），应为 x.toString() */
+function scanBareStringCall(code) {
+  const hits = [];
+  const lines = blank(code).split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    if (/(?<![A-Za-z0-9_$.])String\s*\(/.test(lines[i])) hits.push(lines[i].trim());
+  }
+  return hits;
+}
+
+/** G：undefined 字面量——UTS 空值统一 null，Kotlin 无 undefined（找不到名称） */
+function scanUndefinedLiteral(code) {
+  const hits = [];
+  const lines = blank(code).split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    if (/\bundefined\b/.test(lines[i])) hits.push(lines[i].trim());
+  }
+  return hits;
+}
+
+/** H：catch 参数显式注解 any——Kotlin 无非空 Any 收窄（error17），应 (e) 或 (e : any | null) */
+function scanCatchAnyParam(code) {
+  const hits = [];
+  const lines = blank(code).split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    if (/catch\s*\(\s*\(?\s*[A-Za-z_$][\w$]*\s*:\s*any\b(?!\s*\|)/.test(lines[i])) hits.push(lines[i].trim());
+  }
+  return hits;
+}
+
+/** I：`: any` 注解参数访问 .detail——Kotlin 非空 Any 无 detail 成员（Unresolved reference），应 as UTSJSONObject 后 ['detail'] 索引。
+ *  类型化事件对象（如 InputEvent）自带 detail 属合法用法，故按「any 参数 + 同名接收者」组合判定而非裸扫 .detail */
+function scanAnyParamDetailAccess(code) {
+  const clean = blank(code);
+  const anyParams = new Set();
+  let m;
+  const paramRe = /[(,]\s*([A-Za-z_$][\w$]*)\s*:\s*any\b(?!\s*\|)/g;
+  while ((m = paramRe.exec(clean)) !== null) anyParams.add(m[1]);
+  const hits = [];
+  const accessRe = /(?<![\w$])([A-Za-z_$][\w$]*)\s*\.\s*detail\b/g;
+  while ((m = accessRe.exec(clean)) !== null) {
+    if (anyParams.has(m[1])) hits.push(m[1] + '.detail');
+  }
+  return hits;
+}
+
 /** B：跨文件 export type/interface 未 import 就引用（需全工程导出表） */
 function buildExportedTypeMap() {
   const exported = new Map();
@@ -148,6 +229,260 @@ function buildExportedTypeMap() {
     }
   }
   return exported;
+}
+
+/** 顶层逗号切分（深度感知 () [] {}，字符串与注释已被 blank 抹除） */
+function splitTopLevel(text) {
+  const parts = [];
+  let depth = 0;
+  let cur = '';
+  for (const c of text) {
+    if ('([{'.includes(c)) { depth++; cur += c; continue; }
+    if (')]}'.includes(c)) { depth--; cur += c; continue; }
+    if (c === ',' && depth === 0) { parts.push(cur); cur = ''; continue; }
+    cur += c;
+  }
+  if (cur.trim() !== '') parts.push(cur);
+  return parts;
+}
+
+/** 形参串 → 必选形参数；`=` 默认值或 `?` 可选记为可选；含 `...` 变长返回 null（无法静态计数，跳过执法） */
+function parseRequiredParams(paramText) {
+  if (paramText.trim() === '') return 0;
+  let required = 0;
+  for (const p of splitTopLevel(paramText)) {
+    if (p.includes('...')) return null;
+    if (/[=]/.test(p) || /\?\s*:/.test(p)) continue;
+    required++;
+  }
+  return required;
+}
+
+/** 全局函数签名表：.uts 的 function 定义与「name : (params) =>」箭头属性（composable 返回面）、.uvue script 局部 function；同名取最小必选数 */
+function buildFunctionSignatureMap() {
+  const table = new Map();
+  const consider = (name, paramText) => {
+    const required = parseRequiredParams(paramText);
+    if (required === null) return;
+    const prev = table.get(name);
+    table.set(name, prev === undefined ? required : Math.min(prev, required));
+  };
+  const fnRe = /(?:^|\n)\s*(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(([^)]*)\)/g;
+  const arrowRe = /(?<![\w$])([A-Za-z_$][\w$]*)\s*:\s*\(([^)]*)\)\s*=>/g;
+  let m;
+  for (const file of ALL_FILES.filter((f) => f.endsWith('.uts'))) {
+    const clean = blank(fs.readFileSync(file, 'utf8'));
+    while ((m = fnRe.exec(clean)) !== null) consider(m[1], m[2]);
+    while ((m = arrowRe.exec(clean)) !== null) consider(m[1], m[2]);
+  }
+  for (const file of ALL_FILES.filter((f) => f.endsWith('.uvue'))) {
+    for (const s of scriptBlocks(fs.readFileSync(file, 'utf8'))) {
+      const clean = blank(s.code);
+      while ((m = fnRe.exec(clean)) !== null) consider(m[1], m[2]);
+    }
+  }
+  return table;
+}
+
+/** 实参数统计：从 openIdx 的 `(` 做深度游走，depth=1 的顶层逗号计数；未闭合返回 null */
+function countCallArgs(clean, openIdx) {
+  let depth = 0;
+  let args = 1;
+  for (let i = openIdx; i < clean.length; i++) {
+    const c = clean[i];
+    if ('([{'.includes(c)) { depth++; continue; }
+    if (')]}'.includes(c)) { depth--; if (depth === 0) return args; continue; }
+    if (c === ',' && depth === 1) args++;
+  }
+  return null;
+}
+
+/** J：调用实参少于必选形参（Kotlin error: No value passed for parameter）。
+ *  函数定义行与方法调用（前置 .）不报；变长签名不入表不执法 */
+function scanCallArity(code, sigTable) {
+  const clean = blank(code);
+  const hits = [];
+  const callRe = /(?<![\w$.])([A-Za-z_$][\w$]*)\s*\(/g;
+  let m;
+  while ((m = callRe.exec(clean)) !== null) {
+    const name = m[1];
+    const required = sigTable.get(name);
+    if (required === undefined || required === 0) continue;
+    const before = clean.slice(Math.max(0, m.index - 12), m.index);
+    if (/function\s+$/.test(before)) continue;
+    const args = countCallArgs(clean, m.index + m[0].length - 1);
+    if (args !== null && args < required) hits.push(`${name}(...) 实参 ${args} < 必选 ${required}`);
+  }
+  return hits;
+}
+
+/** 从类型头匹配处提取声明体的深度 1 字段名集合（嵌套内层不取——宁漏勿误） */
+function extractTypeFieldSet(clean, headMatch) {
+  const set = new Set();
+  let depth = 0;
+  let body = '';
+  for (let i = headMatch.index + headMatch[0].length - 1; i < clean.length; i++) {
+    const c = clean[i];
+    if (c === '{') { depth++; if (depth === 1) continue; }
+    else if (c === '}') { depth--; if (depth === 0) break; }
+    if (depth >= 1) body += c;
+  }
+  depth = 0;
+  for (const rawLine of body.split('\n')) {
+    const startsAtZero = depth === 0;
+    if (startsAtZero) {
+      // 单行多字段（`a : X, b : Y` / `a : X; b : Y`）按深度 0 的逗号/分号切段逐段取
+      const segs = [];
+      let d = 0;
+      let cur = '';
+      for (const c of rawLine) {
+        if ('([{'.includes(c)) d++;
+        else if (')]}'.includes(c)) d--;
+        if ((c === ',' || c === ';') && d === 0) { segs.push(cur); cur = ''; continue; }
+        cur += c;
+      }
+      segs.push(cur);
+      for (const seg of segs) {
+        const fm = /^\s*([A-Za-z_$][\w$]*)\s*\??\s*:/.exec(seg);
+        if (fm !== null) set.add(fm[1]);
+      }
+    }
+    for (const c of rawLine) {
+      if ('{(['.includes(c)) depth++;
+      else if ('})]'.includes(c)) depth--;
+    }
+  }
+  return set;
+}
+
+/** 全工程类型字段表：.uts 的 export type / interface / type 声明体（.uvue 本地类型由规则 K 按页覆盖） */
+function buildTypeFieldMap() {
+  const fields = new Map();
+  const headRe = /(?:export\s+)?(?:type|interface)\s+([A-Za-z_$][\w$]*)[^{]*\{/g;
+  let m;
+  for (const file of ALL_FILES.filter((f) => f.endsWith('.uts'))) {
+    const clean = blank(fs.readFileSync(file, 'utf8'));
+    while ((m = headRe.exec(clean)) !== null) {
+      if (!fields.has(m[1])) fields.set(m[1], extractTypeFieldSet(clean, m));
+    }
+  }
+  return fields;
+}
+
+/** L：类型化参数访问未声明字段（Kotlin error18: 找不到名称）。
+ *  仅执法字段表可解析的单类型参数；可选链 ?. 与未知类型不扫；方法调用（后随括号）不报 */
+function scanTypedParamFieldAccess(code, fieldMap) {
+  const clean = blank(code);
+  const hits = [];
+  const fnRe = /(?:^|\n)\s*(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/g;
+  let m;
+  while ((m = fnRe.exec(clean)) !== null) {
+    const openIdx = clean.indexOf('(', m.index + m[0].length - 1);
+    if (openIdx === -1) continue;
+    let depth = 0;
+    let closeIdx = -1;
+    for (let i = openIdx; i < clean.length; i++) {
+      if ('([{'.includes(clean[i])) depth++;
+      else if (')]}'.includes(clean[i])) { depth--; if (depth === 0) { closeIdx = i; break; } }
+    }
+    if (closeIdx === -1) continue;
+    const tracked = [];
+    for (const p of splitTopLevel(clean.slice(openIdx + 1, closeIdx))) {
+      const pm = /^\s*([A-Za-z_$][\w$]*)\s*:\s*([A-Za-z_$][\w$]*)\s*$/.exec(p);
+      if (pm === null) continue;
+      const set = fieldMap.get(pm[2]);
+      if (set !== undefined) tracked.push([pm[1], pm[2], set]);
+    }
+    if (tracked.length === 0) continue;
+    let bodyStart = -1;
+    for (let i = closeIdx + 1; i < clean.length; i++) {
+      if (clean[i] === '{') { bodyStart = i; break; }
+      if (clean[i] === ';') break;
+    }
+    if (bodyStart === -1) continue;
+    depth = 0;
+    let body = '';
+    for (let i = bodyStart; i < clean.length; i++) {
+      const c = clean[i];
+      if (c === '{') { depth++; if (depth === 1) continue; }
+      else if (c === '}') { depth--; if (depth === 0) break; }
+      if (depth >= 1) body += c;
+    }
+    const accessRe = /(?<![\w$])([A-Za-z_$][\w$]*)\s*\.\s*([A-Za-z_$][\w$]*)\b(?!\s*\()/g;
+    while ((m = accessRe.exec(body)) !== null) {
+      for (const [pname, typeName, set] of tracked) {
+        if (m[1] === pname && !set.has(m[2])) hits.push(`参数 ${pname} : ${typeName} 访问未声明字段 ${m[2]}`);
+      }
+    }
+  }
+  return hits;
+}
+
+/** K：模板 v-for 别名访问未声明字段（Kotlin error18——模板属性访问同样走 Kotlin 类型检查）。
+ *  标签游走维护 v-for 绑定栈做块级作用域归属（同名别名各归各块）；元素类型取 script 的
+ *  `const src = ref<ET[]>` / `const src : ET[] =`；来源或类型不可解析则跳过（宁漏勿误） */
+function scanTemplateFields(text, fieldMap) {
+  const scriptIdx = text.indexOf('<script');
+  if (scriptIdx === -1) return [];
+  const template = text.slice(0, scriptIdx);
+  const script = blank(text.slice(scriptIdx));
+  // 页面本地 type/interface 声明优先于全局表（同名遮蔽场景，如 dashboard 本地 CourseItem）
+  const effFields = new Map(fieldMap);
+  const localHeadRe = /(?:^|\n)\s*(?:export\s+)?(?:type|interface)\s+([A-Za-z_$][\w$]*)[^{]*\{/g;
+  let hm;
+  while ((hm = localHeadRe.exec(script)) !== null) {
+    effFields.set(hm[1], extractTypeFieldSet(script, hm));
+  }
+  const elemTypeOf = (src) => {
+    let dm;
+    let et = null;
+    const declRefRe = new RegExp('const\\s+' + src + '\\s*=\\s*ref\\s*<\\s*([\\w$.]+)\\s*\\[\\s*\\]\\s*>');
+    const declAnnotRe = new RegExp('const\\s+' + src + '\\s*:\\s*([\\w$.]+)\\s*\\[\\s*\\]\\s*=');
+    if ((dm = declRefRe.exec(script)) !== null) et = dm[1];
+    if (et === null && (dm = declAnnotRe.exec(script)) !== null) et = dm[1];
+    return et;
+  };
+  const hits = [];
+  const stack = [];
+  const checkChunk = (chunk) => {
+    for (const entry of stack) {
+      if (entry.binding === null || entry.binding.fields === undefined) continue;
+      const b = entry.binding;
+      const accRe = new RegExp('(?<![\\w$])' + b.alias + '\\s*\\.\\s*([A-Za-z_$][\\w$]*)\\b(?!\\s*\\()', 'g');
+      let am;
+      while ((am = accRe.exec(chunk)) !== null) {
+        if (!b.fields.has(am[1])) hits.push(`v-for 别名 ${b.alias} : ${b.type} 访问未声明字段 ${am[1]}`);
+      }
+    }
+  };
+  const tagRe = /<(\/?)([\w-]+)((?:[^>"']|"[^"]*"|'[^']*')*?)(\/?)>/g;
+  let m;
+  let lastEnd = 0;
+  while ((m = tagRe.exec(template)) !== null) {
+    checkChunk(template.slice(lastEnd, m.index));
+    lastEnd = m.index + m[0].length;
+    const isClosing = m[1] === '/';
+    const isSelfClosing = m[4] === '/';
+    const tag = m[2];
+    const attrs = m[3] || '';
+    if (!isClosing) {
+      let binding = null;
+      const vf = /v-for=(["'])\s*\(?\s*([A-Za-z_$][\w$]*)\s*(?:,\s*[^"']*?)?\s*\)?\s+in\s+([A-Za-z_$][\w$]*)\s*\1/.exec(attrs);
+      if (vf !== null) {
+        const et = elemTypeOf(vf[3]);
+        if (et !== null) binding = { alias: vf[2], type: et, fields: effFields.get(et) };
+      }
+      stack.push({ tag, binding });
+      checkChunk(attrs);
+      if (isSelfClosing) stack.pop();
+    } else {
+      for (let i = stack.length - 1; i >= 0; i--) {
+        if (stack[i].tag === tag) { stack.splice(i, 1); break; }
+      }
+    }
+  }
+  checkChunk(template.slice(lastEnd));
+  return hits;
 }
 
 // ── 注入违规自检（证明检测函数有效，不是空跑假绿）────────────────────────
@@ -194,6 +529,66 @@ describe('守护自检：检测逻辑对已知违规样本必须报出', () => {
     const map = buildExportedTypeMap();
     expect(map.has('SecureSetResult')).toBe(true);
     expect(map.has('StoredCredentials')).toBe(true);
+  });
+
+  it('F 能报出裸 String() 强转（对照组：toString 与标识符内 String 不报）', () => {
+    expect(scanBareStringCall('const a = String(123)')).toHaveLength(1);
+    expect(scanBareStringCall('const b = x.toString()')).toEqual([]);
+    expect(scanBareStringCall('const c = "String(x) in string"')).toEqual([]);
+    expect(scanBareStringCall('const d = UTSCString(x)')).toEqual([]);
+  });
+
+  it('G 能报出 undefined 字面量（对照组：null 与注释/字符串内的 undefined 不报）', () => {
+    expect(scanUndefinedLiteral('let x = undefined')).toHaveLength(1);
+    expect(scanUndefinedLiteral('let x = obj ?? undefined')).toHaveLength(1);
+    expect(scanUndefinedLiteral('let x = null')).toEqual([]);
+    expect(scanUndefinedLiteral('// 空值传 undefined 会编译失败')).toEqual([]);
+    expect(scanUndefinedLiteral('const s = "undefined value"')).toEqual([]);
+  });
+
+  it('H 能报出 catch 参数显式 : any（对照组：无注解与 any | null 不报）', () => {
+    expect(scanCatchAnyParam('.catch((e : any) => { fail(e) })')).toHaveLength(1);
+    expect(scanCatchAnyParam('try { x } catch (err : any) { log(err) }')).toHaveLength(1);
+    expect(scanCatchAnyParam('.catch((e) => { fail(e) })')).toEqual([]);
+    expect(scanCatchAnyParam('.catch((e : any | null) => { fail(e) })')).toEqual([]);
+  });
+
+  it('I 能报出 : any 参数访问 .detail（对照组：类型化事件对象与其他成员不报）', () => {
+    expect(scanAnyParamDetailAccess('onChange((e : any) => { const v = e.detail.value })')).toHaveLength(1);
+    expect(scanAnyParamDetailAccess('function h(e : any) : void {\n  const v = e.detail\n}')).toHaveLength(1);
+    expect(scanAnyParamDetailAccess('onInput((e) => { const v = e.detail.value })')).toEqual([]);
+    expect(scanAnyParamDetailAccess('onChange((e : any) => { const v = e.value })')).toEqual([]);
+    expect(scanAnyParamDetailAccess('.catch((err : any | null) => { log(err) })')).toEqual([]);
+  });
+
+  it('J 能报出实参少于必选形参（对照组：实参齐全与方法调用不报）', () => {
+    const table = new Map([['sendInput', 3]]);
+    const code = 'function sendInput(a : string, b : string, c : string[]) : void {}\nsendInput("x", "y")';
+    expect(scanCallArity(code, table)).toHaveLength(1);
+    expect(scanCallArity('sendInput("x", "y", [])', table)).toEqual([]);
+    expect(scanCallArity('obj.sendInput("x")', table)).toEqual([]);
+  });
+
+  it('J 函数定义行自身不计入调用（定义形参可少于全局表同名签名）', () => {
+    const table = new Map([['helper', 2]]);
+    const code = 'function helper(a : string) : void { }\nconst r = helper("only-one")';
+    expect(scanCallArity(code, table)).toHaveLength(1);
+  });
+
+  it('L 能报出类型化参数访问未声明字段（对照组：已声明字段与未知类型不报）', () => {
+    const fields = new Map([['ForumReply', new Set(['id', 'likes_count', 'liked'])]]);
+    const code = 'function likes(r : ForumReply) : number {\n  return r.like_count\n}';
+    expect(scanTypedParamFieldAccess(code, fields)).toHaveLength(1);
+    expect(scanTypedParamFieldAccess('function likes(r : ForumReply) : number {\n  return r.likes_count\n}', fields)).toEqual([]);
+    expect(scanTypedParamFieldAccess('function f(o : SomeUnknown) : void {\n  return o.whatever\n}', fields)).toEqual([]);
+  });
+
+  it('K 能报出 v-for 别名访问未声明模板字段（对照组：已声明字段与未解析来源不报）', () => {
+    const fields = new Map([['ForumTopic', new Set(['id', 'likes_count'])]]);
+    const text = '<template><view v-for="item in topics">{{ item.like_count }} {{ item.likes_count }}</view></template><script setup lang="uts">\nconst topics = ref<ForumTopic[]>([])\n</script>';
+    expect(scanTemplateFields(text, fields)).toHaveLength(1);
+    const unknown = '<template><view v-for="x in mystuff">{{ x.whatever }}</view></template><script setup lang="uts">\nconst mystuff = ref<any[]>([])\n</script>';
+    expect(scanTemplateFields(unknown, fields)).toEqual([]);
   });
 });
 
@@ -272,6 +667,69 @@ describe('全工程守护：五类 Kotlin 编译地雷零命中', () => {
       for (const h of scanUntypedNumericConst(blank(fs.readFileSync(file, 'utf8')))) {
         violations.push(`${path.relative(ROOT, file)}: ${h}`);
       }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it('F：无裸 String() 强转（Kotlin 无 String(x) 重载，应为 x.toString()）', () => {
+    const violations = [];
+    for (const u of allCodeUnits()) {
+      // app-ios 原生互操作文件用 Swift 编译：String(data:encoding:) 是合法初始化器，不在本规则靶内
+      if (u.file.includes('app-ios')) continue;
+      for (const h of scanBareStringCall(u.code)) violations.push(`${path.relative(ROOT, u.file)}: ${h}`);
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it('G：无 undefined 字面量（UTS 空值统一 null，Kotlin 找不到名称 undefined）', () => {
+    const violations = [];
+    for (const u of allCodeUnits()) {
+      for (const h of scanUndefinedLiteral(u.code)) violations.push(`${path.relative(ROOT, u.file)}: ${h}`);
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it('H：catch 参数无显式 : any 注解（allowlist 外零命中，应 (e) 或 any | null）', () => {
+    const violations = [];
+    const exempt = GUARD_ALLOWLIST.H;
+    for (const u of allCodeUnits()) {
+      if (exempt.has(path.relative(ROOT, u.file))) continue;
+      for (const h of scanCatchAnyParam(u.code)) violations.push(`${path.relative(ROOT, u.file)}: ${h}`);
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it('I：script 内无 : any 参数访问 .detail（类型化事件对象自带 detail 属合法，按组合判定）', () => {
+    const violations = [];
+    for (const u of allCodeUnits()) {
+      for (const h of scanAnyParamDetailAccess(u.code)) violations.push(`${path.relative(ROOT, u.file)}: ${h}`);
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it('J：无调用实参少于必选形参（Kotlin error: No value passed for parameter）', () => {
+    const violations = [];
+    const table = buildFunctionSignatureMap();
+    for (const u of allCodeUnits()) {
+      for (const h of scanCallArity(u.code, table)) violations.push(path.relative(ROOT, u.file) + ': ' + h);
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it('K：模板 v-for 别名无未声明字段访问（Kotlin error18: 找不到名称）', () => {
+    const violations = [];
+    const fieldMap = buildTypeFieldMap();
+    for (const file of ALL_FILES.filter((f) => f.endsWith('.uvue'))) {
+      for (const h of scanTemplateFields(fs.readFileSync(file, 'utf8'), fieldMap)) violations.push(path.relative(ROOT, file) + ': ' + h);
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it('L：类型化参数无未声明字段访问（Kotlin error18: 找不到名称）', () => {
+    const violations = [];
+    const fieldMap = buildTypeFieldMap();
+    for (const u of allCodeUnits()) {
+      for (const h of scanTypedParamFieldAccess(u.code, fieldMap)) violations.push(path.relative(ROOT, u.file) + ': ' + h);
     }
     expect(violations).toEqual([]);
   });

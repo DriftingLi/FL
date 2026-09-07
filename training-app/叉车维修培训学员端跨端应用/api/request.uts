@@ -232,6 +232,19 @@ export function request<T>(options : RequestOptions) : Promise<UTSJSONObject> {
     })
 }
 
+/**
+ * mapper-callback 泛型出口：请求成功后将拆包 data 映射为领域 DTO
+ * 与手动 JSON 类型映射（ADR-0003）同构：域 api 传入自己的映射函数，
+ * 页面层只消费域 api 导出的类型，不再接触 UTSJSONObject
+ * @param map 领域映射函数，收到统一信封解析后的 data（对象形态；裸数组已包装为 { list: [...] }）
+ * @throws Error 网络错误、HTTP/业务错误由底层 request reject；map 抛出的异常不被捕获，沿 Promise 链 reject
+ */
+export function requestMapped<T>(options : RequestOptions, map : (data : UTSJSONObject) => T) : Promise<T> {
+    return request<UTSJSONObject>(options).then((data : UTSJSONObject) : T => {
+        return map(data)
+    })
+}
+
 /** 单次 HTTP 请求（模块级函数，支持 401 刷新后重试） */
 function doSingleRequest(
     url : string,
