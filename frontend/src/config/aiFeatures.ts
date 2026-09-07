@@ -10,8 +10,6 @@ import { aiFeatureUI } from './aiFeatureUI'
 // 收录规则：注册表中管理端单绑定且声明计费的专项对话功能（与后端 featureChatKeys 同口径），
 // 键序 = 注册表声明序（助手主页入口卡片顺序）。
 export type AIFeatureKey =
-  | 'fault_consult'
-  | 'fault_code_query'
   | 'maintenance_knowledge'
   | 'drawing_recognition'
   | 'exercise_solving'
@@ -19,8 +17,6 @@ export type AIFeatureKey =
 
 // 注册表派生对：[功能键, 展示名, 是否限免]（展示名即后端 FeatureLabel；限免位供前端角标）。
 const AI_FEATURE_REGISTRY: ReadonlyArray<readonly [AIFeatureKey, string, boolean]> = [
-  ['fault_consult', '故障咨询', false],
-  ['fault_code_query', '故障代码查询', false],
   ['maintenance_knowledge', '维保知识', false],
   ['drawing_recognition', '图纸识别', false],
   ['exercise_solving', '习题解答', false],

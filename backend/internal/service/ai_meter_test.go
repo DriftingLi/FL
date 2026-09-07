@@ -90,7 +90,7 @@ func TestAIMeterBilledBranches(t *testing.T) {
 
 	// billed=true（专项聊天）：预检 + 扣费各一次，prompt/completion 事实与请求一致
 	content, usage, err := port.Stream(WithAIRequestID(ctx, "req-billed"),
-		AIModelSelector{FeatureKey: FeatureFaultConsult, UserID: 7}, msgs, nil)
+		AIModelSelector{FeatureKey: FeatureMaintenanceKnowledge, UserID: 7}, msgs, nil)
 	if err != nil || content != "回复内容" {
 		t.Fatalf("billed 调用异常: content=%q err=%v", content, err)
 	}
@@ -104,7 +104,7 @@ func TestAIMeterBilledBranches(t *testing.T) {
 	// 游客（未登录）：不预检、不扣费、usage=nil
 	meter2 := &fakeAIMeter{}
 	port2, _ := newMeteredStack("回复内容", meter2)
-	_, usage2, err := port2.Stream(ctx, AIModelSelector{FeatureKey: FeatureFaultConsult}, msgs, nil)
+	_, usage2, err := port2.Stream(ctx, AIModelSelector{FeatureKey: FeatureMaintenanceKnowledge}, msgs, nil)
 	if err != nil || usage2 != nil {
 		t.Fatalf("游客调用不应计费: usage=%+v err=%v", usage2, err)
 	}
@@ -115,7 +115,7 @@ func TestAIMeterBilledBranches(t *testing.T) {
 	// 空回复：不扣费（与迁移前 handler 条件一致）
 	meter3 := &fakeAIMeter{}
 	port3, _ := newMeteredStack("", meter3)
-	_, usage3, err := port3.Stream(ctx, AIModelSelector{FeatureKey: FeatureFaultConsult, UserID: 7}, msgs, nil)
+	_, usage3, err := port3.Stream(ctx, AIModelSelector{FeatureKey: FeatureMaintenanceKnowledge, UserID: 7}, msgs, nil)
 	if err != nil || usage3 != nil {
 		t.Fatalf("空回复不应扣费: usage=%+v err=%v", usage3, err)
 	}
@@ -124,7 +124,7 @@ func TestAIMeterBilledBranches(t *testing.T) {
 	meter4 := &fakeAIMeter{}
 	port4, _ := newMeteredStack("标题", meter4)
 	_, usage4, err := port4.Stream(withAIMeterFree(ctx),
-		AIModelSelector{FeatureKey: FeatureFaultConsult, UserID: 7}, msgs, nil)
+		AIModelSelector{FeatureKey: FeatureMaintenanceKnowledge, UserID: 7}, msgs, nil)
 	if err != nil || usage4 != nil {
 		t.Fatalf("免费声明调用不应计费: usage=%+v err=%v", usage4, err)
 	}
@@ -167,7 +167,7 @@ func TestAIMeterDeclaredPromptCharsWins(t *testing.T) {
 	msgs := []*schema.Message{schema.UserMessage("[部分图片加载失败: 注记文本不参与计费]")}
 
 	_, usage, err := port.Stream(withAIPromptChars(WithAIRequestID(ctx, "req-declared"), 0),
-		AIModelSelector{FeatureKey: FeatureFaultConsult, UserID: 7}, msgs, nil)
+		AIModelSelector{FeatureKey: FeatureMaintenanceKnowledge, UserID: 7}, msgs, nil)
 	if err != nil || usage == nil || usage.Res == nil {
 		t.Fatalf("声明路径调用异常: usage=%+v err=%v", usage, err)
 	}
@@ -179,7 +179,7 @@ func TestAIMeterDeclaredPromptCharsWins(t *testing.T) {
 	meter2 := &fakeAIMeter{}
 	port2, _ := newMeteredStack("回复", meter2)
 	if _, _, err := port2.Stream(WithAIRequestID(ctx, "req-fallback"),
-		AIModelSelector{FeatureKey: FeatureFaultConsult, UserID: 7}, msgs, nil); err != nil {
+		AIModelSelector{FeatureKey: FeatureMaintenanceKnowledge, UserID: 7}, msgs, nil); err != nil {
 		t.Fatalf("回退路径调用失败: %v", err)
 	}
 	if _, _, pc, _, _ := meter2.snapshot(); pc != len(msgs[0].Content) {
@@ -194,7 +194,7 @@ func TestAIMeterRequestIDFallbackKey(t *testing.T) {
 	port, _ := newMeteredStack("回复", meter)
 	msgs := []*schema.Message{schema.UserMessage("问")}
 
-	if _, _, err := port.Stream(ctx, AIModelSelector{FeatureKey: FeatureFaultConsult, UserID: 42}, msgs, nil); err != nil {
+	if _, _, err := port.Stream(ctx, AIModelSelector{FeatureKey: FeatureMaintenanceKnowledge, UserID: 42}, msgs, nil); err != nil {
 		t.Fatalf("调用失败: %v", err)
 	}
 	if _, _, _, _, rid := meter.snapshot(); !regexp.MustCompile(`^ai-42-[0-9]+$`).MatchString(rid) {
@@ -210,7 +210,7 @@ func TestAIMeterPreflightBlocksBeforeTransport(t *testing.T) {
 	port, inner := newMeteredStack("不应到达", meter)
 	msgs := []*schema.Message{schema.UserMessage("问")}
 
-	content, usage, err := port.Stream(ctx, AIModelSelector{FeatureKey: FeatureFaultConsult, UserID: 7}, msgs, nil)
+	content, usage, err := port.Stream(ctx, AIModelSelector{FeatureKey: FeatureMaintenanceKnowledge, UserID: 7}, msgs, nil)
 	if !errors.Is(err, ErrInsufficientPoints) || content != "" || usage != nil {
 		t.Fatalf("预检阻断应短路: content=%q usage=%+v err=%v", content, usage, err)
 	}
@@ -292,13 +292,13 @@ func TestAIMeterAutoTitleNoDoubleCharge(t *testing.T) {
 	assistant := NewAIAssistantService(db, cfgSvc, NewFileStore("", nil, zap.NewNop()), "test-master-key", zap.NewNop(), port)
 
 	ctx := context.Background()
-	session, err := assistant.CreateSession(ctx, 7, "新会话", "", FeatureFaultConsult)
+	session, err := assistant.CreateSession(ctx, 7, "新会话", "", FeatureMaintenanceKnowledge)
 	if err != nil {
 		t.Fatalf("CreateSession 失败: %v", err)
 	}
 	_, usage, err := assistant.StreamChat(ctx, 7, StreamChatReq{
 		SessionID:  session.ID,
-		FeatureKey: FeatureFaultConsult,
+		FeatureKey: FeatureMaintenanceKnowledge,
 		Messages: []struct {
 			Role    string   `json:"role"`
 			Content string   `json:"content"`
@@ -392,7 +392,7 @@ func meteredHandlerPipeline(ctx context.Context, port AIModelPort, f billingFact
 	} else {
 		msgs = append(msgs, schema.UserMessage(portText))
 	}
-	sel := AIModelSelector{FeatureKey: FeatureFaultConsult, UserID: f.userID}
+	sel := AIModelSelector{FeatureKey: FeatureMaintenanceKnowledge, UserID: f.userID}
 	return port.Stream(callCtx, sel, msgs, nil)
 }
 
@@ -574,7 +574,7 @@ func TestAIMeterFreePreviewFollowsRegistry(t *testing.T) {
 	if aiFeatureChatBilled(FeatureFaultDiagnosis) {
 		t.Fatal("fault_diagnosis 限免期 aiFeatureChatBilled 应为 false")
 	}
-	if !aiFeatureChatBilled(FeatureFaultConsult) {
+	if !aiFeatureChatBilled(FeatureMaintenanceKnowledge) {
 		t.Fatal("fault_consult 非限免应保持计费")
 	}
 	// 端到端：限免功能经 meter 栈不触发闸门（预检/扣费 0 次）
@@ -593,7 +593,7 @@ func TestAIMeterFreePreviewFollowsRegistry(t *testing.T) {
 	meter2 := &fakeAIMeter{}
 	port2, _ := newMeteredStack("回复", meter2)
 	_, usage2, err := port2.Stream(WithAIRequestID(context.Background(), "req-billed"),
-		AIModelSelector{FeatureKey: FeatureFaultConsult, UserID: 7}, msgs, nil)
+		AIModelSelector{FeatureKey: FeatureMaintenanceKnowledge, UserID: 7}, msgs, nil)
 	if err != nil || usage2 == nil || usage2.Res == nil {
 		t.Fatalf("非限免对话应正常计费: usage=%+v err=%v", usage2, err)
 	}

@@ -4,8 +4,6 @@
 // 功能清单事实不在本文件，勿在生成面之外增删功能键。
 import type { Component } from 'vue'
 import {
-  Warning,
-  Search,
   Reading,
   Picture,
   EditPen,
@@ -26,37 +24,6 @@ export interface AIFeatureUIDescriptor {
 }
 
 export const aiFeatureUI: Record<AIFeatureKey, AIFeatureUIDescriptor> = {
-  fault_consult: {
-    routePath: '/ai-assistant/fault-consult',
-    welcome: '描述您遇到的叉车故障现象，我将按「可能原因 → 排查步骤 → 处理方法」为您诊断。',
-    entryDesc: '描述故障现象，按步骤排查',
-    icon: Warning,
-    suggestions: [
-      '叉车启动困难怎么排查？',
-      '液压升降缓慢的可能原因？',
-      '转向沉重是什么问题？',
-      '制动失灵如何应急处理？'
-    ],
-    quickOptions: [
-      { label: '品牌', options: ['林德', '丰田', '杭叉', '合力', '永恒力', '其他'] },
-      { label: '动力类型', options: ['电动', '内燃'] }
-    ]
-  },
-  fault_code_query: {
-    routePath: '/ai-assistant/fault-code',
-    welcome: '输入叉车显示的故障代码，我将解读代码含义、严重程度与处理建议。不同品牌代码含义可能不同，建议同时选择品牌。',
-    entryDesc: '解读代码含义与处理建议',
-    icon: Search,
-    suggestions: [
-      '故障代码 E01 是什么意思？',
-      'E24 代码怎么处理？',
-      '报警灯闪烁 5 次代表什么？',
-      '如何查询叉车故障码历史？'
-    ],
-    quickOptions: [
-      { label: '品牌', options: ['林德', '丰田', '杭叉', '合力', '永恒力', '其他'] }
-    ]
-  },
   maintenance_knowledge: {
     routePath: '/ai-assistant/maintenance',
     welcome: '叉车维保专家为您解答保养周期、保养项目、执行标准与注意事项。',

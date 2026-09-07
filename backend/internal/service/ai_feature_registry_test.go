@@ -20,8 +20,6 @@ func TestAIFeatureRegistry_DerivedSurfaces(t *testing.T) {
 		FeatureAIAssistantNormal,
 		FeatureAIAssistantExpert,
 		FeatureQuestionExplanation,
-		FeatureFaultConsult,
-		FeatureFaultCodeQuery,
 		FeatureMaintenanceKnowledge,
 		FeatureDrawingRecognition,
 		FeatureExerciseSolving,
@@ -37,8 +35,6 @@ func TestAIFeatureRegistry_DerivedSurfaces(t *testing.T) {
 		FeatureAIAssistantNormal:      "AI 助手 · 普通模式",
 		FeatureAIAssistantExpert:      "AI 助手 · 专家模式",
 		FeatureQuestionExplanation:    "题目 AI 解析",
-		FeatureFaultConsult:           "故障咨询",
-		FeatureFaultCodeQuery:         "故障代码查询",
 		FeatureMaintenanceKnowledge:   "维保知识",
 		FeatureDrawingRecognition:     "图纸识别",
 		FeatureExerciseSolving:        "习题解答",
@@ -50,8 +46,6 @@ func TestAIFeatureRegistry_DerivedSurfaces(t *testing.T) {
 	}
 
 	wantChatKeys := map[string]bool{
-		FeatureFaultConsult:         true,
-		FeatureFaultCodeQuery:       true,
 		FeatureMaintenanceKnowledge: true,
 		FeatureDrawingRecognition:   true,
 		FeatureExerciseSolving:      true,
@@ -63,8 +57,6 @@ func TestAIFeatureRegistry_DerivedSurfaces(t *testing.T) {
 
 	// 专项聊天功能：注册行提示词 = 原多臂 switch 各臂
 	wantPrompt := map[string]string{
-		FeatureFaultConsult:         faultConsultSystemPrompt,
-		FeatureFaultCodeQuery:       faultCodeQuerySystemPrompt,
 		FeatureMaintenanceKnowledge: maintenanceKnowledgeSystemPrompt,
 		FeatureDrawingRecognition:   drawingRecognitionSystemPrompt,
 		FeatureExerciseSolving:      exerciseSolvingSystemPrompt,
