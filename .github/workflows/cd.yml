@@ -720,10 +720,24 @@ jobs:
         if: success() && needs.gate.outputs.environment == 'testing'
         run: |
           echo "测试环境部署成功，停止容器以释放资源..."
-          ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
-            "target" \
-            "cd $DEPLOY_PATH && timeout 120 docker compose -f docker-compose.prod.yml down 2>&1 || true"
-          echo "✅ 测试环境容器已停止"
+          # teardown 是清理步骤，不是冒烟验证内容：健康检查已过即冒烟成功。
+          # ssh 连接层抖动（exit 255）不应标红整条冒烟——重试 3 次后仅告警放行。
+          # 残留容器由下一次 testing 部署的 up -d 覆盖 / down 清理，无累积危害。
+          OK=0
+          for i in 1 2 3; do
+            if ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
+              "target" \
+              "cd $DEPLOY_PATH && timeout 120 docker compose -f docker-compose.prod.yml down 2>&1 || true"; then
+              OK=1; break
+            fi
+            echo "⚠️ teardown 第 $i 次失败（ssh exit=$?），3s 后重试..."
+            sleep 3
+          done
+          if [ "$OK" = "1" ]; then
+            echo "✅ 测试环境容器已停止"
+          else
+            echo "::warning::teardown 重试 3 次仍失败（疑似网络抖动），冒烟结论不受影响，残留容器由下次部署清理"
+          fi
 
       # --------------------------------------------------------
       # Step 2.5: 清理
