@@ -41,15 +41,30 @@ describe('WrongStatsCard 接线契约', () => {
     expect(page).toContain("./components/wrong-stats-card.uvue");
   });
 
-  it('卡片自拉 stats（getWrongQuestionStatsApi 在卡片内，页面不再拉 stats）', () => {
-    expect(card()).toContain('getWrongQuestionStatsApi');
-    expect(page).not.toContain('getWrongQuestionStatsApi');
+  it('卡片纯展示（零取数/零 emit/零 expose）——stats 归页面所有', () => {
+    const c = card();
+    expect(c).not.toContain('getWrongQuestionStatsApi');
+    expect(c).not.toMatch(/defineEmits|defineExpose/);
+    // 页面自拉 stats（卡片自拉 + ref<any> 桥接是 error18 根因，#687 已废）
+    expect(page).toContain('getWrongQuestionStatsApi');
+    expect(page).toContain('async function loadStats');
+    expect(page).not.toMatch(/ref<\s*any/);
   });
 
-  it('卡片声明 todayCount prop 且模板消费 props 值', () => {
+  it('卡片声明 statsTotal/todayCount 两个展示 prop，模板消费', () => {
     const c = card();
+    expect(c).toContain('statsTotal?: number');
     expect(c).toContain('todayCount?: number');
-    expect(c).toMatch(/\{\{\s*(props\.todayCount|todayCount)\s*\}\}/);
+    expect(c).toMatch(/\{\{\s*statsTotal\s*\}\}/);
+    expect(c).toMatch(/\{\{\s*todayCount\s*\}\}/);
+  });
+
+  it('页面 stats 声明先于消费它的 groups computed（Kotlin 局部无前向引用）', () => {
+    const statsIdx = page.indexOf('const stats = ref<WrongQuestionStats>');
+    const groupsIdx = page.indexOf('const groups = computed<GroupRow[]>');
+    expect(statsIdx).toBeGreaterThan(-1);
+    expect(groupsIdx).toBeGreaterThan(-1);
+    expect(statsIdx).toBeLessThan(groupsIdx);
   });
 });
 

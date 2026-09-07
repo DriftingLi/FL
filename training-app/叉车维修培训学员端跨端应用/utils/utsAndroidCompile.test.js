@@ -28,6 +28,7 @@
  *   N. as unknown as 双重强转（Kotlin error18 类型污染；对象 prop 走工厂默认值）
  *   O. 模板 {{ 裸函数名 }} 插值（uni-app x 不自动调用无参 function，静默渲染源码）
  *   P. 可选对象 prop 成员直读（Kotlin error18 nullable 接收者；扁平原始 props 或局部 val+判空）
+ *   Q. ref<any> 类型擦除声明（Kotlin error18 any 无成员；组件实例引用需类型化）
  * 存量违例走 GUARD_ALLOWLIST 豁免，由后续工单在各自范围清零（见常量注释）。
  */
 const fs = require('fs');
@@ -313,6 +314,18 @@ function scanOptionalObjectPropAccess(text) {
         if (!seen.has(mm[0])) { seen.add(mm[0]); hits.push(where + ' 直读可选对象 prop ' + mm[0]); }
       }
     }
+  }
+  return hits;
+}
+
+/** Q：ref<any> 类型擦除声明——Kotlin 侧 any 无成员（error18 找不到名称），
+ *  组件实例引用应定义 interface 或用 defineExpose 的类型化包装，不裸 any。全树 0 存量，全量执法 */
+function scanRefAnyDeclaration(code) {
+  const clean = blank(code);
+  const hits = [];
+  const lines = clean.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    if (/\bref\s*<[^>]*\bany\b/.test(lines[i])) hits.push(lines[i].trim());
   }
   return hits;
 }
@@ -725,6 +738,13 @@ describe('守护自检：检测逻辑对已知违规样本必须报出', () => {
     const localVal = '<template><text>x</text></template>\n<script setup lang="uts">\n    const props = withDefaults(defineProps<{\n        redoResult?: RedoResult | null\n    }>(), {})\n    function r2() : RedoResult | null { return props.redoResult }\n    function f() : boolean { const r = r2(); if (r == null) return false; return r.correct }\n</script>';
     expect(scanOptionalObjectPropAccess(localVal)).toEqual([]);
   });
+
+  it('Q 能报出 ref<any> 类型擦除声明（对照组：具体类型 ref / any | null 形参不报）', () => {
+    expect(scanRefAnyDeclaration('const statsCardRef = ref<any | null>(null)')).toHaveLength(1);
+    expect(scanRefAnyDeclaration('const x = ref<any>(1)')).toHaveLength(1);
+    expect(scanRefAnyDeclaration('const stats = ref<WrongQuestionStats>(s)')).toEqual([]);
+    expect(scanRefAnyDeclaration('function f(e : any | null) : void {}')).toEqual([]);
+  });
 });
 
 // ── 全工程真实扫描（守护本体，回归即红）────────────────────────────────
@@ -897,6 +917,14 @@ describe('全工程守护：五类 Kotlin 编译地雷零命中', () => {
     const violations = [];
     for (const file of ALL_FILES.filter((f) => f.endsWith('.uvue'))) {
       for (const h of scanOptionalObjectPropAccess(fs.readFileSync(file, 'utf8'))) violations.push(path.relative(ROOT, file) + ': ' + h);
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it('Q：无 ref<any> 类型擦除声明（Kotlin error18 any 无成员；组件引用用 interface 或类型化包装）', () => {
+    const violations = [];
+    for (const u of allCodeUnits()) {
+      for (const h of scanRefAnyDeclaration(u.code)) violations.push(path.relative(ROOT, u.file) + ': ' + h);
     }
     expect(violations).toEqual([]);
   });
