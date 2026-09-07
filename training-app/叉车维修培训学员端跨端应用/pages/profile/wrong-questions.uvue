@@ -49,7 +49,7 @@
                         :wrong-count="item.wrong_count" :favorited="item.favorited" :options="item.options"
                         :expanded="expandedId == item.question_id" :redo-result="expandedId == item.question_id ? redoResult : null"
                         :last-redo-answer="lastRedoAnswer" @toggle-expand="onToggleExpand(item.question_id)"
-                        @submit-redo="onSubmitRedo(item, $event)" @remove="onRemove(item)" />
+                        @submit-redo="onSubmitRedo(item, $event as string[])" @remove="onRemove(item)" />
                 </view>
                 <view v-if="loading" class="loading-more">
                     <text class="loading-text">加载中...</text>
@@ -75,7 +75,7 @@
     } from '../../api/wrongQuestion'
     import type { WrongQuestionQuery } from '../../api/wrongQuestion'
     import { getTypeName, isMultiChoice } from '../../utils/wrongQuestionDisplay'
-    import type { WrongQuestionItem, WrongQuestionStats } from '../../types/index'
+    import type { WrongQuestionItem, WrongQuestionStats, WrongQuestionListResult } from '../../types/index'
     import WrongStatsCard from './components/wrong-stats-card.uvue'
     import WrongQuestionCard from './components/wrong-question-card.uvue'
     import WrongFilterBar from './components/wrong-filter-bar.uvue'
@@ -133,7 +133,7 @@
 
     async function loadStats() : void {
         try {
-            const data = await getWrongQuestionStatsApi()
+            const data : WrongQuestionStats = await getWrongQuestionStatsApi()
             stats.value = data
         } catch (e) {
             console.error('[wrong-questions] load stats failed:', e)
@@ -206,7 +206,7 @@
 
         loading.value = true
         try {
-            const result = await getWrongQuestionsApi(page.value, pageSize, buildQuery())
+            const result : WrongQuestionListResult = await getWrongQuestionsApi(page.value, pageSize, buildQuery())
             if (reset) {
                 records.value = result.items
             } else {

@@ -91,7 +91,7 @@
     import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
     import { getCourseListApi } from '../../api/course'
-    import type { CourseItem } from '../../types/index'
+    import type { CourseItem, CourseListResult } from '../../types/index'
     import MallSortBar from './components/mall-sort-bar.uvue'
     import MallCategorySidebar from './components/mall-category-sidebar.uvue'
     import MallFloatActions from './components/mall-float-actions.uvue'
@@ -123,7 +123,7 @@
 
         loading.value = true
         try {
-            const result = await getCourseListApi(page.value, pageSize, 0, 0)
+            const result : CourseListResult = await getCourseListApi(page.value, pageSize, 0, 0)
             if (reset) {
                 products.value = result.items
             } else {

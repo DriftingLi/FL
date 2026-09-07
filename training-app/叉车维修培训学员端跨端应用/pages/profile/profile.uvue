@@ -74,7 +74,7 @@
     import { getPointsBalanceApi } from '../../api/points'
     import { useStatusBarHeight } from '../../utils/system'
     import { UNAVAILABLE_TOAST } from '../../constants/app'
-    import type { StudentProfile, UpdateProfileParams } from '../../types/index'
+    import type { StudentProfile, UpdateProfileParams, StudyStats, PointsBalance, CheckInCalendarResult } from '../../types/index'
     import ProfileUserRow from './components/profile-user-row.uvue'
 
     /** 宫格入口：path 为空或 available=false 时走占位提示 */
@@ -174,7 +174,7 @@
 
     async function loadProfile() {
         try {
-            const data = await getProfileApi()
+            const data : StudentProfile = await getProfileApi()
             profile.value = data
         } catch (e) {
             console.error('[profile] load failed:', e)
@@ -184,7 +184,7 @@
     /** 近 7 天有学习记录的天数 */
     async function loadStreak() {
         try {
-            const stats = await getStudyStatsApi(7)
+            const stats : StudyStats = await getStudyStatsApi(7)
             streakDays.value = stats.active_days
         } catch (e) {
             console.error('[profile] loadStreak failed:', e)
@@ -194,7 +194,7 @@
     /** 可用积分：取积分余额 */
     async function loadPoints() {
         try {
-            const data = await getPointsBalanceApi()
+            const data : PointsBalance = await getPointsBalanceApi()
             pointsTotal.value = data.total_points
         } catch (e) {
             console.error('[profile] loadPoints failed:', e)
@@ -207,7 +207,7 @@
             const now = new Date()
             const year = now.getFullYear()
             const month = now.getMonth() + 1
-            const result = await getCheckInCalendarApi(year, month)
+            const result : CheckInCalendarResult = await getCheckInCalendarApi(year, month)
             const todayStr = year + '-' + padZero(month) + '-' + padZero(now.getDate())
             todayChecked.value = false
             for (let i = 0; i < result.days.length; i++) {
