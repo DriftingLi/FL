@@ -18,16 +18,14 @@
     <!-- 输入框上方：专项功能胶囊工具栏（方案 B；空态随输入框居中，有消息沉底跟随） -->
     <template #input-toolbar>
       <div class="feature-toolbar flex gap-2 overflow-x-auto pb-2">
-        <button
+        <UiCapsule
           v-for="f in aiFeatures"
           :key="f.key"
-          class="feature-capsule flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-pill border border-line bg-panel px-3.5 py-1.5 text-[13px] text-ink-2 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:border-ui-400 hover:bg-ui-50 hover:text-ui-600"
+          :icon="f.icon"
+          :label="f.title"
+          :badge="f.freePreview ? '限免' : ''"
           @click="router.push(f.routePath)"
-        >
-          <el-icon :size="14"><component :is="f.icon" /></el-icon>
-          {{ f.title }}
-          <i v-if="f.freePreview" class="free-preview-badge">限免</i>
-        </button>
+        />
       </div>
     </template>
 
@@ -56,6 +54,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ChatDotRound } from '@element-plus/icons-vue'
 import ChatPageShell from '@/components/ai-assistant/ChatPageShell.vue'
+import UiCapsule from '@/components/ai-assistant/UiCapsule.vue'
 import { useAIAssistantStore } from '@/stores/aiAssistant'
 import { AI_FEATURES } from '@/config/aiFeatures'
 
@@ -116,18 +115,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* ===== 方案 B 胶囊工具栏（本页差异样式；#554 原则：色值走 token，深浅主题跟随） ===== */
-.free-preview-badge {
-  font-style: normal;
-  font-size: 10px;
-  font-weight: 600;
-  color: #fff;
-  background: var(--color-success);
-  border-radius: 999px;
-  padding: 1px 6px;
-  line-height: 1.4;
-}
-
+/* 模式未绑定提示（限免角标已收敛进 UiCapsule 组件） */
 .model-warning {
   text-align: center;
   font-size: 12px;

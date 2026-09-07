@@ -36,7 +36,7 @@ AI 安全审计用 DeepSec（Shield）。See `docs/agents/security-scan.md`.
 
 | 规则          | 内容                                                                                                       |
 | ----------- | -------------------------------------------------------------------------------------------------------- |
-| **R1 原子类区** | `src/components/ui/**` 与已纳入改造的页面：模板只用原子类；`<style scoped>` 仅保留伪元素、`:deep()` 改 Element Plus、keyframes、媒体查询 |
+| **R1 原子类区** | `src/components/ui/**` 与已纳入改造的页面：模板只用原子类；`<style scoped>` 仅保留伪元素（含 `:disabled` 等状态伪类）、`:deep()` 改 Element Plus、keyframes、媒体查询、多行截断的 mask 渐隐（原子类无等价物，见 `DiagnosisSources.vue`） |
 | **R2 冻结区**  | 未列入当期改造的页面与组件，scoped 样式**一行不动**。改共用件时新特性一律走 prop + 默认值等于现状，让未传值的调用方零 diff                                |
 | **R3 禁双写**  | 同一元素同一属性不允许既有 scoped 类又有原子类。需覆盖 Element Plus 外观时二选一：① scoped 内 `:deep()`；② 原子类加 `!` 后缀（`!px-4`）          |
 | **R4 迁移动作** | 页面改用原子类后，删除 scoped 块中已被替代的规则（沿用上一段「删 hint 同步删 CSS」的约定）                                                   |

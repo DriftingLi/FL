@@ -18,19 +18,17 @@
     <!-- 诊断筛选移入输入框上方工具栏胶囊（方案 B；空态随输入框居中，不再撑欢迎区） -->
     <template #input-toolbar>
       <div v-if="isDiagnosis" class="flex items-center gap-2 overflow-x-auto pb-2">
-        <button
-          class="flex shrink-0 cursor-pointer items-center gap-1 whitespace-nowrap rounded-pill border border-line bg-panel px-3.5 py-1.5 text-[13px] text-ink-2 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:border-ui-400 hover:text-ui-600"
-          :class="filterOpen ? 'border-ui-600 bg-ui-50 font-semibold text-ui-600' : ''"
+        <UiCapsule
+          :label="filterSummary ? `⚙ 筛选：${filterSummary}` : '⚙ 筛选'"
+          :active="filterOpen"
           @click="filterOpen = !filterOpen"
-        >
-          ⚙ 筛选{{ filterSummary ? `：${filterSummary}` : '' }} {{ filterOpen ? '▴' : '▾' }}
-        </button>
-        <button
+        />
+        <UiCapsule
           v-for="question in diagnosisQuickAsks"
           :key="question"
-          class="shrink-0 cursor-pointer whitespace-nowrap rounded-pill border border-line bg-panel px-3.5 py-1.5 text-[13px] text-ink-2 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:border-ui-400 hover:bg-ui-50 hover:text-ui-600"
+          :label="question"
           @click="quickAsk(question)"
-        >{{ question }}</button>
+        />
       </div>
       <!-- 折叠面板本体（挂输入区上方，随输入框居中/沉底；欢迎区不再渲染，避免撑爆空态） -->
       <div v-if="isDiagnosis && filterOpen" class="diagnosis-panel">
@@ -123,18 +121,23 @@
       />
     </template>
 
-    <!-- 输入区差异内容：当轮来源面板（SSE sources 事件内存态；落库后由逐轮回放接管） -->
+    <!-- 输入区差异内容：当轮来源面板与图片队列（叠放非互斥，见内层注释） -->
     <template #input-above>
+      <!-- 当轮来源面板（SSE sources 事件内存态；落库后由逐轮回放接管） -->
+      <!-- 与图片队列叠放（非互斥）：诊断页上传图后不断流也能看到待发送队列 -->
       <div v-if="isDiagnosis && store.lastSources.length" class="diagnosis-sources flex flex-col gap-2.5">
-        <div class="flex cursor-pointer items-center justify-between gap-2 py-0.5 text-xs text-ink-3" @click="sourcesOpen = !sourcesOpen">
-          <span>▸ 资料来源（{{ store.lastSources.length }} 条，可从资料链接跳转原文）</span>
-          <span class="whitespace-nowrap text-ui-600">{{ sourcesOpen ? '收起 ▴' : '展开 ▾' }}</span>
-        </div>
+        <SourcesFoldHeader
+          title="资料来源"
+          :count="store.lastSources.length"
+          suffix="，可从资料链接跳转原文"
+          :open="sourcesOpen"
+          @toggle="sourcesOpen = !sourcesOpen"
+        />
         <template v-if="sourcesOpen">
           <DiagnosisSources :sources="store.lastSources" embedded />
         </template>
       </div>
-      <div v-else-if="pendingImages.length" class="pending-images">
+      <div v-if="pendingImages.length" class="pending-images">
         <div v-for="(p, i) in pendingImages" :key="p.url" class="pending-image-item">
           <img :src="p.previewUrl" class="pending-image-thumb" alt="待发送图片" />
           <button class="pending-image-remove" title="移除" @click="removePendingImage(i)">
@@ -175,6 +178,8 @@ import { useAIAssistantStore } from '@/stores/aiAssistant'
 import { getAIFeatureByRoute } from '@/config/aiFeatures'
 import { aiAssistantApi, type DiagnosisBrandOption, type DiagnosisFaultCodeItem } from '@/api/aiAssistant'
 import DiagnosisSources from '@/components/ai-assistant/DiagnosisSources.vue'
+import SourcesFoldHeader from '@/components/ai-assistant/SourcesFoldHeader.vue'
+import UiCapsule from '@/components/ai-assistant/UiCapsule.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 
 const store = useAIAssistantStore()
