@@ -64,7 +64,7 @@ export function getFavoritesApi(targetType : string = '', page : number = 1, pag
 	if (targetType.length > 0) {
 		params['target_type'] = targetType
 	}
-	return getMapped<FavoriteListResult>('/favorites', params, buildFavoriteListResult)
+	return getMapped<FavoriteListResult>('/favorites', params, (data : UTSJSONObject) : FavoriteListResult => buildFavoriteListResult(data))
 }
 
 /**
@@ -75,7 +75,7 @@ export function addFavoriteApi(targetType : string, targetId : number) : Promise
 		target_type: targetType,
 		target_id: targetId,
 	} as UTSJSONObject
-	return postMapped<FavoriteItem>('/favorites', payload, buildFavoriteItem)
+	return postMapped<FavoriteItem>('/favorites', payload, (data : UTSJSONObject) : FavoriteItem => buildFavoriteItem(data))
 }
 
 /**
@@ -95,5 +95,5 @@ export function checkFavoriteApi(targetType : string, targetId : number) : Promi
 		target_type: targetType,
 		target_id: targetId.toString(),
 	} as UTSJSONObject
-	return getMapped<FavoriteCheckResult>('/favorites/check', params, buildFavoriteCheckResult)
+	return getMapped<FavoriteCheckResult>('/favorites/check', params, (data : UTSJSONObject) : FavoriteCheckResult => buildFavoriteCheckResult(data))
 }

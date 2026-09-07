@@ -71,11 +71,11 @@ describe('favorite 域收紧（收藏段）', () => {
     expect(src).toMatch(/import\s*\{[^}]*getMapped[^}]*\}\s*from\s*'\.\/request'/);
     expect(src).toMatch(/import\s*\{[^}]*postMapped[^}]*\}\s*from\s*'\.\/request'/);
   });
-  it('getFavoritesApi 经 getMapped 传 builder 引用，后端 favorites 字段兼容与分页默认值保持', () => {
+  it('getFavoritesApi 经 getMapped 箭头包裹 builder（具名函数直传触发 Kotlin error17，#685），后端 favorites 字段兼容与分页默认值保持', () => {
     const body = fnBodyOf(src, 'getFavoritesApi');
     expect(body).toContain('getMapped<');
-    // mapper 以函数引用传入（buildFavoriteListResult(data) 的箭头包装是无意义中间层）
-    expect(body).toMatch(/getMapped<FavoriteListResult>\([^)]*buildFavoriteListResult\)/);
+    // mapper 必须箭头包裹：UTS→Kotlin 不支持具名顶层函数直传高阶参数（error17）
+    expect(body).toMatch(/getMapped<FavoriteListResult>\([^)]*\(data : UTSJSONObject\) : FavoriteListResult => buildFavoriteListResult\(data\)/);
     const b = read('api/favorite.uts');
     expect(b).toMatch(/function buildFavoriteListResult/);
     expect(b).toContain("data['favorites']");

@@ -341,7 +341,7 @@ function buildStudentCourseDetailResult(data : UTSJSONObject) : StudentCourseDet
  * GET /api/student/courses
  */
 export function getStudentCoursesApi() : Promise<StudentCourseListResult> {
-	return getMapped<StudentCourseListResult>('/student/courses', null, buildStudentCourseListResult)
+	return getMapped<StudentCourseListResult>('/student/courses', null, (data : UTSJSONObject) : StudentCourseListResult => buildStudentCourseListResult(data))
 }
 
 /**
@@ -349,5 +349,5 @@ export function getStudentCoursesApi() : Promise<StudentCourseListResult> {
  * GET /api/student/courses/:course_id
  */
 export function getStudentCourseDetailApi(courseId : number) : Promise<StudentCourseDetail> {
-	return getMapped<StudentCourseDetail>('/student/courses/' + courseId.toString(), null, buildStudentCourseDetailResult)
+	return getMapped<StudentCourseDetail>('/student/courses/' + courseId.toString(), null, (data : UTSJSONObject) : StudentCourseDetail => buildStudentCourseDetailResult(data))
 }

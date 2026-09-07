@@ -217,6 +217,33 @@ function scanAnyParamDetailAccess(code) {
   return hits;
 }
 
+/** M：getMapped/postMapped 出口传 build* 具名函数引用作 mapper
+ *  ——UTS→Kotlin 不支持具名顶层函数直传高阶参数（error17: 参数类型不匹配 / Function invocation expected）；
+ *  应包成箭头 `(data : UTSJSONObject) : T => buildX(data)`。函数型参数（如 map）透传合法，故仅锁 build* 命名。 */
+function scanBareFnRefMapper(code) {
+  const clean = blank(code);
+  const hits = [];
+  const callRe = /(?:get|post)Mapped\s*<[^>]*>\s*\(/g;
+  let m;
+  while ((m = callRe.exec(clean)) !== null) {
+    const openIdx = clean.indexOf('(', m.index + m[0].length - 1);
+    if (openIdx === -1) continue;
+    let depth = 0;
+    let closeIdx = -1;
+    for (let i = openIdx; i < clean.length; i++) {
+      const c = clean[i];
+      if ('([{'.includes(c)) depth++;
+      else if (')]}'.includes(c)) { depth--; if (depth === 0) { closeIdx = i; break; } }
+    }
+    if (closeIdx === -1) continue;
+    const args = splitTopLevel(clean.slice(openIdx + 1, closeIdx));
+    if (args.length === 0) continue;
+    const last = args[args.length - 1].trim();
+    if (/^build[A-Z][\w$]*$/.test(last)) hits.push('mapper 裸引用 ' + last);
+  }
+  return hits;
+}
+
 /** B：跨文件 export type/interface 未 import 就引用（需全工程导出表） */
 function buildExportedTypeMap() {
   const exported = new Map();
@@ -590,6 +617,14 @@ describe('守护自检：检测逻辑对已知违规样本必须报出', () => {
     const unknown = '<template><view v-for="x in mystuff">{{ x.whatever }}</view></template><script setup lang="uts">\nconst mystuff = ref<any[]>([])\n</script>';
     expect(scanTemplateFields(unknown, fields)).toEqual([]);
   });
+
+  it('M 能报出 getMapped 传 build* 裸函数引用（对照组：箭头包裹 / 末参非 build* / 嵌套括号不误报）', () => {
+    expect(scanBareFnRefMapper("return getMapped<Foo>('/x', params, buildFooListResult)")).toHaveLength(1);
+    expect(scanBareFnRefMapper("return postMapped<Foo>('/x', payload, buildFooItem)")).toHaveLength(1);
+    expect(scanBareFnRefMapper("return getMapped<Foo>('/x', params, (data : UTSJSONObject) : Foo => buildFoo(data))")).toEqual([]);
+    expect(scanBareFnRefMapper("return getMapped<Foo>('/x', null, map)")).toEqual([]);
+    expect(scanBareFnRefMapper("return getMapped<Foo>('/x' + id.toString(), null, buildFoo)")).toHaveLength(1);
+  });
 });
 
 // ── 全工程真实扫描（守护本体，回归即红）────────────────────────────────
@@ -730,6 +765,14 @@ describe('全工程守护：五类 Kotlin 编译地雷零命中', () => {
     const fieldMap = buildTypeFieldMap();
     for (const u of allCodeUnits()) {
       for (const h of scanTypedParamFieldAccess(u.code, fieldMap)) violations.push(path.relative(ROOT, u.file) + ': ' + h);
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it('M：*Mapped 出口无 build* 裸函数引用 mapper（Kotlin error17，箭头包裹才合法）', () => {
+    const violations = [];
+    for (const u of allCodeUnits()) {
+      for (const h of scanBareFnRefMapper(u.code)) violations.push(path.relative(ROOT, u.file) + ': ' + h);
     }
     expect(violations).toEqual([]);
   });
