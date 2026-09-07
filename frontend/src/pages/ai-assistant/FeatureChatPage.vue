@@ -125,11 +125,10 @@
     <template #input-above>
       <!-- 当轮来源面板（SSE sources 事件内存态；落库后由逐轮回放接管） -->
       <!-- 与图片队列叠放（非互斥）：诊断页上传图后不断流也能看到待发送队列 -->
-      <div v-if="isDiagnosis && store.lastSources.length" class="diagnosis-sources flex flex-col gap-2.5">
+      <div v-if="isDiagnosis && store.lastSources.length" class="mb-2 flex flex-col gap-2.5">
         <SourcesFoldHeader
-          title="资料来源"
+          title="资料来源（可从资料链接跳转原文）"
           :count="store.lastSources.length"
-          suffix="，可从资料链接跳转原文"
           :open="sourcesOpen"
           @toggle="sourcesOpen = !sourcesOpen"
         />
@@ -579,11 +578,6 @@ onMounted(() => {
 
 .catalog-fault-more {
   align-self: flex-start;
-}
-
-/* ===== 智能维修诊断：当轮来源面板容器（R1 原子类区：flex 结构走模板原子类） ===== */
-.diagnosis-sources {
-  margin-bottom: 8px;
 }
 
 /* ===== 待发送图片（本页差异样式） ===== */

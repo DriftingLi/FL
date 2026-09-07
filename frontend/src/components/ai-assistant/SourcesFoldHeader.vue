@@ -4,7 +4,7 @@
     class="flex cursor-pointer items-center justify-between gap-2 py-0.5 text-xs text-ink-3"
     @click="emit('toggle')"
   >
-    <span>▸ {{ title }}<template v-if="count !== undefined">（{{ count }} 条）</template>{{ suffix }}</span>
+    <span>▸ {{ title }}<template v-if="count !== undefined">（{{ count }} 条）</template></span>
     <span class="whitespace-nowrap text-ui-600">{{ open ? '收起 ▴' : '展开 ▾' }}</span>
   </div>
 </template>
@@ -16,9 +16,8 @@ withDefaults(
     title: string
     open: boolean
     count?: number
-    suffix?: string
   }>(),
-  { count: undefined, suffix: '' }
+  { count: undefined }
 )
 
 const emit = defineEmits<{
