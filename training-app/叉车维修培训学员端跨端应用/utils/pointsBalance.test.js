@@ -32,7 +32,7 @@ describe('buildPointsBalance 字段映射', () => {
     expect(body).toContain("const balanceRaw = obj['balance']");
   });
 
-  it('仍然请求 /points/balance 端点', () => {
-    expect(apiSrc).toContain("get('/points/balance')");
+  it('仍然请求 /points/balance 端点（经 getMapped 出口，T03 收紧 #641 更新调用形态）', () => {
+    expect(apiSrc).toContain("getMapped<PointsBalance>('/points/balance'");
   });
 });

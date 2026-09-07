@@ -19,9 +19,53 @@ const tabPages = new Set(
   pagesConf.tabBar && pagesConf.tabBar.list ? pagesConf.tabBar.list.map((t) => t.pagePath) : []
 );
 
-const template = src.slice(src.indexOf('<template>'), src.lastIndexOf('</template>'));
-const script = src.slice(src.indexOf('<script'), src.lastIndexOf('</script>'));
-const styleBlock = src.slice(src.indexOf('<style>'), src.lastIndexOf('</style>'));
+/** 模块编译单元：主页面 + ./components 下全部组件（T03 手术后各为独立 .uvue 编译单元） */
+const COMPONENT_DIR = path.join(__dirname, '..', 'pages', 'profile', 'components');
+function moduleFiles() {
+  const out = [PAGE_PATH];
+  if (fs.existsSync(COMPONENT_DIR)) {
+    for (const e of fs.readdirSync(COMPONENT_DIR)) {
+      if (e.endsWith('.uvue')) out.push(path.join(COMPONENT_DIR, e));
+    }
+  }
+  return out;
+}
+
+/** 跨 <script>/<style> 抽取指定区块体：template 取页面模板并内联组件模板（保原型顺序），script/style 聚合全部单元 */
+function section(name) {
+  const files = moduleFiles();
+  if (name === 'template') {
+    const pageSrc = fs.readFileSync(PAGE_PATH, 'utf8');
+    const tpl = pageSrc.slice(pageSrc.indexOf('<template>'), pageSrc.lastIndexOf('</template>'));
+    return inlineComponents(tpl);
+  }
+  const re = name === 'script' ? /<script[^>]*>([\s\S]*?)<\/script>/ : /<style[^>]*>([\s\S]*?)<\/style>/;
+  return files.map((f) => {
+    const s = fs.readFileSync(f, 'utf8');
+    const m = re.exec(s);
+    return m ? m[1] : '';
+  }).join('\n');
+}
+
+/**
+ * 组件模板内联：把自闭合的 PascalCase 组件标签替换为组件文件自身的模板体。
+ * 原型区块顺序契约跨越组件边界依然成立——此为路径指向更新，断言强度不变。
+ */
+function inlineComponents(tpl) {
+  return tpl.replace(/<([A-Z][A-Za-z0-9]*)\b[^>]*\/>/g, (whole, tag) => {
+    const kebab = tag.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+    const compPath = path.join(COMPONENT_DIR, kebab + '.uvue');
+    if (!fs.existsSync(compPath)) return whole;
+    const csrc = fs.readFileSync(compPath, 'utf8');
+    const open = csrc.indexOf('<template>');
+    const close = csrc.lastIndexOf('</template>');
+    if (open === -1 || close === -1) return whole;
+    return csrc.slice(open + 10, close);
+  });
+}
+
+const template = section('template');
+const script = section('script');
 
 /** 解析形如 { key, title, icon, path, available } 的宫格条目数组 */
 function entryList(varName) {
@@ -143,42 +187,74 @@ describe('「我的」页面跳转契约', () => {
   });
 });
 
-describe('「我的」页面 uvue 兼容性', () => {
-  it('不使用 uvue 不支持的 CSS 属性与单位', () => {
-    expect(/(^|[;{\s])gap\s*:/.test(styleBlock)).toBe(false);
-    expect(styleBlock.includes('row-gap')).toBe(false);
-    expect(styleBlock.includes('column-gap')).toBe(false);
-    expect(styleBlock.includes('var(--')).toBe(false);
-    expect(styleBlock.includes('currentColor')).toBe(false);
-    expect(styleBlock.includes('calc(')).toBe(false);
-    expect(/\d+(vh|vw)\b/.test(styleBlock)).toBe(false);
-    expect(styleBlock.includes('display: grid')).toBe(false);
-    expect(/transition|animation/.test(styleBlock)).toBe(false);
-    expect(styleBlock.includes('max-height')).toBe(false);
+describe('「我的」页面 uvue 兼容性（逐编译单元：页面 + 各组件独立样式作用域）', () => {
+  const units = moduleFiles();
+  it.each(units.map((f) => [path.basename(f), f]))('%s 不使用 uvue 不支持的 CSS 属性与单位', (_name, file) => {
+    const s = fs.readFileSync(file, 'utf8');
+    const st = s.slice(s.indexOf('<style'), s.lastIndexOf('</style>'));
+    expect(/(^|[;{\s])gap\s*:/.test(st)).toBe(false);
+    expect(st.includes('row-gap')).toBe(false);
+    expect(st.includes('column-gap')).toBe(false);
+    expect(st.includes('var(--')).toBe(false);
+    expect(st.includes('currentColor')).toBe(false);
+    expect(st.includes('calc(')).toBe(false);
+    expect(/\d+(vh|vw)\b/.test(st)).toBe(false);
+    expect(st.includes('display: grid')).toBe(false);
+    expect(/transition|animation/.test(st)).toBe(false);
+    expect(st.includes('max-height')).toBe(false);
   });
 
-  it('只使用 class 选择器', () => {
-    expect(/:(hover|active|focus|first-child|last-child|nth-child|before|after)/.test(styleBlock)).toBe(false);
-    expect(/^\s*(view|text|image|scroll-view|button)\s*\{/m.test(styleBlock)).toBe(false);
-    expect(/^\s*#[\w-]+\s*\{/m.test(styleBlock)).toBe(false);
-    expect(/^[^.@}\s][\w-]*\s*\{/m.test(styleBlock)).toBe(false);
+  it.each(units.map((f) => [path.basename(f), f]))('%s 只使用 class 选择器', (_name, file) => {
+    const s = fs.readFileSync(file, 'utf8');
+    const st = s.slice(s.indexOf('<style'), s.lastIndexOf('</style>'));
+    expect(/:(hover|active|focus|first-child|last-child|nth-child|before|after)/.test(st)).toBe(false);
+    expect(/^\s*(view|text|image|scroll-view|button)\s*\{/m.test(st)).toBe(false);
+    expect(/^\s*#[\w-]+\s*\{/m.test(st)).toBe(false);
+    expect(/^[^.@}\s][\w-]*\s*\{/m.test(st)).toBe(false);
   });
 
-  it('模板与样式中的 class 一一对应（无死样式、无裸 class）', () => {
+  it.each(units.map((f) => [path.basename(f), f]))('%s 模板与样式中的 class 一一对应（无死样式、无裸 class）', (_name, file) => {
+    const s = fs.readFileSync(file, 'utf8');
+    const tpl = s.slice(s.indexOf('<template>'), s.lastIndexOf('</template>'));
+    const script = s.slice(s.indexOf('<script'), s.lastIndexOf('</script>'));
+    const st = s.slice(s.indexOf('<style'), s.lastIndexOf('</style>'));
+    const used = new Set();
+    for (const m of tpl.matchAll(/(?<!:)class="([^"]+)"/g)) {
+      m[1].split(/\s+/).filter(Boolean).forEach((c) => used.add(c));
+    }
+    for (const m of tpl.matchAll(/:class="([^"]+)"/g)) {
+      const expr = m[1];
+      // 对象语法键（'x': 或 x:）是类名；后随冒号的引号串是键而非裸类
+      for (const q of expr.matchAll(/'?([A-Za-z][A-Za-z0-9_-]*)'?\s*:/g)) used.add(q[1]);
+      for (const q of expr.matchAll(/'([^']+)'/g)) {
+        const after = expr.slice(q.index + q[0].length);
+        const before = expr.slice(0, q.index).trimEnd();
+        // 对象键（后随冒号）已由键正则收集；比较值（前随 ==/!=）不是类名
+        if (q[1].length > 0 && !after.trimStart().startsWith(':') && !/(==|!=|===|!==)$/.test(before)) used.add(q[1]);
+      }
+      // 函数绑定 :class="fn(...)"：类名由 script 中该函数的字符串字面量返回（如 getOptionClass）
+      for (const fn of expr.matchAll(/([A-Za-z_$][\w$]*)\s*\(/g)) {
+        const fstart = script.indexOf('function ' + fn[1] + '(');
+        if (fstart === -1) continue;
+        const fend = script.indexOf('\n    }', fstart);
+        const body = script.slice(fstart, fend === -1 ? undefined : fend);
+        for (const q of body.matchAll(/'([^'\n]+)'/g)) if (q[1].length > 0) used.add(q[1]);
+      }
+    }
+    const defined = new Set();
+    for (const m of st.matchAll(/\.([A-Za-z][A-Za-z0-9_-]*)/g)) defined.add(m[1]);
+
+    const undefinedClasses = [...used].filter((c) => !defined.has(c));
+    const deadClasses = [...defined].filter((c) => !used.has(c));
+    expect({ file: path.basename(file), undefinedClasses }).toEqual({ file: path.basename(file), undefinedClasses: [] });
+    expect({ file: path.basename(file), deadClasses }).toEqual({ file: path.basename(file), deadClasses: [] });
+  });
+
+  it('主页面 class 使用面保持规模（原型未缩水）', () => {
     const used = new Set();
     for (const m of template.matchAll(/(?<!:)class="([^"]+)"/g)) {
       m[1].split(/\s+/).filter(Boolean).forEach((c) => used.add(c));
     }
-    for (const m of template.matchAll(/:class="([^"]+)"/g)) {
-      for (const q of m[1].matchAll(/'([^']+)'/g)) used.add(q[1]);
-    }
-    const defined = new Set();
-    for (const m of styleBlock.matchAll(/\.([A-Za-z][A-Za-z0-9_-]*)/g)) defined.add(m[1]);
-
-    const undefinedClasses = [...used].filter((c) => !defined.has(c));
-    const deadClasses = [...defined].filter((c) => !used.has(c));
-    expect(undefinedClasses).toEqual([]);
-    expect(deadClasses).toEqual([]);
     expect(used.size).toBeGreaterThan(20);
   });
 });

@@ -9,7 +9,7 @@
  *   DELETE /api/favorites/:id              取消收藏（仅本人）
  *   GET  /api/favorites/check              检查是否已收藏
  */
-import { get, post, del } from './request'
+import { get, getMapped, post, postMapped, del } from './request'
 import { toNumber, toStr } from './helpers'
 import type { FavoriteItem, FavoriteListResult, FavoriteCheckResult } from '../types/index'
 
@@ -27,20 +27,9 @@ function buildFavoriteItem(obj : UTSJSONObject) : FavoriteItem {
 	} as FavoriteItem
 }
 
-/**
- * 我的收藏列表
- */
-export function getFavoritesApi(targetType : string = '', page : number = 1, pageSize : number = 20) : Promise<FavoriteListResult> {
-	const params : UTSJSONObject = {
-		page: page.toString(),
-		page_size: pageSize.toString(),
-	} as UTSJSONObject
-	if (targetType.length > 0) {
-		params['target_type'] = targetType
-	}
-	return get('/favorites', params).then((data : UTSJSONObject) : FavoriteListResult => {
+/** 从 UTSJSONObject 构造 FavoriteListResult（后端列表字段为 favorites，非 items） */
+function buildFavoriteListResult(data : UTSJSONObject) : FavoriteListResult {
 		const items : FavoriteItem[] = []
-		// 后端返回字段为 favorites（非 items）
 		const listRaw = data['favorites']
 		if (listRaw != null) {
 			const arr = listRaw as Array<UTSJSONObject>
@@ -54,7 +43,28 @@ export function getFavoritesApi(targetType : string = '', page : number = 1, pag
 			page: toNumber(data['page'], 1),
 			page_size: toNumber(data['page_size'], 20),
 		} as FavoriteListResult
-	})
+}
+
+/** 从 UTSJSONObject 构造 FavoriteCheckResult */
+function buildFavoriteCheckResult(data : UTSJSONObject) : FavoriteCheckResult {
+	return {
+		favorited: data['favorited'] == true,
+		favorite_id: toNumber(data['favorite_id']),
+		} as FavoriteCheckResult
+}
+
+/**
+ * 我的收藏列表
+ */
+export function getFavoritesApi(targetType : string = '', page : number = 1, pageSize : number = 20) : Promise<FavoriteListResult> {
+	const params : UTSJSONObject = {
+		page: page.toString(),
+		page_size: pageSize.toString(),
+	} as UTSJSONObject
+	if (targetType.length > 0) {
+		params['target_type'] = targetType
+	}
+	return getMapped<FavoriteListResult>('/favorites', params, buildFavoriteListResult)
 }
 
 /**
@@ -65,9 +75,7 @@ export function addFavoriteApi(targetType : string, targetId : number) : Promise
 		target_type: targetType,
 		target_id: targetId,
 	} as UTSJSONObject
-	return post('/favorites', payload).then((data : UTSJSONObject) : FavoriteItem => {
-		return buildFavoriteItem(data)
-	})
+	return postMapped<FavoriteItem>('/favorites', payload, buildFavoriteItem)
 }
 
 /**
@@ -87,10 +95,5 @@ export function checkFavoriteApi(targetType : string, targetId : number) : Promi
 		target_type: targetType,
 		target_id: targetId.toString(),
 	} as UTSJSONObject
-	return get('/favorites/check', params).then((data : UTSJSONObject) : FavoriteCheckResult => {
-		return {
-			favorited: data['favorited'] == true,
-			favorite_id: toNumber(data['favorite_id']),
-		} as FavoriteCheckResult
-	})
+	return getMapped<FavoriteCheckResult>('/favorites/check', params, buildFavoriteCheckResult)
 }
