@@ -15,10 +15,25 @@
     @suggest="useSuggestion"
     @new-session="handleNewSession"
   >
-    <!-- 欢迎区差异内容：快捷选项（位于预设提示词之前） -->
-    <template #welcome-top>
-      <!-- 智能维修诊断：品牌/车型动态联动 + 故障码快捷查询（包前端还原） -->
-      <div v-if="isDiagnosis" class="diagnosis-panel">
+    <!-- 诊断筛选移入输入框上方工具栏胶囊（方案 B；空态随输入框居中，不再撑欢迎区） -->
+    <template #input-toolbar>
+      <div v-if="isDiagnosis" class="flex items-center gap-2 overflow-x-auto pb-2">
+        <button
+          class="flex shrink-0 cursor-pointer items-center gap-1 whitespace-nowrap rounded-pill border border-line bg-panel px-3.5 py-1.5 text-[13px] text-ink-2 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:border-ui-400 hover:text-ui-600"
+          :class="filterOpen ? 'border-ui-600 bg-ui-50 font-semibold text-ui-600' : ''"
+          @click="filterOpen = !filterOpen"
+        >
+          ⚙ 筛选{{ filterSummary ? `：${filterSummary}` : '' }} {{ filterOpen ? '▴' : '▾' }}
+        </button>
+        <button
+          v-for="q in diagnosisQuickAsks"
+          :key="q"
+          class="shrink-0 cursor-pointer whitespace-nowrap rounded-pill border border-line bg-panel px-3.5 py-1.5 text-[13px] text-ink-2 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:border-ui-400 hover:bg-ui-50 hover:text-ui-600"
+          @click="quickAsk(q)"
+        >{{ q }}</button>
+      </div>
+      <!-- 折叠面板本体（挂输入区上方，随输入框居中/沉底；欢迎区不再渲染，避免撑爆空态） -->
+      <div v-if="isDiagnosis && filterOpen" class="diagnosis-panel">
         <div class="diagnosis-catalog">
           <div class="catalog-row">
             <span class="catalog-label">品牌</span>
@@ -77,8 +92,12 @@
           </div>
         </div>
       </div>
+    </template>
+
+    <!-- 欢迎区差异内容：其余专项功能静态快捷选项（诊断筛选已搬入工具栏，此处不再渲染） -->
+    <template #welcome-top>
       <!-- 其余专项功能：静态快捷选项 -->
-      <div v-else-if="feature?.quickOptions?.length" class="quick-options-area">
+      <div v-if="feature?.quickOptions?.length" class="quick-options-area">
         <div v-for="group in feature.quickOptions" :key="group.label" class="quick-option-group">
           <span class="quick-option-label">{{ group.label }}</span>
           <div class="quick-option-chips">
@@ -185,6 +204,27 @@ const inputPlaceholder = computed(() => {
     ? '输入问题或上传图纸/习题图片...（Enter 发送，Shift+Enter 换行）'
     : '输入您的问题...（Enter 发送，Shift+Enter 换行）'
 })
+
+// ===== 智能维修诊断：筛选折叠（T2 默认折叠，不再撑爆空态居中）=====
+const filterOpen = ref(false)
+const filterSummary = computed(() => {
+  const parts: string[] = []
+  if (selectedBrand.value && selectedBrand.value !== 'all') {
+    parts.push(brands.value.find(b => b.value === selectedBrand.value)?.label || selectedBrand.value)
+  }
+  if (selectedModel.value) parts.push(selectedModel.value)
+  return parts.join(' / ')
+})
+const diagnosisQuickAsks = [
+  '叉车无法行驶且仪表报警，怎么排查？',
+  '故障码 E102 是什么意思？',
+  '货叉提升缓慢且伴随异响，可能是什么原因？'
+]
+
+function quickAsk(q: string) {
+  inputText.value = q
+  handleSend()
+}
 
 // ===== 智能维修诊断：品牌/车型联动（/diagnosis/brands|models 动态数据源）=====
 const brands = ref<DiagnosisBrandOption[]>([])
