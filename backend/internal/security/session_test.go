@@ -405,3 +405,100 @@ func TestRotateRefresh_BlacklistKeyFormatAndTTL(t *testing.T) {
 		t.Errorf("TTL 应约等于旧 refresh 剩余有效期 1h, got %v", ttl)
 	}
 }
+
+// ===== 改密吊销 refresh（#622，移动端 ADR-0006 修复方向 2） =====
+
+// getFailStore 仅读故障包装：Get 报错、写操作正常——模拟「标记读部分故障」，
+// 验证 fail-open（读放行）与 PutIfAbsent 抢占仍 fail-closed 的组合语义。
+type getFailStore struct{ inner BlacklistStore }
+
+func (g getFailStore) Get(context.Context, string) (string, error) {
+	return "", errors.New("get failed")
+}
+func (g getFailStore) Set(ctx context.Context, key, value string, ttl time.Duration) error {
+	return g.inner.Set(ctx, key, value, ttl)
+}
+func (g getFailStore) PutIfAbsent(ctx context.Context, key, value string, ttl time.Duration) (bool, error) {
+	return g.inner.PutIfAbsent(ctx, key, value, ttl)
+}
+
+func TestRotateRefresh_RejectsAfterPasswordRevocation(t *testing.T) {
+	sess := newTestSession(nil)
+	ctx := context.Background()
+	_, refresh, err := sess.IssuePair(7, "acct07", "hrwai_user")
+	if err != nil {
+		t.Fatalf("签发失败: %v", err)
+	}
+	if err := sess.RevokeUserRefresh(ctx, "hrwai_user", 7); err != nil {
+		t.Fatalf("写吊销标记失败: %v", err)
+	}
+	if _, _, err := sess.RotateRefresh(ctx, refresh); !errors.Is(err, ErrInvalidRefresh) {
+		t.Fatalf("改密吊销后轮换应并入 ErrInvalidRefresh 拒绝，got %v", err)
+	}
+}
+
+func TestPasswordRevocation_NewLoginSurvives(t *testing.T) {
+	sess := newTestSession(nil)
+	ctx := context.Background()
+	if err := sess.RevokeUserRefresh(ctx, "hrwai_user", 7); err != nil {
+		t.Fatalf("写吊销标记失败: %v", err)
+	}
+	// JWT iat 为秒精度且同秒一并拒绝（宁错杀防轮换洗白）：跨过标记所在秒后再签发
+	time.Sleep(1100 * time.Millisecond)
+	// 改密后重新登录签发的新链（iat 晚于标记）不受影响
+	_, refresh, err := sess.IssuePair(7, "acct07", "hrwai_user")
+	if err != nil {
+		t.Fatalf("重新登录签发失败: %v", err)
+	}
+	if _, _, err := sess.RotateRefresh(ctx, refresh); err != nil {
+		t.Fatalf("改密后新登录的轮换不应被拒绝: %v", err)
+	}
+}
+
+func TestPasswordRevocation_RoleNamespaced(t *testing.T) {
+	sess := newTestSession(nil)
+	ctx := context.Background()
+	if err := sess.RevokeUserRefresh(ctx, "hrwai_user", 7); err != nil {
+		t.Fatalf("写吊销标记失败: %v", err)
+	}
+	// recruiter_users 与 hrwai_users 两套 ID 空间：同号招聘员不受学员吊销误伤
+	_, refresh, err := sess.IssuePair(7, "rec07", "recruiter")
+	if err != nil {
+		t.Fatalf("签发失败: %v", err)
+	}
+	if _, _, err := sess.RotateRefresh(ctx, refresh); err != nil {
+		t.Fatalf("同号招聘员的轮换不应被学员吊销误伤: %v", err)
+	}
+}
+
+func TestPasswordRevocation_MarkerReadFailOpen(t *testing.T) {
+	sess := newTestSession(getFailStore{inner: newInmemoryBlacklistStore()})
+	ctx := context.Background()
+	if err := sess.RevokeUserRefresh(ctx, "hrwai_user", 7); err != nil {
+		t.Fatalf("标记写入应正常（仅读故障）: %v", err)
+	}
+	_, refresh, err := sess.IssuePair(7, "acct07", "hrwai_user")
+	if err != nil {
+		t.Fatalf("签发失败: %v", err)
+	}
+	// 标记读故障 → fail-open 放行轮换；PutIfAbsent 抢占仍正常执行（非整体故障）
+	if _, _, err := sess.RotateRefresh(ctx, refresh); err != nil {
+		t.Fatalf("标记读故障应放行轮换（fail-open），got %v", err)
+	}
+}
+
+func TestRevokeUserRefresh_TTLMatchesRefreshExpiry(t *testing.T) {
+	store := newRecordingBlacklistStore()
+	sess := newTestSession(store)
+	if err := sess.RevokeUserRefresh(context.Background(), "hrwai_user", 7); err != nil {
+		t.Fatalf("写吊销标记失败: %v", err)
+	}
+	ttl, ok := store.items["jwt:pwd_revoked:hrwai_user:7"]
+	if !ok {
+		t.Fatal("吊销标记未写入")
+	}
+	// TTL 必须等于 refresh 有效期：改密前签发的链最长存活不超过它，标记过期自然失效
+	if ttl != time.Hour {
+		t.Errorf("标记 TTL 应等于 refresh 有效期（newTestSession 为 1h），got %v", ttl)
+	}
+}

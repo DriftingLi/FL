@@ -10,19 +10,17 @@ import { aiFeatureUI } from './aiFeatureUI'
 // 收录规则：注册表中管理端单绑定且声明计费的专项对话功能（与后端 featureChatKeys 同口径），
 // 键序 = 注册表声明序（助手主页入口卡片顺序）。
 export type AIFeatureKey =
-  | 'fault_consult'
-  | 'fault_code_query'
   | 'maintenance_knowledge'
   | 'drawing_recognition'
   | 'exercise_solving'
+  | 'fault_diagnosis'
 
-// 注册表派生对：[功能键, 展示名]（展示名即后端 FeatureLabel）。
-const AI_FEATURE_REGISTRY: ReadonlyArray<readonly [AIFeatureKey, string]> = [
-  ['fault_consult', '故障咨询'],
-  ['fault_code_query', '故障代码查询'],
-  ['maintenance_knowledge', '维保知识'],
-  ['drawing_recognition', '图纸识别'],
-  ['exercise_solving', '习题解答'],
+// 注册表派生对：[功能键, 展示名, 是否限免]（展示名即后端 FeatureLabel；限免位供前端角标）。
+const AI_FEATURE_REGISTRY: ReadonlyArray<readonly [AIFeatureKey, string, boolean]> = [
+  ['maintenance_knowledge', '维保知识', false],
+  ['drawing_recognition', '图纸识别', false],
+  ['exercise_solving', '习题解答', false],
+  ['fault_diagnosis', '智能维修诊断', true],
 ]
 
 export interface AIFeatureQuickOption {
@@ -42,11 +40,14 @@ export interface AIFeatureConfig {
   quickOptions?: AIFeatureQuickOption[]
   supportsImage?: boolean
   maxImages?: number
+  /** 限免声明位（注册表派生）：true 时展示「限免」角标，前端据此提示不扣积分 */
+  freePreview?: boolean
 }
 
-export const AI_FEATURES: AIFeatureConfig[] = AI_FEATURE_REGISTRY.map(([key, title]) => ({
+export const AI_FEATURES: AIFeatureConfig[] = AI_FEATURE_REGISTRY.map(([key, title, freePreview]) => ({
   key,
   title,
+  freePreview,
   ...aiFeatureUI[key]
 }))
 
