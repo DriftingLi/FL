@@ -28,8 +28,8 @@
         <div class="mt-1.5 flex items-center gap-3 text-xs text-ink-3">
           <span v-if="source.metadata?.page_start">第 {{ source.metadata.page_start }}{{ source.metadata.page_end && source.metadata.page_end !== source.metadata.page_start ? '-' + source.metadata.page_end : '' }} 页</span>
           <a
-            v-if="source.metadata?.source_url"
-            :href="source.metadata.source_url"
+            v-if="pdfProxyUrl"
+            :href="pdfProxyUrl"
             target="_blank"
             rel="noopener"
             class="text-ui-600 no-underline hover:underline"
@@ -59,14 +59,24 @@ withDefaults(
 
 const open = ref(false)
 
-const ASSISTANT_STATIC_PREFIX_RE = /^\/?assistant\/static\//
+const ASSISTANT_STATIC_RE = /^\/?(?:assistant\/static\/)?(?:manual\/)?/
 
-// lxc101 取证：IMAGE 标记为 /assistant/static/manual/… 绝对路径，strip 后再进后端代理。
+// lxc101 取证：IMAGE 标记为 /assistant/static/manual/<doc>/page_N.png（manual/ 段是
+// 目录名的一部分），strip 后交给后端拼 /assistant/static/manual/ 前缀。
 function stripAssistantPrefix(path: string): string {
-  return path.replace(ASSISTANT_STATIC_PREFIX_RE, '')
+  return path.replace(ASSISTANT_STATIC_RE, '')
 }
 
 const IMAGE_RE = /<<IMAGE:([^>]+)>>/g
+
+// PDF 原文外链是助手内网路径（/assistant/static/manual/…pdf），公网不可达且登录态
+// 不同域——统一走本站手册代理，#page 锚点保留。
+function pdfProxyUrl(source: DiagnosisSource): string | undefined {
+  const url = source.metadata?.source_url
+  if (!url) return undefined
+  const m = url.match(/\/assistant\/static\/manual\/(.+?\.pdf)/i)
+  return m ? aiAssistantApi.manualUrl(m[1]) : url
+}
 
 function sourceImages(text: string): string[] {
   const out: string[] = []
