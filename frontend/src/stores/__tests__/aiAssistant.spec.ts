@@ -177,6 +177,45 @@ describe('done 后精确重拉一次会话列表（#620）', () => {
   })
 })
 
+describe('会话链路（T6：序号守卫/删除对账/选中抛错/init 全清）', () => {
+  it('删除成功：本地过滤 + 后台重拉对账（listSessions 被触发）', async () => {
+    authState.isLoggedIn = true
+    setActivePinia(createPinia()) // 按登录态重建 store（前一个用例可能切到未登录）
+    const store = createStore()
+    vi.mocked(aiAssistantApi.listSessions).mockResolvedValueOnce([
+      { id: 2, title: '二', model_name: '', created_at: '', updated_at: '' }
+    ])
+    await store.deleteSession(1)
+    await flush()
+    expect(aiAssistantApi.deleteSession).toHaveBeenCalledWith(1)
+    expect(aiAssistantApi.listSessions).toHaveBeenCalled()
+    expect(store.sessions.map(s => s.id)).toEqual([2])
+  })
+
+  it('选中失败抛错（壳弹提示用），消息清空', async () => {
+    authState.isLoggedIn = true
+    setActivePinia(createPinia()) // 按登录态重建 store
+    const store = createStore()
+    vi.mocked(aiAssistantApi.getSessionMessages).mockRejectedValueOnce(new Error('网络异常'))
+    await expect(store.selectSession(9)).rejects.toThrow('网络异常')
+    expect(store.messages).toEqual([])
+  })
+
+  it('init 切回主界面全清：消息/选中/当轮态复位并重拉主界面列表', async () => {
+    const store = createStore()
+    await sendMessageAndStream(store)
+    expect(store.messages.length).toBeGreaterThan(0)
+    vi.clearAllMocks() // sendMessage 内的懒创建/重拉计数清零，只看 init 行为
+    await store.init()
+    await flush()
+    expect(store.messages).toEqual([])
+    expect(store.currentSessionId).toBeNull()
+    expect(store.lastUsage).toBeNull()
+    expect(aiAssistantApi.listAssistantModes).toHaveBeenCalled()
+    expect(aiAssistantApi.listSessions).toHaveBeenCalled()
+  })
+})
+
 describe('clearMessages action（#620）', () => {
   it('清空消息/会话上下文/当轮 usage 与流式状态', async () => {
     const store = createStore()

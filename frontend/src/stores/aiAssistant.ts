@@ -83,21 +83,24 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     selectedMode.value = mode
   }
 
-  // ===== 会话管理 =====
+  // ===== 会话管理（T6：请求序号守卫——旧回包不覆盖删除/新建结果）=====
+  let sessionsSeq = 0
   async function loadSessions() {
     if (!isLoggedIn.value) {
       sessions.value = []
       return
     }
+    const seq = ++sessionsSeq
     sessionsLoading.value = true
     try {
-      sessions.value = await aiAssistantApi.listSessions(
+      const list = await aiAssistantApi.listSessions(
         isFeatureMode.value ? featureKey.value : undefined
       )
+      if (seq === sessionsSeq) sessions.value = list
     } catch {
       // 错误已由拦截器提示
     } finally {
-      sessionsLoading.value = false
+      if (seq === sessionsSeq) sessionsLoading.value = false
     }
   }
 
@@ -116,11 +119,14 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
 
   async function deleteSession(id: number) {
     await aiAssistantApi.deleteSession(id)
+    sessionsSeq++ // 作废在飞的列表请求，避免旧回包复活已删会话
     sessions.value = sessions.value.filter(s => s.id !== id)
     if (currentSessionId.value === id) {
       currentSessionId.value = null
       messages.value = []
     }
+    // 后台重拉对账（序号守卫保证只采纳最新回包；await 让调用方可感知完成）
+    await loadSessions().catch(() => {})
   }
 
   async function renameSession(id: number, title: string) {
@@ -163,7 +169,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
   }
 
   async function selectSession(id: number) {
-    if (!isLoggedIn.value) return
+    if (!isLoggedIn.value) throw new Error('请先登录后查看会话历史')
     currentSessionId.value = id
     // 切换会话即离开「当轮」上下文，上一轮脚注/来源随之失效
     lastUsage.value = null
@@ -171,8 +177,9 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     messagesLoading.value = true
     try {
       messages.value = await aiAssistantApi.getSessionMessages(id)
-    } catch {
+    } catch (e: any) {
       messages.value = []
+      throw new Error(e?.message || '加载会话消息失败，请重试')
     } finally {
       messagesLoading.value = false
     }
@@ -315,10 +322,17 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     return aiAssistantApi.uploadImage(file)
   }
 
-  // ===== 初始化（通用 AI 助手页） =====
+  // ===== 初始化（通用 AI 助手页）=====
+  // 从功能页返回时重置功能上下文（T6：切回主界面全清并重拉，回欢迎态）
   async function init() {
-    // 从功能页返回时重置功能上下文
     featureKey.value = 'ai_assistant'
+    sessionsSeq++ // 断开子界面上下文：作废在飞请求，清空消息/选中/当轮态
+    sessions.value = []
+    messages.value = []
+    currentSessionId.value = null
+    streamingContent.value = ''
+    lastUsage.value = null
+    lastSources.value = []
     await loadAssistantModes()
     if (isLoggedIn.value) {
       await loadSessions()
@@ -330,6 +344,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
   async function initFeature(key: string) {
     if (featureKey.value === key && sessions.value.length > 0) return
     featureKey.value = key
+    sessionsSeq++ // 作废旧功能上下文在飞的列表请求
     sessions.value = []
     messages.value = []
     currentSessionId.value = null

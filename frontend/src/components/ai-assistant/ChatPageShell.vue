@@ -88,7 +88,7 @@
 
       <!-- 会话列表（五档时间分组） -->
       <div class="sidebar-title px-4 pb-1 pt-4 text-xs font-medium text-ink-3">会话历史</div>
-      <div v-loading="store.sessionsLoading" class="session-list flex-1 overflow-y-auto px-2 pb-2">
+      <div v-loading="store.sessionsLoading || store.messagesLoading" class="session-list flex-1 overflow-y-auto px-2 pb-2">
         <div v-if="store.sessions.length === 0 && !store.sessionsLoading" class="empty-sessions px-3 py-8 text-center text-[13px] text-ink-3">
           {{ store.isLoggedIn ? '暂无会话，点击"开启新对话"开始' : '登录后可查看会话历史' }}
         </div>
@@ -510,10 +510,16 @@ const editingTitle = ref('')
 const editInputRef = ref<any>(null)
 let renamingLock = false // 防止 blur + enter 重复触发
 
-// 选中会话：若正在编辑当前会话则不切换
-function handleSelectSession(id: number) {
+// 选中会话：若正在编辑当前会话则不切换；加载态由 store.messagesLoading 驱动，失败弹提示
+async function handleSelectSession(id: number) {
   if (editingSessionId.value === id) return
-  store.selectSession(id)
+  try {
+    await store.selectSession(id)
+  } catch (e: any) {
+    ElMessage.error(e?.message || '加载会话消息失败，请重试')
+  } finally {
+    if (isMobile.value) mobileDrawerOpen.value = false
+  }
 }
 
 // 进入重命名模式
@@ -575,7 +581,12 @@ async function handleDeleteSession(id: number) {
   } catch {
     return
   }
-  await store.deleteSession(id)
+  try {
+    await store.deleteSession(id)
+    ElMessage.success('已删除会话')
+  } catch (e: any) {
+    ElMessage.error(e?.message || '删除会话失败，请重试')
+  }
 }
 
 // ===== 登录/退出 =====
