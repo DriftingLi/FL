@@ -108,13 +108,13 @@ func TestDiagnosisProxy_Manual(t *testing.T) {
 			t.Fatalf("非法手册路径应拒绝: %q", bad)
 		}
 	}
-	// T4：绝对路径兜底 strip（前端漏 strip 时后端仍拼出正确远端路径）
-	body2, _, err := proxy.OpenManual(context.Background(), "/assistant/static/ep_test/page_1.png")
-	if err != nil {
-		t.Fatalf("绝对路径应被兜底 strip: %v", err)
+	// 绝对路径必须被拒绝（strip 唯一在前端，后端收到即非法，不再兜底拼出双前缀）
+	for _, bad := range []string{"/assistant/static/ep_test/page_1.png", "assistant/static/ep_test/page_1.png"} {
+		if _, _, err := proxy.OpenManual(context.Background(), bad); err == nil || err.Error() != "无效的手册资源路径" {
+			t.Fatalf("绝对路径应拒绝而非兜底 strip: %q err=%v", bad, err)
+		}
 	}
-	defer body2.Close()
-	// T4：大写扩展名放行（白名单校验通过；远端 404 属资源不存在而非路径非法）
+	// 大写扩展名放行（白名单校验通过；远端 404 属资源不存在而非路径非法）
 	if _, _, err := proxy.OpenManual(context.Background(), "ep_test/PAGE_2.PNG"); err != nil && err.Error() == "无效的手册资源路径" {
 		t.Fatalf("大写扩展名应放行白名单: %v", err)
 	}

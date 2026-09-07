@@ -465,13 +465,13 @@ func (s *AIAssistantService) GetSessionMessages(ctx context.Context, userID, ses
 			// 解析失败按无图处理，不阻断消息列表
 			_ = json.Unmarshal([]byte(r.Images), &imgs)
 		}
-		var srcs []DiagnosisSource
+		var sources []DiagnosisSource
 		if r.Sources != "" {
 			// 解析失败按无来源处理，不阻断消息列表
-			_ = json.Unmarshal([]byte(r.Sources), &srcs)
+			_ = json.Unmarshal([]byte(r.Sources), &sources)
 		}
 		out[i] = AIChatMessageDTO{
-			ID: r.ID, Role: r.Role, Content: r.Content, Images: imgs, Sources: srcs, CreatedAt: r.CreatedAt,
+			ID: r.ID, Role: r.Role, Content: r.Content, Images: imgs, Sources: sources, CreatedAt: r.CreatedAt,
 		}
 	}
 	return out, nil
@@ -570,8 +570,8 @@ func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req Str
 			}
 			// T5：诊断来源随助手消息持久化（ctx 容器→ JSON 列；非诊断/空来源存空串）
 			sourcesJSON := ""
-			if srcs := DiagnosisSourcesFrom(ctx); len(srcs) > 0 {
-				if b, err := json.Marshal(srcs); err == nil {
+			if sources := DiagnosisSourcesFrom(ctx); len(sources) > 0 {
+				if b, err := json.Marshal(sources); err == nil {
 					sourcesJSON = string(b)
 				} else {
 					s.logger.Warn("诊断来源序列化失败，按无来源落库", zap.Int("session_id", req.SessionID), zap.Error(err))
