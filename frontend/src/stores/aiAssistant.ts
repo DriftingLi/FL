@@ -170,6 +170,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
 
   async function selectSession(id: number) {
     if (!isLoggedIn.value) throw new Error('请先登录后查看会话历史')
+    const previousId = currentSessionId.value
     currentSessionId.value = id
     // 切换会话即离开「当轮」上下文，上一轮脚注/来源随之失效
     lastUsage.value = null
@@ -178,6 +179,8 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     try {
       messages.value = await aiAssistantApi.getSessionMessages(id)
     } catch (e: any) {
+      // 失败回滚选中态：侧栏高亮不悬空在打不开的会话上
+      currentSessionId.value = previousId
       messages.value = []
       throw new Error(e?.message || '加载会话消息失败，请重试')
     } finally {
@@ -260,6 +263,8 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
             id: assistantMsgId,
             role: 'assistant',
             content: finalContent,
+            // 当轮来源快照进消息（ADR-0033 逐轮回放；后端落库后历史以持久化字段为准）
+            sources: lastSources.value.length ? [...lastSources.value] : undefined,
             created_at: new Date().toISOString()
           }
           messages.value.push(assistantMsg)

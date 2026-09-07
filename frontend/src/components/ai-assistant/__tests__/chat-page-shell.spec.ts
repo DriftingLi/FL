@@ -143,6 +143,16 @@ describe('ChatPageShell 槽位', () => {
     expect(area.html().indexOf('toolbar-slot')).toBeLessThan(area.html().indexOf('input-wrap'))
   })
 
+  it('assistant-extra 槽位透传助手消息（诊断逐轮来源回放挂载点）', () => {
+    mocks.store = makeStore({
+      messages: [{ id: 2, role: 'assistant', content: '回答', sources: [{ id: 1 }] }]
+    })
+    const w = mountShell({}, {
+      'assistant-extra': '<div class="extra-slot">{{ JSON.stringify({ n: 1 }) }}</div>'
+    })
+    expect(w.find('.extra-slot').exists()).toBe(true)
+  })
+
   it('raised 布局渲染 input-footer-left 槽位；compact 布局渲染 input-prefix 槽位与 input-above', () => {
     const raised = mountShell(
       { raisedInput: true },

@@ -26,11 +26,11 @@
           ⚙ 筛选{{ filterSummary ? `：${filterSummary}` : '' }} {{ filterOpen ? '▴' : '▾' }}
         </button>
         <button
-          v-for="q in diagnosisQuickAsks"
-          :key="q"
+          v-for="question in diagnosisQuickAsks"
+          :key="question"
           class="shrink-0 cursor-pointer whitespace-nowrap rounded-pill border border-line bg-panel px-3.5 py-1.5 text-[13px] text-ink-2 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:border-ui-400 hover:bg-ui-50 hover:text-ui-600"
-          @click="quickAsk(q)"
-        >{{ q }}</button>
+          @click="quickAsk(question)"
+        >{{ question }}</button>
       </div>
       <!-- 折叠面板本体（挂输入区上方，随输入框居中/沉底；欢迎区不再渲染，避免撑爆空态） -->
       <div v-if="isDiagnosis && filterOpen" class="diagnosis-panel">
@@ -115,36 +115,23 @@
       </div>
     </template>
 
-    <!-- 输入区差异内容：智能维修诊断当轮来源面板（SSE sources 事件；T4 默认折叠+T5 历史回放） -->
+    <!-- 回答下方：逐轮来源回放（ADR-0033；默认折叠，历史每轮独立展开） -->
+    <template #assistant-extra="{ message }">
+      <DiagnosisSources
+        v-if="isDiagnosis && message.sources?.length"
+        :sources="message.sources"
+      />
+    </template>
+
+    <!-- 输入区差异内容：当轮来源面板（SSE sources 事件内存态；落库后由逐轮回放接管） -->
     <template #input-above>
-      <div v-if="isDiagnosis && currentSources.length" class="diagnosis-sources">
+      <div v-if="isDiagnosis && store.lastSources.length" class="diagnosis-sources">
         <div class="sources-head" @click="sourcesOpen = !sourcesOpen">
-          <span>▸ 资料来源（{{ currentSources.length }} 条，可从资料链接跳转原文）</span>
+          <span>▸ 资料来源（{{ store.lastSources.length }} 条，可从资料链接跳转原文）</span>
           <span class="sources-toggle">{{ sourcesOpen ? '收起 ▴' : '展开 ▾' }}</span>
         </div>
         <template v-if="sourcesOpen">
-          <div v-for="src in currentSources" :key="src.id" class="source-card">
-            <img
-              v-for="img in sourceImages(src.text)"
-              :key="img"
-              :src="aiAssistantApi.manualUrl(img)"
-              class="source-image"
-              alt="资料图片"
-              loading="lazy"
-            />
-            <div class="source-text">{{ stripImageMarkers(src.text) }}</div>
-            <div class="source-meta">
-              <span v-if="src.metadata?.page_start">第 {{ src.metadata.page_start }}{{ src.metadata.page_end && src.metadata.page_end !== src.metadata.page_start ? '-' + src.metadata.page_end : '' }} 页</span>
-              <a
-                v-if="src.metadata?.source_url"
-                :href="src.metadata.source_url"
-                target="_blank"
-                rel="noopener"
-                class="source-link"
-              >打开 PDF 来源</a>
-              <span v-if="!src.metadata?.source_url && !src.metadata?.page_start" class="source-empty">暂无来源资料</span>
-            </div>
-          </div>
+          <DiagnosisSources :sources="store.lastSources" bare />
         </template>
       </div>
       <div v-else-if="pendingImages.length" class="pending-images">
@@ -187,6 +174,7 @@ import ChatPageShell from '@/components/ai-assistant/ChatPageShell.vue'
 import { useAIAssistantStore } from '@/stores/aiAssistant'
 import { getAIFeatureByRoute } from '@/config/aiFeatures'
 import { aiAssistantApi, type DiagnosisBrandOption, type DiagnosisFaultCodeItem } from '@/api/aiAssistant'
+import DiagnosisSources from '@/components/ai-assistant/DiagnosisSources.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 
 const store = useAIAssistantStore()
@@ -226,8 +214,8 @@ const diagnosisQuickAsks = [
   '货叉提升缓慢且伴随异响，可能是什么原因？'
 ]
 
-function quickAsk(q: string) {
-  inputText.value = q
+function quickAsk(question: string) {
+  inputText.value = question
   handleSend()
 }
 
@@ -297,41 +285,9 @@ function useFaultCode(item: DiagnosisFaultCodeItem) {
   handleSend()
 }
 
-// ===== 智能维修诊断：来源资料解析（answer_sources 内含 <<IMAGE:...>> 溯源标记）=====
-// 外部助手吐绝对路径（/assistant/static/manual/…，lxc101 取证）：strip 前缀后再进
-// 后端代理，避免双前缀 404（T4）。历史回放（T5）与当轮共用同一解析。
-function stripAssistantPrefix(p: string): string {
-  return p.replace(/^\/assistant\/static\//, '').replace(/^assistant\/static\//, '')
-}
-
-function sourceImages(text: string): string[] {
-  const out: string[] = []
-  const re = /<<IMAGE:([^>]+)>>/g
-  let m: RegExpExecArray | null
-  while ((m = re.exec(text))) {
-    const p = stripAssistantPrefix(m[1].trim())
-    if (p) out.push(p)
-  }
-  return out
-}
-
-function stripImageMarkers(text: string): string {
-  return text.replace(/<<IMAGE:[^>]+>>/g, '').trim()
-}
-
-// ===== 当轮/历史来源统一展示（T4 默认折叠 + T5 历史回放）=====
-// 当轮：store.lastSources（SSE sources 事件内存态）；历史：最后一条助手消息的持久化 sources。
-// 新一轮开始（lastSources 变化）自动收起，避免旧展开态顶新消息区。
+// ===== 当轮来源展开态（默认折叠；新一轮开始自动收起）=====
+// 解析函数已收敛进 DiagnosisSources 组件；本页只保留展开态。
 const sourcesOpen = ref(false)
-const currentSources = computed(() => {
-  if (store.lastSources.length) return store.lastSources
-  const msgs = store.messages
-  for (let i = msgs.length - 1; i >= 0; i--) {
-    const m = msgs[i] as { role: string; sources?: { id: number; text: string; metadata?: { source_url?: string; page_start?: number; page_end?: number } }[] }
-    if (m.role === 'assistant' && m.sources?.length) return m.sources
-  }
-  return []
-})
 // 新一轮开始自动收起（sourcesOpen 只描述当轮展开态，不跟随历史）
 watch(() => store.lastSources, () => {
   sourcesOpen.value = false
@@ -620,7 +576,7 @@ onMounted(() => {
   align-self: flex-start;
 }
 
-/* ===== 智能维修诊断：当轮来源面板（本页差异样式） ===== */
+/* ===== 智能维修诊断：当轮来源面板容器（卡片样式已收敛进 DiagnosisSources 组件） ===== */
 .diagnosis-sources {
   display: flex;
   flex-direction: column;
@@ -642,55 +598,6 @@ onMounted(() => {
 .sources-toggle {
   color: var(--color-primary-600);
   white-space: nowrap;
-}
-
-.source-card {
-  border: 1px solid var(--color-border-light);
-  border-radius: 10px;
-  padding: 10px 12px;
-  background: var(--color-bg-card);
-}
-
-.source-image {
-  max-width: 100%;
-  max-height: 220px;
-  border-radius: 8px;
-  margin-bottom: 6px;
-  display: block;
-  border: 1px solid var(--color-border-light);
-}
-
-.source-text {
-  font-size: 13px;
-  color: var(--color-text-secondary);
-  white-space: pre-wrap;
-  line-height: 1.6;
-  max-height: 120px;
-  overflow: hidden;
-  mask-image: linear-gradient(to bottom, #000 70%, transparent);
-  -webkit-mask-image: linear-gradient(to bottom, #000 70%, transparent);
-}
-
-.source-meta {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  margin-top: 6px;
-  font-size: 12px;
-  color: var(--color-text-tertiary);
-}
-
-.source-link {
-  color: var(--color-primary-600);
-  text-decoration: none;
-}
-
-.source-link:hover {
-  text-decoration: underline;
-}
-
-.source-empty {
-  color: var(--color-text-tertiary);
 }
 
 /* ===== 待发送图片（本页差异样式） ===== */

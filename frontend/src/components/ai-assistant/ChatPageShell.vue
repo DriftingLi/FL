@@ -86,9 +86,9 @@
         </button>
       </div>
 
-      <!-- 会话列表（五档时间分组） -->
+      <!-- 会话列表（五档时间分组；加载态只描述列表本身，消息加载态在消息区） -->
       <div class="sidebar-title px-4 pb-1 pt-4 text-xs font-medium text-ink-3">会话历史</div>
-      <div v-loading="store.sessionsLoading || store.messagesLoading" class="session-list flex-1 overflow-y-auto px-2 pb-2">
+      <div v-loading="store.sessionsLoading" class="session-list flex-1 overflow-y-auto px-2 pb-2">
         <div v-if="store.sessions.length === 0 && !store.sessionsLoading" class="empty-sessions px-3 py-8 text-center text-[13px] text-ink-3">
           {{ store.isLoggedIn ? '暂无会话，点击"开启新对话"开始' : '登录后可查看会话历史' }}
         </div>
@@ -185,11 +185,6 @@
           <h2 class="welcome-title m-0 mb-2 text-2xl font-bold text-ink">{{ welcomeTitle }}</h2>
           <p class="welcome-desc mx-auto mb-6 max-w-[560px] text-sm leading-[1.6] text-ink-3">{{ welcomeDesc }}</p>
 
-          <!-- 模式选择 pills（仅主页传入；空状态居中，对齐 DeepSeek） -->
-          <div v-if="slots['welcome-modes']" class="welcome-modes mb-6 flex justify-center">
-            <slot name="welcome-modes" />
-          </div>
-
           <slot name="welcome-top" />
 
           <!-- 预设提示词：聊天气泡横向一字排开（方案 B 翻页箭头收纳；T1 允许纵向回退） -->
@@ -208,8 +203,7 @@
                 <div
                   v-for="(page, pi) in suggestionPages"
                   :key="pi"
-                  class="suggestion-page flex w-full shrink-0 gap-2"
-                  :class="suggestionWrap ? 'flex-wrap' : 'flex-nowrap overflow-hidden'"
+                  class="suggestion-page flex w-full shrink-0 flex-nowrap gap-2 overflow-hidden"
                 >
                   <div
                     v-for="s in page"
@@ -236,6 +230,14 @@
           <div v-if="!store.isLoggedIn" class="guest-hint mt-8 text-[13px] text-ink-3">
             您当前以游客身份使用，<a href="javascript:void(0)" class="font-semibold text-ui-600 no-underline hover:underline" @click="goLogin">登录</a> 后可保存对话历史
           </div>
+        </div>
+
+        <!-- 消息加载中（选中会话拉取正文；侧栏不锁，失败由选中逻辑弹提示） -->
+        <div v-if="store.messagesLoading" class="message-loading-more flex items-center justify-center gap-2 py-8 text-[13px] text-ink-3">
+          <span class="loading-dot h-2 w-2 rounded-full bg-ui-400"></span>
+          <span class="loading-dot h-2 w-2 rounded-full bg-ui-400"></span>
+          <span class="loading-dot h-2 w-2 rounded-full bg-ui-400"></span>
+          会话加载中…
         </div>
 
         <!-- 消息列表（安全渲染单点：助手内容统一 markstream escape） -->
@@ -268,6 +270,7 @@
                 html-policy="escape"
                 :fade="false"
               />
+              <slot name="assistant-extra" :message="msg" />
             </div>
           </div>
         </div>
@@ -408,8 +411,6 @@ const props = withDefaults(
     canSend?: boolean
     /** 预设提示词翻页：每页条数（默认 3，横向一字排开） */
     suggestionPageSize?: number
-    /** 预设提示词窄屏回退：允许纵向换行（默认横向翻页） */
-    suggestionWrap?: boolean
   }>(),
   {
     backLinkTo: '',
@@ -419,8 +420,7 @@ const props = withDefaults(
     raisedInput: false,
     inputPlaceholder: '输入您的问题...（Enter 发送，Shift+Enter 换行）',
     canSend: false,
-    suggestionPageSize: 3,
-    suggestionWrap: false
+    suggestionPageSize: 3
   }
 )
 
@@ -510,15 +510,14 @@ const editingTitle = ref('')
 const editInputRef = ref<any>(null)
 let renamingLock = false // 防止 blur + enter 重复触发
 
-// 选中会话：若正在编辑当前会话则不切换；加载态由 store.messagesLoading 驱动，失败弹提示
+// 选中会话：若正在编辑当前会话则不切换；失败弹提示且不收抽屉（留在列表重试）
 async function handleSelectSession(id: number) {
   if (editingSessionId.value === id) return
   try {
     await store.selectSession(id)
+    if (isMobile.value) mobileDrawerOpen.value = false
   } catch (e: any) {
     ElMessage.error(e?.message || '加载会话消息失败，请重试')
-  } finally {
-    if (isMobile.value) mobileDrawerOpen.value = false
   }
 }
 
@@ -583,7 +582,6 @@ async function handleDeleteSession(id: number) {
   }
   try {
     await store.deleteSession(id)
-    ElMessage.success('已删除会话')
   } catch (e: any) {
     ElMessage.error(e?.message || '删除会话失败，请重试')
   }
@@ -656,7 +654,7 @@ watch(() => store.streamingContent, () => scrollToBottom(), { flush: 'post' })
 </script>
 
 <style scoped>
-/* R1 允许保留：:deep(EP 内部)、keyframes 与 nth-child 动画延迟。其余样式已全部原子化。
+/* R1 允许保留：:deep(EP 内部)、keyframes 与伪类禁用态。其余样式已全部原子化。
    语义类名（ai-chat-shell/topbar/session-item/welcome-area 等）全部保留在模板上，
    是 chat-page-shell.spec.ts 的 DOM 定位钩子，不得删除。 */
 
@@ -673,7 +671,7 @@ watch(() => store.streamingContent, () => scrollToBottom(), { flush: 'post' })
   line-height: 1.6;
 }
 
-/* 方案 B：翻页箭头禁用态（原子类 disabled: 变体未收敛前用 scoped 兜底，走 token） */
+/* 方案 B：翻页箭头禁用态（:disabled 伪类，原子类 disabled: 变体未收敛前用 scoped 兜底，走 token 思路的纯不透明度） */
 .suggestion-arrow:disabled {
   opacity: 0.35;
   cursor: default;

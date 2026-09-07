@@ -15,10 +15,6 @@
     @suggest="useSuggestion"
     @new-session="handleNewSession"
   >
-    <!-- 欢迎区底部不再放功能入口（方案 B：胶囊工具栏已搬到输入框上方，随输入框居中/沉底） -->
-    <template #welcome-bottom>
-    </template>
-
     <!-- 输入框上方：专项功能胶囊工具栏（方案 B；空态随输入框居中，有消息沉底跟随） -->
     <template #input-toolbar>
       <div class="feature-toolbar flex gap-2 overflow-x-auto pb-2">

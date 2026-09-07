@@ -192,13 +192,15 @@ describe('会话链路（T6：序号守卫/删除对账/选中抛错/init 全清
     expect(store.sessions.map(s => s.id)).toEqual([2])
   })
 
-  it('选中失败抛错（壳弹提示用），消息清空', async () => {
+  it('选中失败抛错并回滚选中态（壳弹提示用），消息清空', async () => {
     authState.isLoggedIn = true
     setActivePinia(createPinia()) // 按登录态重建 store
     const store = createStore()
+    store.currentSessionId = 3
     vi.mocked(aiAssistantApi.getSessionMessages).mockRejectedValueOnce(new Error('网络异常'))
     await expect(store.selectSession(9)).rejects.toThrow('网络异常')
     expect(store.messages).toEqual([])
+    expect(store.currentSessionId).toBe(3)
   })
 
   it('init 切回主界面全清：消息/选中/当轮态复位并重拉主界面列表', async () => {
