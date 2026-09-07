@@ -19,6 +19,7 @@ const (
 	FeatureMaintenanceKnowledge   = "maintenance_knowledge"
 	FeatureDrawingRecognition     = "drawing_recognition"
 	FeatureExerciseSolving        = "exercise_solving"
+	FeatureFaultDiagnosis         = "fault_diagnosis"
 )
 
 // forkliftExpertSystemPrompt 叉车维修专家系统提示词（通用助手与未注册功能的兜底提示词）。
@@ -117,6 +118,13 @@ const chapterContentSystemPrompt = `你是一名叉车维修培训内容编写�
 // questionExplainSystemPrompt 题目 AI 解析系统提示词。
 const questionExplainSystemPrompt = `你是一名叉车维修培训专家，请为以下题目生成详细解析。要求：1. 说明考点（关联知识点）；2. 解释正确选项的原因；3. 说明错误选项为何错误；4. 语言简洁专业，200-400字；5. 直接返回解析文本，不要加额外格式。`
 
+// diagnosisSystemPrompt 智能维修诊断系统提示词。
+// 注：本功能由外部诊断 RAG 助手（forklift-assistant）消费，streamChat 组装的首条 system
+// 消息会被 diagnosis adapter 转译时忽略——此处声明仅为注册表卫生（丢弃仍走通用兜底的
+// 显式声明位），真实行为（提示词/知识库）在外部服务内，不经本站。
+const diagnosisSystemPrompt = `你是一名叉车维修诊断专家：基于维修手册与故障码知识库生成标准排查作业指导书（SOP），
+回答须包含可能原因、排查步骤、处理方法与安全警示。`
+
 // aiBindingKind 功能绑定形态（消费面如何取到模型配置；解析阶梯本身在 AIConfigResolver，不在注册表）。
 type aiBindingKind string
 
@@ -137,23 +145,25 @@ type aiFeature struct {
 	systemPrompt string        // 系统提示词；对话消费必填，未声明时走通用兜底
 	bindingKind  aiBindingKind // 绑定形态
 	billed       bool          // 计费声明位（闸门接线见 #619）：助手对话（双模式/遗留/专项聊天）true，阻塞消费 false
+	freePreview  bool          // 限免声明位（#计划 fault_diagnosis）：true 时闸门按免费放行（专用在位），false 计费
 }
 
 // aiFeatureRegistry AI 功能注册表（唯一事实源，ADR-0030 决策 1）。
 // 行序 = 绑定列表展示序；遗留兼容位列于末尾、不进展示列表。
 var aiFeatureRegistry = []aiFeature{
-	{FeatureGradeShortAnswer, "简答题 AI 评分", gradingSystemPrompt, bindingAdminSingle, false},
-	{FeatureGenerateChapterContent, "课程内容生成", chapterContentSystemPrompt, bindingAdminSingle, false},
-	{FeatureAIAssistantNormal, "AI 助手 · 普通模式", forkliftExpertSystemPrompt, bindingAssistantMode, true},
-	{FeatureAIAssistantExpert, "AI 助手 · 专家模式", forkliftExpertSystemPrompt, bindingAssistantMode, true},
-	{FeatureQuestionExplanation, "题目 AI 解析", questionExplainSystemPrompt, bindingAdminSingle, false},
-	{FeatureFaultConsult, "故障咨询", faultConsultSystemPrompt, bindingAdminSingle, true},
-	{FeatureFaultCodeQuery, "故障代码查询", faultCodeQuerySystemPrompt, bindingAdminSingle, true},
-	{FeatureMaintenanceKnowledge, "维保知识", maintenanceKnowledgeSystemPrompt, bindingAdminSingle, true},
-	{FeatureDrawingRecognition, "图纸识别", drawingRecognitionSystemPrompt, bindingAdminSingle, true},
-	{FeatureExerciseSolving, "习题解答", exerciseSolvingSystemPrompt, bindingAdminSingle, true},
+	{FeatureGradeShortAnswer, "简答题 AI 评分", gradingSystemPrompt, bindingAdminSingle, false, false},
+	{FeatureGenerateChapterContent, "课程内容生成", chapterContentSystemPrompt, bindingAdminSingle, false, false},
+	{FeatureAIAssistantNormal, "AI 助手 · 普通模式", forkliftExpertSystemPrompt, bindingAssistantMode, true, false},
+	{FeatureAIAssistantExpert, "AI 助手 · 专家模式", forkliftExpertSystemPrompt, bindingAssistantMode, true, false},
+	{FeatureQuestionExplanation, "题目 AI 解析", questionExplainSystemPrompt, bindingAdminSingle, false, false},
+	{FeatureFaultConsult, "故障咨询", faultConsultSystemPrompt, bindingAdminSingle, true, false},
+	{FeatureFaultCodeQuery, "故障代码查询", faultCodeQuerySystemPrompt, bindingAdminSingle, true, false},
+	{FeatureMaintenanceKnowledge, "维保知识", maintenanceKnowledgeSystemPrompt, bindingAdminSingle, true, false},
+	{FeatureDrawingRecognition, "图纸识别", drawingRecognitionSystemPrompt, bindingAdminSingle, true, false},
+	{FeatureExerciseSolving, "习题解答", exerciseSolvingSystemPrompt, bindingAdminSingle, true, false},
+	{FeatureFaultDiagnosis, "智能维修诊断", diagnosisSystemPrompt, bindingAdminSingle, true, true},
 	// 遗留兼容：ai_assistant 多绑定回退位（仅解析存量绑定，不供新绑定）
-	{FeatureAIAssistant, "AI 助手对话", forkliftExpertSystemPrompt, bindingAssistantLegacy, true},
+	{FeatureAIAssistant, "AI 助手对话", forkliftExpertSystemPrompt, bindingAssistantLegacy, true, false},
 }
 
 // lookupAIFeature 注册表按功能键查找。
@@ -207,7 +217,8 @@ func deriveFeatureChatKeys(reg []aiFeature) map[string]bool {
 }
 
 // aiFeatureChatBilled 对话计费声明单点（闸门 Stream 流向唯一查询入口，ADR-0031 决策 2）：
-// 对话形态注册行返回其 billed 声明；非对话形态行、未注册键与空键回退 true——空键/未知键/
+// 对话形态注册行返回其 billed 声明（限免声明位 freePreview=true 时按免费放行，闸门跟随——
+// 结束限免 = 翻声明位 + 再生成）；非对话形态行、未注册键与空键回退 true——空键/未知键/
 // billed=false 的阻塞功能键经 ResolveChatSettings 解析阶梯（专项单绑定 → 双模式 → 旧来源）
 // 最终都落为通用对话，按通用对话计费（CONTEXT.md「AI 计费」：仅助手对话计费），防止借免费
 // 功能键逃费。对话形态 = 双模式绑定 / 遗留兼容位 / 专项聊天（aiFeatureIsChat），与解析阶梯的
@@ -216,7 +227,7 @@ func deriveFeatureChatKeys(reg []aiFeature) map[string]bool {
 func aiFeatureChatBilled(featureKey string) bool {
 	f, ok := lookupAIFeature(aiFeatureRegistry, featureKey)
 	if ok && (f.bindingKind == bindingAssistantMode || f.bindingKind == bindingAssistantLegacy || aiFeatureIsChat(f.bindingKind, f.billed)) {
-		return f.billed
+		return f.billed && !f.freePreview
 	}
 	return true
 }

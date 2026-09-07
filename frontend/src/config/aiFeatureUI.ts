@@ -8,7 +8,8 @@ import {
   Search,
   Reading,
   Picture,
-  EditPen
+  EditPen,
+  FirstAidKit
 } from '@element-plus/icons-vue'
 import type { AIFeatureKey, AIFeatureQuickOption } from './aiFeatures'
 
@@ -101,5 +102,20 @@ export const aiFeatureUI: Record<AIFeatureKey, AIFeatureUIDescriptor> = {
     ],
     supportsImage: true,
     maxImages: 4
+  },
+  fault_diagnosis: {
+    routePath: '/ai-assistant/fault-diagnosis',
+    welcome: '描述故障现象或上传现场照片，我将基于维修手册与故障码知识库为您生成排查 SOP。',
+    entryDesc: '基于维修手册生成排查 SOP',
+    icon: FirstAidKit,
+    suggestions: [
+      '叉车无法行驶且仪表报警，怎么排查？',
+      '货叉提升缓慢且伴随异响，可能是什么原因？',
+      '制动失灵如何应急处理？',
+      '故障码 E102 是什么意思？'
+    ],
+    // 无静态 quickOptions：品牌/车型由本页按 /diagnosis/brands|models 动态联动（包前端还原）
+    supportsImage: true,
+    maxImages: 1
   }
 }
