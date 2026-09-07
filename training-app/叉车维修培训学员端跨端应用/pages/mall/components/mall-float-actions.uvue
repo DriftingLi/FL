@@ -1,0 +1,128 @@
+<template>
+	<!-- 悬浮按钮组 -->
+	<view class="float-group">
+		<!-- 回到顶部 -->
+		<view class="float-btn" @click="scrollToTop">
+			<text class="float-icon">↑</text>
+		</view>
+		<!-- 展开/收起 -->
+		<view class="float-btn" @click="toggleFloatMenu">
+			<text class="float-icon">{{ showFloatMenu ? '∧' : '∨' }}</text>
+		</view>
+		<!-- 搜索（收起态） -->
+		<view v-if="!showFloatMenu" class="float-btn float-btn-search" @click="onSearchClick">
+			<text class="float-icon">🔍</text>
+			<text class="float-btn-label">搜索</text>
+		</view>
+		<!-- 展开菜单 -->
+		<view v-if="showFloatMenu" class="float-menu">
+			<view class="float-menu-item" @click="goHome">
+				<text class="float-menu-icon">🏠</text>
+				<text class="float-menu-text">首页</text>
+			</view>
+			<view class="float-menu-item" @click="onShare">
+				<text class="float-menu-icon">🔗</text>
+				<text class="float-menu-text">分享</text>
+			</view>
+			<view class="float-menu-item" @click="onSearchClick">
+				<text class="float-menu-icon">🔍</text>
+				<text class="float-menu-text">搜索</text>
+			</view>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	import { ref } from 'vue'
+
+	// ---- 悬浮按钮 ----
+	const showFloatMenu = ref<boolean>(false)
+
+	const emit = defineEmits(['search'])
+
+	function goHome() : void {
+		uni.switchTab({ url: '/pages/index/index' })
+	}
+
+	function onShare() : void {
+		uni.showToast({ title: '分享功能开发中', icon: 'none' })
+	}
+
+	function onSearchClick() : void {
+		emit('search')
+	}
+
+	function scrollToTop() : void {
+		// 滚动到顶部
+	}
+
+	function toggleFloatMenu() : void {
+		showFloatMenu.value = !showFloatMenu.value
+	}
+</script>
+
+<style>
+	/* ===== 悬浮按钮组 ===== */
+	.float-group {
+		position: fixed;
+		right: 24rpx;
+		bottom: 200rpx;
+		flex-direction: column;
+		align-items: center;
+		z-index: 100;
+	}
+
+	.float-btn {
+		width: 80rpx;
+		height: 80rpx;
+		border-radius: 40rpx;
+		background-color: #ffffff;
+		align-items: center;
+		justify-content: center;
+		box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.15);
+		margin-bottom: 16rpx;
+	}
+
+	.float-btn-search {
+		width: 80rpx;
+		height: 100rpx;
+		border-radius: 40rpx;
+		flex-direction: column;
+		padding-top: 8rpx;
+	}
+
+	.float-icon {
+		font-size: 32rpx;
+		color: #666666;
+	}
+
+	.float-btn-label {
+		font-size: 20rpx;
+		color: #666666;
+		margin-top: 4rpx;
+	}
+
+	.float-menu {
+		background-color: #ffffff;
+		border-radius: 16rpx;
+		box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.15);
+		padding: 16rpx 0;
+		margin-bottom: 16rpx;
+	}
+
+	.float-menu-item {
+		flex-direction: row;
+		align-items: center;
+		padding: 16rpx 32rpx;
+	}
+
+	.float-menu-icon {
+		font-size: 32rpx;
+		margin-right: 16rpx;
+	}
+
+	.float-menu-text {
+		font-size: 26rpx;
+		color: #333333;
+	}
+</style>
