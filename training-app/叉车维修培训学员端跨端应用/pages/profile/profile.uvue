@@ -94,7 +94,7 @@
     import { useAuthStore } from '../../stores/auth'
     import { getProfileApi, getStudyStatsApi } from '../../api/student'
     import { updateProfileApi, uploadAvatarApi } from '../../api/auth'
-    import { getCheckInCalendarApi } from '../../api/forum'
+    import { getCheckInCalendarApi } from '../../api/checkin'
     import { getPointsBalanceApi } from '../../api/points'
     import { useStatusBarHeight } from '../../utils/system'
     import { UNAVAILABLE_TOAST } from '../../constants/app'

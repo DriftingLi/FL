@@ -791,29 +791,28 @@ export type NotificationListResult = {
 
 // ===== 打卡模块类型 =====
 
-/** 打卡结果（POST /forum/check-in 返回） */
+/** 打卡结果（POST /check-in 返回，契约见根仓库 ADR-0028） */
 export type CheckInResult = {
-    checked_in : boolean       // 是否打卡成功
-    consecutive_days : number  // 连续签到天数
-    points_earned : number     // 本次获得积分
-    total_points : number      // 累计积分
+    checked : boolean          // 本次请求后是否处于已打卡态
+    streak : number            // 连续打卡天数
+    total : number             // 累计打卡天数（非积分）
+    today_checked : boolean    // 今日是否已打卡
+    points : number            // 当日实发积分（基础 5 + 阶梯奖；重复请求为 0）
 }
 
 /** 打卡日历单日状态 */
 export type CheckInCalendarDay = {
     date : string              // YYYY-MM-DD
     checked : boolean          // 是否已签到
-    points : number            // 该日获得积分（0 表示未签）
+    points : number            // 该日实发积分（0 表示未签或历史无流水）
 }
 
-/** 打卡日历响应（GET /forum/check-in/calendar） */
+/** 打卡日历响应（GET /check-in/calendar，逐日返回整月每一天） */
 export type CheckInCalendarResult = {
-    year : number
-    month : number
-    consecutive_days : number  // 连续签到天数
-    total_points : number      // 累计积分
-    points_per_day : number    // 每日签到积分
     days : CheckInCalendarDay[] // 当月每日签到状态
+    streak : number             // 连续打卡天数
+    total : number              // 累计打卡天数（非积分）
+    today_checked : boolean     // 今日是否已打卡
 }
 
 /** 打卡排行榜条目（GET /forum/check-in/rank） */

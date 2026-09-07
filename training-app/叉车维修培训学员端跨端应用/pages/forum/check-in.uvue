@@ -14,7 +14,7 @@
             <view class="checkin-banner">
                 <view class="banner-left">
                     <text class="banner-title">8月学习打卡</text>
-                    <text class="banner-desc">已连续签到 {{ consecutiveDays }} 天，每天到一次学习 {{ pointsPerDay }} 个积分</text>
+                    <text class="banner-desc">已连续打卡 {{ consecutiveDays }} 天 · 累计 {{ totalDays }} 天，每日 5 分基础奖，连击满 3/7/30 天额外加分</text>
                 </view>
                 <view class="banner-btn" @click="onCheckIn">
                     <text class="banner-btn-text">{{ todayChecked ? '已打卡' : '开始打卡' }}</text>
@@ -66,7 +66,7 @@
     import { onLoad } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
-    import { checkInApi, getCheckInCalendarApi } from '../../api/forum'
+    import { checkInApi, getCheckInCalendarApi } from '../../api/checkin'
     import type { CheckInCalendarDay } from '../../types/index'
 
     const statusBarHeight = useStatusBarHeight()
@@ -77,8 +77,7 @@
     const displayYear = ref<number>(new Date().getFullYear())
     const displayMonth = ref<number>(new Date().getMonth() + 1)
     const consecutiveDays = ref<number>(0)
-    const totalPoints = ref<number>(0)
-    const pointsPerDay = ref<number>(7)
+    const totalDays = ref<number>(0)
     const calendarDays = ref<CheckInCalendarDay[]>([])
     const todayChecked = ref<boolean>(false)
     // 自动打卡：进入页面即代打卡一次（仅真实数据下触发，每次访问尝试一次）
@@ -185,8 +184,7 @@
         }
         calendarDays.value = mockDays
         consecutiveDays.value = 2
-        totalPoints.value = 49
-        pointsPerDay.value = 7
+        totalDays.value = 49
         // 检查今日
         const todayStr = today.getFullYear() + '-' + padZero(today.getMonth() + 1) + '-' + padZero(today.getDate())
         todayChecked.value = false
@@ -203,11 +201,10 @@
             const result = await getCheckInCalendarApi(displayYear.value, displayMonth.value)
             console.log('[check-in] API result:', JSON.stringify(result))
             usingMock.value = false
-            consecutiveDays.value = result.consecutive_days
-            totalPoints.value = result.total_points
-            pointsPerDay.value = result.points_per_day
+            consecutiveDays.value = result.streak
+            totalDays.value = result.total
             calendarDays.value = result.days
-            console.log('[check-in] days count:', result.days.length, 'consecutive:', result.consecutive_days)
+            console.log('[check-in] days count:', result.days.length, 'streak:', result.streak)
             // 从 days 数组中查找今日签到状态
             const today = new Date()
             const todayStr = today.getFullYear() + '-' + padZero(today.getMonth() + 1) + '-' + padZero(today.getDate())
@@ -234,12 +231,12 @@
         try {
             const result = await checkInApi()
             todayChecked.value = true
-            consecutiveDays.value = result.consecutive_days
-            totalPoints.value = result.total_points
+            consecutiveDays.value = result.streak
+            totalDays.value = result.total
             if (auto) {
-                uni.showToast({ title: '已自动为你打卡 +' + result.points_earned + '积分', icon: 'none' })
+                uni.showToast({ title: '已自动为你打卡 +' + result.points + '积分', icon: 'none' })
             } else {
-                uni.showToast({ title: '打卡成功 +' + result.points_earned + '积分', icon: 'success' })
+                uni.showToast({ title: '打卡成功 +' + result.points + '积分', icon: 'success' })
             }
             loadCalendar()
         } catch (e) {
