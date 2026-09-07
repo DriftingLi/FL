@@ -1,0 +1,94 @@
+<template>
+	<!-- 排序栏 -->
+	<view class="sort-bar">
+		<view class="sort-item" :class="{ 'sort-active': activeSort === 0 }" @click="onSort(0)">
+			<text class="sort-text" :class="{ 'sort-text-active': activeSort === 0 }">商品</text>
+		</view>
+		<view class="sort-item" :class="{ 'sort-active': activeSort === 1 }" @click="onSort(1)">
+			<text class="sort-text" :class="{ 'sort-text-active': activeSort === 1 }">价格</text>
+			<text class="sort-arrow">∨</text>
+		</view>
+		<view class="sort-item" :class="{ 'sort-active': activeSort === 2 }" @click="onSort(2)">
+			<text class="sort-text" :class="{ 'sort-text-active': activeSort === 2 }">积分</text>
+			<text class="sort-arrow">∨</text>
+		</view>
+		<view class="sort-item" :class="{ 'sort-active': activeSort === 3 }" @click="onSort(3)">
+			<text class="sort-text" :class="{ 'sort-text-active': activeSort === 3 }">销量</text>
+			<text class="sort-arrow">∨</text>
+		</view>
+		<view class="sort-icon-btn" @click="onSearchClick">
+			<text class="sort-icon">🔍</text>
+		</view>
+		<view class="sort-icon-btn" @click="onCartClick">
+			<text class="sort-icon">🛒</text>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	const props = withDefaults(defineProps<{
+		activeSort?: number
+	}>(), {
+		activeSort: 0
+	})
+
+	const emit = defineEmits(['sortChange', 'search', 'cart'])
+
+	function onSort(idx : number) : void {
+		emit('sortChange', idx)
+	}
+
+	function onSearchClick() : void {
+		emit('search')
+	}
+
+	function onCartClick() : void {
+		emit('cart')
+	}
+</script>
+
+<style>
+	/* ===== 排序栏 ===== */
+	.sort-bar {
+		background-color: #ffffff;
+		padding: 16rpx 24rpx;
+		flex-direction: row;
+		align-items: center;
+		border-bottom: 1rpx solid #f0f0f0;
+	}
+
+	.sort-item {
+		flex: 1;
+		flex-direction: row;
+		align-items: center;
+		justify-content: center;
+		padding: 8rpx 0;
+	}
+
+	.sort-text {
+		font-size: 26rpx;
+		color: #666666;
+	}
+
+	.sort-text-active {
+		color: #2979ff;
+		font-weight: 600;
+	}
+
+	.sort-arrow {
+		font-size: 20rpx;
+		color: #cccccc;
+		margin-left: 4rpx;
+	}
+
+	.sort-icon-btn {
+		width: 60rpx;
+		height: 60rpx;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.sort-icon {
+		font-size: 32rpx;
+	}
+</style>
