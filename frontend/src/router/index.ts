@@ -296,9 +296,9 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/pages/ai-assistant/AIAssistantPage.vue'),
     meta: { requiresAuth: false, workspace: 'training' }
   },
-  // 专项功能页（故障咨询/故障代码查询/维保知识/图纸识别/习题解答）
+  // 专项功能页（故障咨询/故障代码查询/维保知识/图纸识别/习题解答/智能维修诊断）
   {
-    path: '/ai-assistant/:featureKey(fault-consult|fault-code|maintenance|drawing|exercise)',
+    path: '/ai-assistant/:featureKey(fault-consult|fault-code|maintenance|drawing|exercise|fault-diagnosis)',
     name: routeNames.AIAssistantFeature,
     component: () => import('@/pages/ai-assistant/FeatureChatPage.vue'),
     meta: { requiresAuth: false, workspace: 'training' }

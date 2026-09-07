@@ -7,7 +7,8 @@ import {
   type ChatSession,
   type ChatMessage,
   type AIMode,
-  type AIAssistantModeModels
+  type AIAssistantModeModels,
+  type DiagnosisSource
 } from '@/api/aiAssistant'
 import { useAuthStore } from '@/stores/auth'
 
@@ -43,8 +44,12 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
 
   // ===== 当轮计费 usage（#620 显性通道）=====
   // SSE usage 事件进独立 state，由壳组件渲染当轮脚注；消息正文不再拼接计费文本
-  // （已知取舍：历史回看不显示每轮消耗——后端消息未存 usage，如需回看另立项）。
+  // （已知取舍：历史回看不显示每轮费用——后端消息未存 usage，如需回看另立项）。
   const lastUsage: Ref<TurnUsage | null> = ref(null)
+
+  // ===== 智能维修诊断当轮来源（SSE sources 事件；包前端 answer_sources 还原）=====
+  // 与 usage 同策略：只描述当轮，历史回看不显示（后端未持久化 sources）。
+  const lastSources: Ref<DiagnosisSource[]> = ref([])
 
   // ===== 登录状态（复用主体系 auth store）=====
   const authStore = useAuthStore()
@@ -137,6 +142,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     messages.value = []
     streamingContent.value = ''
     lastUsage.value = null
+    lastSources.value = []
   }
 
   /**
@@ -153,13 +159,15 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     currentSessionId.value = null
     streamingContent.value = ''
     lastUsage.value = null
+    lastSources.value = []
   }
 
   async function selectSession(id: number) {
     if (!isLoggedIn.value) return
     currentSessionId.value = id
-    // 切换会话即离开「当轮」上下文，上一轮脚注随之失效
+    // 切换会话即离开「当轮」上下文，上一轮脚注/来源随之失效
     lastUsage.value = null
+    lastSources.value = []
     messagesLoading.value = true
     try {
       messages.value = await aiAssistantApi.getSessionMessages(id)
@@ -171,7 +179,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
   }
 
   // ===== 流式对话 =====
-  async function sendMessage(content: string, images?: string[]) {
+  async function sendMessage(content: string, images?: string[], opts?: { brand?: string; model?: string }) {
     if ((!content.trim() && !(images && images.length > 0)) || streaming.value) return
     // 专项功能模式：模型由后端按功能绑定解析；通用模式校验双模式可用性
     if (!isFeatureMode.value) {
@@ -205,8 +213,9 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
 
     streaming.value = true
     streamingContent.value = ''
-    // 新一轮开始：清上一轮脚注（usage 仅描述当轮）
+    // 新一轮开始：清上一轮脚注/来源（usage/sources 仅描述当轮）
     lastUsage.value = null
+    lastSources.value = []
     const assistantMsgId = Date.now() + 1
 
     const req: any = {
@@ -218,6 +227,9 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
       config_id: isFeatureMode.value
         ? undefined
         : (selectedMode.value === 'expert' ? modeModels.value.expert?.id : modeModels.value.normal?.id) ?? undefined,
+      // 智能维修诊断（fault_diagnosis）专用：品牌/车型结构化过滤
+      brand: opts?.brand,
+      model: opts?.model,
       messages: historyMessages
     }
 
@@ -228,6 +240,10 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
       // usage 进独立 state（当轮脚注由壳渲染），不再拼进消息正文
       onUsage: (data) => {
         lastUsage.value = data
+      },
+      // 来源资料进独立 state（智能维修诊断；当轮来源面板由本页渲染）
+      onSources: (sources) => {
+        lastSources.value = sources
       },
       onDone: () => {
         // 正文即纯对话内容（计费脚注走 lastUsage 通道，#620）
@@ -318,6 +334,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     messages.value = []
     currentSessionId.value = null
     lastUsage.value = null
+    lastSources.value = []
     if (isLoggedIn.value) {
       await loadSessions()
     }
@@ -338,6 +355,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     streaming,
     streamingContent,
     lastUsage,
+    lastSources,
     isLoggedIn,
     // actions
     init,

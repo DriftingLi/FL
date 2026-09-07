@@ -93,7 +93,11 @@ type StreamChatReq struct {
 	CustomAPIKey  string          `json:"custom_api_key"` // 兼容旧：ModelSource="custom" 时临时输入
 	CustomBaseURL string          `json:"custom_base_url"`
 	CustomModel   string          `json:"custom_model"`
-	Messages      []struct {
+	// Brand/Model 智能维修诊断（fault_diagnosis）专用可选参数：品牌/车型过滤（空 = 全部）。
+	// 经 ctx 透传到 diagnosis adapter（withDiagnosisParams），仅该功能消费；通用对话忽略。
+	Brand    string `json:"brand,omitempty"`
+	Model    string `json:"model,omitempty"`
+	Messages []struct {
 		Role    string   `json:"role"`
 		Content string   `json:"content"`
 		Images  []string `json:"images"` // 用户消息附带的图片 URL（仅最后一条用户消息生效）
@@ -522,6 +526,10 @@ func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req Str
 	var promptChars int
 	if len(req.Messages) > 0 {
 		promptChars = len(req.Messages[len(req.Messages)-1].Content)
+	}
+	// 诊断参数（品牌/车型）经 ctx 透传到 diagnosis adapter（fault_diagnosis 消费）
+	if req.Brand != "" || req.Model != "" {
+		ctx = WithDiagnosisParams(ctx, req.Brand, req.Model)
 	}
 
 	fullContent, usage, err := s.port.Stream(withAIPromptChars(ctx, promptChars), sel, msgs, onChunk)

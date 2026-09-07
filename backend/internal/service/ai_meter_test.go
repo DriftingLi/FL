@@ -565,3 +565,36 @@ func TestAIMeteringAmountDiffZero(t *testing.T) {
 		}
 	}
 }
+
+// TestAIMeterFreePreviewFollowsRegistry 限免声明位（fault_diagnosis freePreview=true）：
+// 闸门 billed 判定跟随注册表——限免期内登录用户不预检、不扣费（usage=nil）；
+// 非限免对话功能（fault_consult）不受影响（值断言 + 端到端两只分支）。
+func TestAIMeterFreePreviewFollowsRegistry(t *testing.T) {
+	// 值断言：billed 单点随 freePreview 翻转
+	if aiFeatureChatBilled(FeatureFaultDiagnosis) {
+		t.Fatal("fault_diagnosis 限免期 aiFeatureChatBilled 应为 false")
+	}
+	if !aiFeatureChatBilled(FeatureFaultConsult) {
+		t.Fatal("fault_consult 非限免应保持计费")
+	}
+	// 端到端：限免功能经 meter 栈不触发闸门（预检/扣费 0 次）
+	meter := &fakeAIMeter{}
+	port, _ := newMeteredStack("SOP 回复", meter)
+	msgs := []*schema.Message{schema.SystemMessage(diagnosisSystemPrompt), schema.UserMessage("叉车无法行驶？")}
+	_, usage, err := port.Stream(WithAIRequestID(context.Background(), "req-free"),
+		AIModelSelector{FeatureKey: FeatureFaultDiagnosis, UserID: 7}, msgs, nil)
+	if err != nil || usage != nil {
+		t.Fatalf("限免调用不应产生计量产出: usage=%+v err=%v", usage, err)
+	}
+	if n1, n2, _, _, _ := meter.snapshot(); n1 != 0 || n2 != 0 {
+		t.Fatalf("限免不得触发闸门: preflight=%d deduct=%d", n1, n2)
+	}
+	// 对照：非限免对话功能正常扣费（防 freePreview 误伤其他功能）
+	meter2 := &fakeAIMeter{}
+	port2, _ := newMeteredStack("回复", meter2)
+	_, usage2, err := port2.Stream(WithAIRequestID(context.Background(), "req-billed"),
+		AIModelSelector{FeatureKey: FeatureFaultConsult, UserID: 7}, msgs, nil)
+	if err != nil || usage2 == nil || usage2.Res == nil {
+		t.Fatalf("非限免对话应正常计费: usage=%+v err=%v", usage2, err)
+	}
+}
