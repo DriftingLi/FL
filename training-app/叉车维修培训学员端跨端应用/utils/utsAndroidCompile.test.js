@@ -16,6 +16,11 @@
  *
  * 设计：每类扫描都是纯函数，先各跑一个「注入违规」自检用例证明检测有效
  * （防止空跑假绿），再对全工程源码跑断言零命中（真正守护）。
+ *
+ * 2026-09 增补（编译门红修，refs #639 四门阻塞）：AGENTS.md 坑位表机械化规则 J–L——
+ *   J. 调用实参少于必选形参（No value passed for parameter；函数定义行与方法调用不报）
+ *   K. 模板 v-for 别名字段越界（error18；标签游走做块级作用域归属，页面本地类型声明优先于全局表）
+ *   L. 类型化参数访问未声明字段（error18；script 侧，字段表可解析的单类型参数）
  */
 const fs = require('fs');
 const path = require('path');
@@ -246,7 +251,46 @@ function scanCallArity(code, sigTable) {
   return hits;
 }
 
-/** 全工程类型字段表：.uts 的 export type / interface / type 声明体，取深度 1 的字段名集合（嵌套内层不取，宁漏勿误） */
+/** 从类型头匹配处提取声明体的深度 1 字段名集合（嵌套内层不取——宁漏勿误） */
+function extractTypeFieldSet(clean, headMatch) {
+  const set = new Set();
+  let depth = 0;
+  let body = '';
+  for (let i = headMatch.index + headMatch[0].length - 1; i < clean.length; i++) {
+    const c = clean[i];
+    if (c === '{') { depth++; if (depth === 1) continue; }
+    else if (c === '}') { depth--; if (depth === 0) break; }
+    if (depth >= 1) body += c;
+  }
+  depth = 0;
+  for (const rawLine of body.split('\n')) {
+    const startsAtZero = depth === 0;
+    if (startsAtZero) {
+      // 单行多字段（`a : X, b : Y` / `a : X; b : Y`）按深度 0 的逗号/分号切段逐段取
+      const segs = [];
+      let d = 0;
+      let cur = '';
+      for (const c of rawLine) {
+        if ('([{'.includes(c)) d++;
+        else if (')]}'.includes(c)) d--;
+        if ((c === ',' || c === ';') && d === 0) { segs.push(cur); cur = ''; continue; }
+        cur += c;
+      }
+      segs.push(cur);
+      for (const seg of segs) {
+        const fm = /^\s*([A-Za-z_$][\w$]*)\s*\??\s*:/.exec(seg);
+        if (fm !== null) set.add(fm[1]);
+      }
+    }
+    for (const c of rawLine) {
+      if ('{(['.includes(c)) depth++;
+      else if ('})]'.includes(c)) depth--;
+    }
+  }
+  return set;
+}
+
+/** 全工程类型字段表：.uts 的 export type / interface / type 声明体（.uvue 本地类型由规则 K 按页覆盖） */
 function buildTypeFieldMap() {
   const fields = new Map();
   const headRe = /(?:export\s+)?(?:type|interface)\s+([A-Za-z_$][\w$]*)[^{]*\{/g;
@@ -254,25 +298,7 @@ function buildTypeFieldMap() {
   for (const file of ALL_FILES.filter((f) => f.endsWith('.uts'))) {
     const clean = blank(fs.readFileSync(file, 'utf8'));
     while ((m = headRe.exec(clean)) !== null) {
-      let depth = 0;
-      let body = '';
-      for (let i = m.index + m[0].length - 1; i < clean.length; i++) {
-        const c = clean[i];
-        if (c === '{') { depth++; if (depth === 1) continue; }
-        else if (c === '}') { depth--; if (depth === 0) break; }
-        if (depth >= 1) body += c;
-      }
-      const set = new Set();
-      depth = 0;
-      for (const rawLine of body.split('\n')) {
-        const fm = /^\s*([A-Za-z_$][\w$]*)\s*\??\s*:/.exec(rawLine);
-        if (fm !== null && depth === 0) set.add(fm[1]);
-        for (const c of rawLine) {
-          if ('{(['.includes(c)) depth++;
-          else if ('})]'.includes(c)) depth--;
-        }
-      }
-      if (!fields.has(m[1])) fields.set(m[1], set);
+      if (!fields.has(m[1])) fields.set(m[1], extractTypeFieldSet(clean, m));
     }
   }
   return fields;
@@ -324,6 +350,73 @@ function scanTypedParamFieldAccess(code, fieldMap) {
       }
     }
   }
+  return hits;
+}
+
+/** K：模板 v-for 别名访问未声明字段（Kotlin error18——模板属性访问同样走 Kotlin 类型检查）。
+ *  标签游走维护 v-for 绑定栈做块级作用域归属（同名别名各归各块）；元素类型取 script 的
+ *  `const src = ref<ET[]>` / `const src : ET[] =`；来源或类型不可解析则跳过（宁漏勿误） */
+function scanTemplateFields(text, fieldMap) {
+  const scriptIdx = text.indexOf('<script');
+  if (scriptIdx === -1) return [];
+  const template = text.slice(0, scriptIdx);
+  const script = blank(text.slice(scriptIdx));
+  // 页面本地 type/interface 声明优先于全局表（同名遮蔽场景，如 dashboard 本地 CourseItem）
+  const effFields = new Map(fieldMap);
+  const localHeadRe = /(?:^|\n)\s*(?:export\s+)?(?:type|interface)\s+([A-Za-z_$][\w$]*)[^{]*\{/g;
+  let hm;
+  while ((hm = localHeadRe.exec(script)) !== null) {
+    effFields.set(hm[1], extractTypeFieldSet(script, hm));
+  }
+  const elemTypeOf = (src) => {
+    let dm;
+    let et = null;
+    const declRefRe = new RegExp('const\\s+' + src + '\\s*=\\s*ref\\s*<\\s*([\\w$.]+)\\s*\\[\\s*\\]\\s*>');
+    const declAnnotRe = new RegExp('const\\s+' + src + '\\s*:\\s*([\\w$.]+)\\s*\\[\\s*\\]\\s*=');
+    if ((dm = declRefRe.exec(script)) !== null) et = dm[1];
+    if (et === null && (dm = declAnnotRe.exec(script)) !== null) et = dm[1];
+    return et;
+  };
+  const hits = [];
+  const stack = [];
+  const checkChunk = (chunk) => {
+    for (const entry of stack) {
+      if (entry.binding === null || entry.binding.fields === undefined) continue;
+      const b = entry.binding;
+      const accRe = new RegExp('(?<![\\w$])' + b.alias + '\\s*\\.\\s*([A-Za-z_$][\\w$]*)\\b(?!\\s*\\()', 'g');
+      let am;
+      while ((am = accRe.exec(chunk)) !== null) {
+        if (!b.fields.has(am[1])) hits.push(`v-for 别名 ${b.alias} : ${b.type} 访问未声明字段 ${am[1]}`);
+      }
+    }
+  };
+  const tagRe = /<(\/?)([\w-]+)((?:[^>"']|"[^"]*"|'[^']*')*?)(\/?)>/g;
+  let m;
+  let lastEnd = 0;
+  while ((m = tagRe.exec(template)) !== null) {
+    checkChunk(template.slice(lastEnd, m.index));
+    lastEnd = m.index + m[0].length;
+    const isClosing = m[1] === '/';
+    const isSelfClosing = m[4] === '/';
+    const tag = m[2];
+    const attrs = m[3] || '';
+    if (!isClosing) {
+      let binding = null;
+      const vf = /v-for=(["'])\s*\(?\s*([A-Za-z_$][\w$]*)\s*(?:,\s*[^"']*?)?\s*\)?\s+in\s+([A-Za-z_$][\w$]*)\s*\1/.exec(attrs);
+      if (vf !== null) {
+        const et = elemTypeOf(vf[3]);
+        if (et !== null) binding = { alias: vf[2], type: et, fields: effFields.get(et) };
+      }
+      stack.push({ tag, binding });
+      checkChunk(attrs);
+      if (isSelfClosing) stack.pop();
+    } else {
+      for (let i = stack.length - 1; i >= 0; i--) {
+        if (stack[i].tag === tag) { stack.splice(i, 1); break; }
+      }
+    }
+  }
+  checkChunk(template.slice(lastEnd));
   return hits;
 }
 
@@ -393,6 +486,14 @@ describe('守护自检：检测逻辑对已知违规样本必须报出', () => {
     expect(scanTypedParamFieldAccess(code, fields)).toHaveLength(1);
     expect(scanTypedParamFieldAccess('function likes(r : ForumReply) : number {\n  return r.likes_count\n}', fields)).toEqual([]);
     expect(scanTypedParamFieldAccess('function f(o : SomeUnknown) : void {\n  return o.whatever\n}', fields)).toEqual([]);
+  });
+
+  it('K 能报出 v-for 别名访问未声明模板字段（对照组：已声明字段与未解析来源不报）', () => {
+    const fields = new Map([['ForumTopic', new Set(['id', 'likes_count'])]]);
+    const text = '<template><view v-for="item in topics">{{ item.like_count }} {{ item.likes_count }}</view></template><script setup lang="uts">\nconst topics = ref<ForumTopic[]>([])\n</script>';
+    expect(scanTemplateFields(text, fields)).toHaveLength(1);
+    const unknown = '<template><view v-for="x in mystuff">{{ x.whatever }}</view></template><script setup lang="uts">\nconst mystuff = ref<any[]>([])\n</script>';
+    expect(scanTemplateFields(unknown, fields)).toEqual([]);
   });
 });
 
@@ -487,6 +588,15 @@ describe('全工程守护：五类 Kotlin 编译地雷零命中', () => {
     const fieldMap = buildTypeFieldMap();
     for (const u of allCodeUnits()) {
       for (const h of scanTypedParamFieldAccess(u.code, fieldMap)) violations.push(path.relative(ROOT, u.file) + ': ' + h);
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it('K：模板 v-for 别名无未声明字段访问（Kotlin error18: 找不到名称）', () => {
+    const violations = [];
+    const fieldMap = buildTypeFieldMap();
+    for (const file of ALL_FILES.filter((f) => f.endsWith('.uvue'))) {
+      for (const h of scanTemplateFields(fs.readFileSync(file, 'utf8'), fieldMap)) violations.push(path.relative(ROOT, file) + ': ' + h);
     }
     expect(violations).toEqual([]);
   });
