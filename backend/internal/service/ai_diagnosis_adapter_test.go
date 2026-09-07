@@ -231,6 +231,34 @@ func TestDiagnosisAdapterStream_Errors(t *testing.T) {
 	}
 }
 
+// TestDiagnosisAdapterStream_BadPayload 坏包分类（T3）：空包/网关 HTML/截断 JSON
+// 分别映射可行动的友好文案，不再是裸「解析诊断响应失败」。
+func TestDiagnosisAdapterStream_BadPayload(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+		want string
+	}{
+		{"空包", "", "空响应"},
+		{"网关页", "<html>502 Bad Gateway</html>", "网关异常"},
+		{"截断JSON", `{"code":200,"data":{"sop_text":"未闭合`, "格式异常"},
+		{"业务码异常", `{"code":500,"data":{}}`, "code 500"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(c.body))
+			}))
+			defer server.Close()
+			_, _, err := newDiagnosisForTest(server).Stream(context.Background(), AIModelSelector{}, msgsSample("x", 0), nil)
+			if err == nil || !strings.Contains(err.Error(), c.want) {
+				t.Fatalf("坏包 %q 应映射 %q，got err=%v", c.body, c.want, err)
+			}
+		})
+	}
+}
+
 // TestRoutingAIModel_Dispatch 分发：fault_diagnosis → diagnosis；其余 → normal（fake 记录）。
 func TestRoutingAIModel_Dispatch(t *testing.T) {
 	normal := &fakeAIModelPort{content: "eino 回复"}

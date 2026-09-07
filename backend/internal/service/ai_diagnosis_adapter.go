@@ -304,12 +304,43 @@ func (a *diagnosisAssistantAdapter) doCall(ctx context.Context, path string, bui
 		return fmt.Errorf("诊断服务响应异常（HTTP %d）", resp.StatusCode)
 	}
 	if err := json.Unmarshal(raw, out); err != nil {
-		return errors.New("解析诊断响应失败")
+		// T3：坏包分类 + 原始包截断日志（定位网关页/空包/截断包/契约漂移）
+		preview := truncateDiagnosisPreview(raw)
+		trimmed := bytes.TrimSpace(raw)
+		a.logger.Error("解析诊断响应失败",
+			zap.String("path", path),
+			zap.Int("bytes", len(raw)),
+			zap.String("preview", preview),
+			zap.Error(err))
+		switch {
+		case len(trimmed) == 0:
+			return errors.New("诊断服务返回了空响应，请重试")
+		case bytes.HasPrefix(trimmed, []byte("<")):
+			return errors.New("诊断服务网关异常（收到非 JSON 响应），请稍后重试")
+		default:
+			return errors.New("诊断服务响应格式异常，请重试")
+		}
 	}
 	if out.Code != 0 && out.Code != 200 {
-		return fmt.Errorf("诊断失败（code %d）", out.Code)
+		a.logger.Warn("诊断业务码异常", zap.String("path", path), zap.Int("code", out.Code))
+		return fmt.Errorf("诊断失败（code %d），请重试", out.Code)
 	}
 	return nil
+}
+
+// truncateDiagnosisPreview 坏包日志预览（截断防爆日志；二进制/长包只留头部）。
+func truncateDiagnosisPreview(raw []byte) string {
+	const maxPreview = 512
+	preview := raw
+	if len(preview) > maxPreview {
+		preview = preview[:maxPreview]
+	}
+	return strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\r' || r == '\t' {
+			return ' '
+		}
+		return r
+	}, strings.ToValidUTF8(string(preview), "�"))
 }
 
 // ---- 消息转译 ----
