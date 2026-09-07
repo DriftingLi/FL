@@ -231,8 +231,8 @@ func TestDiagnosisAdapterStream_Errors(t *testing.T) {
 	}
 }
 
-// TestDiagnosisAdapterStream_BadPayload 坏包分类（T3）：空包/网关 HTML/截断 JSON
-// 分别映射可行动的友好文案，不再是裸「解析诊断响应失败」。
+// TestDiagnosisAdapterStream_BadPayload 坏包分类：空包/网关 HTML/截断 JSON
+// 分别映射可行动的友好文案；截断包若 sop_text 可用则宽容抢救（标记截断不断流）。
 func TestDiagnosisAdapterStream_BadPayload(t *testing.T) {
 	cases := []struct {
 		name string
@@ -241,8 +241,9 @@ func TestDiagnosisAdapterStream_BadPayload(t *testing.T) {
 	}{
 		{"空包", "", "空响应"},
 		{"网关页", "<html>502 Bad Gateway</html>", "网关异常"},
-		{"截断JSON", `{"code":200,"data":{"sop_text":"未闭合`, "格式异常"},
+		{"截断过短仍失败", `{"code":200,"data":{"sop_text":"未闭合`, "格式异常"},
 		{"业务码异常", `{"code":500,"data":{}}`, "code 500"},
+		{"code字符串容忍", `{"code":"200","data":{"sop_text":"## 一、检查方向\n\n先断电并实施驻车制动。","answer_sources":[]}}`, ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -251,11 +252,44 @@ func TestDiagnosisAdapterStream_BadPayload(t *testing.T) {
 				_, _ = w.Write([]byte(c.body))
 			}))
 			defer server.Close()
-			_, _, err := newDiagnosisForTest(server).Stream(context.Background(), AIModelSelector{}, msgsSample("x", 0), nil)
+			content, _, err := newDiagnosisForTest(server).Stream(context.Background(), AIModelSelector{}, msgsSample("x", 0), nil)
+			if c.want == "" {
+				if err != nil {
+					t.Fatalf("code 字符串两态应容忍，got err=%v", err)
+				}
+				if content == "" {
+					t.Fatal("code 字符串容忍后正文不应为空")
+				}
+				return
+			}
 			if err == nil || !strings.Contains(err.Error(), c.want) {
 				t.Fatalf("坏包 %q 应映射 %q，got err=%v", c.body, c.want, err)
 			}
 		})
+	}
+}
+
+// TestDiagnosisAdapterStream_TruncatedSalvage 截断包宽容抢救：sop_text 已到达
+// 部分可用 → 不判死刑，正文抢救 + 截断标记；sources 置空不可信。
+func TestDiagnosisAdapterStream_TruncatedSalvage(t *testing.T) {
+	body := `{"code":200,"data":{"sop_text":"## 一、检查方向\n\n先断电并实施驻车制动，测量电压是否正常，确认故障范围后再深入排查`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+	}))
+	defer server.Close()
+	var chunks []string
+	content, _, err := newDiagnosisForTest(server).Stream(context.Background(), AIModelSelector{}, msgsSample("x", 0), func(c string) {
+		chunks = append(chunks, c)
+	})
+	if err != nil {
+		t.Fatalf("截断包应抢救不断流，got err=%v", err)
+	}
+	if !strings.Contains(content, "先断电并实施驻车制动") || !strings.Contains(content, "传输不完整") {
+		t.Fatalf("抢救正文应含可用部分 + 截断标记，got %q", content)
+	}
+	if strings.Join(chunks, "") != content {
+		t.Fatalf("伪流式切块累加应等于抢救全文")
 	}
 }
 

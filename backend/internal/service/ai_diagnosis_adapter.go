@@ -20,6 +20,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -111,12 +112,39 @@ type diagnosisChatTurn struct {
 }
 
 // diagnosisChatResponse 助手响应（data 仅取消费字段：sop_text + answer_sources）。
+// Code 容忍数字/字符串两态（外部服务实现漂移时 "200" 字符串仍放行）。
 type diagnosisChatResponse struct {
-	Code int `json:"code"`
+	Code diagnosisCode `json:"code"`
 	Data struct {
 		SOPText       string            `json:"sop_text"`
 		AnswerSources []DiagnosisSource `json:"answer_sources"`
 	} `json:"data"`
+}
+
+// diagnosisCode 业务码：数字 0/200 与字符串 "0"/"200" 同视为成功。
+type diagnosisCode int
+
+func (c *diagnosisCode) UnmarshalJSON(raw []byte) error {
+	var n int
+	if err := json.Unmarshal(raw, &n); err == nil {
+		*c = diagnosisCode(n)
+		return nil
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return err
+	}
+	trimmed := strings.TrimSpace(s)
+	if trimmed == "" {
+		*c = 0
+		return nil
+	}
+	parsed, err := strconv.Atoi(trimmed)
+	if err != nil {
+		return err
+	}
+	*c = diagnosisCode(parsed)
+	return nil
 }
 
 // diagnosisAssistantAdapter 诊断 RAG 助手 adapter（第二个生产 AIModelPort 实现）。
@@ -304,7 +332,8 @@ func (a *diagnosisAssistantAdapter) doCall(ctx context.Context, path string, bui
 		return fmt.Errorf("诊断服务响应异常（HTTP %d）", resp.StatusCode)
 	}
 	if err := json.Unmarshal(raw, out); err != nil {
-		// T3：坏包分类 + 原始包截断日志（定位网关页/空包/截断包/契约漂移）
+		// 坏包分类 + 原始包截断日志（定位网关页/空包/截断包/契约漂移）。
+		// 截断包走宽容抢救：能抠出 sop_text 即降级可用（标记截断），抠不出才判死刑。
 		preview := truncateDiagnosisPreview(raw)
 		trimmed := bytes.TrimSpace(raw)
 		a.logger.Error("解析诊断响应失败",
@@ -318,14 +347,57 @@ func (a *diagnosisAssistantAdapter) doCall(ctx context.Context, path string, bui
 		case bytes.HasPrefix(trimmed, []byte("<")):
 			return errors.New("诊断服务网关异常（收到非 JSON 响应），请稍后重试")
 		default:
+			if salvaged, ok := salvageDiagnosisSOP(raw); ok {
+				a.logger.Warn("诊断响应截断，已抢救正文可用部分",
+					zap.String("path", path), zap.Int("bytes", len(raw)))
+				out.Code = 0
+				out.Data.SOPText = salvaged + "\n\n> 诊断报告传输不完整，以上为已收到的部分内容，可重试获取完整报告。"
+				out.Data.AnswerSources = nil
+				break
+			}
 			return errors.New("诊断服务响应格式异常，请重试")
 		}
 	}
 	if out.Code != 0 && out.Code != 200 {
-		a.logger.Warn("诊断业务码异常", zap.String("path", path), zap.Int("code", out.Code))
+		a.logger.Warn("诊断业务码异常", zap.String("path", path), zap.Int("code", int(out.Code)))
 		return fmt.Errorf("诊断失败（code %d），请重试", out.Code)
 	}
 	return nil
+}
+
+// salvageDiagnosisSOP 截断包宽容抢救：从未闭合的 JSON 原文中抠出 "sop_text" 的
+// 已到达部分（要求 ≥20 个 rune 才算可用，避免半句误导）。answer_sources 等结构化
+// 字段不抢救（截断即不可信，置空）。仅处理「解析失败但正文可见」一类坏包；空包、
+// 网关 HTML 页、code 类型漂移（已由 diagnosisCode 容忍）不在此处理。
+func salvageDiagnosisSOP(raw []byte) (string, bool) {
+	const key = `"sop_text"`
+	idx := bytes.LastIndex(raw, []byte(key))
+	if idx < 0 {
+		return "", false
+	}
+	rest := bytes.TrimSpace(raw[idx+len(key):])
+	if !bytes.HasPrefix(rest, []byte(":")) {
+		return "", false
+	}
+	rest = bytes.TrimSpace(rest[1:])
+	if !bytes.HasPrefix(rest, []byte(`"`)) {
+		return "", false
+	}
+	// 截断位置即字符串结尾：取最后一个完整转义边界之前的内容做 JSON 反转义。
+	body := rest[1:]
+	end := len(body)
+	if i := bytes.LastIndexByte(body, '\\'); i >= 0 && i == len(body)-1 {
+		end = i
+	}
+	var decoded string
+	if err := json.Unmarshal([]byte(`"`+string(body[:end])+`"`), &decoded); err != nil {
+		return "", false
+	}
+	decoded = strings.TrimSpace(decoded)
+	if len([]rune(decoded)) < 20 {
+		return "", false
+	}
+	return decoded, true
 }
 
 // truncateDiagnosisPreview 坏包日志预览（截断防爆日志；二进制/长包只留头部）。
