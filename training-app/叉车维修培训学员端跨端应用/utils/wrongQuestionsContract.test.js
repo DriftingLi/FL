@@ -57,11 +57,16 @@ describe('WrongQuestionCard 接线契约', () => {
   const page = read('pages/profile/wrong-questions.uvue');
   const card = () => read('pages/profile/components/wrong-question-card.uvue');
 
-  it('页面 v-for 改用 <WrongQuestionCard> 且透传 item/expanded/redo-result/last-redo-answer', () => {
-    expect(page).toMatch(/<WrongQuestionCard[\s\S]*?:item="item"/);
-    expect(page).toContain(':expanded="expandedId == item.question_id"');
-    expect(page).toContain(':redo-result="expandedId == item.question_id ? redoResult : null"');
-    expect(page).toContain(':last-redo-answer="lastRedoAnswer"');
+  it('页面 v-for 改用 <WrongQuestionCard> 且扁平透传（item 六字段/expanded/redo-result/last-redo-answer）', () => {
+    expect(page).toMatch(/<WrongQuestionCard v-for="\(item, idx\) in records"/);
+    for (const b of [':item-type="item.type"', ':item-title="item.title"', ':item-created-date="item.created_at"',
+      ':wrong-count="item.wrong_count"', ':favorited="item.favorited"', ':options="item.options"',
+      ':expanded="expandedId == item.question_id"', ':last-redo-answer="lastRedoAnswer"',
+      ':redo-result="expandedId == item.question_id ? redoResult : null"']) {
+      expect(page).toContain(b);
+    }
+    // 对象 prop 直传已禁（可选对象 prop 成员直读 = Kotlin error18，#687 复发根因）
+    expect(page).not.toContain(':item="item"');
   });
 
   it('页面 import 卡片（显式 import，Q17 安置）', () => {
@@ -73,23 +78,27 @@ describe('WrongQuestionCard 接线契约', () => {
     expect(page).not.toMatch(/const selectedKeys\s*=/);
   });
 
-  it('卡片声明 item/expanded/redoResult/lastRedoAnswer 四 props', () => {
+  it('卡片声明扁平 props（六原始字段 + expanded/redoResult/lastRedoAnswer），无 item 对象 prop', () => {
     const c = card();
-    for (const p of ['item?: WrongQuestionItem', 'expanded?: boolean', 'redoResult?:', 'lastRedoAnswer?: string']) {
+    for (const p of ['itemType?: string', 'itemTitle?: string', 'itemCreatedDate?: string', 'wrongCount?: number',
+      'favorited?: boolean', 'options?: QuestionOption[]', 'expanded?: boolean', 'redoResult?:', 'lastRedoAnswer?: string']) {
       expect(c).toContain(p);
     }
+    // 可选对象 prop 成员直读 = Kotlin error18（#687 复发的真根因），扁平化后不得回潮
+    expect(c).not.toMatch(/item\?:\s*WrongQuestionItem/);
   });
 
-  it('卡片编译雷修复形态（#684 引入 error18，本轮红修钉死防回潮）', () => {
+  it('卡片编译雷修复形态（#684 引入 error18，#687 复锁定真根因：可选对象 prop 直读）', () => {
     const c = card();
-    // item prop 走工厂默认值（null as unknown as 会污染 Kotlin 类型 → error18 找不到成员）
-    expect(c).toContain('item: () => ({');
+    // 无 as unknown as（上轮误判的病灶，仍是禁项）
     expect(c).not.toMatch(/as\s+unknown\s+as/);
     // display 值必须是 computed（模板 {{ x }} 裸引用；function 不自动调用 → 静默渲染源码）
     expect(c).toMatch(/const displayTypeName = computed/);
     expect(c).toMatch(/const displayDate = computed/);
     // props.redoResult 成员直读清零（Kotlin 对 props getter 无智能转换，须局部 val）
     expect(c).not.toMatch(/props\.redoResult\./);
+    // 无任何 props.item. 成员直读
+    expect(c).not.toMatch(/props\.item\./);
   });
 
   it('卡片 emits 仅 toggleExpand/submitRedo/remove（无 selectOption 残留）', () => {
