@@ -35,7 +35,8 @@
                         </view>
                         <view class="topic-footer">
                             <view class="topic-meta">
-                                <text class="meta-like-icon">{{ item.liked ? '❤️' : '' }} {{ item.like_count > 0 ? item.like_count : '' }}</text>
+                                <text class="meta-like-icon">{{ item.liked ? '❤️' : '' }}
+                                    {{ item.likes_count > 0 ? item.likes_count : '' }}</text>
                                 <text class="meta-item"> {{ item.replies_count }}</text>
                                 <text class="meta-item"> {{ item.views_count }}</text>
                             </view>
@@ -58,7 +59,8 @@
                 </view>
 
                 <view class="reply-list">
-                    <view v-for="(item, idx) in replies" :key="idx" class="reply-card" @click="onTopicClick(item.topic_id)">
+                    <view v-for="(item, idx) in replies" :key="idx" class="reply-card"
+                        @click="onTopicClick(item.topic_id)">
                         <text class="reply-topic-title"> {{ item.topic_title }}</text>
                         <text class="reply-content">{{ item.content }}</text>
                         <view class="reply-footer">
@@ -71,7 +73,8 @@
             <view v-if="loading" class="loading-more">
                 <text class="loading-text">加载中...</text>
             </view>
-            <view v-if="noMore && (currentTab === 'topics' ? topics.length > 0 : replies.length > 0)" class="loading-more">
+            <view v-if="noMore && (currentTab === 'topics' ? topics.length > 0 : replies.length > 0)"
+                class="loading-more">
                 <text class="loading-text">没有更多了</text>
             </view>
         </scroll-view>
