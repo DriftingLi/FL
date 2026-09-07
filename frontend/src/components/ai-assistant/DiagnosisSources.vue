@@ -63,11 +63,14 @@ function stripAssistantPrefix(path: string): string {
   return path.replace(/^\/assistant\/static\//, '').replace(/^assistant\/static\//, '')
 }
 
+const IMAGE_MARKER_RE = /<<IMAGE:([^>]+)>>/g
+const IMAGE_STRIP_RE = /<<IMAGE:[^>]+>>/g
+
 function sourceImages(text: string): string[] {
   const out: string[] = []
-  const re = /<<IMAGE:([^>]+)>>/g
+  IMAGE_MARKER_RE.lastIndex = 0
   let m: RegExpExecArray | null
-  while ((m = re.exec(text))) {
+  while ((m = IMAGE_MARKER_RE.exec(text))) {
     const path = stripAssistantPrefix(m[1].trim())
     if (path) out.push(path)
   }
@@ -75,6 +78,6 @@ function sourceImages(text: string): string[] {
 }
 
 function stripImageMarkers(text: string): string {
-  return text.replace(/<<IMAGE:[^>]+>>/g, '').trim()
+  return text.replace(IMAGE_STRIP_RE, '').trim()
 }
 </script>

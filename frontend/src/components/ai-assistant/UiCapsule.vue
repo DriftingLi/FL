@@ -8,7 +8,7 @@
   >
     <el-icon v-if="iconComponent" :size="14"><component :is="iconComponent" /></el-icon>
     <slot>{{ label }}</slot>
-    <i v-if="badge" class="free-preview-badge">{{ badge }}</i>
+    <i v-if="badge" class="bg-ok rounded-pill px-1.5 py-px text-[10px] font-semibold not-italic leading-[1.4] text-white">{{ badge }}</i>
   </button>
 </template>
 
@@ -40,17 +40,3 @@ const iconComponent = computed(() => {
   return (EPIcons as Record<string, Component>)[props.icon] ?? null
 })
 </script>
-
-<style scoped>
-/* 限免角标：沿用 AIAssistantPage 既有 token 定义（R2 冻结区外的新共用件） */
-.free-preview-badge {
-  font-style: normal;
-  font-size: 10px;
-  font-weight: 600;
-  color: #fff;
-  background: var(--color-success);
-  border-radius: 999px;
-  padding: 1px 6px;
-  line-height: 1.4;
-}
-</style>
