@@ -253,11 +253,6 @@
 </script>
 
 <style>
-    .record-list {
-        flex-direction: column;
-        padding: 16rpx 24rpx 0;
-    }
-
     .record-card {
         background-color: #ffffff;
         border-radius: 16rpx;

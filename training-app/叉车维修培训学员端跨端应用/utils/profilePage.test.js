@@ -216,13 +216,30 @@ describe('「我的」页面 uvue 兼容性（逐编译单元：页面 + 各组�
   it.each(units.map((f) => [path.basename(f), f]))('%s 模板与样式中的 class 一一对应（无死样式、无裸 class）', (_name, file) => {
     const s = fs.readFileSync(file, 'utf8');
     const tpl = s.slice(s.indexOf('<template>'), s.lastIndexOf('</template>'));
+    const script = s.slice(s.indexOf('<script'), s.lastIndexOf('</script>'));
     const st = s.slice(s.indexOf('<style'), s.lastIndexOf('</style>'));
     const used = new Set();
     for (const m of tpl.matchAll(/(?<!:)class="([^"]+)"/g)) {
       m[1].split(/\s+/).filter(Boolean).forEach((c) => used.add(c));
     }
     for (const m of tpl.matchAll(/:class="([^"]+)"/g)) {
-      for (const q of m[1].matchAll(/'([^']+)'/g)) used.add(q[1]);
+      const expr = m[1];
+      // 对象语法键（'x': 或 x:）是类名；后随冒号的引号串是键而非裸类
+      for (const q of expr.matchAll(/'?([A-Za-z][A-Za-z0-9_-]*)'?\s*:/g)) used.add(q[1]);
+      for (const q of expr.matchAll(/'([^']+)'/g)) {
+        const after = expr.slice(q.index + q[0].length);
+        const before = expr.slice(0, q.index).trimEnd();
+        // 对象键（后随冒号）已由键正则收集；比较值（前随 ==/!=）不是类名
+        if (q[1].length > 0 && !after.trimStart().startsWith(':') && !/(==|!=|===|!==)$/.test(before)) used.add(q[1]);
+      }
+      // 函数绑定 :class="fn(...)"：类名由 script 中该函数的字符串字面量返回（如 getOptionClass）
+      for (const fn of expr.matchAll(/([A-Za-z_$][\w$]*)\s*\(/g)) {
+        const fstart = script.indexOf('function ' + fn[1] + '(');
+        if (fstart === -1) continue;
+        const fend = script.indexOf('\n    }', fstart);
+        const body = script.slice(fstart, fend === -1 ? undefined : fend);
+        for (const q of body.matchAll(/'([^'\n]+)'/g)) if (q[1].length > 0) used.add(q[1]);
+      }
     }
     const defined = new Set();
     for (const m of st.matchAll(/\.([A-Za-z][A-Za-z0-9_-]*)/g)) defined.add(m[1]);

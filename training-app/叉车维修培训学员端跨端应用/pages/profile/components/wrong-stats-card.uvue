@@ -25,6 +25,8 @@
     import { getWrongQuestionStatsApi } from '../../../api/wrongQuestion'
     import type { WrongQuestionStats } from '../../../types/index'
 
+    const emit = defineEmits(['loaded'])
+
     const props = withDefaults(defineProps<{
         todayCount?: number
     }>(), {
@@ -44,6 +46,7 @@
         try {
             const data = await getWrongQuestionStatsApi()
             stats.value = data
+            emit('loaded', stats.value)
         } catch (e) {
             console.error('[wrong-stats-card] load stats failed:', e)
         }
