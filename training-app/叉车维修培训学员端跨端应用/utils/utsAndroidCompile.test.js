@@ -27,6 +27,7 @@
  *   M. *Mapped 出口传 build* 具名函数引用（Kotlin error17；箭头包裹才合法）
  *   N. as unknown as 双重强转（Kotlin error18 类型污染；对象 prop 走工厂默认值）
  *   O. 模板 {{ 裸函数名 }} 插值（uni-app x 不自动调用无参 function，静默渲染源码）
+ *   P. 可选对象 prop 成员直读（Kotlin error18 nullable 接收者；扁平原始 props 或局部 val+判空）
  * 存量违例走 GUARD_ALLOWLIST 豁免，由后续工单在各自范围清零（见常量注释）。
  */
 const fs = require('fs');
@@ -275,6 +276,43 @@ function scanBareFnInterpolation(text) {
   const interpRe = /\{\{\s*([A-Za-z_$][\w$]*)\s*\}\}/g;
   while ((m = interpRe.exec(template)) !== null) {
     if (fns.has(m[1])) hits.push(`模板裸插值 {{ ${m[1]} }}（function 未调用）`);
+  }
+  return hits;
+}
+
+/** P：可选对象类型 prop 的成员直读——Kotlin 对 nullable 接收者解析成员失败（error18 找不到名称）。
+ *  合法姿势：原始类型 props 扁平传递（全仓先例），或局部 val + null 检查后访问（先例 redoVal）。
+ *  数组型可选 prop 豁免（v-for 元素非空，先例 ai-chat sessions）。仅扫 .uvue */
+function scanOptionalObjectPropAccess(text) {
+  const scriptIdx = text.indexOf('<script');
+  if (scriptIdx === -1) return [];
+  const template = text.slice(0, scriptIdx);
+  const script = blank(text.slice(scriptIdx));
+  const dpIdx = script.indexOf('defineProps<');
+  if (dpIdx === -1) return [];
+  const blockEnd = script.indexOf('}>', dpIdx);
+  if (blockEnd === -1) return [];
+  const block = script.slice(dpIdx, blockEnd + 2);
+  const objectProps = new Set();
+  const optRe = /(\w+)\s*\?:\s*([A-Z][\w$]*)(\s*\[\s*\])?/g;
+  let m;
+  while ((m = optRe.exec(block)) !== null) {
+    if (m[3]) continue;
+    if (['UTSJSONObject', 'Any', 'Object', 'String', 'Number', 'Boolean'].includes(m[2])) continue;
+    objectProps.add(m[1]);
+  }
+  if (objectProps.size === 0) return [];
+  const hits = [];
+  const zones = [['script', script], ['template', template]];
+  for (const p of objectProps) {
+    for (const [where, src] of zones) {
+      const re = new RegExp('(?<![\\w$.])(?:props\\.)?' + p + '\\s*\\.\\s*[A-Za-z_$][\\w$]*', 'g');
+      const seen = new Set();
+      let mm;
+      while ((mm = re.exec(src)) !== null) {
+        if (!seen.has(mm[0])) { seen.add(mm[0]); hits.push(where + ' 直读可选对象 prop ' + mm[0]); }
+      }
+    }
   }
   return hits;
 }
@@ -674,6 +712,19 @@ describe('守护自检：检测逻辑对已知违规样本必须报出', () => {
     const computedCase = '<template><text>{{ displayDate }}</text></template>\n<script setup lang="uts">\n    const displayDate = computed(() : string => \'\')\n</script>';
     expect(scanBareFnInterpolation(computedCase)).toEqual([]);
   });
+
+  it('P 能报出可选对象 prop 成员直读（对照组：扁平原始 props/数组 prop/局部val 不报）', () => {
+    const bad = '<template><text>{{ item.wrong_count }}</text></template>\n<script setup lang="uts">\n    withDefaults(defineProps<{\n        item?: WrongQuestionItem\n        expanded?: boolean\n    }>(), {})\n</script>';
+    expect(scanOptionalObjectPropAccess(bad)).toHaveLength(1);
+    const scriptBad = '<template><text>x</text></template>\n<script setup lang="uts">\n    const props = withDefaults(defineProps<{\n        item?: WrongQuestionItem\n    }>(), {})\n    function f() : string { return props.item.type }\n</script>';
+    expect(scanOptionalObjectPropAccess(scriptBad)).toHaveLength(1);
+    const flat = '<template><text>{{ wrongCount }}</text></template>\n<script setup lang="uts">\n    withDefaults(defineProps<{\n        wrongCount?: number\n        type?: string\n    }>(), { wrongCount: 0 })\n</script>';
+    expect(scanOptionalObjectPropAccess(flat)).toEqual([]);
+    const arrayProp = '<template><view v-for="s in sessions">{{ s.title }}</view></template>\n<script setup lang="uts">\n    withDefaults(defineProps<{\n        sessions?: AiSession[]\n    }>(), {})\n</script>';
+    expect(scanOptionalObjectPropAccess(arrayProp)).toEqual([]);
+    const localVal = '<template><text>x</text></template>\n<script setup lang="uts">\n    const props = withDefaults(defineProps<{\n        redoResult?: RedoResult | null\n    }>(), {})\n    function r2() : RedoResult | null { return props.redoResult }\n    function f() : boolean { const r = r2(); if (r == null) return false; return r.correct }\n</script>';
+    expect(scanOptionalObjectPropAccess(localVal)).toEqual([]);
+  });
 });
 
 // ── 全工程真实扫描（守护本体，回归即红）────────────────────────────────
@@ -838,6 +889,14 @@ describe('全工程守护：五类 Kotlin 编译地雷零命中', () => {
     const violations = [];
     for (const file of ALL_FILES.filter((f) => f.endsWith('.uvue'))) {
       for (const h of scanBareFnInterpolation(fs.readFileSync(file, 'utf8'))) violations.push(path.relative(ROOT, file) + ': ' + h);
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it('P：无可选对象 prop 成员直读（Kotlin error18 找不到名称；扁平原始 props 或局部 val+判空）', () => {
+    const violations = [];
+    for (const file of ALL_FILES.filter((f) => f.endsWith('.uvue'))) {
+      for (const h of scanOptionalObjectPropAccess(fs.readFileSync(file, 'utf8'))) violations.push(path.relative(ROOT, file) + ': ' + h);
     }
     expect(violations).toEqual([]);
   });

@@ -2,16 +2,16 @@
                 <view class="record-card">
                     <view class="record-header">
                         <text class="record-type-tag">{{ displayTypeName }}</text>
-                        <text class="record-wrong-count">错 {{ item.wrong_count }} 次</text>
-                        <text v-if="item.favorited" class="record-fav-tag">收藏</text>
+                        <text class="record-wrong-count">错 {{ wrongCount }} 次</text>
+                        <text v-if="favorited" class="record-fav-tag">收藏</text>
                         <text class="record-date">{{ displayDate }}</text>
                     </view>
-                    <text class="record-title">{{ item.title }}</text>
+                    <text class="record-title">{{ itemTitle }}</text>
 
                     <!-- 展开态：重做交互 -->
                     <view v-if="expanded" class="redo-section">
                         <view class="option-list">
-                            <view v-for="(opt, oidx) in item.options" :key="oidx"
+                            <view v-for="(opt, oidx) in options" :key="oidx"
                                 class="option-item" :class="getOptionClass(opt.key)"
                                 @click="onSelect(opt.key)">
                                 <view class="option-key" :class="getOptionKeyClass(opt.key)">
@@ -60,7 +60,7 @@
 
 <script setup lang="uts">
     import { ref, computed } from 'vue'
-    import type { WrongQuestionItem, QuestionOption } from '../../../types/index'
+    import type { QuestionOption } from '../../../types/index'
     import { getTypeName, isMultiChoice } from '../../../utils/wrongQuestionDisplay'
 
     /** 错题卡片：展示 + 重做选项选中态（选中态属展示时态随卡片自持；提交结果由页面下发） */
@@ -70,16 +70,24 @@
         explanation : string
     }
 
+    // 可选对象 prop 成员直读在 Kotlin 侧 error18（nullable 接收者）；扁平原始类型传递（全仓先例）
     const props = withDefaults(defineProps<{
-        item?: WrongQuestionItem
+        itemType?: string
+        itemTitle?: string
+        itemCreatedDate?: string
+        wrongCount?: number
+        favorited?: boolean
+        options?: QuestionOption[]
         expanded?: boolean
         redoResult?: RedoResult | null
         lastRedoAnswer?: string
     }>(), {
-        item: () => ({
-            question_id: 0, type: '', title: '', options: [] as QuestionOption[],
-            correct_answer: '', user_answer: '', wrong_count: 0, created_at: '', favorited: false,
-        } as WrongQuestionItem),
+        itemType: '',
+        itemTitle: '',
+        itemCreatedDate: '',
+        wrongCount: 0,
+        favorited: false,
+        options: () => [] as QuestionOption[],
         expanded: false,
         redoResult: null,
         lastRedoAnswer: ''
@@ -215,17 +223,17 @@
     }
 
     const displayTypeName = computed<string>(() : string => {
-        return getTypeName(props.item.type)
+        return getTypeName(props.itemType)
     })
 
     const displayDate = computed<string>(() : string => {
-        return formatDateStr(props.item.created_at)
+        return formatDateStr(props.itemCreatedDate)
     })
 
     /** 点击选项（多选切换 / 单选替换，与原页逻辑一致） */
     function onSelect(key : string) : void {
         if (redoVal() != null) return
-        if (isMultiChoice(props.item.type)) {
+        if (isMultiChoice(props.itemType)) {
             const idx = selectedKeys.value.indexOf(key)
             if (idx >= 0) {
                 selectedKeys.value.splice(idx, 1)

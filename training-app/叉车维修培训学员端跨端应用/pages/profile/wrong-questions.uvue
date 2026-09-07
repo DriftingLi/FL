@@ -44,7 +44,9 @@
                     <text class="empty-text">该分组暂无错题</text>
                 </view>
                 <view class="record-list">
-                    <WrongQuestionCard v-for="(item, idx) in records" :key="idx" :item="item"
+                    <WrongQuestionCard v-for="(item, idx) in records" :key="idx"
+                        :item-type="item.type" :item-title="item.title" :item-created-date="item.created_at"
+                        :wrong-count="item.wrong_count" :favorited="item.favorited" :options="item.options"
                         :expanded="expandedId == item.question_id" :redo-result="expandedId == item.question_id ? redoResult : null"
                         :last-redo-answer="lastRedoAnswer" @toggle-expand="onToggleExpand(item.question_id)"
                         @submit-redo="onSubmitRedo(item, $event)" @remove="onRemove(item)" />
