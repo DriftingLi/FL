@@ -59,11 +59,12 @@ type AIChatSessionDTO struct {
 
 // AIChatMessageDTO 消息展示对象。
 type AIChatMessageDTO struct {
-	ID        int       `json:"id"`
-	Role      string    `json:"role"`
-	Content   string    `json:"content"`
-	Images    []string  `json:"images"` // 用户消息附带的图片 URL
-	CreatedAt time.Time `json:"created_at"`
+	ID        int               `json:"id"`
+	Role      string            `json:"role"`
+	Content   string            `json:"content"`
+	Images    []string          `json:"images"`  // 用户消息附带的图片 URL
+	Sources   []DiagnosisSource `json:"sources"` // 助手消息的诊断来源（T5 历史回放；非诊断/存量为空）
+	CreatedAt time.Time         `json:"created_at"`
 }
 
 // AIAssistantMode AI 助手模式（隐藏底层模型，对用户仅暴露双模式）。
@@ -464,8 +465,13 @@ func (s *AIAssistantService) GetSessionMessages(ctx context.Context, userID, ses
 			// 解析失败按无图处理，不阻断消息列表
 			_ = json.Unmarshal([]byte(r.Images), &imgs)
 		}
+		var sources []DiagnosisSource
+		if r.Sources != "" {
+			// 解析失败按无来源处理，不阻断消息列表
+			_ = json.Unmarshal([]byte(r.Sources), &sources)
+		}
 		out[i] = AIChatMessageDTO{
-			ID: r.ID, Role: r.Role, Content: r.Content, Images: imgs, CreatedAt: r.CreatedAt,
+			ID: r.ID, Role: r.Role, Content: r.Content, Images: imgs, Sources: sources, CreatedAt: r.CreatedAt,
 		}
 	}
 	return out, nil
@@ -562,8 +568,17 @@ func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req Str
 			}).Error; err != nil {
 				return fullContent, usage, fmt.Errorf("保存用户消息失败: %w", err)
 			}
+			// T5：诊断来源随助手消息持久化（ctx 容器→ JSON 列；非诊断/空来源存空串）
+			sourcesJSON := ""
+			if sources := DiagnosisSourcesFrom(ctx); len(sources) > 0 {
+				if b, err := json.Marshal(sources); err == nil {
+					sourcesJSON = string(b)
+				} else {
+					s.logger.Warn("诊断来源序列化失败，按无来源落库", zap.Int("session_id", req.SessionID), zap.Error(err))
+				}
+			}
 			if err := s.db.WithContext(ctx).Create(&model.AIChatMessage{
-				SessionID: req.SessionID, Role: "assistant", Content: fullContent,
+				SessionID: req.SessionID, Role: "assistant", Content: fullContent, Sources: sourcesJSON,
 			}).Error; err != nil {
 				return fullContent, usage, fmt.Errorf("保存助手消息失败: %w", err)
 			}
