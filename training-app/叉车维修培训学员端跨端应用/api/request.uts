@@ -269,6 +269,19 @@ export function getMapped<T>(url : string, params : UTSJSONObject | null = null,
     return requestMapped<T>(opts, map)
 }
 
+/**
+ * POST 请求快捷方法（mapper-callback 出口家族）
+ * data 传法与历史 post() 逐字一致（同一 opts.data 通路，防请求形态漂移），
+ * 拆包后 data 经 map 映射为领域 DTO
+ */
+export function postMapped<T>(url : string, data : any | null = null, map : (data : UTSJSONObject) => T, options : RequestOptions | null = null) : Promise<T> {
+    const opts : RequestOptions = options != null ? options! : { url: url } as RequestOptions
+    opts.url = url
+    opts.method = 'POST'
+    opts.data = data
+    return requestMapped<T>(opts, map)
+}
+
 /** 单次 HTTP 请求（模块级函数，支持 401 刷新后重试） */
 function doSingleRequest(
     url : string,

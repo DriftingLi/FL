@@ -4,7 +4,7 @@
  * - 获取积分明细列表
  * - 上报浏览课程章节积分
  */
-import { get, post } from './request'
+import { get, getMapped, post } from './request'
 import { toNumber, toStr } from './helpers'
 import type { PointsBalance, PointsRecord, PointsRecordListResult } from '../types/index'
 
@@ -87,7 +87,7 @@ function getMockPointsRecordList() : PointsRecordListResult {
  * 获取积分余额
  */
 export function getPointsBalanceApi() : Promise<PointsBalance> {
-	return get('/points/balance').then((data : UTSJSONObject) : PointsBalance => {
+	return getMapped<PointsBalance>('/points/balance', null, (data : UTSJSONObject) : PointsBalance => {
 		return buildPointsBalance(data)
 	}).catch((e) : PointsBalance => {
 		console.warn('[getPointsBalanceApi] network failed, using mock data:', e)
@@ -114,7 +114,7 @@ export function getPointsRecordListApi(
 		type: type,
 		source_type: sourceType,
 	}
-	return get('/points/records', params).then((data : UTSJSONObject) : PointsRecordListResult => {
+	return getMapped<PointsRecordListResult>('/points/records', params, (data : UTSJSONObject) : PointsRecordListResult => {
 		return buildPointsRecordListResult(data)
 	}).catch((e) : PointsRecordListResult => {
 		console.warn('[getPointsRecordListApi] network failed, using mock data:', e)
