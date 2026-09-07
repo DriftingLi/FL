@@ -15,10 +15,23 @@
     @suggest="useSuggestion"
     @new-session="handleNewSession"
   >
-    <!-- 欢迎区差异内容：快捷选项（位于预设提示词之前） -->
-    <template #welcome-top>
-      <!-- 智能维修诊断：品牌/车型动态联动 + 故障码快捷查询（包前端还原） -->
-      <div v-if="isDiagnosis" class="diagnosis-panel">
+    <!-- 诊断筛选移入输入框上方工具栏胶囊（方案 B；空态随输入框居中，不再撑欢迎区） -->
+    <template #input-toolbar>
+      <div v-if="isDiagnosis" class="flex items-center gap-2 overflow-x-auto pb-2">
+        <UiCapsule
+          :label="filterSummary ? `⚙ 筛选：${filterSummary}` : '⚙ 筛选'"
+          :active="filterOpen"
+          @click="filterOpen = !filterOpen"
+        />
+        <UiCapsule
+          v-for="question in diagnosisQuickAsks"
+          :key="question"
+          :label="question"
+          @click="quickAsk(question)"
+        />
+      </div>
+      <!-- 折叠面板本体（挂输入区上方，随输入框居中/沉底；欢迎区不再渲染，避免撑爆空态） -->
+      <div v-if="isDiagnosis && filterOpen" class="diagnosis-panel">
         <div class="diagnosis-catalog">
           <div class="catalog-row">
             <span class="catalog-label">品牌</span>
@@ -77,8 +90,12 @@
           </div>
         </div>
       </div>
+    </template>
+
+    <!-- 欢迎区差异内容：其余专项功能静态快捷选项（诊断筛选已搬入工具栏，此处不再渲染） -->
+    <template #welcome-top>
       <!-- 其余专项功能：静态快捷选项 -->
-      <div v-else-if="feature?.quickOptions?.length" class="quick-options-area">
+      <div v-if="feature?.quickOptions?.length" class="quick-options-area">
         <div v-for="group in feature.quickOptions" :key="group.label" class="quick-option-group">
           <span class="quick-option-label">{{ group.label }}</span>
           <div class="quick-option-chips">
@@ -96,34 +113,30 @@
       </div>
     </template>
 
-    <!-- 输入区差异内容：智能维修诊断当轮来源面板（SSE sources 事件） -->
+    <!-- 回答下方：逐轮来源回放（ADR-0033；默认折叠，历史每轮独立展开） -->
+    <template #assistant-extra="{ message }">
+      <DiagnosisSources
+        v-if="isDiagnosis && message.sources?.length"
+        :sources="message.sources"
+      />
+    </template>
+
+    <!-- 输入区差异内容：当轮来源面板与图片队列（叠放非互斥，见内层注释） -->
     <template #input-above>
-      <div v-if="isDiagnosis && store.lastSources.length" class="diagnosis-sources">
-        <div class="sources-title">资料来源（可从资料链接跳转原文）</div>
-        <div v-for="src in store.lastSources" :key="src.id" class="source-card">
-          <img
-            v-for="img in sourceImages(src.text)"
-            :key="img"
-            :src="aiAssistantApi.manualUrl(img)"
-            class="source-image"
-            alt="资料图片"
-            loading="lazy"
-          />
-          <div class="source-text">{{ stripImageMarkers(src.text) }}</div>
-          <div class="source-meta">
-            <span v-if="src.metadata?.page_start">第 {{ src.metadata.page_start }}{{ src.metadata.page_end && src.metadata.page_end !== src.metadata.page_start ? '-' + src.metadata.page_end : '' }} 页</span>
-            <a
-              v-if="src.metadata?.source_url"
-              :href="src.metadata.source_url"
-              target="_blank"
-              rel="noopener"
-              class="source-link"
-            >打开 PDF 来源</a>
-            <span v-if="!src.metadata?.source_url && !src.metadata?.page_start" class="source-empty">暂无来源资料</span>
-          </div>
-        </div>
+      <!-- 当轮来源面板（SSE sources 事件内存态；落库后由逐轮回放接管） -->
+      <!-- 与图片队列叠放（非互斥）：诊断页上传图后不断流也能看到待发送队列 -->
+      <div v-if="isDiagnosis && store.lastSources.length" class="mb-2 flex flex-col gap-2.5">
+        <SourcesFoldHeader
+          title="资料来源（可从资料链接跳转原文）"
+          :count="store.lastSources.length"
+          :open="sourcesOpen"
+          @toggle="sourcesOpen = !sourcesOpen"
+        />
+        <template v-if="sourcesOpen">
+          <DiagnosisSources :sources="store.lastSources" embedded />
+        </template>
       </div>
-      <div v-else-if="pendingImages.length" class="pending-images">
+      <div v-if="pendingImages.length" class="pending-images">
         <div v-for="(p, i) in pendingImages" :key="p.url" class="pending-image-item">
           <img :src="p.previewUrl" class="pending-image-thumb" alt="待发送图片" />
           <button class="pending-image-remove" title="移除" @click="removePendingImage(i)">
@@ -154,7 +167,7 @@
 <script setup lang="ts">
 // 专项功能聊天页（#398）：壳（顶栏/侧栏/消息/输入/滚底）收敛进 ChatPageShell，
 // 本页仅保留快捷选项、图片队列等功能差异；助手内容随壳统一 markstream escape 安全渲染。
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { UploadFile } from 'element-plus'
@@ -163,6 +176,9 @@ import ChatPageShell from '@/components/ai-assistant/ChatPageShell.vue'
 import { useAIAssistantStore } from '@/stores/aiAssistant'
 import { getAIFeatureByRoute } from '@/config/aiFeatures'
 import { aiAssistantApi, type DiagnosisBrandOption, type DiagnosisFaultCodeItem } from '@/api/aiAssistant'
+import DiagnosisSources from '@/components/ai-assistant/DiagnosisSources.vue'
+import SourcesFoldHeader from '@/components/ai-assistant/SourcesFoldHeader.vue'
+import UiCapsule from '@/components/ai-assistant/UiCapsule.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 
 const store = useAIAssistantStore()
@@ -185,6 +201,27 @@ const inputPlaceholder = computed(() => {
     ? '输入问题或上传图纸/习题图片...（Enter 发送，Shift+Enter 换行）'
     : '输入您的问题...（Enter 发送，Shift+Enter 换行）'
 })
+
+// ===== 智能维修诊断：筛选折叠（T2 默认折叠，不再撑爆空态居中）=====
+const filterOpen = ref(false)
+const filterSummary = computed(() => {
+  const parts: string[] = []
+  if (selectedBrand.value && selectedBrand.value !== 'all') {
+    parts.push(brands.value.find(b => b.value === selectedBrand.value)?.label || selectedBrand.value)
+  }
+  if (selectedModel.value) parts.push(selectedModel.value)
+  return parts.join(' / ')
+})
+const diagnosisQuickAsks = [
+  '叉车无法行驶且仪表报警，怎么排查？',
+  '故障码 E102 是什么意思？',
+  '货叉提升缓慢且伴随异响，可能是什么原因？'
+]
+
+function quickAsk(question: string) {
+  inputText.value = question
+  handleSend()
+}
 
 // ===== 智能维修诊断：品牌/车型联动（/diagnosis/brands|models 动态数据源）=====
 const brands = ref<DiagnosisBrandOption[]>([])
@@ -252,21 +289,13 @@ function useFaultCode(item: DiagnosisFaultCodeItem) {
   handleSend()
 }
 
-// ===== 智能维修诊断：来源资料解析（answer_sources 内含 <<IMAGE:...>> 溯源标记）=====
-function sourceImages(text: string): string[] {
-  const out: string[] = []
-  const re = /<<IMAGE:([^>]+)>>/g
-  let m: RegExpExecArray | null
-  while ((m = re.exec(text))) {
-    const p = m[1].trim()
-    if (p) out.push(p)
-  }
-  return out
-}
-
-function stripImageMarkers(text: string): string {
-  return text.replace(/<<IMAGE:[^>]+>>/g, '').trim()
-}
+// ===== 当轮来源展开态（默认折叠；新一轮开始自动收起）=====
+// 解析函数已收敛进 DiagnosisSources 组件；本页只保留展开态。
+const sourcesOpen = ref(false)
+// 新一轮开始自动收起（sourcesOpen 只描述当轮展开态，不跟随历史）
+watch(() => store.lastSources, () => {
+  sourcesOpen.value = false
+})
 
 interface PendingImage {
   url: string          // 上传成功后的服务器 URL
@@ -549,68 +578,6 @@ onMounted(() => {
 
 .catalog-fault-more {
   align-self: flex-start;
-}
-
-/* ===== 智能维修诊断：当轮来源面板（本页差异样式） ===== */
-.diagnosis-sources {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-
-.sources-title {
-  font-size: 12px;
-  color: var(--color-text-tertiary);
-}
-
-.source-card {
-  border: 1px solid var(--color-border-light);
-  border-radius: 10px;
-  padding: 10px 12px;
-  background: var(--color-bg-card);
-}
-
-.source-image {
-  max-width: 100%;
-  max-height: 220px;
-  border-radius: 8px;
-  margin-bottom: 6px;
-  display: block;
-  border: 1px solid var(--color-border-light);
-}
-
-.source-text {
-  font-size: 13px;
-  color: var(--color-text-secondary);
-  white-space: pre-wrap;
-  line-height: 1.6;
-  max-height: 120px;
-  overflow: hidden;
-  mask-image: linear-gradient(to bottom, #000 70%, transparent);
-  -webkit-mask-image: linear-gradient(to bottom, #000 70%, transparent);
-}
-
-.source-meta {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  margin-top: 6px;
-  font-size: 12px;
-  color: var(--color-text-tertiary);
-}
-
-.source-link {
-  color: var(--color-primary-600);
-  text-decoration: none;
-}
-
-.source-link:hover {
-  text-decoration: underline;
-}
-
-.source-empty {
-  color: var(--color-text-tertiary);
 }
 
 /* ===== 待发送图片（本页差异样式） ===== */

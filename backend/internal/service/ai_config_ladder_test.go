@@ -265,6 +265,18 @@ func TestStreamingPortInjectedEndToEnd(t *testing.T) {
 	if len(msgs) != 2 || msgs[0].Role != "user" || msgs[1].Role != "assistant" || msgs[1].Content != "模拟回复" {
 		t.Fatalf("持久化消息不符: %+v", msgs)
 	}
+	if msgs[1].Sources != "" {
+		t.Fatalf("非诊断对话不应持久化来源: %q", msgs[1].Sources)
+	}
+
+	// 回放：GetSessionMessages 下发 sources（T5；此处为空，与存量 NULL 同口径）
+	got, err := assistant.GetSessionMessages(ctx, 7, session.ID)
+	if err != nil {
+		t.Fatalf("GetSessionMessages 失败: %v", err)
+	}
+	if len(got) != 2 || len(got[1].Sources) != 0 {
+		t.Fatalf("非诊断回放 sources 应为空: %+v", got)
+	}
 }
 
 // TestBlockingPortInjectedEndToEnd 评分/解析端到端（fake 模型端口）：
