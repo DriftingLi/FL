@@ -61,6 +61,8 @@ export interface ChatMessage {
   role: 'user' | 'assistant' | 'system'
   content: string
   images?: string[]
+  /** 助手消息的诊断来源（T5 历史回放；当轮另走 SSE sources 事件内存态） */
+  sources?: DiagnosisSource[]
   created_at: string
 }
 
