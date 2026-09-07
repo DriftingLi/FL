@@ -9,24 +9,7 @@
             <view class="header-right"></view>
         </view>
         <scroll-view class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
-            <!-- 统计卡片 -->
-            <view class="stats-card">
-                <view class="stat-item">
-                    <text class="stat-label">我的错题</text>
-                    <view class="stat-num-row">
-                        <text class="stat-num">{{ stats.total }}</text>
-                        <text class="stat-unit">道</text>
-                    </view>
-                </view>
-                <view class="stat-divider"></view>
-                <view class="stat-item">
-                    <text class="stat-label">今日错题</text>
-                    <view class="stat-num-row">
-                        <text class="stat-num">{{ todayCount }}</text>
-                        <text class="stat-unit">道</text>
-                    </view>
-                </view>
-            </view>
+            <WrongStatsCard ref="statsCardRef" :today-count="todayCount" />
 
             <!-- 筛选栏：时间/收藏为下拉，错多次为开关，重置在右 -->
             <view class="filter-bar">
@@ -150,12 +133,12 @@
     import { goBack } from '../../utils/navigation'
     import {
         getWrongQuestionsApi,
-        getWrongQuestionStatsApi,
         redoWrongQuestionApi,
         removeWrongQuestionApi,
     } from '../../api/wrongQuestion'
     import type { WrongQuestionQuery } from '../../api/wrongQuestion'
     import type { WrongQuestionItem, WrongQuestionStats } from '../../types/index'
+    import WrongStatsCard from './components/wrong-stats-card.uvue'
 
     /** ISO 日期字符串 → YYYY-MM-DD */
     function formatDateStr(dateStr : string) : string {
@@ -195,13 +178,6 @@
     const total = ref<number>(0)
     const loading = ref<boolean>(false)
     const noMore = ref<boolean>(false)
-
-    // 统计
-    const stats = ref<WrongQuestionStats>({
-        total: 0,
-        by_type: {} as UTSJSONObject,
-        by_knowledge_point: {} as UTSJSONObject,
-    } as WrongQuestionStats)
 
     // 今日错题（后端无 today_count，用一次大页拉取按 created_at 统计）
     const todayCount = ref<number>(0)
@@ -260,7 +236,17 @@
         return d.getFullYear() + '-' + padZero(d.getMonth() + 1) + '-' + padZero(d.getDate())
     }
 
-    /** 今日错题：拉一大页按 created_at 前缀统计（后端无 today_count 的近似，500 内准确） */
+    const statsCardRef = ref<any | null>(null)
+
+    /** 经卡片 ref 刷新统计（统计数据归卡片所有） */
+    function refreshStatsCard() : void {
+        const r = statsCardRef.value
+        if (r != null && r.loadStats != null) {
+            r.loadStats()
+        }
+    }
+
+        /** 今日错题：拉一大页按 created_at 前缀统计（后端无 today_count 的近似，500 内准确） */
     function loadTodayCount() : void {
         const q : WrongQuestionQuery = { type: '', sort: '', favorited: false, minWrongCount: 0 } as WrongQuestionQuery
         getWrongQuestionsApi(1, 500, q).then((res) : void => {
@@ -414,14 +400,6 @@
         }
     }
 
-    async function loadStats() {
-        try {
-            const data = await getWrongQuestionStatsApi()
-            stats.value = data
-        } catch (e) {
-            console.error('[wrong-questions] load stats failed:', e)
-        }
-    }
 
     async function loadRecords(reset : boolean = false) {
         if (loading.value) return
@@ -582,8 +560,8 @@
                 }
                 removeFromList(item.question_id)
                 uni.showToast({ title: '回答正确，已移出错题本', icon: 'success' })
-                // 刷新统计
-                loadStats()
+                // 刷新统计（卡片自拉）
+                refreshStatsCard()
             } else {
                 // 重做错误：显示结果，保留在错题本中
                 const result : RedoResult = {
@@ -608,8 +586,8 @@
             await removeWrongQuestionApi(item.question_id)
             uni.showToast({ title: '已移出错题本', icon: 'success' })
             removeFromList(item.question_id)
-            // 刷新统计
-            loadStats()
+            // 刷新统计（卡片自拉）
+            refreshStatsCard()
         } catch (e) {
             console.error('[wrong-questions] remove failed:', e)
             uni.showToast({ title: '移出失败', icon: 'none' })
@@ -640,7 +618,6 @@
     }
 
     onShow(() => {
-        loadStats()
         loadTodayCount()
         if (!grouped.value) {
             loadRecords(true)
@@ -695,51 +672,6 @@
         height: 0;
     }
 
-    /* 统计卡片 */
-    .stats-card {
-        margin: 24rpx;
-        background-color: #ffffff;
-        border-radius: 16rpx;
-        padding: 32rpx 0;
-        flex-direction: row;
-        justify-content: space-around;
-        border: 1rpx solid #eeeeee;
-    }
-
-    .stat-item {
-        flex: 1;
-        flex-direction: column;
-        align-items: center;
-    }
-
-    .stat-num-row {
-        flex-direction: row;
-        align-items: flex-start;
-        justify-content: center;
-    }
-
-    .stat-num {
-        font-size: 48rpx;
-        font-weight: bold;
-        color: #333333;
-    }
-
-    .stat-unit {
-        font-size: 24rpx;
-        color: #999999;
-        margin-left: 8rpx;
-    }
-
-    .stat-label {
-        font-size: 24rpx;
-        color: #999999;
-        margin-bottom: 8rpx;
-    }
-
-    .stat-divider {
-        width: 1rpx;
-        background-color: #f0f0f0;
-    }
 
     /* 筛选栏 */
     .filter-bar {
