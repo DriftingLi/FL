@@ -88,8 +88,8 @@ describe('WrongQuestionCard 接线契约', () => {
     expect(page).toContain("./components/wrong-question-card.uvue");
   });
 
-  it('提交经 submitRedo 事件带答案载荷（页面不再持 selectedKeys）', () => {
-    expect(page).toContain('@submit-redo="onSubmitRedo(item, $event)"');
+  it('提交经 submitRedo 事件带答案载荷（$event 显式断言 string[]，Kotlin 不做模板事件隐转）', () => {
+    expect(page).toContain('@submit-redo="onSubmitRedo(item, $event as string[])"');
     expect(page).not.toMatch(/const selectedKeys\s*=/);
   });
 
