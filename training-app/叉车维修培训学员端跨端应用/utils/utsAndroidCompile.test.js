@@ -24,6 +24,9 @@
  *   J. 调用实参少于必选形参（No value passed for parameter；函数定义行与方法调用不报）
  *   K. 模板 v-for 别名字段越界（error18；标签游走做块级作用域归属，页面本地类型声明优先于全局表）
  *   L. 类型化参数访问未声明字段（error18；script 侧，字段表可解析的单类型参数）
+ *   M. *Mapped 出口传 build* 具名函数引用（Kotlin error17；箭头包裹才合法）
+ *   N. as unknown as 双重强转（Kotlin error18 类型污染；对象 prop 走工厂默认值）
+ *   O. 模板 {{ 裸函数名 }} 插值（uni-app x 不自动调用无参 function，静默渲染源码）
  * 存量违例走 GUARD_ALLOWLIST 豁免，由后续工单在各自范围清零（见常量注释）。
  */
 const fs = require('fs');
@@ -240,6 +243,38 @@ function scanBareFnRefMapper(code) {
     if (args.length === 0) continue;
     const last = args[args.length - 1].trim();
     if (/^build[A-Z][\w$]*$/.test(last)) hits.push('mapper 裸引用 ' + last);
+  }
+  return hits;
+}
+
+/** N：as unknown as 双重强转——Kotlin 侧把属性/参数类型污染为 unknown（error18 找不到成员），
+ *  对象 prop 默认值应走工厂 `() => ({...} as T)`（先例 ai-chat sessions），非 null 强转 */
+function scanUnknownDoubleCast(code) {
+  const clean = blank(code);
+  const hits = [];
+  const lines = clean.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    if (/\bas\s+unknown\s+as\b/.test(lines[i])) hits.push(lines[i].trim());
+  }
+  return hits;
+}
+
+/** O：模板 {{ 裸函数名 }} 插值——引用 script 里 function 声明却无括号调用。
+ *  uni-app x 模板对无参 function 不会自动调用（渲染出函数源码，静默 bug）；
+ *  应改 computed 或模板内 `fn(args)` 调用。仅扫 .uvue（需 template+script 同文件） */
+function scanBareFnInterpolation(text) {
+  const scriptIdx = text.indexOf('<script');
+  if (scriptIdx === -1) return [];
+  const template = text.slice(0, scriptIdx);
+  const script = blank(text.slice(scriptIdx));
+  const hits = [];
+  const fns = new Set();
+  let m;
+  const fnRe = /(?:^|\n)\s*(?:export\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/g;
+  while ((m = fnRe.exec(script)) !== null) fns.add(m[1]);
+  const interpRe = /\{\{\s*([A-Za-z_$][\w$]*)\s*\}\}/g;
+  while ((m = interpRe.exec(template)) !== null) {
+    if (fns.has(m[1])) hits.push(`模板裸插值 {{ ${m[1]} }}（function 未调用）`);
   }
   return hits;
 }
@@ -625,6 +660,20 @@ describe('守护自检：检测逻辑对已知违规样本必须报出', () => {
     expect(scanBareFnRefMapper("return getMapped<Foo>('/x', null, map)")).toEqual([]);
     expect(scanBareFnRefMapper("return getMapped<Foo>('/x' + id.toString(), null, buildFoo)")).toHaveLength(1);
   });
+
+  it('N 能报出 as unknown as 双重强转（对照组：单重 as 不报）', () => {
+    expect(scanUnknownDoubleCast("item: null as unknown as WrongQuestionItem")).toHaveLength(1);
+    expect(scanUnknownDoubleCast("x = obj as UTSJSONObject")).toEqual([]);
+  });
+
+  it('O 能报出模板裸插值 function 名（对照组：computed/带括号调用/未定义名不报）', () => {
+    const bare = '<template><text>{{ displayTypeName }}</text></template>\n<script setup lang="uts">\n    function displayTypeName() : string { return \'\' }\n</script>';
+    expect(scanBareFnInterpolation(bare)).toHaveLength(1);
+    const called = '<template><text>{{ getTypeName(t) }}</text></template>\n<script setup lang="uts">\n    function getTypeName(t : string) : string { return t }\n</script>';
+    expect(scanBareFnInterpolation(called)).toEqual([]);
+    const computedCase = '<template><text>{{ displayDate }}</text></template>\n<script setup lang="uts">\n    const displayDate = computed(() : string => \'\')\n</script>';
+    expect(scanBareFnInterpolation(computedCase)).toEqual([]);
+  });
 });
 
 // ── 全工程真实扫描（守护本体，回归即红）────────────────────────────────
@@ -773,6 +822,22 @@ describe('全工程守护：五类 Kotlin 编译地雷零命中', () => {
     const violations = [];
     for (const u of allCodeUnits()) {
       for (const h of scanBareFnRefMapper(u.code)) violations.push(path.relative(ROOT, u.file) + ': ' + h);
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it('N：全工程无 as unknown as 双重强转（Kotlin error18，对象 prop 走工厂默认值）', () => {
+    const violations = [];
+    for (const u of allCodeUnits()) {
+      for (const h of scanUnknownDoubleCast(u.code)) violations.push(path.relative(ROOT, u.file) + ': ' + h);
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it('O：模板无裸插值引用 function 名（uni-app x 不自动调用无参 function，静默渲染源码）', () => {
+    const violations = [];
+    for (const file of ALL_FILES.filter((f) => f.endsWith('.uvue'))) {
+      for (const h of scanBareFnInterpolation(fs.readFileSync(file, 'utf8'))) violations.push(path.relative(ROOT, file) + ': ' + h);
     }
     expect(violations).toEqual([]);
   });

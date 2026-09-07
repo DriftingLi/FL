@@ -80,6 +80,18 @@ describe('WrongQuestionCard 接线契约', () => {
     }
   });
 
+  it('卡片编译雷修复形态（#684 引入 error18，本轮红修钉死防回潮）', () => {
+    const c = card();
+    // item prop 走工厂默认值（null as unknown as 会污染 Kotlin 类型 → error18 找不到成员）
+    expect(c).toContain('item: () => ({');
+    expect(c).not.toMatch(/as\s+unknown\s+as/);
+    // display 值必须是 computed（模板 {{ x }} 裸引用；function 不自动调用 → 静默渲染源码）
+    expect(c).toMatch(/const displayTypeName = computed/);
+    expect(c).toMatch(/const displayDate = computed/);
+    // props.redoResult 成员直读清零（Kotlin 对 props getter 无智能转换，须局部 val）
+    expect(c).not.toMatch(/props\.redoResult\./);
+  });
+
   it('卡片 emits 仅 toggleExpand/submitRedo/remove（无 selectOption 残留）', () => {
     const c = card();
     expect(c).toContain("defineEmits(['toggleExpand', 'submitRedo', 'remove'])");

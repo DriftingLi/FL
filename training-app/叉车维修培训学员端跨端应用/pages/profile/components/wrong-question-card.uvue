@@ -59,8 +59,8 @@
 </template>
 
 <script setup lang="uts">
-    import { ref } from 'vue'
-    import type { WrongQuestionItem } from '../../../types/index'
+    import { ref, computed } from 'vue'
+    import type { WrongQuestionItem, QuestionOption } from '../../../types/index'
     import { getTypeName, isMultiChoice } from '../../../utils/wrongQuestionDisplay'
 
     /** 错题卡片：展示 + 重做选项选中态（选中态属展示时态随卡片自持；提交结果由页面下发） */
@@ -76,7 +76,10 @@
         redoResult?: RedoResult | null
         lastRedoAnswer?: string
     }>(), {
-        item: null as unknown as WrongQuestionItem,
+        item: () => ({
+            question_id: 0, type: '', title: '', options: [] as QuestionOption[],
+            correct_answer: '', user_answer: '', wrong_count: 0, created_at: '', favorited: false,
+        } as WrongQuestionItem),
         expanded: false,
         redoResult: null,
         lastRedoAnswer: ''
@@ -101,27 +104,36 @@
         return props.redoResult != null
     }
 
+    /** 重做结果局部化（Kotlin 对 props getter 无智能转换） */
+    function redoVal() : RedoResult | null {
+        return props.redoResult
+    }
+
     /** 重做结果是否正确（模板调用） */
     function redoResultCorrect() : boolean {
-        return props.redoResult != null && props.redoResult.correct
+        const r = redoVal()
+        return r != null && r.correct
     }
 
     /** 重做结果样式类（模板调用） */
     function redoResultClass() : string {
-        if (props.redoResult == null) return ''
-        return props.redoResult.correct ? 'correct' : 'wrong'
+        const r = redoVal()
+        if (r == null) return ''
+        return r.correct ? 'correct' : 'wrong'
     }
 
     /** 重做结果文案（模板调用） */
     function redoResultLabel() : string {
-        if (props.redoResult == null) return ''
-        return props.redoResult.correct ? '回答正确' : '回答错误'
+        const r = redoVal()
+        if (r == null) return ''
+        return r.correct ? '回答正确' : '回答错误'
     }
 
     /** 重做结果正确答案（模板调用） */
     function redoResultAnswer() : string {
-        if (props.redoResult == null) return ''
-        return props.redoResult.correct_answer
+        const r = redoVal()
+        if (r == null) return ''
+        return r.correct_answer
     }
 
     /** 重做结果用户答案（模板调用） */
@@ -157,7 +169,7 @@
 
     /** 本地比对：用户答案与正确答案 key 集合是否一致（模板调用） */
     function redoResultLocalMatch() : boolean {
-        const r = props.redoResult
+        const r = redoVal()
         if (r == null) return false
         if (r.correct) return false
         const correctKeys = parseAnswerKeys(r.correct_answer)
@@ -202,17 +214,17 @@
         return isSelected(key) ? 'option-key-selected' : ''
     }
 
-    function displayTypeName() : string {
+    const displayTypeName = computed<string>(() : string => {
         return getTypeName(props.item.type)
-    }
+    })
 
-    function displayDate() : string {
+    const displayDate = computed<string>(() : string => {
         return formatDateStr(props.item.created_at)
-    }
+    })
 
     /** 点击选项（多选切换 / 单选替换，与原页逻辑一致） */
     function onSelect(key : string) : void {
-        if (props.redoResult != null) return
+        if (redoVal() != null) return
         if (isMultiChoice(props.item.type)) {
             const idx = selectedKeys.value.indexOf(key)
             if (idx >= 0) {
