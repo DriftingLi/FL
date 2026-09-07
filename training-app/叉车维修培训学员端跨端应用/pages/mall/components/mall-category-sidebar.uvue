@@ -1,0 +1,85 @@
+<template>
+	<!-- 左侧分类栏 -->
+	<scroll-view class="category-sidebar" scroll-y="true">
+		<view v-for="(cat, idx) in categories" :key="idx" class="category-item"
+			:class="{ 'category-active': activeCategory === idx, 'category-vip': cat.isVip }"
+			@click="onCat(idx)">
+			<text class="category-text"
+				:class="{ 'category-text-active': activeCategory === idx, 'category-text-vip': cat.isVip }">{{ cat.name }}</text>
+		</view>
+	</scroll-view>
+</template>
+
+<script setup lang="uts">
+	type CategoryItem = {
+		name : string
+		id : number
+		isVip : boolean
+	}
+
+	const categories : CategoryItem[] = [
+		{ name: '热门', id: 0, isVip: false },
+		{ name: '图书系列', id: 1, isVip: false },
+		{ name: 'VIP套餐', id: 2, isVip: true },
+	]
+
+	const props = withDefaults(defineProps<{
+		activeCategory?: number
+	}>(), {
+		activeCategory: 0
+	})
+
+	const emit = defineEmits(['categoryChange'])
+
+	function onCat(idx : number) : void {
+		emit('categoryChange', idx)
+	}
+</script>
+
+<style>
+	/* ===== 左侧分类栏 ===== */
+	.category-sidebar {
+		width: 180rpx;
+		background-color: #f8f8f8;
+	}
+
+	.category-item {
+		padding: 28rpx 24rpx;
+		align-items: center;
+		justify-content: center;
+		border-left: 6rpx solid transparent;
+		background-color: #f8f8f8;
+	}
+
+	.category-active {
+		background-color: #ffffff;
+		border-left-color: #2979ff;
+	}
+
+	.category-text {
+		font-size: 26rpx;
+		color: #333333;
+	}
+
+	.category-text-active {
+		color: #2979ff;
+		font-weight: bold;
+	}
+
+	/* VIP套餐特殊样式 */
+	.category-vip {
+		background-color: #f8f8f8;
+	}
+
+	.category-vip.category-active {
+		background-color: #ffffff;
+	}
+
+	.category-text-vip {
+		color: #ff4d4f;
+	}
+
+	.category-text-vip.category-text-active {
+		color: #2979ff;
+	}
+</style>
