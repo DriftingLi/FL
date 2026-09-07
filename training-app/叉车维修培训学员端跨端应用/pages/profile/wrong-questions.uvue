@@ -9,7 +9,7 @@
             <view class="header-right"></view>
         </view>
         <scroll-view class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
-            <WrongStatsCard ref="statsCardRef" :today-count="todayCount" @loaded="onStatsLoaded" />
+            <WrongStatsCard :stats-total="stats.total" :today-count="todayCount" />
 
             <!-- 筛选栏：时间/收藏为下拉，错多次为开关，重置在右 -->
             <WrongFilterBar :sort-mode="sortMode" :only-fav="onlyFav" :only-wrong-many="onlyWrongMany"
@@ -69,6 +69,7 @@
     import { goBack } from '../../utils/navigation'
     import {
         getWrongQuestionsApi,
+        getWrongQuestionStatsApi,
         redoWrongQuestionApi,
         removeWrongQuestionApi,
     } from '../../api/wrongQuestion'
@@ -123,6 +124,22 @@
     const lastRedoAnswer = ref<string>('')
     const redoResult = ref<RedoResult | null>(null)
 
+    // 统计：页面所有（声明必须先于消费它的 groups computed——Kotlin 局部无前向引用）
+    const stats = ref<WrongQuestionStats>({
+        total: 0,
+        by_type: {} as UTSJSONObject,
+        by_knowledge_point: {} as UTSJSONObject,
+    } as WrongQuestionStats)
+
+    async function loadStats() : void {
+        try {
+            const data = await getWrongQuestionStatsApi()
+            stats.value = data
+        } catch (e) {
+            console.error('[wrong-questions] load stats failed:', e)
+        }
+    }
+
     /** 分组行：stats.by_type → {label, typeKey, count}，按数量降序 */
     const groups = computed<GroupRow[]>(() : GroupRow[] => {
         const rows : GroupRow[] = []
@@ -160,27 +177,6 @@
     function todayStr() : string {
         const d = new Date()
         return d.getFullYear() + '-' + padZero(d.getMonth() + 1) + '-' + padZero(d.getDate())
-    }
-
-    // 统计（卡片自拉后 @loaded 回传；groups 分组视图消费 by_type）
-    const stats = ref<WrongQuestionStats>({
-        total: 0,
-        by_type: {} as UTSJSONObject,
-        by_knowledge_point: {} as UTSJSONObject,
-    } as WrongQuestionStats)
-
-    function onStatsLoaded(s : WrongQuestionStats) : void {
-        stats.value = s
-    }
-
-    const statsCardRef = ref<any | null>(null)
-
-    /** 经卡片 ref 刷新统计（统计数据归卡片所有） */
-    function refreshStatsCard() : void {
-        const r = statsCardRef.value
-        if (r != null && r.loadStats != null) {
-            r.loadStats()
-        }
     }
 
         /** 今日错题：拉一大页按 created_at 前缀统计（后端无 today_count 的近似，500 内准确） */
@@ -347,7 +343,7 @@
                 removeFromList(item.question_id)
                 uni.showToast({ title: '回答正确，已移出错题本', icon: 'success' })
                 // 刷新统计（卡片自拉）
-                refreshStatsCard()
+                loadStats()
             } else {
                 // 重做错误：显示结果，保留在错题本中
                 const result : RedoResult = {
@@ -373,7 +369,7 @@
             uni.showToast({ title: '已移出错题本', icon: 'success' })
             removeFromList(item.question_id)
             // 刷新统计（卡片自拉）
-            refreshStatsCard()
+            loadStats()
         } catch (e) {
             console.error('[wrong-questions] remove failed:', e)
             uni.showToast({ title: '移出失败', icon: 'none' })
@@ -404,7 +400,7 @@
     }
 
     onShow(() => {
-        refreshStatsCard()
+        loadStats()
         loadTodayCount()
         if (!grouped.value) {
             loadRecords(true)
