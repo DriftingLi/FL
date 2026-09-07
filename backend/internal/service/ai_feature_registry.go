@@ -14,8 +14,6 @@ const (
 	FeatureAIAssistantNormal      = "ai_assistant_normal"
 	FeatureAIAssistantExpert      = "ai_assistant_expert"
 	FeatureQuestionExplanation    = "ai_question_analysis"
-	FeatureFaultConsult           = "fault_consult"
-	FeatureFaultCodeQuery         = "fault_code_query"
 	FeatureMaintenanceKnowledge   = "maintenance_knowledge"
 	FeatureDrawingRecognition     = "drawing_recognition"
 	FeatureExerciseSolving        = "exercise_solving"
@@ -38,31 +36,6 @@ const forkliftExpertSystemPrompt = `你是一名资深的叉车维修专家，�
 3. 复杂故障按"可能原因 → 排查步骤 → 处理方法"结构回答
 4. 不确定时坦诚告知，不编造数据
 5. 涉及维修必须由专业人员执行的，明确提示联系专业维修人员`
-
-// faultConsultSystemPrompt 故障咨询系统提示词。
-const faultConsultSystemPrompt = `你是一名资深的叉车故障诊断专家，拥有 20 年以上一线维修经验。
-你熟悉林德、丰田、杭叉、合力、永恒力、TCM 等主流品牌叉车的常见故障模式。
-
-回答要求：
-1. 用中文回答，专业、实用、可操作
-2. 按"可能原因 → 排查步骤 → 处理方法"的结构组织回答
-3. 按可能性从高到低排列原因，说明判断依据
-4. 排查步骤具体到工具、测量位置、判断标准
-5. 涉及安全的操作（制动、液压、电气高压部件）必须明确警示
-6. 需要专业设备或资质的维修，明确提示联系专业维修人员
-7. 信息不足时先列出需要确认的关键信息，再给出初步判断
-8. 不确定时坦诚告知，不编造数据`
-
-// faultCodeQuerySystemPrompt 故障代码查询系统提示词。
-const faultCodeQuerySystemPrompt = `你是一名叉车故障代码专家，精通国内外主流品牌（林德、丰田、杭叉、合力、永恒力、TCM 等）叉车自诊断系统的故障代码体系。
-
-回答要求：
-1. 用中文回答，按"代码含义 → 严重程度 → 可能原因 → 处理建议"结构组织
-2. 严重程度分为：紧急（立即停机）、重要（尽快处理）、一般（可短时继续作业）
-3. 不同品牌的代码编号可能相同但含义不同；用户未提供品牌时，先询问品牌与车型，同时给出常见品牌下的典型含义参考
-4. 处理建议具体到操作步骤与所需工具
-5. 明确提示：最终诊断应以对应品牌官方维修手册为准
-6. 不确定时坦诚告知，不编造代码含义`
 
 // maintenanceKnowledgeSystemPrompt 维保知识系统提示词。
 const maintenanceKnowledgeSystemPrompt = `你是一名叉车维保专家，熟悉各品牌电动叉车、内燃叉车的保养体系与行业标准。
@@ -156,8 +129,6 @@ var aiFeatureRegistry = []aiFeature{
 	{FeatureAIAssistantNormal, "AI 助手 · 普通模式", forkliftExpertSystemPrompt, bindingAssistantMode, true, false},
 	{FeatureAIAssistantExpert, "AI 助手 · 专家模式", forkliftExpertSystemPrompt, bindingAssistantMode, true, false},
 	{FeatureQuestionExplanation, "题目 AI 解析", questionExplainSystemPrompt, bindingAdminSingle, false, false},
-	{FeatureFaultConsult, "故障咨询", faultConsultSystemPrompt, bindingAdminSingle, true, false},
-	{FeatureFaultCodeQuery, "故障代码查询", faultCodeQuerySystemPrompt, bindingAdminSingle, true, false},
 	{FeatureMaintenanceKnowledge, "维保知识", maintenanceKnowledgeSystemPrompt, bindingAdminSingle, true, false},
 	{FeatureDrawingRecognition, "图纸识别", drawingRecognitionSystemPrompt, bindingAdminSingle, true, false},
 	{FeatureExerciseSolving, "习题解答", exerciseSolvingSystemPrompt, bindingAdminSingle, true, false},

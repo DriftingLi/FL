@@ -240,7 +240,7 @@ func TestRoutingAIModel_Dispatch(t *testing.T) {
 	r := NewRoutingAIModel(normal, diag)
 
 	// 非诊断键走 eino
-	c, _, err := r.Stream(context.Background(), AIModelSelector{FeatureKey: FeatureFaultConsult}, msgsSample("x", 0), nil)
+	c, _, err := r.Stream(context.Background(), AIModelSelector{FeatureKey: FeatureMaintenanceKnowledge}, msgsSample("x", 0), nil)
 	if err != nil || c != "eino 回复" {
 		t.Fatalf("non-diagnosis 应走 normal: content=%q err=%v", c, err)
 	}
