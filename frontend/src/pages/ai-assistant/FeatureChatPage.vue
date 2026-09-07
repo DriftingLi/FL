@@ -115,32 +115,37 @@
       </div>
     </template>
 
-    <!-- 输入区差异内容：智能维修诊断当轮来源面板（SSE sources 事件） -->
+    <!-- 输入区差异内容：智能维修诊断当轮来源面板（SSE sources 事件；T4 默认折叠+T5 历史回放） -->
     <template #input-above>
-      <div v-if="isDiagnosis && store.lastSources.length" class="diagnosis-sources">
-        <div class="sources-title">资料来源（可从资料链接跳转原文）</div>
-        <div v-for="src in store.lastSources" :key="src.id" class="source-card">
-          <img
-            v-for="img in sourceImages(src.text)"
-            :key="img"
-            :src="aiAssistantApi.manualUrl(img)"
-            class="source-image"
-            alt="资料图片"
-            loading="lazy"
-          />
-          <div class="source-text">{{ stripImageMarkers(src.text) }}</div>
-          <div class="source-meta">
-            <span v-if="src.metadata?.page_start">第 {{ src.metadata.page_start }}{{ src.metadata.page_end && src.metadata.page_end !== src.metadata.page_start ? '-' + src.metadata.page_end : '' }} 页</span>
-            <a
-              v-if="src.metadata?.source_url"
-              :href="src.metadata.source_url"
-              target="_blank"
-              rel="noopener"
-              class="source-link"
-            >打开 PDF 来源</a>
-            <span v-if="!src.metadata?.source_url && !src.metadata?.page_start" class="source-empty">暂无来源资料</span>
-          </div>
+      <div v-if="isDiagnosis && currentSources.length" class="diagnosis-sources">
+        <div class="sources-head" @click="sourcesOpen = !sourcesOpen">
+          <span>▸ 资料来源（{{ currentSources.length }} 条，可从资料链接跳转原文）</span>
+          <span class="sources-toggle">{{ sourcesOpen ? '收起 ▴' : '展开 ▾' }}</span>
         </div>
+        <template v-if="sourcesOpen">
+          <div v-for="src in currentSources" :key="src.id" class="source-card">
+            <img
+              v-for="img in sourceImages(src.text)"
+              :key="img"
+              :src="aiAssistantApi.manualUrl(img)"
+              class="source-image"
+              alt="资料图片"
+              loading="lazy"
+            />
+            <div class="source-text">{{ stripImageMarkers(src.text) }}</div>
+            <div class="source-meta">
+              <span v-if="src.metadata?.page_start">第 {{ src.metadata.page_start }}{{ src.metadata.page_end && src.metadata.page_end !== src.metadata.page_start ? '-' + src.metadata.page_end : '' }} 页</span>
+              <a
+                v-if="src.metadata?.source_url"
+                :href="src.metadata.source_url"
+                target="_blank"
+                rel="noopener"
+                class="source-link"
+              >打开 PDF 来源</a>
+              <span v-if="!src.metadata?.source_url && !src.metadata?.page_start" class="source-empty">暂无来源资料</span>
+            </div>
+          </div>
+        </template>
       </div>
       <div v-else-if="pendingImages.length" class="pending-images">
         <div v-for="(p, i) in pendingImages" :key="p.url" class="pending-image-item">
@@ -173,7 +178,7 @@
 <script setup lang="ts">
 // 专项功能聊天页（#398）：壳（顶栏/侧栏/消息/输入/滚底）收敛进 ChatPageShell，
 // 本页仅保留快捷选项、图片队列等功能差异；助手内容随壳统一 markstream escape 安全渲染。
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { UploadFile } from 'element-plus'
@@ -293,12 +298,18 @@ function useFaultCode(item: DiagnosisFaultCodeItem) {
 }
 
 // ===== 智能维修诊断：来源资料解析（answer_sources 内含 <<IMAGE:...>> 溯源标记）=====
+// 外部助手吐绝对路径（/assistant/static/manual/…，lxc101 取证）：strip 前缀后再进
+// 后端代理，避免双前缀 404（T4）。历史回放（T5）与当轮共用同一解析。
+function stripAssistantPrefix(p: string): string {
+  return p.replace(/^\/assistant\/static\//, '').replace(/^assistant\/static\//, '')
+}
+
 function sourceImages(text: string): string[] {
   const out: string[] = []
   const re = /<<IMAGE:([^>]+)>>/g
   let m: RegExpExecArray | null
   while ((m = re.exec(text))) {
-    const p = m[1].trim()
+    const p = stripAssistantPrefix(m[1].trim())
     if (p) out.push(p)
   }
   return out
@@ -307,6 +318,24 @@ function sourceImages(text: string): string[] {
 function stripImageMarkers(text: string): string {
   return text.replace(/<<IMAGE:[^>]+>>/g, '').trim()
 }
+
+// ===== 当轮/历史来源统一展示（T4 默认折叠 + T5 历史回放）=====
+// 当轮：store.lastSources（SSE sources 事件内存态）；历史：最后一条助手消息的持久化 sources。
+// 新一轮开始（lastSources 变化）自动收起，避免旧展开态顶新消息区。
+const sourcesOpen = ref(false)
+const currentSources = computed(() => {
+  if (store.lastSources.length) return store.lastSources
+  const msgs = store.messages
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const m = msgs[i] as { role: string; sources?: { id: number; text: string; metadata?: { source_url?: string; page_start?: number; page_end?: number } }[] }
+    if (m.role === 'assistant' && m.sources?.length) return m.sources
+  }
+  return []
+})
+// 新一轮开始自动收起（sourcesOpen 只描述当轮展开态，不跟随历史）
+watch(() => store.lastSources, () => {
+  sourcesOpen.value = false
+})
 
 interface PendingImage {
   url: string          // 上传成功后的服务器 URL
@@ -599,9 +628,20 @@ onMounted(() => {
   margin-bottom: 8px;
 }
 
-.sources-title {
+.sources-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   font-size: 12px;
   color: var(--color-text-tertiary);
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.sources-toggle {
+  color: var(--color-primary-600);
+  white-space: nowrap;
 }
 
 .source-card {

@@ -49,7 +49,9 @@ type DiagnosisFaultCodePage struct {
 }
 
 // manualPathPattern 手册子路径白名单（防 SSRF/路径穿越；允许带扩展名的静态文件）。
-var manualPathPattern = regexp.MustCompile(`^[a-zA-Z0-9_\-/]+\.(png|jpg|jpeg|pdf)$`)
+// T4：扩展名大小写不敏感（外部助手吐 PNG/JPG），strip 由前端完成（lxc101 取证 IMAGE 为
+// /assistant/static/… 绝对路径），此处再兜底一次，避免任一端漏 strip 导致双前缀 404。
+var manualPathPattern = regexp.MustCompile(`(?i)^[a-zA-Z0-9_\-/]+\.(png|jpg|jpeg|pdf)$`)
 
 // DiagnosisProxyService 助手只读端点代理（品牌/车型/故障码/手册资源）。
 type DiagnosisProxyService struct {
@@ -120,6 +122,9 @@ func (s *DiagnosisProxyService) ListFaultCodes(ctx context.Context, brand, keywo
 // 返回响应体与 Content-Type；调用方负责关闭。path 不合法（SSRF/穿越）时返回错误。
 func (s *DiagnosisProxyService) OpenManual(ctx context.Context, subpath string) (io.ReadCloser, string, error) {
 	subpath = strings.TrimPrefix(subpath, "/")
+	// 兜底 strip：前端已 strip（见 FeatureChatPage stripAssistantPrefix），此处再 strip 一次，
+	// 任一端漏 strip 都不会拼出双前缀。
+	subpath = strings.TrimPrefix(subpath, "assistant/static/")
 	if !manualPathPattern.MatchString(subpath) {
 		return nil, "", errors.New("无效的手册资源路径")
 	}
