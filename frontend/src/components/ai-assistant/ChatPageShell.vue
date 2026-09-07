@@ -169,26 +169,28 @@
       </div>
     </aside>
 
-    <!-- 右侧对话区（空态：整列居中，输入框随标题居中；有消息：列表占满、输入框沉底） -->
+    <!-- 右侧对话区（空态：欢迎区上移、输入区 mt-auto 居中；有消息：列表占满、输入框沉底） -->
     <main class="chat-main flex min-w-0 flex-1 flex-col bg-panel" :class="isWelcome ? 'justify-center overflow-y-auto' : 'overflow-hidden'">
       <!-- 消息列表 -->
       <div
         ref="messageListRef"
         class="message-list mx-auto w-full p-6 max-[768px]:p-4"
-        :class="isWelcome ? 'flex max-w-[760px] flex-none flex-col overflow-visible' : 'max-w-[1200px] flex-1 overflow-y-auto'"
+        :class="isWelcome ? 'mb-auto flex max-w-[760px] flex-none flex-col overflow-visible' : 'max-w-[1200px] flex-1 overflow-y-auto'"
       >
-        <!-- 空状态：欢迎区（差异内容走 welcome 槽位；m-auto 垂直居中且不裁切内容） -->
-        <div v-if="isWelcome" class="welcome-area m-auto px-6 py-12 text-center">
-          <div class="welcome-icon mb-5 inline-flex h-[72px] w-[72px] items-center justify-center rounded-[20px] bg-[linear-gradient(135deg,var(--color-violet-500,#6366f1),#8b5cf6)] text-white">
-            <el-icon :size="36"><component :is="welcomeIcon" /></el-icon>
+        <!-- 空状态：欢迎区（图标左标题右横排；标题即一句话功能介绍，无副标题；
+             欢迎区上移、输入框居中：整列 justify-center + 欢迎区 mb-auto + 输入区 mt-auto） -->
+        <div v-if="isWelcome" class="welcome-area w-full px-6 pb-4 pt-10 text-center">
+          <div class="welcome-head mx-auto flex max-w-[760px] items-center justify-center gap-3 text-left">
+            <div class="welcome-icon inline-flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-[16px] bg-[linear-gradient(135deg,var(--color-violet-500,#6366f1),#8b5cf6)] text-white">
+              <el-icon :size="28"><component :is="welcomeIcon" /></el-icon>
+            </div>
+            <h2 class="welcome-title m-0 text-xl font-bold leading-snug text-ink">{{ welcomeTitle }}</h2>
           </div>
-          <h2 class="welcome-title m-0 mb-2 text-2xl font-bold text-ink">{{ welcomeTitle }}</h2>
-          <p class="welcome-desc mx-auto mb-6 max-w-[560px] text-sm leading-[1.6] text-ink-3">{{ welcomeDesc }}</p>
 
           <slot name="welcome-top" />
 
-          <!-- 预设提示词：聊天气泡横向一字排开（方案 B 翻页箭头收纳） -->
-          <div v-if="suggestions.length" class="suggestion-pager mx-auto flex max-w-[600px] items-center gap-1.5">
+          <!-- 预设提示词：聊天气泡横向一字排开（方案 B 翻页箭头收纳；自动换行不省略） -->
+          <div v-if="suggestions.length" class="suggestion-pager mx-auto mt-5 flex max-w-[600px] items-center gap-1.5">
             <SuggestionArrow dir="prev" :disabled="!canPagePrev" @page="pageSuggestions(-1)" />
             <div class="suggestion-view min-w-0 flex-1 overflow-hidden">
               <div
@@ -203,7 +205,7 @@
                   <div
                     v-for="s in page"
                     :key="s"
-                    class="suggestion-bubble min-w-0 flex-1 cursor-pointer truncate rounded-card border border-line bg-panel px-3.5 py-2.5 text-left text-[13px] text-ink-2 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:border-ui-400 hover:bg-ui-50 hover:text-ui-600"
+                    class="suggestion-bubble min-w-0 flex-1 cursor-pointer whitespace-normal break-words rounded-card border border-line bg-panel px-3.5 py-2.5 text-left text-[13px] leading-[1.5] text-ink-2 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:border-ui-400 hover:bg-ui-50 hover:text-ui-600"
                     :title="s"
                     @click="emit('suggest', s)"
                   >
@@ -294,10 +296,10 @@
         </div>
       </div>
 
-      <!-- 输入区（空态：收进欢迎流、随标题居中；有消息：沉底 dock） -->
+      <!-- 输入区（空态：mt-auto 顶住列中线，输入框居中；有消息：沉底 dock） -->
       <div
         class="chat-input-area mx-auto w-full bg-panel px-6 pb-5 pt-3 max-[768px]:px-3 max-[768px]:pb-3 max-[768px]:pt-2"
-        :class="isWelcome ? 'max-w-[760px] flex-none' : 'max-w-[1200px]'"
+        :class="isWelcome ? 'mt-auto max-w-[760px] flex-none' : 'max-w-[1200px]'"
       >
         <slot name="input-toolbar" />
         <slot name="input-above" />
@@ -387,10 +389,11 @@ const props = withDefaults(
     /** 顶部栏附加返回链接（功能页：返回 AI 助手） */
     backLinkTo?: string
     backLinkText?: string
-    /** 欢迎区图标/标题/描述 */
+    /** 欢迎区图标/一句话标题（标题即功能介绍，无副标题） */
     welcomeIcon: Component
     welcomeTitle: string
-    welcomeDesc: string
+    /** @deprecated 副标题已下线（欢迎区横排无副标题位），保留仅防旧调用传参炸裂 */
+    welcomeDesc?: string
     /** 预设提示词（点击后 emit('suggest', text)） */
     suggestions?: string[]
     /** 会话重命名（主页专用能力） */

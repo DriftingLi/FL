@@ -82,7 +82,7 @@ func TestDiagnosisAdapterStream_PseudostreamAndSources(t *testing.T) {
 	fake := &fakeDiagnosisServer{
 		t:       t,
 		sopText: "## 一、检查方向\n\n先断电并实施驻车制动。\n\n## 二、工具与步骤\n\n使用万用表测量。",
-		sources: []DiagnosisSource{{ID: 7, Text: "林德服务指南…", Metadata: struct {
+		sources: []DiagnosisSource{{ID: "7", Text: "林德服务指南…", Metadata: struct {
 			SourceURL string `json:"source_url"`
 			PageStart int    `json:"page_start"`
 			PageEnd   int    `json:"page_end"`
@@ -132,9 +132,9 @@ func TestDiagnosisAdapterStream_PseudostreamAndSources(t *testing.T) {
 	if req.ChatHistory[1].Role != "assistant" || req.ChatHistory[1].Content != "前序回答" {
 		t.Fatalf("chat_history 第二个轮次不符: %+v", req.ChatHistory[1])
 	}
-	// sources 透传
+	// sources 透传（数字 ID 原样透出字符串 "7"）
 	gotSources := DiagnosisSourcesFrom(callCtx)
-	if len(gotSources) != 1 || gotSources[0].ID != 7 || gotSources[0].Metadata.SourceURL == "" {
+	if len(gotSources) != 1 || string(gotSources[0].ID) != "7" || gotSources[0].Metadata.SourceURL == "" {
 		t.Fatalf("sources 透传不符: %+v", gotSources)
 	}
 	// 未初始化容器的 ctx 读取为空（其他功能路径安全）
@@ -290,6 +290,29 @@ func TestDiagnosisAdapterStream_TruncatedSalvage(t *testing.T) {
 	}
 	if strings.Join(chunks, "") != content {
 		t.Fatalf("伪流式切块累加应等于抢救全文")
+	}
+}
+
+// TestDiagnosisAdapterSourceID 两态 ID（线上根因：结构化故障码来源吐 "fault-15" 字符串）：
+// 数字 7 与字符串 "fault-15" 都不断流，ID 原样透出。
+func TestDiagnosisAdapterSourceID(t *testing.T) {
+	for _, body := range []string{
+		`{"code":200,"data":{"sop_text":"## 一、检查方向\n\n先断电并实施驻车制动，测量电压确认。","answer_sources":[{"id":7,"text":"t","metadata":{"source_url":"u","page_start":1,"page_end":1}}]}}`,
+		`{"code":200,"data":{"sop_text":"## 一、检查方向\n\n先断电并实施驻车制动，测量电压确认。","answer_sources":[{"id":"fault-15","text":"t","metadata":{"source_url":"u","page_start":1,"page_end":1}}]}}`,
+	} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(body))
+		}))
+		content, _, err := NewDiagnosisAssistantModel(server.URL, zap.NewNop()).Stream(
+			WithDiagnosisSources(context.Background()), AIModelSelector{}, msgsSample("x", 0), nil)
+		server.Close()
+		if err != nil {
+			t.Fatalf("两态 ID 不断流，body=%s err=%v", body, err)
+		}
+		if content == "" {
+			t.Fatalf("两态 ID 正文不应为空，body=%s", body)
+		}
 	}
 }
 

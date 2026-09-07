@@ -3,8 +3,7 @@
     logo-sub="AI 叉车助手 · HRWAI"
     login-redirect="/ai-assistant"
     :welcome-icon="ChatDotRound"
-    welcome-title="叉车维修 AI 助手"
-    welcome-desc="我是您的叉车维修专家助手，可以帮您解答叉车选购、维保周期、故障诊断、操作规范等问题。"
+    welcome-title="选购维保故障操作，叉车问题一问即答"
     :suggestions="suggestions"
     enable-rename
     raised-input

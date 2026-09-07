@@ -125,6 +125,24 @@ describe('ChatPageShell 槽位', () => {
     expect(w.findAll('.suggestion-page')[1].text()).toContain('四')
   })
 
+  it('欢迎区横排：一句话标题无副标题（welcomeDesc 不再渲染）', () => {
+    const w = mountShell({ welcomeTitle: '上传图纸即读懂部件原理', welcomeDesc: '旧副标题不应出现' })
+    const head = w.find('.welcome-head')
+    expect(head.exists()).toBe(true)
+    expect(head.text()).toContain('上传图纸即读懂部件原理')
+    expect(w.find('.welcome-desc').exists()).toBe(false)
+    expect(w.text()).not.toContain('旧副标题不应出现')
+  })
+
+  it('气泡自动换行不省略（无 truncate，超长撑开）', () => {
+    const w = mountShell({ suggestions: ['一', '二', '三', '四'] })
+    const bubbles = w.findAll('.suggestion-bubble')
+    expect(bubbles.length).toBeGreaterThan(0)
+    for (const b of bubbles) {
+      expect(b.classes()).not.toContain('truncate')
+    }
+  })
+
   it('空态输入框随标题居中（main justify-center + 输入区 760）；有消息沉底 1200', async () => {
     const welcome = mountShell({})
     expect(welcome.find('.chat-main').classes()).toContain('justify-center')

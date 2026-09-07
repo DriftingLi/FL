@@ -15,7 +15,7 @@
     @suggest="useSuggestion"
     @new-session="handleNewSession"
   >
-    <!-- 诊断筛选移入输入框上方工具栏胶囊（方案 B；空态随输入框居中，不再撑欢迎区） -->
+    <!-- 诊断筛选移入输入框上方工具栏（快捷问只留下方气泡，此处仅筛选胶囊） -->
     <template #input-toolbar>
       <div v-if="isDiagnosis" class="flex items-center gap-2 overflow-x-auto pb-2">
         <UiCapsule
@@ -23,40 +23,48 @@
           :active="filterOpen"
           @click="filterOpen = !filterOpen"
         />
-        <UiCapsule
-          v-for="question in diagnosisQuickAsks"
-          :key="question"
-          :label="question"
-          @click="quickAsk(question)"
-        />
       </div>
       <!-- 折叠面板本体（挂输入区上方，随输入框居中/沉底；欢迎区不再渲染，避免撑爆空态） -->
       <div v-if="isDiagnosis && filterOpen" class="diagnosis-panel">
         <div class="diagnosis-catalog">
           <div class="catalog-row">
             <span class="catalog-label">品牌</span>
-            <div class="catalog-chips">
-              <button
+            <el-select
+              v-model="selectedBrand"
+              size="small"
+              placeholder="选择品牌"
+              filterable
+              clearable
+              class="catalog-select"
+              @change="onBrandChange($event as string)"
+            >
+              <el-option
                 v-for="b in brands"
                 :key="b.value"
-                class="quick-option-chip"
-                :class="{ active: selectedBrand === b.value }"
-                @click="onBrandChange(b.value)"
-              >{{ b.label }}</button>
-              <span v-if="catalogLoading" class="catalog-loading">加载中...</span>
-            </div>
+                :value="b.value"
+                :label="b.label"
+              />
+            </el-select>
+            <span v-if="catalogLoading" class="catalog-loading">加载中...</span>
           </div>
           <div v-if="selectedBrand && selectedBrand !== 'all'" class="catalog-row">
             <span class="catalog-label">车型</span>
-            <div class="catalog-chips">
-              <button
+            <el-select
+              v-model="selectedModel"
+              size="small"
+              placeholder="选择车型"
+              filterable
+              clearable
+              class="catalog-select"
+              @change="onModelChange"
+            >
+              <el-option
                 v-for="m in models"
                 :key="m"
-                class="quick-option-chip"
-                :class="{ active: selectedModel === m }"
-                @click="toggleModel(m)"
-              >{{ m }}</button>
-            </div>
+                :value="m"
+                :label="m"
+              />
+            </el-select>
           </div>
           <div class="catalog-row" v-if="selectedBrand || faultTotal">
             <span class="catalog-label">故障码</span>
@@ -121,21 +129,8 @@
       />
     </template>
 
-    <!-- 输入区差异内容：当轮来源面板与图片队列（叠放非互斥，见内层注释） -->
+    <!-- 输入区差异内容：图片待发队列（诊断来源只在回答下方逐轮展示，不在输入框上方残留） -->
     <template #input-above>
-      <!-- 当轮来源面板（SSE sources 事件内存态；落库后由逐轮回放接管） -->
-      <!-- 与图片队列叠放（非互斥）：诊断页上传图后不断流也能看到待发送队列 -->
-      <div v-if="isDiagnosis && store.lastSources.length" class="mb-2 flex flex-col gap-2.5">
-        <SourcesFoldHeader
-          title="资料来源（可从资料链接跳转原文）"
-          :count="store.lastSources.length"
-          :open="sourcesOpen"
-          @toggle="sourcesOpen = !sourcesOpen"
-        />
-        <template v-if="sourcesOpen">
-          <DiagnosisSources :sources="store.lastSources" embedded />
-        </template>
-      </div>
       <div v-if="pendingImages.length" class="pending-images">
         <div v-for="(p, i) in pendingImages" :key="p.url" class="pending-image-item">
           <img :src="p.previewUrl" class="pending-image-thumb" alt="待发送图片" />
@@ -167,7 +162,7 @@
 <script setup lang="ts">
 // 专项功能聊天页（#398）：壳（顶栏/侧栏/消息/输入/滚底）收敛进 ChatPageShell，
 // 本页仅保留快捷选项、图片队列等功能差异；助手内容随壳统一 markstream escape 安全渲染。
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { UploadFile } from 'element-plus'
@@ -177,7 +172,6 @@ import { useAIAssistantStore } from '@/stores/aiAssistant'
 import { getAIFeatureByRoute } from '@/config/aiFeatures'
 import { aiAssistantApi, type DiagnosisBrandOption, type DiagnosisFaultCodeItem } from '@/api/aiAssistant'
 import DiagnosisSources from '@/components/ai-assistant/DiagnosisSources.vue'
-import SourcesFoldHeader from '@/components/ai-assistant/SourcesFoldHeader.vue'
 import UiCapsule from '@/components/ai-assistant/UiCapsule.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 
@@ -212,16 +206,6 @@ const filterSummary = computed(() => {
   if (selectedModel.value) parts.push(selectedModel.value)
   return parts.join(' / ')
 })
-const diagnosisQuickAsks = [
-  '叉车无法行驶且仪表报警，怎么排查？',
-  '故障码 E102 是什么意思？',
-  '货叉提升缓慢且伴随异响，可能是什么原因？'
-]
-
-function quickAsk(question: string) {
-  inputText.value = question
-  handleSend()
-}
 
 // ===== 智能维修诊断：品牌/车型联动（/diagnosis/brands|models 动态数据源）=====
 const brands = ref<DiagnosisBrandOption[]>([])
@@ -253,8 +237,9 @@ async function onBrandChange(brand: string) {
   }
 }
 
-function toggleModel(model: string) {
-  selectedModel.value = selectedModel.value === model ? '' : model
+function onModelChange() {
+  // 车型是最后一级筛选：选中即收起面板，输入框回到可点状态
+  if (selectedModel.value) filterOpen.value = false
 }
 
 // ===== 智能维修诊断：故障码快捷查询（直连 fault-codes 代理，精确命中秒回）=====
@@ -288,14 +273,6 @@ function useFaultCode(item: DiagnosisFaultCodeItem) {
   inputText.value = `故障码 ${item.fault_code}（${item.fault_name}），怎么处理？`
   handleSend()
 }
-
-// ===== 当轮来源展开态（默认折叠；新一轮开始自动收起）=====
-// 解析函数已收敛进 DiagnosisSources 组件；本页只保留展开态。
-const sourcesOpen = ref(false)
-// 新一轮开始自动收起（sourcesOpen 只描述当轮展开态，不跟随历史）
-watch(() => store.lastSources, () => {
-  sourcesOpen.value = false
-})
 
 interface PendingImage {
   url: string          // 上传成功后的服务器 URL
@@ -498,11 +475,9 @@ onMounted(() => {
   min-width: 44px;
 }
 
-.catalog-chips {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  align-items: center;
+.catalog-select {
+  flex: 1;
+  min-width: 180px;
 }
 
 .catalog-loading {

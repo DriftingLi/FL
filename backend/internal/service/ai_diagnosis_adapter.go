@@ -87,14 +87,32 @@ func (b *diagnosisSourcesBox) set(s []DiagnosisSource) {
 
 // DiagnosisSource 来源资料条目（answer_sources）：文本内嵌 <<IMAGE:/assistant/static/manual/...>>
 // 溯源标记；metadata.source_url 为 PDF 原文外链，page_start/end 为页码。
+// ID 兼容数字/字符串两态（实测结构化故障码来源吐 "fault-15" 字符串；数字仍原样透出）。
 type DiagnosisSource struct {
-	ID       int    `json:"id"`
-	Text     string `json:"text"`
+	ID       diagnosisSourceID `json:"id"`
+	Text     string            `json:"text"`
 	Metadata struct {
 		SourceURL string `json:"source_url"`
 		PageStart int    `json:"page_start"`
 		PageEnd   int    `json:"page_end"`
 	} `json:"metadata"`
+}
+
+// diagnosisSourceID 来源 ID：数字与字符串两态（与 diagnosisCode 同形问题的同族修复）。
+type diagnosisSourceID string
+
+func (id *diagnosisSourceID) UnmarshalJSON(raw []byte) error {
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		*id = diagnosisSourceID(s)
+		return nil
+	}
+	var n json.Number
+	if err := json.Unmarshal(raw, &n); err != nil {
+		return err
+	}
+	*id = diagnosisSourceID(n.String())
+	return nil
 }
 
 // diagnosisChatRequest 助手 /chat 请求体（chat_history 为 array）。
