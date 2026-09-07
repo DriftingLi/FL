@@ -95,6 +95,26 @@ describe('WrongQuestionCard 接线契约', () => {
       expect(page).not.toContain(fn);
     }
   });
+
+  it('页面对已搬走符号零悬空使用（编译盲区锁：定义删了调用必须同步）', () => {
+    // getTypeName/isMultiChoice 允许经 import 消费（utils/wrongQuestionDisplay 共享纯函数）
+    const withoutImport = page.replace(/import \{[^}]*\} from '[^']*'/g, '');
+    expect(withoutImport).not.toMatch(/(?<![\w$.])selectedKeys\b/);
+    expect(withoutImport).not.toMatch(/(?<![\w$.])hasRedoResult\s*\(/);
+    expect(withoutImport).not.toMatch(/(?<![\w$.])getOptionClass\s*\(/);
+    expect(withoutImport).not.toMatch(/(?<![\w$.])isExpanded\s*\(/);
+    expect(withoutImport).not.toMatch(/(?<![\w$.])parseAnswerKeys\s*\(/);
+    expect(withoutImport).not.toMatch(/(?<![\w$.])redoResultLocalMatch\s*\(/);
+  });
+
+  it('展示纯函数收敛于 utils/wrongQuestionDisplay（页面与卡片 import 同一份，无第二实现）', () => {
+    const card = read('pages/profile/components/wrong-question-card.uvue');
+    expect(page).toContain("import { getTypeName, isMultiChoice } from '../../utils/wrongQuestionDisplay'");
+    expect(card).toContain("import { getTypeName, isMultiChoice } from '../../../utils/wrongQuestionDisplay'");
+    // 卡片内不得再有本地定义
+    expect(card).not.toMatch(/\n\s*function getTypeName\(/);
+    expect(card).not.toMatch(/\n\s*function isMultiChoice\(/);
+  });
 });
 
 describe('600 行软预算机检（wrong-questions 模块文件）', () => {

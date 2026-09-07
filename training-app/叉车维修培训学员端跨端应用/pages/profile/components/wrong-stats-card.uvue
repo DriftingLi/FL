@@ -21,7 +21,6 @@
 
 <script setup lang="uts">
     import { ref } from 'vue'
-    import { onShow } from '@dcloudio/uni-app'
     import { getWrongQuestionStatsApi } from '../../../api/wrongQuestion'
     import type { WrongQuestionStats } from '../../../types/index'
 
@@ -40,8 +39,6 @@
         by_knowledge_point: {} as UTSJSONObject,
     } as WrongQuestionStats)
 
-    defineExpose({ loadStats })
-
     async function loadStats() {
         try {
             const data = await getWrongQuestionStatsApi()
@@ -52,9 +49,7 @@
         }
     }
 
-    onShow(() => {
-        loadStats()
-    })
+    defineExpose({ loadStats })
 </script>
 
 <style>
