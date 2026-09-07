@@ -169,7 +169,7 @@
       </div>
     </aside>
 
-    <!-- 右侧对话区（空态：欢迎区 mb-auto 上移、输入区 mt-auto 居中；有消息：列表占满、输入框沉底） -->
+    <!-- 右侧对话区（空态：欢迎区上移、输入区 mt-auto 居中；有消息：列表占满、输入框沉底） -->
     <main class="chat-main flex min-w-0 flex-1 flex-col bg-panel" :class="isWelcome ? 'justify-center overflow-y-auto' : 'overflow-hidden'">
       <!-- 消息列表 -->
       <div
@@ -179,7 +179,7 @@
       >
         <!-- 空状态：欢迎区（图标左标题右横排；标题即一句话功能介绍，无副标题；
              欢迎区上移、输入框居中：整列 justify-center + 欢迎区 mb-auto + 输入区 mt-auto） -->
-        <div v-if="isWelcome" class="welcome-area m-auto w-full px-6 pb-4 pt-6 text-center">
+        <div v-if="isWelcome" class="welcome-area w-full px-6 pb-4 pt-10 text-center">
           <div class="welcome-head mx-auto flex max-w-[760px] items-center justify-center gap-3 text-left">
             <div class="welcome-icon inline-flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-[16px] bg-[linear-gradient(135deg,var(--color-violet-500,#6366f1),#8b5cf6)] text-white">
               <el-icon :size="28"><component :is="welcomeIcon" /></el-icon>
