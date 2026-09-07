@@ -26,7 +26,7 @@ export interface AIFeatureUIDescriptor {
 export const aiFeatureUI: Record<AIFeatureKey, AIFeatureUIDescriptor> = {
   maintenance_knowledge: {
     routePath: '/ai-assistant/maintenance',
-    welcome: '叉车维保专家为您解答保养周期、保养项目、执行标准与注意事项。',
+    welcome: '保养周期项目标准，一问即懂',
     entryDesc: '保养周期、项目与标准',
     icon: Reading,
     suggestions: [
@@ -41,7 +41,7 @@ export const aiFeatureUI: Record<AIFeatureKey, AIFeatureUIDescriptor> = {
   },
   drawing_recognition: {
     routePath: '/ai-assistant/drawing',
-    welcome: '上传叉车机械图纸、电路图或液压原理图，我将识别图中的部件、符号与参数并解读工作原理。',
+    welcome: '上传图纸即读懂部件原理',
     entryDesc: '上传图纸，识别部件与原理',
     icon: Picture,
     suggestions: [
@@ -57,7 +57,7 @@ export const aiFeatureUI: Record<AIFeatureKey, AIFeatureUIDescriptor> = {
   },
   exercise_solving: {
     routePath: '/ai-assistant/exercise',
-    welcome: '拍摄或上传叉车培训习题的照片，我将给出答案、解析与考查知识点。',
+    welcome: '上传习题即得答案解析',
     entryDesc: '上传习题照片，给出答案与解析',
     icon: EditPen,
     suggestions: [
@@ -72,7 +72,7 @@ export const aiFeatureUI: Record<AIFeatureKey, AIFeatureUIDescriptor> = {
   },
   fault_diagnosis: {
     routePath: '/ai-assistant/fault-diagnosis',
-    welcome: '描述故障现象或上传现场照片，我将基于维修手册与故障码知识库为您生成排查 SOP。',
+    welcome: '描述现象或拍照，基于手册生成排查 SOP',
     entryDesc: '基于维修手册生成排查 SOP',
     icon: FirstAidKit,
     suggestions: [
