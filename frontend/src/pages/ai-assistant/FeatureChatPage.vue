@@ -15,7 +15,7 @@
     @suggest="useSuggestion"
     @new-session="handleNewSession"
   >
-    <!-- 诊断筛选移入输入框上方工具栏胶囊（方案 B；空态随输入框居中，不再撑欢迎区） -->
+    <!-- 诊断筛选移入输入框上方工具栏（快捷问只留下方气泡，此处仅筛选胶囊） -->
     <template #input-toolbar>
       <div v-if="isDiagnosis" class="flex items-center gap-2 overflow-x-auto pb-2">
         <UiCapsule
@@ -23,40 +23,48 @@
           :active="filterOpen"
           @click="filterOpen = !filterOpen"
         />
-        <UiCapsule
-          v-for="question in diagnosisQuickAsks"
-          :key="question"
-          :label="question"
-          @click="quickAsk(question)"
-        />
       </div>
       <!-- 折叠面板本体（挂输入区上方，随输入框居中/沉底；欢迎区不再渲染，避免撑爆空态） -->
       <div v-if="isDiagnosis && filterOpen" class="diagnosis-panel">
         <div class="diagnosis-catalog">
           <div class="catalog-row">
             <span class="catalog-label">品牌</span>
-            <div class="catalog-chips">
-              <button
+            <el-select
+              v-model="selectedBrand"
+              size="small"
+              placeholder="选择品牌"
+              filterable
+              clearable
+              class="catalog-select"
+              @change="onBrandChange($event as string)"
+            >
+              <el-option
                 v-for="b in brands"
                 :key="b.value"
-                class="quick-option-chip"
-                :class="{ active: selectedBrand === b.value }"
-                @click="onBrandChange(b.value)"
-              >{{ b.label }}</button>
-              <span v-if="catalogLoading" class="catalog-loading">加载中...</span>
-            </div>
+                :value="b.value"
+                :label="b.label"
+              />
+            </el-select>
+            <span v-if="catalogLoading" class="catalog-loading">加载中...</span>
           </div>
           <div v-if="selectedBrand && selectedBrand !== 'all'" class="catalog-row">
             <span class="catalog-label">车型</span>
-            <div class="catalog-chips">
-              <button
+            <el-select
+              v-model="selectedModel"
+              size="small"
+              placeholder="选择车型"
+              filterable
+              clearable
+              class="catalog-select"
+              @change="onModelChange"
+            >
+              <el-option
                 v-for="m in models"
                 :key="m"
-                class="quick-option-chip"
-                :class="{ active: selectedModel === m }"
-                @click="toggleModel(m)"
-              >{{ m }}</button>
-            </div>
+                :value="m"
+                :label="m"
+              />
+            </el-select>
           </div>
           <div class="catalog-row" v-if="selectedBrand || faultTotal">
             <span class="catalog-label">故障码</span>
@@ -212,16 +220,6 @@ const filterSummary = computed(() => {
   if (selectedModel.value) parts.push(selectedModel.value)
   return parts.join(' / ')
 })
-const diagnosisQuickAsks = [
-  '叉车无法行驶且仪表报警，怎么排查？',
-  '故障码 E102 是什么意思？',
-  '货叉提升缓慢且伴随异响，可能是什么原因？'
-]
-
-function quickAsk(question: string) {
-  inputText.value = question
-  handleSend()
-}
 
 // ===== 智能维修诊断：品牌/车型联动（/diagnosis/brands|models 动态数据源）=====
 const brands = ref<DiagnosisBrandOption[]>([])
@@ -253,8 +251,9 @@ async function onBrandChange(brand: string) {
   }
 }
 
-function toggleModel(model: string) {
-  selectedModel.value = selectedModel.value === model ? '' : model
+function onModelChange() {
+  // 车型是最后一级筛选：选中即收起面板，输入框回到可点状态
+  if (selectedModel.value) filterOpen.value = false
 }
 
 // ===== 智能维修诊断：故障码快捷查询（直连 fault-codes 代理，精确命中秒回）=====
@@ -498,11 +497,9 @@ onMounted(() => {
   min-width: 44px;
 }
 
-.catalog-chips {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  align-items: center;
+.catalog-select {
+  flex: 1;
+  min-width: 180px;
 }
 
 .catalog-loading {
