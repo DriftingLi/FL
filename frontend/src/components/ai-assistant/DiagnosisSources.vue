@@ -59,18 +59,20 @@ withDefaults(
 
 const open = ref(false)
 
+const ASSISTANT_STATIC_PREFIX_RE = /^\/?assistant\/static\//
+
+// lxc101 取证：IMAGE 标记为 /assistant/static/manual/… 绝对路径，strip 后再进后端代理。
 function stripAssistantPrefix(path: string): string {
-  return path.replace(/^\/assistant\/static\//, '').replace(/^assistant\/static\//, '')
+  return path.replace(ASSISTANT_STATIC_PREFIX_RE, '')
 }
 
-const IMAGE_MARKER_RE = /<<IMAGE:([^>]+)>>/g
-const IMAGE_STRIP_RE = /<<IMAGE:[^>]+>>/g
+const IMAGE_RE = /<<IMAGE:([^>]+)>>/g
 
 function sourceImages(text: string): string[] {
   const out: string[] = []
-  IMAGE_MARKER_RE.lastIndex = 0
+  IMAGE_RE.lastIndex = 0
   let m: RegExpExecArray | null
-  while ((m = IMAGE_MARKER_RE.exec(text))) {
+  while ((m = IMAGE_RE.exec(text))) {
     const path = stripAssistantPrefix(m[1].trim())
     if (path) out.push(path)
   }
@@ -78,6 +80,7 @@ function sourceImages(text: string): string[] {
 }
 
 function stripImageMarkers(text: string): string {
-  return text.replace(IMAGE_STRIP_RE, '').trim()
+  IMAGE_RE.lastIndex = 0
+  return text.replace(IMAGE_RE, '').trim()
 }
 </script>

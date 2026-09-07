@@ -172,6 +172,8 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     if (!isLoggedIn.value) throw new Error('请先登录后查看会话历史')
     const previousId = currentSessionId.value
     const previousMessages = messages.value
+    const previousUsage = lastUsage.value
+    const previousSources = lastSources.value
     currentSessionId.value = id
     // 切换会话即离开「当轮」上下文，上一轮脚注/来源随之失效
     lastUsage.value = null
@@ -180,9 +182,11 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     try {
       messages.value = await aiAssistantApi.getSessionMessages(id)
     } catch (e: any) {
-      // 失败回滚选中态与消息体：侧栏高亮与正文都回到切换前
+      // 失败回滚选中态/消息体/当轮态：侧栏高亮、正文与脚注都回到切换前
       currentSessionId.value = previousId
       messages.value = previousMessages
+      lastUsage.value = previousUsage
+      lastSources.value = previousSources
       throw new Error(e?.message || '加载会话消息失败，请重试')
     } finally {
       messagesLoading.value = false
@@ -328,17 +332,22 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     return aiAssistantApi.uploadImage(file)
   }
 
-  // ===== 初始化（通用 AI 助手页）=====
-  // 从功能页返回时重置功能上下文（T6：切回主界面全清并重拉，回欢迎态）
-  async function init() {
-    featureKey.value = 'ai_assistant'
-    sessionsSeq++ // 断开子界面上下文：作废在飞请求，清空消息/选中/当轮态
+  // ===== 功能上下文切换：作废在飞列表请求 + 清空会话/当轮态（init/initFeature 共用）=====
+  function resetSessionContext() {
+    sessionsSeq++
     sessions.value = []
     messages.value = []
     currentSessionId.value = null
     streamingContent.value = ''
     lastUsage.value = null
     lastSources.value = []
+  }
+
+  // ===== 初始化（通用 AI 助手页）=====
+  // 从功能页返回时重置功能上下文（T6：切回主界面全清并重拉，回欢迎态）
+  async function init() {
+    featureKey.value = 'ai_assistant'
+    resetSessionContext() // 断开子界面上下文
     await loadAssistantModes()
     if (isLoggedIn.value) {
       await loadSessions()
@@ -350,12 +359,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
   async function initFeature(key: string) {
     if (featureKey.value === key && sessions.value.length > 0) return
     featureKey.value = key
-    sessionsSeq++ // 作废旧功能上下文在飞的列表请求
-    sessions.value = []
-    messages.value = []
-    currentSessionId.value = null
-    lastUsage.value = null
-    lastSources.value = []
+    resetSessionContext() // 作废旧功能上下文在飞的列表请求
     if (isLoggedIn.value) {
       await loadSessions()
     }
