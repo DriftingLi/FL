@@ -206,6 +206,8 @@ services:
       REDIS_KEY_PREFIX: "${REDIS_KEY_PREFIX:-fl:}"
       # LibreOffice sidecar HTTP 地址(容器内服务名 + 端口)
       LIBREOFFICE_SIDECAR_URL: http://libreoffice:8000
+      # 外部诊断 RAG 助手（fault_diagnosis 功能）：pve-01 lxc101 上的 forklift-assistant 交付包
+      DIAGNOSIS_ASSISTANT_URL: ${DIAGNOSIS_ASSISTANT_URL:-http://172.17.1.23:8000}
       # 文件存储：local=本地磁盘 / r2=S3 兼容对象存储（Cloudflare R2 或自建 RGW）
       # r2 模式下上传文件、PDF 报告、PPT 转图片均存到 bucket，本地 /data/uploads 与 /data/reports 仅用于 fallback
       STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
@@ -293,11 +295,6 @@ services:
       # SSL 证书：CD 流水线（write_ssl_certs）写入 ${DEPLOY_PATH}/nginx/ssl，
       # 挂载到容器 /etc/nginx/ssl（nginx-host.conf 引用固定路径）
       - ${SSL_CERT_DIR:-./nginx/ssl}:/etc/nginx/ssl:ro
-      # AI 智能维修助手前端静态包（交付包 assistant-dist，运维解压至
-      # ${DEPLOY_PATH}/nginx/assistant-dist；缺失时目录为空、子域 404，不影响其他站点）
-      - ./nginx/assistant-dist:/usr/share/nginx/assistant:ro
-      # 上述子域运维接口（docs/kb/fault-codes）的 Basic Auth 凭据（运维维护）
-      - ./nginx/.htpasswd-assistant:/etc/nginx/.htpasswd-assistant:ro
     deploy:
       resources:
         limits:

@@ -25,7 +25,10 @@
           @click="router.push(f.routePath)"
         >
           <el-icon :size="20" class="feature-entry-icon"><component :is="f.icon" /></el-icon>
-          <span class="feature-entry-title">{{ f.title }}</span>
+          <span class="feature-entry-title">
+            {{ f.title }}
+            <i v-if="f.freePreview" class="free-preview-badge">限免</i>
+          </span>
           <span class="feature-entry-desc">{{ f.entryDesc }}</span>
         </div>
       </div>
@@ -161,6 +164,20 @@ onMounted(() => {
   font-size: 13px;
   font-weight: 600;
   color: var(--color-text-primary);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.free-preview-badge {
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--color-success);
+  border-radius: 999px;
+  padding: 1px 6px;
+  line-height: 1.4;
 }
 
 .feature-entry-desc {

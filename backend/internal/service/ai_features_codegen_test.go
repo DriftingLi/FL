@@ -12,11 +12,11 @@ import (
 )
 
 // sampleRegistry 注册表样例（非真实注册表）：覆盖收录规则四态——
-// admin-single∧billed 进生成面（声明序保留）；免费阻塞行、双模式行、遗留兼容位被过滤。
+// admin-single∧billed 进生成面（声明序保留，freePreview 位透出）；免费阻塞行、双模式行、遗留兼容位被过滤。
 func sampleRegistry() []AIFeatureExport {
 	return []AIFeatureExport{
 		{Name: "grade_short_answer", Label: "简答题 AI 评分", BindingKind: string(bindingAdminSingle), Billed: false},
-		{Name: "fault_consult", Label: "故障咨询", BindingKind: string(bindingAdminSingle), Billed: true},
+		{Name: "fault_consult", Label: "故障咨询", BindingKind: string(bindingAdminSingle), Billed: true, FreePreview: true},
 		{Name: "ai_assistant_normal", Label: "AI 助手 · 普通模式", BindingKind: string(bindingAssistantMode), Billed: true},
 		{Name: "maintenance_knowledge", Label: "维保知识", BindingKind: string(bindingAdminSingle), Billed: true},
 		{Name: "ai_assistant", Label: "AI 助手对话", BindingKind: string(bindingAssistantLegacy), Billed: true},
@@ -47,11 +47,11 @@ export type AIFeatureKey =
   | 'maintenance_knowledge'
   | 'exercise_solving'
 
-// 注册表派生对：[功能键, 展示名]（展示名即后端 FeatureLabel）。
-const AI_FEATURE_REGISTRY: ReadonlyArray<readonly [AIFeatureKey, string]> = [
-  ['fault_consult', '故障咨询'],
-  ['maintenance_knowledge', '维保知识'],
-  ['exercise_solving', '习题解答'],
+// 注册表派生对：[功能键, 展示名, 是否限免]（展示名即后端 FeatureLabel；限免位供前端角标）。
+const AI_FEATURE_REGISTRY: ReadonlyArray<readonly [AIFeatureKey, string, boolean]> = [
+  ['fault_consult', '故障咨询', true],
+  ['maintenance_knowledge', '维保知识', false],
+  ['exercise_solving', '习题解答', false],
 ]
 
 export interface AIFeatureQuickOption {
@@ -71,11 +71,14 @@ export interface AIFeatureConfig {
   quickOptions?: AIFeatureQuickOption[]
   supportsImage?: boolean
   maxImages?: number
+  /** 限免声明位（注册表派生）：true 时展示「限免」角标，前端据此提示不扣积分 */
+  freePreview?: boolean
 }
 
-export const AI_FEATURES: AIFeatureConfig[] = AI_FEATURE_REGISTRY.map(([key, title]) => ({
+export const AI_FEATURES: AIFeatureConfig[] = AI_FEATURE_REGISTRY.map(([key, title, freePreview]) => ({
   key,
   title,
+  freePreview,
   ...aiFeatureUI[key]
 }))
 

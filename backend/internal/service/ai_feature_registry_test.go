@@ -20,11 +20,10 @@ func TestAIFeatureRegistry_DerivedSurfaces(t *testing.T) {
 		FeatureAIAssistantNormal,
 		FeatureAIAssistantExpert,
 		FeatureQuestionExplanation,
-		FeatureFaultConsult,
-		FeatureFaultCodeQuery,
 		FeatureMaintenanceKnowledge,
 		FeatureDrawingRecognition,
 		FeatureExerciseSolving,
+		FeatureFaultDiagnosis,
 	}
 	if !reflect.DeepEqual(AllAIFeatures, wantAll) {
 		t.Fatalf("AllAIFeatures 派生不符（含展示顺序）:\n got=%v\nwant=%v", AllAIFeatures, wantAll)
@@ -36,11 +35,10 @@ func TestAIFeatureRegistry_DerivedSurfaces(t *testing.T) {
 		FeatureAIAssistantNormal:      "AI 助手 · 普通模式",
 		FeatureAIAssistantExpert:      "AI 助手 · 专家模式",
 		FeatureQuestionExplanation:    "题目 AI 解析",
-		FeatureFaultConsult:           "故障咨询",
-		FeatureFaultCodeQuery:         "故障代码查询",
 		FeatureMaintenanceKnowledge:   "维保知识",
 		FeatureDrawingRecognition:     "图纸识别",
 		FeatureExerciseSolving:        "习题解答",
+		FeatureFaultDiagnosis:         "智能维修诊断",
 		FeatureAIAssistant:            "AI 助手对话", // 遗留兼容
 	}
 	if !reflect.DeepEqual(FeatureLabel, wantLabel) {
@@ -48,11 +46,10 @@ func TestAIFeatureRegistry_DerivedSurfaces(t *testing.T) {
 	}
 
 	wantChatKeys := map[string]bool{
-		FeatureFaultConsult:         true,
-		FeatureFaultCodeQuery:       true,
 		FeatureMaintenanceKnowledge: true,
 		FeatureDrawingRecognition:   true,
 		FeatureExerciseSolving:      true,
+		FeatureFaultDiagnosis:       true,
 	}
 	if !reflect.DeepEqual(featureChatKeys, wantChatKeys) {
 		t.Fatalf("featureChatKeys 派生不符: got=%v want=%v", featureChatKeys, wantChatKeys)
@@ -60,11 +57,10 @@ func TestAIFeatureRegistry_DerivedSurfaces(t *testing.T) {
 
 	// 专项聊天功能：注册行提示词 = 原多臂 switch 各臂
 	wantPrompt := map[string]string{
-		FeatureFaultConsult:         faultConsultSystemPrompt,
-		FeatureFaultCodeQuery:       faultCodeQuerySystemPrompt,
 		FeatureMaintenanceKnowledge: maintenanceKnowledgeSystemPrompt,
 		FeatureDrawingRecognition:   drawingRecognitionSystemPrompt,
 		FeatureExerciseSolving:      exerciseSolvingSystemPrompt,
+		FeatureFaultDiagnosis:       diagnosisSystemPrompt,
 		// 阻塞消费功能（评分/章节/解析）的提示词收编进注册表后同面可得
 		FeatureGradeShortAnswer:       gradingSystemPrompt,
 		FeatureGenerateChapterContent: chapterContentSystemPrompt,

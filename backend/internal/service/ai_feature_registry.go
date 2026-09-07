@@ -14,11 +14,10 @@ const (
 	FeatureAIAssistantNormal      = "ai_assistant_normal"
 	FeatureAIAssistantExpert      = "ai_assistant_expert"
 	FeatureQuestionExplanation    = "ai_question_analysis"
-	FeatureFaultConsult           = "fault_consult"
-	FeatureFaultCodeQuery         = "fault_code_query"
 	FeatureMaintenanceKnowledge   = "maintenance_knowledge"
 	FeatureDrawingRecognition     = "drawing_recognition"
 	FeatureExerciseSolving        = "exercise_solving"
+	FeatureFaultDiagnosis         = "fault_diagnosis"
 )
 
 // forkliftExpertSystemPrompt 叉车维修专家系统提示词（通用助手与未注册功能的兜底提示词）。
@@ -37,31 +36,6 @@ const forkliftExpertSystemPrompt = `你是一名资深的叉车维修专家，�
 3. 复杂故障按"可能原因 → 排查步骤 → 处理方法"结构回答
 4. 不确定时坦诚告知，不编造数据
 5. 涉及维修必须由专业人员执行的，明确提示联系专业维修人员`
-
-// faultConsultSystemPrompt 故障咨询系统提示词。
-const faultConsultSystemPrompt = `你是一名资深的叉车故障诊断专家，拥有 20 年以上一线维修经验。
-你熟悉林德、丰田、杭叉、合力、永恒力、TCM 等主流品牌叉车的常见故障模式。
-
-回答要求：
-1. 用中文回答，专业、实用、可操作
-2. 按"可能原因 → 排查步骤 → 处理方法"的结构组织回答
-3. 按可能性从高到低排列原因，说明判断依据
-4. 排查步骤具体到工具、测量位置、判断标准
-5. 涉及安全的操作（制动、液压、电气高压部件）必须明确警示
-6. 需要专业设备或资质的维修，明确提示联系专业维修人员
-7. 信息不足时先列出需要确认的关键信息，再给出初步判断
-8. 不确定时坦诚告知，不编造数据`
-
-// faultCodeQuerySystemPrompt 故障代码查询系统提示词。
-const faultCodeQuerySystemPrompt = `你是一名叉车故障代码专家，精通国内外主流品牌（林德、丰田、杭叉、合力、永恒力、TCM 等）叉车自诊断系统的故障代码体系。
-
-回答要求：
-1. 用中文回答，按"代码含义 → 严重程度 → 可能原因 → 处理建议"结构组织
-2. 严重程度分为：紧急（立即停机）、重要（尽快处理）、一般（可短时继续作业）
-3. 不同品牌的代码编号可能相同但含义不同；用户未提供品牌时，先询问品牌与车型，同时给出常见品牌下的典型含义参考
-4. 处理建议具体到操作步骤与所需工具
-5. 明确提示：最终诊断应以对应品牌官方维修手册为准
-6. 不确定时坦诚告知，不编造代码含义`
 
 // maintenanceKnowledgeSystemPrompt 维保知识系统提示词。
 const maintenanceKnowledgeSystemPrompt = `你是一名叉车维保专家，熟悉各品牌电动叉车、内燃叉车的保养体系与行业标准。
@@ -117,6 +91,13 @@ const chapterContentSystemPrompt = `你是一名叉车维修培训内容编写�
 // questionExplainSystemPrompt 题目 AI 解析系统提示词。
 const questionExplainSystemPrompt = `你是一名叉车维修培训专家，请为以下题目生成详细解析。要求：1. 说明考点（关联知识点）；2. 解释正确选项的原因；3. 说明错误选项为何错误；4. 语言简洁专业，200-400字；5. 直接返回解析文本，不要加额外格式。`
 
+// diagnosisSystemPrompt 智能维修诊断系统提示词。
+// 注：本功能由外部诊断 RAG 助手（forklift-assistant）消费，streamChat 组装的首条 system
+// 消息会被 diagnosis adapter 转译时忽略——此处声明仅为注册表卫生（丢弃仍走通用兜底的
+// 显式声明位），真实行为（提示词/知识库）在外部服务内，不经本站。
+const diagnosisSystemPrompt = `你是一名叉车维修诊断专家：基于维修手册与故障码知识库生成标准排查作业指导书（SOP），
+回答须包含可能原因、排查步骤、处理方法与安全警示。`
+
 // aiBindingKind 功能绑定形态（消费面如何取到模型配置；解析阶梯本身在 AIConfigResolver，不在注册表）。
 type aiBindingKind string
 
@@ -137,23 +118,23 @@ type aiFeature struct {
 	systemPrompt string        // 系统提示词；对话消费必填，未声明时走通用兜底
 	bindingKind  aiBindingKind // 绑定形态
 	billed       bool          // 计费声明位（闸门接线见 #619）：助手对话（双模式/遗留/专项聊天）true，阻塞消费 false
+	freePreview  bool          // 限免声明位（#计划 fault_diagnosis）：true 时闸门按免费放行（专用在位），false 计费
 }
 
 // aiFeatureRegistry AI 功能注册表（唯一事实源，ADR-0030 决策 1）。
 // 行序 = 绑定列表展示序；遗留兼容位列于末尾、不进展示列表。
 var aiFeatureRegistry = []aiFeature{
-	{FeatureGradeShortAnswer, "简答题 AI 评分", gradingSystemPrompt, bindingAdminSingle, false},
-	{FeatureGenerateChapterContent, "课程内容生成", chapterContentSystemPrompt, bindingAdminSingle, false},
-	{FeatureAIAssistantNormal, "AI 助手 · 普通模式", forkliftExpertSystemPrompt, bindingAssistantMode, true},
-	{FeatureAIAssistantExpert, "AI 助手 · 专家模式", forkliftExpertSystemPrompt, bindingAssistantMode, true},
-	{FeatureQuestionExplanation, "题目 AI 解析", questionExplainSystemPrompt, bindingAdminSingle, false},
-	{FeatureFaultConsult, "故障咨询", faultConsultSystemPrompt, bindingAdminSingle, true},
-	{FeatureFaultCodeQuery, "故障代码查询", faultCodeQuerySystemPrompt, bindingAdminSingle, true},
-	{FeatureMaintenanceKnowledge, "维保知识", maintenanceKnowledgeSystemPrompt, bindingAdminSingle, true},
-	{FeatureDrawingRecognition, "图纸识别", drawingRecognitionSystemPrompt, bindingAdminSingle, true},
-	{FeatureExerciseSolving, "习题解答", exerciseSolvingSystemPrompt, bindingAdminSingle, true},
+	{FeatureGradeShortAnswer, "简答题 AI 评分", gradingSystemPrompt, bindingAdminSingle, false, false},
+	{FeatureGenerateChapterContent, "课程内容生成", chapterContentSystemPrompt, bindingAdminSingle, false, false},
+	{FeatureAIAssistantNormal, "AI 助手 · 普通模式", forkliftExpertSystemPrompt, bindingAssistantMode, true, false},
+	{FeatureAIAssistantExpert, "AI 助手 · 专家模式", forkliftExpertSystemPrompt, bindingAssistantMode, true, false},
+	{FeatureQuestionExplanation, "题目 AI 解析", questionExplainSystemPrompt, bindingAdminSingle, false, false},
+	{FeatureMaintenanceKnowledge, "维保知识", maintenanceKnowledgeSystemPrompt, bindingAdminSingle, true, false},
+	{FeatureDrawingRecognition, "图纸识别", drawingRecognitionSystemPrompt, bindingAdminSingle, true, false},
+	{FeatureExerciseSolving, "习题解答", exerciseSolvingSystemPrompt, bindingAdminSingle, true, false},
+	{FeatureFaultDiagnosis, "智能维修诊断", diagnosisSystemPrompt, bindingAdminSingle, true, true},
 	// 遗留兼容：ai_assistant 多绑定回退位（仅解析存量绑定，不供新绑定）
-	{FeatureAIAssistant, "AI 助手对话", forkliftExpertSystemPrompt, bindingAssistantLegacy, true},
+	{FeatureAIAssistant, "AI 助手对话", forkliftExpertSystemPrompt, bindingAssistantLegacy, true, false},
 }
 
 // lookupAIFeature 注册表按功能键查找。
@@ -207,7 +188,8 @@ func deriveFeatureChatKeys(reg []aiFeature) map[string]bool {
 }
 
 // aiFeatureChatBilled 对话计费声明单点（闸门 Stream 流向唯一查询入口，ADR-0031 决策 2）：
-// 对话形态注册行返回其 billed 声明；非对话形态行、未注册键与空键回退 true——空键/未知键/
+// 对话形态注册行返回其 billed 声明（限免声明位 freePreview=true 时按免费放行，闸门跟随——
+// 结束限免 = 翻声明位 + 再生成）；非对话形态行、未注册键与空键回退 true——空键/未知键/
 // billed=false 的阻塞功能键经 ResolveChatSettings 解析阶梯（专项单绑定 → 双模式 → 旧来源）
 // 最终都落为通用对话，按通用对话计费（CONTEXT.md「AI 计费」：仅助手对话计费），防止借免费
 // 功能键逃费。对话形态 = 双模式绑定 / 遗留兼容位 / 专项聊天（aiFeatureIsChat），与解析阶梯的
@@ -216,7 +198,7 @@ func deriveFeatureChatKeys(reg []aiFeature) map[string]bool {
 func aiFeatureChatBilled(featureKey string) bool {
 	f, ok := lookupAIFeature(aiFeatureRegistry, featureKey)
 	if ok && (f.bindingKind == bindingAssistantMode || f.bindingKind == bindingAssistantLegacy || aiFeatureIsChat(f.bindingKind, f.billed)) {
-		return f.billed
+		return f.billed && !f.freePreview
 	}
 	return true
 }

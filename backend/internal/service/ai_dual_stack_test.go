@@ -196,7 +196,7 @@ func TestAIModelPortSharedConfigFromBinding(t *testing.T) {
 	if err := cfgSvc.SetBinding(ctx, FeatureGradeShortAnswer, cfgs[0].ID); err != nil {
 		t.Fatalf("SetBinding(评分) 失败: %v", err)
 	}
-	if err := cfgSvc.SetBinding(ctx, FeatureFaultConsult, cfgs[0].ID); err != nil {
+	if err := cfgSvc.SetBinding(ctx, FeatureMaintenanceKnowledge, cfgs[0].ID); err != nil {
 		t.Fatalf("SetBinding(故障咨询) 失败: %v", err)
 	}
 
@@ -218,7 +218,7 @@ func TestAIModelPortSharedConfigFromBinding(t *testing.T) {
 
 	// 流式：同一配置解析 → Stream → 分片回调 + 累积结果
 	var gotChunks []string
-	gotStream, _, err := adapter.Stream(ctx, AIModelSelector{FeatureKey: FeatureFaultConsult},
+	gotStream, _, err := adapter.Stream(ctx, AIModelSelector{FeatureKey: FeatureMaintenanceKnowledge},
 		[]*schema.Message{schema.UserMessage("叉车液压异常")},
 		func(c string) { gotChunks = append(gotChunks, c) })
 	if err != nil || gotStream != full {
@@ -503,7 +503,7 @@ func TestAIConfigResolverBranchesViaPort(t *testing.T) {
 	}
 
 	// 专项功能未绑定应报错（防绕过：custom 字段不得兜底；文案逐字保留）
-	if _, _, err := adapter.Stream(ctx, AIModelSelector{FeatureKey: FeatureFaultConsult, ModelSource: "custom", CustomAPIKey: "sk-bypass"}, nil, nil); err == nil || err.Error() != "管理员未配置该功能的模型，请联系管理员" {
+	if _, _, err := adapter.Stream(ctx, AIModelSelector{FeatureKey: FeatureMaintenanceKnowledge, ModelSource: "custom", CustomAPIKey: "sk-bypass"}, nil, nil); err == nil || err.Error() != "管理员未配置该功能的模型，请联系管理员" {
 		t.Errorf("专项功能未绑定应报原文案: %v", err)
 	}
 

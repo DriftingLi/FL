@@ -98,11 +98,11 @@ func TestResolveAssistantLadderThreeTiers(t *testing.T) {
 
 	// ① 专项单绑定：FeatureKey 单绑定优先，忽略请求模型来源字段（防绕过）
 	faultID := mkConfig("fault-bind")
-	if err := cfgSvc.SetBinding(ctx, FeatureFaultConsult, faultID); err != nil {
+	if err := cfgSvc.SetBinding(ctx, FeatureMaintenanceKnowledge, faultID); err != nil {
 		t.Fatalf("SetBinding(fault) 失败: %v", err)
 	}
 	mc, err = cfgSvc.ResolveChatSettings(ctx, AIModelSelector{
-		FeatureKey: FeatureFaultConsult, ModelSource: "custom",
+		FeatureKey: FeatureMaintenanceKnowledge, ModelSource: "custom",
 		CustomAPIKey: "sk-bypass", CustomBaseURL: "https://evil.example.com", CustomModel: "evil",
 	})
 	if err != nil || !strings.Contains(mc.APIKey, "fault-bind") {
@@ -218,7 +218,7 @@ func TestStreamingPortInjectedEndToEnd(t *testing.T) {
 	fake := &fakeAIModelPort{content: "模拟回复"}
 	assistant.port = fake
 
-	session, err := assistant.CreateSession(ctx, 7, "已命名会话", "", FeatureFaultConsult)
+	session, err := assistant.CreateSession(ctx, 7, "已命名会话", "", FeatureMaintenanceKnowledge)
 	if err != nil {
 		t.Fatalf("CreateSession 失败: %v", err)
 	}

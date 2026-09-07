@@ -473,6 +473,8 @@ func (h *AIAssistantHandler) StreamChat(c *gin.Context) {
 	if requestID := c.GetString(string(middleware.CtxRequestID)); requestID != "" {
 		ctx = service.WithAIRequestID(ctx, requestID)
 	}
+	// 诊断来源容器初始化（fault_diagnosis 响应 answer_sources 经此透传；其他功能恒空）
+	ctx = service.WithDiagnosisSources(ctx)
 
 	_, usage, err := h.svc.StreamChat(ctx, userID, req, func(content string) {
 		sendEvent("message", map[string]string{"content": content})
@@ -486,6 +488,10 @@ func (h *AIAssistantHandler) StreamChat(c *gin.Context) {
 		}
 		sendEvent("error", map[string]string{"message": err.Error()})
 		return
+	}
+	// 智能维修诊断来源资料（answer_sources）透传：message 事件只搬 content，来源独立事件
+	if sources := service.DiagnosisSourcesFrom(ctx); len(sources) > 0 {
+		sendEvent("sources", map[string]any{"sources": sources})
 	}
 	// usage 事件与扣费结果形状不变（移动端契约无感）：扣费失败时沿用迁移前行为——
 	// 余额不足发 error（仍发 done），其余错误静默跳过 usage 事件

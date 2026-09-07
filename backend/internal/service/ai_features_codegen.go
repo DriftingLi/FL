@@ -18,6 +18,7 @@ type AIFeatureExport struct {
 	Label       string // 展示名（与后端 FeatureLabel 同源）
 	BindingKind string // 绑定形态（string(aiBindingKind)）
 	Billed      bool   // 计费声明位
+	FreePreview bool   // 限免声明位（透出供前端限免角标）
 }
 
 // ExportAIFeatureRegistry 导出注册表快照：声明序、全行（含遗留兼容位），收录过滤由渲染方按规则做。
@@ -25,7 +26,7 @@ func ExportAIFeatureRegistry() []AIFeatureExport {
 	out := make([]AIFeatureExport, 0, len(aiFeatureRegistry))
 	for _, f := range aiFeatureRegistry {
 		out = append(out, AIFeatureExport{
-			Name: f.name, Label: f.label, BindingKind: string(f.bindingKind), Billed: f.billed,
+			Name: f.name, Label: f.label, BindingKind: string(f.bindingKind), Billed: f.billed, FreePreview: f.freePreview,
 		})
 	}
 	return out
@@ -58,8 +59,8 @@ import { aiFeatureUI } from './aiFeatureUI'
 export type AIFeatureKey =
 %s
 
-// 注册表派生对：[功能键, 展示名]（展示名即后端 FeatureLabel）。
-const AI_FEATURE_REGISTRY: ReadonlyArray<readonly [AIFeatureKey, string]> = [
+// 注册表派生对：[功能键, 展示名, 是否限免]（展示名即后端 FeatureLabel；限免位供前端角标）。
+const AI_FEATURE_REGISTRY: ReadonlyArray<readonly [AIFeatureKey, string, boolean]> = [
 %s
 ]
 
@@ -80,11 +81,14 @@ export interface AIFeatureConfig {
   quickOptions?: AIFeatureQuickOption[]
   supportsImage?: boolean
   maxImages?: number
+  /** 限免声明位（注册表派生）：true 时展示「限免」角标，前端据此提示不扣积分 */
+  freePreview?: boolean
 }
 
-export const AI_FEATURES: AIFeatureConfig[] = AI_FEATURE_REGISTRY.map(([key, title]) => ({
+export const AI_FEATURES: AIFeatureConfig[] = AI_FEATURE_REGISTRY.map(([key, title, freePreview]) => ({
   key,
   title,
+  freePreview,
   ...aiFeatureUI[key]
 }))
 
@@ -113,7 +117,7 @@ func RenderFrontendAIFeaturesTS(rows []AIFeatureExport) (string, error) {
 		}
 		n++
 		fmt.Fprintf(&union, "  | '%s'\n", f.Name)
-		fmt.Fprintf(&pairs, "  ['%s', '%s'],\n", f.Name, tsQuote(f.Label))
+		fmt.Fprintf(&pairs, "  ['%s', '%s', %v],\n", f.Name, tsQuote(f.Label), f.FreePreview)
 	}
 	if n == 0 {
 		return "", errors.New("注册表筛出 0 个前端专项对话功能（admin-single ∧ billed），拒绝生成空配置")
