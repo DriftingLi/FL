@@ -74,9 +74,10 @@ export interface AIAssistantModeModels {
   expert: AdminModelOption | null
 }
 
-/** 智能维修诊断来源资料（answer_sources 条目：文本内含 <<IMAGE:...>> 溯源标记） */
+/** 智能维修诊断来源资料（answer_sources 条目：文本内含 <<IMAGE:...>> 溯源标记）。
+ *  ID 两态：结构化故障码来源吐 "fault-15" 字符串，手册来源吐数字（与后端 diagnosisSourceID 同步）。 */
 export interface DiagnosisSource {
-  id: number
+  id: number | string
   text: string
   metadata?: {
     source_url?: string

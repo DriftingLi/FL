@@ -10,19 +10,19 @@
     />
     <template v-if="embedded || open">
       <div
-        v-for="source in sources"
-        :key="source.id"
-        class="mt-2.5 line-clamp-6 rounded-[10px] border border-line bg-panel px-3 py-2.5 text-[13px] leading-[1.6] text-ink-2"
+        v-for="(source, si) in sources"
+        :key="source.id ?? si"
+        class="mt-2.5 rounded-[10px] border border-line bg-panel px-3 py-2.5 text-[13px] leading-[1.6] text-ink-2"
       >
         <img
           v-for="imagePath in sourceImages(source.text)"
           :key="imagePath"
           :src="aiAssistantApi.manualUrl(imagePath)"
-          class="mb-1.5 block max-h-[220px] max-w-full rounded-ctl border border-line"
+          class="mb-1.5 block max-h-[220px] w-auto max-w-full rounded-ctl border border-line"
           alt="资料图片"
           loading="lazy"
         />
-        <div class="whitespace-pre-wrap">
+        <div class="line-clamp-6 whitespace-pre-wrap">
           {{ stripImageMarkers(source.text) }}
         </div>
         <div class="mt-1.5 flex items-center gap-3 text-xs text-ink-3">
