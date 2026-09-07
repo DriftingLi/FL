@@ -125,13 +125,13 @@
 
     <!-- 输入区差异内容：当轮来源面板（SSE sources 事件内存态；落库后由逐轮回放接管） -->
     <template #input-above>
-      <div v-if="isDiagnosis && store.lastSources.length" class="diagnosis-sources">
-        <div class="sources-head" @click="sourcesOpen = !sourcesOpen">
+      <div v-if="isDiagnosis && store.lastSources.length" class="diagnosis-sources flex flex-col gap-2.5">
+        <div class="flex cursor-pointer items-center justify-between gap-2 py-0.5 text-xs text-ink-3" @click="sourcesOpen = !sourcesOpen">
           <span>▸ 资料来源（{{ store.lastSources.length }} 条，可从资料链接跳转原文）</span>
-          <span class="sources-toggle">{{ sourcesOpen ? '收起 ▴' : '展开 ▾' }}</span>
+          <span class="whitespace-nowrap text-ui-600">{{ sourcesOpen ? '收起 ▴' : '展开 ▾' }}</span>
         </div>
         <template v-if="sourcesOpen">
-          <DiagnosisSources :sources="store.lastSources" bare />
+          <DiagnosisSources :sources="store.lastSources" embedded />
         </template>
       </div>
       <div v-else-if="pendingImages.length" class="pending-images">
@@ -576,28 +576,9 @@ onMounted(() => {
   align-self: flex-start;
 }
 
-/* ===== 智能维修诊断：当轮来源面板容器（卡片样式已收敛进 DiagnosisSources 组件） ===== */
+/* ===== 智能维修诊断：当轮来源面板容器（R1 原子类区：flex 结构走模板原子类） ===== */
 .diagnosis-sources {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
   margin-bottom: 8px;
-}
-
-.sources-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--color-text-tertiary);
-  cursor: pointer;
-  padding: 2px 0;
-}
-
-.sources-toggle {
-  color: var(--color-primary-600);
-  white-space: nowrap;
 }
 
 /* ===== 待发送图片（本页差异样式） ===== */

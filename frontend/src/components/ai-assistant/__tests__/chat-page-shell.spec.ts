@@ -117,7 +117,8 @@ describe('ChatPageShell 槽位', () => {
     expect(w.findAll('.suggestion-page').length).toBe(2)
     // 第一页可见第一条
     expect(w.find('.suggestion-page').text()).toContain('一')
-    const arrows = w.findAll('.suggestion-arrow')
+    const pager = w.find('.suggestion-pager')
+    const arrows = pager.findAll('button')
     expect(arrows.length).toBe(2)
     expect(arrows[0].attributes('disabled')).toBeDefined()
     await arrows[1].trigger('click')
@@ -136,11 +137,18 @@ describe('ChatPageShell 槽位', () => {
     expect(chatting.find('.chat-input-area').classes()).toContain('max-w-[1200px]')
   })
 
-  it('input-toolbar 槽位渲染于输入框上方（方案 B 胶囊行）', () => {
-    const w = mountShell({}, { 'input-toolbar': '<div class="toolbar-slot">胶囊</div>' })
+  it('input-toolbar 与 input-above 共存：工具栏在上、图片队列在下（图纸/习题页无挤占回归）', () => {
+    const w = mountShell({}, {
+      'input-toolbar': '<div class="toolbar-slot">胶囊</div>',
+      'input-above': '<div class="pending-slot">图片队列</div>'
+    })
     const area = w.find('.chat-input-area')
     expect(area.find('.toolbar-slot').exists()).toBe(true)
-    expect(area.html().indexOf('toolbar-slot')).toBeLessThan(area.html().indexOf('input-wrap'))
+    expect(area.find('.pending-slot').exists()).toBe(true)
+    const html = area.html()
+    expect(html.indexOf('toolbar-slot')).toBeLessThan(html.indexOf('input-wrap'))
+    // 图片队列挂输入框上方（input-above），不进消息区、不顶回答正文
+    expect(html.indexOf('pending-slot')).toBeLessThan(html.indexOf('input-wrap'))
   })
 
   it('assistant-extra 槽位透传助手消息（诊断逐轮来源回放挂载点）', () => {

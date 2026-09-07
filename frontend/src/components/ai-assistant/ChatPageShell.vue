@@ -187,14 +187,9 @@
 
           <slot name="welcome-top" />
 
-          <!-- 预设提示词：聊天气泡横向一字排开（方案 B 翻页箭头收纳；T1 允许纵向回退） -->
+          <!-- 预设提示词：聊天气泡横向一字排开（方案 B 翻页箭头收纳） -->
           <div v-if="suggestions.length" class="suggestion-pager mx-auto flex max-w-[600px] items-center gap-1.5">
-            <button
-              class="suggestion-arrow flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-pill border border-line bg-panel text-base leading-none text-ink-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:border-ui-400 hover:text-ui-600"
-              :disabled="!canPagePrev"
-              title="上一页"
-              @click="pageSuggestions(-1)"
-            >‹</button>
+            <SuggestionArrow dir="prev" :disabled="!canPagePrev" @page="pageSuggestions(-1)" />
             <div class="suggestion-view min-w-0 flex-1 overflow-hidden">
               <div
                 class="suggestion-track flex gap-2 transition-transform duration-[var(--duration-normal)] ease-[var(--ease-default)]"
@@ -217,12 +212,7 @@
                 </div>
               </div>
             </div>
-            <button
-              class="suggestion-arrow flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-pill border border-line bg-panel text-base leading-none text-ink-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:border-ui-400 hover:text-ui-600"
-              :disabled="!canPageNext"
-              title="下一页"
-              @click="pageSuggestions(1)"
-            >›</button>
+            <SuggestionArrow dir="next" :disabled="!canPageNext" @page="pageSuggestions(1)" />
           </div>
 
           <slot name="welcome-bottom" />
@@ -380,6 +370,7 @@ import 'markstream-vue/index.css'
 import { useAIAssistantStore } from '@/stores/aiAssistant'
 import { useAuthStore } from '@/stores/auth'
 import ThemeToggle from '@/components/ui/ThemeToggle.vue'
+import SuggestionArrow from '@/components/ai-assistant/SuggestionArrow.vue'
 import { authApi } from '@/api/auth'
 import { buildSubdomainUrl } from '@/utils/subdomain'
 import { formatShortDateTime } from '@/utils/format'
@@ -409,8 +400,6 @@ const props = withDefaults(
     inputPlaceholder?: string
     /** 发送按钮可用性（流式更新时由壳切换为停止按钮） */
     canSend?: boolean
-    /** 预设提示词翻页：每页条数（默认 3，横向一字排开） */
-    suggestionPageSize?: number
   }>(),
   {
     backLinkTo: '',
@@ -419,8 +408,7 @@ const props = withDefaults(
     enableRename: false,
     raisedInput: false,
     inputPlaceholder: '输入您的问题...（Enter 发送，Shift+Enter 换行）',
-    canSend: false,
-    suggestionPageSize: 3
+    canSend: false
   }
 )
 
@@ -612,12 +600,13 @@ async function handleUserCommand(cmd: string) {
 }
 
 // ===== 预设提示词翻页（方案 B：横向一字排开、箭头收纳；suggestions 变化回第一页）=====
+// 每页条数内联常量：规格即 3 条一页横向单行，无调用方需要配置。
+const SUGGESTION_PAGE_SIZE = 3
 const suggestionPage = ref(0)
 const suggestionPages = computed(() => {
-  const size = Math.max(1, props.suggestionPageSize)
   const pages: string[][] = []
-  for (let i = 0; i < props.suggestions.length; i += size) {
-    pages.push(props.suggestions.slice(i, i + size))
+  for (let i = 0; i < props.suggestions.length; i += SUGGESTION_PAGE_SIZE) {
+    pages.push(props.suggestions.slice(i, i + SUGGESTION_PAGE_SIZE))
   }
   return pages.length ? pages : [[]]
 })
@@ -654,7 +643,7 @@ watch(() => store.streamingContent, () => scrollToBottom(), { flush: 'post' })
 </script>
 
 <style scoped>
-/* R1 允许保留：:deep(EP 内部)、keyframes 与伪类禁用态。其余样式已全部原子化。
+/* R1 允许保留：:deep(EP 内部)、keyframes 与 nth-child 动画延迟。其余样式已全部原子化。
    语义类名（ai-chat-shell/topbar/session-item/welcome-area 等）全部保留在模板上，
    是 chat-page-shell.spec.ts 的 DOM 定位钩子，不得删除。 */
 
@@ -669,12 +658,6 @@ watch(() => store.streamingContent, () => scrollToBottom(), { flush: 'post' })
   box-shadow: none !important;
   font-size: 14px;
   line-height: 1.6;
-}
-
-/* 方案 B：翻页箭头禁用态（:disabled 伪类，原子类 disabled: 变体未收敛前用 scoped 兜底，走 token 思路的纯不透明度） */
-.suggestion-arrow:disabled {
-  opacity: 0.35;
-  cursor: default;
 }
 
 .loading-dot {
