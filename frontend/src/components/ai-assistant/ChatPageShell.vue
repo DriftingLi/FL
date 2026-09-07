@@ -169,13 +169,13 @@
       </div>
     </aside>
 
-    <!-- 右侧对话区 -->
-    <main class="chat-main flex min-w-0 flex-1 flex-col overflow-hidden bg-panel">
+    <!-- 右侧对话区（空态：整列居中，输入框随标题居中；有消息：列表占满、输入框沉底） -->
+    <main class="chat-main flex min-w-0 flex-1 flex-col bg-panel" :class="isWelcome ? 'justify-center overflow-y-auto' : 'overflow-hidden'">
       <!-- 消息列表 -->
       <div
         ref="messageListRef"
-        class="message-list mx-auto w-full max-w-[900px] flex-1 overflow-y-auto p-6 max-[768px]:p-4"
-        :class="isWelcome ? 'flex flex-col' : ''"
+        class="message-list mx-auto w-full p-6 max-[768px]:p-4"
+        :class="isWelcome ? 'flex max-w-[760px] flex-none flex-col overflow-visible' : 'max-w-[1200px] flex-1 overflow-y-auto'"
       >
         <!-- 空状态：欢迎区（差异内容走 welcome 槽位；m-auto 垂直居中且不裁切内容） -->
         <div v-if="isWelcome" class="welcome-area m-auto px-6 py-12 text-center">
@@ -192,11 +192,43 @@
 
           <slot name="welcome-top" />
 
-          <!-- 预设提示词（两页共用实现） -->
-          <div v-if="suggestions.length" class="suggestion-grid mx-auto grid max-w-[600px] grid-cols-2 gap-3 max-[768px]:grid-cols-1">
-            <div v-for="s in suggestions" :key="s" class="suggestion-card cursor-pointer rounded-[10px] border border-line bg-panel px-4 py-3.5 text-left text-[13px] text-ink-2 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:-translate-y-px hover:border-ui-400 hover:bg-ui-50 hover:text-ui-600 hover:shadow-[0_4px_12px_rgba(13,148,136,0.1)]" @click="emit('suggest', s)">
-              {{ s }}
+          <!-- 预设提示词：聊天气泡横向一字排开（方案 B 翻页箭头收纳；T1 允许纵向回退） -->
+          <div v-if="suggestions.length" class="suggestion-pager mx-auto flex max-w-[600px] items-center gap-1.5">
+            <button
+              class="suggestion-arrow flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-pill border border-line bg-panel text-base leading-none text-ink-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:border-ui-400 hover:text-ui-600"
+              :disabled="!canPagePrev"
+              title="上一页"
+              @click="pageSuggestions(-1)"
+            >‹</button>
+            <div class="suggestion-view min-w-0 flex-1 overflow-hidden">
+              <div
+                class="suggestion-track flex gap-2 transition-transform duration-[var(--duration-normal)] ease-[var(--ease-default)]"
+                :style="{ transform: `translateX(-${suggestionPage * 100}%)` }"
+              >
+                <div
+                  v-for="(page, pi) in suggestionPages"
+                  :key="pi"
+                  class="suggestion-page flex w-full shrink-0 gap-2"
+                  :class="suggestionWrap ? 'flex-wrap' : 'flex-nowrap overflow-hidden'"
+                >
+                  <div
+                    v-for="s in page"
+                    :key="s"
+                    class="suggestion-bubble min-w-0 flex-1 cursor-pointer truncate rounded-card border border-line bg-panel px-3.5 py-2.5 text-left text-[13px] text-ink-2 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:border-ui-400 hover:bg-ui-50 hover:text-ui-600"
+                    :title="s"
+                    @click="emit('suggest', s)"
+                  >
+                    {{ s }}
+                  </div>
+                </div>
+              </div>
             </div>
+            <button
+              class="suggestion-arrow flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-pill border border-line bg-panel text-base leading-none text-ink-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:border-ui-400 hover:text-ui-600"
+              :disabled="!canPageNext"
+              title="下一页"
+              @click="pageSuggestions(1)"
+            >›</button>
           </div>
 
           <slot name="welcome-bottom" />
@@ -269,8 +301,12 @@
         </div>
       </div>
 
-      <!-- 输入区 -->
-      <div class="chat-input-area mx-auto w-full max-w-[900px] bg-panel px-6 pb-5 pt-3 max-[768px]:px-3 max-[768px]:pb-3 max-[768px]:pt-2">
+      <!-- 输入区（空态：收进欢迎流、随标题居中；有消息：沉底 dock） -->
+      <div
+        class="chat-input-area mx-auto w-full bg-panel px-6 pb-5 pt-3 max-[768px]:px-3 max-[768px]:pb-3 max-[768px]:pt-2"
+        :class="isWelcome ? 'max-w-[760px] flex-none' : 'max-w-[1200px]'"
+      >
+        <slot name="input-toolbar" />
         <slot name="input-above" />
         <div class="input-wrap flex items-center gap-2 rounded-xl border border-line bg-panel px-3 py-2 shadow-card transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] focus-within:border-ui-400" :class="[raisedInput ? 'input-wrap--raised min-h-[132px] flex-col items-stretch p-3 gap-3' : '', !raisedInput && !!slots['input-prefix'] ? 'has-image items-end' : '']">
           <slot v-if="!raisedInput" name="input-prefix" />
@@ -370,6 +406,10 @@ const props = withDefaults(
     inputPlaceholder?: string
     /** 发送按钮可用性（流式更新时由壳切换为停止按钮） */
     canSend?: boolean
+    /** 预设提示词翻页：每页条数（默认 3，横向一字排开） */
+    suggestionPageSize?: number
+    /** 预设提示词窄屏回退：允许纵向换行（默认横向翻页） */
+    suggestionWrap?: boolean
   }>(),
   {
     backLinkTo: '',
@@ -378,7 +418,9 @@ const props = withDefaults(
     enableRename: false,
     raisedInput: false,
     inputPlaceholder: '输入您的问题...（Enter 发送，Shift+Enter 换行）',
-    canSend: false
+    canSend: false,
+    suggestionPageSize: 3,
+    suggestionWrap: false
   }
 )
 
@@ -560,6 +602,29 @@ async function handleUserCommand(cmd: string) {
   }
 }
 
+// ===== 预设提示词翻页（方案 B：横向一字排开、箭头收纳；suggestions 变化回第一页）=====
+const suggestionPage = ref(0)
+const suggestionPages = computed(() => {
+  const size = Math.max(1, props.suggestionPageSize)
+  const pages: string[][] = []
+  for (let i = 0; i < props.suggestions.length; i += size) {
+    pages.push(props.suggestions.slice(i, i + size))
+  }
+  return pages.length ? pages : [[]]
+})
+const canPagePrev = computed(() => suggestionPage.value > 0)
+const canPageNext = computed(() => suggestionPage.value < suggestionPages.value.length - 1)
+
+function pageSuggestions(dir: number) {
+  const next = suggestionPage.value + dir
+  if (next < 0 || next >= suggestionPages.value.length) return
+  suggestionPage.value = next
+}
+
+watch(() => props.suggestions, () => {
+  suggestionPage.value = 0
+})
+
 // ===== 输入与发送 =====
 function handleEnter(e: KeyboardEvent) {
   if (e.shiftKey) return
@@ -595,6 +660,12 @@ watch(() => store.streamingContent, () => scrollToBottom(), { flush: 'post' })
   box-shadow: none !important;
   font-size: 14px;
   line-height: 1.6;
+}
+
+/* 方案 B：翻页箭头禁用态（原子类 disabled: 变体未收敛前用 scoped 兜底，走 token） */
+.suggestion-arrow:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 .loading-dot {
