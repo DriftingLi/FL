@@ -131,7 +131,7 @@
         by_knowledge_point: {} as UTSJSONObject,
     } as WrongQuestionStats)
 
-    async function loadStats() : void {
+    async function loadStats() : Promise<void> {
         try {
             const data : WrongQuestionStats = await getWrongQuestionStatsApi()
             stats.value = data

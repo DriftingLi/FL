@@ -29,6 +29,7 @@
  *   O. 模板 {{ 裸函数名 }} 插值（uni-app x 不自动调用无参 function，静默渲染源码）
  *   P. 可选对象 prop 成员直读（Kotlin error18 nullable 接收者；扁平原始 props 或局部 val+判空）
  *   Q. ref<any> 类型擦除声明（Kotlin error18 any 无成员；组件实例引用需类型化）
+ *   R. async 函数返回类型声明 : void（Kotlin 无法推断 UTSPromise 类型参数，级联编译错；须 Promise<void>）
  * 存量违例走 GUARD_ALLOWLIST 豁免，由后续工单在各自范围清零（见常量注释）。
  */
 const fs = require('fs');
@@ -326,6 +327,20 @@ function scanRefAnyDeclaration(code) {
   const lines = clean.split('\n');
   for (let i = 0; i < lines.length; i++) {
     if (/\bref\s*<[^>]*\bany\b/.test(lines[i])) hits.push(lines[i].trim());
+  }
+  return hits;
+}
+
+/** R：async 函数返回类型声明 : void——UTS 编译到 Kotlin 时 async 函数须返回 Promise<T>，
+ *  写 : void 使返回类型成 UTSPromise<uninferred T>，报「Not enough information to infer
+ *  type argument for 'T'」级联三连错（HBuilderX 5.24 编译门实测，wrong-questions loadStats）。
+ *  同步函数 : void 合法不在靶内。全树 0 存量，全量执法 */
+function scanAsyncVoidReturn(code) {
+  const clean = blank(code);
+  const hits = [];
+  const lines = clean.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    if (/async\s+(?:function\s+[A-Za-z_$][\w$]*\s*)?\([^)]*\)\s*:\s*void\b/.test(lines[i])) hits.push(lines[i].trim());
   }
   return hits;
 }
@@ -745,6 +760,14 @@ describe('守护自检：检测逻辑对已知违规样本必须报出', () => {
     expect(scanRefAnyDeclaration('const stats = ref<WrongQuestionStats>(s)')).toEqual([]);
     expect(scanRefAnyDeclaration('function f(e : any | null) : void {}')).toEqual([]);
   });
+
+  it('R 能报出 async 函数声明 : void 返回类型（对照组：Promise<void> / 泛型 Promise<T> / 同步 : void 不报）', () => {
+    expect(scanAsyncVoidReturn('async function loadStats() : void { }')).toHaveLength(1);
+    expect(scanAsyncVoidReturn('const go = async (e : UTSJSONObject) : void => { }')).toHaveLength(1);
+    expect(scanAsyncVoidReturn('async function loadStats() : Promise<void> { }')).toEqual([]);
+    expect(scanAsyncVoidReturn('async function loadStats() : Promise<Stats> { }')).toEqual([]);
+    expect(scanAsyncVoidReturn('function reset() : void { }')).toEqual([]);
+  });
 });
 
 // ── 全工程真实扫描（守护本体，回归即红）────────────────────────────────
@@ -925,6 +948,14 @@ describe('全工程守护：五类 Kotlin 编译地雷零命中', () => {
     const violations = [];
     for (const u of allCodeUnits()) {
       for (const h of scanRefAnyDeclaration(u.code)) violations.push(path.relative(ROOT, u.file) + ': ' + h);
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it('R：async 函数返回类型无 : void 声明（Kotlin 推断不出 UTSPromise 类型参数，级联编译错；须 Promise<void>）', () => {
+    const violations = [];
+    for (const u of allCodeUnits()) {
+      for (const h of scanAsyncVoidReturn(u.code)) violations.push(path.relative(ROOT, u.file) + ': ' + h);
     }
     expect(violations).toEqual([]);
   });
