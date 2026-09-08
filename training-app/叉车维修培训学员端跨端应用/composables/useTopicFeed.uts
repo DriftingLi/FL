@@ -49,7 +49,7 @@ export function useTopicFeed(currentTab : Ref<string>) : UseTopicFeedResult {
         loading.value = true
         try {
             // 后端 scope 白名单仅 all|general|chapter（tab 名不可直传，会被静默当 all），
-            // category 白名单 discussion|question|experience（experience 需后端 #706 扩枚举后放行）
+            // category 白名单 discussion|question|experience（#727 已放行，生产已部署）
             // 广场只出普通帖（discussion）；问答帖（question）与经验帖（experience）各挂各 Tab
             let scope = 'general'
             let category = 'discussion'
@@ -62,11 +62,11 @@ export function useTopicFeed(currentTab : Ref<string>) : UseTopicFeedResult {
                 order = 'desc'
                 sort = qaSort.value == 'latest' ? 'latest' : 'hot'
             } else if (currentTab.value === 'experience') {
-                // 备考经验（#706）：只列经验帖；最多赞映射后端 hot，默认/最新暂同为后端时序（活跃度）
+                // 备考经验（#706）：只列经验帖；最多赞→hot，最新→created（发帖时间，#727 排序档），默认→latest（活跃度）
                 scope = 'all'
                 category = 'experience'
                 order = 'desc'
-                sort = expSort.value == 'hot' ? 'hot' : 'latest'
+                sort = expSort.value == 'hot' ? 'hot' : (expSort.value == 'latest' ? 'created' : 'latest')
             }
             const result = await getForumTopicsApi(page.value, pageSize, scope, sort, order, category)
             if (reset) {
