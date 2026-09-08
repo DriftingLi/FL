@@ -21,6 +21,33 @@
 
         <!-- 职位列表 -->
         <scroll-view class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
+            <!-- 我的简历入口（#705：招聘 tab 退场后，简历三页经此可达；收藏统计无后端支撑不做） -->
+            <view class="mine-section">
+                <view class="mine-card" @click="onResume">
+                    <image v-if="avatarUrl.length > 0" class="mine-avatar" :src="avatarUrl" mode="aspectFill" />
+                    <view v-else class="mine-avatar-placeholder">
+                        <text class="mine-avatar-icon">👷</text>
+                    </view>
+                    <view class="mine-info">
+                        <text class="mine-name">{{ displayName }}</text>
+                    </view>
+                    <view class="mine-btn">
+                        <text class="mine-btn-text">去完善</text>
+                    </view>
+                </view>
+                <view class="mine-func-row">
+                    <view class="mine-func-card" @click="onResumeEdit">
+                        <text class="mine-func-icon">📝</text>
+                        <text class="mine-func-title">在线简历</text>
+                        <text class="mine-func-hint">优化增加推荐</text>
+                    </view>
+                    <view class="mine-func-card ml-16" @click="onResumeAttach">
+                        <text class="mine-func-icon">📁</text>
+                        <text class="mine-func-title">附件简历</text>
+                        <text class="mine-func-hint">制作/上传</text>
+                    </view>
+                </view>
+            </view>
             <view v-if="jobs.length == 0 && !loading" class="empty-tip">
                 <text class="empty-icon">💼</text>
                 <text class="empty-text">暂无职位信息</text>
@@ -60,15 +87,33 @@
 </template>
 
 <script setup lang="uts">
-    import { ref } from 'vue'
+    import { ref, computed } from 'vue'
     import { onLoad } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
     import { getJobListApi } from '../../api/job'
     import { getCatalogTreeSpecialties } from '../../api/course'
+    import { useAuthStore } from '../../stores/auth'
     import type { JobPosting } from '../../api/job'
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    // ---- 我的简历入口（#705 重挂：真实登录态，不引假数据）----
+    const authStore = useAuthStore()
+    const avatarUrl = computed<string>(() : string => {
+        const u = authStore.user.value
+        if (u != null && u.avatar_url != null && u.avatar_url.length > 0) {
+            return u.avatar_url
+        }
+        return ''
+    })
+    const displayName = computed<string>(() : string => {
+        const u = authStore.user.value
+        if (u != null && u.username != null && u.username.length > 0) {
+            return u.username
+        }
+        return '学员'
+    })
 
     // ---- 筛选标签 ----
     type FilterTag = { label : string, id : number }
@@ -163,6 +208,19 @@
 
     function onJobApply(jobId : number) : void {
         uni.navigateTo({ url: '/pages/jobs/job-detail?id=' + jobId })
+    }
+
+    // ---- 简历入口导航（#705：资料卡→总览，两功能卡直跳编辑/附件）----
+    function onResume() : void {
+        uni.navigateTo({ url: '/pages/resume/resume' })
+    }
+
+    function onResumeEdit() : void {
+        uni.navigateTo({ url: '/pages/resume/resume-edit' })
+    }
+
+    function onResumeAttach() : void {
+        uni.navigateTo({ url: '/pages/resume/resume-attach' })
     }
 
     function onLoadMore() : void {
@@ -343,6 +401,97 @@
 
     .job-action-apply-text {
         color: #ffffff;
+    }
+
+    /* 我的简历入口（#705） */
+    .mine-section {
+        flex-direction: column;
+        padding: 16rpx 24rpx 0;
+    }
+
+    .mine-card {
+        flex-direction: row;
+        align-items: center;
+        background-color: #e8f3ff;
+        border-radius: 16rpx;
+        padding: 24rpx;
+    }
+
+    .mine-avatar {
+        width: 88rpx;
+        height: 88rpx;
+        border-radius: 44rpx;
+    }
+
+    .mine-avatar-placeholder {
+        width: 88rpx;
+        height: 88rpx;
+        border-radius: 44rpx;
+        background-color: #ffffff;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .mine-avatar-icon {
+        font-size: 44rpx;
+    }
+
+    .mine-info {
+        flex: 1;
+        flex-direction: column;
+        margin-left: 20rpx;
+    }
+
+    .mine-name {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #1a1a1a;
+    }
+
+    .mine-btn {
+        width: 140rpx;
+        height: 60rpx;
+        border-radius: 30rpx;
+        background-color: #2979ff;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .mine-btn-text {
+        font-size: 26rpx;
+        color: #ffffff;
+    }
+
+    .mine-func-row {
+        flex-direction: row;
+        margin-top: 16rpx;
+    }
+
+    .mine-func-card {
+        flex: 1;
+        flex-direction: column;
+        align-items: center;
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 28rpx 0;
+        border: 1rpx solid #eeeeee;
+    }
+
+    .mine-func-icon {
+        font-size: 48rpx;
+        margin-bottom: 12rpx;
+    }
+
+    .mine-func-title {
+        font-size: 28rpx;
+        font-weight: bold;
+        color: #2979ff;
+    }
+
+    .mine-func-hint {
+        font-size: 22rpx;
+        color: #999999;
+        margin-top: 8rpx;
     }
 
     /* 空状态 */
