@@ -1,0 +1,103 @@
+<template>
+  <view class="user-card">
+    <view class="user-avatar-wrap">
+      <image v-if="avatarUrl.length > 0" class="user-avatar" :src="avatarUrl" mode="aspectFill" />
+      <view v-else class="user-avatar-placeholder">
+        <text class="avatar-emoji">👤</text>
+      </view>
+    </view>
+    <view class="user-info">
+      <view class="user-name-row">
+        <text class="user-name">{{ displayName }}</text>
+        <view class="level-badge">
+          <text class="level-text">Lv{{ userLevel }}</text>
+        </view>
+      </view>
+      <text class="user-ip">IP属地：{{ ipLocation }}</text>
+    </view>
+  </view>
+</template>
+
+<script setup lang="uts">
+  // 个人动态用户信息卡（T03e #677）：纯展示，值全部来自页面 computed/ref。
+  const props = withDefaults(defineProps<{
+    avatarUrl?: string
+    displayName?: string
+    userLevel?: number
+    ipLocation?: string
+  }>(), {
+    avatarUrl: '',
+    displayName: '同学',
+    userLevel: 3,
+    ipLocation: ''
+  })
+</script>
+
+<style>
+  .user-card {
+    background-color: #e8f4fd;
+    margin: 20rpx 24rpx;
+    border-radius: 16rpx;
+    padding: 28rpx 32rpx;
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .user-avatar-wrap {
+    margin-right: 24rpx;
+  }
+
+  .user-avatar {
+    width: 96rpx;
+    height: 96rpx;
+    border-radius: 48rpx;
+  }
+
+  .user-avatar-placeholder {
+    width: 96rpx;
+    height: 96rpx;
+    border-radius: 48rpx;
+    background-color: #ffffff;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .avatar-emoji {
+    font-size: 48rpx;
+  }
+
+  .user-info {
+    flex: 1;
+    flex-direction: column;
+  }
+
+  .user-name-row {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 8rpx;
+  }
+
+  .user-name {
+    font-size: 32rpx;
+    font-weight: bold;
+    color: #333333;
+    margin-right: 12rpx;
+  }
+
+  .level-badge {
+    background-color: #ffffff;
+    border-radius: 16rpx;
+    padding: 4rpx 14rpx;
+  }
+
+  .level-text {
+    font-size: 22rpx;
+    color: #2979ff;
+    font-weight: bold;
+  }
+
+  .user-ip {
+    font-size: 24rpx;
+    color: #999999;
+  }
+</style>
