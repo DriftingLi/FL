@@ -28,9 +28,11 @@
             @field-change="onSortFieldChange" @order-change="onSortOrderChange" />
         <!-- 知识问答：发一个问题 + 筛选（问答 Tab 显示） -->
         <ForumQaHeader v-if="currentTab === 'hot'" :qa-sort="qaSort" @ask="onCreate" @sort-change="onQaSortChange" />
+        <!-- 备考经验：默认/最多赞/最新 chips（#706） -->
+        <ForumExperienceSortBar v-if="currentTab === 'experience'" :exp-sort="expSort" @sort-change="onExpSortChange" />
 
-        <!-- 广场/知识问答 Tab 内容 -->
-        <scroll-view v-if="currentTab == 'square' || currentTab == 'hot'" class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
+        <!-- 广场/知识问答/备考经验 Tab 内容 -->
+        <scroll-view v-if="currentTab == 'square' || currentTab == 'hot' || currentTab == 'experience'" class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
             <ForumCheckinCard v-if="currentTab === 'square'" :players="checkinPlayers" @click="onCheckInClick" />
             <view v-if="topics.length == 0 && !loading" class="empty-tip">
                 <text class="empty-icon"></text>
@@ -55,9 +57,6 @@
             </view>
         </scroll-view>
 
-        <!-- 招聘 Tab 内容（mock 区，退场另见 #705） -->
-        <ForumRecruitPanel v-if="currentTab === 'recruit'" />
-
         <!-- 资源 Tab 内容 -->
         <ForumResourcePanel v-if="currentTab === 'resource'" />
 
@@ -74,9 +73,9 @@
     import ForumTabBar from './components/forum-tab-bar.uvue'
     import ForumSquareSortBar from './components/forum-square-sort-bar.uvue'
     import ForumQaHeader from './components/forum-qa-header.uvue'
+    import ForumExperienceSortBar from './components/forum-experience-sort-bar.uvue'
     import ForumCheckinCard from './components/forum-checkin-card.uvue'
     import ForumTopicCard from './components/forum-topic-card.uvue'
-    import ForumRecruitPanel from './components/forum-recruit-panel.uvue'
     import ForumResourcePanel from './components/forum-resource-panel.uvue'
     import { useTopicFeed } from '../../composables/useTopicFeed'
     import { useAuthStore } from '../../stores/auth'
@@ -89,12 +88,12 @@
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     // ---- tab 态（壳层唯一持有的视图状态）----
-    const currentTab = ref<string>('square') // square | resource | recruit | hot
+    const currentTab = ref<string>('square') // square | resource | hot | experience
 
     // ---- 帖子流（列表域下沉 useTopicFeed）----
     const {
-        topics, loading, noMore, sortField, sortOrder, qaSort,
-        loadTopics, onLoadMore, onSortFieldChange, onSortOrderChange, onQaSortChange,
+        topics, loading, noMore, sortField, sortOrder, qaSort, expSort,
+        loadTopics, onLoadMore, onSortFieldChange, onSortOrderChange, onQaSortChange, onExpSortChange,
     } = useTopicFeed(currentTab)
 
     const unreadCount = ref<number>(0)
@@ -137,11 +136,7 @@
     }
 
     function onPersonalActivity() : void {
-        // 招聘 Tab：头像直达简历页；其他 Tab 保持个人动态
-        if (currentTab.value == 'recruit') {
-            uni.navigateTo({ url: '/pages/resume/resume' })
-            return
-        }
+        // 招聘 tab 已退场（#705），头像统一进个人动态；简历入口重挂留 #705 后续
         uni.navigateTo({ url: '/pages/profile/personal-activity' })
     }
 
@@ -157,10 +152,10 @@
         let scope = 'general'
         if (currentTab.value === 'resource') {
             scope = 'resource'
-        } else if (currentTab.value === 'recruit') {
-            scope = 'recruit'
         } else if (currentTab.value === 'hot') {
             scope = 'question'
+        } else if (currentTab.value === 'experience') {
+            scope = 'experience'
         }
         uni.navigateTo({ url: '/pages/forum/forum-create?scope=' + scope })
     }

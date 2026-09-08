@@ -7,11 +7,11 @@
         <view class="tab-item" :class="{ active: currentTab === 'resource' }" @click="onSwitch('resource')">
             <text class="tab-text">资源</text>
         </view>
-        <view class="tab-item" :class="{ active: currentTab === 'recruit' }" @click="onSwitch('recruit')">
-            <text class="tab-text">招聘</text>
-        </view>
         <view class="tab-item" :class="{ active: currentTab === 'hot' }" @click="onSwitch('hot')">
             <text class="tab-text">知识问答</text>
+        </view>
+        <view class="tab-item" :class="{ active: currentTab === 'experience' }" @click="onSwitch('experience')">
+            <text class="tab-text">备考经验</text>
         </view>
         <view class="tab-icon-btn" @click="onAvatarClick">
             <image v-if="avatarUrl.length > 0" class="tab-avatar" :src="avatarUrl" mode="aspectFill" />

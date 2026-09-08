@@ -234,7 +234,7 @@ export function getForumTopicsApi(page : number = 1, pageSize : number = 10, sco
         page: page.toString(),
         page_size: pageSize.toString(),
     } as UTSJSONObject
-    // 帖子类别（后端 all|discussion|question），空为不筛选
+    // 帖子类别（后端 discussion|question|experience，experience 待后端 #706 扩枚举），空为不筛选
     if (category.length > 0) {
         params['category'] = category
     }
@@ -295,7 +295,7 @@ export function uploadForumImageApi(filePath : string) : Promise<string> {
  * @param title 标题（1-100 字）
  * @param content 内容（1-10000 字）
  * @param images 图片 URL 数组（最多 9 张，先经 uploadForumImageApi 上传获取）
- * @param category 帖子类别（discussion / question）
+ * @param category 帖子类别（discussion / question / experience，experience 待后端 #706 扩枚举）
  */
 export function createForumTopicApi(title : string, content : string, images : string[] = [], category : string = 'discussion') : Promise<ForumTopic> {
     const payload : UTSJSONObject = {

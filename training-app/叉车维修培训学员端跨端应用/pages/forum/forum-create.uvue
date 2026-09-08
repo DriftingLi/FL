@@ -93,6 +93,7 @@
         { label: '广场', value: 'discussion' },
         { label: '资源', value: 'discussion' },
         { label: '知识问答', value: 'question' },
+        { label: '备考经验', value: 'experience' },
     ]
 
     // ===== 表单状态 =====
