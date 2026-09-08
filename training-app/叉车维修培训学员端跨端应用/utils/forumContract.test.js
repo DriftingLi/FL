@@ -220,6 +220,43 @@ describe('行为保持契约（手术不改跳转、交互与乐观更新语义�
   });
 });
 
+describe('api 收紧契约（forum 域经 mapper-callback 出口家族，refs #642/#639）', () => {
+  const src = read('api/forum.uts');
+
+  it('forum.uts 引入 getMapped/postMapped/requestMapped 出口，不再 import 裸 get/put', () => {
+    expect(src).toMatch(/import\s*\{[^}]*getMapped[^}]*\}\s*from\s*'\.\/request'/);
+    expect(src).toMatch(/import\s*\{[^}]*postMapped[^}]*\}\s*from\s*'\.\/request'/);
+    expect(src).toMatch(/import\s*\{[^}]*requestMapped[^}]*\}\s*from\s*'\.\/request'/);
+    expect(src).not.toMatch(/import\s*\{[^}]*\bget\b[^}]*\}\s*from\s*'\.\/request'/);
+    expect(src).not.toMatch(/import\s*\{[^}]*\bput\b[^}]*\}\s*from\s*'\.\/request'/);
+  });
+
+  it('GET 面经 getMapped 且映射函数为既有 builder（buildTopicListResult/buildTopicDetail）', () => {
+    expect(src).toContain('getMapped<ForumTopicListResult>(\'/forum/topics\'');
+    expect(src).toContain('buildTopicListResult(data)');
+    expect(src).toContain('getMapped<ForumTopicDetail>(url');
+    expect(src).toContain('buildTopicDetail(data)');
+  });
+
+  it('POST 面经 postMapped；PUT/DELETE 经 requestMapped 显式 method（保请求形态不变）', () => {
+    expect(src).toContain("postMapped<ForumReply>(url, payload");
+    expect(src).toContain("postMapped<ForumTopic>('/forum/topics'");
+    expect(src).toMatch(/method: 'PUT'/);
+    expect(src).toMatch(/method: 'DELETE'/);
+  });
+
+  it('守护规则 H 清零：forum.uts 无 catch 参数 : any 注解', () => {
+    expect(src).not.toMatch(/\.catch\(\(e : any/);
+  });
+
+  it('降级/报错语义保留：my-* 三接口 catch 空列表降级，topics/detail 失败仍抛错', () => {
+    const degrades = (src.match(/后端未实现时降级为空列表/g) || []).length;
+    expect(degrades).toBe(3);
+    expect(src).toContain("errMsg(e, '获取帖子列表失败')");
+    expect(src).toContain("errMsg(e, '获取帖子详情失败')");
+  });
+});
+
 describe('600 行软预算机检（pages/forum/** 达标后锁定）', () => {
   it('forum 模块全部源文件 ≤600 行', () => {
     const over = forumSourceFiles().map((f) => ({
@@ -238,12 +275,13 @@ describe('600 行软预算机检（pages/forum/** 达标后锁定）', () => {
   });
 });
 
-describe('allowlist 不回潮（forum 页面域违例清零的锁）', () => {
-  it('GUARD_ALLOWLIST 不含 forum 页面域文件', () => {
+describe('allowlist 不回潮（forum 域违例清零的锁）', () => {
+  it('GUARD_ALLOWLIST 不含 forum 域文件（页面与 api 双清零）', () => {
     const guardSrc = read('utils/utsAndroidCompile.test.js');
     const start = guardSrc.indexOf('const GUARD_ALLOWLIST');
     expect(start).toBeGreaterThan(-1);
     const block = guardSrc.slice(start, guardSrc.indexOf('};', start));
     expect(block).not.toMatch(/pages[/\\]forum/);
+    expect(block).not.toMatch(/api[/\\]forum\.uts/);
   });
 });

@@ -1,6 +1,8 @@
 /**
  * 论坛 API
  * @note 后端响应已由 request 层自动解包 data 字段
+ * @note T04 手术（refs #642）：映射出口统一走 mapper-callback 家族
+ *       （getMapped/postMapped/requestMapped，#639 出口），catch 参数零 `: any` 注解（守护规则 H 清零）
  *
  * 帖子列表实际响应：
  *   { page, pages, topics: [{ id, chapter_id, chapter_title, title, content,
@@ -13,7 +15,8 @@
  *
  * 回复对象：{ id, content, created_at, author: { user_id, username, name, nickname, avatar_url } }
  */
-import { get, post, put, del, uploadFile } from './request'
+import { post, del, uploadFile, getMapped, postMapped, requestMapped } from './request'
+import type { RequestOptions } from './request'
 import { toNumber, toStr, toBool, errMsg } from './helpers'
 import type { ForumTopic, ForumTopicListResult, ForumTopicDetail, ForumReply, LikeTopicResult, MyRepliesResult } from '../types/index'
 
@@ -207,6 +210,14 @@ function buildTopicDetail(obj : UTSJSONObject) : ForumTopicDetail {
     return detail
 }
 
+/** 构造 LikeTopicResult（点赞/取消点赞响应形态一致） */
+function buildLikeResult(obj : UTSJSONObject) : LikeTopicResult {
+    return {
+        liked: toBool(obj['liked']),
+        likes_count: toNumber(obj['likes_count']),
+    } as LikeTopicResult
+}
+
 /**
  * 获取帖子列表
  * @param page 页码，默认 1
@@ -227,10 +238,10 @@ export function getForumTopicsApi(page : number = 1, pageSize : number = 10, sco
     if (category.length > 0) {
         params['category'] = category
     }
-    return get('/forum/topics', params).then((data : UTSJSONObject) : ForumTopicListResult => {
+    return getMapped<ForumTopicListResult>('/forum/topics', params, (data : UTSJSONObject) : ForumTopicListResult => {
         console.log('[getForumTopicsApi] raw data:', JSON.stringify(data))
         return buildTopicListResult(data)
-    }).catch((e : any | null) : ForumTopicListResult => {
+    }).catch((e) : ForumTopicListResult => {
         console.error('[getForumTopicsApi] failed:', e)
         const msg = errMsg(e, '获取帖子列表失败')
         throw new Error(msg)
@@ -249,10 +260,10 @@ export function getForumTopicDetailApi(topicId : number, sort : string = 'latest
         sort: sort,
         order: order,
     } as UTSJSONObject
-    return get(url, params).then((data : UTSJSONObject) : ForumTopicDetail => {
+    return getMapped<ForumTopicDetail>(url, params, (data : UTSJSONObject) : ForumTopicDetail => {
         console.log('[getForumTopicDetailApi] raw data:', JSON.stringify(data))
         return buildTopicDetail(data)
-    }).catch((e : any | null) : ForumTopicDetail => {
+    }).catch((e) : ForumTopicDetail => {
         console.error('[getForumTopicDetailApi] failed:', e)
         const msg = errMsg(e, '获取帖子详情失败')
         throw new Error(msg)
@@ -272,7 +283,7 @@ export function uploadForumImageApi(filePath : string) : Promise<string> {
             throw new Error('上传成功但未返回图片地址')
         }
         return toStr(url)
-    }).catch((e : any | null) : string => {
+    }).catch((e) : string => {
         console.error('[uploadForumImageApi] failed:', e)
         const msg = errMsg(e, '上传图片失败')
         throw new Error(msg)
@@ -293,10 +304,10 @@ export function createForumTopicApi(title : string, content : string, images : s
         images: images,
         category: category,
     } as UTSJSONObject
-    return post('/forum/topics', payload).then((data : UTSJSONObject) : ForumTopic => {
+    return postMapped<ForumTopic>('/forum/topics', payload, (data : UTSJSONObject) : ForumTopic => {
         console.log('[createForumTopicApi] raw data:', JSON.stringify(data))
         return buildTopic(data)
-    }).catch((e : any | null) : ForumTopic => {
+    }).catch((e) : ForumTopic => {
         console.error('[createForumTopicApi] failed:', e)
         const msg = errMsg(e, '发布帖子失败')
         throw new Error(msg)
@@ -310,6 +321,7 @@ export function createForumTopicApi(title : string, content : string, images : s
  * @param content 内容（1-10000 字）
  * @param images 图片 URL 数组（最多 9 张）
  * @param category 帖子类别（可选）
+ * @note 后端 PUT /forum/topics/:id 未注册（缺陷已登记 #662），手术保行为不顺手改
  */
 export function updateForumTopicApi(topicId : number, title : string, content : string, images : string[] = [], category : string = '') : Promise<ForumTopic> {
     const url = '/forum/topics/' + topicId.toString()
@@ -321,10 +333,15 @@ export function updateForumTopicApi(topicId : number, title : string, content : 
     if (category.length > 0) {
         payload['category'] = category
     }
-    return put(url, payload).then((data : UTSJSONObject) : ForumTopic => {
+    const options : RequestOptions = {
+        url: url,
+        method: 'PUT',
+        data: payload,
+    }
+    return requestMapped<ForumTopic>(options, (data : UTSJSONObject) : ForumTopic => {
         console.log('[updateForumTopicApi] raw data:', JSON.stringify(data))
         return buildTopic(data)
-    }).catch((e : any | null) : ForumTopic => {
+    }).catch((e) : ForumTopic => {
         console.error('[updateForumTopicApi] failed:', e)
         const msg = errMsg(e, '编辑帖子失败')
         throw new Error(msg)
@@ -343,10 +360,10 @@ export function replyForumTopicApi(topicId : number, content : string, images : 
         content: content,
         images: images,
     } as UTSJSONObject
-    return post(url, payload).then((data : UTSJSONObject) : ForumReply => {
+    return postMapped<ForumReply>(url, payload, (data : UTSJSONObject) : ForumReply => {
         console.log('[replyForumTopicApi] raw data:', JSON.stringify(data))
         return buildReply(data, topicId)
-    }).catch((e : any | null) : ForumReply => {
+    }).catch((e) : ForumReply => {
         console.error('[replyForumTopicApi] failed:', e)
         const msg = errMsg(e, '回复失败')
         throw new Error(msg)
@@ -379,12 +396,7 @@ export function deleteForumReplyApi(replyId : number) : Promise<UTSJSONObject> {
  */
 export function likeTopicApi(topicId : number) : Promise<LikeTopicResult> {
     const url = '/forum/topics/' + topicId + '/like'
-    return post(url).then((data : UTSJSONObject) : LikeTopicResult => {
-        return {
-            liked: toBool(data['liked']),
-            likes_count: toNumber(data['likes_count']),
-        } as LikeTopicResult
-    })
+    return postMapped<LikeTopicResult>(url, null, (data : UTSJSONObject) : LikeTopicResult => buildLikeResult(data))
 }
 
 /**
@@ -393,12 +405,11 @@ export function likeTopicApi(topicId : number) : Promise<LikeTopicResult> {
  */
 export function unlikeTopicApi(topicId : number) : Promise<LikeTopicResult> {
     const url = '/forum/topics/' + topicId + '/like'
-    return del(url).then((data : UTSJSONObject) : LikeTopicResult => {
-        return {
-            liked: toBool(data['liked']),
-            likes_count: toNumber(data['likes_count']),
-        } as LikeTopicResult
-    })
+    const options : RequestOptions = {
+        url: url,
+        method: 'DELETE',
+    }
+    return requestMapped<LikeTopicResult>(options, (data : UTSJSONObject) : LikeTopicResult => buildLikeResult(data))
 }
 
 /**
@@ -408,7 +419,7 @@ export function unlikeTopicApi(topicId : number) : Promise<LikeTopicResult> {
  */
 export function likeReplyApi(replyId : number) : Promise<LikeTopicResult> {
     const url = '/forum/replies/' + replyId + '/like'
-    return post(url).then((data : UTSJSONObject) : LikeTopicResult => {
+    return postMapped<LikeTopicResult>(url, null, (data : UTSJSONObject) : LikeTopicResult => {
         return {
             liked: toBool(data['liked'], true),
             likes_count: toNumber(data['likes_count']),
@@ -423,12 +434,11 @@ export function likeReplyApi(replyId : number) : Promise<LikeTopicResult> {
  */
 export function unlikeReplyApi(replyId : number) : Promise<LikeTopicResult> {
     const url = '/forum/replies/' + replyId + '/like'
-    return del(url).then((data : UTSJSONObject) : LikeTopicResult => {
-        return {
-            liked: toBool(data['liked']),
-            likes_count: toNumber(data['likes_count']),
-        } as LikeTopicResult
-    })
+    const options : RequestOptions = {
+        url: url,
+        method: 'DELETE',
+    }
+    return requestMapped<LikeTopicResult>(options, (data : UTSJSONObject) : LikeTopicResult => buildLikeResult(data))
 }
 
 /**
@@ -467,9 +477,7 @@ export function getMyTopicsApi(page : number = 1, pageSize : number = 10) : Prom
         page: page.toString(),
         page_size: pageSize.toString(),
     } as UTSJSONObject
-    return get('/forum/my-topics', params).then((data : UTSJSONObject) : ForumTopicListResult => {
-        return buildTopicListResult(data)
-    })
+    return getMapped<ForumTopicListResult>('/forum/my-topics', params, (data : UTSJSONObject) : ForumTopicListResult => buildTopicListResult(data))
 }
 
 /**
@@ -482,7 +490,7 @@ export function getMyRepliesApi(page : number = 1, pageSize : number = 10) : Pro
         page: page.toString(),
         page_size: pageSize.toString(),
     } as UTSJSONObject
-    return get('/forum/my-replies', params).then((data : UTSJSONObject) : MyRepliesResult => {
+    return getMapped<MyRepliesResult>('/forum/my-replies', params, (data : UTSJSONObject) : MyRepliesResult => {
         const items : ForumReply[] = []
         const repliesRaw = data['replies']
         if (repliesRaw != null) {
@@ -513,9 +521,7 @@ export function getMyLikedTopicsApi(page : number = 1, pageSize : number = 10) :
         page: page.toString(),
         page_size: pageSize.toString(),
     } as UTSJSONObject
-    return get('/forum/my-liked-topics', params).then((data : UTSJSONObject) : ForumTopicListResult => {
-        return buildTopicListResult(data)
-    }).catch((e : any | null) : ForumTopicListResult => {
+    return getMapped<ForumTopicListResult>('/forum/my-liked-topics', params, (data : UTSJSONObject) : ForumTopicListResult => buildTopicListResult(data)).catch((e) : ForumTopicListResult => {
         // 后端未实现时降级为空列表
         return { items: [], total: 0, page: page, page_size: pageSize } as ForumTopicListResult
     })
@@ -532,9 +538,7 @@ export function getMyObservedTopicsApi(page : number = 1, pageSize : number = 10
         page: page.toString(),
         page_size: pageSize.toString(),
     } as UTSJSONObject
-    return get('/forum/my-observed', params).then((data : UTSJSONObject) : ForumTopicListResult => {
-        return buildTopicListResult(data)
-    }).catch((e : any | null) : ForumTopicListResult => {
+    return getMapped<ForumTopicListResult>('/forum/my-observed', params, (data : UTSJSONObject) : ForumTopicListResult => buildTopicListResult(data)).catch((e) : ForumTopicListResult => {
         // 后端未实现时降级为空列表
         return { items: [], total: 0, page: page, page_size: pageSize } as ForumTopicListResult
     })
@@ -551,9 +555,7 @@ export function getMyViewHistoryApi(page : number = 1, pageSize : number = 10) :
         page: page.toString(),
         page_size: pageSize.toString(),
     } as UTSJSONObject
-    return get('/forum/my-view-history', params).then((data : UTSJSONObject) : ForumTopicListResult => {
-        return buildTopicListResult(data)
-    }).catch((e : any | null) : ForumTopicListResult => {
+    return getMapped<ForumTopicListResult>('/forum/my-view-history', params, (data : UTSJSONObject) : ForumTopicListResult => buildTopicListResult(data)).catch((e) : ForumTopicListResult => {
         // 后端未实现时降级为空列表
         return { items: [], total: 0, page: page, page_size: pageSize } as ForumTopicListResult
     })
