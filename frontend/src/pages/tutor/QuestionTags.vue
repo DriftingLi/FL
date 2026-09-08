@@ -46,7 +46,9 @@
             <span>{{ currentTagId ? `打标「${currentTagName}」下的题目` : '全部题目 · 选择题目并指定标签' }}</span>
           </template>
 
-          <div class="filter-bar">
+          <UiFilterBar>
+        <template #filters>
+
             <el-input
               v-model="searchKeyword"
               placeholder="搜索题干"
@@ -62,7 +64,8 @@
             <UiButton variant="success" v-if="selectedIds.length > 0" @click="openTagAssign(selectedIds)">
               批量打标 ({{ selectedIds.length }})
             </UiButton>
-          </div>
+        </template>
+      </UiFilterBar>
 
           <el-table
             :data="list"
@@ -162,6 +165,7 @@ import type { Question } from '@/types/question'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
+import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 
 const tags = ref<QuestionTag[]>([])
 const tagsLoading = ref(false)
@@ -380,12 +384,6 @@ onMounted(() => {
   opacity: 1;
 }
 
-.filter-bar {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 14px;
-  flex-wrap: wrap;
-}
 
 .question-tag {
   margin-right: 6px;

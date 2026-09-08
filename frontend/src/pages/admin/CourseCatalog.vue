@@ -66,7 +66,9 @@
 
     <!-- 右侧课程表格 -->
     <main class="cc-main">
-      <div class="cc-toolbar">
+      <UiFilterBar>
+        <template #filters>
+
         <el-input v-model="keyword" placeholder="搜索课程名称…" clearable class="cc-search" @input="currentPage = 1">
           <template #prefix>
             <el-icon><Search /></el-icon>
@@ -85,7 +87,8 @@
           <el-option label="全部" value="all" />
         </el-select>
         <UiButton variant="primary" @click="openDrawer()">新增课程</UiButton>
-      </div>
+        </template>
+      </UiFilterBar>
 
       <el-table :data="pagedCourses" v-loading="loading" style="width: 100%">
         <el-table-column label="证件" width="140">
@@ -212,6 +215,7 @@ import CourseCatalogDialogs from '@/components/admin/CourseCatalogDialogs.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
+import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 
 const submitting = ref(false)
 
@@ -597,12 +601,6 @@ onMounted(() => {
   min-width: 0;
 }
 
-.cc-toolbar {
-  display: flex;
-  gap: var(--space-3);
-  align-items: center;
-  margin-bottom: var(--space-4);
-}
 
 .cc-search {
   max-width: 280px;
@@ -642,9 +640,6 @@ onMounted(() => {
 }
 
 @media screen and (max-width: 768px) {
-  .cc-toolbar {
-    flex-wrap: wrap;
-  }
 
   .cc-search {
     flex: 1 1 100%;

@@ -7,7 +7,9 @@
       </div>
     </div>
 
-    <div class="filter-bar">
+    <UiFilterBar>
+        <template #filters>
+
       <el-select v-model="filters.type" placeholder="题型" clearable style="width: 130px">
         <el-option label="单选题" value="single_choice" />
         <el-option label="多选题" value="multi_choice" />
@@ -28,7 +30,8 @@
       <UiButton variant="danger" v-if="selectedIds.length > 0" @click="batchReject">
         批量驳回 ({{ selectedIds.length }})
       </UiButton>
-    </div>
+        </template>
+      </UiFilterBar>
 
     <el-table :data="questions" stripe v-loading="loading" @selection-change="handleSelection">
       <el-table-column type="selection" width="50" />
@@ -135,6 +138,7 @@ import { typeMap } from '@/constants/question'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
+import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 
 const statusMap: Record<string, string> = { draft: '草稿', pending: '待审核', published: '已发布' }
 const statusType: Record<string, string> = { draft: 'info', pending: 'warning', published: 'success' }
@@ -295,5 +299,4 @@ function cancelReject() {
 .question-review-page { padding: 0; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .page-header h2 { margin: 0; }
-.filter-bar { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; align-items: center; }
 </style>

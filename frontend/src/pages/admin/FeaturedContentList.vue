@@ -7,7 +7,9 @@
       </UiButton>
     </div>
 
-    <div class="filter-bar">
+    <UiFilterBar>
+        <template #filters>
+
       <el-select
         v-model="filterCategory"
         placeholder="全部分类"
@@ -34,7 +36,8 @@
       </el-select>
       <UiButton variant="primary" @click="handleFilterChange">查询</UiButton>
       <UiButton @click="resetFilter">重置</UiButton>
-    </div>
+        </template>
+      </UiFilterBar>
 
     <el-table :data="list" v-loading="loading" stripe border style="width: 100%">
       <el-table-column prop="title" label="标题" min-width="240" show-overflow-tooltip />
@@ -100,6 +103,7 @@ import { useAdminTable } from '@/composables/useAdminTable'
 import { formatDateTime } from '@/utils/format'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
+import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 
 const router = useRouter()
 
@@ -194,12 +198,6 @@ onMounted(() => {
   color: var(--color-text-primary);
 }
 
-.filter-bar {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-}
 
 .pagination-wrapper {
   margin-top: 20px;

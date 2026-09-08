@@ -15,13 +15,16 @@
 
       <!-- ===== 举报管理（ADR-0018）===== -->
       <template v-if="activeMainTab === 'reports'">
-        <div class="filter-bar">
+        <UiFilterBar>
+        <template #filters>
+
           <el-radio-group v-model="reportStatus" @change="handleReportStatusChange">
             <el-radio-button :value="-1">全部</el-radio-button>
             <el-radio-button :value="0">待处理</el-radio-button>
             <el-radio-button :value="1">已处理</el-radio-button>
           </el-radio-group>
-        </div>
+        </template>
+      </UiFilterBar>
 
         <el-table v-loading="reportLoading" :data="reports" border>
           <el-table-column prop="id" label="ID" width="60" align="center" />
@@ -69,7 +72,9 @@
 
       <!-- ===== 帖子管理（原有内容）===== -->
       <template v-else>
-      <div class="filter-bar">
+      <UiFilterBar>
+        <template #filters>
+
         <el-tabs v-model="activeTab" @tab-change="handleTabChange">
           <el-tab-pane label="全部帖子" name="all" />
           <el-tab-pane label="综合讨论区" name="discussion" />
@@ -87,7 +92,8 @@
             <el-icon><Search /></el-icon>
           </template>
         </el-input>
-      </div>
+        </template>
+      </UiFilterBar>
 
       <el-table
         v-loading="loading"
@@ -190,6 +196,7 @@ import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
+import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 
 const topics = ref<AdminForumTopic[]>([])
 
@@ -375,14 +382,6 @@ onMounted(loadList)
   color: var(--color-text-disabled);
 }
 
-.filter-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 12px;
-  flex-wrap: wrap;
-}
 
 .title-cell {
   display: flex;

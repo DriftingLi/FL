@@ -22,7 +22,7 @@
         <UiButton size="small" @click="loadLedger">刷新</UiButton>
       </div>
       <div v-if="ledgerLoading" class="text-sm text-ink-3">加载中...</div>
-      <div v-else-if="ledger.length === 0" class="text-sm text-ink-3">暂无数据</div>
+      <UiEmptyState v-else-if="ledger.length === 0" description="暂无数据" size="sm" />
       <div v-else class="grid gap-2">
         <div v-for="item in ledger" :key="String(item.id)" class="border border-line rounded p-2 text-xs">
           <div>用户 {{ item.user_id }} · {{ item.reason }} · {{ item.delta }} 分 · {{ refLabel(item.ref_type) }} {{ item.ref_id }}</div>
@@ -48,7 +48,7 @@
         <UiButton size="small" @click="loadViews">刷新</UiButton>
       </div>
       <div v-if="viewsLoading" class="text-sm text-ink-3">加载中...</div>
-      <div v-else-if="views.length === 0" class="text-sm text-ink-3">暂无数据</div>
+      <UiEmptyState v-else-if="views.length === 0" description="暂无数据" size="sm" />
       <div v-else class="grid gap-2">
         <div v-for="item in views" :key="String(item.id)" class="border border-line rounded p-2 text-xs">
           <div>招聘方 {{ item.recruiter_id }} · 学员 {{ item.resume_user_id }} · {{ item.viewed_at }}</div>
@@ -70,7 +70,7 @@
         <UiButton size="small" @click="loadRequests">刷新</UiButton>
       </div>
       <div v-if="requestsLoading" class="text-sm text-ink-3">加载中...</div>
-      <div v-else-if="requests.length === 0" class="text-sm text-ink-3">暂无数据</div>
+      <UiEmptyState v-else-if="requests.length === 0" description="暂无数据" size="sm" />
       <div v-else class="grid gap-2">
         <div v-for="item in requests" :key="String(item.id)" class="border border-line rounded p-2 text-xs">
           <div>招聘方 {{ item.recruiter_id }} · 学员 {{ item.student_user_id }} · {{ requestStatusLabel(item.status) }}</div>
@@ -94,7 +94,7 @@
         <UiButton size="small" @click="loadJobs">刷新</UiButton>
       </div>
       <div v-if="jobsLoading" class="text-sm text-ink-3">加载中...</div>
-      <div v-else-if="jobs.length === 0" class="text-sm text-ink-3">暂无数据</div>
+      <UiEmptyState v-else-if="jobs.length === 0" description="暂无数据" size="sm" />
       <div v-else class="grid gap-2">
         <div v-for="item in jobs" :key="String(item.id)" class="border border-line rounded p-2 text-xs">
           <div class="flex items-center justify-between gap-2">
@@ -126,7 +126,7 @@
         <UiButton size="small" @click="loadReports">刷新</UiButton>
       </div>
       <div v-if="reportsLoading" class="text-sm text-ink-3">加载中...</div>
-      <div v-else-if="reports.length === 0" class="text-sm text-ink-3">暂无待处理举报</div>
+      <UiEmptyState v-else-if="reports.length === 0" description="暂无待处理举报" size="sm" />
       <div v-else class="grid gap-2">
         <div v-for="item in reports" :key="String(item.id)" class="border border-line rounded p-2 text-xs">
           <div class="flex items-center justify-between gap-2">
@@ -168,6 +168,7 @@ import { unwrappedRequest } from '@/api/request'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 
 // #411：默认锁定问答域（forum_topic），显式切换才跨域全量——卡片标题与内容同域。
 const domain = ref<'forum_topic' | ''>('forum_topic')
