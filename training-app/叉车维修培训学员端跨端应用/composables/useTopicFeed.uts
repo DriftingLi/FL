@@ -1,0 +1,118 @@
+/**
+ * forum 帖子流状态（T04 手术：forum.uvue script 列表域下沉）
+ * 持有 topics 分页与排序态；currentTab 由壳层以 Ref 注入（tab 态属壳层，数据所有权单一）。
+ * 函数字段箭头包裹返回（UTS error18 先例，同 useAiChat）。
+ */
+import { ref } from 'vue'
+import type { Ref } from 'vue'
+import { getForumTopicsApi } from '../api/forum'
+import type { ForumTopic } from '../types/index'
+
+export type UseTopicFeedResult = {
+    topics : Ref<ForumTopic[]>
+    loading : Ref<boolean>
+    noMore : Ref<boolean>
+    sortField : Ref<string>
+    sortOrder : Ref<string>
+    qaSort : Ref<string>
+    loadTopics : (reset : boolean) => Promise<void>
+    onLoadMore : () => void
+    onSortFieldChange : (field : string) => void
+    onSortOrderChange : (order : string) => void
+    onQaSortChange : (val : string) => void
+}
+
+export function useTopicFeed(currentTab : Ref<string>) : UseTopicFeedResult {
+    const topics = ref<ForumTopic[]>([])
+    const page = ref<number>(1)
+    const pageSize = 10
+    const total = ref<number>(0)
+    const loading = ref<boolean>(false)
+    const noMore = ref<boolean>(false)
+    const sortField = ref<string>('latest') // latest | hot
+    const sortOrder = ref<string>('desc')   // desc | asc
+    // 知识问答筛选：recommend（mock，暂以热度代替）| hot | latest
+    const qaSort = ref<string>('recommend')
+
+    async function loadTopics(reset : boolean = false) : Promise<void> {
+        if (loading.value) return
+        if (reset) {
+            page.value = 1
+            noMore.value = false
+        }
+        if (noMore.value && !reset) return
+
+        loading.value = true
+        try {
+            // 后端 scope 白名单仅 all|general|chapter（旧值 hot/recruit 会被静默当 all），
+            // category 白名单 all|discussion|question
+            // 广场/招聘只出普通帖（discussion），知识问答帖（question）仅在问答 Tab 展示
+            let scope = 'general'
+            let category = 'discussion'
+            let sort = sortField.value
+            let order = sortOrder.value
+            if (currentTab.value === 'recruit') {
+                scope = 'all'
+            } else if (currentTab.value === 'hot') {
+                // 知识问答：只列提问帖；推荐/最热都映射后端 hot（推荐暂无独立算法，mock 占位），最新映射 latest
+                scope = 'all'
+                category = 'question'
+                order = 'desc'
+                sort = qaSort.value == 'latest' ? 'latest' : 'hot'
+            }
+            const result = await getForumTopicsApi(page.value, pageSize, scope, sort, order, category)
+            if (reset) {
+                topics.value = result.items
+            } else {
+                topics.value = topics.value.concat(result.items)
+            }
+            total.value = result.total
+            if (topics.value.length >= result.total || result.items.length == 0) {
+                noMore.value = true
+            } else {
+                page.value = page.value + 1
+            }
+        } catch (e) {
+            console.error('[forum] load failed:', e)
+            uni.showToast({ title: '加载帖子失败', icon: 'none' })
+        } finally {
+            loading.value = false
+        }
+    }
+
+    function onLoadMore() : void {
+        loadTopics(false)
+    }
+
+    function onSortFieldChange(field : string) : void {
+        if (sortField.value === field) return
+        sortField.value = field
+        loadTopics(true)
+    }
+
+    function onQaSortChange(val : string) : void {
+        if (qaSort.value === val) return
+        qaSort.value = val
+        loadTopics(true)
+    }
+
+    function onSortOrderChange(order : string) : void {
+        if (sortOrder.value === order) return
+        sortOrder.value = order
+        loadTopics(true)
+    }
+
+    return {
+        topics: topics,
+        loading: loading,
+        noMore: noMore,
+        sortField: sortField,
+        sortOrder: sortOrder,
+        qaSort: qaSort,
+        loadTopics: (reset : boolean) => loadTopics(reset),
+        onLoadMore: () => onLoadMore(),
+        onSortFieldChange: (field : string) => onSortFieldChange(field),
+        onSortOrderChange: (order : string) => onSortOrderChange(order),
+        onQaSortChange: (val : string) => onQaSortChange(val),
+    } as UseTopicFeedResult
+}

@@ -1,0 +1,86 @@
+<template>
+    <!-- 排序栏（广场 Tab） -->
+    <view class="sort-bar">
+        <view class="sort-left">
+            <view class="sort-chip" :class="{ active: sortField === 'latest' }" @click="onField('latest')">
+                <text class="sort-chip-text" :class="{ active: sortField === 'latest' }">最新</text>
+            </view>
+            <view class="sort-chip" :class="{ active: sortField === 'hot' }" @click="onField('hot')">
+                <text class="sort-chip-text" :class="{ active: sortField === 'hot' }">热门</text>
+            </view>
+        </view>
+        <view class="sort-right">
+            <view class="sort-chip" :class="{ active: sortOrder === 'desc' }" @click="onOrder('desc')">
+                <text class="sort-chip-text" :class="{ active: sortOrder === 'desc' }">逆序</text>
+            </view>
+            <view class="sort-chip" :class="{ active: sortOrder === 'asc' }" @click="onOrder('asc')">
+                <text class="sort-chip-text" :class="{ active: sortOrder === 'asc' }">正序</text>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    withDefaults(defineProps<{
+        sortField? : string
+        sortOrder? : string
+    }>(), {
+        sortField: 'latest',
+        sortOrder: 'desc'
+    })
+
+    const emit = defineEmits(['fieldChange', 'orderChange'])
+
+    function onField(field : string) : void {
+        emit('fieldChange', field)
+    }
+
+    function onOrder(order : string) : void {
+        emit('orderChange', order)
+    }
+</script>
+
+<style>
+    /* 排序栏 */
+    .sort-bar {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16rpx 24rpx;
+        background-color: transparent;
+        border-bottom: 1rpx solid rgba(0, 0, 0, 0.06);
+    }
+
+    .sort-left {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .sort-right {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .sort-chip {
+        padding: 8rpx 24rpx;
+        border-radius: 24rpx;
+        background-color: #f5f5f5;
+        border: 1rpx solid #e0e0e0;
+        margin-right: 12rpx;
+    }
+
+    .sort-chip.active {
+        background-color: #e8f0fe;
+        border: 1rpx solid #2979ff;
+    }
+
+    .sort-chip-text {
+        font-size: 24rpx;
+        color: #666666;
+    }
+
+    .sort-chip-text.active {
+        color: #2979ff;
+        font-weight: bold;
+    }
+</style>
