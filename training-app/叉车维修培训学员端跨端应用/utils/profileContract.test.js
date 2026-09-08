@@ -110,3 +110,129 @@ describe('raw .then 收紧完成度（本票四域 DTO 函数零残留）', () =
     expect(src).not.toMatch(/return (get|post)\([^)]*\)\s*\.then\(\(data : UTSJSONObject\) : (?!UTSJSONObject)/);
   });
 });
+
+/* ══ T03f 模块级汇总（refs #678）：预算复检 / 接线收口 / 零直发请求 / allowlist 清零 ══
+ * 前置票（#675/#676/#677 及主页面/api 收紧）已各自切片机检；
+ * 本块是模块口径的总锁——预算按 pages/profile/** 全量走查（不止四手术文件），
+ * 接线按「拆出物全挂载 + components/composables 零孤儿」收口，allowlist 覆盖整个模块与四域 api。
+ * 「零直发请求」是 #641 模块 AC 的本模块锁；不新增全工程守护规则
+ * （ADR-0007 明示该守护留待 #654 收尾票立项）。 */
+
+/** pages/profile/** 全部源文件（.uvue/.uts，排除测试） */
+function profileSourceFiles() {
+  const out = [];
+  const walk = (d) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) { walk(p); continue; }
+      if (/\.(uvue|uts)$/.test(e.name) && !/\.test\./.test(e.name)) out.push(p);
+    }
+  };
+  walk(path.join(ROOT, 'pages/profile'));
+  return out;
+}
+
+describe('600 行软预算机检（模块全量：pages/profile/** 全部源文件）', () => {
+  it('走查范围非空（防路径断链导致空集合假绿：四页 + 8 组件 + flows + 其余页 ≥14）', () => {
+    expect(profileSourceFiles().length).toBeGreaterThanOrEqual(14);
+  });
+
+  it('四超预算文件全部预算内复检（错题本 1137 / 个人信息 1011 / 个人动态 722 / 主页 687 的落袋锁）', () => {
+    const over = [
+      'pages/profile/wrong-questions.uvue',
+      'pages/profile/personal-info.uvue',
+      'pages/profile/personal-activity.uvue',
+      'pages/profile/profile.uvue',
+    ].map((rel) => ({ file: rel, lines: read(rel).split('\n').length }))
+      .filter((x) => x.lines > 600);
+    expect(over).toEqual([]);
+  });
+
+  it('模块全部源文件 ≤600 行（含 components/**，达标后锁住防回潮，先例 mallPilot）', () => {
+    const over = profileSourceFiles().map((f) => ({
+      file: path.relative(ROOT, f),
+      lines: fs.readFileSync(f, 'utf8').split('\n').length,
+    })).filter((x) => x.lines > 600);
+    expect(over).toEqual([]);
+  });
+
+  it('模块目录 ≤2 层（pages/profile/<页 或 <子目录>/<文件>）', () => {
+    const deep = profileSourceFiles()
+      .filter((f) => path.relative(path.join(ROOT, 'pages/profile'), f).split(/[\\/]/).length > 2)
+      .map((f) => path.relative(ROOT, f));
+    expect(deep).toEqual([]);
+  });
+});
+
+describe('组件接线汇总（T03 拆出物 8 组件 + 1 composable：显式 import + 模板挂载）', () => {
+  const WIRING = [
+    ['ProfileUserRow', 'pages/profile/profile.uvue', './components/profile-user-row.uvue'],
+    ['WrongStatsCard', 'pages/profile/wrong-questions.uvue', './components/wrong-stats-card.uvue'],
+    ['WrongQuestionCard', 'pages/profile/wrong-questions.uvue', './components/wrong-question-card.uvue'],
+    ['WrongFilterBar', 'pages/profile/wrong-questions.uvue', './components/wrong-filter-bar.uvue'],
+    ['InfoDialog', 'pages/profile/personal-info.uvue', './components/info-dialog.uvue'],
+    ['ActivityUserCard', 'pages/profile/personal-activity.uvue', './components/activity-user-card.uvue'],
+    ['ActivityTabBar', 'pages/profile/personal-activity.uvue', './components/activity-tab-bar.uvue'],
+    ['ActivityTopicCard', 'pages/profile/personal-activity.uvue', './components/activity-topic-card.uvue'],
+  ];
+
+  it.each(WIRING)('<%s>：%s 显式 import %s 且模板挂载', (tag, pageRel, importRel) => {
+    const page = read(pageRel);
+    expect(page).toContain(importRel);
+    expect(page).toMatch(new RegExp(`<${tag}[\\s/>]`));
+  });
+
+  it('personal-info flows composable 经模块内显式相对 import（Q17 安置）', () => {
+    expect(read('pages/profile/personal-info.uvue')).toContain('./composables/personal-info-flows.uts');
+  });
+
+  it('拆出物零孤儿：components/ 与 composables/ 每个文件都被模块内源文件 import（新增拆出物必须接线）', () => {
+    const pageSrcs = profileSourceFiles()
+      .filter((f) => !f.includes(`${path.sep}components${path.sep}`) && !f.includes(`${path.sep}composables${path.sep}`))
+      .map((f) => fs.readFileSync(f, 'utf8'));
+    const orphanOf = (dir, prefix) => fs.readdirSync(path.join(ROOT, 'pages/profile', dir))
+      .filter((n) => /\.(uvue|uts)$/.test(n))
+      .filter((n) => !pageSrcs.some((s) => s.includes(`${prefix}/${n}`)))
+      .sort();
+    const orphans = [
+      ...orphanOf('components', './components').map((n) => `components/${n}`),
+      ...orphanOf('composables', './composables').map((n) => `composables/${n}`),
+    ];
+    expect(orphans).toEqual([]);
+  });
+});
+
+describe('页面层零直发请求（网络一律经域 api 函数，#641 收紧口径）', () => {
+  it('pages/profile/** 无源文件 import api/request 或裸调 uni.request', () => {
+    const hits = [];
+    for (const f of profileSourceFiles()) {
+      const src = fs.readFileSync(f, 'utf8');
+      const rel = path.relative(ROOT, f);
+      if (/from\s*'[^']*api\/request(\.uts)?'/.test(src)) hits.push(`${rel}: import api/request`);
+      if (/uni\.request\s*\(/.test(src)) hits.push(`${rel}: uni.request 裸调`);
+      if (/uni\.(upload|download)File\s*\(/.test(src)) hits.push(`${rel}: uni.uploadFile/downloadFile 裸调`);
+    }
+    expect(hits).toEqual([]);
+  });
+});
+
+describe('allowlist 模块级清零（profile 域 catch/detail 违例豁免不存在）', () => {
+  /** GUARD_ALLOWLIST 源码块（豁免机制定义于守护文件，先例各切片 allowlist 锁） */
+  function guardAllowlistBlock() {
+    const guardSrc = read('utils/utsAndroidCompile.test.js');
+    const start = guardSrc.indexOf('const GUARD_ALLOWLIST');
+    expect(start).toBeGreaterThan(-1);
+    const end = guardSrc.indexOf('};', start);
+    // 终止符缺失时 indexOf 返回 -1、slice 会静默扩扫全文，必须显式失败
+    expect(end).toBeGreaterThan(start);
+    return guardSrc.slice(start, end);
+  }
+
+  it('GUARD_ALLOWLIST 不含任何 pages/profile 文件（模块全量，非逐切片正则）', () => {
+    expect(guardAllowlistBlock()).not.toMatch(/pages[/\\]profile/);
+  });
+
+  it.each(['student', 'wrongQuestion', 'favorite', 'points'])('本模块域 api %s.uts 无 allowlist 条目', (domain) => {
+    expect(guardAllowlistBlock()).not.toMatch(new RegExp(`api[/\\\\]${domain}\\.uts`));
+  });
+});
