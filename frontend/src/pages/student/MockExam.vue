@@ -90,6 +90,7 @@ import { realExamApi } from '@/api/realExam'
 import { formatDateTime } from '@/utils/format'
 import { useExamSession } from '@/composables/useExamSession'
 import { useAsyncPage } from '@/composables/useAsyncPage'
+import AnsweringSessionShell from '@/components/student/AnsweringSessionShell.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 
 const route = useRoute()
