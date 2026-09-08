@@ -89,4 +89,8 @@ describe('forumTabQuery 类别映射', () => {
   it('问答：按 category=question 分流，不带 scope（问答帖本就无章节归属）', () => {
     expect(forumTabQuery('question')).toEqual({ category: 'question' })
   })
+
+  it('备考经验（#722）：scope=all + category=experience，经验帖可挂章节故看全量', () => {
+    expect(forumTabQuery('experience')).toEqual({ scope: 'all', category: 'experience' })
+  })
 })

@@ -73,13 +73,12 @@
     </div>
 
     <div class="mt-4 flex justify-center" v-if="total > pageSize">
-      <el-pagination
-        v-model:current-page="currentPage"
-        :page-size="pageSize"
-        :total="total"
-        layout="total, prev, pager, next"
-        @current-change="handlePageChange"
-      />
+      <UiPagination
+      v-model:current-page="currentPage"
+      :page-size="pageSize"
+      :total="total"
+      @current-change="handlePageChange"
+    />
     </div>
     </template>
 
@@ -105,6 +104,7 @@ import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
 import ContributionTab from './ContributionTab.vue'
 
 const activeTab = ref<'material' | 'contribution'>('material')

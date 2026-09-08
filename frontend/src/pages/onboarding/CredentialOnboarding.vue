@@ -5,7 +5,7 @@
       <p class="subtitle">请选择您想要考取的证件，系统将为您展示对应的课程与题库</p>
 
       <div v-if="!grouped.special_operation.length && !grouped.skill_level.length && !loading" class="empty">
-        <el-empty description="暂无证件" />
+        <UiEmptyState description="暂无证件" />
       </div>
 
       <template v-else>
@@ -67,6 +67,7 @@ import { ElMessage } from 'element-plus'
 import { useCredentialStore } from '@/stores/credential'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 
 const router = useRouter()
 const credentialStore = useCredentialStore()

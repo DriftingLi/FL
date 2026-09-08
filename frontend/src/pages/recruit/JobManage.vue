@@ -13,9 +13,7 @@
       @retry="handleRetry"
     />
     <UiSkeleton v-else-if="loading" variant="list" :count="4" />
-    <div v-else-if="items.length === 0" class="rounded-card border border-line bg-panel p-8 text-center text-ink-3">
-      暂无职位，点击右上角「发布职位」开始招聘
-    </div>
+    <UiEmptyState v-else-if="items.length === 0" description="暂无职位，点击右上角「发布职位」开始招聘" />
     <div v-else class="grid gap-3">
       <div
         v-for="item in items"
@@ -54,16 +52,16 @@
       </div>
     </div>
     <div v-if="total > 0" class="flex justify-center">
-      <el-pagination
-        v-model:current-page="page"
-        :page-size="pageSize"
-        :total="total"
-        layout="prev, pager, next"
-        @current-change="handlePageChange"
-      />
+      <UiPagination
+      v-model:current-page="page"
+      :page-size="pageSize"
+      :total="total"
+      :show-total="false"
+      @current-change="handlePageChange"
+    />
     </div>
 
-    <el-dialog v-model="dialogVisible" :title="editing ? '编辑职位' : '发布职位'" width="560px" destroy-on-close>
+    <UiDialog v-model="dialogVisible" :title="editing ? '编辑职位' : '发布职位'" width="560px" destroy-on-close>
       <el-form label-width="90px">
         <el-form-item label="职位名" required>
           <el-input v-model="form.title" maxlength="100" placeholder="如：叉车维修技师" />
@@ -95,7 +93,7 @@
         <UiButton @click="dialogVisible = false">取消</UiButton>
         <UiButton variant="primary" :loading="submitting" @click="submit">保存</UiButton>
       </template>
-    </el-dialog>
+    </UiDialog>
   </div>
 </template>
 
@@ -108,6 +106,9 @@ import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
 
 interface PositionItem {
   position_id: number

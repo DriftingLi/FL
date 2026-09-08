@@ -6,6 +6,8 @@ import type { FormInstance } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { trainingApi, type CatalogDirectionNode, type CatalogLevel, type CertificateTemplate } from '@/api/training'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
 
 defineProps<{
   certificateTemplates: CertificateTemplate[]
@@ -172,7 +174,7 @@ defineExpose({ openDirectionDialog, openLevelDialog, openCertificateDialog })
 
 <template>
   <!-- 专业方向对话框 -->
-  <el-dialog v-model="directionDialogVisible" :title="directionForm.specialty_id ? '编辑专业方向' : '新增专业方向'" width="460px" destroy-on-close>
+  <UiDialog v-model="directionDialogVisible" :title="directionForm.specialty_id ? '编辑专业方向' : '新增专业方向'" width="460px" destroy-on-close>
     <el-form ref="directionFormRef" :model="directionForm" :rules="nameRules" label-width="80px">
       <el-form-item label="名称" prop="name">
         <el-input v-model="directionForm.name" placeholder="如：操作、维修、安全、电池" maxlength="30" />
@@ -185,10 +187,10 @@ defineExpose({ openDirectionDialog, openLevelDialog, openCertificateDialog })
       <UiButton @click="directionDialogVisible = false">取消</UiButton>
       <UiButton variant="primary" :loading="submitting" @click="submitDirection">保存</UiButton>
     </template>
-  </el-dialog>
+  </UiDialog>
 
   <!-- 课程等级对话框（等级全局共享） -->
-  <el-dialog v-model="levelDialogVisible" :title="levelForm.level_id ? '编辑课程等级' : '新增课程等级'" width="460px" destroy-on-close>
+  <UiDialog v-model="levelDialogVisible" :title="levelForm.level_id ? '编辑课程等级' : '新增课程等级'" width="460px" destroy-on-close>
     <el-form ref="levelFormRef" :model="levelForm" :rules="nameRules" label-width="80px">
       <el-form-item label="等级名称" prop="name">
         <el-input v-model="levelForm.name" placeholder="如：入门、进阶、专项、认证" maxlength="30" />
@@ -201,10 +203,10 @@ defineExpose({ openDirectionDialog, openLevelDialog, openCertificateDialog })
       <UiButton @click="levelDialogVisible = false">取消</UiButton>
       <UiButton variant="primary" :loading="submitting" @click="submitLevel">保存</UiButton>
     </template>
-  </el-dialog>
+  </UiDialog>
 
   <!-- 证书模板管理 -->
-  <el-dialog v-model="certificateDialogVisible" title="证书模板管理" width="720px" destroy-on-close>
+  <UiDialog v-model="certificateDialogVisible" title="证书模板管理" width="720px" destroy-on-close>
     <div class="certificate-header">
       <UiButton variant="primary" size="small" @click="openCertificateForm()">
         <el-icon><Plus /></el-icon> 新增模板
@@ -231,13 +233,13 @@ defineExpose({ openDirectionDialog, openLevelDialog, openCertificateDialog })
         </template>
       </el-table-column>
     </el-table>
-    <el-empty v-if="!certificateLoading && certificateTemplates.length === 0" description="暂无证书模板" />
+    <UiEmptyState v-if="!certificateLoading && certificateTemplates.length === 0" description="暂无证书模板" />
     <template #footer>
       <UiButton @click="certificateDialogVisible = false">关闭</UiButton>
     </template>
-  </el-dialog>
+  </UiDialog>
 
-  <el-dialog v-model="certificateFormVisible" :title="certificateForm.id ? '编辑模板' : '新增模板'" width="480px" destroy-on-close append-to-body>
+  <UiDialog v-model="certificateFormVisible" :title="certificateForm.id ? '编辑模板' : '新增模板'" width="480px" destroy-on-close append-to-body>
     <el-form ref="certificateFormRef" :model="certificateForm" :rules="certificateRules" label-width="110px">
       <el-form-item label="模板名称" prop="name">
         <el-input v-model="certificateForm.name" placeholder="如：叉车维修技能培训合格证书" maxlength="50" />
@@ -256,7 +258,7 @@ defineExpose({ openDirectionDialog, openLevelDialog, openCertificateDialog })
       <UiButton @click="certificateFormVisible = false">取消</UiButton>
       <UiButton variant="primary" :loading="submitting" @click="submitCertificate">保存</UiButton>
     </template>
-  </el-dialog>
+  </UiDialog>
 </template>
 
 <style scoped>

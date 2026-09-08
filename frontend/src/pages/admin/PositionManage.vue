@@ -33,7 +33,7 @@
       <div class="p-3 text-xs text-ink-3">岗位字典由管理员维护；职位发布与简历「期望岗位」都从这里选取（与专业方向解绑）。</div>
     </div>
 
-    <el-dialog v-model="dialogVisible" :title="editing ? '编辑岗位' : '新增岗位'" width="480px" destroy-on-close>
+    <UiDialog v-model="dialogVisible" :title="editing ? '编辑岗位' : '新增岗位'" width="480px" destroy-on-close>
       <el-form ref="formRef" :model="form" :rules="formRules" label-width="80px">
         <el-form-item label="岗位名称" prop="name">
           <el-input v-model="form.name" maxlength="50" placeholder="如：叉车维修技师" />
@@ -52,7 +52,7 @@
         <UiButton @click="dialogVisible = false">取消</UiButton>
         <UiButton variant="primary" :loading="submitting" @click="handleSubmit">保存</UiButton>
       </template>
-    </el-dialog>
+    </UiDialog>
   </div>
 </template>
 
@@ -62,6 +62,7 @@ import { Plus } from '@element-plus/icons-vue'
 import { ElMessage, type FormInstance } from 'element-plus'
 import { unwrappedRequest } from '@/api/request'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
 
 interface PositionItem {
   position_id: number

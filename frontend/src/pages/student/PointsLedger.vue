@@ -80,13 +80,12 @@
           </div>
           <div class="flex items-center justify-between px-4 py-3">
             <span class="text-xs text-ink-3">共 {{ ledger.total }} 条</span>
-            <el-pagination
+            <UiPagination
               v-model:current-page="page"
               :page-size="pageSize"
               :total="total"
-              layout="prev, pager, next"
+              :show-total="false"
               small
-              background
               @current-change="handlePageChange"
             />
           </div>
@@ -132,6 +131,7 @@ import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 
