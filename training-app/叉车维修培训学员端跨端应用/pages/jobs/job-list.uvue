@@ -21,7 +21,7 @@
 
         <!-- 职位列表 -->
         <scroll-view class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
-            <!-- 我的简历入口（#705：招聘 tab 退场后，简历三页经此可达；收藏统计无后端支撑不做） -->
+            <!-- 我的简历入口（#705 重挂，B 定稿：真实 ResumeData 字段算完善度，后端零改动；人口学字段/Lv/收藏统计不做） -->
             <view class="mine-section">
                 <view class="mine-card" @click="onResume">
                     <image v-if="avatarUrl.length > 0" class="mine-avatar" :src="avatarUrl" mode="aspectFill" />
@@ -31,9 +31,18 @@
                     <view class="mine-info">
                         <text class="mine-name">{{ displayName }}</text>
                     </view>
-                    <view class="mine-btn">
-                        <text class="mine-btn-text">去完善</text>
+                </view>
+                <view class="mine-resume-card" @click="onResume">
+                    <view class="mine-resume-head">
+                        <text class="mine-resume-title">简历完善度 {{ resumePct }}%</text>
+                        <view class="mine-resume-btn">
+                            <text class="mine-resume-btn-text">去完善</text>
+                        </view>
                     </view>
+                    <view class="mine-prog-wrap">
+                        <view class="mine-prog-bar" :style="{ width: resumePct + '%' }"></view>
+                    </view>
+                    <text class="mine-resume-sub">{{ resumeFilledCount }}/8 项已填写</text>
                 </view>
                 <view class="mine-func-row">
                     <view class="mine-func-card" @click="onResumeEdit">
@@ -88,12 +97,14 @@
 
 <script setup lang="uts">
     import { ref, computed } from 'vue'
-    import { onLoad } from '@dcloudio/uni-app'
+    import { onLoad, onShow } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
     import { getJobListApi } from '../../api/job'
     import { getCatalogTreeSpecialties } from '../../api/course'
+    import { getResumeApi } from '../../api/resume'
     import { useAuthStore } from '../../stores/auth'
     import type { JobPosting } from '../../api/job'
+    import type { ResumeData } from '../../types/index'
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
@@ -114,6 +125,35 @@
         }
         return '学员'
     })
+
+    // ---- 简历完善度（B 定稿：真实 ResumeData 八项字段计算，GET /resume 现有契约）----
+    const RESUME_FIELD_TOTAL = 8
+    const resumeFilledCount = ref<number>(0)
+    const resumePct = computed<number>(() : number => {
+        return Math.floor(resumeFilledCount.value * 100 / RESUME_FIELD_TOTAL)
+    })
+
+    function countResumeFilled(r : ResumeData) : number {
+        let n = 0
+        if (r.real_name.length > 0) n = n + 1
+        if (r.contact_phone.length > 0) n = n + 1
+        if (r.wechat.length > 0) n = n + 1
+        if (r.region.length > 0) n = n + 1
+        if (r.expected_position_extra.length > 0) n = n + 1
+        if (r.salary_min > 0 || r.salary_max > 0 || r.salary_negotiable) n = n + 1
+        if (r.experience_years > 0) n = n + 1
+        if (r.self_intro.length > 0) n = n + 1
+        return n
+    }
+
+    function loadResumeStatus() : void {
+        getResumeApi().then((r : ResumeData) : void => {
+            resumeFilledCount.value = countResumeFilled(r)
+        }).catch(() : void => {
+            // 未建简历（404）或加载失败：按 0% 呈现，卡片本身即引导，不打断职位浏览
+            resumeFilledCount.value = 0
+        })
+    }
 
     // ---- 筛选标签 ----
     type FilterTag = { label : string, id : number }
@@ -180,6 +220,11 @@
     onLoad((options : OnLoadOptions) => {
         loadFilters()
         loadJobs(true)
+    })
+
+    // 首次进入与编辑简历返回时都刷新完善度（onShow 覆盖 onLoad 后首触发）
+    onShow(() => {
+        loadResumeStatus()
     })
 
     function onFilterChange(idx : number) : void {
@@ -448,18 +493,55 @@
         color: #1a1a1a;
     }
 
-    .mine-btn {
-        width: 140rpx;
-        height: 60rpx;
-        border-radius: 30rpx;
-        background-color: #2979ff;
-        align-items: center;
-        justify-content: center;
+    .mine-resume-card {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 24rpx;
+        margin-top: 16rpx;
+        border: 1rpx solid #eeeeee;
+        flex-direction: column;
     }
 
-    .mine-btn-text {
-        font-size: 26rpx;
+    .mine-resume-head {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .mine-resume-title {
+        font-size: 28rpx;
+        font-weight: bold;
+        color: #1a1a1a;
+    }
+
+    .mine-resume-btn {
+        padding: 8rpx 28rpx;
+        border-radius: 24rpx;
+        background-color: #2979ff;
+    }
+
+    .mine-resume-btn-text {
+        font-size: 24rpx;
         color: #ffffff;
+    }
+
+    .mine-prog-wrap {
+        height: 12rpx;
+        background-color: #eef1f5;
+        border-radius: 6rpx;
+        margin-top: 16rpx;
+    }
+
+    .mine-prog-bar {
+        height: 12rpx;
+        background-color: #2979ff;
+        border-radius: 6rpx;
+    }
+
+    .mine-resume-sub {
+        font-size: 22rpx;
+        color: #999999;
+        margin-top: 12rpx;
     }
 
     .mine-func-row {

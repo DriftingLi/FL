@@ -3,11 +3,15 @@
  *
  * 背景：招聘 tab 是纯 mock 已随 #705 退场（#720），/pages/resume/* 三页唯一入口
  * 重挂到 job-list（设计 docs/prototype/recruit-mine-design.png）。
- * 本文件钉住重挂的三条语义：
+ * 形态裁定：三变体原型（prototype/jobs-resume 分支）拍板 B「并入真实域」——
+ * 完善度直接由现有 ResumeData 八项字段计算（GET /resume 零后端改动），
+ * 原型图的人口学 9 项/Lv/收藏统计不做（收藏 API 的 target_type 后端未收录、恒 0，
+ * 接线先例见 resume.uvue:174-184，接口就绪前不展示）。
+ * 本文件钉住四条语义：
  * 1) 三页均可达且路由均已注册（无死链）；
- * 2) 资料卡用真实登录态（authStore），不引入收藏数等 mock（设计图统计行因
- *    后端无职位收藏 API 而裁剪，禁止回填假数据）；
- * 3) 入口区在职位列表之上，滚动不遮挡列表操作。
+ * 2) 资料卡用真实登录态（authStore），不引入收藏数等假数据；
+ * 3) 入口区在职位列表之上，滚动不遮挡列表操作；
+ * 4) B 定稿：完善度由真实字段计算，人口学/Lv/收藏统计不得回潮。
  */
 const fs = require('fs');
 const path = require('path');
@@ -44,5 +48,21 @@ describe('就业在线简历入口契约（#705 退场后重挂）', () => {
 
   it('入口区置于职位列表之上（滚动区首块）', () => {
     expect(src).toMatch(/<scroll-view[^>]*>[\s\S]*?class="mine-section"[\s\S]*?class="job-list"/);
+  });
+
+  it('B 定稿：完善度由真实 ResumeData 八项计算，人口学/Lv/收藏统计不回潮', () => {
+    expect(src).toContain("from '../../api/resume'");
+    expect(src).toContain('function countResumeFilled');
+    expect(src).toContain('const RESUME_FIELD_TOTAL = 8');
+    expect(src).toMatch(/width: resumePct \+ '%'/);
+    // 八项字段名必须全部出现在计算函数里（真实域，非新造字段）
+    for (const f of ['real_name', 'contact_phone', 'wechat', 'region',
+      'expected_position_extra', 'salary_negotiable', 'experience_years', 'self_intro']) {
+      expect(src).toContain(f);
+    }
+    // 人口学 9 项 / Lv / 收藏统计：B 裁定不做
+    expect(src).not.toMatch(/出生|民族|政治面貌|应届生|户籍|生源地/);
+    expect(src).not.toMatch(/Lv\d|Lv\$|Lv\{|Lv3/);
+    expect(src).not.toMatch(/公告收藏|职位收藏|合集收藏/);
   });
 });
