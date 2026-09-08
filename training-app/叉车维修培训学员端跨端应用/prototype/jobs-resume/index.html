@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PROTOTYPE · 招聘-我的 / 我的简历 · 3 variants（#705 设计缝）</title>
+<!--
+  PROTOTYPE, WIPE ME —— 一次性 UI 原型，回答「招聘-我的 + 我的简历长什么样」。
+  参考图：docs/prototype/recruit-mine-design.png + 用户 2026-09-08 五屏原型（我的简历=人口学表单+完善度%）。
+  三个变体（?variant=A|B|C 或底部浮条 / ←→ 切换）：
+    A 忠实原型两层 —— hub(Lv+收藏统计) + 人口学表单页 + 进度条；无后端支撑字段带 ⚠ 徽章（内存假数据）
+    B 并入真实域   —— 不新增人口学字段；完善度% 直接由真实 ResumeData 字段（姓名/电话/微信/地区/期望职位/薪资/年限/自介）计算
+    C 任务驱动     —— 完善度=可打勾任务清单；原型图 9 项人口学列为灰色扩展任务（不计入进度，标 ⚠ 需后端）
+  状态全内存，刷新即重置。双击本文件即可运行。
+-->
+<style>
+  :root { --blue:#2979ff; --ink:#1a1a1a; --sub:#666; --line:#eee; --bg:#f5f6f8; --warn:#ff9800; }
+  * { box-sizing:border-box; margin:0; font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; }
+  body { background:#dfe3e8; padding:14px 10px 90px; }
+  .proto-banner { max-width:860px; margin:0 auto 14px; background:#1a1a1a; color:#ffd54f; font-size:12px; padding:8px 12px; border-radius:8px; }
+  .proto-banner b { color:#fff; }
+  .stage { display:flex; gap:26px; justify-content:center; align-items:flex-start; flex-wrap:wrap; max-width:860px; margin:0 auto; }
+  .col { display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .col-cap { font-size:12px; color:#555; }
+  .phone { width:340px; min-height:600px; background:var(--bg); border-radius:26px; border:8px solid #111; overflow:hidden; position:relative; }
+  .statusbar { height:26px; background:linear-gradient(180deg,#CFE9FB,#DFF1FD); }
+  .nav { display:flex; align-items:center; justify-content:space-between; padding:8px 12px; background:linear-gradient(180deg,#CFE9FB,#DFF1FD); }
+  .nav .ttl { font-size:15px; font-weight:700; }
+  .nav .back { font-size:18px; color:#333; }
+  .nav .av { width:26px; height:26px; border-radius:50%; background:#fff; display:flex; align-items:center; justify-content:center; font-size:15px; }
+  .body { padding:10px 12px 16px; }
+  .card { background:#fff; border-radius:12px; padding:12px; margin-bottom:10px; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+  .profile { background:#d6eafc; }
+  .prow { display:flex; align-items:center; gap:8px; }
+  .pav { width:44px; height:44px; border-radius:50%; background:#fff; display:flex; align-items:center; justify-content:center; font-size:24px; }
+  .pname { font-size:16px; font-weight:800; color:var(--ink); }
+  .plv { font-size:11px; color:#5a7dbb; vertical-align:super; }
+  .stats { display:flex; gap:8px; margin-top:10px; }
+  .stat { flex:1; background:#fff; border-radius:10px; text-align:center; padding:7px 0; }
+  .stat .n { font-size:15px; font-weight:800; color:var(--blue); }
+  .stat .l { font-size:10px; color:var(--sub); }
+  .warn { display:inline-block; font-size:9px; color:var(--warn); border:1px solid var(--warn); border-radius:4px; padding:0 3px; margin-left:4px; vertical-align:1px; }
+  .cta { text-align:center; padding:18px 12px; }
+  .cta .ico { font-size:34px; }
+  .cta .t { font-size:14px; font-weight:700; margin:6px 0 10px; }
+  .btn { display:inline-block; background:var(--blue); color:#fff; font-size:12px; border:none; border-radius:14px; padding:6px 18px; cursor:pointer; }
+  .btn.ghost { background:#eef1f5; color:var(--sub); }
+  .sec { font-size:13px; font-weight:800; color:var(--ink); margin:12px 2px 8px; }
+  .funcs { display:flex; gap:8px; }
+  .func { flex:1; background:#fff; border-radius:12px; padding:14px 6px; text-align:center; box-shadow:0 1px 2px rgba(0,0,0,.04); cursor:pointer; }
+  .func .ico { font-size:24px; }
+  .func .t { font-size:12px; font-weight:700; color:var(--blue); margin-top:4px; }
+  .func .h { font-size:10px; color:#999; margin-top:2px; }
+  .banner { display:flex; align-items:center; gap:6px; background:#e8f3ff; border-radius:10px; padding:8px 10px; margin-bottom:8px; font-size:11px; color:#333; }
+  .banner .grow { flex:1; }
+  .prog-wrap { display:flex; align-items:center; gap:8px; margin:2px 2px 10px; }
+  .prog { flex:1; height:8px; background:#e6e9ee; border-radius:4px; overflow:hidden; position:relative; }
+  .prog i { display:block; height:100%; background:linear-gradient(90deg,#57a6ff,var(--blue)); width:0%; transition:width .2s; }
+  .prog .robot { position:absolute; top:-8px; font-size:14px; transition:left .2s; }
+  .pct { font-size:11px; color:var(--sub); width:32px; text-align:right; }
+  .row { display:flex; align-items:center; justify-content:space-between; background:#fff; border-radius:10px; padding:11px 12px; margin-bottom:6px; font-size:13px; box-shadow:0 1px 2px rgba(0,0,0,.04); cursor:pointer; }
+  .row .k { color:var(--ink); } .row .k em { color:#e53935; font-style:normal; }
+  .row .v { color:#bbb; display:flex; align-items:center; gap:4px; }
+  .row .v.set { color:var(--ink); }
+  .row .chev { color:#ccc; }
+  .row input, .row select { border:none; outline:none; font-size:13px; text-align:right; width:130px; background:transparent; color:var(--blue); }
+  .row.dim { opacity:.55; }
+  .row .tick { color:#43a047; font-weight:800; }
+  .row .todo { color:var(--blue); font-size:12px; }
+  .note { font-size:10px; color:#8a6d3b; background:#fcf8e3; border:1px solid #f5e5b8; border-radius:8px; padding:6px 8px; margin-bottom:8px; }
+  .tabs { display:flex; margin-bottom:10px; }
+  .tab { flex:1; text-align:center; font-size:13px; color:var(--sub); padding:8px 0; cursor:pointer; }
+  .tab.on { color:var(--ink); font-weight:800; border-bottom:2px solid var(--blue); }
+  .switcher { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); display:flex; align-items:center; gap:10px; background:#111; color:#fff; border-radius:24px; padding:8px 14px; box-shadow:0 4px 16px rgba(0,0,0,.35); z-index:99; }
+  .switcher button { background:none; border:none; color:#fff; font-size:18px; cursor:pointer; padding:0 6px; }
+  .switcher .lab { font-size:12px; min-width:190px; text-align:center; }
+  .switcher .lab small { display:block; color:#9ab; font-size:10px; }
+</style>
+</head>
+<body>
+<div class="proto-banner"><b>PROTOTYPE</b> 一次性原型 · 状态全内存 · 双击可跑 · ←/→ 或底部浮条切换变体 · 参考五屏原型图（招聘-我的 / 我的简历）</div>
+<div class="stage" id="stage"></div>
+<div class="switcher">
+  <button id="prev">‹</button>
+  <div class="lab" id="vlabel"></div>
+  <button id="next">›</button>
+</div>
+
+<script>
+// ---------- 内存状态（原型专用，刷新即重置） ----------
+const eduOptions = ['请选择','初中及以下','高中/中专','大专','本科'];
+const S = {
+  user: { name:'学员07dslj', avatar:'👷', lv:3, fav:{ notice:0, job:2, coll:0 } },
+  // A/C 用：原型图人口学字段（后端无支撑，⚠）
+  demo: { birthRegion:'', birthDate:'', gender:'', nation:'', hukou:'', origin:'', politic:'', special:'', fresh:'', edu:'' },
+  // B 用：真实 ResumeData 域字段（对齐 types/index.uts）
+  real: { real_name:'', contact_phone:'', wechat:'', region:'', expected_position_extra:'', salary:'', experience_years:'', self_intro:'' },
+};
+const DEMO_KEYS = [
+  ['birthRegion','出生地区',true], ['birthDate','出生年月',true], ['gender','性别',true], ['nation','民族',true],
+  ['hukou','户籍',true], ['origin','生源地',true], ['politic','政治面貌',true], ['special','特殊身份',false],
+  ['fresh','是否应届生身份',false],
+];
+const REAL_KEYS = [
+  ['real_name','姓名',true], ['contact_phone','联系电话',true], ['wechat','微信号',false], ['region','所在地区',true],
+  ['expected_position_extra','期望职位',true], ['salary','期望薪资',false], ['experience_years','从业年限',true], ['self_intro','自我介绍',false],
+];
+const pct = (obj, keys) => Math.round(keys.filter(k => String(obj[k[0]]).trim()).length / keys.length * 100);
+
+// ---------- 通用小件 ----------
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function fieldRow(group, key, label, req, warn, dim) {
+  const v = S[group][key];
+  const sel = key === 'edu' ? `<select onchange="set('${group}','${key}',this.value)">${eduOptions.map(o=>`<option ${o===v?'selected':''}>${o}</option>`).join('')}</select>`
+    : v ? `<span class="v set">${esc(v)} <span class="chev">›</span></span>`
+    : `<span class="v">${req?'<em>必填</em>':'选填'} <span class="chev">›</span></span>`;
+  return `<div class="row ${dim?'dim':''}" onclick="editField('${group}','${key}',this)">${
+    `<span class="k">${label}${req?' <em>*</em>':''}${warn?'<span class="warn">需后端</span>':''}</span>`}${
+    (key==='edu') ? sel : (v ? `<span class="v set">${esc(v)} <span class="chev">›</span></span>` : `<span class="v">${req?'<em>必填</em>':'选填'} <span class="chev">›</span></span>`)
+  }</div>`;
+}
+window.set = (g,k,v) => { S[g][k] = v; render(); };
+window.editField = (g,k,el) => {
+  if (el.querySelector('input')) return;
+  const old = S[g][k];
+  const inp = document.createElement('input');
+  inp.value = old; inp.placeholder = '输入后点其它处保存';
+  el.querySelectorAll('span.v').forEach(n => n.remove());
+  el.appendChild(inp); inp.focus();
+  inp.onblur = () => { S[g][k] = inp.value.trim(); render(); };
+  inp.onkeydown = e => { if (e.key === 'Enter') inp.blur(); };
+};
+const progress = p => `<div class="prog-wrap"><div class="prog"><i style="width:${p}%"></i><span class="robot" style="left:calc(${p}% - 7px)">🤖</span></div><span class="pct">${p}%</span></div>`;
+const navBar = (ttl, right) => `<div class="statusbar"></div><div class="nav"><span class="back">‹</span><span class="ttl">${ttl}</span>${right||'<span style="width:26px"></span>'}</div>`;
+const hubProfile = (withStats, withLv) => `<div class="card profile">
+  <div class="prow"><div class="pav">${S.user.avatar}</div><div><span class="pname">${esc(S.user.name)}</span>${withLv?`<span class="plv">Lv${S.user.lv}</span>`:''}</div></div>
+  ${withStats?`<div class="stats">${[['notice','公告收藏'],['job','职位收藏'],['coll','合集收藏']].map(([k,l])=>`<div class="stat"><div class="n">${S.user.fav[k]}</div><div class="l">${l}<span class="warn">需后端</span></div></div>`).join('')}</div>`:''}
+</div>`;
+const funcsRow = `<div class="sec">常用功能</div><div class="funcs">
+  <div class="func" onclick="alert('原型桩：跳 /pages/resume/resume-edit')"><div class="ico">📝</div><div class="t">在线简历</div><div class="h">优化增加推荐</div></div>
+  <div class="func" onclick="alert('原型桩：跳 /pages/resume/resume-attach')"><div class="ico">📁</div><div class="t">附件简历</div><div class="h">制作/上传</div></div></div>`;
+
+// ---------- 变体 A：忠实原型两层 ----------
+function variantA() {
+  const p = pct(S.demo, [...DEMO_KEYS, ['edu','教育学历',true]]);
+  const hub = `<div class="phone">${navBar('招聘','<div class="av">'+S.user.avatar+'</div>')}<div class="body">
+    ${hubProfile(true,true)}
+    <div class="card cta"><div class="ico">📄</div><div class="t">去填写简历</div><button class="btn" onclick="goScreen('resume')">去完善</button></div>
+    ${funcsRow}</div></div>`;
+  const resume = `<div class="phone">${navBar('上传')}<div class="body">
+    <div class="banner">📄 请先完善你的简历信息 <span class="grow"></span><button class="btn" onclick="alert('原型桩：PUT /resume（人口学字段需后端新增）')">保存</button></div>
+    ${progress(p)}
+    <div class="sec">基本信息 <em style="color:#e53935;font-style:normal">*</em><span class="warn">9 项均无后端字段</span></div>
+    ${DEMO_KEYS.map(([k,l,r])=>fieldRow('demo',k,l,r,true)).join('')}
+    <div class="sec">教育学历 <em style="color:#e53935;font-style:normal">*</em></div>
+    <div class="row"><span class="k">选择学历<span class="warn">需后端</span></span><select onchange="set('demo','edu',this.value)">${eduOptions.map(o=>`<option ${o===S.demo.edu?'selected':''}>${o}</option>`).join('')}</select></div>
+  </div></div>`;
+  return [[hub,'A · 招聘-我的（hub）'],[resume,'A · 我的简历（人口学表单+完善度）']];
+}
+
+// ---------- 变体 B：并入真实域 ----------
+function variantB() {
+  const p = pct(S.real, REAL_KEYS);
+  const done = REAL_KEYS.filter(([k])=>String(S.real[k]).trim()).length;
+  const hub = `<div class="phone">${navBar('招聘','<div class="av">'+S.user.avatar+'</div>')}<div class="body">
+    ${hubProfile(false,false)}
+    <div class="card" style="cursor:pointer" onclick="goScreen('resume')">
+      <div class="prow"><div style="flex:1"><div style="font-size:13px;font-weight:800">简历完善度 ${p}%</div><div style="font-size:10px;color:#999;margin-top:2px">${done}/${REAL_KEYS.length} 项真实字段已填（GET /resume）</div></div><span class="btn">去完善</span></div>
+      <div style="margin-top:8px">${progress(p)}</div>
+    </div>
+    ${funcsRow}
+    <div class="note">B 立场：不新增人口学字段。完善度直接由现有 ResumeData 计算，后端零改动；设计图的统计行/Lv 因无 API 不做。</div>
+  </div></div>`;
+  const resume = `<div class="phone">${navBar('上传')}<div class="body">
+    <div class="banner">📄 完善求职信息，企业更容易找到你 <span class="grow"></span><button class="btn" onclick="alert('原型桩：PUT /resume（现有契约即可）')">保存</button></div>
+    ${progress(p)}
+    <div class="sec">求职信息 <em style="color:#e53935;font-style:normal">*</em></div>
+    ${REAL_KEYS.map(([k,l,r])=>fieldRow('real',k,l,r,false)).join('')}
+    <div class="note">字段全部对齐 types/index.uts ResumeData（real_name/contact_phone/wechat/region/expected_position_extra/salary/experience_years/self_intro），保存走现有 PUT /resume。</div>
+  </div></div>`;
+  return [[hub,'B · hub（真实域完善度）'],[resume,'B · 简历表单（零后端改动）']];
+}
+
+// ---------- 变体 C：任务驱动 ----------
+function variantC() {
+  const p = pct(S.real, REAL_KEYS);
+  const taskRow = (g,k,l,done,warn,dim) => `<div class="row ${dim?'dim':''}" onclick="${done?`goScreen('resume')`:`editField('${g}','${k}',this)`}">
+    <span class="k">${l}${warn?'<span class="warn">需后端</span>':''}</span>
+    ${done?`<span class="v set"><span class="tick">✓</span> <span class="chev">›</span></span>`:`<span class="v">${S[g][k]?`<span class="tick">✓</span>`:'<span class="todo">待完善</span>'} <span class="chev">›</span></span>`}
+  </div>`;
+  const hub = `<div class="phone">${navBar('招聘','<div class="av">'+S.user.avatar+'</div>')}<div class="body">
+    ${hubProfile(false,true)}
+    <div class="card" style="padding-bottom:4px">
+      <div class="prow"><div style="flex:1;font-size:13px;font-weight:800">简历完善度</div><span style="font-size:12px;color:var(--blue);font-weight:800">${p}%</span></div>
+      ${progress(p)}
+      ${REAL_KEYS.map(([k,l])=>taskRow('real',k,l,String(S.real[k]).trim(),false)).join('')}
+      <div class="sec" style="margin:8px 2px 6px;font-size:11px;color:#999">进阶任务（原型图人口学项）</div>
+      ${DEMO_KEYS.slice(0,4).map(([k,l])=>taskRow('demo',k,l,false,true,true)).join('')}
+      <div class="note">C 立场：完善度即任务清单，逐条打勾；人口学 9 项作为灰色进阶任务，等后端补字段再点亮。常用功能被任务取代（在线/附件简历收进任务流）。</div>
+    </div>
+  </div></div>`;
+  return [[hub,'C · 任务清单（单一界面）']];
+}
+
+// ---------- 切换器 ----------
+const VARIANTS = [
+  { key:'A', name:'忠实原型两层', fn:variantA },
+  { key:'B', name:'并入真实域', fn:variantB },
+  { key:'C', name:'任务驱动', fn:variantC },
+];
+let cur = 0;
+window.goScreen = () => {}; // 变体内导航为桩，仅视觉
+function render() {
+  const v = VARIANTS[cur];
+  const screens = v.fn();
+  document.getElementById('stage').innerHTML = screens.map(([html,cap]) =>
+    `<div class="col">${html}<div class="col-cap">${cap}</div></div>`).join('');
+  document.getElementById('vlabel').innerHTML = `${v.key}（${v.name}）<small>?variant=${v.key.toLowerCase()} · ${cur+1}/${VARIANTS.length}</small>`;
+  history.replaceState(null,'','?variant='+v.key.toLowerCase());
+}
+function step(d){ cur = (cur + d + VARIANTS.length) % VARIANTS.length; render(); }
+document.getElementById('prev').onclick = () => step(-1);
+document.getElementById('next').onclick = () => step(1);
+document.addEventListener('keydown', e => {
+  const t = e.target.tagName;
+  if (t==='INPUT'||t==='TEXTAREA'||t==='SELECT'||e.target.isContentEditable) return;
+  if (e.key==='ArrowLeft') step(-1);
+  if (e.key==='ArrowRight') step(1);
+});
+const q = new URLSearchParams(location.search).get('variant');
+if (q) { const i = VARIANTS.findIndex(v => v.key.toLowerCase()===q.toLowerCase()); if (i>=0) cur = i; }
+render();
+</script>
+</body>
+</html>
