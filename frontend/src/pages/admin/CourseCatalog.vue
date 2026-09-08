@@ -158,18 +158,18 @@
           </template>
         </el-table-column>
         <template #empty>
-          <el-empty description="暂无课程" :image-size="60" />
+          <UiEmptyState description="暂无课程" size="sm" />
         </template>
       </el-table>
 
       <div class="cc-pagination" v-if="filteredCourses.length > pageSize">
-        <el-pagination
-          v-model:current-page="currentPage"
-          v-model:page-size="pageSize"
-          :total="filteredCourses.length"
-          :page-sizes="[10, 20, 50]"
-          layout="total, sizes, prev, pager, next"
-        />
+        <UiPagination
+      v-model:current-page="currentPage"
+      v-model:page-size="pageSize"
+      :total="filteredCourses.length"
+      show-sizes
+      :page-sizes="[10, 20, 50]"
+    />
       </div>
     </main>
 
@@ -210,6 +210,8 @@ import FacetItem from '@/components/catalog/FacetItem.vue'
 import CourseCatalogCourseDrawer from '@/components/admin/CourseCatalogCourseDrawer.vue'
 import CourseCatalogDialogs from '@/components/admin/CourseCatalogDialogs.vue'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
 
 const submitting = ref(false)
 

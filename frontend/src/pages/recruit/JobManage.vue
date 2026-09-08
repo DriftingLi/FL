@@ -13,9 +13,7 @@
       @retry="handleRetry"
     />
     <UiSkeleton v-else-if="loading" variant="list" :count="4" />
-    <div v-else-if="items.length === 0" class="rounded-card border border-line bg-panel p-8 text-center text-ink-3">
-      暂无职位，点击右上角「发布职位」开始招聘
-    </div>
+    <UiEmptyState v-else-if="items.length === 0" description="暂无职位，点击右上角「发布职位」开始招聘" />
     <div v-else class="grid gap-3">
       <div
         v-for="item in items"
@@ -54,13 +52,13 @@
       </div>
     </div>
     <div v-if="total > 0" class="flex justify-center">
-      <el-pagination
-        v-model:current-page="page"
-        :page-size="pageSize"
-        :total="total"
-        layout="prev, pager, next"
-        @current-change="handlePageChange"
-      />
+      <UiPagination
+      v-model:current-page="page"
+      :page-size="pageSize"
+      :total="total"
+      :show-total="false"
+      @current-change="handlePageChange"
+    />
     </div>
 
     <el-dialog v-model="dialogVisible" :title="editing ? '编辑职位' : '发布职位'" width="560px" destroy-on-close>
@@ -108,6 +106,8 @@ import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
 
 interface PositionItem {
   position_id: number

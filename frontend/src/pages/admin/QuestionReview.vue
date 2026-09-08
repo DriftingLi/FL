@@ -60,13 +60,13 @@
       </el-table-column>
     </el-table>
 
-    <el-pagination
+    <UiPagination
       v-model:current-page="page"
       :page-size="pageSize"
       :total="total"
-      layout="prev, pager, next"
-      @current-change="handlePageChange"
+      :show-total="false"
       style="margin-top: 15px"
+      @current-change="handlePageChange"
     />
 
     <!-- 题目详情弹窗 -->
@@ -134,6 +134,7 @@ import type { Question } from '@/types/question'
 import { typeMap } from '@/constants/question'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
 
 const statusMap: Record<string, string> = { draft: '草稿', pending: '待审核', published: '已发布' }
 const statusType: Record<string, string> = { draft: 'info', pending: 'warning', published: 'success' }

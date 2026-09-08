@@ -30,15 +30,15 @@
         </div>
       </div>
       <div class="mt-3 flex justify-end">
-        <el-pagination
-          v-model:current-page="page"
-          v-model:page-size="pageSize"
-          :total="total"
-          :page-sizes="[10, 20, 50]"
-          layout="total, sizes, prev, pager, next"
-          @current-change="handlePageChange"
-          @size-change="loadLedger"
-        />
+        <UiPagination
+      v-model:current-page="page"
+      v-model:page-size="pageSize"
+      :total="total"
+      show-sizes
+      :page-sizes="[10, 20, 50]"
+      @current-change="handlePageChange"
+      @size-change="loadLedger"
+    />
       </div>
     </div>
 
@@ -55,13 +55,12 @@
         </div>
       </div>
       <div class="mt-3 flex justify-end">
-        <el-pagination
-          v-model:current-page="viewsPage"
-          :page-size="20"
-          :total="viewsTotal"
-          layout="total, prev, pager, next"
-          @current-change="loadViews"
-        />
+        <UiPagination
+      v-model:current-page="viewsPage"
+      :page-size="20"
+      :total="viewsTotal"
+      @current-change="loadViews"
+    />
       </div>
     </div>
 
@@ -79,13 +78,12 @@
         </div>
       </div>
       <div class="mt-3 flex justify-end">
-        <el-pagination
-          v-model:current-page="requestsPage"
-          :page-size="20"
-          :total="requestsTotal"
-          layout="total, prev, pager, next"
-          @current-change="loadRequests"
-        />
+        <UiPagination
+      v-model:current-page="requestsPage"
+      :page-size="20"
+      :total="requestsTotal"
+      @current-change="loadRequests"
+    />
       </div>
     </div>
 
@@ -113,13 +111,12 @@
         </div>
       </div>
       <div class="mt-3 flex justify-end">
-        <el-pagination
-          v-model:current-page="jobsPage"
-          :page-size="20"
-          :total="jobsTotal"
-          layout="total, prev, pager, next"
-          @current-change="loadJobs"
-        />
+        <UiPagination
+      v-model:current-page="jobsPage"
+      :page-size="20"
+      :total="jobsTotal"
+      @current-change="loadJobs"
+    />
       </div>
     </div>
 
@@ -144,13 +141,12 @@
         </div>
       </div>
       <div class="mt-3 flex justify-end">
-        <el-pagination
-          v-model:current-page="reportsPage"
-          :page-size="20"
-          :total="reportsTotal"
-          layout="total, prev, pager, next"
-          @current-change="loadReports"
-        />
+        <UiPagination
+      v-model:current-page="reportsPage"
+      :page-size="20"
+      :total="reportsTotal"
+      @current-change="loadReports"
+    />
       </div>
     </div>
 
@@ -171,6 +167,7 @@ import { ElMessage } from 'element-plus'
 import { unwrappedRequest } from '@/api/request'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
 
 // #411：默认锁定问答域（forum_topic），显式切换才跨域全量——卡片标题与内容同域。
 const domain = ref<'forum_topic' | ''>('forum_topic')

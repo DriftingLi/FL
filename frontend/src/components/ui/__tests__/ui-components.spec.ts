@@ -26,6 +26,8 @@ import UiStatCard from '../UiStatCard.vue'
 import UiTag from '../UiTag.vue'
 import UiActionChip from '../UiActionChip.vue'
 import UiSegmentTabs from '../UiSegmentTabs.vue'
+import UiPagination from '../UiPagination.vue'
+import UiFilterBar from '../UiFilterBar.vue'
 
 const OPTIONS = [
   { label: '全部', value: 'all' },
@@ -354,5 +356,55 @@ describe('UiSegmentTabs（分段选项卡）', () => {
     expect(btns).toHaveLength(3)
     expect(btns[0].attributes('aria-selected')).toBe('true')
     expect(btns[2].attributes('aria-selected')).toBe('false')
+  })
+})
+
+describe('UiPagination', () => {
+  it('默认渲染 total 与 pager，不出现每页条数选择器', () => {
+    const w = mountWith(UiPagination, { total: 100 })
+    expect(w.find('.el-pagination').exists()).toBe(true)
+    expect(w.find('.el-pagination__total').exists()).toBe(true)
+    expect(w.find('.el-pagination__sizes').exists()).toBe(false)
+  })
+
+  it('showSizes 开启后出现每页条数选择器', () => {
+    const w = mountWith(UiPagination, { total: 100, showSizes: true, pageSize: 20 })
+    expect(w.find('.el-pagination__sizes').exists()).toBe(true)
+  })
+
+  it('翻页发 update:currentPage 与 current-change', async () => {
+    const w = mountWith(UiPagination, { total: 100, currentPage: 1 })
+    await w.find('.btn-next').trigger('click')
+    expect(w.emitted('update:currentPage')?.[0]).toEqual([2])
+    expect(w.emitted('current-change')?.[0]).toEqual([2])
+  })
+
+  it('disabled 时不响应翻页', async () => {
+    const w = mountWith(UiPagination, { total: 100, currentPage: 1, disabled: true })
+    await w.find('.btn-next').trigger('click')
+    expect(w.emitted('update:currentPage')).toBeFalsy()
+  })
+
+  it('align=center 时容器居中', () => {
+    const w = mountWith(UiPagination, { total: 100, align: 'center' })
+    expect(w.find('.justify-center').exists()).toBe(true)
+  })
+})
+
+describe('UiFilterBar', () => {
+  it('渲染 filters 与 actions 两个插槽', () => {
+    const w = mount(UiFilterBar, {
+      slots: {
+        filters: '<input class="f-input" />',
+        actions: '<button class="a-btn">查询</button>'
+      }
+    })
+    expect(w.find('.f-input').exists()).toBe(true)
+    expect(w.find('.a-btn').exists()).toBe(true)
+  })
+
+  it('actions 区域用 ml-auto 顶到最右', () => {
+    const w = mount(UiFilterBar, { slots: { actions: '<span>x</span>' } })
+    expect(w.find('.ml-auto').exists()).toBe(true)
   })
 })

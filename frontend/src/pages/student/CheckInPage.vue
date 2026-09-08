@@ -120,14 +120,14 @@
             <el-table-column label="连续" width="90" prop="streak" />
           </el-table>
           <div v-if="rankTotal > rankPageSize" class="flex justify-center py-3">
-            <el-pagination
-              v-model:current-page="rankPage"
-              :page-size="rankPageSize"
-              :total="rankTotal"
-              layout="prev, pager, next"
-              size="small"
-              @current-change="loadRank"
-            />
+            <UiPagination
+      v-model:current-page="rankPage"
+      :page-size="rankPageSize"
+      :total="rankTotal"
+      :show-total="false"
+      small
+      @current-change="loadRank"
+    />
           </div>
         </div>
       </div>
@@ -147,6 +147,7 @@ import UiTag from '@/components/ui/UiTag.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import { useAsyncPage } from '@/composables/useAsyncPage'
+import UiPagination from '@/components/ui/UiPagination.vue'
 
 const weekdays = ['日', '一', '二', '三', '四', '五', '六']
 

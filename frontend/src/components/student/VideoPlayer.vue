@@ -1,10 +1,10 @@
 <template>
   <div class="video-player-wrapper" ref="wrapperRef">
     <div v-if="error" class="video-error">
-      <el-empty :description="errorMessage">
+      <UiEmptyState :description="errorMessage">
         <UiButton variant="primary" @click="retryLoad">重试</UiButton>
         <UiButton @click="downloadVideo">下载视频</UiButton>
-      </el-empty>
+      </UiEmptyState>
     </div>
 
     <div v-else class="video-container">
@@ -69,6 +69,7 @@ import { ref, computed, onBeforeUnmount } from 'vue'
 import { Download, Loading, Monitor } from '@element-plus/icons-vue'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 
 const props = defineProps({
   src: { type: String, required: true },

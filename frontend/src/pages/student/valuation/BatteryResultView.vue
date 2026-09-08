@@ -12,6 +12,7 @@ import { useBatteryStore } from '@/stores/valuationBattery'
 import { downloadBatteryReportBlob, generateBatteryReport } from '@/api/valuation/battery'
 import { downloadReport } from '@/composables/useReportDownload'
 import { BATTERY_TYPE_LABELS, type BatteryType } from '@/types/valuation/battery'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 
 const router = useRouter()
 const store = useBatteryStore()
@@ -116,7 +117,7 @@ async function downloadPdf() {
           />
         </div>
       </div>
-      <el-empty v-else description="暂无特征数据" />
+      <UiEmptyState v-else description="暂无特征数据" />
     </section>
 
     <!-- 评估建议 -->
@@ -128,7 +129,7 @@ async function downloadPdf() {
       <ResultSuggestions :items="suggestions" variant="battery" />
     </section>
   </div>
-  <el-empty v-else description="暂无评估结果" />
+  <UiEmptyState v-else description="暂无评估结果" />
 </template>
 
 <style scoped>

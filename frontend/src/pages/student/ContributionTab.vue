@@ -18,6 +18,7 @@ import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useCredentialStore } from '@/stores/credential'
+import UiPagination from '@/components/ui/UiPagination.vue'
 
 const props = defineProps<{
   credentialId?: number | null
@@ -373,8 +374,12 @@ defineExpose({ loadMine })
         <UiEmptyState v-else description="暂无学员投稿，快来上传第一份" />
       </div>
       <div v-if="total > pageSize" class="mt-4 flex justify-center">
-        <el-pagination v-model:current-page="currentPage" :page-size="pageSize" :total="total"
-          layout="total, prev, pager, next" @current-change="handlePageChange" />
+        <UiPagination
+      v-model:current-page="currentPage"
+      :page-size="pageSize"
+      :total="total"
+      @current-change="handlePageChange"
+    />
       </div>
     </template>
 

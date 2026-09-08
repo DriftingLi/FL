@@ -6,16 +6,16 @@
     </div>
 
     <div v-else-if="loadError" class="ppt-error">
-      <el-empty description="幻灯片加载失败">
+      <UiEmptyState description="幻灯片加载失败">
         <UiButton variant="primary" @click="loadSlides">重试</UiButton>
         <UiButton @click="downloadFile">下载PPT</UiButton>
-      </el-empty>
+      </UiEmptyState>
     </div>
 
     <div v-else-if="slides.length === 0" class="ppt-empty">
-      <el-empty description="暂无幻灯片预览">
+      <UiEmptyState description="暂无幻灯片预览">
         <UiButton variant="primary" @click="downloadFile">下载PPT文件</UiButton>
-      </el-empty>
+      </UiEmptyState>
     </div>
 
     <template v-else>
@@ -86,6 +86,7 @@ import { ElMessage } from 'element-plus'
 import { courseApi } from '@/api/course'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 
 const props = defineProps({
   src: { type: String, required: true },

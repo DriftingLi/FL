@@ -112,15 +112,16 @@
         </div>
 
         <div class="cc-pagination mt-5 flex justify-center" v-if="total > pageSize">
-          <el-pagination
-            v-model:current-page="currentPage"
-            v-model:page-size="pageSize"
-            :total="total"
-            :page-sizes="[12, 24, 36]"
-            layout="total, sizes, prev, pager, next, jumper"
-            @size-change="handleSizeChange"
-            @current-change="handlePageChange"
-          />
+          <UiPagination
+      v-model:current-page="currentPage"
+      v-model:page-size="pageSize"
+      :total="total"
+      show-sizes
+      :page-sizes="[12, 24, 36]"
+      show-jumper
+      @current-change="handlePageChange"
+      @size-change="handleSizeChange"
+    />
         </div>
       </main>
     </div>
@@ -243,6 +244,7 @@ import UiProgress from '@/components/ui/UiProgress.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
 
 const stagger = useStagger()
 

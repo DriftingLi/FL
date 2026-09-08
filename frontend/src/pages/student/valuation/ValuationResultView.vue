@@ -13,6 +13,7 @@ import FutureValueChart from '@/components/valuation/FutureValueChart.vue'
 import ResultSuggestions from '@/components/valuation/ResultSuggestions.vue'
 import { downloadEvaluationReportBlob } from '@/api/valuation/evaluation'
 import { downloadReport } from '@/composables/useReportDownload'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -99,7 +100,7 @@ async function downloadPdf() {
       <ResultSuggestions :items="r.suggestions || []" />
     </section>
   </div>
-  <el-empty v-else description="暂无评估结果" />
+  <UiEmptyState v-else description="暂无评估结果" />
 </template>
 
 <style scoped>
