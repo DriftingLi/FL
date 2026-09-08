@@ -50,6 +50,16 @@ describe('就业在线简历入口契约（#705 退场后重挂）', () => {
     expect(src).toMatch(/<scroll-view[^>]*>[\s\S]*?class="mine-section"[\s\S]*?class="job-list"/);
   });
 
+  it('版式对齐原型图：居中「去填写简历」大卡（图标+进度+去完善药丸）与「常用功能」小节标题', () => {
+    expect(src).toContain('<text class="mine-resume-icon">📄</text>');
+    expect(src).toContain('去填写简历');
+    expect(src).toContain('完善度 {{ resumePct }}%');
+    expect(src).toContain('<text class="mine-sec-title">常用功能</text>');
+    // 去完善药丸 .stop 防与整卡点击双跳
+    expect(src).toMatch(/class="mine-resume-btn" @click\.stop="onResume"/);
+    expect(src).toMatch(/\.mine-resume-card \{[\s\S]*?align-items: center;/);
+  });
+
   it('B 定稿：完善度由真实 ResumeData 八项计算，人口学/Lv/收藏统计不回潮', () => {
     expect(src).toContain("from '../../api/resume'");
     expect(src).toContain('function countResumeFilled');

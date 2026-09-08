@@ -33,17 +33,17 @@
                     </view>
                 </view>
                 <view class="mine-resume-card" @click="onResume">
-                    <view class="mine-resume-head">
-                        <text class="mine-resume-title">简历完善度 {{ resumePct }}%</text>
-                        <view class="mine-resume-btn">
-                            <text class="mine-resume-btn-text">去完善</text>
-                        </view>
-                    </view>
+                    <text class="mine-resume-icon">📄</text>
+                    <text class="mine-resume-title">去填写简历</text>
                     <view class="mine-prog-wrap">
                         <view class="mine-prog-bar" :style="{ width: resumePct + '%' }"></view>
                     </view>
-                    <text class="mine-resume-sub">{{ resumeFilledCount }}/8 项已填写</text>
+                    <text class="mine-resume-sub">完善度 {{ resumePct }}%（{{ resumeFilledCount }}/8 项已填写）</text>
+                    <view class="mine-resume-btn" @click.stop="onResume">
+                        <text class="mine-resume-btn-text">去完善</text>
+                    </view>
                 </view>
+                <text class="mine-sec-title">常用功能</text>
                 <view class="mine-func-row">
                     <view class="mine-func-card" @click="onResumeEdit">
                         <text class="mine-func-icon">📝</text>
@@ -496,40 +496,42 @@
     .mine-resume-card {
         background-color: #ffffff;
         border-radius: 16rpx;
-        padding: 24rpx;
+        padding: 32rpx 24rpx;
         margin-top: 16rpx;
         border: 1rpx solid #eeeeee;
         flex-direction: column;
+        align-items: center;
     }
 
-    .mine-resume-head {
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
+    .mine-resume-icon {
+        font-size: 64rpx;
     }
 
     .mine-resume-title {
-        font-size: 28rpx;
+        font-size: 30rpx;
         font-weight: bold;
         color: #1a1a1a;
+        margin-top: 12rpx;
     }
 
     .mine-resume-btn {
-        padding: 8rpx 28rpx;
-        border-radius: 24rpx;
+        padding: 12rpx 44rpx;
+        border-radius: 32rpx;
         background-color: #2979ff;
+        margin-top: 20rpx;
     }
 
     .mine-resume-btn-text {
-        font-size: 24rpx;
+        font-size: 26rpx;
         color: #ffffff;
     }
 
     .mine-prog-wrap {
+        width: 100%;
         height: 12rpx;
         background-color: #eef1f5;
         border-radius: 6rpx;
-        margin-top: 16rpx;
+        margin-top: 20rpx;
     }
 
     .mine-prog-bar {
@@ -542,6 +544,13 @@
         font-size: 22rpx;
         color: #999999;
         margin-top: 12rpx;
+    }
+
+    .mine-sec-title {
+        font-size: 28rpx;
+        font-weight: bold;
+        color: #1a1a1a;
+        margin: 24rpx 4rpx 12rpx;
     }
 
     .mine-func-row {
