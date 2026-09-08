@@ -123,18 +123,18 @@ func (h *ForumHandler) UploadImage(c *gin.Context) {
 
 // ListTopics 帖子列表
 // @Summary 帖子列表
-// @Description 支持 scope=all|general|chapter，按 category=all|discussion|question、chapter_id/keyword/sort=latest|hot 过滤
+// @Description 支持 scope=all|general|chapter，按 category=all|discussion|question|experience、chapter_id/keyword/sort=latest|hot|created 过滤
 // @Tags 学员端-论坛
 // @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param scope query string false "范围 all|general|chapter"
-// @Param category query string false "类别 discussion|question，省略表示不过滤（向后兼容）"
+// @Param category query string false "类别 discussion|question|experience，省略表示不过滤（向后兼容）"
 // @Param chapter_id query int false "章节ID"
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(10)
 // @Param keyword query string false "关键词"
-// @Param sort query string false "排序 latest|hot"
+// @Param sort query string false "排序 latest|hot|created（created=发帖时间，#722）"
 // @Param order query string false "排序方向 asc|desc"
 // @Success 200 {object} response.R{data=service.ForumTopicPageResult} "success"
 // @Failure 400 {object} response.R "参数错误"
@@ -180,7 +180,7 @@ func (h *ForumHandler) ListTopics(c *gin.Context) {
 
 // CreateTopic 发帖
 // @Summary 发帖
-// @Description chapter_id 为空表示综合讨论区；category=question 时不得带 chapter_id；images 最多 9 张 URL
+// @Description chapter_id 为空表示综合讨论区；category=question 时不得带 chapter_id；experience（备考经验）可挂章节、不可被采纳；images 最多 9 张 URL
 // @Tags 学员端-论坛
 // @Accept json
 // @Produce json
