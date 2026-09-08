@@ -5,7 +5,9 @@
     </div>
 
     <el-card>
-      <div class="filter-bar">
+      <UiFilterBar>
+        <template #filters>
+
         <el-select v-model="query.role" placeholder="角色" clearable style="width: 130px" @change="load(1)">
           <el-option label="管理员" value="admin" />
           <el-option label="讲师" value="tutor" />
@@ -18,7 +20,8 @@
           @keyup.enter="load(1)"
         />
         <UiButton variant="primary" @click="load(1)">查询</UiButton>
-      </div>
+        </template>
+      </UiFilterBar>
 
       <el-table :data="items" stripe border style="width: 100%">
         <el-table-column type="expand">
@@ -63,6 +66,7 @@ import { adminApi, type AuditLogItem } from '@/api/admin'
 import { formatTime } from '@/utils/format'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
+import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 
 const items = ref<AuditLogItem[]>([])
 const total = ref(0)
@@ -110,12 +114,6 @@ onMounted(() => {
   color: var(--color-text-primary);
 }
 
-.filter-bar {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-}
 
 .audit-detail {
   margin: 0;

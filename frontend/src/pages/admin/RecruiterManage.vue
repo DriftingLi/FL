@@ -6,7 +6,9 @@
 <el-icon><Plus /></el-icon> 新增招聘者
 </el-button>
 </div>
-<div class="filter-bar">
+<UiFilterBar>
+        <template #filters>
+
 <el-input
 v-model="searchKeyword"
 placeholder="搜索企业名或账号"
@@ -18,7 +20,8 @@ style="width: 280px"
 <template #prefix><el-icon><Search /></el-icon></template>
 </el-input>
 <el-button type="primary" @click="search">搜索</el-button>
-</div>
+        </template>
+      </UiFilterBar>
 
 <el-table :data="list" v-loading="loading" stripe border style="width: 100%" row-key="id">
 <el-table-column prop="id" label="ID" width="70" align="center" />
@@ -162,6 +165,7 @@ import { usernameRules } from '@/utils/validate'
 import { useAdminTable } from '@/composables/useAdminTable'
 import { formatDateTime } from '@/utils/format'
 import UiPagination from '@/components/ui/UiPagination.vue'
+import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 
 const dialogVisible = ref(false)
 const submitting = ref(false)
@@ -352,6 +356,5 @@ onMounted(() => {
 .recruiter-manage-page { padding: 16px; }
 .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
 .page-header h2 { font-size: 18px; font-weight: 600; margin: 0; }
-.filter-bar { display: flex; gap: 8px; margin-bottom: 12px; }
 .pagination-wrapper { display: flex; justify-content: flex-end; margin-top: 12px; }
 </style>

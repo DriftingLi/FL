@@ -12,6 +12,7 @@ import { formatDateTime } from '@/utils/format'
 import { phoneRules, passwordRules, emailRules, companyRules } from '@/utils/validate'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
+import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 
 // 新增弹窗
 const dialogVisible = ref(false)
@@ -164,7 +165,9 @@ onMounted(() => {
       </UiButton>
     </div>
 
-    <div class="filter-bar">
+    <UiFilterBar>
+        <template #filters>
+
       <el-input
         v-model="searchKeyword"
         placeholder="搜索账号 / 昵称 / 手机号"
@@ -178,7 +181,8 @@ onMounted(() => {
         </template>
       </el-input>
       <UiButton variant="primary" @click="search">搜索</UiButton>
-    </div>
+        </template>
+      </UiFilterBar>
 
     <el-table :data="list" v-loading="loading" stripe border style="width: 100%">
       <el-table-column prop="id" label="ID" width="70" align="center" />
@@ -323,11 +327,6 @@ onMounted(() => {
   color: var(--color-text-primary);
 }
 
-.filter-bar {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 20px;
-}
 
 .pagination-wrapper {
   display: flex;
@@ -349,14 +348,7 @@ onMounted(() => {
     font-size: 18px;
   }
 
-  .filter-bar {
-    flex-direction: column;
-    gap: 8px;
-  }
 
-  .filter-bar .el-input {
-    width: 100% !important;
-  }
 
   .el-table {
     overflow-x: auto;

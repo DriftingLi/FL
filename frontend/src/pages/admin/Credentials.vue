@@ -8,15 +8,15 @@
     </div>
 
     <el-card shadow="never">
-      <div class="toolbar">
-        <div class="toolbar-filters">
+      <UiFilterBar>
+        <template #filters>
           <el-select v-model="filterCategory" placeholder="类别" clearable style="width: 160px">
             <el-option label="特种作业" value="special_operation" />
             <el-option label="技能等级" value="skill_level" />
           </el-select>
           <el-input v-model="keyword" placeholder="搜索编码/名称" clearable style="width: 220px" />
-        </div>
-      </div>
+        </template>
+      </UiFilterBar>
       <el-table :data="filtered" v-loading="loading" stripe>
         <el-table-column label="类别" width="120">
           <template #default="{ row }">
@@ -98,6 +98,7 @@ import { ElMessage, type FormInstance } from 'element-plus'
 import { credentialApi, type CredentialDict, type CredentialPayload } from '@/api/credential'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 
 const list = ref<CredentialDict[]>([])
 
@@ -225,14 +226,5 @@ onMounted(load)
 .page-header h2 {
   font-size: 20px;
   margin: 0;
-}
-.toolbar {
-  display: flex;
-  justify-content: flex-start;
-  margin-bottom: 12px;
-}
-.toolbar-filters {
-  display: flex;
-  gap: 12px;
 }
 </style>

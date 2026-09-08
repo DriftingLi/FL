@@ -29,6 +29,7 @@ import type { CoefficientConfig } from '@/types/valuation/evaluation'
 import { useCrudTable, type FieldDef } from '@/composables/useCrudTable'
 import { useDirtyDraft } from '@/composables/useDirtyDraft'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 
 // ========== Tab 1: 原价表 ==========
 const ORIGINAL_PRICE_FIELDS: FieldDef[] = [
@@ -376,7 +377,9 @@ function onRefresh() {
             <span class="tab-tip">维护叉车基准原价记录（学生端表单级联查询依赖此表）</span>
             <UiButton variant="primary" :icon="Plus" @click="openCreate">新增</UiButton>
           </div>
-          <div class="filter-bar">
+          <UiFilterBar>
+        <template #filters>
+
             <el-input
               v-model="originalPriceFilter.brand"
               placeholder="筛选品牌"
@@ -406,7 +409,8 @@ function onRefresh() {
               style="width: 160px"
             />
             <UiButton :icon="RefreshLeft" size="small" @click="resetOriginalPriceFilter">重置筛选</UiButton>
-          </div>
+        </template>
+      </UiFilterBar>
           <el-table
             v-loading="originalPriceLoading"
             :data="filteredOriginalPrices"
@@ -740,13 +744,6 @@ function onRefresh() {
 .tab-tip {
   font-size: var(--fs-sm);
   color: var(--color-text-tertiary);
-}
-.filter-bar {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--sp-3);
-  margin-bottom: var(--sp-4);
 }
 
 /* ===== 算法参数折叠面板 ===== */

@@ -15,6 +15,7 @@ import { formatLocaleDateTime } from '@/utils/format'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
+import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 
 const activeTab = ref<'pending' | 'reports'>('pending')
 
@@ -219,13 +220,16 @@ onMounted(() => {
 
       <!-- ===== 举报处置 ===== -->
       <template v-else>
-        <div class="filter-bar">
+        <UiFilterBar>
+        <template #filters>
+
           <el-radio-group :model-value="reportStatus" @update:model-value="(v: any) => { reportStatus = v as number }" @change="handleReportStatusChange">
             <el-radio-button :value="-1">全部</el-radio-button>
             <el-radio-button :value="0">待处理</el-radio-button>
             <el-radio-button :value="1">已处理</el-radio-button>
           </el-radio-group>
-        </div>
+        </template>
+      </UiFilterBar>
         <el-table v-loading="reportLoading" :data="reports" border>
           <el-table-column prop="id" label="ID" width="70" align="center" />
           <el-table-column label="被举报投稿" min-width="220">
@@ -272,7 +276,6 @@ onMounted(() => {
 .contribution-manage-page { padding: 16px; }
 .card-header { display: flex; align-items: center; justify-content: space-between; }
 .card-title { font-size: 16px; font-weight: 600; }
-.filter-bar { margin: 12px 0; }
 .pagination-wrapper { display: flex; justify-content: center; margin-top: 16px; }
 .file-link { display: block; color: var(--el-color-primary); font-size: 12px; line-height: 1.8; }
 .file-link:hover { text-decoration: underline; }
