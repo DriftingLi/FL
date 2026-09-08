@@ -261,6 +261,22 @@ describe('UiDialog', () => {
     w.unmount()
   })
 
+  it('destroy-on-close 与 append-to-body 透传到 el-dialog', async () => {
+    const w = await mountDialog({ title: 'x', destroyOnClose: true, appendToBody: true })
+    const dlg = w.findComponent({ name: 'ElDialog' })
+    expect(dlg.props('destroyOnClose')).toBe(true)
+    expect(dlg.props('appendToBody')).toBe(true)
+    w.unmount()
+  })
+
+  it('默认不销毁、不挂 body（与裸 el-dialog 行为一致）', async () => {
+    const w = await mountDialog({ title: 'x' })
+    const dlg = w.findComponent({ name: 'ElDialog' })
+    expect(dlg.props('destroyOnClose')).toBe(false)
+    expect(dlg.props('appendToBody')).toBe(false)
+    w.unmount()
+  })
+
   it('showCancel=false 时页脚只剩确定按钮', async () => {
     const w = await mountDialog({ title: '提示', showCancel: false, confirmText: '知道了' })
     const labels = footerButtons().map((b) => b.textContent?.trim())

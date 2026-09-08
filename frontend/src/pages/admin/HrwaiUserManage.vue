@@ -13,6 +13,7 @@ import { phoneRules, passwordRules, emailRules, companyRules } from '@/utils/val
 import UiButton from '@/components/ui/UiButton.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiFilterBar from '@/components/ui/UiFilterBar.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
 
 // 新增弹窗
 const dialogVisible = ref(false)
@@ -251,7 +252,7 @@ onMounted(() => {
     </div>
 
     <!-- 新增弹窗 -->
-    <el-dialog
+    <UiDialog
       v-model="dialogVisible"
       title="新增 HRWAI 用户"
       width="520px"
@@ -285,10 +286,10 @@ onMounted(() => {
         <UiButton @click="dialogVisible = false">取消</UiButton>
         <UiButton variant="primary" :loading="submitting" @click="handleSubmit">确认</UiButton>
       </template>
-    </el-dialog>
+    </UiDialog>
 
     <!-- 重置密码弹窗 -->
-    <el-dialog
+    <UiDialog
       v-model="pwdDialogVisible"
       title="重置密码"
       width="440px"
@@ -306,7 +307,7 @@ onMounted(() => {
         <UiButton @click="pwdDialogVisible = false">取消</UiButton>
         <UiButton variant="primary" :loading="pwdSubmitting" @click="handleResetPwd">确认重置</UiButton>
       </template>
-    </el-dialog>
+    </UiDialog>
   </div>
 </template>
 

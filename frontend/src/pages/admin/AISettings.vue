@@ -126,7 +126,7 @@
     </UiCard>
 
     <!-- 新建/编辑对话框 -->
-    <el-dialog
+    <UiDialog
       v-model="dialogVisible"
       :title="dialogMode === 'create' ? '新建 AI 配置' : '编辑 AI 配置'"
       width="600px"
@@ -174,7 +174,7 @@
         <UiButton @click="dialogVisible = false">取消</UiButton>
         <UiButton variant="primary" :loading="saving" @click="handleSave">保存</UiButton>
       </template>
-    </el-dialog>
+    </UiDialog>
   </div>
 </template>
 
@@ -185,6 +185,7 @@ import { Plus, ArrowDown } from '@element-plus/icons-vue'
 import { adminApi, type AIConfig, type FeatureBinding } from '@/api/admin'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiCard from '@/components/ui/UiCard.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
 
 const configs = ref<AIConfig[]>([])
 const bindings = ref<FeatureBinding[]>([])

@@ -30,6 +30,7 @@ import { useCrudTable, type FieldDef } from '@/composables/useCrudTable'
 import { useDirtyDraft } from '@/composables/useDirtyDraft'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiFilterBar from '@/components/ui/UiFilterBar.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
 
 // ========== Tab 1: 原价表 ==========
 const ORIGINAL_PRICE_FIELDS: FieldDef[] = [
@@ -648,7 +649,7 @@ function onRefresh() {
       </el-tabs>
 
       <!-- 原价表编辑对话框 -->
-      <el-dialog
+      <UiDialog
         v-model="dialogVisible"
         :title="dialogTitle"
         width="560px"
@@ -687,10 +688,10 @@ function onRefresh() {
             {{ editingRow ? '保存' : '创建' }}
           </UiButton>
         </template>
-      </el-dialog>
+      </UiDialog>
 
       <!-- 区域系数新增对话框 -->
-      <el-dialog
+      <UiDialog
         v-model="regionCreateDialogVisible"
         title="新增区域系数"
         width="480px"
@@ -720,7 +721,7 @@ function onRefresh() {
             创建
           </UiButton>
         </template>
-      </el-dialog>
+      </UiDialog>
     </div>
   </div>
 </template>

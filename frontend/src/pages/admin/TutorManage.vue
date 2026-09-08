@@ -72,7 +72,7 @@
     />
     </div>
 
-    <el-dialog
+    <UiDialog
       v-model="dialogVisible"
       title="新增导师"
       width="480px"
@@ -93,10 +93,10 @@
         <UiButton @click="dialogVisible = false">取消</UiButton>
         <UiButton variant="primary" :loading="submitting" @click="handleSubmit">确认添加</UiButton>
       </template>
-    </el-dialog>
+    </UiDialog>
 
     <!-- 重置密码弹窗 -->
-    <el-dialog
+    <UiDialog
       v-model="pwdDialogVisible"
       title="重置密码"
       width="440px"
@@ -114,7 +114,7 @@
         <UiButton @click="pwdDialogVisible = false">取消</UiButton>
         <UiButton variant="primary" :loading="pwdSubmitting" @click="handleResetPwd">确认重置</UiButton>
       </template>
-    </el-dialog>
+    </UiDialog>
   </div>
 </template>
 
@@ -130,6 +130,7 @@ import { usernameRules, passwordRules, nameRules } from '@/utils/validate'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiFilterBar from '@/components/ui/UiFilterBar.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
 
 type TutorRow = AdminTutor
 

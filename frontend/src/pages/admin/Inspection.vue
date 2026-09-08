@@ -150,14 +150,14 @@
       </div>
     </div>
 
-    <el-dialog v-model="forceOfflineVisible" title="强制下架职位" width="440px">
+    <UiDialog v-model="forceOfflineVisible" title="强制下架职位" width="440px">
       <div class="text-sm text-ink">职位「{{ forceOfflineJob?.title }}」将被强制下架，学员侧立即不可见，企业不能自行重新上架。</div>
       <el-input v-model="forceOfflineReason" type="textarea" :rows="3" maxlength="500" show-word-limit placeholder="请填写下架原因（将邮件通知企业）" />
       <template #footer>
         <UiButton @click="forceOfflineVisible = false">取消</UiButton>
         <UiButton variant="danger" :loading="forceOfflineing" @click="confirmForceOffline">确认下架</UiButton>
       </template>
-    </el-dialog>
+    </UiDialog>
   </div>
 </template>
 
@@ -169,6 +169,7 @@ import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
 
 // #411：默认锁定问答域（forum_topic），显式切换才跨域全量——卡片标题与内容同域。
 const domain = ref<'forum_topic' | ''>('forum_topic')
