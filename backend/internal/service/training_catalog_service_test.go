@@ -332,6 +332,61 @@ func TestListQuestionTags_QuestionCount(t *testing.T) {
 	}
 }
 
+// TestListQuestionTags_CredentialPartition 标签计数按目标证件分区（#702）：
+// 学员端传证件时只统计该证件的已发布非真题题；不传保持全局口径。
+func TestListQuestionTags_CredentialPartition(t *testing.T) {
+	svc, db := newCatalogSvc(t)
+	tag, _ := svc.CreateQuestionTag(QuestionTagInput{Code: "regulation", Name: "法规"})
+	qsvc := NewQuestionBankService(db, nil, zap.NewNop())
+	credA := model.Credential{Code: "N1", Name: "叉车司机N1"}
+	if err := db.Create(&credA).Error; err != nil {
+		t.Fatalf("建证件A失败: %v", err)
+	}
+	credB := model.Credential{Code: "ELEC", Name: "低压电工"}
+	if err := db.Create(&credB).Error; err != nil {
+		t.Fatalf("建证件B失败: %v", err)
+	}
+
+	mkQ := func(content string, credID int) {
+		t.Helper()
+		in := map[string]any{
+			"type": "single_choice", "content": content, "options": []string{"A", "B"}, "answer": "A",
+			"status": "published", "tag_ids": []int{tag.ID},
+		}
+		if credID > 0 {
+			in["credential_id"] = credID
+		}
+		if _, err := qsvc.CreateQuestion(in, nil, "tutor"); err != nil {
+			t.Fatalf("建题失败: %v", err)
+		}
+	}
+	// A 证件 2 道、证件为空 1 道
+	mkQ("A证件题1", credA.ID)
+	mkQ("A证件题2", credA.ID)
+	mkQ("无证件题", 0)
+
+	got := svc.ListQuestionTags(true, false, &credA.ID)
+	byID := map[int]QuestionTagDict{}
+	for _, d := range got {
+		byID[d.ID] = d
+	}
+	if byID[tag.ID].QuestionCount == nil || *byID[tag.ID].QuestionCount != 2 {
+		t.Fatalf("A证件分区应统计 2 道, got %v", byID[tag.ID].QuestionCount)
+	}
+	gotB := svc.ListQuestionTags(true, false, &credB.ID)
+	for _, d := range gotB {
+		if d.ID == tag.ID && (d.QuestionCount == nil || *d.QuestionCount != 0) {
+			t.Fatalf("B证件分区应为 0, got %v", d.QuestionCount)
+		}
+	}
+	global := svc.ListQuestionTags(true, false)
+	for _, d := range global {
+		if d.ID == tag.ID && (d.QuestionCount == nil || *d.QuestionCount != 3) {
+			t.Fatalf("不分区应统计全部 3 道, got %v", d.QuestionCount)
+		}
+	}
+}
+
 func TestSetQuestionTags(t *testing.T) {
 	svc, db := newCatalogSvc(t)
 	q := testutil.SeedQuestion(t, db, "single_choice", "液压相关题目", "A")
@@ -427,6 +482,41 @@ func TestGetCatalogTree(t *testing.T) {
 	}
 	if courses[0].Name != "叉车基础" || *courses[0].ChapterCount != 1 {
 		t.Fatalf("课程数据不匹配: %+v", courses[0])
+	}
+}
+
+// TestGetCatalogTree_CredentialPartition 目录树按目标证件分区（#702）：
+// 传证件只返回该证件课程；空证件分区返回空树（调用方走内容建设中空状态）。
+func TestGetCatalogTree_CredentialPartition(t *testing.T) {
+	svc, db := newCatalogSvc(t)
+	spec := model.Specialty{Code: "operation", Name: "操作", Status: 1, SortOrder: 1, CreatedAt: testutil.Now()}
+	db.Create(&spec)
+	lv := model.CourseLevel{Code: "beginner", Name: "入门", Status: 1, SortOrder: 1, CreatedAt: testutil.Now()}
+	db.Create(&lv)
+	credA := model.Credential{Code: "N1", Name: "叉车司机N1"}
+	db.Create(&credA)
+	credB := model.Credential{Code: "ELEC", Name: "低压电工"}
+	db.Create(&credB)
+	db.Create(&model.Course{Name: "A课", Status: 1, CredentialID: &credA.ID,
+		SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID), CreatedAt: testutil.Now()})
+
+	countCourses := func(tree *CatalogTreeDTO) int {
+		n := 0
+		for _, s := range tree.Specialties {
+			for _, l := range s.Levels {
+				n += len(l.Courses)
+			}
+		}
+		return n
+	}
+	if n := countCourses(svc.GetCatalogTree(&credA.ID)); n != 1 {
+		t.Fatalf("A证件分区应 1 门课, got %d", n)
+	}
+	if n := countCourses(svc.GetCatalogTree(&credB.ID)); n != 0 {
+		t.Fatalf("B证件分区应 0 门课, got %d", n)
+	}
+	if n := countCourses(svc.GetCatalogTree()); n != 1 {
+		t.Fatalf("不分区应 1 门课, got %d", n)
 	}
 }
 

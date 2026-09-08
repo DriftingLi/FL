@@ -91,15 +91,16 @@ func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *serv
 
 // GetCatalogTree 培训目录树
 // @Summary 培训目录树（公开）
-// @Description 学员端课程目录树
+// @Description 学员端课程目录树（credential_id 可选：传了按目标证件分区，与课程列表同口径；不传不分区）
 // @Tags 学员端-培训目录
 // @Produce json
+// @Param credential_id query int false "目标证件ID"
 // @Success 200 {object} response.R "success"
 // @Router /catalog/tree [get]
 func (h *TrainingCatalogHandler) GetCatalogTree(c *gin.Context) {
 	Endpoint[struct{}, service.CatalogTreeDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.CatalogTreeDTO, error) {
-			return h.svc.GetCatalogTree(), nil
+			return h.svc.GetCatalogTree(queryIDPtr(c, "credential_id")), nil
 		},
 		Render: func(c *gin.Context, _ *struct{}, resp *service.CatalogTreeDTO, _ error) {
 			response.Success(c, resp)
@@ -128,15 +129,16 @@ func (h *TrainingCatalogHandler) ListPublicLevels(c *gin.Context) {
 
 // ListPublicTags 题库标签列表
 // @Summary 题库标签（公开）
-// @Description 仅启用项
+// @Description 仅启用项（credential_id 可选：传了按目标证件分区，与抽题池同口径；不传不分区）
 // @Tags 学员端-培训目录
 // @Produce json
+// @Param credential_id query int false "目标证件ID"
 // @Success 200 {object} response.R "success"
 // @Router /tags [get]
 func (h *TrainingCatalogHandler) ListPublicTags(c *gin.Context) {
 	Endpoint[struct{}, []service.QuestionTagDict]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*[]service.QuestionTagDict, error) {
-			result := h.svc.ListQuestionTags(true, false) // 学员端专项练习：隐藏来源标记标签
+			result := h.svc.ListQuestionTags(true, false, queryIDPtr(c, "credential_id")) // 学员端专项练习：隐藏来源标记标签
 			return &result, nil
 		},
 		Render: func(c *gin.Context, _ *struct{}, resp *[]service.QuestionTagDict, _ error) {

@@ -4,7 +4,7 @@
  * 挂在 /training/materials 页内作为「学员投稿」tab 内容。
  * 广场仅展示 approved 投稿（后端已过滤），跟随当前证件（页面父级传入）。
  */
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Download, UploadFilled, Plus, Document, Warning, View } from '@element-plus/icons-vue'
 import { contributionApi, type ContributionFile, type ContributionItem, type ContributionStatus } from '@/api/contribution'
@@ -72,8 +72,9 @@ function onViewChange(v: string) {
   if (v === 'mine' && mine.value.length === 0) loadMine()
 }
 
+/** 提交用目标证件：抽屉内选择器是唯一写入口（默认当前证件，见 openUpload） */
 function effectiveCredentialId(): number | null {
-  return props.credentialId ?? credentialStore.current?.id ?? null
+  return uploadCredentialId.value ?? null
 }
 
 // ===== 上传投稿 =====
@@ -81,6 +82,14 @@ const uploadVisible = ref(false)
 const uploadTitle = ref('')
 const uploadIntro = ref('')
 const uploadAnonymous = ref(false)
+const uploadCredentialId = ref<number | null>(null)
+const credentialOptions = computed(() => credentialStore.flatList || [])
+
+/** 打开投稿抽屉：目标证件默认当前证件（#702），下拉可选任意有效证件 */
+function openUpload() {
+  uploadCredentialId.value = props.credentialId ?? credentialStore.current?.id ?? null
+  uploadVisible.value = true
+}
 const uploadFiles = ref<{ file: File; file_name: string; file_url: string; file_size: number; content_type: string }[]>([])
 const uploading = ref(false)
 const submitBusy = ref(false)
@@ -296,6 +305,7 @@ const STATUS_CLASS: Record<ContributionStatus, string> = {
 
 onMounted(() => {
   loadList()
+  credentialStore.loadFlat().catch(() => {})
   if (activeView.value === 'mine') loadMine()
 })
 
@@ -311,7 +321,7 @@ defineExpose({ loadMine })
         :options="[{ label: '广场', value: 'plaza' }, { label: '我的投稿', value: 'mine' }]"
         @update:model-value="onViewChange"
       />
-      <UiButton v-if="activeView === 'plaza'" variant="primary" size="small" @click="uploadVisible = true">
+      <UiButton v-if="activeView === 'plaza'" variant="primary" size="small" @click="openUpload">
         <el-icon><Plus /></el-icon>
         上传资料
       </UiButton>
@@ -396,6 +406,15 @@ defineExpose({ loadMine })
     <!-- 上传投稿抽屉 -->
     <el-drawer v-model="uploadVisible" title="上传资料" size="420px" append-to-body>
       <div class="flex flex-col gap-4">
+        <div>
+          <label class="mb-1 block text-sm text-ink-2">目标证件 <span class="text-danger">*</span></label>
+          <el-select v-model="uploadCredentialId" placeholder="选择资料所属证件" class="w-full">
+            <el-option v-for="c in credentialOptions" :key="c.id" :label="c.name" :value="c.id" />
+          </el-select>
+          <p v-if="uploadCredentialId && uploadCredentialId !== (props.credentialId ?? credentialStore.current?.id)" class="mt-1 text-xs text-ink-3">
+            该稿将归属所选证件，切到该证件下可见
+          </p>
+        </div>
         <div>
           <label class="mb-1 block text-sm text-ink-2">标题 <span class="text-danger">*</span></label>
           <el-input v-model="uploadTitle" maxlength="120" placeholder="如：叉车液压系统常见故障排查手册" show-word-limit />

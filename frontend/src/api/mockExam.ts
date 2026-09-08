@@ -40,7 +40,7 @@ export interface MockExamResult {
 
 export const mockExamApi = {
   startMockExam(data: StartMockExamPayload) {
-    return unwrappedRequest.post<{ mock_exam_id: number; questions: Question[]; remaining_time: number }>('/mock-exam/start', data)
+    return unwrappedRequest.post<{ mock_exam_id: number; questions: Question[]; remaining_time: number }>('/mock-exam/start', data, { params: {} })
   },
 
   saveProgress(mockExamId: number, data: MockExamProgressPayload) {

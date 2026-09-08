@@ -105,4 +105,13 @@ describe('useExamSession（会话编排收敛）', () => {
     expect(s.inExam.value).toBe(false)
     expect(s.questions.value).toEqual([])
   })
+
+  it('enter 成功但题目为空时不进卷并抛错（#702 空白页兜底）', async () => {
+    const adapters = makeAdapters({ enter: async () => ({ questions: [], remaining_time: 90 }) })
+    const s = useExamSession(adapters)
+
+    await expect(s.start()).rejects.toThrow('题库暂无可用的题目')
+    expect(s.inExam.value).toBe(false)
+    expect(s.questions.value).toEqual([])
+  })
 })
