@@ -1,5 +1,5 @@
 <template>
-  <el-dialog v-model="visible" :title="title" width="440px">
+  <UiDialog v-model="visible" :title="title" width="440px">
     <el-form label-width="0">
       <el-form-item>
         <el-input v-model="target" placeholder="请输入新邮箱" maxlength="50" />
@@ -15,7 +15,7 @@
       <UiButton @click="visible = false">取消</UiButton>
       <UiButton variant="primary" :loading="submitting" @click="submit">确认修改</UiButton>
     </template>
-  </el-dialog>
+  </UiDialog>
 </template>
 
 <script setup lang="ts">
@@ -27,6 +27,7 @@ import { useSendCode } from '@/composables/useSendCode'
 import { useVerifyDialog } from '@/composables/useVerifyDialog'
 import { ref } from 'vue'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
 
 const authStore = useAuthStore()
 const { remaining: countdown, send } = useSendCode({ purpose: 'bind', sendCode: (ch, tgt) => authApi.sendProfileCode({ channel: ch, target: tgt }) })

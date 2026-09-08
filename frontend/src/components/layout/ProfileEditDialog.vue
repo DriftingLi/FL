@@ -1,5 +1,5 @@
 <template>
-  <el-dialog v-model="visible" title="修改头像与昵称" width="480px">
+  <UiDialog v-model="visible" title="修改头像与昵称" width="480px">
     <div class="profile-edit-dialog">
       <div class="avatar-row">
         <el-avatar :size="72" :src="avatarUrl || undefined" class="current-avatar">
@@ -39,7 +39,7 @@
         </div>
       </div>
     </div>
-  </el-dialog>
+  </UiDialog>
 </template>
 
 <script setup lang="ts">
@@ -48,6 +48,7 @@ import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
 
 const authStore = useAuthStore()
 

@@ -26,6 +26,8 @@ import UiStatCard from '../UiStatCard.vue'
 import UiTag from '../UiTag.vue'
 import UiActionChip from '../UiActionChip.vue'
 import UiSegmentTabs from '../UiSegmentTabs.vue'
+import UiPagination from '../UiPagination.vue'
+import UiFilterBar from '../UiFilterBar.vue'
 
 const OPTIONS = [
   { label: '全部', value: 'all' },
@@ -259,6 +261,22 @@ describe('UiDialog', () => {
     w.unmount()
   })
 
+  it('destroy-on-close 与 append-to-body 透传到 el-dialog', async () => {
+    const w = await mountDialog({ title: 'x', destroyOnClose: true, appendToBody: true })
+    const dlg = w.findComponent({ name: 'ElDialog' })
+    expect(dlg.props('destroyOnClose')).toBe(true)
+    expect(dlg.props('appendToBody')).toBe(true)
+    w.unmount()
+  })
+
+  it('默认不销毁、不挂 body（与裸 el-dialog 行为一致）', async () => {
+    const w = await mountDialog({ title: 'x' })
+    const dlg = w.findComponent({ name: 'ElDialog' })
+    expect(dlg.props('destroyOnClose')).toBe(false)
+    expect(dlg.props('appendToBody')).toBe(false)
+    w.unmount()
+  })
+
   it('showCancel=false 时页脚只剩确定按钮', async () => {
     const w = await mountDialog({ title: '提示', showCancel: false, confirmText: '知道了' })
     const labels = footerButtons().map((b) => b.textContent?.trim())
@@ -331,5 +349,78 @@ describe('UiSegmentTabs（分段选项卡）', () => {
     const w = mountWith(UiSegmentTabs, { modelValue: '7d', options: opts, disabled: true })
     await w.findAll('button')[1].trigger('click')
     expect(w.emitted('update:modelValue')).toBeFalsy()
+  })
+
+  it('指示条用品牌语义色而非 bg-panel（防与卡片同色隐身）', () => {
+    const w = mountWith(UiSegmentTabs, { modelValue: '7d', options: opts })
+    const bar = w.find('[aria-hidden="true"]')
+    expect(bar.classes()).toContain('bg-ui-100')
+    expect(bar.classes()).not.toContain('bg-panel')
+  })
+
+  it('激活项用品牌深字、未激活项用次要文字色', () => {
+    const w = mountWith(UiSegmentTabs, { modelValue: '7d', options: opts })
+    const btns = w.findAll('button')
+    expect(btns[0].classes()).toContain('text-ui-700')
+    expect(btns[1].classes()).toContain('text-ink-3')
+  })
+
+  it('options 变化后按 modelValue 重新标记激活项', async () => {
+    const w = mountWith(UiSegmentTabs, { modelValue: '7d', options: opts })
+    await w.setProps({ options: [...opts, { label: '全部', value: 'all' }] })
+    const btns = w.findAll('button')
+    expect(btns).toHaveLength(3)
+    expect(btns[0].attributes('aria-selected')).toBe('true')
+    expect(btns[2].attributes('aria-selected')).toBe('false')
+  })
+})
+
+describe('UiPagination', () => {
+  it('默认渲染 total 与 pager，不出现每页条数选择器', () => {
+    const w = mountWith(UiPagination, { total: 100 })
+    expect(w.find('.el-pagination').exists()).toBe(true)
+    expect(w.find('.el-pagination__total').exists()).toBe(true)
+    expect(w.find('.el-pagination__sizes').exists()).toBe(false)
+  })
+
+  it('showSizes 开启后出现每页条数选择器', () => {
+    const w = mountWith(UiPagination, { total: 100, showSizes: true, pageSize: 20 })
+    expect(w.find('.el-pagination__sizes').exists()).toBe(true)
+  })
+
+  it('翻页发 update:currentPage 与 current-change', async () => {
+    const w = mountWith(UiPagination, { total: 100, currentPage: 1 })
+    await w.find('.btn-next').trigger('click')
+    expect(w.emitted('update:currentPage')?.[0]).toEqual([2])
+    expect(w.emitted('current-change')?.[0]).toEqual([2])
+  })
+
+  it('disabled 时不响应翻页', async () => {
+    const w = mountWith(UiPagination, { total: 100, currentPage: 1, disabled: true })
+    await w.find('.btn-next').trigger('click')
+    expect(w.emitted('update:currentPage')).toBeFalsy()
+  })
+
+  it('align=center 时容器居中', () => {
+    const w = mountWith(UiPagination, { total: 100, align: 'center' })
+    expect(w.find('.justify-center').exists()).toBe(true)
+  })
+})
+
+describe('UiFilterBar', () => {
+  it('渲染 filters 与 actions 两个插槽', () => {
+    const w = mount(UiFilterBar, {
+      slots: {
+        filters: '<input class="f-input" />',
+        actions: '<button class="a-btn">查询</button>'
+      }
+    })
+    expect(w.find('.f-input').exists()).toBe(true)
+    expect(w.find('.a-btn').exists()).toBe(true)
+  })
+
+  it('actions 区域用 ml-auto 顶到最右', () => {
+    const w = mount(UiFilterBar, { slots: { actions: '<span>x</span>' } })
+    expect(w.find('.ml-auto').exists()).toBe(true)
   })
 })

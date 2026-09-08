@@ -50,9 +50,7 @@
       @retry="handleRetry"
     />
     <UiSkeleton v-else-if="loading && items.length === 0" variant="list" :count="4" />
-    <div v-else-if="items.length === 0" class="rounded-card border border-line bg-panel p-8 text-center text-ink-3">
-      暂无公开简历
-    </div>
+    <UiEmptyState v-else-if="items.length === 0" description="暂无公开简历" />
 
     <!-- #493：响应式方形网格（手机 1 列 → 平板 2-3 列 → 桌面 4 列）；卡面仅核心字段 -->
     <div v-else class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -105,6 +103,7 @@ import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 
 const BATCH = 20
 const items = ref<RecruitResumeItem[]>([])

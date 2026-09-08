@@ -10,7 +10,7 @@
       @retry="handleRetry"
     />
     <UiSkeleton v-else-if="loading" variant="list" :count="4" />
-    <div v-else-if="items.length === 0" class="rounded-card border border-line bg-panel p-8 text-center text-ink-3">暂无投递记录</div>
+    <UiEmptyState v-else-if="items.length === 0" description="暂无投递记录" />
     <div v-else class="grid gap-3">
       <div v-for="item in items" :key="String(item.id)" class="rounded-card border border-line bg-panel p-4">
         <div class="flex items-center justify-between gap-3">
@@ -40,24 +40,24 @@
       </div>
     </div>
     <div v-if="total > 0" class="flex justify-center">
-      <el-pagination
-        v-model:current-page="page"
-        :page-size="pageSize"
-        :total="total"
-        layout="prev, pager, next"
-        @current-change="handlePageChange"
-      />
+      <UiPagination
+      v-model:current-page="page"
+      :page-size="pageSize"
+      :total="total"
+      :show-total="false"
+      @current-change="handlePageChange"
+    />
     </div>
 
     <!-- 撤回弹窗（spec #449 决定 10 的 UI 落点）：「一并撤回联系方式授权」默认不勾选 -->
-    <el-dialog v-model="withdrawVisible" title="撤回投递" width="440px">
+    <UiDialog v-model="withdrawVisible" title="撤回投递" width="440px">
       <div class="text-sm text-ink">确定撤回这条投递吗？撤回后可以重新投递同一职位。</div>
       <el-checkbox v-model="revokeContact" class="mt-3">一并撤回对该企业的联系方式授权</el-checkbox>
       <template #footer>
         <UiButton @click="withdrawVisible = false">取消</UiButton>
         <UiButton variant="primary" :loading="withdrawing" @click="confirmWithdraw">确认撤回</UiButton>
       </template>
-    </el-dialog>
+    </UiDialog>
   </div>
 </template>
 
@@ -71,6 +71,9 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import CompanyContactInfo from '@/components/recruit/CompanyContactInfo.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
 
 const items = ref<JobApplication[]>([])
 // #487：approved 的联系方式交换（投递产生/企业发起）用于企业联系方式展示

@@ -79,17 +79,16 @@
       </el-table>
 
       <div class="pagination-wrapper" v-if="total > pageSize">
-        <el-pagination
-          v-model:current-page="currentPage"
-          :page-size="pageSize"
-          :total="total"
-          layout="total, prev, pager, next"
-          @current-change="load"
-        />
+        <UiPagination
+      v-model:current-page="currentPage"
+      :page-size="pageSize"
+      :total="total"
+      @current-change="load"
+    />
       </div>
     </el-card>
 
-    <el-dialog v-model="rejectDialogVisible" title="驳回修改" width="480px">
+    <UiDialog v-model="rejectDialogVisible" title="驳回修改" width="480px">
       <el-input
         v-model="rejectReason"
         type="textarea"
@@ -102,7 +101,7 @@
         <UiButton @click="rejectDialogVisible = false">取消</UiButton>
         <UiButton variant="danger" :loading="submitting" @click="reject">确认驳回</UiButton>
       </template>
-    </el-dialog>
+    </UiDialog>
   </div>
 </template>
 
@@ -114,6 +113,8 @@ import { adminApi, type ProfileChangeRequest } from '@/api/admin'
 import { useAdminTable } from '@/composables/useAdminTable'
 import { formatLocaleDateTime } from '@/utils/format'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
 
 const submitting = ref(false)
 const activeStatus = ref<'pending' | 'approved' | 'rejected'>('pending')

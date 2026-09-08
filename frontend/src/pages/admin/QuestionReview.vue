@@ -7,7 +7,9 @@
       </div>
     </div>
 
-    <div class="filter-bar">
+    <UiFilterBar>
+        <template #filters>
+
       <el-select v-model="filters.type" placeholder="题型" clearable style="width: 130px">
         <el-option label="单选题" value="single_choice" />
         <el-option label="多选题" value="multi_choice" />
@@ -28,7 +30,8 @@
       <UiButton variant="danger" v-if="selectedIds.length > 0" @click="batchReject">
         批量驳回 ({{ selectedIds.length }})
       </UiButton>
-    </div>
+        </template>
+      </UiFilterBar>
 
     <el-table :data="questions" stripe v-loading="loading" @selection-change="handleSelection">
       <el-table-column type="selection" width="50" />
@@ -60,17 +63,17 @@
       </el-table-column>
     </el-table>
 
-    <el-pagination
+    <UiPagination
       v-model:current-page="page"
       :page-size="pageSize"
       :total="total"
-      layout="prev, pager, next"
-      @current-change="handlePageChange"
+      :show-total="false"
       style="margin-top: 15px"
+      @current-change="handlePageChange"
     />
 
     <!-- 题目详情弹窗 -->
-    <el-dialog v-model="detailVisible" title="题目详情" width="640px">
+    <UiDialog v-model="detailVisible" title="题目详情" width="640px">
       <div v-if="currentQuestion">
         <p><strong>题型：</strong>{{ typeMap[currentQuestion.type] }}</p>
         <p><strong>题干：</strong>{{ currentQuestion.content }}</p>
@@ -101,10 +104,10 @@
         <UiButton variant="danger" @click="rejectFromDetail">驳回</UiButton>
         <UiButton variant="success" @click="publishFromDetail">发布</UiButton>
       </template>
-    </el-dialog>
+    </UiDialog>
 
     <!-- 驳回理由弹窗 -->
-    <el-dialog v-model="rejectDialogVisible" title="填写驳回理由" width="500px">
+    <UiDialog v-model="rejectDialogVisible" title="填写驳回理由" width="500px">
       <el-form>
         <el-form-item label="驳回理由" required>
           <el-input
@@ -121,7 +124,7 @@
         <UiButton @click="cancelReject">取消</UiButton>
         <UiButton variant="danger" :loading="rejecting" @click="confirmReject">确认驳回</UiButton>
       </template>
-    </el-dialog>
+    </UiDialog>
   </div>
 </template>
 
@@ -134,6 +137,9 @@ import type { Question } from '@/types/question'
 import { typeMap } from '@/constants/question'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
+import UiFilterBar from '@/components/ui/UiFilterBar.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
 
 const statusMap: Record<string, string> = { draft: '草稿', pending: '待审核', published: '已发布' }
 const statusType: Record<string, string> = { draft: 'info', pending: 'warning', published: 'success' }
@@ -294,5 +300,4 @@ function cancelReject() {
 .question-review-page { padding: 0; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .page-header h2 { margin: 0; }
-.filter-bar { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; align-items: center; }
 </style>

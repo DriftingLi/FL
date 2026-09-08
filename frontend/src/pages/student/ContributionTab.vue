@@ -18,6 +18,7 @@ import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useCredentialStore } from '@/stores/credential'
+import UiPagination from '@/components/ui/UiPagination.vue'
 
 const props = defineProps<{
   credentialId?: number | null
@@ -373,8 +374,12 @@ defineExpose({ loadMine })
         <UiEmptyState v-else description="暂无学员投稿，快来上传第一份" />
       </div>
       <div v-if="total > pageSize" class="mt-4 flex justify-center">
-        <el-pagination v-model:current-page="currentPage" :page-size="pageSize" :total="total"
-          layout="total, prev, pager, next" @current-change="handlePageChange" />
+        <UiPagination
+      v-model:current-page="currentPage"
+      :page-size="pageSize"
+      :total="total"
+      @current-change="handlePageChange"
+    />
       </div>
     </template>
 
@@ -448,7 +453,7 @@ defineExpose({ loadMine })
       </div>
     </el-drawer>
     <!-- 投稿详情：元信息 + 文件清单逐个下载（列表不带 files，打开时拉 detail） -->
-    <el-dialog v-model="detailVisible" title="投稿详情" width="520px" append-to-body>
+    <UiDialog v-model="detailVisible" title="投稿详情" width="520px" append-to-body>
       <el-skeleton v-if="detailLoading" :rows="5" animated />
       <div v-else-if="detailItem" class="flex flex-col gap-3.5">
         <div>
@@ -478,7 +483,7 @@ defineExpose({ loadMine })
           </div>
         </div>
       </div>
-    </el-dialog>
+    </UiDialog>
 
     <!-- 举报对话框（四理由） -->
     <UiDialog v-model="reportVisible" title="举报投稿" width="440px" :confirm-text="'提交举报'" :confirm-loading="reportSubmitting" @confirm="submitReport">

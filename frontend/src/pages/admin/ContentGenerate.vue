@@ -107,7 +107,7 @@
       </div>
     </UiCard>
 
-    <el-dialog
+    <UiDialog
       v-model="previewVisible"
       :title="`预览 - ${previewTitle}`"
       width="700px"
@@ -117,7 +117,7 @@
       <template #footer>
         <UiButton @click="previewVisible = false">关闭</UiButton>
       </template>
-    </el-dialog>
+    </UiDialog>
   </div>
 </template>
 
@@ -130,6 +130,7 @@ import { adminApi } from '@/api/admin'
 import '@/assets/styles/markdown.css'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiCard from '@/components/ui/UiCard.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
 
 interface GenerateCourse {
   course_id: number

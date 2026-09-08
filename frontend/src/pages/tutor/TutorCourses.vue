@@ -109,15 +109,15 @@
             </CourseCard>
           </div>
 
-          <div v-if="total > pageSize" class="mt-5 flex justify-center">
-            <el-pagination
-              v-model:current-page="page"
-              :page-size="pageSize"
-              :total="total"
-              layout="prev, pager, next"
-              @current-change="handlePageChange"
-            />
-          </div>
+          <UiPagination
+            v-if="total > pageSize"
+            v-model:current-page="page"
+            :page-size="pageSize"
+            :total="total"
+            :show-total="false"
+            align="center"
+            @current-change="handlePageChange"
+          />
         </template>
       </main>
     </div>
@@ -144,6 +144,7 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
 
 /** 导师端课程行：后端额外返回 credential_id，TutorCourse 尚未收录 */
 type TutorCourseRow = TutorCourse & { credential_id?: number }

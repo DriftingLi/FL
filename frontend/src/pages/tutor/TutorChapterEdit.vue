@@ -172,7 +172,7 @@
     </template>
 
     <!-- 元信息编辑弹窗 -->
-    <el-dialog v-model="metaDialogVisible" title="编辑章节信息" width="500px">
+    <UiDialog v-model="metaDialogVisible" title="编辑章节信息" width="500px">
       <el-form :model="metaForm" label-width="100px">
         <el-form-item label="章节标题">
           <el-input v-model="metaForm.title" placeholder="请输入章节标题" maxlength="100" show-word-limit />
@@ -194,10 +194,10 @@
         <UiButton @click="metaDialogVisible = false">取消</UiButton>
         <UiButton variant="primary" :loading="savingMeta" @click="saveMeta">保存</UiButton>
       </template>
-    </el-dialog>
+    </UiDialog>
 
     <!-- 上传文件弹窗 -->
-    <el-dialog
+    <UiDialog
       v-model="uploadDialogVisible"
       :title="`上传${uploadTypeLabel}文件`"
       width="720px"
@@ -211,7 +211,7 @@
         :initial-filter="uploadType"
         @upload-all="handleUploadAll"
       />
-    </el-dialog>
+    </UiDialog>
   </div>
 </template>
 
@@ -238,6 +238,7 @@ import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import { useAsyncPage } from '@/composables/useAsyncPage'
+import UiDialog from '@/components/ui/UiDialog.vue'
 
 const route = useRoute()
 const router = useRouter()

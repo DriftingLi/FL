@@ -17,14 +17,14 @@ import "time"
 // 就是 chapter_id IS NULL，而问答帖的 chapter_id 同样为 NULL，故列表查询必须让
 // category 与 scope 共存在同一条 WHERE 里，否则问答帖会整片灌进讨论 Tab。
 //
-// ⚠️ 上述非法组合在数据库层由 CHECK 兜底，但这些约束**只存在于迁移 SQL（000004）**：
+// ⚠️ 上述非法组合在数据库层由 CHECK 兜底，但这些约束**只存在于迁移 SQL（000005）**：
 // 测试库由 AutoMigrate 建表、不执行 migrations/，因此两条 CHECK（值域 chk_forum_topics_category
 // 与非法组合 chk_forum_topics_question_no_chapter）契约测试都覆盖不到，别误以为测试守住了它们。
 // 行为层由 service 的校验守住：非法类别 400、问答帖带 chapter_id>0 返回 400。
 type ForumTopic struct {
 	ID              int64      `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
 	ChapterID       *int       `gorm:"column:chapter_id" json:"chapter_id,omitempty"`
-	Category        string     `gorm:"column:category;not null;default:discussion" json:"category"` // 'discussion' | 'question'
+	Category        string     `gorm:"column:category;not null;default:discussion" json:"category"` // 'discussion' | 'question' | 'experience'
 	UserID          int        `gorm:"column:user_id" json:"user_id"`
 	Title           string     `gorm:"column:title" json:"title"`
 	Content         string     `gorm:"column:content" json:"content"`

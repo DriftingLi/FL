@@ -23,7 +23,7 @@
       <UiButton variant="primary" size="small" :loading="submitting" @click="handleSubmit">发布</UiButton>
     </div>
 
-    <el-dialog v-model="dialogVisible" title="所有评论" width="520px">
+    <UiDialog v-model="dialogVisible" title="所有评论" width="520px">
       <div v-for="c in comments" :key="c.id" class="comment-item">
         <div class="comment-main">
           <div class="comment-author">
@@ -36,7 +36,7 @@
         <UiButton v-if="c.user_id===currentUserId" variant="danger" link size="small" @click="handleDelete(c.id)">删除</UiButton>
       </div>
       <div v-if="comments.length===0" class="empty">暂无评论</div>
-    </el-dialog>
+    </UiDialog>
   </UiCard>
 </template>
 
@@ -46,6 +46,7 @@ import { useAuthStore } from '@/stores/auth'
 import { questionInteractionApi } from '@/api/questionInteraction'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiCard from '@/components/ui/UiCard.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
 
 const props = defineProps<{ questionId: number }>()
 const authStore = useAuthStore()

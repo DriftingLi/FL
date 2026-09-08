@@ -15,13 +15,16 @@
 
       <!-- ===== 举报管理（ADR-0018）===== -->
       <template v-if="activeMainTab === 'reports'">
-        <div class="filter-bar">
+        <UiFilterBar>
+        <template #filters>
+
           <el-radio-group v-model="reportStatus" @change="handleReportStatusChange">
             <el-radio-button :value="-1">全部</el-radio-button>
             <el-radio-button :value="0">待处理</el-radio-button>
             <el-radio-button :value="1">已处理</el-radio-button>
           </el-radio-group>
-        </div>
+        </template>
+      </UiFilterBar>
 
         <el-table v-loading="reportLoading" :data="reports" border>
           <el-table-column prop="id" label="ID" width="60" align="center" />
@@ -58,19 +61,20 @@
         </el-table>
 
         <div class="pagination-wrapper" v-if="reportTotal > reportPageSize">
-          <el-pagination
-            v-model:current-page="reportCurrentPage"
-            :page-size="reportPageSize"
-            :total="reportTotal"
-            layout="total, prev, pager, next"
-            @current-change="loadReports"
-          />
+          <UiPagination
+      v-model:current-page="reportCurrentPage"
+      :page-size="reportPageSize"
+      :total="reportTotal"
+      @current-change="loadReports"
+    />
         </div>
       </template>
 
       <!-- ===== 帖子管理（原有内容）===== -->
       <template v-else>
-      <div class="filter-bar">
+      <UiFilterBar>
+        <template #filters>
+
         <el-tabs v-model="activeTab" @tab-change="handleTabChange">
           <el-tab-pane label="全部帖子" name="all" />
           <el-tab-pane label="综合讨论区" name="discussion" />
@@ -88,7 +92,8 @@
             <el-icon><Search /></el-icon>
           </template>
         </el-input>
-      </div>
+        </template>
+      </UiFilterBar>
 
       <el-table
         v-loading="loading"
@@ -126,7 +131,7 @@
                     <ForumImageGallery :images="reply.images" />
                   </div>
                 </div>
-                <el-empty v-else description="暂无回复" :image-size="60" />
+                <UiEmptyState v-else description="暂无回复" size="sm" />
               </template>
               <div v-else class="reply-loading">加载中…</div>
             </div>
@@ -161,13 +166,12 @@
       </el-table>
 
       <div class="pagination-wrapper" v-if="total > pageSize">
-        <el-pagination
-          v-model:current-page="currentPage"
-          :page-size="pageSize"
-          :total="total"
-          layout="total, prev, pager, next"
-          @current-change="handlePageChange"
-        />
+        <UiPagination
+      v-model:current-page="currentPage"
+      :page-size="pageSize"
+      :total="total"
+      @current-change="handlePageChange"
+    />
       </div>
       </template>
     </el-card>
@@ -190,6 +194,9 @@ import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
 import { formatLocaleDateTime } from '@/utils/format'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
+import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 
 const topics = ref<AdminForumTopic[]>([])
 
@@ -375,14 +382,6 @@ onMounted(loadList)
   color: var(--color-text-disabled);
 }
 
-.filter-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 12px;
-  flex-wrap: wrap;
-}
 
 .title-cell {
   display: flex;

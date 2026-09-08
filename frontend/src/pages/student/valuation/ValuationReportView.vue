@@ -23,6 +23,7 @@ import {
 } from '@/utils/valuationFormat'
 import { CONDITION_RATING_COLOR } from '@/utils/valuationConstants'
 import type { EvaluationDetailResponse } from '@/types/valuation/evaluation'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -228,7 +229,7 @@ const basicInfoItems = computed(() => {
           </el-button>
         </template>
       </PageHeader>
-      <el-empty description="登录后可查看报告详情" />
+      <UiEmptyState description="登录后可查看报告详情" />
     </div>
   </div>
 </template>
