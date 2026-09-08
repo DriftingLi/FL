@@ -27,14 +27,16 @@ const (
 	ForumScopeChapter = "chapter" // 指定章节讨论区
 )
 
-// 论坛帖子类别常量（#364）。
+// 论坛帖子类别常量（#364；#722 扩 experience）。
 //
 // 类别判"帖子意图"，scope/chapter_id 判"内容坐标"，两者正交但有一格非法：
 // discussion+NULL=综合讨论区、discussion+N=章节讨论区、question+NULL=全局问答、
-// question+N=非法。不预留第三个值——求职信息是常驻实体，不在论坛内。
+// question+N=非法。experience（#706 备考经验）可挂章节也可不挂，但不可被采纳；
+// 求职信息仍是常驻实体，不在论坛内，类别值域到此为止。
 const (
 	ForumCategoryDiscussion = "discussion" // 讨论帖（存量帖子的默认值）
 	ForumCategoryQuestion   = "question"   // 问答帖（可被采纳，走积分直记）
+	ForumCategoryExperience = "experience" // 备考经验帖（#706；不可采纳，可挂章节）
 )
 
 // normalizeForumCategory 校验并归一帖子类别：空串归一为 discussion（向后兼容，移动端不传）。
@@ -44,7 +46,7 @@ func normalizeForumCategory(category string) (string, error) {
 	switch category = strings.TrimSpace(category); category {
 	case "":
 		return ForumCategoryDiscussion, nil
-	case ForumCategoryDiscussion, ForumCategoryQuestion:
+	case ForumCategoryDiscussion, ForumCategoryQuestion, ForumCategoryExperience:
 		return category, nil
 	default:
 		return "", fmt.Errorf("帖子类别无效: %s", category)
@@ -215,7 +217,7 @@ func parseForumCategoryArg(category string) (string, error) {
 	switch category = strings.TrimSpace(category); category {
 	case "":
 		return "", nil
-	case ForumCategoryDiscussion, ForumCategoryQuestion:
+	case ForumCategoryDiscussion, ForumCategoryQuestion, ForumCategoryExperience:
 		return category, nil
 	default:
 		return "", fmt.Errorf("帖子类别无效: %s", category)
@@ -249,12 +251,12 @@ type TopicListInput struct {
 	Page      int
 	PageSize  int
 	Keyword   string
-	Sort      string // latest（默认）/ hot
+	Sort      string // latest（默认）/ hot / created（按发帖时间，#722）
 	Order     string // desc（默认）/ asc
 }
 
 // ListTopics 分页查询主题。
-// scope: all（默认）/ general（综合讨论区）/ chapter（需配合 chapterID）；sort: latest（默认，时间）/ hot（热度：点赞数→回复数→浏览数）；order: desc（默认）/ asc（正序）。
+// scope: all（默认）/ general（综合讨论区）/ chapter（需配合 chapterID）；sort: latest（默认，活跃度）/ hot（热度：点赞数→回复数→浏览数）/ created（发帖时间，#722）；order: desc（默认）/ asc（正序）。
 func (s *ForumService) ListTopics(in TopicListInput) (*ForumTopicPageResult, error) {
 	scope := in.Scope
 	chapterID, page, pageSize := in.ChapterID, in.Page, in.PageSize
@@ -273,7 +275,7 @@ func (s *ForumService) ListTopics(in TopicListInput) (*ForumTopicPageResult, err
 	if scope == ForumScopeChapter && chapterID <= 0 {
 		return nil, errors.New("查询章节讨论区需要有效的 chapter_id")
 	}
-	if sort != "hot" {
+	if sort != "hot" && sort != "created" {
 		sort = "latest"
 	}
 	dir := "DESC"
@@ -287,6 +289,11 @@ func (s *ForumService) ListTopics(in TopicListInput) (*ForumTopicPageResult, err
 	orderClause := "COALESCE(t.last_reply_at, t.created_at) " + dir + ", t.id " + dir
 	if sort == "hot" {
 		orderClause = "t.likes_count " + dir + ", t.reply_count " + dir + ", t.view_count " + dir + ", t.id " + dir
+	}
+	// created（#722）：按发帖时间排，区别于 latest 的活跃度口径。
+	// experience 列表必带 category 等值过滤，idx_forum_topics_category_created 天然命中，无需新索引。
+	if sort == "created" {
+		orderClause = "t.created_at " + dir + ", t.id " + dir
 	}
 
 	rows, total, page, pageSize := paging.QueryWithScan[topicRow](s.db, page, pageSize, 10, 100,
@@ -472,7 +479,7 @@ func (s *ForumService) CreateTopic(in CreateTopicInput) (*ForumTopicDTO, error) 
 	}
 
 	// 非法组合在进库前拒绝：问答帖一律不属于任何章节。
-	// 数据库层有同名 CHECK 作生产兜底（见迁移 000004），此处是能被契约测试守住的行为层。
+	// 数据库层有同名 CHECK 作生产兜底（见迁移 000005），此处是能被契约测试守住的行为层。
 	// 注意只判 >0：chapter_id 传 0 或不传按既有语义归一为综合区，不得在此收紧。
 	if category == ForumCategoryQuestion && chapterID != nil && *chapterID > 0 {
 		return nil, errors.New("问答帖不属于任何章节，不能指定 chapter_id")
