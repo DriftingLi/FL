@@ -143,10 +143,16 @@ describe('ChatPageShell 槽位', () => {
     }
   })
 
-  it('空态输入框随标题居中（main justify-center + 输入区 760）；有消息沉底 1200', async () => {
+  it('空态：grid 三行布局——输入框正中行精确居中、欢迎区第一行底对齐依托其上；有消息沉底 1200', async () => {
     const welcome = mountShell({})
-    expect(welcome.find('.chat-main').classes()).toContain('justify-center')
-    expect(welcome.find('.chat-input-area').classes()).toContain('max-w-[760px]')
+    const mainEl = welcome.find('.chat-main')
+    expect(mainEl.classes()).toContain('grid')
+    expect(mainEl.classes()).toContain('grid-rows-[1fr_auto_1fr]')
+    expect(welcome.find('.message-list').classes()).toContain('row-start-1')
+    expect(welcome.find('.message-list').classes()).toContain('self-end')
+    const inputArea = welcome.find('.chat-input-area')
+    expect(inputArea.classes()).toContain('row-start-2')
+    expect(inputArea.classes()).toContain('max-w-[760px]')
 
     mocks.store.messages = [{ id: 2, role: 'user', content: 'hi' }]
     const chatting = mountShell({})

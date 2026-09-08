@@ -22,14 +22,19 @@
           alt="资料图片"
           loading="lazy"
         />
-        <div class="line-clamp-6 whitespace-pre-wrap">
-          {{ stripImageMarkers(source.text) }}
-        </div>
+        <MarkdownRender
+          mode="chat"
+          :content="stripImageMarkers(source.text)"
+          :final="true"
+          html-policy="escape"
+          :fade="false"
+          class="line-clamp-6"
+        />
         <div class="mt-1.5 flex items-center gap-3 text-xs text-ink-3">
           <span v-if="source.metadata?.page_start">第 {{ source.metadata.page_start }}{{ source.metadata.page_end && source.metadata.page_end !== source.metadata.page_start ? '-' + source.metadata.page_end : '' }} 页</span>
           <a
-            v-if="pdfProxyUrl"
-            :href="pdfProxyUrl"
+            v-if="pdfProxyUrl(source)"
+            :href="pdfProxyUrl(source)"
             target="_blank"
             rel="noopener"
             class="text-ui-600 no-underline hover:underline"
@@ -45,6 +50,7 @@
 // 诊断来源资料展示（逐轮回放 + 当轮面板共用）：IMAGE 标记解析与前缀 strip 单点。
 // 外部助手吐绝对路径（/assistant/static/manual/…，lxc101 取证）：strip 后再进后端代理。
 import { ref } from 'vue'
+import MarkdownRender from 'markstream-vue'
 import { aiAssistantApi, type DiagnosisSource } from '@/api/aiAssistant'
 import SourcesFoldHeader from '@/components/ai-assistant/SourcesFoldHeader.vue'
 
