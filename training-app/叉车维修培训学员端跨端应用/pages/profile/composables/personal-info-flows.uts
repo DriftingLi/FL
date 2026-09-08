@@ -1,0 +1,370 @@
+/**
+ * personal-info 流纯函数（T03d 手术 #676，parent #641 / ADR-0007）
+ *
+ * 从 pages/profile/personal-info.uvue 逐符号搬出，行为逐行等价。
+ * 形态约束（模板绑定与 Kotlin 类型双重考虑）：
+ * - 弹窗显隐、输入值、倒计时实例全部留在页面（模板 v-model/插值绑定不动）；
+ *   本模块一律值入参、布尔/对象出参，零模块级可变状态。
+ * - authStore 触点经函数参数回调注入（onAuthed/onDeleted），本模块零 store 依赖。
+ * - 展示文案纯函数供页面 computed 薄封装消费，全树唯一定义点。
+ */
+import { ref } from 'vue'
+import type { Ref } from 'vue'
+import { updateProfileApi, uploadAvatarApi, changePasswordSendCodeApi, changePasswordApi, profileSendCodeApi, profileBindPhoneApi, profileBindEmailApi, accountSendCodeApi, updateAccountApi, deleteAccountApi } from '../../../api/auth'
+import { errMsg } from '../../../api/helpers'
+import type { LoginResult, UserInfo } from '../../../types/index'
+
+// ===== 展示文案纯函数（页面 computed 消费） =====
+
+export function displayNameOf(u : UserInfo | null) : string {
+	if (u != null) {
+		if (u.name.length > 0) return u.name
+		if (u.username.length > 0) return u.username
+	}
+	return '同学'
+}
+
+export function avatarUrlOf(u : UserInfo | null) : string {
+	if (u != null && u.avatar_url != null && u.avatar_url.length > 0) {
+		return u.avatar_url
+	}
+	return ''
+}
+
+/** 昵称/头像审核中徽标（/auth/me 的 pending_profile_change） */
+export function hasPendingOf(u : UserInfo | null) : boolean {
+	return u != null && u.has_pending_change == true
+}
+
+/** 登录账号：优先 account 字段，回退 username */
+export function accountTextOf(u : UserInfo | null) : string {
+	if (u == null) return '-'
+	const acc = u.account
+	if (acc != null && acc.length > 0) return acc
+	return u.username
+}
+
+/** 手机号：后端已脱敏（137****1234）；老版本缓存无 phone 时回退 username 推导 */
+export function phoneTextOf(u : UserInfo | null) : string {
+	if (u != null) {
+		const p = u.phone
+		if (p != null && p.length > 0) return p
+		if (u.username.length == 11 && u.username.startsWith('1')) {
+			return u.username.substring(0, 3) + '****' + u.username.substring(7)
+		}
+	}
+	return '未绑定'
+}
+
+export function emailTextOf(u : UserInfo | null) : string {
+	if (u != null) {
+		const e = u.email
+		if (e != null && e.length > 0) return e
+	}
+	return '未绑定'
+}
+
+export function companyTextOf(u : UserInfo | null) : string {
+	if (u != null) {
+		const c = u.company
+		if (c != null && c.length > 0) return c
+	}
+	return '未填写'
+}
+
+/** 微信/邮箱注册且未设密码时，入口文案为"设置密码" */
+export function passwordTitleOf(u : UserInfo | null) : string {
+	if (u != null && u.has_password == false) return '设置密码'
+	return '修改密码'
+}
+
+/** 密码 cell 副文案：未设置时提示 */
+export function passwordHintOf(u : UserInfo | null) : string {
+	if (u != null && u.has_password == false) return '未设置'
+	return ''
+}
+
+// ===== 头像 =====
+/** 上传结果 toast 内置；uploadingAvatar 忙态开关留在页面 */
+export async function uploadAvatarFlow(filePath : string) : Promise<void> {
+	uni.showLoading({ title: '上传中...' })
+	try {
+		await uploadAvatarApi(filePath)
+		uni.showToast({ title: '头像已提交，审核通过后生效', icon: 'none' })
+	} catch (e) {
+		console.error('[personal-info] uploadAvatar failed:', e)
+		uni.showToast({ title: errMsg(e, '头像上传失败'), icon: 'none' })
+	} finally {
+		uni.hideLoading()
+	}
+}
+
+// ===== 60s 验证码倒计时 =====
+/** 每个弹窗一个实例；页面绑定 cd ref，start 成功后页面保持按钮禁用至归零 */
+export class Countdown {
+	cd : Ref<number> = ref<number>(0)
+	private timer : number | null = null
+
+	start() : void {
+		this.stop()
+		this.cd.value = 60
+		this.timer = setInterval(() => {
+			this.cd.value = this.cd.value - 1
+			if (this.cd.value <= 0) { this.stop() }
+		}, 1000) as number
+	}
+
+	stop() : void {
+		const t = this.timer
+		if (t != null) { clearInterval(t); this.timer = null }
+	}
+}
+
+// ===== 校验 =====
+function validatePhoneNum(p : string) : boolean {
+	return p.length == 11 && p.startsWith('1')
+}
+
+function validateEmail(t : string) : boolean {
+	return /^[\w.%+-]+@[\w-]+(\.[\w-]+)+$/.test(t)
+}
+
+// ===== 昵称 =====
+/** true = 提交成功（页面关窗 + 刷新） */
+export async function submitNicknameFlow(newName : string) : Promise<boolean> {
+	if (newName.length == 0) {
+		uni.showToast({ title: '昵称不能为空', icon: 'none' })
+		return false
+	}
+	uni.showLoading({ title: '提交中...' })
+	try {
+		await updateProfileApi({ nickname: newName })
+		uni.showToast({ title: '已提交审核，通过后生效', icon: 'none' })
+		return true
+	} catch (e) {
+		console.error('[personal-info] updateNickname failed:', e)
+		uni.showToast({ title: errMsg(e, '修改失败'), icon: 'none' })
+		return false
+	} finally {
+		uni.hideLoading()
+	}
+}
+
+// ===== 密码 =====
+/** true = 已发送（页面启动倒计时） */
+export async function sendPasswordCodeFlow() : Promise<boolean> {
+	try {
+		await changePasswordSendCodeApi()
+		uni.showToast({ title: '验证码已发送', icon: 'none' })
+		return true
+	} catch (e) {
+		uni.showToast({ title: errMsg(e, '发送失败，请重试'), icon: 'none' })
+		return false
+	}
+}
+
+export async function submitPasswordFlow(code : string, pwd : string, confirm : string) : Promise<boolean> {
+	if (code.length != 6) {
+		uni.showToast({ title: '请输入6位验证码', icon: 'none' })
+		return false
+	}
+	if (pwd.length < 6 || pwd.length > 20) {
+		uni.showToast({ title: '密码长度需为6-20位', icon: 'none' })
+		return false
+	}
+	if (pwd != confirm) {
+		uni.showToast({ title: '两次输入的密码不一致', icon: 'none' })
+		return false
+	}
+	uni.showLoading({ title: '保存中...' })
+	try {
+		await changePasswordApi(code, pwd)
+		uni.showToast({ title: '密码修改成功', icon: 'success' })
+		return true
+	} catch (e) {
+		uni.showToast({ title: errMsg(e, '修改失败'), icon: 'none' })
+		return false
+	} finally {
+		uni.hideLoading()
+	}
+}
+
+// ===== 手机号 =====
+export async function sendPhoneCodeFlow(phone : string) : Promise<boolean> {
+	if (!validatePhoneNum(phone)) {
+		uni.showToast({ title: '请输入11位手机号', icon: 'none' })
+		return false
+	}
+	try {
+		await profileSendCodeApi(phone, 'phone')
+		uni.showToast({ title: '验证码已发送', icon: 'none' })
+		return true
+	} catch (e) {
+		uni.showToast({ title: errMsg(e, '发送失败，请重试'), icon: 'none' })
+		return false
+	}
+}
+
+export async function submitPhoneFlow(phone : string, code : string) : Promise<boolean> {
+	if (!validatePhoneNum(phone)) {
+		uni.showToast({ title: '请输入11位手机号', icon: 'none' })
+		return false
+	}
+	if (code.length != 6) {
+		uni.showToast({ title: '请输入6位验证码', icon: 'none' })
+		return false
+	}
+	uni.showLoading({ title: '保存中...' })
+	try {
+		await profileBindPhoneApi(phone, code)
+		uni.showToast({ title: '手机号修改成功', icon: 'success' })
+		return true
+	} catch (e) {
+		uni.showToast({ title: errMsg(e, '修改失败'), icon: 'none' })
+		return false
+	} finally {
+		uni.hideLoading()
+	}
+}
+
+// ===== 邮箱 =====
+export async function sendEmailCodeFlow(emailRaw : string) : Promise<boolean> {
+	const t = emailRaw.trim()
+	if (!validateEmail(t)) {
+		uni.showToast({ title: '邮箱格式不正确', icon: 'none' })
+		return false
+	}
+	try {
+		await profileSendCodeApi(t, 'email')
+		uni.showToast({ title: '验证码已发送，请查收邮箱', icon: 'none' })
+		return true
+	} catch (e) {
+		uni.showToast({ title: errMsg(e, '发送失败，请重试'), icon: 'none' })
+		return false
+	}
+}
+
+export async function submitEmailFlow(emailRaw : string, code : string) : Promise<boolean> {
+	const t = emailRaw.trim()
+	if (!validateEmail(t)) {
+		uni.showToast({ title: '邮箱格式不正确', icon: 'none' })
+		return false
+	}
+	if (code.length != 6) {
+		uni.showToast({ title: '请输入6位验证码', icon: 'none' })
+		return false
+	}
+	uni.showLoading({ title: '保存中...' })
+	try {
+		await profileBindEmailApi(t, code)
+		uni.showToast({ title: '邮箱绑定成功', icon: 'success' })
+		return true
+	} catch (e) {
+		uni.showToast({ title: errMsg(e, '绑定失败'), icon: 'none' })
+		return false
+	} finally {
+		uni.hideLoading()
+	}
+}
+
+// ===== 登录账号 =====
+export async function sendAccountCodeFlow() : Promise<boolean> {
+	try {
+		await accountSendCodeApi()
+		uni.showToast({ title: '验证码已发送', icon: 'none' })
+		return true
+	} catch (e) {
+		uni.showToast({ title: errMsg(e, '发送失败，请重试'), icon: 'none' })
+		return false
+	}
+}
+
+/** 后端重签 JWT：本地登录态整体替换经 onAuthed 回调回交页面，避免 /me 沿用旧账号 claim */
+export async function submitAccountFlow(accRaw : string, code : string, onAuthed : (r : LoginResult) => void) : Promise<boolean> {
+	const acc = accRaw.trim()
+	if (!/^[A-Za-z0-9_]{4,20}$/.test(acc)) {
+		uni.showToast({ title: '账号需为4-20位字母数字下划线', icon: 'none' })
+		return false
+	}
+	if (code.length != 6) {
+		uni.showToast({ title: '请输入6位验证码', icon: 'none' })
+		return false
+	}
+	uni.showLoading({ title: '保存中...' })
+	try {
+		const result : LoginResult = await updateAccountApi(acc, code)
+		onAuthed(result)
+		uni.showToast({ title: '登录账号已修改', icon: 'success' })
+		return true
+	} catch (e) {
+		uni.showToast({ title: errMsg(e, '修改失败'), icon: 'none' })
+		return false
+	} finally {
+		uni.hideLoading()
+	}
+}
+
+// ===== 单位 =====
+export async function submitCompanyFlow(companyRaw : string) : Promise<boolean> {
+	const c = companyRaw.trim()
+	if (c.length == 0) {
+		uni.showToast({ title: '请输入单位名称', icon: 'none' })
+		return false
+	}
+	uni.showLoading({ title: '保存中...' })
+	try {
+		await updateProfileApi({ company: c })
+		uni.showToast({ title: '单位已更新', icon: 'none' })
+		return true
+	} catch (e) {
+		uni.showToast({ title: errMsg(e, '修改失败'), icon: 'none' })
+		return false
+	} finally {
+		uni.hideLoading()
+	}
+}
+
+// ===== 注销 =====
+/** 不可恢复操作的双重确认链；二次确认通过后回调页面执行注销 */
+export function confirmDeleteAccountFlow(onConfirmed : () => void) : void {
+	uni.showModal({
+		title: '确认注销账号？',
+		content: '注销为不可恢复操作：账号、学习记录、积分、论坛帖子与回复将全部删除。如仅是切换账号，请选择"退出当前账号"。',
+		confirmText: '继续注销',
+		confirmColor: '#ff5252',
+		success: (res) => {
+			if (res.confirm) {
+				uni.showModal({
+					title: '最后确认',
+					content: '数据将被永久删除且无法找回，确认注销？',
+					confirmText: '注销账号',
+					confirmColor: '#ff5252',
+					success: (res2) => {
+						if (res2.confirm) {
+							onConfirmed()
+						}
+					}
+				})
+			}
+		}
+	})
+}
+
+/** 成功经 onDeleted 清登录态并回登录页 */
+export async function deleteAccountFlow(onDeleted : () => void) : Promise<boolean> {
+	uni.showLoading({ title: '处理中...' })
+	try {
+		await deleteAccountApi()
+		uni.hideLoading()
+		onDeleted()
+		uni.showToast({ title: '账号已注销', icon: 'none' })
+		setTimeout(() => {
+			uni.reLaunch({ url: '/pages/login/login' })
+		}, 800)
+		return true
+	} catch (e) {
+		uni.hideLoading()
+		uni.showToast({ title: errMsg(e, '注销失败，请稍后重试'), icon: 'none' })
+		return false
+	}
+}
