@@ -205,9 +205,9 @@
         uni.navigateTo({ url: '/pages/jobs/job-detail?id=' + jobId })
     }
 
-    // ---- 简历入口导航（#705：顶栏头像 → 我的页，简历三页在 jobs-mine 内）----
+    // ---- 头像导航（#724 单页合并：直入「我的」= 简历总览页 resume.uvue，不再经中间页）----
     function onMine() : void {
-        uni.navigateTo({ url: '/pages/jobs/jobs-mine' })
+        uni.navigateTo({ url: '/pages/resume/resume' })
     }
 
     function onLoadMore() : void {

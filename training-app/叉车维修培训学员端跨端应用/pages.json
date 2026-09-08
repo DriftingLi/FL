@@ -342,13 +342,6 @@
             }
         },
         {
-            "path": "pages/jobs/jobs-mine",
-            "style": {
-                "navigationStyle": "custom",
-                "navigationBarTitleText": "我的"
-            }
-        },
-        {
             "path": "pages/mall/mall",
             "style": {
                 "navigationStyle": "custom",
