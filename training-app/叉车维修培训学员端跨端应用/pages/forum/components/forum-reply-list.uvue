@@ -1,0 +1,344 @@
+<template>
+    <view class="replies-section">
+        <view class="replies-header">
+            <text class="replies-title">全部回复（{{ items.length }}）</text>
+            <view class="replies-sort-bar">
+                <view class="reply-sort-chip" :class="{ active: sortField === 'latest' }" @click="onField('latest')">
+                    <text class="reply-sort-text" :class="{ active: sortField === 'latest' }">最新</text>
+                </view>
+                <view class="reply-sort-chip" :class="{ active: sortField === 'hot' }" @click="onField('hot')">
+                    <text class="reply-sort-text" :class="{ active: sortField === 'hot' }">热门</text>
+                </view>
+                <view class="reply-sort-chip" :class="{ active: sortOrder === 'desc' }" @click="onOrder('desc')">
+                    <text class="reply-sort-text" :class="{ active: sortOrder === 'desc' }">逆序</text>
+                </view>
+                <view class="reply-sort-chip" :class="{ active: sortOrder === 'asc' }" @click="onOrder('asc')">
+                    <text class="reply-sort-text" :class="{ active: sortOrder === 'asc' }">正序</text>
+                </view>
+            </view>
+        </view>
+
+        <view v-if="items.length == 0" class="empty-replies">
+            <text class="empty-replies-text">暂无回复，来说两句吧</text>
+        </view>
+
+        <view v-for="(item, idx) in items" :key="idx" class="reply-card">
+            <view class="reply-header">
+                <view class="reply-avatar" :style="{ backgroundColor: item.avatarColor }">
+                    <image v-if="item.authorAvatar.length > 0" class="reply-avatar-img"
+                        :src="item.authorAvatar" mode="aspectFill" />
+                    <text v-else class="reply-avatar-text">{{ item.authorInitial }}</text>
+                </view>
+                <view class="reply-info">
+                    <text
+                        class="reply-author">{{ item.authorName }}</text>
+                    <text class="reply-time">{{ item.createdAtText }}</text>
+                </view>
+                <view v-if="item.canDelete" class="reply-delete" @click="onDelete(item.id)">
+                    <text class="reply-delete-text">删除</text>
+                </view>
+                <view v-else class="reply-more" @click="onReport(item.id)">
+                    <text class="reply-more-text">举报</text>
+                </view>
+            </view>
+            <text class="reply-content">{{ item.content }}</text>
+            <view v-if="item.imageUrls.length > 0" class="img-grid">
+                <view v-for="(img, i) in item.imageUrls" :key="i" class="img-cell small"
+                    @click="onPreview(item, i)">
+                    <image class="img-thumb" :src="img" mode="aspectFill" />
+                </view>
+            </view>
+            <view class="reply-action-row">
+                <text class="reply-action-time">{{ item.createdAtText }}</text>
+                <view class="reply-action-right">
+                    <view :class="item.liked ? 'reply-like reply-like-liked' : 'reply-like'" @click="onLike(item.id)">
+                        <text :class="item.liked ? 'reply-like-icon reply-like-icon-liked' : 'reply-like-icon'">{{ item.liked ? '♥' : '♡' }}</text>
+                        <text :class="item.liked ? 'reply-like-count reply-like-count-liked' : 'reply-like-count'">{{ item.likesCount }}</text>
+                    </view>
+                    <view class="reply-action-btn" @click="onReplyTo(item.id)">
+                        <text class="reply-action-text"> 回复</text>
+                    </view>
+                </view>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { previewImages } from '../../../utils/forumDetailDisplay'
+    import type { ForumReplyDisplay } from '../../../utils/forumDetailDisplay'
+
+    // 展示模型数组由壳层映射（扁平下发：权限位/点赞态/URL 预解析全部完成于壳层）
+    const props = withDefaults(defineProps<{
+        items? : ForumReplyDisplay[]
+        sortField? : string
+        sortOrder? : string
+    }>(), {
+        items: () => [] as ForumReplyDisplay[],
+        sortField: 'latest',
+        sortOrder: 'asc'
+    })
+
+    const emit = defineEmits(['sortFieldChange', 'sortOrderChange', 'deleteReply', 'reportReply', 'toggleReplyLike', 'replyToUser'])
+
+    function onField(field : string) : void {
+        emit('sortFieldChange', field)
+    }
+
+    function onOrder(order : string) : void {
+        emit('sortOrderChange', order)
+    }
+
+    function onDelete(id : number) : void {
+        emit('deleteReply', id)
+    }
+
+    function onReport(id : number) : void {
+        emit('reportReply', id)
+    }
+
+    function onLike(id : number) : void {
+        emit('toggleReplyLike', id)
+    }
+
+    function onReplyTo(id : number) : void {
+        emit('replyToUser', id)
+    }
+
+    function onPreview(item : ForumReplyDisplay, index : number) : void {
+        previewImages(item.imageUrls, index)
+    }
+</script>
+
+<style>
+    /* 回复列表 */
+    .replies-section {
+        background-color: #ffffff;
+        padding: 32rpx;
+        flex-direction: column;
+    }
+
+    .replies-header {
+        padding-bottom: 24rpx;
+        border-bottom: 1rpx solid #f0f0f0;
+        margin-bottom: 16rpx;
+        flex-direction: column;
+    }
+
+    .replies-title {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 16rpx;
+    }
+
+    .replies-sort-bar {
+        flex-direction: row;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .reply-sort-chip {
+        padding: 6rpx 20rpx;
+        border-radius: 20rpx;
+        background-color: #f5f5f5;
+        border: 1rpx solid #e0e0e0;
+        margin-right: 12rpx;
+        margin-bottom: 4rpx;
+    }
+
+    .reply-sort-chip.active {
+        background-color: #e8f0fe;
+        border: 1rpx solid #2979ff;
+    }
+
+    .reply-sort-text {
+        font-size: 22rpx;
+        color: #666666;
+    }
+
+    .reply-sort-text.active {
+        color: #2979ff;
+        font-weight: bold;
+    }
+
+    .empty-replies {
+        align-items: center;
+        padding: 60rpx 0;
+    }
+
+    .empty-replies-text {
+        font-size: 26rpx;
+        color: #999999;
+    }
+
+    .reply-card {
+        flex-direction: column;
+        padding: 24rpx 0;
+        border-bottom: 1rpx solid #f5f5f5;
+    }
+
+    .reply-header {
+        flex-direction: row;
+        align-items: center;
+        margin-bottom: 12rpx;
+    }
+
+    .reply-avatar {
+        width: 56rpx;
+        height: 56rpx;
+        border-radius: 28rpx;
+        background-color: #4caf50;
+        align-items: center;
+        justify-content: center;
+        margin-right: 16rpx;
+    }
+
+    .reply-avatar-text {
+        font-size: 24rpx;
+        color: #ffffff;
+        font-weight: bold;
+    }
+
+    .reply-avatar-img {
+        width: 56rpx;
+        height: 56rpx;
+        border-radius: 28rpx;
+    }
+
+    .reply-info {
+        flex: 1;
+        flex-direction: column;
+    }
+
+    .reply-author {
+        font-size: 26rpx;
+        color: #333333;
+        font-weight: bold;
+        margin-bottom: 4rpx;
+    }
+
+    .reply-time {
+        font-size: 22rpx;
+        color: #999999;
+    }
+
+    .reply-delete {
+        padding: 8rpx 16rpx;
+    }
+
+    .reply-delete-text {
+        font-size: 24rpx;
+        color: #f44336;
+    }
+
+    .reply-content {
+        font-size: 28rpx;
+        color: #333333;
+        line-height: 1.6;
+        padding-left: 72rpx;
+    }
+
+    /* 图片墙（帖子/回复展示） */
+    .img-grid {
+        flex-direction: row;
+        flex-wrap: wrap;
+        margin-top: 24rpx;
+    }
+
+    .img-cell {
+        width: 200rpx;
+        height: 200rpx;
+        margin-right: 16rpx;
+        margin-bottom: 16rpx;
+    }
+
+    .img-cell.small {
+        width: 160rpx;
+        height: 160rpx;
+    }
+
+    .img-thumb {
+        width: 200rpx;
+        height: 200rpx;
+        border-radius: 12rpx;
+        background-color: #f0f0f0;
+    }
+
+    .img-cell.small .img-thumb {
+        width: 160rpx;
+        height: 160rpx;
+    }
+
+    .reply-more {
+        padding: 8rpx 16rpx;
+    }
+
+    .reply-more-text {
+        font-size: 24rpx;
+        color: #999999;
+    }
+
+    /* 回复操作行 */
+    .reply-action-row {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        padding-left: 72rpx;
+        margin-top: 12rpx;
+    }
+
+    .reply-action-time {
+        font-size: 22rpx;
+        color: #cccccc;
+    }
+
+    .reply-action-btn {
+        padding: 6rpx 16rpx;
+    }
+
+    .reply-action-text {
+        font-size: 24rpx;
+        color: #2979ff;
+    }
+
+    .reply-action-right {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .reply-like {
+        flex-direction: row;
+        align-items: center;
+        padding: 6rpx 16rpx;
+        border-radius: 24rpx;
+        background-color: #f5f5f5;
+        border: 1px solid #eeeeee;
+        margin-right: 12rpx;
+    }
+
+    .reply-like-liked {
+        background-color: #f44336;
+        border: 1px solid #f44336;
+    }
+
+    .reply-like-icon {
+        font-size: 26rpx;
+        color: #999999;
+        margin-right: 6rpx;
+    }
+
+    .reply-like-icon-liked {
+        color: #ffffff;
+    }
+
+    .reply-like-count {
+        font-size: 22rpx;
+        color: #999999;
+    }
+
+    .reply-like-count-liked {
+        color: #ffffff;
+        font-weight: bold;
+    }
+</style>

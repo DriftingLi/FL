@@ -1,0 +1,80 @@
+/**
+ * forum 举报弹窗域（T04 手术：forum-detail.uvue script 举报域下沉）
+ * 原因文本 reason 归弹窗组件自持（打开即重挂载天然清空），提交时经参数上抛。
+ * 函数字段箭头包裹返回（UTS error18 先例，同 useAiChat）。
+ */
+import { ref } from 'vue'
+import type { Ref } from 'vue'
+import { reportTopicApi, reportReplyApi } from '../api/forum'
+
+export type UseReportResult = {
+    showReportModal : Ref<boolean>
+    reportTargetType : Ref<string>
+    submittingReport : Ref<boolean>
+    onReportTopic : (targetId : number) => void
+    onReportReply : (targetId : number) => void
+    onCloseReport : () => void
+    onSubmitReport : (reason : string) => Promise<void>
+}
+
+export function useReport() : UseReportResult {
+    const showReportModal = ref<boolean>(false)
+    const reportTargetType = ref<string>('topic')
+    const reportTargetId = ref<number>(0)
+    const submittingReport = ref<boolean>(false)
+
+    function onReportTopic(targetId : number) : void {
+        reportTargetType.value = 'topic'
+        reportTargetId.value = targetId
+        showReportModal.value = true
+    }
+
+    function onReportReply(targetId : number) : void {
+        reportTargetType.value = 'reply'
+        reportTargetId.value = targetId
+        showReportModal.value = true
+    }
+
+    function onCloseReport() : void {
+        showReportModal.value = false
+    }
+
+    async function onSubmitReport(reason : string) : Promise<void> {
+        if (reason.trim().length < 1) {
+            uni.showToast({ title: '请输入举报原因', icon: 'none' })
+            return
+        }
+        if (submittingReport.value) return
+        submittingReport.value = true
+        try {
+            if (reportTargetType.value == 'topic') {
+                await reportTopicApi(reportTargetId.value, reason.trim())
+            } else {
+                await reportReplyApi(reportTargetId.value, reason.trim())
+            }
+            uni.showToast({ title: '举报已提交，感谢反馈', icon: 'success' })
+            onCloseReport()
+        } catch (e) {
+            console.error('[forum-detail] report failed:', e)
+            let msg = '举报失败'
+            if (e instanceof Error) {
+                const errObj = e as Error
+                const m = errObj.message
+                if (m != null && m.length > 0) msg = m
+            }
+            uni.showToast({ title: msg, icon: 'none' })
+        } finally {
+            submittingReport.value = false
+        }
+    }
+
+    return {
+        showReportModal: showReportModal,
+        reportTargetType: reportTargetType,
+        submittingReport: submittingReport,
+        onReportTopic: (targetId : number) => onReportTopic(targetId),
+        onReportReply: (targetId : number) => onReportReply(targetId),
+        onCloseReport: () => onCloseReport(),
+        onSubmitReport: (reason : string) => onSubmitReport(reason),
+    } as UseReportResult
+}

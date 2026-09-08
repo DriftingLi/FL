@@ -1,0 +1,61 @@
+<template>
+    <view class="topic-content">
+        <text class="content-text">{{ content }}</text>
+        <view v-if="imageUrls.length > 0" class="img-grid">
+            <view v-for="(img, idx) in imageUrls" :key="idx" class="img-cell"
+                @click="onPreview(idx)">
+                <image class="img-thumb" :src="img" mode="aspectFill" />
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { previewImages } from '../../../utils/forumDetailDisplay'
+
+    // imageUrls 由壳层预解析（resolveFileUrl 幂等，预览传已解析列表与原行为一致）
+    const props = withDefaults(defineProps<{
+        content? : string
+        imageUrls? : string[]
+    }>(), {
+        content: '',
+        imageUrls: () => [] as string[]
+    })
+
+    function onPreview(index : number) : void {
+        previewImages(props.imageUrls, index)
+    }
+</script>
+
+<style>
+    .topic-content {
+        flex-direction: column;
+    }
+
+    .content-text {
+        font-size: 30rpx;
+        color: #333333;
+        line-height: 1.8;
+    }
+
+    /* 图片墙（帖子/回复展示） */
+    .img-grid {
+        flex-direction: row;
+        flex-wrap: wrap;
+        margin-top: 24rpx;
+    }
+
+    .img-cell {
+        width: 200rpx;
+        height: 200rpx;
+        margin-right: 16rpx;
+        margin-bottom: 16rpx;
+    }
+
+    .img-thumb {
+        width: 200rpx;
+        height: 200rpx;
+        border-radius: 12rpx;
+        background-color: #f0f0f0;
+    }
+</style>

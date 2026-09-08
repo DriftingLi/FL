@@ -49,7 +49,6 @@ const SKIP = new Set(['node_modules', 'unpackage', '.git', 'dist', 'hybrid']);
  */
 const GUARD_ALLOWLIST = {
   H: new Set([
-    'api/forum.uts',
     'api/checkin.uts',
     'pages/notifications/notifications.uvue',
   ]),

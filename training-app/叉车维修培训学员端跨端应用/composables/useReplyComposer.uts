@@ -1,0 +1,134 @@
+/**
+ * forum 回复输入域（T04 手术：forum-detail.uvue script 回复域下沉）
+ * 持有草稿内容/图片/上传与提交态；提交成功经 onPosted 回调上抛列表侧变更（禁反向桥接）。
+ * 函数字段箭头包裹返回（UTS error18 先例，同 useAiChat）。
+ */
+import { ref, computed } from 'vue'
+import type { Ref, ComputedRef } from 'vue'
+import { replyForumTopicApi, uploadForumImageApi } from '../api/forum'
+import { previewImages } from '../utils/forumDetailDisplay'
+import { resolveFileUrl } from '../utils/forumDisplay'
+import type { ForumReply } from '../types/index'
+
+export type UseReplyComposerResult = {
+    replyContent : Ref<string>
+    replyImages : Ref<string[]>
+    replyPreviewImages : ComputedRef<string[]>
+    uploadingReplyImage : Ref<boolean>
+    submitting : Ref<boolean>
+    onSubmitReply : (topicId : number, onPosted : (reply : ForumReply) => void) => Promise<void>
+    onAddReplyImage : () => void
+    onRemoveReplyImage : (index : number) => void
+    onPreviewReplyImage : (index : number) => void
+}
+
+export function useReplyComposer() : UseReplyComposerResult {
+    const replyContent = ref<string>('')
+    const replyImages = ref<string[]>([])
+    const submitting = ref<boolean>(false)
+    /**
+     * 回复图片预览 URL（预解析：模板中不调用 import 的 resolveFileUrl，规避 error18；
+     * replyImages 仍保存原始路径用于提交后端）
+     */
+    const replyPreviewImages = computed<string[]>(() : string[] => {
+        const urls : string[] = []
+        for (let i = 0; i < replyImages.value.length; i++) {
+            urls.push(resolveFileUrl(replyImages.value[i]))
+        }
+        return urls
+    })
+    const uploadingReplyImage = ref<boolean>(false)
+
+    /** 提交回复 */
+    async function onSubmitReply(topicId : number, onPosted : (reply : ForumReply) => void) : Promise<void> {
+        if (replyContent.value.trim().length == 0) {
+            uni.showToast({ title: '请输入回复内容', icon: 'none' })
+            return
+        }
+        if (submitting.value) return
+        submitting.value = true
+        try {
+            const reply = await replyForumTopicApi(topicId, replyContent.value.trim(), replyImages.value)
+            onPosted(reply)
+            replyContent.value = ''
+            replyImages.value = []
+            uni.showToast({ title: '回复成功', icon: 'success' })
+        } catch (e) {
+            console.error('[forum-detail] reply failed:', e)
+            uni.showToast({ title: '回复失败', icon: 'none' })
+        } finally {
+            submitting.value = false
+        }
+    }
+
+    /** 逐张上传回复图片（声明在 onAddReplyImage 之前，避免 Kotlin 局部函数前向引用） */
+    async function uploadReplyImages(paths : string[]) : Promise<void> {
+        uploadingReplyImage.value = true
+        uni.showLoading({ title: '上传图片中...' })
+        let failed = 0
+        for (let i = 0; i < paths.length; i++) {
+            if (replyImages.value.length >= 3) break
+            try {
+                const url = await uploadForumImageApi(paths[i])
+                replyImages.value.push(url)
+            } catch (e) {
+                console.error('[forum-detail] upload reply image failed:', e)
+                failed = failed + 1
+            }
+        }
+        uni.hideLoading()
+        uploadingReplyImage.value = false
+        if (failed > 0) {
+            uni.showToast({ title: failed + ' 张图片上传失败，请重试', icon: 'none' })
+        }
+    }
+
+    /** 选择回复图片：批量选择并上传（最多 3 张） */
+    function onAddReplyImage() : void {
+        if (uploadingReplyImage.value) return
+        const remaining = 3 - replyImages.value.length
+        if (remaining <= 0) {
+            uni.showToast({ title: '最多上传 3 张图片', icon: 'none' })
+            return
+        }
+        uni.chooseImage({
+            count: remaining,
+            sizeType: ['compressed'],
+            sourceType: ['album', 'camera'],
+            success: (res) => {
+                const paths = res.tempFilePaths as string[]
+                if (paths.length == 0) return
+                uploadReplyImages(paths)
+            },
+            fail: (err) => {
+                console.log('[forum-detail] chooseImage canceled/failed:', err)
+            },
+        })
+    }
+
+    /** 删除已选回复图片 */
+    function onRemoveReplyImage(index : number) : void {
+        const next : string[] = []
+        for (let i = 0; i < replyImages.value.length; i++) {
+            if (i != index) next.push(replyImages.value[i])
+        }
+        replyImages.value = next
+    }
+
+    /** 预览已选回复图片 */
+    function onPreviewReplyImage(index : number) : void {
+        previewImages(replyImages.value, index)
+    }
+
+    return {
+        replyContent: replyContent,
+        replyImages: replyImages,
+        replyPreviewImages: replyPreviewImages,
+        uploadingReplyImage: uploadingReplyImage,
+        submitting: submitting,
+        onSubmitReply: (topicId : number, onPosted : (reply : ForumReply) => void) => onSubmitReply(topicId, onPosted),
+        onAddReplyImage: () => onAddReplyImage(),
+        onRemoveReplyImage: (index : number) => onRemoveReplyImage(index),
+        onPreviewReplyImage: (index : number) => onPreviewReplyImage(index),
+    } as UseReplyComposerResult
+}

@@ -1,0 +1,38 @@
+/**
+ * forum 详情页纯助手（T04 手术自 forum-detail.uvue 逐字抽出，行为不变）
+ * 扁平下发先例：壳层预解析 URL 与权限位，组件模板只读展示模型字段。
+ */
+import { resolveFileUrl } from './forumDisplay'
+
+/** ISO 日期字符串 → YYYY-MM-DD HH:mm */
+export function formatDateTimeStr(dateStr : string) : string {
+    if (dateStr == null || dateStr.length < 16) return dateStr
+    return dateStr.substring(0, 16).replace('T', ' ')
+}
+
+/** 回复卡展示模型（壳层由 ForumReply + 点赞本地态 + 权限位映射而来） */
+export type ForumReplyDisplay = {
+    id : number
+    authorName : string
+    authorInitial : string
+    authorAvatar : string
+    avatarColor : string
+    createdAtText : string
+    content : string
+    imageUrls : string[]
+    canDelete : boolean
+    liked : boolean
+    likesCount : number
+}
+
+/** 预览一组图片（帖子/回复共用；URL 解析幂等，传入已解析列表与原始列表结果一致） */
+export function previewImages(all : string[], index : number) : void {
+    const urls : string[] = []
+    for (let i = 0; i < all.length; i++) {
+        urls.push(resolveFileUrl(all[i]))
+    }
+    uni.previewImage({
+        urls: urls,
+        current: index,
+    })
+}
