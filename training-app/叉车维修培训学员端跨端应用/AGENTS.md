@@ -24,6 +24,7 @@ Single-context：root `CONTEXT.md` + `docs/adr/`。See `docs/agents/domain.md`.
 
 - **ADR 文件名一律中文命名**：`docs/adr/NNNN-中文标题.md`（先例 `0007-渐进式重构手册.md`）；新建或重命名 ADR 禁止英文文件名；无法翻译的技术专名（如 SSE、JSON）可保留，但凡有中文对应的词（如 playbook→手册）必须用中文。
 - **决策/重构清单固定六段结构、≤25 行**，顺序为：① 目标与范围（这次到底解决什么）→ ② 选型 + 一句理由（每项决策附一句话理由）→ ③ 明确不做的事（防止后续加戏）→ ④ 拆分步骤（按模块拆，标出可并行项）→ ⑤ 约束（不能动的模块、API 兼容、uni-app-x 兼容性）→ ⑥ 验收标准（怎么算完成）。先例 `docs/refactor-decisions.md`。
+- **新决策回写纪律**：手术/实现会话收口时，若产生了 playbook 未覆盖的新决策或新坑位，须先回写对应 ADR（含守护规则落锁情况）再关票——issue 评论不是冷启动会话的必读面，ADR 才是。
 
 ### Security scan
 
