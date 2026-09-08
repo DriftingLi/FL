@@ -331,8 +331,9 @@ type CreateContributionInput struct {
 	FileURLs []string
 }
 
-// checkCredential 校验目标证件存在且为学员当前证件（投稿挂自己的当前证件，
-// 前端默认带当前证件；后端强制校验证件真实存在，防止伪造分区）。
+// checkCredential 校验投稿资格与目标证件（#702）：投稿者须已选定当前证件
+// （淘汰未过 onboarding 的空白号，对真实学员零摩擦）；目标证件只需有效存在，
+// 不必等于当前证件（投稿是供给侧写入，不再被浏览侧全局过滤器绑死；列表仍按当前证件过滤）。
 func (s *ContributionService) checkCredential(userID, credentialID int) error {
 	if credentialID <= 0 {
 		return ErrContributionNoCredential
@@ -344,10 +345,6 @@ func (s *ContributionService) checkCredential(userID, credentialID int) error {
 	if user.CurrentCredentialID == nil {
 		return ErrContributionNoCredential
 	}
-	if *user.CurrentCredentialID != credentialID {
-		return errors.New("投稿证件需与当前证件一致")
-	}
-	// 证件存在性
 	var cnt int64
 	if err := s.db.Model(&model.Credential{}).Where("id = ?", credentialID).Count(&cnt).Error; err != nil {
 		return err

@@ -41,20 +41,22 @@ func RegisterMockExamRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Moc
 	g.GET("/history", h.GetHistory)
 }
 
-// startReq 开始模拟考试请求（学员 ID + body count/duration）。
+// startReq 开始模拟考试请求（学员 ID + body count/duration + query credential_id）。
 type startReq struct {
-	StudentID int
-	Count     int
-	Duration  int
+	StudentID    int
+	Count        int
+	Duration     int
+	CredentialID *int
 }
 
 // Start 开始模拟考试
 // @Summary 开始模拟考试
-// @Description 创建模拟考试会话，count 题量、duration 时长（默认 90 分钟）
+// @Description 创建模拟考试会话，count 题量、duration 时长（默认 90 分钟）；credential_id 可选（经拦截器注入当前证件，按证件分区抽题）
 // @Tags 学员端-模拟考试
 // @Accept json
 // @Produce json
 // @Security BearerAuth
+// @Param credential_id query int false "目标证件ID"
 // @Param body body object false "参数" example({"count":20,"duration":90})
 // @Success 200 {object} response.R{data=service.MockExamStartDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
@@ -66,17 +68,27 @@ func (h *MockExamHandler) Start(c *gin.Context) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
 			var req struct {
-				Count    int `json:"count"`
-				Duration int `json:"duration"`
+				Count           int `json:"count"`
+				Duration        int `json:"duration"`
+				QuestionCount   int `json:"question_count"`
+				DurationMinutes int `json:"duration_minutes"`
 			}
 			_ = c.ShouldBindJSON(&req)
-			if req.Duration == 0 {
-				req.Duration = 90
+			count := req.Count
+			if count <= 0 {
+				count = req.QuestionCount
 			}
-			return &startReq{StudentID: studentID, Count: req.Count, Duration: req.Duration}, nil
+			duration := req.Duration
+			if duration <= 0 {
+				duration = req.DurationMinutes
+			}
+			if duration == 0 {
+				duration = 90
+			}
+			return &startReq{StudentID: studentID, Count: count, Duration: duration, CredentialID: queryIDPtr(c, "credential_id")}, nil
 		},
 		Invoke: func(ctx context.Context, req *startReq) (*service.MockExamStartDTO, error) {
-			return h.svc.Start(req.StudentID, req.Count, req.Duration)
+			return h.svc.Start(req.StudentID, req.Count, req.Duration, req.CredentialID)
 		},
 		Render: func(c *gin.Context, _ *startReq, resp *service.MockExamStartDTO, err error) {
 			if err != nil {

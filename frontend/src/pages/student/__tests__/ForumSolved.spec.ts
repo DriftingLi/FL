@@ -16,6 +16,9 @@ vi.mock('@/api/forum', async (importOriginal) => {
       listTopics: vi.fn(),
       getMyTopics: vi.fn(),
       getMyReplies: vi.fn(),
+      getMyLikedTopics: vi.fn(),
+      getMyObservedTopics: vi.fn(),
+      getMyViewHistory: vi.fn(),
       createTopic: vi.fn(),
       getTopic: vi.fn(),
       acceptReply: vi.fn(),
@@ -31,14 +34,6 @@ vi.mock('@/api/forum', async (importOriginal) => {
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn(), back: vi.fn() }),
   useRoute: () => ({ query: {}, params: { topicId: '1' }, hash: '' })
-}))
-
-vi.mock('@/utils/forumHistory', () => ({
-  loadHistory: vi.fn(() => []),
-  removeHistoryItem: vi.fn(),
-  clearHistory: vi.fn(),
-  pushHistory: vi.fn(),
-  toHistoryItem: vi.fn(() => ({}))
 }))
 
 vi.mock('@/stores/auth', () => ({
@@ -92,7 +87,7 @@ function reply(id: number, isAccepted: boolean, userId = 2) {
 async function mountForumPage() {
   listTopics.mockResolvedValue({ topics: [topic(1, 'question', false), topic(2, 'question', true)], total: 2 } as never)
   const wrapper = mount(ForumPage, {
-    global: { plugins: [ElementPlus], stubs: { ForumHistoryPanel: true, ForumImageUploader: true } }
+    global: { plugins: [ElementPlus], stubs: { ForumImageUploader: true } }
   })
   await flushPromises()
   return wrapper

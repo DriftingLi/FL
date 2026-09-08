@@ -25,6 +25,9 @@ vi.mock('@/api/forum', async (importOriginal) => {
       listTopics: vi.fn(),
       getMyTopics: vi.fn(),
       getMyReplies: vi.fn(),
+      getMyLikedTopics: vi.fn(),
+      getMyObservedTopics: vi.fn(),
+      getMyViewHistory: vi.fn(),
       createTopic: vi.fn()
     }
   }
@@ -33,12 +36,6 @@ vi.mock('@/api/forum', async (importOriginal) => {
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn() }),
   useRoute: () => ({ query: {}, params: {} })
-}))
-
-vi.mock('@/utils/forumHistory', () => ({
-  loadHistory: vi.fn(() => []),
-  removeHistoryItem: vi.fn(),
-  clearHistory: vi.fn()
 }))
 
 // 页面只用到 userInfo?.user_id（浏览记录按用户隔离），mock 掉避免拉起真实 pinia。
@@ -74,7 +71,7 @@ async function mountPage(total = 3, options: { attachTo?: HTMLElement } = {}) {
     global: {
       plugins: [ElementPlus],
       // 打桩子组件：避免拉起真实网络层与弹窗（打卡已迁独立页，论坛不再内嵌打卡弹窗）。
-      stubs: { ForumHistoryPanel: true, ForumImageUploader: true }
+      stubs: { ForumImageUploader: true }
     }
   })
   await flushPromises()
@@ -97,9 +94,9 @@ function tabbarByValues(wrapper: Awaited<ReturnType<typeof mountPage>>, mustIncl
 const categoryGroup = (wrapper: Awaited<ReturnType<typeof mountPage>>) =>
   tabbarByValues(wrapper, ['discussion', 'question', 'mine'])
 
-/** 「我的」二级控件（我的帖子 / 我的回复 / 浏览记录） */
+/** 「我的」二级控件（我的帖子 / 我的回复 / 赞过 / 围观 / 浏览记录，#701） */
 const modeGroup = (wrapper: Awaited<ReturnType<typeof mountPage>>) =>
-  tabbarByValues(wrapper, ['my-topics', 'my-replies', 'history'])
+  tabbarByValues(wrapper, ['my-topics', 'my-replies', 'my-liked', 'my-observed', 'history'])
 
 async function switchCategory(wrapper: Awaited<ReturnType<typeof mountPage>>, next: 'discussion' | 'question') {
   categoryGroup(wrapper).vm.$emit('update:modelValue', next)
@@ -201,6 +198,31 @@ describe('论坛类别分流', () => {
     modeGroup(wrapper).vm.$emit('update:modelValue', 'my-replies')
     await flushPromises()
     expect(forumApi.getMyReplies).toHaveBeenCalled()
+    expect(listTopics).not.toHaveBeenCalled()
+  })
+
+  it('「我的」二级新增赞过/围观/浏览记录：各调各的服务端接口（#701）', async () => {
+    vi.mocked(forumApi.getMyTopics).mockResolvedValue({ topics: [], total: 0, page: 1, pages: 0 } as never)
+    vi.mocked(forumApi.getMyLikedTopics).mockResolvedValue({ topics: [], total: 0, page: 1, pages: 0 } as never)
+    vi.mocked(forumApi.getMyObservedTopics).mockResolvedValue({ topics: [], total: 0, page: 1, pages: 0 } as never)
+    vi.mocked(forumApi.getMyViewHistory).mockResolvedValue({ topics: [], total: 0, page: 1, pages: 0 } as never)
+    const wrapper = await mountPage()
+    listTopics.mockClear()
+    categoryGroup(wrapper).vm.$emit('update:modelValue', 'mine')
+    await flushPromises()
+    expect(forumApi.getMyTopics).toHaveBeenCalledTimes(1)
+
+    modeGroup(wrapper).vm.$emit('update:modelValue', 'my-liked')
+    await flushPromises()
+    expect(forumApi.getMyLikedTopics).toHaveBeenCalledTimes(1)
+
+    modeGroup(wrapper).vm.$emit('update:modelValue', 'my-observed')
+    await flushPromises()
+    expect(forumApi.getMyObservedTopics).toHaveBeenCalledTimes(1)
+
+    modeGroup(wrapper).vm.$emit('update:modelValue', 'history')
+    await flushPromises()
+    expect(forumApi.getMyViewHistory).toHaveBeenCalledTimes(1)
     expect(listTopics).not.toHaveBeenCalled()
   })
 

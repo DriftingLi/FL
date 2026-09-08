@@ -143,7 +143,7 @@ type createContributionReq struct {
 
 // Create 创建投稿 POST /api/contributions
 // @Summary 创建投稿（pending）
-// @Description 学员提交资料投稿（1–5 个文件，合计 ≤50MB，必挂当前证件）。资格：仅学员且已选证件；配额：日 ≤3 份、pending 积压 ≤5 份。未过审不产生积分
+// @Description 学员提交资料投稿（1–5 个文件，合计 ≤50MB，目标证件可选、默认当前证件；投给非当前证件的稿需切过去可见）。资格：仅学员且已选证件；配额：日 ≤3 份、pending 积压 ≤5 份。未过审不产生积分
 // @Tags 学员端-投稿
 // @Accept json
 // @Produce json

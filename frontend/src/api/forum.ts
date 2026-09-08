@@ -166,6 +166,30 @@ export const forumApi = {
     return unwrappedRequest.get<MyRepliesData>('/forum/my-replies', { params })
   },
 
+  /** 赞过（#701：响应逐字沿用 my-topics 形态，按点赞时间倒序） */
+  getMyLikedTopics(params: { page?: number; page_size?: number }) {
+    return unwrappedRequest.get<{ topics: ForumTopicItem[]; total: number; page: number; pages: number }>(
+      '/forum/my-liked-topics',
+      { params }
+    )
+  },
+
+  /** 围观（#701：浏览减去四项直接互动，按最近浏览倒序） */
+  getMyObservedTopics(params: { page?: number; page_size?: number }) {
+    return unwrappedRequest.get<{ topics: ForumTopicItem[]; total: number; page: number; pages: number }>(
+      '/forum/my-observed',
+      { params }
+    )
+  },
+
+  /** 浏览记录（#701：服务端替换本地 localStorage，按主题去重、最近浏览倒序） */
+  getMyViewHistory(params: { page?: number; page_size?: number }) {
+    return unwrappedRequest.get<{ topics: ForumTopicItem[]; total: number; page: number; pages: number }>(
+      '/forum/my-view-history',
+      { params }
+    )
+  },
+
   // ===== 评论点赞（spec #268）=====
 
   /** 点赞评论（幂等） */

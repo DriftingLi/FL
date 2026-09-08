@@ -1203,6 +1203,85 @@ func (s *ForumService) MyTopics(userID, page, pageSize int) (*ForumTopicPageResu
 	}, nil
 }
 
+// personalTopicSelect 个人动态三列表的行装配投影（与 MyTopics 逐字一致，被删主题字段 NULL 由 Scan 零值承载）。
+const personalTopicSelect = "t.id, t.chapter_id, t.category, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.accepted_reply_id, t.solved_at, t.last_reply_at, t.created_at, " +
+	"u.id AS user_id, u.username, u.avatar_url, COALESCE(ch.title, '') AS chapter_title"
+
+// finishPersonalTopics 行装配收尾单点：DTO 转换 + 点赞回填 + 发分回填 + 分页信封。
+func (s *ForumService) finishPersonalTopics(rows []topicRow, total int64, page, pageSize int, userID int) *ForumTopicPageResult {
+	items := make([]ForumTopicDTO, 0, len(rows))
+	for _, r := range rows {
+		items = append(items, r.toDTO(userID))
+	}
+	s.enrichTopicLikedByMe(toDTORefs(items), userID)
+	s.enrichRewardIssued(items)
+	return &ForumTopicPageResult{
+		Page: page, Pages: response.PageCount(total, pageSize),
+		Topics: items, Total: total,
+	}
+}
+
+// MyLikedTopics 赞过（#701）：点赞行驱动 + 主题/作者/章节 LEFT JOIN，按点赞时间倒序。
+// 主题被删时条目保留、标题回空串（与 MyReplies 口径一致）。
+func (s *ForumService) MyLikedTopics(userID, page, pageSize int) *ForumTopicPageResult {
+	rows, total, page, pageSize := paging.QueryWithScan[topicRow](s.db, page, pageSize, 10, 100,
+		"l.created_at DESC, l.id DESC",
+		func(q *gorm.DB) *gorm.DB {
+			return q.Table("forum_topic_like AS l").
+				Select(personalTopicSelect).
+				Joins("LEFT JOIN forum_topics AS t ON t.id = l.topic_id").
+				Joins("LEFT JOIN hrwai_users AS u ON u.id = t.user_id").
+				Joins("LEFT JOIN chapter AS ch ON ch.chapter_id = t.chapter_id").
+				Where("l.user_id = ?", userID)
+		})
+	return s.finishPersonalTopics(rows, total, page, pageSize, userID)
+}
+
+// MyViewHistory 浏览记录（#701）：浏览行驱动 + 主题/作者/章节 LEFT JOIN，按主题去重取最近一次浏览倒序。
+// 去重面是「同一主题多日多行取最近一行」：先按主题聚合出每主题最近浏览（派生表），
+// 再 LEFT JOIN 主题取行装配——count 与 scan 同走派生表，去重语义在计数侧同样成立。
+// 自帖在写入侧已排除（GetTopic 不记录自帖浏览），此处不再过滤。主题被删时条目保留。
+func (s *ForumService) MyViewHistory(userID, page, pageSize int) *ForumTopicPageResult {
+	latestViews := s.db.Table("forum_topic_views AS v").
+		Select("v.topic_id, MAX(v.viewed_at) AS last_viewed").
+		Where("v.user_id = ?", userID).
+		Group("v.topic_id")
+	rows, total, page, pageSize := paging.QueryWithScan[topicRow](s.db, page, pageSize, 10, 100,
+		"lv.last_viewed DESC, t.id DESC",
+		func(q *gorm.DB) *gorm.DB {
+			return q.Table("(?) AS lv", latestViews).
+				Select(personalTopicSelect).
+				Joins("LEFT JOIN forum_topics AS t ON t.id = lv.topic_id").
+				Joins("LEFT JOIN hrwai_users AS u ON u.id = t.user_id").
+				Joins("LEFT JOIN chapter AS ch ON ch.chapter_id = t.chapter_id")
+		})
+	return s.finishPersonalTopics(rows, total, page, pageSize, userID)
+}
+
+// MyObservedTopics 我的围观（#701）：浏览行驱动 + 排除四项直接互动（本人发帖、本人回复、
+// 本人主题点赞、本人对该主题的收藏；回复点赞不计入），按最近浏览倒序。主题被删时条目保留。
+// 同浏览记录：先按主题聚合最近浏览，再做互动排除——排除谓词落在聚合后的主题维度上。
+func (s *ForumService) MyObservedTopics(userID, page, pageSize int) *ForumTopicPageResult {
+	latestViews := s.db.Table("forum_topic_views AS v").
+		Select("v.topic_id, MAX(v.viewed_at) AS last_viewed").
+		Where("v.user_id = ?", userID).
+		Group("v.topic_id")
+	rows, total, page, pageSize := paging.QueryWithScan[topicRow](s.db, page, pageSize, 10, 100,
+		"lv.last_viewed DESC, t.id DESC",
+		func(q *gorm.DB) *gorm.DB {
+			return q.Table("(?) AS lv", latestViews).
+				Select(personalTopicSelect).
+				Joins("LEFT JOIN forum_topics AS t ON t.id = lv.topic_id").
+				Joins("LEFT JOIN hrwai_users AS u ON u.id = t.user_id").
+				Joins("LEFT JOIN chapter AS ch ON ch.chapter_id = t.chapter_id").
+				Where("t.user_id IS NULL OR t.user_id <> ?", userID).
+				Where("NOT EXISTS (SELECT 1 FROM forum_replies r WHERE r.topic_id = t.id AND r.user_id = ?)", userID).
+				Where("NOT EXISTS (SELECT 1 FROM forum_topic_like l WHERE l.topic_id = t.id AND l.user_id = ?)", userID).
+				Where("NOT EXISTS (SELECT 1 FROM favorite f WHERE f.target_type = 'topic' AND f.target_id = t.id AND f.user_id = ?)", userID)
+		})
+	return s.finishPersonalTopics(rows, total, page, pageSize, userID)
+}
+
 // MyReplyDTO 我的回复条目（带主题标题回填）。
 type MyReplyDTO struct {
 	ID         int64       `json:"id"`

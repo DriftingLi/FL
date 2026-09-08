@@ -94,9 +94,9 @@ export interface CertificateTemplatePayload {
 
 export const trainingApi = {
   // ===== 目录树 =====
-  /** 公开目录树（学员端筛选用）：GET /api/catalog/tree → {specialties} */
+  /** 公开目录树（学员端筛选用）：GET /api/catalog/tree → {specialties}（credential_id 经拦截器注入，与课程列表同口径 #702） */
   getCatalogTree() {
-    return unwrappedRequest.get<CatalogTree>('/catalog/tree')
+    return unwrappedRequest.get<CatalogTree>('/catalog/tree', { params: {} })
   },
   /** 全局课程等级列表（仅启用项）：GET /api/levels */
   getLevels() {
@@ -152,9 +152,9 @@ export const trainingApi = {
   },
 
   // ===== 题库标签（后端管理端路由 /admin/question-tag*） =====
-  /** 学员端标签列表（公开，仅启用项，question_count=已发布题数）：GET /api/tags */
+  /** 学员端标签列表（公开，仅启用项，question_count=已发布题数；credential_id 经拦截器注入，与抽题池同口径 #702）：GET /api/tags */
   getTags() {
-    return unwrappedRequest.get<{ tags: QuestionTag[] }>('/tags')
+    return unwrappedRequest.get<{ tags: QuestionTag[] }>('/tags', { params: {} })
   },
   getQuestionTags() {
     return unwrappedRequest.get<{ tags: QuestionTag[] }>('/admin/question-tags')

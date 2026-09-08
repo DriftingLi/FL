@@ -3,7 +3,7 @@
 // 藏大量 implementation（inExam/remainingTime/currentIdx/shellRef 会话状态、
 // submit 前先 save 的顺序约束、断点续传的 resume index、reset）。
 // MockExam / LevelExam 只注入三个持久化 adapter，API 与 id 差异落在 adapter 里。
-import { ref } from 'vue'
+import { ref, nextTick } from 'vue'
 import type { Question } from '@/types/question'
 import { isAnswerEmpty } from './useQuestionAnswer'
 import type AnsweringSessionShell from '@/components/student/AnsweringSessionShell.vue'
@@ -48,15 +48,21 @@ export function useExamSession(adapters: ExamSessionAdapters) {
     return 0
   }
 
-  /** 进入/开始考试：拉取题目 → 恢复答案 → 起倒计时 → 定位断点下标 */
+  /** 进入/开始考试：拉取题目 → 恢复答案 → 切进卷面 → 起倒计时 → 定位断点下标 */
   async function start() {
     const res = await adapters.enter()
     if (!res) return
+    // 空卷兜底（#702）：成功但题目为空不进卷，抛错由调用方提示——否则渲染空壳 currentQ={} 即空白页
+    if (!res.questions || res.questions.length === 0) {
+      throw new Error('题库暂无可用的题目')
+    }
     questions.value = res.questions
     answers.value = { ...(res.answers || {}) }
-    shellRef.value?.begin(res.remaining_time)
+    // 先切进卷面再起倒计时：shellRef 在 v-if="inExam" 下挂载，顺序反了 begin 恒为 null、倒计时永远不起（#702）
     inExam.value = true
     currentIdx.value = findResumeIndex(res.questions, res.answers || {})
+    await nextTick()
+    shellRef.value?.begin(res.remaining_time)
   }
 
   /** 保存进度（自动保存/交卷前兜底），失败静默（拦截器已提示） */

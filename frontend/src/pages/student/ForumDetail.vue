@@ -171,7 +171,6 @@ import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
 import ForumComposer from '@/components/student/ForumComposer.vue'
 import { formatLocaleDateTime } from '@/utils/format'
 import { displayName, authorLetter } from '@/utils/forumDisplay'
-import { pushHistory, toHistoryItem } from '@/utils/forumHistory'
 import { useAuthStore } from '@/stores/auth'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useForumSort } from '@/composables/useForumSort'
@@ -251,13 +250,7 @@ async function loadDetailOnce() {
   const res = await forumApi.getTopic(topicId, replySort.value, replyOrder.value)
   topic.value = res.topic
   replies.value = res.replies || []
-  if (res.topic) {
-    try {
-      pushHistory(toHistoryItem(res.topic), authStore.userInfo?.user_id)
-    } catch {
-      // ignore storage errors
-    }
-  }
+  // 浏览记录走服务端（#701：详情访问即由后端 GetTopic 落浏览去重行），不再写本地 localStorage
   await nextTick()
   scrollToHash()
 }

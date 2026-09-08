@@ -506,7 +506,7 @@ export function getMyRepliesApi(page : number = 1, pageSize : number = 10) : Pro
  * 获取我点赞的帖子列表
  * @param page 页码
  * @param pageSize 每页条数
- * @note 后端暂未提供独立接口，复用 getMyTopicsApi；待后端实现 /forum/my-liked-topics 后替换
+ * @note 后端 GET /forum/my-liked-topics（#701，响应沿用 my-topics 形态，按点赞时间倒序）
  */
 export function getMyLikedTopicsApi(page : number = 1, pageSize : number = 10) : Promise<ForumTopicListResult> {
     const params : UTSJSONObject = {
@@ -525,7 +525,7 @@ export function getMyLikedTopicsApi(page : number = 1, pageSize : number = 10) :
  * 获取我围观的帖子列表（浏览过但未互动的帖子）
  * @param page 页码
  * @param pageSize 每页条数
- * @note 后端暂未提供独立接口，复用 getMyTopicsApi；待后端实现 /forum/my-observed 后替换
+ * @note 后端 GET /forum/my-observed（#701，浏览减去发帖/回复/主题点赞/主题收藏四项，按最近浏览倒序）
  */
 export function getMyObservedTopicsApi(page : number = 1, pageSize : number = 10) : Promise<ForumTopicListResult> {
     const params : UTSJSONObject = {
@@ -544,7 +544,7 @@ export function getMyObservedTopicsApi(page : number = 1, pageSize : number = 10
  * 获取我的浏览记录
  * @param page 页码
  * @param pageSize 每页条数
- * @note 后端暂未提供独立接口；待后端实现 /forum/my-view-history 后替换
+ * @note 后端 GET /forum/my-view-history（#701，按主题去重取最近一次浏览倒序）
  */
 export function getMyViewHistoryApi(page : number = 1, pageSize : number = 10) : Promise<ForumTopicListResult> {
     const params : UTSJSONObject = {
