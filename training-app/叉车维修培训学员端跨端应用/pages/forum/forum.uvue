@@ -15,27 +15,7 @@
                 <text class="header-action" @click="onCreate">发帖</text>
             </view>
         </view>
-        <!-- 顶部Tab栏 -->
-        <view class="tab-bar">
-            <view class="tab-item" :class="{ active: currentTab === 'square' }" @click="onSwitchTab('square')">
-                <text class="tab-text">广场</text>
-            </view>
-            <view class="tab-item" :class="{ active: currentTab === 'resource' }" @click="onSwitchTab('resource')">
-                <text class="tab-text">资源</text>
-            </view>
-            <view class="tab-item" :class="{ active: currentTab === 'recruit' }" @click="onSwitchTab('recruit')">
-                <text class="tab-text">招聘</text>
-            </view>
-            <view class="tab-item" :class="{ active: currentTab === 'hot' }" @click="onSwitchTab('hot')">
-                <text class="tab-text">知识问答</text>
-            </view>
-            <view class="tab-icon-btn" @click="onPersonalActivity">
-                <image v-if="avatarUrl.length > 0" class="tab-avatar" :src="avatarUrl" mode="aspectFill" />
-                <view v-else class="tab-avatar-placeholder">
-                    <text class="tab-avatar-icon">👷</text>
-                </view>
-            </view>
-        </view>
+        <ForumTabBar :current-tab="currentTab" :avatar-url="avatarUrl" @switch-tab="onSwitchTab" @personal-activity="onPersonalActivity" />
         <!-- 搜索栏 -->
         <view class="res-search-bar" @click="onCreate">
             <view class="res-search-input-wrap">
@@ -44,70 +24,14 @@
             </view>
         </view>
         <!-- 排序栏（广场 Tab 显示） -->
-        <view v-if="currentTab === 'square'" class="sort-bar">
-            <view class="sort-left">
-                <view class="sort-chip" :class="{ active: sortField === 'latest' }"
-                    @click="onSortFieldChange('latest')">
-                    <text class="sort-chip-text" :class="{ active: sortField === 'latest' }">最新</text>
-                </view>
-                <view class="sort-chip" :class="{ active: sortField === 'hot' }" @click="onSortFieldChange('hot')">
-                    <text class="sort-chip-text" :class="{ active: sortField === 'hot' }">热门</text>
-                </view>
-            </view>
-            <view class="sort-right">
-                <view class="sort-chip" :class="{ active: sortOrder === 'desc' }" @click="onSortOrderChange('desc')">
-                    <text class="sort-chip-text" :class="{ active: sortOrder === 'desc' }">逆序</text>
-                </view>
-                <view class="sort-chip" :class="{ active: sortOrder === 'asc' }" @click="onSortOrderChange('asc')">
-                    <text class="sort-chip-text" :class="{ active: sortOrder === 'asc' }">正序</text>
-                </view>
-            </view>
-        </view>
-
-        <!-- 招聘子Tab：公告 / 职位 -->
-        <view v-if="currentTab === 'recruit'" class="recruit-sub-bar">
-            <view class="recruit-sub-item" @click="onRecruitSubChange('notice')">
-                <text class="recruit-sub-text" :class="{ active: recruitSubTab === 'notice' }">公告</text>
-            </view>
-            <view class="recruit-sub-item" @click="onRecruitSubChange('job')">
-                <text class="recruit-sub-text" :class="{ active: recruitSubTab === 'job' }">职位</text>
-            </view>
-        </view>
-
-        <!-- 知识问答：发一个问题 -->
-        <view v-if="currentTab === 'hot'" class="ask-bar" @click="onCreate">
-            <text class="ask-bar-text">发一个问题</text>
-            <view class="ask-bar-btn">
-                <text class="ask-bar-btn-icon">+</text>
-            </view>
-        </view>
-
-        <!-- 知识问答：推荐/最热/最新（推荐为热度 mock，后端暂无推荐算法） -->
-        <view v-if="currentTab === 'hot'" class="qa-filter-bar">
-            <view class="qa-chip" :class="{ active: qaSort === 'recommend' }" @click="onQaSortChange('recommend')">
-                <text class="qa-chip-text" :class="{ active: qaSort === 'recommend' }">推荐</text>
-            </view>
-            <view class="qa-chip" :class="{ active: qaSort === 'hot' }" @click="onQaSortChange('hot')">
-                <text class="qa-chip-text" :class="{ active: qaSort === 'hot' }">最热</text>
-            </view>
-            <view class="qa-chip" :class="{ active: qaSort === 'latest' }" @click="onQaSortChange('latest')">
-                <text class="qa-chip-text" :class="{ active: qaSort === 'latest' }">最新</text>
-            </view>
-        </view>
+        <ForumSquareSortBar v-if="currentTab === 'square'" :sort-field="sortField" :sort-order="sortOrder"
+            @field-change="onSortFieldChange" @order-change="onSortOrderChange" />
+        <!-- 知识问答：发一个问题 + 筛选（问答 Tab 显示） -->
+        <ForumQaHeader v-if="currentTab === 'hot'" :qa-sort="qaSort" @ask="onCreate" @sort-change="onQaSortChange" />
 
         <!-- 广场/知识问答 Tab 内容 -->
         <scroll-view v-if="currentTab == 'square' || currentTab == 'hot'" class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
-            <!-- 打卡活动卡片 -->
-            <view v-if="currentTab === 'square'" class="checkin-card" @click="onCheckInClick">
-                <view class="checkin-card-left">
-                    <text class="checkin-card-title">8月学习打卡</text>
-                    <text class="checkin-card-date">2026.08.01</text>
-                    <text class="checkin-card-players">{{ formatCountCompact(checkinPlayers) }}人已参与打卡</text>
-                </view>
-                <view class="checkin-card-btn">
-                    <text class="checkin-card-btn-text">开始打卡</text>
-                </view>
-            </view>
+            <ForumCheckinCard v-if="currentTab === 'square'" :players="checkinPlayers" @click="onCheckInClick" />
             <view v-if="topics.length == 0 && !loading" class="empty-tip">
                 <text class="empty-icon"></text>
                 <text class="empty-text">还没有帖子，来发第一帖吧</text>
@@ -116,76 +40,12 @@
                 </view>
             </view>
             <view class="topic-list">
-                <view v-for="(item, idx) in topics" :key="idx" class="topic-card" @click="onTopicClick(item.id)">
-                    <text class="topic-title">{{ item.title }}</text>
-                    <text class="topic-content-preview">{{ getContentPreview(item.content) }}</text>
-                    <view v-if="item.images.length > 0" class="topic-images">
-                        <view v-for="(img, i) in getFirstImages(item.images)" :key="i" class="topic-image-cell">
-                            <image class="topic-image" :src="resolveImg(img)" mode="aspectFill" />
-                        </view>
-                        <view v-if="item.images.length > 3" class="topic-image-cell">
-                            <image class="topic-image" :src="resolveImg(item.images[3])" mode="aspectFill" />
-                            <view class="topic-image-more">
-                                <text class="topic-image-more-text">+{{ item.images.length - 3 }}</text>
-                            </view>
-                        </view>
-                    </view>
-                    <!-- 知识问答底部：左作者（头像+昵称/日期） 右浏览/评论/点赞，单行布局 -->
-                    <view v-if="currentTab === 'hot'" class="qa-footer">
-                        <view class="qa-author">
-                            <view class="author-avatar" :style="{ backgroundColor: getAvatarColor(item.author_id) }">
-                                <image v-if="item.author_avatar.length > 0" class="author-avatar-img"
-                                    :src="resolveImg(item.author_avatar)" mode="aspectFill" />
-                                <text v-else class="author-avatar-text">{{ getAuthorInitial(item.author_name) }}</text>
-                            </view>
-                            <view class="qa-author-text">
-                                <text class="author-name">{{ item.author_name.length > 0 ? item.author_name : '匿名学员' }}</text>
-                                <text class="qa-date">{{ formatDateStr(item.created_at) }}</text>
-                            </view>
-                        </view>
-                        <view class="qa-stats">
-                            <view class="qa-stat">
-                                <text class="qa-stat-icon">👁</text>
-                                <text class="qa-stat-text">{{ formatCountCompact(item.views_count) }}</text>
-                            </view>
-                            <view class="qa-stat" @click.stop="onReply(item.id)">
-                                <text class="qa-stat-icon">💬</text>
-                                <text class="qa-stat-text">{{ formatCountCompact(item.replies_count) }}</text>
-                            </view>
-                            <view class="qa-stat">
-                                <text class="qa-stat-icon">👍</text>
-                                <text class="qa-stat-text">{{ formatCountCompact(item.likes_count) }}</text>
-                            </view>
-                        </view>
-                    </view>
-                    <template v-else>
-                    <!-- 作者行：头像 + 昵称 + 时间 -->
-                    <view class="topic-author-row">
-                        <view class="author-avatar" :style="{ backgroundColor: getAvatarColor(item.author_id) }">
-                            <image v-if="item.author_avatar.length > 0" class="author-avatar-img"
-                                :src="resolveImg(item.author_avatar)" mode="aspectFill" />
-                            <text v-else class="author-avatar-text">{{ getAuthorInitial(item.author_name) }}</text>
-                        </view>
-                        <text class="author-name">{{ item.author_name.length > 0 ? item.author_name : '匿名学员' }}</text>
-                        <text class="topic-time">{{ formatDateStr(item.created_at) }}</text>
-                    </view>
-                    <!-- 操作栏：点赞数（只读） + 评论 + 浏览；点赞/收藏仅详情页支持 -->
-                    <view class="topic-action-bar">
-                        <view class="action-item">
-                            <text class="action-icon">👍</text>
-                            <text class="action-text">{{ formatCountCompact(item.likes_count) }}</text>
-                        </view>
-                        <view class="action-item" @click.stop="onReply(item.id)">
-                            <text class="action-icon"></text>
-                            <text class="action-text">{{ formatCountCompact(item.replies_count) }}</text>
-                        </view>
-                        <view class="action-item">
-                            <text class="action-icon"></text>
-                            <text class="action-text">{{ formatCountCompact(item.views_count) }}</text>
-                        </view>
-                    </view>
-                    </template>
-                </view>
+                <ForumTopicCard v-for="(item, idx) in topics" :key="idx"
+                    :topic-id="item.id" :title="item.title" :content="item.content" :images="item.images"
+                    :author-id="item.author_id" :author-name="item.author_name" :author-avatar="item.author_avatar"
+                    :created-at="item.created_at" :views-count="item.views_count" :replies-count="item.replies_count"
+                    :likes-count="item.likes_count" :variant="currentTab === 'hot' ? 'qa' : 'square'"
+                    @click="onTopicClick" @reply="onReply" />
             </view>
             <view v-if="loading" class="loading-more">
                 <text class="loading-text">加载中...</text>
@@ -195,93 +55,11 @@
             </view>
         </scroll-view>
 
-        <!-- 招聘职位 Tab 内容（专属卡片） -->
-        <scroll-view v-if="currentTab == 'recruit' && recruitSubTab == 'job'" class="content-scroll" scroll-y="true">
-            <view v-if="mockJobs.length == 0" class="empty-tip">
-                <text class="empty-icon">💼</text>
-                <text class="empty-text">暂无职位信息</text>
-            </view>
-            <view class="job-list">
-                <view v-for="job in mockJobs" :key="job.id" class="job-card">
-                    <view class="job-card-header">
-                        <text class="job-company">{{ job.company }}</text>
-                        <view class="job-type-tag">
-                            <text class="job-type-text">{{ job.jobType }}</text>
-                        </view>
-                    </view>
-                    <text class="job-title">{{ job.title }}</text>
-                    <view class="job-info-row">
-                        <text class="job-salary">{{ job.salary }}</text>
-                        <text class="job-location">📍 {{ job.location }}</text>
-                    </view>
-                    <text class="job-desc">{{ job.description }}</text>
-                    <view class="job-divider"></view>
-                    <view class="job-actions">
-                        <view class="job-action-btn job-action-detail" @click="onJobDetail(job.id)">
-                            <text class="job-action-text job-action-detail-text">查看详情</text>
-                        </view>
-                        <view class="job-action-btn job-action-apply" @click="onJobApply(job.id)">
-                            <text class="job-action-text job-action-apply-text">立即投递</text>
-                        </view>
-                    </view>
-                </view>
-            </view>
-        </scroll-view>
+        <!-- 招聘 Tab 内容（mock 区，退场另见 #705） -->
+        <ForumRecruitPanel v-if="currentTab === 'recruit'" />
 
-        <!-- 招聘公告 Tab 内容 -->
-        <scroll-view v-if="currentTab == 'recruit' && recruitSubTab == 'notice'" class="content-scroll" scroll-y="true">
-            <view class="empty-tip">
-                <text class="empty-icon">📢</text>
-                <text class="empty-text">暂无公告</text>
-            </view>
-        </scroll-view>
-
-        <!-- 资源 Tab 内容（内联） -->
-        <scroll-view v-if="currentTab === 'resource'" class="content-scroll" scroll-y="true">
-
-            <!-- 金币 Banner -->
-            <view class="res-coin-banner">
-                <view class="res-coin-left">
-                    <view class="res-coin-icon-box">
-                        <text class="res-coin-icon-text">$</text>
-                    </view>
-                    <view class="res-coin-info">
-                        <text class="res-coin-label">我的金币</text>
-                        <text class="res-coin-value">{{ formatCountCompact(coinBalance) }}</text>
-                    </view>
-                </view>
-                <view class="res-coin-right">
-                    <text class="res-coin-detail-text" @click="onPointsTodetail">查看明细</text>
-                </view>
-            </view>
-            <!-- 2x2 功能卡片 -->
-            <view class="res-feature-grid">
-                <view class="res-feature-card" @click="onResourceClick('course-mall')">
-                    <view class="res-feature-card-icon-wrap res-card-bg-red">
-                        <text class="res-feature-card-icon"></text>
-                    </view>
-                    <text class="res-feature-card-title res-title-red">课程商城</text>
-                </view>
-                <view class="res-feature-card" @click="onResourceClick('my-purchases')">
-                    <view class="res-feature-card-icon-wrap res-card-bg-blue">
-                        <text class="res-feature-card-icon"></text>
-                    </view>
-                    <text class="res-feature-card-title res-title-blue">我的已购</text>
-                </view>
-                <view class="res-feature-card" @click="onResourceClick('my-uploads')">
-                    <view class="res-feature-card-icon-wrap res-card-bg-green">
-                        <text class="res-feature-card-icon"></text>
-                    </view>
-                    <text class="res-feature-card-title res-title-green">我的上传</text>
-                </view>
-                <view class="res-feature-card" @click="onResourceClick('upload-resource')">
-                    <view class="res-feature-card-icon-wrap res-card-bg-sky">
-                        <text class="res-feature-card-icon">☁️</text>
-                    </view>
-                    <text class="res-feature-card-title res-title-sky">上传资源</text>
-                </view>
-            </view>
-        </scroll-view>
+        <!-- 资源 Tab 内容 -->
+        <ForumResourcePanel v-if="currentTab === 'resource'" />
 
         <!-- 悬浮发帖按钮（非资源Tab时显示） -->
         <view v-if="currentTab === 'square'" class="fab-btn" @click="onCreate">
@@ -293,51 +71,33 @@
 <script setup lang="uts">
     import { ref, computed } from 'vue'
     import { onShow } from '@dcloudio/uni-app'
+    import ForumTabBar from './components/forum-tab-bar.uvue'
+    import ForumSquareSortBar from './components/forum-square-sort-bar.uvue'
+    import ForumQaHeader from './components/forum-qa-header.uvue'
+    import ForumCheckinCard from './components/forum-checkin-card.uvue'
+    import ForumTopicCard from './components/forum-topic-card.uvue'
+    import ForumRecruitPanel from './components/forum-recruit-panel.uvue'
+    import ForumResourcePanel from './components/forum-resource-panel.uvue'
+    import { useTopicFeed } from '../../composables/useTopicFeed'
     import { useAuthStore } from '../../stores/auth'
     import { useStatusBarHeight } from '../../utils/system'
-    import { getForumTopicsApi } from '../../api/forum'
     import { getCheckInCalendarApi } from '../../api/checkin'
-    import { getProfileApi } from '../../api/student'
     import { getUnreadCountApi } from '../../api/notification'
-    import { UNAVAILABLE_TOAST } from '../../constants/app'
-    import type { ForumTopic, StudentProfile } from '../../types/index'
-
-    /** ISO 日期字符串 → YYYY-MM-DD */
-    function formatDateStr(dateStr : string) : string {
-        if (dateStr == null || dateStr.length < 10) return dateStr
-        return dateStr.substring(0, 10)
-    }
-
-    /** 补全后端返回的相对文件 URL */
-    function resolveFileUrl(url : string) : string {
-        if (url.length == 0) return ''
-        if (url.startsWith('http://') || url.startsWith('https://')) {
-            return url
-        }
-        return url
-    }
-
-    /** 数字紧凑格式 */
-    function formatCountCompact(n : number) : string {
-        if (n < 100) return n.toString()
-        if (n < 1000) return '99+'
-        if (n < 10000) return '999+'
-        return '9999+'
-    }
-
-    type RecruitJob = {
-        id : number
-        company : string
-        title : string
-        salary : string
-        location : string
-        jobType : string
-        description : string
-    }
 
     const authStore = useAuthStore()
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    // ---- tab 态（壳层唯一持有的视图状态）----
+    const currentTab = ref<string>('square') // square | resource | recruit | hot
+
+    // ---- 帖子流（列表域下沉 useTopicFeed）----
+    const {
+        topics, loading, noMore, sortField, sortOrder, qaSort,
+        loadTopics, onLoadMore, onSortFieldChange, onSortOrderChange, onQaSortChange,
+    } = useTopicFeed(currentTab)
+
+    const unreadCount = ref<number>(0)
 
     // ---- 用户头像 ----
     const avatarUrl = computed<string>(() : string => {
@@ -347,33 +107,6 @@
         }
         return ''
     })
-
-    // ---- 帖子列表相关 ----
-    const topics = ref<ForumTopic[]>([])
-    const page = ref<number>(1)
-    const pageSize = 10
-    const total = ref<number>(0)
-    const loading = ref<boolean>(false)
-    const noMore = ref<boolean>(false)
-    const currentTab = ref<string>('square') // square | resource | recruit | hot
-    const unreadCount = ref<number>(0)
-    const sortField = ref<string>('latest') // latest | hot
-    const sortOrder = ref<string>('desc')   // desc | asc
-    // 知识问答筛选：recommend（mock，暂以热度代替） | hot | latest
-    const qaSort = ref<string>('recommend')
-    const recruitSubTab = ref<string>('job') // notice | job（招聘子Tab）
-
-    // ---- 招聘职位 Mock 数据 ----
-    const mockJobs = ref<RecruitJob[]>([
-        { id: 1, company: '杭州叉车集团', title: '叉车维修技师', salary: '8000-15000 元/月', location: '浙江杭州', jobType: '全职', description: '负责电动叉车、内燃叉车的日常维护与故障排除，需持有叉车维修相关证书。' },
-        { id: 2, company: '安徽合力股份', title: '液压系统维护员', salary: '7000-12000 元/月', location: '安徽合肥', jobType: '全职', description: '专注叉车液压系统检修与保养，熟悉各类液压元件者优先。' },
-        { id: 3, company: '中力叉车', title: '叉车电路工程师', salary: '9000-16000 元/月', location: '浙江杭州', jobType: '全职', description: '负责新能源电动叉车电控系统调试与维修，需具备电路基础。' },
-        { id: 4, company: '龙工叉车', title: '叉车学徒', salary: '4000-6000 元/月', location: '福建龙岩', jobType: '全职', description: '跟随师傅学习叉车维修技术，零基础可培养，有师傅带教。' },
-        { id: 5, company: '永恒力叉车', title: '仓储设备维修员', salary: '7500-13000 元/月', location: '上海', jobType: '全职', description: '负责仓储搬运设备的定期保养与应急维修，需适应出差。' },
-        { id: 6, company: '杭叉集团', title: '叉车底盘维修工', salary: '7000-11000 元/月', location: '浙江杭州', jobType: '全职', description: '叉车底盘部件检修与更换，有相关经验者优先录用。' },
-        { id: 7, company: '柳工叉车', title: '售后技术支持', salary: '8000-14000 元/月', location: '广西柳州', jobType: '全职', description: '为客户提供叉车维修技术咨询与现场支持，沟通能力强。' },
-        { id: 8, company: '诺力叉车', title: '兼职叉车检修', salary: '200-300 元/天', location: '浙江湖州', jobType: '兼职', description: '按项目结算，负责叉车到厂检修，时间灵活，需有经验。' },
-    ])
 
     // ---- 打卡相关 ----
     const checkinPlayers = ref<number>(0)
@@ -393,121 +126,11 @@
         uni.navigateTo({ url: '/pages/forum/check-in' })
     }
 
-    // ---- 资源 Tab 相关 ----
-    const profile = ref<StudentProfile | null>(null)
-    const coinBalance = computed<number>(() : number => {
-        const p = profile.value
-        if (p == null) return 0
-        const hours = Math.floor(p.total_study_duration / 60)
-        return hours * 3 + p.completed_courses * 20
-    })
-
-    async function loadProfile() : Promise<void> {
-        try { profile.value = await getProfileApi() } catch (e) { console.error('[forum] loadProfile failed:', e) }
-    }
-    function onPointsTodetail() : void {
-        uni.navigateTo({
-            url: "/pages/points/points-detail"
-        })
-    }
-    function onResourceClick(key : string) : void {
-        if (key === 'course-mall') {
-            uni.reLaunch({ url: '/pages/courses/courses' })
-        } else if (key === 'my-purchases') {
-            uni.navigateTo({ url: '/pages/resources/my-purchases' })
-        } else if (key === 'my-uploads') {
-            uni.navigateTo({ url: '/pages/resources/my-uploads' })
-        } else if (key === 'upload-resource') {
-            uni.navigateTo({ url: '/pages/forum/forum-create?scope=resource' })
-        } else {
-            uni.showToast({ title: UNAVAILABLE_TOAST, icon: 'none' })
-        }
-    }
-
-    /** 获取内容预览（截取前 80 字，去掉换行） */
-    function getContentPreview(content : string) : string {
-        const single = content.replace('\n', ' ')
-        if (single.length <= 80) return single
-        return single.substring(0, 80) + '...'
-    }
-
-    /** 取前 3 张图片用于列表缩略图 */
-    function getFirstImages(images : string[]) : string[] {
-        const result : string[] = []
-        const max = images.length > 3 ? 3 : images.length
-        for (let i = 0; i < max; i++) {
-            result.push(images[i])
-        }
-        return result
-    }
-
-    function resolveImg(url : string) : string {
-        return resolveFileUrl(url)
-    }
-
-    function getAuthorInitial(name : string) : string {
-        if (name.length == 0) return '学'
-        return name.substring(0, 1)
-    }
-
-    /** 基于 author_id 稳定生成头像背景色 */
-    function getAvatarColor(authorId : number) : string {
-        const colors : string[] = ['#2979ff', '#4caf50', '#ff9800', '#9c27b0', '#e91e63', '#009688', '#795548', '#607d8b']
-        if (authorId <= 0) return colors[0]
-        return colors[authorId % colors.length]
-    }
-
-    async function loadTopics(reset : boolean = false) : Promise<void> {
-        if (loading.value) return
-        if (reset) {
-            page.value = 1
-            noMore.value = false
-        }
-        if (noMore.value && !reset) return
-
-        loading.value = true
-        try {
-            // 后端 scope 白名单仅 all|general|chapter（旧值 hot/recruit 会被静默当 all），
-            // category 白名单 all|discussion|question
-            // 广场/招聘只出普通帖（discussion），知识问答帖（question）仅在问答 Tab 展示
-            let scope = 'general'
-            let category = 'discussion'
-            let sort = sortField.value
-            let order = sortOrder.value
-            if (currentTab.value === 'recruit') {
-                scope = 'all'
-            } else if (currentTab.value === 'hot') {
-                // 知识问答：只列提问帖；推荐/最热都映射后端 hot（推荐暂无独立算法，mock 占位），最新映射 latest
-                scope = 'all'
-                category = 'question'
-                order = 'desc'
-                sort = qaSort.value == 'latest' ? 'latest' : 'hot'
-            }
-            const result = await getForumTopicsApi(page.value, pageSize, scope, sort, order, category)
-            if (reset) {
-                topics.value = result.items
-            } else {
-                topics.value = topics.value.concat(result.items)
-            }
-            total.value = result.total
-            if (topics.value.length >= result.total || result.items.length == 0) {
-                noMore.value = true
-            } else {
-                page.value = page.value + 1
-            }
-        } catch (e) {
-            console.error('[forum] load failed:', e)
-            uni.showToast({ title: '加载帖子失败', icon: 'none' })
-        } finally {
-            loading.value = false
-        }
-    }
-
     function onSwitchTab(tab : string) : void {
         if (currentTab.value === tab) return
         currentTab.value = tab
         if (tab === 'resource') {
-            loadProfile()
+            // 资源区数据由 ForumResourcePanel 挂载时自拉
             return
         }
         loadTopics(true)
@@ -520,41 +143,6 @@
             return
         }
         uni.navigateTo({ url: '/pages/profile/personal-activity' })
-    }
-
-    function onSortFieldChange(field : string) : void {
-        if (sortField.value === field) return
-        sortField.value = field
-        loadTopics(true)
-    }
-
-    function onQaSortChange(val : string) : void {
-        if (qaSort.value === val) return
-        qaSort.value = val
-        loadTopics(true)
-    }
-
-    function onSortOrderChange(order : string) : void {
-        if (sortOrder.value === order) return
-        sortOrder.value = order
-        loadTopics(true)
-    }
-
-    function onRecruitSubChange(sub : string) : void {
-        if (recruitSubTab.value === sub) return
-        recruitSubTab.value = sub
-    }
-
-    function onJobDetail(jobId : number) : void {
-        uni.showToast({ title: '功能开发中', icon: 'none' })
-    }
-
-    function onJobApply(jobId : number) : void {
-        uni.showToast({ title: '功能开发中', icon: 'none' })
-    }
-
-    function onLoadMore() : void {
-        loadTopics(false)
     }
 
     function onTopicClick(topicId : number) : void {
@@ -694,244 +282,36 @@
         height: 0;
     }
 
-    /* 顶部Tab栏 */
-    .tab-bar {
-        flex-direction: row;
+    /* 搜索栏 */
+    .res-search-bar {
         background-color: transparent;
-        border-bottom: 1rpx solid rgba(0, 0, 0, 0.06);
-        align-items: center;
+        padding: 16rpx 32rpx 20rpx;
     }
 
-    .tab-item {
-        flex: 1;
-        height: 88rpx;
-        align-items: center;
-        justify-content: center;
-        border-bottom: 4rpx solid transparent;
-    }
-
-    .tab-item.active {
-        border-bottom-color: #2979ff;
-    }
-
-    .tab-text {
-        font-size: 30rpx;
-        color: #666666;
-    }
-
-    .tab-item.active .tab-text {
-        color: #1a1a1a;
-        font-weight: bold;
-    }
-
-    /* Tab栏右侧图标按钮 */
-    .tab-icon-btn {
-        width: 80rpx;
-        height: 88rpx;
-        align-items: center;
-        justify-content: center;
-        margin-left: 8rpx;
-    }
-
-    .tab-avatar {
-        width: 56rpx;
-        height: 56rpx;
-        border-radius: 28rpx;
-        border: 2rpx solid #eeeeee;
-    }
-
-    .tab-avatar-placeholder {
-        width: 56rpx;
-        height: 56rpx;
-        border-radius: 28rpx;
-        background-color: #f0f5ff;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .tab-avatar-icon {
-        font-size: 32rpx;
-    }
-
-    /* 排序栏 */
-    .sort-bar {
+    .res-search-input-wrap {
         flex-direction: row;
         align-items: center;
         justify-content: space-between;
+        background-color: #ffffff;
+        border-radius: 36rpx;
         padding: 16rpx 24rpx;
-        background-color: transparent;
-        border-bottom: 1rpx solid rgba(0, 0, 0, 0.06);
     }
 
-    .sort-left {
-        flex-direction: row;
-        align-items: center;
+    .res-search-icon {
+        font-size: 28rpx;
+        color: #999999;
     }
 
-    .sort-right {
-        flex-direction: row;
-        align-items: center;
-    }
-
-    .sort-chip {
-        padding: 8rpx 24rpx;
-        border-radius: 24rpx;
-        background-color: #f5f5f5;
-        border: 1rpx solid #e0e0e0;
-        margin-right: 12rpx;
-    }
-
-    .sort-chip.active {
-        background-color: #e8f0fe;
-        border: 1rpx solid #2979ff;
-    }
-
-    .sort-chip-text {
-        font-size: 24rpx;
-        color: #666666;
-    }
-
-    .sort-chip-text.active {
-        color: #2979ff;
-        font-weight: bold;
+    .res-search-placeholder {
+        font-size: 28rpx;
+        color: #999999;
+        flex: 1;
     }
 
     /* 帖子列表 */
     .topic-list {
         flex-direction: column;
         padding: 16rpx 24rpx;
-    }
-
-    .topic-card {
-        background-color: #ffffff;
-        border-radius: 16rpx;
-        padding: 24rpx;
-        margin-bottom: 16rpx;
-        border: 1px solid #eeeeee;
-        flex-direction: column;
-    }
-
-    .topic-title {
-        font-size: 32rpx;
-        font-weight: bold;
-        color: #333333;
-        line-height: 1.4;
-        margin-bottom: 12rpx;
-    }
-
-    .topic-content-preview {
-        font-size: 26rpx;
-        color: #666666;
-        line-height: 1.5;
-        margin-bottom: 16rpx;
-    }
-
-    /* 列表图片缩略图 */
-    .topic-images {
-        flex-direction: row;
-        margin-bottom: 16rpx;
-    }
-
-    .topic-image-cell {
-        width: 160rpx;
-        height: 160rpx;
-        margin-right: 12rpx;
-        border-radius: 12rpx;
-        overflow: hidden;
-        position: relative;
-    }
-
-    .topic-image {
-        width: 160rpx;
-        height: 160rpx;
-        border-radius: 12rpx;
-        background-color: #f0f0f0;
-    }
-
-    .topic-image-more {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background-color: rgba(0, 0, 0, 0.5);
-        align-items: center;
-        justify-content: center;
-    }
-
-    .topic-image-more-text {
-        font-size: 36rpx;
-        color: #ffffff;
-        font-weight: bold;
-    }
-
-    /* 作者行 */
-    .topic-author-row {
-        flex-direction: row;
-        align-items: center;
-        padding-top: 12rpx;
-        border-top: 1rpx solid #f5f5f5;
-        margin-top: 12rpx;
-    }
-
-    .author-avatar {
-        width: 44rpx;
-        height: 44rpx;
-        border-radius: 22rpx;
-        background-color: #2979ff;
-        align-items: center;
-        justify-content: center;
-        margin-right: 12rpx;
-    }
-
-    .author-avatar-text {
-        font-size: 22rpx;
-        color: #ffffff;
-        font-weight: bold;
-    }
-
-    .author-avatar-img {
-        width: 44rpx;
-        height: 44rpx;
-        border-radius: 22rpx;
-    }
-
-    .author-name {
-        flex: 1;
-        font-size: 24rpx;
-        color: #666666;
-    }
-
-    .topic-time {
-        font-size: 22rpx;
-        color: #cccccc;
-    }
-
-    /* 操作栏 */
-    .topic-action-bar {
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-around;
-        padding: 16rpx 0 0;
-    }
-
-    .action-item {
-        flex-direction: row;
-        align-items: center;
-        padding: 8rpx 16rpx;
-        border-radius: 24rpx;
-        margin-right: 8rpx;
-    }
-
-    .action-icon {
-        font-size: 28rpx;
-        margin-right: 6rpx;
-        color: #999999;
-    }
-
-    .action-text {
-        font-size: 24rpx;
-        color: #999999;
     }
 
     /* 空状态 */
@@ -974,53 +354,6 @@
         color: #999999;
     }
 
-    /* 打卡活动卡片 */
-    .checkin-card {
-        margin: 20rpx 24rpx;
-        padding: 28rpx 32rpx;
-        border-radius: 16rpx;
-        background-color: #FFF8E1;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-    }
-
-    .checkin-card-left {
-        flex: 1;
-        flex-direction: column;
-    }
-
-    .checkin-card-title {
-        font-size: 30rpx;
-        font-weight: bold;
-        color: #333333;
-        margin-bottom: 8rpx;
-    }
-
-    .checkin-card-date {
-        font-size: 22rpx;
-        color: #999999;
-        margin-bottom: 4rpx;
-    }
-
-    .checkin-card-players {
-        font-size: 22rpx;
-        color: #999999;
-    }
-
-    .checkin-card-btn {
-        background-color: #2979ff;
-        padding: 16rpx 32rpx;
-        border-radius: 32rpx;
-        flex-shrink: 0;
-    }
-
-    .checkin-card-btn-text {
-        font-size: 26rpx;
-        color: #ffffff;
-        font-weight: bold;
-    }
-
     /* 悬浮发帖按钮（避开底部 tab-bar） */
     .fab-btn {
         position: fixed;
@@ -1039,382 +372,5 @@
         font-size: 56rpx;
         color: #ffffff;
         font-weight: bold;
-    }
-
-    /* ===== 资源 Tab 内联样式 ===== */
-    .res-search-bar {
-        background-color: transparent;
-        padding: 16rpx 32rpx 20rpx;
-    }
-
-    .res-search-input-wrap {
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        background-color: #ffffff;
-        border-radius: 36rpx;
-        padding: 16rpx 24rpx;
-    }
-
-    .res-search-icon {
-        font-size: 28rpx;
-        color: #999999;
-    }
-
-    .res-search-placeholder {
-        font-size: 28rpx;
-        color: #999999;
-        flex: 1;
-    }
-
-    .res-coin-banner {
-        margin: 24rpx;
-        padding: 28rpx 32rpx;
-        border-radius: 20rpx;
-        background: linear-gradient(90deg, #6FB9F7, #1E88E5);
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-    }
-
-    .res-coin-left {
-        flex-direction: row;
-        align-items: center;
-    }
-
-    .res-coin-icon-box {
-        width: 80rpx;
-        height: 80rpx;
-        border-radius: 40rpx;
-        background-color: #FFD048;
-        align-items: center;
-        justify-content: center;
-        margin-right: 20rpx;
-    }
-
-    .res-coin-icon-text {
-        color: #B27B16;
-        font-size: 40rpx;
-        font-weight: bold;
-        font-size: 44rpx;
-    }
-
-    .res-coin-info {
-        flex-direction: column;
-    }
-
-    .res-coin-label {
-        font-size: 24rpx;
-        color: rgba(255, 255, 255, 0.9);
-    }
-
-    .res-coin-value {
-        font-size: 44rpx;
-        font-weight: bold;
-        color: #ffffff;
-        margin-top: 4rpx;
-    }
-
-    .res-coin-right {
-        flex-direction: row;
-        align-items: center;
-    }
-
-    .res-coin-detail-text {
-        font-size: 26rpx;
-        color: #ffffff;
-    }
-
-    .res-feature-grid {
-        flex-direction: row;
-        flex-wrap: wrap;
-        padding: 0 24rpx;
-    }
-
-    .res-feature-card {
-        width: 50%;
-        padding: 16rpx;
-        flex-direction: column;
-        align-items: center;
-    }
-
-    .res-feature-card-icon-wrap {
-        width: 100%;
-        height: 180rpx;
-        border-radius: 16rpx;
-        align-items: center;
-        justify-content: center;
-        margin-bottom: 16rpx;
-    }
-
-    .res-card-bg-red {
-        background-color: #FFF0F0;
-    }
-
-    .res-card-bg-blue {
-        background-color: #F0F5FF;
-    }
-
-    .res-card-bg-green {
-        background-color: #F0FFF0;
-    }
-
-    .res-card-bg-sky {
-        background-color: #F0F8FF;
-    }
-
-    .res-feature-card-icon {
-        font-size: 72rpx;
-    }
-
-    .res-feature-card-title {
-        font-size: 28rpx;
-        font-weight: 500;
-        color: #333333;
-    }
-    .res-title-red { color: #E5484D; }
-    .res-title-blue { color: #2979ff; }
-    .res-title-green { color: #22A45D; }
-    .res-title-sky { color: #2979ff; }
-
-    /* ===== 招聘子Tab（公告/职位） ===== */
-    .recruit-sub-bar {
-        margin: 16rpx 24rpx;
-        padding: 8rpx;
-        background-color: #ffffff;
-        border-radius: 16rpx;
-        display: flex;
-        flex-direction: row;
-    }
-    .recruit-sub-item {
-        flex: 1;
-        height: 64rpx;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-    .recruit-sub-text {
-        font-size: 28rpx;
-        color: #333333;
-    }
-    .recruit-sub-text.active {
-        color: #2979ff;
-        font-weight: 600;
-    }
-
-    /* ===== 知识问答：发一个问题 ===== */
-    .ask-bar {
-        margin: 16rpx 24rpx;
-        padding: 20rpx 24rpx;
-        background-color: #ffffff;
-        border-radius: 16rpx;
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-    }
-    .ask-bar-text {
-        font-size: 30rpx;
-        color: #1a1a1a;
-        font-weight: 600;
-    }
-    .ask-bar-btn {
-        width: 52rpx;
-        height: 52rpx;
-        border-radius: 26rpx;
-        background-color: #2979ff;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-    .ask-bar-btn-icon {
-        color: #ffffff;
-        font-size: 36rpx;
-        line-height: 36rpx;
-    }
-
-    /* ===== 知识问答：筛选 chips 与卡片 footer ===== */
-    .qa-filter-bar {
-        flex-direction: row;
-        align-items: center;
-        padding: 4rpx 24rpx 16rpx;
-    }
-
-    .qa-chip {
-        padding: 10rpx 32rpx;
-        border-radius: 32rpx;
-        background-color: #f0f1f5;
-        border: 2rpx solid transparent;
-        margin-right: 20rpx;
-    }
-
-    .qa-chip.active {
-        background-color: #e8f3ff;
-        border-color: #2979ff;
-    }
-
-    .qa-chip-text {
-        font-size: 26rpx;
-        color: #666666;
-    }
-
-    .qa-chip-text.active {
-        color: #2979ff;
-        font-weight: bold;
-    }
-
-    .qa-footer {
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        margin-top: 8rpx;
-    }
-
-    .qa-author {
-        flex-direction: row;
-        align-items: center;
-        flex: 1;
-    }
-
-    .qa-author-text {
-        flex-direction: column;
-        margin-left: 12rpx;
-    }
-
-    .qa-date {
-        font-size: 22rpx;
-        color: #bbbbbb;
-        margin-top: 4rpx;
-    }
-
-    .qa-stats {
-        flex-direction: row;
-        align-items: center;
-    }
-
-    .qa-stat {
-        flex-direction: row;
-        align-items: center;
-        margin-left: 28rpx;
-    }
-
-    .qa-stat-icon {
-        font-size: 26rpx;
-        margin-right: 6rpx;
-    }
-
-    .qa-stat-text {
-        font-size: 24rpx;
-        color: #999999;
-    }
-
-    /* ===== 招聘职位卡片 ===== */
-    .job-list {
-        flex-direction: column;
-        padding: 16rpx 24rpx;
-    }
-
-    .job-card {
-        background-color: #ffffff;
-        border-radius: 16rpx;
-        padding: 24rpx;
-        margin-bottom: 16rpx;
-        border: 1rpx solid #eeeeee;
-        flex-direction: column;
-    }
-
-    .job-card-header {
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 12rpx;
-    }
-
-    .job-company {
-        font-size: 24rpx;
-        color: #666666;
-        flex: 1;
-    }
-
-    .job-type-tag {
-        padding: 4rpx 16rpx;
-        border-radius: 8rpx;
-        background-color: #e8f0fe;
-    }
-
-    .job-type-text {
-        font-size: 22rpx;
-        color: #2979ff;
-    }
-
-    .job-title {
-        font-size: 32rpx;
-        font-weight: bold;
-        color: #333333;
-        margin-bottom: 12rpx;
-    }
-
-    .job-info-row {
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 12rpx;
-    }
-
-    .job-salary {
-        font-size: 30rpx;
-        font-weight: bold;
-        color: #ff6b35;
-    }
-
-    .job-location {
-        font-size: 24rpx;
-        color: #999999;
-    }
-
-    .job-desc {
-        font-size: 26rpx;
-        color: #666666;
-        line-height: 1.5;
-        margin-bottom: 16rpx;
-    }
-
-    .job-divider {
-        height: 1rpx;
-        background-color: #f0f0f0;
-        margin-bottom: 16rpx;
-    }
-
-    .job-actions {
-        flex-direction: row;
-        align-items: center;
-        justify-content: flex-end;
-    }
-
-    .job-action-btn {
-        padding: 12rpx 32rpx;
-        border-radius: 24rpx;
-        margin-left: 16rpx;
-    }
-
-    .job-action-detail {
-        background-color: #f5f5f5;
-    }
-
-    .job-action-apply {
-        background-color: #2979ff;
-    }
-
-    .job-action-text {
-        font-size: 26rpx;
-        font-weight: 500;
-    }
-
-    .job-action-detail-text {
-        color: #666666;
-    }
-
-    .job-action-apply-text {
-        color: #ffffff;
     }
 </style>
