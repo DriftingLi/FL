@@ -1,0 +1,407 @@
+/**
+ * forum 详情核心态（T04 手术：forum-detail.uvue script 详情域下沉）
+ * 持有 topic/replies 与其全部交叉变更（点赞/收藏/删除/回复点赞本地态）——数据所有权单一。
+ * 函数字段箭头包裹返回（UTS error18 先例，同 useAiChat）。
+ */
+import { ref, computed } from 'vue'
+import type { Ref, ComputedRef } from 'vue'
+import { useAuthStore } from '../stores/auth'
+import { goBack } from '../utils/navigation'
+import {
+    getForumTopicDetailApi,
+    deleteForumTopicApi,
+    deleteForumReplyApi,
+    likeTopicApi,
+    unlikeTopicApi,
+    likeReplyApi,
+    unlikeReplyApi,
+} from '../api/forum'
+import { checkFavoriteApi, addFavoriteApi, removeFavoriteApi } from '../api/favorite'
+import { getStorageJSON, setStorageJSON } from '../utils/storage'
+import type { ForumTopicDetail, ForumReply } from '../types/index'
+
+export type UseTopicDetailResult = {
+    topicId : Ref<number>
+    topic : Ref<ForumTopicDetail | null>
+    replies : Ref<ForumReply[]>
+    loading : Ref<boolean>
+    replySortField : Ref<string>
+    replySortOrder : Ref<string>
+    canDelete : ComputedRef<boolean>
+    canEdit : ComputedRef<boolean>
+    currentUserId : ComputedRef<number>
+    loadDetail : () => Promise<void>
+    onReplySortFieldChange : (field : string) => void
+    onReplySortOrderChange : (order : string) => void
+    onToggleLike : () => Promise<void>
+    onToggleFavorite : () => Promise<void>
+    onDelete : () => void
+    onEditTopic : () => void
+    canDeleteReply : (reply : ForumReply) => boolean
+    isReplyLiked : (reply : ForumReply) => boolean
+    getReplyLikesCount : (reply : ForumReply) => number
+    onToggleReplyLike : (reply : ForumReply) => Promise<void>
+    onDeleteReply : (replyId : number) => void
+    afterReplyPosted : (reply : ForumReply) => void
+}
+
+export function useTopicDetail() : UseTopicDetailResult {
+    const authStore = useAuthStore()
+
+    const topicId = ref<number>(0)
+    const topic = ref<ForumTopicDetail | null>(null)
+    const replySortField = ref<string>('latest') // latest | hot
+    const replySortOrder = ref<string>('asc')    // asc | desc
+    const replies = ref<ForumReply[]>([])
+    const loading = ref<boolean>(false)
+    const topicFavoriteId = ref<number>(0)
+    // 回复点赞本地态：key 为 reply.id 字符串，value 为 { liked: boolean, likes_count: number }，持久化到本地存储防止刷新丢失（后端暂未在 GetTopic 下发 replies[].liked/likes_count）
+    const replyLikeState = ref<UTSJSONObject>({} as UTSJSONObject)
+
+    function replyLikeStorageKey() : string {
+        return 'forum_reply_like_' + topicId.value.toString()
+    }
+
+    function persistReplyLikeState() : void {
+        try {
+            if (topicId.value > 0) setStorageJSON(replyLikeStorageKey(), replyLikeState.value as object)
+        } catch (e) { console.warn('[forum-detail] persistReplyLikeState failed:', e) }
+    }
+
+    function restoreReplyLikeState() : void {
+        if (topicId.value <= 0) return
+        try {
+            const saved = getStorageJSON(replyLikeStorageKey())
+            if (saved != null) {
+                // 合并到当前态（保留内存中更新的优先）
+                const merged : UTSJSONObject = {} as UTSJSONObject
+                for (const k in saved) merged[k] = saved[k]
+                for (const k in replyLikeState.value) merged[k] = replyLikeState.value[k]
+                replyLikeState.value = merged
+            }
+        } catch (e) { console.warn('[forum-detail] restoreReplyLikeState failed:', e) }
+    }
+
+    function hydrateReplyLikesFromReplies() : void {
+        restoreReplyLikeState()
+        // 若后端已下发 liked/likes_count（未来实现），以后端为权威回填到本地态，避免刷新后样式因后端 0 被覆盖则仅在本地无记录时写入
+        for (let i = 0; i < replies.value.length; i++) {
+            const r = replies.value[i]
+            const hasBackend = (r.liked == true) || (r.likes_count > 0)
+            if (!hasBackend) continue
+            const key = r.id.toString()
+            const existing = replyLikeState.value[key] as UTSJSONObject | null
+            if (existing == null) {
+                const next : UTSJSONObject = {} as UTSJSONObject
+                for (const k in replyLikeState.value) next[k] = replyLikeState.value[k]
+                next[key] = { liked: r.liked, likes_count: r.likes_count } as UTSJSONObject
+                replyLikeState.value = next
+            }
+        }
+        // 首次回填后即持久化，保证刷新后数据不丢
+        persistReplyLikeState()
+    }
+
+    /** 当前用户 ID */
+    const currentUserId = computed<number>(() : number => {
+        const u = authStore.user.value
+        if (u != null) return u.user_id
+        return 0
+    })
+
+    /** 是否可删除帖子（后端 can_delete 或作者本人） */
+    const canDelete = computed<boolean>(() : boolean => {
+        const t = topic.value
+        if (t == null) return false
+        if (t.can_delete) return true
+        return t.author_id == currentUserId.value && currentUserId.value > 0
+    })
+
+    /** 是否可编辑帖子（作者本人） */
+    const canEdit = computed<boolean>(() : boolean => {
+        const t = topic.value
+        if (t == null) return false
+        return t.author_id == currentUserId.value && currentUserId.value > 0
+    })
+
+    /** 是否可删除回复（后端 can_delete 或作者本人） */
+    function canDeleteReply(reply : ForumReply) : boolean {
+        if (reply.can_delete) return true
+        return reply.author_id == currentUserId.value && currentUserId.value > 0
+    }
+
+    // ===== 收藏（声明在 loadDetail 之前，避免 Kotlin 局部函数前向引用） =====
+    async function loadTopicFavorite() : Promise<void> {
+        const t = topic.value
+        if (t == null || t.id <= 0) return
+        try {
+            const result = await checkFavoriteApi('topic', t.id)
+            t.favorited = result.favorited
+            topicFavoriteId.value = result.favorite_id
+        } catch (e) {
+            console.warn('[forum-detail] loadTopicFavorite failed:', e)
+        }
+    }
+
+    async function onToggleFavorite() : Promise<void> {
+        const t = topic.value
+        if (t == null) return
+        const wasFavorited = t.favorited
+        // 乐观更新
+        t.favorited = !wasFavorited
+        try {
+            if (wasFavorited) {
+                await removeFavoriteApi(topicFavoriteId.value)
+                topicFavoriteId.value = 0
+            } else {
+                const result = await addFavoriteApi('topic', t.id)
+                topicFavoriteId.value = result.favorite_id
+            }
+        } catch (e) {
+            // 回滚
+            t.favorited = wasFavorited
+            console.error('[forum-detail] toggleFavorite failed:', e)
+            uni.showToast({ title: '操作失败', icon: 'none' })
+        }
+    }
+
+    async function loadDetail() : Promise<void> {
+        if (topicId.value == 0) return
+        loading.value = true
+        try {
+            const data = await getForumTopicDetailApi(topicId.value, replySortField.value, replySortOrder.value)
+            topic.value = data
+            replies.value = data.replies
+            console.log('[forum-detail] DIAG can_delete=', data.can_delete, 'author_id=', data.author_id, 'currentUserId=', currentUserId.value, 'user=', JSON.stringify(authStore.user.value), 'canDelete=', canDelete.value)
+            // 回填回复点赞态（后端暂未下发时靠本地存储恢复，避免刷新后数据/样式丢失）
+            hydrateReplyLikesFromReplies()
+            // 刷新收藏状态（获取 favorite_id 供取消收藏使用）
+            loadTopicFavorite()
+        } catch (e) {
+            console.error('[forum-detail] load failed:', e)
+            uni.showToast({ title: '加载帖子失败', icon: 'none' })
+        } finally {
+            loading.value = false
+        }
+    }
+
+    /** 执行删除帖子（声明在 onDelete 之前，避免 Kotlin 局部函数前向引用） */
+    async function doDeleteTopic() : Promise<void> {
+        uni.showLoading({ title: '删除中...' })
+        try {
+            await deleteForumTopicApi(topicId.value)
+            uni.showToast({ title: '已删除', icon: 'success' })
+            setTimeout(() => {
+                goBack()
+            }, 1000)
+        } catch (e) {
+            console.error('[forum-detail] delete topic failed:', e)
+            uni.showToast({ title: '删除失败', icon: 'none' })
+        } finally {
+            uni.hideLoading()
+        }
+    }
+
+    /** 删除帖子 */
+    function onDelete() : void {
+        uni.showModal({
+            title: '提示',
+            content: '确定删除这篇帖子吗？删除后不可恢复。',
+            success: (res) => {
+                if (res.confirm) {
+                    doDeleteTopic()
+                }
+            }
+        })
+    }
+
+    /** 执行删除回复（声明在 onDeleteReply 之前，避免 Kotlin 局部函数前向引用） */
+    async function doDeleteReply(replyId : number) : Promise<void> {
+        uni.showLoading({ title: '删除中...' })
+        try {
+            await deleteForumReplyApi(replyId)
+            // 从列表中移除
+            const newReplies : ForumReply[] = []
+            for (let i = 0; i < replies.value.length; i++) {
+                if (replies.value[i].id != replyId) {
+                    newReplies.push(replies.value[i])
+                }
+            }
+            replies.value = newReplies
+            // 更新回复数
+            const t = topic.value
+            if (t != null) {
+                t.replies_count = Math.max(0, t.replies_count - 1)
+            }
+            uni.showToast({ title: '已删除', icon: 'success' })
+        } catch (e) {
+            console.error('[forum-detail] delete reply failed:', e)
+            uni.showToast({ title: '删除失败', icon: 'none' })
+        } finally {
+            uni.hideLoading()
+        }
+    }
+
+    /** 删除回复 */
+    function onDeleteReply(replyId : number) : void {
+        uni.showModal({
+            title: '提示',
+            content: '确定删除这条回复吗？',
+            success: (res) => {
+                if (res.confirm) {
+                    doDeleteReply(replyId)
+                }
+            }
+        })
+    }
+
+    // ===== 回复点赞本地态 helpers（后端 GET /forum/topics/{id} 暂未返回 replies[].liked/likes_count，靠本地态 + POST/DELETE /forum/replies/{id}/like 同步） =====
+    function getReplyLikeRecord(replyId : number) : UTSJSONObject | null {
+        const key = replyId.toString()
+        const v = replyLikeState.value[key]
+        if (v == null) return null
+        return v as UTSJSONObject
+    }
+
+    function isReplyLiked(reply : ForumReply) : boolean {
+        const rec = getReplyLikeRecord(reply.id)
+        if (rec != null) return rec['liked'] == true
+        // 兼容后端未来在 reply 上直接返回 liked / liked_by_me（字段在类型上为可选，直接读，无需 cast）
+        if (reply.liked == true) return true
+        if (reply.liked_by_me == true) return true
+        return false
+    }
+
+    function getReplyLikesCount(reply : ForumReply) : number {
+        const rec = getReplyLikeRecord(reply.id)
+        if (rec != null) {
+            const n = rec['likes_count'] as number
+            if (n != null) return n as number
+        }
+        if (reply.likes_count >= 0) return reply.likes_count
+        const lc = reply.like_count
+        if (lc != null && (lc as number) >= 0) return lc as number
+        return 0
+    }
+
+    function setReplyLikeState(replyId : number, liked : boolean, likesCount : number) : void {
+        const key = replyId.toString()
+        const next : UTSJSONObject = {} as UTSJSONObject
+        for (const k in replyLikeState.value) {
+            next[k] = replyLikeState.value[k]
+        }
+        next[key] = { liked: liked, likes_count: likesCount } as UTSJSONObject
+        replyLikeState.value = next
+        persistReplyLikeState()
+    }
+
+    async function onToggleReplyLike(reply : ForumReply) : Promise<void> {
+        const wasLiked = isReplyLiked(reply)
+        const oldCount = getReplyLikesCount(reply)
+        const nextLiked = !wasLiked
+        const nextCount = wasLiked ? Math.max(0, oldCount - 1) : oldCount + 1
+        setReplyLikeState(reply.id, nextLiked, nextCount)
+        try {
+            if (wasLiked) {
+                const result = await unlikeReplyApi(reply.id)
+                setReplyLikeState(reply.id, result.liked, result.likes_count)
+            } else {
+                const result = await likeReplyApi(reply.id)
+                setReplyLikeState(reply.id, result.liked, result.likes_count)
+            }
+        } catch (e) {
+            setReplyLikeState(reply.id, wasLiked, oldCount)
+            console.error('[forum-detail] toggle reply like failed:', e)
+            let msg = '操作失败'
+            if (e instanceof Error) {
+                const m = (e as Error).message
+                if (m != null && m.length > 0) msg = m
+            }
+            // 后端若尚未实现该接口会 404，提示更友好
+            if (msg.indexOf('404') >= 0 || msg.indexOf('不存在') >= 0) {
+                msg = '点赞回复功能后端暂未实现'
+            }
+            uni.showToast({ title: msg, icon: 'none' })
+        }
+    }
+
+    // ===== 点赞 =====
+    async function onToggleLike() : Promise<void> {
+        const t = topic.value
+        if (t == null) return
+        const wasLiked = t.liked
+        const oldCount = t.likes_count
+        t.liked = !wasLiked
+        t.likes_count = wasLiked ? oldCount - 1 : oldCount + 1
+        if (t.likes_count < 0) t.likes_count = 0
+        try {
+            if (wasLiked) {
+                const result = await unlikeTopicApi(t.id)
+                t.liked = result.liked
+                t.likes_count = result.likes_count
+            } else {
+                const result = await likeTopicApi(t.id)
+                t.liked = result.liked
+                t.likes_count = result.likes_count
+            }
+        } catch (e) {
+            t.liked = wasLiked
+            t.likes_count = oldCount
+            console.error('[forum-detail] toggle like failed:', e)
+        }
+    }
+
+    /** 回复提交成功后的列表侧变更（composer 经回调注入，避免反向下钻） */
+    function afterReplyPosted(reply : ForumReply) : void {
+        replies.value.push(reply)
+        const t = topic.value
+        if (t != null) {
+            t.replies_count = t.replies_count + 1
+        }
+    }
+
+    // ===== 编辑帖子 =====
+    function onEditTopic() : void {
+        const t = topic.value
+        if (t == null) return
+        uni.navigateTo({ url: '/pages/forum/forum-create?id=' + t.id })
+    }
+
+    // ===== 回复排序 =====
+    function onReplySortFieldChange(field : string) : void {
+        if (replySortField.value === field) return
+        replySortField.value = field
+        loadDetail()
+    }
+
+    function onReplySortOrderChange(order : string) : void {
+        if (replySortOrder.value === order) return
+        replySortOrder.value = order
+        loadDetail()
+    }
+
+    return {
+        topicId: topicId,
+        topic: topic,
+        replies: replies,
+        loading: loading,
+        replySortField: replySortField,
+        replySortOrder: replySortOrder,
+        canDelete: canDelete,
+        canEdit: canEdit,
+        currentUserId: currentUserId,
+        loadDetail: () => loadDetail(),
+        onReplySortFieldChange: (field : string) => onReplySortFieldChange(field),
+        onReplySortOrderChange: (order : string) => onReplySortOrderChange(order),
+        onToggleLike: () => onToggleLike(),
+        onToggleFavorite: () => onToggleFavorite(),
+        onDelete: () => onDelete(),
+        onEditTopic: () => onEditTopic(),
+        canDeleteReply: (reply : ForumReply) => canDeleteReply(reply),
+        isReplyLiked: (reply : ForumReply) => isReplyLiked(reply),
+        getReplyLikesCount: (reply : ForumReply) => getReplyLikesCount(reply),
+        onToggleReplyLike: (reply : ForumReply) => onToggleReplyLike(reply),
+        onDeleteReply: (replyId : number) => onDeleteReply(replyId),
+        afterReplyPosted: (reply : ForumReply) => afterReplyPosted(reply),
+    } as UseTopicDetailResult
+}
