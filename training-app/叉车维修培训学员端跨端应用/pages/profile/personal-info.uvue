@@ -83,140 +83,62 @@
     </scroll-view>
 
     <!-- 修改昵称弹窗 -->
-    <view v-if="showNicknameDialog" class="dialog-mask" @click="showNicknameDialog = false">
-      <view class="dialog" @click.stop>
-        <text class="dialog-title">修改昵称</text>
-        <view class="dialog-body">
-          <input class="input" type="text" placeholder="请输入新昵称（20 字以内）" :maxlength="20" v-model="nicknameInput" />
-          <text class="dialog-tip">昵称提交后需管理员审核，审核通过后生效</text>
-        </view>
-        <view class="dialog-footer">
-          <view class="dialog-btn" @click="showNicknameDialog = false">
-            <text class="dialog-btn-text">取消</text>
-          </view>
-          <view class="dialog-btn dialog-btn-primary" @click="onSubmitNickname">
-            <text class="dialog-btn-text-primary">提交审核</text>
-          </view>
-        </view>
-      </view>
-    </view>
+    <InfoDialog :show="showNicknameDialog" title="修改昵称" confirm-text="提交审核" @close="showNicknameDialog = false" @confirm="onSubmitNickname">
+      <input class="input" type="text" placeholder="请输入新昵称（20 字以内）" :maxlength="20" v-model="nicknameInput" />
+      <text class="dialog-tip">昵称提交后需管理员审核，审核通过后生效</text>
+    </InfoDialog>
 
     <!-- 修改/设置密码弹窗 -->
-    <view v-if="showPasswordDialog" class="dialog-mask" @click="showPasswordDialog = false">
-      <view class="dialog" @click.stop>
-        <text class="dialog-title">{{ passwordTitle }}</text>
-        <view class="dialog-body">
-          <view class="input-row">
-            <input class="input" type="number" placeholder="短信验证码" maxlength="6" v-model="passwordCode" />
-            <view class="code-btn" :class="{ 'code-btn-disabled': pwdCountdown > 0 }" @click="onSendPasswordCode">
-              <text class="code-btn-text">{{ pwdCountdown > 0 ? pwdCountdown + 's' : '获取验证码' }}</text>
-            </view>
-          </view>
-          <input class="input" type="text" placeholder="新密码（6-20位）" :password="true" :maxlength="20" v-model="newPassword" />
-          <input class="input" type="text" placeholder="确认新密码" :password="true" :maxlength="20" v-model="confirmPassword" />
-          <text class="dialog-tip">验证码将发送至已绑定手机号 {{ phoneText }}</text>
-        </view>
-        <view class="dialog-footer">
-          <view class="dialog-btn" @click="showPasswordDialog = false">
-            <text class="dialog-btn-text">取消</text>
-          </view>
-          <view class="dialog-btn dialog-btn-primary" @click="onSubmitPassword">
-            <text class="dialog-btn-text-primary">确认</text>
-          </view>
+    <InfoDialog :show="showPasswordDialog" :title="passwordTitle" confirm-text="确认" @close="showPasswordDialog = false" @confirm="onSubmitPassword">
+      <view class="input-row">
+        <input class="input" type="number" placeholder="短信验证码" maxlength="6" v-model="passwordCode" />
+        <view class="code-btn" :class="{ 'code-btn-disabled': pwdCountdown > 0 }" @click="onSendPasswordCode">
+          <text class="code-btn-text">{{ pwdCountdown > 0 ? pwdCountdown + 's' : '获取验证码' }}</text>
         </view>
       </view>
-    </view>
+      <input class="input" type="text" placeholder="新密码（6-20位）" :password="true" :maxlength="20" v-model="newPassword" />
+      <input class="input" type="text" placeholder="确认新密码" :password="true" :maxlength="20" v-model="confirmPassword" />
+      <text class="dialog-tip">验证码将发送至已绑定手机号 {{ phoneText }}</text>
+    </InfoDialog>
 
     <!-- 更换手机号弹窗 -->
-    <view v-if="showPhoneDialog" class="dialog-mask" @click="showPhoneDialog = false">
-      <view class="dialog" @click.stop>
-        <text class="dialog-title">更换手机号</text>
-        <view class="dialog-body">
-          <input class="input" type="number" placeholder="新手机号" maxlength="11" v-model="newPhone" />
-          <view class="input-row">
-            <input class="input" type="number" placeholder="短信验证码" maxlength="6" v-model="phoneCode" />
-            <view class="code-btn" :class="{ 'code-btn-disabled': phoneCountdown > 0 }" @click="onSendPhoneCode">
-              <text class="code-btn-text">{{ phoneCountdown > 0 ? phoneCountdown + 's' : '获取验证码' }}</text>
-            </view>
-          </view>
-        </view>
-        <view class="dialog-footer">
-          <view class="dialog-btn" @click="showPhoneDialog = false">
-            <text class="dialog-btn-text">取消</text>
-          </view>
-          <view class="dialog-btn dialog-btn-primary" @click="onSubmitPhone">
-            <text class="dialog-btn-text-primary">确认</text>
-          </view>
+    <InfoDialog :show="showPhoneDialog" title="更换手机号" confirm-text="确认" @close="showPhoneDialog = false" @confirm="onSubmitPhone">
+      <input class="input" type="number" placeholder="新手机号" maxlength="11" v-model="newPhone" />
+      <view class="input-row">
+        <input class="input" type="number" placeholder="短信验证码" maxlength="6" v-model="phoneCode" />
+        <view class="code-btn" :class="{ 'code-btn-disabled': phoneCountdown > 0 }" @click="onSendPhoneCode">
+          <text class="code-btn-text">{{ phoneCountdown > 0 ? phoneCountdown + 's' : '获取验证码' }}</text>
         </view>
       </view>
-    </view>
+    </InfoDialog>
 
     <!-- 绑定/修改邮箱弹窗 -->
-    <view v-if="showEmailDialog" class="dialog-mask" @click="showEmailDialog = false">
-      <view class="dialog" @click.stop>
-        <text class="dialog-title">{{ emailText == '未绑定' ? '绑定邮箱' : '修改邮箱' }}</text>
-        <view class="dialog-body">
-          <input class="input" type="text" placeholder="请输入邮箱" maxlength="50" v-model="emailInput" />
-          <view class="input-row">
-            <input class="input" type="number" placeholder="邮箱验证码" maxlength="6" v-model="emailCode" />
-            <view class="code-btn" :class="{ 'code-btn-disabled': emailCountdown > 0 }" @click="onSendEmailCode">
-              <text class="code-btn-text">{{ emailCountdown > 0 ? emailCountdown + 's' : '获取验证码' }}</text>
-            </view>
-          </view>
-        </view>
-        <view class="dialog-footer">
-          <view class="dialog-btn" @click="showEmailDialog = false">
-            <text class="dialog-btn-text">取消</text>
-          </view>
-          <view class="dialog-btn dialog-btn-primary" @click="onSubmitEmail">
-            <text class="dialog-btn-text-primary">确认</text>
-          </view>
+    <InfoDialog :show="showEmailDialog" :title="emailText == '未绑定' ? '绑定邮箱' : '修改邮箱'" confirm-text="确认" @close="showEmailDialog = false" @confirm="onSubmitEmail">
+      <input class="input" type="text" placeholder="请输入邮箱" maxlength="50" v-model="emailInput" />
+      <view class="input-row">
+        <input class="input" type="number" placeholder="邮箱验证码" maxlength="6" v-model="emailCode" />
+        <view class="code-btn" :class="{ 'code-btn-disabled': emailCountdown > 0 }" @click="onSendEmailCode">
+          <text class="code-btn-text">{{ emailCountdown > 0 ? emailCountdown + 's' : '获取验证码' }}</text>
         </view>
       </view>
-    </view>
+    </InfoDialog>
 
     <!-- 修改登录账号弹窗 -->
-    <view v-if="showAccountDialog" class="dialog-mask" @click="showAccountDialog = false">
-      <view class="dialog" @click.stop>
-        <text class="dialog-title">修改登录账号</text>
-        <view class="dialog-body">
-          <input class="input" type="text" placeholder="新账号（4-20位字母数字下划线）" :maxlength="20" v-model="accountInput" />
-          <view class="input-row">
-            <input class="input" type="number" placeholder="短信验证码" maxlength="6" v-model="accountCode" />
-            <view class="code-btn" :class="{ 'code-btn-disabled': accountCountdown > 0 }" @click="onSendAccountCode">
-              <text class="code-btn-text">{{ accountCountdown > 0 ? accountCountdown + 's' : '获取验证码' }}</text>
-            </view>
-          </view>
-          <text class="dialog-tip">验证码将发送至已绑定手机号 {{ phoneText }}</text>
-        </view>
-        <view class="dialog-footer">
-          <view class="dialog-btn" @click="showAccountDialog = false">
-            <text class="dialog-btn-text">取消</text>
-          </view>
-          <view class="dialog-btn dialog-btn-primary" @click="onSubmitAccount">
-            <text class="dialog-btn-text-primary">确认</text>
-          </view>
+    <InfoDialog :show="showAccountDialog" title="修改登录账号" confirm-text="确认" @close="showAccountDialog = false" @confirm="onSubmitAccount">
+      <input class="input" type="text" placeholder="新账号（4-20位字母数字下划线）" :maxlength="20" v-model="accountInput" />
+      <view class="input-row">
+        <input class="input" type="number" placeholder="短信验证码" maxlength="6" v-model="accountCode" />
+        <view class="code-btn" :class="{ 'code-btn-disabled': accountCountdown > 0 }" @click="onSendAccountCode">
+          <text class="code-btn-text">{{ accountCountdown > 0 ? accountCountdown + 's' : '获取验证码' }}</text>
         </view>
       </view>
-    </view>
+      <text class="dialog-tip">验证码将发送至已绑定手机号 {{ phoneText }}</text>
+    </InfoDialog>
 
     <!-- 修改单位弹窗 -->
-    <view v-if="showCompanyDialog" class="dialog-mask" @click="showCompanyDialog = false">
-      <view class="dialog" @click.stop>
-        <text class="dialog-title">修改单位</text>
-        <view class="dialog-body">
-          <input class="input" type="text" placeholder="请输入单位名称" :maxlength="50" v-model="companyInput" />
-        </view>
-        <view class="dialog-footer">
-          <view class="dialog-btn" @click="showCompanyDialog = false">
-            <text class="dialog-btn-text">取消</text>
-          </view>
-          <view class="dialog-btn dialog-btn-primary" @click="onSubmitCompany">
-            <text class="dialog-btn-text-primary">保存</text>
-          </view>
-        </view>
-      </view>
-    </view>
+    <InfoDialog :show="showCompanyDialog" title="修改单位" confirm-text="保存" @close="showCompanyDialog = false" @confirm="onSubmitCompany">
+      <input class="input" type="text" placeholder="请输入单位名称" :maxlength="50" v-model="companyInput" />
+    </InfoDialog>
   </view>
 </template>
 
@@ -226,151 +148,86 @@
   import { useStatusBarHeight } from '../../utils/system'
   import { goBack } from '../../utils/navigation'
   import { useAuthStore } from '../../stores/auth'
-  import { updateProfileApi, uploadAvatarApi, changePasswordSendCodeApi, changePasswordApi, profileSendCodeApi, profileBindPhoneApi, profileBindEmailApi, accountSendCodeApi, updateAccountApi, deleteAccountApi } from '../../api/auth'
-  import { errMsg } from '../../api/helpers'
   import type { LoginResult } from '../../types/index'
+  import InfoDialog from './components/info-dialog.uvue'
+  import {
+    displayNameOf, avatarUrlOf, hasPendingOf, accountTextOf, phoneTextOf,
+    emailTextOf, companyTextOf, passwordTitleOf, passwordHintOf, Countdown,
+    uploadAvatarFlow, submitNicknameFlow, sendPasswordCodeFlow, submitPasswordFlow,
+    sendPhoneCodeFlow, submitPhoneFlow, sendEmailCodeFlow, submitEmailFlow,
+    sendAccountCodeFlow, submitAccountFlow, submitCompanyFlow,
+    confirmDeleteAccountFlow, deleteAccountFlow
+  } from './composables/personal-info-flows.uts'
 
   const authStore = useAuthStore()
   const statusBarHeight = useStatusBarHeight()
   const windowHeight = uni.getSystemInfoSync().windowHeight
   const uploadingAvatar = ref<boolean>(false)
 
-  // 昵称弹窗
+  // 弹窗显隐与输入态（模板绑定真值源留在页面）
   const showNicknameDialog = ref<boolean>(false)
   const nicknameInput = ref<string>('')
 
-  // 密码修改相关
   const showPasswordDialog = ref<boolean>(false)
   const passwordCode = ref<string>('')
   const newPassword = ref<string>('')
   const confirmPassword = ref<string>('')
-  const pwdCountdown = ref<number>(0)
-  let pwdTimer : number | null = null
 
-  // 手机号修改相关
   const showPhoneDialog = ref<boolean>(false)
   const newPhone = ref<string>('')
   const phoneCode = ref<string>('')
-  const phoneCountdown = ref<number>(0)
-  let phoneTimer : number | null = null
 
-  // 邮箱绑定相关
   const showEmailDialog = ref<boolean>(false)
   const emailInput = ref<string>('')
   const emailCode = ref<string>('')
-  const emailCountdown = ref<number>(0)
-  let emailTimer : number | null = null
 
-  // 登录账号修改相关
   const showAccountDialog = ref<boolean>(false)
   const accountInput = ref<string>('')
   const accountCode = ref<string>('')
-  const accountCountdown = ref<number>(0)
-  let accountTimer : number | null = null
 
-  // 单位修改相关
   const showCompanyDialog = ref<boolean>(false)
   const companyInput = ref<string>('')
 
-  const userName = computed<string>(() : string => {
-    const u = authStore.user.value
-    if (u != null) {
-      if (u.name.length > 0) return u.name
-      if (u.username.length > 0) return u.username
-    }
-    return '同学'
-  })
+  // 验证码倒计时（各弹窗独立 60s；实例留在页面，onUnload 统一停表）
+  const pwdCd = new Countdown()
+  const pwdCountdown = pwdCd.cd
+  const phoneCd = new Countdown()
+  const phoneCountdown = phoneCd.cd
+  const emailCd = new Countdown()
+  const emailCountdown = emailCd.cd
+  const accountCd = new Countdown()
+  const accountCountdown = accountCd.cd
 
-  const avatarUrl = computed<string>(() : string => {
-    const u = authStore.user.value
-    if (u != null && u.avatar_url != null && u.avatar_url.length > 0) {
-      return u.avatar_url
-    }
-    return ''
-  })
+  // ===== 展示文案（纯函数在 flows，此处薄封装） =====
+  const userName = computed<string>(() : string => displayNameOf(authStore.user.value))
+  const avatarUrl = computed<string>(() : string => avatarUrlOf(authStore.user.value))
+  const hasPending = computed<boolean>(() : boolean => hasPendingOf(authStore.user.value))
+  const accountText = computed<string>(() : string => accountTextOf(authStore.user.value))
+  const phoneText = computed<string>(() : string => phoneTextOf(authStore.user.value))
+  const emailText = computed<string>(() : string => emailTextOf(authStore.user.value))
+  const companyText = computed<string>(() : string => companyTextOf(authStore.user.value))
+  const passwordTitle = computed<string>(() : string => passwordTitleOf(authStore.user.value))
+  const passwordText = computed<string>(() : string => passwordHintOf(authStore.user.value))
 
-  /** 昵称/头像审核中徽标（/auth/me 的 pending_profile_change） */
-  const hasPending = computed<boolean>(() : boolean => {
-    const u = authStore.user.value
-    return u != null && u.has_pending_change == true
-  })
-
-  /** 登录账号：优先 account 字段，回退 username */
-  const accountText = computed<string>(() : string => {
-    const u = authStore.user.value
-    if (u == null) return '-'
-    const acc = u.account
-    if (acc != null && acc.length > 0) return acc
-    return u.username
-  })
-
-  /** 手机号：后端已脱敏（137****1234）；老版本缓存无 phone 时回退 username 推导 */
-  const phoneText = computed<string>(() : string => {
-    const u = authStore.user.value
-    if (u != null) {
-      const p = u.phone
-      if (p != null && p.length > 0) return p
-      if (u.username.length == 11 && u.username.startsWith('1')) {
-        return u.username.substring(0, 3) + '****' + u.username.substring(7)
-      }
-    }
-    return '未绑定'
-  })
-
-  const emailText = computed<string>(() : string => {
-    const u = authStore.user.value
-    if (u != null) {
-      const e = u.email
-      if (e != null && e.length > 0) return e
-    }
-    return '未绑定'
-  })
-
-  const companyText = computed<string>(() : string => {
-    const u = authStore.user.value
-    if (u != null) {
-      const c = u.company
-      if (c != null && c.length > 0) return c
-    }
-    return '未填写'
-  })
-
-  /** 微信/邮箱注册且未设密码时，入口文案为"设置密码" */
-  const passwordTitle = computed<string>(() : string => {
-    const u = authStore.user.value
-    if (u != null && u.has_password == false) return '设置密码'
-    return '修改密码'
-  })
-
-  const passwordText = computed<string>(() : string => {
-    const u = authStore.user.value
-    if (u != null && u.has_password == false) return '未设置'
-    return ''
-  })
+  /** 写操作成功后重拉 /auth/me（phone/email/company/pending 以后端为准） */
+  const refreshUser = () : void => {
+    authStore.validateToken().catch(() => {})
+  }
 
   function onBack() : void {
     goBack()
   }
 
-  /** 进入页面拉最新资料（phone/email/company/pending 等以 /auth/me 为准） */
+  /** 进入页面拉最新资料 */
   onShow(() => {
-    authStore.validateToken().catch(() => {})
+    refreshUser()
   })
 
-  /** 上传头像 */
+  /** 上传头像（忙态留页面，上传流在 flows） */
   async function uploadAvatar(filePath : string) : Promise<void> {
     uploadingAvatar.value = true
-    uni.showLoading({ title: '上传中...' })
-    try {
-      await uploadAvatarApi(filePath)
-      uni.showToast({ title: '头像已提交，审核通过后生效', icon: 'none' })
-    } catch (e) {
-      console.error('[personal-info] uploadAvatar failed:', e)
-      uni.showToast({ title: errMsg(e, '头像上传失败'), icon: 'none' })
-    } finally {
-      uploadingAvatar.value = false
-      uni.hideLoading()
-    }
+    await uploadAvatarFlow(filePath)
+    uploadingAvatar.value = false
   }
 
   function onEditAvatar() : void {
@@ -390,70 +247,6 @@
     })
   }
 
-  // ===== 倒计时（各弹窗独立 60s） =====
-  function stopPwdTimer() : void {
-    const t = pwdTimer
-    if (t != null) { clearInterval(t); pwdTimer = null }
-  }
-
-  function startPwdCd() : void {
-    stopPwdTimer()
-    pwdCountdown.value = 60
-    pwdTimer = setInterval(() => {
-      pwdCountdown.value = pwdCountdown.value - 1
-      if (pwdCountdown.value <= 0) { stopPwdTimer() }
-    }, 1000) as number
-  }
-
-  function stopPhoneTimer() : void {
-    const t = phoneTimer
-    if (t != null) { clearInterval(t); phoneTimer = null }
-  }
-
-  function startPhoneCd() : void {
-    stopPhoneTimer()
-    phoneCountdown.value = 60
-    phoneTimer = setInterval(() => {
-      phoneCountdown.value = phoneCountdown.value - 1
-      if (phoneCountdown.value <= 0) { stopPhoneTimer() }
-    }, 1000) as number
-  }
-
-  function stopEmailTimer() : void {
-    const t = emailTimer
-    if (t != null) { clearInterval(t); emailTimer = null }
-  }
-
-  function startEmailCd() : void {
-    stopEmailTimer()
-    emailCountdown.value = 60
-    emailTimer = setInterval(() => {
-      emailCountdown.value = emailCountdown.value - 1
-      if (emailCountdown.value <= 0) { stopEmailTimer() }
-    }, 1000) as number
-  }
-
-  function stopAccountTimer() : void {
-    const t = accountTimer
-    if (t != null) { clearInterval(t); accountTimer = null }
-  }
-
-  function startAccountCd() : void {
-    stopAccountTimer()
-    accountCountdown.value = 60
-    accountTimer = setInterval(() => {
-      accountCountdown.value = accountCountdown.value - 1
-      if (accountCountdown.value <= 0) { stopAccountTimer() }
-    }, 1000) as number
-  }
-
-  onUnload(() => {
-    stopPwdTimer()
-    stopPhoneTimer()
-    stopEmailTimer()
-    stopAccountTimer()
-  })
-
   // ===== 昵称 =====
   function onEditNickname() : void {
     nicknameInput.value = userName.value == '同学' ? '' : userName.value
@@ -462,27 +255,18 @@
 
   async function onSubmitNickname() : Promise<void> {
     const newName = nicknameInput.value.trim()
-    if (newName.length == 0) {
-      uni.showToast({ title: '昵称不能为空', icon: 'none' })
-      return
+    // 非空且与当前昵称一致：直接关窗不提交；空串留给 flow 判空提示（行为序不变）
+    if (newName.length > 0) {
+      const u = authStore.user.value
+      const currentName = u != null ? u.name : ''
+      if (newName == currentName) {
+        showNicknameDialog.value = false
+        return
+      }
     }
-    const u = authStore.user.value
-    const currentName = u != null ? u.name : ''
-    if (newName == currentName) {
+    if (await submitNicknameFlow(newName)) {
       showNicknameDialog.value = false
-      return
-    }
-    uni.showLoading({ title: '提交中...' })
-    try {
-      await updateProfileApi({ nickname: newName })
-      showNicknameDialog.value = false
-      uni.showToast({ title: '已提交审核，通过后生效', icon: 'none' })
-      authStore.validateToken().catch(() => {})
-    } catch (e) {
-      console.error('[personal-info] updateNickname failed:', e)
-      uni.showToast({ title: errMsg(e, '修改失败'), icon: 'none' })
-    } finally {
-      uni.hideLoading()
+      refreshUser()
     }
   }
 
@@ -496,41 +280,16 @@
 
   async function onSendPasswordCode() : Promise<void> {
     if (pwdCountdown.value > 0) return
-    try {
-      await changePasswordSendCodeApi()
-      uni.showToast({ title: '验证码已发送', icon: 'none' })
-      startPwdCd()
-    } catch (e) {
-      uni.showToast({ title: errMsg(e, '发送失败，请重试'), icon: 'none' })
-    }
+    if (await sendPasswordCodeFlow()) pwdCd.start()
   }
 
   async function onSubmitPassword() : Promise<void> {
-    if (passwordCode.value.length != 6) {
-      uni.showToast({ title: '请输入6位验证码', icon: 'none' })
-      return
-    }
-    if (newPassword.value.length < 6 || newPassword.value.length > 20) {
-      uni.showToast({ title: '密码长度需为6-20位', icon: 'none' })
-      return
-    }
-    if (newPassword.value != confirmPassword.value) {
-      uni.showToast({ title: '两次输入的密码不一致', icon: 'none' })
-      return
-    }
-    uni.showLoading({ title: '保存中...' })
-    try {
-      await changePasswordApi(passwordCode.value, newPassword.value)
-      uni.showToast({ title: '密码修改成功', icon: 'success' })
+    if (await submitPasswordFlow(passwordCode.value, newPassword.value, confirmPassword.value)) {
       showPasswordDialog.value = false
       passwordCode.value = ''
       newPassword.value = ''
       confirmPassword.value = ''
-      authStore.validateToken().catch(() => {})
-    } catch (e) {
-      uni.showToast({ title: errMsg(e, '修改失败'), icon: 'none' })
-    } finally {
-      uni.hideLoading()
+      refreshUser()
     }
   }
 
@@ -541,46 +300,17 @@
     showPhoneDialog.value = true
   }
 
-  function validatePhoneNum(p : string) : boolean {
-    return p.length == 11 && p.startsWith('1')
-  }
-
   async function onSendPhoneCode() : Promise<void> {
     if (phoneCountdown.value > 0) return
-    if (!validatePhoneNum(newPhone.value)) {
-      uni.showToast({ title: '请输入11位手机号', icon: 'none' })
-      return
-    }
-    try {
-      await profileSendCodeApi(newPhone.value, 'phone')
-      uni.showToast({ title: '验证码已发送', icon: 'none' })
-      startPhoneCd()
-    } catch (e) {
-      uni.showToast({ title: errMsg(e, '发送失败，请重试'), icon: 'none' })
-    }
+    if (await sendPhoneCodeFlow(newPhone.value)) phoneCd.start()
   }
 
   async function onSubmitPhone() : Promise<void> {
-    if (!validatePhoneNum(newPhone.value)) {
-      uni.showToast({ title: '请输入11位手机号', icon: 'none' })
-      return
-    }
-    if (phoneCode.value.length != 6) {
-      uni.showToast({ title: '请输入6位验证码', icon: 'none' })
-      return
-    }
-    uni.showLoading({ title: '保存中...' })
-    try {
-      await profileBindPhoneApi(newPhone.value, phoneCode.value)
-      uni.showToast({ title: '手机号修改成功', icon: 'success' })
+    if (await submitPhoneFlow(newPhone.value, phoneCode.value)) {
       showPhoneDialog.value = false
       newPhone.value = ''
       phoneCode.value = ''
-      authStore.validateToken().catch(() => {})
-    } catch (e) {
-      uni.showToast({ title: errMsg(e, '修改失败'), icon: 'none' })
-    } finally {
-      uni.hideLoading()
+      refreshUser()
     }
   }
 
@@ -593,46 +323,15 @@
     showEmailDialog.value = true
   }
 
-  function validateEmail(t : string) : boolean {
-    return /^[\w.%+-]+@[\w-]+(\.[\w-]+)+$/.test(t)
-  }
-
   async function onSendEmailCode() : Promise<void> {
     if (emailCountdown.value > 0) return
-    const t = emailInput.value.trim()
-    if (!validateEmail(t)) {
-      uni.showToast({ title: '邮箱格式不正确', icon: 'none' })
-      return
-    }
-    try {
-      await profileSendCodeApi(t, 'email')
-      uni.showToast({ title: '验证码已发送，请查收邮箱', icon: 'none' })
-      startEmailCd()
-    } catch (e) {
-      uni.showToast({ title: errMsg(e, '发送失败，请重试'), icon: 'none' })
-    }
+    if (await sendEmailCodeFlow(emailInput.value)) emailCd.start()
   }
 
   async function onSubmitEmail() : Promise<void> {
-    const t = emailInput.value.trim()
-    if (!validateEmail(t)) {
-      uni.showToast({ title: '邮箱格式不正确', icon: 'none' })
-      return
-    }
-    if (emailCode.value.length != 6) {
-      uni.showToast({ title: '请输入6位验证码', icon: 'none' })
-      return
-    }
-    uni.showLoading({ title: '保存中...' })
-    try {
-      await profileBindEmailApi(t, emailCode.value)
-      uni.showToast({ title: '邮箱绑定成功', icon: 'success' })
+    if (await submitEmailFlow(emailInput.value, emailCode.value)) {
       showEmailDialog.value = false
-      authStore.validateToken().catch(() => {})
-    } catch (e) {
-      uni.showToast({ title: errMsg(e, '绑定失败'), icon: 'none' })
-    } finally {
-      uni.hideLoading()
+      refreshUser()
     }
   }
 
@@ -645,36 +344,15 @@
 
   async function onSendAccountCode() : Promise<void> {
     if (accountCountdown.value > 0) return
-    try {
-      await accountSendCodeApi()
-      uni.showToast({ title: '验证码已发送', icon: 'none' })
-      startAccountCd()
-    } catch (e) {
-      uni.showToast({ title: errMsg(e, '发送失败，请重试'), icon: 'none' })
-    }
+    if (await sendAccountCodeFlow()) accountCd.start()
   }
 
   async function onSubmitAccount() : Promise<void> {
-    const acc = accountInput.value.trim()
-    if (!/^[A-Za-z0-9_]{4,20}$/.test(acc)) {
-      uni.showToast({ title: '账号需为4-20位字母数字下划线', icon: 'none' })
-      return
-    }
-    if (accountCode.value.length != 6) {
-      uni.showToast({ title: '请输入6位验证码', icon: 'none' })
-      return
-    }
-    uni.showLoading({ title: '保存中...' })
-    try {
-      const result : LoginResult = await updateAccountApi(acc, accountCode.value)
+    if (await submitAccountFlow(accountInput.value, accountCode.value, (r : LoginResult) : void => {
       // 后端重签 JWT：本地登录态整体替换，避免 /me 沿用旧账号 claim
-      authStore.setAuthData(result.token, result.user, result.refresh_token)
+      authStore.setAuthData(r.token, r.user, r.refresh_token)
+    })) {
       showAccountDialog.value = false
-      uni.showToast({ title: '登录账号已修改', icon: 'success' })
-    } catch (e) {
-      uni.showToast({ title: errMsg(e, '修改失败'), icon: 'none' })
-    } finally {
-      uni.hideLoading()
     }
   }
 
@@ -687,62 +365,18 @@
   }
 
   async function onSubmitCompany() : Promise<void> {
-    const c = companyInput.value.trim()
-    if (c.length == 0) {
-      uni.showToast({ title: '请输入单位名称', icon: 'none' })
-      return
-    }
-    uni.showLoading({ title: '保存中...' })
-    try {
-      await updateProfileApi({ company: c })
+    if (await submitCompanyFlow(companyInput.value)) {
       showCompanyDialog.value = false
-      uni.showToast({ title: '单位已更新', icon: 'none' })
-      authStore.validateToken().catch(() => {})
-    } catch (e) {
-      uni.showToast({ title: errMsg(e, '修改失败'), icon: 'none' })
-    } finally {
-      uni.hideLoading()
+      refreshUser()
     }
   }
 
   // ===== 注销与退出 =====
-  async function doDeleteAccount() : Promise<void> {
-    uni.showLoading({ title: '处理中...' })
-    try {
-      await deleteAccountApi()
-      uni.hideLoading()
-      authStore.clearAuthData()
-      uni.showToast({ title: '账号已注销', icon: 'none' })
-      setTimeout(() => {
-        uni.reLaunch({ url: '/pages/login/login' })
-      }, 800)
-    } catch (e) {
-      uni.hideLoading()
-      uni.showToast({ title: errMsg(e, '注销失败，请稍后重试'), icon: 'none' })
-    }
-  }
-
   function onDeleteAccount() : void {
-    uni.showModal({
-      title: '确认注销账号？',
-      content: '注销为不可恢复操作：账号、学习记录、积分、论坛帖子与回复将全部删除。如仅是切换账号，请选择"退出当前账号"。',
-      confirmText: '继续注销',
-      confirmColor: '#ff5252',
-      success: (res) => {
-        if (res.confirm) {
-          uni.showModal({
-            title: '最后确认',
-            content: '数据将被永久删除且无法找回，确认注销？',
-            confirmText: '注销账号',
-            confirmColor: '#ff5252',
-            success: (res2) => {
-              if (res2.confirm) {
-                doDeleteAccount()
-              }
-            }
-          })
-        }
-      }
+    confirmDeleteAccountFlow(() : void => {
+      deleteAccountFlow(() : void => {
+        authStore.clearAuthData()
+      })
     })
   }
 
@@ -758,6 +392,13 @@
       }
     })
   }
+
+  onUnload(() => {
+    pwdCd.stop()
+    phoneCd.stop()
+    emailCd.stop()
+    accountCd.stop()
+  })
 </script>
 
 <style>
@@ -906,38 +547,7 @@
     color: #ff5252;
   }
 
-  /* 弹窗样式 */
-  .dialog-mask {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0, 0, 0, 0.5);
-    align-items: center;
-    justify-content: center;
-    z-index: 999;
-  }
-
-  .dialog {
-    width: 600rpx;
-    background-color: #ffffff;
-    border-radius: 24rpx;
-    padding: 40rpx;
-  }
-
-  .dialog-title {
-    font-size: 34rpx;
-    font-weight: bold;
-    color: #333333;
-    text-align: center;
-    margin-bottom: 32rpx;
-  }
-
-  .dialog-body {
-    margin-bottom: 32rpx;
-  }
-
+  /* 弹窗输入样式（slot 内容归本页作用域；壳样式在 InfoDialog） */
   .dialog-tip {
     font-size: 22rpx;
     color: #999999;
@@ -978,34 +588,5 @@
     font-size: 24rpx;
     color: #ffffff;
     white-space: nowrap;
-  }
-
-  .dialog-footer {
-    flex-direction: row;
-    justify-content: space-between;
-  }
-
-  .dialog-btn {
-    flex: 1;
-    height: 80rpx;
-    border-radius: 12rpx;
-    align-items: center;
-    justify-content: center;
-    background-color: #f5f5f5;
-    margin: 0 8rpx;
-  }
-
-  .dialog-btn-primary {
-    background-color: #2979ff;
-  }
-
-  .dialog-btn-text {
-    font-size: 30rpx;
-    color: #666666;
-  }
-
-  .dialog-btn-text-primary {
-    font-size: 30rpx;
-    color: #ffffff;
   }
 </style>

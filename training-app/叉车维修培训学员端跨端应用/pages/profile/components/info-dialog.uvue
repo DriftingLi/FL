@@ -1,0 +1,110 @@
+<template>
+  <view v-if="show" class="dialog-mask" @click="onMaskTap">
+    <view class="dialog" @click.stop>
+      <text class="dialog-title">{{ title }}</text>
+      <view class="dialog-body">
+        <slot></slot>
+      </view>
+      <view class="dialog-footer">
+        <view class="dialog-btn" @click="onCancel">
+          <text class="dialog-btn-text">{{ cancelText }}</text>
+        </view>
+        <view class="dialog-btn dialog-btn-primary" @click="onConfirm">
+          <text class="dialog-btn-text-primary">{{ confirmText }}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script setup lang="uts">
+  // personal-info 设置弹窗壳（T03d #676）：仅承载标题/主体槽/取消-确认按钮；
+  // 表单输入真值源与提交流程留在页面（slot 内容归父作用域编译）。
+  const props = withDefaults(defineProps<{
+    show?: boolean
+    title?: string
+    cancelText?: string
+    confirmText?: string
+  }>(), {
+    show: false,
+    title: '',
+    cancelText: '取消',
+    confirmText: '确认'
+  })
+
+  const emit = defineEmits(['close', 'confirm'])
+
+  function onMaskTap() : void {
+    emit('close')
+  }
+
+  function onCancel() : void {
+    emit('close')
+  }
+
+  function onConfirm() : void {
+    emit('confirm')
+  }
+</script>
+
+<style>
+  .dialog-mask {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+  }
+
+  .dialog {
+    width: 600rpx;
+    background-color: #ffffff;
+    border-radius: 24rpx;
+    padding: 40rpx;
+  }
+
+  .dialog-title {
+    font-size: 34rpx;
+    font-weight: bold;
+    color: #333333;
+    text-align: center;
+    margin-bottom: 32rpx;
+  }
+
+  .dialog-body {
+    margin-bottom: 32rpx;
+  }
+
+  .dialog-footer {
+    flex-direction: row;
+    justify-content: space-between;
+  }
+
+  .dialog-btn {
+    flex: 1;
+    height: 80rpx;
+    border-radius: 12rpx;
+    align-items: center;
+    justify-content: center;
+    background-color: #f5f5f5;
+    margin: 0 8rpx;
+  }
+
+  .dialog-btn-primary {
+    background-color: #2979ff;
+  }
+
+  .dialog-btn-text {
+    font-size: 30rpx;
+    color: #666666;
+  }
+
+  .dialog-btn-text-primary {
+    font-size: 30rpx;
+    color: #ffffff;
+  }
+</style>
