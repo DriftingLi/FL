@@ -4,7 +4,13 @@
     class="flex cursor-pointer items-center justify-between gap-2 py-0.5 text-xs text-ink-3"
     @click="emit('toggle')"
   >
-    <span>▸ {{ title }}<template v-if="count !== undefined">（{{ count }} 条）</template></span>
+    <span class="inline-flex items-center gap-1">
+      <span
+        class="inline-block text-[10px] transition-transform duration-[var(--duration-fast)] ease-[var(--ease-default)]"
+        :class="open ? 'rotate-90' : ''"
+      >▶</span>
+      {{ title }}<template v-if="count !== undefined">（{{ count }} 条）</template>
+    </span>
     <span class="whitespace-nowrap text-ui-600">{{ open ? '收起 ▴' : '展开 ▾' }}</span>
   </div>
 </template>
