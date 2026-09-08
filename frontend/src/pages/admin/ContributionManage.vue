@@ -14,6 +14,7 @@ import {
 import { formatLocaleDateTime } from '@/utils/format'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
 
 const activeTab = ref<'pending' | 'reports'>('pending')
 
@@ -207,8 +208,12 @@ onMounted(() => {
           </el-table-column>
         </el-table>
         <div class="pagination-wrapper" v-if="pendingTotal > pendingPageSize">
-          <el-pagination v-model:current-page="pendingPage" :page-size="pendingPageSize" :total="pendingTotal"
-            layout="total, prev, pager, next" @current-change="loadPending" />
+          <UiPagination
+      v-model:current-page="pendingPage"
+      :page-size="pendingPageSize"
+      :total="pendingTotal"
+      @current-change="loadPending"
+    />
         </div>
       </template>
 
@@ -250,8 +255,12 @@ onMounted(() => {
           </el-table-column>
         </el-table>
         <div class="pagination-wrapper" v-if="reportTotal > reportPageSize">
-          <el-pagination v-model:current-page="reportPage" :page-size="reportPageSize" :total="reportTotal"
-            layout="total, prev, pager, next" @current-change="loadReports" />
+          <UiPagination
+      v-model:current-page="reportPage"
+      :page-size="reportPageSize"
+      :total="reportTotal"
+      @current-change="loadReports"
+    />
         </div>
       </template>
     </el-card>

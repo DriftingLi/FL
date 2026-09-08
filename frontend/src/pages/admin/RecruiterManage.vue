@@ -55,15 +55,15 @@ style="width: 280px"
 </el-table-column>
 </el-table>
 <div class="pagination-wrapper" v-if="total > pageSize">
-<el-pagination
-v-model:current-page="currentPage"
-v-model:page-size="pageSize"
-:total="total"
-:page-sizes="[10, 20, 50]"
-layout="total, sizes, prev, pager, next"
-@size-change="load"
-@current-change="load"
-/>
+<UiPagination
+      v-model:current-page="currentPage"
+      v-model:page-size="pageSize"
+      :total="total"
+      show-sizes
+      :page-sizes="[10, 20, 50]"
+      @current-change="load"
+      @size-change="load"
+    />
 </div>
 
 <el-dialog v-model="dialogVisible" title="新增企业招聘者" width="520px" destroy-on-close>
@@ -161,6 +161,7 @@ import { adminApi, type AdminRecruiter } from '@/api/admin'
 import { usernameRules } from '@/utils/validate'
 import { useAdminTable } from '@/composables/useAdminTable'
 import { formatDateTime } from '@/utils/format'
+import UiPagination from '@/components/ui/UiPagination.vue'
 
 const dialogVisible = ref(false)
 const submitting = ref(false)

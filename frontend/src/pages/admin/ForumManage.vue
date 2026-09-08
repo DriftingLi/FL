@@ -58,13 +58,12 @@
         </el-table>
 
         <div class="pagination-wrapper" v-if="reportTotal > reportPageSize">
-          <el-pagination
-            v-model:current-page="reportCurrentPage"
-            :page-size="reportPageSize"
-            :total="reportTotal"
-            layout="total, prev, pager, next"
-            @current-change="loadReports"
-          />
+          <UiPagination
+      v-model:current-page="reportCurrentPage"
+      :page-size="reportPageSize"
+      :total="reportTotal"
+      @current-change="loadReports"
+    />
         </div>
       </template>
 
@@ -126,7 +125,7 @@
                     <ForumImageGallery :images="reply.images" />
                   </div>
                 </div>
-                <el-empty v-else description="暂无回复" :image-size="60" />
+                <UiEmptyState v-else description="暂无回复" size="sm" />
               </template>
               <div v-else class="reply-loading">加载中…</div>
             </div>
@@ -161,13 +160,12 @@
       </el-table>
 
       <div class="pagination-wrapper" v-if="total > pageSize">
-        <el-pagination
-          v-model:current-page="currentPage"
-          :page-size="pageSize"
-          :total="total"
-          layout="total, prev, pager, next"
-          @current-change="handlePageChange"
-        />
+        <UiPagination
+      v-model:current-page="currentPage"
+      :page-size="pageSize"
+      :total="total"
+      @current-change="handlePageChange"
+    />
       </div>
       </template>
     </el-card>
@@ -190,6 +188,8 @@ import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
 import { formatLocaleDateTime } from '@/utils/format'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
 
 const topics = ref<AdminForumTopic[]>([])
 

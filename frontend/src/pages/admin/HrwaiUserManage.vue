@@ -11,6 +11,7 @@ import { useAdminTable } from '@/composables/useAdminTable'
 import { formatDateTime } from '@/utils/format'
 import { phoneRules, passwordRules, emailRules, companyRules } from '@/utils/validate'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
 
 // 新增弹窗
 const dialogVisible = ref(false)
@@ -234,15 +235,15 @@ onMounted(() => {
     </el-table>
 
     <div class="pagination-wrapper" v-if="total > pageSize">
-      <el-pagination
-        v-model:current-page="currentPage"
-        v-model:page-size="pageSize"
-        :total="total"
-        :page-sizes="[10, 20, 50]"
-        layout="total, sizes, prev, pager, next"
-        @size-change="load"
-        @current-change="load"
-      />
+      <UiPagination
+      v-model:current-page="currentPage"
+      v-model:page-size="pageSize"
+      :total="total"
+      show-sizes
+      :page-sizes="[10, 20, 50]"
+      @current-change="load"
+      @size-change="load"
+    />
     </div>
 
     <!-- 新增弹窗 -->

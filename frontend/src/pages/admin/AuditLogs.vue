@@ -46,14 +46,12 @@
       </el-table>
 
       <div class="pagination">
-        <el-pagination
-          background
-          layout="total, prev, pager, next"
-          :total="total"
-          :page-size="pageSize"
-          :current-page="page"
-          @current-change="load"
-        />
+        <UiPagination
+      :current-page="page"
+      :page-size="pageSize"
+      :total="total"
+      @current-change="load"
+    />
       </div>
     </el-card>
   </div>
@@ -64,6 +62,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { adminApi, type AuditLogItem } from '@/api/admin'
 import { formatTime } from '@/utils/format'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
 
 const items = ref<AuditLogItem[]>([])
 const total = ref(0)

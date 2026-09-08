@@ -35,7 +35,7 @@
                 </span>
               </div>
             </div>
-            <el-empty v-if="!tagsLoading && tags.length === 0" description="暂无标签" :image-size="60" />
+            <UiEmptyState v-if="!tagsLoading && tags.length === 0" description="暂无标签" size="sm" />
           </div>
         </el-card>
       </el-col>
@@ -95,17 +95,17 @@
             </el-table-column>
           </el-table>
 
-          <div class="pagination-wrapper" v-if="total > pageSize">
-            <el-pagination
-              v-model:current-page="currentPage"
-              v-model:page-size="pageSize"
-              :total="total"
-              :page-sizes="[10, 20, 50]"
-              layout="total, sizes, prev, pager, next"
-              @size-change="search"
-              @current-change="load"
-            />
-          </div>
+          <UiPagination
+            v-if="total > pageSize"
+            v-model:current-page="currentPage"
+            v-model:page-size="pageSize"
+            :total="total"
+            show-sizes
+            :page-sizes="[10, 20, 50]"
+            align="center"
+            @current-change="load"
+            @size-change="search"
+          />
         </el-card>
       </el-col>
     </el-row>
@@ -160,6 +160,8 @@ import { questionTypeOptions, typeMap } from '@/constants/question'
 import { useAdminTable } from '@/composables/useAdminTable'
 import type { Question } from '@/types/question'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
 
 const tags = ref<QuestionTag[]>([])
 const tagsLoading = ref(false)
@@ -393,12 +395,6 @@ onMounted(() => {
 .no-tag {
   font-size: 12px;
   color: var(--color-text-disabled);
-}
-
-.pagination-wrapper {
-  display: flex;
-  justify-content: center;
-  margin-top: 16px;
 }
 
 @media screen and (max-width: 768px) {

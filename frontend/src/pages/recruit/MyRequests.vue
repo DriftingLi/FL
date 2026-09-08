@@ -9,7 +9,7 @@
       @retry="handleRetry"
     />
     <UiSkeleton v-else-if="loading" variant="list" :count="4" />
-    <div v-else-if="items.length === 0" class="rounded-card border border-line bg-panel p-8 text-center text-ink-3">暂无申请记录</div>
+    <UiEmptyState v-else-if="items.length === 0" description="暂无申请记录" />
     <div v-else class="grid gap-3">
       <div v-for="item in items" :key="String(item.id)" class="rounded-card border border-line bg-panel p-4">
         <div class="flex items-center justify-between">
@@ -30,6 +30,7 @@ import { recruitApi } from '@/api/recruit'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 
 const items = ref<any[]>([])
 

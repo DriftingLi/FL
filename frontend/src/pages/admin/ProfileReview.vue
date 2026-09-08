@@ -79,13 +79,12 @@
       </el-table>
 
       <div class="pagination-wrapper" v-if="total > pageSize">
-        <el-pagination
-          v-model:current-page="currentPage"
-          :page-size="pageSize"
-          :total="total"
-          layout="total, prev, pager, next"
-          @current-change="load"
-        />
+        <UiPagination
+      v-model:current-page="currentPage"
+      :page-size="pageSize"
+      :total="total"
+      @current-change="load"
+    />
       </div>
     </el-card>
 
@@ -114,6 +113,7 @@ import { adminApi, type ProfileChangeRequest } from '@/api/admin'
 import { useAdminTable } from '@/composables/useAdminTable'
 import { formatLocaleDateTime } from '@/utils/format'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
 
 const submitting = ref(false)
 const activeStatus = ref<'pending' | 'approved' | 'rejected'>('pending')

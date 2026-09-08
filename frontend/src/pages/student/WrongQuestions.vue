@@ -98,7 +98,13 @@
           <UiButton variant="danger" size="small" @click="removeWrong(item.question_id)">移出</UiButton>
         </div>
       </el-card>
-      <el-pagination v-model:current-page="page" :page-size="pageSize" :total="total" layout="prev, pager, next" @current-change="handlePageChange" />
+      <UiPagination
+      v-model:current-page="page"
+      :page-size="pageSize"
+      :total="total"
+      :show-total="false"
+      @current-change="handlePageChange"
+    />
     </div>
     <UiEmptyState v-else description="暂无错题" />
   </div>
@@ -128,6 +134,7 @@ import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiActionChip from '@/components/ui/UiActionChip.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
 
 interface WrongItem {
   id: number

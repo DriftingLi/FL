@@ -46,9 +46,9 @@
         draggable="false"
       />
       <div v-if="imgError" class="image-error">
-        <el-empty :description="imgErrorMessage">
+        <UiEmptyState :description="imgErrorMessage">
           <UiButton variant="primary" @click="retryLoad">重试</UiButton>
-        </el-empty>
+        </UiEmptyState>
       </div>
     </div>
   </div>
@@ -59,6 +59,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { ZoomIn, ZoomOut, FullScreen, Download, RefreshRight, Rank } from '@element-plus/icons-vue'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 
 const props = defineProps({
   src: { type: String, required: true },

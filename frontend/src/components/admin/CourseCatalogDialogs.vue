@@ -6,6 +6,7 @@ import type { FormInstance } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { trainingApi, type CatalogDirectionNode, type CatalogLevel, type CertificateTemplate } from '@/api/training'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 
 defineProps<{
   certificateTemplates: CertificateTemplate[]
@@ -231,7 +232,7 @@ defineExpose({ openDirectionDialog, openLevelDialog, openCertificateDialog })
         </template>
       </el-table-column>
     </el-table>
-    <el-empty v-if="!certificateLoading && certificateTemplates.length === 0" description="暂无证书模板" />
+    <UiEmptyState v-if="!certificateLoading && certificateTemplates.length === 0" description="暂无证书模板" />
     <template #footer>
       <UiButton @click="certificateDialogVisible = false">关闭</UiButton>
     </template>
