@@ -3,9 +3,10 @@
  *
  * 钉住手术的三类契约（.uvue/.uts 不可被 jest import，走源码契约缝，先例 mallPilotContract）：
  * 1) 组件接线：forum.uvue / forum-detail.uvue 以显式 import 使用模块私有组件（Q17 安置规则）
- * 2) composable 下沉：列表/招聘/资源三域 + 详情/回复/举报三域状态离开壳层
+ * 2) composable 下沉：列表/资源两域 + 详情/回复/举报三域状态离开壳层
+ *    （招聘域已随 #705 退场部分整体删除，退场回归见「招聘 tab 退场契约」）
  * 3) 行为保持：手术不改像素与跳转语义——上传格子仍跳 forum-create（缺陷已登记 #662）、
- *    招聘 tab 头像仍直达简历（退场另票 #705）、问答变体仍由 currentTab 驱动、
+ *    问答变体仍由 currentTab 驱动、
  *    回复栏 v-model 留壳层（uvue 跨组件 v-model 属编译风险区，composer 状态下沉即达预算）
  * 4) 600 软预算机检：pages/forum/** 全部源文件 ≤600 行 + 目录 ≤2 层（达标后锁住防回潮，Q8）
  * 5) allowlist 不回潮：forum 页面文件不得出现在 GUARD_ALLOWLIST
@@ -37,7 +38,6 @@ const LIST_COMPONENTS = [
   'forum-experience-sort-bar',
   'forum-checkin-card',
   'forum-topic-card',
-  'forum-recruit-panel',
   'forum-resource-panel',
 ];
 
@@ -60,7 +60,7 @@ describe('列表页组件接线契约（Q17 安置：pages/forum/components/ 显
   });
 
   it('主页面模板实际使用全部组件标签（非只 import 不用）', () => {
-    for (const c of ['ForumTabBar', 'ForumSquareSortBar', 'ForumQaHeader', 'ForumExperienceSortBar', 'ForumCheckinCard', 'ForumTopicCard', 'ForumRecruitPanel', 'ForumResourcePanel']) {
+    for (const c of ['ForumTabBar', 'ForumSquareSortBar', 'ForumQaHeader', 'ForumExperienceSortBar', 'ForumCheckinCard', 'ForumTopicCard', 'ForumResourcePanel']) {
       expect(page).toMatch(new RegExp(`<${c}[\\s/>]`));
     }
   });
@@ -84,37 +84,32 @@ describe('详情页组件接线契约', () => {
   });
 });
 
-describe('composable 下沉契约（列表三域 + 详情三域状态离开壳层）', () => {
+describe('composable 下沉契约（列表两域 + 详情三域状态离开壳层）', () => {
   const page = read('pages/forum/forum.uvue');
   const feed = read('composables/useTopicFeed.uts');
-  const recruit = read('composables/useRecruitFeed.uts');
   const resource = read('composables/useResourcePoints.uts');
   const detailPage = read('pages/forum/forum-detail.uvue');
   const detail = read('composables/useTopicDetail.uts');
   const composer = read('composables/useReplyComposer.uts');
   const report = read('composables/useReport.uts');
 
-  it('列表页三个 composable 存在且以显式 UseXxxResult 返回（error18 先例）', () => {
+  it('列表页两个 composable 存在且以显式 UseXxxResult 返回（error18 先例）', () => {
     expect(feed).toContain('export function useTopicFeed');
     expect(feed).toContain('} as UseTopicFeedResult');
-    expect(recruit).toContain('export function useRecruitFeed');
-    expect(recruit).toContain('} as UseRecruitFeedResult');
     expect(resource).toContain('export function useResourcePoints');
     expect(resource).toContain('} as UseResourcePointsResult');
   });
 
-  it('列表页壳层仅接线 useTopicFeed；招聘/资源 composable 由各 panel 组件自持消费（数据所有权单一）', () => {
+  it('列表页壳层仅接线 useTopicFeed；资源 composable 由 panel 组件自持消费（数据所有权单一）', () => {
     expect(page).toContain("import { useTopicFeed } from '../../composables/useTopicFeed'");
     expect(page).not.toContain('useRecruitFeed');
     expect(page).not.toContain('useResourcePoints');
-    expect(read('pages/forum/components/forum-recruit-panel.uvue')).toContain("from '../../../composables/useRecruitFeed'");
     expect(read('pages/forum/components/forum-resource-panel.uvue')).toContain("from '../../../composables/useResourcePoints'");
   });
 
-  it('列表页壳层 script 不再持有招聘 mock 与金币公式（下沉验证）', () => {
+  it('列表页壳层 script 不持有招聘 mock 与金币公式（下沉验证）', () => {
     expect(page).not.toContain('mockJobs');
     expect(page).not.toContain('total_study_duration');
-    expect(recruit).toContain('mockJobs');
     expect(resource).toContain('total_study_duration');
   });
 
@@ -150,10 +145,9 @@ describe('composable 下沉契约（列表三域 + 详情三域状态离开壳�
     expect(report).toContain('onSubmitReport(reason : string)');
   });
 
-  it('列表查询语义逐字保留：广场 general/discussion，问答 all/question，招聘 all/discussion', () => {
+  it('列表查询语义逐字保留：广场 general/discussion，问答 all/question', () => {
     expect(feed).toContain("let scope = 'general'");
     expect(feed).toContain("let category = 'discussion'");
-    expect(feed).toMatch(/currentTab\.value === 'recruit'[\s\S]*?scope = 'all'/);
     expect(feed).toMatch(/currentTab\.value === 'hot'[\s\S]*?category = 'question'/);
   });
 
@@ -215,14 +209,32 @@ describe('备考经验 tab 接线契约（#706：第四 tab 进场，复用 Topi
   });
 });
 
+describe('招聘 tab 退场契约（#705 退场部分先行；简历入口重挂留 #705 后续）', () => {
+  const page = read('pages/forum/forum.uvue');
+  const feed = read('composables/useTopicFeed.uts');
+  const tabBar = read('pages/forum/components/forum-tab-bar.uvue');
+
+  it('tab-bar / 壳层 / feed 均不再出现 recruit 分发点', () => {
+    expect(tabBar).not.toMatch(/recruit|招聘/);
+    expect(page).not.toMatch(/recruit|ForumRecruitPanel|\/pages\/resume\/resume/);
+    expect(feed).not.toMatch(/recruit|招聘/);
+  });
+
+  it('招聘死件文件已删除（不留未接线的组件与 composable）', () => {
+    expect(fs.existsSync(path.join(ROOT, 'pages/forum/components/forum-recruit-panel.uvue'))).toBe(false);
+    expect(fs.existsSync(path.join(ROOT, 'composables/useRecruitFeed.uts'))).toBe(false);
+  });
+});
+
 describe('行为保持契约（手术不改跳转、交互与乐观更新语义）', () => {
   const page = read('pages/forum/forum.uvue');
   const detailPage = read('pages/forum/forum-detail.uvue');
   const detail = read('composables/useTopicDetail.uts');
   const composer = read('composables/useReplyComposer.uts');
 
-  it('招聘 tab 头像仍直达简历页（退场+重挂见 #705，本手术不动）', () => {
-    expect(page).toMatch(/currentTab\.value == 'recruit'[\s\S]*?\/pages\/resume\/resume/);
+  it('头像入口统一跳个人动态（招聘退场后无简历直达分支）', () => {
+    expect(page).toMatch(/function onPersonalActivity\(\) : void \{/);
+    expect(page).toContain("uni.navigateTo({ url: '/pages/profile/personal-activity' })");
   });
 
   it('上传资源格子仍跳 forum-create?scope=resource（非法 category 缺陷登记 #662，手术不顺手改）', () => {

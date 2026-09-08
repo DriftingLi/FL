@@ -57,9 +57,6 @@
             </view>
         </scroll-view>
 
-        <!-- 招聘 Tab 内容（mock 区，退场另见 #705） -->
-        <ForumRecruitPanel v-if="currentTab === 'recruit'" />
-
         <!-- 资源 Tab 内容 -->
         <ForumResourcePanel v-if="currentTab === 'resource'" />
 
@@ -79,7 +76,6 @@
     import ForumExperienceSortBar from './components/forum-experience-sort-bar.uvue'
     import ForumCheckinCard from './components/forum-checkin-card.uvue'
     import ForumTopicCard from './components/forum-topic-card.uvue'
-    import ForumRecruitPanel from './components/forum-recruit-panel.uvue'
     import ForumResourcePanel from './components/forum-resource-panel.uvue'
     import { useTopicFeed } from '../../composables/useTopicFeed'
     import { useAuthStore } from '../../stores/auth'
@@ -92,7 +88,7 @@
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     // ---- tab 态（壳层唯一持有的视图状态）----
-    const currentTab = ref<string>('square') // square | resource | recruit | hot | experience
+    const currentTab = ref<string>('square') // square | resource | hot | experience
 
     // ---- 帖子流（列表域下沉 useTopicFeed）----
     const {
@@ -140,11 +136,7 @@
     }
 
     function onPersonalActivity() : void {
-        // 招聘 Tab：头像直达简历页；其他 Tab 保持个人动态
-        if (currentTab.value == 'recruit') {
-            uni.navigateTo({ url: '/pages/resume/resume' })
-            return
-        }
+        // 招聘 tab 已退场（#705），头像统一进个人动态；简历入口重挂留 #705 后续
         uni.navigateTo({ url: '/pages/profile/personal-activity' })
     }
 
@@ -160,8 +152,6 @@
         let scope = 'general'
         if (currentTab.value === 'resource') {
             scope = 'resource'
-        } else if (currentTab.value === 'recruit') {
-            scope = 'recruit'
         } else if (currentTab.value === 'hot') {
             scope = 'question'
         } else if (currentTab.value === 'experience') {
