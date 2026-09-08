@@ -332,4 +332,27 @@ describe('UiSegmentTabs（分段选项卡）', () => {
     await w.findAll('button')[1].trigger('click')
     expect(w.emitted('update:modelValue')).toBeFalsy()
   })
+
+  it('指示条用品牌语义色而非 bg-panel（防与卡片同色隐身）', () => {
+    const w = mountWith(UiSegmentTabs, { modelValue: '7d', options: opts })
+    const bar = w.find('[aria-hidden="true"]')
+    expect(bar.classes()).toContain('bg-ui-100')
+    expect(bar.classes()).not.toContain('bg-panel')
+  })
+
+  it('激活项用品牌深字、未激活项用次要文字色', () => {
+    const w = mountWith(UiSegmentTabs, { modelValue: '7d', options: opts })
+    const btns = w.findAll('button')
+    expect(btns[0].classes()).toContain('text-ui-700')
+    expect(btns[1].classes()).toContain('text-ink-3')
+  })
+
+  it('options 变化后按 modelValue 重新标记激活项', async () => {
+    const w = mountWith(UiSegmentTabs, { modelValue: '7d', options: opts })
+    await w.setProps({ options: [...opts, { label: '全部', value: 'all' }] })
+    const btns = w.findAll('button')
+    expect(btns).toHaveLength(3)
+    expect(btns[0].attributes('aria-selected')).toBe('true')
+    expect(btns[2].attributes('aria-selected')).toBe('false')
+  })
 })
