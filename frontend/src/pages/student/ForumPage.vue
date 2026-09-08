@@ -28,6 +28,7 @@
       :options="[
         { label: '讨论', value: 'discussion' },
         { label: '问答', value: 'question' },
+        { label: '备考经验', value: 'experience' },
         { label: '我的', value: 'mine' }
       ]"
       class="mb-3"
@@ -192,7 +193,7 @@
       :confirm-loading="postForm?.submitting"
       @confirm="postForm?.submit()"
     >
-      <ForumPostForm ref="postForm" category="discussion" @success="onTopicCreated" />
+      <ForumPostForm ref="postForm" :category="mainTab === 'experience' ? 'experience' : 'discussion'" @success="onTopicCreated" />
     </UiDialog>
   </div>
 </template>
@@ -224,7 +225,7 @@ const staggerStyle = useStagger()
 const topics = ref<ForumTopicItem[]>([])
 const myReplies = ref<MyReplyItem[]>([])
 
-// ===== 一级 Tab（讨论 / 问答 / 我的）=====
+// ===== 一级 Tab（讨论 / 问答 / 备考经验 / 我的）=====
 // 选哪一片内容看。"我的"是个人视图（无排序、跨类别），原「模式」轴整体下沉为它的二级 Tab。
 type MainTab = ForumCategory | 'mine'
 const mainTab = ref<MainTab>('discussion')
@@ -246,8 +247,8 @@ function handleSolvedChange() {
 }
 
 // 分页与滚动位置按一级 Tab 各存一份：切走再切回来仍停在原来的位置。
-const pageByTab = ref<Record<MainTab, number>>({ discussion: 1, question: 1, mine: 1 })
-const scrollByTab: Record<MainTab, number> = { discussion: 0, question: 0, mine: 0 }
+const pageByTab = ref<Record<MainTab, number>>({ discussion: 1, question: 1, experience: 1, mine: 1 })
+const scrollByTab: Record<MainTab, number> = { discussion: 0, question: 0, experience: 0, mine: 0 }
 
 const currentPage = computed({
   get: () => pageByTab.value[mainTab.value],
@@ -263,6 +264,7 @@ const showReplies = computed(() => mainTab.value === 'mine' && mineTab.value ===
 // 我的 Tab 各视图空态文案（#701）：与移动端个人动态页口径对齐
 const emptyDescription = computed(() => {
   if (mainTab.value === 'question') return '还没有人提问，来发第一个提问吧'
+  if (mainTab.value === 'experience') return '还没有备考经验帖，来发第一篇吧'
   if (mainTab.value === 'mine') {
     switch (mineTab.value) {
       case 'my-replies':
@@ -358,10 +360,10 @@ async function loadTopicsOnce() {
     return
   }
 
-  // activeMain: 'discussion' | 'question'
+  // activeMain: 'discussion' | 'question' | 'experience'（#722 备考经验进场）
   // 查询参数交给 forumTabQuery 统一翻译（与端共用同一份映射）。
   // 关键是讨论 Tab 必须带 category=discussion：后端 scope=general 的定义就是
-  // chapter_id IS NULL，而问答帖的 chapter_id 同为 NULL，漏 category 会让问答帖整片灌进讨论列表。
+  // chapter_id IS NULL，而问答帖与经验帖的 chapter_id 同为 NULL，漏 category 会让它们灌进讨论列表。
   const query = {
     ...forumTabQuery(activeMain),
     sort: topicSort.value,

@@ -1,7 +1,7 @@
 import { unwrappedRequest } from './request'
 
 /** 论坛帖子类别（#364）：判"帖子意图"的唯一依据，与判区域的 chapter_id 正交。 */
-export type ForumCategory = 'discussion' | 'question'
+export type ForumCategory = 'discussion' | 'question' | 'experience'
 
 /**
  * 论坛列表 Tab（#364）。学员端的「讨论 / 问答」与管理端的
@@ -85,6 +85,9 @@ export function forumTabQuery(tab: ForumTab): Pick<ForumListParams, 'scope' | 'c
     case 'question':
       // 问答帖按设计无章节归属，没有区域维度可筛，故不带 scope。
       return { category: 'question' }
+    case 'experience':
+      // 备考经验（#722）：经验帖可挂章节也可不挂，列表看全量经验帖（对齐移动端 scope=all + category=experience）。
+      return { scope: 'all', category: 'experience' }
     default:
       // 全部：两个参数都不带，与改动前逐条一致（服务端默认 scope=all、不过滤类别）。
       return {}

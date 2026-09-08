@@ -98,7 +98,7 @@ const categoryGroup = (wrapper: Awaited<ReturnType<typeof mountPage>>) =>
 const modeGroup = (wrapper: Awaited<ReturnType<typeof mountPage>>) =>
   tabbarByValues(wrapper, ['my-topics', 'my-replies', 'my-liked', 'my-observed', 'history'])
 
-async function switchCategory(wrapper: Awaited<ReturnType<typeof mountPage>>, next: 'discussion' | 'question') {
+async function switchCategory(wrapper: Awaited<ReturnType<typeof mountPage>>, next: 'discussion' | 'question' | 'experience') {
   categoryGroup(wrapper).vm.$emit('update:modelValue', next)
   await flushPromises()
 }
@@ -134,6 +134,33 @@ describe('论坛类别分流', () => {
     listTopics.mockClear()
     await switchCategory(wrapper, 'discussion')
     expect(listTopics.mock.calls[0][0].category).toBe('discussion')
+  })
+
+  it('切到备考经验 Tab（#722）：请求显式带 scope=all + category=experience', async () => {
+    const wrapper = await mountPage()
+    listTopics.mockClear()
+
+    await switchCategory(wrapper, 'experience')
+    expect(listTopics).toHaveBeenCalledTimes(1)
+    const params = listTopics.mock.calls[0][0]
+    // 经验帖的 chapter_id 也可为 NULL：漏 scope/category 会重蹈问答帖灌进讨论 Tab 的覆辙。
+    expect(params.category).toBe('experience')
+    expect(params.scope).toBe('all')
+  })
+
+  it('发帖表单类别随 Tab 走（#722）：讨论 Tab 发 discussion，经验 Tab 发 experience', async () => {
+    const wrapper = await mountPage()
+    const openBtn = wrapper.findAll('button').find((b) => b.text().includes('发布新帖'))
+    expect(openBtn).toBeTruthy()
+    await openBtn!.trigger('click')
+    await flushPromises()
+
+    const form = () => wrapper.findComponent({ name: 'ForumPostForm' })
+    expect(form().exists()).toBe(true)
+    expect(form().props('category')).toBe('discussion')
+
+    await switchCategory(wrapper, 'experience')
+    expect(form().props('category')).toBe('experience')
   })
 
   it('讨论 Tab 的既有查询口径不变：仍只看综合区（不合并章节讨论）、仍带排序与方向', async () => {
