@@ -1,0 +1,125 @@
+<template>
+  <view class="topic-card" @click="onCardTap">
+    <text v-if="refHeader" class="reply-ref-title">回复了 {{ title }}</text>
+    <text v-else class="topic-title">{{ title }}</text>
+    <text v-if="hasContent" class="topic-preview">{{ contentPreview(content) }}</text>
+    <view class="topic-footer">
+      <view v-if="showStats" class="topic-stats">
+        <text class="stat-text">{{ likesCount }} 赞</text>
+        <text class="stat-text">{{ repliesCount }} 评论</text>
+      </view>
+      <text v-if="tagText.length > 0" class="tag-text">{{ tagText }}</text>
+      <text class="topic-time">{{ displayTime(createdDate) }}</text>
+    </view>
+  </view>
+</template>
+
+<script setup lang="uts">
+  // 个人动态列表卡（T03e #677）：七个 tab 变体共用（帖子/赞/收藏/疑问/回复/围观/浏览）。
+  // props 全部扁平原始值（#687 教训：可选对象 prop 成员直读 = Kotlin error18）；
+  // 变体差异走显式布尔/字符串标志，footer 子节点渲染条件与旧内联版逐一对应。
+  import { formatDateStr } from '../../../utils/format'
+
+  const props = withDefaults(defineProps<{
+    title?: string
+    content?: string
+    createdDate?: string
+    likesCount?: number
+    repliesCount?: number
+    tagText?: string
+    showStats?: boolean
+    refHeader?: boolean
+    hasContent?: boolean
+  }>(), {
+    title: '',
+    content: '',
+    createdDate: '',
+    likesCount: 0,
+    repliesCount: 0,
+    tagText: '',
+    showStats: false,
+    refHeader: false,
+    hasContent: false
+  })
+
+  const emit = defineEmits(['tap'])
+
+  /** 模板不可直调 import 函数（uvue 模板 import 调用编译为 .invoke() = Kotlin error18，
+   *  #677 编译门实测）；本地薄包装后消费 utils/format 唯一实现 */
+  function displayTime(dateStr : string) : string {
+    return formatDateStr(dateStr)
+  }
+
+  function contentPreview(text : string) : string {
+    const single = text.replace('\n', ' ')
+    if (single.length <= 80) return single
+    return single.substring(0, 80) + '...'
+  }
+
+  function onCardTap() : void {
+    emit('tap')
+  }
+</script>
+
+<style>
+  .topic-card {
+    background-color: #ffffff;
+    border-radius: 16rpx;
+    padding: 24rpx;
+    margin-bottom: 16rpx;
+    border: 1rpx solid #eeeeee;
+    flex-direction: column;
+  }
+
+  .topic-title {
+    font-size: 30rpx;
+    font-weight: bold;
+    color: #333333;
+    line-height: 1.4;
+    margin-bottom: 12rpx;
+  }
+
+  .topic-preview {
+    font-size: 26rpx;
+    color: #666666;
+    line-height: 1.5;
+    margin-bottom: 12rpx;
+  }
+
+  .reply-ref-title {
+    font-size: 26rpx;
+    color: #2979ff;
+    margin-bottom: 8rpx;
+    font-weight: bold;
+  }
+
+  .topic-footer {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .topic-stats {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .stat-text {
+    font-size: 22rpx;
+    color: #999999;
+    margin-right: 16rpx;
+  }
+
+  .tag-text {
+    font-size: 22rpx;
+    color: #2979ff;
+    background-color: #f0f5ff;
+    padding: 4rpx 12rpx;
+    border-radius: 8rpx;
+  }
+
+  .topic-time {
+    font-size: 22rpx;
+    color: #cccccc;
+  }
+</style>

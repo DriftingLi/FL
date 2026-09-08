@@ -30,6 +30,7 @@
  *   P. 可选对象 prop 成员直读（Kotlin error18 nullable 接收者；扁平原始 props 或局部 val+判空）
  *   Q. ref<any> 类型擦除声明（Kotlin error18 any 无成员；组件实例引用需类型化）
  *   R. async 函数返回类型声明 : void（Kotlin 无法推断 UTSPromise 类型参数，级联编译错；须 Promise<void>）
+ *   S. 模板直调 import 函数（uvue 模板 import 调用编译为 .invoke() = error18「找不到名称 invoke」；本地包装）
  * 存量违例走 GUARD_ALLOWLIST 豁免，由后续工单在各自范围清零（见常量注释）。
  */
 const fs = require('fs');
@@ -341,6 +342,35 @@ function scanAsyncVoidReturn(code) {
   const lines = clean.split('\n');
   for (let i = 0; i < lines.length; i++) {
     if (/async\s+(?:function\s+[A-Za-z_$][\w$]*\s*)?\([^)]*\)\s*:\s*void\b/.test(lines[i])) hits.push(lines[i].trim());
+  }
+  return hits;
+}
+
+/** S：模板直调 import 函数——uvue 模板绑定走 $setup/$imports 解析，import 的顶层函数在模板里
+ *  以函数调用形态出现时 Kotlin 编译成 .invoke()，报 error18「找不到名称 invoke」（#677 编译门实测：
+ *  activity-topic-card 模板 {{ formatDateStr(createdDate) }}，import 自 utils/format）。
+ *  本地 function / const 箭头在模板中直调合法，不在靶内；修复 = script 内本地薄包装。
+ *  输入为 .uvue 原文（模板段 + script 段）。全树 0 存量，全量执法 */
+function scanImportedFnTemplateCall(raw) {
+  const hits = [];
+  if (!raw.includes('<template>') || !raw.includes('</template>')) return hits;
+  const tpl = raw.slice(raw.indexOf('<template>'), raw.lastIndexOf('</template>') + 11);
+  const sm = /<script[^>]*>([\s\S]*?)<\/script>/.exec(raw);
+  if (!sm) return hits;
+  const script = sm[1];
+  const names = new Set();
+  for (const im of script.matchAll(/import\s+(?:type\s+)?\{([^}]*)\}\s+from/g)) {
+    for (const part of im[1].split(',')) {
+      let n = part.trim().replace(/^type\s+/, '');
+      const asM = /\bas\s+([A-Za-z_$][\w$]*)\s*$/.exec(n);
+      if (asM) n = asM[1];
+      else n = n.split(/[\s]+/)[0];
+      if (/^[A-Za-z_$][\w$]*$/.test(n)) names.add(n);
+    }
+  }
+  for (const dm of script.matchAll(/import\s+([A-Za-z_$][\w$]*)\s+from/g)) names.add(dm[1]);
+  for (const c of tpl.matchAll(/(?<![\w$.])([A-Za-z_$][\w$]*)\s*\(/g)) {
+    if (names.has(c[1])) hits.push('模板直调 import 函数 ' + c[1] + '()');
   }
   return hits;
 }
@@ -768,6 +798,19 @@ describe('守护自检：检测逻辑对已知违规样本必须报出', () => {
     expect(scanAsyncVoidReturn('async function loadStats() : Promise<Stats> { }')).toEqual([]);
     expect(scanAsyncVoidReturn('function reset() : void { }')).toEqual([]);
   });
+
+  it('S 能报出模板直调 import 函数（对照组：本地函数直调/import 仅在 script 消费/as 别名按本地名 不报）', () => {
+    const bad = "<template><text>{{ fmtDate(d) }}</text></template>\n<script setup lang=\"uts\">\n    import { fmtDate } from '../../../utils/format'\n    const d = ref<string>('')\n</script>";
+    expect(scanImportedFnTemplateCall(bad)).toHaveLength(1);
+    const badAttr = "<template><view :class=\"cls(x)\"></view></template>\n<script setup lang=\"uts\">\n    import { cls } from '../../utils/x'\n</script>";
+    expect(scanImportedFnTemplateCall(badAttr)).toHaveLength(1);
+    const localOk = "<template><text>{{ fmt(d) }}</text></template>\n<script setup lang=\"uts\">\n    function fmt(s : string) : string { return s }\n    const d = ref<string>('')\n</script>";
+    expect(scanImportedFnTemplateCall(localOk)).toEqual([]);
+    const scriptOnly = "<template><text>{{ x }}</text></template>\n<script setup lang=\"uts\">\n    import { computed } from 'vue'\n    const x = computed(() : string => '')\n</script>";
+    expect(scanImportedFnTemplateCall(scriptOnly)).toEqual([]);
+    const memberOk = "<template><text>{{ obj.fmt(d) }}</text></template>\n<script setup lang=\"uts\">\n    import { fmt } from '../../utils/x'\n    const obj = { fmt: (s : string) : string => s }\n</script>";
+    expect(scanImportedFnTemplateCall(memberOk)).toEqual([]);
+  });
 });
 
 // ── 全工程真实扫描（守护本体，回归即红）────────────────────────────────
@@ -956,6 +999,14 @@ describe('全工程守护：五类 Kotlin 编译地雷零命中', () => {
     const violations = [];
     for (const u of allCodeUnits()) {
       for (const h of scanAsyncVoidReturn(u.code)) violations.push(path.relative(ROOT, u.file) + ': ' + h);
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it('S：模板零直调 import 函数（uvue 模板 import 调用 = Kotlin error18 invoke；须 script 本地包装）', () => {
+    const violations = [];
+    for (const file of ALL_FILES.filter((f) => f.endsWith('.uvue'))) {
+      for (const h of scanImportedFnTemplateCall(fs.readFileSync(file, 'utf8'))) violations.push(path.relative(ROOT, file) + ': ' + h);
     }
     expect(violations).toEqual([]);
   });

@@ -1,0 +1,94 @@
+<template>
+  <view v-if="sub" class="sub-tab-bar">
+    <view v-for="(label, i) in labels" :key="i" class="sub-tab-item" :class="{ 'active': keys[i] == active }" @click="onTap(i)">
+      <text class="sub-tab-text" :class="{ 'active': keys[i] == active }">{{ label }}</text>
+    </view>
+  </view>
+  <view v-else class="tab-bar">
+    <view v-for="(label, i) in labels" :key="i" class="tab-item" :class="{ 'active': keys[i] == active }" @click="onTap(i)">
+      <text class="tab-text" :class="{ 'active': keys[i] == active }">{{ label }}</text>
+    </view>
+  </view>
+</template>
+
+<script setup lang="uts">
+  // 个人动态 tab 栏（T03e #677）：主 tab 与子 tab 共用壳；
+  // 纯展示，切换决策与取数留页面（emit switch 回传 key）。
+  // 结构按 profilePage class 一一对应检查器语法：主/子分支类名全部字面量，无函数拼接。
+  const props = withDefaults(defineProps<{
+    keys?: string[]
+    labels?: string[]
+    active?: string
+    sub?: boolean
+  }>(), {
+    keys: () : string[] => [],
+    labels: () : string[] => [],
+    active: '',
+    sub: false
+  })
+
+  const emit = defineEmits(['switch'])
+
+  function onTap(i : number) : void {
+    emit('switch', props.keys[i])
+  }
+</script>
+
+<style>
+  .tab-bar {
+    flex-direction: row;
+    background-color: #ffffff;
+    border-bottom: 1rpx solid #eeeeee;
+  }
+
+  .tab-item {
+    flex: 1;
+    height: 88rpx;
+    align-items: center;
+    justify-content: center;
+    border-bottom: 4rpx solid transparent;
+  }
+
+  .tab-item.active {
+    border-bottom-color: #2979ff;
+  }
+
+  .tab-text {
+    font-size: 28rpx;
+    color: #666666;
+  }
+
+  .tab-text.active {
+    color: #2979ff;
+    font-weight: bold;
+  }
+
+  /* 子 Tab 栏 */
+  .sub-tab-bar {
+    flex-direction: row;
+    background-color: #ffffff;
+    border-bottom: 1rpx solid #eeeeee;
+    padding: 0 24rpx;
+  }
+
+  .sub-tab-item {
+    padding: 20rpx 32rpx;
+    align-items: center;
+    justify-content: center;
+    border-bottom: 4rpx solid transparent;
+  }
+
+  .sub-tab-item.active {
+    border-bottom-color: #2979ff;
+  }
+
+  .sub-tab-text {
+    font-size: 28rpx;
+    color: #999999;
+  }
+
+  .sub-tab-text.active {
+    color: #2979ff;
+    font-weight: bold;
+  }
+</style>
