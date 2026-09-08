@@ -1,0 +1,59 @@
+<template>
+    <!-- 备考经验（#706）：默认/最多赞/最新 chips，样式同问答筛选条 -->
+    <view class="exp-filter-bar">
+        <view class="exp-chip" :class="{ active: expSort === 'default' }" @click="onSort('default')">
+            <text class="exp-chip-text" :class="{ active: expSort === 'default' }">默认</text>
+        </view>
+        <view class="exp-chip" :class="{ active: expSort === 'hot' }" @click="onSort('hot')">
+            <text class="exp-chip-text" :class="{ active: expSort === 'hot' }">最多赞</text>
+        </view>
+        <view class="exp-chip" :class="{ active: expSort === 'latest' }" @click="onSort('latest')">
+            <text class="exp-chip-text" :class="{ active: expSort === 'latest' }">最新</text>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    withDefaults(defineProps<{
+        expSort? : string
+    }>(), {
+        expSort: 'default'
+    })
+
+    const emit = defineEmits(['sortChange'])
+
+    function onSort(val : string) : void {
+        emit('sortChange', val)
+    }
+</script>
+
+<style>
+    .exp-filter-bar {
+        flex-direction: row;
+        align-items: center;
+        padding: 4rpx 24rpx 16rpx;
+    }
+
+    .exp-chip {
+        padding: 10rpx 32rpx;
+        border-radius: 32rpx;
+        background-color: #f0f1f5;
+        border: 2rpx solid transparent;
+        margin-right: 20rpx;
+    }
+
+    .exp-chip.active {
+        background-color: #e8f3ff;
+        border-color: #2979ff;
+    }
+
+    .exp-chip-text {
+        font-size: 26rpx;
+        color: #666666;
+    }
+
+    .exp-chip-text.active {
+        color: #2979ff;
+        font-weight: bold;
+    }
+</style>

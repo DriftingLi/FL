@@ -34,6 +34,7 @@ const LIST_COMPONENTS = [
   'forum-tab-bar',
   'forum-square-sort-bar',
   'forum-qa-header',
+  'forum-experience-sort-bar',
   'forum-checkin-card',
   'forum-topic-card',
   'forum-recruit-panel',
@@ -59,7 +60,7 @@ describe('列表页组件接线契约（Q17 安置：pages/forum/components/ 显
   });
 
   it('主页面模板实际使用全部组件标签（非只 import 不用）', () => {
-    for (const c of ['ForumTabBar', 'ForumSquareSortBar', 'ForumQaHeader', 'ForumCheckinCard', 'ForumTopicCard', 'ForumRecruitPanel', 'ForumResourcePanel']) {
+    for (const c of ['ForumTabBar', 'ForumSquareSortBar', 'ForumQaHeader', 'ForumExperienceSortBar', 'ForumCheckinCard', 'ForumTopicCard', 'ForumRecruitPanel', 'ForumResourcePanel']) {
       expect(page).toMatch(new RegExp(`<${c}[\\s/>]`));
     }
   });
@@ -168,6 +169,49 @@ describe('composable 下沉契约（列表三域 + 详情三域状态离开壳�
     const card = read('pages/forum/components/forum-topic-card.uvue');
     expect(card).toContain("from '../../../utils/forumDisplay'");
     expect(card).toContain('computed<string>(');
+  });
+});
+
+describe('备考经验 tab 接线契约（#706：第四 tab 进场，复用 TopicCard + experience 类别）', () => {
+  const page = read('pages/forum/forum.uvue');
+  const feed = read('composables/useTopicFeed.uts');
+  const tabBar = read('pages/forum/components/forum-tab-bar.uvue');
+  const expBar = read('pages/forum/components/forum-experience-sort-bar.uvue');
+  const createPage = read('pages/forum/forum-create.uvue');
+
+  it('tab-bar 有备考经验 tab，点击 onSwitch(experience)', () => {
+    expect(tabBar).toContain('备考经验');
+    expect(tabBar).toMatch(/@click="onSwitch\('experience'\)"/);
+  });
+
+  it('列表查询语义：备考经验 all/experience，最多赞映射 hot，默认/最新落 latest', () => {
+    expect(feed).toMatch(/currentTab\.value === 'experience'[\s\S]*?category = 'experience'/);
+    expect(feed).toMatch(/expSort\.value == 'hot' \? 'hot' : 'latest'/);
+  });
+
+  it('expSort 状态与 onExpSortChange 沉在 useTopicFeed（数据所有权单一，壳层只接线）', () => {
+    expect(feed).toContain("const expSort = ref<string>('default')");
+    expect(feed).toContain('function onExpSortChange(val : string)');
+    expect(feed).toContain('expSort: expSort,');
+    expect(feed).toContain('onExpSortChange: (val : string) => onExpSortChange(val),');
+  });
+
+  it('壳层接线排序条：仅备考经验 tab 显示，帖子流复用广场 TopicCard（variant 表达式不变）', () => {
+    expect(page).toContain("<ForumExperienceSortBar v-if=\"currentTab === 'experience'\" :exp-sort=\"expSort\" @sort-change=\"onExpSortChange\" />");
+    expect(page).toMatch(/currentTab == 'square' \|\| currentTab == 'hot' \|\| currentTab == 'experience'/);
+    expect(page).toMatch(/:variant="currentTab === 'hot' \? 'qa' : 'square'"/);
+  });
+
+  it('排序条组件为默认/最多赞/最新三 chip（原型 forum-6screens 备考经验屏）', () => {
+    for (const label of ['默认', '最多赞', '最新']) {
+      expect(expBar).toContain(label);
+    }
+    expect(expBar).toContain("emit('sortChange', val)");
+  });
+
+  it('发帖入口：备考经验 tab 跳 forum-create?scope=experience，分类 chips 含备考经验(experience)', () => {
+    expect(page).toMatch(/currentTab\.value === 'experience'\) \{\s*scope = 'experience'/);
+    expect(createPage).toContain("{ label: '备考经验', value: 'experience' }");
   });
 });
 

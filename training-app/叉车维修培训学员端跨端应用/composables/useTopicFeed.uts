@@ -15,11 +15,13 @@ export type UseTopicFeedResult = {
     sortField : Ref<string>
     sortOrder : Ref<string>
     qaSort : Ref<string>
+    expSort : Ref<string>
     loadTopics : (reset : boolean) => Promise<void>
     onLoadMore : () => void
     onSortFieldChange : (field : string) => void
     onSortOrderChange : (order : string) => void
     onQaSortChange : (val : string) => void
+    onExpSortChange : (val : string) => void
 }
 
 export function useTopicFeed(currentTab : Ref<string>) : UseTopicFeedResult {
@@ -33,6 +35,8 @@ export function useTopicFeed(currentTab : Ref<string>) : UseTopicFeedResult {
     const sortOrder = ref<string>('desc')   // desc | asc
     // 知识问答筛选：recommend（mock，暂以热度代替）| hot | latest
     const qaSort = ref<string>('recommend')
+    // 备考经验筛选（#706）：default（后端默认时序）| hot（最多赞）| latest
+    const expSort = ref<string>('default')
 
     async function loadTopics(reset : boolean = false) : Promise<void> {
         if (loading.value) return
@@ -45,7 +49,7 @@ export function useTopicFeed(currentTab : Ref<string>) : UseTopicFeedResult {
         loading.value = true
         try {
             // 后端 scope 白名单仅 all|general|chapter（旧值 hot/recruit 会被静默当 all），
-            // category 白名单 all|discussion|question
+            // category 白名单 discussion|question|experience（experience 需后端 #706 扩枚举后放行）
             // 广场/招聘只出普通帖（discussion），知识问答帖（question）仅在问答 Tab 展示
             let scope = 'general'
             let category = 'discussion'
@@ -59,6 +63,12 @@ export function useTopicFeed(currentTab : Ref<string>) : UseTopicFeedResult {
                 category = 'question'
                 order = 'desc'
                 sort = qaSort.value == 'latest' ? 'latest' : 'hot'
+            } else if (currentTab.value === 'experience') {
+                // 备考经验（#706）：只列经验帖；最多赞映射后端 hot，默认/最新暂同为后端时序（活跃度）
+                scope = 'all'
+                category = 'experience'
+                order = 'desc'
+                sort = expSort.value == 'hot' ? 'hot' : 'latest'
             }
             const result = await getForumTopicsApi(page.value, pageSize, scope, sort, order, category)
             if (reset) {
@@ -96,6 +106,12 @@ export function useTopicFeed(currentTab : Ref<string>) : UseTopicFeedResult {
         loadTopics(true)
     }
 
+    function onExpSortChange(val : string) : void {
+        if (expSort.value === val) return
+        expSort.value = val
+        loadTopics(true)
+    }
+
     function onSortOrderChange(order : string) : void {
         if (sortOrder.value === order) return
         sortOrder.value = order
@@ -109,10 +125,12 @@ export function useTopicFeed(currentTab : Ref<string>) : UseTopicFeedResult {
         sortField: sortField,
         sortOrder: sortOrder,
         qaSort: qaSort,
+        expSort: expSort,
         loadTopics: (reset : boolean) => loadTopics(reset),
         onLoadMore: () => onLoadMore(),
         onSortFieldChange: (field : string) => onSortFieldChange(field),
         onSortOrderChange: (order : string) => onSortOrderChange(order),
         onQaSortChange: (val : string) => onQaSortChange(val),
+        onExpSortChange: (val : string) => onExpSortChange(val),
     } as UseTopicFeedResult
 }
