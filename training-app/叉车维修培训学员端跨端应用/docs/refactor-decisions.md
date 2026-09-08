@@ -1,19 +1,25 @@
 # 重构决策清单（spec #638 页面手术结论）
+> 2026-09-08 · 来源：T02 mall（#640）、T03 profile（#641/#675–#678/#684）手术复盘；总纲 #638，playbook ADR-0007。
 
-> 2026-09-08 定稿 · 依据 T02 mall（#640）与 T03 profile（#641 / #675–#678 / #684）手术结论收束；epic 总纲见 #638，playbook 见 ADR-0007。
+## 目标与范围
+治理巨型文件（原 20 个 >600 行）、页面层重复无沉淀、api 契约不一致（类型错误到云打包才暴露）、守护不全四类问题；手段 = 页面层手术 + 域 api 契约收紧，按模块渐进绞杀。
 
-1. 渐进绞杀：每模块 1 分支 + 1 PR + 1 专注会话；合并即直发 production，回滚 = revert squash commit。
-2. 顶层骨架不动；巨型页面拆 section 组件/composable，放 `pages/<module>/components|composables/` 显式 import，不进 easycom 全局目录。
-3. 单文件软预算 ≤600 行已由 mall/profile 两模块验证成立：profile 四文件 1011→592、722→448、1137→565、687→503，全模块 19 文件复检达标，无过度碎片化。
-4. 纯展示/纯动作段优先拆，成本低收益高；业务数据区（列表+分页等）留主文件不硬拆。
-5. UI 像素级冻结：冒烟基线 = 前后逐页截图对比；手术期间发现问题另立 issue（如 #700 后端缺读接口），不顺手改。
-6. api 收紧统一走 mapper-callback 出口家族（requestMapped/getMapped/postMapped）；既有 request/get/post 原样保留（expand–contract）。
-7. 安全网 = 契约测试机检（预算/接线/数据所有权/allowlist 防回潮）+ 静态守护 + 四门冒烟；不新增组件级测试。
-8. **jest 全绿 ≠ 能编译**：Kotlin 传参/模板形态盲区只有 HBuilderX 全量编译门能拦，每手术 PR 必过（error17/18 五层实证）。
-9. 拆分时数据所有权必须单一：谁消费谁持有，跨组件要数据扁平下发；禁止 `ref<any>`/`defineExpose` 反向桥接（守护规则 Q）。
-10. 可选对象类型 prop 成员直读在 Kotlin 必炸：对象 prop 扁平化为原始 props 或走工厂默认值（规则 N/P）。
-11. 机械禁列已落守护 M–S：裸 builder 引用、`as unknown as`、模板裸插值 function、`ref<any`、`async : void`（须 `: Promise<void>`）、模板直调 import 函数（本地薄包装）。
-12. 展示纯函数收敛 utils，消除页面/组件双实现（wrongQuestionDisplay、formatDateStr 先例）。
-13. 契约测试迁移纪律：同 PR 可改路径指向，禁删/弱化断言；既有欠账 #657（2 红）可指认即可、另行处理。
-14. 600 预算是否硬化：forum（T04）为第三个复评模块，术后按 User Story 22 决断。
-15. 后续照 spec 序列推进：forum → dashboard → practice → exam → courses → resume → ai-assistant → auth 三兄弟；login pin 在生物识别后；allowlist 由各手术票清自己范围、#654 收尾删机制。
+## 选型（各附一句理由）
+- 状态管理维持页面级 reactive、不上 Pinia——遵 ADR-0002，uni-app-x 兼容风险不值得。
+- api 出口 = mapper-callback 家族（requestMapped/getMapped/postMapped）——与 ADR-0003 手动 JSON 映射同构。
+- 顶层骨架不动、不做 features/ 大迁移——pages.json 53 路径 + easycom + UTS import 脆弱，负收益。
+- 安全网 = 契约测试机检 + 静态守护 + 四门冒烟——uvue 无组件级测试生态。
+
+## 明确不做
+UI 重设计、性能优化、新增组件级测试、状态管理改造、拆子路由、iOS 验收、动非手术模块的页面结构；发现问题一律记 issue，不顺手改。
+
+## 拆分步骤（* = 可与主线并行）
+PR-0(#639)✅ → mall(#640)✅ → profile(#641)✅ → forum(T04，600 预算第三复评) → dashboard → practice → exam → courses → resume → ai-assistant → auth 三兄弟（login pin 在生物识别 PR 后）；*#652/#653 域 api 批量收紧；*#654 allowlist 退役收尾。
+
+## 约束
+- 冻结：uni-secure-storage、main.uts、App.uvue、manifest.json、config/、残值域 valuation 模块。
+- API 兼容：请求形态不得变（GET 走手动 query 序列化）；既有 request/get/post 原样保留（expand–contract）。
+- uni-app-x：文件 ≤600 行、目录 ≤2 层；数据所有权单一（谁消费谁持有、扁平下发，禁 `ref<any>`/`defineExpose` 反向桥接）；守护 M–S 禁：裸 builder 引用、`as unknown as`、模板裸插值/直调 import 函数、`ref<any`、`async : void`、可选对象 prop 成员直读。
+
+## 验收标准
+手术 PR 四门：Android 逐页截图前后一致、微信开发者工具逐页无报错、npm test 全绿（#657 欠账须可指认）、HBuilderX 全量编译 0 新增 error（人工签收）。epic 完成 = 主力 + auth 手术全部达标且 #652/#653/#654 收口。

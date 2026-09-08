@@ -20,6 +20,11 @@ Issues 存放在 GitHub Issues（使用 `gh` CLI）。See `docs/agents/issue-tra
 
 Single-context：root `CONTEXT.md` + `docs/adr/`。See `docs/agents/domain.md`.
 
+### 决策文档约定（所有会话必须遵守）
+
+- **ADR 文件名一律中文命名**：`docs/adr/NNNN-中文标题.md`（先例 `0007-渐进式重构playbook.md`）；新建或重命名 ADR 禁止英文文件名。
+- **决策/重构清单固定六段结构、≤25 行**，顺序为：① 目标与范围（这次到底解决什么）→ ② 选型 + 一句理由（每项决策附一句话理由）→ ③ 明确不做的事（防止后续加戏）→ ④ 拆分步骤（按模块拆，标出可并行项）→ ⑤ 约束（不能动的模块、API 兼容、uni-app-x 兼容性）→ ⑥ 验收标准（怎么算完成）。先例 `docs/refactor-decisions.md`。
+
 ### Security scan
 
 AI 安全审计用 DeepSec（Shield）。See `docs/agents/security-scan.md`.
