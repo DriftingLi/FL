@@ -114,7 +114,7 @@
     </el-row>
 
     <!-- 标签新建/编辑 -->
-    <el-dialog v-model="tagDialogVisible" :title="tagForm.id ? '编辑标签' : '新增标签'" width="420px" destroy-on-close>
+    <UiDialog v-model="tagDialogVisible" :title="tagForm.id ? '编辑标签' : '新增标签'" width="420px" destroy-on-close>
       <el-form ref="tagFormRef" :model="tagForm" :rules="tagRules" label-width="80px">
         <el-form-item label="标签名" prop="name">
           <el-input v-model="tagForm.name" placeholder="如：法规、结构、液压、电气、制动、故障诊断、应急" maxlength="30" show-word-limit @keyup.enter="submitTag" />
@@ -127,10 +127,10 @@
         <UiButton @click="tagDialogVisible = false">取消</UiButton>
         <UiButton variant="primary" :loading="tagSubmitting" @click="submitTag">保存</UiButton>
       </template>
-    </el-dialog>
+    </UiDialog>
 
     <!-- 打标对话框 -->
-    <el-dialog v-model="tagAssignVisible" :title="`题目打标（${tagAssignQuestionIds.length} 题）`" width="460px" destroy-on-close>
+    <UiDialog v-model="tagAssignVisible" :title="`题目打标（${tagAssignQuestionIds.length} 题）`" width="460px" destroy-on-close>
       <el-form label-width="80px">
         <el-form-item label="选择标签">
           <el-select
@@ -149,7 +149,7 @@
         <UiButton @click="tagAssignVisible = false">取消</UiButton>
         <UiButton variant="primary" :loading="tagSubmitting" @click="submitTagAssign">保存</UiButton>
       </template>
-    </el-dialog>
+    </UiDialog>
   </div>
 </template>
 
@@ -166,6 +166,7 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiFilterBar from '@/components/ui/UiFilterBar.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
 
 const tags = ref<QuestionTag[]>([])
 const tagsLoading = ref(false)

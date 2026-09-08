@@ -127,7 +127,7 @@
     </div>
 
     <!-- 课程详情 -->
-    <el-dialog
+    <UiDialog
       v-model="detailVisible"
       :title="detailCourse?.name || '课程详情'"
       width="680px"
@@ -217,7 +217,7 @@
         <UiButton @click="detailVisible = false">关闭</UiButton>
         <UiButton variant="primary" v-if="detailChapters.length > 0" @click="goToChapter(continueChapter ?? detailChapters[0])">{{ continueChapter ? `继续学习：${continueChapterTitle}` : '开始学习' }}</UiButton>
       </template>
-    </el-dialog>
+    </UiDialog>
   </div>
 </template>
 
@@ -245,6 +245,7 @@ import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
 
 const stagger = useStagger()
 

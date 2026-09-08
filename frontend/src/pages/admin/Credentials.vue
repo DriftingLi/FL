@@ -50,7 +50,7 @@
       </el-table>
     </el-card>
 
-    <el-dialog v-model="dialogVisible" :title="form.id ? '编辑证件' : '新增证件'" width="520px" destroy-on-close>
+    <UiDialog v-model="dialogVisible" :title="form.id ? '编辑证件' : '新增证件'" width="520px" destroy-on-close>
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
         <el-form-item label="编码" prop="code">
           <el-input v-model="form.code" placeholder="如 forklift_n1" :disabled="!!form.id" />
@@ -87,7 +87,7 @@
         <UiButton @click="dialogVisible = false">取消</UiButton>
         <UiButton variant="primary" :loading="submitting" @click="handleSubmit">保存</UiButton>
       </template>
-    </el-dialog>
+    </UiDialog>
   </div>
 </template>
 
@@ -99,6 +99,7 @@ import { credentialApi, type CredentialDict, type CredentialPayload } from '@/ap
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiFilterBar from '@/components/ui/UiFilterBar.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
 
 const list = ref<CredentialDict[]>([])
 

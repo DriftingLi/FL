@@ -44,7 +44,7 @@
     </div>
 
     <!-- collapsed 展开为 dialog 选择 -->
-    <el-dialog v-model="switcherVisible" title="切换证件" width="380px" append-to-body>
+    <UiDialog v-model="switcherVisible" title="切换证件" width="380px" append-to-body>
       <el-select
         v-model="selectedId"
         placeholder="请选择证件"
@@ -62,7 +62,7 @@
         <UiButton @click="switcherVisible = false">取消</UiButton>
         <UiButton variant="primary" :loading="switching" @click="switcherVisible = false">确定</UiButton>
       </template>
-    </el-dialog>
+    </UiDialog>
   </div>
 </template>
 
@@ -73,6 +73,7 @@ import type { CredentialDict } from '@/api/credential'
 import { Notebook } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
 
 const props = withDefaults(
   defineProps<{

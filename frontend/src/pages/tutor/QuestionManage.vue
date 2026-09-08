@@ -115,7 +115,7 @@
       @action="hasFilters ? resetFilters() : router.push({ name: 'TutorQuestionCreate' })"
     />
 
-    <el-dialog v-model="detailVisible" title="题目详情" width="600px">
+    <UiDialog v-model="detailVisible" title="题目详情" width="600px">
       <div v-if="currentQuestion" class="flex flex-col gap-2 text-sm">
         <p><strong>题型：</strong>{{ typeMap[currentQuestion.type] }}</p>
         <p><strong>题干：</strong>{{ currentQuestion.content }}</p>
@@ -144,7 +144,7 @@
           class="mt-2"
         />
       </div>
-    </el-dialog>
+    </UiDialog>
   </div>
 </template>
 
@@ -166,6 +166,7 @@ import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiPagination from '@/components/ui/UiPagination.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
 
 const router = useRouter()
 const statusMap: Record<string, string> = { draft: '草稿', pending: '待审核', published: '已发布' }

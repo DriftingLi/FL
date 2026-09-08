@@ -61,7 +61,7 @@
     />
     </div>
 
-    <el-dialog v-model="dialogVisible" :title="editing ? '编辑职位' : '发布职位'" width="560px" destroy-on-close>
+    <UiDialog v-model="dialogVisible" :title="editing ? '编辑职位' : '发布职位'" width="560px" destroy-on-close>
       <el-form label-width="90px">
         <el-form-item label="职位名" required>
           <el-input v-model="form.title" maxlength="100" placeholder="如：叉车维修技师" />
@@ -93,7 +93,7 @@
         <UiButton @click="dialogVisible = false">取消</UiButton>
         <UiButton variant="primary" :loading="submitting" @click="submit">保存</UiButton>
       </template>
-    </el-dialog>
+    </UiDialog>
   </div>
 </template>
 
@@ -108,6 +108,7 @@ import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
 
 interface PositionItem {
   position_id: number

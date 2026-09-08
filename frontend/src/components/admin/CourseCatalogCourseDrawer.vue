@@ -8,6 +8,7 @@ import type { CatalogDirectionNode, CatalogLevel, CertificateTemplate } from '@/
 
 import type { CredentialDict } from '@/api/credential'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
 
 const props = defineProps<{
   directions: CatalogDirectionNode[]
@@ -328,7 +329,7 @@ defineExpose({ open })
   </el-drawer>
 
   <!-- 章节对话框 -->
-  <el-dialog v-model="chapterDialogVisible" :title="chapterForm.chapter_id ? '编辑章节' : '新增章节'" width="520px" destroy-on-close>
+  <UiDialog v-model="chapterDialogVisible" :title="chapterForm.chapter_id ? '编辑章节' : '新增章节'" width="520px" destroy-on-close>
     <el-form ref="chapterFormRef" :model="chapterForm" :rules="chapterRules" label-width="90px">
       <el-form-item label="章节标题" prop="title">
         <el-input v-model="chapterForm.title" placeholder="章节标题" maxlength="100" />
@@ -341,7 +342,7 @@ defineExpose({ open })
       <UiButton @click="chapterDialogVisible = false">取消</UiButton>
       <UiButton variant="primary" :loading="submitting" @click="submitChapter">保存</UiButton>
     </template>
-  </el-dialog>
+  </UiDialog>
 </template>
 
 <style scoped>
