@@ -68,19 +68,17 @@
       :options="[
         { label: '我的帖子', value: 'my-topics' },
         { label: '我的回复', value: 'my-replies' },
+        { label: '赞过', value: 'my-liked' },
+        { label: '围观', value: 'my-observed' },
         { label: '浏览记录', value: 'history' }
       ]"
-      @update:model-value="(v: string) => { mineTab = v as 'my-topics' | 'my-replies' | 'history'; handleMineTabChange() }"
+      @update:model-value="(v: string) => { mineTab = v as MineTab; handleMineTabChange() }"
       class="mb-3"
     />
 
-    <!-- 浏览记录（卡片分组，选型 b） -->
-    <div v-if="showHistory">
-      <ForumHistoryPanel :items="historyItems" @select="handleHistorySelect" @remove="handleHistoryRemove" @clear="handleHistoryClear" />
-    </div>
-
+    <!-- 我的帖子 / 赞过 / 围观 / 浏览记录共用主题列表渲染（仅我的回复走独立分支） -->
     <!-- 我的回复列表（条目带主题标题回填，点击跳对应帖子） -->
-    <div v-else-if="showReplies" class="min-h-[300px] rounded-card bg-panel shadow-card">
+    <div v-if="showReplies" class="min-h-[300px] rounded-card bg-panel shadow-card">
       <UiErrorState
         v-if="loadError"
         title="回复加载失败"
@@ -176,7 +174,7 @@
       <UiEmptyState v-else :description="emptyDescription" :action-text="mainTab === 'question' ? '我要提问' : undefined" @action="goAsk" />
     </div>
 
-    <div class="mt-5 flex justify-center" v-if="!showHistory && total > pageSize">
+    <div class="mt-5 flex justify-center" v-if="total > pageSize">
       <el-pagination
         v-model:current-page="currentPage"
         :page-size="pageSize"
@@ -203,16 +201,11 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
 import { EditPen, View, ChatDotRound, Picture, Calendar, ArrowUp, ArrowDown } from '@element-plus/icons-vue'
 import { forumApi, forumTabQuery, type ForumCategory, type ForumTopicItem, type MyReplyItem } from '@/api/forum'
 import { formatRelativeTime } from '@/utils/format'
 import { displayName, authorLetter } from '@/utils/forumDisplay'
 import ForumPostForm from '@/components/student/ForumPostForm.vue'
-import ForumHistoryPanel from '@/components/student/ForumHistoryPanel.vue'
-import { loadHistory, removeHistoryItem, clearHistory } from '@/utils/forumHistory'
-import type { ForumHistoryItem } from '@/utils/forumHistory'
-import { useAuthStore } from '@/stores/auth'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useForumSort } from '@/composables/useForumSort'
 import { useStagger } from '@/composables/useStagger'
@@ -226,7 +219,6 @@ import UiDialog from '@/components/ui/UiDialog.vue'
 
 const router = useRouter()
 const route = useRoute()
-const authStore = useAuthStore()
 
 const staggerStyle = useStagger()
 const topics = ref<ForumTopicItem[]>([])
@@ -237,13 +229,12 @@ const myReplies = ref<MyReplyItem[]>([])
 type MainTab = ForumCategory | 'mine'
 const mainTab = ref<MainTab>('discussion')
 
-// ===== 我的 二级 Tab（我的帖子 / 我的回复 / 浏览记录）=====
-type MineTab = 'my-topics' | 'my-replies' | 'history'
+// ===== 我的 二级 Tab（我的帖子 / 我的回复 / 赞过 / 围观 / 浏览记录，#701）=====
+type MineTab = 'my-topics' | 'my-replies' | 'my-liked' | 'my-observed' | 'history'
 const mineTab = ref<MineTab>('my-topics')
 
 // ===== 排序双轴收编（#389）：切维度回默认降序（最新/最热优先）=====
 const { sort: topicSort, order: topicOrder, flipOrder, resetOrder } = useForumSort('desc')
-const historyItems = ref<ForumHistoryItem[]>([])
 
 // ===== 求助/已解决筛选（#367）：仅问答 Tab 的筛选轴 =====
 type SolvedFilter = 'all' | 'solved' | 'unsolved'
@@ -265,18 +256,29 @@ const currentPage = computed({
   }
 })
 
-// 内容分支：三个布尔决定渲染哪一片，逻辑集中在一处比散在 v-if 上更易读。
-const showHistory = computed(() => mainTab.value === 'mine' && mineTab.value === 'history')
+// 内容分支：仅我的回复走独立分支，其余（我的帖子/赞过/围观/浏览记录）同走主题列表分支。
 const showReplies = computed(() => mainTab.value === 'mine' && mineTab.value === 'my-replies')
 
 // 问答 Tab 空态升级为引导（#365 提问入口就位后）：指向"我要提问"
-const emptyDescription = computed(() =>
-  mainTab.value === 'question'
-    ? '还没有人提问，来发第一个提问吧'
-    : mainTab.value === 'mine'
-    ? '你还没有发布过帖子，去讨论区发第一帖吧'
-    : '还没有帖子，来发第一帖吧'
-)
+// 我的 Tab 各视图空态文案（#701）：与移动端个人动态页口径对齐
+const emptyDescription = computed(() => {
+  if (mainTab.value === 'question') return '还没有人提问，来发第一个提问吧'
+  if (mainTab.value === 'mine') {
+    switch (mineTab.value) {
+      case 'my-replies':
+        return '还没有回复过帖子'
+      case 'my-liked':
+        return '还没有点赞过帖子'
+      case 'my-observed':
+        return '还没有围观过帖子'
+      case 'history':
+        return '还没有浏览记录'
+      default:
+        return '你还没有发布过帖子，去讨论区发第一帖吧'
+    }
+  }
+  return '还没有帖子，来发第一帖吧'
+})
 
 watch(mainTab, async (next, prev) => {
   scrollByTab[prev] = window.scrollY
@@ -290,28 +292,10 @@ watch(mainTab, async (next, prev) => {
 })
 
 function handleMineTabChange() {
-  // 二级 Tab 切换：重置分页并刷新。"我的"内三个视图共用 pageByTab.mine，
+  // 二级 Tab 切换：重置分页并刷新。"我的"内五个视图共用 pageByTab.mine，
   // 切换回到同一页 1，避免"上次切走停留在第 5 页"这种残留。
   currentPage.value = 1
   loadTopics()
-}
-
-function handleHistorySelect(id: number) {
-  const found = historyItems.value.find((h) => h.id === id)
-  if (found?.deleted) {
-    ElMessage.warning('原帖已删除')
-    return
-  }
-  goDetail(id)
-}
-
-function handleHistoryRemove(id: number) {
-  historyItems.value = removeHistoryItem(id, authStore.userInfo?.user_id)
-}
-
-function handleHistoryClear() {
-  historyItems.value = clearHistory(authStore.userInfo?.user_id)
-  ElMessage.success('已清空浏览记录')
 }
 
 function handleSortChange() {
@@ -353,19 +337,22 @@ async function loadTopicsOnce() {
 
   if (activeMain === 'mine') {
     const activeMine = mineTab.value
-    if (activeMine === 'history') {
-      // 浏览记录是本地 localStorage，无分页
-      historyItems.value = loadHistory(authStore.userInfo?.user_id)
-      total.value = 0
-      return
-    }
     if (activeMine === 'my-replies') {
       const res = await forumApi.getMyReplies(params)
       myReplies.value = res.replies || []
       total.value = res.total || 0
       return
     }
-    const res = await forumApi.getMyTopics(params)
+    // 我的帖子 / 赞过 / 围观 / 浏览记录四视图同走主题列表渲染（#701：响应逐字沿用 my-topics 形态）
+    const fetcher =
+      activeMine === 'my-liked'
+        ? forumApi.getMyLikedTopics
+        : activeMine === 'my-observed'
+          ? forumApi.getMyObservedTopics
+          : activeMine === 'history'
+            ? forumApi.getMyViewHistory
+            : forumApi.getMyTopics
+    const res = await fetcher(params)
     topics.value = res.topics || []
     total.value = res.total || 0
     return

@@ -157,8 +157,13 @@ async function startExam() {
   loading.value = true
   try {
     await start()
-  } catch {
-    /* 错误已由拦截器提示 */
+  } catch (e) {
+    /* 空卷兜底由 useExamSession 抛错（#702）：拦截器不认识该本地错误，此处补一句提示 */
+    if (e instanceof Error && e.message === '题库暂无可用的题目') {
+      const { ElMessage } = await import('element-plus')
+      ElMessage.warning('题库暂无可用的题目')
+    }
+    /* 后端错误已由拦截器提示 */
   } finally {
     loading.value = false
   }

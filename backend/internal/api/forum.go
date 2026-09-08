@@ -60,6 +60,13 @@ func RegisterForumRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.ForumS
 	g.GET("/my-topics", h.MyTopics)
 	// GET /api/forum/my-replies 我的回复
 	g.GET("/my-replies", h.MyReplies)
+	// ===== 个人动态（#701：赞过 / 围观 / 浏览记录，响应逐字沿用 my-topics 形态）=====
+	// GET /api/forum/my-liked-topics 赞过（按点赞时间倒序）
+	g.GET("/my-liked-topics", h.MyLikedTopics)
+	// GET /api/forum/my-observed 围观（浏览减去四项直接互动，按最近浏览倒序）
+	g.GET("/my-observed", h.MyObservedTopics)
+	// GET /api/forum/my-view-history 浏览记录（按主题去重，按最近浏览倒序）
+	g.GET("/my-view-history", h.MyViewHistory)
 
 	// ===== 评论点赞（spec #268）=====
 	g.POST("/replies/:id/like", h.LikeReply)
@@ -725,6 +732,57 @@ func (h *ForumHandler) MyReplies(c *gin.Context) {
 		return
 	}
 	response.Success(c, resp)
+}
+
+// MyLikedTopics 赞过（#701：响应逐字沿用 my-topics 形态）
+// @Summary 赞过的帖子
+// @Description 按点赞时间倒序；主题被删时条目保留、标题回空串
+// @Tags 学员端-论坛
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(10)
+// @Success 200 {object} response.R{data=service.ForumTopicPageResult} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /forum/my-liked-topics [get]
+func (h *ForumHandler) MyLikedTopics(c *gin.Context) {
+	response.Success(c, h.svc.MyLikedTopics(middleware.CurrentUserID(c),
+		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 10)))
+}
+
+// MyObservedTopics 围观（#701：响应逐字沿用 my-topics 形态）
+// @Summary 围观的帖子
+// @Description 浏览过但未互动（排除本人发帖/回复/主题点赞/主题收藏）；按最近浏览倒序
+// @Tags 学员端-论坛
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(10)
+// @Success 200 {object} response.R{data=service.ForumTopicPageResult} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /forum/my-observed [get]
+func (h *ForumHandler) MyObservedTopics(c *gin.Context) {
+	response.Success(c, h.svc.MyObservedTopics(middleware.CurrentUserID(c),
+		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 10)))
+}
+
+// MyViewHistory 浏览记录（#701：响应逐字沿用 my-topics 形态）
+// @Summary 浏览记录
+// @Description 按主题去重取最近一次浏览，按最近浏览倒序；主题被删时条目保留
+// @Tags 学员端-论坛
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(10)
+// @Success 200 {object} response.R{data=service.ForumTopicPageResult} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /forum/my-view-history [get]
+func (h *ForumHandler) MyViewHistory(c *gin.Context) {
+	response.Success(c, h.svc.MyViewHistory(middleware.CurrentUserID(c),
+		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 10)))
 }
 
 // ListReports 管理端举报列表 GET /api/admin/forum/reports?status=&page=&page_size=
