@@ -3,7 +3,8 @@
  *
  * 背景：招聘 tab 是纯 mock 已随 #705 退场（#720），/pages/resume/* 三页入口
  * 重挂到就业在线。用户 2026-09-08 定稿三层结构（对齐五屏原型「招聘-我的」屏）：
- *   就业在线 profile → job-list（招聘，顶栏右上头像）→ jobs-mine（我的）→ 简历三页
+ *   就业在线 profile → job-list（招聘：公告/职位双 tab，头像在 tab 行最右端，
+ *   避开小程序胶囊遮挡区）→ jobs-mine（我的）→ 简历三页
  * 形态裁定：三变体原型（prototype/jobs-resume 分支）拍板 B「并入真实域」——
  * 完善度直接由现有 ResumeData 八项字段计算（GET /resume 零后端改动），
  * 原型图的人口学 9 项/Lv/收藏统计不做（收藏 API 的 target_type 后端未收录、恒 0，
@@ -25,10 +26,19 @@ describe('就业在线导航链契约（#705 招聘→我的→简历）', () =>
   const list = read('pages/jobs/job-list.uvue');
   const mine = read('pages/jobs/jobs-mine.uvue');
 
-  it('job-list：顶栏标题「招聘」+ 右上头像跳 jobs-mine，不再内嵌简历入口区', () => {
+  it('job-list：公告/职位双 tab；头像在 tab 行最右端跳 jobs-mine；导航栏右侧留给胶囊不放可点元素', () => {
     expect(list).toContain('<text class="header-title">招聘</text>');
-    expect(list).toMatch(/class="header-right" @click="onMine"/);
+    // 双 tab（原型「招聘」屏：公告/职位）
+    expect(list).toMatch(/@click="onTabChange\('notice'\)"/);
+    expect(list).toMatch(/@click="onTabChange\('job'\)"/);
+    // 头像落在 tab 行最右端（避开小程序胶囊），点入我的
+    expect(list).toMatch(/class="tab-avatar-btn" @click="onMine"/);
     expect(list).toContain("uni.navigateTo({ url: '/pages/jobs/jobs-mine' })");
+    // 自定义导航栏右侧不得挂可点元素（小程序胶囊遮挡区）
+    expect(list).not.toMatch(/class="header-right"[^>]*@click/);
+    // 公告 tab 空态占位，不放假数据
+    expect(list).toContain('暂无公告');
+    expect(list).not.toContain('mockJobs');
     // 入口区已搬离 job-list：不应再出现完善度卡/去填写简历大卡
     expect(list).not.toContain('去填写简历');
     expect(list).not.toContain('countResumeFilled');
