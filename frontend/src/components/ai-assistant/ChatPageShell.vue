@@ -169,18 +169,22 @@
       </div>
     </aside>
 
-    <!-- 右侧对话区（空态：欢迎区贴顶、输入框紧跟其下落在视口中部；有消息：列表占满、输入框沉底） -->
-    <main class="chat-main flex min-w-0 flex-1 flex-col bg-panel" :class="isWelcome ? 'overflow-y-auto' : 'overflow-hidden'">
+    <!-- 右侧对话区。空态：grid 三行 1fr/auto/1fr——输入框在正中行精确居中，
+         欢迎区占第一行底对齐（依托输入框上沿向上生长，矮屏行保持内容高可滚动不裁切）；
+         有消息：列表占满、输入框沉底 -->
+    <main
+      class="chat-main min-w-0 flex-1 bg-panel"
+      :class="isWelcome ? 'grid grid-rows-[1fr_auto_1fr] overflow-y-auto' : 'flex flex-col overflow-hidden'"
+    >
       <!-- 消息列表 -->
       <div
         ref="messageListRef"
         class="message-list mx-auto w-full p-6 max-[768px]:p-4"
-        :class="isWelcome ? 'flex max-w-[760px] flex-none flex-col overflow-visible' : 'max-w-[1200px] flex-1 overflow-y-auto'"
+        :class="isWelcome ? 'row-start-1 max-w-[760px] self-end justify-self-center overflow-visible' : 'max-w-[1200px] flex-1 overflow-y-auto'"
       >
-        <!-- 空状态：欢迎区（图标左标题右横排；标题即一句话功能介绍，无副标题；
-             欢迎区贴顶上移、输入框紧跟其后：居中由「紧凑欢迎区+输入框」的堆叠高度决定，
-             不用 auto margin 对劈剩余空间（会把输入框推向下方视口底） -->
-        <div v-if="isWelcome" class="welcome-area w-full px-6 pb-1 pt-8 text-center">
+        <!-- 空状态：欢迎区（图标左标题右横排；标题即一句话功能介绍，无副标题）。
+             定位：grid 第一行 + self-end 贴住输入框上沿，不把输入框往下推 -->
+        <div v-if="isWelcome" class="welcome-area w-full px-6 pb-3 pt-6 text-center">
           <div class="welcome-head mx-auto flex max-w-[760px] items-center justify-center gap-3 text-left">
             <div class="welcome-icon inline-flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-[16px] bg-[linear-gradient(135deg,var(--color-violet-500,#6366f1),#8b5cf6)] text-white">
               <el-icon :size="28"><component :is="welcomeIcon" /></el-icon>
@@ -297,10 +301,10 @@
         </div>
       </div>
 
-      <!-- 输入区（空态：紧跟欢迎区落在视口中部；有消息：沉底 dock） -->
+      <!-- 输入区（空态：grid 第二行精确居中；有消息：沉底 dock） -->
       <div
         class="chat-input-area mx-auto w-full bg-panel px-6 pb-5 pt-3 max-[768px]:px-3 max-[768px]:pb-3 max-[768px]:pt-2"
-        :class="isWelcome ? 'max-w-[760px] flex-none' : 'max-w-[1200px]'"
+        :class="isWelcome ? 'row-start-2 max-w-[760px]' : 'max-w-[1200px]'"
       >
         <slot name="input-toolbar" />
         <slot name="input-above" />
