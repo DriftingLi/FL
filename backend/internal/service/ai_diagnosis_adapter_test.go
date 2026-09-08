@@ -120,8 +120,9 @@ func TestDiagnosisAdapterStream_PseudostreamAndSources(t *testing.T) {
 	if err := json.Unmarshal([]byte(fake.lastJSON), &req); err != nil {
 		t.Fatalf("解析请求体失败: %v", err)
 	}
-	if req.Query != "叉车无法行驶怎么排查？" {
-		t.Fatalf("query 不符: %q", req.Query)
+	// 历史折叠进 query：原始问题仍在，且带上下文标记（chat_history 字段同时保留）
+	if !strings.Contains(req.Query, "叉车无法行驶怎么排查？") || !strings.Contains(req.Query, "[对话上下文]") {
+		t.Fatalf("query 应折叠历史上下文: %q", req.Query)
 	}
 	if len(req.ChatHistory) != 4 {
 		t.Fatalf("chat_history 应为 4 轮（2 追问+2 回答），got %d", len(req.ChatHistory))
@@ -170,8 +171,9 @@ func TestDiagnosisAdapterStream_WithImage(t *testing.T) {
 	if fake.lastPath != "/assistant/api/chat/with-image" {
 		t.Fatalf("图片路径应走 /chat/with-image，got %s", fake.lastPath)
 	}
-	if fake.lastFormBody["query"] != "请根据现场图片进行分析" {
-		t.Fatalf("空 query 应回退默认话术，got %q", fake.lastFormBody["query"])
+	// 空 query 回退默认话术；有历史时默认话术同样被折叠进上下文
+	if q := fake.lastFormBody["query"]; !strings.Contains(q, "请根据现场图片进行分析") || !strings.Contains(q, "[对话上下文]") {
+		t.Fatalf("query 应为折叠后的默认话术，got %q", q)
 	}
 	if fake.lastFormBody["brand"] != "all" {
 		t.Fatalf("brand 默认应为 all，got %q", fake.lastFormBody["brand"])
@@ -183,6 +185,32 @@ func TestDiagnosisAdapterStream_WithImage(t *testing.T) {
 	}
 	if len(hist) != 2 || hist[0].Content != "追问1" || hist[1].Content != "前序回答" {
 		t.Fatalf("with-image chat_history 转译不符: %+v", hist)
+	}
+}
+
+// TestFoldHistoryIntoQuery 折叠预算：空历史透传、轮次上限、单轮截断、总预算、原 query 保留在末尾。
+func TestFoldHistoryIntoQuery(t *testing.T) {
+	if got := foldHistoryIntoQuery(nil, "本轮问题"); got != "本轮问题" {
+		t.Fatalf("无历史应原样透传，got %q", got)
+	}
+	history := make([]diagnosisChatTurn, 0, foldMaxTurns+2)
+	for i := 0; i < foldMaxTurns+2; i++ {
+		role := "user"
+		if i%2 == 1 {
+			role = "assistant"
+		}
+		history = append(history, diagnosisChatTurn{Role: role, Content: strings.Repeat("长", foldMaxTurnRunes+50)})
+	}
+	got := foldHistoryIntoQuery(history, "具体步骤是什么？")
+	// 预算封顶：折进来的字符总量不超过 foldMaxTurns × 单轮截断
+	if strings.Count(got, "长") > foldMaxTurns*foldMaxTurnRunes {
+		t.Fatalf("折叠内容超预算")
+	}
+	if !strings.Contains(got, "[对话上下文]") || !strings.Contains(got, "[本轮问题]") {
+		t.Fatalf("折叠格式缺失标记: %q", got[:120])
+	}
+	if !strings.HasSuffix(got, "[本轮问题]（请结合上文理解本轮追问；勿重复回答历史问题）\n具体步骤是什么？") {
+		t.Fatalf("原 query 应在折叠文本末尾，got tail: %q", got[len(got)-80:])
 	}
 }
 

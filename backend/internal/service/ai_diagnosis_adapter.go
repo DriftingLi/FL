@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/cloudwego/eino/schema"
 	"go.uber.org/zap"
@@ -222,6 +223,8 @@ func (a *diagnosisAssistantAdapter) Stream(ctx context.Context, sel AIModelSelec
 
 	// 伪流式切块：按空行段落切（正文 markdown 分段结构），段落间补分隔符——
 	// 除末段外每段尾附 "\n\n"，各块拼接恒等于全文。空产出时至少落一个空块。
+	// 切块间加节奏间隔：外部助手阻塞返回整包，无间隔时全部 SSE 事件毫秒级到齐，
+	// 前端观感等同一次性出全文（伪流式形同虚设）。
 	content := resp.Data.SOPText
 	if strings.TrimSpace(content) == "" {
 		if onChunk != nil {
@@ -230,17 +233,28 @@ func (a *diagnosisAssistantAdapter) Stream(ctx context.Context, sel AIModelSelec
 		return "", nil, nil
 	}
 	paras := strings.Split(content, "\n\n")
+	chunks := make([]string, 0, len(paras))
 	for i, para := range paras {
 		para = strings.Trim(para, "\n")
 		if para == "" {
 			continue
 		}
-		if onChunk != nil {
-			chunk := para
-			if i < len(paras)-1 {
-				chunk += "\n\n"
-			}
+		chunk := para
+		if i < len(paras)-1 {
+			chunk += "\n\n"
+		}
+		chunks = append(chunks, chunk)
+	}
+	if onChunk != nil {
+		for i, chunk := range chunks {
 			onChunk(chunk)
+			if i < len(chunks)-1 {
+				select {
+				case <-ctx.Done():
+					return content, nil, ctx.Err()
+				case <-time.After(pseudoStreamChunkInterval):
+				}
+			}
 		}
 	}
 	return content, nil, nil
@@ -437,7 +451,8 @@ func truncateDiagnosisPreview(raw []byte) string {
 
 // buildDiagnosisPayload 把端口消息转译为助手调用负载：
 //   - chat_history = 除最后一条用户消息外的全部 user/assistant 轮次（system 前缀忽略）
-//   - query = 最后一条用户消息的文本 part（空时对齐包前端默认话术；纯图片轮次也如此）
+//   - query = 最后一条用户消息的文本 part（空时对齐包前端默认话术；纯图片轮次也如此）；
+//     有历史时把近几轮折叠进 query（见 foldHistoryIntoQuery——外部助手实测忽略 chat_history）
 //   - imageBinary/imageName = 最后一条用户消息的 image part 还原字节（无图 → nil）
 func (a *diagnosisAssistantAdapter) buildDiagnosisPayload(msgs []*schema.Message) (query string, history []diagnosisChatTurn, imageBinary []byte, imageName string, err error) {
 	if len(msgs) == 0 {
@@ -498,7 +513,68 @@ func (a *diagnosisAssistantAdapter) buildDiagnosisPayload(msgs []*schema.Message
 		// 纯图片轮次：对齐包前端行为，默认走图片分析话术
 		query = "请根据现场图片进行分析"
 	}
+	// 外部助手为单轮 RAG QA：chat_history 参数实测被忽略（2026-09-07 lxc101 两轮验证，
+	// 追问命中「请提供故障信息」护栏）。有历史时折叠进 query，检索与生成才能续上上文。
+	if len(history) > 0 && strings.TrimSpace(query) != "" {
+		query = foldHistoryIntoQuery(history, query)
+	}
 	return query, history, imageBinary, imageName, nil
+}
+
+// ---- 上下文折叠 ----
+
+// 伪流式节奏：切块间隔（SSE 事件铺开到肉眼可见的渐进渲染）。
+const pseudoStreamChunkInterval = 60 * time.Millisecond
+
+// 折叠预算：轮次上限（近 3 组问答）、单轮截断、总字符预算——控制 token 与检索污染。
+const (
+	foldMaxTurns      = 6
+	foldMaxTurnRunes  = 300
+	foldMaxTotalRunes = 1200
+)
+
+// foldHistoryIntoQuery 把近几轮历史折进 query 文本：
+//
+//	[对话上下文]
+//	用户：…
+//	助手：…
+//	[本轮问题]（请结合上文理解本轮追问；勿重复回答历史问题）
+//	<query>
+//
+// 检索按整段 query 做向量匹配，历史中的故障码/车型关键词能拉回同一主题的文档；
+// 生成模型也能从折叠文本里读出追问指代。预算封顶防长会话膨胀。
+func foldHistoryIntoQuery(history []diagnosisChatTurn, query string) string {
+	if len(history) == 0 {
+		return query
+	}
+	start := 0
+	if len(history) > foldMaxTurns {
+		start = len(history) - foldMaxTurns
+	}
+	var b strings.Builder
+	b.WriteString("[对话上下文]\n")
+	total := 0
+	for _, t := range history[start:] {
+		role := "助手"
+		if t.Role == "user" {
+			role = "用户"
+		}
+		c := []rune(t.Content)
+		if len(c) > foldMaxTurnRunes {
+			c = c[:foldMaxTurnRunes]
+		}
+		if total+len(c) > foldMaxTotalRunes {
+			break
+		}
+		total += len(c)
+		b.WriteString(role)
+		b.WriteString("：")
+		b.WriteString(string(c))
+		b.WriteString("\n")
+	}
+	b.WriteString("[本轮问题]（请结合上文理解本轮追问；勿重复回答历史问题）\n")
+	b.WriteString(query)
+	return b.String()
 }
 
 // ---- routing adapter：按 FeatureKey 分发 ----
