@@ -331,7 +331,7 @@
             "path": "pages/jobs/job-list",
             "style": {
                 "navigationStyle": "custom",
-                "navigationBarTitleText": "职位广场"
+                "navigationBarTitleText": "招聘"
             }
         },
         {
