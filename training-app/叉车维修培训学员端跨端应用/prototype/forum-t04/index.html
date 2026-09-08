@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<!--
+  ⚠ PROTOTYPE — FORGET ABOUT THIS FILE AFTER THE VERDICT ⚠
+  T04 (#642) forum 模块手术 · 分区看板（一次性原型，非生产代码）
+
+  回答的问题：
+  1) forum.uvue (1419) / forum-detail.uvue (1385) 怎么切成 section 组件而 UI 像素级不变？
+  2) 用户提供的原型图与当前实现的差异清单（按 #642 纪律：记 issue，不顺手改）。
+
+  跑法：双击本文件。数据全是编的。
+  屏幕里的编号 = 候选 section 组件；点右上「分区标注」开关显隐。
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>[PROTOTYPE] T04 forum 手术分区看板</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: "PingFang SC","Microsoft YaHei",sans-serif; }
+  body { background: #e8ebf0; padding-bottom: 90px; }
+  .proto-banner { background: #b45309; color: #fff; text-align: center; padding: 6px; font-size: 13px; letter-spacing: 1px; }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; margin: 8px 0 2px; }
+  .sub { color: #667; font-size: 13px; margin-bottom: 14px; }
+  /* 屏幕切换 */
+  .screens { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .screens button { border: 1px solid #94a3b8; background: #fff; padding: 8px 14px; border-radius: 20px; cursor: pointer; font-size: 14px; }
+  .screens button.on { background: #1d4ed8; color: #fff; border-color: #1d4ed8; }
+  .screen { display: none; }
+  .screen.on { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
+  /* 手机框 */
+  .phone { width: 375px; background: #f4f6f9; border: 10px solid #333; border-radius: 34px; overflow: hidden; flex-shrink: 0; position: relative; }
+  .phone .body { height: 720px; overflow-y: auto; }
+  .cap { text-align: center; font-size: 12px; color: #556; padding: 6px; }
+  /* 通用块 */
+  .blk { position: relative; }
+  .hd { background: linear-gradient(#cfe6f7,#e8f3fb); padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; }
+  .hd .t { font-weight: 700; font-size: 16px; }
+  .tabs { display: flex; background: #e8f3fb; padding: 0 8px 8px; gap: 14px; align-items: center; }
+  .tabs .tb { font-size: 14px; color: #567; padding: 4px 2px; }
+  .tabs .tb.on { color: #1d4ed8; font-weight: 700; border-bottom: 2px solid #1d4ed8; }
+  .avatar { margin-left: auto; width: 30px; height: 30px; border-radius: 50%; background: #fcd34d; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+  .search { margin: 8px 12px; background: #fff; border-radius: 18px; padding: 8px 12px; color: #99a; font-size: 13px; }
+  .chips { display: flex; gap: 8px; padding: 0 12px 8px; }
+  .chip { border-radius: 14px; background: #fff; padding: 4px 12px; font-size: 12px; color: #567; }
+  .chip.on { background: #dbeafe; color: #1d4ed8; }
+  .card { background: #fff; border-radius: 10px; margin: 8px 12px; padding: 10px 12px; font-size: 13px; }
+  .card .row { display: flex; align-items: center; gap: 8px; }
+  .who { width: 26px; height: 26px; border-radius: 50%; background: #93c5fd; display: flex; align-items: center; justify-content: center; font-size: 13px; color: #1e3a5f; }
+  .nm { font-weight: 600; } .dt { color: #99a; font-size: 11px; margin-left: auto; }
+  .stats { display: flex; gap: 14px; color: #778; font-size: 12px; margin-top: 8px; }
+  .imgs { display: flex; gap: 6px; margin-top: 8px; }
+  .im { width: 96px; height: 120px; border-radius: 6px; background: linear-gradient(135deg,#1e3a8a,#3b82f6); color: #fff; font-size: 11px; display: flex; align-items: center; justify-content: center; }
+  .badge { font-size: 11px; border-radius: 4px; padding: 1px 6px; margin-left: auto; }
+  .badge.g { background: #dcfce7; color: #15803d; } .badge.b { background: #dbeafe; color: #1d4ed8; }
+  .checkin { background: linear-gradient(90deg,#e0f2fe,#f0f9ff); border: 1px solid #bae6fd; }
+  .btn-mini { margin-left: auto; background: #38bdf8; color: #fff; border-radius: 14px; font-size: 12px; padding: 4px 12px; }
+  .banner { margin: 8px 12px; border-radius: 10px; background: linear-gradient(90deg,#38bdf8,#0ea5e9); color: #fff; padding: 14px; display: flex; align-items: center; gap: 10px; }
+  .coin { width: 34px; height: 34px; border-radius: 50%; background: #fbbf24; display: flex; align-items: center; justify-content: center; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0 12px; }
+  .gcard { background: #fff; border-radius: 10px; padding: 16px 8px; text-align: center; font-size: 13px; }
+  .gcard .ic { font-size: 26px; }
+  .fab { position: sticky; bottom: 10px; margin-left: 300px; width: 46px; height: 46px; border-radius: 50%; background: #38bdf8; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 4px 10px rgba(0,0,0,.25); }
+  .input { background: #fff; border-radius: 8px; margin: 6px 12px; padding: 10px 12px; color: #99a; font-size: 13px; }
+  .input.tall { min-height: 110px; }
+  .lab { font-size: 13px; font-weight: 600; margin: 10px 12px 2px; }
+  .lab i { color: #dc2626; font-style: normal; }
+  .bigbtn { margin: 14px 12px; background: #38bdf8; color: #fff; text-align: center; border-radius: 22px; padding: 11px; font-size: 14px; }
+  .replybar { position: sticky; bottom: 0; display: flex; gap: 8px; background: #fff; padding: 8px; border-top: 1px solid #eee; }
+  .replybar .fake { flex: 1; border-radius: 16px; background: #f1f5f9; color: #99a; font-size: 13px; padding: 8px 12px; }
+  .replybar .send { background: #38bdf8; color: #fff; border-radius: 16px; padding: 8px 14px; font-size: 13px; }
+  /* 分区标注 */
+  .num { display: none; position: absolute; top: 2px; left: 2px; z-index: 5; width: 20px; height: 20px; border-radius: 50%; background: #dc2626; color: #fff; font-size: 12px; font-weight: 700; align-items: center; justify-content: center; }
+  body.marked .num { display: flex; }
+  body.marked .blk { outline: 1.5px dashed rgba(220,38,38,.55); outline-offset: -2px; }
+  /* 右侧说明 */
+  .notes { flex: 1; min-width: 380px; }
+  table { width: 100%; border-collapse: collapse; background: #fff; font-size: 13px; }
+  th, td { border: 1px solid #dfe3ea; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background: #f1f5f9; }
+  td .mono { font-family: Consolas,monospace; font-size: 12px; color: #0f766e; }
+  .issue { color: #b45309; font-weight: 600; }
+  .keep { color: #15803d; }
+  .imgref { background: #fff; padding: 10px; border-radius: 10px; margin-bottom: 14px; }
+  .imgref img { width: 100%; border: 1px solid #ddd; border-radius: 6px; }
+  .imgref figcaption { font-size: 12px; color: #667; margin-top: 4px; }
+  /* 悬浮条 */
+  .bar { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: #1118; display: flex; gap: 10px; align-items: center; border-radius: 26px; padding: 8px 14px; z-index: 50; }
+  .bar button { border: 0; border-radius: 16px; padding: 6px 12px; cursor: pointer; font-size: 13px; background: #e5e7eb; }
+  .bar .cur { color: #fff; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="proto-banner">⚠ PROTOTYPE · T04 forum 手术分区看板 · 数据为编造 · 双击即用 · 用完即弃（#642）</div>
+<div class="wrap">
+  <h1>#642 forum 模块手术 — 分区 &amp; 原型图差异看板</h1>
+  <div class="sub">左：按当前代码真实结构复刻的屏幕（编号=候选 section 组件）；右：拆分建议与原型图差异。手术纪律：<b>UI 像素级不变</b>，差异只记 issue。</div>
+
+  <div class="screens" id="screens">
+    <button data-s="s1" class="on">① 论坛首页 forum.uvue (1419行)</button>
+    <button data-s="s2">② 帖子详情 forum-detail.uvue (1385行)</button>
+    <button data-s="s3">③ 发帖 forum-create.uvue (507行·预算内)</button>
+    <button data-s="s4">④ 原型图原图 + 差异总表</button>
+  </div>
+
+  <!-- ═══════════ 屏幕1：forum.uvue ═══════════ -->
+  <div class="screen on" id="s1">
+    <div>
+      <div class="phone"><div class="body">
+        <div class="blk"><span class="num">1</span>
+          <div class="hd"><span style="font-size:16px">✉️<sup style="color:#dc2626;font-size:10px">3</sup></span><span class="t">学员论坛</span><span style="color:#1d4ed8;font-size:13px">发帖</span></div>
+        </div>
+        <div class="blk"><span class="num">2</span>
+          <div class="tabs"><span class="tb on">广场</span><span class="tb">资源</span><span class="tb">招聘</span><span class="tb">知识问答</span><span class="avatar">👷</span></div>
+        </div>
+        <div class="blk"><span class="num">3</span><div class="search">写下你此刻的想法　🔍</div></div>
+        <div class="blk"><span class="num">4</span><div class="chips"><span class="chip on">最新</span><span class="chip">热门</span><span style="flex:1"></span><span class="chip on">逆序</span><span class="chip">正序</span></div></div>
+        <div class="blk"><span class="num">5</span>
+          <div class="card checkin"><div class="row"><b>8月学习打卡</b><span class="btn-mini">开始打卡</span></div>
+            <div class="dt">2026/08/01 · 10人已参与打卡</div></div>
+        </div>
+        <div class="blk"><span class="num">6</span>
+          <div class="card"><div class="row"><span class="who">元</span><span class="nm">小元</span><span class="dt">2025/7/11</span></div>
+            <div style="margin-top:6px">25下叉车备课一起的有没有 每天可以一起打卡交流 学习分享 点赞点啦！</div>
+            <div class="imgs"><div class="im">叉车维修</div><div class="im">笔记</div><div class="im">题库</div></div>
+            <div class="stats"><span>👁 22</span><span>⭐ 14</span><span>💬 10</span></div></div>
+          <div class="card"><div class="row"><span class="who">元</span><span class="nm">小元</span><span class="dt">2025/7/11</span></div>
+            <div style="margin-top:6px">25下叉车备课一起的有没有 每天可以一起打卡交流 学习分享 点赞点啦！</div>
+            <div class="stats"><span>👁 22</span><span>⭐ 14</span><span>💬 10</span></div></div>
+        </div>
+        <div class="fab">＋</div>
+      </div></div>
+      <div class="cap">广场 tab（当前实现）。切「资源/招聘/知识问答」见下表分区。</div>
+    </div>
+    <div class="notes">
+      <table>
+        <tr><th>#</th><th>模板区（forum.uvue 行段）</th><th>候选 section 组件 / composable</th><th>说明</th></tr>
+        <tr><td>1</td><td class="mono">header 2–17</td><td class="mono">留壳层</td><td>消息角标+发帖入口，16 行，不值得拆</td></tr>
+        <tr><td>2</td><td class="mono">tab-bar 18–38</td><td class="mono">ForumTabBar</td><td>props: current/unread/avatar；emit switch/personal-activity</td></tr>
+        <tr><td>3</td><td class="mono">search-bar 39–45</td><td class="mono">留壳层</td><td>发帖入口条，7 行</td></tr>
+        <tr><td>4</td><td class="mono">sort-bar 46–66</td><td class="mono">SquareSortBar（并入 SquareFeed）</td><td>最新/热门/逆序/正序</td></tr>
+        <tr><td>5</td><td class="mono">打卡卡片 100–132</td><td class="mono">CheckInCard.vue</td><td>纯展示 + emit start</td></tr>
+        <tr><td>6</td><td class="mono">帖子卡 133–197</td><td class="mono">TopicCard.vue</td><td><b>广场/问答共用</b>（问答多一行作者+统计布局变体，走 prop）</td></tr>
+        <tr><td>7</td><td class="mono">招聘区 67–76,198–238</td><td class="mono">RecruitPanel.vue</td><td>子tab公告/职位 + 两套卡片，自含状态</td></tr>
+        <tr><td>8</td><td class="mono">问答区 77–97</td><td class="mono">QaHeader（并入问答 feed）</td><td>发一个问题条 + 推荐/最热/最新</td></tr>
+        <tr><td>9</td><td class="mono">资源区 239–285</td><td class="mono">ResourcePanel.vue</td><td>金币 banner + 2×2 卡（课程商城/我的已购/我的上传/上传资源）</td></tr>
+        <tr><td>10</td><td class="mono">悬浮按钮 286–290</td><td class="mono">留壳层</td><td>5 行</td></tr>
+        <tr><td>—</td><td class="mono">script 293–604 (311行)</td><td class="mono">useTopicFeed / useRecruitFeed / useResourcePoints</td><td>列表分页+排序下沉 composable；壳层只留 tab 状态</td></tr>
+        <tr><td>—</td><td class="mono">style 605–1419 (814行)</td><td class="mono">随组件走</td><td>各 section 的 scoped 样式随迁（R2：冻结区不动）</td></tr>
+      </table>
+      <p class="sub" style="margin-top:10px">目标：壳层 ≤250 行；每组件 ≤600 软预算。api/forum.uts 现 <b>560 行</b>（票面写 716，已缩水）——收紧按 T01 mapper-callback 出口做 DTO+mapper，行数是次要目标。</p>
+    </div>
+  </div>
+
+  <!-- ═══════════ 屏幕2：forum-detail.uvue ═══════════ -->
+  <div class="screen" id="s2">
+    <div>
+      <div class="phone"><div class="body">
+        <div class="blk"><span class="num">1</span>
+          <div class="hd"><span>‹</span><span class="t">需求详情</span><span></span></div>
+        </div>
+        <div class="blk"><span class="num">2</span>
+          <div class="card"><b style="font-size:15px">检修前需要做哪些安全准备？</b>
+            <div style="margin-top:6px;color:#567">排查与处理：叉车停放在平地面井熄火…</div>
+            <div class="row" style="margin-top:8px"><span class="who">加</span><span class="nm">加油吗543</span><span class="dt">2026/7/11</span></div>
+            <div class="stats"><span>👁 14 浏览</span><span>💬 10 评论</span><span>👍 22 点赞</span></div>
+          </div>
+        </div>
+        <div class="blk"><span class="num">3</span>
+          <div class="lab">评论（10）　<span class="chip on">最新</span><span class="chip">最热</span></div>
+          <div class="card"><div class="row"><span class="who">加</span><span class="nm">加油吗543</span><span class="dt">2026/7/11 09:30</span></div>
+            <div style="margin-top:6px">叉车停放在平地面井熄火（电动叉车关闭主电源开关），拉紧驻车制动。</div></div>
+          <div class="card"><div class="row"><span class="who">加</span><span class="nm">加油吗543</span><span class="dt">2026/7/11 09:30</span></div>
+            <div style="margin-top:6px">叉车停放在平地面井熄火（电动叉车关闭主电源开关），拉紧驻车制动。</div></div>
+        </div>
+        <div class="blk"><span class="num">4</span>
+          <div class="replybar"><span class="fake">写出你的评论</span><span class="send">发送</span></div>
+        </div>
+        <div class="blk"><span class="num">5</span>
+          <div class="card" style="border:1px dashed #dc2626;color:#99a;font-size:12px">（举报弹窗 · 默认隐藏，点楼主/回复触发）</div>
+        </div>
+      </div></div>
+      <div class="cap">帖子详情（当前结构，含举报弹窗占位）</div>
+    </div>
+    <div class="notes">
+      <table>
+        <tr><th>#</th><th>模板区（行段）</th><th>候选 section 组件 / composable</th><th>说明</th></tr>
+        <tr><td>1</td><td class="mono">header 2–21</td><td class="mono">留壳层</td><td>返回+标题+删除(注释态)</td></tr>
+        <tr><td>2</td><td class="mono">topic-section 27–65</td><td class="mono">TopicHeader + TopicBody</td><td>作者行/统计/正文/图片网格</td></tr>
+        <tr><td>3</td><td class="mono">replies-section 66–131</td><td class="mono">ReplyList.vue</td><td>含排序条；采纳答案高亮逻辑在 item 内</td></tr>
+        <tr><td>4</td><td class="mono">回复输入栏 132–150</td><td class="mono">ReplyComposer.vue</td><td>自含输入状态，emit send</td></tr>
+        <tr><td>5</td><td class="mono">举报弹窗 151–170</td><td class="mono">ReportDialog.vue</td><td>props: visible/target；emit submit</td></tr>
+        <tr><td>—</td><td class="mono"><b>script 172–775（604行）</b></td><td class="mono">useTopicDetail / useReplies / useReport / useAccept</td><td><b>本文件真正的胖子</b>：详情加载+回复分页排序+举报+采纳+点赞收藏全在一个 setup。按域拆 4 个 composable，壳层编排</td></tr>
+        <tr><td>—</td><td class="mono">style 776–1385 (610行)</td><td class="mono">随组件走</td><td>同 forum.uvue</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- ═══════════ 屏幕3：forum-create ═══════════ -->
+  <div class="screen" id="s3">
+    <div>
+      <div class="phone"><div class="body">
+        <div class="hd"><span>‹</span><span class="t">发帖</span><span></span></div>
+        <div class="blk"><span class="num">1</span><div class="lab">分类</div>
+          <div class="chips"><span class="chip on">广场</span><span class="chip">资源</span><span class="chip">知识问答</span></div>
+        </div>
+        <div class="blk"><span class="num">2</span><div class="lab">标题 <i>*</i></div><div class="input">请输入标题（1-100 字）　<span style="float:right;color:#bbc">0/100</span></div></div>
+        <div class="blk"><span class="num">3</span><div class="lab">内容 <i>*</i></div><div class="input tall">请输入内容（1-10000 字）</div></div>
+        <div class="blk"><span class="num">4</span><div class="lab">图片</div>
+          <div class="chips"><div class="im" style="width:70px;height:70px">图1</div><div class="input" style="width:70px;height:70px;text-align:center;padding-top:22px">＋<br><span style="font-size:10px">0/9</span></div></div>
+        </div>
+        <div class="bigbtn">发布</div>
+      </div></div>
+      <div class="cap">forum-create（507 行，预算内，不手术）</div>
+    </div>
+    <div class="notes">
+      <table>
+        <tr><th>对比项</th><th>当前实现</th><th>原型图「提交需求」</th><th>处置</th></tr>
+        <tr><td>分类 chips</td><td>广场 / 资源 / 知识问答（资源 value=discussion）</td><td>知识问答 / 广场 / 资源 / <b>备考经验</b></td><td class="issue">→ 记 issue（见差异表 #1）</td></tr>
+        <tr><td>标题限制</td><td>1–100</td><td>6–30</td><td class="issue">→ 记 issue（#3）</td></tr>
+        <tr><td>内容限制</td><td>1–10000</td><td>6–2000</td><td class="issue">→ 记 issue（#3）</td></tr>
+        <tr><td>提交建议卡</td><td>无</td><td>有（4 条指引文案）</td><td class="issue">→ 记 issue（#3）</td></tr>
+        <tr><td>图片区</td><td>有（/9）</td><td>无</td><td class="issue">→ 记 issue（#3）</td></tr>
+      </table>
+      <p class="sub" style="margin-top:8px">本票对 forum-create 无动作（预算内）；上表差异全部只记录不实现。</p>
+    </div>
+  </div>
+
+  <!-- ═══════════ 屏幕4：原型图 + 差异总表 ═══════════ -->
+  <div class="screen" id="s4">
+    <div class="notes" style="min-width:640px">
+      <figure class="imgref"><img src="mockups/forum-6screens.png"><figcaption>原型图批次1：广场 / 资源 / 知识问答 / 备考经验 / 提交需求 / 需求详情</figcaption></figure>
+      <figure class="imgref"><img src="mockups/upload-screen.png" style="width:280px"><figcaption>原型图：上传页（当前 app 无此页）</figcaption></figure>
+      <figure class="imgref"><img src="mockups/points-screens.png" style="width:420px"><figcaption>原型图：积分明细 / 积分规则（属 pages/points，T14 域，非 #642）</figcaption></figure>
+      <table>
+        <tr><th>#</th><th>原型图所示</th><th>当前实现</th><th>归属 / 处置</th></tr>
+        <tr><td>1</td><td>第4个 tab =「备考经验」</td><td>第3个 tab =「招聘」（公告/职位子tab）；全库无「备考」字样</td><td class="issue">产品级分歧 → 记 issue，手术保留「招聘」</td></tr>
+        <tr><td>2</td><td>问答有「已完成/进行中/全部」状态筛选 + 卡片状态徽章</td><td>只有 推荐/最热/最新；无状态徽章（后端有 solved/accept 机制，前端列表未消费）</td><td class="issue">记 issue；手术不补</td></tr>
+        <tr><td>3</td><td>提交需求表单（6–30 标题 / 6–2000 内容 / 提交建议卡 / 无图片）</td><td>forum-create（1–100 / 1–10000 / 图片 /9）</td><td class="issue">记 issue</td></tr>
+        <tr><td>4</td><td>独立「上传」页：微信文档/相册/本地文件/压缩包 + 网盘/WPS/QQ/钉钉</td><td>无此页；资源上传 = forum-create 选「资源」分类 + 图片</td><td class="issue">新功能设计 → 记 issue（涉及后端能力，远超 #642）</td></tr>
+        <tr><td>5</td><td>积分明细三 tab + 已获得/已消耗/已过期 chips</td><td>pages/points/points-detail.uvue；其数据源正是 #662 发现的幻影接口 <span class="mono">/points/records</span>（mock 假数据兜底中）</td><td class="issue">归 T14（#652）+ #662 决策，不混入本票</td></tr>
+        <tr><td>6</td><td>广场打卡卡 / 资源金币banner+2×2 / 详情评论结构</td><td>与当前实现一致</td><td class="keep">✓ 手术像素级保留，作为验收基线</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="bar">
+  <button id="prev">←</button>
+  <span class="cur" id="cur">① 论坛首页</span>
+  <button id="next">→</button>
+  <button id="mark">分区标注：开</button>
+</div>
+
+<script>
+  // 一次性原型：状态全在内存，无持久化，无测试。
+  const names = { s1: '① 论坛首页', s2: '② 帖子详情', s3: '③ 发帖', s4: '④ 原型图+差异表' };
+  const ids = ['s1','s2','s3','s4'];
+  let cur = 's1';
+  function show(id) {
+    cur = id;
+    document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.id === id));
+    document.querySelectorAll('#screens button').forEach(b => b.classList.toggle('on', b.dataset.s === id));
+    document.getElementById('cur').textContent = names[id];
+    history.replaceState(null, '', '#' + id);
+  }
+  document.getElementById('screens').addEventListener('click', e => { if (e.target.dataset.s) show(e.target.dataset.s); });
+  document.getElementById('prev').onclick = () => show(ids[(ids.indexOf(cur) + ids.length - 1) % ids.length]);
+  document.getElementById('next').onclick = () => show(ids[(ids.indexOf(cur) + 1) % ids.length]);
+  document.getElementById('mark').onclick = function () {
+    document.body.classList.toggle('marked');
+    this.textContent = '分区标注：' + (document.body.classList.contains('marked') ? '开' : '关');
+  };
+  addEventListener('keydown', e => {
+    if (['INPUT','TEXTAREA'].includes(document.activeElement.tagName)) return;
+    if (e.key === 'ArrowLeft') document.getElementById('prev').click();
+    if (e.key === 'ArrowRight') document.getElementById('next').click();
+  });
+  if (location.hash && ids.includes(location.hash.slice(1))) show(location.hash.slice(1));
+  document.body.classList.add('marked');
+</script>
+</body>
+</html>
