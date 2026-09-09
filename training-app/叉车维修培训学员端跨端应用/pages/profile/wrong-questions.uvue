@@ -80,8 +80,6 @@
     import WrongQuestionCard from './components/wrong-question-card.uvue'
     import WrongFilterBar from './components/wrong-filter-bar.uvue'
 
-    /** ISO 日期字符串 → YYYY-MM-DD */
-
     /** 题型分组行 */
     type GroupRow = {
         label : string
@@ -342,7 +340,7 @@
                 }
                 removeFromList(item.question_id)
                 uni.showToast({ title: '回答正确，已移出错题本', icon: 'success' })
-                // 刷新统计（卡片自拉）
+                // 刷新统计（stats 归页面所有，见 loadStats）
                 loadStats()
             } else {
                 // 重做错误：显示结果，保留在错题本中
@@ -368,7 +366,7 @@
             await removeWrongQuestionApi(item.question_id)
             uni.showToast({ title: '已移出错题本', icon: 'success' })
             removeFromList(item.question_id)
-            // 刷新统计（卡片自拉）
+            // 刷新统计（stats 归页面所有，见 loadStats）
             loadStats()
         } catch (e) {
             console.error('[wrong-questions] remove failed:', e)
