@@ -85,10 +85,12 @@ node_modules_old/
 .codex/
 
 # ===== 本地文档（不入库；ADRs 例外：架构决策记录是核心资产，必须版本化）=====
-# 2026-09-09 追加例外：docs/agents/（AI/agent 工作约定）随 AGENTS.md 导航拆分一并入库
+# 2026-09-09 追加例外：docs/agents/（AI/agent 工作约定）随 AGENTS.md 导航拆分一并入库；
+# docs/README.md（docs 目录索引）同步入库
 docs/*
 !docs/adr/
 !docs/agents/
+!docs/README.md
 
 # ===== WorkBuddy 相关文件 =====
 .workbuddy/
