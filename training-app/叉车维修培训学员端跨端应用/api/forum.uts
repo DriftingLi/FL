@@ -106,6 +106,7 @@ function buildReply(obj : UTSJSONObject, fallbackTopicId : number = 0) : ForumRe
         can_delete: toBool(obj['can_delete']),
         likes_count: likesCnt,
         liked: likedVal,
+        is_accepted: toBool(obj['is_accepted']),
     } as ForumReply
 }
 
@@ -215,7 +216,9 @@ function buildTopicDetail(obj : UTSJSONObject) : ForumTopicDetail {
         can_delete: toBool(topicObj['can_delete']),
         replies: replies,
         scope: toStr(topicObj['scope'], 'general'),
+        category: toStr(topicObj['category'], 'discussion'),
         status: statusVal,
+        accepted_reply_id: (acceptedReplyId != null && toNumber(acceptedReplyId) > 0) ? toNumber(acceptedReplyId) : null,
     } as ForumTopicDetail
     return detail
 }
@@ -574,4 +577,33 @@ export function getMyViewHistoryApi(page : number = 1, pageSize : number = 10) :
         // 后端未实现时降级为空列表
         return { items: [], total: 0, page: page, page_size: pageSize } as ForumTopicListResult
     })
+}
+
+// ===== 采纳（#366）=====
+
+/**
+ * 采纳回复（#747）
+ * @param topicId 主题 ID
+ * @param replyId 要采纳的回复 ID
+ * @note POST /forum/topics/{id}/accept，后端返回更新后的 topic DTO
+ */
+export function acceptReplyApi(topicId : number, replyId : number) : Promise<ForumTopicDetail> {
+    const body : UTSJSONObject = {
+        reply_id: replyId,
+    } as UTSJSONObject
+    return postMapped<ForumTopicDetail>('/forum/topics/' + topicId.toString() + '/accept', body, (data : UTSJSONObject) : ForumTopicDetail => {
+        return buildTopicDetail(data)
+    })
+}
+
+/**
+ * 取消采纳（#747）
+ * @param topicId 主题 ID
+ * @note DELETE /forum/topics/{id}/accept，后端返回更新后的 topic DTO
+ */
+export function cancelAcceptApi(topicId : number) : Promise<ForumTopicDetail> {
+    return requestMapped<ForumTopicDetail>(
+        { url: '/forum/topics/' + topicId.toString() + '/accept', method: 'DELETE' } as RequestOptions,
+        (data : UTSJSONObject) : ForumTopicDetail => buildTopicDetail(data),
+    )
 }
