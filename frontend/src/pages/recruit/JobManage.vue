@@ -61,7 +61,7 @@
     />
     </div>
 
-    <UiDialog v-model="dialogVisible" :title="editing ? '编辑职位' : '发布职位'" width="560px" destroy-on-close>
+    <UiDialog v-model="dialogVisible" :title="editing ? '编辑职位' : '发布职位'" width="560px" destroy-on-close confirm-text="保存" :confirm-loading="submitting" @confirm="submit">
       <el-form label-width="90px">
         <el-form-item label="职位名" required>
           <el-input v-model="form.title" maxlength="100" placeholder="如：叉车维修技师" />
@@ -89,10 +89,6 @@
           <el-input v-model="form.description" type="textarea" :rows="4" maxlength="5000" show-word-limit />
         </el-form-item>
       </el-form>
-      <template #footer>
-        <UiButton @click="dialogVisible = false">取消</UiButton>
-        <UiButton variant="primary" :loading="submitting" @click="submit">保存</UiButton>
-      </template>
     </UiDialog>
   </div>
 </template>

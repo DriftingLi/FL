@@ -11,6 +11,7 @@ import { CONDITION_RATING_COLOR } from '@/utils/valuationConstants'
 import { formatTonnage, formatWan } from '@/utils/valuationFormat'
 import { formatTime } from '@/utils/format'
 import UiPagination from '@/components/ui/UiPagination.vue'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const router = useRouter()
 
@@ -92,8 +93,8 @@ onMounted(load)
       subtitle="evaluation history"
     >
       <template #actions>
-        <el-button :icon="ArrowLeft" @click="goBack">返回首页</el-button>
-        <el-button :icon="Refresh" :loading="loading" @click="load">刷新</el-button>
+        <UiButton :icon="ArrowLeft" @click="goBack">返回首页</UiButton>
+        <UiButton :icon="Refresh" :loading="loading" @click="load">刷新</UiButton>
       </template>
     </PageHeader>
 
@@ -117,7 +118,7 @@ onMounted(load)
         @clear="onFilterChange"
         @keyup.enter="onFilterChange"
       />
-      <el-button type="primary" @click="onFilterChange">查询</el-button>
+      <UiButton variant="primary" @click="onFilterChange">查询</UiButton>
     </section>
 
     <!-- 列表表格 -->
@@ -182,9 +183,9 @@ onMounted(load)
         </el-table-column>
         <el-table-column label="操作" width="100" align="center" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" link size="small" @click.stop="goReport(row.id)">
+            <UiButton variant="primary" link size="small" @click.stop="goReport(row.id)">
               查看报告
-            </el-button>
+            </UiButton>
           </template>
         </el-table-column>
       </el-table>

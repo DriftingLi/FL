@@ -131,7 +131,7 @@
       :title="dialogMode === 'create' ? '新建 AI 配置' : '编辑 AI 配置'"
       width="600px"
       destroy-on-close
-    >
+     confirm-text="保存" :confirm-loading="saving" @confirm="handleSave">
       <el-form
         ref="formRef"
         :model="form"
@@ -170,10 +170,6 @@
           <el-switch v-model="form.is_active" />
         </el-form-item>
       </el-form>
-      <template #footer>
-        <UiButton @click="dialogVisible = false">取消</UiButton>
-        <UiButton variant="primary" :loading="saving" @click="handleSave">保存</UiButton>
-      </template>
     </UiDialog>
   </div>
 </template>

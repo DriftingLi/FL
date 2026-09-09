@@ -239,8 +239,7 @@ onMounted(() => {
       </el-table-column>
     </el-table>
 
-    <div class="pagination-wrapper" v-if="total > pageSize">
-      <UiPagination
+      <UiPagination v-if="total > pageSize"
       v-model:current-page="currentPage"
       v-model:page-size="pageSize"
       :total="total"
@@ -248,8 +247,8 @@ onMounted(() => {
       :page-sizes="[10, 20, 50]"
       @current-change="load"
       @size-change="load"
-    />
-    </div>
+    / align="center" class="mt-4">
+    
 
     <!-- 新增弹窗 -->
     <UiDialog
@@ -257,7 +256,7 @@ onMounted(() => {
       title="新增 HRWAI 用户"
       width="520px"
       destroy-on-close
-    >
+     confirm-text="确认" :confirm-loading="submitting" @confirm="handleSubmit">
       <el-form ref="formRef" :model="formData" :rules="formRules" label-width="90px">
         <el-form-item label="手机号" prop="phone">
           <el-input
@@ -282,10 +281,6 @@ onMounted(() => {
           <el-input v-model="formData.company" placeholder="选填" maxlength="50" />
         </el-form-item>
       </el-form>
-      <template #footer>
-        <UiButton @click="dialogVisible = false">取消</UiButton>
-        <UiButton variant="primary" :loading="submitting" @click="handleSubmit">确认</UiButton>
-      </template>
     </UiDialog>
 
     <!-- 重置密码弹窗 -->
@@ -294,7 +289,7 @@ onMounted(() => {
       title="重置密码"
       width="440px"
       destroy-on-close
-    >
+     confirm-text="确认重置" :confirm-loading="pwdSubmitting" @confirm="handleResetPwd">
       <el-form ref="pwdFormRef" :model="pwdFormData" :rules="pwdFormRules" label-width="90px">
         <el-form-item label="用户">
           <span>{{ pwdFormData.name }}</span>
@@ -303,10 +298,6 @@ onMounted(() => {
           <el-input v-model="pwdFormData.password" type="password" placeholder="请输入新密码（6-20字符）" maxlength="20" show-password />
         </el-form-item>
       </el-form>
-      <template #footer>
-        <UiButton @click="pwdDialogVisible = false">取消</UiButton>
-        <UiButton variant="primary" :loading="pwdSubmitting" @click="handleResetPwd">确认重置</UiButton>
-      </template>
     </UiDialog>
   </div>
 </template>
@@ -329,11 +320,6 @@ onMounted(() => {
 }
 
 
-.pagination-wrapper {
-  display: flex;
-  justify-content: center;
-  margin-top: 20px;
-}
 
 @media screen and (max-width: 768px) {
   .hrwai-user-manage-page {

@@ -209,14 +209,13 @@ onMounted(() => {
             </template>
           </el-table-column>
         </el-table>
-        <div class="pagination-wrapper" v-if="pendingTotal > pendingPageSize">
-          <UiPagination
+          <UiPagination v-if="pendingTotal > pendingPageSize"
       v-model:current-page="pendingPage"
       :page-size="pendingPageSize"
       :total="pendingTotal"
       @current-change="loadPending"
-    />
-        </div>
+    / align="center" class="mt-4">
+        
       </template>
 
       <!-- ===== 举报处置 ===== -->
@@ -259,14 +258,13 @@ onMounted(() => {
             </template>
           </el-table-column>
         </el-table>
-        <div class="pagination-wrapper" v-if="reportTotal > reportPageSize">
-          <UiPagination
+          <UiPagination v-if="reportTotal > reportPageSize"
       v-model:current-page="reportPage"
       :page-size="reportPageSize"
       :total="reportTotal"
       @current-change="loadReports"
-    />
-        </div>
+    / align="center" class="mt-4">
+        
       </template>
     </el-card>
   </div>
@@ -277,7 +275,6 @@ onMounted(() => {
 .contribution-manage-page { padding: 16px; }
 .card-header { display: flex; align-items: center; justify-content: space-between; }
 .card-title { font-size: 16px; font-weight: 600; }
-.pagination-wrapper { display: flex; justify-content: center; margin-top: 16px; }
 .file-link { display: block; color: var(--el-color-primary); font-size: 12px; line-height: 1.8; }
 .file-link:hover { text-decoration: underline; }
 .report-done { color: var(--color-text-muted, #999999); }

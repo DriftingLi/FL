@@ -1,10 +1,6 @@
 <template>
-  <UiDialog v-model="visible" title="修改单位" width="440px">
+  <UiDialog v-model="visible" title="修改单位" width="440px" confirm-text="保存" :confirm-loading="saving" @confirm="save">
     <el-input v-model="company" maxlength="50" placeholder="请输入单位名称" />
-    <template #footer>
-      <UiButton @click="visible = false">取消</UiButton>
-      <UiButton variant="primary" :loading="saving" @click="save">保存</UiButton>
-    </template>
   </UiDialog>
 </template>
 
@@ -13,7 +9,6 @@ import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
-import UiButton from '@/components/ui/UiButton.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 
 const authStore = useAuthStore()

@@ -24,6 +24,7 @@ import {
 import { CONDITION_RATING_COLOR } from '@/utils/valuationConstants'
 import type { EvaluationDetailResponse } from '@/types/valuation/evaluation'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -131,11 +132,11 @@ const basicInfoItems = computed(() => {
         :subtitle="`生成于 ${formatDateTime(new Date().toISOString())}`"
       >
         <template #actions>
-          <el-button :icon="ArrowLeft" @click="backToResult">返回结果</el-button>
-          <el-button :icon="Download" @click="onDownload" v-if="pdfInfo">下载 PDF</el-button>
-          <el-button type="primary" :icon="CircleCheck" :loading="generating" @click="onGenerate">
+          <UiButton :icon="ArrowLeft" @click="backToResult">返回结果</UiButton>
+          <UiButton :icon="Download" @click="onDownload" v-if="pdfInfo">下载 PDF</UiButton>
+          <UiButton variant="primary" :icon="CircleCheck" :loading="generating" @click="onGenerate">
             {{ pdfInfo ? '重新生成 PDF' : '生成 PDF' }}
-          </el-button>
+          </UiButton>
         </template>
       </PageHeader>
 
@@ -215,18 +216,18 @@ const basicInfoItems = computed(() => {
         <span class="pdf-hint-text">
           已生成报告：{{ pdfInfo.file_name }}（{{ formatBytes(pdfInfo.file_size) }}）
         </span>
-        <el-button type="primary" link :icon="Download" @click="onDownload">下载</el-button>
+        <UiButton variant="primary" link :icon="Download" @click="onDownload">下载</UiButton>
       </div>
     </div>
     <!-- 匿名/无数据降级：报告生成与下载为公开接口，详情展示需登录 -->
     <div v-else class="app-container report-view valuation-root">
       <PageHeader :title="`评估报告 #${id}`" :subtitle="`生成于 ${formatDateTime(new Date().toISOString())}`">
         <template #actions>
-          <el-button :icon="ArrowLeft" @click="backToResult">返回结果</el-button>
-          <el-button :icon="Download" @click="onDownload">下载 PDF</el-button>
-          <el-button type="primary" :icon="CircleCheck" :loading="generating" @click="onGenerate">
+          <UiButton :icon="ArrowLeft" @click="backToResult">返回结果</UiButton>
+          <UiButton :icon="Download" @click="onDownload">下载 PDF</UiButton>
+          <UiButton variant="primary" :icon="CircleCheck" :loading="generating" @click="onGenerate">
             {{ pdfInfo ? '重新生成 PDF' : '生成 PDF' }}
-          </el-button>
+          </UiButton>
         </template>
       </PageHeader>
       <UiEmptyState description="登录后可查看报告详情" />

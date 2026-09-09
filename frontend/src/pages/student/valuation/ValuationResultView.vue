@@ -14,6 +14,7 @@ import ResultSuggestions from '@/components/valuation/ResultSuggestions.vue'
 import { downloadEvaluationReportBlob } from '@/api/valuation/evaluation'
 import { downloadReport } from '@/composables/useReportDownload'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -60,8 +61,8 @@ async function downloadPdf() {
       :subtitle="`evaluation #${id}`"
     >
       <template #actions>
-        <el-button :icon="Edit" @click="goEdit">返回修改</el-button>
-        <el-button type="primary" :icon="Download" @click="downloadPdf">下载 PDF</el-button>
+        <UiButton :icon="Edit" @click="goEdit">返回修改</UiButton>
+        <UiButton variant="primary" :icon="Download" @click="downloadPdf">下载 PDF</UiButton>
       </template>
     </PageHeader>
 
