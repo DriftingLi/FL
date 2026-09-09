@@ -26,6 +26,13 @@ Single-context：root `CONTEXT.md` + `docs/adr/`。See `docs/agents/domain.md`.
 - **决策/重构清单固定六段结构、≤25 行**，顺序为：① 目标与范围（这次到底解决什么）→ ② 选型 + 一句理由（每项决策附一句话理由）→ ③ 明确不做的事（防止后续加戏）→ ④ 拆分步骤（按模块拆，标出可并行项）→ ⑤ 约束（不能动的模块、API 兼容、uni-app-x 兼容性）→ ⑥ 验收标准（怎么算完成）。先例 `docs/refactor-decisions.md`。
 - **新决策回写纪律**：手术/实现会话收口时，若产生了 playbook 未覆盖的新决策或新坑位，须先回写对应 ADR（含守护规则落锁情况）再关票——issue 评论不是冷启动会话的必读面，ADR 才是。
 
+### 会话切分约定（所有技能会话遵守）
+
+- **一条思考链一个会话**：grilling → to-spec → to-tickets 在同一会话内连续完成，中途不 clear/compact——spec 与票不只依赖结论，还依赖被否决的分支和否决理由。
+- **一件票一个会话**：implement/execute-task 每票冷启动新会话，只读票 + 对应 ADR + `docs/refactor-decisions.md`；票间 `/clear`，上一票的讨论残留不进下一票。
+- **换气只在阶段边界**：接近 smart zone（约 150k）用 `/compact`；跨目录、跨工具或会话中途分叉才用 `/handoff`。
+- **收束与执行分座，重构与 UI 分时**：回填结论/补复盘另开短会话，不占手术会话；UI 原型对齐走独立 grilling 链，且同一模块内 UI 对齐 PR 一律排在该模块手术合并之后。
+
 ### Security scan
 
 AI 安全审计用 DeepSec（Shield）。See `docs/agents/security-scan.md`.
