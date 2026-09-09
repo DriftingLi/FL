@@ -37,6 +37,19 @@ _Atry_: 自动填充、自动回填（暗示无验证，安全模型不同）
 **练习题库**：
 标签练习、随机练习、答题卡、数据报告。
 
+## 资源与投稿（移动端映射）
+
+域定义见根仓库 CONTEXT.md「资料投稿（contribution）」词条族；本节只记移动端映射（#710）。
+
+**资源 tab（forum-resource-panel）**：
+论坛页资源分区的 2x2 入口：课程商城 / 我的已购 / 我的上传 / 上传资源。「上传资源」格子与资源区的创建入口（header「发帖」/搜索栏）一律跳 `pages/resources/upload-resource`——资源不是论坛帖，`forum-create?scope=resource` 的 category 非法必 400（已由 forum-create 的 normalizeCategory 与契约测试双重钉死）。
+
+**上传资源页（upload-resource）**：
+投稿表单：标题 ≤120 + 简介 ≤2000 + 文件 1–5 个（扩展名白名单、单 ≤20MB、合计 ≤50MB 前置校验）+ 目标证件取当前证件（无证件阻断）。链路先传后交：逐个文件 POST `/contributions/upload-file` 暂存 → POST `/contributions` 建稿。API 封装 `api/contribution.uts`，类型内聚 api 模块（先例 `api/aiAssistant.uts`，不进 types/index.uts）。
+
+**我的已购（my-purchases）**：
+已购课程 = GET `/student/courses`（我的课程，根仓库 ADR-0017）口径——后端**无购买概念**（课程全开放，`points_price` 积分兑换无已兑清单 endpoint），真「已购清单」如需支持另立后端票；不要再用 profile.course_progress 假充已购（契约测试已钉）。
+
 ## 用户体系
 
 **学员**：
