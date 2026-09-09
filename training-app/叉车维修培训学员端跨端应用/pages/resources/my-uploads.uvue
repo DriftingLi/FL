@@ -24,9 +24,13 @@
                     <view class="upload-item-info">
                         <text class="upload-item-title">{{ item.title }}</text>
                         <text class="upload-item-meta">{{ fmtDate(item.created_at) }} · {{ item.downloads_count }} 次下载 · {{ item.files.length }} 个文件</text>
-                        <text v-if="item.status == 'rejected' && item.reject_reason.length > 0" class="upload-item-reason">驳回原因：{{ item.reject_reason }}</text>
+                        <view v-if="item.status == 'rejected' && item.reject_reason.length > 0" class="upload-item-reason-box">
+                            <text class="upload-item-reason">驳回：{{ item.reject_reason }}</text>
+                        </view>
                     </view>
-                    <text class="upload-item-status" :style="{ color: statusColor(item.status) }">{{ statusLabel(item.status) }}</text>
+                    <view class="upload-item-badge" :style="{ backgroundColor: statusBg(item.status) }">
+                        <text class="upload-item-badge-text" :style="{ color: statusColor(item.status) }">{{ statusLabel(item.status) }}</text>
+                    </view>
                 </view>
             </view>
             <view v-if="loading" class="loading-more">
@@ -147,14 +151,16 @@
     .empty-btn { background-color: #2979ff; padding: 16rpx 48rpx; border-radius: 32rpx; }
     .empty-btn-text { font-size: 28rpx; color: #ffffff; }
     .upload-list { padding: 24rpx; }
-    .upload-item { background-color: #ffffff; border-radius: 16rpx; padding: 24rpx; margin-bottom: 16rpx; flex-direction: row; align-items: center; border: 1rpx solid #eeeeee; }
-    .upload-item-icon-box { width: 80rpx; height: 80rpx; border-radius: 16rpx; align-items: center; justify-content: center; margin-right: 20rpx; }
-    .upload-item-icon { font-size: 40rpx; }
+    .upload-item { background-color: #ffffff; border-radius: 16rpx; padding: 24rpx; margin-bottom: 16rpx; flex-direction: row; align-items: center; }
+    .upload-item-icon-box { width: 80rpx; height: 80rpx; border-radius: 40rpx; align-items: center; justify-content: center; margin-right: 20rpx; }
+    .upload-item-icon { font-size: 36rpx; }
     .upload-item-info { flex: 1; flex-direction: column; }
     .upload-item-title { font-size: 28rpx; font-weight: 500; color: #333333; }
     .upload-item-meta { font-size: 22rpx; color: #999999; margin-top: 6rpx; }
-    .upload-item-reason { font-size: 22rpx; color: #e5484d; margin-top: 6rpx; }
-    .upload-item-status { font-size: 24rpx; color: #999999; }
+    .upload-item-reason-box { background-color: #FFF0F0; border-radius: 8rpx; padding: 8rpx 12rpx; margin-top: 10rpx; }
+    .upload-item-reason { font-size: 22rpx; color: #e5484d; }
+    .upload-item-badge { border-radius: 24rpx; padding: 8rpx 20rpx; margin-left: 16rpx; }
+    .upload-item-badge-text { font-size: 22rpx; font-weight: 500; }
     .loading-more { align-items: center; padding: 24rpx 0; }
     .loading-text { font-size: 24rpx; color: #999999; }
 </style>

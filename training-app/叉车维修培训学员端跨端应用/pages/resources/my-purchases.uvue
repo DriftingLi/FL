@@ -12,16 +12,23 @@
             <view v-if="courses.length == 0 && !loading" class="empty-tip">
                 <text class="empty-icon">📚</text>
                 <text class="empty-text">暂无已购课程</text>
+                <view class="empty-btn" @click="onGoMall">
+                    <text class="empty-btn-text">去商城逛逛</text>
+                </view>
             </view>
             <view class="course-list">
                 <view v-for="(item, idx) in courses" :key="idx" class="course-item" @click="onCourseClick(item.course_id)">
-                    <view class="course-item-left">
+                    <view class="course-item-icon-box"><text class="course-item-icon">📚</text></view>
+                    <view class="course-item-info">
                         <text class="course-item-title">{{ item.course_name }}</text>
-                        <view class="progress-bar-bg">
-                            <view class="progress-bar-fill" :style="{ width: item.progress + '%' }"></view>
+                        <view class="course-item-progress-row">
+                            <view class="progress-bar-bg">
+                                <view class="progress-bar-fill" :style="{ width: item.progress + '%' }"></view>
+                            </view>
+                            <text class="course-item-pct">{{ Math.round(item.progress) }}%</text>
                         </view>
                     </view>
-                    <text class="course-item-pct">{{ Math.round(item.progress) }}%</text>
+                    <text class="course-item-arrow">›</text>
                 </view>
             </view>
         </scroll-view>
@@ -59,6 +66,10 @@
         uni.navigateTo({ url: '/pages/courses/course-detail?id=' + courseId })
     }
 
+    function onGoMall() : void {
+        uni.reLaunch({ url: '/pages/courses/courses' })
+    }
+
     function onBack() : void { goBack() }
 
     onShow(() => { loadPurchases() })
@@ -75,12 +86,18 @@
     .content-scroll { flex: 1; }
     .empty-tip { align-items: center; padding: 160rpx 0; flex-direction: column; }
     .empty-icon { font-size: 96rpx; margin-bottom: 24rpx; }
-    .empty-text { font-size: 28rpx; color: #999999; }
+    .empty-text { font-size: 28rpx; color: #999999; margin-bottom: 32rpx; }
+    .empty-btn { background-color: #2979ff; padding: 16rpx 48rpx; border-radius: 32rpx; }
+    .empty-btn-text { font-size: 28rpx; color: #ffffff; }
     .course-list { padding: 24rpx; }
-    .course-item { background-color: #ffffff; border-radius: 16rpx; padding: 28rpx 24rpx; margin-bottom: 16rpx; flex-direction: row; align-items: center; border: 1rpx solid #eeeeee; }
-    .course-item-left { flex: 1; flex-direction: column; }
-    .course-item-title { font-size: 30rpx; font-weight: 500; color: #333333; margin-bottom: 12rpx; }
-    .progress-bar-bg { height: 12rpx; background-color: #f0f0f0; border-radius: 6rpx; overflow: hidden; }
+    .course-item { background-color: #ffffff; border-radius: 16rpx; padding: 24rpx; margin-bottom: 16rpx; flex-direction: row; align-items: center; }
+    .course-item-icon-box { width: 80rpx; height: 80rpx; border-radius: 40rpx; background-color: #e8f0fe; align-items: center; justify-content: center; margin-right: 20rpx; }
+    .course-item-icon { font-size: 36rpx; }
+    .course-item-info { flex: 1; flex-direction: column; }
+    .course-item-title { font-size: 28rpx; font-weight: 500; color: #333333; }
+    .course-item-progress-row { flex-direction: row; align-items: center; margin-top: 12rpx; }
+    .progress-bar-bg { flex: 1; height: 12rpx; background-color: #f0f0f0; border-radius: 6rpx; overflow: hidden; }
     .progress-bar-fill { height: 12rpx; background-color: #2979ff; border-radius: 6rpx; }
-    .course-item-pct { font-size: 26rpx; color: #2979ff; font-weight: bold; margin-left: 20rpx; }
+    .course-item-pct { font-size: 22rpx; color: #2979ff; font-weight: bold; margin-left: 16rpx; }
+    .course-item-arrow { font-size: 40rpx; color: #cccccc; margin-left: 16rpx; }
 </style>
