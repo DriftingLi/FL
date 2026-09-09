@@ -89,17 +89,20 @@ describe('favorite 域收紧（收藏段）', () => {
   });
 });
 
-describe('points 域收紧（积分余额/明细）', () => {
+describe('points 域收紧（积分余额/流水/任务，#709 改口径）', () => {
   const src = read('api/points.uts');
-  it('引入 getMapped', () => {
+  it('引入 getMapped / postMapped', () => {
     expect(src).toMatch(/import\s*\{[^}]*getMapped[^}]*\}\s*from\s*'\.\/request'/);
   });
-  it.each(['getPointsBalanceApi', 'getPointsRecordListApi'])('%s 经 getMapped 且 mock 降级保持', (fn) => {
-    expect(fnBodyOf(src, fn)).toContain('getMapped<');
+  it.each(['getPointsBalanceApi', 'getPointsLedgerApi', 'getPointsTasksApi', 'claimPointsTaskApi'])('%s 经 mapper-callback 出口', (fn) => {
+    expect(fnBodyOf(src, fn)).toMatch(/(get|post)Mapped</);
   });
-  it('balance/records 的 mock 降级保持（profile 首屏零网络依赖行为不变）', () => {
-    expect(fnBodyOf(src, 'getPointsBalanceApi')).toContain('getMockPointsBalance()');
-    expect(fnBodyOf(src, 'getPointsRecordListApi')).toContain('getMockPointsRecordList()');
+  // #709 前的锁是「mock 降级保持」（profile 首屏零网络依赖）；幻影 404 被它盖了三个月，
+  // 口径反转为「失败要可见」：points 域一律不得再出现占位回退（见 pointsRealApiContract）。
+  it('points 域 mock 降级已退役（#709）：无 getMock* 且出口零 .catch(', () => {
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+    expect(code).not.toMatch(/getMock/);
+    expect(code).not.toContain('.catch(');
   });
 });
 
