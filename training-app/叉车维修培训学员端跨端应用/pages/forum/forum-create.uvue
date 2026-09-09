@@ -5,7 +5,7 @@
             <view class="header-left" @click="onBack">
                 <text class="back-icon" @click="onBack">‹</text>
             </view>
-            <text class="header-title">{{ isEdit ? '编辑帖子' : '发布新帖' }}</text>
+            <text class="header-title">{{ headerTitle }}</text>
             <view class="header-right"></view>
         </view>
 
@@ -25,19 +25,21 @@
 
                 <view class="form-item">
                     <text class="form-label">标题</text>
-                    <input class="form-input" type="text" placeholder="请输入标题（1-100 字）" maxlength="100"
-                        v-model="title" />
-                    <text class="form-counter">{{ title.length }}/100</text>
+                    <input class="form-input" type="text"
+                        :placeholder="isResourceMode ? '请输入资源标题（1-120 字）' : '请输入标题（1-100 字）'"
+                        :maxlength="isResourceMode ? 120 : 100" v-model="title" />
+                    <text class="form-counter">{{ title.length }}/{{ isResourceMode ? 120 : 100 }}</text>
                 </view>
 
                 <view class="form-item">
-                    <text class="form-label">内容</text>
-                    <textarea class="form-textarea" placeholder="请输入内容（1-10000 字）" maxlength="10000"
-                        v-model="content" />
-                    <text class="form-counter">{{ content.length }}/10000</text>
+                    <text class="form-label">{{ isResourceMode ? '简介' : '内容' }}</text>
+                    <textarea class="form-textarea"
+                        :placeholder="isResourceMode ? '介绍这份资料的内容与用途（≤2000 字）' : '请输入内容（1-10000 字）'"
+                        :maxlength="isResourceMode ? 2000 : 10000" v-model="content" />
+                    <text class="form-counter">{{ content.length }}/{{ isResourceMode ? 2000 : 10000 }}</text>
                 </view>
 
-                <view class="form-item">
+                <view v-if="!isResourceMode" class="form-item">
                     <text class="form-label">图片</text>
                     <view class="img-grid">
                         <view v-for="(img, idx) in images" :key="idx" class="img-cell">
@@ -54,9 +56,13 @@
                         </view>
                     </view>
                 </view>
+
+                <!-- 资源投稿表单（#760）：私有组件承载，状态自持；primitive props 单向下发 -->
+                <ForumContributionForm v-if="isResourceMode" :title="title" :intro="content"
+                    :credential-id="credentialId" :credential-name="credentialName" />
             </view>
 
-            <view class="submit-section">
+            <view v-if="!isResourceMode" class="submit-section">
                 <view class="submit-btn" :class="{ disabled: !canSubmit }" @click="onSubmit">
                     <text class="submit-btn-text">{{ submitLabel }}</text>
                 </view>
@@ -67,12 +73,14 @@
 
 <script setup lang="uts">
     import { ref, computed } from 'vue'
-    import { onLoad } from '@dcloudio/uni-app'
+    import { onLoad, onShow } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
     import { createForumTopicApi, updateForumTopicApi, uploadForumImageApi, getForumTopicDetailApi } from '../../api/forum'
+    import { getCurrentCredentialApi } from '../../api/credential'
     import { useAuthStore } from '../../stores/auth'
     import type { ForumTopicDetail } from '../../types/index'
+    import ForumContributionForm from './components/forum-contribution-form.uvue'
 
     /** 补全后端返回的相对文件 URL */
     function resolveFileUrl(url : string) : string {
@@ -87,11 +95,11 @@
     const windowHeight = uni.getSystemInfoSync().windowHeight
     const authStore = useAuthStore()
 
-    // ===== 分类选项 =====
+    // ===== 分类选项（#760：资源 tab 承载投稿表单，为真模式非论坛类别） =====
     type CategoryOption = { label : string, value : string }
     const categories : CategoryOption[] = [
         { label: '广场', value: 'discussion' },
-        { label: '资源', value: 'discussion' },
+        { label: '资源', value: 'resource' },
         { label: '知识问答', value: 'question' },
         { label: '备考经验', value: 'experience' },
     ]
@@ -106,13 +114,27 @@
     const submitting = ref<boolean>(false)
     const uploadingImage = ref<boolean>(false)
     const loadingDetail = ref<boolean>(false)
+    // 资源投稿态（#760）：证件由壳层持有（onShow 跟随证件切换刷新），
+    // 文件列表与提交在 forum-contribution-form 组件内自持
+    const credentialId = ref<number>(0)
+    const credentialName = ref<string>('')
+
+    /** 资源 tab = 投稿模式；编辑态永不进资源（帖子无 resource 类别） */
+    const isResourceMode = computed<boolean>(() : boolean => {
+        return selectedCategory.value == 'resource' && !isEdit.value
+    })
+
+    const headerTitle = computed<string>(() : string => {
+        if (isEdit.value) return '编辑帖子'
+        return isResourceMode.value ? '上传资源' : '发布新帖'
+    })
 
     /** 模板用：补全图片 URL */
     function imgSrc(url : string) : string {
         return resolveFileUrl(url)
     }
 
-    /** 提交按钮文案 */
+    /** 提交按钮文案（资源模式提交在组件内，壳层按钮仅论坛态） */
     const submitLabel = computed<string>(() : string => {
         if (submitting.value) return isEdit.value ? '保存中...' : '发布中...'
         return isEdit.value ? '保存修改' : '发布'
@@ -130,6 +152,11 @@
 
     // ===== 分类选择 =====
     function onSelectCategory(value : string) : void {
+        if (submitting.value) return
+        if (isEdit.value && value == 'resource') {
+            uni.showToast({ title: '编辑帖子不支持资源分类', icon: 'none' })
+            return
+        }
         selectedCategory.value = value
     }
 
@@ -138,6 +165,18 @@
     function normalizeCategory(value : string) : string {
         if (value == 'question' || value == 'experience') return value
         return 'discussion'
+    }
+
+    /** 加载当前证件（投稿目标；onShow 刷新以跟随证件切换，下发给投稿组件） */
+    async function loadCredential() : Promise<void> {
+        try {
+            const cred = await getCurrentCredentialApi()
+            credentialId.value = cred != null ? cred.id : 0
+            credentialName.value = cred != null ? cred.name : ''
+        } catch (e) {
+            credentialId.value = 0
+            credentialName.value = ''
+        }
     }
 
     // ===== 加载帖子数据（编辑模式） =====
@@ -162,7 +201,11 @@
 
     // ===== 提交 =====
     async function onSubmit() : Promise<void> {
-        if (!canSubmit.value) return
+        if (submitting.value) return
+        if (uploadingImage.value || loadingDetail.value) return
+        // 资源模式的提交与按钮在 forum-contribution-form 内；壳层按钮已隐藏，
+        // 此处双保险：resource 永不流入发帖接口
+        if (isResourceMode.value) return
         if (title.value.trim().length == 0) {
             uni.showToast({ title: '请输入标题', icon: 'none' })
             return
@@ -290,12 +333,16 @@
                 loadTopicForEdit(parsedId)
             }
         }
-        // 从 URL 参数接收默认分类（非法/历史 scope 归一，#710）
+        // 从 URL 参数接收默认分类：resource 为合法投稿 tab（#760），
+        // 其余非法/历史 scope 归一（#710）
         const scope = options['scope']
         if (scope != null && scope != '') {
-            selectedCategory.value = normalizeCategory(`${scope}`)
+            const s = `${scope}`
+            selectedCategory.value = s == 'resource' ? 'resource' : normalizeCategory(s)
         }
     })
+
+    onShow(() => { loadCredential() })
 </script>
 
 <style>

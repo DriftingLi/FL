@@ -74,8 +74,8 @@
         } else if (key === 'my-uploads') {
             uni.navigateTo({ url: '/pages/resources/my-uploads' })
         } else if (key === 'upload-resource') {
-            // 资源上传归 resources 模块（#710）：forum-create?scope=resource 的 category 非法必 400
-            uni.navigateTo({ url: '/pages/resources/upload-resource' })
+            // 统一发布页（#760）：forum-create 资源 tab 承载投稿表单，upload-resource 退役
+            uni.navigateTo({ url: '/pages/forum/forum-create?scope=resource' })
         } else {
             uni.showToast({ title: UNAVAILABLE_TOAST, icon: 'none' })
         }
