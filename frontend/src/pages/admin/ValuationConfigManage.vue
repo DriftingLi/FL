@@ -31,6 +31,7 @@ import { useDirtyDraft } from '@/composables/useDirtyDraft'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 
 // ========== Tab 1: 原价表 ==========
 const ORIGINAL_PRICE_FIELDS: FieldDef[] = [
@@ -412,14 +413,12 @@ function onRefresh() {
             <UiButton :icon="RefreshLeft" size="small" @click="resetOriginalPriceFilter">重置筛选</UiButton>
         </template>
       </UiFilterBar>
-          <el-table
-            v-loading="originalPriceLoading"
+          <el-table v-loading="originalPriceLoading"
             :data="filteredOriginalPrices"
             stripe
             border
-            style="width: 100%"
-            empty-text="暂无数据"
-          >
+            style="width: 100%">
+
             <el-table-column
               v-for="col in ORIGINAL_PRICE_FIELDS"
               :key="col.prop"
@@ -447,6 +446,9 @@ function onRefresh() {
                 </el-dropdown>
               </template>
             </el-table-column>
+                      <template #empty>
+              <UiEmptyState description="暂无数据" size="sm" />
+            </template>
           </el-table>
         </el-tab-pane>
 
@@ -476,7 +478,8 @@ function onRefresh() {
                   </UiButton>
                 </div>
               </div>
-              <el-table :data="globalCoefficientsDraft" stripe border style="width: 100%" empty-text="暂无参数">
+              <el-table :data="globalCoefficientsDraft" stripe border style="width: 100%">
+
                 <el-table-column prop="key" label="参数键" width="200" />
                 <el-table-column prop="description" label="参数说明" min-width="320" />
                 <el-table-column label="参数值" width="180">
@@ -491,6 +494,9 @@ function onRefresh() {
                     />
                   </template>
                 </el-table-column>
+                              <template #empty>
+                  <UiEmptyState description="暂无参数" size="sm" />
+                </template>
               </el-table>
             </el-collapse-item>
 
@@ -511,7 +517,8 @@ function onRefresh() {
                   </UiButton>
                 </div>
               </div>
-              <el-table :data="brandsDraft" stripe border style="width: 100%" empty-text="暂无品牌">
+              <el-table :data="brandsDraft" stripe border style="width: 100%">
+
                 <el-table-column prop="name" label="品牌名称" min-width="180" />
                 <el-table-column label="K_brand 系数" width="180">
                   <template #default="{ row }">
@@ -530,6 +537,9 @@ function onRefresh() {
                     <el-switch v-model="row.is_active" />
                   </template>
                 </el-table-column>
+                              <template #empty>
+                  <UiEmptyState description="暂无品牌" size="sm" />
+                </template>
               </el-table>
             </el-collapse-item>
 
@@ -550,7 +560,8 @@ function onRefresh() {
                   </UiButton>
                 </div>
               </div>
-              <el-table :data="conditionRatingsDraft" stripe border style="width: 100%" empty-text="暂无车况评级">
+              <el-table :data="conditionRatingsDraft" stripe border style="width: 100%">
+
                 <el-table-column prop="rating" label="评级" width="100" align="center" />
                 <el-table-column label="中文标签" min-width="180">
                   <template #default="{ row }">
@@ -569,6 +580,9 @@ function onRefresh() {
                     />
                   </template>
                 </el-table-column>
+                              <template #empty>
+                  <UiEmptyState description="暂无车况评级" size="sm" />
+                </template>
               </el-table>
             </el-collapse-item>
 
@@ -591,7 +605,8 @@ function onRefresh() {
                   </UiButton>
                 </div>
               </div>
-              <el-table :data="kcModifiersDraft" stripe border style="width: 100%" empty-text="暂无车况修正项">
+              <el-table :data="kcModifiersDraft" stripe border style="width: 100%">
+
                 <el-table-column prop="key" label="参数键" width="260" />
                 <el-table-column prop="description" label="参数说明" min-width="380" />
                 <el-table-column label="参数值" width="180">
@@ -606,6 +621,9 @@ function onRefresh() {
                     />
                   </template>
                 </el-table-column>
+                              <template #empty>
+                  <UiEmptyState description="暂无车况修正项" size="sm" />
+                </template>
               </el-table>
             </el-collapse-item>
 
@@ -627,7 +645,8 @@ function onRefresh() {
                   </UiButton>
                 </div>
               </div>
-              <el-table :data="regionCoefficientsDraft" stripe border style="width: 100%" empty-text="暂无区域系数">
+              <el-table :data="regionCoefficientsDraft" stripe border style="width: 100%">
+
                 <el-table-column prop="province" label="省份" width="140" />
                 <el-table-column prop="city" label="城市" width="160" />
                 <el-table-column label="区域系数" width="200">
@@ -642,6 +661,9 @@ function onRefresh() {
                     />
                   </template>
                 </el-table-column>
+                              <template #empty>
+                  <UiEmptyState description="暂无区域系数" size="sm" />
+                </template>
               </el-table>
             </el-collapse-item>
           </el-collapse>
