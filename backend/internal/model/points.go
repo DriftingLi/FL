@@ -29,6 +29,9 @@ type PointsTaskConfig struct {
 	TotalLimit  *int   `gorm:"column:total_limit" json:"total_limit,omitempty"`
 	EventType   string `gorm:"column:event_type" json:"event_type"`
 	Description string `gorm:"column:description" json:"description"`
+	// CreatedAt 任务上线时间（#742）：growth_first_experience 的存量口径 cutoff——
+	// 仅发布时间晚于该值的经验帖计达成。测试库 AutoMigrate 建列；种子行取迁移应用时间。
+	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
 func (PointsTaskConfig) TableName() string { return "points_task_config" }

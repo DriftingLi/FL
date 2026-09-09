@@ -21,6 +21,9 @@ import "time"
 // 测试库由 AutoMigrate 建表、不执行 migrations/，因此两条 CHECK（值域 chk_forum_topics_category
 // 与非法组合 chk_forum_topics_question_no_chapter）契约测试都覆盖不到，别误以为测试守住了它们。
 // 行为层由 service 的校验守住：非法类别 400、问答帖带 chapter_id>0 返回 400。
+//
+// 字段约定（#742）：is_featured 精选位为通用列（全类别可用），管理端可精/可撤；
+// 与 accepted_reply_id 派生的问答两态正交，互不影响。
 type ForumTopic struct {
 	ID              int64      `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
 	ChapterID       *int       `gorm:"column:chapter_id" json:"chapter_id,omitempty"`
@@ -35,6 +38,7 @@ type ForumTopic struct {
 	AcceptedReplyID *int64     `gorm:"column:accepted_reply_id" json:"accepted_reply_id,omitempty"`
 	SolvedAt        *time.Time `gorm:"column:solved_at" json:"solved_at,omitempty"`
 	LastReplyAt     *time.Time `gorm:"column:last_reply_at" json:"last_reply_at"`
+	IsFeatured      bool       `gorm:"column:is_featured;not null;default:false" json:"is_featured"`
 	CreatedAt       time.Time  `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt       time.Time  `gorm:"column:updated_at" json:"updated_at"`
 }

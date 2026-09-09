@@ -154,6 +154,7 @@ func profileContactProgress(u *model.HrwaiUser) (done int) {
 
 // taskProgressFor 单任务行为达成判定（#410 后 GetTasks 与 Claim 共用同一实现，杜绝「列表可见/接口空领」分叉）。
 // 返回 nil 表示该任务无行为前置（新任务默认可领，照旧 default 分支；GetTasks 顶层显式透出）。
+// 需要查库的截止类任务走 taskProgressWithDB（growth_first_experience，#742）。
 func taskProgressFor(cfg model.PointsTaskConfig, m *taskMeta) *taskProgress {
 	switch cfg.Code {
 	case "daily_quiz":
@@ -182,6 +183,26 @@ func taskProgressFor(cfg model.PointsTaskConfig, m *taskMeta) *taskProgress {
 		// 未知任务：无行为前置（GetTasks 顶层按可领处理，与旧 default 语义一致）
 		return nil
 	}
+}
+
+// TaskCodeFirstExperience 首篇经验专项分任务码（#742）：growth 组，+20 终身一次。
+const TaskCodeFirstExperience = "growth_first_experience"
+
+// taskProgressWithDB 单任务判定入口（GetTasks/Claim 共用，维持「同一判定单实现」纪律）：
+// 纯规则任务走 taskProgressFor；growth_first_experience 的达成判定需要查库——
+// 存在**发布时间晚于任务上线时间（config.created_at）**的备考经验帖（#742 存量口径：
+// 上线前发布的存量作者不补发，上线后新发才计达成）。
+func (s *PointsService) taskProgressWithDB(cfg model.PointsTaskConfig, m *taskMeta) (*taskProgress, error) {
+	if cfg.Code != TaskCodeFirstExperience {
+		return taskProgressFor(cfg, m), nil
+	}
+	var n int64
+	if err := s.db.Model(&model.ForumTopic{}).
+		Where("user_id = ? AND category = ? AND created_at >= ?", m.User.ID, ForumCategoryExperience, cfg.CreatedAt).
+		Count(&n).Error; err != nil {
+		return nil, err
+	}
+	return &taskProgress{Claimable: n > 0, Progress: 0, Total: 1}, nil
 }
 
 // PointsClaimResult 领取结果
@@ -515,12 +536,17 @@ func (s *PointsService) GetTasks(userID int) (*PointsTasksResult, error) {
 
 	tasks := make([]PointsTaskItem, 0, len(configs))
 	for _, cfg := range configs {
+		// 单任务判定入口（#742）：纯规则走 taskProgressFor，截止类任务查库判定
+		p, err := s.taskProgressWithDB(cfg, m)
+		if err != nil {
+			return nil, err
+		}
 		// 额度判定单点（#410）：不可领（当日/终身额度用尽）即视为已领取，不再回落 claimable
 		if !s.canClaim(cfg, cc[cfg.Code].Today, cc[cfg.Code].Lifetime).Claimable {
 			// 已领取时 progress/total 对齐达成口径：资料任务 2/2，其余已达成任务 1/1
 			prog := 1
 			total := 1
-			if p := taskProgressFor(cfg, m); p != nil {
+			if p != nil {
 				prog, total = p.Progress, p.Total
 				if prog == 0 {
 					prog = total
@@ -535,7 +561,7 @@ func (s *PointsService) GetTasks(userID int) (*PointsTasksResult, error) {
 		status := "todo"
 		progress := 0
 		total := 1
-		if p := taskProgressFor(cfg, m); p != nil {
+		if p != nil {
 			progress, total = p.Progress, p.Total
 			if p.Claimable {
 				status = "claimable"
@@ -581,7 +607,9 @@ func (s *PointsService) Claim(ctx context.Context, userID int, taskCode string) 
 	if err != nil {
 		return nil, err
 	}
-	if p := taskProgressFor(cfg, meta); p != nil && !p.Claimable {
+	if p, err := s.taskProgressWithDB(cfg, meta); err != nil {
+		return nil, err
+	} else if p != nil && !p.Claimable {
 		return nil, ErrTaskNotDone
 	}
 	// Redis 锁（进程内双领护栏；最终裁决仍由唯一索引承担）
