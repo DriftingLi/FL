@@ -12,6 +12,9 @@
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.1",
+    "@fontsource/dm-sans": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@fontsource/noto-sans-sc": "^5.3.0",
     "axios": "^1.6.5",
     "dayjs": "^1.11.13",
     "echarts": "^6.0.0",
