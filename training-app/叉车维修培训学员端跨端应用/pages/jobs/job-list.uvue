@@ -2,30 +2,51 @@
     <view class="container" :style="{ height: windowHeight + 'px' }">
         <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
 
-        <!-- 顶部导航栏 -->
+        <!-- 顶部导航栏（右侧留给小程序胶囊按钮，不放可点元素） -->
         <view class="header">
             <view class="header-left" @click="onBack">
                 <text class="back-icon">‹</text>
             </view>
-            <text class="header-title">职位广场</text>
+            <text class="header-title">招聘</text>
             <view class="header-right"></view>
         </view>
 
-        <!-- 筛选标签 -->
-        <view class="filter-row">
+        <!-- 公告/职位双 tab；头像放 tab 行最右端（避开胶囊遮挡区），点入「我的」 -->
+        <view class="tab-row">
+            <view class="tab-item" :class="{ active: recruitTab === 'notice' }" @click="onTabChange('notice')">
+                <text class="tab-text" :class="{ active: recruitTab === 'notice' }">公告</text>
+            </view>
+            <view class="tab-item" :class="{ active: recruitTab === 'job' }" @click="onTabChange('job')">
+                <text class="tab-text" :class="{ active: recruitTab === 'job' }">职位</text>
+            </view>
+            <view class="tab-avatar-btn" @click="onMine">
+                <image v-if="avatarUrl.length > 0" class="tab-avatar" :src="avatarUrl" mode="aspectFill" />
+                <view v-else class="tab-avatar-placeholder">
+                    <text class="tab-avatar-icon">👷</text>
+                </view>
+            </view>
+        </view>
+
+        <!-- 筛选标签（职位 tab） -->
+        <view class="filter-row" v-if="recruitTab === 'job'">
             <view v-for="(tag, idx) in filterTags" :key="idx"
                 :class="{ 'filter-tag': true, 'ml-16': idx > 0, 'filter-tag-active': activeFilter == idx }" @click="onFilterChange(idx)">
                 <text class="filter-tag-text" :class="{ 'filter-tag-text-active': activeFilter == idx }">{{ tag.label }}</text>
             </view>
         </view>
 
-        <!-- 职位列表 -->
+        <!-- 职位/公告 Tab 内容 -->
         <scroll-view class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
-            <view v-if="jobs.length == 0 && !loading" class="empty-tip">
+            <!-- 公告 tab：后端公告接口未建，空态占位（与旧招聘面板同语义，不放假数据） -->
+            <view v-if="recruitTab === 'notice'" class="empty-tip">
+                <text class="empty-icon">📢</text>
+                <text class="empty-text">暂无公告</text>
+            </view>
+            <view v-if="recruitTab === 'job' && jobs.length == 0 && !loading" class="empty-tip">
                 <text class="empty-icon">💼</text>
                 <text class="empty-text">暂无职位信息</text>
             </view>
-            <view class="job-list">
+            <view v-if="recruitTab === 'job'" class="job-list">
                 <view v-for="job in jobs" :key="job.id" class="job-card" @click="onJobDetail(job.id)">
                     <view class="job-card-header">
                         <text class="job-company">{{ job.company_name }}</text>
@@ -49,10 +70,10 @@
             </view>
 
             <!-- 加载更多 -->
-            <view v-if="loading" class="loading-more">
+            <view v-if="recruitTab === 'job' && loading" class="loading-more">
                 <text class="loading-text">加载中...</text>
             </view>
-            <view v-if="noMore && jobs.length > 0" class="loading-more">
+            <view v-if="recruitTab === 'job' && noMore && jobs.length > 0" class="loading-more">
                 <text class="loading-text">没有更多了</text>
             </view>
         </scroll-view>
@@ -60,15 +81,34 @@
 </template>
 
 <script setup lang="uts">
-    import { ref } from 'vue'
+    import { ref, computed } from 'vue'
     import { onLoad } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
     import { getJobListApi } from '../../api/job'
     import { getCatalogTreeSpecialties } from '../../api/course'
+    import { useAuthStore } from '../../stores/auth'
     import type { JobPosting } from '../../api/job'
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    // ---- 顶栏头像（真实登录态，点入「我的」；不引假数据）----
+    const authStore = useAuthStore()
+    const avatarUrl = computed<string>(() : string => {
+        const u = authStore.user.value
+        if (u != null && u.avatar_url != null && u.avatar_url.length > 0) {
+            return u.avatar_url
+        }
+        return ''
+    })
+
+    // ---- 公告/职位 Tab 态（公告暂无后端，职位为默认真实内容）----
+    const recruitTab = ref<string>('job') // notice | job
+
+    function onTabChange(tab : string) : void {
+        if (recruitTab.value === tab) return
+        recruitTab.value = tab
+    }
 
     // ---- 筛选标签 ----
     type FilterTag = { label : string, id : number }
@@ -165,7 +205,13 @@
         uni.navigateTo({ url: '/pages/jobs/job-detail?id=' + jobId })
     }
 
+    // ---- 头像导航（#724 单页合并：直入「我的」= 简历总览页 resume.uvue，不再经中间页）----
+    function onMine() : void {
+        uni.navigateTo({ url: '/pages/resume/resume' })
+    }
+
     function onLoadMore() : void {
+        if (recruitTab.value !== 'job') return
         loadJobs(false)
     }
 </script>
@@ -215,6 +261,64 @@
 
     .header-right {
         width: 64rpx;
+    }
+
+    /* 公告/职位双 tab；头像在行最右端（避开小程序胶囊遮挡区） */
+    .tab-row {
+        flex-direction: row;
+        align-items: center;
+        background-color: #ffffff;
+        border-bottom: 1rpx solid #f0f0f0;
+        padding: 0 24rpx;
+    }
+
+    .tab-item {
+        flex: 1;
+        height: 88rpx;
+        align-items: center;
+        justify-content: center;
+        border-bottom: 4rpx solid transparent;
+    }
+
+    .tab-item.active {
+        border-bottom-color: #2979ff;
+    }
+
+    .tab-text {
+        font-size: 30rpx;
+        color: #666666;
+    }
+
+    .tab-text.active {
+        color: #1a1a1a;
+        font-weight: bold;
+    }
+
+    .tab-avatar-btn {
+        width: 72rpx;
+        height: 88rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .tab-avatar {
+        width: 56rpx;
+        height: 56rpx;
+        border-radius: 28rpx;
+        border: 2rpx solid #eeeeee;
+    }
+
+    .tab-avatar-placeholder {
+        width: 56rpx;
+        height: 56rpx;
+        border-radius: 28rpx;
+        background-color: #f0f5ff;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .tab-avatar-icon {
+        font-size: 30rpx;
     }
 
     /* 筛选标签 */

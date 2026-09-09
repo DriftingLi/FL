@@ -40,9 +40,14 @@
                 </view>
             </view>
 
-            <!-- 简历填写引导（未填写时展示） -->
-            <view class="resume-guide" v-if="!resumeFilled">
+            <!-- 简历完善度引导（#724 单页合并：真实 ResumeData 八项字段计算，服务端加载完成后未满 100% 展示） -->
+            <view class="resume-guide" v-if="resumeIncomplete">
+                <text class="resume-guide-icon">📄</text>
                 <text class="resume-guide-text">去填写简历</text>
+                <view class="resume-guide-prog-wrap">
+                    <view class="resume-guide-prog-bar" :style="{ width: resumePct + '%' }"></view>
+                </view>
+                <text class="resume-guide-sub">完善度 {{ resumePct }}%（{{ resumeFilledCount }}/8 项已填写）</text>
                 <view class="resume-guide-btn" @click="onOnlineResume">
                     <text class="resume-guide-btn-text">去完善</text>
                 </view>
@@ -74,10 +79,7 @@
     import { getFavoritesApi } from '../../api/favorite'
     import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
-    import { getStorageJSON } from '../../utils/storage'
-    import { toStr } from '../../api/helpers'
     import { getResumeApi } from '../../api/resume'
-    import { STORAGE_KEY_RESUME } from '../../constants/app'
     import type { StudentProfile, FavoriteListResult, ResumeData } from '../../types/index'
 
     const auth = useAuthStore()
@@ -88,8 +90,30 @@
     const noticeFavCount = ref<number>(0)
     const jobFavCount = ref<number>(0)
     const collectionFavCount = ref<number>(0)
-    // 在线简历是否已填写（以服务端数据为准）
-    const resumeFilled = ref<boolean>(false)
+    // ---- 简历完善度（B 定稿：真实 ResumeData 八项字段计算，GET /resume 现有契约）----
+    const RESUME_FIELD_TOTAL = 8
+    const resumeFilledCount = ref<number>(0)
+    const resumeStatusLoaded = ref<boolean>(false)
+    const resumePct = computed<number>(() : number => {
+        return Math.floor(resumeFilledCount.value * 100 / RESUME_FIELD_TOTAL)
+    })
+    // 服务端加载完成且未满 8 项才展示引导卡（加载前隐藏，避免闪烁）
+    const resumeIncomplete = computed<boolean>(() : boolean => {
+        return resumeStatusLoaded.value && resumeFilledCount.value < RESUME_FIELD_TOTAL
+    })
+
+    function countResumeFilled(r : ResumeData) : number {
+        let n = 0
+        if (r.real_name.length > 0) n = n + 1
+        if (r.contact_phone.length > 0) n = n + 1
+        if (r.wechat.length > 0) n = n + 1
+        if (r.region.length > 0) n = n + 1
+        if (r.expected_position_extra.length > 0) n = n + 1
+        if (r.salary_min > 0 || r.salary_max > 0 || r.salary_negotiable) n = n + 1
+        if (r.experience_years > 0) n = n + 1
+        if (r.self_intro.length > 0) n = n + 1
+        return n
+    }
 
     const userName = computed<string>(() : string => {
         const u = auth.user.value
@@ -138,16 +162,11 @@
         uni.navigateTo({ url: '/pages/resume/resume-attach' })
     }
 
-    /** 以服务端数据为准判定简历是否已填写；kind=notfound → 未填写；其他错误不改状态 */
+    /** 以服务端数据刷新完善度；kind=notfound → 0 项；其他错误保持上次状态（未加载成功则引导卡隐藏） */
     function refreshResumeFilled() : void {
-        // 先用本地草稿做即时初步推断
-        const saved = getStorageJSON(STORAGE_KEY_RESUME)
-        if (saved != null) {
-            resumeFilled.value = toStr(saved['real_name'], '').length > 0
-        }
-        // 以服务端为准
         getResumeApi().then((r : ResumeData) : void => {
-            resumeFilled.value = r.real_name.length > 0
+            resumeFilledCount.value = countResumeFilled(r)
+            resumeStatusLoaded.value = true
         }).catch((e) : void => {
             let isNotFound = false
             try {
@@ -157,9 +176,9 @@
                 }
             } catch (_ex) {}
             if (isNotFound) {
-                resumeFilled.value = false
+                resumeFilledCount.value = 0
+                resumeStatusLoaded.value = true
             }
-            // 其他错误不改 resumeFilled，保持上次状态
         })
     }
 
@@ -306,19 +325,49 @@
         color: #999999;
     }
 
-    /* ===== 简历填写引导 ===== */
+    /* ===== 简历完善度引导（白卡，对齐原型「去填写简历」卡） ===== */
     .resume-guide {
+        flex-direction: column;
         align-items: center;
-        margin-top: 40rpx;
+        background-color: #ffffff;
+        border-radius: 24rpx;
+        padding: 32rpx 24rpx;
+        margin-top: 24rpx;
+    }
+
+    .resume-guide-icon {
+        font-size: 56rpx;
     }
 
     .resume-guide-text {
-        font-size: 28rpx;
-        color: #666666;
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #1a1a1a;
+        margin-top: 12rpx;
+    }
+
+    .resume-guide-prog-wrap {
+        width: 100%;
+        height: 12rpx;
+        background-color: #eef1f5;
+        border-radius: 6rpx;
+        margin-top: 20rpx;
+    }
+
+    .resume-guide-prog-bar {
+        height: 12rpx;
+        background-color: #2979ff;
+        border-radius: 6rpx;
+    }
+
+    .resume-guide-sub {
+        font-size: 22rpx;
+        color: #999999;
+        margin-top: 12rpx;
     }
 
     .resume-guide-btn {
-        margin-top: 16rpx;
+        margin-top: 20rpx;
         padding: 12rpx 44rpx;
         border-radius: 36rpx;
         background-color: #2979ff;
