@@ -79,6 +79,7 @@
           <el-tab-pane label="全部帖子" name="all" />
           <el-tab-pane label="综合讨论区" name="discussion" />
           <el-tab-pane label="问答区" name="question" />
+          <el-tab-pane label="备考经验" name="experience" />
         </el-tabs>
         <el-input
           v-model="keyword"
@@ -142,6 +143,7 @@
           <template #default="{ row }">
             <div class="title-cell">
               <el-tag v-if="row.category === 'question'" size="small" type="success">问答</el-tag>
+              <el-tag v-else-if="row.category === 'experience'" size="small" type="warning">备考经验</el-tag>
               <el-tag v-else-if="row.chapter_id" size="small" type="warning">
                 {{ row.chapter_title || '章节讨论' }}
               </el-tag>
@@ -237,8 +239,8 @@ const {
   },
   { defaultPageSize: 10 }
 )
-// 管理端筛选轴：all=全部帖子、discussion=综合讨论区、question=问答区。
-// 三个值都交给 forumTabQuery 翻译成查询参数——"综合讨论区必须带 category=discussion"
+// 管理端筛选轴：all=全部帖子、discussion=综合讨论区、question=问答区、experience=备考经验（#742 走查补齐）。
+// 四个值都交给 forumTabQuery 翻译成查询参数——"综合讨论区必须带 category=discussion"
 // 这条规则只在 api 层写一遍，学员端与管理端共用同一份映射。
 const activeTab = ref<ForumTab>('all')
 const keyword = ref('')
