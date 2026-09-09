@@ -192,3 +192,25 @@ describe('上传页原型对齐契约（#754 视觉 + #756 统一发布页）', 
     expect(src).toMatch(/extension: allowedExt/);
   });
 });
+
+describe('resources 列表页视觉语言对齐契约（#758：圆图标/胶囊徽标/无描边卡/chevron）', () => {
+  it('my-uploads：圆形图标 + 胶囊状态徽标 + 卡片无描边 + 驳回提示条', () => {
+    const src = read('pages/resources/my-uploads.uvue');
+    expect(src).toMatch(/\.upload-item-icon-box \{[^}]*border-radius: 40rpx/);
+    expect(src).toContain('upload-item-badge');
+    expect(src).toMatch(/\.upload-item-badge \{[^}]*border-radius: 24rpx/);
+    expect(src).toMatch(/\.upload-item \{[^}]*\}/);
+    const itemRule = src.match(/\.upload-item \{[^}]*\}/)[0];
+    expect(itemRule).not.toContain('border:');
+    expect(src).toContain('upload-item-reason-box');
+  });
+  it('my-purchases：圆形图标 + chevron + 卡片无描边 + 空态去商城按钮', () => {
+    const src = read('pages/resources/my-purchases.uvue');
+    expect(src).toMatch(/\.course-item-icon-box \{[^}]*border-radius: 40rpx/);
+    expect(src).toContain('course-item-arrow');
+    const itemRule = src.match(/\.course-item \{[^}]*\}/)[0];
+    expect(itemRule).not.toContain('border:');
+    expect(src).toContain('去商城逛逛');
+    expect(src).toMatch(/reLaunch\(\{ url: '\/pages\/courses\/courses' \}\)/);
+  });
+});
