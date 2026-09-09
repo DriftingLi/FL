@@ -1,0 +1,133 @@
+/**
+ * 积分域展示纯函数（#709，无 uni API 依赖，可镜像单测）
+ *
+ * 流水 reason → 中文事由 的口径与 Web 端 frontend/src/utils/pointsReason.ts 同源
+ * （#512 单点：后端是契约，前端文案是展示层；未收录 reason 不崩，按 delta 方向兜底）。
+ * 本文件在其基础上补齐两处移动端需要的键：
+ *   - checkin / featured_bonus（Web 表未收录，会退化成显示原始 code）
+ *   - 任务 code（后端 Claim 落账 Reason 即任务 code，映射成任务标题）
+ * 根因是流水条目缺 display_title 字段，两端各维护一份文案表并非终态——已列入 #709 待后端清单。
+ *
+ * 日期计算复用 utils/checkinCalendar.uts 的导出口径，不重抄一份日历数学。
+ */
+import type { PointsTaskItem } from '../types/index'
+import { normalizeDate, parseDate, shiftDate } from './checkinCalendar'
+
+/** YYYY-MM-DD → 可比较数值（Kotlin 端无字符串序比较，先例 checkinCalendar.dateOrder） */
+function dayOrder(date : string) : number {
+	const p = parseDate(date)
+	if (p == null) return 0
+	return p.y * 10000 + p.m * 100 + p.d
+}
+
+/**
+ * 流水事由中文：命中映射表用表内文案；redeem_<sku> 动态键按前缀识别；
+ * 其余未收录 reason 按 delta 方向兜底（不显示原始 code 给用户）
+ */
+export function ledgerReasonLabel(reason : string, delta : number) : string {
+	if (reason == 'ai_tokens') return 'AI 学习助手对话'
+	if (reason == 'redeem_course') return '兑换课程'
+	if (reason == 'redeem_real_paper') return '兑换真题卷'
+	if (reason == 'accepted_bonus') return '问答被采纳奖励'
+	if (reason == 'accept_action') return '采纳回答奖励'
+	if (reason == 'featured_bonus') return '帖子被加精奖励'
+	if (reason == 'contribution_approved') return '投稿审核通过'
+	if (reason == 'contribution_tier') return '投稿下载达阶'
+	if (reason == 'admin_penalty') return '违规扣减'
+	if (reason == 'rollback') return '系统退回'
+	if (reason == 'checkin') return '每日打卡'
+	// 退役任务 code（#587 删了配置，历史流水仍在，缺映射会把裸 code 甩给用户）
+	if (reason == 'daily_checkin') return '每日打卡'
+	// 任务 code（后端 Claim 落账 Reason = taskCode）
+	if (reason == 'daily_login') return '每日登录'
+	if (reason == 'daily_quiz') return '每日答题'
+	if (reason == 'daily_browse') return '浏览帖子'
+	if (reason == 'growth_post') return '发布帖子'
+	if (reason == 'growth_reply') return '回复帖子'
+	if (reason == 'growth_mock') return '完成模考'
+	if (reason == 'growth_first_experience') return '发布首篇备考经验'
+	if (reason == 'newbie_profile_basic') return '完善基础资料'
+	if (reason == 'newbie_profile_contact') return '完善联系资料'
+	if (reason == 'newbie_credential') return '选定目标证件'
+	if (reason == 'newbie_first_course') return '完成首节课程'
+	// 商城兑换类动态键 redeem_<sku>
+	if (reason.indexOf('redeem_') == 0) return '商城兑换'
+	if (delta >= 0) return '积分获得'
+	return '积分消耗'
+}
+
+/** 流水来源标签（ref_type → 中文），未收录返回「其他」 */
+export function ledgerRefTypeText(refType : string) : string {
+	if (refType == 'task') return '任务'
+	if (refType == 'checkin') return '打卡'
+	if (refType == 'course') return '课程'
+	if (refType == 'real_paper') return '真题卷'
+	if (refType == 'shop') return '商城'
+	if (refType == 'ai') return 'AI 助手'
+	if (refType == 'ai_chat') return 'AI 助手'
+	if (refType == 'forum_topic') return '社区'
+	if (refType == 'contribution') return '投稿'
+	if (refType == 'admin') return '系统'
+	return '其他'
+}
+
+/** 流水图标底色 class（按 ref_type 归组；uvue 只认 class 选择器，故在此收口映射） */
+export function ledgerIconClass(refType : string) : string {
+	if (refType == 'task') return 'icon-task'
+	if (refType == 'checkin') return 'icon-checkin'
+	if (refType == 'course' || refType == 'real_paper' || refType == 'shop') return 'icon-redeem'
+	if (refType == 'ai' || refType == 'ai_chat') return 'icon-redeem'
+	if (refType == 'forum_topic' || refType == 'contribution') return 'icon-community'
+	if (refType == 'admin') return 'icon-admin'
+	return 'icon-default'
+}
+
+/** 带符号的积分变动文本：+7 / -30（后端 delta 已含方向，前端不再判正负拼符号） */
+export function deltaText(delta : number) : string {
+	if (delta >= 0) return '+' + delta.toString()
+	return delta.toString()
+}
+
+/** 收入/支出方向判定（口径同 Web deltaKind：以 delta 正负为准，不受 reason 影响） */
+export function deltaKind(delta : number) : string {
+	if (delta >= 0) return 'in'
+	return 'out'
+}
+
+/**
+ * 条目是否「即将过期」：expires_at 非空、未过期，且落在 [refDate, refDate+days] 内。
+ * #509 设计位：首版后端恒 null → 本判定恒 false，「即将过期」筛选出空列表是正确表现
+ * （过期维度要真筛，得后端补 expires_at 点亮与筛选参数，见 #709 待后端清单）。
+ */
+export function expiringWithinDays(expiresAt : string | null, refDate : string, days : number) : boolean {
+	if (expiresAt == null) return false
+	const e = normalizeDate(expiresAt!)
+	if (parseDate(e) == null) return false
+	const eo = dayOrder(e)
+	const start = dayOrder(normalizeDate(refDate))
+	const end = dayOrder(shiftDate(normalizeDate(refDate), days))
+	// 已过期（早于参考日）不算「即将」
+	if (eo < start) return false
+	return eo <= end
+}
+
+/** 今日可得（口径同 Web TaskCenter todayEarnable：未领取任务的 points 之和） */
+export function earnablePoints(tasks : PointsTaskItem[]) : number {
+	let sum = 0
+	for (let i = 0; i < tasks.length; i++) {
+		if (tasks[i].status != 'claimed') {
+			sum = sum + tasks[i].points
+		}
+	}
+	return sum
+}
+
+/** 今日日期 YYYY-MM-DD（本地时区，客户端筛选基准） */
+export function todayDateStr() : string {
+	const now = new Date()
+	const m = now.getMonth() + 1
+	const d = now.getDate()
+	const mm = m < 10 ? '0' + m.toString() : m.toString()
+	const dd = d < 10 ? '0' + d.toString() : d.toString()
+	return now.getFullYear().toString() + '-' + mm + '-' + dd
+}

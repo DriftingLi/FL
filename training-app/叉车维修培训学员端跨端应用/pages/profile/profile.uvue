@@ -195,7 +195,7 @@
     async function loadPoints() {
         try {
             const data : PointsBalance = await getPointsBalanceApi()
-            pointsTotal.value = data.total_points
+            pointsTotal.value = data.balance
         } catch (e) {
             console.error('[profile] loadPoints failed:', e)
         }

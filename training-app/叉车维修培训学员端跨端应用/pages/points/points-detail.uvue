@@ -1,4 +1,4 @@
-﻿<template>
+<template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
         <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
         <view class="header">
@@ -9,7 +9,7 @@
             <view class="header-right"></view>
         </view>
 
-        <scroll-view class="content-scroll" scroll-y="true">
+        <scroll-view class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
             <!-- 积分余额卡片 -->
             <view class="balance-card">
                 <text class="balance-title">我的积分</text>
@@ -19,54 +19,51 @@
                 </view>
             </view>
 
-            <!-- 过期积分提示 -->
-            <view class="expire-tip">
-                <text class="expire-text">本月暂无过期积分，去积分商城挑选心仪商品</text>
-                <text class="expire-arrow">›</text>
-            </view>
-
-            <!-- Tab 切换 -->
+            <!-- Tab 切换：收支方向走后端 direction 查询（#512） -->
             <view class="tab-bar">
-                <view :class="['tab-item', { active: currentTab == 'income' }]" @click="onTabClick('income')">
+                <view :class="['tab-item', { active: currentTab == 'all' }]" @click="onTabClick('all')">
+                    <text class="tab-text">全部</text>
+                </view>
+                <view :class="['tab-item', { active: currentTab == 'in' }]" @click="onTabClick('in')">
                     <text class="tab-text">积分收入</text>
                 </view>
-                <view :class="['tab-item', { active: currentTab == 'expense' }]" @click="onTabClick('expense')">
+                <view :class="['tab-item', { active: currentTab == 'out' }]" @click="onTabClick('out')">
                     <text class="tab-text">积分支出</text>
                 </view>
             </view>
 
-            <!-- 筛选条件 -->
+            <!-- 二级筛选：过期维度后端未支持，按条目 expires_at 客户端筛（#709 待后端清单） -->
             <view class="filter-bar">
-                <scroll-view class="filter-scroll" scroll-x="true">
-                    <view v-for="(opt, idx) in filterOptions" :key="idx"
-                        :class="['filter-chip', { active: currentFilter == opt.value }]"
-                        @click="onFilterClick(opt.value)">
-                        <text class="filter-chip-text">{{ opt.label }}</text>
-                    </view>
-                </scroll-view>
+                <view :class="['filter-chip', { active: currentExpireFilter == 'expiring' }]"
+                    @click="onExpireFilterClick()">
+                    <text class="filter-chip-text">只看即将过期</text>
+                </view>
             </view>
 
-            <!-- 积分明细列表 -->
+            <!-- 积分流水列表 -->
             <view class="detail-scroll-inner">
-                <view v-if="pointsList.length == 0 && !loading" class="empty-tip">
-                    <text class="empty-text">暂无积分记录</text>
+                <view v-if="loadFailed && items.length == 0" class="error-tip">
+                    <text class="error-text">积分流水加载失败</text>
+                    <view class="retry-btn" @click="onRetry">
+                        <text class="retry-text">重试</text>
+                    </view>
+                </view>
+                <view v-else-if="displayItems.length == 0 && !loading" class="empty-tip">
+                    <text class="empty-text">{{ emptyText }}</text>
                 </view>
                 <view class="detail-list">
-                    <view v-for="(item, idx) in pointsList" :key="idx" class="detail-item">
-                        <view class="detail-icon-wrap" :class="'icon-' + item.source_type">
-                            <text class="detail-icon">{{ getSourceTypeIcon(item.source_type) }}</text>
+                    <view v-for="(item, idx) in displayItems" :key="item.id" class="detail-item">
+                        <view :class="['detail-icon-wrap', itemIconClass(item.ref_type)]">
+                            <text class="detail-icon">{{ itemIconText(item.ref_type) }}</text>
                         </view>
                         <view class="detail-content">
                             <view class="detail-row">
-                                <text class="detail-action">{{ item.action }}</text>
-                                <text class="detail-points">{{ item.points > 0 ? '+' : '' }}{{ item.points }}</text>
+                                <text class="detail-action">{{ itemTitle(item.reason, item.delta) }}</text>
+                                <text :class="['detail-points', itemDeltaClass(item.delta)]">{{ itemDeltaText(item.delta) }}</text>
                             </view>
                             <view class="detail-row">
-                                <text class="detail-desc">{{ item.description }}</text>
-                            </view>
-                            <view class="detail-row">
-                                <text class="detail-source">{{ getSourceTypeText(item.source_type) }}</text>
-                                <text class="detail-date">{{ item.created_at }}</text>
+                                <text class="detail-source">{{ itemSourceText(item.ref_type) }}</text>
+                                <text class="detail-date">{{ itemDateText(item.created_at) }}</text>
                             </view>
                         </view>
                     </view>
@@ -74,7 +71,11 @@
                 <view v-if="loading" class="loading-more">
                     <text class="loading-text">加载中...</text>
                 </view>
-                <view v-if="noMore && pointsList.length > 0" class="loading-more">
+                <!-- 已有数据时的翻页失败：页脚提示 + 点击重试，不吞掉已加载部分 -->
+                <view v-else-if="loadFailed && items.length > 0" class="loading-more" @click="onRetry">
+                    <text class="loading-text">加载失败，点击重试</text>
+                </view>
+                <view v-else-if="noMore && displayItems.length > 0" class="loading-more">
                     <text class="loading-text">没有更多了</text>
                 </view>
             </view>
@@ -92,90 +93,163 @@
     import { onShow } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
-    import { getPointsBalanceApi, getPointsRecordListApi } from '../../api/points'
-    import type { PointsBalance, PointsRecord } from '../../types/index'
-
-    type FilterOption = {
-        label : string
-        value : string
-    }
+    import { getPointsBalanceApi, getPointsLedgerApi } from '../../api/points'
+    import { ledgerReasonLabel, ledgerRefTypeText, ledgerIconClass, deltaText, expiringWithinDays, todayDateStr } from '../../utils/pointsDisplay'
+    import { formatDateTimeStr } from '../../utils/format'
+    import type { PointsBalance, PointsLedgerItem, PointsLedgerResult } from '../../types/index'
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
+    /** 「即将过期」窗口天数（与积分规则文案「到期前 30 天提醒」同口径） */
+    const EXPIRE_WINDOW_DAYS : number = 30
+
     const pointsBalance = ref<number>(0)
-    const currentTab = ref<string>('income')
-    const currentFilter = ref<string>('all')
-    const pointsList = ref<PointsRecord[]>([])
+    /** 收支方向 tab：all 全部 / in 收入 / out 支出（透传后端 direction） */
+    const currentTab = ref<string>('all')
+    /** 过期维度客户端筛选：all / expiring */
+    const currentExpireFilter = ref<string>('all')
+    const items = ref<PointsLedgerItem[]>([])
     const page = ref<number>(1)
-    const pageSize = 20
+    const pageSize : number = 20
     const loading = ref<boolean>(false)
     const noMore = ref<boolean>(false)
-    const loadingBalance = ref<boolean>(false)
+    const loadFailed = ref<boolean>(false)
+    /**
+     * 请求代次：切 tab / 下拉刷新会立刻发起新一轮请求，旧请求的回包必须按代次丢弃，
+     * 否则「上一 tab 的数据落在新 tab 上」这种串数据会稳定复现（loading 闸门挡不住刷新）。
+     */
+    let reqSeq = 0
 
-    const filterOptions : FilterOption[] = [
-        { label: '全部', value: 'all' },
-        { label: '签到', value: 'check_in' },
-        { label: '浏览课程', value: 'course_view' },
-    ]
+    // ===== 模板侧本地薄包装（uvue 模板不可直调 import 函数，守护规则 S）=====
 
-    /** 根据当前 Tab 计算查询类型 */
-    const queryType = computed<string>(() : string => {
-        if (currentTab.value == 'income') return 'income'
-        if (currentTab.value == 'expense') return 'expense'
-        return 'all'
+    function itemTitle(reason : string, delta : number) : string {
+        return ledgerReasonLabel(reason, delta)
+    }
+
+    function itemSourceText(refType : string) : string {
+        return ledgerRefTypeText(refType)
+    }
+
+    function itemIconClass(refType : string) : string {
+        return ledgerIconClass(refType)
+    }
+
+    function itemIconText(refType : string) : string {
+        if (refType == 'task') return '◆'
+        if (refType == 'checkin') return '✓'
+        if (refType == 'course' || refType == 'real_paper' || refType == 'shop') return '★'
+        if (refType == 'forum_topic' || refType == 'contribution') return '✎'
+        if (refType == 'admin') return '!'
+        return '·'
+    }
+
+    function itemDeltaText(delta : number) : string {
+        return deltaText(delta)
+    }
+
+    function itemDeltaClass(delta : number) : string {
+        if (delta >= 0) return 'points-in'
+        return 'points-out'
+    }
+
+    function itemDateText(createdAt : string) : string {
+        return formatDateTimeStr(createdAt)
+    }
+
+    /** tab → 后端 direction 查询值（全部不传） */
+    function directionOf(tab : string) : string {
+        if (tab == 'in') return 'in'
+        if (tab == 'out') return 'out'
+        return ''
+    }
+
+    /**
+     * 展示列表：过期维度按条目 expires_at 客户端筛。
+     * 边界（诚实呈现）：后端 ledger 无过期查询参数，客户端只能筛「已加载条目」，
+     * 继续下拉翻页会纳入更多条目；首版 expires_at 恒 null → 该筛选恒空列表。
+     * 真正的过期维度见 #709 待后端清单。
+     */
+    const displayItems = computed<PointsLedgerItem[]>(() : PointsLedgerItem[] => {
+        if (currentExpireFilter.value != 'expiring') return items.value
+        const today = todayDateStr()
+        const out : PointsLedgerItem[] = []
+        for (let i = 0; i < items.value.length; i++) {
+            if (expiringWithinDays(items.value[i].expires_at, today, EXPIRE_WINDOW_DAYS)) {
+                out.push(items.value[i])
+            }
+        }
+        return out
     })
 
-    /** 加载积分余额 */
+    const emptyText = computed<string>(() : string => {
+        if (currentExpireFilter.value == 'expiring') return '暂无即将过期积分，当前积分永久有效'
+        return '暂无积分记录'
+    })
+
+    /** 加载积分余额（失败由 request 层提示，卡片保持 0 不回填占位数） */
     function loadBalance() : void {
-        loadingBalance.value = true
         getPointsBalanceApi().then((data : PointsBalance) => {
-            pointsBalance.value = data.total_points
+            pointsBalance.value = data.balance
         }).catch((e) => {
             console.warn('[points-detail] load balance failed:', e)
-        }).finally(() => {
-            loadingBalance.value = false
         })
     }
 
-    /** 加载积分明细列表 */
-    function loadRecords(isRefresh : boolean = false) : void {
-        if (loading.value) return
-        if (isRefresh) {
-            page.value = 1
-            noMore.value = false
-            pointsList.value = [] as PointsRecord[]
+    /** 加载积分流水（GET /points/ledger）：isRefresh=true 重置到第 1 页（切 tab / 重试 / 进页） */
+    function loadLedger(isRefresh : boolean) : void {
+        if (!isRefresh) {
+            // 追加翻页不并发、不越过终点
+            if (loading.value || noMore.value) return
         }
-        if (noMore.value) return
+        reqSeq = reqSeq + 1
+        const seq = reqSeq
+        const startPage = isRefresh ? 1 : page.value
+        if (isRefresh) {
+            noMore.value = false
+            items.value = [] as PointsLedgerItem[]
+            loadFailed.value = false
+        }
 
         loading.value = true
-        getPointsRecordListApi(page.value, pageSize, queryType.value, currentFilter.value).then((data) => {
+        getPointsLedgerApi(startPage, pageSize, directionOf(currentTab.value)).then((data : PointsLedgerResult) => {
+            if (seq != reqSeq) return // 已被更新的请求取代，回包作废（防串数据）
+            loadFailed.value = false
             if (isRefresh) {
-                pointsList.value = data.records
+                items.value = data.items
             } else {
-                pointsList.value = pointsList.value.concat(data.records)
+                items.value = items.value.concat(data.items)
             }
-            if (pointsList.value.length >= data.total || data.records.length < pageSize) {
+            if (items.value.length >= data.total || data.items.length < pageSize) {
                 noMore.value = true
             }
-            page.value++
+            page.value = startPage + 1
         }).catch((e) => {
-            console.warn('[points-detail] load records failed:', e)
+            if (seq != reqSeq) return
+            // 失败可见：不再回落占位流水（#662 幻影 404 就是这么被盖住的）
+            loadFailed.value = true
+            console.warn('[points-detail] load ledger failed:', e)
         }).finally(() => {
-            loading.value = false
+            if (seq == reqSeq) loading.value = false
         })
     }
 
     function onTabClick(tab : string) : void {
         if (currentTab.value == tab) return
         currentTab.value = tab
-        loadRecords(true)
+        loadLedger(true)
     }
 
-    function onFilterClick(filter : string) : void {
-        if (currentFilter.value == filter) return
-        currentFilter.value = filter
-        loadRecords(true)
+    function onExpireFilterClick() : void {
+        currentExpireFilter.value = currentExpireFilter.value == 'expiring' ? 'all' : 'expiring'
+    }
+
+    function onRetry() : void {
+        loadLedger(true)
+    }
+
+    function onLoadMore() : void {
+        loadLedger(false)
     }
 
     function onBack() : void {
@@ -186,27 +260,9 @@
         uni.navigateTo({ url: '/pages/points/task-center' })
     }
 
-    /** 获取来源类型显示文本 */
-    function getSourceTypeText(sourceType : string) : string {
-        if (sourceType == 'check_in') return '签到'
-        if (sourceType == 'course_view') return '浏览课程'
-        if (sourceType == 'exam_pass') return '通过考试'
-        if (sourceType == 'course_complete') return '完成课程'
-        return '其他'
-    }
-
-    /** 获取来源类型图标 */
-    function getSourceTypeIcon(sourceType : string) : string {
-        if (sourceType == 'check_in') return ''
-        if (sourceType == 'course_view') return ''
-        if (sourceType == 'exam_pass') return ''
-        if (sourceType == 'course_complete') return ''
-        return ''
-    }
-
     onShow(() => {
         loadBalance()
-        loadRecords(true)
+        loadLedger(true)
     })
 </script>
 
@@ -289,28 +345,6 @@
         color: #ffffff;
     }
 
-    .expire-tip {
-        margin: 0 24rpx 24rpx;
-        padding: 20rpx 24rpx;
-        border-radius: 12rpx;
-        background-color: #fff8e6;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-    }
-
-    .expire-text {
-        font-size: 24rpx;
-        color: #666666;
-        flex: 1;
-    }
-
-    .expire-arrow {
-        font-size: 24rpx;
-        color: #999999;
-        margin-left: 16rpx;
-    }
-
     .tab-bar {
         background-color: #ffffff;
         flex-direction: row;
@@ -337,26 +371,21 @@
     .tab-item.active .tab-text {
         color: #2979ff;
         font-weight: bold;
-        font-size: 32rpx;
+        font-size: 30rpx;
     }
 
     .filter-bar {
         background-color: #ffffff;
         border-bottom: 1rpx solid #f0f0f0;
-    }
-
-    .filter-scroll {
-        white-space: nowrap;
         flex-direction: row;
         align-items: center;
-        padding: 24rpx 24rpx;
+        padding: 20rpx 24rpx;
     }
 
     .filter-chip {
-        padding: 14rpx 32rpx;
+        padding: 12rpx 28rpx;
         border-radius: 32rpx;
         background-color: #f5f5f5;
-        margin-right: 16rpx;
         flex-shrink: 0;
     }
 
@@ -401,24 +430,33 @@
         flex-shrink: 0;
     }
 
-    .icon-check_in {
+    .icon-task {
         background-color: #e8f5e9;
     }
 
-    .icon-course_view {
-        background-color: #e3f2fd;
+    .icon-checkin {
+        background-color: #e8f5e9;
     }
 
-    .icon-exam_pass {
+    .icon-redeem {
         background-color: #fff3e0;
     }
 
-    .icon-course_complete {
-        background-color: #fce4ec;
+    .icon-community {
+        background-color: #e3f2fd;
+    }
+
+    .icon-admin {
+        background-color: #fbe9e7;
+    }
+
+    .icon-default {
+        background-color: #f5f5f5;
     }
 
     .detail-icon {
-        font-size: 36rpx;
+        font-size: 32rpx;
+        color: #666666;
     }
 
     .detail-content {
@@ -442,14 +480,14 @@
     .detail-points {
         font-size: 32rpx;
         font-weight: bold;
+    }
+
+    .points-in {
         color: #2979ff;
     }
 
-    .detail-desc {
-        font-size: 26rpx;
-        color: #666666;
-        lines: 2;
-        text-overflow: ellipsis;
+    .points-out {
+        color: #ee0a24;
     }
 
     .detail-source {
@@ -473,6 +511,29 @@
     .empty-text {
         font-size: 28rpx;
         color: #999999;
+    }
+
+    .error-tip {
+        align-items: center;
+        padding: 60rpx 0;
+        flex-direction: column;
+    }
+
+    .error-text {
+        font-size: 28rpx;
+        color: #666666;
+        margin-bottom: 20rpx;
+    }
+
+    .retry-btn {
+        padding: 12rpx 40rpx;
+        border-radius: 32rpx;
+        background-color: #2979ff;
+    }
+
+    .retry-text {
+        font-size: 26rpx;
+        color: #ffffff;
     }
 
     .loading-more {
