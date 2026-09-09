@@ -37,10 +37,13 @@
 
             <!-- 回复列表 -->
             <ForumReplyList v-if="topic != null" :items="replyItems" :sort-field="replySortField"
-                :sort-order="replySortOrder" @sort-field-change="onReplySortFieldChange"
+                :sort-order="replySortOrder" :is-topic-owner="isTopicOwner"
+                :topic-category="topicCategory" :current-user-id="currentUserId"
+                @sort-field-change="onReplySortFieldChange"
                 @sort-order-change="onReplySortOrderChange" @delete-reply="onDeleteReply"
                 @report-reply="onReportReply" @toggle-reply-like="onToggleReplyLikeById"
-                @reply-to-user="onReplyToUserById" />
+                @reply-to-user="onReplyToUserById"
+                @accept-reply="onAcceptReplyById" @cancel-accept="onCancelAcceptById" />
         </scroll-view>
 
         <!-- 底部回复输入栏 -->
@@ -92,8 +95,9 @@
     const detail = useTopicDetail()
     const {
         topicId, topic, replies, loading, replySortField, replySortOrder,
-        canDelete, canEdit, onToggleLike, onToggleFavorite, onDelete, onEditTopic,
+        canDelete, canEdit, currentUserId, onToggleLike, onToggleFavorite, onDelete, onEditTopic,
         onReplySortFieldChange, onReplySortOrderChange, onDeleteReply, afterReplyPosted, loadDetail,
+        isTopicOwner, onAcceptReply, onCancelAccept,
     } = detail
     const composer = useReplyComposer()
     const {
@@ -169,6 +173,13 @@
         return urls
     })
 
+    /** 帖子类别（question 时显示采纳按钮） */
+    const topicCategory = computed<string>(() : string => {
+        const t = topic.value
+        if (t == null) return 'discussion'
+        return t.category
+    })
+
     /** 回复展示模型（权限位/点赞本地态/URL 预解析全部完成于壳层，组件模板零函数调用） */
     const replyItems = computed<ForumReplyDisplay[]>(() : ForumReplyDisplay[] => {
         const out : ForumReplyDisplay[] = []
@@ -181,6 +192,7 @@
             }
             const display : ForumReplyDisplay = {
                 id: r.id,
+                authorId: r.author_id,
                 authorName: r.author_name.length > 0 ? r.author_name : '匿名学员',
                 authorInitial: getAuthorInitial(r.author_name),
                 authorAvatar: r.author_avatar,
@@ -191,6 +203,7 @@
                 canDelete: detail.canDeleteReply(r),
                 liked: detail.isReplyLiked(r),
                 likesCount: detail.getReplyLikesCount(r),
+                isAccepted: r.is_accepted,
             }
             out.push(display)
         }
@@ -209,6 +222,31 @@
         const r = replyById(id)
         if (r == null) return
         detail.onToggleReplyLike(r)
+    }
+
+    // ===== 采纳/取消采纳 =====
+    function onAcceptReplyById(id : number) : void {
+        uni.showModal({
+            title: '提示',
+            content: '确定采纳此回答吗？采纳后不可撤销积分，但可更换采纳对象。',
+            success: (res) => {
+                if (res.confirm) {
+                    detail.onAcceptReply(id)
+                }
+            }
+        })
+    }
+
+    function onCancelAcceptById() : void {
+        uni.showModal({
+            title: '提示',
+            content: '确定取消采纳吗？取消后状态回到未解决，已发积分不回滚。',
+            success: (res) => {
+                if (res.confirm) {
+                    detail.onCancelAccept()
+                }
+            }
+        })
     }
 
     // ===== 回复某条回复 =====

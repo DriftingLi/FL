@@ -15,6 +15,8 @@ import {
     unlikeTopicApi,
     likeReplyApi,
     unlikeReplyApi,
+    acceptReplyApi,
+    cancelAcceptApi,
 } from '../api/forum'
 import { checkFavoriteApi, addFavoriteApi, removeFavoriteApi } from '../api/favorite'
 import { getStorageJSON, setStorageJSON } from '../utils/storage'
@@ -43,6 +45,9 @@ export type UseTopicDetailResult = {
     onToggleReplyLike : (reply : ForumReply) => Promise<void>
     onDeleteReply : (replyId : number) => void
     afterReplyPosted : (reply : ForumReply) => void
+    isTopicOwner : ComputedRef<boolean>
+    onAcceptReply : (replyId : number) => Promise<void>
+    onCancelAccept : () => Promise<void>
 }
 
 export function useTopicDetail() : UseTopicDetailResult {
@@ -119,6 +124,13 @@ export function useTopicDetail() : UseTopicDetailResult {
 
     /** 是否可编辑帖子（作者本人） */
     const canEdit = computed<boolean>(() : boolean => {
+        const t = topic.value
+        if (t == null) return false
+        return t.author_id == currentUserId.value && currentUserId.value > 0
+    })
+
+    /** 是否为帖子作者（楼主，采纳操作前提） */
+    const isTopicOwner = computed<boolean>(() : boolean => {
         const t = topic.value
         if (t == null) return false
         return t.author_id == currentUserId.value && currentUserId.value > 0
@@ -367,6 +379,62 @@ export function useTopicDetail() : UseTopicDetailResult {
         uni.navigateTo({ url: '/pages/forum/forum-create?id=' + t.id })
     }
 
+    // ===== 采纳（#747）=====
+    async function onAcceptReply(replyId : number) : Promise<void> {
+        const t = topic.value
+        if (t == null) return
+        // 乐观更新：立即标记该回复为已采纳
+        const oldReplies = replies.value.slice()
+        for (let i = 0; i < replies.value.length; i++) {
+            if (replies.value[i].id == replyId) {
+                replies.value[i].is_accepted = true
+            } else {
+                replies.value[i].is_accepted = false
+            }
+        }
+        t.status = 'resolved'
+        try {
+            const result = await acceptReplyApi(t.id, replyId)
+            // 以服务端返回为准回填
+            t.accepted_reply_id = result.accepted_reply_id
+            t.status = result.status
+        } catch (e) {
+            // 回滚
+            replies.value = oldReplies
+            t.status = (t.accepted_reply_id != null && t.accepted_reply_id! > 0) ? 'resolved' : 'open'
+            console.error('[forum-detail] accept reply failed:', e)
+            let msg = '操作失败'
+            if (e instanceof Error) {
+                const m = (e as Error).message
+                if (m != null && m.length > 0) msg = m
+            }
+            uni.showToast({ title: msg, icon: 'none' })
+        }
+    }
+
+    async function onCancelAccept() : Promise<void> {
+        const t = topic.value
+        if (t == null) return
+        // 乐观更新
+        const oldReplies = replies.value.slice()
+        const oldStatus = t.status
+        for (let i = 0; i < replies.value.length; i++) {
+            replies.value[i].is_accepted = false
+        }
+        t.status = 'open'
+        try {
+            const result = await cancelAcceptApi(t.id)
+            t.accepted_reply_id = result.accepted_reply_id
+            t.status = result.status
+        } catch (e) {
+            // 回滚
+            replies.value = oldReplies
+            t.status = oldStatus
+            console.error('[forum-detail] cancel accept failed:', e)
+            uni.showToast({ title: '操作失败', icon: 'none' })
+        }
+    }
+
     // ===== 回复排序 =====
     function onReplySortFieldChange(field : string) : void {
         if (replySortField.value === field) return
@@ -403,5 +471,8 @@ export function useTopicDetail() : UseTopicDetailResult {
         onToggleReplyLike: (reply : ForumReply) => onToggleReplyLike(reply),
         onDeleteReply: (replyId : number) => onDeleteReply(replyId),
         afterReplyPosted: (reply : ForumReply) => afterReplyPosted(reply),
+        isTopicOwner: isTopicOwner,
+        onAcceptReply: (replyId : number) => onAcceptReply(replyId),
+        onCancelAccept: () => onCancelAccept(),
     } as UseTopicDetailResult
 }

@@ -373,6 +373,8 @@ export type ForumReply = {
     liked_by_me ?: boolean
     /** 后端未来可能直接返回：兼容读取时判空使用（forum-detail 本地态回退） */
     like_count ?: number
+    /** 是否被楼主采纳（后端 is_accepted 字段，仅问答帖有效） */
+    is_accepted : boolean
 }
 
 /** 帖子详情（含回复列表） */
@@ -395,8 +397,12 @@ export type ForumTopicDetail = {
     replies : ForumReply[]
     /** 帖子分类：general / resource / video / exam */
     scope : string
+    /** 帖子类别：discussion / question / experience（#727） */
+    category : string
     /** 问题状态：resolved（已解决）/ open（进行中）（#736） */
     status : string
+    /** 被采纳的回复 ID（可空，仅问答帖有效） */
+    accepted_reply_id ?: number
 }
 
 /**

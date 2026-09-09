@@ -32,6 +32,8 @@
                 <view class="reply-info">
                     <text
                         class="reply-author">{{ item.authorName }}</text>
+                    <!-- 已采纳徽章 -->
+                    <text v-if="item.isAccepted" class="reply-accepted-badge">✓ 已采纳</text>
                     <text class="reply-time">{{ item.createdAtText }}</text>
                 </view>
                 <view v-if="item.canDelete" class="reply-delete" @click="onDelete(item.id)">
@@ -46,6 +48,18 @@
                 <view v-for="(img, i) in item.imageUrls" :key="i" class="img-cell small"
                     @click="onPreview(item, i)">
                     <image class="img-thumb" :src="img" mode="aspectFill" />
+                </view>
+            </view>
+            <!-- 采纳按钮（仅问答帖 + 楼主可见 + 非自己回复） -->
+            <view v-if="topicCategory === 'question' && isTopicOwner && !item.isAccepted && item.authorId !== currentUserId" class="reply-accept-row">
+                <view class="reply-accept-btn" @click="onAccept(item.id)">
+                    <text class="reply-accept-btn-text">采纳此回答</text>
+                </view>
+            </view>
+            <!-- 取消采纳按钮（仅问答帖 + 楼主可见 + 已采纳） -->
+            <view v-else-if="topicCategory === 'question' && isTopicOwner && item.isAccepted" class="reply-accept-row">
+                <view class="reply-cancel-accept-btn" @click="onCancelAccept">
+                    <text class="reply-cancel-accept-btn-text">取消采纳</text>
                 </view>
             </view>
             <view class="reply-action-row">
@@ -73,13 +87,19 @@
         items? : ForumReplyDisplay[]
         sortField? : string
         sortOrder? : string
+        isTopicOwner? : boolean
+        topicCategory? : string
+        currentUserId? : number
     }>(), {
         items: () => [] as ForumReplyDisplay[],
         sortField: 'latest',
-        sortOrder: 'asc'
+        sortOrder: 'asc',
+        isTopicOwner: false,
+        topicCategory: 'general',
+        currentUserId: 0,
     })
 
-    const emit = defineEmits(['sortFieldChange', 'sortOrderChange', 'deleteReply', 'reportReply', 'toggleReplyLike', 'replyToUser'])
+    const emit = defineEmits(['sortFieldChange', 'sortOrderChange', 'deleteReply', 'reportReply', 'toggleReplyLike', 'replyToUser', 'acceptReply', 'cancelAccept'])
 
     function onField(field : string) : void {
         emit('sortFieldChange', field)
@@ -103,6 +123,14 @@
 
     function onReplyTo(id : number) : void {
         emit('replyToUser', id)
+    }
+
+    function onAccept(id : number) : void {
+        emit('acceptReply', id)
+    }
+
+    function onCancelAccept() : void {
+        emit('cancelAccept')
     }
 
     function onPreview(item : ForumReplyDisplay, index : number) : void {
@@ -340,5 +368,53 @@
     .reply-like-count-liked {
         color: #ffffff;
         font-weight: bold;
+    }
+
+    /* 采纳徽章 */
+    .reply-accepted-badge {
+        font-size: 20rpx;
+        color: #4caf50;
+        background-color: #e8f5e9;
+        padding: 2rpx 12rpx;
+        border-radius: 12rpx;
+        margin-left: 12rpx;
+        font-weight: bold;
+    }
+
+    /* 采纳按钮行 */
+    .reply-accept-row {
+        padding-left: 72rpx;
+        margin-top: 12rpx;
+    }
+
+    .reply-accept-btn {
+        background-color: #e8f5e9;
+        padding: 8rpx 24rpx;
+        border-radius: 24rpx;
+        border: 1rpx solid #4caf50;
+        align-items: center;
+        justify-content: center;
+        flex-direction: row;
+    }
+
+    .reply-accept-btn-text {
+        font-size: 24rpx;
+        color: #4caf50;
+        font-weight: bold;
+    }
+
+    .reply-cancel-accept-btn {
+        background-color: #f5f5f5;
+        padding: 8rpx 24rpx;
+        border-radius: 24rpx;
+        border: 1rpx solid #cccccc;
+        align-items: center;
+        justify-content: center;
+        flex-direction: row;
+    }
+
+    .reply-cancel-accept-btn-text {
+        font-size: 24rpx;
+        color: #666666;
     }
 </style>
