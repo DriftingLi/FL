@@ -178,9 +178,9 @@ describe('备考经验 tab 接线契约（#706：第四 tab 进场，复用 Topi
     expect(tabBar).toMatch(/@click="onSwitch\('experience'\)"/);
   });
 
-  it('列表查询语义：备考经验 all/experience，最多赞映射 hot，默认/最新落 latest', () => {
+  it('列表查询语义：备考经验 all/experience，最多赞→hot、最新→created（#727 排序档）、默认→latest', () => {
     expect(feed).toMatch(/currentTab\.value === 'experience'[\s\S]*?category = 'experience'/);
-    expect(feed).toMatch(/expSort\.value == 'hot' \? 'hot' : 'latest'/);
+    expect(feed).toMatch(/expSort\.value == 'hot' \? 'hot' : \(expSort\.value == 'latest' \? 'created' : 'latest'\)/);
   });
 
   it('expSort 状态与 onExpSortChange 沉在 useTopicFeed（数据所有权单一，壳层只接线）', () => {
