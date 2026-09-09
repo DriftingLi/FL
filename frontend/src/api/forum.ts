@@ -32,6 +32,8 @@ export interface ForumTopicItem {
   liked_by_me?: boolean
   accepted_reply_id?: number | null
   solved_at?: string | null
+  /** 精选位（#742）：管理端全类别可精/可撤，三 Tab 筛选与标识展示 */
+  is_featured?: boolean
   reward_issued?: boolean
 }
 
@@ -60,6 +62,8 @@ export interface ForumListParams {
   category?: ForumCategory
   /** 解决状态（#367，仅问答有意义） */
   solved?: 'all' | 'solved' | 'unsolved'
+  /** 精选过滤（#742）：'true' 仅精选 / 'false' 仅非精选，省略不过滤 */
+  featured?: 'true' | 'false'
   chapter_id?: number
   page?: number
   page_size?: number
@@ -256,6 +260,8 @@ export interface AdminForumTopic {
   reply_count: number
   last_reply_at?: string | null
   created_at: string
+  /** 精选位（#742） */
+  is_featured?: boolean
   author: {
     user_id: number
     username: string
@@ -283,6 +289,8 @@ export interface AdminForumListParams {
   /** 类别维度（#364）；省略表示两类都看 */
   category?: ForumCategory
   solved?: 'all' | 'solved' | 'unsolved'
+  /** 精选过滤（#742）：'true' 仅精选 / 'false' 找待精候选，省略不过滤 */
+  featured?: 'true' | 'false'
   chapter_id?: number
   page?: number
   page_size?: number
@@ -304,6 +312,18 @@ export const adminForumApi = {
 
   deleteReply(id: number) {
     return unwrappedRequest.delete<null>(`/admin/forum/replies/${id}`)
+  },
+
+  // ===== 精选位（#742，全类别可精/可撤）=====
+
+  /** 加精（首次加精同事务给帖主 featured_bonus +30，幂等） */
+  featureTopic(id: number) {
+    return unwrappedRequest.post<AdminForumTopic>(`/admin/forum/topics/${id}/featured`)
+  },
+
+  /** 取消精选（已发分不回滚，幂等） */
+  unfeatureTopic(id: number) {
+    return unwrappedRequest.delete<AdminForumTopic>(`/admin/forum/topics/${id}/featured`)
   },
 
   // ===== 举报管理（ADR-0018）=====

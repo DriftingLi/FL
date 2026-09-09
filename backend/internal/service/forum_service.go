@@ -62,6 +62,13 @@ const (
 	ReasonAcceptAction  = "accept_action"  // 流水原因：采纳行为奖励
 )
 
+// 加精奖励常量（#742）：管理端加精一次性直记给帖主，每帖幂等一次
+// （取消重精不重复发分，以流水存在判定，与 accepted_bonus 同模式）。
+const (
+	FeaturedBonusPoints = 30               // 加精奖励
+	ReasonFeaturedBonus = "featured_bonus" // 流水原因：帖子被加精
+)
+
 // ErrNotTopicOwner 只有楼主可采纳/取消/更换。
 var ErrNotTopicOwner = errors.New("只有楼主可以执行此操作")
 
@@ -90,7 +97,7 @@ func (a ForumAuthor) DisplayName() string {
 type ForumTopicDTO struct {
 	ID              int64       `json:"id"`
 	ChapterID       *int        `json:"chapter_id"`
-	Category        string      `json:"category"` // discussion | question（#364）
+	Category        string      `json:"category"` // discussion | question | experience（#364/#722）
 	ChapterTitle    string      `json:"chapter_title"`
 	Title           string      `json:"title"`
 	Content         string      `json:"content"`
@@ -105,6 +112,7 @@ type ForumTopicDTO struct {
 	LikedByMe       bool        `json:"liked_by_me"`
 	AcceptedReplyID *int64      `json:"accepted_reply_id,omitempty"`
 	SolvedAt        *string     `json:"solved_at,omitempty"`
+	IsFeatured      bool        `json:"is_featured"`
 	RewardIssued    bool        `json:"reward_issued"`
 }
 
@@ -161,6 +169,7 @@ type topicRow struct {
 	AcceptedReplyID *int64
 	SolvedAt        *time.Time
 	LastReplyAt     *time.Time
+	IsFeatured      bool
 	CreatedAt       time.Time
 	UserID          int
 	Username        string
@@ -192,6 +201,7 @@ func (r topicRow) toDTO(viewerID int) ForumTopicDTO {
 		AcceptedReplyID: r.AcceptedReplyID,
 		SolvedAt:        solvedAt,
 		LastReplyAt:     lastReplyAt,
+		IsFeatured:      r.IsFeatured,
 		CreatedAt:       formatISO(r.CreatedAt),
 		Author: ForumAuthor{
 			UserID: r.UserID, Username: r.Username, AvatarURL: r.AvatarURL,
@@ -239,14 +249,31 @@ func parseSolvedArg(solved string) (string, error) {
 	}
 }
 
+// parseForumFeaturedArg 解析列表查询的 featured 参数（#742）。
+// 空 = 不过滤；true = 仅精选；false = 仅非精选（管理端找待精候选）。
+// 语义与 solved 同构：均为布尔派生列的等值过滤，随 WHERE 共存于主查询。
+func parseForumFeaturedArg(featured string) (string, error) {
+	switch v := strings.TrimSpace(strings.ToLower(featured)); v {
+	case "":
+		return "", nil
+	case "true":
+		return "true", nil
+	case "false":
+		return "false", nil
+	default:
+		return "", fmt.Errorf("featured 参数无效: %s", featured)
+	}
+}
+
 // TopicListInput 主题列表查询条件。
 //
 // 用 struct 而非位置参数：本方法有 scope/keyword/sort/order/category 五个 string，
 // 位置传错（如把 category 落进 keyword）编译通过且语义全错。
 type TopicListInput struct {
 	Scope     string // all（默认）/ general / chapter
-	Category  string // 空或 all = 不过滤；discussion / question = 按类别分流
+	Category  string // 空或 all = 不过滤；discussion / question / experience = 按类别分流
 	Solved    string // 空或 all = 不过滤；solved / unsolved（#367，仅问答帖有意义）
+	Featured  string // 空 = 不过滤；true = 仅精选；false = 仅非精选（#742）
 	ChapterID int
 	Page      int
 	PageSize  int
@@ -266,6 +293,10 @@ func (s *ForumService) ListTopics(in TopicListInput) (*ForumTopicPageResult, err
 		return nil, err
 	}
 	solved, err := parseSolvedArg(in.Solved)
+	if err != nil {
+		return nil, err
+	}
+	featured, err := parseForumFeaturedArg(in.Featured)
 	if err != nil {
 		return nil, err
 	}
@@ -300,7 +331,7 @@ func (s *ForumService) ListTopics(in TopicListInput) (*ForumTopicPageResult, err
 		orderClause,
 		func(q *gorm.DB) *gorm.DB {
 			q = q.Table("forum_topics AS t").
-				Select("t.id, t.chapter_id, t.category, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.accepted_reply_id, t.solved_at, t.last_reply_at, t.created_at, " +
+				Select(topicRowSelect +
 					"u.id AS user_id, u.username, u.avatar_url, " +
 					"COALESCE(ch.title, '') AS chapter_title").
 				Joins("JOIN hrwai_users AS u ON u.id = t.user_id").
@@ -321,6 +352,12 @@ func (s *ForumService) ListTopics(in TopicListInput) (*ForumTopicPageResult, err
 				q = q.Where("t.accepted_reply_id IS NOT NULL")
 			} else if solved == "unsolved" {
 				q = q.Where("t.accepted_reply_id IS NULL")
+			}
+			// 精选过滤（#742）：与 scope/category 同一条 WHERE，不在应用层事后过滤。
+			if featured == "true" {
+				q = q.Where("t.is_featured = TRUE")
+			} else if featured == "false" {
+				q = q.Where("t.is_featured = FALSE")
 			}
 			if keyword = strings.TrimSpace(keyword); keyword != "" {
 				like := "%" + keyword + "%"
@@ -351,7 +388,7 @@ func (s *ForumService) GetTopic(topicID int64, viewerID int, replySort, order st
 	}
 	var row topicRow
 	err := s.db.Table("forum_topics AS t").
-		Select("t.id, t.chapter_id, t.category, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.accepted_reply_id, t.solved_at, t.last_reply_at, t.created_at, "+
+		Select(topicRowSelect+
 			"u.id AS user_id, u.username, u.avatar_url, "+
 			"COALESCE(ch.title, '') AS chapter_title").
 		Joins("JOIN hrwai_users AS u ON u.id = t.user_id").
@@ -1191,7 +1228,7 @@ func (s *ForumService) MyTopics(userID, page, pageSize int) (*ForumTopicPageResu
 		"COALESCE(t.last_reply_at, t.created_at) DESC, t.id DESC",
 		func(q *gorm.DB) *gorm.DB {
 			return q.Table("forum_topics AS t").
-				Select("t.id, t.chapter_id, t.category, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.accepted_reply_id, t.solved_at, t.last_reply_at, t.created_at, "+
+				Select(topicRowSelect+
 					"u.id AS user_id, u.username, u.avatar_url, COALESCE(ch.title, '') AS chapter_title").
 				Joins("JOIN hrwai_users AS u ON u.id = t.user_id").
 				Joins("LEFT JOIN chapter AS ch ON ch.chapter_id = t.chapter_id").
@@ -1210,9 +1247,14 @@ func (s *ForumService) MyTopics(userID, page, pageSize int) (*ForumTopicPageResu
 	}, nil
 }
 
+// topicRowSelect topicRow 的共享投影（#742 审查收敛）：新增 topicRow 字段时只改这一处，
+// 全部列表/详情/个人视图查询共用，避免散落 5 处的投影字符串漂移。
+const topicRowSelect = "t.id, t.chapter_id, t.category, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.accepted_reply_id, t.solved_at, t.last_reply_at, t.is_featured, t.created_at, "
+
 // personalTopicSelect 个人动态三列表的行装配投影（与 MyTopics 逐字一致，被删主题字段 NULL 由 Scan 零值承载）。
-const personalTopicSelect = "t.id, t.chapter_id, t.category, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.accepted_reply_id, t.solved_at, t.last_reply_at, t.created_at, " +
-	"u.id AS user_id, u.username, u.avatar_url, COALESCE(ch.title, '') AS chapter_title"
+const personalTopicSelect = topicRowSelect +
+	"u.id AS user_id, u.username, u.avatar_url, " +
+	"COALESCE(ch.title, '') AS chapter_title"
 
 // finishPersonalTopics 行装配收尾单点：DTO 转换 + 点赞回填 + 发分回填 + 分页信封。
 func (s *ForumService) finishPersonalTopics(rows []topicRow, total int64, page, pageSize int, userID int) *ForumTopicPageResult {
@@ -1584,11 +1626,71 @@ func (s *ForumService) CancelAccept(userID int, topicID int64) (*ForumTopicDTO, 
 	return s.fetchTopicDTO(topicID, userID)
 }
 
+// SetFeatured 管理端设置精选位（#742，全类别可用）。
+//
+// featured=true 且发生状态迁移时，同事务给帖主一次性直记 featured_bonus +30
+// （幂等键 featured_bonus:{topicID} + 流水存在判定双保险，取消重精不重复发分，
+// 沿用 accepted_bonus 同模式）；featured=false 只改状态，已发分不回滚。
+// 状态已一致时幂等短路，不触发任何副作用。
+func (s *ForumService) SetFeatured(topicID int64, featured bool) (*ForumTopicDTO, error) {
+	var topic model.ForumTopic
+	if err := s.db.First(&topic, topicID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("主题不存在")
+		}
+		return nil, err
+	}
+	if topic.IsFeatured == featured {
+		// 幂等：状态已一致（重复加精/重复取消），不发分不改状态
+		return s.fetchTopicDTO(topicID, 0)
+	}
+	now := beijingNow()
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		// CAS：仅当状态仍为旧值时写入，并发下先胜者负责发分
+		res := tx.Model(&model.ForumTopic{}).
+			Where("id = ? AND is_featured = ?", topicID, !featured).
+			Update("is_featured", featured)
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return nil // 并发抢改：由先胜者完成副作用
+		}
+		if !featured {
+			return nil // 取消精选只改状态，已发分不回滚
+		}
+		// 是否已发过分（取消后重精场景）：以流水是否存在判定，每帖只发一次
+		var cnt int64
+		if err := tx.Model(&model.PointsLedger{}).
+			Where("ref_type = ? AND ref_id = ? AND reason = ?", "forum_topic", fmt.Sprintf("%d", topicID), ReasonFeaturedBonus).
+			Count(&cnt).Error; err != nil {
+			return err
+		}
+		if cnt > 0 {
+			return nil
+		}
+		// 积分直记（ADR-0023 事务内通道）：占坑键与状态 CAS 双保险
+		if err := s.points.SettleRewardTx(tx, PointsEntry{
+			UserID: topic.UserID, Delta: FeaturedBonusPoints, Reason: ReasonFeaturedBonus,
+			RefType: "forum_topic", RefID: fmt.Sprintf("%d", topicID),
+			IdemKey: FeaturedBonusIdemKey(topicID),
+		}); err != nil {
+			return err
+		}
+		// 站内信与到账同事务（ADR-0023），C3 事件构造器单点构造文案
+		return s.notificationSvc.CreateTopicFeaturedEvent(tx, NewTopicFeaturedEvent(topic.UserID, topic.Title, topicID, FeaturedBonusPoints), now)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s.fetchTopicDTO(topicID, 0)
+}
+
 // fetchTopicDTO 查询主题 DTO（用于采纳后回显，复用 topicRow 装配，不累浏览量）。
 func (s *ForumService) fetchTopicDTO(topicID int64, viewerID int) (*ForumTopicDTO, error) {
 	var row topicRow
 	err := s.db.Table("forum_topics AS t").
-		Select("t.id, t.chapter_id, t.category, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.accepted_reply_id, t.solved_at, t.last_reply_at, t.created_at, "+
+		Select(topicRowSelect+
 			"u.id AS user_id, u.username, u.avatar_url, "+
 			"COALESCE(ch.title, '') AS chapter_title").
 		Joins("JOIN hrwai_users AS u ON u.id = t.user_id").

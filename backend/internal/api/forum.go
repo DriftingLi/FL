@@ -81,6 +81,9 @@ func RegisterForumRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.ForumS
 	adminG.GET("/topics/:id", h.AdminGetTopic)
 	adminG.DELETE("/topics/:id", h.AdminDeleteTopic)
 	adminG.DELETE("/replies/:id", h.AdminDeleteReply)
+	// 精选位（#742）：全类别可精/可撤；首次加精同事务给帖主 featured_bonus +30（幂等）
+	adminG.POST("/topics/:id/featured", h.AdminFeatureTopic)
+	adminG.DELETE("/topics/:id/featured", h.AdminUnfeatureTopic)
 	// 举报管理（ADR-0018）：status query 0 待处理 / 1 已处理，缺省全部
 	adminG.GET("/reports", h.ListReports)
 	adminG.PUT("/reports/:id", h.HandleReport)
@@ -130,6 +133,7 @@ func (h *ForumHandler) UploadImage(c *gin.Context) {
 // @Security BearerAuth
 // @Param scope query string false "范围 all|general|chapter"
 // @Param category query string false "类别 discussion|question|experience，省略表示不过滤（向后兼容）"
+// @Param featured query string false "精选过滤 true|false，省略表示不过滤（#742）"
 // @Param chapter_id query int false "章节ID"
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(10)
@@ -147,6 +151,7 @@ func (h *ForumHandler) ListTopics(c *gin.Context) {
 				Scope:     c.Query("scope"),
 				Category:  c.Query("category"),
 				Solved:    c.Query("solved"),
+				Featured:  c.Query("featured"),
 				ChapterID: atoiDefault(c.Query("chapter_id"), 0),
 				Page:      atoiDefault(c.Query("page"), 1),
 				PageSize:  atoiDefault(c.Query("page_size"), 10),
@@ -160,6 +165,7 @@ func (h *ForumHandler) ListTopics(c *gin.Context) {
 				Scope:     req.Scope,
 				Category:  req.Category,
 				Solved:    req.Solved,
+				Featured:  req.Featured,
 				ChapterID: req.ChapterID,
 				Page:      req.Page,
 				PageSize:  req.PageSize,
@@ -477,6 +483,65 @@ func (h *ForumHandler) AdminDeleteTopic(c *gin.Context) {
 	}.Handle(c)
 }
 
+// AdminFeatureTopic 管理员加精帖子 POST /api/admin/forum/topics/:id/featured
+// @Summary 管理员加精帖子
+// @Description 全类别可精；首次加精同事务给帖主 featured_bonus +30（每帖幂等一次，取消重精不重复发分）；状态已一致时幂等短路
+// @Tags 管理端-论坛
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "主题 ID"
+// @Success 200 {object} response.R{data=service.ForumTopicDTO} "加精成功"
+// @Failure 400 {object} response.R "加精失败（主题不存在）"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 403 {object} response.R "需要管理员角色"
+// @Router /admin/forum/topics/{id}/featured [post]
+func (h *ForumHandler) AdminFeatureTopic(c *gin.Context) {
+	h.handleSetFeatured(c, true)
+}
+
+// AdminUnfeatureTopic 管理员取消精选 DELETE /api/admin/forum/topics/:id/featured
+// @Summary 管理员取消精选
+// @Description 只改状态，已发放的加精奖励不回滚；状态已一致时幂等短路
+// @Tags 管理端-论坛
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "主题 ID"
+// @Success 200 {object} response.R{data=service.ForumTopicDTO} "已取消精选"
+// @Failure 400 {object} response.R "操作失败（主题不存在）"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 403 {object} response.R "需要管理员角色"
+// @Router /admin/forum/topics/{id}/featured [delete]
+func (h *ForumHandler) AdminUnfeatureTopic(c *gin.Context) {
+	h.handleSetFeatured(c, false)
+}
+
+// handleSetFeatured 加精/取消精选共用管线（#742）：状态迁移 + 首次加精发分在同一服务方法内。
+func (h *ForumHandler) handleSetFeatured(c *gin.Context, featured bool) {
+	Endpoint[topicIDReq, service.ForumTopicDTO]{
+		Parse: func(c *gin.Context) (*topicIDReq, error) {
+			topicID, err := pathInt64(c, "id", "主题ID无效")
+			if err != nil {
+				return nil, err
+			}
+			return &topicIDReq{TopicID: topicID}, nil
+		},
+		Invoke: func(ctx context.Context, req *topicIDReq) (*service.ForumTopicDTO, error) {
+			return h.svc.SetFeatured(req.TopicID, featured)
+		},
+		Render: func(c *gin.Context, _ *topicIDReq, resp *service.ForumTopicDTO, err error) {
+			if err != nil {
+				response.BadRequest(c, err.Error())
+				return
+			}
+			if featured {
+				response.SuccessWithMsg(c, "加精成功", resp)
+			} else {
+				response.SuccessWithMsg(c, "已取消精选", resp)
+			}
+		},
+	}.Handle(c)
+}
+
 // AdminDeleteReply 管理员删除任意回复 DELETE /api/admin/forum/replies/:id
 // AdminDeleteReply 管理员删除回复 DELETE /api/admin/forum/replies/:id
 // @Summary 管理员删除回复
@@ -519,6 +584,7 @@ type listTopicsReq struct {
 	Scope     string
 	Category  string
 	Solved    string
+	Featured  string
 	ChapterID int
 	Page      int
 	PageSize  int
