@@ -20,17 +20,32 @@
                 <text class="qa-chip-text" :class="{ active: qaSort === 'latest' }">最新</text>
             </view>
         </view>
+
+        <!-- 知识问答：状态筛选（#736） -->
+        <view class="qa-status-bar">
+            <view class="qa-chip" :class="{ active: qaStatus === '' }" @click="onStatusChange('')">
+                <text class="qa-chip-text" :class="{ active: qaStatus === '' }">全部</text>
+            </view>
+            <view class="qa-chip" :class="{ active: qaStatus === 'open' }" @click="onStatusChange('open')">
+                <text class="qa-chip-text" :class="{ active: qaStatus === 'open' }">进行中</text>
+            </view>
+            <view class="qa-chip" :class="{ active: qaStatus === 'resolved' }" @click="onStatusChange('resolved')">
+                <text class="qa-chip-text" :class="{ active: qaStatus === 'resolved' }">已解决</text>
+            </view>
+        </view>
     </view>
 </template>
 
 <script setup lang="uts">
     withDefaults(defineProps<{
         qaSort? : string
+        qaStatus? : string
     }>(), {
-        qaSort: 'recommend'
+        qaSort: 'recommend',
+        qaStatus: ''
     })
 
-    const emit = defineEmits(['ask', 'sortChange'])
+    const emit = defineEmits(['ask', 'sortChange', 'statusChange'])
 
     function onAsk() : void {
         emit('ask')
@@ -38,6 +53,10 @@
 
     function onSort(val : string) : void {
         emit('sortChange', val)
+    }
+
+    function onStatusChange(val : string) : void {
+        emit('statusChange', val)
     }
 </script>
 
@@ -82,6 +101,12 @@
         flex-direction: row;
         align-items: center;
         padding: 4rpx 24rpx 16rpx;
+    }
+
+    .qa-status-bar {
+        flex-direction: row;
+        align-items: center;
+        padding: 0rpx 24rpx 16rpx;
     }
 
     .qa-chip {

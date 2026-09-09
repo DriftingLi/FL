@@ -135,6 +135,7 @@ function buildTopic(obj : UTSJSONObject) : ForumTopic {
         favorited: favVal,
         created_at: toStr(obj['created_at']),
         scope: toStr(obj['scope'], 'general'),
+        status: toStr(obj['status'], 'open'),
     } as ForumTopic
 }
 
@@ -206,6 +207,7 @@ function buildTopicDetail(obj : UTSJSONObject) : ForumTopicDetail {
         can_delete: toBool(topicObj['can_delete']),
         replies: replies,
         scope: toStr(topicObj['scope'], 'general'),
+        status: toStr(topicObj['status'], 'open'),
     } as ForumTopicDetail
     return detail
 }
@@ -226,7 +228,7 @@ function buildLikeResult(obj : UTSJSONObject) : LikeTopicResult {
  * @param sort 排序字段，默认 latest
  * @param order 排序方向，默认 desc
  */
-export function getForumTopicsApi(page : number = 1, pageSize : number = 10, scope : string = 'general', sort : string = 'latest', order : string = 'desc', category : string = '') : Promise<ForumTopicListResult> {
+export function getForumTopicsApi(page : number = 1, pageSize : number = 10, scope : string = 'general', sort : string = 'latest', order : string = 'desc', category : string = '', status : string = '') : Promise<ForumTopicListResult> {
     const params : UTSJSONObject = {
         scope: scope,
         sort: sort,
@@ -237,6 +239,10 @@ export function getForumTopicsApi(page : number = 1, pageSize : number = 10, sco
     // 帖子类别（后端 discussion|question|experience，#727 已放行），空为不筛选
     if (category.length > 0) {
         params['category'] = category
+    }
+    // 问题状态筛选（#736）：resolved=已解决，open=进行中，空为不筛选
+    if (status.length > 0) {
+        params['status'] = status
     }
     return getMapped<ForumTopicListResult>('/forum/topics', params, (data : UTSJSONObject) : ForumTopicListResult => {
         console.log('[getForumTopicsApi] raw data:', JSON.stringify(data))

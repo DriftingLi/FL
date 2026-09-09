@@ -15,12 +15,14 @@ export type UseTopicFeedResult = {
     sortField : Ref<string>
     sortOrder : Ref<string>
     qaSort : Ref<string>
+    qaStatus : Ref<string>
     expSort : Ref<string>
     loadTopics : (reset : boolean) => Promise<void>
     onLoadMore : () => void
     onSortFieldChange : (field : string) => void
     onSortOrderChange : (order : string) => void
     onQaSortChange : (val : string) => void
+    onQaStatusChange : (val : string) => void
     onExpSortChange : (val : string) => void
 }
 
@@ -35,6 +37,8 @@ export function useTopicFeed(currentTab : Ref<string>) : UseTopicFeedResult {
     const sortOrder = ref<string>('desc')   // desc | asc
     // 知识问答筛选：recommend（mock，暂以热度代替）| hot | latest
     const qaSort = ref<string>('recommend')
+    // 知识问答状态筛选（#736）：''（全部）| resolved（已解决）| open（进行中）
+    const qaStatus = ref<string>('')
     // 备考经验筛选（#706）：default（后端默认时序）| hot（最多赞）| latest
     const expSort = ref<string>('default')
 
@@ -68,7 +72,8 @@ export function useTopicFeed(currentTab : Ref<string>) : UseTopicFeedResult {
                 order = 'desc'
                 sort = expSort.value == 'hot' ? 'hot' : (expSort.value == 'latest' ? 'created' : 'latest')
             }
-            const result = await getForumTopicsApi(page.value, pageSize, scope, sort, order, category)
+            const statusParam = currentTab.value === 'hot' ? qaStatus.value : ''
+            const result = await getForumTopicsApi(page.value, pageSize, scope, sort, order, category, statusParam)
             if (reset) {
                 topics.value = result.items
             } else {
@@ -104,6 +109,12 @@ export function useTopicFeed(currentTab : Ref<string>) : UseTopicFeedResult {
         loadTopics(true)
     }
 
+    function onQaStatusChange(val : string) : void {
+        if (qaStatus.value === val) return
+        qaStatus.value = val
+        loadTopics(true)
+    }
+
     function onExpSortChange(val : string) : void {
         if (expSort.value === val) return
         expSort.value = val
@@ -123,12 +134,14 @@ export function useTopicFeed(currentTab : Ref<string>) : UseTopicFeedResult {
         sortField: sortField,
         sortOrder: sortOrder,
         qaSort: qaSort,
+        qaStatus: qaStatus,
         expSort: expSort,
         loadTopics: (reset : boolean) => loadTopics(reset),
         onLoadMore: () => onLoadMore(),
         onSortFieldChange: (field : string) => onSortFieldChange(field),
         onSortOrderChange: (order : string) => onSortOrderChange(order),
         onQaSortChange: (val : string) => onQaSortChange(val),
+        onQaStatusChange: (val : string) => onQaStatusChange(val),
         onExpSortChange: (val : string) => onExpSortChange(val),
     } as UseTopicFeedResult
 }
