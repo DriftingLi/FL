@@ -27,7 +27,7 @@
         <ForumSquareSortBar v-if="currentTab === 'square'" :sort-field="sortField" :sort-order="sortOrder"
             @field-change="onSortFieldChange" @order-change="onSortOrderChange" />
         <!-- 知识问答：发一个问题 + 筛选（问答 Tab 显示） -->
-        <ForumQaHeader v-if="currentTab === 'hot'" :qa-sort="qaSort" @ask="onCreate" @sort-change="onQaSortChange" />
+        <ForumQaHeader v-if="currentTab === 'hot'" :qa-sort="qaSort" :qa-status="qaStatus" @ask="onCreate" @sort-change="onQaSortChange" @status-change="onQaStatusChange" />
         <!-- 备考经验：默认/最多赞/最新 chips（#706） -->
         <ForumExperienceSortBar v-if="currentTab === 'experience'" :exp-sort="expSort" @sort-change="onExpSortChange" />
 
@@ -47,6 +47,7 @@
                     :author-id="item.author_id" :author-name="item.author_name" :author-avatar="item.author_avatar"
                     :created-at="item.created_at" :views-count="item.views_count" :replies-count="item.replies_count"
                     :likes-count="item.likes_count" :variant="currentTab === 'hot' ? 'qa' : 'square'"
+                    :status="item.status"
                     @click="onTopicClick" @reply="onReply" />
             </view>
             <view v-if="loading" class="loading-more">
@@ -92,8 +93,8 @@
 
     // ---- 帖子流（列表域下沉 useTopicFeed）----
     const {
-        topics, loading, noMore, sortField, sortOrder, qaSort, expSort,
-        loadTopics, onLoadMore, onSortFieldChange, onSortOrderChange, onQaSortChange, onExpSortChange,
+        topics, loading, noMore, sortField, sortOrder, qaSort, qaStatus, expSort,
+        loadTopics, onLoadMore, onSortFieldChange, onSortOrderChange, onQaSortChange, onQaStatusChange, onExpSortChange,
     } = useTopicFeed(currentTab)
 
     const unreadCount = ref<number>(0)

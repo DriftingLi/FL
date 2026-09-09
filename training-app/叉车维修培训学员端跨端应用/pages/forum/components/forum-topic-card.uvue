@@ -1,6 +1,11 @@
 <template>
     <view class="topic-card" @click="onCardClick">
-        <text class="topic-title">{{ title }}</text>
+        <view class="topic-title-row">
+            <text class="topic-title">{{ title }}</text>
+            <view v-if="variant === 'qa'" class="status-badge" :class="{ 'status-resolved': status === 'resolved' }">
+                <text class="status-badge-text" :class="{ 'status-badge-text-resolved': status === 'resolved' }">{{ statusText }}</text>
+            </view>
+        </view>
         <text class="topic-content-preview">{{ contentPreview }}</text>
         <view v-if="images.length > 0" class="topic-images">
             <view v-for="(img, i) in firstImages" :key="i" class="topic-image-cell">
@@ -95,6 +100,7 @@
         repliesCount? : number
         likesCount? : number
         variant? : string // 'square' | 'qa'
+        status? : string // resolved | open（#736）
     }>(), {
         topicId: 0,
         title: '',
@@ -107,7 +113,8 @@
         viewsCount: 0,
         repliesCount: 0,
         likesCount: 0,
-        variant: 'square'
+        variant: 'square',
+        status: 'open'
     })
 
     const emit = defineEmits(['click', 'reply'])
@@ -124,6 +131,8 @@
     const viewsText = computed<string>(() : string => formatCountCompact(props.viewsCount))
     const repliesText = computed<string>(() : string => formatCountCompact(props.repliesCount))
     const likesText = computed<string>(() : string => formatCountCompact(props.likesCount))
+    /** 状态徽章文本（#740，两态按父票 #707 裁定，标签与 web 一致） */
+    const statusText = computed<string>(() : string => props.status === 'resolved' ? '已解决' : '求助')
 
     function imgUrl(url : string) : string {
         return resolveFileUrl(url)
@@ -148,12 +157,41 @@
         flex-direction: column;
     }
 
+    .topic-title-row {
+        flex-direction: row;
+        align-items: center;
+        margin-bottom: 12rpx;
+    }
+
     .topic-title {
         font-size: 32rpx;
         font-weight: bold;
         color: #333333;
         line-height: 1.4;
-        margin-bottom: 12rpx;
+        flex: 1;
+    }
+
+    /* 状态徽章（#736 #739）：open=蓝，resolved=绿 */
+    .status-badge {
+        margin-left: 12rpx;
+        padding: 4rpx 16rpx;
+        border-radius: 16rpx;
+        background-color: #e3f2fd;
+        flex-shrink: 0;
+    }
+
+    .status-badge.status-resolved {
+        background-color: #e8f5e9;
+    }
+
+    .status-badge-text {
+        font-size: 20rpx;
+        color: #2196f3;
+        font-weight: 500;
+    }
+
+    .status-badge-text.status-badge-text-resolved {
+        color: #4caf50;
     }
 
     .topic-content-preview {

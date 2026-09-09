@@ -112,6 +112,7 @@ function buildReply(obj : UTSJSONObject, fallbackTopicId : number = 0) : ForumRe
 /** 构造 ForumTopic（列表项）
  *  后端字段：view_count / reply_count（非 views_count / replies_count）
  *  点赞字段兼容 liked / liked_by_me（后端 GetTopic 用 liked_by_me，历史用 liked）
+ *  status 从 accepted_reply_id 派生（#707 裁定：采纳判定，非后端 status 字段）
  */
 function buildTopic(obj : UTSJSONObject) : ForumTopic {
     let likedVal = toBool(obj['liked'])
@@ -120,6 +121,9 @@ function buildTopic(obj : UTSJSONObject) : ForumTopic {
     if (!likedVal) likedVal = toBool(obj['likedByMe'])
     const likesCnt = toNumber(obj['likes_count'], -1) >= 0 ? toNumber(obj['likes_count']) : toNumber(obj['like_count'])
     const favVal = toBool(obj['favorited'])
+    // status 从 accepted_reply_id 派生：有采纳回答 = resolved，否则 = open
+    const acceptedReplyId = obj['accepted_reply_id']
+    const statusVal = (acceptedReplyId != null && toNumber(acceptedReplyId) > 0) ? 'resolved' : 'open'
     return {
         id: toNumber(obj['id']),
         title: toStr(obj['title']),
@@ -135,6 +139,7 @@ function buildTopic(obj : UTSJSONObject) : ForumTopic {
         favorited: favVal,
         created_at: toStr(obj['created_at']),
         scope: toStr(obj['scope'], 'general'),
+        status: statusVal,
     } as ForumTopic
 }
 
@@ -162,8 +167,9 @@ function buildTopicListResult(obj : UTSJSONObject) : ForumTopicListResult {
 
 /** 构造 ForumTopicDetail（含回复列表）
  *  后端实际响应：{ topic: { id, title, content, view_count, reply_count, ...,
- *    author: {...}, can_delete }, replies: [{ id, content, created_at, author: {...} }] }
+ *    author: {...}, can_delete, accepted_reply_id }, replies: [{ id, content, created_at, author: {...} }] }
  *  注意：帖子信息在 topic 子对象里，replies 在顶层
+ *  status 从 accepted_reply_id 派生（#707 裁定：采纳判定，非后端 status 字段）
  */
 function buildTopicDetail(obj : UTSJSONObject) : ForumTopicDetail {
     // 帖子主体在 topic 子对象里
@@ -189,6 +195,9 @@ function buildTopicDetail(obj : UTSJSONObject) : ForumTopicDetail {
     if (!likedVal) likedVal = toBool(topicObj['likedByMe'])
     const likesCnt = toNumber(topicObj['likes_count'], -1) >= 0 ? toNumber(topicObj['likes_count']) : toNumber(topicObj['like_count'])
     const favVal = toBool(topicObj['favorited'])
+    // status 从 accepted_reply_id 派生：有采纳回答 = resolved，否则 = open
+    const acceptedReplyId = topicObj['accepted_reply_id']
+    const statusVal = (acceptedReplyId != null && toNumber(acceptedReplyId) > 0) ? 'resolved' : 'open'
     const detail : ForumTopicDetail = {
         id: topicId,
         title: toStr(topicObj['title']),
@@ -206,6 +215,7 @@ function buildTopicDetail(obj : UTSJSONObject) : ForumTopicDetail {
         can_delete: toBool(topicObj['can_delete']),
         replies: replies,
         scope: toStr(topicObj['scope'], 'general'),
+        status: statusVal,
     } as ForumTopicDetail
     return detail
 }
@@ -226,7 +236,7 @@ function buildLikeResult(obj : UTSJSONObject) : LikeTopicResult {
  * @param sort 排序字段，默认 latest
  * @param order 排序方向，默认 desc
  */
-export function getForumTopicsApi(page : number = 1, pageSize : number = 10, scope : string = 'general', sort : string = 'latest', order : string = 'desc', category : string = '') : Promise<ForumTopicListResult> {
+export function getForumTopicsApi(page : number = 1, pageSize : number = 10, scope : string = 'general', sort : string = 'latest', order : string = 'desc', category : string = '', status : string = '') : Promise<ForumTopicListResult> {
     const params : UTSJSONObject = {
         scope: scope,
         sort: sort,
@@ -237,6 +247,11 @@ export function getForumTopicsApi(page : number = 1, pageSize : number = 10, sco
     // 帖子类别（后端 discussion|question|experience，#727 已放行），空为不筛选
     if (category.length > 0) {
         params['category'] = category
+    }
+    // 问题状态筛选（#707 裁定）：沿用 solved 参数（#367 交付），仅 category=question 时生效
+    // resolved（已解决）→ solved=solved；open（进行中）→ solved=unsolved；空为不筛选
+    if (status.length > 0 && category === 'question') {
+        params['solved'] = status === 'resolved' ? 'solved' : 'unsolved'
     }
     return getMapped<ForumTopicListResult>('/forum/topics', params, (data : UTSJSONObject) : ForumTopicListResult => {
         console.log('[getForumTopicsApi] raw data:', JSON.stringify(data))
