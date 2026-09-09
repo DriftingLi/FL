@@ -171,12 +171,12 @@
         flex: 1;
     }
 
-    /* 状态徽章（#736） */
+    /* 状态徽章（#736 #739）：open=蓝，resolved=绿 */
     .status-badge {
         margin-left: 12rpx;
         padding: 4rpx 16rpx;
         border-radius: 16rpx;
-        background-color: #fff3e0;
+        background-color: #e3f2fd;
         flex-shrink: 0;
     }
 
@@ -186,7 +186,7 @@
 
     .status-badge-text {
         font-size: 20rpx;
-        color: #ff9800;
+        color: #2196f3;
         font-weight: 500;
     }
 
