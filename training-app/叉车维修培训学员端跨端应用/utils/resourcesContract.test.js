@@ -47,9 +47,9 @@ describe('提交链路契约（upload-resource 消费 api/contribution）', () =
     expect(src).toContain('getCurrentCredentialApi');
     expect(src).toMatch(/credentialId\.value\s*<=\s*0/);
   });
-  it('App 端选文件走 uni.chooseFile，chooseImage 不再用于资源投稿', () => {
+  it('资源投稿选文件走 uni.chooseFile（chooseImage 仅论坛图片模式，#756）', () => {
     expect(src).toContain('uni.chooseFile');
-    expect(src).not.toContain('uni.chooseImage');
+    expect(src).toMatch(/function onPickLocalFile[\s\S]*?uni\.chooseFile\(\{/);
   });
 });
 
@@ -149,27 +149,41 @@ describe('forum-create 非法类别归一契约', () => {
   });
 });
 
-describe('上传页原型对齐契约（#754：模块分流 + 文件方式行）', () => {
+describe('上传页原型对齐契约（#754 视觉 + #756 统一发布页）', () => {
   const src = read('pages/resources/upload-resource.uvue');
   const code = stripComments(src);
-  it('选择模块 chips：资源=本页选中态，其余三 chip 跳 forum-create 对应 scope', () => {
+  it('选择模块 chips：页内切换 activeModule，不再跳转 forum-create（#756 推翻 #754 分流）', () => {
     expect(src).toContain('选择模块');
     for (const s of ['discussion', 'question', 'experience']) {
       expect(src).toMatch(new RegExp("scope: '" + s + "'"));
     }
-    expect(src).toMatch(/navigateTo\(\{ url: '\/pages\/forum\/forum-create\?scope=' \+ scope \}\)/);
+    expect(code).not.toContain('/pages/forum/forum-create');
+    expect(src).toMatch(/activeModule\.value\s*=\s*scope/);
+    expect(src).toMatch(/const isResource\s*=\s*computed<boolean>/);
   });
-  it('文件方式三行齐备（微信聊天文档/本地文件上传/选择压缩文件）', () => {
+  it('资源模式三文件行齐备（微信聊天文档/本地文件上传/选择压缩文件）', () => {
     expect(src).toContain('微信聊天文档');
     expect(src).toContain('本地文件上传');
     expect(src).toContain('选择压缩文件');
   });
-  it('图片上传行与第三方入口不实现（原型冲突项零残留）', () => {
-    expect(code).not.toContain('图片上传');
+  it('论坛模式接发帖链路：createForumTopicApi + uploadForumImageApi，category=activeModule', () => {
+    expect(src).toMatch(
+      /import\s*\{[^}]*\bcreateForumTopicApi\b[^}]*\}\s*from\s*'\.\.\/\.\.\/api\/forum'/
+    );
+    expect(src).toContain('uploadForumImageApi');
+    expect(src).toMatch(/createForumTopicApi\(t, c, images\.value, activeModule\.value\)/);
+    expect(src).toMatch(/maxImages\s*=\s*9/);
+  });
+  it('第三方入口不实现（原型冲突项零残留）；图片仅论坛模式（投稿白名单不变）', () => {
     expect(code).not.toContain('金山');
     expect(code).not.toContain('WPS');
     expect(code).not.toContain('钉钉');
     expect(code).not.toContain('QQ文档');
+    // 投稿模式仍不收图片：docExt 是白名单去 zip，无图片扩展名
+    expect(src).toMatch(/const docExt\s*=\s*\[[^\]]*\]/);
+    const docExtLine = src.match(/const docExt\s*=\s*\[([^\]]*)\]/)[1];
+    expect(docExtLine).not.toContain('jpg');
+    expect(docExtLine).not.toContain('png');
   });
   it('微信端两行 chooseMessageFile 按扩展名过滤（文档行/zip 行），App 端本地行走 chooseFile', () => {
     expect(src).toContain('uni.chooseMessageFile');
