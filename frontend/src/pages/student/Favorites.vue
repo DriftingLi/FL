@@ -84,7 +84,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { favoriteApi, type FavoriteItem, type FavoriteTargetType } from '@/api/favorite'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import { formatLocaleDateTime } from '@/utils/format'
@@ -96,6 +96,7 @@ import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
+import { useConfirm } from '@/composables/useConfirm'
 
 const router = useRouter()
 
@@ -183,7 +184,7 @@ function handleTabChange() {
 
 async function removeFavorite(item: FavoriteItem) {
   try {
-    await ElMessageBox.confirm('确定移除该收藏吗？', '移除收藏', { type: 'warning' })
+    await useConfirm().confirmDanger('确定移除该收藏吗？', '移除收藏', { type: 'warning' })
   } catch {
     return
   }

@@ -152,7 +152,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowDown } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { questionBankApi } from '@/api/questionBank'
 import { credentialApi, type CredentialDict } from '@/api/credential'
 import type { Question } from '@/types/question'
@@ -167,6 +167,7 @@ import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
+import { useConfirm } from '@/composables/useConfirm'
 
 const router = useRouter()
 const statusMap: Record<string, string> = { draft: '草稿', pending: '待审核', published: '已发布' }
@@ -245,7 +246,7 @@ function editQuestion(row: Question) {
 // 提交审核：将 draft 题目状态改为 pending（后端会清空驳回理由）
 async function submitForReview(row: Question) {
   try {
-    await ElMessageBox.confirm('确定提交该题目给管理员审核？', '提示', { type: 'info' })
+    await useConfirm().confirm('确定提交该题目给管理员审核？', '提示', { type: 'info' })
     await questionBankApi.updateQuestion(row.id, { status: 'pending' })
     ElMessage.success('已提交审核')
     await loadData()
@@ -273,7 +274,7 @@ function handleAction(cmd: string, row: Question) {
 
 async function handleDelete(row: Question) {
   try {
-    await ElMessageBox.confirm('确定删除此题目？', '提示', { type: 'warning' })
+    await useConfirm().confirmDanger('确定删除此题目？', '提示', { type: 'warning' })
     await questionBankApi.deleteQuestion(row.id)
     ElMessage.success('删除成功')
     await loadData()

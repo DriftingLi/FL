@@ -223,7 +223,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { Sort, MagicStick, Filter, CollectionTag } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { questionBankApi } from '@/api/questionBank'
 import { practiceModeApi, type PracticeModeKey } from '@/api/practiceMode'
 import { trainingApi } from '@/api/training'
@@ -251,6 +251,7 @@ import KnowledgeCard from '@/components/practice/KnowledgeCard.vue'
 import CommentCard from '@/components/practice/CommentCard.vue'
 import NoteCard from '@/components/practice/NoteCard.vue'
 import { useAsyncPage } from '@/composables/useAsyncPage'
+import { useConfirm } from '@/composables/useConfirm'
 
 // null = 入口；'sequential' | 'free' | 'tag' = 刷题中
 
@@ -422,7 +423,7 @@ async function startTagPractice() {
 
 async function confirmQuit() {
   try {
-    await ElMessageBox.confirm('确定要退出本次练习吗？', '提示', { type: 'warning' })
+    await useConfirm().confirm('确定要退出本次练习吗？', '提示', { type: 'warning' })
     // 退出时保存当前游标和答题状态并返回入口，随后刷新卡片进度展示
     await quit()
     loadCardData()

@@ -5,7 +5,7 @@
  * 广场仅展示 approved 投稿（后端已过滤），跟随当前证件（页面父级传入）。
  */
 import { ref, watch, onMounted, computed } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { Download, UploadFilled, Plus, Document, Warning, View } from '@element-plus/icons-vue'
 import { contributionApi, type ContributionFile, type ContributionItem, type ContributionStatus } from '@/api/contribution'
 import { resolveFileUrl } from '@/utils/fileUrl'
@@ -19,6 +19,7 @@ import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useCredentialStore } from '@/stores/credential'
 import UiPagination from '@/components/ui/UiPagination.vue'
+import { useConfirm } from '@/composables/useConfirm'
 
 const props = defineProps<{
   credentialId?: number | null
@@ -204,7 +205,7 @@ async function submitContribution() {
 /** 撤回 pending 稿 */
 async function onWithdraw(item: ContributionItem) {
   try {
-    await ElMessageBox.confirm(`撤回后该稿将从审核队列移除，确定撤回「${item.title}」？`, '撤回投稿', {
+    await useConfirm().confirmDanger(`撤回后该稿将从审核队列移除，确定撤回「${item.title}」？`, '撤回投稿', {
       type: 'warning',
       confirmButtonText: '撤回',
       cancelButtonText: '再想想'

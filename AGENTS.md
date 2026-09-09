@@ -37,6 +37,7 @@ AI 安全审计用 DeepSec（Shield）。See `docs/agents/security-scan.md`.
 | **空态两级** | 独立占据内容区的空态（整页 / 列表 / 面板）用 `UiEmptyState`；**卡片正文内嵌**的一行提示保留纯文案（统一 `text-ink-3`），不塞组件 —— 后者换成组件会多出图标与整块留白，比问题本身更重。 |
 | **筛选栏** | `UiFilterBar`，只提供容器与 `#filters` / `#actions` 两个插槽，字段由各页自写；**不做 prop 化** —— 各页字段数与按钮语义不一致，prop 化会让组件持续膨胀。 |
 | **表格** | `<el-table>` 走 `element-overrides.css` 的 `--el-table-*` 全局变量（ADR-0037），**不封装 UiTable**。两条硬边界：**不动行高与单元格内边距**；**禁用 `primary-*`/`accent-*` 做表格底色**（深色块未重定义这两个色阶，会出「暗底亮块」）。表格显式空态用 `UiEmptyState`，默认空态走全局文字色。 |
+| **确认框** | 一律 `useConfirm()`（`composables/useConfirm.ts`）：`confirm`（普通）/ `confirmDanger`（删除、清空、移除、驳回、撤销等不可逆操作 —— 红确认钮 + 焦点不落确认钮，连按回车不误执行）/ `prompt`（带输入）。**业务代码禁直接调 `ElMessageBox`**。 |
 
 页面保持整洁：不要写冗余的小标题、装饰性提示与说明性 hint 文本，有的话就清理，仅保留必要的功能性提示。删除 hint 时同步删除对应的 CSS class 与 scoped style，避免残留死代码。
 

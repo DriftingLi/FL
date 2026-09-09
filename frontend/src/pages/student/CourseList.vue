@@ -225,7 +225,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowRight, Star, StarFilled } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { courseApi, type CourseDetail, type CourseSummary } from '@/api/course'
 import { studentApi, type StudentCourseDetail } from '@/api/student'
 import { favoriteApi } from '@/api/favorite'
@@ -246,6 +246,7 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
+import { useConfirm } from '@/composables/useConfirm'
 
 const stagger = useStagger()
 
@@ -473,7 +474,7 @@ async function handleRedeem() {
   const price = detailCourse.value.points_price
   if (!price) return
   try {
-    await ElMessageBox.confirm(`该课程需 ${price} 积分解锁，确认兑换？`, '积分兑换', {
+    await useConfirm().confirm(`该课程需 ${price} 积分解锁，确认兑换？`, '积分兑换', {
       confirmButtonText: '确认兑换',
       cancelButtonText: '取消',
       type: 'warning'

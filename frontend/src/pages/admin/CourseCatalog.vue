@@ -201,7 +201,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { Search, ArrowDown, CaretTop, CaretBottom } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { trainingApi, type CatalogDirectionNode, type CatalogLevel, type CertificateTemplate } from '@/api/training'
 import { credentialApi, type CredentialDict } from '@/api/credential'
 import { adminApi, type AdminCourseItem } from '@/api/admin'
@@ -216,6 +216,7 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiFilterBar from '@/components/ui/UiFilterBar.vue'
+import { useConfirm } from '@/composables/useConfirm'
 
 const submitting = ref(false)
 
@@ -499,7 +500,7 @@ function handleAction(cmd: string, row: AdminCourseItem) {
       moveCourse(row, 1)
       break
     case 'delete':
-      ElMessageBox.confirm('确定删除该课程？', '提示', {
+      useConfirm().confirmDanger('确定删除该课程？', '提示', {
         type: 'warning',
         confirmButtonText: '确定',
         cancelButtonText: '取消'

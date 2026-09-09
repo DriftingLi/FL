@@ -73,7 +73,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { Star, StarFilled } from '@element-plus/icons-vue'
 import { realExamApi } from '@/api/realExam'
 import { practiceModeApi } from '@/api/practiceMode'
@@ -90,6 +90,7 @@ import KnowledgeCard from '@/components/practice/KnowledgeCard.vue'
 import CommentCard from '@/components/practice/CommentCard.vue'
 import NoteCard from '@/components/practice/NoteCard.vue'
 import UiButton from '@/components/ui/UiButton.vue'
+import { useConfirm } from '@/composables/useConfirm'
 
 const route = useRoute()
 const router = useRouter()
@@ -166,7 +167,7 @@ async function handleSubmit() {
 
 async function confirmQuit() {
   try {
-    await ElMessageBox.confirm('退出后将保存当前进度，下次可继续练习。', '退出练习', {
+    await useConfirm().confirm('退出后将保存当前进度，下次可继续练习。', '退出练习', {
       confirmButtonText: '退出',
       cancelButtonText: '继续练习',
       type: 'warning'
