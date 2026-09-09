@@ -37,7 +37,7 @@ export function useTopicFeed(currentTab : Ref<string>) : UseTopicFeedResult {
     const sortOrder = ref<string>('desc')   // desc | asc
     // 知识问答筛选：recommend（mock，暂以热度代替）| hot | latest
     const qaSort = ref<string>('recommend')
-    // 知识问答状态筛选（#736）：''（全部）| resolved（已解决）| open（进行中）
+    // 知识问答状态筛选（#740，两态按父票 #707 裁定）：''（全部）| resolved（已解决）| open（未解决）
     const qaStatus = ref<string>('')
     // 备考经验筛选（#706）：default（后端默认时序）| hot（最多赞）| latest
     const expSort = ref<string>('default')

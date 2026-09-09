@@ -131,8 +131,8 @@
     const viewsText = computed<string>(() : string => formatCountCompact(props.viewsCount))
     const repliesText = computed<string>(() : string => formatCountCompact(props.repliesCount))
     const likesText = computed<string>(() : string => formatCountCompact(props.likesCount))
-    /** 状态徽章文本（#736） */
-    const statusText = computed<string>(() : string => props.status === 'resolved' ? '已解决' : '进行中')
+    /** 状态徽章文本（#740，两态按父票 #707 裁定，标签与 web 一致） */
+    const statusText = computed<string>(() : string => props.status === 'resolved' ? '已解决' : '求助')
 
     function imgUrl(url : string) : string {
         return resolveFileUrl(url)
