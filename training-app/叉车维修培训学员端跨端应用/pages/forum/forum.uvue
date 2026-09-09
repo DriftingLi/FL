@@ -150,14 +150,13 @@
     }
 
     function onCreate() : void {
-        // 资源 tab 的创建入口（header 发帖/搜索栏）统一走上传资源页（#710）：
-        // forum-create?scope=resource 的 category 非法必 400
+        // 统一发布页（#760）：资源 tab 走 forum-create?scope=resource（该页资源模式承载投稿表单，
+        // 发帖接口永不收到 resource 类别）；其余 tab 只传后端合法类别
         if (currentTab.value === 'resource') {
-            uni.navigateTo({ url: '/pages/resources/upload-resource' })
+            uni.navigateTo({ url: '/pages/forum/forum-create?scope=resource' })
             return
         }
-        // 只传后端合法类别（discussion/question/experience）；square 归 discussion，
-        // 旧值 general 与 resource 均触发后端「帖子类别无效」400
+        // 只传后端合法类别（discussion/question/experience）；square 归 discussion
         let scope = 'discussion'
         if (currentTab.value === 'hot') {
             scope = 'question'

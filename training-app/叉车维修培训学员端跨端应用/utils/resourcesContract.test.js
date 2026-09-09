@@ -1,21 +1,23 @@
 /**
- * 资源上传模块完工契约测试（refs #710）
+ * 资源上传模块契约测试（refs #710 → #754/#756 → #760）
  *
- * 背景：resources 三页半成品——upload-resource 提交死端（「上传功能开发中」toast）、
- * my-uploads 永远空列表（零 API 调用）、my-purchases 拿 profile 的课程进度假充已购、
- * forum 资源 tab 上传入口跳 forum-create?scope=resource（后端 category 仅认
- * discussion/question/experience，resource 必 400「帖子类别无效」）。
- * 后端投稿域（contributions，#517/#611/#702）即资源上传 endpoint：先传后交 + mine 列表。
+ * 架构演进：#710 接通投稿链路（先传后交 + mine）；#754/#756 上传页原型对齐与统一发布；
+ * #760 用户裁定「复用发布新帖页」——forum-create 分类行四 tab（广场/资源/知识问答/备考经验），
+ * 「资源」tab 从假 chip（映射 discussion）变真投稿模式，upload-resource 独立页退役删除。
+ * 后端投稿域（contributions，#517/#611/#702）：POST /contributions/upload-file 暂存 →
+ * POST /contributions 建稿；GET /contributions/mine 我的投稿。发帖接口永不收到 resource 类别。
  *
  * 缝：api/*.uts 与页面 .uvue 无法在 jest 中 import，沿用源码契约测试缝
  * （先例 utils/checkinWiringContract.test.js）。
  *
  * 钉住的契约：
- * 1) 提交链路：upload-resource 消费 api/contribution 的上传+创建投稿函数
- * 2) 数据源：my-uploads 消费 getMyContributionsApi；my-purchases 消费 getStudentCoursesApi
- * 3) 死端清零：「上传功能开发中」与 forum-create?scope=resource 导航字面量全域清零
- * 4) 路由与类型：api/contribution.uts 三条路由、字段对齐后端 json tag（守护规则 H）
- * 5) 400 家族：forum-create 默认 discussion + 非法 scope/回填归一
+ * 1) 提交链路：forum-create 资源模式消费 api/contribution（上传+建稿+证件门槛+白名单前置校验）
+ * 2) 数据源：my-uploads→getMyContributionsApi；my-purchases→getStudentCoursesApi
+ * 3) 入口改跳：资源面板格子/forum 资源 tab/my-uploads 去上传 → forum-create?scope=resource；
+ *    已删页 upload-resource 全域零引用
+ * 4) 路由与类型：api/contribution.uts 三路由、字段对齐后端 json tag（守护规则 H）
+ * 5) 归一：forum-create 默认 discussion；URL scope=resource 进资源 tab，其余非法/历史归一；
+ *    编辑回填 normalizeCategory（帖子永不回填 resource）
  */
 const fs = require('fs');
 const path = require('path');
@@ -23,19 +25,24 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 
-/** 去注释后比对（避免自述性注释误伤 not-contains 断言） */
 const stripComments = (src) =>
   src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/[^\n]*/g, '$1');
 
-describe('提交链路契约（upload-resource 消费 api/contribution）', () => {
-  const src = read('pages/resources/upload-resource.uvue');
-  it('上传与创建投稿函数 import 自 api/contribution', () => {
+describe('提交链路契约（#760：forum-contribution-form 组件承载投稿）', () => {
+  const src = read('pages/forum/components/forum-contribution-form.uvue');
+  const shell = read('pages/forum/forum-create.uvue');
+  it('上传与创建投稿函数 import 自 api/contribution（组件层）', () => {
     const importRe =
-      /import\s*\{[^}]*\b(uploadContributionFileApi|createContributionApi)\b[^}]*\}\s*from\s*'\.\.\/\.\.\/api\/contribution'/;
+      /import\s*\{[^}]*\buploadContributionFileApi\b[^}]*\}\s*from\s*'\.\.\/\.\.\/\.\.\/api\/contribution'/;
     expect(importRe.test(src)).toBe(true);
   });
-  it('提交死端文案「上传功能开发中」清零', () => {
-    expect(src).not.toContain('上传功能开发中');
+  it('选文件走 chooseFile/chooseMessageFile，投稿白名单无图片', () => {
+    expect(src).toContain('uni.chooseFile');
+    expect(src).toContain('uni.chooseMessageFile');
+    const docExtLine = src.match(/const docExt\s*=\s*\[([^\]]*)\]/)[1];
+    expect(docExtLine).not.toContain('jpg');
+    expect(docExtLine).not.toContain('png');
+    expect(docExtLine).not.toContain('jpeg');
   });
   it('客户端前置校验齐备（白名单/20MB/50MB/5 个文件）', () => {
     expect(src).toContain("'pdf'");
@@ -43,13 +50,13 @@ describe('提交链路契约（upload-resource 消费 api/contribution）', () =
     expect(src).toContain('50 * 1024 * 1024');
     expect(src).toMatch(/maxFiles\s*=\s*5/);
   });
-  it('证件门槛：无证件阻断提交（credentialId <= 0）', () => {
-    expect(src).toContain('getCurrentCredentialApi');
-    expect(src).toMatch(/credentialId\.value\s*<=\s*0/);
+  it('证件门槛：壳层取证件下发，组件无证件阻断投稿', () => {
+    expect(shell).toContain('getCurrentCredentialApi');
+    expect(src).toMatch(/props\.credentialId\s*<=\s*0/);
   });
-  it('资源投稿选文件走 uni.chooseFile（chooseImage 仅论坛图片模式，#756）', () => {
-    expect(src).toContain('uni.chooseFile');
-    expect(src).toMatch(/function onPickLocalFile[\s\S]*?uni\.chooseFile\(\{/);
+  it('壳层接线：组件 import + 资源模式渲染并下发 title/intro/credential', () => {
+    expect(shell).toMatch(/import ForumContributionForm from '\.\/components\/forum-contribution-form\.uvue'/);
+    expect(shell).toMatch(/<ForumContributionForm v-if="isResourceMode"[\s\S]*?:credential-id="credentialId"/);
   });
 });
 
@@ -84,36 +91,38 @@ describe('my-purchases 数据源修正契约', () => {
   });
 });
 
-describe('forum 资源入口改跳契约', () => {
-  it('资源面板上传格子改跳 /pages/resources/upload-resource', () => {
+describe('forum 资源入口改跳契约（#760：统一进 forum-create 资源 tab）', () => {
+  it('资源面板上传格子跳 forum-create?scope=resource', () => {
     const src = read('pages/forum/components/forum-resource-panel.uvue');
-    expect(src).toContain("'/pages/resources/upload-resource'");
-    expect(src).not.toMatch(/['"]\/pages\/forum\/forum-create\?scope=resource['"]/);
+    expect(src).toContain("'/pages/forum/forum-create?scope=resource'");
   });
-  it('forum onCreate 资源 tab 分支改跳上传资源页；scope 不再产 resource/general', () => {
+  it('forum onCreate 资源 tab 分支跳 forum-create?scope=resource', () => {
     const src = read('pages/forum/forum.uvue');
-    expect(src).toContain("'/pages/resources/upload-resource'");
-    expect(src).not.toMatch(/scope\s*=\s*'resource'/);
-    expect(src).not.toMatch(/scope\s*=\s*'general'/);
+    expect(src).toContain("'/pages/forum/forum-create?scope=resource'");
   });
-  it('全域不再以导航字面量发送 forum-create?scope=resource', () => {
+  it('my-uploads 去上传跳 forum-create?scope=resource', () => {
+    const src = read('pages/resources/my-uploads.uvue');
+    expect(src).toContain("'/pages/forum/forum-create?scope=resource'");
+  });
+  it('已删页 upload-resource 全域零引用（源码）', () => {
     const offenders = [];
     const walk = (dir) => {
       for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
         const p = path.join(dir, e.name);
         if (e.isDirectory()) { walk(p); continue; }
         if (!/\.(uts|uvue)$/.test(e.name) || /\.test\./.test(e.name)) continue;
-        const src = fs.readFileSync(p, 'utf8');
-        if (/['"]\/pages\/forum\/forum-create\?scope=resource['"]/.test(src)) {
+        if (fs.readFileSync(p, 'utf8').includes('/pages/resources/upload-resource')) {
           offenders.push(path.relative(ROOT, p));
         }
       }
     };
-    walk(path.join(ROOT, 'api'));
-    walk(path.join(ROOT, 'pages'));
-    walk(path.join(ROOT, 'composables'));
-    walk(path.join(ROOT, 'utils'));
+    for (const d of ['api', 'pages', 'composables', 'utils', 'stores']) walk(path.join(ROOT, d));
     expect(offenders).toEqual([]);
+  });
+  it('forum-create 资源 tab 绝不把 resource 发进发帖接口（按钮隐藏 + onSubmit 早退双守卫）', () => {
+    const src = read('pages/forum/forum-create.uvue');
+    expect(src).toMatch(/if\s*\(isResourceMode\.value\)\s*return/);
+    expect(src).toMatch(/<view v-if="!isResourceMode" class="submit-section">/);
   });
 });
 
@@ -136,70 +145,33 @@ describe('api/contribution.uts 路由与类型契约', () => {
   });
 });
 
-describe('forum-create 非法类别归一契约', () => {
+describe('forum-create 归一与资源模式契约（#710 + #760）', () => {
   const src = read('pages/forum/forum-create.uvue');
-  it('默认类别为 discussion（非 general）', () => {
+  it('默认类别为 discussion（非 general/resource）', () => {
     expect(src).toMatch(/selectedCategory\s*=\s*ref<string>\('discussion'\)/);
     expect(src).not.toMatch(/ref<string>\('general'\)/);
   });
-  it('URL scope 与编辑回填均过 normalizeCategory', () => {
-    expect(src).toContain('normalizeCategory');
-    expect(src).toMatch(/selectedCategory\.value\s*=\s*normalizeCategory\(`\$\{scope\}`\)/);
+  it('分类行含资源 tab（value=resource，非假映射 discussion）', () => {
+    expect(src).toMatch(/label:\s*'资源',\s*value:\s*'resource'/);
+  });
+  it('URL scope=resource 进资源模式；其余非法/历史归一', () => {
+    expect(src).toMatch(/s == 'resource' \? 'resource' : normalizeCategory\(s\)/);
+  });
+  it('编辑回填过 normalizeCategory（帖子永不回填 resource）', () => {
     expect(src).toMatch(/selectedCategory\.value\s*=\s*normalizeCategory\(data\.scope\)/);
   });
-});
-
-describe('上传页原型对齐契约（#754 视觉 + #756 统一发布页）', () => {
-  const src = read('pages/resources/upload-resource.uvue');
-  const code = stripComments(src);
-  it('选择模块 chips：页内切换 activeModule，不再跳转 forum-create（#756 推翻 #754 分流）', () => {
-    expect(src).toContain('选择模块');
-    for (const s of ['discussion', 'question', 'experience']) {
-      expect(src).toMatch(new RegExp("scope: '" + s + "'"));
-    }
-    expect(code).not.toContain('/pages/forum/forum-create');
-    expect(src).toMatch(/activeModule\.value\s*=\s*scope/);
-    expect(src).toMatch(/const isResource\s*=\s*computed<boolean>/);
-  });
-  it('资源模式三文件行齐备（微信聊天文档/本地文件上传/选择压缩文件）', () => {
-    expect(src).toContain('微信聊天文档');
-    expect(src).toContain('本地文件上传');
-    expect(src).toContain('选择压缩文件');
-  });
-  it('论坛模式接发帖链路：createForumTopicApi + uploadForumImageApi，category=activeModule', () => {
-    expect(src).toMatch(
-      /import\s*\{[^}]*\bcreateForumTopicApi\b[^}]*\}\s*from\s*'\.\.\/\.\.\/api\/forum'/
-    );
-    expect(src).toContain('uploadForumImageApi');
-    expect(src).toMatch(/createForumTopicApi\(t, c, images\.value, activeModule\.value\)/);
-    expect(src).toMatch(/maxImages\s*=\s*9/);
-  });
-  it('第三方入口不实现（原型冲突项零残留）；图片仅论坛模式（投稿白名单不变）', () => {
-    expect(code).not.toContain('金山');
-    expect(code).not.toContain('WPS');
-    expect(code).not.toContain('钉钉');
-    expect(code).not.toContain('QQ文档');
-    // 投稿模式仍不收图片：docExt 是白名单去 zip，无图片扩展名
-    expect(src).toMatch(/const docExt\s*=\s*\[[^\]]*\]/);
-    const docExtLine = src.match(/const docExt\s*=\s*\[([^\]]*)\]/)[1];
-    expect(docExtLine).not.toContain('jpg');
-    expect(docExtLine).not.toContain('png');
-  });
-  it('微信端两行 chooseMessageFile 按扩展名过滤（文档行/zip 行），App 端本地行走 chooseFile', () => {
-    expect(src).toContain('uni.chooseMessageFile');
-    expect(src).toMatch(/pickFromMessage\(docExt\)/);
-    expect(src).toMatch(/pickFromMessage\(\['zip'\]\)/);
-    expect(src).toMatch(/extension: allowedExt/);
+  it('isResourceMode 计算属性且编辑态互斥', () => {
+    expect(src).toMatch(/const isResourceMode\s*=\s*computed<boolean>/);
+    expect(src).toMatch(/selectedCategory\.value == 'resource' && !isEdit\.value/);
   });
 });
 
-describe('resources 列表页视觉语言对齐契约（#758：圆图标/胶囊徽标/无描边卡/chevron）', () => {
+describe('resources 列表页视觉语言对齐契约（#758）', () => {
   it('my-uploads：圆形图标 + 胶囊状态徽标 + 卡片无描边 + 驳回提示条', () => {
     const src = read('pages/resources/my-uploads.uvue');
     expect(src).toMatch(/\.upload-item-icon-box \{[^}]*border-radius: 40rpx/);
     expect(src).toContain('upload-item-badge');
     expect(src).toMatch(/\.upload-item-badge \{[^}]*border-radius: 24rpx/);
-    expect(src).toMatch(/\.upload-item \{[^}]*\}/);
     const itemRule = src.match(/\.upload-item \{[^}]*\}/)[0];
     expect(itemRule).not.toContain('border:');
     expect(src).toContain('upload-item-reason-box');

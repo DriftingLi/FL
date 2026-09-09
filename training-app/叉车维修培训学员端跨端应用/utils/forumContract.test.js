@@ -237,10 +237,10 @@ describe('行为保持契约（手术不改跳转、交互与乐观更新语义�
     expect(page).toContain("uni.navigateTo({ url: '/pages/profile/personal-activity' })");
   });
 
-  it('上传资源格子跳 /pages/resources/upload-resource（#710 完工：scope=resource 非法 category 必 400，修复落地）', () => {
+  it('上传资源格子跳 forum-create 资源 tab（#760 复用发布页，upload-resource 退役）', () => {
     const panel = read('pages/forum/components/forum-resource-panel.uvue');
-    expect(panel).toContain('/pages/resources/upload-resource');
-    expect(panel).not.toContain('/pages/forum/forum-create?scope=resource');
+    expect(panel).toContain('/pages/forum/forum-create?scope=resource');
+    expect(panel).not.toContain('/pages/resources/upload-resource');
   });
 
   it('TopicCard 广场/问答共用，变体由壳层 currentTab 下发', () => {

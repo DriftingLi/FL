@@ -128,7 +128,8 @@
     }
 
     function onUpload() : void {
-        uni.navigateTo({ url: '/pages/resources/upload-resource' })
+        // 统一发布页资源 tab（#760）
+        uni.navigateTo({ url: '/pages/forum/forum-create?scope=resource' })
     }
 
     function onBack() : void { goBack() }
