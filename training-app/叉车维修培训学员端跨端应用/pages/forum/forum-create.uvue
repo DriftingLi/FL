@@ -102,7 +102,7 @@
     const title = ref<string>('')
     const content = ref<string>('')
     const images = ref<string[]>([])
-    const selectedCategory = ref<string>('general')
+    const selectedCategory = ref<string>('discussion')
     const submitting = ref<boolean>(false)
     const uploadingImage = ref<boolean>(false)
     const loadingDetail = ref<boolean>(false)
@@ -133,6 +133,13 @@
         selectedCategory.value = value
     }
 
+    /** 非法/历史类别值归一（#710）：后端仅认 discussion/question/experience，
+        旧默认 general 与资源域残留 resource 一律归 discussion，防「帖子类别无效」400 */
+    function normalizeCategory(value : string) : string {
+        if (value == 'question' || value == 'experience') return value
+        return 'discussion'
+    }
+
     // ===== 加载帖子数据（编辑模式） =====
     async function loadTopicForEdit(topicId : number) : Promise<void> {
         loadingDetail.value = true
@@ -142,7 +149,7 @@
             title.value = data.title
             content.value = data.content
             images.value = data.images.slice()
-            selectedCategory.value = data.scope.length > 0 ? data.scope : 'general'
+            selectedCategory.value = normalizeCategory(data.scope)
         } catch (e) {
             console.error('[forum-create] loadTopicForEdit failed:', e)
             uni.showToast({ title: '加载帖子失败', icon: 'none' })
@@ -283,10 +290,10 @@
                 loadTopicForEdit(parsedId)
             }
         }
-        // 从 URL 参数接收默认分类
+        // 从 URL 参数接收默认分类（非法/历史 scope 归一，#710）
         const scope = options['scope']
         if (scope != null && scope != '') {
-            selectedCategory.value = `${scope}`
+            selectedCategory.value = normalizeCategory(`${scope}`)
         }
     })
 </script>

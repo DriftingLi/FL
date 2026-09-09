@@ -33,19 +33,21 @@
     import { onShow } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
-    import { getProfileApi } from '../../api/student'
-    import type { StudentProfile, CourseProgressItem } from '../../types/index'
+    import { getStudentCoursesApi } from '../../api/student'
+    import type { StudentCourse } from '../../types/index'
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
-    const courses = ref<CourseProgressItem[]>([])
+    const courses = ref<StudentCourse[]>([])
     const loading = ref<boolean>(false)
 
+    // 已购课程数据源：GET /student/courses（ADR-0017「我的课程」，#710 修正——
+    // 原先拿 profile.course_progress 假充已购；后端无购买概念，真实口径即我的课程）
     async function loadPurchases() : Promise<void> {
         loading.value = true
         try {
-            const data : StudentProfile = await getProfileApi()
-            courses.value = data.course_progress
+            const data = await getStudentCoursesApi()
+            courses.value = data.courses
         } catch (e) {
             console.error('[my-purchases] load failed:', e)
         } finally {
