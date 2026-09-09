@@ -59,7 +59,10 @@ function vditorStaticPlugin(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [vue(), tailwindcss(), vditorStaticPlugin()],
+  plugins: [
+    vue(),
+    tailwindcss(),
+    vditorStaticPlugin()],
   test: {
     environment: 'happy-dom',
     globals: true,
@@ -98,12 +101,19 @@ export default defineConfig({
     }
   },
   build: {
+    // 关闭 modulePreload：vite 的 __vitePreload helper 会被 manualChunks 归入
+    // markdown-stream 大 chunk，导致 entry 静态依赖整个 924KB（#748 性能评估 P0-1）。
+    // 关闭后动态 import 裸加载，原生 module 图仍并行发现依赖；preload 提示的损失可接受。
+    modulePreload: false,
     chunkSizeWarningLimit: 700,
     rollupOptions: {
       output: {
         // 按第三方库拆分 vendor chunk，避免 Element Plus / ECharts / PDF 等
         // 大依赖打进入口 chunk（此前两个入口 chunk 均超 1.1MB）
         manualChunks(id) {
+          // vite 的 preload helper（虚拟模块，动态 import 注入 CSS 用）若不显式归置，
+          // 会被自然聚进 markdown-stream 大 chunk，导致 entry 静态依赖整个 924KB（#748 P0-1）
+          if (id.includes('vite/preload-helper')) return 'vendor'
           if (!id.includes('node_modules')) return undefined
           if (id.includes('/element-plus/') || id.includes('@element-plus/')) return 'element-plus'
           if (id.includes('/echarts/') || id.includes('/zrender/')) return 'echarts'
