@@ -351,17 +351,19 @@ describe('UiSegmentTabs（分段选项卡）', () => {
     expect(w.emitted('update:modelValue')).toBeFalsy()
   })
 
-  it('指示条用品牌语义色而非 bg-panel（防与卡片同色隐身）', () => {
+  it('指示条用实心品牌色而非 bg-panel 或浅底档（防与卡片/灰底同色隐身）', () => {
     const w = mountWith(UiSegmentTabs, { modelValue: '7d', options: opts })
     const bar = w.find('[aria-hidden="true"]')
-    expect(bar.classes()).toContain('bg-ui-100')
+    expect(bar.classes()).toContain('bg-ui-500')
+    // #CCFBF1 / #F0FDFA 压在 bg-canvas 上肉眼就是灰白，等于没改
     expect(bar.classes()).not.toContain('bg-panel')
+    expect(bar.classes()).not.toContain('bg-ui-100')
   })
 
-  it('激活项用品牌深字、未激活项用次要文字色', () => {
+  it('激活项用反白字（压在实心品牌色块上）', () => {
     const w = mountWith(UiSegmentTabs, { modelValue: '7d', options: opts })
     const btns = w.findAll('button')
-    expect(btns[0].classes()).toContain('text-ui-700')
+    expect(btns[0].classes()).toContain('text-white')
     expect(btns[1].classes()).toContain('text-ink-3')
   })
 
