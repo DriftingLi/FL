@@ -220,11 +220,11 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessageBox } from 'element-plus'
 import { Expand, Fold, ArrowDown, SwitchButton } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { isNavRouteActive, type NavItem } from '@/config/navigation'
 import NotificationPanel from '@/components/layout/NotificationPanel.vue'
+import { useConfirm } from '@/composables/useConfirm'
 
 const props = withDefaults(
   defineProps<{
@@ -338,7 +338,7 @@ function isRouteActive(item: NavItem): boolean {
 async function handleUserCommand(command: string) {
   if (command === 'logout') {
     try {
-      await ElMessageBox.confirm('确定要退出登录吗？', '提示', {
+      await useConfirm().confirm('确定要退出登录吗？', '提示', {
         confirmButtonText: '确定',
         cancelButtonText: '取消',
         type: 'warning'

@@ -4,7 +4,7 @@
  * 后端 V1 即 tutor+admin 双角色鉴权；讲师端前端二期，本页现仅在管理端挂出。
  */
 import { ref, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import {
   adminContributionApi,
@@ -16,6 +16,7 @@ import { resolveFileUrl } from '@/utils/fileUrl'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiFilterBar from '@/components/ui/UiFilterBar.vue'
+import { useConfirm } from '@/composables/useConfirm'
 
 const activeTab = ref<'pending' | 'reports'>('pending')
 
@@ -75,7 +76,7 @@ const REPORT_REASON_LABEL: Record<string, string> = {
 // ===== 操作 =====
 async function onApprove(row: ContributionItem) {
   try {
-    await ElMessageBox.confirm(`通过「${row.title}」？作者将 +50 分。`, '审核通过', {
+    await useConfirm().confirm(`通过「${row.title}」？作者将 +50 分。`, '审核通过', {
       type: 'info',
       confirmButtonText: '通过并发分',
       cancelButtonText: '取消'
@@ -95,7 +96,7 @@ async function onApprove(row: ContributionItem) {
 async function onReject(row: ContributionItem) {
   let reason = ''
   try {
-    const { value } = await ElMessageBox.prompt(`驳回「${row.title}」，请填写原因（将送达作者）：`, '驳回投稿', {
+    const { value } = await useConfirm().prompt(`驳回「${row.title}」，请填写原因（将送达作者）：`, '驳回投稿', {
       confirmButtonText: '驳回',
       cancelButtonText: '取消',
       inputType: 'textarea',
@@ -117,7 +118,7 @@ async function onReject(row: ContributionItem) {
 async function onHandleReport(row: ContributionReportItem, action: 'archive' | 'dismiss') {
   if (action === 'archive') {
     try {
-      await ElMessageBox.confirm(`下架被举报投稿 #${row.contribution_id}（${row.contribution_title || ''}）并回收已发积分？`, '处置举报：下架', {
+      await useConfirm().confirm(`下架被举报投稿 #${row.contribution_id}（${row.contribution_title || ''}）并回收已发积分？`, '处置举报：下架', {
         type: 'warning',
         confirmButtonText: '下架并回收',
         cancelButtonText: '取消'

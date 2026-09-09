@@ -34,17 +34,27 @@
       class="mb-3"
     />
 
-    <!-- 排序 / 求助筛选（讨论、问答）：讨论仅排序，问答额外叠求助/已解决 -->
+    <!-- 排序 / 求助筛选（讨论、问答、经验）：精选筛选三 Tab 通用（#742），问答额外叠求助/已解决 -->
     <div v-if="mainTab !== 'mine'" class="mb-3 flex flex-wrap items-center justify-between gap-3">
-      <div v-if="mainTab === 'question'" class="solved-filter">
+      <div class="flex flex-wrap items-center gap-2">
+        <div v-if="mainTab === 'question'" class="solved-filter">
+          <UiSegmentTabs
+            :model-value="solvedFilter"
+            :options="[
+              { label: '全部', value: 'all' },
+              { label: '求助', value: 'unsolved' },
+              { label: '已解决', value: 'solved' }
+            ]"
+            @update:model-value="(v: string) => { solvedFilter = v as 'all' | 'unsolved' | 'solved'; handleSolvedChange() }"
+          />
+        </div>
         <UiSegmentTabs
-          :model-value="solvedFilter"
+          :model-value="featuredFilter"
           :options="[
-            { label: '全部', value: 'all' },
-            { label: '求助', value: 'unsolved' },
-            { label: '已解决', value: 'solved' }
+            { label: '全部帖', value: '' },
+            { label: '★ 精选', value: 'true' }
           ]"
-          @update:model-value="(v: string) => { solvedFilter = v as 'all' | 'unsolved' | 'solved'; handleSolvedChange() }"
+          @update:model-value="(v: string) => { featuredFilter = v as '' | 'true'; handleFeaturedChange() }"
         />
       </div>
       <div class="ml-auto flex items-center gap-2">
@@ -147,6 +157,7 @@
                 {{ topic.chapter_title || '章节讨论' }}
               </el-tag>
               <el-tag v-else size="small" type="info">综合</el-tag>
+              <el-tag v-if="topic.is_featured" size="small" effect="dark" class="font-semibold">★ 精选</el-tag>
               <h3 class="m-0 truncate text-base font-semibold text-ink">{{ topic.title }}</h3>
             </div>
             <p class="mt-1.5 mb-2 line-clamp-2 text-[13px] text-ink-2">{{ topic.content }}</p>
@@ -193,7 +204,12 @@
       :confirm-loading="postForm?.submitting"
       @confirm="postForm?.submit()"
     >
-      <ForumPostForm ref="postForm" :category="mainTab === 'experience' ? 'experience' : 'discussion'" @success="onTopicCreated" />
+      <ForumPostForm
+        ref="postForm"
+        :category="mainTab === 'experience' ? 'experience' : 'discussion'"
+        :categories="['discussion', 'question', 'experience']"
+        @success="onTopicCreated"
+      />
     </UiDialog>
   </div>
 </template>
@@ -241,7 +257,15 @@ const { sort: topicSort, order: topicOrder, flipOrder, resetOrder } = useForumSo
 type SolvedFilter = 'all' | 'solved' | 'unsolved'
 const solvedFilter = ref<SolvedFilter>('all')
 
+// ===== 精选筛选（#742）：三 Tab 通用轴，'' = 全部帖 / 'true' = 仅精选 =====
+const featuredFilter = ref<'' | 'true'>('')
+
 function handleSolvedChange() {
+  currentPage.value = 1
+  loadTopics()
+}
+
+function handleFeaturedChange() {
   currentPage.value = 1
   loadTopics()
 }
@@ -287,6 +311,10 @@ watch(mainTab, async (next, prev) => {
   // 切换一级 Tab 时重置 solved 筛选为全部，避免讨论筛漏到问答
   if (next !== 'question' && solvedFilter.value !== 'all') {
     solvedFilter.value = 'all'
+  }
+  // 精选筛选跨 Tab 不延续（#742）：切 Tab 回到全部帖
+  if (featuredFilter.value !== '') {
+    featuredFilter.value = ''
   }
   await loadTopics()
   await nextTick()
@@ -373,6 +401,10 @@ async function loadTopicsOnce() {
   // 已解决/求助仅对问答生效（#367 单一筛选轴）
   if (activeMain === 'question' && solvedFilter.value !== 'all') {
     ;(query as { solved?: string }).solved = solvedFilter.value
+  }
+  // 精选筛选（#742）：三 Tab 通用，'' 表示不传（不过滤）
+  if (featuredFilter.value !== '') {
+    ;(query as { featured?: string }).featured = featuredFilter.value
   }
   const res = await forumApi.listTopics(query as Parameters<typeof forumApi.listTopics>[0])
   topics.value = res.topics || []

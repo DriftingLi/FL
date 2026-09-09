@@ -78,6 +78,23 @@
 
   --el-transition-duration: 0.25s;
   --el-transition-duration-fast: 0.15s;
+
+  /*
+   * 表格（197 处 / 22 文件）：一律用**会随主题翻转**的项目 token。
+   * ⚠️ 不要用 --color-primary-* / --color-accent-* 做表格底色：深色块只重定义了
+   * bg-* / text-* 系列，primary-50 等在深色下仍是 #F0FDFA 亮色，做 hover / 选中行
+   * 会变成「暗底亮块」（分段控件上因同类问题返工过三轮）。
+   */
+  --el-table-bg-color: var(--color-bg-card);
+  --el-table-tr-bg-color: var(--color-bg-card);
+  --el-table-header-bg-color: var(--color-bg-page);
+  --el-table-expanded-cell-bg-color: var(--color-bg-page);
+  --el-table-row-hover-bg-color: var(--color-bg-page);
+  --el-table-current-row-bg-color: var(--color-bg-page);
+  --el-table-border-color: var(--color-border-light);
+  --el-table-border: 1px solid var(--color-border-light);
+  --el-table-text-color: var(--color-text-primary);
+  --el-table-header-text-color: var(--color-text-secondary);
 }
 
 /*
@@ -109,6 +126,11 @@
   --el-color-info-light-7: #4B5563;
   --el-color-info-light-9: #1F2937;
   --el-color-info-dark-2: #D1D5DB;
+
+  /* 固定列阴影：浅色的淡阴影在深色下几乎不可见，横向滚动时看不出列被固定 */
+  --el-table-fixed-box-shadow: 0 0 10px rgb(0 0 0 / 45%);
+  --el-table-fixed-left-column: inset 10px 0 10px -10px rgb(0 0 0 / 45%);
+  --el-table-fixed-right-column: inset -10px 0 10px -10px rgb(0 0 0 / 45%);
 }
 
 /* 合并自原文件两处 .el-button：radius-lg / font-semibold 为原生效值（后者覆盖前者） */
@@ -260,4 +282,19 @@
 .el-button--large {
   --el-button-size: 48px;
   padding: 0 var(--space-6);
+}
+
+/*
+ * 表格结构：只动**表头与描边**，绝不动行高与单元格内边距 ——
+ * 197 处表格的列表密度、分页位置、滚动条必须保持与改动前一致。
+ * （配色部分走上面的 --el-table-* 变量，这里不再重复声明颜色。）
+ */
+.el-table th.el-table__cell {
+  font-weight: var(--font-semibold);
+  /* 表头与表体的分界比普通行线更实一点，否则长表格里表头会「浮不住」 */
+  border-bottom: 1px solid var(--color-border);
+}
+
+.el-table__empty-block {
+  color: var(--color-text-tertiary);
 }

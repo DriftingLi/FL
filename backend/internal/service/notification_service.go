@@ -166,6 +166,58 @@ func (s *NotificationService) CreateForumAcceptEvent(tx GormCreator, ev ForumAcc
 	return s.CreateWithTx(tx, ev.UserID, ev.Type, title, content, link, forumAcceptPayload(ev.TopicID, ev.ReplyID, ev.Points, ev.Reason), createdAt)
 }
 
+// 论坛加精通知类型（#742）。
+const (
+	NotifTypeForumFeatured = "forum_featured" // 帖主：你的帖子被加精 +30
+)
+
+// forumFeaturedPayload 构造加精事件结构化标记（topic_id + points + reason）。
+func forumFeaturedPayload(topicID int64, points int, reason string) model.JSONB {
+	b, err := json.Marshal(struct {
+		TopicID int64  `json:"topic_id"`
+		Points  int    `json:"points"`
+		Reason  string `json:"reason"`
+	}{TopicID: topicID, Points: points, Reason: reason})
+	if err != nil {
+		return nil
+	}
+	return model.JSONB(b)
+}
+
+// ForumFeaturedEvent 帖子加精事件通知参数（ADR-0024 C3，#742）。
+type ForumFeaturedEvent struct {
+	// UserID 收件人（帖主）。
+	UserID int
+	// TopicTitle 帖子标题（用于文案）。
+	TopicTitle string
+	// TopicID 主题 ID。
+	TopicID int64
+	// Points 到账分值（与实际入账一致）。
+	Points int
+	// Reason 流水原因（ReasonFeaturedBonus）。
+	Reason string
+}
+
+// NewTopicFeaturedEvent 构造帖子加精通知事件（+30 分到账，link 锚到帖子）。
+func NewTopicFeaturedEvent(userID int, topicTitle string, topicID int64, points int) ForumFeaturedEvent {
+	return ForumFeaturedEvent{
+		UserID:     userID,
+		TopicTitle: topicTitle,
+		TopicID:    topicID,
+		Points:     points,
+		Reason:     ReasonFeaturedBonus,
+	}
+}
+
+// CreateTopicFeaturedEvent 在指定事务/连接内创建一条帖子加精事件站内信。
+// 与积分入账同事务提交/回滚（ADR-0023）：通知与到账积分一致。
+func (s *NotificationService) CreateTopicFeaturedEvent(tx GormCreator, ev ForumFeaturedEvent, createdAt time.Time) error {
+	link := fmt.Sprintf("/training/forum/%d", ev.TopicID)
+	title := "你的帖子被加精"
+	content := fmt.Sprintf("你的帖子「%s」被加精精选，+%d 分已到账", ev.TopicTitle, ev.Points)
+	return s.CreateWithTx(tx, ev.UserID, NotifTypeForumFeatured, title, content, link, forumFeaturedPayload(ev.TopicID, ev.Points, ev.Reason), createdAt)
+}
+
 // reviewStatusPayload 构造审核状态结构化标记，如 {"review_status":"approved"}。
 func reviewStatusPayload(reviewStatus string) model.JSONB {
 	b, err := json.Marshal(struct {

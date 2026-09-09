@@ -107,7 +107,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { Refresh, ArrowRight, ArrowDown } from '@element-plus/icons-vue'
 import { adminApi, type ProfileChangeRequest } from '@/api/admin'
 import { useAdminTable } from '@/composables/useAdminTable'
@@ -115,6 +115,7 @@ import { formatLocaleDateTime } from '@/utils/format'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
+import { useConfirm } from '@/composables/useConfirm'
 
 const submitting = ref(false)
 const activeStatus = ref<'pending' | 'approved' | 'rejected'>('pending')
@@ -149,7 +150,7 @@ function handleTabChange() {
 
 async function approve(row: ProfileChangeRequest) {
   try {
-    await ElMessageBox.confirm('确认通过该修改？通过后立即生效。', '通过审核', { type: 'info' })
+    await useConfirm().confirm('确认通过该修改？通过后立即生效。', '通过审核', { type: 'info' })
   } catch {
     return
   }

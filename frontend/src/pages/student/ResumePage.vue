@@ -87,7 +87,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { resumeApi } from '@/api/resume'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
@@ -95,6 +95,7 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import OnlineResumePdf from '@/components/recruit/OnlineResumePdf.vue'
 import CompanyContactInfo from '@/components/recruit/CompanyContactInfo.vue'
+import { useConfirm } from '@/composables/useConfirm'
 
 const router = useRouter()
 const pdfInput = ref<HTMLInputElement | null>(null)
@@ -153,7 +154,7 @@ async function onPdfChange(e: Event) {
 async function deletePdf() {
   // 删除不可恢复，先确认（Standards 审查）
   try {
-    await ElMessageBox.confirm('确定删除已上传的 PDF 附件吗？此操作不可恢复。', '删除附件', { type: 'warning' })
+    await useConfirm().confirmDanger('确定删除已上传的 PDF 附件吗？此操作不可恢复。', '删除附件', { type: 'warning' })
   } catch {
     return
   }

@@ -29,6 +29,10 @@ func AcceptedBonusIdemKey(topicID int64) string { return fmt.Sprintf("accepted_b
 // AcceptActionIdemKey 楼主采纳行为奖励幂等键：`accept_action:{topicID}`。
 func AcceptActionIdemKey(topicID int64) string { return fmt.Sprintf("accept_action:%d", topicID) }
 
+// FeaturedBonusIdemKey 帖子加精奖励幂等键：`featured_bonus:{topicID}`（#742）。
+// 「每帖只发一次」：取消重精/并发均占同一坑，与状态 CAS 双保险（accepted_bonus 同模式）。
+func FeaturedBonusIdemKey(topicID int64) string { return fmt.Sprintf("featured_bonus:%d", topicID) }
+
 // ContributionApprovedIdemKey 投稿过审直记幂等键：`contribution_approved:{contributionID}`。
 func ContributionApprovedIdemKey(contributionID int64) string {
 	return fmt.Sprintf("contribution_approved:%d", contributionID)

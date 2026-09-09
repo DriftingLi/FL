@@ -356,7 +356,7 @@
 // 安全渲染单点：助手内容统一 markstream-vue + html-policy="escape"，AI 域不再有裸 v-html。
 import { ref, computed, useSlots, watch, nextTick, onMounted, onBeforeUnmount, type Component } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import {
   Plus,
   Delete,
@@ -382,6 +382,7 @@ import { authApi } from '@/api/auth'
 import { buildSubdomainUrl } from '@/utils/subdomain'
 import { formatShortDateTime } from '@/utils/format'
 import UiButton from '@/components/ui/UiButton.vue'
+import { useConfirm } from '@/composables/useConfirm'
 
 const props = withDefaults(
   defineProps<{
@@ -572,7 +573,7 @@ async function commitRename(sessionId: number) {
 
 async function handleDeleteSession(id: number) {
   try {
-    await ElMessageBox.confirm('确定删除该会话？所有消息将一并删除。', '确认', { type: 'warning' })
+    await useConfirm().confirmDanger('确定删除该会话？所有消息将一并删除。', '确认', { type: 'warning' })
   } catch {
     return
   }

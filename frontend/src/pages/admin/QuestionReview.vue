@@ -130,7 +130,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { ArrowDown } from '@element-plus/icons-vue'
 import { questionBankApi } from '@/api/questionBank'
 import type { Question } from '@/types/question'
@@ -140,6 +140,7 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
+import { useConfirm } from '@/composables/useConfirm'
 
 const statusMap: Record<string, string> = { draft: '草稿', pending: '待审核', published: '已发布' }
 const statusType: Record<string, string> = { draft: 'info', pending: 'warning', published: 'success' }
@@ -212,7 +213,7 @@ function viewDetail(row: any) {
 // 单题发布
 async function publishSingle(row: { id: number }) {
   try {
-    await ElMessageBox.confirm(`确定发布题目 #${row.id}？发布后学员可见。`, '确认发布', { type: 'success' })
+    await useConfirm().confirm(`确定发布题目 #${row.id}？发布后学员可见。`, '确认发布', { type: 'success' })
     await questionBankApi.publishQuestion(row.id)
     ElMessage.success('发布成功')
     await loadData()
@@ -232,7 +233,7 @@ function rejectSingle(row: { id: number }) {
 // 批量发布
 async function batchPublish() {
   try {
-    await ElMessageBox.confirm(`确定批量发布选中的 ${selectedIds.value.length} 道题目？`, '确认批量发布', { type: 'success' })
+    await useConfirm().confirm(`确定批量发布选中的 ${selectedIds.value.length} 道题目？`, '确认批量发布', { type: 'success' })
     await questionBankApi.batchPublish(selectedIds.value)
     ElMessage.success('批量发布成功')
     await loadData()

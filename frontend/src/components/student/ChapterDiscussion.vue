@@ -10,7 +10,7 @@
  * 状态机：章节列表与展开详情是两级加载 —— 列表轻（只拉标题），详情按需拉取。
  */
 import { ref, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { EditPen, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 import { forumApi, type ForumTopicItem, type ForumReplyItem } from '@/api/forum'
 import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
@@ -25,6 +25,7 @@ import UiTag from '@/components/ui/UiTag.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import { useConfirm } from '@/composables/useConfirm'
 
 const props = defineProps<{
   chapterId: number
@@ -132,7 +133,7 @@ async function submitReply(topicId: number) {
 
 async function removeTopic(topicId: number) {
   try {
-    await ElMessageBox.confirm('确定删除这个帖子吗？删除后无法恢复。', '删除帖子', { type: 'warning' })
+    await useConfirm().confirmDanger('确定删除这个帖子吗？删除后无法恢复。', '删除帖子', { type: 'warning' })
   } catch {
     return
   }
@@ -153,7 +154,7 @@ async function removeTopic(topicId: number) {
 
 async function removeReply(replyId: number) {
   try {
-    await ElMessageBox.confirm('确定删除这条回复吗？', '删除回复', { type: 'warning' })
+    await useConfirm().confirmDanger('确定删除这条回复吗？', '删除回复', { type: 'warning' })
   } catch {
     return
   }
