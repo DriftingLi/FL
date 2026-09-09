@@ -1,0 +1,284 @@
+<template>
+    <view>
+        <view class="attach-card">
+            <text class="attach-label">选择上传的文件方式</text>
+            <view class="method-row method-row-line" @click="onPickWechatDoc">
+                <view class="method-icon-box method-icon-green"><text class="method-icon">💬</text></view>
+                <view class="method-info">
+                    <text class="method-title">微信聊天文档</text>
+                    <text class="method-sub">选择微信聊天中的文档</text>
+                </view>
+                <text class="method-arrow">›</text>
+            </view>
+            <view class="method-row method-row-line" @click="onPickLocalFile">
+                <view class="method-icon-box method-icon-yellow"><text class="method-icon">📁</text></view>
+                <view class="method-info">
+                    <text class="method-title">本地文件上传</text>
+                    <text class="method-sub">从本地文件管理器选择文档</text>
+                </view>
+                <text class="method-arrow">›</text>
+            </view>
+            <view class="method-row" @click="onPickZip">
+                <view class="method-icon-box method-icon-red"><text class="method-icon">📦</text></view>
+                <view class="method-info">
+                    <text class="method-title">选择压缩文件</text>
+                    <text class="method-sub">选择微信聊天中的zip压缩文件</text>
+                </view>
+                <text class="method-arrow">›</text>
+            </view>
+            <view v-if="files.length > 0" class="file-list">
+                <view v-for="(item, idx) in files" :key="idx" class="file-item">
+                    <view class="file-item-info">
+                        <text class="file-item-name">{{ item.name }}</text>
+                        <text class="file-item-size">{{ fmtSize(item.size) }}</text>
+                    </view>
+                    <text class="file-item-remove" @click="onRemoveFile(idx)">移除</text>
+                </view>
+                <text class="upload-total">共 {{ files.length }} 个文件，合计 {{ fmtSize(totalSize) }}</text>
+            </view>
+            <view class="credential-row">
+                <text class="credential-label">投稿证件</text>
+                <text class="credential-name">{{ credentialName.length > 0 ? credentialName : '未选定证件' }}</text>
+            </view>
+        </view>
+        <view class="submit-section">
+            <view class="submit-btn" :class="{ disabled: submitting }" @click="onSubmit">
+                <text class="submit-btn-text">{{ submitText }}</text>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref, computed } from 'vue'
+    import { goBack } from '../../../utils/navigation'
+    import { uploadContributionFileApi, createContributionApi } from '../../../api/contribution'
+    import type { ContributionFileItem } from '../../../api/contribution'
+
+    // 投稿表单（#760）：forum-create 资源 tab 的私有组件，状态自持；
+    // 标题/简介/证件由壳层单向下发（primitive props，uvue 跨组件 v-model 属风险区）
+    const props = withDefaults(defineProps<{
+        title? : string
+        intro? : string
+        credentialId? : number
+        credentialName? : string
+    }>(), {
+        title: '',
+        intro: '',
+        credentialId: 0,
+        credentialName: '',
+    })
+
+    // 投稿硬约束（单一事实源=后端 contribution_service.go，前端只做前置拦截）
+    const maxFiles = 5
+    const maxFileSize = 20 * 1024 * 1024
+    const maxTotalSize = 50 * 1024 * 1024
+    const allowedExt = ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'zip', 'mp4']
+    // 微信聊天文档行的扩展名过滤（白名单去 zip，zip 走「选择压缩文件」行）
+    const docExt = ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'mp4']
+
+    type ChosenFile = { path : string; name : string; size : number }
+    const files = ref<ChosenFile[]>([])
+    const submitting = ref<boolean>(false)
+
+    const totalSize = computed<number>(() : number => {
+        let sum = 0
+        for (let i = 0; i < files.value.length; i++) {
+            sum += files.value[i].size
+        }
+        return sum
+    })
+
+    const submitText = computed<string>(() : string => submitting.value ? '上传中...' : '提交上传')
+
+    /** 文件大小展示 */
+    function fmtSize(size : number) : string {
+        if (size >= 1024 * 1024) {
+            return (size / (1024.0 * 1024.0)).toFixed(1) + 'MB'
+        }
+        if (size >= 1024) {
+            return Math.round(size / 1024.0).toString() + 'KB'
+        }
+        return size.toString() + 'B'
+    }
+
+    /** 取扩展名（小写，无点返回空串） */
+    function extOf(name : string) : string {
+        const idx = name.lastIndexOf('.')
+        if (idx < 0 || idx >= name.length - 1) return ''
+        return name.substring(idx + 1).toLowerCase()
+    }
+
+    function isAllowedExt(ext : string) : boolean {
+        for (let i = 0; i < allowedExt.length; i++) {
+            if (allowedExt[i] == ext) return true
+        }
+        return false
+    }
+
+    /** 前置校验并加入文件列表（逐条提示不合规项） */
+    function addFiles(candidates : ChosenFile[]) : void {
+        for (let i = 0; i < candidates.length; i++) {
+            const c = candidates[i]
+            if (!isAllowedExt(extOf(c.name))) {
+                uni.showToast({ title: '仅支持 pdf/doc/docx/ppt/pptx/xls/xlsx/zip/mp4', icon: 'none' })
+                continue
+            }
+            if (c.size > maxFileSize) {
+                uni.showToast({ title: '单个文件不能超过 20MB', icon: 'none' })
+                continue
+            }
+            if (files.value.length >= maxFiles) {
+                uni.showToast({ title: '一份投稿最多 5 个文件', icon: 'none' })
+                break
+            }
+            if (totalSize.value + c.size > maxTotalSize) {
+                uni.showToast({ title: '文件合计不能超过 50MB', icon: 'none' })
+                break
+            }
+            let dup = false
+            for (let j = 0; j < files.value.length; j++) {
+                if (files.value[j].path == c.path) {
+                    dup = true
+                    break
+                }
+            }
+            if (dup) continue
+            files.value.push(c)
+        }
+    }
+
+    /** 剩余可选槽位（至少 1，防止 picker count=0 报错） */
+    function remainingSlots() : number {
+        const r = maxFiles - files.value.length
+        return r > 0 ? r : 1
+    }
+
+    // #ifdef MP-WEIXIN
+    /** 微信聊天选文件（按扩展名过滤：文档行 / 压缩文件行共用） */
+    function pickFromMessage(extensions : string[]) : void {
+        uni.chooseMessageFile({
+            count: remainingSlots(),
+            type: 'file',
+            extension: extensions,
+            success: (res) => {
+                const picked : ChosenFile[] = []
+                for (let i = 0; i < res.tempFiles.length; i++) {
+                    const f = res.tempFiles[i]
+                    picked.push({ path: f.path, name: f.name, size: f.size } as ChosenFile)
+                }
+                addFiles(picked)
+            }
+        })
+    }
+    // #endif
+
+    function onPickWechatDoc() : void {
+        if (submitting.value) return
+        // #ifdef MP-WEIXIN
+        pickFromMessage(docExt)
+        // #endif
+        // #ifndef MP-WEIXIN
+        uni.showToast({ title: '仅微信小程序支持从聊天选择', icon: 'none' })
+        // #endif
+    }
+
+    function onPickZip() : void {
+        if (submitting.value) return
+        // #ifdef MP-WEIXIN
+        pickFromMessage(['zip'])
+        // #endif
+        // #ifndef MP-WEIXIN
+        uni.showToast({ title: '仅微信小程序支持从聊天选择压缩包', icon: 'none' })
+        // #endif
+    }
+
+    function onPickLocalFile() : void {
+        if (submitting.value) return
+        // #ifdef MP-WEIXIN
+        uni.showToast({ title: '微信端请通过「微信聊天文档」选择', icon: 'none' })
+        // #endif
+        // #ifndef MP-WEIXIN
+        uni.chooseFile({
+            count: remainingSlots(),
+            extension: allowedExt,
+            success: (res) => {
+                const picked : ChosenFile[] = []
+                for (let i = 0; i < res.tempFiles.length; i++) {
+                    const f = res.tempFiles[i]
+                    picked.push({ path: f.path, name: f.name, size: f.size } as ChosenFile)
+                }
+                addFiles(picked)
+            }
+        })
+        // #endif
+    }
+
+    function onRemoveFile(idx : number) : void {
+        if (submitting.value) return
+        files.value.splice(idx, 1)
+    }
+
+    /** 提交：逐个上传暂存 → 创建投稿（pending）。校验/网络错误文案由 request 层统一 toast */
+    async function onSubmit() : Promise<void> {
+        if (submitting.value) return
+        const t = props.title.trim()
+        if (t.length == 0) { uni.showToast({ title: '请输入资源标题', icon: 'none' }); return }
+        if (t.length > 120) { uni.showToast({ title: '标题不能超过 120 字', icon: 'none' }); return }
+        const it = props.intro.trim()
+        if (it.length == 0) { uni.showToast({ title: '请输入资源简介', icon: 'none' }); return }
+        if (it.length > 2000) { uni.showToast({ title: '简介不能超过 2000 字', icon: 'none' }); return }
+        if (props.credentialId <= 0) { uni.showToast({ title: '请先选定证件后再投稿', icon: 'none' }); return }
+        if (files.value.length == 0) { uni.showToast({ title: '请至少选择 1 个文件', icon: 'none' }); return }
+
+        submitting.value = true
+        try {
+            const uploaded : ContributionFileItem[] = []
+            for (let i = 0; i < files.value.length; i++) {
+                uni.showLoading({ title: '上传文件 ' + (i + 1).toString() + '/' + files.value.length.toString(), mask: true })
+                const fi = await uploadContributionFileApi(files.value[i].path)
+                uploaded.push(fi)
+            }
+            uni.showLoading({ title: '提交投稿...', mask: true })
+            await createContributionApi(props.credentialId, t, it, uploaded, false)
+            uni.hideLoading()
+            uni.showToast({ title: '已提交，审核通过后上架', icon: 'success', duration: 1500 })
+            setTimeout(() => { goBack() }, 1200)
+        } catch (e) {
+            uni.hideLoading()
+            console.error('[forum-contribution-form] submit failed:', e)
+        } finally {
+            submitting.value = false
+        }
+    }
+</script>
+
+<style>
+    .attach-card { background-color: #ffffff; border-radius: 16rpx; padding: 32rpx; margin-bottom: 24rpx; flex-direction: column; }
+    .attach-label { font-size: 28rpx; font-weight: bold; color: #333333; margin-bottom: 16rpx; }
+    .method-row { flex-direction: row; align-items: center; padding: 24rpx 0; }
+    .method-row-line { border-bottom: 1rpx solid #f0f0f0; }
+    .method-icon-box { width: 72rpx; height: 72rpx; border-radius: 36rpx; align-items: center; justify-content: center; margin-right: 20rpx; }
+    .method-icon { font-size: 36rpx; }
+    .method-icon-green { background-color: #e3f6e8; }
+    .method-icon-yellow { background-color: #fff4d6; }
+    .method-icon-red { background-color: #fdeaea; }
+    .method-info { flex: 1; flex-direction: column; }
+    .method-title { font-size: 28rpx; color: #333333; }
+    .method-sub { font-size: 22rpx; color: #999999; margin-top: 4rpx; }
+    .method-arrow { font-size: 40rpx; color: #cccccc; }
+    .file-list { margin-top: 20rpx; }
+    .file-item { background-color: #f5f5f5; border-radius: 8rpx; padding: 16rpx; flex-direction: row; align-items: center; margin-bottom: 12rpx; }
+    .file-item-info { flex: 1; flex-direction: column; }
+    .file-item-name { font-size: 26rpx; color: #333333; }
+    .file-item-size { font-size: 22rpx; color: #999999; margin-top: 4rpx; }
+    .file-item-remove { font-size: 26rpx; color: #e5484d; padding: 8rpx 0 8rpx 24rpx; }
+    .upload-total { font-size: 24rpx; color: #999999; margin-top: 4rpx; }
+    .credential-row { margin-top: 24rpx; flex-direction: row; align-items: center; justify-content: space-between; }
+    .credential-label { font-size: 28rpx; font-weight: bold; color: #333333; }
+    .credential-name { font-size: 28rpx; color: #2979ff; }
+    .submit-section { padding: 0 0 64rpx; align-items: center; }
+    .submit-btn { width: 100%; height: 88rpx; border-radius: 44rpx; background-color: #2979ff; align-items: center; justify-content: center; }
+    .submit-btn.disabled { background-color: #cccccc; }
+    .submit-btn-text { font-size: 32rpx; color: #ffffff; font-weight: bold; }
+</style>

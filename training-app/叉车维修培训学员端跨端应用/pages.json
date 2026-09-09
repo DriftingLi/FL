@@ -293,13 +293,6 @@
             }
         },
         {
-            "path": "pages/resources/upload-resource",
-            "style": {
-                "navigationStyle": "custom",
-                "navigationBarTitleText": "上传资源"
-            }
-        },
-        {
             "path": "pages/exam-info/exam-info",
             "style": {
                 "navigationStyle": "custom",
