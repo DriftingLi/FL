@@ -13,6 +13,10 @@
  *    亮度差太小，肉眼就是一块灰白，等于没改（2026-09-08 首版踩过，用户反馈「还是灰色」）。
  * 用实心品牌色 bg-ui-500 + 反白字：两套主题下都与背景有强对比。深色模式里它与
  * 品牌按钮同色系，属既有视觉语言，不突兀。
+ *
+ * ⚠️ 层叠约束：按钮**必须** bg-transparent。项目刻意不引 Tailwind preflight，button 保留
+ * 浏览器默认不透明背景（ButtonFace 浅灰）—— 按钮又带 z-10 在上层，缺这个类会把滑块
+ * 整个盖住（2026-09-09 第二轮反馈「青色滑块在灰色胶囊下面滑动」的根因）。
  */
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 
@@ -144,7 +148,7 @@ onUnmounted(() => {
       type="button"
       role="tab"
       :aria-selected="modelValue === opt.value"
-      class="relative z-10 cursor-pointer rounded-[4px] px-3.5 py-1.5 text-xs font-medium whitespace-nowrap transition-colors duration-150"
+      class="relative z-10 cursor-pointer rounded-[4px] bg-transparent px-3.5 py-1.5 text-xs font-medium whitespace-nowrap transition-colors duration-150"
       :class="modelValue === opt.value ? 'text-white' : 'text-ink-3 hover:text-ink-2'"
       :style="equal ? { flex: '1 1 0' } : undefined"
       @click="select(opt)"
