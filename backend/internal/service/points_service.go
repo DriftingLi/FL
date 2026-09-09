@@ -154,7 +154,7 @@ func profileContactProgress(u *model.HrwaiUser) (done int) {
 
 // taskProgressFor 单任务行为达成判定（#410 后 GetTasks 与 Claim 共用同一实现，杜绝「列表可见/接口空领」分叉）。
 // 返回 nil 表示该任务无行为前置（新任务默认可领，照旧 default 分支；GetTasks 顶层显式透出）。
-// 需要查库的截止类任务走 taskProgressWithDB（growth_first_experience，#742）。
+// 需要查库的截止类任务走 resolveTaskProgress（growth_first_experience，#742）。
 func taskProgressFor(cfg model.PointsTaskConfig, m *taskMeta) *taskProgress {
 	switch cfg.Code {
 	case "daily_quiz":
@@ -188,11 +188,11 @@ func taskProgressFor(cfg model.PointsTaskConfig, m *taskMeta) *taskProgress {
 // TaskCodeFirstExperience 首篇经验专项分任务码（#742）：growth 组，+20 终身一次。
 const TaskCodeFirstExperience = "growth_first_experience"
 
-// taskProgressWithDB 单任务判定入口（GetTasks/Claim 共用，维持「同一判定单实现」纪律）：
+// resolveTaskProgress 单任务判定入口（GetTasks/Claim 共用，维持「同一判定单实现」纪律）：
 // 纯规则任务走 taskProgressFor；growth_first_experience 的达成判定需要查库——
 // 存在**发布时间晚于任务上线时间（config.created_at）**的备考经验帖（#742 存量口径：
 // 上线前发布的存量作者不补发，上线后新发才计达成）。
-func (s *PointsService) taskProgressWithDB(cfg model.PointsTaskConfig, m *taskMeta) (*taskProgress, error) {
+func (s *PointsService) resolveTaskProgress(cfg model.PointsTaskConfig, m *taskMeta) (*taskProgress, error) {
 	if cfg.Code != TaskCodeFirstExperience {
 		return taskProgressFor(cfg, m), nil
 	}
@@ -537,7 +537,7 @@ func (s *PointsService) GetTasks(userID int) (*PointsTasksResult, error) {
 	tasks := make([]PointsTaskItem, 0, len(configs))
 	for _, cfg := range configs {
 		// 单任务判定入口（#742）：纯规则走 taskProgressFor，截止类任务查库判定
-		p, err := s.taskProgressWithDB(cfg, m)
+		p, err := s.resolveTaskProgress(cfg, m)
 		if err != nil {
 			return nil, err
 		}
@@ -607,7 +607,7 @@ func (s *PointsService) Claim(ctx context.Context, userID int, taskCode string) 
 	if err != nil {
 		return nil, err
 	}
-	if p, err := s.taskProgressWithDB(cfg, meta); err != nil {
+	if p, err := s.resolveTaskProgress(cfg, meta); err != nil {
 		return nil, err
 	} else if p != nil && !p.Claimable {
 		return nil, ErrTaskNotDone

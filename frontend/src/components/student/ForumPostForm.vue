@@ -75,12 +75,14 @@ const chipsActive = computed(() => Array.isArray(props.categories) && props.cate
 /** 当前选中的类别：默认 = category prop（所在 Tab），可切换 */
 const selectedCategory = ref<ForumCategory>(props.category)
 
-// 用户是否主动切过 chips（#742）：placeholder 联动仅在主动切换后生效——
-// 保护壳定制过 placeholder 的入口（如问答页的定制文案）不被默认态覆盖
+// 入口类别快照（#742）：placeholder/提示仅在「用户主动切换且偏离入口类别」时联动——
+// 切回入口类别即恢复壳传入的定制文案（保护问答页定制 placeholder 不被永久覆盖）
+const entryCategory = ref<ForumCategory>(props.category)
 const userTouchedCategory = ref(false)
 
-// 壳的默认类别随 Tab 变化（弹窗开着切 Tab 的场景）时同步选中值
+// 壳的默认类别随 Tab 变化（弹窗开着切 Tab 的场景）时视为新一轮入口并同步选中值
 watch(() => props.category, (next) => {
+  entryCategory.value = next
   selectedCategory.value = next
 })
 
@@ -100,15 +102,19 @@ const CATEGORY_HINTS: Record<ForumCategory, { contentPlaceholder: string; hint: 
   }
 }
 
-/** placeholder 联动：仅在用户主动切换类别后生效（保护壳定制文案）；未动过 chips 沿用壳传入值 */
-const effectiveContentPlaceholder = computed(() => {
-  if (chipsActive.value && userTouchedCategory.value) {
-    return CATEGORY_HINTS[selectedCategory.value].contentPlaceholder
-  }
-  return props.contentPlaceholder
-})
-/** 一行功能性提示：chips 激活且选中非讨论类时常显（讨论类无提示） */
-const activeHint = computed(() => (chipsActive.value ? CATEGORY_HINTS[selectedCategory.value].hint : ''))
+/** 是否已偏离入口类别（用户主动切换且当前选中 ≠ 入口类别） */
+const categoryDeviated = computed(
+  () => chipsActive.value && userTouchedCategory.value && selectedCategory.value !== entryCategory.value
+)
+
+/** placeholder 联动：偏离入口类别后用类别文案；未偏离严格沿用壳传入值（存量调用零 diff） */
+const effectiveContentPlaceholder = computed(() =>
+  categoryDeviated.value ? CATEGORY_HINTS[selectedCategory.value].contentPlaceholder : props.contentPlaceholder
+)
+/** 一行功能性提示：仅在偏离入口类别且该类别有提示时显示 */
+const activeHint = computed(() =>
+  categoryDeviated.value ? CATEGORY_HINTS[selectedCategory.value].hint : ''
+)
 
 const chipOptions = computed(() =>
   (props.categories ?? []).map((c) => CATEGORY_OPTIONS.find((o) => o.value === c) ?? { label: c, value: c })
@@ -121,6 +127,7 @@ function handleCategoryChange(v: string) {
 
 function reset() {
   form.value = { title: '', content: '', images: [] }
+  entryCategory.value = props.category
   selectedCategory.value = props.category
   userTouchedCategory.value = false
 }

@@ -331,7 +331,7 @@ func (s *ForumService) ListTopics(in TopicListInput) (*ForumTopicPageResult, err
 		orderClause,
 		func(q *gorm.DB) *gorm.DB {
 			q = q.Table("forum_topics AS t").
-				Select("t.id, t.chapter_id, t.category, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.accepted_reply_id, t.solved_at, t.last_reply_at, t.is_featured, t.created_at, " +
+				Select(topicRowSelect +
 					"u.id AS user_id, u.username, u.avatar_url, " +
 					"COALESCE(ch.title, '') AS chapter_title").
 				Joins("JOIN hrwai_users AS u ON u.id = t.user_id").
@@ -388,7 +388,7 @@ func (s *ForumService) GetTopic(topicID int64, viewerID int, replySort, order st
 	}
 	var row topicRow
 	err := s.db.Table("forum_topics AS t").
-		Select("t.id, t.chapter_id, t.category, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.accepted_reply_id, t.solved_at, t.last_reply_at, t.is_featured, t.created_at, "+
+		Select(topicRowSelect+
 			"u.id AS user_id, u.username, u.avatar_url, "+
 			"COALESCE(ch.title, '') AS chapter_title").
 		Joins("JOIN hrwai_users AS u ON u.id = t.user_id").
@@ -1228,7 +1228,7 @@ func (s *ForumService) MyTopics(userID, page, pageSize int) (*ForumTopicPageResu
 		"COALESCE(t.last_reply_at, t.created_at) DESC, t.id DESC",
 		func(q *gorm.DB) *gorm.DB {
 			return q.Table("forum_topics AS t").
-				Select("t.id, t.chapter_id, t.category, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.accepted_reply_id, t.solved_at, t.last_reply_at, t.is_featured, t.created_at, "+
+				Select(topicRowSelect+
 					"u.id AS user_id, u.username, u.avatar_url, COALESCE(ch.title, '') AS chapter_title").
 				Joins("JOIN hrwai_users AS u ON u.id = t.user_id").
 				Joins("LEFT JOIN chapter AS ch ON ch.chapter_id = t.chapter_id").
@@ -1247,9 +1247,14 @@ func (s *ForumService) MyTopics(userID, page, pageSize int) (*ForumTopicPageResu
 	}, nil
 }
 
+// topicRowSelect topicRow 的共享投影（#742 审查收敛）：新增 topicRow 字段时只改这一处，
+// 全部列表/详情/个人视图查询共用，避免散落 5 处的投影字符串漂移。
+const topicRowSelect = "t.id, t.chapter_id, t.category, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.accepted_reply_id, t.solved_at, t.last_reply_at, t.is_featured, t.created_at, "
+
 // personalTopicSelect 个人动态三列表的行装配投影（与 MyTopics 逐字一致，被删主题字段 NULL 由 Scan 零值承载）。
-const personalTopicSelect = "t.id, t.chapter_id, t.category, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.accepted_reply_id, t.solved_at, t.last_reply_at, t.is_featured, t.created_at, " +
-	"u.id AS user_id, u.username, u.avatar_url, COALESCE(ch.title, '') AS chapter_title"
+const personalTopicSelect = topicRowSelect +
+	"u.id AS user_id, u.username, u.avatar_url, " +
+	"COALESCE(ch.title, '') AS chapter_title"
 
 // finishPersonalTopics 行装配收尾单点：DTO 转换 + 点赞回填 + 发分回填 + 分页信封。
 func (s *ForumService) finishPersonalTopics(rows []topicRow, total int64, page, pageSize int, userID int) *ForumTopicPageResult {
@@ -1685,7 +1690,7 @@ func (s *ForumService) SetFeatured(topicID int64, featured bool) (*ForumTopicDTO
 func (s *ForumService) fetchTopicDTO(topicID int64, viewerID int) (*ForumTopicDTO, error) {
 	var row topicRow
 	err := s.db.Table("forum_topics AS t").
-		Select("t.id, t.chapter_id, t.category, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.accepted_reply_id, t.solved_at, t.last_reply_at, t.is_featured, t.created_at, "+
+		Select(topicRowSelect+
 			"u.id AS user_id, u.username, u.avatar_url, "+
 			"COALESCE(ch.title, '') AS chapter_title").
 		Joins("JOIN hrwai_users AS u ON u.id = t.user_id").
