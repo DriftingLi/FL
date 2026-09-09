@@ -8,6 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 
 // 只替换网络层，保留 forumTabQuery 的真实实现：
 // 页面现在通过 forumTabQuery 把 Tab 翻成查询参数，若连它一起 mock 掉，
@@ -47,6 +48,7 @@ import { forumApi } from '@/api/forum'
 import ForumPage from '../ForumPage.vue'
 
 const listTopics = vi.mocked(forumApi.listTopics)
+const createTopic = vi.mocked(forumApi.createTopic)
 
 /** 一条帖子桩数据。 */
 function topic(id: number, category: 'discussion' | 'question') {
@@ -62,10 +64,13 @@ function topic(id: number, category: 'discussion' | 'question') {
   }
 }
 
-async function mountPage(total = 3, options: { attachTo?: HTMLElement } = {}) {
+async function mountPage(total = 3, options: { attachTo?: HTMLElement; topics?: ReturnType<typeof topic>[] } = {}) {
   // total=0 必须同时把 topics 置空，否则 v-else-if="topics.length > 0" 会渲染列表，
   // 空态断言就是在验一个永远走不到的分支。
-  listTopics.mockResolvedValue({ topics: total === 0 ? [] : [topic(1, 'discussion')], total } as never)
+  listTopics.mockResolvedValue({
+    topics: options.topics ?? (total === 0 ? [] : [topic(1, 'discussion')]),
+    total
+  } as never)
   const wrapper = mount(ForumPage, {
     attachTo: options.attachTo,
     global: {
@@ -161,6 +166,71 @@ describe('论坛类别分流', () => {
 
     await switchCategory(wrapper, 'experience')
     expect(form().props('category')).toBe('experience')
+  })
+
+  it('表单内类别 chips（#742）：默认 = 所在 Tab 类别，切换后提交携带对应 category', async () => {
+    const wrapper = await mountPage()
+    const openBtn = wrapper.findAll('button').find((b) => b.text().includes('发布新帖'))
+    await openBtn!.trigger('click')
+    await flushPromises()
+
+    const form = () => wrapper.findComponent({ name: 'ForumPostForm' })
+    // chips 渲染三分类
+    const chipBar = form().findComponent(UiSegmentTabs)
+    expect(chipBar.exists()).toBe(true)
+    const chipLabels = chipBar.findAll('[role="tab"]').map((b) => b.text().trim())
+    expect(chipLabels).toEqual(expect.arrayContaining(['讨论', '问答', '备考经验']))
+
+    // 未动 chips 直接提交：默认 = 所在 Tab（讨论）
+    await form().findAllComponents(UiInput)[0].setValue('默认类别帖')
+    await form().findAllComponents(UiInput)[1].setValue('内容')
+    await (form().vm as unknown as { submit: () => Promise<boolean> }).submit()
+    await flushPromises()
+    expect(createTopic).toHaveBeenCalledTimes(1)
+    expect(createTopic.mock.calls[0][0].category).toBe('discussion')
+
+    // 切到问答再提交：携带 question（reset 后需重新填写两个字段）
+    chipBar.vm.$emit('update:modelValue', 'question')
+    await flushPromises()
+    await form().findAllComponents(UiInput)[0].setValue('问答模式帖')
+    await form().findAllComponents(UiInput)[1].setValue('内容')
+    await (form().vm as unknown as { submit: () => Promise<boolean> }).submit()
+    await flushPromises()
+    expect(createTopic).toHaveBeenCalledTimes(2)
+    expect(createTopic.mock.calls[1][0].category).toBe('question')
+  })
+
+  it('精选筛选（#742）：切到精选请求 featured=true，切回全部不带参数', async () => {
+    const wrapper = await mountPage()
+    listTopics.mockClear()
+
+    // 定位精选筛选段（options 恰为 '' 与 'true' 两个值）
+    const featuredBar = wrapper.findAllComponents(UiSegmentTabs).find((b) => {
+      const opts = b.props('options') as Array<{ value: string }>
+      return opts.length === 2 && opts.every((o) => o.value === '' || o.value === 'true')
+    })
+    expect(featuredBar).toBeTruthy()
+
+    featuredBar!.vm.$emit('update:modelValue', 'true')
+    await flushPromises()
+    const lastParams = listTopics.mock.calls[listTopics.mock.calls.length - 1][0]
+    expect(lastParams.featured).toBe('true')
+
+    featuredBar!.vm.$emit('update:modelValue', '')
+    await flushPromises()
+    const backParams = listTopics.mock.calls[listTopics.mock.calls.length - 1][0]
+    expect(backParams.featured).toBeUndefined()
+  })
+
+  it('精选帖渲染 ★ 精选标识（#742），非精选帖不渲染', async () => {
+    const wrapper = await mountPage(2, {
+      topics: [
+        { ...topic(1, 'discussion'), is_featured: true, title: '被精选的讨论' },
+        { ...topic(2, 'discussion'), is_featured: false, title: '普通讨论' }
+      ] as never
+    })
+    const featuredTags = wrapper.findAll('.el-tag').filter((t) => t.text().includes('精选'))
+    expect(featuredTags.length).toBe(1)
   })
 
   it('讨论 Tab 的既有查询口径不变：仍只看综合区（不合并章节讨论）、仍带排序与方向', async () => {

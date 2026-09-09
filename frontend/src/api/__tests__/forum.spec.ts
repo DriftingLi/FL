@@ -74,6 +74,32 @@ describe('adminForumApi 举报管理', () => {
   })
 })
 
+describe('adminForumApi 精选位（#742）', () => {
+  it('featureTopic：POST /admin/forum/topics/:id/featured', async () => {
+    mockPost.mockResolvedValue({ id: 5, is_featured: true })
+    await adminForumApi.featureTopic(5)
+    expect(mockPost).toHaveBeenCalledWith('/admin/forum/topics/5/featured')
+  })
+
+  it('unfeatureTopic：DELETE /admin/forum/topics/:id/featured', async () => {
+    mockDelete.mockResolvedValue({ id: 5, is_featured: false })
+    await adminForumApi.unfeatureTopic(5)
+    expect(mockDelete).toHaveBeenCalledWith('/admin/forum/topics/5/featured')
+  })
+
+  it('listTopics：featured 参数透传（true 仅精选 / false 找待精候选）', async () => {
+    mockGet.mockResolvedValue({ topics: [], total: 0 })
+    await adminForumApi.listTopics({ featured: 'true', page: 1 })
+    expect(mockGet).toHaveBeenCalledWith('/admin/forum/topics', {
+      params: { featured: 'true', page: 1 }
+    })
+    await adminForumApi.listTopics({ featured: 'false', page: 1 })
+    expect(mockGet).toHaveBeenLastCalledWith('/admin/forum/topics', {
+      params: { featured: 'false', page: 1 }
+    })
+  })
+})
+
 // #364：Tab → 查询参数的映射。两端（学员 / 管理）共用这一份，
 // 锁的是"综合讨论区不再混入问答帖"这条规则本身——它一旦回退，
 // 管理员会在综合区看到问答帖，且没法单独审问答区。

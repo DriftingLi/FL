@@ -146,6 +146,7 @@
                 {{ row.chapter_title || '章节讨论' }}
               </el-tag>
               <el-tag v-else size="small" type="info">综合</el-tag>
+              <el-tag v-if="row.is_featured" size="small" effect="dark" class="font-semibold">★ 精选</el-tag>
               <span class="title-text">{{ row.title }}</span>
             </div>
           </template>
@@ -158,9 +159,23 @@
         <el-table-column label="创建时间" width="160" align="center">
           <template #default="{ row }">{{ formatLocaleDateTime(row.created_at) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="90" fixed="right" align="center">
+        <el-table-column label="操作" width="150" fixed="right" align="center">
           <template #default="{ row }">
-            <UiButton variant="danger" size="small" @click="deleteTopic(row)">删除</UiButton>
+            <div class="flex items-center justify-center gap-1.5">
+              <UiButton
+                v-if="!row.is_featured"
+                variant="secondary"
+                size="small"
+                @click="featureTopic(row)"
+              >加精</UiButton>
+              <UiButton
+                v-else
+                variant="secondary"
+                size="small"
+                @click="unfeatureTopic(row)"
+              >取消精选</UiButton>
+              <UiButton variant="danger" size="small" @click="deleteTopic(row)">删除</UiButton>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -333,6 +348,40 @@ async function deleteTopic(row: AdminForumTopic) {
     loadList()
   } catch (e) {
     console.error('删除失败:', e)
+    /* 错误已由拦截器提示 */
+  }
+}
+
+// ===== 精选位（#742）：全类别可精/可撤；首次加精后端同事务发帖主 +30（幂等） =====
+
+async function featureTopic(row: AdminForumTopic) {
+  try {
+    await useConfirm().confirm(`加精后「${row.title}」将带上精选标识，帖主获 +30 分（每帖仅一次）。`, '加精帖子', { type: 'info' })
+  } catch {
+    return
+  }
+  try {
+    await adminForumApi.featureTopic(row.id)
+    ElMessage.success('已加精')
+    loadList()
+  } catch (e) {
+    console.error('加精失败:', e)
+    /* 错误已由拦截器提示 */
+  }
+}
+
+async function unfeatureTopic(row: AdminForumTopic) {
+  try {
+    await useConfirm().confirm(`确定取消「${row.title}」的精选标识？`, '取消精选', { type: 'info' })
+  } catch {
+    return
+  }
+  try {
+    await adminForumApi.unfeatureTopic(row.id)
+    ElMessage.success('已取消精选')
+    loadList()
+  } catch (e) {
+    console.error('取消精选失败:', e)
     /* 错误已由拦截器提示 */
   }
 }
