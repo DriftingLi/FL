@@ -1,11 +1,7 @@
 <template>
-  <UiDialog v-model="visible" title="修改昵称" width="440px">
+  <UiDialog v-model="visible" title="修改昵称" width="440px" confirm-text="提交审核" :confirm-loading="saving" :confirm-disabled="nicknamePending" @confirm="save">
     <el-input v-model="nickname" maxlength="30" show-word-limit placeholder="昵称（1-30字）" :disabled="nicknamePending" />
     <p v-if="nicknamePending" class="hint">昵称审核中，请等待管理员审核</p>
-    <template #footer>
-      <UiButton @click="visible = false">取消</UiButton>
-      <UiButton variant="primary" :loading="saving" :disabled="nicknamePending" @click="save">提交审核</UiButton>
-    </template>
   </UiDialog>
 </template>
 
@@ -14,7 +10,6 @@ import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
-import UiButton from '@/components/ui/UiButton.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 
 const authStore = useAuthStore()

@@ -33,7 +33,7 @@
       <div class="p-3 text-xs text-ink-3">岗位字典由管理员维护；职位发布与简历「期望岗位」都从这里选取（与专业方向解绑）。</div>
     </div>
 
-    <UiDialog v-model="dialogVisible" :title="editing ? '编辑岗位' : '新增岗位'" width="480px" destroy-on-close>
+    <UiDialog v-model="dialogVisible" :title="editing ? '编辑岗位' : '新增岗位'" width="480px" destroy-on-close confirm-text="保存" :confirm-loading="submitting" @confirm="handleSubmit">
       <el-form ref="formRef" :model="form" :rules="formRules" label-width="80px">
         <el-form-item label="岗位名称" prop="name">
           <el-input v-model="form.name" maxlength="50" placeholder="如：叉车维修技师" />
@@ -48,10 +48,6 @@
           <el-switch v-model="form.status" :active-value="1" :inactive-value="0" active-text="启用" inactive-text="停用" />
         </el-form-item>
       </el-form>
-      <template #footer>
-        <UiButton @click="dialogVisible = false">取消</UiButton>
-        <UiButton variant="primary" :loading="submitting" @click="handleSubmit">保存</UiButton>
-      </template>
     </UiDialog>
   </div>
 </template>

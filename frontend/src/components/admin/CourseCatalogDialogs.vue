@@ -174,7 +174,7 @@ defineExpose({ openDirectionDialog, openLevelDialog, openCertificateDialog })
 
 <template>
   <!-- 专业方向对话框 -->
-  <UiDialog v-model="directionDialogVisible" :title="directionForm.specialty_id ? '编辑专业方向' : '新增专业方向'" width="460px" destroy-on-close>
+  <UiDialog v-model="directionDialogVisible" :title="directionForm.specialty_id ? '编辑专业方向' : '新增专业方向'" width="460px" destroy-on-close confirm-text="保存" :confirm-loading="submitting" @confirm="submitDirection">
     <el-form ref="directionFormRef" :model="directionForm" :rules="nameRules" label-width="80px">
       <el-form-item label="名称" prop="name">
         <el-input v-model="directionForm.name" placeholder="如：操作、维修、安全、电池" maxlength="30" />
@@ -183,14 +183,10 @@ defineExpose({ openDirectionDialog, openLevelDialog, openCertificateDialog })
         <el-input v-model="directionForm.code" placeholder="唯一编码，如 OPERATE" maxlength="30" />
       </el-form-item>
     </el-form>
-    <template #footer>
-      <UiButton @click="directionDialogVisible = false">取消</UiButton>
-      <UiButton variant="primary" :loading="submitting" @click="submitDirection">保存</UiButton>
-    </template>
   </UiDialog>
 
   <!-- 课程等级对话框（等级全局共享） -->
-  <UiDialog v-model="levelDialogVisible" :title="levelForm.level_id ? '编辑课程等级' : '新增课程等级'" width="460px" destroy-on-close>
+  <UiDialog v-model="levelDialogVisible" :title="levelForm.level_id ? '编辑课程等级' : '新增课程等级'" width="460px" destroy-on-close confirm-text="保存" :confirm-loading="submitting" @confirm="submitLevel">
     <el-form ref="levelFormRef" :model="levelForm" :rules="nameRules" label-width="80px">
       <el-form-item label="等级名称" prop="name">
         <el-input v-model="levelForm.name" placeholder="如：入门、进阶、专项、认证" maxlength="30" />
@@ -199,10 +195,6 @@ defineExpose({ openDirectionDialog, openLevelDialog, openCertificateDialog })
         <el-input v-model="levelForm.code" placeholder="唯一编码，如 BEGINNER" maxlength="30" />
       </el-form-item>
     </el-form>
-    <template #footer>
-      <UiButton @click="levelDialogVisible = false">取消</UiButton>
-      <UiButton variant="primary" :loading="submitting" @click="submitLevel">保存</UiButton>
-    </template>
   </UiDialog>
 
   <!-- 证书模板管理 -->
@@ -239,7 +231,7 @@ defineExpose({ openDirectionDialog, openLevelDialog, openCertificateDialog })
     </template>
   </UiDialog>
 
-  <UiDialog v-model="certificateFormVisible" :title="certificateForm.id ? '编辑模板' : '新增模板'" width="480px" destroy-on-close append-to-body>
+  <UiDialog v-model="certificateFormVisible" :title="certificateForm.id ? '编辑模板' : '新增模板'" width="480px" destroy-on-close append-to-body confirm-text="保存" :confirm-loading="submitting" @confirm="submitCertificate">
     <el-form ref="certificateFormRef" :model="certificateForm" :rules="certificateRules" label-width="110px">
       <el-form-item label="模板名称" prop="name">
         <el-input v-model="certificateForm.name" placeholder="如：叉车维修技能培训合格证书" maxlength="50" />
@@ -254,10 +246,6 @@ defineExpose({ openDirectionDialog, openLevelDialog, openCertificateDialog })
         <el-input v-model="certificateForm.description" type="textarea" :rows="3" maxlength="300" />
       </el-form-item>
     </el-form>
-    <template #footer>
-      <UiButton @click="certificateFormVisible = false">取消</UiButton>
-      <UiButton variant="primary" :loading="submitting" @click="submitCertificate">保存</UiButton>
-    </template>
   </UiDialog>
 </template>
 

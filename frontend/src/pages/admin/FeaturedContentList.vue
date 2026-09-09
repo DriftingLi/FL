@@ -79,8 +79,7 @@
       </el-table-column>
     </el-table>
 
-    <div class="pagination-wrapper" v-if="total > pageSize">
-      <UiPagination
+      <UiPagination v-if="total > pageSize"
       v-model:current-page="currentPage"
       v-model:page-size="pageSize"
       :total="total"
@@ -88,8 +87,8 @@
       :page-sizes="[10, 20, 50]"
       @current-change="load"
       @size-change="load"
-    />
-    </div>
+    align="right" class="mt-4" />
+    
   </div>
 </template>
 
@@ -199,11 +198,6 @@ onMounted(() => {
 }
 
 
-.pagination-wrapper {
-  margin-top: 20px;
-  display: flex;
-  justify-content: flex-end;
-}
 
 .empty-text {
   color: var(--color-text-disabled);

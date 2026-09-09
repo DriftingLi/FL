@@ -60,14 +60,13 @@
           </el-table-column>
         </el-table>
 
-        <div class="pagination-wrapper" v-if="reportTotal > reportPageSize">
-          <UiPagination
+          <UiPagination v-if="reportTotal > reportPageSize"
       v-model:current-page="reportCurrentPage"
       :page-size="reportPageSize"
       :total="reportTotal"
       @current-change="loadReports"
-    />
-        </div>
+    align="center" class="mt-4" />
+        
       </template>
 
       <!-- ===== 帖子管理（原有内容）===== -->
@@ -182,14 +181,13 @@
         </el-table-column>
       </el-table>
 
-      <div class="pagination-wrapper" v-if="total > pageSize">
-        <UiPagination
+        <UiPagination v-if="total > pageSize"
       v-model:current-page="currentPage"
       :page-size="pageSize"
       :total="total"
       @current-change="handlePageChange"
-    />
-      </div>
+    align="center" class="mt-4" />
+      
       </template>
     </el-card>
   </div>
@@ -522,9 +520,4 @@ onMounted(loadList)
   font-size: 13px;
 }
 
-.pagination-wrapper {
-  display: flex;
-  justify-content: center;
-  margin-top: 16px;
-}
 </style>
