@@ -112,7 +112,7 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted, computed } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { Star, StarFilled, SortDown, SortUp } from '@element-plus/icons-vue'
 import { wrongQuestionApi } from '@/api/wrongQuestion'
 import { favoriteApi } from '@/api/favorite'
@@ -135,6 +135,7 @@ import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiActionChip from '@/components/ui/UiActionChip.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
+import { useConfirm } from '@/composables/useConfirm'
 
 interface WrongItem {
   id: number
@@ -346,7 +347,7 @@ async function toggleFavorite(item: WrongItem) {
 
 async function removeWrong(questionId: number) {
   try {
-    await ElMessageBox.confirm('确定移出此错题？', '提示', { type: 'warning' })
+    await useConfirm().confirm('确定移出此错题？', '提示', { type: 'warning' })
     await wrongQuestionApi.removeWrongQuestion(questionId)
     ElMessage.success('已移出')
     selectedIds.value.delete(questionId)
@@ -357,7 +358,7 @@ async function removeWrong(questionId: number) {
 async function handleBatchRemove(){
   if(selectedIds.value.size===0){ ElMessage.warning('请选择要移出的题目'); return }
   try{
-    await ElMessageBox.confirm(`确定移出选中的 ${selectedIds.value.size} 道错题？`, '提示', { type: 'warning' })
+    await useConfirm().confirm(`确定移出选中的 ${selectedIds.value.size} 道错题？`, '提示', { type: 'warning' })
     await wrongQuestionApi.batchRemoveWrongQuestions(Array.from(selectedIds.value))
     ElMessage.success('已批量移出')
     selectedIds.value = new Set()

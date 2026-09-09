@@ -158,7 +158,7 @@ style="width: 280px"
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { Plus, Search, ArrowDown } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import type { FormInstance, FormItemRule, FormRules } from 'element-plus'
 import { adminApi, type AdminRecruiter } from '@/api/admin'
 import { usernameRules } from '@/utils/validate'
@@ -167,6 +167,7 @@ import { formatDateTime } from '@/utils/format'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
+import { useConfirm } from '@/composables/useConfirm'
 
 const dialogVisible = ref(false)
 const submitting = ref(false)
@@ -299,7 +300,7 @@ function handleAction(cmd: string, row: AdminRecruiter) {
 async function handleToggle(row: AdminRecruiter) {
   const next = row.status === 1 ? '禁用' : '启用'
   try {
-    await ElMessageBox.confirm(`确定${next}该招聘者账号？`, '提示', { type: 'warning' })
+    await useConfirm().confirm(`确定${next}该招聘者账号？`, '提示', { type: 'warning' })
   } catch {
     return
   }

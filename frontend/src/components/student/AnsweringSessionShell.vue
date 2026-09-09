@@ -49,7 +49,7 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue'
 import { Timer } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import type { Question } from '@/types/question'
 import { typeMap } from '@/constants/question'
 import { formatClock } from '@/utils/format'
@@ -57,6 +57,7 @@ import { buildQuestionOptions, isAnswerEmpty, toggleAnswer } from '@/composables
 import { useCountdown } from '@/composables/useCountdown'
 import QuestionOptionPicker from '@/components/student/QuestionOptionPicker.vue'
 import UiButton from '@/components/ui/UiButton.vue'
+import { useConfirm } from '@/composables/useConfirm'
 
 // 答题会话壳：考试进行中的工具栏/倒计时/题目卡片/答题卡/交卷交互。
 // 练习/考试共享同一交互形态；持久化与交卷后的流程由页面注入回调。
@@ -117,7 +118,7 @@ function begin(seconds: number) {
 
 async function confirmSubmit() {
   try {
-    await ElMessageBox.confirm('确定要交卷吗？', '提示', { type: 'warning' })
+    await useConfirm().confirm('确定要交卷吗？', '提示', { type: 'warning' })
     await doSubmit()
   } catch {}
 }

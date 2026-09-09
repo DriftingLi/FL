@@ -2,7 +2,8 @@
 // 封装 list / create / edit / delete + 编辑对话框 + loading/submitting 状态
 // 适用于管理员后台以「表格 + 弹窗表单」方式管理单一资源的场景（如原价表）
 import { ref, reactive } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
+import { useConfirm } from '@/composables/useConfirm'
 
 // 字段定义：驱动弹窗表单渲染、默认值与必填校验
 export interface FieldDef {
@@ -127,7 +128,7 @@ export function useCrudTable<T extends Record<string, any>, ID = unknown>(
     const id = resource.getId(row)
     if (id == null) return
     try {
-      await ElMessageBox.confirm(`确定删除该${entityLabel}？`, '删除确认', { type: 'warning' })
+      await useConfirm().confirmDanger(`确定删除该${entityLabel}？`, '删除确认')
       await resource.remove(id)
       ElMessage.success('已删除')
       await load()

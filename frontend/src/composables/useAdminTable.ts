@@ -3,7 +3,7 @@
 // loading / list / total / currentPage / pageSize / search / action 分发 / confirmDelete。
 // 页面只声明 fetch adapter 与行操作 adapter。
 import { ref } from 'vue'
-import { ElMessageBox } from 'element-plus'
+import { useConfirm } from '@/composables/useConfirm'
 
 export interface AdminTablePaging {
   page: number
@@ -78,11 +78,7 @@ export function useAdminTable<T>(options: AdminTableOptions<T>) {
   /** 通用删除确认：确认后执行 action 并刷新列表；取消静默。 */
   async function confirmDelete(row: T, action: (row: T) => void | Promise<void>, message: string): Promise<void> {
     try {
-      await ElMessageBox.confirm(message, '提示', {
-        type: 'warning',
-        confirmButtonText: '确定',
-        cancelButtonText: '取消'
-      })
+      await useConfirm().confirmDanger(message, '提示')
     } catch {
       return
     }

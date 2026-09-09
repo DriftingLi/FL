@@ -222,7 +222,7 @@ import {
   ArrowLeft, ArrowRight, Edit, Check, Upload, Delete,
   VideoCamera, Document
 } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { tutorApi, type TutorChapter, type TutorChapterDetail } from '@/api/tutor'
 import type { ChapterFile } from '@/api/course'
 import MarkdownEditor from '@/components/tutor/MarkdownEditor.vue'
@@ -239,6 +239,7 @@ import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiDialog from '@/components/ui/UiDialog.vue'
+import { useConfirm } from '@/composables/useConfirm'
 
 const route = useRoute()
 const router = useRouter()
@@ -404,7 +405,7 @@ function handleUploadAll(result: UploadAllResult) {
 // 删除文件
 async function handleDeleteFile(file: ChapterFile) {
   try {
-    await ElMessageBox.confirm(
+    await useConfirm().confirmDanger(
       `确定要删除文件"${file.file_name}"吗？`,
       '确认删除',
       { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }

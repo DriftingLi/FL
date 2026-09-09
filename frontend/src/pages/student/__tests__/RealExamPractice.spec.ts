@@ -19,6 +19,15 @@ vi.mock('element-plus', async (importOriginal) => {
   }
 })
 
+// 退出练习确认已收口到 useConfirm（#735），mock 掉让其直接放行
+vi.mock('@/composables/useConfirm', () => ({
+  useConfirm: () => ({
+    confirm: vi.fn().mockResolvedValue('confirm'),
+    confirmDanger: vi.fn().mockResolvedValue('confirm'),
+    prompt: vi.fn().mockResolvedValue({ value: '' })
+  })
+}))
+
 vi.mock('@/api/realExam', () => ({
   realExamApi: { startPractice: vi.fn() }
 }))

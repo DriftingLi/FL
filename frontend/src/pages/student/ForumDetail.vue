@@ -163,7 +163,7 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { ArrowLeft, View, ChatDotRound, ArrowUp, ArrowDown } from '@element-plus/icons-vue'
 import { forumApi, type ForumTopicItem, type ForumReplyItem } from '@/api/forum'
 import { favoriteApi } from '@/api/favorite'
@@ -185,6 +185,7 @@ import UiDialog from '@/components/ui/UiDialog.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiActionChip from '@/components/ui/UiActionChip.vue'
+import { useConfirm } from '@/composables/useConfirm'
 
 const route = useRoute()
 const router = useRouter()
@@ -264,7 +265,7 @@ async function handleAccept(replyId: number) {
     : '确认采纳？+40 分将发放给该答主'
   const title = alreadyIssued ? '更换采纳' : '采纳回答'
   try {
-    await ElMessageBox.confirm(msg, title, { type: alreadyIssued ? 'warning' : 'info', confirmButtonText: '确认', cancelButtonText: '取消' })
+    await useConfirm().confirm(msg, title, { type: alreadyIssued ? 'warning' : 'info', confirmButtonText: '确认', cancelButtonText: '取消' })
   } catch {
     return
   }
@@ -286,7 +287,7 @@ async function handleAccept(replyId: number) {
 async function handleCancelAccept() {
   if (!topic.value) return
   try {
-    await ElMessageBox.confirm('确认取消采纳？已发放积分不会收回。', '取消采纳', { type: 'warning' })
+    await useConfirm().confirm('确认取消采纳？已发放积分不会收回。', '取消采纳', { type: 'warning' })
   } catch {
     return
   }
@@ -337,7 +338,7 @@ async function removeTopic() {
     ? '该帖已解决且已被采纳，删除后已采纳的答案将一并被删除，且计数将计入巡检，是否确认删除？'
     : '确定删除这个帖子吗？删除后无法恢复。'
   try {
-    await ElMessageBox.confirm(msg, '删除帖子', { type: 'warning' })
+    await useConfirm().confirmDanger(msg, '删除帖子', { type: 'warning' })
   } catch {
     return
   }
@@ -353,7 +354,7 @@ async function removeTopic() {
 
 async function removeReply(replyId: number) {
   try {
-    await ElMessageBox.confirm('确定删除这条回复吗？', '删除回复', { type: 'warning' })
+    await useConfirm().confirmDanger('确定删除这条回复吗？', '删除回复', { type: 'warning' })
   } catch {
     return
   }

@@ -180,12 +180,13 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { ElMessage, ElMessageBox, type FormInstance, type FormItemRule } from 'element-plus'
+import { ElMessage, type FormInstance, type FormItemRule } from 'element-plus'
 import { Plus, ArrowDown } from '@element-plus/icons-vue'
 import { adminApi, type AIConfig, type FeatureBinding } from '@/api/admin'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
+import { useConfirm } from '@/composables/useConfirm'
 
 const configs = ref<AIConfig[]>([])
 const bindings = ref<FeatureBinding[]>([])
@@ -356,7 +357,7 @@ async function handleAction(cmd: string, row: AIConfig) {
       break
     case 'delete':
       try {
-        await ElMessageBox.confirm('确定删除该配置？被绑定的配置无法删除。', '提示', {
+        await useConfirm().confirmDanger('确定删除该配置？被绑定的配置无法删除。', '提示', {
           type: 'warning',
           confirmButtonText: '确定',
           cancelButtonText: '取消'

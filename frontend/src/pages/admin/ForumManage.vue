@@ -180,7 +180,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { Refresh, Search } from '@element-plus/icons-vue'
 import {
   adminForumApi,
@@ -197,6 +197,7 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiFilterBar from '@/components/ui/UiFilterBar.vue'
+import { useConfirm } from '@/composables/useConfirm'
 
 const topics = ref<AdminForumTopic[]>([])
 
@@ -270,7 +271,7 @@ async function loadReports() {
 
 async function handleReport(row: AdminForumReportItem) {
   try {
-    await ElMessageBox.confirm('确认将该举报标记为已处理？', '处理举报', { type: 'warning' })
+    await useConfirm().confirm('确认将该举报标记为已处理？', '处理举报', { type: 'warning' })
   } catch {
     return
   }
@@ -321,7 +322,7 @@ async function loadReplies(topicId: number) {
 
 async function deleteTopic(row: AdminForumTopic) {
   try {
-    await ElMessageBox.confirm(`确定删除帖子「${row.title}」？删除后不可恢复。`, '删除帖子', { type: 'warning' })
+    await useConfirm().confirmDanger(`确定删除帖子「${row.title}」？删除后不可恢复。`, '删除帖子', { type: 'warning' })
   } catch {
     return
   }
@@ -338,7 +339,7 @@ async function deleteTopic(row: AdminForumTopic) {
 
 async function deleteReply(reply: AdminForumReply) {
   try {
-    await ElMessageBox.confirm('确定删除这条回复？删除后不可恢复。', '删除回复', { type: 'warning' })
+    await useConfirm().confirmDanger('确定删除这条回复？删除后不可恢复。', '删除回复', { type: 'warning' })
   } catch {
     return
   }
