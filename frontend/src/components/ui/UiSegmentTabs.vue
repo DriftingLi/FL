@@ -6,11 +6,13 @@
  * prefers-reduced-motion 下过渡由全局媒体查询压平（见 global.css）。
  * 等分模式（equal）：窄容器内各选项等宽铺满。
  *
- * ⚠️ 配色约束（改动前必读）：激活指示条**不能**用 bg-panel。
- * 它与最常见的父容器（卡片）同值，放进卡片里会彻底隐身 ——
- * 浅色 #FFFFFF on #FFFFFF、深色 #1E293B on #1E293B，两套主题都失效。
- * 一律走品牌语义色：bg-ui-100 底 + text-ui-700 字，沿用 FacetItem.active 的
- * 「品牌浅底 + 品牌深字」语言（侧栏是深底，50 档够用；这里常在白卡片上，故调亮一档到 100）。
+ * ⚠️ 配色约束（改动前必读）：
+ * 1. 激活指示条**不能**用 bg-panel —— 它与最常见的父容器（卡片）同值，放进卡片里彻底隐身
+ *    （浅色 #FFFFFF on #FFFFFF、深色 #1E293B on #1E293B）。
+ * 2. 也**不能**用浅底档（bg-ui-50/100 = #F0FDFA/#CCFBF1）—— 压在 bg-canvas 灰胶囊底上
+ *    亮度差太小，肉眼就是一块灰白，等于没改（2026-09-08 首版踩过，用户反馈「还是灰色」）。
+ * 用实心品牌色 bg-ui-500 + 反白字：两套主题下都与背景有强对比。深色模式里它与
+ * 品牌按钮同色系，属既有视觉语言，不突兀。
  */
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 
@@ -124,7 +126,7 @@ onUnmounted(() => {
     -->
     <div
       aria-hidden="true"
-      class="absolute left-0 top-0 rounded-[4px] bg-ui-100 shadow-sm"
+      class="absolute left-0 top-0 rounded-[4px] bg-ui-500 shadow-sm"
       :class="
         ready
           ? 'transition-[transform,width,height] duration-200 ease-out motion-reduce:transition-none'
@@ -143,7 +145,7 @@ onUnmounted(() => {
       role="tab"
       :aria-selected="modelValue === opt.value"
       class="relative z-10 cursor-pointer rounded-[4px] px-3.5 py-1.5 text-xs font-medium whitespace-nowrap transition-colors duration-150"
-      :class="modelValue === opt.value ? 'text-ui-700' : 'text-ink-3 hover:text-ink-2'"
+      :class="modelValue === opt.value ? 'text-white' : 'text-ink-3 hover:text-ink-2'"
       :style="equal ? { flex: '1 1 0' } : undefined"
       @click="select(opt)"
     >
