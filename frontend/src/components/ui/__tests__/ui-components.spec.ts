@@ -367,6 +367,13 @@ describe('UiSegmentTabs（分段选项卡）', () => {
     expect(btns[1].classes()).toContain('text-ink-3')
   })
 
+  it('按钮必须 bg-transparent——项目无 preflight，button 默认不透明背景会盖住滑块', () => {
+    const w = mountWith(UiSegmentTabs, { modelValue: '7d', options: opts })
+    for (const btn of w.findAll('button')) {
+      expect(btn.classes()).toContain('bg-transparent')
+    }
+  })
+
   it('options 变化后按 modelValue 重新标记激活项', async () => {
     const w = mountWith(UiSegmentTabs, { modelValue: '7d', options: opts })
     await w.setProps({ options: [...opts, { label: '全部', value: 'all' }] })
