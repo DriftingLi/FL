@@ -214,7 +214,7 @@ onMounted(() => {
       :page-size="pendingPageSize"
       :total="pendingTotal"
       @current-change="loadPending"
-    / align="center" class="mt-4">
+    align="center" class="mt-4" />
         
       </template>
 
@@ -263,7 +263,7 @@ onMounted(() => {
       :page-size="reportPageSize"
       :total="reportTotal"
       @current-change="loadReports"
-    / align="center" class="mt-4">
+    align="center" class="mt-4" />
         
       </template>
     </el-card>

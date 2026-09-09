@@ -83,7 +83,7 @@
       :page-size="pageSize"
       :total="total"
       @current-change="load"
-    / align="center" class="mt-4">
+    align="center" class="mt-4" />
       
     </el-card>
 

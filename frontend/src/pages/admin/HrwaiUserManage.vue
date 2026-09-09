@@ -247,7 +247,7 @@ onMounted(() => {
       :page-sizes="[10, 20, 50]"
       @current-change="load"
       @size-change="load"
-    / align="center" class="mt-4">
+    align="center" class="mt-4" />
     
 
     <!-- 新增弹窗 -->

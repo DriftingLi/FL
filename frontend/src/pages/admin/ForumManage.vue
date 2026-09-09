@@ -65,7 +65,7 @@
       :page-size="reportPageSize"
       :total="reportTotal"
       @current-change="loadReports"
-    / align="center" class="mt-4">
+    align="center" class="mt-4" />
         
       </template>
 
@@ -186,7 +186,7 @@
       :page-size="pageSize"
       :total="total"
       @current-change="handlePageChange"
-    / align="center" class="mt-4">
+    align="center" class="mt-4" />
       
       </template>
     </el-card>

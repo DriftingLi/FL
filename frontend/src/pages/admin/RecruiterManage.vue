@@ -65,7 +65,7 @@ style="width: 280px"
       :page-sizes="[10, 20, 50]"
       @current-change="load"
       @size-change="load"
-    / align="right" class="mt-4">
+    align="right" class="mt-4" />
 
 <UiDialog v-model="dialogVisible" title="新增企业招聘者" width="520px" destroy-on-close confirm-text="确认创建" :confirm-loading="submitting" @confirm="handleSubmit">
 <el-form ref="formRef" :model="formData" :rules="formRules" label-width="110px">

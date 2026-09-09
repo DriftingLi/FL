@@ -87,7 +87,7 @@
       :page-sizes="[10, 20, 50]"
       @current-change="load"
       @size-change="load"
-    / align="right" class="mt-4">
+    align="right" class="mt-4" />
     
   </div>
 </template>
