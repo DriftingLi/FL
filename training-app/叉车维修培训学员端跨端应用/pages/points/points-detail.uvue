@@ -71,8 +71,8 @@
                 <view v-if="loading" class="loading-more">
                     <text class="loading-text">加载中...</text>
                 </view>
-                <!-- 已有数据时的翻页失败：页脚提示 + 点击重试，不吞掉已加载部分 -->
-                <view v-else-if="loadFailed && items.length > 0" class="loading-more" @click="onRetry">
+                <!-- 已有数据时的翻页失败：页脚提示 + 点击续翻（回到当前页重试，已加载部分不丢） -->
+                <view v-else-if="loadFailed && items.length > 0" class="loading-more" @click="onRetryMore">
                     <text class="loading-text">加载失败，点击重试</text>
                 </view>
                 <view v-else-if="noMore && displayItems.length > 0" class="loading-more">
@@ -94,7 +94,7 @@
     import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
     import { getPointsBalanceApi, getPointsLedgerApi } from '../../api/points'
-    import { ledgerReasonLabel, ledgerRefTypeText, ledgerIconClass, deltaText, expiringWithinDays, todayDateStr } from '../../utils/pointsDisplay'
+    import { ledgerReasonLabel, ledgerRefTypeText, ledgerIconClass, ledgerIconGlyph, deltaText, deltaKind, expiringWithinDays, todayDateStr } from '../../utils/pointsDisplay'
     import { formatDateTimeStr } from '../../utils/format'
     import type { PointsBalance, PointsLedgerItem, PointsLedgerResult } from '../../types/index'
 
@@ -136,12 +136,7 @@
     }
 
     function itemIconText(refType : string) : string {
-        if (refType == 'task') return '◆'
-        if (refType == 'checkin') return '✓'
-        if (refType == 'course' || refType == 'real_paper' || refType == 'shop') return '★'
-        if (refType == 'forum_topic' || refType == 'contribution') return '✎'
-        if (refType == 'admin') return '!'
-        return '·'
+        return ledgerIconGlyph(refType)
     }
 
     function itemDeltaText(delta : number) : string {
@@ -149,7 +144,7 @@
     }
 
     function itemDeltaClass(delta : number) : string {
-        if (delta >= 0) return 'points-in'
+        if (deltaKind(delta) == 'in') return 'points-in'
         return 'points-out'
     }
 
@@ -244,8 +239,14 @@
         currentExpireFilter.value = currentExpireFilter.value == 'expiring' ? 'all' : 'expiring'
     }
 
+    /** 整屏失败重试：回到第 1 页重取 */
     function onRetry() : void {
         loadLedger(true)
+    }
+
+    /** 翻页失败重试：停在失败的那一页续取，已加载的部分不丢（页脚入口） */
+    function onRetryMore() : void {
+        loadLedger(false)
     }
 
     function onLoadMore() : void {

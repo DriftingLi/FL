@@ -29,8 +29,9 @@
                 </view>
             </view>
 
-            <!-- 错误态：任务加载失败要可见（旧版整页硬编码占位任务，后端异常无人发现） -->
-            <view v-if="loadFailed" class="error-tip">
+            <!-- 错误态：任务加载失败要可见（旧版整页硬编码占位任务，后端异常无人发现）；
+                 已有真任务时不清屏，只在页脚提示可重试 -->
+            <view v-if="loadFailed && tasks.length == 0" class="error-tip">
                 <text class="error-text">任务加载失败</text>
                 <view class="retry-btn" @click="onRetry">
                     <text class="retry-text">重试</text>
@@ -42,7 +43,7 @@
             </view>
 
             <!-- 任务分组：daily / newbie / growth 由后端 group 直分 -->
-            <view v-for="(g, gi) in grouped" :key="gi" class="section">
+            <view v-for="g in grouped" :key="g.key" class="section">
                 <view class="section-header">
                     <text class="section-title">{{ g.label }}</text>
                     <view class="section-underline"></view>
@@ -67,6 +68,10 @@
                         </view>
                     </view>
                 </view>
+            </view>
+
+            <view v-if="loadFailed && tasks.length > 0" class="foot-error" @click="onRetry">
+                <text class="foot-error-text">最新状态拉取失败，点击重试</text>
             </view>
 
             <view class="bottom-spacer"></view>
@@ -109,6 +114,8 @@
     const loadFailed = ref<boolean>(false)
     /** 正在领取的任务 code（空串表示无进行中请求，兼作防重入闸门） */
     const claimingCode = ref<string>('')
+    /** 任务列表请求代次（领取后刷新与 onShow 刷新并发时按代次丢弃旧回包） */
+    let reqSeq = 0
 
     // ===== 纯映射函数（须先于调用它们的 computed / 事件函数定义，守护规则 A）=====
 
@@ -193,15 +200,14 @@
     }
 
     function taskBtnClass(status : string) : string {
-        if (status == 'claimed') return 'task-btn-done'
-        if (status == 'todo') return 'task-btn-todo'
-        return 'task-btn-claim'
+        // 领取态是唯一可点成事的动作，其余（去完成 / 已领取）同属「非动作」灰态，共用一套外观
+        if (status == 'claimable') return 'task-btn-claim'
+        return 'task-btn-off'
     }
 
     function taskBtnTextClass(status : string) : string {
-        if (status == 'claimed') return 'text-done'
-        if (status == 'todo') return 'text-todo'
-        return 'text-claim'
+        if (status == 'claimable') return 'text-on-claim'
+        return 'text-on-off'
     }
 
     // ===== 派生视图 =====
@@ -223,15 +229,19 @@
     }
 
     function loadTasks() : void {
+        reqSeq = reqSeq + 1
+        const seq = reqSeq
         loading.value = true
         getPointsTasksApi().then((data : PointsTasksResult) => {
+            if (seq != reqSeq) return // 回包作废（领取后刷新与 onShow 刷新并发时，旧数据不覆盖新数据）
             loadFailed.value = false
             tasks.value = data.tasks
         }).catch((e) => {
+            if (seq != reqSeq) return
             loadFailed.value = true
             console.warn('[task-center] load tasks failed:', e)
         }).finally(() => {
-            loading.value = false
+            if (seq == reqSeq) loading.value = false
         })
     }
 
@@ -242,9 +252,13 @@
 
     // ===== 交互 =====
 
-    /** 领取：成功用返回的余额即时刷新；失败（含「今日已领」幂等）一律回读服务端状态 */
+    /** 领取：同任务连点静默忽略（按钮已在「领取中」），异任务占用给可见提示 */
     function onClaim(task : PointsTaskItem) : void {
-        if (claimingCode.value.length > 0) return
+        if (claimingCode.value == task.code) return
+        if (claimingCode.value.length > 0) {
+            uni.showToast({ title: '请先等上一个领取完成', icon: 'none' })
+            return
+        }
         claimingCode.value = task.code
         claimPointsTaskApi(task.code).then((res : PointsClaimResult) => {
             pointsBalance.value = res.balance
@@ -272,13 +286,19 @@
         uni.navigateTo({ url: route.url })
     }
 
+    /** 三态显式分派：claimable 领取 / todo 去完成 / claimed 静默；后端新增第四态时显形不静默 */
     function onTaskBtn(task : PointsTaskItem) : void {
-        if (task.status == 'claimed') return
         if (task.status == 'claimable') {
             onClaim(task)
             return
         }
-        onGo(task)
+        if (task.status == 'todo') {
+            onGo(task)
+            return
+        }
+        if (task.status != 'claimed') {
+            uni.showToast({ title: '任务状态异常，请下拉重进', icon: 'none' })
+        }
     }
 
     function onBack() : void {
@@ -524,41 +544,31 @@
         margin-right: 16rpx;
     }
 
+    /* 按钮外观按「是否可领取」二态分派：可领取=动作态橙，其余（去完成/已领取）=非动作灰 */
     .task-btn {
         padding: 12rpx 28rpx;
         border-radius: 28rpx;
-        background-color: #2979ff;
         flex-shrink: 0;
     }
 
-    /* 可领取是主操作：与 +N 奖励同色系，从「去完成」的灰与「已领取」的灰字里跳出来 */
     .task-btn-claim {
         background-color: #FF8F00;
     }
 
-    .task-btn-todo {
-        background-color: #f5f5f5;
-    }
-
-    .task-btn-done {
+    .task-btn-off {
         background-color: #f5f5f5;
     }
 
     .task-btn-text {
         font-size: 24rpx;
+    }
+
+    .text-on-claim {
         color: #ffffff;
     }
 
-    .text-todo {
-        color: #666666;
-    }
-
-    .text-done {
+    .text-on-off {
         color: #999999;
-    }
-
-    .text-claim {
-        color: #ffffff;
     }
 
     /* 状态位 */
@@ -593,6 +603,17 @@
     .retry-text {
         font-size: 26rpx;
         color: #ffffff;
+    }
+
+    /* 已有任务时的页脚失败提示（不清屏，只补一次可点的重试位） */
+    .foot-error {
+        align-items: center;
+        padding: 24rpx 0;
+    }
+
+    .foot-error-text {
+        font-size: 24rpx;
+        color: #ee0a24;
     }
 
     .bottom-spacer {

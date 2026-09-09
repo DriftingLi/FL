@@ -8,17 +8,11 @@
  *   - 任务 code（后端 Claim 落账 Reason 即任务 code，映射成任务标题）
  * 根因是流水条目缺 display_title 字段，两端各维护一份文案表并非终态——已列入 #709 待后端清单。
  *
- * 日期计算复用 utils/checkinCalendar.uts 的导出口径，不重抄一份日历数学。
+ * 日期数学不重抄：序比较用 utils/checkinCalendar.uts 的 dateOrder，日期串用 utils/format.uts 的 formatDate。
  */
 import type { PointsTaskItem } from '../types/index'
-import { normalizeDate, parseDate, shiftDate } from './checkinCalendar'
-
-/** YYYY-MM-DD → 可比较数值（Kotlin 端无字符串序比较，先例 checkinCalendar.dateOrder） */
-function dayOrder(date : string) : number {
-	const p = parseDate(date)
-	if (p == null) return 0
-	return p.y * 10000 + p.m * 100 + p.d
-}
+import { normalizeDate, parseDate, dateOrder, shiftDate } from './checkinCalendar'
+import { formatDate } from './format'
 
 /**
  * 流水事由中文：命中映射表用表内文案；redeem_<sku> 动态键按前缀识别；
@@ -82,6 +76,16 @@ export function ledgerIconClass(refType : string) : string {
 	return 'icon-default'
 }
 
+/** 流水图标字形（与 ledgerIconClass 成对，页面只做薄包装） */
+export function ledgerIconGlyph(refType : string) : string {
+	if (refType == 'task') return '◆'
+	if (refType == 'checkin') return '✓'
+	if (refType == 'course' || refType == 'real_paper' || refType == 'shop') return '★'
+	if (refType == 'forum_topic' || refType == 'contribution') return '✎'
+	if (refType == 'admin') return '!'
+	return '·'
+}
+
 /** 带符号的积分变动文本：+7 / -30（后端 delta 已含方向，前端不再判正负拼符号） */
 export function deltaText(delta : number) : string {
 	if (delta >= 0) return '+' + delta.toString()
@@ -103,9 +107,9 @@ export function expiringWithinDays(expiresAt : string | null, refDate : string, 
 	if (expiresAt == null) return false
 	const e = normalizeDate(expiresAt!)
 	if (parseDate(e) == null) return false
-	const eo = dayOrder(e)
-	const start = dayOrder(normalizeDate(refDate))
-	const end = dayOrder(shiftDate(normalizeDate(refDate), days))
+	const eo = dateOrder(e)
+	const start = dateOrder(normalizeDate(refDate))
+	const end = dateOrder(shiftDate(normalizeDate(refDate), days))
 	// 已过期（早于参考日）不算「即将」
 	if (eo < start) return false
 	return eo <= end
@@ -122,12 +126,7 @@ export function earnablePoints(tasks : PointsTaskItem[]) : number {
 	return sum
 }
 
-/** 今日日期 YYYY-MM-DD（本地时区，客户端筛选基准） */
+/** 今日日期 YYYY-MM-DD（本地时区，客户端筛选基准；日期串一律走 utils/format.uts） */
 export function todayDateStr() : string {
-	const now = new Date()
-	const m = now.getMonth() + 1
-	const d = now.getDate()
-	const mm = m < 10 ? '0' + m.toString() : m.toString()
-	const dd = d < 10 ? '0' + d.toString() : d.toString()
-	return now.getFullYear().toString() + '-' + mm + '-' + dd
+	return formatDate(Date.now(), 'YYYY-MM-DD')
 }

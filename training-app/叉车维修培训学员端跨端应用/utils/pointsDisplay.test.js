@@ -120,6 +120,42 @@ function earnablePoints(tasks) {
   return sum;
 }
 
+/** ref_type → 图标 class（与 .uts ledgerIconClass 同表） */
+function ledgerIconClass(refType) {
+  if (refType === 'task') return 'icon-task';
+  if (refType === 'checkin') return 'icon-checkin';
+  if (refType === 'course' || refType === 'real_paper' || refType === 'shop') return 'icon-redeem';
+  if (refType === 'ai' || refType === 'ai_chat') return 'icon-redeem';
+  if (refType === 'forum_topic' || refType === 'contribution') return 'icon-community';
+  if (refType === 'admin') return 'icon-admin';
+  return 'icon-default';
+}
+
+/** ref_type → 字形（与 .uts ledgerIconGlyph 同表） */
+function ledgerIconGlyph(refType) {
+  if (refType === 'task') return '◆';
+  if (refType === 'checkin') return '✓';
+  if (refType === 'course' || refType === 'real_paper' || refType === 'shop') return '★';
+  if (refType === 'forum_topic' || refType === 'contribution') return '✎';
+  if (refType === 'admin') return '!';
+  return '·';
+}
+
+/** 字形表（供 it.each 展开；与 ledgerIconGlyph 镜像同源） */
+function GlyphMap() {
+  return {
+    task: '◆',
+    checkin: '✓',
+    course: '★',
+    real_paper: '★',
+    shop: '★',
+    forum_topic: '✎',
+    contribution: '✎',
+    admin: '!',
+    unknown_x: '·',
+  };
+}
+
 // ===== 用例 =====
 
 describe('ledgerReasonLabel：流水事由中文（口径同 Web #512）', () => {
@@ -213,6 +249,91 @@ describe('earnablePoints：今日可得上限（口径同 Web todayEarnable）',
   });
 });
 
+describe('ledgerIconClass / ledgerIconGlyph：ref_type → 图标（class 与字形同处收口）', () => {
+  const CLASS_OF = {
+    task: 'icon-task',
+    checkin: 'icon-checkin',
+    course: 'icon-redeem',
+    real_paper: 'icon-redeem',
+    shop: 'icon-redeem',
+    ai: 'icon-redeem',
+    ai_chat: 'icon-redeem',
+    forum_topic: 'icon-community',
+    contribution: 'icon-community',
+    admin: 'icon-admin',
+    unknown_x: 'icon-default',
+    '': 'icon-default',
+  };
+
+  it.each(Object.entries(CLASS_OF))('ref_type %s → class %s', (refType, cls) => {
+    expect(ledgerIconClass(refType)).toBe(cls);
+  });
+
+  it('兑换类（课程/真题/商城）与 AI 类共用一套底色，社区与投稿共用', () => {
+    expect(new Set(['course', 'real_paper', 'shop', 'ai', 'ai_chat'].map(ledgerIconClass))).toEqual(
+      new Set(['icon-redeem']),
+    );
+    expect(new Set(['forum_topic', 'contribution'].map(ledgerIconClass))).toEqual(new Set(['icon-community']));
+  });
+
+  it.each(Object.entries(GlyphMap()))('ref_type %s → 字形 %s', (refType, glyph) => {
+    expect(ledgerIconGlyph(refType)).toBe(glyph);
+  });
+
+  it('未知 ref_type 落到占位字形，不留空文本', () => {
+    expect(ledgerIconGlyph('unknown_x')).toBe('·');
+    expect(ledgerIconGlyph('')).toBe('·');
+  });
+
+  it('.uts 内 class 与字形两张表按同一 ref_type 键成文（防只改一张）', () => {
+    const src = fs.readFileSync(path.join(__dirname, 'pointsDisplay.uts'), 'utf8');
+    for (const key of Object.keys(CLASS_OF)) {
+      if (key === '' || key === 'unknown_x') continue;
+      expect(src).toMatch(new RegExp(`refType == '${key}'`));
+    }
+  });
+});
+
+describe('todayDateStr：客户端筛选基准日', () => {
+  it('委托 utils/format.uts 的 formatDate（本文件不重抄日期数学）', () => {
+    const src = fs.readFileSync(path.join(__dirname, 'pointsDisplay.uts'), 'utf8');
+    expect(src).toContain("import { formatDate } from './format'");
+    expect(src).toContain("formatDate(Date.now(), 'YYYY-MM-DD')");
+  });
+
+  it('不再回退成手写 pad：todayDateStr 只留一行委托', () => {
+    const src = fs.readFileSync(path.join(__dirname, 'pointsDisplay.uts'), 'utf8');
+    // 镜像侧行为已由 expiringWithinDays 用例覆盖（同一份日期口径）；此处锁委托形态
+    const fn = src.slice(src.indexOf('export function todayDateStr'));
+    expect(fn).not.toMatch(/getMonth\(\)/);
+  });
+});
+
+const WEB_TABLE = path.join(__dirname, '..', '..', '..', 'frontend', 'src', 'utils', 'pointsReason.ts');
+// 全仓 checkout 才跑得动跨端比对；单模块局部 checkout 时显式 skip（在报告里可见，不假绿）
+const describeWeb = fs.existsSync(WEB_TABLE) ? describe : describe.skip;
+
+describeWeb('跨端文案表不分叉：移动端 .uts vs Web pointsReason.ts', () => {
+  const utsSrc = fs.readFileSync(path.join(__dirname, 'pointsDisplay.uts'), 'utf8');
+
+  it('Web 表内每个 reason 键，移动端文案必须逐字相同（改文案要两端同改）', () => {
+    const webSrc = fs.readFileSync(WEB_TABLE, 'utf8');
+    const from = webSrc.indexOf('const REASON_LABELS');
+    const block = webSrc.slice(from, webSrc.indexOf('\n}', from));
+    const pairs = [...block.matchAll(/(\w+):\s*\{\s*label:\s*'([^']+)'/g)];
+    expect(pairs.length).toBeGreaterThan(5); // 解析失败立刻显形，不空跑假绿
+    for (const [, reason, label] of pairs) {
+      expect(utsSrc).toContain(`if (reason == '${reason}') return '${label}'`);
+    }
+  });
+
+  it('移动端补齐的键（Web 表未收录）在此显式登记，防悄悄长第三份口径', () => {
+    for (const extra of ['checkin', 'featured_bonus', 'daily_login', 'newbie_credential']) {
+      expect(utsSrc).toContain(`if (reason == '${extra}')`);
+    }
+  });
+});
+
 describe('镜像同步：pointsDisplay.uts 与本文件表逐键一致', () => {
   const src = fs.readFileSync(path.join(__dirname, 'pointsDisplay.uts'), 'utf8');
 
@@ -227,5 +348,10 @@ describe('镜像同步：pointsDisplay.uts 与本文件表逐键一致', () => {
   it('.uts 未收录 reason 也走 delta 兜底，与镜像同式', () => {
     expect(src).toContain("if (reason.indexOf('redeem_') == 0) return '商城兑换'");
     expect(src).toContain("if (delta >= 0) return '积分获得'");
+  });
+
+  it('.uts 不再自带日历数学：序比较与日期串都委托既有 util', () => {
+    expect(src).toContain("import { normalizeDate, parseDate, dateOrder, shiftDate } from './checkinCalendar'");
+    expect(src).not.toContain('y * 10000');
   });
 });
