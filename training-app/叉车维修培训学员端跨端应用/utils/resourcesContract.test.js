@@ -148,3 +148,33 @@ describe('forum-create 非法类别归一契约', () => {
     expect(src).toMatch(/selectedCategory\.value\s*=\s*normalizeCategory\(data\.scope\)/);
   });
 });
+
+describe('上传页原型对齐契约（#754：模块分流 + 文件方式行）', () => {
+  const src = read('pages/resources/upload-resource.uvue');
+  const code = stripComments(src);
+  it('选择模块 chips：资源=本页选中态，其余三 chip 跳 forum-create 对应 scope', () => {
+    expect(src).toContain('选择模块');
+    for (const s of ['discussion', 'question', 'experience']) {
+      expect(src).toMatch(new RegExp("scope: '" + s + "'"));
+    }
+    expect(src).toMatch(/navigateTo\(\{ url: '\/pages\/forum\/forum-create\?scope=' \+ scope \}\)/);
+  });
+  it('文件方式三行齐备（微信聊天文档/本地文件上传/选择压缩文件）', () => {
+    expect(src).toContain('微信聊天文档');
+    expect(src).toContain('本地文件上传');
+    expect(src).toContain('选择压缩文件');
+  });
+  it('图片上传行与第三方入口不实现（原型冲突项零残留）', () => {
+    expect(code).not.toContain('图片上传');
+    expect(code).not.toContain('金山');
+    expect(code).not.toContain('WPS');
+    expect(code).not.toContain('钉钉');
+    expect(code).not.toContain('QQ文档');
+  });
+  it('微信端两行 chooseMessageFile 按扩展名过滤（文档行/zip 行），App 端本地行走 chooseFile', () => {
+    expect(src).toContain('uni.chooseMessageFile');
+    expect(src).toMatch(/pickFromMessage\(docExt\)/);
+    expect(src).toMatch(/pickFromMessage\(\['zip'\]\)/);
+    expect(src).toMatch(/extension: allowedExt/);
+  });
+});
