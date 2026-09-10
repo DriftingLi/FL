@@ -1,0 +1,243 @@
+<template>
+    <!-- 内容 Tab + 筛选标签 + 课程卡片列表 ——T05 手术自 dashboard.uvue 逐段搬出（Tab/标签选中态纯视觉，归组件自持） -->
+    <view>
+        <view class="tab-row">
+            <view v-for="(tab, idx) in contentTabs" :key="idx" class="tab-item" @click="onTabChange(idx)">
+                <text class="tab-text" :class="{ 'tab-text-active': activeTab == idx }">{{ tab }}</text>
+                <view v-if="activeTab == idx" class="tab-underline"></view>
+            </view>
+        </view>
+
+        <view class="filter-row">
+            <view class="filter-tags">
+                <view v-for="(tag, idx) in filterTags" :key="idx" class="filter-tag"
+                    :class="{ 'filter-tag-active': activeFilter == idx }" @click="onFilterChange(idx)">
+                    <text class="filter-tag-text"
+                        :class="{ 'filter-tag-text-active': activeFilter == idx }">{{ tag }}</text>
+                </view>
+            </view>
+            <view class="filter-btn" @click="onFilterBtnClick">
+                <text class="filter-btn-text">筛选</text>
+            </view>
+        </view>
+
+        <view class="course-list">
+            <view v-for="(course, idx) in courseList" :key="idx" class="course-card" @click="onCourseClick(course)">
+                <view class="course-header">
+                    <view v-if="course.isHot" class="course-tag-hot">
+                        <text class="course-tag-hot-text">热销</text>
+                    </view>
+                    <text class="course-title">{{ course.title }}</text>
+                </view>
+                <view class="course-tags">
+                    <view v-for="(tag, tagIdx) in course.tags" :key="tagIdx" class="course-tag-sm">
+                        <text class="course-tag-sm-text">{{ tag }}</text>
+                    </view>
+                </view>
+                <view class="course-footer">
+                    <text class="course-price">¥ {{ course.price }}</text>
+                    <text class="course-sales">已售 {{ course.sales }}+</text>
+                </view>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref } from 'vue'
+
+    const emit = defineEmits(['openFilter'])
+
+    // ---- 内容 Tab ----
+    const contentTabs : string[] = ['热门课程', '精品课程']
+    const activeTab = ref<number>(0)
+
+    // ---- 筛选标签 ----
+    const filterTags : string[] = ['全部', '实操技能', '综合评审']
+    const activeFilter = ref<number>(0)
+
+    // ---- 课程静态数据 ----
+    type CourseItem = {
+        id : number
+        title : string
+        tags : string[]
+        price : number
+        sales : number
+        isHot : boolean
+    }
+
+    const courseList : CourseItem[] = [
+        { id: 1, title: '2026年叉车基础理论课程', tags: ['直播报课', '电子资料'], price: 39, sales: 999, isHot: true },
+        { id: 2, title: '叉车实操技能强化班', tags: ['实操教学', '在线答疑'], price: 128, sales: 567, isHot: true },
+        { id: 3, title: '叉车安全规范专题课', tags: ['法规解读', '案例分析'], price: 0, sales: 1234, isHot: false },
+        { id: 4, title: '叉车维修高级进阶课', tags: ['直播回放', '电子资料'], price: 199, sales: 234, isHot: false },
+    ]
+
+    function onTabChange(idx : number) : void {
+        activeTab.value = idx
+    }
+
+    function onFilterChange(idx : number) : void {
+        activeFilter.value = idx
+    }
+
+    function onFilterBtnClick() : void {
+        emit('openFilter')
+    }
+
+    // ---- 课程点击 ----
+    function onCourseClick(course : CourseItem) : void {
+        uni.navigateTo({ url: `/pages/courses/course-detail?id=${course.id}` })
+    }
+</script>
+
+<style>
+    /* 内容 Tab */
+    .tab-row {
+        flex-direction: row;
+        padding: 24rpx 32rpx 0;
+    }
+
+    .tab-item {
+        margin-right: 40rpx;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .tab-text {
+        font-size: 28rpx;
+        color: #999999;
+        padding-bottom: 12rpx;
+    }
+
+    .tab-text-active {
+        color: #333333;
+        font-weight: bold;
+    }
+
+    .tab-underline {
+        width: 40rpx;
+        height: 6rpx;
+        border-radius: 3rpx;
+        background-color: #2979ff;
+    }
+
+    /* 筛选标签 */
+    .filter-row {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20rpx 32rpx;
+    }
+
+    .filter-tags {
+        flex: 1;
+        flex-direction: row;
+    }
+
+    .filter-tag {
+        padding: 14rpx 28rpx;
+        border-radius: 999rpx;
+        background-color: #ECECEC;
+        margin-right: 24rpx;
+    }
+
+    .filter-tag-active {
+        background-color: #EBF9FF;
+    }
+
+    .filter-tag-text {
+        font-size: 24rpx;
+        color: #666666;
+    }
+
+    .filter-tag-text-active {
+        color: #239EDD;
+    }
+
+    .filter-btn {
+        padding: 14rpx 28rpx;
+        border-radius: 999rpx;
+        background-color: #ECECEC;
+    }
+
+    .filter-btn-text {
+        font-size: 24rpx;
+        color: #666666;
+    }
+
+    /* 课程卡片 */
+    .course-list {
+        padding: 0 24rpx 24rpx;
+    }
+
+    .course-card {
+        background-color: #FFFFFF;
+        border-radius: 16rpx;
+        padding: 24rpx;
+        margin-bottom: 20rpx;
+    }
+
+    .course-header {
+        flex-direction: row;
+        align-items: center;
+        margin-bottom: 16rpx;
+    }
+
+    .course-tag-hot {
+        background-color: #00A443;
+        padding: 8rpx 20rpx;
+        border-radius: 999rpx;
+        margin-right: 16rpx;
+    }
+
+    .course-tag-hot-text {
+        font-size: 22rpx;
+        color: #FFFFFF;
+        font-weight: 600;
+    }
+
+    .course-title {
+        font-size: 30rpx;
+        font-weight: 600;
+        color: #333333;
+        flex: 1;
+        lines: 1;
+        text-overflow: ellipsis;
+    }
+
+    .course-tags {
+        flex-direction: row;
+        flex-wrap: wrap;
+        margin-bottom: 16rpx;
+    }
+
+    .course-tag-sm {
+        padding: 8rpx 16rpx;
+        border-radius: 8rpx;
+        margin-right: 12rpx;
+        margin-bottom: 8rpx;
+    }
+
+    .course-tag-sm-text {
+        font-size: 22rpx;
+        color: #999999;
+    }
+
+    .course-footer {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .course-price {
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #FF2424;
+    }
+
+    .course-sales {
+        font-size: 24rpx;
+        color: #999999;
+    }
+</style>

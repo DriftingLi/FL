@@ -1,0 +1,92 @@
+/**
+ * dashboard 首页数据流（T05 手术 #643，parent #638 / ADR-0007）
+ *
+ * 自 pages/dashboard/dashboard.uvue 逐符号搬出，行为逐行等价：
+ * 通知未读数轮询（30s）、我的课程/继续学习加载、精选内容（新闻资讯）加载。
+ * 生命周期挂载（onShow/onHide）留在页面壳，本模块只提供 start/stop 纯动作。
+ */
+import { ref } from 'vue'
+import type { Ref } from 'vue'
+import { getStudentCoursesApi } from '../../../api/student'
+import { getFeaturedContentsApi } from '../../../api/featured'
+import { getUnreadCountApi } from '../../../api/notification'
+import type { StudentCourse, FeaturedContentItem } from '../../../types/index'
+
+export type UseDashboardFeedsResult = {
+    unreadCount : Ref<number>
+    continueLearning : Ref<StudentCourse | null>
+    myCourses : Ref<StudentCourse[]>
+    newsList : Ref<FeaturedContentItem[]>
+    loadMyCourses : () => Promise<void>
+    loadFeaturedContents : () => Promise<void>
+    startUnreadPolling : () => void
+    stopUnreadPolling : () => void
+}
+
+export function useDashboardFeeds() : UseDashboardFeedsResult {
+    // ---- 通知未读数 ----
+    const unreadCount = ref<number>(0)
+    let unreadTimer : number | null = null
+
+    async function loadUnreadCount() : Promise<void> {
+        try {
+            const count = await getUnreadCountApi()
+            unreadCount.value = count
+        } catch (e) {
+            // 静默失败
+        }
+    }
+
+    function stopUnreadPolling() : void {
+        const t = unreadTimer
+        if (t != null) {
+            clearInterval(t)
+            unreadTimer = null
+        }
+    }
+
+    function startUnreadPolling() : void {
+        stopUnreadPolling()
+        loadUnreadCount()
+        unreadTimer = setInterval(() => {
+            loadUnreadCount()
+        }, 30000)
+    }
+
+    // ---- 继续学习 ----
+    const continueLearning = ref<StudentCourse | null>(null)
+    const myCourses = ref<StudentCourse[]>([])
+
+    async function loadMyCourses() : Promise<void> {
+        try {
+            const result = await getStudentCoursesApi()
+            myCourses.value = result.courses
+            continueLearning.value = result.continue_learning
+        } catch (e) {
+            console.warn('[dashboard] loadMyCourses failed:', e)
+        }
+    }
+
+    // ---- 精选内容（从 API 加载） ----
+    const newsList = ref<FeaturedContentItem[]>([])
+
+    async function loadFeaturedContents() : Promise<void> {
+        try {
+            const result = await getFeaturedContentsApi(1, 5)
+            newsList.value = result.items
+        } catch (e) {
+            console.warn('[dashboard] loadFeaturedContents failed:', e)
+        }
+    }
+
+    return {
+        unreadCount: unreadCount,
+        continueLearning: continueLearning,
+        myCourses: myCourses,
+        newsList: newsList,
+        loadMyCourses: loadMyCourses,
+        loadFeaturedContents: loadFeaturedContents,
+        startUnreadPolling: startUnreadPolling,
+        stopUnreadPolling: stopUnreadPolling
+    } as UseDashboardFeedsResult
+}
