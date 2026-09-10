@@ -31,8 +31,8 @@
  *   Q. ref<any> 类型擦除声明（Kotlin error18 any 无成员；组件实例引用需类型化）
  *   R. async 函数返回类型声明 : void（Kotlin 无法推断 UTSPromise 类型参数，级联编译错；须 Promise<void>）
  *   S. 模板直调 import 函数（uvue 模板 import 调用编译为 .invoke() = error18「找不到名称 invoke」；本地包装）
- *   T. 显式 Result 类型的 return 对象里裸传同文件函数引用（Kotlin error17 自动调用；
- *      形态与 M 同类，箭头包裹才合法，先例 composables/useTopicDetail.uts）
+ *   T. return 对象字面量裸传同文件函数引用（Kotlin error17 自动调用；显式 key: fn 与速记 { fn }
+ *      两种形态均触发、无需类型标注；形态与 M 同类，箭头包裹才合法，先例 composables/useTopicDetail.uts）
  * 存量违例走 GUARD_ALLOWLIST 豁免，由后续工单在各自范围清零（见常量注释）。
  */
 const fs = require('fs');
@@ -252,13 +252,18 @@ function scanBareFnRefMapper(code) {
   return hits;
 }
 
-/** T：显式 Result 类型的 return 对象里裸传同文件函数引用
- *  Kotlin error17：UTS 把字段位置上的函数名解析为「调用」，实际类型成了返回值类型，
- *  与声明的 Function0 不匹配。形态与 M 同类（裸引用 → 箭头包裹）；先例 composables/useTopicDetail.uts。
- *  仅当该 return 字面量带显式类型（as XxxResult 或函数返回类型标注）时判定——
- *  无显式类型的推断形态当前不被编译器调用，暂不报（见 ADR-0007）。
+/** T：return 对象字面量里裸传同文件函数引用（Kotlin error17）
+ *  UTS 把字段位置上的函数名解析为「调用」，实际类型成了返回值类型，与期望的 Function0 不匹配：
+ *  `error: Function invocation 'loadOverview()' expected.`
+ *
+ *  两种形态**都**触发（2026-09-10 编译现场实测，两轮各证一次）：
+ *    ① 显式 `key: fn`（先例 #800 修 use-dashboard-credential/feeds）
+ *    ② 速记 `{ fn }`（先例 #802 修 4 个 practice composable，**无需任何类型标注**）
+ *  合法形态 = 箭头包裹，先例 composables/useTopicDetail.uts：
+ *    `loadDetail: () => loadDetail(),` / `canDeleteReply: (reply : ForumReply) => canDeleteReply(reply),`
+ *  与规则 M 同类。Ref 等非函数值用速记不受影响，不报。
  */
-function scanBareFnRefInTypedReturn(code) {
+function scanBareFnRefInReturn(code) {
   const clean = blank(code);
   const hits = [];
   // 同文件声明的函数名（function 声明 + 箭头 const）
@@ -280,21 +285,21 @@ function scanBareFnRefInTypedReturn(code) {
       else if (c === '}') { depth--; if (depth === 0) { close = i; break; } }
     }
     if (close === -1) continue;
-    // 该字面量是否带显式类型：随后的 `as XxxResult`
-    const after = clean.slice(close + 1, close + 60);
-    if (!/^\s*as\s+[A-Za-z_$][\w$]*/.test(after)) continue;
-    const block = clean.slice(open + 1, close);
     const baseLine = clean.slice(0, open).split('\n').length;
-    const lines = block.split('\n');
-    for (let i = 0; i < lines.length; i++) {
-      const mm = lines[i].match(/^\s*([A-Za-z_$][\w$]*)\s*:\s*([A-Za-z_$][\w$]*)\s*,?\s*$/);
-      if (!mm) continue;
-      if (fns.has(mm[2])) hits.push('第 ' + (baseLine + i) + ' 行 ' + mm[1] + ': ' + mm[2]);
+    const members = splitTopLevel(clean.slice(open + 1, close));
+    for (let i = 0; i < members.length; i++) {
+      const t = members[i].trim();
+      if (t.length === 0) continue;
+      // ① 显式 key: fn
+      let mm = /^([A-Za-z_$][\w$]*)\s*:\s*([A-Za-z_$][\w$]*)$/.exec(t);
+      if (mm !== null && fns.has(mm[2])) { hits.push('第 ' + baseLine + ' 行附近 ' + mm[1] + ': ' + mm[2] + '（显式）'); continue; }
+      // ② 速记 fn
+      mm = /^([A-Za-z_$][\w$]*)$/.exec(t);
+      if (mm !== null && fns.has(mm[1])) hits.push('第 ' + baseLine + ' 行附近 ' + mm[1] + '（速记）');
     }
   }
   return hits;
-}
-/** N：as unknown as 双重强转——Kotlin 侧把属性/参数类型污染为 unknown（error18 找不到成员），
+}/** N：as unknown as 双重强转——Kotlin 侧把属性/参数类型污染为 unknown（error18 找不到成员），
  *  对象 prop 默认值应走工厂 `() => ({...} as T)`（先例 ai-chat sessions），非 null 强转 */
 function scanUnknownDoubleCast(code) {
   const clean = blank(code);
@@ -1015,40 +1020,58 @@ describe('全工程守护：五类 Kotlin 编译地雷零命中', () => {
     expect(violations).toEqual([]);
   });
 
-  it('T：自检——注入「显式 Result 类型的 return 里裸传函数引用」必须被抓到', () => {
-    const bad = [
-      'export type R = {',
-      '    go : () => void',
-      '}',
-      'export function useThing() : R {',
-      '    function go() : void {}',
-      '    return {',
-      '        go: go',
-      '    } as R',
-      '}',
-    ].join('\n');
-    expect(scanBareFnRefInTypedReturn(bad).length).toBeGreaterThan(0);
-
-    // 反向自检：箭头包裹后必须干净（先例 composables/useTopicDetail.uts 形态）
-    const good = bad.replace('go: go', 'go: () => go()');
-    expect(scanBareFnRefInTypedReturn(good)).toEqual([]);
-
-    // 反向自检：无显式类型（推断形态）不判定——当前编译器不调用该形态（见 ADR-0007）
-    const inferred = [
+  it('T：自检——注入「return 里裸传函数引用」必须被抓到（显式与速记两种形态）', () => {
+    const head = [
       'export function useThing() {',
       '    function go() : void {}',
+      '    function run(x : number) : void {}',
+    ];
+    const tail = ['}'];
+
+    // ① 显式 key: fn（先例 #800 dashboard）
+    const explicit = head.concat([
       '    return {',
       '        go: go',
       '    }',
+    ], tail).join('\n');
+    expect(scanBareFnRefInReturn(explicit).length).toBeGreaterThan(0);
+
+    // ② 速记 { fn }，且**无任何类型标注**（先例 #802 practice）
+    const shorthand = head.concat([
+      '    return {',
+      '        go,',
+      '        run',
+      '    }',
+    ], tail).join('\n');
+    expect(scanBareFnRefInReturn(shorthand).length).toBeGreaterThan(0);
+
+    // 反向自检：全部箭头包裹后必须干净（先例 composables/useTopicDetail.uts 形态）
+    const good = head.concat([
+      '    return {',
+      '        go: () => go(),',
+      '        run: (x : number) => run(x)',
+      '    }',
+    ], tail).join('\n');
+    expect(scanBareFnRefInReturn(good)).toEqual([]);
+
+    // 反向自检：非函数值（Ref 等）用速记不受影响
+    const refs = [
+      'import { ref } from \'vue\'',
+      'export function useRefs() {',
+      '    const count = ref<number>(0)',
+      '    function bump() : void {}',
+      '    return {',
+      '        count,',
+      '        bump: () => bump()',
+      '    }',
       '}',
     ].join('\n');
-    expect(scanBareFnRefInTypedReturn(inferred)).toEqual([]);
+    expect(scanBareFnRefInReturn(refs)).toEqual([]);
   });
-
-  it('T：全工程无「显式 Result 类型的 return 里裸传函数引用」（Kotlin error17，箭头包裹才合法）', () => {
+  it('T：全工程无「return 里裸传函数引用」（Kotlin error17，显式与速记均须箭头包裹）', () => {
     const violations = [];
     for (const u of allCodeUnits()) {
-      for (const h of scanBareFnRefInTypedReturn(u.code)) violations.push(path.relative(ROOT, u.file) + ': ' + h);
+      for (const h of scanBareFnRefInReturn(u.code)) violations.push(path.relative(ROOT, u.file) + ': ' + h);
     }
     expect(violations).toEqual([]);
   });
