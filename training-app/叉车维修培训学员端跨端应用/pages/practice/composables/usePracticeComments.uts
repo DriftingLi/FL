@@ -1,0 +1,45 @@
+/**
+ * practice-do 评论交互 composable（T06 practice 手术，parent #644）
+ */
+import { ref } from 'vue'
+import { getCommentsApi, createCommentApi, deleteCommentApi } from '../../../api/questionInteraction'
+import type { QuestionComment } from '../../../types/index'
+
+export function usePracticeComments(currentUserId : number) {
+    const showComments = ref<boolean>(false)
+    const comments = ref<QuestionComment[]>([])
+    const commentText = ref<string>('')
+
+    async function loadComments(questionId : number) : Promise<void> {
+        if (questionId <= 0) return
+        try {
+            const result = await getCommentsApi(questionId)
+            const uid = currentUserId
+            const list = result.items
+            for (let i = 0; i < list.length; i++) { list[i].can_delete = list[i].user_id == uid && uid > 0 }
+            comments.value = list
+        } catch (e) { console.warn('[practice-do] loadComments failed:', e) }
+    }
+
+    function toggleComments(questionId : number) : void {
+        showComments.value = !showComments.value
+        if (showComments.value && comments.value.length == 0) { loadComments(questionId) }
+    }
+
+    async function onSubmitComment(questionId : number) : Promise<void> {
+        const text = commentText.value.trim()
+        if (text.length == 0) return
+        try { const c = await createCommentApi(questionId, text); comments.value.push(c); commentText.value = ''; uni.showToast({ title: '评论成功', icon: 'none' }) }
+        catch (e) { console.error('[practice-do] submitComment failed:', e) }
+    }
+
+    function onDeleteComment(comment : QuestionComment) : void {
+        uni.showModal({ title: '提示', content: '确定删除这条评论吗？',
+            success: (res) => { if (res.confirm) { const cid = comment.id; deleteCommentApi(cid).then((_ : UTSJSONObject) => { comments.value = comments.value.filter((c) => c.id != cid); uni.showToast({ title: '已删除', icon: 'none' }) }).catch((e) => { console.warn('[practice-do] deleteComment failed:', e); uni.showToast({ title: '删除失败', icon: 'none' }) }) } }
+        })
+    }
+
+    function resetComments() : void { showComments.value = false; comments.value = []; commentText.value = '' }
+
+    return { showComments, comments, commentText, loadComments, toggleComments, onSubmitComment, onDeleteComment, resetComments }
+}
