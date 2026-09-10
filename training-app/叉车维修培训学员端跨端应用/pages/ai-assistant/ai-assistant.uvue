@@ -53,7 +53,7 @@
 		<AiChatModelPicker :visible="showModelPicker" :all-models="allModels" :current-model-id="currentModelId" :current-model-source="currentModelSource" @close="showModelPicker = false" @select="selectModel" @custom="showCustomForm = true" @manage="goManageModels" />
 
 		<!-- 自定义 API Key 弹窗 -->
-		<AiChatCustomForm :visible="showCustomForm" :custom-model="customModel" :custom-base-url="customBaseUrl" :custom-api-key="customApiKey" @close="closeCustomForm" @update:custom-model="customModel = $event" @update:custom-base-url="customBaseUrl = $event" @update:custom-api-key="customApiKey = $event" @confirm="confirmCustomModel" />
+		<AiChatCustomForm :visible="showCustomForm" :custom-model="customModel" :custom-base-url="customBaseUrl" :custom-api-key="customApiKey" @close="closeCustomForm" @update:custom-model="onCustomModelUpdate" @update:custom-base-url="onCustomBaseUrlUpdate" @update:custom-api-key="onCustomApiKeyUpdate" @confirm="confirmCustomModel" />
 	</view>
 </template>
 
@@ -69,7 +69,7 @@
 	} from '../../api/aiAssistant'
 	import { useAiChat } from '../../composables/useAiChat'
 	import type { ChatBodyBuilder } from '../../composables/useAiChat'
-	import type { AiModel, AiUserModel, AIModelOption, AiChatMessage, AiSession } from '../../types/index'
+	import type { AiModel, AiUserModel, AIModelOption, AiChatMessage, AiSession, AIFunctionItem } from '../../types/index'
 	import { isProPaid, getVersion, setVersion } from '../../utils/aiPay'
 	import { STORAGE_KEY_AI_SELECTED_USER_MODEL } from '../../constants/app'
 	import { FUNCTION_ITEMS, QUICK_PROMPTS, RIGHT_MENU_ITEMS } from './ai-assistant-constants'
@@ -329,6 +329,18 @@
 	// 自定义 API Key
 	function closeCustomForm() : void {
 		showCustomForm.value = false
+	}
+
+	function onCustomModelUpdate(value : string) : void {
+		customModel.value = value
+	}
+
+	function onCustomBaseUrlUpdate(value : string) : void {
+		customBaseUrl.value = value
+	}
+
+	function onCustomApiKeyUpdate(value : string) : void {
+		customApiKey.value = value
 	}
 
 	function confirmCustomModel() : void {
