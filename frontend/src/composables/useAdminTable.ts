@@ -1,7 +1,12 @@
-// useAdminTable：管理端标准列表页状态机 module（ADR-0015）。
+// useAdminTable：管理端标准列表页状态机 module（ADR-0015；三态补齐见 ADR-0039）。
 // interface：fetch + actions + searchable；implementation 拥有
-// loading / list / total / currentPage / pageSize / search / action 分发 / confirmDelete。
-// 页面只声明 fetch adapter 与行操作 adapter。
+// loading / loadError / retrying / list / total / currentPage / pageSize / search /
+// action 分发 / confirmDelete。页面只声明 fetch adapter 与行操作 adapter。
+//
+// 三态语义对齐 useAsyncPage（#790 A1，ADR-0039）：load 失败收敛为 loadError、
+// **绝不向上 reject**（此前 try/finally 无 catch，未 await 的调用点会产生
+// unhandled rejection）；retry 带 retrying 防重入，可直接驱动错误态重试按钮。
+// admin 域统一用本件，非 admin 场景仍用 useAsyncPage（全站 40 处）。
 import { ref } from 'vue'
 import { useConfirm } from '@/composables/useConfirm'
 
@@ -24,6 +29,8 @@ export interface AdminTableOptions<T> {
 
 export function useAdminTable<T>(options: AdminTableOptions<T>) {
   const loading = ref(false)
+  const loadError = ref(false)
+  const retrying = ref(false)
   const list = ref<T[]>([])
   const total = ref(0)
   const currentPage = ref(1)
@@ -31,8 +38,10 @@ export function useAdminTable<T>(options: AdminTableOptions<T>) {
   const searchKeyword = ref('')
   const filters = ref<Record<string, unknown>>({})
 
+  /** 装载（首屏/翻页/筛选变化共用）：错误收敛为 loadError，绝不 reject */
   async function load() {
     loading.value = true
+    loadError.value = false
     try {
       const payload: Record<string, unknown> = { ...filters.value }
       if (options.searchable && searchKeyword.value) {
@@ -41,9 +50,20 @@ export function useAdminTable<T>(options: AdminTableOptions<T>) {
       const result = await options.fetch({ page: currentPage.value, pageSize: pageSize.value }, payload)
       list.value = result.list || []
       total.value = result.total || 0
+    } catch {
+      // 错误态由 loadError 承载（拦截器已统一 toast），不向上抛：调用点常不 await load()
+      loadError.value = true
     } finally {
       loading.value = false
+      retrying.value = false
     }
+  }
+
+  /** 错误态重试：retrying 防重入，可直接作为重试按钮 loading */
+  async function retry(): Promise<void> {
+    if (retrying.value) return
+    retrying.value = true
+    await load()
   }
 
   /** 搜索：回到第一页并重新加载。 */
@@ -88,6 +108,8 @@ export function useAdminTable<T>(options: AdminTableOptions<T>) {
 
   return {
     loading,
+    loadError,
+    retrying,
     list,
     total,
     currentPage,
@@ -95,6 +117,7 @@ export function useAdminTable<T>(options: AdminTableOptions<T>) {
     searchKeyword,
     filters,
     load,
+    retry,
     search,
     applyFilters,
     reset,
