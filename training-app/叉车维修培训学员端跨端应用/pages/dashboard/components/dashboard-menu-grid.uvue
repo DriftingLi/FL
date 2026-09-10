@@ -27,7 +27,7 @@
     const menuItems : MenuItem[] = [
         { key: 'course-mall', title: '课程商城', icon: '🛒', color: '#FF6B35', path: '/pages/mall/mall', available: true },
         { key: 'question-bank', title: '题库练习', icon: '📚', color: '#4ECDC4', path: '/pages/practice/practice', available: true },
-        { key: 'exam-center', title: '考试中心', icon: '📝', color: '#2979ff', path: '/pages/exam/exam', available: true },
+        { key: 'materials', title: '学习资料', icon: '📚', color: '#2979ff', path: '/pages/resources/materials', available: true },
         { key: 'exam-info', title: '考情资讯', icon: '📣', color: '#96CEB4', path: '/pages/exam-info/exam-info', available: true },
     ]
 

@@ -272,7 +272,7 @@ describe('行为保持点（手术偏离与回退风险的显式钉锁）', () =
 
   it('静态数据完整性：宫格 4 入口 / 课程 4 卡 / Tab 2 / 筛选标签 3 / 热门考证 2', () => {
     const menu = read('pages/dashboard/components/dashboard-menu-grid.uvue');
-    for (const t of ['课程商城', '题库练习', '考试中心', '考情资讯']) expect(menu).toContain(t);
+    for (const t of ['课程商城', '题库练习', '学习资料', '考情资讯']) expect(menu).toContain(t);
     const course = read('pages/dashboard/components/dashboard-course-section.uvue');
     for (const t of ['2026年叉车基础理论课程', '叉车实操技能强化班', '叉车安全规范专题课', '叉车维修高级进阶课']) expect(course).toContain(t);
     expect(course).toContain("['热门课程', '精品课程']");
