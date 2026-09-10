@@ -50,13 +50,9 @@
     </div>
 
     <!-- 撤回弹窗（spec #449 决定 10 的 UI 落点）：「一并撤回联系方式授权」默认不勾选 -->
-    <UiDialog v-model="withdrawVisible" title="撤回投递" width="440px">
+    <UiDialog v-model="withdrawVisible" title="撤回投递" width="440px" confirm-text="确认撤回" :confirm-loading="withdrawing" @confirm="confirmWithdraw">
       <div class="text-sm text-ink">确定撤回这条投递吗？撤回后可以重新投递同一职位。</div>
       <el-checkbox v-model="revokeContact" class="mt-3">一并撤回对该企业的联系方式授权</el-checkbox>
-      <template #footer>
-        <UiButton @click="withdrawVisible = false">取消</UiButton>
-        <UiButton variant="primary" :loading="withdrawing" @click="confirmWithdraw">确认撤回</UiButton>
-      </template>
     </UiDialog>
   </div>
 </template>

@@ -60,8 +60,7 @@
       </el-table-column>
     </el-table>
 
-    <div class="pagination-wrapper" v-if="total > pageSize">
-      <UiPagination
+      <UiPagination v-if="total > pageSize"
       v-model:current-page="currentPage"
       v-model:page-size="pageSize"
       :total="total"
@@ -69,15 +68,15 @@
       :page-sizes="[10, 20, 50]"
       @current-change="load"
       @size-change="load"
-    />
-    </div>
+    align="center" class="mt-4" />
+    
 
     <UiDialog
       v-model="dialogVisible"
       title="新增导师"
       width="480px"
       destroy-on-close
-    >
+     confirm-text="确认添加" :confirm-loading="submitting" @confirm="handleSubmit">
       <el-form ref="formRef" :model="formData" :rules="formRules" label-width="100px">
         <el-form-item label="用户名" prop="username">
           <el-input v-model="formData.username" placeholder="请输入用户名（3-20字符）" maxlength="20" show-word-limit />
@@ -89,10 +88,6 @@
           <el-input v-model="formData.name" placeholder="请输入姓名（2-10字符）" maxlength="10" show-word-limit />
         </el-form-item>
       </el-form>
-      <template #footer>
-        <UiButton @click="dialogVisible = false">取消</UiButton>
-        <UiButton variant="primary" :loading="submitting" @click="handleSubmit">确认添加</UiButton>
-      </template>
     </UiDialog>
 
     <!-- 重置密码弹窗 -->
@@ -101,7 +96,7 @@
       title="重置密码"
       width="440px"
       destroy-on-close
-    >
+     confirm-text="确认重置" :confirm-loading="pwdSubmitting" @confirm="handleResetPwd">
       <el-form ref="pwdFormRef" :model="pwdFormData" :rules="pwdFormRules" label-width="90px">
         <el-form-item label="导师">
           <span>{{ pwdFormData.name }}</span>
@@ -110,10 +105,6 @@
           <el-input v-model="pwdFormData.password" type="password" placeholder="请输入新密码（6-20字符）" maxlength="20" show-password />
         </el-form-item>
       </el-form>
-      <template #footer>
-        <UiButton @click="pwdDialogVisible = false">取消</UiButton>
-        <UiButton variant="primary" :loading="pwdSubmitting" @click="handleResetPwd">确认重置</UiButton>
-      </template>
     </UiDialog>
   </div>
 </template>
@@ -282,11 +273,6 @@ onMounted(() => {
 }
 
 
-.pagination-wrapper {
-  display: flex;
-  justify-content: center;
-  margin-top: 20px;
-}
 
 @media screen and (max-width: 768px) {
   .tutor-manage-page {

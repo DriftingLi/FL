@@ -49,12 +49,8 @@
           </div>
         </div>
       </div>
-      <UiDialog v-model="showDialog" title="申请交换联系方式" width="420px">
+      <UiDialog v-model="showDialog" title="申请交换联系方式" width="420px" confirm-text="提交申请" :confirm-loading="submitting" @confirm="submitRequest">
         <el-input v-model="message" type="textarea" :rows="3" maxlength="200" show-word-limit placeholder="请填写申请附言（1-200字）" />
-        <template #footer>
-          <UiButton @click="showDialog = false">取消</UiButton>
-          <UiButton variant="primary" :loading="submitting" @click="submitRequest">提交申请</UiButton>
-        </template>
       </UiDialog>
     </div>
   </div>

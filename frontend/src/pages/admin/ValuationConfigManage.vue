@@ -676,7 +676,7 @@ function onRefresh() {
         :title="dialogTitle"
         width="560px"
         destroy-on-close
-      >
+       :confirm-text="editingRow ? '保存' : '创建'" :confirm-loading="submitting" @confirm="handleSubmit">
         <el-form :model="formData" label-width="120px">
           <el-form-item
             v-for="f in ORIGINAL_PRICE_FIELDS"
@@ -704,12 +704,6 @@ function onRefresh() {
             />
           </el-form-item>
         </el-form>
-        <template #footer>
-          <UiButton @click="dialogVisible = false">取消</UiButton>
-          <UiButton variant="primary" :loading="submitting" @click="handleSubmit">
-            {{ editingRow ? '保存' : '创建' }}
-          </UiButton>
-        </template>
       </UiDialog>
 
       <!-- 区域系数新增对话框 -->
@@ -718,7 +712,7 @@ function onRefresh() {
         title="新增区域系数"
         width="480px"
         destroy-on-close
-      >
+       confirm-text="创建" :confirm-loading="creatingRegion" @confirm="handleCreateRegion">
         <el-form :model="regionCreateForm" label-width="100px">
           <el-form-item label="省份" required>
             <el-input v-model="regionCreateForm.province" placeholder="如：江苏" />
@@ -737,12 +731,6 @@ function onRefresh() {
             />
           </el-form-item>
         </el-form>
-        <template #footer>
-          <UiButton @click="regionCreateDialogVisible = false">取消</UiButton>
-          <UiButton variant="primary" :loading="creatingRegion" @click="handleCreateRegion">
-            创建
-          </UiButton>
-        </template>
       </UiDialog>
     </div>
   </div>

@@ -1,5 +1,12 @@
 /**
  * practice 模块手术契约测试（T06，parent #644 / ADR-0007）
+ *
+ * 钉住 practice 手术交付的五类契约：
+ * 1) 600 行软预算：pages/practice/** 全部源文件 ≤600 行
+ * 2) 模块目录 ≤2 层
+ * 3) composable 接线：practice-do.uvue / practice.uvue 以显式 import 使用 composable
+ * 4) allowlist 不回潮：practice 域文件不得出现在 GUARD_ALLOWLIST
+ * 5) 零直发请求：页面层不直接 uni.request
  */
 const fs = require('fs');
 const path = require('path');

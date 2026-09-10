@@ -78,17 +78,16 @@
         </el-table-column>
       </el-table>
 
-      <div class="pagination-wrapper" v-if="total > pageSize">
-        <UiPagination
+        <UiPagination v-if="total > pageSize"
       v-model:current-page="currentPage"
       :page-size="pageSize"
       :total="total"
       @current-change="load"
-    />
-      </div>
+    align="center" class="mt-4" />
+      
     </el-card>
 
-    <UiDialog v-model="rejectDialogVisible" title="驳回修改" width="480px">
+    <UiDialog v-model="rejectDialogVisible" title="驳回修改" width="480px" confirm-text="确认驳回" :confirm-loading="submitting" @confirm="reject">
       <el-input
         v-model="rejectReason"
         type="textarea"
@@ -97,10 +96,6 @@
         show-word-limit
         placeholder="请输入驳回原因（选填）"
       />
-      <template #footer>
-        <UiButton @click="rejectDialogVisible = false">取消</UiButton>
-        <UiButton variant="danger" :loading="submitting" @click="reject">确认驳回</UiButton>
-      </template>
     </UiDialog>
   </div>
 </template>
@@ -244,9 +239,4 @@ onMounted(load)
   color: var(--color-text-disabled);
 }
 
-.pagination-wrapper {
-  display: flex;
-  justify-content: center;
-  margin-top: 16px;
-}
 </style>

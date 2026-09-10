@@ -13,6 +13,7 @@ import { downloadBatteryReportBlob, generateBatteryReport } from '@/api/valuatio
 import { downloadReport } from '@/composables/useReportDownload'
 import { BATTERY_TYPE_LABELS, type BatteryType } from '@/types/valuation/battery'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const router = useRouter()
 const store = useBatteryStore()
@@ -70,10 +71,10 @@ async function downloadPdf() {
       :subtitle="`battery #${id} · ${batteryTypeName}`"
     >
       <template #actions>
-        <el-button :icon="Edit" @click="goEdit">重新评估</el-button>
-        <el-button type="primary" :icon="Download" @click="downloadPdf">
+        <UiButton :icon="Edit" @click="goEdit">重新评估</UiButton>
+        <UiButton variant="primary" :icon="Download" @click="downloadPdf">
           下载 PDF
-        </el-button>
+        </UiButton>
       </template>
     </PageHeader>
 

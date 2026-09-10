@@ -1,5 +1,5 @@
 <template>
-  <UiDialog v-model="visible" :title="title" width="440px">
+  <UiDialog v-model="visible" :title="title" width="440px" confirm-text="确认修改" :confirm-loading="submitting" @confirm="submit">
     <el-form label-width="0">
       <el-form-item>
         <el-input v-model="target" :placeholder="placeholder" maxlength="20" />
@@ -11,10 +11,6 @@
         </div>
       </el-form-item>
     </el-form>
-    <template #footer>
-      <UiButton @click="visible = false">取消</UiButton>
-      <UiButton variant="primary" :loading="submitting" @click="submit">确认修改</UiButton>
-    </template>
   </UiDialog>
 </template>
 

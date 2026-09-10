@@ -114,7 +114,7 @@
     </el-row>
 
     <!-- 标签新建/编辑 -->
-    <UiDialog v-model="tagDialogVisible" :title="tagForm.id ? '编辑标签' : '新增标签'" width="420px" destroy-on-close>
+    <UiDialog v-model="tagDialogVisible" :title="tagForm.id ? '编辑标签' : '新增标签'" width="420px" destroy-on-close confirm-text="保存" :confirm-loading="tagSubmitting" @confirm="submitTag">
       <el-form ref="tagFormRef" :model="tagForm" :rules="tagRules" label-width="80px">
         <el-form-item label="标签名" prop="name">
           <el-input v-model="tagForm.name" placeholder="如：法规、结构、液压、电气、制动、故障诊断、应急" maxlength="30" show-word-limit @keyup.enter="submitTag" />
@@ -123,14 +123,10 @@
           <el-input v-model="tagForm.code" placeholder="唯一编码，如 HYDRAULIC" maxlength="30" @keyup.enter="submitTag" />
         </el-form-item>
       </el-form>
-      <template #footer>
-        <UiButton @click="tagDialogVisible = false">取消</UiButton>
-        <UiButton variant="primary" :loading="tagSubmitting" @click="submitTag">保存</UiButton>
-      </template>
     </UiDialog>
 
     <!-- 打标对话框 -->
-    <UiDialog v-model="tagAssignVisible" :title="`题目打标（${tagAssignQuestionIds.length} 题）`" width="460px" destroy-on-close>
+    <UiDialog v-model="tagAssignVisible" :title="`题目打标（${tagAssignQuestionIds.length} 题）`" width="460px" destroy-on-close confirm-text="保存" :confirm-loading="tagSubmitting" @confirm="submitTagAssign">
       <el-form label-width="80px">
         <el-form-item label="选择标签">
           <el-select
@@ -145,10 +141,6 @@
           </el-select>
         </el-form-item>
       </el-form>
-      <template #footer>
-        <UiButton @click="tagAssignVisible = false">取消</UiButton>
-        <UiButton variant="primary" :loading="tagSubmitting" @click="submitTagAssign">保存</UiButton>
-      </template>
     </UiDialog>
   </div>
 </template>

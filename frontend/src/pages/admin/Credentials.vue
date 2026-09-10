@@ -50,7 +50,7 @@
       </el-table>
     </el-card>
 
-    <UiDialog v-model="dialogVisible" :title="form.id ? '编辑证件' : '新增证件'" width="520px" destroy-on-close>
+    <UiDialog v-model="dialogVisible" :title="form.id ? '编辑证件' : '新增证件'" width="520px" destroy-on-close confirm-text="保存" :confirm-loading="submitting" @confirm="handleSubmit">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
         <el-form-item label="编码" prop="code">
           <el-input v-model="form.code" placeholder="如 forklift_n1" :disabled="!!form.id" />
@@ -83,10 +83,6 @@
           <el-switch v-model="form.status" :active-value="1" :inactive-value="0" active-text="启用" inactive-text="停用" />
         </el-form-item>
       </el-form>
-      <template #footer>
-        <UiButton @click="dialogVisible = false">取消</UiButton>
-        <UiButton variant="primary" :loading="submitting" @click="handleSubmit">保存</UiButton>
-      </template>
     </UiDialog>
   </div>
 </template>

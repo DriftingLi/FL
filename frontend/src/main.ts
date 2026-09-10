@@ -1,6 +1,18 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import ElementPlus from 'element-plus'
+// 自托管字体（@fontsource，替代 Google Fonts 渲染阻塞外链 —— #748 P0-2）
+import '@fontsource/dm-sans/400.css'
+import '@fontsource/dm-sans/400-italic.css'
+import '@fontsource/dm-sans/500.css'
+import '@fontsource/dm-sans/600.css'
+import '@fontsource/dm-sans/700.css'
+import '@fontsource/jetbrains-mono/400.css'
+import '@fontsource/jetbrains-mono/500.css'
+import '@fontsource/noto-sans-sc/400.css'
+import '@fontsource/noto-sans-sc/500.css'
+import '@fontsource/noto-sans-sc/600.css'
+import '@fontsource/noto-sans-sc/700.css'
 // 样式统一由 tailwind.css 按 @layer 顺序引入（vendor → theme → base → utilities）
 import './assets/styles/tailwind.css'
 

@@ -132,7 +132,7 @@
       :title="detailCourse?.name || '课程详情'"
       width="680px"
       destroy-on-close
-    >
+     :confirm-text="continueChapter ? `继续学习：${continueChapterTitle}` : '开始学习'" @confirm="goToChapter(continueChapter ?? detailChapters[0])">
       <template #header>
         <div class="detail-header flex items-center justify-between gap-3 pr-6">
           <span class="detail-header-title text-lg font-semibold text-ink">{{ detailCourse?.name || '课程详情' }}</span>
@@ -213,10 +213,6 @@
           </div>
         </template>
       </div>
-      <template #footer>
-        <UiButton @click="detailVisible = false">关闭</UiButton>
-        <UiButton variant="primary" v-if="detailChapters.length > 0" @click="goToChapter(continueChapter ?? detailChapters[0])">{{ continueChapter ? `继续学习：${continueChapterTitle}` : '开始学习' }}</UiButton>
-      </template>
     </UiDialog>
   </div>
 </template>

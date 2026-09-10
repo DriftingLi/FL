@@ -28,6 +28,12 @@ import UiActionChip from '../UiActionChip.vue'
 import UiSegmentTabs from '../UiSegmentTabs.vue'
 import UiPagination from '../UiPagination.vue'
 import UiFilterBar from '../UiFilterBar.vue'
+import UiSwitch from '../UiSwitch.vue'
+import UiCheckbox from '../UiCheckbox.vue'
+import UiCheckboxGroup from '../UiCheckboxGroup.vue'
+import UiRadioGroup from '../UiRadioGroup.vue'
+import UiTooltip from '../UiTooltip.vue'
+import UiUpload from '../UiUpload.vue'
 
 const OPTIONS = [
   { label: '全部', value: 'all' },
@@ -431,5 +437,127 @@ describe('UiFilterBar', () => {
   it('actions 区域用 ml-auto 顶到最右', () => {
     const w = mount(UiFilterBar, { slots: { actions: '<span>x</span>' } })
     expect(w.find('.ml-auto').exists()).toBe(true)
+  })
+})
+
+describe('UiSwitch', () => {
+  it('v-model 经 defineModel 转发到 el-switch', async () => {
+    const w = mountWith(UiSwitch, { modelValue: false })
+    await w.setProps({ modelValue: true })
+    expect(w.find('.el-switch').classes()).toContain('is-checked')
+  })
+
+  it('attrs 透传（inline-prompt 下激活侧文本渲染，EP 只显示当前侧）', () => {
+    const w = mountWith(UiSwitch, { modelValue: true, inlinePrompt: true, activeText: '开启' })
+    expect(w.text()).toContain('开启')
+  })
+})
+
+describe('UiCheckbox / UiCheckboxGroup', () => {
+  it('单体 v-model 转发 + label 走 attrs', async () => {
+    const w = mountWith(UiCheckbox, { modelValue: true, label: '面议' })
+    expect(w.find('.el-checkbox').classes()).toContain('is-checked')
+    expect(w.text()).toContain('面议')
+  })
+
+  it('组内用法：value/label 走 attrs，选中状态由 group 管理', async () => {
+    const w = mount(UiCheckboxGroup, {
+      props: { modelValue: ['a'] },
+      slots: { default: '<UiCheckbox value="a" label="A" /><UiCheckbox value="b" label="B" />' },
+      global: { plugins: [ElementPlus], components: { UiCheckbox } }
+    })
+    await nextTick()
+    const boxes = w.findAll('.el-checkbox')
+    expect(boxes[0].classes()).toContain('is-checked')
+    expect(boxes[1].classes()).not.toContain('is-checked')
+  })
+
+  it('group v-model 数组转发', async () => {
+    const w = mountWith(UiCheckboxGroup, { modelValue: ['x'] })
+    expect((w.find('.el-checkbox-group').element as HTMLInputElement)).toBeTruthy()
+  })
+})
+
+describe('UiRadioGroup', () => {
+  it('v-model 转发 + 组内选中态正确', async () => {
+    const w = mount(UiRadioGroup, {
+      props: { modelValue: 'b' },
+      slots: { default: '<el-radio value="a">甲</el-radio><el-radio value="b">乙</el-radio>' },
+      global: { plugins: [ElementPlus] }
+    })
+    await nextTick()
+    const radios = w.findAll('.el-radio')
+    expect(radios[1].classes()).toContain('is-checked')
+  })
+
+  it('attrs 透传（size 经 provide 落到子 radio，EP 行为：group 根不带 size class）', async () => {
+    const w = mount(UiRadioGroup, {
+      props: { modelValue: 'a', size: 'small' },
+      slots: { default: '<el-radio value="a">甲</el-radio>' },
+      global: { plugins: [ElementPlus] }
+    })
+    await nextTick()
+    expect(w.find('.el-radio').classes()).toContain('el-radio--small')
+  })
+})
+
+describe('UiTooltip', () => {
+  it('挂载不炸，trigger slot 正常渲染', () => {
+    const w = mount(UiTooltip, {
+      props: { content: '提示文案', placement: 'top' },
+      slots: { default: '<button class="trigger">目标</button>' },
+      global: { plugins: [ElementPlus] }
+    })
+    expect(w.find('.trigger').exists()).toBe(true)
+  })
+
+  it('#content 具名槽传入不报错（popper 未触发不渲染，属 EP 行为）', () => {
+    const w = mount(UiTooltip, {
+      props: { placement: 'top' },
+      slots: { default: '<button class="trigger2">y</button>', content: '<span>富内容</span>' },
+      global: { plugins: [ElementPlus] }
+    })
+    expect(w.find('.trigger2').exists()).toBe(true)
+  })
+})
+
+describe('UiUpload', () => {
+  it('attrs 透传（drag 落到 el-upload 渲染拖拽区）', () => {
+    const w = mountWith(UiUpload, { action: '#', drag: true })
+    expect(w.find('.el-upload').exists()).toBe(true)
+    expect(w.find('.el-upload-dragger').exists()).toBe(true)
+  })
+
+  it('default slot 转发（trigger 内容）', () => {
+    const w = mount(UiUpload, {
+      props: { action: '#' },
+      slots: { default: '<button class="up-btn">上传</button>' },
+      global: { plugins: [ElementPlus] }
+    })
+    expect(w.find('.up-btn').exists()).toBe(true)
+  })
+})
+
+describe('UiTag（tone 唯一入口扩展，#766 C2）', () => {
+  it('新 tone 值 primary / info 直通 EP type', () => {
+    const primary = mountWith(UiTag, { tone: 'primary' })
+    expect(primary.find('.el-tag').classes()).toContain('el-tag--primary')
+    const info = mountWith(UiTag, { tone: 'info' })
+    expect(info.find('.el-tag').classes()).toContain('el-tag--info')
+  })
+
+  it('size 接受 EP 原值 small（迁移直通）', () => {
+    const w = mountWith(UiTag, { tone: 'success', size: 'small' })
+    expect(w.find('.el-tag').classes()).toContain('el-tag--small')
+  })
+
+  it('attrs 显式透传（class 落到根，浏览器下 fallthrough 到 span）', () => {
+    const w = mountWith(UiTag, { tone: 'success', class: 'ml-1.5' })
+    expect(w.classes()).toContain('ml-1.5')
+  })
+
+  it('旧 API 零 diff：tone=brand 的品牌样式仍在（断言根，同既有测试）', () => {
+    const w = mountWith(UiTag, { tone: 'brand', effect: 'light' })
+    expect(w.classes()).toContain('bg-ui-50')
   })
 })

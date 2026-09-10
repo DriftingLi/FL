@@ -17,6 +17,7 @@ export type UseTopicFeedResult = {
     qaSort : Ref<string>
     qaStatus : Ref<string>
     expSort : Ref<string>
+    featuredFilter : Ref<string>
     loadTopics : (reset : boolean) => Promise<void>
     onLoadMore : () => void
     onSortFieldChange : (field : string) => void
@@ -24,6 +25,7 @@ export type UseTopicFeedResult = {
     onQaSortChange : (val : string) => void
     onQaStatusChange : (val : string) => void
     onExpSortChange : (val : string) => void
+    onFeaturedChange : (val : string) => void
 }
 
 export function useTopicFeed(currentTab : Ref<string>) : UseTopicFeedResult {
@@ -41,6 +43,8 @@ export function useTopicFeed(currentTab : Ref<string>) : UseTopicFeedResult {
     const qaStatus = ref<string>('')
     // 备考经验筛选（#706）：default（后端默认时序）| hot（最多赞）| latest
     const expSort = ref<string>('default')
+    // 精选筛选（#742 批次三，三 Tab 通用轴，对齐 Web）：''（全部帖）| 'true'（仅精选）；跨 Tab 不延续由壳层切 Tab 复位
+    const featuredFilter = ref<string>('')
 
     async function loadTopics(reset : boolean = false) : Promise<void> {
         if (loading.value) return
@@ -73,7 +77,7 @@ export function useTopicFeed(currentTab : Ref<string>) : UseTopicFeedResult {
                 sort = expSort.value == 'hot' ? 'hot' : (expSort.value == 'latest' ? 'created' : 'latest')
             }
             const statusParam = currentTab.value === 'hot' ? qaStatus.value : ''
-            const result = await getForumTopicsApi(page.value, pageSize, scope, sort, order, category, statusParam)
+            const result = await getForumTopicsApi(page.value, pageSize, scope, sort, order, category, statusParam, featuredFilter.value)
             if (reset) {
                 topics.value = result.items
             } else {
@@ -121,6 +125,12 @@ export function useTopicFeed(currentTab : Ref<string>) : UseTopicFeedResult {
         loadTopics(true)
     }
 
+    function onFeaturedChange(val : string) : void {
+        if (featuredFilter.value === val) return
+        featuredFilter.value = val
+        loadTopics(true)
+    }
+
     function onSortOrderChange(order : string) : void {
         if (sortOrder.value === order) return
         sortOrder.value = order
@@ -136,6 +146,7 @@ export function useTopicFeed(currentTab : Ref<string>) : UseTopicFeedResult {
         qaSort: qaSort,
         qaStatus: qaStatus,
         expSort: expSort,
+        featuredFilter: featuredFilter,
         loadTopics: (reset : boolean) => loadTopics(reset),
         onLoadMore: () => onLoadMore(),
         onSortFieldChange: (field : string) => onSortFieldChange(field),
@@ -143,5 +154,6 @@ export function useTopicFeed(currentTab : Ref<string>) : UseTopicFeedResult {
         onQaSortChange: (val : string) => onQaSortChange(val),
         onQaStatusChange: (val : string) => onQaStatusChange(val),
         onExpSortChange: (val : string) => onExpSortChange(val),
+        onFeaturedChange: (val : string) => onFeaturedChange(val),
     } as UseTopicFeedResult
 }

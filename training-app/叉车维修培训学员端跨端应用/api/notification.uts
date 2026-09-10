@@ -8,7 +8,7 @@
  *   POST /api/notifications/:id/read  单条已读
  *   POST /api/notifications/read-all  全部已读
  */
-import { get, post } from './request'
+import { getMapped, post } from './request'
 import { toNumber, toStr, toBool } from './helpers'
 import type { NotificationItem, NotificationListResult } from '../types/index'
 
@@ -30,6 +30,25 @@ function buildNotificationItem(obj : UTSJSONObject) : NotificationItem {
     } as NotificationItem
 }
 
+/** 通知列表映射（T05 手术 #643：收紧至 getMapped 出口，响应字段读取逐行不变） */
+function buildNotificationListResult(data : UTSJSONObject) : NotificationListResult {
+    const items : NotificationItem[] = []
+    const rawItems = data['items']
+    if (rawItems != null) {
+        const arr = rawItems as Array<UTSJSONObject>
+        for (let i = 0; i < arr.length; i++) {
+            items.push(buildNotificationItem(arr[i]))
+        }
+    }
+    return {
+        items: items,
+        total: toNumber(data['total']),
+        page: toNumber(data['page']),
+        page_size: toNumber(data['page_size']),
+        unread_count: toNumber(data['unread_count']),
+    } as NotificationListResult
+}
+
 /**
  * 获取通知列表
  * @param page 页码，默认 1
@@ -40,32 +59,14 @@ export function getNotificationsApi(page : number = 1, pageSize : number = 10) :
         page: page.toString(),
         page_size: pageSize.toString(),
     } as UTSJSONObject
-    return get('/notifications', params).then((data : UTSJSONObject) : NotificationListResult => {
-        const items : NotificationItem[] = []
-        const rawItems = data['items']
-        if (rawItems != null) {
-            const arr = rawItems as Array<UTSJSONObject>
-            for (let i = 0; i < arr.length; i++) {
-                items.push(buildNotificationItem(arr[i]))
-            }
-        }
-        return {
-            items: items,
-            total: toNumber(data['total']),
-            page: toNumber(data['page']),
-            page_size: toNumber(data['page_size']),
-            unread_count: toNumber(data['unread_count']),
-        } as NotificationListResult
-    })
+    return getMapped<NotificationListResult>('/notifications', params, (data : UTSJSONObject) : NotificationListResult => buildNotificationListResult(data))
 }
 
 /**
  * 获取未读通知数
  */
 export function getUnreadCountApi() : Promise<number> {
-    return get('/notifications/unread-count').then((data : UTSJSONObject) : number => {
-        return toNumber(data['count'])
-    })
+    return getMapped<number>('/notifications/unread-count', null, (data : UTSJSONObject) : number => toNumber(data['count']))
 }
 
 /**

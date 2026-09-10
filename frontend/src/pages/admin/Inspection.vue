@@ -150,13 +150,9 @@
       </div>
     </div>
 
-    <UiDialog v-model="forceOfflineVisible" title="强制下架职位" width="440px">
+    <UiDialog v-model="forceOfflineVisible" title="强制下架职位" width="440px" confirm-text="确认下架" :confirm-loading="forceOfflineing" @confirm="confirmForceOffline">
       <div class="text-sm text-ink">职位「{{ forceOfflineJob?.title }}」将被强制下架，学员侧立即不可见，企业不能自行重新上架。</div>
       <el-input v-model="forceOfflineReason" type="textarea" :rows="3" maxlength="500" show-word-limit placeholder="请填写下架原因（将邮件通知企业）" />
-      <template #footer>
-        <UiButton @click="forceOfflineVisible = false">取消</UiButton>
-        <UiButton variant="danger" :loading="forceOfflineing" @click="confirmForceOffline">确认下架</UiButton>
-      </template>
     </UiDialog>
   </div>
 </template>

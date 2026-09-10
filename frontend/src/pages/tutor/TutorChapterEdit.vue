@@ -172,7 +172,7 @@
     </template>
 
     <!-- 元信息编辑弹窗 -->
-    <UiDialog v-model="metaDialogVisible" title="编辑章节信息" width="500px">
+    <UiDialog v-model="metaDialogVisible" title="编辑章节信息" width="500px" confirm-text="保存" :confirm-loading="savingMeta" @confirm="saveMeta">
       <el-form :model="metaForm" label-width="100px">
         <el-form-item label="章节标题">
           <el-input v-model="metaForm.title" placeholder="请输入章节标题" maxlength="100" show-word-limit />
@@ -190,10 +190,6 @@
           <span class="ml-2 text-[13px] text-ink-3">分钟</span>
         </el-form-item>
       </el-form>
-      <template #footer>
-        <UiButton @click="metaDialogVisible = false">取消</UiButton>
-        <UiButton variant="primary" :loading="savingMeta" @click="saveMeta">保存</UiButton>
-      </template>
     </UiDialog>
 
     <!-- 上传文件弹窗 -->

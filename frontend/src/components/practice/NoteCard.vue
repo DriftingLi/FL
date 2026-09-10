@@ -10,12 +10,8 @@
     </div>
     <div v-else class="empty">暂无笔记</div>
 
-    <UiDialog v-model="dialogVisible" title="笔记" width="480px">
+    <UiDialog v-model="dialogVisible" title="笔记" width="480px" confirm-text="保存" :confirm-loading="saving" @confirm="handleSave">
       <el-input v-model="input" type="textarea" :rows="5" placeholder="记录你的笔记" maxlength="2000" show-word-limit />
-      <template #footer>
-        <UiButton @click="dialogVisible=false">取消</UiButton>
-        <UiButton variant="primary" :loading="saving" @click="handleSave">保存</UiButton>
-      </template>
     </UiDialog>
   </UiCard>
 </template>

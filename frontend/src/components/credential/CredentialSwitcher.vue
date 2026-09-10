@@ -44,7 +44,7 @@
     </div>
 
     <!-- collapsed 展开为 dialog 选择 -->
-    <UiDialog v-model="switcherVisible" title="切换证件" width="380px" append-to-body>
+    <UiDialog v-model="switcherVisible" title="切换证件" width="380px" append-to-body confirm-text="确定" :confirm-loading="switching" @confirm="switcherVisible = false">
       <el-select
         v-model="selectedId"
         placeholder="请选择证件"
@@ -58,10 +58,6 @@
           <el-option v-for="c in credentialStore.grouped.skill_level" :key="c.id" :label="levelLabel(c)" :value="c.id" />
         </el-option-group>
       </el-select>
-      <template #footer>
-        <UiButton @click="switcherVisible = false">取消</UiButton>
-        <UiButton variant="primary" :loading="switching" @click="switcherVisible = false">确定</UiButton>
-      </template>
     </UiDialog>
   </div>
 </template>
@@ -72,7 +68,6 @@ import { useCredentialStore } from '@/stores/credential'
 import type { CredentialDict } from '@/api/credential'
 import { Notebook } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import UiButton from '@/components/ui/UiButton.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 
 const props = withDefaults(
