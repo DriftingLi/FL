@@ -2,9 +2,24 @@
  * practice-do 笔记交互 composable（T06 practice 手术，parent #644）
  */
 import { ref } from 'vue'
+import type { Ref } from 'vue'
 import { getNoteApi, saveNoteApi, deleteNoteApi } from '../../../api/questionInteraction'
 
-export function usePracticeNotes() {
+/** 本 composable 的显式返回类型。
+ *  UTS 对无标注的匿名返回对象无法在消费侧解析成员（error18「找不到名称」），
+ *  故显式声明；形态照可编译先例 composables/useTopicDetail.uts（显式 Result 类型 + 箭头函数字段）。
+ */
+export type UsePracticeNotesResult = {
+    showNote : Ref<boolean>
+    noteContent : Ref<string>
+    loadNote : (questionId : number) => Promise<void>
+    toggleNote : (questionId : number) => void
+    onSaveNote : (questionId : number) => void
+    onDeleteNote : (questionId : number) => void
+    resetNotes : () => void
+}
+
+export function usePracticeNotes() : UsePracticeNotesResult {
     const showNote = ref<boolean>(false)
     const noteContent = ref<string>('')
     let noteSaveTimer : number | null = null
@@ -39,5 +54,5 @@ export function usePracticeNotes() {
         onSaveNote: (questionId : number) => onSaveNote(questionId),
         onDeleteNote: (questionId : number) => onDeleteNote(questionId),
         resetNotes: () => resetNotes()
-    }
+    } as UsePracticeNotesResult
 }

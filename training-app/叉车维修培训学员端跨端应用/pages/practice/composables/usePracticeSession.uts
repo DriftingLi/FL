@@ -2,11 +2,65 @@
  * practice-do 会话状态 composable（T06 practice 手术，parent #644 / ADR-0007）
  */
 import { ref, computed } from 'vue'
+import type { Ref, ComputedRef } from 'vue'
 import { getFreePracticeApi, getSequentialPracticeApi, getTagPracticeApi, submitAnswerApi, savePracticeProgressApi } from '../../../api/practice'
 import { checkFavoriteApi, addFavoriteApi, removeFavoriteApi } from '../../../api/favorite'
 import type { Question, SubmitAnswerResult, AnswerState, QuestionOption, SubmitAnswerParams, FavoriteCheckResult } from '../../../types/index'
 
-export function usePracticeSession() {
+/** 本 composable 的显式返回类型。
+ *  UTS 对无标注的匿名返回对象无法在消费侧解析成员（error18「找不到名称」），
+ *  故显式声明；形态照可编译先例 composables/useTopicDetail.uts（显式 Result 类型 + 箭头函数字段）。
+ */
+export type UsePracticeSessionResult = {
+    questions : Ref<Question[]>
+    currentIndex : Ref<number>
+    loading : Ref<boolean>
+    showResult : Ref<boolean>
+    showSummary : Ref<boolean>
+    showAnswerCard : Ref<boolean>
+    isFavorited : Ref<boolean>
+    favoriteId : Ref<number>
+    selectedKeys : Ref<string[]>
+    answerStates : Ref<AnswerState[]>
+    lastUserAnswer : Ref<string>
+    lastResult : Ref<SubmitAnswerResult>
+    totalSeconds : Ref<number>
+    questionStartTime : Ref<number>
+    questionElapsed : Ref<number>
+    siteAccuracy : Ref<number>
+    difficultyLevel : Ref<string>
+    currentQuestion : ComputedRef<Question>
+    timerText : ComputedRef<string>
+    questionTimeText : ComputedRef<string>
+    correctCount : ComputedRef<number>
+    summaryAccuracy : ComputedRef<number>
+    getTypeName : (type : string) => string
+    isMultiChoice : () => boolean
+    isSelected : (key : string) => boolean
+    isCorrectAnswer : (key : string) => boolean
+    getOptionClass : (key : string) => string
+    getOptionKeyClass : (key : string) => string
+    getOptionTextClass : (key : string) => string
+    getAnswerCardClass : (idx : number) => string
+    getAnswerCardNumClass : (idx : number) => string
+    onOptionClick : (key : string) => void
+    onToggleFavorite : () => void
+    loadQuestions : (mode : string, practiceCount : number, tagId : number) => Promise<void>
+    onSubmit : (mode : string) => Promise<void>
+    onNext : () => void
+    onJumpToQuestion : (idx : number) => void
+    onToggleAnswerCard : () => void
+    onCloseAnswerCard : () => void
+    onSubmitPaper : () => void
+    onRestart : () => void
+    resetQuestionState : () => void
+    recordQuestionTime : () => void
+    checkFavorite : () => Promise<void>
+    startTimer : () => void
+    stopTimer : () => void
+}
+
+export function usePracticeSession() : UsePracticeSessionResult {
     const questions = ref<Question[]>([])
     const currentIndex = ref<number>(0)
     const loading = ref<boolean>(false)
@@ -59,7 +113,7 @@ export function usePracticeSession() {
     function recordQuestionTime() { const now = Date.now(); if (questionStartTime.value > 0) { questionElapsed.value = Math.floor((now - questionStartTime.value) / 1000) }; questionStartTime.value = now }
     async function checkFavorite() : Promise<void> { const qid = currentQuestion.value.question_id; if (qid <= 0) return; try { const r = await checkFavoriteApi('question', qid); isFavorited.value = r.favorited; favoriteId.value = r.favorite_id } catch (e) { console.warn('[practice-do] checkFavorite failed:', e) } }
     function onToggleFavorite() : void { const qid = currentQuestion.value.question_id; if (qid <= 0) return; if (isFavorited.value) { const fid = favoriteId.value; if (fid > 0) { removeFavoriteApi(fid).then(() => { isFavorited.value = false; favoriteId.value = 0; uni.showToast({ title: '已取消收藏', icon: 'none' }) }).catch((e) => { console.warn('[practice-do] removeFavorite failed:', e); uni.showToast({ title: '操作失败', icon: 'none' }) }) } } else { addFavoriteApi('question', qid).then((item) => { isFavorited.value = true; favoriteId.value = item.favorite_id; uni.showToast({ title: '已收藏', icon: 'none' }) }).catch((e) => { console.warn('[practice-do] addFavorite failed:', e); uni.showToast({ title: '操作失败', icon: 'none' }) }) } }
-    async function loadQuestions(mode : string, practiceCount : number, tagId : number) { loading.value = true; try { if (mode == 'free') { questions.value = await getFreePracticeApi(practiceCount) } else if (mode == 'sequential') { questions.value = await getSequentialPracticeApi() } else if (mode == 'tag') { questions.value = await getTagPracticeApi(tagId, 0) }; if (questions.value.length > 0) { startTimer(); recordQuestionTime(); checkFavorite() } } catch (e) { console.error('[practice-do] load questions failed:', e); uni.showToast({ title: '加载题目失败', icon: 'none' }) } finally { loading.value = false } }
+    async function loadQuestions(mode : string, practiceCount : number, tagId : number) : Promise<void> { loading.value = true; try { if (mode == 'free') { questions.value = await getFreePracticeApi(practiceCount) } else if (mode == 'sequential') { questions.value = await getSequentialPracticeApi() } else if (mode == 'tag') { questions.value = await getTagPracticeApi(tagId, 0) }; if (questions.value.length > 0) { startTimer(); recordQuestionTime(); checkFavorite() } } catch (e) { console.error('[practice-do] load questions failed:', e); uni.showToast({ title: '加载题目失败', icon: 'none' }) } finally { loading.value = false } }
     function saveProgress(mode : string, tagId : number) { if (mode == 'free') return; const saveMode = mode == 'tag' ? 'tag:' + tagId.toString() : mode; const a : UTSJSONObject = {} as UTSJSONObject; for (let i = 0; i < answerStates.value.length; i++) { const s = answerStates.value[i]; a[s.question_id.toString()] = s.user_answer }; savePracticeProgressApi(currentIndex.value + 1, saveMode, questions.value.length, a).catch((e) => { console.warn('[practice-do] save progress failed:', e) }) }
     async function onSubmit(mode : string) : Promise<void> { if (selectedKeys.value.length == 0) { uni.showToast({ title: '请选择答案', icon: 'none' }); return }; let ua = ''; if (isMultiChoice()) { ua = selectedKeys.value.slice().sort().join(',') } else { ua = selectedKeys.value[0] }; lastUserAnswer.value = ua; const qid = currentQuestion.value.question_id; try { const p : SubmitAnswerParams = { question_id: qid, user_answer: ua, practice_type: mode } as SubmitAnswerParams; const r = await submitAnswerApi(p); lastResult.value = r; showResult.value = true; recordQuestionTime(); const s : AnswerState = { question_id: qid, user_answer: ua, is_correct: r.correct, correct_answer: r.correct_answer, submitted: true } as AnswerState; answerStates.value.push(s); if (mode != 'free') { saveProgress(mode, 0) } } catch (e) { console.error('[practice-do] submit failed:', e); uni.showToast({ title: '提交失败', icon: 'none' }) } }
     function resetQuestionState() : void { showResult.value = false; lastUserAnswer.value = ''; lastResult.value = { correct: false, correct_answer: '', explanation: '' } as SubmitAnswerResult }
@@ -116,5 +170,5 @@ export function usePracticeSession() {
         checkFavorite: () => checkFavorite(),
         startTimer: () => startTimer(),
         stopTimer: () => stopTimer()
-    }
+    } as UsePracticeSessionResult
 }

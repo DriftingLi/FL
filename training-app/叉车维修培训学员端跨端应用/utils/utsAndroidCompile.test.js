@@ -33,6 +33,10 @@
  *   S. 模板直调 import 函数（uvue 模板 import 调用编译为 .invoke() = error18「找不到名称 invoke」；本地包装）
  *   T. return 对象字面量裸传同文件函数引用（Kotlin error17 自动调用；显式 key: fn 与速记 { fn }
  *      两种形态均触发、无需类型标注；形态与 M 同类，箭头包裹才合法，先例 composables/useTopicDetail.uts）
+ *   U. 返回对象的 composable 缺显式结果类型（Kotlin error18 找不到名称；须签名标注或 s T 强转，
+ *      先例 useAiChat「规避类型推断问题」注释，14/14 满足）
+ *   V. async 函数缺返回类型标注（Kotlin 推不出 UTSPromise 的 T，级联「expected Unit」错；须 Promise<T>）
+ *   W. 模板裸 handler 未定义（error18 找不到名称；@click="裸标识符" 须在 script 有定义）
  * 存量违例走 GUARD_ALLOWLIST 豁免，由后续工单在各自范围清零（见常量注释）。
  */
 const fs = require('fs');
@@ -299,7 +303,120 @@ function scanBareFnRefInReturn(code) {
     }
   }
   return hits;
-}/** N：as unknown as 双重强转——Kotlin 侧把属性/参数类型污染为 unknown（error18 找不到成员），
+}/** U：返回对象的 composable 缺显式结果类型（Kotlin error18 找不到名称）
+ *  UTS 对无标注的匿名返回对象，在消费侧解析不出成员：页面写 `session.onNext` 会报
+ *  `找不到名称 "onNext"`、`session.currentQuestion.value` 报 `找不到名称 "value"`。
+ *  全仓既定规避法 = 整体以显式结果类型强转/标注；先例注释见 composables/useAiChat.uts
+ *  「整体以显式类型 UseAiChatResult 强转（与 stores/auth.uts 同款写法规避类型推断问题）」，
+ *  composables/useTopicDetail.uts 同款（14/14 个返回函数的 composable 均满足）。
+ *  判定：export function useX(...) 的 return 对象含函数成员时，须有签名标注 `: T` 或 return 后 `as T`。
+ */
+function scanComposableMissingResultType(code) {
+  const clean = blank(code);
+  const hits = [];
+  const fns = new Set();
+  let m;
+  const reFn = /(?:^|\n)\s*(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/g;
+  while ((m = reFn.exec(clean)) !== null) fns.add(m[1]);
+  if (fns.size === 0) return hits;
+
+  const reHook = /(?:^|\n)\s*export\s+function\s+(use[A-Za-z0-9_$]*)\s*\([^)]*\)\s*(?::\s*([^\{]+?))?\s*\{/g;
+  while ((m = reHook.exec(clean)) !== null) {
+    const hook = m[1];
+    const declaredRet = m[2] ? m[2].trim() : null;
+    const bodyStart = clean.indexOf('{', m.index + m[0].length - 1);
+    let depth = 0, bodyEnd = -1;
+    for (let i = bodyStart; i < clean.length; i++) {
+      const c = clean[i];
+      if (c === '{') depth++; else if (c === '}') { depth--; if (depth === 0) { bodyEnd = i; break; } }
+    }
+    if (bodyEnd < 0) continue;
+    const body = clean.slice(bodyStart, bodyEnd);
+
+    // 体内成员最多的 return 块
+    let best = null;
+    const reRet = /return\s*\{/g;
+    let rm;
+    while ((rm = reRet.exec(body)) !== null) {
+      const o = body.indexOf('{', rm.index);
+      let d = 0, cl = -1;
+      for (let i = o; i < body.length; i++) {
+        const c = body[i];
+        if (c === '{') d++; else if (c === '}') { d--; if (d === 0) { cl = i; break; } }
+      }
+      if (cl < 0) continue;
+      const members = splitTopLevel(body.slice(o + 1, cl)).map((x) => x.trim()).filter(Boolean);
+      if (best === null || members.length > best.members.length) best = { o, cl, members, absClose: bodyStart + cl };
+    }
+    if (best === null) continue;
+
+    let fnMembers = 0;
+    for (const t of best.members) {
+      let mm = /^([A-Za-z_$][\w$]*)\s*:\s*([A-Za-z_$][\w$]*)$/.exec(t);
+      if (mm !== null && fns.has(mm[2])) { fnMembers++; continue; }
+      if (/^[A-Za-z_$][\w$]*\s*:\s*\(/.test(t)) { fnMembers++; continue; }
+      mm = /^([A-Za-z_$][\w$]*)$/.exec(t);
+      if (mm !== null && fns.has(mm[1])) fnMembers++;
+    }
+    if (fnMembers === 0) continue;
+
+    const after = clean.slice(best.absClose + 1, best.absClose + 60);
+    const hasAs = /^\s*as\s+[A-Za-z_$][\w$]*/.test(after);
+    if (declaredRet === null && !hasAs) {
+      hits.push(hook + '（' + fnMembers + ' 个函数成员）缺显式结果类型');
+    }
+  }
+  return hits;
+}
+/** V：async 函数缺返回类型标注（Kotlin 「Cannot infer type argument for 'T'」级联错）
+ *  规则 R 只覆盖 `async fn() : void`（错误的标注）；**完全不写标注**是另一子类：
+ *  Kotlin 侧生成 `UTSPromise<T>` 而 T 推不出来，回落报
+ *  「Cannot infer type for this parameter」+「Return type mismatch: expected 'Unit',
+ *   actual 'UTSPromise<uninferred ERROR CLASS>」——2026-09-10 wrong-questions.kt:49 云打包实测。
+ *  修复 = 补 `: Promise<void>`（无返回值）或显式 `: Promise<T>`。
+ */
+function scanAsyncMissingReturnType(code) {
+  const clean = blank(code);
+  const hits = [];
+  const re = /(?:^|\n)\s*(?:export\s+)?async\s+function\s+([A-Za-z_$][\w$]*)\s*\(([^)]*)\)\s*\{/g;
+  let m;
+  while ((m = re.exec(clean)) !== null) hits.push(m[1] + ' 缺返回类型标注（须 Promise<T>，无返回值用 Promise<void>）');
+  return hits;
+}
+
+/** W：模板裸 handler 未定义（error18 找不到名称）
+ *  形如 `@click="onBack"` 的**整体为裸标识符**的绑定，若 script 中无同名定义，
+ *  Kotlin 侧即报「找不到名称 "onBack"」——2026-09-10 practice-do.uvue:5 实测（重写时漏带该函数）。
+ *  识别 script 侧四类定义：function/const|let 声明、import 绑定、解构绑定、Options API methods 条目。
+ *  模板里带参数调用（`@click="fn(a)"`）与对象成员（`@click="obj.fn"`）不在靶内。
+ */
+function scanUndefinedTemplateHandler(text) {
+  const si = text.indexOf('<script');
+  if (si < 0) return [];
+  const tpl = text.slice(0, si);
+  const script = blank(text.slice(si));
+  const importLines = script.split('\n').filter((l) => /^\s*import\s/.test(l)).join('\n');
+  const destructured = [...script.matchAll(/const\s*\{([^}]*)\}\s*=/g)].map((x) => x[1]).join(',');
+  const hits = [];
+  const re = /@[a-zA-Z][\w-]*\s*=\s*"([A-Za-z_$][\w$]*)\s*"/g;
+  let m;
+  const seen = new Set();
+  while ((m = re.exec(tpl)) !== null) {
+    const name = m[1];
+    if (seen.has(name)) continue;
+    seen.add(name);
+    const word = new RegExp('\\b' + name + '\\b');
+    const defined =
+      new RegExp('(?:^|\\n)\\s*(?:export\\s+)?(?:async\\s+)?function\\s+' + name + '\\s*\\(').test(script) ||
+      new RegExp('(?:^|\\n)\\s*(?:const|let)\\s+' + name + '\\b').test(script) ||
+      new RegExp('(?:^|\\n)\\s*' + name + '\\s*\\([^)]*\\)\\s*\\{').test(script) ||
+      word.test(importLines) ||
+      word.test(destructured);
+    if (!defined) hits.push('@...="' + name + '" 未在 script 中定义');
+  }
+  return hits;
+}
+/** N：as unknown as 双重强转——Kotlin 侧把属性/参数类型污染为 unknown（error18 找不到成员），
  *  对象 prop 默认值应走工厂 `() => ({...} as T)`（先例 ai-chat sessions），非 null 强转 */
 function scanUnknownDoubleCast(code) {
   const clean = blank(code);
@@ -1068,10 +1185,153 @@ describe('全工程守护：五类 Kotlin 编译地雷零命中', () => {
     ].join('\n');
     expect(scanBareFnRefInReturn(refs)).toEqual([]);
   });
+  it('U：自检——注入「返回函数的 composable 缺显式结果类型」必须被抓到', () => {
+    // 坏：有箭头但无签名标注、无 as 强转（practice #803 的形态）
+    const bad = [
+      'import { ref } from \'vue\'',
+      'export function useThing() {',
+      '    const n = ref<number>(0)',
+      '    function go() : void {}',
+      '    return {',
+      '        n,',
+      '        go: () => go()',
+      '    }',
+      '}',
+    ].join('\n');
+    expect(scanComposableMissingResultType(bad).length).toBeGreaterThan(0);
+
+    // 好①：签名标注（先例 useTopicDetail）
+    const goodAnnotated = bad.replace('export function useThing() {', 'export function useThing() : UseThingResult {');
+    expect(scanComposableMissingResultType(goodAnnotated)).toEqual([]);
+
+    // 好②：return 对象 as 强转（先例 useAiChat / useBiometric）
+    const goodAs = bad.replace('    }', '    } as UseThingResult');
+    expect(scanComposableMissingResultType(goodAs)).toEqual([]);
+
+    // 反向自检：返回对象不含函数成员时不判定（纯状态 composable）
+    const pureState = [
+      'import { ref } from \'vue\'',
+      'export function useThing() {',
+      '    const n = ref<number>(0)',
+      '    return {',
+      '        n',
+      '    }',
+      '}',
+    ].join('\n');
+    expect(scanComposableMissingResultType(pureState)).toEqual([]);
+  });
+
+  it('U：全工程返回函数的 composable 均有显式结果类型（Kotlin error18，规避类型推断问题）', () => {
+    const violations = [];
+    for (const u of allCodeUnits()) {
+      for (const h of scanComposableMissingResultType(u.code)) violations.push(path.relative(ROOT, u.file) + ': ' + h);
+    }
+    expect(violations).toEqual([]);
+  });
   it('T：全工程无「return 里裸传函数引用」（Kotlin error17，显式与速记均须箭头包裹）', () => {
     const violations = [];
     for (const u of allCodeUnits()) {
       for (const h of scanBareFnRefInReturn(u.code)) violations.push(path.relative(ROOT, u.file) + ': ' + h);
+    }
+    expect(violations).toEqual([]);
+  });
+  it('V：自检——注入「async 函数缺返回类型标注」必须被抓到', () => {
+    const bad = [
+      'export function useThing() {',
+      '    async function loadData() {',
+      '        await uni.request({ url: \'/x\' })',
+      '    }',
+      '}',
+    ].join('\n');
+    expect(scanAsyncMissingReturnType(bad).length).toBeGreaterThan(0);
+
+    // 好①：Promise<void>
+    expect(scanAsyncMissingReturnType(bad.replace('async function loadData() {', 'async function loadData() : Promise<void> {'))).toEqual([]);
+    // 好②：显式 Promise<T>
+    expect(scanAsyncMissingReturnType(bad.replace('async function loadData() {', 'async function loadData() : Promise<string> {'))).toEqual([]);
+    // 反向自检：非 async 函数不判定
+    expect(scanAsyncMissingReturnType(bad.replace('async function loadData() {', 'function loadData() {'))).toEqual([]);
+  });
+
+  it('V：全工程 async 函数均有返回类型标注（Kotlin 推不出 UTSPromise 的 T）', () => {
+    const violations = [];
+    for (const u of allCodeUnits()) {
+      for (const h of scanAsyncMissingReturnType(u.code)) violations.push(path.relative(ROOT, u.file) + ': ' + h);
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it('W：自检——注入「模板裸 handler 未定义」必须被抓到', () => {
+    const bad = [
+      '<template>',
+      '    <view @click="onBack"><text>‹</text></view>',
+      '</template>',
+      '<script setup lang="uts">',
+      '    function goBack() : void {}',
+      '</script>',
+    ].join('\n');
+    expect(scanUndefinedTemplateHandler(bad).length).toBeGreaterThan(0);
+
+    // 好：function 定义
+    const goodFn = bad.replace('    function goBack() : void {}', '    function goBack() : void {}\n    function onBack() : void { goBack() }');
+    expect(scanUndefinedTemplateHandler(goodFn)).toEqual([]);
+
+    // 好：解构绑定（先例 dashboard / practice 从 composable 取 handler）
+    const goodDestructure = [
+      '<template>',
+      '    <view @click="onCertTap"></view>',
+      '</template>',
+      '<script setup lang="uts">',
+      '    const { onCertTap } = useDashboardCredential()',
+      '</script>',
+    ].join('\n');
+    expect(scanUndefinedTemplateHandler(goodDestructure)).toEqual([]);
+
+    // 好：import 绑定
+    const goodImport = [
+      '<template>',
+      '    <view @click="goBack"></view>',
+      '</template>',
+      '<script setup lang="uts">',
+      '    import { goBack } from \'../../utils/navigation\'',
+      '</script>',
+    ].join('\n');
+    expect(scanUndefinedTemplateHandler(goodImport)).toEqual([]);
+
+    // 好：Options API methods（先例 pages/index/index.uvue）
+    const goodOptions = [
+      '<template>',
+      '    <button @click="goLogin">进入</button>',
+      '</template>',
+      '<script>',
+      'export default {',
+      '    methods: {',
+      '        goLogin() {',
+      '            uni.navigateTo({ url: \'/pages/login/login\' })',
+      '        }',
+      '    }',
+      '}',
+      '</script>',
+    ].join('\n');
+    expect(scanUndefinedTemplateHandler(goodOptions)).toEqual([]);
+
+    // 反向自检：带参数调用 / 对象成员不在靶内
+    const notBare = [
+      '<template>',
+      '    <view @click="handle(item)"></view>',
+      '    <view @click="session.onNext()"></view>',
+      '</template>',
+      '<script setup lang="uts">',
+      '    function handle(x : number) : void {}',
+      '</script>',
+    ].join('\n');
+    expect(scanUndefinedTemplateHandler(notBare)).toEqual([]);
+  });
+
+  it('W：全工程模板裸 handler 均有 script 定义（error18 找不到名称）', () => {
+    const violations = [];
+    for (const file of ALL_FILES.filter((f) => f.endsWith('.uvue'))) {
+      for (const h of scanUndefinedTemplateHandler(fs.readFileSync(file, 'utf8'))) violations.push(path.relative(ROOT, file) + ': ' + h);
     }
     expect(violations).toEqual([]);
   });

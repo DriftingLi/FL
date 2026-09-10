@@ -171,6 +171,7 @@
     function onNext() : void { session.onNext(); comments.resetComments(); notes.resetNotes(); knowledgeTags.value = []; loadKnowledge() }
     function onSubmit() : void { session.onSubmit(mode.value) }
     function onShareExplanation() : void { uni.showToast({ title: '分享功能开发中', icon: 'none' }) }
+    function onBack() : void { goBack() }
     function onExit() : void { session.stopTimer(); goBack() }
     function onRestart() : void { session.onRestart(); comments.resetComments(); notes.resetNotes(); knowledgeTags.value = []; session.loadQuestions(mode.value, practiceCount.value, tagId.value); loadKnowledge() }
 
