@@ -83,7 +83,7 @@ fi
 
 # ghcr 国内镜像源（南大 ghcr.nju.edu.cn，透传 ghcr 认证可拉私有镜像）：
 # 晚高峰 ghcr CDN 限速时代理回源/直连均易超时（曾致 testing CD 连续失败），
-# 作为拉取回退链路的第一回退（代理 → 镜像源 → 直连 ghcr.io，见 pull_one）。
+# 作为拉取链路的最后回退（直连 ghcr.io → 代理 → 镜像源，见 pull_one）。
 # 置空禁用；仅对 ghcr.io 镜像生效。
 REGISTRY_MIRROR="${REGISTRY_MIRROR:-ghcr.nju.edu.cn}"
 
@@ -622,31 +622,49 @@ ensure_proxy_healthy() {
     return 1
 }
 
-# 进度感知拉取看门狗（#635）：docker pull 后台执行，仅当「无新输出」持续超过
-# DOCKER_PULL_IDLE_TIMEOUT（默认 180s）才判定挂起并终止。
-# 动机：总时长 timeout（原 600s）会把「慢但在动」的拉取反复归零——ghcr-cache
-# 逐出后全量回源实测 43 分钟，任何 600s 预算下必然失败循环；registry 真挂起
-# （无输出）仍按 #575 的初衷快速 fail-fast。新输出实时转发 stderr，runner 日志
-# 可见性不变。外层 SSH 若被整体超时掐断，后台 pull 成为孤儿继续缓存层——
-# 属预期行为（下次尝试命中已缓存层）。
+# 进度感知拉取看门狗（#635）：docker pull 后台执行，输出实时转发 stderr。
+# 两段式无输出判定（实测结论 2026-09-10：代理 /v2/ 存活只证明 registry 进程活着，
+# 大 blob 回源爬行时 docker CLI 可能零输出——启动后 60s 内零输出直接杀并走回退链路，
+# 已有输出后按 DOCKER_PULL_IDLE_TIMEOUT（默认 180s）判定挂起）。
+# 另有总超时 DOCKER_PULL_TOTAL_TIMEOUT（默认 2700s）兜底无限打印却永不结束的极端情况；
+# 正常慢回源（持续打印进度）不受影响。外层 SSH 若被整体超时掐断，后台 pull 成为
+# 孤儿继续缓存层——属预期行为（下次尝试命中已缓存层）。
 pull_with_watchdog() {
     local image="$1"
     local idle_timeout="${DOCKER_PULL_IDLE_TIMEOUT:-180}"
+    local first_timeout="${DOCKER_PULL_FIRST_TIMEOUT:-60}"
+    local total_timeout="${DOCKER_PULL_TOTAL_TIMEOUT:-2700}"
     local log_file
     log_file=$(mktemp)
     docker pull "$image" >"$log_file" 2>&1 &
     local pull_pid=$!
     local last_size=0 last_change now size rc=0
-    last_change=$(date +%s)
+    local start_ts
+    start_ts=$(date +%s)
+    last_change=$start_ts
     while kill -0 "$pull_pid" 2>/dev/null; do
         sleep 10
         now=$(date +%s)
+        # 总超时独立于输出判定：无限打印却永不结束的极端情况也必须终止
+        if [ $((now - start_ts)) -ge "$total_timeout" ]; then
+            log_warn "拉取总耗时超 ${total_timeout}s，终止（总超时兜底）"
+            kill "$pull_pid" 2>/dev/null
+            wait "$pull_pid" 2>/dev/null || true
+            rm -f "$log_file"
+            return 1
+        fi
         size=$(stat -c %s "$log_file" 2>/dev/null || echo 0)
         if [ "$size" != "$last_size" ]; then
             tail -c +"$((last_size + 1))" "$log_file" 2>/dev/null >&2
             last_size=$size
             last_change=$now
-        elif [ $((now - last_change)) -ge "$idle_timeout" ]; then
+        elif [ "$last_size" -eq 0 ] && [ $((now - start_ts)) -ge "$first_timeout" ]; then
+            log_warn "拉取 ${first_timeout}s 零输出（上游回源疑似卡死），终止并走回退链路"
+            kill "$pull_pid" 2>/dev/null
+            wait "$pull_pid" 2>/dev/null || true
+            rm -f "$log_file"
+            return 1
+        elif [ "$last_size" -gt 0 ] && [ $((now - last_change)) -ge "$idle_timeout" ]; then
             log_warn "拉取 ${idle_timeout}s 无新输出，判定挂起并终止（进度看门狗）"
             kill "$pull_pid" 2>/dev/null
             wait "$pull_pid" 2>/dev/null || true
@@ -660,15 +678,53 @@ pull_with_watchdog() {
     return "$rc"
 }
 
-# 拉取单个镜像：3 次重试；回退链路：国内镜像源（透传 ghcr 认证）→ 直连 ghcr.io 认证拉取
+# 拉取单个镜像：回退链路：直连 ghcr.io 认证拉取 → 国内镜像源（透传 ghcr 认证）→ 代理重试。
+# 顺序依据 2026-09-10 实测：同样的大 blob 卡死窗口内代理与镜像源均 180s 零输出被杀，
+# 直连反而先成功——代理 /v2/ 存活只证明 registry 进程活着，证明不了回源链路；
+# 代理卡死时 3 次同路径重试（每次最长 180s+）只会白烧 9 分钟，直连优先能最快穿透。
+# 直连成功后补 tag 回代理路径引用，保持 .env/compose 引用不变。
 pull_one() {
     local name="$1"
     local image="$2"
-    local retries=3
+
+    # ghcr 核心路径（<org>/<image>:<tag>）：从代理/镜像源/直连任一前缀提取，供回退引用。
+    # 注意：去掉 registry 前缀后的镜像名（如 driftingli/fl-backend:tag）会被 docker
+    # 解析到 Docker Hub（registry-1.docker.io）——回退引用必须补对应 registry 前缀。
+    local core=""
+    case "$image" in
+        "${REGISTRY_PROXY}/"*) core="${image#${REGISTRY_PROXY}/}" ;;
+        "${REGISTRY_MIRROR}/"*) core="${image#${REGISTRY_MIRROR}/}" ;;
+        "${REGISTRY}/"*) core="${image#${REGISTRY}/}" ;;
+    esac
+
+    # 回退 0（首选）：直连 ghcr.io 认证拉取（回源链路最短；已是直连路径时直接拉取）。
+    # 仅 ghcr 系镜像走此分支；GITHUB_TOKEN 为空时跳过（无认证直连必被限流）。
+    if [ -n "$core" ] && [ -n "$GITHUB_TOKEN" ]; then
+        local ghcr_ref="${REGISTRY}/${core}"
+        if [ "$image" = "$ghcr_ref" ]; then
+            log_info "拉取${name}镜像（直连）: $image"
+            if pull_with_watchdog "$image"; then
+                log_ok "${name}镜像: $image"
+                return 0
+            fi
+        else
+            log_info "拉取${name}镜像（直连优先）: ${ghcr_ref}"
+            echo "$GITHUB_TOKEN" | docker login "$REGISTRY" -u oauth2 --password-stdin >/dev/null 2>&1 || true
+            if pull_with_watchdog "$ghcr_ref"; then
+                docker tag "$ghcr_ref" "$image"
+                docker rmi "$ghcr_ref" >/dev/null 2>&1 || true
+                log_ok "直连拉取成功并补 tag: $image"
+                return 0
+            fi
+            log_warn "直连拉取失败，转代理路径重试..."
+        fi
+    fi
+
+    # 代理路径：2 次重试（进度看门狗：首包 60s 零输出即杀，慢回源持续有输出不受影响）。
+    # 挂起时按失败处理 → 重启代理重试 / 走镜像源回退。
+    local retries=2
     for attempt in $(seq 1 $retries); do
-        log_info "拉取${name}镜像 (尝试 $attempt/$retries): $image"
-        # 进度看门狗（#635）：仅「无输出超时」判定挂起，慢拉取（缓存回源）不再被总时长误杀；
-        # 挂起时按失败处理 → 重启代理重试 / 走回退链路
+        log_info "拉取${name}镜像 (代理尝试 $attempt/$retries): $image"
         if pull_with_watchdog "$image"; then
             log_ok "${name}镜像: $image"
             return 0
@@ -681,17 +737,7 @@ pull_one() {
         fi
     done
 
-    # ghcr 核心路径（<org>/<image>:<tag>）：从代理/镜像源/直连任一前缀提取，供回退引用。
-    # 注意：去掉 registry 前缀后的镜像名（如 driftingli/fl-backend:tag）会被 docker
-    # 解析到 Docker Hub（registry-1.docker.io）——回退引用必须补对应 registry 前缀。
-    local core=""
-    case "$image" in
-        "${REGISTRY_PROXY}/"*) core="${image#${REGISTRY_PROXY}/}" ;;
-        "${REGISTRY_MIRROR}/"*) core="${image#${REGISTRY_MIRROR}/}" ;;
-        "${REGISTRY}/"*) core="${image#${REGISTRY}/}" ;;
-    esac
-
-    # 回退 1：国内镜像源（仅 ghcr.io；镜像源路径本身失败时跳过，不重复尝试）
+    # 回退：国内镜像源（仅 ghcr.io；镜像源路径本身失败时跳过，不重复尝试）
     if [ -n "$core" ] && [ "$REGISTRY" = "ghcr.io" ] && [ -n "$REGISTRY_MIRROR" ] &&
         [ -n "$GITHUB_TOKEN" ] && [ "$image" != "${REGISTRY_MIRROR}/${core}" ]; then
         local mirror_ref="${REGISTRY_MIRROR}/${core}"
@@ -705,19 +751,7 @@ pull_one() {
         fi
     fi
 
-    # 回退 2：直连 ghcr.io 认证拉取（已是直连路径时跳过；最终兜底）
-    if [ -n "$core" ] && [ -n "$GITHUB_TOKEN" ] && [ "$image" != "${REGISTRY}/${core}" ]; then
-        local ghcr_ref="${REGISTRY}/${core}"
-        log_warn "回退直连 ${REGISTRY} 认证拉取: ${ghcr_ref}"
-        echo "$GITHUB_TOKEN" | docker login "$REGISTRY" -u oauth2 --password-stdin >/dev/null 2>&1 || true
-        if pull_with_watchdog "$ghcr_ref"; then
-            docker tag "$ghcr_ref" "$image"
-            docker rmi "$ghcr_ref" >/dev/null 2>&1 || true
-            log_ok "直连拉取成功并补 tag: $image"
-            return 0
-        fi
-    fi
-    log_error "${name}镜像拉取失败(已重试 $retries 次 + 镜像源/直连回退): $image"
+    log_error "${name}镜像拉取失败(直连优先 + 代理 $retries 次 + 镜像源回退): $image"
     return 1
 }
 
@@ -725,9 +759,12 @@ pull_images() {
     log_info ">>> 拉取最新镜像..."
     ensure_proxy_healthy || true
 
-    # 拉取挂起判定由 pull_one 的进度看门狗控制（DOCKER_PULL_IDLE_TIMEOUT，默认 180s
-    # 无新输出才杀）：慢拉取（ghcr-cache 逐出回源实测 43 分钟）只要持续出层就不会被误杀，
-    # registry 上游挂起仍快速失败走重试/回退链路（#635）
+    # 拉取挂起判定由 pull_one 的进度看门狗控制（首包 DOCKER_PULL_FIRST_TIMEOUT 默认 60s
+    # 零输出即杀 + 持续无输出 DOCKER_PULL_IDLE_TIMEOUT 默认 180s 才杀）：慢拉取
+    # （ghcr-cache 逐出回源实测 43 分钟）只要持续出层就不会被误杀，
+    # registry 上游挂起仍快速失败走重试/回退链路（#635）。
+    # 直连优先：ghcr.io 回源链路最短先行，代理/镜像源随后，单镜像最坏耗时从
+    # 代理 3×180s+镜像源 180s+直连 180s（~15min）降到直连 60~180s 穿透或快速转代理。
 
     # 拉取后端镜像（本地已有该 tag 则跳过：内容标签命中即零传输）
     if [ -n "$IMAGE_BACKEND" ]; then
