@@ -12,8 +12,15 @@
  *   - /practice-mode/knowledge-point（已下线 404）
  *   - /practice-mode/knowledge-point-progress（已下线 404）
  * @note 新增标签练习：GET /practice-mode/tag?tag_id=X&count=Y
+ *
+ * @note T06 域 api 收紧（#644 / ADR-0007）：返回领域 DTO 的 8 个函数改走 mapper-callback 出口
+ *   （getMapped / postMapped + 箭头包裹的 build* 映射），params 仍沿用手动 query 序列化，
+ *   请求形态逐字不变。**raw 透传的 4 个函数刻意保留裸 get/post**（不硬套 identity map，T03/T05 口径）：
+ *   - getQuestionBankStatsApi / getQuestionListApi：无消费方，后端结构未定型，不为此造 DTO
+ *   - savePracticeProgressApi：返回体被调用方忽略（void 语义）
+ *   - getPracticeReportApi：报告页需后端原始结构（含 by_type 明细）自由渲染
  */
-import { get, post } from './request'
+import { get, getMapped, post, postMapped } from './request'
 import { toNumber, toStr, toBool } from './helpers'
 import type { Question, SubmitAnswerResult, SubmitAnswerParams, QuestionOption, PracticeStats, PracticeOverview, PracticeHistoryItem, PracticeHistoryResult, PracticeProgress } from '../types/index'
 
@@ -137,6 +144,26 @@ function buildPracticeProgress(data : UTSJSONObject) : PracticeProgress {
 	return progress
 }
 
+/** 从 UTSJSONObject 构造 SubmitAnswerResult */
+function buildSubmitAnswerResult(data : UTSJSONObject) : SubmitAnswerResult {
+	const result : SubmitAnswerResult = {
+		correct: toBool(data['is_correct']),
+		correct_answer: toStr(data['correct_answer']),
+		explanation: toStr(data['explanation']),
+	} as SubmitAnswerResult
+	return result
+}
+
+/** 从 UTSJSONObject 构造 PracticeOverview（GET /practice-mode/practice-stats） */
+function buildPracticeOverview(data : UTSJSONObject) : PracticeOverview {
+	const overview : PracticeOverview = {
+		today_count: toNumber(data['today_count']),
+		total_count: toNumber(data['total_count']),
+		total_days: toNumber(data['total_days']),
+	} as PracticeOverview
+	return overview
+}
+
 // ========== 题库 ==========
 
 /** 题库统计 */
@@ -172,6 +199,11 @@ export function getQuestionListApi(page : number = 1, pageSize : number = 20, ty
  * @param count 抽题数量，默认 20
  * @param type 题型过滤（可选）
  */
+/**
+ * 随机练习抽题
+ * @param count 抽题数量，默认 20
+ * @param type 题型过滤（可选）
+ */
 export function getFreePracticeApi(count : number = 20, type : string = '') : Promise<Question[]> {
 	const params : UTSJSONObject = {
 		count: count.toString(),
@@ -179,18 +211,20 @@ export function getFreePracticeApi(count : number = 20, type : string = '') : Pr
 	if (type.length > 0) {
 		params['type'] = type
 	}
-	return get('/practice-mode/free', params).then((data : UTSJSONObject) : Question[] => {
-		return buildQuestions(data)
-	})
+	return getMapped<Question[]>('/practice-mode/free', params, (data : UTSJSONObject) : Question[] => buildQuestions(data))
 }
 
 /** 顺序练习（开始/续练） */
+/** 顺序练习（开始/续练） */
 export function getSequentialPracticeApi() : Promise<Question[]> {
-	return get('/practice-mode/sequential').then((data : UTSJSONObject) : Question[] => {
-		return buildQuestions(data)
-	})
+	return getMapped<Question[]>('/practice-mode/sequential', null, (data : UTSJSONObject) : Question[] => buildQuestions(data))
 }
 
+/**
+ * 标签练习抽题
+ * @param tagId 标签 ID（必填）
+ * @param count 题量，0=全部
+ */
 /**
  * 标签练习抽题
  * @param tagId 标签 ID（必填）
@@ -201,13 +235,15 @@ export function getTagPracticeApi(tagId : number, count : number = 0) : Promise<
 		tag_id: tagId.toString(),
 		count: count.toString(),
 	}
-	return get('/practice-mode/tag', params).then((data : UTSJSONObject) : Question[] => {
-		return buildQuestions(data)
-	})
+	return getMapped<Question[]>('/practice-mode/tag', params, (data : UTSJSONObject) : Question[] => buildQuestions(data))
 }
 
 // ========== 答题与进度 ==========
 
+/**
+ * 提交答案
+ * @param params 提交参数（question_id, user_answer, practice_type）
+ */
 /**
  * 提交答案
  * @param params 提交参数（question_id, user_answer, practice_type）
@@ -218,14 +254,7 @@ export function submitAnswerApi(params : SubmitAnswerParams) : Promise<SubmitAns
 		user_answer: params.user_answer,
 		practice_type: params.practice_type,
 	} as UTSJSONObject
-	return post('/practice-mode/submit', payload).then((data : UTSJSONObject) : SubmitAnswerResult => {
-		const result : SubmitAnswerResult = {
-			correct: toBool(data['is_correct']),
-			correct_answer: toStr(data['correct_answer']),
-			explanation: toStr(data['explanation']),
-		} as SubmitAnswerResult
-		return result
-	})
+	return postMapped<SubmitAnswerResult>('/practice-mode/submit', payload, (data : UTSJSONObject) : SubmitAnswerResult => buildSubmitAnswerResult(data))
 }
 
 /**
@@ -246,13 +275,15 @@ export function savePracticeProgressApi(index : number, practiceMode : string, t
  * 查询练习进度
  * @param mode 'sequential' | 'tag:<id>' | 'paper:<id>'
  */
+/**
+ * 查询练习进度
+ * @param mode 'sequential' | 'tag:<id>' | 'paper:<id>'
+ */
 export function getPracticeProgressApi(mode : string) : Promise<PracticeProgress> {
 	const params : UTSJSONObject = {
-		mode: mode,
+	mode: mode,
 	} as UTSJSONObject
-	return get('/practice-mode/progress', params).then((data : UTSJSONObject) : PracticeProgress => {
-		return buildPracticeProgress(data)
-	})
+	return getMapped<PracticeProgress>('/practice-mode/progress', params, (data : UTSJSONObject) : PracticeProgress => buildPracticeProgress(data))
 }
 
 /**
@@ -265,26 +296,22 @@ export function getPracticeReportApi() : Promise<UTSJSONObject> {
 }
 
 /** 刷题数据统计：今日做题/累计做题/累计天数（GET /practice-mode/practice-stats） */
+/** 刷题数据统计：今日做题/累计做题/累计天数（GET /practice-mode/practice-stats） */
 export function getPracticeOverviewApi() : Promise<PracticeOverview> {
-	return get('/practice-mode/practice-stats').then((data : UTSJSONObject) : PracticeOverview => {
-		const overview : PracticeOverview = {
-			today_count: toNumber(data['today_count']),
-			total_count: toNumber(data['total_count']),
-			total_days: toNumber(data['total_days']),
-		} as PracticeOverview
-		return overview
-	})
+	return getMapped<PracticeOverview>('/practice-mode/practice-stats', null, (data : UTSJSONObject) : PracticeOverview => buildPracticeOverview(data))
 }
 
 // ========== 统计与历史 ==========
 
 /** 练习统计 */
+/** 练习统计 */
 export function getPracticeStatsApi() : Promise<PracticeStats> {
-	return get('/practice-mode/stats').then((data : UTSJSONObject) : PracticeStats => {
-		return buildPracticeStats(data)
-	})
+	return getMapped<PracticeStats>('/practice-mode/stats', null, (data : UTSJSONObject) : PracticeStats => buildPracticeStats(data))
 }
 
+/**
+ * 练习历史
+ */
 /**
  * 练习历史
  */
@@ -302,7 +329,5 @@ export function getPracticeHistoryApi(page : number = 1, pageSize : number = 20,
 	if (endDate.length > 0) {
 		params['end_date'] = endDate
 	}
-	return get('/practice-mode/history', params).then((data : UTSJSONObject) : PracticeHistoryResult => {
-		return buildHistoryResult(data)
-	})
+	return getMapped<PracticeHistoryResult>('/practice-mode/history', params, (data : UTSJSONObject) : PracticeHistoryResult => buildHistoryResult(data))
 }

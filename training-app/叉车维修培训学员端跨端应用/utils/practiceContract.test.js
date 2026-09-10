@@ -118,3 +118,89 @@ describe('零直发请求（页面层不直接 uni.request）', () => {
     expect(src).not.toMatch(/uni\.request\s*\(/);
   });
 });
+
+describe('域 api 收紧（T06 / ADR-0007）：DTO 函数经 mapper-callback 出口', () => {
+  const api = read('api/practice.uts');
+
+  it('引入 getMapped / postMapped 出口家族', () => {
+    expect(api).toMatch(/import\s*\{[^}]*getMapped[^}]*postMapped[^}]*\}\s*from\s*'\.\/request'/);
+  });
+
+  const DTO_FNS = [
+    'getFreePracticeApi',
+    'getSequentialPracticeApi',
+    'getTagPracticeApi',
+    'submitAnswerApi',
+    'getPracticeProgressApi',
+    'getPracticeOverviewApi',
+    'getPracticeStatsApi',
+    'getPracticeHistoryApi',
+  ];
+
+  it.each(DTO_FNS)('%s 经 mapper 出口（getMapped/postMapped + 箭头包裹 build*）', (name) => {
+    const start = api.indexOf('export function ' + name);
+    expect(start).toBeGreaterThan(-1);
+    const body = api.slice(start, api.indexOf('\n}', start));
+    expect(body).toMatch(/(get|post)Mapped<[A-Za-z_$][\w$]*(?:\[\])?>\('[^']+', [^,]+, \(data : UTSJSONObject\) : [A-Za-z_$][\w$]*(?:\[\])? => build[A-Za-z_$][\w$]*\(data\)\)/);
+  });
+
+  // raw 透传白名单：刻意保留裸 get/post（不硬套 identity map，T03/T05 口径）
+  const RAW_PASSTHROUGH = [
+    'getQuestionBankStatsApi',
+    'getQuestionListApi',
+    'savePracticeProgressApi',
+    'getPracticeReportApi',
+  ];
+
+  it.each(RAW_PASSTHROUGH)('%s 保持 raw 透传（裸 get/post），未误加 DTO', (name) => {
+    const start = api.indexOf('export function ' + name);
+    expect(start).toBeGreaterThan(-1);
+    const body = api.slice(start, api.indexOf('\n}', start));
+    expect(body).toMatch(/return (get|post)\('/);
+    expect(body).not.toMatch(/Mapped</);
+  });
+});
+
+describe('幻影路由锁（#662 口径）：api 层路由必须落在后端已注册清单内', () => {
+  /** 抹掉注释（`://` 例外，防误杀 URL 字面量） */
+  function stripComments(s) {
+    return s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+  }
+
+  /** 从后端 <file>.go 的 rg.Group("<prefix>") + g.METHOD("<path>") 推出已注册路由 */
+  function registeredRoutes(rel, prefix) {
+    const src = stripComments(read(rel));
+    const out = [];
+    const re = /g\.(GET|POST|PUT|DELETE|PATCH)\("([^"]+)"[^)]*\)/g;
+    let m;
+    while ((m = re.exec(src)) !== null) out.push(prefix + m[2]);
+    return out;
+  }
+
+  it('practice 域 api 的每个路由都在 practice_mode.go / question_bank.go 已注册', () => {
+    const registered = [
+      ...registeredRoutes('../../backend/internal/api/practice_mode.go', '/practice-mode'),
+      ...registeredRoutes('../../backend/internal/api/question_bank.go', '/question-bank'),
+    ];
+    expect(registered.length).toBeGreaterThan(10);
+
+    const api = stripComments(read('api/practice.uts'));
+    const used = [...api.matchAll(/'(\/(?:practice-mode|question-bank)\/[^']*)'/g)].map((m) => m[1]);
+    expect(used.length).toBeGreaterThan(8);
+
+    const phantom = used.filter((u) => !registered.includes(u));
+    expect(phantom).toEqual([]);
+  });
+});
+
+describe('api 层零静默回退（失败要可见）', () => {
+  const api = read('api/practice.uts');
+
+  it('api/practice.uts 不含 mock 占位数据构造', () => {
+    expect(api).not.toMatch(/mock/i);
+  });
+
+  it('api/practice.uts 不吞错：零 .catch(，失败直带上抛页面', () => {
+    expect(api).not.toContain('.catch(');
+  });
+});
