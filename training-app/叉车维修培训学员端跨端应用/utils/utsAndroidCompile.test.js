@@ -35,6 +35,8 @@
  *      两种形态均触发、无需类型标注；形态与 M 同类，箭头包裹才合法，先例 composables/useTopicDetail.uts）
  *   U. 返回对象的 composable 缺显式结果类型（Kotlin error18 找不到名称；须签名标注或 s T 强转，
  *      先例 useAiChat「规避类型推断问题」注释，14/14 满足）
+ *   V. async 函数缺返回类型标注（Kotlin 推不出 UTSPromise 的 T，级联「expected Unit」错；须 Promise<T>）
+ *   W. 模板裸 handler 未定义（error18 找不到名称；@click="裸标识符" 须在 script 有定义）
  * 存量违例走 GUARD_ALLOWLIST 豁免，由后续工单在各自范围清零（见常量注释）。
  */
 const fs = require('fs');
@@ -363,6 +365,54 @@ function scanComposableMissingResultType(code) {
     if (declaredRet === null && !hasAs) {
       hits.push(hook + '（' + fnMembers + ' 个函数成员）缺显式结果类型');
     }
+  }
+  return hits;
+}
+/** V：async 函数缺返回类型标注（Kotlin 「Cannot infer type argument for 'T'」级联错）
+ *  规则 R 只覆盖 `async fn() : void`（错误的标注）；**完全不写标注**是另一子类：
+ *  Kotlin 侧生成 `UTSPromise<T>` 而 T 推不出来，回落报
+ *  「Cannot infer type for this parameter」+「Return type mismatch: expected 'Unit',
+ *   actual 'UTSPromise<uninferred ERROR CLASS>」——2026-09-10 wrong-questions.kt:49 云打包实测。
+ *  修复 = 补 `: Promise<void>`（无返回值）或显式 `: Promise<T>`。
+ */
+function scanAsyncMissingReturnType(code) {
+  const clean = blank(code);
+  const hits = [];
+  const re = /(?:^|\n)\s*(?:export\s+)?async\s+function\s+([A-Za-z_$][\w$]*)\s*\(([^)]*)\)\s*\{/g;
+  let m;
+  while ((m = re.exec(clean)) !== null) hits.push(m[1] + ' 缺返回类型标注（须 Promise<T>，无返回值用 Promise<void>）');
+  return hits;
+}
+
+/** W：模板裸 handler 未定义（error18 找不到名称）
+ *  形如 `@click="onBack"` 的**整体为裸标识符**的绑定，若 script 中无同名定义，
+ *  Kotlin 侧即报「找不到名称 "onBack"」——2026-09-10 practice-do.uvue:5 实测（重写时漏带该函数）。
+ *  识别 script 侧四类定义：function/const|let 声明、import 绑定、解构绑定、Options API methods 条目。
+ *  模板里带参数调用（`@click="fn(a)"`）与对象成员（`@click="obj.fn"`）不在靶内。
+ */
+function scanUndefinedTemplateHandler(text) {
+  const si = text.indexOf('<script');
+  if (si < 0) return [];
+  const tpl = text.slice(0, si);
+  const script = blank(text.slice(si));
+  const importLines = script.split('\n').filter((l) => /^\s*import\s/.test(l)).join('\n');
+  const destructured = [...script.matchAll(/const\s*\{([^}]*)\}\s*=/g)].map((x) => x[1]).join(',');
+  const hits = [];
+  const re = /@[a-zA-Z][\w-]*\s*=\s*"([A-Za-z_$][\w$]*)\s*"/g;
+  let m;
+  const seen = new Set();
+  while ((m = re.exec(tpl)) !== null) {
+    const name = m[1];
+    if (seen.has(name)) continue;
+    seen.add(name);
+    const word = new RegExp('\\b' + name + '\\b');
+    const defined =
+      new RegExp('(?:^|\\n)\\s*(?:export\\s+)?(?:async\\s+)?function\\s+' + name + '\\s*\\(').test(script) ||
+      new RegExp('(?:^|\\n)\\s*(?:const|let)\\s+' + name + '\\b').test(script) ||
+      new RegExp('(?:^|\\n)\\s*' + name + '\\s*\\([^)]*\\)\\s*\\{').test(script) ||
+      word.test(importLines) ||
+      word.test(destructured);
+    if (!defined) hits.push('@...="' + name + '" 未在 script 中定义');
   }
   return hits;
 }
@@ -1182,6 +1232,106 @@ describe('全工程守护：五类 Kotlin 编译地雷零命中', () => {
     const violations = [];
     for (const u of allCodeUnits()) {
       for (const h of scanBareFnRefInReturn(u.code)) violations.push(path.relative(ROOT, u.file) + ': ' + h);
+    }
+    expect(violations).toEqual([]);
+  });
+  it('V：自检——注入「async 函数缺返回类型标注」必须被抓到', () => {
+    const bad = [
+      'export function useThing() {',
+      '    async function loadData() {',
+      '        await uni.request({ url: \'/x\' })',
+      '    }',
+      '}',
+    ].join('\n');
+    expect(scanAsyncMissingReturnType(bad).length).toBeGreaterThan(0);
+
+    // 好①：Promise<void>
+    expect(scanAsyncMissingReturnType(bad.replace('async function loadData() {', 'async function loadData() : Promise<void> {'))).toEqual([]);
+    // 好②：显式 Promise<T>
+    expect(scanAsyncMissingReturnType(bad.replace('async function loadData() {', 'async function loadData() : Promise<string> {'))).toEqual([]);
+    // 反向自检：非 async 函数不判定
+    expect(scanAsyncMissingReturnType(bad.replace('async function loadData() {', 'function loadData() {'))).toEqual([]);
+  });
+
+  it('V：全工程 async 函数均有返回类型标注（Kotlin 推不出 UTSPromise 的 T）', () => {
+    const violations = [];
+    for (const u of allCodeUnits()) {
+      for (const h of scanAsyncMissingReturnType(u.code)) violations.push(path.relative(ROOT, u.file) + ': ' + h);
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it('W：自检——注入「模板裸 handler 未定义」必须被抓到', () => {
+    const bad = [
+      '<template>',
+      '    <view @click="onBack"><text>‹</text></view>',
+      '</template>',
+      '<script setup lang="uts">',
+      '    function goBack() : void {}',
+      '</script>',
+    ].join('\n');
+    expect(scanUndefinedTemplateHandler(bad).length).toBeGreaterThan(0);
+
+    // 好：function 定义
+    const goodFn = bad.replace('    function goBack() : void {}', '    function goBack() : void {}\n    function onBack() : void { goBack() }');
+    expect(scanUndefinedTemplateHandler(goodFn)).toEqual([]);
+
+    // 好：解构绑定（先例 dashboard / practice 从 composable 取 handler）
+    const goodDestructure = [
+      '<template>',
+      '    <view @click="onCertTap"></view>',
+      '</template>',
+      '<script setup lang="uts">',
+      '    const { onCertTap } = useDashboardCredential()',
+      '</script>',
+    ].join('\n');
+    expect(scanUndefinedTemplateHandler(goodDestructure)).toEqual([]);
+
+    // 好：import 绑定
+    const goodImport = [
+      '<template>',
+      '    <view @click="goBack"></view>',
+      '</template>',
+      '<script setup lang="uts">',
+      '    import { goBack } from \'../../utils/navigation\'',
+      '</script>',
+    ].join('\n');
+    expect(scanUndefinedTemplateHandler(goodImport)).toEqual([]);
+
+    // 好：Options API methods（先例 pages/index/index.uvue）
+    const goodOptions = [
+      '<template>',
+      '    <button @click="goLogin">进入</button>',
+      '</template>',
+      '<script>',
+      'export default {',
+      '    methods: {',
+      '        goLogin() {',
+      '            uni.navigateTo({ url: \'/pages/login/login\' })',
+      '        }',
+      '    }',
+      '}',
+      '</script>',
+    ].join('\n');
+    expect(scanUndefinedTemplateHandler(goodOptions)).toEqual([]);
+
+    // 反向自检：带参数调用 / 对象成员不在靶内
+    const notBare = [
+      '<template>',
+      '    <view @click="handle(item)"></view>',
+      '    <view @click="session.onNext()"></view>',
+      '</template>',
+      '<script setup lang="uts">',
+      '    function handle(x : number) : void {}',
+      '</script>',
+    ].join('\n');
+    expect(scanUndefinedTemplateHandler(notBare)).toEqual([]);
+  });
+
+  it('W：全工程模板裸 handler 均有 script 定义（error18 找不到名称）', () => {
+    const violations = [];
+    for (const file of ALL_FILES.filter((f) => f.endsWith('.uvue'))) {
+      for (const h of scanUndefinedTemplateHandler(fs.readFileSync(file, 'utf8'))) violations.push(path.relative(ROOT, file) + ': ' + h);
     }
     expect(violations).toEqual([]);
   });

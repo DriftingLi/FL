@@ -262,7 +262,7 @@
 
     // 看课上报积分的调用已删除：/points/course-view 后端从未注册（#662），看课计分待后端补
 
-    async function loadDetail() {
+    async function loadDetail() : Promise<void> {
         if (courseId.value <= 0 || chapterId.value <= 0) return
         loading.value = true
         detail.value = null
