@@ -10,6 +10,7 @@
 import { API_BASE_URL, REQUEST_TIMEOUT, ENABLE_DEBUG_LOG } from '../config/env'
 import { STORAGE_KEY_TOKEN } from '../constants/app'
 import { getStorage, removeStorage } from '../utils/storage'
+import { isContentUri, buildTempFilePath, UPLOAD_TMP_DIR } from '../utils/uploadPath'
 // 注意：不能在此处 import useAuthStore（会导致循环依赖），改用全局回调
 
 /** 请求方法 */
@@ -394,59 +395,132 @@ export function patch(url : string, data : any | null = null, options : RequestO
     return request<UTSJSONObject>(opts)
 }
 
+// ── 上传前路径正规化（#816 根因修复）──────────────────────────────────────
+// 真机证据（Android / 小米文件管理选文件）：
+//   [uploadFile] >>> POST .../api/contributions/upload-file filePath=content://com.android.fileexplorer...
+//   CursorWindow: Failed to read row 0, column 4294967295 from a window with 1 rows, 2 columns
+//   IllegalStateException: Couldn't read row 0, col -1 from CursorWindow
+//     at uts.sdk.modules.DCloudUniNetwork.UploadController.getFileInformation(index.kt:873)
+// uni.uploadFile 无法用 ContentResolver 正确解析 content://（列名假设与 provider 不符），
+// 请求尚未发出即崩在 getFileInformation。对策：先拷成真实文件路径再上传。
+
+/**
+ * 当 filePath 为 content:// 时，拷贝到 USER_DATA_PATH/upload-tmp 下的真实文件
+ * @returns 真实可传路径
+ * @note 非 content://（chooseImage 的 tempFilePath / 小程序 file:// 路径）原样透传，零行为变更
+ * @note 所有文件系统 API 与 env 路径常量都锁在 APP-ANDROID 块内：非 Android 平台整段被
+ *       编译器剔除，既不参与类型检查也不会运行——避免 H5 / 小程序端出现未实现 API
+ */
+async function prepareUploadPath(path : string) : Promise<string> {
+    if (!isContentUri(path)) return path
+    // #ifdef APP-ANDROID
+    const destPath = buildTempFilePath(uni.env.USER_DATA_PATH, path, Date.now())
+    const manager = uni.getFileSystemManager()
+    if (ENABLE_DEBUG_LOG) {
+        console.log('[uploadFile] content:// -> 落盘中转', path, '=>', destPath)
+    }
+    await new Promise<void>((resolve, reject) => {
+        // 裸对象字面量：对齐全仓 uni API 调用惯例（不引 uni 命名类型，避免类型名不可解析）
+        manager.copyFile({
+            srcPath: path,
+            destPath: destPath,
+            success: (_res) => {
+                resolve()
+            },
+            fail: (err) => {
+                reject(new Error('读取所选文件失败：' + errMsg(err, '系统未授予该文件访问权限')))
+            }
+        })
+    })
+    return destPath
+    // #endif
+    // #ifndef APP-ANDROID
+    // 非 Android 平台 chooseFile 返回的已是可访问的真实路径，无需中转
+    return path
+    // #endif
+}
+
+/** 删除中转文件（上传结束即清理，失败也不影响主流程） */
+function removeTempFile(path : string) : void {
+    // #ifdef APP-ANDROID
+    if (path.indexOf('/' + UPLOAD_TMP_DIR + '/') < 0) return
+    try {
+        uni.getFileSystemManager().removeFile({
+            filePath: path,
+            success: (_res) => {},
+            fail: (_err) => {}
+        })
+    } catch (e) {
+        // 中转文件残留不影响业务（USER_DATA_PATH 不会被系统清理，仅占少量空间）
+    }
+    // #endif
+}
+
 /**
  * 上传文件（multipart/form-data）
  * @note uni.uploadFile 不走统一 request 封装，需手动注入 Authorization 与解包 ApiResponse
+ * @note 入参若为 content:// URI，会先拷成真实文件再传（#816 根因修复）
  * @returns 解包后的 data 字段（UTSJSONObject）
  */
 export function uploadFile(url : string, filePath : string, name : string = 'file', formData : UTSJSONObject | null = null, options : RequestOptions | null = null) : Promise<UTSJSONObject> {
-    return new Promise<UTSJSONObject>((resolve, reject) => {
-        const silent = options?.silent ?? false
-        const timeout = options?.timeout ?? REQUEST_TIMEOUT
-        const fullURL = resolveURL(url)
-        const header = buildUploadHeader(silent)
+    return prepareUploadPath(filePath).then((realPath : string) : Promise<UTSJSONObject> => {
+        return new Promise<UTSJSONObject>((resolve, reject) => {
+            const silent = options?.silent ?? false
+            const timeout = options?.timeout ?? REQUEST_TIMEOUT
+            const fullURL = resolveURL(url)
+            const header = buildUploadHeader(silent)
 
-        if (ENABLE_DEBUG_LOG) {
-            console.log('[uploadFile] >>> POST', fullURL, 'filePath=', filePath)
-        }
-
-        // formData 必须是 UTSJSONObject，null 时传空对象（uni.uploadFile 不接受 undefined）
-        const safeFormData : UTSJSONObject = formData != null ? formData! : ({} as UTSJSONObject)
-
-        uni.uploadFile({
-            url: fullURL,
-            filePath: filePath,
-            name: name,
-            header: header,
-            formData: safeFormData,
-            timeout: timeout,
-            success: (res) => {
-                const statusCode = res.statusCode
-                // res.data 是字符串，需要 JSON.parse
-                let body : UTSJSONObject
-                try {
-                    const parsed = JSON.parse(res.data)
-                    if (parsed == null) {
-                        throw new Error('empty body')
-                    }
-                    body = parsed as UTSJSONObject
-                } catch (e) {
-                    const msg = `上传失败 (${statusCode})`
-                    showError(msg, silent)
-                    reject(new Error(msg))
-                    return
-                }
-
-                if (statusCode == 401) {
-                    logoutAndReject(silent, reject)
-                    return
-                }
-                handleStatus(statusCode, body, silent, '上传失败', resolve, reject)
-            },
-            fail: (err) => {
-                console.error('[uploadFile] <<< FAIL errMsg=', err.errMsg)
-                networkError(err.errMsg, '上传失败，请检查网络后重试', '上传超时，请稍后重试', silent, reject)
+            if (ENABLE_DEBUG_LOG) {
+                console.log('[uploadFile] >>> POST', fullURL, 'filePath=', realPath)
             }
+
+            // formData 必须是 UTSJSONObject，null 时传空对象（uni.uploadFile 不接受 undefined）
+            const safeFormData : UTSJSONObject = formData != null ? formData! : ({} as UTSJSONObject)
+
+            /** 收尾：中转文件用完即删（无论成功/失败/401） */
+            const done = () : void => {
+                removeTempFile(realPath)
+            }
+
+            uni.uploadFile({
+                url: fullURL,
+                filePath: realPath,
+                name: name,
+                header: header,
+                formData: safeFormData,
+                timeout: timeout,
+                success: (res) => {
+                    const statusCode = res.statusCode
+                    // res.data 是字符串，需要 JSON.parse
+                    let body : UTSJSONObject
+                    try {
+                        const parsed = JSON.parse(res.data)
+                        if (parsed == null) {
+                            throw new Error('empty body')
+                        }
+                        body = parsed as UTSJSONObject
+                    } catch (e) {
+                        const msg = `上传失败 (${statusCode})`
+                        showError(msg, silent)
+                        done()
+                        reject(new Error(msg))
+                        return
+                    }
+
+                    if (statusCode == 401) {
+                        done()
+                        logoutAndReject(silent, reject)
+                        return
+                    }
+                    done()
+                    handleStatus(statusCode, body, silent, '上传失败', resolve, reject)
+                },
+                fail: (err) => {
+                    console.error('[uploadFile] <<< FAIL errMsg=', err.errMsg)
+                    done()
+                    networkError(err.errMsg, '上传失败，请检查网络后重试', '上传超时，请稍后重试', silent, reject)
+                }
+            })
         })
     })
 }
