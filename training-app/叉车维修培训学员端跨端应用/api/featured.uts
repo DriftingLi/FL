@@ -6,7 +6,7 @@
  *   GET  /api/featured-content/:id             精选详情（含相关/上下篇）
  *   POST /api/featured-content/:id/view        浏览计数 +1
  */
-import { get, post } from './request'
+import { getMapped, post } from './request'
 import { toNumber, toStr } from './helpers'
 import type { FeaturedContentItem, FeaturedContentListResult, FeaturedContentDetail } from '../types/index'
 
@@ -29,6 +29,65 @@ function buildFeaturedItem(obj : UTSJSONObject) : FeaturedContentItem {
 	} as FeaturedContentItem
 }
 
+/** 精选列表映射（T05 手术 #643：收紧至 getMapped 出口，响应字段读取逐行不变） */
+function buildFeaturedListResult(data : UTSJSONObject) : FeaturedContentListResult {
+	const items : FeaturedContentItem[] = []
+	const itemsRaw = data['items']
+	if (itemsRaw != null) {
+		const arr = itemsRaw as Array<UTSJSONObject>
+		for (let i = 0; i < arr.length; i++) {
+			items.push(buildFeaturedItem(arr[i]))
+		}
+	}
+	return {
+		items: items,
+		total: toNumber(data['total']),
+		page: toNumber(data['page'], 1),
+		pages: toNumber(data['pages']),
+	} as FeaturedContentListResult
+}
+
+/** 精选详情映射（T05 手术 #643：收紧至 getMapped 出口，响应字段读取逐行不变） */
+function buildFeaturedDetailResult(data : UTSJSONObject) : FeaturedContentDetail {
+	const base = buildFeaturedItem(data)
+	let prev : FeaturedContentItem | null = null
+	let next : FeaturedContentItem | null = null
+	const prevRaw = data['prev']
+	const nextRaw = data['next']
+	if (prevRaw != null) {
+		prev = buildFeaturedItem(prevRaw as UTSJSONObject)
+	}
+	if (nextRaw != null) {
+		next = buildFeaturedItem(nextRaw as UTSJSONObject)
+	}
+	const related : FeaturedContentItem[] = []
+	const relatedRaw = data['related']
+	if (relatedRaw != null) {
+		const arr = relatedRaw as Array<UTSJSONObject>
+		for (let i = 0; i < arr.length; i++) {
+			related.push(buildFeaturedItem(arr[i]))
+		}
+	}
+	return {
+		content_id: base.content_id,
+		title: base.title,
+		category: base.category,
+		category_label: base.category_label,
+		summary: base.summary,
+		cover_image: base.cover_image,
+		source: base.source,
+		status: base.status,
+		sort_order: base.sort_order,
+		view_count: base.view_count,
+		published_at: base.published_at,
+		created_at: base.created_at,
+		content: toStr(data['content']),
+		related: related,
+		prev: prev,
+		next: next,
+	} as FeaturedContentDetail
+}
+
 /**
  * 精选列表
  * @param page 页码
@@ -43,22 +102,7 @@ export function getFeaturedContentsApi(page : number = 1, pageSize : number = 10
 	if (category.length > 0) {
 		params['category'] = category
 	}
-	return get('/featured-contents', params).then((data : UTSJSONObject) : FeaturedContentListResult => {
-		const items : FeaturedContentItem[] = []
-		const itemsRaw = data['items']
-		if (itemsRaw != null) {
-			const arr = itemsRaw as Array<UTSJSONObject>
-			for (let i = 0; i < arr.length; i++) {
-				items.push(buildFeaturedItem(arr[i]))
-			}
-		}
-		return {
-			items: items,
-			total: toNumber(data['total']),
-			page: toNumber(data['page'], 1),
-			pages: toNumber(data['pages']),
-		} as FeaturedContentListResult
-	})
+	return getMapped<FeaturedContentListResult>('/featured-contents', params, (data : UTSJSONObject) : FeaturedContentListResult => buildFeaturedListResult(data))
 }
 
 /**
@@ -66,45 +110,7 @@ export function getFeaturedContentsApi(page : number = 1, pageSize : number = 10
  * @param contentId 内容 ID
  */
 export function getFeaturedContentDetailApi(contentId : number) : Promise<FeaturedContentDetail> {
-	return get('/featured-content/' + contentId.toString()).then((data : UTSJSONObject) : FeaturedContentDetail => {
-		const base = buildFeaturedItem(data)
-		let prev : FeaturedContentItem | null = null
-		let next : FeaturedContentItem | null = null
-		const prevRaw = data['prev']
-		const nextRaw = data['next']
-		if (prevRaw != null) {
-			prev = buildFeaturedItem(prevRaw as UTSJSONObject)
-		}
-		if (nextRaw != null) {
-			next = buildFeaturedItem(nextRaw as UTSJSONObject)
-		}
-		const related : FeaturedContentItem[] = []
-		const relatedRaw = data['related']
-		if (relatedRaw != null) {
-			const arr = relatedRaw as Array<UTSJSONObject>
-			for (let i = 0; i < arr.length; i++) {
-				related.push(buildFeaturedItem(arr[i]))
-			}
-		}
-		return {
-			content_id: base.content_id,
-			title: base.title,
-			category: base.category,
-			category_label: base.category_label,
-			summary: base.summary,
-			cover_image: base.cover_image,
-			source: base.source,
-			status: base.status,
-			sort_order: base.sort_order,
-			view_count: base.view_count,
-			published_at: base.published_at,
-			created_at: base.created_at,
-			content: toStr(data['content']),
-			related: related,
-			prev: prev,
-			next: next,
-		} as FeaturedContentDetail
-	})
+	return getMapped<FeaturedContentDetail>('/featured-content/' + contentId.toString(), null, (data : UTSJSONObject) : FeaturedContentDetail => buildFeaturedDetailResult(data))
 }
 
 /**

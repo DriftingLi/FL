@@ -342,6 +342,8 @@ export type ForumTopic = {
     scope : string
     /** 问题状态：resolved（已解决）/ open（进行中）（#736） */
     status : string
+    /** 精选位（#742 批次三）：后端 is_featured 回显，管理端加精，列表展示标识与筛选 */
+    is_featured : boolean
 }
 
 /** 帖子列表响应 */
