@@ -86,14 +86,14 @@
                   <span v-if="course.theory_hours || course.practice_hours" class="cc-meta-item">
                     理论{{ course.theory_hours || 0 }}学时 · 实操{{ course.practice_hours || 0 }}学时
                   </span>
-                  <el-tag v-if="course.points_price" size="small" type="warning" effect="plain">
+                  <UiTag v-if="course.points_price" size="small" tone="warning" effect="plain">
                     {{ course.points_price }} 积分解锁
-                  </el-tag>
+                  </UiTag>
                 </div>
                 <div class="cc-cert flex" v-if="course.certificate_name">
-                  <el-tag size="small" type="success" effect="plain">
+                  <UiTag size="small" tone="success" effect="plain">
                     {{ course.certificate_name }}
-                  </el-tag>
+                  </UiTag>
                 </div>
               </template>
             </CourseCard>
@@ -142,14 +142,14 @@
       <div v-loading="detailLoading">
         <template v-if="detailCourse">
           <div class="detail-brief mb-3 flex flex-wrap gap-2">
-            <el-tag v-if="detailCourse.level?.name" type="warning">{{ detailCourse.level.name }}</el-tag>
-            <el-tag v-if="detailCourse.specialty?.name" type="primary" effect="plain">
+            <UiTag v-if="detailCourse.level?.name" tone="warning">{{ detailCourse.level.name }}</UiTag>
+            <UiTag v-if="detailCourse.specialty?.name" tone="primary" effect="plain">
               {{ detailCourse.specialty.name }}
-            </el-tag>
+            </UiTag>
           </div>
           <p class="detail-desc mb-4 text-sm text-ink-2">{{ detailCourse.description || '暂无简介' }}</p>
           <div v-if="detailCourse?.points_price" class="detail-redeem">
-            <el-tag type="warning" effect="plain">{{ detailCourse.points_price }} 积分解锁</el-tag>
+            <UiTag tone="warning" effect="plain">{{ detailCourse.points_price }} 积分解锁</UiTag>
             <UiButton variant="warning" size="small" @click="handleRedeem">兑换解锁</UiButton>
           </div>
 
@@ -169,13 +169,13 @@
             </el-descriptions-item>
             <el-descriptions-item label="前置课程">
               <template v-if="detailCourse.prerequisites && detailCourse.prerequisites.length > 0">
-                <el-tag
+                <UiTag
                   v-for="p in detailCourse.prerequisites"
                   :key="p.course_id"
                   size="small"
-                  type="info"
+                  tone="info"
                   class="prereq-tag mr-1 my-0.5"
-                >{{ p.name }}</el-tag>
+                >{{ p.name }}</UiTag>
               </template>
               <span v-else>—</span>
             </el-descriptions-item>
@@ -204,7 +204,7 @@
               >
                 <span class="chapter-index flex size-6 shrink-0 items-center justify-center rounded-[6px] bg-ui-100 text-xs font-semibold text-ui-600">{{ i + 1 }}</span>
                 <span class="chapter-title flex-1 text-sm text-ink">{{ ch.title }}</span>
-                <el-tag v-if="chapterCompleted(ch.chapter_id)" size="small" type="success" effect="plain">已完成</el-tag>
+                <UiTag v-if="chapterCompleted(ch.chapter_id)" size="small" tone="success" effect="plain">已完成</UiTag>
                 <span v-if="ch.duration" class="chapter-duration text-xs text-ink-3">{{ ch.duration }}分钟</span>
                 <el-icon class="chapter-arrow text-ink-3"><ArrowRight /></el-icon>
               </div>
@@ -243,6 +243,7 @@ import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import { useConfirm } from '@/composables/useConfirm'
+import UiTag from '@/components/ui/UiTag.vue'
 
 const stagger = useStagger()
 

@@ -37,7 +37,7 @@
           </el-table-column>
           <el-table-column label="来源" min-width="90">
             <template #default="{ row }">
-              <el-tag v-if="row.paper_id" size="small" type="warning" effect="plain">真题卷</el-tag>
+              <UiTag v-if="row.paper_id" size="small" tone="warning" effect="plain">真题卷</UiTag>
             </template>
           </el-table-column>
         </el-table>
@@ -92,6 +92,7 @@ import { useExamSession } from '@/composables/useExamSession'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import AnsweringSessionShell from '@/components/student/AnsweringSessionShell.vue'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiTag from '@/components/ui/UiTag.vue'
 
 const route = useRoute()
 const router = useRouter()

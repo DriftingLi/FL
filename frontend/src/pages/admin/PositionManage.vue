@@ -16,7 +16,7 @@
         <el-table-column prop="sort_order" label="排序" width="80" align="center" />
         <el-table-column label="状态" width="90" align="center">
           <template #default="{ row }">
-            <el-tag :type="row.status === 1 ? 'success' : 'info'" size="small">{{ row.status === 1 ? '启用' : '停用' }}</el-tag>
+            <UiTag :tone="row.status === 1 ? 'success' : 'info'" size="small">{{ row.status === 1 ? '启用' : '停用' }}</UiTag>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="160" align="center">
@@ -45,7 +45,7 @@
           <el-input v-model="form.description" type="textarea" :rows="2" maxlength="200" />
         </el-form-item>
         <el-form-item label="状态">
-          <el-switch v-model="form.status" :active-value="1" :inactive-value="0" active-text="启用" inactive-text="停用" />
+          <UiSwitch v-model="form.status" :active-value="1" :inactive-value="0" active-text="启用" inactive-text="停用" />
         </el-form-item>
       </el-form>
     </UiDialog>
@@ -59,6 +59,8 @@ import { ElMessage, type FormInstance } from 'element-plus'
 import { unwrappedRequest } from '@/api/request'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
+import UiTag from '@/components/ui/UiTag.vue'
+import UiSwitch from '@/components/ui/UiSwitch.vue'
 
 interface PositionItem {
   position_id: number

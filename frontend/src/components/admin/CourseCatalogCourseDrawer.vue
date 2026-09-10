@@ -9,6 +9,8 @@ import type { CatalogDirectionNode, CatalogLevel, CertificateTemplate } from '@/
 import type { CredentialDict } from '@/api/credential'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
+import UiRadioGroup from '@/components/ui/UiRadioGroup.vue'
+import UiCheckbox from '@/components/ui/UiCheckbox.vue'
 
 const props = defineProps<{
   directions: CatalogDirectionNode[]
@@ -289,16 +291,16 @@ defineExpose({ open })
         <el-input v-model="drawerForm.description" type="textarea" :rows="2" maxlength="500" />
       </el-form-item>
       <el-form-item label="上架状态">
-        <el-radio-group v-model="drawerForm.status">
+        <UiRadioGroup v-model="drawerForm.status">
           <el-radio :value="1">上架</el-radio>
           <el-radio :value="0">下架</el-radio>
-        </el-radio-group>
+        </UiRadioGroup>
       </el-form-item>
       <el-form-item label="热门">
-        <el-checkbox v-model="drawerForm.is_hot">热门</el-checkbox>
+        <UiCheckbox v-model="drawerForm.is_hot">热门</UiCheckbox>
       </el-form-item>
       <el-form-item label="精品">
-        <el-checkbox v-model="drawerForm.is_featured">精品</el-checkbox>
+        <UiCheckbox v-model="drawerForm.is_featured">精品</UiCheckbox>
       </el-form-item>
     </el-form>
 

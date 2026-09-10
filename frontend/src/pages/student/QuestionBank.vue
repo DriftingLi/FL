@@ -142,20 +142,20 @@
         <div class="text-[15px] text-ink">
           第 {{ currentIdx + 1 }}/{{ questions.length }} 题
           <span class="ml-3 text-[13px] text-ink-3">已答对 {{ correctCount }} · 已答错 {{ wrongCount }}</span>
-          <el-tag v-if="mode === 'sequential'" size="small" type="primary" style="margin-left: 10px">顺序练习</el-tag>
-          <el-tag v-else-if="mode === 'tag'" size="small" style="margin-left: 10px">
+          <UiTag v-if="mode === 'sequential'" size="small" tone="primary" style="margin-left: 10px">顺序练习</UiTag>
+          <UiTag v-else-if="mode === 'tag'" size="small" style="margin-left: 10px">
             标签：{{ currentTagName }}
-          </el-tag>
-          <el-tag v-else-if="specialType && mode === 'free'" size="small" type="warning" style="margin-left: 10px">
+          </UiTag>
+          <UiTag v-else-if="specialType && mode === 'free'" size="small" tone="warning" style="margin-left: 10px">
             {{ typeMap[specialType] }}
-          </el-tag>
+          </UiTag>
         </div>
         <UiButton size="small" @click="confirmQuit">退出练习</UiButton>
       </div>
 
       <el-card v-if="currentQuestion" class="mb-[15px]">
         <div class="mb-[15px] flex items-center gap-2">
-          <el-tag size="small">{{ typeMap[currentQuestion.type] || '题目' }}</el-tag>
+          <UiTag size="small">{{ typeMap[currentQuestion.type] || '题目' }}</UiTag>
           <!-- #511：收藏统一药丸（激活琥珀填充） -->
           <UiActionChip icon="fav" :label="favorited ? '已收藏' : '收藏'" tone="fav" :active="favorited" compact @click="toggleFavorite" />
         </div>
@@ -252,6 +252,7 @@ import CommentCard from '@/components/practice/CommentCard.vue'
 import NoteCard from '@/components/practice/NoteCard.vue'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useConfirm } from '@/composables/useConfirm'
+import UiTag from '@/components/ui/UiTag.vue'
 
 // null = 入口；'sequential' | 'free' | 'tag' = 刷题中
 

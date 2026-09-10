@@ -6,7 +6,7 @@
           {{ letter }}
         </el-avatar>
         <div class="avatar-actions">
-          <el-upload
+          <UiUpload
             accept="image/*"
             :show-file-list="false"
             :http-request="handleAvatarUpload"
@@ -15,7 +15,7 @@
             <UiButton size="small" :loading="avatarUploading" :disabled="avatarPending">
               {{ avatarPending ? '头像审核中' : '上传新头像' }}
             </UiButton>
-          </el-upload>
+          </UiUpload>
           <p class="hint">管理员审核通过后生效</p>
         </div>
       </div>
@@ -32,7 +32,7 @@
           :disabled="nicknamePending"
         />
         <div class="nickname-actions">
-          <el-tag v-if="nicknamePending" type="warning" size="small">昵称审核中</el-tag>
+          <UiTag v-if="nicknamePending" tone="warning" size="small">昵称审核中</UiTag>
           <UiButton variant="primary" v-else :loading="savingNickname" @click="saveNickname">
             保存昵称
           </UiButton>
@@ -49,6 +49,8 @@ import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
+import UiTag from '@/components/ui/UiTag.vue'
+import UiUpload from '@/components/ui/UiUpload.vue'
 
 const authStore = useAuthStore()
 

@@ -10,7 +10,7 @@
 
     <el-card v-if="currentQuestion" v-loading="loading" class="question-card">
       <div class="question-header mb-3 flex items-center justify-between">
-        <el-tag size="small">{{ typeMap[currentQuestion.type] || '题目' }}</el-tag>
+        <UiTag size="small">{{ typeMap[currentQuestion.type] || '题目' }}</UiTag>
         <el-icon
           class="fav-star cursor-pointer text-lg"
           :class="favorited ? 'text-warn' : 'text-ink-muted'"
@@ -91,6 +91,7 @@ import CommentCard from '@/components/practice/CommentCard.vue'
 import NoteCard from '@/components/practice/NoteCard.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import { useConfirm } from '@/composables/useConfirm'
+import UiTag from '@/components/ui/UiTag.vue'
 
 const route = useRoute()
 const router = useRouter()

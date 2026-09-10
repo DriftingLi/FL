@@ -12,6 +12,7 @@ import { formatTonnage, formatWan } from '@/utils/valuationFormat'
 import { formatTime } from '@/utils/format'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiTag from '@/components/ui/UiTag.vue'
 
 const router = useRouter()
 
@@ -150,7 +151,7 @@ onMounted(load)
         </el-table-column>
         <el-table-column label="车况评级" width="100" align="center">
           <template #default="{ row }">
-            <el-tag
+            <UiTag
               effect="plain"
               :style="{
                 color: ratingColor(row.condition_rating),
@@ -158,7 +159,7 @@ onMounted(load)
               }"
             >
               {{ row.condition_rating || '-' }}
-            </el-tag>
+            </UiTag>
           </template>
         </el-table-column>
         <el-table-column label="残值（万元）" width="130" align="right">

@@ -43,14 +43,14 @@
       <el-table-column prop="title" label="标题" min-width="240" show-overflow-tooltip />
       <el-table-column label="分类" width="120" align="center">
         <template #default="{ row }">
-          <el-tag size="small">{{ categoryLabel(row.category) }}</el-tag>
+          <UiTag size="small">{{ categoryLabel(row.category) }}</UiTag>
         </template>
       </el-table-column>
       <el-table-column label="状态" width="100" align="center">
         <template #default="{ row }">
-          <el-tag :type="row.status === 1 ? 'success' : 'info'" size="small">
+          <UiTag :tone="row.status === 1 ? 'success' : 'info'" size="small">
             {{ row.status === 1 ? '已发布' : '草稿' }}
-          </el-tag>
+          </UiTag>
         </template>
       </el-table-column>
       <el-table-column label="发布时间" width="180" align="center">
@@ -103,6 +103,7 @@ import { formatDateTime } from '@/utils/format'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiFilterBar from '@/components/ui/UiFilterBar.vue'
+import UiTag from '@/components/ui/UiTag.vue'
 
 const router = useRouter()
 

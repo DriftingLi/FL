@@ -5,7 +5,7 @@
         <UiButton variant="text" @click="goBack">返回</UiButton>
         <div class="flex items-center gap-2">
           <span class="text-[13px] text-ink-2">公开给招聘方</span>
-          <el-switch :model-value="visibilityOpen" @change="toggleVisibility" />
+          <UiSwitch :model-value="visibilityOpen" @change="toggleVisibility" />
         </div>
       </div>
       <div v-if="viewCount > 0" class="rounded-card border border-line bg-ui-50 px-4 py-3 mb-4 text-sm text-ink">
@@ -96,6 +96,7 @@ import UiCard from '@/components/ui/UiCard.vue'
 import OnlineResumePdf from '@/components/recruit/OnlineResumePdf.vue'
 import CompanyContactInfo from '@/components/recruit/CompanyContactInfo.vue'
 import { useConfirm } from '@/composables/useConfirm'
+import UiSwitch from '@/components/ui/UiSwitch.vue'
 
 const router = useRouter()
 const pdfInput = ref<HTMLInputElement | null>(null)

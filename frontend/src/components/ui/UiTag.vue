@@ -1,3 +1,8 @@
+<script lang="ts">
+/** tone 的类型导出：供调用方的映射表/函数收窄返回类型（如 Record<string, UiTagTone>） */
+export type UiTagTone = 'brand' | 'primary' | 'success' | 'info' | 'warning' | 'danger' | 'neutral'
+</script>
+
 <script setup lang="ts">
 /**
  * 标签：包 `el-tag`，用 tone 表达语义而非 EP 的 type。

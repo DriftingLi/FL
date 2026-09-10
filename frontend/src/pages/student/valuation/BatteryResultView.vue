@@ -14,6 +14,7 @@ import { downloadReport } from '@/composables/useReportDownload'
 import { BATTERY_TYPE_LABELS, type BatteryType } from '@/types/valuation/battery'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiTag from '@/components/ui/UiTag.vue'
 
 const router = useRouter()
 const store = useBatteryStore()
@@ -108,7 +109,7 @@ async function downloadPdf() {
           <div class="feature-head">
             <span class="feature-rank">{{ String(index + 1).padStart(2, '0') }}</span>
             <span class="feature-name">{{ item.name }}</span>
-            <el-tag class="feature-group" effect="plain">{{ item.group }}</el-tag>
+            <UiTag class="feature-group" effect="plain">{{ item.group }}</UiTag>
           </div>
           <el-progress
             :percentage="Math.round(item.normalized * 100)"

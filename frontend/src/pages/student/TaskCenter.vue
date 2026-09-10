@@ -87,7 +87,7 @@
                 领取
               </UiButton>
               <UiButton variant="ghost" v-else-if="task.status === 'todo'" size="small" disabled>去完成</UiButton>
-              <el-tag v-else type="success" size="small" effect="plain">已领取</el-tag>
+              <UiTag v-else tone="success" size="small" effect="plain">已领取</UiTag>
             </div>
           </UiCard>
         </div>
@@ -110,6 +110,7 @@ import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiCard from '@/components/ui/UiCard.vue'
+import UiTag from '@/components/ui/UiTag.vue'
 
 const staggerStyle = useStagger(6)
 

@@ -14,7 +14,7 @@
       <div v-for="item in items" :key="String(item.id)" class="rounded-card border border-line bg-panel p-4">
         <div class="flex items-center justify-between">
           <div class="text-sm text-ink">学员 ID：{{ item.student_user_id }}</div>
-          <el-tag :type="tagType(item.status)" size="small">{{ statusLabel(item.status) }}</el-tag>
+          <UiTag :tone="tagType(item.status)" size="small">{{ statusLabel(item.status) }}</UiTag>
         </div>
         <div class="mt-2 text-xs text-ink-3">附言：{{ item.message }}</div>
         <div class="mt-1 text-xs text-ink-3">申请时间：{{ item.created_at }}</div>
@@ -31,6 +31,7 @@ import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiTag from '@/components/ui/UiTag.vue'
 
 const items = ref<any[]>([])
 
@@ -56,7 +57,7 @@ function tagType(s: string) {
   if (s === 'approved') return 'success'
   if (s === 'rejected' || s === 'revoked') return 'danger'
   if (s === 'expired') return 'info'
-  return ''
+  return 'primary'
 }
 
 onMounted(load)

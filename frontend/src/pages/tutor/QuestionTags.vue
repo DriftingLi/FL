@@ -12,7 +12,7 @@
         <el-card shadow="never" class="tags-card">
           <template #header>
             <span>考点标签</span>
-            <el-tag size="small" type="info" class="tags-count">{{ tags.length }}</el-tag>
+            <UiTag size="small" tone="info" class="tags-count">{{ tags.length }}</UiTag>
           </template>
           <div v-loading="tagsLoading">
             <div class="tag-list">
@@ -84,9 +84,9 @@
             <el-table-column label="标签" min-width="160">
               <template #default="{ row }">
                 <template v-if="row.tags && row.tags.length > 0">
-                  <el-tag v-for="t in row.tags" :key="t.id" size="small" class="question-tag" type="primary" effect="plain">
+                  <UiTag v-for="t in row.tags" :key="t.id" size="small" class="question-tag" tone="primary" effect="plain">
                     {{ t.name }}
-                  </el-tag>
+                  </UiTag>
                 </template>
                 <span v-else class="no-tag">未打标</span>
               </template>
@@ -159,6 +159,7 @@ import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
+import UiTag from '@/components/ui/UiTag.vue'
 
 const tags = ref<QuestionTag[]>([])
 const tagsLoading = ref(false)

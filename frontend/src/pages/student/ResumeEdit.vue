@@ -54,7 +54,7 @@
             <el-input-number v-model="form.salary_min" :min="0" placeholder="最低" controls-position="right" />
             <span class="text-ink-3">-</span>
             <el-input-number v-model="form.salary_max" :min="0" placeholder="最高" controls-position="right" />
-            <el-checkbox v-model="form.salary_negotiable" label="面议" class="ml-2" />
+            <UiCheckbox v-model="form.salary_negotiable" label="面议" class="ml-2" />
           </div>
         </el-form-item>
         <el-form-item label="到岗时间">
@@ -145,6 +145,7 @@ import { buildCityLevelRegionOptions, splitRegionPath, regionElementsToPaths, ca
 import UiButton from '@/components/ui/UiButton.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
+import UiCheckbox from '@/components/ui/UiCheckbox.vue'
 
 const router = useRouter()
 const saving = ref(false)

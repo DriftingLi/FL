@@ -54,9 +54,9 @@
 
           <div class="flex min-w-0 flex-1 flex-col gap-1.5">
             <div class="flex min-w-0 items-center gap-2">
-              <el-tag size="small" :type="typeTagColor(item.target_type)" effect="plain">
+              <UiTag size="small" :tone="typeTagColor(item.target_type)" effect="plain">
                 {{ typeLabel(item.target_type) }}
-              </el-tag>
+              </UiTag>
               <span class="truncate text-[15px] font-medium text-ink">{{ item.title || `${typeLabel(item.target_type)} #${item.target_id}` }}</span>
             </div>
             <span v-if="item.created_at" class="text-xs text-ink-3">{{ formatLocaleDateTime(item.created_at) }}</span>
@@ -97,6 +97,7 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import { useConfirm } from '@/composables/useConfirm'
+import UiTag from '@/components/ui/UiTag.vue'
 
 const router = useRouter()
 

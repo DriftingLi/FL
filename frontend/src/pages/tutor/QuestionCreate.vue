@@ -70,7 +70,7 @@
 
         <el-form-item v-if="form.type === 'fault_image'" label="图片">
           <div v-loading="imageUploading" class="w-full">
-            <el-upload
+            <UiUpload
               class="[&_.el-upload]:flex [&_.el-upload]:cursor-pointer [&_.el-upload]:overflow-hidden [&_.el-upload]:rounded-card [&_.el-upload]:border [&_.el-upload]:border-dashed [&_.el-upload]:border-line-strong [&_.el-upload]:transition-colors [&_.el-upload:hover]:border-ui-500"
               :show-file-list="false"
               :before-upload="beforeImageUpload"
@@ -82,7 +82,7 @@
                 <el-icon :size="28"><Plus /></el-icon>
                 <span>点击上传图片</span>
               </div>
-            </el-upload>
+            </UiUpload>
 
             <div v-if="form.image_url" class="mt-2">
               <UiButton variant="danger" size="small" @click="removeImage">删除图片</UiButton>
@@ -103,22 +103,22 @@
         </el-form-item>
 
         <el-form-item v-if="form.type === 'true_false'" label="正确答案" required>
-          <el-radio-group v-model="form.answer">
+          <UiRadioGroup v-model="form.answer">
             <el-radio value="对">对</el-radio>
             <el-radio value="错">错</el-radio>
-          </el-radio-group>
+          </UiRadioGroup>
         </el-form-item>
 
         <el-form-item v-else-if="form.type === 'single_choice' || form.type === 'fault_image'" label="正确答案" required>
-          <el-radio-group v-model="form.answer">
+          <UiRadioGroup v-model="form.answer">
             <el-radio v-for="key in optionKeys" :key="key" :value="key">{{ key }}</el-radio>
-          </el-radio-group>
+          </UiRadioGroup>
         </el-form-item>
 
         <el-form-item v-else-if="form.type === 'multi_choice'" label="正确答案" required>
-          <el-checkbox-group v-model="multiAnswer">
-            <el-checkbox v-for="key in optionKeys" :key="key" :value="key" :label="key">{{ key }}</el-checkbox>
-          </el-checkbox-group>
+          <UiCheckboxGroup v-model="multiAnswer">
+            <UiCheckbox v-for="key in optionKeys" :key="key" :value="key" :label="key">{{ key }}</UiCheckbox>
+          </UiCheckboxGroup>
         </el-form-item>
 
         <el-form-item v-if="form.type === 'short_answer'" label="参考答案">
@@ -166,6 +166,10 @@ import UiSelect, { type UiSelectOption } from '@/components/ui/UiSelect.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import { useAsyncPage } from '@/composables/useAsyncPage'
+import UiCheckboxGroup from '@/components/ui/UiCheckboxGroup.vue'
+import UiRadioGroup from '@/components/ui/UiRadioGroup.vue'
+import UiUpload from '@/components/ui/UiUpload.vue'
+import UiCheckbox from '@/components/ui/UiCheckbox.vue'
 
 const route = useRoute()
 const router = useRouter()

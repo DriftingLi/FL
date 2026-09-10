@@ -48,17 +48,17 @@
           </template>
         </el-dropdown>
 
-        <el-tooltip content="画中画" placement="top">
+        <UiTooltip content="画中画" placement="top">
           <UiButton size="small" class="control-btn" @click="togglePiP" :disabled="!pipSupported">
             <el-icon><Monitor /></el-icon>
           </UiButton>
-        </el-tooltip>
+        </UiTooltip>
 
-        <el-tooltip content="下载" placement="top">
+        <UiTooltip content="下载" placement="top">
           <UiButton size="small" class="control-btn" @click="downloadVideo">
             <el-icon><Download /></el-icon>
           </UiButton>
-        </el-tooltip>
+        </UiTooltip>
       </div>
     </div>
   </div>
@@ -70,6 +70,7 @@ import { Download, Loading, Monitor } from '@element-plus/icons-vue'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiTooltip from '@/components/ui/UiTooltip.vue'
 
 const props = defineProps({
   src: { type: String, required: true },

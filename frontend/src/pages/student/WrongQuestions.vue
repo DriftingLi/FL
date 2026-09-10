@@ -13,12 +13,12 @@
         <el-icon class="mr-1"><SortDown v-if="sortOrder === 'desc'" /><SortUp v-else /></el-icon>
         {{ sortOrder === 'desc' ? '最新错误在前' : '最早错误在前' }}
       </UiButton>
-      <el-checkbox v-model="filterFavorited">收藏</el-checkbox>
-      <el-checkbox v-model="filterMultiWrong">错多次</el-checkbox>
+      <UiCheckbox v-model="filterFavorited">收藏</UiCheckbox>
+      <UiCheckbox v-model="filterMultiWrong">错多次</UiCheckbox>
       <UiButton @click="resetFilters">重置筛选</UiButton>
     </div>
     <div class="mb-5 flex flex-wrap items-center gap-2.5">
-      <el-checkbox :model-value="isAllSelected" :indeterminate="isIndeterminate" @change="toggleSelectAll" :disabled="wrongList.length===0">全选</el-checkbox>
+      <UiCheckbox :model-value="isAllSelected" :indeterminate="isIndeterminate" @change="toggleSelectAll" :disabled="wrongList.length===0">全选</UiCheckbox>
       <UiButton variant="danger" :disabled="selectedIds.size===0" @click="handleBatchRemove">批量移出</UiButton>
       <UiButton variant="success" :disabled="wrongList.length===0" @click="handleExport">导出错题</UiButton>
     </div>
@@ -42,9 +42,9 @@
       >
         <div class="mb-2 flex items-center justify-between">
           <div class="flex items-center gap-2">
-            <el-checkbox :model-value="selectedIds.has(item.question_id)" @change="(val:boolean)=>toggleSelect(item.question_id, val)" />
-            <el-tag size="small">{{ item.question?.type ? (typeMap as Record<string, string>)[item.question.type] : '' }}</el-tag>
-            <el-tag v-if="item.is_redone" type="success" size="small">已重做</el-tag>
+            <UiCheckbox :model-value="selectedIds.has(item.question_id)" @change="(val:boolean)=>toggleSelect(item.question_id, val)" />
+            <UiTag size="small">{{ item.question?.type ? (typeMap as Record<string, string>)[item.question.type] : '' }}</UiTag>
+            <UiTag v-if="item.is_redone" tone="success" size="small">已重做</UiTag>
             <el-icon class="fav-star cursor-pointer text-lg text-ink-muted hover:text-warn" :class="item.favorited ? 'text-warn' : ''" @click="toggleFavorite(item)">
               <StarFilled v-if="item.favorited" /><Star v-else />
             </el-icon>
@@ -74,7 +74,7 @@
           </template>
           <template v-else>
             <div class="mb-2 flex items-center gap-2">
-              <el-tag size="small">{{ redoItem.question?.type ? (typeMap as Record<string, string>)[redoItem.question.type] : '' }}</el-tag>
+              <UiTag size="small">{{ redoItem.question?.type ? (typeMap as Record<string, string>)[redoItem.question.type] : '' }}</UiTag>
               <UiActionChip icon="fav" :label="favorited ? '已收藏' : '收藏'" tone="fav" :active="favorited" compact @click="toggleRedoFavorite" />
             </div>
             <QuestionOptionPicker
@@ -136,6 +136,8 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiActionChip from '@/components/ui/UiActionChip.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import { useConfirm } from '@/composables/useConfirm'
+import UiTag from '@/components/ui/UiTag.vue'
+import UiCheckbox from '@/components/ui/UiCheckbox.vue'
 
 interface WrongItem {
   id: number

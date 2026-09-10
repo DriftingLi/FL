@@ -17,8 +17,8 @@
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2">
               <span class="text-sm font-semibold text-ink">{{ item.job_title || '职位 #' + item.job_posting_id }}</span>
-              <el-tag :type="tagType(item.status)" size="small">{{ statusLabel(item.status) }}</el-tag>
-              <el-tag v-if="item.employer_viewed_at" type="info" size="small">企业已查看</el-tag>
+              <UiTag :tone="tagType(item.status)" size="small">{{ statusLabel(item.status) }}</UiTag>
+              <UiTag v-if="item.employer_viewed_at" tone="info" size="small">企业已查看</UiTag>
             </div>
             <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-3">
               <span v-if="item.company_name">{{ item.company_name }}</span>
@@ -52,7 +52,7 @@
     <!-- 撤回弹窗（spec #449 决定 10 的 UI 落点）：「一并撤回联系方式授权」默认不勾选 -->
     <UiDialog v-model="withdrawVisible" title="撤回投递" width="440px" confirm-text="确认撤回" :confirm-loading="withdrawing" @confirm="confirmWithdraw">
       <div class="text-sm text-ink">确定撤回这条投递吗？撤回后可以重新投递同一职位。</div>
-      <el-checkbox v-model="revokeContact" class="mt-3">一并撤回对该企业的联系方式授权</el-checkbox>
+      <UiCheckbox v-model="revokeContact" class="mt-3">一并撤回对该企业的联系方式授权</UiCheckbox>
     </UiDialog>
   </div>
 </template>
@@ -70,6 +70,8 @@ import CompanyContactInfo from '@/components/recruit/CompanyContactInfo.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
+import UiTag from '@/components/ui/UiTag.vue'
+import UiCheckbox from '@/components/ui/UiCheckbox.vue'
 
 const items = ref<JobApplication[]>([])
 // #487：approved 的联系方式交换（投递产生/企业发起）用于企业联系方式展示

@@ -24,8 +24,8 @@
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2">
               <span class="text-sm font-semibold text-ink">{{ item.title }}</span>
-              <el-tag v-if="item.forced_offline" type="danger" size="small">已强制下架</el-tag>
-              <el-tag v-else :type="item.status === 'open' ? 'success' : 'info'" size="small">{{ item.status === 'open' ? '招聘中' : '已下架' }}</el-tag>
+              <UiTag v-if="item.forced_offline" tone="danger" size="small">已强制下架</UiTag>
+              <UiTag v-else :tone="item.status === 'open' ? 'success' : 'info'" size="small">{{ item.status === 'open' ? '招聘中' : '已下架' }}</UiTag>
             </div>
             <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-3">
               <span v-if="item.position_name">{{ item.position_name }}</span>
@@ -105,6 +105,7 @@ import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
+import UiTag from '@/components/ui/UiTag.vue'
 
 interface PositionItem {
   position_id: number

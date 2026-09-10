@@ -6,12 +6,12 @@
         <span class="file-name" :title="fileName">{{ fileName || '文档' }}</span>
       </div>
       <div class="toolbar-right">
-        <el-tooltip v-if="canPreview" content="在新窗口打开" placement="bottom">
+        <UiTooltip v-if="canPreview" content="在新窗口打开" placement="bottom">
           <UiButton :icon="FullScreen" circle size="small" @click="openInNewTab"/>
-        </el-tooltip>
-        <el-tooltip content="下载" placement="bottom">
+        </UiTooltip>
+        <UiTooltip content="下载" placement="bottom">
           <UiButton :icon="Download" circle size="small" @click="downloadFile"/>
-        </el-tooltip>
+        </UiTooltip>
       </div>
     </div>
 
@@ -58,6 +58,7 @@ import { Document, Download, FullScreen, Loading } from '@element-plus/icons-vue
 import { resolveFileUrl } from '@/utils/fileUrl'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiTooltip from '@/components/ui/UiTooltip.vue'
 
 const props = defineProps({
   src: { type: String, required: true },

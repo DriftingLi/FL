@@ -32,6 +32,7 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiSwitch from '@/components/ui/UiSwitch.vue'
 
 // ========== Tab 1: 原价表 ==========
 const ORIGINAL_PRICE_FIELDS: FieldDef[] = [
@@ -534,7 +535,7 @@ function onRefresh() {
                 </el-table-column>
                 <el-table-column label="启用" width="120" align="center">
                   <template #default="{ row }">
-                    <el-switch v-model="row.is_active" />
+                    <UiSwitch v-model="row.is_active" />
                   </template>
                 </el-table-column>
                               <template #empty>
@@ -696,7 +697,7 @@ function onRefresh() {
               :precision="f.prop === 'tonnage' || f.prop === 'original_price' ? 2 : 0"
               style="width: 100%"
             />
-            <el-switch
+            <UiSwitch
               v-else-if="f.type === 'switch'"
               v-model="formData[f.prop]"
               active-text="启用"

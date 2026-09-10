@@ -13,7 +13,7 @@
       <el-col :xs="24" :md="18">
         <el-card class="question-card">
           <div class="question-header">
-            <el-tag>{{ (typeMap as Record<string, string>)[currentQ.type] }}</el-tag>
+            <UiTag>{{ (typeMap as Record<string, string>)[currentQ.type] }}</UiTag>
             <span>第 {{ currentIndex + 1 }}/{{ questions.length }} 题<span v-if="showScore">（{{ currentQ.score }}分）</span></span>
           </div>
           <img v-if="currentQ.image_url" :src="currentQ.image_url" class="q-image" loading="lazy" decoding="async" />
@@ -58,6 +58,7 @@ import { useCountdown } from '@/composables/useCountdown'
 import QuestionOptionPicker from '@/components/student/QuestionOptionPicker.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import { useConfirm } from '@/composables/useConfirm'
+import UiTag from '@/components/ui/UiTag.vue'
 
 // 答题会话壳：考试进行中的工具栏/倒计时/题目卡片/答题卡/交卷交互。
 // 练习/考试共享同一交互形态；持久化与交卷后的流程由页面注入回调。
