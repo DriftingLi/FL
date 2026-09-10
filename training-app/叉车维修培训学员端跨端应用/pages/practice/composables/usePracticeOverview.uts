@@ -1,0 +1,32 @@
+/**
+ * practice 主页数据加载 composable（T06 practice 手术，parent #644）
+ */
+import { ref } from 'vue'
+import { getTagsApi } from '../../../api/course'
+import { getPracticeOverviewApi, getPracticeProgressApi } from '../../../api/practice'
+import type { TagItem, PracticeOverview } from '../../../types/index'
+
+export type ModuleRow = { tag_id : number; name : string; total : number; completed : number }
+
+export function usePracticeOverview() {
+    const overview = ref<PracticeOverview>({ today_count: 0, total_count: 0, total_days: 0 } as PracticeOverview)
+    const modules = ref<ModuleRow[]>([])
+    const listLoading = ref<boolean>(false)
+    const listError = ref<string>('')
+
+    async function loadOverview() : Promise<void> { try { overview.value = await getPracticeOverviewApi() } catch (e) { console.error('[practice] load overview failed:', e) } }
+
+    async function loadModules() : Promise<void> {
+        listLoading.value = true; listError.value = ''
+        let tags : TagItem[] = []
+        try { tags = await getTagsApi() } catch (e) { console.error('[practice] load tags failed:', e); listError.value = '加载失败，请点击重试'; listLoading.value = false; return }
+        const rows : ModuleRow[] = []
+        for (let i = 0; i < tags.length; i++) { const t = tags[i]; rows.push({ tag_id: t.id, name: t.name, total: t.question_count, completed: 0 } as ModuleRow) }
+        modules.value = rows; listLoading.value = false
+        for (let i = 0; i < rows.length; i++) {
+            try { const p = await getPracticeProgressApi('tag:' + rows[i].tag_id.toString()); if (p.completed > 0 || p.total > 0) { rows[i].completed = p.completed; if (p.total > 0) { rows[i].total = p.total }; modules.value = rows.slice() } } catch (e) { /* silent */ }
+        }
+    }
+
+    return { overview, modules, listLoading, listError, loadOverview, loadModules }
+}
