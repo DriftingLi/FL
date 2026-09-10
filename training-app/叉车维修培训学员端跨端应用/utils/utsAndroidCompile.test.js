@@ -31,6 +31,8 @@
  *   Q. ref<any> 类型擦除声明（Kotlin error18 any 无成员；组件实例引用需类型化）
  *   R. async 函数返回类型声明 : void（Kotlin 无法推断 UTSPromise 类型参数，级联编译错；须 Promise<void>）
  *   S. 模板直调 import 函数（uvue 模板 import 调用编译为 .invoke() = error18「找不到名称 invoke」；本地包装）
+ *   T. 显式 Result 类型的 return 对象里裸传同文件函数引用（Kotlin error17 自动调用；
+ *      形态与 M 同类，箭头包裹才合法，先例 composables/useTopicDetail.uts）
  * 存量违例走 GUARD_ALLOWLIST 豁免，由后续工单在各自范围清零（见常量注释）。
  */
 const fs = require('fs');
@@ -250,6 +252,48 @@ function scanBareFnRefMapper(code) {
   return hits;
 }
 
+/** T：显式 Result 类型的 return 对象里裸传同文件函数引用
+ *  Kotlin error17：UTS 把字段位置上的函数名解析为「调用」，实际类型成了返回值类型，
+ *  与声明的 Function0 不匹配。形态与 M 同类（裸引用 → 箭头包裹）；先例 composables/useTopicDetail.uts。
+ *  仅当该 return 字面量带显式类型（as XxxResult 或函数返回类型标注）时判定——
+ *  无显式类型的推断形态当前不被编译器调用，暂不报（见 ADR-0007）。
+ */
+function scanBareFnRefInTypedReturn(code) {
+  const clean = blank(code);
+  const hits = [];
+  // 同文件声明的函数名（function 声明 + 箭头 const）
+  const fns = new Set();
+  let m;
+  const reFn = /(?:^|\n)\s*(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/g;
+  while ((m = reFn.exec(clean)) !== null) fns.add(m[1]);
+  const reArrow = /(?:^|\n)\s*(?:export\s+)?const\s+([A-Za-z_$][\w$]*)\s*(?::[^=]+)?=\s*(?:async\s*)?\([^)]*\)\s*(?::[^=]+)?=>/g;
+  while ((m = reArrow.exec(clean)) !== null) fns.add(m[1]);
+  if (fns.size === 0) return hits;
+
+  const reRet = /return\s*\{/g;
+  while ((m = reRet.exec(clean)) !== null) {
+    const open = clean.indexOf('{', m.index);
+    let depth = 0, close = -1;
+    for (let i = open; i < clean.length; i++) {
+      const c = clean[i];
+      if (c === '{') depth++;
+      else if (c === '}') { depth--; if (depth === 0) { close = i; break; } }
+    }
+    if (close === -1) continue;
+    // 该字面量是否带显式类型：随后的 `as XxxResult`
+    const after = clean.slice(close + 1, close + 60);
+    if (!/^\s*as\s+[A-Za-z_$][\w$]*/.test(after)) continue;
+    const block = clean.slice(open + 1, close);
+    const baseLine = clean.slice(0, open).split('\n').length;
+    const lines = block.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const mm = lines[i].match(/^\s*([A-Za-z_$][\w$]*)\s*:\s*([A-Za-z_$][\w$]*)\s*,?\s*$/);
+      if (!mm) continue;
+      if (fns.has(mm[2])) hits.push('第 ' + (baseLine + i) + ' 行 ' + mm[1] + ': ' + mm[2]);
+    }
+  }
+  return hits;
+}
 /** N：as unknown as 双重强转——Kotlin 侧把属性/参数类型污染为 unknown（error18 找不到成员），
  *  对象 prop 默认值应走工厂 `() => ({...} as T)`（先例 ai-chat sessions），非 null 强转 */
 function scanUnknownDoubleCast(code) {
@@ -530,6 +574,15 @@ function buildTypeFieldMap() {
  *  仅执法字段表可解析的单类型参数；可选链 ?. 与未知类型不扫；方法调用（后随括号）不报 */
 function scanTypedParamFieldAccess(code, fieldMap) {
   const clean = blank(code);
+  // 本文件本地 type/interface 声明优先于全局表（同名遮蔽场景，先例规则 K）：
+  // 全局表按裸类型名键控且只收 .uts，`MenuItem` 这类同名异形类型（ai-assistant-constants 的
+  // {key,label} vs dashboard-menu-grid 本地的 {…,path,available}）会让本页合法访问被误判。
+  const effFields = new Map(fieldMap);
+  const localHeadRe = /(?:^|\n)\s*(?:export\s+)?(?:type|interface)\s+([A-Za-z_$][\w$]*)[^{]*\{/g;
+  let hm;
+  while ((hm = localHeadRe.exec(clean)) !== null) {
+    effFields.set(hm[1], extractTypeFieldSet(clean, hm));
+  }
   const hits = [];
   const fnRe = /(?:^|\n)\s*(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/g;
   let m;
@@ -547,7 +600,7 @@ function scanTypedParamFieldAccess(code, fieldMap) {
     for (const p of splitTopLevel(clean.slice(openIdx + 1, closeIdx))) {
       const pm = /^\s*([A-Za-z_$][\w$]*)\s*:\s*([A-Za-z_$][\w$]*)\s*$/.exec(p);
       if (pm === null) continue;
-      const set = fieldMap.get(pm[2]);
+      const set = effFields.get(pm[2]);
       if (set !== undefined) tracked.push([pm[1], pm[2], set]);
     }
     if (tracked.length === 0) continue;
@@ -962,6 +1015,43 @@ describe('全工程守护：五类 Kotlin 编译地雷零命中', () => {
     expect(violations).toEqual([]);
   });
 
+  it('T：自检——注入「显式 Result 类型的 return 里裸传函数引用」必须被抓到', () => {
+    const bad = [
+      'export type R = {',
+      '    go : () => void',
+      '}',
+      'export function useThing() : R {',
+      '    function go() : void {}',
+      '    return {',
+      '        go: go',
+      '    } as R',
+      '}',
+    ].join('\n');
+    expect(scanBareFnRefInTypedReturn(bad).length).toBeGreaterThan(0);
+
+    // 反向自检：箭头包裹后必须干净（先例 composables/useTopicDetail.uts 形态）
+    const good = bad.replace('go: go', 'go: () => go()');
+    expect(scanBareFnRefInTypedReturn(good)).toEqual([]);
+
+    // 反向自检：无显式类型（推断形态）不判定——当前编译器不调用该形态（见 ADR-0007）
+    const inferred = [
+      'export function useThing() {',
+      '    function go() : void {}',
+      '    return {',
+      '        go: go',
+      '    }',
+      '}',
+    ].join('\n');
+    expect(scanBareFnRefInTypedReturn(inferred)).toEqual([]);
+  });
+
+  it('T：全工程无「显式 Result 类型的 return 里裸传函数引用」（Kotlin error17，箭头包裹才合法）', () => {
+    const violations = [];
+    for (const u of allCodeUnits()) {
+      for (const h of scanBareFnRefInTypedReturn(u.code)) violations.push(path.relative(ROOT, u.file) + ': ' + h);
+    }
+    expect(violations).toEqual([]);
+  });
   it('N：全工程无 as unknown as 双重强转（Kotlin error18，对象 prop 走工厂默认值）', () => {
     const violations = [];
     for (const u of allCodeUnits()) {
