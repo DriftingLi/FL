@@ -13,6 +13,7 @@ export function formatDateTimeStr(dateStr : string) : string {
 /** 回复卡展示模型（壳层由 ForumReply + 点赞本地态 + 权限位映射而来） */
 export type ForumReplyDisplay = {
     id : number
+    authorId : number
     authorName : string
     authorInitial : string
     authorAvatar : string
@@ -23,6 +24,8 @@ export type ForumReplyDisplay = {
     canDelete : boolean
     liked : boolean
     likesCount : number
+    /** 是否被楼主采纳（仅问答帖有效） */
+    isAccepted : boolean
 }
 
 /** 预览一组图片（帖子/回复共用；URL 解析幂等，传入已解析列表与原始列表结果一致） */

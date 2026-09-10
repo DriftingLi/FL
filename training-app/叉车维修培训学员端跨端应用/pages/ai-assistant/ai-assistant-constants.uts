@@ -1,0 +1,32 @@
+/**
+ * AI 助手页面常量定义
+ * 功能入口、快捷提示语、右侧菜单项
+ */
+import type { AIFunctionItem } from '../../types/index'
+
+/** 功能入口列表 */
+export const FUNCTION_ITEMS : AIFunctionItem[] = [
+    { key: 'fault-code', title: '故障代码查询', icon: '\uD83D\uDD27', prompt: '帮我查询叉车故障代码含义' },
+    { key: 'drawing', title: '图纸识别', icon: '\uD83D\uDCD0', prompt: '请识别这张叉车图纸' },
+    { key: 'exercise', title: '习题解答', icon: '\uD83D\uDCDD', prompt: '请解答这道叉车维修题目' },
+    { key: 'knowledge', title: '维保知识', icon: '\uD83D\uDCDA', prompt: '请介绍叉车维保相关知识' },
+]
+
+/** 快捷提示语列表 */
+export const QUICK_PROMPTS : string[] = [
+    '叉车液压系统常见故障有哪些，如何排查？',
+    '叉车启动困难可能是什么原因？',
+    '叉车日常保养的检查要点有哪些？',
+]
+
+/** 右侧菜单项类型 */
+export type MenuItem = { key : string; label : string }
+
+/** 右侧菜单项列表 */
+export const RIGHT_MENU_ITEMS : MenuItem[] = [
+    { key: 'new-chat', label: '新对话' },
+    { key: 'switch-basic', label: '切换到基础版' },
+    { key: 'settings', label: '对话设置' },
+    { key: 'custom-models', label: '自定义模型' },
+    { key: 'profile', label: '个人中心' },
+]
