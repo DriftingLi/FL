@@ -107,6 +107,7 @@ import { adminApi } from '@/api/admin'
 import { downloadExport, type ExportKind } from '@/api/export'
 import { useECharts } from '@/composables/useECharts'
 import UiButton from '@/components/ui/UiButton.vue'
+import { formatDurationCn, getProgressColor } from '@/utils/format'
 
 const overview = ref<any>({})
 const courseStats = ref<{ name: string; study_count: number; total_duration: number; avg_progress: number }[]>([])
@@ -128,22 +129,10 @@ async function handleExport(kind: ExportKind) {
   }
 }
 
-function formatDuration(minutes: number) {
-  if (!minutes || minutes <= 0) return '0分钟'
-  const hours = Math.floor(minutes / 60)
-  const mins = minutes % 60
-  if (hours > 0) {
-    return mins > 0 ? `${hours}小时${mins}分钟` : `${hours}小时`
-  }
-  return `${mins}分钟`
-}
+// 时长格式（中文）：抽到 utils/format（#796）
+const formatDuration = formatDurationCn
 
-function getProgressColor(progress: number) {
-  if (progress >= 100) return 'var(--color-success)'
-  if (progress >= 60) return 'var(--color-primary-500)'
-  if (progress >= 30) return '#e6a23c'
-  return '#f56c6c'
-}
+// 进度→颜色：抽到 utils/format（#796）
 
 function renderBarChart() {
   if (courseStats.value.length === 0) return

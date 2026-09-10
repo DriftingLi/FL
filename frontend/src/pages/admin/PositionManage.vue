@@ -8,7 +8,14 @@
     </div>
 
     <div class="rounded-card border border-line bg-panel">
-      <el-table :data="list" v-loading="loading" stripe>
+      <UiErrorState
+        v-if="loadError"
+        title="岗位加载失败"
+        description="网络或服务端异常，可重试"
+        :retrying="retrying"
+        @retry="retryLoad"
+      />
+      <el-table v-else :data="list" v-loading="loading" stripe>
         <el-table-column prop="position_id" label="ID" width="80" align="center" />
         <el-table-column prop="name" label="岗位名称" min-width="160" />
         <el-table-column prop="code" label="编码" width="160" />
@@ -54,10 +61,12 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { useAdminTable } from '@/composables/useAdminTable'
 import { Plus } from '@element-plus/icons-vue'
 import { ElMessage, type FormInstance } from 'element-plus'
 import { unwrappedRequest } from '@/api/request'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiSwitch from '@/components/ui/UiSwitch.vue'
@@ -71,8 +80,6 @@ interface PositionItem {
   status: number
 }
 
-const list = ref<PositionItem[]>([])
-const loading = ref(false)
 const dialogVisible = ref(false)
 const editing = ref(false)
 const submitting = ref(false)
@@ -83,14 +90,21 @@ const formRules = {
   code: [{ required: true, message: '请输入唯一编码', trigger: 'blur' }]
 }
 
-async function load() {
-  loading.value = true
-  try {
+// 列表：admin 列表状态机 useAdminTable（#793，ADR-0039）——无分页，一次拉全量（total = list.length）
+const {
+  loading,
+  loadError,
+  retrying,
+  list,
+  load,
+  retry: retryLoad
+} = useAdminTable<PositionItem>({
+  fetch: async () => {
     const res: any = await unwrappedRequest.get('/admin/positions', { headers: { 'X-Silent': '1' } })
-    list.value = res?.positions || []
-  } catch {}
-  loading.value = false
-}
+    const positions: PositionItem[] = res?.positions || []
+    return { list: positions, total: positions.length }
+  }
+})
 
 function openDialog(item?: PositionItem) {
   editing.value = !!item

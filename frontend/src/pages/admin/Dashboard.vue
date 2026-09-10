@@ -65,6 +65,7 @@ import { adminApi } from '@/api/admin'
 import { useAuthStore } from '@/stores/auth'
 import { useECharts } from '@/composables/useECharts'
 import { displayNameOf } from '@/types/user'
+import { formatDurationCompact } from '@/utils/format'
 
 const authStore = useAuthStore()
 const userName = computed(() => displayNameOf(authStore.userInfo) || '管理员')
@@ -97,15 +98,8 @@ const quickActions = [
   { label: '内容生成', path: '/admin/content-generate', icon: MagicStick, color: 'var(--color-violet-500)', bgColor: 'var(--color-violet-50)' }
 ]
 
-function formatDuration(minutes: number) {
-  if (!minutes || minutes <= 0) return '0分钟'
-  const hours = Math.floor(minutes / 60)
-  const mins = minutes % 60
-  if (hours > 0) {
-    return mins > 0 ? `${hours}h${mins}m` : `${hours}h`
-  }
-  return `${mins}m`
-}
+// 时长格式（紧凑）：抽到 utils/format（#796）——与 Statistics 的中文格式是同名不同语义
+const formatDuration = formatDurationCompact
 
 const brandColors = ['#2563EB', '#3B82F6', '#60A5FA', '#10B981', '#34D399', '#F59E0B', '#FBBF24', '#8B5CF6']
 

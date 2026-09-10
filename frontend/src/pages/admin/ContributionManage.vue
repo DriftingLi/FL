@@ -19,28 +19,31 @@ import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiRadioGroup from '@/components/ui/UiRadioGroup.vue'
+import UiErrorState from '@/components/ui/UiErrorState.vue'
+import { useAdminTable } from '@/composables/useAdminTable'
 
 const activeTab = ref<'pending' | 'reports'>('pending')
 
 // ===== 待审核队列 =====
-const pendingItems = ref<ContributionItem[]>([])
-const pendingLoading = ref(false)
-const pendingPage = ref(1)
-const pendingPageSize = 20
-const pendingTotal = ref(0)
-
-async function loadPending() {
-  pendingLoading.value = true
-  try {
-    const res = await adminContributionApi.listPending({ page: pendingPage.value, page_size: pendingPageSize })
-    pendingItems.value = res.items || []
-    pendingTotal.value = res.total || 0
-  } catch (e: any) {
-    ElMessage.error(e?.message || '加载审核队列失败')
-  } finally {
-    pendingLoading.value = false
+// admin 列表状态机 useAdminTable（#793，ADR-0039）——三态 + 分页 + 列表托管。
+// 解构改名保持模板零改动；错误由 loadError 承载（原先此处自有 ElMessage 提示）。
+const {
+  loading: pendingLoading,
+  loadError: pendingError,
+  retrying: pendingRetrying,
+  list: pendingItems,
+  total: pendingTotal,
+  currentPage: pendingPage,
+  pageSize: pendingPageSize,
+  load: loadPending,
+  retry: retryPending
+} = useAdminTable<ContributionItem>({
+  pageSize: 20,
+  fetch: async (paging) => {
+    const res = await adminContributionApi.listPending({ page: paging.page, page_size: paging.pageSize })
+    return { list: res.items || [], total: res.total || 0 }
   }
-}
+})
 
 // ===== 举报队列 =====
 const reports = ref<ContributionReportItem[]>([])
@@ -183,7 +186,14 @@ onMounted(() => {
 
       <!-- ===== 待审核队列 ===== -->
       <template v-if="activeTab === 'pending'">
-        <el-table v-loading="pendingLoading" :data="pendingItems" border>
+        <UiErrorState
+          v-if="pendingError"
+          title="审核队列加载失败"
+          description="网络或服务端异常，可重试"
+          :retrying="pendingRetrying"
+          @retry="retryPending"
+        />
+        <el-table v-else v-loading="pendingLoading" :data="pendingItems" border>
           <el-table-column prop="id" label="ID" width="70" align="center" />
           <el-table-column label="投稿" min-width="220">
             <template #default="{ row }">
