@@ -48,7 +48,8 @@
     function onFeatureClick(feature : string) : void {
         if (feature == 'past_paper') { uni.showToast({ title: '历年真题开发中', icon: 'none' }) }
         else if (feature == 'mock_exam') { uni.navigateTo({ url: '/pages/exam/mock-exam' }) }
-        else if (feature == 'level_exam') { uni.navigateTo({ url: '/pages/exam/level-exam-do' }) }
+        // #810：等级考试域已退役；本格视觉与 feature key 保持不变，改指既有模拟考试链路
+        else if (feature == 'level_exam') { uni.navigateTo({ url: '/pages/exam/mock-exam' }) }
         else if (feature == 'wrong_question') { uni.navigateTo({ url: '/pages/profile/wrong-questions' }) }
     }
     async function onRefresh() : Promise<void> { isRefreshing.value = true; await loadOverview(); await loadModules(); isRefreshing.value = false }
