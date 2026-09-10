@@ -25,6 +25,16 @@
 - **审计日志（audit log）**：管理员/讲师写操作由中间件统一记录，落库留痕（合规用途，与系统运行日志区分）。
 - **系统运行日志（app log）**：zap 统一日志栈（`internal/logger`），排查用——级别过滤、敏感字段脱敏、访问日志（request_id/user_id/role）、生产文件轮转持久化（`/data/logs`）。与「审计日志」的边界：前者是运行期诊断输出（console/文件），后者是业务写操作的持久化记录（DB 表），两者互不替代。
 
+## 审核（review）
+
+- **审核（review）**：**过载词** —— 本仓库有三个互不相同的审核状态机，不可视为同一概念：
+  - **题库审核（question review）**：`question.status` 为字符串，`draft` / `pending` / `published`；驳回**回到 `draft`** 并写入 `reject_reason`（作者可修改后重新提交），支持批量驳回。
+  - **资料审核（profile review）**：学员昵称/头像修改的提交→审核流，通过/驳回为**终态**；审核结果以站内信通知。
+  - **投稿审核（contribution review）**：`contribution.status` 为字符串，五态 `pending` / `approved` / `rejected` / `withdrawn` / `archived`；驳回为终态。
+  _Avoid_：把三者统称「审核流程」后假定状态枚举一致 —— 三者状态类型与终态语义均不同（资料审核的 `status` 为整型），强行统一会丢语义。
+- **驳回理由（reject reason）**：三域**唯一真正同构**的审核概念 —— `question` / `account` / `contribution` 三个模型都有 `reject_reason` 字段，驳回时由管理员填写并回传给提交者。UI 形态统一为「理由输入弹窗 + 确认按钮 loading」，提交动作（单条 / 批量 / 详情页触发）由各域自定。
+  _Avoid_：审核状态机（各域不同）、审批流（本仓库无多级审批）
+
 ## 培训领域
 
 - **目标证件（target credential）**：学员报考的外部持证目标（`credential`，`code` 唯一），与"证书模板（培训合格证书）"严格区分。两类：特种作业上岗证（`special_operation`：叉车司机N1/低压电工/焊工等）与职业技能等级（`skill_level`：工程机械维修工·叉车维修方向 L5-L1，每级为独立证件）；每证件拥有独立的课程库与题库（`course.credential_id` / `question.credential_id` 单归属，V1 1:N，预留 M:N 扩展）。
