@@ -5,7 +5,7 @@
 // seam：页面组件层，mock '@/api/checkin'（不依赖真实后端）。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import { epLite } from '@/test/element-lite'
 
 vi.mock('@/api/checkin', () => ({
   checkInApi: {
@@ -32,7 +32,7 @@ function dateStr(y: number, m: number, d: number): string {
 async function mountPage() {
   const wrapper = mount(CheckInPage, {
     global: {
-      plugins: [ElementPlus],
+      plugins: [epLite()],
       stubs: { RouterLink: { template: '<a><slot /></a>' } }
     }
   })

@@ -5,7 +5,7 @@
 //    外围三件（收藏/知识点/计时）经 questionPeripheralAdapters 工厂接入。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import { epLite } from '@/test/element-lite'
 
 vi.mock('@/api/wrongQuestion', () => ({
   wrongQuestionApi: {
@@ -74,7 +74,7 @@ beforeEach(() => {
 function mountPage() {
   return mount(WrongQuestions, {
     global: {
-      plugins: [ElementPlus],
+      plugins: [epLite()],
       // CommentCard / NoteCard 挂载即拉 API（会话装配之外的关注点），stub 掉
       stubs: { CommentCard: true, NoteCard: true }
     }

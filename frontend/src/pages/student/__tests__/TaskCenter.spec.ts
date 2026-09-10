@@ -3,7 +3,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { ElMessage } from 'element-plus'
-import ElementPlus from 'element-plus'
+import { epLite } from '@/test/element-lite'
 
 vi.mock('@/api/points', () => ({
   pointsApi: {
@@ -19,7 +19,7 @@ import TaskCenter from '../TaskCenter.vue'
 
 function mountPage() {
   return mount(TaskCenter, {
-    global: { plugins: [ElementPlus] },
+    global: { plugins: [epLite()] },
   })
 }
 

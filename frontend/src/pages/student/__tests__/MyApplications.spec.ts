@@ -2,7 +2,7 @@
 // 决定 10（撤回不连带）的 UI 落点，HTTP 面不可见，因此用页面 spec 守住。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import { epLite } from '@/test/element-lite'
 
 vi.mock('@/api/job', () => ({
   jobApi: { listMyApplications: vi.fn(), withdrawApplication: vi.fn() },
@@ -22,7 +22,7 @@ const app = {
 }
 
 function mountPage() {
-  return mount(MyApplications, { global: { plugins: [ElementPlus] } })
+  return mount(MyApplications, { global: { plugins: [epLite()] } })
 }
 
 beforeEach(() => {

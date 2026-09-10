@@ -1,7 +1,7 @@
 // #493 职位广场：方形网格 + 加载更多（追加、到底 END 态、筛选重置）。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import { epLite } from '@/test/element-lite'
 
 vi.mock('@/api/job', () => ({
   jobApi: { listPublicJobs: vi.fn() },
@@ -23,7 +23,7 @@ function mkJob(id: number) {
 }
 
 function mountPage() {
-  return mount(JobPlaza, { global: { plugins: [ElementPlus] } })
+  return mount(JobPlaza, { global: { plugins: [epLite()] } })
 }
 
 beforeEach(() => {

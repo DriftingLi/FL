@@ -1,7 +1,7 @@
 // #485 在线简历 PDF 内嵌组件：带鉴权 blob 取流、加载骨架、失败可重试。
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import { epLite } from '@/test/element-lite'
 
 vi.mock('@/api/client', () => ({
   getValidAccessToken: vi.fn()
@@ -13,7 +13,7 @@ import OnlineResumePdf from '../OnlineResumePdf.vue'
 function mountComp(endpoint = '/api/recruit/resumes/1/pdf') {
   return mount(OnlineResumePdf, {
     props: { endpoint },
-    global: { plugins: [ElementPlus] }
+    global: { plugins: [epLite()] }
   })
 }
 
