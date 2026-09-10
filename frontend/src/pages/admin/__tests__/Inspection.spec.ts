@@ -1,7 +1,7 @@
 // #411 巡检问答积分流水视图契约（组件层）：默认请求锁定问答域 + 按域量词渲染 + 分页透出。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import { epLite } from '@/test/element-lite'
 
 vi.mock('@/api/request', () => ({
   unwrappedRequest: { get: vi.fn() },
@@ -11,7 +11,7 @@ import { unwrappedRequest } from '@/api/request'
 import InspectionView from '../Inspection.vue'
 
 function mountView() {
-  return mount(InspectionView, { global: { plugins: [ElementPlus] } })
+  return mount(InspectionView, { global: { plugins: [epLite()] } })
 }
 
 beforeEach(() => {

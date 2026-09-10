@@ -5,7 +5,7 @@ import { describe, it, expect, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import type { Component } from 'vue'
-import ElementPlus from 'element-plus'
+import { epLite } from '@/test/element-lite'
 
 import UiBadge from '../UiBadge.vue'
 import UiButton from '../UiButton.vue'
@@ -41,7 +41,7 @@ const OPTIONS = [
 ]
 
 function mountWith(comp: Component, props: Record<string, unknown> = {}) {
-  return mount(comp, { props, global: { plugins: [ElementPlus] } })
+  return mount(comp, { props, global: { plugins: [epLite()] } })
 }
 
 describe('UiCard', () => {
@@ -210,7 +210,7 @@ describe('UiDialog', () => {
     const w = mount(UiDialog, {
       props: { modelValue: true, ...props },
       attachTo: document.body,
-      global: { plugins: [ElementPlus] }
+      global: { plugins: [epLite()] }
     })
     await flushPromises()
     await nextTick()
@@ -464,7 +464,7 @@ describe('UiCheckbox / UiCheckboxGroup', () => {
     const w = mount(UiCheckboxGroup, {
       props: { modelValue: ['a'] },
       slots: { default: '<UiCheckbox value="a" label="A" /><UiCheckbox value="b" label="B" />' },
-      global: { plugins: [ElementPlus], components: { UiCheckbox } }
+      global: { plugins: [epLite()], components: { UiCheckbox } }
     })
     await nextTick()
     const boxes = w.findAll('.el-checkbox')
@@ -483,7 +483,7 @@ describe('UiRadioGroup', () => {
     const w = mount(UiRadioGroup, {
       props: { modelValue: 'b' },
       slots: { default: '<el-radio value="a">甲</el-radio><el-radio value="b">乙</el-radio>' },
-      global: { plugins: [ElementPlus] }
+      global: { plugins: [epLite()] }
     })
     await nextTick()
     const radios = w.findAll('.el-radio')
@@ -494,7 +494,7 @@ describe('UiRadioGroup', () => {
     const w = mount(UiRadioGroup, {
       props: { modelValue: 'a', size: 'small' },
       slots: { default: '<el-radio value="a">甲</el-radio>' },
-      global: { plugins: [ElementPlus] }
+      global: { plugins: [epLite()] }
     })
     await nextTick()
     expect(w.find('.el-radio').classes()).toContain('el-radio--small')
@@ -506,7 +506,7 @@ describe('UiTooltip', () => {
     const w = mount(UiTooltip, {
       props: { content: '提示文案', placement: 'top' },
       slots: { default: '<button class="trigger">目标</button>' },
-      global: { plugins: [ElementPlus] }
+      global: { plugins: [epLite()] }
     })
     expect(w.find('.trigger').exists()).toBe(true)
   })
@@ -515,7 +515,7 @@ describe('UiTooltip', () => {
     const w = mount(UiTooltip, {
       props: { placement: 'top' },
       slots: { default: '<button class="trigger2">y</button>', content: '<span>富内容</span>' },
-      global: { plugins: [ElementPlus] }
+      global: { plugins: [epLite()] }
     })
     expect(w.find('.trigger2').exists()).toBe(true)
   })
@@ -532,7 +532,7 @@ describe('UiUpload', () => {
     const w = mount(UiUpload, {
       props: { action: '#' },
       slots: { default: '<button class="up-btn">上传</button>' },
-      global: { plugins: [ElementPlus] }
+      global: { plugins: [epLite()] }
     })
     expect(w.find('.up-btn').exists()).toBe(true)
   })

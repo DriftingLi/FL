@@ -1,7 +1,7 @@
 // #493 简历库：方形网格卡片 + 加载更多（追加、END）。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import { epLite } from '@/test/element-lite'
 
 vi.mock('element-china-area-data', () => ({
   pcTextArr: [
@@ -30,7 +30,7 @@ function mkCard(id: number) {
 }
 
 function mountPage() {
-  return mount(Resumes, { global: { plugins: [ElementPlus] } })
+  return mount(Resumes, { global: { plugins: [epLite()] } })
 }
 
 beforeEach(() => {

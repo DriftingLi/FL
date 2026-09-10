@@ -6,7 +6,7 @@
 // 灌进讨论 Tab（后端 scope=general 的定义恰好是 chapter_id IS NULL）。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import { epLite } from '@/test/element-lite'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 
@@ -74,7 +74,7 @@ async function mountPage(total = 3, options: { attachTo?: HTMLElement; topics?: 
   const wrapper = mount(ForumPage, {
     attachTo: options.attachTo,
     global: {
-      plugins: [ElementPlus],
+      plugins: [epLite()],
       // 打桩子组件：避免拉起真实网络层与弹窗（打卡已迁独立页，论坛不再内嵌打卡弹窗）。
       stubs: { ForumImageUploader: true }
     }

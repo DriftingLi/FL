@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { reactive, nextTick } from 'vue'
 import { createRouter, createMemoryHistory } from 'vue-router'
-import ElementPlus from 'element-plus'
+import { epLite } from '@/test/element-lite'
 
 import ChatPageShell from '../ChatPageShell.vue'
 
@@ -83,7 +83,7 @@ function mountShell(props: Record<string, unknown> = {}, slots: Record<string, a
     },
     slots,
     global: {
-      plugins: [ElementPlus, router]
+      plugins: [epLite(), router]
     }
   })
 }

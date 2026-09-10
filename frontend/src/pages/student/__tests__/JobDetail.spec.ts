@@ -2,7 +2,7 @@
 // 这条领域语义只承载在 UI（HTTP 面不可见），因此用页面 spec 守住。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import { epLite } from '@/test/element-lite'
 
 vi.mock('@/api/job', () => ({
   jobApi: { getPublicJob: vi.fn(), applyJob: vi.fn() },
@@ -23,7 +23,7 @@ const job = {
 }
 
 function mountPage() {
-  return mount(JobDetail, { global: { plugins: [ElementPlus] } })
+  return mount(JobDetail, { global: { plugins: [epLite()] } })
 }
 
 beforeEach(() => {

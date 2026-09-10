@@ -1,7 +1,7 @@
 // #490 投递列表详情抽屉：内嵌在线简历 PDF + 明文联系方式 + 标记不合适；旧指引文案已移除。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import { epLite } from '@/test/element-lite'
 
 vi.mock('vue-router', () => ({
   useRoute: () => ({ params: { id: '1' } }),
@@ -46,7 +46,7 @@ const appItem = {
 }
 
 function mountPage() {
-  return mount(ApplicationList, { global: { plugins: [ElementPlus] } })
+  return mount(ApplicationList, { global: { plugins: [epLite()] } })
 }
 
 beforeEach(() => {

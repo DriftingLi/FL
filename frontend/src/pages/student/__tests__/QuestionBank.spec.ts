@@ -4,7 +4,7 @@
 // 切题对新题重查收藏、结果卡拿到作答用时。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import { epLite } from '@/test/element-lite'
 import { createPinia } from 'pinia'
 
 vi.mock('@/api/questionBank', () => ({
@@ -66,7 +66,7 @@ beforeEach(() => {
 
 async function mountAndStart() {
   // CommentCard/NoteCard（结果区）依赖 auth store，mount 需挂 Pinia
-  const wrapper = mount(QuestionBank, { global: { plugins: [ElementPlus, createPinia()] } })
+  const wrapper = mount(QuestionBank, { global: { plugins: [epLite(), createPinia()] } })
   await flushPromises()
   const startBtn = wrapper.findAll('button').find(b => b.text().includes('开始练习'))
   await startBtn!.trigger('click')

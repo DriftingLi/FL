@@ -2,7 +2,7 @@
 // seam：组件层 mock @/api/contribution（不依赖真实后端）。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import { epLite } from '@/test/element-lite'
 
 vi.mock('@/api/contribution', () => ({
   contributionApi: {
@@ -32,7 +32,7 @@ function mountTab(props = {}) {
   return mount(ContributionTab, {
     props: { credentialId: 1, ...props },
     global: {
-      plugins: [ElementPlus],
+      plugins: [epLite()],
       stubs: { RouterLink: { template: '<a><slot /></a>' } }
     }
   })
