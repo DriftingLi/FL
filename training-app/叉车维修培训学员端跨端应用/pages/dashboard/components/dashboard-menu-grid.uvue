@@ -1,0 +1,80 @@
+<template>
+    <!-- 功能入口网格 -->
+    <view class="menu-grid">
+        <view v-for="(item, idx) in menuItems" :key="idx" class="menu-item"
+            :class="{ 'menu-item--col4': idx < 4 }" @click="onMenuClick(item)">
+            <view class="menu-icon-box" :style="{ backgroundColor: item.color }">
+                <text class="menu-icon-text">{{ item.icon }}</text>
+            </view>
+            <text class="menu-label">{{ item.title }}</text>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { UNAVAILABLE_TOAST } from '../../../constants/app'
+
+    // ---- 功能入口 ----
+    type MenuItem = {
+        key : string
+        title : string
+        icon : string
+        color : string
+        path : string
+        available : boolean
+    }
+
+    const menuItems : MenuItem[] = [
+        { key: 'course-mall', title: '课程商城', icon: '🛒', color: '#FF6B35', path: '/pages/mall/mall', available: true },
+        { key: 'question-bank', title: '题库练习', icon: '📚', color: '#4ECDC4', path: '/pages/practice/practice', available: true },
+        { key: 'exam-center', title: '考试中心', icon: '📝', color: '#2979ff', path: '/pages/exam/exam', available: true },
+        { key: 'exam-info', title: '考情资讯', icon: '📣', color: '#96CEB4', path: '/pages/exam-info/exam-info', available: true },
+    ]
+
+    function onMenuClick(item : MenuItem) : void {
+        if (!item.available || item.path.length == 0) {
+            uni.showToast({ title: UNAVAILABLE_TOAST, icon: 'none' })
+            return
+        }
+        uni.reLaunch({ url: item.path })
+    }
+</script>
+
+<style>
+    /* 功能入口网格 */
+    .menu-grid {
+        flex-direction: row;
+        flex-wrap: wrap;
+        padding: 0 24rpx;
+    }
+
+    .menu-item {
+        width: 20%;
+        padding: 20rpx 0;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    /* 截图稿为四列宫格：前四项各占四分之一宽 */
+    .menu-item--col4 {
+        width: 25%;
+    }
+
+    .menu-icon-box {
+        width: 88rpx;
+        height: 88rpx;
+        border-radius: 20rpx;
+        margin-bottom: 12rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .menu-icon-text {
+        font-size: 44rpx;
+    }
+
+    .menu-label {
+        font-size: 24rpx;
+        color: #333333;
+    }
+</style>

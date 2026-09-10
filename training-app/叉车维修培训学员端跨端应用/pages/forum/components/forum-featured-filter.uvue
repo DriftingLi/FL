@@ -1,0 +1,56 @@
+<template>
+    <!-- 精选筛选（#742 批次三，对齐 Web）：三 Tab 通用轴，全部帖 / ★ 精选 -->
+    <view class="featured-filter-bar">
+        <view class="featured-chip" :class="{ active: featured === '' }" @click="onFeatured('')">
+            <text class="featured-chip-text" :class="{ active: featured === '' }">全部帖</text>
+        </view>
+        <view class="featured-chip" :class="{ active: featured === 'true' }" @click="onFeatured('true')">
+            <text class="featured-chip-text" :class="{ active: featured === 'true' }">★ 精选</text>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    withDefaults(defineProps<{
+        featured? : string
+    }>(), {
+        featured: ''
+    })
+
+    const emit = defineEmits(['featuredChange'])
+
+    function onFeatured(val : string) : void {
+        emit('featuredChange', val)
+    }
+</script>
+
+<style>
+    .featured-filter-bar {
+        flex-direction: row;
+        align-items: center;
+        padding: 4rpx 24rpx 12rpx;
+    }
+
+    .featured-chip {
+        padding: 10rpx 32rpx;
+        border-radius: 32rpx;
+        background-color: #f0f1f5;
+        border: 2rpx solid transparent;
+        margin-right: 20rpx;
+    }
+
+    .featured-chip.active {
+        background-color: #e8f3ff;
+        border-color: #2979ff;
+    }
+
+    .featured-chip-text {
+        font-size: 26rpx;
+        color: #666666;
+    }
+
+    .featured-chip-text.active {
+        color: #2979ff;
+        font-weight: bold;
+    }
+</style>

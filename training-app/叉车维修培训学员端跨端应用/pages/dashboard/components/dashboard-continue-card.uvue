@@ -1,0 +1,114 @@
+<template>
+    <!-- 继续学习 ——T05 手术自 dashboard.uvue 逐段搬出；数据扁平下发（ADR-0007 规则 N/P：禁对象 prop 成员直读），显隐由页面 v-if 控制 -->
+    <view class="continue-section">
+        <view class="section-header">
+            <text class="section-title">继续学习</text>
+            <text class="section-more" @click="onTap">查看全部</text>
+        </view>
+        <view class="continue-card" @click="onTap">
+            <view class="continue-info">
+                <text class="continue-course-name">{{ courseName }}</text>
+                <text class="continue-chapter">上次学到：{{ chapterTitle }}</text>
+                <view class="continue-progress-bar">
+                    <view class="continue-progress-fill" :style="{ width: progress + '%' }">
+                    </view>
+                </view>
+                <text class="continue-progress-text">已完成 {{ progress }}%</text>
+            </view>
+            <text class="continue-arrow">›</text>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    const props = withDefaults(defineProps<{
+        courseName? : string
+        chapterTitle? : string
+        progress? : number
+    }>(), {
+        courseName: '',
+        chapterTitle: '',
+        progress: 0
+    })
+
+    const emit = defineEmits(['click'])
+
+    function onTap() : void {
+        emit('click')
+    }
+</script>
+
+<style>
+    /* ===== 继续学习 ===== */
+    .continue-section {
+        margin: 0 24rpx 24rpx 24rpx;
+    }
+
+    .section-header {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20rpx;
+    }
+
+    .section-title {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .section-more {
+        font-size: 24rpx;
+        color: #999999;
+    }
+
+    .continue-card {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 24rpx;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .continue-info {
+        flex: 1;
+        flex-direction: column;
+    }
+
+    .continue-course-name {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 8rpx;
+    }
+
+    .continue-chapter {
+        font-size: 24rpx;
+        color: #999999;
+        margin-bottom: 16rpx;
+    }
+
+    .continue-progress-bar {
+        height: 8rpx;
+        background-color: #eeeeee;
+        border-radius: 4rpx;
+        margin-bottom: 8rpx;
+    }
+
+    .continue-progress-fill {
+        height: 8rpx;
+        background-color: #2979ff;
+        border-radius: 4rpx;
+    }
+
+    .continue-progress-text {
+        font-size: 22rpx;
+        color: #2979ff;
+    }
+
+    .continue-arrow {
+        font-size: 40rpx;
+        color: #cccccc;
+        margin-left: 16rpx;
+    }
+</style>

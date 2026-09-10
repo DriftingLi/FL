@@ -36,6 +36,7 @@ const LIST_COMPONENTS = [
   'forum-square-sort-bar',
   'forum-qa-header',
   'forum-experience-sort-bar',
+  'forum-featured-filter',
   'forum-checkin-card',
   'forum-topic-card',
   'forum-resource-panel',
@@ -60,7 +61,7 @@ describe('列表页组件接线契约（Q17 安置：pages/forum/components/ 显
   });
 
   it('主页面模板实际使用全部组件标签（非只 import 不用）', () => {
-    for (const c of ['ForumTabBar', 'ForumSquareSortBar', 'ForumQaHeader', 'ForumExperienceSortBar', 'ForumCheckinCard', 'ForumTopicCard', 'ForumResourcePanel']) {
+    for (const c of ['ForumTabBar', 'ForumSquareSortBar', 'ForumQaHeader', 'ForumExperienceSortBar', 'ForumFeaturedFilter', 'ForumCheckinCard', 'ForumTopicCard', 'ForumResourcePanel']) {
       expect(page).toMatch(new RegExp(`<${c}[\\s/>]`));
     }
   });
@@ -206,6 +207,54 @@ describe('备考经验 tab 接线契约（#706：第四 tab 进场，复用 Topi
   it('发帖入口：备考经验 tab 跳 forum-create?scope=experience，分类 chips 含备考经验(experience)', () => {
     expect(page).toMatch(/currentTab\.value === 'experience'\) \{\s*scope = 'experience'/);
     expect(createPage).toContain("{ label: '备考经验', value: 'experience' }");
+  });
+});
+
+describe('精选筛选契约（#742 批次三：三 Tab 通用精选筛选 + 列表精选标识，接口契约勿改名）', () => {
+  const src = read('api/forum.uts');
+  const feed = read('composables/useTopicFeed.uts');
+  const page = read('pages/forum/forum.uvue');
+  const card = read('pages/forum/components/forum-topic-card.uvue');
+  const bar = read('pages/forum/components/forum-featured-filter.uvue');
+  const types = read('types/index.uts');
+
+  it('api：featured 参数按后端契约透传（featured=true|false，空串不传=不过滤；参数名勿改）', () => {
+    expect(src).toMatch(/featured : string = ''/);
+    expect(src).toMatch(/if \(featured\.length > 0\)/);
+    expect(src).toContain("params['featured'] = featured");
+  });
+
+  it('api：buildTopic 回显后端 DTO 字段 is_featured（勿改名）', () => {
+    expect(src).toContain("is_featured: toBool(obj['is_featured'])");
+  });
+
+  it('types：ForumTopic 携带 is_featured', () => {
+    expect(types).toMatch(/is_featured : boolean/);
+  });
+
+  it('feed：featuredFilter 态与 onFeaturedChange 沉在 useTopicFeed（数据所有权单一），加载时透传', () => {
+    expect(feed).toContain("const featuredFilter = ref<string>('')");
+    expect(feed).toContain('function onFeaturedChange(val : string)');
+    expect(feed).toContain('featuredFilter: featuredFilter,');
+    expect(feed).toContain('onFeaturedChange: (val : string) => onFeaturedChange(val),');
+    expect(feed).toContain('getForumTopicsApi(page.value, pageSize, scope, sort, order, category, statusParam, featuredFilter.value)');
+  });
+
+  it('壳层接线：三 Tab 显示精选筛选条（资源 Tab 不显示）；切 Tab 精选筛选回全部帖（跨 Tab 不延续，对齐 Web）', () => {
+    expect(page).toContain("<ForumFeaturedFilter v-if=\"currentTab === 'square' || currentTab === 'hot' || currentTab === 'experience'\" :featured=\"featuredFilter\" @featured-change=\"onFeaturedChange\" />");
+    expect(page).toMatch(/featuredFilter\.value = ''/);
+  });
+
+  it('筛选条组件：全部帖 / ★ 精选 双 chip（选项与 Web 一致），点击 emit featuredChange', () => {
+    expect(bar).toContain('全部帖');
+    expect(bar).toContain('★ 精选');
+    expect(bar).toContain("emit('featuredChange', val)");
+  });
+
+  it('列表标识：卡片 is_featured 由壳层扁平下发（R2 默认 false 零 diff），精选徽章文案与 Web 一致', () => {
+    expect(page).toContain(':is-featured="item.is_featured"');
+    expect(card).toContain('v-if="isFeatured"');
+    expect(card).toContain('★ 精选');
   });
 });
 

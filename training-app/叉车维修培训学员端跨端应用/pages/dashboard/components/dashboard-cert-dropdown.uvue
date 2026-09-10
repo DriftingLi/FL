@@ -1,0 +1,376 @@
+<template>
+    <!-- 证件下拉选择器（选择学习阶段风格）——T05 手术自 dashboard.uvue 逐段搬出，显隐由页面 v-if 控制 -->
+    <view class="cert-dropdown-mask" @click="onClose">
+        <view class="cert-dropdown" @click.stop>
+            <!-- 标题栏 -->
+            <view class="cert-dropdown-header">
+                <text class="cert-dropdown-title">选择学习阶段</text>
+                <view class="cert-dropdown-close" @click="onClose">
+                    <text class="cert-dropdown-close-icon">✕</text>
+                </view>
+            </view>
+            <scroll-view scroll-y class="cert-dropdown-scroll">
+                <view v-for="(group, gIdx) in groups" :key="gIdx" class="cert-dropdown-section">
+                    <!-- 分组标题 -->
+                    <view class="cert-dropdown-section-header">
+                        <view class="cert-dropdown-section-icon-wrap"
+                            :style="{ backgroundColor: group.category === 'skill_level' ? '#E8F5E9' : '#FFF3E0' }">
+                            <text class="cert-dropdown-section-icon">{{ group.icon }}</text>
+                        </view>
+                        <text class="cert-dropdown-section-title">{{ group.group_name }}</text>
+                    </view>
+                    <!-- 胶囊标签 -->
+                    <view class="cert-dropdown-chips">
+                        <view v-for="(item, idx) in group.items" :key="idx" class="cert-dropdown-chip mr-16 mb-16"
+                            :class="{ 'cert-dropdown-chip--active': currentId === item.id }" @click="onSelect(item)">
+                            <!-- 单行（特种作业证） -->
+                            <view v-if="item.level == null" class="cert-dropdown-chip-single">
+                                <text class="cert-dropdown-chip-text"
+                                    :class="{ 'cert-dropdown-chip-text--active': currentId === item.id }">{{ item.name }}</text>
+                            </view>
+                            <!-- 双行（技能等级证） -->
+                            <view v-else class="cert-dropdown-chip-double">
+                                <text class="cert-dropdown-chip-level"
+                                    :class="{ 'cert-dropdown-chip-text--active': currentId === item.id }">{{ levelNames[item.level!.toString()] }}</text>
+                                <!-- <text class="cert-dropdown-chip-desc"
+                                    :class="{ 'cert-dropdown-chip-desc--active': currentId === item.id }">{{ item.name }}</text> -->
+                            </view>
+                        </view>
+                    </view>
+                </view>
+
+                <!-- 热门考证 -->
+                <view class="cert-dropdown-section">
+                    <view class="cert-dropdown-hot-header">
+                        <text class="cert-dropdown-hot-title">热门考证</text>
+                        <view class="cert-dropdown-hot-line"></view>
+                    </view>
+                    <view class="cert-dropdown-hot-grid">
+                        <view v-for="(item, idx) in hotCertList" :key="idx" class="cert-dropdown-hot-card"
+                            :class="idx > 0 ? 'ml-16' : ''">
+                            <view class="cert-dropdown-hot-card-header">
+                                <text class="cert-dropdown-hot-card-star">⭐</text>
+                                <text class="cert-dropdown-hot-card-title">{{ item.title }}</text>
+                            </view>
+                            <text class="cert-dropdown-hot-card-desc">{{ item.desc }}</text>
+                        </view>
+                    </view>
+                </view>
+
+                <!-- 热门考证详情说明 -->
+                <view class="cert-dropdown-section">
+                    <view v-for="(item, idx) in hotCertDetails" :key="idx" class="cert-dropdown-detail-item">
+                        <view class="cert-dropdown-detail-title-row">
+                            <text class="cert-dropdown-detail-bullet">✦</text>
+                            <text class="cert-dropdown-detail-title">{{ item.title }}</text>
+                        </view>
+                        <text class="cert-dropdown-detail-content">{{ item.content }}</text>
+                    </view>
+                </view>
+
+                <!-- 底部留白 -->
+                <view style="height: 48rpx;"></view>
+            </scroll-view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import type { CredentialGroup, CredentialItem } from '../../../types/index'
+
+    const props = withDefaults(defineProps<{
+        groups? : CredentialGroup[]
+        currentId? : number
+    }>(), {
+        groups: () => [] as CredentialGroup[],
+        currentId: 0
+    })
+
+    const emit = defineEmits(['close', 'select'])
+
+    // 等级数字转中文
+    const levelNames : UTSJSONObject = {
+        '5': '五级',
+        '4': '四级',
+        '3': '三级',
+        '2': '二级',
+        '1': '一级',
+    }
+
+    // ---- 热门考证（静态数据） ----
+    type HotCertItem = {
+        title : string
+        desc : string
+    }
+
+    const hotCertList : HotCertItem[] = [
+        { title: '入门组合', desc: '工程机械维修工（初级）+ 叉车N1证' },
+        { title: '电动叉车维修优选', desc: '工程机械维修工+N1司机证+低压电工证' },
+    ]
+
+    type HotCertDetail = {
+        title : string
+        content : string
+    }
+
+    const hotCertDetails : HotCertDetail[] = [
+        {
+            title: '1、工程机械机械维修工（初级）',
+            content: '叉车证N1代表叉车车辆维修，N1是场内专用机动车辆作业叉车司机上岗证，N1是场内专用机动车辆叉车司机资格证，在早期，叉车证N1可以驾驶任何吨位的叉车。'
+        },
+        {
+            title: '2、叉车N1证',
+            content: '叉车证N1代表叉车车辆维修，N1是场内专用机动车辆作业叉车司机上岗证，N1是场内专用机动车辆叉车司机资格证，在早期，叉车证N1可以驾驶任何吨位的叉车。'
+        }
+    ]
+
+    function onClose() : void {
+        emit('close')
+    }
+
+    function onSelect(item : CredentialItem) : void {
+        emit('select', item)
+    }
+</script>
+
+<style>
+    /* ===== 证件下拉选择器（选择学习阶段风格） ===== */
+    .cert-dropdown-mask {
+        position: fixed;
+        left: 0;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        z-index: 300;
+        background-color: rgba(0, 0, 0, 0.4);
+        justify-content: flex-start;
+    }
+
+    .cert-dropdown {
+        background-color: #F5F7FA;
+        border-bottom-left-radius: 28rpx;
+        border-bottom-right-radius: 28rpx;
+        max-height: 800rpx;
+        box-shadow: 0 8rpx 32rpx rgba(0, 0, 0, 0.15);
+    }
+
+    .cert-dropdown-header {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        padding: 28rpx 32rpx;
+        background-color: #FFFFFF;
+        border-bottom-left-radius: 28rpx;
+        border-bottom-right-radius: 28rpx;
+    }
+
+    .cert-dropdown-title {
+        font-size: 34rpx;
+        font-weight: 600;
+        color: #222222;
+    }
+
+    .cert-dropdown-close {
+        width: 48rpx;
+        height: 48rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .cert-dropdown-close-icon {
+        font-size: 32rpx;
+        color: #999999;
+    }
+
+    .cert-dropdown-scroll {
+        max-height: 700rpx;
+    }
+
+    /* ---- 分组区块 ---- */
+    .cert-dropdown-section {
+        margin: 16rpx 24rpx 0;
+        padding: 24rpx;
+        background-color: #FFFFFF;
+        border-radius: 16rpx;
+    }
+
+    .cert-dropdown-section-header {
+        flex-direction: row;
+        align-items: center;
+        margin-bottom: 20rpx;
+    }
+
+    .cert-dropdown-section-icon-wrap {
+        width: 48rpx;
+        height: 48rpx;
+        border-radius: 12rpx;
+        align-items: center;
+        justify-content: center;
+        margin-right: 12rpx;
+    }
+
+    .cert-dropdown-section-icon {
+        font-size: 28rpx;
+    }
+
+    .cert-dropdown-section-title {
+        font-size: 28rpx;
+        font-weight: 600;
+        color: #222222;
+        flex: 1;
+    }
+
+    /* ---- 胶囊标签 ---- */
+    .cert-dropdown-chips {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+
+    .cert-dropdown-chip {
+        padding: 18rpx 28rpx;
+        background-color: #F5F7FA;
+        border-radius: 40rpx;
+        border-width: 2rpx;
+        border-color: transparent;
+    }
+
+    .cert-dropdown-chip--active {
+        background-color: #EBF5FF;
+        border-color: #2979FF;
+    }
+
+    /* 单行（特种作业证） */
+    .cert-dropdown-chip-single {
+        align-items: center;
+        justify-content: center;
+    }
+
+    .cert-dropdown-chip-text {
+        font-size: 28rpx;
+        color: #444444;
+    }
+
+    .cert-dropdown-chip-text--active {
+        color: #2979FF;
+        font-weight: 600;
+    }
+
+    /* 双行（技能等级证） */
+    .cert-dropdown-chip-double {
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-width: 100rpx;
+    }
+
+    .cert-dropdown-chip-level {
+        font-size: 28rpx;
+        font-weight: 600;
+        color: #444444;
+        margin-bottom: 2rpx;
+    }
+
+    .cert-dropdown-chip-desc {
+        font-size: 22rpx;
+        color: #888888;
+    }
+
+    .cert-dropdown-chip-desc--active {
+        color: #79AEFF;
+    }
+
+    /* ---- 热门考证标题 ---- */
+    .cert-dropdown-hot-header {
+        flex-direction: column;
+        align-items: flex-start;
+        margin-bottom: 20rpx;
+    }
+
+    .cert-dropdown-hot-title {
+        font-size: 30rpx;
+        font-weight: 600;
+        color: #222222;
+    }
+
+    .cert-dropdown-hot-line {
+        width: 56rpx;
+        height: 6rpx;
+        border-radius: 3rpx;
+        background-color: #2979FF;
+        margin-top: 8rpx;
+    }
+
+    /* ---- 热门考证卡片 ---- */
+    .cert-dropdown-hot-grid {
+        flex-direction: row;
+    }
+
+    .cert-dropdown-hot-card {
+        flex: 1;
+        padding: 20rpx 16rpx;
+        background: linear-gradient(135deg, #2979FF 0%, #1565C0 100%);
+        border-radius: 12rpx;
+    }
+
+    .cert-dropdown-hot-card-header {
+        flex-direction: row;
+        align-items: center;
+        margin-bottom: 8rpx;
+    }
+
+    .cert-dropdown-hot-card-star {
+        font-size: 24rpx;
+        margin-right: 6rpx;
+    }
+
+    .cert-dropdown-hot-card-title {
+        flex: 1;
+        font-size: 26rpx;
+        font-weight: 600;
+        color: #FFFFFF;
+    }
+
+    .cert-dropdown-hot-card-desc {
+        font-size: 20rpx;
+        color: rgba(255, 255, 255, 0.85);
+        lines: 2;
+        text-overflow: ellipsis;
+    }
+
+    /* ---- 热门考证详情说明 ---- */
+    .cert-dropdown-detail-item {
+        margin-bottom: 20rpx;
+    }
+
+    /* uvue 原生端不支持 last-child 伪类；末项收尾由内容区底部留白承担 */
+
+    .cert-dropdown-detail-title-row {
+        flex-direction: row;
+        align-items: center;
+        margin-bottom: 8rpx;
+    }
+
+    .cert-dropdown-detail-bullet {
+        font-size: 24rpx;
+        color: #2979FF;
+        margin-right: 8rpx;
+    }
+
+    .cert-dropdown-detail-title {
+        font-size: 26rpx;
+        font-weight: 600;
+        color: #222222;
+    }
+
+    .cert-dropdown-detail-content {
+        font-size: 22rpx;
+        color: #666666;
+        line-height: 36rpx;
+        padding-left: 32rpx;
+    }
+
+    /* ---- 间距工具类（替代 gap） ---- */
+    .ml-16 { margin-left: 16rpx; }
+    .mr-16 { margin-right: 16rpx; }
+    .mb-16 { margin-bottom: 16rpx; }
+</style>
