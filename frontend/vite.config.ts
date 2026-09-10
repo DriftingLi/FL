@@ -68,6 +68,10 @@ export default defineConfig({
   test: {
     environment: 'happy-dom',
     globals: true,
+    // 并发下重挂载用例（CourseCatalog：整页 + el-table 全渲染）会被 CPU 争抢拖到
+    // 5s 默认超时之外（单跑每例 <1.1s）。epLite 降低了 import 争抢但未根除，
+    // 给裕量到 15s（#772：单跑健康 + 全量并发偶发超时的折中兜底）
+    testTimeout: 15_000,
     // Node 25+ localStorage 遮蔽兜底（见 vitest.setup.ts）；Node ≤24 环境实现正常时零影响
     setupFiles: ['./vitest.setup.ts'],
     /*
