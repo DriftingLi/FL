@@ -140,6 +140,7 @@ function buildTopic(obj : UTSJSONObject) : ForumTopic {
         created_at: toStr(obj['created_at']),
         scope: toStr(obj['scope'], 'general'),
         status: statusVal,
+        is_featured: toBool(obj['is_featured']),
     } as ForumTopic
 }
 
@@ -235,8 +236,9 @@ function buildLikeResult(obj : UTSJSONObject) : LikeTopicResult {
  * @param scope 范围，默认 general（对应 https://training.gccsmile.com/api/forum/topics?scope=general&sort=latest&order=desc&page=1&page_size=10）
  * @param sort 排序字段，默认 latest
  * @param order 排序方向，默认 desc
+ * @param featured 精选过滤（#742 契约，勿改名）：'true' | 'false'，空串表示不过滤
  */
-export function getForumTopicsApi(page : number = 1, pageSize : number = 10, scope : string = 'general', sort : string = 'latest', order : string = 'desc', category : string = '', status : string = '') : Promise<ForumTopicListResult> {
+export function getForumTopicsApi(page : number = 1, pageSize : number = 10, scope : string = 'general', sort : string = 'latest', order : string = 'desc', category : string = '', status : string = '', featured : string = '') : Promise<ForumTopicListResult> {
     const params : UTSJSONObject = {
         scope: scope,
         sort: sort,
@@ -252,6 +254,10 @@ export function getForumTopicsApi(page : number = 1, pageSize : number = 10, sco
     // resolved（已解决）→ solved=solved；open（进行中）→ solved=unsolved；空为不筛选
     if (status.length > 0 && category === 'question') {
         params['solved'] = status === 'resolved' ? 'solved' : 'unsolved'
+    }
+    // 精选过滤（#742 批次三，对齐 Web 三 Tab 通用轴）：featured=true|false，空为不传（不过滤）
+    if (featured.length > 0) {
+        params['featured'] = featured
     }
     return getMapped<ForumTopicListResult>('/forum/topics', params, (data : UTSJSONObject) : ForumTopicListResult => {
         console.log('[getForumTopicsApi] raw data:', JSON.stringify(data))
