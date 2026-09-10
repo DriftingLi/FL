@@ -144,6 +144,7 @@ import type { UiTagTone } from '@/components/ui/UiTag.vue'
 import type { Question } from '@/types/question'
 import { typeMap } from '@/constants/question'
 import { useAdminTable } from '@/composables/useAdminTable'
+import { useRejectReasonDialog } from '@/composables/useRejectReasonDialog'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiFilterBar from '@/components/ui/UiFilterBar.vue'
@@ -188,9 +189,28 @@ const detailVisible = ref(false)
 const currentQuestion = ref<Question | null>(null)
 
 // 驳回相关
-const rejectDialogVisible = ref(false)
-const rejectReason = ref('')
-const rejecting = ref(false)
+// 驳回理由弹窗：#795 三域共用的弹窗状态机（visible/reason/submitting + 空理由校验 + 失败保留理由）
+// 提交动作由本页注入 —— 单条 / 批量 / 详情页触发的差异留在闭包里。
+const {
+  visible: rejectDialogVisible,
+  reason: rejectReason,
+  submitting: rejecting,
+  open: openRejectDialog,
+  close: closeRejectDialog,
+  submit: confirmReject
+} = useRejectReasonDialog({
+  onSubmit: async (reason) => {
+    if (rejectMode === 'batch') {
+      await questionBankApi.batchReject(selectedIds.value, reason)
+      ElMessage.success('批量驳回成功')
+    } else {
+      await questionBankApi.rejectQuestion(rejectTargetId, reason)
+      ElMessage.success('已驳回')
+      if (rejectMode === 'detail') detailVisible.value = false
+    }
+    await loadData()
+  }
+})
 // 驳回模式：single(单题) / batch(批量) / detail(从详情弹窗)
 let rejectMode = 'single'
 let rejectTargetId = 0
@@ -244,8 +264,7 @@ async function publishSingle(row: { id: number }) {
 function rejectSingle(row: { id: number }) {
   rejectMode = 'single'
   rejectTargetId = row.id
-  rejectReason.value = ''
-  rejectDialogVisible.value = true
+  openRejectDialog()
 }
 
 // 批量发布
@@ -264,8 +283,7 @@ async function batchPublish() {
 function batchReject() {
   if (selectedIds.value.length === 0) return
   rejectMode = 'batch'
-  rejectReason.value = ''
-  rejectDialogVisible.value = true
+  openRejectDialog()
 }
 
 // 从详情弹窗发布
@@ -280,37 +298,11 @@ function rejectFromDetail() {
   if (!currentQuestion.value) return
   rejectMode = 'detail'
   rejectTargetId = currentQuestion.value.id
-  rejectReason.value = ''
-  rejectDialogVisible.value = true
-}
-
-// 确认驳回
-async function confirmReject() {
-  if (!rejectReason.value.trim()) {
-    ElMessage.warning('请填写驳回理由')
-    return
-  }
-  rejecting.value = true
-  try {
-    if (rejectMode === 'batch') {
-      await questionBankApi.batchReject(selectedIds.value, rejectReason.value)
-      ElMessage.success('批量驳回成功')
-    } else {
-      await questionBankApi.rejectQuestion(rejectTargetId, rejectReason.value)
-      ElMessage.success('已驳回')
-      if (rejectMode === 'detail') detailVisible.value = false
-    }
-    rejectDialogVisible.value = false
-    await loadData()
-  } catch {
-    /* 错误已由拦截器提示 */
-  } finally {
-    rejecting.value = false
-  }
+  openRejectDialog()
 }
 
 function cancelReject() {
-  rejectDialogVisible.value = false
+  closeRejectDialog()
   rejectReason.value = ''
 }
 </script>

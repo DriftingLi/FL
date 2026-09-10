@@ -106,6 +106,7 @@ import { ElMessage } from 'element-plus'
 import { Refresh, ArrowRight, ArrowDown } from '@element-plus/icons-vue'
 import { adminApi, type ProfileChangeRequest } from '@/api/admin'
 import { useAdminTable } from '@/composables/useAdminTable'
+import { useRejectReasonDialog } from '@/composables/useRejectReasonDialog'
 import { formatLocaleDateTime } from '@/utils/format'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
@@ -113,10 +114,22 @@ import UiDialog from '@/components/ui/UiDialog.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import UiTag from '@/components/ui/UiTag.vue'
 
-const submitting = ref(false)
+// 驳回理由弹窗：#795 三域共用弹窗状态机；提交动作由本页注入（资料审核驳回为终态）
+const {
+  visible: rejectDialogVisible,
+  reason: rejectReason,
+  submitting,
+  open: openRejectDialog,
+  submit: reject
+} = useRejectReasonDialog({
+  onSubmit: async (reason) => {
+    if (!currentRow.value) return
+    await adminApi.rejectProfileReview(currentRow.value.id, reason.trim())
+    ElMessage.success('已驳回')
+    load()
+  }
+})
 const activeStatus = ref<'pending' | 'approved' | 'rejected'>('pending')
-const rejectDialogVisible = ref(false)
-const rejectReason = ref('')
 const currentRow = ref<ProfileChangeRequest | null>(null)
 
 function displayName(row: ProfileChangeRequest) {
@@ -162,25 +175,10 @@ async function approve(row: ProfileChangeRequest) {
 
 function openReject(row: ProfileChangeRequest) {
   currentRow.value = row
-  rejectReason.value = ''
-  rejectDialogVisible.value = true
+  openRejectDialog()
 }
 
-async function reject() {
-  if (!currentRow.value) return
-  submitting.value = true
-  try {
-    await adminApi.rejectProfileReview(currentRow.value.id, rejectReason.value.trim())
-    ElMessage.success('已驳回')
-    rejectDialogVisible.value = false
-    load()
-  } catch (e) {
-    console.error('驳回失败:', e)
-    /* 错误已由拦截器提示 */
-  } finally {
-    submitting.value = false
-  }
-}
+/* 驳回提交已由 useRejectReasonDialog 的 submit（解构为 reject）承载 */
 
 onMounted(load)
 </script>
