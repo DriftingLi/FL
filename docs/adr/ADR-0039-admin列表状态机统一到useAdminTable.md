@@ -39,6 +39,27 @@ admin 域 19 个页面长期存在**两套并存的列表状态机**，外加 7 
 用户拍板一次完成。代价是回归面大（13 页），收益是避免双轨长期共存的维护成本。
 每页迁移都是「替换状态来源、保留模板与业务语义」，可脚本化 + 逐页验证。
 
+## 范围修正（2026-09-10 盘点后）
+
+原票按「13 页」一刀切，盘点每页实际形态（表格数 / UiPagination 数 / 表单数）后修正：
+
+| 类别 | 页面 | 处置 |
+|---|---|---|
+| **有分页**的列表页（服务端分页） | ForumManage / QuestionReview / Inspection / CourseCatalog / AuditLogs / ContributionManage | 迁 useAdminTable |
+| **有表格无分页**的列表页 | Credentials / PositionManage / AISettings / Statistics | 迁 useAdminTable（fetch 一次拉全量，`total = list.length`，分页字段闲置——与 useAsyncPage 注释「不分页页只解构三态」同理） |
+| **非列表页** | FeaturedContentEdit（纯表单）、ContentGenerate（生成页）、Dashboard（仪表盘） | **不迁** —— useAdminTable 是列表状态机，套在详情/仪表盘上是语义错配 |
+| 已有 useAdminTable | FeaturedContentList / HrwaiUserManage / ProfileReview / RecruiterManage / TutorManage / ValuationConfigManage | 不动 |
+
+判定依据：`<el-table>` 数、`UiPagination` 数、`<el-form>` 数（C3/C4 已把 el-pagination 迁为
+UiPagination，早期按 el-pagination 的统计会全部漏成 0），**以及分页性质**（服务端 `:total` 来自
+composable / 请求，还是客户端 `.length`）。
+
+二次修正（核实分页性质后）：**CourseCatalog 与 Credentials 也移出** —— 二者用 useAsyncPage 只为拿
+`loading`（CourseCatalog 是客户端筛选 + 客户端分页；Credentials 无分页），无列表托管需求，
+强迁是假统一。最终迁移清单：
+- #792 → ForumManage / Inspection / QuestionReview（3 页，服务端分页）
+- #793 → AuditLogs / ContributionManage（服务端分页，手写 → 收编）/ AISettings / PositionManage / Statistics（有表格无分页）
+
 ## 边界（明确不做）
 
 - **不改 `useAsyncPage`**：它不是 admin 的件，40 处调用不动
@@ -47,6 +68,7 @@ admin 域 19 个页面长期存在**两套并存的列表状态机**，外加 7 
   在数据层就不同构。三域**唯一同构的是 `reject_reason`**，这块另行抽取（见下节）
 - **不抽「admin 通用列表页组件」**：字段与操作语义各异，prop 化会重蹈 UiFilterBar /
   UiTable 的覆辙（两者都明确拒绝 prop 化/封装）
+- **非列表页不支持迁移**：详情/表单页与仪表盘用既有三态件即可，不强行套列表状态机
 
 ## 配套：驳回理由弹窗（另一批）
 
