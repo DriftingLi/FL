@@ -1,0 +1,172 @@
+/**
+ * 资源投稿 API（#710：资源上传模块完工——upload-resource 提交 / my-uploads 数据源）
+ * 路由：POST /contributions/upload-file（先传后交）、POST /contributions、GET /contributions/mine
+ * 后端契约：internal/api/contribution.go + internal/service/contribution_service.go（#517/#611/#702）
+ * - 文件：1-5 个，单文件 ≤20MB，合计 ≤50MB；扩展名白名单 pdf/doc/docx/ppt/pptx/xls/xlsx/zip/mp4
+ * - 表单：credential_id 必填（>0 且用户已选当前证件）、title ≤120、intro ≤2000
+ * - 配额：自然日 ≤3 份、pending 积压 ≤5 份；过审 +50 积分
+ * @note 投稿类型内聚本模块（不进 types/index.uts），先例 api/aiAssistant.uts
+ * @note catch 参数零 `: any` 注解（守护规则 H，同 forum.uts）
+ */
+import { uploadFile, getMapped, postMapped } from './request'
+import type { RequestOptions } from './request'
+import { toNumber, toStr, toBool, errMsg } from './helpers'
+
+/**
+ * 投稿状态值域（后端 ContributionStatus* 常量）：
+ * pending 待审核 / approved 已上架 / rejected 未通过 / withdrawn 已撤回 / archived 已下架
+ * @note UTS 联合字面量不能用于运行时强转，统一 string
+ */
+
+/** 投稿文件对象（对齐后端 ContributionFileDTO） */
+export type ContributionFileItem = {
+    file_id : number           // 后端 omitempty，缺省 0
+    file_name : string
+    file_url : string
+    file_size : number
+    content_type : string
+}
+
+/** 投稿条目（对齐后端 ContributionItemDTO） */
+export type ContributionItem = {
+    id : number
+    credential_id : number
+    title : string
+    intro : string
+    status : string            // pending / approved / rejected / withdrawn / archived
+    is_anonymous : boolean
+    downloads_count : number
+    reject_reason : string     // 后端 omitempty，缺省空串
+    files : ContributionFileItem[]
+    created_at : string
+}
+
+/** 投稿分页（对齐后端 ContributionPageResult） */
+export type ContributionPageResult = {
+    items : ContributionItem[]
+    total : number
+    page : number
+    page_size : number
+}
+
+/** 构造投稿文件对象（从 UTSJSONObject；content_type 缺失兜底 octet-stream） */
+function buildFileItem(obj : UTSJSONObject) : ContributionFileItem {
+    const contentType = toStr(obj['content_type'])
+    return {
+        file_id: toNumber(obj['file_id']),
+        file_name: toStr(obj['file_name']),
+        file_url: toStr(obj['file_url']),
+        file_size: toNumber(obj['file_size']),
+        content_type: contentType.length > 0 ? contentType : 'application/octet-stream',
+    } as ContributionFileItem
+}
+
+/** 构造投稿条目（从 UTSJSONObject） */
+function buildContributionItem(obj : UTSJSONObject) : ContributionItem {
+    const files : ContributionFileItem[] = []
+    const filesRaw = obj['files']
+    if (filesRaw != null) {
+        const arr = filesRaw as Array<UTSJSONObject>
+        for (let i = 0; i < arr.length; i++) {
+            files.push(buildFileItem(arr[i]))
+        }
+    }
+    return {
+        id: toNumber(obj['id']),
+        credential_id: toNumber(obj['credential_id']),
+        title: toStr(obj['title']),
+        intro: toStr(obj['intro']),
+        status: toStr(obj['status']),
+        is_anonymous: toBool(obj['is_anonymous']),
+        downloads_count: toNumber(obj['downloads_count']),
+        reject_reason: toStr(obj['reject_reason']),
+        files: files,
+        created_at: toStr(obj['created_at']),
+    } as ContributionItem
+}
+
+/** 构造投稿分页（从 UTSJSONObject） */
+function buildContributionPage(data : UTSJSONObject) : ContributionPageResult {
+    const items : ContributionItem[] = []
+    const itemsRaw = data['items']
+    if (itemsRaw != null) {
+        const arr = itemsRaw as Array<UTSJSONObject>
+        for (let i = 0; i < arr.length; i++) {
+            items.push(buildContributionItem(arr[i]))
+        }
+    }
+    return {
+        items: items,
+        total: toNumber(data['total']),
+        page: toNumber(data['page'], 1),
+        page_size: toNumber(data['page_size'], 20),
+    } as ContributionPageResult
+}
+
+/**
+ * 上传投稿暂存文件（先传后交）
+ * POST /contributions/upload-file（multipart 字段 file）
+ * @note 大文件（≤20MB/合计 ≤50MB）上传耗时超默认超时，放宽到 120s（对齐 Web 端 contribution.ts）
+ */
+export function uploadContributionFileApi(filePath : string) : Promise<ContributionFileItem> {
+    const options : RequestOptions = { url: '/contributions/upload-file', timeout: 120000 }
+    return uploadFile('/contributions/upload-file', filePath, 'file', null, options).then((data : UTSJSONObject) : ContributionFileItem => {
+        return buildFileItem(data)
+    }).catch((e) : ContributionFileItem => {
+        console.error('[uploadContributionFileApi] failed:', e)
+        throw new Error(errMsg(e, '上传文件失败'))
+    })
+}
+
+/**
+ * 创建投稿（pending，待审核）
+ * POST /contributions
+ * @param credentialId 目标证件 ID（必填 >0；移动端取当前证件）
+ * @param title 标题（≤120 字，必填）
+ * @param intro 简介（≤2000 字，必填）
+ * @param files 已上传暂存的文件清单（1-5 个，经 uploadContributionFileApi 获得）
+ * @param isAnonymous 是否匿名展示
+ */
+export function createContributionApi(credentialId : number, title : string, intro : string, files : ContributionFileItem[], isAnonymous : boolean = false) : Promise<ContributionItem> {
+    const filePayload : UTSJSONObject[] = []
+    for (let i = 0; i < files.length; i++) {
+        filePayload.push({
+            file_url: files[i].file_url,
+            file_name: files[i].file_name,
+            file_size: files[i].file_size,
+            content_type: files[i].content_type,
+        } as UTSJSONObject)
+    }
+    const payload : UTSJSONObject = {
+        credential_id: credentialId,
+        title: title,
+        intro: intro,
+        is_anonymous: isAnonymous,
+        files: filePayload,
+    } as UTSJSONObject
+    return postMapped<ContributionItem>('/contributions', payload, (data : UTSJSONObject) : ContributionItem => {
+        return buildContributionItem(data)
+    }).catch((e) : ContributionItem => {
+        console.error('[createContributionApi] failed:', e)
+        throw new Error(errMsg(e, '提交投稿失败'))
+    })
+}
+
+/**
+ * 我的投稿（全状态，按创建时间倒序）
+ * GET /contributions/mine
+ * @param page 页码（默认 1）
+ * @param pageSize 每页数量（默认 20，后端上限 50）
+ */
+export function getMyContributionsApi(page : number = 1, pageSize : number = 20) : Promise<ContributionPageResult> {
+    const params : UTSJSONObject = {
+        page: page.toString(),
+        page_size: pageSize.toString(),
+    } as UTSJSONObject
+    return getMapped<ContributionPageResult>('/contributions/mine', params, (data : UTSJSONObject) : ContributionPageResult => {
+        return buildContributionPage(data)
+    }).catch((e) : ContributionPageResult => {
+        console.error('[getMyContributionsApi] failed:', e)
+        throw new Error(errMsg(e, '获取我的投稿失败'))
+    })
+}

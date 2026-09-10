@@ -1,0 +1,169 @@
+<template>
+    <!-- 答题卡弹窗 -->
+    <view v-if="visible" class="ac-mask" @click="onClose">
+        <view class="ac-sheet" @click.stop>
+            <view class="ac-header">
+                <text class="ac-title">答题卡</text>
+            </view>
+            <view class="ac-grid">
+                <view v-for="(q, idx) in questions" :key="idx"
+                    class="ac-item mr-20-mb-20"
+                    :class="getItemClass(idx)"
+                    @click="onJump(idx)">
+                    <text class="ac-num" :class="getNumClass(idx)">{{ idx + 1 }}</text>
+                </view>
+            </view>
+            <view class="ac-footer">
+                <view class="ac-submit-btn" @click="onSubmitPaper">
+                    <text class="ac-submit-text">交卷</text>
+                </view>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import type { Question } from '../../../types/index'
+
+    const props = defineProps<{
+        visible : boolean
+        questions : Question[]
+        currentIndex : number
+        answerStates : { question_id : number, is_correct : boolean }[]
+    }>()
+
+    const emit = defineEmits<{
+        (e : 'close') : void
+        (e : 'jump', idx : number) : void
+        (e : 'submit-paper') : void
+    }>()
+
+    function getItemClass(idx : number) : string {
+        if (idx == props.currentIndex) return 'ac-item-current'
+        const q = props.questions[idx]
+        for (let i = 0; i < props.answerStates.length; i++) {
+            if (props.answerStates[i].question_id == q.question_id) {
+                return props.answerStates[i].is_correct ? 'ac-item-correct' : 'ac-item-wrong'
+            }
+        }
+        return 'ac-item-default'
+    }
+
+    function getNumClass(idx : number) : string {
+        if (idx == props.currentIndex) return 'ac-num-current'
+        const q = props.questions[idx]
+        for (let i = 0; i < props.answerStates.length; i++) {
+            if (props.answerStates[i].question_id == q.question_id) {
+                return 'ac-num-answered'
+            }
+        }
+        return 'ac-num-default'
+    }
+
+    function onClose() : void {
+        emit('close')
+    }
+
+    function onJump(idx : number) : void {
+        emit('jump', idx)
+    }
+
+    function onSubmitPaper() : void {
+        emit('submit-paper')
+    }
+</script>
+
+<style>
+    .ac-mask {
+        position: fixed;
+        left: 0;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        justify-content: flex-end;
+    }
+    .ac-sheet {
+        background-color: #ffffff;
+        border-radius: 32rpx 32rpx 0 0;
+        padding: 40rpx 32rpx;
+        padding-bottom: 48rpx;
+        flex-direction: column;
+        max-height: 960rpx;
+    }
+    .ac-header {
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 40rpx;
+    }
+    .ac-title {
+        font-size: 34rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+    .ac-grid {
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: flex-start;
+    }
+    .ac-item {
+        width: 100rpx;
+        height: 100rpx;
+        border-radius: 50rpx;
+        align-items: center;
+        justify-content: center;
+        border: 2rpx solid #e0e0e0;
+        background-color: #ffffff;
+    }
+    .ac-item-current {
+        border-color: #2979ff;
+        background-color: #ffffff;
+    }
+    .ac-item-correct {
+        border-color: #2979ff;
+        background-color: #2979ff;
+    }
+    .ac-item-wrong {
+        border-color: #2979ff;
+        background-color: #2979ff;
+    }
+    .ac-item-default {
+        border-color: #e0e0e0;
+        background-color: #ffffff;
+    }
+    .ac-num {
+        font-size: 28rpx;
+        color: #666666;
+    }
+    .ac-num-current {
+        color: #2979ff;
+        font-weight: bold;
+    }
+    .ac-num-answered {
+        color: #ffffff;
+        font-weight: bold;
+    }
+    .ac-num-default {
+        color: #666666;
+    }
+    .ac-footer {
+        margin-top: 40rpx;
+        flex-direction: row;
+        justify-content: center;
+    }
+    .ac-submit-btn {
+        background-color: #2979ff;
+        border-radius: 48rpx;
+        padding: 26rpx 0;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+    }
+    .ac-submit-text {
+        font-size: 32rpx;
+        font-weight: 600;
+        color: #ffffff;
+    }
+    .mr-20-mb-20 { margin-right: 20rpx; margin-bottom: 20rpx; }
+</style>

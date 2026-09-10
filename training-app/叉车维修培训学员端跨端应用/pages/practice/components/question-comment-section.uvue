@@ -1,0 +1,159 @@
+<template>
+    <!-- 评论区块 -->
+    <view class="qcm-block">
+        <view class="qcm-header">
+            <text class="qcm-title">评论</text>
+            <view class="qcm-action" @click="onToggle">
+                <text class="qcm-action-text">{{ expanded ? '收起' : '查看所有评论' }}</text>
+            </view>
+        </view>
+        <view v-if="expanded">
+            <view v-for="(c, idx) in comments" :key="idx" class="qcm-item">
+                <view class="qcm-head">
+                    <text class="qcm-author">{{ c.username }}</text>
+                    <text class="qcm-time">{{ formatTime(c.created_at) }}</text>
+                    <view v-if="c.can_delete" class="qcm-delete" @click="onDelete(c)">
+                        <text class="qcm-delete-text">删除</text>
+                    </view>
+                </view>
+                <text class="qcm-content">{{ c.content }}</text>
+            </view>
+            <view v-if="comments.length == 0" class="qcm-empty-wrap">
+                <text class="qcm-empty-text">暂无评论，快来抢沙发吧~</text>
+            </view>
+            <view class="qcm-input-bar">
+                <input class="qcm-input" v-model="commentText" placeholder="写下你的评论..." maxlength="500" />
+                <view class="qcm-send-btn" :class="commentText.length > 0 ? 'qcm-send-active' : ''" @click="onSubmit">
+                    <text class="qcm-send-text">发表</text>
+                </view>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import type { QuestionComment } from '../../../types/index'
+
+    const props = defineProps<{
+        expanded : boolean
+        comments : QuestionComment[]
+        commentText : string
+    }>()
+
+    const emit = defineEmits<{
+        (e : 'toggle') : void
+        (e : 'submit') : void
+        (e : 'delete', comment : QuestionComment) : void
+        (e : 'update:commentText', value : string) : void
+    }>()
+
+    function onToggle() : void {
+        emit('toggle')
+    }
+
+    function onSubmit() : void {
+        emit('submit')
+    }
+
+    function onDelete(comment : QuestionComment) : void {
+        emit('delete', comment)
+    }
+
+    function formatTime(dateStr : string) : string {
+        if (dateStr.length == 0) return ''
+        const d = new Date(dateStr)
+        const m = d.getMonth() + 1
+        const day = d.getDate()
+        const h = d.getHours()
+        const min = d.getMinutes()
+        const mStr = m < 10 ? `0${m}` : `${m}`
+        const dStr = day < 10 ? `0${day}` : `${day}`
+        const hStr = h < 10 ? `0${h}` : `${h}`
+        const minStr = min < 10 ? `0${min}` : `${min}`
+        return `${mStr}-${dStr} ${hStr}:${minStr}`
+    }
+</script>
+
+<style>
+    .qcm-block {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 28rpx;
+        margin-bottom: 20rpx;
+        border: 1rpx solid #f0f0f0;
+        flex-direction: column;
+    }
+    .qcm-header {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 16rpx;
+    }
+    .qcm-title {
+        font-size: 30rpx;
+        color: #333333;
+        font-weight: 600;
+    }
+    .qcm-action { padding: 8rpx 16rpx; }
+    .qcm-action-text { font-size: 24rpx; color: #2979ff; }
+    .qcm-item {
+        padding: 20rpx 0;
+        border-bottom: 1rpx solid #f5f5f5;
+        flex-direction: column;
+    }
+    .qcm-head {
+        flex-direction: row;
+        align-items: center;
+        margin-bottom: 12rpx;
+    }
+    .qcm-author {
+        font-size: 26rpx;
+        color: #333333;
+        font-weight: 500;
+        margin-right: 16rpx;
+    }
+    .qcm-time {
+        font-size: 22rpx;
+        color: #cccccc;
+        flex: 1;
+    }
+    .qcm-delete {
+        padding: 6rpx 16rpx;
+        border: 1rpx solid #f44336;
+        border-radius: 8rpx;
+    }
+    .qcm-delete-text { font-size: 22rpx; color: #f44336; }
+    .qcm-content {
+        font-size: 28rpx;
+        color: #666666;
+        line-height: 42rpx;
+    }
+    .qcm-empty-wrap { padding: 20rpx 0; align-items: center; }
+    .qcm-empty-text { font-size: 26rpx; color: #cccccc; }
+    .qcm-input-bar {
+        flex-direction: row;
+        align-items: center;
+        margin-top: 16rpx;
+    }
+    .qcm-input {
+        flex: 1;
+        height: 72rpx;
+        background-color: #f5f5f5;
+        border-radius: 36rpx;
+        padding: 0 28rpx;
+        font-size: 26rpx;
+        color: #333333;
+    }
+    .qcm-send-btn {
+        margin-left: 16rpx;
+        padding: 16rpx 28rpx;
+        border-radius: 36rpx;
+        background-color: #e0e0e0;
+    }
+    .qcm-send-active { background-color: #2979ff; }
+    .qcm-send-text {
+        font-size: 26rpx;
+        color: #ffffff;
+        font-weight: 500;
+    }
+</style>

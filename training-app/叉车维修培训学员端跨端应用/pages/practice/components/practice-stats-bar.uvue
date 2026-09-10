@@ -1,0 +1,88 @@
+<template>
+    <!-- 数据统计栏 -->
+    <view class="ps-bar">
+        <view class="ps-item">
+            <text class="ps-num">{{ overview.today_count }}</text>
+            <text class="ps-label">今日做题</text>
+        </view>
+        <view class="ps-divider"></view>
+        <view class="ps-item">
+            <text class="ps-num">{{ overview.total_count }}</text>
+            <text class="ps-label">累计做题</text>
+        </view>
+        <view class="ps-divider"></view>
+        <view class="ps-item">
+            <text class="ps-num">{{ overview.total_days }}</text>
+            <text class="ps-label">累计天数</text>
+        </view>
+        <view class="ps-divider"></view>
+        <view class="ps-item" @click="onReportClick">
+            <view class="ps-report-wrap">
+                <text class="ps-report-text">数据报告</text>
+                <text class="ps-report-arrow">›</text>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import type { PracticeOverview } from '../../../types/index'
+
+    defineProps<{
+        overview : PracticeOverview
+    }>()
+
+    const emit = defineEmits<{
+        (e : 'report-click') : void
+    }>()
+
+    function onReportClick() : void {
+        emit('report-click')
+    }
+</script>
+
+<style>
+    .ps-bar {
+        margin: 0 24rpx 24rpx 24rpx;
+        background: linear-gradient(135deg, #4facfe 0%, #2979ff 100%);
+        border-radius: 20rpx;
+        padding: 24rpx 0;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-around;
+    }
+    .ps-item {
+        flex: 1;
+        flex-direction: column;
+        align-items: center;
+    }
+    .ps-num {
+        font-size: 34rpx;
+        font-weight: bold;
+        color: #ffffff;
+        margin-bottom: 4rpx;
+    }
+    .ps-label {
+        font-size: 22rpx;
+        color: rgba(255, 255, 255, 0.85);
+    }
+    .ps-divider {
+        width: 1rpx;
+        height: 48rpx;
+        background-color: rgba(255, 255, 255, 0.3);
+    }
+    .ps-report-wrap {
+        flex-direction: row;
+        align-items: center;
+    }
+    .ps-report-text {
+        font-size: 26rpx;
+        color: #ffffff;
+        font-weight: bold;
+    }
+    .ps-report-arrow {
+        font-size: 26rpx;
+        color: #ffffff;
+        margin-left: 4rpx;
+    }
+</style>

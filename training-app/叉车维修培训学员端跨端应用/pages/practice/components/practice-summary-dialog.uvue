@@ -1,0 +1,127 @@
+<template>
+    <!-- 结果汇总弹窗 -->
+    <view v-if="visible" class="sm-mask">
+        <view class="sm-box">
+            <text class="sm-title">练习完成</text>
+            <view class="sm-stats">
+                <view class="sm-stat">
+                    <text class="sm-stat-num">{{ totalCount }}</text>
+                    <text class="sm-stat-label">总题数</text>
+                </view>
+                <view class="sm-stat">
+                    <text class="sm-stat-num sm-correct">{{ correctCount }}</text>
+                    <text class="sm-stat-label">答对</text>
+                </view>
+                <view class="sm-stat">
+                    <text class="sm-stat-num sm-wrong">{{ totalCount - correctCount }}</text>
+                    <text class="sm-stat-label">答错</text>
+                </view>
+                <view class="sm-stat">
+                    <text class="sm-stat-num">{{ accuracy }}%</text>
+                    <text class="sm-stat-label">正确率</text>
+                </view>
+            </view>
+            <view class="sm-actions">
+                <view class="sm-btn sm-btn-secondary" @click="onExit">
+                    <text class="sm-btn-secondary-text">返回</text>
+                </view>
+                <view class="sm-btn sm-btn-primary" @click="onRestart">
+                    <text class="sm-btn-primary-text">再练一次</text>
+                </view>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    const props = defineProps<{
+        visible : boolean
+        totalCount : number
+        correctCount : number
+        accuracy : number
+    }>()
+
+    const emit = defineEmits<{
+        (e : 'exit') : void
+        (e : 'restart') : void
+    }>()
+
+    function onExit() : void {
+        emit('exit')
+    }
+
+    function onRestart() : void {
+        emit('restart')
+    }
+</script>
+
+<style>
+    .sm-mask {
+        position: fixed;
+        left: 0;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.6);
+        justify-content: center;
+        align-items: center;
+    }
+    .sm-box {
+        width: 600rpx;
+        background-color: #ffffff;
+        border-radius: 24rpx;
+        padding: 48rpx 32rpx;
+        align-items: center;
+    }
+    .sm-title {
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 40rpx;
+    }
+    .sm-stats {
+        flex-direction: row;
+        justify-content: space-around;
+        margin-bottom: 40rpx;
+        align-self: stretch;
+    }
+    .sm-stat {
+        flex-direction: column;
+        align-items: center;
+    }
+    .sm-stat-num {
+        font-size: 44rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 8rpx;
+    }
+    .sm-correct { color: #4caf50; }
+    .sm-wrong { color: #f44336; }
+    .sm-stat-label {
+        font-size: 22rpx;
+        color: #999999;
+    }
+    .sm-actions {
+        flex-direction: row;
+        align-self: stretch;
+    }
+    .sm-btn {
+        flex: 1;
+        align-items: center;
+        padding: 24rpx 0;
+        border-radius: 48rpx;
+        margin: 0 12rpx;
+    }
+    .sm-btn-secondary { background-color: #f5f5f5; }
+    .sm-btn-primary { background-color: #2979ff; }
+    .sm-btn-primary-text {
+        font-size: 28rpx;
+        font-weight: bold;
+        color: #ffffff;
+    }
+    .sm-btn-secondary-text {
+        font-size: 28rpx;
+        font-weight: bold;
+        color: #666666;
+    }
+</style>

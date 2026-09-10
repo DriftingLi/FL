@@ -1,0 +1,93 @@
+<template>
+    <!-- 笔记区块 -->
+    <view class="qns-block">
+        <view class="qns-header">
+            <text class="qns-title">笔记</text>
+            <view class="qns-action" @click="onToggle">
+                <text class="qns-action-text">{{ expanded ? '收起' : (content.length > 0 ? '查看笔记' : '添加笔记') }}</text>
+            </view>
+        </view>
+        <view v-if="expanded" class="qns-area">
+            <textarea class="qns-textarea" v-model="noteText" placeholder="记录你的学习心得..." maxlength="2000" @blur="onSave" />
+            <view v-if="noteText.length > 0" class="qns-actions">
+                <view class="qns-delete-btn" @click="onDelete">
+                    <text class="qns-delete-text">删除笔记</text>
+                </view>
+                <text class="qns-autosave">自动保存</text>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    const props = defineProps<{
+        expanded : boolean
+        content : string
+    }>()
+
+    const emit = defineEmits<{
+        (e : 'toggle') : void
+        (e : 'save') : void
+        (e : 'delete') : void
+        (e : 'update:content', value : string) : void
+    }>()
+
+    const noteText = props.content
+
+    function onToggle() : void {
+        emit('toggle')
+    }
+
+    function onSave() : void {
+        emit('save')
+    }
+
+    function onDelete() : void {
+        emit('delete')
+    }
+</script>
+
+<style>
+    .qns-block {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 28rpx;
+        margin-bottom: 20rpx;
+        border: 1rpx solid #f0f0f0;
+        flex-direction: column;
+    }
+    .qns-header {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 16rpx;
+    }
+    .qns-title {
+        font-size: 30rpx;
+        color: #333333;
+        font-weight: 600;
+    }
+    .qns-action { padding: 8rpx 16rpx; }
+    .qns-action-text { font-size: 24rpx; color: #2979ff; }
+    .qns-area { flex-direction: column; }
+    .qns-textarea {
+        width: 100%;
+        min-height: 200rpx;
+        background-color: #fafafa;
+        border: 1rpx solid #f0f0f0;
+        border-radius: 12rpx;
+        padding: 20rpx;
+        font-size: 28rpx;
+        color: #333333;
+        line-height: 44rpx;
+    }
+    .qns-actions {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 12rpx;
+    }
+    .qns-delete-btn { padding: 8rpx 16rpx; }
+    .qns-delete-text { font-size: 24rpx; color: #f44336; }
+    .qns-autosave { font-size: 22rpx; color: #cccccc; }
+</style>

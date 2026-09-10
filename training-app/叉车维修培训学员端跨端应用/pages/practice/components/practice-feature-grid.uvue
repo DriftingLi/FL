@@ -1,0 +1,69 @@
+<template>
+    <!-- 功能入口网格 -->
+    <view class="pf-grid">
+        <view class="pf-item" @click="onFeatureClick('past_paper')">
+            <view class="pf-icon-wrap pf-color-paper">
+                <text class="pf-icon-text">📄</text>
+            </view>
+            <text class="pf-name">历年真题</text>
+        </view>
+        <view class="pf-item" @click="onFeatureClick('mock_exam')">
+            <view class="pf-icon-wrap pf-color-mock">
+                <text class="pf-icon-text">📋</text>
+            </view>
+            <text class="pf-name">套卷模拟</text>
+        </view>
+        <view class="pf-item" @click="onFeatureClick('level_exam')">
+            <view class="pf-icon-wrap pf-color-level">
+                <text class="pf-icon-text">🏆</text>
+            </view>
+            <text class="pf-name">模考大赛</text>
+        </view>
+        <view class="pf-item" @click="onFeatureClick('wrong_question')">
+            <view class="pf-icon-wrap pf-color-wrong">
+                <text class="pf-icon-text">❌</text>
+            </view>
+            <text class="pf-name">错题本</text>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    const emit = defineEmits<{
+        (e : 'feature-click', feature : string) : void
+    }>()
+
+    function onFeatureClick(feature : string) : void {
+        emit('feature-click', feature)
+    }
+</script>
+
+<style>
+    .pf-grid {
+        margin: 0 24rpx 24rpx 24rpx;
+        background-color: #ffffff;
+        border-radius: 20rpx;
+        padding: 28rpx 0;
+        flex-direction: row;
+        justify-content: space-around;
+    }
+    .pf-item {
+        flex: 1;
+        flex-direction: column;
+        align-items: center;
+    }
+    .pf-icon-wrap {
+        width: 80rpx;
+        height: 80rpx;
+        border-radius: 20rpx;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 12rpx;
+    }
+    .pf-color-paper { background-color: #fff8e1; }
+    .pf-color-mock { background-color: #e8f5e9; }
+    .pf-color-level { background-color: #e3f2fd; }
+    .pf-color-wrong { background-color: #fce4ec; }
+    .pf-icon-text { font-size: 40rpx; }
+    .pf-name { font-size: 24rpx; color: #333333; }
+</style>

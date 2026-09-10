@@ -1,0 +1,56 @@
+<template>
+    <!-- 考点区块 -->
+    <view class="qkt-block">
+        <view class="qkt-header">
+            <text class="qkt-title">考点</text>
+        </view>
+        <view v-if="tags.length > 0" class="qkt-row">
+            <view v-for="tag in tags" :key="tag.id" class="qkt-tag mr-12-mb-12">
+                <text class="qkt-tag-text">{{ tag.name }}</text>
+            </view>
+        </view>
+        <text v-else class="qkt-empty">暂无考点信息</text>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import type { KnowledgeTag } from '../../../types/index'
+
+    defineProps<{
+        tags : KnowledgeTag[]
+    }>()
+</script>
+
+<style>
+    .qkt-block {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 28rpx;
+        margin-bottom: 20rpx;
+        border: 1rpx solid #f0f0f0;
+        flex-direction: column;
+    }
+    .qkt-header {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 16rpx;
+    }
+    .qkt-title {
+        font-size: 30rpx;
+        color: #333333;
+        font-weight: 600;
+    }
+    .qkt-row {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+    .qkt-tag {
+        background-color: #f0f7ff;
+        border-radius: 8rpx;
+        padding: 8rpx 20rpx;
+    }
+    .qkt-tag-text { font-size: 24rpx; color: #2979ff; }
+    .qkt-empty { font-size: 26rpx; color: #cccccc; }
+    .mr-12-mb-12 { margin-right: 12rpx; margin-bottom: 12rpx; }
+</style>

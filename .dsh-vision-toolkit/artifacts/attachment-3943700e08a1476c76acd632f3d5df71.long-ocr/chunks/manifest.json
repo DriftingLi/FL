@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "input": "E:\\FL\\.dsh-vision-toolkit\\tmp\\pasted-images\\131f9e53c0f71b998bbf\\attachment-3943700e08a1476c76acd632f3d5df71.png",
+  "image_width": 456,
+  "image_height": 892,
+  "mode": "general",
+  "target_height": 400,
+  "min_height": 200,
+  "max_height": 568,
+  "fallback_overlap": 40,
+  "analysis": {
+    "analysis_scale": 1,
+    "safe_band_radius_px": 5
+  },
+  "chunks": [
+    {
+      "index": 1,
+      "image": "chunk_001.png",
+      "image_sha256": "b4238eb389528ba5a30bfe43f5ad9abb641f78bd4c898005f72c342111687efd",
+      "core_top": 0,
+      "core_bottom": 400,
+      "crop_top": 0,
+      "crop_bottom": 440,
+      "top_overlap": 0,
+      "bottom_overlap": 40,
+      "cut_energy": 141.25,
+      "cut_quality": 0.7506775067750677,
+      "top_safe_margin": null,
+      "bottom_safe_margin": 0,
+      "ocr": "chunk_001.ocr.md",
+      "ocr_reused": false
+    },
+    {
+      "index": 2,
+      "image": "chunk_002.png",
+      "image_sha256": "d36d448c04b602a64bc10a6b803efcd625ce225fcc1e806d8a7c5e4bb4a95c4a",
+      "core_top": 400,
+      "core_bottom": 892,
+      "crop_top": 360,
+      "crop_bottom": 892,
+      "top_overlap": 40,
+      "bottom_overlap": 0,
+      "cut_energy": null,
+      "cut_quality": null,
+      "top_safe_margin": 0,
+      "bottom_safe_margin": null,
+      "ocr": "chunk_002.ocr.md",
+      "ocr_reused": false
+    }
+  ],
+  "merge_boundaries": [
+    {
+      "after_chunk": 1,
+      "before_chunk": 2,
+      "removed_items": 1,
+      "unit": "lines",
+      "method": "exact"
+    }
+  ],
+  "output": "E:\\FL\\.dsh-vision-toolkit\\artifacts\\attachment-3943700e08a1476c76acd632f3d5df71.long-ocr\\attachment-3943700e08a1476c76acd632f3d5df71.ocr.md",
+  "complete": true
+}
