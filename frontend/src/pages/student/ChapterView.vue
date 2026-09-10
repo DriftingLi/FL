@@ -24,13 +24,13 @@
       <div class="chapter-header mb-5">
         <div class="header-left flex flex-wrap items-center gap-2.5">
           <h1 class="chapter-title m-0 text-[22px] font-semibold text-ink max-md:text-lg">{{ chapterDetail.title }}</h1>
-          <el-tag
+          <UiTag
             v-if="chapterDetail.study_status === 'completed'"
-            type="success"
+            tone="success"
             size="small"
           >
             已完成
-          </el-tag>
+          </UiTag>
           <UiButton v-else size="small" :loading="markingCompleted" @click="markCompleted">
             标记完成
           </UiButton>
@@ -54,7 +54,7 @@
                 <component :is="optionIcon(option as any)" />
               </el-icon>
               {{ option.label }}
-              <el-tag size="small" type="info" class="ml-0.5 scale-[0.85]">{{ optionCount(option as any) }}</el-tag>
+              <UiTag size="small" tone="info" class="ml-0.5 scale-[0.85]">{{ optionCount(option as any) }}</UiTag>
             </span>
           </template>
         </UiSegmentTabs>
@@ -153,6 +153,7 @@ import PptViewer from '@/components/student/PptViewer.vue'
 import ImageViewer from '@/components/student/ImageViewer.vue'
 import ChapterDiscussion from '@/components/student/ChapterDiscussion.vue'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiTag from '@/components/ui/UiTag.vue'
 
 marked.use(
   markedHighlight({

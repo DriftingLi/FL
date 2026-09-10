@@ -3,7 +3,7 @@
     <div class="page-header">
       <h2>题库审核</h2>
       <div class="header-tips" v-if="pendingCount > 0">
-        <el-tag type="warning">待审核 {{ pendingCount }} 题</el-tag>
+        <UiTag tone="warning">待审核 {{ pendingCount }} 题</UiTag>
       </div>
     </div>
 
@@ -42,7 +42,7 @@
       <el-table-column prop="content" label="题干" show-overflow-tooltip />
       <el-table-column label="状态" width="100">
         <template #default="{ row }">
-          <el-tag :type="statusType[row.status]" size="small">{{ statusMap[row.status] }}</el-tag>
+          <UiTag :tone="statusType[row.status]" size="small">{{ statusMap[row.status] }}</UiTag>
         </template>
       </el-table-column>
       <el-table-column label="操作" width="90" fixed="right" align="center">
@@ -133,6 +133,7 @@ import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowDown } from '@element-plus/icons-vue'
 import { questionBankApi } from '@/api/questionBank'
+import type { UiTagTone } from '@/components/ui/UiTag.vue'
 import type { Question } from '@/types/question'
 import { typeMap } from '@/constants/question'
 import { useAsyncPage } from '@/composables/useAsyncPage'
@@ -141,9 +142,10 @@ import UiPagination from '@/components/ui/UiPagination.vue'
 import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import { useConfirm } from '@/composables/useConfirm'
+import UiTag from '@/components/ui/UiTag.vue'
 
 const statusMap: Record<string, string> = { draft: '草稿', pending: '待审核', published: '已发布' }
-const statusType: Record<string, string> = { draft: 'info', pending: 'warning', published: 'success' }
+const statusType: Record<string, UiTagTone> = { draft: 'info', pending: 'warning', published: 'success' }
 
 const questions = ref<Question[]>([])
 

@@ -110,7 +110,7 @@
         >
           <div class="min-w-0 flex-1">
             <div class="flex flex-wrap items-center gap-2">
-              <el-tag size="small" type="info">回复</el-tag>
+              <UiTag size="small" tone="info">回复</UiTag>
               <h3 class="m-0 truncate text-base font-semibold text-ink">{{ reply.topic_title || '原帖已删除' }}</h3>
             </div>
             <p class="mt-1.5 mb-2 line-clamp-2 text-[13px] text-ink-2">{{ reply.content }}</p>
@@ -150,14 +150,14 @@
           <div class="min-w-0 flex-1">
             <div class="flex flex-wrap items-center gap-2">
               <template v-if="topic.category === 'question'">
-                <el-tag v-if="topic.accepted_reply_id || topic.solved_at" size="small" type="success" effect="dark" class="font-semibold">✓ 已解决</el-tag>
-                <el-tag v-else size="small" type="info" effect="plain" class="bg-canvas text-ink-2 border-[var(--color-border-dark)]">求助</el-tag>
+                <UiTag v-if="topic.accepted_reply_id || topic.solved_at" size="small" tone="success" effect="dark" class="font-semibold">✓ 已解决</UiTag>
+                <UiTag v-else size="small" tone="info" effect="plain" class="bg-canvas text-ink-2 border-[var(--color-border-dark)]">求助</UiTag>
               </template>
-              <el-tag v-else-if="topic.chapter_id" size="small" type="warning">
+              <UiTag v-else-if="topic.chapter_id" size="small" tone="warning">
                 {{ topic.chapter_title || '章节讨论' }}
-              </el-tag>
-              <el-tag v-else size="small" type="info">综合</el-tag>
-              <el-tag v-if="topic.is_featured" size="small" effect="dark" class="font-semibold">★ 精选</el-tag>
+              </UiTag>
+              <UiTag v-else size="small" tone="info">综合</UiTag>
+              <UiTag v-if="topic.is_featured" size="small" effect="dark" class="font-semibold">★ 精选</UiTag>
               <h3 class="m-0 truncate text-base font-semibold text-ink">{{ topic.title }}</h3>
             </div>
             <p class="mt-1.5 mb-2 line-clamp-2 text-[13px] text-ink-2">{{ topic.content }}</p>
@@ -233,6 +233,7 @@ import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
+import UiTag from '@/components/ui/UiTag.vue'
 
 const router = useRouter()
 const route = useRoute()

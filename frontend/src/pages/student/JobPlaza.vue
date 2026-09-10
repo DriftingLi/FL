@@ -33,8 +33,8 @@
         <div class="flex items-start justify-between gap-2">
           <div class="min-w-0 flex-1 text-sm font-semibold text-ink line-clamp-1">{{ item.title }}</div>
           <!-- #488：状态角标 -->
-          <el-tag v-if="item.apply_state === 'applied'" type="success" size="small">已投递</el-tag>
-          <el-tag v-else-if="item.apply_state === 'not_hired'" type="danger" size="small">未录用</el-tag>
+          <UiTag v-if="item.apply_state === 'applied'" tone="success" size="small">已投递</UiTag>
+          <UiTag v-else-if="item.apply_state === 'not_hired'" tone="danger" size="small">未录用</UiTag>
         </div>
         <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-3">
           <span v-if="item.position_name">{{ item.position_name }}</span>
@@ -66,6 +66,7 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiTag from '@/components/ui/UiTag.vue'
 
 const items = ref<JobPosting[]>([])
 const loadingMore = ref(false)

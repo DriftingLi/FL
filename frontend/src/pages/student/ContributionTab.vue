@@ -20,6 +20,8 @@ import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useCredentialStore } from '@/stores/credential'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import { useConfirm } from '@/composables/useConfirm'
+import UiRadioGroup from '@/components/ui/UiRadioGroup.vue'
+import UiSwitch from '@/components/ui/UiSwitch.vue'
 
 const props = defineProps<{
   credentialId?: number | null
@@ -444,7 +446,7 @@ defineExpose({ loadMine })
           </div>
         </div>
         <div class="flex items-center gap-2">
-          <el-switch v-model="uploadAnonymous" />
+          <UiSwitch v-model="uploadAnonymous" />
           <span class="text-xs text-ink-2">匿名投稿（公开后显示「匿名学员」，积分照常发放）</span>
         </div>
         <div class="mt-2 flex justify-end gap-2">
@@ -490,9 +492,9 @@ defineExpose({ loadMine })
     <UiDialog v-model="reportVisible" title="举报投稿" width="440px" :confirm-text="'提交举报'" :confirm-loading="reportSubmitting" @confirm="submitReport">
       <div class="flex flex-col gap-2">
         <p v-if="reportTarget" class="mb-1 text-xs text-ink-3">举报《{{ reportTarget.title }}》</p>
-        <el-radio-group v-model="reportReason" class="flex flex-col items-start gap-2">
+        <UiRadioGroup v-model="reportReason" class="flex flex-col items-start gap-2">
           <el-radio v-for="r in REPORT_REASONS" :key="r.value" :value="r.value">{{ r.label }}</el-radio>
-        </el-radio-group>
+        </UiRadioGroup>
       </div>
     </UiDialog>
   </div>

@@ -34,7 +34,7 @@ style="width: 280px"
 </el-table-column>
 <el-table-column label="状态" width="100" align="center">
 <template #default="{ row }">
-<el-tag :type="row.status === 1 ? 'success' : 'danger'" size="small">{{ row.status === 1 ? '正常' : '禁用' }}</el-tag>
+<UiTag :tone="row.status === 1 ? 'success' : 'danger'" size="small">{{ row.status === 1 ? '正常' : '禁用' }}</UiTag>
 </template>
 </el-table-column>
 <el-table-column prop="created_at" label="创建时间" width="180" align="center">
@@ -155,6 +155,7 @@ import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiTag from '@/components/ui/UiTag.vue'
 
 const dialogVisible = ref(false)
 const submitting = ref(false)

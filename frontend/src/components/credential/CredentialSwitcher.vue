@@ -4,11 +4,11 @@
     :class="{ collapsed: collapsed, 'is-dark': props.theme === 'dark' }"
   >
     <div v-if="collapsed" class="collapsed-view">
-      <el-tooltip :content="current?.name || '选择证件'" placement="right" :show-after="300">
+      <UiTooltip :content="current?.name || '选择证件'" placement="right" :show-after="300">
         <div class="collapsed-icon" @click="switcherVisible = true">
           <el-icon><Notebook /></el-icon>
         </div>
-      </el-tooltip>
+      </UiTooltip>
     </div>
     <div v-else class="expanded-view">
       <div class="switcher-label">当前证件</div>
@@ -69,6 +69,7 @@ import type { CredentialDict } from '@/api/credential'
 import { Notebook } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import UiDialog from '@/components/ui/UiDialog.vue'
+import UiTooltip from '@/components/ui/UiTooltip.vue'
 
 const props = withDefaults(
   defineProps<{

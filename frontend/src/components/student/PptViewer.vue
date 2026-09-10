@@ -22,15 +22,15 @@
       <div class="ppt-header">
         <span class="slide-title">{{ fileName }}</span>
         <div class="ppt-actions">
-          <el-tooltip content="重新生成幻灯片" placement="bottom">
+          <UiTooltip content="重新生成幻灯片" placement="bottom">
             <UiButton :icon="Refresh" circle size="small" :loading="regenerating" @click="regenerateSlides"/>
-          </el-tooltip>
-          <el-tooltip content="全屏演示" placement="bottom">
+          </UiTooltip>
+          <UiTooltip content="全屏演示" placement="bottom">
             <UiButton :icon="Rank" circle size="small" @click="toggleFullscreen"/>
-          </el-tooltip>
-          <el-tooltip content="下载" placement="bottom">
+          </UiTooltip>
+          <UiTooltip content="下载" placement="bottom">
             <UiButton :icon="Download" circle size="small" @click="downloadFile"/>
-          </el-tooltip>
+          </UiTooltip>
         </div>
       </div>
 
@@ -87,6 +87,7 @@ import { courseApi } from '@/api/course'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiTooltip from '@/components/ui/UiTooltip.vue'
 
 const props = defineProps({
   src: { type: String, required: true },

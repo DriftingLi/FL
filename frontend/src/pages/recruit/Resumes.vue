@@ -62,8 +62,8 @@
         <div class="flex items-center justify-between gap-2">
           <div class="min-w-0 flex-1 truncate text-sm font-semibold text-ink">{{ item.real_name || item.real_name_masked || '匿名学员' }}</div>
           <!-- #489：联系状态角标 -->
-          <el-tag v-if="item.contact_state === 'approved'" type="success" size="small">已授权</el-tag>
-          <el-tag v-else-if="item.contact_state === 'pending'" type="warning" size="small">待学员确认</el-tag>
+          <UiTag v-if="item.contact_state === 'approved'" tone="success" size="small">已授权</UiTag>
+          <UiTag v-else-if="item.contact_state === 'pending'" tone="warning" size="small">待学员确认</UiTag>
         </div>
         <div class="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-xs text-ink-3">
           <span v-if="item.expected_specialty_extra">{{ item.expected_specialty_extra }}</span>
@@ -104,6 +104,7 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiTag from '@/components/ui/UiTag.vue'
 
 const BATCH = 20
 const items = ref<RecruitResumeItem[]>([])

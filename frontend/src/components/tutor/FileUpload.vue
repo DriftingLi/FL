@@ -1,7 +1,7 @@
 <template>
   <div class="file-upload border border-line rounded-ctl bg-panel p-5">
     <div class="filter-bar mb-4 overflow-x-auto whitespace-nowrap">
-      <el-radio-group v-model="activeFilter" size="small" @change="handleFilterChange">
+      <UiRadioGroup v-model="activeFilter" size="small" @change="handleFilterChange">
         <el-radio-button
           v-for="item in filterOptions"
           :key="item.value"
@@ -9,7 +9,7 @@
         >
           {{ item.label }}
         </el-radio-button>
-      </el-radio-group>
+      </UiRadioGroup>
     </div>
 
     <div
@@ -62,9 +62,9 @@
             <div class="file-detail flex-1 min-w-0">
               <div class="file-name-row flex items-center gap-2">
                 <span class="file-name text-sm text-ink overflow-hidden text-ellipsis whitespace-nowrap max-w-[260px] max-[768px]:max-w-[160px]" :title="file.name">{{ file.name }}</span>
-                <el-tag size="small" :type="getFileTypeTagType(file.category)" class="file-type-tag shrink-0">
+                <UiTag size="small" :tone="getFileTypeTagType(file.category)" class="file-type-tag shrink-0">
                   {{ getFileTypeLabel(file.category) }}
-                </el-tag>
+                </UiTag>
               </div>
               <span class="file-size text-xs text-ink-muted mt-0.5">{{ formatSize(file.size) }}</span>
             </div>
@@ -123,7 +123,10 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { tutorApi } from '@/api/tutor'
+import type { UiTagTone } from '@/components/ui/UiTag.vue'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiTag from '@/components/ui/UiTag.vue'
+import UiRadioGroup from '@/components/ui/UiRadioGroup.vue'
 
 interface FileItem {
   uid: number
@@ -272,9 +275,9 @@ function getFileIcon(ext: string) {
   }
 }
 
-function getFileTypeTagType(category: string) {
-  const types: Record<string, string> = {
-    document: '',
+function getFileTypeTagType(category: string): UiTagTone {
+  const types: Record<string, UiTagTone> = {
+    document: 'primary',
     ppt: 'warning',
     video: 'danger'
   }

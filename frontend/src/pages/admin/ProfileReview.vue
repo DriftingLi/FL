@@ -31,9 +31,9 @@
         </el-table-column>
         <el-table-column label="修改项" width="100">
           <template #default="{ row }">
-            <el-tag :type="row.field_type === 'nickname' ? 'primary' : 'warning'" size="small">
+            <UiTag :tone="row.field_type === 'nickname' ? 'primary' : 'warning'" size="small">
               {{ row.field_type === 'nickname' ? '昵称' : '头像' }}
-            </el-tag>
+            </UiTag>
           </template>
         </el-table-column>
         <el-table-column label="原值 → 新值" min-width="220">
@@ -71,9 +71,9 @@
                 </template>
               </el-dropdown>
             </template>
-            <el-tag v-else :type="row.status === 'approved' ? 'success' : 'danger'" size="small">
+            <UiTag v-else :tone="row.status === 'approved' ? 'success' : 'danger'" size="small">
               {{ row.status === 'approved' ? '已通过' : '已拒绝' }}
-            </el-tag>
+            </UiTag>
           </template>
         </el-table-column>
       </el-table>
@@ -111,6 +111,7 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import { useConfirm } from '@/composables/useConfirm'
+import UiTag from '@/components/ui/UiTag.vue'
 
 const submitting = ref(false)
 const activeStatus = ref<'pending' | 'approved' | 'rejected'>('pending')

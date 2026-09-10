@@ -3,7 +3,7 @@
     <template #header><span class="card-title">考点</span></template>
     <div class="content">
       <template v-if="tags.length>0">
-        <el-tag v-for="t in tags" :key="t.id" size="small" style="margin:4px 6px 0 0">{{ t.name }}</el-tag>
+        <UiTag v-for="t in tags" :key="t.id" size="small" style="margin:4px 6px 0 0">{{ t.name }}</UiTag>
       </template>
       <span v-else class="empty">暂无</span>
     </div>
@@ -12,6 +12,7 @@
 
 <script setup lang="ts">
 import UiCard from '@/components/ui/UiCard.vue'
+import UiTag from '@/components/ui/UiTag.vue'
 
 defineProps<{ tags: any[] }>()
 </script>

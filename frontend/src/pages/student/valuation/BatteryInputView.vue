@@ -8,6 +8,7 @@ import { Refresh, Promotion, Upload } from '@element-plus/icons-vue'
 import PageHeader from '@/components/valuation/PageHeader.vue'
 import { useBatteryStore } from '@/stores/valuationBattery'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiUpload from '@/components/ui/UiUpload.vue'
 import {
   BATTERY_TYPE_LABELS,
   type BatteryType,
@@ -235,7 +236,7 @@ const isValid = computed(
             @change="parseJson"
           />
           <div class="form-toolbar">
-            <el-upload
+            <UiUpload
               :before-upload="(file: File) => { handleFile(file); return false; }"
               :show-file-list="false"
               accept=".json,application/json"
@@ -243,7 +244,7 @@ const isValid = computed(
               <UiButton class="btn-ghost" :icon="Upload">
                 上传 .json
               </UiButton>
-            </el-upload>
+            </UiUpload>
             <UiButton class="btn-ghost" @click="loadSample">加载示例</UiButton>
             <span v-if="jsonError" class="form-error">{{ jsonError }}</span>
             <span v-else-if="cycleCount > 0" class="form-hint">

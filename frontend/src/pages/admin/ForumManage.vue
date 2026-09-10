@@ -18,11 +18,11 @@
         <UiFilterBar>
         <template #filters>
 
-          <el-radio-group v-model="reportStatus" @change="handleReportStatusChange">
+          <UiRadioGroup v-model="reportStatus" @change="handleReportStatusChange">
             <el-radio-button :value="-1">全部</el-radio-button>
             <el-radio-button :value="0">待处理</el-radio-button>
             <el-radio-button :value="1">已处理</el-radio-button>
-          </el-radio-group>
+          </UiRadioGroup>
         </template>
       </UiFilterBar>
 
@@ -33,18 +33,18 @@
           </el-table-column>
           <el-table-column label="对象" min-width="200">
             <template #default="{ row }">
-              <el-tag size="small" :type="row.reply_id ? 'info' : 'warning'">
+              <UiTag size="small" :tone="row.reply_id ? 'info' : 'warning'">
                 {{ row.reply_id ? '回复' : '帖子' }}
-              </el-tag>
+              </UiTag>
               <span class="report-target">{{ row.topic_title || `#${row.topic_id}` }}</span>
             </template>
           </el-table-column>
           <el-table-column prop="reason" label="举报理由" min-width="180" show-overflow-tooltip />
           <el-table-column label="状态" width="90" align="center">
             <template #default="{ row }">
-              <el-tag size="small" :type="row.status === 1 ? 'success' : 'danger'">
+              <UiTag size="small" :tone="row.status === 1 ? 'success' : 'danger'">
                 {{ row.status === 1 ? '已处理' : '待处理' }}
-              </el-tag>
+              </UiTag>
             </template>
           </el-table-column>
           <el-table-column label="时间" width="160" align="center">
@@ -141,13 +141,13 @@
         <el-table-column label="标题" min-width="240">
           <template #default="{ row }">
             <div class="title-cell">
-              <el-tag v-if="row.category === 'question'" size="small" type="success">问答</el-tag>
-              <el-tag v-else-if="row.category === 'experience'" size="small" type="warning">备考经验</el-tag>
-              <el-tag v-else-if="row.chapter_id" size="small" type="warning">
+              <UiTag v-if="row.category === 'question'" size="small" tone="success">问答</UiTag>
+              <UiTag v-else-if="row.category === 'experience'" size="small" tone="warning">备考经验</UiTag>
+              <UiTag v-else-if="row.chapter_id" size="small" tone="warning">
                 {{ row.chapter_title || '章节讨论' }}
-              </el-tag>
-              <el-tag v-else size="small" type="info">综合</el-tag>
-              <el-tag v-if="row.is_featured" size="small" effect="dark" class="font-semibold">★ 精选</el-tag>
+              </UiTag>
+              <UiTag v-else size="small" tone="info">综合</UiTag>
+              <UiTag v-if="row.is_featured" size="small" effect="dark" class="font-semibold">★ 精选</UiTag>
               <span class="title-text">{{ row.title }}</span>
             </div>
           </template>
@@ -213,6 +213,8 @@ import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 import { useConfirm } from '@/composables/useConfirm'
+import UiTag from '@/components/ui/UiTag.vue'
+import UiRadioGroup from '@/components/ui/UiRadioGroup.vue'
 
 const topics = ref<AdminForumTopic[]>([])
 

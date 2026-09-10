@@ -14,6 +14,7 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
+import UiTag from '@/components/ui/UiTag.vue'
 
 // 新增弹窗
 const dialogVisible = ref(false)
@@ -211,9 +212,9 @@ onMounted(() => {
       </el-table-column>
       <el-table-column label="状态" width="90" align="center">
         <template #default="{ row }">
-          <el-tag :type="row.status === 1 ? 'success' : 'danger'" size="small">
+          <UiTag :tone="row.status === 1 ? 'success' : 'danger'" size="small">
             {{ row.status === 1 ? '正常' : '禁用' }}
-          </el-tag>
+          </UiTag>
         </template>
       </el-table-column>
       <el-table-column prop="created_at" label="注册时间" width="160" align="center">

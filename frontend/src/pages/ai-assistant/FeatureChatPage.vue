@@ -144,7 +144,7 @@
 
     <!-- 输入区差异内容：图片上传按钮 -->
     <template #input-prefix>
-      <el-upload
+      <UiUpload
         v-if="supportsImage"
         :show-file-list="false"
         :auto-upload="false"
@@ -154,7 +154,7 @@
         @change="handleImageSelect"
       >
         <UiButton :icon="Picture" circle :disabled="store.streaming || pendingImages.length >= maxImages" title="上传图片"/>
-      </el-upload>
+      </UiUpload>
     </template>
   </ChatPageShell>
 </template>
@@ -174,6 +174,7 @@ import { aiAssistantApi, type DiagnosisBrandOption, type DiagnosisFaultCodeItem 
 import DiagnosisSources from '@/components/ai-assistant/DiagnosisSources.vue'
 import UiCapsule from '@/components/ai-assistant/UiCapsule.vue'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiUpload from '@/components/ui/UiUpload.vue'
 
 const store = useAIAssistantStore()
 const router = useRouter()

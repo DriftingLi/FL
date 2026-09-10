@@ -57,7 +57,7 @@
           <template #default="{ row }">
             <div class="feature-cell">
               <span class="feature-label">{{ row.feature_label }}</span>
-              <el-tag type="info" size="small">单绑定</el-tag>
+              <UiTag tone="info" size="small">单绑定</UiTag>
             </div>
           </template>
         </el-table-column>
@@ -101,9 +101,9 @@
         <el-table-column prop="model" label="模型" min-width="140" />
         <el-table-column label="状态" width="80">
           <template #default="{ row }">
-            <el-tag :type="row.is_active ? 'success' : 'info'" size="small">
+            <UiTag :tone="row.is_active ? 'success' : 'info'" size="small">
               {{ row.is_active ? '启用' : '停用' }}
-            </el-tag>
+            </UiTag>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="100" fixed="right" align="center">
@@ -167,7 +167,7 @@
           <el-input v-model="form.description" placeholder="可选备注" clearable autocomplete="off" />
         </el-form-item>
         <el-form-item v-if="dialogMode === 'edit'" label="启用状态">
-          <el-switch v-model="form.is_active" />
+          <UiSwitch v-model="form.is_active" />
         </el-form-item>
       </el-form>
     </UiDialog>
@@ -183,6 +183,8 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import { useConfirm } from '@/composables/useConfirm'
+import UiTag from '@/components/ui/UiTag.vue'
+import UiSwitch from '@/components/ui/UiSwitch.vue'
 
 const configs = ref<AIConfig[]>([])
 const bindings = ref<FeatureBinding[]>([])

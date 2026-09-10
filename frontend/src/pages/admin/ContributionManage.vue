@@ -17,6 +17,8 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 import { useConfirm } from '@/composables/useConfirm'
+import UiTag from '@/components/ui/UiTag.vue'
+import UiRadioGroup from '@/components/ui/UiRadioGroup.vue'
 
 const activeTab = ref<'pending' | 'reports'>('pending')
 
@@ -223,11 +225,11 @@ onMounted(() => {
         <UiFilterBar>
         <template #filters>
 
-          <el-radio-group :model-value="reportStatus" @update:model-value="(v: any) => { reportStatus = v as number }" @change="handleReportStatusChange">
+          <UiRadioGroup :model-value="reportStatus" @update:model-value="(v: any) => { reportStatus = v as number }" @change="handleReportStatusChange">
             <el-radio-button :value="-1">全部</el-radio-button>
             <el-radio-button :value="0">待处理</el-radio-button>
             <el-radio-button :value="1">已处理</el-radio-button>
-          </el-radio-group>
+          </UiRadioGroup>
         </template>
       </UiFilterBar>
         <el-table v-loading="reportLoading" :data="reports" border>
@@ -240,9 +242,9 @@ onMounted(() => {
           </el-table-column>
           <el-table-column label="状态" width="90" align="center">
             <template #default="{ row }">
-              <el-tag size="small" :type="row.status === 1 ? 'success' : 'danger'">
+              <UiTag size="small" :tone="row.status === 1 ? 'success' : 'danger'">
                 {{ row.status === 1 ? '已处理' : '待处理' }}
-              </el-tag>
+              </UiTag>
             </template>
           </el-table-column>
           <el-table-column label="时间" width="160" align="center">

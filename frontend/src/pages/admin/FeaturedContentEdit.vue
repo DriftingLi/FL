@@ -47,7 +47,7 @@
         </el-form-item>
 
         <el-form-item label="封面图">
-          <el-upload
+          <UiUpload
             class="cover-uploader"
             :show-file-list="false"
             :http-request="handleCoverUpload"
@@ -58,7 +58,7 @@
               <el-icon><Plus /></el-icon>
               <span>点击上传封面</span>
             </div>
-          </el-upload>
+          </UiUpload>
           <div class="cover-actions" v-if="form.cover_image">
             <UiButton variant="danger" link @click="form.cover_image = ''">移除封面</UiButton>
           </div>
@@ -79,10 +79,10 @@
         </el-form-item>
 
         <el-form-item label="状态">
-          <el-radio-group v-model="form.status">
+          <UiRadioGroup v-model="form.status">
             <el-radio :value="0">保存草稿</el-radio>
             <el-radio :value="1">立即发布</el-radio>
-          </el-radio-group>
+          </UiRadioGroup>
         </el-form-item>
 
         <el-form-item>
@@ -107,6 +107,8 @@ import { adminFeaturedApi, featuredCategoryOptions } from '@/api/featured'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiUpload from '@/components/ui/UiUpload.vue'
+import UiRadioGroup from '@/components/ui/UiRadioGroup.vue'
 
 const route = useRoute()
 const router = useRouter()

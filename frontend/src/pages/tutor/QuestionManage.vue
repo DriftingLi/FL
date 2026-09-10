@@ -67,13 +67,13 @@
         <el-table-column prop="content" label="题干" show-overflow-tooltip />
         <el-table-column label="状态" width="120">
           <template #default="{ row }">
-            <el-tooltip
+            <UiTooltip
               v-if="row.status === 'draft' && row.reject_reason"
               :content="`驳回理由：${row.reject_reason}`"
               placement="top"
             >
               <UiTag tone="danger">已驳回</UiTag>
-            </el-tooltip>
+            </UiTooltip>
             <UiTag v-else :tone="statusTone[row.status]">{{ statusMap[row.status] }}</UiTag>
           </template>
         </el-table-column>
@@ -168,6 +168,7 @@ import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import { useConfirm } from '@/composables/useConfirm'
+import UiTooltip from '@/components/ui/UiTooltip.vue'
 
 const router = useRouter()
 const statusMap: Record<string, string> = { draft: '草稿', pending: '待审核', published: '已发布' }
