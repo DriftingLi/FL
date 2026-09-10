@@ -10,7 +10,7 @@
         </view>
 
         <scroll-view class="content-scroll" scroll-y="true">
-            <!-- 积分卡片 -->
+            <!-- 积分卡片（余额 / 累计来自 GET /points/balance，今日可得按未领任务算） -->
             <view class="balance-card">
                 <view class="balance-top">
                     <view class="balance-coin">
@@ -25,59 +25,53 @@
                     </view>
                 </view>
                 <view class="balance-bottom">
-                    <text class="balance-stats">今日可得  +{{ todayEarned }}，累计获得 {{ totalEarned }}</text>
+                    <text class="balance-stats">今日可得  +{{ todayEarnable }}，累计获得 {{ totalEarned }}</text>
                 </view>
             </view>
 
-            <!-- 每日任务分组 -->
-            <view class="section">
+            <!-- 错误态：任务加载失败要可见（旧版整页硬编码占位任务，后端异常无人发现）；
+                 已有真任务时不清屏，只在页脚提示可重试 -->
+            <view v-if="loadFailed && tasks.length == 0" class="error-tip">
+                <text class="error-text">任务加载失败</text>
+                <view class="retry-btn" @click="onRetry">
+                    <text class="retry-text">重试</text>
+                </view>
+            </view>
+
+            <view v-else-if="loading && tasks.length == 0" class="loading-tip">
+                <text class="loading-text">加载中...</text>
+            </view>
+
+            <!-- 任务分组：daily / newbie / growth 由后端 group 直分 -->
+            <view v-for="g in grouped" :key="g.key" class="section">
                 <view class="section-header">
-                    <text class="section-title">每日任务</text>
+                    <text class="section-title">{{ g.label }}</text>
                     <view class="section-underline"></view>
+                    <text class="section-desc">{{ g.desc }}</text>
                 </view>
                 <view class="task-card">
-                    <view v-for="(task, idx) in dailyTasks" :key="idx"
-                        :class="['task-item', { 'task-item-last': idx === dailyTasks.length - 1 }]">
-                        <view class="task-icon-wrap" :style="{ backgroundColor: task.iconBg }">
-                            <text class="task-icon">{{ task.icon }}</text>
+                    <view v-for="(task, ti) in g.tasks" :key="task.code"
+                        :class="['task-item', { 'task-item-last': ti == g.tasks.length - 1 }]">
+                        <view :class="['task-icon-wrap', groupIconClass(task.group)]">
+                            <text class="task-icon">{{ taskIconText(task.code, task.group) }}</text>
                         </view>
                         <view class="task-content">
                             <view class="task-title-row">
                                 <text class="task-title">{{ task.title }}</text>
-                                <text class="task-progress">（{{ task.done }}/{{ task.total }}）</text>
+                                <text v-if="task.total > 1" class="task-progress">（{{ task.progress }}/{{ task.total }}）</text>
                             </view>
                             <text class="task-desc">{{ task.desc }}</text>
                         </view>
-                        <view class="task-btn" :class="{ 'task-btn-done': task.done >= task.total }"
-                            @click="onTaskAction(task)">
-                            <text class="task-btn-text">{{ task.done >= task.total ? '已完成' : '去完成' }}</text>
+                        <text class="task-points">+{{ task.points }}</text>
+                        <view :class="['task-btn', taskBtnClass(task.status)]" @click="onTaskBtn(task)">
+                            <text :class="['task-btn-text', taskBtnTextClass(task.status)]">{{ taskBtnText(task.status, task.code) }}</text>
                         </view>
                     </view>
                 </view>
             </view>
 
-            <!-- 福利任务分组 -->
-            <view class="section">
-                <view class="section-header">
-                    <text class="section-title">福利任务</text>
-                    <view class="section-underline"></view>
-                </view>
-                <view class="task-card">
-                    <view v-for="(task, idx) in welfareTasks" :key="idx"
-                        :class="['task-item', { 'task-item-last': idx === welfareTasks.length - 1 }]">
-                        <view class="task-icon-wrap" :style="{ backgroundColor: task.iconBg }">
-                            <text class="task-icon">{{ task.icon }}</text>
-                        </view>
-                        <view class="task-content">
-                            <text class="task-title">{{ task.title }}</text>
-                            <text class="task-desc">{{ task.desc }}</text>
-                        </view>
-                        <view class="task-btn" :class="{ 'task-btn-done': task.completed }"
-                            @click="onWelfareAction(task)">
-                            <text class="task-btn-text">{{ task.completed ? '已完成' : '去完成' }}</text>
-                        </view>
-                    </view>
-                </view>
+            <view v-if="loadFailed && tasks.length > 0" class="foot-error" @click="onRetry">
+                <text class="foot-error-text">最新状态拉取失败，点击重试</text>
             </view>
 
             <view class="bottom-spacer"></view>
@@ -86,57 +80,226 @@
 </template>
 
 <script setup lang="uts">
-    import { ref } from 'vue'
+    import { ref, computed } from 'vue'
     import { onShow } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
+    import { getPointsBalanceApi, getPointsTasksApi, claimPointsTaskApi } from '../../api/points'
+    import { earnablePoints } from '../../utils/pointsDisplay'
+    import type { PointsBalance, PointsTaskItem, PointsTasksResult, PointsClaimResult } from '../../types/index'
 
-    type DailyTask = {
-        title : string
+    /** 分组视图（后端 group → 端上展示的一段任务清单） */
+    type TaskGroupView = {
+        key : string
+        label : string
         desc : string
-        done : number
-        total : number
-        icon : string
-        iconBg : string
-        action : string
+        tasks : PointsTaskItem[]
     }
 
-    type WelfareTask = {
-        title : string
-        desc : string
-        completed : boolean
-        icon : string
-        iconBg : string
-        action : string
+    /** 任务跳转目标（tab 页要走 switchTab，navigateTo 打不开 tabBar 页） */
+    type TaskRoute = {
+        url : string
+        tab : boolean
     }
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
-    const pointsBalance = ref<number>(42)
-    const todayEarned = ref<number>(80)
-    const totalEarned = ref<number>(42)
+    // ===== 状态（声明先于一切引用它的函数：UTS 无提升，后置声明即 Kotlin 编译错）=====
 
-    const dailyTasks = ref<DailyTask[]>([
-        { title: '每日登录', desc: '登录小程序获得', done: 1, total: 1, icon: '👆', iconBg: '#FFF3E0', action: 'login' },
-        { title: '每日答题', desc: '完成容易题库练习', done: 0, total: 1, icon: '📝', iconBg: '#E3F2FD', action: 'daily-quiz' },
-        { title: '发布帖子', desc: '完成一次打卡签到', done: 1, total: 1, icon: '📋', iconBg: '#E8F5E9', action: 'create-post' },
-        { title: '浏览帖子', desc: '去广场浏览3篇帖子，立得任务奖励', done: 1, total: 3, icon: '📖', iconBg: '#FFF8E1', action: 'browse-posts' },
-        { title: '浏览课程', desc: '去游览课程查看3个课程，立得任务奖励', done: 1, total: 3, icon: '📚', iconBg: '#F3E5F5', action: 'browse-courses' },
-        { title: '浏览商城', desc: '去商城浏览3个商品，立得任务奖励', done: 1, total: 3, icon: '🏪', iconBg: '#E0F7FA', action: 'browse-mall' },
-        { title: '发表评论', desc: '在广场发布不少于10字的评论', done: 0, total: 3, icon: '💬', iconBg: '#FBE9E7', action: 'comment' },
-        { title: '完成1次题库练习', desc: '完成任务模拟考试并提交', done: 0, total: 1, icon: '✅', iconBg: '#E8F5E9', action: 'quiz-practice' },
-        { title: '完成1次模拟考试', desc: '完成任务模拟考试并提交', done: 0, total: 1, icon: '📊', iconBg: '#EDE7F6', action: 'mock-exam' },
-    ])
+    const pointsBalance = ref<number>(0)
+    const totalEarned = ref<number>(0)
+    const tasks = ref<PointsTaskItem[]>([])
+    const loading = ref<boolean>(false)
+    const loadFailed = ref<boolean>(false)
+    /** 正在领取的任务 code（空串表示无进行中请求，兼作防重入闸门） */
+    const claimingCode = ref<string>('')
+    /** 任务列表请求代次（领取后刷新与 onShow 刷新并发时按代次丢弃旧回包） */
+    let reqSeq = 0
 
-    const welfareTasks = ref<WelfareTask[]>([
-        { title: '完善个人信息', desc: '上传头像并完善昵称', completed: true, icon: '👤', iconBg: '#E3F2FD', action: 'profile' },
-        { title: '选定考试目标证件', desc: '转发帖子、文章、招聘等内容，转发字数不少于10字', completed: false, icon: '🎯', iconBg: '#FFF3E0', action: 'select-cert' },
-        { title: '完成首节课程', desc: '观看任意课程首页并完成', completed: false, icon: '🎬', iconBg: '#E8F5E9', action: 'first-chapter' },
-        { title: '完成积分兑礼', desc: '去商城兑换好礼', completed: false, icon: '🎁', iconBg: '#FCE4EC', action: 'exchange' },
-        { title: '邀请好友注册', desc: '去邀请好友得奖励', completed: false, icon: '👥', iconBg: '#F3E5F5', action: 'invite' },
-        { title: '分享给好友', desc: '去邀请好友得奖励', completed: false, icon: '🔗', iconBg: '#E0F7FA', action: 'share' },
-    ])
+    // ===== 纯映射函数（须先于调用它们的 computed / 事件函数定义，守护规则 A）=====
+
+    function groupLabelOf(group : string) : string {
+        if (group == 'daily') return '每日任务'
+        if (group == 'newbie') return '新手任务'
+        if (group == 'growth') return '成长任务'
+        return '其他任务'
+    }
+
+    /** 分组口径文案与后端配置同源（daily/growth 同为当日达成当日领，#410） */
+    function groupDescOf(group : string) : string {
+        if (group == 'daily') return '每日 0 点重置，当日达成当日领'
+        if (group == 'newbie') return '一次性任务，完成后不再出现'
+        if (group == 'growth') return '每日达成每日领，当日 0 点重置'
+        return ''
+    }
+
+    function groupIconClass(group : string) : string {
+        if (group == 'daily') return 'icon-daily'
+        if (group == 'newbie') return 'icon-newbie'
+        if (group == 'growth') return 'icon-growth'
+        return 'icon-other'
+    }
+
+    function taskIconText(code : string, group : string) : string {
+        if (code == 'daily_login') return '👆'
+        if (code == 'daily_quiz') return '📝'
+        if (code == 'daily_browse') return '📖'
+        if (code == 'growth_post') return '📋'
+        if (code == 'growth_reply') return '💬'
+        if (code == 'growth_mock') return '📊'
+        if (code == 'growth_first_experience') return '✍️'
+        if (code == 'newbie_profile_basic') return '👤'
+        if (code == 'newbie_profile_contact') return '📱'
+        if (code == 'newbie_credential') return '🎯'
+        if (code == 'newbie_first_course') return '🎬'
+        if (group == 'newbie') return '🎁'
+        return '⭐'
+    }
+
+    /** 「去完成」落点：任务 code → 页面路由（无前置动作的任务返回空 url） */
+    function taskRoute(code : string) : TaskRoute {
+        if (code == 'daily_quiz' || code == 'growth_mock') return { url: '/pages/practice/practice', tab: false } as TaskRoute
+        if (code == 'daily_browse' || code == 'growth_reply') return { url: '/pages/forum/forum', tab: true } as TaskRoute
+        if (code == 'growth_post' || code == 'growth_first_experience') return { url: '/pages/forum/forum-create', tab: false } as TaskRoute
+        if (code == 'newbie_profile_basic' || code == 'newbie_profile_contact') return { url: '/pages/profile/personal-info', tab: false } as TaskRoute
+        if (code == 'newbie_credential') return { url: '/pages/profile-setup/profile-setup', tab: false } as TaskRoute
+        if (code == 'newbie_first_course') return { url: '/pages/courses/courses', tab: true } as TaskRoute
+        return { url: '', tab: false } as TaskRoute
+    }
+
+    /** 按后端 group 分组（口径同 Web TaskCenter groupLabelMap，不另造端上分组） */
+    function buildGroups(list : PointsTaskItem[]) : TaskGroupView[] {
+        const order : string[] = ['daily', 'newbie', 'growth']
+        const out : TaskGroupView[] = []
+        for (let i = 0; i < order.length; i++) {
+            const bucket : PointsTaskItem[] = []
+            for (let j = 0; j < list.length; j++) {
+                if (list[j].group == order[i]) bucket.push(list[j])
+            }
+            if (bucket.length > 0) {
+                out.push({ key: order[i], label: groupLabelOf(order[i]), desc: groupDescOf(order[i]), tasks: bucket } as TaskGroupView)
+            }
+        }
+        // 后端新增分组时兜底成段，避免任务在端上凭空消失
+        const rest : PointsTaskItem[] = []
+        for (let j = 0; j < list.length; j++) {
+            if (order.indexOf(list[j].group) < 0) rest.push(list[j])
+        }
+        if (rest.length > 0) {
+            out.push({ key: 'other', label: '其他任务', desc: '', tasks: rest } as TaskGroupView)
+        }
+        return out
+    }
+
+    function taskBtnText(status : string, code : string) : string {
+        if (claimingCode.value == code) return '领取中'
+        if (status == 'claimable') return '领取'
+        if (status == 'claimed') return '已领取'
+        return '去完成'
+    }
+
+    function taskBtnClass(status : string) : string {
+        // 领取态是唯一可点成事的动作，其余（去完成 / 已领取）同属「非动作」灰态，共用一套外观
+        if (status == 'claimable') return 'task-btn-claim'
+        return 'task-btn-off'
+    }
+
+    function taskBtnTextClass(status : string) : string {
+        if (status == 'claimable') return 'text-on-claim'
+        return 'text-on-off'
+    }
+
+    // ===== 派生视图 =====
+
+    const grouped = computed<TaskGroupView[]>(() : TaskGroupView[] => buildGroups(tasks.value))
+
+    /** 今日可得：未领取任务的奖励之和（后端无 today_earned 字段，口径同 Web） */
+    const todayEarnable = computed<number>(() : number => earnablePoints(tasks.value))
+
+    // ===== 数据加载 =====
+
+    function loadBalance() : void {
+        getPointsBalanceApi().then((data : PointsBalance) => {
+            pointsBalance.value = data.balance
+            totalEarned.value = data.total_earned
+        }).catch((e) => {
+            console.warn('[task-center] load balance failed:', e)
+        })
+    }
+
+    function loadTasks() : void {
+        reqSeq = reqSeq + 1
+        const seq = reqSeq
+        loading.value = true
+        getPointsTasksApi().then((data : PointsTasksResult) => {
+            if (seq != reqSeq) return // 回包作废（领取后刷新与 onShow 刷新并发时，旧数据不覆盖新数据）
+            loadFailed.value = false
+            tasks.value = data.tasks
+        }).catch((e) => {
+            if (seq != reqSeq) return
+            loadFailed.value = true
+            console.warn('[task-center] load tasks failed:', e)
+        }).finally(() => {
+            if (seq == reqSeq) loading.value = false
+        })
+    }
+
+    function onRetry() : void {
+        loadBalance()
+        loadTasks()
+    }
+
+    // ===== 交互 =====
+
+    /** 领取：同任务连点静默忽略（按钮已在「领取中」），异任务占用给可见提示 */
+    function onClaim(task : PointsTaskItem) : void {
+        if (claimingCode.value == task.code) return
+        if (claimingCode.value.length > 0) {
+            uni.showToast({ title: '请先等上一个领取完成', icon: 'none' })
+            return
+        }
+        claimingCode.value = task.code
+        claimPointsTaskApi(task.code).then((res : PointsClaimResult) => {
+            pointsBalance.value = res.balance
+            totalEarned.value = res.total_earned
+            uni.showToast({ title: '已领取 +' + task.points.toString() + ' 积分', icon: 'none' })
+            loadTasks()
+        }).catch((e) => {
+            console.warn('[task-center] claim failed:', e)
+            loadTasks()
+        }).finally(() => {
+            claimingCode.value = ''
+        })
+    }
+
+    function onGo(task : PointsTaskItem) : void {
+        const route = taskRoute(task.code)
+        if (route.url.length == 0) {
+            uni.showToast({ title: '完成对应学习后即可领取', icon: 'none' })
+            return
+        }
+        if (route.tab) {
+            uni.switchTab({ url: route.url })
+            return
+        }
+        uni.navigateTo({ url: route.url })
+    }
+
+    /** 三态显式分派：claimable 领取 / todo 去完成 / claimed 静默；后端新增第四态时显形不静默 */
+    function onTaskBtn(task : PointsTaskItem) : void {
+        if (task.status == 'claimable') {
+            onClaim(task)
+            return
+        }
+        if (task.status == 'todo') {
+            onGo(task)
+            return
+        }
+        if (task.status != 'claimed') {
+            uni.showToast({ title: '任务状态异常，请下拉重进', icon: 'none' })
+        }
+    }
 
     function onBack() : void {
         goBack()
@@ -146,52 +309,9 @@
         uni.showToast({ title: '功能开发中', icon: 'none' })
     }
 
-    function onTaskAction(task : DailyTask) : void {
-        if (task.done >= task.total) return
-        switch (task.action) {
-            case 'create-post':
-                uni.navigateTo({ url: '/pages/forum/forum-create' })
-                break
-            case 'browse-posts':
-                uni.navigateTo({ url: '/pages/forum/forum' })
-                break
-            case 'browse-courses':
-                uni.reLaunch({ url: '/pages/courses/courses' })
-                break
-            case 'browse-mall':
-                uni.navigateTo({ url: '/pages/mall/mall' })
-                break
-            case 'comment':
-                uni.navigateTo({ url: '/pages/forum/forum' })
-                break
-            case 'quiz-practice':
-            case 'mock-exam':
-                uni.navigateTo({ url: '/pages/practice/practice' })
-                break
-            default:
-                uni.showToast({ title: '功能开发中', icon: 'none' })
-        }
-    }
-
-    function onWelfareAction(task : WelfareTask) : void {
-        if (task.completed) return
-        switch (task.action) {
-            case 'profile':
-                uni.navigateTo({ url: '/pages/profile/personal-info' })
-                break
-            case 'first-chapter':
-                uni.reLaunch({ url: '/pages/courses/courses' })
-                break
-            case 'exchange':
-                uni.showToast({ title: '功能开发中', icon: 'none' })
-                break
-            default:
-                uni.showToast({ title: '功能开发中', icon: 'none' })
-        }
-    }
-
     onShow(() => {
-        // TODO: 从后端加载任务进度
+        loadBalance()
+        loadTasks()
     })
 </script>
 
@@ -331,6 +451,12 @@
         margin-top: 8rpx;
     }
 
+    .section-desc {
+        font-size: 22rpx;
+        color: #999999;
+        margin-top: 8rpx;
+    }
+
     /* 任务卡片 */
     .task-card {
         margin: 0 24rpx;
@@ -358,6 +484,22 @@
         align-items: center;
         justify-content: center;
         margin-right: 20rpx;
+    }
+
+    .icon-daily {
+        background-color: #FFF3E0;
+    }
+
+    .icon-newbie {
+        background-color: #E8F5E9;
+    }
+
+    .icon-growth {
+        background-color: #E3F2FD;
+    }
+
+    .icon-other {
+        background-color: #F5F5F5;
     }
 
     .task-icon {
@@ -395,24 +537,83 @@
         text-overflow: ellipsis;
     }
 
+    .task-points {
+        font-size: 26rpx;
+        font-weight: bold;
+        color: #FF8F00;
+        margin-right: 16rpx;
+    }
+
+    /* 按钮外观按「是否可领取」二态分派：可领取=动作态橙，其余（去完成/已领取）=非动作灰 */
     .task-btn {
         padding: 12rpx 28rpx;
         border-radius: 28rpx;
-        background-color: #2979ff;
         flex-shrink: 0;
     }
 
-    .task-btn-done {
+    .task-btn-claim {
+        background-color: #FF8F00;
+    }
+
+    .task-btn-off {
         background-color: #f5f5f5;
     }
 
     .task-btn-text {
         font-size: 24rpx;
+    }
+
+    .text-on-claim {
         color: #ffffff;
     }
 
-    .task-btn-done .task-btn-text {
+    .text-on-off {
         color: #999999;
+    }
+
+    /* 状态位 */
+    .loading-tip {
+        align-items: center;
+        padding: 80rpx 0;
+    }
+
+    .loading-text {
+        font-size: 26rpx;
+        color: #999999;
+    }
+
+    .error-tip {
+        align-items: center;
+        padding: 60rpx 0;
+        flex-direction: column;
+    }
+
+    .error-text {
+        font-size: 28rpx;
+        color: #666666;
+        margin-bottom: 20rpx;
+    }
+
+    .retry-btn {
+        padding: 12rpx 40rpx;
+        border-radius: 32rpx;
+        background-color: #2979ff;
+    }
+
+    .retry-text {
+        font-size: 26rpx;
+        color: #ffffff;
+    }
+
+    /* 已有任务时的页脚失败提示（不清屏，只补一次可点的重试位） */
+    .foot-error {
+        align-items: center;
+        padding: 24rpx 0;
+    }
+
+    .foot-error-text {
+        font-size: 24rpx;
+        color: #ee0a24;
     }
 
     .bottom-spacer {

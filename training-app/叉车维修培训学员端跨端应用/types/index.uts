@@ -1082,34 +1082,56 @@ export type CredentialSwitchResult = {
     credential : CredentialItem | null  // 切换后的当前证件
 }
 
-// ========== 积分模块类型 ======
+// ========== 积分模块类型（逐字段对齐 backend/internal/service/points_service.go，#709） ==========
 
-/** 积分余额 */
+/** 积分余额 GET /points/balance */
 export type PointsBalance = {
-    total_points : number      // 总积分
-    today_earned : number      // 今日获得积分
-    level : string             // 积分等级代码
-    level_name : string        // 积分等级名称
-    next_level_points : number // 升级到下一等级所需积分
+    balance : number        // 可用余额
+    total_earned : number   // 累计获得
+    total_spent : number    // 累计支出（delta<0 绝对值聚合，#509）
 }
 
-/** 积分明细记录 */
-export type PointsRecord = {
-    record_id : number         // 记录 ID
-    action : string            // 行为描述（签到、浏览课程等）
-    points : number            // 获得的积分（正数为获得，负数为消耗）
-    description : string       // 详细描述
-    created_at : string        // 创建时间
-    source_type : string       // 来源类型：check_in, course_view, exam_pass 等
-    source_id : number         // 来源 ID（课程 ID、考试 ID 等）
+/** 积分流水条目 GET /points/ledger */
+export type PointsLedgerItem = {
+    id : number             // 流水 ID
+    delta : number          // 积分变动（正数收入 / 负数支出）
+    reason : string         // 事由键：任务 code、checkin、redeem_*、ai_tokens 等
+    ref_type : string       // 关联类型：task/course/shop/ai/admin/checkin…
+    ref_id : string         // 关联 ID（后端字符串，非数字）
+    created_at : string     // RFC3339 时间
+    expires_at : string | null // 过期时间设计位（#509：首版恒 null，永久有效）
 }
 
-/** 积分明细列表结果 */
-export type PointsRecordListResult = {
-    records : PointsRecord[]   // 记录列表
-    total : number             // 总记录数
+/** 积分流水分页结果 */
+export type PointsLedgerResult = {
+    items : PointsLedgerItem[] // 条目列表（后端字段名 items，非 records）
+    total : number             // 总条数
     page : number              // 当前页码
-    page_size : number         // 每页条数
+    pages : number             // 总页数
+}
+
+/** 积分任务项 GET /points/tasks */
+export type PointsTaskItem = {
+    code : string           // 任务编码（POST /points/tasks/{code}/claim 用）
+    group : string          // 分组：daily / newbie / growth
+    title : string          // 任务标题
+    desc : string           // 任务说明
+    points : number         // 奖励积分
+    status : string         // 三态：todo / claimable / claimed
+    progress : number       // 达成进度
+    total : number          // 进度分母
+}
+
+/** 积分任务列表结果 */
+export type PointsTasksResult = {
+    tasks : PointsTaskItem[]
+}
+
+/** 任务领取结果 POST /points/tasks/{code}/claim */
+export type PointsClaimResult = {
+    balance : number        // 领取后余额
+    total_earned : number   // 领取后累计获得
+    task_status : string    // 领取后任务状态（恒 claimed）
 }
 
 // ========== 简历模块（GET/PUT /resume，对齐后端 JobCardDTO / JobCardInput） ==========
