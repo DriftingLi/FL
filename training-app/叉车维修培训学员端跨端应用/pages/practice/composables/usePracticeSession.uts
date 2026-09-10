@@ -2,11 +2,65 @@
  * practice-do 会话状态 composable（T06 practice 手术，parent #644 / ADR-0007）
  */
 import { ref, computed } from 'vue'
+import type { Ref, ComputedRef } from 'vue'
 import { getFreePracticeApi, getSequentialPracticeApi, getTagPracticeApi, submitAnswerApi, savePracticeProgressApi } from '../../../api/practice'
 import { checkFavoriteApi, addFavoriteApi, removeFavoriteApi } from '../../../api/favorite'
 import type { Question, SubmitAnswerResult, AnswerState, QuestionOption, SubmitAnswerParams, FavoriteCheckResult } from '../../../types/index'
 
-export function usePracticeSession() {
+/** 本 composable 的显式返回类型。
+ *  UTS 对无标注的匿名返回对象无法在消费侧解析成员（error18「找不到名称」），
+ *  故显式声明；形态照可编译先例 composables/useTopicDetail.uts（显式 Result 类型 + 箭头函数字段）。
+ */
+export type UsePracticeSessionResult = {
+    questions : Ref<Question[]>
+    currentIndex : Ref<number>
+    loading : Ref<boolean>
+    showResult : Ref<boolean>
+    showSummary : Ref<boolean>
+    showAnswerCard : Ref<boolean>
+    isFavorited : Ref<boolean>
+    favoriteId : Ref<number>
+    selectedKeys : Ref<string[]>
+    answerStates : Ref<AnswerState[]>
+    lastUserAnswer : Ref<string>
+    lastResult : Ref<SubmitAnswerResult>
+    totalSeconds : Ref<number>
+    questionStartTime : Ref<number>
+    questionElapsed : Ref<number>
+    siteAccuracy : Ref<number>
+    difficultyLevel : Ref<string>
+    currentQuestion : ComputedRef<Question>
+    timerText : ComputedRef<string>
+    questionTimeText : ComputedRef<string>
+    correctCount : ComputedRef<number>
+    summaryAccuracy : ComputedRef<number>
+    getTypeName : (type : string) => string
+    isMultiChoice : () => boolean
+    isSelected : (key : string) => boolean
+    isCorrectAnswer : (key : string) => boolean
+    getOptionClass : (key : string) => string
+    getOptionKeyClass : (key : string) => string
+    getOptionTextClass : (key : string) => string
+    getAnswerCardClass : (idx : number) => string
+    getAnswerCardNumClass : (idx : number) => string
+    onOptionClick : (key : string) => void
+    onToggleFavorite : () => void
+    loadQuestions : (mode : string, practiceCount : number, tagId : number) => Promise<void>
+    onSubmit : (mode : string) => Promise<void>
+    onNext : () => void
+    onJumpToQuestion : (idx : number) => void
+    onToggleAnswerCard : () => void
+    onCloseAnswerCard : () => void
+    onSubmitPaper : () => void
+    onRestart : () => void
+    resetQuestionState : () => void
+    recordQuestionTime : () => void
+    checkFavorite : () => Promise<void>
+    startTimer : () => void
+    stopTimer : () => void
+}
+
+export function usePracticeSession() : UsePracticeSessionResult {
     const questions = ref<Question[]>([])
     const currentIndex = ref<number>(0)
     const loading = ref<boolean>(false)
@@ -116,5 +170,5 @@ export function usePracticeSession() {
         checkFavorite: () => checkFavorite(),
         startTimer: () => startTimer(),
         stopTimer: () => stopTimer()
-    }
+    } as UsePracticeSessionResult
 }

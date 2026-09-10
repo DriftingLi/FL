@@ -2,13 +2,27 @@
  * practice 主页数据加载 composable（T06 practice 手术，parent #644）
  */
 import { ref } from 'vue'
+import type { Ref } from 'vue'
 import { getTagsApi } from '../../../api/course'
 import { getPracticeOverviewApi, getPracticeProgressApi } from '../../../api/practice'
 import type { TagItem, PracticeOverview } from '../../../types/index'
 
+/** 本 composable 的显式返回类型。
+ *  UTS 对无标注的匿名返回对象无法在消费侧解析成员（error18「找不到名称」），
+ *  故显式声明；形态照可编译先例 composables/useTopicDetail.uts（显式 Result 类型 + 箭头函数字段）。
+ */
+export type UsePracticeOverviewResult = {
+    overview : Ref<PracticeOverview>
+    modules : Ref<ModuleRow[]>
+    listLoading : Ref<boolean>
+    listError : Ref<string>
+    loadOverview : () => Promise<void>
+    loadModules : () => Promise<void>
+}
+
 export type ModuleRow = { tag_id : number; name : string; total : number; completed : number }
 
-export function usePracticeOverview() {
+export function usePracticeOverview() : UsePracticeOverviewResult {
     const overview = ref<PracticeOverview>({ today_count: 0, total_count: 0, total_days: 0 } as PracticeOverview)
     const modules = ref<ModuleRow[]>([])
     const listLoading = ref<boolean>(false)
@@ -35,5 +49,5 @@ export function usePracticeOverview() {
         listError,
         loadOverview: () => loadOverview(),
         loadModules: () => loadModules()
-    }
+    } as UsePracticeOverviewResult
 }
