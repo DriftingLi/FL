@@ -33,7 +33,14 @@
         </template>
       </UiFilterBar>
 
-    <el-table :data="questions" stripe v-loading="loading" @selection-change="handleSelection">
+    <UiErrorState
+      v-if="loadError"
+      title="题目加载失败"
+      description="网络或服务端异常，可重试"
+      :retrying="retrying"
+      @retry="retryLoad"
+    />
+    <el-table v-else :data="questions" stripe v-loading="loading" @selection-change="handleSelection">
       <el-table-column type="selection" width="50" />
       <el-table-column prop="id" label="ID" width="60" />
       <el-table-column prop="type" label="题型" width="100">
@@ -136,10 +143,11 @@ import { questionBankApi } from '@/api/questionBank'
 import type { UiTagTone } from '@/components/ui/UiTag.vue'
 import type { Question } from '@/types/question'
 import { typeMap } from '@/constants/question'
-import { useAsyncPage } from '@/composables/useAsyncPage'
+import { useAdminTable } from '@/composables/useAdminTable'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiFilterBar from '@/components/ui/UiFilterBar.vue'
+import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import UiTag from '@/components/ui/UiTag.vue'
@@ -147,23 +155,31 @@ import UiTag from '@/components/ui/UiTag.vue'
 const statusMap: Record<string, string> = { draft: '草稿', pending: '待审核', published: '已发布' }
 const statusType: Record<string, UiTagTone> = { draft: 'info', pending: 'warning', published: 'success' }
 
-const questions = ref<Question[]>([])
-
-// 三态 + 分页收编 useAsyncPage（#439）：loader 纯装配，错误收敛 loadError
+// 列表：admin 列表状态机 useAdminTable（#792，ADR-0039）——三态 + 分页 + 列表托管。
+// 解构改名保持模板零改动；filters 为页面自管筛选轴（由 fetch adapter 读取）。
 const {
   loading,
+  loadError,
+  retrying,
+  list: questions,
   total,
-  page,
+  currentPage: page,
   pageSize,
-  run: loadData,
-  handlePageChange
-} = useAsyncPage(async () => {
-  const res = await questionBankApi.getQuestions({ page: page.value, page_size: pageSize.value, ...filters.value })
-  questions.value = res?.questions || []
-  total.value = res?.total || 0
-  // 加载待审核总数（仅当不是 pending 筛选时单独查询）
-  await loadPendingCount()
+  load: loadData,
+  retry: retryLoad
+} = useAdminTable<Question>({
+  fetch: async (paging) => {
+    const res = await questionBankApi.getQuestions({ page: paging.page, page_size: paging.pageSize, ...filters.value })
+    // 加载待审核总数（仅当不是 pending 筛选时单独查询）
+    await loadPendingCount()
+    return { list: res?.questions || [], total: res?.total || 0 }
+  }
 })
+
+/** 翻页重装：useAdminTable 的 load 读取 currentPage */
+function handlePageChange(): void {
+  void loadData()
+}
 const filters = ref({ type: '', status: 'pending', keyword: '' })
 const selectedIds = ref<number[]>([])
 const pendingCount = ref(0)

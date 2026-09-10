@@ -22,6 +22,13 @@
         <UiButton size="small" @click="loadLedger">刷新</UiButton>
       </div>
       <div v-if="ledgerLoading" class="text-sm text-ink-3">加载中...</div>
+      <UiErrorState
+        v-else-if="ledgerError"
+        title="流水加载失败"
+        description="网络或服务端异常，可重试"
+        :retrying="ledgerRetrying"
+        @retry="retryLedger"
+      />
       <UiEmptyState v-else-if="ledger.length === 0" description="暂无数据" size="sm" />
       <div v-else class="grid gap-2">
         <div v-for="item in ledger" :key="String(item.id)" class="border border-line rounded p-2 text-xs">
@@ -37,7 +44,7 @@
       show-sizes
       :page-sizes="[10, 20, 50]"
       @current-change="handlePageChange"
-      @size-change="loadLedger"
+      @size-change="handleLedgerSizeChange"
     />
       </div>
     </div>
@@ -161,35 +168,50 @@
 import { ref, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { unwrappedRequest } from '@/api/request'
-import { useAsyncPage } from '@/composables/useAsyncPage'
+import { useAdminTable } from '@/composables/useAdminTable'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 
 // #411：默认锁定问答域（forum_topic），显式切换才跨域全量——卡片标题与内容同域。
 const domain = ref<'forum_topic' | ''>('forum_topic')
 const reason = ref('')
 const userId = ref('')
-const ledger = ref<LedgerItem[]>([])
-
-// 流水列表三态 + 分页收编 useAsyncPage（#439）
+// 流水列表：admin 列表状态机 useAdminTable（#792，ADR-0039）——三态 + 分页 + 列表托管。
+// 解构改名保持模板零改动；domain/reason/userId 为页面自管筛选轴（由 fetch adapter 读取）。
 const {
   loading: ledgerLoading,
+  loadError: ledgerError,
+  retrying: ledgerRetrying,
+  list: ledger,
   total,
-  page,
+  currentPage: page,
   pageSize,
-  run: loadLedger,
-  handlePageChange
-} = useAsyncPage(async () => {
-  const params: Record<string, any> = { page: page.value, page_size: pageSize.value }
-  if (domain.value) params.ref_type = domain.value
-  if (reason.value) params.reason = reason.value
-  if (userId.value) params.user_id = userId.value
-  const res: any = await unwrappedRequest.get('/admin/points/ledger', { params, headers: { 'X-Silent': '1' } })
-  ledger.value = res?.items || []
-  total.value = res?.total ?? 0
+  load: loadLedger,
+  retry: retryLedger
+} = useAdminTable<LedgerItem>({
+  fetch: async (paging) => {
+    const params: Record<string, any> = { page: paging.page, page_size: paging.pageSize }
+    if (domain.value) params.ref_type = domain.value
+    if (reason.value) params.reason = reason.value
+    if (userId.value) params.user_id = userId.value
+    const res: any = await unwrappedRequest.get('/admin/points/ledger', { params, headers: { 'X-Silent': '1' } })
+    return { list: res?.items || [], total: res?.total ?? 0 }
+  }
 })
+
+/** 翻页重装：useAdminTable 的 load 读取 currentPage */
+function handlePageChange(): void {
+  void loadLedger()
+}
+
+/** 页大小变化：回第一页重装（与既有三态件语义一致） */
+function handleLedgerSizeChange(): void {
+  page.value = 1
+  void loadLedger()
+}
 
 interface LedgerItem {
   id: number
