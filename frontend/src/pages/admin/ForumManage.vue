@@ -95,7 +95,15 @@
         </template>
       </UiFilterBar>
 
+      <UiErrorState
+        v-if="loadError"
+        title="帖子加载失败"
+        description="网络或服务端异常，可重试"
+        :retrying="retrying"
+        @retry="retryLoad"
+      />
       <el-table
+        v-else
         v-loading="loading"
         :data="topics"
         stripe
@@ -207,38 +215,45 @@ import {
 } from '@/api/forum'
 import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
 import { formatLocaleDateTime } from '@/utils/format'
-import { useAsyncPage } from '@/composables/useAsyncPage'
+import { useAdminTable } from '@/composables/useAdminTable'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiRadioGroup from '@/components/ui/UiRadioGroup.vue'
 
-const topics = ref<AdminForumTopic[]>([])
-
-// 帖子列表三态 + 分页收编 useAsyncPage（#439）
+// 帖子列表：admin 列表状态机 useAdminTable（#792，ADR-0039）——三态 + 分页 + 列表一并托管。
+// 解构改名保持模板零改动；keyword 为页面自管筛选轴（由 fetch adapter 读取）。
 const {
   loading,
+  loadError,
+  retrying,
+  list: topics,
   total,
-  page: currentPage,
+  currentPage,
   pageSize,
-  run: loadList,
-  handlePageChange
-} = useAsyncPage(
-  async () => {
+  load: loadList,
+  retry: retryLoad
+} = useAdminTable<AdminForumTopic>({
+  pageSize: 10,
+  fetch: async (paging) => {
     const res = await adminForumApi.listTopics({
       ...forumTabQuery(activeTab.value),
-      page: currentPage.value,
-      page_size: pageSize.value,
+      page: paging.page,
+      page_size: paging.pageSize,
       keyword: keyword.value || undefined
     })
-    topics.value = res.topics || []
-    total.value = res.total || 0
-  },
-  { defaultPageSize: 10 }
-)
+    return { list: res.topics || [], total: res.total || 0 }
+  }
+})
+
+/** 分页控件回调：useAdminTable 的 load 读取 currentPage，翻页后重装 */
+function handlePageChange(): void {
+  void loadList()
+}
 // 管理端筛选轴：all=全部帖子、discussion=综合讨论区、question=问答区、experience=备考经验（#742 走查补齐）。
 // 四个值都交给 forumTabQuery 翻译成查询参数——"综合讨论区必须带 category=discussion"
 // 这条规则只在 api 层写一遍，学员端与管理端共用同一份映射。
