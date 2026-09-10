@@ -172,7 +172,7 @@
         { key: 'settings', title: '设置', icon: '⚙', path: '/pages/profile/settings', available: true },
     ]
 
-    async function loadProfile() {
+    async function loadProfile() : Promise<void> {
         try {
             const data : StudentProfile = await getProfileApi()
             profile.value = data
@@ -182,7 +182,7 @@
     }
 
     /** 近 7 天有学习记录的天数 */
-    async function loadStreak() {
+    async function loadStreak() : Promise<void> {
         try {
             const stats : StudyStats = await getStudyStatsApi(7)
             streakDays.value = stats.active_days
@@ -192,7 +192,7 @@
     }
 
     /** 可用积分：取积分余额 */
-    async function loadPoints() {
+    async function loadPoints() : Promise<void> {
         try {
             const data : PointsBalance = await getPointsBalanceApi()
             pointsTotal.value = data.balance
@@ -202,7 +202,7 @@
     }
 
     /** 加载签到状态（今日是否已签到） */
-    async function loadCheckInStatus() {
+    async function loadCheckInStatus() : Promise<void> {
         try {
             const now = new Date()
             const year = now.getFullYear()

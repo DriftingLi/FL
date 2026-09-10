@@ -172,7 +172,7 @@
     }
 
     /** 时间字符串截取 YYYY-MM-DD */
-    async function loadRecords(reset : boolean = false) {
+    async function loadRecords(reset : boolean = false) : Promise<void> {
         if (loading.value) return
         if (reset) {
             page.value = 1
