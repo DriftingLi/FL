@@ -1,0 +1,242 @@
+<template>
+    <!-- 模块练习列表（标签专项） ——T06 手术自 practice.uvue 逐段搬出 -->
+    <view class="module-section">
+        <!-- 骨架屏 -->
+        <view v-if="loading && modules.length == 0" class="skeleton-list">
+            <view v-for="i in 4" :key="i" class="skeleton-item">
+                <view class="skeleton-content">
+                    <view class="skeleton-line skeleton-line-title"></view>
+                    <view class="skeleton-line skeleton-line-sub"></view>
+                </view>
+                <view class="skeleton-arrow"></view>
+            </view>
+        </view>
+
+        <!-- 错误态 -->
+        <view v-else-if="error.length > 0 && modules.length == 0" class="error-state" @click="onRetry">
+            <text class="error-icon">⚠️</text>
+            <text class="error-text">{{ error }}</text>
+            <view class="error-btn">
+                <text class="error-btn-text">点击重试</text>
+            </view>
+        </view>
+
+        <!-- 空状态 -->
+        <view v-else-if="modules.length == 0" class="empty-state">
+            <text class="empty-icon">📭</text>
+            <text class="empty-text">暂无题库标签</text>
+        </view>
+
+        <!-- 模块列表 -->
+        <view v-else class="module-list">
+            <view v-for="(m, idx) in modules" :key="m.tag_id" class="module-card" @click="onModuleClick(m)">
+                <view class="module-icon">
+                    <text class="module-icon-text">›</text>
+                </view>
+                <view class="module-info">
+                    <text class="module-name">{{ m.name }}</text>
+                    <text class="module-meta">{{ moduleMeta(m) }}</text>
+                </view>
+                <text class="module-arrow">›</text>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import type { ModuleRow } from '../composables/usePracticeOverview'
+
+    const props = withDefaults(defineProps<{
+        loading? : boolean
+        error? : string
+        modules? : ModuleRow[]
+    }>(), {
+        loading: false,
+        error: '',
+        modules: () => [] as ModuleRow[]
+    })
+
+    const emit = defineEmits(['retry', 'moduleClick'])
+
+    /**
+     * mock 正确率：后端无"按标签"维度正确率接口（stats 仅按题型），
+     * 用标签 ID 派生的稳定伪值填充 UI，接口就绪后删除本函数并接真实字段。
+     */
+    function mockAccuracy(tagId : number) : number {
+        return 60 + (tagId * 13) % 35
+    }
+
+    /** 模块行副标题：已开始显示完成进度（正确率为 mock），未开始显示总题量 */
+    function moduleMeta(m : ModuleRow) : string {
+        if (m.completed > 0) {
+            return '已完成 ' + m.completed.toString() + '/' + m.total.toString() + ' 正确率 ' + mockAccuracy(m.tag_id).toString() + '%'
+        }
+        if (m.total > 0) {
+            return '共 ' + m.total.toString() + ' 题'
+        }
+        return '暂无题目'
+    }
+
+    function onRetry() : void {
+        emit('retry')
+    }
+
+    function onModuleClick(m : ModuleRow) : void {
+        emit('moduleClick', m)
+    }
+</script>
+
+<style>
+    .module-section {
+        flex-direction: column;
+    }
+
+    .module-list {
+        padding: 0 24rpx;
+        flex-direction: column;
+    }
+
+    .module-card {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 28rpx;
+        margin-bottom: 20rpx;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .module-icon {
+        width: 52rpx;
+        height: 52rpx;
+        border-radius: 26rpx;
+        border: 3rpx solid #2979ff;
+        align-items: center;
+        justify-content: center;
+        margin-right: 20rpx;
+        flex-shrink: 0;
+    }
+
+    .module-icon-text {
+        font-size: 30rpx;
+        color: #2979ff;
+        font-weight: bold;
+    }
+
+    .module-info {
+        flex: 1;
+        flex-direction: column;
+    }
+
+    .module-name {
+        font-size: 30rpx;
+        color: #333333;
+        font-weight: 600;
+    }
+
+    .module-meta {
+        font-size: 24rpx;
+        color: #999999;
+        margin-top: 8rpx;
+    }
+
+    .module-arrow {
+        font-size: 36rpx;
+        color: #cccccc;
+        margin-left: 12rpx;
+    }
+
+    /* ===== 骨架屏 ===== */
+    .skeleton-list {
+        margin: 0 24rpx;
+        background-color: #ffffff;
+        border-radius: 20rpx;
+    }
+
+    .skeleton-item {
+        padding: 24rpx 28rpx;
+        flex-direction: row;
+        align-items: center;
+        border-bottom: 1rpx solid #f5f5f5;
+    }
+
+    .skeleton-content {
+        flex: 1;
+        flex-direction: column;
+    }
+
+    .skeleton-line {
+        background-color: #f0f0f0;
+        border-radius: 8rpx;
+        margin-bottom: 12rpx;
+    }
+
+    .skeleton-line-title {
+        width: 60%;
+        height: 28rpx;
+    }
+
+    .skeleton-line-sub {
+        width: 40%;
+        height: 20rpx;
+    }
+
+    .skeleton-arrow {
+        width: 24rpx;
+        height: 24rpx;
+        background-color: #f0f0f0;
+        border-radius: 4rpx;
+        margin-left: 16rpx;
+    }
+
+    /* ===== 错误态 ===== */
+    .error-state {
+        margin: 0 24rpx;
+        background-color: #ffffff;
+        border-radius: 20rpx;
+        padding: 80rpx 0;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .error-icon {
+        font-size: 64rpx;
+        margin-bottom: 16rpx;
+    }
+
+    .error-text {
+        font-size: 28rpx;
+        color: #999999;
+        margin-bottom: 24rpx;
+    }
+
+    .error-btn {
+        background-color: #2979ff;
+        border-radius: 12rpx;
+        padding: 12rpx 40rpx;
+    }
+
+    .error-btn-text {
+        font-size: 26rpx;
+        color: #ffffff;
+    }
+
+    /* ===== 空状态 ===== */
+    .empty-state {
+        margin: 0 24rpx;
+        background-color: #ffffff;
+        border-radius: 20rpx;
+        padding: 80rpx 0;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .empty-icon {
+        font-size: 64rpx;
+        margin-bottom: 16rpx;
+    }
+
+    .empty-text {
+        font-size: 28rpx;
+        color: #999999;
+    }
+</style>

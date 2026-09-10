@@ -14,7 +14,7 @@
         </view>
         <scroll-view class="scroll-content" scroll-y="true" :refresher-enabled="true" :refresher-triggered="isRefreshing" @refresherrefresh="onRefresh">
             <PracticeBannerCard />
-            <PracticeStatsBar :overview="overview" @report-click="onReportClick" />
+            <PracticeStatsBar :today-count="overview.today_count" :total-count="overview.total_count" :total-days="overview.total_days" @report-click="onReportClick" />
             <PracticeFeatureGrid @feature-click="onFeatureClick" />
             <PracticeModuleList :loading="listLoading" :error="listError" :modules="modules" @retry="loadModules" @module-click="onModuleClick" />
             <view class="safe-bottom"></view>

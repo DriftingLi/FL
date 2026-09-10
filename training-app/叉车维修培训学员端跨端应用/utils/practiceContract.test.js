@@ -1,18 +1,22 @@
 /**
  * practice 模块手术契约测试（T06，parent #644 / ADR-0007）
  *
- * 钉住 practice 手术交付的五类契约：
+ * 钉住 practice 手术交付的六类契约：
  * 1) 600 行软预算：pages/practice/** 全部源文件 ≤600 行
  * 2) 模块目录 ≤2 层
  * 3) composable 接线：practice-do.uvue / practice.uvue 以显式 import 使用 composable
- * 4) allowlist 不回潮：practice 域文件不得出现在 GUARD_ALLOWLIST
- * 5) 零直发请求：页面层不直接 uni.request
+ * 4) 组件接线零孤儿：页面 import 的组件文件必须存在，组件文件必须被页面引用
+ *    （#779 回归教训：practice.uvue 改为 import 四个组件却从未创建文件，master 编译中断）
+ * 5) allowlist 不回潮：practice 域文件不得出现在 GUARD_ALLOWLIST
+ * 6) 零直发请求：页面层不直接 uni.request
  */
 const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+
+const PRACTICE_PAGES = ['pages/practice/practice.uvue', 'pages/practice/practice-do.uvue'];
 
 function practiceSourceFiles(dir = 'pages/practice') {
   const out = [];
@@ -63,6 +67,32 @@ describe('composable 接线契约（T06 拆分：显式 import composable）', (
 
   it('practice.uvue import usePracticeOverview composable', () => {
     expect(mainPage).toContain('./composables/usePracticeOverview');
+  });
+});
+
+describe('组件接线零孤儿（#779 回归锁：import 的组件文件必须存在）', () => {
+  it('页面 import 的每个模块私有组件文件都真实存在', () => {
+    const missing = [];
+    for (const page of PRACTICE_PAGES) {
+      const src = read(page);
+      const re = /from\s+'\.\/components\/([^']+\.uvue)'/g;
+      let m;
+      while ((m = re.exec(src)) !== null) {
+        const target = path.join(ROOT, 'pages/practice/components', m[1]);
+        if (!fs.existsSync(target)) missing.push(page + ' -> components/' + m[1]);
+      }
+    }
+    expect(missing).toEqual([]);
+  });
+
+  it('组件目录内不存在孤儿文件（每个 .uvue 都被某页面显式 import）', () => {
+    const dir = path.join(ROOT, 'pages/practice/components');
+    if (!fs.existsSync(dir)) return;
+    const pagesSrc = PRACTICE_PAGES.map((p) => read(p)).join('\n');
+    const orphans = fs.readdirSync(dir)
+      .filter((f) => f.endsWith('.uvue'))
+      .filter((f) => !pagesSrc.includes('./components/' + f));
+    expect(orphans).toEqual([]);
   });
 });
 

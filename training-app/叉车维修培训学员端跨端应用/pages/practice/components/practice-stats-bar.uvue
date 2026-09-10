@@ -1,0 +1,98 @@
+<template>
+    <!-- 数据统计栏（蓝色渐变）：数据源 /practice-mode/practice-stats ——T06 手术自 practice.uvue 逐段搬出 -->
+    <view class="stat-bar">
+        <view class="stat-item">
+            <text class="stat-num">{{ todayCount }}</text>
+            <text class="stat-label">今日做题</text>
+        </view>
+        <view class="stat-divider"></view>
+        <view class="stat-item">
+            <text class="stat-num">{{ totalCount }}</text>
+            <text class="stat-label">累计做题</text>
+        </view>
+        <view class="stat-divider"></view>
+        <view class="stat-item">
+            <text class="stat-num">{{ totalDays }}</text>
+            <text class="stat-label">累计天数</text>
+        </view>
+        <view class="stat-divider"></view>
+        <view class="stat-item" @click="onReportClick">
+            <view class="stat-report-wrap">
+                <text class="stat-report-text">数据报告</text>
+                <text class="stat-report-arrow">›</text>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    // 对象 prop 扁平化为原始 props（ADR-0007 规则 N/P，全仓先例）
+    const props = withDefaults(defineProps<{
+        todayCount? : number
+        totalCount? : number
+        totalDays? : number
+    }>(), {
+        todayCount: 0,
+        totalCount: 0,
+        totalDays: 0
+    })
+
+    const emit = defineEmits(['reportClick'])
+
+    function onReportClick() : void {
+        emit('reportClick')
+    }
+</script>
+
+<style>
+    .stat-bar {
+        margin: 0 24rpx 24rpx 24rpx;
+        background: linear-gradient(135deg, #4facfe 0%, #2979ff 100%);
+        border-radius: 20rpx;
+        padding: 24rpx 0;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-around;
+    }
+
+    .stat-item {
+        flex: 1;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .stat-num {
+        font-size: 34rpx;
+        font-weight: bold;
+        color: #ffffff;
+        margin-bottom: 4rpx;
+    }
+
+    .stat-label {
+        font-size: 22rpx;
+        color: rgba(255, 255, 255, 0.85);
+    }
+
+    .stat-divider {
+        width: 1rpx;
+        height: 48rpx;
+        background-color: rgba(255, 255, 255, 0.3);
+    }
+
+    .stat-report-wrap {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .stat-report-text {
+        font-size: 26rpx;
+        color: #ffffff;
+        font-weight: bold;
+    }
+
+    .stat-report-arrow {
+        font-size: 26rpx;
+        color: #ffffff;
+        margin-left: 4rpx;
+    }
+</style>
