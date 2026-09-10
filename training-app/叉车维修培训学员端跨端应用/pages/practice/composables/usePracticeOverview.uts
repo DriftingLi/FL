@@ -28,5 +28,12 @@ export function usePracticeOverview() {
         }
     }
 
-    return { overview, modules, listLoading, listError, loadOverview, loadModules }
+    return {
+        overview,
+        modules,
+        listLoading,
+        listError,
+        loadOverview: () => loadOverview(),
+        loadModules: () => loadModules()
+    }
 }
