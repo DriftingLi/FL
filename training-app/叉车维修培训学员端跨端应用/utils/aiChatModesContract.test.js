@@ -39,24 +39,27 @@ describe('双模式 models 消费契约', () => {
     });
   });
 
-  describe('专业版页面消费 modes', () => {
-    it('页面引入 getAiModesApi', () => {
-      expect(pageSrc).toContain('getAiModesApi');
+  // #657 契约对齐实现：本块原断言 `getAiModesApi` / `selectMode`，但页面实际消费的是
+  // `getAiModelsApi` / `selectModel` —— 契约自 #552 诞生起即基于错误假设（非后来改坏）。
+  // 维护者决策 = 路径 A：契约对齐实现，不改页面代码。
+  // 另：原第三条 `toContain('selectMode')` 曾被 `selectModel` 的**子串**意外命中而假绿
+  //（同 ADR-0007「零命中锁被子串命中」一类），此处一并换成语义断言。
+  describe('专业版页面消费模型源（#657 对齐实现）', () => {
+    it('页面引入 getAiModelsApi（模型列表来源；getAiModesApi 仅 API 层导出）', () => {
+      expect(pageSrc).toContain('getAiModelsApi');
     });
 
-    it('selectMode 将选中模式落到 admin 源（驱动请求体 config_id）', () => {
-      // 从页面源提取 selectMode 函数体，断言其设 model_source='admin' 并落盘（persistSettings）
-      const start = pageSrc.indexOf('function selectMode');
+    it('selectModel 将选中模型落到 user/admin 源并落盘', () => {
+      const start = pageSrc.indexOf('function selectModel');
       expect(start).toBeGreaterThan(-1);
       const body = pageSrc.slice(start, pageSrc.indexOf('\n\t}', start));
-      expect(body).toContain("currentModelSource.value = 'admin'");
-      expect(body).toContain('currentModelId.value =');
+      expect(body).toContain('currentModelId.value = m.id');
+      expect(body).toContain("currentModelSource.value = isUser ? 'user' : 'admin'");
       expect(body).toContain('persistSettings()');
     });
 
-    it('modes 驱动 admin 源请求体携带对应 config_id（normal/expert 并入模型选择）', () => {
-      // 页面应有 modes→config_id 的映射/选择逻辑：至少存在 selectMode 处理
-      expect(pageSrc).toContain('selectMode');
+    it('admin 源请求体由 currentModelSource 驱动（语义断言，非子串巧合）', () => {
+      expect(pageSrc).toContain('model_source: currentModelSource.value');
     });
   });
-});
+  });

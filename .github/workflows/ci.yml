@@ -26,6 +26,7 @@ jobs:
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
+      mobile: ${{ steps.filter.outputs.mobile }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,6 +40,9 @@ jobs:
               - '.github/workflows/**'
             frontend:
               - 'frontend/**'
+              - '.github/workflows/**'
+            mobile:
+              - 'training-app/**'
               - '.github/workflows/**'
 
   # ============================================================
@@ -275,6 +279,34 @@ jobs:
           echo "迁移文件完整性检查通过"
 
   # ============================================================
+  # Stage 6.5: 移动端 - 契约与静态守护单测（jest node 环境，无浏览器依赖）
+  # ============================================================
+  mobile-test:
+    needs: changes
+    if: needs.changes.outputs.mobile == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: training-app/叉车维修培训学员端跨端应用
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: training-app/叉车维修培训学员端跨端应用/package-lock.json
+      # 单测是纯 node 环境（jest.config.unit.js: testEnvironment=node，只扫 utils/**），
+      # 不需要 Chromium；puppeteer 在 devDependencies 里默认会下载，故显式跳过。
+      - name: 安装依赖（跳过 puppeteer Chromium 下载）
+        run: npm ci
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: 'true'
+          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'true'
+      - name: 单元测试（守护规则 + 各模块契约）
+        run: npm run test:unit
+
+
+  # ============================================================
   # Stage 7: CI 汇总 + testing 冒烟部署门禁
   #   1) 汇总各 job 结论。本 job 的 check run 名（ci-summary）是 ruleset 配置的
   #      必检状态检查，必须在每次分支 push 上运行并上报 success/failure，
@@ -282,7 +314,7 @@ jobs:
   #   2) CI 全绿且该分支有开启中的 PR 时，派发 CD workflow 部署 testing 冒烟。
   # ============================================================
   ci-summary:
-    needs: [backend-lint, backend-test, frontend-check, security-scan, migration-check]
+    needs: [backend-lint, backend-test, frontend-check, mobile-test, security-scan, migration-check]
     if: always()
     runs-on: ubuntu-latest
     # 触发 CD workflow_dispatch 需要 actions:write；查分支 open PR 需要 pull-requests:read
@@ -315,6 +347,7 @@ jobs:
           check "${{ needs.backend-lint.result }}" "backend-lint"
           check "${{ needs.backend-test.result }}" "backend-test"
           check "${{ needs.frontend-check.result }}" "frontend-check"
+          check "${{ needs.mobile-test.result }}" "mobile-test"
           check "${{ needs.migration-check.result }}" "migration-check"
           check "${{ needs.security-scan.result }}" "security-scan"
 
