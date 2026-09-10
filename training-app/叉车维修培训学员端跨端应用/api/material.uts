@@ -95,6 +95,51 @@ export function getMaterialDownloadApi(materialId : number) : Promise<MaterialDo
 }
 
 /**
+ * 下载并打开资料（#814）
+ * 两步：GET /materials/:id/download 取静态直链 → uni.downloadFile 落地临时文件 → openDocument 打开。
+ * @note 下载动作收在 api 层：页面层禁 uni.downloadFile 裸调（先例 utils/profileContract.test.js:216、
+ *       utils/dashboardContract.test.js:190 的页面层「零直发请求」口径）
+ * @returns 空串 = 成功；非空 = 给用户看的失败原因
+ */
+export function downloadAndOpenMaterialApi(materialId : number) : Promise<string> {
+	return getMaterialDownloadApi(materialId).then((info : MaterialDownloadInfo) : Promise<string> => {
+		if (info.file_url.length == 0) {
+			return Promise.resolve('资料地址无效')
+		}
+		// 静态直链含中文/空格，需编码；展开符会触发守护规则 I（UTS 展开会被误判为未定义标识符）
+		const encodedURL = encodeURI(info.file_url)
+		return new Promise<string>((resolve) => {
+			uni.downloadFile({
+				url: encodedURL,
+				success: (res) => {
+					if (res.statusCode != 200) {
+						resolve('资料下载失败（' + res.statusCode.toString() + '）')
+						return
+					}
+					// 下载成功即打开：失败（如端侧不支持该文件类型）给明确提示，不静默
+					uni.openDocument({
+						filePath: res.tempFilePath,
+						success: () : void => { resolve('') },
+						fail: () : void => { resolve('无法打开此文件') }
+					})
+				},
+				fail: (err) => {
+					const errMsg = err.errMsg
+					if (errMsg != null && errMsg.indexOf('timeout') >= 0) {
+						resolve('资料下载超时，请稍后重试')
+					} else {
+						resolve('资料下载失败，请检查网络后重试')
+					}
+				}
+			})
+		})
+	}).catch((e) : string => {
+		console.error('[downloadAndOpenMaterialApi] failed:', e)
+		return '资料下载失败'
+	})
+}
+
+/**
  * 学员可访问资料（同列表，别名端点）
  */
 export function getStudentMaterialsApi(page : number = 1, pageSize : number = 20) : Promise<MaterialListResult> {

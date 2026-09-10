@@ -163,7 +163,7 @@ describe('「我的」页面跳转契约', () => {
   it('原型中尚无对应页的条目走占位提示而非死链', () => {
     const placeholder = allEntries.filter((i) => !i.available).map((i) => i.key);
     expect(placeholder.sort()).toEqual(
-      ['address', 'help', 'materials', 'notebook', 'orders', 'study-plan'].sort()
+      ['address', 'help', 'notebook', 'orders', 'study-plan'].sort()
     );
   });
 

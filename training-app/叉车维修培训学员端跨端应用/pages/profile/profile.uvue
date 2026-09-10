@@ -158,7 +158,7 @@
         { key: 'wrong-questions', title: '错题本', icon: '📕', path: '/pages/profile/wrong-questions', available: true },
         { key: 'notebook', title: '笔记本', icon: '📔', path: '', available: false },
         { key: 'study-plan', title: '学练计划', icon: '🎯', path: '', available: false },
-        { key: 'materials', title: '学习资料', icon: '📚', path: '', available: false },
+        { key: 'materials', title: '学习资料', icon: '📚', path: '/pages/resources/materials', available: true },
         { key: 'jobs', title: '就业在线', icon: '💼', path: '/pages/jobs/job-list', available: true },
         { key: 'task-center', title: '任务中心', icon: '✅', path: '/pages/points/task-center', available: true },
     ]

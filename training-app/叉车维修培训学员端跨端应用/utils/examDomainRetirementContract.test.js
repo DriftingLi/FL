@@ -12,7 +12,11 @@
  * 4) 共享类型面：域内 6 个类型清零，ExamQuestion / QuestionOption（模拟考在用）保留
  * 5) 入口改写（维护者决策 2026-09-10）：题库页「模考大赛」格子保留、沿用 level_exam key、
  *    改指 /pages/exam/mock-exam
- * 6) 行为保持：考试中心页保留模拟考试段与「模考历史」入口；首页九宫格保留「考试中心」
+ * 6) 行为保持：题库页「模考大赛」格子保留、改指模拟考（见 §5）
+ *
+ * #814 变更（维护者决策 2026-09-11）：考试中心页（pages/exam/exam.uvue）与首页九宫格
+ * 该入口已随本票升级式推翻 §6 原断言——入口换名「学习资料」+ 整页删除，该页不再是活页。
+ * 考试中心零引用与「学习资料」入口改由 utils/materialsPageContract.test.js 守护。
  *
  * 自命中防护（ADR-0007 T05 教训：「契约零命中锁会被断言字符串自身命中」）：
  * 断言里必然出现被锁 token（如 'level-exam-do'），故全域扫描**显式排除 *.test.js** ——
@@ -86,8 +90,8 @@ describe('pages.json 无孤儿路由（域下线不残留路径）', () => {
     expect(routes).not.toContain('pages/exam/level-exam-result');
   });
 
-  it('模拟考试链路与考试中心页仍注册', () => {
-    for (const p of ['pages/exam/exam', 'pages/exam/mock-exam', 'pages/exam/mock-exam-result']) {
+  it('模拟考试链路仍注册（考试中心页已随 #814 摘除）', () => {
+    for (const p of ['pages/exam/mock-exam', 'pages/exam/mock-exam-result']) {
       expect(routes).toContain(p);
     }
   });
@@ -134,27 +138,9 @@ describe('题库页入口改写（维护者决策 2026-09-10）', () => {
   });
 });
 
-describe('行为保持：考试中心页与首页九宫格入口', () => {
-  const exam = read('pages/exam/exam.uvue');
-  const menuGrid = read('pages/dashboard/components/dashboard-menu-grid.uvue');
-
-  it('考试中心页保留模拟考试段与「模考历史」入口', () => {
-    expect(exam).toContain('模拟考试');
-    expect(exam).toContain('模考历史');
-    expect(exam).toContain("url: '/pages/exam/mock-exam?mode=new&duration=90'");
-    expect(exam).toContain("url: '/pages/profile/mock-exam-records'");
-  });
-
-  it('考试中心页不再持有等级考试取数逻辑', () => {
-    expect(exam).not.toMatch(/loadAvailable|loadHistory|availableExams|historyPage/);
-  });
-
-  it('首页九宫格保留「考试中心」入口（Q1=A：摘入口=丢功能，显式否决验收标准 §1 该条）', () => {
-    expect(menuGrid).toContain("title: '考试中心'");
-    expect(menuGrid).toContain("path: '/pages/exam/exam'");
-    expect([...menuGrid.matchAll(/\{\s*key: '/g)].length).toBe(4);
-  });
-});
+/* 原「行为保持：考试中心页与首页九宫格入口」describe 已随 #814 删除：
+   考试中心页与首页该入口均已删（维护者决策 2026-09-11，升级式推翻 #810 的保留裁定）。
+   模拟考试链路零改动见下。 */
 
 describe('模拟考试链路零改动（本票只改入口指向）', () => {
   it.each([
