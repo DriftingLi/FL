@@ -33,6 +33,8 @@
  *   S. 模板直调 import 函数（uvue 模板 import 调用编译为 .invoke() = error18「找不到名称 invoke」；本地包装）
  *   T. return 对象字面量裸传同文件函数引用（Kotlin error17 自动调用；显式 key: fn 与速记 { fn }
  *      两种形态均触发、无需类型标注；形态与 M 同类，箭头包裹才合法，先例 composables/useTopicDetail.uts）
+ *   U. 返回对象的 composable 缺显式结果类型（Kotlin error18 找不到名称；须签名标注或 s T 强转，
+ *      先例 useAiChat「规避类型推断问题」注释，14/14 满足）
  * 存量违例走 GUARD_ALLOWLIST 豁免，由后续工单在各自范围清零（见常量注释）。
  */
 const fs = require('fs');
@@ -299,7 +301,72 @@ function scanBareFnRefInReturn(code) {
     }
   }
   return hits;
-}/** N：as unknown as 双重强转——Kotlin 侧把属性/参数类型污染为 unknown（error18 找不到成员），
+}/** U：返回对象的 composable 缺显式结果类型（Kotlin error18 找不到名称）
+ *  UTS 对无标注的匿名返回对象，在消费侧解析不出成员：页面写 `session.onNext` 会报
+ *  `找不到名称 "onNext"`、`session.currentQuestion.value` 报 `找不到名称 "value"`。
+ *  全仓既定规避法 = 整体以显式结果类型强转/标注；先例注释见 composables/useAiChat.uts
+ *  「整体以显式类型 UseAiChatResult 强转（与 stores/auth.uts 同款写法规避类型推断问题）」，
+ *  composables/useTopicDetail.uts 同款（14/14 个返回函数的 composable 均满足）。
+ *  判定：export function useX(...) 的 return 对象含函数成员时，须有签名标注 `: T` 或 return 后 `as T`。
+ */
+function scanComposableMissingResultType(code) {
+  const clean = blank(code);
+  const hits = [];
+  const fns = new Set();
+  let m;
+  const reFn = /(?:^|\n)\s*(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/g;
+  while ((m = reFn.exec(clean)) !== null) fns.add(m[1]);
+  if (fns.size === 0) return hits;
+
+  const reHook = /(?:^|\n)\s*export\s+function\s+(use[A-Za-z0-9_$]*)\s*\([^)]*\)\s*(?::\s*([^\{]+?))?\s*\{/g;
+  while ((m = reHook.exec(clean)) !== null) {
+    const hook = m[1];
+    const declaredRet = m[2] ? m[2].trim() : null;
+    const bodyStart = clean.indexOf('{', m.index + m[0].length - 1);
+    let depth = 0, bodyEnd = -1;
+    for (let i = bodyStart; i < clean.length; i++) {
+      const c = clean[i];
+      if (c === '{') depth++; else if (c === '}') { depth--; if (depth === 0) { bodyEnd = i; break; } }
+    }
+    if (bodyEnd < 0) continue;
+    const body = clean.slice(bodyStart, bodyEnd);
+
+    // 体内成员最多的 return 块
+    let best = null;
+    const reRet = /return\s*\{/g;
+    let rm;
+    while ((rm = reRet.exec(body)) !== null) {
+      const o = body.indexOf('{', rm.index);
+      let d = 0, cl = -1;
+      for (let i = o; i < body.length; i++) {
+        const c = body[i];
+        if (c === '{') d++; else if (c === '}') { d--; if (d === 0) { cl = i; break; } }
+      }
+      if (cl < 0) continue;
+      const members = splitTopLevel(body.slice(o + 1, cl)).map((x) => x.trim()).filter(Boolean);
+      if (best === null || members.length > best.members.length) best = { o, cl, members, absClose: bodyStart + cl };
+    }
+    if (best === null) continue;
+
+    let fnMembers = 0;
+    for (const t of best.members) {
+      let mm = /^([A-Za-z_$][\w$]*)\s*:\s*([A-Za-z_$][\w$]*)$/.exec(t);
+      if (mm !== null && fns.has(mm[2])) { fnMembers++; continue; }
+      if (/^[A-Za-z_$][\w$]*\s*:\s*\(/.test(t)) { fnMembers++; continue; }
+      mm = /^([A-Za-z_$][\w$]*)$/.exec(t);
+      if (mm !== null && fns.has(mm[1])) fnMembers++;
+    }
+    if (fnMembers === 0) continue;
+
+    const after = clean.slice(best.absClose + 1, best.absClose + 60);
+    const hasAs = /^\s*as\s+[A-Za-z_$][\w$]*/.test(after);
+    if (declaredRet === null && !hasAs) {
+      hits.push(hook + '（' + fnMembers + ' 个函数成员）缺显式结果类型');
+    }
+  }
+  return hits;
+}
+/** N：as unknown as 双重强转——Kotlin 侧把属性/参数类型污染为 unknown（error18 找不到成员），
  *  对象 prop 默认值应走工厂 `() => ({...} as T)`（先例 ai-chat sessions），非 null 强转 */
 function scanUnknownDoubleCast(code) {
   const clean = blank(code);
@@ -1067,6 +1134,49 @@ describe('全工程守护：五类 Kotlin 编译地雷零命中', () => {
       '}',
     ].join('\n');
     expect(scanBareFnRefInReturn(refs)).toEqual([]);
+  });
+  it('U：自检——注入「返回函数的 composable 缺显式结果类型」必须被抓到', () => {
+    // 坏：有箭头但无签名标注、无 as 强转（practice #803 的形态）
+    const bad = [
+      'import { ref } from \'vue\'',
+      'export function useThing() {',
+      '    const n = ref<number>(0)',
+      '    function go() : void {}',
+      '    return {',
+      '        n,',
+      '        go: () => go()',
+      '    }',
+      '}',
+    ].join('\n');
+    expect(scanComposableMissingResultType(bad).length).toBeGreaterThan(0);
+
+    // 好①：签名标注（先例 useTopicDetail）
+    const goodAnnotated = bad.replace('export function useThing() {', 'export function useThing() : UseThingResult {');
+    expect(scanComposableMissingResultType(goodAnnotated)).toEqual([]);
+
+    // 好②：return 对象 as 强转（先例 useAiChat / useBiometric）
+    const goodAs = bad.replace('    }', '    } as UseThingResult');
+    expect(scanComposableMissingResultType(goodAs)).toEqual([]);
+
+    // 反向自检：返回对象不含函数成员时不判定（纯状态 composable）
+    const pureState = [
+      'import { ref } from \'vue\'',
+      'export function useThing() {',
+      '    const n = ref<number>(0)',
+      '    return {',
+      '        n',
+      '    }',
+      '}',
+    ].join('\n');
+    expect(scanComposableMissingResultType(pureState)).toEqual([]);
+  });
+
+  it('U：全工程返回函数的 composable 均有显式结果类型（Kotlin error18，规避类型推断问题）', () => {
+    const violations = [];
+    for (const u of allCodeUnits()) {
+      for (const h of scanComposableMissingResultType(u.code)) violations.push(path.relative(ROOT, u.file) + ': ' + h);
+    }
+    expect(violations).toEqual([]);
   });
   it('T：全工程无「return 里裸传函数引用」（Kotlin error17，显式与速记均须箭头包裹）', () => {
     const violations = [];
