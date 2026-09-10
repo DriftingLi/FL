@@ -41,5 +41,14 @@ export function usePracticeComments(currentUserId : number) {
 
     function resetComments() : void { showComments.value = false; comments.value = []; commentText.value = '' }
 
-    return { showComments, comments, commentText, loadComments, toggleComments, onSubmitComment, onDeleteComment, resetComments }
+    return {
+        showComments,
+        comments,
+        commentText,
+        loadComments: (questionId : number) => loadComments(questionId),
+        toggleComments: (questionId : number) => toggleComments(questionId),
+        onSubmitComment: (questionId : number) => onSubmitComment(questionId),
+        onDeleteComment: (comment : QuestionComment) => onDeleteComment(comment),
+        resetComments: () => resetComments()
+    }
 }

@@ -31,5 +31,13 @@ export function usePracticeNotes() {
 
     function resetNotes() : void { showNote.value = false; noteContent.value = '' }
 
-    return { showNote, noteContent, loadNote, toggleNote, onSaveNote, onDeleteNote, resetNotes }
+    return {
+        showNote,
+        noteContent,
+        loadNote: (questionId : number) => loadNote(questionId),
+        toggleNote: (questionId : number) => toggleNote(questionId),
+        onSaveNote: (questionId : number) => onSaveNote(questionId),
+        onDeleteNote: (questionId : number) => onDeleteNote(questionId),
+        resetNotes: () => resetNotes()
+    }
 }
