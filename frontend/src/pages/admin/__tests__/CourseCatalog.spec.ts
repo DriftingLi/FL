@@ -2,7 +2,8 @@
 // seam：组件层，mock API 层。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import ElementPlus, { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus'
+import { epLite } from '@/test/element-lite'
 
 vi.mock('@/api/admin', () => ({
   adminApi: {
@@ -47,7 +48,7 @@ const successSpy = vi.spyOn(ElMessage, 'success').mockImplementation(() => undef
 
 function mountPage() {
   return mount(CourseCatalog, {
-    global: { plugins: [ElementPlus] }
+    global: { plugins: [epLite()] }
   })
 }
 

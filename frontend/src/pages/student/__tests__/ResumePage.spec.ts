@@ -10,7 +10,7 @@ vi.mock('element-china-area-data', () => ({
 // #415 简历未建空态：未建（契约内 404）时不弹报错、渲染空态引导；已建时渲染表单。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import { epLite } from '@/test/element-lite'
 
 vi.mock('@/api/resume', () => ({
   resumeApi: { get: vi.fn(), getViewStats: vi.fn(), listContactRequests: vi.fn(), approveContactRequest: vi.fn(), rejectContactRequest: vi.fn(), revokeContactRequest: vi.fn() },
@@ -27,7 +27,7 @@ import { unwrappedRequest } from '@/api/request'
 import ResumePage from '../ResumePage.vue'
 
 function mountPage() {
-  return mount(ResumePage, { global: { plugins: [ElementPlus] } })
+  return mount(ResumePage, { global: { plugins: [epLite()] } })
 }
 
 beforeEach(() => {

@@ -1,7 +1,7 @@
 // #367 问答状态可见：求助/已解决与采纳置顶
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import { epLite } from '@/test/element-lite'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 
 vi.mock('@/api/request', () => ({
@@ -87,7 +87,7 @@ function reply(id: number, isAccepted: boolean, userId = 2) {
 async function mountForumPage() {
   listTopics.mockResolvedValue({ topics: [topic(1, 'question', false), topic(2, 'question', true)], total: 2 } as never)
   const wrapper = mount(ForumPage, {
-    global: { plugins: [ElementPlus], stubs: { ForumImageUploader: true } }
+    global: { plugins: [epLite()], stubs: { ForumImageUploader: true } }
   })
   await flushPromises()
   return wrapper
@@ -171,7 +171,7 @@ describe('问答状态可见 #367', () => {
       replies: [r1, r2, r3]
     } as never)
     const wrapper = mount(ForumDetail, {
-      global: { plugins: [ElementPlus], stubs: { ForumImageGallery: true, UiEmptyState: true, UiErrorState: true, UiSkeleton: true } }
+      global: { plugins: [epLite()], stubs: { ForumImageGallery: true, UiEmptyState: true, UiErrorState: true, UiSkeleton: true } }
     })
     await flushPromises()
     await new Promise(r => setTimeout(r, 0))
@@ -190,7 +190,7 @@ describe('问答状态可见 #367', () => {
       replies: [rSelf]
     } as never)
     const wrapper2 = mount(ForumDetail, {
-      global: { plugins: [ElementPlus], stubs: { ForumImageGallery: true, UiEmptyState: true, UiErrorState: true, UiSkeleton: true } }
+      global: { plugins: [epLite()], stubs: { ForumImageGallery: true, UiEmptyState: true, UiErrorState: true, UiSkeleton: true } }
     })
     await flushPromises()
     await new Promise(r => setTimeout(r, 0))

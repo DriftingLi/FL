@@ -1,7 +1,7 @@
 // #491 编辑页：回显不丢失（#486 语义迁移至此）、保存后回预览。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import { epLite } from '@/test/element-lite'
 
 vi.mock('element-china-area-data', () => ({
   pcTextArr: [
@@ -24,7 +24,7 @@ import { unwrappedRequest } from '@/api/request'
 import ResumeEdit from '../ResumeEdit.vue'
 
 function mountPage() {
-  return mount(ResumeEdit, { global: { plugins: [ElementPlus] } })
+  return mount(ResumeEdit, { global: { plugins: [epLite()] } })
 }
 
 beforeEach(() => {

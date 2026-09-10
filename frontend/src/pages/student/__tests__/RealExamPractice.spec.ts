@@ -52,7 +52,8 @@ vi.mock('@/api/questionInteraction', () => ({
   }
 }))
 
-import ElementPlus, { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus'
+import { epLite } from '@/test/element-lite'
 import { createPinia } from 'pinia'
 import { realExamApi } from '@/api/realExam'
 import { favoriteApi } from '@/api/favorite'
@@ -75,7 +76,7 @@ beforeEach(() => {
 
 describe('RealExamPractice 外围交互接入（#616）', () => {
   it("进题即查收藏并预取知识点（'enter' 触发，未作答就查）", async () => {
-    const wrapper = mount(RealExamPractice, { global: { plugins: [ElementPlus, createPinia()] } })
+    const wrapper = mount(RealExamPractice, { global: { plugins: [epLite(), createPinia()] } })
     await flushPromises()
 
     expect(favoriteApi.check).toHaveBeenCalledWith({ target_type: 'question', target_id: 201 })
@@ -85,7 +86,7 @@ describe('RealExamPractice 外围交互接入（#616）', () => {
   })
 
   it('点击收藏星：add 成功后提示「已收藏」且星标点亮', async () => {
-    const wrapper = mount(RealExamPractice, { global: { plugins: [ElementPlus, createPinia()] } })
+    const wrapper = mount(RealExamPractice, { global: { plugins: [epLite(), createPinia()] } })
     await flushPromises()
 
     await wrapper.find('.fav-star').trigger('click')
