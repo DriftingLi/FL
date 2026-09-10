@@ -237,8 +237,10 @@ describe('行为保持契约（手术不改跳转、交互与乐观更新语义�
     expect(page).toContain("uni.navigateTo({ url: '/pages/profile/personal-activity' })");
   });
 
-  it('上传资源格子仍跳 forum-create?scope=resource（非法 category 缺陷登记 #662，手术不顺手改）', () => {
-    expect(read('pages/forum/components/forum-resource-panel.uvue')).toContain('/pages/forum/forum-create?scope=resource');
+  it('上传资源格子跳 forum-create 资源 tab（#760 复用发布页，upload-resource 退役）', () => {
+    const panel = read('pages/forum/components/forum-resource-panel.uvue');
+    expect(panel).toContain('/pages/forum/forum-create?scope=resource');
+    expect(panel).not.toContain('/pages/resources/upload-resource');
   });
 
   it('TopicCard 广场/问答共用，变体由壳层 currentTab 下发', () => {
