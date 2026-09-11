@@ -945,7 +945,7 @@ func (s *ForumService) rollbackTopicRewardsTx(tx *gorm.DB, topicID int64) error 
 	_, err := s.points.RollbackByRef(tx, PointsRollback{
 		RefType: "forum_topic",
 		RefID:   fmt.Sprintf("%d", topicID),
-		Reasons: []string{ReasonAcceptedBonus, ReasonAcceptAction, ReasonFeaturedBonus},
+		Reasons: topicDirectRewardReasons,
 		IdemKey: ForumRollbackIdemKey(topicID),
 	})
 	if errors.Is(err, ErrPointsProcessed) {
@@ -964,7 +964,7 @@ func (s *ForumService) hasAnyRewardForTopic(tx *gorm.DB, topicID int64) (bool, e
 	if err := tx.Model(&model.PointsLedger{}).
 		Where("ref_type = ? AND ref_id = ? AND delta > 0 AND reason IN ?",
 			"forum_topic", fmt.Sprintf("%d", topicID),
-			[]string{ReasonAcceptedBonus, ReasonAcceptAction, ReasonFeaturedBonus}).
+			topicDirectRewardReasons).
 		Count(&n).Error; err != nil {
 		return false, err
 	}
@@ -1651,6 +1651,14 @@ func (s *ForumService) AcceptReply(userID int, topicID, replyID int64) (*ForumTo
 	if topic.Category != ForumCategoryQuestion {
 		return nil, errors.New("只有问答帖可采纳回答")
 	}
+	// 经验帖不可被采纳（ADR-0040）：认定不限制意图，管理员可以认定一篇 question 帖，
+	// 若不拦就会出现「经验 + 已采纳」的组合——它与领域边界冲突（一次性提问归问答、
+	// 可复用经验输出归经验），也让经验区里混进带采纳状态的帖子。
+	// 逃生口：管理员先取消经验认定（与「经验帖撤精须先取消认定」互为镜像）。
+	// 库层另有 CHECK chk_forum_topics_experience_not_accepted 兜底（迁移 000028）。
+	if topic.IsExperience {
+		return nil, errors.New("备考经验帖不可被采纳，请先取消经验认定")
+	}
 	var reply model.ForumReply
 	if err := s.db.First(&reply, replyID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -1825,7 +1833,8 @@ func (s *ForumService) CancelAccept(userID int, topicID int64) (*ForumTopicDTO, 
 //
 // 流水 reason 字面量保持 featured_bonus 不变：points_ledger 是不可变流水，且幂等键格式改动
 // 等于同一事件重放拿到新键 → 双重发分/双重追回（ADR-0023 明文）。改名只发生在词汇与文案层。
-func (s *ForumService) awardDesignationRewardTx(tx *gorm.DB, topic model.ForumTopic, now time.Time) error {
+// designation 决定站内信文案（加精 / 认定备考经验），不影响流水。
+func (s *ForumService) awardDesignationRewardTx(tx *gorm.DB, topic model.ForumTopic, designation string, now time.Time) error {
 	var cnt int64
 	if err := tx.Model(&model.PointsLedger{}).
 		Where("ref_type = ? AND ref_id = ? AND reason = ?", "forum_topic", fmt.Sprintf("%d", topic.ID), ReasonFeaturedBonus).
@@ -1842,6 +1851,10 @@ func (s *ForumService) awardDesignationRewardTx(tx *gorm.DB, topic model.ForumTo
 		IdemKey: FeaturedBonusIdemKey(topic.ID),
 	}); err != nil {
 		return err
+	}
+	// 两种认定共用同一笔流水，但文案必须区分（ADR-0040）：写「被加精」会让被认定经验的帖主看不懂。
+	if designation == DesignationExperience {
+		return s.notificationSvc.CreateTopicFeaturedEvent(tx, NewTopicExperienceEvent(topic.UserID, topic.Title, topic.ID, FeaturedBonusPoints), now)
 	}
 	return s.notificationSvc.CreateTopicFeaturedEvent(tx, NewTopicFeaturedEvent(topic.UserID, topic.Title, topic.ID, FeaturedBonusPoints), now)
 }
@@ -1863,6 +1876,12 @@ func (s *ForumService) DesignateExperience(topicID int64) (*ForumTopicDTO, error
 	if topic.IsExperience {
 		return s.fetchTopicDTO(topicID, 0)
 	}
+	// 已采纳的帖不可被认定为经验（与 AcceptReply 的守卫互为镜像，二者缺一即有漏洞）：
+	// 逃生口是先取消采纳。库层 CHECK 兜底见迁移 000028。
+	// 只判「是否有采纳指针」而非意图——同一条规则也兜住历史遗留的悬挂行。
+	if topic.AcceptedReplyID != nil {
+		return nil, errors.New("已采纳的帖子不可认定为备考经验，请先取消采纳")
+	}
 	now := beijingNow()
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		// CAS：认定与精选一并置位（两者必须同进，否则撞蕴含 CHECK）。
@@ -1880,7 +1899,7 @@ func (s *ForumService) DesignateExperience(topicID int64) (*ForumTopicDTO, error
 		if res.RowsAffected == 0 {
 			return nil // 并发抢认定：由先胜者完成副作用
 		}
-		return s.awardDesignationRewardTx(tx, topic, now)
+		return s.awardDesignationRewardTx(tx, topic, DesignationExperience, now)
 	})
 	if err != nil {
 		return nil, err
@@ -1952,7 +1971,7 @@ func (s *ForumService) SetFeatured(topicID int64, featured bool) (*ForumTopicDTO
 			return nil // 取消精选只改状态，已发分不回滚
 		}
 		// 认定奖励与「认定备考经验」共用同一实现：每帖只发一次，先认定后加精不重复发分。
-		return s.awardDesignationRewardTx(tx, topic, now)
+		return s.awardDesignationRewardTx(tx, topic, DesignationFeatured, now)
 	})
 	if err != nil {
 		return nil, err
@@ -1986,15 +2005,29 @@ func (s *ForumService) fetchTopicDTO(topicID int64, viewerID int) (*ForumTopicDT
 	return &dto, nil
 }
 
-// rewardLedgerReasons 论坛主题上「已发奖励」的全部流水 reason（ADR-0040/0041）。
-// 三种直记奖励都会让 reward_issued 为真：采纳答主 / 采纳动作 / 认定（含加精）。
-var rewardLedgerReasons = []string{ReasonAcceptedBonus, ReasonAcceptAction, ReasonFeaturedBonus}
+// topicDirectRewardReasons 论坛主题上「全部直记奖励」的流水 reason（ADR-0040/0041）。
+// 用途：违规回收范围（rollbackTopicRewardsTx）与回收触发条件（hasAnyRewardForTopic）。
+// **不要**拿它做 reward_issued——那个字段的判据见 acceptRewardLedgerReasons。
+var topicDirectRewardReasons = []string{ReasonAcceptedBonus, ReasonAcceptAction, ReasonFeaturedBonus}
+
+// acceptRewardLedgerReasons 「采纳类奖励」的流水 reason：答主被采纳 + 楼主采纳动作。
+//
+// reward_issued 的**唯一**判据（#367）。语义是「**该帖的采纳奖励是否已发放**」，不是
+// 「该帖是否发过任何奖励」——这个区别有真实后果：该字段的唯一消费方是采纳前二次确认
+// （ForumDetail.vue，文案「该帖采纳奖励已发放……不再产生积分」）。若把 featured_bonus
+// （加精 / 认定 +30）也算进来，一篇**只是被加精、从未被采纳**的问答帖会让楼主看到
+// 「采纳不再产生积分」，而实际上答主仍会拿到 40 分——错误提示会劝退真实采纳。
+// 故本集合**必须小于** topicDirectRewardReasons，两者不可合并。
+var acceptRewardLedgerReasons = []string{ReasonAcceptedBonus, ReasonAcceptAction}
 
 // enrichRewardIssued 批量回填 reward_issued（#367）。
 //
-// 语义 = **该帖是否已产生过任一直记奖励**。旧实现只认 question 帖的 accepted_bonus，
-// 于是被加精或被认定（+30）的帖子在列表上仍显示「未发分」——契约字段与事实不符。
-// 与 hasRewardIssued（详情单条）**必须同口径**：两处是两个实现，漂移过一次就是 bug。
+// 语义 = 该帖的**采纳奖励**是否已发放（acceptRewardLedgerReasons）。与 hasRewardIssued
+// （详情单条）**必须同口径**：两处是两个实现，漂移过一次就是 bug。
+//
+// 历史：曾放宽为「任一直记奖励」并去掉类别限制，会让「只被加精」的帖子误报
+// 「采纳不再产生积分」，故收窄回采纳类；同时不再按类别过滤（非 question 帖不会持有
+// 采纳类流水，那道过滤只是无谓扫描）。
 func (s *ForumService) enrichRewardIssued(items []ForumTopicDTO) {
 	if len(items) == 0 {
 		return
@@ -2013,7 +2046,7 @@ func (s *ForumService) enrichRewardIssued(items []ForumTopicDTO) {
 	}
 	var issued []string
 	if err := s.db.Model(&model.PointsLedger{}).
-		Where("ref_type = ? AND reason IN ? AND ref_id IN ?", "forum_topic", rewardLedgerReasons, ids).
+		Where("ref_type = ? AND reason IN ? AND ref_id IN ?", "forum_topic", acceptRewardLedgerReasons, ids).
 		Distinct("ref_id").Pluck("ref_id", &issued).Error; err != nil {
 		return
 	}
@@ -2032,7 +2065,7 @@ func (s *ForumService) enrichRewardIssued(items []ForumTopicDTO) {
 func (s *ForumService) hasRewardIssued(topicID int64) bool {
 	var cnt int64
 	if err := s.db.Model(&model.PointsLedger{}).
-		Where("ref_type = ? AND reason IN ? AND ref_id = ?", "forum_topic", rewardLedgerReasons, fmt.Sprintf("%d", topicID)).
+		Where("ref_type = ? AND reason IN ? AND ref_id = ?", "forum_topic", acceptRewardLedgerReasons, fmt.Sprintf("%d", topicID)).
 		Count(&cnt).Error; err != nil {
 		return false
 	}

@@ -23,6 +23,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -36,21 +38,29 @@ import (
 	"forklift-training/internal/testutil"
 )
 
-// designationEnv 本文件共用装配：整套路由 + 作者/管理员两个身份。
+// designationEnv 本文件共用装配：整套路由 + 作者/答主/读者/管理员四个身份。
 type designationEnv struct {
-	db        *gorm.DB
-	r         *gin.Engine
-	author    model.HrwaiUser
-	reader    model.HrwaiUser
-	authorTok string
-	readerTok string
-	adminTok  string
+	db          *gorm.DB
+	r           *gin.Engine
+	author      model.HrwaiUser
+	answerer    model.HrwaiUser
+	reader      model.HrwaiUser
+	authorTok   string
+	answererTok string
+	readerTok   string
+	adminTok    string
 }
 
 func newDesignationEnv(t *testing.T) *designationEnv {
 	t.Helper()
+	return newDesignationEnvWithDB(t, testutil.NewMemoryDB(t))
+}
+
+// newDesignationEnvWithDB 允许注入 db：并发用例需用文件库——内存库无法承载并发连接
+// （仓库既有先例 answering_session_cursor_concurrent_test.go 同样使用 NewFileDB）。
+func newDesignationEnvWithDB(t *testing.T, db *gorm.DB) *designationEnv {
+	t.Helper()
 	gin.SetMode(gin.TestMode)
-	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey: "contract-test-secret",
 		AuthCookie:   config.AuthCookieConfig{Name: "hrwai_token"},
@@ -58,8 +68,9 @@ func newDesignationEnv(t *testing.T) *designationEnv {
 	r := NewRouter(newContractDeps(t, db, cfg))
 
 	author := model.HrwaiUser{Account: "desig_author", Phone: "13800000401", Username: "经验作者", Status: 1, CreatedAt: testutil.Now()}
+	answerer := model.HrwaiUser{Account: "desig_answerer", Phone: "13800000403", Username: "答主", Status: 1, CreatedAt: testutil.Now()}
 	reader := model.HrwaiUser{Account: "desig_reader", Phone: "13800000402", Username: "读者", Status: 1, CreatedAt: testutil.Now()}
-	for _, u := range []*model.HrwaiUser{&author, &reader} {
+	for _, u := range []*model.HrwaiUser{&author, &answerer, &reader} {
 		if err := db.Create(u).Error; err != nil {
 			t.Fatalf("创建用户失败: %v", err)
 		}
@@ -75,11 +86,29 @@ func newDesignationEnv(t *testing.T) *designationEnv {
 		return tok
 	}
 	return &designationEnv{
-		db: db, r: r, author: author, reader: reader,
-		authorTok: issue(author.ID, author.Account, "hrwai_user"),
-		readerTok: issue(reader.ID, reader.Account, "hrwai_user"),
-		adminTok:  issue(admin.AdminID, admin.Username, "admin"),
+		db: db, r: r, author: author, answerer: answerer, reader: reader,
+		authorTok:   issue(author.ID, author.Account, "hrwai_user"),
+		answererTok: issue(answerer.ID, answerer.Account, "hrwai_user"),
+		readerTok:   issue(reader.ID, reader.Account, "hrwai_user"),
+		adminTok:    issue(admin.AdminID, admin.Username, "admin"),
 	}
+}
+
+// reply 以 tok 身份回复主题，返回回复 ID。
+func (e *designationEnv) reply(t *testing.T, tok string, topicID int64, content string) int64 {
+	t.Helper()
+	rec := doWithToken(t, e.r, tok, http.MethodPost, fmt.Sprintf("/api/forum/topics/%d/replies", topicID), map[string]any{"content": content})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("回复应 201，实际 %d %s", rec.Code, rec.Body.String())
+	}
+	return decodeID(t, rec)
+}
+
+// accept 以 tok 身份采纳 replyID。
+func (e *designationEnv) accept(t *testing.T, tok string, topicID, replyID int64) *httptest.ResponseRecorder {
+	t.Helper()
+	return doWithToken(t, e.r, tok, http.MethodPost,
+		fmt.Sprintf("/api/forum/topics/%d/accept", topicID), map[string]any{"reply_id": replyID})
 }
 
 func (e *designationEnv) balance(t *testing.T, tok string) int {
@@ -458,4 +487,190 @@ func TestForumExperienceTopicNotAcceptable(t *testing.T) {
 		t.Fatalf("经验帖采纳应 400，实际 %d %s", rec.Code, rec.Body.String())
 	}
 	fmt.Println("采纳闸门契约通过：被认定为经验的帖子仍不可被采纳")
+}
+
+// TestForumExperienceNotAcceptableInvariant 「经验帖不可被采纳」是**被守卫的不变式**，
+// 不是前提（ADR-0040 + 迁移 000028）。
+//
+// 认定不限制意图，故有两条路径能造出「经验 + 已采纳」：
+//
+//	① 管理员认定一篇 question 帖（该帖仍可被采纳）；
+//	② 作者把已认定的 discussion 帖编辑成 question 后采纳。
+//
+// 两条都必须被拒并给出逃生口；库层另有 CHECK chk_forum_topics_experience_not_accepted 兜底
+// （见 forum_experience_migration_contract_test.go 的 Postgres 断言）。
+func TestForumExperienceNotAcceptableInvariant(t *testing.T) {
+	e := newDesignationEnv(t)
+	post := func(path string) *httptest.ResponseRecorder {
+		return doWithToken(t, e.r, e.adminTok, http.MethodPost, path, nil)
+	}
+
+	// ① 认定一篇**问答帖**是允许的（认定与意图正交），但认定后它不能再被采纳
+	qTopic := func() (int64, int64) {
+		rec := doWithToken(t, e.r, e.authorTok, http.MethodPost, "/api/forum/topics",
+			map[string]any{"category": "question", "title": "可被认定的问答帖", "content": "x"})
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("发问答帖应 201，实际 %d %s", rec.Code, rec.Body.String())
+		}
+		tid := decodeID(t, rec)
+		rid := e.reply(t, e.answererTok, tid, "回答")
+		return tid, rid
+	}
+
+	tid, rid := qTopic()
+	if rec := post(fmt.Sprintf("/api/admin/forum/topics/%d/experience", tid)); rec.Code != http.StatusOK {
+		t.Fatalf("认定问答帖应 200（认定与意图正交），实际 %d %s", rec.Code, rec.Body.String())
+	}
+	rec := e.accept(t, e.authorTok, tid, rid)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("经验帖采纳应 400，实际 %d %s", rec.Code, rec.Body.String())
+	}
+	var got struct {
+		Message string `json:"message"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &got)
+	if got.Message != "备考经验帖不可被采纳，请先取消经验认定" {
+		t.Fatalf("拒绝文案不符，实际 %q", got.Message)
+	}
+	if _, _, acceptedID := func() (string, bool, *int64) {
+		var row model.ForumTopic
+		if err := e.db.First(&row, tid).Error; err != nil {
+			t.Fatalf("回读失败: %v", err)
+		}
+		return row.Category, row.IsExperience, row.AcceptedReplyID
+	}(); acceptedID != nil {
+		t.Fatalf("被拒的采纳不得写入采纳指针")
+	}
+	// 逃生口：先取消经验认定，即可采纳
+	if rec := doWithToken(t, e.r, e.adminTok, http.MethodDelete, fmt.Sprintf("/api/admin/forum/topics/%d/experience", tid), nil); rec.Code != http.StatusOK {
+		t.Fatalf("取消认定应 200，实际 %d", rec.Code)
+	}
+	if rec := e.accept(t, e.authorTok, tid, rid); rec.Code != http.StatusOK {
+		t.Fatalf("取消认定后采纳应 200，实际 %d %s", rec.Code, rec.Body.String())
+	}
+
+	// ② 已采纳的帖不能再被认定为经验（与 ① 互为镜像，缺一即有漏洞）
+	tid2, rid2 := qTopic()
+	if rec := e.accept(t, e.authorTok, tid2, rid2); rec.Code != http.StatusOK {
+		t.Fatalf("采纳应 200，实际 %d", rec.Code)
+	}
+	rec = post(fmt.Sprintf("/api/admin/forum/topics/%d/experience", tid2))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("已采纳帖认定经验应 400，实际 %d %s", rec.Code, rec.Body.String())
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &got)
+	if got.Message != "已采纳的帖子不可认定为备考经验，请先取消采纳" {
+		t.Fatalf("拒绝文案不符，实际 %q", got.Message)
+	}
+	if _, exp, _ := func() (string, bool, *int64) {
+		var row model.ForumTopic
+		if err := e.db.First(&row, tid2).Error; err != nil {
+			t.Fatalf("回读失败: %v", err)
+		}
+		return row.Category, row.IsExperience, row.AcceptedReplyID
+	}(); exp {
+		t.Fatalf("被拒的认定不得写入 is_experience")
+	}
+
+	// ③ 路径 ②：把**已认定**的 discussion 帖编辑成 question 是允许的（意图轴自由迁移），
+	//    但采纳仍被 ① 的守卫拦住——证明第三条路径也被封死。
+	tid3 := e.createDiscussion(t, "认定的讨论帖改问答")
+	if rec := post(fmt.Sprintf("/api/admin/forum/topics/%d/experience", tid3)); rec.Code != http.StatusOK {
+		t.Fatalf("认定应 200，实际 %d", rec.Code)
+	}
+	rid3 := e.reply(t, e.answererTok, tid3, "回答3")
+	rec = doWithToken(t, e.r, e.authorTok, http.MethodPut, fmt.Sprintf("/api/forum/topics/%d", tid3),
+		map[string]any{"title": "改问答", "content": "x", "category": "question"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("认定帖改意图应 200（两轴正交），实际 %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := e.accept(t, e.authorTok, tid3, rid3); rec.Code != http.StatusBadRequest {
+		t.Fatalf("改意图后的经验帖采纳应仍被 400 拦住，实际 %d %s", rec.Code, rec.Body.String())
+	}
+
+	fmt.Println("经验不可采纳契约通过：认定后不可采纳、已采纳不可认定、改意图路径同被拦，逃生口可用")
+}
+
+// TestForumDesignateConcurrentOnlyOneReward 并发认定只发一次分（CAS + 流水幂等双保险）。
+//
+// spec 的 testing decisions 第 2 项要求，此前只有 SetFeatured 的同构实现而无测试。
+func TestForumDesignateConcurrentOnlyOneReward(t *testing.T) {
+	e := newDesignationEnvWithDB(t, testutil.NewFileDB(t))
+	topicID := e.createDiscussion(t, "并发认定")
+	before := e.balance(t, e.authorTok)
+
+	const n = 8
+	var wg sync.WaitGroup
+	codes := make([]int, n)
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			rec := doWithToken(t, e.r, e.adminTok, http.MethodPost,
+				fmt.Sprintf("/api/admin/forum/topics/%d/experience", topicID), nil)
+			codes[idx] = rec.Code
+		}(i)
+	}
+	wg.Wait()
+
+	// 全部请求都应 200（幂等短路），且只发一笔
+	for i, c := range codes {
+		if c != http.StatusOK {
+			t.Fatalf("第 %d 个并发认定应 200（幂等），实际 %d", i, c)
+		}
+	}
+	if n := e.featuredLedgerCount(t, topicID); n != 1 {
+		t.Fatalf("并发认定只应产生 1 条流水，实际 %d", n)
+	}
+	if delta := e.balance(t, e.authorTok) - before; delta != 30 {
+		t.Fatalf("并发认定只应发一次 +30，实际 +%d", delta)
+	}
+	if _, featured, experience := e.topicFlags(t, topicID); !featured || !experience {
+		t.Fatalf("并发认定后两轴皆应真，实际 featured=%v experience=%v", featured, experience)
+	}
+
+	fmt.Println("并发认定契约通过：8 并发只发一笔 +30，两轴皆置位")
+}
+
+// TestForumDesignationNotificationWording 两种认定共用同一笔流水，但站内信文案必须区分。
+func TestForumDesignationNotificationWording(t *testing.T) {
+	e := newDesignationEnv(t)
+
+	readNotif := func(topicID int64) (string, string) {
+		t.Helper()
+		var n model.Notification
+		if err := e.db.Where("user_id = ? AND type = ?", e.author.ID, "forum_featured").
+			Order("id DESC").First(&n).Error; err != nil {
+			t.Fatalf("查询站内信失败: %v", err)
+		}
+		return n.Title, n.Content
+	}
+
+	// 加精 → 「被加精」
+	featID := e.createDiscussion(t, "加精文案")
+	if rec := doWithToken(t, e.r, e.adminTok, http.MethodPost, fmt.Sprintf("/api/admin/forum/topics/%d/featured", featID), nil); rec.Code != http.StatusOK {
+		t.Fatalf("加精应 200，实际 %d", rec.Code)
+	}
+	title, content := readNotif(featID)
+	if title != "你的帖子被加精" {
+		t.Fatalf("加精文案应「你的帖子被加精」，实际 %q", title)
+	}
+	if !strings.Contains(content, "加精精选") {
+		t.Fatalf("加精正文应含「加精精选」，实际 %q", content)
+	}
+
+	// 认定经验 → 「被认定为备考经验」（不得复用加精文案）
+	expID := e.createDiscussion(t, "认定文案")
+	if rec := doWithToken(t, e.r, e.adminTok, http.MethodPost, fmt.Sprintf("/api/admin/forum/topics/%d/experience", expID), nil); rec.Code != http.StatusOK {
+		t.Fatalf("认定应 200，实际 %d", rec.Code)
+	}
+	title, content = readNotif(expID)
+	if title != "你的帖子被认定为备考经验" {
+		t.Fatalf("认定文案应「你的帖子被认定为备考经验」，实际 %q", title)
+	}
+	if strings.Contains(content, "加精") {
+		t.Fatalf("认定正文不得复用加精措辞，实际 %q", content)
+	}
+
+	fmt.Println("认定文案契约通过：加精与认定经验文案区分，流水 reason 仍共用 featured_bonus")
 }

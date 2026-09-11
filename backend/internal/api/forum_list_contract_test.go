@@ -167,7 +167,12 @@ func TestForumSolvedRequiresQuestionCategory(t *testing.T) {
 	fmt.Println("solved 校验契约通过：缺 category=question 返回 400，正确用法与 all 不受影响")
 }
 
-// TestForumRewardIssuedCoversAllDirectRewards reward_issued 覆盖任一直记奖励，且列表/详情同口径。
+// TestForumRewardIssuedCoversAcceptRewardsOnly reward_issued **只覆盖采纳类奖励**，且列表/详情同口径。
+//
+// 语义边界（本用例的回归价值）：该字段的唯一消费方是「采纳前二次确认」（ForumDetail.vue:262），
+// 文案为「该帖采纳奖励已发放……不再产生积分」。若把 featured_bonus（加精/认定）也算进来，
+// 一篇**只是被加精、从未被采纳**的问答帖会让楼主看到「采纳不再产生积分」——而实际上答主仍会
+// 拿到 40 分。错误提示会劝退真实的采纳行为，故 reason 集合必须是采纳类。
 func TestForumRewardIssuedCoversAllDirectRewards(t *testing.T) {
 	e := newListContractEnv(t)
 
@@ -209,9 +214,9 @@ func TestForumRewardIssuedCoversAllDirectRewards(t *testing.T) {
 		title string
 		want  bool
 	}{
-		{featTitle, true}, // 旧实现错报 false（非 question 帖）
-		{expTitle, true},  // 旧实现错报 false
-		{qTitle, true},
+		{featTitle, false}, // 只被加精、从未被采纳 → 采纳仍会发分，**不得**置位
+		{expTitle, false},  // 只被认定、从未被采纳 → 同上
+		{qTitle, true},     // 已被采纳 → 采纳奖励已发放
 		{plainTitle, false},
 	} {
 		got, found := e.rewardIssuedOf(t, "", tc.title)
@@ -228,7 +233,7 @@ func TestForumRewardIssuedCoversAllDirectRewards(t *testing.T) {
 		id   int64
 		want bool
 	}{
-		{featID, true}, {expID, true}, {qID, true}, {plainID, false},
+		{featID, false}, {expID, false}, {qID, true}, {plainID, false},
 	} {
 		rec := doWithToken(t, e.r, e.authorTok, http.MethodGet, fmt.Sprintf("/api/forum/topics/%d", tc.id), nil)
 		if rec.Code != http.StatusOK {
@@ -249,7 +254,7 @@ func TestForumRewardIssuedCoversAllDirectRewards(t *testing.T) {
 		}
 	}
 
-	fmt.Println("reward_issued 契约通过：加精/认定/采纳均为真，列表与详情同口径")
+	fmt.Println("reward_issued 契约通过：仅采纳类奖励置位（加精/认定不置位），列表与详情同口径")
 }
 
 // TestForumListFiltersCoexist 四种筛选与 scope/category 共存不互相污染（回归）。
