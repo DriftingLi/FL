@@ -91,6 +91,12 @@ const (
 	ForumReplyMaxImages = 3 // 回复最多图片数
 )
 
+// 详情页回复分页（ADR-0042）：回复列表的唯一读取形态是分页，旧的「一次性全量返回」已退役。
+const (
+	ForumReplyDefaultPageSize = 20  // 默认每页回复数
+	ForumReplyMaxPageSize     = 100 // 页大小上限（超上限回退默认值，与全仓 ClampMax 同口径）
+)
+
 // ForumAuthor 论坛作者信息（展示名为昵称）。
 type ForumAuthor struct {
 	UserID    int    `json:"user_id"`
@@ -129,18 +135,21 @@ type ForumTopicDTO struct {
 
 // ForumReplyDTO 论坛回复对象。
 type ForumReplyDTO struct {
-	ID         int64       `json:"id"`
-	TopicID    int64       `json:"topic_id"`
-	ParentID   *int64      `json:"parent_id,omitempty"`
-	ParentName string      `json:"parent_name,omitempty"` // 被回复人的展示名
-	Content    string      `json:"content"`
-	Images     []string    `json:"images"`
-	CreatedAt  string      `json:"created_at"`
-	Author     ForumAuthor `json:"author"`
-	CanDelete  bool        `json:"can_delete"`
-	LikesCount int64       `json:"likes_count"`
-	LikedByMe  bool        `json:"liked_by_me"`
-	IsAccepted bool        `json:"is_accepted"`
+	ID         int64  `json:"id"`
+	TopicID    int64  `json:"topic_id"`
+	ParentID   *int64 `json:"parent_id,omitempty"`
+	ParentName string `json:"parent_name,omitempty"` // 被回复人的展示名
+	// ParentAvatarURL 被回复人的头像（ADR-0042「昵称 › 被回复人」行内形态所需）。
+	// 与 ParentName 同口径 omitempty：顶层回复（无被回复人）两个字段都不出现。
+	ParentAvatarURL string      `json:"parent_avatar_url,omitempty"`
+	Content         string      `json:"content"`
+	Images          []string    `json:"images"`
+	CreatedAt       string      `json:"created_at"`
+	Author          ForumAuthor `json:"author"`
+	CanDelete       bool        `json:"can_delete"`
+	LikesCount      int64       `json:"likes_count"`
+	LikedByMe       bool        `json:"liked_by_me"`
+	IsAccepted      bool        `json:"is_accepted"`
 }
 
 // ForumService 论坛服务。
@@ -437,7 +446,21 @@ func (s *ForumService) ListTopics(in TopicListInput) (*ForumTopicPageResult, err
 
 // GetTopic 主题详情（含回复，回复带被回复人信息），并累加浏览量。
 // replySort: time/latest（默认，时间）/ hot（热度：点赞数→时间）；order: asc/desc（默认 asc 对 time，desc 对 hot；显式传入时统一覆盖）
-func (s *ForumService) GetTopic(topicID int64, viewerID int, replySort, order string) (map[string]any, error) {
+// TopicDetailInput 主题详情查询条件（ADR-0042）。
+// 用 struct 而非位置参数，理由同 TopicListInput：本方法有 sort/order/page/page_size 多个标量，
+// 位置传错编译通过而语义全错。
+type TopicDetailInput struct {
+	TopicID   int64
+	ViewerID  int
+	ReplySort string // latest（别名 time）/ hot
+	Order     string // asc / desc；空 = 按 sort 的默认方向
+	Page      int    // <=0 回退 1
+	PageSize  int    // <=0 或超上限回退 ForumReplyDefaultPageSize
+}
+
+func (s *ForumService) GetTopic(in TopicDetailInput) (map[string]any, error) {
+	topicID, viewerID := in.TopicID, in.ViewerID
+	replySort, order := in.ReplySort, in.Order
 	if replySort == "latest" {
 		replySort = "time"
 	}
@@ -472,20 +495,7 @@ func (s *ForumService) GetTopic(topicID int64, viewerID int, replySort, order st
 		}
 	}
 
-	// 回复列表（含被回复人展示名）
-	var replies []struct {
-		ID         int64
-		TopicID    int64
-		ParentID   *int64
-		Content    string
-		Images     string
-		LikesCount int64
-		CreatedAt  time.Time
-		UserID     int
-		Username   string
-		AvatarURL  string
-		ParentName string
-	}
+	// 回复游标方向：time/latest 默认正序（先发先排），hot 默认倒序。
 	dir := "ASC"
 	if order == "desc" {
 		dir = "DESC"
@@ -501,32 +511,56 @@ func (s *ForumService) GetTopic(topicID int64, viewerID int, replySort, order st
 	if replySort == "hot" {
 		replyOrder = "r.likes_count " + dir + ", r.created_at ASC, r.id ASC"
 	}
-	if err := s.db.Table("forum_replies AS r").
-		Select("r.id, r.topic_id, r.parent_id, r.content, r.images, r.likes_count, r.created_at, "+
-			"u.id AS user_id, u.username, u.avatar_url, "+
-			"COALESCE(pu.username, '') AS parent_name").
-		Joins("JOIN hrwai_users AS u ON u.id = r.user_id").
-		Joins("LEFT JOIN forum_replies AS pr ON pr.id = r.parent_id").
-		Joins("LEFT JOIN hrwai_users AS pu ON pu.id = pr.user_id").
-		Where("r.topic_id = ?", topicID).
-		Order(replyOrder).
-		Scan(&replies).Error; err != nil {
+	// ===== 回复分页 + 置顶（ADR-0042）=====
+	// 回复流 = [置顶条] + [其余按 sort/order 排序]，按 page_size 切块：
+	// 置顶条占首页第一格，并从排序结果里剔除（否则同一条会既在首位、又在自然位置重复出现）。
+	page, pageSize := paging.ClampMax(in.Page, in.PageSize, ForumReplyDefaultPageSize, ForumReplyMaxPageSize)
+
+	// count 与 scan 同一 WHERE 作用域（同一 baseQuery），故 total 与列表页的 reply_count 同源。
+	var total int64
+	if err := s.replyBaseQuery(topicID, nil).Count(&total).Error; err != nil {
 		return nil, err
 	}
 
-	replyDTOs := make([]ForumReplyDTO, 0, len(replies))
-	for _, r := range replies {
-		isAcc := row.AcceptedReplyID != nil && *row.AcceptedReplyID == r.ID
-		replyDTOs = append(replyDTOs, ForumReplyDTO{
-			ID: r.ID, TopicID: r.TopicID, ParentID: r.ParentID, ParentName: r.ParentName,
-			Content: r.Content, Images: parseImageURLs(r.Images), CreatedAt: formatISO(r.CreatedAt),
-			Author: ForumAuthor{
-				UserID: r.UserID, Username: r.Username, AvatarURL: r.AvatarURL,
-			},
-			CanDelete:  r.UserID == viewerID,
-			LikesCount: r.LikesCount,
-			IsAccepted: isAcc,
-		})
+	acceptedID := row.AcceptedReplyID
+	// 置顶条只在首页取。它占掉首页一格，故其余回复的 offset 要按此折算：
+	// 第 k 页（k>=2）的其余回复从 (k-1)*pageSize - 1 开始——不是朴素的 (k-1)*pageSize。
+	offset := (page - 1) * pageSize
+	limit := pageSize
+	if acceptedID != nil {
+		offset = (page-1)*pageSize - 1
+		if page == 1 {
+			offset = 0
+			limit = pageSize - 1 // 首页给置顶条留一格
+		}
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	replyDTOs := make([]ForumReplyDTO, 0, pageSize)
+	if acceptedID != nil && page == 1 {
+		var pinned replyRow
+		if err := s.replyBaseQuery(topicID, nil).Where("r.id = ?", *acceptedID).Scan(&pinned).Error; err != nil {
+			return nil, err
+		}
+		if pinned.ID != 0 {
+			replyDTOs = append(replyDTOs, pinned.toDTO(viewerID, acceptedID))
+		}
+	}
+
+	// limit<=0 只在 pageSize=1 且首页有置顶条时出现——此时首页就是置顶条本身，不再查其余。
+	if limit > 0 {
+		var replies []replyRow
+		if err := s.replyBaseQuery(topicID, acceptedID).
+			Order(replyOrder).
+			Offset(offset).Limit(limit).
+			Scan(&replies).Error; err != nil {
+			return nil, err
+		}
+		for _, r := range replies {
+			replyDTOs = append(replyDTOs, r.toDTO(viewerID, acceptedID))
+		}
 	}
 	// 批量回填当前用户是否已赞（计数已由 likes_count 列提供，单一 helper 收敛）
 	s.enrichReplyLikedByMe(replyDTOs, viewerID)
@@ -541,7 +575,62 @@ func (s *ForumService) GetTopic(topicID int64, viewerID int, replySort, order st
 	return map[string]any{
 		"topic":   topicDTO,
 		"replies": replyDTOs,
+		"page":    page,
+		"pages":   response.PageCount(total, pageSize),
+		"total":   total,
 	}, nil
+}
+
+// replyRow 详情页回复行的扫描结构（置顶查询与分页查询共用同一投影，避免两处漂移）。
+type replyRow struct {
+	ID         int64
+	TopicID    int64
+	ParentID   *int64
+	Content    string
+	Images     string
+	LikesCount int64
+	CreatedAt  time.Time
+	UserID     int
+	Username   string
+	AvatarURL  string
+	ParentName string
+	// ParentAvatarURL 被回复人的头像（join pr→pu 回填）。
+	ParentAvatarURL string
+}
+
+// toDTO 行 → DTO。acceptedReplyID 为该帖当前采纳的回复 id（nil = 未采纳），据此打 is_accepted。
+func (r replyRow) toDTO(viewerID int, acceptedReplyID *int64) ForumReplyDTO {
+	return ForumReplyDTO{
+		ID: r.ID, TopicID: r.TopicID, ParentID: r.ParentID,
+		ParentName: r.ParentName, ParentAvatarURL: r.ParentAvatarURL,
+		Content: r.Content, Images: parseImageURLs(r.Images), CreatedAt: formatISO(r.CreatedAt),
+		Author: ForumAuthor{
+			UserID: r.UserID, Username: r.Username, AvatarURL: r.AvatarURL,
+		},
+		CanDelete:  r.UserID == viewerID,
+		LikesCount: r.LikesCount,
+		IsAccepted: acceptedReplyID != nil && *acceptedReplyID == r.ID,
+	}
+}
+
+// replyRowSelect 详情页回复行的共享投影（置顶查询与分页查询共用同一份，新增字段只改这一处）。
+const replyRowSelect = "r.id, r.topic_id, r.parent_id, r.content, r.images, r.likes_count, r.created_at, " +
+	"u.id AS user_id, u.username, u.avatar_url, " +
+	"COALESCE(pu.username, '') AS parent_name, COALESCE(pu.avatar_url, '') AS parent_avatar_url"
+
+// replyBaseQuery 详情页回复查询的共享装配：同一 WHERE 同时服务 count 与 scan。
+// excludeReplyID 非 nil 时剔除该条——置顶条已单独取得，不应再出现在排序结果里。
+func (s *ForumService) replyBaseQuery(topicID int64, excludeReplyID *int64) *gorm.DB {
+	q := s.db.Table("forum_replies AS r").
+		Select(replyRowSelect).
+		Joins("JOIN hrwai_users AS u ON u.id = r.user_id").
+		Joins("LEFT JOIN forum_replies AS pr ON pr.id = r.parent_id").
+		Joins("LEFT JOIN hrwai_users AS pu ON pu.id = pr.user_id").
+		Where("r.topic_id = ?", topicID)
+	if excludeReplyID != nil {
+		q = q.Where("r.id <> ?", *excludeReplyID)
+	}
+	return q
 }
 
 // CreateTopicInput 发帖条件。Category 为空归一为 discussion（移动端旧契约不传）。
