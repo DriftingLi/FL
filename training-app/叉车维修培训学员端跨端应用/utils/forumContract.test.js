@@ -204,9 +204,14 @@ describe('备考经验 tab 接线契约（#706：第四 tab 进场，复用 Topi
     expect(expBar).toContain("emit('sortChange', val)");
   });
 
-  it('发帖入口：备考经验 tab 跳 forum-create?scope=experience，分类 chips 含备考经验(experience)', () => {
-    expect(page).toMatch(/currentTab\.value === 'experience'\) \{\s*scope = 'experience'/);
-    expect(createPage).toContain("{ label: '备考经验', value: 'experience' }");
+  it('发帖入口（ADR-0040）：经验 tab 退为只读策展流，发布口不再产出 experience，分类行无「备考经验」', () => {
+    // 经验 tab 仍是只读策展流：列表查询照旧 category=experience（见上一条），
+    // 但发帖入口只能落 discussion/question —— 传 experience 后端直接 400
+    expect(page).not.toMatch(/scope = 'experience'/);
+    expect(createPage).not.toMatch(/value: 'experience'/);
+    expect(createPage).toContain("{ label: '广场', value: 'discussion' }");
+    expect(createPage).toContain("{ label: '资源', value: 'resource' }");
+    expect(createPage).toContain("{ label: '知识问答', value: 'question' }");
   });
 });
 

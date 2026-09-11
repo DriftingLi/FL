@@ -10,7 +10,7 @@
       <ForumPostForm
         ref="postForm"
         category="question"
-        :categories="['discussion', 'question', 'experience']"
+        :categories="['discussion', 'question']"
         label-width="56px"
         content-label="正文"
         :content-rows="10"

@@ -95,7 +95,7 @@ function tabbarByValues(wrapper: Awaited<ReturnType<typeof mountPage>>, mustIncl
   throw new Error(`找不到含 [${mustInclude.join(', ')}] 的分段控件`)
 }
 
-/** 主分段控件（讨论 / 问答 / 我的） */
+/** 主分段控件（讨论 / 问答 / 备考经验 / 我的） */
 const categoryGroup = (wrapper: Awaited<ReturnType<typeof mountPage>>) =>
   tabbarByValues(wrapper, ['discussion', 'question', 'mine'])
 
@@ -153,7 +153,7 @@ describe('论坛类别分流', () => {
     expect(params.scope).toBe('all')
   })
 
-  it('发帖表单类别随 Tab 走（#722）：讨论 Tab 发 discussion，经验 Tab 发 experience', async () => {
+  it('发布入口（ADR-0040）：经验 Tab 退为只读策展流，发帖表单只默认 discussion、只提供两意图', async () => {
     const wrapper = await mountPage()
     const openBtn = wrapper.findAll('button').find((b) => b.text().includes('发布新帖'))
     expect(openBtn).toBeTruthy()
@@ -163,23 +163,26 @@ describe('论坛类别分流', () => {
     const form = () => wrapper.findComponent({ name: 'ForumPostForm' })
     expect(form().exists()).toBe(true)
     expect(form().props('category')).toBe('discussion')
+    expect(form().props('categories')).toEqual(['discussion', 'question'])
 
+    // 弹窗开着切到经验 Tab：表单不得跟着变成 experience（提交即 400）
     await switchCategory(wrapper, 'experience')
-    expect(form().props('category')).toBe('experience')
+    expect(form().props('category')).toBe('discussion')
+    expect(form().props('categories')).not.toContain('experience')
   })
 
-  it('表单内类别 chips（#742）：默认 = 所在 Tab 类别，切换后提交携带对应 category', async () => {
+  it('表单内类别 chips（#742 / ADR-0040）：默认 = 所在 Tab 类别，切换后提交携带对应 category', async () => {
     const wrapper = await mountPage()
     const openBtn = wrapper.findAll('button').find((b) => b.text().includes('发布新帖'))
     await openBtn!.trigger('click')
     await flushPromises()
 
     const form = () => wrapper.findComponent({ name: 'ForumPostForm' })
-    // chips 渲染三分类
+    // chips 只渲染学员能自述的两意图（「备考经验」是管理端认定，不在发布入口）
     const chipBar = form().findComponent(UiSegmentTabs)
     expect(chipBar.exists()).toBe(true)
     const chipLabels = chipBar.findAll('[role="tab"]').map((b) => b.text().trim())
-    expect(chipLabels).toEqual(expect.arrayContaining(['讨论', '问答', '备考经验']))
+    expect(chipLabels).toEqual(['讨论', '问答'])
 
     // 未动 chips 直接提交：默认 = 所在 Tab（讨论）
     await form().findAllComponents(UiInput)[0].setValue('默认类别帖')
