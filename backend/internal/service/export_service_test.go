@@ -65,7 +65,7 @@ func TestExportEvaluations(t *testing.T) {
 	if row[29] != "http://x/report.pdf" {
 		t.Fatalf("报告路径不符: %v", row[29])
 	}
-	if row[30] != "2026-08-08T10:30:00.000000" {
+	if row[30] != "2026-08-08T18:30:00.000000+08:00" {
 		t.Fatalf("创建时间格式不符: %v", row[30])
 	}
 }

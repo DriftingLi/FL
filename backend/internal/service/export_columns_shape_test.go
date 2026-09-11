@@ -133,7 +133,7 @@ func TestEvaluationExportColumnsScanFormat(t *testing.T) {
 
 	wantRow := []any{int64(1), "alice", "张三", "Toyota", "FBT", "Series-1", 3.5, "标准", "L型",
 		3000, 2020, 2021, 1200, "是", "广东省", "广州市", "是", "否", "是",
-		"优", 180000.0, "0.8123", "", "", "", "", 123456.78, "", "", "http://x/report.pdf", "2026-08-08T10:30:00.000000"}
+		"优", 180000.0, "0.8123", "", "", "", "", 123456.78, "", "", "http://x/report.pdf", "2026-08-08T18:30:00.000000+08:00"}
 	gotRow := buildEvalExportRow(r)
 	if len(gotRow) != len(wantRow) {
 		t.Fatalf("行单元格数 = %d, 期望 %d", len(gotRow), len(wantRow))
