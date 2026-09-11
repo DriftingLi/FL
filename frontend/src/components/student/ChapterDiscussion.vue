@@ -48,6 +48,10 @@ const detailContent = ref('')
 const replies = ref<ForumReplyItem[]>([])
 // 章节讨论是内嵌面板、没有翻页交互，故一次取到页大小上限；
 // 超出时模板给一行可见提示 + 跳详情页入口（不静默丢弃尾部回复）。
+//
+// ⚠️ 这个 100 必须与后端 `service.ForumReplyMaxPageSize` 保持一致：
+// 后端对超上限的 page_size 是「回退默认值」而不是「截断到上限」（ClampMax 口径），
+// 一旦后端的 max 降到 100 以下，这里会**静默退回默认 20 条**而不是报错。
 const CHAPTER_REPLY_PAGE_SIZE = 100
 const replyPages = ref(1)
 const replyContent = ref('')
