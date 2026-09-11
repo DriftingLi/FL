@@ -31,7 +31,8 @@ const CHECKIN_PAGES = [
 
 /** 提取类型声明体（type X = { ... }） */
 function typeBody(name) {
-  const src = read('types/index.uts');
+  // CheckIn types moved to types/points.uts after types split
+  const src = read('types/points.uts');
   const start = src.indexOf(`export type ${name} = {`);
   if (start === -1) throw new Error(`未找到类型 ${name}`);
   return src.slice(start, src.indexOf('\n}', start));

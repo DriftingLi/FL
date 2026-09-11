@@ -1,0 +1,25 @@
+/**
+ * 通知模块类型
+ */
+
+/** 通知项 */
+export type NotificationItem = {
+    id : number
+    type : string       // system | profile_review | forum_reply | forum_report | forum_topic_deleted | forum_reply_deleted
+    title : string
+    content : string
+    link : string       // 跳转路径，如 /training/forum/:topic_id；帖子已删除时为空
+    payload : UTSJSONObject
+    is_read : boolean
+    read_at : string
+    created_at : string
+}
+
+/** 通知列表响应 */
+export type NotificationListResult = {
+    items : NotificationItem[]
+    total : number
+    page : number
+    page_size : number
+    unread_count : number
+}

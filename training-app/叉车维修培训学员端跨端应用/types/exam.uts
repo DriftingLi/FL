@@ -1,0 +1,108 @@
+/**
+ * 考试模块类型
+ */
+import type { QuestionOption } from './practice'
+
+/** 考核题目 */
+export type ExamQuestion = {
+    question_id : number
+    type : string          // 题型：single_choice / multiple_choice / true_false
+    title : string
+    options : QuestionOption[]
+    score : number
+}
+
+/** 模拟考试开始参数 */
+export type MockExamStartParams = {
+    count : number
+    duration : number
+}
+
+/** 模拟考试信息 */
+export type MockExamInfo = {
+    mock_exam_id : number
+    questions : ExamQuestion[]
+    duration : number          // 考试时长（分钟）
+    remaining_time : number    // 剩余时间（秒）
+    answers ?: UTSJSONObject   // 续考时后端返回的已存答案 { 题目ID字符串: 答案 }
+}
+
+/** 模拟考试保存参数 */
+export type MockExamSaveParams = {
+    mock_exam_id : number
+    answers : UTSJSONObject
+    remaining_time : number
+}
+
+/** 模拟考试结果详情（单题） */
+export type MockExamResultDetail = {
+    question_id : number
+    title : string
+    type : string
+    user_answer : string
+    correct_answer : string
+    is_correct : boolean
+}
+
+/** 模拟考试结果 */
+export type MockExamResult = {
+    mock_exam_id : number
+    score : number
+    total_score : number
+    passed : boolean
+    correct_count : number
+    total_questions : number
+    used_time : number          // 用时（秒）
+    details : MockExamResultDetail[]
+}
+
+/** 模拟考试历史项 */
+export type MockExamHistoryItem = {
+    mock_exam_id : number
+    score : number
+    total_score : number
+    passed : boolean
+    correct_count : number
+    total_questions : number
+    duration : number            // 考试时长（分钟）
+    used_time : number           // 用时（秒）
+    status : string             // completed / in_progress
+    created_at : string
+    completed_at : string
+}
+
+/** 模拟考试历史结果 */
+export type MockExamHistoryResult = {
+    items : MockExamHistoryItem[]
+    total : number
+    page : number
+    page_size : number
+}
+
+/** 错题项 */
+export type WrongQuestionItem = {
+    question_id : number
+    type : string
+    title : string
+    options : QuestionOption[]
+    correct_answer : string
+    user_answer : string
+    wrong_count : number
+    created_at : string
+    favorited : boolean      // 是否已收藏（后端 JOIN favorite 回填）
+}
+
+/** 错题列表结果 */
+export type WrongQuestionListResult = {
+    items : WrongQuestionItem[]
+    total : number
+    page : number
+    page_size : number
+}
+
+/** 错题统计 */
+export type WrongQuestionStats = {
+    total : number
+    by_type : UTSJSONObject               // { 题型: 数量 }
+    by_knowledge_point : UTSJSONObject    // { 知识点: 数量 }
+}

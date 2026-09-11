@@ -1,0 +1,47 @@
+/**
+ * 精选内容模块类型
+ */
+
+/** 精选内容条目 */
+export type FeaturedContentItem = {
+    content_id : number
+    title : string
+    category : string
+    category_label : string
+    summary : string
+    cover_image : string
+    source : string
+    status : string
+    sort_order : number
+    view_count : number
+    published_at : string
+    created_at : string
+}
+
+/** 精选内容列表结果 */
+export type FeaturedContentListResult = {
+    items : FeaturedContentItem[]
+    total : number
+    page : number
+    pages : number
+}
+
+/** 精选内容详情 */
+export type FeaturedContentDetail = {
+    content_id : number
+    title : string
+    category : string
+    category_label : string
+    summary : string
+    cover_image : string
+    source : string
+    status : string
+    sort_order : number
+    view_count : number
+    published_at : string
+    created_at : string
+    content : string
+    related : FeaturedContentItem[]
+    prev : FeaturedContentItem | null
+    next : FeaturedContentItem | null
+}

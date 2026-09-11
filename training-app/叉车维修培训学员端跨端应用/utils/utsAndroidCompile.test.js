@@ -712,12 +712,18 @@ function extractTypeFieldSet(clean, headMatch) {
   return set;
 }
 
-/** 全工程类型字段表：.uts 的 export type / interface / type 声明体（.uvue 本地类型由规则 K 按页覆盖） */
-function buildTypeFieldMap() {
+/** 全工程类型字段表：.uts 的 export type / interface 声明体（.uvue 本地类型由规则 K 按页覆盖）
+ *  @param files 参与构建的 .uts 清单（默认全工程）；显式传入用于「遍历顺序无关」回归锁 */
+function buildTypeFieldMap(files = ALL_FILES.filter((f) => f.endsWith('.uts'))) {
   const fields = new Map();
-  const headRe = /(?:export\s+)?(?:type|interface)\s+([A-Za-z_$][\w$]*)[^{]*\{/g;
+  // 类型头与 `{` 必须同行（`[^{}\n]*`），不得跨行（旧写法 `[^{]*` 会跨行）。
+  // 跨行时 `export { type X, type Y } from './x'` 这类 barrel re-export 行会被当作类型头：
+  // 其后的 `{` 取自**下一行**的 `export {`，于是 X 以「零字段」入表；又因下方 `!fields.has()`
+  // 先到先得，谁先被读到谁胜出——而 readdir 顺序 NTFS/ext4 不同，导致本机绿 / CI 红。
+  // 收紧后 barrel 行不再命中，字段表与遍历顺序无关（规则 K/L 不再假阳性）。
+  const headRe = /(?:export\s+)?(?:type|interface)\s+([A-Za-z_$][\w$]*)[^{}\n]*\{/g;
   let m;
-  for (const file of ALL_FILES.filter((f) => f.endsWith('.uts'))) {
+  for (const file of files) {
     const clean = blank(fs.readFileSync(file, 'utf8'));
     while ((m = headRe.exec(clean)) !== null) {
       if (!fields.has(m[1])) fields.set(m[1], extractTypeFieldSet(clean, m));
@@ -878,6 +884,36 @@ describe('守护自检：检测逻辑对已知违规样本必须报出', () => {
   it('C 能报出 toByteArray("UTF-8")', () => {
     expect(scanCharsetLiteral('const x = value.toByteArray("UTF-8")')).toHaveLength(1);
     expect(scanCharsetLiteral('const x = value.toByteArray(Charset.forName("UTF-8"))')).toEqual([]);
+  });
+
+  /**
+   * 规则 K/L 的字段表必须与文件遍历顺序无关。
+   * 回归背景（types 拆分后 CI 红 / 本机绿）：类型头正则跨行匹配了 `types/index.uts` 的
+   * `export { type X } from './y'` barrel 行，把 X 以「零字段」先占入表；而 `!fields.has()`
+   * 先到先得，谁先读到谁胜出——readdir 顺序 NTFS 与 ext4 不同，于是同一份代码两端结论相反。
+   * 锁法：正序 / 逆序两次构建必须完全一致（旧写法必红，新写法必绿）。
+   */
+  it('字段表与文件遍历顺序无关（barrel re-export 不得以零字段先占类型名）', () => {
+    const utsFiles = ALL_FILES.filter((f) => f.endsWith('.uts'));
+    const forward = buildTypeFieldMap(utsFiles);
+    const backward = buildTypeFieldMap([...utsFiles].reverse());
+
+    expect([...forward.keys()].sort()).toEqual([...backward.keys()].sort());
+    for (const [name, fieldSet] of forward) {
+      expect([...fieldSet].sort()).toEqual([...(backward.get(name) ?? new Set())].sort());
+    }
+
+    // 反向自检：被 barrel 行先占过的类型必须解析出**真实**字段（非空），否则规则 K/L 会假阳性
+    for (const [name, required] of [
+      ['NotificationItem', ['id', 'type', 'title', 'content', 'link', 'is_read', 'created_at']],
+      ['SearchItem', ['type', 'id', 'title', 'cover', 'summary']],
+      ['ExamQuestion', ['question_id', 'type', 'title', 'options', 'score']],
+    ]) {
+      const set = forward.get(name);
+      expect(set).toBeDefined();
+      expect(set.size).toBeGreaterThan(0);
+      for (const f of required) expect(set.has(f)).toBe(true);
+    }
   });
 
   it('D 能报出 ambient 函数声明', () => {
@@ -1059,6 +1095,9 @@ describe('全工程守护：五类 Kotlin 编译地雷零命中', () => {
           if (new RegExp('(?:^|\\n)[ \\t]*(?:export\\s+)?(?:type|interface)\\s+' + name + '\\b').test(clean)) continue;
           if (new RegExp('import\\s+(?:type\\s+)?\\{[^}]*\\b' + name + '\\b[^}]*\\}', 's').test(clean)) continue;
           if (new RegExp('import\\s+(?:type\\s+)?' + name + '\\b').test(clean)) continue;
+          // barrel re-export: export type { X } from './y'  OR  export { type X } from './y'
+          if (new RegExp('export\\s+type\\s+\\{[^}]*\\b' + name + '\\b[^}]*\\}\\s+from', 's').test(clean)) continue;
+          if (new RegExp('export\\s+\\{[^}]*type\\s+' + name + '\\b[^}]*\\}\\s+from', 's').test(clean)) continue;
           const useRe = new RegExp('(?<![\\w$])' + name + '(?![\\w$])');
           if (lines.some((ln) => useRe.test(ln))) {
             violations.push(`${path.relative(ROOT, file)}: "${name}" 未 import（导出于 ${path.relative(ROOT, defFile)}）`);

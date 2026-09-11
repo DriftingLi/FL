@@ -105,14 +105,17 @@ describe('pages.json 无孤儿路由（域下线不残留路径）', () => {
 
 describe('共享类型面：域类型清零、共享类型保留', () => {
   const types = read('types/index.uts');
+  const examTypes = read('types/exam.uts');
+  const practiceTypes = read('types/practice.uts');
 
   it('types/index.uts 不含 LevelExam* 类型声明', () => {
     expect(types).not.toMatch(/export\s+type\s+LevelExam\w*/);
+    expect(examTypes).not.toMatch(/export\s+type\s+LevelExam\w*/);
   });
 
   it('模拟考在用的 ExamQuestion / QuestionOption 保留（不连带打断 mock-exam）', () => {
-    expect(types).toMatch(/export\s+type\s+ExamQuestion\s*=/);
-    expect(types).toMatch(/export\s+type\s+QuestionOption\s*=/);
+    expect(examTypes).toMatch(/export\s+type\s+ExamQuestion\s*=/);
+    expect(practiceTypes).toMatch(/export\s+type\s+QuestionOption\s*=/);
   });
 });
 
