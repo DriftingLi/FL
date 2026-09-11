@@ -50,14 +50,14 @@
                     <image class="img-thumb" :src="img" mode="aspectFill" />
                 </view>
             </view>
-            <!-- 采纳按钮（仅问答帖 + 楼主可见 + 非自己回复） -->
-            <view v-if="topicCategory === 'question' && isTopicOwner && !item.isAccepted && item.authorId !== currentUserId" class="reply-accept-row">
+            <!-- 采纳按钮（问答帖 + 楼主 + 非自己回复 + 未采纳）；判定已由壳层下发，模板零求值 -->
+            <view v-if="item.canAcceptReply" class="reply-accept-row">
                 <view class="reply-accept-btn" @click="onAccept(item.id)">
                     <text class="reply-accept-btn-text">采纳此回答</text>
                 </view>
             </view>
-            <!-- 取消采纳按钮（仅问答帖 + 楼主可见 + 已采纳） -->
-            <view v-else-if="topicCategory === 'question' && isTopicOwner && item.isAccepted" class="reply-accept-row">
+            <!-- 取消采纳按钮（楼主 + 已采纳；已采纳帖必为问答帖，见迁移 000026 的 CHECK） -->
+            <view v-else-if="isTopicOwner && item.isAccepted" class="reply-accept-row">
                 <view class="reply-cancel-accept-btn" @click="onCancelAccept">
                     <text class="reply-cancel-accept-btn-text">取消采纳</text>
                 </view>
@@ -87,16 +87,13 @@
         items? : ForumReplyDisplay[]
         sortField? : string
         sortOrder? : string
+        /** 保留供「取消采纳」判定；「采纳」判定改由 item.canAcceptReply 下发（#816 后续） */
         isTopicOwner? : boolean
-        topicCategory? : string
-        currentUserId? : number
     }>(), {
         items: () => [] as ForumReplyDisplay[],
         sortField: 'latest',
         sortOrder: 'asc',
         isTopicOwner: false,
-        topicCategory: 'general',
-        currentUserId: 0,
     })
 
     const emit = defineEmits(['sortFieldChange', 'sortOrderChange', 'deleteReply', 'reportReply', 'toggleReplyLike', 'replyToUser', 'acceptReply', 'cancelAccept'])
