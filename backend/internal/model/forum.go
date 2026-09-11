@@ -17,17 +17,20 @@ import "time"
 // 就是 chapter_id IS NULL，而问答帖的 chapter_id 同样为 NULL，故列表查询必须让
 // category 与 scope 共存在同一条 WHERE 里，否则问答帖会整片灌进讨论 Tab。
 //
-// ⚠️ 上述非法组合在数据库层由 CHECK 兜底，但这些约束**只存在于迁移 SQL（000005）**：
-// 测试库由 AutoMigrate 建表、不执行 migrations/，因此两条 CHECK（值域 chk_forum_topics_category
-// 与非法组合 chk_forum_topics_question_no_chapter）契约测试都覆盖不到，别误以为测试守住了它们。
-// 行为层由 service 的校验守住：非法类别 400、问答帖带 chapter_id>0 返回 400。
+// ⚠️ 上述非法组合在数据库层由 CHECK 兜底，但这些约束**只存在于迁移 SQL（000005 / 000026 / 000027）**：
+// 测试库由 AutoMigrate 建表、不执行 migrations/，因此这些 CHECK（值域 chk_forum_topics_category、
+// 非法组合 chk_forum_topics_question_no_chapter、已采纳只能是问答帖、经验蕴含精选）
+// 契约测试都覆盖不到。**迁移约束的守护在 Postgres adapter 契约测试里**（DATABASE_URL 存在时执行），
+// 别误以为 SQLite 契约测试守住了它们。
+// 行为层由 service 的校验守住：非法意图 400、问答帖带 chapter_id>0 返回 400、经验帖必须先取消认定才能撤精。
 //
-// 字段约定（#742）：is_featured 精选位为通用列（全类别可用），管理端可精/可撤；
-// 与 accepted_reply_id 派生的问答两态正交，互不影响。
+// 字段约定（ADR-0040）：**意图** Category 由学员自述（discussion|question）；
+// **认定** IsFeatured / IsExperience 由管理端授予，与 accepted_reply_id 派生的问答两态正交，互不影响。
+// IsExperience 蕴含 IsFeatured（经验区是精选的子集）。
 type ForumTopic struct {
 	ID              int64      `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
 	ChapterID       *int       `gorm:"column:chapter_id" json:"chapter_id,omitempty"`
-	Category        string     `gorm:"column:category;not null;default:discussion" json:"category"` // 'discussion' | 'question' | 'experience'
+	Category        string     `gorm:"column:category;not null;default:discussion" json:"category"` // 意图：'discussion' | 'question'（ADR-0040）
 	UserID          int        `gorm:"column:user_id" json:"user_id"`
 	Title           string     `gorm:"column:title" json:"title"`
 	Content         string     `gorm:"column:content" json:"content"`
@@ -39,6 +42,7 @@ type ForumTopic struct {
 	SolvedAt        *time.Time `gorm:"column:solved_at" json:"solved_at,omitempty"`
 	LastReplyAt     *time.Time `gorm:"column:last_reply_at" json:"last_reply_at"`
 	IsFeatured      bool       `gorm:"column:is_featured;not null;default:false" json:"is_featured"`
+	IsExperience    bool       `gorm:"column:is_experience;not null;default:false" json:"is_experience"`
 	CreatedAt       time.Time  `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt       time.Time  `gorm:"column:updated_at" json:"updated_at"`
 }

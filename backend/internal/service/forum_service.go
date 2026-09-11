@@ -107,7 +107,7 @@ func (a ForumAuthor) DisplayName() string {
 type ForumTopicDTO struct {
 	ID              int64       `json:"id"`
 	ChapterID       *int        `json:"chapter_id"`
-	Category        string      `json:"category"` // discussion | question | experience（#364/#722）
+	Category        string      `json:"category"` // 意图：discussion | question（ADR-0040）
 	ChapterTitle    string      `json:"chapter_title"`
 	Title           string      `json:"title"`
 	Content         string      `json:"content"`
@@ -122,7 +122,8 @@ type ForumTopicDTO struct {
 	LikedByMe       bool        `json:"liked_by_me"`
 	AcceptedReplyID *int64      `json:"accepted_reply_id,omitempty"`
 	SolvedAt        *string     `json:"solved_at,omitempty"`
-	IsFeatured      bool        `json:"is_featured"`
+	IsFeatured      bool        `json:"is_featured"`   // 认定：精选位
+	IsExperience    bool        `json:"is_experience"` // 认定：备考经验（蕴含 is_featured）
 	RewardIssued    bool        `json:"reward_issued"`
 }
 
@@ -180,6 +181,7 @@ type topicRow struct {
 	SolvedAt        *time.Time
 	LastReplyAt     *time.Time
 	IsFeatured      bool
+	IsExperience    bool
 	CreatedAt       time.Time
 	UserID          int
 	Username        string
@@ -212,6 +214,7 @@ func (r topicRow) toDTO(viewerID int) ForumTopicDTO {
 		SolvedAt:        solvedAt,
 		LastReplyAt:     lastReplyAt,
 		IsFeatured:      r.IsFeatured,
+		IsExperience:    r.IsExperience,
 		CreatedAt:       formatISO(r.CreatedAt),
 		Author: ForumAuthor{
 			UserID: r.UserID, Username: r.Username, AvatarURL: r.AvatarURL,
@@ -275,21 +278,43 @@ func parseForumFeaturedArg(featured string) (string, error) {
 	}
 }
 
+// parseForumExperienceArg 解析列表查询的 is_experience 参数（ADR-0040）。
+// 空 = 不过滤；true = 仅经验认定（经验 Tab）；false = 仅非经验。
+// 与 solved/featured 同构：布尔派生列的等值过滤，随 WHERE 共存于主查询。
+//
+// 注意与 category=experience **不是**同一件事：那是遗留意图值（存量行已降级、写入已收窄），
+// 保留接受该值只为不让旧客户端拿到 400；它过滤不出任何行，经验 Tab 一律走本参数。
+func parseForumExperienceArg(experience string) (string, error) {
+	switch v := strings.TrimSpace(strings.ToLower(experience)); v {
+	case "":
+		return "", nil
+	case "true":
+		return "true", nil
+	case "false":
+		return "false", nil
+	default:
+		return "", fmt.Errorf("is_experience 参数无效: %s", experience)
+	}
+}
+
 // TopicListInput 主题列表查询条件。
 //
 // 用 struct 而非位置参数：本方法有 scope/keyword/sort/order/category 五个 string，
 // 位置传错（如把 category 落进 keyword）编译通过且语义全错。
 type TopicListInput struct {
-	Scope     string // all（默认）/ general / chapter
-	Category  string // 空或 all = 不过滤；discussion / question / experience = 按类别分流
-	Solved    string // 空或 all = 不过滤；solved / unsolved（#367，仅问答帖有意义）
-	Featured  string // 空 = 不过滤；true = 仅精选；false = 仅非精选（#742）
-	ChapterID int
-	Page      int
-	PageSize  int
-	Keyword   string
-	Sort      string // latest（默认）/ hot / created（按发帖时间，#722）
-	Order     string // desc（默认）/ asc
+	Scope    string // all（默认）/ general / chapter
+	Category string // 空或 all = 不过滤；discussion / question / experience = 按类别分流
+	Solved   string // 空或 all = 不过滤；solved / unsolved（#367，仅问答帖有意义）
+	Featured string // 空 = 不过滤；true = 仅精选；false = 仅非精选（#742）
+	// IsExperience 空 = 不过滤；true = 仅备考经验认定；false = 仅非经验（ADR-0040）。
+	// 经验 Tab 的唯一判据——**不要再改回 category=experience**（存量行已降级，过滤不出行）。
+	IsExperience string
+	ChapterID    int
+	Page         int
+	PageSize     int
+	Keyword      string
+	Sort         string // latest（默认）/ hot / created（按发帖时间，#722）
+	Order        string // desc（默认）/ asc
 }
 
 // ListTopics 分页查询主题。
@@ -307,6 +332,10 @@ func (s *ForumService) ListTopics(in TopicListInput) (*ForumTopicPageResult, err
 		return nil, err
 	}
 	featured, err := parseForumFeaturedArg(in.Featured)
+	if err != nil {
+		return nil, err
+	}
+	isExperience, err := parseForumExperienceArg(in.IsExperience)
 	if err != nil {
 		return nil, err
 	}
@@ -368,6 +397,13 @@ func (s *ForumService) ListTopics(in TopicListInput) (*ForumTopicPageResult, err
 				q = q.Where("t.is_featured = TRUE")
 			} else if featured == "false" {
 				q = q.Where("t.is_featured = FALSE")
+			}
+			// 经验认定过滤（ADR-0040）：同上，与 scope/category/solved/featured 共存在一条 WHERE。
+			// 经验 Tab 的唯一判据——**不要再改回 category=experience**（存量行已降级，过滤不出行）。
+			if isExperience == "true" {
+				q = q.Where("t.is_experience = TRUE")
+			} else if isExperience == "false" {
+				q = q.Where("t.is_experience = FALSE")
 			}
 			if keyword = strings.TrimSpace(keyword); keyword != "" {
 				like := "%" + keyword + "%"
@@ -1385,7 +1421,7 @@ func (s *ForumService) MyTopics(userID, page, pageSize int) (*ForumTopicPageResu
 
 // topicRowSelect topicRow 的共享投影（#742 审查收敛）：新增 topicRow 字段时只改这一处，
 // 全部列表/详情/个人视图查询共用，避免散落 5 处的投影字符串漂移。
-const topicRowSelect = "t.id, t.chapter_id, t.category, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.accepted_reply_id, t.solved_at, t.last_reply_at, t.is_featured, t.created_at, "
+const topicRowSelect = "t.id, t.chapter_id, t.category, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.accepted_reply_id, t.solved_at, t.last_reply_at, t.is_featured, t.is_experience, t.created_at, "
 
 // personalTopicSelect 个人动态三列表的行装配投影（与 MyTopics 逐字一致，被删主题字段 NULL 由 Scan 零值承载）。
 const personalTopicSelect = topicRowSelect +
@@ -1774,6 +1810,99 @@ func (s *ForumService) CancelAccept(userID int, topicID int64) (*ForumTopicDTO, 
 	return s.fetchTopicDTO(topicID, userID)
 }
 
+// awardDesignationRewardTx 认定奖励（加精 / 认定备考经验**共用同一笔**，ADR-0040）：
+// 每帖一次性直记 featured_bonus +30，以流水存在判定幂等（取消重精、先精后认定、先认定后精
+// 都只发一次），站内信与到账同事务（ADR-0023 + C3 事件构造器单点）。
+//
+// 流水 reason 字面量保持 featured_bonus 不变：points_ledger 是不可变流水，且幂等键格式改动
+// 等于同一事件重放拿到新键 → 双重发分/双重追回（ADR-0023 明文）。改名只发生在词汇与文案层。
+func (s *ForumService) awardDesignationRewardTx(tx *gorm.DB, topic model.ForumTopic, now time.Time) error {
+	var cnt int64
+	if err := tx.Model(&model.PointsLedger{}).
+		Where("ref_type = ? AND ref_id = ? AND reason = ?", "forum_topic", fmt.Sprintf("%d", topic.ID), ReasonFeaturedBonus).
+		Count(&cnt).Error; err != nil {
+		return err
+	}
+	if cnt > 0 {
+		return nil
+	}
+	// 积分直记（ADR-0023 事务内通道）：占坑键与状态 CAS 双保险
+	if err := s.points.SettleRewardTx(tx, PointsEntry{
+		UserID: topic.UserID, Delta: FeaturedBonusPoints, Reason: ReasonFeaturedBonus,
+		RefType: "forum_topic", RefID: fmt.Sprintf("%d", topic.ID),
+		IdemKey: FeaturedBonusIdemKey(topic.ID),
+	}); err != nil {
+		return err
+	}
+	return s.notificationSvc.CreateTopicFeaturedEvent(tx, NewTopicFeaturedEvent(topic.UserID, topic.Title, topic.ID, FeaturedBonusPoints), now)
+}
+
+// DesignateExperience 管理端认定「备考经验」（ADR-0040）。
+//
+// 一个认定动作同时置 is_experience 与 is_featured（经验蕴含精选，库层 CHECK 兜底），
+// 并按「认定奖励每帖一次」发 +30 —— 与加精共用同一条流水，故先加精后认定不会重复发分
+// （awardDesignationRewardTx 的流水存在判定短路），先认定后加精亦然。
+// 状态已一致时幂等短路（重复认定不发分不改状态）。
+func (s *ForumService) DesignateExperience(topicID int64) (*ForumTopicDTO, error) {
+	var topic model.ForumTopic
+	if err := s.db.First(&topic, topicID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrTopicNotFound
+		}
+		return nil, err
+	}
+	if topic.IsExperience {
+		return s.fetchTopicDTO(topicID, 0)
+	}
+	now := beijingNow()
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		// CAS：认定与精选一并置位（两者必须同进，否则撞蕴含 CHECK）。
+		// WHERE is_experience = false 保证并发下只有先胜者发分。
+		res := tx.Model(&model.ForumTopic{}).
+			Where("id = ? AND is_experience = ?", topicID, false).
+			Updates(map[string]any{
+				"is_experience": true,
+				"is_featured":   true,
+				"updated_at":    now,
+			})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return nil // 并发抢认定：由先胜者完成副作用
+		}
+		return s.awardDesignationRewardTx(tx, topic, now)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s.fetchTopicDTO(topicID, 0)
+}
+
+// RevokeExperience 管理端取消经验认定（ADR-0040）：只撤 is_experience，
+// **保留精选位**（撤的是归类不是质量认可，管理员可继续让它挂着精选）；已发分不回滚
+// （与撤精同政策：认定动作不是违规，回滚会让管理员不敢认定）。
+// 状态已一致时幂等短路。
+func (s *ForumService) RevokeExperience(topicID int64) (*ForumTopicDTO, error) {
+	var topic model.ForumTopic
+	if err := s.db.First(&topic, topicID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrTopicNotFound
+		}
+		return nil, err
+	}
+	if !topic.IsExperience {
+		return s.fetchTopicDTO(topicID, 0)
+	}
+	// CAS：只改 is_experience，is_featured 原样保留（不写它，避免覆盖并发下的精选变更）
+	if err := s.db.Model(&model.ForumTopic{}).
+		Where("id = ? AND is_experience = ?", topicID, true).
+		Updates(map[string]any{"is_experience": false, "updated_at": beijingNow()}).Error; err != nil {
+		return nil, err
+	}
+	return s.fetchTopicDTO(topicID, 0)
+}
+
 // SetFeatured 管理端设置精选位（#742，全类别可用）。
 //
 // featured=true 且发生状态迁移时，同事务给帖主一次性直记 featured_bonus +30
@@ -1787,6 +1916,12 @@ func (s *ForumService) SetFeatured(topicID int64, featured bool) (*ForumTopicDTO
 			return nil, ErrTopicNotFound
 		}
 		return nil, err
+	}
+	// 经验帖蕴含精选（库层 CHECK 兜底）：直接撤精会撞 CHECK，或留下「经验但非精选」的悬挂态。
+	// 逃生口是「先取消经验认定」——文案与 #811「已采纳的问答帖不能改类别，请先取消采纳」同构。
+	// 判定按认定事实（IsExperience），与意图 Category 无关。
+	if !featured && topic.IsExperience {
+		return nil, errors.New("备考经验帖蕴含精选位，请先取消经验认定")
 	}
 	if topic.IsFeatured == featured {
 		// 幂等：状态已一致（重复加精/重复取消），不发分不改状态
@@ -1807,26 +1942,8 @@ func (s *ForumService) SetFeatured(topicID int64, featured bool) (*ForumTopicDTO
 		if !featured {
 			return nil // 取消精选只改状态，已发分不回滚
 		}
-		// 是否已发过分（取消后重精场景）：以流水是否存在判定，每帖只发一次
-		var cnt int64
-		if err := tx.Model(&model.PointsLedger{}).
-			Where("ref_type = ? AND ref_id = ? AND reason = ?", "forum_topic", fmt.Sprintf("%d", topicID), ReasonFeaturedBonus).
-			Count(&cnt).Error; err != nil {
-			return err
-		}
-		if cnt > 0 {
-			return nil
-		}
-		// 积分直记（ADR-0023 事务内通道）：占坑键与状态 CAS 双保险
-		if err := s.points.SettleRewardTx(tx, PointsEntry{
-			UserID: topic.UserID, Delta: FeaturedBonusPoints, Reason: ReasonFeaturedBonus,
-			RefType: "forum_topic", RefID: fmt.Sprintf("%d", topicID),
-			IdemKey: FeaturedBonusIdemKey(topicID),
-		}); err != nil {
-			return err
-		}
-		// 站内信与到账同事务（ADR-0023），C3 事件构造器单点构造文案
-		return s.notificationSvc.CreateTopicFeaturedEvent(tx, NewTopicFeaturedEvent(topic.UserID, topic.Title, topicID, FeaturedBonusPoints), now)
+		// 认定奖励与「认定备考经验」共用同一实现：每帖只发一次，先认定后加精不重复发分。
+		return s.awardDesignationRewardTx(tx, topic, now)
 	})
 	if err != nil {
 		return nil, err

@@ -57,10 +57,12 @@ export function useTopicFeed(currentTab : Ref<string>) : UseTopicFeedResult {
         loading.value = true
         try {
             // 后端 scope 白名单仅 all|general|chapter（tab 名不可直传，会被静默当 all），
-            // category 白名单 discussion|question|experience（#727 已放行，生产已部署）
-            // 广场只出普通帖（discussion）；问答帖（question）与经验帖（experience）各挂各 Tab
+            // category 白名单只有学员自述的两值 discussion|question（ADR-0040 收窄；
+            // 'experience' 仅为旧客户端兼容保留、过滤不出任何行）
+            // 广场只出普通帖（discussion）；问答帖（question）走 category，经验帖走认定 is_experience
             let scope = 'general'
             let category = 'discussion'
+            let isExperience = ''
             let sort = sortField.value
             let order = sortOrder.value
             if (currentTab.value === 'hot') {
@@ -70,14 +72,17 @@ export function useTopicFeed(currentTab : Ref<string>) : UseTopicFeedResult {
                 order = 'desc'
                 sort = qaSort.value == 'latest' ? 'latest' : 'hot'
             } else if (currentTab.value === 'experience') {
-                // 备考经验（#706）：只列经验帖；最多赞→hot，最新→created（发帖时间，#727 排序档），默认→latest（活跃度）
+                // 备考经验（#706 / ADR-0040）：经验的唯一判据是管理端认定 is_experience（不是 category）；
+                // scope=all —— 经验帖可挂章节也可不挂，看全量认定帖。
+                // 最多赞→hot，最新→created（发帖时间，#727 排序档），默认→latest（活跃度）
                 scope = 'all'
-                category = 'experience'
+                category = ''
+                isExperience = 'true'
                 order = 'desc'
                 sort = expSort.value == 'hot' ? 'hot' : (expSort.value == 'latest' ? 'created' : 'latest')
             }
             const statusParam = currentTab.value === 'hot' ? qaStatus.value : ''
-            const result = await getForumTopicsApi(page.value, pageSize, scope, sort, order, category, statusParam, featuredFilter.value)
+            const result = await getForumTopicsApi(page.value, pageSize, scope, sort, order, category, statusParam, featuredFilter.value, isExperience)
             if (reset) {
                 topics.value = result.items
             } else {

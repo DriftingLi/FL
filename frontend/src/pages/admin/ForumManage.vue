@@ -149,12 +149,15 @@
         <el-table-column label="标题" min-width="240">
           <template #default="{ row }">
             <div class="title-cell">
+              <!-- 意图轴（学员自述，ADR-0040 只有两值） -->
               <UiTag v-if="row.category === 'question'" size="small" tone="success">问答</UiTag>
-              <UiTag v-else-if="row.category === 'experience'" size="small" tone="warning">备考经验</UiTag>
               <UiTag v-else-if="row.chapter_id" size="small" tone="warning">
                 {{ row.chapter_title || '章节讨论' }}
               </UiTag>
               <UiTag v-else size="small" tone="info">综合</UiTag>
+              <!-- 认定轴（管理端授予）：经验蕴含精选，故经验帖两个标签同时出现，
+                   不合并、也绝不出现「经验但非精选」的误导态 -->
+              <UiTag v-if="row.is_experience" size="small" tone="warning" effect="dark" class="font-semibold">备考经验</UiTag>
               <UiTag v-if="row.is_featured" size="small" effect="dark" class="font-semibold">★ 精选</UiTag>
               <span class="title-text">{{ row.title }}</span>
             </div>
@@ -168,11 +171,29 @@
         <el-table-column label="创建时间" width="160" align="center">
           <template #default="{ row }">{{ formatLocaleDateTime(row.created_at) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="150" fixed="right" align="center">
+        <el-table-column label="操作" width="230" fixed="right" align="center">
           <template #default="{ row }">
             <div class="flex items-center justify-center gap-1.5">
               <UiButton
-                v-if="!row.is_featured"
+                v-if="!row.is_experience"
+                variant="secondary"
+                size="small"
+                @click="designateExperience(row)"
+              >认定经验</UiButton>
+              <UiButton
+                v-else
+                variant="secondary"
+                size="small"
+                @click="revokeExperience(row)"
+              >取消经验认定</UiButton>
+              <!-- 经验蕴含精选：经验帖不得直接撤精（后端 400），禁用并给逃生口 -->
+              <UiTooltip v-if="row.is_featured && row.is_experience" content="备考经验帖蕴含精选位，请先取消经验认定">
+                <span>
+                  <UiButton variant="secondary" size="small" disabled>取消精选</UiButton>
+                </span>
+              </UiTooltip>
+              <UiButton
+                v-else-if="!row.is_featured"
                 variant="secondary"
                 size="small"
                 @click="featureTopic(row)"
@@ -224,6 +245,7 @@ import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiRadioGroup from '@/components/ui/UiRadioGroup.vue'
+import UiTooltip from '@/components/ui/UiTooltip.vue'
 
 // 帖子列表：admin 列表状态机 useAdminTable（#792，ADR-0039）——三态 + 分页 + 列表一并托管。
 // 解构改名保持模板零改动；keyword 为页面自管筛选轴（由 fetch adapter 读取）。
@@ -254,9 +276,11 @@ const {
 function handlePageChange(): void {
   void loadList()
 }
-// 管理端筛选轴：all=全部帖子、discussion=综合讨论区、question=问答区、experience=备考经验（#742 走查补齐）。
+// 管理端筛选轴：all=全部帖子、discussion=综合讨论区、question=问答区、experience=备考经验认定（#742 走查补齐）。
 // 四个值都交给 forumTabQuery 翻译成查询参数——"综合讨论区必须带 category=discussion"
 // 这条规则只在 api 层写一遍，学员端与管理端共用同一份映射。
+// ⚠️ experience 翻译出的是 scope=all + is_experience=true（管理端认定，ADR-0040）：
+// category='experience' 的存量行已由迁移降级为 discussion，发它必然空。
 const activeTab = ref<ForumTab>('all')
 const keyword = ref('')
 const expandedRows = ref<number[]>([])
@@ -399,6 +423,48 @@ async function unfeatureTopic(row: AdminForumTopic) {
     loadList()
   } catch (e) {
     console.error('取消精选失败:', e)
+    /* 错误已由拦截器提示 */
+  }
+}
+
+// ===== 备考经验认定（ADR-0040）：与精选位同轴的管理端认定，经验蕴含精选 =====
+
+async function designateExperience(row: AdminForumTopic) {
+  try {
+    await useConfirm().confirm(
+      `认定后「${row.title}」将进入备考经验区并带上精选标识，帖主获 +30 分（每帖仅一次；已加精的帖子不重复发放）。`,
+      '认定备考经验',
+      { type: 'info' }
+    )
+  } catch {
+    return
+  }
+  try {
+    await adminForumApi.designateExperience(row.id)
+    ElMessage.success('已认定为备考经验')
+    loadList()
+  } catch (e) {
+    console.error('认定备考经验失败:', e)
+    /* 错误已由拦截器提示 */
+  }
+}
+
+async function revokeExperience(row: AdminForumTopic) {
+  try {
+    await useConfirm().confirm(
+      `确定取消「${row.title}」的备考经验认定？精选位保留，已发放积分不收回。`,
+      '取消经验认定',
+      { type: 'info' }
+    )
+  } catch {
+    return
+  }
+  try {
+    await adminForumApi.revokeExperience(row.id)
+    ElMessage.success('已取消经验认定')
+    loadList()
+  } catch (e) {
+    console.error('取消经验认定失败:', e)
     /* 错误已由拦截器提示 */
   }
 }
