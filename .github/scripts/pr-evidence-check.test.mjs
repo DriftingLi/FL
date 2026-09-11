@@ -154,6 +154,29 @@ test('training-app 下的 pages.json 也算运行时面（免得有人只改路�
   assert.equal(r.ok, false);
 });
 
+test('未命中 MP-WEIXIN 面 → 第②门免（去掉②行也不红）', () => {
+  const body = FULL_EVIDENCE.split('\n').filter((l) => !l.startsWith('- ② ')).join('\n');
+  const r = run({ body });
+  assert.equal(r.ok, true, r.errors.join('；'));
+  assert.match(r.notes.join(), /第②门免/);
+});
+
+test('diff 出现 MP-WEIXIN 条件编译 → 第②门必填，缺②即红', () => {
+  const files = [uvue('pages/login/login.uvue', { patch: '@@ -1,2 +1,3 @@\n+// #ifdef MP-WEIXIN\n+// #endif\n' })];
+  const body = FULL_EVIDENCE.split('\n').filter((l) => !l.startsWith('- ② ')).join('\n');
+  const r = run({ files, body });
+  assert.equal(r.ok, false);
+  assert.match(r.errors.join(), /②/);
+});
+
+test('manifest.json 改动 → 第②门必填', () => {
+  const files = [uvue('manifest.json', { patch: '@@ -1,2 +1,3 @@\n+"mp-weixin": {}\n' })];
+  const body = FULL_EVIDENCE.split('\n').filter((l) => !l.startsWith('- ② ')).join('\n');
+  const r = run({ files, body });
+  assert.equal(r.ok, false);
+  assert.match(r.errors.join(), /②/);
+});
+
 test('frontend 下的同名 manifest.json 不算运行时面（不得误伤 Web 端）', () => {
   const r = run({ files: [{ filename: 'frontend/public/manifest.json', status: 'modified', patch: '' }] });
   assert.deepEqual(r.runtime, []);

@@ -45,6 +45,15 @@ jobs:
               );
               const needs4b = addsAsync || addsComposable;
 
+              // ② 触发条件（ADR-0008）：命中 MP-WEIXIN 面 —— 条件编译段 / manifest.json / platformConfig.json。
+              // （初版实现漏了这条，对任何运行时面 PR 都强制要求第②门，比 ADR 更严；此处对齐 ADR。）
+              const MP_WEIXIN_FILES = ['manifest.json', 'platformConfig.json'];
+              const needs2 = files.some(
+                (f) =>
+                  (f.filename.startsWith('training-app/') && MP_WEIXIN_FILES.includes(f.filename.split('/').pop())) ||
+                  (f.patch || '').includes('MP-WEIXIN'),
+              );
+
               const runtime = files.filter((f) => isRuntimeFile(f.filename)).map((f) => f.filename);
               const errors = [];
               const notes = [];
@@ -71,10 +80,10 @@ jobs:
 
               const GATES = [
                 { key: '①', label: 'Android 真机逐页截图对比', fields: ['执行人', '日期', '复测对象', '结论'], artifact: 'screenshot' },
-                { key: '②', label: '微信开发者工具无报错', fields: ['执行人', '日期', '复测对象', '结论'], artifact: 'screenshot' },
+                { key: '②', label: '微信开发者工具无报错', fields: ['执行人', '日期', '复测对象', '结论'], artifact: 'screenshot', requires: 'mpweixin' },
                 { key: '③', label: 'npm run test:unit 全绿', fields: ['结论'], artifact: 'ci-run' },
                 { key: '④a', label: 'dev 全量编译', fields: ['执行人', '日期', '复测对象', '结论'], artifact: 'build-log' },
-                { key: '④b', label: 'release 云打包', fields: ['执行人', '日期', '复测对象', '结论'], artifact: 'any', conditional: true },
+                { key: '④b', label: 'release 云打包', fields: ['执行人', '日期', '复测对象', '结论'], artifact: 'any', requires: '4b' },
               ];
               const PLACEHOLDER = /^(|[-—–~]+|待人工|待补|待填|待确认|⏳|tbd|todo|n\/?a|无|暂无)$/i;
               const ARTIFACT = {
@@ -86,7 +95,8 @@ jobs:
 
               const lines = section.split('\n').filter((l) => /^\s*[-*]\s/.test(l));
               for (const gate of GATES) {
-                if (gate.conditional && !needs4b) continue;
+                if (gate.requires === 'mpweixin' && !needs2) continue;
+                if (gate.requires === '4b' && !needs4b) continue;
                 const line = lines.find((l) => l.includes(gate.key));
                 const where = `${gate.key} ${gate.label}`;
                 if (!line) {
@@ -136,7 +146,8 @@ jobs:
                   needs4b,
                 };
               }
-              if (errors.length === 0) notes.push('四门证据结构完整（pr-evidence 只校结构，真伪由维护者判定）。');
+              if (!needs2) notes.push('未命中 MP-WEIXIN 面（无 MP-WEIXIN 条件编译 / manifest.json / platformConfig.json 改动）→ 第②门免（ADR-0008）。');
+              if (errors.length === 0) notes.push('证据结构完整（pr-evidence 只校结构，真伪由维护者判定）。');
               return { ok: errors.length === 0, errors, notes, runtime, needs4b };
             }
             // ==== PR-EVIDENCE-VALIDATOR-END ====
