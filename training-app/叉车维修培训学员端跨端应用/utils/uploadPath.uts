@@ -61,7 +61,7 @@ function decodeSafe(v : string) : string {
 export function sanitizeBaseName(name : string) : string {
     let out = ''
     for (let i = 0; i < name.length; i++) {
-        const code = name.charCodeAt(i)
+        const code = name.charCodeAt(i) ?? 0
         const c = name[i]
         const isDigit = code >= 48 && code <= 57    // '0'=48, '9'=57
         const isLower = code >= 97 && code <= 122   // 'a'=97, 'z'=122
@@ -85,7 +85,7 @@ export function sanitizeBaseName(name : string) : string {
 export function shortHash(v : string) : string {
     let h = 2166136261
     for (let i = 0; i < v.length; i++) {
-        h = h ^ v.charCodeAt(i)
+        h = h ^ (v.charCodeAt(i) ?? 0)
         h = (h * 16777619) >>> 0
     }
     return h.toString(16)
