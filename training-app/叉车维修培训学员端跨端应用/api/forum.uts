@@ -142,6 +142,7 @@ function buildTopic(obj : UTSJSONObject) : ForumTopic {
         scope: toStr(obj['scope'], 'general'),
         status: statusVal,
         is_featured: toBool(obj['is_featured']),
+        is_experience: toBool(obj['is_experience']),
     } as ForumTopic
 }
 
@@ -218,6 +219,7 @@ function buildTopicDetail(obj : UTSJSONObject) : ForumTopicDetail {
         replies: replies,
         scope: toStr(topicObj['scope'], 'general'),
         category: toStr(topicObj['category'], 'discussion'),
+        is_experience: toBool(topicObj['is_experience']),
         status: statusVal,
         accepted_reply_id: (acceptedReplyId != null && toNumber(acceptedReplyId) > 0) ? toNumber(acceptedReplyId) : null,
     } as ForumTopicDetail
