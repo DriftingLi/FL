@@ -273,11 +273,7 @@ func (h *ForumHandler) GetTopic(c *gin.Context) {
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *topicGetReq) (*map[string]any, error) {
-			result, err := h.svc.GetTopic(service.TopicDetailInput{
-				TopicID: req.TopicID, ViewerID: req.UserID,
-				ReplySort: req.Sort, Order: req.Order,
-				Page: req.Page, PageSize: req.PageSize,
-			})
+			result, err := h.svc.GetTopic(req.toDetailInput())
 			if err != nil {
 				return nil, err
 			}
@@ -516,11 +512,7 @@ func (h *ForumHandler) AdminGetTopic(c *gin.Context) {
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *topicGetReq) (*map[string]any, error) {
-			result, err := h.svc.GetTopic(service.TopicDetailInput{
-				TopicID: req.TopicID, ViewerID: req.UserID,
-				ReplySort: req.Sort, Order: req.Order,
-				Page: req.Page, PageSize: req.PageSize,
-			})
+			result, err := h.svc.GetTopic(req.toDetailInput())
 			if err != nil {
 				return nil, err
 			}
@@ -780,6 +772,15 @@ type topicGetReq struct {
 	// Page/PageSize 回复分页（ADR-0042）：回复列表的唯一读取形态是分页，旧的「一次性全量」已退役。
 	Page     int
 	PageSize int
+}
+
+// toDetailInput 学员端与管理端详情共用同一份 req→service 入参映射（两处逐字重复会漂移）。
+func (r *topicGetReq) toDetailInput() service.TopicDetailInput {
+	return service.TopicDetailInput{
+		TopicID: r.TopicID, ViewerID: r.UserID,
+		ReplySort: r.Sort, Order: r.Order,
+		Page: r.Page, PageSize: r.PageSize,
+	}
 }
 
 // replyTopicReq 回复请求。

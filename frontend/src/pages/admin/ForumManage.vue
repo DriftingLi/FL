@@ -127,8 +127,9 @@
                         {{ displayName(reply.author).charAt(0).toUpperCase() }}
                       </el-avatar>
                       <span class="reply-author">{{ displayName(reply.author) }}</span>
+                      <!-- 与学员端一致的「› 被回复人」行内形态（ADR-0042），不再用独立引用块 -->
                       <span v-if="reply.parent_id && reply.parent_name" class="reply-quote">
-                        回复 @{{ reply.parent_name }}
+                        › {{ reply.parent_name }}
                       </span>
                       <span class="reply-time">{{ formatLocaleDateTime(reply.created_at) }}</span>
                       <UiButton variant="danger" class="reply-delete" size="small" @click="deleteReply(reply)">
@@ -143,7 +144,7 @@
                 <div v-if="replyMap[row.id] && hasMoreReplies(row.id)" class="reply-more">
                   <UiButton
                     size="small"
-                    :loading="replyLoadingMoreId === row.id"
+                    :loading="replyLoadingMoreIds.includes(row.id)"
                     @click="loadMoreReplies(row.id)"
                   >
                     加载更多回复（剩余 {{ remainingRepliesOf(row.id) }} 条）
@@ -300,7 +301,8 @@ const detailLoadingId = ref<number | null>(null)
 // 只渲染首页会让管理员看不见后面的违规回复。
 const ADMIN_REPLY_PAGE_SIZE = 20
 const replyMeta = ref<Record<number, { page: number; pages: number; total: number }>>({})
-const replyLoadingMoreId = ref<number | null>(null)
+// 按行记加载态：单个全局 id 会让「另一行同时点加载更多」被静默忽略
+const replyLoadingMoreIds = ref<number[]>([])
 
 // ===== 举报管理（ADR-0018）=====
 const activeMainTab = ref<'topics' | 'reports'>('topics')
@@ -410,8 +412,8 @@ function remainingRepliesOf(topicId: number) {
 
 /** 加载更多回复：**追加**下一页（不替换） */
 async function loadMoreReplies(topicId: number) {
-  if (replyLoadingMoreId.value !== null || !hasMoreReplies(topicId)) return
-  replyLoadingMoreId.value = topicId
+  if (replyLoadingMoreIds.value.includes(topicId) || !hasMoreReplies(topicId)) return
+  replyLoadingMoreIds.value = [...replyLoadingMoreIds.value, topicId]
   try {
     const next = (replyMeta.value[topicId]?.page ?? 1) + 1
     const res = await adminForumApi.getTopic(topicId, next, ADMIN_REPLY_PAGE_SIZE)
@@ -431,7 +433,7 @@ async function loadMoreReplies(topicId: number) {
     console.error('加载更多回复失败:', e)
     /* 错误已由拦截器提示 */
   } finally {
-    replyLoadingMoreId.value = null
+    replyLoadingMoreIds.value = replyLoadingMoreIds.value.filter((id) => id !== topicId)
   }
 }
 
@@ -541,6 +543,15 @@ async function deleteReply(reply: AdminForumReply) {
       replyMap.value = {
         ...replyMap.value,
         [reply.topic_id]: replyMap.value[reply.topic_id].filter(r => r.id !== reply.id)
+      }
+      // total 要一起减，否则「剩余 N 条」比实际多（删父回复会级联删子树，实际减得更多，
+      // 但那是下一次加载才拿得到的真值——这里只保证不会**虚高**）。
+      const meta = replyMeta.value[reply.topic_id]
+      if (meta) {
+        replyMeta.value = {
+          ...replyMeta.value,
+          [reply.topic_id]: { ...meta, total: Math.max(meta.total - 1, 0) }
+        }
       }
     }
     loadList()

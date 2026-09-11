@@ -176,11 +176,8 @@ async function removeTopic(topicId: number) {
 }
 
 // ===== 回复互动（#858：与帖子详情同口径——点赞乐观更新、举报走同一对话框形态）=====
-const { toggle: toggleReplyLikeOnce } = useLike(forumApi.likeReply, forumApi.unlikeReply)
+const { toggle: toggleReplyLike } = useLike(forumApi.likeReply, forumApi.unlikeReply)
 
-async function toggleReplyLike(reply: ForumReplyItem) {
-  await toggleReplyLikeOnce(reply)
-}
 
 // 举报：状态机与提交口径与帖子详情共用同一 composable（原先两处逐字重复）
 const {

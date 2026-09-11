@@ -86,8 +86,6 @@ func TestForumReplyParentAvatarContract(t *testing.T) {
 	childOfAvatar := mkReply(int(author.ID), &root.ID, "回复有头像的人", time.Minute)
 	root2 := mkReply(int(noAvatar.ID), nil, "顶层回复2", 2*time.Minute)
 	childOfNoAvatar := mkReply(int(author.ID), &root2.ID, "回复没头像的人", 3*time.Minute)
-	_ = childOfAvatar
-	_ = childOfNoAvatar
 
 	if err := db.Model(&model.ForumTopic{}).Where("id = ?", topic.ID).Update("reply_count", 4).Error; err != nil {
 		t.Fatalf("回填 reply_count 失败: %v", err)

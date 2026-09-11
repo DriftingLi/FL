@@ -237,6 +237,9 @@ const REPLY_PAGE_SIZE = 20
 const replyPage = ref(1)
 const hasMore = ref(false)
 const loadingMore = ref(false)
+// 分页总数以**响应里的 total** 为准（与 pages 同一来源），不读 topic.reply_count ——
+// 后者是列表页消费的反范式列，两者若漂移会让「剩余 N 条」与翻页行为自相矛盾。
+const replyTotal = ref(0)
 
 /** 楼主视角：这条可被采纳（问答帖 + 非本人作答 + 尚未采纳） */
 function canAcceptReply(reply: ForumReplyItem) {
@@ -254,11 +257,8 @@ function canCancelAcceptReply(reply: ForumReplyItem) {
   return !!topic.value && topic.value.category === 'question' && isTopicOwner.value && !!reply.is_accepted
 }
 
-/** 尚未加载的回复条数（加载更多按钮上的剩余量） */
-const remainingReplies = computed(() => {
-  const total = topic.value?.reply_count ?? replies.value.length
-  return Math.max(total - replies.value.length, 0)
-})
+/** 尚未加载的回复条数（加载更多按钮上的剩余量）；与 pages/total 同源 */
+const remainingReplies = computed(() => Math.max(replyTotal.value - replies.value.length, 0))
 
 function scrollToHash() {
   const hash = route.hash || window.location.hash
@@ -277,10 +277,32 @@ async function loadDetailOnce() {
   const res = await forumApi.getTopic(topicId, replySort.value, replyOrder.value, 1, REPLY_PAGE_SIZE)
   topic.value = res.topic
   replies.value = res.replies || []
+  replyTotal.value = res.total ?? replies.value.length
   hasMore.value = (res.page ?? 1) < (res.pages ?? 1)
   // 浏览记录走服务端（#701：详情访问即由后端 GetTopic 落浏览去重行），不再写本地 localStorage
   await nextTick()
   scrollToHash()
+}
+
+/**
+ * 重载「用户当前已加载的页数」窗口（删回复后用）。
+ * 逐页取回并覆盖 replies，页数不变 → 阅读位置不缩回第一页。
+ */
+async function reloadLoadedPages() {
+  const pagesLoaded = Math.max(replyPage.value, 1)
+  const topicId = Number(route.params.topicId)
+  const collected: ForumReplyItem[] = []
+  for (let p = 1; p <= pagesLoaded; p++) {
+    const res = await forumApi.getTopic(topicId, replySort.value, replyOrder.value, p, REPLY_PAGE_SIZE)
+    collected.push(...(res.replies || []))
+    topic.value = res.topic
+    replyTotal.value = res.total ?? collected.length
+    const lastPage = res.pages ?? p
+    hasMore.value = (res.page ?? p) < lastPage
+    // 删到最后一页空了：不必再往上取
+    if (!hasMore.value) break
+  }
+  replies.value = collected
 }
 
 /** 加载更多：**追加**下一页（不替换），保持阅读连续；到底后入口消失。 */
@@ -294,6 +316,7 @@ async function loadMore() {
     )
     replies.value = [...replies.value, ...(res.replies || [])]
     replyPage.value = res.page ?? next
+    replyTotal.value = res.total ?? replyTotal.value
     hasMore.value = replyPage.value < (res.pages ?? replyPage.value)
   } catch (e) {
     console.error('加载更多回复失败:', e)
@@ -402,7 +425,9 @@ async function removeReply(replyId: number) {
   try {
     await forumApi.deleteReply(replyId)
     ElMessage.success('已删除')
-    loadDetail()
+    // 删父回复会**级联删掉整棵楼中楼**（后端按子树大小减计数），本地 filter 一条是错的；
+    // 但也不该 loadDetail() 缩回第一页——按已加载的页数重载，保留阅读位置。
+    await reloadLoadedPages()
   } catch (e) {
     console.error('删除失败:', e)
     /* 错误已由拦截器提示 */
@@ -411,7 +436,9 @@ async function removeReply(replyId: number) {
 
 // ===== 帖子卡的 ⋯ 菜单（互动下沉后，治理动作的唯一入口）=====
 const topicMoreItems = computed<UiMoreMenuItem[]>(() => {
-  const items: UiMoreMenuItem[] = [{ key: 'report', label: '举报' }]
+  const items: UiMoreMenuItem[] = []
+  // 与回复卡同规则：自己的内容不显示「举报」（后端无自举报拦截，这是前端入口收敛）
+  if (!isTopicOwner.value) items.push({ key: 'report', label: '举报' })
   if (topic.value?.can_delete) items.push({ key: 'delete', label: '删除', tone: 'danger' })
   return items
 })

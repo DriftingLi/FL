@@ -240,14 +240,14 @@ export const forumApi = {
     )
   },
 
-  // ===== 评论点赞（spec #268）=====
+  // ===== 回复点赞（spec #268）=====
 
-  /** 点赞评论（幂等） */
+  /** 点赞回复（幂等） */
   likeReply(id: number) {
     return unwrappedRequest.post<{ likes_count: number; liked: boolean }>(`/forum/replies/${id}/like`)
   },
 
-  /** 取消点赞评论（幂等） */
+  /** 取消点赞回复（幂等） */
   unlikeReply(id: number) {
     return unwrappedRequest.delete<{ likes_count: number; liked: boolean }>(`/forum/replies/${id}/like`)
   },
@@ -319,6 +319,8 @@ export interface AdminForumReply {
   topic_id: number
   parent_id?: number | null
   parent_name?: string
+  /** 被回复人的头像（与学员端同一 DTO）；管理端面板紧凑，只展示名字 */
+  parent_avatar_url?: string
   content: string
   images?: string[]
   created_at: string

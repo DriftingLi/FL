@@ -73,7 +73,8 @@ function reply(id: number, over: Partial<ForumReplyItem> = {}): ForumReplyItem {
   }
 }
 
-function topic(replyCount: number) {
+/** 帖子桩数据。authorId 默认 1 = 当前登录用户（本人是楼主）；传 2 表示别人的帖子。 */
+function topic(replyCount: number, authorId = 1) {
   return {
     id: 1,
     category: 'question' as const,
@@ -82,8 +83,9 @@ function topic(replyCount: number) {
     view_count: 0,
     reply_count: replyCount,
     created_at: '2026-08-01T10:00:00+08:00',
-    author: { user_id: 1, username: '楼主', avatar_url: '' },
-    can_delete: true,
+    author: { user_id: authorId, username: authorId === 1 ? '楼主' : '别人的帖', avatar_url: '' },
+    // can_delete 由后端按「是不是本人」下发，桩数据保持同口径
+    can_delete: authorId === 1,
     likes_count: 0,
     liked_by_me: false,
     accepted_reply_id: null,
@@ -184,9 +186,13 @@ describe('详情页回复分页（#854）', () => {
 describe('回复卡动作分层（#857）', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  async function mountWithReplies(replies: ForumReplyItem[]) {
+  async function mountWithReplies(replies: ForumReplyItem[], topicAuthorId = 1) {
     getTopic.mockResolvedValue({
-      topic: topic(replies.length), replies, page: 1, pages: 1, total: replies.length
+      topic: topic(replies.length, topicAuthorId),
+      replies,
+      page: 1,
+      pages: 1,
+      total: replies.length
     } as never)
     return mountDetail()
   }
@@ -227,16 +233,25 @@ describe('回复卡动作分层（#857）', () => {
   })
 
   it('帖子卡同页统一：举报/删除进 ⋯，点赞/收藏留在帖子操作行', async () => {
-    const wrapper = await mountWithReplies([reply(1)])
+    // 别人的帖子：可见「举报」，无可删权限
+    const wrapper = await mountWithReplies([reply(1)], 2)
     const keys = moreItemsOfTopic(wrapper).map((i) => i.key)
     expect(keys).toContain('report')
-    expect(keys).toContain('delete') // topic.can_delete = true
+    expect(keys).not.toContain('delete')
     const topicCard = wrapper.find('.topic-card')
     expect(topicCard.find('.topic-actions').exists()).toBe(true)
     expect(topicCard.find('.topic-actions').text()).toContain('点赞')
     expect(topicCard.find('.topic-actions').text()).toContain('收藏')
     // 治理动作不在帖子卡正文里以 chip 形式出现
     expect(topicCard.find('.topic-actions').text()).not.toContain('举报')
+  })
+
+  it('自己的帖子：⋯ 里不出现「举报」（与回复卡同规则）', async () => {
+    // topic.author.user_id = 1 = authStore.userInfo.user_id，即本人是楼主
+    const wrapper = await mountWithReplies([reply(1)])
+    const keys = moreItemsOfTopic(wrapper).map((i) => i.key)
+    expect(keys).not.toContain('report')
+    expect(keys).toContain('delete')
   })
 
   it('采纳入口独立于互动行，只对楼主、非本人作答的回答出现', async () => {
