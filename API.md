@@ -786,10 +786,10 @@ data: null
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | POST | `/api/forum/upload-image` | 上传论坛图片（图文分离，先传图后随发帖/回复提交 URL） |
-| GET | `/api/forum/topics` | 帖子列表（scope=all|general|chapter；keyword 搜索；分页；`sort=latest|hot` `order=asc|desc`） |
-| POST | `/api/forum/topics` | 发帖（images 最多 9 张） |
-| GET | `/api/forum/topics/:id` | 帖子详情（含回复；`sort=latest|hot|time` `order=asc|desc`） |
-| PUT | `/api/forum/topics/:id` | 编辑自己的帖子（#811：仅作者本人，非本人 403；可改 title/content/images/category，空串归一 discussion；问答帖不得挂章节） |
+| GET | `/api/forum/topics` | 帖子列表（scope=all|general|chapter；category=discussion|question；`is_experience` 经验认定筛选；`featured` 精选筛选；`solved` **须同时带 category=question**；keyword 搜索；分页；`sort=latest|hot|created` `order=asc|desc`） |
+| POST | `/api/forum/topics` | 发帖（images 最多 9 张；`category` **仅 discussion\|question**——「备考经验」是管理端认定，学员传 `experience` 返回 400） |
+| GET | `/api/forum/topics/:id` | 帖子详情（含回复；`sort=latest|hot|time` `order=asc|desc`；`reward_issued` = 该帖是否已产生过任一自记奖励） |
+| PUT | `/api/forum/topics/:id` | 编辑自己的帖子（#811：仅作者本人，非本人 403；可改 title/content/images/category，空串归一 discussion，`experience` 400；问答帖不得挂章节） |
 | POST | `/api/forum/topics/:id/replies` | 回复（images 最多 3 张；支持回复楼层） |
 | DELETE | `/api/forum/topics/:id` | 删除自己的帖子 |
 | DELETE | `/api/forum/replies/:id` | 删除自己的回复 |
@@ -809,10 +809,13 @@ data: null
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/admin/forum/topics` | 帖子列表（支持 `featured=true|false` 精选过滤） |
+| GET | `/api/admin/forum/topics` | 帖子列表（支持 `featured=true|false` 精选过滤、`is_experience=true|false` 经验认定过滤） |
 | GET | `/api/admin/forum/topics/:id` | 帖子详情 |
-| DELETE | `/api/admin/forum/topics/:id` | 删除帖子 |
-| POST | `/api/admin/forum/topics/:id/featured` | 加精（#742，全类别；首次给帖主 +30 幂等直记） |
+| DELETE | `/api/admin/forum/topics/:id` | 删除帖子（若该帖产生过任一直记奖励则按 `rollback` 对冲追回：答主 40 / 楼主 5 / 帖主 30，按 user_id 分组、封底 0） |
+| POST | `/api/admin/forum/topics/:id/featured` | 加精（#742，全类别；首次给帖主 +30 幂等直记，**与经验认定共用同一笔**） |
+| DELETE | `/api/admin/forum/topics/:id/featured` | 取消精选（已发分不回滚；**经验帖返回 400**，须先取消经验认定） |
+| POST | `/api/admin/forum/topics/:id/experience` | 认定备考经验（ADR-0040：同时置 is_experience 与 is_featured，首次给帖主 +30；与加精共用一笔） |
+| DELETE | `/api/admin/forum/topics/:id/experience` | 取消经验认定（**保留精选位**，已发分不回滚） |
 | DELETE | `/api/admin/forum/topics/:id/featured` | 取消精选（状态回滚，已发分不回滚） |
 | DELETE | `/api/admin/forum/replies/:id` | 删除回复 |
 | GET | `/api/admin/forum/reports?status=&page=&page_size=` | 举报列表（status 0 待处理/1 已处理，缺省全部） |
@@ -1164,19 +1167,30 @@ multipart/form-data：`file`。响应 200：data 为 `{ "url": "/static/uploads/
 
 ## 16.8 问答与简历、招聘（#364-#375，ADR-0022）
 
-### 16.8.1 论坛类别与问答筛选
+### 16.8.1 论坛意图、认定与问答筛选（ADR-0040）
 
-论坛新增 `category`（`discussion` | `question`，空串归一 `discussion`）与问答筛选 `solved`（`all` | `solved` 已解决 | `unsolved` 求助，仅对 `question` 有意义）；`question` 帖一律 `chapter_id=NULL`（带 `chapter_id>0` 返回 400，`CHECK` 兜底）。
+论坛帖有**两条正交轴**：
+
+- **意图** `category` = 学员发帖时**自述**想干什么，**只有** `discussion` | `question`（空串归一 `discussion`）。**「备考经验」不是意图**——学员传 `experience` 返回 400。
+- **认定** `is_featured`（精选，全类别可用）与 `is_experience`（备考经验，**蕴含精选**）由管理端授予。
+
+故「经验 Tab」的判据是 `is_experience=true`，**不是** `category=experience`（后者是遗留意图值，存量行已被迁移降级为 `discussion`，保留接受只为不给旧客户端 400，**过滤不出任何行**）。`question` 帖一律 `chapter_id=NULL`（带 `chapter_id>0` 返回 400，`CHECK` 兜底）。
+
+**认定是叠加标记、不是搬家**：被认定为经验的帖子**仍留在讨论 Tab**（与 `is_featured` 同构——加精也不搬走帖子），经验 Tab 只是「已认定考经」的子集视图。
 
 | 方法 | 路径 | 鉴权 | 说明 |
 |---|---|---|---|
-| GET | `/api/forum/topics?category=&solved=&scope=&chapter_id=&keyword=&sort=&order=&page=&page_size=` | JWT+hrwai_user | 帖子列表（`scope=all|general|chapter` 与 `category` 必须共存在同一条 WHERE，否则问答帖灌进讨论 Tab） |
-| POST | `/api/forum/topics` | JWT+hrwai_user | 发帖（`{title, content, category, chapter_id?, images[]}`，`category=question` 时不得带 `chapter_id>0`） |
-| GET | `/api/forum/topics/:id` | JWT+hrwai_user | 详情（含 `accepted_reply_id`/`solved_at`/`reward_issued` 与每条回复 `is_accepted`） |
+| GET | `/api/forum/topics?category=&is_experience=&featured=&solved=&scope=&chapter_id=&keyword=&sort=&order=&page=&page_size=` | JWT+hrwai_user | 帖子列表（`scope`/`category`/`solved`/`featured`/`is_experience` **必须共存在同一条 WHERE**，否则问答帖灌进讨论 Tab） |
+| POST | `/api/forum/topics` | JWT+hrwai_user | 发帖（`{title, content, category, chapter_id?, images[]}`，`category` 仅两值；`question` 时不得带 `chapter_id>0`） |
+| GET | `/api/forum/topics/:id` | JWT+hrwai_user | 详情（含 `accepted_reply_id`/`solved_at`/`is_experience`/`reward_issued` 与每条回复 `is_accepted`） |
 | POST | `/api/forum/topics/:id/accept` | JWT+hrwai_user（仅楼主） | 采纳回答 `{reply_id}`（首次采纳才发分，见积分） |
 | DELETE | `/api/forum/topics/:id/accept` | JWT+hrwai_user（仅楼主） | 取消采纳（已发分不回滚） |
 
-`GET /api/forum/topics` 响应与既有同形，元素新增 `category`/`accepted_reply_id`/`solved_at`/`reward_issued`；`solved` 非法返回 400。
+`GET /api/forum/topics` 响应与既有同形，元素新增 `category`/`accepted_reply_id`/`solved_at`/`is_experience`/`reward_issued`。
+
+**参数校验（均返回 400，不静默降级）**：`solved` 非法值；`featured` 非法值；`is_experience` 非法值；**`solved` 非空但未指定 `category=question`**（solved 只对问答帖有意义，旧实现会静默返回空列表）。
+
+**`reward_issued` 语义** = 该帖是否已产生过**任一**直记奖励（`accepted_bonus` / `accept_action` / `featured_bonus`）。列表批量回填与详情单条回填同口径。
 
 ### 16.8.2 学员侧简历卡 `/api/resume`（role=hrwai_user）
 
