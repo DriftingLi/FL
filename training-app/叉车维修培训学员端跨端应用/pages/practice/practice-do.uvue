@@ -2,7 +2,7 @@
     <view class="page" :style="{ height: windowHeight + 'px' }">
         <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
         <view class="nav-bar">
-            <view class="nav-left" @click="goBack()"><text class="nav-back">‹</text></view>
+            <view class="nav-left" @click="onBack"><text class="nav-back">‹</text></view>
             <view class="nav-center">
                 <text class="nav-timer">⏱ {{ session.timerText.value }}</text>
                 <text class="nav-progress ml-24">{{ session.currentIndex.value + 1 }}/{{ session.questions.value.length }}</text>
@@ -171,6 +171,7 @@
     function onNext() : void { session.onNext(); comments.resetComments(); notes.resetNotes(); knowledgeTags.value = []; loadKnowledge() }
     function onSubmit() : void { session.onSubmit(mode.value) }
     function onShareExplanation() : void { uni.showToast({ title: '分享功能开发中', icon: 'none' }) }
+    function onBack() : void { goBack() }
     function onExit() : void { session.stopTimer(); goBack() }
     function onRestart() : void { session.onRestart(); comments.resetComments(); notes.resetNotes(); knowledgeTags.value = []; session.loadQuestions(mode.value, practiceCount.value, tagId.value); loadKnowledge() }
 

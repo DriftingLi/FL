@@ -189,7 +189,7 @@ describe('#816 上传层接入（api/request.uts）', () => {
 
   it('中转文件传完即删，且成功/失败/401 三条路径都走到清理', () => {
     expect(src).toMatch(/function removeTempFile\(path : string\) : void/);
-    expect(src).toContain('removeFile(');
+    expect(src).toContain('unlink(');
     const doneCalls = src.match(/done\(\)/g) || [];
     expect(doneCalls.length).toBeGreaterThanOrEqual(3);
   });

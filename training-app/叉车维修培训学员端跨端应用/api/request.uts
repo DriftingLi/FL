@@ -452,7 +452,7 @@ function removeTempFile(path : string) : void {
     // #ifdef APP-ANDROID
     if (path.indexOf('/' + UPLOAD_TMP_DIR + '/') < 0) return
     try {
-        uni.getFileSystemManager().removeFile({
+        uni.getFileSystemManager().unlink({
             filePath: path,
             success: (_res : any | null) => {},
             fail: (_err : any | null) => {}
