@@ -38,7 +38,6 @@
             <!-- 回复列表 -->
             <ForumReplyList v-if="topic != null" :items="replyItems" :sort-field="replySortField"
                 :sort-order="replySortOrder" :is-topic-owner="isTopicOwner"
-                :topic-category="topicCategory" :current-user-id="currentUserId"
                 @sort-field-change="onReplySortFieldChange"
                 @sort-order-change="onReplySortOrderChange" @delete-reply="onDeleteReply"
                 @report-reply="onReportReply" @toggle-reply-like="onToggleReplyLikeById"
@@ -173,14 +172,22 @@
         return urls
     })
 
-    /** 帖子类别（question 时显示采纳按钮） */
-    const topicCategory = computed<string>(() : string => {
+    /**
+     * 该条回复能否被当前用户采纳（问答帖 + 楼主本人 + 非自己回复）。
+     * 2026-09-11：原判断写在 forum-reply-list 模板 v-if 里，安卓真机整块不渲染
+     * （同数据在小程序正常），判定为原生端模板求值不稳；改为壳层算好后扁平下发
+     * （先例：本文件 replyItems 已有的 canDelete/liked 等权限位）。
+     */
+    function canAcceptReply(r : ForumReply) : boolean {
+        if (!isTopicOwner.value) return false
         const t = topic.value
-        if (t == null) return 'discussion'
-        return t.category
-    })
+        if (t == null || t.category != 'question') return false
+        if (r.is_accepted) return false
+        const uid = currentUserId.value
+        if (uid <= 0) return false
+        return r.author_id != uid
+    }
 
-    /** 回复展示模型（权限位/点赞本地态/URL 预解析全部完成于壳层，组件模板零函数调用） */
     const replyItems = computed<ForumReplyDisplay[]>(() : ForumReplyDisplay[] => {
         const out : ForumReplyDisplay[] = []
         const rs = replies.value
@@ -204,6 +211,7 @@
                 liked: detail.isReplyLiked(r),
                 likesCount: detail.getReplyLikesCount(r),
                 isAccepted: r.is_accepted,
+                canAcceptReply: canAcceptReply(r),
             }
             out.push(display)
         }
