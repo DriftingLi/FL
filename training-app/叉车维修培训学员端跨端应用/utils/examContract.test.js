@@ -327,7 +327,9 @@ describe('删除禁区「exam 不用删」：行为保持点逐项仍在', () =>
   });
 
   it('超时自动交卷：autoSubmitFn 间接入口与提示仍在', () => {
-    expect(session).toContain('autoSubmitFn = doSubmit');
+    // 原为 autoSubmitFn = doSubmit（裸引用），云打包 release 编译因局部作用域 SAM 失败报 error17，
+    // 改为箭头包裹（与规则 T 合法形态一致）；提交超时自动交卷通过此变量间接触发，行为不变
+    expect(session).toContain('autoSubmitFn = (auto : boolean) => doSubmit(auto)');
     expect(session).toContain('考试时间已到，自动交卷');
   });
 

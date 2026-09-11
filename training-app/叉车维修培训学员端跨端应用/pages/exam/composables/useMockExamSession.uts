@@ -443,7 +443,10 @@ export function useMockExamSession() : UseMockExamSessionResult {
         }
     }
     // 绑定 autoSubmitFn：startTimer 超时自动交卷的间接入口（打破局部函数互相引用环）
-    autoSubmitFn = doSubmit
+    // ⚠️ 必须箭头包裹：局部函数名在赋值上下文走 Kotlin SAM 失败（函数体 vs 脚本顶层差异），
+    //    裸引用被解析为零参调用（UTSPromise<Unit>）→ 云打包 error17「Assignment type mismatch」。
+    //    参考：同仓规则 T（return 对象箭头包裹）与 ADR-0007 缺口二。
+    autoSubmitFn = (auto : boolean) => doSubmit(auto)
 
     /** 点击交卷 */
     function onSubmitClick() : void {
