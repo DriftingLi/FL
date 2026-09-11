@@ -141,16 +141,29 @@ describe('论坛类别分流', () => {
     expect(listTopics.mock.calls[0][0].category).toBe('discussion')
   })
 
-  it('切到备考经验 Tab（#722）：请求显式带 scope=all + category=experience', async () => {
+  it('切到备考经验 Tab（#722 / ADR-0040）：请求显式带 scope=all + is_experience=true，不发 category', async () => {
     const wrapper = await mountPage()
     listTopics.mockClear()
 
     await switchCategory(wrapper, 'experience')
     expect(listTopics).toHaveBeenCalledTimes(1)
     const params = listTopics.mock.calls[0][0]
-    // 经验帖的 chapter_id 也可为 NULL：漏 scope/category 会重蹈问答帖灌进讨论 Tab 的覆辙。
-    expect(params.category).toBe('experience')
+    // 经验帖的 chapter_id 也可为 NULL：漏 scope 会重蹈问答帖灌进讨论 Tab 的覆辙。
+    // 判据是管理端认定 is_experience；category='experience' 的存量行已降级，发它必然空。
+    expect(params.is_experience).toBe('true')
+    expect(params.category).toBeUndefined()
     expect(params.scope).toBe('all')
+  })
+
+  it('经验认定标识（ADR-0040）：is_experience 的帖子渲染「备考经验」，未认定的不渲染', async () => {
+    const wrapper = await mountPage(2, {
+      topics: [
+        { ...topic(1, 'discussion'), is_experience: true, is_featured: true, title: '被认定的考经' },
+        { ...topic(2, 'discussion'), is_experience: false, title: '普通讨论' }
+      ] as never
+    })
+    const experienceTags = wrapper.findAll('.el-tag').filter((t) => t.text().includes('备考经验'))
+    expect(experienceTags.length).toBe(1)
   })
 
   it('发布入口（ADR-0040）：经验 Tab 退为只读策展流，发帖表单只默认 discussion、只提供两意图', async () => {

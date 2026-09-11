@@ -157,6 +157,8 @@
                 {{ topic.chapter_title || '章节讨论' }}
               </UiTag>
               <UiTag v-else size="small" tone="info">综合</UiTag>
+              <!-- 认定两轴分开渲染（ADR-0040）：经验蕴含精选，故经验帖两个标签都在 -->
+              <UiTag v-if="topic.is_experience" size="small" tone="warning" effect="dark" class="font-semibold">备考经验</UiTag>
               <UiTag v-if="topic.is_featured" size="small" effect="dark" class="font-semibold">★ 精选</UiTag>
               <h3 class="m-0 truncate text-base font-semibold text-ink">{{ topic.title }}</h3>
             </div>
@@ -395,7 +397,8 @@ async function loadTopicsOnce() {
   // activeMain: 'discussion' | 'question' | 'experience'（#722 备考经验进场）
   // 查询参数交给 forumTabQuery 统一翻译（与端共用同一份映射）。
   // 关键是讨论 Tab 必须带 category=discussion：后端 scope=general 的定义就是
-  // chapter_id IS NULL，而问答帖与经验帖的 chapter_id 同为 NULL，漏 category 会让它们灌进讨论列表。
+  // chapter_id IS NULL，而问答帖与认定经验帖的 chapter_id 同为 NULL，漏 category 会让它们灌进讨论列表。
+  // 经验 Tab 已改走 is_experience=true（ADR-0040）：那是管理端认定，不是学员自述的 category。
   const query = {
     ...forumTabQuery(activeMain),
     sort: topicSort.value,

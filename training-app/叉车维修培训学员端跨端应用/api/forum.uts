@@ -240,8 +240,9 @@ function buildLikeResult(obj : UTSJSONObject) : LikeTopicResult {
  * @param sort 排序字段，默认 latest
  * @param order 排序方向，默认 desc
  * @param featured 精选过滤（#742 契约，勿改名）：'true' | 'false'，空串表示不过滤
+ * @param isExperience 经验认定过滤（ADR-0040 契约，勿改名）：'true' 仅管理端认定的经验帖，空串表示不过滤
  */
-export function getForumTopicsApi(page : number = 1, pageSize : number = 10, scope : string = 'general', sort : string = 'latest', order : string = 'desc', category : string = '', status : string = '', featured : string = '') : Promise<ForumTopicListResult> {
+export function getForumTopicsApi(page : number = 1, pageSize : number = 10, scope : string = 'general', sort : string = 'latest', order : string = 'desc', category : string = '', status : string = '', featured : string = '', isExperience : string = '') : Promise<ForumTopicListResult> {
     const params : UTSJSONObject = {
         scope: scope,
         sort: sort,
@@ -249,7 +250,8 @@ export function getForumTopicsApi(page : number = 1, pageSize : number = 10, sco
         page: page.toString(),
         page_size: pageSize.toString(),
     } as UTSJSONObject
-    // 帖子类别（后端 discussion|question|experience，#727 已放行），空为不筛选
+    // 帖子意图（学员自述，ADR-0040 起只有 discussion|question 两值；'experience' 仅为旧客户端
+    // 兼容留在后端白名单里，存量行已降级，发它过滤不出任何行），空为不筛选
     if (category.length > 0) {
         params['category'] = category
     }
@@ -261,6 +263,11 @@ export function getForumTopicsApi(page : number = 1, pageSize : number = 10, sco
     // 精选过滤（#742 批次三，对齐 Web 三 Tab 通用轴）：featured=true|false，空为不传（不过滤）
     if (featured.length > 0) {
         params['featured'] = featured
+    }
+    // 经验认定过滤（ADR-0040）：经验 Tab 的唯一判据是管理端认定 is_experience，**不是** category
+    // （自称不产生事实：category='experience' 的存量行已被迁移降级为 discussion），空为不传
+    if (isExperience.length > 0) {
+        params['is_experience'] = isExperience
     }
     return getMapped<ForumTopicListResult>('/forum/topics', params, (data : UTSJSONObject) : ForumTopicListResult => {
         console.log('[getForumTopicsApi] raw data:', JSON.stringify(data))
@@ -319,7 +326,8 @@ export function uploadForumImageApi(filePath : string) : Promise<string> {
  * @param title 标题（1-100 字）
  * @param content 内容（1-10000 字）
  * @param images 图片 URL 数组（最多 9 张，先经 uploadForumImageApi 上传获取）
- * @param category 帖子类别（discussion / question / experience，#727 已放行）
+ * @param category 帖子意图（学员自述，ADR-0040 起只有 discussion / question 两值；
+ *                 'experience' 写入后端直接 400——「备考经验」是管理端认定，不是自述类别）
  */
 export function createForumTopicApi(title : string, content : string, images : string[] = [], category : string = 'discussion') : Promise<ForumTopic> {
     const payload : UTSJSONObject = {
