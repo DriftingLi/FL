@@ -415,7 +415,7 @@ async function prepareUploadPath(path : string) : Promise<string> {
     if (!isContentUri(path)) return path
     // #ifdef APP-ANDROID
     const destPath = buildTempFilePath(uni.env.USER_DATA_PATH, path, Date.now())
-    const manager = (uni as any).getFileSystemManager()
+    const manager = uni.getFileSystemManager()
     if (ENABLE_DEBUG_LOG) {
         console.log('[uploadFile] content:// -> 落盘中转', path, '=>', destPath)
     }
@@ -452,7 +452,7 @@ function removeTempFile(path : string) : void {
     // #ifdef APP-ANDROID
     if (path.indexOf('/' + UPLOAD_TMP_DIR + '/') < 0) return
     try {
-        (uni as any).getFileSystemManager().removeFile({
+        uni.getFileSystemManager().removeFile({
             filePath: path,
             success: (_res : any | null) => {},
             fail: (_err : any | null) => {}
