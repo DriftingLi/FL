@@ -329,6 +329,15 @@ export interface AdminForumReply {
   }
 }
 
+/** 管理端帖子详情响应（ADR-0042：`topic` 与 `replies` 平级 + 分页信封） */
+export interface AdminForumTopicDetailData {
+  topic?: AdminForumTopic
+  replies?: AdminForumReply[]
+  page?: number
+  pages?: number
+  total?: number
+}
+
 export interface AdminForumListParams {
   scope?: 'all' | 'general' | 'chapter'
   /** 类别维度（#364）；省略表示两类都看 */
@@ -349,8 +358,19 @@ export const adminForumApi = {
     return unwrappedRequest.get<{ topics: AdminForumTopic[]; total: number }>('/admin/forum/topics', { params })
   },
 
-  getTopic(id: number) {
-    return unwrappedRequest.get<{ topic?: AdminForumTopic; replies?: AdminForumReply[] }>(`/admin/forum/topics/${id}`)
+  /**
+   * 管理端帖子详情（ADR-0042：回复同样分页读取）。
+   *
+   * ⚠️ 详情接口改为分页后，管理端展开面板若只取首页就会**静默少掉**后面的回复——
+   * 治理面看不到全部回复等于看不见违规内容，故调用方必须接「加载更多」。
+   */
+  getTopic(id: number, page?: number, pageSize?: number) {
+    const params: Record<string, number> = {}
+    if (page) params.page = page
+    if (pageSize) params.page_size = pageSize
+    return unwrappedRequest.get<AdminForumTopicDetailData>(`/admin/forum/topics/${id}`, {
+      params: Object.keys(params).length ? params : undefined
+    })
   },
 
   deleteTopic(id: number) {

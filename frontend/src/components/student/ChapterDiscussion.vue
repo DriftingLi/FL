@@ -10,6 +10,7 @@
  * 状态机：章节列表与展开详情是两级加载 —— 列表轻（只拉标题），详情按需拉取。
  */
 import { ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { EditPen, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 import { forumApi, type ForumTopicItem, type ForumReplyItem } from '@/api/forum'
@@ -29,8 +30,10 @@ import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import { useConfirm } from '@/composables/useConfirm'
+import { useForumReport } from '@/composables/useForumReport'
 
 const authStore = useAuthStore()
+const router = useRouter()
 
 const props = defineProps<{
   chapterId: number
@@ -43,6 +46,10 @@ const expandedTopicId = ref<number | null>(null)
 const expandedTopic = ref<ForumTopicItem | null>(null)
 const detailContent = ref('')
 const replies = ref<ForumReplyItem[]>([])
+// 章节讨论是内嵌面板、没有翻页交互，故一次取到页大小上限；
+// 超出时模板给一行可见提示 + 跳详情页入口（不静默丢弃尾部回复）。
+const CHAPTER_REPLY_PAGE_SIZE = 100
+const replyPages = ref(1)
 const replyContent = ref('')
 const replyImages = ref<string[]>([])
 const replyingTo = ref<{ id: number; username: string } | null>(null)
@@ -91,10 +98,12 @@ async function loadDetail(topicId: number) {
     // ADR-0042：详情回复一律分页读取。章节讨论是内嵌预览面板、没有翻页交互，
     // 故取页大小上限（100）以保持既有「展开即看全」的体验；超出 100 条的章节帖罕见，
     // 真出现也只影响该帖的尾部回复（论坛详情页仍是完整的分页读取）。
-    const res = await forumApi.getTopic(topicId, undefined, undefined, 1, 100)
+    const res = await forumApi.getTopic(topicId, undefined, undefined, 1, CHAPTER_REPLY_PAGE_SIZE)
     expandedTopic.value = res.topic || null
     detailContent.value = res.topic?.content || ''
     replies.value = res.replies || []
+    // 截断要显式可见（见模板提示），不做静默丢弃
+    replyPages.value = res.pages ?? 1
   } catch (e) {
     console.error('加载帖子详情失败:', e)
     /* 错误已由拦截器提示 */
@@ -111,6 +120,12 @@ function openCreate() {
 async function onTopicCreated() {
   createVisible.value = false
   await loadTopics()
+}
+
+/** 跳论坛详情页看完整回复（截断提示的去向） */
+function goTopicDetail() {
+  if (!expandedTopicId.value) return
+  router.push({ name: 'ForumDetail', params: { topicId: String(expandedTopicId.value) } })
 }
 
 function startReplyTo(reply: ForumReplyItem) {
@@ -167,39 +182,14 @@ async function toggleReplyLike(reply: ForumReplyItem) {
   await toggleReplyLikeOnce(reply)
 }
 
-const reportVisible = ref(false)
-const reportReason = ref('')
-const reportSubmitting = ref(false)
-const reportTarget = ref<{ kind: 'topic' | 'reply'; id: number } | null>(null)
-
-function openReport(kind: 'topic' | 'reply', replyId?: number) {
-  if (!expandedTopicId.value) return
-  reportTarget.value = { kind, id: kind === 'topic' ? expandedTopicId.value : replyId! }
-  reportReason.value = ''
-  reportVisible.value = true
-}
-
-async function submitReport() {
-  const reason = reportReason.value.trim()
-  if (!reportTarget.value) return
-  if (reason.length < 1 || reason.length > 500) {
-    ElMessage.warning('举报理由需为 1-500 字')
-    return
-  }
-  reportSubmitting.value = true
-  try {
-    const { kind, id } = reportTarget.value
-    if (kind === 'topic') await forumApi.reportTopic(id, reason)
-    else await forumApi.reportReply(id, reason)
-    ElMessage.success('举报已提交，等待处理')
-    reportVisible.value = false
-  } catch (e) {
-    console.error('举报失败:', e)
-    /* 错误已由拦截器提示 */
-  } finally {
-    reportSubmitting.value = false
-  }
-}
+// 举报：状态机与提交口径与帖子详情共用同一 composable（原先两处逐字重复）
+const {
+  visible: reportVisible,
+  reason: reportReason,
+  submitting: reportSubmitting,
+  open: openReport,
+  submit: submitReport
+} = useForumReport()
 
 /** 是否为当前登录用户自己发的（决定 ⋯ 里是否出现「举报」） */
 function isOwnReply(reply: ForumReplyItem) {
@@ -304,10 +294,16 @@ watch(() => props.chapterId, () => {
                   @reply-to="startReplyTo"
                   @like="toggleReplyLike"
                   @report="(r) => openReport('reply', r.id)"
+
                   @delete="removeReply"
                 />
               </template>
               <UiEmptyState v-else description="还没有回复" />
+              <!-- 截断提示：面板无翻页交互，超出部分给一个明确去向而不是静默丢掉 -->
+              <p v-if="replyPages > 1" class="mt-2 mb-0 text-center text-xs text-ink-3">
+                仅显示前 {{ replies.length }} 条回复，
+                <UiButton variant="text" size="small" @click="goTopicDetail">查看全部</UiButton>
+              </p>
             </div>
 
             <!-- 回复输入（与帖子详情页共用 ForumComposer） -->

@@ -99,6 +99,12 @@ func TestForumReplyPaginationContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("签发 token 失败: %v", err)
 	}
+	// 管理端详情走同一个 GetTopic，需 admin 角色才可达（RegisterForumRoutes 内含管理端路由）
+	adminTok, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).
+		Issue(1, "admin1", "admin")
+	if err != nil {
+		t.Fatalf("签发 admin token 失败: %v", err)
+	}
 
 	getPage := func(query string) replyPageResp {
 		req, _ := http.NewRequest(http.MethodGet, "/api/forum/topics/"+fmt.Sprint(topic.ID)+query, nil)
@@ -230,6 +236,28 @@ func TestForumReplyPaginationContract(t *testing.T) {
 		// 倒序下第二条应是最后一条回复（排序轴生效）
 		if len(got.Data.Replies) > 1 && got.Data.Replies[1].ID != replyIDs[replyTotal-1] {
 			t.Fatalf("倒序第二条 = %d, want %d", got.Data.Replies[1].ID, replyIDs[replyTotal-1])
+		}
+	})
+
+	// 管理端详情走同一个 GetTopic：治理面若只拿首页就会**看不见后面的违规回复**，
+	// 故必须同样受分页参数控制、并在响应里带上翻页所需的信封。
+	t.Run("管理端详情同样分页且带分页信封", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodGet, fmt.Sprintf("/api/admin/forum/topics/%d?page=1&page_size=10", topic.ID), nil)
+		req.Header.Set("Authorization", "Bearer "+adminTok)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("管理端详情期望 200, got %d %s", w.Code, w.Body.String())
+		}
+		var got replyPageResp
+		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+			t.Fatalf("解析失败: %v", err)
+		}
+		if len(got.Data.Replies) != 10 {
+			t.Fatalf("管理端首页应 10 条（受 page_size 控制）, got %d", len(got.Data.Replies))
+		}
+		if got.Data.Total != replyTotal {
+			t.Fatalf("管理端 total = %d, want %d", got.Data.Total, replyTotal)
 		}
 	})
 

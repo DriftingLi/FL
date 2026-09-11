@@ -444,8 +444,6 @@ func (s *ForumService) ListTopics(in TopicListInput) (*ForumTopicPageResult, err
 	}, nil
 }
 
-// GetTopic 主题详情（含回复，回复带被回复人信息），并累加浏览量。
-// replySort: time/latest（默认，时间）/ hot（热度：点赞数→时间）；order: asc/desc（默认 asc 对 time，desc 对 hot；显式传入时统一覆盖）
 // TopicDetailInput 主题详情查询条件（ADR-0042）。
 // 用 struct 而非位置参数，理由同 TopicListInput：本方法有 sort/order/page/page_size 多个标量，
 // 位置传错编译通过而语义全错。
@@ -458,6 +456,14 @@ type TopicDetailInput struct {
 	PageSize  int    // <=0 或超上限回退 ForumReplyDefaultPageSize
 }
 
+// GetTopic 主题详情（回复**分页**返回，带被回复人信息），并累加浏览量。
+// replySort: time/latest（默认，时间）/ hot（热度：点赞数→时间）；order: asc/desc（默认 asc 对 time，desc 对 hot；显式传入时统一覆盖）。
+//
+// 置顶（ADR-0042）：被采纳回复固定占首页第一条并从排序结果中剔除，故第 k 页（k>=2）的
+// 其余回复从 (k-1)*pageSize-1 起算 —— 不是朴素的 (k-1)*pageSize。
+//
+// total 为**实时 COUNT**（分页必须与实际行数一致，否则会出现空页）；topic.reply_count 是
+// 列表页消费的反范式计数列，两者由计数单写入口保持同值。
 func (s *ForumService) GetTopic(in TopicDetailInput) (map[string]any, error) {
 	topicID, viewerID := in.TopicID, in.ViewerID
 	replySort, order := in.ReplySort, in.Order

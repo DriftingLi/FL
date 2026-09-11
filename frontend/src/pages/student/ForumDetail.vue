@@ -189,6 +189,7 @@ import UiTag from '@/components/ui/UiTag.vue'
 import UiActionChip from '@/components/ui/UiActionChip.vue'
 import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
 import { useConfirm } from '@/composables/useConfirm'
+import { useForumReport } from '@/composables/useForumReport'
 
 const route = useRoute()
 const router = useRouter()
@@ -318,13 +319,10 @@ async function handleAccept(replyId: number) {
   try {
     const updated = await forumApi.acceptReply(topic.value.id, replyId)
     ElMessage.success('已采纳')
-    if (updated) {
-      topic.value = { ...topic.value, ...updated } as ForumTopicItem
-      const newAccepted = (updated as ForumTopicItem).accepted_reply_id
-      replies.value = replies.value.map((r) => ({ ...r, is_accepted: newAccepted != null && r.id === newAccepted }))
-    } else {
-      await loadDetail()
-    }
+    if (updated) topic.value = { ...topic.value, ...updated } as ForumTopicItem
+    // 必须重载而不是本地翻 is_accepted：置顶是**后端事实**（ADR-0042），
+    // 本地翻标记会让「已采纳」停在原位，与「恒占首页第一条」自相矛盾。
+    await loadDetail()
   } catch (e) {
     console.error('采纳失败:', e)
   }
@@ -340,12 +338,9 @@ async function handleCancelAccept() {
   try {
     const updated = await forumApi.cancelAccept(topic.value.id)
     ElMessage.success('已取消采纳')
-    if (updated) {
-      topic.value = { ...topic.value, ...updated } as ForumTopicItem
-      replies.value = replies.value.map((r) => ({ ...r, is_accepted: false }))
-    } else {
-      await loadDetail()
-    }
+    if (updated) topic.value = { ...topic.value, ...updated } as ForumTopicItem
+    // 同 handleAccept：取消后该条回到自然排序位置，只能由后端重排
+    await loadDetail()
   } catch (e) {
     console.error('取消采纳失败:', e)
   }
@@ -422,7 +417,7 @@ const topicMoreItems = computed<UiMoreMenuItem[]>(() => {
 })
 
 function onTopicMoreSelect(key: string) {
-  if (key === 'report') openReport('topic')
+  if (key === 'report') openReport('topic', Number(route.params.topicId))
   else if (key === 'delete') removeTopic()
 }
 
@@ -485,42 +480,14 @@ async function toggleReplyLike(reply: ForumReplyItem) {
   await toggleReplyLikeOnce(reply)
 }
 
-// 举报（帖子/回复共用对话框）
-const reportVisible = ref(false)
-const reportReason = ref('')
-const reportSubmitting = ref(false)
-const reportTarget = ref<{ kind: 'topic' | 'reply'; id: number } | null>(null)
-
-function openReport(kind: 'topic' | 'reply', replyId?: number) {
-  reportTarget.value = { kind, id: kind === 'topic' ? Number(route.params.topicId) : replyId! }
-  reportReason.value = ''
-  reportVisible.value = true
-}
-
-async function submitReport() {
-  const reason = reportReason.value.trim()
-  if (!reportTarget.value) return
-  if (reason.length < 1 || reason.length > 500) {
-    ElMessage.warning('举报理由需为 1-500 字')
-    return
-  }
-  reportSubmitting.value = true
-  try {
-    const { kind, id } = reportTarget.value
-    if (kind === 'topic') {
-      await forumApi.reportTopic(id, reason)
-    } else {
-      await forumApi.reportReply(id, reason)
-    }
-    ElMessage.success('举报已提交，等待处理')
-    reportVisible.value = false
-  } catch (e) {
-    console.error('举报失败:', e)
-    /* 错误已由拦截器提示 */
-  } finally {
-    reportSubmitting.value = false
-  }
-}
+// 举报（帖子/回复共用对话框）：状态机与提交口径收在 composable 一处，与章节讨论共用。
+const {
+  visible: reportVisible,
+  reason: reportReason,
+  submitting: reportSubmitting,
+  open: openReport,
+  submit: submitReport
+} = useForumReport()
 
 watch(
   () => route.hash,

@@ -49,6 +49,8 @@ vi.mock('@/api/favorite', () => ({
 
 import { forumApi, type ForumReplyItem } from '@/api/forum'
 import UiMoreMenu from '@/components/ui/UiMoreMenu.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 import ForumDetail from '../ForumDetail.vue'
 
 const getTopic = vi.mocked(forumApi.getTopic)
@@ -243,6 +245,50 @@ describe('回复卡动作分层（#857）', () => {
     expect(item.find('.reply-accept-row').exists()).toBe(true)
     expect(item.find('.reply-accept-row').text()).toContain('采纳此回答')
     expect(item.find('.reply-actions').text()).not.toContain('采纳')
+  })
+})
+
+describe('举报入口（收编为 useForumReport 一处）', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('从 ⋯ 选「举报」打开对话框，确认后按主题/回复分别提交', async () => {
+    getTopic.mockResolvedValue({
+      topic: topic(1), replies: [reply(1)], page: 1, pages: 1, total: 1
+    } as never)
+    const wrapper = await mountDetail()
+
+    // ⋯ 选「举报」→ 对话框打开
+    const replyMenu = wrapper.findAll('.reply-item')[0].findComponent(UiMoreMenu)
+    replyMenu.vm.$emit('select', 'report')
+    await flushPromises()
+    const dialog = wrapper.findComponent(UiDialog)
+    expect(dialog.props('modelValue')).toBe(true)
+
+    // 理由为空时提交被拦下（校验在 composable 一处，两端同口径）
+    dialog.vm.$emit('confirm')
+    await flushPromises()
+    expect(forumApi.reportReply).not.toHaveBeenCalled()
+
+    // 填理由后提交 → 打到回复举报端点
+    wrapper.findComponent(UiInput).vm.$emit('update:modelValue', '违规内容')
+    await flushPromises()
+    dialog.vm.$emit('confirm')
+    await flushPromises()
+    expect(forumApi.reportReply).toHaveBeenCalledWith(1, '违规内容')
+  })
+
+  it('帖子卡的 ⋯ 选「举报」打的是主题举报端点', async () => {
+    getTopic.mockResolvedValue({
+      topic: topic(1), replies: [reply(1)], page: 1, pages: 1, total: 1
+    } as never)
+    const wrapper = await mountDetail()
+    wrapper.find('.topic-card').findComponent(UiMoreMenu).vm.$emit('select', 'report')
+    await flushPromises()
+    wrapper.findComponent(UiInput).vm.$emit('update:modelValue', '主题违规')
+    await flushPromises()
+    wrapper.findComponent(UiDialog).vm.$emit('confirm')
+    await flushPromises()
+    expect(forumApi.reportTopic).toHaveBeenCalledWith(1, '主题违规')
   })
 })
 

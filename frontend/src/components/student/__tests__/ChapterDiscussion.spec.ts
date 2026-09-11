@@ -31,6 +31,11 @@ vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({ userInfo: { user_id: 1, username: '我' } })
 }))
 
+// 章节讨论新增了「查看全部」跳详情（截断提示的去向）
+vi.mock('vue-router', () => ({
+  useRouter: () => ({ push: vi.fn() })
+}))
+
 import { forumApi, type ForumReplyItem } from '@/api/forum'
 import UiMoreMenu from '@/components/ui/UiMoreMenu.vue'
 import ForumReplyCard from '../ForumReplyCard.vue'
@@ -156,6 +161,58 @@ describe('章节讨论回复区对齐（#858）', () => {
     // 但章节帖不是问答帖 —— 采纳入口不该出现。
     const wrapper = await mountExpanded([reply(1)])
     expect(wrapper.find('.reply-accept-row').exists()).toBe(false)
+  })
+
+  it('回复超过一页时给出可见的截断提示与去向（不静默丢弃）', async () => {
+    listTopics.mockResolvedValue({
+      topics: [
+        {
+          id: 1,
+          chapter_id: 1,
+          category: 'discussion',
+          title: '章节讨论帖',
+          content: '内容',
+          view_count: 0,
+          reply_count: 150,
+          created_at: '2026-08-01T10:00:00+08:00',
+          author: { user_id: 1, username: '楼主', avatar_url: '' }
+        }
+      ],
+      total: 1
+    } as never)
+    getTopic.mockResolvedValue({
+      topic: {
+        id: 1,
+        chapter_id: 1,
+        category: 'discussion',
+        title: '章节讨论帖',
+        content: '内容',
+        view_count: 0,
+        reply_count: 150,
+        created_at: '2026-08-01T10:00:00+08:00',
+        author: { user_id: 1, username: '楼主', avatar_url: '' }
+      },
+      replies: [reply(1)],
+      page: 1,
+      pages: 2,
+      total: 150
+    } as never)
+
+    const wrapper = mount(ChapterDiscussion, {
+      props: { chapterId: 1 },
+      global: {
+        plugins: [epLite()],
+        stubs: { ForumImageGallery: true, ForumPostForm: true, ForumComposer: true }
+      }
+    })
+    await flushPromises()
+    await wrapper.findAll('.cursor-pointer')[0].trigger('click')
+    await flushPromises()
+    await new Promise((r) => setTimeout(r, 0))
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('仅显示前 1 条回复')
+    expect(wrapper.text()).toContain('查看全部')
   })
 
   it('楼中楼显示被回复人', async () => {
