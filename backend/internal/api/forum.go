@@ -40,6 +40,8 @@ func RegisterForumRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.ForumS
 	g.POST("/topics", h.CreateTopic)
 	// GET /api/forum/topics/:id 主题详情（含回复）
 	g.GET("/topics/:id", h.GetTopic)
+	// PUT /api/forum/topics/:id 编辑帖子（#811，仅作者本人；可改 title/content/images/category）
+	g.PUT("/topics/:id", h.UpdateTopic)
 	// POST /api/forum/topics/:id/replies 回复（images 为图片 URL 数组，最多 3 张）
 	g.POST("/topics/:id/replies", h.ReplyTopic)
 	// DELETE /api/forum/topics/:id 删除自己的主题
@@ -324,6 +326,74 @@ func (h *ForumHandler) ReplyTopic(c *gin.Context) {
 	}.Handle(c)
 }
 
+// UpdateTopic 编辑自己的帖子（#811）
+// @Summary 编辑自己的帖子
+// @Description 仅作者本人可改 title/content/images/category；非本人 403，主题不存在 404；类别值域 discussion|question|experience，空串归一 discussion；问答帖不得挂章节（与发帖同规则）
+// @Tags 学员端-论坛
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "主题ID"
+// @Success 200 {object} response.R{data=service.ForumTopicDTO} "修改成功"
+// @Failure 400 {object} response.R "参数错误（类别非法/长度越界/图片非法）"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 403 {object} response.R "非作者本人"
+// @Failure 404 {object} response.R "主题不存在"
+// @Router /forum/topics/{id} [put]
+func (h *ForumHandler) UpdateTopic(c *gin.Context) {
+	Endpoint[updateTopicReq, service.ForumTopicDTO]{
+		Parse: func(c *gin.Context) (*updateTopicReq, error) {
+			topicID, err := pathInt64(c, "id", "主题ID无效")
+			if err != nil {
+				return nil, err
+			}
+			var body struct {
+				Category string   `json:"category"`
+				Title    string   `json:"title"`
+				Content  string   `json:"content"`
+				Images   []string `json:"images"`
+			}
+			if err := c.ShouldBindJSON(&body); err != nil {
+				return nil, badRequest("请求参数错误")
+			}
+			return &updateTopicReq{
+				UserID:   middleware.CurrentUserID(c),
+				TopicID:  topicID,
+				Category: body.Category,
+				Title:    body.Title,
+				Content:  body.Content,
+				Images:   body.Images,
+			}, nil
+		},
+		Invoke: func(ctx context.Context, req *updateTopicReq) (*service.ForumTopicDTO, error) {
+			return h.svc.UpdateTopic(service.UpdateTopicInput{
+				UserID:   req.UserID,
+				TopicID:  req.TopicID,
+				Category: req.Category,
+				Title:    req.Title,
+				Content:  req.Content,
+				Images:   req.Images,
+			})
+		},
+		Render: func(c *gin.Context, _ *updateTopicReq, resp *service.ForumTopicDTO, err error) {
+			if err != nil {
+				// 哨兵映射（errors.Is，不做字符串比对）：owner 403 / 不存在 404 / 其余 400
+				if errors.Is(err, service.ErrNotTopicOwner) {
+					response.Forbidden(c, err.Error())
+					return
+				}
+				if errors.Is(err, service.ErrTopicNotFound) {
+					response.NotFound(c, err.Error())
+					return
+				}
+				response.BadRequest(c, err.Error())
+				return
+			}
+			response.SuccessWithMsg(c, "修改成功", resp)
+		},
+	}.Handle(c)
+}
+
 // DeleteTopic 删除自己的帖子
 // @Summary 删除自己的帖子
 // @Description 仅本人可删
@@ -601,6 +671,16 @@ type createTopicReq struct {
 	Title     string
 	Content   string
 	Images    []string
+}
+
+// updateTopicReq 编辑帖子请求（#811）：chapter_id 不在契约内（编辑不迁移章节归属）。
+type updateTopicReq struct {
+	UserID   int
+	TopicID  int64
+	Category string
+	Title    string
+	Content  string
+	Images   []string
 }
 
 // topicGetReq 主题详情请求。

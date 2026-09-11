@@ -338,7 +338,10 @@ export type ForumTopic = {
     liked : boolean
     favorited : boolean
     created_at : string
-    /** 帖子分类：general / resource / video / exam */
+    /**
+     * @deprecated 旧分类词汇（general / resource / video / exam），后端详情 DTO 已不回该字段，
+     * 读它只会拿到 buildTopicDetail 垫的默认值。判类别一律用下方的 category（#811 踩坑教训）。
+     */
     scope : string
     /** 问题状态：resolved（已解决）/ open（进行中）（#736） */
     status : string
