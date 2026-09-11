@@ -87,6 +87,26 @@ describe('adminForumApi 精选位（#742）', () => {
     expect(mockDelete).toHaveBeenCalledWith('/admin/forum/topics/5/featured')
   })
 
+  it('designateExperience：POST /admin/forum/topics/:id/experience', async () => {
+    mockPost.mockResolvedValue({ id: 5, is_experience: true, is_featured: true })
+    await adminForumApi.designateExperience(5)
+    expect(mockPost).toHaveBeenCalledWith('/admin/forum/topics/5/experience')
+  })
+
+  it('revokeExperience：DELETE /admin/forum/topics/:id/experience（保留精选位）', async () => {
+    mockDelete.mockResolvedValue({ id: 5, is_experience: false, is_featured: true })
+    await adminForumApi.revokeExperience(5)
+    expect(mockDelete).toHaveBeenCalledWith('/admin/forum/topics/5/experience')
+  })
+
+  it('listTopics：is_experience 参数透传（经验筛选轴唯一判据）', async () => {
+    mockGet.mockResolvedValue({ topics: [], total: 0 })
+    await adminForumApi.listTopics({ is_experience: 'true', page: 1 })
+    expect(mockGet).toHaveBeenCalledWith('/admin/forum/topics', {
+      params: { is_experience: 'true', page: 1 }
+    })
+  })
+
   it('listTopics：featured 参数透传（true 仅精选 / false 找待精候选）', async () => {
     mockGet.mockResolvedValue({ topics: [], total: 0 })
     await adminForumApi.listTopics({ featured: 'true', page: 1 })
@@ -116,7 +136,12 @@ describe('forumTabQuery 类别映射', () => {
     expect(forumTabQuery('question')).toEqual({ category: 'question' })
   })
 
-  it('备考经验（#722）：scope=all + category=experience，经验帖可挂章节故看全量', () => {
-    expect(forumTabQuery('experience')).toEqual({ scope: 'all', category: 'experience' })
+  it('备考经验（#722 / ADR-0040）：scope=all + is_experience=true —— 判据是管理端认定，不是 category', () => {
+    expect(forumTabQuery('experience')).toEqual({ scope: 'all', is_experience: 'true' })
+  })
+
+  it('备考经验筛选不得退化成 category=experience（存量行已降级，发它必然空）', () => {
+    // 反向断言：把 is_experience 做成 category 的别名是最容易犯的错，这里锁死。
+    expect(forumTabQuery('experience')).not.toHaveProperty('category')
   })
 })

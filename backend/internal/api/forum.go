@@ -86,6 +86,8 @@ func RegisterForumRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.ForumS
 	// 精选位（#742）：全类别可精/可撤；首次加精同事务给帖主 featured_bonus +30（幂等）
 	adminG.POST("/topics/:id/featured", h.AdminFeatureTopic)
 	adminG.DELETE("/topics/:id/featured", h.AdminUnfeatureTopic)
+	adminG.POST("/topics/:id/experience", h.AdminDesignateExperience)
+	adminG.DELETE("/topics/:id/experience", h.AdminRevokeExperience)
 	// 举报管理（ADR-0018）：status query 0 待处理 / 1 已处理，缺省全部
 	adminG.GET("/reports", h.ListReports)
 	adminG.PUT("/reports/:id", h.HandleReport)
@@ -150,30 +152,34 @@ func (h *ForumHandler) ListTopics(c *gin.Context) {
 	Endpoint[listTopicsReq, service.ForumTopicPageResult]{
 		Parse: func(c *gin.Context) (*listTopicsReq, error) {
 			return &listTopicsReq{
-				Scope:     c.Query("scope"),
-				Category:  c.Query("category"),
-				Solved:    c.Query("solved"),
-				Featured:  c.Query("featured"),
-				ChapterID: atoiDefault(c.Query("chapter_id"), 0),
-				Page:      atoiDefault(c.Query("page"), 1),
-				PageSize:  atoiDefault(c.Query("page_size"), 10),
-				Keyword:   c.Query("keyword"),
-				Sort:      c.Query("sort"),
-				Order:     c.Query("order"),
+				Scope:    c.Query("scope"),
+				Category: c.Query("category"),
+				Solved:   c.Query("solved"),
+				Featured: c.Query("featured"),
+				// is_experience 是经验 Tab 的判据（ADR-0040）；category=experience 是遗留意图值，
+				// 两者**不是**同一件事，详见 service.parseForumExperienceArg 的注释。
+				IsExperience: c.Query("is_experience"),
+				ChapterID:    atoiDefault(c.Query("chapter_id"), 0),
+				Page:         atoiDefault(c.Query("page"), 1),
+				PageSize:     atoiDefault(c.Query("page_size"), 10),
+				Keyword:      c.Query("keyword"),
+				Sort:         c.Query("sort"),
+				Order:        c.Query("order"),
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *listTopicsReq) (*service.ForumTopicPageResult, error) {
 			return h.svc.ListTopics(service.TopicListInput{
-				Scope:     req.Scope,
-				Category:  req.Category,
-				Solved:    req.Solved,
-				Featured:  req.Featured,
-				ChapterID: req.ChapterID,
-				Page:      req.Page,
-				PageSize:  req.PageSize,
-				Keyword:   req.Keyword,
-				Sort:      req.Sort,
-				Order:     req.Order,
+				Scope:        req.Scope,
+				Category:     req.Category,
+				Solved:       req.Solved,
+				Featured:     req.Featured,
+				IsExperience: req.IsExperience,
+				ChapterID:    req.ChapterID,
+				Page:         req.Page,
+				PageSize:     req.PageSize,
+				Keyword:      req.Keyword,
+				Sort:         req.Sort,
+				Order:        req.Order,
 			})
 		},
 		Render: func(c *gin.Context, _ *listTopicsReq, resp *service.ForumTopicPageResult, err error) {
@@ -585,6 +591,68 @@ func (h *ForumHandler) AdminUnfeatureTopic(c *gin.Context) {
 	h.handleSetFeatured(c, false)
 }
 
+// AdminDesignateExperience 管理员认定备考经验 POST /api/admin/forum/topics/:id/experience
+// @Summary 管理员认定备考经验
+// @Description 一个认定动作同时置 is_experience 与 is_featured（经验蕴含精选）；首次认定同事务给帖主 +30（与加精共用一笔，每帖幂等一次）；状态已一致时幂等短路
+// @Tags 管理端-论坛
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "主题 ID"
+// @Success 200 {object} response.R{data=service.ForumTopicDTO} "认定成功"
+// @Failure 400 {object} response.R "认定失败（主题不存在）"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 403 {object} response.R "需要管理员角色"
+// @Router /admin/forum/topics/{id}/experience [post]
+func (h *ForumHandler) AdminDesignateExperience(c *gin.Context) {
+	h.handleExperience(c, true)
+}
+
+// AdminRevokeExperience 管理员取消经验认定 DELETE /api/admin/forum/topics/:id/experience
+// @Summary 管理员取消经验认定
+// @Description 只撤经验归类，保留精选位；已发放的认定奖励不回滚；状态已一致时幂等短路
+// @Tags 管理端-论坛
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "主题 ID"
+// @Success 200 {object} response.R{data=service.ForumTopicDTO} "已取消经验认定"
+// @Failure 400 {object} response.R "操作失败（主题不存在）"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 403 {object} response.R "需要管理员角色"
+// @Router /admin/forum/topics/{id}/experience [delete]
+func (h *ForumHandler) AdminRevokeExperience(c *gin.Context) {
+	h.handleExperience(c, false)
+}
+
+// handleExperience 认定/取消经验共用管线（ADR-0040）：权限由路由组的 RoleRequired("admin") 收口。
+func (h *ForumHandler) handleExperience(c *gin.Context, designate bool) {
+	Endpoint[topicIDReq, service.ForumTopicDTO]{
+		Parse: func(c *gin.Context) (*topicIDReq, error) {
+			topicID, err := pathInt64(c, "id", "主题ID无效")
+			if err != nil {
+				return nil, err
+			}
+			return &topicIDReq{TopicID: topicID}, nil
+		},
+		Invoke: func(ctx context.Context, req *topicIDReq) (*service.ForumTopicDTO, error) {
+			if designate {
+				return h.svc.DesignateExperience(req.TopicID)
+			}
+			return h.svc.RevokeExperience(req.TopicID)
+		},
+		Render: func(c *gin.Context, _ *topicIDReq, resp *service.ForumTopicDTO, err error) {
+			if err != nil {
+				response.BadRequest(c, err.Error())
+				return
+			}
+			if designate {
+				response.SuccessWithMsg(c, "已认定为备考经验", resp)
+			} else {
+				response.SuccessWithMsg(c, "已取消经验认定", resp)
+			}
+		},
+	}.Handle(c)
+}
+
 // handleSetFeatured 加精/取消精选共用管线（#742）：状态迁移 + 首次加精发分在同一服务方法内。
 func (h *ForumHandler) handleSetFeatured(c *gin.Context, featured bool) {
 	Endpoint[topicIDReq, service.ForumTopicDTO]{
@@ -651,16 +719,18 @@ func (h *ForumHandler) AdminDeleteReply(c *gin.Context) {
 
 // listTopicsReq 主题列表请求（查询参数）。
 type listTopicsReq struct {
-	Scope     string
-	Category  string
-	Solved    string
-	Featured  string
-	ChapterID int
-	Page      int
-	PageSize  int
-	Keyword   string
-	Sort      string
-	Order     string
+	Scope    string
+	Category string
+	Solved   string
+	Featured string
+	// IsExperience 经验认定筛选（ADR-0040）：空 = 不过滤；true = 仅经验；false = 仅非经验。
+	IsExperience string
+	ChapterID    int
+	Page         int
+	PageSize     int
+	Keyword      string
+	Sort         string
+	Order        string
 }
 
 // createTopicReq 发帖请求。

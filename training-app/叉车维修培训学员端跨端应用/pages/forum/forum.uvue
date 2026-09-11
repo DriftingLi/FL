@@ -38,8 +38,8 @@
             <ForumCheckinCard v-if="currentTab === 'square'" :players="checkinPlayers" @click="onCheckInClick" />
             <view v-if="topics.length == 0 && !loading" class="empty-tip">
                 <text class="empty-icon"></text>
-                <text class="empty-text">还没有帖子，来发第一帖吧</text>
-                <view class="empty-btn" @click="onCreate">
+                <text class="empty-text">{{ emptyText }}</text>
+                <view v-if="currentTab !== 'experience'" class="empty-btn" @click="onCreate">
                     <text class="empty-btn-text">发布新帖</text>
                 </view>
             </view>
@@ -128,6 +128,9 @@
     function onCheckInClick() : void {
         uni.navigateTo({ url: '/pages/forum/check-in' })
     }
+
+    // 空态文案（ADR-0040）：备考经验 tab 是管理端认定的只读策展流，不引导发布（对齐 Web）
+    const emptyText = computed<string>(() : string => currentTab.value === 'experience' ? '还没有备考经验帖' : '还没有帖子，来发第一帖吧')
 
     function onSwitchTab(tab : string) : void {
         if (currentTab.value === tab) return

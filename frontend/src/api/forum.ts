@@ -1,9 +1,11 @@
 import { unwrappedRequest } from './request'
 
 /**
- * 论坛帖子类别（#364）：判"帖子意图"的唯一依据，与判区域的 chapter_id 正交。
- * ADR-0040 起 'experience' 只用于**列表筛选与展示**（经验 Tab 仍是只读策展流）——
- * 学员发帖/编辑只认 ForumPublishCategory 两值，写入 'experience' 后端直接 400。
+ * 论坛帖子意图（#364）：判"学员想干什么"的唯一依据，与判区域的 chapter_id 正交。
+ * ADR-0040 起值域收窄为两值；'experience' 只为**旧客户端兼容**留在类型与筛选白名单里
+ * （后端接受但恒不出任何行——存量行已由迁移降级为 discussion）。
+ * 「备考经验」是管理端**认定**，判据是 is_experience（见 ForumTopicItem.is_experience），
+ * **不是类别**——两者不可互相替代。
  */
 export type ForumCategory = 'discussion' | 'question' | 'experience'
 
@@ -45,6 +47,12 @@ export interface ForumTopicItem {
   solved_at?: string | null
   /** 精选位（#742）：管理端全类别可精/可撤，三 Tab 筛选与标识展示 */
   is_featured?: boolean
+  /**
+   * 备考经验认定（ADR-0040）：管理端认定列，与 is_featured 同轴且**蕴含精选**
+   * （is_experience ⇒ is_featured，不存在"经验但非精选"）。
+   * 经验 Tab 的唯一判据就是这个字段；category 是学员自述的意图，别拿它当本字段的别名。
+   */
+  is_experience?: boolean
   reward_issued?: boolean
 }
 
@@ -75,6 +83,8 @@ export interface ForumListParams {
   solved?: 'all' | 'solved' | 'unsolved'
   /** 精选过滤（#742）：'true' 仅精选 / 'false' 仅非精选，省略不过滤 */
   featured?: 'true' | 'false'
+  /** 经验认定过滤（ADR-0040）：'true' 仅管理端认定的经验帖，省略不过滤 */
+  is_experience?: 'true' | 'false'
   chapter_id?: number
   page?: number
   page_size?: number
@@ -89,10 +99,10 @@ export interface ForumListParams {
  * 学员端与管理端共用这一份映射：学员端的「讨论」与管理端的「综合讨论区」本就是同一片内容
  * （非章节 + 讨论类别），规则写两处迟早会各改各的。
  *
- * ⚠️ 两个轴不可互相替代：scope 判**区域**（chapter_id IS NULL），category 判**类别**。
+ * ⚠️ 两个轴不可互相替代：scope 判**区域**（chapter_id IS NULL），category 判**意图**。
  * 讨论 Tab 必须同时带 category —— 问答帖的 chapter_id 也是 NULL，漏掉它问答帖会整片灌进讨论列表。
  */
-export function forumTabQuery(tab: ForumTab): Pick<ForumListParams, 'scope' | 'category'> {
+export function forumTabQuery(tab: ForumTab): Pick<ForumListParams, 'scope' | 'category' | 'is_experience'> {
   switch (tab) {
     case 'discussion':
       // 讨论 Tab 沿用既有口径：只看综合区、不合并章节讨论。
@@ -101,9 +111,10 @@ export function forumTabQuery(tab: ForumTab): Pick<ForumListParams, 'scope' | 'c
       // 问答帖按设计无章节归属，没有区域维度可筛，故不带 scope。
       return { category: 'question' }
     case 'experience':
-      // 备考经验（#722）：经验帖可挂章节也可不挂，列表看全量经验帖（对齐移动端 scope=all + category=experience）。
-      // 只读策展流：本映射只用于**列表查询**；发布入口不再产出该值（ADR-0040，后续批次迁 is_experience）。
-      return { scope: 'all', category: 'experience' }
+      // 备考经验（#722 / ADR-0040）：判据是管理端**认定** is_experience，**不是** category ——
+      // category='experience' 的存量行已被迁移降级为 discussion，发它必然空。
+      // scope=all：经验帖可挂章节也可不挂，列表看全量认定帖。
+      return { scope: 'all', is_experience: 'true' }
     default:
       // 全部：两个参数都不带，与改动前逐条一致（服务端默认 scope=all、不过滤类别）。
       return {}
@@ -274,6 +285,8 @@ export interface AdminForumTopic {
   created_at: string
   /** 精选位（#742） */
   is_featured?: boolean
+  /** 备考经验认定（ADR-0040）：管理端授予的归类，蕴含精选；经验 Tab 的筛选判据 */
+  is_experience?: boolean
   author: {
     user_id: number
     username: string
@@ -303,6 +316,8 @@ export interface AdminForumListParams {
   solved?: 'all' | 'solved' | 'unsolved'
   /** 精选过滤（#742）：'true' 仅精选 / 'false' 找待精候选，省略不过滤 */
   featured?: 'true' | 'false'
+  /** 经验认定过滤（ADR-0040）：'true' 仅认定的经验帖（「备考经验」筛选轴），省略不过滤 */
+  is_experience?: 'true' | 'false'
   chapter_id?: number
   page?: number
   page_size?: number
@@ -333,9 +348,24 @@ export const adminForumApi = {
     return unwrappedRequest.post<AdminForumTopic>(`/admin/forum/topics/${id}/featured`)
   },
 
-  /** 取消精选（已发分不回滚，幂等） */
+  /**
+   * 取消精选（已发分不回滚，幂等）。
+   * ⚠️ 经验帖撤精后端 400（经验蕴含精选位），须先取消经验认定——前端已在行内禁用该入口。
+   */
   unfeatureTopic(id: number) {
     return unwrappedRequest.delete<AdminForumTopic>(`/admin/forum/topics/${id}/featured`)
+  },
+
+  // ===== 备考经验认定（ADR-0040，与精选位同轴）=====
+
+  /** 认定备考经验：同时置 is_experience 与 is_featured，首次认定给帖主 +30（与加精共用一次，幂等） */
+  designateExperience(id: number) {
+    return unwrappedRequest.post<AdminForumTopic>(`/admin/forum/topics/${id}/experience`)
+  },
+
+  /** 取消经验认定：**保留精选位**，已发分不回滚（幂等） */
+  revokeExperience(id: number) {
+    return unwrappedRequest.delete<AdminForumTopic>(`/admin/forum/topics/${id}/experience`)
   },
 
   // ===== 举报管理（ADR-0018）=====

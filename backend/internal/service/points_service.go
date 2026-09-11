@@ -154,7 +154,7 @@ func profileContactProgress(u *model.HrwaiUser) (done int) {
 
 // taskProgressFor 单任务行为达成判定（#410 后 GetTasks 与 Claim 共用同一实现，杜绝「列表可见/接口空领」分叉）。
 // 返回 nil 表示该任务无行为前置（新任务默认可领，照旧 default 分支；GetTasks 顶层显式透出）。
-// 需要查库的截止类任务走 resolveTaskProgress（growth_first_experience，#742）。
+// 需要查库的截止类任务走 resolveTaskProgress（当前无此类任务，见其注释）。
 func taskProgressFor(cfg model.PointsTaskConfig, m *taskMeta) *taskProgress {
 	switch cfg.Code {
 	case "daily_quiz":
@@ -185,24 +185,18 @@ func taskProgressFor(cfg model.PointsTaskConfig, m *taskMeta) *taskProgress {
 	}
 }
 
-// TaskCodeFirstExperience 首篇经验专项分任务码（#742）：growth 组，+20 终身一次。
-const TaskCodeFirstExperience = "growth_first_experience"
-
-// resolveTaskProgress 单任务判定入口（GetTasks/Claim 共用，维持「同一判定单实现」纪律）：
-// 纯规则任务走 taskProgressFor；growth_first_experience 的达成判定需要查库——
-// 存在**发布时间晚于任务上线时间（config.created_at）**的备考经验帖（#742 存量口径：
-// 上线前发布的存量作者不补发，上线后新发才计达成）。
+// resolveTaskProgress 单任务判定入口（GetTasks/Claim 共用，维持「同一判定单实现」纪律）。
+//
+// 历史：这里原有一条 growth_first_experience 的查库分支（#742 首篇经验专项分 +20，
+// 以 points_task_config.created_at 为存量 cutoff）。**该任务已随 ADR-0040 退役**：
+// 「备考经验」改为管理端认定，认定奖励与加精合并为同一笔 featured_bonus，
+// 判定读当前 category 的写法本身就是可被「改个下拉框」白拿的漏洞。
+// 任务配置行已由迁移 000027 删除，此处不再保留分支——配置里没有的任务不会被列出，
+// 领取走 ErrTaskNotFound，无需行为判定兜底。
+//
+// points_task_config.created_at 列保留为通用「任务上线时间」（暂无消费方）。
 func (s *PointsService) resolveTaskProgress(cfg model.PointsTaskConfig, m *taskMeta) (*taskProgress, error) {
-	if cfg.Code != TaskCodeFirstExperience {
-		return taskProgressFor(cfg, m), nil
-	}
-	var n int64
-	if err := s.db.Model(&model.ForumTopic{}).
-		Where("user_id = ? AND category = ? AND created_at >= ?", m.User.ID, ForumCategoryExperience, cfg.CreatedAt).
-		Count(&n).Error; err != nil {
-		return nil, err
-	}
-	return &taskProgress{Claimable: n > 0, Progress: 0, Total: 1}, nil
+	return taskProgressFor(cfg, m), nil
 }
 
 // PointsClaimResult 领取结果
