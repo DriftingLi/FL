@@ -415,7 +415,7 @@ async function prepareUploadPath(path : string) : Promise<string> {
     if (!isContentUri(path)) return path
     // #ifdef APP-ANDROID
     const destPath = buildTempFilePath(uni.env.USER_DATA_PATH, path, Date.now())
-    const manager = uni.getFileSystemManager()
+    const manager = (uni as any).getFileSystemManager()
     if (ENABLE_DEBUG_LOG) {
         console.log('[uploadFile] content:// -> 落盘中转', path, '=>', destPath)
     }
@@ -424,11 +424,18 @@ async function prepareUploadPath(path : string) : Promise<string> {
         manager.copyFile({
             srcPath: path,
             destPath: destPath,
-            success: (_res) => {
+            success: (_res : any | null) => {
                 resolve()
             },
-            fail: (err) => {
-                reject(new Error('读取所选文件失败：' + errMsg(err, '系统未授予该文件访问权限')))
+            fail: (err : any | null) => {
+                let failMsg = '系统未授予该文件访问权限'
+                if (err != null) {
+                    const e = err as UTSJSONObject
+                    if (e['errMsg'] != null) {
+                        failMsg = e['errMsg']!.toString()
+                    }
+                }
+                reject(new Error('读取所选文件失败：' + failMsg))
             }
         })
     })
@@ -445,10 +452,10 @@ function removeTempFile(path : string) : void {
     // #ifdef APP-ANDROID
     if (path.indexOf('/' + UPLOAD_TMP_DIR + '/') < 0) return
     try {
-        uni.getFileSystemManager().removeFile({
+        (uni as any).getFileSystemManager().removeFile({
             filePath: path,
-            success: (_res) => {},
-            fail: (_err) => {}
+            success: (_res : any | null) => {},
+            fail: (_err : any | null) => {}
         })
     } catch (e) {
         // 中转文件残留不影响业务（USER_DATA_PATH 不会被系统清理，仅占少量空间）
