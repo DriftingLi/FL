@@ -36,7 +36,7 @@
                         <view class="article-meta">
                             <text v-if="item.category_label.length > 0" class="article-category">{{ item.category_label }}</text>
                             <text v-if="item.source.length > 0" class="article-source">{{ item.source }}</text>
-                            <text v-if="item.published_at.length > 0" class="article-date">{{ formatDateStr(item.published_at) }}</text>
+                            <text v-if="item.published_at.length > 0" class="article-date">{{ displayTime(item.published_at) }}</text>
                             <text class="article-views">{{ item.view_count }} 阅读</text>
                         </view>
                     </view>
@@ -59,11 +59,12 @@
     import { goBack } from '../../utils/navigation'
     import { getFeaturedContentsApi } from '../../api/featured'
     import type { FeaturedContentItem } from '../../types/index'
+    import { formatDateStr } from '../../utils/format'
 
-    /** ISO 日期字符串 → YYYY-MM-DD */
-    function formatDateStr(dateStr : string) : string {
-        if (dateStr == null || dateStr.length < 10) return dateStr
-        return dateStr.substring(0, 10)
+    /** 模板不可直调 import 函数（uvue 模板 import 调用编译为 .invoke() = Kotlin error18，先例 #677）；
+     *  本地薄包装消费 utils/format 唯一实现（T03 口径：展示纯函数零第二实现） */
+    function displayTime(dateStr : string) : string {
+        return formatDateStr(dateStr)
     }
 
     type CategoryOption = {

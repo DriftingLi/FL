@@ -154,11 +154,10 @@ describe('composable 下沉契约（列表两域 + 详情三域状态离开壳�
 
   it('展示纯函数集中在 utils/forumDisplay.uts 与 forumDetailDisplay.uts，组件经 computed/局部函数包装（守护规则 S：模板禁直调 import 函数）', () => {
     const display = read('utils/forumDisplay.uts');
-    for (const fn of ['formatDateStr', 'resolveFileUrl', 'formatCountCompact', 'getContentPreview', 'getFirstImages', 'getAuthorInitial', 'getAvatarColor']) {
+    for (const fn of ['resolveFileUrl', 'getContentPreview', 'getFirstImages', 'getAuthorInitial', 'getAvatarColor']) {
       expect(display).toContain(`export function ${fn}`);
     }
     const detailDisplay = read('utils/forumDetailDisplay.uts');
-    expect(detailDisplay).toContain('export function formatDateTimeStr');
     expect(detailDisplay).toContain('export type ForumReplyDisplay');
     expect(detailDisplay).toContain('export function previewImages');
     const card = read('pages/forum/components/forum-topic-card.uvue');

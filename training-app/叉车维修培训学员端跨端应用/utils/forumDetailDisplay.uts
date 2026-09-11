@@ -4,12 +4,6 @@
  */
 import { resolveFileUrl } from './forumDisplay'
 
-/** ISO 日期字符串 → YYYY-MM-DD HH:mm */
-export function formatDateTimeStr(dateStr : string) : string {
-    if (dateStr == null || dateStr.length < 16) return dateStr
-    return dateStr.substring(0, 16).replace('T', ' ')
-}
-
 /** 回复卡展示模型（壳层由 ForumReply + 点赞本地态 + 权限位映射而来） */
 export type ForumReplyDisplay = {
     id : number

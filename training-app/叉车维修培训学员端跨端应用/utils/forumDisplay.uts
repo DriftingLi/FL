@@ -1,13 +1,9 @@
 /**
  * forum 域纯展示助手（T04 手术自 forum.uvue 逐字抽出，行为不变）
  * 组件经 computed/局部函数包装后在模板使用；模板直调 import 函数被守护规则 S 禁止。
+ * 泛型格式化（formatDateStr / formatCountCompact / formatDateTimeStr）唯一实现在 utils/format，
+ * 本文件不再持有第二实现（T03 口径；引用方直接 import utils/format）。
  */
-
-/** ISO 日期字符串 → YYYY-MM-DD */
-export function formatDateStr(dateStr : string) : string {
-    if (dateStr == null || dateStr.length < 10) return dateStr
-    return dateStr.substring(0, 10)
-}
 
 /** 补全后端返回的相对文件 URL */
 export function resolveFileUrl(url : string) : string {
@@ -16,14 +12,6 @@ export function resolveFileUrl(url : string) : string {
         return url
     }
     return url
-}
-
-/** 数字紧凑格式 */
-export function formatCountCompact(n : number) : string {
-    if (n < 100) return n.toString()
-    if (n < 1000) return '99+'
-    if (n < 10000) return '999+'
-    return '9999+'
 }
 
 /** 获取内容预览（截取前 80 字，去掉换行） */

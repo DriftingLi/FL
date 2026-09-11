@@ -14,7 +14,7 @@
 
 <script setup lang="uts">
     import { computed } from 'vue'
-    import { formatCountCompact } from '../../../utils/forumDisplay'
+    import { formatCountCompact } from '../../../utils/format'
 
     const props = withDefaults(defineProps<{
         players? : number
