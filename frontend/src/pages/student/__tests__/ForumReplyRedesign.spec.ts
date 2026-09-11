@@ -47,10 +47,20 @@ vi.mock('@/api/favorite', () => ({
   favoriteApi: { check: vi.fn().mockResolvedValue({ favorited: false }), add: vi.fn(), remove: vi.fn() }
 }))
 
+// 删除走 useConfirm().confirmDanger，mock 掉让其直接放行（否则函数在确认处短路）
+vi.mock('@/composables/useConfirm', () => ({
+  useConfirm: () => ({
+    confirm: vi.fn().mockResolvedValue('confirm'),
+    confirmDanger: vi.fn().mockResolvedValue('confirm'),
+    prompt: vi.fn().mockResolvedValue({ value: '' })
+  })
+}))
+
 import { forumApi, type ForumReplyItem } from '@/api/forum'
 import UiMoreMenu from '@/components/ui/UiMoreMenu.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiInput from '@/components/ui/UiInput.vue'
+import UiErrorState from '@/components/ui/UiErrorState.vue'
 import ForumDetail from '../ForumDetail.vue'
 
 const getTopic = vi.mocked(forumApi.getTopic)
@@ -99,7 +109,7 @@ async function mountDetail() {
       plugins: [epLite()],
       // UiMoreMenu 是 el-dropdown（teleport popper），20 张卡一起挂载在 CI 双核上会超时；
       // stub 后 props 断言照常可用，菜单自身的渲染/事件由 ui-components.spec 守住。
-      stubs: { ForumImageGallery: true, UiSkeleton: true, ForumComposer: true, UiMoreMenu: true }
+      stubs: { ForumImageGallery: true, UiSkeleton: true, ForumComposer: true, UiMoreMenu: true, UiErrorState: true }
     }
   })
   await flushPromises()
@@ -122,7 +132,12 @@ function moreItemsOfTopic(wrapper: ReturnType<typeof mount>): MenuItem[] {
 }
 
 describe('详情页回复分页（#854）', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    // clearAllMocks 不清 mockResolvedValueOnce 队列，残留会泄漏到下一个用例；
+    // 这里显式重置，保证每个用例从干净的 mock 出发。
+    vi.clearAllMocks()
+    getTopic.mockReset()
+  })
 
   it('加载更多是追加而非替换，且到底显示结束态', async () => {
     const page1 = Array.from({ length: 20 }, (_, i) => reply(i + 1))
@@ -184,7 +199,12 @@ describe('详情页回复分页（#854）', () => {
 })
 
 describe('回复卡动作分层（#857）', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    // clearAllMocks 不清 mockResolvedValueOnce 队列，残留会泄漏到下一个用例；
+    // 这里显式重置，保证每个用例从干净的 mock 出发。
+    vi.clearAllMocks()
+    getTopic.mockReset()
+  })
 
   async function mountWithReplies(replies: ForumReplyItem[], topicAuthorId = 1) {
     getTopic.mockResolvedValue({
@@ -263,8 +283,80 @@ describe('回复卡动作分层（#857）', () => {
   })
 })
 
+describe('删除回复后的刷新（#854 故事 2：不丢失已读位置）', () => {
+  beforeEach(() => {
+    // clearAllMocks 不清 mockResolvedValueOnce 队列，残留会泄漏到下一个用例；
+    // 这里显式重置，保证每个用例从干净的 mock 出发。
+    vi.clearAllMocks()
+    getTopic.mockReset()
+  })
+
+  it('删掉一条后按已加载页数重载，不缩回第 1 页', async () => {
+    const page1 = Array.from({ length: 20 }, (_, i) => reply(i + 1))
+    const page2 = Array.from({ length: 5 }, (_, i) => reply(i + 21))
+    getTopic
+      .mockResolvedValueOnce({ topic: topic(25), replies: page1, page: 1, pages: 2, total: 25 } as never)
+      .mockResolvedValueOnce({ topic: topic(25), replies: page2, page: 2, pages: 2, total: 25 } as never)
+      .mockResolvedValueOnce({ topic: topic(24), replies: page1, page: 1, pages: 2, total: 24 } as never)
+      .mockResolvedValueOnce({
+        topic: topic(24),
+        replies: page2.slice(0, 4),
+        page: 2,
+        pages: 2,
+        total: 24
+      } as never)
+    vi.mocked(forumApi.deleteReply).mockResolvedValue(null as never)
+
+    const wrapper = await mountDetail()
+    const more = wrapper.findAll('button').find((b) => b.text().includes('加载更多'))
+    await more!.trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('.reply-item').length).toBe(25)
+
+    getTopic.mockClear()
+    const lastCard = wrapper.findAll('.reply-item')[24]
+    lastCard.findComponent(UiMoreMenu).vm.$emit('select', 'delete')
+    await flushPromises()
+    await new Promise((r) => setTimeout(r, 0))
+    await flushPromises()
+
+    // 关键：重载的是已加载的 1、2 两页（不是只回第 1 页）
+    expect(getTopic).toHaveBeenCalledTimes(2)
+    expect(getTopic).toHaveBeenNthCalledWith(1, 1, 'latest', 'asc', 1, 20)
+    expect(getTopic).toHaveBeenNthCalledWith(2, 1, 'latest', 'asc', 2, 20)
+    expect(wrapper.findAll('.reply-item').length).toBe(24)
+  })
+
+  it('删除成功但刷新失败时报错误态，不停在「已删项还在」的列表', async () => {
+    getTopic
+      .mockResolvedValueOnce({
+        topic: topic(1),
+        replies: [reply(1, { author: { user_id: 1, username: '我', avatar_url: '' }, can_delete: true })],
+        page: 1,
+        pages: 1,
+        total: 1
+      } as never)
+      .mockRejectedValueOnce(new Error('network'))
+    vi.mocked(forumApi.deleteReply).mockResolvedValue(null as never)
+
+    const wrapper = await mountDetail()
+    wrapper.findAll('.reply-item')[0].findComponent(UiMoreMenu).vm.$emit('select', 'delete')
+    await flushPromises()
+    await new Promise((r) => setTimeout(r, 0))
+    await flushPromises()
+
+    // 进可重试的错误态（断言错误态组件本身，而非它的文案）
+    expect(wrapper.findComponent(UiErrorState).exists()).toBe(true)
+  })
+})
+
 describe('举报入口（收编为 useForumReport 一处）', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    // clearAllMocks 不清 mockResolvedValueOnce 队列，残留会泄漏到下一个用例；
+    // 这里显式重置，保证每个用例从干净的 mock 出发。
+    vi.clearAllMocks()
+    getTopic.mockReset()
+  })
 
   it('从 ⋯ 选「举报」打开对话框，确认后按主题/回复分别提交', async () => {
     getTopic.mockResolvedValue({
@@ -308,7 +400,12 @@ describe('举报入口（收编为 useForumReport 一处）', () => {
 })
 
 describe('被回复人小头像（#855）', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    // clearAllMocks 不清 mockResolvedValueOnce 队列，残留会泄漏到下一个用例；
+    // 这里显式重置，保证每个用例从干净的 mock 出发。
+    vi.clearAllMocks()
+    getTopic.mockReset()
+  })
 
   it('楼中楼渲染「昵称 › 被回复人」且带头像', async () => {
     getTopic.mockResolvedValue({

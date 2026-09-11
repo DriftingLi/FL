@@ -425,12 +425,20 @@ async function removeReply(replyId: number) {
   try {
     await forumApi.deleteReply(replyId)
     ElMessage.success('已删除')
+  } catch (e) {
+    console.error('删除失败:', e)
+    /* 错误已由拦截器提示 */
+    return
+  }
+  // 删除已成功，下面的刷新失败**不能**报成「删除失败」——单独兜底并置可重试的错误态
+  // （否则列表会停在「已删项还在」的状态且用户看不到任何出口）。
+  try {
     // 删父回复会**级联删掉整棵楼中楼**（后端按子树大小减计数），本地 filter 一条是错的；
     // 但也不该 loadDetail() 缩回第一页——按已加载的页数重载，保留阅读位置。
     await reloadLoadedPages()
   } catch (e) {
-    console.error('删除失败:', e)
-    /* 错误已由拦截器提示 */
+    console.error('删除后刷新回复列表失败:', e)
+    loadError.value = true
   }
 }
 
