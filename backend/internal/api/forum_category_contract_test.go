@@ -48,6 +48,8 @@ type topicListResp struct {
 			ID       int64  `json:"id"`
 			Title    string `json:"title"`
 			Category string `json:"category"`
+			// RewardIssued 供 #827 的列表回填断言（该字段是列表契约的一部分）。
+			RewardIssued bool `json:"reward_issued"`
 		} `json:"topics"`
 	} `json:"data"`
 }

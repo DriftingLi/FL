@@ -249,6 +249,10 @@ func parseForumCategoryArg(category string) (string, error) {
 
 // parseSolvedArg 解析列表查询的 solved 参数（#367）。
 // 空或 all = 不过滤；solved = 已解决（accepted_reply_id 非空）；unsolved = 求助（accepted_reply_id 为空）。
+//
+// **类别校验在调用侧**（ListTopics）：solved 只对问答帖有意义，故非空时必须同时指定
+// category=question，否则 400。旧实现在任何类别下都无条件拼 accepted_reply_id 条件——
+// 对 discussion/experience 而言该列恒为 NULL，用户拿到的是**静默空列表**而非明确拒绝。
 func parseSolvedArg(solved string) (string, error) {
 	switch v := strings.TrimSpace(strings.ToLower(solved)); v {
 	case "", "all":
@@ -338,6 +342,11 @@ func (s *ForumService) ListTopics(in TopicListInput) (*ForumTopicPageResult, err
 	isExperience, err := parseForumExperienceArg(in.IsExperience)
 	if err != nil {
 		return nil, err
+	}
+	// solved 只对问答帖有意义（accepted_reply_id 只在 question 帖上非空）。
+	// 缺 category=question 时报 400 而非静默返回空列表——与 solved 非法值同口径。
+	if solved != "" && category != ForumCategoryQuestion {
+		return nil, errors.New("solved 筛选仅对问答帖有意义，请同时指定 category=question")
 	}
 	if scope == "" {
 		scope = ForumScopeAll
@@ -1977,8 +1986,15 @@ func (s *ForumService) fetchTopicDTO(topicID int64, viewerID int) (*ForumTopicDT
 	return &dto, nil
 }
 
-// enrichRewardIssued 批量回填 reward_issued（#367 二次确认分支）。
-// 仅查询 question 类帖且 reason=accepted_bonus 的流水，避免无谓扫描。
+// rewardLedgerReasons 论坛主题上「已发奖励」的全部流水 reason（ADR-0040/0041）。
+// 三种直记奖励都会让 reward_issued 为真：采纳答主 / 采纳动作 / 认定（含加精）。
+var rewardLedgerReasons = []string{ReasonAcceptedBonus, ReasonAcceptAction, ReasonFeaturedBonus}
+
+// enrichRewardIssued 批量回填 reward_issued（#367）。
+//
+// 语义 = **该帖是否已产生过任一直记奖励**。旧实现只认 question 帖的 accepted_bonus，
+// 于是被加精或被认定（+30）的帖子在列表上仍显示「未发分」——契约字段与事实不符。
+// 与 hasRewardIssued（详情单条）**必须同口径**：两处是两个实现，漂移过一次就是 bug。
 func (s *ForumService) enrichRewardIssued(items []ForumTopicDTO) {
 	if len(items) == 0 {
 		return
@@ -1986,9 +2002,6 @@ func (s *ForumService) enrichRewardIssued(items []ForumTopicDTO) {
 	ids := make([]string, 0, len(items))
 	seen := make(map[string]struct{}, len(items))
 	for _, t := range items {
-		if t.Category != ForumCategoryQuestion {
-			continue
-		}
 		sid := fmt.Sprintf("%d", t.ID)
 		if _, ok := seen[sid]; !ok {
 			seen[sid] = struct{}{}
@@ -2000,7 +2013,7 @@ func (s *ForumService) enrichRewardIssued(items []ForumTopicDTO) {
 	}
 	var issued []string
 	if err := s.db.Model(&model.PointsLedger{}).
-		Where("ref_type = ? AND reason = ? AND ref_id IN ?", "forum_topic", ReasonAcceptedBonus, ids).
+		Where("ref_type = ? AND reason IN ? AND ref_id IN ?", "forum_topic", rewardLedgerReasons, ids).
 		Distinct("ref_id").Pluck("ref_id", &issued).Error; err != nil {
 		return
 	}
@@ -2015,11 +2028,11 @@ func (s *ForumService) enrichRewardIssued(items []ForumTopicDTO) {
 	}
 }
 
-// hasRewardIssued 单条查询：该帖是否已产生过 accepted_bonus 流水。
+// hasRewardIssued 单条查询：该帖是否已产生过任一直记奖励（与 enrichRewardIssued 同口径）。
 func (s *ForumService) hasRewardIssued(topicID int64) bool {
 	var cnt int64
 	if err := s.db.Model(&model.PointsLedger{}).
-		Where("ref_type = ? AND reason = ? AND ref_id = ?", "forum_topic", ReasonAcceptedBonus, fmt.Sprintf("%d", topicID)).
+		Where("ref_type = ? AND reason IN ? AND ref_id = ?", "forum_topic", rewardLedgerReasons, fmt.Sprintf("%d", topicID)).
 		Count(&cnt).Error; err != nil {
 		return false
 	}
