@@ -182,6 +182,8 @@
         if (!isTopicOwner.value) return false
         const t = topic.value
         if (t == null || t.category != 'question') return false
+        // 备考经验帖不可被采纳（#836：后端守卫双向 + 库层 CHECK，前端先隐藏必然失败的按钮）
+        if (t.is_experience) return false
         if (r.is_accepted) return false
         const uid = currentUserId.value
         if (uid <= 0) return false
