@@ -95,6 +95,11 @@ describe('credential 域收紧（dashboard 证件切换数据源）', () => {
     expect(body).toContain('getMockCredentialList()');
     expect(body).toContain("uni.getStorageSync('selected_cert')");
   });
+  it('credential.level 走 toNumberOrNull（后端该字段可为 null，裸 as number 抛 Kotlin NPE）', () => {
+    expect(src).toContain("level: toNumberOrNull(obj['level'])");
+    expect(src).not.toMatch(/obj\['level'\]\s*as\s+number/);
+    expect(src).toMatch(/import\s*\{[^}]*toNumberOrNull[^}]*\}\s*from\s*'\.\/helpers'/);
+  });
   it('switchCredentialApi 经 requestMapped，PATCH 经 opts.method 赋值（与 patch() 逐字同通路）且保留 catch + mock 模拟切换', () => {
     const body = fnBodyOf(src, 'switchCredentialApi');
     expect(body).toContain('requestMapped<CredentialSwitchResult>');

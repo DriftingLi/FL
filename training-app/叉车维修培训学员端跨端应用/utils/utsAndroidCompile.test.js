@@ -416,6 +416,40 @@ function scanUndefinedTemplateHandler(text) {
   }
   return hits;
 }
+/** X：encodeURI() 返回 String?——直传需要 String 的参数，Kotlin 侧报
+ *  「Argument type mismatch: actual type is 'String?', but 'String' was expected」。
+ *  2026-09-10 api/material.uts:110 云打包实测（index.kt:10223 downloadFile 的 url 参数）。
+ *  修复 = 同一行加 `?? ''` 兜底；encodeURIComponent 返回 string，不在靶内。 */
+function scanNullableEncodeUri(code) {
+  const clean = blank(code);
+  const hits = [];
+  const lines = clean.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    if (/\bencodeURI\s*\(/.test(lines[i]) && !/\?\?/.test(lines[i])) hits.push(lines[i].trim() + ' 缺 ?? 兜底');
+  }
+  return hits;
+}
+/** Y：FileSystemManager 方法名须取官方清单——不存在的方法名 Kotlin 侧报「Unresolved reference」。
+ *  2026-09-10 api/request.uts:455 `removeFile` 云打包实测（index.kt:530）；
+ *  删除文件的正解是 unlink（微信小程序同源），删目录是 rmdir。 */
+const FS_MANAGER_METHODS = [
+  'access', 'accessSync', 'appendFile', 'appendFileSync', 'close', 'closeSync', 'copyFile', 'copyFileSync',
+  'fstat', 'fstatSync', 'ftruncate', 'ftruncateSync', 'getFileInfo', 'getFileInfoSync', 'getSavedFileList',
+  'mkdir', 'mkdirSync', 'open', 'openSync', 'read', 'readCompressedFile', 'readCompressedFileSync', 'readFile',
+  'readFileSync', 'readSync', 'readZipEntry', 'readdir', 'readdirSync', 'rename', 'renameSync', 'rmdir', 'rmdirSync',
+  'saveFile', 'saveFileSync', 'stat', 'statSync', 'truncate', 'truncateSync', 'unlink', 'unlinkSync',
+  'unzip', 'unzipSync', 'write', 'writeFile', 'writeFileSync', 'writeSync',
+];
+function scanUnknownFsManagerMethod(code) {
+  const clean = blank(code);
+  const hits = [];
+  const re = /getFileSystemManager\(\)\s*\.\s*([A-Za-z_$][\w$]*)/g;
+  let m;
+  while ((m = re.exec(clean)) !== null) {
+    if (FS_MANAGER_METHODS.indexOf(m[1]) < 0) hits.push('getFileSystemManager().' + m[1] + ' 不在官方方法清单内');
+  }
+  return hits;
+}
 /** N：as unknown as 双重强转——Kotlin 侧把属性/参数类型污染为 unknown（error18 找不到成员），
  *  对象 prop 默认值应走工厂 `() => ({...} as T)`（先例 ai-chat sessions），非 null 强转 */
 function scanUnknownDoubleCast(code) {
@@ -1379,6 +1413,39 @@ describe('全工程守护：五类 Kotlin 编译地雷零命中', () => {
     const violations = [];
     for (const file of ALL_FILES.filter((f) => f.endsWith('.uvue'))) {
       for (const h of scanImportedFnTemplateCall(fs.readFileSync(file, 'utf8'))) violations.push(path.relative(ROOT, file) + ': ' + h);
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it('X：自检——encodeURI 未兜底必须被抓到（Kotlin 参数类型不匹配 String? vs String）', () => {
+    expect(scanNullableEncodeUri('const u = encodeURI(info.file_url)\nuni.downloadFile({ url: u })').length).toBeGreaterThan(0);
+    // 好：同行 ?? 兜底
+    expect(scanNullableEncodeUri("const u = encodeURI(info.file_url) ?? ''")).toEqual([]);
+    // 反向自检：encodeURIComponent 返回 string，不在靶内
+    expect(scanNullableEncodeUri('const q = encodeURIComponent(k)')).toEqual([]);
+  });
+
+  it('X：全工程 encodeURI 调用均有 ?? 兜底（参数类型不匹配，云打包 index.kt 实测）', () => {
+    const violations = [];
+    for (const u of allCodeUnits()) {
+      for (const h of scanNullableEncodeUri(u.code)) violations.push(path.relative(ROOT, u.file) + ': ' + h);
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it('Y：自检——FileSystemManager 不存在的方法名必须被抓到（Kotlin Unresolved reference）', () => {
+    expect(scanUnknownFsManagerMethod('uni.getFileSystemManager().removeFile({ filePath: p })').length).toBeGreaterThan(0);
+    // 好：删除文件用 unlink，删除目录用 rmdir
+    expect(scanUnknownFsManagerMethod('uni.getFileSystemManager().unlink({ filePath: p })')).toEqual([]);
+    expect(scanUnknownFsManagerMethod('uni.getFileSystemManager().rmdir({ dirPath: p })')).toEqual([]);
+    // 好：先取 manager 再调方法（本项目 #816 用法）
+    expect(scanUnknownFsManagerMethod('const m = getFileSystemManager()\nm.copyFile({ srcPath: a })')).toEqual([]);
+  });
+
+  it('Y：全工程 FileSystemManager 方法名均在官方清单内（否则云打包 Unresolved reference）', () => {
+    const violations = [];
+    for (const u of allCodeUnits()) {
+      for (const h of scanUnknownFsManagerMethod(u.code)) violations.push(path.relative(ROOT, u.file) + ': ' + h);
     }
     expect(violations).toEqual([]);
   });

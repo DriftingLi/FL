@@ -12,6 +12,20 @@ export function toNumber(v : any | null, defaultVal : number = 0) : number {
     return n
 }
 
+/**
+ * 安全转换为 number | null（null / 非数字返回 null）
+ * @note 用于 JSON 里**可能缺省**的数字字段。直接 `v as number` 在字段为 null 时
+ *       会抛 Kotlin NullPointerException：null cannot be cast to non-null type kotlin.Number
+ *       （2026-09-10 真机实测：GET /me/credential 的 credential.level 为 null）
+ */
+export function toNumberOrNull(v : any | null) : number | null {
+    if (v == null) return null
+    const s = `${v}`
+    const n = parseFloat(s)
+    if (isNaN(n)) return null
+    return n
+}
+
 /** 安全转换为 string */
 export function toStr(v : any | null, defaultVal : string = '') : string {
     if (v == null) return defaultVal
