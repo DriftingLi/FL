@@ -188,7 +188,10 @@
             title.value = data.title
             content.value = data.content
             images.value = data.images.slice()
-            selectedCategory.value = normalizeCategory(data.scope)
+            // #811：编辑态回填读 category（详情 DTO 只回 category，不回 scope——
+            // 旧写法读 data.scope 恒为 buildTopicDetail 垫的 'general'，任何问答帖/经验帖
+            // 一进编辑态就被归一成 discussion，保存即降级类别）
+            selectedCategory.value = normalizeCategory(data.category)
         } catch (e) {
             console.error('[forum-create] loadTopicForEdit failed:', e)
             uni.showToast({ title: '加载帖子失败', icon: 'none' })
