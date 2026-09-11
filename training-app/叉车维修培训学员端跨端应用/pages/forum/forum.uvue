@@ -50,6 +50,7 @@
                     :created-at="item.created_at" :views-count="item.views_count" :replies-count="item.replies_count"
                     :likes-count="item.likes_count" :variant="currentTab === 'hot' ? 'qa' : 'square'"
                     :status="item.status" :is-featured="item.is_featured"
+                    :is-experience="item.is_experience"
                     @click="onTopicClick" @reply="onReply" />
             </view>
             <view v-if="loading" class="loading-more">

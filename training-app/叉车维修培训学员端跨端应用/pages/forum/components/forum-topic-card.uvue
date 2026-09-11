@@ -2,6 +2,9 @@
     <view class="topic-card" @click="onCardClick">
         <view class="topic-title-row">
             <text class="topic-title">{{ title }}</text>
+            <view v-if="isExperience" class="experience-badge">
+                <text class="experience-badge-text">备考经验</text>
+            </view>
             <view v-if="isFeatured" class="featured-badge">
                 <text class="featured-badge-text">★ 精选</text>
             </view>
@@ -104,6 +107,7 @@
         variant? : string // 'square' | 'qa'
         status? : string // resolved | open（#736）
         isFeatured? : boolean // 精选位标识（#742 批次三）
+        isExperience? : boolean // 备考经验认定（ADR-0040 #836）
     }>(), {
         topicId: 0,
         title: '',
@@ -118,7 +122,8 @@
         likesCount: 0,
         variant: 'square',
         status: 'open',
-        isFeatured: false
+        isFeatured: false,
+        isExperience: false
     })
 
     const emit = defineEmits(['click', 'reply'])
@@ -173,6 +178,21 @@
         color: #333333;
         line-height: 1.4;
         flex: 1;
+    }
+
+    /* 备考经验徽章（ADR-0040 #836）：深底暖字，与 Web UiTag warning dark 对齐 */
+    .experience-badge {
+        margin-left: 12rpx;
+        padding: 4rpx 16rpx;
+        border-radius: 16rpx;
+        background-color: #fff7e6;
+        flex-shrink: 0;
+    }
+
+    .experience-badge-text {
+        font-size: 20rpx;
+        color: #d46b08;
+        font-weight: bold;
     }
 
     /* 精选徽章（#742 批次三）：金色区分问答状态色，琥珀底 + 橙金文字 */
