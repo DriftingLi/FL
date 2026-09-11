@@ -46,7 +46,9 @@ export function extractBaseName(uri : string) : string {
 function decodeSafe(v : string) : string {
     if (v.indexOf('%') < 0) return v
     try {
-        return decodeURIComponent(v)
+        const decoded = decodeURIComponent(v)
+        if (decoded != null) return decoded
+        return v
     } catch (e) {
         return v
     }
@@ -59,11 +61,13 @@ function decodeSafe(v : string) : string {
 export function sanitizeBaseName(name : string) : string {
     let out = ''
     for (let i = 0; i < name.length; i++) {
+        const code = name.charCodeAt(i)
         const c = name[i]
-        const isDigit = c >= '0' && c <= '9'
-        const isLower = c >= 'a' && c <= 'z'
-        const isUpper = c >= 'A' && c <= 'Z'
-        if (isDigit || isLower || isUpper || c == '.' || c == '-' || c == '_') {
+        const isDigit = code >= 48 && code <= 57    // '0'=48, '9'=57
+        const isLower = code >= 97 && code <= 122   // 'a'=97, 'z'=122
+        const isUpper = code >= 65 && code <= 90    // 'A'=65, 'Z'=90
+        if (isDigit || isLower || isUpper || code == 46 || code == 45 || code == 95) {
+            // code==46 '.', code==45 '-', code==95 '_'
             out += c
         } else {
             out += '_'
