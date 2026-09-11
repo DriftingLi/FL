@@ -5,7 +5,9 @@
       <UiButton variant="primary" v-if="mainTab === 'question'" size="large" :icon="EditPen" @click="goAsk">
         我要提问
       </UiButton>
-      <UiButton variant="primary" v-else size="large" :icon="EditPen" @click="openCreateDialog">
+      <!-- 经验 Tab 是只读策展流（ADR-0040）：学员不能自称考经，故不提供发布入口；
+           发布者只能在讨论/提问之间选，想被认定经验要先发成讨论帖再由管理端认定。 -->
+      <UiButton v-else-if="mainTab !== 'experience'" variant="primary" size="large" :icon="EditPen" @click="openCreateDialog">
         发布新帖
       </UiButton>
     </div>

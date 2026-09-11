@@ -154,7 +154,11 @@ func profileContactProgress(u *model.HrwaiUser) (done int) {
 
 // taskProgressFor 单任务行为达成判定（#410 后 GetTasks 与 Claim 共用同一实现，杜绝「列表可见/接口空领」分叉）。
 // 返回 nil 表示该任务无行为前置（新任务默认可领，照旧 default 分支；GetTasks 顶层显式透出）。
-// 需要查库的截止类任务走 resolveTaskProgress（当前无此类任务，见其注释）。
+// 全部任务都是纯规则判定，GetTasks 与 Claim 直接调用本函数（「同一判定单实现」纪律）。
+//
+// 历史：原有一层 resolveTaskProgress 包装，用于 growth_first_experience 的查库判定；
+// 该任务随 ADR-0040 退役（配置行由迁移 000027 删除）后包装只剩纯转发，已内联删除。
+// 将来若出现需要查库的截止类任务，再加回包装层即可。
 func taskProgressFor(cfg model.PointsTaskConfig, m *taskMeta) *taskProgress {
 	switch cfg.Code {
 	case "daily_quiz":
@@ -183,20 +187,6 @@ func taskProgressFor(cfg model.PointsTaskConfig, m *taskMeta) *taskProgress {
 		// 未知任务：无行为前置（GetTasks 顶层按可领处理，与旧 default 语义一致）
 		return nil
 	}
-}
-
-// resolveTaskProgress 单任务判定入口（GetTasks/Claim 共用，维持「同一判定单实现」纪律）。
-//
-// 历史：这里原有一条 growth_first_experience 的查库分支（#742 首篇经验专项分 +20，
-// 以 points_task_config.created_at 为存量 cutoff）。**该任务已随 ADR-0040 退役**：
-// 「备考经验」改为管理端认定，认定奖励与加精合并为同一笔 featured_bonus，
-// 判定读当前 category 的写法本身就是可被「改个下拉框」白拿的漏洞。
-// 任务配置行已由迁移 000027 删除，此处不再保留分支——配置里没有的任务不会被列出，
-// 领取走 ErrTaskNotFound，无需行为判定兜底。
-//
-// points_task_config.created_at 列保留为通用「任务上线时间」（暂无消费方）。
-func (s *PointsService) resolveTaskProgress(cfg model.PointsTaskConfig, m *taskMeta) (*taskProgress, error) {
-	return taskProgressFor(cfg, m), nil
 }
 
 // PointsClaimResult 领取结果
@@ -530,11 +520,8 @@ func (s *PointsService) GetTasks(userID int) (*PointsTasksResult, error) {
 
 	tasks := make([]PointsTaskItem, 0, len(configs))
 	for _, cfg := range configs {
-		// 单任务判定入口（#742）：纯规则走 taskProgressFor，截止类任务查库判定
-		p, err := s.resolveTaskProgress(cfg, m)
-		if err != nil {
-			return nil, err
-		}
+		// 行为达成判定（#410 单实现，与 Claim 同源）
+		p := taskProgressFor(cfg, m)
 		// 额度判定单点（#410）：不可领（当日/终身额度用尽）即视为已领取，不再回落 claimable
 		if !s.canClaim(cfg, cc[cfg.Code].Today, cc[cfg.Code].Lifetime).Claimable {
 			// 已领取时 progress/total 对齐达成口径：资料任务 2/2，其余已达成任务 1/1
@@ -601,9 +588,7 @@ func (s *PointsService) Claim(ctx context.Context, userID int, taskCode string) 
 	if err != nil {
 		return nil, err
 	}
-	if p, err := s.resolveTaskProgress(cfg, meta); err != nil {
-		return nil, err
-	} else if p != nil && !p.Claimable {
+	if p := taskProgressFor(cfg, meta); p != nil && !p.Claimable {
 		return nil, ErrTaskNotDone
 	}
 	// Redis 锁（进程内双领护栏；最终裁决仍由唯一索引承担）
