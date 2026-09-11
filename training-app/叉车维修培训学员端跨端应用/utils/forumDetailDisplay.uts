@@ -20,6 +20,8 @@ export type ForumReplyDisplay = {
     likesCount : number
     /** 是否被楼主采纳（仅问答帖有效） */
     isAccepted : boolean
+    /** 该条能否被当前用户采纳（问答帖 + 楼主本人 + 非自己回复 + 尚未采纳） */
+    canAcceptReply : boolean
 }
 
 /** 预览一组图片（帖子/回复共用；URL 解析幂等，传入已解析列表与原始列表结果一致） */
