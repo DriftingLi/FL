@@ -214,6 +214,17 @@ describe('备考经验 tab 接线契约（#706：第四 tab 进场，复用 Topi
     expect(createPage).toContain("{ label: '资源', value: 'resource' }");
     expect(createPage).toContain("{ label: '知识问答', value: 'question' }");
   });
+
+  it('经验 tab 无任何发布入口（只读策展流）：header 发帖与搜索栏均按 currentTab 隐藏', () => {
+    // 三个入口都点进 onCreate（发布），经验 tab 下必须全部不渲染——
+    // 学员不能自称考经，让按钮留着只会把用户送进一个必然落到 discussion 的表单。
+    expect(page).toMatch(/v-if="currentTab !== 'experience'" class="header-right"/);
+    expect(page).toMatch(/v-if="currentTab !== 'experience'" class="res-search-bar"/);
+    // 空态按钮同期（先前的批次已加）
+    expect(page).toMatch(/v-if="currentTab !== 'experience'" class="empty-btn"/);
+    // 悬浮按钮本就只在广场显示
+    expect(page).toMatch(/v-if="currentTab === 'square'" class="fab-btn"/);
+  });
 });
 
 describe('精选筛选契约（#742 批次三：三 Tab 通用精选筛选 + 列表精选标识，接口契约勿改名）', () => {
@@ -268,6 +279,8 @@ describe('备考经验认定契约（ADR-0040：is_experience 是管理端认定
   const src = read('api/forum.uts');
   const feed = read('composables/useTopicFeed.uts');
   const page = read('pages/forum/forum.uvue');
+  const types = read('types/forum.uts');
+  const card = read('pages/forum/components/forum-topic-card.uvue');
 
   it('api：is_experience 参数按后端契约透传（isExperience=true，空串不传=不过滤；参数名勿改）', () => {
     expect(src).toMatch(/isExperience : string = ''/);
@@ -277,6 +290,24 @@ describe('备考经验认定契约（ADR-0040：is_experience 是管理端认定
 
   it('api：category 注释不再写「取值含 experience」的旧口径（意图只有两值）', () => {
     expect(src).not.toMatch(/discussion\|question\|experience/);
+  });
+
+  it('types：ForumTopic 携带 is_experience（#836 收尾）', () => {
+    expect(types).toMatch(/is_experience : boolean/);
+  });
+
+  it('api：buildTopic 映射后端 is_experience 字段（#836 收尾）', () => {
+    expect(src).toContain("is_experience: toBool(obj['is_experience'])");
+  });
+
+  it('列表项扁平下发 is_experience（#836 收尾）', () => {
+    expect(page).toContain(':is-experience="item.is_experience"');
+  });
+
+  it('卡片组件携带 isExperience prop 并渲染「备考经验」徽章（对齐 Web）', () => {
+    expect(card).toMatch(/isExperience\? : boolean/);
+    expect(card).toContain('v-if="isExperience"');
+    expect(card).toContain('备考经验');
   });
 
   it('feed：经验分支清空 category、置 isExperience=true（不把 is_experience 当 category 别名）', () => {

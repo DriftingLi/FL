@@ -10,22 +10,30 @@
  * 状态机：章节列表与展开详情是两级加载 —— 列表轻（只拉标题），详情按需拉取。
  */
 import { ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { EditPen, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 import { forumApi, type ForumTopicItem, type ForumReplyItem } from '@/api/forum'
 import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
 import ForumPostForm from '@/components/student/ForumPostForm.vue'
 import ForumComposer from '@/components/student/ForumComposer.vue'
+import ForumReplyCard from '@/components/student/ForumReplyCard.vue'
 import { formatRelativeTime } from '@/utils/format'
 import { displayName, authorLetter } from '@/utils/forumDisplay'
+import { useAuthStore } from '@/stores/auth'
 import { useAsyncPage } from '@/composables/useAsyncPage'
+import { useLike } from '@/composables/useLike'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
-import UiTag from '@/components/ui/UiTag.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import { useConfirm } from '@/composables/useConfirm'
+import { useForumReport } from '@/composables/useForumReport'
+
+const authStore = useAuthStore()
+const router = useRouter()
 
 const props = defineProps<{
   chapterId: number
@@ -38,6 +46,14 @@ const expandedTopicId = ref<number | null>(null)
 const expandedTopic = ref<ForumTopicItem | null>(null)
 const detailContent = ref('')
 const replies = ref<ForumReplyItem[]>([])
+// 章节讨论是内嵌面板、没有翻页交互，故一次取到页大小上限；
+// 超出时模板给一行可见提示 + 跳详情页入口（不静默丢弃尾部回复）。
+//
+// ⚠️ 这个 100 必须与后端 `service.ForumReplyMaxPageSize` 保持一致：
+// 后端对超上限的 page_size 是「回退默认值」而不是「截断到上限」（ClampMax 口径），
+// 一旦后端的 max 降到 100 以下，这里会**静默退回默认 20 条**而不是报错。
+const CHAPTER_REPLY_PAGE_SIZE = 100
+const replyPages = ref(1)
 const replyContent = ref('')
 const replyImages = ref<string[]>([])
 const replyingTo = ref<{ id: number; username: string } | null>(null)
@@ -83,10 +99,15 @@ async function loadDetail(topicId: number) {
   detailContent.value = ''
   replies.value = []
   try {
-    const res = await forumApi.getTopic(topicId)
+    // ADR-0042：详情回复一律分页读取。章节讨论是内嵌预览面板、没有翻页交互，
+    // 故取页大小上限（100）以保持既有「展开即看全」的体验；超出 100 条的章节帖罕见，
+    // 真出现也只影响该帖的尾部回复（论坛详情页仍是完整的分页读取）。
+    const res = await forumApi.getTopic(topicId, undefined, undefined, 1, CHAPTER_REPLY_PAGE_SIZE)
     expandedTopic.value = res.topic || null
     detailContent.value = res.topic?.content || ''
     replies.value = res.replies || []
+    // 截断要显式可见（见模板提示），不做静默丢弃
+    replyPages.value = res.pages ?? 1
   } catch (e) {
     console.error('加载帖子详情失败:', e)
     /* 错误已由拦截器提示 */
@@ -103,6 +124,12 @@ function openCreate() {
 async function onTopicCreated() {
   createVisible.value = false
   await loadTopics()
+}
+
+/** 跳论坛详情页看完整回复（截断提示的去向） */
+function goTopicDetail() {
+  if (!expandedTopicId.value) return
+  router.push({ name: 'ForumDetail', params: { topicId: String(expandedTopicId.value) } })
 }
 
 function startReplyTo(reply: ForumReplyItem) {
@@ -150,6 +177,24 @@ async function removeTopic(topicId: number) {
     console.error('删除失败:', e)
     /* 错误已由拦截器提示 */
   }
+}
+
+// ===== 回复互动（#858：与帖子详情同口径——点赞乐观更新、举报走同一对话框形态）=====
+const { toggle: toggleReplyLike } = useLike(forumApi.likeReply, forumApi.unlikeReply)
+
+
+// 举报：状态机与提交口径与帖子详情共用同一 composable（原先两处逐字重复）
+const {
+  visible: reportVisible,
+  reason: reportReason,
+  submitting: reportSubmitting,
+  open: openReport,
+  submit: submitReport
+} = useForumReport()
+
+/** 是否为当前登录用户自己发的（决定 ⋯ 里是否出现「举报」） */
+function isOwnReply(reply: ForumReplyItem) {
+  return reply.author.user_id === authStore.userInfo?.user_id
 }
 
 async function removeReply(replyId: number) {
@@ -237,45 +282,29 @@ watch(() => props.chapterId, () => {
             <!-- 回复流 -->
             <div class="rounded-[8px] bg-panel px-3 py-1 max-md:px-2">
               <template v-if="replies.length > 0">
-                <div
+                <!-- 与帖子详情共用同一份回复渲染（含点赞 / 举报 / ⋯）；
+                     密度取 compact：内嵌面板不套详情页尺寸，避免撑长课程页展开区。 -->
+                <ForumReplyCard
                   v-for="reply in replies"
                   :key="reply.id"
-                  class="border-b border-line py-3 last:border-b-0"
-                >
-                  <div class="flex items-center gap-2">
-                    <el-avatar :size="26" :src="reply.author.avatar_url || undefined">
-                      {{ authorLetter(reply.author) }}
-                    </el-avatar>
-                    <span class="text-[13px] font-semibold text-ink">{{ displayName(reply.author) }}</span>
-                    <UiTag
-                      v-if="expandedTopic && reply.author.user_id === expandedTopic.author.user_id"
-                      tone="neutral"
-                      effect="plain"
-                      class="ml-1"
-                    >
-                      楼主
-                    </UiTag>
-                    <span class="text-xs text-ink-3">{{ formatRelativeTime(reply.created_at) }}</span>
-                    <div class="ml-auto flex items-center gap-1">
-                      <UiButton variant="primary" size="small" @click="startReplyTo(reply)">回复</UiButton>
-                      <UiButton v-if="reply.can_delete" variant="danger" text size="small" @click="removeReply(reply.id)">
-                        删除
-                      </UiButton>
-                    </div>
-                  </div>
-                  <div
-                    v-if="reply.parent_id && reply.parent_name"
-                    class="my-1.5 inline-block rounded-[6px] bg-canvas px-2 py-0.5 text-xs text-ink-3"
-                  >
-                    回复 @{{ reply.parent_name }}
-                  </div>
-                  <div class="whitespace-pre-wrap break-words text-[13px] leading-[1.6] text-ink">
-                    {{ reply.content }}
-                  </div>
-                  <ForumImageGallery :images="reply.images" />
-                </div>
+                  class="border-b border-line last:border-b-0"
+                  density="compact"
+                  :reply="reply"
+                  :topic-author-id="expandedTopic?.author.user_id"
+                  :is-own="isOwnReply(reply)"
+                  @reply-to="startReplyTo"
+                  @like="toggleReplyLike"
+                  @report="(r) => openReport('reply', r.id)"
+
+                  @delete="removeReply"
+                />
               </template>
               <UiEmptyState v-else description="还没有回复" />
+              <!-- 截断提示：面板无翻页交互，超出部分给一个明确去向而不是静默丢掉 -->
+              <p v-if="replyPages > 1" class="mt-2 mb-0 text-center text-xs text-ink-3">
+                仅显示前 {{ replies.length }} 条回复，
+                <UiButton variant="text" size="small" @click="goTopicDetail">查看全部</UiButton>
+              </p>
             </div>
 
             <!-- 回复输入（与帖子详情页共用 ForumComposer） -->
@@ -297,6 +326,25 @@ watch(() => props.chapterId, () => {
                 删除本帖
               </UiButton>
             </div>
+
+            <!-- 举报对话框（与帖子详情同形态） -->
+            <UiDialog
+              v-model="reportVisible"
+              title="举报"
+              width="440px"
+              confirm-text="提交"
+              :confirm-loading="reportSubmitting"
+              @confirm="submitReport"
+            >
+              <UiInput
+                v-model="reportReason"
+                type="textarea"
+                :rows="4"
+                :maxlength="500"
+                show-word-limit
+                placeholder="请填写举报理由（1-500 字）"
+              />
+            </UiDialog>
           </template>
         </div>
       </div>

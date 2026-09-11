@@ -96,5 +96,40 @@ func TestForumExperienceDesignationOnPostgres(t *testing.T) {
 		t.Fatalf("策展线索键应存在（迁移 INSERT 未执行？）: %v", err)
 	}
 
-	t.Log("迁移 000027 契约通过：值域收窄、经验蕴含精选、任务退役、策展线索均落地")
+	// 8. ★ 「经验帖不可被采纳」由 CHECK 兜底（迁移 000028）。
+	//    行为层由 service 双向守卫（AcceptReply / DesignateExperience），
+	//    但并发与直接 SQL 绕不过库层这条——它是该不变式的最后一道防线。
+	//
+	//    注意：采纳指针只能落在 question 帖上（迁移 000026 的
+	//    chk_forum_topics_accepted_requires_question），故这里必须建**问答帖**；
+	//    拿 discussion 帖置采纳会先撞那条 CHECK 而不是本迁移这条。
+	qTopic := model.ForumTopic{
+		Category: "question", UserID: author.ID, Title: "可被采纳的问答帖", Content: "x",
+		Images: model.JSONB("[]"), CreatedAt: testutil.Now(), UpdatedAt: testutil.Now(),
+	}
+	if err := db.Create(&qTopic).Error; err != nil {
+		t.Fatalf("建问答帖失败: %v", err)
+	}
+	acceptedReply := model.ForumReply{TopicID: qTopic.ID, UserID: author.ID, Content: "回答", Images: model.JSONB("[]"), CreatedAt: testutil.Now()}
+	if err := db.Create(&acceptedReply).Error; err != nil {
+		t.Fatalf("建回复失败: %v", err)
+	}
+	if err := db.Exec("UPDATE forum_topics SET accepted_reply_id = ?, solved_at = NOW() WHERE id = ?", acceptedReply.ID, qTopic.ID).Error; err != nil {
+		t.Fatalf("置采纳状态失败（question 帖应可采纳）: %v", err)
+	}
+	if err := db.Exec("UPDATE forum_topics SET is_experience = true, is_featured = true WHERE id = ?", qTopic.ID).Error; err == nil {
+		t.Fatalf("「已采纳 + 认定为经验」应被 CHECK 拒绝（迁移 000028），实际成功")
+	}
+	// 反证：清掉采纳指针后，同一行可以正常被认定（拒绝的是组合而非列本身）
+	if err := db.Exec("UPDATE forum_topics SET accepted_reply_id = NULL, solved_at = NULL WHERE id = ?", qTopic.ID).Error; err != nil {
+		t.Fatalf("清采纳状态失败: %v", err)
+	}
+	// 必须**同时**置 is_featured——经验蕴含精选（000027 的
+	// chk_forum_topics_experience_requires_featured）；上一步被拒后 is_featured 仍为 false。
+	if err := db.Exec("UPDATE forum_topics SET is_experience = true, is_featured = true WHERE id = ?", qTopic.ID).Error; err != nil {
+		t.Fatalf("无采纳指针时认定（经验+精选）应可写入: %v", err)
+	}
+	_ = normal
+
+	t.Log("迁移 000027/000028 契约通过：值域收窄、经验蕴含精选、经验不可被采纳、任务退役、策展线索均落地")
 }

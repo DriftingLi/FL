@@ -43,15 +43,28 @@ describe('采纳按钮：判定由壳层下发（安卓真机可见性修复）'
     expect(model).toMatch(/canAcceptReply : boolean/);
   });
 
-  it('壳层 canAcceptReply 覆盖四个必要条件', () => {
+  it('壳层 canAcceptReply 覆盖五个必要条件（含 is_experience 守卫）', () => {
     const start = detail.indexOf('function canAcceptReply');
     expect(start).toBeGreaterThan(-1);
-    const body = detail.slice(start, start + 420);
+    const body = detail.slice(start, start + 500);
     expect(body).toContain('if (!isTopicOwner.value) return false');
     expect(body).toMatch(/if \(t == null \|\| t\.category != 'question'\) return false/);
+    // #836：经验帖不可被采纳（后端守卫双向 + 库层 CHECK，前端先隐藏必然失败的按钮）
+    expect(body).toContain('if (t.is_experience) return false');
     expect(body).toContain('if (r.is_accepted) return false');
     expect(body).toContain('if (uid <= 0) return false');
     expect(body).toContain('return r.author_id != uid');
+  });
+
+  it('经验帖不渲染采纳按钮（#836：is_experience 守卫在 category 判定之后、其余判定之前）', () => {
+    const start = detail.indexOf('function canAcceptReply');
+    const body = detail.slice(start, start + 500);
+    const categoryGuard = body.indexOf("t.category != 'question'");
+    const experienceGuard = body.indexOf('t.is_experience');
+    const acceptedGuard = body.indexOf('r.is_accepted');
+    expect(categoryGuard).toBeGreaterThan(-1);
+    expect(experienceGuard).toBeGreaterThan(categoryGuard);
+    expect(acceptedGuard).toBeGreaterThan(experienceGuard);
   });
 
   it('函数定义在 replyItems 之前（UTS 无函数提升，调早于定义即 error18）', () => {

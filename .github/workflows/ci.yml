@@ -307,6 +307,21 @@ jobs:
 
 
   # ============================================================
+  # Stage 6.6: pr-evidence 校验逻辑的自检（守护的守护）
+  #   校验器内联在 .github/workflows/pr-evidence.yml 里（不 checkout 即可运行），
+  #   本 job 抽取该段跑表驱动单测：逻辑被改坏或 workflow 被删 → 这里红 → ci-summary 红 → 不能合并。
+  # ============================================================
+  pr-evidence-selftest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: 抽取式单测（pr-evidence 校验逻辑）
+        run: node --test .github/scripts/pr-evidence-check.test.mjs
+
+  # ============================================================
   # Stage 7: CI 汇总 + testing 冒烟部署门禁
   #   1) 汇总各 job 结论。本 job 的 check run 名（ci-summary）是 ruleset 配置的
   #      必检状态检查，必须在每次分支 push 上运行并上报 success/failure，
@@ -314,7 +329,7 @@ jobs:
   #   2) CI 全绿且该分支有开启中的 PR 时，派发 CD workflow 部署 testing 冒烟。
   # ============================================================
   ci-summary:
-    needs: [backend-lint, backend-test, frontend-check, mobile-test, security-scan, migration-check]
+    needs: [backend-lint, backend-test, frontend-check, mobile-test, pr-evidence-selftest, security-scan, migration-check]
     if: always()
     runs-on: ubuntu-latest
     # 触发 CD workflow_dispatch 需要 actions:write；查分支 open PR 需要 pull-requests:read
@@ -348,6 +363,7 @@ jobs:
           check "${{ needs.backend-test.result }}" "backend-test"
           check "${{ needs.frontend-check.result }}" "frontend-check"
           check "${{ needs.mobile-test.result }}" "mobile-test"
+          check "${{ needs.pr-evidence-selftest.result }}" "pr-evidence-selftest"
           check "${{ needs.migration-check.result }}" "migration-check"
           check "${{ needs.security-scan.result }}" "security-scan"
 

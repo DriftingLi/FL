@@ -22,4 +22,4 @@ PR-0(#639)✅ → mall(#640)✅ → profile(#641)✅ → forum(T04，600 预算�
 - uni-app-x：文件 ≤600 行、目录 ≤2 层；数据所有权单一（谁消费谁持有、扁平下发，禁 `ref<any>`/`defineExpose` 反向桥接）；守护 M–S 禁：裸 builder 引用、`as unknown as`、模板裸插值/直调 import 函数、`ref<any`、`async : void`、可选对象 prop 成员直读。
 
 ## 验收标准
-手术 PR 四门：Android 逐页截图前后一致、微信开发者工具逐页无报错、npm test 全绿（#657 欠账须可指认）、HBuilderX 全量编译 0 新增 error（人工签收）。epic 完成 = 主力 + auth 手术全部达标且 #652/#653/#654 收口。
+手术 PR 四门（现行口径见 ADR-0008）：① 触及运行时面时 Android 真机逐页截图前后一致、② 命中 MP-WEIXIN 面时微信开发者工具无报错（两道人工门须在 PR 正文「## 验收证据」段留四字段与产物）、③ npm test 全绿、④a dev 全量编译 0 新增 error（`npm run build:compile` → `.ci-verify/build.log`）、④b release 云打包按触发条件跑；缺证据不再只是声明——由 `pr-evidence` 必检 + ruleset `approve=1` 兜底（落地票 #841）。epic 完成 = 主力 + auth 手术全部达标且 #652/#653/#654 收口。

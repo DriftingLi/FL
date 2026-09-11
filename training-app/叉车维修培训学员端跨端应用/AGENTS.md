@@ -170,6 +170,15 @@ UTS（uni-app-x 的 TypeScript 变体）不支持以下 TypeScript 语法：
 - **部署配置**：改 `docker-compose*.yml` / `deploy.sh` 后可用 `docker compose -f docker-compose.prod.yml config -q` 做语法校验
 - **安全检测**：改动触及认证/授权/密钥/DB 连接/AI 生成代码时，跑 `python -m deepsec shield scan backend frontend/src`，确认无新增 critical/high（已知误报见 `docs/agents/security-scan.md`）。
 
+## 验收门与合并纪律（ADR-0008）
+
+改动触及运行时面（改动集含 `*.uvue` / `*.uts`，或 training-app 下的 `manifest.json` / `pages.json` / `platformConfig.json`）时，适用 `docs/adr/0008-移动端验收门与证据.md` 的四门与证据要求。
+
+- **agent 会话不得自行合并这类 PR**：必须把 PR 正文的 `## 验收证据` 段填齐（每门四字段 + 产物），然后**停在「待人工签收」**，由人执行合并。
+- 非运行时面的 PR（纯文档 / 测试 / CI 配置）不受此限，agent 可自行合并。
+- **人工门（真机逐页截图、微信开发者工具、HBuilderX 全量编译）只能由人执行**；agent 不得代填「执行人」，也不得在证据里写「已通过」。
+- 例外通道：正文写明「已接受未验证风险 + 理由 + 事后验证计划」，检查会打警告放行，但**仍必须由人执行合并**。禁止静默例外。
+- `pr-evidence` 检查只校证据结构、不校真伪；它是**可见检查**而非 ruleset 必检——本仓**有可用的 admin 通道**（维护者持有仓库所有者账号），但**裁定不装**（逐 PR 审批成本高于约束收益，见 ADR-0008「为何不装『必检 + approve』」）。
 ## 发布流程（push / PR / merge）
 
 master 有仓库 ruleset「protect master」保护（直接 push 会被拒，`push declined due to repository rule violations`），且限定 squash 合并。发布必须走分支 + PR：

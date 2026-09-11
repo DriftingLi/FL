@@ -11,13 +11,14 @@
                 </view>
             </view>
             <text class="header-title">学员论坛</text>
-            <view class="header-right" @click="onCreate">
+            <!-- 经验 Tab 是只读策展流（ADR-0040）：学员不能自称考经，故不提供发布入口 -->
+            <view v-if="currentTab !== 'experience'" class="header-right" @click="onCreate">
                 <text class="header-action" @click="onCreate">发帖</text>
             </view>
         </view>
         <ForumTabBar :current-tab="currentTab" :avatar-url="avatarUrl" @switch-tab="onSwitchTab" @personal-activity="onPersonalActivity" />
-        <!-- 搜索栏 -->
-        <view class="res-search-bar" @click="onCreate">
+        <!-- 搜索栏（点击即进发布，故与 header 同口径：经验 Tab 不显示） -->
+        <view v-if="currentTab !== 'experience'" class="res-search-bar" @click="onCreate">
             <view class="res-search-input-wrap">
                 <text class="res-search-placeholder">写下你此刻的想法</text>
                 <text class="res-search-icon">🔍</text>
@@ -50,6 +51,7 @@
                     :created-at="item.created_at" :views-count="item.views_count" :replies-count="item.replies_count"
                     :likes-count="item.likes_count" :variant="currentTab === 'hot' ? 'qa' : 'square'"
                     :status="item.status" :is-featured="item.is_featured"
+                    :is-experience="item.is_experience"
                     @click="onTopicClick" @reply="onReply" />
             </view>
             <view v-if="loading" class="loading-more">

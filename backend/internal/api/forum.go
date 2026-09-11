@@ -251,6 +251,8 @@ func (h *ForumHandler) CreateTopic(c *gin.Context) {
 // @Param id path int true "主题ID"
 // @Param sort query string false "排序 time|hot|latest"
 // @Param order query string false "排序方向 asc|desc"
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页回复数" default(20)
 // @Success 200 {object} response.R "success"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "不存在"
@@ -264,10 +266,14 @@ func (h *ForumHandler) GetTopic(c *gin.Context) {
 			if err != nil {
 				return nil, err
 			}
-			return &topicGetReq{TopicID: topicID, UserID: userID, Sort: c.Query("sort"), Order: c.Query("order")}, nil
+			return &topicGetReq{
+				TopicID: topicID, UserID: userID,
+				Sort: c.Query("sort"), Order: c.Query("order"),
+				Page: atoiDefault(c.Query("page"), 1), PageSize: atoiDefault(c.Query("page_size"), 0),
+			}, nil
 		},
 		Invoke: func(ctx context.Context, req *topicGetReq) (*map[string]any, error) {
-			result, err := h.svc.GetTopic(req.TopicID, req.UserID, req.Sort, req.Order)
+			result, err := h.svc.GetTopic(req.toDetailInput())
 			if err != nil {
 				return nil, err
 			}
@@ -499,10 +505,14 @@ func (h *ForumHandler) AdminGetTopic(c *gin.Context) {
 			if err != nil {
 				return nil, err
 			}
-			return &topicGetReq{TopicID: topicID, UserID: userID, Sort: c.Query("sort"), Order: c.Query("order")}, nil
+			return &topicGetReq{
+				TopicID: topicID, UserID: userID,
+				Sort: c.Query("sort"), Order: c.Query("order"),
+				Page: atoiDefault(c.Query("page"), 1), PageSize: atoiDefault(c.Query("page_size"), 0),
+			}, nil
 		},
 		Invoke: func(ctx context.Context, req *topicGetReq) (*map[string]any, error) {
-			result, err := h.svc.GetTopic(req.TopicID, req.UserID, req.Sort, req.Order)
+			result, err := h.svc.GetTopic(req.toDetailInput())
 			if err != nil {
 				return nil, err
 			}
@@ -759,6 +769,18 @@ type topicGetReq struct {
 	UserID  int
 	Sort    string
 	Order   string
+	// Page/PageSize 回复分页（ADR-0042）：回复列表的唯一读取形态是分页，旧的「一次性全量」已退役。
+	Page     int
+	PageSize int
+}
+
+// toDetailInput 学员端与管理端详情共用同一份 req→service 入参映射（两处逐字重复会漂移）。
+func (r *topicGetReq) toDetailInput() service.TopicDetailInput {
+	return service.TopicDetailInput{
+		TopicID: r.TopicID, ViewerID: r.UserID,
+		ReplySort: r.Sort, Order: r.Order,
+		Page: r.Page, PageSize: r.PageSize,
+	}
 }
 
 // replyTopicReq 回复请求。

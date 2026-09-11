@@ -34,6 +34,7 @@ import UiCheckboxGroup from '../UiCheckboxGroup.vue'
 import UiRadioGroup from '../UiRadioGroup.vue'
 import UiTooltip from '../UiTooltip.vue'
 import UiUpload from '../UiUpload.vue'
+import UiMoreMenu from '../UiMoreMenu.vue'
 
 const OPTIONS = [
   { label: '全部', value: 'all' },
@@ -561,3 +562,62 @@ describe('UiTag（tone 唯一入口扩展，#766 C2）', () => {
     expect(w.classes()).toContain('bg-ui-50')
   })
 })
+
+describe('UiMoreMenu（溢出菜单）', () => {
+  afterEach(() => {
+    document.body.innerHTML = ''
+  })
+
+  const ITEMS = [
+    { key: 'report', label: '举报' },
+    { key: 'delete', label: '删除', tone: 'danger' as const }
+  ]
+
+  async function mountMenu(items = ITEMS) {
+    const w = mount(UiMoreMenu, {
+      props: { items },
+      attachTo: document.body,
+      global: { plugins: [epLite()] }
+    })
+    await flushPromises()
+    await nextTick()
+    return w
+  }
+
+  it('items 为空时不渲染触发按钮（没有可治理的动作就不该有入口）', async () => {
+    const w = await mountMenu([])
+    expect(document.querySelector('.more-menu-trigger')).toBeNull()
+    w.unmount()
+  })
+
+  it('渲染 ⋯ 触发按钮并带无障碍标签', async () => {
+    const w = await mountMenu()
+    const btn = document.querySelector('.more-menu-trigger')
+    expect(btn).not.toBeNull()
+    expect(btn?.getAttribute('aria-label')).toBe('更多操作')
+    w.unmount()
+  })
+
+  it('展开后按 items 顺序渲染菜单项', async () => {
+    const w = await mountMenu()
+    document.querySelector('.more-menu-trigger')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flushPromises()
+    await nextTick()
+    const rendered = Array.from(document.querySelectorAll('.el-dropdown-menu__item'))
+    expect(rendered.map((i) => i.textContent?.trim())).toEqual(['举报', '删除'])
+    w.unmount()
+  })
+
+  it('点菜单项发 select(key)', async () => {
+    const w = await mountMenu()
+    document.querySelector('.more-menu-trigger')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flushPromises()
+    await nextTick()
+    const rendered = Array.from(document.querySelectorAll('.el-dropdown-menu__item'))
+    rendered[1].dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flushPromises()
+    expect(w.emitted('select')?.[0]).toEqual(['delete'])
+    w.unmount()
+  })
+})
+
