@@ -789,23 +789,31 @@ data: null
 | GET | `/api/forum/topics` | 帖子列表（scope=all|general|chapter；keyword 搜索；分页；`sort=latest|hot` `order=asc|desc`） |
 | POST | `/api/forum/topics` | 发帖（images 最多 9 张） |
 | GET | `/api/forum/topics/:id` | 帖子详情（含回复；`sort=latest|hot|time` `order=asc|desc`） |
+| PUT | `/api/forum/topics/:id` | 编辑自己的帖子（#811：仅作者本人，非本人 403；可改 title/content/images/category，空串归一 discussion；问答帖不得挂章节） |
 | POST | `/api/forum/topics/:id/replies` | 回复（images 最多 3 张；支持回复楼层） |
 | DELETE | `/api/forum/topics/:id` | 删除自己的帖子 |
 | DELETE | `/api/forum/replies/:id` | 删除自己的回复 |
 | POST | `/api/forum/topics/:id/like` | 点赞（幂等，ADR-0018） |
 | DELETE | `/api/forum/topics/:id/like` | 取消点赞（幂等） |
+| POST | `/api/forum/topics/:id/accept` | 采纳回答（仅楼主，幂等，首次加分） |
+| DELETE | `/api/forum/topics/:id/accept` | 取消采纳（状态回未解决，已发分不回滚） |
 | POST | `/api/forum/topics/:id/report` | 举报主题（reason 1-500 字） |
 | POST | `/api/forum/replies/:id/report` | 举报回复 |
 | GET | `/api/forum/my-topics` | 我的帖子（分页） |
 | GET | `/api/forum/my-replies` | 我的回复（分页，含主题标题回填） |
+| GET | `/api/forum/my-liked-topics` | 赞过（#701，按点赞时间倒序） |
+| GET | `/api/forum/my-observed` | 围观（#701，浏览减四项直接互动） |
+| GET | `/api/forum/my-view-history` | 浏览记录（#701，服务端去重） |
 
 **管理端 `/api/admin/forum`（role=admin）**
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/admin/forum/topics` | 帖子列表 |
+| GET | `/api/admin/forum/topics` | 帖子列表（支持 `featured=true|false` 精选过滤） |
 | GET | `/api/admin/forum/topics/:id` | 帖子详情 |
 | DELETE | `/api/admin/forum/topics/:id` | 删除帖子 |
+| POST | `/api/admin/forum/topics/:id/featured` | 加精（#742，全类别；首次给帖主 +30 幂等直记） |
+| DELETE | `/api/admin/forum/topics/:id/featured` | 取消精选（状态回滚，已发分不回滚） |
 | DELETE | `/api/admin/forum/replies/:id` | 删除回复 |
 | GET | `/api/admin/forum/reports?status=&page=&page_size=` | 举报列表（status 0 待处理/1 已处理，缺省全部） |
 | PUT | `/api/admin/forum/reports/:id` | 处理举报（body: `{"status": 1}`） |

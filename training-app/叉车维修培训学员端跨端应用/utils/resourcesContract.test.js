@@ -158,7 +158,8 @@ describe('forum-create 归一与资源模式契约（#710 + #760）', () => {
     expect(src).toMatch(/s == 'resource' \? 'resource' : normalizeCategory\(s\)/);
   });
   it('编辑回填过 normalizeCategory（帖子永不回填 resource）', () => {
-    expect(src).toMatch(/selectedCategory\.value\s*=\s*normalizeCategory\(data\.scope\)/);
+    // #811：回填源改为详情 DTO 的 category（旧写法读不存在的 scope，问答/经验帖一进编辑态即降级 discussion）
+    expect(src).toMatch(/selectedCategory\.value\s*=\s*normalizeCategory\(data\.category\)/);
   });
   it('isResourceMode 计算属性且编辑态互斥', () => {
     expect(src).toMatch(/const isResourceMode\s*=\s*computed<boolean>/);

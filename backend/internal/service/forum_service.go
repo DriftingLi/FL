@@ -72,6 +72,10 @@ const (
 // ErrNotTopicOwner 只有楼主可采纳/取消/更换。
 var ErrNotTopicOwner = errors.New("只有楼主可以执行此操作")
 
+// ErrTopicNotFound 主题不存在（#811 收敛为哨兵：handler 以 errors.Is 映射 404，
+// 不做 err.Error() 字符串比对——沿用积分域哨兵纪律，CONTEXT.md「积分错误哨兵」同精神）。
+var ErrTopicNotFound = errors.New("主题不存在")
+
 // ErrAcceptOwnReply 楼主不能采纳自己的回答（自问自答禁止，ADR-0028）。
 var ErrAcceptOwnReply = errors.New("不能采纳自己的回答")
 
@@ -570,6 +574,80 @@ func (s *ForumService) CreateTopic(in CreateTopicInput) (*ForumTopicDTO, error) 
 	}, nil
 }
 
+// UpdateTopicInput 编辑帖子条件（#811）。
+//
+// 可改字段仅 title / content / images / category；**chapter_id 不在契约内**——
+// 移动端 PUT 载荷不传（编辑不迁移章节归属），故更新路径按既有行的 chapter_id
+// 判定发帖同构的不变量（question 不得挂章节）。
+type UpdateTopicInput struct {
+	UserID   int
+	TopicID  int64
+	Category string
+	Title    string
+	Content  string
+	Images   []string
+}
+
+// UpdateTopic 作者本人编辑帖子（#811）。
+//
+// 校验顺序与语义与发帖同构：
+//   - 主题不存在 → ErrTopicNotFound（handler 映射 404）
+//   - 非作者本人 → ErrNotTopicOwner（handler 映射 403，与采纳/取消采纳同 owner 语义）
+//   - 类别归一走 normalizeForumCategory（空串归一 discussion 向后兼容；
+//     **不要**误用 parseForumCategoryArg——那是列表查询语义，空串 = 不过滤）
+//   - 标题 1-100 / 正文 1-10000 / 图片走 validateForumImages（≤9 张 + 仅本站 images/forum/ 前缀）
+//   - question 不得带 chapter_id：编辑不改章节归属，按既有行判定
+//
+// 明确不做（#811 范围）：编辑历史/版本留痕、管理员代为编辑、is_edited 列、
+// 改 GET 详情响应形态（DTO 已含 category）。
+func (s *ForumService) UpdateTopic(in UpdateTopicInput) (*ForumTopicDTO, error) {
+	var topic model.ForumTopic
+	if err := s.db.First(&topic, in.TopicID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrTopicNotFound
+		}
+		return nil, err
+	}
+	if topic.UserID != in.UserID {
+		return nil, ErrNotTopicOwner
+	}
+
+	category, err := normalizeForumCategory(in.Category)
+	if err != nil {
+		return nil, err
+	}
+	title := strings.TrimSpace(in.Title)
+	content := strings.TrimSpace(in.Content)
+	if utf8.RuneCountInString(title) < 1 || utf8.RuneCountInString(title) > 100 {
+		return nil, errors.New("标题长度需在 1-100 个字符之间")
+	}
+	if utf8.RuneCountInString(content) < 1 || utf8.RuneCountInString(content) > 10000 {
+		return nil, errors.New("内容长度需在 1-10000 个字符之间")
+	}
+	if err := validateForumImages(in.Images, ForumTopicMaxImages); err != nil {
+		return nil, err
+	}
+	// 与发帖同构的不变量（对照 CreateTopic）：问答帖不属于任何章节。
+	// 编辑不迁移章节，故按既有行的 chapter_id 判定；数据库 CHECK 只在迁移 000005、
+	// 测试库 AutoMigrate 覆盖不到，行为层必须自己守住。
+	if category == ForumCategoryQuestion && topic.ChapterID != nil && *topic.ChapterID > 0 {
+		return nil, errors.New("问答帖不属于任何章节，不能指定 chapter_id")
+	}
+
+	// 显式写全四字段（map 更新：category 归一后的非空值不受 GORM 零值跳过影响）
+	if err := s.db.Model(&model.ForumTopic{}).Where("id = ?", in.TopicID).Updates(map[string]any{
+		"category":   category,
+		"title":      title,
+		"content":    content,
+		"images":     marshalImageURLs(in.Images),
+		"updated_at": beijingNow(),
+	}).Error; err != nil {
+		return nil, err
+	}
+	// 详情响应形态不变（DTO 已含 category），重新装配以回显图片/点赞等派生字段
+	return s.fetchTopicDTO(in.TopicID, in.UserID)
+}
+
 // ReplyTopic 回复主题或回复某条回复（parentReplyID 非空时）。
 // images 为回复图片 URL 列表（最多 ForumReplyMaxImages 张，仅接受本站 images/forum/ 前缀）。
 func (s *ForumService) ReplyTopic(userID int, topicID int64, content string, parentReplyID *int64, images []string) (*ForumReplyDTO, error) {
@@ -584,7 +662,7 @@ func (s *ForumService) ReplyTopic(userID int, topicID int64, content string, par
 	var topic model.ForumTopic
 	if err := s.db.First(&topic, topicID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("主题不存在")
+			return nil, ErrTopicNotFound
 		}
 		return nil, err
 	}
@@ -678,7 +756,7 @@ func (s *ForumService) DeleteTopic(userID int, topicID int64) error {
 	var topic model.ForumTopic
 	if err := s.db.First(&topic, topicID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("主题不存在")
+			return ErrTopicNotFound
 		}
 		return err
 	}
@@ -698,7 +776,7 @@ func (s *ForumService) AdminDeleteTopic(topicID int64) error {
 	var topic model.ForumTopic
 	if err := s.db.First(&topic, topicID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("主题不存在")
+			return ErrTopicNotFound
 		}
 		return err
 	}
@@ -986,7 +1064,7 @@ func (s *ForumService) LikeTopic(userID int, topicID int64) (int64, error) {
 		return 0, err
 	}
 	if cnt == 0 {
-		return 0, errors.New("主题不存在")
+		return 0, ErrTopicNotFound
 	}
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		var existing model.ForumTopicLike
@@ -1108,7 +1186,7 @@ func (s *ForumService) CreateReport(userID int, topicID, replyID *int64, reason 
 		var cnt int64
 		s.db.Model(&model.ForumTopic{}).Where("id = ?", *topicID).Count(&cnt)
 		if cnt == 0 {
-			return errors.New("主题不存在")
+			return ErrTopicNotFound
 		}
 	}
 	if replyID != nil {
@@ -1460,7 +1538,7 @@ func (s *ForumService) AcceptReply(userID int, topicID, replyID int64) (*ForumTo
 	var topic model.ForumTopic
 	if err := s.db.First(&topic, topicID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("主题不存在")
+			return nil, ErrTopicNotFound
 		}
 		return nil, err
 	}
@@ -1602,7 +1680,7 @@ func (s *ForumService) CancelAccept(userID int, topicID int64) (*ForumTopicDTO, 
 	var topic model.ForumTopic
 	if err := s.db.First(&topic, topicID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("主题不存在")
+			return nil, ErrTopicNotFound
 		}
 		return nil, err
 	}
@@ -1636,7 +1714,7 @@ func (s *ForumService) SetFeatured(topicID int64, featured bool) (*ForumTopicDTO
 	var topic model.ForumTopic
 	if err := s.db.First(&topic, topicID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("主题不存在")
+			return nil, ErrTopicNotFound
 		}
 		return nil, err
 	}

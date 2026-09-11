@@ -345,7 +345,8 @@ export function createForumTopicApi(title : string, content : string, images : s
  * @param content 内容（1-10000 字）
  * @param images 图片 URL 数组（最多 9 张）
  * @param category 帖子类别（可选）
- * @note 后端 PUT /forum/topics/:id 未注册（缺陷已登记 #662），手术保行为不顺手改
+ * @note 后端 PUT /forum/topics/:id 已落地（#811）：仅作者本人可改，非本人 403；
+ *       载荷 title/content/images/category（chapter_id 不在契约内，编辑不迁移章节归属）
  */
 export function updateForumTopicApi(topicId : number, title : string, content : string, images : string[] = [], category : string = '') : Promise<ForumTopic> {
     const url = '/forum/topics/' + topicId.toString()
