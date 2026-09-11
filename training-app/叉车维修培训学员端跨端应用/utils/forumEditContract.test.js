@@ -22,7 +22,7 @@ const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 describe('论坛编辑链路契约（#811）', () => {
   const create = read('pages/forum/forum-create.uvue');
   const api = read('api/forum.uts');
-  const types = read('types/index.uts');
+  const types = read('types/forum.uts');
 
   it('编辑态回填读 category（详情 DTO 唯一权威字段），不再读 scope', () => {
     // 明细：必须读 category

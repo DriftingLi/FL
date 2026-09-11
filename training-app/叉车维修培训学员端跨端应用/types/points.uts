@@ -1,0 +1,81 @@
+/**
+ * 积分模块类型
+ * 含：积分余额、流水、任务、打卡
+ * 逐字段对齐 backend/internal/service/points_service.go，#709
+ */
+
+/** 积分余额 GET /points/balance */
+export type PointsBalance = {
+    balance : number        // 可用余额
+    total_earned : number   // 累计获得
+    total_spent : number    // 累计支出（delta<0 绝对值聚合，#509）
+}
+
+/** 积分流水条目 GET /points/ledger */
+export type PointsLedgerItem = {
+    id : number             // 流水 ID
+    delta : number          // 积分变动（正数收入 / 负数支出）
+    reason : string         // 事由键：任务 code、checkin、redeem_*、ai_tokens 等
+    ref_type : string       // 关联类型：task/course/shop/ai/admin/checkin…
+    ref_id : string         // 关联 ID（后端字符串，非数字）
+    created_at : string     // RFC3339 时间
+    expires_at : string | null // 过期时间设计位（#509：首版恒 null，永久有效）
+}
+
+/** 积分流水分页结果 */
+export type PointsLedgerResult = {
+    items : PointsLedgerItem[] // 条目列表（后端字段名 items，非 records）
+    total : number             // 总条数
+    page : number              // 当前页码
+    pages : number             // 总页数
+}
+
+/** 积分任务项 GET /points/tasks */
+export type PointsTaskItem = {
+    code : string           // 任务编码（POST /points/tasks/{code}/claim 用）
+    group : string          // 分组：daily / newbie / growth
+    title : string          // 任务标题
+    desc : string           // 任务说明
+    points : number         // 奖励积分
+    status : string         // 三态：todo / claimable / claimed
+    progress : number       // 达成进度
+    total : number          // 进度分母
+}
+
+/** 积分任务列表结果 */
+export type PointsTasksResult = {
+    tasks : PointsTaskItem[]
+}
+
+/** 任务领取结果 POST /points/tasks/{code}/claim */
+export type PointsClaimResult = {
+    balance : number        // 领取后余额
+    total_earned : number   // 领取后累计获得
+    task_status : string    // 领取后任务状态（恒 claimed）
+}
+
+// ========== 打卡模块类型 ==========
+
+/** 打卡结果（POST /check-in 返回，契约见根仓库 ADR-0028） */
+export type CheckInResult = {
+    checked : boolean          // 本次请求后是否处于已打卡态
+    streak : number            // 连续打卡天数
+    total : number             // 累计打卡天数（非积分）
+    today_checked : boolean    // 今日是否已打卡
+    points : number            // 当日实发积分（基础 5 + 阶梯奖；重复请求为 0）
+}
+
+/** 打卡日历单日状态 */
+export type CheckInCalendarDay = {
+    date : string              // YYYY-MM-DD
+    checked : boolean          // 是否已签到
+    points : number            // 该日实发积分（0 表示未签或历史无流水）
+}
+
+/** 打卡日历响应（GET /check-in/calendar，逐日返回整月每一天） */
+export type CheckInCalendarResult = {
+    days : CheckInCalendarDay[] // 当月每日签到状态
+    streak : number             // 连续打卡天数
+    total : number              // 累计打卡天数（非积分）
+    today_checked : boolean     // 今日是否已打卡
+}

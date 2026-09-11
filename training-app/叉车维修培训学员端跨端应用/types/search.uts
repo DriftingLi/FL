@@ -1,0 +1,37 @@
+/**
+ * 搜索模块类型
+ */
+
+/** 搜索结果条目 */
+export type SearchItem = {
+    type : string                   // course / question / content / topic
+    id : number
+    title : string
+    cover : string
+    summary : string
+}
+
+/** 搜索分类结果 */
+export type SearchCategoryResult = {
+    items : SearchItem[]
+    total : number
+}
+
+/** 全部搜索结果 */
+export type SearchResult = {
+    keyword : string
+    courses : SearchCategoryResult
+    questions : SearchCategoryResult
+    contents : SearchCategoryResult
+    topics : SearchCategoryResult
+}
+
+/** 指定类型搜索分页结果 */
+export type SearchPagedResult = {
+    keyword : string
+    type : string
+    total : number
+    page : number
+    pages : number
+    items : SearchItem[]
+}
