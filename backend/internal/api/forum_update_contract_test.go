@@ -109,9 +109,9 @@ func TestForumUpdateTopicContract(t *testing.T) {
 	topicID := create(map[string]any{"title": "原标题", "content": "原内容"})
 	chapterTopicID := create(map[string]any{"chapter_id": 77, "title": "章节帖", "content": "x"})
 
-	// 1. 本人更新成功：字段落库 + DTO 回显
+	// 1. 本人更新成功：字段落库 + DTO 回显（ADR-0040：意图值域只有 讨论/问答）
 	rec := do(authorToken, http.MethodPut, fmt.Sprintf("/api/forum/topics/%d", topicID), map[string]any{
-		"title": "改后标题", "content": "改后内容", "category": "experience",
+		"title": "改后标题", "content": "改后内容", "category": "question",
 	})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("本人编辑应 200，实际 %d %s", rec.Code, rec.Body.String())
@@ -120,7 +120,7 @@ func TestForumUpdateTopicContract(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &updated); err != nil {
 		t.Fatalf("解析编辑响应失败: %v", err)
 	}
-	if updated.Data.Title != "改后标题" || updated.Data.Content != "改后内容" || updated.Data.Category != "experience" {
+	if updated.Data.Title != "改后标题" || updated.Data.Content != "改后内容" || updated.Data.Category != "question" {
 		t.Fatalf("编辑回显不符：title=%q content=%q category=%q", updated.Data.Title, updated.Data.Content, updated.Data.Category)
 	}
 	// 落库核对（不经响应自证）
@@ -128,8 +128,17 @@ func TestForumUpdateTopicContract(t *testing.T) {
 	if err := db.First(&row, topicID).Error; err != nil {
 		t.Fatalf("回读主题失败: %v", err)
 	}
-	if row.Title != "改后标题" || row.Category != "experience" {
+	if row.Title != "改后标题" || row.Category != "question" {
 		t.Fatalf("落库不符：title=%q category=%q", row.Title, row.Category)
+	}
+
+	// 1b. ★ ADR-0040：学员不能自称「备考经验」——编辑传 experience 被拒（400）。
+	//     旧实现把 experience 当第三类别放行，本条即该收窄的守卫。
+	rec = do(authorToken, http.MethodPut, fmt.Sprintf("/api/forum/topics/%d", topicID), map[string]any{
+		"title": "想改成经验", "content": "x", "category": "experience",
+	})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("改 experience 应 400（学员不能自称经验），实际 %d %s", rec.Code, rec.Body.String())
 	}
 
 	// 2. 空类别归一 discussion（向后兼容：移动端旧契约不传 category）
@@ -179,11 +188,17 @@ func TestForumUpdateTopicContract(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("章节帖改 question 应 400，实际 %d %s", rec.Code, rec.Body.String())
 	}
-	// 反证：章节帖保持 discussion/experience 可正常更新
+	// 反证一：章节帖保持 discussion 可正常更新（改标题，意图不动）
+	if rec := do(authorToken, http.MethodPut, fmt.Sprintf("/api/forum/topics/%d", chapterTopicID), map[string]any{
+		"title": "章节帖改标题", "content": "x", "category": "discussion",
+	}); rec.Code != http.StatusOK {
+		t.Fatalf("章节帖改标题应 200，实际 %d %s", rec.Code, rec.Body.String())
+	}
+	// 反证二：章节帖改 experience 同样被拒（意图收窄与章节归属正交）
 	if rec := do(authorToken, http.MethodPut, fmt.Sprintf("/api/forum/topics/%d", chapterTopicID), map[string]any{
 		"title": "章节帖改经验", "content": "x", "category": "experience",
-	}); rec.Code != http.StatusOK {
-		t.Fatalf("章节帖改 experience 应 200，实际 %d %s", rec.Code, rec.Body.String())
+	}); rec.Code != http.StatusBadRequest {
+		t.Fatalf("章节帖改 experience 应 400，实际 %d %s", rec.Code, rec.Body.String())
 	}
 
 	// 7. 长度越界 → 400（空标题）
@@ -196,9 +211,9 @@ func TestForumUpdateTopicContract(t *testing.T) {
 	// 8. 已采纳的问答帖禁止改类别（2026-09-11 维护者裁定）
 	//    未采纳的问答帖改类别仍放行 —— 两条路径都要有证据
 	qTopicID := create(map[string]any{"category": "question", "title": "待解决问题", "content": "x"})
-	// 8a. 未采纳：改 experience 放行
+	// 8a. 未采纳：问答改讨论放行（意图之间可自由迁移）
 	if rec := do(authorToken, http.MethodPut, fmt.Sprintf("/api/forum/topics/%d", qTopicID), map[string]any{
-		"title": "未采纳问答改经验", "content": "x", "category": "experience",
+		"title": "未采纳问答改讨论", "content": "x", "category": "discussion",
 	}); rec.Code != http.StatusOK {
 		t.Fatalf("未采纳问答帖改类别应 200，实际 %d %s", rec.Code, rec.Body.String())
 	}

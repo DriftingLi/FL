@@ -59,7 +59,7 @@ func TestAdminDeleteTopicZeroBalanceRollback(t *testing.T) {
 	// 回收幂等：同键二次 settle 静默跳过，不再产生流水
 	for i := 0; i < 2; i++ {
 		if err := db.Transaction(func(tx *gorm.DB) error {
-			return svc.rollbackAcceptedBonusTx(tx, topic.ID)
+			return svc.rollbackTopicRewardsTx(tx, topic.ID)
 		}); err != nil {
 			t.Fatalf("第 %d 次重复回收应幂等跳过: %v", i+1, err)
 		}
