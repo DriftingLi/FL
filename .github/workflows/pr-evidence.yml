@@ -95,7 +95,7 @@ jobs:
                   continue;
                 }
                 // 解析「字段：值」，字段之间用 · 或 | 分隔
-                const marks = [...line.matchAll(/(执行人|日期|复测对象|结论)[：:]\s*/g)];
+                const marks = [...line.matchAll(/(执行人|日期|复测对象|结论)(?:[（(][^）)]*[）)])?\s*[：:]\s*/g)];
                 const values = {};
                 marks.forEach((m, i) => {
                   const start = m.index + m[0].length;
