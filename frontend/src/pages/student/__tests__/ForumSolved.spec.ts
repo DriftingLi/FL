@@ -161,14 +161,20 @@ describe('问答状态可见 #367', () => {
     expect(p2.solved).toBe('unsolved')
   })
 
-  it('详情页已采纳答案恒置顶且带绿色边框与 ✓ 标记', async () => {
-    // 构造详情：回复 2 为已采纳，但排在后面，渲染后应置顶
+  // ADR-0042 起**置顶是后端事实**：后端保证被采纳回复占首页第一条，前端忠实按响应顺序渲染。
+  // 旧断言「把排在后面的已采纳条挪到首位」测的是前端派生置顶——分页后前端只拿得到一页，
+  // 那个派生必然失效，故断言改为「顺序即后端顺序」+「已采纳条带样式与标记」。
+  it('详情页按后端顺序渲染（置顶不再由前端派生）', async () => {
+    // 后端给的顺序：已采纳的 2 在首位
+    const r2 = reply(2, true)
     const r1 = reply(1, false)
-    const r2 = reply(2, true) // 已采纳
     const r3 = reply(3, false)
     getTopic.mockResolvedValue({
       topic: { id: 1, category: 'question', title: '问答', content: '内容', view_count: 0, reply_count: 3, created_at: '2026-08-01T10:00:00+08:00', author: { user_id: 1, username: '楼主', avatar_url: '' }, accepted_reply_id: 2, solved_at: '2026-08-02T10:00:00+08:00', reward_issued: true },
-      replies: [r1, r2, r3]
+      replies: [r2, r1, r3],
+      page: 1,
+      pages: 1,
+      total: 3
     } as never)
     const wrapper = mount(ForumDetail, {
       global: { plugins: [epLite()], stubs: { ForumImageGallery: true, UiEmptyState: true, UiErrorState: true, UiSkeleton: true } }
@@ -176,13 +182,35 @@ describe('问答状态可见 #367', () => {
     await flushPromises()
     await new Promise(r => setTimeout(r, 0))
     await flushPromises()
-    // 检查置顶：第一个渲染的回复应为已采纳
     const replyItems = wrapper.findAll('.reply-item')
     expect(replyItems.length).toBe(3)
-    // 已采纳的在最前且有 is-accepted 类与绿色边框
+    // 首条是后端给的首条（前端不重排），且带 is-accepted 样式与 ✓ 标记
+    expect(replyItems[0].text()).toContain('回复2')
     expect(replyItems[0].classes()).toContain('is-accepted')
     expect(replyItems[0].text()).toContain('已采纳')
-    // 楼主标识与已采纳可同时成立（用楼主自己的回答被采纳的场景）
+  })
+
+  it('前端不再补位：后端把已采纳条排在中间时，渲染顺序原样保留', async () => {
+    // 这条守住「前端派生置顶已删」——若有人把 sortedReplies 加回来，本用例会红。
+    getTopic.mockResolvedValue({
+      topic: { id: 1, category: 'question', title: '问答', content: '内容', view_count: 0, reply_count: 3, created_at: '2026-08-01T10:00:00+08:00', author: { user_id: 1, username: '楼主', avatar_url: '' }, accepted_reply_id: 2, solved_at: '2026-08-02T10:00:00+08:00', reward_issued: true },
+      replies: [reply(1, false), reply(2, true), reply(3, false)],
+      page: 1,
+      pages: 1,
+      total: 3
+    } as never)
+    const wrapper = mount(ForumDetail, {
+      global: { plugins: [epLite()], stubs: { ForumImageGallery: true, UiEmptyState: true, UiErrorState: true, UiSkeleton: true } }
+    })
+    await flushPromises()
+    await new Promise(r => setTimeout(r, 0))
+    await flushPromises()
+    const replyItems = wrapper.findAll('.reply-item')
+    expect(replyItems[0].text()).toContain('回复1')
+    expect(replyItems[1].classes()).toContain('is-accepted')
+  })
+
+  it('楼主标识与已采纳可同时成立', async () => {
     // 构造楼主自答被采纳
     const rSelf = reply(4, true, 1)
     getTopic.mockResolvedValue({

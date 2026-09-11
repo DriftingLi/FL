@@ -27,12 +27,18 @@ const props = withDefaults(
     /** 紧凑形态：仅图标 + 计数 */
     compact?: boolean
     disabled?: boolean
+    /**
+     * 无边框变体（ADR-0042 回复卡底部操作行）：去掉描边与边框类 hover，只留图标+计数。
+     * 默认 false = 描边药丸（现状），未传值的既有调用方零 diff。
+     */
+    borderless?: boolean
   }>(),
   {
     tone: 'neutral',
     active: false,
     compact: false,
-    disabled: false
+    disabled: false,
+    borderless: false
   }
 )
 
@@ -63,6 +69,15 @@ const path = computed(() => (builtin.value ? PATHS[builtin.value][props.active ?
 
 const chipClass = computed(() => {
   const active = props.active
+  // 无边框变体：激活态只留语义色（无底色），未激活只留文字色变化 —— 不产出任何 border-* 类。
+  if (props.borderless) {
+    if (active && props.tone === 'like') return 'text-rose'
+    if (active && props.tone === 'fav') return 'text-warn'
+    if (props.tone === 'danger') return 'text-ink-3 hover:text-bad-strong'
+    if (props.tone === 'like') return 'text-ink-3 hover:text-rose'
+    if (props.tone === 'fav') return 'text-ink-3 hover:text-warn'
+    return 'text-ink-3 hover:text-ink-2'
+  }
   if (active && props.tone === 'like') return 'bg-rose-soft text-rose border-transparent'
   if (active && props.tone === 'fav') return 'bg-warn-soft text-warn border-transparent'
   if (props.tone === 'danger') return 'text-ink-3 hover:text-bad-strong hover:bg-bad-soft hover:border-transparent'
@@ -70,14 +85,20 @@ const chipClass = computed(() => {
   if (props.tone === 'fav') return 'text-ink-3 hover:text-warn hover:border-warn/40'
   return 'text-ink-3 hover:text-ink-2 hover:border-line-strong'
 })
+
+/** 基础类：无边框变体去掉 border 与药丸内边距（图标+计数紧贴，照截图的操作行形态） */
+const baseClass = computed(() =>
+  props.borderless
+    ? 'inline-flex cursor-pointer items-center gap-1 rounded-[6px] border-0 bg-transparent px-1.5 py-1 text-xs font-medium leading-none transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50'
+    : 'inline-flex cursor-pointer items-center gap-1.5 rounded-pill border px-2.5 py-1.5 text-xs font-medium leading-none transition-all duration-150 hover:-translate-y-px disabled:pointer-events-none disabled:opacity-50'
+)
 </script>
 
 <template>
   <button
     type="button"
     :disabled="disabled"
-    class="inline-flex cursor-pointer items-center gap-1.5 rounded-pill border px-2.5 py-1.5 text-xs font-medium leading-none transition-all duration-150 hover:-translate-y-px disabled:pointer-events-none disabled:opacity-50"
-    :class="chipClass"
+    :class="[baseClass, chipClass]"
     @click="(ev: MouseEvent) => emit('click', ev)"
   >
     <!-- 内置 SVG（激活切 filled；stroke 线型 → fill 实心） -->

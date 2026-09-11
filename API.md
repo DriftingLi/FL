@@ -788,7 +788,7 @@ data: null
 | POST | `/api/forum/upload-image` | 上传论坛图片（图文分离，先传图后随发帖/回复提交 URL） |
 | GET | `/api/forum/topics` | 帖子列表（scope=all|general|chapter；category=discussion|question；`is_experience` 经验认定筛选；`featured` 精选筛选；`solved` **须同时带 category=question**；keyword 搜索；分页；`sort=latest|hot|created` `order=asc|desc`） |
 | POST | `/api/forum/topics` | 发帖（images 最多 9 张；`category` **仅 discussion\|question**——「备考经验」是管理端认定，学员传 `experience` 返回 400） |
-| GET | `/api/forum/topics/:id` | 帖子详情（含回复；`sort=latest|hot|time` `order=asc|desc`；`reward_issued` = 该帖是否已产生过任一自记奖励） |
+| GET | `/api/forum/topics/:id` | 帖子详情（含**分页**回复：`page`/`page_size`，默认 20，响应带 `page`/`pages`/`total`；`sort=latest|hot|time` `order=asc|desc`；**被采纳回复固定占首页第一条**并从排序结果剔除——首页容量 = `page_size − 1`，ADR-0042；`reward_issued` = 该帖是否已产生过任一自记奖励） |
 | PUT | `/api/forum/topics/:id` | 编辑自己的帖子（#811：仅作者本人，非本人 403；可改 title/content/images/category，空串归一 discussion，`experience` 400；问答帖不得挂章节） |
 | POST | `/api/forum/topics/:id/replies` | 回复（images 最多 3 张；支持回复楼层） |
 | DELETE | `/api/forum/topics/:id` | 删除自己的帖子 |
@@ -838,13 +838,21 @@ multipart/form-data：`file`。响应 200：data 为 `{ "url": "/static/uploads/
 
 响应 200：data 为帖子对象（同列表 topics 元素）。
 
-**GET /api/forum/topics/:id**
+**GET /api/forum/topics/:id?page=1&page_size=20&sort=latest&order=asc**
 
-响应 200：data 为帖子对象 + `replies` 数组：
+响应 200：data 为 `{ topic, replies, page, pages, total }`（`topic` 与 `replies` **平级**；ADR-0042 起回复分页读取）：
 
 ```json
-{ "code": 200, "message": "success", "data": { "id": 1, "title": "...", "content": "...", "images": [], "view_count": 10, "reply_count": 2, "last_reply_at": "...", "created_at": "...", "author": { ... }, "can_delete": true, "likes_count": 3, "liked_by_me": true, "replies": [ { "id": 1, "topic_id": 1, "parent_id": null, "parent_name": null, "content": "回复内容", "images": [], "created_at": "...", "author": { ... }, "can_delete": true } ] } }
+{ "code": 200, "message": "success", "data": { "page": 1, "pages": 2, "total": 21, "topic": { "id": 1, "title": "...", "content": "...", "images": [], "view_count": 10, "reply_count": 21, "last_reply_at": "...", "created_at": "...", "author": { ... }, "can_delete": true, "likes_count": 3, "liked_by_me": true, "accepted_reply_id": 7, "solved_at": "..." }, "replies": [ { "id": 7, "topic_id": 1, "parent_id": null, "parent_name": null, "parent_avatar_url": null, "content": "被采纳的回答（恒为首页第一条）", "images": [], "created_at": "...", "author": { ... }, "can_delete": false, "likes_count": 5, "liked_by_me": false, "is_accepted": true } ] } }
 ```
+
+**分页与置顶口径**：
+
+- 首页容量 = `page_size − 1`（该帖**有**采纳回复时），被采纳回复占其中一格且**从排序结果中剔除**，不重复出现；无采纳回复时首页容量为 `page_size`，其余页固定 `page_size`。故「第 N 页 = offset N×page_size」的朴素实现不成立。
+- 置顶**优先于**排序：`sort`/`order` 只决定置顶之外的回复顺序。切换排序维度应重置到第 1 页。
+- `total` = 该帖回复总数（含置顶条），与 `topic.reply_count` 一致。
+- 被回复人字段：`parent_name`（展示名）与 `parent_avatar_url`（头像，可空）由详情接口 join 回填，供「昵称 › 被回复人」行内形态使用；楼中楼为**扁平一层**，`parent_id` 不构成可折叠子树。
+- 分页是回复列表的**唯一读取形态**（旧的「一次性全量返回」已退役）；`page` 越界返回空 `replies` 数组。
 
 **POST /api/forum/topics/:id/replies**
 

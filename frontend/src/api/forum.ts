@@ -61,6 +61,8 @@ export interface ForumReplyItem {
   topic_id: number
   parent_id?: number | null
   parent_name?: string
+  /** 被回复人的头像（ADR-0042「昵称 › 被回复人」行内形态）；顶层回复为空 */
+  parent_avatar_url?: string
   content: string
   images?: string[]
   created_at: string
@@ -73,6 +75,16 @@ export interface ForumReplyItem {
   likes_count?: number
   liked_by_me?: boolean
   is_accepted?: boolean
+}
+
+/** 帖子详情响应（ADR-0042）：`topic` 与 `replies` 平级 + 分页信封 */
+export interface ForumTopicDetailData {
+  topic: ForumTopicItem
+  replies: ForumReplyItem[]
+  page: number
+  pages: number
+  /** 回复总数（含置顶条），与 topic.reply_count 同源 */
+  total: number
 }
 
 export interface ForumListParams {
@@ -130,11 +142,19 @@ export const forumApi = {
     return unwrappedRequest.post<ForumTopicItem>('/forum/topics', data)
   },
 
-  getTopic(id: number, sort?: 'latest' | 'hot' | 'time', order?: 'asc' | 'desc') {
-    const params: Record<string, string> = {}
+  /**
+   * 帖子详情（ADR-0042）：回复**分页读取**，`topic` 与 `replies` 平级，附带分页信封。
+   *
+   * ⚠️ 被采纳回复由**后端**保证占首页第一条并从排序结果剔除（不再是前端派生置顶），
+   * 故首页条数 = page_size（含置顶条）；翻页时页与页之间无重叠、无遗漏。
+   */
+  getTopic(id: number, sort?: 'latest' | 'hot' | 'time', order?: 'asc' | 'desc', page?: number, pageSize?: number) {
+    const params: Record<string, string | number> = {}
     if (sort) params.sort = sort
     if (order) params.order = order
-    return unwrappedRequest.get<{ topic: ForumTopicItem; replies: ForumReplyItem[] }>(`/forum/topics/${id}`, { params: Object.keys(params).length ? params : undefined })
+    if (page) params.page = page
+    if (pageSize) params.page_size = pageSize
+    return unwrappedRequest.get<ForumTopicDetailData>(`/forum/topics/${id}`, { params: Object.keys(params).length ? params : undefined })
   },
 
   replyTopic(id: number, content: string, parentReplyId?: number | null, images?: string[]) {
@@ -220,14 +240,14 @@ export const forumApi = {
     )
   },
 
-  // ===== 评论点赞（spec #268）=====
+  // ===== 回复点赞（spec #268）=====
 
-  /** 点赞评论（幂等） */
+  /** 点赞回复（幂等） */
   likeReply(id: number) {
     return unwrappedRequest.post<{ likes_count: number; liked: boolean }>(`/forum/replies/${id}/like`)
   },
 
-  /** 取消点赞评论（幂等） */
+  /** 取消点赞回复（幂等） */
   unlikeReply(id: number) {
     return unwrappedRequest.delete<{ likes_count: number; liked: boolean }>(`/forum/replies/${id}/like`)
   },
@@ -299,6 +319,8 @@ export interface AdminForumReply {
   topic_id: number
   parent_id?: number | null
   parent_name?: string
+  /** 被回复人的头像（与学员端同一 DTO）；管理端面板紧凑，只展示名字 */
+  parent_avatar_url?: string
   content: string
   images?: string[]
   created_at: string
@@ -307,6 +329,15 @@ export interface AdminForumReply {
     username: string
     avatar_url: string
   }
+}
+
+/** 管理端帖子详情响应（ADR-0042：`topic` 与 `replies` 平级 + 分页信封） */
+export interface AdminForumTopicDetailData {
+  topic?: AdminForumTopic
+  replies?: AdminForumReply[]
+  page?: number
+  pages?: number
+  total?: number
 }
 
 export interface AdminForumListParams {
@@ -329,8 +360,19 @@ export const adminForumApi = {
     return unwrappedRequest.get<{ topics: AdminForumTopic[]; total: number }>('/admin/forum/topics', { params })
   },
 
-  getTopic(id: number) {
-    return unwrappedRequest.get<{ topic?: AdminForumTopic; replies?: AdminForumReply[] }>(`/admin/forum/topics/${id}`)
+  /**
+   * 管理端帖子详情（ADR-0042：回复同样分页读取）。
+   *
+   * ⚠️ 详情接口改为分页后，管理端展开面板若只取首页就会**静默少掉**后面的回复——
+   * 治理面看不到全部回复等于看不见违规内容，故调用方必须接「加载更多」。
+   */
+  getTopic(id: number, page?: number, pageSize?: number) {
+    const params: Record<string, number> = {}
+    if (page) params.page = page
+    if (pageSize) params.page_size = pageSize
+    return unwrappedRequest.get<AdminForumTopicDetailData>(`/admin/forum/topics/${id}`, {
+      params: Object.keys(params).length ? params : undefined
+    })
   },
 
   deleteTopic(id: number) {

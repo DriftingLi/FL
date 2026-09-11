@@ -25,15 +25,10 @@
           </el-avatar>
           <div class="topic-author-info flex flex-col gap-0.5">
             <span class="author-name text-sm font-semibold text-ink">{{ displayName(topic.author) }}</span>
-            <span class="topic-time text-xs text-ink-3">{{ formatLocaleDateTime(topic.created_at, '') }}</span>
+            <span class="topic-time text-xs text-ink-3">{{ formatRelativeTime(topic.created_at) }}</span>
           </div>
-          <div class="topic-actions ml-auto flex items-center gap-1">
-            <!-- #511：UiActionChip 统一互动/治理操作（图标内置、激活态填充） -->
-            <UiActionChip icon="like" :label="topic?.liked_by_me ? '已赞' : '点赞'" :count="topic.likes_count" tone="like" :active="!!topic?.liked_by_me" @click="toggleTopicLike" />
-            <UiActionChip icon="fav" :label="topicFavorited ? '已收藏' : '收藏'" tone="fav" :active="topicFavorited" @click="toggleFavorite" />
-            <UiActionChip icon="report" label="举报" tone="neutral" @click="openReport('topic')" />
-            <UiActionChip v-if="topic.can_delete" icon="delete" label="删除" tone="danger" @click="removeTopic" />
-          </div>
+          <!-- 治理动作（举报 / 删除）收进 ⋯；互动动作（点赞 / 收藏）下沉到正文下方的操作行 -->
+          <UiMoreMenu class="ml-auto" :items="topicMoreItems" @select="onTopicMoreSelect" />
         </div>
         <div class="topic-body mt-4">
           <div class="topic-title-row mb-3 flex flex-wrap items-center gap-2">
@@ -51,15 +46,33 @@
           </div>
           <div class="topic-content whitespace-pre-wrap break-words text-[15px] leading-[1.8] text-ink">{{ topic.content }}</div>
           <ForumImageGallery :images="topic.images" />
-          <div class="topic-stats mt-4 flex items-center gap-1.5 text-[13px] text-ink-3">
-            <el-icon><View /></el-icon>
-            {{ topic.view_count }} 次浏览
-            <span class="like-stat ml-3 inline-flex items-center gap-0.5 text-bad">
-              <svg class="size-3.5" viewBox="0 0 24 24" :fill="topic.liked_by_me ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-              {{ topic.likes_count || 0 }} 点赞
+          <!-- 帖子操作行：左统计、右互动。浏览/回复数取自列（与详情分页 total 同源），点赞数由操作 chip 承载，不重复渲染。 -->
+          <div class="topic-stats mt-4 flex flex-wrap items-center gap-3 text-[13px] text-ink-3">
+            <span class="inline-flex items-center gap-1">
+              <el-icon><View /></el-icon>{{ topic.view_count }} 次浏览
             </span>
-            <el-icon class="reply-icon ml-3"><ChatDotRound /></el-icon>
-            {{ topic.reply_count }} 条回复
+            <span class="inline-flex items-center gap-1">
+              <el-icon><ChatDotRound /></el-icon>{{ topic.reply_count }} 条回复
+            </span>
+            <div class="topic-actions ml-auto flex items-center gap-3">
+              <UiActionChip
+                icon="like"
+                :label="topic.liked_by_me ? '已赞' : '点赞'"
+                :count="topic.likes_count"
+                tone="like"
+                borderless
+                :active="!!topic.liked_by_me"
+                @click="toggleTopicLike"
+              />
+              <UiActionChip
+                icon="fav"
+                :label="topicFavorited ? '已收藏' : '收藏'"
+                tone="fav"
+                borderless
+                :active="topicFavorited"
+                @click="toggleFavorite"
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -79,49 +92,37 @@
             <UiButton size="small" :icon="replyOrder==='asc'? ArrowUp : ArrowDown" @click="toggleReplyOrder">{{ replyOrder==='asc' ? '正序' : '逆序' }}</UiButton>
           </div>
         </div>
-        <template v-if="sortedReplies.length > 0">
-          <div
-            v-for="(reply, i) in sortedReplies"
+        <template v-if="replies.length > 0">
+          <!-- 渲染顺序即后端顺序：被采纳回复由后端保证占首页第一条（ADR-0042），
+               前端不再派生置顶（旧 sortedReplies 已删）——分页后前端只拿得到一页，
+               派生置顶必然失效。 -->
+          <ForumReplyCard
+            v-for="(reply, i) in replies"
             :key="reply.id"
             :id="`reply-${reply.id}`"
-            class="reply-item stagger-in flex gap-3 border-b border-line py-4 last:border-b-0"
-            :class="
-              reply.is_accepted
-                ? 'is-accepted relative my-1.5 -mx-2 rounded-[8px] bg-ok-soft p-3 pl-4 before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:rounded-full before:bg-ok'
-                : ''
-            "
+            class="stagger-in border-b border-line last:border-b-0"
             :style="staggerStyle(i)"
-          >
-            <el-avatar :size="38" :src="reply.author.avatar_url || undefined">
-              {{ authorLetter(reply.author) }}
-            </el-avatar>
-            <div class="reply-main min-w-0 flex-1">
-              <div class="reply-meta mb-1.5 flex flex-wrap items-center gap-2">
-                <span class="author-name text-sm font-semibold text-ink">{{ displayName(reply.author) }}</span>
-                <UiTag v-if="topic && reply.author.user_id === topic.author.user_id" tone="neutral" effect="plain" class="ml-1.5">楼主</UiTag>
-                <UiTag v-if="reply.is_accepted" tone="success" effect="dark" class="ml-1.5">✓ 已采纳</UiTag>
-                <span class="reply-time text-xs text-ink-3">{{ formatLocaleDateTime(reply.created_at, '') }}</span>
-                <UiButton variant="primary" class="reply-btn" size="small" @click="startReplyTo(reply)">
-                  回复
-                </UiButton>
-                <!-- #511：回复互动/治理统一药丸形态 -->
-                <UiActionChip icon="like" :label="reply.liked_by_me ? '已赞' : '点赞'" :count="reply.likes_count" tone="like" compact :active="!!reply.liked_by_me" @click="toggleReplyLike(reply)" />
-                <UiActionChip icon="report" label="举报" tone="neutral" compact @click="openReport('reply', reply.id)" />
-                <UiActionChip v-if="reply.can_delete" icon="delete" label="删除" tone="danger" compact class="ml-auto" @click="removeReply(reply.id)" />
-              </div>
-              <div v-if="reply.parent_id && reply.parent_name" class="reply-quote mb-1 inline-block rounded-[6px] bg-canvas px-2 py-0.5 text-xs text-ink-3">
-                回复 @{{ reply.parent_name }}
-              </div>
-              <div class="reply-content whitespace-pre-wrap break-words text-sm leading-[1.7] text-ink">{{ reply.content }}</div>
-              <ForumImageGallery :images="reply.images" />
-              <div v-if="topic && topic.category === 'question' && isTopicOwner && !reply.is_accepted && !isOwnReply(reply)" class="reply-accept-row mt-2">
-                <UiButton variant="success" plain size="small" @click="handleAccept(reply.id)">采纳此回答</UiButton>
-              </div>
-              <div v-else-if="topic && topic.category === 'question' && isTopicOwner && reply.is_accepted" class="reply-accept-row mt-2">
-                <UiButton size="small" @click="handleCancelAccept">取消采纳</UiButton>
-              </div>
-            </div>
+            :reply="reply"
+            :topic-author-id="topic.author.user_id"
+            :is-own="isOwnReply(reply)"
+            :can-accept="canAcceptReply(reply)"
+            :can-cancel-accept="canCancelAcceptReply(reply)"
+            @reply-to="startReplyTo"
+            @like="toggleReplyLike"
+            @report="(r) => openReport('reply', r.id)"
+            @delete="removeReply"
+            @accept="handleAccept"
+            @cancel-accept="handleCancelAccept"
+          />
+          <!-- 加载更多（ADR-0042）：追加下一页而非替换，保持阅读连续；到底显示结束态。
+               深链 #reply-N 只由采纳通知生成（指向被采纳回复），而后端恒把被采纳回复放首页第一条，
+               所以这里不需要「循环加载直到命中」的兜底。 -->
+          <div v-if="hasMore" class="mt-3 flex justify-center">
+            <UiButton :loading="loadingMore" @click="loadMore">
+              加载更多回复（剩余 {{ remainingReplies }} 条）
+            </UiButton>
           </div>
+          <p v-else class="mt-3 mb-0 text-center text-xs text-ink-3">没有更多回复了</p>
         </template>
         <UiEmptyState v-else description="暂无回复，来说两句吧" />
       </div>
@@ -169,7 +170,8 @@ import { forumApi, type ForumTopicItem, type ForumReplyItem } from '@/api/forum'
 import { favoriteApi } from '@/api/favorite'
 import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
 import ForumComposer from '@/components/student/ForumComposer.vue'
-import { formatLocaleDateTime } from '@/utils/format'
+import ForumReplyCard from '@/components/student/ForumReplyCard.vue'
+import { formatRelativeTime } from '@/utils/format'
 import { displayName, authorLetter } from '@/utils/forumDisplay'
 import { useAuthStore } from '@/stores/auth'
 import { useAsyncPage } from '@/composables/useAsyncPage'
@@ -185,7 +187,9 @@ import UiDialog from '@/components/ui/UiDialog.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiActionChip from '@/components/ui/UiActionChip.vue'
+import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
 import { useConfirm } from '@/composables/useConfirm'
+import { useForumReport } from '@/composables/useForumReport'
 
 const route = useRoute()
 const router = useRouter()
@@ -226,15 +230,35 @@ function isOwnReply(reply: ForumReplyItem) {
   return reply.author.user_id === authStore.userInfo?.user_id
 }
 
-const sortedReplies = computed(() => {
-  if (!replies.value.length) return []
-  const idx = replies.value.findIndex((r) => r.is_accepted)
-  if (idx <= 0) return replies.value
-  const copy = [...replies.value]
-  const [acc] = copy.splice(idx, 1)
-  copy.unshift(acc)
-  return copy
-})
+// ===== 回复分页（ADR-0042）=====
+// 回复列表的唯一读取形态是分页；被采纳回复由**后端**保证占首页第一条，
+// 前端不再派生置顶（旧 sortedReplies 已删）——分页后前端只拿得到一页，派生必然失效。
+const REPLY_PAGE_SIZE = 20
+const replyPage = ref(1)
+const hasMore = ref(false)
+const loadingMore = ref(false)
+// 分页总数以**响应里的 total** 为准（与 pages 同一来源），不读 topic.reply_count ——
+// 后者是列表页消费的反范式列，两者若漂移会让「剩余 N 条」与翻页行为自相矛盾。
+const replyTotal = ref(0)
+
+/** 楼主视角：这条可被采纳（问答帖 + 非本人作答 + 尚未采纳） */
+function canAcceptReply(reply: ForumReplyItem) {
+  return (
+    !!topic.value &&
+    topic.value.category === 'question' &&
+    isTopicOwner.value &&
+    !reply.is_accepted &&
+    !isOwnReply(reply)
+  )
+}
+
+/** 楼主视角：这条已被采纳，可取消（取消采纳不改类别，逃生口在楼主手上） */
+function canCancelAcceptReply(reply: ForumReplyItem) {
+  return !!topic.value && topic.value.category === 'question' && isTopicOwner.value && !!reply.is_accepted
+}
+
+/** 尚未加载的回复条数（加载更多按钮上的剩余量）；与 pages/total 同源 */
+const remainingReplies = computed(() => Math.max(replyTotal.value - replies.value.length, 0))
 
 function scrollToHash() {
   const hash = route.hash || window.location.hash
@@ -248,12 +272,58 @@ function scrollToHash() {
 
 async function loadDetailOnce() {
   const topicId = Number(route.params.topicId)
-  const res = await forumApi.getTopic(topicId, replySort.value, replyOrder.value)
+  // 首次加载与「切排序 / 重试」都回到第 1 页并**替换**列表（分页语义：不是追加）
+  replyPage.value = 1
+  const res = await forumApi.getTopic(topicId, replySort.value, replyOrder.value, 1, REPLY_PAGE_SIZE)
   topic.value = res.topic
   replies.value = res.replies || []
+  replyTotal.value = res.total ?? replies.value.length
+  hasMore.value = (res.page ?? 1) < (res.pages ?? 1)
   // 浏览记录走服务端（#701：详情访问即由后端 GetTopic 落浏览去重行），不再写本地 localStorage
   await nextTick()
   scrollToHash()
+}
+
+/**
+ * 重载「用户当前已加载的页数」窗口（删回复后用）。
+ * 逐页取回并覆盖 replies，页数不变 → 阅读位置不缩回第一页。
+ */
+async function reloadLoadedPages() {
+  const pagesLoaded = Math.max(replyPage.value, 1)
+  const topicId = Number(route.params.topicId)
+  const collected: ForumReplyItem[] = []
+  for (let p = 1; p <= pagesLoaded; p++) {
+    const res = await forumApi.getTopic(topicId, replySort.value, replyOrder.value, p, REPLY_PAGE_SIZE)
+    collected.push(...(res.replies || []))
+    topic.value = res.topic
+    replyTotal.value = res.total ?? collected.length
+    const lastPage = res.pages ?? p
+    hasMore.value = (res.page ?? p) < lastPage
+    // 删到最后一页空了：不必再往上取
+    if (!hasMore.value) break
+  }
+  replies.value = collected
+}
+
+/** 加载更多：**追加**下一页（不替换），保持阅读连续；到底后入口消失。 */
+async function loadMore() {
+  if (loadingMore.value || !hasMore.value) return
+  loadingMore.value = true
+  try {
+    const next = replyPage.value + 1
+    const res = await forumApi.getTopic(
+      Number(route.params.topicId), replySort.value, replyOrder.value, next, REPLY_PAGE_SIZE
+    )
+    replies.value = [...replies.value, ...(res.replies || [])]
+    replyPage.value = res.page ?? next
+    replyTotal.value = res.total ?? replyTotal.value
+    hasMore.value = replyPage.value < (res.pages ?? replyPage.value)
+  } catch (e) {
+    console.error('加载更多回复失败:', e)
+    /* 错误已由拦截器提示 */
+  } finally {
+    loadingMore.value = false
+  }
 }
 
 async function handleAccept(replyId: number) {
@@ -272,13 +342,10 @@ async function handleAccept(replyId: number) {
   try {
     const updated = await forumApi.acceptReply(topic.value.id, replyId)
     ElMessage.success('已采纳')
-    if (updated) {
-      topic.value = { ...topic.value, ...updated } as ForumTopicItem
-      const newAccepted = (updated as ForumTopicItem).accepted_reply_id
-      replies.value = replies.value.map((r) => ({ ...r, is_accepted: newAccepted != null && r.id === newAccepted }))
-    } else {
-      await loadDetail()
-    }
+    if (updated) topic.value = { ...topic.value, ...updated } as ForumTopicItem
+    // 必须重载而不是本地翻 is_accepted：置顶是**后端事实**（ADR-0042），
+    // 本地翻标记会让「已采纳」停在原位，与「恒占首页第一条」自相矛盾。
+    await loadDetail()
   } catch (e) {
     console.error('采纳失败:', e)
   }
@@ -294,12 +361,9 @@ async function handleCancelAccept() {
   try {
     const updated = await forumApi.cancelAccept(topic.value.id)
     ElMessage.success('已取消采纳')
-    if (updated) {
-      topic.value = { ...topic.value, ...updated } as ForumTopicItem
-      replies.value = replies.value.map((r) => ({ ...r, is_accepted: false }))
-    } else {
-      await loadDetail()
-    }
+    if (updated) topic.value = { ...topic.value, ...updated } as ForumTopicItem
+    // 同 handleAccept：取消后该条回到自然排序位置，只能由后端重排
+    await loadDetail()
   } catch (e) {
     console.error('取消采纳失败:', e)
   }
@@ -361,11 +425,35 @@ async function removeReply(replyId: number) {
   try {
     await forumApi.deleteReply(replyId)
     ElMessage.success('已删除')
-    loadDetail()
   } catch (e) {
     console.error('删除失败:', e)
     /* 错误已由拦截器提示 */
+    return
   }
+  // 删除已成功，下面的刷新失败**不能**报成「删除失败」——单独兜底并置可重试的错误态
+  // （否则列表会停在「已删项还在」的状态且用户看不到任何出口）。
+  try {
+    // 删父回复会**级联删掉整棵楼中楼**（后端按子树大小减计数），本地 filter 一条是错的；
+    // 但也不该 loadDetail() 缩回第一页——按已加载的页数重载，保留阅读位置。
+    await reloadLoadedPages()
+  } catch (e) {
+    console.error('删除后刷新回复列表失败:', e)
+    loadError.value = true
+  }
+}
+
+// ===== 帖子卡的 ⋯ 菜单（互动下沉后，治理动作的唯一入口）=====
+const topicMoreItems = computed<UiMoreMenuItem[]>(() => {
+  const items: UiMoreMenuItem[] = []
+  // 与回复卡同规则：自己的内容不显示「举报」（后端无自举报拦截，这是前端入口收敛）
+  if (!isTopicOwner.value) items.push({ key: 'report', label: '举报' })
+  if (topic.value?.can_delete) items.push({ key: 'delete', label: '删除', tone: 'danger' })
+  return items
+})
+
+function onTopicMoreSelect(key: string) {
+  if (key === 'report') openReport('topic', Number(route.params.topicId))
+  else if (key === 'delete') removeTopic()
 }
 
 function goBack() {
@@ -427,42 +515,14 @@ async function toggleReplyLike(reply: ForumReplyItem) {
   await toggleReplyLikeOnce(reply)
 }
 
-// 举报（帖子/回复共用对话框）
-const reportVisible = ref(false)
-const reportReason = ref('')
-const reportSubmitting = ref(false)
-const reportTarget = ref<{ kind: 'topic' | 'reply'; id: number } | null>(null)
-
-function openReport(kind: 'topic' | 'reply', replyId?: number) {
-  reportTarget.value = { kind, id: kind === 'topic' ? Number(route.params.topicId) : replyId! }
-  reportReason.value = ''
-  reportVisible.value = true
-}
-
-async function submitReport() {
-  const reason = reportReason.value.trim()
-  if (!reportTarget.value) return
-  if (reason.length < 1 || reason.length > 500) {
-    ElMessage.warning('举报理由需为 1-500 字')
-    return
-  }
-  reportSubmitting.value = true
-  try {
-    const { kind, id } = reportTarget.value
-    if (kind === 'topic') {
-      await forumApi.reportTopic(id, reason)
-    } else {
-      await forumApi.reportReply(id, reason)
-    }
-    ElMessage.success('举报已提交，等待处理')
-    reportVisible.value = false
-  } catch (e) {
-    console.error('举报失败:', e)
-    /* 错误已由拦截器提示 */
-  } finally {
-    reportSubmitting.value = false
-  }
-}
+// 举报（帖子/回复共用对话框）：状态机与提交口径收在 composable 一处，与章节讨论共用。
+const {
+  visible: reportVisible,
+  reason: reportReason,
+  submitting: reportSubmitting,
+  open: openReport,
+  submit: submitReport
+} = useForumReport()
 
 watch(
   () => route.hash,
