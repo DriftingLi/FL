@@ -133,3 +133,4 @@ export function formatCountCompact(n : number) : string {
 export function formatCountFull(n : number) : string {
 	return n.toLocaleString()
 }
+// pr-evidence 探针改动（本分支仅用于验证验收门红色路径，不合并）
