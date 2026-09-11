@@ -473,7 +473,7 @@ func (s *StudentService) GetStudentCourses(studentID int) (*StudentCoursesDTO, e
 		result.Courses = append(result.Courses, dto)
 	}
 
-	// 最后学习时间倒序（formatISO 为 UTC 定长格式，字典序即时间序；无值排后）。
+	// 最后学习时间倒序（formatISO 为**同时区**定长格式，偏移恒定故字典序即时间序；无值排后）。
 	sort.SliceStable(result.Courses, func(i, j int) bool {
 		return result.Courses[i].LastStudiedAt > result.Courses[j].LastStudiedAt
 	})
