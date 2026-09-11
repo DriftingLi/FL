@@ -83,7 +83,7 @@
     import { useReport } from '../../composables/useReport'
     import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
-    import { formatDateTimeStr } from '../../utils/forumDetailDisplay'
+    import { formatDateTimeStr } from '../../utils/format'
     import type { ForumReplyDisplay } from '../../utils/forumDetailDisplay'
     import { resolveFileUrl, getAuthorInitial, getAvatarColor } from '../../utils/forumDisplay'
     import type { ForumReply } from '../../types/index'

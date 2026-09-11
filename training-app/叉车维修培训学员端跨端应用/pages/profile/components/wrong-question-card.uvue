@@ -62,6 +62,7 @@
     import { ref, computed } from 'vue'
     import type { QuestionOption } from '../../../types/index'
     import { getTypeName, isMultiChoice } from '../../../utils/wrongQuestionDisplay'
+    import { formatDateStr } from '../../../utils/format'
 
     /** 错题卡片：展示 + 重做选项选中态（选中态属展示时态随卡片自持；提交结果由页面下发） */
     type RedoResult = {
@@ -100,11 +101,6 @@
 
     function resetSelection() : void {
         selectedKeys.value = [] as string[]
-    }
-
-    function formatDateStr(dateStr : string) : string {
-        if (dateStr == null || dateStr.length < 10) return dateStr
-        return dateStr.substring(0, 10)
     }
 
     /** 是否已提交重做（模板调用） */
