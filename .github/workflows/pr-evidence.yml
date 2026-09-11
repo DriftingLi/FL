@@ -1,0 +1,175 @@
+name: PR - 验收证据校验
+
+# 本 workflow 是仓库「PR 事件不触发任何 CI/CD」的**唯一豁免**（依据 docs/adr/0008-移动端验收门与证据.md）：
+# 它只读 PR 正文、改动文件清单与 review 状态，**不 checkout、不构建、不部署、不执行 PR 里的任何代码**，
+# 因此 PR 事件在这里不产生构建/部署副作用。若要新增其他 PR 触发 workflow，先改 ADR-0008。
+#
+# 它只校验「证据段的结构与产物字段是否存在」，**不校验真伪** —— 真伪由维护者读日志/截图判定（ADR-0008 明确不做）。
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+concurrency:
+  group: pr-evidence-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  pr-evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            // ==== PR-EVIDENCE-VALIDATOR-START ====
+            // 纯函数：输入 files/body/author/reviews，输出 { ok, errors, notes, runtime, needs4b }
+            // 被 .github/scripts/pr-evidence-check.test.mjs 以抽取式单测覆盖（改这里就要过那个测试）。
+            function validatePrEvidence({ files, body, author, reviews }) {
+              const RUNTIME_JSON = ['manifest.json', 'pages.json', 'platformConfig.json'];
+              const isRuntimeFile = (p) => {
+                if (p.endsWith('.uvue') || p.endsWith('.uts')) return true;
+                if (!p.startsWith('training-app/')) return false;
+                return RUNTIME_JSON.includes(p.split('/').pop());
+              };
+
+              // ④b 触发条件（ADR-0008）：新增 async function 或新增 composable
+              const addsAsync = files.some((f) =>
+                (f.patch || '').split('\n').some((l) => /^\+\s*(export\s+)?async\s+function\b/.test(l)),
+              );
+              const addsComposable = files.some(
+                (f) => f.status === 'added' && /(^|\/)composables\/[^/]+\.uts$/.test(f.filename),
+              );
+              const needs4b = addsAsync || addsComposable;
+
+              const runtime = files.filter((f) => isRuntimeFile(f.filename)).map((f) => f.filename);
+              const errors = [];
+              const notes = [];
+
+              if (runtime.length === 0) {
+                notes.push(`未命中运行时面（改动 ${files.length} 个文件），按 ADR-0008 免人工门与 ④a 编译门。`);
+                return { ok: true, errors, notes, runtime, needs4b };
+              }
+
+              const clean = String(body || '').replace(/<!--[\s\S]*?-->/g, '');
+              const head = clean.match(/^##\s*验收证据\s*$/m);
+              if (!head) {
+                errors.push('缺 `## 验收证据` 段（段名固定，见 .github/PULL_REQUEST_TEMPLATE.md）。');
+                return { ok: false, errors, notes, runtime, needs4b };
+              }
+              const rest = clean.slice(head.index + head[0].length);
+              const next = rest.search(/^##\s/m);
+              const section = next === -1 ? rest : rest.slice(0, next);
+
+              // 例外通道：显式风险接受 + 非作者 approve
+              const riskDeclared = /已接受未验证风险/.test(clean) && /事后验证计划/.test(clean);
+              const approvedByOther = (reviews || []).some(
+                (r) => r.state === 'APPROVED' && r.user && r.user.login !== author,
+              );
+
+              const GATES = [
+                { key: '①', label: 'Android 真机逐页截图对比', fields: ['执行人', '日期', '复测对象', '结论'], artifact: 'screenshot' },
+                { key: '②', label: '微信开发者工具无报错', fields: ['执行人', '日期', '复测对象', '结论'], artifact: 'screenshot' },
+                { key: '③', label: 'npm run test:unit 全绿', fields: ['结论'], artifact: 'ci-run' },
+                { key: '④a', label: 'dev 全量编译', fields: ['执行人', '日期', '复测对象', '结论'], artifact: 'build-log' },
+                { key: '④b', label: 'release 云打包', fields: ['执行人', '日期', '复测对象', '结论'], artifact: 'any', conditional: true },
+              ];
+              const PLACEHOLDER = /^(|[-—–~]+|待人工|待补|待填|待确认|⏳|tbd|todo|n\/?a|无|暂无)$/i;
+              const ARTIFACT = {
+                screenshot: /!\[[^\]]*\]\(|https?:\/\/|docs\/verification\//,
+                'ci-run': /actions\/runs\/\d+/,
+                'build-log': /build\.log/,
+                any: /\S/,
+              };
+
+              const lines = section.split('\n').filter((l) => /^\s*[-*]\s/.test(l));
+              for (const gate of GATES) {
+                if (gate.conditional && !needs4b) continue;
+                const line = lines.find((l) => l.includes(gate.key));
+                const where = `${gate.key} ${gate.label}`;
+                if (!line) {
+                  errors.push(`${where}：缺该行（每门一行，格式见模板）。`);
+                  continue;
+                }
+                // 解析「字段：值」，字段之间用 · 或 | 分隔
+                const marks = [...line.matchAll(/(执行人|日期|复测对象|结论)[：:]\s*/g)];
+                const values = {};
+                marks.forEach((m, i) => {
+                  const start = m.index + m[0].length;
+                  const end = i + 1 < marks.length ? marks[i + 1].index : line.length;
+                  values[m[1]] = line.slice(start, end).replace(/[·|]\s*$/, '').trim();
+                });
+                for (const field of gate.fields) {
+                  const v = values[field];
+                  if (v === undefined) errors.push(`${where}：缺字段「${field}」。`);
+                  else if (PLACEHOLDER.test(v)) errors.push(`${where}：「${field}」为空或仍是占位（「待人工」「⏳」不算证据）。`);
+                }
+                if (gate.fields.includes('日期') && values['日期'] && !/\d{4}-\d{2}-\d{2}/.test(values['日期'])) {
+                  errors.push(`${where}：「日期」须为 YYYY-MM-DD。`);
+                }
+                if (gate.fields.includes('执行人') && values['执行人']) {
+                  const handles = values['执行人'].match(/@[A-Za-z0-9_-]+/g) || [];
+                  if (handles.length === 0) errors.push(`${where}：「执行人」须写 GitHub handle（如 @someone）。`);
+                  else if (handles.every((h) => h.slice(1) === author)) {
+                    errors.push(`${where}：「执行人」不得是 PR 作者/agent 账号（${handles.join(' ')}）——人工门只能人签。`);
+                  }
+                }
+                if (values['结论'] && !ARTIFACT[gate.artifact].test(values['结论'])) {
+                  const hint = {
+                    screenshot: '须引用截图或其链接（或 docs/verification/ 路径）',
+                    'ci-run': '须贴 CI run 链接（…/actions/runs/<id>）',
+                    'build-log': '须引用 .ci-verify/build.log',
+                    any: '须引用产物',
+                  }[gate.artifact];
+                  errors.push(`${where}：「结论」${hint}。`);
+                }
+              }
+
+              if (errors.length > 0 && riskDeclared) {
+                if (approvedByOther) {
+                  return {
+                    ok: true,
+                    errors: [],
+                    notes: [
+                      `⚠️ 本 PR 走的是「已接受未验证风险」例外通道（已获非作者 approve）。缺项：${errors.join('；')}`,
+                    ],
+                    runtime,
+                    needs4b,
+                  };
+                }
+                errors.push('声明了「已接受未验证风险」，但还没有非作者 approve —— 例外通道需要人的显式签收。');
+              }
+              if (errors.length === 0) notes.push('四门证据结构完整（pr-evidence 只校结构，真伪由维护者判定）。');
+              return { ok: errors.length === 0, errors, notes, runtime, needs4b };
+            }
+            // ==== PR-EVIDENCE-VALIDATOR-END ====
+
+            const pr = context.payload.pull_request;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner, repo, pull_number: pr.number, per_page: 100,
+            });
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
+              owner, repo, pull_number: pr.number, per_page: 100,
+            });
+            const result = validatePrEvidence({
+              files, body: pr.body || '', author: pr.user.login, reviews,
+            });
+
+            await core.summary
+              .addHeading('验收证据校验（ADR-0008）', 3)
+              .addRaw(`命中运行时面的文件：${result.runtime.length} 个`).addEOL()
+              .addList(result.runtime.length ? result.runtime : ['（无）'])
+              .addRaw(`④b release 云打包门：${result.needs4b ? '触发（收口 PR / 新增 async / 新增 composable）' : '未触发'}`).addEOL()
+              .addList([...result.notes, ...result.errors.map((e) => `❌ ${e}`)])
+              .write();
+
+            if (!result.ok) {
+              core.setFailed(`验收证据不完整：\n- ${result.errors.join('\n- ')}`);
+            } else {
+              core.info(`pr-evidence 通过：${result.notes.join(' / ')}`);
+            }
