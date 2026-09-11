@@ -61,6 +61,8 @@ export interface ForumReplyItem {
   topic_id: number
   parent_id?: number | null
   parent_name?: string
+  /** 被回复人的头像（ADR-0042「昵称 › 被回复人」行内形态）；顶层回复为空 */
+  parent_avatar_url?: string
   content: string
   images?: string[]
   created_at: string
@@ -73,6 +75,16 @@ export interface ForumReplyItem {
   likes_count?: number
   liked_by_me?: boolean
   is_accepted?: boolean
+}
+
+/** 帖子详情响应（ADR-0042）：`topic` 与 `replies` 平级 + 分页信封 */
+export interface ForumTopicDetailData {
+  topic: ForumTopicItem
+  replies: ForumReplyItem[]
+  page: number
+  pages: number
+  /** 回复总数（含置顶条），与 topic.reply_count 同源 */
+  total: number
 }
 
 export interface ForumListParams {
@@ -130,11 +142,19 @@ export const forumApi = {
     return unwrappedRequest.post<ForumTopicItem>('/forum/topics', data)
   },
 
-  getTopic(id: number, sort?: 'latest' | 'hot' | 'time', order?: 'asc' | 'desc') {
-    const params: Record<string, string> = {}
+  /**
+   * 帖子详情（ADR-0042）：回复**分页读取**，`topic` 与 `replies` 平级，附带分页信封。
+   *
+   * ⚠️ 被采纳回复由**后端**保证占首页第一条并从排序结果剔除（不再是前端派生置顶），
+   * 故首页条数 = page_size（含置顶条）；翻页时页与页之间无重叠、无遗漏。
+   */
+  getTopic(id: number, sort?: 'latest' | 'hot' | 'time', order?: 'asc' | 'desc', page?: number, pageSize?: number) {
+    const params: Record<string, string | number> = {}
     if (sort) params.sort = sort
     if (order) params.order = order
-    return unwrappedRequest.get<{ topic: ForumTopicItem; replies: ForumReplyItem[] }>(`/forum/topics/${id}`, { params: Object.keys(params).length ? params : undefined })
+    if (page) params.page = page
+    if (pageSize) params.page_size = pageSize
+    return unwrappedRequest.get<ForumTopicDetailData>(`/forum/topics/${id}`, { params: Object.keys(params).length ? params : undefined })
   },
 
   replyTopic(id: number, content: string, parentReplyId?: number | null, images?: string[]) {
