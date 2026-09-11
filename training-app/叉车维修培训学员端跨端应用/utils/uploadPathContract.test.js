@@ -64,10 +64,16 @@ const shortHash = (v) => {
   return h.toString(16);
 };
 
+const trimTrailingSlash = (p) => {
+  let out = p;
+  while (out.endsWith('/')) out = out.substring(0, out.length - 1);
+  return out;
+};
+
 const buildTempFilePath = (userDataPath, sourcePath, seq) => {
   const safe = sanitizeBaseName(extractBaseName(sourcePath));
   const h = shortHash(sourcePath + '#' + seq.toString());
-  return userDataPath + '/' + UPLOAD_TMP_DIR + '/u' + h + '_' + safe;
+  return trimTrailingSlash(userDataPath) + '/' + UPLOAD_TMP_DIR + '/u' + h + '_' + safe;
 };
 
 /** 真机日志里那条真实 URI */
@@ -143,6 +149,16 @@ describe('#816 中转文件名推导', () => {
     const b = buildTempFilePath('/u', REAL_URI, 2);
     expect(a).not.toBe(b);
   });
+
+  it('BASE 带尾斜杠不拼出双斜杠（真机 uni.env.USER_DATA_PATH = unifile://usr/ 实测）', () => {
+    const withSlash = buildTempFilePath('unifile://usr/', REAL_URI, 1);
+    const withoutSlash = buildTempFilePath('unifile://usr', REAL_URI, 1);
+    expect(withSlash).toBe(withoutSlash);
+    expect(withSlash).toContain('unifile://usr/upload-tmp/');
+    expect(withSlash.includes('usr//')).toBe(false);
+    // 连续多根尾斜杠同样收敛
+    expect(buildTempFilePath('unifile://usr///', REAL_URI, 1)).toBe(withoutSlash);
+  });
 });
 
 describe('#816 上传层接入（api/request.uts）', () => {
@@ -187,6 +203,10 @@ describe('#816 上传层接入（api/request.uts）', () => {
     expect(src).toContain('uni.env.USER_DATA_PATH');
   });
 
+  it('unifile:// 先转真实绝对路径再传 uni.uploadFile（原生层不认该 scheme，真机 602001）', () => {
+    expect(src).toContain('UTSAndroid.convert2AbsFullPath(uni.env.USER_DATA_PATH)');
+  });
+
   it('中转文件传完即删，且成功/失败/401 三条路径都走到清理', () => {
     expect(src).toMatch(/function removeTempFile\(path : string\) : void/);
     expect(src).toContain('unlink(');
@@ -225,6 +245,7 @@ describe('#816 复刻函数与 UTS 实现同步（防两处漂移）', () => {
   });
 
   it('目标路径拼接形态一致', () => {
-    expect(uts).toContain("return userDataPath + '/' + UPLOAD_TMP_DIR + '/u' + h + '_' + safe");
+    expect(uts).toContain("return trimTrailingSlash(userDataPath) + '/' + UPLOAD_TMP_DIR + '/u' + h + '_' + safe");
+    expect(uts).toContain('function trimTrailingSlash(p : string) : string');
   });
 });

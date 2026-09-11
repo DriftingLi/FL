@@ -94,9 +94,20 @@ export function shortHash(v : string) : string {
 /**
  * 拼中转文件绝对路径：<userDataPath>/upload-tmp/u<hash>_<safeName>
  * @note 保留扩展名，后端白名单校验依赖它
+ * @note userDataPath 可能是 `unifile://usr/` 形态（HBuilderX 4.71+ 的 uni.env.USER_DATA_PATH
+ *       自带尾斜杠），先掐尾斜杠再拼，避免拼出 `unifile://usr//upload-tmp/...` 双斜杠
  */
 export function buildTempFilePath(userDataPath : string, sourcePath : string, seq : number) : string {
     const safe = sanitizeBaseName(extractBaseName(sourcePath))
     const h = shortHash(sourcePath + '#' + seq.toString())
-    return userDataPath + '/' + UPLOAD_TMP_DIR + '/u' + h + '_' + safe
+    return trimTrailingSlash(userDataPath) + '/' + UPLOAD_TMP_DIR + '/u' + h + '_' + safe
+}
+
+/** 掐掉路径尾部斜杠（可能连续多根）；空串原样返回 */
+function trimTrailingSlash(p : string) : string {
+    let out = p
+    while (out.endsWith('/')) {
+        out = out.substring(0, out.length - 1)
+    }
+    return out
 }

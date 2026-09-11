@@ -414,7 +414,11 @@ export function patch(url : string, data : any | null = null, options : RequestO
 async function prepareUploadPath(path : string) : Promise<string> {
     if (!isContentUri(path)) return path
     // #ifdef APP-ANDROID
-    const destPath = buildTempFilePath(uni.env.USER_DATA_PATH, path, Date.now())
+    // uni.env.USER_DATA_PATH 在 HBuilderX 4.71+ 是 `unifile://usr/` 虚拟路径：FileSystemManager
+    // 认它，但 uni.uploadFile 的原生层读不到这个 scheme，报 602001 request system error
+    // （2026-09-10 真机实测）。统一转成真实绝对路径，文件系统与上传链路都用真路径。
+    const basePath = UTSAndroid.convert2AbsFullPath(uni.env.USER_DATA_PATH)
+    const destPath = buildTempFilePath(basePath, path, Date.now())
     const manager = uni.getFileSystemManager()
     if (ENABLE_DEBUG_LOG) {
         console.log('[uploadFile] content:// -> 落盘中转', path, '=>', destPath)
