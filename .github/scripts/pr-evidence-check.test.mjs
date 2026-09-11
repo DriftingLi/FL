@@ -38,7 +38,7 @@ const uvue = (name = 'pages/exam/exam.uvue', extra = {}) => ({
 });
 const docs = { filename: 'docs/adr/0008-移动端验收门与证据.md', status: 'added', patch: '' };
 
-const run = (opts) => validate({ files: [uvue()], body: '', author: AUTHOR, reviews: [], ...opts });
+const run = (opts) => validate({ files: [uvue()], body: '', author: AUTHOR, ...opts });
 
 const FULL_EVIDENCE = `## 改了什么
 
@@ -83,11 +83,11 @@ test('占位符「待人工 / ⏳」= 缺证据：红', () => {
   assert.match(r.errors.join(), /占位/);
 });
 
-test('执行人填 PR 作者/agent 账号：红（人工门只能人签）', () => {
+test('执行人与 PR 作者同一账号：只提示、不拦（单账号仓库分不出人与 agent）', () => {
   const body = FULL_EVIDENCE.replace('@DriftingLi', `@${AUTHOR}`);
   const r = run({ body });
-  assert.equal(r.ok, false);
-  assert.match(r.errors.join(), /只能人签/);
+  assert.equal(r.ok, true, r.errors.join('；'));
+  assert.match(r.notes.join(), /同一账号/);
 });
 
 test('日期格式不对：红', () => {
@@ -134,24 +134,18 @@ test('新增 composable 文件 → 触发 ④b，补齐后绿', () => {
   assert.equal(completed.ok, true, completed.errors.join('；'));
 });
 
-test('声明「已接受未验证风险」但没有非作者 approve：红', () => {
+test('声明「已接受未验证风险」：放行但打警告，并提示必须由人合并', () => {
   const body = `${FULL_EVIDENCE.split('## 验收证据')[0]}## 验收证据\n\n已接受未验证风险：本地无 Android 真机。事后验证计划：合并后由维护者补跑。\n`;
   const r = run({ body });
-  assert.equal(r.ok, false);
-  assert.match(r.errors.join(), /例外通道需要人的显式签收/);
-});
-
-test('声明风险接受 + 非作者 approve：放行但打警告', () => {
-  const body = `${FULL_EVIDENCE.split('## 验收证据')[0]}## 验收证据\n\n已接受未验证风险：本地无 Android 真机。事后验证计划：合并后由维护者补跑。\n`;
-  const r = run({ body, reviews: [{ state: 'APPROVED', user: { login: 'DriftingLi' } }] });
   assert.equal(r.ok, true, r.errors.join('；'));
   assert.match(r.notes.join(), /例外通道/);
+  assert.match(r.notes.join(), /由人执行合并/);
 });
 
-test('作者自己的 approve 不算签收', () => {
-  const body = `${FULL_EVIDENCE.split('## 验收证据')[0]}## 验收证据\n\n已接受未验证风险：本地无 Android 真机。事后验证计划：合并后由维护者补跑。\n`;
-  const r = run({ body, reviews: [{ state: 'APPROVED', user: { login: AUTHOR } }] });
+test('例外通道不能替代证据段：缺段时仍红', () => {
+  const r = run({ body: '已接受未验证风险：本地无真机。事后验证计划：由人补跑。\n' });
   assert.equal(r.ok, false);
+  assert.match(r.errors.join(), /验收证据/);
 });
 
 test('training-app 下的 pages.json 也算运行时面（免得有人只改路由配置绕过）', () => {

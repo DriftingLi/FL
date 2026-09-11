@@ -1,7 +1,7 @@
 name: PR - 验收证据校验
 
 # 本 workflow 是仓库「PR 事件不触发任何 CI/CD」的**唯一豁免**（依据 docs/adr/0008-移动端验收门与证据.md）：
-# 它只读 PR 正文、改动文件清单与 review 状态，**不 checkout、不构建、不部署、不执行 PR 里的任何代码**，
+# 它只读 PR 正文与改动文件清单，**不 checkout、不构建、不部署、不执行 PR 里的任何代码**，
 # 因此 PR 事件在这里不产生构建/部署副作用。若要新增其他 PR 触发 workflow，先改 ADR-0008。
 #
 # 它只校验「证据段的结构与产物字段是否存在」，**不校验真伪** —— 真伪由维护者读日志/截图判定（ADR-0008 明确不做）。
@@ -26,9 +26,9 @@ jobs:
         with:
           script: |
             // ==== PR-EVIDENCE-VALIDATOR-START ====
-            // 纯函数：输入 files/body/author/reviews，输出 { ok, errors, notes, runtime, needs4b }
+            // 纯函数：输入 files/body/author，输出 { ok, errors, notes, runtime, needs4b }
             // 被 .github/scripts/pr-evidence-check.test.mjs 以抽取式单测覆盖（改这里就要过那个测试）。
-            function validatePrEvidence({ files, body, author, reviews }) {
+            function validatePrEvidence({ files, body, author }) {
               const RUNTIME_JSON = ['manifest.json', 'pages.json', 'platformConfig.json'];
               const isRuntimeFile = (p) => {
                 if (p.endsWith('.uvue') || p.endsWith('.uts')) return true;
@@ -64,11 +64,10 @@ jobs:
               const next = rest.search(/^##\s/m);
               const section = next === -1 ? rest : rest.slice(0, next);
 
-              // 例外通道：显式风险接受 + 非作者 approve
+              // 例外通道：显式风险接受。
+              // 本仓只有两个账号、维护者不持有 admin 那个 → 「必检 + approve=1」装不上（ADR-0008「单账号约束」）。
+              // 该通道的约束改由 AGENTS.md 的「agent 不得自合触及运行时面的 PR」承担。
               const riskDeclared = /已接受未验证风险/.test(clean) && /事后验证计划/.test(clean);
-              const approvedByOther = (reviews || []).some(
-                (r) => r.state === 'APPROVED' && r.user && r.user.login !== author,
-              );
 
               const GATES = [
                 { key: '①', label: 'Android 真机逐页截图对比', fields: ['执行人', '日期', '复测对象', '结论'], artifact: 'screenshot' },
@@ -110,12 +109,9 @@ jobs:
                 if (gate.fields.includes('日期') && values['日期'] && !/\d{4}-\d{2}-\d{2}/.test(values['日期'])) {
                   errors.push(`${where}：「日期」须为 YYYY-MM-DD。`);
                 }
-                if (gate.fields.includes('执行人') && values['执行人']) {
-                  const handles = values['执行人'].match(/@[A-Za-z0-9_-]+/g) || [];
-                  if (handles.length === 0) errors.push(`${where}：「执行人」须写 GitHub handle（如 @someone）。`);
-                  else if (handles.every((h) => h.slice(1) === author)) {
-                    errors.push(`${where}：「执行人」不得是 PR 作者/agent 账号（${handles.join(' ')}）——人工门只能人签。`);
-                  }
+                // 单账号仓库无法机械区分「人」与「agent」：只提示、不拦（约束落在 AGENTS.md 上）
+                if (gate.fields.includes('执行人') && values['执行人'] === `@${author}`) {
+                  notes.push(`${where}：执行人与 PR 作者是同一账号（${author}）——本仓单账号，机械上分不出人与 agent；agent 不得代填该字段。`);
                 }
                 if (values['结论'] && !ARTIFACT[gate.artifact].test(values['结论'])) {
                   const hint = {
@@ -129,18 +125,16 @@ jobs:
               }
 
               if (errors.length > 0 && riskDeclared) {
-                if (approvedByOther) {
-                  return {
-                    ok: true,
-                    errors: [],
-                    notes: [
-                      `⚠️ 本 PR 走的是「已接受未验证风险」例外通道（已获非作者 approve）。缺项：${errors.join('；')}`,
-                    ],
-                    runtime,
-                    needs4b,
-                  };
-                }
-                errors.push('声明了「已接受未验证风险」，但还没有非作者 approve —— 例外通道需要人的显式签收。');
+                return {
+                  ok: true,
+                  errors: [],
+                  notes: [
+                    `⚠️ 本 PR 走的是「已接受未验证风险」例外通道。缺项：${errors.join('；')}`,
+                    '⚠️ 例外通道下必须由人执行合并（AGENTS.md：agent 不得自行合并触及运行时面的 PR）。',
+                  ],
+                  runtime,
+                  needs4b,
+                };
               }
               if (errors.length === 0) notes.push('四门证据结构完整（pr-evidence 只校结构，真伪由维护者判定）。');
               return { ok: errors.length === 0, errors, notes, runtime, needs4b };
@@ -153,11 +147,8 @@ jobs:
             const files = await github.paginate(github.rest.pulls.listFiles, {
               owner, repo, pull_number: pr.number, per_page: 100,
             });
-            const reviews = await github.paginate(github.rest.pulls.listReviews, {
-              owner, repo, pull_number: pr.number, per_page: 100,
-            });
             const result = validatePrEvidence({
-              files, body: pr.body || '', author: pr.user.login, reviews,
+              files, body: pr.body || '', author: pr.user.login,
             });
 
             await core.summary

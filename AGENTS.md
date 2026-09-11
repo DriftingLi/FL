@@ -34,3 +34,9 @@ AI 安全审计用 DeepSec（Shield）。See `docs/agents/security-scan.md`.
 | [`docs/agents/checks.md`](docs/agents/checks.md) | 测试与检查流程：后端四件套（**Windows 本机** / WSL 双环境）、前端 type-check + vitest、部署配置校验、DeepSec 安全检测 | 每次提交前 |
 | [`docs/agents/release.md`](docs/agents/release.md) | 发布流程：分支 + PR + ruleset 门禁 + squash 直发 production，含应急通道与「禁 timeout 包 git/gh」铁律 | push / PR / merge 前 |
 | [`docs/agents/multi-agent-git.md`](docs/agents/multi-agent-git.md) | 多 Agent 并发与 git 隔离：worktree 一会话一分支、游离提交取证、`git add` 纪律 | 多会话/自动化并发操作仓库时 |
+
+## 验收门（移动端，ADR-0008）
+
+移动端改动触及运行时面时，适用四门验收与证据要求：**agent 不得自行合并这类 PR**——必须把 PR 正文的证据段填齐，然后停在「待人工签收」，由人执行合并。
+
+规则全文见 `training-app/叉车维修培训学员端跨端应用/AGENTS.md`「验收门与合并纪律」；口径与原因见该子项目 `docs/adr/0008-移动端验收门与证据.md`。
