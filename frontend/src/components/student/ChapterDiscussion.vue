@@ -16,16 +16,21 @@ import { forumApi, type ForumTopicItem, type ForumReplyItem } from '@/api/forum'
 import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
 import ForumPostForm from '@/components/student/ForumPostForm.vue'
 import ForumComposer from '@/components/student/ForumComposer.vue'
+import ForumReplyCard from '@/components/student/ForumReplyCard.vue'
 import { formatRelativeTime } from '@/utils/format'
 import { displayName, authorLetter } from '@/utils/forumDisplay'
+import { useAuthStore } from '@/stores/auth'
 import { useAsyncPage } from '@/composables/useAsyncPage'
+import { useLike } from '@/composables/useLike'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
-import UiTag from '@/components/ui/UiTag.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import { useConfirm } from '@/composables/useConfirm'
+
+const authStore = useAuthStore()
 
 const props = defineProps<{
   chapterId: number
@@ -83,7 +88,10 @@ async function loadDetail(topicId: number) {
   detailContent.value = ''
   replies.value = []
   try {
-    const res = await forumApi.getTopic(topicId)
+    // ADR-0042：详情回复一律分页读取。章节讨论是内嵌预览面板、没有翻页交互，
+    // 故取页大小上限（100）以保持既有「展开即看全」的体验；超出 100 条的章节帖罕见，
+    // 真出现也只影响该帖的尾部回复（论坛详情页仍是完整的分页读取）。
+    const res = await forumApi.getTopic(topicId, undefined, undefined, 1, 100)
     expandedTopic.value = res.topic || null
     detailContent.value = res.topic?.content || ''
     replies.value = res.replies || []
@@ -150,6 +158,52 @@ async function removeTopic(topicId: number) {
     console.error('删除失败:', e)
     /* 错误已由拦截器提示 */
   }
+}
+
+// ===== 回复互动（#858：与帖子详情同口径——点赞乐观更新、举报走同一对话框形态）=====
+const { toggle: toggleReplyLikeOnce } = useLike(forumApi.likeReply, forumApi.unlikeReply)
+
+async function toggleReplyLike(reply: ForumReplyItem) {
+  await toggleReplyLikeOnce(reply)
+}
+
+const reportVisible = ref(false)
+const reportReason = ref('')
+const reportSubmitting = ref(false)
+const reportTarget = ref<{ kind: 'topic' | 'reply'; id: number } | null>(null)
+
+function openReport(kind: 'topic' | 'reply', replyId?: number) {
+  if (!expandedTopicId.value) return
+  reportTarget.value = { kind, id: kind === 'topic' ? expandedTopicId.value : replyId! }
+  reportReason.value = ''
+  reportVisible.value = true
+}
+
+async function submitReport() {
+  const reason = reportReason.value.trim()
+  if (!reportTarget.value) return
+  if (reason.length < 1 || reason.length > 500) {
+    ElMessage.warning('举报理由需为 1-500 字')
+    return
+  }
+  reportSubmitting.value = true
+  try {
+    const { kind, id } = reportTarget.value
+    if (kind === 'topic') await forumApi.reportTopic(id, reason)
+    else await forumApi.reportReply(id, reason)
+    ElMessage.success('举报已提交，等待处理')
+    reportVisible.value = false
+  } catch (e) {
+    console.error('举报失败:', e)
+    /* 错误已由拦截器提示 */
+  } finally {
+    reportSubmitting.value = false
+  }
+}
+
+/** 是否为当前登录用户自己发的（决定 ⋯ 里是否出现「举报」） */
+function isOwnReply(reply: ForumReplyItem) {
+  return reply.author.user_id === authStore.userInfo?.user_id
 }
 
 async function removeReply(replyId: number) {
@@ -237,43 +291,21 @@ watch(() => props.chapterId, () => {
             <!-- 回复流 -->
             <div class="rounded-[8px] bg-panel px-3 py-1 max-md:px-2">
               <template v-if="replies.length > 0">
-                <div
+                <!-- 与帖子详情共用同一份回复渲染（含点赞 / 举报 / ⋯）；
+                     密度取 compact：内嵌面板不套详情页尺寸，避免撑长课程页展开区。 -->
+                <ForumReplyCard
                   v-for="reply in replies"
                   :key="reply.id"
-                  class="border-b border-line py-3 last:border-b-0"
-                >
-                  <div class="flex items-center gap-2">
-                    <el-avatar :size="26" :src="reply.author.avatar_url || undefined">
-                      {{ authorLetter(reply.author) }}
-                    </el-avatar>
-                    <span class="text-[13px] font-semibold text-ink">{{ displayName(reply.author) }}</span>
-                    <UiTag
-                      v-if="expandedTopic && reply.author.user_id === expandedTopic.author.user_id"
-                      tone="neutral"
-                      effect="plain"
-                      class="ml-1"
-                    >
-                      楼主
-                    </UiTag>
-                    <span class="text-xs text-ink-3">{{ formatRelativeTime(reply.created_at) }}</span>
-                    <div class="ml-auto flex items-center gap-1">
-                      <UiButton variant="primary" size="small" @click="startReplyTo(reply)">回复</UiButton>
-                      <UiButton v-if="reply.can_delete" variant="danger" text size="small" @click="removeReply(reply.id)">
-                        删除
-                      </UiButton>
-                    </div>
-                  </div>
-                  <div
-                    v-if="reply.parent_id && reply.parent_name"
-                    class="my-1.5 inline-block rounded-[6px] bg-canvas px-2 py-0.5 text-xs text-ink-3"
-                  >
-                    回复 @{{ reply.parent_name }}
-                  </div>
-                  <div class="whitespace-pre-wrap break-words text-[13px] leading-[1.6] text-ink">
-                    {{ reply.content }}
-                  </div>
-                  <ForumImageGallery :images="reply.images" />
-                </div>
+                  class="border-b border-line last:border-b-0"
+                  density="compact"
+                  :reply="reply"
+                  :topic-author-id="expandedTopic?.author.user_id"
+                  :is-own="isOwnReply(reply)"
+                  @reply-to="startReplyTo"
+                  @like="toggleReplyLike"
+                  @report="(r) => openReport('reply', r.id)"
+                  @delete="removeReply"
+                />
               </template>
               <UiEmptyState v-else description="还没有回复" />
             </div>
@@ -297,6 +329,25 @@ watch(() => props.chapterId, () => {
                 删除本帖
               </UiButton>
             </div>
+
+            <!-- 举报对话框（与帖子详情同形态） -->
+            <UiDialog
+              v-model="reportVisible"
+              title="举报"
+              width="440px"
+              confirm-text="提交"
+              :confirm-loading="reportSubmitting"
+              @confirm="submitReport"
+            >
+              <UiInput
+                v-model="reportReason"
+                type="textarea"
+                :rows="4"
+                :maxlength="500"
+                show-word-limit
+                placeholder="请填写举报理由（1-500 字）"
+              />
+            </UiDialog>
           </template>
         </div>
       </div>
