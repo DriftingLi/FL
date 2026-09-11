@@ -371,4 +371,24 @@ describe('论坛类别分流', () => {
 
     wrapper.unmount()
   })
+
+  // ADR-0040：经验 Tab 是**只读策展流**，不提供发布入口——
+  // 学员不能自称考经（发帖传 experience 会被后端 400），故这个 Tab 不该出现任何发布按钮。
+  it('经验 Tab 不显示发布入口（只读策展流，ADR-0040）', async () => {
+    const wrapper = await mountPage(3)
+
+    // 讨论 Tab 有发布入口
+    expect(wrapper.find('.forum-header button').exists()).toBe(true)
+    expect(wrapper.find('.forum-header button').text()).toContain('发布新帖')
+
+    // 经验 Tab 没有任何 header 按钮（既不是「发布新帖」也不是「我要提问」）
+    await switchCategory(wrapper, 'experience')
+    expect(wrapper.find('.forum-header button').exists()).toBe(false)
+
+    // 切回讨论 Tab 后入口恢复（不是永久消失）
+    await switchCategory(wrapper, 'discussion')
+    expect(wrapper.find('.forum-header button').text()).toContain('发布新帖')
+
+    wrapper.unmount()
+  })
 })

@@ -816,7 +816,6 @@ data: null
 | DELETE | `/api/admin/forum/topics/:id/featured` | 取消精选（已发分不回滚；**经验帖返回 400**，须先取消经验认定） |
 | POST | `/api/admin/forum/topics/:id/experience` | 认定备考经验（ADR-0040：同时置 is_experience 与 is_featured，首次给帖主 +30；与加精共用一笔） |
 | DELETE | `/api/admin/forum/topics/:id/experience` | 取消经验认定（**保留精选位**，已发分不回滚） |
-| DELETE | `/api/admin/forum/topics/:id/featured` | 取消精选（状态回滚，已发分不回滚） |
 | DELETE | `/api/admin/forum/replies/:id` | 删除回复 |
 | GET | `/api/admin/forum/reports?status=&page=&page_size=` | 举报列表（status 0 待处理/1 已处理，缺省全部） |
 | PUT | `/api/admin/forum/reports/:id` | 处理举报（body: `{"status": 1}`） |

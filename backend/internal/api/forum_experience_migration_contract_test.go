@@ -96,5 +96,26 @@ func TestForumExperienceDesignationOnPostgres(t *testing.T) {
 		t.Fatalf("策展线索键应存在（迁移 INSERT 未执行？）: %v", err)
 	}
 
-	t.Log("迁移 000027 契约通过：值域收窄、经验蕴含精选、任务退役、策展线索均落地")
+	// 8. ★ 「经验帖不可被采纳」由 CHECK 兜底（迁移 000028）。
+	//    行为层由 service 双向守卫（AcceptReply / DesignateExperience），
+	//    但并发与直接 SQL 绕不过库层这条——它是该不变式的最后一道防线。
+	acceptedReply := model.ForumReply{TopicID: normal.ID, UserID: author.ID, Content: "回答", Images: model.JSONB("[]"), CreatedAt: testutil.Now()}
+	if err := db.Create(&acceptedReply).Error; err != nil {
+		t.Fatalf("建回复失败: %v", err)
+	}
+	if err := db.Exec("UPDATE forum_topics SET accepted_reply_id = ?, solved_at = NOW() WHERE id = ?", acceptedReply.ID, normal.ID).Error; err != nil {
+		t.Fatalf("置采纳状态失败: %v", err)
+	}
+	if err := db.Exec("UPDATE forum_topics SET is_experience = true, is_featured = true WHERE id = ?", normal.ID).Error; err == nil {
+		t.Fatalf("「已采纳 + 认定为经验」应被 CHECK 拒绝（迁移 000028），实际成功")
+	}
+	// 反证：清掉采纳指针后，同一行可以正常被认定（拒绝的是组合而非列本身）
+	if err := db.Exec("UPDATE forum_topics SET accepted_reply_id = NULL, solved_at = NULL WHERE id = ?", normal.ID).Error; err != nil {
+		t.Fatalf("清采纳状态失败: %v", err)
+	}
+	if err := db.Exec("UPDATE forum_topics SET is_experience = true WHERE id = ?", normal.ID).Error; err != nil {
+		t.Fatalf("无采纳指针时认定应可写入: %v", err)
+	}
+
+	t.Log("迁移 000027/000028 契约通过：值域收窄、经验蕴含精选、经验不可被采纳、任务退役、策展线索均落地")
 }
