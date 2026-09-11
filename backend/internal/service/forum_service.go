@@ -27,26 +27,32 @@ const (
 	ForumScopeChapter = "chapter" // 指定章节讨论区
 )
 
-// 论坛帖子类别常量（#364；#722 扩 experience）。
+// 论坛帖子类别常量（#364；ADR-0040 起收窄回两值，只表达作者意图）。
 //
 // 类别判"帖子意图"，scope/chapter_id 判"内容坐标"，两者正交但有一格非法：
 // discussion+NULL=综合讨论区、discussion+N=章节讨论区、question+NULL=全局问答、
 // question+N=非法。experience（#706 备考经验）可挂章节也可不挂，但不可被采纳；
-// 求职信息仍是常驻实体，不在论坛内，类别值域到此为止。
+// 求职信息仍是常驻实体，不在论坛内，意图值域到此为止。
+//
+// 「备考经验」**不是意图**（ADR-0040）：它是管理端认定（forum_topics.is_experience），
+// 学员不能自述。判「是不是经验帖」看 is_experience，不要再读 category == 'experience'。
 const (
 	ForumCategoryDiscussion = "discussion" // 讨论帖（存量帖子的默认值）
 	ForumCategoryQuestion   = "question"   // 问答帖（可被采纳，走积分直记）
-	ForumCategoryExperience = "experience" // 备考经验帖（#706；不可采纳，可挂章节）
+	// ForumCategoryExperience 是**只读的历史值**（ADR-0040）：写入路径已不再接受（见 normalizeForumCategory），
+	// 仅剩读侧消费——列表筛选 parseForumCategoryArg 过滤存量行，与待退役的 growth_first_experience 判定。
+	ForumCategoryExperience = "experience"
 )
 
-// normalizeForumCategory 校验并归一帖子类别：空串归一为 discussion（向后兼容，移动端不传）。
-// 非空且不在值域内返回错误。归一后再落到模型上，避免依赖数据库 DEFAULT
+// normalizeForumCategory 校验并归一**意图**：空串归一为 discussion（向后兼容，移动端不传）。
+// 非空且不在两值域内返回错误——`experience` 在此被拒（ADR-0040：自称不产生事实，经验由管理端认定）。
+// 归一后再落到模型上，避免依赖数据库 DEFAULT
 // （GORM 对带 default tag 的零值字段会跳过 INSERT，内存对象拿不到回填值）。
 func normalizeForumCategory(category string) (string, error) {
 	switch category = strings.TrimSpace(category); category {
 	case "":
 		return ForumCategoryDiscussion, nil
-	case ForumCategoryDiscussion, ForumCategoryQuestion, ForumCategoryExperience:
+	case ForumCategoryDiscussion, ForumCategoryQuestion:
 		return category, nil
 	default:
 		return "", fmt.Errorf("帖子类别无效: %s", category)
@@ -406,15 +412,19 @@ func (s *ForumService) GetTopic(topicID int64, viewerID int, replySort, order st
 		return nil, gorm.ErrRecordNotFound
 	}
 
-	// 浏览量 +1（失败不影响主流程）
-	_ = s.db.Model(&model.ForumTopic{}).Where("id = ?", topicID).
-		UpdateColumn("view_count", gorm.Expr("view_count + 1")).Error
-	row.ViewCount++
-
-	// 记录去重浏览（用于 daily_browse 积分，排除自帖，同一帖每日一次）
+	// 浏览量只在**真实浏览**时 +1（ADR-0041）：以既有浏览去重行的插入成败为事实源，
+	// 排除自帖、每人每日每帖一次；复用去重表，不新增列，存量数值不回填。
+	// 旧实现是「详情请求即 +1」——不去重、不排作者，而 hot 排序第三键正是 view_count，
+	// 自己反复刷新就能把帖子推上热门。
 	if viewerID != 0 && viewerID != int(row.UserID) {
 		viewDate := time.Now().In(clock.Location()).Format("2006-01-02")
-		_ = s.db.Exec("INSERT INTO forum_topic_views (user_id, topic_id, view_date) VALUES (?,?,?) ON CONFLICT (user_id, topic_id, view_date) DO NOTHING", viewerID, topicID, viewDate).Error
+		// 同一语句同时服务两个目的：daily_browse 的去重事实源 + 浏览量的计数闸门。
+		res := s.db.Exec("INSERT INTO forum_topic_views (user_id, topic_id, view_date) VALUES (?,?,?) ON CONFLICT (user_id, topic_id, view_date) DO NOTHING", viewerID, topicID, viewDate)
+		if res.Error == nil && res.RowsAffected > 0 {
+			_ = s.db.Model(&model.ForumTopic{}).Where("id = ?", topicID).
+				UpdateColumn("view_count", gorm.Expr("view_count + 1")).Error
+			row.ViewCount++
+		}
 	}
 
 	// 回复列表（含被回复人展示名）
@@ -779,7 +789,8 @@ func (s *ForumService) DeleteTopic(userID int, topicID int64) error {
 }
 
 // AdminDeleteTopic 管理员删除任意主题（不校验作者）。图片一并清理；站内信通知作者。
-// 若该帖曾产生采纳分（accepted_bonus），则按 rollback 原因写对冲流水并扣减余额（封底 0，幂等）。
+// 若该帖产生过任一直记奖励（被采纳 / 采纳动作 / 认定），则按 rollback 原因写对冲流水并扣减余额
+// （封底 0，幂等，按 user_id 分组各自追回）。
 func (s *ForumService) AdminDeleteTopic(topicID int64) error {
 	var topic model.ForumTopic
 	if err := s.db.First(&topic, topicID).Error; err != nil {
@@ -806,9 +817,15 @@ func (s *ForumService) AdminDeleteTopic(topicID int64) error {
 		if err := tx.Delete(&model.ForumTopic{}, topicID).Error; err != nil {
 			return err
 		}
-		// 违规回收：若曾发放过 accepted_bonus 且未回滚，则扣回
-		if topic.AcceptedReplyID != nil {
-			if err := s.rollbackAcceptedBonusTx(tx, topicID); err != nil {
+		// 违规回收（ADR-0041）：触发条件是「该帖存在任一正向直记奖励」，而不是「曾被采纳」——
+		// 否则「加精但未采纳」的帖子（正是备考经验帖的形状）会被整片漏掉。
+		// 范围含答主/楼主/帖主三方，RollbackByRef 内部按 user_id 分组各自追回、封底 0。
+		hasReward, err := s.hasAnyRewardForTopic(tx, topicID)
+		if err != nil {
+			return err
+		}
+		if hasReward {
+			if err := s.rollbackTopicRewardsTx(tx, topicID); err != nil {
 				return err
 			}
 		}
@@ -866,22 +883,47 @@ func (s *ForumService) incrementDeletedAfterAccepted() error {
 	})
 }
 
-// rollbackAcceptedBonusTx 论坛违规回收（#609 收编后的声明式入口）：回收哪个 ref 的哪些
+// rollbackTopicRewardsTx 论坛违规回收（#609 收编后的声明式入口）：回收哪个 ref 的哪些
 // reasons 交 PointsService.RollbackByRef 内部完成（原账 SUM 取反、封底 0、占坑防双扣、
 // 存量 rollback 标记防双扣）；占坑键 rollback:{topicID} 即「已处理」标记（格式逐字不动），
 // 余额不足按余额截断、余额为 0 时仅落占坑行（不再写 Delta:0 流水——#384 缺陷修复语义）。
 // 占坑冲突（已回收过）按论坛语义静默放行：删帖动作不因重复回收失败（ADR-0023 映射契约）。
-func (s *ForumService) rollbackAcceptedBonusTx(tx *gorm.DB, topicID int64) error {
+//
+// 范围 = 该帖产生的**全部直记奖励**（ADR-0041）：答主 accepted_bonus + 楼主 accept_action +
+// 帖主 featured_bonus（含经验认定奖励，两者共用同一条流水）。旧实现只声明 accepted_bonus，
+// 楼主与帖主的分一律不追。
+//
+// **一个 ref 只能有一次回收事件**：RollbackByRef 的护栏是 ref 级一次性（该 ref 只要存在任一条
+// rollback 流水就整体跳过；护栏保护占坑表上线前的历史数据，投稿域共用）。故 AdminDeleteReply
+// **不调用本方法**——否则先删回复会永久占掉该帖的回收机会，帖主的 featured_bonus 再也追不回。
+func (s *ForumService) rollbackTopicRewardsTx(tx *gorm.DB, topicID int64) error {
 	_, err := s.points.RollbackByRef(tx, PointsRollback{
 		RefType: "forum_topic",
 		RefID:   fmt.Sprintf("%d", topicID),
-		Reasons: []string{ReasonAcceptedBonus},
+		Reasons: []string{ReasonAcceptedBonus, ReasonAcceptAction, ReasonFeaturedBonus},
 		IdemKey: ForumRollbackIdemKey(topicID),
 	})
 	if errors.Is(err, ErrPointsProcessed) {
 		return nil
 	}
 	return err
+}
+
+// hasAnyRewardForTopic 该帖是否产生过任一直记奖励（正向流水）。
+//
+// 管理员删帖的回收触发器（ADR-0041）：不能只看 AcceptedReplyID——「加精但从未被采纳」的帖子
+// （正是备考经验帖的形状：经验蕴含精选且不可被采纳）没有采纳指针，旧守卫会让它的认定奖励
+// 永远落在回收盲区。只认正向流水，回收本身写的 reason=rollback 负向流水不会被误判。
+func (s *ForumService) hasAnyRewardForTopic(tx *gorm.DB, topicID int64) (bool, error) {
+	var n int64
+	if err := tx.Model(&model.PointsLedger{}).
+		Where("ref_type = ? AND ref_id = ? AND delta > 0 AND reason IN ?",
+			"forum_topic", fmt.Sprintf("%d", topicID),
+			[]string{ReasonAcceptedBonus, ReasonAcceptAction, ReasonFeaturedBonus}).
+		Count(&n).Error; err != nil {
+		return false, err
+	}
+	return n > 0, nil
 }
 
 // DeleteReply 删除回复（仅作者本人；其下级回复随外键级联删除）。
@@ -901,6 +943,8 @@ func (s *ForumService) DeleteReply(userID int, replyID int64) error {
 }
 
 // AdminDeleteReply 管理员删除任意回复（不校验作者；其下级回复随外键级联删除）。图片一并清理；站内信通知回复作者。
+// 若删的是被采纳的回答，只把主题打回未解决（清 accepted_reply_id/solved_at），**不回收积分**——
+// 奖励处置的唯一出口是 AdminDeleteTopic（见 rollbackTopicRewardsTx 的 ref 级一次性说明）。
 func (s *ForumService) AdminDeleteReply(replyID int64) error {
 	var reply model.ForumReply
 	if err := s.db.First(&reply, replyID).Error; err != nil {
@@ -914,13 +958,19 @@ func (s *ForumService) AdminDeleteReply(replyID int64) error {
 		topic.Title = ""
 	}
 	topicTitle := topic.Title
-	// 若该回复是被采纳的回答，则违规回收（幂等，复用同一 rollback 键）
-	needsRollback := topic.AcceptedReplyID != nil && *topic.AcceptedReplyID == replyID
-	if needsRollback {
-		// 在事务外先尝试回收（幂等），失败仅记日志，不阻断删回复
-		_ = s.db.Transaction(func(tx *gorm.DB) error {
-			return s.rollbackAcceptedBonusTx(tx, topic.ID)
-		})
+	// 若该回复是被采纳的回答，只把主题打回未解决——**不回收奖励**（ADR-0041）。
+	// 理由：RollbackByRef 是 ref 级一次性护栏，这里回收会永久占掉该帖的回收机会，
+	// 之后管理员删整帖时帖主的 featured_bonus 再也追不回。**删帖才是奖励处置的唯一出口**，
+	// 届时答主/楼主/帖主三笔一次全部追回（回收能力最大化）。
+	// solved_at 必须显式清：accepted_reply_id 有 ON DELETE SET NULL 外键兜底，solved_at 没有。
+	if topic.AcceptedReplyID != nil && *topic.AcceptedReplyID == replyID {
+		if err := s.db.Model(&model.ForumTopic{}).Where("id = ?", topic.ID).Updates(map[string]any{
+			"accepted_reply_id": nil,
+			"solved_at":         nil,
+			"updated_at":        beijingNow(),
+		}).Error; err != nil {
+			return err
+		}
 	}
 	if err := s.deleteReplyWithImages(replyID, reply.TopicID); err != nil {
 		return err
@@ -1622,15 +1672,27 @@ func (s *ForumService) AcceptReply(userID int, topicID, replyID int64) (*ForumTo
 		if err := tx.Model(&model.PointsLedger{}).Where("user_id = ? AND reason = ? AND created_at >= ?", userID, ReasonAcceptAction, todayStart).Count(&dailyAskerCnt).Error; err != nil {
 			return err
 		}
+		// 配对次数的事实源是 points_ledger 本身（ADR-0041），不是当前挂着的 accepted_reply_id：
+		// 状态列可被 CancelAccept 置空、被删帖抹掉，拿它计数等于给配对衰减留了重置开关
+		// （每轮「采纳→取消/删帖」即可把计数打回 1，衰减永不触发）。
+		// 同一 topic 的两条流水——accepted_bonus 记在答主、accept_action 记在楼主——
+		// 按 ref_id 自连接即还原「楼主↔答主」配对；流水不可回退，取消与删帖都不影响。
+		// 口径是「**付过钱的**配对次数」：被日封顶拦下的采纳不计入（ADR-0041 已承认的边际）。
 		var pairCnt int64
-		if err := tx.Raw("SELECT COUNT(*) FROM forum_topics WHERE user_id = ? AND accepted_reply_id IN (SELECT id FROM forum_replies WHERE user_id = ?)", userID, reply.UserID).Scan(&pairCnt).Error; err != nil {
+		if err := tx.Raw("SELECT COUNT(*) FROM points_ledger a "+
+			"JOIN points_ledger b ON b.ref_type = a.ref_type AND b.ref_id = a.ref_id "+
+			"WHERE a.ref_type = 'forum_topic' AND a.reason = ? AND a.user_id = ? "+
+			"AND b.reason = ? AND b.user_id = ?",
+			ReasonAcceptedBonus, reply.UserID, ReasonAcceptAction, userID).Scan(&pairCnt).Error; err != nil {
 			return err
 		}
 		bonusDelta := AcceptBonusPoints
 		actionDelta := AcceptActionPoints
-		if pairCnt >= 6 {
+		// 阈值以「已付配对数」为基准：与旧实现（计数含当前帖、>=6 / >=4）数值等价，
+		// 见 forum_accept_caps_contract_test.go 断言的每对终身 3×40 + 2×20 = 160。
+		if pairCnt >= 5 {
 			bonusDelta = 0
-		} else if pairCnt >= 4 {
+		} else if pairCnt >= 3 {
 			bonusDelta = bonusDelta / 2
 		}
 		if dailyAnsCnt >= 3 {

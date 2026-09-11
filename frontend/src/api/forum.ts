@@ -1,7 +1,18 @@
 import { unwrappedRequest } from './request'
 
-/** 论坛帖子类别（#364）：判"帖子意图"的唯一依据，与判区域的 chapter_id 正交。 */
+/**
+ * 论坛帖子类别（#364）：判"帖子意图"的唯一依据，与判区域的 chapter_id 正交。
+ * ADR-0040 起 'experience' 只用于**列表筛选与展示**（经验 Tab 仍是只读策展流）——
+ * 学员发帖/编辑只认 ForumPublishCategory 两值，写入 'experience' 后端直接 400。
+ */
 export type ForumCategory = 'discussion' | 'question' | 'experience'
+
+/**
+ * 学员可自述的发帖意图（ADR-0040）：'备考经验'已改为管理端认定，
+ * 学员只能声明"想讨论什么"（讨论 / 提问），不能声明"产出了什么"。
+ * 发帖与编辑的 category 入参只接受这两个值。
+ */
+export type ForumPublishCategory = 'discussion' | 'question'
 
 /**
  * 论坛列表 Tab（#364）。学员端的「讨论 / 问答」与管理端的
@@ -91,6 +102,7 @@ export function forumTabQuery(tab: ForumTab): Pick<ForumListParams, 'scope' | 'c
       return { category: 'question' }
     case 'experience':
       // 备考经验（#722）：经验帖可挂章节也可不挂，列表看全量经验帖（对齐移动端 scope=all + category=experience）。
+      // 只读策展流：本映射只用于**列表查询**；发布入口不再产出该值（ADR-0040，后续批次迁 is_experience）。
       return { scope: 'all', category: 'experience' }
     default:
       // 全部：两个参数都不带，与改动前逐条一致（服务端默认 scope=all、不过滤类别）。
@@ -103,7 +115,7 @@ export const forumApi = {
     return unwrappedRequest.get<{ topics: ForumTopicItem[]; total: number }>('/forum/topics', { params })
   },
 
-  createTopic(data: { chapter_id?: number | null; category?: ForumCategory; title: string; content: string; images?: string[] }) {
+  createTopic(data: { chapter_id?: number | null; category?: ForumPublishCategory; title: string; content: string; images?: string[] }) {
     return unwrappedRequest.post<ForumTopicItem>('/forum/topics', data)
   },
 

@@ -96,12 +96,12 @@
     const authStore = useAuthStore()
 
     // ===== 分类选项（#760：资源 tab 承载投稿表单，为真模式非论坛类别） =====
+    // ADR-0040：「备考经验」改为管理端认定，发布口不再提供 —— 分类行三段 = 广场/资源/知识问答
     type CategoryOption = { label : string, value : string }
     const categories : CategoryOption[] = [
         { label: '广场', value: 'discussion' },
         { label: '资源', value: 'resource' },
         { label: '知识问答', value: 'question' },
-        { label: '备考经验', value: 'experience' },
     ]
 
     // ===== 表单状态 =====
@@ -160,10 +160,11 @@
         selectedCategory.value = value
     }
 
-    /** 非法/历史类别值归一（#710）：后端仅认 discussion/question/experience，
-        旧默认 general 与资源域残留 resource 一律归 discussion，防「帖子类别无效」400 */
+    /** 非法/历史类别值归一（#710，ADR-0040 收窄）：后端发帖/编辑只认 discussion/question，
+        旧默认 general、资源域残留 resource 与历史 experience 一律归 discussion——
+        历史值读回来归一而非抛错，防「帖子类别无效」400 */
     function normalizeCategory(value : string) : string {
-        if (value == 'question' || value == 'experience') return value
+        if (value == 'question') return value
         return 'discussion'
     }
 
@@ -337,7 +338,7 @@
             }
         }
         // 从 URL 参数接收默认分类：resource 为合法投稿 tab（#760），
-        // 其余非法/历史 scope 归一（#710）
+        // 其余非法/历史 scope（含历史 experience）归一（#710 / ADR-0040）
         const scope = options['scope']
         if (scope != null && scope != '') {
             const s = `${scope}`

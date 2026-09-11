@@ -117,32 +117,33 @@ func TestForumRollbackContract(t *testing.T) {
 	if ansUser.PointsBalance != 0 {
 		t.Fatalf("回收后答主应 0, 实际 %d", ansUser.PointsBalance)
 	}
-	// 楼主余额不变（仅回收答主的 accepted_bonus）
+	// 楼主余额同样被追回（ADR-0041：范围扩到 accept_action）。
+	// 旧实现只声明 accepted_bonus，楼主的 +5 不追——本条即该修复的守卫。
 	if err := db.First(&authorUser, author.ID).Error; err != nil {
 		t.Fatalf("fetch author after: %v", err)
 	}
-	if authorUser.PointsBalance != 5 {
-		t.Fatalf("回收不应影响楼主 accept_action, 实际 %d", authorUser.PointsBalance)
+	if authorUser.PointsBalance != 0 {
+		t.Fatalf("回收应同时追回楼主 accept_action，期望 0 实际 %d", authorUser.PointsBalance)
 	}
-	// 回收流水应存在
-	db.Model(&model.PointsLedger{}).Where("reason = ? AND ref_id = ?", "rollback", fmt.Sprintf("%d", q1)).Count(&cnt)
-	if cnt != 1 {
-		t.Fatalf("rollback 流水应 1, 实际 %d", cnt)
-	}
-	var rollback model.PointsLedger
-	if err := db.Where("reason = ? AND ref_id = ?", "rollback", fmt.Sprintf("%d", q1)).First(&rollback).Error; err != nil {
+	// 回收流水按 user_id 分组，应恰两条：答主 -40、楼主 -5
+	var rollbacks []model.PointsLedger
+	if err := db.Where("reason = ? AND ref_id = ?", "rollback", fmt.Sprintf("%d", q1)).Find(&rollbacks).Error; err != nil {
 		t.Fatalf("find rollback: %v", err)
 	}
-	if rollback.Delta != -40 {
-		t.Fatalf("rollback delta 应 -40, 实际 %d", rollback.Delta)
+	if len(rollbacks) != 2 {
+		t.Fatalf("rollback 流水应 2 条（答主/楼主各一），实际 %d", len(rollbacks))
 	}
-	// 幂等：重复处理不应重复扣分（此处通过再次查询同一帖的 rollback 计数仍为 1，以及余额仍 0）
-	// 由于帖已删，二次删除会 404，不会再扣；我们通过直接调用 service 的 rollback 逻辑二次尝试来验证幂等
-	// 模拟：再次对同一 topicID 尝试 rollback（通过直接插入已存在 rollback，再调用 AdminDeleteTopic 的幂等检查）
-	// 这里我们直接验证 DB 中 rollback 唯一
+	sum := 0
+	for _, rbr := range rollbacks {
+		sum += int(rbr.Delta)
+	}
+	if sum != -45 {
+		t.Fatalf("rollback 合计应 -45（答主 -40 + 楼主 -5），实际 %d", sum)
+	}
+	// 幂等：重复处理不应重复扣分。帖已删，二次删除会 404；这里直接核对 DB 中 rollback 仍恰两条。
 	db.Model(&model.PointsLedger{}).Where("reason = ? AND ref_id = ?", "rollback", fmt.Sprintf("%d", q1)).Count(&cnt)
-	if cnt != 1 {
-		t.Fatalf("幂等：rollback 应仍为 1, 实际 %d", cnt)
+	if cnt != 2 {
+		t.Fatalf("幂等：rollback 应仍为 2（答主+楼主各一）, 实际 %d", cnt)
 	}
 
 	// 楼主删除自己已解决帖：应计入巡检计数，不回滚

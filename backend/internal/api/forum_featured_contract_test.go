@@ -5,8 +5,9 @@
 //  2. featured_bonus 幂等：首次加精 +30 一次；取消重精不重复发分（流水存在判定 + 占坑键）；
 //     取消精选只改状态不回滚；重复加精/重复取消幂等短路。
 //  3. featured=true|false 筛选与 DTO is_featured 回显（全类别可精：经验帖/讨论帖均可）。
-//  4. growth_first_experience 达成判定：仅「任务上线后」发布的经验帖计达成（存量口径），
+//  4. growth_first_experience 达成判定：仅「任务上线后」的经验帖计达成（存量口径），
 //     discussion/question 不计；total_limit=1 终身一次。
+//     ADR-0040 起经验由管理端认定、学员发帖传 experience 已 400，经验行一律直接落库种子。
 //
 // 站内信（forum_featured）与积分入账同事务，经 notifications 行数断言。
 package api
@@ -125,8 +126,18 @@ func TestForumFeaturedContract(t *testing.T) {
 		return got
 	}
 
-	// 素材：经验帖（加精主对象）+ 讨论帖（全类别可精的对照组）
-	exp := create(authorToken, map[string]any{"category": "experience", "title": "备考经验精选帖", "content": "x"})
+	// 素材：经验帖（加精主对象）+ 讨论帖（全类别可精的对照组）。
+	// ADR-0040 起学员不能自称经验，经验行直接落库模拟（存量行 / 管理端认定行）；
+	// 经 API 新建的那条改为讨论帖——加精本身与类别无关，全类别可精的对照仍成立。
+	preTopic := model.ForumTopic{
+		Category: "experience", UserID: author.ID, Title: "备考经验精选帖", Content: "x",
+		Images: model.JSONB("[]"), CreatedAt: testutil.Now(), UpdatedAt: testutil.Now(),
+	}
+	if err := db.Create(&preTopic).Error; err != nil {
+		t.Fatalf("种子经验帖失败: %v", err)
+	}
+	exp := featuredResp{}
+	exp.Data.ID = preTopic.ID
 	disc := create(authorToken, map[string]any{"title": "普通讨论帖", "content": "x"})
 
 	// 1. 权限：hrwai_user 走管理端加精路由必须被拒
@@ -336,11 +347,19 @@ func TestGrowthFirstExperienceContract(t *testing.T) {
 		t.Fatalf("存量作者空领应被拒，实际 %d %s", rec.Code, rec.Body.String())
 	}
 
-	// 2. A 上线后再发一篇经验帖（经 API）：达成可领
-	recA := do(tokenA, http.MethodPost, "/api/forum/topics", map[string]any{"category": "experience", "title": "A 上线后的新经验", "content": "x"})
-	if recA.Code != http.StatusCreated {
-		t.Fatalf("A 发经验帖应 201，实际 %d %s", recA.Code, recA.Body.String())
+	// 2. A 上线后再有一篇经验帖：达成可领。
+	//    ADR-0040 起经验由管理端认定、学员发帖传 experience 已 400，故直接落库模拟认定行。
+	seedExp := func(uid int, title string, at time.Time) {
+		t.Helper()
+		tp := model.ForumTopic{
+			Category: "experience", UserID: uid, Title: title, Content: "x",
+			Images: model.JSONB("[]"), CreatedAt: at, UpdatedAt: at,
+		}
+		if err := db.Create(&tp).Error; err != nil {
+			t.Fatalf("种子经验帖失败: %v", err)
+		}
 	}
+	seedExp(authorA.ID, "A 上线后的新经验", launch.Add(time.Hour))
 	if status := taskStatus(tokenA, "growth_first_experience"); status != "claimable" {
 		t.Fatalf("上线后新发经验帖应可领，实际 %s", status)
 	}
@@ -362,11 +381,8 @@ func TestGrowthFirstExperienceContract(t *testing.T) {
 		t.Fatalf("首篇经验专项分应 +20，实际 %d → %d", before, after)
 	}
 
-	// 3. 终身一次：A 再发一篇也不可再领（total_limit=1）
-	recA2 := do(tokenA, http.MethodPost, "/api/forum/topics", map[string]any{"category": "experience", "title": "A 第二篇经验", "content": "x"})
-	if recA2.Code != http.StatusCreated {
-		t.Fatalf("A 第二篇应 201，实际 %d", recA2.Code)
-	}
+	// 3. 终身一次：A 再有第二篇也不可再领（total_limit=1）
+	seedExp(authorA.ID, "A 第二篇经验", launch.Add(2*time.Hour))
 	if rec := do(tokenA, http.MethodPost, "/api/points/tasks/growth_first_experience/claim", nil); rec.Code == http.StatusOK {
 		t.Fatalf("终身一次：第二次领取应被拒，实际 %d", rec.Code)
 	}
@@ -379,12 +395,9 @@ func TestGrowthFirstExperienceContract(t *testing.T) {
 	if status := taskStatus(tokenB, "growth_first_experience"); status == "claimable" {
 		t.Fatalf("讨论帖不应计入首篇经验达成")
 	}
-	recB2 := do(tokenB, http.MethodPost, "/api/forum/topics", map[string]any{"category": "experience", "title": "B 的经验帖", "content": "x"})
-	if recB2.Code != http.StatusCreated {
-		t.Fatalf("B 发经验帖应 201，实际 %d", recB2.Code)
-	}
+	seedExp(authorB.ID, "B 的经验帖", launch.Add(time.Hour))
 	if status := taskStatus(tokenB, "growth_first_experience"); status != "claimable" {
-		t.Fatalf("B 发经验帖后应可领，实际 %s", status)
+		t.Fatalf("B 有经验帖后应可领，实际 %s", status)
 	}
 
 	fmt.Println("首篇经验专项分契约通过：存量口径//category 维度/终身一次均守住")

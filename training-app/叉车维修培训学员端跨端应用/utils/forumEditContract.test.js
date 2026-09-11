@@ -70,11 +70,11 @@ describe('论坛编辑链路契约（#811）', () => {
     expect(ahead).toContain('category');
   });
 
-  it('类别归一语义：#811 编辑态三值保真（question/experience 保留，其余归 discussion）', () => {
+  it('类别归一语义（ADR-0040）：只保真 question，历史 experience 与资源域残留一律归 discussion 不抛错', () => {
     const start = create.indexOf('function normalizeCategory');
     expect(start).toBeGreaterThan(-1);
     const fn = create.slice(start, create.indexOf('\n    }', start));
-    expect(fn).toContain("value == 'question' || value == 'experience'");
+    expect(fn).toContain("if (value == 'question') return value");
     expect(fn).toContain("return 'discussion'");
   });
 });

@@ -161,12 +161,11 @@
             uni.navigateTo({ url: '/pages/forum/forum-create?scope=resource' })
             return
         }
-        // 只传后端合法类别（discussion/question/experience）；square 归 discussion
+        // 发布口只传学员可自述的意图（ADR-0040，后端只认 discussion/question）：
+        // square 归 discussion，hot 归 question；经验 tab 是只读策展流，同样落 discussion
         let scope = 'discussion'
         if (currentTab.value === 'hot') {
             scope = 'question'
-        } else if (currentTab.value === 'experience') {
-            scope = 'experience'
         }
         uni.navigateTo({ url: '/pages/forum/forum-create?scope=' + scope })
     }

@@ -195,6 +195,8 @@
     />
     </div>
 
+    <!-- 发布入口（ADR-0040）：经验 Tab 已退为只读策展流——表单默认落「讨论」，且只提供
+         讨论/问答两个意图（即便从经验 Tab 打开，表单也会把历史 experience 归一为 discussion）。 -->
     <UiDialog
       v-model="createDialogVisible"
       title="发布新帖"
@@ -206,8 +208,8 @@
     >
       <ForumPostForm
         ref="postForm"
-        :category="mainTab === 'experience' ? 'experience' : 'discussion'"
-        :categories="['discussion', 'question', 'experience']"
+        category="discussion"
+        :categories="['discussion', 'question']"
         @success="onTopicCreated"
       />
     </UiDialog>
@@ -289,7 +291,8 @@ const showReplies = computed(() => mainTab.value === 'mine' && mineTab.value ===
 // 我的 Tab 各视图空态文案（#701）：与移动端个人动态页口径对齐
 const emptyDescription = computed(() => {
   if (mainTab.value === 'question') return '还没有人提问，来发第一个提问吧'
-  if (mainTab.value === 'experience') return '还没有备考经验帖，来发第一篇吧'
+  // 经验区是管理端认定的只读策展流（ADR-0040）：不再有「发第一篇」入口，文案不引导发布
+  if (mainTab.value === 'experience') return '还没有备考经验帖'
   if (mainTab.value === 'mine') {
     switch (mineTab.value) {
       case 'my-replies':

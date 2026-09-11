@@ -2,7 +2,7 @@
  * 资源上传模块契约测试（refs #710 → #754/#756 → #760）
  *
  * 架构演进：#710 接通投稿链路（先传后交 + mine）；#754/#756 上传页原型对齐与统一发布；
- * #760 用户裁定「复用发布新帖页」——forum-create 分类行四 tab（广场/资源/知识问答/备考经验），
+ * #760 用户裁定「复用发布新帖页」——forum-create 分类行（ADR-0040 后三段：广场/资源/知识问答），
  * 「资源」tab 从假 chip（映射 discussion）变真投稿模式，upload-resource 独立页退役删除。
  * 后端投稿域（contributions，#517/#611/#702）：POST /contributions/upload-file 暂存 →
  * POST /contributions 建稿；GET /contributions/mine 我的投稿。发帖接口永不收到 resource 类别。
