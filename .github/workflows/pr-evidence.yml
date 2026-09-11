@@ -74,7 +74,8 @@ jobs:
               const section = next === -1 ? rest : rest.slice(0, next);
 
               // 例外通道：显式风险接受。
-              // 本仓只有两个账号、维护者不持有 admin 那个 → 「必检 + approve=1」装不上（ADR-0008「单账号约束」）。
+              // 本仓有可用的 admin 通道（维护者持有仓库所有者账号），但裁定不装「必检 + approve=1」
+              // ——逐 PR 审批成本高于约束收益（ADR-0008「为何不装『必检 + approve』」）。
               // 该通道的约束改由 AGENTS.md 的「agent 不得自合触及运行时面的 PR」承担。
               const riskDeclared = /已接受未验证风险/.test(clean) && /事后验证计划/.test(clean);
 
