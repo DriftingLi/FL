@@ -26,6 +26,48 @@ const exists = (rel) => fs.existsSync(path.join(ROOT, rel));
 
 const EXAM_PAGES = ['pages/exam/mock-exam.uvue', 'pages/exam/mock-exam-result.uvue'];
 
+/** 模块必需源文件清单（删任一即红；新增文件不触发假红，但会被 count 下限兜住扫描面失效） */
+const REQUIRED_SOURCE_FILES = [
+  'pages/exam/mock-exam.uvue',
+  'pages/exam/mock-exam-result.uvue',
+  'pages/exam/composables/useMockExamSession.uts',
+  'pages/exam/composables/useMockExamResult.uts',
+  'pages/exam/components/exam-question-card.uvue',
+  'pages/exam/components/exam-action-bar.uvue',
+  'pages/exam/components/exam-result-summary.uvue',
+  'pages/exam/components/exam-result-detail-list.uvue',
+];
+
+/** 页面 ↔ 组件接口对账表（本票唯一新增接口面，改名必须红） */
+const WIRING = [
+  { page: 'pages/exam/mock-exam.uvue', tag: 'ExamQuestionCard', comp: 'pages/exam/components/exam-question-card.uvue' },
+  { page: 'pages/exam/mock-exam.uvue', tag: 'ExamActionBar', comp: 'pages/exam/components/exam-action-bar.uvue' },
+  { page: 'pages/exam/mock-exam-result.uvue', tag: 'ExamResultSummary', comp: 'pages/exam/components/exam-result-summary.uvue' },
+  { page: 'pages/exam/mock-exam-result.uvue', tag: 'ExamResultDetailList', comp: 'pages/exam/components/exam-result-detail-list.uvue' },
+];
+
+/** 组件 defineProps<{...}> 的字段名（已按 optional 写法 `x? : T` / `x : T` 两种覆盖） */
+function definePropsNames(src) {
+  const m = /defineProps<\{([\s\S]*?)\}>/.exec(src);
+  if (m === null) return [];
+  return [...m[1].matchAll(/([A-Za-z_$][\w$]*)\s*\??\s*:/g)].map((x) => x[1]);
+}
+
+/** 组件 defineEmits(['a', 'b']) 的事件名 */
+function defineEmitsNames(src) {
+  const m = /defineEmits\(\[([^\]]*)\]\)/.exec(src);
+  if (m === null) return [];
+  return [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1]);
+}
+
+/** 页面里某个组件的属性区（自闭合标签） */
+function usageAttrs(pageSrc, tag) {
+  const m = new RegExp('<' + tag + '\\b([\\s\\S]*?)/>').exec(pageSrc);
+  return m === null ? null : m[1];
+}
+
+const camelToKebab = (s) => s.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase());
+
 function examSourceFiles() {
   const out = [];
   const walk = (d) => {
@@ -58,8 +100,62 @@ describe('600 行软预算机检（pages/exam/** + 模块域 api 达标后锁定
     expect(deep).toEqual([]);
   });
 
-  it('扫描面非空（防 walk 静默失效导致假绿）', () => {
-    expect(examSourceFiles().length).toBeGreaterThanOrEqual(7);
+  it('模块必需源文件清单完整（删任一文件即红，扫描面不靠数量下限兜底）', () => {
+    const missing = REQUIRED_SOURCE_FILES.filter((f) => !exists(f));
+    expect(missing).toEqual([]);
+    expect(examSourceFiles().length).toBeGreaterThanOrEqual(REQUIRED_SOURCE_FILES.length);
+  });
+});
+
+describe('页面 ↔ 组件接口对账（本票唯一新增接口面：prop/事件改名即红）', () => {
+  it.each(WIRING.map((w) => [w.tag, w]))('%s：页面绑定的每个 prop 都在组件 defineProps 内', (tag, w) => {
+    const attrs = usageAttrs(read(w.page), tag);
+    expect(attrs).not.toBeNull();
+    const bound = [...attrs.matchAll(/:([a-zA-Z][\w-]*)\s*=/g)].map((m) => m[1]);
+    expect(bound.length).toBeGreaterThan(0);
+    const declared = definePropsNames(read(w.comp)).map(camelToKebab);
+    expect(bound.filter((b) => !declared.includes(b))).toEqual([]);
+  });
+
+  it.each(WIRING.map((w) => [w.tag, w]))('%s：组件声明的每个 prop 都被页面绑定（无孤儿 prop）', (tag, w) => {
+    const declared = definePropsNames(read(w.comp)).map(camelToKebab);
+    const attrs = usageAttrs(read(w.page), tag);
+    const bound = [...attrs.matchAll(/:([a-zA-Z][\w-]*)\s*=/g)].map((m) => m[1]);
+    expect(declared.filter((d) => !bound.includes(d))).toEqual([]);
+  });
+
+  it.each(WIRING.map((w) => [w.tag, w]))('%s：页面监听的每个事件都在组件 defineEmits 内', (tag, w) => {
+    const attrs = usageAttrs(read(w.page), tag);
+    const listened = [...attrs.matchAll(/@([a-zA-Z][\w-]*)\s*=/g)].map((m) => m[1]);
+    const declared = defineEmitsNames(read(w.comp)).map(camelToKebab);
+    expect(listened.filter((l) => !declared.includes(l))).toEqual([]);
+  });
+
+  it.each(WIRING.map((w) => [w.tag, w]))('%s：组件声明的每个事件都被页面监听（无孤儿 emit）', (tag, w) => {
+    const declared = defineEmitsNames(read(w.comp)).map(camelToKebab);
+    const attrs = usageAttrs(read(w.page), tag);
+    const listened = [...attrs.matchAll(/@([a-zA-Z][\w-]*)\s*=/g)].map((m) => m[1]);
+    expect(declared.filter((d) => !listened.includes(d))).toEqual([]);
+  });
+
+  it('对账表本身有效（4 个组件、prop 与事件总数非零，防解析器静默失效）', () => {
+    const props = WIRING.reduce((n, w) => n + definePropsNames(read(w.comp)).length, 0);
+    const emits = WIRING.reduce((n, w) => n + defineEmitsNames(read(w.comp)).length, 0);
+    expect(props).toBe(14);
+    expect(emits).toBe(4);
+  });
+
+  it('对账锁具备红能力（注入改名必须被抓到，防「解析器失效即假绿」）', () => {
+    const attrs = usageAttrs(read('pages/exam/mock-exam.uvue'), 'ExamQuestionCard');
+    expect(attrs).not.toBeNull();
+
+    const declaredEmits = defineEmitsNames(read('pages/exam/components/exam-question-card.uvue')).map(camelToKebab);
+    const listened = [...attrs.replace('@option-click', '@option-clicked').matchAll(/@([a-zA-Z][\w-]*)\s*=/g)].map((m) => m[1]);
+    expect(listened.filter((l) => !declaredEmits.includes(l))).toEqual(['option-clicked']);
+
+    const declaredProps = definePropsNames(read('pages/exam/components/exam-question-card.uvue')).map(camelToKebab);
+    const bound = [...attrs.replace(':selected-keys', ':selected-key').matchAll(/:([a-zA-Z][\w-]*)\s*=/g)].map((m) => m[1]);
+    expect(bound.filter((b) => !declaredProps.includes(b))).toEqual(['selected-key']);
   });
 });
 
@@ -95,7 +191,8 @@ describe('组件接线零孤儿（#779 回归锁：import 的组件文件必须�
 
   it('组件目录内不存在孤儿文件（每个 .uvue 都被某页面显式 import）', () => {
     const dir = path.join(ROOT, 'pages/exam/components');
-    if (!fs.existsSync(dir)) return;
+    // 目录整体消失不得静默通过（首版照抄 practice 先例的 `if (!existsSync) return`，是假绿通道）
+    expect(fs.existsSync(dir)).toBe(true);
     const pagesSrc = EXAM_PAGES.map((p) => read(p)).join('\n');
     const orphans = fs.readdirSync(dir)
       .filter((f) => f.endsWith('.uvue'))
@@ -290,5 +387,14 @@ describe('展示纯函数唯一实现（T03/T06 口径）：exam 模块零题型
   it('两个 composable 均消费 utils/wrongQuestionDisplay 的唯一实现', () => {
     expect(read('pages/exam/composables/useMockExamSession.uts')).toMatch(/import\s*\{[^}]*getTypeName[^}]*\}\s*from\s*'\.\.\/\.\.\/\.\.\/utils\/wrongQuestionDisplay'/);
     expect(read('pages/exam/composables/useMockExamResult.uts')).toMatch(/import\s*\{[^}]*getTypeName[^}]*\}\s*from\s*'\.\.\/\.\.\/\.\.\/utils\/wrongQuestionDisplay'/);
+  });
+
+  it('选项选中判定 isSelected 唯一实现在题目卡片（composable 不重复导出，原页面那份零消费）', () => {
+    expect(read('pages/exam/composables/useMockExamSession.uts')).not.toContain('function isSelected');
+    expect(read('pages/exam/components/exam-question-card.uvue')).toContain('function isSelected');
+    // 页面模板不得直调 session.isSelected（组件自持选中态渲染）
+    for (const page of EXAM_PAGES) {
+      expect(read(page)).not.toContain('session.isSelected');
+    }
   });
 });

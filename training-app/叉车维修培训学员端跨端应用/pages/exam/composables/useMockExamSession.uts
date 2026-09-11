@@ -8,6 +8,8 @@
  *
  * 展示纯函数不在此重写：题型名走 utils/wrongQuestionDisplay 的唯一实现
  * （原页面内的 getTypeName / isMultiChoice 是第二实现，随本票退役）。
+ * 同理，选项选中判定 isSelected 的唯一实现在题目卡片组件（选中态经 selectedKeys 数组下发），
+ * 原页面内那一份零消费，随搬迁删除。
  */
 import { ref, computed } from 'vue'
 import type { Ref, ComputedRef } from 'vue'
@@ -46,7 +48,6 @@ export type UseMockExamSessionResult = {
     loadExam : () => Promise<void>
     getPaletteClass : (idx : number) => string
     getPaletteTextClass : (idx : number) => string
-    isSelected : (key : string) => boolean
     onOptionClick : (key : string) => void
     onJumpTo : (idx : number) => void
     onPrev : () => void
@@ -141,11 +142,6 @@ export function useMockExamSession() : UseMockExamSessionResult {
     /** 是否多选题（题型判定收敛 utils/wrongQuestionDisplay，此处只补「当前题」取值） */
     function isCurrentMultiChoice() : boolean {
         return isMultiChoiceType(currentQuestion.value.type)
-    }
-
-    /** 选项是否已选中 */
-    function isSelected(key : string) : boolean {
-        return selectedKeys.value.indexOf(key) >= 0
     }
 
     /** 题号导航条样式：当前题/已答/未答 */
@@ -499,7 +495,6 @@ export function useMockExamSession() : UseMockExamSessionResult {
         loadExam: () => loadExam(),
         getPaletteClass: (idx : number) => getPaletteClass(idx),
         getPaletteTextClass: (idx : number) => getPaletteTextClass(idx),
-        isSelected: (key : string) => isSelected(key),
         onOptionClick: (key : string) => onOptionClick(key),
         onJumpTo: (idx : number) => onJumpTo(idx),
         onPrev: () => onPrev(),
