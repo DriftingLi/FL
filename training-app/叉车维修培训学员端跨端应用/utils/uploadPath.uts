@@ -1,0 +1,113 @@
+/**
+ * 上传路径工具（#816 根因修复）
+ *
+ * 根因：系统文件选择器（小米文件管理 / 微信下载目录）在 Android 上返回的是
+ * `content://com.android.fileexplorer.myprovider/...` 形式的 URI。`uni.uploadFile`
+ * 内部用 Android ContentResolver 去 query 这个 URI 取文件名/大小，而 provider 暴露的
+ * 列名与 DCloud 的假设不一致，`getString()` 拿到 col -1，抛：
+ *   IllegalStateException: Couldn't read row 0, col -1 from CursorWindow
+ *     at uts.sdk.modules.DCloudUniNetwork.UploadController.getFileInformation
+ * 请求根本没发出去（HTTP 层未参与），所以既不是网络问题也不是后端/配额问题。
+ *
+ * 对策：上传前把 `content://` 拷成真实文件路径再传。本文件只放**纯函数**
+ * （路径判定 / 文件名提取 / 净化 / 哈希 / 目标路径拼接），便于契约测试；
+ * 真正的文件系统调用在 api/request.uts 的 prepareUploadPath 里（需运行时能力）。
+ *
+ * @note 纯函数零依赖，不 import any（守护套件会扫本目录）
+ */
+
+/** 临时落盘中转目录名（位于 uni.env.USER_DATA_PATH 下，可写且不被系统清理） */
+export const UPLOAD_TMP_DIR = 'upload-tmp'
+
+/**
+ * 是否为 Android content:// URI
+ * @note 用 startsWith 显式前缀匹配而非正则，避免 UTS 对正则特性支持的边界问题
+ */
+export function isContentUri(path : string) : boolean {
+    return path.startsWith('content://')
+}
+
+/**
+ * 取路径最后一段作为文件名（不含 query/fragment）
+ * @note 只做纯字符串切分，不碰文件系统
+ */
+export function extractBaseName(uri : string) : string {
+    let p = uri
+    const q = p.indexOf('?')
+    if (q >= 0) p = p.substring(0, q)
+    const h = p.indexOf('#')
+    if (h >= 0) p = p.substring(0, h)
+    const slash = p.lastIndexOf('/')
+    const name = slash >= 0 ? p.substring(slash + 1) : p
+    return decodeSafe(name)
+}
+
+/** 宽松解码：非法百分号序列原样返回，不让文件名把整条上传链路带崩 */
+function decodeSafe(v : string) : string {
+    if (v.indexOf('%') < 0) return v
+    try {
+        const decoded = decodeURIComponent(v)
+        if (decoded != null) return decoded
+        return v
+    } catch (e) {
+        return v
+    }
+}
+
+/**
+ * 净化文件名：仅保留 [A-Za-z0-9._-]，其余（含中文与全角标点）替换为 `_`
+ * @note 安全性优先——目标路径要拼进文件系统；中文文件名保留在原 path 里已足够取证
+ */
+export function sanitizeBaseName(name : string) : string {
+    let out = ''
+    for (let i = 0; i < name.length; i++) {
+        const code = name.charCodeAt(i) ?? 0
+        const c = name[i]
+        const isDigit = code >= 48 && code <= 57    // '0'=48, '9'=57
+        const isLower = code >= 97 && code <= 122   // 'a'=97, 'z'=122
+        const isUpper = code >= 65 && code <= 90    // 'A'=65, 'Z'=90
+        if (isDigit || isLower || isUpper || code == 46 || code == 45 || code == 95) {
+            // code==46 '.', code==45 '-', code==95 '_'
+            out += c
+        } else {
+            out += '_'
+        }
+    }
+    if (out.length == 0) return 'file'
+    if (out.length > 64) out = out.substring(out.length - 64)
+    return out
+}
+
+/**
+ * 文件名指纹（FNV-1a 32 位，十六进制）
+ * @note 用于压掉同名文件与超长中文名带来的冲突，纯函数便于测试
+ */
+export function shortHash(v : string) : string {
+    let h = 2166136261
+    for (let i = 0; i < v.length; i++) {
+        h = h ^ (v.charCodeAt(i) ?? 0)
+        h = (h * 16777619) >>> 0
+    }
+    return h.toString(16)
+}
+
+/**
+ * 拼中转文件绝对路径：<userDataPath>/upload-tmp/u<hash>_<safeName>
+ * @note 保留扩展名，后端白名单校验依赖它
+ * @note userDataPath 可能是 `unifile://usr/` 形态（HBuilderX 4.71+ 的 uni.env.USER_DATA_PATH
+ *       自带尾斜杠），先掐尾斜杠再拼，避免拼出 `unifile://usr//upload-tmp/...` 双斜杠
+ */
+export function buildTempFilePath(userDataPath : string, sourcePath : string, seq : number) : string {
+    const safe = sanitizeBaseName(extractBaseName(sourcePath))
+    const h = shortHash(sourcePath + '#' + seq.toString())
+    return trimTrailingSlash(userDataPath) + '/' + UPLOAD_TMP_DIR + '/u' + h + '_' + safe
+}
+
+/** 掐掉路径尾部斜杠（可能连续多根）；空串原样返回 */
+function trimTrailingSlash(p : string) : string {
+    let out = p
+    while (out.endsWith('/')) {
+        out = out.substring(0, out.length - 1)
+    }
+    return out
+}

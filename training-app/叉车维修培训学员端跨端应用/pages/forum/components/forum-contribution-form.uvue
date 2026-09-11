@@ -42,6 +42,10 @@
             </view>
         </view>
         <view class="submit-section">
+            <!-- #816：失败原因必须留在页面上，不能只写 console（真机反馈「点了没反应」） -->
+            <view v-if="errorText.length > 0" class="submit-error-box">
+                <text class="submit-error-text">{{ errorText }}</text>
+            </view>
             <view class="submit-btn" :class="{ disabled: submitting }" @click="onSubmit">
                 <text class="submit-btn-text">{{ submitText }}</text>
             </view>
@@ -52,6 +56,7 @@
 <script setup lang="uts">
     import { ref, computed } from 'vue'
     import { goBack } from '../../../utils/navigation'
+    import { errMsg } from '../../../api/helpers'
     import { uploadContributionFileApi, createContributionApi } from '../../../api/contribution'
     import type { ContributionFileItem } from '../../../api/contribution'
 
@@ -80,6 +85,8 @@
     type ChosenFile = { path : string; name : string; size : number }
     const files = ref<ChosenFile[]>([])
     const submitting = ref<boolean>(false)
+    /** 失败原因（页内持久展示，空串 = 无错误）。#816：组件不再静默吞错 */
+    const errorText = ref<string>('')
 
     const totalSize = computed<number>(() : number => {
         let sum = 0
@@ -219,7 +226,10 @@
         files.value.splice(idx, 1)
     }
 
-    /** 提交：逐个上传暂存 → 创建投稿（pending）。校验/网络错误文案由 request 层统一 toast */
+    /** 提交：逐个上传暂存 → 创建投稿（pending）。
+     *  #816：失败必须落到页内 errorText（并保留 submit failed 日志供真机取证），
+     *  不再依赖 request 层 toast——那对 uni.uploadFile 的 fail 分支与映射期异常并不成立。
+     */
     async function onSubmit() : Promise<void> {
         if (submitting.value) return
         const t = props.title.trim()
@@ -232,13 +242,17 @@
         if (files.value.length == 0) { uni.showToast({ title: '请至少选择 1 个文件', icon: 'none' }); return }
 
         submitting.value = true
+        errorText.value = ''
+        let stage = '上传文件'
         try {
             const uploaded : ContributionFileItem[] = []
             for (let i = 0; i < files.value.length; i++) {
-                uni.showLoading({ title: '上传文件 ' + (i + 1).toString() + '/' + files.value.length.toString(), mask: true })
+                stage = '上传文件 ' + (i + 1).toString() + '/' + files.value.length.toString()
+                uni.showLoading({ title: stage, mask: true })
                 const fi = await uploadContributionFileApi(files.value[i].path)
                 uploaded.push(fi)
             }
+            stage = '提交投稿'
             uni.showLoading({ title: '提交投稿...', mask: true })
             await createContributionApi(props.credentialId, t, it, uploaded, false)
             uni.hideLoading()
@@ -246,7 +260,9 @@
             setTimeout(() => { goBack() }, 1200)
         } catch (e) {
             uni.hideLoading()
-            console.error('[forum-contribution-form] submit failed:', e)
+            // 定位证据：失败阶段 + 原因（真机调试控制台可直接读到）
+            console.error('[forum-contribution-form] submit failed at', stage, ':', e)
+            errorText.value = stage + '失败：' + errMsg(e, '请检查网络后重试')
         } finally {
             submitting.value = false
         }
@@ -278,6 +294,9 @@
     .credential-label { font-size: 28rpx; font-weight: bold; color: #333333; }
     .credential-name { font-size: 28rpx; color: #2979ff; }
     .submit-section { padding: 0 0 64rpx; align-items: center; }
+    /* #816：失败原因常驻页内（不再只写 console） */
+    .submit-error-box { width: 100%; background-color: #FFF0F0; border-radius: 12rpx; padding: 16rpx 20rpx; margin-bottom: 20rpx; }
+    .submit-error-text { font-size: 24rpx; color: #e5484d; }
     .submit-btn { width: 100%; height: 88rpx; border-radius: 44rpx; background-color: #2979ff; align-items: center; justify-content: center; }
     .submit-btn.disabled { background-color: #cccccc; }
     .submit-btn-text { font-size: 32rpx; color: #ffffff; font-weight: bold; }

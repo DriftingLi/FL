@@ -9,7 +9,15 @@
             <view class="header-right"></view>
         </view>
         <scroll-view class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
-            <view v-if="uploads.length == 0 && !loading" class="empty-tip">
+            <!-- #816：加载失败不能再伪装成「暂无上传资源」 -->
+            <view v-if="uploads.length == 0 && !loading && failed" class="empty-tip">
+                <text class="empty-icon">📡</text>
+                <text class="empty-text">加载失败，请检查网络后重试</text>
+                <view class="empty-btn" @click="reload">
+                    <text class="empty-btn-text">重试</text>
+                </view>
+            </view>
+            <view v-if="uploads.length == 0 && !loading && !failed" class="empty-tip">
                 <text class="empty-icon">📤</text>
                 <text class="empty-text">暂无上传资源</text>
                 <view class="empty-btn" @click="onUpload">
@@ -57,6 +65,8 @@
     const uploads = ref<ContributionItem[]>([])
     const loading = ref<boolean>(false)
     const noMore = ref<boolean>(false)
+    /** 加载失败标记（#816：与「暂无数据」区分开，失败给重试位而不是空态） */
+    const failed = ref<boolean>(false)
     const page = ref<number>(1)
     const pageSize = 20
 
@@ -108,8 +118,10 @@
                 }
             }
             noMore.value = uploads.value.length >= data.total || data.items.length == 0
+            failed.value = false
         } catch (e) {
             console.error('[my-uploads] load failed:', e)
+            failed.value = true
         } finally {
             loading.value = false
         }
@@ -118,6 +130,7 @@
     function reload() : void {
         page.value = 1
         noMore.value = false
+        failed.value = false
         loadUploads()
     }
 

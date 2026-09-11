@@ -107,7 +107,7 @@ export function downloadAndOpenMaterialApi(materialId : number) : Promise<string
 			return Promise.resolve('资料地址无效')
 		}
 		// 静态直链含中文/空格，需编码；展开符会触发守护规则 I（UTS 展开会被误判为未定义标识符）
-		const encodedURL = encodeURI(info.file_url)
+		const encodedURL = encodeURI(info.file_url) ?? ''
 		return new Promise<string>((resolve) => {
 			uni.downloadFile({
 				url: encodedURL,
