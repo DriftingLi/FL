@@ -1,0 +1,144 @@
+<template>
+    <!-- 题目卡片 + 选项列表 —— T07 手术自 pages/exam/mock-exam.uvue 逐段搬出，类名与结构逐字不变 -->
+    <view class="question-card">
+        <view class="question-header">
+            <text class="question-type-tag">{{ typeName }}</text>
+            <text class="question-score">{{ score }}分</text>
+        </view>
+        <text class="question-title">{{ title }}</text>
+
+        <!-- 选项列表 -->
+        <view class="option-list">
+            <view v-for="(opt, idx) in options" :key="idx"
+                class="option-item"
+                :class="isSelected(opt.key) ? 'option-selected' : ''"
+                @click="onOptionClick(opt.key)">
+                <view class="option-key" :class="isSelected(opt.key) ? 'option-key-selected' : ''">
+                    <text class="option-key-text">{{ opt.key }}</text>
+                </view>
+                <text class="option-text">{{ opt.text }}</text>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import type { QuestionOption } from '../../../types/index'
+
+    // 对象 prop 扁平化为原始 props（ADR-0007 规则 P，全仓先例 wrong-question-card）
+    const props = withDefaults(defineProps<{
+        typeName? : string
+        score? : number
+        title? : string
+        options? : QuestionOption[]
+        selectedKeys? : string[]
+    }>(), {
+        typeName: '',
+        score: 0,
+        title: '',
+        options: () => [] as QuestionOption[],
+        selectedKeys: () => [] as string[]
+    })
+
+    const emit = defineEmits(['optionClick'])
+
+    /** 选项是否已选中（选中态由页面/composable 持有，组件只读） */
+    function isSelected(key : string) : boolean {
+        return props.selectedKeys.indexOf(key) >= 0
+    }
+
+    function onOptionClick(key : string) : void {
+        emit('optionClick', key)
+    }
+</script>
+
+<style>
+    /* 题目卡片 */
+    .question-card {
+        background-color: #ffffff;
+        margin: 0 24rpx 24rpx;
+        border-radius: 16rpx;
+        padding: 32rpx;
+        border: 1px solid #eeeeee;
+    }
+
+    .question-header {
+        flex-direction: row;
+        align-items: center;
+        margin-bottom: 24rpx;
+    }
+
+    .question-type-tag {
+        font-size: 22rpx;
+        color: #ffffff;
+        background-color: #2979ff;
+        padding: 6rpx 16rpx;
+        border-radius: 8rpx;
+        margin-right: 16rpx;
+    }
+
+    .question-score {
+        font-size: 22rpx;
+        color: #ff9800;
+        background-color: #fff3e0;
+        padding: 6rpx 16rpx;
+        border-radius: 8rpx;
+    }
+
+    .question-title {
+        font-size: 32rpx;
+        color: #333333;
+        line-height: 48rpx;
+        margin-bottom: 32rpx;
+    }
+
+    /* 选项列表 */
+    .option-list {
+        flex-direction: column;
+    }
+
+    .option-item {
+        flex-direction: row;
+        align-items: center;
+        padding: 24rpx;
+        background-color: #f8f9fa;
+        border-radius: 12rpx;
+        margin-bottom: 16rpx;
+        border: 2rpx solid transparent;
+    }
+
+    .option-selected {
+        background-color: #e3f2fd;
+        border-color: #2979ff;
+    }
+
+    .option-key {
+        width: 56rpx;
+        height: 56rpx;
+        border-radius: 28rpx;
+        background-color: #e0e0e0;
+        align-items: center;
+        justify-content: center;
+        margin-right: 20rpx;
+    }
+
+    .option-key-selected {
+        background-color: #2979ff;
+    }
+
+    .option-key-text {
+        font-size: 28rpx;
+        font-weight: bold;
+        color: #666666;
+    }
+
+    .option-key-selected .option-key-text {
+        color: #ffffff;
+    }
+
+    .option-text {
+        flex: 1;
+        font-size: 28rpx;
+        color: #333333;
+    }
+</style>

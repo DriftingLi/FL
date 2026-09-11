@@ -1,0 +1,170 @@
+/**
+ * mock-exam-result 成绩页状态 composable（T07 exam 手术，parent #645 / ADR-0007）
+ *
+ * 逐段搬自 pages/exam/mock-exam-result.uvue 的 <script setup>，行为逐字保持：
+ * GET /mock-exam/:id/result 拉取 → 成绩汇总（通过判定 / 得分 / 答对答错 / 正确率 / 用时）
+ * → 逐题详情（你的答案、正确答案、对错标记）；失败态与重试语义不变。
+ * 页面壳层只保留模板与薄包装 handler（照 T06 先例 pages/practice/composables/usePracticeSession.uts）。
+ *
+ * 展示纯函数不在此重写：题型名走 utils/wrongQuestionDisplay 的唯一实现
+ * （原页面内的 getTypeName 是第二实现，随本票退役）。
+ */
+import { ref, computed } from 'vue'
+import type { Ref, ComputedRef } from 'vue'
+import { getMockExamResultApi } from '../../../api/mockExam'
+import { getTypeName } from '../../../utils/wrongQuestionDisplay'
+import type { MockExamResult, MockExamResultDetail } from '../../../types/index'
+
+/** 成绩汇总卡片视图模型（扁平下发，组件只渲染，无展示逻辑） */
+export type ExamResultSummaryView = {
+    passed : boolean
+    scoreText : string
+    totalScoreText : string
+    correctCount : number
+    totalQuestions : number
+    accuracy : number
+    usedTimeText : string
+}
+
+/** 逐题详情行视图模型（扁平下发） */
+export type ExamResultDetailRow = {
+    index : number
+    typeName : string
+    statusText : string
+    isCorrect : boolean
+    title : string
+    userAnswerText : string
+    correctAnswer : string
+}
+
+/** 本 composable 的显式返回类型（Kotlin error18 规避，先例 usePracticeSession / useMockExamSession） */
+export type UseMockExamResultResult = {
+    mockExamId : Ref<number>
+    loading : Ref<boolean>
+    hasError : Ref<boolean>
+    errorMsg : Ref<string>
+    summary : ComputedRef<ExamResultSummaryView>
+    details : ComputedRef<ExamResultDetailRow[]>
+    applyOptions : (options : UTSJSONObject) => void
+    loadResult : () => Promise<void>
+}
+
+/** 格式化分数（整数显示整数，小数显示 1 位） */
+function formatScore(score : number) : string {
+    if (score == Math.floor(score)) {
+        return '' + Math.floor(score)
+    }
+    return score.toFixed(1)
+}
+
+/** 用时显示：<=0 显示 --；>=1 分钟显示 x分y秒，否则只显示秒 */
+function buildUsedTimeText(sec : number) : string {
+    if (sec <= 0) return '--'
+    const m = Math.floor(sec / 60)
+    const s = sec % 60
+    if (m > 0) return m + '分' + s + '秒'
+    return s + '秒'
+}
+
+export function useMockExamResult() : UseMockExamResultResult {
+    const mockExamId = ref<number>(0)
+    const loading = ref<boolean>(false)
+    const hasError = ref<boolean>(false)
+    const errorMsg = ref<string>('加载成绩失败')
+
+    const result = ref<MockExamResult>({
+        mock_exam_id: 0,
+        score: 0,
+        total_score: 0,
+        passed: false,
+        correct_count: 0,
+        total_questions: 0,
+        used_time: 0,
+        details: [] as MockExamResultDetail[],
+    } as MockExamResult)
+
+    /** 汇总卡片视图模型（含正确率与用时文案，原页面两个 computed 的合并） */
+    const summary = computed<ExamResultSummaryView>(() : ExamResultSummaryView => {
+        const r = result.value
+        let accuracy = 0
+        if (r.total_questions != 0) {
+            accuracy = Math.floor(r.correct_count * 100 / r.total_questions)
+        }
+        return {
+            passed: r.passed,
+            scoreText: formatScore(r.score),
+            totalScoreText: formatScore(r.total_score),
+            correctCount: r.correct_count,
+            totalQuestions: r.total_questions,
+            accuracy: accuracy,
+            usedTimeText: buildUsedTimeText(r.used_time),
+        } as ExamResultSummaryView
+    })
+
+    /** 逐题详情行（派生在 composable 内完成，组件只渲染扁平字段） */
+    const details = computed<ExamResultDetailRow[]>(() : ExamResultDetailRow[] => {
+        const rows : ExamResultDetailRow[] = []
+        const list = result.value.details
+        for (let i = 0; i < list.length; i++) {
+            const d = list[i]
+            const row : ExamResultDetailRow = {
+                index: i + 1,
+                typeName: getTypeName(d.type),
+                statusText: d.is_correct ? '✓ 正确' : '✗ 错误',
+                isCorrect: d.is_correct,
+                title: d.title,
+                userAnswerText: d.user_answer.length > 0 ? d.user_answer : '未作答',
+                correctAnswer: d.correct_answer,
+            } as ExamResultDetailRow
+            rows.push(row)
+        }
+        return rows
+    })
+
+    async function loadResult() : Promise<void> {
+        if (mockExamId.value == 0) {
+            hasError.value = true
+            errorMsg.value = '考试 ID 无效'
+            return
+        }
+        loading.value = true
+        hasError.value = false
+        try {
+            const data = await getMockExamResultApi(mockExamId.value)
+            result.value = data
+            console.log('[mock-exam-result] loaded, score:', data.score, '/', data.total_score)
+        } catch (e) {
+            console.error('[mock-exam-result] load failed:', e)
+            hasError.value = true
+            errorMsg.value = '加载成绩失败'
+            if (e instanceof Error) {
+                const errObj = e as Error
+                const m = errObj.message
+                if (m != null && m.length > 0) {
+                    errorMsg.value = errorMsg.value + ': ' + m
+                }
+            }
+        } finally {
+            loading.value = false
+        }
+    }
+
+    /** 应用页面 onLoad 参数（mock_exam_id） */
+    function applyOptions(options : UTSJSONObject) : void {
+        const id = options['mock_exam_id']
+        if (id != null) {
+            mockExamId.value = parseInt(`${id}`)
+        }
+    }
+
+    return {
+        mockExamId,
+        loading,
+        hasError,
+        errorMsg,
+        summary,
+        details,
+        applyOptions: (options : UTSJSONObject) => applyOptions(options),
+        loadResult: () => loadResult()
+    } as UseMockExamResultResult
+}

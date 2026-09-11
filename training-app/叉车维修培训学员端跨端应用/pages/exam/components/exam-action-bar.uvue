@@ -1,0 +1,111 @@
+<template>
+    <!-- 上一题/下一题 + 底部交卷 —— T07 手术自 pages/exam/mock-exam.uvue 逐段搬出，类名与结构逐字不变。
+         唯一结构差异 = 组件单根要求引入的 .action-area 包层（column 容器，内层 padding 原样）。
+         原页面 .action-btn-submit 规则 12 写 0 读（模板零消费），随搬迁删除（T05 死代码消费面核对口径）。 -->
+    <view class="action-area">
+        <!-- 操作按钮 -->
+        <view class="action-bar">
+            <view class="action-btn action-btn-secondary" @click="onPrev">
+                <text class="action-btn-text action-btn-text-secondary">上一题</text>
+            </view>
+            <view v-if="!isLast" class="action-btn action-btn-primary" @click="onNext">
+                <text class="action-btn-text">下一题</text>
+            </view>
+            <view v-else class="action-btn action-btn-disabled">
+                <text class="action-btn-text action-btn-text-secondary">已是最后一题</text>
+            </view>
+        </view>
+
+        <!-- 底部交卷按钮 -->
+        <view class="submit-section">
+            <view class="submit-btn" @click="onSubmitClick">
+                <text class="submit-btn-text">交卷</text>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    const props = withDefaults(defineProps<{
+        isLast? : boolean
+    }>(), {
+        isLast: false
+    })
+
+    const emit = defineEmits(['prev', 'next', 'submitClick'])
+
+    function onPrev() : void {
+        emit('prev')
+    }
+
+    function onNext() : void {
+        emit('next')
+    }
+
+    function onSubmitClick() : void {
+        emit('submitClick')
+    }
+</script>
+
+<style>
+    /* 底部操作区：包一层 column 容器承载原页面同级的两段（视觉与内层 padding 逐字不变） */
+    .action-area {
+        flex-direction: column;
+    }
+
+    /* 操作按钮 */
+    .action-bar {
+        flex-direction: row;
+        padding: 0 24rpx 24rpx;
+    }
+
+    .action-btn {
+        flex: 1;
+        align-items: center;
+        padding: 24rpx 0;
+        border-radius: 48rpx;
+        margin: 0 12rpx;
+    }
+
+    .action-btn-secondary {
+        background-color: #f5f5f5;
+        border: 1px solid #e0e0e0;
+    }
+
+    .action-btn-primary {
+        background-color: #2979ff;
+    }
+
+    .action-btn-text {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #ffffff;
+    }
+
+    .action-btn-text-secondary {
+        color: #666666;
+    }
+
+    .action-btn-disabled {
+        background-color: #f5f5f5;
+        border: 1px solid #e0e0e0;
+    }
+
+    /* 底部交卷按钮 */
+    .submit-section {
+        padding: 0 24rpx 48rpx;
+    }
+
+    .submit-btn {
+        align-items: center;
+        padding: 24rpx 0;
+        border-radius: 48rpx;
+        background-color: #ff5722;
+    }
+
+    .submit-btn-text {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #ffffff;
+    }
+</style>
