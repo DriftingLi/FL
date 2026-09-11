@@ -633,6 +633,14 @@ func (s *ForumService) UpdateTopic(in UpdateTopicInput) (*ForumTopicDTO, error) 
 	if category == ForumCategoryQuestion && topic.ChapterID != nil && *topic.ChapterID > 0 {
 		return nil, errors.New("问答帖不属于任何章节，不能指定 chapter_id")
 	}
+	// 已采纳的帖子禁止改类别（2026-09-11 维护者裁定）：采纳状态只在问答帖有意义，
+	// 迁移类别会把 accepted_reply_id/solved_at 留在非问答帖上（答主已发的分按既有政策
+	// 「取消采纳不回滚」保留），产生「非问答帖带采纳」的悬挂态。
+	// 判定按采纳事实而非当前类别——同一条规则也兜住历史遗留的悬挂行。
+	// 逃生口：先取消采纳（CancelAccept 清空 accepted_reply_id）再改类别。
+	if topic.AcceptedReplyID != nil && category != ForumCategoryQuestion {
+		return nil, errors.New("已采纳的问答帖不能改类别，请先取消采纳")
+	}
 
 	// 显式写全四字段（map 更新：category 归一后的非空值不受 GORM 零值跳过影响）
 	if err := s.db.Model(&model.ForumTopic{}).Where("id = ?", in.TopicID).Updates(map[string]any{

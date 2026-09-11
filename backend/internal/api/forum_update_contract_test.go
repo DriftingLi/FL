@@ -193,7 +193,50 @@ func TestForumUpdateTopicContract(t *testing.T) {
 		t.Fatalf("空标题应 400，实际 %d", rec.Code)
 	}
 
-	// 8. 未认证 → 401（路由挂在 JWTAuth 组内）
+	// 8. 已采纳的问答帖禁止改类别（2026-09-11 维护者裁定）
+	//    未采纳的问答帖改类别仍放行 —— 两条路径都要有证据
+	qTopicID := create(map[string]any{"category": "question", "title": "待解决问题", "content": "x"})
+	// 8a. 未采纳：改 experience 放行
+	if rec := do(authorToken, http.MethodPut, fmt.Sprintf("/api/forum/topics/%d", qTopicID), map[string]any{
+		"title": "未采纳问答改经验", "content": "x", "category": "experience",
+	}); rec.Code != http.StatusOK {
+		t.Fatalf("未采纳问答帖改类别应 200，实际 %d %s", rec.Code, rec.Body.String())
+	}
+	// 8b. 造一条已采纳问答帖（直接落库模拟采纳态，避免串采纳链路）
+	acceptedTopicID := create(map[string]any{"category": "question", "title": "已解决问题", "content": "x"})
+	if err := db.Model(&model.ForumTopic{}).Where("id = ?", acceptedTopicID).
+		Updates(map[string]any{"accepted_reply_id": 1, "solved_at": testutil.Now()}).Error; err != nil {
+		t.Fatalf("模拟采纳态失败: %v", err)
+	}
+	rec = do(authorToken, http.MethodPut, fmt.Sprintf("/api/forum/topics/%d", acceptedTopicID), map[string]any{
+		"title": "已采纳改讨论", "content": "x", "category": "discussion",
+	})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("已采纳问答帖改类别应 400，实际 %d %s", rec.Code, rec.Body.String())
+	}
+	var acceptedResp updateTopicResp
+	_ = json.Unmarshal(rec.Body.Bytes(), &acceptedResp)
+	if acceptedResp.Message != "已采纳的问答帖不能改类别，请先取消采纳" {
+		t.Fatalf("拒绝文案不符，实际 %q", acceptedResp.Message)
+	}
+	// 8c. 同类别（question → question）不受限：改标题放行
+	if rec := do(authorToken, http.MethodPut, fmt.Sprintf("/api/forum/topics/%d", acceptedTopicID), map[string]any{
+		"title": "已采纳改标题", "content": "x", "category": "question",
+	}); rec.Code != http.StatusOK {
+		t.Fatalf("已采纳问答帖改标题应 200，实际 %d %s", rec.Code, rec.Body.String())
+	}
+	// 8d. 逃生口：清空采纳后可改类别
+	if err := db.Model(&model.ForumTopic{}).Where("id = ?", acceptedTopicID).
+		Updates(map[string]any{"accepted_reply_id": nil, "solved_at": nil}).Error; err != nil {
+		t.Fatalf("清理采纳态失败: %v", err)
+	}
+	if rec := do(authorToken, http.MethodPut, fmt.Sprintf("/api/forum/topics/%d", acceptedTopicID), map[string]any{
+		"title": "取消采纳后改讨论", "content": "x", "category": "discussion",
+	}); rec.Code != http.StatusOK {
+		t.Fatalf("取消采纳后改类别应 200，实际 %d %s", rec.Code, rec.Body.String())
+	}
+
+	// 9. 未认证 → 401（路由挂在 JWTAuth 组内）
 	req, _ := http.NewRequest(http.MethodPut, fmt.Sprintf("/api/forum/topics/%d", topicID), bytes.NewReader([]byte(`{"title":"x","content":"y"}`)))
 	req.Header.Set("Content-Type", "application/json")
 	plain := httptest.NewRecorder()
@@ -202,5 +245,5 @@ func TestForumUpdateTopicContract(t *testing.T) {
 		t.Fatalf("未认证应 401，实际 %d", plain.Code)
 	}
 
-	fmt.Println("编辑帖子契约通过：本人/空类别归一/非本人403/非法类别400/不存在404/章节帖不变量/长度越界/未认证 401 均守住")
+	fmt.Println("编辑帖子契约通过：本人/空类别归一/非本人403/非法类别400/不存在404/章节帖不变量/已采纳禁改类别/长度越界/未认证 401 均守住")
 }
