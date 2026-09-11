@@ -1,0 +1,27 @@
+/**
+ * 收藏模块类型
+ */
+
+/** 收藏条目 */
+export type FavoriteItem = {
+    favorite_id : number
+    target_type : string            // course / chapter / question / featured / topic
+    target_id : number
+    title : string
+    cover : string
+    created_at : string
+}
+
+/** 收藏列表结果 */
+export type FavoriteListResult = {
+    items : FavoriteItem[]
+    total : number
+    page : number
+    page_size : number
+}
+
+/** 收藏检查结果 */
+export type FavoriteCheckResult = {
+    favorited : boolean
+    favorite_id : number
+}

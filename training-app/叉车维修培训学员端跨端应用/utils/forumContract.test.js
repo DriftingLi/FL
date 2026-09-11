@@ -216,7 +216,7 @@ describe('精选筛选契约（#742 批次三：三 Tab 通用精选筛选 + 列
   const page = read('pages/forum/forum.uvue');
   const card = read('pages/forum/components/forum-topic-card.uvue');
   const bar = read('pages/forum/components/forum-featured-filter.uvue');
-  const types = read('types/index.uts');
+  const types = read('types/forum.uts');
 
   it('api：featured 参数按后端契约透传（featured=true|false，空串不传=不过滤；参数名勿改）', () => {
     expect(src).toMatch(/featured : string = ''/);

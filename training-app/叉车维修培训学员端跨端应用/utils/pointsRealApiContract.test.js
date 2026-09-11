@@ -27,7 +27,7 @@ function stripComments(src) {
 }
 
 const apiSrc = stripComments(read('api/points.uts'));
-const typesSrc = read('types/index.uts');
+const typesSrc = read('types/points.uts');
 const detailSrc = read('pages/points/points-detail.uvue');
 const taskSrc = stripComments(read('pages/points/task-center.uvue'));
 const chapterSrc = stripComments(read('pages/courses/chapter-view.uvue'));

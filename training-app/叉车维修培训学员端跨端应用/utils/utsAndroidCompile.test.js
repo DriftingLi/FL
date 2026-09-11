@@ -1059,6 +1059,8 @@ describe('全工程守护：五类 Kotlin 编译地雷零命中', () => {
           if (new RegExp('(?:^|\\n)[ \\t]*(?:export\\s+)?(?:type|interface)\\s+' + name + '\\b').test(clean)) continue;
           if (new RegExp('import\\s+(?:type\\s+)?\\{[^}]*\\b' + name + '\\b[^}]*\\}', 's').test(clean)) continue;
           if (new RegExp('import\\s+(?:type\\s+)?' + name + '\\b').test(clean)) continue;
+          // barrel re-export: export type { X } from './y'
+          if (new RegExp('export\\s+type\\s+\\{[^}]*\\b' + name + '\\b[^}]*\\}\\s+from', 's').test(clean)) continue;
           const useRe = new RegExp('(?<![\\w$])' + name + '(?![\\w$])');
           if (lines.some((ln) => useRe.test(ln))) {
             violations.push(`${path.relative(ROOT, file)}: "${name}" 未 import（导出于 ${path.relative(ROOT, defFile)}）`);

@@ -1,0 +1,31 @@
+/**
+ * 跨域共享类型
+ * ApiResponse — 统一信封格式（request 层内部使用）
+ * GridItem — 首页九宫格入口配置
+ * MarkdownBlock — Markdown 解析后的块类型
+ */
+
+/** 后端通用 JSON 响应格式 */
+export type ApiResponse<T> = {
+    code : number
+    message : string
+    data : T
+}
+
+/** 九宫格入口配置项 */
+export type GridItem = {
+    key : string
+    title : string
+    icon : string        // emoji 或字符
+    color : string       // 卡片主题色（hex）
+    path : string        // 跳转路径，空字符串表示占位
+    available : boolean  // 是否已开发
+}
+
+/** Markdown 解析后的块类型 */
+export type MarkdownBlock = {
+    type : string      // heading / paragraph / code / list / quote / divider / image
+    level : number     // 标题层级 1-6（非标题为 0）
+    text : string      // 文本内容
+    items : string[]   // 列表项（仅 list 类型）
+}

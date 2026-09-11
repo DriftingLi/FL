@@ -1,0 +1,105 @@
+/**
+ * 论坛模块类型
+ */
+
+/** 论坛帖子 */
+export type ForumTopic = {
+    id : number
+    title : string
+    content : string
+    images : string[]
+    author_id : number
+    author_name : string
+    author_avatar : string
+    replies_count : number
+    views_count : number
+    likes_count : number
+    liked : boolean
+    favorited : boolean
+    created_at : string
+    /**
+     * @deprecated 旧分类词汇（general / resource / video / exam），后端详情 DTO 已不回该字段，
+     * 读它只会拿到 buildTopicDetail 垫的默认值。判类别一律用下方的 category（#811 踩坑教训）。
+     */
+    scope : string
+    /** 问题状态：resolved（已解决）/ open（进行中）（#736） */
+    status : string
+    /** 精选位（#742 批次三）：后端 is_featured 回显，管理端加精，列表展示标识与筛选 */
+    is_featured : boolean
+}
+
+/** 帖子列表响应 */
+export type ForumTopicListResult = {
+    items : ForumTopic[]
+    total : number
+    page : number
+    page_size : number
+}
+
+/** 帖子回复 */
+export type ForumReply = {
+    id : number
+    topic_id : number
+    topic_title : string
+    content : string
+    images : string[]
+    author_id : number
+    author_name : string
+    author_avatar : string
+    created_at : string
+    /** 是否可删除（后端返回，贴主本人为 true） */
+    can_delete : boolean
+    likes_count : number
+    liked : boolean
+    /** 后端未来可能直接返回：兼容读取时判空使用（forum-detail 本地态回退） */
+    liked_by_me ?: boolean
+    /** 后端未来可能直接返回：兼容读取时判空使用（forum-detail 本地态回退） */
+    like_count ?: number
+    /** 是否被楼主采纳（后端 is_accepted 字段，仅问答帖有效） */
+    is_accepted : boolean
+}
+
+/** 帖子详情（含回复列表） */
+export type ForumTopicDetail = {
+    id : number
+    title : string
+    content : string
+    images : string[]
+    author_id : number
+    author_name : string
+    author_avatar : string
+    replies_count : number
+    views_count : number
+    likes_count : number
+    liked : boolean
+    favorited : boolean
+    created_at : string
+    /** 是否可删除（后端返回，贴主本人为 true） */
+    can_delete : boolean
+    replies : ForumReply[]
+    /** 帖子分类：general / resource / video / exam */
+    scope : string
+    /** 帖子类别：discussion / question / experience（#727） */
+    category : string
+    /** 问题状态：resolved（已解决）/ open（进行中）（#736） */
+    status : string
+    /** 被采纳的回复 ID（可空，仅问答帖有效） */
+    accepted_reply_id ?: number
+}
+
+/**
+ * 帖子点赞/取消点赞响应（POST/DELETE /forum/topics/:id/like）
+ * @note UTS 不支持内联匿名对象类型，必须用具名 type
+ */
+export type LikeTopicResult = {
+    liked : boolean
+    likes_count : number
+}
+
+/** 我的回复列表响应（GET /forum/my-replies） */
+export type MyRepliesResult = {
+    items : ForumReply[]
+    total : number
+    page : number
+    page_size : number
+}
