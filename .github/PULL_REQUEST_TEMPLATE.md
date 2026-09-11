@@ -1,6 +1,6 @@
 <!--
 合并方式固定 Squash and merge；目标分支固定 master（本模板此前写在移动端目录下且写着 main，GitHub 读不到、分支名也是错的）。
-master 有 ruleset「protect master」，必检只有 ci-summary；pr-evidence 在本仓是**可见检查**（维护者无 admin 通道，装不上必检）。
+master 有 ruleset「protect master」，必检只有 ci-summary；pr-evidence 在本仓是**可见检查**（本仓有可用 admin 通道，但裁定不装必检——逐 PR 审批成本高于约束收益）。
 真正的阻塞是行为约束：**agent 不得自行合并触及运行时面的 PR** —— 必须把证据填齐后停在「待人工签收」，由人执行合并。口径见 docs/adr/0008-移动端验收门与证据.md。
 -->
 

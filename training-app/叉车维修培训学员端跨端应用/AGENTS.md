@@ -178,7 +178,7 @@ UTS（uni-app-x 的 TypeScript 变体）不支持以下 TypeScript 语法：
 - 非运行时面的 PR（纯文档 / 测试 / CI 配置）不受此限，agent 可自行合并。
 - **人工门（真机逐页截图、微信开发者工具、HBuilderX 全量编译）只能由人执行**；agent 不得代填「执行人」，也不得在证据里写「已通过」。
 - 例外通道：正文写明「已接受未验证风险 + 理由 + 事后验证计划」，检查会打警告放行，但**仍必须由人执行合并**。禁止静默例外。
-- `pr-evidence` 检查只校证据结构、不校真伪；本仓无 admin 通道，它是**可见检查**而非 ruleset 必检（原因见 ADR-0008「单账号约束」）。
+- `pr-evidence` 检查只校证据结构、不校真伪；它是**可见检查**而非 ruleset 必检——本仓**有可用的 admin 通道**（维护者持有仓库所有者账号），但**裁定不装**（逐 PR 审批成本高于约束收益，见 ADR-0008「为何不装『必检 + approve』」）。
 ## 发布流程（push / PR / merge）
 
 master 有仓库 ruleset「protect master」保护（直接 push 会被拒，`push declined due to repository rule violations`），且限定 squash 合并。发布必须走分支 + PR：
