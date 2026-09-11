@@ -85,9 +85,8 @@
         resolveFileUrl,
         getAuthorInitial,
         getAvatarColor,
-        formatDateStr,
-        formatCountCompact,
     } from '../../../utils/forumDisplay'
+    import { formatDateStr, formatCountCompact } from '../../../utils/format'
 
     // 扁平原始类型 props 下发（全仓先例：可选对象 prop 成员直读 Kotlin error18）
     const props = withDefaults(defineProps<{

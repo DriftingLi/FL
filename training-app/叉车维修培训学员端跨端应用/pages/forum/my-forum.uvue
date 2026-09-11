@@ -44,7 +44,7 @@
                                 <view class="topic-edit-btn" @click.stop="onEditTopic(item.id)">
                                     <text class="topic-edit-text">编辑</text>
                                 </view>
-                                <text class="meta-time">{{ formatDateStr(item.created_at) }}</text>
+                                <text class="meta-time">{{ displayTime(item.created_at) }}</text>
                             </view>
                         </view>
                     </view>
@@ -64,7 +64,7 @@
                         <text class="reply-topic-title"> {{ item.topic_title }}</text>
                         <text class="reply-content">{{ item.content }}</text>
                         <view class="reply-footer">
-                            <text class="reply-time">{{ formatDateStr(item.created_at) }}</text>
+                            <text class="reply-time">{{ displayTime(item.created_at) }}</text>
                         </view>
                     </view>
                 </view>
@@ -88,11 +88,12 @@
     import { goBack } from '../../utils/navigation'
     import { getMyTopicsApi, getMyRepliesApi } from '../../api/forum'
     import type { ForumTopic, ForumReply } from '../../types/index'
+    import { formatDateStr } from '../../utils/format'
 
-    /** ISO 日期字符串 → YYYY-MM-DD */
-    function formatDateStr(dateStr : string) : string {
-        if (dateStr == null || dateStr.length < 10) return dateStr
-        return dateStr.substring(0, 10)
+    /** 模板不可直调 import 函数（uvue 模板 import 调用编译为 .invoke() = Kotlin error18，先例 #677）；
+     *  本地薄包装消费 utils/format 唯一实现（T03 口径：展示纯函数零第二实现） */
+    function displayTime(dateStr : string) : string {
+        return formatDateStr(dateStr)
     }
 
     const statusBarHeight = useStatusBarHeight()

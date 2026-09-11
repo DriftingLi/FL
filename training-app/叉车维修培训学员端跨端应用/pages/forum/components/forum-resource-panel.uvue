@@ -48,7 +48,7 @@
 <script setup lang="uts">
     import { computed, onMounted } from 'vue'
     import { useResourcePoints } from '../../../composables/useResourcePoints'
-    import { formatCountCompact } from '../../../utils/forumDisplay'
+    import { formatCountCompact } from '../../../utils/format'
     import { UNAVAILABLE_TOAST } from '../../../constants/app'
 
     // 资源区数据自持（谁消费谁持有）；挂载即拉 profile，与术后壳层 onSwitchTab('resource') 行为等价
