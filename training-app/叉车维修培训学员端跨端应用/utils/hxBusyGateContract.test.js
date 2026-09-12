@@ -108,19 +108,22 @@ describe('HBuilderX 忙检测契约（单实例串行资源，2026-09-12）', ()
     const first = HX_SCRIPTS[0];
     const second = HX_SCRIPTS[1];
     const cases = [
-      ['H1', { ...real, helper: real.helper.replace('function Wait-HxFree', 'function Wait-HxX') }],
-      ['H1', { ...real, helper: real.helper.replace('HxLockStaleMinutes = 30', 'HxLockStaleMinutes = 90') }],
+      ['H1', { ...real, helper: real.helper.replace(/function Wait-HxFree/g, 'function Wait-HxX') }],
+      ['H1', { ...real, helper: real.helper.replace(/HxLockStaleMinutes = 30/g, 'HxLockStaleMinutes = 90') }],
       ['H2', { ...real, scripts: { ...real.scripts, [first]: real.scripts[first].replace(/hx-busy\.ps1/g, 'other.ps1') } }],
       ['H2', { ...real, scripts: { ...real.scripts, [second]: real.scripts[second].replace(/Wait-HxFree/g, 'WaitNothing') } }],
       ['H3', { ...real, scripts: { ...real.scripts, [first]: real.scripts[first] + '\nStop-Process -Name HBuilderX -Force\n' } }],
       ['H4', { ...real, helper: real.helper.replace(/exit 2/g, 'exit 1') }],
       ['H5', { ...real, scripts: { ...real.scripts, [first]: real.scripts[first].replace(/Release-HxLock/g, 'ReleaseNothing') } }],
-      ['H6', { ...real, helper: real.helper.replace('无法可靠探测', '可以精确探测') }],
-      ['H7', { ...real, helper: real.helper.replace('[switch]$NoWait', '[switch]$WaitForever') }],
+      ['H6', { ...real, helper: real.helper.replace(/无法可靠探测/g, '可以精确探测') }],
+      ['H7', { ...real, helper: real.helper.replace(/\[switch\]\$NoWait/g, '[switch]$WaitForever') }],
       ['H8', { ...real, helper: real.helper.replace(/HX_BUSY wait=/g, 'BUSY wait=') }],
-      ['H9', { ...real, adr: real.adr.replace('单实例', '多实例') }],
+      ['H9', { ...real, adr: real.adr.replace(/单实例/g, '多实例') }],
       ['H9', { ...real, adr: real.adr.replace(/git status/g, 'git diff') }]
     ];
+    // 注入一律用**全局**替换（/…/g）：判据多用 includes 判「存在」，若目标文本在文件里有第二处，
+    // 只替换第一处会让注入静默失效 ⇒ 自检假绿。2026-09-13 实测踩中：ADR-0008 新增一句
+    // 「单实例串行资源」使「单实例」出现两处，H9 的注入随之失效。
     cases.forEach(([rule, sources]) => {
       const found = scanContract(sources);
       expect(found.some((v) => v.startsWith(rule))).toBe(true);
