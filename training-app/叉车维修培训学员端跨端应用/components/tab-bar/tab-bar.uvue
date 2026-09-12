@@ -45,7 +45,7 @@
     const tabs : TabItem[] = [
         { key: 'dashboard', path: '/pages/dashboard/dashboard', icon: '/static/tabbar/home.png', activeIcon: '/static/tabbar/home-active.png', text: '首页' },
         { key: 'courses', path: '/pages/courses/courses', icon: '/static/tabbar/course.png', activeIcon: '/static/tabbar/course-active.png', text: '课程' },
-        { key: 'ai', path: '/pages/ai-assistant/ai-assistant', icon: '/static/tabbar/ai.png', activeIcon: '/static/tabbar/ai-active.png', text: 'AI学' },
+        { key: 'ai', path: '/pages/ai-assistant/version-select', icon: '/static/tabbar/ai.png', activeIcon: '/static/tabbar/ai-active.png', text: 'AI学' },
         { key: 'forum', path: '/pages/forum/forum', icon: '/static/tabbar/forum.png', activeIcon: '/static/tabbar/forum-active.png', text: '交流' },
         { key: 'profile', path: '/pages/profile/profile', icon: '/static/tabbar/profile.png', activeIcon: '/static/tabbar/profile-active.png', text: '我的' },
     ]
@@ -67,7 +67,11 @@
     .tab-bar {
         flex-direction: row;
         background-color: #ffffff;
-        border-top: 1rpx solid #f0f0f0;
+        /* 对齐原生栏的分割线观感：原生（pages.json borderStyle:black）真机实测是一条
+           清晰中灰线（该行平均亮度 170.9，等效约 #808080 @1px）；原 #f0f0f0（亮度 240）
+           比 AI 页上方的浅蓝底色（#E2EEFA，亮度 235.8）还亮 —— 等于没有分割线。
+           取 #ababab：1rpx=1.54px × 该色暗度(255-171) ≈ 129，与原生的 126.5 等效。 */
+        border-top: 1rpx solid #ababab;
         position: relative;
         z-index: 10;
     }
@@ -91,7 +95,8 @@
     }
 
     .tab-text.active {
-        color: #2979ff;
+        /* 与 pages.json 原生栏的 selectedColor 对齐（原为 #2979ff） */
+        color: #239edd;
         font-weight: bold;
     }
 </style>
