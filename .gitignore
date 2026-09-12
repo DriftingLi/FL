@@ -188,6 +188,7 @@ viz/
 .commandcode/
 .gocache/
 .glcache/
+.gomodcache/
 
 .npminstall-cache/
 
