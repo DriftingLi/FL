@@ -10,7 +10,8 @@
 				<view class="function-grid">
 					<view v-for="(item, idx) in functionItems" :key="idx" class="function-item" @click="onFunctionClick(item)">
 						<view class="function-icon-box">
-							<text class="function-icon">{{ item.icon }}</text>
+							<image v-if="item.iconPath && item.iconPath.length > 0" class="function-icon-img" :src="item.iconPath" mode="aspectFit" />
+							<text v-else class="function-icon-emoji">{{ item.icon }}</text>
 						</view>
 						<text class="function-title">{{ item.title }}</text>
 					</view>
@@ -38,7 +39,7 @@
 		</view>
 
 		<!-- 底部输入区（专业版带模型选择器） -->
-		<AiChatInput :show-model-bar="true" :model-name="currentModelName" @send="onInputSend" @model-click="showModelPicker = true" />
+		<AiChatInput :show-model-bar="true" :model-name="currentModelName" :show-image-button="true" @send="onInputSend" @model-click="showModelPicker = true" @voice-click="onVoiceClick" @image-click="onImageClick" />
 
 		<!-- 底部导航栏 -->
 		<TabBar :active-index="2"></TabBar>
@@ -191,6 +192,14 @@
 	// 消息操作
 	function onCopyText(content : string) : void {
 		uni.setClipboardData({ data: content, success: () => { uni.showToast({ title: '已复制', icon: 'success' }) } })
+	}
+
+	function onVoiceClick() : void {
+		uni.showToast({ title: '语音输入开发中', icon: 'none' })
+	}
+
+	function onImageClick() : void {
+		uni.showToast({ title: '图片发送开发中', icon: 'none' })
 	}
 
 	function getLastUserMessage() : string {
@@ -458,7 +467,7 @@
 <style>
 	.ai-page {
 		flex: 1;
-		background-color: #f8f8f8;
+		background: linear-gradient(180deg, #d2ebfc 0%, #e1eff9 45%, #edf3f6 100%);
 	}
 
 	.main {
@@ -478,26 +487,29 @@
 
 	.function-item {
 		align-items: center;
-		width: 22%;
+		width: 18%;
 	}
 
 	.function-icon-box {
-		width: 96rpx;
-		height: 96rpx;
-		background-color: #e5e5e5;
-		border-radius: 16rpx;
+		width: 84rpx;
+		height: 84rpx;
 		align-items: center;
 		justify-content: center;
-		margin-bottom: 12rpx;
+		margin-bottom: 10rpx;
 	}
 
-	.function-icon {
-		font-size: 44rpx;
+	.function-icon-img {
+		width: 84rpx;
+		height: 84rpx;
+	}
+
+	.function-icon-emoji {
+		font-size: 68rpx;
 	}
 
 	.function-title {
-		font-size: 24rpx;
-		color: #666666;
+		font-size: 22rpx;
+		color: #333333;
 		text-align: center;
 	}
 

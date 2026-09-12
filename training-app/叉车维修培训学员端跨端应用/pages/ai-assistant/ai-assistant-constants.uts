@@ -4,19 +4,20 @@
  */
 import type { AIFunctionItem } from '../../types/index'
 
-/** 功能入口列表 */
+/** 功能入口列表（5 项，含自定义图标路径） */
 export const FUNCTION_ITEMS : AIFunctionItem[] = [
-    { key: 'fault-code', title: '故障代码查询', icon: '\uD83D\uDD27', prompt: '帮我查询叉车故障代码含义' },
-    { key: 'drawing', title: '图纸识别', icon: '\uD83D\uDCD0', prompt: '请识别这张叉车图纸' },
-    { key: 'exercise', title: '习题解答', icon: '\uD83D\uDCDD', prompt: '请解答这道叉车维修题目' },
-    { key: 'knowledge', title: '维保知识', icon: '\uD83D\uDCDA', prompt: '请介绍叉车维保相关知识' },
+    { key: 'fault-consult', title: '故障咨询', icon: '\uD83D\uDC77', prompt: '故障咨询', iconPath: '/static/icons/ai-functions/fault-consult.png' },
+    { key: 'fault-code', title: '故障代码查询', icon: '\uD83D\uDD0D', prompt: '帮我查询叉车故障代码含义', iconPath: '/static/icons/ai-functions/fault-code-query.png' },
+    { key: 'drawing', title: '图纸识别', icon: '\uD83D\uDCDC', prompt: '请识别这张叉车图纸', iconPath: '/static/icons/ai-functions/drawing-recognition.png' },
+    { key: 'exercise', title: '习题解答', icon: '\u270F\uFE0F', prompt: '请解答这道叉车维修题目', iconPath: '/static/icons/ai-functions/exercise-solving.png' },
+    { key: 'knowledge', title: '维保知识', icon: '\uD83D\uDD27', prompt: '请介绍叉车维保相关知识', iconPath: '/static/icons/ai-functions/maintenance-knowledge.png' },
 ]
 
-/** 快捷提示语列表 */
+/** 快捷提示语列表（基础版+专业版统一） */
 export const QUICK_PROMPTS : string[] = [
-    '叉车液压系统常见故障有哪些，如何排查？',
-    '叉车启动困难可能是什么原因？',
-    '叉车日常保养的检查要点有哪些？',
+    '如何高效阅读书籍？',
+    '帮我写近期的学习汇报',
+    '总结这个章节的主要内容',
 ]
 
 /** 右侧菜单项类型 */

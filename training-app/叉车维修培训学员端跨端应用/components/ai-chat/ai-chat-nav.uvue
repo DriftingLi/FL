@@ -1,20 +1,39 @@
 <template>
 	<view class="ai-chat-nav" :style="{ paddingTop: statusBarHeight + 'px' }">
 		<view class="nav-content">
-			<text class="nav-icon" @click="onLeftClick">&#9776;</text>
-			<view class="nav-center">
-				<text class="nav-title">维修助手</text>
-				<view class="version-tabs">
-					<text class="version-tab" :class="{ active: version == 'basic' }" @click="onTabChange('basic')">基础版</text>
-					<text class="version-tab" :class="{ active: version == 'pro' }" @click="onTabChange('pro')">专业版</text>
+			<!-- 左：会话抽屉 -->
+			<view class="nav-left" @click="onLeftClick">
+				<view class="panel-icon">
+					<view class="panel-icon-line"></view>
 				</view>
 			</view>
-			<text class="nav-icon" @click="onMenuClick">&#9638;</text>
+
+			<!-- 中：版本标题 + 副标题 -->
+			<view class="nav-center">
+				<view class="nav-title-row">
+					<text class="nav-title">{{ versionTitle }}</text>
+					<text v-if="version == 'basic'" class="nav-sparkle">&#10024;</text>
+				</view>
+				<text class="nav-subtitle">维修助手</text>
+			</view>
+
+			<!-- 右：菜单 + 版本切换胶囊 -->
+			<view class="nav-right">
+				<view class="nav-pill">
+					<text class="pill-more" @click="onMenuClick">&#8943;</text>
+					<view class="pill-divider"></view>
+					<view class="pill-switch" @click="onSwitchVersion">
+						<view class="pill-switch-dot"></view>
+					</view>
+				</view>
+			</view>
 		</view>
 	</view>
 </template>
 
 <script setup lang="uts">
+	import { computed } from 'vue'
+
 	const props = withDefaults(defineProps<{
 		version?: string
 		statusBarHeight?: number
@@ -25,6 +44,10 @@
 
 	const emit = defineEmits(['leftClick', 'menuClick', 'tabChange'])
 
+	const versionTitle = computed<string>(() : string => {
+		return props.version == 'pro' ? '专业版' : '基础版'
+	})
+
 	function onLeftClick() : void {
 		emit('leftClick')
 	}
@@ -33,33 +56,49 @@
 		emit('menuClick')
 	}
 
-	function onTabChange(v : string) : void {
-		if (v != props.version) {
-			emit('tabChange', v)
-		}
+	/** 胶囊右侧圆点：切换到另一版本 */
+	function onSwitchVersion() : void {
+		emit('tabChange', props.version == 'pro' ? 'basic' : 'pro')
 	}
 </script>
 
 <style>
 	.ai-chat-nav {
-		background-color: #ffffff;
-		border-bottom: 1rpx solid #f0f0f0;
+		background-color: transparent;
 	}
 
 	.nav-content {
 		flex-direction: row;
 		align-items: center;
 		justify-content: space-between;
-		height: 88rpx;
-		padding: 0 24rpx;
+		padding: 8rpx 24rpx 0 24rpx;
 	}
 
-	.nav-icon {
-		font-size: 40rpx;
-		color: #333333;
-		padding: 12rpx;
+	/* 左：面板图标 */
+	.nav-left {
+		width: 96rpx;
+		height: 96rpx;
+		align-items: center;
+		justify-content: center;
 	}
 
+	.panel-icon {
+		width: 44rpx;
+		height: 36rpx;
+		border: 3rpx solid #6b6b6b;
+		border-radius: 8rpx;
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.panel-icon-line {
+		width: 3rpx;
+		height: 24rpx;
+		background-color: #6b6b6b;
+		margin-left: 9rpx;
+	}
+
+	/* 中：标题 */
 	.nav-center {
 		flex: 1;
 		flex-direction: column;
@@ -67,26 +106,71 @@
 		justify-content: center;
 	}
 
-	.version-tabs {
+	.nav-title-row {
 		flex-direction: row;
 		align-items: center;
-		margin-bottom: 4rpx;
-	}
-
-	.version-tab {
-		font-size: 24rpx;
-		color: #999999;
-		padding: 4rpx 16rpx;
-	}
-
-	.version-tab.active {
-		color: #2979ff;
-		font-weight: 600;
 	}
 
 	.nav-title {
-		font-size: 28rpx;
-		color: #2979ff;
-		font-weight: 500;
+		font-size: 34rpx;
+		color: #333333;
+		font-weight: bold;
+	}
+
+	.nav-sparkle {
+		font-size: 26rpx;
+		margin-left: 6rpx;
+	}
+
+	.nav-subtitle {
+		font-size: 24rpx;
+		color: #65bbe9;
+		margin-top: 6rpx;
+	}
+
+	/* 右：胶囊 */
+	.nav-right {
+		width: 96rpx;
+		height: 96rpx;
+		align-items: flex-end;
+		justify-content: center;
+	}
+
+	.nav-pill {
+		flex-direction: row;
+		align-items: center;
+		background-color: #ffffff;
+		border-radius: 40rpx;
+		padding: 8rpx 16rpx;
+	}
+
+	.pill-more {
+		font-size: 32rpx;
+		color: #333333;
+		padding: 0 10rpx;
+	}
+
+	.pill-divider {
+		width: 1rpx;
+		height: 32rpx;
+		background-color: #e0e0e0;
+		margin: 0 4rpx;
+	}
+
+	.pill-switch {
+		width: 44rpx;
+		height: 44rpx;
+		border-radius: 22rpx;
+		border: 3rpx solid #333333;
+		align-items: center;
+		justify-content: center;
+		margin-left: 8rpx;
+	}
+
+	.pill-switch-dot {
+		width: 16rpx;
+		height: 16rpx;
+		border-radius: 8rpx;
+		background-color: #333333;
 	}
 </style>

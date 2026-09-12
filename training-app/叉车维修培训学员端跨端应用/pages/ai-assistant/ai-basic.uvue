@@ -5,12 +5,25 @@
 
 		<!-- 主内容区 -->
 		<view class="main">
-			<scroll-view scroll-y class="pro-scroll" :scroll-into-view="scrollIntoViewId" scroll-with-animation>
-				<!-- 无对话：欢迎 + 快捷提示语 -->
+			<scroll-view scroll-y class="scroll-area" :scroll-into-view="scrollIntoViewId" scroll-with-animation>
+				<!-- 无对话：功能入口 + 快捷提示语 -->
 				<view v-if="messages.length == 0 && !thinking" class="welcome-panel">
+					<!-- 功能入口宫格 -->
+					<view class="function-grid">
+						<view v-for="(item, idx) in functionItems" :key="idx" class="function-item" @click="onFunctionClick(item)">
+							<view class="function-icon-box">
+								<image v-if="item.iconPath && item.iconPath.length > 0" class="function-icon-img" :src="item.iconPath" mode="aspectFit" />
+								<text v-else class="function-icon-emoji">{{ item.icon }}</text>
+							</view>
+							<text class="function-title">{{ item.title }}</text>
+						</view>
+					</view>
+
+					<!-- 快捷提示语 -->
 					<view class="prompt-list">
 						<view v-for="(p, idx) in quickPrompts" :key="idx" class="prompt-card" @click="sendText(p)">
 							<text class="prompt-text">{{ p }}</text>
+							<text class="prompt-arrow">&#8250;</text>
 						</view>
 					</view>
 				</view>
@@ -28,8 +41,8 @@
 			</scroll-view>
 		</view>
 
-		<!-- 底部输入区 -->
-		<AiChatInput :status-bar-height="statusBarHeight" @send="onInputSend" />
+		<!-- 底部输入区（含只读模型芯片） -->
+		<AiChatInput :show-model-bar="true" :model-name="currentModelName" :model-desc="currentModelDesc" :model-readonly="true" :show-image-button="true" @send="onInputSend" @voice-click="onVoiceClick" @image-click="onImageClick" />
 
 		<!-- 底部导航栏 -->
 		<TabBar :active-index="2"></TabBar>
@@ -74,7 +87,7 @@
 
 <script setup lang="uts">
 	import { onLoad, onShow } from '@dcloudio/uni-app'
-	import { ref } from 'vue'
+	import { ref, computed } from 'vue'
 	import { useAuthStore } from '../../stores/auth'
 	import {
 		getAiModelsApi,
@@ -83,7 +96,7 @@
 	} from '../../api/aiAssistant'
 	import { useAiChat } from '../../composables/useAiChat'
 	import type { ChatBodyBuilder } from '../../composables/useAiChat'
-	import type { AiModel, AiChatMessage, AiSession } from '../../types/index'
+	import type { AiModel, AiChatMessage, AiSession, AIFunctionItem } from '../../types/index'
 	import {
 		isProPaid,
 		setVersion,
@@ -92,6 +105,7 @@
 		PRO_PRICE_MONTH,
 		PRO_PRICE_YEAR,
 	} from '../../utils/aiPay'
+	import { FUNCTION_ITEMS, QUICK_PROMPTS, RIGHT_MENU_ITEMS } from './ai-assistant-constants'
 	import AiChatNav from '../../components/ai-chat/ai-chat-nav.uvue'
 	import AiChatBubble from '../../components/ai-chat/ai-chat-bubble.uvue'
 	import AiChatDrawerLeft from '../../components/ai-chat/ai-chat-drawer-left.uvue'
@@ -130,14 +144,31 @@
 	const models = ref<AiModel[]>([])
 	const currentModelId = ref<number>(0)
 
-	// 右侧菜单项
-	type MenuItem = { key: string; label: string }
-	const rightMenuItems : MenuItem[] = [
-		{ key: 'switch-pro', label: '切换到专业版' },
-		{ key: 'settings', label: '对话设置' },
-		{ key: 'custom-models', label: '自定义模型' },
-		{ key: 'profile', label: '个人中心' },
-	]
+	// 功能入口（从常量导入）
+	const functionItems = FUNCTION_ITEMS
+	const quickPrompts = QUICK_PROMPTS
+	const rightMenuItems = RIGHT_MENU_ITEMS
+
+	// 当前模型名与描述（只读展示）
+	const currentModelName = computed<string>(() : string => {
+		const list = models.value
+		for (let i = 0; i < list.length; i++) {
+			if (list[i].id == currentModelId.value) {
+				return list[i].name
+			}
+		}
+		return list.length > 0 ? list[0].name : '选择模型'
+	})
+
+	const currentModelDesc = computed<string>(() : string => {
+		const list = models.value
+		for (let i = 0; i < list.length; i++) {
+			if (list[i].id == currentModelId.value) {
+				return list[i].description
+			}
+		}
+		return list.length > 0 ? list[0].description : ''
+	})
 
 	/** 基础版请求体：固定使用平台模型（admin） */
 	const buildBody : ChatBodyBuilder = (history : AiChatMessage[], sessionID : number) : UTSJSONObject => {
@@ -160,10 +191,23 @@
 		sendInput('基础版', buildBody, [])
 	}
 
+	function onVoiceClick() : void {
+		uni.showToast({ title: '语音输入开发中', icon: 'none' })
+	}
+
+	function onImageClick() : void {
+		uni.showToast({ title: '图片发送开发中', icon: 'none' })
+	}
+
 	// 快捷提示语点击
 	function sendText(text : string) : void {
 		inputText.value = text
 		onInputSend(text)
+	}
+
+	// 功能入口点击
+	function onFunctionClick(item : AIFunctionItem) : void {
+		sendText(item.prompt)
 	}
 
 	// 消息操作
@@ -218,13 +262,6 @@
 			uni.switchTab({ url: '/pages/profile/profile' })
 		}
 	}
-
-	// 快捷提示语
-	const quickPrompts : string[] = [
-		'叉车液压系统常见故障有哪些，如何排查？',
-		'叉车启动困难可能是什么原因？',
-		'叉车日常保养的检查要点有哪些？',
-	]
 
 	// 数据加载
 	async function loadModels() : Promise<void> {
@@ -303,17 +340,58 @@
 <style>
 	.ai-page {
 		flex: 1;
-		background-color: #f8f8f8;
+		background: linear-gradient(180deg, #d2ebfc 0%, #e1eff9 45%, #edf3f6 100%);
 	}
 
 	.main {
 		flex: 1;
 	}
 
-	.welcome-panel {
+	.scroll-area {
+		flex: 1;
 		padding: 24rpx;
 	}
 
+	.welcome-panel {
+		padding: 0;
+	}
+
+	/* 功能入口宫格 */
+	.function-grid {
+		flex-direction: row;
+		justify-content: space-between;
+		margin-bottom: 24rpx;
+	}
+
+	.function-item {
+		align-items: center;
+		width: 18%;
+	}
+
+	.function-icon-box {
+		width: 84rpx;
+		height: 84rpx;
+		align-items: center;
+		justify-content: center;
+		margin-bottom: 10rpx;
+	}
+
+	.function-icon-img {
+		width: 84rpx;
+		height: 84rpx;
+	}
+
+	.function-icon-emoji {
+		font-size: 68rpx;
+	}
+
+	.function-title {
+		font-size: 22rpx;
+		color: #333333;
+		text-align: center;
+	}
+
+	/* 快捷提示语 */
 	.prompt-list {
 		flex-direction: column;
 		margin-bottom: 24rpx;
@@ -335,11 +413,13 @@
 		color: #333333;
 	}
 
-	.pro-scroll {
-		flex: 1;
-		padding: 24rpx;
+	.prompt-arrow {
+		font-size: 36rpx;
+		color: #cccccc;
+		margin-left: 16rpx;
 	}
 
+	/* 聊天区 */
 	.chat-area {
 		flex-direction: column;
 		margin-bottom: 24rpx;
