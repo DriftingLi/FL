@@ -10,7 +10,9 @@
     "test:ios": "cross-env UNI_PLATFORM=app UNI_OS_NAME=ios jest -i",
     "test:mp-weixin": "cross-env UNI_PLATFORM=mp-weixin jest -i",
     "build:compile": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/compile-check.ps1",
-    "build:kotlin-all": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/kotlin-all-check.ps1"
+    "build:kotlin-all": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/kotlin-all-check.ps1",
+    "smoke:emulator": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/emulator-smoke.ps1",
+    "setup:android-sdk": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/android-sdk-setup.ps1"
   },
   "devDependencies": {
     "@dcloudio/uni-automator": "^2.0.0",
@@ -21,3 +23,4 @@
     "puppeteer": "^3.0.1"
   }
 }
+
