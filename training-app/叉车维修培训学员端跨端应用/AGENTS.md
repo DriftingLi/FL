@@ -170,6 +170,35 @@ UTS（uni-app-x 的 TypeScript 变体）不支持以下 TypeScript 语法：
 - **部署配置**：改 `docker-compose*.yml` / `deploy.sh` 后可用 `docker compose -f docker-compose.prod.yml config -q` 做语法校验
 - **安全检测**：改动触及认证/授权/密钥/DB 连接/AI 生成代码时，跑 `python -m deepsec shield scan backend frontend/src`，确认无新增 critical/high（已知误报见 `docs/agents/security-scan.md`）。
 
+## 开发内循环（移动端 UI 迭代）
+
+> 口径：**门是全量的，日常是增量的**。`scripts/compile-check.ps1`（④a，带干净缓存重建，实测 4.8–8 分钟）是**门**，默认值不动；
+> `scripts/hx-run.ps1`（`npm run hx:run`）是**日常增量运行**（约 1–2 分钟），**不是门、不进 `## 验收证据`**。
+
+### 三层节奏
+
+| 层 | 触发 | 动作 | 成本 |
+| --- | --- | --- | --- |
+| **内循环（热刷新）** | 只改模板 / 样式，想看真机效果 | HBuilderX「运行到手机」+ 热刷新；**不勾干净缓存重建、不重装基座** | 秒级～1 分钟 |
+| **内循环（增量运行）** | 改 `<script>` 结构 / 新增文件（热刷新不生效） | `npm run hx:run`（= `scripts/hx-run.ps1`，**增量**：无干净缓存重建、不重装基座、不做 `adb install`） | 约 1–2 分钟 |
+| **中循环** | **每个「视觉满意点」一次**（不是每次微调） | `npm run test:unit` + ④ 本地编译门（`npm run build:kotlin-all` 够用；必要时 `npm run build:compile` 全量）→ **一次提交** | 分钟级 |
+| **外循环** | **主题收口一次** | ①a 真机自动取证（`adb` 只读逐页截图 + logcat，**不抢焦点**）→ 开 PR；证据 sha 对齐 | 一次 |
+
+**提交粒度**：**一个视觉主题一个 commit**。色值微调与结构删除**不要混在一个提交里**——反例 `56d0fe3`（本地分支 `feat/ai-basic-ui-prototype`，+21 / −71）：「背景实色兜底」与「去掉小程序 chrome 胶囊」压在一起，回滚无从下手。
+
+**时间花在哪**：基座 APK（95.7 MB）**只装一次**；资源导出 publish 98 秒–3 分钟；全量编译 **4.8–8 分钟** vs 增量 **约 1–2 分钟**。
+`hx-run.ps1` 会打印分段表与机检行 `HX_RUN mode=… compile=… deploy=… total=… exit=…`，一眼看出时间花在编译段还是部署段。
+
+### 反模式（逐条禁）
+
+- 每次微调都**全量重编译**——全量是门的活（`compile-check.ps1`），日常走 `hx-run.ps1`。
+- 每次微调都**重装基座**——基座只装一次；`hx-run.ps1` 里没有任何 `adb install`，装机由 HBuilderX 自己处理。
+- 每次微调都**跑全量门 + 提交**——门按中循环跑（每个视觉满意点一次），提交按「一个视觉主题一个 commit」。
+- **kill `cli` 或 HBuilderX 主程序**——违反 ADR-0008 的「HBuilderX 是单实例串行资源」坑位：**忙就等**（`scripts/lib/hx-busy.ps1` 的「锁 + 忙探测 + 等待上限」），超时 `exit 2` 并改跑不需要 HBuilderX 的检查（`npm run test:unit` / `build:kotlin-all -SkipPublish` / `smoke:emulator`）；`hx-run.ps1` 内不含任何强杀调用。
+- 拿**仿真机当热刷新用**——仿真机是**前置冒烟**（`npm run smoke:emulator`，非门、不替代 ①），装一次 SDK 3–4 GB / 20–40 分钟，不适合秒级迭代。
+
+**HBuilderX 回写坑位同样适用**：跑完任何 HBuilderX 步骤（含 `hx-run.ps1`）先 `git status` 看 `manifest.json` 是否被改脏，脏了就还原再继续。
+
 ## 验收门与合并纪律（ADR-0008）
 
 改动触及运行时面（改动集含 `*.uvue` / `*.uts`，或 training-app 下的 `manifest.json` / `pages.json` / `platformConfig.json`）时，适用 `docs/adr/0008-移动端验收门与证据.md` 的四门与证据要求。
