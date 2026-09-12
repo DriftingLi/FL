@@ -98,9 +98,20 @@
     .tab-bar {
         flex-direction: row;
         background-color: #ffffff;
+
         border-top: 1rpx solid #ababab; /* 过渡件：与原生栏对齐。取 #ababab 依据：原生栏该行实测平均亮度 170.9，1rpx=1.54px × 该色暗度(255-171) ≈ 129 ≈ 等效；原 #f0f0f0（亮度 240）比页面浅蓝底(235.8)还亮、等于没有线。随组件在 #911 删除 */
         position: relative;
         z-index: 10;
+        /* 钉死栏高 = 与原生栏等高的 197px（128rpx @本机 1.54 比例）。
+           真机实测两条创建路径给出两个值：首次挂载 195-200px（=原生），切页后重建 296px
+           （多出的约 100px 全在内容下方 —— 内容顶在栏顶、空白落在下面）。
+           根因是 uvue 里子元素高度会参与并撑高父容器；与其继续追时序，不如把栏高钉死。
+           ⚠️ uvue 的 height **含 padding**（border-box 语义）：128rpx 里留给内容的是 197-48=149px，
+           而内容实际需要约 142px ⇒ 不裁切。上一次写成 96rpx（148px）时内容盒只剩 100px，
+           把 tab 文字裁掉了 —— 那是数值错，不是方向错。
+           手画栏整体在 #911 删除，本段随之消失。 */
+        height: 128rpx;
+        overflow: hidden;
     }
 
     .tab-item {
