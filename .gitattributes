@@ -15,3 +15,9 @@ Dockerfile text eol=lf
 *.css text eol=lf
 *.md text eol=lf
 *.json text eol=lf
+*.mjs text eol=lf
+
+# 门脚本统一 LF：契约测试（*.js，已强制 LF）按**字面量多行锚点**匹配门脚本源码；
+# Windows 上 core.autocrlf=true 会把 *.ps1 检出成 CRLF ⇒ 锚点必然失配、契约测试在 Windows 上必红
+# （实测先例：emulatorSmokeContract 的「C3 注入点已失效」用例）。故 *.ps1 也钉 LF。
+*.ps1 text eol=lf

@@ -48,6 +48,8 @@ param(
     [string]$Project,
     [bool]$Clean = $true,
     [int]$TimeoutSeconds = 1800,
+    [int]$HxWaitSeconds = 600,
+    [switch]$HxNoWait,
     [int]$PostToPr = 0
 )
 
@@ -140,6 +142,11 @@ $started = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
 Set-Content -LiteralPath $logPath -Value "# compile-check 开始 $started`n# cli = $CliPath`n# project = $Project`n# clean = $Clean" -Encoding utf8
 
 $script:timedOutStep = $null
+
+# ---------- HBuilderX 忙检测（单实例串行资源，ADR-0008 坑位段）----------
+. (Join-Path $PSScriptRoot 'lib\hx-busy.ps1')
+$hx = Wait-HxFree -CliExe $CliPath -TimeoutSeconds $HxWaitSeconds -NoWait:$HxNoWait -LogPath $logPath
+try {
 
 function Invoke-CliStep {
     param([string[]]$CliArgs, [int]$StepTimeout = 180)
@@ -275,3 +282,8 @@ if ($PostToPr -gt 0) {
         -ResultLine $result -LogRelative '.ci-verify/build.log' -ReproCommand 'npm run build:compile'
 }
 exit 0
+
+} finally {
+    # 释放 agent 互斥锁（必须，否则下一个会话会一直等）
+    Release-HxLock
+}

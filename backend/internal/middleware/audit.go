@@ -71,7 +71,7 @@ func AuditLog(svc *service.AuditService, logger *zap.Logger) gin.HandlerFunc {
 			Path:      c.Request.URL.Path,
 			Method:    method,
 			RequestID: c.GetString(string(CtxRequestID)),
-			IP:        c.ClientIP(),
+			IP:        ClientIP(c),
 			Status:    c.Writer.Status(),
 			Detail:    model.JSONB(detail),
 			CreatedAt: time.Now(),

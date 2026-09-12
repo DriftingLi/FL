@@ -50,6 +50,8 @@ param(
     [string]$HBuilderX,
     [string]$Cli,
     [switch]$SkipPublish,
+    [int]$HxWaitSeconds = 600,
+    [switch]$HxNoWait,
     [int]$PublishTimeoutSeconds = 900,
     [int]$KotlincTimeoutSeconds = 900,
     [int]$PostToPr = 0
@@ -159,6 +161,14 @@ Set-Content -LiteralPath $logPath -Encoding utf8 -Value @(
 )
 function Write-Log { param([string]$Text) Add-Content -LiteralPath $logPath -Value $Text -Encoding utf8 }
 
+# ---------- HBuilderX 忙检测（单实例串行资源，ADR-0008 坑位段）----------
+. (Join-Path $PSScriptRoot 'lib\hx-busy.ps1')
+if ($SkipPublish) {
+    Write-Host '>>> -SkipPublish：不接 HBuilderX，跳过忙检测与互斥锁（kotlinc 段不依赖主程序）' -ForegroundColor Yellow
+} else {
+    $hx = Wait-HxFree -CliExe (Join-Path (Resolve-HBuilderXRoot -Explicit $HBuilderX -ExplicitCli $Cli) 'cli.exe') -TimeoutSeconds $HxWaitSeconds -NoWait:$HxNoWait -LogPath $logPath
+}
+try {
 # ---------- 1) 可选：导出 appResource 产物 ----------
 $hbxRoot = Resolve-HBuilderXRoot -Explicit $HBuilderX -ExplicitCli $Cli
 if (-not $SkipPublish) {
@@ -347,3 +357,8 @@ if ($PostToPr -gt 0) {
 }
 exit 0
 
+
+} finally {
+    # 释放 agent 互斥锁（-SkipPublish 下未取锁，Release-HxLock 是安全的空操作）
+    Release-HxLock
+}

@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
+	"go.uber.org/zap"
 
 	_ "forklift-training/docs"
 
@@ -29,6 +30,7 @@ func NewRouter(deps *Deps) *gin.Engine {
 	}
 
 	r := gin.New()
+	applyTrustedProxies(r, cfg.TrustedProxies, deps.Logger)
 	r.Use(middleware.RequestID())
 	r.Use(applogger.AccessLog(deps.Logger))
 	r.Use(middleware.Recovery(deps.Logger))
@@ -158,6 +160,28 @@ func NewRouter(deps *Deps) *gin.Engine {
 	RegisterContributionRoutes(api, rd, deps.ContributionSvc)
 
 	return r
+}
+
+// applyTrustedProxies 把可信反向代理配置写入 gin 引擎——「取客户端 IP 是否采信
+// X-Forwarded-For / X-Real-IP」的唯一开关（读取方见 middleware.ClientIP）。
+//
+// 默认（TRUSTED_PROXIES 为空）不信任任何代理：gin 的默认值是信任所有代理
+// （0.0.0.0/0），那会让请求头决定客户端 IP，限流/审计/属地随之可被伪造。
+// 配置非法时 fail closed 到「不信任任何代理」，绝不带着半截的可信列表启动。
+func applyTrustedProxies(r *gin.Engine, proxies []string, logger *zap.Logger) {
+	if err := r.SetTrustedProxies(proxies); err != nil {
+		logger.Error("TRUSTED_PROXIES 配置非法，已退化为不信任任何代理",
+			zap.Error(err), zap.Strings("trusted_proxies", proxies))
+		_ = r.SetTrustedProxies(nil)
+		return
+	}
+	if len(proxies) == 0 {
+		logger.Warn("未配置可信代理（TRUSTED_PROXIES）：客户端 IP 一律取 TCP 对端地址；" +
+			"若前面有反向代理，所有请求会被算作同一个客户端（按 IP 限流退化为全局限流）")
+		return
+	}
+	logger.Info("可信代理已配置", zap.Strings("trusted_proxies", proxies))
+	warnIfGatewayNotTrusted(defaultGateway(), proxies, logger)
 }
 
 // registerStaticRoutes 注册 /static/* 静态资源路由。

@@ -285,3 +285,65 @@ test('风险分层：含 .uvue 的改动不算低风险 → 缺 ① 行仍红', 
   assert.match(r.errors.join(), /①/);
   assert.doesNotMatch(r.notes.join(), /低风险运行时面/);
 });
+
+// -------------------- 2026-09-12 修订：② 降为半自动门 + ② 的 sha 绑定评论（#883） --------------------
+
+// ② 的触发面：manifest.json 改动（ADR-0008「命中 MP-WEIXIN 面」）
+// 注意：manifest.json 同时命中 ④b 打包面 ⇒ 这组用例的正文需带 ④b 行（与真实 PR 一致）
+const mpWeixinFiles = () => [uvue('manifest.json', { patch: '@@ -1,2 +1,3 @@\n+"mp-weixin": {}\n' })];
+const GATE4B_LINE =
+  '- ④b release 云打包（触及打包面时） — 执行人：人 · 日期：2026-09-11 · 复测对象：manifest.json 改动 · 结论（含产物）：cli pack 日志；发布前置条款：正式发版前必跑一次并装机自测';
+const gate2Comment = (sha) =>
+  [
+    '<!-- gate-evidence:② -->',
+    '**② 微信开发者工具无报错（半自动，agent 执行）**',
+    `- commit: ${sha}`,
+    '- 结论（含产物）：`MP_WEIXIN_RESULT appid=wx38c3e31b16a7ced0 pageStack=2 entry=pages/index/index errorsTotal=0 exceptionsTotal=0`；截图 `.ci-verify/entry.png`；日志 `.ci-verify/mp-weixin.log`',
+    '- 非等价声明：② ≠ ① 真机门，也 ≠ ④b 云打包门。',
+    '- 复现：`npm run build:mp-weixin-check`',
+    '',
+  ].join('\n');
+
+test('② 半自动门：② 行缺失但存在 sha 匹配的 gate-evidence:② 评论 ⇒ 绿，且 notes 提到评论', () => {
+  const body = `${dropLines(['- ② '])}\n${GATE4B_LINE}\n`;
+  const r = run({ files: mpWeixinFiles(), body, gateComments: [gate2Comment(SHA.slice(0, 7))], headSha: SHA });
+  assert.equal(r.ok, true, r.errors.join('；'));
+  assert.match(r.notes.join(), /评论/);
+  assert.match(r.notes.join(), /sha 绑定 a20d2e2/);
+  assert.match(r.notes.join(), /②/);
+});
+
+test('② 半自动门：评论 sha 与 head 不匹配 ⇒ 仍红（缺 ② 行）', () => {
+  const body = dropLines(['- ② ']);
+  const r = run({ files: mpWeixinFiles(), body, gateComments: [gate2Comment('deadbee')], headSha: SHA });
+  assert.equal(r.ok, false);
+  assert.match(r.errors.join(), /② 微信开发者工具无报错/);
+});
+
+test('② 半自动门：没给 headSha 时评论不作为证据（fail-closed）', () => {
+  const body = dropLines(['- ② ']);
+  const r = run({ files: mpWeixinFiles(), body, gateComments: [gate2Comment(SHA)] });
+  assert.equal(r.ok, false);
+  assert.match(r.errors.join(), /②/);
+});
+
+test('② 两者互不串台：只给 ④ 评论不能免 ② 行', () => {
+  const body = dropLines(['- ② ']);
+  const r = run({ files: mpWeixinFiles(), body, gateComments: [gate4Comment(SHA)], headSha: SHA });
+  assert.equal(r.ok, false);
+  assert.match(r.errors.join(), /②/);
+});
+
+test('② 结论须引用截图（只有自然语言结论不算产物）', () => {
+  const body = `${dropLines(['- ② '])}\n- ② 微信开发者工具无报错 — 执行人：@DriftingLi · 日期：2026-09-12 · 复测对象：入口页 pages/index/index · 结论（含产物）：入口页无报错\n${GATE4B_LINE}\n`;
+  const r = run({ files: mpWeixinFiles(), body });
+  assert.equal(r.ok, false);
+  assert.match(r.errors.join(), /②/);
+  assert.match(r.errors.join(), /截图/);
+});
+
+test('② 结论引用 .ci-verify/entry.png 视为有效产物（② 的截图落点）', () => {
+  const body = `${dropLines(['- ② '])}\n- ② 微信开发者工具无报错 — 执行人：@DriftingLi · 日期：2026-09-12 · 复测对象：入口页 pages/index/index · 结论（含产物）：errorsTotal=0 exceptionsTotal=0，截图 .ci-verify/entry.png\n${GATE4B_LINE}\n`;
+  const r = run({ files: mpWeixinFiles(), body });
+  assert.equal(r.ok, true, r.errors.join('；'));
+});
