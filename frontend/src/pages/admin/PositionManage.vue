@@ -8,7 +8,14 @@
     </div>
 
     <div class="rounded-card border border-line bg-panel">
-      <el-table :data="list" v-loading="loading" stripe>
+      <UiErrorState
+        v-if="loadError"
+        title="岗位加载失败"
+        description="网络或服务端异常，可重试"
+        :retrying="retrying"
+        @retry="retryLoad"
+      />
+      <el-table v-else :data="list" v-loading="loading" stripe>
         <el-table-column prop="position_id" label="ID" width="80" align="center" />
         <el-table-column prop="name" label="岗位名称" min-width="160" />
         <el-table-column prop="code" label="编码" width="160" />
@@ -16,7 +23,7 @@
         <el-table-column prop="sort_order" label="排序" width="80" align="center" />
         <el-table-column label="状态" width="90" align="center">
           <template #default="{ row }">
-            <el-tag :type="row.status === 1 ? 'success' : 'info'" size="small">{{ row.status === 1 ? '启用' : '停用' }}</el-tag>
+            <UiTag :tone="row.status === 1 ? 'success' : 'info'" size="small">{{ row.status === 1 ? '启用' : '停用' }}</UiTag>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="160" align="center">
@@ -33,7 +40,7 @@
       <div class="p-3 text-xs text-ink-3">岗位字典由管理员维护；职位发布与简历「期望岗位」都从这里选取（与专业方向解绑）。</div>
     </div>
 
-    <el-dialog v-model="dialogVisible" :title="editing ? '编辑岗位' : '新增岗位'" width="480px" destroy-on-close>
+    <UiDialog v-model="dialogVisible" :title="editing ? '编辑岗位' : '新增岗位'" width="480px" destroy-on-close confirm-text="保存" :confirm-loading="submitting" @confirm="handleSubmit">
       <el-form ref="formRef" :model="form" :rules="formRules" label-width="80px">
         <el-form-item label="岗位名称" prop="name">
           <el-input v-model="form.name" maxlength="50" placeholder="如：叉车维修技师" />
@@ -45,23 +52,24 @@
           <el-input v-model="form.description" type="textarea" :rows="2" maxlength="200" />
         </el-form-item>
         <el-form-item label="状态">
-          <el-switch v-model="form.status" :active-value="1" :inactive-value="0" active-text="启用" inactive-text="停用" />
+          <UiSwitch v-model="form.status" :active-value="1" :inactive-value="0" active-text="启用" inactive-text="停用" />
         </el-form-item>
       </el-form>
-      <template #footer>
-        <UiButton @click="dialogVisible = false">取消</UiButton>
-        <UiButton variant="primary" :loading="submitting" @click="handleSubmit">保存</UiButton>
-      </template>
-    </el-dialog>
+    </UiDialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { useAdminTable } from '@/composables/useAdminTable'
 import { Plus } from '@element-plus/icons-vue'
 import { ElMessage, type FormInstance } from 'element-plus'
 import { unwrappedRequest } from '@/api/request'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiErrorState from '@/components/ui/UiErrorState.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
+import UiTag from '@/components/ui/UiTag.vue'
+import UiSwitch from '@/components/ui/UiSwitch.vue'
 
 interface PositionItem {
   position_id: number
@@ -72,8 +80,6 @@ interface PositionItem {
   status: number
 }
 
-const list = ref<PositionItem[]>([])
-const loading = ref(false)
 const dialogVisible = ref(false)
 const editing = ref(false)
 const submitting = ref(false)
@@ -84,14 +90,21 @@ const formRules = {
   code: [{ required: true, message: '请输入唯一编码', trigger: 'blur' }]
 }
 
-async function load() {
-  loading.value = true
-  try {
+// 列表：admin 列表状态机 useAdminTable（#793，ADR-0039）——无分页，一次拉全量（total = list.length）
+const {
+  loading,
+  loadError,
+  retrying,
+  list,
+  load,
+  retry: retryLoad
+} = useAdminTable<PositionItem>({
+  fetch: async () => {
     const res: any = await unwrappedRequest.get('/admin/positions', { headers: { 'X-Silent': '1' } })
-    list.value = res?.positions || []
-  } catch {}
-  loading.value = false
-}
+    const positions: PositionItem[] = res?.positions || []
+    return { list: positions, total: positions.length }
+  }
+})
 
 function openDialog(item?: PositionItem) {
   editing.value = !!item

@@ -23,23 +23,23 @@
         </el-form-item>
 
         <el-form-item label="选择章节" v-if="chapters.length > 0">
-          <el-checkbox-group v-model="selectedChapterIds">
-            <el-checkbox
+          <UiCheckboxGroup v-model="selectedChapterIds">
+            <UiCheckbox
               v-for="chapter in chapters"
               :key="chapter.chapter_id"
               :label="chapter.chapter_id"
             >
               {{ chapter.title }}
-              <el-tag
+              <UiTag
                 v-if="chapter.content && chapter.content.length > 100"
                 type="success"
                 size="small"
                 style="margin-left: 8px"
               >
                 已有内容
-              </el-tag>
-            </el-checkbox>
-          </el-checkbox-group>
+              </UiTag>
+            </UiCheckbox>
+          </UiCheckboxGroup>
           <div class="select-actions">
             <UiButton variant="primary" size="small" class="select-all-btn" @click="selectAll">全选</UiButton>
             <UiButton variant="text" size="small" @click="selectNone">取消全选</UiButton>
@@ -96,9 +96,9 @@
           <el-icon v-if="item.status === 'success'" class="status-icon success"><CircleCheck /></el-icon>
           <el-icon v-else class="status-icon failed"><CircleClose /></el-icon>
           <span class="chapter-title">{{ item.title }}</span>
-          <el-tag :type="item.status === 'success' ? 'success' : 'danger'" size="small">
+          <UiTag :tone="item.status === 'success' ? 'success' : 'danger'" size="small">
             {{ item.status === 'success' ? '生成成功' : '生成失败' }}
-          </el-tag>
+          </UiTag>
           <UiButton variant="primary" text v-if="item.status === 'success' && item.content" size="small" @click="previewChapter(item)">
             预览
           </UiButton>
@@ -107,7 +107,7 @@
       </div>
     </UiCard>
 
-    <el-dialog
+    <UiDialog
       v-model="previewVisible"
       :title="`预览 - ${previewTitle}`"
       width="700px"
@@ -117,7 +117,7 @@
       <template #footer>
         <UiButton @click="previewVisible = false">关闭</UiButton>
       </template>
-    </el-dialog>
+    </UiDialog>
   </div>
 </template>
 
@@ -130,6 +130,10 @@ import { adminApi } from '@/api/admin'
 import '@/assets/styles/markdown.css'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiCard from '@/components/ui/UiCard.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
+import UiCheckboxGroup from '@/components/ui/UiCheckboxGroup.vue'
+import UiTag from '@/components/ui/UiTag.vue'
+import UiCheckbox from '@/components/ui/UiCheckbox.vue'
 
 interface GenerateCourse {
   course_id: number

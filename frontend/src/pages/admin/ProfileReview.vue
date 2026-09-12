@@ -31,9 +31,9 @@
         </el-table-column>
         <el-table-column label="修改项" width="100">
           <template #default="{ row }">
-            <el-tag :type="row.field_type === 'nickname' ? 'primary' : 'warning'" size="small">
+            <UiTag :tone="row.field_type === 'nickname' ? 'primary' : 'warning'" size="small">
               {{ row.field_type === 'nickname' ? '昵称' : '头像' }}
-            </el-tag>
+            </UiTag>
           </template>
         </el-table-column>
         <el-table-column label="原值 → 新值" min-width="220">
@@ -71,25 +71,23 @@
                 </template>
               </el-dropdown>
             </template>
-            <el-tag v-else :type="row.status === 'approved' ? 'success' : 'danger'" size="small">
+            <UiTag v-else :tone="row.status === 'approved' ? 'success' : 'danger'" size="small">
               {{ row.status === 'approved' ? '已通过' : '已拒绝' }}
-            </el-tag>
+            </UiTag>
           </template>
         </el-table-column>
       </el-table>
 
-      <div class="pagination-wrapper" v-if="total > pageSize">
-        <el-pagination
-          v-model:current-page="currentPage"
-          :page-size="pageSize"
-          :total="total"
-          layout="total, prev, pager, next"
-          @current-change="load"
-        />
-      </div>
+        <UiPagination v-if="total > pageSize"
+      v-model:current-page="currentPage"
+      :page-size="pageSize"
+      :total="total"
+      @current-change="load"
+    align="center" class="mt-4" />
+      
     </el-card>
 
-    <el-dialog v-model="rejectDialogVisible" title="驳回修改" width="480px">
+    <UiDialog v-model="rejectDialogVisible" title="驳回修改" width="480px" confirm-text="确认驳回" :confirm-loading="submitting" @confirm="reject">
       <el-input
         v-model="rejectReason"
         type="textarea"
@@ -98,27 +96,40 @@
         show-word-limit
         placeholder="请输入驳回原因（选填）"
       />
-      <template #footer>
-        <UiButton @click="rejectDialogVisible = false">取消</UiButton>
-        <UiButton variant="danger" :loading="submitting" @click="reject">确认驳回</UiButton>
-      </template>
-    </el-dialog>
+    </UiDialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { Refresh, ArrowRight, ArrowDown } from '@element-plus/icons-vue'
 import { adminApi, type ProfileChangeRequest } from '@/api/admin'
 import { useAdminTable } from '@/composables/useAdminTable'
+import { useRejectReasonDialog } from '@/composables/useRejectReasonDialog'
 import { formatLocaleDateTime } from '@/utils/format'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
+import { useConfirm } from '@/composables/useConfirm'
+import UiTag from '@/components/ui/UiTag.vue'
 
-const submitting = ref(false)
+// 驳回理由弹窗：#795 三域共用弹窗状态机；提交动作由本页注入（资料审核驳回为终态）
+const {
+  visible: rejectDialogVisible,
+  reason: rejectReason,
+  submitting,
+  open: openRejectDialog,
+  submit: reject
+} = useRejectReasonDialog({
+  onSubmit: async (reason) => {
+    if (!currentRow.value) return
+    await adminApi.rejectProfileReview(currentRow.value.id, reason.trim())
+    ElMessage.success('已驳回')
+    load()
+  }
+})
 const activeStatus = ref<'pending' | 'approved' | 'rejected'>('pending')
-const rejectDialogVisible = ref(false)
-const rejectReason = ref('')
 const currentRow = ref<ProfileChangeRequest | null>(null)
 
 function displayName(row: ProfileChangeRequest) {
@@ -148,7 +159,7 @@ function handleTabChange() {
 
 async function approve(row: ProfileChangeRequest) {
   try {
-    await ElMessageBox.confirm('确认通过该修改？通过后立即生效。', '通过审核', { type: 'info' })
+    await useConfirm().confirm('确认通过该修改？通过后立即生效。', '通过审核', { type: 'info' })
   } catch {
     return
   }
@@ -164,25 +175,10 @@ async function approve(row: ProfileChangeRequest) {
 
 function openReject(row: ProfileChangeRequest) {
   currentRow.value = row
-  rejectReason.value = ''
-  rejectDialogVisible.value = true
+  openRejectDialog()
 }
 
-async function reject() {
-  if (!currentRow.value) return
-  submitting.value = true
-  try {
-    await adminApi.rejectProfileReview(currentRow.value.id, rejectReason.value.trim())
-    ElMessage.success('已驳回')
-    rejectDialogVisible.value = false
-    load()
-  } catch (e) {
-    console.error('驳回失败:', e)
-    /* 错误已由拦截器提示 */
-  } finally {
-    submitting.value = false
-  }
-}
+/* 驳回提交已由 useRejectReasonDialog 的 submit（解构为 reject）承载 */
 
 onMounted(load)
 </script>
@@ -242,9 +238,4 @@ onMounted(load)
   color: var(--color-text-disabled);
 }
 
-.pagination-wrapper {
-  display: flex;
-  justify-content: center;
-  margin-top: 16px;
-}
 </style>

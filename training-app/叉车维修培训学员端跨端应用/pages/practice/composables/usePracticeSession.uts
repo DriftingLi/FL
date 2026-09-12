@@ -1,0 +1,174 @@
+/**
+ * practice-do 会话状态 composable（T06 practice 手术，parent #644 / ADR-0007）
+ */
+import { ref, computed } from 'vue'
+import type { Ref, ComputedRef } from 'vue'
+import { getFreePracticeApi, getSequentialPracticeApi, getTagPracticeApi, submitAnswerApi, savePracticeProgressApi } from '../../../api/practice'
+import { checkFavoriteApi, addFavoriteApi, removeFavoriteApi } from '../../../api/favorite'
+import type { Question, SubmitAnswerResult, AnswerState, QuestionOption, SubmitAnswerParams, FavoriteCheckResult } from '../../../types/index'
+
+/** 本 composable 的显式返回类型。
+ *  UTS 对无标注的匿名返回对象无法在消费侧解析成员（error18「找不到名称」），
+ *  故显式声明；形态照可编译先例 composables/useTopicDetail.uts（显式 Result 类型 + 箭头函数字段）。
+ */
+export type UsePracticeSessionResult = {
+    questions : Ref<Question[]>
+    currentIndex : Ref<number>
+    loading : Ref<boolean>
+    showResult : Ref<boolean>
+    showSummary : Ref<boolean>
+    showAnswerCard : Ref<boolean>
+    isFavorited : Ref<boolean>
+    favoriteId : Ref<number>
+    selectedKeys : Ref<string[]>
+    answerStates : Ref<AnswerState[]>
+    lastUserAnswer : Ref<string>
+    lastResult : Ref<SubmitAnswerResult>
+    totalSeconds : Ref<number>
+    questionStartTime : Ref<number>
+    questionElapsed : Ref<number>
+    siteAccuracy : Ref<number>
+    difficultyLevel : Ref<string>
+    currentQuestion : ComputedRef<Question>
+    timerText : ComputedRef<string>
+    questionTimeText : ComputedRef<string>
+    correctCount : ComputedRef<number>
+    summaryAccuracy : ComputedRef<number>
+    getTypeName : (type : string) => string
+    isMultiChoice : () => boolean
+    isSelected : (key : string) => boolean
+    isCorrectAnswer : (key : string) => boolean
+    getOptionClass : (key : string) => string
+    getOptionKeyClass : (key : string) => string
+    getOptionTextClass : (key : string) => string
+    getAnswerCardClass : (idx : number) => string
+    getAnswerCardNumClass : (idx : number) => string
+    onOptionClick : (key : string) => void
+    onToggleFavorite : () => void
+    loadQuestions : (mode : string, practiceCount : number, tagId : number) => Promise<void>
+    onSubmit : (mode : string) => Promise<void>
+    onNext : () => void
+    onJumpToQuestion : (idx : number) => void
+    onToggleAnswerCard : () => void
+    onCloseAnswerCard : () => void
+    onSubmitPaper : () => void
+    onRestart : () => void
+    resetQuestionState : () => void
+    recordQuestionTime : () => void
+    checkFavorite : () => Promise<void>
+    startTimer : () => void
+    stopTimer : () => void
+}
+
+export function usePracticeSession() : UsePracticeSessionResult {
+    const questions = ref<Question[]>([])
+    const currentIndex = ref<number>(0)
+    const loading = ref<boolean>(false)
+    const showResult = ref<boolean>(false)
+    const showSummary = ref<boolean>(false)
+    const showAnswerCard = ref<boolean>(false)
+    const isFavorited = ref<boolean>(false)
+    const favoriteId = ref<number>(0)
+    const selectedKeys = ref<string[]>([])
+    const answerStates = ref<AnswerState[]>([])
+    const lastUserAnswer = ref<string>('')
+    const lastResult = ref<SubmitAnswerResult>({ correct: false, correct_answer: '', explanation: '' } as SubmitAnswerResult)
+    const totalSeconds = ref<number>(0)
+    const questionStartTime = ref<number>(0)
+    const questionElapsed = ref<number>(0)
+    let timerInterval : number | null = null
+    const siteAccuracy = ref<number>(85)
+    const difficultyLevel = ref<string>('C')
+
+    const currentQuestion = computed<Question>(() : Question => {
+        if (questions.value.length == 0) { return { question_id: 0, type: '', title: '', options: [] as QuestionOption[], correct_answer: '', explanation: '' } as Question }
+        return questions.value[currentIndex.value]
+    })
+    const timerText = computed<string>(() : string => {
+        const m = Math.floor(totalSeconds.value / 60); const s = totalSeconds.value % 60
+        return (m < 10 ? '0' + `${m}` : `${m}`) + ':' + (s < 10 ? '0' + `${s}` : `${s}`)
+    })
+    const questionTimeText = computed<string>(() : string => { const t = questionElapsed.value; if (t < 1) return '< 1秒'; return `${t}` + '秒' })
+    const correctCount = computed<number>(() : number => { let c = 0; for (let i = 0; i < answerStates.value.length; i++) { if (answerStates.value[i].is_correct) c++ }; return c })
+    const summaryAccuracy = computed<number>(() : number => { if (questions.value.length == 0) return 0; return Math.floor(correctCount.value * 100 / questions.value.length) })
+
+    function getTypeName(type : string) : string { if (type == 'single' || type == 'single_choice') return '单选题'; if (type == 'multi' || type == 'multiple_choice' || type == 'multi_choice') return '多选题'; if (type == 'judge' || type == 'true_false') return '判断题'; return '其他' }
+    function isMultiChoice() : boolean { const t = currentQuestion.value.type; return t == 'multi' || t == 'multiple_choice' || t == 'multi_choice' }
+    function isSelected(key : string) : boolean { return selectedKeys.value.indexOf(key) >= 0 }
+    function parseAnswerKeys(answer : string) : string[] {
+        if (answer.length == 0) return [] as string[]; if (answer == 'true' || answer == 'false') return [answer] as string[]
+        let sep = ''; if (answer.indexOf(',') >= 0) sep = ','; else if (answer.indexOf('，') >= 0) sep = '，'; else if (answer.indexOf(' ') >= 0) sep = ' '; else if (answer.indexOf(';') >= 0) sep = ';'; else if (answer.indexOf('|') >= 0) sep = '|'
+        if (sep.length > 0) { const parts = answer.split(sep); const keys : string[] = []; for (let i = 0; i < parts.length; i++) { const k = parts[i].trim(); if (k.length > 0) keys.push(k) }; return keys }
+        const keys : string[] = []; for (let i = 0; i < answer.length; i++) { keys.push(answer.charAt(i)) }; return keys
+    }
+    function isCorrectAnswer(key : string) : boolean { return parseAnswerKeys(lastResult.value.correct_answer).indexOf(key) >= 0 }
+    function getOptionClass(key : string) : string { if (!showResult.value) return isSelected(key) ? 'option-selected' : ''; if (isCorrectAnswer(key)) return 'option-correct'; if (isSelected(key) && !isCorrectAnswer(key)) return 'option-wrong'; return '' }
+    function getOptionKeyClass(key : string) : string { if (!showResult.value) return isSelected(key) ? 'option-key-selected' : ''; if (isCorrectAnswer(key)) return 'option-key-correct'; if (isSelected(key) && !isCorrectAnswer(key)) return 'option-key-wrong'; return '' }
+    function getOptionTextClass(key : string) : string { if (showResult.value && isCorrectAnswer(key)) return 'option-text-correct'; if (showResult.value && isSelected(key) && !isCorrectAnswer(key)) return 'option-text-wrong'; return '' }
+    function getAnswerCardClass(idx : number) : string { if (idx == currentIndex.value) return 'card-item-current'; const q = questions.value[idx]; for (let i = 0; i < answerStates.value.length; i++) { if (answerStates.value[i].question_id == q.question_id) return answerStates.value[i].is_correct ? 'card-item-correct' : 'card-item-wrong' }; return 'card-item-default' }
+    function getAnswerCardNumClass(idx : number) : string { if (idx == currentIndex.value) return 'card-num-current'; const q = questions.value[idx]; for (let i = 0; i < answerStates.value.length; i++) { if (answerStates.value[i].question_id == q.question_id) return 'card-num-answered' }; return 'card-num-default' }
+    function onOptionClick(key : string) : void { if (showResult.value) return; if (isMultiChoice()) { const idx = selectedKeys.value.indexOf(key); if (idx >= 0) { selectedKeys.value.splice(idx, 1) } else { selectedKeys.value.push(key) } } else { selectedKeys.value = [key] } }
+    function startTimer() { if (timerInterval != null) return; timerInterval = setInterval(() => { totalSeconds.value = totalSeconds.value + 1 }, 1000) }
+    function stopTimer() { const t = timerInterval; if (t != null) { clearInterval(t); timerInterval = null } }
+    function recordQuestionTime() { const now = Date.now(); if (questionStartTime.value > 0) { questionElapsed.value = Math.floor((now - questionStartTime.value) / 1000) }; questionStartTime.value = now }
+    async function checkFavorite() : Promise<void> { const qid = currentQuestion.value.question_id; if (qid <= 0) return; try { const r = await checkFavoriteApi('question', qid); isFavorited.value = r.favorited; favoriteId.value = r.favorite_id } catch (e) { console.warn('[practice-do] checkFavorite failed:', e) } }
+    function onToggleFavorite() : void { const qid = currentQuestion.value.question_id; if (qid <= 0) return; if (isFavorited.value) { const fid = favoriteId.value; if (fid > 0) { removeFavoriteApi(fid).then(() => { isFavorited.value = false; favoriteId.value = 0; uni.showToast({ title: '已取消收藏', icon: 'none' }) }).catch((e) => { console.warn('[practice-do] removeFavorite failed:', e); uni.showToast({ title: '操作失败', icon: 'none' }) }) } } else { addFavoriteApi('question', qid).then((item) => { isFavorited.value = true; favoriteId.value = item.favorite_id; uni.showToast({ title: '已收藏', icon: 'none' }) }).catch((e) => { console.warn('[practice-do] addFavorite failed:', e); uni.showToast({ title: '操作失败', icon: 'none' }) }) } }
+    async function loadQuestions(mode : string, practiceCount : number, tagId : number) : Promise<void> { loading.value = true; try { if (mode == 'free') { questions.value = await getFreePracticeApi(practiceCount) } else if (mode == 'sequential') { questions.value = await getSequentialPracticeApi() } else if (mode == 'tag') { questions.value = await getTagPracticeApi(tagId, 0) }; if (questions.value.length > 0) { startTimer(); recordQuestionTime(); checkFavorite() } } catch (e) { console.error('[practice-do] load questions failed:', e); uni.showToast({ title: '加载题目失败', icon: 'none' }) } finally { loading.value = false } }
+    function saveProgress(mode : string, tagId : number) { if (mode == 'free') return; const saveMode = mode == 'tag' ? 'tag:' + tagId.toString() : mode; const a : UTSJSONObject = {} as UTSJSONObject; for (let i = 0; i < answerStates.value.length; i++) { const s = answerStates.value[i]; a[s.question_id.toString()] = s.user_answer }; savePracticeProgressApi(currentIndex.value + 1, saveMode, questions.value.length, a).catch((e) => { console.warn('[practice-do] save progress failed:', e) }) }
+    async function onSubmit(mode : string) : Promise<void> { if (selectedKeys.value.length == 0) { uni.showToast({ title: '请选择答案', icon: 'none' }); return }; let ua = ''; if (isMultiChoice()) { ua = selectedKeys.value.slice().sort().join(',') } else { ua = selectedKeys.value[0] }; lastUserAnswer.value = ua; const qid = currentQuestion.value.question_id; try { const p : SubmitAnswerParams = { question_id: qid, user_answer: ua, practice_type: mode } as SubmitAnswerParams; const r = await submitAnswerApi(p); lastResult.value = r; showResult.value = true; recordQuestionTime(); const s : AnswerState = { question_id: qid, user_answer: ua, is_correct: r.correct, correct_answer: r.correct_answer, submitted: true } as AnswerState; answerStates.value.push(s); if (mode != 'free') { saveProgress(mode, 0) } } catch (e) { console.error('[practice-do] submit failed:', e); uni.showToast({ title: '提交失败', icon: 'none' }) } }
+    function resetQuestionState() : void { showResult.value = false; lastUserAnswer.value = ''; lastResult.value = { correct: false, correct_answer: '', explanation: '' } as SubmitAnswerResult }
+    function onNext() : void { if (currentIndex.value >= questions.value.length - 1) { showSummary.value = true; stopTimer(); return }; currentIndex.value = currentIndex.value + 1; selectedKeys.value = []; resetQuestionState(); recordQuestionTime(); checkFavorite() }
+    function onJumpToQuestion(idx : number) : void { if (idx == currentIndex.value) { showAnswerCard.value = false; return }; currentIndex.value = idx; selectedKeys.value = []; resetQuestionState(); const q = questions.value[idx]; for (let i = 0; i < answerStates.value.length; i++) { if (answerStates.value[i].question_id == q.question_id) { const st = answerStates.value[i]; lastUserAnswer.value = st.user_answer; lastResult.value = { correct: st.is_correct, correct_answer: st.correct_answer, explanation: '' } as SubmitAnswerResult; showResult.value = true; break } }; showAnswerCard.value = false; recordQuestionTime(); checkFavorite() }
+    function onToggleAnswerCard() : void { showAnswerCard.value = !showAnswerCard.value }
+    function onCloseAnswerCard() : void { showAnswerCard.value = false }
+    function onSubmitPaper() : void { uni.showModal({ title: '提示', content: '确定要交卷吗？', success: (res) => { if (res.confirm) { showAnswerCard.value = false; showSummary.value = true; stopTimer() } } }) }
+    function onRestart() : void { currentIndex.value = 0; selectedKeys.value = []; showResult.value = false; showSummary.value = false; answerStates.value = []; lastResult.value = { correct: false, correct_answer: '', explanation: '' } as SubmitAnswerResult; totalSeconds.value = 0; questionStartTime.value = 0; questionElapsed.value = 0 }
+    return {
+        questions,
+        currentIndex,
+        loading,
+        showResult,
+        showSummary,
+        showAnswerCard,
+        isFavorited,
+        favoriteId,
+        selectedKeys,
+        answerStates,
+        lastUserAnswer,
+        lastResult,
+        totalSeconds,
+        questionStartTime,
+        questionElapsed,
+        siteAccuracy,
+        difficultyLevel,
+        currentQuestion,
+        timerText,
+        questionTimeText,
+        correctCount,
+        summaryAccuracy,
+        getTypeName: (type : string) => getTypeName(type),
+        isMultiChoice: () => isMultiChoice(),
+        isSelected: (key : string) => isSelected(key),
+        isCorrectAnswer: (key : string) => isCorrectAnswer(key),
+        getOptionClass: (key : string) => getOptionClass(key),
+        getOptionKeyClass: (key : string) => getOptionKeyClass(key),
+        getOptionTextClass: (key : string) => getOptionTextClass(key),
+        getAnswerCardClass: (idx : number) => getAnswerCardClass(idx),
+        getAnswerCardNumClass: (idx : number) => getAnswerCardNumClass(idx),
+        onOptionClick: (key : string) => onOptionClick(key),
+        onToggleFavorite: () => onToggleFavorite(),
+        loadQuestions: (mode : string, practiceCount : number, tagId : number) => loadQuestions(mode, practiceCount, tagId),
+        onSubmit: (mode : string) => onSubmit(mode),
+        onNext: () => onNext(),
+        onJumpToQuestion: (idx : number) => onJumpToQuestion(idx),
+        onToggleAnswerCard: () => onToggleAnswerCard(),
+        onCloseAnswerCard: () => onCloseAnswerCard(),
+        onSubmitPaper: () => onSubmitPaper(),
+        onRestart: () => onRestart(),
+        resetQuestionState: () => resetQuestionState(),
+        recordQuestionTime: () => recordQuestionTime(),
+        checkFavorite: () => checkFavorite(),
+        startTimer: () => startTimer(),
+        stopTimer: () => stopTimer()
+    } as UsePracticeSessionResult
+}

@@ -18,41 +18,12 @@
         </view>
 
         <!-- 排序栏 -->
-        <view class="sort-bar">
-            <view class="sort-item" :class="{ 'sort-active': activeSort === 0 }" @click="onSortChange(0)">
-                <text class="sort-text" :class="{ 'sort-text-active': activeSort === 0 }">商品</text>
-            </view>
-            <view class="sort-item" :class="{ 'sort-active': activeSort === 1 }" @click="onSortChange(1)">
-                <text class="sort-text" :class="{ 'sort-text-active': activeSort === 1 }">价格</text>
-                <text class="sort-arrow">∨</text>
-            </view>
-            <view class="sort-item" :class="{ 'sort-active': activeSort === 2 }" @click="onSortChange(2)">
-                <text class="sort-text" :class="{ 'sort-text-active': activeSort === 2 }">积分</text>
-                <text class="sort-arrow">∨</text>
-            </view>
-            <view class="sort-item" :class="{ 'sort-active': activeSort === 3 }" @click="onSortChange(3)">
-                <text class="sort-text" :class="{ 'sort-text-active': activeSort === 3 }">销量</text>
-                <text class="sort-arrow">∨</text>
-            </view>
-            <view class="sort-icon-btn" @click="onSearch">
-                <text class="sort-icon">🔍</text>
-            </view>
-            <view class="sort-icon-btn" @click="onCart">
-                <text class="sort-icon">🛒</text>
-            </view>
-        </view>
+        <MallSortBar :active-sort="activeSort" @sort-change="onSortChange" @search="onSearch" @cart="onCart" />
 
         <!-- 双栏主体 -->
         <view class="main-body">
             <!-- 左侧分类栏 -->
-            <scroll-view class="category-sidebar" scroll-y="true">
-                <view v-for="(cat, idx) in categories" :key="idx" class="category-item"
-                    :class="{ 'category-active': activeCategory === idx, 'category-vip': cat.isVip }"
-                    @click="onCategoryChange(idx)">
-                    <text class="category-text"
-                        :class="{ 'category-text-active': activeCategory === idx, 'category-text-vip': cat.isVip }">{{ cat.name }}</text>
-                </view>
-            </scroll-view>
+            <MallCategorySidebar :active-category="activeCategory" @category-change="onCategoryChange" />
 
             <!-- 右侧商品列表 -->
             <scroll-view class="product-list" scroll-y="true" @scrolltolower="onLoadMore">
@@ -110,36 +81,7 @@
         </view>
 
         <!-- 悬浮按钮组 -->
-        <view class="float-group">
-            <!-- 回到顶部 -->
-            <view class="float-btn" @click="scrollToTop">
-                <text class="float-icon">↑</text>
-            </view>
-            <!-- 展开/收起 -->
-            <view class="float-btn" @click="toggleFloatMenu">
-                <text class="float-icon">{{ showFloatMenu ? '∧' : '∨' }}</text>
-            </view>
-            <!-- 搜索（收起态） -->
-            <view v-if="!showFloatMenu" class="float-btn float-btn-search" @click="onSearch">
-                <text class="float-icon">🔍</text>
-                <text class="float-btn-label">搜索</text>
-            </view>
-            <!-- 展开菜单 -->
-            <view v-if="showFloatMenu" class="float-menu">
-                <view class="float-menu-item" @click="goHome">
-                    <text class="float-menu-icon">🏠</text>
-                    <text class="float-menu-text">首页</text>
-                </view>
-                <view class="float-menu-item" @click="onShare">
-                    <text class="float-menu-icon">🔗</text>
-                    <text class="float-menu-text">分享</text>
-                </view>
-                <view class="float-menu-item" @click="onSearch">
-                    <text class="float-menu-icon">🔍</text>
-                    <text class="float-menu-text">搜索</text>
-                </view>
-            </view>
-        </view>
+        <MallFloatActions @search="onSearch" />
     </view>
 </template>
 
@@ -149,7 +91,10 @@
     import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
     import { getCourseListApi } from '../../api/course'
-    import type { CourseItem } from '../../types/index'
+    import type { CourseItem, CourseListResult } from '../../types/index'
+    import MallSortBar from './components/mall-sort-bar.uvue'
+    import MallCategorySidebar from './components/mall-category-sidebar.uvue'
+    import MallFloatActions from './components/mall-float-actions.uvue'
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
@@ -158,17 +103,6 @@
     const activeSort = ref<number>(0)
 
     // ---- 左侧分类 ----
-    type CategoryItem = {
-        name : string
-        id : number
-        isVip : boolean
-    }
-
-    const categories : CategoryItem[] = [
-        { name: '热门', id: 0, isVip: false },
-        { name: '图书系列', id: 1, isVip: false },
-        { name: 'VIP套餐', id: 2, isVip: true },
-    ]
     const activeCategory = ref<number>(0)
 
     // ---- 商品列表 ----
@@ -178,9 +112,6 @@
     const pageSize = 12
     const loading = ref<boolean>(false)
     const noMore = ref<boolean>(false)
-
-    // ---- 悬浮按钮 ----
-    const showFloatMenu = ref<boolean>(false)
 
     async function loadProducts(reset : boolean = false) : Promise<void> {
         if (loading.value) return
@@ -192,7 +123,7 @@
 
         loading.value = true
         try {
-            const result = await getCourseListApi(page.value, pageSize, 0, 0)
+            const result : CourseListResult = await getCourseListApi(page.value, pageSize, 0, 0)
             if (reset) {
                 products.value = result.items
             } else {
@@ -240,27 +171,8 @@
         uni.showToast({ title: '购物车开发中', icon: 'none' })
     }
 
-    function onMore() : void {
-        uni.showToast({ title: '更多选项开发中', icon: 'none' })
-    }
-
-    function goHome() : void {
-        uni.switchTab({ url: '/pages/index/index' })
-    }
     function toback() : void {
         goBack()
-    }
-
-    function onShare() : void {
-        uni.showToast({ title: '分享功能开发中', icon: 'none' })
-    }
-
-    function scrollToTop() : void {
-        // 滚动到顶部
-    }
-
-    function toggleFloatMenu() : void {
-        showFloatMenu.value = !showFloatMenu.value
     }
 
     function increaseQty(item : CourseItem) : void {
@@ -346,100 +258,10 @@
         color: #666666;
     }
 
-    /* ===== 排序栏 ===== */
-    .sort-bar {
-        background-color: #ffffff;
-        padding: 16rpx 24rpx;
-        flex-direction: row;
-        align-items: center;
-        border-bottom: 1rpx solid #f0f0f0;
-    }
-
-    .sort-item {
-        flex: 1;
-        flex-direction: row;
-        align-items: center;
-        justify-content: center;
-        padding: 8rpx 0;
-    }
-
-    .sort-text {
-        font-size: 26rpx;
-        color: #666666;
-    }
-
-    .sort-text-active {
-        color: #2979ff;
-        font-weight: 600;
-    }
-
-    .sort-arrow {
-        font-size: 20rpx;
-        color: #cccccc;
-        margin-left: 4rpx;
-    }
-
-    .sort-icon-btn {
-        width: 60rpx;
-        height: 60rpx;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .sort-icon {
-        font-size: 32rpx;
-    }
-
     /* ===== 双栏主体 ===== */
     .main-body {
         flex: 1;
         flex-direction: row;
-    }
-
-    /* ===== 左侧分类栏 ===== */
-    .category-sidebar {
-        width: 180rpx;
-        background-color: #f8f8f8;
-    }
-
-    .category-item {
-        padding: 28rpx 24rpx;
-        align-items: center;
-        justify-content: center;
-        border-left: 6rpx solid transparent;
-        background-color: #f8f8f8;
-    }
-
-    .category-active {
-        background-color: #ffffff;
-        border-left-color: #2979ff;
-    }
-
-    .category-text {
-        font-size: 26rpx;
-        color: #333333;
-    }
-
-    .category-text-active {
-        color: #2979ff;
-        font-weight: bold;
-    }
-
-    /* VIP套餐特殊样式 */
-    .category-vip {
-        background-color: #f8f8f8;
-    }
-
-    .category-vip.category-active {
-        background-color: #ffffff;
-    }
-
-    .category-text-vip {
-        color: #ff4d4f;
-    }
-
-    .category-text-vip.category-text-active {
-        color: #2979ff;
     }
 
     /* ===== 右侧商品列表 ===== */
@@ -617,69 +439,5 @@
     .loading-text {
         font-size: 24rpx;
         color: #999999;
-    }
-
-    /* ===== 悬浮按钮组 ===== */
-    .float-group {
-        position: fixed;
-        right: 24rpx;
-        bottom: 200rpx;
-        flex-direction: column;
-        align-items: center;
-        z-index: 100;
-    }
-
-    .float-btn {
-        width: 80rpx;
-        height: 80rpx;
-        border-radius: 40rpx;
-        background-color: #ffffff;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.15);
-        margin-bottom: 16rpx;
-    }
-
-    .float-btn-search {
-        width: 80rpx;
-        height: 100rpx;
-        border-radius: 40rpx;
-        flex-direction: column;
-        padding-top: 8rpx;
-    }
-
-    .float-icon {
-        font-size: 32rpx;
-        color: #666666;
-    }
-
-    .float-btn-label {
-        font-size: 20rpx;
-        color: #666666;
-        margin-top: 4rpx;
-    }
-
-    .float-menu {
-        background-color: #ffffff;
-        border-radius: 16rpx;
-        box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.15);
-        padding: 16rpx 0;
-        margin-bottom: 16rpx;
-    }
-
-    .float-menu-item {
-        flex-direction: row;
-        align-items: center;
-        padding: 16rpx 32rpx;
-    }
-
-    .float-menu-icon {
-        font-size: 32rpx;
-        margin-right: 16rpx;
-    }
-
-    .float-menu-text {
-        font-size: 26rpx;
-        color: #333333;
     }
 </style>

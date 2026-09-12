@@ -1,0 +1,161 @@
+/**
+ * 课程模块类型
+ * 含：课程、章节、专业方向、课程等级、学习资料、标签
+ */
+
+/** 课程列表项 */
+export type CourseItem = {
+    course_id : number
+    title : string
+    category : string
+    description : string
+    cover_url : string
+    duration : number
+    chapter_count : number
+    /** 专业方向 ID（0 表示未设置） */
+    specialty_id : number
+    /** 课程等级 ID（0 表示未设置） */
+    level_id : number
+    /** 购物车本地数量（非后端字段，选填） */
+    quantity ?: number
+    /** 商城价格（0=免费；后端课程接口暂未返回，选填） */
+    price ?: number
+    /** 报名人数（后端课程接口暂未返回，选填） */
+    enrollCount ?: number
+}
+
+/** 专业方向（筛选项） */
+export type SpecialtyItem = {
+    specialty_id : number
+    name : string
+}
+
+/** 课程等级（筛选项） */
+export type LevelItem = {
+    level_id : number
+    name : string
+}
+
+/** 课程分类（兼容旧接口，value 为专业方向 ID 字符串） */
+export type CourseCategory = {
+    id : number
+    name : string
+    value : string
+}
+
+/** 课程列表响应 */
+export type CourseListResult = {
+    items : CourseItem[]
+    total : number
+    page : number
+    page_size : number
+}
+
+/** 章节项 */
+export type ChapterItem = {
+    chapter_id : number
+    title : string
+    order_num : number
+    duration : number
+}
+
+/** 章节附件文件 */
+export type ChapterFile = {
+    file_id : number
+    file_name : string
+    file_url : string
+    content_type : string  // video / document / ppt / image
+}
+
+/** 章节详情 */
+export type ChapterDetail = {
+    chapter_id : number
+    title : string
+    content : string               // 图文内容（markdown/html）
+    files : ChapterFile[]          // 附件列表
+    previous_chapter_id : number   // 上一章节 ID（0 表示无）
+    next_chapter_id : number       // 下一章节 ID（0 表示无）
+    study_status : string          // 学习状态：completed / studying / ''
+    duration : number              // 章节时长（秒）
+}
+
+/** 课程详情 */
+export type CourseDetail = {
+    course_id : number
+    title : string
+    description : string
+    category : string
+    cover_url : string
+    duration : number
+    chapters : ChapterItem[]
+    progress_pct : number
+    /** 专业方向 ID（0 表示未设置） */
+    specialty_id : number
+    /** 课程等级 ID（0 表示未设置） */
+    level_id : number
+    /** 专业方向名称 */
+    specialty_name : string
+    /** 课程等级名称 */
+    level_name : string
+    /** 理论学时 */
+    theory_hours : number
+    /** 实操学时 */
+    practice_hours : number
+    /** 关联证书名称 */
+    certificate_name : string
+    /** 证书有效期（天） */
+    certificate_validity_days : number
+    /** 是否已报名 */
+    is_enrolled : boolean
+    /** 已完成章节数 */
+    completed_chapters : number
+    /** 前置课程列表 */
+    prerequisites : CoursePrereq[]
+}
+
+/** 前置课程 */
+export type CoursePrereq = {
+    course_id : number
+    name : string
+}
+
+// ========== 学习资料（GET /materials） ==========
+/** 学习资料条目 */
+export type MaterialItem = {
+    file_id : number
+    chapter_id : number
+    chapter_title : string
+    course_id : number
+    course_name : string
+    file_name : string
+    file_url : string
+    content_type : string
+    file_size : number
+    created_at : string
+}
+
+/** 学习资料列表结果 */
+export type MaterialListResult = {
+    materials : MaterialItem[]
+    total : number
+    page : number
+    pages : number
+}
+
+/** 学习资料下载信息 */
+export type MaterialDownloadInfo = {
+    file_url : string
+    file_name : string
+}
+
+// ========== 标签（GET /tags） ==========
+/** 题库标签条目 */
+export type TagItem = {
+    id : number
+    code : string
+    name : string
+    description : string
+    sort_order : number
+    status : number
+    question_count : number
+}

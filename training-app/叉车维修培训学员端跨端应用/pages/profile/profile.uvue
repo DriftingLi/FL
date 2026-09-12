@@ -8,31 +8,7 @@
         </view>
 
         <scroll-view class="content-scroll" scroll-y>
-            <!-- 用户行：头像 + 昵称/等级 + 段位星级 + 签到胶囊 -->
-            <view class="user-row">
-                <view class="user-avatar" @click.stop="onChangeAvatar">
-                    <image v-if="avatarUrl.length > 0" class="avatar-img" :src="avatarUrl" mode="aspectFill">
-                    </image>
-                    <text v-else class="avatar-icon">👤</text>
-                </view>
-                <view class="user-info" @click="onEditNickname">
-                    <view class="name-row">
-                        <text class="user-name">{{ userName }}</text>
-                        <text class="user-lv">Lv{{ userLevel }}</text>
-                    </view>
-                    <view class="role-row">
-                        <text class="role-icon">🏅</text>
-                        <text class="user-role">{{ rankName }}</text>
-                        <view class="stars-row">
-                            <text v-for="(s, i) in starList" :key="i"
-                                :class="['star', { 'star-active': i < starCount }]">★</text>
-                        </view>
-                    </view>
-                </view>
-                <view class="checkin-pill" @click="onGoCheckIn">
-                    <text class="checkin-pill-text">{{ todayChecked ? '已签到' : '签到' }}</text>
-                </view>
-            </view>
+            <ProfileUserRow :study-minutes="studyMinutes" :completed-courses="completedCourses" :today-checked="todayChecked" @avatar-tap="onChangeAvatar" @edit-nickname="onEditNickname" @checkin-tap="onGoCheckIn" />
 
             <!-- 学习数据：三张独立卡片 -->
             <view class="stats-row">
@@ -94,11 +70,12 @@
     import { useAuthStore } from '../../stores/auth'
     import { getProfileApi, getStudyStatsApi } from '../../api/student'
     import { updateProfileApi, uploadAvatarApi } from '../../api/auth'
-    import { getCheckInCalendarApi } from '../../api/forum'
+    import { getCheckInCalendarApi } from '../../api/checkin'
     import { getPointsBalanceApi } from '../../api/points'
     import { useStatusBarHeight } from '../../utils/system'
     import { UNAVAILABLE_TOAST } from '../../constants/app'
-    import type { StudentProfile, UpdateProfileParams } from '../../types/index'
+    import type { StudentProfile, UpdateProfileParams, StudyStats, PointsBalance, CheckInCalendarResult } from '../../types/index'
+    import ProfileUserRow from './components/profile-user-row.uvue'
 
     /** 宫格入口：path 为空或 available=false 时走占位提示 */
     type ProfileEntry = {
@@ -120,23 +97,6 @@
     /** 签到状态（原型：签到胶囊只区分今日是否已签到） */
     const todayChecked = ref<boolean>(false)
 
-    const userName = computed<string>(() : string => {
-        const u = authStore.user.value
-        if (u != null) {
-            if (u.name.length > 0) return u.name
-            if (u.username.length > 0) return u.username
-        }
-        return '同学'
-    })
-
-    const avatarUrl = computed<string>(() : string => {
-        const u = authStore.user.value
-        if (u != null && u.avatar_url != null && u.avatar_url.length > 0) {
-            return u.avatar_url
-        }
-        return ''
-    })
-
     function padZero(n : number) : string {
         if (n < 10) return '0' + n
         return '' + n
@@ -150,36 +110,6 @@
         if (hours <= 0) return mins + 'm'
         if (mins <= 0) return hours + 'h'
         return hours + 'h' + mins + 'm'
-    }
-
-    /**
-     * 学员等级 Lv：按累计学时本地推导（后端无等级字段）
-     * <5h → Lv1，<20h → Lv2，<50h → Lv3，<100h → Lv4，其余 Lv5
-     */
-    function levelFromHours(hours : number) : number {
-        if (hours < 5) return 1
-        if (hours < 20) return 2
-        if (hours < 50) return 3
-        if (hours < 100) return 4
-        return 5
-    }
-
-    /**
-     * 段位：按已完成课程数本地推导（后端无段位字段）
-     * 0 → 初级工，1 → 中级技师，2 → 高级技师，>=3 → 技师
-     */
-    function rankNameFromCompleted(completed : number) : string {
-        if (completed <= 0) return '初级工'
-        if (completed == 1) return '中级技师'
-        if (completed == 2) return '高级技师'
-        return '技师'
-    }
-
-    /** 等级 → 点亮星数（共 5 颗） */
-    function starCountFromLevel(level : number) : number {
-        if (level <= 0) return 0
-        if (level > 5) return 5
-        return level
     }
 
     /** 积分展示：非正数归零，超过 9999 折叠 */
@@ -209,20 +139,6 @@
         return formatStudyDuration(studyMinutes.value)
     })
 
-    const userLevel = computed<number>(() : number => {
-        return levelFromHours(studyMinutes.value / 60)
-    })
-
-    const rankName = computed<string>(() : string => {
-        return rankNameFromCompleted(completedCourses.value)
-    })
-
-    const starList : number[] = [1, 2, 3, 4, 5]
-
-    const starCount = computed<number>(() : number => {
-        return starCountFromLevel(userLevel.value)
-    })
-
     const pointsText = computed<string>(() : string => {
         return formatPoints(pointsTotal.value)
     })
@@ -242,7 +158,7 @@
         { key: 'wrong-questions', title: '错题本', icon: '📕', path: '/pages/profile/wrong-questions', available: true },
         { key: 'notebook', title: '笔记本', icon: '📔', path: '', available: false },
         { key: 'study-plan', title: '学练计划', icon: '🎯', path: '', available: false },
-        { key: 'materials', title: '学习资料', icon: '📚', path: '', available: false },
+        { key: 'materials', title: '学习资料', icon: '📚', path: '/pages/resources/materials', available: true },
         { key: 'jobs', title: '就业在线', icon: '💼', path: '/pages/jobs/job-list', available: true },
         { key: 'task-center', title: '任务中心', icon: '✅', path: '/pages/points/task-center', available: true },
     ]
@@ -256,9 +172,9 @@
         { key: 'settings', title: '设置', icon: '⚙', path: '/pages/profile/settings', available: true },
     ]
 
-    async function loadProfile() {
+    async function loadProfile() : Promise<void> {
         try {
-            const data = await getProfileApi()
+            const data : StudentProfile = await getProfileApi()
             profile.value = data
         } catch (e) {
             console.error('[profile] load failed:', e)
@@ -266,9 +182,9 @@
     }
 
     /** 近 7 天有学习记录的天数 */
-    async function loadStreak() {
+    async function loadStreak() : Promise<void> {
         try {
-            const stats = await getStudyStatsApi(7)
+            const stats : StudyStats = await getStudyStatsApi(7)
             streakDays.value = stats.active_days
         } catch (e) {
             console.error('[profile] loadStreak failed:', e)
@@ -276,22 +192,22 @@
     }
 
     /** 可用积分：取积分余额 */
-    async function loadPoints() {
+    async function loadPoints() : Promise<void> {
         try {
-            const data = await getPointsBalanceApi()
-            pointsTotal.value = data.total_points
+            const data : PointsBalance = await getPointsBalanceApi()
+            pointsTotal.value = data.balance
         } catch (e) {
             console.error('[profile] loadPoints failed:', e)
         }
     }
 
     /** 加载签到状态（今日是否已签到） */
-    async function loadCheckInStatus() {
+    async function loadCheckInStatus() : Promise<void> {
         try {
             const now = new Date()
             const year = now.getFullYear()
             const month = now.getMonth() + 1
-            const result = await getCheckInCalendarApi(year, month)
+            const result : CheckInCalendarResult = await getCheckInCalendarApi(year, month)
             const todayStr = year + '-' + padZero(month) + '-' + padZero(now.getDate())
             todayChecked.value = false
             for (let i = 0; i < result.days.length; i++) {
@@ -451,106 +367,6 @@
         flex: 1;
     }
 
-    /* 用户行 */
-    .user-row {
-        flex-direction: row;
-        align-items: center;
-        padding: 24rpx 48rpx 0 24rpx;
-    }
-
-    .user-avatar {
-        width: 116rpx;
-        height: 116rpx;
-        border-radius: 58rpx;
-        background-color: #F5F5F5;
-        border: 4rpx solid #ffffff;
-        align-items: center;
-        justify-content: center;
-        overflow: hidden;
-    }
-
-    .avatar-img {
-        width: 116rpx;
-        height: 116rpx;
-        border-radius: 58rpx;
-    }
-
-    .avatar-icon {
-        font-size: 56rpx;
-    }
-
-    .user-info {
-        flex: 1;
-        flex-direction: column;
-        margin-left: 24rpx;
-    }
-
-    .name-row {
-        flex-direction: row;
-        align-items: center;
-    }
-
-    .user-name {
-        font-size: 40rpx;
-        font-weight: bold;
-        color: #333333;
-    }
-
-    .user-lv {
-        font-size: 22rpx;
-        font-weight: bold;
-        color: #333333;
-        margin-left: 16rpx;
-    }
-
-    .role-row {
-        flex-direction: row;
-        align-items: center;
-        margin-top: 8rpx;
-    }
-
-    .role-icon {
-        font-size: 26rpx;
-        margin-right: 8rpx;
-    }
-
-    .user-role {
-        font-size: 28rpx;
-        color: #666666;
-    }
-
-    .stars-row {
-        flex-direction: row;
-        align-items: center;
-        margin-left: 24rpx;
-    }
-
-    .star {
-        font-size: 26rpx;
-        color: #FFFFFF;
-        margin-right: 4rpx;
-    }
-
-    .star-active {
-        color: #FDE03B;
-    }
-
-    .checkin-pill {
-        height: 52rpx;
-        padding: 0 24rpx;
-        border-radius: 26rpx;
-        background-color: #EBF9FF;
-        align-items: center;
-        justify-content: center;
-        margin-left: 16rpx;
-        flex-shrink: 0;
-    }
-
-    .checkin-pill-text {
-        font-size: 26rpx;
-        font-weight: bold;
-        color: #239EDD;
-    }
 
     /* 学习数据：三张独立卡片 */
     .stats-row {

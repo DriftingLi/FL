@@ -86,14 +86,14 @@
                   <span v-if="course.theory_hours || course.practice_hours" class="cc-meta-item">
                     理论{{ course.theory_hours || 0 }}学时 · 实操{{ course.practice_hours || 0 }}学时
                   </span>
-                  <el-tag v-if="course.points_price" size="small" type="warning" effect="plain">
+                  <UiTag v-if="course.points_price" size="small" tone="warning" effect="plain">
                     {{ course.points_price }} 积分解锁
-                  </el-tag>
+                  </UiTag>
                 </div>
                 <div class="cc-cert flex" v-if="course.certificate_name">
-                  <el-tag size="small" type="success" effect="plain">
+                  <UiTag size="small" tone="success" effect="plain">
                     {{ course.certificate_name }}
-                  </el-tag>
+                  </UiTag>
                 </div>
               </template>
             </CourseCard>
@@ -112,26 +112,27 @@
         </div>
 
         <div class="cc-pagination mt-5 flex justify-center" v-if="total > pageSize">
-          <el-pagination
-            v-model:current-page="currentPage"
-            v-model:page-size="pageSize"
-            :total="total"
-            :page-sizes="[12, 24, 36]"
-            layout="total, sizes, prev, pager, next, jumper"
-            @size-change="handleSizeChange"
-            @current-change="handlePageChange"
-          />
+          <UiPagination
+      v-model:current-page="currentPage"
+      v-model:page-size="pageSize"
+      :total="total"
+      show-sizes
+      :page-sizes="[12, 24, 36]"
+      show-jumper
+      @current-change="handlePageChange"
+      @size-change="handleSizeChange"
+    />
         </div>
       </main>
     </div>
 
     <!-- 课程详情 -->
-    <el-dialog
+    <UiDialog
       v-model="detailVisible"
       :title="detailCourse?.name || '课程详情'"
       width="680px"
       destroy-on-close
-    >
+     :confirm-text="continueChapter ? `继续学习：${continueChapterTitle}` : '开始学习'" @confirm="goToChapter(continueChapter ?? detailChapters[0])">
       <template #header>
         <div class="detail-header flex items-center justify-between gap-3 pr-6">
           <span class="detail-header-title text-lg font-semibold text-ink">{{ detailCourse?.name || '课程详情' }}</span>
@@ -141,14 +142,14 @@
       <div v-loading="detailLoading">
         <template v-if="detailCourse">
           <div class="detail-brief mb-3 flex flex-wrap gap-2">
-            <el-tag v-if="detailCourse.level?.name" type="warning">{{ detailCourse.level.name }}</el-tag>
-            <el-tag v-if="detailCourse.specialty?.name" type="primary" effect="plain">
+            <UiTag v-if="detailCourse.level?.name" tone="warning">{{ detailCourse.level.name }}</UiTag>
+            <UiTag v-if="detailCourse.specialty?.name" tone="primary" effect="plain">
               {{ detailCourse.specialty.name }}
-            </el-tag>
+            </UiTag>
           </div>
           <p class="detail-desc mb-4 text-sm text-ink-2">{{ detailCourse.description || '暂无简介' }}</p>
           <div v-if="detailCourse?.points_price" class="detail-redeem">
-            <el-tag type="warning" effect="plain">{{ detailCourse.points_price }} 积分解锁</el-tag>
+            <UiTag tone="warning" effect="plain">{{ detailCourse.points_price }} 积分解锁</UiTag>
             <UiButton variant="warning" size="small" @click="handleRedeem">兑换解锁</UiButton>
           </div>
 
@@ -168,13 +169,13 @@
             </el-descriptions-item>
             <el-descriptions-item label="前置课程">
               <template v-if="detailCourse.prerequisites && detailCourse.prerequisites.length > 0">
-                <el-tag
+                <UiTag
                   v-for="p in detailCourse.prerequisites"
                   :key="p.course_id"
                   size="small"
-                  type="info"
+                  tone="info"
                   class="prereq-tag mr-1 my-0.5"
-                >{{ p.name }}</el-tag>
+                >{{ p.name }}</UiTag>
               </template>
               <span v-else>—</span>
             </el-descriptions-item>
@@ -203,7 +204,7 @@
               >
                 <span class="chapter-index flex size-6 shrink-0 items-center justify-center rounded-[6px] bg-ui-100 text-xs font-semibold text-ui-600">{{ i + 1 }}</span>
                 <span class="chapter-title flex-1 text-sm text-ink">{{ ch.title }}</span>
-                <el-tag v-if="chapterCompleted(ch.chapter_id)" size="small" type="success" effect="plain">已完成</el-tag>
+                <UiTag v-if="chapterCompleted(ch.chapter_id)" size="small" tone="success" effect="plain">已完成</UiTag>
                 <span v-if="ch.duration" class="chapter-duration text-xs text-ink-3">{{ ch.duration }}分钟</span>
                 <el-icon class="chapter-arrow text-ink-3"><ArrowRight /></el-icon>
               </div>
@@ -212,19 +213,15 @@
           </div>
         </template>
       </div>
-      <template #footer>
-        <UiButton @click="detailVisible = false">关闭</UiButton>
-        <UiButton variant="primary" v-if="detailChapters.length > 0" @click="goToChapter(continueChapter ?? detailChapters[0])">{{ continueChapter ? `继续学习：${continueChapterTitle}` : '开始学习' }}</UiButton>
-      </template>
-    </el-dialog>
+    </UiDialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowRight, Star, StarFilled } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { courseApi, type CourseDetail, type CourseSummary } from '@/api/course'
 import { studentApi, type StudentCourseDetail } from '@/api/student'
 import { favoriteApi } from '@/api/favorite'
@@ -233,7 +230,6 @@ import { pointsApi } from '@/api/points'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useCourseCatalog, treeCatalogAdapter } from '@/composables/useCourseCatalog'
 import { useStagger } from '@/composables/useStagger'
-import { useCredentialRefetch } from '@/composables/useCredentialRefetch'
 import { useCredentialStore } from '@/stores/credential'
 import FacetCard from '@/components/catalog/FacetCard.vue'
 import FacetItem from '@/components/catalog/FacetItem.vue'
@@ -244,6 +240,10 @@ import UiProgress from '@/components/ui/UiProgress.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
+import { useConfirm } from '@/composables/useConfirm'
+import UiTag from '@/components/ui/UiTag.vue'
 
 const stagger = useStagger()
 
@@ -267,6 +267,7 @@ const tabOptions = [
 ]
 
 // 三态 + 分页三件套收编（#388）：loader 只负责拉数据与写响应
+// （#605：证件切换即重拉已内聚进 useAsyncPage——回第一页、tab/方向/等级筛选词原样保留）
 const {
   loading,
   loadError,
@@ -470,7 +471,7 @@ async function handleRedeem() {
   const price = detailCourse.value.points_price
   if (!price) return
   try {
-    await ElMessageBox.confirm(`该课程需 ${price} 积分解锁，确认兑换？`, '积分兑换', {
+    await useConfirm().confirm(`该课程需 ${price} 积分解锁，确认兑换？`, '积分兑换', {
       confirmButtonText: '确认兑换',
       cancelButtonText: '取消',
       type: 'warning'
@@ -502,6 +503,19 @@ function goToChapter(ch: { chapter_id: number }) {
   })
 }
 
+// #594 目录 facet 收敛（存量缺口修复：master 时代目录树同样只拉一次，切证件后
+// totalAll/scopedTotal/countOf* 停留旧证件口径）：目录树按当前证件分区（credential_id
+// 由拦截器注入），切证件时随装载流与列表并行重载。不并入 useAsyncPage loader——
+// 翻页/筛选变化不应重复拉树；与列表重载也不重复请求（两个 loader 各自恰好一次）。
+// 仅本页树 adapter 受证件过滤；admin/tutor 的目录 adapter 走 /admin、/tutor 豁免域，
+// 且 credential store 对非学员角色结构性为 null，不受此 watch 影响
+watch(
+  () => credentialStore.current?.id,
+  () => {
+    void fetchCatalog()
+  }
+)
+
 onMounted(() => {
   fetchCatalog()
   loadCourses()
@@ -510,12 +524,6 @@ onMounted(() => {
   if (queryCourseId > 0) {
     openDetailById(queryCourseId)
   }
-})
-
-// 证件切换即重拉（单点：watch store.current.id，见 useCredentialRefetch）
-useCredentialRefetch(() => {
-  currentPage.value = 1
-  loadCourses()
 })
 </script>
 

@@ -69,10 +69,10 @@
             }
         },
         {
-            "path": "pages/exam/exam",
+            "path": "pages/resources/materials",
             "style": {
                 "navigationStyle": "custom",
-                "navigationBarTitleText": "考试"
+                "navigationBarTitleText": "学习资料"
             }
         },
         {
@@ -87,20 +87,6 @@
             "style": {
                 "navigationStyle": "custom",
                 "navigationBarTitleText": "考试成绩"
-            }
-        },
-        {
-            "path": "pages/exam/level-exam-do",
-            "style": {
-                "navigationStyle": "custom",
-                "navigationBarTitleText": "等级考试"
-            }
-        },
-        {
-            "path": "pages/exam/level-exam-result",
-            "style": {
-                "navigationStyle": "custom",
-                "navigationBarTitleText": "等级考试成绩"
             }
         },
         {
@@ -293,13 +279,6 @@
             }
         },
         {
-            "path": "pages/resources/upload-resource",
-            "style": {
-                "navigationStyle": "custom",
-                "navigationBarTitleText": "上传资源"
-            }
-        },
-        {
             "path": "pages/exam-info/exam-info",
             "style": {
                 "navigationStyle": "custom",
@@ -331,7 +310,7 @@
             "path": "pages/jobs/job-list",
             "style": {
                 "navigationStyle": "custom",
-                "navigationBarTitleText": "职位广场"
+                "navigationBarTitleText": "招聘"
             }
         },
         {

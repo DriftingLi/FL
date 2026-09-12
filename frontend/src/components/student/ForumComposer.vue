@@ -19,6 +19,7 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import { useForumImageUpload } from '@/composables/useForumImageUpload'
 import { resolveFileUrl } from '@/utils/fileUrl'
+import UiTag from '@/components/ui/UiTag.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -117,9 +118,9 @@ function onKeydown(event: KeyboardEvent) {
 <template>
   <div class="forum-composer">
     <div v-if="props.replyingTo" class="mb-2">
-      <el-tag closable size="small" type="info" @close="emit('update:replyingTo', null)">
+      <UiTag closable size="small" tone="info" @close="emit('update:replyingTo', null)">
         回复 @{{ props.replyingTo.username }}
-      </el-tag>
+      </UiTag>
     </div>
 
     <!--

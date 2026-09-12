@@ -1,0 +1,123 @@
+<template>
+    <!-- 题目详情列表 —— T07 手术自 pages/exam/mock-exam-result.uvue 逐段搬出，类名与结构逐字不变 -->
+    <view class="detail-list">
+        <view v-for="(row, idx) in rows" :key="idx" class="detail-card">
+            <view class="detail-header">
+                <text class="detail-type-tag">{{ row.typeName }}</text>
+                <text class="detail-status" :class="row.isCorrect ? 'status-correct' : 'status-wrong'">
+                    {{ row.statusText }}
+                </text>
+            </view>
+            <text class="detail-title">{{ row.index }}. {{ row.title }}</text>
+            <view class="detail-answers">
+                <view class="detail-answer-row">
+                    <text class="detail-answer-label">你的答案：</text>
+                    <text class="detail-answer-value" :class="row.isCorrect ? 'answer-correct' : 'answer-wrong'">
+                        {{ row.userAnswerText }}
+                    </text>
+                </view>
+                <view v-if="!row.isCorrect" class="detail-answer-row">
+                    <text class="detail-answer-label">正确答案：</text>
+                    <text class="detail-answer-value answer-correct">{{ row.correctAnswer }}</text>
+                </view>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import type { ExamResultDetailRow } from '../composables/useMockExamResult'
+
+    // 数组型 prop（行数据已在 composable 内派生为扁平视图模型，组件只渲染）
+    const props = withDefaults(defineProps<{
+        rows? : ExamResultDetailRow[]
+    }>(), {
+        rows: () => [] as ExamResultDetailRow[]
+    })
+</script>
+
+<style>
+    /* 题目详情列表 */
+    .detail-list {
+        padding: 0 24rpx;
+    }
+
+    .detail-card {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 24rpx;
+        margin-bottom: 16rpx;
+        border: 1px solid #eeeeee;
+        flex-direction: column;
+    }
+
+    .detail-header {
+        flex-direction: row;
+        align-items: center;
+        margin-bottom: 16rpx;
+    }
+
+    .detail-type-tag {
+        font-size: 20rpx;
+        color: #ffffff;
+        background-color: #2979ff;
+        padding: 4rpx 12rpx;
+        border-radius: 6rpx;
+        margin-right: 12rpx;
+    }
+
+    .detail-status {
+        font-size: 22rpx;
+        padding: 4rpx 12rpx;
+        border-radius: 6rpx;
+    }
+
+    .status-correct {
+        color: #4caf50;
+        background-color: #e8f5e9;
+    }
+
+    .status-wrong {
+        color: #f44336;
+        background-color: #ffebee;
+    }
+
+    .detail-title {
+        font-size: 28rpx;
+        color: #333333;
+        line-height: 44rpx;
+        margin-bottom: 16rpx;
+    }
+
+    .detail-answers {
+        flex-direction: column;
+        background-color: #fafafa;
+        padding: 16rpx;
+        border-radius: 8rpx;
+    }
+
+    .detail-answer-row {
+        flex-direction: row;
+        align-items: center;
+        padding: 4rpx 0;
+    }
+
+    .detail-answer-label {
+        font-size: 24rpx;
+        color: #999999;
+        margin-right: 8rpx;
+    }
+
+    .detail-answer-value {
+        font-size: 24rpx;
+        font-weight: bold;
+    }
+
+    .answer-correct {
+        color: #4caf50;
+    }
+
+    .answer-wrong {
+        color: #f44336;
+    }
+</style>

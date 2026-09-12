@@ -7,7 +7,6 @@ package service
 
 import (
 	"errors"
-	"fmt"
 	"time"
 
 	"go.uber.org/zap"
@@ -233,7 +232,7 @@ func (s *CheckInService) CheckIn(userID int) (*CheckInResult, error) {
 			if err := s.points.SettleRewardTx(tx, PointsEntry{
 				UserID: userID, Delta: delta, Reason: checkInReason,
 				RefType: checkInRefType, RefID: shanghaiDayStr(today),
-				IdemKey: fmt.Sprintf("checkin:%d:%s", userID, shanghaiDayStr(today)),
+				IdemKey: CheckInIdemKey(userID, today),
 			}); err != nil {
 				return err
 			}

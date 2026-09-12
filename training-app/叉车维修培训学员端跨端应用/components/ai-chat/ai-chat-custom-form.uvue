@@ -1,0 +1,180 @@
+<template>
+	<view v-if="visible" class="picker-mask" @click="onMaskClick"></view>
+	<view v-if="visible" class="model-picker">
+		<view class="picker-title">使用自定义 API Key</view>
+		<view class="custom-hint">仅本次会话有效，不会被保存到服务器。</view>
+		<view class="form-item">
+			<text class="form-label">模型名</text>
+			<input class="form-input" type="text" :value="customModel" placeholder="如：gpt-4o、deepseek-chat" @input="onCustomModelInput" />
+		</view>
+		<view class="form-item">
+			<text class="form-label">Base URL</text>
+			<input class="form-input" type="text" :value="customBaseUrl" placeholder="如：https://api.openai.com/v1" @input="onCustomBaseUrlInput" />
+		</view>
+		<view class="form-item">
+			<text class="form-label">API Key</text>
+			<input class="form-input" type="text" :password="true" :value="customApiKey" placeholder="sk-..." @input="onCustomApiKeyInput" />
+		</view>
+		<view class="custom-actions">
+			<view class="custom-btn cancel" @click="onCancel">
+				<text class="custom-btn-text">取消</text>
+			</view>
+			<view class="custom-btn primary" @click="onConfirm">
+				<text class="custom-btn-text">确认使用</text>
+			</view>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	const props = withDefaults(defineProps<{
+		visible?: boolean
+		customModel?: string
+		customBaseUrl?: string
+		customApiKey?: string
+	}>(), {
+		visible: false,
+		customModel: '',
+		customBaseUrl: '',
+		customApiKey: ''
+	})
+
+	const emit = defineEmits<{
+		(e: 'close'): void
+		(e: 'update:customModel', value: string): void
+		(e: 'update:customBaseUrl', value: string): void
+		(e: 'update:customApiKey', value: string): void
+		(e: 'confirm'): void
+	}>()
+
+	function onMaskClick() : void {
+		emit('close')
+	}
+
+	function onCancel() : void {
+		emit('close')
+	}
+
+	function onCustomModelInput(e : InputEvent) : void {
+		emit('update:customModel', e.detail.value)
+	}
+
+	function onCustomBaseUrlInput(e : InputEvent) : void {
+		emit('update:customBaseUrl', e.detail.value)
+	}
+
+	function onCustomApiKeyInput(e : InputEvent) : void {
+		emit('update:customApiKey', e.detail.value)
+	}
+
+	function onConfirm() : void {
+		if (props.customModel.trim().length == 0) {
+			uni.showToast({ title: '请输入模型名', icon: 'none' })
+			return
+		}
+		if (props.customBaseUrl.trim().length == 0) {
+			uni.showToast({ title: '请输入 Base URL', icon: 'none' })
+			return
+		}
+		if (props.customApiKey.trim().length == 0) {
+			uni.showToast({ title: '请输入 API Key', icon: 'none' })
+			return
+		}
+		emit('confirm')
+	}
+</script>
+
+<style>
+	.picker-mask {
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background-color: rgba(0, 0, 0, 0.4);
+		z-index: 200;
+	}
+
+	.model-picker {
+		position: absolute;
+		left: 48rpx;
+		right: 48rpx;
+		top: 30%;
+		background-color: #ffffff;
+		border-radius: 24rpx;
+		padding: 32rpx;
+		z-index: 201;
+	}
+
+	.picker-title {
+		font-size: 32rpx;
+		font-weight: 600;
+		color: #333333;
+		text-align: center;
+		margin-bottom: 24rpx;
+	}
+
+	.custom-hint {
+		font-size: 24rpx;
+		color: #999999;
+		line-height: 1.6;
+		margin-bottom: 24rpx;
+		background-color: #f5f6f8;
+		border-radius: 12rpx;
+		padding: 16rpx 20rpx;
+	}
+
+	.form-item {
+		margin-bottom: 20rpx;
+	}
+
+	.form-label {
+		font-size: 24rpx;
+		color: #666666;
+		margin-bottom: 10rpx;
+	}
+
+	.form-input {
+		height: 80rpx;
+		background-color: #f5f6f8;
+		border-radius: 12rpx;
+		padding: 0 24rpx;
+		font-size: 28rpx;
+		color: #333333;
+	}
+
+	.custom-actions {
+		flex-direction: row;
+		margin-top: 8rpx;
+	}
+
+	.custom-btn {
+		flex: 1;
+		height: 88rpx;
+		border-radius: 44rpx;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.custom-btn.cancel {
+		background-color: #f0f0f0;
+		margin-right: 16rpx;
+	}
+
+	.custom-btn.primary {
+		background-color: #2979ff;
+	}
+
+	.custom-btn-text {
+		font-size: 30rpx;
+		font-weight: bold;
+	}
+
+	.custom-btn.cancel .custom-btn-text {
+		color: #333333;
+	}
+
+	.custom-btn.primary .custom-btn-text {
+		color: #ffffff;
+	}
+</style>

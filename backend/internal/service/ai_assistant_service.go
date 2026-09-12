@@ -21,106 +21,8 @@ import (
 	"forklift-training/internal/security"
 )
 
-// forkliftExpertSystemPrompt 叉车维修专家系统提示词。
-const forkliftExpertSystemPrompt = `你是一名资深的叉车维修专家，拥有 20 年以上叉车维保与故障诊断经验。
-你熟悉国内外主流品牌（如林德、丰田、杭叉、合力、永恒力、TCM 等）的电动平衡重叉车、内燃叉车、前移式叉车、仓储叉车的结构、工作原理与常见故障。
-你的职责是为用户提供专业的：
-- 叉车选购建议（按工况、吨位、配置推荐合适车型）
-- 维保周期与项目（日常检查、季度保养、年度大修）
-- 故障诊断与排查（启动困难、液压异常、转向失灵、电池续航下降等）
-- 操作规范与安全注意事项
-- 配件更换与维修成本评估
-
-回答要求：
-1. 用中文回答，专业、实用、可操作
-2. 涉及安全的操作必须明确警示
-3. 复杂故障按"可能原因 → 排查步骤 → 处理方法"结构回答
-4. 不确定时坦诚告知，不编造数据
-5. 涉及维修必须由专业人员执行的，明确提示联系专业维修人员`
-
-// faultConsultSystemPrompt 故障咨询系统提示词。
-const faultConsultSystemPrompt = `你是一名资深的叉车故障诊断专家，拥有 20 年以上一线维修经验。
-你熟悉林德、丰田、杭叉、合力、永恒力、TCM 等主流品牌叉车的常见故障模式。
-
-回答要求：
-1. 用中文回答，专业、实用、可操作
-2. 按"可能原因 → 排查步骤 → 处理方法"的结构组织回答
-3. 按可能性从高到低排列原因，说明判断依据
-4. 排查步骤具体到工具、测量位置、判断标准
-5. 涉及安全的操作（制动、液压、电气高压部件）必须明确警示
-6. 需要专业设备或资质的维修，明确提示联系专业维修人员
-7. 信息不足时先列出需要确认的关键信息，再给出初步判断
-8. 不确定时坦诚告知，不编造数据`
-
-// faultCodeQuerySystemPrompt 故障代码查询系统提示词。
-const faultCodeQuerySystemPrompt = `你是一名叉车故障代码专家，精通国内外主流品牌（林德、丰田、杭叉、合力、永恒力、TCM 等）叉车自诊断系统的故障代码体系。
-
-回答要求：
-1. 用中文回答，按"代码含义 → 严重程度 → 可能原因 → 处理建议"结构组织
-2. 严重程度分为：紧急（立即停机）、重要（尽快处理）、一般（可短时继续作业）
-3. 不同品牌的代码编号可能相同但含义不同；用户未提供品牌时，先询问品牌与车型，同时给出常见品牌下的典型含义参考
-4. 处理建议具体到操作步骤与所需工具
-5. 明确提示：最终诊断应以对应品牌官方维修手册为准
-6. 不确定时坦诚告知，不编造代码含义`
-
-// maintenanceKnowledgeSystemPrompt 维保知识系统提示词。
-const maintenanceKnowledgeSystemPrompt = `你是一名叉车维保专家，熟悉各品牌电动叉车、内燃叉车的保养体系与行业标准。
-
-回答要求：
-1. 用中文回答，按"保养周期 → 保养项目 → 执行标准 → 注意事项"结构组织
-2. 区分日常检查（班前班后）、周检、月度、季度、年度保养的项目差异
-3. 给出可量化的标准（如液压油型号、轮胎磨损限度、电瓶电解液比重范围）
-4. 电动叉车重点说明电瓶充放电与维护规范，内燃叉车说明机油滤芯与排放要求
-5. 涉及安全的操作必须明确警示
-6. 不确定时坦诚告知，不编造数据`
-
-// drawingRecognitionSystemPrompt 图纸识别系统提示词。
-const drawingRecognitionSystemPrompt = `你是一名叉车图纸分析专家，擅长识读叉车领域的机械结构图、装配图、电路原理图、液压原理图与气动回路图。
-
-回答要求：
-1. 用中文回答，先整体描述图纸类型与表达内容，再分项解读
-2. 机械图纸：识别主要部件名称、装配关系、配合公差与关键尺寸
-3. 电路图纸：识别电器元件符号、供电回路、控制逻辑与保护装置
-4. 液压图纸：识别泵、阀、缸等元件，说明油路走向与工作原理
-5. 图纸不清晰或无法辨认的部分，明确说明，不猜测编造
-6. 结尾给出需要用户补充确认的信息（如图纸版本、部件编号）`
-
-// exerciseSolvingSystemPrompt 习题解答系统提示词。
-const exerciseSolvingSystemPrompt = `你是一名叉车维修培训教员，负责解答叉车操作、维保、安全规范相关的培训习题与考试题目。
-
-回答要求：
-1. 用中文回答，先给出最终答案，再给出解析
-2. 解析按步骤推理，说明每一步的依据（法规、原理、操作规范）
-3. 说明题目考查的知识点，便于举一反三
-4. 若题目信息不完整或有歧义，列出需要补充的条件并按最常见理解作答
-5. 涉及安全规范的题目，注明依据的标准或规范名称
-6. 不确定时坦诚告知，不编造答案`
-
-// featureChatKeys 专项功能键集合（模型由管理端单绑定解析，用户无需选模型）。
-var featureChatKeys = map[string]bool{
-	FeatureFaultConsult:         true,
-	FeatureFaultCodeQuery:       true,
-	FeatureMaintenanceKnowledge: true,
-	FeatureDrawingRecognition:   true,
-	FeatureExerciseSolving:      true,
-}
-
-// featureSystemPrompt 返回功能对应的系统提示词；未注册的功能回退到通用叉车专家提示词。
-func featureSystemPrompt(featureKey string) string {
-	switch featureKey {
-	case FeatureFaultConsult:
-		return faultConsultSystemPrompt
-	case FeatureFaultCodeQuery:
-		return faultCodeQuerySystemPrompt
-	case FeatureMaintenanceKnowledge:
-		return maintenanceKnowledgeSystemPrompt
-	case FeatureDrawingRecognition:
-		return drawingRecognitionSystemPrompt
-	case FeatureExerciseSolving:
-		return exerciseSolvingSystemPrompt
-	}
-	return forkliftExpertSystemPrompt
-}
+// 功能系统提示词与 featureSystemPrompt 均为注册表派生面，单点在 ai_feature_registry.go
+// （ADR-0030 决策 1：功能声明知识 = 一张表）。
 
 // aiImageDirPrefix AI 助手图片存储子目录（URL/对象 key 前缀）。
 const aiImageDirPrefix = "images/ai-assistant"
@@ -157,11 +59,12 @@ type AIChatSessionDTO struct {
 
 // AIChatMessageDTO 消息展示对象。
 type AIChatMessageDTO struct {
-	ID        int       `json:"id"`
-	Role      string    `json:"role"`
-	Content   string    `json:"content"`
-	Images    []string  `json:"images"` // 用户消息附带的图片 URL
-	CreatedAt time.Time `json:"created_at"`
+	ID        int               `json:"id"`
+	Role      string            `json:"role"`
+	Content   string            `json:"content"`
+	Images    []string          `json:"images"`  // 用户消息附带的图片 URL
+	Sources   []DiagnosisSource `json:"sources"` // 助手消息的诊断来源（T5 历史回放；非诊断/存量为空）
+	CreatedAt time.Time         `json:"created_at"`
 }
 
 // AIAssistantMode AI 助手模式（隐藏底层模型，对用户仅暴露双模式）。
@@ -191,7 +94,11 @@ type StreamChatReq struct {
 	CustomAPIKey  string          `json:"custom_api_key"` // 兼容旧：ModelSource="custom" 时临时输入
 	CustomBaseURL string          `json:"custom_base_url"`
 	CustomModel   string          `json:"custom_model"`
-	Messages      []struct {
+	// Brand/Model 智能维修诊断（fault_diagnosis）专用可选参数：品牌/车型过滤（空 = 全部）。
+	// 经 ctx 透传到 diagnosis adapter（withDiagnosisParams），仅该功能消费；通用对话忽略。
+	Brand    string `json:"brand,omitempty"`
+	Model    string `json:"model,omitempty"`
+	Messages []struct {
 		Role    string   `json:"role"`
 		Content string   `json:"content"`
 		Images  []string `json:"images"` // 用户消息附带的图片 URL（仅最后一条用户消息生效）
@@ -205,12 +112,13 @@ type AIAssistantService struct {
 	fileSvc     *FileStore // 图片上传/读取（多模态对话）
 	secretKey   string     // 用于加密用户自定义 API Key 的主密钥（SECRET_KEY）
 	logger      *zap.Logger
-	streamer    AIStreamingTransport // 流式传输槽位（nil 时自实装；测试可注入 fake）
+	port        AIModelPort // 单一模型端口（与阻塞侧共享同一 adapter，ADR-0029 T2；测试可注入 fake）
 }
 
-// NewAIAssistantService 构造 AIAssistantService。
-func NewAIAssistantService(db *gorm.DB, aiConfigSvc *AIConfigService, fileSvc *FileStore, secretKey string, logger *zap.Logger) *AIAssistantService {
-	return &AIAssistantService{db: db, aiConfigSvc: aiConfigSvc, fileSvc: fileSvc, secretKey: secretKey, logger: logger}
+// NewAIAssistantService 构造 AIAssistantService。port 为单一模型端口
+// （NewEinoAIModel 产物与阻塞侧共享同一 client 缓存），必须非 nil：构造期注入是不变量。
+func NewAIAssistantService(db *gorm.DB, aiConfigSvc *AIConfigService, fileSvc *FileStore, secretKey string, logger *zap.Logger, port AIModelPort) *AIAssistantService {
+	return &AIAssistantService{db: db, aiConfigSvc: aiConfigSvc, fileSvc: fileSvc, secretKey: secretKey, logger: logger, port: port}
 }
 
 // ListPublicModels 返回管理员绑定到 AI 助手功能的可用配置列表（不含 api_key）。
@@ -386,7 +294,7 @@ const autoTitlePlaceholder = "新会话"
 // maybeGenerateSessionTitle 异步生成会话标题。
 // 仅当会话标题为占位符 "新会话" 时才生成；已被 AI 命名或用户手动改名后不再覆盖。
 // 失败仅记录日志，不影响主流程。
-func (s *AIAssistantService) maybeGenerateSessionTitle(ctx context.Context, userID, sessionID int, mc AISettings) {
+func (s *AIAssistantService) maybeGenerateSessionTitle(ctx context.Context, userID, sessionID int, sel AIModelSelector) {
 	// 查询会话，校验归属和标题
 	var session model.AIChatSession
 	if err := s.db.WithContext(ctx).
@@ -415,7 +323,7 @@ func (s *AIAssistantService) maybeGenerateSessionTitle(ctx context.Context, user
 		return
 	}
 
-	title, err := s.generateTitleWithModel(ctx, mc, userMsg.Content)
+	title, err := s.generateTitleWithModel(ctx, sel, userMsg.Content)
 	if err != nil {
 		s.logger.Warn("自动命名：调用模型失败", zap.Int("session_id", sessionID), zap.Error(err))
 		return
@@ -440,9 +348,12 @@ func (s *AIAssistantService) maybeGenerateSessionTitle(ctx context.Context, user
 	s.logger.Info("自动命名完成", zap.Int("session_id", sessionID), zap.String("title", title))
 }
 
-// generateTitleWithModel 调用同模型根据用户首条消息生成简短标题
-// （client 构建/超时/收集循环全部在流式槽位单点）。
-func (s *AIAssistantService) generateTitleWithModel(ctx context.Context, mc AISettings, userMessage string) (string, error) {
+// generateTitleWithModel 调用对话同一选择子对应的模型，根据用户首条消息生成简短标题
+// （凭证解析/client 构建/超时/收集循环全部在单一模型端口内单点）。
+// 计量意图显式声明免费（ADR-0031 决策 2）：自动命名无独立功能键、随对话选择子发起，
+// 若随注册表默认（其所属对话 billed=true）会与主对话双扣——CONTEXT.md「AI 计费」
+// 免费清单收录本消费，显式声明使其从隐式漏网转为登记。
+func (s *AIAssistantService) generateTitleWithModel(ctx context.Context, sel AIModelSelector, userMessage string) (string, error) {
 	const titlePrompt = `请根据用户的问题，生成一个简短的中文会话标题。
 要求：
 1. 不超过 20 个字
@@ -457,7 +368,8 @@ func (s *AIAssistantService) generateTitleWithModel(ctx context.Context, mc AISe
 		schema.SystemMessage("你是一个会话标题生成助手，根据用户消息生成简短的中文标题。"),
 		schema.UserMessage(fmt.Sprintf(titlePrompt, userMessage)),
 	}
-	return s.streamingSlot().StreamComplete(ctx, mc, msgs, nil)
+	title, _, err := s.port.Stream(withAIMeterFree(ctx), sel, msgs, nil)
+	return title, err
 }
 
 // titleTrimRunes 需要从标题首尾去除的字符集合（使用 map 保证唯一性，避免 SA1024）。
@@ -553,90 +465,35 @@ func (s *AIAssistantService) GetSessionMessages(ctx context.Context, userID, ses
 			// 解析失败按无图处理，不阻断消息列表
 			_ = json.Unmarshal([]byte(r.Images), &imgs)
 		}
+		var sources []DiagnosisSource
+		if r.Sources != "" {
+			// 解析失败按无来源处理，不阻断消息列表
+			_ = json.Unmarshal([]byte(r.Sources), &sources)
+		}
 		out[i] = AIChatMessageDTO{
-			ID: r.ID, Role: r.Role, Content: r.Content, Images: imgs, CreatedAt: r.CreatedAt,
+			ID: r.ID, Role: r.Role, Content: r.Content, Images: imgs, Sources: sources, CreatedAt: r.CreatedAt,
 		}
 	}
 	return out, nil
 }
 
-// resolveModelConfig 解析模型配置（与 AIService 消费同一 AISettings 形状）。
-// 优先级：专项功能（FeatureKey，管理端单绑定）→ Mode 双模式（normal/expert）→ 兼容旧 ModelSource。
-func (s *AIAssistantService) resolveModelConfig(ctx context.Context, userID int, req StreamChatReq) (AISettings, error) {
-	// 专项功能：由管理端单绑定解析，忽略请求中的模型来源字段（防绕过）
-	if featureChatKeys[req.FeatureKey] {
-		mc := s.aiConfigSvc.ResolveConfig(ctx, req.FeatureKey)
-		if mc.APIKey == "" {
-			return AISettings{}, errors.New("管理员未配置该功能的模型，请联系管理员")
-		}
-		return mc, nil
-	}
-	// 通用助手：Mode 双模式（隐藏底层模型）——降级阶梯在 ResolveAssistantPair 单点
-	if req.Mode == ModeNormal || req.Mode == ModeExpert {
-		normal, expert, err := s.aiConfigSvc.ResolveAssistantPair(ctx)
-		if err != nil {
-			return AISettings{}, fmt.Errorf("校验可用模型失败: %w", err)
-		}
-		cfg := normal
-		if req.Mode == ModeExpert {
-			cfg = expert
-		}
-		if cfg == nil {
-			return AISettings{}, errors.New("该模式未绑定模型，请联系管理员配置")
-		}
-		return AISettings{APIKey: cfg.APIKey, BaseURL: cfg.BaseURL, Model: cfg.Model, Source: "binding:" + cfg.Name}, nil
-	}
-	switch req.ModelSource {
-	case "admin":
-		// 校验该配置是否被管理员绑定到 AI 助手功能（兼容旧前端：同时校验新双绑定的两个 Feature）
-		boundCfgsNormal, _ := s.aiConfigSvc.ListConfigsForFeature(ctx, FeatureAIAssistantNormal)
-		boundCfgsExpert, _ := s.aiConfigSvc.ListConfigsForFeature(ctx, FeatureAIAssistantExpert)
-		boundCfgsLegacy, _ := s.aiConfigSvc.ListConfigsForFeature(ctx, FeatureAIAssistant)
-		allBound := append(append(boundCfgsNormal, boundCfgsExpert...), boundCfgsLegacy...)
-		var cfg *model.AIConfig
-		for i := range allBound {
-			if allBound[i].ID == req.ConfigID {
-				cfg = &allBound[i]
-				break
-			}
-		}
-		if cfg == nil {
-			return AISettings{}, errors.New("该模型未绑定到 AI 助手，请联系管理员或选择自定义模型")
-		}
-		return AISettings{APIKey: cfg.APIKey, BaseURL: cfg.BaseURL, Model: cfg.Model, Source: "binding:" + cfg.Name}, nil
-	case "user":
-		if userID == 0 {
-			return AISettings{}, errors.New("未登录不能使用用户自定义模型")
-		}
-		var m model.AIUserModel
-		if err := s.db.WithContext(ctx).Where("id = ? AND user_id = ?", req.UserModelID, userID).
-			Limit(1).Find(&m).Error; err != nil {
-			return AISettings{}, err
-		}
-		if m.ID == 0 {
-			return AISettings{}, gorm.ErrRecordNotFound
-		}
-		key, err := security.DecryptSecret(m.APIKey, s.secretKey)
-		if err != nil {
-			return AISettings{}, fmt.Errorf("解密用户自定义模型 API Key 失败: %w", err)
-		}
-		return AISettings{APIKey: key, BaseURL: m.BaseURL, Model: m.Model, Source: "user:" + m.Name}, nil
-	case "custom":
-		if req.CustomAPIKey == "" || req.CustomBaseURL == "" || req.CustomModel == "" {
-			return AISettings{}, errors.New("自定义模型配置不完整")
-		}
-		return AISettings{APIKey: req.CustomAPIKey, BaseURL: req.CustomBaseURL, Model: req.CustomModel, Source: "custom"}, nil
-	}
-	return AISettings{}, fmt.Errorf("未知的 model_source: %s", req.ModelSource)
-}
-
 // StreamChat 流式对话。
-// onChunk 回调用于推送增量内容；返回完整回复内容。
-// 传输（建 client/超时/Recv 收集）在流式槽位 StreamComplete 单点；此处留 prompt 组装与持久化真语义。
-func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req StreamChatReq, onChunk func(content string)) (string, error) {
-	mc, err := s.resolveModelConfig(ctx, userID, req)
-	if err != nil {
-		return "", err
+// onChunk 回调用于推送增量内容；返回完整回复内容与计量产出（*AIUsage，闸门在端口装饰器
+// 内单点，ADR-0031——预检/扣费/prompt 事实/请求标识降级均不在本服务，调用方透传请求标识
+// 即可）。此处只把请求的模型选择字段投影为 AIModelSelector（纯数据、零解析知识）并组装消息；
+// 凭证解析（专项单绑定 → 双模式 → 旧来源）与传输（client 签名缓存/超时/Recv 收集）
+// 全部在单一模型端口 Stream 内经注入 resolver 单点完成（ADR-0029 T2）。
+func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req StreamChatReq, onChunk func(content string)) (string, *AIUsage, error) {
+	sel := AIModelSelector{
+		FeatureKey:    req.FeatureKey,
+		Mode:          req.Mode,
+		ModelSource:   req.ModelSource,
+		ConfigID:      req.ConfigID,
+		UserModelID:   req.UserModelID,
+		UserID:        userID,
+		CustomAPIKey:  req.CustomAPIKey,
+		CustomBaseURL: req.CustomBaseURL,
+		CustomModel:   req.CustomModel,
 	}
 
 	// 拼装消息：功能系统提示词 + 历史消息
@@ -657,7 +514,7 @@ func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req Str
 			if i == lastUserIdx && len(m.Images) > 0 {
 				userMsg, err := s.buildImageUserMessage(ctx, m.Content, m.Images)
 				if err != nil {
-					return "", err
+					return "", nil, err
 				}
 				msgs = append(msgs, userMsg)
 				continue
@@ -668,9 +525,22 @@ func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req Str
 		}
 	}
 
-	fullContent, err := s.streamingSlot().StreamComplete(ctx, mc, msgs, onChunk)
+	// 计费事实随计费意图声明（口径锚定请求 DTO，与迁移前 handler 取值逐字一致：最后一条
+	// 消息原文长度）。多模态消息经 buildImageUserMessage 重组，图片全部加载失败时注入的
+	// 注记文本只存在于传输层消息——DTO Content 才是口径事实，注记不参与计费。声明经 ctx
+	// 透传给端口上的计量闸门（ADR-0031），meter 优先取声明值、未声明才回退端口消息推导。
+	var promptChars int
+	if len(req.Messages) > 0 {
+		promptChars = len(req.Messages[len(req.Messages)-1].Content)
+	}
+	// 诊断参数（品牌/车型）经 ctx 透传到 diagnosis adapter（fault_diagnosis 消费）
+	if req.Brand != "" || req.Model != "" {
+		ctx = WithDiagnosisParams(ctx, req.Brand, req.Model)
+	}
+
+	fullContent, usage, err := s.port.Stream(withAIPromptChars(ctx, promptChars), sel, msgs, onChunk)
 	if err != nil {
-		return fullContent, err
+		return fullContent, usage, err
 	}
 
 	// 持久化（仅登录用户且指定了 SessionID）
@@ -696,22 +566,31 @@ func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req Str
 			if err := s.db.WithContext(ctx).Create(&model.AIChatMessage{
 				SessionID: req.SessionID, Role: "user", Content: lastUserMsg, Images: imagesJSON,
 			}).Error; err != nil {
-				return fullContent, fmt.Errorf("保存用户消息失败: %w", err)
+				return fullContent, usage, fmt.Errorf("保存用户消息失败: %w", err)
+			}
+			// T5：诊断来源随助手消息持久化（ctx 容器→ JSON 列；非诊断/空来源存空串）
+			sourcesJSON := ""
+			if sources := DiagnosisSourcesFrom(ctx); len(sources) > 0 {
+				if b, err := json.Marshal(sources); err == nil {
+					sourcesJSON = string(b)
+				} else {
+					s.logger.Warn("诊断来源序列化失败，按无来源落库", zap.Int("session_id", req.SessionID), zap.Error(err))
+				}
 			}
 			if err := s.db.WithContext(ctx).Create(&model.AIChatMessage{
-				SessionID: req.SessionID, Role: "assistant", Content: fullContent,
+				SessionID: req.SessionID, Role: "assistant", Content: fullContent, Sources: sourcesJSON,
 			}).Error; err != nil {
-				return fullContent, fmt.Errorf("保存助手消息失败: %w", err)
+				return fullContent, usage, fmt.Errorf("保存助手消息失败: %w", err)
 			}
 			if err := s.db.WithContext(ctx).Model(&model.AIChatSession{}).
 				Where("id = ?", req.SessionID).
 				Updates(map[string]any{"updated_at": now}).Error; err != nil {
-				return fullContent, fmt.Errorf("更新会话时间失败: %w", err)
+				return fullContent, usage, fmt.Errorf("更新会话时间失败: %w", err)
 			}
 
 			// 异步生成会话标题：仅当标题为占位符"新会话"时（首次对话）
-			// 使用独立 context 避免请求结束后被取消；recover 防止 panic 影响主流程
-			mcCopy := mc
+			// 使用独立 context 避免请求结束后被取消；recover 防止 panic 影响主流程。
+			// 凭证随选择子在端口内经 resolver 解析（与主对话同一路径）。
 			sessionID := req.SessionID
 			uid := userID
 			go func() {
@@ -721,12 +600,12 @@ func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req Str
 					}
 				}()
 				bgCtx := context.Background()
-				s.maybeGenerateSessionTitle(bgCtx, uid, sessionID, mcCopy)
+				s.maybeGenerateSessionTitle(bgCtx, uid, sessionID, sel)
 			}()
 		}
 	}
 
-	return fullContent, nil
+	return fullContent, usage, nil
 }
 
 // buildImageUserMessage 构建带图片的多模态用户消息。

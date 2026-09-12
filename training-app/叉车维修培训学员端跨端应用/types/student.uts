@@ -1,0 +1,105 @@
+/**
+ * 学员模块类型
+ */
+
+/** 学习统计单日数据 */
+/** 学习统计响应 */
+export type StudyStats = {
+    days : number
+    labels : string[]
+    data : number[]
+    total_minutes : number
+    active_days : number
+}
+
+/** 课程进度项 */
+export type CourseProgressItem = {
+    course_id : number
+    course_name : string
+    progress : number
+    study_date ?: string
+}
+
+/** 学员档案 */
+export type StudentProfile = {
+    student_id : number
+    username : string
+    name : string
+    phone : string
+    email ?: string
+    company ?: string
+    total_study_duration : number
+    total_courses : number
+    completed_courses : number
+    course_progress : CourseProgressItem[]
+}
+
+/** 学习记录条目 */
+export type StudyRecord = {
+    record_id : number
+    course_id : number
+    course_name : string
+    chapter_id : number
+    chapter_title : string
+    study_duration : number
+    study_date : string
+}
+
+/** 学习记录分页响应 */
+export type StudyRecordsResult = {
+    records : StudyRecord[]
+    total : number
+    page : number
+    page_size : number
+}
+
+// ========== 学员课程（GET /student/courses） ==========
+/** 学员课程条目 */
+export type StudentCourse = {
+    course_id : number
+    course_name : string
+    cover : string
+    specialty_id : number
+    level_id : number
+    progress : number               // 0-100
+    completed_chapters : number
+    total_chapters : number
+    study_duration : number         // 分钟
+    last_chapter_id : number
+    last_chapter_title : string
+    last_position : number          // 秒
+    last_studied_at : string
+}
+
+/** 学员课程列表结果 */
+export type StudentCourseListResult = {
+    courses : StudentCourse[]
+    continue_learning : StudentCourse | null
+}
+
+/** 学员单课程章节进度 */
+export type StudentCourseChapterProgress = {
+    chapter_id : number
+    title : string
+    progress : number               // 0-100
+    video_position : number         // 秒
+    completed : boolean
+}
+
+/** 学员单课程学习详情（GET /student/courses/:course_id） */
+export type StudentCourseDetail = {
+    course_id : number
+    course_name : string
+    cover : string
+    specialty_id : number
+    level_id : number
+    progress : number               // 0-100
+    completed_chapters : number
+    total_chapters : number
+    study_duration : number         // 分钟
+    last_chapter_id : number
+    last_chapter_title : string
+    last_position : number          // 秒
+    last_studied_at : string
+    chapters : StudentCourseChapterProgress[]
+}

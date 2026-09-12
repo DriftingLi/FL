@@ -2,11 +2,13 @@
 <div class="recruiter-manage-page">
 <div class="page-header">
 <h2>企业招聘者管理</h2>
-<el-button type="primary" @click="openAddDialog">
+<UiButton variant="primary" @click="openAddDialog">
 <el-icon><Plus /></el-icon> 新增招聘者
-</el-button>
+</UiButton>
 </div>
-<div class="filter-bar">
+<UiFilterBar>
+        <template #filters>
+
 <el-input
 v-model="searchKeyword"
 placeholder="搜索企业名或账号"
@@ -17,8 +19,9 @@ style="width: 280px"
 >
 <template #prefix><el-icon><Search /></el-icon></template>
 </el-input>
-<el-button type="primary" @click="search">搜索</el-button>
-</div>
+<UiButton variant="primary" @click="search">搜索</UiButton>
+        </template>
+      </UiFilterBar>
 
 <el-table :data="list" v-loading="loading" stripe border style="width: 100%" row-key="id">
 <el-table-column prop="id" label="ID" width="70" align="center" />
@@ -31,7 +34,7 @@ style="width: 280px"
 </el-table-column>
 <el-table-column label="状态" width="100" align="center">
 <template #default="{ row }">
-<el-tag :type="row.status === 1 ? 'success' : 'danger'" size="small">{{ row.status === 1 ? '正常' : '禁用' }}</el-tag>
+<UiTag :tone="row.status === 1 ? 'success' : 'danger'" size="small">{{ row.status === 1 ? '正常' : '禁用' }}</UiTag>
 </template>
 </el-table-column>
 <el-table-column prop="created_at" label="创建时间" width="180" align="center">
@@ -40,9 +43,9 @@ style="width: 280px"
 <el-table-column label="操作" width="110" fixed="right" align="center">
 <template #default="{ row }">
 <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
-<el-button type="primary" link size="small">
+<UiButton variant="primary" link size="small">
 操作<el-icon class="el-icon--right"><ArrowDown /></el-icon>
-</el-button>
+</UiButton>
 <template #dropdown>
 <el-dropdown-menu>
 <el-dropdown-item command="edit">编辑企业信息</el-dropdown-item>
@@ -54,19 +57,17 @@ style="width: 280px"
 </template>
 </el-table-column>
 </el-table>
-<div class="pagination-wrapper" v-if="total > pageSize">
-<el-pagination
-v-model:current-page="currentPage"
-v-model:page-size="pageSize"
-:total="total"
-:page-sizes="[10, 20, 50]"
-layout="total, sizes, prev, pager, next"
-@size-change="load"
-@current-change="load"
-/>
-</div>
+<UiPagination v-if="total > pageSize"
+      v-model:current-page="currentPage"
+      v-model:page-size="pageSize"
+      :total="total"
+      show-sizes
+      :page-sizes="[10, 20, 50]"
+      @current-change="load"
+      @size-change="load"
+    align="right" class="mt-4" />
 
-<el-dialog v-model="dialogVisible" title="新增企业招聘者" width="520px" destroy-on-close>
+<UiDialog v-model="dialogVisible" title="新增企业招聘者" width="520px" destroy-on-close confirm-text="确认创建" :confirm-loading="submitting" @confirm="handleSubmit">
 <el-form ref="formRef" :model="formData" :rules="formRules" label-width="110px">
 <el-form-item label="用户名" prop="username">
 <el-input v-model="formData.username" placeholder="请输入用户名" maxlength="20" />
@@ -96,13 +97,9 @@ layout="total, sizes, prev, pager, next"
 <el-input v-model="formData.wechat" placeholder="选填，学员同意交换后可加" maxlength="100" />
 </el-form-item>
 </el-form>
-<template #footer>
-<el-button @click="dialogVisible = false">取消</el-button>
-<el-button type="primary" :loading="submitting" @click="handleSubmit">确认创建</el-button>
-</template>
-</el-dialog>
+</UiDialog>
 
-<el-dialog v-model="editDialogVisible" title="编辑企业信息" width="520px" destroy-on-close>
+<UiDialog v-model="editDialogVisible" title="编辑企业信息" width="520px" destroy-on-close confirm-text="保存修改" :confirm-loading="editing" @confirm="handleEditSubmit">
 <el-form ref="editFormRef" :model="editForm" :rules="editFormRules" label-width="110px">
 <el-form-item label="用户名" prop="username">
 <el-input v-model="editForm.username" placeholder="请输入用户名（4-20位字母/数字/下划线）" maxlength="20" />
@@ -129,13 +126,9 @@ layout="total, sizes, prev, pager, next"
 <el-input v-model="editForm.wechat" placeholder="选填，学员同意交换后可加" maxlength="100" />
 </el-form-item>
 </el-form>
-<template #footer>
-<el-button @click="editDialogVisible = false">取消</el-button>
-<el-button type="primary" :loading="editing" @click="handleEditSubmit">保存修改</el-button>
-</template>
-</el-dialog>
+</UiDialog>
 
-<el-dialog v-model="pwdDialogVisible" title="重置密码" width="440px" destroy-on-close>
+<UiDialog v-model="pwdDialogVisible" title="重置密码" width="440px" destroy-on-close confirm-text="确认重置" :confirm-loading="pwdSubmitting" @confirm="handleResetPwd">
 <el-form ref="pwdFormRef" :model="pwdForm" :rules="pwdRules" label-width="90px">
 <el-form-item label="招聘者">
 <span>{{ pwdForm.username }}</span>
@@ -144,23 +137,25 @@ layout="total, sizes, prev, pager, next"
 <el-input v-model="pwdForm.password" type="password" placeholder="请输入新密码（6-20位）" maxlength="20" show-password />
 </el-form-item>
 </el-form>
-<template #footer>
-<el-button @click="pwdDialogVisible = false">取消</el-button>
-<el-button type="primary" :loading="pwdSubmitting" @click="handleResetPwd">确认重置</el-button>
-</template>
-</el-dialog>
+</UiDialog>
 </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { Plus, Search, ArrowDown } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import type { FormInstance, FormItemRule, FormRules } from 'element-plus'
 import { adminApi, type AdminRecruiter } from '@/api/admin'
 import { usernameRules } from '@/utils/validate'
 import { useAdminTable } from '@/composables/useAdminTable'
 import { formatDateTime } from '@/utils/format'
+import UiPagination from '@/components/ui/UiPagination.vue'
+import UiFilterBar from '@/components/ui/UiFilterBar.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
+import { useConfirm } from '@/composables/useConfirm'
+import UiButton from '@/components/ui/UiButton.vue'
+import UiTag from '@/components/ui/UiTag.vue'
 
 const dialogVisible = ref(false)
 const submitting = ref(false)
@@ -293,7 +288,7 @@ function handleAction(cmd: string, row: AdminRecruiter) {
 async function handleToggle(row: AdminRecruiter) {
   const next = row.status === 1 ? '禁用' : '启用'
   try {
-    await ElMessageBox.confirm(`确定${next}该招聘者账号？`, '提示', { type: 'warning' })
+    await useConfirm().confirm(`确定${next}该招聘者账号？`, '提示', { type: 'warning' })
   } catch {
     return
   }
@@ -351,6 +346,4 @@ onMounted(() => {
 .recruiter-manage-page { padding: 16px; }
 .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
 .page-header h2 { font-size: 18px; font-weight: 600; margin: 0; }
-.filter-bar { display: flex; gap: 8px; margin-bottom: 12px; }
-.pagination-wrapper { display: flex; justify-content: flex-end; margin-top: 12px; }
 </style>

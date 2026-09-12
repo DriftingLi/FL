@@ -8,8 +8,16 @@
             <text class="header-title">我的上传</text>
             <view class="header-right"></view>
         </view>
-        <scroll-view class="content-scroll" scroll-y="true">
-            <view v-if="uploads.length == 0" class="empty-tip">
+        <scroll-view class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
+            <!-- #816：加载失败不能再伪装成「暂无上传资源」 -->
+            <view v-if="uploads.length == 0 && !loading && failed" class="empty-tip">
+                <text class="empty-icon">📡</text>
+                <text class="empty-text">加载失败，请检查网络后重试</text>
+                <view class="empty-btn" @click="reload">
+                    <text class="empty-btn-text">重试</text>
+                </view>
+            </view>
+            <view v-if="uploads.length == 0 && !loading && !failed" class="empty-tip">
                 <text class="empty-icon">📤</text>
                 <text class="empty-text">暂无上传资源</text>
                 <view class="empty-btn" @click="onUpload">
@@ -18,15 +26,26 @@
             </view>
             <view class="upload-list">
                 <view v-for="(item, idx) in uploads" :key="idx" class="upload-item">
-                    <view class="upload-item-icon-box" :style="{ backgroundColor: item.color }">
-                        <text class="upload-item-icon">{{ item.icon }}</text>
+                    <view class="upload-item-icon-box" :style="{ backgroundColor: statusBg(item.status) }">
+                        <text class="upload-item-icon">{{ statusIcon(item.status) }}</text>
                     </view>
                     <view class="upload-item-info">
                         <text class="upload-item-title">{{ item.title }}</text>
-                        <text class="upload-item-meta">{{ item.time }}</text>
+                        <text class="upload-item-meta">{{ fmtDate(item.created_at) }} · {{ item.downloads_count }} 次下载 · {{ item.files.length }} 个文件</text>
+                        <view v-if="item.status == 'rejected' && item.reject_reason.length > 0" class="upload-item-reason-box">
+                            <text class="upload-item-reason">驳回：{{ item.reject_reason }}</text>
+                        </view>
                     </view>
-                    <text class="upload-item-status">{{ item.status }}</text>
+                    <view class="upload-item-badge" :style="{ backgroundColor: statusBg(item.status) }">
+                        <text class="upload-item-badge-text" :style="{ color: statusColor(item.status) }">{{ statusLabel(item.status) }}</text>
+                    </view>
                 </view>
+            </view>
+            <view v-if="loading" class="loading-more">
+                <text class="loading-text">加载中...</text>
+            </view>
+            <view v-if="!loading && uploads.length > 0 && noMore" class="loading-more">
+                <text class="loading-text">没有更多了</text>
             </view>
         </scroll-view>
     </view>
@@ -34,20 +53,101 @@
 
 <script setup lang="uts">
     import { ref } from 'vue'
+    import { onShow } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
+    import { getMyContributionsApi } from '../../api/contribution'
+    import type { ContributionItem } from '../../api/contribution'
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
-    type UploadItem = { title : string; time : string; status : string; icon : string; color : string }
-    const uploads = ref<UploadItem[]>([])
+    const uploads = ref<ContributionItem[]>([])
+    const loading = ref<boolean>(false)
+    const noMore = ref<boolean>(false)
+    /** 加载失败标记（#816：与「暂无数据」区分开，失败给重试位而不是空态） */
+    const failed = ref<boolean>(false)
+    const page = ref<number>(1)
+    const pageSize = 20
+
+    /** 状态文案（pending/未知值兜底为待审核） */
+    function statusLabel(status : string) : string {
+        if (status == 'approved') return '已上架'
+        if (status == 'rejected') return '未通过'
+        if (status == 'withdrawn') return '已撤回'
+        if (status == 'archived') return '已下架'
+        return '待审核'
+    }
+
+    function statusIcon(status : string) : string {
+        if (status == 'approved') return '✅'
+        if (status == 'rejected') return '✖️'
+        return '🕐'
+    }
+
+    function statusColor(status : string) : string {
+        if (status == 'approved') return '#22A45D'
+        if (status == 'rejected') return '#E5484D'
+        if (status == 'withdrawn' || status == 'archived') return '#999999'
+        return '#FF9800'
+    }
+
+    function statusBg(status : string) : string {
+        if (status == 'approved') return '#F0FFF0'
+        if (status == 'rejected') return '#FFF0F0'
+        if (status == 'withdrawn' || status == 'archived') return '#F5F5F5'
+        return '#FFF7E6'
+    }
+
+    /** RFC3339 → yyyy-MM-dd */
+    function fmtDate(iso : string) : string {
+        if (iso.length >= 10) return iso.substring(0, 10)
+        return iso
+    }
+
+    async function loadUploads() : Promise<void> {
+        if (loading.value) return
+        loading.value = true
+        try {
+            const data = await getMyContributionsApi(page.value, pageSize)
+            if (page.value <= 1) {
+                uploads.value = data.items
+            } else {
+                for (let i = 0; i < data.items.length; i++) {
+                    uploads.value.push(data.items[i])
+                }
+            }
+            noMore.value = uploads.value.length >= data.total || data.items.length == 0
+            failed.value = false
+        } catch (e) {
+            console.error('[my-uploads] load failed:', e)
+            failed.value = true
+        } finally {
+            loading.value = false
+        }
+    }
+
+    function reload() : void {
+        page.value = 1
+        noMore.value = false
+        failed.value = false
+        loadUploads()
+    }
+
+    function onLoadMore() : void {
+        if (loading.value || noMore.value) return
+        page.value += 1
+        loadUploads()
+    }
 
     function onUpload() : void {
-        uni.navigateTo({ url: '/pages/resources/upload-resource' })
+        // 统一发布页资源 tab（#760）
+        uni.navigateTo({ url: '/pages/forum/forum-create?scope=resource' })
     }
 
     function onBack() : void { goBack() }
+
+    onShow(() => { reload() })
 </script>
 
 <style>
@@ -65,11 +165,16 @@
     .empty-btn { background-color: #2979ff; padding: 16rpx 48rpx; border-radius: 32rpx; }
     .empty-btn-text { font-size: 28rpx; color: #ffffff; }
     .upload-list { padding: 24rpx; }
-    .upload-item { background-color: #ffffff; border-radius: 16rpx; padding: 24rpx; margin-bottom: 16rpx; flex-direction: row; align-items: center; border: 1rpx solid #eeeeee; }
-    .upload-item-icon-box { width: 80rpx; height: 80rpx; border-radius: 16rpx; align-items: center; justify-content: center; margin-right: 20rpx; }
-    .upload-item-icon { font-size: 40rpx; }
+    .upload-item { background-color: #ffffff; border-radius: 16rpx; padding: 24rpx; margin-bottom: 16rpx; flex-direction: row; align-items: center; }
+    .upload-item-icon-box { width: 80rpx; height: 80rpx; border-radius: 40rpx; align-items: center; justify-content: center; margin-right: 20rpx; }
+    .upload-item-icon { font-size: 36rpx; }
     .upload-item-info { flex: 1; flex-direction: column; }
     .upload-item-title { font-size: 28rpx; font-weight: 500; color: #333333; }
     .upload-item-meta { font-size: 22rpx; color: #999999; margin-top: 6rpx; }
-    .upload-item-status { font-size: 24rpx; color: #999999; }
+    .upload-item-reason-box { background-color: #FFF0F0; border-radius: 8rpx; padding: 8rpx 12rpx; margin-top: 10rpx; }
+    .upload-item-reason { font-size: 22rpx; color: #e5484d; }
+    .upload-item-badge { border-radius: 24rpx; padding: 8rpx 20rpx; margin-left: 16rpx; }
+    .upload-item-badge-text { font-size: 22rpx; font-weight: 500; }
+    .loading-more { align-items: center; padding: 24rpx 0; }
+    .loading-text { font-size: 24rpx; color: #999999; }
 </style>

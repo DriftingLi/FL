@@ -37,13 +37,15 @@ function vditorStaticPlugin(): Plugin {
   ]
   const copy = () => {
     if (!fs.existsSync(src)) return
-    // 每次全量同步：先清空旧产物，再按白名单复制，避免残留大体积文件
-    fs.rmSync(dest, { recursive: true, force: true })
     fs.mkdirSync(dest, { recursive: true })
+    // cpSync force 覆盖写，不做任何 rmSync —— 本机 safe-delete 的批量删除保护
+    // 对 public/vditor/dist 树上的 rmSync 一律按整树计数（约 5000 文件 > 阈值 500），
+    // 无论目标是目录还是单文件都会拦截启动（#768 期间实测两次 Startup Error）。
+    // 白名单只增不减（见上注释），覆盖写无残留风险，语义等价「同步最新产物」。
     for (const item of WHITELIST) {
       const srcPath = path.join(src, item)
       if (!fs.existsSync(srcPath)) continue
-      fs.cpSync(srcPath, path.join(dest, item), { recursive: true })
+      fs.cpSync(srcPath, path.join(dest, item), { recursive: true, force: true })
     }
   }
   return {
@@ -59,12 +61,38 @@ function vditorStaticPlugin(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [vue(), tailwindcss(), vditorStaticPlugin()],
+  plugins: [
+    vue(),
+    tailwindcss(),
+    vditorStaticPlugin()],
   test: {
     environment: 'happy-dom',
     globals: true,
+    // 并发下重挂载用例（CourseCatalog：整页 + el-table 全渲染）会被 CPU 争抢拖到
+    // 5s 默认超时之外（单跑每例 <1.1s）。epLite 降低了 import 争抢但未根除，
+    // 给裕量到 15s（#772：单跑健康 + 全量并发偶发超时的折中兜底）
+    testTimeout: 15_000,
     // Node 25+ localStorage 遮蔽兜底（见 vitest.setup.ts）；Node ≤24 环境实现正常时零影响
-    setupFiles: ['./vitest.setup.ts']
+    setupFiles: ['./vitest.setup.ts'],
+    /*
+     * 覆盖率（#768）：只做度量不做治理 —— 不设 thresholds、不挂 CI 门禁。
+     * npx vitest run --coverage 产出 text + html 报告（coverage/ 目录）。
+     * include 只算业务代码；测试文件与测试基建不进分母。
+     * 用 istanbul 而非 v8 provider：v8 的 coverageFilesDirectory 在收尾时要
+     * rmSync 约 5000 个中间文件，会触发本机 safe-delete 的批量删除保护。
+     */
+    coverage: {
+      provider: 'istanbul',
+      // all: 未被任何测试加载的文件也计 0% 入报告 —— 否则 baseline 会系统性偏乐观
+      all: true,
+      reporter: ['text', 'html'],
+      reportsDirectory: 'coverage',
+      // 本机 safe-delete 会拦截对 coverage/ 的一切 rmSync（回收站积压导致任何
+      // 批量删除都触发 bulk guard）—— 关掉运行前清目录，报告文件覆盖写
+      cleanOnRerun: false,
+      include: ['src/**'],
+      exclude: ['src/**/*.spec.ts', 'src/**/__tests__/**', 'src/test/**', 'src/main.ts']
+    }
   },
   resolve: {
     alias: {
@@ -98,12 +126,19 @@ export default defineConfig({
     }
   },
   build: {
+    // 关闭 modulePreload：vite 的 __vitePreload helper 会被 manualChunks 归入
+    // markdown-stream 大 chunk，导致 entry 静态依赖整个 924KB（#748 性能评估 P0-1）。
+    // 关闭后动态 import 裸加载，原生 module 图仍并行发现依赖；preload 提示的损失可接受。
+    modulePreload: false,
     chunkSizeWarningLimit: 700,
     rollupOptions: {
       output: {
         // 按第三方库拆分 vendor chunk，避免 Element Plus / ECharts / PDF 等
         // 大依赖打进入口 chunk（此前两个入口 chunk 均超 1.1MB）
         manualChunks(id) {
+          // vite 的 preload helper（虚拟模块，动态 import 注入 CSS 用）若不显式归置，
+          // 会被自然聚进 markdown-stream 大 chunk，导致 entry 静态依赖整个 924KB（#748 P0-1）
+          if (id.includes('vite/preload-helper')) return 'vendor'
           if (!id.includes('node_modules')) return undefined
           if (id.includes('/element-plus/') || id.includes('@element-plus/')) return 'element-plus'
           if (id.includes('/echarts/') || id.includes('/zrender/')) return 'echarts'

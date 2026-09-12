@@ -20,6 +20,19 @@ Issues 存放在 GitHub Issues（使用 `gh` CLI）。See `docs/agents/issue-tra
 
 Single-context：root `CONTEXT.md` + `docs/adr/`。See `docs/agents/domain.md`.
 
+### 决策文档约定（所有会话必须遵守）
+
+- **ADR 文件名一律中文命名**：`docs/adr/NNNN-中文标题.md`（先例 `0007-渐进式重构手册.md`）；新建或重命名 ADR 禁止英文文件名；无法翻译的技术专名（如 SSE、JSON）可保留，但凡有中文对应的词（如 playbook→手册）必须用中文。
+- **决策/重构清单固定六段结构、≤25 行**，顺序为：① 目标与范围（这次到底解决什么）→ ② 选型 + 一句理由（每项决策附一句话理由）→ ③ 明确不做的事（防止后续加戏）→ ④ 拆分步骤（按模块拆，标出可并行项）→ ⑤ 约束（不能动的模块、API 兼容、uni-app-x 兼容性）→ ⑥ 验收标准（怎么算完成）。先例 `docs/refactor-decisions.md`。
+- **新决策回写纪律**：手术/实现会话收口时，若产生了 playbook 未覆盖的新决策或新坑位，须先回写对应 ADR（含守护规则落锁情况）再关票——issue 评论不是冷启动会话的必读面，ADR 才是。
+
+### 会话切分约定（所有技能会话遵守）
+
+- **一条思考链一个会话**：grilling → to-spec → to-tickets 在同一会话内连续完成，中途不 clear/compact——spec 与票不只依赖结论，还依赖被否决的分支和否决理由。
+- **一件票一个会话**：implement/execute-task 每票冷启动新会话，只读票 + 对应 ADR + `docs/refactor-decisions.md`；票间 `/clear`，上一票的讨论残留不进下一票。
+- **换气只在阶段边界**：接近 smart zone（约 150k）用 `/compact`；跨目录、跨工具或会话中途分叉才用 `/handoff`。
+- **收束与执行分座，重构与 UI 分时**：回填结论/补复盘另开短会话，不占手术会话；UI 原型对齐走独立 grilling 链，且同一模块内 UI 对齐 PR 一律排在该模块手术合并之后。
+
 ### Security scan
 
 AI 安全审计用 DeepSec（Shield）。See `docs/agents/security-scan.md`.
@@ -157,6 +170,16 @@ UTS（uni-app-x 的 TypeScript 变体）不支持以下 TypeScript 语法：
 - **部署配置**：改 `docker-compose*.yml` / `deploy.sh` 后可用 `docker compose -f docker-compose.prod.yml config -q` 做语法校验
 - **安全检测**：改动触及认证/授权/密钥/DB 连接/AI 生成代码时，跑 `python -m deepsec shield scan backend frontend/src`，确认无新增 critical/high（已知误报见 `docs/agents/security-scan.md`）。
 
+## 验收门与合并纪律（ADR-0008）
+
+改动触及运行时面（改动集含 `*.uvue` / `*.uts`，或 training-app 下的 `manifest.json` / `pages.json` / `platformConfig.json`）时，适用 `docs/adr/0008-移动端验收门与证据.md` 的四门与证据要求。
+
+- **agent 会话不得自行合并这类 PR**：必须把 PR 正文的 `## 验收证据` 段填齐（每门四字段 + 产物），然后**停在「待人工签收」**，由人执行合并。
+- 非运行时面的 PR（纯文档 / 测试 / CI 配置）不受此限，agent 可自行合并。
+- **人工门（真机逐页截图、微信开发者工具）只能由人执行**；agent 不得代填这两门的「执行人」，也不得在证据里写「已通过」。
+- **④a（HBuilderX 全量编译）为半自动门（2026-09-11 裁定 B，#870）**：agent 可执行 `npm run build:compile`，把 `.ci-verify/build.log` + 日志片段填进 ④a 行；**④a 的「执行人」栏填执行会话所用账号并注明「agent 执行」**。**运行前提**：CLI 靠与 HBuilderX 主程序的本地 IPC，受限沙箱下报「与主程序的连接已中断」⇒ **必须以全访问权限执行**。**合并仍由人执行**（上一条不变）。
+- 例外通道：正文写明「已接受未验证风险 + 理由 + 事后验证计划」，检查会打警告放行，但**仍必须由人执行合并**。禁止静默例外。
+- `pr-evidence` 检查只校证据结构、不校真伪；它是**可见检查**而非 ruleset 必检——本仓**有可用的 admin 通道**（维护者持有仓库所有者账号），但**裁定不装**（逐 PR 审批成本高于约束收益，见 ADR-0008「为何不装『必检 + approve』」）。
 ## 发布流程（push / PR / merge）
 
 master 有仓库 ruleset「protect master」保护（直接 push 会被拒，`push declined due to repository rule violations`），且限定 squash 合并。发布必须走分支 + PR：

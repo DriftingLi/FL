@@ -11,6 +11,10 @@ import { useAdminTable } from '@/composables/useAdminTable'
 import { formatDateTime } from '@/utils/format'
 import { phoneRules, passwordRules, emailRules, companyRules } from '@/utils/validate'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
+import UiFilterBar from '@/components/ui/UiFilterBar.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
+import UiTag from '@/components/ui/UiTag.vue'
 
 // 新增弹窗
 const dialogVisible = ref(false)
@@ -163,7 +167,9 @@ onMounted(() => {
       </UiButton>
     </div>
 
-    <div class="filter-bar">
+    <UiFilterBar>
+        <template #filters>
+
       <el-input
         v-model="searchKeyword"
         placeholder="搜索账号 / 昵称 / 手机号"
@@ -177,7 +183,8 @@ onMounted(() => {
         </template>
       </el-input>
       <UiButton variant="primary" @click="search">搜索</UiButton>
-    </div>
+        </template>
+      </UiFilterBar>
 
     <el-table :data="list" v-loading="loading" stripe border style="width: 100%">
       <el-table-column prop="id" label="ID" width="70" align="center" />
@@ -205,9 +212,9 @@ onMounted(() => {
       </el-table-column>
       <el-table-column label="状态" width="90" align="center">
         <template #default="{ row }">
-          <el-tag :type="row.status === 1 ? 'success' : 'danger'" size="small">
+          <UiTag :tone="row.status === 1 ? 'success' : 'danger'" size="small">
             {{ row.status === 1 ? '正常' : '禁用' }}
-          </el-tag>
+          </UiTag>
         </template>
       </el-table-column>
       <el-table-column prop="created_at" label="注册时间" width="160" align="center">
@@ -233,25 +240,24 @@ onMounted(() => {
       </el-table-column>
     </el-table>
 
-    <div class="pagination-wrapper" v-if="total > pageSize">
-      <el-pagination
-        v-model:current-page="currentPage"
-        v-model:page-size="pageSize"
-        :total="total"
-        :page-sizes="[10, 20, 50]"
-        layout="total, sizes, prev, pager, next"
-        @size-change="load"
-        @current-change="load"
-      />
-    </div>
+      <UiPagination v-if="total > pageSize"
+      v-model:current-page="currentPage"
+      v-model:page-size="pageSize"
+      :total="total"
+      show-sizes
+      :page-sizes="[10, 20, 50]"
+      @current-change="load"
+      @size-change="load"
+    align="center" class="mt-4" />
+    
 
     <!-- 新增弹窗 -->
-    <el-dialog
+    <UiDialog
       v-model="dialogVisible"
       title="新增 HRWAI 用户"
       width="520px"
       destroy-on-close
-    >
+     confirm-text="确认" :confirm-loading="submitting" @confirm="handleSubmit">
       <el-form ref="formRef" :model="formData" :rules="formRules" label-width="90px">
         <el-form-item label="手机号" prop="phone">
           <el-input
@@ -276,19 +282,15 @@ onMounted(() => {
           <el-input v-model="formData.company" placeholder="选填" maxlength="50" />
         </el-form-item>
       </el-form>
-      <template #footer>
-        <UiButton @click="dialogVisible = false">取消</UiButton>
-        <UiButton variant="primary" :loading="submitting" @click="handleSubmit">确认</UiButton>
-      </template>
-    </el-dialog>
+    </UiDialog>
 
     <!-- 重置密码弹窗 -->
-    <el-dialog
+    <UiDialog
       v-model="pwdDialogVisible"
       title="重置密码"
       width="440px"
       destroy-on-close
-    >
+     confirm-text="确认重置" :confirm-loading="pwdSubmitting" @confirm="handleResetPwd">
       <el-form ref="pwdFormRef" :model="pwdFormData" :rules="pwdFormRules" label-width="90px">
         <el-form-item label="用户">
           <span>{{ pwdFormData.name }}</span>
@@ -297,11 +299,7 @@ onMounted(() => {
           <el-input v-model="pwdFormData.password" type="password" placeholder="请输入新密码（6-20字符）" maxlength="20" show-password />
         </el-form-item>
       </el-form>
-      <template #footer>
-        <UiButton @click="pwdDialogVisible = false">取消</UiButton>
-        <UiButton variant="primary" :loading="pwdSubmitting" @click="handleResetPwd">确认重置</UiButton>
-      </template>
-    </el-dialog>
+    </UiDialog>
   </div>
 </template>
 
@@ -322,17 +320,7 @@ onMounted(() => {
   color: var(--color-text-primary);
 }
 
-.filter-bar {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 20px;
-}
 
-.pagination-wrapper {
-  display: flex;
-  justify-content: center;
-  margin-top: 20px;
-}
 
 @media screen and (max-width: 768px) {
   .hrwai-user-manage-page {
@@ -348,14 +336,7 @@ onMounted(() => {
     font-size: 18px;
   }
 
-  .filter-bar {
-    flex-direction: column;
-    gap: 8px;
-  }
 
-  .filter-bar .el-input {
-    width: 100% !important;
-  }
 
   .el-table {
     overflow-x: auto;

@@ -61,6 +61,8 @@ export interface ChatMessage {
   role: 'user' | 'assistant' | 'system'
   content: string
   images?: string[]
+  /** 助手消息的诊断来源（T5 历史回放；当轮另走 SSE sources 事件内存态） */
+  sources?: DiagnosisSource[]
   created_at: string
 }
 
@@ -70,6 +72,41 @@ export type AIMode = 'normal' | 'expert'
 export interface AIAssistantModeModels {
   normal: AdminModelOption | null
   expert: AdminModelOption | null
+}
+
+/** 智能维修诊断来源资料（answer_sources 条目：文本内含 <<IMAGE:...>> 溯源标记）。
+ *  ID 两态：结构化故障码来源吐 "fault-15" 字符串，手册来源吐数字（与后端 diagnosisSourceID 同步）。 */
+export interface DiagnosisSource {
+  id: number | string
+  text: string
+  metadata?: {
+    source_url?: string
+    page_start?: number
+    page_end?: number
+  }
+}
+
+/** 智能维修诊断品牌选项 */
+export interface DiagnosisBrandOption {
+  value: string
+  label: string
+}
+
+/** 智能维修诊断故障码条目 */
+export interface DiagnosisFaultCodeItem {
+  id: number
+  brand: string
+  brand_cn: string
+  model_series: string
+  fault_code: string
+  fault_name: string
+  symptom: string
+  causes: string
+  sop_steps: string
+  safety_warning: string
+  part_numbers: string
+  source_file: string
+  page_num: number
 }
 
 export interface StreamChatReq {
@@ -84,6 +121,9 @@ export interface StreamChatReq {
   custom_api_key?: string
   custom_base_url?: string
   custom_model?: string
+  // 智能维修诊断（fault_diagnosis）专用：品牌/车型过滤（结构化传参，不走文本注入）
+  brand?: string
+  model?: string
   messages: Array<{ role: 'user' | 'assistant'; content: string; images?: string[] }>
 }
 
@@ -175,6 +215,27 @@ export const aiAssistantApi = {
     return client.get<ChatMessage[]>(`/sessions/${id}/messages`)
   },
 
+  /** GET /api/ai-assistant/diagnosis/brands — 智能维修诊断品牌列表 */
+  listDiagnosisBrands() {
+    return client.get<DiagnosisBrandOption[]>('/diagnosis/brands')
+  },
+
+  /** GET /api/ai-assistant/diagnosis/models — 某品牌车型列表 */
+  listDiagnosisModels(brand?: string) {
+    return client.get<string[]>('/diagnosis/models', { params: brand ? { brand } : undefined })
+  },
+
+  /** GET /api/ai-assistant/diagnosis/fault-codes — 故障码分页查询 */
+  listDiagnosisFaultCodes(params: { brand?: string; keyword?: string; page?: number; page_size?: number }) {
+    return client.get<{ items: DiagnosisFaultCodeItem[]; total: number }>('/diagnosis/fault-codes', { params })
+  },
+
+  /** GET /api/ai-assistant/diagnosis/manual/* — 手册静态资源代理 URL（溯源图片；可选认证直接 <img>） */
+  manualUrl(subpath: string): string {
+    const segs = subpath.split('/').map(encodeURIComponent).join('/')
+    return `${API_BASE_URL}/diagnosis/manual/${segs}`
+  },
+
   /**
    * POST /api/ai-assistant/chat — 流式对话（SSE）
    * 使用 fetch + ReadableStream 消费 text/event-stream
@@ -190,6 +251,7 @@ export const aiAssistantApi = {
       onDone?: () => void
       onError?: (message: string) => void
       onUsage?: (data: { points_cost: number; total_tokens: number; balance: number; prompt_tokens?: number; completion_tokens?: number }) => void
+      onSources?: (sources: DiagnosisSource[]) => void
     }
   ): AbortController {
     const controller = new AbortController()
@@ -236,6 +298,9 @@ export const aiAssistantApi = {
                 if (content) handlers.onChunk?.(content)
               } else if (evt.event === 'usage') {
                 handlers.onUsage?.(evt.data as { points_cost: number; total_tokens: number; balance: number })
+              } else if (evt.event === 'sources') {
+                const payload = (evt.data as { sources?: DiagnosisSource[] })?.sources || []
+                handlers.onSources?.(payload)
               } else if (evt.event === 'error') {
                 const msg = (evt.data as { message?: string })?.message || '生成失败'
                 handlers.onError?.(msg)

@@ -8,6 +8,9 @@ import type { CatalogDirectionNode, CatalogLevel, CertificateTemplate } from '@/
 
 import type { CredentialDict } from '@/api/credential'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
+import UiRadioGroup from '@/components/ui/UiRadioGroup.vue'
+import UiCheckbox from '@/components/ui/UiCheckbox.vue'
 
 const props = defineProps<{
   directions: CatalogDirectionNode[]
@@ -288,16 +291,16 @@ defineExpose({ open })
         <el-input v-model="drawerForm.description" type="textarea" :rows="2" maxlength="500" />
       </el-form-item>
       <el-form-item label="上架状态">
-        <el-radio-group v-model="drawerForm.status">
+        <UiRadioGroup v-model="drawerForm.status">
           <el-radio :value="1">上架</el-radio>
           <el-radio :value="0">下架</el-radio>
-        </el-radio-group>
+        </UiRadioGroup>
       </el-form-item>
       <el-form-item label="热门">
-        <el-checkbox v-model="drawerForm.is_hot">热门</el-checkbox>
+        <UiCheckbox v-model="drawerForm.is_hot">热门</UiCheckbox>
       </el-form-item>
       <el-form-item label="精品">
-        <el-checkbox v-model="drawerForm.is_featured">精品</el-checkbox>
+        <UiCheckbox v-model="drawerForm.is_featured">精品</UiCheckbox>
       </el-form-item>
     </el-form>
 
@@ -328,7 +331,7 @@ defineExpose({ open })
   </el-drawer>
 
   <!-- 章节对话框 -->
-  <el-dialog v-model="chapterDialogVisible" :title="chapterForm.chapter_id ? '编辑章节' : '新增章节'" width="520px" destroy-on-close>
+  <UiDialog v-model="chapterDialogVisible" :title="chapterForm.chapter_id ? '编辑章节' : '新增章节'" width="520px" destroy-on-close confirm-text="保存" :confirm-loading="submitting" @confirm="submitChapter">
     <el-form ref="chapterFormRef" :model="chapterForm" :rules="chapterRules" label-width="90px">
       <el-form-item label="章节标题" prop="title">
         <el-input v-model="chapterForm.title" placeholder="章节标题" maxlength="100" />
@@ -337,11 +340,7 @@ defineExpose({ open })
         <el-input-number v-model="chapterForm.duration" :min="0" :max="9999" style="width: 100%" />
       </el-form-item>
     </el-form>
-    <template #footer>
-      <UiButton @click="chapterDialogVisible = false">取消</UiButton>
-      <UiButton variant="primary" :loading="submitting" @click="submitChapter">保存</UiButton>
-    </template>
-  </el-dialog>
+  </UiDialog>
 </template>
 
 <style scoped>

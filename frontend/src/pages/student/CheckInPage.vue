@@ -120,14 +120,14 @@
             <el-table-column label="连续" width="90" prop="streak" />
           </el-table>
           <div v-if="rankTotal > rankPageSize" class="flex justify-center py-3">
-            <el-pagination
-              v-model:current-page="rankPage"
-              :page-size="rankPageSize"
-              :total="rankTotal"
-              layout="prev, pager, next"
-              size="small"
-              @current-change="loadRank"
-            />
+            <UiPagination
+      v-model:current-page="rankPage"
+      :page-size="rankPageSize"
+      :total="rankTotal"
+      :show-total="false"
+      small
+      @current-change="loadRank"
+    />
           </div>
         </div>
       </div>
@@ -141,11 +141,13 @@ import { ElMessage } from 'element-plus'
 import { ArrowRight } from '@element-plus/icons-vue'
 import { checkInApi, type CheckInDay, type CheckInRankItem, type CheckInRankMe } from '@/api/checkin'
 import { shanghaiDateStr } from '@/utils/format'
+import { computeDayStates, type CheckInDayState } from '@/utils/checkinCalendar'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import { useAsyncPage } from '@/composables/useAsyncPage'
+import UiPagination from '@/components/ui/UiPagination.vue'
 
 const weekdays = ['日', '一', '二', '三', '四', '五', '六']
 
@@ -156,7 +158,7 @@ interface CalendarCell {
   isToday: boolean
   checked: boolean
   points: number
-  /** 属于「当前正在连续的打卡段」（从今日/昨日连续回溯到该日） */
+  /** 属于「当前连续打卡段」（段区间由后端 streak 定段，见 utils/checkinCalendar） */
   inActiveStreak: boolean
 }
 
@@ -178,17 +180,15 @@ const rankPage = ref(1)
 const rankPageSize = ref(20)
 const rankLoading = ref(false)
 
-const { loading, loadError, retrying, retry: retryLoad, run: refresh } = useAsyncPage(async () => {
-  const cal = await checkInApi.getCalendar({ year: viewYear.value, month: viewMonth.value })
-  calendar.value = cal
-  return true
-})
-
-const checkedByDate = computed(() => {
-  const m = new Map<string, CheckInDay>()
-  for (const d of calendar.value.days) m.set(d.date, d)
-  return m
-})
+// 打卡不按当前证件分区（checkin 服务无 credential 口径），不随切换重装（#604 opt-out）
+const { loading, loadError, retrying, retry: retryLoad, run: refresh } = useAsyncPage(
+  async () => {
+    const cal = await checkInApi.getCalendar({ year: viewYear.value, month: viewMonth.value })
+    calendar.value = cal
+    return true
+  },
+  { credentialScoped: false }
+)
 
 const pointsByDate = computed(() => {
   const m = new Map<string, number>()
@@ -196,24 +196,13 @@ const pointsByDate = computed(() => {
   return m
 })
 
-/** 当前连续段 [start, end] 日期串（streak 由后端窗口口径给出，跨月连续也能正确定段：
- * 段尾=今日（已签）或昨日（今日未签），段长=streak，段起点=段尾−(streak−1)） */
-function activeStreakRange(): { start: string; end: string } | null {
-  const streak = calendar.value.streak
-  if (streak <= 0) return null
-  const end = new Date()
-  const endStr = shanghaiDateStr(end)
-  const set = new Set(checkedByDate.value.keys())
-  if (!set.has(endStr)) {
-    // 今日未签：段尾退到昨日；若昨日也未签则无连续段（后端 streak 应已为 0）
-    end.setDate(end.getDate() - 1)
-  }
-  const start = new Date(end)
-  start.setDate(start.getDate() - (streak - 1))
-  return { start: shanghaiDateStr(start), end: shanghaiDateStr(end) }
-}
-
-const activeRange = computed(() => activeStreakRange())
+/** 日期 → 三态（'streak' 连续段 | 'past' 已断开 | 'none' 未打卡）：段区间由后端 streak 定段（spec #599） */
+const stateByDate = computed(() => {
+  const states = computeDayStates(calendar.value.days, shanghaiDateStr(new Date()), calendar.value.streak)
+  const m = new Map<string, CheckInDayState>()
+  for (let i = 0; i < calendar.value.days.length; i++) m.set(calendar.value.days[i].date, states[i])
+  return m
+})
 
 const calendarCells = computed<CalendarCell[]>(() => {
   const y = viewYear.value
@@ -223,7 +212,6 @@ const calendarCells = computed<CalendarCell[]>(() => {
   const daysInMonth = new Date(y, m, 0).getDate()
   const prevMonthDays = new Date(y, m - 1, 0).getDate()
   const localToday = shanghaiDateStr(new Date())
-  const range = activeRange.value
 
   const cells: CalendarCell[] = []
   for (let i = startWeek - 1; i >= 0; i--) {
@@ -231,17 +219,15 @@ const calendarCells = computed<CalendarCell[]>(() => {
   }
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-    const checked = checkedByDate.value.has(dateStr)
-    // 连续段成员 = 在 [range.start, range.end] 内且已打卡（range 由后端 streak 定段，跨月正确）
-    const inActive = checked && range != null && dateStr >= range.start && dateStr <= range.end
+    const state = stateByDate.value.get(dateStr)
     cells.push({
       key: `cur-${d}`,
       day: d,
       isCurrentMonth: true,
       isToday: dateStr === localToday,
-      checked,
+      checked: state != null && state !== 'none',
       points: pointsByDate.value.get(dateStr) ?? 0,
-      inActiveStreak: inActive
+      inActiveStreak: state === 'streak'
     })
   }
   const totalCells = 42

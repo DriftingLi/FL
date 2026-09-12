@@ -53,7 +53,8 @@ type AIChatMessage struct {
 	SessionID int       `gorm:"column:session_id" json:"session_id"`
 	Role      string    `gorm:"column:role" json:"role"` // 'user' | 'assistant' | 'system'
 	Content   string    `gorm:"column:content" json:"content"`
-	Images    string    `gorm:"column:images" json:"-"` // JSON 数组字符串，用户消息附带的图片 URL
+	Images    string    `gorm:"column:images" json:"-"`  // JSON 数组字符串，用户消息附带的图片 URL
+	Sources   string    `gorm:"column:sources" json:"-"` // JSON 数组字符串，助手消息的诊断来源（T5 历史回放）
 	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
 }
 

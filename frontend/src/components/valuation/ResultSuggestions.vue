@@ -5,10 +5,12 @@
       <span class="suggestion-text">{{ s }}</span>
     </li>
   </ul>
-  <el-empty v-else description="暂无建议" />
+  <UiEmptyState v-else description="暂无建议" />
 </template>
 
 <script setup lang="ts">
+
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 // 评估建议列表（评估结果 / 评估报告 / 电池 RUL 三页共用；battery 变体为电池页视觉）。
 withDefaults(
   defineProps<{

@@ -48,24 +48,16 @@
     </div>
 
     <!-- 投递确认弹窗（spec #449 决定 1 的 UI 落点）：明确告知「投递即授权…与简历是否公开无关」 -->
-    <el-dialog v-model="showApplyDialog" title="确认投递" width="440px">
+    <UiDialog v-model="showApplyDialog" title="确认投递" width="440px" confirm-text="确认投递" :confirm-loading="applying" @confirm="confirmApply">
       <div class="text-sm text-ink">
         投递即授权该企业查看你的联系方式，与简历是否公开无关。投递后企业可直接与你联系。
       </div>
-      <template #footer>
-        <UiButton @click="showApplyDialog = false">取消</UiButton>
-        <UiButton variant="primary" :loading="applying" @click="confirmApply">确认投递</UiButton>
-      </template>
-    </el-dialog>
+    </UiDialog>
 
     <!-- 举报弹窗 -->
-    <el-dialog v-model="showReportDialog" title="举报职位" width="440px">
+    <UiDialog v-model="showReportDialog" title="举报职位" width="440px" confirm-text="提交举报" :confirm-loading="reporting" @confirm="confirmReport">
       <el-input v-model="reportReason" type="textarea" :rows="3" maxlength="500" show-word-limit placeholder="请填写举报原因（如：交培训费包分配、冒用别家公司名义）" />
-      <template #footer>
-        <UiButton @click="showReportDialog = false">取消</UiButton>
-        <UiButton variant="danger" :loading="reporting" @click="confirmReport">提交举报</UiButton>
-      </template>
-    </el-dialog>
+    </UiDialog>
   </div>
 </template>
 
@@ -78,6 +70,7 @@ import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
 
 const route = useRoute()
 const data = ref<JobPosting | null>(null)
@@ -94,11 +87,14 @@ const {
   retrying,
   retry: handleRetry,
   run: load
-} = useAsyncPage(async () => {
-  const id = Number(route.params.id)
-  const res = await jobApi.getPublicJob(id)
-  data.value = (res as any) || null
-})
+} = useAsyncPage(
+  async () => {
+    const id = Number(route.params.id)
+    const res = await jobApi.getPublicJob(id)
+    data.value = (res as any) || null
+  },
+  { credentialScoped: false } // 招聘域不受证件过滤（#604 opt-out）
+)
 
 // #488：可投递 = 无记录或冷却期满/已撤回
 const canApply = computed(() => {

@@ -65,6 +65,12 @@
   --el-border-color-light: var(--color-border-light);
   --el-border-color-lighter: var(--color-border-light);
   --el-border-color-extra-light: var(--color-border-light);
+  /*
+   * -darker 是最后一个未映射的边框档（EP 出厂 #cdd0d6 固定值）—— el-upload picture-card
+   * 的虚线框走它，深色模式下亮边突兀（2026-09-10 实测：浅深两主题边框同为 #cdd0d6）。
+   * 只补 :root 这一层即可：--color-border-dark 本身随主题翻转，深色自动跟随。
+   */
+  --el-border-color-darker: var(--color-border-dark);
 
   --el-fill-color: var(--color-border-light);
   --el-fill-color-light: var(--color-border-light);
@@ -78,6 +84,23 @@
 
   --el-transition-duration: 0.25s;
   --el-transition-duration-fast: 0.15s;
+
+  /*
+   * 表格（197 处 / 22 文件）：一律用**会随主题翻转**的项目 token。
+   * ⚠️ 不要用 --color-primary-* / --color-accent-* 做表格底色：深色块只重定义了
+   * bg-* / text-* 系列，primary-50 等在深色下仍是 #F0FDFA 亮色，做 hover / 选中行
+   * 会变成「暗底亮块」（分段控件上因同类问题返工过三轮）。
+   */
+  --el-table-bg-color: var(--color-bg-card);
+  --el-table-tr-bg-color: var(--color-bg-card);
+  --el-table-header-bg-color: var(--color-bg-page);
+  --el-table-expanded-cell-bg-color: var(--color-bg-page);
+  --el-table-row-hover-bg-color: var(--color-bg-page);
+  --el-table-current-row-bg-color: var(--color-bg-page);
+  --el-table-border-color: var(--color-border-light);
+  --el-table-border: 1px solid var(--color-border-light);
+  --el-table-text-color: var(--color-text-primary);
+  --el-table-header-text-color: var(--color-text-secondary);
 }
 
 /*
@@ -109,6 +132,11 @@
   --el-color-info-light-7: #4B5563;
   --el-color-info-light-9: #1F2937;
   --el-color-info-dark-2: #D1D5DB;
+
+  /* 固定列阴影：浅色的淡阴影在深色下几乎不可见，横向滚动时看不出列被固定 */
+  --el-table-fixed-box-shadow: 0 0 10px rgb(0 0 0 / 45%);
+  --el-table-fixed-left-column: inset 10px 0 10px -10px rgb(0 0 0 / 45%);
+  --el-table-fixed-right-column: inset -10px 0 10px -10px rgb(0 0 0 / 45%);
 }
 
 /* 合并自原文件两处 .el-button：radius-lg / font-semibold 为原生效值（后者覆盖前者） */
@@ -245,6 +273,25 @@
   border-color: var(--color-border-light);
 }
 
+/*
+ * 深色气泡（el-tooltip 默认 / el-popover effect="dark"）：EP 出厂把底色绑在
+ * var(--el-text-color-primary) 上做「反色」，浅色下 = 深底白字（好）；深色下
+ * text-primary 翻成浅色 → 浅底深字，与页面所有深色弹层语言冲突
+ * （2026-09-10 实测：深色下气泡 #F1F5F9 底 + #1E293B 字）。
+ * 只在深色块覆写：底色改卡片色、文字用深色下的 text-primary（= 浅色）、
+ * 边框与箭头跟随。浅色保持 EP 出厂反色逻辑不动（深底白字本就正确）。
+ */
+[data-theme="dark"] .el-popper.is-dark {
+  --el-popper-bg-color-dark: var(--color-bg-card);
+  color: var(--el-text-color-primary);
+  border-color: var(--color-border);
+}
+
+[data-theme="dark"] .el-popper.is-dark .el-popper__arrow::before {
+  background: var(--color-bg-card);
+  border-color: var(--color-border);
+}
+
 .el-button--primary:hover,
 .el-button--primary:focus {
   opacity: 0.92;
@@ -260,4 +307,19 @@
 .el-button--large {
   --el-button-size: 48px;
   padding: 0 var(--space-6);
+}
+
+/*
+ * 表格结构：只动**表头与描边**，绝不动行高与单元格内边距 ——
+ * 197 处表格的列表密度、分页位置、滚动条必须保持与改动前一致。
+ * （配色部分走上面的 --el-table-* 变量，这里不再重复声明颜色。）
+ */
+.el-table th.el-table__cell {
+  font-weight: var(--font-semibold);
+  /* 表头与表体的分界比普通行线更实一点，否则长表格里表头会「浮不住」 */
+  border-bottom: 1px solid var(--color-border);
+}
+
+.el-table__empty-block {
+  color: var(--color-text-tertiary);
 }

@@ -111,6 +111,40 @@ func TestStartCleansAbandonedExams(t *testing.T) {
 	}
 }
 
+// TestStartCredentialPartition 模考抽题按当前证件分区（#702）：
+// 传证件只抽该证件题；空证件分区抽不到题时返回空池错误。
+func TestStartCredentialPartition(t *testing.T) {
+	db := testutil.NewMemoryDB(t)
+	svc := NewMockExamService(db, nil, zap.NewNop())
+	student := testutil.SeedStudent(t, db, "考生", "x")
+	credA := model.Credential{Code: "N1", Name: "叉车司机N1"}
+	if err := db.Create(&credA).Error; err != nil {
+		t.Fatalf("建证件A失败: %v", err)
+	}
+	credB := model.Credential{Code: "ELEC", Name: "低压电工"}
+	if err := db.Create(&credB).Error; err != nil {
+		t.Fatalf("建证件B失败: %v", err)
+	}
+	qsvc := NewQuestionBankService(db, nil, zap.NewNop())
+	if _, err := qsvc.CreateQuestion(map[string]any{
+		"type": "single_choice", "content": "A证件题", "options": []string{"A", "B"}, "answer": "A",
+		"status": "published", "credential_id": credA.ID,
+	}, nil, "tutor"); err != nil {
+		t.Fatalf("建题失败: %v", err)
+	}
+
+	got, err := svc.Start(student.ID, 10, 90, &credA.ID)
+	if err != nil {
+		t.Fatalf("A证件分区应能开考: %v", err)
+	}
+	if got.TotalQuestions != 1 {
+		t.Fatalf("A证件分区应抽到 1 题, got %d", got.TotalQuestions)
+	}
+	if _, err := svc.Start(student.ID, 10, 90, &credB.ID); err == nil {
+		t.Fatalf("B证件空池应返回错误")
+	}
+}
+
 // TestStartKeepsOtherStudentsAbandoned 清理只作用于本人：他人的废弃记录不受影响。
 func TestStartKeepsOtherStudentsAbandoned(t *testing.T) {
 	db := testutil.NewMemoryDB(t)

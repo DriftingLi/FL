@@ -40,6 +40,8 @@ func RegisterForumRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.ForumS
 	g.POST("/topics", h.CreateTopic)
 	// GET /api/forum/topics/:id 主题详情（含回复）
 	g.GET("/topics/:id", h.GetTopic)
+	// PUT /api/forum/topics/:id 编辑帖子（#811，仅作者本人；可改 title/content/images/category）
+	g.PUT("/topics/:id", h.UpdateTopic)
 	// POST /api/forum/topics/:id/replies 回复（images 为图片 URL 数组，最多 3 张）
 	g.POST("/topics/:id/replies", h.ReplyTopic)
 	// DELETE /api/forum/topics/:id 删除自己的主题
@@ -60,6 +62,13 @@ func RegisterForumRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.ForumS
 	g.GET("/my-topics", h.MyTopics)
 	// GET /api/forum/my-replies 我的回复
 	g.GET("/my-replies", h.MyReplies)
+	// ===== 个人动态（#701：赞过 / 围观 / 浏览记录，响应逐字沿用 my-topics 形态）=====
+	// GET /api/forum/my-liked-topics 赞过（按点赞时间倒序）
+	g.GET("/my-liked-topics", h.MyLikedTopics)
+	// GET /api/forum/my-observed 围观（浏览减去四项直接互动，按最近浏览倒序）
+	g.GET("/my-observed", h.MyObservedTopics)
+	// GET /api/forum/my-view-history 浏览记录（按主题去重，按最近浏览倒序）
+	g.GET("/my-view-history", h.MyViewHistory)
 
 	// ===== 评论点赞（spec #268）=====
 	g.POST("/replies/:id/like", h.LikeReply)
@@ -74,6 +83,11 @@ func RegisterForumRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.ForumS
 	adminG.GET("/topics/:id", h.AdminGetTopic)
 	adminG.DELETE("/topics/:id", h.AdminDeleteTopic)
 	adminG.DELETE("/replies/:id", h.AdminDeleteReply)
+	// 精选位（#742）：全类别可精/可撤；首次加精同事务给帖主 featured_bonus +30（幂等）
+	adminG.POST("/topics/:id/featured", h.AdminFeatureTopic)
+	adminG.DELETE("/topics/:id/featured", h.AdminUnfeatureTopic)
+	adminG.POST("/topics/:id/experience", h.AdminDesignateExperience)
+	adminG.DELETE("/topics/:id/experience", h.AdminRevokeExperience)
 	// 举报管理（ADR-0018）：status query 0 待处理 / 1 已处理，缺省全部
 	adminG.GET("/reports", h.ListReports)
 	adminG.PUT("/reports/:id", h.HandleReport)
@@ -116,18 +130,19 @@ func (h *ForumHandler) UploadImage(c *gin.Context) {
 
 // ListTopics 帖子列表
 // @Summary 帖子列表
-// @Description 支持 scope=all|general|chapter，按 category=all|discussion|question、chapter_id/keyword/sort=latest|hot 过滤
+// @Description 支持 scope=all|general|chapter，按 category=all|discussion|question|experience、chapter_id/keyword/sort=latest|hot|created 过滤
 // @Tags 学员端-论坛
 // @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param scope query string false "范围 all|general|chapter"
-// @Param category query string false "类别 discussion|question，省略表示不过滤（向后兼容）"
+// @Param category query string false "类别 discussion|question|experience，省略表示不过滤（向后兼容）"
+// @Param featured query string false "精选过滤 true|false，省略表示不过滤（#742）"
 // @Param chapter_id query int false "章节ID"
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(10)
 // @Param keyword query string false "关键词"
-// @Param sort query string false "排序 latest|hot"
+// @Param sort query string false "排序 latest|hot|created（created=发帖时间，#722）"
 // @Param order query string false "排序方向 asc|desc"
 // @Success 200 {object} response.R{data=service.ForumTopicPageResult} "success"
 // @Failure 400 {object} response.R "参数错误"
@@ -137,28 +152,34 @@ func (h *ForumHandler) ListTopics(c *gin.Context) {
 	Endpoint[listTopicsReq, service.ForumTopicPageResult]{
 		Parse: func(c *gin.Context) (*listTopicsReq, error) {
 			return &listTopicsReq{
-				Scope:     c.Query("scope"),
-				Category:  c.Query("category"),
-				Solved:    c.Query("solved"),
-				ChapterID: atoiDefault(c.Query("chapter_id"), 0),
-				Page:      atoiDefault(c.Query("page"), 1),
-				PageSize:  atoiDefault(c.Query("page_size"), 10),
-				Keyword:   c.Query("keyword"),
-				Sort:      c.Query("sort"),
-				Order:     c.Query("order"),
+				Scope:    c.Query("scope"),
+				Category: c.Query("category"),
+				Solved:   c.Query("solved"),
+				Featured: c.Query("featured"),
+				// is_experience 是经验 Tab 的判据（ADR-0040）；category=experience 是遗留意图值，
+				// 两者**不是**同一件事，详见 service.parseForumExperienceArg 的注释。
+				IsExperience: c.Query("is_experience"),
+				ChapterID:    atoiDefault(c.Query("chapter_id"), 0),
+				Page:         atoiDefault(c.Query("page"), 1),
+				PageSize:     atoiDefault(c.Query("page_size"), 10),
+				Keyword:      c.Query("keyword"),
+				Sort:         c.Query("sort"),
+				Order:        c.Query("order"),
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *listTopicsReq) (*service.ForumTopicPageResult, error) {
 			return h.svc.ListTopics(service.TopicListInput{
-				Scope:     req.Scope,
-				Category:  req.Category,
-				Solved:    req.Solved,
-				ChapterID: req.ChapterID,
-				Page:      req.Page,
-				PageSize:  req.PageSize,
-				Keyword:   req.Keyword,
-				Sort:      req.Sort,
-				Order:     req.Order,
+				Scope:        req.Scope,
+				Category:     req.Category,
+				Solved:       req.Solved,
+				Featured:     req.Featured,
+				IsExperience: req.IsExperience,
+				ChapterID:    req.ChapterID,
+				Page:         req.Page,
+				PageSize:     req.PageSize,
+				Keyword:      req.Keyword,
+				Sort:         req.Sort,
+				Order:        req.Order,
 			})
 		},
 		Render: func(c *gin.Context, _ *listTopicsReq, resp *service.ForumTopicPageResult, err error) {
@@ -173,7 +194,7 @@ func (h *ForumHandler) ListTopics(c *gin.Context) {
 
 // CreateTopic 发帖
 // @Summary 发帖
-// @Description chapter_id 为空表示综合讨论区；category=question 时不得带 chapter_id；images 最多 9 张 URL
+// @Description chapter_id 为空表示综合讨论区；category=question 时不得带 chapter_id；experience（备考经验）可挂章节、不可被采纳；images 最多 9 张 URL
 // @Tags 学员端-论坛
 // @Accept json
 // @Produce json
@@ -230,6 +251,8 @@ func (h *ForumHandler) CreateTopic(c *gin.Context) {
 // @Param id path int true "主题ID"
 // @Param sort query string false "排序 time|hot|latest"
 // @Param order query string false "排序方向 asc|desc"
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页回复数" default(20)
 // @Success 200 {object} response.R "success"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "不存在"
@@ -243,10 +266,14 @@ func (h *ForumHandler) GetTopic(c *gin.Context) {
 			if err != nil {
 				return nil, err
 			}
-			return &topicGetReq{TopicID: topicID, UserID: userID, Sort: c.Query("sort"), Order: c.Query("order")}, nil
+			return &topicGetReq{
+				TopicID: topicID, UserID: userID,
+				Sort: c.Query("sort"), Order: c.Query("order"),
+				Page: atoiDefault(c.Query("page"), 1), PageSize: atoiDefault(c.Query("page_size"), 0),
+			}, nil
 		},
 		Invoke: func(ctx context.Context, req *topicGetReq) (*map[string]any, error) {
-			result, err := h.svc.GetTopic(req.TopicID, req.UserID, req.Sort, req.Order)
+			result, err := h.svc.GetTopic(req.toDetailInput())
 			if err != nil {
 				return nil, err
 			}
@@ -307,6 +334,74 @@ func (h *ForumHandler) ReplyTopic(c *gin.Context) {
 				return
 			}
 			response.Created(c, "回复成功", resp)
+		},
+	}.Handle(c)
+}
+
+// UpdateTopic 编辑自己的帖子（#811）
+// @Summary 编辑自己的帖子
+// @Description 仅作者本人可改 title/content/images/category；非本人 403，主题不存在 404；类别值域 discussion|question|experience，空串归一 discussion；问答帖不得挂章节（与发帖同规则）
+// @Tags 学员端-论坛
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "主题ID"
+// @Success 200 {object} response.R{data=service.ForumTopicDTO} "修改成功"
+// @Failure 400 {object} response.R "参数错误（类别非法/长度越界/图片非法）"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 403 {object} response.R "非作者本人"
+// @Failure 404 {object} response.R "主题不存在"
+// @Router /forum/topics/{id} [put]
+func (h *ForumHandler) UpdateTopic(c *gin.Context) {
+	Endpoint[updateTopicReq, service.ForumTopicDTO]{
+		Parse: func(c *gin.Context) (*updateTopicReq, error) {
+			topicID, err := pathInt64(c, "id", "主题ID无效")
+			if err != nil {
+				return nil, err
+			}
+			var body struct {
+				Category string   `json:"category"`
+				Title    string   `json:"title"`
+				Content  string   `json:"content"`
+				Images   []string `json:"images"`
+			}
+			if err := c.ShouldBindJSON(&body); err != nil {
+				return nil, badRequest("请求参数错误")
+			}
+			return &updateTopicReq{
+				UserID:   middleware.CurrentUserID(c),
+				TopicID:  topicID,
+				Category: body.Category,
+				Title:    body.Title,
+				Content:  body.Content,
+				Images:   body.Images,
+			}, nil
+		},
+		Invoke: func(ctx context.Context, req *updateTopicReq) (*service.ForumTopicDTO, error) {
+			return h.svc.UpdateTopic(service.UpdateTopicInput{
+				UserID:   req.UserID,
+				TopicID:  req.TopicID,
+				Category: req.Category,
+				Title:    req.Title,
+				Content:  req.Content,
+				Images:   req.Images,
+			})
+		},
+		Render: func(c *gin.Context, _ *updateTopicReq, resp *service.ForumTopicDTO, err error) {
+			if err != nil {
+				// 哨兵映射（errors.Is，不做字符串比对）：owner 403 / 不存在 404 / 其余 400
+				if errors.Is(err, service.ErrNotTopicOwner) {
+					response.Forbidden(c, err.Error())
+					return
+				}
+				if errors.Is(err, service.ErrTopicNotFound) {
+					response.NotFound(c, err.Error())
+					return
+				}
+				response.BadRequest(c, err.Error())
+				return
+			}
+			response.SuccessWithMsg(c, "修改成功", resp)
 		},
 	}.Handle(c)
 }
@@ -410,10 +505,14 @@ func (h *ForumHandler) AdminGetTopic(c *gin.Context) {
 			if err != nil {
 				return nil, err
 			}
-			return &topicGetReq{TopicID: topicID, UserID: userID, Sort: c.Query("sort"), Order: c.Query("order")}, nil
+			return &topicGetReq{
+				TopicID: topicID, UserID: userID,
+				Sort: c.Query("sort"), Order: c.Query("order"),
+				Page: atoiDefault(c.Query("page"), 1), PageSize: atoiDefault(c.Query("page_size"), 0),
+			}, nil
 		},
 		Invoke: func(ctx context.Context, req *topicGetReq) (*map[string]any, error) {
-			result, err := h.svc.GetTopic(req.TopicID, req.UserID, req.Sort, req.Order)
+			result, err := h.svc.GetTopic(req.toDetailInput())
 			if err != nil {
 				return nil, err
 			}
@@ -470,6 +569,127 @@ func (h *ForumHandler) AdminDeleteTopic(c *gin.Context) {
 	}.Handle(c)
 }
 
+// AdminFeatureTopic 管理员加精帖子 POST /api/admin/forum/topics/:id/featured
+// @Summary 管理员加精帖子
+// @Description 全类别可精；首次加精同事务给帖主 featured_bonus +30（每帖幂等一次，取消重精不重复发分）；状态已一致时幂等短路
+// @Tags 管理端-论坛
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "主题 ID"
+// @Success 200 {object} response.R{data=service.ForumTopicDTO} "加精成功"
+// @Failure 400 {object} response.R "加精失败（主题不存在）"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 403 {object} response.R "需要管理员角色"
+// @Router /admin/forum/topics/{id}/featured [post]
+func (h *ForumHandler) AdminFeatureTopic(c *gin.Context) {
+	h.handleSetFeatured(c, true)
+}
+
+// AdminUnfeatureTopic 管理员取消精选 DELETE /api/admin/forum/topics/:id/featured
+// @Summary 管理员取消精选
+// @Description 只改状态，已发放的加精奖励不回滚；状态已一致时幂等短路
+// @Tags 管理端-论坛
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "主题 ID"
+// @Success 200 {object} response.R{data=service.ForumTopicDTO} "已取消精选"
+// @Failure 400 {object} response.R "操作失败（主题不存在）"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 403 {object} response.R "需要管理员角色"
+// @Router /admin/forum/topics/{id}/featured [delete]
+func (h *ForumHandler) AdminUnfeatureTopic(c *gin.Context) {
+	h.handleSetFeatured(c, false)
+}
+
+// AdminDesignateExperience 管理员认定备考经验 POST /api/admin/forum/topics/:id/experience
+// @Summary 管理员认定备考经验
+// @Description 一个认定动作同时置 is_experience 与 is_featured（经验蕴含精选）；首次认定同事务给帖主 +30（与加精共用一笔，每帖幂等一次）；状态已一致时幂等短路
+// @Tags 管理端-论坛
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "主题 ID"
+// @Success 200 {object} response.R{data=service.ForumTopicDTO} "认定成功"
+// @Failure 400 {object} response.R "认定失败（主题不存在）"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 403 {object} response.R "需要管理员角色"
+// @Router /admin/forum/topics/{id}/experience [post]
+func (h *ForumHandler) AdminDesignateExperience(c *gin.Context) {
+	h.handleExperience(c, true)
+}
+
+// AdminRevokeExperience 管理员取消经验认定 DELETE /api/admin/forum/topics/:id/experience
+// @Summary 管理员取消经验认定
+// @Description 只撤经验归类，保留精选位；已发放的认定奖励不回滚；状态已一致时幂等短路
+// @Tags 管理端-论坛
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "主题 ID"
+// @Success 200 {object} response.R{data=service.ForumTopicDTO} "已取消经验认定"
+// @Failure 400 {object} response.R "操作失败（主题不存在）"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 403 {object} response.R "需要管理员角色"
+// @Router /admin/forum/topics/{id}/experience [delete]
+func (h *ForumHandler) AdminRevokeExperience(c *gin.Context) {
+	h.handleExperience(c, false)
+}
+
+// handleExperience 认定/取消经验共用管线（ADR-0040）：权限由路由组的 RoleRequired("admin") 收口。
+func (h *ForumHandler) handleExperience(c *gin.Context, designate bool) {
+	Endpoint[topicIDReq, service.ForumTopicDTO]{
+		Parse: func(c *gin.Context) (*topicIDReq, error) {
+			topicID, err := pathInt64(c, "id", "主题ID无效")
+			if err != nil {
+				return nil, err
+			}
+			return &topicIDReq{TopicID: topicID}, nil
+		},
+		Invoke: func(ctx context.Context, req *topicIDReq) (*service.ForumTopicDTO, error) {
+			if designate {
+				return h.svc.DesignateExperience(req.TopicID)
+			}
+			return h.svc.RevokeExperience(req.TopicID)
+		},
+		Render: func(c *gin.Context, _ *topicIDReq, resp *service.ForumTopicDTO, err error) {
+			if err != nil {
+				response.BadRequest(c, err.Error())
+				return
+			}
+			if designate {
+				response.SuccessWithMsg(c, "已认定为备考经验", resp)
+			} else {
+				response.SuccessWithMsg(c, "已取消经验认定", resp)
+			}
+		},
+	}.Handle(c)
+}
+
+// handleSetFeatured 加精/取消精选共用管线（#742）：状态迁移 + 首次加精发分在同一服务方法内。
+func (h *ForumHandler) handleSetFeatured(c *gin.Context, featured bool) {
+	Endpoint[topicIDReq, service.ForumTopicDTO]{
+		Parse: func(c *gin.Context) (*topicIDReq, error) {
+			topicID, err := pathInt64(c, "id", "主题ID无效")
+			if err != nil {
+				return nil, err
+			}
+			return &topicIDReq{TopicID: topicID}, nil
+		},
+		Invoke: func(ctx context.Context, req *topicIDReq) (*service.ForumTopicDTO, error) {
+			return h.svc.SetFeatured(req.TopicID, featured)
+		},
+		Render: func(c *gin.Context, _ *topicIDReq, resp *service.ForumTopicDTO, err error) {
+			if err != nil {
+				response.BadRequest(c, err.Error())
+				return
+			}
+			if featured {
+				response.SuccessWithMsg(c, "加精成功", resp)
+			} else {
+				response.SuccessWithMsg(c, "已取消精选", resp)
+			}
+		},
+	}.Handle(c)
+}
+
 // AdminDeleteReply 管理员删除任意回复 DELETE /api/admin/forum/replies/:id
 // AdminDeleteReply 管理员删除回复 DELETE /api/admin/forum/replies/:id
 // @Summary 管理员删除回复
@@ -509,15 +729,18 @@ func (h *ForumHandler) AdminDeleteReply(c *gin.Context) {
 
 // listTopicsReq 主题列表请求（查询参数）。
 type listTopicsReq struct {
-	Scope     string
-	Category  string
-	Solved    string
-	ChapterID int
-	Page      int
-	PageSize  int
-	Keyword   string
-	Sort      string
-	Order     string
+	Scope    string
+	Category string
+	Solved   string
+	Featured string
+	// IsExperience 经验认定筛选（ADR-0040）：空 = 不过滤；true = 仅经验；false = 仅非经验。
+	IsExperience string
+	ChapterID    int
+	Page         int
+	PageSize     int
+	Keyword      string
+	Sort         string
+	Order        string
 }
 
 // createTopicReq 发帖请求。
@@ -530,12 +753,34 @@ type createTopicReq struct {
 	Images    []string
 }
 
+// updateTopicReq 编辑帖子请求（#811）：chapter_id 不在契约内（编辑不迁移章节归属）。
+type updateTopicReq struct {
+	UserID   int
+	TopicID  int64
+	Category string
+	Title    string
+	Content  string
+	Images   []string
+}
+
 // topicGetReq 主题详情请求。
 type topicGetReq struct {
 	TopicID int64
 	UserID  int
 	Sort    string
 	Order   string
+	// Page/PageSize 回复分页（ADR-0042）：回复列表的唯一读取形态是分页，旧的「一次性全量」已退役。
+	Page     int
+	PageSize int
+}
+
+// toDetailInput 学员端与管理端详情共用同一份 req→service 入参映射（两处逐字重复会漂移）。
+func (r *topicGetReq) toDetailInput() service.TopicDetailInput {
+	return service.TopicDetailInput{
+		TopicID: r.TopicID, ViewerID: r.UserID,
+		ReplySort: r.Sort, Order: r.Order,
+		Page: r.Page, PageSize: r.PageSize,
+	}
 }
 
 // replyTopicReq 回复请求。
@@ -725,6 +970,57 @@ func (h *ForumHandler) MyReplies(c *gin.Context) {
 		return
 	}
 	response.Success(c, resp)
+}
+
+// MyLikedTopics 赞过（#701：响应逐字沿用 my-topics 形态）
+// @Summary 赞过的帖子
+// @Description 按点赞时间倒序；主题被删时条目保留、标题回空串
+// @Tags 学员端-论坛
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(10)
+// @Success 200 {object} response.R{data=service.ForumTopicPageResult} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /forum/my-liked-topics [get]
+func (h *ForumHandler) MyLikedTopics(c *gin.Context) {
+	response.Success(c, h.svc.MyLikedTopics(middleware.CurrentUserID(c),
+		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 10)))
+}
+
+// MyObservedTopics 围观（#701：响应逐字沿用 my-topics 形态）
+// @Summary 围观的帖子
+// @Description 浏览过但未互动（排除本人发帖/回复/主题点赞/主题收藏）；按最近浏览倒序
+// @Tags 学员端-论坛
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(10)
+// @Success 200 {object} response.R{data=service.ForumTopicPageResult} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /forum/my-observed [get]
+func (h *ForumHandler) MyObservedTopics(c *gin.Context) {
+	response.Success(c, h.svc.MyObservedTopics(middleware.CurrentUserID(c),
+		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 10)))
+}
+
+// MyViewHistory 浏览记录（#701：响应逐字沿用 my-topics 形态）
+// @Summary 浏览记录
+// @Description 按主题去重取最近一次浏览，按最近浏览倒序；主题被删时条目保留
+// @Tags 学员端-论坛
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(10)
+// @Success 200 {object} response.R{data=service.ForumTopicPageResult} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /forum/my-view-history [get]
+func (h *ForumHandler) MyViewHistory(c *gin.Context) {
+	response.Success(c, h.svc.MyViewHistory(middleware.CurrentUserID(c),
+		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 10)))
 }
 
 // ListReports 管理端举报列表 GET /api/admin/forum/reports?status=&page=&page_size=

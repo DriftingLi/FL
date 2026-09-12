@@ -27,18 +27,26 @@ const (
 	ForumScopeChapter = "chapter" // 指定章节讨论区
 )
 
-// 论坛帖子类别常量（#364）。
+// 论坛帖子类别常量（#364；ADR-0040 起收窄回两值，只表达作者意图）。
 //
 // 类别判"帖子意图"，scope/chapter_id 判"内容坐标"，两者正交但有一格非法：
 // discussion+NULL=综合讨论区、discussion+N=章节讨论区、question+NULL=全局问答、
-// question+N=非法。不预留第三个值——求职信息是常驻实体，不在论坛内。
+// question+N=非法。experience（#706 备考经验）可挂章节也可不挂，但不可被采纳；
+// 求职信息仍是常驻实体，不在论坛内，意图值域到此为止。
+//
+// 「备考经验」**不是意图**（ADR-0040）：它是管理端认定（forum_topics.is_experience），
+// 学员不能自述。判「是不是经验帖」看 is_experience，不要再读 category == 'experience'。
 const (
 	ForumCategoryDiscussion = "discussion" // 讨论帖（存量帖子的默认值）
 	ForumCategoryQuestion   = "question"   // 问答帖（可被采纳，走积分直记）
+	// ForumCategoryExperience 是**只读的历史值**（ADR-0040）：写入路径已不再接受（见 normalizeForumCategory），
+	// 仅剩读侧消费——列表筛选 parseForumCategoryArg 过滤存量行，与待退役的 growth_first_experience 判定。
+	ForumCategoryExperience = "experience"
 )
 
-// normalizeForumCategory 校验并归一帖子类别：空串归一为 discussion（向后兼容，移动端不传）。
-// 非空且不在值域内返回错误。归一后再落到模型上，避免依赖数据库 DEFAULT
+// normalizeForumCategory 校验并归一**意图**：空串归一为 discussion（向后兼容，移动端不传）。
+// 非空且不在两值域内返回错误——`experience` 在此被拒（ADR-0040：自称不产生事实，经验由管理端认定）。
+// 归一后再落到模型上，避免依赖数据库 DEFAULT
 // （GORM 对带 default tag 的零值字段会跳过 INSERT，内存对象拿不到回填值）。
 func normalizeForumCategory(category string) (string, error) {
 	switch category = strings.TrimSpace(category); category {
@@ -52,16 +60,27 @@ func normalizeForumCategory(category string) (string, error) {
 }
 
 // 采纳积分常量（#366）：每帖只发一次分，走流水直记（非任务制）。
+// ReasonRollback（违规回收流水原因）已随回收实现收编移入积分域（#609，points_service.go）。
 const (
 	AcceptBonusPoints   = 40               // 答主采纳奖励
 	AcceptActionPoints  = 5                // 楼主采纳行为奖励
 	ReasonAcceptedBonus = "accepted_bonus" // 流水原因：被采纳奖励
 	ReasonAcceptAction  = "accept_action"  // 流水原因：采纳行为奖励
-	ReasonRollback      = "rollback"       // 流水原因：违规回收（#376）
+)
+
+// 加精奖励常量（#742）：管理端加精一次性直记给帖主，每帖幂等一次
+// （取消重精不重复发分，以流水存在判定，与 accepted_bonus 同模式）。
+const (
+	FeaturedBonusPoints = 30               // 加精奖励
+	ReasonFeaturedBonus = "featured_bonus" // 流水原因：帖子被加精
 )
 
 // ErrNotTopicOwner 只有楼主可采纳/取消/更换。
 var ErrNotTopicOwner = errors.New("只有楼主可以执行此操作")
+
+// ErrTopicNotFound 主题不存在（#811 收敛为哨兵：handler 以 errors.Is 映射 404，
+// 不做 err.Error() 字符串比对——沿用积分域哨兵纪律，CONTEXT.md「积分错误哨兵」同精神）。
+var ErrTopicNotFound = errors.New("主题不存在")
 
 // ErrAcceptOwnReply 楼主不能采纳自己的回答（自问自答禁止，ADR-0028）。
 var ErrAcceptOwnReply = errors.New("不能采纳自己的回答")
@@ -70,6 +89,12 @@ var ErrAcceptOwnReply = errors.New("不能采纳自己的回答")
 const (
 	ForumTopicMaxImages = 9 // 主题最多图片数
 	ForumReplyMaxImages = 3 // 回复最多图片数
+)
+
+// 详情页回复分页（ADR-0042）：回复列表的唯一读取形态是分页，旧的「一次性全量返回」已退役。
+const (
+	ForumReplyDefaultPageSize = 20  // 默认每页回复数
+	ForumReplyMaxPageSize     = 100 // 页大小上限（超上限回退默认值，与全仓 ClampMax 同口径）
 )
 
 // ForumAuthor 论坛作者信息（展示名为昵称）。
@@ -88,7 +113,7 @@ func (a ForumAuthor) DisplayName() string {
 type ForumTopicDTO struct {
 	ID              int64       `json:"id"`
 	ChapterID       *int        `json:"chapter_id"`
-	Category        string      `json:"category"` // discussion | question（#364）
+	Category        string      `json:"category"` // 意图：discussion | question（ADR-0040）
 	ChapterTitle    string      `json:"chapter_title"`
 	Title           string      `json:"title"`
 	Content         string      `json:"content"`
@@ -103,23 +128,28 @@ type ForumTopicDTO struct {
 	LikedByMe       bool        `json:"liked_by_me"`
 	AcceptedReplyID *int64      `json:"accepted_reply_id,omitempty"`
 	SolvedAt        *string     `json:"solved_at,omitempty"`
+	IsFeatured      bool        `json:"is_featured"`   // 认定：精选位
+	IsExperience    bool        `json:"is_experience"` // 认定：备考经验（蕴含 is_featured）
 	RewardIssued    bool        `json:"reward_issued"`
 }
 
 // ForumReplyDTO 论坛回复对象。
 type ForumReplyDTO struct {
-	ID         int64       `json:"id"`
-	TopicID    int64       `json:"topic_id"`
-	ParentID   *int64      `json:"parent_id,omitempty"`
-	ParentName string      `json:"parent_name,omitempty"` // 被回复人的展示名
-	Content    string      `json:"content"`
-	Images     []string    `json:"images"`
-	CreatedAt  string      `json:"created_at"`
-	Author     ForumAuthor `json:"author"`
-	CanDelete  bool        `json:"can_delete"`
-	LikesCount int64       `json:"likes_count"`
-	LikedByMe  bool        `json:"liked_by_me"`
-	IsAccepted bool        `json:"is_accepted"`
+	ID         int64  `json:"id"`
+	TopicID    int64  `json:"topic_id"`
+	ParentID   *int64 `json:"parent_id,omitempty"`
+	ParentName string `json:"parent_name,omitempty"` // 被回复人的展示名
+	// ParentAvatarURL 被回复人的头像（ADR-0042「昵称 › 被回复人」行内形态所需）。
+	// 与 ParentName 同口径 omitempty：顶层回复（无被回复人）两个字段都不出现。
+	ParentAvatarURL string      `json:"parent_avatar_url,omitempty"`
+	Content         string      `json:"content"`
+	Images          []string    `json:"images"`
+	CreatedAt       string      `json:"created_at"`
+	Author          ForumAuthor `json:"author"`
+	CanDelete       bool        `json:"can_delete"`
+	LikesCount      int64       `json:"likes_count"`
+	LikedByMe       bool        `json:"liked_by_me"`
+	IsAccepted      bool        `json:"is_accepted"`
 }
 
 // ForumService 论坛服务。
@@ -159,6 +189,8 @@ type topicRow struct {
 	AcceptedReplyID *int64
 	SolvedAt        *time.Time
 	LastReplyAt     *time.Time
+	IsFeatured      bool
+	IsExperience    bool
 	CreatedAt       time.Time
 	UserID          int
 	Username        string
@@ -190,6 +222,8 @@ func (r topicRow) toDTO(viewerID int) ForumTopicDTO {
 		AcceptedReplyID: r.AcceptedReplyID,
 		SolvedAt:        solvedAt,
 		LastReplyAt:     lastReplyAt,
+		IsFeatured:      r.IsFeatured,
+		IsExperience:    r.IsExperience,
 		CreatedAt:       formatISO(r.CreatedAt),
 		Author: ForumAuthor{
 			UserID: r.UserID, Username: r.Username, AvatarURL: r.AvatarURL,
@@ -215,7 +249,7 @@ func parseForumCategoryArg(category string) (string, error) {
 	switch category = strings.TrimSpace(category); category {
 	case "":
 		return "", nil
-	case ForumCategoryDiscussion, ForumCategoryQuestion:
+	case ForumCategoryDiscussion, ForumCategoryQuestion, ForumCategoryExperience:
 		return category, nil
 	default:
 		return "", fmt.Errorf("帖子类别无效: %s", category)
@@ -224,6 +258,10 @@ func parseForumCategoryArg(category string) (string, error) {
 
 // parseSolvedArg 解析列表查询的 solved 参数（#367）。
 // 空或 all = 不过滤；solved = 已解决（accepted_reply_id 非空）；unsolved = 求助（accepted_reply_id 为空）。
+//
+// **类别校验在调用侧**（ListTopics）：solved 只对问答帖有意义，故非空时必须同时指定
+// category=question，否则 400。旧实现在任何类别下都无条件拼 accepted_reply_id 条件——
+// 对 discussion/experience 而言该列恒为 NULL，用户拿到的是**静默空列表**而非明确拒绝。
 func parseSolvedArg(solved string) (string, error) {
 	switch v := strings.TrimSpace(strings.ToLower(solved)); v {
 	case "", "all":
@@ -237,24 +275,63 @@ func parseSolvedArg(solved string) (string, error) {
 	}
 }
 
+// parseForumFeaturedArg 解析列表查询的 featured 参数（#742）。
+// 空 = 不过滤；true = 仅精选；false = 仅非精选（管理端找待精候选）。
+// 语义与 solved 同构：均为布尔派生列的等值过滤，随 WHERE 共存于主查询。
+func parseForumFeaturedArg(featured string) (string, error) {
+	switch v := strings.TrimSpace(strings.ToLower(featured)); v {
+	case "":
+		return "", nil
+	case "true":
+		return "true", nil
+	case "false":
+		return "false", nil
+	default:
+		return "", fmt.Errorf("featured 参数无效: %s", featured)
+	}
+}
+
+// parseForumExperienceArg 解析列表查询的 is_experience 参数（ADR-0040）。
+// 空 = 不过滤；true = 仅经验认定（经验 Tab）；false = 仅非经验。
+// 与 solved/featured 同构：布尔派生列的等值过滤，随 WHERE 共存于主查询。
+//
+// 注意与 category=experience **不是**同一件事：那是遗留意图值（存量行已降级、写入已收窄），
+// 保留接受该值只为不让旧客户端拿到 400；它过滤不出任何行，经验 Tab 一律走本参数。
+func parseForumExperienceArg(experience string) (string, error) {
+	switch v := strings.TrimSpace(strings.ToLower(experience)); v {
+	case "":
+		return "", nil
+	case "true":
+		return "true", nil
+	case "false":
+		return "false", nil
+	default:
+		return "", fmt.Errorf("is_experience 参数无效: %s", experience)
+	}
+}
+
 // TopicListInput 主题列表查询条件。
 //
 // 用 struct 而非位置参数：本方法有 scope/keyword/sort/order/category 五个 string，
 // 位置传错（如把 category 落进 keyword）编译通过且语义全错。
 type TopicListInput struct {
-	Scope     string // all（默认）/ general / chapter
-	Category  string // 空或 all = 不过滤；discussion / question = 按类别分流
-	Solved    string // 空或 all = 不过滤；solved / unsolved（#367，仅问答帖有意义）
-	ChapterID int
-	Page      int
-	PageSize  int
-	Keyword   string
-	Sort      string // latest（默认）/ hot
-	Order     string // desc（默认）/ asc
+	Scope    string // all（默认）/ general / chapter
+	Category string // 空或 all = 不过滤；discussion / question / experience = 按类别分流
+	Solved   string // 空或 all = 不过滤；solved / unsolved（#367，仅问答帖有意义）
+	Featured string // 空 = 不过滤；true = 仅精选；false = 仅非精选（#742）
+	// IsExperience 空 = 不过滤；true = 仅备考经验认定；false = 仅非经验（ADR-0040）。
+	// 经验 Tab 的唯一判据——**不要再改回 category=experience**（存量行已降级，过滤不出行）。
+	IsExperience string
+	ChapterID    int
+	Page         int
+	PageSize     int
+	Keyword      string
+	Sort         string // latest（默认）/ hot / created（按发帖时间，#722）
+	Order        string // desc（默认）/ asc
 }
 
 // ListTopics 分页查询主题。
-// scope: all（默认）/ general（综合讨论区）/ chapter（需配合 chapterID）；sort: latest（默认，时间）/ hot（热度：点赞数→回复数→浏览数）；order: desc（默认）/ asc（正序）。
+// scope: all（默认）/ general（综合讨论区）/ chapter（需配合 chapterID）；sort: latest（默认，活跃度）/ hot（热度：点赞数→回复数→浏览数）/ created（发帖时间，#722）；order: desc（默认）/ asc（正序）。
 func (s *ForumService) ListTopics(in TopicListInput) (*ForumTopicPageResult, error) {
 	scope := in.Scope
 	chapterID, page, pageSize := in.ChapterID, in.Page, in.PageSize
@@ -267,13 +344,26 @@ func (s *ForumService) ListTopics(in TopicListInput) (*ForumTopicPageResult, err
 	if err != nil {
 		return nil, err
 	}
+	featured, err := parseForumFeaturedArg(in.Featured)
+	if err != nil {
+		return nil, err
+	}
+	isExperience, err := parseForumExperienceArg(in.IsExperience)
+	if err != nil {
+		return nil, err
+	}
+	// solved 只对问答帖有意义（accepted_reply_id 只在 question 帖上非空）。
+	// 缺 category=question 时报 400 而非静默返回空列表——与 solved 非法值同口径。
+	if solved != "" && category != ForumCategoryQuestion {
+		return nil, errors.New("solved 筛选仅对问答帖有意义，请同时指定 category=question")
+	}
 	if scope == "" {
 		scope = ForumScopeAll
 	}
 	if scope == ForumScopeChapter && chapterID <= 0 {
 		return nil, errors.New("查询章节讨论区需要有效的 chapter_id")
 	}
-	if sort != "hot" {
+	if sort != "hot" && sort != "created" {
 		sort = "latest"
 	}
 	dir := "DESC"
@@ -288,12 +378,17 @@ func (s *ForumService) ListTopics(in TopicListInput) (*ForumTopicPageResult, err
 	if sort == "hot" {
 		orderClause = "t.likes_count " + dir + ", t.reply_count " + dir + ", t.view_count " + dir + ", t.id " + dir
 	}
+	// created（#722）：按发帖时间排，区别于 latest 的活跃度口径。
+	// experience 列表必带 category 等值过滤，idx_forum_topics_category_created 天然命中，无需新索引。
+	if sort == "created" {
+		orderClause = "t.created_at " + dir + ", t.id " + dir
+	}
 
 	rows, total, page, pageSize := paging.QueryWithScan[topicRow](s.db, page, pageSize, 10, 100,
 		orderClause,
 		func(q *gorm.DB) *gorm.DB {
 			q = q.Table("forum_topics AS t").
-				Select("t.id, t.chapter_id, t.category, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.accepted_reply_id, t.solved_at, t.last_reply_at, t.created_at, " +
+				Select(topicRowSelect +
 					"u.id AS user_id, u.username, u.avatar_url, " +
 					"COALESCE(ch.title, '') AS chapter_title").
 				Joins("JOIN hrwai_users AS u ON u.id = t.user_id").
@@ -314,6 +409,19 @@ func (s *ForumService) ListTopics(in TopicListInput) (*ForumTopicPageResult, err
 				q = q.Where("t.accepted_reply_id IS NOT NULL")
 			} else if solved == "unsolved" {
 				q = q.Where("t.accepted_reply_id IS NULL")
+			}
+			// 精选过滤（#742）：与 scope/category 同一条 WHERE，不在应用层事后过滤。
+			if featured == "true" {
+				q = q.Where("t.is_featured = TRUE")
+			} else if featured == "false" {
+				q = q.Where("t.is_featured = FALSE")
+			}
+			// 经验认定过滤（ADR-0040）：同上，与 scope/category/solved/featured 共存在一条 WHERE。
+			// 经验 Tab 的唯一判据——**不要再改回 category=experience**（存量行已降级，过滤不出行）。
+			if isExperience == "true" {
+				q = q.Where("t.is_experience = TRUE")
+			} else if isExperience == "false" {
+				q = q.Where("t.is_experience = FALSE")
 			}
 			if keyword = strings.TrimSpace(keyword); keyword != "" {
 				like := "%" + keyword + "%"
@@ -336,15 +444,35 @@ func (s *ForumService) ListTopics(in TopicListInput) (*ForumTopicPageResult, err
 	}, nil
 }
 
-// GetTopic 主题详情（含回复，回复带被回复人信息），并累加浏览量。
-// replySort: time/latest（默认，时间）/ hot（热度：点赞数→时间）；order: asc/desc（默认 asc 对 time，desc 对 hot；显式传入时统一覆盖）
-func (s *ForumService) GetTopic(topicID int64, viewerID int, replySort, order string) (map[string]any, error) {
+// TopicDetailInput 主题详情查询条件（ADR-0042）。
+// 用 struct 而非位置参数，理由同 TopicListInput：本方法有 sort/order/page/page_size 多个标量，
+// 位置传错编译通过而语义全错。
+type TopicDetailInput struct {
+	TopicID   int64
+	ViewerID  int
+	ReplySort string // latest（别名 time）/ hot
+	Order     string // asc / desc；空 = 按 sort 的默认方向
+	Page      int    // <=0 回退 1
+	PageSize  int    // <=0 或超上限回退 ForumReplyDefaultPageSize
+}
+
+// GetTopic 主题详情（回复**分页**返回，带被回复人信息），并累加浏览量。
+// replySort: time/latest（默认，时间）/ hot（热度：点赞数→时间）；order: asc/desc（默认 asc 对 time，desc 对 hot；显式传入时统一覆盖）。
+//
+// 置顶（ADR-0042）：被采纳回复固定占首页第一条并从排序结果中剔除，故第 k 页（k>=2）的
+// 其余回复从 (k-1)*pageSize-1 起算 —— 不是朴素的 (k-1)*pageSize。
+//
+// total 为**实时 COUNT**（分页必须与实际行数一致，否则会出现空页）；topic.reply_count 是
+// 列表页消费的反范式计数列，两者由计数单写入口保持同值。
+func (s *ForumService) GetTopic(in TopicDetailInput) (map[string]any, error) {
+	topicID, viewerID := in.TopicID, in.ViewerID
+	replySort, order := in.ReplySort, in.Order
 	if replySort == "latest" {
 		replySort = "time"
 	}
 	var row topicRow
 	err := s.db.Table("forum_topics AS t").
-		Select("t.id, t.chapter_id, t.category, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.accepted_reply_id, t.solved_at, t.last_reply_at, t.created_at, "+
+		Select(topicRowSelect+
 			"u.id AS user_id, u.username, u.avatar_url, "+
 			"COALESCE(ch.title, '') AS chapter_title").
 		Joins("JOIN hrwai_users AS u ON u.id = t.user_id").
@@ -358,31 +486,22 @@ func (s *ForumService) GetTopic(topicID int64, viewerID int, replySort, order st
 		return nil, gorm.ErrRecordNotFound
 	}
 
-	// 浏览量 +1（失败不影响主流程）
-	_ = s.db.Model(&model.ForumTopic{}).Where("id = ?", topicID).
-		UpdateColumn("view_count", gorm.Expr("view_count + 1")).Error
-	row.ViewCount++
-
-	// 记录去重浏览（用于 daily_browse 积分，排除自帖，同一帖每日一次）
+	// 浏览量只在**真实浏览**时 +1（ADR-0041）：以既有浏览去重行的插入成败为事实源，
+	// 排除自帖、每人每日每帖一次；复用去重表，不新增列，存量数值不回填。
+	// 旧实现是「详情请求即 +1」——不去重、不排作者，而 hot 排序第三键正是 view_count，
+	// 自己反复刷新就能把帖子推上热门。
 	if viewerID != 0 && viewerID != int(row.UserID) {
 		viewDate := time.Now().In(clock.Location()).Format("2006-01-02")
-		_ = s.db.Exec("INSERT INTO forum_topic_views (user_id, topic_id, view_date) VALUES (?,?,?) ON CONFLICT (user_id, topic_id, view_date) DO NOTHING", viewerID, topicID, viewDate).Error
+		// 同一语句同时服务两个目的：daily_browse 的去重事实源 + 浏览量的计数闸门。
+		res := s.db.Exec("INSERT INTO forum_topic_views (user_id, topic_id, view_date) VALUES (?,?,?) ON CONFLICT (user_id, topic_id, view_date) DO NOTHING", viewerID, topicID, viewDate)
+		if res.Error == nil && res.RowsAffected > 0 {
+			_ = s.db.Model(&model.ForumTopic{}).Where("id = ?", topicID).
+				UpdateColumn("view_count", gorm.Expr("view_count + 1")).Error
+			row.ViewCount++
+		}
 	}
 
-	// 回复列表（含被回复人展示名）
-	var replies []struct {
-		ID         int64
-		TopicID    int64
-		ParentID   *int64
-		Content    string
-		Images     string
-		LikesCount int64
-		CreatedAt  time.Time
-		UserID     int
-		Username   string
-		AvatarURL  string
-		ParentName string
-	}
+	// 回复游标方向：time/latest 默认正序（先发先排），hot 默认倒序。
 	dir := "ASC"
 	if order == "desc" {
 		dir = "DESC"
@@ -398,32 +517,56 @@ func (s *ForumService) GetTopic(topicID int64, viewerID int, replySort, order st
 	if replySort == "hot" {
 		replyOrder = "r.likes_count " + dir + ", r.created_at ASC, r.id ASC"
 	}
-	if err := s.db.Table("forum_replies AS r").
-		Select("r.id, r.topic_id, r.parent_id, r.content, r.images, r.likes_count, r.created_at, "+
-			"u.id AS user_id, u.username, u.avatar_url, "+
-			"COALESCE(pu.username, '') AS parent_name").
-		Joins("JOIN hrwai_users AS u ON u.id = r.user_id").
-		Joins("LEFT JOIN forum_replies AS pr ON pr.id = r.parent_id").
-		Joins("LEFT JOIN hrwai_users AS pu ON pu.id = pr.user_id").
-		Where("r.topic_id = ?", topicID).
-		Order(replyOrder).
-		Scan(&replies).Error; err != nil {
+	// ===== 回复分页 + 置顶（ADR-0042）=====
+	// 回复流 = [置顶条] + [其余按 sort/order 排序]，按 page_size 切块：
+	// 置顶条占首页第一格，并从排序结果里剔除（否则同一条会既在首位、又在自然位置重复出现）。
+	page, pageSize := paging.ClampMax(in.Page, in.PageSize, ForumReplyDefaultPageSize, ForumReplyMaxPageSize)
+
+	// count 与 scan 同一 WHERE 作用域（同一 baseQuery），故 total 与列表页的 reply_count 同源。
+	var total int64
+	if err := s.replyBaseQuery(topicID, nil).Count(&total).Error; err != nil {
 		return nil, err
 	}
 
-	replyDTOs := make([]ForumReplyDTO, 0, len(replies))
-	for _, r := range replies {
-		isAcc := row.AcceptedReplyID != nil && *row.AcceptedReplyID == r.ID
-		replyDTOs = append(replyDTOs, ForumReplyDTO{
-			ID: r.ID, TopicID: r.TopicID, ParentID: r.ParentID, ParentName: r.ParentName,
-			Content: r.Content, Images: parseImageURLs(r.Images), CreatedAt: formatISO(r.CreatedAt),
-			Author: ForumAuthor{
-				UserID: r.UserID, Username: r.Username, AvatarURL: r.AvatarURL,
-			},
-			CanDelete:  r.UserID == viewerID,
-			LikesCount: r.LikesCount,
-			IsAccepted: isAcc,
-		})
+	acceptedID := row.AcceptedReplyID
+	// 置顶条只在首页取。它占掉首页一格，故其余回复的 offset 要按此折算：
+	// 第 k 页（k>=2）的其余回复从 (k-1)*pageSize - 1 开始——不是朴素的 (k-1)*pageSize。
+	offset := (page - 1) * pageSize
+	limit := pageSize
+	if acceptedID != nil {
+		offset = (page-1)*pageSize - 1
+		if page == 1 {
+			offset = 0
+			limit = pageSize - 1 // 首页给置顶条留一格
+		}
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	replyDTOs := make([]ForumReplyDTO, 0, pageSize)
+	if acceptedID != nil && page == 1 {
+		var pinned replyRow
+		if err := s.replyBaseQuery(topicID, nil).Where("r.id = ?", *acceptedID).Scan(&pinned).Error; err != nil {
+			return nil, err
+		}
+		if pinned.ID != 0 {
+			replyDTOs = append(replyDTOs, pinned.toDTO(viewerID, acceptedID))
+		}
+	}
+
+	// limit<=0 只在 pageSize=1 且首页有置顶条时出现——此时首页就是置顶条本身，不再查其余。
+	if limit > 0 {
+		var replies []replyRow
+		if err := s.replyBaseQuery(topicID, acceptedID).
+			Order(replyOrder).
+			Offset(offset).Limit(limit).
+			Scan(&replies).Error; err != nil {
+			return nil, err
+		}
+		for _, r := range replies {
+			replyDTOs = append(replyDTOs, r.toDTO(viewerID, acceptedID))
+		}
 	}
 	// 批量回填当前用户是否已赞（计数已由 likes_count 列提供，单一 helper 收敛）
 	s.enrichReplyLikedByMe(replyDTOs, viewerID)
@@ -438,7 +581,62 @@ func (s *ForumService) GetTopic(topicID int64, viewerID int, replySort, order st
 	return map[string]any{
 		"topic":   topicDTO,
 		"replies": replyDTOs,
+		"page":    page,
+		"pages":   response.PageCount(total, pageSize),
+		"total":   total,
 	}, nil
+}
+
+// replyRow 详情页回复行的扫描结构（置顶查询与分页查询共用同一投影，避免两处漂移）。
+type replyRow struct {
+	ID         int64
+	TopicID    int64
+	ParentID   *int64
+	Content    string
+	Images     string
+	LikesCount int64
+	CreatedAt  time.Time
+	UserID     int
+	Username   string
+	AvatarURL  string
+	ParentName string
+	// ParentAvatarURL 被回复人的头像（join pr→pu 回填）。
+	ParentAvatarURL string
+}
+
+// toDTO 行 → DTO。acceptedReplyID 为该帖当前采纳的回复 id（nil = 未采纳），据此打 is_accepted。
+func (r replyRow) toDTO(viewerID int, acceptedReplyID *int64) ForumReplyDTO {
+	return ForumReplyDTO{
+		ID: r.ID, TopicID: r.TopicID, ParentID: r.ParentID,
+		ParentName: r.ParentName, ParentAvatarURL: r.ParentAvatarURL,
+		Content: r.Content, Images: parseImageURLs(r.Images), CreatedAt: formatISO(r.CreatedAt),
+		Author: ForumAuthor{
+			UserID: r.UserID, Username: r.Username, AvatarURL: r.AvatarURL,
+		},
+		CanDelete:  r.UserID == viewerID,
+		LikesCount: r.LikesCount,
+		IsAccepted: acceptedReplyID != nil && *acceptedReplyID == r.ID,
+	}
+}
+
+// replyRowSelect 详情页回复行的共享投影（置顶查询与分页查询共用同一份，新增字段只改这一处）。
+const replyRowSelect = "r.id, r.topic_id, r.parent_id, r.content, r.images, r.likes_count, r.created_at, " +
+	"u.id AS user_id, u.username, u.avatar_url, " +
+	"COALESCE(pu.username, '') AS parent_name, COALESCE(pu.avatar_url, '') AS parent_avatar_url"
+
+// replyBaseQuery 详情页回复查询的共享装配：同一 WHERE 同时服务 count 与 scan。
+// excludeReplyID 非 nil 时剔除该条——置顶条已单独取得，不应再出现在排序结果里。
+func (s *ForumService) replyBaseQuery(topicID int64, excludeReplyID *int64) *gorm.DB {
+	q := s.db.Table("forum_replies AS r").
+		Select(replyRowSelect).
+		Joins("JOIN hrwai_users AS u ON u.id = r.user_id").
+		Joins("LEFT JOIN forum_replies AS pr ON pr.id = r.parent_id").
+		Joins("LEFT JOIN hrwai_users AS pu ON pu.id = pr.user_id").
+		Where("r.topic_id = ?", topicID)
+	if excludeReplyID != nil {
+		q = q.Where("r.id <> ?", *excludeReplyID)
+	}
+	return q
 }
 
 // CreateTopicInput 发帖条件。Category 为空归一为 discussion（移动端旧契约不传）。
@@ -472,7 +670,7 @@ func (s *ForumService) CreateTopic(in CreateTopicInput) (*ForumTopicDTO, error) 
 	}
 
 	// 非法组合在进库前拒绝：问答帖一律不属于任何章节。
-	// 数据库层有同名 CHECK 作生产兜底（见迁移 000004），此处是能被契约测试守住的行为层。
+	// 数据库层有同名 CHECK 作生产兜底（见迁移 000005），此处是能被契约测试守住的行为层。
 	// 注意只判 >0：chapter_id 传 0 或不传按既有语义归一为综合区，不得在此收紧。
 	if category == ForumCategoryQuestion && chapterID != nil && *chapterID > 0 {
 		return nil, errors.New("问答帖不属于任何章节，不能指定 chapter_id")
@@ -526,6 +724,88 @@ func (s *ForumService) CreateTopic(in CreateTopicInput) (*ForumTopicDTO, error) 
 	}, nil
 }
 
+// UpdateTopicInput 编辑帖子条件（#811）。
+//
+// 可改字段仅 title / content / images / category；**chapter_id 不在契约内**——
+// 移动端 PUT 载荷不传（编辑不迁移章节归属），故更新路径按既有行的 chapter_id
+// 判定发帖同构的不变量（question 不得挂章节）。
+type UpdateTopicInput struct {
+	UserID   int
+	TopicID  int64
+	Category string
+	Title    string
+	Content  string
+	Images   []string
+}
+
+// UpdateTopic 作者本人编辑帖子（#811）。
+//
+// 校验顺序与语义与发帖同构：
+//   - 主题不存在 → ErrTopicNotFound（handler 映射 404）
+//   - 非作者本人 → ErrNotTopicOwner（handler 映射 403，与采纳/取消采纳同 owner 语义）
+//   - 类别归一走 normalizeForumCategory（空串归一 discussion 向后兼容；
+//     **不要**误用 parseForumCategoryArg——那是列表查询语义，空串 = 不过滤）
+//   - 标题 1-100 / 正文 1-10000 / 图片走 validateForumImages（≤9 张 + 仅本站 images/forum/ 前缀）
+//   - question 不得带 chapter_id：编辑不改章节归属，按既有行判定
+//
+// 明确不做（#811 范围）：编辑历史/版本留痕、管理员代为编辑、is_edited 列、
+// 改 GET 详情响应形态（DTO 已含 category）。
+func (s *ForumService) UpdateTopic(in UpdateTopicInput) (*ForumTopicDTO, error) {
+	var topic model.ForumTopic
+	if err := s.db.First(&topic, in.TopicID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrTopicNotFound
+		}
+		return nil, err
+	}
+	if topic.UserID != in.UserID {
+		return nil, ErrNotTopicOwner
+	}
+
+	category, err := normalizeForumCategory(in.Category)
+	if err != nil {
+		return nil, err
+	}
+	title := strings.TrimSpace(in.Title)
+	content := strings.TrimSpace(in.Content)
+	if utf8.RuneCountInString(title) < 1 || utf8.RuneCountInString(title) > 100 {
+		return nil, errors.New("标题长度需在 1-100 个字符之间")
+	}
+	if utf8.RuneCountInString(content) < 1 || utf8.RuneCountInString(content) > 10000 {
+		return nil, errors.New("内容长度需在 1-10000 个字符之间")
+	}
+	if err := validateForumImages(in.Images, ForumTopicMaxImages); err != nil {
+		return nil, err
+	}
+	// 与发帖同构的不变量（对照 CreateTopic）：问答帖不属于任何章节。
+	// 编辑不迁移章节，故按既有行的 chapter_id 判定；数据库 CHECK 只在迁移 000005、
+	// 测试库 AutoMigrate 覆盖不到，行为层必须自己守住。
+	if category == ForumCategoryQuestion && topic.ChapterID != nil && *topic.ChapterID > 0 {
+		return nil, errors.New("问答帖不属于任何章节，不能指定 chapter_id")
+	}
+	// 已采纳的帖子禁止改类别（2026-09-11 维护者裁定）：采纳状态只在问答帖有意义，
+	// 迁移类别会把 accepted_reply_id/solved_at 留在非问答帖上（答主已发的分按既有政策
+	// 「取消采纳不回滚」保留），产生「非问答帖带采纳」的悬挂态。
+	// 判定按采纳事实而非当前类别——同一条规则也兜住历史遗留的悬挂行。
+	// 逃生口：先取消采纳（CancelAccept 清空 accepted_reply_id）再改类别。
+	if topic.AcceptedReplyID != nil && category != ForumCategoryQuestion {
+		return nil, errors.New("已采纳的问答帖不能改类别，请先取消采纳")
+	}
+
+	// 显式写全四字段（map 更新：category 归一后的非空值不受 GORM 零值跳过影响）
+	if err := s.db.Model(&model.ForumTopic{}).Where("id = ?", in.TopicID).Updates(map[string]any{
+		"category":   category,
+		"title":      title,
+		"content":    content,
+		"images":     marshalImageURLs(in.Images),
+		"updated_at": beijingNow(),
+	}).Error; err != nil {
+		return nil, err
+	}
+	// 详情响应形态不变（DTO 已含 category），重新装配以回显图片/点赞等派生字段
+	return s.fetchTopicDTO(in.TopicID, in.UserID)
+}
+
 // ReplyTopic 回复主题或回复某条回复（parentReplyID 非空时）。
 // images 为回复图片 URL 列表（最多 ForumReplyMaxImages 张，仅接受本站 images/forum/ 前缀）。
 func (s *ForumService) ReplyTopic(userID int, topicID int64, content string, parentReplyID *int64, images []string) (*ForumReplyDTO, error) {
@@ -540,7 +820,7 @@ func (s *ForumService) ReplyTopic(userID int, topicID int64, content string, par
 	var topic model.ForumTopic
 	if err := s.db.First(&topic, topicID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("主题不存在")
+			return nil, ErrTopicNotFound
 		}
 		return nil, err
 	}
@@ -634,7 +914,7 @@ func (s *ForumService) DeleteTopic(userID int, topicID int64) error {
 	var topic model.ForumTopic
 	if err := s.db.First(&topic, topicID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("主题不存在")
+			return ErrTopicNotFound
 		}
 		return err
 	}
@@ -649,12 +929,13 @@ func (s *ForumService) DeleteTopic(userID int, topicID int64) error {
 }
 
 // AdminDeleteTopic 管理员删除任意主题（不校验作者）。图片一并清理；站内信通知作者。
-// 若该帖曾产生采纳分（accepted_bonus），则按 rollback 原因写对冲流水并扣减余额（封底 0，幂等）。
+// 若该帖产生过任一直记奖励（被采纳 / 采纳动作 / 认定），则按 rollback 原因写对冲流水并扣减余额
+// （封底 0，幂等，按 user_id 分组各自追回）。
 func (s *ForumService) AdminDeleteTopic(topicID int64) error {
 	var topic model.ForumTopic
 	if err := s.db.First(&topic, topicID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("主题不存在")
+			return ErrTopicNotFound
 		}
 		return err
 	}
@@ -676,9 +957,15 @@ func (s *ForumService) AdminDeleteTopic(topicID int64) error {
 		if err := tx.Delete(&model.ForumTopic{}, topicID).Error; err != nil {
 			return err
 		}
-		// 违规回收：若曾发放过 accepted_bonus 且未回滚，则扣回
-		if topic.AcceptedReplyID != nil {
-			if err := s.rollbackAcceptedBonusTx(tx, topicID); err != nil {
+		// 违规回收（ADR-0041）：触发条件是「该帖存在任一正向直记奖励」，而不是「曾被采纳」——
+		// 否则「加精但未采纳」的帖子（正是备考经验帖的形状）会被整片漏掉。
+		// 范围含答主/楼主/帖主三方，RollbackByRef 内部按 user_id 分组各自追回、封底 0。
+		hasReward, err := s.hasAnyRewardForTopic(tx, topicID)
+		if err != nil {
+			return err
+		}
+		if hasReward {
+			if err := s.rollbackTopicRewardsTx(tx, topicID); err != nil {
 				return err
 			}
 		}
@@ -736,36 +1023,47 @@ func (s *ForumService) incrementDeletedAfterAccepted() error {
 	})
 }
 
-// rollbackAcceptedBonusTx 在事务内执行违规回收：若该帖曾发放 accepted_bonus 且未回滚，则按
-// rollback 原因对冲扣减答主余额（封底 0，幂等）。簿记经 PointsService 事务内通道（ADR-0023）：
-// 占坑键 rollback:{topicID} 即「已处理」标记；余额不足按余额截断、余额为 0 时仅落占坑行
-// （不再写 Delta:0 流水——points_ledger CHECK (delta <> 0)，#384 缺陷修复）。
-func (s *ForumService) rollbackAcceptedBonusTx(tx *gorm.DB, topicID int64) error {
-	// 幂等：已存在 rollback 流水（存量数据标记）则跳过；占坑行接管后续幂等
-	var existed int64
-	if err := tx.Model(&model.PointsLedger{}).Where("reason = ? AND ref_type = ? AND ref_id = ?", ReasonRollback, "forum_topic", fmt.Sprintf("%d", topicID)).Count(&existed).Error; err != nil {
-		return err
-	}
-	if existed > 0 {
-		return nil
-	}
-	// 查找原发放流水（取最近一条）
-	var orig model.PointsLedger
-	if err := tx.Where("reason = ? AND ref_type = ? AND ref_id = ?", ReasonAcceptedBonus, "forum_topic", fmt.Sprintf("%d", topicID)).Order("created_at DESC").First(&orig).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil
-		}
-		return err
-	}
-	if orig.Delta <= 0 {
-		return nil
-	}
-	return s.points.SettleRewardTx(tx, PointsEntry{
-		UserID: orig.UserID, Delta: -orig.Delta, Reason: ReasonRollback,
-		RefType: "forum_topic", RefID: fmt.Sprintf("%d", topicID),
-		IdemKey:   "rollback:" + fmt.Sprintf("%d", topicID),
-		FloorZero: true,
+// rollbackTopicRewardsTx 论坛违规回收（#609 收编后的声明式入口）：回收哪个 ref 的哪些
+// reasons 交 PointsService.RollbackByRef 内部完成（原账 SUM 取反、封底 0、占坑防双扣、
+// 存量 rollback 标记防双扣）；占坑键 rollback:{topicID} 即「已处理」标记（格式逐字不动），
+// 余额不足按余额截断、余额为 0 时仅落占坑行（不再写 Delta:0 流水——#384 缺陷修复语义）。
+// 占坑冲突（已回收过）按论坛语义静默放行：删帖动作不因重复回收失败（ADR-0023 映射契约）。
+//
+// 范围 = 该帖产生的**全部直记奖励**（ADR-0041）：答主 accepted_bonus + 楼主 accept_action +
+// 帖主 featured_bonus（含经验认定奖励，两者共用同一条流水）。旧实现只声明 accepted_bonus，
+// 楼主与帖主的分一律不追。
+//
+// **一个 ref 只能有一次回收事件**：RollbackByRef 的护栏是 ref 级一次性（该 ref 只要存在任一条
+// rollback 流水就整体跳过；护栏保护占坑表上线前的历史数据，投稿域共用）。故 AdminDeleteReply
+// **不调用本方法**——否则先删回复会永久占掉该帖的回收机会，帖主的 featured_bonus 再也追不回。
+func (s *ForumService) rollbackTopicRewardsTx(tx *gorm.DB, topicID int64) error {
+	_, err := s.points.RollbackByRef(tx, PointsRollback{
+		RefType: "forum_topic",
+		RefID:   fmt.Sprintf("%d", topicID),
+		Reasons: topicDirectRewardReasons,
+		IdemKey: ForumRollbackIdemKey(topicID),
 	})
+	if errors.Is(err, ErrPointsProcessed) {
+		return nil
+	}
+	return err
+}
+
+// hasAnyRewardForTopic 该帖是否产生过任一直记奖励（正向流水）。
+//
+// 管理员删帖的回收触发器（ADR-0041）：不能只看 AcceptedReplyID——「加精但从未被采纳」的帖子
+// （正是备考经验帖的形状：经验蕴含精选且不可被采纳）没有采纳指针，旧守卫会让它的认定奖励
+// 永远落在回收盲区。只认正向流水，回收本身写的 reason=rollback 负向流水不会被误判。
+func (s *ForumService) hasAnyRewardForTopic(tx *gorm.DB, topicID int64) (bool, error) {
+	var n int64
+	if err := tx.Model(&model.PointsLedger{}).
+		Where("ref_type = ? AND ref_id = ? AND delta > 0 AND reason IN ?",
+			"forum_topic", fmt.Sprintf("%d", topicID),
+			topicDirectRewardReasons).
+		Count(&n).Error; err != nil {
+		return false, err
+	}
+	return n > 0, nil
 }
 
 // DeleteReply 删除回复（仅作者本人；其下级回复随外键级联删除）。
@@ -785,6 +1083,8 @@ func (s *ForumService) DeleteReply(userID int, replyID int64) error {
 }
 
 // AdminDeleteReply 管理员删除任意回复（不校验作者；其下级回复随外键级联删除）。图片一并清理；站内信通知回复作者。
+// 若删的是被采纳的回答，只把主题打回未解决（清 accepted_reply_id/solved_at），**不回收积分**——
+// 奖励处置的唯一出口是 AdminDeleteTopic（见 rollbackTopicRewardsTx 的 ref 级一次性说明）。
 func (s *ForumService) AdminDeleteReply(replyID int64) error {
 	var reply model.ForumReply
 	if err := s.db.First(&reply, replyID).Error; err != nil {
@@ -798,13 +1098,19 @@ func (s *ForumService) AdminDeleteReply(replyID int64) error {
 		topic.Title = ""
 	}
 	topicTitle := topic.Title
-	// 若该回复是被采纳的回答，则违规回收（幂等，复用同一 rollback 键）
-	needsRollback := topic.AcceptedReplyID != nil && *topic.AcceptedReplyID == replyID
-	if needsRollback {
-		// 在事务外先尝试回收（幂等），失败仅记日志，不阻断删回复
-		_ = s.db.Transaction(func(tx *gorm.DB) error {
-			return s.rollbackAcceptedBonusTx(tx, topic.ID)
-		})
+	// 若该回复是被采纳的回答，只把主题打回未解决——**不回收奖励**（ADR-0041）。
+	// 理由：RollbackByRef 是 ref 级一次性护栏，这里回收会永久占掉该帖的回收机会，
+	// 之后管理员删整帖时帖主的 featured_bonus 再也追不回。**删帖才是奖励处置的唯一出口**，
+	// 届时答主/楼主/帖主三笔一次全部追回（回收能力最大化）。
+	// solved_at 必须显式清：accepted_reply_id 有 ON DELETE SET NULL 外键兜底，solved_at 没有。
+	if topic.AcceptedReplyID != nil && *topic.AcceptedReplyID == replyID {
+		if err := s.db.Model(&model.ForumTopic{}).Where("id = ?", topic.ID).Updates(map[string]any{
+			"accepted_reply_id": nil,
+			"solved_at":         nil,
+			"updated_at":        beijingNow(),
+		}).Error; err != nil {
+			return err
+		}
 	}
 	if err := s.deleteReplyWithImages(replyID, reply.TopicID); err != nil {
 		return err
@@ -956,7 +1262,7 @@ func (s *ForumService) LikeTopic(userID int, topicID int64) (int64, error) {
 		return 0, err
 	}
 	if cnt == 0 {
-		return 0, errors.New("主题不存在")
+		return 0, ErrTopicNotFound
 	}
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		var existing model.ForumTopicLike
@@ -1078,7 +1384,7 @@ func (s *ForumService) CreateReport(userID int, topicID, replyID *int64, reason 
 		var cnt int64
 		s.db.Model(&model.ForumTopic{}).Where("id = ?", *topicID).Count(&cnt)
 		if cnt == 0 {
-			return errors.New("主题不存在")
+			return ErrTopicNotFound
 		}
 	}
 	if replyID != nil {
@@ -1198,7 +1504,7 @@ func (s *ForumService) MyTopics(userID, page, pageSize int) (*ForumTopicPageResu
 		"COALESCE(t.last_reply_at, t.created_at) DESC, t.id DESC",
 		func(q *gorm.DB) *gorm.DB {
 			return q.Table("forum_topics AS t").
-				Select("t.id, t.chapter_id, t.category, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.accepted_reply_id, t.solved_at, t.last_reply_at, t.created_at, "+
+				Select(topicRowSelect+
 					"u.id AS user_id, u.username, u.avatar_url, COALESCE(ch.title, '') AS chapter_title").
 				Joins("JOIN hrwai_users AS u ON u.id = t.user_id").
 				Joins("LEFT JOIN chapter AS ch ON ch.chapter_id = t.chapter_id").
@@ -1215,6 +1521,90 @@ func (s *ForumService) MyTopics(userID, page, pageSize int) (*ForumTopicPageResu
 		Page: page, Pages: response.PageCount(total, pageSize),
 		Topics: items, Total: total,
 	}, nil
+}
+
+// topicRowSelect topicRow 的共享投影（#742 审查收敛）：新增 topicRow 字段时只改这一处，
+// 全部列表/详情/个人视图查询共用，避免散落 5 处的投影字符串漂移。
+const topicRowSelect = "t.id, t.chapter_id, t.category, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.accepted_reply_id, t.solved_at, t.last_reply_at, t.is_featured, t.is_experience, t.created_at, "
+
+// personalTopicSelect 个人动态三列表的行装配投影（与 MyTopics 逐字一致，被删主题字段 NULL 由 Scan 零值承载）。
+const personalTopicSelect = topicRowSelect +
+	"u.id AS user_id, u.username, u.avatar_url, " +
+	"COALESCE(ch.title, '') AS chapter_title"
+
+// finishPersonalTopics 行装配收尾单点：DTO 转换 + 点赞回填 + 发分回填 + 分页信封。
+func (s *ForumService) finishPersonalTopics(rows []topicRow, total int64, page, pageSize int, userID int) *ForumTopicPageResult {
+	items := make([]ForumTopicDTO, 0, len(rows))
+	for _, r := range rows {
+		items = append(items, r.toDTO(userID))
+	}
+	s.enrichTopicLikedByMe(toDTORefs(items), userID)
+	s.enrichRewardIssued(items)
+	return &ForumTopicPageResult{
+		Page: page, Pages: response.PageCount(total, pageSize),
+		Topics: items, Total: total,
+	}
+}
+
+// MyLikedTopics 赞过（#701）：点赞行驱动 + 主题/作者/章节 LEFT JOIN，按点赞时间倒序。
+// 主题被删时条目保留、标题回空串（与 MyReplies 口径一致）。
+func (s *ForumService) MyLikedTopics(userID, page, pageSize int) *ForumTopicPageResult {
+	rows, total, page, pageSize := paging.QueryWithScan[topicRow](s.db, page, pageSize, 10, 100,
+		"l.created_at DESC, l.id DESC",
+		func(q *gorm.DB) *gorm.DB {
+			return q.Table("forum_topic_like AS l").
+				Select(personalTopicSelect).
+				Joins("LEFT JOIN forum_topics AS t ON t.id = l.topic_id").
+				Joins("LEFT JOIN hrwai_users AS u ON u.id = t.user_id").
+				Joins("LEFT JOIN chapter AS ch ON ch.chapter_id = t.chapter_id").
+				Where("l.user_id = ?", userID)
+		})
+	return s.finishPersonalTopics(rows, total, page, pageSize, userID)
+}
+
+// MyViewHistory 浏览记录（#701）：浏览行驱动 + 主题/作者/章节 LEFT JOIN，按主题去重取最近一次浏览倒序。
+// 去重面是「同一主题多日多行取最近一行」：先按主题聚合出每主题最近浏览（派生表），
+// 再 LEFT JOIN 主题取行装配——count 与 scan 同走派生表，去重语义在计数侧同样成立。
+// 自帖在写入侧已排除（GetTopic 不记录自帖浏览），此处不再过滤。主题被删时条目保留。
+func (s *ForumService) MyViewHistory(userID, page, pageSize int) *ForumTopicPageResult {
+	latestViews := s.db.Table("forum_topic_views AS v").
+		Select("v.topic_id, MAX(v.viewed_at) AS last_viewed").
+		Where("v.user_id = ?", userID).
+		Group("v.topic_id")
+	rows, total, page, pageSize := paging.QueryWithScan[topicRow](s.db, page, pageSize, 10, 100,
+		"lv.last_viewed DESC, t.id DESC",
+		func(q *gorm.DB) *gorm.DB {
+			return q.Table("(?) AS lv", latestViews).
+				Select(personalTopicSelect).
+				Joins("LEFT JOIN forum_topics AS t ON t.id = lv.topic_id").
+				Joins("LEFT JOIN hrwai_users AS u ON u.id = t.user_id").
+				Joins("LEFT JOIN chapter AS ch ON ch.chapter_id = t.chapter_id")
+		})
+	return s.finishPersonalTopics(rows, total, page, pageSize, userID)
+}
+
+// MyObservedTopics 我的围观（#701）：浏览行驱动 + 排除四项直接互动（本人发帖、本人回复、
+// 本人主题点赞、本人对该主题的收藏；回复点赞不计入），按最近浏览倒序。主题被删时条目保留。
+// 同浏览记录：先按主题聚合最近浏览，再做互动排除——排除谓词落在聚合后的主题维度上。
+func (s *ForumService) MyObservedTopics(userID, page, pageSize int) *ForumTopicPageResult {
+	latestViews := s.db.Table("forum_topic_views AS v").
+		Select("v.topic_id, MAX(v.viewed_at) AS last_viewed").
+		Where("v.user_id = ?", userID).
+		Group("v.topic_id")
+	rows, total, page, pageSize := paging.QueryWithScan[topicRow](s.db, page, pageSize, 10, 100,
+		"lv.last_viewed DESC, t.id DESC",
+		func(q *gorm.DB) *gorm.DB {
+			return q.Table("(?) AS lv", latestViews).
+				Select(personalTopicSelect).
+				Joins("LEFT JOIN forum_topics AS t ON t.id = lv.topic_id").
+				Joins("LEFT JOIN hrwai_users AS u ON u.id = t.user_id").
+				Joins("LEFT JOIN chapter AS ch ON ch.chapter_id = t.chapter_id").
+				Where("t.user_id IS NULL OR t.user_id <> ?", userID).
+				Where("NOT EXISTS (SELECT 1 FROM forum_replies r WHERE r.topic_id = t.id AND r.user_id = ?)", userID).
+				Where("NOT EXISTS (SELECT 1 FROM forum_topic_like l WHERE l.topic_id = t.id AND l.user_id = ?)", userID).
+				Where("NOT EXISTS (SELECT 1 FROM favorite f WHERE f.target_type = 'topic' AND f.target_id = t.id AND f.user_id = ?)", userID)
+		})
+	return s.finishPersonalTopics(rows, total, page, pageSize, userID)
 }
 
 // MyReplyDTO 我的回复条目（带主题标题回填）。
@@ -1346,7 +1736,7 @@ func (s *ForumService) AcceptReply(userID int, topicID, replyID int64) (*ForumTo
 	var topic model.ForumTopic
 	if err := s.db.First(&topic, topicID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("主题不存在")
+			return nil, ErrTopicNotFound
 		}
 		return nil, err
 	}
@@ -1355,6 +1745,14 @@ func (s *ForumService) AcceptReply(userID int, topicID, replyID int64) (*ForumTo
 	}
 	if topic.Category != ForumCategoryQuestion {
 		return nil, errors.New("只有问答帖可采纳回答")
+	}
+	// 经验帖不可被采纳（ADR-0040）：认定不限制意图，管理员可以认定一篇 question 帖，
+	// 若不拦就会出现「经验 + 已采纳」的组合——它与领域边界冲突（一次性提问归问答、
+	// 可复用经验输出归经验），也让经验区里混进带采纳状态的帖子。
+	// 逃生口：管理员先取消经验认定（与「经验帖撤精须先取消认定」互为镜像）。
+	// 库层另有 CHECK chk_forum_topics_experience_not_accepted 兜底（迁移 000028）。
+	if topic.IsExperience {
+		return nil, errors.New("备考经验帖不可被采纳，请先取消经验认定")
 	}
 	var reply model.ForumReply
 	if err := s.db.First(&reply, replyID).Error; err != nil {
@@ -1422,15 +1820,27 @@ func (s *ForumService) AcceptReply(userID int, topicID, replyID int64) (*ForumTo
 		if err := tx.Model(&model.PointsLedger{}).Where("user_id = ? AND reason = ? AND created_at >= ?", userID, ReasonAcceptAction, todayStart).Count(&dailyAskerCnt).Error; err != nil {
 			return err
 		}
+		// 配对次数的事实源是 points_ledger 本身（ADR-0041），不是当前挂着的 accepted_reply_id：
+		// 状态列可被 CancelAccept 置空、被删帖抹掉，拿它计数等于给配对衰减留了重置开关
+		// （每轮「采纳→取消/删帖」即可把计数打回 1，衰减永不触发）。
+		// 同一 topic 的两条流水——accepted_bonus 记在答主、accept_action 记在楼主——
+		// 按 ref_id 自连接即还原「楼主↔答主」配对；流水不可回退，取消与删帖都不影响。
+		// 口径是「**付过钱的**配对次数」：被日封顶拦下的采纳不计入（ADR-0041 已承认的边际）。
 		var pairCnt int64
-		if err := tx.Raw("SELECT COUNT(*) FROM forum_topics WHERE user_id = ? AND accepted_reply_id IN (SELECT id FROM forum_replies WHERE user_id = ?)", userID, reply.UserID).Scan(&pairCnt).Error; err != nil {
+		if err := tx.Raw("SELECT COUNT(*) FROM points_ledger a "+
+			"JOIN points_ledger b ON b.ref_type = a.ref_type AND b.ref_id = a.ref_id "+
+			"WHERE a.ref_type = 'forum_topic' AND a.reason = ? AND a.user_id = ? "+
+			"AND b.reason = ? AND b.user_id = ?",
+			ReasonAcceptedBonus, reply.UserID, ReasonAcceptAction, userID).Scan(&pairCnt).Error; err != nil {
 			return err
 		}
 		bonusDelta := AcceptBonusPoints
 		actionDelta := AcceptActionPoints
-		if pairCnt >= 6 {
+		// 阈值以「已付配对数」为基准：与旧实现（计数含当前帖、>=6 / >=4）数值等价，
+		// 见 forum_accept_caps_contract_test.go 断言的每对终身 3×40 + 2×20 = 160。
+		if pairCnt >= 5 {
 			bonusDelta = 0
-		} else if pairCnt >= 4 {
+		} else if pairCnt >= 3 {
 			bonusDelta = bonusDelta / 2
 		}
 		if dailyAnsCnt >= 3 {
@@ -1448,7 +1858,7 @@ func (s *ForumService) AcceptReply(userID int, topicID, replyID int64) (*ForumTo
 			if err := s.points.SettleRewardTx(tx, PointsEntry{
 				UserID: reply.UserID, Delta: bonusDelta, Reason: ReasonAcceptedBonus,
 				RefType: "forum_topic", RefID: fmt.Sprintf("%d", topicID),
-				IdemKey: "accepted_bonus:" + fmt.Sprintf("%d", topicID),
+				IdemKey: AcceptedBonusIdemKey(topicID),
 			}); err != nil {
 				return err
 			}
@@ -1457,7 +1867,7 @@ func (s *ForumService) AcceptReply(userID int, topicID, replyID int64) (*ForumTo
 			if err := s.points.SettleRewardTx(tx, PointsEntry{
 				UserID: userID, Delta: actionDelta, Reason: ReasonAcceptAction,
 				RefType: "forum_topic", RefID: fmt.Sprintf("%d", topicID),
-				IdemKey: "accept_action:" + fmt.Sprintf("%d", topicID),
+				IdemKey: AcceptActionIdemKey(topicID),
 			}); err != nil {
 				return err
 			}
@@ -1488,7 +1898,7 @@ func (s *ForumService) CancelAccept(userID int, topicID int64) (*ForumTopicDTO, 
 	var topic model.ForumTopic
 	if err := s.db.First(&topic, topicID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("主题不存在")
+			return nil, ErrTopicNotFound
 		}
 		return nil, err
 	}
@@ -1512,11 +1922,163 @@ func (s *ForumService) CancelAccept(userID int, topicID int64) (*ForumTopicDTO, 
 	return s.fetchTopicDTO(topicID, userID)
 }
 
+// awardDesignationRewardTx 认定奖励（加精 / 认定备考经验**共用同一笔**，ADR-0040）：
+// 每帖一次性直记 featured_bonus +30，以流水存在判定幂等（取消重精、先精后认定、先认定后精
+// 都只发一次），站内信与到账同事务（ADR-0023 + C3 事件构造器单点）。
+//
+// 流水 reason 字面量保持 featured_bonus 不变：points_ledger 是不可变流水，且幂等键格式改动
+// 等于同一事件重放拿到新键 → 双重发分/双重追回（ADR-0023 明文）。改名只发生在词汇与文案层。
+// designation 决定站内信文案（加精 / 认定备考经验），不影响流水。
+func (s *ForumService) awardDesignationRewardTx(tx *gorm.DB, topic model.ForumTopic, designation string, now time.Time) error {
+	var cnt int64
+	if err := tx.Model(&model.PointsLedger{}).
+		Where("ref_type = ? AND ref_id = ? AND reason = ?", "forum_topic", fmt.Sprintf("%d", topic.ID), ReasonFeaturedBonus).
+		Count(&cnt).Error; err != nil {
+		return err
+	}
+	if cnt > 0 {
+		return nil
+	}
+	// 积分直记（ADR-0023 事务内通道）：占坑键与状态 CAS 双保险
+	if err := s.points.SettleRewardTx(tx, PointsEntry{
+		UserID: topic.UserID, Delta: FeaturedBonusPoints, Reason: ReasonFeaturedBonus,
+		RefType: "forum_topic", RefID: fmt.Sprintf("%d", topic.ID),
+		IdemKey: FeaturedBonusIdemKey(topic.ID),
+	}); err != nil {
+		return err
+	}
+	// 两种认定共用同一笔流水，但文案必须区分（ADR-0040）：写「被加精」会让被认定经验的帖主看不懂。
+	if designation == DesignationExperience {
+		return s.notificationSvc.CreateTopicFeaturedEvent(tx, NewTopicExperienceEvent(topic.UserID, topic.Title, topic.ID, FeaturedBonusPoints), now)
+	}
+	return s.notificationSvc.CreateTopicFeaturedEvent(tx, NewTopicFeaturedEvent(topic.UserID, topic.Title, topic.ID, FeaturedBonusPoints), now)
+}
+
+// DesignateExperience 管理端认定「备考经验」（ADR-0040）。
+//
+// 一个认定动作同时置 is_experience 与 is_featured（经验蕴含精选，库层 CHECK 兜底），
+// 并按「认定奖励每帖一次」发 +30 —— 与加精共用同一条流水，故先加精后认定不会重复发分
+// （awardDesignationRewardTx 的流水存在判定短路），先认定后加精亦然。
+// 状态已一致时幂等短路（重复认定不发分不改状态）。
+func (s *ForumService) DesignateExperience(topicID int64) (*ForumTopicDTO, error) {
+	var topic model.ForumTopic
+	if err := s.db.First(&topic, topicID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrTopicNotFound
+		}
+		return nil, err
+	}
+	if topic.IsExperience {
+		return s.fetchTopicDTO(topicID, 0)
+	}
+	// 已采纳的帖不可被认定为经验（与 AcceptReply 的守卫互为镜像，二者缺一即有漏洞）：
+	// 逃生口是先取消采纳。库层 CHECK 兜底见迁移 000028。
+	// 只判「是否有采纳指针」而非意图——同一条规则也兜住历史遗留的悬挂行。
+	if topic.AcceptedReplyID != nil {
+		return nil, errors.New("已采纳的帖子不可认定为备考经验，请先取消采纳")
+	}
+	now := beijingNow()
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		// CAS：认定与精选一并置位（两者必须同进，否则撞蕴含 CHECK）。
+		// WHERE is_experience = false 保证并发下只有先胜者发分。
+		res := tx.Model(&model.ForumTopic{}).
+			Where("id = ? AND is_experience = ?", topicID, false).
+			Updates(map[string]any{
+				"is_experience": true,
+				"is_featured":   true,
+				"updated_at":    now,
+			})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return nil // 并发抢认定：由先胜者完成副作用
+		}
+		return s.awardDesignationRewardTx(tx, topic, DesignationExperience, now)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s.fetchTopicDTO(topicID, 0)
+}
+
+// RevokeExperience 管理端取消经验认定（ADR-0040）：只撤 is_experience，
+// **保留精选位**（撤的是归类不是质量认可，管理员可继续让它挂着精选）；已发分不回滚
+// （与撤精同政策：认定动作不是违规，回滚会让管理员不敢认定）。
+// 状态已一致时幂等短路。
+func (s *ForumService) RevokeExperience(topicID int64) (*ForumTopicDTO, error) {
+	var topic model.ForumTopic
+	if err := s.db.First(&topic, topicID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrTopicNotFound
+		}
+		return nil, err
+	}
+	if !topic.IsExperience {
+		return s.fetchTopicDTO(topicID, 0)
+	}
+	// CAS：只改 is_experience，is_featured 原样保留（不写它，避免覆盖并发下的精选变更）
+	if err := s.db.Model(&model.ForumTopic{}).
+		Where("id = ? AND is_experience = ?", topicID, true).
+		Updates(map[string]any{"is_experience": false, "updated_at": beijingNow()}).Error; err != nil {
+		return nil, err
+	}
+	return s.fetchTopicDTO(topicID, 0)
+}
+
+// SetFeatured 管理端设置精选位（#742，全类别可用）。
+//
+// featured=true 且发生状态迁移时，同事务给帖主一次性直记 featured_bonus +30
+// （幂等键 featured_bonus:{topicID} + 流水存在判定双保险，取消重精不重复发分，
+// 沿用 accepted_bonus 同模式）；featured=false 只改状态，已发分不回滚。
+// 状态已一致时幂等短路，不触发任何副作用。
+func (s *ForumService) SetFeatured(topicID int64, featured bool) (*ForumTopicDTO, error) {
+	var topic model.ForumTopic
+	if err := s.db.First(&topic, topicID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrTopicNotFound
+		}
+		return nil, err
+	}
+	// 经验帖蕴含精选（库层 CHECK 兜底）：直接撤精会撞 CHECK，或留下「经验但非精选」的悬挂态。
+	// 逃生口是「先取消经验认定」——文案与 #811「已采纳的问答帖不能改类别，请先取消采纳」同构。
+	// 判定按认定事实（IsExperience），与意图 Category 无关。
+	if !featured && topic.IsExperience {
+		return nil, errors.New("备考经验帖蕴含精选位，请先取消经验认定")
+	}
+	if topic.IsFeatured == featured {
+		// 幂等：状态已一致（重复加精/重复取消），不发分不改状态
+		return s.fetchTopicDTO(topicID, 0)
+	}
+	now := beijingNow()
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		// CAS：仅当状态仍为旧值时写入，并发下先胜者负责发分
+		res := tx.Model(&model.ForumTopic{}).
+			Where("id = ? AND is_featured = ?", topicID, !featured).
+			Update("is_featured", featured)
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return nil // 并发抢改：由先胜者完成副作用
+		}
+		if !featured {
+			return nil // 取消精选只改状态，已发分不回滚
+		}
+		// 认定奖励与「认定备考经验」共用同一实现：每帖只发一次，先认定后加精不重复发分。
+		return s.awardDesignationRewardTx(tx, topic, DesignationFeatured, now)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s.fetchTopicDTO(topicID, 0)
+}
+
 // fetchTopicDTO 查询主题 DTO（用于采纳后回显，复用 topicRow 装配，不累浏览量）。
 func (s *ForumService) fetchTopicDTO(topicID int64, viewerID int) (*ForumTopicDTO, error) {
 	var row topicRow
 	err := s.db.Table("forum_topics AS t").
-		Select("t.id, t.chapter_id, t.category, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.accepted_reply_id, t.solved_at, t.last_reply_at, t.created_at, "+
+		Select(topicRowSelect+
 			"u.id AS user_id, u.username, u.avatar_url, "+
 			"COALESCE(ch.title, '') AS chapter_title").
 		Joins("JOIN hrwai_users AS u ON u.id = t.user_id").
@@ -1538,8 +2100,29 @@ func (s *ForumService) fetchTopicDTO(topicID int64, viewerID int) (*ForumTopicDT
 	return &dto, nil
 }
 
-// enrichRewardIssued 批量回填 reward_issued（#367 二次确认分支）。
-// 仅查询 question 类帖且 reason=accepted_bonus 的流水，避免无谓扫描。
+// topicDirectRewardReasons 论坛主题上「全部直记奖励」的流水 reason（ADR-0040/0041）。
+// 用途：违规回收范围（rollbackTopicRewardsTx）与回收触发条件（hasAnyRewardForTopic）。
+// **不要**拿它做 reward_issued——那个字段的判据见 acceptRewardLedgerReasons。
+var topicDirectRewardReasons = []string{ReasonAcceptedBonus, ReasonAcceptAction, ReasonFeaturedBonus}
+
+// acceptRewardLedgerReasons 「采纳类奖励」的流水 reason：答主被采纳 + 楼主采纳动作。
+//
+// reward_issued 的**唯一**判据（#367）。语义是「**该帖的采纳奖励是否已发放**」，不是
+// 「该帖是否发过任何奖励」——这个区别有真实后果：该字段的唯一消费方是采纳前二次确认
+// （ForumDetail.vue，文案「该帖采纳奖励已发放……不再产生积分」）。若把 featured_bonus
+// （加精 / 认定 +30）也算进来，一篇**只是被加精、从未被采纳**的问答帖会让楼主看到
+// 「采纳不再产生积分」，而实际上答主仍会拿到 40 分——错误提示会劝退真实采纳。
+// 故本集合**必须小于** topicDirectRewardReasons，两者不可合并。
+var acceptRewardLedgerReasons = []string{ReasonAcceptedBonus, ReasonAcceptAction}
+
+// enrichRewardIssued 批量回填 reward_issued（#367）。
+//
+// 语义 = 该帖的**采纳奖励**是否已发放（acceptRewardLedgerReasons）。与 hasRewardIssued
+// （详情单条）**必须同口径**：两处是两个实现，漂移过一次就是 bug。
+//
+// 历史：曾放宽为「任一直记奖励」并去掉类别限制，会让「只被加精」的帖子误报
+// 「采纳不再产生积分」，故收窄回采纳类；同时不再按类别过滤（非 question 帖不会持有
+// 采纳类流水，那道过滤只是无谓扫描）。
 func (s *ForumService) enrichRewardIssued(items []ForumTopicDTO) {
 	if len(items) == 0 {
 		return
@@ -1547,9 +2130,6 @@ func (s *ForumService) enrichRewardIssued(items []ForumTopicDTO) {
 	ids := make([]string, 0, len(items))
 	seen := make(map[string]struct{}, len(items))
 	for _, t := range items {
-		if t.Category != ForumCategoryQuestion {
-			continue
-		}
 		sid := fmt.Sprintf("%d", t.ID)
 		if _, ok := seen[sid]; !ok {
 			seen[sid] = struct{}{}
@@ -1561,7 +2141,7 @@ func (s *ForumService) enrichRewardIssued(items []ForumTopicDTO) {
 	}
 	var issued []string
 	if err := s.db.Model(&model.PointsLedger{}).
-		Where("ref_type = ? AND reason = ? AND ref_id IN ?", "forum_topic", ReasonAcceptedBonus, ids).
+		Where("ref_type = ? AND reason IN ? AND ref_id IN ?", "forum_topic", acceptRewardLedgerReasons, ids).
 		Distinct("ref_id").Pluck("ref_id", &issued).Error; err != nil {
 		return
 	}
@@ -1576,11 +2156,11 @@ func (s *ForumService) enrichRewardIssued(items []ForumTopicDTO) {
 	}
 }
 
-// hasRewardIssued 单条查询：该帖是否已产生过 accepted_bonus 流水。
+// hasRewardIssued 单条查询：该帖是否已产生过任一直记奖励（与 enrichRewardIssued 同口径）。
 func (s *ForumService) hasRewardIssued(topicID int64) bool {
 	var cnt int64
 	if err := s.db.Model(&model.PointsLedger{}).
-		Where("ref_type = ? AND reason = ? AND ref_id = ?", "forum_topic", ReasonAcceptedBonus, fmt.Sprintf("%d", topicID)).
+		Where("ref_type = ? AND reason IN ? AND ref_id = ?", "forum_topic", acceptRewardLedgerReasons, fmt.Sprintf("%d", topicID)).
 		Count(&cnt).Error; err != nil {
 		return false
 	}

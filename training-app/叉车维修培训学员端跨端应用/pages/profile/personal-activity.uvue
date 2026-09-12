@@ -12,62 +12,16 @@
 
         <scroll-view class="content-scroll" scroll-y>
             <!-- 用户信息卡片 -->
-            <view class="user-card">
-                <view class="user-avatar-wrap">
-                    <image v-if="avatarUrl.length > 0" class="user-avatar" :src="avatarUrl" mode="aspectFill" />
-                    <view v-else class="user-avatar-placeholder">
-                        <text class="avatar-emoji">👤</text>
-                    </view>
-                </view>
-                <view class="user-info">
-                    <view class="user-name-row">
-                        <text class="user-name">{{ displayName }}</text>
-                        <view class="level-badge">
-                            <text class="level-text">Lv{{ userLevel }}</text>
-                        </view>
-                    </view>
-                    <text class="user-ip">IP属地：{{ ipLocation }}</text>
-                </view>
-            </view>
+            <ActivityUserCard :avatar-url="avatarUrl" :display-name="displayName" :user-level="userLevel" :ip-location="ipLocation" />
 
             <!-- Tab 栏 -->
-            <view class="tab-bar">
-                <view class="tab-item" :class="{ active: currentTab === 'posts' }" @click="onSwitchTab('posts')">
-                    <text class="tab-text" :class="{ active: currentTab === 'posts' }">我的帖子</text>
-                </view>
-                <view class="tab-item" :class="{ active: currentTab === 'likes' }" @click="onSwitchTab('likes')">
-                    <text class="tab-text" :class="{ active: currentTab === 'likes' }">赞/收藏</text>
-                </view>
-                <view class="tab-item" :class="{ active: currentTab === 'interact' }" @click="onSwitchTab('interact')">
-                    <text class="tab-text" :class="{ active: currentTab === 'interact' }">互动</text>
-                </view>
-                <view class="tab-item" :class="{ active: currentTab === 'views' }" @click="onSwitchTab('views')">
-                    <text class="tab-text" :class="{ active: currentTab === 'views' }">游览记录</text>
-                </view>
-            </view>
+            <ActivityTabBar :keys="mainTabKeys" :labels="mainTabLabels" :active="currentTab" @switch="onSwitchTab" />
 
             <!-- 赞/收藏 子 Tab -->
-            <view v-if="currentTab === 'likes'" class="sub-tab-bar">
-                <view class="sub-tab-item" :class="{ active: likesSubTab === 'liked' }" @click="onSwitchLikesSubTab('liked')">
-                    <text class="sub-tab-text" :class="{ active: likesSubTab === 'liked' }">赞</text>
-                </view>
-                <view class="sub-tab-item" :class="{ active: likesSubTab === 'favorited' }" @click="onSwitchLikesSubTab('favorited')">
-                    <text class="sub-tab-text" :class="{ active: likesSubTab === 'favorited' }">收藏</text>
-                </view>
-            </view>
+            <ActivityTabBar v-if="currentTab === 'likes'" :sub="true" :keys="likesSubKeys" :labels="likesSubLabels" :active="likesSubTab" @switch="onSwitchLikesSubTab" />
 
             <!-- 互动 子 Tab -->
-            <view v-if="currentTab === 'interact'" class="sub-tab-bar">
-                <view class="sub-tab-item" :class="{ active: interactSubTab === 'questions' }" @click="onSwitchInteractSubTab('questions')">
-                    <text class="sub-tab-text" :class="{ active: interactSubTab === 'questions' }">我的疑问</text>
-                </view>
-                <view class="sub-tab-item" :class="{ active: interactSubTab === 'replies' }" @click="onSwitchInteractSubTab('replies')">
-                    <text class="sub-tab-text" :class="{ active: interactSubTab === 'replies' }">我的回复</text>
-                </view>
-                <view class="sub-tab-item" :class="{ active: interactSubTab === 'observed' }" @click="onSwitchInteractSubTab('observed')">
-                    <text class="sub-tab-text" :class="{ active: interactSubTab === 'observed' }">我的围观</text>
-                </view>
-            </view>
+            <ActivityTabBar v-if="currentTab === 'interact'" :sub="true" :keys="interactSubKeys" :labels="interactSubLabels" :active="interactSubTab" @switch="onSwitchInteractSubTab" />
 
             <!-- ========= 我的帖子 ========= -->
             <view v-if="currentTab === 'posts'">
@@ -78,17 +32,8 @@
                     </view>
                 </view>
                 <view class="list-section">
-                    <view v-for="(item, idx) in topics" :key="idx" class="topic-card" @click="onTopicClick(item.id)">
-                        <text class="topic-title">{{ item.title }}</text>
-                        <text class="topic-preview">{{ getContentPreview(item.content) }}</text>
-                        <view class="topic-footer">
-                            <view class="topic-stats">
-                                <text class="stat-text">{{ item.likes_count }} 赞</text>
-                                <text class="stat-text">{{ item.replies_count }} 评论</text>
-                            </view>
-                            <text class="topic-time">{{ formatDateStr(item.created_at) }}</text>
-                        </view>
-                    </view>
+                    <ActivityTopicCard v-for="(item, idx) in topics" :key="idx" :title="item.title" :content="item.content" :has-content="true"
+                        :likes-count="item.likes_count" :replies-count="item.replies_count" :created-date="item.created_at" :show-stats="true" @tap="onTopicClick(item.id)" />
                 </view>
             </view>
 
@@ -100,13 +45,8 @@
                         <text class="empty-hint">还没有点赞过帖子</text>
                     </view>
                     <view class="list-section">
-                        <view v-for="(item, idx) in likedTopics" :key="idx" class="topic-card" @click="onTopicClick(item.id)">
-                            <text class="topic-title">{{ item.title }}</text>
-                            <text class="topic-preview">{{ getContentPreview(item.content) }}</text>
-                            <view class="topic-footer">
-                                <text class="topic-time">{{ formatDateStr(item.created_at) }}</text>
-                            </view>
-                        </view>
+                        <ActivityTopicCard v-for="(item, idx) in likedTopics" :key="idx" :title="item.title" :content="item.content" :has-content="true"
+                            :created-date="item.created_at" @tap="onTopicClick(item.id)" />
                     </view>
                 </view>
                 <!-- 收藏 -->
@@ -115,13 +55,8 @@
                         <text class="empty-hint">还没有收藏过内容</text>
                     </view>
                     <view class="list-section">
-                        <view v-for="(item, idx) in favoriteItems" :key="idx" class="topic-card" @click="onFavoriteClick(item)">
-                            <text class="topic-title">{{ item.title }}</text>
-                            <view class="topic-footer">
-                                <text class="tag-text">{{ item.target_type }}</text>
-                                <text class="topic-time">{{ formatDateStr(item.created_at) }}</text>
-                            </view>
-                        </view>
+                        <ActivityTopicCard v-for="(item, idx) in favoriteItems" :key="idx" :title="item.title" :tag-text="item.target_type"
+                            :created-date="item.created_at" @tap="onFavoriteClick(item)" />
                     </view>
                 </view>
             </view>
@@ -134,13 +69,8 @@
                         <text class="empty-hint">还没有提出过疑问</text>
                     </view>
                     <view class="list-section">
-                        <view v-for="(item, idx) in myQuestions" :key="idx" class="topic-card" @click="onTopicClick(item.topic_id)">
-                            <text class="topic-title">{{ item.topic_title }}</text>
-                            <text class="topic-preview">{{ getContentPreview(item.content) }}</text>
-                            <view class="topic-footer">
-                                <text class="topic-time">{{ formatDateStr(item.created_at) }}</text>
-                            </view>
-                        </view>
+                        <ActivityTopicCard v-for="(item, idx) in myQuestions" :key="idx" :title="item.topic_title" :content="item.content" :has-content="true"
+                            :created-date="item.created_at" @tap="onTopicClick(item.topic_id)" />
                     </view>
                 </view>
                 <!-- 我的回复 -->
@@ -149,13 +79,8 @@
                         <text class="empty-hint">还没有回复过帖子</text>
                     </view>
                     <view class="list-section">
-                        <view v-for="(item, idx) in myReplies" :key="idx" class="topic-card" @click="onTopicClick(item.topic_id)">
-                            <text class="reply-ref-title">回复了 {{ item.topic_title }}</text>
-                            <text class="topic-preview">{{ getContentPreview(item.content) }}</text>
-                            <view class="topic-footer">
-                                <text class="topic-time">{{ formatDateStr(item.created_at) }}</text>
-                            </view>
-                        </view>
+                        <ActivityTopicCard v-for="(item, idx) in myReplies" :key="idx" :title="item.topic_title" :content="item.content" :has-content="true" :ref-header="true"
+                            :created-date="item.created_at" @tap="onTopicClick(item.topic_id)" />
                     </view>
                 </view>
                 <!-- 我的围观 -->
@@ -164,13 +89,8 @@
                         <text class="empty-hint">还没有围观过帖子</text>
                     </view>
                     <view class="list-section">
-                        <view v-for="(item, idx) in observedTopics" :key="idx" class="topic-card" @click="onTopicClick(item.id)">
-                            <text class="topic-title">{{ item.title }}</text>
-                            <text class="topic-preview">{{ getContentPreview(item.content) }}</text>
-                            <view class="topic-footer">
-                                <text class="topic-time">{{ formatDateStr(item.created_at) }}</text>
-                            </view>
-                        </view>
+                        <ActivityTopicCard v-for="(item, idx) in observedTopics" :key="idx" :title="item.title" :content="item.content" :has-content="true"
+                            :created-date="item.created_at" @tap="onTopicClick(item.id)" />
                     </view>
                 </view>
             </view>
@@ -181,13 +101,8 @@
                     <text class="empty-hint">还没有浏览记录</text>
                 </view>
                 <view class="list-section">
-                    <view v-for="(item, idx) in viewHistory" :key="idx" class="topic-card" @click="onTopicClick(item.id)">
-                        <text class="topic-title">{{ item.title }}</text>
-                        <text class="topic-preview">{{ getContentPreview(item.content) }}</text>
-                        <view class="topic-footer">
-                            <text class="topic-time">{{ formatDateStr(item.created_at) }}</text>
-                        </view>
-                    </view>
+                    <ActivityTopicCard v-for="(item, idx) in viewHistory" :key="idx" :title="item.title" :content="item.content" :has-content="true"
+                        :created-date="item.created_at" @tap="onTopicClick(item.id)" />
                 </view>
             </view>
 
@@ -211,12 +126,17 @@
     import { getMyTopicsApi, getMyRepliesApi, getMyLikedTopicsApi, getMyObservedTopicsApi, getMyViewHistoryApi } from '../../api/forum'
     import { getFavoritesApi } from '../../api/favorite'
     import type { ForumTopic, ForumReply, FavoriteItem } from '../../types/index'
+    import ActivityUserCard from './components/activity-user-card.uvue'
+    import ActivityTabBar from './components/activity-tab-bar.uvue'
+    import ActivityTopicCard from './components/activity-topic-card.uvue'
 
-    /** ISO 日期字符串 → YYYY-MM-DD */
-    function formatDateStr(dateStr : string) : string {
-        if (dateStr == null || dateStr.length < 10) return dateStr
-        return dateStr.substring(0, 10)
-    }
+    // Tab 配置（值与手术前逐字一致；「游览记录」错别字按 UI 冻结保留）
+    const mainTabKeys : string[] = ['posts', 'likes', 'interact', 'views']
+    const mainTabLabels : string[] = ['我的帖子', '赞/收藏', '互动', '游览记录']
+    const likesSubKeys : string[] = ['liked', 'favorited']
+    const likesSubLabels : string[] = ['赞', '收藏']
+    const interactSubKeys : string[] = ['questions', 'replies', 'observed']
+    const interactSubLabels : string[] = ['我的疑问', '我的回复', '我的围观']
 
     const authStore = useAuthStore()
     const statusBarHeight = useStatusBarHeight()
@@ -278,13 +198,6 @@
         }
         return viewHistory.value.length > 0
     })
-
-    // ---- 辅助函数 ----
-    function getContentPreview(content : string) : string {
-        const single = content.replace('\n', ' ')
-        if (single.length <= 80) return single
-        return single.substring(0, 80) + '...'
-    }
 
     // ---- 数据加载 ----
     function checkNoMore(itemsCount : number, total : number) : void {
@@ -492,132 +405,6 @@
         height: 0;
     }
 
-    /* 用户信息卡片 */
-    .user-card {
-        background-color: #e8f4fd;
-        margin: 20rpx 24rpx;
-        border-radius: 16rpx;
-        padding: 28rpx 32rpx;
-        flex-direction: row;
-        align-items: center;
-    }
-
-    .user-avatar-wrap {
-        margin-right: 24rpx;
-    }
-
-    .user-avatar {
-        width: 96rpx;
-        height: 96rpx;
-        border-radius: 48rpx;
-    }
-
-    .user-avatar-placeholder {
-        width: 96rpx;
-        height: 96rpx;
-        border-radius: 48rpx;
-        background-color: #ffffff;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .avatar-emoji {
-        font-size: 48rpx;
-    }
-
-    .user-info {
-        flex: 1;
-        flex-direction: column;
-    }
-
-    .user-name-row {
-        flex-direction: row;
-        align-items: center;
-        margin-bottom: 8rpx;
-    }
-
-    .user-name {
-        font-size: 32rpx;
-        font-weight: bold;
-        color: #333333;
-        margin-right: 12rpx;
-    }
-
-    .level-badge {
-        background-color: #ffffff;
-        border-radius: 16rpx;
-        padding: 4rpx 14rpx;
-    }
-
-    .level-text {
-        font-size: 22rpx;
-        color: #2979ff;
-        font-weight: bold;
-    }
-
-    .user-ip {
-        font-size: 24rpx;
-        color: #999999;
-    }
-
-    /* Tab 栏 */
-    .tab-bar {
-        flex-direction: row;
-        background-color: #ffffff;
-        border-bottom: 1rpx solid #eeeeee;
-    }
-
-    .tab-item {
-        flex: 1;
-        height: 88rpx;
-        align-items: center;
-        justify-content: center;
-        border-bottom: 4rpx solid transparent;
-    }
-
-    .tab-item.active {
-        border-bottom-color: #2979ff;
-    }
-
-    .tab-text {
-        font-size: 28rpx;
-        color: #666666;
-    }
-
-    .tab-text.active {
-        color: #2979ff;
-        font-weight: bold;
-    }
-
-    /* 子 Tab 栏 */
-    .sub-tab-bar {
-        flex-direction: row;
-        background-color: #ffffff;
-        border-bottom: 1rpx solid #eeeeee;
-        padding: 0 24rpx;
-    }
-
-    .sub-tab-item {
-        padding: 20rpx 32rpx;
-        align-items: center;
-        justify-content: center;
-        border-bottom: 4rpx solid transparent;
-    }
-
-    .sub-tab-item.active {
-        border-bottom-color: #2979ff;
-    }
-
-    .sub-tab-text {
-        font-size: 28rpx;
-        color: #999999;
-    }
-
-    .sub-tab-text.active {
-        color: #2979ff;
-        font-weight: bold;
-    }
-
     /* 空状态 */
     .empty-state {
         align-items: center;
@@ -646,67 +433,6 @@
     .list-section {
         flex-direction: column;
         padding: 16rpx 24rpx;
-    }
-
-    .topic-card {
-        background-color: #ffffff;
-        border-radius: 16rpx;
-        padding: 24rpx;
-        margin-bottom: 16rpx;
-        border: 1rpx solid #eeeeee;
-        flex-direction: column;
-    }
-
-    .topic-title {
-        font-size: 30rpx;
-        font-weight: bold;
-        color: #333333;
-        line-height: 1.4;
-        margin-bottom: 12rpx;
-    }
-
-    .topic-preview {
-        font-size: 26rpx;
-        color: #666666;
-        line-height: 1.5;
-        margin-bottom: 12rpx;
-    }
-
-    .reply-ref-title {
-        font-size: 26rpx;
-        color: #2979ff;
-        margin-bottom: 8rpx;
-        font-weight: bold;
-    }
-
-    .topic-footer {
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-    }
-
-    .topic-stats {
-        flex-direction: row;
-        align-items: center;
-    }
-
-    .stat-text {
-        font-size: 22rpx;
-        color: #999999;
-        margin-right: 16rpx;
-    }
-
-    .tag-text {
-        font-size: 22rpx;
-        color: #2979ff;
-        background-color: #f0f5ff;
-        padding: 4rpx 12rpx;
-        border-radius: 8rpx;
-    }
-
-    .topic-time {
-        font-size: 22rpx;
-        color: #cccccc;
     }
 
     /* 加载更多 */

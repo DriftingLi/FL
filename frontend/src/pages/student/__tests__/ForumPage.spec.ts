@@ -6,8 +6,9 @@
 // 灌进讨论 Tab（后端 scope=general 的定义恰好是 chapter_id IS NULL）。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import { epLite } from '@/test/element-lite'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 
 // 只替换网络层，保留 forumTabQuery 的真实实现：
 // 页面现在通过 forumTabQuery 把 Tab 翻成查询参数，若连它一起 mock 掉，
@@ -25,6 +26,9 @@ vi.mock('@/api/forum', async (importOriginal) => {
       listTopics: vi.fn(),
       getMyTopics: vi.fn(),
       getMyReplies: vi.fn(),
+      getMyLikedTopics: vi.fn(),
+      getMyObservedTopics: vi.fn(),
+      getMyViewHistory: vi.fn(),
       createTopic: vi.fn()
     }
   }
@@ -33,12 +37,6 @@ vi.mock('@/api/forum', async (importOriginal) => {
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn() }),
   useRoute: () => ({ query: {}, params: {} })
-}))
-
-vi.mock('@/utils/forumHistory', () => ({
-  loadHistory: vi.fn(() => []),
-  removeHistoryItem: vi.fn(),
-  clearHistory: vi.fn()
 }))
 
 // 页面只用到 userInfo?.user_id（浏览记录按用户隔离），mock 掉避免拉起真实 pinia。
@@ -50,6 +48,7 @@ import { forumApi } from '@/api/forum'
 import ForumPage from '../ForumPage.vue'
 
 const listTopics = vi.mocked(forumApi.listTopics)
+const createTopic = vi.mocked(forumApi.createTopic)
 
 /** 一条帖子桩数据。 */
 function topic(id: number, category: 'discussion' | 'question') {
@@ -65,16 +64,19 @@ function topic(id: number, category: 'discussion' | 'question') {
   }
 }
 
-async function mountPage(total = 3, options: { attachTo?: HTMLElement } = {}) {
+async function mountPage(total = 3, options: { attachTo?: HTMLElement; topics?: ReturnType<typeof topic>[] } = {}) {
   // total=0 必须同时把 topics 置空，否则 v-else-if="topics.length > 0" 会渲染列表，
   // 空态断言就是在验一个永远走不到的分支。
-  listTopics.mockResolvedValue({ topics: total === 0 ? [] : [topic(1, 'discussion')], total } as never)
+  listTopics.mockResolvedValue({
+    topics: options.topics ?? (total === 0 ? [] : [topic(1, 'discussion')]),
+    total
+  } as never)
   const wrapper = mount(ForumPage, {
     attachTo: options.attachTo,
     global: {
-      plugins: [ElementPlus],
+      plugins: [epLite()],
       // 打桩子组件：避免拉起真实网络层与弹窗（打卡已迁独立页，论坛不再内嵌打卡弹窗）。
-      stubs: { ForumHistoryPanel: true, ForumImageUploader: true }
+      stubs: { ForumImageUploader: true }
     }
   })
   await flushPromises()
@@ -93,15 +95,15 @@ function tabbarByValues(wrapper: Awaited<ReturnType<typeof mountPage>>, mustIncl
   throw new Error(`找不到含 [${mustInclude.join(', ')}] 的分段控件`)
 }
 
-/** 主分段控件（讨论 / 问答 / 我的） */
+/** 主分段控件（讨论 / 问答 / 备考经验 / 我的） */
 const categoryGroup = (wrapper: Awaited<ReturnType<typeof mountPage>>) =>
   tabbarByValues(wrapper, ['discussion', 'question', 'mine'])
 
-/** 「我的」二级控件（我的帖子 / 我的回复 / 浏览记录） */
+/** 「我的」二级控件（我的帖子 / 我的回复 / 赞过 / 围观 / 浏览记录，#701） */
 const modeGroup = (wrapper: Awaited<ReturnType<typeof mountPage>>) =>
-  tabbarByValues(wrapper, ['my-topics', 'my-replies', 'history'])
+  tabbarByValues(wrapper, ['my-topics', 'my-replies', 'my-liked', 'my-observed', 'history'])
 
-async function switchCategory(wrapper: Awaited<ReturnType<typeof mountPage>>, next: 'discussion' | 'question') {
+async function switchCategory(wrapper: Awaited<ReturnType<typeof mountPage>>, next: 'discussion' | 'question' | 'experience') {
   categoryGroup(wrapper).vm.$emit('update:modelValue', next)
   await flushPromises()
 }
@@ -137,6 +139,114 @@ describe('论坛类别分流', () => {
     listTopics.mockClear()
     await switchCategory(wrapper, 'discussion')
     expect(listTopics.mock.calls[0][0].category).toBe('discussion')
+  })
+
+  it('切到备考经验 Tab（#722 / ADR-0040）：请求显式带 scope=all + is_experience=true，不发 category', async () => {
+    const wrapper = await mountPage()
+    listTopics.mockClear()
+
+    await switchCategory(wrapper, 'experience')
+    expect(listTopics).toHaveBeenCalledTimes(1)
+    const params = listTopics.mock.calls[0][0]
+    // 经验帖的 chapter_id 也可为 NULL：漏 scope 会重蹈问答帖灌进讨论 Tab 的覆辙。
+    // 判据是管理端认定 is_experience；category='experience' 的存量行已降级，发它必然空。
+    expect(params.is_experience).toBe('true')
+    expect(params.category).toBeUndefined()
+    expect(params.scope).toBe('all')
+  })
+
+  it('经验认定标识（ADR-0040）：is_experience 的帖子渲染「备考经验」，未认定的不渲染', async () => {
+    const wrapper = await mountPage(2, {
+      topics: [
+        { ...topic(1, 'discussion'), is_experience: true, is_featured: true, title: '被认定的考经' },
+        { ...topic(2, 'discussion'), is_experience: false, title: '普通讨论' }
+      ] as never
+    })
+    const experienceTags = wrapper.findAll('.el-tag').filter((t) => t.text().includes('备考经验'))
+    expect(experienceTags.length).toBe(1)
+  })
+
+  it('发布入口（ADR-0040）：经验 Tab 退为只读策展流，发帖表单只默认 discussion、只提供两意图', async () => {
+    const wrapper = await mountPage()
+    const openBtn = wrapper.findAll('button').find((b) => b.text().includes('发布新帖'))
+    expect(openBtn).toBeTruthy()
+    await openBtn!.trigger('click')
+    await flushPromises()
+
+    const form = () => wrapper.findComponent({ name: 'ForumPostForm' })
+    expect(form().exists()).toBe(true)
+    expect(form().props('category')).toBe('discussion')
+    expect(form().props('categories')).toEqual(['discussion', 'question'])
+
+    // 弹窗开着切到经验 Tab：表单不得跟着变成 experience（提交即 400）
+    await switchCategory(wrapper, 'experience')
+    expect(form().props('category')).toBe('discussion')
+    expect(form().props('categories')).not.toContain('experience')
+  })
+
+  it('表单内类别 chips（#742 / ADR-0040）：默认 = 所在 Tab 类别，切换后提交携带对应 category', async () => {
+    const wrapper = await mountPage()
+    const openBtn = wrapper.findAll('button').find((b) => b.text().includes('发布新帖'))
+    await openBtn!.trigger('click')
+    await flushPromises()
+
+    const form = () => wrapper.findComponent({ name: 'ForumPostForm' })
+    // chips 只渲染学员能自述的两意图（「备考经验」是管理端认定，不在发布入口）
+    const chipBar = form().findComponent(UiSegmentTabs)
+    expect(chipBar.exists()).toBe(true)
+    const chipLabels = chipBar.findAll('[role="tab"]').map((b) => b.text().trim())
+    expect(chipLabels).toEqual(['讨论', '问答'])
+
+    // 未动 chips 直接提交：默认 = 所在 Tab（讨论）
+    await form().findAllComponents(UiInput)[0].setValue('默认类别帖')
+    await form().findAllComponents(UiInput)[1].setValue('内容')
+    await (form().vm as unknown as { submit: () => Promise<boolean> }).submit()
+    await flushPromises()
+    expect(createTopic).toHaveBeenCalledTimes(1)
+    expect(createTopic.mock.calls[0][0].category).toBe('discussion')
+
+    // 切到问答再提交：携带 question（reset 后需重新填写两个字段）
+    chipBar.vm.$emit('update:modelValue', 'question')
+    await flushPromises()
+    await form().findAllComponents(UiInput)[0].setValue('问答模式帖')
+    await form().findAllComponents(UiInput)[1].setValue('内容')
+    await (form().vm as unknown as { submit: () => Promise<boolean> }).submit()
+    await flushPromises()
+    expect(createTopic).toHaveBeenCalledTimes(2)
+    expect(createTopic.mock.calls[1][0].category).toBe('question')
+  })
+
+  it('精选筛选（#742）：切到精选请求 featured=true，切回全部不带参数', async () => {
+    const wrapper = await mountPage()
+    listTopics.mockClear()
+
+    // 定位精选筛选段（options 恰为 '' 与 'true' 两个值）
+    const featuredBar = wrapper.findAllComponents(UiSegmentTabs).find((b) => {
+      const opts = b.props('options') as Array<{ value: string }>
+      return opts.length === 2 && opts.every((o) => o.value === '' || o.value === 'true')
+    })
+    expect(featuredBar).toBeTruthy()
+
+    featuredBar!.vm.$emit('update:modelValue', 'true')
+    await flushPromises()
+    const lastParams = listTopics.mock.calls[listTopics.mock.calls.length - 1][0]
+    expect(lastParams.featured).toBe('true')
+
+    featuredBar!.vm.$emit('update:modelValue', '')
+    await flushPromises()
+    const backParams = listTopics.mock.calls[listTopics.mock.calls.length - 1][0]
+    expect(backParams.featured).toBeUndefined()
+  })
+
+  it('精选帖渲染 ★ 精选标识（#742），非精选帖不渲染', async () => {
+    const wrapper = await mountPage(2, {
+      topics: [
+        { ...topic(1, 'discussion'), is_featured: true, title: '被精选的讨论' },
+        { ...topic(2, 'discussion'), is_featured: false, title: '普通讨论' }
+      ] as never
+    })
+    const featuredTags = wrapper.findAll('.el-tag').filter((t) => t.text().includes('精选'))
+    expect(featuredTags.length).toBe(1)
   })
 
   it('讨论 Tab 的既有查询口径不变：仍只看综合区（不合并章节讨论）、仍带排序与方向', async () => {
@@ -204,6 +314,31 @@ describe('论坛类别分流', () => {
     expect(listTopics).not.toHaveBeenCalled()
   })
 
+  it('「我的」二级新增赞过/围观/浏览记录：各调各的服务端接口（#701）', async () => {
+    vi.mocked(forumApi.getMyTopics).mockResolvedValue({ topics: [], total: 0, page: 1, pages: 0 } as never)
+    vi.mocked(forumApi.getMyLikedTopics).mockResolvedValue({ topics: [], total: 0, page: 1, pages: 0 } as never)
+    vi.mocked(forumApi.getMyObservedTopics).mockResolvedValue({ topics: [], total: 0, page: 1, pages: 0 } as never)
+    vi.mocked(forumApi.getMyViewHistory).mockResolvedValue({ topics: [], total: 0, page: 1, pages: 0 } as never)
+    const wrapper = await mountPage()
+    listTopics.mockClear()
+    categoryGroup(wrapper).vm.$emit('update:modelValue', 'mine')
+    await flushPromises()
+    expect(forumApi.getMyTopics).toHaveBeenCalledTimes(1)
+
+    modeGroup(wrapper).vm.$emit('update:modelValue', 'my-liked')
+    await flushPromises()
+    expect(forumApi.getMyLikedTopics).toHaveBeenCalledTimes(1)
+
+    modeGroup(wrapper).vm.$emit('update:modelValue', 'my-observed')
+    await flushPromises()
+    expect(forumApi.getMyObservedTopics).toHaveBeenCalledTimes(1)
+
+    modeGroup(wrapper).vm.$emit('update:modelValue', 'history')
+    await flushPromises()
+    expect(forumApi.getMyViewHistory).toHaveBeenCalledTimes(1)
+    expect(listTopics).not.toHaveBeenCalled()
+  })
+
   it('从问答 Tab 发讨论帖：会切回讨论 Tab，不会"发布成功却看不到帖"', async () => {
     const createTopic = vi.mocked(forumApi.createTopic)
     createTopic.mockResolvedValue(topic(99, 'discussion') as never)
@@ -233,6 +368,26 @@ describe('论坛类别分流', () => {
     const calls = listTopics.mock.calls
     expect(calls.length).toBeGreaterThan(0)
     expect(calls[calls.length - 1][0].category).toBe('discussion')
+
+    wrapper.unmount()
+  })
+
+  // ADR-0040：经验 Tab 是**只读策展流**，不提供发布入口——
+  // 学员不能自称考经（发帖传 experience 会被后端 400），故这个 Tab 不该出现任何发布按钮。
+  it('经验 Tab 不显示发布入口（只读策展流，ADR-0040）', async () => {
+    const wrapper = await mountPage(3)
+
+    // 讨论 Tab 有发布入口
+    expect(wrapper.find('.forum-header button').exists()).toBe(true)
+    expect(wrapper.find('.forum-header button').text()).toContain('发布新帖')
+
+    // 经验 Tab 没有任何 header 按钮（既不是「发布新帖」也不是「我要提问」）
+    await switchCategory(wrapper, 'experience')
+    expect(wrapper.find('.forum-header button').exists()).toBe(false)
+
+    // 切回讨论 Tab 后入口恢复（不是永久消失）
+    await switchCategory(wrapper, 'discussion')
+    expect(wrapper.find('.forum-header button').text()).toContain('发布新帖')
 
     wrapper.unmount()
   })

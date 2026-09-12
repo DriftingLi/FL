@@ -9,42 +9,12 @@
             <view class="header-right"></view>
         </view>
         <scroll-view class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
-            <!-- 统计卡片 -->
-            <view class="stats-card">
-                <view class="stat-item">
-                    <text class="stat-label">我的错题</text>
-                    <view class="stat-num-row">
-                        <text class="stat-num">{{ stats.total }}</text>
-                        <text class="stat-unit">道</text>
-                    </view>
-                </view>
-                <view class="stat-divider"></view>
-                <view class="stat-item">
-                    <text class="stat-label">今日错题</text>
-                    <view class="stat-num-row">
-                        <text class="stat-num">{{ todayCount }}</text>
-                        <text class="stat-unit">道</text>
-                    </view>
-                </view>
-            </view>
+            <WrongStatsCard :stats-total="stats.total" :today-count="todayCount" />
 
             <!-- 筛选栏：时间/收藏为下拉，错多次为开关，重置在右 -->
-            <view class="filter-bar">
-                <view class="filter-left">
-                    <view class="filter-chip" :class="{ active: sortMode == 'time_asc' }" @click="onTimeTap">
-                        <text class="filter-chip-text">{{ sortMode == 'time_asc' ? '最早在前 ▾' : '时间 ▾' }}</text>
-                    </view>
-                    <view class="filter-chip" :class="{ active: onlyFav }" @click="onFavTap">
-                        <text class="filter-chip-text">{{ onlyFav ? '仅收藏 ▾' : '收藏 ▾' }}</text>
-                    </view>
-                    <view class="filter-chip" :class="{ active: onlyWrongMany }" @click="onWrongManyTap">
-                        <text class="filter-chip-text">错多次</text>
-                    </view>
-                </view>
-                <view class="filter-reset" @click="onResetFilter">
-                    <text class="filter-reset-text">重置</text>
-                </view>
-            </view>
+            <WrongFilterBar :sort-mode="sortMode" :only-fav="onlyFav" :only-wrong-many="onlyWrongMany"
+                @time-change="onTimeChange" @fav-change="onFavChange" @wrong-many-change="onWrongManyChange"
+                @reset="onResetFilter" />
 
             <!-- 分组视图（默认）：按题型分组 -->
             <view v-if="grouped">
@@ -74,63 +44,12 @@
                     <text class="empty-text">该分组暂无错题</text>
                 </view>
                 <view class="record-list">
-                    <view v-for="(item, idx) in records" :key="idx" class="record-card">
-                        <view class="record-header">
-                            <text class="record-type-tag">{{ getTypeName(item.type) }}</text>
-                            <text class="record-wrong-count">错 {{ item.wrong_count }} 次</text>
-                            <text v-if="item.favorited" class="record-fav-tag">收藏</text>
-                            <text class="record-date">{{ formatDateStr(item.created_at) }}</text>
-                        </view>
-                        <text class="record-title">{{ item.title }}</text>
-
-                        <!-- 展开态：重做交互 -->
-                        <view v-if="isExpanded(item.question_id)" class="redo-section">
-                            <view class="option-list">
-                                <view v-for="(opt, oidx) in item.options" :key="oidx"
-                                    class="option-item" :class="getOptionClass(item, opt.key)"
-                                    @click="onOptionClick(item, opt.key)">
-                                    <view class="option-key" :class="getOptionKeyClass(item, opt.key)">
-                                        <text class="option-key-text">{{ opt.key }}</text>
-                                    </view>
-                                    <text class="option-text">{{ opt.text }}</text>
-                                </view>
-                            </view>
-
-                            <!-- 重做结果 -->
-                            <view v-if="hasRedoResult()" class="redo-result"
-                                :class="redoResultClass()">
-                                <text class="redo-result-text">{{ redoResultLabel() }}</text>
-                                <text class="redo-result-answer">我的答案：{{ redoResultUserAnswer() }}</text>
-                                <text class="redo-result-answer">正确答案：{{ redoResultAnswer() }}</text>
-                                <text v-if="redoResultLocalMatch()" class="redo-result-hint">提示：选项内容一致，可能因答案格式差异被判错</text>
-                            </view>
-
-                            <!-- 操作按钮 -->
-                            <view class="redo-actions">
-                                <view v-if="!hasRedoResult()" class="redo-btn redo-btn-primary"
-                                    @click="onSubmitRedo(item)">
-                                    <text class="redo-btn-text">提交答案</text>
-                                </view>
-                                <view v-if="hasRedoResult() && redoResultCorrect()" class="redo-btn redo-btn-success"
-                                    @click="onRemove(item)">
-                                    <text class="redo-btn-text">移出错题本</text>
-                                </view>
-                                <view v-else class="redo-btn redo-btn-danger" @click="onRemove(item)">
-                                    <text class="redo-btn-text">移出错题本</text>
-                                </view>
-                            </view>
-                        </view>
-
-                        <!-- 折叠态操作按钮 -->
-                        <view v-if="!isExpanded(item.question_id)" class="card-actions">
-                            <view class="card-action-btn" @click="onToggleExpand(item.question_id)">
-                                <text class="card-action-text">重做</text>
-                            </view>
-                            <view class="card-action-btn card-action-danger" @click="onRemove(item)">
-                                <text class="card-action-text card-action-danger-text">移出</text>
-                            </view>
-                        </view>
-                    </view>
+                    <WrongQuestionCard v-for="(item, idx) in records" :key="idx"
+                        :item-type="item.type" :item-title="item.title" :item-created-date="item.created_at"
+                        :wrong-count="item.wrong_count" :favorited="item.favorited" :options="item.options"
+                        :expanded="expandedId == item.question_id" :redo-result="expandedId == item.question_id ? redoResult : null"
+                        :last-redo-answer="lastRedoAnswer" @toggle-expand="onToggleExpand(item.question_id)"
+                        @submit-redo="onSubmitRedo(item, $event as string[])" @remove="onRemove(item)" />
                 </view>
                 <view v-if="loading" class="loading-more">
                     <text class="loading-text">加载中...</text>
@@ -155,13 +74,11 @@
         removeWrongQuestionApi,
     } from '../../api/wrongQuestion'
     import type { WrongQuestionQuery } from '../../api/wrongQuestion'
-    import type { WrongQuestionItem, WrongQuestionStats } from '../../types/index'
-
-    /** ISO 日期字符串 → YYYY-MM-DD */
-    function formatDateStr(dateStr : string) : string {
-        if (dateStr == null || dateStr.length < 10) return dateStr
-        return dateStr.substring(0, 10)
-    }
+    import { getTypeName, isMultiChoice } from '../../utils/wrongQuestionDisplay'
+    import type { WrongQuestionItem, WrongQuestionStats, WrongQuestionListResult } from '../../types/index'
+    import WrongStatsCard from './components/wrong-stats-card.uvue'
+    import WrongQuestionCard from './components/wrong-question-card.uvue'
+    import WrongFilterBar from './components/wrong-filter-bar.uvue'
 
     /** 题型分组行 */
     type GroupRow = {
@@ -196,29 +113,29 @@
     const loading = ref<boolean>(false)
     const noMore = ref<boolean>(false)
 
-    // 统计
-    const stats = ref<WrongQuestionStats>({
-        total: 0,
-        by_type: {} as UTSJSONObject,
-        by_knowledge_point: {} as UTSJSONObject,
-    } as WrongQuestionStats)
-
     // 今日错题（后端无 today_count，用一次大页拉取按 created_at 统计）
     const todayCount = ref<number>(0)
 
     // 当前展开的题目 ID（0 表示都折叠）。同一时间只展开一道题，
     // 因此选中答案与重做结果用单值 ref，避免 UTSJSONObject 索引/null 赋值在 uvue 模板中的兼容性问题。
     const expandedId = ref<number>(0)
-    const selectedKeys = ref<string[]>([])
     const lastRedoAnswer = ref<string>('')
     const redoResult = ref<RedoResult | null>(null)
 
-    /** 题型名称 */
-    function getTypeName(type : string) : string {
-        if (type == 'single' || type == 'single_choice') return '单选题'
-        if (type == 'multi' || type == 'multiple_choice' || type == 'multi_choice') return '多选题'
-        if (type == 'judge' || type == 'true_false') return '判断题'
-        return '其他'
+    // 统计：页面所有（声明必须先于消费它的 groups computed——Kotlin 局部无前向引用）
+    const stats = ref<WrongQuestionStats>({
+        total: 0,
+        by_type: {} as UTSJSONObject,
+        by_knowledge_point: {} as UTSJSONObject,
+    } as WrongQuestionStats)
+
+    async function loadStats() : Promise<void> {
+        try {
+            const data : WrongQuestionStats = await getWrongQuestionStatsApi()
+            stats.value = data
+        } catch (e) {
+            console.error('[wrong-questions] load stats failed:', e)
+        }
     }
 
     /** 分组行：stats.by_type → {label, typeKey, count}，按数量降序 */
@@ -260,7 +177,7 @@
         return d.getFullYear() + '-' + padZero(d.getMonth() + 1) + '-' + padZero(d.getDate())
     }
 
-    /** 今日错题：拉一大页按 created_at 前缀统计（后端无 today_count 的近似，500 内准确） */
+        /** 今日错题：拉一大页按 created_at 前缀统计（后端无 today_count 的近似，500 内准确） */
     function loadTodayCount() : void {
         const q : WrongQuestionQuery = { type: '', sort: '', favorited: false, minWrongCount: 0 } as WrongQuestionQuery
         getWrongQuestionsApi(1, 500, q).then((res) : void => {
@@ -276,154 +193,8 @@
         }).catch(() => {})
     }
 
-    /** 是否多选题 */
-    function isMultiChoice(type : string) : boolean {
-        return type == 'multi' || type == 'multiple_choice' || type == 'multi_choice'
-    }
 
-    /** 当前展开判断（模板调用） */
-    function isExpanded(qid : number) : boolean {
-        return expandedId.value == qid
-    }
-
-    /** 是否已提交重做（模板调用） */
-    function hasRedoResult() : boolean {
-        return redoResult.value != null
-    }
-
-    /** 重做结果是否正确（模板调用） */
-    function redoResultCorrect() : boolean {
-        const r = redoResult.value
-        if (r == null) return false
-        return r.correct
-    }
-
-    /** 重做结果样式类（模板调用） */
-    function redoResultClass() : string {
-        const r = redoResult.value
-        if (r == null) return ''
-        return r.correct ? 'correct' : 'wrong'
-    }
-
-    /** 重做结果文案（模板调用） */
-    function redoResultLabel() : string {
-        const r = redoResult.value
-        if (r == null) return ''
-        return r.correct ? '回答正确' : '回答错误'
-    }
-
-    /** 重做结果正确答案（模板调用） */
-    function redoResultAnswer() : string {
-        const r = redoResult.value
-        if (r == null) return ''
-        return r.correct_answer
-    }
-
-    /** 重做结果用户答案（模板调用） */
-    function redoResultUserAnswer() : string {
-        return lastRedoAnswer.value.length > 0 ? lastRedoAnswer.value : '未作答'
-    }
-
-    /** 将答案字符串解析为 key 数组，兼容多种分隔符（声明在 redoResultLocalMatch 之前，避免 Kotlin 局部函数前向引用） */
-    function parseAnswerKeys(answer : string) : string[] {
-        if (answer.length == 0) return [] as string[]
-        if (answer == 'true' || answer == 'false') return [answer] as string[]
-        let separator = ''
-        if (answer.indexOf(',') >= 0) separator = ','
-        else if (answer.indexOf('，') >= 0) separator = '，'
-        else if (answer.indexOf(' ') >= 0) separator = ' '
-        else if (answer.indexOf(';') >= 0) separator = ';'
-        else if (answer.indexOf('|') >= 0) separator = '|'
-        if (separator.length > 0) {
-            const parts = answer.split(separator)
-            const keys : string[] = []
-            for (let i = 0; i < parts.length; i++) {
-                const k = parts[i].trim()
-                if (k.length > 0) keys.push(k)
-            }
-            return keys
-        }
-        const keys : string[] = []
-        for (let i = 0; i < answer.length; i++) {
-            keys.push(answer.charAt(i))
-        }
-        return keys
-    }
-
-    /** 本地比对：用户答案与正确答案 key 集合是否一致（模板调用） */
-    function redoResultLocalMatch() : boolean {
-        const r = redoResult.value
-        if (r == null) return false
-        if (r.correct) return false
-        const correctKeys = parseAnswerKeys(r.correct_answer)
-        const userKeys = parseAnswerKeys(lastRedoAnswer.value)
-        if (correctKeys.length != userKeys.length) return false
-        if (correctKeys.length == 0) return false
-        const sortedCorrect = correctKeys.slice().sort().join('')
-        const sortedUser = userKeys.slice().sort().join('')
-        return sortedCorrect == sortedUser
-    }
-
-    /** 选项是否已选中 */
-    function isSelected(key : string) : boolean {
-        return selectedKeys.value.indexOf(key) >= 0
-    }
-
-    /** 答案是否包含某 key */
-    function isAnswerContains(answer : string, key : string) : boolean {
-        const keys = parseAnswerKeys(answer)
-        return keys.indexOf(key) >= 0
-    }
-
-    /** 选项样式类（模板调用） */
-    function getOptionClass(item : WrongQuestionItem, key : string) : string {
-        const r = redoResult.value
-        if (r != null) {
-            if (isAnswerContains(r.correct_answer, key)) return 'option-correct'
-            if (isSelected(key) && !isAnswerContains(r.correct_answer, key)) return 'option-wrong'
-            return ''
-        }
-        return isSelected(key) ? 'option-selected' : ''
-    }
-
-    /** 选项 key 样式类（模板调用） */
-    function getOptionKeyClass(item : WrongQuestionItem, key : string) : string {
-        const r = redoResult.value
-        if (r != null) {
-            if (isAnswerContains(r.correct_answer, key)) return 'option-key-correct'
-            if (isSelected(key) && !isAnswerContains(r.correct_answer, key)) return 'option-key-wrong'
-            return ''
-        }
-        return isSelected(key) ? 'option-key-selected' : ''
-    }
-
-    /** 点击选项 */
-    function onOptionClick(item : WrongQuestionItem, key : string) : void {
-        if (redoResult.value != null) return
-        if (isMultiChoice(item.type)) {
-            const idx = selectedKeys.value.indexOf(key)
-            if (idx >= 0) {
-                selectedKeys.value.splice(idx, 1)
-            } else {
-                selectedKeys.value.push(key)
-            }
-        } else {
-            // 单选/判断：替换为单元素数组
-            const arr : string[] = [key]
-            selectedKeys.value = arr
-        }
-    }
-
-    async function loadStats() {
-        try {
-            const data = await getWrongQuestionStatsApi()
-            stats.value = data
-        } catch (e) {
-            console.error('[wrong-questions] load stats failed:', e)
-        }
-    }
-
-    async function loadRecords(reset : boolean = false) {
+    async function loadRecords(reset : boolean = false) : Promise<void> {
         if (loading.value) return
         if (reset) {
             page.value = 1
@@ -433,7 +204,7 @@
 
         loading.value = true
         try {
-            const result = await getWrongQuestionsApi(page.value, pageSize, buildQuery())
+            const result : WrongQuestionListResult = await getWrongQuestionsApi(page.value, pageSize, buildQuery())
             if (reset) {
                 records.value = result.items
             } else {
@@ -455,7 +226,6 @@
 
     function resetRedoState() : void {
         expandedId.value = 0
-        selectedKeys.value = [] as string[]
         lastRedoAnswer.value = ''
         redoResult.value = null
     }
@@ -477,27 +247,17 @@
     }
 
     // ===== 筛选交互 =====
-    function onTimeTap() : void {
-        uni.showActionSheet({
-            itemList: ['最近错误在前', '最早错误在前'],
-            success: (res) => {
-                sortMode.value = res.tapIndex == 1 ? 'time_asc' : 'desc'
-                if (!grouped.value) loadRecords(true)
-            }
-        })
+    function onTimeChange(mode : string) : void {
+        sortMode.value = mode
+        if (!grouped.value) loadRecords(true)
     }
 
-    function onFavTap() : void {
-        uni.showActionSheet({
-            itemList: ['全部错题', '仅看收藏'],
-            success: (res) => {
-                onlyFav.value = res.tapIndex == 1
-                if (!grouped.value) loadRecords(true)
-            }
-        })
+    function onFavChange(v : boolean) : void {
+        onlyFav.value = v
+        if (!grouped.value) loadRecords(true)
     }
 
-    function onWrongManyTap() : void {
+    function onWrongManyChange() : void {
         onlyWrongMany.value = !onlyWrongMany.value
         if (!grouped.value) loadRecords(true)
     }
@@ -519,9 +279,8 @@
             // 收起当前题
             expandedId.value = 0
         } else {
-            // 展开新题，重置该题的选中与结果
+            // 展开新题，重置该题结果（选中态随新卡片挂载归零）
             expandedId.value = qid
-            selectedKeys.value = [] as string[]
             lastRedoAnswer.value = ''
             redoResult.value = null
         }
@@ -540,13 +299,12 @@
         total.value = Math.max(0, total.value - 1)
         if (expandedId.value == questionId) {
             expandedId.value = 0
-            selectedKeys.value = [] as string[]
             redoResult.value = null
         }
     }
 
-    async function onSubmitRedo(item : WrongQuestionItem) : Promise<void> {
-        if (selectedKeys.value.length == 0) {
+    async function onSubmitRedo(item : WrongQuestionItem, answerKeys : string[] = []) : Promise<void> {
+        if (answerKeys.length == 0) {
             uni.showToast({ title: '请选择答案', icon: 'none' })
             return
         }
@@ -555,13 +313,13 @@
         if (isMultiChoice(item.type)) {
             // 拷贝后排序，避免修改原数组
             const sorted : string[] = []
-            for (let i = 0; i < selectedKeys.value.length; i++) {
-                sorted.push(selectedKeys.value[i])
+            for (let i = 0; i < answerKeys.length; i++) {
+                sorted.push(answerKeys[i])
             }
             sorted.sort()
             userAnswer = sorted.join(',')
         } else {
-            userAnswer = selectedKeys.value[0]
+            userAnswer = answerKeys[0]
         }
         lastRedoAnswer.value = userAnswer
 
@@ -582,7 +340,7 @@
                 }
                 removeFromList(item.question_id)
                 uni.showToast({ title: '回答正确，已移出错题本', icon: 'success' })
-                // 刷新统计
+                // 刷新统计（stats 归页面所有，见 loadStats）
                 loadStats()
             } else {
                 // 重做错误：显示结果，保留在错题本中
@@ -608,7 +366,7 @@
             await removeWrongQuestionApi(item.question_id)
             uni.showToast({ title: '已移出错题本', icon: 'success' })
             removeFromList(item.question_id)
-            // 刷新统计
+            // 刷新统计（stats 归页面所有，见 loadStats）
             loadStats()
         } catch (e) {
             console.error('[wrong-questions] remove failed:', e)
@@ -695,101 +453,6 @@
         height: 0;
     }
 
-    /* 统计卡片 */
-    .stats-card {
-        margin: 24rpx;
-        background-color: #ffffff;
-        border-radius: 16rpx;
-        padding: 32rpx 0;
-        flex-direction: row;
-        justify-content: space-around;
-        border: 1rpx solid #eeeeee;
-    }
-
-    .stat-item {
-        flex: 1;
-        flex-direction: column;
-        align-items: center;
-    }
-
-    .stat-num-row {
-        flex-direction: row;
-        align-items: flex-start;
-        justify-content: center;
-    }
-
-    .stat-num {
-        font-size: 48rpx;
-        font-weight: bold;
-        color: #333333;
-    }
-
-    .stat-unit {
-        font-size: 24rpx;
-        color: #999999;
-        margin-left: 8rpx;
-    }
-
-    .stat-label {
-        font-size: 24rpx;
-        color: #999999;
-        margin-bottom: 8rpx;
-    }
-
-    .stat-divider {
-        width: 1rpx;
-        background-color: #f0f0f0;
-    }
-
-    /* 筛选栏 */
-    .filter-bar {
-        background-color: #ffffff;
-        margin: 0 24rpx;
-        padding: 16rpx 20rpx;
-        border-radius: 16rpx;
-        border: 1rpx solid #eeeeee;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-    }
-
-    .filter-left {
-        flex-direction: row;
-        align-items: center;
-        flex: 1;
-    }
-
-    .filter-chip {
-        padding: 10rpx 24rpx;
-        border-radius: 32rpx;
-        background-color: #f5f5f5;
-        margin-right: 14rpx;
-        flex-shrink: 0;
-    }
-
-    .filter-chip.active {
-        background-color: #e3f2fd;
-        border: 1rpx solid #2979ff;
-    }
-
-    .filter-chip-text {
-        font-size: 24rpx;
-        color: #666666;
-    }
-
-    .filter-chip.active .filter-chip-text {
-        color: #2979ff;
-    }
-
-    .filter-reset {
-        padding: 10rpx 8rpx;
-        flex-shrink: 0;
-    }
-
-    .filter-reset-text {
-        font-size: 24rpx;
-        color: #666666;
-    }
 
     /* 分组卡片 */
     .group-list {
@@ -875,245 +538,6 @@
         padding: 16rpx 24rpx 0;
     }
 
-    .record-card {
-        background-color: #ffffff;
-        border-radius: 16rpx;
-        padding: 24rpx;
-        margin-bottom: 16rpx;
-        border: 1px solid #eeeeee;
-        flex-direction: column;
-    }
-
-    .record-header {
-        flex-direction: row;
-        align-items: center;
-        margin-bottom: 16rpx;
-    }
-
-    .record-type-tag {
-        font-size: 20rpx;
-        color: #ffffff;
-        background-color: #ff5722;
-        padding: 4rpx 12rpx;
-        border-radius: 6rpx;
-        margin-right: 12rpx;
-    }
-
-    .record-wrong-count {
-        font-size: 22rpx;
-        color: #f44336;
-        background-color: #ffebee;
-        padding: 4rpx 12rpx;
-        border-radius: 6rpx;
-        margin-right: 12rpx;
-    }
-
-    .record-fav-tag {
-        font-size: 20rpx;
-        color: #2979ff;
-        background-color: #e3f2fd;
-        padding: 4rpx 12rpx;
-        border-radius: 6rpx;
-        margin-right: 12rpx;
-    }
-
-    .record-date {
-        font-size: 22rpx;
-        color: #cccccc;
-    }
-
-    .record-title {
-        font-size: 30rpx;
-        color: #333333;
-        line-height: 1.5;
-        margin-bottom: 16rpx;
-    }
-
-    /* 重做区域 */
-    .redo-section {
-        flex-direction: column;
-        margin-bottom: 16rpx;
-    }
-
-    .option-list {
-        flex-direction: column;
-        margin-bottom: 16rpx;
-    }
-
-    .option-item {
-        flex-direction: row;
-        align-items: center;
-        padding: 20rpx 16rpx;
-        background-color: #f8f9fa;
-        border-radius: 8rpx;
-        margin-bottom: 12rpx;
-        border: 2rpx solid transparent;
-    }
-
-    .option-selected {
-        background-color: #e3f2fd;
-        border-color: #2979ff;
-    }
-
-    .option-correct {
-        background-color: #e8f5e9;
-        border-color: #4caf50;
-    }
-
-    .option-wrong {
-        background-color: #ffebee;
-        border-color: #f44336;
-    }
-
-    .option-key {
-        width: 48rpx;
-        height: 48rpx;
-        border-radius: 24rpx;
-        background-color: #e0e0e0;
-        align-items: center;
-        justify-content: center;
-        margin-right: 16rpx;
-    }
-
-    .option-key-selected {
-        background-color: #2979ff;
-    }
-
-    .option-key-correct {
-        background-color: #4caf50;
-    }
-
-    .option-key-wrong {
-        background-color: #f44336;
-    }
-
-    .option-key-text {
-        font-size: 24rpx;
-        font-weight: bold;
-        color: #333333;
-    }
-
-    .option-key-selected .option-key-text {
-        color: #ffffff;
-    }
-
-    .option-key-correct .option-key-text {
-        color: #ffffff;
-    }
-
-    .option-key-wrong .option-key-text {
-        color: #ffffff;
-    }
-
-    .option-text {
-        flex: 1;
-        font-size: 26rpx;
-        color: #333333;
-    }
-
-    .redo-result {
-        flex-direction: column;
-        padding: 16rpx;
-        border-radius: 8rpx;
-        margin-bottom: 16rpx;
-    }
-
-    .redo-result.correct {
-        background-color: #e8f5e9;
-    }
-
-    .redo-result.wrong {
-        background-color: #ffebee;
-    }
-
-    .redo-result-text {
-        font-size: 26rpx;
-        font-weight: bold;
-        margin-bottom: 8rpx;
-    }
-
-    .redo-result.correct .redo-result-text {
-        color: #4caf50;
-    }
-
-    .redo-result.wrong .redo-result-text {
-        color: #f44336;
-    }
-
-    .redo-result-answer {
-        font-size: 24rpx;
-        color: #666666;
-    }
-
-    .redo-result-hint {
-        font-size: 22rpx;
-        color: #ff9800;
-        margin-top: 8rpx;
-    }
-
-    .redo-actions {
-        flex-direction: row;
-        justify-content: flex-end;
-    }
-
-    .redo-btn {
-        padding: 12rpx 32rpx;
-        border-radius: 32rpx;
-        margin-left: 16rpx;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .redo-btn-primary {
-        background-color: #2979ff;
-    }
-
-    .redo-btn-success {
-        background-color: #4caf50;
-    }
-
-    .redo-btn-danger {
-        background-color: #ffffff;
-        border: 1rpx solid #f44336;
-    }
-
-    .redo-btn-text {
-        font-size: 24rpx;
-        color: #ffffff;
-    }
-
-    .redo-btn-danger .redo-btn-text {
-        color: #f44336;
-    }
-
-    /* 折叠态操作 */
-    .card-actions {
-        flex-direction: row;
-        justify-content: flex-end;
-        padding-top: 8rpx;
-        border-top: 1rpx solid #f5f5f5;
-    }
-
-    .card-action-btn {
-        padding: 8rpx 24rpx;
-        border-radius: 24rpx;
-        background-color: #2979ff;
-        margin-left: 16rpx;
-    }
-
-    .card-action-danger {
-        background-color: #ffffff;
-        border: 1rpx solid #f44336;
-    }
-
-    .card-action-text {
-        font-size: 24rpx;
-        color: #ffffff;
-    }
-
-    .card-action-danger-text {
-        color: #f44336;
-    }
 
     .empty-tip {
         align-items: center;

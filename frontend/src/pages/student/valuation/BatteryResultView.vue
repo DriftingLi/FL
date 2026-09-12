@@ -12,6 +12,9 @@ import { useBatteryStore } from '@/stores/valuationBattery'
 import { downloadBatteryReportBlob, generateBatteryReport } from '@/api/valuation/battery'
 import { downloadReport } from '@/composables/useReportDownload'
 import { BATTERY_TYPE_LABELS, type BatteryType } from '@/types/valuation/battery'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiButton from '@/components/ui/UiButton.vue'
+import UiTag from '@/components/ui/UiTag.vue'
 
 const router = useRouter()
 const store = useBatteryStore()
@@ -69,10 +72,10 @@ async function downloadPdf() {
       :subtitle="`battery #${id} · ${batteryTypeName}`"
     >
       <template #actions>
-        <el-button :icon="Edit" @click="goEdit">重新评估</el-button>
-        <el-button type="primary" :icon="Download" @click="downloadPdf">
+        <UiButton :icon="Edit" @click="goEdit">重新评估</UiButton>
+        <UiButton variant="primary" :icon="Download" @click="downloadPdf">
           下载 PDF
-        </el-button>
+        </UiButton>
       </template>
     </PageHeader>
 
@@ -106,7 +109,7 @@ async function downloadPdf() {
           <div class="feature-head">
             <span class="feature-rank">{{ String(index + 1).padStart(2, '0') }}</span>
             <span class="feature-name">{{ item.name }}</span>
-            <el-tag class="feature-group" effect="plain">{{ item.group }}</el-tag>
+            <UiTag class="feature-group" effect="plain">{{ item.group }}</UiTag>
           </div>
           <el-progress
             :percentage="Math.round(item.normalized * 100)"
@@ -116,7 +119,7 @@ async function downloadPdf() {
           />
         </div>
       </div>
-      <el-empty v-else description="暂无特征数据" />
+      <UiEmptyState v-else description="暂无特征数据" />
     </section>
 
     <!-- 评估建议 -->
@@ -128,7 +131,7 @@ async function downloadPdf() {
       <ResultSuggestions :items="suggestions" variant="battery" />
     </section>
   </div>
-  <el-empty v-else description="暂无评估结果" />
+  <UiEmptyState v-else description="暂无评估结果" />
 </template>
 
 <style scoped>

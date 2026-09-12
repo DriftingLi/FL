@@ -50,50 +50,10 @@
 		<AiChatDrawerRight :visible="sidebarRight" :menu-items="rightMenuItems" :status-bar-height="statusBarHeight" @close="sidebarRight = false" @action="onMenuAction" />
 
 		<!-- 模型选择弹窗 -->
-		<view v-if="showModelPicker" class="picker-mask" @click="showModelPicker = false"></view>
-		<view v-if="showModelPicker" class="model-picker">
-			<view class="picker-title">选择模型</view>
-			<view v-if="allModels.length == 0" class="picker-empty">暂无可用模型</view>
-			<view v-for="(m, idx) in allModels" :key="idx" class="picker-item" :class="{ active: currentModelId == m.id && currentModelSource != 'custom' }" @click="selectModel(m)">
-				<text class="picker-item-name">{{ m.name }}</text>
-				<text class="picker-item-model">{{ m.model }}</text>
-			</view>
-			<view class="picker-action" :class="{ active: currentModelSource == 'custom' }" @click="showCustomForm = true">
-				<text class="picker-action-name">自定义 API Key</text>
-				<text class="picker-action-desc">临时输入模型与密钥</text>
-			</view>
-			<view class="picker-action" @click="goManageModels">
-				<text class="picker-action-name">管理自定义模型</text>
-				<text class="picker-action-desc">新增 / 编辑 / 删除</text>
-			</view>
-		</view>
+		<AiChatModelPicker :visible="showModelPicker" :all-models="allModels" :current-model-id="currentModelId" :current-model-source="currentModelSource" @close="showModelPicker = false" @select="selectModel" @custom="showCustomForm = true" @manage="goManageModels" />
 
 		<!-- 自定义 API Key 弹窗 -->
-		<view v-if="showCustomForm" class="picker-mask" @click="closeCustomForm"></view>
-		<view v-if="showCustomForm" class="model-picker">
-			<view class="picker-title">使用自定义 API Key</view>
-			<view class="custom-hint">仅本次会话有效，不会被保存到服务器。</view>
-			<view class="form-item">
-				<text class="form-label">模型名</text>
-				<input class="form-input" type="text" :value="customModel" placeholder="如：gpt-4o、deepseek-chat" @input="onCustomModelInput" />
-			</view>
-			<view class="form-item">
-				<text class="form-label">Base URL</text>
-				<input class="form-input" type="text" :value="customBaseUrl" placeholder="如：https://api.openai.com/v1" @input="onCustomBaseUrlInput" />
-			</view>
-			<view class="form-item">
-				<text class="form-label">API Key</text>
-				<input class="form-input" type="text" :password="true" :value="customApiKey" placeholder="sk-..." @input="onCustomApiKeyInput" />
-			</view>
-			<view class="custom-actions">
-				<view class="custom-btn cancel" @click="closeCustomForm">
-					<text class="custom-btn-text">取消</text>
-				</view>
-				<view class="custom-btn primary" @click="confirmCustomModel">
-					<text class="custom-btn-text">确认使用</text>
-				</view>
-			</view>
-		</view>
+		<AiChatCustomForm :visible="showCustomForm" :custom-model="customModel" :custom-base-url="customBaseUrl" :custom-api-key="customApiKey" @close="closeCustomForm" @update:custom-model="onCustomModelUpdate" @update:custom-base-url="onCustomBaseUrlUpdate" @update:custom-api-key="onCustomApiKeyUpdate" @confirm="confirmCustomModel" />
 	</view>
 </template>
 
@@ -109,14 +69,17 @@
 	} from '../../api/aiAssistant'
 	import { useAiChat } from '../../composables/useAiChat'
 	import type { ChatBodyBuilder } from '../../composables/useAiChat'
-	import type { AiModel, AiUserModel, AIModelOption, AIFunctionItem, AiChatMessage, AiSession } from '../../types/index'
+	import type { AiModel, AiUserModel, AIModelOption, AiChatMessage, AiSession, AIFunctionItem } from '../../types/index'
 	import { isProPaid, getVersion, setVersion } from '../../utils/aiPay'
 	import { STORAGE_KEY_AI_SELECTED_USER_MODEL } from '../../constants/app'
+	import { FUNCTION_ITEMS, QUICK_PROMPTS, RIGHT_MENU_ITEMS } from './ai-assistant-constants'
 	import AiChatNav from '../../components/ai-chat/ai-chat-nav.uvue'
 	import AiChatBubble from '../../components/ai-chat/ai-chat-bubble.uvue'
 	import AiChatDrawerLeft from '../../components/ai-chat/ai-chat-drawer-left.uvue'
 	import AiChatDrawerRight from '../../components/ai-chat/ai-chat-drawer-right.uvue'
 	import AiChatInput from '../../components/ai-chat/ai-chat-input.uvue'
+	import AiChatModelPicker from '../../components/ai-chat/ai-chat-model-picker.uvue'
+	import AiChatCustomForm from '../../components/ai-chat/ai-chat-custom-form.uvue'
 	import TabBar from '../../components/tab-bar/tab-bar.uvue'
 
 	const auth = useAuthStore()
@@ -152,7 +115,7 @@
 	const models = ref<AiModel[]>([])
 	const userModels = ref<AiUserModel[]>([])
 	const currentModelId = ref<number>(0)
-	const currentModelSource = ref<'admin' | 'user' | 'custom'>('admin')
+	const currentModelSource = ref<string>('admin')
 
 	const allModels = computed<AIModelOption[]>(() : AIModelOption[] => {
 		const arr : AIModelOption[] = []
@@ -180,15 +143,12 @@
 		return '选择模型'
 	})
 
-	// 右侧菜单项
-	type MenuItem = { key: string; label: string }
-	const rightMenuItems : MenuItem[] = [
-		{ key: 'new-chat', label: '新对话' },
-		{ key: 'switch-basic', label: '切换到基础版' },
-		{ key: 'settings', label: '对话设置' },
-		{ key: 'custom-models', label: '自定义模型' },
-		{ key: 'profile', label: '个人中心' },
-	]
+	// 右侧菜单项（从常量导入）
+	const rightMenuItems = RIGHT_MENU_ITEMS
+
+	// 功能入口（从常量导入）
+	const functionItems = FUNCTION_ITEMS
+	const quickPrompts = QUICK_PROMPTS
 
 	// 专业版请求体
 	const buildBody : ChatBodyBuilder = (history : AiChatMessage[], sessionID : number) : UTSJSONObject => {
@@ -202,8 +162,6 @@
 		} else if (currentModelSource.value == 'user') {
 			params['user_model_id'] = currentModelId.value
 		} else {
-			// trim 兜底：用户粘贴 Base URL 常带首尾空白，原样传给后端会让 url.Parse 报
-			// "first path segment in URL cannot contain colon"（自定义模型调用失败）
 			params['custom_api_key'] = customApiKey.value.trim()
 			params['custom_base_url'] = customBaseUrl.value.trim()
 			params['custom_model'] = customModel.value.trim()
@@ -222,7 +180,7 @@
 			return
 		}
 		inputText.value = text
-		sendInput(currentModelName.value, buildBody)
+		sendInput(currentModelName.value, buildBody, [])
 	}
 
 	function sendText(text : string) : void {
@@ -235,7 +193,6 @@
 		uni.setClipboardData({ data: content, success: () => { uni.showToast({ title: '已复制', icon: 'success' }) } })
 	}
 
-	// 先定义后使用：App 端编译为 Kotlin，脚本顶层函数无提升（error18）
 	function getLastUserMessage() : string {
 		for (let i = messages.value.length - 1; i >= 0; i--) {
 			if (messages.value[i].role == 'user') {
@@ -246,7 +203,6 @@
 	}
 
 	function onRetry() : void {
-		// 专业版重试：重新发送最后一条用户消息
 		const lastUserMsg = getLastUserMessage()
 		if (lastUserMsg.length > 0) {
 			inputText.value = lastUserMsg
@@ -254,7 +210,7 @@
 		}
 	}
 
-	// 版本切换（goBasic 先定义再被 onTabChange/onMenuAction 引用：Kotlin 无提升）
+	// 版本切换
 	function goBasic() : void {
 		setVersion('basic')
 		uni.reLaunch({ url: '/pages/ai-assistant/ai-basic' })
@@ -292,25 +248,11 @@
 		}
 	}
 
-	// 功能入口
-	const functionItems : AIFunctionItem[] = [
-		{ key: 'fault-code', title: '故障代码查询', icon: '\uD83D\uDD27', prompt: '帮我查询叉车故障代码含义' },
-		{ key: 'drawing', title: '图纸识别', icon: '\uD83D\uDCD0', prompt: '请识别这张叉车图纸' },
-		{ key: 'exercise', title: '习题解答', icon: '\uD83D\uDCDD', prompt: '请解答这道叉车维修题目' },
-		{ key: 'knowledge', title: '维保知识', icon: '\uD83D\uDCDA', prompt: '请介绍叉车维保相关知识' },
-	]
-
-	const quickPrompts : string[] = [
-		'叉车液压系统常见故障有哪些，如何排查？',
-		'叉车启动困难可能是什么原因？',
-		'叉车日常保养的检查要点有哪些？',
-	]
-
 	function onFunctionClick(item : AIFunctionItem) : void {
 		sendText(item.prompt)
 	}
 
-	// 持久化设置（先定义：被 selectModel 等多处引用，Kotlin 无提升）
+	// 持久化设置
 	function persistSettings() : void {
 		const s = loadAiChatSettings()
 		s.model_source = currentModelSource.value
@@ -389,30 +331,19 @@
 		showCustomForm.value = false
 	}
 
-	function onCustomModelInput(e : InputEvent) : void {
-		customModel.value = e.detail.value
+	function onCustomModelUpdate(value : string) : void {
+		customModel.value = value
 	}
-	function onCustomBaseUrlInput(e : InputEvent) : void {
-		customBaseUrl.value = e.detail.value
+
+	function onCustomBaseUrlUpdate(value : string) : void {
+		customBaseUrl.value = value
 	}
-	function onCustomApiKeyInput(e : InputEvent) : void {
-		customApiKey.value = e.detail.value
+
+	function onCustomApiKeyUpdate(value : string) : void {
+		customApiKey.value = value
 	}
 
 	function confirmCustomModel() : void {
-		if (customModel.value.trim().length == 0) {
-			uni.showToast({ title: '请输入模型名', icon: 'none' })
-			return
-		}
-		if (customBaseUrl.value.trim().length == 0) {
-			uni.showToast({ title: '请输入 Base URL', icon: 'none' })
-			return
-		}
-		if (customApiKey.value.trim().length == 0) {
-			uni.showToast({ title: '请输入 API Key', icon: 'none' })
-			return
-		}
-		// 归一化：确认时一次性 trim 掉首尾空白，避免脏值流入水合/落盘/发送
 		customModel.value = customModel.value.trim()
 		customBaseUrl.value = customBaseUrl.value.trim()
 		customApiKey.value = customApiKey.value.trim()
@@ -626,153 +557,5 @@
 		font-size: 28rpx;
 		color: #333333;
 		line-height: 1.6;
-	}
-
-	/* 模型选择弹窗 */
-	.picker-mask {
-		position: absolute;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		background-color: rgba(0, 0, 0, 0.4);
-		z-index: 200;
-	}
-
-	.model-picker {
-		position: absolute;
-		left: 48rpx;
-		right: 48rpx;
-		top: 30%;
-		background-color: #ffffff;
-		border-radius: 24rpx;
-		padding: 32rpx;
-		z-index: 201;
-	}
-
-	.picker-title {
-		font-size: 32rpx;
-		font-weight: 600;
-		color: #333333;
-		text-align: center;
-		margin-bottom: 24rpx;
-	}
-
-	.picker-empty {
-		text-align: center;
-		font-size: 26rpx;
-		color: #999999;
-		padding: 32rpx 0;
-	}
-
-	.picker-item {
-		padding: 24rpx;
-		border-bottom: 1rpx solid #f5f5f5;
-	}
-
-	.picker-item.active {
-		background-color: #e3f2fd;
-		border-radius: 12rpx;
-	}
-
-	.picker-item-name {
-		font-size: 28rpx;
-		color: #333333;
-		font-weight: 500;
-	}
-
-	.picker-item-model {
-		font-size: 22rpx;
-		color: #999999;
-		margin-top: 6rpx;
-	}
-
-	.picker-action {
-		flex-direction: row;
-		align-items: center;
-		justify-content: space-between;
-		padding: 24rpx;
-		border-bottom: 1rpx solid #f5f5f5;
-	}
-
-	.picker-action.active {
-		background-color: #e3f2fd;
-		border-radius: 12rpx;
-	}
-
-	.picker-action-name {
-		font-size: 28rpx;
-		color: #2979ff;
-		font-weight: 500;
-	}
-
-	.picker-action-desc {
-		font-size: 22rpx;
-		color: #999999;
-	}
-
-	/* 自定义 API Key 弹窗 */
-	.custom-hint {
-		font-size: 24rpx;
-		color: #999999;
-		line-height: 1.6;
-		margin-bottom: 24rpx;
-		background-color: #f5f6f8;
-		border-radius: 12rpx;
-		padding: 16rpx 20rpx;
-	}
-
-	.form-item {
-		margin-bottom: 20rpx;
-	}
-
-	.form-label {
-		font-size: 24rpx;
-		color: #666666;
-		margin-bottom: 10rpx;
-	}
-
-	.form-input {
-		height: 80rpx;
-		background-color: #f5f6f8;
-		border-radius: 12rpx;
-		padding: 0 24rpx;
-		font-size: 28rpx;
-		color: #333333;
-	}
-
-	.custom-actions {
-		flex-direction: row;
-		margin-top: 8rpx;
-	}
-
-	.custom-btn {
-		flex: 1;
-		height: 88rpx;
-		border-radius: 44rpx;
-		align-items: center;
-		justify-content: center;
-	}
-
-	.custom-btn.cancel {
-		background-color: #f0f0f0;
-		margin-right: 16rpx;
-	}
-
-	.custom-btn.primary {
-		background-color: #2979ff;
-	}
-
-	.custom-btn-text {
-		font-size: 30rpx;
-		font-weight: bold;
-	}
-
-	.custom-btn.cancel .custom-btn-text {
-		color: #333333;
-	}
-
-	.custom-btn.primary .custom-btn-text {
-		color: #ffffff;
 	}
 </style>

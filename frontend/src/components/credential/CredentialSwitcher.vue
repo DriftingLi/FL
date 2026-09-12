@@ -4,11 +4,11 @@
     :class="{ collapsed: collapsed, 'is-dark': props.theme === 'dark' }"
   >
     <div v-if="collapsed" class="collapsed-view">
-      <el-tooltip :content="current?.name || '选择证件'" placement="right" :show-after="300">
+      <UiTooltip :content="current?.name || '选择证件'" placement="right" :show-after="300">
         <div class="collapsed-icon" @click="switcherVisible = true">
           <el-icon><Notebook /></el-icon>
         </div>
-      </el-tooltip>
+      </UiTooltip>
     </div>
     <div v-else class="expanded-view">
       <div class="switcher-label">当前证件</div>
@@ -44,7 +44,7 @@
     </div>
 
     <!-- collapsed 展开为 dialog 选择 -->
-    <el-dialog v-model="switcherVisible" title="切换证件" width="380px" append-to-body>
+    <UiDialog v-model="switcherVisible" title="切换证件" width="380px" append-to-body confirm-text="确定" :confirm-loading="switching" @confirm="switcherVisible = false">
       <el-select
         v-model="selectedId"
         placeholder="请选择证件"
@@ -58,11 +58,7 @@
           <el-option v-for="c in credentialStore.grouped.skill_level" :key="c.id" :label="levelLabel(c)" :value="c.id" />
         </el-option-group>
       </el-select>
-      <template #footer>
-        <UiButton @click="switcherVisible = false">取消</UiButton>
-        <UiButton variant="primary" :loading="switching" @click="switcherVisible = false">确定</UiButton>
-      </template>
-    </el-dialog>
+    </UiDialog>
   </div>
 </template>
 
@@ -72,7 +68,8 @@ import { useCredentialStore } from '@/stores/credential'
 import type { CredentialDict } from '@/api/credential'
 import { Notebook } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import UiButton from '@/components/ui/UiButton.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
+import UiTooltip from '@/components/ui/UiTooltip.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -111,7 +108,7 @@ function handleChange(val: number) {
     .then(() => {
       ElMessage.success('已切换证件')
       switcherVisible.value = false
-      // 全局刷新由各页面经 useCredentialRefetch watch store 变化完成（#387 单点）
+      // 受证件过滤页面的失效刷新由 useAsyncPage 内聚 watch store 变化完成（#604 单点）
     })
     .catch((e: any) => {
       ElMessage.error(e?.message || '切换失败')

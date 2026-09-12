@@ -16,7 +16,7 @@
       @retry="handleRetry"
     />
     <UiSkeleton v-else-if="loading" variant="list" :count="4" />
-    <div v-else-if="items.length === 0" class="rounded-card border border-line bg-panel p-8 text-center text-ink-3">暂无投递</div>
+    <UiEmptyState v-else-if="items.length === 0" description="暂无投递" />
     <div v-else class="grid gap-3">
       <div
         v-for="item in items"
@@ -28,8 +28,8 @@
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2">
               <span class="text-sm font-semibold text-ink">{{ item.student_real_name_masked || '匿名学员' }}</span>
-              <el-tag v-if="!item.employer_viewed_at" type="warning" size="small">未读</el-tag>
-              <el-tag :type="tagType(item.status)" size="small">{{ statusLabel(item.status) }}</el-tag>
+              <UiTag v-if="!item.employer_viewed_at" tone="warning" size="small">未读</UiTag>
+              <UiTag :tone="tagType(item.status)" size="small">{{ statusLabel(item.status) }}</UiTag>
             </div>
             <div class="mt-1 text-xs text-ink-3">投递于 {{ item.created_at }}</div>
             <div v-if="resumeUpdated(item)" class="mt-1 text-xs text-orange-500">该候选人自你收到投递后又更新过简历</div>
@@ -42,13 +42,13 @@
       </div>
     </div>
     <div v-if="total > 0" class="flex justify-center">
-      <el-pagination
-        v-model:current-page="page"
-        :page-size="pageSize"
-        :total="total"
-        layout="prev, pager, next"
-        @current-change="handlePageChange"
-      />
+      <UiPagination
+      v-model:current-page="page"
+      :page-size="pageSize"
+      :total="total"
+      :show-total="false"
+      @current-change="handlePageChange"
+    />
     </div>
 
     <!-- 投递详情抽屉（#490）：内嵌在线简历 PDF + 明文联系方式（投递即授权）+ 标记不合适 -->
@@ -57,7 +57,7 @@
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
             <span class="font-semibold text-ink">{{ current.student_real_name_masked || '匿名学员' }}</span>
-            <el-tag :type="tagType(current.status)" size="small">{{ statusLabel(current.status) }}</el-tag>
+            <UiTag :tone="tagType(current.status)" size="small">{{ statusLabel(current.status) }}</UiTag>
           </div>
         </div>
         <div class="text-xs text-ink-3">投递于 {{ current.created_at }}</div>
@@ -95,6 +95,9 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import OnlineResumePdf from '@/components/recruit/OnlineResumePdf.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
+import UiTag from '@/components/ui/UiTag.vue'
 
 const route = useRoute()
 const items = ref<JobApplication[]>([])

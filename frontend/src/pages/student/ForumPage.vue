@@ -5,7 +5,9 @@
       <UiButton variant="primary" v-if="mainTab === 'question'" size="large" :icon="EditPen" @click="goAsk">
         我要提问
       </UiButton>
-      <UiButton variant="primary" v-else size="large" :icon="EditPen" @click="openCreateDialog">
+      <!-- 经验 Tab 是只读策展流（ADR-0040）：学员不能自称考经，故不提供发布入口；
+           发布者只能在讨论/提问之间选，想被认定经验要先发成讨论帖再由管理端认定。 -->
+      <UiButton v-else-if="mainTab !== 'experience'" variant="primary" size="large" :icon="EditPen" @click="openCreateDialog">
         发布新帖
       </UiButton>
     </div>
@@ -28,22 +30,33 @@
       :options="[
         { label: '讨论', value: 'discussion' },
         { label: '问答', value: 'question' },
+        { label: '备考经验', value: 'experience' },
         { label: '我的', value: 'mine' }
       ]"
       class="mb-3"
     />
 
-    <!-- 排序 / 求助筛选（讨论、问答）：讨论仅排序，问答额外叠求助/已解决 -->
+    <!-- 排序 / 求助筛选（讨论、问答、经验）：精选筛选三 Tab 通用（#742），问答额外叠求助/已解决 -->
     <div v-if="mainTab !== 'mine'" class="mb-3 flex flex-wrap items-center justify-between gap-3">
-      <div v-if="mainTab === 'question'" class="solved-filter">
+      <div class="flex flex-wrap items-center gap-2">
+        <div v-if="mainTab === 'question'" class="solved-filter">
+          <UiSegmentTabs
+            :model-value="solvedFilter"
+            :options="[
+              { label: '全部', value: 'all' },
+              { label: '求助', value: 'unsolved' },
+              { label: '已解决', value: 'solved' }
+            ]"
+            @update:model-value="(v: string) => { solvedFilter = v as 'all' | 'unsolved' | 'solved'; handleSolvedChange() }"
+          />
+        </div>
         <UiSegmentTabs
-          :model-value="solvedFilter"
+          :model-value="featuredFilter"
           :options="[
-            { label: '全部', value: 'all' },
-            { label: '求助', value: 'unsolved' },
-            { label: '已解决', value: 'solved' }
+            { label: '全部帖', value: '' },
+            { label: '★ 精选', value: 'true' }
           ]"
-          @update:model-value="(v: string) => { solvedFilter = v as 'all' | 'unsolved' | 'solved'; handleSolvedChange() }"
+          @update:model-value="(v: string) => { featuredFilter = v as '' | 'true'; handleFeaturedChange() }"
         />
       </div>
       <div class="ml-auto flex items-center gap-2">
@@ -68,19 +81,17 @@
       :options="[
         { label: '我的帖子', value: 'my-topics' },
         { label: '我的回复', value: 'my-replies' },
+        { label: '赞过', value: 'my-liked' },
+        { label: '围观', value: 'my-observed' },
         { label: '浏览记录', value: 'history' }
       ]"
-      @update:model-value="(v: string) => { mineTab = v as 'my-topics' | 'my-replies' | 'history'; handleMineTabChange() }"
+      @update:model-value="(v: string) => { mineTab = v as MineTab; handleMineTabChange() }"
       class="mb-3"
     />
 
-    <!-- 浏览记录（卡片分组，选型 b） -->
-    <div v-if="showHistory">
-      <ForumHistoryPanel :items="historyItems" @select="handleHistorySelect" @remove="handleHistoryRemove" @clear="handleHistoryClear" />
-    </div>
-
+    <!-- 我的帖子 / 赞过 / 围观 / 浏览记录共用主题列表渲染（仅我的回复走独立分支） -->
     <!-- 我的回复列表（条目带主题标题回填，点击跳对应帖子） -->
-    <div v-else-if="showReplies" class="min-h-[300px] rounded-card bg-panel shadow-card">
+    <div v-if="showReplies" class="min-h-[300px] rounded-card bg-panel shadow-card">
       <UiErrorState
         v-if="loadError"
         title="回复加载失败"
@@ -101,7 +112,7 @@
         >
           <div class="min-w-0 flex-1">
             <div class="flex flex-wrap items-center gap-2">
-              <el-tag size="small" type="info">回复</el-tag>
+              <UiTag size="small" tone="info">回复</UiTag>
               <h3 class="m-0 truncate text-base font-semibold text-ink">{{ reply.topic_title || '原帖已删除' }}</h3>
             </div>
             <p class="mt-1.5 mb-2 line-clamp-2 text-[13px] text-ink-2">{{ reply.content }}</p>
@@ -141,13 +152,16 @@
           <div class="min-w-0 flex-1">
             <div class="flex flex-wrap items-center gap-2">
               <template v-if="topic.category === 'question'">
-                <el-tag v-if="topic.accepted_reply_id || topic.solved_at" size="small" type="success" effect="dark" class="font-semibold">✓ 已解决</el-tag>
-                <el-tag v-else size="small" type="info" effect="plain" class="bg-canvas text-ink-2 border-[var(--color-border-dark)]">求助</el-tag>
+                <UiTag v-if="topic.accepted_reply_id || topic.solved_at" size="small" tone="success" effect="dark" class="font-semibold">✓ 已解决</UiTag>
+                <UiTag v-else size="small" tone="info" effect="plain" class="bg-canvas text-ink-2 border-[var(--color-border-dark)]">求助</UiTag>
               </template>
-              <el-tag v-else-if="topic.chapter_id" size="small" type="warning">
+              <UiTag v-else-if="topic.chapter_id" size="small" tone="warning">
                 {{ topic.chapter_title || '章节讨论' }}
-              </el-tag>
-              <el-tag v-else size="small" type="info">综合</el-tag>
+              </UiTag>
+              <UiTag v-else size="small" tone="info">综合</UiTag>
+              <!-- 认定两轴分开渲染（ADR-0040）：经验蕴含精选，故经验帖两个标签都在 -->
+              <UiTag v-if="topic.is_experience" size="small" tone="warning" effect="dark" class="font-semibold">备考经验</UiTag>
+              <UiTag v-if="topic.is_featured" size="small" effect="dark" class="font-semibold">★ 精选</UiTag>
               <h3 class="m-0 truncate text-base font-semibold text-ink">{{ topic.title }}</h3>
             </div>
             <p class="mt-1.5 mb-2 line-clamp-2 text-[13px] text-ink-2">{{ topic.content }}</p>
@@ -176,16 +190,17 @@
       <UiEmptyState v-else :description="emptyDescription" :action-text="mainTab === 'question' ? '我要提问' : undefined" @action="goAsk" />
     </div>
 
-    <div class="mt-5 flex justify-center" v-if="!showHistory && total > pageSize">
-      <el-pagination
-        v-model:current-page="currentPage"
-        :page-size="pageSize"
-        :total="total"
-        layout="total, prev, pager, next"
-        @current-change="handlePageChange"
-      />
+    <div class="mt-5 flex justify-center" v-if="total > pageSize">
+      <UiPagination
+      v-model:current-page="currentPage"
+      :page-size="pageSize"
+      :total="total"
+      @current-change="handlePageChange"
+    />
     </div>
 
+    <!-- 发布入口（ADR-0040）：经验 Tab 已退为只读策展流——表单默认落「讨论」，且只提供
+         讨论/问答两个意图（即便从经验 Tab 打开，表单也会把历史 experience 归一为 discussion）。 -->
     <UiDialog
       v-model="createDialogVisible"
       title="发布新帖"
@@ -195,7 +210,12 @@
       :confirm-loading="postForm?.submitting"
       @confirm="postForm?.submit()"
     >
-      <ForumPostForm ref="postForm" category="discussion" @success="onTopicCreated" />
+      <ForumPostForm
+        ref="postForm"
+        category="discussion"
+        :categories="['discussion', 'question']"
+        @success="onTopicCreated"
+      />
     </UiDialog>
   </div>
 </template>
@@ -203,16 +223,11 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
 import { EditPen, View, ChatDotRound, Picture, Calendar, ArrowUp, ArrowDown } from '@element-plus/icons-vue'
 import { forumApi, forumTabQuery, type ForumCategory, type ForumTopicItem, type MyReplyItem } from '@/api/forum'
 import { formatRelativeTime } from '@/utils/format'
 import { displayName, authorLetter } from '@/utils/forumDisplay'
 import ForumPostForm from '@/components/student/ForumPostForm.vue'
-import ForumHistoryPanel from '@/components/student/ForumHistoryPanel.vue'
-import { loadHistory, removeHistoryItem, clearHistory } from '@/utils/forumHistory'
-import type { ForumHistoryItem } from '@/utils/forumHistory'
-import { useAuthStore } from '@/stores/auth'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useForumSort } from '@/composables/useForumSort'
 import { useStagger } from '@/composables/useStagger'
@@ -223,40 +238,48 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
+import UiTag from '@/components/ui/UiTag.vue'
 
 const router = useRouter()
 const route = useRoute()
-const authStore = useAuthStore()
 
 const staggerStyle = useStagger()
 const topics = ref<ForumTopicItem[]>([])
 const myReplies = ref<MyReplyItem[]>([])
 
-// ===== 一级 Tab（讨论 / 问答 / 我的）=====
+// ===== 一级 Tab（讨论 / 问答 / 备考经验 / 我的）=====
 // 选哪一片内容看。"我的"是个人视图（无排序、跨类别），原「模式」轴整体下沉为它的二级 Tab。
 type MainTab = ForumCategory | 'mine'
 const mainTab = ref<MainTab>('discussion')
 
-// ===== 我的 二级 Tab（我的帖子 / 我的回复 / 浏览记录）=====
-type MineTab = 'my-topics' | 'my-replies' | 'history'
+// ===== 我的 二级 Tab（我的帖子 / 我的回复 / 赞过 / 围观 / 浏览记录，#701）=====
+type MineTab = 'my-topics' | 'my-replies' | 'my-liked' | 'my-observed' | 'history'
 const mineTab = ref<MineTab>('my-topics')
 
 // ===== 排序双轴收编（#389）：切维度回默认降序（最新/最热优先）=====
 const { sort: topicSort, order: topicOrder, flipOrder, resetOrder } = useForumSort('desc')
-const historyItems = ref<ForumHistoryItem[]>([])
 
 // ===== 求助/已解决筛选（#367）：仅问答 Tab 的筛选轴 =====
 type SolvedFilter = 'all' | 'solved' | 'unsolved'
 const solvedFilter = ref<SolvedFilter>('all')
+
+// ===== 精选筛选（#742）：三 Tab 通用轴，'' = 全部帖 / 'true' = 仅精选 =====
+const featuredFilter = ref<'' | 'true'>('')
 
 function handleSolvedChange() {
   currentPage.value = 1
   loadTopics()
 }
 
+function handleFeaturedChange() {
+  currentPage.value = 1
+  loadTopics()
+}
+
 // 分页与滚动位置按一级 Tab 各存一份：切走再切回来仍停在原来的位置。
-const pageByTab = ref<Record<MainTab, number>>({ discussion: 1, question: 1, mine: 1 })
-const scrollByTab: Record<MainTab, number> = { discussion: 0, question: 0, mine: 0 }
+const pageByTab = ref<Record<MainTab, number>>({ discussion: 1, question: 1, experience: 1, mine: 1 })
+const scrollByTab: Record<MainTab, number> = { discussion: 0, question: 0, experience: 0, mine: 0 }
 
 const currentPage = computed({
   get: () => pageByTab.value[mainTab.value],
@@ -265,18 +288,31 @@ const currentPage = computed({
   }
 })
 
-// 内容分支：三个布尔决定渲染哪一片，逻辑集中在一处比散在 v-if 上更易读。
-const showHistory = computed(() => mainTab.value === 'mine' && mineTab.value === 'history')
+// 内容分支：仅我的回复走独立分支，其余（我的帖子/赞过/围观/浏览记录）同走主题列表分支。
 const showReplies = computed(() => mainTab.value === 'mine' && mineTab.value === 'my-replies')
 
 // 问答 Tab 空态升级为引导（#365 提问入口就位后）：指向"我要提问"
-const emptyDescription = computed(() =>
-  mainTab.value === 'question'
-    ? '还没有人提问，来发第一个提问吧'
-    : mainTab.value === 'mine'
-    ? '你还没有发布过帖子，去讨论区发第一帖吧'
-    : '还没有帖子，来发第一帖吧'
-)
+// 我的 Tab 各视图空态文案（#701）：与移动端个人动态页口径对齐
+const emptyDescription = computed(() => {
+  if (mainTab.value === 'question') return '还没有人提问，来发第一个提问吧'
+  // 经验区是管理端认定的只读策展流（ADR-0040）：不再有「发第一篇」入口，文案不引导发布
+  if (mainTab.value === 'experience') return '还没有备考经验帖'
+  if (mainTab.value === 'mine') {
+    switch (mineTab.value) {
+      case 'my-replies':
+        return '还没有回复过帖子'
+      case 'my-liked':
+        return '还没有点赞过帖子'
+      case 'my-observed':
+        return '还没有围观过帖子'
+      case 'history':
+        return '还没有浏览记录'
+      default:
+        return '你还没有发布过帖子，去讨论区发第一帖吧'
+    }
+  }
+  return '还没有帖子，来发第一帖吧'
+})
 
 watch(mainTab, async (next, prev) => {
   scrollByTab[prev] = window.scrollY
@@ -284,34 +320,20 @@ watch(mainTab, async (next, prev) => {
   if (next !== 'question' && solvedFilter.value !== 'all') {
     solvedFilter.value = 'all'
   }
+  // 精选筛选跨 Tab 不延续（#742）：切 Tab 回到全部帖
+  if (featuredFilter.value !== '') {
+    featuredFilter.value = ''
+  }
   await loadTopics()
   await nextTick()
   window.scrollTo?.({ top: scrollByTab[next] })
 })
 
 function handleMineTabChange() {
-  // 二级 Tab 切换：重置分页并刷新。"我的"内三个视图共用 pageByTab.mine，
+  // 二级 Tab 切换：重置分页并刷新。"我的"内五个视图共用 pageByTab.mine，
   // 切换回到同一页 1，避免"上次切走停留在第 5 页"这种残留。
   currentPage.value = 1
   loadTopics()
-}
-
-function handleHistorySelect(id: number) {
-  const found = historyItems.value.find((h) => h.id === id)
-  if (found?.deleted) {
-    ElMessage.warning('原帖已删除')
-    return
-  }
-  goDetail(id)
-}
-
-function handleHistoryRemove(id: number) {
-  historyItems.value = removeHistoryItem(id, authStore.userInfo?.user_id)
-}
-
-function handleHistoryClear() {
-  historyItems.value = clearHistory(authStore.userInfo?.user_id)
-  ElMessage.success('已清空浏览记录')
 }
 
 function handleSortChange() {
@@ -340,7 +362,12 @@ const {
   total,
   run: loadTopics,
   handlePageChange
-} = useAsyncPage(loadTopicsOnce, { pageRef: currentPage, defaultPageSize: 10 })
+} = useAsyncPage(loadTopicsOnce, {
+  pageRef: currentPage,
+  defaultPageSize: 10,
+  // 论坛不受证件过滤（CONTEXT.md「当前证件」），不随切换重装/重置页码（#604 opt-out）
+  credentialScoped: false
+})
 
 async function loadTopicsOnce() {
   const params = { page: currentPage.value, page_size: pageSize.value }
@@ -348,28 +375,32 @@ async function loadTopicsOnce() {
 
   if (activeMain === 'mine') {
     const activeMine = mineTab.value
-    if (activeMine === 'history') {
-      // 浏览记录是本地 localStorage，无分页
-      historyItems.value = loadHistory(authStore.userInfo?.user_id)
-      total.value = 0
-      return
-    }
     if (activeMine === 'my-replies') {
       const res = await forumApi.getMyReplies(params)
       myReplies.value = res.replies || []
       total.value = res.total || 0
       return
     }
-    const res = await forumApi.getMyTopics(params)
+    // 我的帖子 / 赞过 / 围观 / 浏览记录四视图同走主题列表渲染（#701：响应逐字沿用 my-topics 形态）
+    const fetcher =
+      activeMine === 'my-liked'
+        ? forumApi.getMyLikedTopics
+        : activeMine === 'my-observed'
+          ? forumApi.getMyObservedTopics
+          : activeMine === 'history'
+            ? forumApi.getMyViewHistory
+            : forumApi.getMyTopics
+    const res = await fetcher(params)
     topics.value = res.topics || []
     total.value = res.total || 0
     return
   }
 
-  // activeMain: 'discussion' | 'question'
+  // activeMain: 'discussion' | 'question' | 'experience'（#722 备考经验进场）
   // 查询参数交给 forumTabQuery 统一翻译（与端共用同一份映射）。
   // 关键是讨论 Tab 必须带 category=discussion：后端 scope=general 的定义就是
-  // chapter_id IS NULL，而问答帖的 chapter_id 同为 NULL，漏 category 会让问答帖整片灌进讨论列表。
+  // chapter_id IS NULL，而问答帖与认定经验帖的 chapter_id 同为 NULL，漏 category 会让它们灌进讨论列表。
+  // 经验 Tab 已改走 is_experience=true（ADR-0040）：那是管理端认定，不是学员自述的 category。
   const query = {
     ...forumTabQuery(activeMain),
     sort: topicSort.value,
@@ -379,6 +410,10 @@ async function loadTopicsOnce() {
   // 已解决/求助仅对问答生效（#367 单一筛选轴）
   if (activeMain === 'question' && solvedFilter.value !== 'all') {
     ;(query as { solved?: string }).solved = solvedFilter.value
+  }
+  // 精选筛选（#742）：三 Tab 通用，'' 表示不传（不过滤）
+  if (featuredFilter.value !== '') {
+    ;(query as { featured?: string }).featured = featuredFilter.value
   }
   const res = await forumApi.listTopics(query as Parameters<typeof forumApi.listTopics>[0])
   topics.value = res.topics || []

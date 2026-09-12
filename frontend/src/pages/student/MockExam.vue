@@ -37,7 +37,7 @@
           </el-table-column>
           <el-table-column label="来源" min-width="90">
             <template #default="{ row }">
-              <el-tag v-if="row.paper_id" size="small" type="warning" effect="plain">真题卷</el-tag>
+              <UiTag v-if="row.paper_id" size="small" tone="warning" effect="plain">真题卷</UiTag>
             </template>
           </el-table-column>
         </el-table>
@@ -90,7 +90,9 @@ import { realExamApi } from '@/api/realExam'
 import { formatDateTime } from '@/utils/format'
 import { useExamSession } from '@/composables/useExamSession'
 import { useAsyncPage } from '@/composables/useAsyncPage'
+import AnsweringSessionShell from '@/components/student/AnsweringSessionShell.vue'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiTag from '@/components/ui/UiTag.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -157,8 +159,13 @@ async function startExam() {
   loading.value = true
   try {
     await start()
-  } catch {
-    /* 错误已由拦截器提示 */
+  } catch (e) {
+    /* 空卷兜底由 useExamSession 抛错（#702）：拦截器不认识该本地错误，此处补一句提示 */
+    if (e instanceof Error && e.message === '题库暂无可用的题目') {
+      const { ElMessage } = await import('element-plus')
+      ElMessage.warning('题库暂无可用的题目')
+    }
+    /* 后端错误已由拦截器提示 */
   } finally {
     loading.value = false
   }

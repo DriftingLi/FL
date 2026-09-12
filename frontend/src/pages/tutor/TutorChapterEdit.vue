@@ -172,7 +172,7 @@
     </template>
 
     <!-- 元信息编辑弹窗 -->
-    <el-dialog v-model="metaDialogVisible" title="编辑章节信息" width="500px">
+    <UiDialog v-model="metaDialogVisible" title="编辑章节信息" width="500px" confirm-text="保存" :confirm-loading="savingMeta" @confirm="saveMeta">
       <el-form :model="metaForm" label-width="100px">
         <el-form-item label="章节标题">
           <el-input v-model="metaForm.title" placeholder="请输入章节标题" maxlength="100" show-word-limit />
@@ -190,14 +190,10 @@
           <span class="ml-2 text-[13px] text-ink-3">分钟</span>
         </el-form-item>
       </el-form>
-      <template #footer>
-        <UiButton @click="metaDialogVisible = false">取消</UiButton>
-        <UiButton variant="primary" :loading="savingMeta" @click="saveMeta">保存</UiButton>
-      </template>
-    </el-dialog>
+    </UiDialog>
 
     <!-- 上传文件弹窗 -->
-    <el-dialog
+    <UiDialog
       v-model="uploadDialogVisible"
       :title="`上传${uploadTypeLabel}文件`"
       width="720px"
@@ -211,7 +207,7 @@
         :initial-filter="uploadType"
         @upload-all="handleUploadAll"
       />
-    </el-dialog>
+    </UiDialog>
   </div>
 </template>
 
@@ -222,7 +218,7 @@ import {
   ArrowLeft, ArrowRight, Edit, Check, Upload, Delete,
   VideoCamera, Document
 } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { tutorApi, type TutorChapter, type TutorChapterDetail } from '@/api/tutor'
 import type { ChapterFile } from '@/api/course'
 import MarkdownEditor from '@/components/tutor/MarkdownEditor.vue'
@@ -238,6 +234,8 @@ import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import { useAsyncPage } from '@/composables/useAsyncPage'
+import UiDialog from '@/components/ui/UiDialog.vue'
+import { useConfirm } from '@/composables/useConfirm'
 
 const route = useRoute()
 const router = useRouter()
@@ -403,7 +401,7 @@ function handleUploadAll(result: UploadAllResult) {
 // 删除文件
 async function handleDeleteFile(file: ChapterFile) {
   try {
-    await ElMessageBox.confirm(
+    await useConfirm().confirmDanger(
       `确定要删除文件"${file.file_name}"吗？`,
       '确认删除',
       { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }

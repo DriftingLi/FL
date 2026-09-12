@@ -214,7 +214,9 @@ func (s *TrainingCatalogService) DeleteCertificateTemplate(id int) error {
 // ListQuestionTags 题库标签列表（activeOnly=true 仅启用项；includeSourceTags=false 时
 // 过滤来源标记标签——专项练习侧不应出现「真题」等 source 标签，管理端传 true 保留可见）。
 // 附带 question_count：学员端统计已发布题目数，管理端统计全部题目数。
-func (s *TrainingCatalogService) ListQuestionTags(activeOnly, includeSourceTags bool) []QuestionTagDict {
+// credentialID 非 nil 时按目标证件分区（#702：学员端标签计数与抽题池同口径——
+// 已发布 + 排除来源标记标签 + 证件分区；nil = 不分区，保持管理端全局口径）。
+func (s *TrainingCatalogService) ListQuestionTags(activeOnly, includeSourceTags bool, credentialID ...*int) []QuestionTagDict {
 	list := catalogList(s.db, questionTagCatalogSpec(), activeOnly)
 	if len(list) == 0 {
 		return list
@@ -244,21 +246,34 @@ func (s *TrainingCatalogService) ListQuestionTags(activeOnly, includeSourceTags 
 		ids = append(ids, d.ID)
 	}
 
-	// 一次查询全部标签的题目数（LEFT JOIN 保证无题目标签也返回 0，避免 N+1）
+	// 一次查询全部标签的题目数（LEFT JOIN 保证无题目标签也返回 0，避免 N+1）。
+	// 分区语义（#702）：学员端（activeOnly）在 published 计数上叠加题库池三元组——
+	// 排除来源标记标签题 + 可选证件分区，与抽题/进度池同口径；管理端（activeOnly=false）保持全量。
 	type countRow struct {
 		TagID          int
 		TotalCount     int64
 		PublishedCount int64
 	}
+	cred := credOf(credentialID)
 	var rows []countRow
-	s.db.Table("question_tag AS t").
-		Select("t.id AS tag_id, COUNT(qtr.question_id) AS total_count, "+
-			"COUNT(qtr.question_id) FILTER (WHERE q.status = 'published') AS published_count").
-		Joins("LEFT JOIN question_tag_relation AS qtr ON qtr.tag_id = t.id").
-		Joins("LEFT JOIN question AS q ON q.id = qtr.question_id").
-		Where("t.id IN ?", ids).
-		Group("t.id").
-		Scan(&rows)
+	if cred != nil {
+		s.db.Raw("SELECT t.id AS tag_id, COUNT(qtr.question_id) AS total_count, "+
+			"COUNT(qtr.question_id) FILTER (WHERE q.status = 'published' AND NOT EXISTS "+
+			"(SELECT 1 FROM question_tag_relation qtr2 JOIN question_tag qt ON qt.id = qtr2.tag_id WHERE qtr2.question_id = q.id AND qt.is_source_tag)"+
+			" AND q.credential_id = ?) AS published_count "+
+			"FROM question_tag AS t LEFT JOIN question_tag_relation AS qtr ON qtr.tag_id = t.id "+
+			"LEFT JOIN question AS q ON q.id = qtr.question_id WHERE t.id IN ? GROUP BY t.id",
+			*cred, ids).Scan(&rows)
+	} else {
+		s.db.Table("question_tag AS t").
+			Select("t.id AS tag_id, COUNT(qtr.question_id) AS total_count, "+
+				"COUNT(qtr.question_id) FILTER (WHERE q.status = 'published') AS published_count").
+			Joins("LEFT JOIN question_tag_relation AS qtr ON qtr.tag_id = t.id").
+			Joins("LEFT JOIN question AS q ON q.id = qtr.question_id").
+			Where("t.id IN ?", ids).
+			Group("t.id").
+			Scan(&rows)
+	}
 	counts := make(map[int]countRow, len(rows))
 	for i := range rows {
 		counts[rows[i].TagID] = rows[i]
@@ -416,20 +431,22 @@ func replaceQuestionTags(db *gorm.DB, questionID int, tagIDs []int) error {
 // ===== 目录树（学员端） =====
 
 // GetCatalogTree 目录树（学员端）：专业方向 → 等级 → 课程（仅启用项，课程含章节数）。
-func (s *TrainingCatalogService) GetCatalogTree() *CatalogTreeDTO {
-	return s.getCatalogTree(true, false)
+// credentialID 非 nil 时按目标证件分区（#702：与课程列表同口径；nil = 不分区）。
+func (s *TrainingCatalogService) GetCatalogTree(credentialID ...*int) *CatalogTreeDTO {
+	return s.getCatalogTree(true, false, credOf(credentialID))
 }
 
 // GetAdminCatalogTree 目录树（管理端）：专业方向 → 等级 → 课程 → 章节。
 // 含停用项与全部课程，课程节点附带章节列表（章节拖拽排序用 order_num）。
 func (s *TrainingCatalogService) GetAdminCatalogTree() *CatalogTreeDTO {
-	return s.getCatalogTree(false, true)
+	return s.getCatalogTree(false, true, nil)
 }
 
 // getCatalogTree 构建目录树。
 // activeOnly=true 时仅返回启用项（学员端）；withChapters=true 时课程节点附带章节列表（管理端）。
+// cred 非 nil 时课程按目标证件分区（学员端 #702）；管理端传 nil 保持全量。
 // 节点字段按 key 字母序声明，与旧 map 投影字节序一致（shape-lock 测试锁定）。
-func (s *TrainingCatalogService) getCatalogTree(activeOnly, withChapters bool) *CatalogTreeDTO {
+func (s *TrainingCatalogService) getCatalogTree(activeOnly, withChapters bool, cred *int) *CatalogTreeDTO {
 	var specialties []model.Specialty
 	{
 		q := s.db.Model(&model.Specialty{})
@@ -459,6 +476,9 @@ func (s *TrainingCatalogService) getCatalogTree(activeOnly, withChapters bool) *
 			Select("course.*, (SELECT COUNT(*) FROM chapter WHERE chapter.course_id = course.course_id) AS chapter_count")
 		if activeOnly {
 			q = q.Where("course.status = ?", 1)
+		}
+		if cred != nil {
+			q = q.Where("course.credential_id = ?", *cred)
 		}
 		q.Order("course.sort_order ASC, course.course_id ASC").Find(&rows)
 	}

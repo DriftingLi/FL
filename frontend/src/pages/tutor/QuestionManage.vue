@@ -67,13 +67,13 @@
         <el-table-column prop="content" label="题干" show-overflow-tooltip />
         <el-table-column label="状态" width="120">
           <template #default="{ row }">
-            <el-tooltip
+            <UiTooltip
               v-if="row.status === 'draft' && row.reject_reason"
               :content="`驳回理由：${row.reject_reason}`"
               placement="top"
             >
               <UiTag tone="danger">已驳回</UiTag>
-            </el-tooltip>
+            </UiTooltip>
             <UiTag v-else :tone="statusTone[row.status]">{{ statusMap[row.status] }}</UiTag>
           </template>
         </el-table-column>
@@ -97,13 +97,13 @@
       </el-table>
 
       <div v-if="total > pageSize" class="mt-4 flex justify-center">
-        <el-pagination
-          v-model:current-page="page"
-          :page-size="pageSize"
-          :total="total"
-          layout="prev, pager, next"
-          @current-change="handlePageChange"
-        />
+        <UiPagination
+      v-model:current-page="page"
+      :page-size="pageSize"
+      :total="total"
+      :show-total="false"
+      @current-change="handlePageChange"
+    />
       </div>
     </template>
 
@@ -115,7 +115,7 @@
       @action="hasFilters ? resetFilters() : router.push({ name: 'TutorQuestionCreate' })"
     />
 
-    <el-dialog v-model="detailVisible" title="题目详情" width="600px">
+    <UiDialog v-model="detailVisible" title="题目详情" width="600px">
       <div v-if="currentQuestion" class="flex flex-col gap-2 text-sm">
         <p><strong>题型：</strong>{{ typeMap[currentQuestion.type] }}</p>
         <p><strong>题干：</strong>{{ currentQuestion.content }}</p>
@@ -144,7 +144,7 @@
           class="mt-2"
         />
       </div>
-    </el-dialog>
+    </UiDialog>
   </div>
 </template>
 
@@ -152,7 +152,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowDown } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { questionBankApi } from '@/api/questionBank'
 import { credentialApi, type CredentialDict } from '@/api/credential'
 import type { Question } from '@/types/question'
@@ -165,6 +165,10 @@ import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import { useAsyncPage } from '@/composables/useAsyncPage'
+import UiPagination from '@/components/ui/UiPagination.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
+import { useConfirm } from '@/composables/useConfirm'
+import UiTooltip from '@/components/ui/UiTooltip.vue'
 
 const router = useRouter()
 const statusMap: Record<string, string> = { draft: '草稿', pending: '待审核', published: '已发布' }
@@ -243,7 +247,7 @@ function editQuestion(row: Question) {
 // 提交审核：将 draft 题目状态改为 pending（后端会清空驳回理由）
 async function submitForReview(row: Question) {
   try {
-    await ElMessageBox.confirm('确定提交该题目给管理员审核？', '提示', { type: 'info' })
+    await useConfirm().confirm('确定提交该题目给管理员审核？', '提示', { type: 'info' })
     await questionBankApi.updateQuestion(row.id, { status: 'pending' })
     ElMessage.success('已提交审核')
     await loadData()
@@ -271,7 +275,7 @@ function handleAction(cmd: string, row: Question) {
 
 async function handleDelete(row: Question) {
   try {
-    await ElMessageBox.confirm('确定删除此题目？', '提示', { type: 'warning' })
+    await useConfirm().confirmDanger('确定删除此题目？', '提示', { type: 'warning' })
     await questionBankApi.deleteQuestion(row.id)
     ElMessage.success('删除成功')
     await loadData()

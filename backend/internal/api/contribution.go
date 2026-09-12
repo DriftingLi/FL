@@ -5,6 +5,7 @@ package api
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -76,6 +77,30 @@ func currentUserID(c *gin.Context) (int, error) {
 	return userID, nil
 }
 
+// contributionErrStatus 投稿域哨兵→状态码表（#611，ADR-0024）：不存在 → 404，
+// 状态/校验/配额类 → 400；未命中（含解析错误已先行处理）走 500 默认信封。
+var contributionErrStatus = &errStatusTable{
+	entries: []errStatusEntry{
+		{service.ErrContributionNotFound, http.StatusNotFound},
+		{service.ErrContributionNotOwner, http.StatusBadRequest},
+		{service.ErrContributionNotPending, http.StatusBadRequest},
+		{service.ErrContributionNotApproved, http.StatusBadRequest},
+		{service.ErrContributionQuotaDaily, http.StatusBadRequest},
+		{service.ErrContributionQuotaPending, http.StatusBadRequest},
+		{service.ErrContributionNoCredential, http.StatusBadRequest},
+		{service.ErrContributionTitleRequired, http.StatusBadRequest},
+		{service.ErrContributionIntroRequired, http.StatusBadRequest},
+		{service.ErrContributionFilesRequired, http.StatusBadRequest},
+		{service.ErrContributionFilesTooMany, http.StatusBadRequest},
+		{service.ErrContributionFileTooLarge, http.StatusBadRequest},
+		{service.ErrContributionTotalTooLarge, http.StatusBadRequest},
+		{service.ErrContributionFileInvalid, http.StatusBadRequest},
+		{service.ErrContributionRejectReason, http.StatusBadRequest},
+		{service.ErrContributionArchiveReason, http.StatusBadRequest},
+		{service.ErrContributionInvalidReportReason, http.StatusBadRequest},
+	},
+}
+
 // UploadFile 上传投稿暂存文件 POST /api/contributions/upload-file
 // @Summary 上传投稿文件（暂存）
 // @Description 先传后交：逐个文件上传到暂存位，返回 URL 与元数据，随投稿表单提交时引用。扩展名白名单 pdf/doc/docx/ppt/pptx/xls/xlsx/zip/mp4，单文件 ≤20MB
@@ -97,13 +122,8 @@ func (h *ContributionHandler) UploadFile(c *gin.Context) {
 			}
 			return h.svc.UploadFile(ctx, file)
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.ContributionFileDTO, err error) {
-			if err != nil {
-				renderContributionError(c, err)
-				return
-			}
-			response.Success(c, resp)
-		},
+		// #611：错误映射收编至 contributionErrStatus
+		ErrStatus: contributionErrStatus,
 	}.Handle(c)
 }
 
@@ -123,7 +143,7 @@ type createContributionReq struct {
 
 // Create 创建投稿 POST /api/contributions
 // @Summary 创建投稿（pending）
-// @Description 学员提交资料投稿（1–5 个文件，合计 ≤50MB，必挂当前证件）。资格：仅学员且已选证件；配额：日 ≤3 份、pending 积压 ≤5 份。未过审不产生积分
+// @Description 学员提交资料投稿（1–5 个文件，合计 ≤50MB，目标证件可选、默认当前证件；投给非当前证件的稿需切过去可见）。资格：仅学员且已选证件；配额：日 ≤3 份、pending 积压 ≤5 份。未过审不产生积分
 // @Tags 学员端-投稿
 // @Accept json
 // @Produce json
@@ -154,13 +174,8 @@ func (h *ContributionHandler) Create(c *gin.Context) {
 				IsAnonymous: req.IsAnonymous, Files: files,
 			})
 		},
-		Render: func(c *gin.Context, _ *createContributionReq, resp *service.ContributionItemDTO, err error) {
-			if err != nil {
-				renderContributionError(c, err)
-				return
-			}
-			response.Success(c, resp)
-		},
+		// #611：错误映射收编至 contributionErrStatus
+		ErrStatus: contributionErrStatus,
 	}.Handle(c)
 }
 
@@ -267,13 +282,8 @@ func (h *ContributionHandler) GetDetail(c *gin.Context) {
 			userID, _ := currentUserID(c)
 			return h.svc.GetDetail(id, userID)
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.ContributionItemDTO, err error) {
-			if err != nil {
-				renderContributionError(c, err)
-				return
-			}
-			response.Success(c, resp)
-		},
+		// #611：错误映射收编至 contributionErrStatus
+		ErrStatus: contributionErrStatus,
 	}.Handle(c)
 }
 
@@ -300,13 +310,8 @@ func (h *ContributionHandler) Download(c *gin.Context) {
 			}
 			return h.svc.Download(userID, id)
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.DownloadResult, err error) {
-			if err != nil {
-				renderContributionError(c, err)
-				return
-			}
-			response.Success(c, resp)
-		},
+		// #611：错误映射收编至 contributionErrStatus
+		ErrStatus: contributionErrStatus,
 	}.Handle(c)
 }
 
@@ -338,7 +343,7 @@ func (h *ContributionHandler) Withdraw(c *gin.Context) {
 		},
 		Render: func(c *gin.Context, _ *struct{}, _ *struct{}, err error) {
 			if err != nil {
-				renderContributionError(c, err)
+				contributionErrStatus.renderError(c, err) // #611：错误映射退表，成功文案保留定制
 				return
 			}
 			response.SuccessWithMsg(c, "已撤回", nil)
@@ -384,7 +389,7 @@ func (h *ContributionHandler) Report(c *gin.Context) {
 		},
 		Render: func(c *gin.Context, _ *reportContributionReq, _ *struct{}, err error) {
 			if err != nil {
-				renderContributionError(c, err)
+				contributionErrStatus.renderError(c, err) // #611：错误映射退表，成功文案保留定制
 				return
 			}
 			response.SuccessWithMsg(c, "举报已提交", nil)
@@ -452,7 +457,7 @@ func (h *ContributionHandler) Approve(c *gin.Context) {
 		},
 		Render: func(c *gin.Context, _ *struct{}, resp *service.ContributionItemDTO, err error) {
 			if err != nil {
-				renderContributionError(c, err)
+				contributionErrStatus.renderError(c, err) // #611：错误映射退表，成功文案保留定制
 				return
 			}
 			response.SuccessWithMsg(c, "已通过", resp)
@@ -493,7 +498,7 @@ func (h *ContributionHandler) Reject(c *gin.Context) {
 		},
 		Render: func(c *gin.Context, _ *contributionRejectReq, resp *service.ContributionItemDTO, err error) {
 			if err != nil {
-				renderContributionError(c, err)
+				contributionErrStatus.renderError(c, err) // #611：错误映射退表，成功文案保留定制
 				return
 			}
 			response.SuccessWithMsg(c, "已驳回", resp)
@@ -529,7 +534,7 @@ func (h *ContributionHandler) Archive(c *gin.Context) {
 		},
 		Render: func(c *gin.Context, _ *contributionRejectReq, resp *service.ContributionItemDTO, err error) {
 			if err != nil {
-				renderContributionError(c, err)
+				contributionErrStatus.renderError(c, err) // #611：错误映射退表，成功文案保留定制
 				return
 			}
 			response.SuccessWithMsg(c, "已下架", resp)
@@ -614,36 +619,4 @@ func (h *ContributionHandler) HandleReport(c *gin.Context) {
 			response.SuccessWithMsg(c, "已处理", nil)
 		},
 	}.Handle(c)
-}
-
-// renderContributionError 统一投稿错误 → HTTP 状态码映射（ADR-0024 哨兵 → 状态码）。
-func renderContributionError(c *gin.Context, err error) {
-	switch {
-	case errors.Is(err, service.ErrContributionNotFound):
-		response.NotFound(c, err.Error())
-	case errors.Is(err, service.ErrContributionNotOwner),
-		errors.Is(err, service.ErrContributionNotPending),
-		errors.Is(err, service.ErrContributionNotApproved),
-		errors.Is(err, service.ErrContributionQuotaDaily),
-		errors.Is(err, service.ErrContributionQuotaPending),
-		errors.Is(err, service.ErrContributionNoCredential),
-		errors.Is(err, service.ErrContributionTitleRequired),
-		errors.Is(err, service.ErrContributionIntroRequired),
-		errors.Is(err, service.ErrContributionFilesRequired),
-		errors.Is(err, service.ErrContributionFilesTooMany),
-		errors.Is(err, service.ErrContributionFileTooLarge),
-		errors.Is(err, service.ErrContributionTotalTooLarge),
-		errors.Is(err, service.ErrContributionFileInvalid),
-		errors.Is(err, service.ErrContributionRejectReason),
-		errors.Is(err, service.ErrContributionArchiveReason),
-		errors.Is(err, service.ErrContributionInvalidReportReason):
-		response.BadRequest(c, err.Error())
-	default:
-		var pe *ParseError
-		if asParseError(err, &pe) {
-			renderStatus(c, pe.Status, pe.Message)
-			return
-		}
-		response.ServerError(c, err.Error())
-	}
 }

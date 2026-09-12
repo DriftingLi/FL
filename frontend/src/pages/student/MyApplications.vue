@@ -10,15 +10,15 @@
       @retry="handleRetry"
     />
     <UiSkeleton v-else-if="loading" variant="list" :count="4" />
-    <div v-else-if="items.length === 0" class="rounded-card border border-line bg-panel p-8 text-center text-ink-3">暂无投递记录</div>
+    <UiEmptyState v-else-if="items.length === 0" description="暂无投递记录" />
     <div v-else class="grid gap-3">
       <div v-for="item in items" :key="String(item.id)" class="rounded-card border border-line bg-panel p-4">
         <div class="flex items-center justify-between gap-3">
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2">
               <span class="text-sm font-semibold text-ink">{{ item.job_title || '职位 #' + item.job_posting_id }}</span>
-              <el-tag :type="tagType(item.status)" size="small">{{ statusLabel(item.status) }}</el-tag>
-              <el-tag v-if="item.employer_viewed_at" type="info" size="small">企业已查看</el-tag>
+              <UiTag :tone="tagType(item.status)" size="small">{{ statusLabel(item.status) }}</UiTag>
+              <UiTag v-if="item.employer_viewed_at" tone="info" size="small">企业已查看</UiTag>
             </div>
             <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-3">
               <span v-if="item.company_name">{{ item.company_name }}</span>
@@ -40,24 +40,20 @@
       </div>
     </div>
     <div v-if="total > 0" class="flex justify-center">
-      <el-pagination
-        v-model:current-page="page"
-        :page-size="pageSize"
-        :total="total"
-        layout="prev, pager, next"
-        @current-change="handlePageChange"
-      />
+      <UiPagination
+      v-model:current-page="page"
+      :page-size="pageSize"
+      :total="total"
+      :show-total="false"
+      @current-change="handlePageChange"
+    />
     </div>
 
     <!-- 撤回弹窗（spec #449 决定 10 的 UI 落点）：「一并撤回联系方式授权」默认不勾选 -->
-    <el-dialog v-model="withdrawVisible" title="撤回投递" width="440px">
+    <UiDialog v-model="withdrawVisible" title="撤回投递" width="440px" confirm-text="确认撤回" :confirm-loading="withdrawing" @confirm="confirmWithdraw">
       <div class="text-sm text-ink">确定撤回这条投递吗？撤回后可以重新投递同一职位。</div>
-      <el-checkbox v-model="revokeContact" class="mt-3">一并撤回对该企业的联系方式授权</el-checkbox>
-      <template #footer>
-        <UiButton @click="withdrawVisible = false">取消</UiButton>
-        <UiButton variant="primary" :loading="withdrawing" @click="confirmWithdraw">确认撤回</UiButton>
-      </template>
-    </el-dialog>
+      <UiCheckbox v-model="revokeContact" class="mt-3">一并撤回对该企业的联系方式授权</UiCheckbox>
+    </UiDialog>
   </div>
 </template>
 
@@ -71,6 +67,11 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import CompanyContactInfo from '@/components/recruit/CompanyContactInfo.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
+import UiTag from '@/components/ui/UiTag.vue'
+import UiCheckbox from '@/components/ui/UiCheckbox.vue'
 
 const items = ref<JobApplication[]>([])
 // #487：approved 的联系方式交换（投递产生/企业发起）用于企业联系方式展示
@@ -90,21 +91,24 @@ const {
   pageSize,
   run: load,
   handlePageChange
-} = useAsyncPage(async () => {
-  const res = await jobApi.listMyApplications({ page: page.value, page_size: pageSize.value })
-  items.value = res?.items || []
-  total.value = res?.total || 0
-  try {
-    // 后端列表单页上限 20：翻页取全量 approved，避免申请多时较早企业的联系方式缺失（Standards 审查）
-    approvedContacts.value = []
-    for (let p = 1; p <= 10; p++) {
-      const reqs: any = await resumeApi.listContactRequests({ page: p, page_size: 20 })
-      const items = reqs?.items || []
-      approvedContacts.value.push(...items.filter((r: any) => r.status === 'approved'))
-      if (items.length < 20) break
-    }
-  } catch {}
-})
+} = useAsyncPage(
+  async () => {
+    const res = await jobApi.listMyApplications({ page: page.value, page_size: pageSize.value })
+    items.value = res?.items || []
+    total.value = res?.total || 0
+    try {
+      // 后端列表单页上限 20：翻页取全量 approved，避免申请多时较早企业的联系方式缺失（Standards 审查）
+      approvedContacts.value = []
+      for (let p = 1; p <= 10; p++) {
+        const reqs: any = await resumeApi.listContactRequests({ page: p, page_size: 20 })
+        const items = reqs?.items || []
+        approvedContacts.value.push(...items.filter((r: any) => r.status === 'approved'))
+        if (items.length < 20) break
+      }
+    } catch {}
+  },
+  { credentialScoped: false } // 招聘域不受证件过滤（#604 opt-out）
+)
 
 // 找该投递对应企业的已授权联系方式（按 recruiter_id 匹配）
 function approvedContactFor(item: JobApplication) {

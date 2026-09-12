@@ -1,10 +1,10 @@
 <template>
   <div class="video-player-wrapper" ref="wrapperRef">
     <div v-if="error" class="video-error">
-      <el-empty :description="errorMessage">
+      <UiEmptyState :description="errorMessage">
         <UiButton variant="primary" @click="retryLoad">重试</UiButton>
         <UiButton @click="downloadVideo">下载视频</UiButton>
-      </el-empty>
+      </UiEmptyState>
     </div>
 
     <div v-else class="video-container">
@@ -48,17 +48,17 @@
           </template>
         </el-dropdown>
 
-        <el-tooltip content="画中画" placement="top">
+        <UiTooltip content="画中画" placement="top">
           <UiButton size="small" class="control-btn" @click="togglePiP" :disabled="!pipSupported">
             <el-icon><Monitor /></el-icon>
           </UiButton>
-        </el-tooltip>
+        </UiTooltip>
 
-        <el-tooltip content="下载" placement="top">
+        <UiTooltip content="下载" placement="top">
           <UiButton size="small" class="control-btn" @click="downloadVideo">
             <el-icon><Download /></el-icon>
           </UiButton>
-        </el-tooltip>
+        </UiTooltip>
       </div>
     </div>
   </div>
@@ -69,6 +69,8 @@ import { ref, computed, onBeforeUnmount } from 'vue'
 import { Download, Loading, Monitor } from '@element-plus/icons-vue'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiTooltip from '@/components/ui/UiTooltip.vue'
 
 const props = defineProps({
   src: { type: String, required: true },

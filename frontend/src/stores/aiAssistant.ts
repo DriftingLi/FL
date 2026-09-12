@@ -7,9 +7,17 @@ import {
   type ChatSession,
   type ChatMessage,
   type AIMode,
-  type AIAssistantModeModels
+  type AIAssistantModeModels,
+  type DiagnosisSource
 } from '@/api/aiAssistant'
 import { useAuthStore } from '@/stores/auth'
+
+/** 当轮计费消耗（SSE usage 事件负载；ADR-0023 tokens 后计量） */
+export interface TurnUsage {
+  points_cost: number
+  total_tokens: number
+  balance: number
+}
 
 export const useAIAssistantStore = defineStore('aiAssistant', () => {
   // ===== 功能上下文 =====
@@ -33,6 +41,15 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
   const streaming = ref(false)
   const streamingContent = ref('')
   let abortController: AbortController | null = null
+
+  // ===== 当轮计费 usage（#620 显性通道）=====
+  // SSE usage 事件进独立 state，由壳组件渲染当轮脚注；消息正文不再拼接计费文本
+  // （已知取舍：历史回看不显示每轮费用——后端消息未存 usage，如需回看另立项）。
+  const lastUsage: Ref<TurnUsage | null> = ref(null)
+
+  // ===== 智能维修诊断当轮来源（SSE sources 事件；包前端 answer_sources 还原）=====
+  // 与 usage 同策略：只描述当轮，历史回看不显示（后端未持久化 sources）。
+  const lastSources: Ref<DiagnosisSource[]> = ref([])
 
   // ===== 登录状态（复用主体系 auth store）=====
   const authStore = useAuthStore()
@@ -66,21 +83,24 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     selectedMode.value = mode
   }
 
-  // ===== 会话管理 =====
+  // ===== 会话管理（T6：请求序号守卫——旧回包不覆盖删除/新建结果）=====
+  let sessionsSeq = 0
   async function loadSessions() {
     if (!isLoggedIn.value) {
       sessions.value = []
       return
     }
+    const seq = ++sessionsSeq
     sessionsLoading.value = true
     try {
-      sessions.value = await aiAssistantApi.listSessions(
+      const list = await aiAssistantApi.listSessions(
         isFeatureMode.value ? featureKey.value : undefined
       )
+      if (seq === sessionsSeq) sessions.value = list
     } catch {
       // 错误已由拦截器提示
     } finally {
-      sessionsLoading.value = false
+      if (seq === sessionsSeq) sessionsLoading.value = false
     }
   }
 
@@ -99,11 +119,14 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
 
   async function deleteSession(id: number) {
     await aiAssistantApi.deleteSession(id)
+    sessionsSeq++ // 作废在飞的列表请求，避免旧回包复活已删会话
     sessions.value = sessions.value.filter(s => s.id !== id)
     if (currentSessionId.value === id) {
       currentSessionId.value = null
       messages.value = []
     }
+    // 后台重拉对账（序号守卫保证只采纳最新回包；await 让调用方可感知完成）
+    await loadSessions().catch(() => {})
   }
 
   async function renameSession(id: number, title: string) {
@@ -124,23 +147,54 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     currentSessionId.value = null
     messages.value = []
     streamingContent.value = ''
+    lastUsage.value = null
+    lastSources.value = []
+  }
+
+  /**
+   * 清空会话消息（#620）：登出等场景的状态变更走 action，组件不再直改 store 内部数组。
+   * 流式进行中先中止当轮流（中止触发的 onDone 因正文已空不再落消息），再整体复位。
+   */
+  function clearMessages() {
+    if (abortController) {
+      abortController.abort()
+      abortController = null
+    }
+    streaming.value = false
+    messages.value = []
+    currentSessionId.value = null
+    streamingContent.value = ''
+    lastUsage.value = null
+    lastSources.value = []
   }
 
   async function selectSession(id: number) {
-    if (!isLoggedIn.value) return
+    if (!isLoggedIn.value) throw new Error('请先登录后查看会话历史')
+    const previousId = currentSessionId.value
+    const previousMessages = messages.value
+    const previousUsage = lastUsage.value
+    const previousSources = lastSources.value
     currentSessionId.value = id
+    // 切换会话即离开「当轮」上下文，上一轮脚注/来源随之失效
+    lastUsage.value = null
+    lastSources.value = []
     messagesLoading.value = true
     try {
       messages.value = await aiAssistantApi.getSessionMessages(id)
-    } catch {
-      messages.value = []
+    } catch (e: any) {
+      // 失败回滚选中态/消息体/当轮态：侧栏高亮、正文与脚注都回到切换前
+      currentSessionId.value = previousId
+      messages.value = previousMessages
+      lastUsage.value = previousUsage
+      lastSources.value = previousSources
+      throw new Error(e?.message || '加载会话消息失败，请重试')
     } finally {
       messagesLoading.value = false
     }
   }
 
   // ===== 流式对话 =====
-  async function sendMessage(content: string, images?: string[]) {
+  async function sendMessage(content: string, images?: string[], opts?: { brand?: string; model?: string }) {
     if ((!content.trim() && !(images && images.length > 0)) || streaming.value) return
     // 专项功能模式：模型由后端按功能绑定解析；通用模式校验双模式可用性
     if (!isFeatureMode.value) {
@@ -174,6 +228,9 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
 
     streaming.value = true
     streamingContent.value = ''
+    // 新一轮开始：清上一轮脚注/来源（usage/sources 仅描述当轮）
+    lastUsage.value = null
+    lastSources.value = []
     const assistantMsgId = Date.now() + 1
 
     const req: any = {
@@ -185,39 +242,45 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
       config_id: isFeatureMode.value
         ? undefined
         : (selectedMode.value === 'expert' ? modeModels.value.expert?.id : modeModels.value.normal?.id) ?? undefined,
+      // 智能维修诊断（fault_diagnosis）专用：品牌/车型结构化过滤
+      brand: opts?.brand,
+      model: opts?.model,
       messages: historyMessages
     }
 
-    let lastUsage: { points_cost: number; total_tokens: number; balance: number } | null = null
     abortController = aiAssistantApi.streamChat(req, {
       onChunk: (chunk) => {
         streamingContent.value += chunk
       },
+      // usage 进独立 state（当轮脚注由壳渲染），不再拼进消息正文
       onUsage: (data) => {
-        lastUsage = data
+        lastUsage.value = data
+      },
+      // 来源资料进独立 state（智能维修诊断；当轮来源面板由本页渲染）
+      onSources: (sources) => {
+        lastSources.value = sources
       },
       onDone: () => {
-        let finalContent = streamingContent.value
-        if (lastUsage) {
-          finalContent += `\n\n— 本轮消耗 ${lastUsage.points_cost} 分 · ${(lastUsage.total_tokens / 1000).toFixed(1)}k tokens · 余额 ${lastUsage.balance}`
+        // 正文即纯对话内容（计费脚注走 lastUsage 通道，#620）
+        const finalContent = streamingContent.value
+        if (finalContent) {
+          const assistantMsg: ChatMessage = {
+            id: assistantMsgId,
+            role: 'assistant',
+            content: finalContent,
+            // 当轮来源快照进消息（ADR-0033 逐轮回放；后端落库后历史以持久化字段为准）
+            sources: lastSources.value.length ? [...lastSources.value] : undefined,
+            created_at: new Date().toISOString()
+          }
+          messages.value.push(assistantMsg)
         }
-        const assistantMsg: ChatMessage = {
-          id: assistantMsgId,
-          role: 'assistant',
-          content: finalContent,
-          created_at: new Date().toISOString()
-        }
-        messages.value.push(assistantMsg)
         streamingContent.value = ''
         streaming.value = false
         abortController = null
+        // 流结束 → 精确重拉一次会话列表（后端 done 前已完成异步命名；
+        // 标题未就绪时显示默认名，下次进入自然命中）。5 秒定时器已删除（#620）。
         if (isLoggedIn.value) {
           loadSessions().catch(() => {})
-          const curSessionId = currentSessionId.value
-          const cur = sessions.value.find(s => s.id === curSessionId)
-          if (cur && (cur.title === '新会话' || cur.title === '')) {
-            setTimeout(() => loadSessions().catch(() => {}), 5000)
-          }
         }
       },
       onError: (message) => {
@@ -251,6 +314,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
       abortController = null
     }
     streaming.value = false
+    lastUsage.value = null
     if (streamingContent.value) {
       const assistantMsg: ChatMessage = {
         id: Date.now(),
@@ -268,10 +332,22 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     return aiAssistantApi.uploadImage(file)
   }
 
-  // ===== 初始化（通用 AI 助手页） =====
+  // ===== 功能上下文切换：作废在飞列表请求 + 清空会话/当轮态（init/initFeature 共用）=====
+  function resetSessionContext() {
+    sessionsSeq++
+    sessions.value = []
+    messages.value = []
+    currentSessionId.value = null
+    streamingContent.value = ''
+    lastUsage.value = null
+    lastSources.value = []
+  }
+
+  // ===== 初始化（通用 AI 助手页）=====
+  // 从功能页返回时重置功能上下文（T6：切回主界面全清并重拉，回欢迎态）
   async function init() {
-    // 从功能页返回时重置功能上下文
     featureKey.value = 'ai_assistant'
+    resetSessionContext() // 断开子界面上下文
     await loadAssistantModes()
     if (isLoggedIn.value) {
       await loadSessions()
@@ -283,9 +359,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
   async function initFeature(key: string) {
     if (featureKey.value === key && sessions.value.length > 0) return
     featureKey.value = key
-    sessions.value = []
-    messages.value = []
-    currentSessionId.value = null
+    resetSessionContext() // 作废旧功能上下文在飞的列表请求
     if (isLoggedIn.value) {
       await loadSessions()
     }
@@ -305,6 +379,8 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     messagesLoading,
     streaming,
     streamingContent,
+    lastUsage,
+    lastSources,
     isLoggedIn,
     // actions
     init,
@@ -316,6 +392,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     deleteSession,
     renameSession,
     startDraft,
+    clearMessages,
     selectSession,
     sendMessage,
     stopStreaming,

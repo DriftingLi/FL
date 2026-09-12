@@ -1,0 +1,94 @@
+<template>
+    <!-- 培训横幅卡片 ——T06 手术自 practice.uvue 逐段搬出 -->
+    <view class="banner-card">
+        <view class="banner-image-area">
+            <view class="banner-forklift">
+                <text class="banner-emoji">🏗️</text>
+            </view>
+            <view class="banner-overlay">
+                <text class="banner-title-cn">叉车维修培训</text>
+                <text class="banner-title-sub">规范检修 · 安全作业</text>
+            </view>
+            <!-- 右侧标签 -->
+            <view class="banner-tags">
+                <text class="banner-tag">维修步骤</text>
+                <text class="banner-tag">安全要点</text>
+                <text class="banner-tag">实操教学</text>
+                <text class="banner-tag">案例分析</text>
+                <text class="banner-tag">考核发证</text>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    // 纯展示组件：无 props / 无 emit（T06 practice 手术，parent #644）
+</script>
+
+<style>
+    .banner-card {
+        margin: 24rpx 24rpx;
+        background-color: #ffffff;
+        border-radius: 20rpx;
+        overflow: hidden;
+    }
+
+    .banner-image-area {
+        height: 260rpx;
+        background: linear-gradient(135deg, #e8f4ff 0%, #d0e8ff 100%);
+        flex-direction: row;
+        align-items: center;
+        position: relative;
+    }
+
+    .banner-forklift {
+        width: 180rpx;
+        height: 180rpx;
+        align-items: center;
+        justify-content: center;
+        margin-left: 32rpx;
+    }
+
+    .banner-emoji {
+        font-size: 100rpx;
+    }
+
+    .banner-overlay {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        padding: 16rpx 28rpx;
+        background-color: rgba(0, 0, 0, 0.25);
+        flex-direction: column;
+    }
+
+    .banner-title-cn {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #ffffff;
+        margin-bottom: 4rpx;
+    }
+
+    .banner-title-sub {
+        font-size: 22rpx;
+        color: rgba(255, 255, 255, 0.85);
+    }
+
+    .banner-tags {
+        position: absolute;
+        right: 20rpx;
+        top: 20rpx;
+        flex-direction: column;
+    }
+
+    .banner-tag {
+        font-size: 20rpx;
+        color: #ffffff;
+        background-color: rgba(41, 121, 255, 0.7);
+        padding: 6rpx 16rpx;
+        border-radius: 8rpx;
+        text-align: center;
+        margin-bottom: 8rpx;
+    }
+</style>

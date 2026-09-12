@@ -1,0 +1,70 @@
+/**
+ * practice-do 评论交互 composable（T06 practice 手术，parent #644）
+ */
+import { ref } from 'vue'
+import type { Ref } from 'vue'
+import { getCommentsApi, createCommentApi, deleteCommentApi } from '../../../api/questionInteraction'
+import type { QuestionComment } from '../../../types/index'
+
+/** 本 composable 的显式返回类型。
+ *  UTS 对无标注的匿名返回对象无法在消费侧解析成员（error18「找不到名称」），
+ *  故显式声明；形态照可编译先例 composables/useTopicDetail.uts（显式 Result 类型 + 箭头函数字段）。
+ */
+export type UsePracticeCommentsResult = {
+    showComments : Ref<boolean>
+    comments : Ref<QuestionComment[]>
+    commentText : Ref<string>
+    loadComments : (questionId : number) => Promise<void>
+    toggleComments : (questionId : number) => void
+    onSubmitComment : (questionId : number) => Promise<void>
+    onDeleteComment : (comment : QuestionComment) => void
+    resetComments : () => void
+}
+
+export function usePracticeComments(currentUserId : number) : UsePracticeCommentsResult {
+    const showComments = ref<boolean>(false)
+    const comments = ref<QuestionComment[]>([])
+    const commentText = ref<string>('')
+
+    async function loadComments(questionId : number) : Promise<void> {
+        if (questionId <= 0) return
+        try {
+            const result = await getCommentsApi(questionId)
+            const uid = currentUserId
+            const list = result.items
+            for (let i = 0; i < list.length; i++) { list[i].can_delete = list[i].user_id == uid && uid > 0 }
+            comments.value = list
+        } catch (e) { console.warn('[practice-do] loadComments failed:', e) }
+    }
+
+    function toggleComments(questionId : number) : void {
+        showComments.value = !showComments.value
+        if (showComments.value && comments.value.length == 0) { loadComments(questionId) }
+    }
+
+    async function onSubmitComment(questionId : number) : Promise<void> {
+        const text = commentText.value.trim()
+        if (text.length == 0) return
+        try { const c = await createCommentApi(questionId, text); comments.value.push(c); commentText.value = ''; uni.showToast({ title: '评论成功', icon: 'none' }) }
+        catch (e) { console.error('[practice-do] submitComment failed:', e) }
+    }
+
+    function onDeleteComment(comment : QuestionComment) : void {
+        uni.showModal({ title: '提示', content: '确定删除这条评论吗？',
+            success: (res) => { if (res.confirm) { const cid = comment.id; deleteCommentApi(cid).then((_ : UTSJSONObject) => { comments.value = comments.value.filter((c) => c.id != cid); uni.showToast({ title: '已删除', icon: 'none' }) }).catch((e) => { console.warn('[practice-do] deleteComment failed:', e); uni.showToast({ title: '删除失败', icon: 'none' }) }) } }
+        })
+    }
+
+    function resetComments() : void { showComments.value = false; comments.value = []; commentText.value = '' }
+
+    return {
+        showComments,
+        comments,
+        commentText,
+        loadComments: (questionId : number) => loadComments(questionId),
+        toggleComments: (questionId : number) => toggleComments(questionId),
+        onSubmitComment: (questionId : number) => onSubmitComment(questionId),
+        onDeleteComment: (comment : QuestionComment) => onDeleteComment(comment),
+        resetComments: () => resetComments()
+    } as UsePracticeCommentsResult
+}

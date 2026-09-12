@@ -1,0 +1,81 @@
+<template>
+    <!-- 打卡活动卡片 -->
+    <view class="checkin-card" @click="onClick">
+        <view class="checkin-card-left">
+            <text class="checkin-card-title">8月学习打卡</text>
+            <text class="checkin-card-date">2026.08.01</text>
+            <text class="checkin-card-players">{{ playersText }}</text>
+        </view>
+        <view class="checkin-card-btn">
+            <text class="checkin-card-btn-text">开始打卡</text>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { computed } from 'vue'
+    import { formatCountCompact } from '../../../utils/format'
+
+    const props = withDefaults(defineProps<{
+        players? : number
+    }>(), {
+        players: 0
+    })
+
+    const emit = defineEmits(['click'])
+
+    const playersText = computed<string>(() : string => formatCountCompact(props.players) + '人已参与打卡')
+
+    function onClick() : void {
+        emit('click')
+    }
+</script>
+
+<style>
+    /* 打卡活动卡片 */
+    .checkin-card {
+        margin: 20rpx 24rpx;
+        padding: 28rpx 32rpx;
+        border-radius: 16rpx;
+        background-color: #FFF8E1;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .checkin-card-left {
+        flex: 1;
+        flex-direction: column;
+    }
+
+    .checkin-card-title {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 8rpx;
+    }
+
+    .checkin-card-date {
+        font-size: 22rpx;
+        color: #999999;
+        margin-bottom: 4rpx;
+    }
+
+    .checkin-card-players {
+        font-size: 22rpx;
+        color: #999999;
+    }
+
+    .checkin-card-btn {
+        background-color: #2979ff;
+        padding: 16rpx 32rpx;
+        border-radius: 32rpx;
+        flex-shrink: 0;
+    }
+
+    .checkin-card-btn-text {
+        font-size: 26rpx;
+        color: #ffffff;
+        font-weight: bold;
+    }
+</style>

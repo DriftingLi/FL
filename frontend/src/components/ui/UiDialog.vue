@@ -44,6 +44,10 @@ const props = withDefaults(
     showClose?: boolean
     /** 点击遮罩是否关闭 */
     closeOnClickModal?: boolean
+    /** 关闭时销毁内容（透传 el-dialog；重开不残留脏表单用） */
+    destroyOnClose?: boolean
+    /** 挂到 body（嵌套弹窗层级遮蔽时用，透传 el-dialog） */
+    appendToBody?: boolean
   }>(),
   {
     title: '',
@@ -56,7 +60,9 @@ const props = withDefaults(
     confirmLoading: false,
     confirmDisabled: false,
     showClose: true,
-    closeOnClickModal: true
+    closeOnClickModal: true,
+    destroyOnClose: false,
+    appendToBody: false
   }
 )
 
@@ -69,6 +75,8 @@ const emit = defineEmits<{
   close: []
   /** 对话框打开时触发（透传 el-dialog 的 open）—— 内容需要按打开时机拉数据时用 */
   open: []
+  /** 动画结束、DOM 已卸载（透传 el-dialog 的 closed）—— 清理计时器等场景用 */
+  closed: []
 }>()
 
 function onCancel() {
@@ -82,6 +90,7 @@ function onConfirm() {
 
 function onClosed() {
   emit('close')
+  emit('closed')
 }
 </script>
 
@@ -93,6 +102,8 @@ function onClosed() {
     :align-center="props.center"
     :show-close="props.showClose"
     :close-on-click-modal="props.closeOnClickModal"
+    :destroy-on-close="props.destroyOnClose"
+    :append-to-body="props.appendToBody"
     @open="emit('open')"
     @closed="onClosed"
   >

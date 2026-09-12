@@ -1,0 +1,17 @@
+/**
+ * 错题本展示纯函数（页面分组视图与错题卡片共用，避免两份实现）
+ * 先例：utils/checkinCalendar.uts（模块内纯函数 + jest 镜像测试）
+ */
+
+/** 题型 code → 中文名 */
+export function getTypeName(type : string) : string {
+    if (type == 'single' || type == 'single_choice') return '单选题'
+    if (type == 'multi' || type == 'multiple_choice' || type == 'multi_choice') return '多选题'
+    if (type == 'judge' || type == 'true_false') return '判断题'
+    return '其他'
+}
+
+/** 是否多选题（决定选项是切换还是替换） */
+export function isMultiChoice(type : string) : boolean {
+    return type == 'multi' || type == 'multiple_choice' || type == 'multi_choice'
+}

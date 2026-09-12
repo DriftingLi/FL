@@ -1,0 +1,37 @@
+/**
+ * forum 详情页纯助手（T04 手术自 forum-detail.uvue 逐字抽出，行为不变）
+ * 扁平下发先例：壳层预解析 URL 与权限位，组件模板只读展示模型字段。
+ */
+import { resolveFileUrl } from './forumDisplay'
+
+/** 回复卡展示模型（壳层由 ForumReply + 点赞本地态 + 权限位映射而来） */
+export type ForumReplyDisplay = {
+    id : number
+    authorId : number
+    authorName : string
+    authorInitial : string
+    authorAvatar : string
+    avatarColor : string
+    createdAtText : string
+    content : string
+    imageUrls : string[]
+    canDelete : boolean
+    liked : boolean
+    likesCount : number
+    /** 是否被楼主采纳（仅问答帖有效） */
+    isAccepted : boolean
+    /** 该条能否被当前用户采纳（问答帖 + 楼主本人 + 非自己回复 + 尚未采纳） */
+    canAcceptReply : boolean
+}
+
+/** 预览一组图片（帖子/回复共用；URL 解析幂等，传入已解析列表与原始列表结果一致） */
+export function previewImages(all : string[], index : number) : void {
+    const urls : string[] = []
+    for (let i = 0; i < all.length; i++) {
+        urls.push(resolveFileUrl(all[i]))
+    }
+    uni.previewImage({
+        urls: urls,
+        current: index,
+    })
+}

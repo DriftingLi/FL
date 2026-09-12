@@ -2,6 +2,10 @@
 package service
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -118,13 +122,13 @@ func TestUpdatePassword(t *testing.T) {
 	svc, tdb := newAuthSvc(t)
 	hash, _ := HashPassword("old123")
 	s := testutil.SeedStudent(t, tdb, "pwduser", hash)
-	if err := svc.UpdatePassword(s.ID, "new123"); err != nil {
+	if err := svc.UpdatePassword(context.Background(), s.ID, "new123"); err != nil {
 		t.Fatalf("修改密码失败: %v", err)
 	}
 	if _, err := svc.HrwaiLogin("acct_pwduser", "new123"); err != nil {
 		t.Fatalf("新密码应可登录: %v", err)
 	}
-	if err := svc.UpdatePassword(s.ID, "123"); err == nil {
+	if err := svc.UpdatePassword(context.Background(), s.ID, "123"); err == nil {
 		t.Error("过短密码应报错")
 	}
 }
@@ -367,5 +371,84 @@ func TestGetProfile_UserNotFound(t *testing.T) {
 	}
 	if dto.HasPassword != nil {
 		t.Fatal("用户不存在时不应有 has_password 字段")
+	}
+}
+
+// spyBlacklist 捕获写入的键（验证改密吊销标记）。
+type spyBlacklist struct {
+	mu sync.Mutex
+	m  map[string]string
+}
+
+func (s *spyBlacklist) Get(_ context.Context, key string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v, ok := s.m[key]
+	if !ok {
+		return "", errors.New("key not found")
+	}
+	return v, nil
+}
+
+func (s *spyBlacklist) Set(_ context.Context, key, value string, _ time.Duration) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.m[key] = value
+	return nil
+}
+
+func (s *spyBlacklist) PutIfAbsent(_ context.Context, key, value string, _ time.Duration) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.m[key]; ok {
+		return false, nil
+	}
+	s.m[key] = value
+	return true, nil
+}
+
+func newAuthSvcWithBlacklist(t *testing.T, bl security.BlacklistStore) (*AuthService, *gorm.DB) {
+	t.Helper()
+	db := testutil.NewMemoryDB(t)
+	sess := security.NewSessionWithBlacklistAndRefresh(testJWTSecret, time.Hour, 7*24*time.Hour, security.CookieConfig{}, bl)
+	return NewAuthService(db, sess, NewForumCounter(), "admin123", "tutor123", "student123", zap.NewNop()), db
+}
+
+// 改密成功后必须写入用户级 refresh 吊销标记（#622）：快捷登录静默续登随之失效。
+func TestUpdatePassword_RevokesRefreshMarker(t *testing.T) {
+	bl := &spyBlacklist{m: make(map[string]string)}
+	svc, tdb := newAuthSvcWithBlacklist(t, bl)
+	hash, _ := HashPassword("old123")
+	s := testutil.SeedStudent(t, tdb, "revuser", hash)
+
+	if err := svc.UpdatePassword(context.Background(), s.ID, "new123"); err != nil {
+		t.Fatalf("修改密码失败: %v", err)
+	}
+	key := fmt.Sprintf("jwt:pwd_revoked:hrwai_user:%d", s.ID)
+	if _, ok := bl.m[key]; !ok {
+		t.Fatalf("改密后应写入吊销标记 %s", key)
+	}
+}
+
+// 管理员重置招聘员密码同口径吊销（角色命名空间键，不与学员 ID 撞）。
+func TestResetRecruiterPassword_RevokesRefreshMarker(t *testing.T) {
+	bl := &spyBlacklist{m: make(map[string]string)}
+	svc, tdb := newAuthSvcWithBlacklist(t, bl)
+	hash, _ := HashPassword("old123")
+	rec := &model.RecruiterUser{Username: "rec_rev", Password: hash, CompanyName: "公司", Status: 1}
+	if err := tdb.Create(rec).Error; err != nil {
+		t.Fatalf("造数失败: %v", err)
+	}
+
+	if err := svc.ResetRecruiterPassword(context.Background(), rec.ID, "new123"); err != nil {
+		t.Fatalf("重置密码失败: %v", err)
+	}
+	key := fmt.Sprintf("jwt:pwd_revoked:recruiter:%d", rec.ID)
+	if _, ok := bl.m[key]; !ok {
+		t.Fatalf("重置后应写入吊销标记 %s", key)
+	}
+	// 学员同号不受招聘员吊销影响（角色命名空间）
+	if _, ok := bl.m[fmt.Sprintf("jwt:pwd_revoked:hrwai_user:%d", rec.ID)]; ok {
+		t.Fatal("招聘员吊销不应误写学员命名空间")
 	}
 }

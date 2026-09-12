@@ -1,27 +1,27 @@
 <template>
   <div class="image-viewer" ref="containerRef">
     <div class="image-toolbar">
-      <el-tooltip content="缩小" placement="bottom">
+      <UiTooltip content="缩小" placement="bottom">
         <UiButton :icon="ZoomOut" circle size="small" @click="zoomOut" :disabled="scale <= 0.1"/>
-      </el-tooltip>
+      </UiTooltip>
       <span class="zoom-text">{{ Math.round(scale * 100) }}%</span>
-      <el-tooltip content="放大" placement="bottom">
+      <UiTooltip content="放大" placement="bottom">
         <UiButton :icon="ZoomIn" circle size="small" @click="zoomIn" :disabled="scale >= 5"/>
-      </el-tooltip>
+      </UiTooltip>
       <el-divider direction="vertical" />
-      <el-tooltip content="适合窗口" placement="bottom">
+      <UiTooltip content="适合窗口" placement="bottom">
         <UiButton :icon="FullScreen" circle size="small" @click="fitToWindow"/>
-      </el-tooltip>
-      <el-tooltip content="原始大小" placement="bottom">
+      </UiTooltip>
+      <UiTooltip content="原始大小" placement="bottom">
         <UiButton :icon="RefreshRight" circle size="small" @click="resetZoom"/>
-      </el-tooltip>
+      </UiTooltip>
       <el-divider direction="vertical" />
-      <el-tooltip content="全屏" placement="bottom">
+      <UiTooltip content="全屏" placement="bottom">
         <UiButton :icon="Rank" circle size="small" @click="toggleFullscreen"/>
-      </el-tooltip>
-      <el-tooltip content="下载" placement="bottom">
+      </UiTooltip>
+      <UiTooltip content="下载" placement="bottom">
         <UiButton :icon="Download" circle size="small" @click="downloadFile"/>
-      </el-tooltip>
+      </UiTooltip>
     </div>
 
     <div
@@ -46,9 +46,9 @@
         draggable="false"
       />
       <div v-if="imgError" class="image-error">
-        <el-empty :description="imgErrorMessage">
+        <UiEmptyState :description="imgErrorMessage">
           <UiButton variant="primary" @click="retryLoad">重试</UiButton>
-        </el-empty>
+        </UiEmptyState>
       </div>
     </div>
   </div>
@@ -59,6 +59,8 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { ZoomIn, ZoomOut, FullScreen, Download, RefreshRight, Rank } from '@element-plus/icons-vue'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiTooltip from '@/components/ui/UiTooltip.vue'
 
 const props = defineProps({
   src: { type: String, required: true },

@@ -59,7 +59,7 @@
             <span>{{ item.label }}</span>
             <el-icon class="nav-group-arrow" :class="{ expanded: isGroupExpanded(item.key) }"><ArrowDown /></el-icon>
           </div>
-          <el-tooltip v-else placement="right" :show-after="300">
+          <UiTooltip v-else placement="right" :show-after="300">
             <template #content>
               <div class="nav-group-tooltip-title">{{ item.label }}</div>
               <div
@@ -74,7 +74,7 @@
             <div class="nav-group-icon-only" :class="{ 'is-active': isGroupActive(item) }">
               <el-icon><component :is="item.icon" /></el-icon>
             </div>
-          </el-tooltip>
+          </UiTooltip>
           <div v-show="isGroupExpanded(item.key)" class="nav-group-children">
             <template v-for="child in item.children" :key="child.key">
               <!-- 二级嵌套：child 自身还有 children（如 题库练习 ┬ 真题练习） -->
@@ -220,11 +220,12 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessageBox } from 'element-plus'
 import { Expand, Fold, ArrowDown, SwitchButton } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { isNavRouteActive, type NavItem } from '@/config/navigation'
 import NotificationPanel from '@/components/layout/NotificationPanel.vue'
+import { useConfirm } from '@/composables/useConfirm'
+import UiTooltip from '@/components/ui/UiTooltip.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -338,7 +339,7 @@ function isRouteActive(item: NavItem): boolean {
 async function handleUserCommand(command: string) {
   if (command === 'logout') {
     try {
-      await ElMessageBox.confirm('确定要退出登录吗？', '提示', {
+      await useConfirm().confirm('确定要退出登录吗？', '提示', {
         confirmButtonText: '确定',
         cancelButtonText: '取消',
         type: 'warning'

@@ -166,6 +166,89 @@ func (s *NotificationService) CreateForumAcceptEvent(tx GormCreator, ev ForumAcc
 	return s.CreateWithTx(tx, ev.UserID, ev.Type, title, content, link, forumAcceptPayload(ev.TopicID, ev.ReplyID, ev.Points, ev.Reason), createdAt)
 }
 
+// 论坛加精通知类型（#742）。
+const (
+	NotifTypeForumFeatured = "forum_featured" // 帖主：帖子被加精 / 被认定为备考经验，+30（ADR-0040 两种认定共用同一类型与流水）
+)
+
+// forumFeaturedPayload 构造加精事件结构化标记（topic_id + points + reason）。
+func forumFeaturedPayload(topicID int64, points int, reason string) model.JSONB {
+	b, err := json.Marshal(struct {
+		TopicID int64  `json:"topic_id"`
+		Points  int    `json:"points"`
+		Reason  string `json:"reason"`
+	}{TopicID: topicID, Points: points, Reason: reason})
+	if err != nil {
+		return nil
+	}
+	return model.JSONB(b)
+}
+
+// 认定类型（ADR-0040）：加精与「认定备考经验」共用同一笔 featured_bonus 流水，
+// 但**文案必须区分**——把「被认定为备考经验」写成「被加精」会让帖主看不懂发生了什么。
+const (
+	DesignationFeatured   = "featured"   // 精选位认定
+	DesignationExperience = "experience" // 备考经验认定（蕴含精选）
+)
+
+// ForumFeaturedEvent 帖子认定事件通知参数（ADR-0024 C3，#742 / ADR-0040）。
+type ForumFeaturedEvent struct {
+	// UserID 收件人（帖主）。
+	UserID int
+	// TopicTitle 帖子标题（用于文案）。
+	TopicTitle string
+	// TopicID 主题 ID。
+	TopicID int64
+	// Points 到账分值（与实际入账一致）。
+	Points int
+	// Reason 流水原因（ReasonFeaturedBonus）。
+	Reason string
+	// Designation 认定类型（DesignationFeatured | DesignationExperience），决定文案。
+	Designation string
+}
+
+// NewTopicFeaturedEvent 构造**加精**通知事件（+30 分到账，link 锚到帖子）。
+func NewTopicFeaturedEvent(userID int, topicTitle string, topicID int64, points int) ForumFeaturedEvent {
+	return ForumFeaturedEvent{
+		UserID:      userID,
+		TopicTitle:  topicTitle,
+		TopicID:     topicID,
+		Points:      points,
+		Reason:      ReasonFeaturedBonus,
+		Designation: DesignationFeatured,
+	}
+}
+
+// NewTopicExperienceEvent 构造**认定备考经验**通知事件（同一笔 +30，文案不同）。
+// 与 NewTopicFeaturedEvent 拆成两个构造函数，遵 ADR-0027 C1「每个业务事件一个构造函数」：
+// 流水 reason 相同不代表业务事件相同，文案口径内聚在站内信域，业务方一行触发。
+func NewTopicExperienceEvent(userID int, topicTitle string, topicID int64, points int) ForumFeaturedEvent {
+	return ForumFeaturedEvent{
+		UserID:      userID,
+		TopicTitle:  topicTitle,
+		TopicID:     topicID,
+		Points:      points,
+		Reason:      ReasonFeaturedBonus,
+		Designation: DesignationExperience,
+	}
+}
+
+// CreateTopicFeaturedEvent 在指定事务/连接内创建一条帖子认定事件站内信。
+// 与积分入账同事务提交/回滚（ADR-0023）：通知与到账积分一致。
+func (s *NotificationService) CreateTopicFeaturedEvent(tx GormCreator, ev ForumFeaturedEvent, createdAt time.Time) error {
+	link := fmt.Sprintf("/training/forum/%d", ev.TopicID)
+	var title, content string
+	switch ev.Designation {
+	case DesignationExperience:
+		title = "你的帖子被认定为备考经验"
+		content = fmt.Sprintf("你的帖子「%s」已被认定为备考经验并进入经验区，+%d 分已到账", ev.TopicTitle, ev.Points)
+	default:
+		title = "你的帖子被加精"
+		content = fmt.Sprintf("你的帖子「%s」被加精精选，+%d 分已到账", ev.TopicTitle, ev.Points)
+	}
+	return s.CreateWithTx(tx, ev.UserID, NotifTypeForumFeatured, title, content, link, forumFeaturedPayload(ev.TopicID, ev.Points, ev.Reason), createdAt)
+}
+
 // reviewStatusPayload 构造审核状态结构化标记，如 {"review_status":"approved"}。
 func reviewStatusPayload(reviewStatus string) model.JSONB {
 	b, err := json.Marshal(struct {

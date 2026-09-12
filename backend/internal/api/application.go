@@ -6,7 +6,7 @@ package api
 
 import (
 	"context"
-	"errors"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 
@@ -14,6 +14,17 @@ import (
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
+
+// applicationErrStatus 投递域哨兵→状态码表（#611）：职位不可投/不存在 → 404，非本人 → 403，
+// 其余（重复投递/冷却/日限/简历不完整等业务校验）兜底 400。
+var applicationErrStatus = &errStatusTable{
+	entries: []errStatusEntry{
+		{service.ErrApplyJobInactive, http.StatusNotFound},
+		{service.ErrJobNotFound, http.StatusNotFound},
+		{service.ErrApplyNotYours, http.StatusForbidden},
+	},
+	fallback: http.StatusBadRequest,
+}
 
 // RegisterApplicationRoutes 注册投递相关路由。
 func RegisterApplicationRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.JobApplicationService) {
@@ -60,7 +71,7 @@ func (h *ApplicationHandler) Apply(c *gin.Context) {
 		},
 		Render: func(c *gin.Context, _ *struct{}, resp *service.ApplicationDTO, err error) {
 			if err != nil {
-				renderApplyError(c, err)
+				applicationErrStatus.renderError(c, err) // #611：错误映射退表，201 定制成功信封保留
 				return
 			}
 			response.Created(c, "投递成功，企业已可查看你的联系方式", *resp)
@@ -126,25 +137,10 @@ func (h *ApplicationHandler) Withdraw(c *gin.Context) {
 		},
 		Render: func(c *gin.Context, _ *struct{}, resp *service.ApplicationDTO, err error) {
 			if err != nil {
-				renderApplyError(c, err)
+				applicationErrStatus.renderError(c, err) // #611：错误映射退表，成功文案保留定制
 				return
 			}
 			response.SuccessWithMsg(c, "投递已撤回", *resp)
 		},
 	}.Handle(c)
-}
-
-// renderApplyError 投递域错误映射（哨兵 → 状态码，禁文案比对）。
-func renderApplyError(c *gin.Context, err error) {
-	var pe *ParseError
-	switch {
-	case asParseError(err, &pe):
-		renderStatus(c, pe.Status, pe.Message)
-	case errors.Is(err, service.ErrApplyJobInactive), errors.Is(err, service.ErrJobNotFound):
-		response.NotFound(c, err.Error())
-	case errors.Is(err, service.ErrApplyNotYours):
-		response.Forbidden(c, err.Error())
-	default:
-		response.BadRequest(c, err.Error())
-	}
 }

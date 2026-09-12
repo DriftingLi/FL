@@ -15,7 +15,7 @@ const fs = require('fs');
 const path = require('path');
 
 const API_PATH = path.join(__dirname, '..', 'api', 'aiAssistant.uts');
-const TYPES_PATH = path.join(__dirname, '..', 'types', 'index.uts');
+const TYPES_PATH = path.join(__dirname, '..', 'types', 'ai.uts');
 const apiSrc = fs.readFileSync(API_PATH, 'utf8');
 const typesSrc = fs.readFileSync(TYPES_PATH, 'utf8');
 

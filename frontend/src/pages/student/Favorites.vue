@@ -54,9 +54,9 @@
 
           <div class="flex min-w-0 flex-1 flex-col gap-1.5">
             <div class="flex min-w-0 items-center gap-2">
-              <el-tag size="small" :type="typeTagColor(item.target_type)" effect="plain">
+              <UiTag size="small" :tone="typeTagColor(item.target_type)" effect="plain">
                 {{ typeLabel(item.target_type) }}
-              </el-tag>
+              </UiTag>
               <span class="truncate text-[15px] font-medium text-ink">{{ item.title || `${typeLabel(item.target_type)} #${item.target_id}` }}</span>
             </div>
             <span v-if="item.created_at" class="text-xs text-ink-3">{{ formatLocaleDateTime(item.created_at) }}</span>
@@ -71,13 +71,12 @@
     </div>
 
     <div class="mt-4 flex justify-center" v-if="total > pageSize">
-      <el-pagination
-        v-model:current-page="currentPage"
-        :page-size="pageSize"
-        :total="total"
-        layout="total, prev, pager, next"
-        @current-change="handlePageChange"
-      />
+      <UiPagination
+      v-model:current-page="currentPage"
+      :page-size="pageSize"
+      :total="total"
+      @current-change="handlePageChange"
+    />
     </div>
   </div>
 </template>
@@ -85,7 +84,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { favoriteApi, type FavoriteItem, type FavoriteTargetType } from '@/api/favorite'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import { formatLocaleDateTime } from '@/utils/format'
@@ -96,6 +95,9 @@ import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
+import { useConfirm } from '@/composables/useConfirm'
+import UiTag from '@/components/ui/UiTag.vue'
 
 const router = useRouter()
 
@@ -183,7 +185,7 @@ function handleTabChange() {
 
 async function removeFavorite(item: FavoriteItem) {
   try {
-    await ElMessageBox.confirm('确定移除该收藏吗？', '移除收藏', { type: 'warning' })
+    await useConfirm().confirmDanger('确定移除该收藏吗？', '移除收藏', { type: 'warning' })
   } catch {
     return
   }

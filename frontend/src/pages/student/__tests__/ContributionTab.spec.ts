@@ -2,7 +2,7 @@
 // seam：组件层 mock @/api/contribution（不依赖真实后端）。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import { epLite } from '@/test/element-lite'
 
 vi.mock('@/api/contribution', () => ({
   contributionApi: {
@@ -19,7 +19,9 @@ vi.mock('@/api/contribution', () => ({
 
 vi.mock('@/stores/credential', () => ({
   useCredentialStore: () => ({
-    current: { id: 1 }
+    current: { id: 1 },
+    flatList: [{ id: 1, name: '叉车司机N1' }, { id: 2, name: '低压电工' }],
+    loadFlat: vi.fn().mockResolvedValue([])
   })
 }))
 
@@ -30,7 +32,7 @@ function mountTab(props = {}) {
   return mount(ContributionTab, {
     props: { credentialId: 1, ...props },
     global: {
-      plugins: [ElementPlus],
+      plugins: [epLite()],
       stubs: { RouterLink: { template: '<a><slot /></a>' } }
     }
   })
@@ -142,5 +144,14 @@ describe('ContributionTab 学员投稿（#517）', () => {
     submitBtn!.dispatchEvent(new MouseEvent('click'))
     await flushPromises()
     expect(vi.mocked(contributionApi.create)).not.toHaveBeenCalled()
+  })
+
+  it('上传抽屉：目标证件默认当前证件（#702）', async () => {
+    const w = mountTab()
+    await flushPromises()
+    const uploadBtn = w.findAll('button').find((b) => b.text().includes('上传资料'))
+    await uploadBtn!.trigger('click')
+    await flushPromises()
+    expect(document.body.textContent).toContain('目标证件')
   })
 })

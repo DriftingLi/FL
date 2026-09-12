@@ -1,7 +1,7 @@
 // #412 讲师端题库管理：证件列渲染真实归属（而非恒为占位符），请求带 sort=id_asc。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import { epLite } from '@/test/element-lite'
 
 vi.mock('@/api/questionBank', () => ({
   questionBankApi: { getQuestions: vi.fn(), getQuestion: vi.fn() },
@@ -18,7 +18,7 @@ import { credentialApi } from '@/api/credential'
 import QuestionManage from '../QuestionManage.vue'
 
 function mountPage() {
-  return mount(QuestionManage, { global: { plugins: [ElementPlus] } })
+  return mount(QuestionManage, { global: { plugins: [epLite()] } })
 }
 
 beforeEach(() => {

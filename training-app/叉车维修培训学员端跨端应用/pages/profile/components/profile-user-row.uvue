@@ -1,0 +1,223 @@
+<template>
+    <!-- 用户行：头像 + 昵称/等级 + 段位星级 + 签到胶囊 -->
+    <view class="user-row">
+        <view class="user-avatar" @click.stop="onAvatarTap">
+            <image v-if="avatarUrl.length > 0" class="avatar-img" :src="avatarUrl" mode="aspectFill">
+            </image>
+            <text v-else class="avatar-icon">👤</text>
+        </view>
+        <view class="user-info" @click="onInfoTap">
+            <view class="name-row">
+                <text class="user-name">{{ userName }}</text>
+                <text class="user-lv">Lv{{ userLevel }}</text>
+            </view>
+            <view class="role-row">
+                <text class="role-icon">🏅</text>
+                <text class="user-role">{{ rankName }}</text>
+                <view class="stars-row">
+                    <text v-for="(s, i) in starList" :key="i"
+                        :class="['star', { 'star-active': i < starCount }]">★</text>
+                </view>
+            </view>
+        </view>
+        <view class="checkin-pill" @click="onCheckinTap">
+            <text class="checkin-pill-text">{{ todayChecked ? '已签到' : '签到' }}</text>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { computed } from 'vue'
+    import { useAuthStore } from '../../../stores/auth'
+
+    /** 用户行展示数据：学时/完课数来自页面（推导 Lv/段位/星级），头像与昵称读 authStore */
+    const props = withDefaults(defineProps<{
+        studyMinutes ?: number
+        completedCourses ?: number
+        todayChecked ?: boolean
+    }>(), {
+        studyMinutes: 0,
+        completedCourses: 0,
+        todayChecked: false
+    })
+
+    const emit = defineEmits(['avatarTap', 'editNickname', 'checkinTap'])
+
+    const authStore = useAuthStore()
+
+    const userName = computed<string>(() : string => {
+        const u = authStore.user.value
+        if (u != null) {
+            if (u.name.length > 0) return u.name
+            if (u.username.length > 0) return u.username
+        }
+        return '同学'
+    })
+
+    const avatarUrl = computed<string>(() : string => {
+        const u = authStore.user.value
+        if (u != null && u.avatar_url != null && u.avatar_url.length > 0) {
+            return u.avatar_url
+        }
+        return ''
+    })
+
+    /**
+     * 学员等级 Lv：按累计学时本地推导（后端无等级字段）
+     * <5h → Lv1，<20h → Lv2，<50h → Lv3，<100h → Lv4，其余 Lv5
+     */
+    function levelFromHours(hours : number) : number {
+        if (hours < 5) return 1
+        if (hours < 20) return 2
+        if (hours < 50) return 3
+        if (hours < 100) return 4
+        return 5
+    }
+
+    /**
+     * 段位：按已完成课程数本地推导（后端无段位字段）
+     * 0 → 初级工，1 → 中级技师，2 → 高级技师，>=3 → 技师
+     */
+    function rankNameFromCompleted(completed : number) : string {
+        if (completed <= 0) return '初级工'
+        if (completed == 1) return '中级技师'
+        if (completed == 2) return '高级技师'
+        return '技师'
+    }
+
+    /** 等级 → 点亮星数（共 5 颗） */
+    function starCountFromLevel(level : number) : number {
+        if (level <= 0) return 0
+        if (level > 5) return 5
+        return level
+    }
+
+    const userLevel = computed<number>(() : number => {
+        return levelFromHours(props.studyMinutes / 60)
+    })
+
+    const rankName = computed<string>(() : string => {
+        return rankNameFromCompleted(props.completedCourses)
+    })
+
+    const starList : number[] = [1, 2, 3, 4, 5]
+
+    const starCount = computed<number>(() : number => {
+        return starCountFromLevel(userLevel.value)
+    })
+
+    function onAvatarTap() : void {
+        emit('avatarTap')
+    }
+
+    function onInfoTap() : void {
+        emit('editNickname')
+    }
+
+    function onCheckinTap() : void {
+        emit('checkinTap')
+    }
+</script>
+
+<style>
+    /* 用户行 */
+    .user-row {
+        flex-direction: row;
+        align-items: center;
+        padding: 24rpx 48rpx 0 24rpx;
+    }
+
+    .user-avatar {
+        width: 116rpx;
+        height: 116rpx;
+        border-radius: 58rpx;
+        background-color: #F5F5F5;
+        border: 4rpx solid #ffffff;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+    }
+
+    .avatar-img {
+        width: 116rpx;
+        height: 116rpx;
+        border-radius: 58rpx;
+    }
+
+    .avatar-icon {
+        font-size: 56rpx;
+    }
+
+    .user-info {
+        flex: 1;
+        flex-direction: column;
+        margin-left: 24rpx;
+    }
+
+    .name-row {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .user-name {
+        font-size: 40rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .user-lv {
+        font-size: 22rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-left: 16rpx;
+    }
+
+    .role-row {
+        flex-direction: row;
+        align-items: center;
+        margin-top: 8rpx;
+    }
+
+    .role-icon {
+        font-size: 26rpx;
+        margin-right: 8rpx;
+    }
+
+    .user-role {
+        font-size: 28rpx;
+        color: #666666;
+    }
+
+    .stars-row {
+        flex-direction: row;
+        align-items: center;
+        margin-left: 24rpx;
+    }
+
+    .star {
+        font-size: 26rpx;
+        color: #FFFFFF;
+        margin-right: 4rpx;
+    }
+
+    .star-active {
+        color: #FDE03B;
+    }
+
+    .checkin-pill {
+        height: 52rpx;
+        padding: 0 24rpx;
+        border-radius: 26rpx;
+        background-color: #EBF9FF;
+        align-items: center;
+        justify-content: center;
+        margin-left: 16rpx;
+        flex-shrink: 0;
+    }
+
+    .checkin-pill-text {
+        font-size: 26rpx;
+        font-weight: bold;
+        color: #239EDD;
+    }
+</style>

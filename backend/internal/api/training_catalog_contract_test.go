@@ -105,7 +105,9 @@ func keysOf(m map[string]any) []string {
 	return out
 }
 
-var isoMicroRE = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}$`)
+// 时间字段的对外契约（ADR-0043）：业务时区（Asia/Shanghai）墙钟 + 微秒定长 + **显式 `+08:00` 偏移**。
+// 偏移是断言的一部分——历史实现输出裸 UTC，会被 JS 按本地时区解析，东八区恒差 8 小时。
+var isoMicroRE = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}\+08:00$`)
 
 // TestCatalogContract_Specialty 专业方向端点全流程：创建/列表/更新/交换/删除，
 // data 键集与旧 map 字典一致，值类型经 JSON 往返后不变。

@@ -43,6 +43,19 @@ _Atry_: 自动填充、自动回填（暗示无验证，安全模型不同）
 **练习题库**：
 标签练习、随机练习、答题卡、数据报告。
 
+## 资源与投稿（移动端映射）
+
+域定义见根仓库 CONTEXT.md「资料投稿（contribution）」词条族；本节只记移动端映射（#710）。
+
+**资源 tab（forum-resource-panel）**：
+论坛页资源分区的 2x2 入口：课程商城 / 我的已购 / 我的上传 / 上传资源。「上传资源」格子与资源区的创建入口（header「发帖」/搜索栏）一律跳 `forum-create?scope=resource`——统一发布页（#760），资源 tab 承载投稿表单，独立页 upload-resource 已退役。
+
+**统一发布页（forum-create）**：
+分类行三 tab（ADR-0040 后）：广场/资源/知识问答——**「备考经验」不再是发布选项**（学员不能自称考经，它是管理端认定）。资源=投稿表单（文件方式三行〔微信聊天文档/本地文件上传/选择压缩文件，白名单 pdf/doc/docx/ppt/pptx/xls/xlsx/zip/mp4、单 ≤20MB、合计 ≤50MB、≤5 个前置校验〕+ 标题 ≤120 + 简介 + 目标证件取当前证件〔无证件阻断〕；链路先传后交：逐个 POST `/contributions/upload-file` 暂存 → POST `/contributions` 建稿，API 封装 `api/contribution.uts`）；其余三 tab=发帖表单（标题 ≤100 + 正文 + 图片 ≤9，`createForumTopicApi`，category 即 tab scope）。resource 永不发进发帖接口（isResourceMode 分流 + 编辑回填 normalizeCategory 双守卫）。
+
+**我的已购（my-purchases）**：
+已购课程 = GET `/student/courses`（我的课程，根仓库 ADR-0017）口径——后端**无购买概念**（课程全开放，`points_price` 积分兑换无已兑清单 endpoint），真「已购清单」如需支持另立后端票；不要再用 profile.course_progress 假充已购（契约测试已钉）。
+
 ## 用户体系
 
 **学员**：

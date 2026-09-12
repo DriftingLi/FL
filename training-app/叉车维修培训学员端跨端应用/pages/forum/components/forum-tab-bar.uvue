@@ -1,0 +1,104 @@
+<template>
+    <!-- 顶部Tab栏 -->
+    <view class="tab-bar">
+        <view class="tab-item" :class="{ active: currentTab === 'square' }" @click="onSwitch('square')">
+            <text class="tab-text">广场</text>
+        </view>
+        <view class="tab-item" :class="{ active: currentTab === 'resource' }" @click="onSwitch('resource')">
+            <text class="tab-text">资源</text>
+        </view>
+        <view class="tab-item" :class="{ active: currentTab === 'hot' }" @click="onSwitch('hot')">
+            <text class="tab-text">知识问答</text>
+        </view>
+        <view class="tab-item" :class="{ active: currentTab === 'experience' }" @click="onSwitch('experience')">
+            <text class="tab-text">备考经验</text>
+        </view>
+        <view class="tab-icon-btn" @click="onAvatarClick">
+            <image v-if="avatarUrl.length > 0" class="tab-avatar" :src="avatarUrl" mode="aspectFill" />
+            <view v-else class="tab-avatar-placeholder">
+                <text class="tab-avatar-icon">👷</text>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    withDefaults(defineProps<{
+        currentTab? : string
+        avatarUrl? : string
+    }>(), {
+        currentTab: 'square',
+        avatarUrl: ''
+    })
+
+    const emit = defineEmits(['switchTab', 'personalActivity'])
+
+    function onSwitch(tab : string) : void {
+        emit('switchTab', tab)
+    }
+
+    function onAvatarClick() : void {
+        emit('personalActivity')
+    }
+</script>
+
+<style>
+    /* 顶部Tab栏 */
+    .tab-bar {
+        flex-direction: row;
+        background-color: transparent;
+        border-bottom: 1rpx solid rgba(0, 0, 0, 0.06);
+        align-items: center;
+    }
+
+    .tab-item {
+        flex: 1;
+        height: 88rpx;
+        align-items: center;
+        justify-content: center;
+        border-bottom: 4rpx solid transparent;
+    }
+
+    .tab-item.active {
+        border-bottom-color: #2979ff;
+    }
+
+    .tab-text {
+        font-size: 30rpx;
+        color: #666666;
+    }
+
+    .tab-item.active .tab-text {
+        color: #1a1a1a;
+        font-weight: bold;
+    }
+
+    /* Tab栏右侧图标按钮 */
+    .tab-icon-btn {
+        width: 80rpx;
+        height: 88rpx;
+        align-items: center;
+        justify-content: center;
+        margin-left: 8rpx;
+    }
+
+    .tab-avatar {
+        width: 56rpx;
+        height: 56rpx;
+        border-radius: 28rpx;
+        border: 2rpx solid #eeeeee;
+    }
+
+    .tab-avatar-placeholder {
+        width: 56rpx;
+        height: 56rpx;
+        border-radius: 28rpx;
+        background-color: #f0f5ff;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .tab-avatar-icon {
+        font-size: 32rpx;
+    }
+</style>

@@ -3,11 +3,13 @@
     <div class="page-header">
       <h2>题库审核</h2>
       <div class="header-tips" v-if="pendingCount > 0">
-        <el-tag type="warning">待审核 {{ pendingCount }} 题</el-tag>
+        <UiTag tone="warning">待审核 {{ pendingCount }} 题</UiTag>
       </div>
     </div>
 
-    <div class="filter-bar">
+    <UiFilterBar>
+        <template #filters>
+
       <el-select v-model="filters.type" placeholder="题型" clearable style="width: 130px">
         <el-option label="单选题" value="single_choice" />
         <el-option label="多选题" value="multi_choice" />
@@ -28,9 +30,17 @@
       <UiButton variant="danger" v-if="selectedIds.length > 0" @click="batchReject">
         批量驳回 ({{ selectedIds.length }})
       </UiButton>
-    </div>
+        </template>
+      </UiFilterBar>
 
-    <el-table :data="questions" stripe v-loading="loading" @selection-change="handleSelection">
+    <UiErrorState
+      v-if="loadError"
+      title="题目加载失败"
+      description="网络或服务端异常，可重试"
+      :retrying="retrying"
+      @retry="retryLoad"
+    />
+    <el-table v-else :data="questions" stripe v-loading="loading" @selection-change="handleSelection">
       <el-table-column type="selection" width="50" />
       <el-table-column prop="id" label="ID" width="60" />
       <el-table-column prop="type" label="题型" width="100">
@@ -39,7 +49,7 @@
       <el-table-column prop="content" label="题干" show-overflow-tooltip />
       <el-table-column label="状态" width="100">
         <template #default="{ row }">
-          <el-tag :type="statusType[row.status]" size="small">{{ statusMap[row.status] }}</el-tag>
+          <UiTag :tone="statusType[row.status]" size="small">{{ statusMap[row.status] }}</UiTag>
         </template>
       </el-table-column>
       <el-table-column label="操作" width="90" fixed="right" align="center">
@@ -60,17 +70,17 @@
       </el-table-column>
     </el-table>
 
-    <el-pagination
+    <UiPagination
       v-model:current-page="page"
       :page-size="pageSize"
       :total="total"
-      layout="prev, pager, next"
-      @current-change="handlePageChange"
+      :show-total="false"
       style="margin-top: 15px"
+      @current-change="handlePageChange"
     />
 
     <!-- 题目详情弹窗 -->
-    <el-dialog v-model="detailVisible" title="题目详情" width="640px">
+    <UiDialog v-model="detailVisible" title="题目详情" width="640px">
       <div v-if="currentQuestion">
         <p><strong>题型：</strong>{{ typeMap[currentQuestion.type] }}</p>
         <p><strong>题干：</strong>{{ currentQuestion.content }}</p>
@@ -101,10 +111,10 @@
         <UiButton variant="danger" @click="rejectFromDetail">驳回</UiButton>
         <UiButton variant="success" @click="publishFromDetail">发布</UiButton>
       </template>
-    </el-dialog>
+    </UiDialog>
 
     <!-- 驳回理由弹窗 -->
-    <el-dialog v-model="rejectDialogVisible" title="填写驳回理由" width="500px">
+    <UiDialog v-model="rejectDialogVisible" title="填写驳回理由" width="500px">
       <el-form>
         <el-form-item label="驳回理由" required>
           <el-input
@@ -121,40 +131,56 @@
         <UiButton @click="cancelReject">取消</UiButton>
         <UiButton variant="danger" :loading="rejecting" @click="confirmReject">确认驳回</UiButton>
       </template>
-    </el-dialog>
+    </UiDialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { ArrowDown } from '@element-plus/icons-vue'
 import { questionBankApi } from '@/api/questionBank'
+import type { UiTagTone } from '@/components/ui/UiTag.vue'
 import type { Question } from '@/types/question'
 import { typeMap } from '@/constants/question'
-import { useAsyncPage } from '@/composables/useAsyncPage'
+import { useAdminTable } from '@/composables/useAdminTable'
+import { useRejectReasonDialog } from '@/composables/useRejectReasonDialog'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
+import UiFilterBar from '@/components/ui/UiFilterBar.vue'
+import UiErrorState from '@/components/ui/UiErrorState.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
+import { useConfirm } from '@/composables/useConfirm'
+import UiTag from '@/components/ui/UiTag.vue'
 
 const statusMap: Record<string, string> = { draft: '草稿', pending: '待审核', published: '已发布' }
-const statusType: Record<string, string> = { draft: 'info', pending: 'warning', published: 'success' }
+const statusType: Record<string, UiTagTone> = { draft: 'info', pending: 'warning', published: 'success' }
 
-const questions = ref<Question[]>([])
-
-// 三态 + 分页收编 useAsyncPage（#439）：loader 纯装配，错误收敛 loadError
+// 列表：admin 列表状态机 useAdminTable（#792，ADR-0039）——三态 + 分页 + 列表托管。
+// 解构改名保持模板零改动；filters 为页面自管筛选轴（由 fetch adapter 读取）。
 const {
   loading,
+  loadError,
+  retrying,
+  list: questions,
   total,
-  page,
+  currentPage: page,
   pageSize,
-  run: loadData,
-  handlePageChange
-} = useAsyncPage(async () => {
-  const res = await questionBankApi.getQuestions({ page: page.value, page_size: pageSize.value, ...filters.value })
-  questions.value = res?.questions || []
-  total.value = res?.total || 0
-  // 加载待审核总数（仅当不是 pending 筛选时单独查询）
-  await loadPendingCount()
+  load: loadData,
+  retry: retryLoad
+} = useAdminTable<Question>({
+  fetch: async (paging) => {
+    const res = await questionBankApi.getQuestions({ page: paging.page, page_size: paging.pageSize, ...filters.value })
+    // 加载待审核总数（仅当不是 pending 筛选时单独查询）
+    await loadPendingCount()
+    return { list: res?.questions || [], total: res?.total || 0 }
+  }
 })
+
+/** 翻页重装：useAdminTable 的 load 读取 currentPage */
+function handlePageChange(): void {
+  void loadData()
+}
 const filters = ref({ type: '', status: 'pending', keyword: '' })
 const selectedIds = ref<number[]>([])
 const pendingCount = ref(0)
@@ -163,9 +189,28 @@ const detailVisible = ref(false)
 const currentQuestion = ref<Question | null>(null)
 
 // 驳回相关
-const rejectDialogVisible = ref(false)
-const rejectReason = ref('')
-const rejecting = ref(false)
+// 驳回理由弹窗：#795 三域共用的弹窗状态机（visible/reason/submitting + 空理由校验 + 失败保留理由）
+// 提交动作由本页注入 —— 单条 / 批量 / 详情页触发的差异留在闭包里。
+const {
+  visible: rejectDialogVisible,
+  reason: rejectReason,
+  submitting: rejecting,
+  open: openRejectDialog,
+  close: closeRejectDialog,
+  submit: confirmReject
+} = useRejectReasonDialog({
+  onSubmit: async (reason) => {
+    if (rejectMode === 'batch') {
+      await questionBankApi.batchReject(selectedIds.value, reason)
+      ElMessage.success('批量驳回成功')
+    } else {
+      await questionBankApi.rejectQuestion(rejectTargetId, reason)
+      ElMessage.success('已驳回')
+      if (rejectMode === 'detail') detailVisible.value = false
+    }
+    await loadData()
+  }
+})
 // 驳回模式：single(单题) / batch(批量) / detail(从详情弹窗)
 let rejectMode = 'single'
 let rejectTargetId = 0
@@ -206,7 +251,7 @@ function viewDetail(row: any) {
 // 单题发布
 async function publishSingle(row: { id: number }) {
   try {
-    await ElMessageBox.confirm(`确定发布题目 #${row.id}？发布后学员可见。`, '确认发布', { type: 'success' })
+    await useConfirm().confirm(`确定发布题目 #${row.id}？发布后学员可见。`, '确认发布', { type: 'success' })
     await questionBankApi.publishQuestion(row.id)
     ElMessage.success('发布成功')
     await loadData()
@@ -219,14 +264,13 @@ async function publishSingle(row: { id: number }) {
 function rejectSingle(row: { id: number }) {
   rejectMode = 'single'
   rejectTargetId = row.id
-  rejectReason.value = ''
-  rejectDialogVisible.value = true
+  openRejectDialog()
 }
 
 // 批量发布
 async function batchPublish() {
   try {
-    await ElMessageBox.confirm(`确定批量发布选中的 ${selectedIds.value.length} 道题目？`, '确认批量发布', { type: 'success' })
+    await useConfirm().confirm(`确定批量发布选中的 ${selectedIds.value.length} 道题目？`, '确认批量发布', { type: 'success' })
     await questionBankApi.batchPublish(selectedIds.value)
     ElMessage.success('批量发布成功')
     await loadData()
@@ -239,8 +283,7 @@ async function batchPublish() {
 function batchReject() {
   if (selectedIds.value.length === 0) return
   rejectMode = 'batch'
-  rejectReason.value = ''
-  rejectDialogVisible.value = true
+  openRejectDialog()
 }
 
 // 从详情弹窗发布
@@ -255,37 +298,11 @@ function rejectFromDetail() {
   if (!currentQuestion.value) return
   rejectMode = 'detail'
   rejectTargetId = currentQuestion.value.id
-  rejectReason.value = ''
-  rejectDialogVisible.value = true
-}
-
-// 确认驳回
-async function confirmReject() {
-  if (!rejectReason.value.trim()) {
-    ElMessage.warning('请填写驳回理由')
-    return
-  }
-  rejecting.value = true
-  try {
-    if (rejectMode === 'batch') {
-      await questionBankApi.batchReject(selectedIds.value, rejectReason.value)
-      ElMessage.success('批量驳回成功')
-    } else {
-      await questionBankApi.rejectQuestion(rejectTargetId, rejectReason.value)
-      ElMessage.success('已驳回')
-      if (rejectMode === 'detail') detailVisible.value = false
-    }
-    rejectDialogVisible.value = false
-    await loadData()
-  } catch {
-    /* 错误已由拦截器提示 */
-  } finally {
-    rejecting.value = false
-  }
+  openRejectDialog()
 }
 
 function cancelReject() {
-  rejectDialogVisible.value = false
+  closeRejectDialog()
   rejectReason.value = ''
 }
 </script>
@@ -294,5 +311,4 @@ function cancelReject() {
 .question-review-page { padding: 0; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .page-header h2 { margin: 0; }
-.filter-bar { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; align-items: center; }
 </style>

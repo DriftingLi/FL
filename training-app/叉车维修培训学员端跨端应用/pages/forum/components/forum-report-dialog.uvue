@@ -1,0 +1,131 @@
+<template>
+    <view class="report-modal-mask" @click="onClose">
+        <view class="report-modal" @click.stop>
+            <text class="report-modal-title">{{ reportTargetType === 'topic' ? '举报帖子' : '举报回复' }}</text>
+            <textarea class="report-textarea" placeholder="请输入举报原因（1-500字）" maxlength="500"
+                v-model="reason" />
+            <text class="report-counter">{{ reason.length }}/500</text>
+            <view class="report-actions">
+                <view class="report-cancel" @click="onClose">
+                    <text class="report-cancel-text">取消</text>
+                </view>
+                <view class="report-confirm" :class="{ disabled: reason.length < 1 || submitting }"
+                    @click="onSubmit">
+                    <text class="report-confirm-text">{{ submitting ? '提交中...' : '提交' }}</text>
+                </view>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref } from 'vue'
+
+    // reason 归弹窗自持：壳层 v-if 打开即重挂载，天然等价于原「打开时清空」语义
+    const props = withDefaults(defineProps<{
+        reportTargetType? : string
+        submitting? : boolean
+    }>(), {
+        reportTargetType: 'topic',
+        submitting: false
+    })
+
+    const reason = ref<string>('')
+
+    const emit = defineEmits(['close', 'submit'])
+
+    function onClose() : void {
+        emit('close')
+    }
+
+    function onSubmit() : void {
+        emit('submit', reason.value)
+    }
+</script>
+
+<style>
+    /* 举报弹窗 */
+    .report-modal-mask {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        align-items: center;
+        justify-content: center;
+        z-index: 999;
+    }
+
+    .report-modal {
+        width: 600rpx;
+        background-color: #ffffff;
+        border-radius: 24rpx;
+        padding: 40rpx;
+        flex-direction: column;
+    }
+
+    .report-modal-title {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #333333;
+        text-align: center;
+        margin-bottom: 32rpx;
+    }
+
+    .report-textarea {
+        width: 100%;
+        height: 240rpx;
+        background-color: #f5f5f5;
+        border-radius: 12rpx;
+        padding: 20rpx;
+        font-size: 28rpx;
+        color: #333333;
+        margin-bottom: 8rpx;
+    }
+
+    .report-counter {
+        font-size: 22rpx;
+        color: #999999;
+        text-align: right;
+        margin-bottom: 24rpx;
+    }
+
+    .report-actions {
+        flex-direction: row;
+        justify-content: space-between;
+    }
+
+    .report-cancel {
+        flex: 1;
+        height: 80rpx;
+        border-radius: 40rpx;
+        background-color: #f5f5f5;
+        align-items: center;
+        justify-content: center;
+        margin-right: 16rpx;
+    }
+
+    .report-cancel-text {
+        font-size: 28rpx;
+        color: #666666;
+    }
+
+    .report-confirm {
+        flex: 1;
+        height: 80rpx;
+        border-radius: 40rpx;
+        background-color: #2979ff;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .report-confirm.disabled {
+        background-color: #cccccc;
+    }
+
+    .report-confirm-text {
+        font-size: 28rpx;
+        color: #ffffff;
+    }
+</style>

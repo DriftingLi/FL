@@ -49,13 +49,9 @@
           </div>
         </div>
       </div>
-      <el-dialog v-model="showDialog" title="申请交换联系方式" width="420px">
+      <UiDialog v-model="showDialog" title="申请交换联系方式" width="420px" confirm-text="提交申请" :confirm-loading="submitting" @confirm="submitRequest">
         <el-input v-model="message" type="textarea" :rows="3" maxlength="200" show-word-limit placeholder="请填写申请附言（1-200字）" />
-        <template #footer>
-          <UiButton @click="showDialog = false">取消</UiButton>
-          <UiButton variant="primary" :loading="submitting" @click="submitRequest">提交申请</UiButton>
-        </template>
-      </el-dialog>
+      </UiDialog>
     </div>
   </div>
 </template>
@@ -70,6 +66,7 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import OnlineResumePdf from '@/components/recruit/OnlineResumePdf.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
 
 const route = useRoute()
 const data = ref<RecruitResumeItem | null>(null)

@@ -13,12 +13,12 @@
         <el-icon class="mr-1"><SortDown v-if="sortOrder === 'desc'" /><SortUp v-else /></el-icon>
         {{ sortOrder === 'desc' ? '最新错误在前' : '最早错误在前' }}
       </UiButton>
-      <el-checkbox v-model="filterFavorited">收藏</el-checkbox>
-      <el-checkbox v-model="filterMultiWrong">错多次</el-checkbox>
+      <UiCheckbox v-model="filterFavorited">收藏</UiCheckbox>
+      <UiCheckbox v-model="filterMultiWrong">错多次</UiCheckbox>
       <UiButton @click="resetFilters">重置筛选</UiButton>
     </div>
     <div class="mb-5 flex flex-wrap items-center gap-2.5">
-      <el-checkbox :model-value="isAllSelected" :indeterminate="isIndeterminate" @change="toggleSelectAll" :disabled="wrongList.length===0">全选</el-checkbox>
+      <UiCheckbox :model-value="isAllSelected" :indeterminate="isIndeterminate" @change="toggleSelectAll" :disabled="wrongList.length===0">全选</UiCheckbox>
       <UiButton variant="danger" :disabled="selectedIds.size===0" @click="handleBatchRemove">批量移出</UiButton>
       <UiButton variant="success" :disabled="wrongList.length===0" @click="handleExport">导出错题</UiButton>
     </div>
@@ -42,9 +42,9 @@
       >
         <div class="mb-2 flex items-center justify-between">
           <div class="flex items-center gap-2">
-            <el-checkbox :model-value="selectedIds.has(item.question_id)" @change="(val:boolean)=>toggleSelect(item.question_id, val)" />
-            <el-tag size="small">{{ item.question?.type ? (typeMap as Record<string, string>)[item.question.type] : '' }}</el-tag>
-            <el-tag v-if="item.is_redone" type="success" size="small">已重做</el-tag>
+            <UiCheckbox :model-value="selectedIds.has(item.question_id)" @change="(val:boolean)=>toggleSelect(item.question_id, val)" />
+            <UiTag size="small">{{ item.question?.type ? (typeMap as Record<string, string>)[item.question.type] : '' }}</UiTag>
+            <UiTag v-if="item.is_redone" tone="success" size="small">已重做</UiTag>
             <el-icon class="fav-star cursor-pointer text-lg text-ink-muted hover:text-warn" :class="item.favorited ? 'text-warn' : ''" @click="toggleFavorite(item)">
               <StarFilled v-if="item.favorited" /><Star v-else />
             </el-icon>
@@ -52,39 +52,44 @@
           <span class="text-[13px] text-bad">错误 {{ item.wrong_count }} 次</span>
         </div>
         <p class="mb-2.5 text-[15px] leading-[1.6]">{{ item.question?.content }}</p>
-        <div v-if="redoingId === item.id" class="mt-2.5">
-          <template v-if="redoResults[item.id]">
+        <div v-if="redoItem?.id === item.id" class="mt-2.5">
+          <template v-if="submitted && lastResult">
             <AnswerResultCard
-              :correct-answer="redoResults[item.id].correct_answer || ''"
-              :user-answer="redoResults[item.id].user_answer"
-              :is-correct="!!redoResults[item.id].is_correct"
-              :duration-seconds="redoDurations[item.id]"
-              :accuracy-rate="redoResults[item.id].accuracy_rate"
-              :common-wrong="redoResults[item.id].common_wrong"
-              :question-type="item.question?.type"
+              :correct-answer="lastResult.correct_answer || ''"
+              :user-answer="lastResult.user_answer"
+              :is-correct="!!lastResult.is_correct"
+              :duration-seconds="lastDuration"
+              :accuracy-rate="lastResult.accuracy_rate"
+              :common-wrong="lastResult.common_wrong"
+              :question-type="redoItem.question?.type"
             />
-            <AIExplanationCard :ai-explanation="redoResults[item.id].ai_explanation" :fallback-explanation="redoResults[item.id].explanation" />
-            <KnowledgeCard :tags="wrongKnowledge[item.id] || []" />
-            <CommentCard :question-id="item.question_id" />
-            <NoteCard :question-id="item.question_id" />
+            <AIExplanationCard :ai-explanation="lastResult.ai_explanation" :fallback-explanation="lastResult.explanation" />
+            <KnowledgeCard :tags="knowledgeTags" />
+            <CommentCard :question-id="redoItem.question_id" />
+            <NoteCard :question-id="redoItem.question_id" />
             <div class="mt-2 flex gap-2">
-              <UiButton size="small" @click="redoingId = null">关闭</UiButton>
-              <UiButton variant="primary" size="small" @click="redoingId = null">完成</UiButton>
+              <UiButton size="small" @click="closeRedo">关闭</UiButton>
+              <UiButton variant="primary" size="small" @click="closeRedo">完成</UiButton>
             </div>
           </template>
           <template v-else>
+            <div class="mb-2 flex items-center gap-2">
+              <UiTag size="small">{{ redoItem.question?.type ? (typeMap as Record<string, string>)[redoItem.question.type] : '' }}</UiTag>
+              <UiActionChip icon="fav" :label="favorited ? '已收藏' : '收藏'" tone="fav" :active="favorited" compact @click="toggleRedoFavorite" />
+            </div>
             <QuestionOptionPicker
-              v-if="item.question?.type !== 'short_answer'"
+              v-if="redoItem.question?.type !== 'short_answer'"
               compact
-              :options="buildQuestionOptions(item.question ?? {})"
-              :selected-keys="redoAnswer"
-              :multi-choice="item.question?.type === 'multi_choice'"
-              @select="key => toggleRedoOption(key, item.question?.type ?? 'single_choice')"
+              :options="currentOptions"
+              :selected-keys="selectedOptionKeys"
+              :multi-choice="redoItem.question?.type === 'multi_choice'"
+              :disabled="submitted"
+              @select="selectRedoOption"
             />
-            <el-input v-else v-model="redoTextAnswer" type="textarea" :rows="3" placeholder="请输入答案" />
+            <el-input v-else v-model="textAnswer" type="textarea" :rows="3" placeholder="请输入答案" :disabled="submitted" />
             <div class="mt-2 flex gap-2">
-              <UiButton variant="primary" size="small" @click="submitRedo(item)">提交</UiButton>
-              <UiButton size="small" @click="redoingId = null">取消</UiButton>
+              <UiButton variant="primary" size="small" :disabled="!canSubmit" @click="submitRedo">提交</UiButton>
+              <UiButton size="small" @click="closeRedo">取消</UiButton>
             </div>
           </template>
         </div>
@@ -93,7 +98,13 @@
           <UiButton variant="danger" size="small" @click="removeWrong(item.question_id)">移出</UiButton>
         </div>
       </el-card>
-      <el-pagination v-model:current-page="page" :page-size="pageSize" :total="total" layout="prev, pager, next" @current-change="handlePageChange" />
+      <UiPagination
+      v-model:current-page="page"
+      :page-size="pageSize"
+      :total="total"
+      :show-total="false"
+      @current-change="handlePageChange"
+    />
     </div>
     <UiEmptyState v-else description="暂无错题" />
   </div>
@@ -101,27 +112,32 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted, computed } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { Star, StarFilled, SortDown, SortUp } from '@element-plus/icons-vue'
-import { wrongQuestionApi, type RedoResult } from '@/api/wrongQuestion'
+import { wrongQuestionApi } from '@/api/wrongQuestion'
 import { favoriteApi } from '@/api/favorite'
 import { typeMap } from '@/constants/question'
-import { toggleAnswer, buildQuestionOptions } from '@/composables/useQuestionAnswer'
 import { downloadBlob } from '@/composables/useReportDownload'
+import type { Question } from '@/types/question'
+import { usePracticeSession } from '@/composables/usePracticeSession'
+import { useQuestionPeripherals, questionPeripheralAdapters } from '@/composables/useQuestionPeripherals'
 import QuestionOptionPicker from '@/components/student/QuestionOptionPicker.vue'
 import AnswerResultCard from '@/components/practice/AnswerResultCard.vue'
 import AIExplanationCard from '@/components/practice/AIExplanationCard.vue'
 import KnowledgeCard from '@/components/practice/KnowledgeCard.vue'
 import CommentCard from '@/components/practice/CommentCard.vue'
 import NoteCard from '@/components/practice/NoteCard.vue'
-import { questionInteractionApi } from '@/api/questionInteraction'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useStagger } from '@/composables/useStagger'
-import { useCredentialRefetch } from '@/composables/useCredentialRefetch'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiActionChip from '@/components/ui/UiActionChip.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
+import { useConfirm } from '@/composables/useConfirm'
+import UiTag from '@/components/ui/UiTag.vue'
+import UiCheckbox from '@/components/ui/UiCheckbox.vue'
 
 interface WrongItem {
   id: number
@@ -173,14 +189,108 @@ const filterType = ref('')
 const sortOrder = ref<'desc' | 'asc'>('desc')
 const filterFavorited = ref(false)
 const filterMultiWrong = ref(false)
-const redoingId = ref<number | null>(null)
-const redoAnswer = ref<(string | number)[]>([])
-const redoTextAnswer = ref('')
-const redoStartTime = ref<number>(Date.now())
-const redoResults = ref<Record<number, RedoResult>>({})
-const redoDurations = ref<Record<number, number>>({})
-const wrongKnowledge = ref<Record<number, any[]>>({})
 const selectedIds = ref<Set<number>>(new Set())
+
+// ===== 错题重做 = 答题会话的单题变体（#617）=====
+// 无推进节奏、单题即时提交：提交管线/判分装配与练习同源（usePracticeSession），
+// 收藏/知识点/计时外围三件经 questionPeripheralAdapters 工厂接入（与练习页同一绑定点），
+// 内联重做状态机（redoAnswer/redoResults/wrongKnowledge 等）删除。
+const redoItem = ref<WrongItem | null>(null)
+
+const session = usePracticeSession({
+  // 单题变体 start：把当前重做项包装成单题会话（无断点进度）
+  start: async (mode) => {
+    const item = redoItem.value
+    if (mode !== 'single' || !item?.question) return null
+    return {
+      questions: [{ id: item.question_id, ...item.question } as Question],
+      startIndex: 0,
+      answersState: null
+    }
+  },
+  // 单题提交走错题重做接口（判分口径由后端统一落 question_practice_record）；
+  // 失败向上抛出 → 会话保持作答态（错误已由拦截器提示）
+  submit: async (payload) => {
+    const answer = Array.isArray(payload.user_answer) ? payload.user_answer.join(', ') : String(payload.user_answer ?? '')
+    const res = await wrongQuestionApi.redoWrongQuestion(payload.question_id, answer)
+    return {
+      ...res,
+      is_correct: res?.is_correct ?? null,
+      correct_answer: res?.correct_answer ?? '',
+      explanation: res?.explanation ?? '',
+      question_id: payload.question_id,
+      // 结果卡按数组渲染多选（「、」分隔），与 master 一致；接口提交用逗号串
+      user_answer: Array.isArray(payload.user_answer) ? payload.user_answer : answer
+    }
+  },
+  // 单题变体无断点进度，不落进度
+  saveProgress: async () => {}
+})
+
+const {
+  currentOptions,
+  selectedOptionKeys,
+  toggleOption,
+  textAnswer,
+  submitted,
+  lastResult,
+  canSubmit,
+  start,
+  submitAnswer,
+  backToEntry
+} = session
+
+// 外围三件与练习同源：收藏（进题查态）、知识点（出结果查）、计时（提交前取用时）
+// （toggleFavorite 重命名为 togglePanelFavorite，列表级 toggleFavorite 已占用该名）
+const { favorited, toggleFavorite: togglePanelFavorite, knowledgeTags, lastDuration, recordDuration } = useQuestionPeripherals(
+  session,
+  questionPeripheralAdapters({ knowledgeTrigger: 'result' })
+)
+
+async function startRedo(item: WrongItem) {
+  if (!item.question) return
+  redoItem.value = item
+  const ok = await start('single')
+  if (!ok) redoItem.value = null
+}
+
+function closeRedo() {
+  redoItem.value = null
+  backToEntry()
+}
+
+function selectRedoOption(key: string | number) {
+  const item = redoItem.value
+  if (!item) return
+  toggleOption(item.question_id, key, item.question?.type === 'multi_choice')
+}
+
+// 重做面板收藏与列表星标同态（同一 question_id 的收藏状态）
+async function toggleRedoFavorite() {
+  const r = await togglePanelFavorite()
+  const item = redoItem.value
+  if (r !== null && item) item.favorited = r === 'added'
+}
+
+async function submitRedo() {
+  recordDuration()
+  await submitAnswer()
+  const r = lastResult.value
+  if (!r) return // 提交失败：错误已由拦截器提示，留在作答态
+  if (r.is_correct === true) {
+    ElMessage.success('回答正确！已标记为已重做')
+    // 更新列表中的标记
+    const item = redoItem.value
+    if (item) {
+      const idx = wrongList.value.findIndex(w => w.id === item.id)
+      if (idx >= 0) wrongList.value[idx].is_redone = true
+    }
+  } else if (r.is_correct === false) {
+    ElMessage.warning('回答错误，继续加油')
+  } else {
+    ElMessage.info('简答题需要教师批改，已提交')
+  }
+}
 
 const isAllSelected = computed(()=> wrongList.value.length>0 && wrongList.value.every(i=> selectedIds.value.has(i.question_id)))
 const isIndeterminate = computed(()=> {
@@ -204,11 +314,8 @@ function toggleSelectAll(val: boolean){
 onMounted(() => loadData())
 watch([filterType, sortOrder, filterFavorited, filterMultiWrong], () => { page.value = 1; loadData() })
 
-// 证件切换即重拉（#387：错题本按当前证件分区，后端 credential_id 过滤）
-useCredentialRefetch(() => {
-  page.value = 1
-  loadData()
-})
+// 证件切换即重拉（#605：错题本按当前证件分区，失效刷新已内聚进 useAsyncPage，
+// 回第一页、筛选条件原样保留）
 
 function toggleSort() {
   sortOrder.value = sortOrder.value === 'desc' ? 'asc' : 'desc'
@@ -240,49 +347,9 @@ async function toggleFavorite(item: WrongItem) {
   }
 }
 
-function startRedo(item: WrongItem) {
-  redoingId.value = item.id
-  redoAnswer.value = []
-  redoTextAnswer.value = ''
-  redoStartTime.value = Date.now()
-  delete redoResults.value[item.id]
-  delete redoDurations.value[item.id]
-}
-
-function toggleRedoOption(key: string | number, type: string) {
-  const next = toggleAnswer(redoAnswer.value, key, type === 'multi_choice')
-  redoAnswer.value = type === 'multi_choice' ? (next as (string | number)[]) : [next as string | number]
-}
-
-async function submitRedo(item: WrongItem) {
-  try {
-    const answer = item.question?.type === 'short_answer' ? redoTextAnswer.value : redoAnswer.value
-    const duration = (Date.now() - redoStartTime.value) / 1000
-    const res = await wrongQuestionApi.redoWrongQuestion(item.question_id, Array.isArray(answer) ? answer.join(', ') : answer)
-    redoDurations.value[item.id] = duration
-    redoResults.value[item.id] = { ...res, user_answer: answer }
-    try {
-      const tags = await questionInteractionApi.listKnowledge(item.question_id)
-      wrongKnowledge.value[item.id] = tags || []
-    } catch { wrongKnowledge.value[item.id] = [] }
-    if (res?.is_correct === true) {
-      ElMessage.success('回答正确！已标记为已重做')
-      // 更新列表中的标记
-      const idx = wrongList.value.findIndex(w=>w.id===item.id)
-      if(idx>=0) wrongList.value[idx].is_redone = true
-    } else if (res?.is_correct === false) {
-      ElMessage.warning('回答错误，继续加油')
-    } else {
-      ElMessage.info('简答题需要教师批改，已提交')
-    }
-  } catch {
-    /* 错误已由拦截器提示 */
-  }
-}
-
 async function removeWrong(questionId: number) {
   try {
-    await ElMessageBox.confirm('确定移出此错题？', '提示', { type: 'warning' })
+    await useConfirm().confirm('确定移出此错题？', '提示', { type: 'warning' })
     await wrongQuestionApi.removeWrongQuestion(questionId)
     ElMessage.success('已移出')
     selectedIds.value.delete(questionId)
@@ -293,7 +360,7 @@ async function removeWrong(questionId: number) {
 async function handleBatchRemove(){
   if(selectedIds.value.size===0){ ElMessage.warning('请选择要移出的题目'); return }
   try{
-    await ElMessageBox.confirm(`确定移出选中的 ${selectedIds.value.size} 道错题？`, '提示', { type: 'warning' })
+    await useConfirm().confirm(`确定移出选中的 ${selectedIds.value.size} 道错题？`, '提示', { type: 'warning' })
     await wrongQuestionApi.batchRemoveWrongQuestions(Array.from(selectedIds.value))
     ElMessage.success('已批量移出')
     selectedIds.value = new Set()

@@ -2,8 +2,17 @@
  * 模拟考试 API
  * @note 后端返回的题目使用 questionToDict 格式：
  *   id → question_id, content → title, options 是 Map → Array
+ *
+ * @note T07 域 api 收紧（#645 / ADR-0007）：返回领域 DTO 的 4 个函数改走 mapper-callback 出口
+ *   （getMapped / postMapped + 箭头包裹的 build* 映射），params 仍沿用手动 query 序列化、
+ *   payload 仍走同一 opts.data 通路，请求形态逐字不变。**raw 透传的 2 个函数刻意保留裸 post**
+ *   （不硬套 identity map —— 返回体被调用方忽略，void 语义，T03/T05 口径）：
+ *   - saveMockExamApi / submitMockExamApi
+ * @note getMockExamHistoryApi 保留既有 `.catch` 空表回退（原样搬运，非本票新增）：
+ *   消费方 pages/exam（未完成考试探活）与 pages/profile/mock-exam-records 各自另有 try/catch
+ *   与可见错误态，回退不构成 #662 式幻影路由掩盖。是否随域收尾退役留给 api 批量收尾票（#652/#653）。
  */
-import { get, post } from './request'
+import { getMapped, post, postMapped } from './request'
 import { toNumber, toStr, toBool } from './helpers'
 import type { MockExamStartParams, MockExamInfo, MockExamSaveParams, MockExamResult, MockExamResultDetail, MockExamHistoryItem, MockExamHistoryResult, ExamQuestion, QuestionOption } from '../types/index'
 
@@ -195,9 +204,7 @@ export function startMockExamApi(count : number = 0, duration : number = 90) : P
 		count: count,
 		duration: duration
 	} as UTSJSONObject
-	return post('/mock-exam/start', payload).then((data : UTSJSONObject) : MockExamInfo => {
-		return buildMockExamInfo(data)
-	})
+	return postMapped<MockExamInfo>('/mock-exam/start', payload, (data : UTSJSONObject) : MockExamInfo => buildMockExamInfo(data))
 }
 
 /**
@@ -205,6 +212,7 @@ export function startMockExamApi(count : number = 0, duration : number = 90) : P
  * @param mockExamId 模拟考试 ID
  * @param answers 答案对象
  * @param remainingTime 剩余时间（秒）
+ * @note 返回体被调用方忽略（void 语义），保持 raw 透传
  */
 export function saveMockExamApi(mockExamId : number, answers : UTSJSONObject, remainingTime : number) : Promise<UTSJSONObject> {
 	const url = '/mock-exam/' + mockExamId + '/save'
@@ -221,14 +229,13 @@ export function saveMockExamApi(mockExamId : number, answers : UTSJSONObject, re
  */
 export function resumeMockExamApi(mockExamId : number) : Promise<MockExamInfo> {
 	const url = '/mock-exam/' + mockExamId + '/resume'
-	return get(url).then((data : UTSJSONObject) : MockExamInfo => {
-		return buildMockExamInfo(data)
-	})
+	return getMapped<MockExamInfo>(url, null, (data : UTSJSONObject) : MockExamInfo => buildMockExamInfo(data))
 }
 
 /**
  * 交卷
  * @param mockExamId 模拟考试 ID
+ * @note 返回体被调用方忽略（void 语义），保持 raw 透传
  */
 export function submitMockExamApi(mockExamId : number) : Promise<UTSJSONObject> {
 	const url = '/mock-exam/' + mockExamId + '/submit'
@@ -241,9 +248,7 @@ export function submitMockExamApi(mockExamId : number) : Promise<UTSJSONObject> 
  */
 export function getMockExamResultApi(mockExamId : number) : Promise<MockExamResult> {
 	const url = '/mock-exam/' + mockExamId + '/result'
-	return get(url).then((data : UTSJSONObject) : MockExamResult => {
-		return buildMockExamResult(data)
-	})
+	return getMapped<MockExamResult>(url, null, (data : UTSJSONObject) : MockExamResult => buildMockExamResult(data))
 }
 
 /**
@@ -256,9 +261,7 @@ export function getMockExamHistoryApi(page : number = 1, pageSize : number = 10)
 		page: page.toString(),
 		page_size: pageSize.toString(),
 	} as UTSJSONObject
-	return get('/mock-exam/history', params).then((data : UTSJSONObject) : MockExamHistoryResult => {
-		return buildMockExamHistoryResult(data)
-	}).catch((e) : MockExamHistoryResult => {
+	return getMapped<MockExamHistoryResult>('/mock-exam/history', params, (data : UTSJSONObject) : MockExamHistoryResult => buildMockExamHistoryResult(data)).catch((e) : MockExamHistoryResult => {
 		console.warn('[getMockExamHistoryApi] network failed:', e)
 		return { items: [] as MockExamHistoryItem[], total: 0, page: page, page_size: pageSize } as MockExamHistoryResult
 	})

@@ -6,12 +6,12 @@
         <span class="file-name" :title="fileName">{{ fileName || '文档' }}</span>
       </div>
       <div class="toolbar-right">
-        <el-tooltip v-if="canPreview" content="在新窗口打开" placement="bottom">
+        <UiTooltip v-if="canPreview" content="在新窗口打开" placement="bottom">
           <UiButton :icon="FullScreen" circle size="small" @click="openInNewTab"/>
-        </el-tooltip>
-        <el-tooltip content="下载" placement="bottom">
+        </UiTooltip>
+        <UiTooltip content="下载" placement="bottom">
           <UiButton :icon="Download" circle size="small" @click="downloadFile"/>
-        </el-tooltip>
+        </UiTooltip>
       </div>
     </div>
 
@@ -33,20 +33,20 @@
 
       <!-- 非 PDF 文档：浏览器无法内嵌预览，提供下载/新窗口打开 -->
       <div v-if="!canPreview" class="doc-unsupported">
-        <el-empty :description="unsupportedMessage">
+        <UiEmptyState :description="unsupportedMessage">
           <UiButton variant="primary" @click="downloadFile">
             <el-icon><Download /></el-icon> 下载文档
           </UiButton>
           <UiButton @click="openInNewTab">在新窗口打开</UiButton>
-        </el-empty>
+        </UiEmptyState>
         <p class="unsupported-tip" v-if="unsupportedTip">{{ unsupportedTip }}</p>
       </div>
 
       <div v-if="loadError" class="doc-error">
-        <el-empty :description="errorMessage">
+        <UiEmptyState :description="errorMessage">
           <UiButton variant="primary" @click="downloadFile">下载文档</UiButton>
           <UiButton @click="openInNewTab">在新窗口打开</UiButton>
-        </el-empty>
+        </UiEmptyState>
       </div>
     </div>
   </div>
@@ -57,6 +57,8 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { Document, Download, FullScreen, Loading } from '@element-plus/icons-vue'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiTooltip from '@/components/ui/UiTooltip.vue'
 
 const props = defineProps({
   src: { type: String, required: true },

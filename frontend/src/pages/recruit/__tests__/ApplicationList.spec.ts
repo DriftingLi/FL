@@ -1,7 +1,7 @@
 // #490 投递列表详情抽屉：内嵌在线简历 PDF + 明文联系方式 + 标记不合适；旧指引文案已移除。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import { epLite } from '@/test/element-lite'
 
 vi.mock('vue-router', () => ({
   useRoute: () => ({ params: { id: '1' } }),
@@ -19,9 +19,15 @@ vi.mock('@/api/recruit', () => ({
 vi.mock('@/components/recruit/OnlineResumePdf.vue', () => ({
   default: { template: '<div class="mock-pdf">PDF-PLACEHOLDER</div>' },
 }))
-vi.mock('@/api/client', () => ({
-  getValidAccessToken: vi.fn(() => Promise.resolve('tk')),
-}))
+// useAsyncPage 内聚证件失效刷新（#604）后 import 链经 stores/credential → api/credential →
+// api/request，需要真实 client 工厂完成模块初始化；仅覆盖 getValidAccessToken 不触网
+vi.mock(import('@/api/client'), async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/client')>()
+  return {
+    ...actual,
+    getValidAccessToken: vi.fn(() => Promise.resolve('tk')),
+  }
+})
 
 import { jobApi } from '@/api/job'
 import { recruitApi } from '@/api/recruit'
@@ -40,7 +46,7 @@ const appItem = {
 }
 
 function mountPage() {
-  return mount(ApplicationList, { global: { plugins: [ElementPlus] } })
+  return mount(ApplicationList, { global: { plugins: [epLite()] } })
 }
 
 beforeEach(() => {

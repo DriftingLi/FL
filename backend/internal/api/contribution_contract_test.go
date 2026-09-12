@@ -117,6 +117,24 @@ func TestContributionAPIContract(t *testing.T) {
 		t.Fatalf("无证件投稿应 400, got %d", w.Code)
 	}
 
+	// 2b. 跨证件投稿（#702）：已选定当前证件的学员可投给另一有效证件。
+	otherCred := &model.Credential{Code: "ELEC", Name: "低压电工"}
+	if err := deps.DB.Create(otherCred).Error; err != nil {
+		t.Fatalf("建第二证件失败: %v", err)
+	}
+	crossBody := map[string]any{
+		"credential_id": otherCred.ID,
+		"title":         "电工安全手册",
+		"intro":         "跨证件供稿",
+		"files": []map[string]any{{
+			"file_url": "/static/uploads/contributions/y.pdf", "file_name": "y.pdf", "file_size": 1024, "content_type": "document",
+		}},
+	}
+	w = contributionDo(t, r, tok, "POST", "/api/contributions", crossBody)
+	if w.Code != http.StatusOK {
+		t.Fatalf("跨证件投稿应 200, got %d body=%s", w.Code, w.Body.String())
+	}
+
 	// 3. 未认证 401
 	w = contributionDo(t, r, "", "GET", "/api/contributions?credential_id="+fmt.Sprintf("%d", cred.ID), nil)
 	if w.Code != http.StatusUnauthorized {

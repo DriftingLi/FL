@@ -1,7 +1,7 @@
 // Materials 学习资料页双 tab（#517）：课程资料 / 学员投稿切换。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import { epLite } from '@/test/element-lite'
 
 vi.mock('@/api/material', () => ({
   materialApi: { list: vi.fn() }
@@ -35,7 +35,7 @@ beforeEach(() => {
 
 describe('Materials 学习资料页（#517 双 tab）', () => {
   it('渲染两个 tab 与默认「课程资料」', async () => {
-    const w = mount(Materials, { global: { plugins: [ElementPlus] } })
+    const w = mount(Materials, { global: { plugins: [epLite()] } })
     await flushPromises()
     expect(w.text()).toContain('学习资料')
     expect(w.text()).toContain('课程资料')
@@ -45,7 +45,7 @@ describe('Materials 学习资料页（#517 双 tab）', () => {
   it('切到「学员投稿」渲染投稿 tab（stub 子组件）', async () => {
     const w = mount(Materials, {
       global: {
-        plugins: [ElementPlus],
+        plugins: [epLite()],
         stubs: { ContributionTab: { template: '<div class="contrib-tab-stub">学员投稿区</div>' } }
       }
     })

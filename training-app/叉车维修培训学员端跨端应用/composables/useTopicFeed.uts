@@ -1,0 +1,164 @@
+/**
+ * forum 帖子流状态（T04 手术：forum.uvue script 列表域下沉）
+ * 持有 topics 分页与排序态；currentTab 由壳层以 Ref 注入（tab 态属壳层，数据所有权单一）。
+ * 函数字段箭头包裹返回（UTS error18 先例，同 useAiChat）。
+ */
+import { ref } from 'vue'
+import type { Ref } from 'vue'
+import { getForumTopicsApi } from '../api/forum'
+import type { ForumTopic } from '../types/index'
+
+export type UseTopicFeedResult = {
+    topics : Ref<ForumTopic[]>
+    loading : Ref<boolean>
+    noMore : Ref<boolean>
+    sortField : Ref<string>
+    sortOrder : Ref<string>
+    qaSort : Ref<string>
+    qaStatus : Ref<string>
+    expSort : Ref<string>
+    featuredFilter : Ref<string>
+    loadTopics : (reset : boolean) => Promise<void>
+    onLoadMore : () => void
+    onSortFieldChange : (field : string) => void
+    onSortOrderChange : (order : string) => void
+    onQaSortChange : (val : string) => void
+    onQaStatusChange : (val : string) => void
+    onExpSortChange : (val : string) => void
+    onFeaturedChange : (val : string) => void
+}
+
+export function useTopicFeed(currentTab : Ref<string>) : UseTopicFeedResult {
+    const topics = ref<ForumTopic[]>([])
+    const page = ref<number>(1)
+    const pageSize = 10
+    const total = ref<number>(0)
+    const loading = ref<boolean>(false)
+    const noMore = ref<boolean>(false)
+    const sortField = ref<string>('latest') // latest | hot
+    const sortOrder = ref<string>('desc')   // desc | asc
+    // 知识问答筛选：recommend（mock，暂以热度代替）| hot | latest
+    const qaSort = ref<string>('recommend')
+    // 知识问答状态筛选（#740，两态按父票 #707 裁定）：''（全部）| resolved（已解决）| open（未解决）
+    const qaStatus = ref<string>('')
+    // 备考经验筛选（#706）：default（后端默认时序）| hot（最多赞）| latest
+    const expSort = ref<string>('default')
+    // 精选筛选（#742 批次三，三 Tab 通用轴，对齐 Web）：''（全部帖）| 'true'（仅精选）；跨 Tab 不延续由壳层切 Tab 复位
+    const featuredFilter = ref<string>('')
+
+    async function loadTopics(reset : boolean = false) : Promise<void> {
+        if (loading.value) return
+        if (reset) {
+            page.value = 1
+            noMore.value = false
+        }
+        if (noMore.value && !reset) return
+
+        loading.value = true
+        try {
+            // 后端 scope 白名单仅 all|general|chapter（tab 名不可直传，会被静默当 all），
+            // category 白名单只有学员自述的两值 discussion|question（ADR-0040 收窄；
+            // 'experience' 仅为旧客户端兼容保留、过滤不出任何行）
+            // 广场只出普通帖（discussion）；问答帖（question）走 category，经验帖走认定 is_experience
+            let scope = 'general'
+            let category = 'discussion'
+            let isExperience = ''
+            let sort = sortField.value
+            let order = sortOrder.value
+            if (currentTab.value === 'hot') {
+                // 知识问答：只列提问帖；推荐/最热都映射后端 hot（推荐暂无独立算法，mock 占位），最新映射 latest
+                scope = 'all'
+                category = 'question'
+                order = 'desc'
+                sort = qaSort.value == 'latest' ? 'latest' : 'hot'
+            } else if (currentTab.value === 'experience') {
+                // 备考经验（#706 / ADR-0040）：经验的唯一判据是管理端认定 is_experience（不是 category）；
+                // scope=all —— 经验帖可挂章节也可不挂，看全量认定帖。
+                // 最多赞→hot，最新→created（发帖时间，#727 排序档），默认→latest（活跃度）
+                scope = 'all'
+                category = ''
+                isExperience = 'true'
+                order = 'desc'
+                sort = expSort.value == 'hot' ? 'hot' : (expSort.value == 'latest' ? 'created' : 'latest')
+            }
+            const statusParam = currentTab.value === 'hot' ? qaStatus.value : ''
+            const result = await getForumTopicsApi(page.value, pageSize, scope, sort, order, category, statusParam, featuredFilter.value, isExperience)
+            if (reset) {
+                topics.value = result.items
+            } else {
+                topics.value = topics.value.concat(result.items)
+            }
+            total.value = result.total
+            if (topics.value.length >= result.total || result.items.length == 0) {
+                noMore.value = true
+            } else {
+                page.value = page.value + 1
+            }
+        } catch (e) {
+            console.error('[forum] load failed:', e)
+            uni.showToast({ title: '加载帖子失败', icon: 'none' })
+        } finally {
+            loading.value = false
+        }
+    }
+
+    function onLoadMore() : void {
+        loadTopics(false)
+    }
+
+    function onSortFieldChange(field : string) : void {
+        if (sortField.value === field) return
+        sortField.value = field
+        loadTopics(true)
+    }
+
+    function onQaSortChange(val : string) : void {
+        if (qaSort.value === val) return
+        qaSort.value = val
+        loadTopics(true)
+    }
+
+    function onQaStatusChange(val : string) : void {
+        if (qaStatus.value === val) return
+        qaStatus.value = val
+        loadTopics(true)
+    }
+
+    function onExpSortChange(val : string) : void {
+        if (expSort.value === val) return
+        expSort.value = val
+        loadTopics(true)
+    }
+
+    function onFeaturedChange(val : string) : void {
+        if (featuredFilter.value === val) return
+        featuredFilter.value = val
+        loadTopics(true)
+    }
+
+    function onSortOrderChange(order : string) : void {
+        if (sortOrder.value === order) return
+        sortOrder.value = order
+        loadTopics(true)
+    }
+
+    return {
+        topics: topics,
+        loading: loading,
+        noMore: noMore,
+        sortField: sortField,
+        sortOrder: sortOrder,
+        qaSort: qaSort,
+        qaStatus: qaStatus,
+        expSort: expSort,
+        featuredFilter: featuredFilter,
+        loadTopics: (reset : boolean) => loadTopics(reset),
+        onLoadMore: () => onLoadMore(),
+        onSortFieldChange: (field : string) => onSortFieldChange(field),
+        onSortOrderChange: (order : string) => onSortOrderChange(order),
+        onQaSortChange: (val : string) => onQaSortChange(val),
+        onQaStatusChange: (val : string) => onQaStatusChange(val),
+        onExpSortChange: (val : string) => onExpSortChange(val),
+        onFeaturedChange: (val : string) => onFeaturedChange(val),
+    } as UseTopicFeedResult
+}

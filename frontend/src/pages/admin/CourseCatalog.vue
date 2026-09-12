@@ -66,7 +66,9 @@
 
     <!-- 右侧课程表格 -->
     <main class="cc-main">
-      <div class="cc-toolbar">
+      <UiFilterBar>
+        <template #filters>
+
         <el-input v-model="keyword" placeholder="搜索课程名称…" clearable class="cc-search" @input="currentPage = 1">
           <template #prefix>
             <el-icon><Search /></el-icon>
@@ -85,25 +87,26 @@
           <el-option label="全部" value="all" />
         </el-select>
         <UiButton variant="primary" @click="openDrawer()">新增课程</UiButton>
-      </div>
+        </template>
+      </UiFilterBar>
 
       <el-table :data="pagedCourses" v-loading="loading" style="width: 100%">
         <el-table-column label="证件" width="140">
           <template #default="{ row }">
-            <el-tag size="small" effect="plain">{{ credentialNameOf((row as any).credential_id) || '—' }}</el-tag>
+            <UiTag size="small" effect="plain">{{ credentialNameOf((row as any).credential_id) || '—' }}</UiTag>
           </template>
         </el-table-column>
         <el-table-column label="课程名称" min-width="220" show-overflow-tooltip>
           <template #default="{ row }">
-            <el-tag v-if="row.status === 0" type="info" size="small">草稿</el-tag>
-            <el-tag v-if="isUnmounted(row)" type="danger" size="small" style="margin-left: 4px">待补全</el-tag>
+            <UiTag v-if="row.status === 0" tone="info" size="small">草稿</UiTag>
+            <UiTag v-if="isUnmounted(row)" tone="danger" size="small" style="margin-left: 4px">待补全</UiTag>
             <span class="cc-cell-name">{{ row.name }}</span>
           </template>
         </el-table-column>
         <el-table-column label="方向 / 等级" width="150">
           <template #default="{ row }">
             <template v-if="!isUnmounted(row)">
-              <el-tag :type="levelTagType(levelNameOf(row.level_id))" size="small">{{ levelNameOf(row.level_id) }}</el-tag>
+              <UiTag :tone="levelTagType(levelNameOf(row.level_id))" size="small">{{ levelNameOf(row.level_id) }}</UiTag>
               <span class="cc-cell-dim">{{ specialtyNameOf(row.specialty_id) }}</span>
             </template>
             <span v-else class="cc-cell-warn">缺少方向/等级</span>
@@ -122,19 +125,19 @@
         </el-table-column>
         <el-table-column label="热门" width="90" align="center">
           <template #default="{ row }">
-            <el-switch :model-value="!!row.is_hot" @change="(v: boolean) => toggleHot(row, v)" />
+            <UiSwitch :model-value="!!row.is_hot" @change="(v: boolean) => toggleHot(row, v)" />
           </template>
         </el-table-column>
         <el-table-column label="精品" width="90" align="center">
           <template #default="{ row }">
-            <el-switch :model-value="!!row.is_featured" @change="(v: boolean) => toggleFeatured(row, v)" />
+            <UiSwitch :model-value="!!row.is_featured" @change="(v: boolean) => toggleFeatured(row, v)" />
           </template>
         </el-table-column>
         <el-table-column label="状态" width="90">
           <template #default="{ row }">
-            <el-tag :type="row.status === 1 ? 'success' : 'info'" size="small">
+            <UiTag :tone="row.status === 1 ? 'success' : 'info'" size="small">
               {{ row.status === 1 ? '已上架' : '未上架' }}
-            </el-tag>
+            </UiTag>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="90" fixed="right" align="center">
@@ -158,18 +161,18 @@
           </template>
         </el-table-column>
         <template #empty>
-          <el-empty description="暂无课程" :image-size="60" />
+          <UiEmptyState description="暂无课程" size="sm" />
         </template>
       </el-table>
 
       <div class="cc-pagination" v-if="filteredCourses.length > pageSize">
-        <el-pagination
-          v-model:current-page="currentPage"
-          v-model:page-size="pageSize"
-          :total="filteredCourses.length"
-          :page-sizes="[10, 20, 50]"
-          layout="total, sizes, prev, pager, next"
-        />
+        <UiPagination
+      v-model:current-page="currentPage"
+      v-model:page-size="pageSize"
+      :total="filteredCourses.length"
+      show-sizes
+      :page-sizes="[10, 20, 50]"
+    />
       </div>
     </main>
 
@@ -198,7 +201,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { Search, ArrowDown, CaretTop, CaretBottom } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { trainingApi, type CatalogDirectionNode, type CatalogLevel, type CertificateTemplate } from '@/api/training'
 import { credentialApi, type CredentialDict } from '@/api/credential'
 import { adminApi, type AdminCourseItem } from '@/api/admin'
@@ -210,6 +213,12 @@ import FacetItem from '@/components/catalog/FacetItem.vue'
 import CourseCatalogCourseDrawer from '@/components/admin/CourseCatalogCourseDrawer.vue'
 import CourseCatalogDialogs from '@/components/admin/CourseCatalogDialogs.vue'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
+import UiFilterBar from '@/components/ui/UiFilterBar.vue'
+import { useConfirm } from '@/composables/useConfirm'
+import UiTag from '@/components/ui/UiTag.vue'
+import UiSwitch from '@/components/ui/UiSwitch.vue'
 
 const submitting = ref(false)
 
@@ -493,7 +502,7 @@ function handleAction(cmd: string, row: AdminCourseItem) {
       moveCourse(row, 1)
       break
     case 'delete':
-      ElMessageBox.confirm('确定删除该课程？', '提示', {
+      useConfirm().confirmDanger('确定删除该课程？', '提示', {
         type: 'warning',
         confirmButtonText: '确定',
         cancelButtonText: '取消'
@@ -595,12 +604,6 @@ onMounted(() => {
   min-width: 0;
 }
 
-.cc-toolbar {
-  display: flex;
-  gap: var(--space-3);
-  align-items: center;
-  margin-bottom: var(--space-4);
-}
 
 .cc-search {
   max-width: 280px;
@@ -640,9 +643,6 @@ onMounted(() => {
 }
 
 @media screen and (max-width: 768px) {
-  .cc-toolbar {
-    flex-wrap: wrap;
-  }
 
   .cc-search {
     flex: 1 1 100%;

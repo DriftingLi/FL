@@ -8,21 +8,21 @@
     </div>
 
     <el-card shadow="never">
-      <div class="toolbar">
-        <div class="toolbar-filters">
+      <UiFilterBar>
+        <template #filters>
           <el-select v-model="filterCategory" placeholder="类别" clearable style="width: 160px">
             <el-option label="特种作业" value="special_operation" />
             <el-option label="技能等级" value="skill_level" />
           </el-select>
           <el-input v-model="keyword" placeholder="搜索编码/名称" clearable style="width: 220px" />
-        </div>
-      </div>
+        </template>
+      </UiFilterBar>
       <el-table :data="filtered" v-loading="loading" stripe>
         <el-table-column label="类别" width="120">
           <template #default="{ row }">
-            <el-tag size="small" :type="row.category === 'special_operation' ? '' : 'success'">
+            <UiTag size="small" :tone="row.category === 'special_operation' ? 'primary' : 'success'">
               {{ row.category === 'special_operation' ? '特种作业' : `技能等级 L${row.level}` }}
-            </el-tag>
+            </UiTag>
           </template>
         </el-table-column>
         <el-table-column label="证件名称" min-width="200">
@@ -34,7 +34,7 @@
         <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
         <el-table-column label="状态" width="90" align="center">
           <template #default="{ row }">
-            <el-tag :type="row.status === 1 ? 'success' : 'info'" size="small">{{ row.status === 1 ? '启用' : '停用' }}</el-tag>
+            <UiTag :tone="row.status === 1 ? 'success' : 'info'" size="small">{{ row.status === 1 ? '启用' : '停用' }}</UiTag>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="150" fixed="right" align="center">
@@ -50,7 +50,7 @@
       </el-table>
     </el-card>
 
-    <el-dialog v-model="dialogVisible" :title="form.id ? '编辑证件' : '新增证件'" width="520px" destroy-on-close>
+    <UiDialog v-model="dialogVisible" :title="form.id ? '编辑证件' : '新增证件'" width="520px" destroy-on-close confirm-text="保存" :confirm-loading="submitting" @confirm="handleSubmit">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
         <el-form-item label="编码" prop="code">
           <el-input v-model="form.code" placeholder="如 forklift_n1" :disabled="!!form.id" />
@@ -80,14 +80,10 @@
           <el-input-number v-model="form.sort_order" :min="0" :max="999" style="width: 100%" />
         </el-form-item>
         <el-form-item label="状态" prop="status">
-          <el-switch v-model="form.status" :active-value="1" :inactive-value="0" active-text="启用" inactive-text="停用" />
+          <UiSwitch v-model="form.status" :active-value="1" :inactive-value="0" active-text="启用" inactive-text="停用" />
         </el-form-item>
       </el-form>
-      <template #footer>
-        <UiButton @click="dialogVisible = false">取消</UiButton>
-        <UiButton variant="primary" :loading="submitting" @click="handleSubmit">保存</UiButton>
-      </template>
-    </el-dialog>
+    </UiDialog>
   </div>
 </template>
 
@@ -98,6 +94,10 @@ import { ElMessage, type FormInstance } from 'element-plus'
 import { credentialApi, type CredentialDict, type CredentialPayload } from '@/api/credential'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiFilterBar from '@/components/ui/UiFilterBar.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
+import UiTag from '@/components/ui/UiTag.vue'
+import UiSwitch from '@/components/ui/UiSwitch.vue'
 
 const list = ref<CredentialDict[]>([])
 
@@ -225,14 +225,5 @@ onMounted(load)
 .page-header h2 {
   font-size: 20px;
   margin: 0;
-}
-.toolbar {
-  display: flex;
-  justify-content: flex-start;
-  margin-bottom: 12px;
-}
-.toolbar-filters {
-  display: flex;
-  gap: 12px;
 }
 </style>

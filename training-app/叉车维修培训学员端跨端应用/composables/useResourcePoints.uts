@@ -1,0 +1,33 @@
+/**
+ * forum 资源 Tab 金币数据（T04 手术：forum.uvue script 资源域下沉）
+ * 金币暂以学习时长/完课数估算（公式逐字保留）；真实积分接口接线另见 #709。
+ * 函数字段箭头包裹返回（UTS error18 先例，同 useAiChat）。
+ */
+import { ref, computed } from 'vue'
+import type { ComputedRef } from 'vue'
+import { getProfileApi } from '../api/student'
+import type { StudentProfile } from '../types/index'
+
+export type UseResourcePointsResult = {
+    coinBalance : ComputedRef<number>
+    loadProfile : () => Promise<void>
+}
+
+export function useResourcePoints() : UseResourcePointsResult {
+    const profile = ref<StudentProfile | null>(null)
+    const coinBalance = computed<number>(() : number => {
+        const p = profile.value
+        if (p == null) return 0
+        const hours = Math.floor(p.total_study_duration / 60)
+        return hours * 3 + p.completed_courses * 20
+    })
+
+    async function loadProfile() : Promise<void> {
+        try { profile.value = await getProfileApi() } catch (e) { console.error('[forum] loadProfile failed:', e) }
+    }
+
+    return {
+        coinBalance: coinBalance,
+        loadProfile: () => loadProfile(),
+    } as UseResourcePointsResult
+}

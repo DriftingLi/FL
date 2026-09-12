@@ -399,7 +399,9 @@ jobs:
     # fail-fast 兜底：deploy 的 SSH 远程执行曾两次在 pve-01 上卡死 17+ 分钟
     # （docker daemon/镜像拉取挂起，脚本内各命令虽各有超时但没有整体兜底），
     # 拖死 gate 的 15 分钟轮询。testing 正常 2~3 分钟、production 正常 5~11 分钟。
-    timeout-minutes: ${{ needs.gate.outputs.environment == 'testing' && 12 || 30 }}
+    # 预算还须覆盖最坏情况（#635）：ghcr-cache 逐出后全量回源实测 43 分钟 +
+    # compose up + 健康检查——旧预算（12/30）把回源场景必杀（job 超时显示 cancelled）。
+    timeout-minutes: ${{ needs.gate.outputs.environment == 'testing' && 55 || 75 }}
     environment:
       # 环境名统一由 gate 解析(push→production / dispatch→inputs)，
       # 保证 push 事件下 inputs.environment 为空时也能正确落到 production
@@ -520,8 +522,11 @@ jobs:
       UP_WAIT_TIMEOUT: ${{ needs.gate.outputs.environment == 'testing' && '30' || '60' }}
       # 远程部署脚本整体超时（秒）：pve-01 上曾出现 docker 命令挂起导致 ssh 步骤
       # 卡死 17+ 分钟（脚本内各命令虽有零散超时，但没有整体兜底），拖死 gate 轮询。
-      # testing 正常 2~3 分钟 → 660s 余量 3 倍+；production 正常 5~11 分钟 → 1500s。
-      DEPLOY_CMD_TIMEOUT: ${{ needs.gate.outputs.environment == 'testing' && '660' || '1500' }}
+      # testing 正常 2~3 分钟；production 正常 5~11 分钟。
+      # 预算对齐 #635 最坏情况（ghcr-cache 逐出回源 43 分钟 + 拉取后 up + 健康检查）：
+      # 镜像拉取自身的挂起由脚本内进度看门狗（DOCKER_PULL_IDLE_TIMEOUT=180s 无输出）fail-fast，
+      # 此处只兜「脚本整体」——慢回源场景由本预算容纳，不再与 600s 拉取超时互相收割。
+      DEPLOY_CMD_TIMEOUT: ${{ needs.gate.outputs.environment == 'testing' && '3000' || '4500' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -715,10 +720,24 @@ jobs:
         if: success() && needs.gate.outputs.environment == 'testing'
         run: |
           echo "测试环境部署成功，停止容器以释放资源..."
-          ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
-            "target" \
-            "cd $DEPLOY_PATH && timeout 120 docker compose -f docker-compose.prod.yml down 2>&1 || true"
-          echo "✅ 测试环境容器已停止"
+          # teardown 是清理步骤，不是冒烟验证内容：健康检查已过即冒烟成功。
+          # ssh 连接层抖动（exit 255）不应标红整条冒烟——重试 3 次后仅告警放行。
+          # 残留容器由下一次 testing 部署的 up -d 覆盖 / down 清理，无累积危害。
+          OK=0
+          for i in 1 2 3; do
+            if ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
+              "target" \
+              "cd $DEPLOY_PATH && timeout 120 docker compose -f docker-compose.prod.yml down 2>&1 || true"; then
+              OK=1; break
+            fi
+            echo "⚠️ teardown 第 $i 次失败（ssh exit=$?），3s 后重试..."
+            sleep 3
+          done
+          if [ "$OK" = "1" ]; then
+            echo "✅ 测试环境容器已停止"
+          else
+            echo "::warning::teardown 重试 3 次仍失败（疑似网络抖动），冒烟结论不受影响，残留容器由下次部署清理"
+          fi
 
       # --------------------------------------------------------
       # Step 2.5: 清理

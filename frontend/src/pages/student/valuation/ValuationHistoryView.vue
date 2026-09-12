@@ -10,6 +10,9 @@ import type { EvaluationDetail } from '@/types/valuation/evaluation'
 import { CONDITION_RATING_COLOR } from '@/utils/valuationConstants'
 import { formatTonnage, formatWan } from '@/utils/valuationFormat'
 import { formatTime } from '@/utils/format'
+import UiPagination from '@/components/ui/UiPagination.vue'
+import UiButton from '@/components/ui/UiButton.vue'
+import UiTag from '@/components/ui/UiTag.vue'
 
 const router = useRouter()
 
@@ -91,8 +94,8 @@ onMounted(load)
       subtitle="evaluation history"
     >
       <template #actions>
-        <el-button :icon="ArrowLeft" @click="goBack">返回首页</el-button>
-        <el-button :icon="Refresh" :loading="loading" @click="load">刷新</el-button>
+        <UiButton :icon="ArrowLeft" @click="goBack">返回首页</UiButton>
+        <UiButton :icon="Refresh" :loading="loading" @click="load">刷新</UiButton>
       </template>
     </PageHeader>
 
@@ -116,7 +119,7 @@ onMounted(load)
         @clear="onFilterChange"
         @keyup.enter="onFilterChange"
       />
-      <el-button type="primary" @click="onFilterChange">查询</el-button>
+      <UiButton variant="primary" @click="onFilterChange">查询</UiButton>
     </section>
 
     <!-- 列表表格 -->
@@ -148,7 +151,7 @@ onMounted(load)
         </el-table-column>
         <el-table-column label="车况评级" width="100" align="center">
           <template #default="{ row }">
-            <el-tag
+            <UiTag
               effect="plain"
               :style="{
                 color: ratingColor(row.condition_rating),
@@ -156,7 +159,7 @@ onMounted(load)
               }"
             >
               {{ row.condition_rating || '-' }}
-            </el-tag>
+            </UiTag>
           </template>
         </el-table-column>
         <el-table-column label="残值（万元）" width="130" align="right">
@@ -181,25 +184,25 @@ onMounted(load)
         </el-table-column>
         <el-table-column label="操作" width="100" align="center" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" link size="small" @click.stop="goReport(row.id)">
+            <UiButton variant="primary" link size="small" @click.stop="goReport(row.id)">
               查看报告
-            </el-button>
+            </UiButton>
           </template>
         </el-table-column>
       </el-table>
 
       <!-- 分页 -->
       <div class="pagination-wrap">
-        <el-pagination
-          v-model:current-page="page"
-          v-model:page-size="pageSize"
-          :total="total"
-          :page-sizes="[10, 20, 50]"
-          layout="total, sizes, prev, pager, next, jumper"
-          background
-          @current-change="onPageChange"
-          @size-change="onSizeChange"
-        />
+        <UiPagination
+      v-model:current-page="page"
+      v-model:page-size="pageSize"
+      :total="total"
+      show-sizes
+      :page-sizes="[10, 20, 50]"
+      show-jumper
+      @current-change="onPageChange"
+      @size-change="onSizeChange"
+    />
       </div>
     </section>
   </div>

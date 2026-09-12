@@ -1,0 +1,79 @@
+<template>
+            <!-- 统计卡片 -->
+            <view class="stats-card">
+                <view class="stat-item">
+                    <text class="stat-label">我的错题</text>
+                    <view class="stat-num-row">
+                        <text class="stat-num">{{ statsTotal }}</text>
+                        <text class="stat-unit">道</text>
+                    </view>
+                </view>
+                <view class="stat-divider"></view>
+                <view class="stat-item">
+                    <text class="stat-label">今日错题</text>
+                    <view class="stat-num-row">
+                        <text class="stat-num">{{ todayCount }}</text>
+                        <text class="stat-unit">道</text>
+                    </view>
+                </view>
+            </view>
+</template>
+
+<script setup lang="uts">
+    // 纯展示：统计数据归页面所有（页面 onShow 拉取 + 重做/移除后刷新），卡片零取数零事件
+    const props = withDefaults(defineProps<{
+        statsTotal?: number
+        todayCount?: number
+    }>(), {
+        statsTotal: 0,
+        todayCount: 0
+    })
+</script>
+
+<style>
+    /* 统计卡片 */
+    .stats-card {
+        margin: 24rpx;
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 32rpx 0;
+        flex-direction: row;
+        justify-content: space-around;
+        border: 1rpx solid #eeeeee;
+    }
+
+    .stat-item {
+        flex: 1;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .stat-num-row {
+        flex-direction: row;
+        align-items: flex-start;
+        justify-content: center;
+    }
+
+    .stat-num {
+        font-size: 48rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .stat-unit {
+        font-size: 24rpx;
+        color: #999999;
+        margin-left: 8rpx;
+    }
+
+    .stat-label {
+        font-size: 24rpx;
+        color: #999999;
+        margin-bottom: 8rpx;
+    }
+
+    .stat-divider {
+        width: 1rpx;
+        background-color: #f0f0f0;
+    }
+</style>

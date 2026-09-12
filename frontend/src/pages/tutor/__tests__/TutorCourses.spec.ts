@@ -2,7 +2,7 @@
 // seam：组件层，mock API 层。计数联动语义已收敛至 useCourseCatalog 接口测试。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import { epLite } from '@/test/element-lite'
 
 vi.mock('@/api/tutor', () => ({
   tutorApi: {
@@ -30,7 +30,7 @@ import TutorCourses from '../TutorCourses.vue'
 
 function mountPage() {
   return mount(TutorCourses, {
-    global: { plugins: [ElementPlus] }
+    global: { plugins: [epLite()] }
   })
 }
 

@@ -13,9 +13,7 @@
       @retry="handleRetry"
     />
     <UiSkeleton v-else-if="loading" variant="list" :count="4" />
-    <div v-else-if="items.length === 0" class="rounded-card border border-line bg-panel p-8 text-center text-ink-3">
-      暂无职位，点击右上角「发布职位」开始招聘
-    </div>
+    <UiEmptyState v-else-if="items.length === 0" description="暂无职位，点击右上角「发布职位」开始招聘" />
     <div v-else class="grid gap-3">
       <div
         v-for="item in items"
@@ -26,8 +24,8 @@
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2">
               <span class="text-sm font-semibold text-ink">{{ item.title }}</span>
-              <el-tag v-if="item.forced_offline" type="danger" size="small">已强制下架</el-tag>
-              <el-tag v-else :type="item.status === 'open' ? 'success' : 'info'" size="small">{{ item.status === 'open' ? '招聘中' : '已下架' }}</el-tag>
+              <UiTag v-if="item.forced_offline" tone="danger" size="small">已强制下架</UiTag>
+              <UiTag v-else :tone="item.status === 'open' ? 'success' : 'info'" size="small">{{ item.status === 'open' ? '招聘中' : '已下架' }}</UiTag>
             </div>
             <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-3">
               <span v-if="item.position_name">{{ item.position_name }}</span>
@@ -54,16 +52,16 @@
       </div>
     </div>
     <div v-if="total > 0" class="flex justify-center">
-      <el-pagination
-        v-model:current-page="page"
-        :page-size="pageSize"
-        :total="total"
-        layout="prev, pager, next"
-        @current-change="handlePageChange"
-      />
+      <UiPagination
+      v-model:current-page="page"
+      :page-size="pageSize"
+      :total="total"
+      :show-total="false"
+      @current-change="handlePageChange"
+    />
     </div>
 
-    <el-dialog v-model="dialogVisible" :title="editing ? '编辑职位' : '发布职位'" width="560px" destroy-on-close>
+    <UiDialog v-model="dialogVisible" :title="editing ? '编辑职位' : '发布职位'" width="560px" destroy-on-close confirm-text="保存" :confirm-loading="submitting" @confirm="submit">
       <el-form label-width="90px">
         <el-form-item label="职位名" required>
           <el-input v-model="form.title" maxlength="100" placeholder="如：叉车维修技师" />
@@ -91,11 +89,7 @@
           <el-input v-model="form.description" type="textarea" :rows="4" maxlength="5000" show-word-limit />
         </el-form-item>
       </el-form>
-      <template #footer>
-        <UiButton @click="dialogVisible = false">取消</UiButton>
-        <UiButton variant="primary" :loading="submitting" @click="submit">保存</UiButton>
-      </template>
-    </el-dialog>
+    </UiDialog>
   </div>
 </template>
 
@@ -108,6 +102,10 @@ import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
+import UiTag from '@/components/ui/UiTag.vue'
 
 interface PositionItem {
   position_id: number

@@ -20,9 +20,7 @@
       @retry="handleRetry"
     />
     <UiSkeleton v-else-if="loading && items.length === 0" variant="list" :count="4" />
-    <div v-else-if="items.length === 0" class="rounded-card border border-line bg-panel p-8 text-center text-ink-3">
-      暂无招聘中的职位
-    </div>
+    <UiEmptyState v-else-if="items.length === 0" description="暂无招聘中的职位" />
 
     <!-- #493：响应式方形网格（手机 1 列 → 平板 2-3 列 → 桌面 4 列） -->
     <div v-else class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -35,8 +33,8 @@
         <div class="flex items-start justify-between gap-2">
           <div class="min-w-0 flex-1 text-sm font-semibold text-ink line-clamp-1">{{ item.title }}</div>
           <!-- #488：状态角标 -->
-          <el-tag v-if="item.apply_state === 'applied'" type="success" size="small">已投递</el-tag>
-          <el-tag v-else-if="item.apply_state === 'not_hired'" type="danger" size="small">未录用</el-tag>
+          <UiTag v-if="item.apply_state === 'applied'" tone="success" size="small">已投递</UiTag>
+          <UiTag v-else-if="item.apply_state === 'not_hired'" tone="danger" size="small">未录用</UiTag>
         </div>
         <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-3">
           <span v-if="item.position_name">{{ item.position_name }}</span>
@@ -67,6 +65,8 @@ import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiTag from '@/components/ui/UiTag.vue'
 
 const items = ref<JobPosting[]>([])
 const loadingMore = ref(false)
@@ -104,11 +104,15 @@ function buildParams(page: number) {
   return params
 }
 
-const { loading, loadError, retrying, retry: handleRetry, run: load } = useAsyncPage(async () => {
-  const res = await jobApi.listPublicJobs(buildParams(1))
-  items.value = res?.items || []
-  hasMore.value = (res?.items?.length || 0) >= BATCH
-})
+// 招聘域不受证件过滤（client.ts 注入豁免同口径），不随切换重置 load-more 累积列表（#604 opt-out）
+const { loading, loadError, retrying, retry: handleRetry, run: load } = useAsyncPage(
+  async () => {
+    const res = await jobApi.listPublicJobs(buildParams(1))
+    items.value = res?.items || []
+    hasMore.value = (res?.items?.length || 0) >= BATCH
+  },
+  { credentialScoped: false }
+)
 
 // #493：筛选变化 → 清空已累积列表并回第一页
 function resetAndLoad() {

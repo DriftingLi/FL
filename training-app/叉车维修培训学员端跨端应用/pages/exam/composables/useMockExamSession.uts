@@ -1,0 +1,511 @@
+/**
+ * mock-exam 会话状态 composable（T07 exam 手术，parent #645 / ADR-0007）
+ *
+ * 逐段搬自 pages/exam/mock-exam.uvue 的 <script setup>（原 905 行页面的状态机部分），
+ * 行为逐字保持：随机组卷 / /save 进度保存 / /resume 断点续考 / 未完成考试询问 /
+ * 倒计时（含 <5min 警告、<1min 危险、每 30s 自动保存）/ 交卷（含超时自动交卷）/ 成绩跳转。
+ * 页面壳层只保留模板与薄包装 handler（照 T06 先例 pages/practice/composables/usePracticeSession.uts）。
+ *
+ * 展示纯函数不在此重写：题型名走 utils/wrongQuestionDisplay 的唯一实现
+ * （原页面内的 getTypeName / isMultiChoice 是第二实现，随本票退役）。
+ * 同理，选项选中判定 isSelected 的唯一实现在题目卡片组件（选中态经 selectedKeys 数组下发），
+ * 原页面内那一份零消费，随搬迁删除。
+ */
+import { ref, computed } from 'vue'
+import type { Ref, ComputedRef } from 'vue'
+import { startMockExamApi, resumeMockExamApi, saveMockExamApi, submitMockExamApi, getMockExamHistoryApi } from '../../../api/mockExam'
+import { getTypeName, isMultiChoice as isMultiChoiceType } from '../../../utils/wrongQuestionDisplay'
+import type { MockExamInfo, ExamQuestion, QuestionOption } from '../../../types/index'
+
+/** 交卷处理函数引用类型（具体类型而非 any：UTS 闭包内对 any 类型变量解析有问题） */
+type AutoSubmitHandler = (auto : boolean) => Promise<void>
+
+/** 本 composable 的显式返回类型。
+ *  UTS 对无标注的匿名返回对象无法在消费侧解析成员（Kotlin error18「找不到名称」），
+ *  故显式声明；形态照可编译先例 pages/practice/composables/usePracticeSession.uts
+ *  （显式 Result 类型 + 箭头包裹的函数字段，同时规避 error17/error18）。
+ */
+export type UseMockExamSessionResult = {
+    mode : Ref<string>
+    mockExamId : Ref<number>
+    initDuration : Ref<number>
+    questions : Ref<ExamQuestion[]>
+    currentIndex : Ref<number>
+    loading : Ref<boolean>
+    submitting : Ref<boolean>
+    loadError : Ref<string>
+    selectedKeys : Ref<string[]>
+    remainingTime : Ref<number>
+    currentQuestion : ComputedRef<ExamQuestion>
+    currentTypeName : ComputedRef<string>
+    progressPercent : ComputedRef<number>
+    answeredCount : ComputedRef<number>
+    timerDisplay : ComputedRef<string>
+    isTimeWarning : ComputedRef<boolean>
+    isTimeDanger : ComputedRef<boolean>
+    applyOptions : (options : UTSJSONObject) => void
+    boot : () => Promise<void>
+    loadExam : () => Promise<void>
+    getPaletteClass : (idx : number) => string
+    getPaletteTextClass : (idx : number) => string
+    onOptionClick : (key : string) => void
+    onJumpTo : (idx : number) => void
+    onPrev : () => void
+    onNext : () => void
+    doSaveProgress : (showTip : boolean) => Promise<void>
+    startTimer : () => void
+    stopTimer : () => void
+    doSubmit : (auto : boolean) => Promise<void>
+    onSubmitClick : () => void
+}
+
+export function useMockExamSession() : UseMockExamSessionResult {
+    // 页面参数
+    const mode = ref<string>('new')           // new / resume
+    const mockExamId = ref<number>(0)
+    const initDuration = ref<number>(90)      // 新考试默认时长（分钟）
+
+    // 题目与状态
+    const questions = ref<ExamQuestion[]>([])
+    const currentIndex = ref<number>(0)
+    const loading = ref<boolean>(false)
+    const submitting = ref<boolean>(false)
+    const loadError = ref<string>('')
+
+    // 答案存储：{ question_id_string: answer_string }
+    // UTSJSONObject 属性变更不会自动触发响应式，用 answersVersion 强制更新依赖
+    const answers = ref<UTSJSONObject>({} as UTSJSONObject)
+    const answersVersion = ref<number>(0)
+    // 当前题选中的 key 列表（单选为单元素，多选可多元素）
+    const selectedKeys = ref<string[]>([])
+
+    // 剩余时间（秒）
+    const remainingTime = ref<number>(0)
+    let timerId : number = 0
+    // 打破 startTimer <-> doSubmit 局部函数相互调用的循环（Kotlin 局部函数不支持互相前向引用）
+    let autoSubmitFn : AutoSubmitHandler | null = null
+    let lastSaveTime : number = 0
+
+    const currentQuestion = computed<ExamQuestion>(() : ExamQuestion => {
+        if (questions.value.length == 0) {
+            return { question_id: 0, type: '', title: '', options: [] as QuestionOption[], score: 0 } as ExamQuestion
+        }
+        return questions.value[currentIndex.value]
+    })
+
+    /** 当前题题型名（题目卡片标题栏展示） */
+    const currentTypeName = computed<string>(() : string => {
+        return getTypeName(currentQuestion.value.type)
+    })
+
+    const progressPercent = computed<number>(() : number => {
+        if (questions.value.length == 0) return 0
+        return Math.floor((currentIndex.value + 1) * 100 / questions.value.length)
+    })
+
+    /** 已答题数 */
+    const answeredCount = computed<number>(() : number => {
+        answersVersion.value  // 依赖 answers 变更
+        let cnt = 0
+        for (let i = 0; i < questions.value.length; i++) {
+            const qid = questions.value[i].question_id.toString()
+            const ans = answers.value[qid]
+            if (ans != null) {
+                const ansStr = `${ans}`
+                if (ansStr.length > 0) cnt++
+            }
+        }
+        return cnt
+    })
+
+    /** 时间显示 MM:SS */
+    const timerDisplay = computed<string>(() : string => {
+        const total = remainingTime.value
+        if (total <= 0) return '00:00'
+        const m = Math.floor(total / 60)
+        const s = total % 60
+        const mm = m < 10 ? '0' + m : '' + m
+        const ss = s < 10 ? '0' + s : '' + s
+        return mm + ':' + ss
+    })
+
+    /** 剩余时间 < 5 分钟，警告 */
+    const isTimeWarning = computed<boolean>(() : boolean => {
+        return remainingTime.value > 0 && remainingTime.value <= 300 && remainingTime.value > 60
+    })
+
+    /** 剩余时间 < 1 分钟，危险 */
+    const isTimeDanger = computed<boolean>(() : boolean => {
+        return remainingTime.value > 0 && remainingTime.value <= 60
+    })
+
+    /** 是否多选题（题型判定收敛 utils/wrongQuestionDisplay，此处只补「当前题」取值） */
+    function isCurrentMultiChoice() : boolean {
+        return isMultiChoiceType(currentQuestion.value.type)
+    }
+
+    /** 题号导航条样式：当前题/已答/未答 */
+    function getPaletteClass(idx : number) : string {
+        answersVersion.value  // 依赖 answers 变更
+        if (idx == currentIndex.value) return 'palette-current'
+        const qid = questions.value[idx].question_id.toString()
+        const ans = answers.value[qid]
+        if (ans != null) {
+            const ansStr = `${ans}`
+            if (ansStr.length > 0) return 'palette-answered'
+        }
+        return 'palette-unanswered'
+    }
+
+    function getPaletteTextClass(idx : number) : string {
+        answersVersion.value  // 依赖 answers 变更
+        if (idx == currentIndex.value) return 'palette-text-current'
+        const qid = questions.value[idx].question_id.toString()
+        const ans = answers.value[qid]
+        if (ans != null) {
+            const ansStr = `${ans}`
+            if (ansStr.length > 0) return 'palette-text-answered'
+        }
+        return 'palette-text-unanswered'
+    }
+
+    /** 将当前题选中答案同步到 answers */
+    function saveCurrentAnswer() : void {
+        const qid = currentQuestion.value.question_id.toString()
+        if (selectedKeys.value.length == 0) {
+            // 未选或已取消：移除答案
+            answers.value[qid] = ''
+        } else {
+            let ans = ''
+            if (isCurrentMultiChoice()) {
+                // 多选：拷贝并排序后拼接
+                const sorted : string[] = []
+                for (let i = 0; i < selectedKeys.value.length; i++) {
+                    sorted.push(selectedKeys.value[i])
+                }
+                sorted.sort()
+                ans = sorted.join(',')
+            } else {
+                ans = selectedKeys.value[0]
+            }
+            answers.value[qid] = ans
+        }
+        // 触发 answeredCount / palette 重新计算
+        answersVersion.value = answersVersion.value + 1
+    }
+
+    /** 点击选项 */
+    function onOptionClick(key : string) : void {
+        if (isCurrentMultiChoice()) {
+            const idx = selectedKeys.value.indexOf(key)
+            if (idx >= 0) {
+                selectedKeys.value.splice(idx, 1)
+            } else {
+                selectedKeys.value.push(key)
+            }
+        } else {
+            // 单选/判断：替换为单元素数组
+            const arr : string[] = [key]
+            selectedKeys.value = arr
+        }
+        // 同步到 answers
+        saveCurrentAnswer()
+    }
+
+    /** 从 answers 中加载当前题已选答案到 selectedKeys */
+    function loadSelectedKeys() : void {
+        selectedKeys.value = [] as string[]
+        const qid = currentQuestion.value.question_id.toString()
+        const ans = answers.value[qid]
+        if (ans == null) return
+        const ansStr = `${ans}`
+        if (ansStr.length == 0) return
+        // 与当前题选项匹配：判断答案是否包含某选项 key
+        // 支持 single_choice(A)、multiple_choice(ABC) 拼接格式
+        const opts = currentQuestion.value.options
+        const arr : string[] = []
+        for (let i = 0; i < opts.length; i++) {
+            if (ansStr.indexOf(opts[i].key) >= 0) {
+                arr.push(opts[i].key)
+            }
+        }
+        selectedKeys.value = arr
+    }
+
+    /** 跳转到指定题号 */
+    function onJumpTo(idx : number) : void {
+        if (idx == currentIndex.value) return
+        // 保存当前题答案
+        saveCurrentAnswer()
+        currentIndex.value = idx
+        loadSelectedKeys()
+    }
+
+    function onPrev() : void {
+        if (currentIndex.value <= 0) {
+            uni.showToast({ title: '已是第一题', icon: 'none' })
+            return
+        }
+        saveCurrentAnswer()
+        currentIndex.value = currentIndex.value - 1
+        loadSelectedKeys()
+    }
+
+    function onNext() : void {
+        if (currentIndex.value >= questions.value.length - 1) return
+        saveCurrentAnswer()
+        currentIndex.value = currentIndex.value + 1
+        loadSelectedKeys()
+    }
+
+    /** 保存进度（6.2） */
+    async function doSaveProgress(showTip : boolean) : Promise<void> {
+        if (mockExamId.value == 0) return
+        // 确保当前题答案已同步
+        saveCurrentAnswer()
+        try {
+            await saveMockExamApi(mockExamId.value, answers.value, remainingTime.value)
+            lastSaveTime = Date.now()
+            if (showTip) {
+                uni.showToast({ title: '已保存进度', icon: 'success' })
+            }
+            console.log('[mock-exam] progress saved, remaining:', remainingTime.value)
+        } catch (e) {
+            console.warn('[mock-exam] save progress failed:', e)
+            if (showTip) {
+                uni.showToast({ title: '保存进度失败', icon: 'none' })
+            }
+        }
+    }
+
+    function stopTimer() : void {
+        if (timerId != 0) {
+            clearInterval(timerId)
+            timerId = 0
+        }
+    }
+
+    /** 启动倒计时 */
+    function startTimer() : void {
+        stopTimer()
+        timerId = setInterval(() : void => {
+            if (remainingTime.value > 0) {
+                remainingTime.value = remainingTime.value - 1
+                // 每 30 秒自动保存
+                const now = Date.now()
+                if (now - lastSaveTime > 30000) {
+                    lastSaveTime = now
+                    doSaveProgress(false)
+                }
+            } else {
+                // 时间到，自动交卷（通过 autoSubmitFn 间接触发，避免局部函数互相前向引用）
+                stopTimer()
+                uni.showToast({ title: '考试时间已到，自动交卷', icon: 'none' })
+                // autoSubmitFn 在 setInterval 捕获闭包中被修改，Kotlin 无法非空 smart cast，
+                // 用不可变局部副本绕过；async 返回的 Promise 无需 await（fire-and-forget）
+                const submitFn = autoSubmitFn
+                if (submitFn != null) {
+                    submitFn(true)
+                }
+            }
+        }, 1000) as number
+    }
+
+    /** 加载题目（开始新考试 6.1 或恢复考试 6.3） */
+    async function loadExam() : Promise<void> {
+        loading.value = true
+        loadError.value = ''
+        try {
+            let info : MockExamInfo
+            if (mode.value == 'resume' && mockExamId.value > 0) {
+                info = await resumeMockExamApi(mockExamId.value)
+            } else {
+                info = await startMockExamApi(0, initDuration.value)
+            }
+            mockExamId.value = info.mock_exam_id
+            questions.value = info.questions
+            remainingTime.value = info.remaining_time
+            // 续考恢复：把后端已保存的答案灌回本地，否则答过的题全部"复活"成未答
+            const saved = info.answers
+            if (mode.value == 'resume' && saved != null) {
+                answers.value = saved as UTSJSONObject
+                answersVersion.value = answersVersion.value + 1
+            }
+            loadSelectedKeys()
+            console.log('[mock-exam] loaded, mock_exam_id:', info.mock_exam_id, 'questions:', info.questions.length, 'remaining:', info.remaining_time)
+            if (questions.value.length == 0) {
+                uni.showToast({ title: '暂无题目', icon: 'none' })
+            } else {
+                startTimer()
+            }
+        } catch (e) {
+            console.error('[mock-exam] load failed:', e)
+            let msg = '加载考试失败'
+            if (e instanceof Error) {
+                const errObj = e as Error
+                const m = errObj.message
+                if (m != null && m.length > 0) {
+                    msg = msg + '：' + m
+                }
+            }
+            loadError.value = msg
+        } finally {
+            loading.value = false
+        }
+    }
+
+    /**
+     * 入口：mode=new 时先查历史，发现未完成的考试会话则询问"继续上一场"，
+     * 避免重复组卷产生多条 in_progress 记录、浪费考试次数。
+     */
+    async function boot() : Promise<void> {
+        if (mode.value == 'new') {
+            try {
+                const h = await getMockExamHistoryApi(1, 5)
+                let resumeId = 0
+                for (let i = 0; i < h.items.length; i++) {
+                    if (h.items[i].status == 'in_progress') {
+                        resumeId = h.items[i].mock_exam_id
+                        break
+                    }
+                }
+                if (resumeId > 0) {
+                    uni.showModal({
+                        title: '发现未完成的考试',
+                        content: '继续上一场考试？选择"开始新考试"将重新组卷。',
+                        confirmText: '继续考试',
+                        cancelText: '开始新考试',
+                        success: (res) => {
+                            if (res.confirm) {
+                                mode.value = 'resume'
+                                mockExamId.value = resumeId
+                            }
+                            loadExam()
+                        }
+                    })
+                    return
+                }
+            } catch (e) {
+                console.warn('[mock-exam] check resumable failed:', e)
+            }
+        }
+        loadExam()
+    }
+
+    /** 交卷（6.4） */
+    async function doSubmit(auto : boolean) : Promise<void> {
+        if (submitting.value) return
+        if (mockExamId.value == 0) {
+            uni.showToast({ title: '考试未开始', icon: 'none' })
+            return
+        }
+        submitting.value = true
+        stopTimer()
+        // 保存当前题答案
+        saveCurrentAnswer()
+        uni.showLoading({ title: '正在交卷...', mask: true })
+        try {
+            // 先保存一次进度，确保后端拿到最新答案
+            try {
+                await saveMockExamApi(mockExamId.value, answers.value, remainingTime.value)
+            } catch (e) {
+                console.warn('[mock-exam] save before submit failed:', e)
+            }
+            // 交卷
+            await submitMockExamApi(mockExamId.value)
+            uni.hideLoading()
+            uni.showToast({ title: '交卷成功', icon: 'success' })
+            const examId = mockExamId.value
+            // 跳转到成绩页
+            setTimeout(() : void => {
+                uni.redirectTo({
+                    url: '/pages/exam/mock-exam-result?mock_exam_id=' + examId
+                })
+            }, 800)
+        } catch (e) {
+            uni.hideLoading()
+            console.error('[mock-exam] submit failed:', e)
+            let msg = '交卷失败'
+            if (e instanceof Error) {
+                const errObj = e as Error
+                const m = errObj.message
+                if (m != null && m.length > 0) {
+                    msg = msg + ': ' + m
+                }
+            }
+            uni.showToast({ title: msg, icon: 'none' })
+            // 交卷失败，恢复计时
+            if (!auto) {
+                startTimer()
+            }
+        } finally {
+            submitting.value = false
+        }
+    }
+    // 绑定 autoSubmitFn：startTimer 超时自动交卷的间接入口（打破局部函数互相引用环）
+    // ⚠️ 必须箭头包裹：局部函数名在赋值上下文走 Kotlin SAM 失败（函数体 vs 脚本顶层差异），
+    //    裸引用被解析为零参调用（UTSPromise<Unit>）→ 云打包 error17「Assignment type mismatch」。
+    //    参考：同仓规则 T（return 对象箭头包裹）与 ADR-0007 缺口二。
+    autoSubmitFn = (auto : boolean) => doSubmit(auto)
+
+    /** 点击交卷 */
+    function onSubmitClick() : void {
+        const unanswered = questions.value.length - answeredCount.value
+        const content = unanswered > 0
+            ? '还有 ' + unanswered + ' 题未作答，确定交卷吗？'
+            : '确定要交卷吗？'
+        uni.showModal({
+            title: '交卷确认',
+            content: content,
+            success: (res) => {
+                if (res.confirm) {
+                    doSubmit(false)
+                }
+            }
+        })
+    }
+
+    /** 应用页面 onLoad 参数（mode / mock_exam_id / duration） */
+    function applyOptions(options : UTSJSONObject) : void {
+        const m = options['mode']
+        if (m != null) mode.value = `${m}`
+        const id = options['mock_exam_id']
+        if (id != null) mockExamId.value = parseInt(`${id}`)
+        const dur = options['duration']
+        if (dur != null) initDuration.value = parseInt(`${dur}`)
+    }
+
+    return {
+        mode,
+        mockExamId,
+        initDuration,
+        questions,
+        currentIndex,
+        loading,
+        submitting,
+        loadError,
+        selectedKeys,
+        remainingTime,
+        currentQuestion,
+        currentTypeName,
+        progressPercent,
+        answeredCount,
+        timerDisplay,
+        isTimeWarning,
+        isTimeDanger,
+        applyOptions: (options : UTSJSONObject) => applyOptions(options),
+        boot: () => boot(),
+        loadExam: () => loadExam(),
+        getPaletteClass: (idx : number) => getPaletteClass(idx),
+        getPaletteTextClass: (idx : number) => getPaletteTextClass(idx),
+        onOptionClick: (key : string) => onOptionClick(key),
+        onJumpTo: (idx : number) => onJumpTo(idx),
+        onPrev: () => onPrev(),
+        onNext: () => onNext(),
+        doSaveProgress: (showTip : boolean) => doSaveProgress(showTip),
+        startTimer: () => startTimer(),
+        stopTimer: () => stopTimer(),
+        doSubmit: (auto : boolean) => doSubmit(auto),
+        onSubmitClick: () => onSubmitClick()
+    } as UseMockExamSessionResult
+}

@@ -50,9 +50,7 @@
       @retry="handleRetry"
     />
     <UiSkeleton v-else-if="loading && items.length === 0" variant="list" :count="4" />
-    <div v-else-if="items.length === 0" class="rounded-card border border-line bg-panel p-8 text-center text-ink-3">
-      暂无公开简历
-    </div>
+    <UiEmptyState v-else-if="items.length === 0" description="暂无公开简历" />
 
     <!-- #493：响应式方形网格（手机 1 列 → 平板 2-3 列 → 桌面 4 列）；卡面仅核心字段 -->
     <div v-else class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -64,8 +62,8 @@
         <div class="flex items-center justify-between gap-2">
           <div class="min-w-0 flex-1 truncate text-sm font-semibold text-ink">{{ item.real_name || item.real_name_masked || '匿名学员' }}</div>
           <!-- #489：联系状态角标 -->
-          <el-tag v-if="item.contact_state === 'approved'" type="success" size="small">已授权</el-tag>
-          <el-tag v-else-if="item.contact_state === 'pending'" type="warning" size="small">待学员确认</el-tag>
+          <UiTag v-if="item.contact_state === 'approved'" tone="success" size="small">已授权</UiTag>
+          <UiTag v-else-if="item.contact_state === 'pending'" tone="warning" size="small">待学员确认</UiTag>
         </div>
         <div class="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-xs text-ink-3">
           <span v-if="item.expected_specialty_extra">{{ item.expected_specialty_extra }}</span>
@@ -105,6 +103,8 @@ import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiTag from '@/components/ui/UiTag.vue'
 
 const BATCH = 20
 const items = ref<RecruitResumeItem[]>([])

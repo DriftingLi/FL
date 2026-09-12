@@ -4,7 +4,7 @@
  * 后端 V1 即 tutor+admin 双角色鉴权；讲师端前端二期，本页现仅在管理端挂出。
  */
 import { ref, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import {
   adminContributionApi,
@@ -14,28 +14,36 @@ import {
 import { formatLocaleDateTime } from '@/utils/format'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
+import UiFilterBar from '@/components/ui/UiFilterBar.vue'
+import { useConfirm } from '@/composables/useConfirm'
+import UiTag from '@/components/ui/UiTag.vue'
+import UiRadioGroup from '@/components/ui/UiRadioGroup.vue'
+import UiErrorState from '@/components/ui/UiErrorState.vue'
+import { useAdminTable } from '@/composables/useAdminTable'
 
 const activeTab = ref<'pending' | 'reports'>('pending')
 
 // ===== 待审核队列 =====
-const pendingItems = ref<ContributionItem[]>([])
-const pendingLoading = ref(false)
-const pendingPage = ref(1)
-const pendingPageSize = 20
-const pendingTotal = ref(0)
-
-async function loadPending() {
-  pendingLoading.value = true
-  try {
-    const res = await adminContributionApi.listPending({ page: pendingPage.value, page_size: pendingPageSize })
-    pendingItems.value = res.items || []
-    pendingTotal.value = res.total || 0
-  } catch (e: any) {
-    ElMessage.error(e?.message || '加载审核队列失败')
-  } finally {
-    pendingLoading.value = false
+// admin 列表状态机 useAdminTable（#793，ADR-0039）——三态 + 分页 + 列表托管。
+// 解构改名保持模板零改动；错误由 loadError 承载（原先此处自有 ElMessage 提示）。
+const {
+  loading: pendingLoading,
+  loadError: pendingError,
+  retrying: pendingRetrying,
+  list: pendingItems,
+  total: pendingTotal,
+  currentPage: pendingPage,
+  pageSize: pendingPageSize,
+  load: loadPending,
+  retry: retryPending
+} = useAdminTable<ContributionItem>({
+  pageSize: 20,
+  fetch: async (paging) => {
+    const res = await adminContributionApi.listPending({ page: paging.page, page_size: paging.pageSize })
+    return { list: res.items || [], total: res.total || 0 }
   }
-}
+})
 
 // ===== 举报队列 =====
 const reports = ref<ContributionReportItem[]>([])
@@ -73,7 +81,7 @@ const REPORT_REASON_LABEL: Record<string, string> = {
 // ===== 操作 =====
 async function onApprove(row: ContributionItem) {
   try {
-    await ElMessageBox.confirm(`通过「${row.title}」？作者将 +50 分。`, '审核通过', {
+    await useConfirm().confirm(`通过「${row.title}」？作者将 +50 分。`, '审核通过', {
       type: 'info',
       confirmButtonText: '通过并发分',
       cancelButtonText: '取消'
@@ -93,7 +101,7 @@ async function onApprove(row: ContributionItem) {
 async function onReject(row: ContributionItem) {
   let reason = ''
   try {
-    const { value } = await ElMessageBox.prompt(`驳回「${row.title}」，请填写原因（将送达作者）：`, '驳回投稿', {
+    const { value } = await useConfirm().prompt(`驳回「${row.title}」，请填写原因（将送达作者）：`, '驳回投稿', {
       confirmButtonText: '驳回',
       cancelButtonText: '取消',
       inputType: 'textarea',
@@ -115,7 +123,7 @@ async function onReject(row: ContributionItem) {
 async function onHandleReport(row: ContributionReportItem, action: 'archive' | 'dismiss') {
   if (action === 'archive') {
     try {
-      await ElMessageBox.confirm(`下架被举报投稿 #${row.contribution_id}（${row.contribution_title || ''}）并回收已发积分？`, '处置举报：下架', {
+      await useConfirm().confirm(`下架被举报投稿 #${row.contribution_id}（${row.contribution_title || ''}）并回收已发积分？`, '处置举报：下架', {
         type: 'warning',
         confirmButtonText: '下架并回收',
         cancelButtonText: '取消'
@@ -178,7 +186,14 @@ onMounted(() => {
 
       <!-- ===== 待审核队列 ===== -->
       <template v-if="activeTab === 'pending'">
-        <el-table v-loading="pendingLoading" :data="pendingItems" border>
+        <UiErrorState
+          v-if="pendingError"
+          title="审核队列加载失败"
+          description="网络或服务端异常，可重试"
+          :retrying="pendingRetrying"
+          @retry="retryPending"
+        />
+        <el-table v-else v-loading="pendingLoading" :data="pendingItems" border>
           <el-table-column prop="id" label="ID" width="70" align="center" />
           <el-table-column label="投稿" min-width="220">
             <template #default="{ row }">
@@ -206,21 +221,27 @@ onMounted(() => {
             </template>
           </el-table-column>
         </el-table>
-        <div class="pagination-wrapper" v-if="pendingTotal > pendingPageSize">
-          <el-pagination v-model:current-page="pendingPage" :page-size="pendingPageSize" :total="pendingTotal"
-            layout="total, prev, pager, next" @current-change="loadPending" />
-        </div>
+          <UiPagination v-if="pendingTotal > pendingPageSize"
+      v-model:current-page="pendingPage"
+      :page-size="pendingPageSize"
+      :total="pendingTotal"
+      @current-change="loadPending"
+    align="center" class="mt-4" />
+        
       </template>
 
       <!-- ===== 举报处置 ===== -->
       <template v-else>
-        <div class="filter-bar">
-          <el-radio-group :model-value="reportStatus" @update:model-value="(v: any) => { reportStatus = v as number }" @change="handleReportStatusChange">
+        <UiFilterBar>
+        <template #filters>
+
+          <UiRadioGroup :model-value="reportStatus" @update:model-value="(v: any) => { reportStatus = v as number }" @change="handleReportStatusChange">
             <el-radio-button :value="-1">全部</el-radio-button>
             <el-radio-button :value="0">待处理</el-radio-button>
             <el-radio-button :value="1">已处理</el-radio-button>
-          </el-radio-group>
-        </div>
+          </UiRadioGroup>
+        </template>
+      </UiFilterBar>
         <el-table v-loading="reportLoading" :data="reports" border>
           <el-table-column prop="id" label="ID" width="70" align="center" />
           <el-table-column label="被举报投稿" min-width="220">
@@ -231,9 +252,9 @@ onMounted(() => {
           </el-table-column>
           <el-table-column label="状态" width="90" align="center">
             <template #default="{ row }">
-              <el-tag size="small" :type="row.status === 1 ? 'success' : 'danger'">
+              <UiTag size="small" :tone="row.status === 1 ? 'success' : 'danger'">
                 {{ row.status === 1 ? '已处理' : '待处理' }}
-              </el-tag>
+              </UiTag>
             </template>
           </el-table-column>
           <el-table-column label="时间" width="160" align="center">
@@ -249,10 +270,13 @@ onMounted(() => {
             </template>
           </el-table-column>
         </el-table>
-        <div class="pagination-wrapper" v-if="reportTotal > reportPageSize">
-          <el-pagination v-model:current-page="reportPage" :page-size="reportPageSize" :total="reportTotal"
-            layout="total, prev, pager, next" @current-change="loadReports" />
-        </div>
+          <UiPagination v-if="reportTotal > reportPageSize"
+      v-model:current-page="reportPage"
+      :page-size="reportPageSize"
+      :total="reportTotal"
+      @current-change="loadReports"
+    align="center" class="mt-4" />
+        
       </template>
     </el-card>
   </div>
@@ -263,8 +287,6 @@ onMounted(() => {
 .contribution-manage-page { padding: 16px; }
 .card-header { display: flex; align-items: center; justify-content: space-between; }
 .card-title { font-size: 16px; font-weight: 600; }
-.filter-bar { margin: 12px 0; }
-.pagination-wrapper { display: flex; justify-content: center; margin-top: 16px; }
 .file-link { display: block; color: var(--el-color-primary); font-size: 12px; line-height: 1.8; }
 .file-link:hover { text-decoration: underline; }
 .report-done { color: var(--color-text-muted, #999999); }

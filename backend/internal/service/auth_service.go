@@ -2,6 +2,7 @@
 package service
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -275,7 +276,7 @@ func (s *AuthService) GetHrwaiUserByID(id int) (*model.HrwaiUser, error) {
 }
 
 // UpdatePassword 设置/修改当前用户密码（账号密码登录用）。
-func (s *AuthService) UpdatePassword(userID int, password string) error {
+func (s *AuthService) UpdatePassword(ctx context.Context, userID int, password string) error {
 	if len(password) < 6 || len(password) > 20 {
 		return errors.New("密码长度需为 6-20 位")
 	}
@@ -283,7 +284,15 @@ func (s *AuthService) UpdatePassword(userID int, password string) error {
 	if err != nil {
 		return err
 	}
-	return s.db.Model(&model.HrwaiUser{}).Where("id = ?", userID).Update("password", hashed).Error
+	if err := s.db.Model(&model.HrwaiUser{}).Where("id = ?", userID).Update("password", hashed).Error; err != nil {
+		return err
+	}
+	// 改密吊销该用户全部 refresh（#622，移动端 ADR-0006 方向 2）：快捷登录的静默续登
+	// 在改密后立即失效，回退密码登录。标记写入失败不阻断改密（密码已生效），记日志暴露缺口。
+	if err := s.session.RevokeUserRefresh(ctx, "hrwai_user", userID); err != nil {
+		s.logger.Warn("改密后 refresh 吊销标记写入失败", zap.Int("user_id", userID), zap.Error(err))
+	}
+	return nil
 }
 
 // AdminLogin 管理员登录（admin 表无 status 字段，无禁用语义）。
@@ -620,7 +629,7 @@ func (s *AuthService) EditRecruiter(id int, in RecruiterEditInput) (*model.Recru
 }
 
 // ResetRecruiterPassword 重置招聘者口令（#417）：旧口令立即失效，响应不回显任何口令字段。
-func (s *AuthService) ResetRecruiterPassword(id int, password string) error {
+func (s *AuthService) ResetRecruiterPassword(ctx context.Context, id int, password string) error {
 	if len(password) < 6 || len(password) > 20 {
 		return errors.New("密码长度需为 6-20 位")
 	}
@@ -633,7 +642,15 @@ func (s *AuthService) ResetRecruiterPassword(id int, password string) error {
 	if err != nil {
 		return err
 	}
-	return s.db.Model(&model.RecruiterUser{}).Where("id = ?", id).Update("password", hashed).Error
+	if err := s.db.Model(&model.RecruiterUser{}).Where("id = ?", id).Update("password", hashed).Error; err != nil {
+		return err
+	}
+	// 管理员强制重置凭证理应踢下线（#622 同口径）：吊销该招聘员全部 refresh。
+	// 角色命名空间键——与学员 ID 空间互不干扰。
+	if err := s.session.RevokeUserRefresh(ctx, "recruiter", id); err != nil {
+		s.logger.Warn("招聘员改密后 refresh 吊销标记写入失败", zap.Int("recruiter_id", id), zap.Error(err))
+	}
+	return nil
 }
 
 // EnsureDefaultUsers 确保默认账号存在（admin/tutor/student），密码由环境变量配置。

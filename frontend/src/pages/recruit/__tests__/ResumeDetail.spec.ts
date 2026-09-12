@@ -1,11 +1,19 @@
 // #489 简历详情按钮状态机：none 显示申请、pending 禁用+提示、approved 无申请按钮直接明文。
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import { epLite } from '@/test/element-lite'
 
 vi.mock('vue-router', () => ({ useRoute: () => ({ params: { id: '1' } }) }))
 vi.mock('@/api/recruit', () => ({ recruitApi: { getResume: vi.fn(), getContact: vi.fn(), createContactRequest: vi.fn() } }))
-vi.mock('@/api/client', () => ({ getValidAccessToken: vi.fn(() => Promise.resolve('tk')) }))
+// useAsyncPage 内聚证件失效刷新（#604）后 import 链经 stores/credential → api/credential →
+// api/request，需要真实 client 工厂完成模块初始化；仅覆盖 getValidAccessToken 不触网
+vi.mock(import('@/api/client'), async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/client')>()
+  return {
+    ...actual,
+    getValidAccessToken: vi.fn(() => Promise.resolve('tk')),
+  }
+})
 vi.mock('@/components/recruit/OnlineResumePdf.vue', () => ({ default: { template: '<div class="mock-pdf">PDF</div>' } }))
 
 import { recruitApi } from '@/api/recruit'
@@ -13,7 +21,7 @@ import ResumeDetail from '../ResumeDetail.vue'
 
 const card = { user_id: 5, real_name_masked: '张*', real_name: '张*', expected_regions: [], updated_at: '2026-09-01T00:00:00Z' }
 
-function mountPage() { return mount(ResumeDetail, { global: { plugins: [ElementPlus] } }) }
+function mountPage() { return mount(ResumeDetail, { global: { plugins: [epLite()] } }) }
 
 beforeEach(() => {
   vi.mocked(recruitApi.getResume).mockReset()

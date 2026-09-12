@@ -22,7 +22,14 @@
         <UiButton size="small" @click="loadLedger">刷新</UiButton>
       </div>
       <div v-if="ledgerLoading" class="text-sm text-ink-3">加载中...</div>
-      <div v-else-if="ledger.length === 0" class="text-sm text-ink-3">暂无数据</div>
+      <UiErrorState
+        v-else-if="ledgerError"
+        title="流水加载失败"
+        description="网络或服务端异常，可重试"
+        :retrying="ledgerRetrying"
+        @retry="retryLedger"
+      />
+      <UiEmptyState v-else-if="ledger.length === 0" description="暂无数据" size="sm" />
       <div v-else class="grid gap-2">
         <div v-for="item in ledger" :key="String(item.id)" class="border border-line rounded p-2 text-xs">
           <div>用户 {{ item.user_id }} · {{ item.reason }} · {{ item.delta }} 分 · {{ refLabel(item.ref_type) }} {{ item.ref_id }}</div>
@@ -30,15 +37,15 @@
         </div>
       </div>
       <div class="mt-3 flex justify-end">
-        <el-pagination
-          v-model:current-page="page"
-          v-model:page-size="pageSize"
-          :total="total"
-          :page-sizes="[10, 20, 50]"
-          layout="total, sizes, prev, pager, next"
-          @current-change="handlePageChange"
-          @size-change="loadLedger"
-        />
+        <UiPagination
+      v-model:current-page="page"
+      v-model:page-size="pageSize"
+      :total="total"
+      show-sizes
+      :page-sizes="[10, 20, 50]"
+      @current-change="handlePageChange"
+      @size-change="handleLedgerSizeChange"
+    />
       </div>
     </div>
 
@@ -48,20 +55,19 @@
         <UiButton size="small" @click="loadViews">刷新</UiButton>
       </div>
       <div v-if="viewsLoading" class="text-sm text-ink-3">加载中...</div>
-      <div v-else-if="views.length === 0" class="text-sm text-ink-3">暂无数据</div>
+      <UiEmptyState v-else-if="views.length === 0" description="暂无数据" size="sm" />
       <div v-else class="grid gap-2">
         <div v-for="item in views" :key="String(item.id)" class="border border-line rounded p-2 text-xs">
           <div>招聘方 {{ item.recruiter_id }} · 学员 {{ item.resume_user_id }} · {{ item.viewed_at }}</div>
         </div>
       </div>
       <div class="mt-3 flex justify-end">
-        <el-pagination
-          v-model:current-page="viewsPage"
-          :page-size="20"
-          :total="viewsTotal"
-          layout="total, prev, pager, next"
-          @current-change="loadViews"
-        />
+        <UiPagination
+      v-model:current-page="viewsPage"
+      :page-size="20"
+      :total="viewsTotal"
+      @current-change="loadViews"
+    />
       </div>
     </div>
 
@@ -71,7 +77,7 @@
         <UiButton size="small" @click="loadRequests">刷新</UiButton>
       </div>
       <div v-if="requestsLoading" class="text-sm text-ink-3">加载中...</div>
-      <div v-else-if="requests.length === 0" class="text-sm text-ink-3">暂无数据</div>
+      <UiEmptyState v-else-if="requests.length === 0" description="暂无数据" size="sm" />
       <div v-else class="grid gap-2">
         <div v-for="item in requests" :key="String(item.id)" class="border border-line rounded p-2 text-xs">
           <div>招聘方 {{ item.recruiter_id }} · 学员 {{ item.student_user_id }} · {{ requestStatusLabel(item.status) }}</div>
@@ -79,13 +85,12 @@
         </div>
       </div>
       <div class="mt-3 flex justify-end">
-        <el-pagination
-          v-model:current-page="requestsPage"
-          :page-size="20"
-          :total="requestsTotal"
-          layout="total, prev, pager, next"
-          @current-change="loadRequests"
-        />
+        <UiPagination
+      v-model:current-page="requestsPage"
+      :page-size="20"
+      :total="requestsTotal"
+      @current-change="loadRequests"
+    />
       </div>
     </div>
 
@@ -96,7 +101,7 @@
         <UiButton size="small" @click="loadJobs">刷新</UiButton>
       </div>
       <div v-if="jobsLoading" class="text-sm text-ink-3">加载中...</div>
-      <div v-else-if="jobs.length === 0" class="text-sm text-ink-3">暂无数据</div>
+      <UiEmptyState v-else-if="jobs.length === 0" description="暂无数据" size="sm" />
       <div v-else class="grid gap-2">
         <div v-for="item in jobs" :key="String(item.id)" class="border border-line rounded p-2 text-xs">
           <div class="flex items-center justify-between gap-2">
@@ -113,13 +118,12 @@
         </div>
       </div>
       <div class="mt-3 flex justify-end">
-        <el-pagination
-          v-model:current-page="jobsPage"
-          :page-size="20"
-          :total="jobsTotal"
-          layout="total, prev, pager, next"
-          @current-change="loadJobs"
-        />
+        <UiPagination
+      v-model:current-page="jobsPage"
+      :page-size="20"
+      :total="jobsTotal"
+      @current-change="loadJobs"
+    />
       </div>
     </div>
 
@@ -129,7 +133,7 @@
         <UiButton size="small" @click="loadReports">刷新</UiButton>
       </div>
       <div v-if="reportsLoading" class="text-sm text-ink-3">加载中...</div>
-      <div v-else-if="reports.length === 0" class="text-sm text-ink-3">暂无待处理举报</div>
+      <UiEmptyState v-else-if="reports.length === 0" description="暂无待处理举报" size="sm" />
       <div v-else class="grid gap-2">
         <div v-for="item in reports" :key="String(item.id)" class="border border-line rounded p-2 text-xs">
           <div class="flex items-center justify-between gap-2">
@@ -144,24 +148,19 @@
         </div>
       </div>
       <div class="mt-3 flex justify-end">
-        <el-pagination
-          v-model:current-page="reportsPage"
-          :page-size="20"
-          :total="reportsTotal"
-          layout="total, prev, pager, next"
-          @current-change="loadReports"
-        />
+        <UiPagination
+      v-model:current-page="reportsPage"
+      :page-size="20"
+      :total="reportsTotal"
+      @current-change="loadReports"
+    />
       </div>
     </div>
 
-    <el-dialog v-model="forceOfflineVisible" title="强制下架职位" width="440px">
+    <UiDialog v-model="forceOfflineVisible" title="强制下架职位" width="440px" confirm-text="确认下架" :confirm-loading="forceOfflineing" @confirm="confirmForceOffline">
       <div class="text-sm text-ink">职位「{{ forceOfflineJob?.title }}」将被强制下架，学员侧立即不可见，企业不能自行重新上架。</div>
       <el-input v-model="forceOfflineReason" type="textarea" :rows="3" maxlength="500" show-word-limit placeholder="请填写下架原因（将邮件通知企业）" />
-      <template #footer>
-        <UiButton @click="forceOfflineVisible = false">取消</UiButton>
-        <UiButton variant="danger" :loading="forceOfflineing" @click="confirmForceOffline">确认下架</UiButton>
-      </template>
-    </el-dialog>
+    </UiDialog>
   </div>
 </template>
 
@@ -169,32 +168,50 @@
 import { ref, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { unwrappedRequest } from '@/api/request'
-import { useAsyncPage } from '@/composables/useAsyncPage'
+import { useAdminTable } from '@/composables/useAdminTable'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiErrorState from '@/components/ui/UiErrorState.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
 
 // #411：默认锁定问答域（forum_topic），显式切换才跨域全量——卡片标题与内容同域。
 const domain = ref<'forum_topic' | ''>('forum_topic')
 const reason = ref('')
 const userId = ref('')
-const ledger = ref<LedgerItem[]>([])
-
-// 流水列表三态 + 分页收编 useAsyncPage（#439）
+// 流水列表：admin 列表状态机 useAdminTable（#792，ADR-0039）——三态 + 分页 + 列表托管。
+// 解构改名保持模板零改动；domain/reason/userId 为页面自管筛选轴（由 fetch adapter 读取）。
 const {
   loading: ledgerLoading,
+  loadError: ledgerError,
+  retrying: ledgerRetrying,
+  list: ledger,
   total,
-  page,
+  currentPage: page,
   pageSize,
-  run: loadLedger,
-  handlePageChange
-} = useAsyncPage(async () => {
-  const params: Record<string, any> = { page: page.value, page_size: pageSize.value }
-  if (domain.value) params.ref_type = domain.value
-  if (reason.value) params.reason = reason.value
-  if (userId.value) params.user_id = userId.value
-  const res: any = await unwrappedRequest.get('/admin/points/ledger', { params, headers: { 'X-Silent': '1' } })
-  ledger.value = res?.items || []
-  total.value = res?.total ?? 0
+  load: loadLedger,
+  retry: retryLedger
+} = useAdminTable<LedgerItem>({
+  fetch: async (paging) => {
+    const params: Record<string, any> = { page: paging.page, page_size: paging.pageSize }
+    if (domain.value) params.ref_type = domain.value
+    if (reason.value) params.reason = reason.value
+    if (userId.value) params.user_id = userId.value
+    const res: any = await unwrappedRequest.get('/admin/points/ledger', { params, headers: { 'X-Silent': '1' } })
+    return { list: res?.items || [], total: res?.total ?? 0 }
+  }
 })
+
+/** 翻页重装：useAdminTable 的 load 读取 currentPage */
+function handlePageChange(): void {
+  void loadLedger()
+}
+
+/** 页大小变化：回第一页重装（与既有三态件语义一致） */
+function handleLedgerSizeChange(): void {
+  page.value = 1
+  void loadLedger()
+}
 
 interface LedgerItem {
   id: number

@@ -5,8 +5,10 @@
     </div>
 
     <el-card>
-      <div class="filter-bar">
-        <el-select v-model="query.role" placeholder="角色" clearable style="width: 130px" @change="load(1)">
+      <UiFilterBar>
+        <template #filters>
+
+        <el-select v-model="query.role" placeholder="角色" clearable style="width: 130px" @change="search()">
           <el-option label="管理员" value="admin" />
           <el-option label="讲师" value="tutor" />
         </el-select>
@@ -15,12 +17,20 @@
           placeholder="搜索操作内容或操作人"
           clearable
           style="width: 220px"
-          @keyup.enter="load(1)"
+          @keyup.enter="search()"
         />
-        <UiButton variant="primary" @click="load(1)">查询</UiButton>
-      </div>
+        <UiButton variant="primary" @click="search()">查询</UiButton>
+        </template>
+      </UiFilterBar>
 
-      <el-table :data="items" stripe border style="width: 100%">
+      <UiErrorState
+        v-if="loadError"
+        title="日志加载失败"
+        description="网络或服务端异常，可重试"
+        :retrying="retrying"
+        @retry="retryLoad"
+      />
+      <el-table v-else :data="items" stripe border style="width: 100%" v-loading="loading">
         <el-table-column type="expand">
           <template #default="{ row }">
             <pre class="audit-detail">{{ JSON.stringify(row.detail || {}, null, 2) }}</pre>
@@ -46,55 +56,64 @@
       </el-table>
 
       <div class="pagination">
-        <el-pagination
-          background
-          layout="total, prev, pager, next"
-          :total="total"
-          :page-size="pageSize"
-          :current-page="page"
-          @current-change="load"
-        />
+        <UiPagination
+      v-model:current-page="page"
+      :page-size="pageSize"
+      :total="total"
+      @current-change="load"
+    />
       </div>
     </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive } from 'vue'
 import { adminApi, type AuditLogItem } from '@/api/admin'
 import { formatTime } from '@/utils/format'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
+import UiFilterBar from '@/components/ui/UiFilterBar.vue'
+import UiErrorState from '@/components/ui/UiErrorState.vue'
+import { useAdminTable } from '@/composables/useAdminTable'
 
-const items = ref<AuditLogItem[]>([])
-const total = ref(0)
-const page = ref(1)
-const pageSize = 20
 const query = reactive<{ role: string; keyword: string }>({
   role: '',
   keyword: ''
 })
 
-async function load(p: number) {
-  page.value = p
-  try {
+// 列表：admin 列表状态机 useAdminTable（#793，ADR-0039）——三态 + 分页 + 列表托管。
+// 解构改名保持模板零改动；query 为页面自管筛选轴（由 fetch adapter 读取）。
+const {
+  loading,
+  loadError,
+  retrying,
+  list: items,
+  total,
+  currentPage: page,
+  pageSize,
+  load,
+  retry: retryLoad
+} = useAdminTable<AuditLogItem>({
+  pageSize: 20,
+  fetch: async (paging) => {
     const data = await adminApi.listAuditLogs({
-      page: p,
-      page_size: pageSize,
+      page: paging.page,
+      page_size: paging.pageSize,
       role: query.role || undefined,
       keyword: query.keyword || undefined
     })
-    if (data) {
-      items.value = data.items || []
-      total.value = data.total || 0
-    }
-  } catch (e) {
-    // 拦截器已提示
+    return { list: data?.items || [], total: data?.total || 0 }
   }
+})
+
+/** 查询 / 筛选变化：回第一页重装 */
+function search(): void {
+  page.value = 1
+  void load()
 }
 
-onMounted(() => {
-  load(1)
-})
+onMounted(load)
 </script>
 
 <style scoped>
@@ -111,12 +130,6 @@ onMounted(() => {
   color: var(--color-text-primary);
 }
 
-.filter-bar {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-}
 
 .audit-detail {
   margin: 0;

@@ -5,7 +5,7 @@
       <p class="subtitle">请选择您想要考取的证件，系统将为您展示对应的课程与题库</p>
 
       <div v-if="!grouped.special_operation.length && !grouped.skill_level.length && !loading" class="empty">
-        <el-empty description="暂无证件" />
+        <UiEmptyState description="暂无证件" />
       </div>
 
       <template v-else>
@@ -67,6 +67,7 @@ import { ElMessage } from 'element-plus'
 import { useCredentialStore } from '@/stores/credential'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 
 const router = useRouter()
 const credentialStore = useCredentialStore()
@@ -75,16 +76,21 @@ const submitting = ref(false)
 const selectedId = ref<number | null>(null)
 
 // 三态收编 useAsyncPage（#439）：引导页错误仍由拦截器 toast，loadError 不展示（行为冻结）
-const { loading, run: loadGrouped } = useAsyncPage(async () => {
-  await credentialStore.loadGrouped()
-  // 若已持有 current，则预选
-  if (credentialStore.current?.id) selectedId.value = credentialStore.current.id
-  else {
-    // 尝试加载 current
-    const cur = await credentialStore.loadCurrent().catch(() => null)
-    if (cur?.id) selectedId.value = cur.id
-  }
-})
+// credentialScoped=false（#604）：本页装载的证件目录不随当前证件变化，且页面只存在于
+// 选定证件（null→id 那一次变化）之前，无需随切换重装
+const { loading, run: loadGrouped } = useAsyncPage(
+  async () => {
+    await credentialStore.loadGrouped()
+    // 若已持有 current，则预选
+    if (credentialStore.current?.id) selectedId.value = credentialStore.current.id
+    else {
+      // 尝试加载 current
+      const cur = await credentialStore.loadCurrent().catch(() => null)
+      if (cur?.id) selectedId.value = cur.id
+    }
+  },
+  { credentialScoped: false }
+)
 
 const grouped = computed(() => credentialStore.grouped)
 

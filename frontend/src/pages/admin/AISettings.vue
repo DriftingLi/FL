@@ -57,7 +57,7 @@
           <template #default="{ row }">
             <div class="feature-cell">
               <span class="feature-label">{{ row.feature_label }}</span>
-              <el-tag type="info" size="small">单绑定</el-tag>
+              <UiTag tone="info" size="small">单绑定</UiTag>
             </div>
           </template>
         </el-table-column>
@@ -101,9 +101,9 @@
         <el-table-column prop="model" label="模型" min-width="140" />
         <el-table-column label="状态" width="80">
           <template #default="{ row }">
-            <el-tag :type="row.is_active ? 'success' : 'info'" size="small">
+            <UiTag :tone="row.is_active ? 'success' : 'info'" size="small">
               {{ row.is_active ? '启用' : '停用' }}
-            </el-tag>
+            </UiTag>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="100" fixed="right" align="center">
@@ -126,12 +126,12 @@
     </UiCard>
 
     <!-- 新建/编辑对话框 -->
-    <el-dialog
+    <UiDialog
       v-model="dialogVisible"
       :title="dialogMode === 'create' ? '新建 AI 配置' : '编辑 AI 配置'"
       width="600px"
       destroy-on-close
-    >
+     confirm-text="保存" :confirm-loading="saving" @confirm="handleSave">
       <el-form
         ref="formRef"
         :model="form"
@@ -167,24 +167,24 @@
           <el-input v-model="form.description" placeholder="可选备注" clearable autocomplete="off" />
         </el-form-item>
         <el-form-item v-if="dialogMode === 'edit'" label="启用状态">
-          <el-switch v-model="form.is_active" />
+          <UiSwitch v-model="form.is_active" />
         </el-form-item>
       </el-form>
-      <template #footer>
-        <UiButton @click="dialogVisible = false">取消</UiButton>
-        <UiButton variant="primary" :loading="saving" @click="handleSave">保存</UiButton>
-      </template>
-    </el-dialog>
+    </UiDialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { ElMessage, ElMessageBox, type FormInstance, type FormItemRule } from 'element-plus'
+import { ElMessage, type FormInstance, type FormItemRule } from 'element-plus'
 import { Plus, ArrowDown } from '@element-plus/icons-vue'
 import { adminApi, type AIConfig, type FeatureBinding } from '@/api/admin'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiCard from '@/components/ui/UiCard.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
+import { useConfirm } from '@/composables/useConfirm'
+import UiTag from '@/components/ui/UiTag.vue'
+import UiSwitch from '@/components/ui/UiSwitch.vue'
 
 const configs = ref<AIConfig[]>([])
 const bindings = ref<FeatureBinding[]>([])
@@ -355,7 +355,7 @@ async function handleAction(cmd: string, row: AIConfig) {
       break
     case 'delete':
       try {
-        await ElMessageBox.confirm('确定删除该配置？被绑定的配置无法删除。', '提示', {
+        await useConfirm().confirmDanger('确定删除该配置？被绑定的配置无法删除。', '提示', {
           type: 'warning',
           confirmButtonText: '确定',
           cancelButtonText: '取消'

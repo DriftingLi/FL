@@ -5,7 +5,7 @@
  * @note 后端 /student/profile 返回嵌套结构：
  *       { student_info: {...}, study_stats: {...}, course_progress: [...] }
  */
-import { get } from './request'
+import { get, getMapped } from './request'
 import { toNumber, toStr, toBool } from './helpers'
 import type { StudentProfile, StudyRecordsResult, StudyStats, CourseProgressItem, StudyRecord, StudentCourse, StudentCourseListResult, StudentCourseDetail, StudentCourseChapterProgress } from '../types/index'
 
@@ -206,7 +206,7 @@ function getMockRecords() : StudyRecordsResult {
 
 /** 学员档案（信息 + 学习统计 + 各课程进度） */
 export function getProfileApi() : Promise<StudentProfile> {
-	return get('/student/profile').then((data : UTSJSONObject) : StudentProfile => {
+	return getMapped<StudentProfile>('/student/profile', null, (data : UTSJSONObject) : StudentProfile => {
 		return buildStudentProfile(data)
 	}).catch((e) : StudentProfile => {
 		console.warn('[getProfileApi] network failed, using mock data:', e)
@@ -219,7 +219,7 @@ export function getProfileApi() : Promise<StudentProfile> {
  */
 export function getStudyStatsApi(days : number) : Promise<StudyStats> {
 	const params : UTSJSONObject = { days: days.toString() }
-	return get('/student/study-stats', params).then((data : UTSJSONObject) : StudyStats => {
+	return getMapped<StudyStats>('/student/study-stats', params, (data : UTSJSONObject) : StudyStats => {
 		return buildStudyStats(data)
 	}).catch((e) : StudyStats => {
 		console.warn('[getStudyStatsApi] network failed, using mock data:', e)
@@ -244,7 +244,7 @@ export function getRecordsApi(page : number, pageSize : number, startDate : stri
 	if (endDate.length > 0) {
 		params['end_date'] = endDate
 	}
-	return get('/student/records', params).then((data : UTSJSONObject) : StudyRecordsResult => {
+	return getMapped<StudyRecordsResult>('/student/records', params, (data : UTSJSONObject) : StudyRecordsResult => {
 		return buildStudyRecordsResult(data)
 	}).catch((e) : StudyRecordsResult => {
 		console.warn('[getRecordsApi] network failed, using mock data:', e)
@@ -285,30 +285,63 @@ function buildChapterProgress(obj : UTSJSONObject) : StudentCourseChapterProgres
 	} as StudentCourseChapterProgress
 }
 
+/** 从 UTSJSONObject 构造 StudentCourseListResult */
+function buildStudentCourseListResult(data : UTSJSONObject) : StudentCourseListResult {
+	const courses : StudentCourse[] = []
+	const coursesRaw = data['courses']
+	if (coursesRaw != null) {
+		const arr = coursesRaw as Array<UTSJSONObject>
+		for (let i = 0; i < arr.length; i++) {
+			courses.push(buildStudentCourse(arr[i]))
+		}
+	}
+	let continueLearning : StudentCourse | null = null
+	const clRaw = data['continue_learning']
+	if (clRaw != null) {
+		continueLearning = buildStudentCourse(clRaw as UTSJSONObject)
+	}
+	return {
+		courses: courses,
+		continue_learning: continueLearning,
+	} as StudentCourseListResult
+}
+
+/** 从 UTSJSONObject 构造 StudentCourseDetail（course 基字段 + chapters 进度） */
+function buildStudentCourseDetailResult(data : UTSJSONObject) : StudentCourseDetail {
+	const base = buildStudentCourse(data)
+	const chapters : StudentCourseChapterProgress[] = []
+	const chaptersRaw = data['chapters']
+	if (chaptersRaw != null) {
+		const arr = chaptersRaw as Array<UTSJSONObject>
+		for (let i = 0; i < arr.length; i++) {
+			chapters.push(buildChapterProgress(arr[i]))
+		}
+	}
+	const detail : StudentCourseDetail = {
+		course_id: base.course_id,
+		course_name: base.course_name,
+		cover: base.cover,
+		specialty_id: base.specialty_id,
+		level_id: base.level_id,
+		progress: base.progress,
+		completed_chapters: base.completed_chapters,
+		total_chapters: base.total_chapters,
+		study_duration: base.study_duration,
+		last_chapter_id: base.last_chapter_id,
+		last_chapter_title: base.last_chapter_title,
+		last_position: base.last_position,
+		last_studied_at: base.last_studied_at,
+		chapters: chapters,
+	} as StudentCourseDetail
+	return detail
+}
+
 /**
  * 我的课程列表（含最后学习位置与 continue_learning）
  * GET /api/student/courses
  */
 export function getStudentCoursesApi() : Promise<StudentCourseListResult> {
-	return get('/student/courses').then((data : UTSJSONObject) : StudentCourseListResult => {
-		const courses : StudentCourse[] = []
-		const coursesRaw = data['courses']
-		if (coursesRaw != null) {
-			const arr = coursesRaw as Array<UTSJSONObject>
-			for (let i = 0; i < arr.length; i++) {
-				courses.push(buildStudentCourse(arr[i]))
-			}
-		}
-		let continueLearning : StudentCourse | null = null
-		const clRaw = data['continue_learning']
-		if (clRaw != null) {
-			continueLearning = buildStudentCourse(clRaw as UTSJSONObject)
-		}
-		return {
-			courses: courses,
-			continue_learning: continueLearning,
-		} as StudentCourseListResult
-	})
+	return getMapped<StudentCourseListResult>('/student/courses', null, (data : UTSJSONObject) : StudentCourseListResult => buildStudentCourseListResult(data))
 }
 
 /**
@@ -316,32 +349,5 @@ export function getStudentCoursesApi() : Promise<StudentCourseListResult> {
  * GET /api/student/courses/:course_id
  */
 export function getStudentCourseDetailApi(courseId : number) : Promise<StudentCourseDetail> {
-	return get('/student/courses/' + courseId.toString()).then((data : UTSJSONObject) : StudentCourseDetail => {
-		const base = buildStudentCourse(data)
-		const chapters : StudentCourseChapterProgress[] = []
-		const chaptersRaw = data['chapters']
-		if (chaptersRaw != null) {
-			const arr = chaptersRaw as Array<UTSJSONObject>
-			for (let i = 0; i < arr.length; i++) {
-				chapters.push(buildChapterProgress(arr[i]))
-			}
-		}
-		const detail : StudentCourseDetail = {
-			course_id: base.course_id,
-			course_name: base.course_name,
-			cover: base.cover,
-			specialty_id: base.specialty_id,
-			level_id: base.level_id,
-			progress: base.progress,
-			completed_chapters: base.completed_chapters,
-			total_chapters: base.total_chapters,
-			study_duration: base.study_duration,
-			last_chapter_id: base.last_chapter_id,
-			last_chapter_title: base.last_chapter_title,
-			last_position: base.last_position,
-			last_studied_at: base.last_studied_at,
-			chapters: chapters,
-		} as StudentCourseDetail
-		return detail
-	})
+	return getMapped<StudentCourseDetail>('/student/courses/' + courseId.toString(), null, (data : UTSJSONObject) : StudentCourseDetail => buildStudentCourseDetailResult(data))
 }

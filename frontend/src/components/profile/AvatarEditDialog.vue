@@ -1,11 +1,11 @@
 <template>
-  <el-dialog v-model="visible" title="修改头像" width="440px" @closed="onClosed">
+  <UiDialog v-model="visible" title="修改头像" width="440px" @closed="onClosed">
     <div class="avatar-edit">
       <div class="avatar-preview">
         <el-avatar :size="72" :src="avatarUrl || undefined">{{ letter }}</el-avatar>
-        <span v-if="avatarPending" class="pending-tag"><el-tag type="warning" size="small">审核中</el-tag></span>
+        <span v-if="avatarPending" class="pending-tag"><UiTag tone="warning" size="small">审核中</UiTag></span>
       </div>
-      <el-upload
+      <UiUpload
         accept="image/*"
         :show-file-list="false"
         :http-request="handleAvatarUpload"
@@ -14,13 +14,13 @@
         <UiButton size="small" :loading="avatarUploading" :disabled="avatarPending">
           {{ avatarPending ? '头像审核中' : '上传新头像' }}
         </UiButton>
-      </el-upload>
+      </UiUpload>
       <p class="hint">管理员审核通过后生效</p>
     </div>
     <template #footer>
       <UiButton @click="visible = false">关闭</UiButton>
     </template>
-  </el-dialog>
+  </UiDialog>
 </template>
 
 <script setup lang="ts">
@@ -29,6 +29,9 @@ import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
+import UiTag from '@/components/ui/UiTag.vue'
+import UiUpload from '@/components/ui/UiUpload.vue'
 
 const authStore = useAuthStore()
 const visible = ref(false)

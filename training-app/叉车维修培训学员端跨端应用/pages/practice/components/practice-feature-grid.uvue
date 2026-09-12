@@ -1,0 +1,88 @@
+<template>
+    <!-- 功能入口网格 ——T06 手术自 practice.uvue 逐段搬出 -->
+    <view class="feature-grid">
+        <view class="feature-item" @click="onFeatureClick('past_paper')">
+            <view class="feature-icon-wrap feature-color-paper">
+                <text class="feature-icon-text">📄</text>
+            </view>
+            <text class="feature-name">历年真题</text>
+        </view>
+        <view class="feature-item" @click="onFeatureClick('mock_exam')">
+            <view class="feature-icon-wrap feature-color-mock">
+                <text class="feature-icon-text">📋</text>
+            </view>
+            <text class="feature-name">套卷模拟</text>
+        </view>
+        <view class="feature-item" @click="onFeatureClick('level_exam')">
+            <view class="feature-icon-wrap feature-color-level">
+                <text class="feature-icon-text">🏆</text>
+            </view>
+            <text class="feature-name">模考大赛</text>
+        </view>
+        <view class="feature-item" @click="onFeatureClick('wrong_question')">
+            <view class="feature-icon-wrap feature-color-wrong">
+                <text class="feature-icon-text">❌</text>
+            </view>
+            <text class="feature-name">错题本</text>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    const emit = defineEmits(['featureClick'])
+
+    function onFeatureClick(feature : string) : void {
+        emit('featureClick', feature)
+    }
+</script>
+
+<style>
+    .feature-grid {
+        margin: 0 24rpx 24rpx 24rpx;
+        background-color: #ffffff;
+        border-radius: 20rpx;
+        padding: 28rpx 0;
+        flex-direction: row;
+        justify-content: space-around;
+    }
+
+    .feature-item {
+        flex: 1;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .feature-icon-wrap {
+        width: 80rpx;
+        height: 80rpx;
+        border-radius: 20rpx;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 12rpx;
+    }
+
+    .feature-color-paper {
+        background-color: #fff8e1;
+    }
+
+    .feature-color-mock {
+        background-color: #e8f5e9;
+    }
+
+    .feature-color-level {
+        background-color: #e3f2fd;
+    }
+
+    .feature-color-wrong {
+        background-color: #fce4ec;
+    }
+
+    .feature-icon-text {
+        font-size: 40rpx;
+    }
+
+    .feature-name {
+        font-size: 24rpx;
+        color: #333333;
+    }
+</style>

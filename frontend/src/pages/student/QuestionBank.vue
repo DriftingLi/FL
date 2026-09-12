@@ -142,20 +142,20 @@
         <div class="text-[15px] text-ink">
           第 {{ currentIdx + 1 }}/{{ questions.length }} 题
           <span class="ml-3 text-[13px] text-ink-3">已答对 {{ correctCount }} · 已答错 {{ wrongCount }}</span>
-          <el-tag v-if="mode === 'sequential'" size="small" type="primary" style="margin-left: 10px">顺序练习</el-tag>
-          <el-tag v-else-if="mode === 'tag'" size="small" style="margin-left: 10px">
+          <UiTag v-if="mode === 'sequential'" size="small" tone="primary" style="margin-left: 10px">顺序练习</UiTag>
+          <UiTag v-else-if="mode === 'tag'" size="small" style="margin-left: 10px">
             标签：{{ currentTagName }}
-          </el-tag>
-          <el-tag v-else-if="specialType && mode === 'free'" size="small" type="warning" style="margin-left: 10px">
+          </UiTag>
+          <UiTag v-else-if="specialType && mode === 'free'" size="small" tone="warning" style="margin-left: 10px">
             {{ typeMap[specialType] }}
-          </el-tag>
+          </UiTag>
         </div>
         <UiButton size="small" @click="confirmQuit">退出练习</UiButton>
       </div>
 
       <el-card v-if="currentQuestion" class="mb-[15px]">
         <div class="mb-[15px] flex items-center gap-2">
-          <el-tag size="small">{{ typeMap[currentQuestion.type] || '题目' }}</el-tag>
+          <UiTag size="small">{{ typeMap[currentQuestion.type] || '题目' }}</UiTag>
           <!-- #511：收藏统一药丸（激活琥珀填充） -->
           <UiActionChip icon="fav" :label="favorited ? '已收藏' : '收藏'" tone="fav" :active="favorited" compact @click="toggleFavorite" />
         </div>
@@ -223,9 +223,8 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { Sort, MagicStick, Filter, CollectionTag } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { questionBankApi } from '@/api/questionBank'
-import { favoriteApi } from '@/api/favorite'
 import { practiceModeApi, type PracticeModeKey } from '@/api/practiceMode'
 import { trainingApi } from '@/api/training'
 import type { QuestionTag } from '@/api/training'
@@ -244,14 +243,16 @@ import {
   type PracticeMode,
   type PracticeStartData
 } from '@/composables/usePracticeSession'
+import { useQuestionPeripherals, questionPeripheralAdapters } from '@/composables/useQuestionPeripherals'
 import QuestionOptionPicker from '@/components/student/QuestionOptionPicker.vue'
 import AnswerResultCard from '@/components/practice/AnswerResultCard.vue'
 import AIExplanationCard from '@/components/practice/AIExplanationCard.vue'
 import KnowledgeCard from '@/components/practice/KnowledgeCard.vue'
 import CommentCard from '@/components/practice/CommentCard.vue'
 import NoteCard from '@/components/practice/NoteCard.vue'
-import { questionInteractionApi } from '@/api/questionInteraction'
-import { useCredentialRefetch } from '@/composables/useCredentialRefetch'
+import { useAsyncPage } from '@/composables/useAsyncPage'
+import { useConfirm } from '@/composables/useConfirm'
+import UiTag from '@/components/ui/UiTag.vue'
 
 // null = 入口；'sequential' | 'free' | 'tag' = 刷题中
 
@@ -331,13 +332,7 @@ async function resolveProgress(modeKey: PracticeModeKey | '', total: number): Pr
 }
 
 // 练习会话状态机：三个 start 模式 + 进度保存作为 adapter 注入，页面不触碰 API 层
-const {
-  mode, questions, currentIdx, answers, toggleOption,
-  correctCount, wrongCount,
-  currentQuestion, textAnswer, submitted, lastResult, currentOptions,
-  selectedOptionKeys, canSubmit, loading,
-  start, submitAnswer, nextQuestion, prevQuestion, quit
-} = usePracticeSession({
+const session = usePracticeSession({
   start: async (startMode: PracticeMode): Promise<PracticeStartData | null> => {
     if (startMode === 'sequential') {
       const res = await practiceModeApi.startSequential()
@@ -390,6 +385,20 @@ const {
   }
 })
 
+const {
+  mode, questions, currentIdx, answers, toggleOption,
+  correctCount, wrongCount,
+  currentQuestion, textAnswer, submitted, lastResult, currentOptions,
+  selectedOptionKeys, canSubmit, loading,
+  start, submitAnswer, nextQuestion, prevQuestion, quit
+} = session
+
+// ===== 外围交互：收藏 / 知识点 / 作答计时（#616，页内自建 watch 收敛进 module）=====
+const { favorited, toggleFavorite, knowledgeTags, lastDuration, recordDuration } = useQuestionPeripherals(
+  session,
+  questionPeripheralAdapters({ knowledgeTrigger: 'result' })
+)
+
 // ===== 开始各模式（薄 wrapper：启动会话 + 空题数提示）=====
 async function startSequential() {
   const ok = await start('sequential')
@@ -401,55 +410,8 @@ async function startFree() {
   if (!ok) ElMessage.warning('暂无符合条件的题目')
 }
 
-const questionStartTime = ref<number>(Date.now())
-const lastDuration = ref<number | undefined>(undefined)
-const knowledgeTags = ref<any[]>([])
-const favorited = ref(false)
-const favoriteId = ref(0)
-
-watch(currentQuestion, async (q) => {
-  questionStartTime.value = Date.now()
-  lastDuration.value = undefined
-  favorited.value = false
-  favoriteId.value = 0
-  if (!q) return
-  try {
-    const res = await favoriteApi.check({ target_type: 'question', target_id: q.id })
-    favorited.value = !!res?.favorited
-    favoriteId.value = res?.favorite_id || 0
-  } catch {
-    // 查询失败降级为未收藏
-  }
-})
-
-async function toggleFavorite() {
-  const q = currentQuestion.value
-  if (!q) return
-  try {
-    if (favorited.value) {
-      await favoriteApi.remove(favoriteId.value)
-      favorited.value = false
-      favoriteId.value = 0
-    } else {
-      const res = await favoriteApi.add({ target_type: 'question', target_id: q.id })
-      favorited.value = true
-      favoriteId.value = res?.favorite_id || 0
-    }
-  } catch {
-    /* 错误已由拦截器提示 */
-  }
-}
-
-watch(() => (lastResult.value as any)?.question_id, async (qid: number) => {
-  if (!qid) { knowledgeTags.value = []; return }
-  try {
-    const tags = await questionInteractionApi.listKnowledge(qid)
-    knowledgeTags.value = (tags as any) || []
-  } catch { knowledgeTags.value = [] }
-})
-
 async function handleSubmit() {
-  lastDuration.value = (Date.now() - questionStartTime.value) / 1000
+  recordDuration()
   await submitAnswer()
   loadPracticeStats()
 }
@@ -462,7 +424,7 @@ async function startTagPractice() {
 
 async function confirmQuit() {
   try {
-    await ElMessageBox.confirm('确定要退出本次练习吗？', '提示', { type: 'warning' })
+    await useConfirm().confirm('确定要退出本次练习吗？', '提示', { type: 'warning' })
     // 退出时保存当前游标和答题状态并返回入口，随后刷新卡片进度展示
     await quit()
     loadCardData()
@@ -473,12 +435,6 @@ async function confirmQuit() {
 onMounted(() => {
   loadCardData()
   loadTags()
-})
-
-// 证件切换即重拉（单点：watch store.current.id，见 useCredentialRefetch；
-// loadCardData 已含 getPracticeStats，覆盖原事件通知里的 loadPracticeStats）
-useCredentialRefetch(() => {
-  loadCardData()
 })
 
 async function loadTags() {
@@ -494,30 +450,29 @@ async function loadTags() {
   }
 }
 
-async function loadCardData() {
-  try {
-    const [statsRes, progRes, practiceRes] = await Promise.all([
-      questionBankApi.getStats().catch(() => null as any),
-      practiceModeApi.getSequentialProgress().catch(() => null as any),
-      practiceModeApi.getPracticeStats().catch(() => null as any)
-    ])
-    if (statsRes) totalQuestions.value = (statsRes.total as number) || 0
-    if (progRes) seqProgress.value = progRes
-    if (practiceRes) {
-      practiceStats.value = {
-        today_count: Number((practiceRes as any)?.today_count ?? 0),
-        total_count: Number((practiceRes as any)?.total_count ?? 0),
-        total_days: Number((practiceRes as any)?.total_days ?? 0)
-      }
-      practiceStatsLoading.value = false
+// 入口卡片聚合装载收编进 useAsyncPage（#605）：loader 纯装配（各并发请求自带降级 catch，
+// 不外抛）；证件切换即重拉由 module 内聚 watch 承担——loadCardData 已含 getPracticeStats，
+// 覆盖原事件通知里的 loadPracticeStats
+const { run: loadCardData } = useAsyncPage(async () => {
+  const [statsRes, progRes, practiceRes] = await Promise.all([
+    questionBankApi.getStats().catch(() => null as any),
+    practiceModeApi.getSequentialProgress().catch(() => null as any),
+    practiceModeApi.getPracticeStats().catch(() => null as any)
+  ])
+  if (statsRes) totalQuestions.value = (statsRes.total as number) || 0
+  if (progRes) seqProgress.value = progRes
+  if (practiceRes) {
+    practiceStats.value = {
+      today_count: Number((practiceRes as any)?.today_count ?? 0),
+      total_count: Number((practiceRes as any)?.total_count ?? 0),
+      total_days: Number((practiceRes as any)?.total_days ?? 0)
     }
-  } catch (e) {
-    // 静默失败，卡片展示降级为默认值
+    practiceStatsLoading.value = false
   }
   // 若第 3 并发失败时 fallback 仍走独立 loader（避免悬在 skeleton）
   if (practiceStatsLoading.value) {
     try { await loadPracticeStats() } catch {}
   }
-}
+})
 </script>
 

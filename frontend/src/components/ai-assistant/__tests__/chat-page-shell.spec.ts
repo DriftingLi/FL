@@ -1,10 +1,10 @@
 // ChatPageShell 壳测试（#398）：槽位渲染、安全渲染单点（markstream escape、无裸 v-html）、
 // 侧栏会话操作（重命名/删除/选中）、输入区变体与发送事件、自动滚底钩子不回归。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { reactive, nextTick } from 'vue'
 import { createRouter, createMemoryHistory } from 'vue-router'
-import ElementPlus from 'element-plus'
+import { epLite } from '@/test/element-lite'
 
 import ChatPageShell from '../ChatPageShell.vue'
 
@@ -53,6 +53,10 @@ function makeStore(overrides: Record<string, unknown> = {}) {
     messages: [] as Array<Record<string, unknown>>,
     streaming: false,
     streamingContent: '',
+    // #620：当轮 usage 独立 state + 状态变更 action（壳渲染脚注、登出走 action）
+    lastUsage: null as Record<string, number> | null,
+    clearMessages: vi.fn(),
+    loadSessions: vi.fn().mockResolvedValue(undefined),
     selectSession: vi.fn(),
     deleteSession: vi.fn().mockResolvedValue(undefined),
     renameSession: vi.fn().mockResolvedValue(undefined),
@@ -79,7 +83,7 @@ function mountShell(props: Record<string, unknown> = {}, slots: Record<string, a
     },
     slots,
     global: {
-      plugins: [ElementPlus, router]
+      plugins: [epLite(), router]
     }
   })
 }
@@ -89,9 +93,9 @@ beforeEach(() => {
 })
 
 describe('ChatPageShell 槽位', () => {
-  it('空状态渲染欢迎区：welcome-top 槽位 → 预设提示词 → welcome-bottom 槽位顺序', async () => {
+  it('空状态渲染欢迎区：welcome-top 槽位 → 预设提示词翻页 → welcome-bottom 槽位顺序', async () => {
     const w = mountShell(
-      { suggestions: ['问题一', '问题二'] },
+      { suggestions: ['问题一', '问题二', '问题三', '问题四'] },
       {
         'welcome-top': '<div class="slot-top">快捷选项</div>',
         'welcome-bottom': '<div class="slot-bottom">功能入口</div>'
@@ -101,16 +105,84 @@ describe('ChatPageShell 槽位', () => {
     expect(area.exists()).toBe(true)
     const html = area.html()
     expect(html.indexOf('slot-top')).toBeGreaterThan(-1)
-    expect(html.indexOf('slot-top')).toBeLessThan(html.indexOf('suggestion-grid'))
-    expect(html.indexOf('suggestion-grid')).toBeLessThan(html.indexOf('slot-bottom'))
+    expect(html.indexOf('slot-top')).toBeLessThan(html.indexOf('suggestion-pager'))
+    expect(html.indexOf('suggestion-pager')).toBeLessThan(html.indexOf('slot-bottom'))
     // 游客提示仅未登录时渲染
     expect(w.find('.guest-hint').exists()).toBe(false)
   })
 
-  it('有消息或流式中不渲染欢迎区', async () => {
+  it('预设提示词横向翻页：默认 3 条一页，箭头切换页面', async () => {
+    const w = mountShell({ suggestions: ['一', '二', '三', '四'] })
+    expect(w.find('.suggestion-pager').exists()).toBe(true)
+    expect(w.findAll('.suggestion-page').length).toBe(2)
+    // 第一页可见第一条
+    expect(w.find('.suggestion-page').text()).toContain('一')
+    const pager = w.find('.suggestion-pager')
+    const arrows = pager.findAll('button')
+    expect(arrows.length).toBe(2)
+    expect(arrows[0].attributes('disabled')).toBeDefined()
+    await arrows[1].trigger('click')
+    expect(w.findAll('.suggestion-page')[1].text()).toContain('四')
+  })
+
+  it('欢迎区横排：一句话标题无副标题（welcomeDesc 不再渲染）', () => {
+    const w = mountShell({ welcomeTitle: '上传图纸即读懂部件原理', welcomeDesc: '旧副标题不应出现' })
+    const head = w.find('.welcome-head')
+    expect(head.exists()).toBe(true)
+    expect(head.text()).toContain('上传图纸即读懂部件原理')
+    expect(w.find('.welcome-desc').exists()).toBe(false)
+    expect(w.text()).not.toContain('旧副标题不应出现')
+  })
+
+  it('气泡自动换行不省略（无 truncate，超长撑开）', () => {
+    const w = mountShell({ suggestions: ['一', '二', '三', '四'] })
+    const bubbles = w.findAll('.suggestion-bubble')
+    expect(bubbles.length).toBeGreaterThan(0)
+    for (const b of bubbles) {
+      expect(b.classes()).not.toContain('truncate')
+    }
+  })
+
+  it('空态：grid 三行布局——输入框正中行精确居中、欢迎区第一行底对齐依托其上；有消息沉底 1200', async () => {
+    const welcome = mountShell({})
+    const mainEl = welcome.find('.chat-main')
+    expect(mainEl.classes()).toContain('grid')
+    expect(mainEl.classes()).toContain('grid-rows-[1fr_auto_1fr]')
+    expect(welcome.find('.message-list').classes()).toContain('row-start-1')
+    expect(welcome.find('.message-list').classes()).toContain('self-end')
+    const inputArea = welcome.find('.chat-input-area')
+    expect(inputArea.classes()).toContain('row-start-2')
+    expect(inputArea.classes()).toContain('max-w-[760px]')
+
     mocks.store.messages = [{ id: 2, role: 'user', content: 'hi' }]
-    const w = mountShell({})
-    expect(w.find('.welcome-area').exists()).toBe(false)
+    const chatting = mountShell({})
+    expect(chatting.find('.welcome-area').exists()).toBe(false)
+    expect(chatting.find('.message-list').classes()).toContain('max-w-[1200px]')
+    expect(chatting.find('.chat-input-area').classes()).toContain('max-w-[1200px]')
+  })
+
+  it('input-toolbar 与 input-above 共存：工具栏在上、图片队列在下（图纸/习题页无挤占回归）', () => {
+    const w = mountShell({}, {
+      'input-toolbar': '<div class="toolbar-slot">胶囊</div>',
+      'input-above': '<div class="pending-slot">图片队列</div>'
+    })
+    const area = w.find('.chat-input-area')
+    expect(area.find('.toolbar-slot').exists()).toBe(true)
+    expect(area.find('.pending-slot').exists()).toBe(true)
+    const html = area.html()
+    expect(html.indexOf('toolbar-slot')).toBeLessThan(html.indexOf('input-wrap'))
+    // 图片队列挂输入框上方（input-above），不进消息区、不顶回答正文
+    expect(html.indexOf('pending-slot')).toBeLessThan(html.indexOf('input-wrap'))
+  })
+
+  it('assistant-extra 槽位透传助手消息（诊断逐轮来源回放挂载点）', () => {
+    mocks.store = makeStore({
+      messages: [{ id: 2, role: 'assistant', content: '回答', sources: [{ id: 1 }] }]
+    })
+    const w = mountShell({}, {
+      'assistant-extra': '<div class="extra-slot">{{ JSON.stringify({ n: 1 }) }}</div>'
+    })
+    expect(w.find('.extra-slot').exists()).toBe(true)
   })
 
   it('raised 布局渲染 input-footer-left 槽位；compact 布局渲染 input-prefix 槽位与 input-above', () => {
@@ -222,5 +294,42 @@ describe('ChatPageShell 输入与发送', () => {
     const w = mountShell({ backLinkTo: '/ai-assistant', backLinkText: '返回 AI 助手' })
     expect(w.find('.logo-sub').text()).toBe('AI 叉车助手 · 测试')
     expect(w.find('.back-link').text()).toContain('返回 AI 助手')
+  })
+})
+
+describe('ChatPageShell 当轮计费脚注（#620）', () => {
+  it('store.lastUsage 存在时渲染当轮脚注；消息正文不含计费文本（usage 与正文分离）', async () => {
+    mocks.store = makeStore({
+      lastUsage: { points_cost: 5, total_tokens: 1500, balance: 95 },
+      messages: [{ id: 2, role: 'assistant', content: '回答内容' }]
+    })
+    const w = mountShell({})
+    const footnote = w.find('.usage-footnote')
+    expect(footnote.exists()).toBe(true)
+    expect(footnote.text()).toContain('本轮消耗 5 分')
+    expect(footnote.text()).toContain('1.5k tokens')
+    expect(footnote.text()).toContain('余额 95')
+    // 助手正文只有对话内容
+    const body = w.findAll('.message-text').map(d => d.text()).join('')
+    expect(body).not.toContain('本轮消耗')
+  })
+
+  it('无 lastUsage（未发送/已切会话）不渲染脚注', () => {
+    const w = mountShell({})
+    expect(w.find('.usage-footnote').exists()).toBe(false)
+  })
+})
+
+describe('ChatPageShell 登出（#620）', () => {
+  it('退出登录走 store.clearMessages + loadSessions action，不再直改消息数组', async () => {
+    const w = mountShell({})
+    // 侧栏底部的用户菜单（首个 ElDropdown 是主题切换的，需定位到 footer 内）
+    const userMenu = w.find('.sidebar-footer').findComponent({ name: 'ElDropdown' })
+    expect(userMenu.exists()).toBe(true)
+    userMenu.vm.$emit('command', 'logout')
+    await flushPromises()
+
+    expect(mocks.store.clearMessages).toHaveBeenCalledTimes(1)
+    expect(mocks.store.loadSessions).toHaveBeenCalledTimes(1)
   })
 })

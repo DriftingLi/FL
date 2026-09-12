@@ -4,12 +4,19 @@ import { useCredentialStore } from '@/stores/credential'
 import {
   getSubdomain,
   buildCrossDomainAuthUrl,
-  getTargetSubdomainForPath,
   getDefaultWorkspaceBySubdomain,
   isIpDirectMode
 } from '@/utils/subdomain'
+import { resolveGuardDecision, type GuardInput, type GuardState } from './guard'
 import { resolveWorkspaceForRole } from '@/utils/authRedirect'
 import { routeNames } from '@/config/routeNames'
+
+// workspace（工作区）声明约定（#618）：「这条路由属于哪个工作区」单点写在各布局/页面路由的
+// meta.workspace（子路由经 vue-router meta 合并继承，无需逐条重复）；守卫与登录回跳读声明，
+// 子域前缀表（authRedirect.PATH_AUTH_ENTRIES）只兜底未声明路径（404）。工作区语义而非子域名字面，
+// 派生关系（workspace → 子域名）单点在 guard.WORKSPACE_SUBDOMAIN。
+// redirect 型记录（/ /dashboard /tutor 等旧路径兼容）在路由解析期即被改写为目标路由，
+// 不会成为守卫的 to，因此无需 workspace 声明。
 
 const routes: RouteRecordRaw[] = [
   // ========== 登录 / 注册 ==========
@@ -17,26 +24,26 @@ const routes: RouteRecordRaw[] = [
     path: '/login',
     name: routeNames.Login,
     component: () => import('@/pages/auth/Login.vue'),
-    meta: { requiresAuth: false, authPage: true }
+    meta: { requiresAuth: false, authPage: true, workspace: 'auth' }
   },
   {
     path: '/register',
     name: routeNames.Register,
     component: () => import('@/pages/auth/Register.vue'),
-    meta: { requiresAuth: false, authPage: true }
+    meta: { requiresAuth: false, authPage: true, workspace: 'auth' }
   },
   {
     path: '/forgot-password',
     name: routeNames.ForgotPassword,
     component: () => import('@/pages/auth/ForgotPassword.vue'),
-    meta: { requiresAuth: false, authPage: true }
+    meta: { requiresAuth: false, authPage: true, workspace: 'auth' }
   },
 
   // ========== 培训模块 - 学员子区 ==========
   {
     path: '/training',
     component: () => import('@/layouts/TrainingLayout.vue'),
-    meta: { requiresAuth: true, role: 'hrwai_user' },
+    meta: { requiresAuth: true, role: 'hrwai_user', workspace: 'training' },
     children: [
       {
         path: '',
@@ -170,7 +177,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/training/tutor',
     component: () => import('@/layouts/TutorLayout.vue'),
-    meta: { requiresAuth: true, role: 'tutor' },
+    meta: { requiresAuth: true, role: 'tutor', workspace: 'tutor' },
     children: [
       {
         path: '',
@@ -215,7 +222,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/valuation',
     component: () => import('@/layouts/ValuationLayout.vue'),
-    meta: { requiresAuth: false },
+    meta: { requiresAuth: false, workspace: 'valuation' },
     children: [
       {
         path: '',
@@ -266,19 +273,19 @@ const routes: RouteRecordRaw[] = [
     path: '/valuation/login',
     name: routeNames.ValuationLogin,
     component: () => import('@/pages/auth/Login.vue'),
-    meta: { requiresAuth: false, isValuationAuthPage: true, authPage: true }
+    meta: { requiresAuth: false, isValuationAuthPage: true, authPage: true, workspace: 'valuation' }
   },
   {
     path: '/valuation/register',
     name: routeNames.ValuationRegister,
     component: () => import('@/pages/auth/Register.vue'),
-    meta: { requiresAuth: false, isValuationAuthPage: true, authPage: true }
+    meta: { requiresAuth: false, isValuationAuthPage: true, authPage: true, workspace: 'valuation' }
   },
   {
     path: '/valuation/forgot-password',
     name: routeNames.ValuationForgotPassword,
     component: () => import('@/pages/auth/ForgotPassword.vue'),
-    meta: { requiresAuth: false, isValuationAuthPage: true, authPage: true }
+    meta: { requiresAuth: false, isValuationAuthPage: true, authPage: true, workspace: 'valuation' }
   },
 
   // ========== AI 助手模块（training 子域名，可选登录；登录后可保存历史会话） ==========
@@ -287,21 +294,21 @@ const routes: RouteRecordRaw[] = [
     path: '/ai-assistant',
     name: routeNames.AIAssistant,
     component: () => import('@/pages/ai-assistant/AIAssistantPage.vue'),
-    meta: { requiresAuth: false }
+    meta: { requiresAuth: false, workspace: 'training' }
   },
-  // 专项功能页（故障咨询/故障代码查询/维保知识/图纸识别/习题解答）
+  // 专项功能页（维保知识/图纸识别/习题解答/智能维修诊断）
   {
-    path: '/ai-assistant/:featureKey(fault-consult|fault-code|maintenance|drawing|exercise)',
+    path: '/ai-assistant/:featureKey(maintenance|drawing|exercise|fault-diagnosis)',
     name: routeNames.AIAssistantFeature,
     component: () => import('@/pages/ai-assistant/FeatureChatPage.vue'),
-    meta: { requiresAuth: false }
+    meta: { requiresAuth: false, workspace: 'training' }
   },
 
   // ========== 管理员后台 ==========
   {
     path: '/admin',
     component: () => import('@/layouts/AdminLayout.vue'),
-    meta: { requiresAuth: true, role: 'admin' },
+    meta: { requiresAuth: true, role: 'admin', workspace: 'manage' },
     children: [
       {
         path: '',
@@ -409,7 +416,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/recruit',
     component: () => import('@/layouts/RecruitLayout.vue'),
-    meta: { requiresAuth: true, role: 'recruiter' },
+    meta: { requiresAuth: true, role: 'recruiter', workspace: 'recruit' },
     children: [
       {
         path: '',
@@ -506,155 +513,71 @@ const router = createRouter({
   routes
 })
 
+/**
+ * 全局守卫 orchestrator（#618）：决策逻辑全部在 guard.ts 的纯函数决策管线
+ * （(目标路由， 认证/环境状态) ⇒ 决策，全分支单测覆盖），这里只做三件事——
+ * 1. 注入环境事实：等待认证初始化、投影 to 为 GuardInput、读取 auth/credential/子域名状态；
+ * 2. 执行决策：next / 清登录态重定向 / 跨子域名整页跳转 / 当前子域名默认工作区；
+ * 3. load-credential 决策时补拉一次证件数据后重跑管线（管线纯函数，重跑无副作用；
+ *    loadCurrent 内部吞错，失败记为无证件，与既有行为一致）。
+ */
 router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
 
   // 等待认证初始化完成（main.ts 显式启动，幂等；同一 Promise 等待不重复执行）
   await authStore.initialize()
 
-  const isValuationPath = to.path === '/valuation' || to.path.startsWith('/valuation/')
-  // 认证页标记（meta.authPage）：/login、/register、/forgot-password 及 /valuation 下的独立登录/注册/找回密码
-  const isAuthPage = to.matched.some(record => record.meta?.authPage)
-  // valuation 子域名独立认证页（回跳 /valuation/history 特判）
-  const isValuationLoginPage = isAuthPage && isValuationPath
-  // 主体系认证页（training / 主域名通用登录流程，不含 valuation 认证页）
-  const isLoginPath = isAuthPage && !isValuationPath
+  const credStore = useCredentialStore()
+  let credentialLoadAttempted = false
 
-  // ===== 子域名边界检查 =====
-  // 六类子域名：main（公共）、training（学员培训+AI助手）、valuation（残值评估）、
-  // tutor（导师工作区）、admin（管理员后台）、recruit（企业招聘）
-  // 跨子域名访问会触发整页跳转（不同 origin，token 不共享）
-  // IP 直连模式下跳过子域名边界检查（无 DNS 子域名环境，通过路径直接访问所有工作区）
-  const currentSubdomain = getSubdomain()
-  const skipSubdomainCheck = isIpDirectMode()
+  const input = (): GuardInput => ({
+    path: to.path,
+    fullPath: to.fullPath,
+    name: to.name,
+    meta: to.meta as Record<string, unknown>,
+    // 逐条匹配记录的 meta（保持既有 some() 语义：requiresAuth/authPage 按逐条判断）
+    matched: to.matched.map(record => record.meta as Record<string, unknown>)
+  })
 
-  if (!skipSubdomainCheck) {
-    if (isValuationPath) {
-      // 估值路径必须在 valuation 子域名下访问
-      if (currentSubdomain !== 'valuation') {
-        window.location.href = buildCrossDomainAuthUrl('valuation', to.fullPath)
+  const state = (): GuardState => ({
+    isLoggedIn: authStore.isLoggedIn,
+    role: authStore.userInfo?.role ?? '',
+    hasValidToken: !!(authStore.token && authStore.isLoggedIn && authStore.userInfo && authStore.userInfo.role),
+    subdomain: getSubdomain(),
+    ipDirect: isIpDirectMode(),
+    credential: !credStore.initialized ? 'unloaded' : credStore.current === null ? 'none' : 'present'
+  })
+
+  for (;;) {
+    const decision = resolveGuardDecision(input(), state())
+    switch (decision.action) {
+      case 'allow':
+        next()
         return
-      }
-    } else if (isLoginPath) {
-      // /login 和 /register 在主域名上跳到 training 子域名（主域名不再承载登录）
-      // valuation 子域名有独立的 /valuation/login 与 /valuation/register，主体系 /login 重定向过去
-      if (currentSubdomain === 'main') {
-        window.location.href = buildCrossDomainAuthUrl('training', to.fullPath)
+      case 'redirect':
+        // clearAuth = token 失效口径：先清登录态再回认证页
+        if (decision.clearAuth) authStore.clearAuthData()
+        next(decision.to)
         return
-      }
-      if (currentSubdomain === 'valuation') {
-        if (to.path === '/register') next('/valuation/register')
-        else if (to.path === '/forgot-password') next('/valuation/forgot-password')
-        else next('/valuation/login')
+      case 'external':
+        // 跨子域名整页跳转（不同 origin，token 不共享；经 auth_token 参数交接登录态）
+        window.location.href = buildCrossDomainAuthUrl(decision.target, decision.path)
         return
-      }
-    } else {
-      // 非登录路径：按路径前缀映射到对应子域名
-      const targetSubdomain = getTargetSubdomainForPath(to.path)
-      if (currentSubdomain !== targetSubdomain) {
-        if (targetSubdomain === 'main') {
-          // AI 助手部署在主域名，允许从功能子域名跳转过去；
-          // 其余公共路径（/、/dispatch 等）留在当前子域名默认工作区
-          if (to.path.startsWith('/ai-assistant')) {
-            window.location.href = buildCrossDomainAuthUrl('main', to.fullPath)
-          } else {
-            next(getDefaultWorkspaceBySubdomain())
-          }
-        } else {
-          // 路径属于另一个功能子域名 → 跨子域名跳转
-          window.location.href = buildCrossDomainAuthUrl(targetSubdomain, to.fullPath)
-        }
+      case 'workspace-home':
+        // 留在当前子域名的默认工作区（valuation/recruit 子域名有独立入口）
+        next(getDefaultWorkspaceBySubdomain())
         return
-      }
-    }
-  }
-
-  // 已登录用户访问登录页：按当前子域名跳转到对应工作区
-  if (isLoginPath && authStore.isLoggedIn && authStore.userInfo.role) {
-    next(getDefaultWorkspaceBySubdomain())
-    return
-  }
-
-  // 已登录用户访问估值登录/注册页 → 跳回评估历史
-  if (isValuationLoginPage && authStore.isLoggedIn && authStore.userInfo.role === 'hrwai_user') {
-    next('/valuation/history')
-    return
-  }
-
-  // 通过 to.matched 检查是否需要鉴权（支持子路由覆盖父路由 meta）
-  const requiresAuth = to.matched.some(record => record.meta?.requiresAuth === true)
-
-  if (!requiresAuth) {
-    next()
-    return
-  }
-
-  const hasValidToken = authStore.token &&
-                        authStore.isLoggedIn &&
-                        authStore.userInfo &&
-                        authStore.userInfo.role
-
-  if (!hasValidToken) {
-    authStore.clearAuthData()
-    // 估值路径跳估值登录页，其余跳主登录页
-    if (isValuationPath) {
-      next({ path: '/valuation/login', query: { redirect: to.fullPath } })
-    } else {
-      next({ path: '/login', query: { redirect: to.fullPath } })
-    }
-    return
-  }
-
-  // 角色校验：优先使用最内层匹配的 meta（to.meta 已是最终合并的 meta）
-  const userRole = authStore.userInfo?.role ?? ''
-  const requiredRole = to.meta?.role as string | undefined
-  const requiredRoles = to.meta?.roles as string[] | undefined
-
-  const roleMatched = requiredRoles
-    ? requiredRoles.includes(userRole)
-    : (requiredRole ? requiredRole === userRole : true)
-
-  if (!roleMatched) {
-    // 管理员/导师回各自工作台（单点函数 resolveWorkspaceForRole）
-    if (userRole === 'admin' || userRole === 'tutor') {
-      next(resolveWorkspaceForRole(userRole))
-    } else if (isValuationPath) {
-      // 学员/未知角色访问估值受限页 → 回估值首页（公开，无需登录）
-      next('/valuation')
-    } else {
-      // 其余 → 学员工作区
-      next('/training')
-    }
-    return
-  }
-
-  // ===== 目标证件预筛选（ADR-0020）=====
-  // 强制拦截：hrwai_user 且 current_credential_id 为空时，training 工作区内除 onboarding 外均重定向至 onboarding
-  if (userRole === 'hrwai_user' && !isIpDirectMode()) {
-    const targetSubdomain = getTargetSubdomainForPath(to.path)
-    const isTrainingPath = targetSubdomain === 'training' || to.path.startsWith('/training')
-    const isOnboarding = to.name === routeNames.CredentialOnboarding
-    if (isTrainingPath) {
-      try {
-        const credStore = useCredentialStore()
-        if (!credStore.initialized) {
-          await credStore.loadCurrent()
-        }
-        if (credStore.current === null && !isOnboarding) {
-          next({ name: routeNames.CredentialOnboarding })
+      case 'load-credential':
+        // 证件数据未加载：补拉一次后重跑管线；credentialLoadAttempted 防御性兜底死循环
+        if (credentialLoadAttempted) {
+          next()
           return
         }
-        if (credStore.current !== null && isOnboarding) {
-          next('/training')
-          return
-        }
-      } catch {
-        // 网络异常时放行，避免卡死登录
-      }
+        credentialLoadAttempted = true
+        await credStore.loadCurrent()
+        break
     }
   }
-
-  next()
 })
 
 export default router

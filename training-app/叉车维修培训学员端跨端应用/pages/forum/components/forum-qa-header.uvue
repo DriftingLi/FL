@@ -1,0 +1,134 @@
+<template>
+    <view class="qa-header-wrap">
+        <!-- 知识问答：发一个问题 -->
+        <view class="ask-bar" @click="onAsk">
+            <text class="ask-bar-text">发一个问题</text>
+            <view class="ask-bar-btn">
+                <text class="ask-bar-btn-icon">+</text>
+            </view>
+        </view>
+
+        <!-- 知识问答：状态筛选（#740，两态按父票 #707 裁定，标签与 web 一致） -->
+        <view class="qa-status-bar">
+            <view class="qa-chip" :class="{ active: qaStatus === '' }" @click="onStatusChange('')">
+                <text class="qa-chip-text" :class="{ active: qaStatus === '' }">全部</text>
+            </view>
+            <view class="qa-chip" :class="{ active: qaStatus === 'open' }" @click="onStatusChange('open')">
+                <text class="qa-chip-text" :class="{ active: qaStatus === 'open' }">求助</text>
+            </view>
+            <view class="qa-chip" :class="{ active: qaStatus === 'resolved' }" @click="onStatusChange('resolved')">
+                <text class="qa-chip-text" :class="{ active: qaStatus === 'resolved' }">已解决</text>
+            </view>
+        </view>
+
+        <!-- 知识问答：推荐/最热/最新（推荐为热度 mock，后端暂无推荐算法） -->
+        <view class="qa-filter-bar">
+            <view class="qa-chip" :class="{ active: qaSort === 'recommend' }" @click="onSort('recommend')">
+                <text class="qa-chip-text" :class="{ active: qaSort === 'recommend' }">推荐</text>
+            </view>
+            <view class="qa-chip" :class="{ active: qaSort === 'hot' }" @click="onSort('hot')">
+                <text class="qa-chip-text" :class="{ active: qaSort === 'hot' }">最热</text>
+            </view>
+            <view class="qa-chip" :class="{ active: qaSort === 'latest' }" @click="onSort('latest')">
+                <text class="qa-chip-text" :class="{ active: qaSort === 'latest' }">最新</text>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    withDefaults(defineProps<{
+        qaSort? : string
+        qaStatus? : string
+    }>(), {
+        qaSort: 'recommend',
+        qaStatus: ''
+    })
+
+    const emit = defineEmits(['ask', 'sortChange', 'statusChange'])
+
+    function onAsk() : void {
+        emit('ask')
+    }
+
+    function onSort(val : string) : void {
+        emit('sortChange', val)
+    }
+
+    function onStatusChange(val : string) : void {
+        emit('statusChange', val)
+    }
+</script>
+
+<style>
+    .qa-header-wrap {
+        flex-direction: column;
+    }
+
+    /* ===== 知识问答：发一个问题 ===== */
+    .ask-bar {
+        margin: 16rpx 24rpx;
+        padding: 20rpx 24rpx;
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .ask-bar-text {
+        font-size: 30rpx;
+        color: #1a1a1a;
+        font-weight: 600;
+    }
+    .ask-bar-btn {
+        width: 52rpx;
+        height: 52rpx;
+        border-radius: 26rpx;
+        background-color: #2979ff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .ask-bar-btn-icon {
+        color: #ffffff;
+        font-size: 36rpx;
+        line-height: 36rpx;
+    }
+
+    /* ===== 知识问答：筛选 chips ===== */
+    .qa-filter-bar {
+        flex-direction: row;
+        align-items: center;
+        padding: 4rpx 24rpx 16rpx;
+    }
+
+    .qa-status-bar {
+        flex-direction: row;
+        align-items: center;
+        padding: 0rpx 24rpx 16rpx;
+    }
+
+    .qa-chip {
+        padding: 10rpx 32rpx;
+        border-radius: 32rpx;
+        background-color: #f0f1f5;
+        border: 2rpx solid transparent;
+        margin-right: 20rpx;
+    }
+
+    .qa-chip.active {
+        background-color: #e8f3ff;
+        border-color: #2979ff;
+    }
+
+    .qa-chip-text {
+        font-size: 26rpx;
+        color: #666666;
+    }
+
+    .qa-chip-text.active {
+        color: #2979ff;
+        font-weight: bold;
+    }
+</style>

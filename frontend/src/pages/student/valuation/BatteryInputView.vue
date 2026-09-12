@@ -7,6 +7,8 @@ import { ElMessage } from 'element-plus'
 import { Refresh, Promotion, Upload } from '@element-plus/icons-vue'
 import PageHeader from '@/components/valuation/PageHeader.vue'
 import { useBatteryStore } from '@/stores/valuationBattery'
+import UiButton from '@/components/ui/UiButton.vue'
+import UiUpload from '@/components/ui/UiUpload.vue'
 import {
   BATTERY_TYPE_LABELS,
   type BatteryType,
@@ -177,10 +179,10 @@ const isValid = computed(
         subtitle="Battery RUL"
       >
         <template #actions>
-          <el-button class="btn-ghost" :icon="Refresh" @click="reset">
+          <UiButton class="btn-ghost" :icon="Refresh" @click="reset">
             重置
-          </el-button>
-          <el-button
+          </UiButton>
+          <UiButton
             class="btn-primary"
             :icon="Promotion"
             :disabled="!isValid || submitting"
@@ -188,7 +190,7 @@ const isValid = computed(
             @click="submit"
           >
             开始评估
-          </el-button>
+          </UiButton>
         </template>
       </PageHeader>
 
@@ -234,16 +236,16 @@ const isValid = computed(
             @change="parseJson"
           />
           <div class="form-toolbar">
-            <el-upload
+            <UiUpload
               :before-upload="(file: File) => { handleFile(file); return false; }"
               :show-file-list="false"
               accept=".json,application/json"
             >
-              <el-button class="btn-ghost" :icon="Upload">
+              <UiButton class="btn-ghost" :icon="Upload">
                 上传 .json
-              </el-button>
-            </el-upload>
-            <el-button class="btn-ghost" @click="loadSample">加载示例</el-button>
+              </UiButton>
+            </UiUpload>
+            <UiButton class="btn-ghost" @click="loadSample">加载示例</UiButton>
             <span v-if="jsonError" class="form-error">{{ jsonError }}</span>
             <span v-else-if="cycleCount > 0" class="form-hint">
               已解析 <strong>{{ cycleCount }}</strong> 个循环

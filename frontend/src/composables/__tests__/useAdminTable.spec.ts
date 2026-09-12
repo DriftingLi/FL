@@ -1,7 +1,13 @@
 // useAdminTable：管理端列表状态机的接口级测试。
 // seam：composable 接口——fetch 用内存 fixture，actions 用内存 stub，不触达 API 层。
 import { describe, it, expect, vi } from 'vitest'
-import { ElMessageBox } from 'element-plus'
+
+// 删除确认已收口到 useConfirm（#735），mock 掉按「确认/取消」两种路径放行
+const { confirmSpy } = vi.hoisted(() => ({ confirmSpy: vi.fn() }))
+vi.mock('@/composables/useConfirm', () => ({
+  useConfirm: () => ({ confirm: confirmSpy, confirmDanger: confirmSpy, prompt: vi.fn() })
+}))
+
 import { useAdminTable } from '@/composables/useAdminTable'
 
 interface Row {
@@ -73,7 +79,7 @@ describe('useAdminTable（admin 列表状态机）', () => {
   })
 
   it('confirmDelete 确认后执行 action 并刷新列表', async () => {
-    vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
+    confirmSpy.mockResolvedValue('confirm' as never)
     const { table, seen } = makeTable()
     const action = vi.fn()
 
@@ -84,7 +90,7 @@ describe('useAdminTable（admin 列表状态机）', () => {
   })
 
   it('confirmDelete 取消时不执行 action、不刷新', async () => {
-    vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel' as never)
+    confirmSpy.mockRejectedValue('cancel' as never)
     const { table, seen } = makeTable()
     const action = vi.fn()
 
@@ -92,5 +98,95 @@ describe('useAdminTable（admin 列表状态机）', () => {
 
     expect(action).not.toHaveBeenCalled()
     expect(seen.length).toBe(0)
+  })
+  // ---- 三态（#790 A1）：对齐 useAsyncPage（loading / loadError / retrying + 绝不 reject）----
+
+  it('load 失败：收敛为 loadError，且不向上 reject', async () => {
+    const table = useAdminTable<Row>({
+      fetch: async () => {
+        throw new Error('boom')
+      }
+    })
+
+    await expect(table.load()).resolves.toBeUndefined()
+    expect(table.loadError.value).toBe(true)
+    expect(table.loading.value).toBe(false)
+  })
+
+  it('load 成功：清掉上一次的 loadError', async () => {
+    let fail = true
+    const table = useAdminTable<Row>({
+      fetch: async () => {
+        if (fail) throw new Error('boom')
+        return { list: [{ id: 1, name: 'a' }], total: 1 }
+      }
+    })
+
+    await table.load()
+    expect(table.loadError.value).toBe(true)
+
+    fail = false
+    await table.load()
+    expect(table.loadError.value).toBe(false)
+    expect(table.list.value).toHaveLength(1)
+  })
+
+  it('retry：失败后重试成功，retrying 开合且 loadError 复位', async () => {
+    let fail = true
+    const table = useAdminTable<Row>({
+      fetch: async () => {
+        if (fail) throw new Error('boom')
+        return { list: [{ id: 2, name: 'b' }], total: 1 }
+      }
+    })
+
+    await table.load()
+    expect(table.loadError.value).toBe(true)
+
+    fail = false
+    const p = table.retry()
+    expect(table.retrying.value).toBe(true)
+    await p
+    expect(table.retrying.value).toBe(false)
+    expect(table.loadError.value).toBe(false)
+    expect(table.list.value[0].id).toBe(2)
+  })
+
+  it('retry 防重入：重试进行中再调不重复触发 fetch', async () => {
+    let calls = 0
+    let release: (() => void) | null = null
+    const table = useAdminTable<Row>({
+      fetch: () => {
+        calls++
+        return new Promise<{ list: Row[]; total: number }>((resolve) => {
+          release = () => resolve({ list: [], total: 0 })
+        })
+      }
+    })
+
+    const first = table.retry()
+    const second = table.retry()
+    release!()
+    await Promise.all([first, second])
+
+    expect(calls).toBe(1)
+  })
+
+  it('search 也清掉 loadError（与 re-load 语义一致）', async () => {
+    let fail = true
+    const table = useAdminTable<Row>({
+      fetch: async () => {
+        if (fail) throw new Error('boom')
+        return { list: [], total: 0 }
+      },
+      searchable: true
+    })
+
+    await table.load()
+    expect(table.loadError.value).toBe(true)
+
+    fail = false
+    await table.search()
+    expect(table.loadError.value).toBe(false)
   })
 })

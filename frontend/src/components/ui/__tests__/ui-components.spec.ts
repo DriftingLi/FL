@@ -5,7 +5,7 @@ import { describe, it, expect, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import type { Component } from 'vue'
-import ElementPlus from 'element-plus'
+import { epLite } from '@/test/element-lite'
 
 import UiBadge from '../UiBadge.vue'
 import UiButton from '../UiButton.vue'
@@ -26,6 +26,15 @@ import UiStatCard from '../UiStatCard.vue'
 import UiTag from '../UiTag.vue'
 import UiActionChip from '../UiActionChip.vue'
 import UiSegmentTabs from '../UiSegmentTabs.vue'
+import UiPagination from '../UiPagination.vue'
+import UiFilterBar from '../UiFilterBar.vue'
+import UiSwitch from '../UiSwitch.vue'
+import UiCheckbox from '../UiCheckbox.vue'
+import UiCheckboxGroup from '../UiCheckboxGroup.vue'
+import UiRadioGroup from '../UiRadioGroup.vue'
+import UiTooltip from '../UiTooltip.vue'
+import UiUpload from '../UiUpload.vue'
+import UiMoreMenu from '../UiMoreMenu.vue'
 
 const OPTIONS = [
   { label: '全部', value: 'all' },
@@ -33,7 +42,7 @@ const OPTIONS = [
 ]
 
 function mountWith(comp: Component, props: Record<string, unknown> = {}) {
-  return mount(comp, { props, global: { plugins: [ElementPlus] } })
+  return mount(comp, { props, global: { plugins: [epLite()] } })
 }
 
 describe('UiCard', () => {
@@ -202,7 +211,7 @@ describe('UiDialog', () => {
     const w = mount(UiDialog, {
       props: { modelValue: true, ...props },
       attachTo: document.body,
-      global: { plugins: [ElementPlus] }
+      global: { plugins: [epLite()] }
     })
     await flushPromises()
     await nextTick()
@@ -256,6 +265,22 @@ describe('UiDialog', () => {
     await nextTick()
     expect(w.emitted('cancel')).toBeTruthy()
     expect(w.emitted('update:modelValue')?.[0]).toEqual([false])
+    w.unmount()
+  })
+
+  it('destroy-on-close 与 append-to-body 透传到 el-dialog', async () => {
+    const w = await mountDialog({ title: 'x', destroyOnClose: true, appendToBody: true })
+    const dlg = w.findComponent({ name: 'ElDialog' })
+    expect(dlg.props('destroyOnClose')).toBe(true)
+    expect(dlg.props('appendToBody')).toBe(true)
+    w.unmount()
+  })
+
+  it('默认不销毁、不挂 body（与裸 el-dialog 行为一致）', async () => {
+    const w = await mountDialog({ title: 'x' })
+    const dlg = w.findComponent({ name: 'ElDialog' })
+    expect(dlg.props('destroyOnClose')).toBe(false)
+    expect(dlg.props('appendToBody')).toBe(false)
     w.unmount()
   })
 
@@ -332,4 +357,267 @@ describe('UiSegmentTabs（分段选项卡）', () => {
     await w.findAll('button')[1].trigger('click')
     expect(w.emitted('update:modelValue')).toBeFalsy()
   })
+
+  it('指示条用实心品牌色而非 bg-panel 或浅底档（防与卡片/灰底同色隐身）', () => {
+    const w = mountWith(UiSegmentTabs, { modelValue: '7d', options: opts })
+    const bar = w.find('[aria-hidden="true"]')
+    expect(bar.classes()).toContain('bg-ui-500')
+    // #CCFBF1 / #F0FDFA 压在 bg-canvas 上肉眼就是灰白，等于没改
+    expect(bar.classes()).not.toContain('bg-panel')
+    expect(bar.classes()).not.toContain('bg-ui-100')
+  })
+
+  it('激活项用反白字（压在实心品牌色块上）', () => {
+    const w = mountWith(UiSegmentTabs, { modelValue: '7d', options: opts })
+    const btns = w.findAll('button')
+    expect(btns[0].classes()).toContain('text-white')
+    expect(btns[1].classes()).toContain('text-ink-3')
+  })
+
+  it('按钮必须 bg-transparent——项目无 preflight，button 默认不透明背景会盖住滑块', () => {
+    const w = mountWith(UiSegmentTabs, { modelValue: '7d', options: opts })
+    for (const btn of w.findAll('button')) {
+      expect(btn.classes()).toContain('bg-transparent')
+    }
+  })
+
+  it('options 变化后按 modelValue 重新标记激活项', async () => {
+    const w = mountWith(UiSegmentTabs, { modelValue: '7d', options: opts })
+    await w.setProps({ options: [...opts, { label: '全部', value: 'all' }] })
+    const btns = w.findAll('button')
+    expect(btns).toHaveLength(3)
+    expect(btns[0].attributes('aria-selected')).toBe('true')
+    expect(btns[2].attributes('aria-selected')).toBe('false')
+  })
 })
+
+describe('UiPagination', () => {
+  it('默认渲染 total 与 pager，不出现每页条数选择器', () => {
+    const w = mountWith(UiPagination, { total: 100 })
+    expect(w.find('.el-pagination').exists()).toBe(true)
+    expect(w.find('.el-pagination__total').exists()).toBe(true)
+    expect(w.find('.el-pagination__sizes').exists()).toBe(false)
+  })
+
+  it('showSizes 开启后出现每页条数选择器', () => {
+    const w = mountWith(UiPagination, { total: 100, showSizes: true, pageSize: 20 })
+    expect(w.find('.el-pagination__sizes').exists()).toBe(true)
+  })
+
+  it('翻页发 update:currentPage 与 current-change', async () => {
+    const w = mountWith(UiPagination, { total: 100, currentPage: 1 })
+    await w.find('.btn-next').trigger('click')
+    expect(w.emitted('update:currentPage')?.[0]).toEqual([2])
+    expect(w.emitted('current-change')?.[0]).toEqual([2])
+  })
+
+  it('disabled 时不响应翻页', async () => {
+    const w = mountWith(UiPagination, { total: 100, currentPage: 1, disabled: true })
+    await w.find('.btn-next').trigger('click')
+    expect(w.emitted('update:currentPage')).toBeFalsy()
+  })
+
+  it('align=center 时容器居中', () => {
+    const w = mountWith(UiPagination, { total: 100, align: 'center' })
+    expect(w.find('.justify-center').exists()).toBe(true)
+  })
+})
+
+describe('UiFilterBar', () => {
+  it('渲染 filters 与 actions 两个插槽', () => {
+    const w = mount(UiFilterBar, {
+      slots: {
+        filters: '<input class="f-input" />',
+        actions: '<button class="a-btn">查询</button>'
+      }
+    })
+    expect(w.find('.f-input').exists()).toBe(true)
+    expect(w.find('.a-btn').exists()).toBe(true)
+  })
+
+  it('actions 区域用 ml-auto 顶到最右', () => {
+    const w = mount(UiFilterBar, { slots: { actions: '<span>x</span>' } })
+    expect(w.find('.ml-auto').exists()).toBe(true)
+  })
+})
+
+describe('UiSwitch', () => {
+  it('v-model 经 defineModel 转发到 el-switch', async () => {
+    const w = mountWith(UiSwitch, { modelValue: false })
+    await w.setProps({ modelValue: true })
+    expect(w.find('.el-switch').classes()).toContain('is-checked')
+  })
+
+  it('attrs 透传（inline-prompt 下激活侧文本渲染，EP 只显示当前侧）', () => {
+    const w = mountWith(UiSwitch, { modelValue: true, inlinePrompt: true, activeText: '开启' })
+    expect(w.text()).toContain('开启')
+  })
+})
+
+describe('UiCheckbox / UiCheckboxGroup', () => {
+  it('单体 v-model 转发 + label 走 attrs', async () => {
+    const w = mountWith(UiCheckbox, { modelValue: true, label: '面议' })
+    expect(w.find('.el-checkbox').classes()).toContain('is-checked')
+    expect(w.text()).toContain('面议')
+  })
+
+  it('组内用法：value/label 走 attrs，选中状态由 group 管理', async () => {
+    const w = mount(UiCheckboxGroup, {
+      props: { modelValue: ['a'] },
+      slots: { default: '<UiCheckbox value="a" label="A" /><UiCheckbox value="b" label="B" />' },
+      global: { plugins: [epLite()], components: { UiCheckbox } }
+    })
+    await nextTick()
+    const boxes = w.findAll('.el-checkbox')
+    expect(boxes[0].classes()).toContain('is-checked')
+    expect(boxes[1].classes()).not.toContain('is-checked')
+  })
+
+  it('group v-model 数组转发', async () => {
+    const w = mountWith(UiCheckboxGroup, { modelValue: ['x'] })
+    expect((w.find('.el-checkbox-group').element as HTMLInputElement)).toBeTruthy()
+  })
+})
+
+describe('UiRadioGroup', () => {
+  it('v-model 转发 + 组内选中态正确', async () => {
+    const w = mount(UiRadioGroup, {
+      props: { modelValue: 'b' },
+      slots: { default: '<el-radio value="a">甲</el-radio><el-radio value="b">乙</el-radio>' },
+      global: { plugins: [epLite()] }
+    })
+    await nextTick()
+    const radios = w.findAll('.el-radio')
+    expect(radios[1].classes()).toContain('is-checked')
+  })
+
+  it('attrs 透传（size 经 provide 落到子 radio，EP 行为：group 根不带 size class）', async () => {
+    const w = mount(UiRadioGroup, {
+      props: { modelValue: 'a', size: 'small' },
+      slots: { default: '<el-radio value="a">甲</el-radio>' },
+      global: { plugins: [epLite()] }
+    })
+    await nextTick()
+    expect(w.find('.el-radio').classes()).toContain('el-radio--small')
+  })
+})
+
+describe('UiTooltip', () => {
+  it('挂载不炸，trigger slot 正常渲染', () => {
+    const w = mount(UiTooltip, {
+      props: { content: '提示文案', placement: 'top' },
+      slots: { default: '<button class="trigger">目标</button>' },
+      global: { plugins: [epLite()] }
+    })
+    expect(w.find('.trigger').exists()).toBe(true)
+  })
+
+  it('#content 具名槽传入不报错（popper 未触发不渲染，属 EP 行为）', () => {
+    const w = mount(UiTooltip, {
+      props: { placement: 'top' },
+      slots: { default: '<button class="trigger2">y</button>', content: '<span>富内容</span>' },
+      global: { plugins: [epLite()] }
+    })
+    expect(w.find('.trigger2').exists()).toBe(true)
+  })
+})
+
+describe('UiUpload', () => {
+  it('attrs 透传（drag 落到 el-upload 渲染拖拽区）', () => {
+    const w = mountWith(UiUpload, { action: '#', drag: true })
+    expect(w.find('.el-upload').exists()).toBe(true)
+    expect(w.find('.el-upload-dragger').exists()).toBe(true)
+  })
+
+  it('default slot 转发（trigger 内容）', () => {
+    const w = mount(UiUpload, {
+      props: { action: '#' },
+      slots: { default: '<button class="up-btn">上传</button>' },
+      global: { plugins: [epLite()] }
+    })
+    expect(w.find('.up-btn').exists()).toBe(true)
+  })
+})
+
+describe('UiTag（tone 唯一入口扩展，#766 C2）', () => {
+  it('新 tone 值 primary / info 直通 EP type', () => {
+    const primary = mountWith(UiTag, { tone: 'primary' })
+    expect(primary.find('.el-tag').classes()).toContain('el-tag--primary')
+    const info = mountWith(UiTag, { tone: 'info' })
+    expect(info.find('.el-tag').classes()).toContain('el-tag--info')
+  })
+
+  it('size 接受 EP 原值 small（迁移直通）', () => {
+    const w = mountWith(UiTag, { tone: 'success', size: 'small' })
+    expect(w.find('.el-tag').classes()).toContain('el-tag--small')
+  })
+
+  it('attrs 显式透传（class 落到根，浏览器下 fallthrough 到 span）', () => {
+    const w = mountWith(UiTag, { tone: 'success', class: 'ml-1.5' })
+    expect(w.classes()).toContain('ml-1.5')
+  })
+
+  it('旧 API 零 diff：tone=brand 的品牌样式仍在（断言根，同既有测试）', () => {
+    const w = mountWith(UiTag, { tone: 'brand', effect: 'light' })
+    expect(w.classes()).toContain('bg-ui-50')
+  })
+})
+
+describe('UiMoreMenu（溢出菜单）', () => {
+  afterEach(() => {
+    document.body.innerHTML = ''
+  })
+
+  const ITEMS = [
+    { key: 'report', label: '举报' },
+    { key: 'delete', label: '删除', tone: 'danger' as const }
+  ]
+
+  async function mountMenu(items = ITEMS) {
+    const w = mount(UiMoreMenu, {
+      props: { items },
+      attachTo: document.body,
+      global: { plugins: [epLite()] }
+    })
+    await flushPromises()
+    await nextTick()
+    return w
+  }
+
+  it('items 为空时不渲染触发按钮（没有可治理的动作就不该有入口）', async () => {
+    const w = await mountMenu([])
+    expect(document.querySelector('.more-menu-trigger')).toBeNull()
+    w.unmount()
+  })
+
+  it('渲染 ⋯ 触发按钮并带无障碍标签', async () => {
+    const w = await mountMenu()
+    const btn = document.querySelector('.more-menu-trigger')
+    expect(btn).not.toBeNull()
+    expect(btn?.getAttribute('aria-label')).toBe('更多操作')
+    w.unmount()
+  })
+
+  it('展开后按 items 顺序渲染菜单项', async () => {
+    const w = await mountMenu()
+    document.querySelector('.more-menu-trigger')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flushPromises()
+    await nextTick()
+    const rendered = Array.from(document.querySelectorAll('.el-dropdown-menu__item'))
+    expect(rendered.map((i) => i.textContent?.trim())).toEqual(['举报', '删除'])
+    w.unmount()
+  })
+
+  it('点菜单项发 select(key)', async () => {
+    const w = await mountMenu()
+    document.querySelector('.more-menu-trigger')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flushPromises()
+    await nextTick()
+    const rendered = Array.from(document.querySelectorAll('.el-dropdown-menu__item'))
+    rendered[1].dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flushPromises()
+    expect(w.emitted('select')?.[0]).toEqual(['delete'])
+    w.unmount()
+  })
+})
+

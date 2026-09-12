@@ -12,9 +12,9 @@
       </el-table>
     </div>
     <div v-else class="spreadsheet-download">
-      <el-empty description="该表格文件暂不支持在线预览">
+      <UiEmptyState description="该表格文件暂不支持在线预览">
         <UiButton variant="primary" @click="downloadFile">下载文件</UiButton>
-      </el-empty>
+      </UiEmptyState>
     </div>
   </div>
 </template>
@@ -23,6 +23,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 
 const props = defineProps({
   src: { type: String, required: true },

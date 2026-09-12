@@ -7,7 +7,9 @@
       </UiButton>
     </div>
 
-    <div class="filter-bar">
+    <UiFilterBar>
+        <template #filters>
+
       <el-select
         v-model="filterCategory"
         placeholder="全部分类"
@@ -34,20 +36,21 @@
       </el-select>
       <UiButton variant="primary" @click="handleFilterChange">查询</UiButton>
       <UiButton @click="resetFilter">重置</UiButton>
-    </div>
+        </template>
+      </UiFilterBar>
 
     <el-table :data="list" v-loading="loading" stripe border style="width: 100%">
       <el-table-column prop="title" label="标题" min-width="240" show-overflow-tooltip />
       <el-table-column label="分类" width="120" align="center">
         <template #default="{ row }">
-          <el-tag size="small">{{ categoryLabel(row.category) }}</el-tag>
+          <UiTag size="small">{{ categoryLabel(row.category) }}</UiTag>
         </template>
       </el-table-column>
       <el-table-column label="状态" width="100" align="center">
         <template #default="{ row }">
-          <el-tag :type="row.status === 1 ? 'success' : 'info'" size="small">
+          <UiTag :tone="row.status === 1 ? 'success' : 'info'" size="small">
             {{ row.status === 1 ? '已发布' : '草稿' }}
-          </el-tag>
+          </UiTag>
         </template>
       </el-table-column>
       <el-table-column label="发布时间" width="180" align="center">
@@ -76,17 +79,16 @@
       </el-table-column>
     </el-table>
 
-    <div class="pagination-wrapper" v-if="total > pageSize">
-      <el-pagination
-        v-model:current-page="currentPage"
-        v-model:page-size="pageSize"
-        :total="total"
-        :page-sizes="[10, 20, 50]"
-        layout="total, sizes, prev, pager, next"
-        @size-change="load"
-        @current-change="load"
-      />
-    </div>
+      <UiPagination v-if="total > pageSize"
+      v-model:current-page="currentPage"
+      v-model:page-size="pageSize"
+      :total="total"
+      show-sizes
+      :page-sizes="[10, 20, 50]"
+      @current-change="load"
+      @size-change="load"
+    align="right" class="mt-4" />
+    
   </div>
 </template>
 
@@ -99,6 +101,9 @@ import { adminFeaturedApi, featuredCategoryOptions, categoryLabel, type Featured
 import { useAdminTable } from '@/composables/useAdminTable'
 import { formatDateTime } from '@/utils/format'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
+import UiFilterBar from '@/components/ui/UiFilterBar.vue'
+import UiTag from '@/components/ui/UiTag.vue'
 
 const router = useRouter()
 
@@ -193,18 +198,7 @@ onMounted(() => {
   color: var(--color-text-primary);
 }
 
-.filter-bar {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-}
 
-.pagination-wrapper {
-  margin-top: 20px;
-  display: flex;
-  justify-content: flex-end;
-}
 
 .empty-text {
   color: var(--color-text-disabled);

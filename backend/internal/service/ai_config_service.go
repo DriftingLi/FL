@@ -9,8 +9,9 @@ import (
 	"sync"
 	"time"
 
+	einomodel "github.com/cloudwego/eino/components/model"
+	"github.com/cloudwego/eino/schema"
 	"github.com/redis/go-redis/v9"
-	"github.com/sashabaranov/go-openai"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/cache"
@@ -18,51 +19,8 @@ import (
 	"forklift-training/internal/security"
 )
 
-// AI 功能键（与前端展示一致）。新增功能时在此追加并同步前端。
-const (
-	FeatureGradeShortAnswer       = "grade_short_answer"
-	FeatureGenerateChapterContent = "generate_chapter_content"
-	FeatureAIAssistant            = "ai_assistant" // 遗留：多绑定，已由 normal/expert 双绑定替代，仅作兼容回退
-	FeatureAIAssistantNormal      = "ai_assistant_normal"
-	FeatureAIAssistantExpert      = "ai_assistant_expert"
-	FeatureQuestionExplanation    = "ai_question_analysis"
-	FeatureFaultConsult           = "fault_consult"
-	FeatureFaultCodeQuery         = "fault_code_query"
-	FeatureMaintenanceKnowledge   = "maintenance_knowledge"
-	FeatureDrawingRecognition     = "drawing_recognition"
-	FeatureExerciseSolving        = "exercise_solving"
-)
-
-// AllAIFeatures 全部 AI 功能键列表（用于绑定列表的全量展示）。
-// AI 助手已由 multi 的 ai_assistant 拆为双绑定的 normal/expert 单绑定，其它功能保持单绑定。
-var AllAIFeatures = []string{
-	FeatureGradeShortAnswer,
-	FeatureGenerateChapterContent,
-	FeatureAIAssistantNormal,
-	FeatureAIAssistantExpert,
-	FeatureQuestionExplanation,
-	FeatureFaultConsult,
-	FeatureFaultCodeQuery,
-	FeatureMaintenanceKnowledge,
-	FeatureDrawingRecognition,
-	FeatureExerciseSolving,
-}
-
-// FeatureLabel 功能键对应的中文名称。
-var FeatureLabel = map[string]string{
-	FeatureGradeShortAnswer:       "简答题 AI 评分",
-	FeatureGenerateChapterContent: "课程内容生成",
-	FeatureAIAssistantNormal:      "AI 助手 · 普通模式",
-	FeatureAIAssistantExpert:      "AI 助手 · 专家模式",
-	FeatureQuestionExplanation:    "题目 AI 解析",
-	FeatureFaultConsult:           "故障咨询",
-	FeatureFaultCodeQuery:         "故障代码查询",
-	FeatureMaintenanceKnowledge:   "维保知识",
-	FeatureDrawingRecognition:     "图纸识别",
-	FeatureExerciseSolving:        "习题解答",
-	// 遗留兼容
-	FeatureAIAssistant: "AI 助手对话",
-}
+// AI 功能键常量、AllAIFeatures / FeatureLabel / featureChatKeys / featureSystemPrompt
+// 均为注册表派生面，单点在 ai_feature_registry.go（ADR-0030 决策 1）。
 
 // AIConfigDTO 返回给前端的配置对象（API Key 脱敏）。
 type AIConfigDTO struct {
@@ -476,7 +434,7 @@ func (s *AIConfigService) loadResolveConfig(ctx context.Context, featureKey stri
 // ResolveAssistantPair AI 助手双模式绑定解析（降级阶梯单点，#397）：
 // ① normal/expert 各自单绑定 → ② 双双未绑定时回退遗留 ai_assistant 多绑定
 // （第一条→normal，第二条→expert，仅一条时 expert 复用 normal）。
-// 展示（ListAssistantModes）与对话解析（resolveModelConfig）共用，不再各写一份阶梯。
+// 展示（ListAssistantModes）与对话凭证解析（ResolveChatSettings）共用，不再各写一份阶梯。
 func (s *AIConfigService) ResolveAssistantPair(ctx context.Context) (normal, expert *model.AIConfig, err error) {
 	normalCfgs, err := s.ListConfigsForFeature(ctx, FeatureAIAssistantNormal)
 	if err != nil {
@@ -512,8 +470,96 @@ func (s *AIConfigService) ResolveAssistantPair(ctx context.Context) (normal, exp
 	return normal, expert, nil
 }
 
-// TestConfig 管理端配置连通性测试：解密配置后建 go-openai client 发最小补全请求
-// （30s 超时纪律单点在 service；此前为 handler 内联建 client）。
+// AIConfigResolver 由 *AIConfigService 提供唯一实现（ADR-0029 决策 2：解析知识不泄出配置 service）。
+var _ AIConfigResolver = (*AIConfigService)(nil)
+
+// featureChatKeys 注册表派生面（专项对话功能键集合），声明在 ai_feature_registry.go；
+// 此处唯一消费：对话凭证解析的专项功能优先分支。
+
+// ResolveFeatureSettings 阻塞栈凭证解析（AIConfigResolver 实现；自 AIService.ensureClient
+// 的解析段迁入）：featureKey → 管理端单绑定；空键/未绑定报错（不再降级到环境变量）。
+func (s *AIConfigService) ResolveFeatureSettings(ctx context.Context, featureKey string) (AISettings, error) {
+	// 空键查不到绑定（ResolveConfig 返回 unbound），与未绑定共用同一报错分支
+	cur := s.ResolveConfig(ctx, featureKey)
+	if cur.APIKey == "" {
+		return AISettings{}, fmt.Errorf("AI 功能 %q 未绑定配置，请在管理员后台 AI 配置页面绑定", featureKey)
+	}
+	return cur, nil
+}
+
+// ResolveChatSettings 对话凭证解析（AIConfigResolver 实现；自 AIAssistantService.resolveModelConfig
+// 迁入，三重 switch 的知识内聚在配置 service，#606）。
+// 优先级：专项功能（FeatureKey，管理端单绑定）→ Mode 双模式（normal/expert）→ 兼容旧 ModelSource。
+func (s *AIConfigService) ResolveChatSettings(ctx context.Context, sel AIModelSelector) (AISettings, error) {
+	// 专项功能：由管理端单绑定解析，忽略选择子中的模型来源字段（防绕过）
+	if featureChatKeys[sel.FeatureKey] {
+		mc := s.ResolveConfig(ctx, sel.FeatureKey)
+		if mc.APIKey == "" {
+			return AISettings{}, errors.New("管理员未配置该功能的模型，请联系管理员")
+		}
+		return mc, nil
+	}
+	// 通用助手：Mode 双模式（隐藏底层模型）——降级阶梯在 ResolveAssistantPair 单点
+	if sel.Mode == ModeNormal || sel.Mode == ModeExpert {
+		normal, expert, err := s.ResolveAssistantPair(ctx)
+		if err != nil {
+			return AISettings{}, fmt.Errorf("校验可用模型失败: %w", err)
+		}
+		cfg := normal
+		if sel.Mode == ModeExpert {
+			cfg = expert
+		}
+		if cfg == nil {
+			return AISettings{}, errors.New("该模式未绑定模型，请联系管理员配置")
+		}
+		return AISettings{APIKey: cfg.APIKey, BaseURL: cfg.BaseURL, Model: cfg.Model, Source: "binding:" + cfg.Name}, nil
+	}
+	switch sel.ModelSource {
+	case "admin":
+		// 校验该配置是否被管理员绑定到 AI 助手功能（兼容旧前端：同时校验新双绑定的两个 Feature）
+		boundCfgsNormal, _ := s.ListConfigsForFeature(ctx, FeatureAIAssistantNormal)
+		boundCfgsExpert, _ := s.ListConfigsForFeature(ctx, FeatureAIAssistantExpert)
+		boundCfgsLegacy, _ := s.ListConfigsForFeature(ctx, FeatureAIAssistant)
+		allBound := append(append(boundCfgsNormal, boundCfgsExpert...), boundCfgsLegacy...)
+		var cfg *model.AIConfig
+		for i := range allBound {
+			if allBound[i].ID == sel.ConfigID {
+				cfg = &allBound[i]
+				break
+			}
+		}
+		if cfg == nil {
+			return AISettings{}, errors.New("该模型未绑定到 AI 助手，请联系管理员或选择自定义模型")
+		}
+		return AISettings{APIKey: cfg.APIKey, BaseURL: cfg.BaseURL, Model: cfg.Model, Source: "binding:" + cfg.Name}, nil
+	case "user":
+		if sel.UserID == 0 {
+			return AISettings{}, errors.New("未登录不能使用用户自定义模型")
+		}
+		var m model.AIUserModel
+		if err := s.db.WithContext(ctx).Where("id = ? AND user_id = ?", sel.UserModelID, sel.UserID).
+			Limit(1).Find(&m).Error; err != nil {
+			return AISettings{}, err
+		}
+		if m.ID == 0 {
+			return AISettings{}, gorm.ErrRecordNotFound
+		}
+		key, err := security.DecryptSecret(m.APIKey, s.secretKey)
+		if err != nil {
+			return AISettings{}, fmt.Errorf("解密用户自定义模型 API Key 失败: %w", err)
+		}
+		return AISettings{APIKey: key, BaseURL: m.BaseURL, Model: m.Model, Source: "user:" + m.Name}, nil
+	case "custom":
+		if sel.CustomAPIKey == "" || sel.CustomBaseURL == "" || sel.CustomModel == "" {
+			return AISettings{}, errors.New("自定义模型配置不完整")
+		}
+		return AISettings{APIKey: sel.CustomAPIKey, BaseURL: sel.CustomBaseURL, Model: sel.CustomModel, Source: "custom"}, nil
+	}
+	return AISettings{}, fmt.Errorf("未知的 model_source: %s", sel.ModelSource)
+}
+
+// TestConfig 管理端配置连通性测试：解密配置后建 eino client 发最小补全请求
+// （30s 超时纪律单点在 service；一次性诊断调用，不经 adapter 签名缓存）。
 func (s *AIConfigService) TestConfig(ctx context.Context, id int) error {
 	row, err := s.GetConfigByID(ctx, id)
 	if err != nil {
@@ -521,14 +567,13 @@ func (s *AIConfigService) TestConfig(ctx context.Context, id int) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	client := newOpenAIClient(row.APIKey, row.BaseURL)
-	_, err = client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
-		Model: row.Model,
-		Messages: []openai.ChatCompletionMessage{
-			{Role: openai.ChatMessageRoleUser, Content: "请回复 'OK'"},
-		},
-		MaxTokens: 10,
-	})
+	chatModel, err := newEinoChatModel(ctx, AISettings{APIKey: row.APIKey, BaseURL: row.BaseURL, Model: row.Model})
+	if err != nil {
+		return fmt.Errorf("构建模型失败: %w", err)
+	}
+	_, err = chatModel.Generate(ctx, []*schema.Message{
+		schema.UserMessage("请回复 'OK'"),
+	}, einomodel.WithMaxTokens(10))
 	return err
 }
 
@@ -557,17 +602,4 @@ func MaskKey(k string) string {
 		return string(masked)
 	}
 	return k[:6] + "..." + k[len(k)-4:]
-}
-
-func isValidFeature(key string) bool {
-	for _, f := range AllAIFeatures {
-		if f == key {
-			return true
-		}
-	}
-	// 遗留兼容：ai_assistant 仍视为有效以便旧数据回退/迁移
-	if key == FeatureAIAssistant {
-		return true
-	}
-	return false
 }

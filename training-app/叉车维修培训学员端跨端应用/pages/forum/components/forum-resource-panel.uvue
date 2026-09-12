@@ -1,0 +1,200 @@
+<template>
+    <scroll-view class="content-scroll" scroll-y="true">
+        <!-- 金币 Banner -->
+        <view class="res-coin-banner">
+            <view class="res-coin-left">
+                <view class="res-coin-icon-box">
+                    <text class="res-coin-icon-text">$</text>
+                </view>
+                <view class="res-coin-info">
+                    <text class="res-coin-label">我的金币</text>
+                    <text class="res-coin-value">{{ coinText }}</text>
+                </view>
+            </view>
+            <view class="res-coin-right">
+                <text class="res-coin-detail-text" @click="onPointsTodetail">查看明细</text>
+            </view>
+        </view>
+        <!-- 2x2 功能卡片 -->
+        <view class="res-feature-grid">
+            <view class="res-feature-card" @click="onResourceClick('course-mall')">
+                <view class="res-feature-card-icon-wrap res-card-bg-red">
+                    <text class="res-feature-card-icon"></text>
+                </view>
+                <text class="res-feature-card-title res-title-red">课程商城</text>
+            </view>
+            <view class="res-feature-card" @click="onResourceClick('my-purchases')">
+                <view class="res-feature-card-icon-wrap res-card-bg-blue">
+                    <text class="res-feature-card-icon"></text>
+                </view>
+                <text class="res-feature-card-title res-title-blue">我的已购</text>
+            </view>
+            <view class="res-feature-card" @click="onResourceClick('my-uploads')">
+                <view class="res-feature-card-icon-wrap res-card-bg-green">
+                    <text class="res-feature-card-icon"></text>
+                </view>
+                <text class="res-feature-card-title res-title-green">我的上传</text>
+            </view>
+            <view class="res-feature-card" @click="onResourceClick('upload-resource')">
+                <view class="res-feature-card-icon-wrap res-card-bg-sky">
+                    <text class="res-feature-card-icon">☁️</text>
+                </view>
+                <text class="res-feature-card-title res-title-sky">上传资源</text>
+            </view>
+        </view>
+    </scroll-view>
+</template>
+
+<script setup lang="uts">
+    import { computed, onMounted } from 'vue'
+    import { useResourcePoints } from '../../../composables/useResourcePoints'
+    import { formatCountCompact } from '../../../utils/format'
+    import { UNAVAILABLE_TOAST } from '../../../constants/app'
+
+    // 资源区数据自持（谁消费谁持有）；挂载即拉 profile，与术后壳层 onSwitchTab('resource') 行为等价
+    const { coinBalance, loadProfile } = useResourcePoints()
+
+    const coinText = computed<string>(() : string => formatCountCompact(coinBalance.value))
+
+    onMounted(() : void => {
+        loadProfile()
+    })
+
+    function onPointsTodetail() : void {
+        uni.navigateTo({
+            url: "/pages/points/points-detail"
+        })
+    }
+
+    function onResourceClick(key : string) : void {
+        if (key === 'course-mall') {
+            uni.reLaunch({ url: '/pages/courses/courses' })
+        } else if (key === 'my-purchases') {
+            uni.navigateTo({ url: '/pages/resources/my-purchases' })
+        } else if (key === 'my-uploads') {
+            uni.navigateTo({ url: '/pages/resources/my-uploads' })
+        } else if (key === 'upload-resource') {
+            // 统一发布页（#760）：forum-create 资源 tab 承载投稿表单，upload-resource 退役
+            uni.navigateTo({ url: '/pages/forum/forum-create?scope=resource' })
+        } else {
+            uni.showToast({ title: UNAVAILABLE_TOAST, icon: 'none' })
+        }
+    }
+</script>
+
+<style>
+    .content-scroll {
+        flex: 1;
+        height: 0;
+    }
+
+    .res-coin-banner {
+        margin: 24rpx;
+        padding: 28rpx 32rpx;
+        border-radius: 20rpx;
+        background: linear-gradient(90deg, #6FB9F7, #1E88E5);
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .res-coin-left {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .res-coin-icon-box {
+        width: 80rpx;
+        height: 80rpx;
+        border-radius: 40rpx;
+        background-color: #FFD048;
+        align-items: center;
+        justify-content: center;
+        margin-right: 20rpx;
+    }
+
+    .res-coin-icon-text {
+        color: #B27B16;
+        font-size: 40rpx;
+        font-weight: bold;
+        font-size: 44rpx;
+    }
+
+    .res-coin-info {
+        flex-direction: column;
+    }
+
+    .res-coin-label {
+        font-size: 24rpx;
+        color: rgba(255, 255, 255, 0.9);
+    }
+
+    .res-coin-value {
+        font-size: 44rpx;
+        font-weight: bold;
+        color: #ffffff;
+        margin-top: 4rpx;
+    }
+
+    .res-coin-right {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .res-coin-detail-text {
+        font-size: 26rpx;
+        color: #ffffff;
+    }
+
+    .res-feature-grid {
+        flex-direction: row;
+        flex-wrap: wrap;
+        padding: 0 24rpx;
+    }
+
+    .res-feature-card {
+        width: 50%;
+        padding: 16rpx;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .res-feature-card-icon-wrap {
+        width: 100%;
+        height: 180rpx;
+        border-radius: 16rpx;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 16rpx;
+    }
+
+    .res-card-bg-red {
+        background-color: #FFF0F0;
+    }
+
+    .res-card-bg-blue {
+        background-color: #F0F5FF;
+    }
+
+    .res-card-bg-green {
+        background-color: #F0FFF0;
+    }
+
+    .res-card-bg-sky {
+        background-color: #F0F8FF;
+    }
+
+    .res-feature-card-icon {
+        font-size: 72rpx;
+    }
+
+    .res-feature-card-title {
+        font-size: 28rpx;
+        font-weight: 500;
+        color: #333333;
+    }
+    .res-title-red { color: #E5484D; }
+    .res-title-blue { color: #2979ff; }
+    .res-title-green { color: #22A45D; }
+    .res-title-sky { color: #2979ff; }
+</style>

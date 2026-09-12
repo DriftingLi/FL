@@ -90,7 +90,6 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowRight } from '@element-plus/icons-vue'
-import { ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
 import { resumeApi } from '@/api/resume'
@@ -103,6 +102,7 @@ import PasswordEditDialog from '@/components/profile/PasswordEditDialog.vue'
 import AccountEditDialog from '@/components/profile/AccountEditDialog.vue'
 import DeleteAccountDialog from '@/components/profile/DeleteAccountDialog.vue'
 import UiButton from '@/components/ui/UiButton.vue'
+import { useConfirm } from '@/composables/useConfirm'
 
 const authStore = useAuthStore()
 const router = useRouter()
@@ -142,7 +142,7 @@ function openResume(){ router.push({ name: 'StudentResume' }) }
 
 async function handleLogout(){
   try {
-    await ElMessageBox.confirm('确定要退出当前账号吗？', '提示', { type: 'warning' })
+    await useConfirm().confirm('确定要退出当前账号吗？', '提示', { type: 'warning' })
   } catch { return }
   try { await authApi.logout() } catch {}
   authStore.clearAuthData()

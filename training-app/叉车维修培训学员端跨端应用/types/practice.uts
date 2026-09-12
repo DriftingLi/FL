@@ -1,0 +1,125 @@
+/**
+ * 题库练习模块类型
+ * 含：练习题目、提交答案、练习统计、练习历史、题目互动（评论/笔记/考点）
+ */
+
+/** 题目选项 */
+export type QuestionOption = {
+    key : string
+    text : string
+}
+
+/** 练习题目 */
+export type Question = {
+    question_id : number
+    type : string
+    title : string
+    options : QuestionOption[]
+    correct_answer : string
+    explanation : string
+    knowledge_point ?: string
+}
+
+/** 提交答案参数 */
+export type SubmitAnswerParams = {
+    question_id : number
+    user_answer : string
+    practice_type : string
+}
+
+/** 提交答案响应 */
+export type SubmitAnswerResult = {
+    correct : boolean
+    correct_answer : string
+    explanation : string
+}
+
+/** 练习统计 */
+export type PracticeStats = {
+    total_practiced : number   // 总练习题数
+    correct_count : number     // 答对题数
+    accuracy : number          // 正确率（0-100）
+    today_count : number       // 今日练习数
+    streak_days : number       // 连续练习天数
+}
+
+/** 练习历史记录项 */
+export type PracticeHistoryItem = {
+    record_id : number
+    question_id : number
+    question_title : string
+    type : string
+    user_answer : string
+    correct_answer : string
+    is_correct : boolean
+    practice_type : string
+    created_at : string
+}
+
+/** 练习历史结果 */
+export type PracticeHistoryResult = {
+    items : PracticeHistoryItem[]
+    total : number
+    page : number
+    page_size : number
+}
+
+/** 练习进度 */
+export type PracticeProgress = {
+    index : number             // 当前题序号（后端 current_index）
+    completed : number         // 已完成题数（后端 completed）
+    practice_mode : string     // 练习模式（sequential / tag:<id> / paper:<id>）
+    total : number             // 总题量
+    answers_state : UTSJSONObject // 已答题状态
+}
+
+/** 刷题数据统计（GET /practice-mode/practice-stats，按证件分区聚合） */
+export type PracticeOverview = {
+    today_count : number   // 今日做题
+    total_count : number   // 累计做题
+    total_days : number    // 累计做题天数
+}
+
+/** 答题状态（用于做题页面跟踪每题作答情况） */
+export type AnswerState = {
+    question_id : number
+    user_answer : string
+    is_correct : boolean
+    correct_answer : string
+    submitted : boolean
+}
+
+// ========== 题目互动（评论 / 笔记 / 考点） ==========
+
+/** 题目评论 */
+export type QuestionComment = {
+    id : number
+    question_id : number
+    user_id : number
+    username : string
+    avatar_url : string
+    content : string
+    created_at : string
+    can_delete : boolean
+}
+
+/** 评论列表结果 */
+export type CommentListResult = {
+    items : QuestionComment[]
+    total : number
+}
+
+/** 个人笔记 */
+export type QuestionNote = {
+    id : number | null
+    question_id : number
+    content : string
+    updated_at : string
+}
+
+/** 考点标签 */
+export type KnowledgeTag = {
+    id : number
+    code : string
+    name : string
+}

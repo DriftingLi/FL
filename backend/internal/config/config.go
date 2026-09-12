@@ -28,6 +28,9 @@ type Config struct {
 	// LibreOfficeSidecarURL LibreOffice sidecar HTTP 地址(如 http://libreoffice:8000)。
 	// 为空时降级到本地 exec 调用(向后兼容)。
 	LibreOfficeSidecarURL string
+	// DiagnosisAssistantURL 外部诊断 RAG 助手（forklift-assistant 交付包）HTTP 地址。
+	// 为空时故障诊断功能经模型端口返回「未配置」友好错误（见 ai_diagnosis_adapter.go）。
+	DiagnosisAssistantURL string
 	// Storage 文件存储配置（local 本地磁盘 / r2 Cloudflare R2 对象存储）。
 	Storage StorageConfig
 	// AI 服务配置（OpenAI 兼容格式）。优先级：AI_* > DEEPSEEK_* > ZHIPU_* > OPENAI_API_KEY。
@@ -212,6 +215,8 @@ func setDefaults() {
 	viper.SetDefault("upload_folder", "")
 	viper.SetDefault("volume_mount_path", "")
 	viper.SetDefault("libreoffice_sidecar_url", "")
+	// 外部诊断 RAG 助手地址：测试/生产经 compose env 注入；未设置空串 → 功能不可用（友好报错）
+	viper.SetDefault("diagnosis_assistant_url", "")
 	viper.SetDefault("storage_driver", "local")
 	viper.SetDefault("r2_account_id", "")
 	viper.SetDefault("r2_access_key_id", "")
@@ -308,6 +313,7 @@ func Load() (*Config, error) {
 		// LibreOffice sidecar HTTP 地址;为空则降级到本地 exec(向后兼容)
 		MaxContentLength:      int64(positiveInt("max_content_length_mb", 250)) * 1024 * 1024,
 		LibreOfficeSidecarURL: viper.GetString("libreoffice_sidecar_url"),
+		DiagnosisAssistantURL: viper.GetString("diagnosis_assistant_url"),
 		Storage: StorageConfig{
 			Driver:            viper.GetString("storage_driver"),
 			R2AccountID:       viper.GetString("r2_account_id"),

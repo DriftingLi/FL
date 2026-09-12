@@ -125,7 +125,8 @@ type MockExamHistoryDTO struct {
 }
 
 // Start 生成模拟考试：从 published 题库随机抽 count 题（不分等级、不分题型）。
-func (s *MockExamService) Start(studentID, count, duration int) (*MockExamStartDTO, error) {
+// credentialID 非 nil 时按当前证件分区（#702：与练习池同口径——已发布 + 排真题 + 证件分区）。
+func (s *MockExamService) Start(studentID, count, duration int, credentialID ...*int) (*MockExamStartDTO, error) {
 	if count <= 0 {
 		count = mockExamDefaultCount
 	}
@@ -133,7 +134,7 @@ func (s *MockExamService) Start(studentID, count, duration int) (*MockExamStartD
 		duration = 90
 	}
 
-	selected, err := sampleQuestions(s.db, "", count)
+	selected, err := sampleQuestions(s.db, "", count, credentialID...)
 	if err != nil {
 		return nil, errors.New("查询题目失败")
 	}

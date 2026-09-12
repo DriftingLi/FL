@@ -1,136 +1,135 @@
 /**
- * 积分模块 API
- * - 获取积分余额
- * - 获取积分明细列表
- * - 上报浏览课程章节积分
+ * 积分模块 API（#709：路由全部对齐后端 points.go 已注册清单，mock 静默回退全部退役）
+ *
+ * - GET  /points/balance              余额（balance / total_earned / total_spent）
+ * - GET  /points/ledger               流水分页（page / page_size / direction=in|out，#512）
+ * - GET  /points/tasks                任务中心（todo / claimable / claimed 三态）
+ * - POST /points/tasks/{code}/claim   领取任务积分
+ *
+ * 后端从未注册过的路由不在本文件出现：/points/records 与 /points/course-view 是 #662
+ * 实测 404 的幻影路由。旧版靠 api 层 .catch() 回落占位数据把 404 静默盖住（用户永远看到
+ * 三条假流水），本票后失败一律沿 Promise 上抛——request 层已统一 toast，页面再呈现
+ * 可见错误态与重试入口（同 #408/#409「占位数据不是后端异常的正确呈现」口径）。
  */
-import { get, post } from './request'
+import { getMapped, postMapped } from './request'
 import { toNumber, toStr } from './helpers'
-import type { PointsBalance, PointsRecord, PointsRecordListResult } from '../types/index'
+import type { PointsBalance, PointsLedgerItem, PointsLedgerResult, PointsTaskItem, PointsTasksResult, PointsClaimResult } from '../types/index'
 
-/**
- * 从 UTSJSONObject 构造 PointsBalance
- * 后端 GET /points/balance 返回 { balance, total_earned }；
- * 保留对早期字段名 total_points / today_earned 的读取，缺失时回退。
- */
+/** 从 UTSJSONObject 构造 PointsBalance（后端三字段直读，无历史别名回退） */
 function buildPointsBalance(obj : UTSJSONObject) : PointsBalance {
-	const totalRaw = obj['total_points']
-	const balanceRaw = obj['balance']
-	const todayRaw = obj['today_earned']
-	const earnedRaw = obj['total_earned']
 	return {
-		total_points: totalRaw != null ? toNumber(totalRaw) : toNumber(balanceRaw),
-		today_earned: todayRaw != null ? toNumber(todayRaw) : toNumber(earnedRaw),
-		level: toStr(obj['level']),
-		level_name: toStr(obj['level_name']),
-		next_level_points: toNumber(obj['next_level_points']),
+		balance: toNumber(obj['balance']),
+		total_earned: toNumber(obj['total_earned']),
+		total_spent: toNumber(obj['total_spent']),
 	} as PointsBalance
 }
 
-/** 从 UTSJSONObject 构造 PointsRecord */
-function buildPointsRecord(obj : UTSJSONObject) : PointsRecord {
+/** 从 UTSJSONObject 构造 PointsLedgerItem（expires_at 为 #509 设计位，首版后端恒 null） */
+function buildPointsLedgerItem(obj : UTSJSONObject) : PointsLedgerItem {
+	const expiresRaw = obj['expires_at']
 	return {
-		record_id: toNumber(obj['record_id']),
-		action: toStr(obj['action']),
-		points: toNumber(obj['points']),
-		description: toStr(obj['description']),
+		id: toNumber(obj['id']),
+		delta: toNumber(obj['delta']),
+		reason: toStr(obj['reason']),
+		ref_type: toStr(obj['ref_type']),
+		ref_id: toStr(obj['ref_id']),
 		created_at: toStr(obj['created_at']),
-		source_type: toStr(obj['source_type']),
-		source_id: toNumber(obj['source_id']),
-	} as PointsRecord
+		expires_at: expiresRaw != null ? toStr(expiresRaw) : null,
+	} as PointsLedgerItem
 }
 
-/** 从 UTSJSONObject 构造 PointsRecordListResult */
-function buildPointsRecordListResult(obj : UTSJSONObject) : PointsRecordListResult {
-	const records : PointsRecord[] = []
-	const recordsRaw = obj['records']
-	if (recordsRaw != null) {
-		const arr = recordsRaw as Array<UTSJSONObject>
+/** 从 UTSJSONObject 构造 PointsLedgerResult（后端列表字段是 items，不是 records） */
+function buildPointsLedgerResult(obj : UTSJSONObject) : PointsLedgerResult {
+	const items : PointsLedgerItem[] = []
+	const raw = obj['items']
+	if (raw != null) {
+		const arr = raw as Array<UTSJSONObject>
 		for (let i = 0; i < arr.length; i++) {
-			records.push(buildPointsRecord(arr[i]))
+			items.push(buildPointsLedgerItem(arr[i]))
 		}
 	}
 	return {
-		records: records,
+		items: items,
 		total: toNumber(obj['total']),
 		page: toNumber(obj['page']),
-		page_size: toNumber(obj['page_size']),
-	} as PointsRecordListResult
+		pages: toNumber(obj['pages']),
+	} as PointsLedgerResult
 }
 
-/** mock 积分余额（网络不可用时回退） */
-function getMockPointsBalance() : PointsBalance {
+/** 从 UTSJSONObject 构造 PointsTaskItem */
+function buildPointsTaskItem(obj : UTSJSONObject) : PointsTaskItem {
 	return {
-		total_points: 42,
-		today_earned: 7,
-		level: 'bronze',
-		level_name: '青铜学员',
-		next_level_points: 100,
-	} as PointsBalance
+		code: toStr(obj['code']),
+		group: toStr(obj['group']),
+		title: toStr(obj['title']),
+		desc: toStr(obj['desc']),
+		points: toNumber(obj['points']),
+		status: toStr(obj['status']),
+		progress: toNumber(obj['progress']),
+		total: toNumber(obj['total']),
+	} as PointsTaskItem
 }
 
-/** mock 积分明细列表（网络不可用时回退） */
-function getMockPointsRecordList() : PointsRecordListResult {
+/** 从 UTSJSONObject 构造 PointsTasksResult */
+function buildPointsTasksResult(obj : UTSJSONObject) : PointsTasksResult {
+	const tasks : PointsTaskItem[] = []
+	const raw = obj['tasks']
+	if (raw != null) {
+		const arr = raw as Array<UTSJSONObject>
+		for (let i = 0; i < arr.length; i++) {
+			tasks.push(buildPointsTaskItem(arr[i]))
+		}
+	}
+	return { tasks: tasks } as PointsTasksResult
+}
+
+/** 从 UTSJSONObject 构造 PointsClaimResult */
+function buildPointsClaimResult(obj : UTSJSONObject) : PointsClaimResult {
 	return {
-		records: [
-			{ record_id: 1, action: '签到', points: 7, description: '每日签到', created_at: '2026-08-22', source_type: 'check_in', source_id: 0 } as PointsRecord,
-			{ record_id: 2, action: '浏览课程', points: 2, description: '浏览课程《叉车基础操作》第一章', created_at: '2026-08-21', source_type: 'course_view', source_id: 1 } as PointsRecord,
-			{ record_id: 3, action: '签到', points: 7, description: '每日签到', created_at: '2026-08-20', source_type: 'check_in', source_id: 0 } as PointsRecord,
-		],
-		total: 3,
-		page: 1,
-		page_size: 20,
-	} as PointsRecordListResult
+		balance: toNumber(obj['balance']),
+		total_earned: toNumber(obj['total_earned']),
+		task_status: toStr(obj['task_status']),
+	} as PointsClaimResult
 }
 
 /**
  * 获取积分余额
+ * 失败时 reject（request 层已提示），由调用方呈现错误态
  */
 export function getPointsBalanceApi() : Promise<PointsBalance> {
-	return get('/points/balance').then((data : UTSJSONObject) : PointsBalance => {
-		return buildPointsBalance(data)
-	}).catch((e) : PointsBalance => {
-		console.warn('[getPointsBalanceApi] network failed, using mock data:', e)
-		return getMockPointsBalance()
-	})
+	return getMapped<PointsBalance>('/points/balance', null, (data : UTSJSONObject) : PointsBalance => buildPointsBalance(data))
 }
 
 /**
- * 获取积分明细列表
- * @param page 页码，默认 1
- * @param pageSize 每页条数，默认 20
- * @param type 类型过滤：'all' 全部，'income' 收入，'expense' 支出
- * @param sourceType 来源过滤：'all' 全部，'check_in' 签到，'course_view' 浏览课程
+ * 获取积分流水（GET /points/ledger）
+ * @param page 页码，从 1 起
+ * @param pageSize 每页条数
+ * @param direction 收支方向：'' 全部 / 'in' 收入 / 'out' 支出（#512）
+ *        后端无「来源」维度筛选，故本参数不接受 source_type 之类幻影条件（#709 待后端清单）
  */
-export function getPointsRecordListApi(
-	page : number = 1,
-	pageSize : number = 20,
-	type : string = 'all',
-	sourceType : string = 'all'
-) : Promise<PointsRecordListResult> {
+export function getPointsLedgerApi(page : number, pageSize : number, direction : string) : Promise<PointsLedgerResult> {
 	const params : UTSJSONObject = {
 		page: page.toString(),
 		page_size: pageSize.toString(),
-		type: type,
-		source_type: sourceType,
 	}
-	return get('/points/records', params).then((data : UTSJSONObject) : PointsRecordListResult => {
-		return buildPointsRecordListResult(data)
-	}).catch((e) : PointsRecordListResult => {
-		console.warn('[getPointsRecordListApi] network failed, using mock data:', e)
-		return getMockPointsRecordList()
-	})
+	if (direction != '') {
+		params['direction'] = direction
+	}
+	return getMapped<PointsLedgerResult>('/points/ledger', params, (data : UTSJSONObject) : PointsLedgerResult => buildPointsLedgerResult(data))
 }
 
 /**
- * 上报浏览课程章节积分
- * @param courseId 课程 ID
- * @param chapterId 章节 ID
+ * 获取积分任务列表（GET /points/tasks，三态由后端按真实行为实时算）
  */
-export function reportCourseViewPointsApi(courseId : number, chapterId : number) : Promise<UTSJSONObject> {
-	const payload : UTSJSONObject = {
-		course_id: courseId,
-		chapter_id: chapterId,
-	}
-	return post('/points/course-view', payload)
+export function getPointsTasksApi() : Promise<PointsTasksResult> {
+	return getMapped<PointsTasksResult>('/points/tasks', null, (data : UTSJSONObject) : PointsTasksResult => buildPointsTasksResult(data))
+}
+
+/**
+ * 领取任务积分（POST /points/tasks/{code}/claim，后端防双领 + 幂等）
+ * @param code 任务编码
+ */
+export function claimPointsTaskApi(code : string) : Promise<PointsClaimResult> {
+	const url = '/points/tasks/' + encodeURIComponent(code) + '/claim'
+	return postMapped<PointsClaimResult>(url, null, (data : UTSJSONObject) : PointsClaimResult => buildPointsClaimResult(data))
 }

@@ -57,3 +57,42 @@ export const formatTime = formatDateTime
 export function shanghaiDateStr(d: Date): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(d)
 }
+
+/**
+ * 时长格式化（紧凑）：90 → "1h30m"，60 → "1h"，非正数 → "0分钟"。
+ * 与 formatDurationCn 是**两个不同语义的格式**（勿因同名而合并，见 #796 的教训）。
+ */
+export function formatDurationCompact(minutes: number): string {
+  if (!minutes || minutes <= 0) return '0分钟'
+  const hours = Math.floor(minutes / 60)
+  const mins = minutes % 60
+  if (hours > 0) {
+    return mins > 0 ? `${hours}h${mins}m` : `${hours}h`
+  }
+  return `${mins}m`
+}
+
+/**
+ * 时长格式化（中文）：90 → "1小时30分钟"，60 → "1小时"，非正数 → "0分钟"。
+ * 与 formatDurationCompact 的差异是业务口径（后台报表用中文、图表轴用紧凑）。
+ */
+export function formatDurationCn(minutes: number): string {
+  if (!minutes || minutes <= 0) return '0分钟'
+  const hours = Math.floor(minutes / 60)
+  const mins = minutes % 60
+  if (hours > 0) {
+    return mins > 0 ? `${hours}小时${mins}分钟` : `${hours}小时`
+  }
+  return `${mins}分钟`
+}
+
+/**
+ * 学习进度 → 颜色（统计页进度条/图表）。
+ * 注意：两档为既有裸 hex（EP 出厂警告色/危险色），迁移期保持值不变以免视觉回归（#796）。
+ */
+export function getProgressColor(progress: number): string {
+  if (progress >= 100) return 'var(--color-success)'
+  if (progress >= 60) return 'var(--color-primary-500)'
+  if (progress >= 30) return '#e6a23c'
+  return '#f56c6c'
+}

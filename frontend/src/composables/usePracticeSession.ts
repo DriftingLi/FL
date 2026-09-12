@@ -1,12 +1,15 @@
 // usePracticeSession：练习会话状态机 module（题库练习页的会话编排收敛）。
-// deep module：小 interface（start / submit / saveProgress 三个持久化 adapter）
-// 藏大量 implementation：mode/currentIdx/questions/answers/submittedMap/resultMap/
-// correctCount 会话状态、answers_state 三态反序列化（null/[]/absent）、断点恢复、
-// 退出清空、buildAnswersState 序列化 round-trip、游标推进 + 进度保存编排。
+// deep module：小 interface（start / submit / saveProgress 三个持久化 adapter +
+// onQuestionEnter 题目进入钩子）藏大量 implementation：mode/currentIdx/questions/
+// answers/submittedMap/resultMap/correctCount 会话状态、answers_state 三态反序列化
+// （null/[]/absent）、断点恢复、退出清空、buildAnswersState 序列化 round-trip、
+// 游标推进 + 进度保存编排。
 // 后端调用（startSequential/startFree/startTagPractice/saveProgress/submitAnswer）
 // 与进度 key 语义由调用方注入 adapter，本 composable 不 import 任何 api。
 // 三个 start 模式（顺序/自由/标签）通过 mode 参数区分，adapter 内解析各模式参数。
-import { ref, computed } from 'vue'
+// 题目进入时机（进入会话/切题/回退/退出）经 onQuestionEnter 暴露给外围交互
+// （收藏/知识点/计时，见 useQuestionPeripherals），会话本身不承载这些外围职责。
+import { ref, computed, watch } from 'vue'
 import type { Ref } from 'vue'
 import type { Question, SubmitResult } from '@/types/question'
 import {
@@ -16,8 +19,9 @@ import {
   useQuestionAnswer
 } from './useQuestionAnswer'
 
-/** 练习模式：顺序 / 自由（随机或专项）/ 标签 / 真题卷（mode 键 paper:<paperID>） */
-export type PracticeMode = 'sequential' | 'free' | 'tag' | 'paper'
+/** 练习模式：顺序 / 自由（随机或专项）/ 标签 / 真题卷（mode 键 paper:<paperID>）/
+ *  单题即时变体（#617 错题重做）：无推进节奏、无断点进度，提交管线与判分装配与练习同源 */
+export type PracticeMode = 'sequential' | 'free' | 'tag' | 'paper' | 'single'
 
 /** 进入/续练某模式时 adapter 返回的数据（questions + 断点进度） */
 export interface PracticeStartData {
@@ -47,7 +51,7 @@ export interface PracticeSavePayload {
 export interface PracticeSessionAdapters {
   /** 进入/续练：拉取题目并解析断点进度；无题目/失败返回 null */
   start: (mode: PracticeMode) => Promise<PracticeStartData | null>
-  /** 提交单题答案并判定，返回结果；失败返回 null */
+  /** 提交单题答案并判定，返回结果；失败语义由调用方 adapter 决定（返回 null 或抛出），页面按需处理 */
   submit: (payload: PracticeSubmitPayload) => Promise<SubmitResult | null>
   /** 保存进度与答题状态；无断点模式（随机）由 adapter 内部跳过，失败静默 */
   saveProgress: (payload: PracticeSavePayload) => Promise<void>
@@ -110,6 +114,23 @@ export function usePracticeSession(adapters: PracticeSessionAdapters) {
     if (ans === undefined || ans === null) return false
     if (Array.isArray(ans)) return ans.length > 0
     return ans !== ''
+  })
+
+  // ===== 题目进入生命周期钩子 =====
+  // 当前题对象变化即触发（进入会话、切题、回退；退出会话传 null），按注册序执行；
+  // 同题重复渲染不触发（按 currentQuestion 对象引用判变，与会话外自建 watch 语义一致）。
+  const enterHooks = new Set<(q: Question | null) => void>()
+
+  /** 注册题目进入钩子；返回解绑函数 */
+  function onQuestionEnter(cb: (q: Question | null) => void): () => void {
+    enterHooks.add(cb)
+    return () => {
+      enterHooks.delete(cb)
+    }
+  }
+
+  watch(currentQuestion, (q) => {
+    for (const cb of enterHooks) cb(q)
   })
 
   // ===== 会话状态机 =====
@@ -274,6 +295,10 @@ export function usePracticeSession(adapters: PracticeSessionAdapters) {
     nextQuestion,
     prevQuestion,
     quit,
-    saveCurrentProgress
+    // 返回入口：清空会话状态（不保存进度；单题变体 #617 关闭重做面板用）
+    backToEntry,
+    saveCurrentProgress,
+    // 题目进入生命周期（外围交互挂载点）
+    onQuestionEnter
   }
 }

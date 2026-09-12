@@ -29,6 +29,11 @@ type PointsTaskConfig struct {
 	TotalLimit  *int   `gorm:"column:total_limit" json:"total_limit,omitempty"`
 	EventType   string `gorm:"column:event_type" json:"event_type"`
 	Description string `gorm:"column:description" json:"description"`
+	// CreatedAt 任务上线时间（#742 引入）：**当前无消费方**——它诞生时是
+	// growth_first_experience 的存量 cutoff，该任务已随 ADR-0040 退役（配置行由迁移 000027 删除）。
+	// 保留为通用「任务上线时间」列，供将来需要存量口径的新任务使用；
+	// 若长期无消费方，可考虑在后续迁移中移除。测试库 AutoMigrate 建列；种子行取迁移应用时间。
+	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
 func (PointsTaskConfig) TableName() string { return "points_task_config" }

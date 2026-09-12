@@ -65,16 +65,16 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { useCredentialStore } from '@/stores/credential'
 import { realExamApi, type RealExamPaper } from '@/api/realExam'
-import { useCredentialRefetch } from '@/composables/useCredentialRefetch'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useStagger } from '@/composables/useStagger'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiCard from '@/components/ui/UiCard.vue'
+import { useConfirm } from '@/composables/useConfirm'
 
 const router = useRouter()
 const credentialStore = useCredentialStore()
@@ -101,10 +101,8 @@ const emptyDescription = computed(() =>
   currentCredentialName.value ? `${currentCredentialName.value} 真题建设中，敬请期待` : '真题建设中，敬请期待'
 )
 
-// 首屏加载 + 证件切换即重拉（单点：watch store.current.id，见 useCredentialRefetch；
-// 列表按 current_credential 分区）
+// 首屏加载（#605：证件切换即重拉已内聚进 useAsyncPage——列表按 current_credential 分区）
 onMounted(loadPapers)
-useCredentialRefetch(loadPapers)
 
 const grouped = computed(() => {
   const map = new Map<string, RealExamPaper[]>()
@@ -126,7 +124,7 @@ function startExam(p: RealExamPaper) {
 
 async function redeem(p: RealExamPaper) {
   try {
-    await ElMessageBox.confirm(`该套真题需 ${p.price} 积分解锁，确认兑换？`, '积分兑换', {
+    await useConfirm().confirm(`该套真题需 ${p.price} 积分解锁，确认兑换？`, '积分兑换', {
       confirmButtonText: '确认兑换',
       cancelButtonText: '取消',
       type: 'warning'

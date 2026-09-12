@@ -1,5 +1,5 @@
 <template>
-  <el-dialog v-model="visible" :title="hasPassword ? '修改密码' : '设置密码'" width="440px">
+  <UiDialog v-model="visible" :title="hasPassword ? '修改密码' : '设置密码'" width="440px" confirm-text="保存" :confirm-loading="submitting" @confirm="submit">
     <el-form label-width="0">
       <el-form-item>
         <div class="code-row">
@@ -14,11 +14,7 @@
         <el-input v-model="confirm" type="password" show-password placeholder="确认新密码" @keyup.enter="submit" />
       </el-form-item>
     </el-form>
-    <template #footer>
-      <UiButton @click="visible=false">取消</UiButton>
-      <UiButton variant="primary" :loading="submitting" @click="submit">保存</UiButton>
-    </template>
-  </el-dialog>
+  </UiDialog>
 </template>
 
 <script setup lang="ts">
@@ -29,6 +25,7 @@ import { authApi } from '@/api/auth'
 import { useSendCode } from '@/composables/useSendCode'
 import { useVerifyDialog } from '@/composables/useVerifyDialog'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
 
 const authStore = useAuthStore()
 const visible = ref(false)

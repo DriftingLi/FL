@@ -1,0 +1,106 @@
+<template>
+    <!-- 新闻资讯板块 ——T05 手术自 dashboard.uvue 逐段搬出 -->
+    <view class="news-section">
+        <view class="section-header">
+            <text class="section-title">新闻资讯</text>
+            <text class="section-more" @click="onMore">更多</text>
+        </view>
+        <view class="section-underline"></view>
+        <view class="news-list">
+            <view v-for="(news, idx) in newsList" :key="idx" class="news-item" @click="onNewsClick(news)">
+                <text class="news-icon">+</text>
+                <text class="news-title" :style="{ flex: 1 }">{{ news.title }}</text>
+                <text class="news-date" v-if="news.published_at">{{ news.published_at }}</text>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import type { FeaturedContentItem } from '../../../types/index'
+
+    const props = withDefaults(defineProps<{
+        newsList? : FeaturedContentItem[]
+    }>(), {
+        newsList: () => [] as FeaturedContentItem[]
+    })
+
+    const emit = defineEmits(['click', 'more'])
+
+    function onNewsClick(news : FeaturedContentItem) : void {
+        emit('click', news)
+    }
+
+    function onMore() : void {
+        emit('more')
+    }
+</script>
+
+<style>
+    /* 新闻资讯板块 */
+    .news-section {
+        margin: 24rpx;
+        background-color: #FFFFFF;
+        border-radius: 16rpx;
+        padding: 24rpx;
+    }
+
+    .section-header {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20rpx;
+    }
+
+    .section-title {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .section-more {
+        font-size: 24rpx;
+        color: #999999;
+    }
+
+    /* 标题下蓝色短划线（对照截图稿） */
+    .section-underline {
+        width: 40rpx;
+        height: 6rpx;
+        border-radius: 3rpx;
+        background-color: #239EDD;
+        margin-bottom: 16rpx;
+    }
+
+    .news-list {
+        flex-direction: column;
+    }
+
+    .news-item {
+        flex-direction: row;
+        align-items: center;
+        padding: 20rpx 0;
+        border-bottom-width: 1rpx;
+        border-bottom-color: #F0F0F0;
+    }
+
+    .news-icon {
+        font-size: 32rpx;
+        color: #FF6B35;
+        margin-right: 16rpx;
+        font-weight: bold;
+    }
+
+    .news-date {
+        font-size: 22rpx;
+        color: #cccccc;
+        margin-left: 16rpx;
+    }
+
+    .news-title {
+        font-size: 28rpx;
+        color: #333333;
+        lines: 1;
+        text-overflow: ellipsis;
+    }
+</style>
