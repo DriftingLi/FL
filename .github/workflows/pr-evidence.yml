@@ -5,6 +5,9 @@ name: PR - 验收证据校验
 # 因此 PR 事件在这里不产生构建/部署副作用。若要新增其他 PR 触发 workflow，先改 ADR-0008。
 #
 # 它只校验「证据段的结构与产物字段是否存在」，**不校验真伪** —— 真伪由维护者读日志/截图判定（ADR-0008 明确不做）。
+# 截图产物的判据是**结构性**的（2026-09-12 修订）：只认 GitHub 托管图片（附件/Markdown 图片）、仓库内
+# `docs/verification/<模块>/<PR号>/<页名>.<ext>`、以及 sha 绑定门评论链接（`#issuecomment-<id>`）；
+# 裸本地产物路径（`.ci-verify/*.png`）与任意 http(s) 链接**不算证据**（改判据的理由见 ADR-0008）。
 # ④ 本地编译门与 ② 微信开发者工具门（2026-09-12 起为半自动门）的证据都可由脚本（`-PostToPr`）贴的
 # sha 绑定评论承载，校验器只校结构与 sha 绑定，同样不校真伪。
 
@@ -130,11 +133,41 @@ jobs:
                 { key: '④b', label: 'release 云打包（触及打包面时）', fields: ['执行人', '日期', '复测对象', '结论'], artifact: 'any', requires: '4b' },
               ];
               const PLACEHOLDER = /^(|[-—–~]+|待人工|待补|待填|待确认|⏳|tbd|todo|n\/?a|无|暂无)$/i;
+              // 截图证据的**结构性判据**（2026-09-12 修订，ADR-0008「截图证据的结构性判据」）：
+              // 旧判据是过宽的子串正则（`https?:\/\/` / `.ci-verify\/\S+\.png` / `mp-weixin\.png`）——
+              // 在「结论」里贴个**本地产物路径**或随手一个链接就能让这门结构上被判满足（假绿）。
+              // 现在只认三种**可核验**的来源：① GitHub 托管的图片（附件直链 / Markdown 图片语法）；
+              // ② 仓库内 `docs/verification/<模块>/<PR号>/<页名>.<ext>`（PR 号必须是数字段，与截图落点约定一致）；
+              // ③ 指向 sha 绑定门评论的链接（`#issuecomment-<id>`）。
+              // **明确不接受**裸 `.ci-verify/*.png` 之类的本地产物路径与任意 http(s) 链接（不在仓库里、读不到）。
+              // 仍然**只校结构、不校真伪**（ADR-0008「明确不做」）：不校验链接可达、不校验图片内容。
+              const IMAGE_EXT = /\.(?:png|jpe?g|webp|gif|bmp)\b/i;
+              const GITHUB_IMAGE_HOST = /^https:\/\/(?:github\.com\/user-attachments\/|[^\s/]*user-images\.githubusercontent\.com\/)/;
+              // 仓库内路径：docs/verification/<模块>/<PR号>/<页名>.<ext>（PR 号必须是数字段）
+              const REPO_VERIFICATION = /docs\/verification\/[^\s/`"'<>]+\/\d+\/[^\s/`"'<>]+\.(?:png|jpe?g|webp|gif|bmp)\b/i;
+              const isScreenshotArtifact = (value) => {
+                const v = String(value || '');
+                if (!v) return false;
+                // ③ sha 绑定门评论链接（评论本身已按 gate-evidence 标记 + commit sha 绑定到 head）
+                if (/#issuecomment-\d+/.test(v)) return true;
+                // ② 仓库内路径（可点开预览、可核验）
+                if (REPO_VERIFICATION.test(v)) return true;
+                // ① GitHub 托管的图片：附件 / 图床直链
+                if (/(?:https:\/\/github\.com\/user-attachments\/|https:\/\/[^\s/]*user-images\.githubusercontent\.com\/)[^\s)`"']*/.test(v)) return true;
+                // Markdown 图片语法：远程图片（GitHub 托管或带图片扩展名的 http(s) URL）或仓库内路径；
+                // **相对路径不得指向本地产物**（`.ci-verify/x.png` 之类不在仓库里、渲染即裂图、无从核验）。
+                const mdImages = [...v.matchAll(/!\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)].map((m) => m[1]);
+                return mdImages.some((u) => (/^https?:\/\//i.test(u) ? (GITHUB_IMAGE_HOST.test(u) || IMAGE_EXT.test(u)) : REPO_VERIFICATION.test(u)));
+              };
               const ARTIFACT = {
-                screenshot: /!\[[^\]]*\]\(|https?:\/\/|docs\/verification\/|\.ci-verify\/\S+\.png|mp-weixin\.png/,
+                screenshot: isScreenshotArtifact,
                 'ci-run': /actions\/runs\/\d+/,
                 'compile-log': /build\.log|kotlin-all\.log/,
                 any: /\S/,
+              };
+              const artifactOk = (kind, value) => {
+                const spec = ARTIFACT[kind];
+                return typeof spec === 'function' ? spec(value) : spec.test(value);
               };
 
               // ④ 门一行，但 ④b 行同样含「④」——按行首编号匹配（行首 ④ 后紧跟字母 a/b 的属于 ④a/④b 行），
@@ -188,9 +221,9 @@ jobs:
                 if (gate.fields.includes('执行人') && values['执行人'] === `@${author}`) {
                   notes.push(`${where}：执行人与 PR 作者是同一账号（${author}）——本仓单账号，机械上分不出人与 agent；agent 不得代填该字段。`);
                 }
-                if (values['结论'] && !ARTIFACT[gate.artifact].test(values['结论'])) {
+                if (values['结论'] && !artifactOk(gate.artifact, values['结论'])) {
                   const hint = {
-                    screenshot: '须引用截图或其链接（或 docs/verification/ 路径、.ci-verify/mp-weixin-*.png）',
+                    screenshot: '须引用**可核验**的截图：GitHub 附件/Markdown 图片、仓库内 `docs/verification/<模块>/<PR号>/<页名>.<ext>`（PR 号须为数字），或 sha 绑定门评论链接（`#issuecomment-<id>`）；裸本地产物路径（`.ci-verify/*.png` 等）与任意 http(s) 链接不算证据',
                     'ci-run': '须贴 CI run 链接（…/actions/runs/<id>）',
                     'compile-log': '须引用 `.ci-verify/build.log`（④a）或 `.ci-verify/kotlin-all.log`（④c）',
                     any: '须引用产物',
