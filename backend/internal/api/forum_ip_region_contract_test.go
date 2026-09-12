@@ -128,8 +128,8 @@ func TestForumIPRegionContract(t *testing.T) {
 	}
 
 	want := geolocation.Resolve(regionPublicIP)
-	if want.IsEmpty() {
-		t.Fatalf("前置条件失败：%s 在库中应能解出属地（xdb 数据异常？）", regionPublicIP)
+	if want.Province == "" {
+		t.Fatalf("前置条件失败：%s 在库中应能解出省级属地（xdb 数据异常？）", regionPublicIP)
 	}
 
 	var topicID int64

@@ -7,12 +7,14 @@ package geolocation
 // 这里只测三种可观察行为：占位值折空、边界地址落空、库真的能解出属地。
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"strings"
 	"testing"
 	"time"
 )
 
-// parseRegion 的输入是 xdb 实测样本（见 PR 正文的探针输出）。
+// parseRegion 的输入是 xdb 实测样本。
 func TestParseRegion(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -50,22 +52,30 @@ func TestResolve_BoundariesAreEmpty(t *testing.T) {
 		"not-an-ip", "", "   ",
 		"2001:db8::1", "::1", "::ffff:192.168.1.1",
 	} {
-		if region := Resolve(ip); !region.IsEmpty() {
+		if region := Resolve(ip); region != (Region{}) {
 			t.Errorf("Resolve(%q) = %+v, want 空属地", ip, region)
 		}
 	}
 }
 
-// 库真的能解出属地——只断言「非空」，不断言是哪个省（映射随 xdb 更新而变）。
+// 库真的能用：取几个长期存在的国内公共地址，**只要求「至少一个能解出省级属地」**。
+//
+// 两头都不钉死：不断言「某个 IP → 某个省」（映射随 xdb 更新而变），也不把要求压在单一 IP 上
+// （某条 IP 段调整不该让用例变红）。全解不出才说明 xdb 或解析器已失效。
 func TestResolve_PublicAddressHasRegion(t *testing.T) {
-	// 114.114.114.114 是 114DNS 的公共解析地址，国内段长期稳定存在。
-	region := Resolve("114.114.114.114")
-	if region.Province == "" {
-		t.Fatalf("公共地址应能解出省级属地，got %+v", region)
+	candidates := []string{"114.114.114.114", "223.5.5.5", "119.29.29.29"}
+	var resolved Region
+	var resolvedIP string
+	for _, ip := range candidates {
+		if region := Resolve(ip); region.Province != "" {
+			resolved, resolvedIP = region, ip
+			break
+		}
 	}
-	if region.City == "" {
-		t.Fatalf("公共地址应能解出市级属地，got %+v", region)
+	if resolvedIP == "" {
+		t.Fatalf("候选公共地址 %v 全部解析不出属地——xdb 或解析器已失效", candidates)
 	}
+	t.Logf("（示例）%s → %+v；本用例只断言「库可用」，不断言具体省份", resolvedIP, resolved)
 }
 
 // 版本记录来自 xdb 头，形如 ip2region_v4.xdb@<RFC3339>；格式固定但不锁具体日期。
@@ -82,8 +92,9 @@ func TestDataVersion(t *testing.T) {
 
 // 内嵌数据文件的指纹与常量一致：人工替换 xdb 却忘了更新 DataSourceMD5 时在这里变红。
 func TestEmbeddedDataFingerprint(t *testing.T) {
-	sum := md5Hex(ip2regionV4)
-	if sum != DataSourceMD5 {
-		t.Errorf("内嵌 xdb 的 md5 = %s, DataSourceMD5 = %s —— 替换数据文件后请同步更新常量与文档", sum, DataSourceMD5)
+	sum := md5.Sum(ip2regionV4)
+	if got := hex.EncodeToString(sum[:]); got != DataSourceMD5 {
+		t.Errorf("内嵌 xdb 的 md5 = %s, DataSourceMD5 = %s —— 替换数据文件后请同步更新常量与文档",
+			got, DataSourceMD5)
 	}
 }

@@ -26,11 +26,11 @@ import (
 //go:embed data/ip2region_v4.xdb
 var ip2regionV4 []byte
 
-// 数据文件来源，供人工替换与留痕（替换后同步更新 DataSourceMD5）。
+// 数据文件与指纹。人工替换 data/ 下的 xdb 后必须同步更新 DataSourceMD5——
+// 指纹不一致时有测试直接变红（来源 URL 与版本口径见 docs/adr/ADR-0045）。
 const (
-	DataSource       = "ip2region_v4.xdb"
-	DataSourceOrigin = "https://github.com/lionsoul2014/ip2region/raw/master/data/ip2region_v4.xdb"
-	DataSourceMD5    = "c30f0c57e4ba14cab6aa5a15e976ac1c"
+	DataSource    = "ip2region_v4.xdb"
+	DataSourceMD5 = "c30f0c57e4ba14cab6aa5a15e976ac1c"
 )
 
 // Region 属地：省 / 市两档，任一项都可能为空。
@@ -40,9 +40,6 @@ type Region struct {
 	Province string
 	City     string
 }
-
-// IsEmpty 两档都空即属地为空。
-func (r Region) IsEmpty() bool { return r.Province == "" && r.City == "" }
 
 // DataVersion 返回内嵌库自身的版本记录：ip2region 把生成时间写在 xdb 头里，
 // 比在代码里手抄一个版本号可信。取不到时返回空串（不影响解析）。
@@ -70,10 +67,10 @@ func Resolve(ip string) Region {
 }
 
 var (
-	loadOnce sync.Once
-	loaded   *xdb.Searcher
-	loadedHd *xdb.Header
-	loadErr  error
+	loadOnce     sync.Once
+	loaded       *xdb.Searcher
+	loadedHeader *xdb.Header
+	loadErr      error
 )
 
 // load 懒加载内嵌库（进程内一次）。Search 只读 content buffer，可并发调用。
@@ -90,9 +87,9 @@ func load() (*xdb.Searcher, *xdb.Header, error) {
 			loadErr = fmt.Errorf("加载 %s 失败: %w", DataSource, err)
 			return
 		}
-		loaded, loadedHd = searcher, header
+		loaded, loadedHeader = searcher, header
 	})
-	return loaded, loadedHd, loadErr
+	return loaded, loadedHeader, loadErr
 }
 
 // parseRegion 解析 ip2region 的原始记录串——竖线分隔的「国家|省州|市|ISP|国家代码」。
