@@ -122,6 +122,7 @@
                   <ForumContent
                     :content="row.content"
                     :format="row.content_format"
+                    link-policy="plain"
                     class="topic-content-text"
                   />
                   <ForumImageGallery :images="row.images" />

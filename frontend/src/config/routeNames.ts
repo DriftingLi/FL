@@ -21,6 +21,8 @@ export const routeNames = {
   ForumPage: 'ForumPage',
   ForumAsk: 'ForumAsk',
   ForumDetail: 'ForumDetail',
+  /** 「即将离开本站」中转页（#881 / ADR-0044） */
+  LinkOut: 'LinkOut',
   ChapterView: 'ChapterView',
   QuestionBank: 'QuestionBank',
   MockExam: 'MockExam',

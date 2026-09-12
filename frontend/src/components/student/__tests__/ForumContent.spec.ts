@@ -47,6 +47,44 @@ describe("ForumContent 安全闸门（UGC 不可信输入）", () => {
   })
 })
 
+describe("ForumContent 外链治理（#881 / ADR-0044）", () => {
+  /** 取渲染结果里所有 <a> 的 href */
+  function hrefsOf(w: ReturnType<typeof mountContent>) {
+    return w.findAll('a').map((a) => a.attributes('href') ?? '')
+  }
+
+  it('站外链接指向「即将离开本站」中转页，而不是直接指向外站', () => {
+    const w = mountContent('见 [手册](https://example.com/doc)')
+    const hrefs = hrefsOf(w)
+    expect(hrefs.length).toBe(1)
+    // 指向中转页而非外站原址（目标地址作为参数携带，故编码后当然含域名——
+    // 这里断言的是「href 的起点是中转页路径」，而不是「不含域名」）
+    expect(hrefs[0].startsWith('/training/link-out?url=')).toBe(true)
+    expect(decodeURIComponent(hrefs[0])).toContain('https://example.com/doc')
+    // 相对本站的站外绝对地址同样经中转
+    const w2 = mountContent('见 [外站](http://other.example.org/x)')
+    expect(w2.findAll('a')[0].attributes('href')?.startsWith('/training/link-out?url=')).toBe(true)
+  })
+
+  it('站内链接原样直连，不经中转（不无谓打断站内浏览）', () => {
+    const w = mountContent('见 [课程](/training/courses/1)')
+    expect(hrefsOf(w)).toEqual(['/training/courses/1'])
+  })
+
+  it('伪协议链接不得渲染成可点击链接', () => {
+    const w = mountContent('[点我](javascript:window.__pwned=1)')
+    expect(hrefsOf(w).some((h) => h.toLowerCase().startsWith('javascript:'))).toBe(false)
+  })
+
+  it('linkPolicy=plain：链接渲染为纯文本（管理端治理预览用，不做导航）', () => {
+    const w = mount(ForumContent, {
+      props: { content: '见 [手册](https://example.com/doc)', format: 'markdown', linkPolicy: 'plain' }
+    })
+    expect(w.findAll('a').length).toBe(0)
+    expect(w.text()).toContain('手册')
+  })
+})
+
 describe("ForumContent 两种格式的渲染差异", () => {
   it("format=text：不解释语法，保留换行", () => {
     const w = mountContent("# 不是标题\n**不是加粗**", "text")

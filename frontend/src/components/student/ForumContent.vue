@@ -22,7 +22,48 @@
 import { computed } from "vue"
 import MarkdownRender from "markstream-vue"
 import "markstream-vue/index.css"
-import type { MarkdownIt } from "stream-markdown-parser"
+import { isUnsafeHtmlUrl, type MarkdownIt, type ParsedNode } from "stream-markdown-parser"
+
+/** 「即将离开本站」中转页路径（站外链接一律经它，不直接把读者带走） */
+const LINK_OUT_PATH = "/training/link-out"
+
+/** 节点结构的最小视图：解析器的联合类型太大，这里按需取字段做改写。 */
+interface LinkishNode {
+  type: string
+  href?: string
+  text?: string
+  content?: string
+  children?: LinkishNode[]
+  items?: LinkishNode[]
+}
+
+/**
+ * 链接改写（ADR-0044）：
+ *   - 伪协议（javascript: 等）→ **就地展开成纯文本**，绝不渲染成可点链接；
+ *   - linkPolicy=plain（管理端治理预览）→ 同样展开成纯文本：治理面看的是内容本身，
+ *     顺带去掉一处「管理员在后台点到外站」的入口；
+ *   - 站内（以 / 或 # 开头）→ 直连；
+ *   - 其余站外 → 指向中转页，目标地址以参数带上。
+ *
+ * 用 flatMap 把链接**就地替换**成它的行内内容而不是 `content` 字符串：
+ * 这样 `[**重点**](url)` 里的加粗不会被吃掉。
+ *
+ * 幂等：中转页地址以 / 开头，二次处理时按站内放行；plain 处理后已无链接节点。
+ * 故即使解析器对每层都调用一次本钩子，结果也一致。
+ */
+function rewriteLinks(nodes: LinkishNode[], policy: "transit" | "plain"): LinkishNode[] {
+  return nodes.flatMap((node) => {
+    const children = node.children ? rewriteLinks(node.children, policy) : undefined
+    const items = node.items ? rewriteLinks(node.items, policy) : undefined
+    if (node.type !== "link") return [{ ...node, children, items }]
+
+    const href = node.href ?? ""
+    const inline = children?.length ? children : [{ type: "text", content: node.text ?? "" }]
+    if (!href || isUnsafeHtmlUrl(href) || policy === "plain") return inline
+    if (href.startsWith("/") || href.startsWith("#")) return [{ ...node, href, children: inline }]
+    return [{ ...node, href: `${LINK_OUT_PATH}?url=${encodeURIComponent(href)}`, children: inline }]
+  })
+}
 
 /**
  * 论坛正文的 markdown-it 配置。
@@ -43,11 +84,24 @@ const props = withDefaults(
      * 这样不带该字段的调用方（含尚未适配的客户端过来的数据）按纯文本渲染，不会误解语法。
      */
     format?: "text" | "markdown"
+    /**
+     * 链接策略（ADR-0044）：
+     *   transit（默认）站外链接经「即将离开本站」中转页；
+     *   plain 链接一律渲染为纯文本——管理端治理预览用（看内容本身，不做导航）。
+     */
+    linkPolicy?: "transit" | "plain"
   }>(),
-  { format: "text" }
+  { format: "text", linkPolicy: "transit" }
 )
 
 const isMarkdown = computed(() => props.format === "markdown")
+
+/** 链接治理在 AST 层做（见 rewriteLinks），不做 DOM 事后改写。 */
+const parseOptions = computed(() => ({
+  final: true,
+  postTransformNodes: (nodes: ParsedNode[]) =>
+    rewriteLinks(nodes as unknown as LinkishNode[], props.linkPolicy) as unknown as ParsedNode[]
+}))
 </script>
 
 <!--
@@ -66,6 +120,7 @@ const isMarkdown = computed(() => props.format === "markdown")
       :content="content"
       :final="true"
       html-policy="escape"
+      :parse-options="parseOptions"
       :custom-markdown-it="configureForumMarkdown"
       :fade="false"
     />
