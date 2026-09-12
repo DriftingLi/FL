@@ -17,15 +17,9 @@
 				<text class="nav-subtitle">维修助手</text>
 			</view>
 
-			<!-- 右：菜单 + 版本切换胶囊 -->
-			<view class="nav-right">
-				<view class="nav-pill">
-					<text class="pill-more" @click="onMenuClick">&#8943;</text>
-					<view class="pill-divider"></view>
-					<view class="pill-switch" @click="onSwitchVersion">
-						<view class="pill-switch-dot"></view>
-					</view>
-				</view>
+			<!-- 右：菜单入口（原型里的白胶囊是小程序端 chrome，App 端不画） -->
+			<view class="nav-right" @click="onMenuClick">
+				<text class="nav-more">&#8943;</text>
 			</view>
 		</view>
 	</view>
@@ -42,7 +36,7 @@
 		statusBarHeight: 20
 	})
 
-	const emit = defineEmits(['leftClick', 'menuClick', 'tabChange'])
+	const emit = defineEmits(['leftClick', 'menuClick'])
 
 	const versionTitle = computed<string>(() : string => {
 		return props.version == 'pro' ? '专业版' : '基础版'
@@ -54,11 +48,6 @@
 
 	function onMenuClick() : void {
 		emit('menuClick')
-	}
-
-	/** 胶囊右侧圆点：切换到另一版本 */
-	function onSwitchVersion() : void {
-		emit('tabChange', props.version == 'pro' ? 'basic' : 'pro')
 	}
 </script>
 
@@ -76,9 +65,9 @@
 
 	/* 左：面板图标 */
 	.nav-left {
-		width: 96rpx;
+		width: 160rpx;
 		height: 96rpx;
-		align-items: center;
+		align-items: flex-start;
 		justify-content: center;
 	}
 
@@ -128,49 +117,17 @@
 		margin-top: 6rpx;
 	}
 
-	/* 右：胶囊 */
+	/* 右：菜单入口（宽度与左等宽，保证标题居中） */
 	.nav-right {
-		width: 96rpx;
+		width: 160rpx;
 		height: 96rpx;
 		align-items: flex-end;
 		justify-content: center;
 	}
 
-	.nav-pill {
-		flex-direction: row;
-		align-items: center;
-		background-color: #ffffff;
-		border-radius: 40rpx;
-		padding: 8rpx 16rpx;
-	}
-
-	.pill-more {
-		font-size: 32rpx;
+	.nav-more {
+		font-size: 40rpx;
 		color: #333333;
-		padding: 0 10rpx;
-	}
-
-	.pill-divider {
-		width: 1rpx;
-		height: 32rpx;
-		background-color: #e0e0e0;
-		margin: 0 4rpx;
-	}
-
-	.pill-switch {
-		width: 44rpx;
-		height: 44rpx;
-		border-radius: 22rpx;
-		border: 3rpx solid #333333;
-		align-items: center;
-		justify-content: center;
-		margin-left: 8rpx;
-	}
-
-	.pill-switch-dot {
-		width: 16rpx;
-		height: 16rpx;
-		border-radius: 8rpx;
-		background-color: #333333;
+		padding: 8rpx 12rpx;
 	}
 </style>

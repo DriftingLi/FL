@@ -1,7 +1,7 @@
 <template>
 	<view class="ai-page" :style="{ height: windowHeight + 'px' }">
 		<!-- 自定义导航栏 -->
-		<AiChatNav :version="'pro'" :status-bar-height="statusBarHeight" @left-click="toggleSidebarLeft" @menu-click="toggleSidebarRight" @tab-change="onTabChange" />
+		<AiChatNav :version="'pro'" :status-bar-height="statusBarHeight" @left-click="toggleSidebarLeft" @menu-click="toggleSidebarRight" />
 
 		<!-- 主内容区 -->
 		<view class="main">
@@ -226,12 +226,6 @@
 	function goBasic() : void {
 		setVersion('basic')
 		uni.reLaunch({ url: '/pages/ai-assistant/ai-basic' })
-	}
-
-	function onTabChange(v : string) : void {
-		if (v == 'basic') {
-			goBasic()
-		}
 	}
 
 	// 会话操作
@@ -471,7 +465,10 @@
 	.ai-page {
 		display: flex;
 		flex-direction: column;
-		background: linear-gradient(180deg, #d2ebfc 0%, #e1eff9 45%, #edf3f6 100%);
+		/* 实色兜底：真机实测 background: linear-gradient(...) 不绘制（dashboard 等同款写法同样静默失败），
+		   故先给实色底，再叠渐变——渐变生效则覆盖，不生效则退回实色 */
+		background-color: #dfeffb;
+		background-image: linear-gradient(180deg, #d2ebfc 0%, #e1eff9 45%, #edf3f6 100%);
 	}
 
 	.main {
