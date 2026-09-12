@@ -54,3 +54,22 @@ icacls "E:\FL\.git\worktrees" /reset /T /C
 ⚠️ **该修复尚未执行**：截至 2026-09-12 仍是待办（`docs/agents/handoff-验收门-2026-09-11.md` 六、待办）。**修复前**多会话隔离继续用独立 clone，修好后再清理那些重复副本（已产生约 618 MB 重复副本，实测含 `node_modules` 的 6 个克隆目录合计约 892 MB）。
 
 > 红线：ACL 坏着时**不要执行 `git worktree add`**（必失败），也**不要为了绕过它去删 `.git` 下的其他内容**——只有上面这一条明确列出的目录可删，且需管理员执行。
+
+## `E:` 盘是 exFAT：写入工具会失败（2026-09-13 实测）
+
+`E:\` 与 `E:\FL` 所在卷的文件系统是 **exFAT**，而 exFAT **不支持硬链接**：
+
+```powershell
+Get-Volume | Where-Object DriveLetter -eq 'E' | Select DriveLetter, FileSystemType   # → exFAT
+New-Item -ItemType HardLink -Path E:\_t.txt -Target E:\_gh\README.md                  # → Hard links are not supported
+```
+
+后果：**以「硬链接 + 原子改名」落盘的写入工具在该卷上会直接失败**，报 `EISDIR: illegal operation on a directory, link ... -> ...`。
+症状是**对任何路径都失败**（含仓库根、含新建文件），很容易被误读成路径或权限问题。
+
+**处置（按序取用）**：
+
+1. **在 NTFS 卷上写，再拷回去**：写文件用 `E:\` 之外的暂存目录（`C:\` / `D:\` 都是 NTFS），再 `Copy-Item` 到目标路径 —— 字节原样、`*.ps1` / `*.js` / `*.mjs` 的 LF 不受影响。
+2. **改已有文件**：把「精确旧文本 → 新文本」的替换对写成文件，用一个 10 行的 Node 脚本做**字面量拼接**（先断言锚点唯一），比在 shell 里做正则转义可靠。
+   ⚠️ 拼接时**必须用函数式替换**（`s.replace(old, () => next)`）。用字符串替换会把替换文本里的 ``$` `` / `$'` / `$&` / `$1` 当成替换模式展开 —— 实测有一次把 PowerShell 脚本的**后半份整个复制了一遍**。
+3. **不要**把仓库整体搬到 `C:` 来规避（空间与 clone 体积都不划算），也不要因此改用 `git worktree`（见上一节的 ACL 待办）。
