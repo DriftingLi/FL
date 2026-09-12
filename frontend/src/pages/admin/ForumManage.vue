@@ -117,7 +117,13 @@
             <div v-loading="detailLoadingId === row.id" class="expand-replies">
               <template v-if="replyMap[row.id]">
                 <div class="topic-content">
-                  <div class="topic-content-text">{{ row.content }}</div>
+                  <!-- 治理面看**实际展示效果**（ADR-0044）：渲染版才看得出学员最终看到的是什么。
+                       raw HTML 在 escape 策略下以文本形式可见，所以渲染版不会掩盖藏起来的标记。 -->
+                  <ForumContent
+                    :content="row.content"
+                    :format="row.content_format"
+                    class="topic-content-text"
+                  />
                   <ForumImageGallery :images="row.images" />
                 </div>
                 <div v-if="replyMap[row.id].length > 0" class="reply-list">
@@ -246,6 +252,7 @@ import {
   type AdminForumReportItem
 } from '@/api/forum'
 import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
+import ForumContent from '@/components/student/ForumContent.vue'
 import { formatLocaleDateTime } from '@/utils/format'
 import { useAdminTable } from '@/composables/useAdminTable'
 import UiButton from '@/components/ui/UiButton.vue'
