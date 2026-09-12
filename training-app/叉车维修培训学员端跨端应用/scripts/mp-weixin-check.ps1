@@ -10,7 +10,9 @@
     全链路（每一步都无人工介入，#883 实测）：
       cli open → cli project open --path <项目>（HBuilderX 只认「已导入项目」，这一步是无人值守导入入口）
       → cli publish mp-weixin --project <项目>（构建**并自己拉起**开发者工具打开项目）
-      → cli.bat close（清残留自动化会话）→ cli.bat auto --auto-port <Port> --trust-project（开自动化端口）
+      → cli.bat close（清残留自动化会话）
+      → **cli.bat open --project <构建产物>（重新打开项目窗口 —— 2026-09-12 复测新增的必需步骤）**
+      → cli.bat auto --auto-port <Port> --trust-project（开自动化端口）
       → node scripts/mp-weixin-probe.mjs（miniprogram-automator 连上：读 pageStack / console / exceptions + 截图）
 
     **三条实测坑位（勿删，ADR-0008 已录）**：
@@ -22,6 +24,26 @@
          且不返回内容 ⇒ 产物只能靠落盘 PNG 取。
       3. `page.$()` 元素级断言在 0.12.1 + Stable v2.01.2510290 组合下**不可用**（挂起 15s 超时）
          ⇒ 本门只做 page 级导航 + console/exception 判定 + 整页截图，**不得**加元素级断言。
+
+    **时序坑位 4（2026-09-12 复测钉死，直接决定这门红还是绿）**：`cli.bat close` 会把项目窗口**一起关掉**，
+    而 `cli.bat auto` **不会重开** ⇒ 少了重开这一步，`pageStack` **恒空**（所有 page 级 API 报误导弹错）。
+    故顺序写死为 `close → open --project <dist> → auto`（守护测试 C12），且 `open` 是**显式步骤并写进日志**；
+    `-SkipBuild` 下同样定位构建产物目录（`$dist` 在两个分支里都已做过存在性校验）。
+    补证：插入 `open` 后 `pageStack=["pages/index/index"]`、`errorsTotal=0`。
+
+    **导航不可用时诚实降级（2026-09-12 复测，**不许假绿**）**：本机 `miniprogram-automator@0.12.1` 下
+    `mp.reLaunch` / `mp.navigateTo` **恒报 `Uncaught [object Object]`**，而 `mp.connect` / `mp.pageStack` /
+    `mp.screenshot` 正常 ⇒ 「逐页导航 + 每页截图」这组断言在此环境**不可能成立**。处置是探针把这组记成
+    **SKIP（reason=navigation-api-unsupported）**：既不算通过、也不算失败，并在结果行显式写出
+    `navigation=skip(unsupported)`，PR 评论同步写明。门只对**可验证子集**作结论，即探针 assertions 里的：
+    `connected` + `pageStackNonEmpty` + `entryPageInStack` + `noConsoleErrors` + `noExceptions`
+    + `currentPageScreenshot`（**至少 1 张当前页截图**）；**降级时** `failures=` 只由这几条产生
+    （`allRoutesVisited` / `screenshotsProduced` 在降级时值为字符串 `skip`，**不得**写成 `true`，见守护测试 C13；
+    导航在可用机器上时这两条按「每步导航后当前页 == 目标页」判，**不拿导航前读到的 pageStack 去比所有路由**——
+    那样恒假、会让健康机器上的门永远过不去）。
+    结果行的 `navigation=` 取值域：`ok`（逐页导航可用）/ `skip(unsupported)`（降级）/ `n/a`（环境早退，没走到导航）。
+    **未证实**：是否为版本组合（automator 0.12.1 × 开发者工具 Stable v2.01.2510290）问题，**留给后续排查**，
+    不得据此宣称「已定位根因」；**首跑校准**要求人工核对结果行的 `navigation=` 字段（ADR-0008 ② 段）。
 
     **判成败一律解析输出，绝不看退出码**：HBuilderX CLI 失败时退出码恒为 0（如实测「项目不存在，请先导入」仍返回 0），
     开发者工具 `cli.bat` 与探针的退出码同样不作为门结论。
@@ -99,6 +121,7 @@ param(
     [switch]$SkipBuild,
     [int]$PublishTimeoutSeconds = 900,
     [int]$AutoTimeoutSeconds = 180,
+    [int]$OpenTimeoutSeconds = 120,
     [int]$PortWaitSeconds = 90,
     [string]$Module = 'mp-weixin',
     [switch]$NoArchive,
@@ -202,6 +225,16 @@ function Invoke-Process {
         return @{ Output = "[timeout] $Tag 超过 $TimeoutSeconds 秒未返回，已终止"; ExitCode = -1; TimedOut = $true }
     }
     return @{ Output = ($stdout.Result + $stderr.Result); ExitCode = $p.ExitCode; TimedOut = $false }
+}
+
+# 探针 JSON 的安全取值：Set-StrictMode 下访问不存在的属性会抛异常，
+# 而「navigation 字段是否存在」正是降级判据，不能因为字段缺失把脚本炸成 env 失败。
+function Get-Prop {
+    param($Object, [string]$Name)
+    if ($null -eq $Object) { return $null }
+    $p = $Object.PSObject.Properties[$Name]
+    if ($p) { return $p.Value }
+    return $null
 }
 
 # ---------- 项目与日志 ----------
@@ -310,7 +343,9 @@ function Publish-GateComment {
         [string]$ShotRelative,
         [string]$ReproCommand,
         [string[]]$ArchivedRel = @(),
-        [string[]]$ArchiveNotes = @()
+        [string[]]$ArchiveNotes = @(),
+        [bool]$NavSkipped = $false,
+        [string]$NavReason = ''
     )
     $sha = Get-HeadSha -ProjectDir $Project
     if (-not $sha) {
@@ -327,13 +362,20 @@ function Publish-GateComment {
         $archLines += '- 入库截图：（无 —— 见脚本输出的 [archive] 说明，未入库不影响门结论）'
     }
     if (@($ArchiveNotes).Count -gt 0) { $archLines += ('- 入库说明：' + (@($ArchiveNotes) -join '；')) }
+    # 降级必须**显式写明**（不许假绿）：评论里不写清楚，读评论的人会把「可验证子集通过」当成「逐页都过了」。
+    $navLines = @()
+    if ($NavSkipped) {
+        $navLines += "- ⚠️ 降级（SKIP，非 PASS）：逐页导航 + 每页截图 = SKIP（reason=$($NavReason)）——本机 ``miniprogram-automator@0.12.1`` 的 ``mp.reLaunch`` / ``mp.navigateTo`` 恒报 ``Uncaught [object Object]``，该组断言在此环境不成立。"
+        $navLines += '- 门只对**可验证子集**作结论：`connected=true` + `pageStack` 非空 + 入口页在栈内 + `errorsTotal==0 && exceptionsTotal==0` + 至少 1 张当前页截图；**未取证的页**见上面的 `navigation=` 字段与日志 ``' + $LogRelative + '``。'
+        $navLines += '- **未证实**：是否为版本组合（automator 0.12.1 × 开发者工具 Stable v2.01.2510290）问题，留给后续排查；本条不宣称已定位根因，**首跑须人工核对 `navigation=` 字段**。'
+    }
     $body = @(
         '<!-- gate-evidence:② -->',
         '**② 微信开发者工具无报错（半自动，agent 执行）**',
         "- commit: $sha",
         "- 结论（含产物）：``$ResultLine``；本地截图 ``$ShotRelative``；日志 ``$LogRelative``",
         '- 非等价声明：② ≠ ① 真机门，也 ≠ ④b 云打包门（content:// / 生物识别 / 第三方 SDK / 真机性能 挡不住）。'
-    ) + $archLines + @(
+    ) + $navLines + $archLines + @(
         "- 复现：``$ReproCommand``"
     )
     $body = $body -join "`n"
@@ -467,7 +509,7 @@ function Publish-ScreenshotArchive {
     if (-not $encoder) { $notes.Add('本机无 cwebp / ffmpeg / magick：按纪律退到 JPEG q75（System.Drawing）') }
     else { $notes.Add("WebP 编码器：$($encoder.Name)") }
 
-    $shots = @($ProbeJson.shots | Where-Object { $_.isPng -and (Test-Path -LiteralPath $_.path) })
+    $shots = @($ProbeJson.shots | Where-Object { (Get-Prop $_ 'isPng') -and (Test-Path -LiteralPath $_.path) })
     # 超限处置顺序：先降质 → 再缩尺 → 再减图（减图写进评论）
     $plan = @(
         @{ MaxWidth = $script:ArchiveMaxWidth; Quality = 75 },
@@ -641,6 +683,22 @@ try {
     # 4) 清残留自动化会话（坑位 1：不 close 会撞 pageStack 空 ⇒ page 级 API 全废且报误导错）
     Invoke-DevToolsClose
 
+    # 4.5) **重新打开项目窗口**（时序坑位 4，2026-09-12 复测钉死的缺失步骤，勿删）：
+    #      `cli.bat close` 把项目窗口一起关掉，而 `cli.bat auto` **不会重开** ⇒ 少了这一步 pageStack 恒空。
+    #      故顺序写死 `close → open --project <dist> → auto`（守护测试 C12），本步为**显式步骤并写进日志**。
+    #      `-SkipBuild` 下同样定位构建产物目录：$dist 在上面两个分支里都已做过存在性校验（缺 app.json 即 exit 2）。
+    #      判据仍是输出/产物：本步只在**超时**时判环境不可用（窗口没重开就没法继续），其余一律记日志、
+    #      由探针的 pageStack 前置断言给出真正的门结论（开发者工具 cli.bat 的输出与退出码不作门结论）。
+    $open = Invoke-Process -FilePath $devTools -Arguments @('open', '--project', $dist) `
+        -TimeoutSeconds $OpenTimeoutSeconds -Tag 'devtools-open'
+    Write-Log "`n>>> devtools-open（close 之后 auto 之前重开项目窗口；缺这步 pageStack 恒空）`n$($open.Output)"
+    Write-Host $open.Output
+    if ($open.TimedOut) {
+        Write-Host "[error] cli.bat open 超时（$OpenTimeoutSeconds 秒）：项目窗口未重开 ⇒ auto 不会替你重开 ⇒ pageStack 必为空格。" -ForegroundColor Red
+        Write-Log 'MP_WEIXIN_RESULT errors=env reason=devtools-open-timeout'
+        exit 2
+    }
+
     # 5) 开自动化端口（无人值守，不需要人在 GUI 里点任何开关）
     #    ⚠️ 2026-09-12 实测最要紧的一条：auto **必须跑完**（它会派生子进程去起自动化服务；
     #    中途 kill 掉 auto 会让端口永远不监听），且跑完后端口是**延迟出现**的 ⇒ 之后必须轮询等待。
@@ -748,13 +806,37 @@ try {
     }
 
     $stackLen = @($probeJson.pageStack).Count
-    $shotPng = @($probeJson.shots | Where-Object { $_.isPng })
+    $shotPng = @($probeJson.shots | Where-Object { Get-Prop $_ 'isPng' })
     $shotNames = (@($shotPng | ForEach-Object { Split-Path $_.path -Leaf }) -join ',')
-    $resultLine = "MP_WEIXIN_RESULT appid=$productAppId pageStack=$stackLen entry=$($probeJson.entryPage) " +
+    # 导航降级（诚实降级，不许假绿）：探针把「逐页导航 + 每页截图」记成 SKIP ⇒ 结果行显式写出
+    # navigation=skip(unsupported) + navigationSkipReason=navigation-api-unsupported，
+    # **既不当通过也不当失败**；门只对可验证子集（connected / pageStack 非空 / 入口页在栈内 /
+    # errorsTotal==0 && exceptionsTotal==0 / ≥1 张当前页截图）作结论，failures= 只在可验证子集不过时非空。
+    $nav = Get-Prop $probeJson 'navigation'
+    $navStatus = "$(Get-Prop $nav 'status')"
+    $navSkip = ($navStatus -eq 'skip')
+    $navReason = "$(Get-Prop $nav 'detail')"
+    # ok = 逐页导航可用；skip(unsupported) = 导航 API 不可用（诚实降级）；n/a = 没走到导航（环境早退）
+    $navField = if ($navSkip) { "skip($(Get-Prop $nav 'reason'))" } elseif ($navStatus -eq 'ok') { 'ok' } else { 'n/a' }
+    $metricLine = "appid=$productAppId pageStack=$stackLen entry=$($probeJson.entryPage) " +
         "errorsTotal=$($probeJson.errorsTotal) exceptionsTotal=$($probeJson.exceptionsTotal) logsTotal=$($probeJson.logsTotal) " +
-        "shots=$($shotPng.Count) log=$logRelative"
+        "shots=$($shotPng.Count) navigation=$navField"
+    if ($navSkip) { $metricLine += " navigationSkipReason=$navReason" }
+    $metricLine += " log=$logRelative"
+    $resultLine = "MP_WEIXIN_RESULT $metricLine"
     Write-Log "`n$resultLine"
-    Write-Log ("shots: " + (@($shotPng | ForEach-Object { "$($_.path) $($_.width)x$($_.height) $($_.bytes)B" }) -join ' | '))
+    Write-Log ("shots: " + (@($shotPng | ForEach-Object { "$($_.path) $(Get-Prop $_ 'width')x$(Get-Prop $_ 'height') $(Get-Prop $_ 'bytes')B" }) -join ' | '))
+    if ($navSkip) {
+        $skipLine = "navigation=SKIP reason=$navReason skippedAssertions=$((@(Get-Prop (Get-Prop $probeJson 'navigation') 'skippedAssertions') -join ',')) " +
+            "skippedSteps=$((@(Get-Prop (Get-Prop $probeJson 'navigation') 'skippedSteps') -join ','))"
+        Write-Log $skipLine
+        Write-Host ''
+        Write-Host "⚠️  降级：逐页导航 + 每页截图 = SKIP（reason=$navReason）" -ForegroundColor Yellow
+        Write-Host '    本机 miniprogram-automator@0.12.1 的 mp.reLaunch / mp.navigateTo 恒报 `Uncaught [object Object]`；' -ForegroundColor Yellow
+        Write-Host '    门只对可验证子集（连通 + pageStack 非空 + 入口页在栈内 + 无 error/exception + ≥1 张当前页截图）作结论。' -ForegroundColor Yellow
+        Write-Host '    未证实是否为版本组合问题（留给后续排查）；首跑请人工核对结果行的 navigation= 字段。' -ForegroundColor Yellow
+        Write-Host "    $skipLine" -ForegroundColor Yellow
+    }
 
     # P2：门通过时把截图**压缩入库**到 PR 分支（docs/verification/<模块>/<PR号>/<页名>-after.<ext>）
     # 任何失败都只警告 + 给命令，**不让门因此失败**（维护者 2026-09-12 要求）。
@@ -778,7 +860,12 @@ try {
     $failed = @($probeJson.failures)
     if ($probeJson.probeOk -and $failed.Count -eq 0) {
         Write-Host ''
-        Write-Host "✅ ② 通过：$resultLine" -ForegroundColor Green
+        if ($navSkip) {
+            Write-Host "✅ ② 通过（可验证子集；逐页导航组 = SKIP）：$resultLine" -ForegroundColor Green
+            Write-Host "   ⚠️ 未取证的部分：逐页导航 + 每页截图 = SKIP（reason=$navReason）—— 见上面的降级说明与 ADR-0008 ② 段。" -ForegroundColor Yellow
+        } else {
+            Write-Host "✅ ② 通过：$resultLine" -ForegroundColor Green
+        }
         Write-Host "   截图：$shotNames（日志 $logPath）" -ForegroundColor Green
         Write-Host '   非等价声明：② ≠ ① 真机门，也 ≠ ④b 云打包门；content:// / 生物识别 / 第三方 SDK / 真机性能 挡不住。' -ForegroundColor Yellow
         Write-Host '   注意：不得由 agent 代填 ② 的「执行人」、不得由 agent 写「已通过」——本脚本只产出证据。' -ForegroundColor Yellow
@@ -787,10 +874,14 @@ try {
         Write-Host ''
         Write-Host "❌ ② 未过：$($failed.Count) 条断言未过 ——" -ForegroundColor Red
         $failed | Select-Object -First 20 | ForEach-Object { Write-Host "   $_" -ForegroundColor Red }
-        @($probeJson.steps | Where-Object { $_.error }) | Select-Object -First 10 |
-            ForEach-Object { Write-Host "   [step] $($_.label) $($_.route)：$($_.error)" -ForegroundColor Red }
+        # 用 Get-Prop 而不是 `$_.error`：Set-StrictMode 下访问**不存在的属性**会抛异常，
+        # 而探针的 step 只在真出错时才带 error 字段 ⇒ 旧写法会把「❌ 门未过」的失败路径炸成
+        # `errors=env reason=exception`（本机 2026-09-12 复测实测到：失败详情被异常顶掉）。
+        @($probeJson.steps | Where-Object { Get-Prop $_ 'error' }) | Select-Object -First 10 |
+            ForEach-Object { Write-Host "   [step] $($_.label) $($_.route)：$(Get-Prop $_ 'error')" -ForegroundColor Red }
         Write-Host "完整日志：$logPath" -ForegroundColor Yellow
-        Write-Log ("MP_WEIXIN_RESULT errors=$($failed.Count) failures=" + ($failed -join ' / '))
+        # failures= 只在**可验证子集**不过时非空（导航降级不产生 failures，只记 SKIP）
+        Write-Log ("MP_WEIXIN_RESULT errors=$($failed.Count) failures=" + ($failed -join ' / ') + " $metricLine")
         $exitCode = if (@($failed | Where-Object { $_ -match '环境不可用' }).Count -gt 0) { 2 } else { 1 }
     }
 } catch {
@@ -806,9 +897,13 @@ try {
 
 # P1：仅门通过时贴「sha 绑定」评论（门结果免手抄；gh 不可用/取不到 sha 只警告，不改门结论）
 if ($exitCode -eq 0 -and $PostToPr -gt 0) {
+    # ⚠️ 续行符一个都不能少：本调用此前在 `-ShotRelative … -ReproCommand …` 一行**漏了行尾反引号**，
+    #    于是 `-ArchivedRel` / `-ArchiveNotes` 被解析成**一条新命令**（运行到贴评论后会 CommandNotFound），
+    #    入库截图清单也就从来没进过评论。守护测试 C14 现在按「以 `-参数名` 单独起行」拦这类断链。
     Publish-GateComment -PrNumber $PostToPr -ResultLine $resultLine -LogRelative $logRelative `
-        -ShotRelative ".ci-verify/$shotNames" -ReproCommand 'npm run build:mp-weixin-check'
+        -ShotRelative ".ci-verify/$shotNames" -ReproCommand 'npm run build:mp-weixin-check' `
         -ArchivedRel $(if ($archive -and $archive.Rel) { @($archive.Rel) } else { @() }) `
-        -ArchiveNotes $(if ($archive) { @($archive.Notes) } else { @() })
+        -ArchiveNotes $(if ($archive) { @($archive.Notes) } else { @() }) `
+        -NavSkipped ([bool]$navSkip) -NavReason $navReason
 }
 exit $exitCode

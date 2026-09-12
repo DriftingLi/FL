@@ -50,8 +50,8 @@ const FULL_EVIDENCE = `## 改了什么
 
 ## 验收证据
 
-- ① Android 真机逐页截图对比 — 执行人：@DriftingLi · 日期：2026-09-11 · 复测对象：exam 入口页与交卷流程 · 结论（含产物）：逐页截图 docs/verification/exam/exam-home-after.jpg
-- ② 微信开发者工具无报错 — 执行人：@DriftingLi · 日期：2026-09-11 · 复测对象：未命中 MP-WEIXIN 面，仅入口页 · 结论（含产物）：入口页无报错 https://github.com/DriftingLi/FL/blob/master/docs/verification/exam/entry-after.jpg
+- ① Android 真机逐页截图对比 — 执行人：@DriftingLi · 日期：2026-09-11 · 复测对象：exam 入口页与交卷流程 · 结论（含产物）：逐页截图 docs/verification/exam/624/exam-home-after.jpg
+- ② 微信开发者工具无报错 — 执行人：@DriftingLi · 日期：2026-09-11 · 复测对象：未命中 MP-WEIXIN 面，仅入口页 · 结论（含产物）：入口页无报错 ![入口页](https://github.com/user-attachments/assets/11111111-2222-3333-4444-555555555555)
 - ③ \`npm run test:unit\` 全绿 — 结论（含产物）：https://github.com/DriftingLi/FL/actions/runs/123456789
 ${GATE4_LINE}
 `;
@@ -81,7 +81,7 @@ test('证据只写在 HTML 注释里不算（模板注释不得骗过校验）',
 });
 
 test('占位符「待人工 / ⏳」= 缺证据：红', () => {
-  const body = FULL_EVIDENCE.replace('@DriftingLi · 日期：2026-09-11 · 复测对象：exam 入口页与交卷流程 · 结论（含产物）：逐页截图 docs/verification/exam/exam-home-after.jpg', '⏳ · 日期：待人工 · 复测对象：待人工 · 结论（含产物）：待人工');
+  const body = FULL_EVIDENCE.replace('@DriftingLi · 日期：2026-09-11 · 复测对象：exam 入口页与交卷流程 · 结论（含产物）：逐页截图 docs/verification/exam/624/exam-home-after.jpg', '⏳ · 日期：待人工 · 复测对象：待人工 · 结论（含产物）：待人工');
   const r = run({ body });
   assert.equal(r.ok, false);
   assert.match(r.errors.join(), /占位/);
@@ -342,8 +342,101 @@ test('② 结论须引用截图（只有自然语言结论不算产物）', () =
   assert.match(r.errors.join(), /截图/);
 });
 
-test('② 结论引用 .ci-verify/entry.png 视为有效产物（② 的截图落点）', () => {
+test('② 结论引用 .ci-verify/entry.png **不算**产物：红（本地产物不可核验，2026-09-12 收紧）', () => {
   const body = `${dropLines(['- ② '])}\n- ② 微信开发者工具无报错 — 执行人：@DriftingLi · 日期：2026-09-12 · 复测对象：入口页 pages/index/index · 结论（含产物）：errorsTotal=0 exceptionsTotal=0，截图 .ci-verify/entry.png\n${GATE4B_LINE}\n`;
   const r = run({ files: mpWeixinFiles(), body });
+  assert.equal(r.ok, false);
+  assert.match(r.errors.join(), /②/);
+  assert.match(r.errors.join(), /截图/);
+});
+
+// -------------------- 2026-09-12 修订：截图产物判据改为**结构性**（堵 .ci-verify 假绿） --------------------
+// 背景：旧判据 `https?:\/\/|\.ci-verify\/\S+\.png|mp-weixin\.png|docs\/verification\/` 过宽 ——
+// 在「结论」里贴个本地 png 路径就能让门**结构上被判满足**（截图从没进仓库、无人能核验）。
+// 新判据只认：① GitHub 托管图片（附件直链 / Markdown 图片语法）；② 仓库内
+// `docs/verification/<模块>/<PR号>/<页名>.<ext>`（PR 号必须是数字段）；③ sha 绑定门评论链接（#issuecomment-<id>）。
+
+/** 把 ① 行的结论换掉，其余保持完整四门证据 */
+const withScreenshotConclusion = (conclusion) => {
+  const line = FULL_EVIDENCE.split('\n').find((l) => l.startsWith('- ① '));
+  return FULL_EVIDENCE.replace(line, `- ① Android 真机逐页截图对比 — 执行人：@DriftingLi · 日期：2026-09-11 · 复测对象：exam 入口页与交卷流程 · 结论（含产物）：${conclusion}`);
+};
+
+test('结构性判据①：GitHub 附件直链 / Markdown 图片 ⇒ 绿', () => {
+  const cases = [
+    '入口页截图 https://github.com/user-attachments/assets/abcdef01-2345-6789-abcd-ef0123456789',
+    '入口页截图 ![entry](https://github.com/user-attachments/assets/abcdef01-2345-6789-abcd-ef0123456789)',
+    '入口页截图 ![entry](https://user-images.githubusercontent.com/12345/67890-entry.png)',
+    '入口页截图 ![](https://github.com/DriftingLi/FL/assets/12345/preview.webp)',
+    '入口页截图 ![entry](https://anywhere.example.com/hosted/entry.png)', // Markdown 图片指向图片：算（但不可核验真伪，见「不校真伪」用例）
+  ];
+  for (const conclusion of cases) {
+    const r = run({ body: withScreenshotConclusion(conclusion) });
+    assert.equal(r.ok, true, `${conclusion} ⇒ ${r.errors.join('；')}`);
+  }
+});
+
+test('结构性判据②：仓库内 docs/verification/<模块>/<PR号>/<页名>.<ext> ⇒ 绿（jpg / webp 同样认）', () => {
+  const cases = [
+    'docs/verification/exam/624/exam-home-after.jpg',
+    '`docs/verification/exam/624/exam-home-after.webp`',
+    '![after](docs/verification/exam/624/exam-home-after.png)',
+    'https://github.com/DriftingLi/FL/blob/master/docs/verification/exam/624/exam-home-after.jpg?raw=true',
+  ];
+  for (const conclusion of cases) {
+    const r = run({ body: withScreenshotConclusion(conclusion) });
+    assert.equal(r.ok, true, `${conclusion} ⇒ ${r.errors.join('；')}`);
+  }
+});
+
+test('结构性判据③：sha 绑定门评论链接（#issuecomment-<id>）⇒ 绿', () => {
+  const cases = [
+    '截图见门评论 https://github.com/DriftingLi/FL/pull/624#issuecomment-5644481824',
+    '见 #issuecomment-5644481824',
+  ];
+  for (const conclusion of cases) {
+    const r = run({ body: withScreenshotConclusion(conclusion) });
+    assert.equal(r.ok, true, `${conclusion} ⇒ ${r.errors.join('；')}`);
+  }
+});
+
+test('结构性判据：裸本地产物路径 / 任意链接 ⇒ 红（旧的假绿来源）', () => {
+  const cases = [
+    '.ci-verify/entry.png',
+    '截图 `.ci-verify/mp-weixin-entry.png`（本地）',
+    '截图 mp-weixin.png',
+    '入口页无报错 https://example.com/somewhere',
+    '见附件（无路径）',
+    'docs/verification/exam/exam-home-after.jpg', // 缺 <PR号> 数字段：不满足 docs/verification/<模块>/<PR号>/<页名>.<ext>
+    'docs/verification/exam/624/exam-home-after', // 缺扩展名
+    '截图 ![entry](.ci-verify/entry.png)', // Markdown 图片语法也救不了本地产物（不在仓库里，渲染即裂图）
+    '截图 ![](mp-weixin.png)',
+    '入口页截图 https://example.com/a.png', // 裸 http(s) 图片直链（非 GitHub 托管）不认——要贴就贴成 Markdown 图片语法或 GitHub 附件
+  ];
+  for (const conclusion of cases) {
+    const r = run({ body: withScreenshotConclusion(conclusion) });
+    assert.equal(r.ok, false, `${conclusion} 不该被认作截图产物`);
+    assert.match(r.errors.join(), /截图/);
+  }
+});
+
+test('结构性判据：② 行同样适用（裸 .ci-verify 不再假绿，GitHub 附件链接可过）', () => {
+  const red = run({
+    files: mpWeixinFiles(),
+    body: `${dropLines(['- ② '])}\n- ② 微信开发者工具无报错 — 执行人：@DriftingLi · 日期：2026-09-12 · 复测对象：入口页 · 结论（含产物）：errorsTotal=0，产物 .ci-verify/entry.png\n${GATE4B_LINE}\n`,
+  });
+  assert.equal(red.ok, false);
+  assert.match(red.errors.join(), /截图/);
+
+  const green = run({
+    files: mpWeixinFiles(),
+    body: `${dropLines(['- ② '])}\n- ② 微信开发者工具无报错 — 执行人：@DriftingLi · 日期：2026-09-12 · 复测对象：入口页 · 结论（含产物）：errorsTotal=0，截图 ![entry](https://github.com/user-attachments/assets/abcdef01-2345-6789-abcd-ef0123456789)\n${GATE4B_LINE}\n`,
+  });
+  assert.equal(green.ok, true, green.errors.join('；'));
+});
+
+test('结构性判据不改口径：仍只校结构、不校链接可达（不引入真伪校验）', () => {
+  // 指向仓库外的 user-images 直链一样放行——判据是「来源形态」，不校验可达性/内容
+  const r = run({ body: withScreenshotConclusion('截图 https://user-images.githubusercontent.com/00000/does-not-exist.png') });
   assert.equal(r.ok, true, r.errors.join('；'));
 });
