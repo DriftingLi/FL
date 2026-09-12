@@ -32,14 +32,25 @@ manifest.json / pages.json / platformConfig.json 时，本段必须逐门填写�
 ④ 的证据可由脚本贴的「sha 绑定评论」承载：本仓 `npm run build:kotlin-all` 不转发参数，
 要贴评论请直接跑 `pwsh -NoProfile -File scripts/kotlin-all-check.ps1 -PostToPr <PR号>`
 （dev 面同理 `scripts/compile-check.ps1 -PostToPr <PR号>`，仅门通过时贴）；正文该行写「见评论 <链接>」即可。
-校验器只认「带 gate-evidence:④ 注释标记 + commit 与 head sha 相等」的评论，不校真伪。
+② 自 2026-09-12 起是**半自动门**（#883 实测全链路无人值守，≈4.5 分钟/次）：跑
+`pwsh -NoProfile -File scripts/mp-weixin-check.ps1 -PostToPr <PR号>`（或 `npm run build:mp-weixin-check`），
+门通过时会贴 `<!-- gate-evidence:② -->` + `commit: <head sha>` 的评论，正文该行同样写「见评论 <链接>」。
+**但「执行人」栏仍须由人签收**：agent 只产出证据（`MP_WEIXIN_RESULT` + 截图），不得代填执行人、不得写「已通过」。
+校验器只认「带 gate-evidence:④ / gate-evidence:② 注释标记 + commit 与 head sha 相等」的评论，不校真伪。
+带 -PostToPr 时 ② 还会把截图**压缩入库**到本 PR 分支的 docs/verification/<模块>/<PR号>/<页名>-after.<ext>
+（WebP q75，本机无编码器则 JPEG q75；宽 ≤720；每 PR ≤10 张 / 单张 ≤150KB / 合计 ≤1.5MB；`-NoArchive` 可跳过），
+并在评论里用仓库内相对路径列出——**入库失败只警告、不影响门结论**。
+⚠️ HBuilderX 是**单实例串行资源**：需要 HBuilderX 的门（② / ④a / ④c 的 publish 段）会先走
+`scripts/lib/hx-busy.ps1` 的「锁 + 忙探测 + 等待上限」；维护者正在用 GUI 时脚本会等到上限后 `exit 2`
+（环境不可用，绝不抢占主程序），日志里打 `HX_BUSY wait=<秒> result=...`。**跑完任何 HBuilderX 门后先
+`git status` 看 `manifest.json` 是否被 HBuilderX 回写改脏**（它会把 mp-weixin.appid 置 null），脏了就还原再继续。
 低风险运行时面：改动集**只有** .uts 逻辑（无 .uvue、无三份 json、无 uni_modules）时，①② 两行**可以整行不写**；
 若写了就写「免（低风险运行时面：仅 .uts 逻辑改动）」——代价是真机/渲染类问题推迟到发版前 ① 全量冒烟兜底。
 例外通道：正文写明「已接受未验证风险」+ 理由 + 事后验证计划，检查会打警告放行，但**这类 PR 必须由人执行合并**。
 -->
 
 - ① Android 真机逐页截图对比 — 执行人： · 日期： · 复测对象： · 结论（含产物）：
-- ② 微信开发者工具无报错 — 执行人： · 日期： · 复测对象： · 结论（含产物）：
+- ② 微信开发者工具无报错（半自动：可跑 `scripts/mp-weixin-check.ps1` 产出证据，执行人栏仍由人签收） — 执行人： · 日期： · 复测对象： · 结论（含产物，引用 `MP_WEIXIN_RESULT` + 截图 `.ci-verify/*.png`；也可写「见评论 <链接>」）：
 - ③ `npm run test:unit` 全绿 — 结论（含产物，贴 CI run 链接）：
 - ④ 本地编译门（默认 ④c `npm run build:kotlin-all`；dev 面追加 ④a `npm run build:compile`） — 执行人： · 日期： · 复测对象： · 结论（含产物，引用 `.ci-verify/kotlin-all.log` 或 `.ci-verify/build.log`；也可写「见评论 <链接>」）：
 - ④b release 云打包（触及打包面时必填；正式发版前必跑） — 执行人： · 日期： · 复测对象： · 结论（含产物）：
