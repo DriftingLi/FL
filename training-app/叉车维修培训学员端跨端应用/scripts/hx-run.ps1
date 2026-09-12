@@ -28,9 +28,21 @@
     **分段计时**：从 launch 步的 stdout 里抽「带时间戳的行」，算「编译段 / 部署段」；再加各步墙钟。
     机检格式（便于日志 / 评论里核对时间花在哪）：
         HX_RUN mode=incremental|full compile=<s> deploy=<s> total=<s> exit=ok|fail|env|dryrun
-    **诚实声明**：分段标记表（`$script:HxCompileEndMarkers`）**尚未用真实 HBuilderX stdout 校准**
-    （本 PR 全程未跑 HBuilderX）⇒ 未命中标记时退化为「launch 步墙钟即编译段、部署段 0」，
-    并打印 `segment_source=wallclock`，真机首跑后按真实输出校准即可。
+    **分段计时的诚实声明（2026-09-12 已首跑）**：标记表（`$script:HxCompileEndMarkers`）在 2026-09-12 的真机
+    首跑里命中了 `编译成功`；未命中时仍退化为「launch 步墙钟即编译段、部署段 0」并打印 `segment_source=wallclock`。
+    **但分段计时只说明时间花在哪，不构成「已部署」的证据**（见下条）。
+
+    **假绿教训（2026-09-12；本次修复的起因，勿删）**：**编译成功 ≠ 运行成功**。实测 HBuilderX 会连续打出
+        `… 编译成功。` → `ready in 223549ms.` → `已停止运行...`
+    整条链路**没有任何东西到达设备**（设备上目标包的 `lastUpdateTime` 仍是旧日期），而旧版脚本因为
+    「没扫到 error 行」就报 `exit=ok` + 退出码 0 ⇒ 有人据它宣布「已编译并运行到设备」，把**旧构建的截图**
+    当成 ①a 取证入库（证据污染，已在对应 PR 里撤回）。**这就是本仓最忌讳的假绿。**
+    处置：新增**部署后置断言** `Get-DeployedState` —— 不再依赖 HBuilderX 的措辞，改查**设备侧事实**
+    （`topResumedActivity` 是否为目标 App），并额外扫 `已停止运行` 一类停止标记；判定打一条新机检行：
+        HX_RUN_DEPLOY deployed=true|false foreground=<包名> reason=<说明>
+    `deployed=false` ⇒ 判**未部署**：`exit=env` + 退出码 2（既不是成功，也不是「代码写错了」）。
+    候选包名 = `manifest.json` 的 appid（`__UNI__XXXX` → `uni.app.XXXX`）+ HBuilderX 标准基座 `io.dcloud.uniappx`
+    （dev 运行的常见承载；两者都不是 ⇒ 未部署）。
 
     **退出码**：0 = 运行到手机成功；1 = 输出含 error 行（编译 / 运行失败）；2 = 环境不可用
     （cli 或 adb 缺失、多设备未显式指定、与主程序连接中断、忙等待超时、某步未在超时内返回）。
@@ -309,6 +321,36 @@ function Write-HxRunResult {
     if ($LogFile) { Add-Content -LiteralPath $LogFile -Value $line -Encoding utf8 -ErrorAction SilentlyContinue }
 }
 
+function Get-DeployedState {
+    <#
+      部署后置断言（2026-09-12 加，起因见脚本头「假绿教训」段）。
+      **不依赖 HBuilderX 的措辞**：只用它作为辅助信号（停止/失败标记），主判据是**设备侧事实** ——
+      目标 App 是否真的在前台。这样即使 HBuilderX 换了文案，判据依然成立。
+      返回 @{ Deployed=<bool>; Foreground=<包名>; StopMarkers=@(); Reason=<说明> }
+    #>
+    param([string]$AdbExe, [string]$Serial, [string]$Stdout, [string[]]$Packages)
+    $stopMarkers = @('已停止运行', '运行失败', '安装失败', '同步失败')
+    $hitStop = @($stopMarkers | Where-Object { $Stdout -match [regex]::Escape($_) })
+    $fg = ''
+    try {
+        $dump = (& $AdbExe -s $Serial shell dumpsys activity activities 2>&1 | Out-String)
+        $m = [regex]::Match($dump, 'topResumedActivity=[^\r\n]*?\s([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)/')
+        if ($m.Success) { $fg = $m.Groups[1].Value }
+    } catch { }
+    $fgText = if ($fg) { $fg } else { '(取不到前台 Activity)' }
+    $matched = ''
+    foreach ($pkg in @($Packages)) { if ($pkg -and $fg -eq $pkg) { $matched = $pkg; break } }
+    $reason = if ($matched) { "前台是目标 App（$matched）" }
+              elseif ($hitStop.Count -gt 0) { "HBuilderX 输出出现停止/失败标记（$($hitStop -join '、')），且前台=$fgText" }
+              else { "前台不是目标 App（实测前台=$fgText；候选=$(@($Packages) -join '、')）" }
+    return [pscustomobject]@{
+        Deployed = [bool]$matched
+        Foreground = $fgText
+        StopMarkers = $hitStop
+        Reason = $reason
+    }
+}
+
 function Write-SegmentTable {
     param($Steps, $Segment, [int]$Total)
     Write-Host ''
@@ -444,6 +486,31 @@ if ($errorLines.Count -gt 0) {
     Write-Host "完整日志：$LogPath" -ForegroundColor Yellow
     Write-HxRunResult -Mode $mode -Compile $segment.Compile -Deploy $segment.Deploy -Total $totalSeconds -Exit 'fail' -LogFile $LogPath
     exit 1
+}
+
+# ---------- 部署后置断言（编译成功 ≠ 运行成功；见脚本头「假绿教训」）----------
+# 候选包名：manifest 的 appid（__UNI__XXXX → uni.app.XXXX）+ HBuilderX 标准基座。
+$appidMatch = [regex]::Match((Get-Content -LiteralPath (Join-Path $Project 'manifest.json') -Raw), '"appid"\s*:\s*"(__UNI__[0-9A-Za-z]+)"')
+$candidatePkgs = @()
+if ($appidMatch.Success) { $candidatePkgs += ('uni.app.' + ($appidMatch.Groups[1].Value -replace '^__UNI__', '')) }
+$candidatePkgs += 'io.dcloud.uniappx'
+$deployed = Get-DeployedState -AdbExe $adbExe -Serial $target.Serial -Stdout $launchStep.Output -Packages $candidatePkgs
+$deployLine = "HX_RUN_DEPLOY deployed=$(if ($deployed.Deployed) { 'true' } else { 'false' }) foreground=$($deployed.Foreground) reason=$($deployed.Reason)"
+Write-Host $deployLine
+Add-Content -LiteralPath $LogPath -Value $deployLine -Encoding utf8
+
+if (-not $deployed.Deployed) {
+    Write-Host ''
+    Write-Host '❌ 判定为**未部署**：编译产物没有到达设备 —— 这次运行不算成功。' -ForegroundColor Red
+    Write-Host "   依据：$($deployed.Reason)" -ForegroundColor Red
+    if ($deployed.StopMarkers.Count -gt 0) {
+        Write-Host "   HBuilderX 停止/失败标记：$($deployed.StopMarkers -join '、')" -ForegroundColor Red
+    }
+    Write-Host '   常见原因：设备屏幕锁着或被别的 App 占着、装机确认弹窗没人点、基座未就绪。' -ForegroundColor Yellow
+    Write-Host '   注意：这里判的是「有没有到设备」，不是「代码对不对」—— 编译错误另有上面的 error 行分支。' -ForegroundColor Yellow
+    Write-Host "   完整日志：$LogPath" -ForegroundColor Yellow
+    Write-HxRunResult -Mode $mode -Compile $segment.Compile -Deploy $segment.Deploy -Total $totalSeconds -Exit 'env' -LogFile $LogPath
+    exit 2
 }
 
 Write-Host ''
