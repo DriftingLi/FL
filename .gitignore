@@ -20,6 +20,10 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+# 根目录没有 package.json（各子工程自带），在根误跑 npm 会生成一个空壳锁文件。
+# 根锚定：只挡仓库根，不影响 frontend/ 与 training-app/ 下正常入库的锁文件。
+/package-lock.json
+/node_modules/.package-lock.json
 
 # ===== 环境变量与密钥 =====
 .env
