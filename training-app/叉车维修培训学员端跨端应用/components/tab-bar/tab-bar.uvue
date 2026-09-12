@@ -32,20 +32,27 @@
     // 设备 dumpsys navigationBars inset = 48px）。原写法一声不响，属「静默失败」。
     // 现在三段兜底：① setup 读 → ② onMounted 再读（首帧可能未就绪）→ ③ 都没有则用常量。
     // 只用本项目已验证可用的 getSystemInfoSync()（getWindowInfo / screenHeight 本仓无先例，不冒险）。
-    const FALLBACK_SAFE_AREA_BOTTOM = 48
+    // 真机实测：本机型正确值 48px（dumpsys navigationBars bottom=48）。
+    // **但首次实例化时该值返回 96（恰好 2×）** —— 实测同一入口路径下：首帧栏顶线 y=2212、
+    // 切走再回来 y=2308，整条栏平移 96px，而两态「图标带→文字带」间距都是 35px（与原生栏一致）
+    // ⇒ 内容没变，是内边距翻倍。切页后该值才回到 48，故**首次读到的值不可信**。
+    // 处置：给该值设上限，超出上限即判为翻倍值并退回真值常量。不无条件采用读数。
+    // onMounted 的二次读取保留（能救「首帧取不到」的情形），但挡不住「首帧翻倍」。
+    // 定时重读被排除：本仓约定避免 setTimeout/setInterval。
+    // **本段是过渡件** —— 手画栏整体在 #911（AI 页走原生路由）被删除，届时一并消失。
+    // 该常量身兼两职：① 读不到时的兜底值 ② 可信上限（读数超过它即判为翻倍值）
+    const SAFE_AREA_BOTTOM = 48
 
     function applySafeAreaBottom() : void {
         const insets = uni.getSystemInfoSync().safeAreaInsets
         if (insets != null) {
             const bottom = insets.bottom
-            if (bottom != null && bottom > 0) {
+            if (bottom != null && bottom > 0 && bottom <= SAFE_AREA_BOTTOM) {
                 safeAreaBottom.value = bottom
                 return
             }
         }
-        if (safeAreaBottom.value <= 0) {
-            safeAreaBottom.value = FALLBACK_SAFE_AREA_BOTTOM
-        }
+        safeAreaBottom.value = SAFE_AREA_BOTTOM
     }
 
     applySafeAreaBottom()
