@@ -789,7 +789,7 @@ data: null
 | GET | `/api/forum/topics` | 帖子列表（scope=all|general|chapter；category=discussion|question；`is_experience` 经验认定筛选；`featured` 精选筛选；`solved` **须同时带 category=question**；keyword 搜索；分页；`sort=latest|hot|created` `order=asc|desc`） |
 | POST | `/api/forum/topics` | 发帖（images 最多 9 张；`category` **仅 discussion\|question**——「备考经验」是管理端认定，学员传 `experience` 返回 400；`content_format` **仅 text\|markdown**，缺省 text，非法值 400 不静默归一，ADR-0044） |
 | GET | `/api/forum/topics/:id` | 帖子详情（含**分页**回复：`page`/`page_size`，默认 20，响应带 `page`/`pages`/`total`；`sort=latest|hot|time` `order=asc|desc`；**被采纳回复固定占首页第一条**并从排序结果剔除——首页容量 = `page_size − 1`，ADR-0042；`reward_issued` = 该帖是否已产生过任一自记奖励） |
-| PUT | `/api/forum/topics/:id` | 编辑自己的帖子（#811：仅作者本人，非本人 403；可改 title/content/images/category，空串归一 discussion，`experience` 400；问答帖不得挂章节）。**不含 `content_format`**——该字段是全量替换语义下的例外：既有客户端不带它，若按缺省 text 处理会把 markdown 帖静默重置，故编辑保持原值（ADR-0044） |
+| PUT | `/api/forum/topics/:id` | 编辑自己的帖子（#811：仅作者本人，非本人 403；可改 title/content/images/category，空串归一 discussion，`experience` 400；问答帖不得挂章节）。**不含 `content_format`**——该字段是全量替换语义下的例外：既有客户端不带它，若按缺省 text 处理会把 markdown 帖静默重置，故编辑保持原值（ADR-0044）。同理**不含 `ip_province` / `ip_city`**：属地是发布那一刻的快照，编辑不改（ADR-0045） |
 | POST | `/api/forum/topics/:id/replies` | 回复（images 最多 3 张；支持回复楼层；`content_format` 与发帖同口径，缺省 text） |
 | DELETE | `/api/forum/topics/:id` | 删除自己的帖子 |
 | DELETE | `/api/forum/replies/:id` | 删除自己的回复 |
@@ -804,6 +804,8 @@ data: null
 | GET | `/api/forum/my-liked-topics` | 赞过（#701，按点赞时间倒序） |
 | GET | `/api/forum/my-observed` | 围观（#701，浏览减四项直接互动） |
 | GET | `/api/forum/my-view-history` | 浏览记录（#701，服务端去重） |
+
+**属地字段（ADR-0045）**：帖子与回复的 DTO 都带 `ip_province` / `ip_city`（省/州 与 市），值是**发布那一刻的快照**——发帖 / 回复时按可信取 IP 口径解析一次并落库，**编辑帖子不写这两个字段**（与 `content_format` 同类）。**为空即无属地**：内网 / 保留地址 / 库中无该段 / 本次改造之前的存量行都是空串，客户端据此**整段不渲染**（不显示「未知」、不留占位、不出现悬空分隔符）。显示口径是**市优先、市为空退到省**；粒度与最小化口径见 `docs/adr/ADR-0045`。
 
 **管理端 `/api/admin/forum`（role=admin）**
 

@@ -15,6 +15,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/clock"
+	"forklift-training/internal/geolocation"
 	"forklift-training/internal/model"
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
@@ -144,8 +145,13 @@ type ForumTopicDTO struct {
 	Title        string `json:"title"`
 	Content      string `json:"content"`
 	// ContentFormat 正文格式声明（ADR-0044）：text | markdown。前端据此选渲染方式。
-	ContentFormat   string      `json:"content_format"`
-	Images          []string    `json:"images"`
+	ContentFormat string   `json:"content_format"`
+	Images        []string `json:"images"`
+	// IPProvince / IPCity 发布那一刻的属地快照（ADR-0045）。空串 = 无属地，
+	// 展示侧据此**整段不渲染**（不显示「未知」、不留占位）。
+	// 位置在作者行：它是「这条帖子的作者当时在哪」，不是用户资料。
+	IPProvince      string      `json:"ip_province"`
+	IPCity          string      `json:"ip_city"`
 	ViewCount       int         `json:"view_count"`
 	ReplyCount      int         `json:"reply_count"`
 	LastReplyAt     *string     `json:"last_reply_at"`
@@ -180,6 +186,10 @@ type ForumReplyDTO struct {
 	LikesCount    int64       `json:"likes_count"`
 	LikedByMe     bool        `json:"liked_by_me"`
 	IsAccepted    bool        `json:"is_accepted"`
+	// IPProvince / IPCity 发布那一刻的属地快照（ADR-0045），与主题同口径：
+	// 空串 = 无属地，展示侧接在相对时间之后（「18 小时前 · 上海」），为空则整段不渲染。
+	IPProvince string `json:"ip_province"`
+	IPCity     string `json:"ip_city"`
 }
 
 // ForumService 论坛服务。
@@ -213,6 +223,8 @@ type topicRow struct {
 	Title           string
 	Content         string
 	ContentFormat   string
+	IPProvince      string
+	IPCity          string
 	Images          string
 	ViewCount       int
 	ReplyCount      int
@@ -247,6 +259,8 @@ func (r topicRow) toDTO(viewerID int) ForumTopicDTO {
 		Title:           r.Title,
 		Content:         r.Content,
 		ContentFormat:   r.ContentFormat,
+		IPProvince:      r.IPProvince,
+		IPCity:          r.IPCity,
 		Images:          parseImageURLs(r.Images),
 		ViewCount:       r.ViewCount,
 		ReplyCount:      r.ReplyCount,
@@ -626,6 +640,8 @@ type replyRow struct {
 	ParentID      *int64
 	Content       string
 	ContentFormat string
+	IPProvince    string
+	IPCity        string
 	Images        string
 	LikesCount    int64
 	CreatedAt     time.Time
@@ -643,6 +659,7 @@ func (r replyRow) toDTO(viewerID int, acceptedReplyID *int64) ForumReplyDTO {
 		ID: r.ID, TopicID: r.TopicID, ParentID: r.ParentID,
 		ParentName: r.ParentName, ParentAvatarURL: r.ParentAvatarURL,
 		Content: r.Content, ContentFormat: r.ContentFormat,
+		IPProvince: r.IPProvince, IPCity: r.IPCity,
 		Images: parseImageURLs(r.Images), CreatedAt: formatISO(r.CreatedAt),
 		Author: ForumAuthor{
 			UserID: r.UserID, Username: r.Username, AvatarURL: r.AvatarURL,
@@ -654,7 +671,7 @@ func (r replyRow) toDTO(viewerID int, acceptedReplyID *int64) ForumReplyDTO {
 }
 
 // replyRowSelect 详情页回复行的共享投影（置顶查询与分页查询共用同一份，新增字段只改这一处）。
-const replyRowSelect = "r.id, r.topic_id, r.parent_id, r.content, r.content_format, r.images, r.likes_count, r.created_at, " +
+const replyRowSelect = "r.id, r.topic_id, r.parent_id, r.content, r.content_format, r.ip_province, r.ip_city, r.images, r.likes_count, r.created_at, " +
 	"u.id AS user_id, u.username, u.avatar_url, " +
 	"COALESCE(pu.username, '') AS parent_name, COALESCE(pu.avatar_url, '') AS parent_avatar_url"
 
@@ -683,6 +700,9 @@ type CreateTopicInput struct {
 	// ContentFormat 正文格式声明（ADR-0044）。空串归一为 text——移动端旧契约不传该字段。
 	ContentFormat string
 	Images        []string
+	// ClientIP 发布请求的客户端 IP（handler 传 middleware.ClientIP(c)，即可信取 IP 单点）。
+	// 属地是**发布那一刻**的快照：只在这里解析一次并落库（ADR-0045）。
+	ClientIP string
 }
 
 // CreateTopic 发帖。chapterID 为 nil/0 表示发到综合讨论区。
@@ -728,6 +748,10 @@ func (s *ForumService) CreateTopic(in CreateTopicInput) (*ForumTopicDTO, error) 
 		cid = chapterID
 	}
 
+	// 属地快照（ADR-0045）：发布那一刻取一次。解析不出来就是空串（内网 / 保留地址 / 库无该段），
+	// 不报错也不阻断发帖——展示侧「为空即整段不渲染」。
+	region := geolocation.Resolve(in.ClientIP)
+
 	now := beijingNow()
 	topic := model.ForumTopic{
 		ChapterID: cid,
@@ -740,9 +764,13 @@ func (s *ForumService) CreateTopic(in CreateTopicInput) (*ForumTopicDTO, error) 
 		// 与 category 同理显式写入：model 上带 default tag，GORM 会跳过零值字段的 INSERT，
 		// 那样内存对象（下面的 DTO）会拿到空串而不是归一后的 text。
 		ContentFormat: contentFormat,
-		Images:        marshalImageURLs(images),
-		CreatedAt:     now,
-		UpdatedAt:     now,
+		// 与 category / content_format 同理显式写入：model 上带 default tag，GORM 会跳过零值字段，
+		// 那样内存对象（下面的 DTO）会与库里不一致。
+		IPProvince: region.Province,
+		IPCity:     region.City,
+		Images:     marshalImageURLs(images),
+		CreatedAt:  now,
+		UpdatedAt:  now,
 	}
 	if err := s.db.Create(&topic).Error; err != nil {
 		return nil, err
@@ -759,6 +787,8 @@ func (s *ForumService) CreateTopic(in CreateTopicInput) (*ForumTopicDTO, error) 
 		Title:         topic.Title,
 		Content:       topic.Content,
 		ContentFormat: topic.ContentFormat,
+		IPProvince:    topic.IPProvince,
+		IPCity:        topic.IPCity,
 		Images:        images,
 		CreatedAt:     formatISO(topic.CreatedAt),
 		Author: ForumAuthor{
@@ -862,6 +892,8 @@ type ReplyTopicInput struct {
 	Images        []string // 最多 ForumReplyMaxImages 张，仅接受本站 images/forum/ 前缀
 	// ContentFormat 正文格式声明（ADR-0044）。空串归一为 text——移动端旧契约不传该字段。
 	ContentFormat string
+	// ClientIP 发布请求的客户端 IP（与发帖同口径）。
+	ClientIP string
 }
 
 // ReplyTopic 回复主题或回复某条回复（ParentReplyID 非空时）。
@@ -916,6 +948,9 @@ func (s *ForumService) ReplyTopic(in ReplyTopicInput) (*ForumReplyDTO, error) {
 	_ = s.db.Select("username").First(&replier, userID).Error
 	replierName := replier.Username
 
+	// 属地快照（ADR-0045），与发帖同口径：发布那一刻取一次，解析不出来即空串。
+	region := geolocation.Resolve(in.ClientIP)
+
 	now := beijingNow()
 	reply := model.ForumReply{
 		TopicID:  topicID,
@@ -924,6 +959,8 @@ func (s *ForumService) ReplyTopic(in ReplyTopicInput) (*ForumReplyDTO, error) {
 		Content:  content,
 		// 显式写入归一后的格式，不依赖数据库 DEFAULT（与发帖同理：GORM 跳过带 default tag 的零值）。
 		ContentFormat: contentFormat,
+		IPProvince:    region.Province,
+		IPCity:        region.City,
 		Images:        marshalImageURLs(images),
 		CreatedAt:     now,
 	}
@@ -967,6 +1004,7 @@ func (s *ForumService) ReplyTopic(in ReplyTopicInput) (*ForumReplyDTO, error) {
 	return &ForumReplyDTO{
 		ID: reply.ID, TopicID: reply.TopicID, ParentID: reply.ParentID,
 		ParentName: parentName, Content: reply.Content, ContentFormat: reply.ContentFormat,
+		IPProvince: reply.IPProvince, IPCity: reply.IPCity,
 		Images: images, CreatedAt: formatISO(reply.CreatedAt),
 		Author: ForumAuthor{
 			UserID: u.ID, Username: u.Username, AvatarURL: u.AvatarURL,
@@ -1591,7 +1629,7 @@ func (s *ForumService) MyTopics(userID, page, pageSize int) (*ForumTopicPageResu
 
 // topicRowSelect topicRow 的共享投影（#742 审查收敛）：新增 topicRow 字段时只改这一处，
 // 全部列表/详情/个人视图查询共用，避免散落 5 处的投影字符串漂移。
-const topicRowSelect = "t.id, t.chapter_id, t.category, t.title, t.content, t.content_format, t.images, t.view_count, t.reply_count, t.likes_count, t.accepted_reply_id, t.solved_at, t.last_reply_at, t.is_featured, t.is_experience, t.created_at, "
+const topicRowSelect = "t.id, t.chapter_id, t.category, t.title, t.content, t.content_format, t.ip_province, t.ip_city, t.images, t.view_count, t.reply_count, t.likes_count, t.accepted_reply_id, t.solved_at, t.last_reply_at, t.is_featured, t.is_experience, t.created_at, "
 
 // personalTopicSelect 个人动态三列表的行装配投影（与 MyTopics 逐字一致，被删主题字段 NULL 由 Scan 零值承载）。
 const personalTopicSelect = topicRowSelect +

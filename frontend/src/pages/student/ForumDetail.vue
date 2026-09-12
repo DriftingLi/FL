@@ -25,7 +25,11 @@
           </el-avatar>
           <div class="topic-author-info flex flex-col gap-0.5">
             <span class="author-name text-sm font-semibold text-ink">{{ displayName(topic.author) }}</span>
-            <span class="topic-time text-xs text-ink-3">{{ formatRelativeTime(topic.created_at) }}</span>
+            <!-- 属地（ADR-0045）：与作者名 / 时间同处一行；为空时整段不渲染 -->
+            <span class="topic-time text-xs text-ink-3">
+              {{ formatRelativeTime(topic.created_at)
+              }}<template v-if="topicRegion"> · {{ topicRegion }}</template>
+            </span>
           </div>
           <!-- 治理动作（举报 / 删除）收进 ⋯；互动动作（点赞 / 收藏）下沉到正文下方的操作行 -->
           <UiMoreMenu class="ml-auto" :items="topicMoreItems" @select="onTopicMoreSelect" />
@@ -179,7 +183,7 @@ import ForumComposer from '@/components/student/ForumComposer.vue'
 import ForumReplyCard from '@/components/student/ForumReplyCard.vue'
 import ForumContent from '@/components/student/ForumContent.vue'
 import { formatRelativeTime } from '@/utils/format'
-import { displayName, authorLetter } from '@/utils/forumDisplay'
+import { displayName, authorLetter, regionLabel } from '@/utils/forumDisplay'
 import { useAuthStore } from '@/stores/auth'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useForumSort } from '@/composables/useForumSort'
@@ -231,6 +235,9 @@ function toggleReplyOrder(){
 }
 
 const isTopicOwner = computed(() => !!topic.value && topic.value.author.user_id === authStore.userInfo?.user_id)
+
+/** 帖子作者的属地快照（ADR-0045）：空串 = 无属地，作者行那段整段不渲染 */
+const topicRegion = computed(() => (topic.value ? regionLabel(topic.value) : ''))
 
 /** 回复是否为当前登录用户（楼主自己）所发 —— 自己的回答不可采纳（ADR-0028） */
 function isOwnReply(reply: ForumReplyItem) {
