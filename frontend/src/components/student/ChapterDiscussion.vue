@@ -20,7 +20,7 @@ import ForumComposer from '@/components/student/ForumComposer.vue'
 import ForumReplyCard from '@/components/student/ForumReplyCard.vue'
 import ForumContent from '@/components/student/ForumContent.vue'
 import { formatRelativeTime } from '@/utils/format'
-import { displayName, authorLetter } from '@/utils/forumDisplay'
+import { displayName, authorLetter, regionLabel } from '@/utils/forumDisplay'
 import { useAuthStore } from '@/stores/auth'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useLike } from '@/composables/useLike'
@@ -262,7 +262,11 @@ watch(() => props.chapterId, () => {
               {{ authorLetter(topic.author) }}
             </el-avatar>
             <span class="text-ink-2">{{ displayName(topic.author) }}</span>
-            <span>{{ formatRelativeTime(topic.created_at) }}</span>
+            <!-- 属地（ADR-0045）：与详情页作者行同口径——市优先退省，为空整段不渲染 -->
+            <span class="chapter-topic-time">
+              {{ formatRelativeTime(topic.created_at)
+              }}<template v-if="regionLabel(topic)"> · {{ regionLabel(topic) }}</template>
+            </span>
             <el-icon class="ml-auto">
               <ArrowUp v-if="expandedTopicId === topic.id" />
               <ArrowDown v-else />

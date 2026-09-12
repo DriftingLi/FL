@@ -221,7 +221,13 @@ func (h *ForumHandler) CreateTopic(c *gin.Context) {
 			if err := c.ShouldBindJSON(&body); err != nil {
 				return nil, badRequest("请求参数错误")
 			}
-			return &createTopicReq{UserID: userID, ChapterID: body.ChapterID, Category: body.Category, Title: body.Title, Content: body.Content, ContentFormat: body.ContentFormat, Images: body.Images}, nil
+			return &createTopicReq{
+				UserID: userID, ChapterID: body.ChapterID, Category: body.Category,
+				Title: body.Title, Content: body.Content, ContentFormat: body.ContentFormat,
+				Images: body.Images,
+				// 属地快照的输入走可信取 IP 单点：伪造 X-Forwarded-For 改不动它。
+				ClientIP: middleware.ClientIP(c),
+			}, nil
 		},
 		Invoke: func(ctx context.Context, req *createTopicReq) (*service.ForumTopicDTO, error) {
 			return h.svc.CreateTopic(service.CreateTopicInput{
@@ -232,6 +238,7 @@ func (h *ForumHandler) CreateTopic(c *gin.Context) {
 				Content:       req.Content,
 				ContentFormat: req.ContentFormat,
 				Images:        req.Images,
+				ClientIP:      req.ClientIP,
 			})
 		},
 		Render: func(c *gin.Context, _ *createTopicReq, resp *service.ForumTopicDTO, err error) {
@@ -328,7 +335,13 @@ func (h *ForumHandler) ReplyTopic(c *gin.Context) {
 			if err := c.ShouldBindJSON(&body); err != nil {
 				return nil, badRequest("请求参数错误")
 			}
-			return &replyTopicReq{UserID: userID, TopicID: topicID, Content: body.Content, ParentReplyID: body.ParentReplyID, Images: body.Images, ContentFormat: body.ContentFormat}, nil
+			return &replyTopicReq{
+				UserID: userID, TopicID: topicID, Content: body.Content,
+				ParentReplyID: body.ParentReplyID, Images: body.Images,
+				ContentFormat: body.ContentFormat,
+				// 与发帖同口径：属地快照的输入走可信取 IP 单点。
+				ClientIP: middleware.ClientIP(c),
+			}, nil
 		},
 		Invoke: func(ctx context.Context, req *replyTopicReq) (*service.ForumReplyDTO, error) {
 			return h.svc.ReplyTopic(service.ReplyTopicInput{
@@ -338,6 +351,7 @@ func (h *ForumHandler) ReplyTopic(c *gin.Context) {
 				ParentReplyID: req.ParentReplyID,
 				Images:        req.Images,
 				ContentFormat: req.ContentFormat,
+				ClientIP:      req.ClientIP,
 			})
 		},
 		Render: func(c *gin.Context, _ *replyTopicReq, resp *service.ForumReplyDTO, err error) {
@@ -765,9 +779,12 @@ type createTopicReq struct {
 	// ContentFormat 正文格式声明（ADR-0044）。空串由 service 归一为 text。
 	ContentFormat string
 	Images        []string
+	// ClientIP 发布请求的客户端 IP（可信取 IP 单点），属地快照的输入（ADR-0045）。
+	ClientIP string
 }
 
 // updateTopicReq 编辑帖子请求（#811）：chapter_id 不在契约内（编辑不迁移章节归属）。
+// 编辑路径**不**携带 ClientIP：属地是发布那一刻的事实，编辑不写该字段。
 type updateTopicReq struct {
 	UserID   int
 	TopicID  int64
@@ -806,6 +823,8 @@ type replyTopicReq struct {
 	Images        []string
 	// ContentFormat 正文格式声明（ADR-0044）。空串由 service 归一为 text。
 	ContentFormat string
+	// ClientIP 发布请求的客户端 IP（可信取 IP 单点），属地快照的输入（ADR-0045）。
+	ClientIP string
 }
 
 // topicDeleteReq 删除自己主题请求。

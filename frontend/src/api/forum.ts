@@ -41,6 +41,13 @@ export interface ForumTopicItem {
   content: string
   /** 正文格式声明（ADR-0044）：text | markdown，缺省按 text 渲染 */
   content_format?: ForumContentFormat
+  /**
+   * 发布那一刻的 IP 属地快照（ADR-0045）：省/州 与 市。
+   * 空串 = 无属地（内网 / 保留地址 / 库无该段 / 存量帖）——展示侧**整段不渲染**，
+   * 不显示「未知」、不留占位。只显示一级，口径见 regionLabel()。
+   */
+  ip_province?: string
+  ip_city?: string
   images?: string[]
   view_count: number
   reply_count: number
@@ -77,6 +84,9 @@ export interface ForumReplyItem {
   content: string
   /** 正文格式声明（ADR-0044）：text | markdown，缺省按 text 渲染 */
   content_format?: ForumContentFormat
+  /** 发布那一刻的属地快照（ADR-0045），与 ForumTopicItem 同口径。 */
+  ip_province?: string
+  ip_city?: string
   images?: string[]
   created_at: string
   author: {
