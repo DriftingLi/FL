@@ -8,7 +8,7 @@
 </template>
 
 <script setup lang="uts">
-    import { ref, watch } from 'vue'
+    import { ref, watch, onMounted } from 'vue'
 
     const props = withDefaults(defineProps<{
         activeIndex ?: number
@@ -26,14 +26,33 @@
         }
     })
 
-    const sysInfo = uni.getSystemInfoSync()
-    const insets = sysInfo.safeAreaInsets
-    if (insets != null) {
-        const bottom = insets.bottom
-        if (bottom != null && bottom > 0) {
-            safeAreaBottom.value = bottom
+    // 底部安全区（手势区）内边距。
+    // 原写法只在 setup 读一次 getSystemInfoSync().safeAreaInsets，且**取不到就整段静默跳过** ——
+    // 真机实测：该值在首帧可能取不到，于是栏少补一截底部内边距、比原生栏矮（本机型差 43px，
+    // 设备 dumpsys navigationBars inset = 48px）。原写法一声不响，属「静默失败」。
+    // 现在三段兜底：① setup 读 → ② onMounted 再读（首帧可能未就绪）→ ③ 都没有则用常量。
+    // 只用本项目已验证可用的 getSystemInfoSync()（getWindowInfo / screenHeight 本仓无先例，不冒险）。
+    const FALLBACK_SAFE_AREA_BOTTOM = 48
+
+    function applySafeAreaBottom() : void {
+        const insets = uni.getSystemInfoSync().safeAreaInsets
+        if (insets != null) {
+            const bottom = insets.bottom
+            if (bottom != null && bottom > 0) {
+                safeAreaBottom.value = bottom
+                return
+            }
+        }
+        if (safeAreaBottom.value <= 0) {
+            safeAreaBottom.value = FALLBACK_SAFE_AREA_BOTTOM
         }
     }
+
+    applySafeAreaBottom()
+
+    onMounted(() => {
+        applySafeAreaBottom()
+    })
 
     type TabItem = {
         key : string
