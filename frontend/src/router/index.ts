@@ -86,6 +86,14 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/student/ForumDetail.vue')
       },
       {
+        // 「即将离开本站」中转页（#881 / ADR-0044）：站外链接一律先到这里。
+        // 挂在学员工作区下（继承布局 / 主题入口 / 工作区声明）；管理端治理预览走
+        // ForumContent 的 linkPolicy=plain，不做导航，故不需要管理端副本。
+        path: 'link-out',
+        name: routeNames.LinkOut,
+        component: () => import('@/pages/student/LinkOutPage.vue')
+      },
+      {
         path: 'course/:courseId/chapter/:chapterId',
         name: routeNames.ChapterView,
         component: () => import('@/pages/student/ChapterView.vue')

@@ -115,7 +115,7 @@
               <UiTag size="small" tone="info">回复</UiTag>
               <h3 class="m-0 truncate text-base font-semibold text-ink">{{ reply.topic_title || '原帖已删除' }}</h3>
             </div>
-            <p class="mt-1.5 mb-2 line-clamp-2 text-[13px] text-ink-2">{{ reply.content }}</p>
+            <p class="mt-1.5 mb-2 line-clamp-2 text-[13px] text-ink-2">{{ summaryOfReply(reply) }}</p>
             <div class="flex items-center gap-1.5 text-xs text-ink-3">
               <span>{{ formatRelativeTime(reply.created_at) }}</span>
             </div>
@@ -164,7 +164,7 @@
               <UiTag v-if="topic.is_featured" size="small" effect="dark" class="font-semibold">★ 精选</UiTag>
               <h3 class="m-0 truncate text-base font-semibold text-ink">{{ topic.title }}</h3>
             </div>
-            <p class="mt-1.5 mb-2 line-clamp-2 text-[13px] text-ink-2">{{ topic.content }}</p>
+            <p class="mt-1.5 mb-2 line-clamp-2 text-[13px] text-ink-2">{{ summaryOf(topic) }}</p>
             <div class="flex items-center gap-1.5 text-xs text-ink-3">
               <span>{{ displayName(topic.author) }}</span>
               <span class="text-[var(--color-border-dark)]">·</span>
@@ -226,6 +226,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { EditPen, View, ChatDotRound, Picture, Calendar, ArrowUp, ArrowDown } from '@element-plus/icons-vue'
 import { forumApi, forumTabQuery, type ForumCategory, type ForumTopicItem, type MyReplyItem } from '@/api/forum'
 import { formatRelativeTime } from '@/utils/format'
+import { markdownToPlainText } from '@/utils/markdownText'
 import { displayName, authorLetter } from '@/utils/forumDisplay'
 import ForumPostForm from '@/components/student/ForumPostForm.vue'
 import { useAsyncPage } from '@/composables/useAsyncPage'
@@ -437,6 +438,19 @@ async function onTopicCreated() {
   }
   currentPage.value = 1
   await loadTopics()
+}
+
+/**
+ * 列表摘要：markdown 帖投影成纯文本再截断，否则摘要会露出 `##`、`**` 这类源标记。
+ * 纯文本帖原样返回——它本来就是给人看的，没必要多跑一遍解析。
+ */
+function summaryOf(topic: ForumTopicItem) {
+  return topic.content_format === 'markdown' ? markdownToPlainText(topic.content) : topic.content
+}
+
+/** 「我的回复」列表同口径：markdown 回复也要剥成纯文本，否则同一页两种摘要风格 */
+function summaryOfReply(reply: MyReplyItem) {
+  return reply.content_format === 'markdown' ? markdownToPlainText(reply.content) : reply.content
 }
 
 function goDetail(id: number) {
