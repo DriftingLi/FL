@@ -216,6 +216,9 @@ services:
       # gin 会把它当成代理继续往左找，客户端自带的伪造值反而胜出（用例
       # TestClientIP_TrustedClientAddressLetsSpoofWin 锁定该语义）。
       # 换宿主机 / 重建网络导致网段变化时，用环境变量 TRUSTED_PROXIES 覆盖本默认值。
+      # 若把 frontend 改回 bridge 网络（proxy_pass http://backend:8080，见 nginx.default.conf），
+      # 对端变成 frontend 容器的动态地址、不在本列表内，必须显式把该地址加进来，
+      # 否则所有请求会被算作同一个客户端。
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-127.0.0.1/32,172.19.0.1/32,192.168.240.1/32}
       # LibreOffice sidecar HTTP 地址(容器内服务名 + 端口)
       LIBREOFFICE_SIDECAR_URL: http://libreoffice:8000

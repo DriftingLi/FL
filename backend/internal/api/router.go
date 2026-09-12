@@ -181,6 +181,7 @@ func applyTrustedProxies(r *gin.Engine, proxies []string, logger *zap.Logger) {
 		return
 	}
 	logger.Info("可信代理已配置", zap.Strings("trusted_proxies", proxies))
+	warnIfGatewayNotTrusted(defaultGateway(), proxies, logger)
 }
 
 // registerStaticRoutes 注册 /static/* 静态资源路由。

@@ -599,14 +599,21 @@ func wechatAppConfig(idKey, secretKey string, legacyKeys ...string) WechatAppCon
 	return c
 }
 
-// splitProxies 解析逗号分隔的可信代理列表，空值返回 nil（= 不信任任何代理）。
-// 逗号列表口径复用 splitOrigins（去空白、丢弃空项），只多一层「空 → nil」，
-// 让「没有可信代理」在类型上只有一个表示，装配方不必再判空。
+// splitProxies 解析逗号分隔的可信代理列表（IP / CIDR）；空白项丢弃，空值返回 nil。
+// 空值归一成 nil 而不是空切片：「没有可信代理」在类型上只有一个表示，装配方不必判空。
+// 不复用 splitOrigins：那是 CORS 源（URL）的口径，将来若加 URL 归一化会静默改变取 IP 口径。
 func splitProxies(s string) []string {
-	if proxies := splitOrigins(s); len(proxies) > 0 {
-		return proxies
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
 	}
-	return nil
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // validateTrustedProxies 校验可信代理列表的每一项是 IP 或 CIDR。

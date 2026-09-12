@@ -68,8 +68,8 @@ func TestClientIP_TrustedProxyUsesRightmostUntrustedHop(t *testing.T) {
 	got := clientIPFor(t, r, proxyPeer, map[string]string{
 		"X-Forwarded-For": spoofed + ", " + realClient,
 	})
-	if got != realClient {
-		t.Errorf("可信代理链应取最右侧不可信地址: got %q, want %q", got, realClient)
+	if got != "198.51.100.9" {
+		t.Errorf("可信代理链应取最右侧不可信地址: got %q, want %q", got, "198.51.100.9")
 	}
 }
 
@@ -77,8 +77,8 @@ func TestClientIP_TrustedProxyUsesRightmostUntrustedHop(t *testing.T) {
 func TestClientIP_TrustedProxyWithoutSpoofedHeader(t *testing.T) {
 	r := newClientIPRouter(t, []string{"192.0.2.10"})
 	got := clientIPFor(t, r, proxyPeer, map[string]string{"X-Forwarded-For": realClient})
-	if got != realClient {
-		t.Errorf("可信代理转发的客户端 IP 应被采信: got %q, want %q", got, realClient)
+	if got != "198.51.100.9" {
+		t.Errorf("可信代理转发的客户端 IP 应被采信: got %q, want %q", got, "198.51.100.9")
 	}
 }
 
@@ -109,8 +109,8 @@ func TestClientIP_NormalizesIPv4MappedIPv6(t *testing.T) {
 	r := newClientIPRouter(t, []string{"192.0.2.10"})
 	plain := clientIPFor(t, r, proxyPeer, map[string]string{"X-Forwarded-For": realClient})
 	mapped := clientIPFor(t, r, proxyPeer, map[string]string{"X-Forwarded-For": "::ffff:" + realClient})
-	if mapped != realClient {
-		t.Errorf("IPv4-mapped IPv6 应归一成 IPv4: got %q, want %q", mapped, realClient)
+	if mapped != "198.51.100.9" {
+		t.Errorf("IPv4-mapped IPv6 应归一成 IPv4: got %q, want %q", mapped, "198.51.100.9")
 	}
 	if mapped != plain {
 		t.Errorf("同一客户端的两种写法应归一成同一个键: %q vs %q", mapped, plain)
