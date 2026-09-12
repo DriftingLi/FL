@@ -1,10 +1,12 @@
 <#
 .SYNOPSIS
-    移动端验收门 ④a：HBuilderX 全量编译（dev 编译）—— 半自动编译门。
+    移动端验收门 ④ 的 dev 面载体：HBuilderX 全量编译（dev 编译，口径 ④a）—— 半自动编译门。
 
 .DESCRIPTION
-    口径见 docs/adr/0008-移动端验收门与证据.md：第 ④a 门 = 「可复现命令 + 可核验日志」，
-    证据产物固定为 <项目>/.ci-verify/build.log（被 .gitignore 的 *.log 覆盖，不入库）。
+    口径见 docs/adr/0008-移动端验收门与证据.md：2026-09-11 修订后 ④ = 「本地编译门」，
+    **默认载体是 ④c**（scripts/kotlin-all-check.ps1，整模块 kotlinc）；本脚本（④a，dev 全量编译）
+    只在 **dev 专属面**（改动 `pages.json` / `manifest.json` / `platformConfig.json`、新增页面、收口 PR）追加。
+    门 = 「可复现命令 + 可核验日志」，证据产物固定为 <项目>/.ci-verify/build.log（被 .gitignore 的 *.log 覆盖，不入库）。
 
     三件必须知道的事：
       1. HBuilderX CLI 是**驱动主程序**的，不是独立无头工具：必须先 `cli open` 且主程序可达；
@@ -28,16 +30,25 @@
 .PARAMETER TimeoutSeconds
     编译步骤的超时秒数（默认 1800）。
 
+.PARAMETER PostToPr
+    > 0 时，**仅在门通过（exit 0）分支**把结果贴成 PR 评论（P1：编译门结果免手抄）。
+    评论正文严格形如 `<!-- gate-evidence:④ -->` + 「④ 本地编译门（④a dev 全量编译，agent 执行）」
+    + `commit: <HEAD sha>` + 结论（含 COMPILE_RESULT）与日志路径 + 复现命令；
+    `.github/workflows/pr-evidence.yml` 只认「带该标记且 sha 与 PR head 相等」的评论，不校真伪。
+    gh 不可用/取不到 sha 时只打印警告，**不影响门的结论**。
+
 .EXAMPLE
     npm run build:compile
     pwsh -NoProfile -File scripts/compile-check.ps1 -Clean:$false -TimeoutSeconds 900
+    pwsh -NoProfile -File scripts/compile-check.ps1 -PostToPr 859   # 通过后把结果贴成 sha 绑定评论
 #>
 [CmdletBinding()]
 param(
     [string]$Cli,
     [string]$Project,
     [bool]$Clean = $true,
-    [int]$TimeoutSeconds = 1800
+    [int]$TimeoutSeconds = 1800,
+    [int]$PostToPr = 0
 )
 
 Set-StrictMode -Version Latest
@@ -198,11 +209,69 @@ if ($errorLines.Count -gt 0) {
     Write-Host "❌ 编译门未过：$($errorLines.Count) 行含 error/编译错误 ——" -ForegroundColor Red
     $errorLines | Select-Object -First 40 | ForEach-Object { Write-Host "   $_" -ForegroundColor Red }
     Write-Host "完整日志：$logPath" -ForegroundColor Yellow
-    Write-Host "把 $result 与关键行粘进 PR 的「验收证据」④a 行。" -ForegroundColor Yellow
+    Write-Host "把 $result 与关键行粘进 PR 的「验收证据」④ 行。" -ForegroundColor Yellow
     exit 1
 }
 
 Write-Host ''
 Write-Host "✅ 编译门通过：未发现 error 行（$result）" -ForegroundColor Green
-Write-Host '   把这一行与日志尾部若干行粘进 PR 的「验收证据」④a 行。' -ForegroundColor Green
+Write-Host '   把这一行与日志尾部若干行粘进 PR 的「验收证据」④ 行；或加 -PostToPr <n> 让脚本直接贴 sha 绑定评论。' -ForegroundColor Green
+
+# ---------- P1：门通过时把结果贴成「sha 绑定」的 PR 评论（编译门结果免手抄）----------
+function Get-HeadSha {
+    param([string]$ProjectDir)
+    $attempts = @()
+    if ($ProjectDir) { $attempts += , @('-C', $ProjectDir, 'rev-parse', 'HEAD') }
+    $attempts += , @('rev-parse', 'HEAD')
+    foreach ($a in $attempts) {
+        try {
+            $out = & git @a 2>$null | Select-Object -First 1
+            if ($out -and "$out".Trim()) { return "$out".Trim() }
+        } catch { }
+    }
+    return ''
+}
+
+function Publish-GateComment {
+    param(
+        [int]$PrNumber,
+        [string]$GateLabel,
+        [string]$ResultLine,
+        [string]$LogRelative,
+        [string]$ReproCommand
+    )
+    $sha = Get-HeadSha -ProjectDir $Project
+    if (-not $sha) {
+        Write-Host '[warn] 取不到 HEAD sha（git 不可用或不在仓库里）：跳过贴 PR 评论，门结论不受影响。' -ForegroundColor Yellow
+        return
+    }
+    $short = $sha.Substring(0, [Math]::Min(7, $sha.Length))
+    # 正文格式被 .github/workflows/pr-evidence.yml 认（标记 + commit sha），改动前先看那边的注释
+    $body = @(
+        '<!-- gate-evidence:④ -->',
+        "**④ 本地编译门（$GateLabel，agent 执行）**",
+        "- commit: $sha",
+        "- 结论（含产物）：``$ResultLine``；日志 ``$LogRelative``",
+        "- 复现：``$ReproCommand``"
+    ) -join "`n"
+    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+        Write-Host '[warn] 找不到 gh CLI：跳过贴 PR 评论，门结论不受影响（结果见上面日志）。' -ForegroundColor Yellow
+        return
+    }
+    try {
+        $out = (& gh pr comment $PrNumber --body $body 2>&1 | Out-String)
+        if ($out -match 'github\.com/') {
+            Write-Host "✅ 已贴 PR #$PrNumber 的 ④ 门评论（sha 绑定 $short）。" -ForegroundColor Green
+        } else {
+            Write-Host "[warn] 贴 PR #$PrNumber 评论疑似失败（门结论不受影响）：$($out.Trim())" -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Host "[warn] 贴 PR 评论失败（门结论不受影响）：$_" -ForegroundColor Yellow
+    }
+}
+
+if ($PostToPr -gt 0) {
+    Publish-GateComment -PrNumber $PostToPr -GateLabel '④a dev 全量编译' `
+        -ResultLine $result -LogRelative '.ci-verify/build.log' -ReproCommand 'npm run build:compile'
+}
 exit 0
