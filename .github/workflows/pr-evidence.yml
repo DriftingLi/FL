@@ -166,15 +166,25 @@ jobs:
                 }
                 return { ok: true, reason: `commit \`${commit7}\` 是 head 的祖先且其间运行时面（${RUNTIME_LABEL}）未变` };
               };
-              // 门评论：任一候选「绑上」即算满足；全都不满足时把**最有信息量的那条**原因带进错误文案
+              // 门评论：任一候选「绑上」即算满足；全都不满足时把**最有信息量的那条**原因带进错误文案。
+              // 顺序上先判「commit 恰好等于 head」的候选（不打 compare，也就不会因 API 抖动把一条本可用的评论拖红）；
+              // 祖先口径的候选排在后面 —— 于是「老评论绑旧 sha + 新评论绑新 sha」共存时优先认新评论。
               const gateComment = async (gateKey) => {
                 const candidates = (gateComments || [])
                   .map((c) => (typeof c === 'string' ? c : ((c && c.body) || '')))
                   .filter((t) => isGateEvidenceFor(t, gateKey));
                 if (candidates.length === 0) return { hit: undefined, reason: '' };
+                const headLc = String(headSha || '').toLowerCase();
+                const exact = headLc ? candidates.filter((t) => shaMatches(gateCommitIn(t), headLc)) : [];
+                const rest = candidates.filter((t) => !exact.includes(t));
                 const reasons = [];
                 let informative = '';
-                for (const text of candidates) {
+                for (const text of exact) {
+                  const v = await judgeGateComment(text);
+                  if (v.ok) return { hit: text, reason: v.reason };
+                  reasons.push(v.reason);
+                }
+                for (const text of rest) {
                   const v = await judgeGateComment(text);
                   if (v.ok) return { hit: text, reason: v.reason };
                   reasons.push(v.reason);

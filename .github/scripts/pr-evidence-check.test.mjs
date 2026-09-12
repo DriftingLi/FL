@@ -676,3 +676,16 @@ test('j) 候选评论里有一条绑上就算满足（老评论作废、新评�
   assert.equal(r.ok, true, r.errors.join('；'));
   assert.match(r.notes.join(), /祖先/);
 });
+
+test('j2) 老评论（绑旧 sha）+ 新评论（绑当前 head）共存 ⇒ 认新评论，且**不打 compare**', async () => {
+  const { fn, counts } = trueAncestor(['docs/x.md']);
+  const r = await run({
+    body: bodyWith4FromComment(),
+    gateComments: [gate4Comment(ANC), gate4Comment(HEAD)],
+    headSha: HEAD,
+    fetchCompare: fn,
+  });
+  assert.equal(r.ok, true, r.errors.join('；'));
+  assert.equal(counts.calls, 0, '「恰好等于 head」的候选必须优先判（既省配额，也不让 API 抖动把可用评论拖红）');
+  assert.doesNotMatch(r.notes.join(), /绑定口径/, '按 sha 相等口径绑上的不必记「放宽」说明');
+});
