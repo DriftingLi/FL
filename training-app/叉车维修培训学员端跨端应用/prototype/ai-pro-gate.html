@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PROTOTYPE · AI 助手「专业版」表达（?variant=A|B|C）</title>
+<!--
+  ============================================================================
+  PROTOTYPE — 一次性的，判完就扔。不要从这里往生产抄代码（技能明列的反模式）。
+  ============================================================================
+  计划（技能要求的一行）：
+    三个变体，「专业版 / 被锁能力」在 AI 会话页上的结构表达，同一路由用 ?variant=A|B|C 切换。
+
+  要判的问题：
+    「专业版」怎么表达 + 用户点到一个被锁的能力时，界面发生什么。
+    —— 这是**信息层级**之争（能力在不在原位 / 档位显不显性），不是文案之争。
+
+  三个变体（结构不同，不是换色换字）：
+    A · 就地能力锁   能力留在原位带锁标；点击 → 底部半屏 sheet
+    B · 档位横幅     欢迎区顶部一条专业版横幅；被锁能力不在原位
+    C′ · 独立专业版页 会话页零噪音；抽屉里有实打实的入口 → 独立推入页
+       （C′ 是「C · 隐身」的修正版：C 因「积分兑换失去主曝光位」被否）
+
+  已定前置（不在本原型里判）：
+    AI学 tab 落到 pages/ai-assistant/ai-assistant 唯一页；头部固定「AI 助手」（不再挂版本名）；
+    门 = {模型选择, 自定义模型, 图片}（功能宫格与语音不上锁）。
+
+  收尾：胜者折叠进 pages/ai-assistant/ai-assistant.uvue；全套变体进 throwaway 分支；指针留 #911。
+-->
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font: 14px/1.5 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #2b2f36; color: #e8eaed;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 18px 12px 92px; min-height: 100vh;
+  }
+  .hint { font-size: 12px; color: #9aa0a6; text-align: center; max-width: 640px; margin-bottom: 14px; }
+  .hint b { color: #e8eaed; }
+
+  /* ---------- 手机框 ---------- */
+  .phone {
+    width: 390px; height: 844px; border-radius: 34px; overflow: hidden;
+    background: #dfeffb; position: relative; flex: 0 0 auto;
+    box-shadow: 0 12px 40px rgba(0,0,0,.45); border: 8px solid #111;
+  }
+  .screen { position: absolute; inset: 0; display: flex; flex-direction: column; }
+
+  .nav { display: flex; align-items: center; padding: 10px 14px 6px; }
+  .nav .ico { width: 34px; height: 34px; display: grid; place-items: center; font-size: 17px; color: #333; }
+  .nav .panel { width: 20px; height: 16px; border: 2px solid #6b6b6b; border-radius: 4px; position: relative; }
+  .nav .panel::before { content: ""; position: absolute; left: 4px; top: 1px; bottom: 1px; width: 2px; background: #6b6b6b; }
+  .nav .c { flex: 1; text-align: center; }
+  .nav .t { font-size: 17px; font-weight: 700; color: #222; }
+  .nav .s { font-size: 12px; color: #239EDD; margin-top: 2px; }
+
+  .scroll { flex: 1; overflow: auto; padding: 8px 14px 6px; }
+  .scroll::-webkit-scrollbar { width: 0; }
+
+  .grid { display: flex; justify-content: space-between; margin: 6px 0 14px; }
+  .g { width: 19%; text-align: center; }
+  .g .b { font-size: 30px; line-height: 1.15; }
+  .g .l { font-size: 10px; color: #333; margin-top: 3px; }
+
+  .card { background: #fff; border-radius: 12px; padding: 14px 12px; margin-bottom: 8px;
+          display: flex; align-items: center; justify-content: space-between; }
+  .card .p { font-size: 14px; color: #333; }
+  .card .a { color: #c9ced6; font-size: 16px; }
+
+  /* ---------- 输入区 ---------- */
+  .inputCard { background: #fff; border-radius: 16px; margin: 0 12px 6px; padding: 12px 12px 9px;
+               border: 1px solid #eaf2f8; }
+  .inputTop { display: flex; align-items: flex-start; gap: 8px; }
+  .ph { flex: 1; color: #b3b8bf; font-size: 14px; }
+  .send { color: #7fc7ef; font-size: 20px; }
+  .inputBottom { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  .chip { flex: 1; display: flex; align-items: center; gap: 6px; background: #f5f5f5;
+          border-radius: 16px; padding: 6px 10px; font-size: 12px; color: #666; }
+  .chip .qv { color: #6e5bff; }
+  .chip .car { color: #999; margin-left: auto; }
+  .act { width: 32px; height: 32px; border-radius: 50%; background: #f5f5f5;
+         display: grid; place-items: center; font-size: 14px; color: #8a8a8a; position: relative; flex: 0 0 auto; }
+  .lock { position: absolute; right: -2px; top: -2px; font-size: 9px; background: #ff9800; color: #fff;
+          border-radius: 8px; padding: 0 3px; line-height: 13px; }
+  .lockedChip { background: #f0f4f8; color: #9aa6b2; }
+  .lockedChip .qv { color: #b9c4cf; }
+  .ghost { color: #c2ccd6; font-size: 12px; }
+
+  /* ---------- 底栏 ---------- */
+  .tabbar { display: flex; background: #fff; border-top: 1px solid #ababab; margin-top: auto; }
+  .tab { flex: 1; text-align: center; padding: 7px 0 6px; font-size: 10px; color: #999; }
+  .tab .ti { font-size: 19px; display: block; margin-bottom: 2px; }
+  .tab.on { color: #239EDD; font-weight: 700; }
+
+  /* ---------- 覆盖层 ---------- */
+  .mask { position: absolute; inset: 0; background: rgba(0,0,0,.38); }
+  .drawer { position: absolute; left: 0; top: 0; bottom: 0; width: 76%; background: #fff; padding: 14px 12px; }
+  .drow { display: flex; align-items: center; gap: 10px; padding: 12px 10px; border-radius: 10px;
+          background: #f7f9fb; margin-bottom: 8px; font-size: 14px; color: #333; }
+  .drow .di { font-size: 17px; }
+  .drow .tag { margin-left: auto; font-size: 11px; color: #fff; background: #ff9800;
+               border-radius: 9px; padding: 1px 7px; }
+  .drow .tag.ok { background: #19be6b; }
+  .drow .chev { margin-left: auto; color: #c9ced6; }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; background: #fff;
+           border-radius: 18px 18px 0 0; padding: 16px 16px 22px; }
+  .sheet h4 { font-size: 15px; color: #222; margin-bottom: 2px; }
+  .sheet .sub { font-size: 12px; color: #9aa0a6; margin-bottom: 12px; }
+  .cap { display: flex; gap: 10px; align-items: flex-start; padding: 9px 0; border-bottom: 1px solid #f4f6f8; }
+  .cap .ci { font-size: 18px; }
+  .cap .ct { font-size: 13px; color: #333; }
+  .cap .cd { font-size: 11px; color: #9aa0a6; }
+  .price { display: flex; align-items: baseline; gap: 6px; margin: 14px 0 12px; }
+  .price .n { font-size: 22px; font-weight: 700; color: #ff6b00; }
+  .price .u { font-size: 12px; color: #9aa0a6; }
+  .cta { background: #239EDD; color: #fff; text-align: center; border-radius: 22px;
+         padding: 12px; font-size: 15px; font-weight: 600; }
+  .cta2 { text-align: center; color: #9aa0a6; font-size: 13px; padding: 10px; }
+  .push { position: absolute; inset: 0; background: #dfeffb; display: flex; flex-direction: column; }
+  .pushNav { display: flex; align-items: center; padding: 10px 14px; }
+  .pushNav .bk { font-size: 20px; color: #333; width: 34px; }
+  .pushNav .pt { flex: 1; text-align: center; font-size: 16px; font-weight: 700; color: #222; }
+  .banner { background: linear-gradient(90deg,#fff3e0,#ffe8cc); border: 1px solid #ffd9a8;
+            border-radius: 12px; padding: 12px; margin: 2px 0 10px; display: flex; align-items: center; gap: 10px; }
+  .banner .bi { font-size: 20px; }
+  .banner .bt { flex: 1; }
+  .banner .bt b { font-size: 14px; color: #8a4b00; display: block; }
+  .banner .bt span { font-size: 11px; color: #a97142; }
+  .banner .go { background: #ff9800; color: #fff; font-size: 12px; font-weight: 600;
+                border-radius: 14px; padding: 6px 12px; }
+
+  /* ---------- 切换条（技能第 4 步）---------- */
+  #switcher {
+    position: fixed; left: 50%; transform: translateX(-50%); bottom: 16px; z-index: 99;
+    display: flex; align-items: center; gap: 2px; background: #111; color: #fff;
+    border-radius: 999px; padding: 6px; box-shadow: 0 6px 22px rgba(0,0,0,.5);
+    font: 13px/1 -apple-system,"PingFang SC",sans-serif;
+  }
+  #switcher button { background: none; border: 0; color: #fff; font-size: 17px; padding: 4px 12px; cursor: pointer; }
+  #switcher .lab { padding: 4px 6px; min-width: 210px; text-align: center; color: #ffd479; }
+  #switcher .k { color: #8ab4f8; }
+</style>
+</head>
+<body>
+  <div class="hint">
+    <b>PROTOTYPE — 一次性的，判完就扔。</b>
+    同一条路由上的三个结构变体，用 <b>?variant=A|B|C</b> 或底部黑条切换（也可按 ← →）。<br>
+    要判的是：<b>「专业版 / 被锁能力」怎么表达</b> + <b>点到被锁能力时发生什么</b>。
+  </div>
+
+  <div class="phone"><div class="screen" id="stage"></div></div>
+
+  <div id="switcher">
+    <button id="prev" title="上一个 (←)">‹</button>
+    <div class="lab" id="lab"></div>
+    <button id="next" title="下一个 (→)">›</button>
+  </div>
+
+<script>  // ======================= 数据（照真 App 的文案） =======================
+  const GRID = [['👷','故障咨询'],['🔍','故障代码查询'],['📜','图纸识别'],['📝','习题解答'],['🔧','维保知识']];
+  const PROMPTS = ['如何高效阅读书籍？','帮我写近期的学习汇报','总结这个章节的主要内容'];
+  const CAPS = [
+    ['🧠','选择模型','在多个平台模型间切换'],
+    ['🛠️','自定义模型','接入你自己的 API Key'],
+    ['🖼️','发送图片','拍下图纸或故障照片直接问'],
+  ];
+  const PRICE = ['500','积分'];
+  const VARIANTS = [['A','就地能力锁'],['B','档位横幅'],['C','独立专业版页']];
+
+  const S = { variant:'A', unlocked:false, drawer:false, sheet:false, push:false };
+
+  // ======================= 共享片段 =======================
+  const nav = () => `<div class="nav">
+      <div class="ico" data-act="openDrawer"><div class="panel"></div></div>
+      <div class="c"><div class="t">AI 助手</div><div class="s">维修助手</div></div>
+      <div class="ico">⋯</div>
+    </div>`;
+
+  const grid = () => `<div class="grid">` + GRID.map(([b,l]) =>
+    `<div class="g"><div class="b">${b}</div><div class="l">${l}</div></div>`).join('') + `</div>`;
+
+  const prompts = () => PROMPTS.map(p =>
+    `<div class="card"><span class="p">${p}</span><span class="a">›</span></div>`).join('');
+
+  const tabbar = () => `<div class="tabbar">` + [['🏠','首页'],['📖','课程'],['🤖','AI学'],['💬','交流'],['👤','我的']]
+    .map(([i,l],k) => `<div class="tab ${k===2?'on':''}"><span class="ti">${i}</span>${l}</div>`).join('') + `</div>`;
+
+  const capsList = () => CAPS.map(([i,t,d]) =>
+    `<div class="cap"><div class="ci">${i}</div><div><div class="ct">${t}</div><div class="cd">${d}</div></div></div>`).join('');
+
+  const priceRow = () => `<div class="price"><span class="n">${PRICE[0]}</span><span class="u">${PRICE[1]}</span></div>`;
+
+  // 输入卡：能力是否留在原位，由变体决定
+  const inputCard = (bottom) => `<div class="inputCard">
+      <div class="inputTop"><span class="ph">提出你想要知道的问题</span><span class="send">✈</span></div>
+      ${bottom ? `<div class="inputBottom">${bottom}</div>` : ''}
+    </div>`;
+
+  const chipLocked = () => `<div class="chip lockedChip"><span class="qv">✦</span><span>选择模型</span><span class="car">🔒</span></div>`;
+  const chipOpen   = () => `<div class="chip"><span class="qv">✦</span><span>qwen3.7-max</span><span class="car">⌄</span></div>`;
+  const attachLocked = () => `<div class="act" data-act="sheet">📎<span class="lock">🔒</span></div>`;
+  const attachOpen   = () => `<div class="act">📎</div>`;
+  const voice = () => `<div class="act">🔊</div>`;
+
+  const sheet = () => `<div class="mask" data-act="closeSheet"></div><div class="sheet">
+      <h4>专业版能力</h4>
+      <div class="sub">解锁后立即可用 · 一次兑换长期有效</div>
+      ${capsList()}${priceRow()}
+      <div class="cta" data-act="closeSheet">去兑换</div>
+      <div class="cta2" data-act="closeSheet">以后再说</div>
+    </div>`;
+
+  const drawer = (rows) => `<div class="mask" data-act="closeDrawer"></div><div class="drawer">${rows}</div>`;
+
+  // ======================= 变体 A · 就地能力锁 =======================
+  function vA() {
+    const u = S.unlocked;
+    const bottom = (u ? chipOpen() : chipLocked())
+      + (u ? attachOpen() : attachLocked()) + voice();
+    const drows = `
+      <div class="drow"><span class="di">✏️</span>新对话</div>
+      <div class="drow" data-act="sheet"><span class="di">✨</span>专业版
+        ${u ? '<span class="tag ok">已解锁</span>' : '<span class="tag">未解锁 · 去兑换</span>'}</div>
+      <div class="drow"><span class="di">⚙️</span>对话设置</div>
+      <div class="drow"><span class="di">👤</span>个人中心</div>`;
+    return nav() + `<div class="scroll">${grid()}${prompts()}</div>`
+      + inputCard(bottom) + tabbar()
+      + (S.drawer ? drawer(drows) : '') + (S.sheet ? sheet() : '');
+  }
+
+  // ======================= 变体 B · 档位横幅 =======================
+  function vB() {
+    const u = S.unlocked;
+    const banner = u
+      ? `<div class="banner" style="background:linear-gradient(90deg,#e8f8ee,#d6f2e2);border-color:#b7e4c8">
+           <span class="bi">✨</span><div class="bt"><b style="color:#0f7a45">专业版 · 已解锁</b>
+           <span style="color:#3f9c6b">选模型 / 自定义模型 / 发图片 均可用</span></div></div>`
+      : `<div class="banner" data-act="sheet"><span class="bi">✨</span>
+           <div class="bt"><b>解锁专业版</b><span>选模型 · 自定义模型 · 发图片</span></div>
+           <div class="go">查看权益</div></div>`;
+    const drows = `
+      <div class="drow"><span class="di">✏️</span>新对话</div>
+      <div class="drow" data-act="sheet"><span class="di">✨</span>专业版权益
+        ${u ? '<span class="tag ok">已解锁</span>' : '<span class="chev">›</span>'}</div>
+      <div class="drow"><span class="di">⚙️</span>对话设置</div>
+      <div class="drow"><span class="di">👤</span>个人中心</div>`;
+    return nav() + `<div class="scroll">${banner}${grid()}${prompts()}</div>`
+      + inputCard(voice()) + tabbar()
+      + (S.drawer ? drawer(drows) : '') + (S.sheet ? sheet() : '');
+  }
+
+  // ======================= 变体 C′ · 独立专业版页 =======================
+  function vC() {
+    const u = S.unlocked;
+    const drows = `
+      <div class="drow"><span class="di">✏️</span>新对话</div>
+      <div class="drow" data-act="push"><span class="di">✨</span>
+        ${u ? '专业版 · 已解锁' : '解锁专业版'}<span class="chev">›</span></div>
+      <div class="drow"><span class="di">⚙️</span>对话设置</div>
+      <div class="drow"><span class="di">👤</span>个人中心</div>`;
+    const pushPage = `<div class="push">
+        <div class="pushNav"><div class="bk" data-act="closePush">‹</div><div class="pt">专业版</div><div style="width:34px"></div></div>
+        <div class="scroll">${capsList()}${priceRow()}
+          <div class="cta" data-act="closePush">立即兑换</div>
+          <div class="cta2" data-act="closePush">以后再说</div></div>
+      </div>`;
+    return nav() + `<div class="scroll">${grid()}${prompts()}</div>`
+      + inputCard(voice()) + tabbar()
+      + (S.drawer ? drawer(drows) : '') + (S.push ? pushPage : '');
+  }
+
+  // ======================= 渲染 + 切换条 =======================
+  function render() {
+    document.getElementById('stage').innerHTML =
+      S.variant === 'A' ? vA() : S.variant === 'B' ? vB() : vC();
+
+    const v = VARIANTS.find(x => x[0] === S.variant);
+    document.getElementById('lab').innerHTML =
+      `<span class="k">${v[0]}</span> — ${v[1]}　`
+      + `<span style="color:${S.unlocked?'#7ee2a8':'#ffb4a2'}">${S.unlocked?'已解锁':'未解锁'}</span>`;
+
+    document.getElementById('stage').querySelectorAll('[data-act]').forEach(el => {
+      el.onclick = (e) => {
+        const a = el.getAttribute('data-act');
+        if (a === 'sheet') { S.sheet = true; S.drawer = false; }
+        if (a === 'push') { S.push = true; S.drawer = false; }
+        if (a === 'closeSheet') S.sheet = false;
+        if (a === 'closePush') S.push = false;
+        if (a === 'closeDrawer') S.drawer = false;
+        if (a === 'openDrawer') { S.drawer = true; S.sheet = false; }
+        e.stopPropagation();
+        render();
+      };
+    });
+  }
+
+  function setVariant(k) {
+    S.variant = k; S.drawer = false; S.sheet = false; S.push = false;
+    // file:// 下 history.replaceState 可能被浏览器拒（双击打开时就是 file://）
+    // ⇒ 失败就退化成 hash，保证切换条仍然能用、且刷新后保持
+    try {
+      const url = new URL(location.href);
+      url.searchParams.set('variant', k);
+      history.replaceState(null, '', url);
+    } catch (e) {
+      try { location.hash = 'variant=' + k; } catch (e2) {}
+    }
+    render();
+  }
+  function cycle(d) {
+    const i = VARIANTS.findIndex(x => x[0] === S.variant);
+    setVariant(VARIANTS[(i + d + VARIANTS.length) % VARIANTS.length][0]);
+  }
+
+  document.getElementById('prev').onclick = () => cycle(-1);
+  document.getElementById('next').onclick = () => cycle(1);
+
+  // 键盘 ← →（输入框聚焦时不拦截 —— 技能明列）
+  document.addEventListener('keydown', (e) => {
+    const t = document.activeElement;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    if (e.key === 'ArrowLeft') cycle(-1);
+    if (e.key === 'ArrowRight') cycle(1);
+    if (e.key === 'u' || e.key === 'U') { S.unlocked = !S.unlocked; render(); }
+  });
+
+  // 切换条上再挂一个「已解锁」开关（也在黑条里，不属于被测设计）
+  (function addUnlockToggle() {
+    const bar = document.getElementById('switcher');
+    const b = document.createElement('button');
+    b.textContent = '👁 未解锁/已解锁 (U)';
+    b.style.fontSize = '11px'; b.style.padding = '4px 10px'; b.style.color = '#7ee2a8';
+    b.onclick = () => { S.unlocked = !S.unlocked; render(); };
+    bar.appendChild(b);
+  })();
+
+  // 开局：抽屉默认打开（不然 C′ 的入口看不到）
+  const initial = /variant=([ABC])/i.exec(location.search + location.hash);
+  S.variant = (initial ? initial[1] : 'A').toUpperCase();
+  if (!VARIANTS.some(x => x[0] === S.variant)) S.variant = 'A';
+  S.drawer = false;   // 首屏判断：抽屉默认关，左面板图标点开
+  render();
+</script>
+</body>
+</html>
