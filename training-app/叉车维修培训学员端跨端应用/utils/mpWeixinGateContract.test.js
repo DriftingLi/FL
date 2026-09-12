@@ -15,6 +15,13 @@
  *   C8 非等价声明 + 挡不住的类别 + **源 manifest appid 前置断言**（HBuilderX 首次导入会回写 manifest 置 null）
  *   C9 截图入库纪律（P2）：WebP→JPEG 回退、宽 ≤720、单张 ≤150KB、合计 ≤1.5MB、-NoArchive、失败不阻塞门
  *   C10 注册与文档：package.json 脚本、ADR-0008、PR 模板、移动端 AGENTS.md 的人工门清单
+ *   C11 HBuilderX 忙检测：必须 dot-source scripts/lib/hx-busy.ps1、等它给结论、**绝不 kill 主程序**
+ *   C12 **② 的时序三步写死**（2026-09-12 复测）：`close → open --project <dist> → auto`；
+ *       `open` 必须是**显式步骤 + 写进日志**，`-SkipBuild` 下同样能定位构建产物，且不得被 build 分支条件包住
+ *   C13 **导航不可用时诚实降级**（2026-09-12 复测）：探针把「逐页导航 + 每页截图」记 SKIP
+ *       （reason=navigation-api-unsupported）、SKIP **不得写成 PASS**、必须写进结果行与门评论；
+ *       门只对可验证子集作结论（failures 只由该子集产生）
+ *   C14 贴评论调用**不得断链**：语句续行符缺失会让 `-ArchivedRel …` 变成另一条命令（曾真实存在）
  * 设计沿用本仓既有守护测试的形态（见 utils/kotlinAllGateContract.test.js）：
  * 先对「注入违规」的变形样本断言检测有效（防空跑假绿），再对真实文件断言零命中。
  */
@@ -121,6 +128,51 @@ function scanContract(sources) {
   must(!/Stop-Process[^\r\n]*HBuilderX/.test(s), 'C11', '出现 kill 主程序的调用（HBuilderX 是共享单实例资源，绝不抢占）');
   must(s.includes('$HxWaitSeconds') && s.includes('$HxNoWait'), 'C11', '缺 -HxWaitSeconds / -HxNoWait 参数');
 
+  // C12 ② 的时序三步：close → open --project <dist> → auto（缺 open 会撞 pageStack 恒空）
+  const closeIdx = s.indexOf("'close', '--project'");
+  const openIdx = s.indexOf("'open', '--project'");
+  const autoIdx = s.indexOf("'auto', '--project'");
+  must(openIdx !== -1, 'C12', '缺少 `cli.bat open --project <dist>`（close 之后 auto 之前必须重开项目窗口，否则 pageStack 恒空）');
+  if (closeIdx !== -1 && openIdx !== -1 && autoIdx !== -1) {
+    must(closeIdx < openIdx, 'C12', '`open` 未出现在 `close` 之后（close 会把项目窗口一起关掉，必须先关再开）');
+    must(openIdx < autoIdx, 'C12', '`open` 未出现在 `auto` 之前（auto 不会替你重开项目窗口）');
+  }
+  must(/Invoke-Process -FilePath \$devTools -Arguments @\('open', '--project', \$dist\)/.test(s), 'C12', 'open 未作为显式步骤经 Invoke-Process 调用 $dist（须用构建产物目录，-SkipBuild 下也要能定位）');
+  must(s.includes('devtools-open'), 'C12', 'open 步骤没有独立的 Tag/日志（`devtools-open`）');
+  must(/Write-Log "`n>>> devtools-open/.test(s), 'C12', 'open 步骤的输出没有写进日志（须与 close/auto 一样可追溯）');
+  must(s.includes('$open.TimedOut'), 'C12', 'open 缺超时兜底（窗口没重开就没法继续，超时判 env 不可用）');
+  if (openIdx !== -1) {
+    const lastDistGuard = s.lastIndexOf('no-dist');
+    must(lastDistGuard !== -1 && openIdx > lastDistGuard, 'C12', 'open 步骤落在构建分支条件内（-SkipBuild 路径到不了它）');
+  }
+
+  // C13 导航不可用时诚实降级：SKIP，不得写成 PASS；且必须写进结果行与门评论
+  must(probe.includes('navigation-api-unsupported'), 'C13', '探针未记录降级原因 `navigation-api-unsupported`');
+  must(/NAV_SKIP_ASSERTIONS/.test(probe), 'C13', '探针未声明「降级涉及哪几条断言」（allRoutesVisited / screenshotsProduced）');
+  must(/'skip'/.test(probe), 'C13', '探针未把降级断言记为 SKIP（字符串 skip），有假绿风险');
+  must(/if \(v === false\)/.test(probe), 'C13', '探针的 failures 不是「只由明确 false（可验证子集不过）」产生（SKIP 会被算成失败或 PASS 混入）');
+  must(/isNavigationUnsupported/.test(probe), 'C13', '探针未区分「导航 API 不支持」与真失败（TIMEOUT 之类不得被降级吞掉）');
+  must(probe.includes('currentPageScreenshot') || probe.includes('current.png'), 'C13', '探针降级后没有取「当前页」截图（可验证子集要求 ≥1 张）');
+  must(s.includes('navigation=$navField'), 'C13', '结果行缺 `navigation=` 字段（降级必须机检可见）');
+  must(s.includes('navigation=SKIP reason='), 'C13', '日志缺 `navigation=SKIP reason=…` 行（降级必须写进日志）');
+  must(!/navigation=PASS/.test(s), 'C13', '把导航降级写成了 PASS（降级不等于通过）');
+  must(s.includes('降级（SKIP，非 PASS）'), 'C13', 'PR 门评论未显式写明降级（SKIP，非 PASS）');
+  must(/navigation-api-unsupported/.test(s), 'C13', '脚本侧未写明降级原因（reason=navigation-api-unsupported）');
+  must(/未证实/.test(s), 'C13', '脚本头未写明「未证实」（版本组合问题留给后续排查，不得宣称已定位根因）');
+  must(/首跑/.test(s), 'C13', '脚本头未写明首跑校准要求');
+
+  // C14 贴评论调用不得断链（缺续行反引号会把参数变成另一条命令）
+  const lines = s.split(/\r?\n/);
+  lines.forEach((line, idx) => {
+    if (!/^\s+-[A-Za-z][\w]*\b/.test(line)) return;
+    if (idx === 0 || /`\s*$/.test(lines[idx - 1])) return;
+    violations.push('C14 第 ' + (idx + 1) + ' 行以 `' + line.trim().split(/\s+/)[0] + '` 起行，但上一行没有续行反引号（语句断链，参数不会生效）');
+  });
+  if (callAt !== -1) {
+    const callBlock = s.slice(callAt, s.indexOf('exit $exitCode'));
+    must(callBlock.includes('-ArchivedRel') && callBlock.includes('-ArchiveNotes'), 'C14', 'Publish-GateComment 调用未传 -ArchivedRel / -ArchiveNotes（入库截图清单进不了评论）');
+  }
+
   // C10 注册与文档
   must(/"build:mp-weixin-check"\s*:\s*"[^"]*scripts\/mp-weixin-check\.ps1"/.test(pkg), 'C10', 'package.json 未注册 build:mp-weixin-check');
   must(adr.includes('半自动'), 'C10', 'ADR-0008 未把 ② 记为半自动门');
@@ -168,7 +220,21 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动）', 
       ['C10', { ...real, agents: '人工门清单（无 ② 条目）' }],
       ['C11', { ...real, script: real.script.replace(/hx-busy\.ps1/g, 'other.ps1') }],
       ['C11', { ...real, script: real.script.replace(/Release-HxLock/g, 'ReleaseNothing') }],
-      ['C11', { ...real, script: real.script.replace('Release-HxLock', 'Stop-Process -Name HBuilderX -Force') }]
+      ['C11', { ...real, script: real.script.replace('Release-HxLock', 'Stop-Process -Name HBuilderX -Force') }],
+      // C12：删掉/挪走「重开项目窗口」这一步（pageStack 恒空的老问题）
+      ['C12', { ...real, script: real.script.replace("'open', '--project'", "'openX', '--project'") }],
+      ['C12', { ...real, script: real.script.replace("Invoke-Process -FilePath $devTools -Arguments @('open', '--project', $dist)", "Invoke-Process -FilePath $devTools -Arguments @('auto', '--project', $dist)") }],
+      ['C12', { ...real, script: real.script.replace(/devtools-open/g, 'devtools-x') }],
+      ['C12', { ...real, script: real.script.replace(/\$open\.TimedOut/g, '$openX.TimedOut') }],
+      // C13：把降级写成 PASS / 让 SKIP 静默变成通过
+      ['C13', { ...real, script: real.script.replace('navigation=SKIP reason=', 'navigation=PASS reason=') }],
+      ['C13', { ...real, script: real.script.replace('navigation=$navField', 'navigation=ok') }],
+      ['C13', { ...real, script: real.script.replace('降级（SKIP，非 PASS）', '结果说明') }],
+      ['C13', { ...real, probe: real.probe.replace(/navigation-api-unsupported/g, 'x') }],
+      ['C13', { ...real, probe: real.probe.replace(/'skip'/g, 'true') }],
+      ['C13', { ...real, probe: real.probe.replace('if (v === false)', 'if (v === true)') }],
+      // C14：续行反引号被删 ⇒ `-ArchivedRel …` 变成另一条命令（曾真实发生过）
+      ['C14', { ...real, script: real.script.replace(/-ReproCommand 'npm run build:mp-weixin-check' `/g, "-ReproCommand 'npm run build:mp-weixin-check'") }]
     ];
     cases.forEach(([rule, sources]) => {
       const found = scanContract(sources);
@@ -203,5 +269,60 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动）', 
     expect(real.script).toContain('$script:ArchiveMaxBytes = 150KB');
     expect(real.script).toContain('$script:ArchiveMaxTotal = 1.5MB');
     expect(real.script).toContain('$script:ArchiveMaxWidth = 720');
+  });
+
+  it('C12：close → open --project <dist> → auto 三步顺序写死，且 open 是显式步骤并写进日志', () => {
+    const s = real.script;
+    const closeIdx = s.indexOf("'close', '--project'");
+    const openIdx = s.indexOf("'open', '--project'");
+    const autoIdx = s.indexOf("'auto', '--project'");
+    expect(closeIdx).toBeGreaterThan(-1);
+    expect(openIdx).toBeGreaterThan(closeIdx);
+    expect(autoIdx).toBeGreaterThan(openIdx);
+    // 显式步骤 + 走 $dist（-SkipBuild 下同样定位构建产物）
+    expect(s).toContain("Invoke-Process -FilePath $devTools -Arguments @('open', '--project', $dist)");
+    expect(s).toContain('devtools-open');
+    expect(s).toMatch(/Write-Log "`n>>> devtools-open/);
+    expect(s).toContain('$open.TimedOut');
+    // 不得被 build 分支包住：open 必须晚于 -SkipBuild 分支的 no-dist 兜底
+    expect(openIdx).toBeGreaterThan(s.lastIndexOf('no-dist'));
+  });
+
+  it('C13：导航不可用时降级为 SKIP（不是 PASS），且写进结果行 / 日志 / 门评论', () => {
+    expect(real.probe).toContain('navigation-api-unsupported');
+    expect(real.probe).toContain("NAV_SKIP_ASSERTIONS");
+    expect(real.probe).toContain("'skip'");
+    expect(real.probe).toContain('if (v === false)');
+    expect(real.script).toContain('navigation=$navField');
+    expect(real.script).toContain('navigation=SKIP reason=');
+    expect(real.script).toContain('navigation-api-unsupported');
+    expect(real.script).toContain('降级（SKIP，非 PASS）');
+    expect(real.script).not.toMatch(/navigation=PASS/);
+    // 可验证子集写在脚本头里（门只对它作结论）
+    expect(real.script).toContain('可验证子集');
+    expect(real.script).toContain('currentPageScreenshot');
+    expect(real.probe).toContain('currentPageScreenshot');
+  });
+
+  it('C13：SKIP 不产生 failures，failures 只由可验证子集（明确 false）产生', () => {
+    // 静态守护：探针只把 `v === false` 收进 failures，且降级断言的值是字符串 'skip'
+    const probe = real.probe;
+    const finishBody = probe.slice(probe.indexOf('function finish('), probe.indexOf('const loaded = loadAutomator()'));
+    expect(finishBody).toMatch(/if \(v === false\) result\.failures\.push/);
+    expect(finishBody).toMatch(/:\s*'skip'/); // 降级时断言的值是字符串 'skip'（既不是 true 也不是 false）
+    expect(finishBody).not.toMatch(/v\)\s*\{\s*result\.failures/); // 旧的 `if (!v)` 形态（会把 SKIP 算成失败）
+  });
+
+  it('C14：贴评论调用是一条语句（续行反引号不缺，-ArchivedRel/-ArchiveNotes 在语句内）', () => {
+    const lines = real.script.split(/\r?\n/);
+    lines.forEach((line, idx) => {
+      if (!/^\s+-[A-Za-z][\w]*\b/.test(line)) return;
+      if (idx === 0) return;
+      expect(lines[idx - 1]).toMatch(/`\s*$/); // 上一行必须以续行反引号结尾
+    });
+    const callAt = real.script.indexOf('Publish-GateComment -PrNumber');
+    const callBlock = real.script.slice(callAt, real.script.indexOf('exit $exitCode'));
+    expect(callBlock).toContain('-ArchivedRel');
+    expect(callBlock).toContain('-ArchiveNotes');
   });
 });
