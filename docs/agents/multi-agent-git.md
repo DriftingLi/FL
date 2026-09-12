@@ -15,3 +15,42 @@
 - **绝不** **`git add -A`**：共享工作区常混有其他会话/工具的未提交改动（如 `forum.uts`、`.aider-desk/`、`.monitor/`），只 `git add <本次文件>`。
 
 用完 worktree 后记得清理：`git worktree remove <dir>` + `git branch -D <branch>`。
+
+## Windows 上用 worktree 的注意事项
+
+Windows 本机（`E:\` 盘）上 worktree 可用，但有几处与 Linux 不同，照下面做：
+
+- **一 worktree 一分支一会话**：`git worktree add E:\wt-<task> -b feat/<task> origin/master`，全程在 `E:\wt-<task>` 内改、提交、push、开 PR；用完 `git worktree remove E:\wt-<task>` + `git branch -D feat/<task>`。放在 `E:\wt-<task>`（与主树同级）而非盘符根，便于一眼看清是哪个会话的目录。
+
+- **`node_modules` 不要每个 worktree 重装**：目录联接（junction）共享主树那一份，省掉每个 worktree 2–5 分钟的 `npm ci`：
+  ```
+  cmd /c mklink /J <worktree>\training-app\叉车维修培训学员端跨端应用\node_modules <主树>\training-app\叉车维修培训学员端跨端应用\node_modules
+  ```
+  若确实需要孤立依赖（例如验证 lockfile 变更），才在 worktree 内 `npm ci --ignore-scripts`。
+
+- **junction 要先删再删目录**：PowerShell 7 的 `Remove-Item -Recurse -Force` 只删联接本身、不跟进主树（本机 PS 7.6.5 实测；Windows PowerShell 5.1 不保证），但**删 worktree 时先单独拆掉联接更稳**：`cmd /c rmdir <worktree>\training-app\叉车维修培训学员端跨端应用\node_modules`，再 `git worktree remove`。Windows PowerShell 5.1 下 `Remove-Item -Recurse` 是否会跟进 junction 并删掉主树内容，**未证实**——所以不要靠它。
+
+- **HBuilderX 仍要唯一项目名（worktree 解决不了）**：HBuilderX 按**项目名**解析，worktree / 完整 clone 里的项目目录 basename 与主树相同 ⇒ 跑 HBuilderX 前要把该项目目录改成**唯一名**。改名期间 `git diff --name-only` 会误报整目录删除（删除 + 未跟踪新增），所以**任何 git 操作前必须先把项目目录名改回**。
+
+- **`stash` 是全仓共享的**：所有 worktree 共用同一个 stash 栈。别在多 worktree 之间长期留 stash，用完即 `pop`/`drop`；否则另一会话 `/clear` 后无法分辨哪条 stash 是自己的。
+
+- **worktree 元数据也在 `.git` 下**：`.git/worktrees/` 与 `git worktree list` 全局共享，不是每个 worktree 一份。
+
+### ACL 修复（需管理员，一次性）
+
+现状：`E:\FL\.git\worktrees` **存在但列不出内容**（`Get-ChildItem` 返回 0 项；`git worktree list` 尚可列注册项），导致 `git worktree add` 连续失败 ⇒ 多会话隔离临时改用独立 clone（每个都要单独 `npm ci`）。已核实该目录当前**无残留注册项**（`git worktree list` 只有主树一条）与**无残留目录**（枚举为空），所以下面「删掉让 git 重建」是低风险的。
+
+优先配方——删掉坏目录让 git 重建（普通 PowerShell，路径无风险）：
+```
+Remove-Item -Recurse -Force E:\FL\.git\worktrees
+cd E:\FL; git worktree prune
+```
+若删除失败或之后仍列不出内容，改对目录重置权限（**管理员** PowerShell）：
+```
+icacls "E:\FL\.git\worktrees" /reset /T /C
+```
+修好后先 `git worktree list`，再跑一次 `git worktree add` 试通（试通后可 `git worktree remove` 收回）。
+
+⚠️ **该修复尚未执行**：截至 2026-09-12 仍是待办（`docs/agents/handoff-验收门-2026-09-11.md` 六、待办）。**修复前**多会话隔离继续用独立 clone，修好后再清理那些重复副本（已产生约 618 MB 重复副本，实测含 `node_modules` 的 6 个克隆目录合计约 892 MB）。
+
+> 红线：ACL 坏着时**不要执行 `git worktree add`**（必失败），也**不要为了绕过它去删 `.git` 下的其他内容**——只有上面这一条明确列出的目录可删，且需管理员执行。

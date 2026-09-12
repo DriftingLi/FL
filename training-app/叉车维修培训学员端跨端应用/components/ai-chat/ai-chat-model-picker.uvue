@@ -5,6 +5,7 @@
 		<view v-if="allModels.length == 0" class="picker-empty">暂无可用模型</view>
 		<view v-for="(m, idx) in allModels" :key="idx" class="picker-item" :class="{ active: currentModelId == m.id && currentModelSource != 'custom' }" @click="onSelectModel(m)">
 			<text class="picker-item-name">{{ m.name }}</text>
+			<text v-if="m.description && m.description.length > 0" class="picker-item-desc">{{ m.description }}</text>
 			<text class="picker-item-model">{{ m.model }}</text>
 		</view>
 		<view class="picker-action" :class="{ active: currentModelSource == 'custom' }" @click="onCustomClick">
@@ -110,10 +111,16 @@
 		font-weight: 500;
 	}
 
+	.picker-item-desc {
+		font-size: 22rpx;
+		color: #2979ff;
+		margin-top: 4rpx;
+	}
+
 	.picker-item-model {
 		font-size: 22rpx;
 		color: #999999;
-		margin-top: 6rpx;
+		margin-top: 4rpx;
 	}
 
 	.picker-action {

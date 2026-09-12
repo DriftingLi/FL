@@ -9,10 +9,12 @@
     "test:android": "cross-env UNI_PLATFORM=app UNI_OS_NAME=android jest -i",
     "test:ios": "cross-env UNI_PLATFORM=app UNI_OS_NAME=ios jest -i",
     "test:mp-weixin": "cross-env UNI_PLATFORM=mp-weixin jest -i",
+    "hx:run": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/hx-run.ps1",
     "build:compile": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/compile-check.ps1",
     "build:kotlin-all": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/kotlin-all-check.ps1",
     "build:mp-weixin-check": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/mp-weixin-check.ps1",
     "smoke:emulator": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/emulator-smoke.ps1",
+    "capture:device": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/device-capture.ps1",
     "setup:android-sdk": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/android-sdk-setup.ps1"
   },
   "devDependencies": {

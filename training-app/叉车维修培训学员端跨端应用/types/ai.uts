@@ -72,6 +72,7 @@ export type AIModelOption = {
 export type AIFunctionItem = {
     key : string
     title : string
-    icon : string
+    icon : string          // emoji 字符（专业版当前使用）
     prompt : string
+    iconPath ?: string     // 图片路径（基础版原型使用自定义图标）
 }

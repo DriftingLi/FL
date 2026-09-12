@@ -1,20 +1,33 @@
 <template>
 	<view class="ai-chat-nav" :style="{ paddingTop: statusBarHeight + 'px' }">
 		<view class="nav-content">
-			<text class="nav-icon" @click="onLeftClick">&#9776;</text>
-			<view class="nav-center">
-				<text class="nav-title">维修助手</text>
-				<view class="version-tabs">
-					<text class="version-tab" :class="{ active: version == 'basic' }" @click="onTabChange('basic')">基础版</text>
-					<text class="version-tab" :class="{ active: version == 'pro' }" @click="onTabChange('pro')">专业版</text>
+			<!-- 左：会话抽屉 -->
+			<view class="nav-left" @click="onLeftClick">
+				<view class="panel-icon">
+					<view class="panel-icon-line"></view>
 				</view>
 			</view>
-			<text class="nav-icon" @click="onMenuClick">&#9638;</text>
+
+			<!-- 中：版本标题 + 副标题 -->
+			<view class="nav-center">
+				<view class="nav-title-row">
+					<text class="nav-title">{{ versionTitle }}</text>
+					<text v-if="version == 'basic'" class="nav-sparkle">&#10024;</text>
+				</view>
+				<text class="nav-subtitle">维修助手</text>
+			</view>
+
+			<!-- 右：菜单入口（原型里的白胶囊是小程序端 chrome，App 端不画） -->
+			<view class="nav-right" @click="onMenuClick">
+				<text class="nav-more">&#8943;</text>
+			</view>
 		</view>
 	</view>
 </template>
 
 <script setup lang="uts">
+	import { computed } from 'vue'
+
 	const props = withDefaults(defineProps<{
 		version?: string
 		statusBarHeight?: number
@@ -23,7 +36,11 @@
 		statusBarHeight: 20
 	})
 
-	const emit = defineEmits(['leftClick', 'menuClick', 'tabChange'])
+	const emit = defineEmits(['leftClick', 'menuClick'])
+
+	const versionTitle = computed<string>(() : string => {
+		return props.version == 'pro' ? '专业版' : '基础版'
+	})
 
 	function onLeftClick() : void {
 		emit('leftClick')
@@ -32,34 +49,45 @@
 	function onMenuClick() : void {
 		emit('menuClick')
 	}
-
-	function onTabChange(v : string) : void {
-		if (v != props.version) {
-			emit('tabChange', v)
-		}
-	}
 </script>
 
 <style>
 	.ai-chat-nav {
-		background-color: #ffffff;
-		border-bottom: 1rpx solid #f0f0f0;
+		background-color: transparent;
 	}
 
 	.nav-content {
 		flex-direction: row;
 		align-items: center;
 		justify-content: space-between;
-		height: 88rpx;
-		padding: 0 24rpx;
+		padding: 8rpx 24rpx 0 24rpx;
 	}
 
-	.nav-icon {
-		font-size: 40rpx;
-		color: #333333;
-		padding: 12rpx;
+	/* 左：面板图标 */
+	.nav-left {
+		width: 160rpx;
+		height: 96rpx;
+		align-items: flex-start;
+		justify-content: center;
 	}
 
+	.panel-icon {
+		width: 44rpx;
+		height: 36rpx;
+		border: 3rpx solid #6b6b6b;
+		border-radius: 8rpx;
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.panel-icon-line {
+		width: 3rpx;
+		height: 24rpx;
+		background-color: #6b6b6b;
+		margin-left: 9rpx;
+	}
+
+	/* 中：标题 */
 	.nav-center {
 		flex: 1;
 		flex-direction: column;
@@ -67,26 +95,39 @@
 		justify-content: center;
 	}
 
-	.version-tabs {
+	.nav-title-row {
 		flex-direction: row;
 		align-items: center;
-		margin-bottom: 4rpx;
-	}
-
-	.version-tab {
-		font-size: 24rpx;
-		color: #999999;
-		padding: 4rpx 16rpx;
-	}
-
-	.version-tab.active {
-		color: #2979ff;
-		font-weight: 600;
 	}
 
 	.nav-title {
-		font-size: 28rpx;
-		color: #2979ff;
-		font-weight: 500;
+		font-size: 34rpx;
+		color: #333333;
+		font-weight: bold;
+	}
+
+	.nav-sparkle {
+		font-size: 26rpx;
+		margin-left: 6rpx;
+	}
+
+	.nav-subtitle {
+		font-size: 24rpx;
+		color: #65bbe9;
+		margin-top: 6rpx;
+	}
+
+	/* 右：菜单入口（宽度与左等宽，保证标题居中） */
+	.nav-right {
+		width: 160rpx;
+		height: 96rpx;
+		align-items: flex-end;
+		justify-content: center;
+	}
+
+	.nav-more {
+		font-size: 40rpx;
+		color: #333333;
+		padding: 8rpx 12rpx;
 	}
 </style>
