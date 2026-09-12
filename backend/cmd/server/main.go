@@ -29,6 +29,7 @@ import (
 	"forklift-training/internal/config"
 	"forklift-training/internal/daemon"
 	"forklift-training/internal/db"
+	"forklift-training/internal/geolocation"
 	applogger "forklift-training/internal/logger"
 	migratedb "forklift-training/internal/migrate"
 	"forklift-training/internal/security"
@@ -75,6 +76,14 @@ func main() {
 	logger.Info("配置加载完成", zap.String("env", cfg.AppEnv), zap.String("port", cfg.Port))
 	for _, w := range cfg.CORSConfigWarnings() {
 		logger.Warn(w)
+	}
+
+	// 1.6 IP 属地库自检（ADR-0045）：内嵌 xdb 的版本来自库头，写进启动日志便于追溯。
+	// 加载失败时属地会**静默全空**（展示侧「为空即整段不渲染」），所以这里必须留痕。
+	if v := geolocation.DataVersion(); v != "" {
+		logger.Info("IP 属地库已加载", zap.String("version", v))
+	} else {
+		logger.Warn("IP 属地库加载失败：帖子与回复的属地将一律为空（展示侧整段不渲染，不阻断发帖）")
 	}
 
 	// 2. GORM 连接数据库

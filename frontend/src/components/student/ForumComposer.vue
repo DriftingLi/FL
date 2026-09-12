@@ -23,6 +23,7 @@ import UiTag from '@/components/ui/UiTag.vue'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 import ForumContent from './ForumContent.vue'
 import { useForumContentFormat, FORUM_FORMAT_OPTIONS } from '@/composables/useForumContentFormat'
+import { FORUM_REGION_NOTICE } from '@/utils/forumDisplay'
 import type { ForumContentFormat } from '@/api/forum'
 
 const props = withDefaults(
@@ -193,6 +194,10 @@ function onKeydown(event: KeyboardEvent) {
           {{ previewing ? '继续编辑' : '预览' }}
         </UiButton>
       </div>
+
+      <!-- 发布前披露（ADR-0045）：ui-conventions「不写说明性 hint」的明确例外，
+           文案单点在 forumDisplay.FORUM_REGION_NOTICE —— 别在这里另抄一份。 -->
+      <p class="forum-region-notice mt-1.5 mb-0 text-xs text-ink-3">{{ FORUM_REGION_NOTICE }}</p>
 
       <div class="mt-2 flex items-center gap-2 border-t border-line pt-2">
         <UiButton

@@ -36,7 +36,12 @@ type ForumTopic struct {
 	Content   string `gorm:"column:content" json:"content"`
 	// ContentFormat 正文格式声明（ADR-0044）：text=纯文本 / markdown=受限 Markdown 子集。
 	// 作者自述；缺省 text（service 把空串归一为 text，故列 NOT NULL）。
-	ContentFormat   string     `gorm:"column:content_format;not null;default:text" json:"content_format"`
+	ContentFormat string `gorm:"column:content_format;not null;default:text" json:"content_format"`
+	// IPProvince / IPCity 发布那一刻的 IP 属地快照（ADR-0045）：省/州 与 市。
+	// 空串 = 无属地（内网 / 保留地址 / 库无该段 / 存量行）。**只在首次发布时写入**，
+	// 编辑路径不写——属地是发布那一刻的事实，不是用户资料。
+	IPProvince      string     `gorm:"column:ip_province;not null;default:''" json:"ip_province"`
+	IPCity          string     `gorm:"column:ip_city;not null;default:''" json:"ip_city"`
 	Images          JSONB      `gorm:"column:images;type:jsonb" json:"images"`
 	ViewCount       int        `gorm:"column:view_count;default:0" json:"view_count"`
 	ReplyCount      int        `gorm:"column:reply_count;default:0" json:"reply_count"`
@@ -60,10 +65,13 @@ type ForumReply struct {
 	ParentID *int64 `gorm:"column:parent_id" json:"parent_id,omitempty"`
 	Content  string `gorm:"column:content" json:"content"`
 	// ContentFormat 正文格式声明（ADR-0044），与 ForumTopic 同口径。
-	ContentFormat string    `gorm:"column:content_format;not null;default:text" json:"content_format"`
-	Images        JSONB     `gorm:"column:images;type:jsonb" json:"images"`
-	LikesCount    int       `gorm:"column:likes_count;default:0" json:"likes_count"`
-	CreatedAt     time.Time `gorm:"column:created_at" json:"created_at"`
+	ContentFormat string `gorm:"column:content_format;not null;default:text" json:"content_format"`
+	// IPProvince / IPCity 发布那一刻的属地快照（ADR-0045），与 ForumTopic 同口径。
+	IPProvince string    `gorm:"column:ip_province;not null;default:''" json:"ip_province"`
+	IPCity     string    `gorm:"column:ip_city;not null;default:''" json:"ip_city"`
+	Images     JSONB     `gorm:"column:images;type:jsonb" json:"images"`
+	LikesCount int       `gorm:"column:likes_count;default:0" json:"likes_count"`
+	CreatedAt  time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
 func (ForumReply) TableName() string { return "forum_replies" }

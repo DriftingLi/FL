@@ -25,6 +25,7 @@ import UiButton from '@/components/ui/UiButton.vue'
 import ForumImageUploader from './ForumImageUploader.vue'
 import ForumContent from './ForumContent.vue'
 import { useForumContentFormat, FORUM_FORMAT_OPTIONS } from '@/composables/useForumContentFormat'
+import { FORUM_REGION_NOTICE } from '@/utils/forumDisplay'
 
 const props = withDefaults(defineProps<{
   /**
@@ -248,6 +249,9 @@ defineExpose({ canSubmit, submitting, submit, reset })
         :placeholder="effectiveContentPlaceholder"
       />
       <p v-if="activeHint" class="mt-1.5 mb-0 text-xs text-ink-3">{{ activeHint }}</p>
+      <!-- 发布前披露（ADR-0045）：ui-conventions「不写说明性 hint」的明确例外，
+           文案单点在 forumDisplay.FORUM_REGION_NOTICE —— 别在这里另抄一份。 -->
+      <p class="forum-region-notice mt-1.5 mb-0 text-xs text-ink-3">{{ FORUM_REGION_NOTICE }}</p>
     </div>
 
     <div>

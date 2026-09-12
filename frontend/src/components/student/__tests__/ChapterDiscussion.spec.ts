@@ -67,35 +67,25 @@ function reply(id: number, over: Partial<ForumReplyItem> = {}): ForumReplyItem {
 }
 
 /** 挂载并展开第一个章节帖（章节讨论是「列表 → 点击展开详情」两级加载） */
-async function mountExpanded(replies: ForumReplyItem[]) {
+async function mountExpanded(replies: ForumReplyItem[], topicOver: Record<string, unknown> = {}) {
+  const topicStub = {
+    id: 1,
+    chapter_id: 1,
+    category: 'discussion',
+    title: '章节讨论帖',
+    content: '内容',
+    view_count: 0,
+    reply_count: replies.length,
+    created_at: '2026-08-01T10:00:00+08:00',
+    author: { user_id: 1, username: '楼主', avatar_url: '' },
+    ...topicOver
+  }
   listTopics.mockResolvedValue({
-    topics: [
-      {
-        id: 1,
-        chapter_id: 1,
-        category: 'discussion',
-        title: '章节讨论帖',
-        content: '内容',
-        view_count: 0,
-        reply_count: replies.length,
-        created_at: '2026-08-01T10:00:00+08:00',
-        author: { user_id: 1, username: '楼主', avatar_url: '' }
-      }
-    ],
+    topics: [topicStub],
     total: 1
   } as never)
   getTopic.mockResolvedValue({
-    topic: {
-      id: 1,
-      chapter_id: 1,
-      category: 'discussion',
-      title: '章节讨论帖',
-      content: '内容',
-      view_count: 0,
-      reply_count: replies.length,
-      created_at: '2026-08-01T10:00:00+08:00',
-      author: { user_id: 1, username: '楼主', avatar_url: '' }
-    },
+    topic: topicStub,
     replies,
     page: 1,
     pages: 1,
@@ -276,5 +266,32 @@ describe('章节讨论回复区对齐（#858）', () => {
     const parent = wrapper.find('.reply-parent')
     expect(parent.exists()).toBe(true)
     expect(parent.text()).toContain('上游')
+  })
+})
+
+describe('章节讨论的属地（#889 / ADR-0045）', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('帖子头与回复署名行都显示属地（与详情页同口径）', async () => {
+    const wrapper = await mountExpanded(
+      [reply(1, { ip_province: '江苏省', ip_city: '南京市' })],
+      { ip_province: '广东省', ip_city: '深圳市' }
+    )
+
+    // 帖子头：作者名 · 时间 · 属地
+    const header = wrapper.find('.chapter-topic-time')
+    expect(header.exists()).toBe(true)
+    expect(header.text()).toContain('· 深圳市')
+
+    // 回复署名行：与详情页共用同一张卡
+    const region = wrapper.find('.reply-region')
+    expect(region.exists()).toBe(true)
+    expect(region.text()).toBe('· 南京市')
+  })
+
+  it('无属地：帖子头那一段整段不渲染（连分隔符也没有）', async () => {
+    const wrapper = await mountExpanded([reply(1)])
+    expect(wrapper.find('.chapter-topic-time').text()).not.toContain('·')
+    expect(wrapper.find('.reply-region').exists()).toBe(false)
   })
 })
