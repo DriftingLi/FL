@@ -47,9 +47,18 @@
     默认（只读）模式的行为：不切页，仅对**当前前台**采 1 张图（-Pages 只有一页时用 该页-current 命名），
     -Pages 里每一页在报告里标 SKIP（未切页：切页默认关闭）——**不假装跑过**。
 
+    ### 切页分支**实测不生效**（2026-09-12，首次真机实测，PR #898 复现）
+    本脚本的切页走 `am start -n <launcher> -a VIEW -d uniapp://<page> --ez dcloud_open_url true --es dcloud_page <page>`，
+    **实测该意图未能让 App 换页**：五页连跑，`*-after.png` 的 SHA256 **完全相同**、实拍内容为同一页（App 停在原页）。
+    即：**`-AllowAppStart` 目前只能采到「当前那一页」，做不到逐页。**
+    `docs/verification/device/624-checklist.md` 原文已注明该分支「未在真机跑过」——本次是它的第一次真机实测，结论是不工作。
+    已知可用的替代切页机制是 HBuilderX 的 `cli launch app-android --pagePath <页>`（实测能进目标页），
+    但每页都要过一遍 HBuilderX，成本高 ⇒ **是否为此更换切页机制待裁定**，本脚本不做猜测性改动。
+
     ## 判成败（只看输出里的 DEVICE_CAPTURE_RESULT=）
     断言（不满足 ⇒ exit 1）：前台 Activity 可取得、截图落盘且非 0 字节、窗口内无 FATAL EXCEPTION、
-    窗口内无 ANR in 前台包名。
+    窗口内无 ANR in 前台包名；**切页模式下另有「页身份」断言**：两页及以上截图哈希相同 ⇒ 判相关页 FAIL
+    （防「切页静默失效却各判 PASS」——上面四项覆盖不到「目标页是否真的加载」）。
     环境不满足（缺 adb / 无设备 / 多设备未指定 -Device / 设备非 online）⇒ exit 2。
     **截图压缩与入库失败一律只警告、不影响结论**（-NoArchive 可整体跳过）。
 
@@ -333,11 +342,15 @@ function Export-Screenshot {
     & cmd.exe /c $cmd 2>&1 | Out-Null
     if (Test-Path -LiteralPath $path -PathType Leaf) {
         $size = (Get-Item -LiteralPath $path).Length
-        Write-Log "截图：$Name（$([math]::Round($size / 1KB, 1)) KB）"
-        return [pscustomobject]@{ Page = $Name; Path = $path; Name = $Name; Bytes = $size }
+        # sha256 供「页身份 fail-closed」用：切页失效时多页会拍到同一屏（2026-09-12 实测，见 PR #898）
+        $hash = ''
+        if ($size -gt 0) { $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash }
+        $short = if ($hash.Length -ge 16) { $hash.Substring(0, 16) } else { $hash }
+        Write-Log "截图：$Name（$([math]::Round($size / 1KB, 1)) KB，sha256=$short…）"
+        return [pscustomobject]@{ Page = $Name; Path = $path; Name = $Name; Bytes = $size; Hash = $hash }
     }
     Write-Log "截图失败：$Name（文件未生成）"
-    return [pscustomobject]@{ Page = $Name; Path = $path; Name = $Name; Bytes = 0 }
+    return [pscustomobject]@{ Page = $Name; Path = $path; Name = $Name; Bytes = 0; Hash = '' }
 }
 
 # ================= 切页（写操作：**仅** -AllowAppStart 显式开启时可达） =================
@@ -667,6 +680,36 @@ try {
             Write-Log "  前台=$($fg.Component) 截图=$($shot.Name) 判定=$status"
             $pageResults += [pscustomobject]@{ Page = $page; Status = $status; Detail = ($pageFail -join '；'); Shot = $shot.Name }
         }
+
+        # ---- 页身份 fail-closed：多页截图哈希相同 ⇒ 切页没真的生效 ----
+        # 实测（2026-09-12，PR #898）：`am start -d uniapp://<page>` 未被 App 处理，App 停在原页，
+        # 五张 *-after.png 哈希完全相同却因「前台/字节数/FATAL/ANR」四项都过而各判 PASS。
+        # 上面那四项覆盖不到「目标页是否真的加载」⇒ 这里补一条：哈希撞车即判相关页 FAIL，绝不静默放过。
+        $passShots = @()
+        foreach ($r in $pageResults) {
+            if ($r.Status -ne 'PASS') { continue }
+            $rec = @($script:ShotRecords | Where-Object { $_.Name -eq $r.Shot })[0]
+            if ($rec -and $rec.Hash) { $passShots += [pscustomobject]@{ Page = $r.Page; Hash = $rec.Hash } }
+        }
+        if (@($passShots).Count -ge 2) {
+            $groups = @{}
+            foreach ($ps in $passShots) {
+                if ($groups.ContainsKey($ps.Hash)) { $groups[$ps.Hash] = @($groups[$ps.Hash]) + @($ps.Page) }
+                else { $groups[$ps.Hash] = @($ps.Page) }
+            }
+            foreach ($h in @($groups.Keys)) {
+                $same = @($groups[$h])
+                if ($same.Count -lt 2) { continue }
+                $shortHash = if ($h.Length -ge 16) { $h.Substring(0, 16) } else { $h }
+                $detail = "切页未生效：截图哈希与 $(($same | Select-Object -Skip 1) -join '、') 相同（sha256=$shortHash…）—— 疑似 uniapp:// 深链未被 App 处理"
+                foreach ($p in $same) {
+                    $hit = @($pageResults | Where-Object { $_.Page -eq $p })[0]
+                    if ($hit) { $hit.Status = 'FAIL'; $hit.Detail = $detail }
+                    $failures += "$p -> $detail"
+                    Write-Log "  FAIL $p -> $detail"
+                }
+            }
+        }
     }
 
     # ---------------- logcat 窗口断言 ----------------
@@ -698,7 +741,8 @@ try {
         "切页：$(if ($CanStart) { '已显式开启（-AllowAppStart）' } else { '关闭（只读；未切页）' })",
         "logcat：窗口起点=$($final.WindowStart) 窗口行数=$($final.WindowLines)  FATAL EXCEPTION=$($final.FatalCount)  ANR in 包=$($final.AnrPkgCount)  ANR 合计=$($final.AnrAllCount)  E AndroidRuntime=$($final.RuntimeCrashes)  进程死亡=$($final.ProcessDeaths)",
         "页面判定：PASS=$(@($pageResults | Where-Object { $_.Status -eq 'PASS' }).Count)  FAIL=$(@($pageResults | Where-Object { $_.Status -eq 'FAIL' }).Count)  SKIP=$(@($pageResults | Where-Object { $_.Status -eq 'SKIP' }).Count)",
-        "截图：$(($script:ShotRecords | ForEach-Object { "$($_.Name)=$($_.Bytes)B" }) -join ', ')",
+        "截图：$(($script:ShotRecords | ForEach-Object { $h = if ($_.Hash -and $_.Hash.Length -ge 12) { $_.Hash.Substring(0, 12) } else { 'n/a' }; "$($_.Name)=$($_.Bytes)B/$h" }) -join ', ')",
+        "页身份断言：$(if ($CanStart) { '已启用 —— 多页截图哈希相同即判 FAIL（防切页静默失效）' } else { '不适用（未切页）' })",
         "目录=$VerifyRoot  日志=$LogPath"
     )
     $summary | ForEach-Object { Write-Log $_ }

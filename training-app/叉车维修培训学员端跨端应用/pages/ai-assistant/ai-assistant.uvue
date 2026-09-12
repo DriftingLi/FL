@@ -1,7 +1,7 @@
 <template>
-	<view class="ai-page">
+	<view class="ai-page" :style="{ height: windowHeight + 'px' }">
 		<!-- 自定义导航栏 -->
-		<AiChatNav :version="'pro'" :status-bar-height="statusBarHeight" @left-click="toggleSidebarLeft" @menu-click="toggleSidebarRight" @tab-change="onTabChange" />
+		<AiChatNav :version="'pro'" :status-bar-height="statusBarHeight" @left-click="toggleSidebarLeft" @menu-click="toggleSidebarRight" />
 
 		<!-- 主内容区 -->
 		<view class="main">
@@ -10,7 +10,8 @@
 				<view class="function-grid">
 					<view v-for="(item, idx) in functionItems" :key="idx" class="function-item" @click="onFunctionClick(item)">
 						<view class="function-icon-box">
-							<text class="function-icon">{{ item.icon }}</text>
+							<image v-if="item.iconPath && item.iconPath.length > 0" class="function-icon-img" :src="item.iconPath" mode="aspectFit" />
+							<text v-else class="function-icon-emoji">{{ item.icon }}</text>
 						</view>
 						<text class="function-title">{{ item.title }}</text>
 					</view>
@@ -38,7 +39,7 @@
 		</view>
 
 		<!-- 底部输入区（专业版带模型选择器） -->
-		<AiChatInput :show-model-bar="true" :model-name="currentModelName" @send="onInputSend" @model-click="showModelPicker = true" />
+		<AiChatInput :show-model-bar="true" :model-name="currentModelName" :show-image-button="true" @send="onInputSend" @model-click="showModelPicker = true" @voice-click="onVoiceClick" @image-click="onImageClick" />
 
 		<!-- 底部导航栏 -->
 		<TabBar :active-index="2"></TabBar>
@@ -83,6 +84,9 @@
 	import TabBar from '../../components/tab-bar/tab-bar.uvue'
 
 	const auth = useAuthStore()
+
+	// 页面根 view 需显式高度，否则背景渐变不绘制（先例 dashboard/forum/courses 同写法）
+	const windowHeight = uni.getSystemInfoSync().windowHeight
 
 	// 聊天核心逻辑
 	const {
@@ -193,6 +197,14 @@
 		uni.setClipboardData({ data: content, success: () => { uni.showToast({ title: '已复制', icon: 'success' }) } })
 	}
 
+	function onVoiceClick() : void {
+		uni.showToast({ title: '语音输入开发中', icon: 'none' })
+	}
+
+	function onImageClick() : void {
+		uni.showToast({ title: '图片发送开发中', icon: 'none' })
+	}
+
 	function getLastUserMessage() : string {
 		for (let i = messages.value.length - 1; i >= 0; i--) {
 			if (messages.value[i].role == 'user') {
@@ -214,12 +226,6 @@
 	function goBasic() : void {
 		setVersion('basic')
 		uni.reLaunch({ url: '/pages/ai-assistant/ai-basic' })
-	}
-
-	function onTabChange(v : string) : void {
-		if (v == 'basic') {
-			goBasic()
-		}
 	}
 
 	// 会话操作
@@ -457,8 +463,12 @@
 
 <style>
 	.ai-page {
-		flex: 1;
-		background-color: #f8f8f8;
+		display: flex;
+		flex-direction: column;
+		/* 实色兜底：真机实测 background: linear-gradient(...) 不绘制（dashboard 等同款写法同样静默失败），
+		   故先给实色底，再叠渐变——渐变生效则覆盖，不生效则退回实色 */
+		background-color: #dfeffb;
+		background-image: linear-gradient(180deg, #d2ebfc 0%, #e1eff9 45%, #edf3f6 100%);
 	}
 
 	.main {
@@ -478,26 +488,29 @@
 
 	.function-item {
 		align-items: center;
-		width: 22%;
+		width: 19%;
 	}
 
 	.function-icon-box {
-		width: 96rpx;
-		height: 96rpx;
-		background-color: #e5e5e5;
-		border-radius: 16rpx;
+		width: 84rpx;
+		height: 84rpx;
 		align-items: center;
 		justify-content: center;
-		margin-bottom: 12rpx;
+		margin-bottom: 10rpx;
 	}
 
-	.function-icon {
-		font-size: 44rpx;
+	.function-icon-img {
+		width: 84rpx;
+		height: 84rpx;
+	}
+
+	.function-icon-emoji {
+		font-size: 68rpx;
 	}
 
 	.function-title {
-		font-size: 24rpx;
-		color: #666666;
+		font-size: 20rpx;
+		color: #333333;
 		text-align: center;
 	}
 

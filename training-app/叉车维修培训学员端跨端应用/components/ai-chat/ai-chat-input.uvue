@@ -1,18 +1,26 @@
 <template>
-	<view class="input-area">
-		<view v-if="showModelBar" class="model-bar">
-			<view class="model-selector" @click="onModelClick">
-				<text class="model-icon">&#9733;</text>
-				<text class="model-name">{{ modelName }}</text>
-				<text class="model-arrow">&#9662;</text>
-			</view>
-		</view>
-		<view class="input-row">
-			<text v-if="showImageButton" class="image-btn" @click="onImageClick">&#128206;</text>
-			<view class="input-box">
-				<input v-model="inputText" class="chat-input" :placeholder="placeholder" confirm-type="send" @confirm="onSend" />
-			</view>
+	<view class="input-card">
+		<!-- 上排：占位符 + 发送 -->
+		<view class="input-top">
+			<input v-model="inputText" class="chat-input" :placeholder="placeholder" confirm-type="send" @confirm="onSend" />
 			<text class="send-btn" :class="{ disabled: inputText.length == 0 || disabled }" @click="onSend">&#10148;</text>
+		</view>
+		<!-- 下排：模型芯片 + 动作按钮 -->
+		<view class="input-bottom">
+			<view v-if="showModelBar" class="model-chip" @click="onModelClick">
+				<text class="model-logo">&#10022;</text>
+				<text class="model-name">{{ modelName }}</text>
+				<text v-if="modelDesc.length > 0" class="model-desc">{{ modelDesc }}</text>
+				<text v-if="!modelReadonly" class="model-arrow">&#8964;</text>
+			</view>
+			<view class="action-group">
+				<view v-if="showImageButton" class="action-btn" @click="onImageClick">
+					<text class="action-icon">&#128206;</text>
+				</view>
+				<view class="action-btn" @click="onVoiceClick">
+					<text class="action-icon">&#128266;</text>
+				</view>
+			</view>
 		</view>
 	</view>
 </template>
@@ -22,17 +30,21 @@
 		placeholder?: string
 		showModelBar?: boolean
 		modelName?: string
+		modelDesc?: string
+		modelReadonly?: boolean
 		disabled?: boolean
 		showImageButton?: boolean
 	}>(), {
 		placeholder: '提出你想要知道的问题',
 		showModelBar: false,
 		modelName: '',
+		modelDesc: '',
+		modelReadonly: false,
 		disabled: false,
 		showImageButton: false
 	})
 
-	const emit = defineEmits(['send', 'modelClick', 'imageClick'])
+	const emit = defineEmits(['send', 'modelClick', 'imageClick', 'voiceClick'])
 
 	const inputText = ref<string>('')
 
@@ -50,81 +62,101 @@
 	function onImageClick() : void {
 		emit('imageClick')
 	}
+
+	function onVoiceClick() : void {
+		emit('voiceClick')
+	}
 </script>
 
 <style>
-	.input-area {
+	.input-card {
 		background-color: #ffffff;
-		border-top: 1rpx solid #f0f0f0;
-		padding: 16rpx 24rpx;
-	}
-
-	.model-bar {
-		flex-direction: row;
-		align-items: center;
-		justify-content: space-between;
-		margin-bottom: 16rpx;
-	}
-
-	.model-selector {
-		flex-direction: row;
-		align-items: center;
-		background-color: #f5f5f5;
 		border-radius: 24rpx;
-		padding: 10rpx 20rpx;
+		margin: 12rpx 20rpx;
+		padding: 20rpx 20rpx 14rpx 20rpx;
+		border: 1rpx solid #eaf2f8;
 	}
 
-	.model-icon {
-		font-size: 24rpx;
-		color: #2979ff;
-		margin-right: 8rpx;
-	}
-
-	.model-name {
-		font-size: 24rpx;
-		color: #333333;
-		margin-right: 8rpx;
-		max-width: 300rpx;
-	}
-
-	.model-arrow {
-		font-size: 20rpx;
-		color: #999999;
-	}
-
-	.input-row {
+	.input-top {
 		flex-direction: row;
-		align-items: center;
-	}
-
-	.input-box {
-		flex: 1;
-		background-color: #f5f5f5;
-		border-radius: 36rpx;
-		padding: 0 24rpx;
-		margin: 0 12rpx;
+		align-items: flex-start;
 	}
 
 	.chat-input {
+		flex: 1;
 		height: 72rpx;
 		font-size: 28rpx;
 		color: #333333;
 	}
 
-	.image-btn {
-		font-size: 40rpx;
-		color: #666666;
-		padding: 12rpx;
-		margin-right: 8rpx;
-	}
-
 	.send-btn {
 		font-size: 40rpx;
-		color: #2979ff;
-		padding: 12rpx;
+		color: #6db8e8;
+		padding: 8rpx 4rpx 8rpx 16rpx;
 	}
 
 	.send-btn.disabled {
-		color: #cccccc;
+		color: #cfe6f5;
+	}
+
+	.input-bottom {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		margin-top: 8rpx;
+	}
+
+	.model-chip {
+		flex-direction: row;
+		align-items: center;
+		background-color: #f5f5f5;
+		border-radius: 32rpx;
+		padding: 10rpx 20rpx;
+		flex: 1;
+		margin-right: 12rpx;
+	}
+
+	.model-logo {
+		font-size: 26rpx;
+		color: #6e5bff;
+		margin-right: 10rpx;
+	}
+
+	.model-name {
+		font-size: 24rpx;
+		color: #666666;
+		margin-right: 10rpx;
+	}
+
+	.model-desc {
+		flex: 1;
+		font-size: 20rpx;
+		color: #9a9a9a;
+	}
+
+	.model-arrow {
+		font-size: 22rpx;
+		color: #999999;
+		margin-left: 8rpx;
+	}
+
+	.action-group {
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.action-btn {
+		width: 64rpx;
+		height: 64rpx;
+		border-radius: 32rpx;
+		background-color: #f5f5f5;
+		align-items: center;
+		justify-content: center;
+		margin-left: 12rpx;
+	}
+
+	.action-icon {
+		font-size: 30rpx;
+		color: #8a8a8a;
 	}
 </style>
