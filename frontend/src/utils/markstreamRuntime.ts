@@ -76,11 +76,10 @@ let applied: Promise<void> | null = null
 /**
  * 应用启动时调用一次（`main.ts`，`void setupMarkstreamRuntime()`）。重复调用返回同一个 Promise。
  *
- * 为什么连 markstream 本体也走动态 import：它是 937KB 的 chunk，而**入口 chunk 的静态依赖
- * 会被每一个路由 chunk 继承**（Rollup 的 hoistTransitiveImports，实测：把它静态挂到
- * `main.ts` 之后，连登录页都多出 `markstream/katex/mermaid/markdown` 四条静态 import）。
- * 这与「重型 peer 不拖首屏」是同一件事，只是漏在上一层——**开启动作发生在启动处，
- * 不等于开启动作的代码必须进首包**。
+ * 为什么连 markstream 本体也走动态 import：它是 939KB 的 chunk，而**入口 chunk 的静态依赖会被
+ * 每一个路由 chunk 继承**——实测把它静态挂到 `main.ts` 之后，连登录页都多出 markstream / katex /
+ * mermaid / marked 四条静态 import，首屏从约 1.5MB 涨到 6.1MB。这与「重型 peer 不拖首屏」是同一件事，
+ * 只是漏在上一层：**开启动作发生在启动处，不等于开启动作的代码必须进首包**。
  *
  * 代价与兜底：开启是异步的（差一个 chunk 的加载时间）。首屏渲染时若内容面已经挂载完，
  * 极早期渲染的公式/图表会先按降级形态（源码 / 纯文本）出现——按 ADR-0046 属
