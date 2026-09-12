@@ -197,7 +197,7 @@ UTS（uni-app-x 的 TypeScript 变体）不支持以下 TypeScript 语法：
 - **kill `cli` 或 HBuilderX 主程序**——违反 ADR-0008 的「HBuilderX 是单实例串行资源」坑位：**忙就等**（`scripts/lib/hx-busy.ps1` 的「锁 + 忙探测 + 等待上限」），超时 `exit 2` 并改跑不需要 HBuilderX 的检查（`npm run test:unit` / `build:kotlin-all -SkipPublish` / `smoke:emulator`）；`hx-run.ps1` 内不含任何强杀调用。
 - 拿**仿真机当热刷新用**——仿真机是**前置冒烟**（`npm run smoke:emulator`，非门、不替代 ①），装一次 SDK 3–4 GB / 20–40 分钟，不适合秒级迭代。
 
-**HBuilderX 回写坑位同样适用**：跑完任何 HBuilderX 步骤（含 `hx-run.ps1`）先 `git status` 看 `manifest.json` 是否被改脏，脏了就还原再继续。
+**HBuilderX 回写坑位同样适用**：跑完任何 HBuilderX 步骤（含 `hx-run.ps1`）先 `git status` 看 `manifest.json` **与 `pages.json`** 是否被改脏，脏了就还原再继续 —— 后者会被写入一段 `condition`（GUI 选的启动页，注释自述「仅开发期间生效」），**属本地开发配置、禁止提交**；而 `pages.json` 同时是「运行时面 / 打包面」判据来源，误提交会让 PR 凭空命中 ④b 云打包门（详见 `docs/adr/0008-移动端验收门与证据.md`）。
 
 ## 验收门与合并纪律（ADR-0008）
 
