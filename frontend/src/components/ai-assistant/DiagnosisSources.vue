@@ -27,6 +27,7 @@
           :content="stripImageMarkers(source.text)"
           :final="true"
           html-policy="escape"
+          :mermaid-props="MARKSTREAM_MERMAID_PROPS"
           :fade="false"
           class="line-clamp-6"
         />
@@ -51,6 +52,7 @@
 // 外部助手吐绝对路径（/assistant/static/manual/…，lxc101 取证）：strip 后再进后端代理。
 import { ref } from 'vue'
 import MarkdownRender from 'markstream-vue'
+import { MARKSTREAM_MERMAID_PROPS } from '@/utils/markstreamRuntime'
 import { aiAssistantApi, type DiagnosisSource } from '@/api/aiAssistant'
 import SourcesFoldHeader from '@/components/ai-assistant/SourcesFoldHeader.vue'
 

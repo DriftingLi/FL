@@ -60,6 +60,85 @@ function vditorStaticPlugin(): Plugin {
   }
 }
 
+/**
+ * 从模块 id 取出它属于哪个 npm 包（处理 `@scope/name` 与嵌套 node_modules）。
+ * 用于「某个包属于哪个 chunk」的判断——按包名而不是路径片段匹配，
+ * 免得 `/marked/` 这种规则把 `marked-katex-extension` 之外的东西也卷进来。
+ */
+function packageNameOf(id: string): string {
+  const marker = '/node_modules/'
+  const index = id.lastIndexOf(marker)
+  if (index === -1) return ''
+  const segments = id.slice(index + marker.length).split('/')
+  const first = segments[0] ?? ''
+  return first.startsWith('@') ? `${first}/${segments[1] ?? ''}` : first
+}
+
+function readPackageJson(name: string): { dependencies?: Record<string, string> } | null {
+  try {
+    return JSON.parse(fs.readFileSync(path.resolve(__dirname, 'node_modules', name, 'package.json'), 'utf8'))
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 某个包的**独占依赖闭包**（#900）。
+ *
+ * 重型可选渲染 peer（mermaid / stream-diffs）必须和它们的传递依赖同进退：
+ * 只要有任何一个依赖落进 vendor，而 vendor 被入口静态引用，首屏就会白白背上
+ * d3 / cytoscape / shiki 这些几百 KB 的东西——「动态 import 不拖首屏」当场失效。
+ * mermaid 的闭包有 100 个包（d3 / cytoscape / dagre / roughjs…），手写清单会随
+ * 版本漂移腐烂，所以在构建期从 node_modules 现算。
+ * `shared` 是本仓库自身的依赖（katex / marked / dayjs 已有各自分块），遇到就停：
+ * 这些包由它们自己的规则归置，本闭包不再重复认领。
+ */
+function dependencyClosure(rootPackage: string, shared: Set<string>): Set<string> {
+  const names = new Set<string>()
+  const queue = Object.keys(readPackageJson(rootPackage)?.dependencies ?? {})
+  while (queue.length > 0) {
+    const name = queue.shift() as string
+    if (names.has(name) || shared.has(name)) continue
+    names.add(name)
+    queue.push(...Object.keys(readPackageJson(name)?.dependencies ?? {}))
+  }
+  return names
+}
+
+const APP_DEPENDENCIES = new Set(
+  Object.keys(
+    (JSON.parse(fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf8')) as { dependencies?: Record<string, string> })
+      .dependencies ?? {}
+  )
+)
+
+/** 按需 peer：chunk 名与包名同名（清单只有这一处，加减 peer 改这里）。 */
+const LAZY_PEERS = ['katex', 'stream-diffs', 'mermaid'] as const
+const LAZY_PEER_ROOTS = new Set<string>(LAZY_PEERS)
+
+/**
+ * 应用**其余依赖**的传递闭包。
+ *
+ * 这一步是必须的，不是保险：按需 peer 的闭包里有一批**公共库**（mermaid → lodash-es），
+ * 而别的依赖也在用同一个包（element-plus → lodash-es）。若把 lodash-es 划给 mermaid
+ * chunk，element-plus 的 chunk 就会**静态 import 整个 mermaid chunk**——实测首屏 +3MB，
+ * 且因为 EP 在入口图里，这个边一路传染到每一个路由 chunk。
+ * 所以「按需 chunk 的独占依赖」= peer 闭包 **减去** 应用其余依赖的闭包。
+ */
+const APP_STATIC_CLOSURE = new Set<string>(APP_DEPENDENCIES)
+for (const dep of APP_DEPENDENCIES) {
+  if (LAZY_PEER_ROOTS.has(dep)) continue
+  for (const name of dependencyClosure(dep, new Set())) APP_STATIC_CLOSURE.add(name)
+}
+
+/** 包名 → 它所属的「按需 chunk」 */
+const LAZY_PEER_CHUNKS = new Map<string, string>(LAZY_PEERS.map((name) => [name, name]))
+for (const peer of LAZY_PEERS) {
+  for (const name of dependencyClosure(peer, APP_STATIC_CLOSURE)) {
+    if (!LAZY_PEER_CHUNKS.has(name)) LAZY_PEER_CHUNKS.set(name, peer)
+  }
+}
+
 export default defineConfig({
   plugins: [
     vue(),
@@ -136,6 +215,10 @@ export default defineConfig({
         // 按第三方库拆分 vendor chunk，避免 Element Plus / ECharts / PDF 等
         // 大依赖打进入口 chunk（此前两个入口 chunk 均超 1.1MB）
         manualChunks(id) {
+          // CSS 模块**不按包归置**：把 .css 归进某个 chunk 会让那个 chunk 变成「必须静态加载」的
+          // 依赖——实测把入口 import 的 katex.min.css 归进 katex chunk 后，545KB 的 katex JS
+          // 被一起拖进首屏（Route chunk 还会跟着继承）。样式交给 vite 默认的 CSS 分组。
+          if (id.endsWith('.css')) return undefined
           // vite 的 preload helper（虚拟模块，动态 import 注入 CSS 用）若不显式归置，
           // 会被自然聚进 markdown-stream 大 chunk，导致 entry 静态依赖整个 924KB（#748 P0-1）
           if (id.includes('vite/preload-helper')) return 'vendor'
@@ -145,6 +228,11 @@ export default defineConfig({
           if (id.includes('/pdfjs-dist/')) return 'pdfjs'
           if (id.includes('/vditor/')) return 'vditor'
           if (id.includes('/marked') || id.includes('highlight.js')) return 'markdown'
+          // 重型可选渲染 peer（#900）：连同各自独占依赖闭包单独成 chunk。
+          // 它们只在「页面上真的出现公式 / 图表 / 增强代码块」时才该被下载，
+          // 因此绝不能落进下面那个 vendor 兜底（vendor 被入口静态引用，会拖进首屏）。
+          const lazyPeerChunk = LAZY_PEER_CHUNKS.get(packageNameOf(id))
+          if (lazyPeerChunk) return lazyPeerChunk
           if (id.includes('markstream-vue') || id.includes('markstream-core') || id.includes('stream-markdown-parser')) return 'markdown-stream'
           if (id.includes('/dayjs/')) return 'dayjs'
           if (id.includes('/vuedraggable/') || id.includes('/sortablejs/')) return 'draggable'

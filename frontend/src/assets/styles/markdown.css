@@ -207,3 +207,19 @@
     padding: 8px 12px;
   }
 }
+
+/*
+ * 公式（#901 / ADR-0046）：KaTeX 自带字体与行内对齐，这里只补两件正文排版会打架的事：
+ * - 块级公式可能是长推导，超宽时横向滚动，而不是把正文容器撑破（与 pre / table 同策略）；
+ * - 渲染失败时 KaTeX 会输出 .katex-error（红字源码），给它在深色主题下也可读的颜色。
+ */
+.markdown-body .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 0;
+}
+
+.markdown-body .katex-error {
+  color: var(--color-danger, #f56c6c);
+}
+

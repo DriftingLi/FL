@@ -44,16 +44,20 @@
             <div class="flex flex-col gap-3">
               <div class="flex items-center justify-between">
                 <span class="text-[13px] text-ink-3">使用 Markdown 编辑，支持实时预览</span>
-                <UiButton
-                  size="small"
-                  :loading="savingContent"
-                  :disabled="!contentChanged"
-                  @click="saveContent"
-                >
-                  <el-icon><Check /></el-icon> 保存正文
-                </UiButton>
+                <div class="flex items-center gap-2">
+                  <UiButton size="small" @click="openPreview">发布端预览</UiButton>
+                  <UiButton
+                    size="small"
+                    :loading="savingContent"
+                    :disabled="!contentChanged"
+                    @click="saveContent"
+                  >
+                    <el-icon><Check /></el-icon> 保存正文
+                  </UiButton>
+                </div>
               </div>
               <MarkdownEditor
+                ref="markdownEditorRef"
                 :key="chapterDetail.chapter_id"
                 v-model="editContent"
                 :height="560"
@@ -192,6 +196,16 @@
       </el-form>
     </UiDialog>
 
+    <!--
+      发布端预览（#903）：渲染走**发布端同一个实现**（PublishPreviewDialog → PublishMarkdown），
+      不是 Vditor 内部 lute 引擎的解释——预览与发布同源才是这个入口的意义。
+    -->
+    <PublishPreviewDialog
+      v-model="previewVisible"
+      :content="previewContent"
+      subtitle="与 Web 学员端章节正文同一渲染器：表格 / 代码高亮 / 公式。"
+    />
+
     <!-- 上传文件弹窗 -->
     <UiDialog
       v-model="uploadDialogVisible"
@@ -222,6 +236,7 @@ import { ElMessage } from 'element-plus'
 import { tutorApi, type TutorChapter, type TutorChapterDetail } from '@/api/tutor'
 import type { ChapterFile } from '@/api/course'
 import MarkdownEditor from '@/components/tutor/MarkdownEditor.vue'
+import PublishPreviewDialog from '@/components/render/PublishPreviewDialog.vue'
 import FileUpload from '@/components/tutor/FileUpload.vue'
 import VideoPlayer from '@/components/student/VideoPlayer.vue'
 import DocumentViewer from '@/components/student/DocumentViewer.vue'
@@ -251,6 +266,18 @@ const editContent = ref('')
 const originalContent = ref('')
 const savingContent = ref(false)
 const contentChanged = computed(() => editContent.value !== originalContent.value)
+
+// 发布端预览（#903）：取编辑器里的**最新**正文快照渲染，不写回表单、不发请求。
+// 不直接用 v-model：ir 模式下 v-model 偶发滞后一拍，预览会显示上一版内容——
+// 而「预览不准」正是这个入口要消灭的问题。
+const markdownEditorRef = ref<{ getValue: () => string } | null>(null)
+const previewVisible = ref(false)
+const previewContent = ref('')
+
+function openPreview() {
+  previewContent.value = markdownEditorRef.value?.getValue() || editContent.value
+  previewVisible.value = true
+}
 
 // 文件分组（图片不再作为独立章节文件上传，统一走图文 Markdown 粘贴）
 const TYPE_ORDER = ['video', 'document', 'ppt']

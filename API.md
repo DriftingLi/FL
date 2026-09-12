@@ -296,6 +296,8 @@ Query：`page`（默认 1）、`page_size`（默认 12）、`specialty_id`、`le
 
 `content_type`：`text` | `video` | `document` | `ppt` | `image`；`study_status`：`completed` / `studying` / 空。
 
+**正文格式（ADR-0046）**：`content` 是 Markdown，由讲师在 Web 编辑端（Vditor）撰写，Web 学员端用**发布端渲染器**（marked + highlight.js + KaTeX）渲染——支持表格、代码高亮与公式（`$...$` / `$$...$$`）。接口本身不感知渲染器、字段不变；**移动端不渲染公式**（属「降级仍可读」，公式以源码呈现），移动端的表格渲染缺口另立 issue。编辑端的「发布端预览」与学员端同源，不是 Vditor 内部引擎的解释。
+
 **POST /api/course/:course_id/progress**
 
 请求体：
@@ -687,6 +689,8 @@ Query：`page`（默认 1）、`page_size`（默认 10）、`category` ∈ `comp
 响应 200：data 为列表项 + `content`（正文）、`related`（相关资讯数组）、`prev`/`next`（上/下一篇导航，null 表示无）。
 
 **POST /api/featured-content/:id/view**：请求体 `{}`，响应 200 data 为 `{ content_id, view_count }`。
+
+**正文格式口径（ADR-0046）**：`content` 是 **Markdown**，由管理端撰写，门户（Nuxt）与移动端各自渲染。正文子集是**三端交集**——标题 / 列表 / 引用 / 代码块 / 图片 / 链接；**不含表格与公式**（门户与移动端都不渲染，写了读者看到的是原始文本）。管理端编辑器在正文越界时给出可见提示，**服务端不做强校验**（不阻断保存与发布——误伤存量与未来合法内容的成本高于收益）。
 
 ---
 
@@ -1159,7 +1163,9 @@ multipart/form-data：`file`。响应 200：data 为 `{ "url": "/static/uploads/
 
 **POST /api/admin/featured-content**
 
-请求体：`{ "title": "标题", "category": "news", "summary": "摘要", "cover_image": "/static/uploads/...", "content": "正文 HTML/MD", "source": "官网", "status": "draft", "sort_order": 1 }`
+请求体：`{ "title": "标题", "category": "news", "summary": "摘要", "cover_image": "/static/uploads/...", "content": "正文 Markdown", "source": "官网", "status": "draft", "sort_order": 1 }`
+
+`content`（正文）：**Markdown，落在三端交集子集内**——标题 / 列表 / 引用 / 代码块 / 图片 / 链接；**不含表格与公式**（门户与移动端不渲染，ADR-0046）。管理端编辑器在越界时给出可见提示，服务端不校验、不阻断。
 
 **POST /api/admin/featured-content/:id/publish**：请求体 `{}`，发布/下线切换。
 

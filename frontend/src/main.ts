@@ -21,6 +21,7 @@ import router from './router'
 import icons from './icons'
 import { useAuthStore } from './stores/auth'
 import { useThemeStore } from './stores/theme'
+import { setupMarkstreamRuntime } from './utils/markstreamRuntime'
 
 const app = createApp(App)
 const pinia = createPinia()
@@ -39,5 +40,9 @@ useThemeStore()
 
 app.use(router)
 app.use(ElementPlus)
+
+// 内容渲染能力（公式/图表/代码高亮 + 中文化）：全仓唯一开启点。不 await——它内部是
+// 动态 import（开启动作的代码本身也不进首包，见 markstreamRuntime 的注释）。
+void setupMarkstreamRuntime()
 
 app.mount('#app')
