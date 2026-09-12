@@ -44,7 +44,13 @@
           <div v-if="topic.category === 'question' && isTopicOwner && topic.accepted_reply_id" class="accept-actions mb-3">
             <UiButton size="small" @click="handleCancelAccept">取消采纳</UiButton>
           </div>
-          <div class="topic-content whitespace-pre-wrap break-words text-[15px] leading-[1.8] text-ink">{{ topic.content }}</div>
+          <!-- 正文按作者声明的格式渲染（ADR-0044）：纯文本分支的 whitespace-pre-wrap
+               由 ForumContent 内部按需加，这里不再重复；字号/行高仍由本页决定。 -->
+          <ForumContent
+            :content="topic.content"
+            :format="topic.content_format"
+            class="topic-content text-[15px] leading-[1.8] text-ink"
+          />
           <ForumImageGallery :images="topic.images" />
           <!-- 帖子操作行：左统计、右互动。浏览/回复数取自列（与详情分页 total 同源），点赞数由操作 chip 承载，不重复渲染。 -->
           <div class="topic-stats mt-4 flex flex-wrap items-center gap-3 text-[13px] text-ink-3">
@@ -154,7 +160,7 @@
           :submitting="submitting"
           :max-images="3"
           placeholder="写下你的回复…"
-          @submit="submitReply"
+          @submit="(p) => submitReply(p)"
         />
       </div>
     </template>
@@ -166,11 +172,12 @@ import { ref, computed, nextTick, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, View, ChatDotRound, ArrowUp, ArrowDown } from '@element-plus/icons-vue'
-import { forumApi, type ForumTopicItem, type ForumReplyItem } from '@/api/forum'
+import { forumApi, type ForumTopicItem, type ForumReplyItem, type ForumContentFormat } from '@/api/forum'
 import { favoriteApi } from '@/api/favorite'
 import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
 import ForumComposer from '@/components/student/ForumComposer.vue'
 import ForumReplyCard from '@/components/student/ForumReplyCard.vue'
+import ForumContent from '@/components/student/ForumContent.vue'
 import { formatRelativeTime } from '@/utils/format'
 import { displayName, authorLetter } from '@/utils/forumDisplay'
 import { useAuthStore } from '@/stores/auth'
@@ -369,7 +376,7 @@ async function handleCancelAccept() {
   }
 }
 
-async function submitReply() {
+async function submitReply(payload: { contentFormat: ForumContentFormat }) {
   const content = replyContent.value.trim()
   if (!content && replyImages.value.length === 0) {
     ElMessage.warning('请输入回复内容')
@@ -378,7 +385,7 @@ async function submitReply() {
   submitting.value = true
   try {
     const topicId = Number(route.params.topicId)
-    await forumApi.replyTopic(topicId, content, replyingTo.value?.id, replyImages.value)
+    await forumApi.replyTopic(topicId, content, replyingTo.value?.id, replyImages.value, payload.contentFormat)
     ElMessage.success('回复成功')
     replyContent.value = ''
     replyImages.value = []

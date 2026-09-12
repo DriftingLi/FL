@@ -153,18 +153,18 @@ func TestDeleteNestedReply_DecrementsReplyCountBySubtreeSize(t *testing.T) {
 		t.Fatal(err)
 	}
 	// 结构：r0（顶层幸存者）/ r1（删除根）← r2 ← r3，reply_count = 4。
-	if _, err := svc.ReplyTopic(user.ID, topic.ID, "顶层幸存者", nil, nil); err != nil {
+	if _, err := svc.ReplyTopic(ReplyTopicInput{UserID: user.ID, TopicID: topic.ID, Content: "顶层幸存者", ParentReplyID: nil, Images: nil}); err != nil {
 		t.Fatal(err)
 	}
-	r1, err := svc.ReplyTopic(user.ID, topic.ID, "一楼", nil, nil)
+	r1, err := svc.ReplyTopic(ReplyTopicInput{UserID: user.ID, TopicID: topic.ID, Content: "一楼", ParentReplyID: nil, Images: nil})
 	if err != nil {
 		t.Fatal(err)
 	}
-	r2, err := svc.ReplyTopic(user.ID, topic.ID, "楼中楼", &r1.ID, nil)
+	r2, err := svc.ReplyTopic(ReplyTopicInput{UserID: user.ID, TopicID: topic.ID, Content: "楼中楼", ParentReplyID: &r1.ID, Images: nil})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.ReplyTopic(user.ID, topic.ID, "楼中楼的楼中楼", &r2.ID, nil); err != nil {
+	if _, err := svc.ReplyTopic(ReplyTopicInput{UserID: user.ID, TopicID: topic.ID, Content: "楼中楼的楼中楼", ParentReplyID: &r2.ID, Images: nil}); err != nil {
 		t.Fatal(err)
 	}
 	assertForumInt(t, db, "forum_topics", topic.ID, "reply_count", 4)

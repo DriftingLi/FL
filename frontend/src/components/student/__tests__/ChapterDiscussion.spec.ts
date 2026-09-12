@@ -5,6 +5,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { epLite } from '@/test/element-lite'
 
+// markstream 的 CSS 导入在 vitest 下无意义，替身掉
+vi.mock('markstream-vue/index.css', () => ({}))
+
 vi.mock('@/api/request', () => ({
   unwrappedRequest: { get: vi.fn(), post: vi.fn(), delete: vi.fn(), put: vi.fn() }
 }))
@@ -119,6 +122,57 @@ function moreItemsOfReply(wrapper: ReturnType<typeof mount>, index = 0) {
   const item = wrapper.findAll('.reply-item')[index]
   return (item.findComponent(UiMoreMenu).props('items') ?? []) as Array<{ key: string; label: string }>
 }
+
+describe('章节讨论正文按声明格式渲染（#878 / ADR-0044）', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  /** 展开第一个章节帖，正文与格式可指定 */
+  async function mountWithContent(content: string, format?: string) {
+    const baseTopic = {
+      id: 1,
+      chapter_id: 1,
+      category: 'discussion',
+      title: '章节讨论帖',
+      content,
+      view_count: 0,
+      reply_count: 0,
+      created_at: '2026-08-01T10:00:00+08:00',
+      author: { user_id: 1, username: '楼主', avatar_url: '' }
+    };
+    const withFormat = format === undefined ? baseTopic : { ...baseTopic, content_format: format };
+    listTopics.mockResolvedValue({ topics: [withFormat], total: 1 } as never);
+    getTopic.mockResolvedValue({
+      topic: withFormat,
+      replies: [],
+      page: 1,
+      pages: 1,
+      total: 0
+    } as never);
+
+    const wrapper = mount(ChapterDiscussion, {
+      props: { chapterId: 1 },
+      global: {
+        plugins: [epLite()],
+        stubs: { ForumImageGallery: true, ForumPostForm: true, ForumComposer: true }
+      }
+    });
+    await flushPromises();
+    await wrapper.findAll('.cursor-pointer')[0].trigger('click')
+    await flushPromises();
+    await new Promise((r) => setTimeout(r, 0));
+    await flushPromises();
+    return wrapper;
+  }
+
+  it('markdown 帖渲染出结构，纯文本帖原样显示（与详情页同口径）', async () => {
+    const md = await mountWithContent('## 排查步骤', 'markdown')
+    expect(md.html()).toMatch(/<h2/i)
+
+    const txt = await mountWithContent('## 排查步骤', 'text')
+    expect(txt.html()).not.toMatch(/<h2/i)
+    expect(txt.text()).toContain('## 排查步骤')
+  })
+})
 
 describe('章节讨论回复区对齐（#858）', () => {
   beforeEach(() => vi.clearAllMocks())

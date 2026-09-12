@@ -44,6 +44,32 @@ const (
 	ForumCategoryExperience = "experience"
 )
 
+// 论坛正文格式常量（ADR-0044）。
+//
+// 格式是**作者自述的声明位**，不是系统猜测：同一段文字按 text 与按 markdown 渲染结果不同
+// （例如「1. 检查电瓶」在 markdown 下会变成有序列表），所以必须由作者决定，
+// 而不是由服务端根据内容「看起来像不像 markdown」来推断。
+const (
+	ForumContentFormatText     = "text"     // 纯文本：保留换行，不做任何语法解释
+	ForumContentFormatMarkdown = "markdown" // 受限 Markdown 子集
+)
+
+// normalizeContentFormat 校验并归一**正文格式声明**：空串归一为 text（向后兼容——
+// 移动端与存量客户端不带该字段），其余必须在两值域内。
+//
+// 非法值返回错误而**不是**静默归一：静默回退会让客户端以为自己设置生效了，
+// 直到用户发现排版没出来。口径与 normalizeForumCategory 一致（TrimSpace + 大小写敏感）。
+func normalizeContentFormat(format string) (string, error) {
+	switch format = strings.TrimSpace(format); format {
+	case "":
+		return ForumContentFormatText, nil
+	case ForumContentFormatText, ForumContentFormatMarkdown:
+		return format, nil
+	default:
+		return "", fmt.Errorf("正文格式无效: %s", format)
+	}
+}
+
 // normalizeForumCategory 校验并归一**意图**：空串归一为 discussion（向后兼容，移动端不传）。
 // 非空且不在两值域内返回错误——`experience` 在此被拒（ADR-0040：自称不产生事实，经验由管理端认定）。
 // 归一后再落到模型上，避免依赖数据库 DEFAULT
@@ -111,12 +137,14 @@ func (a ForumAuthor) DisplayName() string {
 
 // ForumTopicDTO 论坛主题列表/详情对象。
 type ForumTopicDTO struct {
-	ID              int64       `json:"id"`
-	ChapterID       *int        `json:"chapter_id"`
-	Category        string      `json:"category"` // 意图：discussion | question（ADR-0040）
-	ChapterTitle    string      `json:"chapter_title"`
-	Title           string      `json:"title"`
-	Content         string      `json:"content"`
+	ID           int64  `json:"id"`
+	ChapterID    *int   `json:"chapter_id"`
+	Category     string `json:"category"` // 意图：discussion | question（ADR-0040）
+	ChapterTitle string `json:"chapter_title"`
+	Title        string `json:"title"`
+	Content      string `json:"content"`
+	// ContentFormat 正文格式声明（ADR-0044）：text | markdown。前端据此选渲染方式。
+	ContentFormat   string      `json:"content_format"`
 	Images          []string    `json:"images"`
 	ViewCount       int         `json:"view_count"`
 	ReplyCount      int         `json:"reply_count"`
@@ -141,15 +169,17 @@ type ForumReplyDTO struct {
 	ParentName string `json:"parent_name,omitempty"` // 被回复人的展示名
 	// ParentAvatarURL 被回复人的头像（ADR-0042「昵称 › 被回复人」行内形态所需）。
 	// 与 ParentName 同口径 omitempty：顶层回复（无被回复人）两个字段都不出现。
-	ParentAvatarURL string      `json:"parent_avatar_url,omitempty"`
-	Content         string      `json:"content"`
-	Images          []string    `json:"images"`
-	CreatedAt       string      `json:"created_at"`
-	Author          ForumAuthor `json:"author"`
-	CanDelete       bool        `json:"can_delete"`
-	LikesCount      int64       `json:"likes_count"`
-	LikedByMe       bool        `json:"liked_by_me"`
-	IsAccepted      bool        `json:"is_accepted"`
+	ParentAvatarURL string `json:"parent_avatar_url,omitempty"`
+	Content         string `json:"content"`
+	// ContentFormat 正文格式声明（ADR-0044）：text | markdown。与主题同口径。
+	ContentFormat string      `json:"content_format"`
+	Images        []string    `json:"images"`
+	CreatedAt     string      `json:"created_at"`
+	Author        ForumAuthor `json:"author"`
+	CanDelete     bool        `json:"can_delete"`
+	LikesCount    int64       `json:"likes_count"`
+	LikedByMe     bool        `json:"liked_by_me"`
+	IsAccepted    bool        `json:"is_accepted"`
 }
 
 // ForumService 论坛服务。
@@ -182,6 +212,7 @@ type topicRow struct {
 	ChapterTitle    string
 	Title           string
 	Content         string
+	ContentFormat   string
 	Images          string
 	ViewCount       int
 	ReplyCount      int
@@ -215,6 +246,7 @@ func (r topicRow) toDTO(viewerID int) ForumTopicDTO {
 		ChapterTitle:    r.ChapterTitle,
 		Title:           r.Title,
 		Content:         r.Content,
+		ContentFormat:   r.ContentFormat,
 		Images:          parseImageURLs(r.Images),
 		ViewCount:       r.ViewCount,
 		ReplyCount:      r.ReplyCount,
@@ -589,17 +621,18 @@ func (s *ForumService) GetTopic(in TopicDetailInput) (map[string]any, error) {
 
 // replyRow 详情页回复行的扫描结构（置顶查询与分页查询共用同一投影，避免两处漂移）。
 type replyRow struct {
-	ID         int64
-	TopicID    int64
-	ParentID   *int64
-	Content    string
-	Images     string
-	LikesCount int64
-	CreatedAt  time.Time
-	UserID     int
-	Username   string
-	AvatarURL  string
-	ParentName string
+	ID            int64
+	TopicID       int64
+	ParentID      *int64
+	Content       string
+	ContentFormat string
+	Images        string
+	LikesCount    int64
+	CreatedAt     time.Time
+	UserID        int
+	Username      string
+	AvatarURL     string
+	ParentName    string
 	// ParentAvatarURL 被回复人的头像（join pr→pu 回填）。
 	ParentAvatarURL string
 }
@@ -609,7 +642,8 @@ func (r replyRow) toDTO(viewerID int, acceptedReplyID *int64) ForumReplyDTO {
 	return ForumReplyDTO{
 		ID: r.ID, TopicID: r.TopicID, ParentID: r.ParentID,
 		ParentName: r.ParentName, ParentAvatarURL: r.ParentAvatarURL,
-		Content: r.Content, Images: parseImageURLs(r.Images), CreatedAt: formatISO(r.CreatedAt),
+		Content: r.Content, ContentFormat: r.ContentFormat,
+		Images: parseImageURLs(r.Images), CreatedAt: formatISO(r.CreatedAt),
 		Author: ForumAuthor{
 			UserID: r.UserID, Username: r.Username, AvatarURL: r.AvatarURL,
 		},
@@ -620,7 +654,7 @@ func (r replyRow) toDTO(viewerID int, acceptedReplyID *int64) ForumReplyDTO {
 }
 
 // replyRowSelect 详情页回复行的共享投影（置顶查询与分页查询共用同一份，新增字段只改这一处）。
-const replyRowSelect = "r.id, r.topic_id, r.parent_id, r.content, r.images, r.likes_count, r.created_at, " +
+const replyRowSelect = "r.id, r.topic_id, r.parent_id, r.content, r.content_format, r.images, r.likes_count, r.created_at, " +
 	"u.id AS user_id, u.username, u.avatar_url, " +
 	"COALESCE(pu.username, '') AS parent_name, COALESCE(pu.avatar_url, '') AS parent_avatar_url"
 
@@ -646,13 +680,19 @@ type CreateTopicInput struct {
 	Category  string
 	Title     string
 	Content   string
-	Images    []string
+	// ContentFormat 正文格式声明（ADR-0044）。空串归一为 text——移动端旧契约不传该字段。
+	ContentFormat string
+	Images        []string
 }
 
 // CreateTopic 发帖。chapterID 为 nil/0 表示发到综合讨论区。
 // images 为主题图片 URL 列表（最多 ForumTopicMaxImages 张，仅接受本站 images/forum/ 前缀）。
 func (s *ForumService) CreateTopic(in CreateTopicInput) (*ForumTopicDTO, error) {
 	category, err := normalizeForumCategory(in.Category)
+	if err != nil {
+		return nil, err
+	}
+	contentFormat, err := normalizeContentFormat(in.ContentFormat)
 	if err != nil {
 		return nil, err
 	}
@@ -693,13 +733,16 @@ func (s *ForumService) CreateTopic(in CreateTopicInput) (*ForumTopicDTO, error) 
 		ChapterID: cid,
 		// 显式写入归一后的非空类别，不依赖数据库 DEFAULT：
 		// GORM 对带 default tag 的零值字段会跳过 INSERT，那样内存对象（下面的 DTO）会拿到空串。
-		Category:  category,
-		UserID:    userID,
-		Title:     title,
-		Content:   content,
-		Images:    marshalImageURLs(images),
-		CreatedAt: now,
-		UpdatedAt: now,
+		Category: category,
+		UserID:   userID,
+		Title:    title,
+		Content:  content,
+		// 与 category 同理显式写入：model 上带 default tag，GORM 会跳过零值字段的 INSERT，
+		// 那样内存对象（下面的 DTO）会拿到空串而不是归一后的 text。
+		ContentFormat: contentFormat,
+		Images:        marshalImageURLs(images),
+		CreatedAt:     now,
+		UpdatedAt:     now,
 	}
 	if err := s.db.Create(&topic).Error; err != nil {
 		return nil, err
@@ -710,13 +753,14 @@ func (s *ForumService) CreateTopic(in CreateTopicInput) (*ForumTopicDTO, error) 
 		return nil, err
 	}
 	return &ForumTopicDTO{
-		ID:        topic.ID,
-		ChapterID: topic.ChapterID,
-		Category:  topic.Category,
-		Title:     topic.Title,
-		Content:   topic.Content,
-		Images:    images,
-		CreatedAt: formatISO(topic.CreatedAt),
+		ID:            topic.ID,
+		ChapterID:     topic.ChapterID,
+		Category:      topic.Category,
+		Title:         topic.Title,
+		Content:       topic.Content,
+		ContentFormat: topic.ContentFormat,
+		Images:        images,
+		CreatedAt:     formatISO(topic.CreatedAt),
 		Author: ForumAuthor{
 			UserID: u.ID, Username: u.Username, AvatarURL: u.AvatarURL,
 		},
@@ -806,12 +850,31 @@ func (s *ForumService) UpdateTopic(in UpdateTopicInput) (*ForumTopicDTO, error) 
 	return s.fetchTopicDTO(in.TopicID, in.UserID)
 }
 
-// ReplyTopic 回复主题或回复某条回复（parentReplyID 非空时）。
-// images 为回复图片 URL 列表（最多 ForumReplyMaxImages 张，仅接受本站 images/forum/ 前缀）。
-func (s *ForumService) ReplyTopic(userID int, topicID int64, content string, parentReplyID *int64, images []string) (*ForumReplyDTO, error) {
-	content = strings.TrimSpace(content)
+// ReplyTopicInput 发回复条件。
+//
+// 用 struct 而非位置参数，理由同 CreateTopicInput / TopicDetailInput：本方法有 content 与
+// content_format 两个极易互串的 string，位置传错能编译通过而语义全错。
+type ReplyTopicInput struct {
+	UserID        int
+	TopicID       int64
+	Content       string
+	ParentReplyID *int64   // 非空即楼中楼
+	Images        []string // 最多 ForumReplyMaxImages 张，仅接受本站 images/forum/ 前缀
+	// ContentFormat 正文格式声明（ADR-0044）。空串归一为 text——移动端旧契约不传该字段。
+	ContentFormat string
+}
+
+// ReplyTopic 回复主题或回复某条回复（ParentReplyID 非空时）。
+func (s *ForumService) ReplyTopic(in ReplyTopicInput) (*ForumReplyDTO, error) {
+	userID, topicID, parentReplyID, images := in.UserID, in.TopicID, in.ParentReplyID, in.Images
+	content := strings.TrimSpace(in.Content)
 	if utf8.RuneCountInString(content) < 1 || utf8.RuneCountInString(content) > 5000 {
 		return nil, errors.New("回复内容长度需在 1-5000 个字符之间")
+	}
+	// 回复与主题同口径：空串归一为 text（移动端旧契约不传该字段），非法值 400。
+	contentFormat, err := normalizeContentFormat(in.ContentFormat)
+	if err != nil {
+		return nil, err
 	}
 	if err := validateForumImages(images, ForumReplyMaxImages); err != nil {
 		return nil, err
@@ -855,14 +918,16 @@ func (s *ForumService) ReplyTopic(userID int, topicID int64, content string, par
 
 	now := beijingNow()
 	reply := model.ForumReply{
-		TopicID:   topicID,
-		UserID:    userID,
-		ParentID:  parentReplyID,
-		Content:   content,
-		Images:    marshalImageURLs(images),
-		CreatedAt: now,
+		TopicID:  topicID,
+		UserID:   userID,
+		ParentID: parentReplyID,
+		Content:  content,
+		// 显式写入归一后的格式，不依赖数据库 DEFAULT（与发帖同理：GORM 跳过带 default tag 的零值）。
+		ContentFormat: contentFormat,
+		Images:        marshalImageURLs(images),
+		CreatedAt:     now,
 	}
-	err := s.db.Transaction(func(tx *gorm.DB) error {
+	err = s.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&reply).Error; err != nil {
 			return err
 		}
@@ -901,7 +966,8 @@ func (s *ForumService) ReplyTopic(userID int, topicID int64, content string, par
 	}
 	return &ForumReplyDTO{
 		ID: reply.ID, TopicID: reply.TopicID, ParentID: reply.ParentID,
-		ParentName: parentName, Content: reply.Content, Images: images, CreatedAt: formatISO(reply.CreatedAt),
+		ParentName: parentName, Content: reply.Content, ContentFormat: reply.ContentFormat,
+		Images: images, CreatedAt: formatISO(reply.CreatedAt),
 		Author: ForumAuthor{
 			UserID: u.ID, Username: u.Username, AvatarURL: u.AvatarURL,
 		},
@@ -1525,7 +1591,7 @@ func (s *ForumService) MyTopics(userID, page, pageSize int) (*ForumTopicPageResu
 
 // topicRowSelect topicRow 的共享投影（#742 审查收敛）：新增 topicRow 字段时只改这一处，
 // 全部列表/详情/个人视图查询共用，避免散落 5 处的投影字符串漂移。
-const topicRowSelect = "t.id, t.chapter_id, t.category, t.title, t.content, t.images, t.view_count, t.reply_count, t.likes_count, t.accepted_reply_id, t.solved_at, t.last_reply_at, t.is_featured, t.is_experience, t.created_at, "
+const topicRowSelect = "t.id, t.chapter_id, t.category, t.title, t.content, t.content_format, t.images, t.view_count, t.reply_count, t.likes_count, t.accepted_reply_id, t.solved_at, t.last_reply_at, t.is_featured, t.is_experience, t.created_at, "
 
 // personalTopicSelect 个人动态三列表的行装配投影（与 MyTopics 逐字一致，被删主题字段 NULL 由 Scan 零值承载）。
 const personalTopicSelect = topicRowSelect +
@@ -1609,14 +1675,16 @@ func (s *ForumService) MyObservedTopics(userID, page, pageSize int) *ForumTopicP
 
 // MyReplyDTO 我的回复条目（带主题标题回填）。
 type MyReplyDTO struct {
-	ID         int64       `json:"id"`
-	TopicID    int64       `json:"topic_id"`
-	TopicTitle string      `json:"topic_title"`
-	ParentID   *int64      `json:"parent_id,omitempty"`
-	Content    string      `json:"content"`
-	Images     []string    `json:"images"`
-	CreatedAt  string      `json:"created_at"`
-	Author     ForumAuthor `json:"author"`
+	ID         int64  `json:"id"`
+	TopicID    int64  `json:"topic_id"`
+	TopicTitle string `json:"topic_title"`
+	ParentID   *int64 `json:"parent_id,omitempty"`
+	Content    string `json:"content"`
+	// ContentFormat 正文格式声明（ADR-0044）：列表摘要据此决定是否剥成纯文本。
+	ContentFormat string      `json:"content_format"`
+	Images        []string    `json:"images"`
+	CreatedAt     string      `json:"created_at"`
+	Author        ForumAuthor `json:"author"`
 }
 
 // MyReplyPageResult 我的回复分页结果。
@@ -1630,22 +1698,23 @@ type MyReplyPageResult struct {
 // MyReplies 我的回复（主题被删时标题为空串，条目保留）。
 func (s *ForumService) MyReplies(userID, page, pageSize int) (*MyReplyPageResult, error) {
 	type myReplyRow struct {
-		ID         int64
-		TopicID    int64
-		TopicTitle string
-		ParentID   *int64
-		Content    string
-		Images     string
-		CreatedAt  time.Time
-		UserID     int
-		Username   string
-		AvatarURL  string
+		ID            int64
+		TopicID       int64
+		TopicTitle    string
+		ParentID      *int64
+		Content       string
+		ContentFormat string
+		Images        string
+		CreatedAt     time.Time
+		UserID        int
+		Username      string
+		AvatarURL     string
 	}
 	rows, total, page, pageSize := paging.QueryWithScan[myReplyRow](s.db, page, pageSize, 10, 100,
 		"r.created_at DESC, r.id DESC",
 		func(q *gorm.DB) *gorm.DB {
 			return q.Table("forum_replies AS r").
-				Select("r.id, r.topic_id, r.parent_id, r.content, r.images, r.created_at, "+
+				Select("r.id, r.topic_id, r.parent_id, r.content, r.content_format, r.images, r.created_at, "+
 					"u.id AS user_id, u.username, u.avatar_url, COALESCE(t.title, '') AS topic_title").
 				Joins("JOIN hrwai_users AS u ON u.id = r.user_id").
 				Joins("LEFT JOIN forum_topics AS t ON t.id = r.topic_id").
@@ -1655,7 +1724,8 @@ func (s *ForumService) MyReplies(userID, page, pageSize int) (*MyReplyPageResult
 	for _, r := range rows {
 		items = append(items, MyReplyDTO{
 			ID: r.ID, TopicID: r.TopicID, TopicTitle: r.TopicTitle, ParentID: r.ParentID,
-			Content: r.Content, Images: parseImageURLs(r.Images), CreatedAt: formatISO(r.CreatedAt),
+			Content: r.Content, ContentFormat: r.ContentFormat,
+			Images: parseImageURLs(r.Images), CreatedAt: formatISO(r.CreatedAt),
 			Author: ForumAuthor{UserID: r.UserID, Username: r.Username, AvatarURL: r.AvatarURL},
 		})
 	}
