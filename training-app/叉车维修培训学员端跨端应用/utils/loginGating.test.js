@@ -1,11 +1,13 @@
 /**
- * 登录页门控回填流程契约测试（Issue #545）
+ * 登录页门控回填流程契约测试（Issue #545 + ADR-0004 快捷登录增补）
  *
  * login.uvue 无法在 jest 中渲染，以源码文本断言门控顺序（外部行为契约）：
- * 1) 入口显隐：仅在"存在已保存凭据 && 设备支持生物识别"时显示脱敏入口
+ * 1) 入口显隐：仅在"存在已保存凭据 && 设备支持生物识别"时显示快捷登录入口
  * 2) 门控顺序：authenticate 通过才 loadSecureCredentials 回填；失败不回填不清除
  * 3) 取消勾选：立即 clearSecureCredentials 并收起入口
- * 4) 保存时机：仅账号密码登录成功后保存；微信一键登录不触及凭据
+ * 4) 保存时机：仅账号密码登录成功后保存（含 refresh_token）；微信一键登录不触及凭据
+ * 5) 快捷登录：authenticate → loadSecureToken → auth.quickLogin → reLaunch；失败降级回填
+ * 6) 孤儿凭据自愈：确定性不支持 + 完整凭据 → 降级仅账号；API 失败（definitive=false）不清理
  */
 const fs = require('fs');
 const path = require('path');
@@ -67,7 +69,7 @@ describe('保存时机契约（登录成功路径）', () => {
   it('仅勾选记住密码且账号非空才保存（密码在登录成功后落盘）', () => {
     const body = fnBody('onSubmit');
     expect(body).toContain('rememberMe.value && uname.length > 0');
-    const saveIdx = body.indexOf('saveSecureCredentials(uname, password.value)');
+    const saveIdx = body.indexOf('saveSecureCredentials(uname, password.value, auth.getRefreshToken())');
     const clearIdx = body.indexOf('clearSecureCredentials()');
     expect(saveIdx).toBeGreaterThan(-1);
     expect(clearIdx).toBeGreaterThan(saveIdx);
@@ -86,5 +88,75 @@ describe('保存时机契约（登录成功路径）', () => {
     expect(script).toContain("from '../../utils/secureStorage'");
     expect(script).not.toContain('uni.setStorageSync');
     expect(script).not.toContain('uni.getStorageSync');
+  });
+});
+
+describe('快捷登录契约（onQuickLogin，ADR-0004 增补）', () => {
+  const body = fnBody('onQuickLogin');
+
+  it('门控顺序：先 authenticate，通过后才 loadSecureToken', () => {
+    const authIdx = body.indexOf('biometric.authenticate');
+    const tokenIdx = body.indexOf('loadSecureToken()');
+    expect(authIdx).toBeGreaterThan(-1);
+    expect(tokenIdx).toBeGreaterThan(authIdx);
+  });
+
+  it('静默续登成功后直接 reLaunch 进 dashboard（回写由 auth store 统一负责）', () => {
+    const quickIdx = body.indexOf('auth.quickLogin(rt)');
+    const reIdx = body.indexOf("uni.reLaunch({ url: '/pages/dashboard/dashboard' })");
+    expect(quickIdx).toBeGreaterThan(-1);
+    expect(reIdx).toBeGreaterThan(quickIdx);
+  });
+
+  it('续登失败提示过期并降级回填（不静默失败）', () => {
+    expect(body).toContain('快捷登录已过期，请验证后登录');
+    expect(body).toContain('onBiometricUnlock()');
+  });
+
+  it('无令牌（升级前旧包络）给出一次性引导并走回填兜底', () => {
+    expect(body).toContain('请先输入密码登录一次，之后可快捷登录');
+    const tokenIdx = body.indexOf('loadSecureToken()');
+    const fallbackIdx = body.indexOf('onBiometricUnlock()');
+    expect(tokenIdx).toBeGreaterThan(-1);
+    expect(fallbackIdx).toBeGreaterThan(tokenIdx);
+  });
+
+  it('防重入：quickLogging 进行中直接返回', () => {
+    expect(body).toContain('if (quickLogging.value)');
+  });
+
+  it('入口绑定切换为 onQuickLogin，文案走动态标签', () => {
+    expect(src).toContain('@click="onQuickLogin"');
+    expect(src).toContain('{{ quickLoginLabel }}');
+    expect(src).not.toContain('解锁填充');
+  });
+});
+
+describe('孤儿凭据自愈契约（initBiometricGate，ADR-0004）', () => {
+  const body = fnBody('initBiometricGate');
+
+  it('先 await checkSupport 拿确定性结果，再做入口/回填判定（防 isSupported 初值误判）', () => {
+    const supportIdx = body.indexOf('await biometric.checkSupport()');
+    const storedIdx = body.indexOf('hasStoredCredentials()');
+    expect(supportIdx).toBeGreaterThan(-1);
+    expect(storedIdx).toBeGreaterThan(supportIdx);
+  });
+
+  it('自愈条件三合：确定性不支持（definitive=true）+ 存在完整凭据才降级', () => {
+    const condIdx = body.indexOf('!support.supported && support.definitive && hasStoredCredentials()');
+    const degradeIdx = body.indexOf('saveAccountOnly(cred.u)');
+    expect(condIdx).toBeGreaterThan(-1);
+    expect(degradeIdx).toBeGreaterThan(condIdx);
+  });
+
+  it('自愈只清密码密文，保留账号（saveAccountOnly 收敛到与登录时降级同款终态）', () => {
+    expect(body).toContain('loadSecureCredentials()');
+    expect(body).toContain('saveAccountOnly(cred.u)');
+  });
+
+  it('降级后走账号回填分支（hasStoredCredentials 已为 false，loadSavedAccount 生效）', () => {
+    const degradeIdx = body.indexOf('saveAccountOnly(cred.u)');
+    const refillIdx = body.indexOf('loadSavedAccount()');
+    expect(refillIdx).toBeGreaterThan(degradeIdx);
   });
 });
