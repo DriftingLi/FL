@@ -204,6 +204,22 @@ services:
       REDIS_DB: "${REDIS_DB:-0}"
       REDIS_POOL_SIZE: "${REDIS_POOL_SIZE:-20}"
       REDIS_KEY_PREFIX: "${REDIS_KEY_PREFIX:-fl:}"
+      # 可信反向代理 —— 「取客户端 IP 是否采信 X-Forwarded-For / X-Real-IP」的唯一开关
+      # （读取方 backend/internal/middleware/clientip.go，装配方 api.applyTrustedProxies）。
+      # 默认不信任任何代理；下面这三个地址是本部署自己的代理，不是通用默认值：
+      #   frontend 用 network_mode: host，经宿主机发布端口访问 backend，容器看到的 TCP 对端
+      #   是宿主机在 forklift-net 网桥上的地址（= 该网桥网关），两台宿主机网段不同：
+      #     pve-02（production）172.19.0.0/16   → 网关 172.19.0.1
+      #     pve-01（testing）   192.168.240.0/20 → 网关 192.168.240.1
+      #   回环地址一并登记：容器与宿主同网络栈（如后端也跑 host 网络）时对端就是回环。
+      # 刻意不写 172.16.0.0/12 之类的整段私网：真实客户端自己落在私网里时（局域网用户），
+      # gin 会把它当成代理继续往左找，客户端自带的伪造值反而胜出（用例
+      # TestClientIP_TrustedClientAddressLetsSpoofWin 锁定该语义）。
+      # 换宿主机 / 重建网络导致网段变化时，用环境变量 TRUSTED_PROXIES 覆盖本默认值。
+      # 若把 frontend 改回 bridge 网络（proxy_pass http://backend:8080，见 nginx.default.conf），
+      # 对端变成 frontend 容器的动态地址、不在本列表内，必须显式把该地址加进来，
+      # 否则所有请求会被算作同一个客户端。
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-127.0.0.1/32,172.19.0.1/32,192.168.240.1/32}
       # LibreOffice sidecar HTTP 地址(容器内服务名 + 端口)
       LIBREOFFICE_SIDECAR_URL: http://libreoffice:8000
       # 外部诊断 RAG 助手（fault_diagnosis 功能）：pve-01 lxc101 上的 forklift-assistant 交付包
