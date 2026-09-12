@@ -18,7 +18,7 @@
 import { computed } from 'vue'
 import { ChatDotRound } from '@element-plus/icons-vue'
 import type { ForumReplyItem } from '@/api/forum'
-import { displayName, authorLetter } from '@/utils/forumDisplay'
+import { displayName, authorLetter, regionLabel } from '@/utils/forumDisplay'
 import { formatRelativeTime } from '@/utils/format'
 import ForumImageGallery from './ForumImageGallery.vue'
 import ForumContent from './ForumContent.vue'
@@ -56,6 +56,8 @@ const emit = defineEmits<{
 }>()
 
 const compact = computed(() => props.density === 'compact')
+// 属地（ADR-0045）：发布那一刻的快照，空串即无（历史回复 / 内网来源）——整段不渲染。
+const region = computed(() => regionLabel(props.reply))
 const avatarSize = computed(() => (compact.value ? 26 : 38))
 const contentClass = computed(() =>
   compact.value ? 'text-[13px] leading-[1.6]' : 'text-sm leading-[1.7]'
@@ -137,6 +139,9 @@ function onMoreSelect(key: string) {
       <!-- 操作行：左时间、右互动（回复 + 点赞）；治理动作在上方 ⋯ 里 -->
       <div class="reply-actions mt-2 flex items-center gap-1.5 text-xs text-ink-3">
         <span class="reply-time">{{ formatRelativeTime(reply.created_at) }}</span>
+        <!-- 属地：接在相对时间之后（「18 小时前 · 上海」）。为空时整段不渲染，
+             连分隔符也不出现；窄屏用 truncate 让长地名先省略，不挤压右侧互动动作。 -->
+        <span v-if="region" class="reply-region max-w-[8rem] truncate" :title="region">· {{ region }}</span>
         <div class="reply-actions-right ml-auto flex items-center gap-3">
           <button
             type="button"
