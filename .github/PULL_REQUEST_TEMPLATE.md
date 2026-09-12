@@ -36,7 +36,9 @@ manifest.json / pages.json / platformConfig.json 时，本段必须逐门填写�
 `pwsh -NoProfile -File scripts/mp-weixin-check.ps1 -PostToPr <PR号>`（或 `npm run build:mp-weixin-check`），
 门通过时会贴 `<!-- gate-evidence:② -->` + `commit: <head sha>` 的评论，正文该行同样写「见评论 <链接>」。
 **但「执行人」栏仍须由人签收**：agent 只产出证据（`MP_WEIXIN_RESULT` + 截图），不得代填执行人、不得写「已通过」。
-校验器只认「带 gate-evidence:④ / gate-evidence:② 注释标记 + commit 与 head sha 相等」的评论，不校真伪。
+校验器只认「带 gate-evidence:④ / gate-evidence:② 注释标记 + commit 与 head 绑定」的评论，不校真伪：
+绑定 = `commit` **等于** head sha，**或**它是 head 的**祖先**且二者之间没有运行时面（`*.uvue` / `*.uts` / 三份 json）改动
+（2026-09-12 放宽，免去 master 前进一次就重跑重贴的 churn）；其间运行时面动过、或不是祖先，仍须重跑并重贴。
 带 -PostToPr 时 ② 还会把截图**压缩入库**到本 PR 分支的 docs/verification/<模块>/<PR号>/<页名>-after.<ext>
 （WebP q75，本机无编码器则 JPEG q75；宽 ≤720；每 PR ≤10 张 / 单张 ≤150KB / 合计 ≤1.5MB；`-NoArchive` 可跳过），
 并在评论里用仓库内相对路径列出——**入库失败只警告、不影响门结论**。
