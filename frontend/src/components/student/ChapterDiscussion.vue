@@ -13,11 +13,12 @@ import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { EditPen, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
-import { forumApi, type ForumTopicItem, type ForumReplyItem } from '@/api/forum'
+import { forumApi, type ForumTopicItem, type ForumReplyItem, type ForumContentFormat } from '@/api/forum'
 import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
 import ForumPostForm from '@/components/student/ForumPostForm.vue'
 import ForumComposer from '@/components/student/ForumComposer.vue'
 import ForumReplyCard from '@/components/student/ForumReplyCard.vue'
+import ForumContent from '@/components/student/ForumContent.vue'
 import { formatRelativeTime } from '@/utils/format'
 import { displayName, authorLetter } from '@/utils/forumDisplay'
 import { useAuthStore } from '@/stores/auth'
@@ -136,7 +137,7 @@ function startReplyTo(reply: ForumReplyItem) {
   replyingTo.value = { id: reply.id, username: displayName(reply.author) }
 }
 
-async function submitReply(topicId: number) {
+async function submitReply(topicId: number, payload: { contentFormat: ForumContentFormat }) {
   const content = replyContent.value.trim()
   if (!content) {
     ElMessage.warning('请输入回复内容')
@@ -144,7 +145,7 @@ async function submitReply(topicId: number) {
   }
   replying.value = true
   try {
-    await forumApi.replyTopic(topicId, content, replyingTo.value?.id, replyImages.value)
+    await forumApi.replyTopic(topicId, content, replyingTo.value?.id, replyImages.value, payload.contentFormat)
     ElMessage.success('回复成功')
     replyContent.value = ''
     replyImages.value = []
@@ -274,9 +275,12 @@ watch(() => props.chapterId, () => {
           <UiSkeleton v-if="detailLoading" variant="list" :count="2" />
 
           <template v-else>
-            <div class="mb-3.5 whitespace-pre-wrap break-words text-sm leading-[1.7] text-ink">
-              {{ detailContent }}
-            </div>
+            <!-- 展开的帖子正文按声明格式渲染（ADR-0044），与详情页同源 -->
+            <ForumContent
+              :content="detailContent"
+              :format="expandedTopic?.content_format"
+              class="mb-3.5 text-sm leading-[1.7] text-ink"
+            />
             <ForumImageGallery :images="expandedTopic?.images" />
 
             <!-- 回复流 -->
@@ -317,7 +321,7 @@ watch(() => props.chapterId, () => {
                 :max-images="3"
                 :rows="2"
                 placeholder="写下你的回复…"
-                @submit="submitReply(topic.id)"
+                @submit="(p) => submitReply(topic.id, p)"
               />
             </div>
 

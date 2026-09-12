@@ -99,7 +99,7 @@ func RateLimit(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 			c.Next()
 			return
 		}
-		limiter := pool.get(c.ClientIP())
+		limiter := pool.get(ClientIP(c))
 		if !limiter.Allow() {
 			c.Header("Retry-After", "1")
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{

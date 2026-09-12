@@ -1,9 +1,11 @@
 <#
 .SYNOPSIS
-    移动端验收门候选 ④c：本地整模块 Kotlin 编译（半自动门）——输入取 appResource 产物。
+    移动端验收门 ④ 的默认载体：本地整模块 Kotlin 编译（半自动门，口径 ④c）——输入取 appResource 产物。
 
 .DESCRIPTION
-    口径见 docs/adr/0008-移动端验收门与证据.md「④a 的运行前提与 ④b 的判定」；来源 issue #859（spike）/ #870（T2）。
+    口径见 docs/adr/0008-移动端验收门与证据.md；来源 issue #859（spike）/ #870（T2）。
+    2026-09-11 修订：④a 与 ④c 合并为「④ 本地编译门」——④c（本脚本）为**默认**，
+    dev 专属面（pages.json / manifest.json / platformConfig.json 改动、新增页面、收口 PR）追加 ④a（`npm run build:compile`）。
 
     为什么需要它
       - ④a（`npm run build:compile`）走 HBuilderX 的**增量**编译：只把本次变更的 .kt 交给 kotlinc，
@@ -29,10 +31,18 @@
 
     退出码：0 = 通过；1 = 编译报错（或 publish 未成功）；2 = 环境不可用（缺 CLI/编译器、无产物、超时）。
 
+.PARAMETER PostToPr
+    > 0 时，**仅在门通过（exit 0）分支**把结果贴成 PR 评论（P1：编译门结果免手抄）。
+    评论正文严格形如 `<!-- gate-evidence:④ -->` + 「④ 本地编译门（④c 整模块 Kotlin 编译，agent 执行）」
+    + `commit: <HEAD sha>` + 结论（含 KOTLIN_ALL_RESULT）与日志路径 + 复现命令；
+    `.github/workflows/pr-evidence.yml` 只认「带该标记且 sha 与 PR head 相等」的评论，不校真伪。
+    gh 不可用/取不到 sha 时只打印警告，**不影响门的结论**。
+
 .EXAMPLE
     npm run build:kotlin-all
     pwsh -NoProfile -File scripts/kotlin-all-check.ps1 -SkipPublish
     pwsh -NoProfile -File scripts/kotlin-all-check.ps1 -HBuilderX 'D:\软件\HBuilderX.5.23.2026080626\HBuilderX'
+    pwsh -NoProfile -File scripts/kotlin-all-check.ps1 -PostToPr 859   # 通过后把结果贴成 sha 绑定评论
 #>
 [CmdletBinding()]
 param(
@@ -40,8 +50,11 @@ param(
     [string]$HBuilderX,
     [string]$Cli,
     [switch]$SkipPublish,
+    [int]$HxWaitSeconds = 600,
+    [switch]$HxNoWait,
     [int]$PublishTimeoutSeconds = 900,
-    [int]$KotlincTimeoutSeconds = 900
+    [int]$KotlincTimeoutSeconds = 900,
+    [int]$PostToPr = 0
 )
 
 Set-StrictMode -Version Latest
@@ -148,6 +161,14 @@ Set-Content -LiteralPath $logPath -Encoding utf8 -Value @(
 )
 function Write-Log { param([string]$Text) Add-Content -LiteralPath $logPath -Value $Text -Encoding utf8 }
 
+# ---------- HBuilderX 忙检测（单实例串行资源，ADR-0008 坑位段）----------
+. (Join-Path $PSScriptRoot 'lib\hx-busy.ps1')
+if ($SkipPublish) {
+    Write-Host '>>> -SkipPublish：不接 HBuilderX，跳过忙检测与互斥锁（kotlinc 段不依赖主程序）' -ForegroundColor Yellow
+} else {
+    $hx = Wait-HxFree -CliExe (Join-Path (Resolve-HBuilderXRoot -Explicit $HBuilderX -ExplicitCli $Cli) 'cli.exe') -TimeoutSeconds $HxWaitSeconds -NoWait:$HxNoWait -LogPath $logPath
+}
+try {
 # ---------- 1) 可选：导出 appResource 产物 ----------
 $hbxRoot = Resolve-HBuilderXRoot -Explicit $HBuilderX -ExplicitCli $Cli
 if (-not $SkipPublish) {
@@ -276,5 +297,68 @@ if ($errorLines.Count -gt 0) {
 Write-Host ''
 Write-Host "✅ ④c 通过：整模块编译无 error（$summary）" -ForegroundColor Green
 Write-Host '   注意：④c ≠ compileReleaseKotlin（工具链不同），只作本地加固，不能替代 ④b 的结论。' -ForegroundColor Yellow
+
+# ---------- 5) P1：门通过时把结果贴成「sha 绑定」的 PR 评论（编译门结果免手抄）----------
+function Get-HeadSha {
+    param([string]$ProjectDir)
+    $attempts = @()
+    if ($ProjectDir) { $attempts += , @('-C', $ProjectDir, 'rev-parse', 'HEAD') }
+    $attempts += , @('rev-parse', 'HEAD')
+    foreach ($a in $attempts) {
+        try {
+            $out = & git @a 2>$null | Select-Object -First 1
+            if ($out -and "$out".Trim()) { return "$out".Trim() }
+        } catch { }
+    }
+    return ''
+}
+
+function Publish-GateComment {
+    param(
+        [int]$PrNumber,
+        [string]$GateLabel,
+        [string]$ResultLine,
+        [string]$LogRelative,
+        [string]$ReproCommand
+    )
+    $sha = Get-HeadSha -ProjectDir $Project
+    if (-not $sha) {
+        Write-Host '[warn] 取不到 HEAD sha（git 不可用或不在仓库里）：跳过贴 PR 评论，门结论不受影响。' -ForegroundColor Yellow
+        return
+    }
+    $short = $sha.Substring(0, [Math]::Min(7, $sha.Length))
+    # 正文格式被 .github/workflows/pr-evidence.yml 认（标记 + commit sha），改动前先看那边的注释
+    $body = @(
+        '<!-- gate-evidence:④ -->',
+        "**④ 本地编译门（$GateLabel，agent 执行）**",
+        "- commit: $sha",
+        "- 结论（含产物）：``$ResultLine``；日志 ``$LogRelative``",
+        "- 复现：``$ReproCommand``"
+    ) -join "`n"
+    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+        Write-Host '[warn] 找不到 gh CLI：跳过贴 PR 评论，门结论不受影响（结果见上面日志）。' -ForegroundColor Yellow
+        return
+    }
+    try {
+        $out = (& gh pr comment $PrNumber --body $body 2>&1 | Out-String)
+        if ($out -match 'github\.com/') {
+            Write-Host "✅ 已贴 PR #$PrNumber 的 ④ 门评论（sha 绑定 $short）。" -ForegroundColor Green
+        } else {
+            Write-Host "[warn] 贴 PR #$PrNumber 评论疑似失败（门结论不受影响）：$($out.Trim())" -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Host "[warn] 贴 PR 评论失败（门结论不受影响）：$_" -ForegroundColor Yellow
+    }
+}
+
+if ($PostToPr -gt 0) {
+    Publish-GateComment -PrNumber $PostToPr -GateLabel '④c 整模块 Kotlin 编译' `
+        -ResultLine $summary -LogRelative '.ci-verify/kotlin-all.log' -ReproCommand 'npm run build:kotlin-all'
+}
 exit 0
 
+
+} finally {
+    # 释放 agent 互斥锁（-SkipPublish 下未取锁，Release-HxLock 是安全的空操作）
+    Release-HxLock
+}

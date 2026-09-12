@@ -1,4 +1,4 @@
-﻿# KB Pipeline monitor (single-shot, scheduled task ef08d295, every 10 min)
+# KB Pipeline monitor (single-shot, scheduled task ef08d295, every 10 min)
 # 只读监控 pve-04 知识库流水线：解析→转换→嵌入→图注→重转换→重灌→完成
 # 不改服务器任何文件。输出写入 .kb-pipeline-monitor.log，供助手/用户查阅。
 $LogFile = 'E:\FL\training-app\叉车维修培训学员端跨端应用\.kb-pipeline-monitor.log'

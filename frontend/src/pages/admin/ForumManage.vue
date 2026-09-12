@@ -117,7 +117,14 @@
             <div v-loading="detailLoadingId === row.id" class="expand-replies">
               <template v-if="replyMap[row.id]">
                 <div class="topic-content">
-                  <div class="topic-content-text">{{ row.content }}</div>
+                  <!-- 治理面看**实际展示效果**（ADR-0044）：渲染版才看得出学员最终看到的是什么。
+                       raw HTML 在 escape 策略下以文本形式可见，所以渲染版不会掩盖藏起来的标记。 -->
+                  <ForumContent
+                    :content="row.content"
+                    :format="row.content_format"
+                    link-policy="plain"
+                    class="topic-content-text"
+                  />
                   <ForumImageGallery :images="row.images" />
                 </div>
                 <div v-if="replyMap[row.id].length > 0" class="reply-list">
@@ -136,7 +143,13 @@
                         删除回复
                       </UiButton>
                     </div>
-                    <div class="reply-content">{{ reply.content }}</div>
+                    <!-- 回复同样按声明格式渲染：管理员判断违规依据的是学员实际看到的样子 -->
+                    <ForumContent
+                      :content="reply.content"
+                      :format="reply.content_format"
+                      link-policy="plain"
+                      class="reply-content"
+                    />
                     <ForumImageGallery :images="reply.images" />
                   </div>
                 </div>
@@ -246,6 +259,7 @@ import {
   type AdminForumReportItem
 } from '@/api/forum'
 import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
+import ForumContent from '@/components/student/ForumContent.vue'
 import { formatLocaleDateTime } from '@/utils/format'
 import { useAdminTable } from '@/composables/useAdminTable'
 import UiButton from '@/components/ui/UiButton.vue'
@@ -608,12 +622,13 @@ onMounted(loadList)
   border-bottom: 1px solid var(--color-border-light);
 }
 
+/* 只管本页的密度（字号/行高/色），**不再管换行与断词**——
+   那两条现在由 ForumContent 的原子类按格式分支决定（纯文本才保留换行）。
+   同一元素同一属性既有 scoped 类又有原子类会构成双写（ui-conventions R3）。 */
 .topic-content-text {
   font-size: 14px;
   color: var(--color-text-primary);
   line-height: 1.7;
-  white-space: pre-wrap;
-  word-break: break-word;
 }
 
 .reply-list {
