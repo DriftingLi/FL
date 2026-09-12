@@ -17,6 +17,9 @@
  *   D7 判成败只看输出（DEVICE_CAPTURE_RESULT），**不得**出现 $LASTEXITCODE
  *   D8 ADR-0008 已记录「①a」，且写明只替代取证、不替代 ①b，且不得代填「执行人」
  *   D9 脚本必须是 LF 行尾（.gitattributes 钉了 *.ps1；Windows 上 CRLF 会让本测试的字面量锚点全部失配）
+ *   D10 切页模式必须有「页身份」fail-closed 断言：截图记 SHA256，多页哈希相同即判相关页 FAIL
+ *      —— 2026-09-12 PR #898 实测 `am start -d uniapp://<page>` 未让 App 换页、五图同哈希却各判 PASS
+ *      （原有四项断言覆盖不到「目标页是否真的加载」），故把这条补成硬规
  *
  * 设计沿用本仓既有守护测试的形态（见 utils/emulatorSmokeContract.test.js）：
  * 先对「注入违规」的变形样本断言检测有效（防空跑假绿），再对真实文件断言零命中。
@@ -231,6 +234,26 @@ function scanContract(sources) {
     violations.push('D8 ADR 不得代填「执行人」');
   }
 
+  // D10 页身份 fail-closed：切页静默失效必须被判出，不得各判 PASS
+  // （2026-09-12 PR #898 实测：`am start -d uniapp://<page>` 未让 App 换页，五张 *-after.png
+  //   SHA256 完全相同，却因「前台/字节数/FATAL/ANR」四项都过而各判 PASS —— 那四项覆盖不到
+  //   「目标页是否真的加载」。故切页模式必须自带哈希撞车判据。）
+  if (!/function Export-Screenshot \{[\s\S]*?Get-FileHash[\s\S]*?SHA256/.test(code)) {
+    violations.push('D10 截图未记 SHA256（页身份断言缺输入）');
+  }
+  if (!code.includes('$script:ShotRecords | Where-Object { $_.Name -eq $r.Shot }')) {
+    violations.push('D10 缺「按截图名回查哈希」的关联步骤');
+  }
+  if (!code.includes('切页未生效')) {
+    violations.push('D10 缺「切页未生效」失败文案（切页失效须被判出而非静默 PASS）');
+  }
+  if (!code.includes("$hit.Status = 'FAIL'")) {
+    violations.push('D10 哈希撞车未把相关页判 FAIL');
+  }
+  if (!code.includes('页身份断言：')) {
+    violations.push('D10 汇总未打出页身份断言状态（人无法一眼核）');
+  }
+
   return violations;
 }
 
@@ -255,7 +278,12 @@ describe('真机只读取证契约（①a 预置 · 非门 · 不替代 ①b）'
       ['D7', '拿退出码当判据', (s) => ({ ...s, script: s.script + '\nif ($LASTEXITCODE -ne 0) { exit 1 }\n' })],
       ['D8', 'ADR 抹掉「不替代 ①b」', (s) => ({ ...s, adr: s.adr.replace(/不替代 ①b/g, '不替代某物') })],
       ['D8', 'ADR 代填执行人', (s) => ({ ...s, adr: s.adr + '\n执行人：alice\n' })],
-      ['D9', '脚本被写出 CRLF', (s) => ({ ...s, script: s.script.replace(/\n/g, '\r\n') })]
+      ['D9', '脚本被写出 CRLF', (s) => ({ ...s, script: s.script.replace(/\n/g, '\r\n') })],
+      ['D10', '截图不再记 SHA256', (s) => ({ ...s, script: s.script.replace(/Get-FileHash[\s\S]*?SHA256\)\.Hash/, "''") })],
+      ['D10', '按截图名回查哈希被删', (s) => ({ ...s, script: s.script.replace('$script:ShotRecords | Where-Object { $_.Name -eq $r.Shot }', '$script:ShotRecords') })],
+      ['D10', '哈希撞车不再判 FAIL', (s) => ({ ...s, script: s.script.replace("$hit.Status = 'FAIL'", '$hit.Status = $hit.Status') })],
+      ['D10', '「切页未生效」文案被删', (s) => ({ ...s, script: s.script.replace(/切页未生效/g, '页问题') })],
+      ['D10', '汇总页身份行被删', (s) => ({ ...s, script: s.script.replace('页身份断言：', '备注：') })]
     ];
     cases.forEach(([rule, label, mutate]) => {
       const found = scanContract(mutate(real));
@@ -286,6 +314,18 @@ describe('真机只读取证契约（①a 预置 · 非门 · 不替代 ①b）'
     expect(readonlyIdx).toBeGreaterThan(-1);
     expect(elseIdx).toBeGreaterThan(readonlyIdx);
     expect(code.indexOf('Start-AppPage -Page')).toBeGreaterThan(elseIdx);
+  });
+
+  it('切页模式自带页身份 fail-closed 断言（防「五图同哈希却各判 PASS」）', () => {
+    const code = codeOf(real.script);
+    expect(code).toMatch(/Get-FileHash[\s\S]*?SHA256/);
+    expect(code).toContain('切页未生效');
+    expect(code).toContain("$hit.Status = 'FAIL'");
+    expect(code).toContain('页身份断言：');
+    // 断言必须落在切页分支之后（只读模式不适用）
+    const startIdx = code.indexOf('Start-AppPage -Page');
+    expect(startIdx).toBeGreaterThan(-1);
+    expect(code.indexOf('切页未生效')).toBeGreaterThan(startIdx);
   });
 
   it('默认（不加开关）就是只读：切页闸门与提示语都在', () => {
