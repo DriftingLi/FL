@@ -8,11 +8,10 @@
 				</view>
 			</view>
 
-			<!-- 中：版本标题 + 副标题 -->
+			<!-- 中：标题 + 副标题 -->
 			<view class="nav-center">
 				<view class="nav-title-row">
-					<text class="nav-title">{{ versionTitle }}</text>
-					<text v-if="version == 'basic'" class="nav-sparkle">&#10024;</text>
+					<text class="nav-title">AI 助手</text>
 				</view>
 				<text class="nav-subtitle">维修助手</text>
 			</view>
@@ -26,21 +25,14 @@
 </template>
 
 <script setup lang="uts">
-	import { computed } from 'vue'
 
 	const props = withDefaults(defineProps<{
-		version?: string
 		statusBarHeight?: number
 	}>(), {
-		version: 'basic',
 		statusBarHeight: 20
 	})
 
 	const emit = defineEmits(['leftClick', 'menuClick'])
-
-	const versionTitle = computed<string>(() : string => {
-		return props.version == 'pro' ? '专业版' : '基础版'
-	})
 
 	function onLeftClick() : void {
 		emit('leftClick')
@@ -106,10 +98,6 @@
 		font-weight: bold;
 	}
 
-	.nav-sparkle {
-		font-size: 26rpx;
-		margin-left: 6rpx;
-	}
 
 	.nav-subtitle {
 		font-size: 24rpx;

@@ -230,20 +230,6 @@
             }
         },
         {
-            "path": "pages/ai-assistant/version-select",
-            "style": {
-                "navigationStyle": "custom",
-                "navigationBarTitleText": "选择版本"
-            }
-        },
-        {
-            "path": "pages/ai-assistant/ai-basic",
-            "style": {
-                "navigationStyle": "custom",
-                "navigationBarTitleText": "维修助手基础版"
-            }
-        },
-        {
             "path": "pages/ai-assistant/custom-models",
             "style": {
                 "navigationStyle": "custom",
@@ -374,7 +360,7 @@
                 "selectedIconPath": "static/tabbar/course-active.png"
             },
             {
-                "pagePath": "pages/ai-assistant/version-select",
+                "pagePath": "pages/ai-assistant/ai-assistant",
                 "text": "AI学",
                 "iconPath": "static/tabbar/ai.png",
                 "selectedIconPath": "static/tabbar/ai-active.png"
