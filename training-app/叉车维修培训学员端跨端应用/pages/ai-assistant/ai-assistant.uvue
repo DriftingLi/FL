@@ -1,11 +1,18 @@
 <template>
-	<view class="ai-page" :style="{ height: windowHeight + 'px' }">
+	<view class="ai-page">
 		<!-- 自定义导航栏 -->
-		<AiChatNav :version="'pro'" :status-bar-height="statusBarHeight" @left-click="toggleSidebarLeft" @menu-click="toggleSidebarRight" />
+		<AiChatNav :status-bar-height="statusBarHeight" @left-click="toggleSidebarLeft" @menu-click="toggleSidebarRight" />
 
 		<!-- 主内容区 -->
 		<view class="main">
 			<scroll-view scroll-y class="pro-scroll" :scroll-into-view="scrollIntoViewId" scroll-with-animation>
+				<!-- 专业版入口：积分兑换未上线，点击只给提示，不做任何付费 -->
+				<view class="pro-banner" @click="onProBannerClick">
+					<text class="pro-banner-title">解锁专业版</text>
+					<text class="pro-banner-sub">选模型 / 自定义模型 / 发图片 · 积分兑换即将开放</text>
+					<text class="pro-banner-go">查看</text>
+				</view>
+
 				<!-- 功能入口 -->
 				<view class="function-grid">
 					<view v-for="(item, idx) in functionItems" :key="idx" class="function-item" @click="onFunctionClick(item)">
@@ -39,10 +46,7 @@
 		</view>
 
 		<!-- 底部输入区（专业版带模型选择器） -->
-		<AiChatInput :show-model-bar="true" :model-name="currentModelName" :show-image-button="true" @send="onInputSend" @model-click="showModelPicker = true" @voice-click="onVoiceClick" @image-click="onImageClick" />
-
-		<!-- 底部导航栏 -->
-		<TabBar :active-index="2"></TabBar>
+		<AiChatInput :show-model-bar="proUnlocked" :model-name="currentModelName" :model-readonly="!proUnlocked" :show-image-button="proUnlocked" @send="onInputSend" @model-click="onModelBarClick" @voice-click="onVoiceClick" @image-click="onImageClick" />
 
 		<!-- 左侧会话抽屉 -->
 		<AiChatDrawerLeft :visible="sidebarLeft" :sessions="sessions" :current-session-id="currentSession?.id ?? 0" :status-bar-height="statusBarHeight" @close="sidebarLeft = false" @new-chat="onNewChat" @select="onSelectSession" @delete="onDeleteSession" />
@@ -71,7 +75,7 @@
 	import { useAiChat } from '../../composables/useAiChat'
 	import type { ChatBodyBuilder } from '../../composables/useAiChat'
 	import type { AiModel, AiUserModel, AIModelOption, AiChatMessage, AiSession, AIFunctionItem } from '../../types/index'
-	import { isProPaid, getVersion, setVersion } from '../../utils/aiPay'
+
 	import { STORAGE_KEY_AI_SELECTED_USER_MODEL } from '../../constants/app'
 	import { FUNCTION_ITEMS, QUICK_PROMPTS, RIGHT_MENU_ITEMS } from './ai-assistant-constants'
 	import AiChatNav from '../../components/ai-chat/ai-chat-nav.uvue'
@@ -81,12 +85,15 @@
 	import AiChatInput from '../../components/ai-chat/ai-chat-input.uvue'
 	import AiChatModelPicker from '../../components/ai-chat/ai-chat-model-picker.uvue'
 	import AiChatCustomForm from '../../components/ai-chat/ai-chat-custom-form.uvue'
-	import TabBar from '../../components/tab-bar/tab-bar.uvue'
+
 
 	const auth = useAuthStore()
 
-	// 页面根 view 需显式高度，否则背景渐变不绘制（先例 dashboard/forum/courses 同写法）
-	const windowHeight = uni.getSystemInfoSync().windowHeight
+	// 专业版能力门：积分兑换尚未上线，故恒为 false（页面按基础版能力渲染）。
+	// 兑换上线后改读后端「已拥有」判定（#920），届时删除本常量。
+	const proUnlocked = ref<boolean>(false)
+
+
 
 	// 聊天核心逻辑
 	const {
@@ -222,10 +229,20 @@
 		}
 	}
 
-	// 版本切换
-	function goBasic() : void {
-		setVersion('basic')
-		uni.reLaunch({ url: '/pages/ai-assistant/ai-basic' })
+
+
+	// 专业版入口：兑换未上线，点击只给提示，不做任何付费动作
+	function onProBannerClick() : void {
+		uni.showToast({ title: '积分兑换即将开放', icon: 'none' })
+	}
+
+	// 模型芯片：未解锁时只读，点击同样只给提示
+	function onModelBarClick() : void {
+		if (!proUnlocked.value) {
+			uni.showToast({ title: '积分兑换即将开放', icon: 'none' })
+			return
+		}
+		showModelPicker.value = true
 	}
 
 	// 会话操作
@@ -243,8 +260,6 @@
 		sidebarRight.value = false
 		if (key == 'new-chat') {
 			startNewChat()
-		} else if (key == 'switch-basic') {
-			goBasic()
 		} else if (key == 'settings') {
 			uni.navigateTo({ url: '/pages/ai-assistant/ai-settings' })
 		} else if (key == 'custom-models') {
@@ -426,15 +441,7 @@
 			return
 		}
 
-		if (!isProPaid()) {
-			uni.reLaunch({ url: '/pages/ai-assistant/version-select' })
-			return
-		}
 
-		if (getVersion() == 'basic') {
-			uni.reLaunch({ url: '/pages/ai-assistant/ai-basic' })
-			return
-		}
 
 		loadModels()
 		loadSessions()
@@ -463,12 +470,11 @@
 
 <style>
 	.ai-page {
+		flex: 1;
 		display: flex;
 		flex-direction: column;
-		/* 实色兜底：真机实测 background: linear-gradient(...) 不绘制（dashboard 等同款写法同样静默失败），
-		   故先给实色底，再叠渐变——渐变生效则覆盖，不生效则退回实色 */
+		/* 底色用实色：本机型实测 background: linear-gradient(...) 静默不绘制 */
 		background-color: #dfeffb;
-		background-image: linear-gradient(180deg, #d2ebfc 0%, #e1eff9 45%, #edf3f6 100%);
 	}
 
 	.main {
@@ -571,4 +577,36 @@
 		color: #333333;
 		line-height: 1.6;
 	}
+	/* 专业版入口横幅：实色配色（本机型不绘制渐变）；#920 兑换上线后接真解锁 */
+	.pro-banner {
+		flex-direction: row;
+		align-items: center;
+		background-color: #fff3e0;
+		border: 1rpx solid #ffd9a8;
+		border-radius: 16rpx;
+		padding: 20rpx 24rpx;
+		margin-bottom: 24rpx;
+	}
+
+	.pro-banner-title {
+		font-size: 28rpx;
+		font-weight: bold;
+		color: #8a4b00;
+	}
+
+	.pro-banner-sub {
+		flex: 1;
+		font-size: 22rpx;
+		color: #a97142;
+		margin-left: 16rpx;
+	}
+
+	.pro-banner-go {
+		font-size: 24rpx;
+		color: #ffffff;
+		background-color: #ff9800;
+		border-radius: 24rpx;
+		padding: 8rpx 20rpx;
+	}
+
 </style>

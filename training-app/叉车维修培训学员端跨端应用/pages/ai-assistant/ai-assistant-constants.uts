@@ -26,7 +26,6 @@ export type MenuItem = { key : string; label : string }
 /** 右侧菜单项列表 */
 export const RIGHT_MENU_ITEMS : MenuItem[] = [
     { key: 'new-chat', label: '新对话' },
-    { key: 'switch-basic', label: '切换到基础版' },
     { key: 'settings', label: '对话设置' },
     { key: 'custom-models', label: '自定义模型' },
     { key: 'profile', label: '个人中心' },
