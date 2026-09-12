@@ -152,7 +152,7 @@
 	const quickPrompts = QUICK_PROMPTS
 	const rightMenuItems = RIGHT_MENU_ITEMS
 
-	// 当前模型名与描述（只读展示）
+	// 当前模型名与描述（只读展示；未配置模型时给中性文案——芯片不可点，不该写「选择模型」诱导点击）
 	const currentModelName = computed<string>(() : string => {
 		const list = models.value
 		for (let i = 0; i < list.length; i++) {
@@ -160,7 +160,7 @@
 				return list[i].name
 			}
 		}
-		return list.length > 0 ? list[0].name : '选择模型'
+		return list.length > 0 ? list[0].name : '未配置模型'
 	})
 
 	const currentModelDesc = computed<string>(() : string => {
