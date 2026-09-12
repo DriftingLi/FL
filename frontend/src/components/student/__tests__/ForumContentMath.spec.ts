@@ -85,13 +85,12 @@ describe('ForumContent 公式（#900）', () => {
     expect(w.text()).toContain('<script>')
   })
 
-  it('行内 \`$...$\` 目前不渲染（上游现状，登记在 ADR-0046）：以源码可见，不假装支持', async () => {
-    const w = mountContent('扭矩 $T$ 时按此取值')
-    await vi.waitFor(() => {
-      expect(w.text()).toContain('$T$')
-    })
-    expect(w.element.querySelector('[data-markstream-math]')).toBeNull()
-  })
+  // ⚠️ 这里**刻意不测行内公式**（`$...$`）：
+  // 真实浏览器里论坛的行内公式正常渲染（线上实测：`行内公式 $f(x) = ax + b$` 出公式），
+  // 但本仓的单测环境（happy-dom）里 markstream 的**组件**会把 `math_inline` 降级成纯文本节点
+  // ——只有直接调解析器 `parseMarkdownToStructure()` 才拿得到 `math_inline`。
+  // 在这个环境里写行内公式的用例，无论正向还是负向，断言的都是环境差异而不是产品行为。
+  // 该格由线上 / 人工验证覆盖；口径记在 ADR-0046「已知限制」。
 })
 
 /**
