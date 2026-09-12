@@ -508,6 +508,18 @@ test('b) 绑定判据②：证据 commit 是 head 祖先 + 其间只有文档/�
   assert.match(notes, /运行时面/);
 });
 
+test('b1) 祖先绑定时摘要行必须点名**实际绑上的旧 commit**，不得写成 head（摘要不得往「更可信」方向失真）', async () => {
+  const { fn } = trueAncestor(DOC_FILES);
+  const r = await run({ body: bodyWith4FromComment(), gateComments: [gate4Comment(ANC)], headSha: HEAD, fetchCompare: fn });
+  assert.equal(r.ok, true, r.errors.join('；'));
+  const notes = r.notes.join('\n');
+  const head7 = HEAD.slice(0, 7);
+  // 摘要行形如：④ 本地编译门：证据来自 PR 评论（sha 绑定 <证据 commit> —— 祖先口径，当前 head 为 <head>）。
+  assert.match(notes, new RegExp(`本地编译门：证据来自 PR 评论（sha 绑定 ${anc7} `), '摘要行必须写实际绑上的 commit，而不是 head');
+  assert.match(notes, /祖先口径，当前 head 为/, '祖先绑定必须显式标出「当前 head 是另一个 sha」');
+  assert.doesNotMatch(notes, new RegExp(`本地编译门：证据来自 PR 评论（sha 绑定 ${head7}）`), '不得把摘要写成「绑定了 head」（旧措辞）');
+});
+
 test('b2) 祖先 + 其间**只有非运行时面**（含 .github/**、frontend/**）⇒ 满足（免重跑 churn 的主场景）', async () => {
   const files = ['.github/workflows/ci.yml', 'frontend/src/App.vue', 'scripts/foo.ps1', 'docs/x.md'];
   const { fn, counts } = trueAncestor(files);

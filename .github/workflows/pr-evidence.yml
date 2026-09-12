@@ -199,6 +199,15 @@ jobs:
               const gate4Comment = g4.hit;
               const gate2Comment = g2.hit;
               const headSha7 = String(headSha || '').slice(0, 7);
+              // 摘要行必须写**实际绑上的那个 commit**（2026-09-13 补正）：祖先绑定成立时证据是在**旧 commit**
+              // 上产出的；写死 head 会让摘要读起来像「证据是在当前 head 上跑的」—— 在一个只校结构的门里，
+              // 这属于往「更可信」方向失真。恰好等于 head 时输出与旧文案逐字一致（旧用例不受影响）。
+              const boundPhrase = (text) => {
+                const b7 = (gateCommitIn(text) || '').slice(0, 7) || headSha7;
+                return b7 === headSha7
+                  ? `sha 绑定 ${b7}`
+                  : `sha 绑定 ${b7} —— 祖先口径，当前 head 为 ${headSha7}`;
+              };
               // gateReason 只在「有门评论但一条都没绑上」时才有值 —— 用于 ① 缺行报错文案，② 末尾的留痕 notes
               const gateReason = {
                 '④': gate4Comment ? '' : g4.reason,
@@ -292,13 +301,13 @@ jobs:
                 if (lowRiskRuntime && (gate.key === '①' || gate.key === '②')) continue;
                 // ④ 的门证据已由 sha 绑定的 PR 评论承载 → 跳过字段校验（正文该行可写「见评论 <链接>」）
                 if (gate.key === '④' && gate4Comment) {
-                  notes.push(`④ 本地编译门：证据来自 PR 评论（sha 绑定 ${headSha7}）。`);
+                  notes.push(`④ 本地编译门：证据来自 PR 评论（${boundPhrase(gate4Comment)}）。`);
                   continue;
                 }
                 // ② 门同理（2026-09-12 起为半自动门：agent 可执行 scripts/mp-weixin-check.ps1 并贴评论）；
                 // 「执行人」栏仍须由人签收 —— 校验器分不出人/agent（单账号），约束落在 AGENTS.md 上。
                 if (gate.key === '②' && gate2Comment) {
-                  notes.push(`② 微信开发者工具门（半自动）：证据来自 PR 评论（sha 绑定 ${headSha7}）；执行人栏仍须由人签收。`);
+                  notes.push(`② 微信开发者工具门（半自动）：证据来自 PR 评论（${boundPhrase(gate2Comment)}）；执行人栏仍须由人签收。`);
                   continue;
                 }
                 const line = lines.find((l) => matchesGate(l, gate));
