@@ -298,7 +298,7 @@ const gate2Comment = (sha) =>
     '<!-- gate-evidence:② -->',
     '**② 微信开发者工具无报错（半自动，agent 执行）**',
     `- commit: ${sha}`,
-    '- 结论（含产物）：`MP_WEIXIN_RESULT appid=wx38c3e31b16a7ced0 pageStack=2 entry=pages/index/index errorsTotal=0 exceptionsTotal=0`；截图 `.ci-verify/entry.png`；日志 `.ci-verify/mp-weixin.log`',
+    '- 结论（含产物）：`MP_WEIXIN_RESULT appid=wx38c3e31b16a7ced0 pageStack=2 entry=pages/index/index errorsTotal=0 exceptionsTotal=0 shots=2 navigation=ok`；截图 `docs/verification/mp-weixin/624/entry-after.webp`；日志 `.ci-verify/mp-weixin.log`',
     '- 非等价声明：② ≠ ① 真机门，也 ≠ ④b 云打包门。',
     '- 复现：`npm run build:mp-weixin-check`',
     '',
