@@ -12,6 +12,8 @@ master 有仓库 ruleset「protect master」保护（直接 push 会被拒，`pu
 6. **Squash merge → 直发 production**：`gh pr merge <n> --squash --delete-branch`。master 的 push **不跑 CI**，直接触发 `cd.yml` 的 `gate` job：从 commit 主题解析 `(#N)` → 校验该 PR head 的 `ci-summary=success`、该 commit 的 testing 冒烟 `success`（冒烟可能晚于合并，gate 最多轮询 15 分钟）→ 通过后才构建镜像并部署 production。若报 "requirements have not been met"，用 `gh pr view <n> --json statusCheckRollup` 排查。
 7. **收尾**：`git fetch --prune` → `git checkout master && git pull --ff-only` → 删除本地 feat 分支（若 gh 已自动删）。
 
+**验收门（合并前置，与上面的 CI/CD 机制是两道独立的门）**：上面第 3–6 步只讲 CI/CD；**PR 正文的 `## 验收证据` 段**由 `.github/workflows/pr-evidence.yml` 对**每一个 PR** 校验，**缺段直接判红**（与改动是否命中运行时面无关）：未命中运行时面写 `免（未命中运行时面）`（先例 #908），命中移动端运行时面则按四门填「执行人 / 日期 / 复测对象 / 结论（含产物）」。四门判据、豁免与「**agent 不得自行合并运行时面 PR**」纪律见 `training-app/叉车维修培训学员端跨端应用/docs/adr/0008-移动端验收门与证据.md`（**写全路径**，根仓库另有一个同名的 `ADR-0008`）。
+
 **应急通道**：gate 阻断但确认可以上生产时，手动放行 `gh workflow run cd.yml -f environment=production -f ref=<master sha>`（dispatch 不经门禁）。若是 testing 冒烟失败，先到 Actions 重跑该 CD run，再重新合并或走应急通道。
 
 > ⚠️ 本次流水线变更**合并前**切出的分支：其 `ci-summary` 受旧条件约束（仅 master 上报），在 PR 上显示 skipped，既不满足必检也会被 gate 判为 `other`。先 `git merge origin/master` 重推、等 CI 重跑，再走合并流程。

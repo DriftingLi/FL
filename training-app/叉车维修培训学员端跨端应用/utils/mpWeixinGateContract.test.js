@@ -15,6 +15,20 @@
  *   C8 非等价声明 + 挡不住的类别 + **源 manifest appid 前置断言**（HBuilderX 首次导入会回写 manifest 置 null）
  *   C9 截图入库纪律（P2）：WebP→JPEG 回退、宽 ≤720、单张 ≤150KB、合计 ≤1.5MB、-NoArchive、失败不阻塞门
  *   C10 注册与文档：package.json 脚本、ADR-0008、PR 模板、移动端 AGENTS.md 的人工门清单
+ *   C11 HBuilderX 忙检测：必须 dot-source scripts/lib/hx-busy.ps1、等它给结论、**绝不 kill 主程序**
+ *   C12 **② 的时序三步写死**（2026-09-12 复测）：`close → open --project <dist> → auto`；
+ *       `open` 必须是**显式步骤 + 写进日志**，`-SkipBuild` 下同样能定位构建产物，且不得被 build 分支条件包住
+ *   C13 **导航不可用时诚实降级**（2026-09-12 复测）：探针把「逐页导航 + 每页截图」记 SKIP
+ *       （reason=navigation-api-unsupported）、SKIP **不得写成 PASS**、必须写进结果行与门评论；
+ *       门只对可验证子集作结论（failures 只由该子集产生）
+ *   C14 贴评论调用**不得断链**：语句续行符缺失会让 `-ArchivedRel …` 变成另一条命令（曾真实存在）
+ *   C15 **就绪闸门**（2026-09-13 实测定位）：`auto` 之后、探针之前必须先用 `scripts/mp-weixin-ready.mjs`
+ *       等齐「`Tool.getInfo` 带 `SDKVersion`」与「`App.getPageStack` 开始应答」两个里程碑；探针超时抬到
+ *       `-ProbeTimeoutMs`；结果行必须带 `ready=` / `sdk=` / `ide=`
+ *   C16 失败**归因**：探针必须用 `connectError.kind` 把「会话未就绪」与「端口连不上」分开报；
+ *       脚本不得再把「自动化端口连不上」当作「重试无益」——那一类恰恰是**短暂**的（实测 24–34s 才就绪）
+ *   C17 `-Doctor` 体检模式：只体检、不构建、不跑探针、不贴评论、不入库、**不产出门的通过结论**；
+ *       逐层 OK/WARN/FAIL + 独立退出码，报告必须在 finally 里打印（早期 exit 也要有结论）
  * 设计沿用本仓既有守护测试的形态（见 utils/kotlinAllGateContract.test.js）：
  * 先对「注入违规」的变形样本断言检测有效（防空跑假绿），再对真实文件断言零命中。
  */
@@ -24,6 +38,7 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const SCRIPT_REL = 'scripts/mp-weixin-check.ps1';
 const PROBE_REL = 'scripts/mp-weixin-probe.mjs';
+const READY_REL = 'scripts/mp-weixin-ready.mjs';
 const PKG_REL = 'package.json';
 const ADR_REL = 'docs/adr/0008-移动端验收门与证据.md';
 const AGENTS_REL = 'AGENTS.md';
@@ -38,6 +53,7 @@ function scanContract(sources) {
   const violations = [];
   const s = sources.script || '';
   const probe = sources.probe || '';
+  const ready = sources.ready || '';
   const pkg = sources.pkg || '';
   const adr = sources.adr || '';
   const agents = sources.agents || '';
@@ -121,6 +137,112 @@ function scanContract(sources) {
   must(!/Stop-Process[^\r\n]*HBuilderX/.test(s), 'C11', '出现 kill 主程序的调用（HBuilderX 是共享单实例资源，绝不抢占）');
   must(s.includes('$HxWaitSeconds') && s.includes('$HxNoWait'), 'C11', '缺 -HxWaitSeconds / -HxNoWait 参数');
 
+  // C12 ② 的时序三步：close → open --project <dist> → auto（缺 open 会撞 pageStack 恒空）
+  const closeIdx = s.indexOf("'close', '--project'");
+  const openIdx = s.indexOf("'open', '--project'");
+  const autoIdx = s.indexOf("'auto', '--project'");
+  must(openIdx !== -1, 'C12', '缺少 `cli.bat open --project <dist>`（close 之后 auto 之前必须重开项目窗口，否则 pageStack 恒空）');
+  if (closeIdx !== -1 && openIdx !== -1 && autoIdx !== -1) {
+    must(closeIdx < openIdx, 'C12', '`open` 未出现在 `close` 之后（close 会把项目窗口一起关掉，必须先关再开）');
+    must(openIdx < autoIdx, 'C12', '`open` 未出现在 `auto` 之前（auto 不会替你重开项目窗口）');
+  }
+  must(/Invoke-Process -FilePath \$devTools -Arguments @\('open', '--project', \$dist\)/.test(s), 'C12', 'open 未作为显式步骤经 Invoke-Process 调用 $dist（须用构建产物目录，-SkipBuild 下也要能定位）');
+  must(s.includes('devtools-open'), 'C12', 'open 步骤没有独立的 Tag/日志（`devtools-open`）');
+  must(/Write-Log "`n>>> devtools-open/.test(s), 'C12', 'open 步骤的输出没有写进日志（须与 close/auto 一样可追溯）');
+  must(s.includes('$open.TimedOut'), 'C12', 'open 缺超时兜底（窗口没重开就没法继续，超时判 env 不可用）');
+  if (openIdx !== -1) {
+    const lastDistGuard = s.lastIndexOf('no-dist');
+    must(lastDistGuard !== -1 && openIdx > lastDistGuard, 'C12', 'open 步骤落在构建分支条件内（-SkipBuild 路径到不了它）');
+  }
+
+  // C13 导航不可用时诚实降级：SKIP，不得写成 PASS；且必须写进结果行与门评论
+  must(probe.includes('navigation-api-unsupported'), 'C13', '探针未记录降级原因 `navigation-api-unsupported`');
+  must(/NAV_SKIP_ASSERTIONS/.test(probe), 'C13', '探针未声明「降级涉及哪几条断言」（allRoutesVisited / screenshotsProduced）');
+  must(/'skip'/.test(probe), 'C13', '探针未把降级断言记为 SKIP（字符串 skip），有假绿风险');
+  must(/if \(v === false\)/.test(probe), 'C13', '探针的 failures 不是「只由明确 false（可验证子集不过）」产生（SKIP 会被算成失败或 PASS 混入）');
+  must(/isNavigationUnsupported/.test(probe), 'C13', '探针未区分「导航 API 不支持」与真失败（TIMEOUT 之类不得被降级吞掉）');
+  must(probe.includes('currentPageScreenshot') || probe.includes('current.png'), 'C13', '探针降级后没有取「当前页」截图（可验证子集要求 ≥1 张）');
+  must(s.includes('navigation=$navField'), 'C13', '结果行缺 `navigation=` 字段（降级必须机检可见）');
+  must(s.includes('navigation=SKIP reason='), 'C13', '日志缺 `navigation=SKIP reason=…` 行（降级必须写进日志）');
+  must(!/navigation=PASS/.test(s), 'C13', '把导航降级写成了 PASS（降级不等于通过）');
+  must(s.includes('降级（SKIP，非 PASS）'), 'C13', 'PR 门评论未显式写明降级（SKIP，非 PASS）');
+  must(/navigation-api-unsupported/.test(s), 'C13', '脚本侧未写明降级原因（reason=navigation-api-unsupported）');
+  must(/未证实/.test(s), 'C13', '脚本头未写明「未证实」（版本组合问题留给后续排查，不得宣称已定位根因）');
+  must(/首跑/.test(s), 'C13', '脚本头未写明首跑校准要求');
+
+  // C14 贴评论调用不得断链（缺续行反引号会把参数变成另一条命令）
+  const lines = s.split(/\r?\n/);
+  lines.forEach((line, idx) => {
+    if (!/^\s+-[A-Za-z][\w]*\b/.test(line)) return;
+    if (idx === 0 || /`\s*$/.test(lines[idx - 1])) return;
+    violations.push('C14 第 ' + (idx + 1) + ' 行以 `' + line.trim().split(/\s+/)[0] + '` 起行，但上一行没有续行反引号（语句断链，参数不会生效）');
+  });
+  if (callAt !== -1) {
+    const callBlock = s.slice(callAt, s.indexOf('exit $exitCode'));
+    must(callBlock.includes('-ArchivedRel') && callBlock.includes('-ArchiveNotes'), 'C14', 'Publish-GateComment 调用未传 -ArchivedRel / -ArchiveNotes（入库截图清单进不了评论）');
+  }
+
+  // C15 就绪闸门（2026-09-13 实测定位）：auto 之后、探针之前必须先等齐两个里程碑。
+  //     缺它 ② 时好时坏：automator 的 checkVersion() 早于 SDKVersion 出现就抛 undefined.split，
+  //     而探针原来的 30s 超时正落在实测 24–34s 这段就绪窗口中间。
+  must(s.includes("$ReadyRelative = 'scripts\\mp-weixin-ready.mjs'"), 'C15', '未引用就绪闸门 scripts/mp-weixin-ready.mjs');
+  const readyIdx = s.indexOf('ready-gate');
+  const probeArgsIdx = s.indexOf('$probeArgs = @($probePath');
+  must(readyIdx !== -1, 'C15', '缺就绪闸门步骤（标签 ready-gate）');
+  if (autoIdx !== -1 && readyIdx !== -1) must(autoIdx < readyIdx, 'C15', '就绪闸门未出现在 auto 之后（顺序错了等于没等）');
+  if (readyIdx !== -1 && probeArgsIdx !== -1) must(readyIdx < probeArgsIdx, 'C15', '就绪闸门未出现在探针之前（端点没就绪就交给了 automator）');
+  must(s.includes('MP_WEIXIN_READY'), 'C15', '未解析就绪闸门的 MP_WEIXIN_READY 结果行');
+  must(s.includes('--require-stack'), 'C15', '就绪闸门未要求 pageStack 开始应答（只等 SDKVersion 不够：探针的 pageStack 前置断言必挂）');
+  must(s.includes('$ReadyWaitSeconds'), 'C15', '缺 -ReadyWaitSeconds 预算参数');
+  must(s.includes("'--timeout-ms', \"$ProbeTimeoutMs\""), 'C15', '探针超时未由 -ProbeTimeoutMs 传入（30s 默认值正落在就绪窗口中间）');
+  const ptm = s.match(/\$ProbeTimeoutMs = (\d+)/);
+  must(ptm && Number(ptm[1]) >= 60000, 'C15', 'ProbeTimeoutMs 默认值不足 60s（实测就绪窗口上界 34s）');
+  must(s.includes('ready=${readySeconds}s sdk=$sdkVersion ide=$ideVersion'), 'C15', '结果行缺 ready= / sdk= / ide=（会话就绪耗时不机检，下次红绿不定又只能靠猜）');
+  must(s.includes('reason=automation-not-ready'), 'C15', '未就绪时没有独立 reason（会退化成笼统的 env 失败）');
+  must(ready.includes('SDKVersion'), 'C15', '就绪闸门没有校验 Tool.getInfo 的 SDKVersion');
+  must(ready.includes('App.getPageStack'), 'C15', '就绪闸门没有校验 App.getPageStack 开始应答');
+  must(probe.includes('mp-weixin-ready.mjs'), 'C15', '探针未指向就绪闸门（归因说明进不了探针侧）');
+  must(/24–34s/.test(s) && /24–34s/.test(probe), 'C15', '脚本与探针未记录实测就绪窗口（24–34s）——超时值会变成无来源的魔法数');
+
+  // C16 失败归因：会话未就绪 ≠ 端口连不上（旧版把两者写成同一句，直接导致一轮误诊）
+  must(probe.includes('connectError'), 'C16', '探针未输出 connectError（无法区分未就绪与连不上）');
+  must(probe.includes('classifyConnectError'), 'C16', '探针未对连接失败做归因分类');
+  must(probe.includes("'not-ready'") && probe.includes("'unreachable'"), 'C16', '探针缺 not-ready / unreachable 两个归因口径');
+  must(s.includes('connectError.kind') || probe.includes('connectError.kind'), 'C16', '归因口径未写进结果（kind）');
+  // 「自动化端口连不上」是**短暂**的（实测 24–34s 才就绪）⇒ 绝不能作为「放弃重试」的依据。
+  // 只检查判据**那一行**：上面允许写注释解释这条历史教训。
+  // 判据是 `if (...)` 这一行，`break` 在它的**下一行** —— 断言必须按行号取，不能指望同一行里出现 break。
+  const sLines = s.split(/\r?\n/);
+  const breakIdx = sLines.findIndex((l) => l.includes("'找不到 miniprogram-automator' }"));
+  must(breakIdx !== -1, 'C16', '缺「只对缺模块提前放弃重试」的判据行');
+  if (breakIdx !== -1) {
+    must(!sLines[breakIdx].includes('自动化端口连不上'), 'C16', '放弃重试的判据行仍含「自动化端口连不上」（它正是短暂的那一类 ⇒ 门必红）');
+    must(Boolean(sLines[breakIdx + 1]) && sLines[breakIdx + 1].includes('break'), 'C16', '放弃重试的判据之后没有 break（判据不生效）');
+  }
+
+  // C17 -Doctor 体检模式：只体检，不产出门结论
+  // 必须带尾随逗号一起匹配：`s.includes('[switch]$Doctor')` 会被 `[switch]$DoctorX` 这类改名**蒙过去**
+  // （子串仍在），注入用例实测就抓不到——这正是「防空跑假绿」那组用例存在的意义。
+  must(/\[switch\]\$Doctor,/.test(s), 'C17', '缺 -Doctor 开关（须为 `[switch]$Doctor,` 参数）');
+  must(s.includes('if ($Doctor) { $SkipBuild = $true }'), 'C17', '-Doctor 未强制跳过构建（会去接 HBuilderX 并改工作树）');
+  must(s.includes('if ($Doctor) { Write-DoctorReport }'), 'C17', '体检报告未在 finally 里打印（早期 exit 就看不到结论）');
+  must(/Add-DoctorRow/.test(s), 'C17', '缺逐层体检记录（Add-DoctorRow）');
+  ['L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7'].forEach((layer) => {
+    must(s.includes("'" + layer + " "), 'C17', '体检缺 ' + layer + ' 层');
+  });
+  must(s.includes('doctor-islogin'), 'C17', '体检缺登录态检查（登录态过期需人补扫一次码）');
+  must(s.includes('不产出 ② 门的通过结论'), 'C17', '体检未声明「不产出门的通过结论」（-Doctor 绿 ≠ ② 通过）');
+  must(s.includes('Get-DoctorExitCode'), 'C17', '缺体检独立退出码');
+  const doctorExitIdx = s.indexOf('exit (Get-DoctorExitCode)');
+  must(doctorExitIdx !== -1, 'C17', '体检模式未在就绪判定后退出');
+  if (doctorExitIdx !== -1) {
+    must(probeArgsIdx === -1 || doctorExitIdx < probeArgsIdx, 'C17', '-Doctor 会继续跑探针（体检不该产出门结论）');
+    must(doctorExitIdx < callAt, 'C17', '-Doctor 会贴 PR 评论');
+    const archiveCallIdx = s.indexOf('Publish-ScreenshotArchive -PrNumber');
+    must(archiveCallIdx === -1 || doctorExitIdx < archiveCallIdx, 'C17', '-Doctor 会做截图入库');
+  }
+  must(/"build:mp-weixin-doctor"\s*:\s*"[^"]*-Doctor"/.test(pkg), 'C17', 'package.json 未注册 build:mp-weixin-doctor');
+
   // C10 注册与文档
   must(/"build:mp-weixin-check"\s*:\s*"[^"]*scripts\/mp-weixin-check\.ps1"/.test(pkg), 'C10', 'package.json 未注册 build:mp-weixin-check');
   must(adr.includes('半自动'), 'C10', 'ADR-0008 未把 ② 记为半自动门');
@@ -136,6 +258,7 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动）', 
   const real = {
     script: readSource(SCRIPT_REL),
     probe: readSource(PROBE_REL),
+    ready: readSource(READY_REL),
     pkg: readSource(PKG_REL),
     adr: readSource(ADR_REL),
     agents: readSource(AGENTS_REL),
@@ -168,11 +291,45 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动）', 
       ['C10', { ...real, agents: '人工门清单（无 ② 条目）' }],
       ['C11', { ...real, script: real.script.replace(/hx-busy\.ps1/g, 'other.ps1') }],
       ['C11', { ...real, script: real.script.replace(/Release-HxLock/g, 'ReleaseNothing') }],
-      ['C11', { ...real, script: real.script.replace('Release-HxLock', 'Stop-Process -Name HBuilderX -Force') }]
+      ['C11', { ...real, script: real.script.replace('Release-HxLock', 'Stop-Process -Name HBuilderX -Force') }],
+      // C12：删掉/挪走「重开项目窗口」这一步（pageStack 恒空的老问题）
+      ['C12', { ...real, script: real.script.replace("'open', '--project'", "'openX', '--project'") }],
+      ['C12', { ...real, script: real.script.replace("Invoke-Process -FilePath $devTools -Arguments @('open', '--project', $dist)", "Invoke-Process -FilePath $devTools -Arguments @('auto', '--project', $dist)") }],
+      ['C12', { ...real, script: real.script.replace(/devtools-open/g, 'devtools-x') }],
+      ['C12', { ...real, script: real.script.replace(/\$open\.TimedOut/g, '$openX.TimedOut') }],
+      // C13：把降级写成 PASS / 让 SKIP 静默变成通过
+      ['C13', { ...real, script: real.script.replace('navigation=SKIP reason=', 'navigation=PASS reason=') }],
+      ['C13', { ...real, script: real.script.replace('navigation=$navField', 'navigation=ok') }],
+      ['C13', { ...real, script: real.script.replace('降级（SKIP，非 PASS）', '结果说明') }],
+      ['C13', { ...real, probe: real.probe.replace(/navigation-api-unsupported/g, 'x') }],
+      ['C13', { ...real, probe: real.probe.replace(/'skip'/g, 'true') }],
+      ['C13', { ...real, probe: real.probe.replace('if (v === false)', 'if (v === true)') }],
+      // C14：续行反引号被删 ⇒ `-ArchivedRel …` 变成另一条命令（曾真实发生过）
+      ['C14', { ...real, script: real.script.replace(/-ReproCommand 'npm run build:mp-weixin-check' `/g, "-ReproCommand 'npm run build:mp-weixin-check'") }],
+      // C15：拆掉就绪闸门 / 把探针超时降回 30s / 不让它等 pageStack
+      ['C15', { ...real, script: real.script.replace("$ReadyRelative = 'scripts\\mp-weixin-ready.mjs'", "$ReadyRelative = 'scripts\\x.mjs'") }],
+      ['C15', { ...real, script: real.script.replace(/\$ProbeTimeoutMs = 60000/, '$ProbeTimeoutMs = 30000') }],
+      ['C15', { ...real, script: real.script.replace("'--require-stack', '--require-root'", "'--require-root'") }],
+      ['C15', { ...real, script: real.script.replace('ready=${readySeconds}s sdk=$sdkVersion ide=$ideVersion', '') }],
+      ['C15', { ...real, script: real.script.replace('reason=automation-not-ready', 'reason=env') }],
+      ['C15', { ...real, ready: real.ready.replace(/SDKVersion/g, 'x') }],
+      ['C15', { ...real, probe: real.probe.replace(/mp-weixin-ready\.mjs/g, 'x.mjs') }],
+      // C16：把两类失败合并回去 / 取消归因分类
+      ['C16', { ...real, probe: real.probe.replace(/classifyConnectError/g, 'classifyX') }],
+      ['C16', { ...real, probe: real.probe.replace(/'not-ready'/g, "'x'") }],
+      ['C16', { ...real, script: real.script.replace("'找不到 miniprogram-automator' }", "'找不到 miniprogram-automator|自动化端口连不上' }") }],
+      // C17：体检模式失效（不跳构建 / 报告不打 / 声称产出门结论 / 注册丢失）
+      ['C17', { ...real, script: real.script.replace('[switch]$Doctor', '[switch]$DoctorX') }],
+      ['C17', { ...real, script: real.script.replace('if ($Doctor) { $SkipBuild = $true }', 'if ($Doctor) { }') }],
+      ['C17', { ...real, script: real.script.replace('if ($Doctor) { Write-DoctorReport }', '') }],
+      ['C17', { ...real, script: real.script.replace('不产出 ② 门的通过结论', '体检结论') }],
+      ['C17', { ...real, pkg: real.pkg.replace('build:mp-weixin-doctor', 'build:mp-x') }]
     ];
-    cases.forEach(([rule, sources]) => {
+    cases.forEach(([rule, sources], caseIndex) => {
       const found = scanContract(sources);
-      expect(found.some((v) => v.startsWith(rule))).toBe(true);
+      // 断言里带上序号与规则名：注入用例一旦失效，失败信息要能直接指出是**哪一条**（否则只能二分）
+      expect({ caseIndex, rule, detected: found.some((v) => v.startsWith(rule)) })
+        .toEqual({ caseIndex, rule, detected: true });
     });
   });
 
@@ -203,5 +360,106 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动）', 
     expect(real.script).toContain('$script:ArchiveMaxBytes = 150KB');
     expect(real.script).toContain('$script:ArchiveMaxTotal = 1.5MB');
     expect(real.script).toContain('$script:ArchiveMaxWidth = 720');
+  });
+
+  it('C12：close → open --project <dist> → auto 三步顺序写死，且 open 是显式步骤并写进日志', () => {
+    const s = real.script;
+    const closeIdx = s.indexOf("'close', '--project'");
+    const openIdx = s.indexOf("'open', '--project'");
+    const autoIdx = s.indexOf("'auto', '--project'");
+    expect(closeIdx).toBeGreaterThan(-1);
+    expect(openIdx).toBeGreaterThan(closeIdx);
+    expect(autoIdx).toBeGreaterThan(openIdx);
+    // 显式步骤 + 走 $dist（-SkipBuild 下同样定位构建产物）
+    expect(s).toContain("Invoke-Process -FilePath $devTools -Arguments @('open', '--project', $dist)");
+    expect(s).toContain('devtools-open');
+    expect(s).toMatch(/Write-Log "`n>>> devtools-open/);
+    expect(s).toContain('$open.TimedOut');
+    // 不得被 build 分支包住：open 必须晚于 -SkipBuild 分支的 no-dist 兜底
+    expect(openIdx).toBeGreaterThan(s.lastIndexOf('no-dist'));
+  });
+
+  it('C13：导航不可用时降级为 SKIP（不是 PASS），且写进结果行 / 日志 / 门评论', () => {
+    expect(real.probe).toContain('navigation-api-unsupported');
+    expect(real.probe).toContain("NAV_SKIP_ASSERTIONS");
+    expect(real.probe).toContain("'skip'");
+    expect(real.probe).toContain('if (v === false)');
+    expect(real.script).toContain('navigation=$navField');
+    expect(real.script).toContain('navigation=SKIP reason=');
+    expect(real.script).toContain('navigation-api-unsupported');
+    expect(real.script).toContain('降级（SKIP，非 PASS）');
+    expect(real.script).not.toMatch(/navigation=PASS/);
+    // 可验证子集写在脚本头里（门只对它作结论）
+    expect(real.script).toContain('可验证子集');
+    expect(real.script).toContain('currentPageScreenshot');
+    expect(real.probe).toContain('currentPageScreenshot');
+  });
+
+  it('C13：SKIP 不产生 failures，failures 只由可验证子集（明确 false）产生', () => {
+    // 静态守护：探针只把 `v === false` 收进 failures，且降级断言的值是字符串 'skip'
+    const probe = real.probe;
+    const finishBody = probe.slice(probe.indexOf('function finish('), probe.indexOf('const loaded = loadAutomator()'));
+    expect(finishBody).toMatch(/if \(v === false\) result\.failures\.push/);
+    expect(finishBody).toMatch(/:\s*'skip'/); // 降级时断言的值是字符串 'skip'（既不是 true 也不是 false）
+    expect(finishBody).not.toMatch(/v\)\s*\{\s*result\.failures/); // 旧的 `if (!v)` 形态（会把 SKIP 算成失败）
+  });
+
+  it('C14：贴评论调用是一条语句（续行反引号不缺，-ArchivedRel/-ArchiveNotes 在语句内）', () => {
+    const lines = real.script.split(/\r?\n/);
+    lines.forEach((line, idx) => {
+      if (!/^\s+-[A-Za-z][\w]*\b/.test(line)) return;
+      if (idx === 0) return;
+      expect(lines[idx - 1]).toMatch(/`\s*$/); // 上一行必须以续行反引号结尾
+    });
+    const callAt = real.script.indexOf('Publish-GateComment -PrNumber');
+    const callBlock = real.script.slice(callAt, real.script.indexOf('exit $exitCode'));
+    expect(callBlock).toContain('-ArchivedRel');
+    expect(callBlock).toContain('-ArchiveNotes');
+  });
+
+  it('C15：auto 之后、探针之前必须跑就绪闸门，探针超时抬到 -ProbeTimeoutMs，结果行机检就绪耗时', () => {
+    const s = real.script;
+    const autoIdx = s.indexOf("'auto', '--project'");
+    const readyIdx = s.indexOf('ready-gate');
+    const probeArgsIdx = s.indexOf('$probeArgs = @($probePath');
+    expect(autoIdx).toBeGreaterThan(-1);
+    expect(readyIdx).toBeGreaterThan(autoIdx);
+    expect(probeArgsIdx).toBeGreaterThan(readyIdx);
+    expect(s).toContain('MP_WEIXIN_READY');
+    expect(s).toContain('--require-stack');
+    expect(s).toContain("'--timeout-ms', \"$ProbeTimeoutMs\"");
+    expect(s).toContain('ready=${readySeconds}s sdk=$sdkVersion ide=$ideVersion');
+    expect(s).toContain('24–34s');
+    expect(real.probe).toContain('24–34s');
+    // 就绪闸门自己必须真的等这两个里程碑（不是只做个端口探测）
+    expect(real.ready).toContain('SDKVersion');
+    expect(real.ready).toContain('App.getPageStack');
+    expect(real.ready).toContain('MP_WEIXIN_READY');
+  });
+
+  it('C16：连接失败必须归因；「自动化端口连不上」不得再被当作「重试无益」', () => {
+    const lines = real.script.split(/\r?\n/);
+    const breakIdx = lines.findIndex((l) => l.includes("'找不到 miniprogram-automator' }"));
+    expect(breakIdx).toBeGreaterThan(-1);
+    expect(lines[breakIdx]).not.toContain('自动化端口连不上');
+    expect(lines[breakIdx + 1]).toContain('break');
+    expect(real.probe).toContain('connectError');
+    expect(real.probe).toContain('classifyConnectError');
+    expect(real.probe).toContain("'not-ready'");
+    expect(real.probe).toContain("'unreachable'");
+  });
+
+  it('C17：-Doctor 只体检（不构建 / 不跑探针 / 不贴评论 / 不入库），报告在 finally 打印', () => {
+    const s = real.script;
+    const doctorExitIdx = s.indexOf('exit (Get-DoctorExitCode)');
+    expect(s).toContain('[switch]$Doctor');
+    expect(s).toContain('if ($Doctor) { $SkipBuild = $true }');
+    expect(s).toContain('if ($Doctor) { Write-DoctorReport }');
+    expect(doctorExitIdx).toBeGreaterThan(-1);
+    expect(doctorExitIdx).toBeLessThan(s.indexOf('$probeArgs = @($probePath'));
+    expect(doctorExitIdx).toBeLessThan(s.indexOf('Publish-GateComment -PrNumber'));
+    expect(doctorExitIdx).toBeLessThan(s.indexOf('Publish-ScreenshotArchive -PrNumber'));
+    expect(s).toContain('不产出 ② 门的通过结论');
+    expect(s).toContain('Get-DoctorExitCode');
   });
 });

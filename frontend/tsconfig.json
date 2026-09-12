@@ -29,7 +29,10 @@
 
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      // 上游把 TS 源码当类型入口发布，源码本身在 noUnusedParameters 下报错（详见该文件注释）：
+      // 类型面显式接管，运行时仍解析到真包。
+      "marked-katex-extension": ["./src/types/marked-katex-extension.d.ts"]
     },
     "types": ["node", "vite/client"]
   },

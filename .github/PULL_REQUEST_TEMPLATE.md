@@ -1,7 +1,7 @@
 <!--
 合并方式固定 Squash and merge；目标分支固定 master（本模板此前写在移动端目录下且写着 main，GitHub 读不到、分支名也是错的）。
 master 有 ruleset「protect master」，必检只有 ci-summary；pr-evidence 在本仓是**可见检查**（本仓有可用 admin 通道，但裁定不装必检——逐 PR 审批成本高于约束收益）。
-真正的阻塞是行为约束：**agent 不得自行合并触及运行时面的 PR** —— 必须把证据填齐后停在「待人工签收」，由人执行合并。口径见 docs/adr/0008-移动端验收门与证据.md。
+真正的阻塞是行为约束：**agent 不得自行合并触及运行时面的 PR** —— 必须把证据填齐后停在「待人工签收」，由人执行合并。口径见 `training-app/叉车维修培训学员端跨端应用/docs/adr/0008-移动端验收门与证据.md`（**必须写全路径**：该 ADR 属**移动端编号体系**，根仓库另有一个同名的 `docs/adr/ADR-0008-字典描述符驱动的管理面.md`，只写 `docs/adr/0008-…` 在根目录解析不到）。
 -->
 
 ## 改了什么 / 为什么改
@@ -36,7 +36,9 @@ manifest.json / pages.json / platformConfig.json 时，本段必须逐门填写�
 `pwsh -NoProfile -File scripts/mp-weixin-check.ps1 -PostToPr <PR号>`（或 `npm run build:mp-weixin-check`），
 门通过时会贴 `<!-- gate-evidence:② -->` + `commit: <head sha>` 的评论，正文该行同样写「见评论 <链接>」。
 **但「执行人」栏仍须由人签收**：agent 只产出证据（`MP_WEIXIN_RESULT` + 截图），不得代填执行人、不得写「已通过」。
-校验器只认「带 gate-evidence:④ / gate-evidence:② 注释标记 + commit 与 head sha 相等」的评论，不校真伪。
+校验器只认「带 gate-evidence:④ / gate-evidence:② 注释标记 + commit 与 head 绑定」的评论，不校真伪：
+绑定 = `commit` **等于** head sha，**或**它是 head 的**祖先**且二者之间没有运行时面（`*.uvue` / `*.uts` / 三份 json）改动
+（2026-09-12 放宽，免去 master 前进一次就重跑重贴的 churn）；其间运行时面动过、或不是祖先，仍须重跑并重贴。
 带 -PostToPr 时 ② 还会把截图**压缩入库**到本 PR 分支的 docs/verification/<模块>/<PR号>/<页名>-after.<ext>
 （WebP q75，本机无编码器则 JPEG q75；宽 ≤720；每 PR ≤10 张 / 单张 ≤150KB / 合计 ≤1.5MB；`-NoArchive` 可跳过），
 并在评论里用仓库内相对路径列出——**入库失败只警告、不影响门结论**。

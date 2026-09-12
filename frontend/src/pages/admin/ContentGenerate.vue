@@ -107,17 +107,12 @@
       </div>
     </UiCard>
 
-    <UiDialog
+    <PublishPreviewDialog
       v-model="previewVisible"
       :title="`预览 - ${previewTitle}`"
-      width="700px"
-      destroy-on-close
-    >
-      <div class="preview-content markdown-body" v-html="renderedPreview"></div>
-      <template #footer>
-        <UiButton @click="previewVisible = false">关闭</UiButton>
-      </template>
-    </UiDialog>
+      :content="previewContent"
+      subtitle="与学员端章节正文同一渲染器（含代码高亮）。"
+    />
   </div>
 </template>
 
@@ -125,12 +120,10 @@
 import { ref, computed, onUnmounted } from 'vue'
 import { MagicStick, CircleCheck, CircleClose, Loading } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { marked } from 'marked'
 import { adminApi } from '@/api/admin'
-import '@/assets/styles/markdown.css'
+import PublishPreviewDialog from '@/components/render/PublishPreviewDialog.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiCard from '@/components/ui/UiCard.vue'
-import UiDialog from '@/components/ui/UiDialog.vue'
 import UiCheckboxGroup from '@/components/ui/UiCheckboxGroup.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiCheckbox from '@/components/ui/UiCheckbox.vue'
@@ -171,11 +164,6 @@ let pollTimer: ReturnType<typeof setInterval> | null = null
 const previewVisible = ref(false)
 const previewTitle = ref('')
 const previewContent = ref('')
-
-const renderedPreview = computed(() => {
-  if (!previewContent.value) return ''
-  return marked.parse(previewContent.value)
-})
 
 const progressPercent = computed(() => {
   if (!generateTask.value) return 0
