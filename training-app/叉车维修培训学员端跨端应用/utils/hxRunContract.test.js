@@ -19,6 +19,10 @@
  *   C9 头注释写明与 `compile-check.ps1` 的分工（门 = 全量，本脚本 = 日常增量）与「绝不 kill 主程序」
  *   C10 文档落锁：移动端 `AGENTS.md`「开发内循环（移动端 UI 迭代）」三层节奏 + 反模式、
  *       ADR-0008 非门辅助段的一行指针、`package.json` 注册 `hx:run`
+ *   C11 **部署后置断言**（2026-09-12 假绿教训）：必须有 `Get-DeployedState`，主判据是**设备侧事实**
+ *       （`topResumedActivity` 是否为目标 App；候选含 `io.dcloud.uniappx` 标准基座），并纳入实测停止标记
+ *       `已停止运行`；必须输出 `HX_RUN_DEPLOY deployed=…` 机检行；`deployed=false` ⇒ `exit=env` + `exit 2`，
+ *       且该判定必须出现在报成功（`-Exit 'ok'`）**之前**
  *
  * 设计沿用本仓既有守护测试形态（见 utils/emulatorSmokeContract.test.js、utils/hxBusyGateContract.test.js）：
  * 先对「注入违规」的变形样本断言检测有效（防空跑假绿），再对真实文件断言零命中。
@@ -26,9 +30,11 @@
  * **CRLF 坑位**：`.gitattributes` 已把 `*.ps1` / `*.js` / `*.md` 钉成 LF；本文件里的锚点按 **LF** 写。
  * 若哪天有人把 `hx-run.ps1` 存成 CRLF，本测试的多行锚点会失配（这正是想要的：先红再改）。
  *
- * **未实测声明（照实记）**：`scripts/hx-run.ps1` 在本 PR 里**只跑到了 `-DryRun`**（维护者正用 HBuilderX 做 #781，
- * 不抢占主程序）。所以「真实 HBuilderX 输出下 `HX_RUN` 分段行与编译/部署段是否准」**待维护者空出 HBuilderX 后首跑校准**
- * （脚本内的 `$script:HxCompileEndMarkers` 标记表就是为此留的校准点）。
+ * **首跑校准已发生（2026-09-12，照实记）**：`hx-run.ps1` 已真机首跑，标记表命中了 `编译成功`。
+ * 而这次首跑暴露的**不是计时不准，而是假绿** —— HBuilderX 打出 `编译成功` → `ready in …` → `已停止运行...`，
+ * **什么都没到达设备**（设备上目标包 `lastUpdateTime` 仍是旧日期），旧版脚本却仍报 `exit=ok` / 退出码 0，
+ * 于是有人据它宣布「已编译并运行到设备」，把**旧构建的截图**当成 ①a 取证入库（证据污染，已在对应 PR 撤回）。
+ * 故新增 **C11**，把「**编译成功 ≠ 运行成功**」这条锁死。
  */
 
 const fs = require('fs');
@@ -148,6 +154,22 @@ function scanContract(sources) {
   must(raw.includes('scripts/lib/hx-busy.ps1'), 'C9', '头注释未指向 scripts/lib/hx-busy.ps1');
   must(raw.includes('不是门'), 'C9', '头注释未声明本脚本不是门（不进验收证据）');
 
+  // ---- C11 部署后置断言：编译成功 ≠ 运行成功（2026-09-12 假绿教训）----
+  must(/function\s+Get-DeployedState/.test(code), 'C11', '缺部署后置断言 Get-DeployedState（只扫 error 行会报出假绿）');
+  must(/HX_RUN_DEPLOY deployed=/.test(code), 'C11', '缺 HX_RUN_DEPLOY 机检行（「到底有没有到设备」必须可机检）');
+  must(/topResumedActivity/.test(code), 'C11', '后置断言未查设备侧事实（topResumedActivity）');
+  must(/已停止运行/.test(code), 'C11', '未纳入实测停止标记「已停止运行」（2026-09-12 真机首跑的校准点）');
+  must(/io\.dcloud\.uniappx/.test(code), 'C11', '候选包名缺 HBuilderX 标准基座（dev 运行的常见承载）');
+  const verdictAt = code.indexOf('if (-not $deployed.Deployed)');
+  must(verdictAt !== -1, 'C11', '缺「未部署」分支（必须显式判未部署，不能只报成功）');
+  const okAt = code.indexOf("-Exit 'ok'");
+  if (verdictAt !== -1) {
+    const verdictSlice = code.slice(verdictAt, verdictAt + 900);
+    must(/-Exit 'env'/.test(verdictSlice), 'C11', '未部署时未打 exit=env 的结果行（不得报 ok）');
+    must(/exit 2/.test(verdictSlice), 'C11', '未部署时未 exit 2（以 0 退出就是假绿）');
+    must(okAt !== -1 && verdictAt < okAt, 'C11', '部署后置断言必须在报成功（-Exit \'ok\'）之前 —— 否则成功先被报出去了');
+  }
+
   // ---- C10 文档落锁 ----
   must(agents.includes('## 开发内循环（移动端 UI 迭代）'), 'C10', 'AGENTS.md 缺「开发内循环（移动端 UI 迭代）」小节');
   ['内循环', '中循环', '外循环'].forEach((token) => {
@@ -220,7 +242,22 @@ describe('日常增量运行契约（scripts/hx-run.ps1，2026-09-12）', () => 
       })],
       ['C10', 'AGENTS.md 反模式清单被删', (s) => ({ ...s, agents: s.agents.replace(/反模式/g, '注意事项') })],
       ['C10', 'ADR 指针被删', (s) => ({ ...s, adr: s.adr.replace('hx-run.ps1', 'other.ps1') })],
-      ['C10', 'package.json 未注册', (s) => ({ ...s, pkg: s.pkg.replace('"hx:run"', '"hxrun"') })]
+      ['C10', 'package.json 未注册', (s) => ({ ...s, pkg: s.pkg.replace('"hx:run"', '"hxrun"') })],
+      ['C11', '后置断言函数被删（退回只看 error 行）', (s) => ({
+        ...s,
+        script: s.script.replace(/function Get-DeployedState/g, 'function X')
+      })],
+      ['C11', 'HX_RUN_DEPLOY 机检行被删', (s) => ({
+        ...s,
+        script: s.script.replace(/HX_RUN_DEPLOY deployed=/g, 'X')
+      })],
+      ['C11', '不再查设备侧事实', (s) => ({ ...s, script: s.script.replace(/topResumedActivity/g, 'X') })],
+      ['C11', '实测停止标记被删', (s) => ({ ...s, script: s.script.replace(/已停止运行/g, 'X') })],
+      ['C11', '标准基座候选被删', (s) => ({ ...s, script: s.script.replace(/io\.dcloud\.uniappx/g, 'X') })],
+      ['C11', '未部署分支被删（退回只报成功）', (s) => ({
+        ...s,
+        script: s.script.replace('if (-not $deployed.Deployed) {', 'if ($false) {')
+      })]
     ];
     cases.forEach(([rule, label, mutate]) => {
       const found = scanContract(mutate(real));
@@ -255,6 +292,21 @@ describe('日常增量运行契约（scripts/hx-run.ps1，2026-09-12）', () => 
     expect(dryAt).toBeGreaterThan(-1);
     expect(dryAt).toBeLessThan(waitAt);
     expect(waitAt).toBeLessThan(dispatchAt);
+  });
+
+  it('C11：部署后置断言存在、查设备事实、未部署时 exit=env/2 且在报成功之前', () => {
+    const code = maskDocBlocks(real.script);
+    expect(code).toMatch(/function\s+Get-DeployedState/);
+    expect(code).toContain('HX_RUN_DEPLOY deployed=');
+    expect(code).toContain('topResumedActivity');
+    expect(code).toContain('已停止运行');
+    expect(code).toContain('io.dcloud.uniappx');
+    const verdictAt = code.indexOf('if (-not $deployed.Deployed)');
+    const okAt = code.indexOf("-Exit 'ok'");
+    expect(verdictAt).toBeGreaterThan(-1);
+    expect(okAt).toBeGreaterThan(-1);
+    expect(verdictAt).toBeLessThan(okAt);
+    expect(code.slice(verdictAt, verdictAt + 900)).toContain('exit 2');
   });
 
   it('C10：AGENTS.md 的三层节奏与 ADR-0008 的一行指针都在', () => {
