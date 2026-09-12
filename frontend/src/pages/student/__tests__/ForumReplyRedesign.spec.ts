@@ -11,6 +11,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { epLite } from '@/test/element-lite'
 
+// markstream 的 CSS 导入在 vitest 下无意义，替身掉
+vi.mock('markstream-vue/index.css', () => ({}))
+
 vi.mock('@/api/request', () => ({
   unwrappedRequest: { get: vi.fn(), post: vi.fn(), delete: vi.fn(), put: vi.fn() }
 }))
@@ -195,6 +198,36 @@ describe('详情页回复分页（#854）', () => {
     const wrapper = await mountDetail()
     expect(wrapper.findAll('.reply-item').length).toBe(0)
     expect(wrapper.text()).not.toContain('没有更多回复了')
+  })
+})
+
+describe('帖子正文按声明格式渲染（#878 / ADR-0044）', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  async function mountWithTopic(over: Record<string, unknown>) {
+    getTopic.mockResolvedValue({
+      topic: { ...topic(0), ...over },
+      replies: [],
+      page: 1,
+      pages: 0,
+      total: 0
+    } as never)
+    return mountDetail()
+  }
+
+  it('markdown 帖渲染出结构，纯文本帖把语法原样显示', async () => {
+    const md = await mountWithTopic({ content: '## 排查步骤', content_format: 'markdown' })
+    expect(md.find('.topic-content h2').exists()).toBe(true)
+
+    const txt = await mountWithTopic({ content: '## 排查步骤', content_format: 'text' })
+    expect(txt.find('.topic-content h2').exists()).toBe(false)
+    expect(txt.find('.topic-content').text()).toContain('## 排查步骤')
+  })
+
+  it('缺省 content_format 按纯文本渲染（向后兼容存量帖与不带该字段的客户端）', async () => {
+    const w = await mountWithTopic({ content: '# 不是标题' })
+    expect(w.find('.topic-content h1').exists()).toBe(false)
+    expect(w.find('.topic-content').text()).toContain('# 不是标题')
   })
 })
 

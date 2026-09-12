@@ -18,6 +18,7 @@ import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
 import ForumPostForm from '@/components/student/ForumPostForm.vue'
 import ForumComposer from '@/components/student/ForumComposer.vue'
 import ForumReplyCard from '@/components/student/ForumReplyCard.vue'
+import ForumContent from '@/components/student/ForumContent.vue'
 import { formatRelativeTime } from '@/utils/format'
 import { displayName, authorLetter } from '@/utils/forumDisplay'
 import { useAuthStore } from '@/stores/auth'
@@ -274,9 +275,12 @@ watch(() => props.chapterId, () => {
           <UiSkeleton v-if="detailLoading" variant="list" :count="2" />
 
           <template v-else>
-            <div class="mb-3.5 whitespace-pre-wrap break-words text-sm leading-[1.7] text-ink">
-              {{ detailContent }}
-            </div>
+            <!-- 展开的帖子正文按声明格式渲染（ADR-0044），与详情页同源 -->
+            <ForumContent
+              :content="detailContent"
+              :format="expandedTopic?.content_format"
+              class="mb-3.5 text-sm leading-[1.7] text-ink"
+            />
             <ForumImageGallery :images="expandedTopic?.images" />
 
             <!-- 回复流 -->

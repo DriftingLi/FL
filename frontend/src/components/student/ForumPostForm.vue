@@ -21,7 +21,11 @@ import { ElMessage } from 'element-plus'
 import { forumApi, type ForumCategory, type ForumPublishCategory } from '@/api/forum'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
+import UiButton from '@/components/ui/UiButton.vue'
 import ForumImageUploader from './ForumImageUploader.vue'
+import ForumContent from './ForumContent.vue'
+import { useForumContentFormat } from '@/composables/useForumContentFormat'
+import type { ForumContentFormat } from '@/api/forum'
 
 const props = withDefaults(defineProps<{
   /**
@@ -66,6 +70,23 @@ const emit = defineEmits<{ success: [] }>()
 
 const form = ref<{ title: string; content: string; images: string[] }>({ title: '', content: '', images: [] })
 const submitting = ref(false)
+
+// ===== 正文格式（#878 / ADR-0044）=====
+// 首次默认纯文本、之后记住上次选择；声明位置于「作者自述」，不由系统猜测。
+const { format: contentFormat } = useForumContentFormat()
+const isMarkdown = computed(() => contentFormat.value === 'markdown')
+const previewing = ref(false)
+
+const FORMAT_OPTIONS: Array<{ label: string; value: ForumContentFormat }> = [
+  { label: '纯文本', value: 'text' },
+  { label: 'Markdown', value: 'markdown' }
+]
+
+function handleFormatChange(v: string) {
+  contentFormat.value = v === 'markdown' ? 'markdown' : 'text'
+  // 切回纯文本时退出预览：纯文本没有可预览的渲染结果
+  if (!isMarkdown.value) previewing.value = false
+}
 const canSubmit = computed(() => form.value.title.trim().length > 0 && form.value.content.trim().length > 0)
 
 // ===== 类别 chips（#742 批次四）=====
@@ -138,6 +159,8 @@ function handleCategoryChange(v: string) {
 
 function reset() {
   form.value = { title: '', content: '', images: [] }
+  // 格式是**用户偏好**不是本次输入，reset 不重置它（重开表单仍是他上次的选择）
+  previewing.value = false
   entryCategory.value = toPublishCategory(props.category)
   selectedCategory.value = entryCategory.value
   userTouchedCategory.value = false
@@ -166,8 +189,8 @@ async function submit(): Promise<boolean> {
     // ADR-0040 起只可能是 discussion/question）—— 两者互斥，与改造前两种提交形态一一对应
     const payload =
       props.chapterId != null
-        ? { chapter_id: props.chapterId, title, content, images: form.value.images }
-        : { category: selectedCategory.value, title, content, images: form.value.images }
+        ? { chapter_id: props.chapterId, title, content, images: form.value.images, content_format: contentFormat.value }
+        : { category: selectedCategory.value, title, content, images: form.value.images, content_format: contentFormat.value }
     await forumApi.createTopic(payload)
     ElMessage.success(props.successMessage)
     reset()
@@ -210,10 +233,26 @@ defineExpose({ canSubmit, submitting, submit, reset })
     </div>
 
     <div>
-      <label class="mb-1.5 block text-sm font-medium text-ink">
-        <span class="mr-0.5 text-bad">*</span>{{ contentLabel }}
+      <label class="mb-1.5 block text-sm font-medium text-ink">正文格式</label>
+      <UiSegmentTabs :model-value="contentFormat" :options="FORMAT_OPTIONS" @update:model-value="handleFormatChange" />
+    </div>
+
+    <div>
+      <label class="mb-1.5 flex items-center gap-2 text-sm font-medium text-ink">
+        <span><span class="mr-0.5 text-bad">*</span>{{ contentLabel }}</span>
+        <!-- 预览与发布同源：都走 ForumContent 这一个渲染单点，不另起一套预览渲染 -->
+        <UiButton v-if="isMarkdown" variant="text" size="small" class="ml-auto" @click="previewing = !previewing">
+          {{ previewing ? '继续编辑' : '预览' }}
+        </UiButton>
       </label>
+      <ForumContent
+        v-if="previewing"
+        :content="form.content"
+        format="markdown"
+        class="min-h-[120px] rounded-[6px] border border-line bg-canvas p-3 text-sm leading-[1.7] text-ink"
+      />
       <UiInput
+        v-else
         v-model="form.content"
         type="textarea"
         :rows="contentRows"
