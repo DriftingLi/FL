@@ -86,7 +86,7 @@
     .tab-bar {
         flex-direction: row;
         background-color: #ffffff;
-        border-top: 1rpx solid #f0f0f0;
+        border-top: 1rpx solid #ababab; /* 过渡件：与原生栏对齐。取 #ababab 依据：原生栏该行实测平均亮度 170.9，1rpx=1.54px × 该色暗度(255-171) ≈ 129 ≈ 等效；原 #f0f0f0（亮度 240）比页面浅蓝底(235.8)还亮、等于没有线。随组件在 #911 删除 */
         position: relative;
         z-index: 10;
     }
@@ -110,7 +110,7 @@
     }
 
     .tab-text.active {
-        color: #2979ff;
+        color: #239EDD; /* 过渡件：与 pages.json 原生栏 selectedColor 对齐 */
         font-weight: bold;
     }
 </style>
