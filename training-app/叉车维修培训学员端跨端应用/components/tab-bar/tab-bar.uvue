@@ -1,7 +1,12 @@
 <template>
     <view class="tab-bar" :style="{ paddingBottom: safeAreaBottom + 'px' }">
         <view v-for="(item, idx) in tabs" :key="idx" class="tab-item" @click="onTabClick(item.path, idx)">
-            <image class="tab-icon" :src="activeIndex == idx ? item.activeIcon : item.icon" mode="aspectFit" />
+            <!-- 固定尺寸盒子兜住首次渲染：uvue 的 <image> 在资源就绪前会取默认高度（实测 240px，
+                 正好对上首帧图标与文字间 195px 的异常缺口），把 .tab-item 撑高、白条比原生栏高约 96px。
+                 套一层定尺盒子后，首次渲染的高度就被夹住，不再随加载时序变化。 -->
+            <view class="tab-icon-box">
+                <image class="tab-icon" :src="activeIndex == idx ? item.activeIcon : item.icon" mode="aspectFit" />
+            </view>
             <text :class="['tab-text', { active: activeIndex == idx }]">{{ item.text }}</text>
         </view>
     </view>
@@ -105,10 +110,16 @@
         padding: 14rpx 0 8rpx;
     }
 
-    .tab-icon {
+    .tab-icon-box {
         width: 44rpx;
         height: 44rpx;
         margin-bottom: 6rpx;
+        overflow: hidden;
+    }
+
+    .tab-icon {
+        width: 44rpx;
+        height: 44rpx;
     }
 
     .tab-text {
