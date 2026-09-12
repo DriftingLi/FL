@@ -442,19 +442,10 @@ function Invoke-DevToolsClose {
 }
 
 # ---------- P1：门通过时把结果贴成「sha 绑定」的 PR 评论（② 门结果免手抄）----------
-function Get-HeadSha {
-    param([string]$ProjectDir)
-    $attempts = @()
-    if ($ProjectDir) { $attempts += , @('-C', $ProjectDir, 'rev-parse', 'HEAD') }
-    $attempts += , @('rev-parse', 'HEAD')
-    foreach ($a in $attempts) {
-        try {
-            $out = & git @a 2>$null | Select-Object -First 1
-            if ($out -and "$out".Trim()) { return "$out".Trim() }
-        } catch { }
-    }
-    return ''
-}
+# Get-HeadSha 已上移到 scripts/lib/gate-common.ps1（三份**逐字节相同**、且无任何守护 pin ⇒ 唯一合格的零风险
+# 切片）。共享库头部写明了准入门槛：只有「逐字节相同」**且**「未被 utils/*Contract.test.js 作为字面量锚点
+# pin 住」的代码才允许搬进去 —— 本仓守护断言的是**源码文本**，搬走被 pin 的代码等于逼着后续放宽守护。
+. (Join-Path $PSScriptRoot 'lib\gate-common.ps1')
 
 function Publish-GateComment {
     param(
