@@ -113,7 +113,7 @@
       width="700px"
       destroy-on-close
     >
-      <div class="preview-content markdown-body" v-html="renderedPreview"></div>
+      <PublishMarkdown class="preview-content" :content="previewContent" />
       <template #footer>
         <UiButton @click="previewVisible = false">关闭</UiButton>
       </template>
@@ -125,9 +125,8 @@
 import { ref, computed, onUnmounted } from 'vue'
 import { MagicStick, CircleCheck, CircleClose, Loading } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { marked } from 'marked'
 import { adminApi } from '@/api/admin'
-import '@/assets/styles/markdown.css'
+import PublishMarkdown from '@/components/render/PublishMarkdown.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
@@ -171,11 +170,6 @@ let pollTimer: ReturnType<typeof setInterval> | null = null
 const previewVisible = ref(false)
 const previewTitle = ref('')
 const previewContent = ref('')
-
-const renderedPreview = computed(() => {
-  if (!previewContent.value) return ''
-  return marked.parse(previewContent.value)
-})
 
 const progressPercent = computed(() => {
   if (!generateTask.value) return 0

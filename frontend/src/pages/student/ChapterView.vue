@@ -60,7 +60,10 @@
         </UiSegmentTabs>
 
         <template v-if="activeTab === 'content' && chapterDetail.content">
-          <div class="content-text mb-5 text-[15px] leading-[1.8] text-ink markdown-body" v-html="renderedContent"></div>
+          <PublishMarkdown
+            class="content-text mb-5 text-[15px] leading-[1.8] text-ink"
+            :content="chapterDetail.content"
+          />
         </template>
 
         <template v-else-if="activeGroup">
@@ -134,15 +137,11 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, ArrowRight, VideoCamera, Document, Picture } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { marked } from 'marked'
-import { markedHighlight } from 'marked-highlight'
-import hljs from 'highlight.js'
 import { courseApi, type ChapterDetail } from '@/api/course'
 import { studentApi, type StudentChapterProgress } from '@/api/student'
 import { useCourseStore } from '@/stores/course'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useStudyTracker } from '@/composables/useStudyTracker'
-import '@/assets/styles/markdown.css'
 import VideoPlayer from '@/components/student/VideoPlayer.vue'
 import DocumentViewer from '@/components/student/DocumentViewer.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
@@ -154,19 +153,7 @@ import ImageViewer from '@/components/student/ImageViewer.vue'
 import ChapterDiscussion from '@/components/student/ChapterDiscussion.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiTag from '@/components/ui/UiTag.vue'
-
-marked.use(
-  markedHighlight({
-    langPrefix: 'hljs language-',
-    highlight(code, lang) {
-      if (lang && hljs.getLanguage(lang)) {
-        return hljs.highlight(code, { language: lang }).value
-      }
-      return hljs.highlightAuto(code).value
-    }
-  }),
-  { breaks: true, gfm: true }
-)
+import PublishMarkdown from '@/components/render/PublishMarkdown.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -328,11 +315,6 @@ const activeGroup = computed(() => {
 function optionIcon(opt: { icon?: any }): any { return opt.icon }
 function optionColor(opt: { color?: string }): string | undefined { return opt.color }
 function optionCount(opt: { count?: number }): number { return opt.count ?? 0 }
-
-const renderedContent = computed(() => {
-  if (!chapterDetail.value?.content) return ''
-  return marked.parse(chapterDetail.value.content)
-})
 
 // 计算默认激活的 Tab：优先图文，其次按 TYPE_ORDER 第一个有内容的媒体类型
 const defaultTab = computed(() => {
