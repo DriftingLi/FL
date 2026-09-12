@@ -265,6 +265,7 @@
                 :content="msg.content"
                 :final="true"
                 html-policy="escape"
+                :mermaid-props="MARKSTREAM_MERMAID_PROPS"
                 :fade="false"
               />
               <slot name="assistant-extra" :message="msg" />
@@ -284,6 +285,7 @@
                 :content="store.streamingContent"
                 :final="!store.streaming"
                 html-policy="escape"
+                :mermaid-props="MARKSTREAM_MERMAID_PROPS"
                 :fade="false"
               />
             </div>
@@ -374,6 +376,7 @@ import {
 } from '@element-plus/icons-vue'
 import MarkdownRender from 'markstream-vue'
 import 'markstream-vue/index.css'
+import { MARKSTREAM_MERMAID_PROPS } from '@/utils/markstreamRuntime'
 import { useAIAssistantStore } from '@/stores/aiAssistant'
 import { useAuthStore } from '@/stores/auth'
 import ThemeToggle from '@/components/ui/ThemeToggle.vue'
