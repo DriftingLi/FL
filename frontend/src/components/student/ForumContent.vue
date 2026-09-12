@@ -82,7 +82,8 @@ function rewriteLinks(nodes: LinkishNode[], policy: "transit" | "plain"): Linkis
  */
 function configureForumMarkdown(md: MarkdownIt): MarkdownIt {
   md.set({ breaks: true })
-  // 只放开**声明过的子集**（标题/有序无序列表/加粗/行内代码/代码块/引用/链接）。
+  // 只放开**声明过的子集**（标题/有序无序列表/加粗/行内代码/代码块/引用/链接，
+  // 以及 #900 之后纳入子集的公式与 mermaid 图表——见 ADR-0044 的子集补记）。
   // 解析器默认还带表格与脚注，不关掉就成了「声称受限、实则不限」——
   // 而移动端没有对应的块渲染能力，放开等于制造两端不一致。
   // ignoreInvalid=true：规则名变了也只静默跳过，不让渲染整体炸掉。
