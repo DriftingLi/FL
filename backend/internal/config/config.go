@@ -4,6 +4,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"strings"
 	"time"
@@ -40,6 +41,12 @@ type Config struct {
 	Valuation ValuationConfig
 	Redis     RedisConfig
 	RateLimit RateLimitConfig
+	// TrustedProxies 可信反向代理地址（TRUSTED_PROXIES，逗号分隔的 IP / CIDR）。
+	// 默认空 = 不信任任何代理。gin 的默认值是「信任所有代理」（0.0.0.0/0），
+	// 那会让请求头里的 X-Forwarded-For 决定服务端认定的客户端 IP——按 IP 限流、
+	// 审计日志、IP 属地都会变成客户端可随意伪造的值，故这里显式收敛为
+	// 「只有部署声明的代理才被信任」。取值见 docker-compose.prod.yml 的 TRUSTED_PROXIES。
+	TrustedProxies []string
 	// CaptchaEnabled 图形验证码开关（生产默认开启、其他默认关闭；显式 true/false 可覆盖）。
 	CaptchaEnabled   bool
 	Swagger          SwaggerConfig
@@ -243,6 +250,8 @@ func setDefaults() {
 	viper.SetDefault("redis_idle_timeout", "5m")
 	viper.SetDefault("rate_limit_rps", 20.0)
 	viper.SetDefault("rate_limit_burst", 40)
+	// 空 = 不信任任何反向代理（与 gin 的默认值相反，见 Config.TrustedProxies）
+	viper.SetDefault("trusted_proxies", "")
 	viper.SetDefault("admin_default_password", "admin123")
 	viper.SetDefault("tutor_default_password", "tutor123")
 	viper.SetDefault("student_default_password", "student123")
@@ -351,6 +360,7 @@ func Load() (*Config, error) {
 			RPS:     positiveFloat("rate_limit_rps", 20),
 			Burst:   positiveInt("rate_limit_burst", 40),
 		},
+		TrustedProxies: splitProxies(viper.GetString("trusted_proxies")),
 		CaptchaEnabled: captchaEnabled,
 		Swagger: SwaggerConfig{
 			Enabled: swaggerEnabled,
@@ -444,6 +454,11 @@ func (c *Config) CORSConfigWarnings() []string {
 
 // Validate 在 production 环境校验必填项。
 func (c *Config) Validate() error {
+	// 可信代理格式在所有环境都校验：gin 的 SetTrustedProxies 遇到非法条目时会返回
+	// 「已成功解析的前半截 + error」，只靠它兜底会留下一个半截的可信列表。
+	if err := validateTrustedProxies(c.TrustedProxies); err != nil {
+		return err
+	}
 	if c.AppEnv != "production" {
 		return nil
 	}
@@ -582,6 +597,33 @@ func wechatAppConfig(idKey, secretKey string, legacyKeys ...string) WechatAppCon
 		}
 	}
 	return c
+}
+
+// splitProxies 解析逗号分隔的可信代理列表，空值返回 nil（= 不信任任何代理）。
+// 逗号列表口径复用 splitOrigins（去空白、丢弃空项），只多一层「空 → nil」，
+// 让「没有可信代理」在类型上只有一个表示，装配方不必再判空。
+func splitProxies(s string) []string {
+	if proxies := splitOrigins(s); len(proxies) > 0 {
+		return proxies
+	}
+	return nil
+}
+
+// validateTrustedProxies 校验可信代理列表的每一项是 IP 或 CIDR。
+// 校验口径与 gin 一致：裸 IP 允许（等价于 /32 或 /128）。
+func validateTrustedProxies(proxies []string) error {
+	for _, p := range proxies {
+		if strings.Contains(p, "/") {
+			if _, _, err := net.ParseCIDR(p); err != nil {
+				return fmt.Errorf("TRUSTED_PROXIES 条目 %q 不是合法 CIDR: %w", p, err)
+			}
+			continue
+		}
+		if net.ParseIP(p) == nil {
+			return fmt.Errorf("TRUSTED_PROXIES 条目 %q 不是合法 IP 或 CIDR", p)
+		}
+	}
+	return nil
 }
 
 func splitOrigins(s string) []string {

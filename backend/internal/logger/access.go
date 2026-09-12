@@ -28,7 +28,7 @@ func AccessLog(l *zap.Logger) gin.HandlerFunc {
 			zap.String("path", c.Request.URL.Path),
 			zap.Int("status", c.Writer.Status()),
 			zap.Float64("duration_ms", float64(time.Since(start).Microseconds())/1000),
-			zap.String("ip", c.ClientIP()),
+			zap.String("ip", middleware.ClientIP(c)),
 			zap.Int64("user_id", int64(middleware.CurrentUserID(c))),
 			zap.String("user_role", middleware.CurrentRole(c)),
 			zap.String("request_id", c.GetString(string(middleware.CtxRequestID))),
