@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Android SDK 一次性装机（command-line tools + platform-tools/adb + emulator + API 30 x86 系统镜像）。
 

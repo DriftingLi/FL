@@ -5,7 +5,8 @@ name: PR - 验收证据校验
 # 因此 PR 事件在这里不产生构建/部署副作用。若要新增其他 PR 触发 workflow，先改 ADR-0008。
 #
 # 它只校验「证据段的结构与产物字段是否存在」，**不校验真伪** —— 真伪由维护者读日志/截图判定（ADR-0008 明确不做）。
-# ④ 本地编译门的证据可由脚本（`-PostToPr`）贴的 sha 绑定评论承载，校验器只校结构与 sha 绑定，同样不校真伪。
+# ④ 本地编译门与 ② 微信开发者工具门（2026-09-12 起为半自动门）的证据都可由脚本（`-PostToPr`）贴的
+# sha 绑定评论承载，校验器只校结构与 sha 绑定，同样不校真伪。
 
 on:
   pull_request:
@@ -18,7 +19,7 @@ concurrency:
 permissions:
   contents: read
   pull-requests: read
-  issues: read # 读 PR 评论（P1：④ 门的 sha 绑定证据评论）；issues 端点在 PR 上共用，缺它可能取不到评论
+  issues: read # 读 PR 评论（P1：④ / ② 门的 sha 绑定证据评论）；issues 端点在 PR 上共用，缺它可能取不到评论
 
 jobs:
   pr-evidence:
@@ -77,17 +78,22 @@ jobs:
               };
               const lowRiskRuntime = runtime.length > 0 && files.every((f) => isLowRiskUtChange(f));
 
-              // P1：④ 本地编译门的结果可由「sha 绑定的 PR 评论」承载（编译门输出免手抄进正文）。
+              // P1：④ 本地编译门与 ② 微信开发者工具门的结果可由「sha 绑定的 PR 评论」承载（脚本输出免手抄进正文）。
               // 判据只为「结构与 sha 绑定」，不校真伪（与正文证据同一口径）：评论须同时带
-              // <!-- gate-evidence:④ --> 标记与 commit: <sha>，且 sha 与本次 head sha 相等（允许短 sha 前缀互含）。
+              // <!-- gate-evidence:<门号> --> 标记与 commit: <sha>，且 sha 与本次 head sha 相等（允许短 sha 前缀互含）。
+              // ② 自 2026-09-12 起是**半自动门**（#883 实测 agent 可无人值守跑完），口径与 ④ 一致，故共用同一实现。
               const shaMatches = (a, b) => Boolean(a) && Boolean(b) && (a.startsWith(b) || b.startsWith(a));
-              const gate4Comment = (gateComments || []).find((c) => {
-                const text = typeof c === 'string' ? c : ((c && c.body) || '');
-                if (!/<!--\s*gate-evidence:④\s*-->/.test(text)) return false;
-                if (!headSha) return false;
-                const m = text.match(/commit:\s*`?([0-9a-fA-F]{7,40})`?/);
-                return Boolean(m) && shaMatches(m[1].toLowerCase(), String(headSha).toLowerCase());
-              });
+              const gateComment = (gateKey) =>
+                headSha
+                  ? (gateComments || []).find((c) => {
+                      const text = typeof c === 'string' ? c : ((c && c.body) || '');
+                      if (!new RegExp('<!--\\s*gate-evidence:' + gateKey + '\\s*-->').test(text)) return false;
+                      const m = text.match(/commit:\s*`?([0-9a-fA-F]{7,40})`?/);
+                      return Boolean(m) && shaMatches(m[1].toLowerCase(), String(headSha).toLowerCase());
+                    })
+                  : undefined;
+              const gate4Comment = gateComment('④');
+              const gate2Comment = gateComment('②');
               const headSha7 = String(headSha || '').slice(0, 7);
 
               if (runtime.length === 0) {
@@ -118,14 +124,14 @@ jobs:
 
               const GATES = [
                 { key: '①', label: 'Android 真机逐页截图对比', fields: ['执行人', '日期', '复测对象', '结论'], artifact: 'screenshot' },
-                { key: '②', label: '微信开发者工具无报错', fields: ['执行人', '日期', '复测对象', '结论'], artifact: 'screenshot', requires: 'mpweixin' },
+                { key: '②', label: '微信开发者工具无报错（半自动：agent 可执行 scripts/mp-weixin-check.ps1）', fields: ['执行人', '日期', '复测对象', '结论'], artifact: 'screenshot', requires: 'mpweixin' },
                 { key: '③', label: 'npm run test:unit 全绿', fields: ['结论'], artifact: 'ci-run' },
                 { key: '④', label: '本地编译门（默认 ④c 整模块；dev 面追加 ④a）', fields: ['执行人', '日期', '复测对象', '结论'], artifact: 'compile-log' },
                 { key: '④b', label: 'release 云打包（触及打包面时）', fields: ['执行人', '日期', '复测对象', '结论'], artifact: 'any', requires: '4b' },
               ];
               const PLACEHOLDER = /^(|[-—–~]+|待人工|待补|待填|待确认|⏳|tbd|todo|n\/?a|无|暂无)$/i;
               const ARTIFACT = {
-                screenshot: /!\[[^\]]*\]\(|https?:\/\/|docs\/verification\//,
+                screenshot: /!\[[^\]]*\]\(|https?:\/\/|docs\/verification\/|\.ci-verify\/\S+\.png|mp-weixin\.png/,
                 'ci-run': /actions\/runs\/\d+/,
                 'compile-log': /build\.log|kotlin-all\.log/,
                 any: /\S/,
@@ -145,9 +151,15 @@ jobs:
                 if (gate.requires === 'mpweixin' && !needs2) continue;
                 if (gate.requires === '4b' && !needs4b) continue;
                 if (lowRiskRuntime && (gate.key === '①' || gate.key === '②')) continue;
-                // ④ 门的证据已由 sha 绑定的 PR 评论承载 → 跳过字段校验（正文该行可写「见评论 <链接>」）
+                // ④ 的门证据已由 sha 绑定的 PR 评论承载 → 跳过字段校验（正文该行可写「见评论 <链接>」）
                 if (gate.key === '④' && gate4Comment) {
                   notes.push(`④ 本地编译门：证据来自 PR 评论（sha 绑定 ${headSha7}）。`);
+                  continue;
+                }
+                // ② 门同理（2026-09-12 起为半自动门：agent 可执行 scripts/mp-weixin-check.ps1 并贴评论）；
+                // 「执行人」栏仍须由人签收 —— 校验器分不出人/agent（单账号），约束落在 AGENTS.md 上。
+                if (gate.key === '②' && gate2Comment) {
+                  notes.push(`② 微信开发者工具门（半自动）：证据来自 PR 评论（sha 绑定 ${headSha7}）；执行人栏仍须由人签收。`);
                   continue;
                 }
                 const line = lines.find((l) => matchesGate(l, gate));
@@ -178,7 +190,7 @@ jobs:
                 }
                 if (values['结论'] && !ARTIFACT[gate.artifact].test(values['结论'])) {
                   const hint = {
-                    screenshot: '须引用截图或其链接（或 docs/verification/ 路径）',
+                    screenshot: '须引用截图或其链接（或 docs/verification/ 路径、.ci-verify/mp-weixin-*.png）',
                     'ci-run': '须贴 CI run 链接（…/actions/runs/<id>）',
                     'compile-log': '须引用 `.ci-verify/build.log`（④a）或 `.ci-verify/kotlin-all.log`（④c）',
                     any: '须引用产物',
