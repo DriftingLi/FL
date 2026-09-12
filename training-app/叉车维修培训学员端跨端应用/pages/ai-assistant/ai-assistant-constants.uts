@@ -9,7 +9,7 @@ export const FUNCTION_ITEMS : AIFunctionItem[] = [
     { key: 'fault-consult', title: '故障咨询', icon: '\uD83D\uDC77', prompt: '故障咨询', iconPath: '/static/icons/ai-functions/fault-consult.png' },
     { key: 'fault-code', title: '故障代码查询', icon: '\uD83D\uDD0D', prompt: '帮我查询叉车故障代码含义', iconPath: '/static/icons/ai-functions/fault-code-query.png' },
     { key: 'drawing', title: '图纸识别', icon: '\uD83D\uDCDC', prompt: '请识别这张叉车图纸', iconPath: '/static/icons/ai-functions/drawing-recognition.png' },
-    { key: 'exercise', title: '习题解答', icon: '\u270F\uFE0F', prompt: '请解答这道叉车维修题目', iconPath: '/static/icons/ai-functions/exercise-solving.png' },
+    { key: 'exercise', title: '习题解答', icon: '\uD83D\uDCDD', prompt: '请解答这道叉车维修题目', iconPath: '/static/icons/ai-functions/exercise-solving.png' },
     { key: 'knowledge', title: '维保知识', icon: '\uD83D\uDD27', prompt: '请介绍叉车维保相关知识', iconPath: '/static/icons/ai-functions/maintenance-knowledge.png' },
 ]
 
