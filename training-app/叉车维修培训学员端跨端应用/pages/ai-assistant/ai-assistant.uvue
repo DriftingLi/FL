@@ -1,5 +1,5 @@
 <template>
-	<view class="ai-page" :style="{ height: windowHeight + 'px' }">
+	<view class="ai-page">
 		<!-- 自定义导航栏 -->
 		<AiChatNav :version="'pro'" :status-bar-height="statusBarHeight" @left-click="toggleSidebarLeft" @menu-click="toggleSidebarRight" />
 
@@ -84,9 +84,6 @@
 	import TabBar from '../../components/tab-bar/tab-bar.uvue'
 
 	const auth = useAuthStore()
-
-	// 页面根 view 需显式高度，否则背景渐变不绘制（先例 dashboard/forum/courses 同写法）
-	const windowHeight = uni.getSystemInfoSync().windowHeight
 
 	// 聊天核心逻辑
 	const {
@@ -462,13 +459,16 @@
 </script>
 
 <style>
+	/* 布局靠 flex:1 填满**真实视口**，不用 windowHeight —— 实测它在两次页面实例化之间取值不同
+	   （同一份代码：一次底部手画栏贴底、一次悬高约 247px）。手画栏是流内最后一个子元素，
+	   被 .main{flex:1} 顶到**盒子底部** ⇒ 盒子一矮，栏就悬空。
+	   底色用**实色** background-color：本机型实测 `background: linear-gradient(...)` 静默不绘制 ——
+	   #781 当初以为「flex:1 不绘制背景」，其实不绘制的是**渐变**，不是盒子（那次从没试过实色）。 */
 	.ai-page {
+		flex: 1;
 		display: flex;
 		flex-direction: column;
-		/* 实色兜底：真机实测 background: linear-gradient(...) 不绘制（dashboard 等同款写法同样静默失败），
-		   故先给实色底，再叠渐变——渐变生效则覆盖，不生效则退回实色 */
 		background-color: #dfeffb;
-		background-image: linear-gradient(180deg, #d2ebfc 0%, #e1eff9 45%, #edf3f6 100%);
 	}
 
 	.main {
