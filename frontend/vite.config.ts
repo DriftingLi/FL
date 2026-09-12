@@ -112,8 +112,9 @@ const APP_DEPENDENCIES = new Set(
   )
 )
 
-/** 按需 peer 的包名（其余应用依赖的闭包都不许被它们认领） */
-const LAZY_PEER_ROOTS = new Set(['katex', 'stream-diffs', 'mermaid'])
+/** 按需 peer：chunk 名与包名同名（清单只有这一处，加减 peer 改这里）。 */
+const LAZY_PEERS = ['katex', 'stream-diffs', 'mermaid'] as const
+const LAZY_PEER_ROOTS = new Set<string>(LAZY_PEERS)
 
 /**
  * 应用**其余依赖**的传递闭包。
@@ -131,10 +132,10 @@ for (const dep of APP_DEPENDENCIES) {
 }
 
 /** 包名 → 它所属的「按需 chunk」 */
-const LAZY_PEER_CHUNKS = new Map<string, string>([['katex', 'katex'], ['stream-diffs', 'stream-diffs'], ['mermaid', 'mermaid']])
-for (const [chunk, root] of [['stream-diffs', 'stream-diffs'], ['mermaid', 'mermaid']] as const) {
-  for (const name of dependencyClosure(root, APP_STATIC_CLOSURE)) {
-    if (!LAZY_PEER_CHUNKS.has(name)) LAZY_PEER_CHUNKS.set(name, chunk)
+const LAZY_PEER_CHUNKS = new Map<string, string>(LAZY_PEERS.map((name) => [name, name]))
+for (const peer of LAZY_PEERS) {
+  for (const name of dependencyClosure(peer, APP_STATIC_CLOSURE)) {
+    if (!LAZY_PEER_CHUNKS.has(name)) LAZY_PEER_CHUNKS.set(name, peer)
   }
 }
 

@@ -94,6 +94,30 @@ describe('ForumContent 公式（#900）', () => {
   })
 })
 
+/**
+ * 开启单点是否真的生效，不看我们自己传了什么，看**真实库的状态与渲染结果**：
+ * 这两条与上方的公式用例一起，构成 #900「启用收敛成一个单点」的端到端契约
+ * （markstream-vue 在本文件里没有被 mock）。
+ */
+describe('开启单点生效（#900）', () => {
+  it('真实 markstream 的 katex / mermaid 开关已打开', async () => {
+    const markstream = await import('markstream-vue')
+    expect(markstream.isKatexEnabled()).toBe(true)
+    expect(markstream.isMermaidEnabled()).toBe(true)
+  })
+
+  it('组件文案中文化：渲染出的操作按钮是中文（setDefaultI18nMap，不装 vue-i18n）', async () => {
+    const w = mountContent('```mermaid\ngraph TD;\nA-->B;\n```')
+    await vi.waitFor(() => {
+      expect(w.element.querySelector('[aria-label="导出"]')).not.toBeNull()
+    })
+    const labels = w.findAll('[aria-label]').map((el) => el.attributes('aria-label'))
+    expect(labels).toContain('打开')
+    expect(labels).not.toContain('Export')
+    expect(labels).not.toContain('Open')
+  })
+})
+
 describe('mermaid 安全级（#900）', () => {
   it('渲染不可信内容前固定 strict：禁脚本、禁事件属性、不开 htmlLabels', async () => {
     const w = mountContent('```mermaid\ngraph TD;\nA-->B;\n```')

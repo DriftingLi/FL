@@ -6,6 +6,10 @@
 //
 // 组件文案中文化同样在这条单点上：`setDefaultI18nMap` 只许在这里被调一次，
 // 散到各渲染组件就会出现「同一个库两套文案」。
+//
+// 本文件是**单元层**补充（loader 是不是函数、map 传了什么）。「单点真的生效」由
+// ForumContentMath.spec 的端到端契约守（真实库状态 + 渲染出的中文文案）——
+// 这里 mock 掉 markstream 就只能断言我们传了什么，不能断言库有没有用它。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const mocks = vi.hoisted(() => ({

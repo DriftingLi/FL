@@ -27,21 +27,15 @@ export type PublishSubset = 'chapter' | 'featured'
 /** 内容精选允许的语法（三端交集）——写给作者看的清单，与 API.md 的契约同源。 */
 export const FEATURED_SUBSET_SYNTAX = '标题 / 列表 / 引用 / 代码块 / 图片 / 链接'
 
-/** 子集外语法在预览里的说明（#902 / #903）。 */
-export const OUTSIDE_SUBSET_NOTICE =
-  `以下语法在门户与移动端不渲染，读者看到的是原始文本：`
-
-/** 越界种类 → 给作者看的名字。 */
-const OUTSIDE_SUBSET_LABELS: Record<OutsideSubsetKind, string> = {
+/** 越界种类 → 给作者看的名字（也是提示文案里的用词，唯一来源）。 */
+const OUTSIDE_SUBSET_LABELS: Record<'table' | 'math', string> = {
   table: '表格',
   math: '公式'
 }
 
-export type OutsideSubsetKind = 'table' | 'math'
-
-export interface OutsideSubsetHit {
-  kind: OutsideSubsetKind
-  label: string
+/** 子集外语法在预览 / 编辑器提示里的统一说法（#902 / #903）——两处文案由它派生，不各写一份。 */
+export function outsideSubsetNotice(labels: readonly string[]): string {
+  return '以下语法在门户与移动端不渲染，读者看到的是原始文本：' + labels.join('、')
 }
 
 function highlightCode(code: string, lang: string): string {
@@ -108,14 +102,17 @@ export function renderPublishMarkdown(source: string, subset: PublishSubset = 'c
  *
  * 检测用**章节档**的思路跑：章节档是超集（表格 + 公式都在），越界项在超集里才看得见。
  */
-export function detectOutsideSubset(source: string): OutsideSubsetHit[] {
+export function detectOutsideSubset(source: string): string[] {
   if (!source) return []
-  const found = new Set<OutsideSubsetKind>()
+  // 便宜的预筛：GFM 表格必须有竖线、KaTeX 必须有美元号。两者都不含时直接返回，
+  // 不在每次输入（管理端编辑器逐键触发）都对全文跑一遍词法。
+  if (!source.includes('|') && !source.includes('$')) return []
+  const found = new Set<'table' | 'math'>()
   collectOutsideSubset(chapterMarked.lexer(source) as unknown[], found)
-  return [...found].map((kind) => ({ kind, label: OUTSIDE_SUBSET_LABELS[kind] }))
+  return [...found].map((kind) => OUTSIDE_SUBSET_LABELS[kind])
 }
 
-function collectOutsideSubset(tokens: readonly unknown[], found: Set<OutsideSubsetKind>): void {
+function collectOutsideSubset(tokens: readonly unknown[], found: Set<'table' | 'math'>): void {
   for (const raw of tokens) {
     if (!raw || typeof raw !== 'object') continue
     const token = raw as { type?: string; tokens?: unknown[]; items?: unknown[] }

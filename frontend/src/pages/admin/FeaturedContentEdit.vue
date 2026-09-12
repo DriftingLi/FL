@@ -71,14 +71,14 @@
               作者在这里被明确告知，而不是发布后才发现读者看到的是一堆竖线。
               **只提示不阻断**：判据留在编辑器与文档，不做后端强校验。
             -->
-            <el-alert
+            <UiAlert
               v-if="outsideSubsetLabels.length"
               class="mb-2"
               type="warning"
               :closable="false"
               show-icon
-              :title="`正文含${outsideSubsetLabels.join('、')}：门户与移动端不渲染这些语法，读者会看到原始文本`"
-              :description="`三端交集子集：${FEATURED_SUBSET_SYNTAX}。保存与发布不受影响。`"
+              :title="outsideNotice"
+              description="保存与发布不受影响；发布端预览里能看到读者实际看到的样子。"
             />
             <MarkdownEditor
               ref="markdownEditorRef"
@@ -115,19 +115,12 @@
     </div>
 
     <!-- 发布端预览（#903）：交集档渲染 + 越界语法说明，预览里不含表格与公式 -->
-    <UiDialog v-model="previewVisible" title="发布端预览" width="800px" destroy-on-close>
-      <p class="mb-3 text-xs text-ink-3">
-        门户访客与移动端学员看到的样子（三端交集子集）。
-      </p>
-      <PublishMarkdown
-        class="max-h-[60vh] overflow-y-auto rounded-ctl border border-line bg-canvas p-4"
-        subset="featured"
-        :content="previewContent"
-      />
-      <template #footer>
-        <UiButton @click="previewVisible = false">关闭</UiButton>
-      </template>
-    </UiDialog>
+    <PublishPreviewDialog
+      v-model="previewVisible"
+      subset="featured"
+      :content="previewContent"
+      subtitle="门户访客与移动端学员看到的样子（三端交集子集）。"
+    />
   </div>
 </template>
 
@@ -138,9 +131,9 @@ import { Plus } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import MarkdownEditor from '@/components/tutor/MarkdownEditor.vue'
-import PublishMarkdown from '@/components/render/PublishMarkdown.vue'
-import UiDialog from '@/components/ui/UiDialog.vue'
-import { detectOutsideSubset, FEATURED_SUBSET_SYNTAX } from '@/utils/publishMarkdown'
+import PublishPreviewDialog from '@/components/render/PublishPreviewDialog.vue'
+import UiAlert from '@/components/ui/UiAlert.vue'
+import { detectOutsideSubset, FEATURED_SUBSET_SYNTAX, outsideSubsetNotice } from '@/utils/publishMarkdown'
 import { adminFeaturedApi, featuredCategoryOptions } from '@/api/featured'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import { useAsyncPage } from '@/composables/useAsyncPage'
@@ -192,7 +185,10 @@ const form = reactive({
 })
 
 // 子集越界提示（#902）：判据与渲染同源（见 publishMarkdown.detectOutsideSubset）
-const outsideSubsetLabels = computed(() => detectOutsideSubset(form.content).map((hit) => hit.label))
+const outsideSubsetLabels = computed(() => detectOutsideSubset(form.content))
+
+/** 编辑器提示与预览里的说明同源（publishMarkdown.outsideSubsetNotice） */
+const outsideNotice = computed(() => outsideSubsetNotice(outsideSubsetLabels.value))
 
 // 发布端预览（#903）：同讲师端，取编辑器最新值快照，不写回表单、不发请求
 const previewVisible = ref(false)

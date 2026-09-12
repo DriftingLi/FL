@@ -13,9 +13,11 @@ import { computed } from 'vue'
 import '@/assets/styles/markdown.css'
 import {
   detectOutsideSubset,
+  outsideSubsetNotice,
   renderPublishMarkdown,
   type PublishSubset
 } from '@/utils/publishMarkdown'
+import UiAlert from '@/components/ui/UiAlert.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -32,20 +34,20 @@ const html = computed(() => renderPublishMarkdown(props.content, props.subset))
  * 交集档的越界说明：只在**真的越界**时出现，且不阻断任何操作。
  * 放在组件里而不是页面里，是为了「哪个渲染档位就要给哪个档位的说明」不依赖调用方记得加。
  */
-const outsideLabels = computed(() =>
-  props.subset === 'featured' ? detectOutsideSubset(props.content).map((hit) => hit.label) : []
-)
+const outsideLabels = computed(() => (props.subset === 'featured' ? detectOutsideSubset(props.content) : []))
+
+const outsideNotice = computed(() => outsideSubsetNotice(outsideLabels.value))
 </script>
 
 <template>
   <div class="publish-markdown">
-    <el-alert
+    <UiAlert
       v-if="outsideLabels.length"
       class="mb-3"
       type="warning"
       :closable="false"
       show-icon
-      :title="`以下语法在门户与移动端不渲染，读者看到的是原始文本：${outsideLabels.join('、')}`"
+      :title="outsideNotice"
     />
     <!-- eslint-disable-next-line vue/no-v-html -->
     <div class="markdown-body" v-html="html"></div>

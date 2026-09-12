@@ -24,6 +24,7 @@ import MarkdownRender from "markstream-vue"
 import "markstream-vue/index.css"
 import { isUnsafeHtmlUrl, type MarkdownIt, type ParsedNode } from "stream-markdown-parser"
 import { FORUM_LINK_OUT_PATH } from "@/config/forumLinks"
+import { MARKSTREAM_MERMAID_PROPS } from "@/utils/markstreamRuntime"
 
 /** 「即将离开本站」中转页路径（站外链接一律经它，不直接把读者带走）。
  *  字面量收在 config 一处，并由路由测试钉住它与路由表一致。 */
@@ -133,6 +134,7 @@ const parseOptions = computed(() => ({
       :content="content"
       :final="true"
       html-policy="escape"
+      :mermaid-props="MARKSTREAM_MERMAID_PROPS"
       :parse-options="parseOptions"
       :custom-markdown-it="configureForumMarkdown"
       :fade="false"

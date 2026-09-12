@@ -197,21 +197,14 @@
     </UiDialog>
 
     <!--
-      发布端预览（#903）：渲染走**发布端同一个实现**（PublishMarkdown），
+      发布端预览（#903）：渲染走**发布端同一个实现**（PublishPreviewDialog → PublishMarkdown），
       不是 Vditor 内部 lute 引擎的解释——预览与发布同源才是这个入口的意义。
     -->
-    <UiDialog v-model="previewVisible" title="发布端预览" width="800px" destroy-on-close>
-      <p class="mb-3 text-xs text-ink-3">
-        与 Web 学员端章节正文同一渲染器：表格 / 代码高亮 / 公式。
-      </p>
-      <PublishMarkdown
-        class="max-h-[60vh] overflow-y-auto rounded-ctl border border-line bg-canvas p-4"
-        :content="previewContent"
-      />
-      <template #footer>
-        <UiButton @click="previewVisible = false">关闭</UiButton>
-      </template>
-    </UiDialog>
+    <PublishPreviewDialog
+      v-model="previewVisible"
+      :content="previewContent"
+      subtitle="与 Web 学员端章节正文同一渲染器：表格 / 代码高亮 / 公式。"
+    />
 
     <!-- 上传文件弹窗 -->
     <UiDialog
@@ -243,7 +236,7 @@ import { ElMessage } from 'element-plus'
 import { tutorApi, type TutorChapter, type TutorChapterDetail } from '@/api/tutor'
 import type { ChapterFile } from '@/api/course'
 import MarkdownEditor from '@/components/tutor/MarkdownEditor.vue'
-import PublishMarkdown from '@/components/render/PublishMarkdown.vue'
+import PublishPreviewDialog from '@/components/render/PublishPreviewDialog.vue'
 import FileUpload from '@/components/tutor/FileUpload.vue'
 import VideoPlayer from '@/components/student/VideoPlayer.vue'
 import DocumentViewer from '@/components/student/DocumentViewer.vue'

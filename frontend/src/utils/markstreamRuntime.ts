@@ -61,6 +61,16 @@ export const MARKSTREAM_I18N_ZH: Readonly<Record<string, string>> = {
   'artifacts.svgPreviewTitle': 'SVG 预览'
 }
 
+/**
+ * mermaid 的安全级**在本仓显式固定**（ADR-0046 安全口径）。
+ *
+ * markstream 的 MermaidBlockNode 默认就是 isStrict: true（strict 下禁用脚本、禁事件属性、
+ * 不开 htmlLabels），但「默认值」不是契约：上游翻一次默认值，学员 UGC 与模型输出里的图表
+ * 就会静默变成可执行内容。这里把它写成本仓的显式输入，各内容面引用同一个常量——
+ * 它属于安全旋钮，属于本文档说的「唯一开启点」。
+ */
+export const MARKSTREAM_MERMAID_PROPS = { isStrict: true } as const
+
 let applied: Promise<void> | null = null
 
 /**
