@@ -5,3 +5,6 @@ unpackage/
 # 本地 AI 辅助 agent 配置（不随项目共享）
 .opencode/agents/
 .opencode/node_modules/
+
+# 仿真机前置冒烟（非门）的本地产物：日志/截图留在本地，入库版走 docs/verification/
+.ci-verify/

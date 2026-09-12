@@ -787,10 +787,10 @@ data: null
 |---|---|---|
 | POST | `/api/forum/upload-image` | 上传论坛图片（图文分离，先传图后随发帖/回复提交 URL） |
 | GET | `/api/forum/topics` | 帖子列表（scope=all|general|chapter；category=discussion|question；`is_experience` 经验认定筛选；`featured` 精选筛选；`solved` **须同时带 category=question**；keyword 搜索；分页；`sort=latest|hot|created` `order=asc|desc`） |
-| POST | `/api/forum/topics` | 发帖（images 最多 9 张；`category` **仅 discussion\|question**——「备考经验」是管理端认定，学员传 `experience` 返回 400） |
+| POST | `/api/forum/topics` | 发帖（images 最多 9 张；`category` **仅 discussion\|question**——「备考经验」是管理端认定，学员传 `experience` 返回 400；`content_format` **仅 text\|markdown**，缺省 text，非法值 400 不静默归一，ADR-0044） |
 | GET | `/api/forum/topics/:id` | 帖子详情（含**分页**回复：`page`/`page_size`，默认 20，响应带 `page`/`pages`/`total`；`sort=latest|hot|time` `order=asc|desc`；**被采纳回复固定占首页第一条**并从排序结果剔除——首页容量 = `page_size − 1`，ADR-0042；`reward_issued` = 该帖是否已产生过任一自记奖励） |
-| PUT | `/api/forum/topics/:id` | 编辑自己的帖子（#811：仅作者本人，非本人 403；可改 title/content/images/category，空串归一 discussion，`experience` 400；问答帖不得挂章节） |
-| POST | `/api/forum/topics/:id/replies` | 回复（images 最多 3 张；支持回复楼层） |
+| PUT | `/api/forum/topics/:id` | 编辑自己的帖子（#811：仅作者本人，非本人 403；可改 title/content/images/category，空串归一 discussion，`experience` 400；问答帖不得挂章节）。**不含 `content_format`**——该字段是全量替换语义下的例外：既有客户端不带它，若按缺省 text 处理会把 markdown 帖静默重置，故编辑保持原值（ADR-0044） |
+| POST | `/api/forum/topics/:id/replies` | 回复（images 最多 3 张；支持回复楼层；`content_format` 与发帖同口径，缺省 text） |
 | DELETE | `/api/forum/topics/:id` | 删除自己的帖子 |
 | DELETE | `/api/forum/replies/:id` | 删除自己的回复 |
 | POST | `/api/forum/topics/:id/like` | 点赞（幂等，ADR-0018） |
@@ -856,7 +856,9 @@ multipart/form-data：`file`。响应 200：data 为 `{ "url": "/static/uploads/
 
 **POST /api/forum/topics/:id/replies**
 
-请求体：`{ "content": "回复内容", "images": [], "parent_reply_id": 0 }`
+请求体：`{ "content": "回复内容", "images": [], "parent_reply_id": 0, "content_format": "text" }`
+
+`content_format` 取值 `text`（默认）或 `markdown`；响应 `data` 亦回传该字段。主题与回复各自独立声明，互不影响。
 
 **DELETE /api/forum/topics/:id** / **DELETE /api/forum/replies/:id**：请求体 `{}`，响应 200 `{ "code": 200, "message": "删除成功", "data": null }`。
 
