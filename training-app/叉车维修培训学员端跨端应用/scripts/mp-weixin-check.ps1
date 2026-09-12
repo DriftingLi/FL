@@ -13,6 +13,8 @@
       → cli.bat close（清残留自动化会话）
       → **cli.bat open --project <构建产物>（重新打开项目窗口 —— 2026-09-12 复测新增的必需步骤）**
       → cli.bat auto --auto-port <Port> --trust-project（开自动化端口）
+      → node scripts/mp-weixin-ready.mjs（**就绪闸门**：等端口接受连接 + Tool.getInfo 带 SDKVersion
+        + App.getPageStack 开始应答，再把端点交给 automator —— 2026-09-13 实测新增，缺它 ② 时好时坏）
       → node scripts/mp-weixin-probe.mjs（miniprogram-automator 连上：读 pageStack / console / exceptions + 截图）
 
     **三条实测坑位（勿删，ADR-0008 已录）**：
@@ -30,6 +32,27 @@
     故顺序写死为 `close → open --project <dist> → auto`（守护测试 C12），且 `open` 是**显式步骤并写进日志**；
     `-SkipBuild` 下同样定位构建产物目录（`$dist` 在两个分支里都已做过存在性校验）。
     补证：插入 `open` 后 `pageStack=["pages/index/index"]`、`errorsTotal=0`。
+    ⚠️ 2026-09-13 补正：这一步「必需」的结论**未与就绪窗口隔离**（见下面坑位 5）——当时那次的绿也可能
+    只是会话恰好已经就绪。本步保留（close 确实会把项目窗口一起关掉），但**不得**再据它宣称
+    「缺 open 必然 pageStack 恒空」；判据以坑位 5 的就绪闸门为准。
+
+    **时序坑位 5（2026-09-13 实测定位，② 时好时坏的全部原因，直接决定这门红还是绿）**：
+    `cli.bat auto` 返回**不等于**自动化会话可用。实测三个里程碑分得很开
+    （本机 Stable v2.01.2510290 × miniprogram-automator@0.12.1）：
+      · 端口开始接受连接          t ≈ 1s        （auto 返回后仍有一小段会 ECONNREFUSED）
+      · `Tool.getInfo` 带 SDKVersion  t ≈ 1–3s    —— 早于此，result 里**只有 version、没有 SDKVersion**
+      · `App.getPageStack` 开始应答   t ≈ 24–34s  （两次实测 24s / 34s，波动大）
+    两条门红都由此产生，且**都被误报成了「端口连不上」**：
+      a) `automator.connect()` 内部的 `checkVersion()` 紧跟 ws 打开之后执行，落在第二个里程碑之前 ⇒
+         `licia/cmpVersion` 对 `undefined` 调 `.split('.')` ⇒ 抛
+         `Cannot read properties of undefined (reading 'split')`，再被 `connectTool` 的 catch 换成
+         “Failed connecting to …” ⇒ 看上去完全是端口问题；
+      b) 探针的 `mp.pageStack()` 超时原本取 30s，**正落在 24–34s 这段就绪窗口中间** ⇒ 同一份代码
+         有时绿有时红。这不是竞态，是**就绪等待不足**。
+    处置：`close → open → auto` 之后**先跑就绪闸门**（第 4.9 步），等齐两个里程碑再交给 automator；
+    探针的 `--timeout-ms` 同步抬到 `-ProbeTimeoutMs`（默认 60s）。探针侧另用 `connectError.kind`
+    （not-ready / unreachable / timeout / unknown）把两类失败分开报，**不得**再合并成一句
+    「自动化端口连不上」——那正是本轮误诊把排查引向端口、多花了一轮实测的原因。
 
     **导航不可用时诚实降级（2026-09-12 复测，**不许假绿**）**：本机 `miniprogram-automator@0.12.1` 下
     `mp.reLaunch` / `mp.navigateTo` **恒报 `Uncaught [object Object]`**，而 `mp.connect` / `mp.pageStack` /
@@ -122,7 +145,7 @@ param(
     [int]$PublishTimeoutSeconds = 900,
     [int]$AutoTimeoutSeconds = 180,
     [int]$OpenTimeoutSeconds = 120,
-    [int]$PortWaitSeconds = 90,
+    [int]$PortWaitSeconds = 180,
     [string]$Module = 'mp-weixin',
     [switch]$NoArchive,
     [int]$HxWaitSeconds = 600,
@@ -130,6 +153,9 @@ param(
     [int]$ProbeTimeoutSeconds = 180,
     [int]$ProbeAttempts = 6,
     [int]$ProbeRetryDelaySeconds = 10,
+    [int]$ProbeTimeoutMs = 60000,
+    [int]$ReadyWaitSeconds = 120,
+    [switch]$Doctor,
     [int]$PostToPr = 0
 )
 
@@ -138,6 +164,7 @@ $ErrorActionPreference = 'Stop'
 
 $DistRelative = 'unpackage\dist\build\mp-weixin'
 $ProbeRelative = 'scripts\mp-weixin-probe.mjs'
+$ReadyRelative = 'scripts\mp-weixin-ready.mjs'
 $WxDevToolsPatterns = @(
     'E:\微信web开发者工具\cli.bat',
     'D:\微信web开发者工具\cli.bat',
@@ -146,6 +173,12 @@ $WxDevToolsPatterns = @(
     "$env:LOCALAPPDATA\微信web开发者工具\cli.bat"
 )
 $script:closed = $false
+# -PortWaitSeconds 由 90 抬到 180（2026-09-13）：-Doctor 首跑实测到一次「cli.bat auto 回显 √ auto、
+# 端口 90s 内始终没监听」，紧接着同一命令 8s 内就起来了 ⇒ **这一条只抬预算，不是修复**：病根未定位，
+# 已如实记进 ADR-0008 ② 段的待排查项；遇到它时结果行是 reason=port-not-listening，-Doctor 的 L6 会标 FAIL。
+# -Doctor：只做环境体检（不接 HBuilderX、不构建、不跑探针、不贴评论、**不产出门的通过结论**），
+# 逐层给 OK/WARN/FAIL。它复用主流程的 close → open → auto → 就绪闸门，所以体检走的就是门真正的路径。
+if ($Doctor) { $SkipBuild = $true }
 
 function Test-PeHeader {
     param([string]$Path)
@@ -257,6 +290,51 @@ Set-Content -LiteralPath $logPath -Encoding utf8 -Value @(
 )
 function Write-Log { param([string]$Text) Add-Content -LiteralPath $logPath -Value $Text -Encoding utf8 }
 
+# ---------- -Doctor：逐层体检的记录与报告（只读；结论只用于诊断，**不是门的通过结论**）----------
+$script:DoctorRows = [System.Collections.Generic.List[object]]::new()
+# 体检的**应到层**：报告不全 ⇒ 结论必须是「未就绪」（防「早期 exit 却打出环境就绪」的假绿）
+$script:DoctorLayers = @(
+    'L1 工具链', 'L2 登录态', 'L3 进程端口', 'L4 构建产物',
+    'L5 项目窗口', 'L6 自动化端口', 'L7 会话就绪'
+)
+function Add-DoctorRow {
+    param([string]$Layer, [string]$Verdict, [string]$Detail)
+    [void]$script:DoctorRows.Add([pscustomobject]@{ Layer = $Layer; Verdict = $Verdict; Detail = $Detail })
+}
+function Write-DoctorReport {
+    Write-Host ''
+    Write-Host '================ ② 环境体检（-Doctor）================' -ForegroundColor Cyan
+    if ($script:DoctorRows.Count -eq 0) {
+        Write-Host '  （无记录：脚本在记录任何层之前就退出了——读上面的 [error] 行）' -ForegroundColor Yellow
+    }
+    foreach ($r in $script:DoctorRows) {
+        $color = switch ("$($r.Verdict)") { 'OK' { 'Green' } 'WARN' { 'Yellow' } default { 'Red' } }
+        Write-Host ("  [{0}] {1,-4} {2}" -f $r.Layer, $r.Verdict, $r.Detail) -ForegroundColor $color
+    }
+    $fails = @($script:DoctorRows | Where-Object { $_.Verdict -eq 'FAIL' })
+    $warns = @($script:DoctorRows | Where-Object { $_.Verdict -eq 'WARN' })
+    # **报告不全一律不算就绪**（2026-09-13 首跑实测抓到的假绿）：脚本可能在某一层之前就 exit 2，
+    # 此时 rows 里既没有 FAIL 也没有 WARN，旧逻辑会打出「环境就绪（0 条 WARN）」——结论与退出码自相矛盾。
+    $seen = @($script:DoctorRows | ForEach-Object { $_.Layer })
+    $missing = @($script:DoctorLayers | Where-Object { $seen -notcontains $_ })
+    Write-Host ''
+    if ($fails.Count -gt 0) {
+        Write-Host "结论：环境**未就绪**（$($fails.Count) 层 FAIL）——先修这些层，再跑 ②。" -ForegroundColor Red
+    } elseif ($missing.Count -gt 0) {
+        Write-Host "结论：环境**未就绪**（报告不全：$($missing -join '、') 这些层没走到 —— 流程在它们之前就退出了，看上面的 [error] 行）。" -ForegroundColor Red
+    } else {
+        Write-Host "结论：环境**就绪**（$($warns.Count) 条 WARN 不阻断）。" -ForegroundColor Green
+    }
+    Write-Host '注意：-Doctor 只体检环境，**不产出 ② 门的通过结论**；门结论只能由探针输出（MP_WEIXIN_RESULT）。' -ForegroundColor Yellow
+}
+function Get-DoctorExitCode {
+    if (@($script:DoctorRows | Where-Object { $_.Verdict -eq 'FAIL' }).Count -gt 0) { return 2 }
+    # 报告不全是**失败**，不是「没意见」：否则早期 exit 会以 0 收尾，看着像体检通过。
+    $seen = @($script:DoctorRows | ForEach-Object { $_.Layer })
+    if (@($script:DoctorLayers | Where-Object { $seen -notcontains $_ }).Count -gt 0) { return 2 }
+    return 0
+}
+
 $dist = Join-Path $Project $DistRelative
 $probePath = Join-Path $Project $ProbeRelative
 if (-not (Test-Path -LiteralPath $probePath)) {
@@ -306,6 +384,49 @@ if ($occupied.Count -gt 0) {
     Write-Log "port $Port already listening by pid(s): $(($occupied.OwningProcess) -join ',')"
 }
 
+# ---------- -Doctor 的 L1–L4（静态面；在动 close/open/auto 之前先记下来）----------
+if ($Doctor) {
+    Add-DoctorRow -Layer 'L1 工具链' -Verdict $(if ($devTools) { 'OK' } else { 'FAIL' }) -Detail "微信开发者工具 cli.bat = $devTools"
+    Add-DoctorRow -Layer 'L1 工具链' -Verdict $(if ($nodeExe) { 'OK' } else { 'FAIL' }) -Detail "node = $nodeExe"
+    # -Doctor 不接 HBuilderX（$SkipBuild 已置位），因此它缺失**不判 FAIL**，只如实报告
+    Add-DoctorRow -Layer 'L1 工具链' -Verdict 'OK' -Detail "HBuilderX = $(if ($hbxRoot) { $hbxRoot } else { '(未探测到；-Doctor 不构建，故不判失败)' })"
+    Add-DoctorRow -Layer 'L1 工具链' -Verdict $(if (Test-Path -LiteralPath (Join-Path $Project $ReadyRelative)) { 'OK' } else { 'FAIL' }) -Detail "就绪闸门 = $(Join-Path $Project $ReadyRelative)"
+
+    # L2 登录态：开发者工具必须已登录；登录态过期需人补扫一次码（本步只报告，不改门结论）
+    try {
+        $loginOut = (Invoke-Process -FilePath $devTools -Arguments @('islogin') -TimeoutSeconds 120 -Tag 'doctor-islogin').Output
+        Write-Log "`n>>> doctor-islogin`n$loginOut"
+        $isLoggedIn = ($loginOut -match '"login"\s*:\s*true')
+        Add-DoctorRow -Layer 'L2 登录态' -Verdict $(if ($isLoggedIn) { 'OK' } else { 'FAIL' }) -Detail ("cli.bat islogin -> " + (($loginOut -replace '\s+', ' ').Trim()))
+    } catch {
+        Add-DoctorRow -Layer 'L2 登录态' -Verdict 'FAIL' -Detail "cli.bat islogin 调用失败：$_"
+    }
+
+    # L3 残留会话/端口占用：残留会让 auto 静默复用旧会话（坑位 1）
+    $portOwners = @(Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue)
+    $ideCount = @(Get-Process -Name wechatdevtools -ErrorAction SilentlyContinue).Count
+    $portDetail = if ($portOwners.Count -gt 0) {
+        (($portOwners | ForEach-Object { "pid=$($_.OwningProcess)@$($_.LocalAddress)" }) -join ',') + '（疑似残留会话，下一步 close 会清）'
+    } else { '无' }
+    Add-DoctorRow -Layer 'L3 进程端口' -Verdict 'OK' -Detail "wechatdevtools.exe 进程数 = $ideCount（单实例资源）；端口 $Port 占用 = $portDetail"
+
+    # L4 产物：源 manifest appid 与构建产物 appid 都读出来对比（HBuilderX 回写 manifest 置 null 是已知坑）
+    $manRaw = Get-Content -LiteralPath (Join-Path $Project 'manifest.json') -Raw
+    $manMatch = [regex]::Match($manRaw, '(?s)"mp-weixin"\s*:\s*\{.*?"appid"\s*:\s*"([^"]*)"')
+    $srcId = if ($manMatch.Success) { $manMatch.Groups[1].Value } else { '' }
+    $prodId = ''
+    $cfgPath = Join-Path $dist 'project.config.json'
+    if (Test-Path -LiteralPath $cfgPath) {
+        $cfgMatch = [regex]::Match((Get-Content -LiteralPath $cfgPath -Raw), '"appid"\s*:\s*"([^"]*)"')
+        if ($cfgMatch.Success) { $prodId = $cfgMatch.Groups[1].Value }
+    }
+    $distOk = Test-Path -LiteralPath (Join-Path $dist 'app.json')
+    Add-DoctorRow -Layer 'L4 构建产物' -Verdict $(if ($distOk) { 'OK' } else { 'FAIL' }) -Detail "dist app.json = $distOk（$dist）"
+    $idOk = [bool]($prodId -and ((-not $AppId) -or $prodId -eq $AppId))
+    $srcNote = if ($srcId -ne $AppId) { '  ← 源 manifest 与期望不一致：HBuilderX 回写置 null 的痕迹，先 `git checkout -- manifest.json`' } else { '' }
+    Add-DoctorRow -Layer 'L4 构建产物' -Verdict $(if ($idOk) { 'OK' } else { 'FAIL' }) -Detail "产物 appid = '$prodId'（期望 '$AppId'）；源 manifest appid = '$srcId'$srcNote"
+}
+
 # ---------- 收尾：cli.bat close 必须在 finally 路径里执行，避免端口/会话残留 ----------
 function Invoke-DevToolsClose {
     if ($script:closed) { return }
@@ -321,19 +442,10 @@ function Invoke-DevToolsClose {
 }
 
 # ---------- P1：门通过时把结果贴成「sha 绑定」的 PR 评论（② 门结果免手抄）----------
-function Get-HeadSha {
-    param([string]$ProjectDir)
-    $attempts = @()
-    if ($ProjectDir) { $attempts += , @('-C', $ProjectDir, 'rev-parse', 'HEAD') }
-    $attempts += , @('rev-parse', 'HEAD')
-    foreach ($a in $attempts) {
-        try {
-            $out = & git @a 2>$null | Select-Object -First 1
-            if ($out -and "$out".Trim()) { return "$out".Trim() }
-        } catch { }
-    }
-    return ''
-}
+# Get-HeadSha 已上移到 scripts/lib/gate-common.ps1（三份**逐字节相同**、且无任何守护 pin ⇒ 唯一合格的零风险
+# 切片）。共享库头部写明了准入门槛：只有「逐字节相同」**且**「未被 utils/*Contract.test.js 作为字面量锚点
+# pin 住」的代码才允许搬进去 —— 本仓守护断言的是**源码文本**，搬走被 pin 的代码等于逼着后续放宽守护。
+. (Join-Path $PSScriptRoot 'lib\gate-common.ps1')
 
 function Publish-GateComment {
     param(
@@ -693,6 +805,11 @@ try {
         -TimeoutSeconds $OpenTimeoutSeconds -Tag 'devtools-open'
     Write-Log "`n>>> devtools-open（close 之后 auto 之前重开项目窗口；缺这步 pageStack 恒空）`n$($open.Output)"
     Write-Host $open.Output
+    # 体检行必须记在**各自那一步**上，不能攒到就绪闸门再记：早期 exit（超时 / 端口没起来）会让报告缺层，
+    # 而报告缺层恰恰发生在最需要它的时候（-Doctor 首跑实测抓到过这个形态）。
+    if ($Doctor) {
+        Add-DoctorRow -Layer 'L5 项目窗口' -Verdict $(if ($open.TimedOut) { 'FAIL' } else { 'OK' }) -Detail ("close → open 已执行；open 回显 = " + (($open.Output -replace '\s+', ' ').Trim()))
+    }
     if ($open.TimedOut) {
         Write-Host "[error] cli.bat open 超时（$OpenTimeoutSeconds 秒）：项目窗口未重开 ⇒ auto 不会替你重开 ⇒ pageStack 必为空格。" -ForegroundColor Red
         Write-Log 'MP_WEIXIN_RESULT errors=env reason=devtools-open-timeout'
@@ -707,6 +824,7 @@ try {
     Write-Log "`n>>> devtools-auto`n$($auto.Output)"
     Write-Host $auto.Output
     if ($auto.TimedOut) {
+        if ($Doctor) { Add-DoctorRow -Layer 'L6 自动化端口' -Verdict 'FAIL' -Detail "cli.bat auto 超时（$AutoTimeoutSeconds 秒）：自动化端口没开起来（残留会话多时见过此形态）" }
         Write-Host "[error] cli.bat auto 超时（$AutoTimeoutSeconds 秒）" -ForegroundColor Red
         Write-Log 'MP_WEIXIN_RESULT errors=env reason=auto-timeout'
         exit 2
@@ -735,6 +853,9 @@ try {
     }
     Write-Log "端口 $Port listening=$listening addrs=$addrs"
     Write-Host "端口 $Port listening=$listening addrs=$addrs"
+    if ($Doctor) {
+        Add-DoctorRow -Layer 'L6 自动化端口' -Verdict $(if ($listening) { 'OK' } else { 'FAIL' }) -Detail "port $Port listening=$listening（等 ${PortWaitSeconds}s）addrs=$addrs；auto 回显 Using AppID='$usingAppId'"
+    }
     if (-not $listening) {
         Write-Host "[error] 自动化端口 $Port 未监听：cli.bat auto 未真正生效。" -ForegroundColor Red
         Write-Log 'MP_WEIXIN_RESULT errors=env reason=port-not-listening'
@@ -767,8 +888,57 @@ try {
         }
     }
     Write-Log "automator require-root = $autoRoot"
+
+    # 4.9) **就绪闸门（2026-09-13 实测新增；缺它 ② 时好时坏 —— 见脚本头坑位 5）**：
+    #      端口 listening ≠ 会话可用。实测三个里程碑：端口 t≈1s → Tool.getInfo 带 SDKVersion t≈1–3s
+    #      → App.getPageStack 开始应答 t≈24–34s。`automator.connect()` 内部的 `checkVersion()` 落在
+    #      第二个里程碑之前就抛 `Cannot read properties of undefined (reading 'split')`，而探针原来的
+    #      30s 超时又正落在 24–34s 中间 ⇒ 红绿不定。故这里先用裸 ws 等齐两个里程碑（只读、用完即关；
+    #      实测**不影响**随后的 automator 会话），超预算才判环境不可用，且 reason 会明确写出缺的是
+    #      哪个里程碑 —— 不再笼统说成「端口连不上」。
+    $readyPath = Join-Path $Project $ReadyRelative
+    if (-not (Test-Path -LiteralPath $readyPath)) {
+        Write-Host "[error] 缺就绪闸门脚本：$readyPath" -ForegroundColor Red
+        Write-Log 'MP_WEIXIN_RESULT errors=env reason=no-ready-gate'
+        exit 2
+    }
+    $readyArgs = @($readyPath, '--ws', "ws://127.0.0.1:$Port", '--wait-seconds', "$ReadyWaitSeconds",
+        '--require-stack', '--require-root', $autoRoot)
+    $ready = Invoke-Process -FilePath $nodeExe -Arguments $readyArgs -TimeoutSeconds ($ReadyWaitSeconds + 60) -Tag 'ready-gate'
+    Write-Log "`n>>> ready-gate（等端口 + SDKVersion + pageStack 三个里程碑）`n$($ready.Output)"
+    Write-Host $ready.Output
+    $readyJson = $null
+    foreach ($line in ($ready.Output -split "`r?`n")) {
+        if ($line -match '^\s*MP_WEIXIN_READY\s+(\{.*\})\s*$') {
+            try { $readyJson = ($Matches[1] | ConvertFrom-Json) } catch { $readyJson = $null }
+        }
+    }
+    if (-not $readyJson) {
+        Write-Host '[error] 就绪闸门未输出可解析的 MP_WEIXIN_READY 结果行（见日志）。' -ForegroundColor Red
+        Write-Log 'MP_WEIXIN_RESULT errors=env reason=no-ready-result'
+        exit 2
+    }
+    $readyElapsed = Get-Prop $readyJson 'elapsedMs'
+    if ($null -eq $readyElapsed) { $readyElapsed = 0 }
+    $readySeconds = [int]([double]$readyElapsed / 1000)
+    $sdkVersion = "$(Get-Prop $readyJson 'sdkVersion')"
+    $ideVersion = "$(Get-Prop $readyJson 'ideVersion')"
+    $readyOk = ((Get-Prop $readyJson 'ok') -eq $true)
+    if ($Doctor) {
+        Add-DoctorRow -Layer 'L7 会话就绪' -Verdict $(if ($readyOk) { 'OK' } else { 'FAIL' }) -Detail ("端口 t=$(Get-Prop $readyJson 'portReadyAt')s、SDKVersion t=$(Get-Prop $readyJson 'sdkReadyAt')s、pageStack t=$(Get-Prop $readyJson 'pageStackAt')s；sdk=$sdkVersion ide=$ideVersion pageStack=$(Get-Prop $readyJson 'pageStack')")
+        Write-Log "doctor ready-gate: ok=$readyOk reason=$(Get-Prop $readyJson 'reason') detail=$(Get-Prop $readyJson 'detail')"
+        exit (Get-DoctorExitCode)
+    }
+    if (-not $readyOk) {
+        Write-Host "[error] 自动化会话未就绪（reason=$(Get-Prop $readyJson 'reason')）：$(Get-Prop $readyJson 'detail')" -ForegroundColor Red
+        Write-Host '        注意：端口是通的 —— 这不是「端口连不上」，是会话还没到可用状态（坑位 5）。' -ForegroundColor Red
+        Write-Log "MP_WEIXIN_RESULT errors=env reason=automation-not-ready detail=$(Get-Prop $readyJson 'detail')"
+        exit 2
+    }
+
     $probeArgs = @($probePath, '--ws', "ws://127.0.0.1:$Port", '--routes', ($routeList -join ','),
-        '--entry-url', $entryUrl, '--shot-dir', $logDir, '--require-root', $autoRoot)
+        '--entry-url', $entryUrl, '--shot-dir', $logDir, '--require-root', $autoRoot,
+        '--timeout-ms', "$ProbeTimeoutMs")
     # 探针重试：开发者工具把项目/小程序拉起来是**异步**的（实测连接与 pageStack 常在第 2–3 次才就绪，
     # 首次报 "check if target project window is opened with automation enabled"）⇒ 必须重试而不是一次定生死。
     $probe = $null
@@ -790,8 +960,11 @@ try {
             }
         }
         if ($probeJson -and $probeJson.probeOk) { break }
-        if ($probeJson -and @($probeJson.failures | Where-Object { $_ -match '环境不可用：找不到 miniprogram-automator|自动化端口连不上' }).Count -gt 0 -and $attempt -ge 2) {
-            break  # 环境问题重试无益
+        # ⚠️ 2026-09-13 修正（坑位 5）：旧版把「自动化端口连不上」也算进「重试无益」⇒ attempt≥2 就放弃，
+        #    而那一类**恰恰是短暂**的（会话未就绪，实测 24–34s 才好）⇒ 门必红。现在只对**真正不会自愈**的
+        #    环境问题（缺 automator 模块）提前放弃；连不上 / 未就绪一律按次数重试到底。
+        if ($probeJson -and @($probeJson.failures | Where-Object { $_ -match '找不到 miniprogram-automator' }).Count -gt 0 -and $attempt -ge 2) {
+            break  # 缺模块重试无益
         }
         if ($attempt -lt $ProbeAttempts) {
             Write-Host ">>> 探针未就绪（第 $attempt 次），$ProbeRetryDelaySeconds 秒后重试 —— 开发者工具拉起项目是异步的" -ForegroundColor Yellow
@@ -818,9 +991,10 @@ try {
     $navReason = "$(Get-Prop $nav 'detail')"
     # ok = 逐页导航可用；skip(unsupported) = 导航 API 不可用（诚实降级）；n/a = 没走到导航（环境早退）
     $navField = if ($navSkip) { "skip($(Get-Prop $nav 'reason'))" } elseif ($navStatus -eq 'ok') { 'ok' } else { 'n/a' }
+    # ready=/sdk=/ide=：就绪闸门的取证（会话就绪耗时可机检；缺了它，下次红绿不定又只能靠猜）
     $metricLine = "appid=$productAppId pageStack=$stackLen entry=$($probeJson.entryPage) " +
         "errorsTotal=$($probeJson.errorsTotal) exceptionsTotal=$($probeJson.exceptionsTotal) logsTotal=$($probeJson.logsTotal) " +
-        "shots=$($shotPng.Count) navigation=$navField"
+        "shots=$($shotPng.Count) navigation=$navField ready=${readySeconds}s sdk=$sdkVersion ide=$ideVersion"
     if ($navSkip) { $metricLine += " navigationSkipReason=$navReason" }
     $metricLine += " log=$logRelative"
     $resultLine = "MP_WEIXIN_RESULT $metricLine"
@@ -893,6 +1067,8 @@ try {
     Invoke-DevToolsClose
     # 释放 agent 互斥锁（-SkipBuild 下未取锁，Release-HxLock 是安全的空操作）
     if (Get-Command Release-HxLock -ErrorAction SilentlyContinue) { Release-HxLock }
+    # -Doctor：无论从哪条路径退出都要把逐层体检报告打出来（早期 exit 也要能看到结论）
+    if ($Doctor) { Write-DoctorReport }
 }
 
 # P1：仅门通过时贴「sha 绑定」评论（门结果免手抄；gh 不可用/取不到 sha 只警告，不改门结论）

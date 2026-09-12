@@ -3,16 +3,18 @@
  *
  * 对外语义固定（契约测试 utils/secureStorage.test.js 钉住）：
  * - hasStoredCredentials:  has=true 且账号密码均非空才算"存在"
- * - saveSecureCredentials: 账号+密码完整保存
+ * - saveSecureCredentials: 账号+密码+refresh_token 完整保存（rt 供快捷登录，ADR-0004 增补）
  * - loadSecureCredentials: 与包络判定同口径；无完整凭据返回 null
+ * - loadSecureToken:       快捷登录令牌（仅完整凭据且 rt 非空时返回，否则空串）
  * - clearSecureCredentials: 清除（幂等）
- * - saveAccountOnly / loadSavedAccount: 凭据降级（仅记住账号，ADR-0004 决策 A）
+ * - saveAccountOnly / loadSavedAccount: 凭据降级（仅记住账号，ADR-0004 决策 A；降级包络不含 rt）
  *
  * 存储后端按平台分流（T3, ADR-0005）：
  * - App 端（Android/iOS）: uni-secure-storage 插件加密落盘（Keystore/Keychain）
  * - 非 App 端（H5/小程序）: uni.setStorage 明文（H5 生产策略另行评估）
  *
  * 迁移说明：App 端切换到加密存储后，首次运行会把旧明文条目迁移为加密条目并删除明文。
+ * rt 字段后补（快捷登录引入）：旧包络无 rt 键，解析时按空串容忍。
  */
 import { setStorageJSON, getStorageJSON, removeStorage } from './storage'
 import { STORAGE_KEY_CREDENTIALS } from '../constants/app'
@@ -27,6 +29,7 @@ export type StoredCredentials = {
     u : string
     p : string
     has : boolean
+    rt : string              // 快捷登录用 refresh_token（非完整凭据包络时为空串）
 }
 
 /** 当前平台是否可用加密存储（App 端 true） */
@@ -97,7 +100,7 @@ function parseEnvelope(json : string) : StoredCredentials | null {
     }
 }
 
-/** UTSJSONObject → StoredCredentials（字段校验） */
+/** UTSJSONObject → StoredCredentials（字段校验；rt 为后补字段，缺失容忍为空串） */
 function fromJSON(obj : UTSJSONObject) : StoredCredentials | null {
     const u = obj['u']
     const p = obj['p']
@@ -105,10 +108,16 @@ function fromJSON(obj : UTSJSONObject) : StoredCredentials | null {
     if (u == null || p == null || has == null) {
         return null
     }
+    let rt = ''
+    const rtRaw = obj['rt']
+    if (rtRaw != null) {
+        rt = rtRaw as string
+    }
     const result : StoredCredentials = {
         u: u as string,
         p: p as string,
         has: has as boolean,
+        rt: rt,
     }
     return result
 }
@@ -128,21 +137,22 @@ export function hasStoredCredentials() : boolean {
     return env.u.length > 0 && env.p.length > 0
 }
 
-/** 保存凭据（App 端加密落盘） */
-export function saveSecureCredentials(username : string, password : string) : void {
+/** 保存凭据（App 端加密落盘；rt 为快捷登录 refresh_token，可为空串） */
+export function saveSecureCredentials(username : string, password : string, rt : string) : void {
     const data : StoredCredentials = {
         u: username,
         p: password,
         has: true,
+        rt: rt,
     }
     writeEnvelope(data)
 }
 
 /**
- * 凭据降级：仅记住账号（生物识别不可用平台用，ADR-0004 决策 A）
+ * 凭据降级：仅记住账号（生物识别不可用平台/设备用，ADR-0004 决策 A；孤儿凭据自愈同款终态）
  *
- * 密码字段落空串、has 落 false——存储内容不构成完整凭据包络，
- * hasStoredCredentials()/loadSecureCredentials() 均判定为"无已保存凭据"，
+ * 密码字段落空串、has 落 false、rt 落空串——存储内容不构成完整凭据包络，
+ * hasStoredCredentials()/loadSecureCredentials()/loadSecureToken() 均判定为"无"，
  * 脱敏入口因此不出现；账号回填走独立的 loadSavedAccount()。
  */
 export function saveAccountOnly(username : string) : void {
@@ -150,6 +160,7 @@ export function saveAccountOnly(username : string) : void {
         u: username,
         p: '',
         has: false,
+        rt: '',
     }
     writeEnvelope(data)
 }
@@ -180,6 +191,45 @@ export function loadSecureCredentials() : StoredCredentials | null {
         return null
     }
     return env
+}
+
+/**
+ * 读取快捷登录令牌（生物门控的 refresh_token，ADR-0004 增补）
+ * 与 loadSecureCredentials 同口径：仅完整凭据包络（has=true 且 u/p 非空）且 rt 非空时返回；
+ * 降级包络/旧包络/异常包络返回空串
+ */
+export function loadSecureToken() : string {
+    const env = readEnvelope()
+    if (env == null) {
+        return ''
+    }
+    if (env.has !== true) {
+        return ''
+    }
+    if (env.u.length == 0 || env.p.length == 0) {
+        return ''
+    }
+    return env.rt
+}
+
+/**
+ * 回写轮换后的快捷登录令牌（ADR-0004：refresh 每次轮换即旧令牌失效，
+ * 包络里的 rt 是唯一跨登出持久副本，不回写则滑动续期在登出后断裂）
+ * 仅完整凭据包络时生效；无凭据/降级包络为无害 no-op
+ */
+export function updateSecureToken(rt : string) : void {
+    if (rt.length == 0) {
+        return
+    }
+    const env = readEnvelope()
+    if (env == null || env.has !== true) {
+        return
+    }
+    if (env.u.length == 0 || env.p.length == 0) {
+        return
+    }
+    env.rt = rt
+    writeEnvelope(env)
 }
 
 /** 清除已保存凭据 */

@@ -22,6 +22,13 @@
 //   首跑校准（见 docs/adr/0008-移动端验收门与证据.md ② 段）要求人工核对 `navigation=` 字段。
 //   ⚠️ 只认「API 不支持」这一族签名；`TIMEOUT(...)`（元素级 API 挂起那类）仍按**真失败**处理，绝不静默降级。
 //
+// 2026-09-13 定位（**② 时好时坏的真正原因**，勿删）：本探针此前把「会话未就绪」报成了「自动化端口连不上」。
+//   实测三个里程碑：端口接受连接 t≈1s → `Tool.getInfo` 带 `SDKVersion` t≈1–3s → `App.getPageStack` 开始应答
+//   t≈24–34s。`automator.connect()` 内部的 `checkVersion()` 紧跟在 ws 打开之后，落在第 2 个里程碑之前就会抛
+//   `Cannot read properties of undefined (reading 'split')`；而 `mp.pageStack()` 原本的 30s 超时**正好落在
+//   24–34s 这段窗口中间** ⇒ 同一份代码有时绿有时红。处置 = 调用方先跑 `scripts/mp-weixin-ready.mjs` 就绪闸门
+//   （等齐两个里程碑再 connect），并且本探针必须用 `connectError.kind` 把两类失败分开报。
+//
 // 用法：
 //   node mp-weixin-probe.mjs --ws ws://127.0.0.1:9420 --routes pages/index/index,pages/login/login \
 //        --entry-url pages/index/index --shot-dir <dir> [--timeout-ms 30000] [--page-timeout-ms 10000]
@@ -134,6 +141,9 @@ const result = {
   ws: args.ws, connected: false, automatorFrom: '', routes: args.routes,
   pageStack: [], entryPage: '', steps: [], shots: [],
   logsTotal: 0, errorsTotal: 0, exceptionsTotal: 0, consoleTail: [], elapsedMs: 0,
+  // connectError：连接失败时的**归因口径**（{kind: not-ready|unreachable|timeout|unknown, raw}），
+  // 调用方靠它区分「会话未就绪」与「端口连不上」——两者以前都写成同一句，导致误诊（2026-09-13）。
+  connectError: null,
   // navigation：ok = 逐页导航断言可用；skip = 导航 API 不可用 ⇒ 该组断言记 SKIP（reason=navigation-api-unsupported）
   navigation: { status: 'pending', reason: '', detail: '', at: '', skippedAssertions: [], skippedSteps: [] },
   assertions: {}, failures: [],
@@ -195,13 +205,38 @@ if (!loaded.mod) {
 result.automatorFrom = loaded.from;
 const automator = loaded.mod;
 
+// 「连不上」与「会话未就绪」**必须分开报**（2026-09-13 实测定位，勿合并回去）。
+// automator 的 `Launcher.connect` 在 ws 打开后**立刻**调 `MiniProgram.checkVersion()`，它读
+// `(await send('Tool.getInfo')).SDKVersion`；该字段在会话就绪前缺失 ⇒ `licia/cmpVersion` 对 undefined
+// 调 `.split('.')` ⇒ 抛 `Cannot read properties of undefined (reading 'split')`，
+// 再被 `connectTool` 的 catch 换成 “Failed connecting to …” 文案 —— 看上去完全像端口问题。
+// 旧版探针把这条一律写成「自动化端口连不上」，把排查引向了端口/时序（真实发生在 #883 复测里），
+// 而真实原因是**会话未就绪**：见 scripts/mp-weixin-ready.mjs 的就绪闸门与 ADR-0008 ② 段。
+function classifyConnectError(e) {
+  const raw = String((e && e.message) || e || '');
+  if (/reading 'split'|cmpVersion|checkVersion|SDKVersion/i.test(raw)) {
+    return { kind: 'not-ready', detail: '自动化会话未就绪：Tool.getInfo 未返回 SDKVersion（automator 的 checkVersion 崩溃）' };
+  }
+  if (/Failed connecting to|ECONNREFUSED|socket hang up|Connection closed|ETIMEDOUT/i.test(raw)) {
+    return { kind: 'unreachable', detail: '自动化端口连不上（ws 层）' };
+  }
+  if (/^TIMEOUT\(/.test(raw)) return { kind: 'timeout', detail: '连接超时（未在预算内拿到连接）' };
+  return { kind: 'unknown', detail: '连接失败' };
+}
+
 let mp;
 try {
   mp = await withTimeout(automator.connect({ wsEndpoint: args.ws }), args.timeoutMs, 'automator.connect');
   result.connected = true;
 } catch (e) {
-  result.failures.push('环境不可用：自动化端口连不上（' + String((e && e.message) || e) + '）');
+  const c = classifyConnectError(e);
+  result.connectError = { kind: c.kind, raw: String((e && e.message) || e) };
+  result.failures.push('环境不可用：' + c.detail + '（口径 connectError.kind=' + c.kind + '；原始：' + result.connectError.raw + '）');
   console.error('[error] ' + result.failures[0]);
+  if (c.kind === 'not-ready') {
+    console.error('[error] 这不是端口问题：跑就绪闸门 `node scripts/mp-weixin-ready.mjs --ws <端点> --require-stack`');
+    console.error('[error] 它会等 Tool.getInfo 带 SDKVersion、且 App.getPageStack 开始应答，再把端点交给 automator。');
+  }
   finish(true);
 }
 

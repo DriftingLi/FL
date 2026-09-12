@@ -45,11 +45,39 @@ describe('凭据包络判定契约（hasStoredCredentials）', () => {
 });
 
 describe('凭据读写与清除契约', () => {
-  it('saveSecureCredentials 落盘结构三字段齐全（u/p/has=true）', () => {
+  it('saveSecureCredentials 落盘结构四字段齐全（u/p/has=true/rt）', () => {
     const body = fnBody('saveSecureCredentials');
     expect(body).toContain('u: username');
     expect(body).toContain('p: password');
     expect(body).toContain('has: true');
+    expect(body).toContain('rt: rt');
+  });
+
+  it('loadSecureToken 仅完整凭据包络且 rt 非空时返回令牌（快捷登录数据源，与 loadSecureCredentials 同口径）', () => {
+    const body = fnBody('loadSecureToken');
+    expect(body).toContain('env.has !== true');
+    expect(body).toContain('env.u.length == 0 || env.p.length == 0');
+    expect(body).toContain('return env.rt');
+  });
+
+  it('updateSecureToken 回写轮换令牌：仅完整包络生效，空 rt 与降级包络为 no-op（滑动续期回写口）', () => {
+    const body = fnBody('updateSecureToken');
+    expect(body).toContain('if (rt.length == 0)');
+    expect(body).toContain('env.has !== true');
+    expect(body).toContain('env.u.length == 0 || env.p.length == 0');
+    expect(body).toContain('env.rt = rt');
+    expect(body).toContain('writeEnvelope(env)');
+  });
+
+  it('fromJSON 对后补 rt 字段容忍：旧包络缺失 rt 键时按空串处理（向前兼容）', () => {
+    const body = fnBody('fromJSON');
+    expect(body).toContain("obj['rt']");
+    expect(body).toContain("let rt = ''");
+  });
+
+  it('saveAccountOnly 降级包络不含 rt（无门控则无快捷登录）', () => {
+    const body = fnBody('saveAccountOnly');
+    expect(body).toContain('rt: \'\'');
   });
 
   it('loadSecureCredentials 与包络判定同口径（has!==true 或字段为空即 null）', () => {
