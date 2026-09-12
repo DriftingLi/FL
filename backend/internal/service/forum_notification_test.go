@@ -43,7 +43,7 @@ func TestForumNotify_ReplyToOwnTopic(t *testing.T) {
 	author := seedForumUser(t, db, "own-author")
 	topic := seedNotificationTopic(t, db, author, "自学帖")
 
-	if _, err := svc.ReplyTopic(author.ID, topic.ID, "自己顶一下", nil, nil); err != nil {
+	if _, err := svc.ReplyTopic(ReplyTopicInput{UserID: author.ID, TopicID: topic.ID, Content: "自己顶一下", ParentReplyID: nil, Images: nil}); err != nil {
 		t.Fatalf("回复失败: %v", err)
 	}
 	if ns := notificationsOf(t, db, author.ID); len(ns) != 0 {
@@ -58,7 +58,7 @@ func TestForumNotify_ReplyToOthersTopic(t *testing.T) {
 	replier := seedForumUser(t, db, "replier-1")
 	topic := seedNotificationTopic(t, db, author, "求助帖")
 
-	if _, err := svc.ReplyTopic(replier.ID, topic.ID, "我来解答", nil, nil); err != nil {
+	if _, err := svc.ReplyTopic(ReplyTopicInput{UserID: replier.ID, TopicID: topic.ID, Content: "我来解答", ParentReplyID: nil, Images: nil}); err != nil {
 		t.Fatalf("回复失败: %v", err)
 	}
 	ns := notificationsOf(t, db, author.ID)
@@ -90,7 +90,7 @@ func TestForumNotify_ReplyToReply(t *testing.T) {
 	topic := seedNotificationTopic(t, db, author, "讨论帖")
 
 	// 楼主自己发一条楼层回复（无通知）
-	ar, err := svc.ReplyTopic(author.ID, topic.ID, "楼主补充", nil, nil)
+	ar, err := svc.ReplyTopic(ReplyTopicInput{UserID: author.ID, TopicID: topic.ID, Content: "楼主补充", ParentReplyID: nil, Images: nil})
 	if err != nil {
 		t.Fatalf("楼主回复失败: %v", err)
 	}
@@ -99,7 +99,7 @@ func TestForumNotify_ReplyToReply(t *testing.T) {
 	}
 
 	// commenter 楼中楼回复楼主的那条（被回复人=楼主 → 与楼主被回帖合并，只 1 条）
-	if _, err := svc.ReplyTopic(commenter.ID, topic.ID, "追问", &ar.ID, nil); err != nil {
+	if _, err := svc.ReplyTopic(ReplyTopicInput{UserID: commenter.ID, TopicID: topic.ID, Content: "追问", ParentReplyID: &ar.ID, Images: nil}); err != nil {
 		t.Fatalf("楼中楼失败: %v", err)
 	}
 	if ns := notificationsOf(t, db, author.ID); len(ns) != 1 {
@@ -107,11 +107,11 @@ func TestForumNotify_ReplyToReply(t *testing.T) {
 	}
 
 	// commenter 发自己的楼层回复，third 楼中楼回复它 → commenter 收到楼中楼通知
-	cr, err := svc.ReplyTopic(commenter.ID, topic.ID, "我的楼层", nil, nil)
+	cr, err := svc.ReplyTopic(ReplyTopicInput{UserID: commenter.ID, TopicID: topic.ID, Content: "我的楼层", ParentReplyID: nil, Images: nil})
 	if err != nil {
 		t.Fatalf("commenter 回帖失败: %v", err)
 	}
-	if _, err := svc.ReplyTopic(third.ID, topic.ID, "回复你的楼层", &cr.ID, nil); err != nil {
+	if _, err := svc.ReplyTopic(ReplyTopicInput{UserID: third.ID, TopicID: topic.ID, Content: "回复你的楼层", ParentReplyID: &cr.ID, Images: nil}); err != nil {
 		t.Fatalf("楼中楼失败: %v", err)
 	}
 	// commenter 的 cr（顶层回复 → 楼主第 2 条）+ third 的楼中楼同时是对楼主帖的新回复（楼主第 3 条）
@@ -204,7 +204,7 @@ func TestForumNotify_AdminDeleteReply(t *testing.T) {
 	author := seedForumUser(t, db, "reply-author")
 	topic := seedNotificationTopic(t, db, seedForumUser(t, db, "lz2"), "有回复的帖")
 
-	reply, err := svc.ReplyTopic(author.ID, topic.ID, "待删回复", nil, nil)
+	reply, err := svc.ReplyTopic(ReplyTopicInput{UserID: author.ID, TopicID: topic.ID, Content: "待删回复", ParentReplyID: nil, Images: nil})
 	if err != nil {
 		t.Fatalf("回复失败: %v", err)
 	}

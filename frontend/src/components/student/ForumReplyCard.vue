@@ -21,6 +21,7 @@ import type { ForumReplyItem } from '@/api/forum'
 import { displayName, authorLetter } from '@/utils/forumDisplay'
 import { formatRelativeTime } from '@/utils/format'
 import ForumImageGallery from './ForumImageGallery.vue'
+import ForumContent from './ForumContent.vue'
 import UiActionChip from '@/components/ui/UiActionChip.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
@@ -115,9 +116,14 @@ function onMoreSelect(key: string) {
         <UiMoreMenu class="ml-auto" :items="moreItems" @select="onMoreSelect" />
       </div>
 
-      <div class="reply-content mt-1.5 whitespace-pre-wrap break-words text-ink" :class="contentClass">
-        {{ reply.content }}
-      </div>
+      <!-- 正文按作者声明的格式渲染（ADR-0044）：纯文本分支的 whitespace-pre-wrap
+           由 ForumContent 内部按需加，密度（字号/行高）仍由本卡的 variant 决定。 -->
+      <ForumContent
+        :content="reply.content"
+        :format="reply.content_format"
+        class="reply-content mt-1.5 text-ink"
+        :class="contentClass"
+      />
       <ForumImageGallery :images="reply.images" />
 
       <!-- 采纳行：楼主视角专属，独立于互动行（采纳是判定动作，不与点赞同级） -->

@@ -215,20 +215,23 @@ func (h *ForumHandler) CreateTopic(c *gin.Context) {
 				Title     string   `json:"title"`
 				Content   string   `json:"content"`
 				Images    []string `json:"images"`
+				// ContentFormat 正文格式声明（ADR-0044）：text | markdown，缺省 text。
+				ContentFormat string `json:"content_format"`
 			}
 			if err := c.ShouldBindJSON(&body); err != nil {
 				return nil, badRequest("请求参数错误")
 			}
-			return &createTopicReq{UserID: userID, ChapterID: body.ChapterID, Category: body.Category, Title: body.Title, Content: body.Content, Images: body.Images}, nil
+			return &createTopicReq{UserID: userID, ChapterID: body.ChapterID, Category: body.Category, Title: body.Title, Content: body.Content, ContentFormat: body.ContentFormat, Images: body.Images}, nil
 		},
 		Invoke: func(ctx context.Context, req *createTopicReq) (*service.ForumTopicDTO, error) {
 			return h.svc.CreateTopic(service.CreateTopicInput{
-				UserID:    req.UserID,
-				ChapterID: req.ChapterID,
-				Category:  req.Category,
-				Title:     req.Title,
-				Content:   req.Content,
-				Images:    req.Images,
+				UserID:        req.UserID,
+				ChapterID:     req.ChapterID,
+				Category:      req.Category,
+				Title:         req.Title,
+				Content:       req.Content,
+				ContentFormat: req.ContentFormat,
+				Images:        req.Images,
 			})
 		},
 		Render: func(c *gin.Context, _ *createTopicReq, resp *service.ForumTopicDTO, err error) {
@@ -319,14 +322,23 @@ func (h *ForumHandler) ReplyTopic(c *gin.Context) {
 				Content       string   `json:"content"`
 				ParentReplyID *int64   `json:"parent_reply_id"`
 				Images        []string `json:"images"`
+				// ContentFormat 正文格式声明（ADR-0044）：text | markdown，缺省 text。
+				ContentFormat string `json:"content_format"`
 			}
 			if err := c.ShouldBindJSON(&body); err != nil {
 				return nil, badRequest("请求参数错误")
 			}
-			return &replyTopicReq{UserID: userID, TopicID: topicID, Content: body.Content, ParentReplyID: body.ParentReplyID, Images: body.Images}, nil
+			return &replyTopicReq{UserID: userID, TopicID: topicID, Content: body.Content, ParentReplyID: body.ParentReplyID, Images: body.Images, ContentFormat: body.ContentFormat}, nil
 		},
 		Invoke: func(ctx context.Context, req *replyTopicReq) (*service.ForumReplyDTO, error) {
-			return h.svc.ReplyTopic(req.UserID, req.TopicID, req.Content, req.ParentReplyID, req.Images)
+			return h.svc.ReplyTopic(service.ReplyTopicInput{
+				UserID:        req.UserID,
+				TopicID:       req.TopicID,
+				Content:       req.Content,
+				ParentReplyID: req.ParentReplyID,
+				Images:        req.Images,
+				ContentFormat: req.ContentFormat,
+			})
 		},
 		Render: func(c *gin.Context, _ *replyTopicReq, resp *service.ForumReplyDTO, err error) {
 			if err != nil {
@@ -750,7 +762,9 @@ type createTopicReq struct {
 	Category  string
 	Title     string
 	Content   string
-	Images    []string
+	// ContentFormat 正文格式声明（ADR-0044）。空串由 service 归一为 text。
+	ContentFormat string
+	Images        []string
 }
 
 // updateTopicReq 编辑帖子请求（#811）：chapter_id 不在契约内（编辑不迁移章节归属）。
@@ -790,6 +804,8 @@ type replyTopicReq struct {
 	Content       string
 	ParentReplyID *int64
 	Images        []string
+	// ContentFormat 正文格式声明（ADR-0044）。空串由 service 归一为 text。
+	ContentFormat string
 }
 
 // topicDeleteReq 删除自己主题请求。

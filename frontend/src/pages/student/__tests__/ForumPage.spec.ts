@@ -112,6 +112,71 @@ beforeEach(() => {
   vi.clearAllMocks()
 })
 
+describe('列表摘要的正文格式口径（#880 / ADR-0044）', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('markdown 帖的摘要投影成纯文本，不露出源标记', async () => {
+    const md = { ...topic(1, 'discussion'), content: '## 排查步骤', content_format: 'markdown' as const }
+    const w = await mountPage(1, { topics: [md as ReturnType<typeof topic>] })
+    const summary = w.find('.line-clamp-2').text()
+    expect(summary).not.toContain('##')
+    expect(summary).toContain('排查步骤')
+  })
+
+  it('纯文本帖摘要原样显示（不误伤没有标记的内容）', async () => {
+    const txt = { ...topic(1, 'discussion'), content: '液压油多久换一次', content_format: 'text' as const }
+    const w = await mountPage(1, { topics: [txt as ReturnType<typeof topic>] })
+    expect(w.find('.line-clamp-2').text()).toBe('液压油多久换一次')
+  })
+
+  it('缺省 content_format 的存量帖按原样摘要', async () => {
+    const legacy = { ...topic(1, 'discussion'), content: '## 存量帖原样' }
+    const w = await mountPage(1, { topics: [legacy as ReturnType<typeof topic>] })
+    expect(w.find('.line-clamp-2').text()).toBe('## 存量帖原样')
+  })
+})
+
+describe('「我的回复」列表的摘要口径（#880 / ADR-0044）', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  async function mountMyReplies(reply: Record<string, unknown>) {
+    const w = await mountPage(1, {});
+    categoryGroup(w).vm.$emit('update:modelValue', 'mine')
+    await flushPromises();
+    vi.mocked(forumApi.getMyReplies).mockResolvedValue({
+      replies: [reply],
+      total: 1,
+      page: 1,
+      pages: 1
+    } as never);
+    modeGroup(w).vm.$emit('update:modelValue', 'my-replies')
+    await flushPromises();
+    return w;
+  }
+
+  it('markdown 回复的摘要剥成纯文本（不露出源标记）', async () => {
+    const w = await mountMyReplies({
+      id: 1, topic_id: 1, topic_title: '原帖', parent_id: null,
+      content: '## 排查步骤', content_format: 'markdown',
+      created_at: '2026-08-01T10:00:00+08:00',
+      author: { user_id: 1, username: '我', avatar_url: '' }
+    });
+    const summary = w.find('.line-clamp-2').text();
+    expect(summary).not.toContain('##');
+    expect(summary).toContain('排查步骤');
+  });
+
+  it('纯文本回复原样显示', async () => {
+    const w = await mountMyReplies({
+      id: 1, topic_id: 1, topic_title: '原帖', parent_id: null,
+      content: '液压油多久换一次', content_format: 'text',
+      created_at: '2026-08-01T10:00:00+08:00',
+      author: { user_id: 1, username: '我', avatar_url: '' }
+    });
+    expect(w.find('.line-clamp-2').text()).toBe('液压油多久换一次');
+  });
+});
+
 describe('论坛类别分流', () => {
   it('默认落在讨论 Tab，且请求显式带 category=discussion', async () => {
     await mountPage()
