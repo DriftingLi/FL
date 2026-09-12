@@ -13,6 +13,7 @@
     "build:kotlin-all": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/kotlin-all-check.ps1",
     "build:mp-weixin-check": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/mp-weixin-check.ps1",
     "smoke:emulator": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/emulator-smoke.ps1",
+    "capture:device": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/device-capture.ps1",
     "setup:android-sdk": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/android-sdk-setup.ps1"
   },
   "devDependencies": {
