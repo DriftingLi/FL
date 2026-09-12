@@ -132,7 +132,7 @@ func TestForum_Reply_ImageLimit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.ReplyTopic(user.ID, topic.ID, "回复", nil, forumURLs(4)); err == nil {
+	if _, err := svc.ReplyTopic(ReplyTopicInput{UserID: user.ID, TopicID: topic.ID, Content: "回复", ParentReplyID: nil, Images: forumURLs(4)}); err == nil {
 		t.Fatal("回复图片超过 3 张应报错")
 	}
 }
@@ -146,13 +146,13 @@ func TestForum_DeleteTopic_CleansImages(t *testing.T) {
 		t.Fatal(err)
 	}
 	topicImages := forumURLs(1)
-	reply, err := svc.ReplyTopic(user.ID, topic.ID, "回复", nil, forumURLs(1))
+	reply, err := svc.ReplyTopic(ReplyTopicInput{UserID: user.ID, TopicID: topic.ID, Content: "回复", ParentReplyID: nil, Images: forumURLs(1)})
 	if err != nil {
 		t.Fatal(err)
 	}
 	replyImages := forumURLs(1)
 	childImages := forumURLs(1)
-	if _, err := svc.ReplyTopic(user.ID, topic.ID, "子回复", &reply.ID, childImages); err != nil {
+	if _, err := svc.ReplyTopic(ReplyTopicInput{UserID: user.ID, TopicID: topic.ID, Content: "子回复", ParentReplyID: &reply.ID, Images: childImages}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -178,12 +178,12 @@ func TestForum_DeleteReply_CleansSubReplyImages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	parent, err := svc.ReplyTopic(user.ID, topic.ID, "父回复", nil, nil)
+	parent, err := svc.ReplyTopic(ReplyTopicInput{UserID: user.ID, TopicID: topic.ID, Content: "父回复", ParentReplyID: nil, Images: nil})
 	if err != nil {
 		t.Fatal(err)
 	}
 	childImages := forumURLs(1)
-	if _, err := svc.ReplyTopic(user.ID, topic.ID, "子回复", &parent.ID, childImages); err != nil {
+	if _, err := svc.ReplyTopic(ReplyTopicInput{UserID: user.ID, TopicID: topic.ID, Content: "子回复", ParentReplyID: &parent.ID, Images: childImages}); err != nil {
 		t.Fatal(err)
 	}
 

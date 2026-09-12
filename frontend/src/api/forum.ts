@@ -17,6 +17,15 @@ export type ForumCategory = 'discussion' | 'question' | 'experience'
 export type ForumPublishCategory = 'discussion' | 'question'
 
 /**
+ * 正文格式声明（ADR-0044）：text=纯文本 / markdown=受限 Markdown 子集。
+ *
+ * 这是**作者自述的声明位**，不是系统猜测——同一段文字按两种格式渲染结果不同
+ * （例如「1. 检查电瓶」在 markdown 下会变成有序列表），故渲染方式必须由作者决定。
+ * 缺省（字段缺失或空串）按 `text` 处理，与后端 normalizeContentFormat 的归一一致。
+ */
+export type ForumContentFormat = 'text' | 'markdown'
+
+/**
  * 论坛列表 Tab（#364）。学员端的「讨论 / 问答」与管理端的
  * 「全部帖子 / 综合讨论区 / 问答区」本质是同一片内容的三种切法，
  * 因此两端共用这一份映射，避免"讨论 Tab 必须带 category"这条规则各写一遍。
@@ -30,6 +39,8 @@ export interface ForumTopicItem {
   chapter_title?: string
   title: string
   content: string
+  /** 正文格式声明（ADR-0044）：text | markdown，缺省按 text 渲染 */
+  content_format?: ForumContentFormat
   images?: string[]
   view_count: number
   reply_count: number
@@ -64,6 +75,8 @@ export interface ForumReplyItem {
   /** 被回复人的头像（ADR-0042「昵称 › 被回复人」行内形态）；顶层回复为空 */
   parent_avatar_url?: string
   content: string
+  /** 正文格式声明（ADR-0044）：text | markdown，缺省按 text 渲染 */
+  content_format?: ForumContentFormat
   images?: string[]
   created_at: string
   author: {
@@ -298,6 +311,8 @@ export interface AdminForumTopic {
   chapter_title?: string
   title: string
   content: string
+  /** 正文格式声明（ADR-0044）：text | markdown，缺省按 text 渲染 */
+  content_format?: ForumContentFormat
   images?: string[]
   view_count: number
   reply_count: number
@@ -322,6 +337,8 @@ export interface AdminForumReply {
   /** 被回复人的头像（与学员端同一 DTO）；管理端面板紧凑，只展示名字 */
   parent_avatar_url?: string
   content: string
+  /** 正文格式声明（ADR-0044）：text | markdown，缺省按 text 渲染 */
+  content_format?: ForumContentFormat
   images?: string[]
   created_at: string
   author: {

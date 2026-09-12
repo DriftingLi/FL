@@ -28,12 +28,15 @@ import "time"
 // **认定** IsFeatured / IsExperience 由管理端授予，与 accepted_reply_id 派生的问答两态正交，互不影响。
 // IsExperience 蕴含 IsFeatured（经验区是精选的子集）。
 type ForumTopic struct {
-	ID              int64      `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	ChapterID       *int       `gorm:"column:chapter_id" json:"chapter_id,omitempty"`
-	Category        string     `gorm:"column:category;not null;default:discussion" json:"category"` // 意图：'discussion' | 'question'（ADR-0040）
-	UserID          int        `gorm:"column:user_id" json:"user_id"`
-	Title           string     `gorm:"column:title" json:"title"`
-	Content         string     `gorm:"column:content" json:"content"`
+	ID        int64  `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	ChapterID *int   `gorm:"column:chapter_id" json:"chapter_id,omitempty"`
+	Category  string `gorm:"column:category;not null;default:discussion" json:"category"` // 意图：'discussion' | 'question'（ADR-0040）
+	UserID    int    `gorm:"column:user_id" json:"user_id"`
+	Title     string `gorm:"column:title" json:"title"`
+	Content   string `gorm:"column:content" json:"content"`
+	// ContentFormat 正文格式声明（ADR-0044）：text=纯文本 / markdown=受限 Markdown 子集。
+	// 作者自述；缺省 text（service 把空串归一为 text，故列 NOT NULL）。
+	ContentFormat   string     `gorm:"column:content_format;not null;default:text" json:"content_format"`
 	Images          JSONB      `gorm:"column:images;type:jsonb" json:"images"`
 	ViewCount       int        `gorm:"column:view_count;default:0" json:"view_count"`
 	ReplyCount      int        `gorm:"column:reply_count;default:0" json:"reply_count"`
@@ -51,14 +54,16 @@ func (ForumTopic) TableName() string { return "forum_topics" }
 
 // ForumReply 论坛回复。
 type ForumReply struct {
-	ID         int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	TopicID    int64     `gorm:"column:topic_id" json:"topic_id"`
-	UserID     int       `gorm:"column:user_id" json:"user_id"`
-	ParentID   *int64    `gorm:"column:parent_id" json:"parent_id,omitempty"`
-	Content    string    `gorm:"column:content" json:"content"`
-	Images     JSONB     `gorm:"column:images;type:jsonb" json:"images"`
-	LikesCount int       `gorm:"column:likes_count;default:0" json:"likes_count"`
-	CreatedAt  time.Time `gorm:"column:created_at" json:"created_at"`
+	ID       int64  `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	TopicID  int64  `gorm:"column:topic_id" json:"topic_id"`
+	UserID   int    `gorm:"column:user_id" json:"user_id"`
+	ParentID *int64 `gorm:"column:parent_id" json:"parent_id,omitempty"`
+	Content  string `gorm:"column:content" json:"content"`
+	// ContentFormat 正文格式声明（ADR-0044），与 ForumTopic 同口径。
+	ContentFormat string    `gorm:"column:content_format;not null;default:text" json:"content_format"`
+	Images        JSONB     `gorm:"column:images;type:jsonb" json:"images"`
+	LikesCount    int       `gorm:"column:likes_count;default:0" json:"likes_count"`
+	CreatedAt     time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
 func (ForumReply) TableName() string { return "forum_replies" }
