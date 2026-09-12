@@ -432,6 +432,37 @@ describe('举报入口（收编为 useForumReport 一处）', () => {
   })
 })
 
+describe('回复卡按声明格式渲染（#879 / ADR-0044）', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  async function mountWithReply(over: Record<string, unknown>) {
+    getTopic.mockResolvedValue({
+      topic: topic(1),
+      replies: [reply(1, over)],
+      page: 1,
+      pages: 1,
+      total: 1
+    } as never)
+    return mountDetail()
+  }
+
+  it('markdown 回复渲染出结构（含代码块可读），纯文本回复原样显示', async () => {
+    const md = await mountWithReply({ content: '先量 `E01` 电压', content_format: 'markdown' })
+    expect(md.find('.reply-content code').exists()).toBe(true)
+    expect(md.find('.reply-content').text()).toContain('E01')
+
+    const txt = await mountWithReply({ content: '先量 `E01` 电压', content_format: 'text' })
+    expect(txt.find('.reply-content code').exists()).toBe(false)
+    expect(txt.find('.reply-content').text()).toContain('`E01`')
+  })
+
+  it('缺省 content_format 的回复按纯文本渲染（向后兼容存量数据）', async () => {
+    const w = await mountWithReply({ content: '## 不是标题' })
+    expect(w.find('.reply-content h2').exists()).toBe(false)
+    expect(w.find('.reply-content').text()).toContain('## 不是标题')
+  })
+})
+
 describe('被回复人小头像（#855）', () => {
   beforeEach(() => {
     // clearAllMocks 不清 mockResolvedValueOnce 队列，残留会泄漏到下一个用例；

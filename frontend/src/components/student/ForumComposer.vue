@@ -20,6 +20,10 @@ import UiInput from '@/components/ui/UiInput.vue'
 import { useForumImageUpload } from '@/composables/useForumImageUpload'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import UiTag from '@/components/ui/UiTag.vue'
+import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
+import ForumContent from './ForumContent.vue'
+import { useForumContentFormat } from '@/composables/useForumContentFormat'
+import type { ForumContentFormat } from '@/api/forum'
 
 const props = withDefaults(
   defineProps<{
@@ -53,7 +57,11 @@ const emit = defineEmits<{
   'update:modelValue': [string]
   'update:images': [string[]]
   'update:replyingTo': [{ id: number; username: string } | null]
-  submit: []
+  /**
+   * 提交。带上正文格式：格式状态在本组件内（与发帖侧共用同一偏好），
+   * 父级调 replyTopic 时需要它——不带上父级就只能猜。
+   */
+  submit: [{ contentFormat: ForumContentFormat }]
 }>()
 
 const content = computed({
@@ -74,12 +82,28 @@ const { uploading, uploadFiles, removeImage, handlePaste } = useForumImageUpload
 
 const fileInput = ref<HTMLInputElement | null>(null)
 
+// ===== 正文格式（#879 / ADR-0044）=====
+// 与发帖侧**共用同一个偏好键**：同一个人对正文格式的偏好与他写的是主题还是回复无关。
+const { format: contentFormat } = useForumContentFormat()
+const isMarkdown = computed(() => contentFormat.value === 'markdown')
+const previewing = ref(false)
+
+const FORMAT_OPTIONS: Array<{ label: string; value: ForumContentFormat }> = [
+  { label: '纯文本', value: 'text' },
+  { label: 'Markdown', value: 'markdown' }
+]
+
+function handleFormatChange(v: string) {
+  contentFormat.value = v === 'markdown' ? 'markdown' : 'text'
+  if (!isMarkdown.value) previewing.value = false
+}
+
 /** 提交口径沿用改造前：内容非空或图片非空 */
 const canSubmit = computed(() => content.value.trim().length > 0 || props.images.length > 0)
 
 function submit() {
   if (!canSubmit.value || props.submitting) return
-  emit('submit')
+  emit('submit', { contentFormat: contentFormat.value })
 }
 
 function triggerSelect() {
@@ -148,7 +172,15 @@ function onKeydown(event: KeyboardEvent) {
         </div>
       </div>
 
+      <!-- 预览与发布同源：都走 ForumContent 这一个渲染单点 -->
+      <ForumContent
+        v-if="previewing"
+        :content="props.modelValue"
+        format="markdown"
+        class="min-h-[60px] text-sm leading-[1.7] text-ink"
+      />
       <UiInput
+        v-else
         v-model="content"
         type="textarea"
         variant="bare"
@@ -157,6 +189,18 @@ function onKeydown(event: KeyboardEvent) {
         :placeholder="props.placeholder"
         @keydown="onKeydown"
       />
+
+      <!-- 正文格式：与发帖侧同控件同口径 -->
+      <div class="mt-2 flex flex-wrap items-center gap-2">
+        <UiSegmentTabs
+          :model-value="contentFormat"
+          :options="FORMAT_OPTIONS"
+          @update:model-value="handleFormatChange"
+        />
+        <UiButton v-if="isMarkdown" variant="text" size="small" @click="previewing = !previewing">
+          {{ previewing ? '继续编辑' : '预览' }}
+        </UiButton>
+      </div>
 
       <div class="mt-2 flex items-center gap-2 border-t border-line pt-2">
         <UiButton

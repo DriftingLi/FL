@@ -170,11 +170,24 @@ export const forumApi = {
     return unwrappedRequest.get<ForumTopicDetailData>(`/forum/topics/${id}`, { params: Object.keys(params).length ? params : undefined })
   },
 
-  replyTopic(id: number, content: string, parentReplyId?: number | null, images?: string[]) {
+  /**
+   * 回复（ADR-0044 起带正文格式）。
+   *
+   * contentFormat 缺省按 text 提交；Web 侧一律显式传（用户的选择在
+   * useForumContentFormat 里），只有尚未适配的旧客户端才会省略该字段。
+   */
+  replyTopic(
+    id: number,
+    content: string,
+    parentReplyId?: number | null,
+    images?: string[],
+    contentFormat?: ForumContentFormat
+  ) {
     return unwrappedRequest.post<ForumReplyItem>(`/forum/topics/${id}/replies`, {
       content,
       parent_reply_id: parentReplyId || null,
-      images: images || []
+      images: images || [],
+      content_format: contentFormat ?? 'text'
     })
   },
 

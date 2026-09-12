@@ -160,7 +160,7 @@
           :submitting="submitting"
           :max-images="3"
           placeholder="写下你的回复…"
-          @submit="submitReply"
+          @submit="(p) => submitReply(p)"
         />
       </div>
     </template>
@@ -172,7 +172,7 @@ import { ref, computed, nextTick, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, View, ChatDotRound, ArrowUp, ArrowDown } from '@element-plus/icons-vue'
-import { forumApi, type ForumTopicItem, type ForumReplyItem } from '@/api/forum'
+import { forumApi, type ForumTopicItem, type ForumReplyItem, type ForumContentFormat } from '@/api/forum'
 import { favoriteApi } from '@/api/favorite'
 import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
 import ForumComposer from '@/components/student/ForumComposer.vue'
@@ -376,7 +376,7 @@ async function handleCancelAccept() {
   }
 }
 
-async function submitReply() {
+async function submitReply(payload: { contentFormat: ForumContentFormat }) {
   const content = replyContent.value.trim()
   if (!content && replyImages.value.length === 0) {
     ElMessage.warning('请输入回复内容')
@@ -385,7 +385,7 @@ async function submitReply() {
   submitting.value = true
   try {
     const topicId = Number(route.params.topicId)
-    await forumApi.replyTopic(topicId, content, replyingTo.value?.id, replyImages.value)
+    await forumApi.replyTopic(topicId, content, replyingTo.value?.id, replyImages.value, payload.contentFormat)
     ElMessage.success('回复成功')
     replyContent.value = ''
     replyImages.value = []
