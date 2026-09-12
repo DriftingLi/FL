@@ -24,8 +24,7 @@ import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import ForumImageUploader from './ForumImageUploader.vue'
 import ForumContent from './ForumContent.vue'
-import { useForumContentFormat } from '@/composables/useForumContentFormat'
-import type { ForumContentFormat } from '@/api/forum'
+import { useForumContentFormat, FORUM_FORMAT_OPTIONS } from '@/composables/useForumContentFormat'
 
 const props = withDefaults(defineProps<{
   /**
@@ -73,20 +72,8 @@ const submitting = ref(false)
 
 // ===== 正文格式（#878 / ADR-0044）=====
 // 首次默认纯文本、之后记住上次选择；声明位置于「作者自述」，不由系统猜测。
-const { format: contentFormat } = useForumContentFormat()
-const isMarkdown = computed(() => contentFormat.value === 'markdown')
-const previewing = ref(false)
-
-const FORMAT_OPTIONS: Array<{ label: string; value: ForumContentFormat }> = [
-  { label: '纯文本', value: 'text' },
-  { label: 'Markdown', value: 'markdown' }
-]
-
-function handleFormatChange(v: string) {
-  contentFormat.value = v === 'markdown' ? 'markdown' : 'text'
-  // 切回纯文本时退出预览：纯文本没有可预览的渲染结果
-  if (!isMarkdown.value) previewing.value = false
-}
+// 偏好与切换态（选项/预览/切换处理）收在 composable 一处，与回复框共用同一套口径。
+const { format: contentFormat, isMarkdown, previewing, handleFormatChange, resetPreview } = useForumContentFormat()
 const canSubmit = computed(() => form.value.title.trim().length > 0 && form.value.content.trim().length > 0)
 
 // ===== 类别 chips（#742 批次四）=====
@@ -160,7 +147,7 @@ function handleCategoryChange(v: string) {
 function reset() {
   form.value = { title: '', content: '', images: [] }
   // 格式是**用户偏好**不是本次输入，reset 不重置它（重开表单仍是他上次的选择）
-  previewing.value = false
+  resetPreview()
   entryCategory.value = toPublishCategory(props.category)
   selectedCategory.value = entryCategory.value
   userTouchedCategory.value = false
@@ -234,7 +221,7 @@ defineExpose({ canSubmit, submitting, submit, reset })
 
     <div>
       <label class="mb-1.5 block text-sm font-medium text-ink">正文格式</label>
-      <UiSegmentTabs :model-value="contentFormat" :options="FORMAT_OPTIONS" @update:model-value="handleFormatChange" />
+      <UiSegmentTabs :model-value="contentFormat" :options="FORUM_FORMAT_OPTIONS" @update:model-value="handleFormatChange" />
     </div>
 
     <div>

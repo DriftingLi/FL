@@ -23,9 +23,11 @@ import { computed } from "vue"
 import MarkdownRender from "markstream-vue"
 import "markstream-vue/index.css"
 import { isUnsafeHtmlUrl, type MarkdownIt, type ParsedNode } from "stream-markdown-parser"
+import { FORUM_LINK_OUT_PATH } from "@/config/forumLinks"
 
-/** 「即将离开本站」中转页路径（站外链接一律经它，不直接把读者带走） */
-const LINK_OUT_PATH = "/training/link-out"
+/** 「即将离开本站」中转页路径（站外链接一律经它，不直接把读者带走）。
+ *  字面量收在 config 一处，并由路由测试钉住它与路由表一致。 */
+const LINK_OUT_PATH = FORUM_LINK_OUT_PATH
 
 /** 节点结构的最小视图：解析器的联合类型太大，这里按需取字段做改写。 */
 interface LinkishNode {
@@ -33,6 +35,8 @@ interface LinkishNode {
   href?: string
   text?: string
   content?: string
+  /** ImageNode.alt：内嵌图片不在子集内，展开成 alt 文本 */
+  alt?: string
   children?: LinkishNode[]
   items?: LinkishNode[]
 }
@@ -55,6 +59,9 @@ function rewriteLinks(nodes: LinkishNode[], policy: "transit" | "plain"): Linkis
   return nodes.flatMap((node) => {
     const children = node.children ? rewriteLinks(node.children, policy) : undefined
     const items = node.items ? rewriteLinks(node.items, policy) : undefined
+    // 内嵌图片不在声明子集内：图片走 images 数组（图文分离，挂在文末图集）。
+    // 正文里的 ![]() 展开成 alt 文本，避免同一张图既在正文又在图集。
+    if (node.type === "image") return [{ type: "text", content: node.alt ?? "" }]
     if (node.type !== "link") return [{ ...node, children, items }]
 
     const href = node.href ?? ""
@@ -73,7 +80,13 @@ function rewriteLinks(nodes: LinkishNode[], policy: "transit" | "plain"): Linkis
  * 减少本组件对安全策略的干预面，策略只由 `html-policy` 一个旋钮表达。
  */
 function configureForumMarkdown(md: MarkdownIt): MarkdownIt {
-  return md.set({ breaks: true })
+  md.set({ breaks: true })
+  // 只放开**声明过的子集**（标题/有序无序列表/加粗/行内代码/代码块/引用/链接）。
+  // 解析器默认还带表格与脚注，不关掉就成了「声称受限、实则不限」——
+  // 而移动端没有对应的块渲染能力，放开等于制造两端不一致。
+  // ignoreInvalid=true：规则名变了也只静默跳过，不让渲染整体炸掉。
+  md.disable(["table", "footnote"], true)
+  return md
 }
 
 const props = withDefaults(
@@ -112,7 +125,7 @@ const parseOptions = computed(() => ({
 <template>
   <div
     class="forum-content break-words"
-    :class="isMarkdown ? 'forum-content--markdown' : 'whitespace-pre-wrap'"
+    :class="isMarkdown ? undefined : 'whitespace-pre-wrap'"
   >
     <MarkdownRender
       v-if="isMarkdown"

@@ -1675,14 +1675,16 @@ func (s *ForumService) MyObservedTopics(userID, page, pageSize int) *ForumTopicP
 
 // MyReplyDTO 我的回复条目（带主题标题回填）。
 type MyReplyDTO struct {
-	ID         int64       `json:"id"`
-	TopicID    int64       `json:"topic_id"`
-	TopicTitle string      `json:"topic_title"`
-	ParentID   *int64      `json:"parent_id,omitempty"`
-	Content    string      `json:"content"`
-	Images     []string    `json:"images"`
-	CreatedAt  string      `json:"created_at"`
-	Author     ForumAuthor `json:"author"`
+	ID         int64  `json:"id"`
+	TopicID    int64  `json:"topic_id"`
+	TopicTitle string `json:"topic_title"`
+	ParentID   *int64 `json:"parent_id,omitempty"`
+	Content    string `json:"content"`
+	// ContentFormat 正文格式声明（ADR-0044）：列表摘要据此决定是否剥成纯文本。
+	ContentFormat string      `json:"content_format"`
+	Images        []string    `json:"images"`
+	CreatedAt     string      `json:"created_at"`
+	Author        ForumAuthor `json:"author"`
 }
 
 // MyReplyPageResult 我的回复分页结果。
@@ -1696,22 +1698,23 @@ type MyReplyPageResult struct {
 // MyReplies 我的回复（主题被删时标题为空串，条目保留）。
 func (s *ForumService) MyReplies(userID, page, pageSize int) (*MyReplyPageResult, error) {
 	type myReplyRow struct {
-		ID         int64
-		TopicID    int64
-		TopicTitle string
-		ParentID   *int64
-		Content    string
-		Images     string
-		CreatedAt  time.Time
-		UserID     int
-		Username   string
-		AvatarURL  string
+		ID            int64
+		TopicID       int64
+		TopicTitle    string
+		ParentID      *int64
+		Content       string
+		ContentFormat string
+		Images        string
+		CreatedAt     time.Time
+		UserID        int
+		Username      string
+		AvatarURL     string
 	}
 	rows, total, page, pageSize := paging.QueryWithScan[myReplyRow](s.db, page, pageSize, 10, 100,
 		"r.created_at DESC, r.id DESC",
 		func(q *gorm.DB) *gorm.DB {
 			return q.Table("forum_replies AS r").
-				Select("r.id, r.topic_id, r.parent_id, r.content, r.images, r.created_at, "+
+				Select("r.id, r.topic_id, r.parent_id, r.content, r.content_format, r.images, r.created_at, "+
 					"u.id AS user_id, u.username, u.avatar_url, COALESCE(t.title, '') AS topic_title").
 				Joins("JOIN hrwai_users AS u ON u.id = r.user_id").
 				Joins("LEFT JOIN forum_topics AS t ON t.id = r.topic_id").
@@ -1721,7 +1724,8 @@ func (s *ForumService) MyReplies(userID, page, pageSize int) (*MyReplyPageResult
 	for _, r := range rows {
 		items = append(items, MyReplyDTO{
 			ID: r.ID, TopicID: r.TopicID, TopicTitle: r.TopicTitle, ParentID: r.ParentID,
-			Content: r.Content, Images: parseImageURLs(r.Images), CreatedAt: formatISO(r.CreatedAt),
+			Content: r.Content, ContentFormat: r.ContentFormat,
+			Images: parseImageURLs(r.Images), CreatedAt: formatISO(r.CreatedAt),
 			Author: ForumAuthor{UserID: r.UserID, Username: r.Username, AvatarURL: r.AvatarURL},
 		})
 	}

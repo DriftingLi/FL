@@ -22,7 +22,7 @@ import { resolveFileUrl } from '@/utils/fileUrl'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 import ForumContent from './ForumContent.vue'
-import { useForumContentFormat } from '@/composables/useForumContentFormat'
+import { useForumContentFormat, FORUM_FORMAT_OPTIONS } from '@/composables/useForumContentFormat'
 import type { ForumContentFormat } from '@/api/forum'
 
 const props = withDefaults(
@@ -83,20 +83,9 @@ const { uploading, uploadFiles, removeImage, handlePaste } = useForumImageUpload
 const fileInput = ref<HTMLInputElement | null>(null)
 
 // ===== 正文格式（#879 / ADR-0044）=====
-// 与发帖侧**共用同一个偏好键**：同一个人对正文格式的偏好与他写的是主题还是回复无关。
-const { format: contentFormat } = useForumContentFormat()
-const isMarkdown = computed(() => contentFormat.value === 'markdown')
-const previewing = ref(false)
-
-const FORMAT_OPTIONS: Array<{ label: string; value: ForumContentFormat }> = [
-  { label: '纯文本', value: 'text' },
-  { label: 'Markdown', value: 'markdown' }
-]
-
-function handleFormatChange(v: string) {
-  contentFormat.value = v === 'markdown' ? 'markdown' : 'text'
-  if (!isMarkdown.value) previewing.value = false
-}
+// 与发帖侧**共用同一个偏好键与同一套切换态**（composable 单点）：
+// 同一个人对正文格式的偏好与他写的是主题还是回复无关。
+const { format: contentFormat, isMarkdown, previewing, handleFormatChange, resetPreview } = useForumContentFormat()
 
 /** 提交口径沿用改造前：内容非空或图片非空 */
 const canSubmit = computed(() => content.value.trim().length > 0 || props.images.length > 0)
@@ -104,6 +93,9 @@ const canSubmit = computed(() => content.value.trim().length > 0 || props.images
 function submit() {
   if (!canSubmit.value || props.submitting) return
   emit('submit', { contentFormat: contentFormat.value })
+  // 提交后父级会清空正文：此时若仍停在预览态，用户看到的是一块空预览、
+  // 还得手动点「继续编辑」才能写下一句。复位到编辑态（与发帖表单 reset 同口径）。
+  resetPreview()
 }
 
 function triggerSelect() {
@@ -194,7 +186,7 @@ function onKeydown(event: KeyboardEvent) {
       <div class="mt-2 flex flex-wrap items-center gap-2">
         <UiSegmentTabs
           :model-value="contentFormat"
-          :options="FORMAT_OPTIONS"
+          :options="FORUM_FORMAT_OPTIONS"
           @update:model-value="handleFormatChange"
         />
         <UiButton v-if="isMarkdown" variant="text" size="small" @click="previewing = !previewing">

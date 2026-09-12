@@ -115,7 +115,7 @@
               <UiTag size="small" tone="info">回复</UiTag>
               <h3 class="m-0 truncate text-base font-semibold text-ink">{{ reply.topic_title || '原帖已删除' }}</h3>
             </div>
-            <p class="mt-1.5 mb-2 line-clamp-2 text-[13px] text-ink-2">{{ reply.content }}</p>
+            <p class="mt-1.5 mb-2 line-clamp-2 text-[13px] text-ink-2">{{ summaryOfReply(reply) }}</p>
             <div class="flex items-center gap-1.5 text-xs text-ink-3">
               <span>{{ formatRelativeTime(reply.created_at) }}</span>
             </div>
@@ -446,6 +446,11 @@ async function onTopicCreated() {
  */
 function summaryOf(topic: ForumTopicItem) {
   return topic.content_format === 'markdown' ? markdownToPlainText(topic.content) : topic.content
+}
+
+/** 「我的回复」列表同口径：markdown 回复也要剥成纯文本，否则同一页两种摘要风格 */
+function summaryOfReply(reply: MyReplyItem) {
+  return reply.content_format === 'markdown' ? markdownToPlainText(reply.content) : reply.content
 }
 
 function goDetail(id: number) {

@@ -143,7 +143,13 @@
                         删除回复
                       </UiButton>
                     </div>
-                    <div class="reply-content">{{ reply.content }}</div>
+                    <!-- 回复同样按声明格式渲染：管理员判断违规依据的是学员实际看到的样子 -->
+                    <ForumContent
+                      :content="reply.content"
+                      :format="reply.content_format"
+                      link-policy="plain"
+                      class="reply-content"
+                    />
                     <ForumImageGallery :images="reply.images" />
                   </div>
                 </div>
@@ -616,12 +622,13 @@ onMounted(loadList)
   border-bottom: 1px solid var(--color-border-light);
 }
 
+/* 只管本页的密度（字号/行高/色），**不再管换行与断词**——
+   那两条现在由 ForumContent 的原子类按格式分支决定（纯文本才保留换行）。
+   同一元素同一属性既有 scoped 类又有原子类会构成双写（ui-conventions R3）。 */
 .topic-content-text {
   font-size: 14px;
   color: var(--color-text-primary);
   line-height: 1.7;
-  white-space: pre-wrap;
-  word-break: break-word;
 }
 
 .reply-list {

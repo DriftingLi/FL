@@ -83,6 +83,39 @@ describe('管理端正文渲染（#880 / ADR-0044）', () => {
     expect(w.find('.topic-content h2').exists()).toBe(true);
   });
 
+  it('markdown 回复在展开面板里也渲染（管理员同样要看实际展示效果）', async () => {
+    const topic = adminTopic();
+    listTopics.mockResolvedValue({ topics: [topic], total: 1 } as never);
+    getTopic.mockResolvedValue({
+      topic,
+      replies: [
+        {
+          id: 9,
+          topic_id: 1,
+          parent_id: null,
+          parent_name: '',
+          content: '先量 `E01` 电压',
+          content_format: 'markdown',
+          images: [],
+          created_at: '2026-08-02T10:00:00+08:00',
+          author: { user_id: 3, username: '答主', avatar_url: '' }
+        }
+      ],
+      page: 1,
+      pages: 1,
+      total: 1
+    } as never);
+    const w = mount(ForumManage, {
+      global: { plugins: [epLite()], stubs: { ForumImageGallery: true } }
+    });
+    await flushPromises();
+    w.findComponent({ name: "ElTable" }).vm.$emit("expand-change", topic, [topic]);
+    await flushPromises();
+    await new Promise((r) => setTimeout(r, 0));
+    await flushPromises();
+    expect(w.find('.reply-content code').exists()).toBe(true);
+  });
+
   it('纯文本帖仍按纯文本渲染（不误伤存量）', async () => {
     const w = await mountManage(adminTopic({ content: '## 原样', content_format: 'text' }));
     expect(w.find('.topic-content h2').exists()).toBe(false);

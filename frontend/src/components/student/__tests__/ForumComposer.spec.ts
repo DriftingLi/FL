@@ -5,6 +5,7 @@
 // 分两个键只会产生「发帖选了 Markdown、回复却还是纯文本」这种莫名其妙的不一致。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import UiInput from '@/components/ui/UiInput.vue'
 import { epLite } from '@/test/element-lite'
 import ForumPostForm from '../ForumPostForm.vue'
 import ForumContent from '../ForumContent.vue'
@@ -69,6 +70,22 @@ describe('回复框正文格式（#879 / ADR-0044）', () => {
     expect(fc.props('format')).toBe('markdown');
     expect(fc.props('content')).toContain('## 回复内容');
   })
+
+  it('提交后退出预览态（父级清空正文，停在空预览会让人以为发丢了）', async () => {
+    const w = mountComposer();
+    w.findAllComponents({ name: 'UiSegmentTabs' })[0].vm.$emit('update:modelValue', 'markdown');
+    await flushPromises();
+    const btn = w.findAll('button').find((b) => b.text().includes('预览'));
+    await btn!.trigger('click');
+    await flushPromises();
+    expect(w.findComponent(ForumContent).exists()).toBe(true);
+
+    await w.find('.forum-composer button[title*="发表回复"]').trigger('click');
+    await flushPromises();
+    // 回到编辑态：渲染单点不再占位，输入框回来了
+    expect(w.findComponent(ForumContent).exists()).toBe(false);
+    expect(w.findAllComponents(UiInput).length).toBeGreaterThan(0);
+  });
 
   it('与发帖共用同一个格式偏好：发帖选了 Markdown，回复框也是 Markdown', async () => {
     const post = mount(ForumPostForm, {

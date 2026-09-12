@@ -151,7 +151,15 @@ export const forumApi = {
     return unwrappedRequest.get<{ topics: ForumTopicItem[]; total: number }>('/forum/topics', { params })
   },
 
-  createTopic(data: { chapter_id?: number | null; category?: ForumPublishCategory; title: string; content: string; images?: string[] }) {
+  createTopic(data: {
+    chapter_id?: number | null
+    category?: ForumPublishCategory
+    title: string
+    content: string
+    images?: string[]
+    /** 正文格式声明（ADR-0044）。与 replyTopic 同口径：缺省按 text。 */
+    content_format?: ForumContentFormat
+  }) {
     return unwrappedRequest.post<ForumTopicItem>('/forum/topics', data)
   },
 
@@ -292,12 +300,15 @@ export const forumApi = {
 }
 
 /** 我的回复条目（主题被删时 topic_title 为空串，条目保留） */
+/** 我的回复条目（主题被删时 topic_title 为空串，条目保留） */
 export interface MyReplyItem {
   id: number
   topic_id: number
   topic_title?: string
   parent_id?: number | null
   content: string
+  /** 正文格式声明（ADR-0044）：列表摘要据此决定是否剥成纯文本 */
+  content_format?: ForumContentFormat
   images?: string[]
   created_at: string
   author: {

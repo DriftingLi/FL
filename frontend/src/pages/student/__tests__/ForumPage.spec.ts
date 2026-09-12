@@ -136,6 +136,47 @@ describe('列表摘要的正文格式口径（#880 / ADR-0044）', () => {
   })
 })
 
+describe('「我的回复」列表的摘要口径（#880 / ADR-0044）', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  async function mountMyReplies(reply: Record<string, unknown>) {
+    const w = await mountPage(1, {});
+    categoryGroup(w).vm.$emit('update:modelValue', 'mine')
+    await flushPromises();
+    vi.mocked(forumApi.getMyReplies).mockResolvedValue({
+      replies: [reply],
+      total: 1,
+      page: 1,
+      pages: 1
+    } as never);
+    modeGroup(w).vm.$emit('update:modelValue', 'my-replies')
+    await flushPromises();
+    return w;
+  }
+
+  it('markdown 回复的摘要剥成纯文本（不露出源标记）', async () => {
+    const w = await mountMyReplies({
+      id: 1, topic_id: 1, topic_title: '原帖', parent_id: null,
+      content: '## 排查步骤', content_format: 'markdown',
+      created_at: '2026-08-01T10:00:00+08:00',
+      author: { user_id: 1, username: '我', avatar_url: '' }
+    });
+    const summary = w.find('.line-clamp-2').text();
+    expect(summary).not.toContain('##');
+    expect(summary).toContain('排查步骤');
+  });
+
+  it('纯文本回复原样显示', async () => {
+    const w = await mountMyReplies({
+      id: 1, topic_id: 1, topic_title: '原帖', parent_id: null,
+      content: '液压油多久换一次', content_format: 'text',
+      created_at: '2026-08-01T10:00:00+08:00',
+      author: { user_id: 1, username: '我', avatar_url: '' }
+    });
+    expect(w.find('.line-clamp-2').text()).toBe('液压油多久换一次');
+  });
+});
+
 describe('论坛类别分流', () => {
   it('默认落在讨论 Tab，且请求显式带 category=discussion', async () => {
     await mountPage()
