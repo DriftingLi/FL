@@ -21,9 +21,9 @@ describe('buildCredentialItem 可空字段契约', () => {
   const body = fnBody('buildCredentialItem');
 
   it('level 走 null 容忍分支，禁止 as number 强转', () => {
-    expect(body).toContain('let level : number | null = null');
-    expect(body).toContain('levelRaw != null');
-    expect(body).toContain('level = toNumber(levelRaw)');
+    // 合并 master 后统一走 helpers 的 toNumberOrNull（等价实现，house style）；
+    // 契约意图不变：可空字段必须容忍 null，且不得用 as number 强转。
+    expect(body).toContain("level: toNumberOrNull(obj['level'])");
     expect(body).not.toContain("obj['level'] as number");
   });
 
