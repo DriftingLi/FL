@@ -11,8 +11,9 @@
 //
 // 覆盖的 Go 类型：CheckInCalendarResult / CheckInDay / CheckInRankItem / CheckInRankResult / CheckInResult / ForumAuthor
 //
-// 已知限制（注解层尚不表达，故本批一律按非可选渲染）：
-//   - 不区分「缺省 / null / 零值」三态（Go 指针与 omitempty 在 swagger 里不可见）；
+// 已知限制（除显式标注 x-nullable 的字段外，一律按非可选渲染）：
+//   - 不区分「缺省 / null / 零值」三态（Go 指针与 omitempty 在 swagger 里默认不可见；
+//     需要精确可空时给字段加 extensions:"x-nullable"，本生成器会渲染 T | null）；
 //   - 不生成 query / body 的入参类型（只生成响应形状）。
 // 需要精确可空或入参类型时，先在注解层补齐（见 spec #940 片五②的差集清单）。
 

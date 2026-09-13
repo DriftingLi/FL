@@ -11596,8 +11596,7 @@ const docTemplate = `{
                 "by_type": {
                     "type": "object",
                     "additionalProperties": {
-                        "type": "integer",
-                        "format": "int64"
+                        "type": "integer"
                     }
                 },
                 "total": {

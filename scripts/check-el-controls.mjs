@@ -22,7 +22,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const DEFAULT_SCAN_DIR = join(ROOT, 'frontend', 'src')
@@ -60,11 +60,12 @@ export function visibleTemplateLines(source) {
   let end = -1
   for (let i = 0; i < lines.length; i++) {
     if (start < 0) {
-      if (/^<template[\s>]/.test(lines[i])) start = i + 1
-    } else if (/^<\/template>\s*$/.test(lines[i])) {
-      end = i
-      break
+      if (/^\s*<template[\s>]/.test(lines[i])) start = i + 1
+      continue
     }
+    // 取**最后一个**闭合标签：具名插槽的 <template #footer> 也会出现 </template>，
+    // 若取第一个就会在插槽处提前收尾 —— 那等于把文件后半段的模板静默漏检（假绿）。
+    if (/^\s*<\/template>\s*$/.test(lines[i])) end = i
   }
   if (start < 0) return []
   if (end < 0) end = lines.length
@@ -249,4 +250,8 @@ function main(argv) {
   return 2
 }
 
-process.exitCode = main(process.argv.slice(2))
+// 仅作为 CLI 直接运行时才执行：被 import（自检里喂源码文本）时不产生副作用，
+// 否则「导入即全树扫描」会让自检继承工作树的结论。
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  process.exitCode = main(process.argv.slice(2))
+}

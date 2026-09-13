@@ -436,19 +436,20 @@ jobs:
       # 密钥
       SECRET_KEY: ${{ secrets.SECRET_KEY }}
       JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
-      JWT_EXPIRES_HOURS: ${{ secrets.JWT_EXPIRES_HOURS || '2' }}
-      JWT_REFRESH_EXPIRES_DAYS: ${{ secrets.JWT_REFRESH_EXPIRES_DAYS || '7' }}
+      # 默认值不在 workflow 里重写：空值由远端 source 的 deploy/env.defaults 提供（spec #940 片四）
+      JWT_EXPIRES_HOURS: ${{ secrets.JWT_EXPIRES_HOURS }}
+      JWT_REFRESH_EXPIRES_DAYS: ${{ secrets.JWT_REFRESH_EXPIRES_DAYS }}
       # 登录态 Cookie（父域名共享登录；production 走 HTTPS 时 Secure=true）
-      AUTH_COOKIE_NAME: ${{ secrets.AUTH_COOKIE_NAME || 'hrwai_token' }}
+      AUTH_COOKIE_NAME: ${{ secrets.AUTH_COOKIE_NAME }}
       AUTH_COOKIE_DOMAIN: ${{ secrets.AUTH_COOKIE_DOMAIN }}
       AUTH_COOKIE_SECURE: ${{ needs.gate.outputs.environment == 'production' && 'true' || 'false' }}
       # SMTP 邮件（验证码通道；腾讯企业邮 SSL 465）
       SMTP_HOST: ${{ secrets.SMTP_HOST }}
-      SMTP_PORT: ${{ secrets.SMTP_PORT || '465' }}
+      SMTP_PORT: ${{ secrets.SMTP_PORT }}
       SMTP_USERNAME: ${{ secrets.SMTP_USERNAME || secrets.SMTP_FROM }}
       SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
       SMTP_FROM: ${{ secrets.SMTP_FROM }}
-      SMTP_FROM_NAME: ${{ secrets.SMTP_FROM_NAME || '和润天下' }}
+      SMTP_FROM_NAME: ${{ secrets.SMTP_FROM_NAME }}
       # 腾讯云短信（手机验证码通道；SecretId/SecretKey 为云 API 密钥 cam/capi，非控制台 AppKey）
       TENCENT_SMS_SECRET_ID: ${{ secrets.TENCENT_SMS_SECRET_ID }}
       TENCENT_SMS_SECRET_KEY: ${{ secrets.TENCENT_SMS_SECRET_KEY }}
@@ -458,7 +459,7 @@ jobs:
       TENCENT_SMS_TEMPLATE_LOGIN: ${{ secrets.TENCENT_SMS_TEMPLATE_LOGIN }}
       TENCENT_SMS_TEMPLATE_PASSWORD: ${{ secrets.TENCENT_SMS_TEMPLATE_PASSWORD }}
       TENCENT_SMS_TEMPLATE_BIND_PHONE: ${{ secrets.TENCENT_SMS_TEMPLATE_BIND_PHONE }}
-      TENCENT_SMS_REGION: ${{ secrets.TENCENT_SMS_REGION || 'ap-guangzhou' }}
+      TENCENT_SMS_REGION: ${{ secrets.TENCENT_SMS_REGION }}
       # 微信登录凭证（小程序 code2session / 开放平台扫码占位——两套凭证严格区分）
       WECHAT_MINI_PROGRAM_APP_ID: ${{ secrets.WECHAT_MINI_PROGRAM_APP_ID || secrets.WECHAT_APP_ID }}
       WECHAT_MINI_PROGRAM_APP_SECRET: ${{ secrets.WECHAT_MINI_PROGRAM_APP_SECRET || secrets.WECHAT_APP_SECRET }}

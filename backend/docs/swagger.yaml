@@ -1187,7 +1187,6 @@ definitions:
     properties:
       by_type:
         additionalProperties:
-          format: int64
           type: integer
         type: object
       total:

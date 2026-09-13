@@ -25,8 +25,9 @@ const tsHeaderTemplate = `// 生成文件，勿手改（ADR-0019 契约 codegen 
 %s//
 // 覆盖的 Go 类型：%s
 //
-// 已知限制（注解层尚不表达，故本批一律按非可选渲染）：
-//   - 不区分「缺省 / null / 零值」三态（Go 指针与 omitempty 在 swagger 里不可见）；
+// 已知限制（除显式标注 x-nullable 的字段外，一律按非可选渲染）：
+//   - 不区分「缺省 / null / 零值」三态（Go 指针与 omitempty 在 swagger 里默认不可见；
+//     需要精确可空时给字段加 extensions:"x-nullable"，本生成器会渲染 T | null）；
 //   - 不生成 query / body 的入参类型（只生成响应形状）。
 // 需要精确可空或入参类型时，先在注解层补齐（见 spec #940 片五②的差集清单）。
 
@@ -76,8 +77,8 @@ func LoadSpec(path string) (*Spec, error) {
 	return &spec, nil
 }
 
-// RefName 从 $ref 取类型名（#/definitions/service.CheckInResult → service.CheckInResult）。
-func RefName(ref string) string {
+// refName 从 $ref 取类型名（#/definitions/service.CheckInResult → service.CheckInResult）。
+func refName(ref string) string {
 	if i := strings.LastIndex(ref, "/"); i >= 0 {
 		return ref[i+1:]
 	}
@@ -130,7 +131,7 @@ func collect(spec *Spec, roots []string) ([]string, error) {
 func collectRefs(s Schema, out *[]string) {
 	s = normalize(s)
 	if s.Ref != "" {
-		*out = append(*out, RefName(s.Ref))
+		*out = append(*out, refName(s.Ref))
 	}
 	for _, part := range s.AllOf {
 		collectRefs(part, out)
@@ -141,19 +142,29 @@ func collectRefs(s Schema, out *[]string) {
 	for _, p := range s.Props {
 		collectRefs(p, out)
 	}
-	if len(s.AddProps) > 0 && strings.HasPrefix(strings.TrimSpace(string(s.AddProps)), "{") {
-		var sub Schema
-		if json.Unmarshal(s.AddProps, &sub) == nil {
-			collectRefs(sub, out)
-		}
+	if sub, ok := additionalSchema(s); ok {
+		collectRefs(sub, out)
 	}
+}
+
+// additionalSchema 取 additionalProperties 的对象 schema —— swagger 里它可能是 true/false
+// 字面量，也可能是对象；只有对象形态才有可渲染的值类型。解析写在一处，避免两个调用点各抄一遍。
+func additionalSchema(s Schema) (Schema, bool) {
+	if len(s.AddProps) == 0 || !strings.HasPrefix(strings.TrimSpace(string(s.AddProps)), "{") {
+		return Schema{}, false
+	}
+	var sub Schema
+	if err := json.Unmarshal(s.AddProps, &sub); err != nil {
+		return Schema{}, false
+	}
+	return sub, true
 }
 
 // tsType 把 swagger 类型渲染为 TS 类型表达式。
 func tsType(s Schema) string {
 	s = normalize(s)
 	if s.Ref != "" {
-		out := tsName(RefName(s.Ref))
+		out := tsName(refName(s.Ref))
 		if s.XNullable {
 			out += " | null"
 		}
@@ -179,15 +190,8 @@ func tsType(s Schema) string {
 		if len(s.Props) > 0 {
 			return "{ [key: string]: unknown }"
 		}
-		if len(s.AddProps) > 0 {
-			trimmed := strings.TrimSpace(string(s.AddProps))
-			if strings.HasPrefix(trimmed, "{") {
-				var sub Schema
-				if json.Unmarshal(s.AddProps, &sub) == nil {
-					return "Record<string, " + tsType(sub) + ">"
-				}
-			}
-			return "Record<string, unknown>"
+		if sub, ok := additionalSchema(s); ok {
+			return "Record<string, " + tsType(sub) + ">"
 		}
 		return "Record<string, unknown>"
 	default:

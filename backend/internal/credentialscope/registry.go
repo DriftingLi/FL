@@ -1,19 +1,25 @@
 // Package credentialscope 「按证件重装」例外登记表（ADR-0047 §4 收尾 / spec #940 片六）。
 //
-// 背景：useAsyncPage 默认随当前证件切换重装（credentialScoped 缺省 true），少数域显式传
+// 背景：useAsyncPage 默认随当前证件切换**重装**（credentialScoped 缺省 true），少数域显式传
 // false 关闭重装。这些例外此前只散在调用点（有的带注释、有的只留一句 #604 opt-out），
 // 没有任何地方能回答「全站有哪些例外、各自为什么」。
 //
+// 注意与「按什么过滤」区分（ADR-0047 §4）：本表管的是**切换后是否重装**，
+// 不是「数据按哪个证件过滤」—— 两件事各有其判据，不要混为一谈。
+//
 // 本包把例外收成一张**声明表**并生成前端常量 frontend/src/config/credentialScope.ts；
 // **运行期判据不变**（调用点仍传字面量，零行为变化）—— 本表只把「有哪些例外」变成可核对
-// 的事实，并由 codegen_test.go 的覆盖锁扫描前端源码强制登记：新增一处未登记的 opt-out 即报红。
+// 的事实，并由 codegen_test.go 的覆盖锁**按出现次数**强制登记：新增一处未登记的 opt-out 即报红。
 package credentialscope
 
 // OptOut 一处「不随当前证件切换重装」的消费者。
 type OptOut struct {
 	// File 相对 frontend/src 的路径（覆盖锁按文件比对，不按行号 —— 行号会随无关编辑漂移）。
 	File string
-	// Reason 为什么它不随当前证件过滤：评审只看这一句，务必写「域理由」而不是「历史如此」。
+	// Count 该文件里 opt-out 字面量的出现次数：同一文件里再加一处例外也要改这里，
+	// 否则覆盖锁报红（「每一处都命中登记清单」按次数核，不按文件存在性核）。
+	Count int
+	// Reason 为什么它不随当前证件重装：评审只看这一句，务必写「域理由」而不是「历史如此」。
 	Reason string
 }
 
@@ -28,19 +34,19 @@ const GeneratedFile = "config/credentialScope.ts"
 
 // OptOuts 例外登记表（渲染时按 File 排序，声明序不影响生成物）。
 //
-// 口径：只有**域本身不受当前证件分区**时才登记 —— 论坛域（帖子/回复/章节讨论）、招聘域
+// 口径：只有**域本身不随当前证件分区**时才登记 —— 论坛域（帖子/回复/章节讨论）、招聘域
 // （职位/投递）、积分域（流水/任务中心/打卡）、以及「证件目录」本身（它装载的就是证件清单，
 // 自然不随当前证件变化）。任何「因为懒得重装」而加进来的条目都应被评审打回。
 var OptOuts = []OptOut{
-	{File: "components/student/ChapterDiscussion.vue", Reason: "章节讨论属论坛域，帖子不按证件分区（#604 opt-out）"},
-	{File: "pages/onboarding/CredentialOnboarding.vue", Reason: "本页装载的就是证件目录，不随当前证件变化（且页面只存在于未选证件时）"},
-	{File: "pages/student/ChapterView.vue", Reason: "章节页内嵌论坛域讨论区，随章节而非随证件装载（#604 opt-out）"},
-	{File: "pages/student/CheckInPage.vue", Reason: "打卡不按当前证件分区（ADR-0028 独立蓝图）"},
-	{File: "pages/student/ForumDetail.vue", Reason: "论坛域不受证件过滤（#604 opt-out）"},
-	{File: "pages/student/ForumPage.vue", Reason: "论坛域不受证件过滤（#604 opt-out）"},
-	{File: "pages/student/JobDetail.vue", Reason: "招聘域不受证件过滤（#604 opt-out）"},
-	{File: "pages/student/JobPlaza.vue", Reason: "招聘域职位广场不受证件过滤（#604 opt-out）"},
-	{File: "pages/student/MyApplications.vue", Reason: "招聘域投递记录不受证件过滤（#604 opt-out）"},
-	{File: "pages/student/PointsLedger.vue", Reason: "积分流水不按当前证件分区，切换后不重置页码（#604 opt-out）"},
-	{File: "pages/student/TaskCenter.vue", Reason: "积分任务中心不按当前证件分区（#604 opt-out）"},
+	{File: "components/student/ChapterDiscussion.vue", Count: 1, Reason: "章节讨论属论坛域，帖子不按证件分区（#604 opt-out）"},
+	{File: "pages/onboarding/CredentialOnboarding.vue", Count: 1, Reason: "本页装载的就是证件目录，不随当前证件变化（且页面只存在于未选证件时）"},
+	{File: "pages/student/ChapterView.vue", Count: 1, Reason: "章节页内嵌论坛域讨论区，随章节而非随证件装载（#604 opt-out）"},
+	{File: "pages/student/CheckInPage.vue", Count: 1, Reason: "打卡不按当前证件分区（ADR-0028 独立蓝图）"},
+	{File: "pages/student/ForumDetail.vue", Count: 1, Reason: "论坛域不受证件过滤（#604 opt-out）"},
+	{File: "pages/student/ForumPage.vue", Count: 1, Reason: "论坛域不受证件过滤（#604 opt-out）"},
+	{File: "pages/student/JobDetail.vue", Count: 1, Reason: "招聘域不受证件过滤（#604 opt-out）"},
+	{File: "pages/student/JobPlaza.vue", Count: 1, Reason: "招聘域职位广场不受证件过滤（#604 opt-out）"},
+	{File: "pages/student/MyApplications.vue", Count: 1, Reason: "招聘域投递记录不受证件过滤（#604 opt-out）"},
+	{File: "pages/student/PointsLedger.vue", Count: 1, Reason: "积分流水不按当前证件分区，切换后不重置页码（#604 opt-out）"},
+	{File: "pages/student/TaskCenter.vue", Count: 1, Reason: "积分任务中心不按当前证件分区（#604 opt-out）"},
 }

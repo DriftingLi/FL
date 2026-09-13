@@ -119,6 +119,44 @@ test('边界：一行多处全报，自闭合与多行属性展开都能定位�
   )
 })
 
+test('边界：具名插槽的 </template> 不提前收尾（根模板取最后一个闭合标签）', () => {
+  // 现网先例：pages/admin/RecruiterManage.vue 的插槽闭合写在列 0，
+  // 早先的实现会在那里收尾，把文件后半段模板整段漏检（假绿）。
+  const src = [
+    '<template>',
+    '  <div>',
+    '    <UiCard>',
+    '      <template #footer>',
+    '        <span>页脚</span>',
+    '      </template>',
+    '    </UiCard>',
+    '    <el-dialog />', // 在插槽闭合之后 —— 必须被扫到
+    '  </div>',
+    '</template>'
+  ].join('\n')
+  const violations = findViolations(src)
+  assert.deepEqual(
+    violations.map((v) => [v.tag, v.line]),
+    [['el-dialog', 8]]
+  )
+})
+
+test('边界：根模板不在文件开头（script 在前）也能定位', () => {
+  const src = [
+    '<script setup lang="ts">',
+    "const hint = '<el-dialog>'", // script 里的字符串不算
+    '</script>',
+    '',
+    '<template>',
+    '  <el-button>提交</el-button>',
+    '</template>'
+  ].join('\n')
+  assert.deepEqual(
+    findViolations(src).map((v) => [v.tag, v.line]),
+    [['el-button', 6]]
+  )
+})
+
 test('边界：无根模板（纯 script 组件）无判定面', () => {
   assert.deepEqual(findViolations('<script setup>\nconst a = 1\n</script>'), [])
 })

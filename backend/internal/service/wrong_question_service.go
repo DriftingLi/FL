@@ -67,6 +67,15 @@ type WrongQuestionRemoveResultDTO struct {
 	Removed bool `json:"removed"`
 }
 
+// WrongQuestionBatchRemoveResultDTO 批量移出错题本结果。
+//
+// 与单条移除的 DTO 分开：单条是「有没有这条」（bool），批量是「移出了几条」（int）。
+// 两个 DTO 的键同名为 removed 但类型不同 —— 分开定型正是为了让这处差异显式，而不是
+// 两个 map 里的匿名 int/bool（spec #940 片三）。
+type WrongQuestionBatchRemoveResultDTO struct {
+	Removed int `json:"removed"`
+}
+
 // GetWrongQuestions 错题列表。
 // sort: "time_asc" 按最近错误时间升序，其余按降序（默认）；
 // favorited: 仅返回已收藏的错题（JOIN favorite，user_id 与 student_id 同源）；

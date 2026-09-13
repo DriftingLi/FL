@@ -3,6 +3,7 @@ package apitypes
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -59,6 +60,33 @@ func TestDomainRootsExist(t *testing.T) {
 		for _, r := range d.Roots {
 			if _, ok := spec.Definitions[r]; !ok {
 				t.Fatalf("域 %s 的根类型 %q 不在 swagger definitions 里（注解改名或声明表过期）", d.Name, r)
+			}
+		}
+	}
+}
+
+// TestDomainEndpointsExist 声明表里登记的端点必须在 swagger paths 里存在 ——
+// 生成物头部会把这些端点写给读者看，靠人工维护必然会漂；这条锁把它钉在注解产物上。
+func TestDomainEndpointsExist(t *testing.T) {
+	spec, err := LoadSpec(specPath(t))
+	if err != nil {
+		t.Fatalf("读取 swagger 产物失败: %v", err)
+	}
+	for _, d := range Domains {
+		if len(d.Endpoints) == 0 {
+			t.Fatalf("域 %s 未声明任何端点", d.Name)
+		}
+		for _, e := range d.Endpoints {
+			raw, ok := spec.Paths[e.Path]
+			if !ok {
+				t.Fatalf("域 %s 声明的端点 %s %s 不在 swagger paths 里（注解改了路径？声明表过期？）", d.Name, e.Method, e.Path)
+			}
+			ops, ok := raw.(map[string]any)
+			if !ok {
+				t.Fatalf("域 %s 的端点 %s 在 swagger 里不是对象", d.Name, e.Path)
+			}
+			if _, ok := ops[strings.ToLower(e.Method)]; !ok {
+				t.Fatalf("域 %s 的端点 %s 缺 %s 方法", d.Name, e.Path, e.Method)
 			}
 		}
 	}

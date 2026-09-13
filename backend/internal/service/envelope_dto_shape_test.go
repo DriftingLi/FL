@@ -120,6 +120,11 @@ func TestEnvelopeDTOShapeLock(t *testing.T) {
 			dto:    &WrongQuestionRemoveResultDTO{Removed: true},
 		},
 		{
+			name:   "WrongQuestionBatchRemoveResultDTO（同键不同类型：批量是条数）",
+			legacy: map[string]any{"removed": 3},
+			dto:    &WrongQuestionBatchRemoveResultDTO{Removed: 3},
+		},
+		{
 			name: "WechatQRCodeInfoDTO",
 			legacy: map[string]any{
 				"enabled": false,
