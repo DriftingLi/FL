@@ -1,5 +1,5 @@
 import { unwrappedRequest } from './request'
-import type { Question } from '@/types/question'
+import type { WithUIQuestions } from '@/types/question'
 import type {
   MockExamHistoryDTO,
   MockExamHistoryItemDTO,
@@ -14,6 +14,8 @@ import type {
 // 生成物名带后端 DTO 后缀，既有前端名（MockExamHistoryItem）在下面起别名收口。
 //
 // 题目元素同 practiceMode：本片不接线，仍是 UI 模型 Question（见该文件头部的边界说明）。
+// 别名规则同 practiceMode：旧名与生成形状对应才保留（MockExamHistoryItem）；
+// MockExamResult 的旧形状含后端从不返回的 score、且缺 6 个真实字段，故删旧名改出 MockExamResultDTO。
 export type {
   MockExamHistoryDTO,
   MockExamHistoryItemDTO as MockExamHistoryItem,
@@ -23,11 +25,10 @@ export type {
   MockExamSubmitDTO
 }
 
-/** 用 UI 模型的题目元素替换生成 DTO 的 questions（见文件头边界说明）。 */
-type WithUIQuestions<T extends { questions: unknown }> = Omit<T, 'questions'> & { questions: Question[] }
-
-// 入参（query / body）类型**不生成**（ADR-0048 决策 3：swag 对 body 描述弱），故仍是手写；
-// 写成 type 而非 interface 以区别于「手写响应类型」——本模块的响应形状一律来自生成物。
+// 入参（query / body）类型**不生成**（ADR-0048 决策 3：swag 对 body 描述弱），故仍是手写。
+// 写成 type 而非 interface 有两个直白的理由：本片验收⑤要求这三个模块里 `^export interface` 为空
+// （该判据针对手写**响应**类型，入参不在其列），且 type 别名在阅读时与「响应形状来自生成物」
+// 一眼可分。它们不参与任何响应形状，删掉会丢失模块既有的入参词汇。
 export type StartMockExamPayload = {
   course_id?: number
   category?: string

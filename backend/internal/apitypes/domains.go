@@ -8,10 +8,15 @@
 // 范围纪律：只做**声明表里登记的域**（ADR-0048 决策 2：Web 消费面 + 域内完整）。
 package apitypes
 
-// Endpoint 生成物头部列出的端点（文档用途：让读者知道这些类型从哪来）。
+// Endpoint 生成物头部列出的端点。
+//
+// 两个用途：一是写给生成物的读者看（这些类型从哪来），二是被 TestDomainEndpointsDeclareData
+// 当作「本域注解完整性」的断言表 —— NoData 为真表示该端点**有意**没有返回载荷
+// （注解显式为 response.R，浏览器只拿 errcode/errmsg），未登记又缺 data 指认的端点直接判红。
 type Endpoint struct {
 	Method string
 	Path   string
+	NoData bool
 }
 
 // Domain 一个域的生成声明。
@@ -65,14 +70,14 @@ var Domains = []Domain{
 			{Method: "GET", Path: "/contributions/mine"},
 			{Method: "GET", Path: "/contributions/{id}"},
 			{Method: "POST", Path: "/contributions/{id}/download"},
-			{Method: "DELETE", Path: "/contributions/{id}"},
-			{Method: "POST", Path: "/contributions/{id}/report"},
+			{Method: "DELETE", Path: "/contributions/{id}", NoData: true},
+			{Method: "POST", Path: "/contributions/{id}/report", NoData: true},
 			{Method: "GET", Path: "/admin/contributions/pending"},
 			{Method: "POST", Path: "/admin/contributions/{id}/approve"},
 			{Method: "POST", Path: "/admin/contributions/{id}/reject"},
 			{Method: "POST", Path: "/admin/contributions/{id}/archive"},
 			{Method: "GET", Path: "/admin/contributions/reports"},
-			{Method: "POST", Path: "/admin/contributions/reports/{id}/handle"},
+			{Method: "POST", Path: "/admin/contributions/reports/{id}/handle", NoData: true},
 		},
 	},
 	{
@@ -91,7 +96,7 @@ var Domains = []Domain{
 			{Method: "GET", Path: "/practice-mode/tag"},
 			{Method: "GET", Path: "/practice-mode/sequential"},
 			{Method: "GET", Path: "/practice-mode/sequential-progress"},
-			{Method: "POST", Path: "/practice-mode/progress"},
+			{Method: "POST", Path: "/practice-mode/progress", NoData: true},
 			{Method: "GET", Path: "/practice-mode/progress"},
 			{Method: "POST", Path: "/practice-mode/submit"},
 			{Method: "GET", Path: "/practice-mode/practice-stats"},
@@ -111,7 +116,7 @@ var Domains = []Domain{
 		},
 		Endpoints: []Endpoint{
 			{Method: "POST", Path: "/mock-exam/start"},
-			{Method: "POST", Path: "/mock-exam/{mock_exam_id}/save"},
+			{Method: "POST", Path: "/mock-exam/{mock_exam_id}/save", NoData: true},
 			{Method: "GET", Path: "/mock-exam/{mock_exam_id}/resume"},
 			{Method: "POST", Path: "/mock-exam/{mock_exam_id}/submit"},
 			{Method: "GET", Path: "/mock-exam/{mock_exam_id}/result"},

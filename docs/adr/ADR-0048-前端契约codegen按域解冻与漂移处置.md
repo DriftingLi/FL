@@ -32,7 +32,7 @@ ADR-0019 把「由 OpenAPI 生成前端类型」整体推迟，只留下方向�
 - **为什么不能只靠 x-nullable**：`omitempty` 字段漏标时，生成物把前端手写的 `?` **静默升级为必填**，而 type-check 只抓「窄 → 宽」（消费处少判空），抓不到「宽 → 窄」——正是本 ADR 想消灭的那类静默漂移。
 - **swagger 空 schema（Go `any`）渲染 `unknown`**：此前落到 object 分支渲染 `Record<string, unknown>`，对实际是 string / number / 数组的取值撒谎（`user_answer` / `answers` / `options` 等）。
 - **片一实测**：三个域 30 个 Web 消费端点、25 个已指认 data、5 个有意无 data（撤回 / 举报 / 处置举报 / `POST /practice-mode/progress` / `POST /mock-exam/{id}/save`）；字段级差异逐条判定后**全部落在 ② 手写类型过时**（3 个凭空字段 `practice_mode` / `finished_at` / `score`、2 个漏字段、若干过时可空性），无一例 ① 注解写错或 ③ 后端第三种形状。清单与处置见 PR 验收证据。
-- **已知限制（留后续片）**：题目类型 `QuestionDTO` 同时是跨域 UI 模型（`frontend/src/types/question.ts`），其删除归 `questionBank` 片，本片在 api 模块用 `WithUIQuestions` 显式标注该边界；生成物按域重复包含共享类型（`QuestionDTO` 同时在 `practiceMode.ts` 与 `mockExam.ts`），暂不引入跨域共享文件。
+- **已知限制（留后续片）**：**注解层还没有枚举词汇** —— `status` 一类封闭值集在 swag 侧可用 `enums:"..."` 标注，但生成器尚未把它渲染成 TS 联合类型，故 `ContributionItemDTO.status` 生成 `string`，前端的窄化联合（`ContributionStatus`）只能保留并在消费处断言（`ContributionTab.vue`）。这是注解表达力缺口，不是「注解写错」；补 enum 渲染属生成器能力，另立片；题目类型 `QuestionDTO` 同时是跨域 UI 模型（`frontend/src/types/question.ts`），其删除归 `questionBank` 片，本片在 api 模块用 `WithUIQuestions` 显式标注该边界；生成物按域重复包含共享类型（`QuestionDTO` 同时在 `practiceMode.ts` 与 `mockExam.ts`），暂不引入跨域共享文件。
 
 ## 备选
 

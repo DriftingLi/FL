@@ -1,6 +1,6 @@
 import { unwrappedRequest } from './request'
 import { useCredentialStore } from '@/stores/credential'
-import type { Question } from '@/types/question'
+import type { Question, WithUIQuestions } from '@/types/question'
 import type {
   HistoryItemDTO,
   HistoryResultDTO,
@@ -20,6 +20,11 @@ import type {
 // （ADR-0048 决策 7）。强行接线要么加一层运行时映射、要么把 UI 模型的 options / status
 // 降级成 unknown / string，两者都越过本片「响应字节不变 + 行为不变」的边界。
 // 除 questions 元素外，本域响应字段全部走生成类型。
+//
+// 别名规则（片一统一口径）：**只在旧名与生成形状确实对应时**保留旧名（如 mockExam 的
+// MockExamHistoryItem）；旧名对应的是错形状（如本模块的 PracticeStats / PracticeHistoryItem /
+// PracticeProgressData —— 字段名或可空性与后端不符）则直接删除旧名，改出生成名，
+// 差异在片一的字段级清单里逐条归档。
 export type {
   HistoryItemDTO,
   HistoryResultDTO,
@@ -29,9 +34,6 @@ export type {
   ProgressResultDTO,
   SubmitResultDTO
 }
-
-/** 用 UI 模型的题目元素替换生成 DTO 的 questions（见文件头边界说明）。 */
-type WithUIQuestions<T extends { questions: unknown }> = Omit<T, 'questions'> & { questions: Question[] }
 
 /** 惰性读取当前证件 id（无 Pinia 环境/未选证件返回 undefined；容错不阻断保存） */
 function currentCredentialId(): number | undefined {

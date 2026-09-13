@@ -83,6 +83,58 @@ func LoadSpec(path string) (*Spec, error) {
 	return &spec, nil
 }
 
+// operation swagger path item 里单个方法的最小投影（只取响应）。
+type operation struct {
+	Responses map[string]struct {
+		Schema Schema `json:"schema"`
+	} `json:"responses"`
+}
+
+// DataRef 取端点 200 响应里 response.R{data=…} 的 data 指认，返回类型引用与「是否指认了 data」。
+//
+// swag 把统一信封渲染成 allOf: [{$ref response.R}, {type: object, properties: {data: …}}]，
+// 故沿 allOf 找 properties.data。data 存在但不是 $ref（数组 / 内联对象）时类型名返回空串、
+// 第二返回值仍为 true —— 调用方（声明表锁测试）只关心有没有指认，类型名交给渲染器。
+func (s *Spec) DataRef(method, path string) (string, bool) {
+	raw, ok := s.Paths[path]
+	if !ok {
+		return "", false
+	}
+	ops, ok := raw.(map[string]any)
+	if !ok {
+		return "", false
+	}
+	b, err := json.Marshal(ops[strings.ToLower(method)])
+	if err != nil {
+		return "", false
+	}
+	var op operation
+	if err := json.Unmarshal(b, &op); err != nil {
+		return "", false
+	}
+	ok200, ok := op.Responses["200"]
+	if !ok {
+		return "", false
+	}
+	for _, part := range append([]Schema{ok200.Schema}, ok200.Schema.AllOf...) {
+		data, ok := part.Props["data"]
+		if !ok {
+			continue
+		}
+		data = normalize(data)
+		if data.Ref != "" {
+			return refName(data.Ref), true
+		}
+		if data.Type == "array" && data.Items != nil {
+			if item := normalize(*data.Items); item.Ref != "" {
+				return refName(item.Ref), true // data=[]service.Xxx：元素类型才是生成的根
+			}
+		}
+		return "", true
+	}
+	return "", false
+}
+
 // refName 从 $ref 取类型名（#/definitions/service.CheckInResult → service.CheckInResult）。
 func refName(ref string) string {
 	if i := strings.LastIndex(ref, "/"); i >= 0 {

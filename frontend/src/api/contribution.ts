@@ -17,6 +17,9 @@ import type {
  * 本文件只留请求壳、端点装配与**名称适配**——生成物沿用后端 DTO 命名，
  * 前端域词汇不带 DTO 后缀，故在下面起别名（既有 import 路径与类型名不破）。
  * 可空 / 缺省态（file_id?、files?、reject_reason?）由注解层的 x-optional 表达，不在这里手改。
+ *
+ * 别名规则（片一统一口径）：旧名与生成形状确实对应时保留旧名（本模块全部如此）；
+ * 旧名对应错形状时删旧名、改出生成名（见 practiceMode / mockExam 的文件头）。
  */
 export type {
   ContributionAuthor,
