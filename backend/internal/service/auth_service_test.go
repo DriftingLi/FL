@@ -214,7 +214,7 @@ func TestTutorRegister_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("导师注册失败: %v", err)
 	}
-	if result["username"] != "newtutor" {
+	if result.Username != "newtutor" {
 		t.Fatalf("注册结果不匹配: %+v", result)
 	}
 }

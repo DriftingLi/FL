@@ -34,11 +34,44 @@ func NewWrongQuestionService(db *gorm.DB, ai *AIService, logger *zap.Logger) *Wr
 	}
 }
 
+// WrongQuestionDTO 错题本条目（ADR-0009 §2 typed DTO / spec #940 片三）。
+//
+// 字段按 JSON key 字母序声明（created_at / favorite_id / favorited / id / is_redone /
+// is_removed / last_wrong_at / question / question_id / student_id / wrong_count）——
+// 旧形态是 map[string]any，encoding/json 对 map 按 key 排序输出，字母序保证换 struct
+// 后序列化字节序不变。Question 带 omitempty：题目行缺失时旧 map 根本不写该 key。
+type WrongQuestionDTO struct {
+	CreatedAt   string       `json:"created_at"`
+	FavoriteID  int64        `json:"favorite_id"`
+	Favorited   bool         `json:"favorited"`
+	ID          int          `json:"id"`
+	IsRedone    bool         `json:"is_redone"`
+	IsRemoved   bool         `json:"is_removed"`
+	LastWrongAt string       `json:"last_wrong_at"`
+	Question    *QuestionDTO `json:"question,omitempty"`
+	QuestionID  int          `json:"question_id"`
+	StudentID   int          `json:"student_id"`
+	WrongCount  int          `json:"wrong_count"`
+}
+
+// WrongQuestionPageDTO 错题本分页（字段按 JSON key 字母序：items / page / page_size / total）。
+type WrongQuestionPageDTO struct {
+	Items    []WrongQuestionDTO `json:"items"`
+	Page     int                `json:"page"`
+	PageSize int                `json:"page_size"`
+	Total    int64              `json:"total"`
+}
+
+// WrongQuestionRemoveResultDTO 移出错题本结果。
+type WrongQuestionRemoveResultDTO struct {
+	Removed bool `json:"removed"`
+}
+
 // GetWrongQuestions 错题列表。
 // sort: "time_asc" 按最近错误时间升序，其余按降序（默认）；
 // favorited: 仅返回已收藏的错题（JOIN favorite，user_id 与 student_id 同源）；
 // credentialID: 按题目所属证件分区（与课程/题库同口径，#387；nil 表示不过滤）。
-func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, qType string, minWrongCount *int, favorited bool, sort string, credentialID *int) map[string]any {
+func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, qType string, minWrongCount *int, favorited bool, sort string, credentialID *int) *WrongQuestionPageDTO {
 	orderBy := "wrong_question.last_wrong_at DESC"
 	if sort == "time_asc" {
 		orderBy = "wrong_question.last_wrong_at ASC"
@@ -70,22 +103,34 @@ func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, 
 	questions := loadQuestionsByIDs(s.db, questionIDs)
 	favoriteIDs := s.loadFavoriteIDs(studentID, questionIDs)
 
-	result := make([]map[string]any, 0, len(items))
+	result := make([]WrongQuestionDTO, 0, len(items))
 	for i := range items {
 		wq := &items[i]
-		item := wrongQuestionToDict(wq)
-		item["favorited"] = favoriteIDs[wq.QuestionID] > 0
-		item["favorite_id"] = favoriteIDs[wq.QuestionID]
+		favoriteID := favoriteIDs[wq.QuestionID]
+		var question *QuestionDTO
 		if q, ok := questions[wq.QuestionID]; ok {
-			item["question"] = newQuestionDTO(q, true)
+			dto := newQuestionDTO(q, true)
+			question = &dto
 		}
-		result = append(result, item)
+		result = append(result, WrongQuestionDTO{
+			CreatedAt:   formatISO(wq.CreatedAt),
+			FavoriteID:  favoriteID,
+			Favorited:   favoriteID > 0,
+			ID:          wq.ID,
+			IsRedone:    wq.IsRedone,
+			IsRemoved:   wq.IsRemoved,
+			LastWrongAt: formatISO(wq.LastWrongAt),
+			Question:    question,
+			QuestionID:  wq.QuestionID,
+			StudentID:   wq.StudentID,
+			WrongCount:  wq.WrongCount,
+		})
 	}
-	return map[string]any{
-		"total":     total,
-		"page":      page,
-		"page_size": pageSize,
-		"items":     result,
+	return &WrongQuestionPageDTO{
+		Items:    result,
+		Page:     page,
+		PageSize: pageSize,
+		Total:    total,
 	}
 }
 
@@ -152,14 +197,14 @@ func (s *WrongQuestionService) RedoWrongQuestion(studentID, questionID int, user
 }
 
 // RemoveWrongQuestion 移除错题。
-func (s *WrongQuestionService) RemoveWrongQuestion(studentID, questionID int) (map[string]any, error) {
+func (s *WrongQuestionService) RemoveWrongQuestion(studentID, questionID int) (*WrongQuestionRemoveResultDTO, error) {
 	var wq model.WrongQuestion
 	if err := s.db.Where("student_id = ? AND question_id = ? AND is_removed = ?", studentID, questionID, false).First(&wq).Error; err != nil {
 		return nil, errors.New("错题记录不存在")
 	}
 	wq.IsRemoved = true
 	s.db.Save(&wq)
-	return map[string]any{"removed": true}, nil
+	return &WrongQuestionRemoveResultDTO{Removed: true}, nil
 }
 
 // GetStats 错题统计（经统计聚合 module，一次 GROUP BY）。
@@ -273,21 +318,6 @@ func FormatWrongQuestionsText(exportData []map[string]any) string {
 	fmt.Fprintf(&sb, "\n共 %d 道错题\n", len(exportData))
 	fmt.Fprintf(&sb, "%s\n", strings.Repeat("=", 50))
 	return sb.String()
-}
-
-// ===== dict 辅助 =====
-
-func wrongQuestionToDict(wq *model.WrongQuestion) map[string]any {
-	return map[string]any{
-		"id":            wq.ID,
-		"student_id":    wq.StudentID,
-		"question_id":   wq.QuestionID,
-		"wrong_count":   wq.WrongCount,
-		"last_wrong_at": formatISO(wq.LastWrongAt),
-		"is_removed":    wq.IsRemoved,
-		"is_redone":     wq.IsRedone,
-		"created_at":    formatISO(wq.CreatedAt),
-	}
 }
 
 // BatchRemoveWrongQuestions 批量移出错题本

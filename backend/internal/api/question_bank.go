@@ -71,7 +71,7 @@ type listQuestionsReq struct {
 
 // ListQuestions 题目列表分页 GET /api/question-bank/questions
 func (h *QuestionBankHandler) ListQuestions(c *gin.Context) {
-	Endpoint[listQuestionsReq, map[string]any]{
+	Endpoint[listQuestionsReq, service.QuestionPageDTO]{
 		Parse: func(c *gin.Context) (*listQuestionsReq, error) {
 			return &listQuestionsReq{
 				Page:         atoiDefault(c.Query("page"), 1),
@@ -84,12 +84,11 @@ func (h *QuestionBankHandler) ListQuestions(c *gin.Context) {
 				Sort:         c.Query("sort"),
 			}, nil
 		},
-		Invoke: func(ctx context.Context, req *listQuestionsReq) (*map[string]any, error) {
-			result := h.svc.ListQuestions(req.Page, req.PageSize, req.QType, req.Status, req.Keyword, req.TagID, req.CredentialID, req.Sort)
-			return &result, nil
+		Invoke: func(ctx context.Context, req *listQuestionsReq) (*service.QuestionPageDTO, error) {
+			return h.svc.ListQuestions(req.Page, req.PageSize, req.QType, req.Status, req.Keyword, req.TagID, req.CredentialID, req.Sort), nil
 		},
-		Render: func(c *gin.Context, _ *listQuestionsReq, resp *map[string]any, _ error) {
-			response.Success(c, deref(resp))
+		Render: func(c *gin.Context, _ *listQuestionsReq, resp *service.QuestionPageDTO, _ error) {
+			response.Success(c, *resp)
 		},
 	}.Handle(c)
 }
@@ -139,7 +138,7 @@ type batchPublishReq struct {
 
 // BatchPublish 批量发布（仅管理员）POST /api/question-bank/questions/batch-publish
 func (h *QuestionBankHandler) BatchPublish(c *gin.Context) {
-	Endpoint[batchPublishReq, map[string]any]{
+	Endpoint[batchPublishReq, service.QuestionPublishResultDTO]{
 		Parse: func(c *gin.Context) (*batchPublishReq, error) {
 			req, err := bindJSON[batchPublishReq](c)
 			if err != nil {
@@ -150,14 +149,11 @@ func (h *QuestionBankHandler) BatchPublish(c *gin.Context) {
 			}
 			return req, nil
 		},
-		Invoke: func(ctx context.Context, req *batchPublishReq) (*map[string]any, error) {
-			result := h.svc.BatchPublish(req.QuestionIDs)
-			return &result, nil
+		Invoke: func(ctx context.Context, req *batchPublishReq) (*service.QuestionPublishResultDTO, error) {
+			return h.svc.BatchPublish(req.QuestionIDs), nil
 		},
-		Render: func(c *gin.Context, _ *batchPublishReq, resp *map[string]any, _ error) {
-			result := deref(resp)
-			m := result.(map[string]any)
-			response.SuccessWithMsg(c, "成功发布"+strconv.Itoa(m["published_count"].(int))+"道题目", result)
+		Render: func(c *gin.Context, _ *batchPublishReq, resp *service.QuestionPublishResultDTO, _ error) {
+			response.SuccessWithMsg(c, "成功发布"+strconv.Itoa(resp.PublishedCount)+"道题目", *resp)
 		},
 	}.Handle(c)
 }
@@ -170,7 +166,7 @@ type batchRejectReq struct {
 
 // BatchReject 批量驳回（仅管理员）POST /api/question-bank/questions/batch-reject
 func (h *QuestionBankHandler) BatchReject(c *gin.Context) {
-	Endpoint[batchRejectReq, map[string]any]{
+	Endpoint[batchRejectReq, service.QuestionRejectResultDTO]{
 		Parse: func(c *gin.Context) (*batchRejectReq, error) {
 			req, err := bindJSON[batchRejectReq](c)
 			if err != nil {
@@ -181,20 +177,15 @@ func (h *QuestionBankHandler) BatchReject(c *gin.Context) {
 			}
 			return req, nil
 		},
-		Invoke: func(ctx context.Context, req *batchRejectReq) (*map[string]any, error) {
-			result, err := h.svc.BatchReject(req.QuestionIDs, req.Reason)
-			if err != nil {
-				return nil, err
-			}
-			return &result, nil
+		Invoke: func(ctx context.Context, req *batchRejectReq) (*service.QuestionRejectResultDTO, error) {
+			return h.svc.BatchReject(req.QuestionIDs, req.Reason)
 		},
-		Render: func(c *gin.Context, _ *batchRejectReq, resp *map[string]any, err error) {
+		Render: func(c *gin.Context, _ *batchRejectReq, resp *service.QuestionRejectResultDTO, err error) {
 			if err != nil {
 				response.BadRequest(c, err.Error())
 				return
 			}
-			m := deref(resp).(map[string]any)
-			response.SuccessWithMsg(c, "成功驳回"+strconv.Itoa(m["rejected_count"].(int))+"道题目", deref(resp))
+			response.SuccessWithMsg(c, "成功驳回"+strconv.Itoa(resp.RejectedCount)+"道题目", *resp)
 		},
 	}.Handle(c)
 }
@@ -207,7 +198,7 @@ type batchImportReq struct {
 
 // BatchImport 批量导入 POST /api/question-bank/questions/batch-import
 func (h *QuestionBankHandler) BatchImport(c *gin.Context) {
-	Endpoint[batchImportReq, map[string]any]{
+	Endpoint[batchImportReq, service.QuestionImportResultDTO]{
 		Parse: func(c *gin.Context) (*batchImportReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			userID, _ := uid.(int)
@@ -222,13 +213,11 @@ func (h *QuestionBankHandler) BatchImport(c *gin.Context) {
 			}
 			return &batchImportReq{Questions: req.Questions, UserID: userID}, nil
 		},
-		Invoke: func(ctx context.Context, req *batchImportReq) (*map[string]any, error) {
-			result := h.svc.BatchImport(req.Questions, &req.UserID)
-			return &result, nil
+		Invoke: func(ctx context.Context, req *batchImportReq) (*service.QuestionImportResultDTO, error) {
+			return h.svc.BatchImport(req.Questions, &req.UserID), nil
 		},
-		Render: func(c *gin.Context, _ *batchImportReq, resp *map[string]any, _ error) {
-			m := deref(resp).(map[string]any)
-			response.SuccessWithMsg(c, "成功导入"+strconv.Itoa(m["success_count"].(int))+"道题目", deref(resp))
+		Render: func(c *gin.Context, _ *batchImportReq, resp *service.QuestionImportResultDTO, _ error) {
+			response.SuccessWithMsg(c, "成功导入"+strconv.Itoa(resp.SuccessCount)+"道题目", *resp)
 		},
 	}.Handle(c)
 }
