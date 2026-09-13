@@ -898,6 +898,13 @@ definitions:
       total:
         type: integer
     type: object
+  service.ProgressSaveResultDTO:
+    properties:
+      index:
+        type: integer
+      saved:
+        type: boolean
+    type: object
   service.QuestionDTO:
     properties:
       answer:
@@ -5624,7 +5631,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ProgressSaveResultDTO'
+              type: object
         "400":
           description: 参数错误（含未知练习模式）
           schema:

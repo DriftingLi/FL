@@ -24,6 +24,13 @@ type ProgressResultDTO struct {
 	AnswersState map[string]any `json:"answers_state" extensions:"x-nullable"`
 }
 
+// ProgressSaveResultDTO 保存练习进度的响应 {"index": N, "saved": true}。
+// 字段声明按 JSON key 字母序 —— 与改造前 handler 内联 map 的序列化字节序一致（#954 片二收尾）。
+type ProgressSaveResultDTO struct {
+	Index int  `json:"index"`
+	Saved bool `json:"saved"`
+}
+
 // SubmitResultDTO 单题提交判定结果（旧 SubmitAnswer map 输出）。
 // IsCorrect 为 *bool：简答题经 AI 判定前为 nil（JSON null），判定后与客观题一样为 true/false。
 // 简答题追加 reference_answer / scoring_criteria / max_score；

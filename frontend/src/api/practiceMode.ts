@@ -8,6 +8,7 @@ import type {
   PracticeStartResultDTO,
   PracticeStatsDTO,
   ProgressResultDTO,
+  ProgressSaveResultDTO,
   SubmitResultDTO
 } from './generated/practiceMode'
 
@@ -32,6 +33,7 @@ export type {
   PracticeStartResultDTO,
   PracticeStatsDTO,
   ProgressResultDTO,
+  ProgressSaveResultDTO,
   SubmitResultDTO
 }
 
@@ -75,7 +77,7 @@ export const practiceModeApi = {
   // 模式（标签/按卷）不分桶，不携带。
   saveProgress(index: number, mode: PracticeModeKey = 'sequential', total: number = 0, answersState: Record<string, unknown> = {}) {
     const credentialId = mode === 'sequential' ? currentCredentialId() : undefined
-    return unwrappedRequest.post<null>('/practice-mode/progress', { index, practice_mode: mode, total, answers_state: answersState, credential_id: credentialId })
+    return unwrappedRequest.post<ProgressSaveResultDTO>('/practice-mode/progress', { index, practice_mode: mode, total, answers_state: answersState, credential_id: credentialId })
   },
   // 查询任意模式的练习进度和答题状态（断点续练用）
   getProgress(mode: PracticeModeKey = 'sequential') {
