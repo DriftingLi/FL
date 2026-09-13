@@ -33,7 +33,7 @@ beforeEach(() => {
 describe('URL auth_token 消费', () => {
   it('携带有效 auth_token：建立登录态、持久化并立即从地址栏移除', async () => {
     setUrl('?auth_token=carried-9&next=/training')
-    getUserInfo.mockResolvedValue({ role: 'hrwai_user', user_id: 3, username: 'u3' })
+    getUserInfo.mockResolvedValue({ account: 'u3', role: 'hrwai_user', user_id: 3, username: 'u3' })
 
     const store = createStore()
     await flushPromises()
@@ -50,7 +50,7 @@ describe('URL auth_token 消费', () => {
     localStorage.setItem('token', 'old-token')
     localStorage.setItem('userInfo', JSON.stringify({ token: 'old-token', role: 'hrwai_user' }))
     setUrl('?auth_token=carried-new')
-    getUserInfo.mockResolvedValue({ role: 'hrwai_user' })
+    getUserInfo.mockResolvedValue({ account: 'u1', role: 'hrwai_user', user_id: 1 })
 
     const store = createStore()
     await flushPromises()
@@ -85,7 +85,7 @@ describe('URL auth_token 消费', () => {
 
 describe('token 持久化 round-trip', () => {
   it('setAuthData 写入 localStorage，clearAuthData 清空', async () => {
-    getUserInfo.mockResolvedValue({ role: 'hrwai_user' })
+    getUserInfo.mockResolvedValue({ account: 'u1', role: 'hrwai_user', user_id: 1 })
     const store = useAuthStore()
 
     store.setAuthData({ token: 't-1', role: 'hrwai_user', user_id: 7 })
@@ -106,7 +106,7 @@ describe('token 持久化 round-trip', () => {
   it('新 Pinia 实例从 localStorage 恢复登录态', async () => {
     localStorage.setItem('token', 't-restore')
     localStorage.setItem('userInfo', JSON.stringify({ token: 't-restore', role: 'hrwai_user', username: 'u9' }))
-    getUserInfo.mockResolvedValue({ role: 'hrwai_user' })
+    getUserInfo.mockResolvedValue({ account: 'u1', role: 'hrwai_user', user_id: 1 })
 
     setActivePinia(createPinia())
     const store = createStore()
@@ -132,7 +132,7 @@ describe('token 持久化 round-trip', () => {
   it('/auth/me 返回资料合并进 userInfo 并持久化', async () => {
     localStorage.setItem('token', 't-merge')
     localStorage.setItem('userInfo', JSON.stringify({ token: 't-merge', role: 'hrwai_user', username: '老张' }))
-    getUserInfo.mockResolvedValue({ role: 'hrwai_user', avatar_url: 'a.png' })
+    getUserInfo.mockResolvedValue({ account: 'u1', role: 'hrwai_user', user_id: 1, avatar_url: 'a.png' })
 
     const store = createStore()
     await flushPromises()
@@ -143,7 +143,7 @@ describe('token 持久化 round-trip', () => {
   })
 
   it('initialize 幂等：多次调用只执行一次校验', async () => {
-    getUserInfo.mockResolvedValue({ role: 'hrwai_user' })
+    getUserInfo.mockResolvedValue({ account: 'u1', role: 'hrwai_user', user_id: 1 })
 
     const store = createStore()
     await store.initialize()

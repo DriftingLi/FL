@@ -230,7 +230,7 @@ type changeAccountReq struct {
 // @Produce json
 // @Security BearerAuth
 // @Param body body object true "account/code" example({"account":"new_account","code":"123456"})
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.LoginResult} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /auth/account [put]

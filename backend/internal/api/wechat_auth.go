@@ -48,7 +48,7 @@ func RegisterWechatAuthRoutes(rg *gin.RouterGroup, svc *service.WechatAuthServic
 // @Accept json
 // @Produce json
 // @Param body body object true "code" example({"code":"wx_code"})
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.WxLoginResult} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Router /auth/wx-login [post]
 func (h *WechatAuthHandler) MiniProgramLogin(c *gin.Context) {
@@ -75,7 +75,7 @@ func (h *WechatAuthHandler) MiniProgramLogin(c *gin.Context) {
 // @Tags 学员端-认证
 // @Accept json
 // @Produce json
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.WechatQRCodeInfoDTO} "success"
 // @Router /auth/wechat/qrcode [post]
 func (h *WechatAuthHandler) GetQRCodeInfo(c *gin.Context) {
 	Endpoint[struct{}, service.WechatQRCodeInfoDTO]{
@@ -95,7 +95,7 @@ func (h *WechatAuthHandler) GetQRCodeInfo(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param body body object true "code" example({"code":"qr_code"})
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.LoginResult} "success"
 // @Failure 400 {object} response.R "未配置"
 // @Router /auth/wechat/login [post]
 func (h *WechatAuthHandler) LoginWithQRCode(c *gin.Context) {

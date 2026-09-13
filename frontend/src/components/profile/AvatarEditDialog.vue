@@ -37,11 +37,11 @@ const authStore = useAuthStore()
 const visible = ref(false)
 const avatarUploading = ref(false)
 
-const pending = computed(() => (authStore.userInfo as any)?.pending_profile_change || null)
+const pending = computed(() => authStore.userInfo?.pending_profile_change || null)
 const avatarPending = computed(() => pending.value?.field_type === 'avatar')
-const avatarUrl = computed(() => (authStore.userInfo as any)?.avatar_url || '')
+const avatarUrl = computed(() => authStore.userInfo?.avatar_url || '')
 const letter = computed(() => {
-  const name = (authStore.userInfo as any)?.username || '?'
+  const name = authStore.userInfo?.username || '?'
   return name.charAt(0).toUpperCase()
 })
 

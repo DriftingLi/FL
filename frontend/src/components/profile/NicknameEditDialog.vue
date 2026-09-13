@@ -17,7 +17,7 @@ const visible = ref(false)
 const nickname = ref('')
 const saving = ref(false)
 
-const pending = computed(() => (authStore.userInfo as any)?.pending_profile_change || null)
+const pending = computed(() => authStore.userInfo?.pending_profile_change || null)
 const nicknamePending = computed(() => pending.value?.field_type === 'nickname')
 
 function open() {

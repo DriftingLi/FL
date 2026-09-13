@@ -267,6 +267,11 @@ func TestInlineResponseDTOBytes(t *testing.T) {
 			legacy: map[string]any{"saved": true, "index": 5},
 			dto:    &ProgressSaveResultDTO{Index: 5, Saved: true},
 		},
+		{
+			name:   "RefreshResultDTO（POST /auth/refresh：原 raw handler 内联 map[string]string）",
+			legacy: map[string]string{"token": "acc-1", "refresh_token": "ref-1"},
+			dto:    &RefreshResultDTO{RefreshToken: "ref-1", Token: "acc-1"},
+		},
 	}
 
 	for _, tc := range cases {

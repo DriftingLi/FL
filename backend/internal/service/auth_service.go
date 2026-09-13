@@ -139,17 +139,17 @@ func (s *AuthService) GetProfile(userID int, role, account string) *ProfileDTO {
 // PendingProfileChange 用双指针表达三态：nil=键缺失、&nil=输出 null、&对象=输出对象。
 type ProfileDTO struct {
 	Account              string                    `json:"account"`
-	Name                 *string                   `json:"name,omitempty"`
-	AvatarURL            *string                   `json:"avatar_url,omitempty"`
-	Company              *string                   `json:"company,omitempty"`
-	Email                *string                   `json:"email,omitempty"`
-	HasPassword          *bool                     `json:"has_password,omitempty"`
-	PendingProfileChange **ProfileChangeRequestDTO `json:"pending_profile_change,omitempty"`
-	Phone                *string                   `json:"phone,omitempty"`
+	Name                 *string                   `json:"name,omitempty" extensions:"x-optional"`
+	AvatarURL            *string                   `json:"avatar_url,omitempty" extensions:"x-optional"`
+	Company              *string                   `json:"company,omitempty" extensions:"x-optional"`
+	Email                *string                   `json:"email,omitempty" extensions:"x-optional"`
+	HasPassword          *bool                     `json:"has_password,omitempty" extensions:"x-optional"`
+	PendingProfileChange **ProfileChangeRequestDTO `json:"pending_profile_change,omitempty" extensions:"x-optional,x-nullable"`
+	Phone                *string                   `json:"phone,omitempty" extensions:"x-optional"`
 	Role                 string                    `json:"role"`
-	UID                  *string                   `json:"uid,omitempty"`
+	UID                  *string                   `json:"uid,omitempty" extensions:"x-optional"`
 	UserID               int                       `json:"user_id"`
-	Username             *string                   `json:"username,omitempty"`
+	Username             *string                   `json:"username,omitempty" extensions:"x-optional"`
 }
 
 // ptr 构造 T 的指针（ProfileDTO 指针字段表达键缺失/存在两态）。
@@ -177,6 +177,13 @@ func HashPassword(password string) (string, error) {
 // VerifyPassword 校验密码。
 func VerifyPassword(password, hashed string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hashed), []byte(password)) == nil
+}
+
+// RefreshResultDTO 双令牌轮换的响应 {"refresh_token": "...", "token": "..."}。
+// 字段声明按 JSON key 字母序 —— 与改造前 raw handler 里 map[string]string 的序列化字节序一致（#959 auth 域收口）。
+type RefreshResultDTO struct {
+	RefreshToken string `json:"refresh_token"`
+	Token        string `json:"token"`
 }
 
 // LoginResult 登录返回结构（双令牌：access token + refresh token）。
