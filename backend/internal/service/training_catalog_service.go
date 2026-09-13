@@ -384,6 +384,11 @@ func (s *TrainingCatalogService) ListGroupedCredentials() map[string][]Credentia
 	return grouped
 }
 
+// QuestionTagsResultDTO 题目标签全量替换的响应 {"tag_ids": [...]}（#954 片二）。
+type QuestionTagsResultDTO struct {
+	TagIDs []int `json:"tag_ids"`
+}
+
 // ===== 题目-标签关联 =====
 
 // SetQuestionTags 全量替换题目标签关联。

@@ -970,6 +970,11 @@ func (s *PointsService) aiTokensResult(points, total, prompt, completion, userID
 	return res
 }
 
+// PointsPenaltyResultDTO 管理员扣罚的响应 {"deducted": N}（实际扣减额，#954 片二）。
+type PointsPenaltyResultDTO struct {
+	Deducted int `json:"deducted"`
+}
+
 // AdminPenalty 管理员扣罚（自定义 1-500，截断到 0）
 func (s *PointsService) AdminPenalty(ctx context.Context, adminID, userID, delta int, reason string) (int, error) {
 	if delta <= 0 || delta > 500 {
