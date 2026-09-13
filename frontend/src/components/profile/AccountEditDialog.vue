@@ -33,7 +33,7 @@ const dlg = useVerifyDialog({
   submitAsync: async (t,c)=>{
     if(!isValidAccount(t)){ ElMessage.warning('账号需为4-20位字母、数字或下划线'); throw new Error('invalid')}
     const r = await authApi.updateAccount({ account: t, code: c })
-    if((r as any)?.token) authStore.setAuthData(r as any)
+    if (r?.token) authStore.setAuthData(r)
   },
   onSuccess: async ()=>{ ElMessage.success('账号修改成功'); await authStore.refreshUserInfo(); visible.value=false }
 })

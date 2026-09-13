@@ -1,22 +1,13 @@
+import type { ProfileChangeRequestDTO } from '@/api/generated/auth'
+
 // 用户资料 typed module：账号体系（account/uid/username）唯一 shape 与派生字段的实现。
 // 契约与后端 /auth/me（AuthService.GetProfile）对齐：username 为昵称，uid 为字符串雪花 ID；
 // 讲师/管理员表仍有 name（显示名）字段，hrwai 用户无。
 
-/** 待审核资料请求（后端 ProfileChangeRequestDTO 对应） */
-export interface PendingProfileChange {
-  id: number
-  user_id: number
-  username: string
-  avatar_url: string
-  field_type: string
-  old_value: string
-  new_value: string
-  status: string
-  reject_reason?: string
-  reviewed_by?: number | null
-  reviewed_at?: string | null
-  created_at: string
-}
+// 待审核资料请求 = 后端 ProfileChangeRequestDTO 的**生成物**（唯一事实源在后端注解，
+// 再生成：cd backend && go run ./cmd/gen-apitypes）。此前这里手写了一份同样的字段表
+// —— issue #959（auth 域片）把它换成生成类型的别名，字段漂移从此由 type-check 暴露。
+export type PendingProfileChange = ProfileChangeRequestDTO
 
 /** 用户资料（登录响应与 /auth/me 共用同一 shape，取代双份手写 AuthUserInfo/UserInfo） */
 export interface UserProfile {

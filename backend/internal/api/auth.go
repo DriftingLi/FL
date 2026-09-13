@@ -40,7 +40,7 @@ func NewAuthHandler(sess *security.Session, authSvc *service.AuthService, fileSv
 // @Accept json
 // @Produce json
 // @Param body body object true "登录" example({"username":"13800000001","password":"123456"})
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.LoginResult} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Router /auth/login [post]
 func (h *AuthHandler) Login(c *gin.Context) {
@@ -69,6 +69,15 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}.Handle(c)
 }
 
+// @Summary 管理员登录
+// @Description 管理员账号密码登录，成功写入登录 Cookie 并返回双令牌
+// @Tags 管理端-认证
+// @Accept json
+// @Produce json
+// @Param body body object true "登录" example({"username":"admin","password":"123456"})
+// @Success 200 {object} response.R{data=service.LoginResult} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Router /auth/admin-login [post]
 // AdminLogin 管理员登录 POST /api/auth/admin-login
 func (h *AuthHandler) AdminLogin(c *gin.Context) {
 	Endpoint[loginReq, service.LoginResult]{
@@ -96,6 +105,15 @@ func (h *AuthHandler) AdminLogin(c *gin.Context) {
 	}.Handle(c)
 }
 
+// @Summary 导师登录
+// @Description 导师账号密码登录，成功写入登录 Cookie 并返回双令牌
+// @Tags 讲师端-认证
+// @Accept json
+// @Produce json
+// @Param body body object true "登录" example({"username":"tutor","password":"123456"})
+// @Success 200 {object} response.R{data=service.LoginResult} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Router /auth/tutor-login [post]
 // TutorLogin 导师登录 POST /api/auth/tutor-login
 func (h *AuthHandler) TutorLogin(c *gin.Context) {
 	Endpoint[loginReq, service.LoginResult]{
@@ -123,6 +141,15 @@ func (h *AuthHandler) TutorLogin(c *gin.Context) {
 	}.Handle(c)
 }
 
+// @Summary 企业招聘者登录
+// @Description 招聘者账号密码登录（第四角色，host-only cookie 隔离），成功返回双令牌
+// @Tags 招聘域-认证
+// @Accept json
+// @Produce json
+// @Param body body object true "登录" example({"username":"hr001","password":"123456"})
+// @Success 200 {object} response.R{data=service.LoginResult} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Router /auth/recruiter-login [post]
 // RecruiterLogin 企业招聘者登录 POST /api/auth/recruiter-login（第四角色，host-only cookie 隔离）
 func (h *AuthHandler) RecruiterLogin(c *gin.Context) {
 	Endpoint[loginReq, service.LoginResult]{
@@ -185,7 +212,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param body body object true "refresh_token" example({"refresh_token":"eyJhbGciOi..."})
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.RefreshResultDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /auth/refresh [post]
 func (h *AuthHandler) Refresh(c *gin.Context) {
@@ -216,7 +243,7 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 	if claims != nil && claims.Role == service.HrwaiRole && h.authSvc != nil {
 		h.authSvc.RecordDailyLogin(claims.UserID)
 	}
-	response.Success(c, map[string]string{"token": access, "refresh_token": refresh})
+	response.Success(c, service.RefreshResultDTO{RefreshToken: refresh, Token: access})
 }
 
 // meReq /auth/me 请求（身份来自 JWT 中间件上下文）。
@@ -233,7 +260,7 @@ type meReq struct {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.ProfileDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /auth/me [get]
 func (h *AuthHandler) Me(c *gin.Context) {
@@ -262,7 +289,7 @@ func (h *AuthHandler) Me(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param body body object true "资料" example({"nickname":"新昵称","company":"新单位"})
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.ProfileChangeRequestDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /auth/profile [put]
@@ -353,7 +380,7 @@ func (h *AuthHandler) DeleteAccount(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param file formData file true "头像图片"
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.ProfileChangeRequestDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /auth/avatar [post]

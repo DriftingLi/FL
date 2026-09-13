@@ -151,7 +151,7 @@ type codeRegisterReq struct {
 // @Accept json
 // @Produce json
 // @Param body body object true "注册" example({"email":"a@b.com","code":"123456","nickname":"张三","password":"123456"})
-// @Success 201 {object} response.R "success"
+// @Success 201 {object} response.R{data=service.LoginResult} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Router /auth/email/register [post]
 // @Router /auth/phone/register [post]
@@ -212,7 +212,7 @@ type codeLoginReq struct {
 // @Accept json
 // @Produce json
 // @Param body body object true "登录" example({"email":"a@b.com","code":"123456"})
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.LoginResult} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Router /auth/email/login [post]
 // @Router /auth/phone/login [post]
