@@ -694,7 +694,9 @@ if ($CompileOnly) {
         exit 2
     }
 
-    $errorLines = Get-HxErrorLines -Output $allOutput
+    # ⚠️ 调用点必须包 `@(...)`：函数 `return @(...)` 在空数组时会退化成 $null，
+    #    而 `Set-StrictMode -Latest` 下 `$null.Count` 直接抛错（2026-09-13 首次真跑踩到）
+    $errorLines = @(Get-HxErrorLines -Output $allOutput)
     if ($errorLines.Count -gt 0) {
         Write-Host ''
         Write-Host "❌ 仅编译发现 $($errorLines.Count) 行编译期诊断 ——" -ForegroundColor Red
@@ -774,7 +776,8 @@ Write-SegmentTable -Steps $steps -Segment $segment -Total $totalSeconds
 Add-Content -LiteralPath $LogPath -Value "`n$launchOutput" -Encoding utf8
 
 # 判成败只解析 stdout（CLI 退出码恒 0）；判据与 -CompileOnly 共用同一个函数（#949，避免两处漂移）
-$errorLines = Get-HxErrorLines -Output $allOutput
+# ⚠️ 必须包 `@(...)`：函数 `return @(...)` 空数组会退化成 $null，`$null.Count` 在 StrictMode 下抛错
+$errorLines = @(Get-HxErrorLines -Output $allOutput)
 
 if ($errorLines.Count -gt 0) {
     Write-Host ''

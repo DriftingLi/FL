@@ -240,6 +240,16 @@ function scanContract(sources) {
     '-CompileOnly 未跳过设备解析（会让「不接设备也能跑诊断」落空）'
   );
   must(/Test-HxCompileFinished/.test(code), 'C13', '缺部署停滞判据（编译段已结束 + 无前进 ⇒ 提前判环境不可用）');
+  // ⚠️ 每个 Get-HxErrorLines 调用点都必须包 @(...)：函数返回空数组会退化成 $null，
+  //    而 `$null.Count` 在 Set-StrictMode -Latest 下直接抛错（2026-09-13 首次真跑踩到）
+  const ghcCalls = (code.match(/Get-HxErrorLines -Output/g) || []).length;
+  const ghcSafe = (code.match(/@\(Get-HxErrorLines -Output/g) || []).length;
+  must(ghcCalls >= 2, 'C13', `Get-HxErrorLines 调用点应 ≥2（仅编译 + 真运行；实得 ${ghcCalls}）`);
+  must(
+    ghcCalls === ghcSafe,
+    'C13',
+    `有 Get-HxErrorLines 调用点没包 @()（${ghcSafe}/${ghcCalls}）—— 空数组退化成 $null 会让 StrictMode 抛错`
+  );
   must(/\[int\]\$DeployStallSeconds\s*=\s*300/.test(code), 'C13', '缺 -DeployStallSeconds（默认 300）');
   must(/\[int\]\$TimeoutSeconds\s*=\s*900/.test(code), 'C13', '部署轮询上限默认不是 900（#949 要求由 1800 下调）');
   must(/"hx:compile-only"\s*:\s*"[^"]*hx-run\.ps1\s+-CompileOnly"/.test(pkg), 'C13', 'package.json 未注册 hx:compile-only');
@@ -398,6 +408,10 @@ describe('日常增量运行契约（scripts/hx-run.ps1，2026-09-12）', () => 
       ['C13', 'AGENTS.md 不再写 CompileOnly 分层', (s) => ({
         ...s,
         agents: s.agents.replace(/CompileOnly|compile-only/g, 'XXX')
+      })],
+      ['C13', 'Get-HxErrorLines 调用点丢了 @()（空数组退化成 $null ⇒ StrictMode 抛错）', (s) => ({
+        ...s,
+        script: s.script.replace(/@\(Get-HxErrorLines -Output/g, 'Get-HxErrorLines -Output')
       })]
     ];
     cases.forEach(([rule, label, mutate]) => {
