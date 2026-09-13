@@ -261,3 +261,55 @@ export const roleNavigation: Record<string, NavItem[]> = {
   tutor: tutorNav,
   recruiter: recruiterNav
 }
+
+// ===== 侧栏分组判定（纯函数；ADR-0047 §2 / spec #930 决策 6）=====
+//
+// 这三条判定原先长在 AppSidebar.vue（826 行）内部，零测试。它们与 isNavRouteActive 是同
+// 一族：侧栏出过的两次线上问题都发生在「判定与编排混在一起」的地方，故一并抽成纯函数。
+
+/** 分组展开态：默认展开，只有显式为 false 才收起（与组件原语义逐字一致）。 */
+export function isGroupExpanded(map: Record<string, boolean>, key: string): boolean {
+  return map[key] !== false
+}
+
+/** 切换分组展开态：返回新对象（不原地修改，便于测试与响应式追踪）。 */
+export function toggleGroupExpanded(
+  map: Record<string, boolean>,
+  key: string
+): Record<string, boolean> {
+  return { ...map, [key]: !isGroupExpanded(map, key) }
+}
+
+/** 收集分组下的全部叶子项（最多两层一级子级，与侧栏结构一致；无 routeName/externalUrl 的容器跳过）。 */
+export function flattenLeaves(item: NavItem): NavItem[] {
+  const result: NavItem[] = []
+  for (const child of item.children || []) {
+    if (child.routeName || child.externalUrl) result.push(child)
+    if (child.children?.length) {
+      for (const sub of child.children) {
+        if (sub.routeName || sub.externalUrl) result.push(sub)
+      }
+    }
+  }
+  return result
+}
+
+/** 分组是否激活：任一子项（含二层）命中当前路由即点亮整条分组。 */
+export function isGroupActive(
+  item: NavItem,
+  routeName: unknown,
+  routeParams?: RouteParamsLike
+): boolean {
+  if (!item.children?.length) return false
+  for (const child of item.children) {
+    if (child.children?.length) {
+      if (isNavRouteActive(child, routeName, routeParams)) return true
+      for (const sub of child.children) {
+        if (isNavRouteActive(sub, routeName, routeParams)) return true
+      }
+    } else if (isNavRouteActive(child, routeName, routeParams)) {
+      return true
+    }
+  }
+  return false
+}
