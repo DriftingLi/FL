@@ -8,6 +8,12 @@
 - **讲师（tutor）**：独立账号表（tutor），管理章节内容、题库、阅卷；不建课（课程创建/编辑仅管理员，见 ADR-0006 后的领域约定）。
 - **管理员（admin）**：独立账号表（admin），管理学员/讲师/课程/题库/残值配置/AI 配置。
 
+**授权（authorization）**——与角色区分的一层词汇：
+
+- **能力（capability）**：角色对某个资源域可以做的一类动作的**资格**，按 `资源域.动作` 命名（如 `forum.moderate`、`valuation.config.write`）。能力只回答「这个角色有没有资格做这类动作」，同时是端点授权、页面可见性与页面内动作入口的判据。
+- **数据级不变式**：所有权（只有楼主能采纳自己的帖）、可见作用域（按当前证件分区）、状态前置（经验帖不可被采纳）。与能力**正交**，不进能力表；由拥有该不变式的域以**具名谓词**单点表达（后端为事实源）。
+  _Avoid_：权限（泛称，会把能力与数据级不变式混为一谈）、把所有权/状态前置写成能力条目
+
 ## 账号与认证
 
 - **统一账号**：hrwai_users 表 + 统一 JWT（角色 hrwai_user）；支持用户名或手机号登录。
@@ -68,6 +74,7 @@
 - **AI 计费（AI billing）**：仅 AI 助手对话按 tokens 后计量扣费（一次请求 = 一次用户可见消费；会话自动命名是对话内 service 追加的内部二次消费，显式免费）；刷题 AI 解析、简答评分、章节内容生成均免费——有意决策，扩计费面需单独立项。所有 LLM 消费统一过**计量闸门**（挂在模型端口上的 meter，ADR-0031）：免费消费由功能注册表 `billed=false` 声明或调用点显式声明，不再依赖调用侧自觉。**限免（freePreview）**：注册表声明位，置位时该对话功能免计费（`aiFeatureChatBilled` 随 `!freePreview` 放行，结束限免 = 翻位 + 再生成，前端限免角标随 codegen 同步）；典型样例 = 智能维修诊断上线期限免。口径：tokens 按字符长度估算（prompt+completion /4，兜底单点；prompt 只算最后一条用户消息，system/历史/图片不计）；积分 = ceil(tokens/1000)×10，下限 5 上限 100；余额预检与扣费下限同源于积分域（不可在调用侧另立常量）；幂等键 `ai_tokens:{requestID}`（ADR-0023），同请求重试/重放只扣一次。
 - **智能维修诊断（fault_diagnosis）**：学员端故障诊断对话功能（专项功能键 `fault_diagnosis`，管理端单绑定形态但**不绑定模型**——模型是外部 RAG 服务）。回答由外部诊断 RAG 助手（forklift-assistant 交付包：FastAPI + bge-m3 本地向量检索 + LLM，部署在 pve-01 lxc101）生成，区别于纯大模型生成的「AI 助手」：本地手册向量检索 + 故障码知识库支撑，SOP 正文含来源资料（answer_sources，经 SSE `sources` 事件透传）。传输经模型端口第二 adapter（diagnosisAssistantAdapter）+ routing 分发（ADR-0032），配置 `DIAGNOSIS_ASSISTANT_URL`；周边只读代理 `/api/ai-assistant/diagnosis/*`（品牌/车型/故障码/手册资源）。上线期 freePreview 限免。取代已下线的 `fault_consult`（故障咨询）与 `fault_code_query`（故障代码查询）两个纯 prompt 功能。
 - **积分（points）**：学员激励与消耗的统一账务域（PointsService 单点承载）：余额、流水（points_ledger，delta≠0 必写）、幂等占坑（points_entry_idem，ADR-0023）。入账/扣费来源：任务领取、每日打卡直记、问答采纳奖励、兑换（课程/真题卷/商城）、AI 按 tokens 计量扣费、管理员扣罚与违规回收对冲（封底 0）。
+- **发放事实（reward fact）**：某笔直记奖励「是否已经发生过」的判据——**事实源是流水本身，不是状态列**。状态列可被「取消采纳」与「删帖」回退，流水不可回退，拿状态列判定等于给重复发分留了重置开关。所有「每帖只发一次」的直记奖励（问答采纳、帖子精选／经验认定、投稿过审与达阶）共用这一判据，且必须在**发分前**判定一次、由单一实现承载。
 - **积分回收对冲（points rollback）**：对已发放流水的追回机制——按 (refType, refID, reasons) 聚合原账取反入账、封底 0、幂等占坑键防双扣，由积分域单实现承载；业务方只声明「回收哪个 ref 的哪些 reason」（如投稿违规下架追回 approved+tier 两笔、论坛违规回收 accepted_bonus+accept_action+featured_bonus 三笔），不手写对冲。与「扣罚」的区别：对冲以原账存在为前提、总量不越过已发放部分；扣罚是主动负向入账（ErrInvalidPenalty 守卫）。
 - **资料投稿（contribution）**：学员自主上传、经审核通过后才对全学员公开可下载的**非课程来源**资料（`user_contribution`，投稿区列表为独立浏览面）。与 material 的区别是供给侧而非形态：material 长在课程章节上（由讲师/管理员发布），contribution 长在学员账号上（由学员提交、平台审核）。积分激励买的是这份供给——**未过审不产生任何积分**，见「投稿审核（contribution review）」。形态：**一份投稿＝1–5 个文件**（白名单 pdf/doc/docx/ppt/pptx/xls/xlsx/zip/mp4；单文件 ≤20MB、单投稿合计 ≤50MB，扩展名＋MIME 双校验）＋标题＋简介（均必填）。必挂**目标证件**（`credential_id`，与课程/题库同构，V1 1:N 预留 M:N），投稿区浏览跟随当前证件过滤；写入不绑定当前证件（表单可选目标证件、默认当前，见 ADR-0034）。
 - **投稿审核（contribution review）**：`pending → approved / rejected`，**管理员与讲师同为审核者**（投稿是内容事务，讲师具备专业判断；审核动作天然落审计日志）。rejected 可修改后重提 = 新建一条投稿（新行新审核，不复用旧行、不改写历史）。approved 后仍可被下架进 `archived`（文件立即不可下载），下架时用 **rollback 对冲追回**过审分与达阶分（封底 0）并站内信告知原因——口径同问答采纳奖励的「删帖不回滚、违规回收走对冲」，但投稿相反：**违规下架必须追回**，因为过审分是审核时点即发的预付奖励。作者主动撤回 `pending` 稿为 `withdrawn`（未发过分，无需回滚）。
