@@ -100,12 +100,12 @@
 			<view v-if="settings.model_source == 'user' || settings.model_source == 'custom'" class="section">
 				<view class="section-head">
 					<text class="section-title">已保存模型</text>
-					<text class="section-add" @click="goManageModels">＋ 新增</text>
+					<text v-if="proUnlocked" class="section-add" @click="goManageModels">＋ 新增</text>
 				</view>
-				<view v-if="userModels.length == 0" class="card add-model-card" @click="goManageModels">
+				<view v-if="proUnlocked && userModels.length == 0" class="card add-model-card" @click="goManageModels">
 					<text class="add-model-text">暂无已保存模型，点击去添加</text>
 				</view>
-				<view v-else class="card">
+				<view v-else-if="userModels.length > 0" class="card">
 					<view v-for="(m, idx) in userModels" :key="idx">
 						<view class="model-row">
 							<view class="model-left" @click="onSelectUserModel(m)">
@@ -158,6 +158,15 @@
 	const platformModels = ref<AiModel[]>([])
 	const userModels = ref<AiUserModel[]>([])
 	const saving = ref<boolean>(false)
+
+	/**
+	 * 专业版能力门（#939 口径 A：门落在本页的「进入自定义模型」入口上）。
+	 * 与 AI 助手页**同一口径**：积分兑换未上线 ⇒ 恒 false（基础版）。
+	 * 本页是 `pages/ai-assistant/custom-models` 的第二条入口链（第一条在抽屉里，由 #926/#936 收口），
+	 * 故这里也要有门，否则「对话设置 → ＋ 新增 / 空态卡」仍能进该页。
+	 * #920 兑换上线后：两页一并改为读后端「已拥有」判定（届时本常量删除）。
+	 */
+	const proUnlocked = ref<boolean>(false)
 
 	const formName = ref<string>('')
 	const formBaseUrl = ref<string>('')

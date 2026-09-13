@@ -10,18 +10,27 @@
  *   ① 输入区：模型芯片只读、附件按钮不渲染；
  *   ② 抽屉菜单：不显示「自定义模型」；
  *   ③ 模型芯片点击：只给提示、不打开选择器；
- *   ④ 「解锁专业版」横幅用**实色**（本机型实测 background: linear-gradient(...) 静默不绘制）。
+ *   ④ 「解锁专业版」横幅用**实色**（本机型实测 background: linear-gradient(...) 静默不绘制）；
+ *   ⑥ **对话设置页是同一条门**（#939 口径 A）：该页的「＋ 新增」与空态卡按门隐藏 ——
+ *      `pages/ai-assistant/custom-models` 有两条入口链，只收抽屉那条（#926/#936）不算收口；
+ *   ⑦ 右侧菜单入口与**已证可点**的左侧对称（#947 的防御性修复；该 issue 的根因尚未定案）。
  */
 const fs = require('fs');
 const path = require('path');
 
 const PAGE = path.join(__dirname, '..', 'pages', 'ai-assistant', 'ai-assistant.uvue');
 const CONSTS = path.join(__dirname, '..', 'pages', 'ai-assistant', 'ai-assistant-constants.uts');
+const SETTINGS = path.join(__dirname, '..', 'pages', 'ai-assistant', 'ai-settings.uvue');
+const NAV = path.join(__dirname, '..', 'components', 'ai-chat', 'ai-chat-nav.uvue');
+const DRAWER_RIGHT = path.join(__dirname, '..', 'components', 'ai-chat', 'ai-chat-drawer-right.uvue');
 const read = (p) => fs.readFileSync(p, 'utf8');
 
 describe('AI 助手专业版能力门（proUnlocked）契约', () => {
   const page = read(PAGE);
   const consts = read(CONSTS);
+  const settings = read(SETTINGS);
+  const nav = read(NAV);
+  const drawerRight = read(DRAWER_RIGHT);
 
   it('① 能力门存在且默认关闭（兑换未上线期间恒为 false）', () => {
     expect(page).toMatch(/const\s+proUnlocked\s*=\s*ref<boolean>\(false\)/);
@@ -60,5 +69,27 @@ describe('AI 助手专业版能力门（proUnlocked）契约', () => {
     const style = page.slice(from, page.indexOf('.pro-banner-go {', from));
     expect(style).toMatch(/background-color:\s*#/);
     expect(style).not.toMatch(/gradient/);
+  });
+
+  it('⑥ 对话设置页同门（#939 口径 A）：「＋ 新增」与空态卡按门隐藏', () => {
+    // 该页必须有**同一形态**的页面级门（ADR 0009 的口径：页面级 proUnlocked；#920 上线后两页一并改读后端判定）
+    expect(settings).toMatch(/const\s+proUnlocked\s*=\s*ref<boolean>\(false\)/);
+    // 两条漏径都在门内：新增入口、空态卡
+    expect(settings).toMatch(/<text v-if="proUnlocked" class="section-add"/);
+    expect(settings).toMatch(/v-if="proUnlocked && userModels\.length == 0"/);
+    // 列表必须 v-else-if：若沿用 v-else，锁定时会把空态卡藏了却渲染一个空卡片
+    expect(settings).toMatch(/v-else-if="userModels\.length > 0"/);
+    // 门后唯一去处仍是自定义模型页（口径 A 只把入口收进同一门，不改目标页）
+    expect(settings).toMatch(/url:\s*'\/pages\/ai-assistant\/custom-models'/);
+  });
+
+  it('⑦ 右侧菜单入口与左侧对称（#947 防御性修复；根因未定案）', () => {
+    expect(nav).toMatch(/class="nav-right" @click="onMenuClick"/);
+    // 内层要有**显式尺寸的盒子**（左侧 .panel-icon 有尺寸且可用），排除"裸 text 没有命中区"
+    expect(nav).toMatch(/class="nav-more-box"/);
+    expect(nav).toMatch(/\.nav-more-box\s*\{[^}]*width:\s*\d+rpx/);
+    expect(nav).toMatch(/\.nav-more-box\s*\{[^}]*height:\s*\d+rpx/);
+    // 右抽屉定位用「已证可用」的 left 锚定，而不是只给 right（只给 right 时定位可能不被采纳）
+    expect(drawerRight).toMatch(/\.drawer-right\s*\{[^}]*left:\s*30%/);
   });
 });
