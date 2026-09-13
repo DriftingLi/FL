@@ -48,7 +48,7 @@ function contributionItem(over: Record<string, unknown> = {}): import('@/api/con
     is_anonymous: false,
     downloads_count: 12,
     created_at: '2026-09-01T10:00:00+08:00',
-    author: { user_id: 7, username: '小明' },
+    author: { user_id: 7, username: '小明', anonymous: false },
     // 列表契约：ListPublic 不加载 files（摘要形状）——详情靠 detail 懒加载（回归守卫见详情用例）
     ...(over as object)
   }

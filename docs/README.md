@@ -8,7 +8,7 @@
 
 | 目录 | 入库 | 用途 |
 | --- | --- | --- |
-| `docs/adr/` | ✅ | 架构决策记录（`ADR-0001-…`，38 篇；移动端另有独立 ADR 体系见 `training-app/…/docs/adr/`） |
+| `docs/adr/` | ✅ | 架构决策记录（`ADR-0001-…`，49 篇；移动端另有独立 ADR 体系见 `training-app/…/docs/adr/`） |
 | `docs/agents/` | ✅ | AI/agent 工作约定，由根 `AGENTS.md` 导航（issue-tracker / triage-labels / domain / security-scan / ui-conventions / checks / release / multi-agent-git） |
 | `docs/README.md` | ✅ | 本索引 |
 | `docs/plans/` | ❌ | 产品 / 技术方案、实施计划（当前为空；命名建议 `主题-方案.md`） |
@@ -42,7 +42,7 @@
 
 ### docs/adr/（入库）
 
-38 篇，编号 `ADR-0001-…`（如 `ADR-0001-验证码通道适配器seam`、`0028-打卡积分直记化与每日登录事实源迁移`）。清单与最新决策见仓库 `docs/adr/` 目录本身，不在此重复维护。
+49 篇，编号 `ADR-0001-…`（如 `ADR-0001-验证码通道适配器seam`、`0028-打卡积分直记化与每日登录事实源迁移`）。清单与最新决策见仓库 `docs/adr/` 目录本身，不在此重复维护。
 
 ### docs/plans/（本地，当前为空）
 

@@ -73,11 +73,11 @@ type MockExamAnswerDetailDTO struct {
 	MaxScore      float64 `json:"max_score"`
 	Explanation   string  `json:"explanation"`
 	Options       any     `json:"options"`
-	IsCorrect     *bool   `json:"is_correct"`
+	IsCorrect     *bool   `json:"is_correct" extensions:"x-nullable"`
 	// AI 评分字段仅在短答 AI 评分成功时出现。
-	AIScore    *float64 `json:"ai_score,omitempty"`
-	AIComment  *string  `json:"ai_comment,omitempty"`
-	AIFallback *bool    `json:"ai_fallback,omitempty"`
+	AIScore    *float64 `json:"ai_score,omitempty" extensions:"x-optional"`
+	AIComment  *string  `json:"ai_comment,omitempty" extensions:"x-optional"`
+	AIFallback *bool    `json:"ai_fallback,omitempty" extensions:"x-optional"`
 }
 
 // MockExamSubmitDTO 交卷结果（同时落库为 result JSON）。
@@ -99,21 +99,22 @@ type MockExamResultDTO struct {
 
 // MockExamHistoryItemDTO 历史列表条目。
 type MockExamHistoryItemDTO struct {
-	ID            int      `json:"id"`
-	StudentID     int      `json:"student_id"`
-	QuestionIDs   any      `json:"question_ids"`
-	Answers       any      `json:"answers"`
-	StartTime     string   `json:"start_time"`
-	SubmitTime    string   `json:"submit_time"`
-	RemainingTime int      `json:"remaining_time"`
-	Duration      int      `json:"duration"`
-	Status        string   `json:"status"`
-	Result        any      `json:"result"`
-	CreatedAt     string   `json:"created_at"`
-	Score         *float64 `json:"score"`
+	ID            int    `json:"id"`
+	StudentID     int    `json:"student_id"`
+	QuestionIDs   any    `json:"question_ids"`
+	Answers       any    `json:"answers"`
+	StartTime     string `json:"start_time"`
+	SubmitTime    string `json:"submit_time"`
+	RemainingTime int    `json:"remaining_time"`
+	Duration      int    `json:"duration"`
+	Status        string `json:"status"`
+	Result        any    `json:"result"`
+	CreatedAt     string `json:"created_at"`
+	// Score 未交卷时为 null（键仍在）：x-nullable 让生成物渲染 number | null。
+	Score *float64 `json:"score" extensions:"x-nullable"`
 	// PaperID 真题卷来源（#386）：按卷开考时写入 mock_exam.paper_id，随机模考为 nil
 	// （omitempty——既有消费者对随机模考的响应零差异，向后兼容）。
-	PaperID *int `json:"paper_id,omitempty"`
+	PaperID *int `json:"paper_id,omitempty" extensions:"x-optional"` // 随机模考无来源卷：**键不存在**（omitempty），故 x-optional 而非 x-nullable
 }
 
 // MockExamHistoryDTO 历史列表信封。

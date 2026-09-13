@@ -78,12 +78,11 @@ func (h *WechatAuthHandler) MiniProgramLogin(c *gin.Context) {
 // @Success 200 {object} response.R "success"
 // @Router /auth/wechat/qrcode [post]
 func (h *WechatAuthHandler) GetQRCodeInfo(c *gin.Context) {
-	Endpoint[struct{}, map[string]any]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*map[string]any, error) {
-			result := h.svc.QRCodeInfo()
-			return &result, nil
+	Endpoint[struct{}, service.WechatQRCodeInfoDTO]{
+		Invoke: func(ctx context.Context, _ *struct{}) (*service.WechatQRCodeInfoDTO, error) {
+			return h.svc.QRCodeInfo(), nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *map[string]any, _ error) {
+		Render: func(c *gin.Context, _ *struct{}, resp *service.WechatQRCodeInfoDTO, _ error) {
 			response.Success(c, *resp)
 		},
 	}.Handle(c)

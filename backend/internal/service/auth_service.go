@@ -326,8 +326,18 @@ func (s *AuthService) TutorLogin(username, password string) (*LoginResult, error
 	}, "tutor", "导师账号或密码错误")
 }
 
+// TutorRegisterResultDTO 导师建号结果（ADR-0009 §2 typed DTO / spec #940 片三）。
+//
+// 字段按 JSON key 字母序声明（name / tutor_id / username）：旧形态是 map[string]any，
+// encoding/json 对 map 按 key 排序输出 —— 字母序保证换成 struct 后字节序不变。
+type TutorRegisterResultDTO struct {
+	Name     string `json:"name"`
+	TutorID  int    `json:"tutor_id"`
+	Username string `json:"username"`
+}
+
 // TutorRegister 导师注册。
-func (s *AuthService) TutorRegister(username, password, name string) (map[string]any, error) {
+func (s *AuthService) TutorRegister(username, password, name string) (*TutorRegisterResultDTO, error) {
 	var count int64
 	s.db.Model(&model.Tutor{}).Where("username = ?", username).Count(&count)
 	if count > 0 {
@@ -347,10 +357,10 @@ func (s *AuthService) TutorRegister(username, password, name string) (map[string
 	if err := s.db.Create(&tutor).Error; err != nil {
 		return nil, err
 	}
-	return map[string]any{
-		"tutor_id": tutor.TutorID,
-		"username": tutor.Username,
-		"name":     tutor.Name,
+	return &TutorRegisterResultDTO{
+		Name:     tutor.Name,
+		TutorID:  tutor.TutorID,
+		Username: tutor.Username,
 	}, nil
 }
 
@@ -422,6 +432,67 @@ func ValidateRecruiterInput(in RecruiterCreateInput) error {
 		return errors.New("微信号过长（最多 100 字符）")
 	}
 	return nil
+}
+
+// RecruiterCreatedDTO 招聘者账号创建（201）的响应形状；password 不在内。
+// 字段声明按 JSON key 字母序 —— 与改造前 map[string]any 的序列化字节序一致（#954 片二）。
+type RecruiterCreatedDTO struct {
+	BusinessScope string `json:"business_scope"`
+	CompanyName   string `json:"company_name"`
+	ContactEmail  string `json:"contact_email"`
+	ContactName   string `json:"contact_name"`
+	ContactPhone  string `json:"contact_phone"`
+	CreditCode    string `json:"credit_code"`
+	ID            int    `json:"id"`
+	Status        int16  `json:"status"`
+	Username      string `json:"username"`
+	Wechat        string `json:"wechat"`
+}
+
+// RecruiterUpdatedDTO 招聘者编辑（200）的响应形状：与创建**同一个投影少一个 status**。
+// 这个差异是现状（改造前两处 map 就不一致），本片按「字节不变」保留，是否统一由 admin 片决定。
+type RecruiterUpdatedDTO struct {
+	BusinessScope string `json:"business_scope"`
+	CompanyName   string `json:"company_name"`
+	ContactEmail  string `json:"contact_email"`
+	ContactName   string `json:"contact_name"`
+	ContactPhone  string `json:"contact_phone"`
+	CreditCode    string `json:"credit_code"`
+	ID            int    `json:"id"`
+	Username      string `json:"username"`
+	Wechat        string `json:"wechat"`
+}
+
+// NewRecruiterCreatedDTO / NewRecruiterUpdatedDTO 把招聘者模型投影为对外形状。
+// 投影折叠进 DTO 构造（ADR-0009 §2）：两个 handler 不再各抄一遍字段，
+// 也把「Edit 比 Create 少一个 status」这条差异摆在同一个地方（是否统一交 admin 片）。
+func NewRecruiterCreatedDTO(rec *model.RecruiterUser) RecruiterCreatedDTO {
+	return RecruiterCreatedDTO{
+		BusinessScope: rec.BusinessScope,
+		CompanyName:   rec.CompanyName,
+		ContactEmail:  rec.ContactEmail,
+		ContactName:   rec.ContactName,
+		ContactPhone:  rec.ContactPhone,
+		CreditCode:    rec.CreditCode,
+		ID:            rec.ID,
+		Status:        rec.Status,
+		Username:      rec.Username,
+		Wechat:        rec.Wechat,
+	}
+}
+
+func NewRecruiterUpdatedDTO(rec *model.RecruiterUser) RecruiterUpdatedDTO {
+	return RecruiterUpdatedDTO{
+		BusinessScope: rec.BusinessScope,
+		CompanyName:   rec.CompanyName,
+		ContactEmail:  rec.ContactEmail,
+		ContactName:   rec.ContactName,
+		ContactPhone:  rec.ContactPhone,
+		CreditCode:    rec.CreditCode,
+		ID:            rec.ID,
+		Username:      rec.Username,
+		Wechat:        rec.Wechat,
+	}
 }
 
 // CreateRecruiter 管理员创建招聘者账号（邀约制，企业字段全部必填）。
@@ -627,6 +698,10 @@ func (s *AuthService) EditRecruiter(id int, in RecruiterEditInput) (*model.Recru
 	}
 	return &r, nil
 }
+
+// RecruiterPasswordResetResult 重置密码的响应体：改造前是空 map（信封里 data 为 {}），
+// 空结构体保形 —— 序列化仍是 {} 而不是 null（#954 片二：字节不变）。
+type RecruiterPasswordResetResult struct{}
 
 // ResetRecruiterPassword 重置招聘者口令（#417）：旧口令立即失效，响应不回显任何口令字段。
 func (s *AuthService) ResetRecruiterPassword(ctx context.Context, id int, password string) error {

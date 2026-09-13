@@ -426,8 +426,41 @@ func (s *QuestionBankService) DeleteQuestion(id int) error {
 	return nil
 }
 
+// QuestionPageDTO 题库分页结果（ADR-0009 §2 typed DTO / spec #940 片三）。
+// 字段按 JSON key 字母序声明（page / page_size / questions / total）—— 旧 map 的序列化序。
+type QuestionPageDTO struct {
+	Page      int           `json:"page"`
+	PageSize  int           `json:"page_size"`
+	Questions []QuestionDTO `json:"questions"`
+	Total     int64         `json:"total"`
+}
+
+// QuestionImportErrorDTO 单条导入失败：index 为入参下标，error 为原因。
+type QuestionImportErrorDTO struct {
+	Error string `json:"error"`
+	Index int    `json:"index"`
+}
+
+// QuestionImportResultDTO 批量导入结果（字段按 JSON key 字母序：error_count / errors / success_count）。
+// Errors 用非 nil 空切片初始化，保证无失败时序列化为 []（与旧 map 的 []map[string]any{} 同形）。
+type QuestionImportResultDTO struct {
+	ErrorCount   int                      `json:"error_count"`
+	Errors       []QuestionImportErrorDTO `json:"errors"`
+	SuccessCount int                      `json:"success_count"`
+}
+
+// QuestionPublishResultDTO 批量发布结果。
+type QuestionPublishResultDTO struct {
+	PublishedCount int `json:"published_count"`
+}
+
+// QuestionRejectResultDTO 批量驳回结果。
+type QuestionRejectResultDTO struct {
+	RejectedCount int `json:"rejected_count"`
+}
+
 // ListQuestions 题目列表分页查询（可按标签 tagID 过滤，结果附带标签列表）。
-func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, status, keyword string, tagID *int, credentialID *int, sort ...string) map[string]any {
+func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, status, keyword string, tagID *int, credentialID *int, sort ...string) *QuestionPageDTO {
 	// 排序口径（#412）：缺省保持现状「最新提交优先」（created_at DESC, id ASC）；
 	// 讲师端显式传 id_asc 请求按 ID 升序，翻页时 ID 单调推进、不再呈锯齿跳回。
 	order := "created_at DESC, id ASC"
@@ -459,11 +492,11 @@ func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, st
 		ids = append(ids, list[i].ID)
 	}
 	s.attachTagsBatch(ids, out)
-	return map[string]any{
-		"total":     total,
-		"page":      page,
-		"page_size": pageSize,
-		"questions": out,
+	return &QuestionPageDTO{
+		Page:      page,
+		PageSize:  pageSize,
+		Questions: out,
+		Total:     total,
 	}
 }
 
@@ -538,7 +571,7 @@ func (s *QuestionBankService) PublishQuestion(id int) (QuestionDTO, error) {
 }
 
 // BatchPublish 批量发布（管理员审核通过）。同时清空驳回理由。
-func (s *QuestionBankService) BatchPublish(ids []int) map[string]any {
+func (s *QuestionBankService) BatchPublish(ids []int) *QuestionPublishResultDTO {
 	count := 0
 	if len(ids) > 0 {
 		count64 := s.db.Model(&model.Question{}).
@@ -547,7 +580,7 @@ func (s *QuestionBankService) BatchPublish(ids []int) map[string]any {
 			RowsAffected
 		count = int(count64)
 	}
-	return map[string]any{"published_count": count}
+	return &QuestionPublishResultDTO{PublishedCount: count}
 }
 
 // RejectQuestion 驳回题目（管理员审核）。状态回退为 draft，记录驳回理由供导师查看修改。
@@ -569,40 +602,40 @@ func (s *QuestionBankService) RejectQuestion(id int, reason string) (QuestionDTO
 }
 
 // BatchReject 批量驳回（管理员审核）。状态回退为 draft，统一记录同一驳回理由。
-func (s *QuestionBankService) BatchReject(ids []int, reason string) (map[string]any, error) {
+func (s *QuestionBankService) BatchReject(ids []int, reason string) (*QuestionRejectResultDTO, error) {
 	if reason == "" {
 		return nil, errors.New("请填写驳回理由")
 	}
 	if len(ids) == 0 {
-		return map[string]any{"rejected_count": 0}, nil
+		return &QuestionRejectResultDTO{RejectedCount: 0}, nil
 	}
 	count64 := s.db.Model(&model.Question{}).
 		Where("id IN ?", ids).
 		Updates(map[string]any{"status": "draft", "reject_reason": reason}).
 		RowsAffected
-	return map[string]any{"rejected_count": int(count64)}, nil
+	return &QuestionRejectResultDTO{RejectedCount: int(count64)}, nil
 }
 
 // BatchImport 批量导入题目。
-func (s *QuestionBankService) BatchImport(items []any, createdBy *int) map[string]any {
-	success, errs := 0, []map[string]any{}
+func (s *QuestionBankService) BatchImport(items []any, createdBy *int) *QuestionImportResultDTO {
+	success, errs := 0, make([]QuestionImportErrorDTO, 0)
 	for i, item := range items {
 		data, ok := item.(map[string]any)
 		if !ok {
-			errs = append(errs, map[string]any{"index": i, "error": "无效数据"})
+			errs = append(errs, QuestionImportErrorDTO{Index: i, Error: "无效数据"})
 			continue
 		}
 		data["status"] = "pending"
 		if _, err := s.CreateQuestion(data, createdBy, "tutor"); err != nil {
-			errs = append(errs, map[string]any{"index": i, "error": err.Error()})
+			errs = append(errs, QuestionImportErrorDTO{Index: i, Error: err.Error()})
 			continue
 		}
 		success++
 	}
-	return map[string]any{
-		"success_count": success,
-		"error_count":   len(errs),
-		"errors":        errs,
+	return &QuestionImportResultDTO{
+		ErrorCount:   len(errs),
+		Errors:       errs,
+		SuccessCount: success,
 	}
 }
 

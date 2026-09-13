@@ -285,6 +285,14 @@ func (s *RecruitService) Get(userID int) (*RecruitResumeCard, error) {
 	return s.GetForRecruiter(userID, 0)
 }
 
+// RecruitMeDTO 招聘者自助信息 GET /api/recruit/me 的响应（#954 片二）。
+// 注意它**不是** /auth/me 的 ProfileDTO：只回 3 个字段，改造前后字节一致。
+type RecruitMeDTO struct {
+	Account string `json:"account"`
+	Role    string `json:"role"`
+	UserID  int    `json:"user_id"`
+}
+
 // GetForRecruiter 脱敏详情（#489）：带企业视角联系状态。recruiterID>0 时回填。
 func (s *RecruitService) GetForRecruiter(userID, recruiterID int) (*RecruitResumeCard, error) {
 	var card model.JobCard

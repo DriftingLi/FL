@@ -245,19 +245,27 @@ func (s *WechatAuthService) findOrCreateByOpenID(openID, unionID string) (*model
 	return nil, false, errors.New("微信登录注册失败，请稍后再试")
 }
 
+// WechatQRCodeInfoDTO 扫码登录占位信息（ADR-0009 §2 typed DTO / spec #940 片三）。
+// 字段按 JSON key 字母序声明（enabled / message / qr_url）—— 旧 map 的序列化序。
+type WechatQRCodeInfoDTO struct {
+	Enabled bool   `json:"enabled"`
+	Message string `json:"message"`
+	QRURL   string `json:"qr_url"`
+}
+
 // QRCodeInfo 返回扫码登录占位信息：未配置授权时 enabled=false，前端展示占位二维码。
-func (s *WechatAuthService) QRCodeInfo() map[string]any {
+func (s *WechatAuthService) QRCodeInfo() *WechatQRCodeInfoDTO {
 	if !s.cfg.Configured() {
-		return map[string]any{
-			"enabled": false,
-			"qr_url":  "",
-			"message": "微信授权暂未配置，请等待开放平台配置完成后使用",
+		return &WechatQRCodeInfoDTO{
+			Enabled: false,
+			Message: "微信授权暂未配置，请等待开放平台配置完成后使用",
+			QRURL:   "",
 		}
 	}
-	return map[string]any{
-		"enabled": true,
-		"qr_url":  "",
-		"message": "微信扫码登录待接入（二维码生成接口占位）",
+	return &WechatQRCodeInfoDTO{
+		Enabled: true,
+		Message: "微信扫码登录待接入（二维码生成接口占位）",
+		QRURL:   "",
 	}
 }
 

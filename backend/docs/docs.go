@@ -547,6 +547,258 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/forum/topics/{id}/experience": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "一个认定动作同时置 is_experience 与 is_featured（经验蕴含精选）；首次认定同事务给帖主 +30（与加精共用一笔，每帖幂等一次）；状态已一致时幂等短路",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-论坛"
+                ],
+                "summary": "管理员认定备考经验",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "主题 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "认定成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ForumTopicDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "认定失败（主题不存在）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "需要管理员角色",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "只撤经验归类，保留精选位；已发放的认定奖励不回滚；状态已一致时幂等短路",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-论坛"
+                ],
+                "summary": "管理员取消经验认定",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "主题 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "已取消经验认定",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ForumTopicDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "操作失败（主题不存在）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "需要管理员角色",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/forum/topics/{id}/featured": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "全类别可精；首次加精同事务给帖主 featured_bonus +30（每帖幂等一次，取消重精不重复发分）；状态已一致时幂等短路",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-论坛"
+                ],
+                "summary": "管理员加精帖子",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "主题 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "加精成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ForumTopicDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "加精失败（主题不存在）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "需要管理员角色",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "只改状态，已发放的加精奖励不回滚；状态已一致时幂等短路",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-论坛"
+                ],
+                "summary": "管理员取消精选",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "主题 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "已取消精选",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ForumTopicDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "操作失败（主题不存在）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "需要管理员角色",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/job-reports": {
             "get": {
                 "security": [
@@ -2547,7 +2799,7 @@ const docTemplate = `{
         },
         "/catalog/tree": {
             "get": {
-                "description": "学员端课程目录树",
+                "description": "学员端课程目录树（credential_id 可选：传了按目标证件分区，与课程列表同口径；不传不分区）",
                 "produces": [
                     "application/json"
                 ],
@@ -2555,6 +2807,14 @@ const docTemplate = `{
                     "学员端-培训目录"
                 ],
                 "summary": "培训目录树（公开）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "目标证件ID",
+                        "name": "credential_id",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "success",
@@ -2676,6 +2936,180 @@ const docTemplate = `{
                 }
             }
         },
+        "/check-in": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Asia/Shanghai 每日一次；首签即发积分（基础 5 + 连击满 3/7/30 天阶梯 5/10/50），",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-每日打卡"
+                ],
+                "summary": "每日打卡",
+                "responses": {
+                    "200": {
+                        "description": "打卡结果",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.CheckInResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/check-in/calendar": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "按年月查询打卡日历（逐日 {date, checked, points}）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-每日打卡"
+                ],
+                "summary": "打卡日历",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "年份",
+                        "name": "year",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "月份 1-12",
+                        "name": "month",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "日历",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.CheckInCalendarResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/check-in/rank": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "分页查询打卡排行榜",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-每日打卡"
+                ],
+                "summary": "打卡排行榜",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "每页条数",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "排行榜",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.CheckInRankResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/contributions": {
             "get": {
                 "security": [
@@ -2760,7 +3194,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "学员提交资料投稿（1–5 个文件，合计 ≤50MB，必挂当前证件）。资格：仅学员且已选证件；配额：日 ≤3 份、pending 积压 ≤5 份。未过审不产生积分",
+                "description": "学员提交资料投稿（1–5 个文件，合计 ≤50MB，目标证件可选、默认当前证件；投给非当前证件的稿需切过去可见）。资格：仅学员且已选证件；配额：日 ≤3 份、pending 积压 ≤5 份。未过审不产生积分",
                 "consumes": [
                     "application/json"
                 ],
@@ -3799,54 +4233,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/forum/check-in": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Asia/Shanghai 每日一次，返回连击/排名",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "学员端-论坛"
-                ],
-                "summary": "每日打卡",
-                "responses": {
-                    "200": {
-                        "description": "success",
-                        "schema": {
-                            "$ref": "#/definitions/response.R"
-                        }
-                    },
-                    "400": {
-                        "description": "已打卡",
-                        "schema": {
-                            "$ref": "#/definitions/response.R"
-                        }
-                    },
-                    "401": {
-                        "description": "未认证",
-                        "schema": {
-                            "$ref": "#/definitions/response.R"
-                        }
-                    }
-                }
-            }
-        },
-        "/forum/check-in/calendar": {
+        "/forum/my-liked-topics": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "按年月查询打卡日历",
+                "description": "按点赞时间倒序；主题被删时条目保留、标题回空串",
                 "consumes": [
                     "application/json"
                 ],
@@ -3856,55 +4250,7 @@ const docTemplate = `{
                 "tags": [
                     "学员端-论坛"
                 ],
-                "summary": "打卡日历",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "年份",
-                        "name": "year",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "月份 1-12",
-                        "name": "month",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "success",
-                        "schema": {
-                            "$ref": "#/definitions/response.R"
-                        }
-                    },
-                    "401": {
-                        "description": "未认证",
-                        "schema": {
-                            "$ref": "#/definitions/response.R"
-                        }
-                    }
-                }
-            }
-        },
-        "/forum/check-in/rank": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "分页查询打卡排行榜",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "学员端-论坛"
-                ],
-                "summary": "打卡排行榜",
+                "summary": "赞过的帖子",
                 "parameters": [
                     {
                         "type": "integer",
@@ -3915,7 +4261,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "integer",
-                        "default": 20,
+                        "default": 10,
                         "description": "每页条数",
                         "name": "page_size",
                         "in": "query"
@@ -3925,7 +4271,81 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ForumTopicPageResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
                             "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/forum/my-observed": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "浏览过但未互动（排除本人发帖/回复/主题点赞/主题收藏）；按最近浏览倒序",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-论坛"
+                ],
+                "summary": "围观的帖子",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 10,
+                        "description": "每页条数",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ForumTopicPageResult"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -4026,6 +4446,68 @@ const docTemplate = `{
                         "description": "success",
                         "schema": {
                             "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/forum/my-view-history": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "按主题去重取最近一次浏览，按最近浏览倒序；主题被删时条目保留",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-论坛"
+                ],
+                "summary": "浏览记录",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 10,
+                        "description": "每页条数",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ForumTopicPageResult"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -4247,7 +4729,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "支持 scope=all|general|chapter，按 category=all|discussion|question、chapter_id/keyword/sort=latest|hot 过滤",
+                "description": "支持 scope=all|general|chapter，按 category=all|discussion|question|experience、chapter_id/keyword/sort=latest|hot|created 过滤",
                 "consumes": [
                     "application/json"
                 ],
@@ -4267,8 +4749,14 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "类别 discussion|question，省略表示不过滤（向后兼容）",
+                        "description": "类别 discussion|question|experience，省略表示不过滤（向后兼容）",
                         "name": "category",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "精选过滤 true|false，省略表示不过滤（#742）",
+                        "name": "featured",
                         "in": "query"
                     },
                     {
@@ -4299,7 +4787,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "排序 latest|hot",
+                        "description": "排序 latest|hot|created（created=发帖时间，#722）",
                         "name": "sort",
                         "in": "query"
                     },
@@ -4349,7 +4837,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "chapter_id 为空表示综合讨论区；category=question 时不得带 chapter_id；images 最多 9 张 URL",
+                "description": "chapter_id 为空表示综合讨论区；category=question 时不得带 chapter_id；experience（备考经验）可挂章节、不可被采纳；images 最多 9 张 URL",
                 "consumes": [
                     "application/json"
                 ],
@@ -4442,13 +4930,39 @@ const docTemplate = `{
                         "description": "排序方向 asc|desc",
                         "name": "order",
                         "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "每页回复数",
+                        "name": "page_size",
+                        "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "success",
+                        "description": "详情",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ForumTopicDetailDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -4459,6 +4973,77 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "仅作者本人可改 title/content/images/category；非本人 403，主题不存在 404；类别值域 discussion|question|experience，空串归一 discussion；问答帖不得挂章节（与发帖同规则）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-论坛"
+                ],
+                "summary": "编辑自己的帖子",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "主题ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "修改成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ForumTopicDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误（类别非法/长度越界/图片非法）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "非作者本人",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "主题不存在",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -5457,7 +6042,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "创建模拟考试会话，count 题量、duration 时长（默认 90 分钟）",
+                "description": "创建模拟考试会话，count 题量、duration 时长（默认 90 分钟）；credential_id 可选（经拦截器注入当前证件，按证件分区抽题）",
                 "consumes": [
                     "application/json"
                 ],
@@ -5469,6 +6054,12 @@ const docTemplate = `{
                 ],
                 "summary": "开始模拟考试",
                 "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "目标证件ID",
+                        "name": "credential_id",
+                        "in": "query"
+                    },
                     {
                         "description": "参数",
                         "name": "body",
@@ -6481,7 +7072,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ProgressSaveResultDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -8879,7 +9482,7 @@ const docTemplate = `{
         },
         "/tags": {
             "get": {
-                "description": "仅启用项",
+                "description": "仅启用项（credential_id 可选：传了按目标证件分区，与抽题池同口径；不传不分区）",
                 "produces": [
                     "application/json"
                 ],
@@ -8887,6 +9490,14 @@ const docTemplate = `{
                     "学员端-培训目录"
                 ],
                 "summary": "题库标签（公开）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "目标证件ID",
+                        "name": "credential_id",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "success",
@@ -9454,6 +10065,110 @@ const docTemplate = `{
                 }
             }
         },
+        "service.CheckInCalendarResult": {
+            "type": "object",
+            "properties": {
+                "days": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.CheckInDay"
+                    }
+                },
+                "streak": {
+                    "type": "integer"
+                },
+                "today_checked": {
+                    "type": "boolean"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.CheckInDay": {
+            "type": "object",
+            "properties": {
+                "checked": {
+                    "type": "boolean"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "points": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.CheckInRankItem": {
+            "type": "object",
+            "properties": {
+                "rank": {
+                    "type": "integer"
+                },
+                "streak": {
+                    "type": "integer"
+                },
+                "today_checked": {
+                    "type": "boolean"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "user": {
+                    "$ref": "#/definitions/service.ForumAuthor"
+                }
+            }
+        },
+        "service.CheckInRankResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.CheckInRankItem"
+                    }
+                },
+                "me": {
+                    "description": "Me 是 Go 指针：未上榜时为 null。extensions 把这条可空性**表达进注解层**，\ncodegen 据此渲染 me: CheckInRankItem | null（spec #940 片五③）。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/service.CheckInRankItem"
+                        }
+                    ],
+                    "x-nullable": true
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.CheckInResult": {
+            "type": "object",
+            "properties": {
+                "checked": {
+                    "type": "boolean"
+                },
+                "points": {
+                    "description": "Points 今日实发积分（基础 + 跨档阶梯，合并单笔；已打卡/重复请求时为 0）。",
+                    "type": "integer"
+                },
+                "streak": {
+                    "type": "integer"
+                },
+                "today_checked": {
+                    "type": "boolean"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
         "service.ContributionAuthor": {
             "type": "object",
             "properties": {
@@ -9475,7 +10190,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "file_id": {
-                    "type": "integer"
+                    "description": "FileID 暂存文件尚未落库：key 不存在（omitempty）→ x-optional。",
+                    "type": "integer",
+                    "x-optional": true
                 },
                 "file_name": {
                     "type": "string"
@@ -9492,7 +10209,12 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "author": {
-                    "$ref": "#/definitions/service.ContributionAuthor"
+                    "description": "Author 的 omitempty 对结构体取值**无效**（encoding/json 不省略零值结构体）：key 恒在，\n生成物按必填渲染是正确的，前端手写的 author? 属过时宽容。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/service.ContributionAuthor"
+                        }
+                    ]
                 },
                 "created_at": {
                     "type": "string"
@@ -9507,7 +10229,8 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/service.ContributionFileDTO"
-                    }
+                    },
+                    "x-optional": true
                 },
                 "id": {
                     "type": "integer"
@@ -9519,7 +10242,8 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "reject_reason": {
-                    "type": "string"
+                    "type": "string",
+                    "x-optional": true
                 },
                 "status": {
                     "type": "string"
@@ -9836,6 +10560,10 @@ const docTemplate = `{
                 "content": {
                     "type": "string"
                 },
+                "content_format": {
+                    "description": "ContentFormat 正文格式声明（ADR-0044）：text | markdown。与主题同口径。",
+                    "type": "string"
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -9848,6 +10576,13 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
+                "ip_city": {
+                    "type": "string"
+                },
+                "ip_province": {
+                    "description": "IPProvince / IPCity 发布那一刻的属地快照（ADR-0045），与主题同口径：\n空串 = 无属地，展示侧接在相对时间之后（「18 小时前 · 上海」），为空则整段不渲染。",
+                    "type": "string"
+                },
                 "is_accepted": {
                     "type": "boolean"
                 },
@@ -9856,6 +10591,10 @@ const docTemplate = `{
                 },
                 "likes_count": {
                     "type": "integer"
+                },
+                "parent_avatar_url": {
+                    "description": "ParentAvatarURL 被回复人的头像（ADR-0042「昵称 › 被回复人」行内形态所需）。\n与 ParentName 同口径 omitempty：顶层回复（无被回复人）两个字段都不出现。",
+                    "type": "string"
                 },
                 "parent_id": {
                     "type": "integer"
@@ -9882,7 +10621,7 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "category": {
-                    "description": "discussion | question（#364）",
+                    "description": "意图：discussion | question（ADR-0040）",
                     "type": "string"
                 },
                 "chapter_id": {
@@ -9892,6 +10631,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "content": {
+                    "type": "string"
+                },
+                "content_format": {
+                    "description": "ContentFormat 正文格式声明（ADR-0044）：text | markdown。前端据此选渲染方式。",
                     "type": "string"
                 },
                 "created_at": {
@@ -9905,6 +10648,21 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                },
+                "ip_city": {
+                    "type": "string"
+                },
+                "ip_province": {
+                    "description": "IPProvince / IPCity 发布那一刻的属地快照（ADR-0045）。空串 = 无属地，\n展示侧据此**整段不渲染**（不显示「未知」、不留占位）。\n位置在作者行：它是「这条帖子的作者当时在哪」，不是用户资料。",
+                    "type": "string"
+                },
+                "is_experience": {
+                    "description": "认定：备考经验（蕴含 is_featured）",
+                    "type": "boolean"
+                },
+                "is_featured": {
+                    "description": "认定：精选位",
+                    "type": "boolean"
                 },
                 "last_reply_at": {
                     "type": "string"
@@ -9928,6 +10686,29 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "view_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.ForumTopicDetailDTO": {
+            "type": "object",
+            "properties": {
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "replies": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.ForumReplyDTO"
+                    }
+                },
+                "topic": {
+                    "$ref": "#/definitions/service.ForumTopicDTO"
+                },
+                "total": {
                     "type": "integer"
                 }
             }
@@ -9968,7 +10749,12 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "question": {
-                    "$ref": "#/definitions/service.QuestionDTO"
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/service.QuestionDTO"
+                        }
+                    ],
+                    "x-optional": true
                 },
                 "question_id": {
                     "type": "integer"
@@ -10051,14 +10837,17 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "ai_comment": {
-                    "type": "string"
+                    "type": "string",
+                    "x-optional": true
                 },
                 "ai_fallback": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "x-optional": true
                 },
                 "ai_score": {
                     "description": "AI 评分字段仅在短答 AI 评分成功时出现。",
-                    "type": "number"
+                    "type": "number",
+                    "x-optional": true
                 },
                 "content": {
                     "type": "string"
@@ -10070,7 +10859,8 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "is_correct": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "x-nullable": true
                 },
                 "max_score": {
                     "type": "number"
@@ -10123,7 +10913,8 @@ const docTemplate = `{
                 },
                 "paper_id": {
                     "description": "PaperID 真题卷来源（#386）：按卷开考时写入 mock_exam.paper_id，随机模考为 nil\n（omitempty——既有消费者对随机模考的响应零差异，向后兼容）。",
-                    "type": "integer"
+                    "type": "integer",
+                    "x-optional": true
                 },
                 "question_ids": {},
                 "remaining_time": {
@@ -10131,7 +10922,9 @@ const docTemplate = `{
                 },
                 "result": {},
                 "score": {
-                    "type": "number"
+                    "description": "Score 未交卷时为 null（键仍在）：x-nullable 让生成物渲染 number | null。",
+                    "type": "number",
+                    "x-nullable": true
                 },
                 "start_time": {
                     "type": "string"
@@ -10350,8 +11143,10 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "answers_state": {
+                    "description": "AnswersState 无进度时为 null（键仍在）→ x-nullable。",
                     "type": "object",
-                    "additionalProperties": {}
+                    "additionalProperties": {},
+                    "x-nullable": true
                 },
                 "completed": {
                     "type": "integer"
@@ -10368,12 +11163,24 @@ const docTemplate = `{
                 }
             }
         },
+        "service.ProgressSaveResultDTO": {
+            "type": "object",
+            "properties": {
+                "index": {
+                    "type": "integer"
+                },
+                "saved": {
+                    "type": "boolean"
+                }
+            }
+        },
         "service.QuestionDTO": {
             "type": "object",
             "properties": {
                 "answer": {
                     "description": "学员侧（includeAnswer=false）省略以下四个字段。",
-                    "type": "string"
+                    "type": "string",
+                    "x-optional": true
                 },
                 "content": {
                     "type": "string"
@@ -10382,17 +11189,20 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "created_by": {
-                    "type": "integer"
+                    "type": "integer",
+                    "x-nullable": true
                 },
                 "created_by_type": {
                     "type": "string"
                 },
                 "credential_id": {
                     "description": "CredentialID 题目归属的目标证件（#412）：讲师端题库管理用证件列区分分区，学员侧形状不变。",
-                    "type": "integer"
+                    "type": "integer",
+                    "x-optional": true
                 },
                 "explanation": {
-                    "type": "string"
+                    "type": "string",
+                    "x-optional": true
                 },
                 "id": {
                     "type": "integer"
@@ -10402,7 +11212,8 @@ const docTemplate = `{
                 },
                 "options": {},
                 "reference_answer": {
-                    "type": "string"
+                    "type": "string",
+                    "x-optional": true
                 },
                 "reject_reason": {
                     "type": "string"
@@ -10411,13 +11222,15 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "scoring_criteria": {
-                    "type": "string"
+                    "type": "string",
+                    "x-optional": true
                 },
                 "status": {
                     "type": "string"
                 },
                 "tags": {
-                    "description": "Tags 题库管理面附加（未设置时省略；设置后保留 null/[] 形态与历史一致）。"
+                    "description": "Tags 题库管理面附加（未设置时省略；设置后保留 null/[] 形态与历史一致）。",
+                    "x-optional": true
                 },
                 "type": {
                     "type": "string"
@@ -10786,22 +11599,28 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "accuracy_rate": {
-                    "type": "number"
+                    "type": "number",
+                    "x-optional": true
                 },
                 "ai_comment": {
-                    "type": "string"
+                    "type": "string",
+                    "x-optional": true
                 },
                 "ai_explanation": {
-                    "type": "string"
+                    "type": "string",
+                    "x-optional": true
                 },
                 "ai_fallback": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "x-optional": true
                 },
                 "ai_score": {
-                    "type": "number"
+                    "type": "number",
+                    "x-optional": true
                 },
                 "common_wrong": {
-                    "type": "string"
+                    "type": "string",
+                    "x-optional": true
                 },
                 "correct_answer": {
                     "type": "string"
@@ -10810,22 +11629,27 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "is_correct": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "x-nullable": true
                 },
                 "max_score": {
-                    "type": "integer"
+                    "type": "integer",
+                    "x-optional": true
                 },
                 "question_id": {
                     "type": "integer"
                 },
                 "reference_answer": {
-                    "type": "string"
+                    "type": "string",
+                    "x-optional": true
                 },
                 "scoring_criteria": {
-                    "type": "string"
+                    "type": "string",
+                    "x-optional": true
                 },
                 "total_attempts": {
-                    "type": "integer"
+                    "type": "integer",
+                    "x-optional": true
                 },
                 "user_answer": {}
             }
@@ -10836,8 +11660,7 @@ const docTemplate = `{
                 "by_type": {
                     "type": "object",
                     "additionalProperties": {
-                        "type": "integer",
-                        "format": "int64"
+                        "type": "integer"
                     }
                 },
                 "total": {

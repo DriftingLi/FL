@@ -8,7 +8,6 @@ import (
 
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/model"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
@@ -307,7 +306,7 @@ func (h *AdminHandler) DeleteChapter(c *gin.Context) {
 
 // GenerateContent 异步生成课程内容 POST /api/admin/course/generate-content
 func (h *AdminHandler) GenerateContent(c *gin.Context) {
-	Endpoint[generateContentReq, string]{
+	Endpoint[generateContentReq, service.GenerateContentResultDTO]{
 		Parse: func(c *gin.Context) (*generateContentReq, error) {
 			var req struct {
 				CourseID   int   `json:"course_id"`
@@ -321,19 +320,19 @@ func (h *AdminHandler) GenerateContent(c *gin.Context) {
 			}
 			return &generateContentReq{CourseID: req.CourseID, ChapterIDs: req.ChapterIDs, UserID: c.GetInt("user_id")}, nil
 		},
-		Invoke: func(ctx context.Context, req *generateContentReq) (*string, error) {
+		Invoke: func(ctx context.Context, req *generateContentReq) (*service.GenerateContentResultDTO, error) {
 			taskID, err := h.contentGenSvc.StartGeneration(req.CourseID, req.ChapterIDs, req.UserID)
 			if err != nil {
 				return nil, err
 			}
-			return &taskID, nil
+			return &service.GenerateContentResultDTO{TaskID: taskID}, nil
 		},
-		Render: func(c *gin.Context, _ *generateContentReq, resp *string, err error) {
+		Render: func(c *gin.Context, _ *generateContentReq, resp *service.GenerateContentResultDTO, err error) {
 			if err != nil {
 				response.BadRequest(c, err.Error())
 				return
 			}
-			response.Created(c, "生成任务已启动", map[string]any{"task_id": *resp})
+			response.Created(c, "生成任务已启动", resp)
 		},
 	}.Handle(c)
 }
@@ -382,25 +381,24 @@ func (h *AdminHandler) ListHrwaiUsers(c *gin.Context) {
 
 // CreateHrwaiUser 新增 HRWAI 用户 POST /api/admin/hrwai-users
 func (h *AdminHandler) CreateHrwaiUser(c *gin.Context) {
-	Endpoint[createHrwaiUserReq, model.HrwaiUser]{
+	Endpoint[createHrwaiUserReq, service.HrwaiUserCreatedDTO]{
 		Parse: func(c *gin.Context) (*createHrwaiUserReq, error) {
 			return bindJSON[createHrwaiUserReq](c)
 		},
-		Invoke: func(ctx context.Context, req *createHrwaiUserReq) (*model.HrwaiUser, error) {
-			return h.adminSvc.CreateHrwaiUser(req.Phone, req.Password, req.Account, req.Username, req.Email, req.Company)
+		Invoke: func(ctx context.Context, req *createHrwaiUserReq) (*service.HrwaiUserCreatedDTO, error) {
+			u, err := h.adminSvc.CreateHrwaiUser(req.Phone, req.Password, req.Account, req.Username, req.Email, req.Company)
+			if err != nil {
+				return nil, err
+			}
+			dto := service.NewHrwaiUserCreatedDTO(u)
+			return &dto, nil
 		},
-		Render: func(c *gin.Context, _ *createHrwaiUserReq, resp *model.HrwaiUser, err error) {
+		Render: func(c *gin.Context, _ *createHrwaiUserReq, resp *service.HrwaiUserCreatedDTO, err error) {
 			if err != nil {
 				response.BadRequest(c, err.Error())
 				return
 			}
-			response.Created(c, "用户添加成功", map[string]any{
-				"id":       resp.ID,
-				"uid":      service.FormatUID(resp.UID),
-				"account":  resp.Account,
-				"username": resp.Username,
-				"phone":    resp.Phone,
-			})
+			response.Created(c, "用户添加成功", resp)
 		},
 	}.Handle(c)
 }
@@ -480,7 +478,7 @@ func (h *AdminHandler) ResetHrwaiUserPassword(c *gin.Context) {
 
 // ToggleHrwaiUserStatus 切换 HRWAI 用户启用/禁用状态 PUT /api/admin/hrwai-users/:id/status
 func (h *AdminHandler) ToggleHrwaiUserStatus(c *gin.Context) {
-	Endpoint[idParam, int16]{
+	Endpoint[idParam, service.StatusResultDTO]{
 		Parse: func(c *gin.Context) (*idParam, error) {
 			id, err := pathInt(c, "id", "用户ID无效")
 			if err != nil {
@@ -488,23 +486,23 @@ func (h *AdminHandler) ToggleHrwaiUserStatus(c *gin.Context) {
 			}
 			return &idParam{ID: id}, nil
 		},
-		Invoke: func(ctx context.Context, req *idParam) (*int16, error) {
+		Invoke: func(ctx context.Context, req *idParam) (*service.StatusResultDTO, error) {
 			next, err := h.adminSvc.ToggleHrwaiUserStatus(req.ID)
 			if err != nil {
 				return nil, err
 			}
-			return &next, nil
+			return &service.StatusResultDTO{Status: int(next)}, nil
 		},
-		Render: func(c *gin.Context, _ *idParam, resp *int16, err error) {
+		Render: func(c *gin.Context, _ *idParam, resp *service.StatusResultDTO, err error) {
 			if err != nil {
 				response.NotFound(c, err.Error())
 				return
 			}
 			msg := "用户已启用"
-			if *resp == 0 {
+			if resp.Status == 0 {
 				msg = "用户已禁用"
 			}
-			response.SuccessWithMsg(c, msg, map[string]any{"status": *resp})
+			response.SuccessWithMsg(c, msg, resp)
 		},
 	}.Handle(c)
 }
@@ -556,7 +554,7 @@ func (h *AdminHandler) ListTutors(c *gin.Context) {
 
 // CreateTutor 添加导师 POST /api/admin/tutor
 func (h *AdminHandler) CreateTutor(c *gin.Context) {
-	Endpoint[createTutorReq, map[string]any]{
+	Endpoint[createTutorReq, service.TutorRegisterResultDTO]{
 		Parse: func(c *gin.Context) (*createTutorReq, error) {
 			req, err := bindJSON[createTutorReq](c)
 			if err != nil {
@@ -567,14 +565,10 @@ func (h *AdminHandler) CreateTutor(c *gin.Context) {
 			}
 			return req, nil
 		},
-		Invoke: func(ctx context.Context, req *createTutorReq) (*map[string]any, error) {
-			result, err := h.authSvc.TutorRegister(req.Username, req.Password, req.Name)
-			if err != nil {
-				return nil, err
-			}
-			return &result, nil
+		Invoke: func(ctx context.Context, req *createTutorReq) (*service.TutorRegisterResultDTO, error) {
+			return h.authSvc.TutorRegister(req.Username, req.Password, req.Name)
 		},
-		Render: func(c *gin.Context, _ *createTutorReq, resp *map[string]any, err error) {
+		Render: func(c *gin.Context, _ *createTutorReq, resp *service.TutorRegisterResultDTO, err error) {
 			if err != nil {
 				response.BadRequest(c, err.Error())
 				return
@@ -644,7 +638,7 @@ func (h *AdminHandler) ResetTutorPassword(c *gin.Context) {
 
 // ToggleTutorStatus 切换导师启用/禁用状态 PUT /api/admin/tutor/:tutor_id/status
 func (h *AdminHandler) ToggleTutorStatus(c *gin.Context) {
-	Endpoint[idParam, int]{
+	Endpoint[idParam, service.StatusResultDTO]{
 		Parse: func(c *gin.Context) (*idParam, error) {
 			id, err := pathInt(c, "tutor_id", "导师ID无效")
 			if err != nil {
@@ -652,23 +646,23 @@ func (h *AdminHandler) ToggleTutorStatus(c *gin.Context) {
 			}
 			return &idParam{ID: id}, nil
 		},
-		Invoke: func(ctx context.Context, req *idParam) (*int, error) {
+		Invoke: func(ctx context.Context, req *idParam) (*service.StatusResultDTO, error) {
 			next, err := h.adminSvc.ToggleTutorStatus(req.ID)
 			if err != nil {
 				return nil, err
 			}
-			return &next, nil
+			return &service.StatusResultDTO{Status: next}, nil
 		},
-		Render: func(c *gin.Context, _ *idParam, resp *int, err error) {
+		Render: func(c *gin.Context, _ *idParam, resp *service.StatusResultDTO, err error) {
 			if err != nil {
 				response.NotFound(c, err.Error())
 				return
 			}
 			msg := "导师已启用"
-			if *resp == 0 {
+			if resp.Status == 0 {
 				msg = "导师已禁用"
 			}
-			response.SuccessWithMsg(c, msg, map[string]any{"status": *resp})
+			response.SuccessWithMsg(c, msg, resp)
 		},
 	}.Handle(c)
 }
