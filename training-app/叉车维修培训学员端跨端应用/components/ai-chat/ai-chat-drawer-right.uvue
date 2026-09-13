@@ -14,7 +14,17 @@
 </template>
 
 <script setup lang="uts">
-	type MenuItem = { key: string; label: string }
+	/**
+	 * ⚠️ `MenuItem` 必须与页面**同一个类型来源**。
+	 * 2026-09-13 实测（issue #947）：本文件原来自带一份 `type MenuItem = { key: string; label: string }`，
+	 * 而页面用的是 `pages/ai-assistant/ai-assistant-constants.uts` 导出的同名类型 —— 两个结构相同但
+	 * **名义不同**的类型编译到 Kotlin 后是两个类，页面把 `MenuItem[]` 传进本组件的 prop 时抛
+	 * `java.lang.ClassCastException: MenuItem cannot be cast to MenuItem`（现场栈：本文件第 9 行 v-for），
+	 * 右侧抽屉**一渲染就炸、连遮罩都没画出来** ⇒ 真机表现为「点 ⋯ 没有反应」。
+	 * 左侧抽屉（`AiChatDrawerLeft`）的类型来自 `types/index`（单一来源）所以不炸 —— 这就是左右不对称的原因。
+	 * 守护：`utils/aiChatDrawerContract.test.js`。
+	 */
+	import type { MenuItem } from '../../pages/ai-assistant/ai-assistant-constants'
 
 	withDefaults(defineProps<{
 		visible?: boolean
@@ -63,6 +73,11 @@
 	}
 
 	.drawer-right {
+		/* 2026-09-13（issue #947）：原写法只有 `right: 0`，真机表现为「点 ⋯ 无反应」——
+		   而左侧抽屉（`left: 0`）一直可用 ⇒ 补上 `left: 30%`（与 `width: 70%` 一致），用"已证可用"的
+		   `left` 锚定。补上之后真机**抽屉正常弹出**（维护者 2026-09-13 18:45 截图确认）。
+		   ⚠️ 与 `.nav-more-box` 是同一批修复，二者中**承重者未定**（未单独二分）；实测证明"两者都在"可用。 */
+		left: 30%;
 		right: 0;
 	}
 

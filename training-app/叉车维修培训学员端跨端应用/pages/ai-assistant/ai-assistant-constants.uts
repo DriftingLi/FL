@@ -13,7 +13,7 @@ export const FUNCTION_ITEMS : AIFunctionItem[] = [
     { key: 'knowledge', title: '维保知识', icon: '\uD83D\uDD27', prompt: '请介绍叉车维保相关知识', iconPath: '/static/icons/ai-functions/maintenance-knowledge.png' },
 ]
 
-/** 快捷提示语列表（基础版+专业版统一） */
+/** 快捷提示语列表 */
 export const QUICK_PROMPTS : string[] = [
     '如何高效阅读书籍？',
     '帮我写近期的学习汇报',
