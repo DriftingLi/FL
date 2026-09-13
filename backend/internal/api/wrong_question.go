@@ -73,7 +73,7 @@ type listWrongQuestionsReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /wrong-questions [get]
 func (h *WrongQuestionHandler) List(c *gin.Context) {
-	Endpoint[listWrongQuestionsReq, map[string]any]{
+	Endpoint[listWrongQuestionsReq, service.WrongQuestionPageDTO]{
 		Parse: func(c *gin.Context) (*listWrongQuestionsReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
@@ -88,12 +88,11 @@ func (h *WrongQuestionHandler) List(c *gin.Context) {
 				CredentialID:  middleware.CredentialIDPtr(c),
 			}, nil
 		},
-		Invoke: func(ctx context.Context, req *listWrongQuestionsReq) (*map[string]any, error) {
-			result := h.svc.GetWrongQuestions(req.StudentID, req.Page, req.PageSize, req.QType, req.MinWrongCount, req.Favorited, req.Sort, req.CredentialID)
-			return &result, nil
+		Invoke: func(ctx context.Context, req *listWrongQuestionsReq) (*service.WrongQuestionPageDTO, error) {
+			return h.svc.GetWrongQuestions(req.StudentID, req.Page, req.PageSize, req.QType, req.MinWrongCount, req.Favorited, req.Sort, req.CredentialID), nil
 		},
-		Render: func(c *gin.Context, _ *listWrongQuestionsReq, resp *map[string]any, _ error) {
-			response.Success(c, deref(resp))
+		Render: func(c *gin.Context, _ *listWrongQuestionsReq, resp *service.WrongQuestionPageDTO, _ error) {
+			response.Success(c, *resp)
 		},
 	}.Handle(c)
 }
@@ -167,7 +166,7 @@ type removeWrongQuestionReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /wrong-questions/{question_id}/remove [post]
 func (h *WrongQuestionHandler) Remove(c *gin.Context) {
-	Endpoint[removeWrongQuestionReq, map[string]any]{
+	Endpoint[removeWrongQuestionReq, service.WrongQuestionRemoveResultDTO]{
 		Parse: func(c *gin.Context) (*removeWrongQuestionReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
@@ -177,19 +176,15 @@ func (h *WrongQuestionHandler) Remove(c *gin.Context) {
 			}
 			return &removeWrongQuestionReq{StudentID: studentID, QuestionID: questionID}, nil
 		},
-		Invoke: func(ctx context.Context, req *removeWrongQuestionReq) (*map[string]any, error) {
-			result, err := h.svc.RemoveWrongQuestion(req.StudentID, req.QuestionID)
-			if err != nil {
-				return nil, err
-			}
-			return &result, nil
+		Invoke: func(ctx context.Context, req *removeWrongQuestionReq) (*service.WrongQuestionRemoveResultDTO, error) {
+			return h.svc.RemoveWrongQuestion(req.StudentID, req.QuestionID)
 		},
-		Render: func(c *gin.Context, _ *removeWrongQuestionReq, resp *map[string]any, err error) {
+		Render: func(c *gin.Context, _ *removeWrongQuestionReq, resp *service.WrongQuestionRemoveResultDTO, err error) {
 			if err != nil {
 				response.BadRequest(c, err.Error())
 				return
 			}
-			response.SuccessWithMsg(c, "已移出错题本", deref(resp))
+			response.SuccessWithMsg(c, "已移出错题本", *resp)
 		},
 	}.Handle(c)
 }
@@ -205,7 +200,7 @@ func (h *WrongQuestionHandler) Remove(c *gin.Context) {
 // @Success 200 {object} response.R "success"
 // @Router /wrong-questions/batch-remove [post]
 func (h *WrongQuestionHandler) BatchRemove(c *gin.Context) {
-	Endpoint[batchRemoveReq, map[string]any]{
+	Endpoint[batchRemoveReq, service.WrongQuestionBatchRemoveResultDTO]{
 		Parse: func(c *gin.Context) (*batchRemoveReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
@@ -217,20 +212,19 @@ func (h *WrongQuestionHandler) BatchRemove(c *gin.Context) {
 			}
 			return &batchRemoveReq{StudentID: studentID, QuestionIDs: req.QuestionIDs}, nil
 		},
-		Invoke: func(ctx context.Context, req *batchRemoveReq) (*map[string]any, error) {
+		Invoke: func(ctx context.Context, req *batchRemoveReq) (*service.WrongQuestionBatchRemoveResultDTO, error) {
 			cnt, err := h.svc.BatchRemoveWrongQuestions(req.StudentID, req.QuestionIDs)
 			if err != nil {
 				return nil, err
 			}
-			m := map[string]any{"removed": cnt}
-			return &m, nil
+			return &service.WrongQuestionBatchRemoveResultDTO{Removed: cnt}, nil
 		},
-		Render: func(c *gin.Context, _ *batchRemoveReq, resp *map[string]any, err error) {
+		Render: func(c *gin.Context, _ *batchRemoveReq, resp *service.WrongQuestionBatchRemoveResultDTO, err error) {
 			if err != nil {
 				response.BadRequest(c, err.Error())
 				return
 			}
-			response.SuccessWithMsg(c, "已批量移出", deref(resp))
+			response.SuccessWithMsg(c, "已批量移出", *resp)
 		},
 	}.Handle(c)
 }

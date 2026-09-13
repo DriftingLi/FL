@@ -207,14 +207,13 @@ func TestListQuestions_Pagination(t *testing.T) {
 		testutil.SeedQuestion(t, db, "single_choice", "题目前5", "A")
 	}
 	result := svc.ListQuestions(1, 2, "", "", "", nil, nil)
-	if result["total"].(int64) != 5 {
-		t.Fatalf("总数应为 5, got %v", result["total"])
+	if result.Total != 5 {
+		t.Fatalf("总数应为 5, got %v", result.Total)
 	}
-	questions := result["questions"].([]QuestionDTO)
-	if len(questions) != 2 {
-		t.Fatalf("本页应 2 条, got %d", len(questions))
+	if len(result.Questions) != 2 {
+		t.Fatalf("本页应 2 条, got %d", len(result.Questions))
 	}
-	if result["page"].(int) != 1 || result["page_size"].(int) != 2 {
+	if result.Page != 1 || result.PageSize != 2 {
 		t.Fatalf("分页参数不匹配: %+v", result)
 	}
 }
@@ -224,19 +223,19 @@ func TestListQuestions_FilterByType(t *testing.T) {
 	testutil.SeedQuestion(t, db, "single_choice", "单选题", "A")
 	testutil.SeedQuestion(t, db, "true_false", "判断题", "true")
 	result := svc.ListQuestions(1, 20, "true_false", "", "", nil, nil)
-	if result["total"].(int64) != 1 {
-		t.Fatalf("判断题应 1 条, got %v", result["total"])
+	if result.Total != 1 {
+		t.Fatalf("判断题应 1 条, got %v", result.Total)
 	}
 }
 
 func TestListQuestions_DefaultPage(t *testing.T) {
 	svc, _ := newQuestionBankSvc(t)
 	result := svc.ListQuestions(0, 0, "", "", "", nil, nil)
-	if result["page"].(int) != 1 {
-		t.Fatalf("默认页码应为 1, got %v", result["page"])
+	if result.Page != 1 {
+		t.Fatalf("默认页码应为 1, got %v", result.Page)
 	}
-	if result["page_size"].(int) != 20 {
-		t.Fatalf("默认页大小应为 20, got %v", result["page_size"])
+	if result.PageSize != 20 {
+		t.Fatalf("默认页大小应为 20, got %v", result.PageSize)
 	}
 }
 
@@ -269,8 +268,8 @@ func TestBatchPublish_Success(t *testing.T) {
 	q1 := testutil.SeedQuestion(t, db, "single_choice", "q1", "A")
 	q2 := testutil.SeedQuestion(t, db, "single_choice", "q2", "A")
 	result := svc.BatchPublish([]int{q1.ID, q2.ID})
-	if result["published_count"].(int) != 2 {
-		t.Fatalf("应发布 2 条, got %v", result["published_count"])
+	if result.PublishedCount != 2 {
+		t.Fatalf("应发布 2 条, got %v", result.PublishedCount)
 	}
 }
 
@@ -278,16 +277,16 @@ func TestBatchPublish_PartialNotFound(t *testing.T) {
 	svc, db := newQuestionBankSvc(t)
 	q1 := testutil.SeedQuestion(t, db, "single_choice", "q1", "A")
 	result := svc.BatchPublish([]int{q1.ID, 9999})
-	if result["published_count"].(int) != 1 {
-		t.Fatalf("应发布 1 条, got %v", result["published_count"])
+	if result.PublishedCount != 1 {
+		t.Fatalf("应发布 1 条, got %v", result.PublishedCount)
 	}
 }
 
 func TestBatchPublish_Empty(t *testing.T) {
 	svc, _ := newQuestionBankSvc(t)
 	result := svc.BatchPublish([]int{})
-	if result["published_count"].(int) != 0 {
-		t.Fatalf("空列表应 0 条, got %v", result["published_count"])
+	if result.PublishedCount != 0 {
+		t.Fatalf("空列表应 0 条, got %v", result.PublishedCount)
 	}
 }
 
@@ -310,11 +309,14 @@ func TestBatchImport_Success(t *testing.T) {
 	}
 	createdBy := 1
 	result := svc.BatchImport(items, &createdBy)
-	if result["success_count"].(int) != 2 {
-		t.Fatalf("应成功 2 条, got %v", result["success_count"])
+	if result.SuccessCount != 2 {
+		t.Fatalf("应成功 2 条, got %v", result.SuccessCount)
 	}
-	if result["error_count"].(int) != 0 {
-		t.Fatalf("应无错误, got %v", result["error_count"])
+	if result.ErrorCount != 0 {
+		t.Fatalf("应无错误, got %v", result.ErrorCount)
+	}
+	if result.Errors == nil {
+		t.Fatal("errors 应为空切片而非 nil（响应会是 [] 而不是 null）")
 	}
 }
 
@@ -334,11 +336,14 @@ func TestBatchImport_WithErrors(t *testing.T) {
 		"not-a-map", // 无效数据
 	}
 	result := svc.BatchImport(items, nil)
-	if result["success_count"].(int) != 1 {
-		t.Fatalf("应成功 1 条, got %v", result["success_count"])
+	if result.SuccessCount != 1 {
+		t.Fatalf("应成功 1 条, got %v", result.SuccessCount)
 	}
-	if result["error_count"].(int) != 2 {
-		t.Fatalf("应错误 2 条, got %v", result["error_count"])
+	if result.ErrorCount != 2 {
+		t.Fatalf("应错误 2 条, got %v", result.ErrorCount)
+	}
+	if len(result.Errors) != 2 {
+		t.Fatalf("应带 2 条错误明细, got %v", result.Errors)
 	}
 }
 

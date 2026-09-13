@@ -96,3 +96,38 @@ func TestEnvVarsShape(t *testing.T) {
 		seen[v.Name] = true
 	}
 }
+
+// 生成物的真实消费者锁（spec #940 片四）：ADR-0047 §5 收尾时 deploy/env.defaults 是
+// 「零消费者」的死文件 —— 只有全等契约钉着它，部署链路仍各自写默认值。这条锁把接线钉住：
+// CD 生成的环境变量文件必须 source 它，且打包清单必须带上它（否则远端 source 会失败）。
+// 没有这条锁，某次重构可以把接线悄悄摘掉，「生成物与运行期行为脱节」会原样回来。
+func TestEnvDefaultsIsConsumed(t *testing.T) {
+	cdPath := filepath.Join("..", "..", "..", ".github", "workflows", "cd.yml")
+	data, err := os.ReadFile(cdPath)
+	if err != nil {
+		t.Fatalf("读取 %s 失败: %v", cdPath, err)
+	}
+	cd := string(data)
+	if !strings.Contains(cd, "source \"$DEPLOY_PATH/deploy/env.defaults\"") {
+		t.Fatal("CD 链路没有 source deploy/env.defaults：生成物又变回零消费者的死文件")
+	}
+	if !strings.Contains(cd, "deploy/env.defaults \\") {
+		t.Fatal("CD 的打包清单里没有 deploy/env.defaults：远端 source 会失败")
+	}
+	// 生成物是**整体 export** 的，而 compose 的取值优先级是「shell 环境 > .env」：
+	// 镜像引用由 deploy-remote.sh 按 registry + tag 现算后写进 .env（不 export），
+	// 一旦生成物把 BACKEND_IMAGE/FRONTEND_IMAGE/LIBREOFFICE_IMAGE 留在环境里，就会盖掉计算值，
+	// compose 转而去 Docker Hub 拉不存在的 forklift-backend:latest（2026-09-13 testing 冒烟实测）。
+	if !strings.Contains(cd, "unset BACKEND_IMAGE FRONTEND_IMAGE LIBREOFFICE_IMAGE") {
+		t.Fatal("CD 的环境变量文件没有 unset 生成物里的镜像名：会把部署脚本算好的镜像引用盖掉")
+	}
+	// 部署脚本自己也会 source 生成物（手工执行路径的兜底），因此同一处让位必须在那里也做一遍 ——
+	// 只在一侧让位，compose 仍会拿到生成物里的本地镜像名（2026-09-13 testing 冒烟两次实测）。
+	remote, err := os.ReadFile(filepath.Join("..", "..", "..", "scripts", "deploy-remote.sh"))
+	if err != nil {
+		t.Fatalf("读取 scripts/deploy-remote.sh 失败: %v", err)
+	}
+	if !strings.Contains(string(remote), "unset BACKEND_IMAGE FRONTEND_IMAGE LIBREOFFICE_IMAGE") {
+		t.Fatal("deploy-remote.sh source 生成物后没有 unset 镜像名：compose 会去拉不存在的本地镜像")
+	}
+}

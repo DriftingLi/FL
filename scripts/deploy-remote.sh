@@ -32,6 +32,17 @@ MODE="${1:-deploy}"  # deploy | rollback
 DEPLOY_PATH="${DEPLOY_PATH:-/opt/forklift-training}"
 BACKUP_DIR="${DEPLOY_PATH}/backups"
 
+# 部署默认值唯一事实源（ADR-0047 §5 / spec #940 片四）：CD 链路已在 /tmp/deploy-env.sh 里 source 过它，
+# 手工执行本脚本时在这里兜底 source 一次 —— 声明表内的变量因此不必在脚本里再写一遍默认值。
+if [ -f "${DEPLOY_PATH}/deploy/env.defaults" ]; then
+    # shellcheck disable=SC1090
+    . "${DEPLOY_PATH}/deploy/env.defaults"
+    # 镜像引用由本脚本按 registry + tag 现算后写进 .env；而 compose 的取值优先级是
+    # 「shell 环境 > .env」—— 生成物里的 forklift-*-image:latest 若留在环境里就会盖掉计算值，
+    # compose 转而去 Docker Hub 拉不存在的镜像（2026-09-13 testing 冒烟实测踩到）。
+    unset BACKEND_IMAGE FRONTEND_IMAGE LIBREOFFICE_IMAGE
+fi
+
 # Docker
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 BACKEND_SERVICE="${BACKEND_SERVICE:-backend}"
@@ -171,7 +182,7 @@ write_env_file() {
         # SMTP 邮件（验证码通道；腾讯企业邮 SSL 465）
         printf 'SMTP_HOST='
         env_val "${SMTP_HOST:-}"; echo
-        echo "SMTP_PORT=${SMTP_PORT:-465}"
+        echo "SMTP_PORT=${SMTP_PORT}"
         printf 'SMTP_USERNAME='
         env_val "${SMTP_USERNAME:-${SMTP_FROM:-}}"; echo
         printf 'SMTP_PASSWORD='
@@ -207,12 +218,12 @@ write_env_file() {
         env_val "${SECRET_KEY:-}"; echo
         printf 'JWT_SECRET_KEY='
         env_val "${JWT_SECRET_KEY:-}"; echo
-        echo "JWT_EXPIRES_HOURS=${JWT_EXPIRES_HOURS:-2}"
+        echo "JWT_EXPIRES_HOURS=${JWT_EXPIRES_HOURS}"
         echo "JWT_REFRESH_EXPIRES_DAYS=${JWT_REFRESH_EXPIRES_DAYS:-7}"
 
         # 登录态 Cookie（父域名共享登录）
         printf 'AUTH_COOKIE_NAME='
-        env_val "${AUTH_COOKIE_NAME:-hrwai_token}"; echo
+        env_val "${AUTH_COOKIE_NAME}"; echo
         printf 'AUTH_COOKIE_DOMAIN='
         env_val "${AUTH_COOKIE_DOMAIN:-}"; echo
         echo "AUTH_COOKIE_SECURE=${AUTH_COOKIE_SECURE:-true}"
@@ -240,12 +251,12 @@ write_env_file() {
         echo "MAX_CONTENT_LENGTH_MB=250"
         echo "VALUATION_PDF_OUTPUT_DIR=/data/reports"
         echo "REDIS_PASSWORD=${REDIS_PASSWORD:-}"
-        echo "REDIS_DB=${REDIS_DB:-0}"
+        echo "REDIS_DB=${REDIS_DB}"
         echo "REDIS_POOL_SIZE=${REDIS_POOL_SIZE:-20}"
         echo "REDIS_KEY_PREFIX=${REDIS_KEY_PREFIX:-fl:}"
 
         echo "# S3 兼容对象存储（STORAGE_DRIVER=r2；R2_ENDPOINT 空=Cloudflare R2，非空=自建 RGW）"
-        echo "STORAGE_DRIVER=${STORAGE_DRIVER:-local}"
+        echo "STORAGE_DRIVER=${STORAGE_DRIVER}"
         printf 'R2_ENDPOINT='
         env_val "${R2_ENDPOINT:-}"; echo
         printf 'R2_ACCOUNT_ID='
@@ -258,7 +269,7 @@ write_env_file() {
         printf 'R2_PUBLIC_DOMAIN='
         env_val "${R2_PUBLIC_DOMAIN:-}"; echo
 
-        echo "BACKEND_HOST_PORT=${BACKEND_HOST_PORT:-8080}"
+        echo "BACKEND_HOST_PORT=${BACKEND_HOST_PORT}"
 
         # Volume 路径配置
         # 默认 named volume（production）；测试环境(Docker 19.03)用 bind mount 绕过 volume 权限 bug

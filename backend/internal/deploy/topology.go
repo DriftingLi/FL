@@ -7,6 +7,11 @@
 // 与声明表逐字一致——漂移从「人工 diff 发现」变成「go test 报红」。
 //
 // 本期只做声明 + 生成 + 断言，不改动部署脚本的执行路径（见 spec #932 决策 5）。
+//
+// 片四（spec #940）把生成物接进了部署链路：cd.yml 生成的环境变量文件**先 source 它**，
+// 在其之上只补写「secrets / 环境确实提供了值的变量」；因此 cd.yml 里不再出现声明表内变量的
+// 默认值字面量，compose 的「有默认值的变量引用」退居最后兜底（且仍被漂移锁钉住）。
+// 接线本身由 TestEnvDefaultsIsConsumed 守住 —— 否则某次重构能把消费者悄悄摘掉。
 package deploy
 
 import (
@@ -91,7 +96,9 @@ func RenderEnvDefaults() (string, error) {
 	b.WriteString("# 唯一事实源：backend/internal/deploy/topology.go。\n")
 	b.WriteString("# 再生成：cd backend && go run ./cmd/gen-deploy\n")
 	b.WriteString("# 同步契约：backend/internal/deploy/topology_test.go 与本文件全等比对，\n")
-	b.WriteString("# 并由漂移锁断言 cd.yml / deploy-remote.sh / docker-compose.prod.yml 的默认值一致。\n")
+	b.WriteString("# 并由漂移锁断言 compose 的默认值一致。\n")
+	b.WriteString("# 消费方：CD 生成的环境变量文件 source 本文件（spec #940 片四 / ADR-0047 §5），\n")
+	b.WriteString("# 随后只覆盖「secrets / 环境确实提供了值」的变量。\n")
 	for _, v := range EnvVars {
 		fmt.Fprintf(&b, "# %s\n", v.Desc)
 		fmt.Fprintf(&b, "export %s=%s\n", v.Name, shellQuote(v.Default))

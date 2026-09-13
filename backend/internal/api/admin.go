@@ -556,7 +556,7 @@ func (h *AdminHandler) ListTutors(c *gin.Context) {
 
 // CreateTutor 添加导师 POST /api/admin/tutor
 func (h *AdminHandler) CreateTutor(c *gin.Context) {
-	Endpoint[createTutorReq, map[string]any]{
+	Endpoint[createTutorReq, service.TutorRegisterResultDTO]{
 		Parse: func(c *gin.Context) (*createTutorReq, error) {
 			req, err := bindJSON[createTutorReq](c)
 			if err != nil {
@@ -567,14 +567,10 @@ func (h *AdminHandler) CreateTutor(c *gin.Context) {
 			}
 			return req, nil
 		},
-		Invoke: func(ctx context.Context, req *createTutorReq) (*map[string]any, error) {
-			result, err := h.authSvc.TutorRegister(req.Username, req.Password, req.Name)
-			if err != nil {
-				return nil, err
-			}
-			return &result, nil
+		Invoke: func(ctx context.Context, req *createTutorReq) (*service.TutorRegisterResultDTO, error) {
+			return h.authSvc.TutorRegister(req.Username, req.Password, req.Name)
 		},
-		Render: func(c *gin.Context, _ *createTutorReq, resp *map[string]any, err error) {
+		Render: func(c *gin.Context, _ *createTutorReq, resp *service.TutorRegisterResultDTO, err error) {
 			if err != nil {
 				response.BadRequest(c, err.Error())
 				return

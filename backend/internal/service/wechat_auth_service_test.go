@@ -196,7 +196,7 @@ func TestWechatQRCodeInfo_NotConfigured(t *testing.T) {
 	svc, _ := newWxSvc(t, "", "", 0, nil)
 	svc.cfg = config.WechatAppConfig{}
 	info := svc.QRCodeInfo()
-	if info["enabled"] != false {
+	if info.Enabled != false {
 		t.Errorf("未配置授权时应 enabled=false: %+v", info)
 	}
 }

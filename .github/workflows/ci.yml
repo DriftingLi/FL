@@ -76,6 +76,19 @@ jobs:
       - name: Go vet 静态分析
         run: go vet ./...
 
+      # Swagger 产物新鲜度（ADR-0019 专项第一步 / spec #940 片五①）：注解是唯一事实源，
+      # 生成物过期（改了注解没跑 make swagger）以前只有人肉发现 —— 这里让它直接红。
+      # swag 版本显式钉住：产物要字节可比，工具链漂移会让这条锁变成噪声源。
+      - name: Swagger 产物新鲜度（注解 → backend/docs 必须同步）
+        run: |
+          go install github.com/swaggo/swag/cmd/swag@v1.16.4
+          "$(go env GOPATH)/bin/swag" init -g cmd/server/main.go -o docs
+          cd "$GITHUB_WORKSPACE"
+          if ! git diff --exit-code -- backend/docs; then
+            echo "::error::backend/docs 与注解不同步：请在 backend 下执行 make swagger 并提交生成物"
+            exit 1
+          fi
+
       - name: golangci-lint 代码检查
         run: |
           # 固定版本安装，避免 @latest 随上游变动导致 CI 结果漂移
@@ -164,6 +177,12 @@ jobs:
 
       - name: TypeScript 类型检查
         run: npm run type-check
+
+      # 已收敛控件守卫（ADR-0035 备选转正 / spec #940 片一）：业务模板不得裸用封装层已收的 10 类控件。
+      # 用全量模式而非 --diff：当前树实测 0 违规，规则可以绝对化执行；判定逻辑的自检在 el-controls-selftest。
+      - name: 已收敛控件守卫（业务模板不得裸用封装控件）
+        working-directory: ${{ github.workspace }}
+        run: node scripts/check-el-controls.mjs --all
 
       - name: 前端单元测试
         run: npm test
@@ -322,6 +341,21 @@ jobs:
         run: node --test .github/scripts/pr-evidence-check.test.mjs
 
   # ============================================================
+  # Stage 6.7: 已收敛控件守卫的自检（守护的守护）
+  #   守卫坏了 = 规则静默失效 = 全绿假象。本 job 用表驱动单测喂源码文本，断言违规集合
+  #   （正例 / 注释与字符串负例 / 放行面 / 边界），并跑一次 CLI 全量模式防假红。
+  # ============================================================
+  el-controls-selftest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: 表驱动单测（守卫判定逻辑）
+        run: node --test scripts/check-el-controls.test.mjs
+
+  # ============================================================
   # Stage 7: CI 汇总 + testing 冒烟部署门禁
   #   1) 汇总各 job 结论。本 job 的 check run 名（ci-summary）是 ruleset 配置的
   #      必检状态检查，必须在每次分支 push 上运行并上报 success/failure，
@@ -329,7 +363,7 @@ jobs:
   #   2) CI 全绿且该分支有开启中的 PR 时，派发 CD workflow 部署 testing 冒烟。
   # ============================================================
   ci-summary:
-    needs: [backend-lint, backend-test, frontend-check, mobile-test, pr-evidence-selftest, security-scan, migration-check]
+    needs: [backend-lint, backend-test, frontend-check, mobile-test, pr-evidence-selftest, el-controls-selftest, security-scan, migration-check]
     if: always()
     runs-on: ubuntu-latest
     # 触发 CD workflow_dispatch 需要 actions:write；查分支 open PR 需要 pull-requests:read
@@ -364,6 +398,7 @@ jobs:
           check "${{ needs.frontend-check.result }}" "frontend-check"
           check "${{ needs.mobile-test.result }}" "mobile-test"
           check "${{ needs.pr-evidence-selftest.result }}" "pr-evidence-selftest"
+          check "${{ needs.el-controls-selftest.result }}" "el-controls-selftest"
           check "${{ needs.migration-check.result }}" "migration-check"
           check "${{ needs.security-scan.result }}" "security-scan"
 
