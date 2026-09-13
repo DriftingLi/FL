@@ -672,6 +672,21 @@ definitions:
       name:
         type: string
     type: object
+  service.LoginResult:
+    properties:
+      account:
+        type: string
+      refresh_token:
+        type: string
+      role:
+        type: string
+      token:
+        type: string
+      user_id:
+        type: integer
+      username:
+        type: string
+    type: object
   service.MockExamAnswerDetailDTO:
     properties:
       ai_comment:
@@ -879,6 +894,73 @@ definitions:
       total:
         type: integer
     type: object
+  service.ProfileChangeRequestDTO:
+    properties:
+      avatar_url:
+        type: string
+      created_at:
+        type: string
+      field_type:
+        type: string
+      id:
+        type: integer
+      new_value:
+        type: string
+      old_value:
+        type: string
+      reject_reason:
+        type: string
+      reviewed_at:
+        type: string
+        x-optional: true
+      reviewed_by:
+        type: integer
+        x-optional: true
+      status:
+        type: string
+      user_id:
+        type: integer
+      username:
+        type: string
+    type: object
+  service.ProfileDTO:
+    properties:
+      account:
+        type: string
+      avatar_url:
+        type: string
+        x-optional: true
+      company:
+        type: string
+        x-optional: true
+      email:
+        type: string
+        x-optional: true
+      has_password:
+        type: boolean
+        x-optional: true
+      name:
+        type: string
+        x-optional: true
+      pending_profile_change:
+        allOf:
+        - $ref: '#/definitions/service.ProfileChangeRequestDTO'
+        x-nullable: true
+        x-optional: true
+      phone:
+        type: string
+        x-optional: true
+      role:
+        type: string
+      uid:
+        type: string
+        x-optional: true
+      user_id:
+        type: integer
+      username:
+        type: string
+        x-optional: true
+    type: object
   service.ProgressResultDTO:
     properties:
       answers_state:
@@ -981,6 +1063,13 @@ definitions:
         type: string
       total_earned:
         type: integer
+    type: object
+  service.RefreshResultDTO:
+    properties:
+      refresh_token:
+        type: string
+      token:
+        type: string
     type: object
   service.ReportInput:
     properties:
@@ -1227,6 +1316,15 @@ definitions:
         x-optional: true
       user_answer: {}
     type: object
+  service.WechatQRCodeInfoDTO:
+    properties:
+      enabled:
+        type: boolean
+      message:
+        type: string
+      qr_url:
+        type: string
+    type: object
   service.WrongQuestionStatsDTO:
     properties:
       by_type:
@@ -1235,6 +1333,27 @@ definitions:
         type: object
       total:
         type: integer
+    type: object
+  service.WxLoginResult:
+    properties:
+      account:
+        type: string
+      avatar:
+        type: string
+      isNew:
+        type: boolean
+      name:
+        type: string
+      refresh_token:
+        type: string
+      role:
+        type: string
+      token:
+        type: string
+      user_id:
+        type: integer
+      username:
+        type: string
     type: object
 info:
   contact: {}
@@ -2348,7 +2467,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.LoginResult'
+              type: object
         "400":
           description: 参数错误
           schema:
@@ -2383,6 +2507,37 @@ paths:
       summary: 发送修改登录账号验证码
       tags:
       - 学员端-个人资料
+  /auth/admin-login:
+    post:
+      consumes:
+      - application/json
+      description: 管理员账号密码登录，成功写入登录 Cookie 并返回双令牌
+      parameters:
+      - description: 登录
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.LoginResult'
+              type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 管理员登录
+      tags:
+      - 管理端-认证
   /auth/avatar:
     post:
       consumes:
@@ -2400,7 +2555,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ProfileChangeRequestDTO'
+              type: object
         "400":
           description: 参数错误
           schema:
@@ -2432,7 +2592,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.LoginResult'
+              type: object
         "400":
           description: 参数错误
           schema:
@@ -2458,7 +2623,12 @@ paths:
         "201":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.LoginResult'
+              type: object
         "400":
           description: 参数错误
           schema:
@@ -2536,7 +2706,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.LoginResult'
+              type: object
         "400":
           description: 参数错误
           schema:
@@ -2576,7 +2751,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ProfileDTO'
+              type: object
         "401":
           description: 未认证
           schema:
@@ -2604,7 +2784,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.LoginResult'
+              type: object
         "400":
           description: 参数错误
           schema:
@@ -2630,7 +2815,12 @@ paths:
         "201":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.LoginResult'
+              type: object
         "400":
           description: 参数错误
           schema:
@@ -2708,7 +2898,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ProfileChangeRequestDTO'
+              type: object
         "400":
           description: 参数错误
           schema:
@@ -2871,6 +3066,37 @@ paths:
       summary: 发送绑定验证码
       tags:
       - 学员端-个人资料
+  /auth/recruiter-login:
+    post:
+      consumes:
+      - application/json
+      description: 招聘者账号密码登录（第四角色，host-only cookie 隔离），成功返回双令牌
+      parameters:
+      - description: 登录
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.LoginResult'
+              type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 企业招聘者登录
+      tags:
+      - 招聘域-认证
   /auth/refresh:
     post:
       consumes:
@@ -2889,7 +3115,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.RefreshResultDTO'
+              type: object
         "401":
           description: 未认证
           schema:
@@ -2897,6 +3128,37 @@ paths:
       summary: 刷新双令牌
       tags:
       - 学员端-认证
+  /auth/tutor-login:
+    post:
+      consumes:
+      - application/json
+      description: 导师账号密码登录，成功写入登录 Cookie 并返回双令牌
+      parameters:
+      - description: 登录
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.LoginResult'
+              type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 导师登录
+      tags:
+      - 讲师端-认证
   /auth/wechat/login:
     post:
       consumes:
@@ -2915,7 +3177,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.LoginResult'
+              type: object
         "400":
           description: 未配置
           schema:
@@ -2934,7 +3201,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.WechatQRCodeInfoDTO'
+              type: object
       summary: 获取微信扫码信息
       tags:
       - 学员端-认证
@@ -2957,7 +3229,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.WxLoginResult'
+              type: object
         "400":
           description: 参数错误
           schema:

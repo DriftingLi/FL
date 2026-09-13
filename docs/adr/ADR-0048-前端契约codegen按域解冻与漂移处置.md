@@ -44,6 +44,16 @@ ADR-0019 把「由 OpenAPI 生成前端类型」整体推迟，只留下方向�
 - **字节契约机制**沿用 ADR-0009 的字节序纪律：`TestInlineResponseDTOBytes` 用「改造前的 map 形态 ↔ 新 DTO」表驱动逐字节比对（参照物是旧 map 本身，不是手抄字面量）；DTO 投影折叠进构造器（ADR-0009 §2）。
 - **保留的现状差异**：招聘者创建（10 字段，含 `status`）与编辑（9 字段）形状不同，按「字节不变」保留，是否统一交 admin 片；`POST /practice-mode/progress` 的 `data` 从「注解写作无、实际有」纠正为 `service.ProgressSaveResultDTO`（该端点此前被片一登记为 NoData，本片一并改正）。
 
+## 实施修订（2026-09-13，片三 #959）
+
+auth 域片（注解缺口最深的域）落地时的口径补充：
+
+- **计数**：Web 消费面 **29 个端点**（`api/auth.ts` 26 + `client.ts` 的 `/auth/refresh`）→ **17 个有 data、12 个有意无 data**（logout、DELETE account、email/phone send-code、email/phone reset-password、profile/send-code、profile/email、profile/phone、profile/password、profile/password/send-code、account/send-code）；3 个登录端点（admin / tutor / recruiter）此前**不在 swagger**，本片补注解。
+- **`DataRef` 认得 201**：注册类端点用 `response.Created`，声明表锁此前只认 200，会把它们误判成「缺注解」——已修（`internal/apitypes/codegen.go`）。
+- **内联响应 map 的判据**：`/auth/refresh` 的响应体是 `map[string]string`（不是 `map[string]any` / `gin.H`，片二的口径没圈到它）——判据应读作「handler 手工拼的响应体」，与容器类型无关。
+- **共享 client 也是消费面**：`api/client.ts` 的静默刷新直接裸读 axios 的 `res.data.data`；本片给它补上生成的 `RefreshResultDTO`（信封形状显式声明）。「唯一事实源」覆盖**所有**消费点，不只是域模块。
+- **会话态 UI 模型保留**：`UserProfile`（token ∪ 登录基础字段 ∪ `/auth/me` 全量资料）继续手写并注明边界；`PendingProfileChange` 改为从生成类型派生（删掉手写副本）。
+
 ## 备选
 
 - **继续全量推迟**：拒绝 —— 输入面已可信、管道已跑通（#940），继续等只会让手写副本继续漂移；按域解冻把风险限制在「每片独立验收」内。

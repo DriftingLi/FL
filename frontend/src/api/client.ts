@@ -10,6 +10,7 @@ import axios from 'axios'
 import type { AxiosError, AxiosRequestConfig, AxiosInstance } from 'axios'
 import { ElMessage } from 'element-plus'
 import { getToken, getRefreshToken, setToken, setRefreshToken } from '@/utils/storage'
+import type { RefreshResultDTO } from './generated/auth'
 
 /**
  * 错误的语义分类，供上层决定「能否重试」「渲染哪种错误态」。
@@ -65,7 +66,9 @@ function tryRefreshTokens(): Promise<boolean> {
   if (!rt) return Promise.resolve(false)
   if (!refreshPromise) {
     refreshPromise = refreshHttp
-      .post('/auth/refresh', { refresh_token: rt })
+      // 响应形状来自生成物（后端注解是唯一事实源）：raw axios 拿不到 unwrappedRequest 的解包，
+      // 故这里显式声明信封（ADR-0009 的统一 {code,message,data}）。
+      .post<{ data: RefreshResultDTO }>('/auth/refresh', { refresh_token: rt })
       .then(res => {
         const data = res.data?.data
         if (data?.token && data?.refresh_token) {
