@@ -78,6 +78,7 @@
 
 	import { STORAGE_KEY_AI_SELECTED_USER_MODEL } from '../../constants/app'
 	import { FUNCTION_ITEMS, QUICK_PROMPTS, RIGHT_MENU_ITEMS } from './ai-assistant-constants'
+	import type { MenuItem } from './ai-assistant-constants'
 	import AiChatNav from '../../components/ai-chat/ai-chat-nav.uvue'
 	import AiChatBubble from '../../components/ai-chat/ai-chat-bubble.uvue'
 	import AiChatDrawerLeft from '../../components/ai-chat/ai-chat-drawer-left.uvue'
@@ -154,8 +155,16 @@
 		return '选择模型'
 	})
 
-	// 右侧菜单项（从常量导入）
-	const rightMenuItems = RIGHT_MENU_ITEMS
+	// 右侧菜单：未解锁专业版时**不显示**「自定义模型」。
+	// 该页属专业版能力（门集合见 ADR 0009），必须与输入区的能力门同一口径 ——
+	// 否则未解锁用户仍能从抽屉进入该页（本改动修的正是这条漏网路径）。
+	// 用 computed 过滤而非改常量：常量仍描述「专业版全量菜单」，可见性由能力门决定。
+	const rightMenuItems = computed<MenuItem[]>(() : MenuItem[] => {
+		if (proUnlocked.value) {
+			return RIGHT_MENU_ITEMS
+		}
+		return RIGHT_MENU_ITEMS.filter((m : MenuItem) => m.key != 'custom-models')
+	})
 
 	// 功能入口（从常量导入）
 	const functionItems = FUNCTION_ITEMS
