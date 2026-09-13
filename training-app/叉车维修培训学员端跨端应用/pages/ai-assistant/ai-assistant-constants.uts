@@ -6,7 +6,11 @@ import type { AIFunctionItem } from '../../types/index'
 
 /** 功能入口列表（5 项，含自定义图标路径） */
 export const FUNCTION_ITEMS : AIFunctionItem[] = [
-    { key: 'fault-consult', title: '故障咨询', icon: '\uD83D\uDC77', prompt: '故障咨询', iconPath: '/static/icons/ai-functions/fault-consult.png' },
+    // 「故障咨询」接后端专项功能键 fault_diagnosis（智能维修诊断）：根仓库 ADR-0032 决策 3 已把
+    // fault_consult / fault_code_query 下线，替代物写明就是「同一用户入口（智能维修诊断）」
+    // —— 本格即其继任者，故复用既有键（#921；其余 4 格的接线另见 #971）。
+    // 记法：本文件引用的 ADR-0030 / ADR-0032 属**根仓库**编号体系（见根 docs/adr/），与移动端 0001-0009 无关。
+    { key: 'fault-consult', title: '故障咨询', icon: '\uD83D\uDC77', prompt: '故障咨询', iconPath: '/static/icons/ai-functions/fault-consult.png', featureKey: 'fault_diagnosis' },
     { key: 'fault-code', title: '故障代码查询', icon: '\uD83D\uDD0D', prompt: '帮我查询叉车故障代码含义', iconPath: '/static/icons/ai-functions/fault-code-query.png' },
     { key: 'drawing', title: '图纸识别', icon: '\uD83D\uDCDC', prompt: '请识别这张叉车图纸', iconPath: '/static/icons/ai-functions/drawing-recognition.png' },
     { key: 'exercise', title: '习题解答', icon: '\uD83D\uDCDD', prompt: '请解答这道叉车维修题目', iconPath: '/static/icons/ai-functions/exercise-solving.png' },

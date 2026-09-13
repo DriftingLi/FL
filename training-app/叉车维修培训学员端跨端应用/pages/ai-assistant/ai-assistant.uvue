@@ -187,6 +187,13 @@
 	const functionItems = FUNCTION_ITEMS
 	const quickPrompts = QUICK_PROMPTS
 
+	// 待发功能键（#921）：宫格点击时置入、**该轮发完即清** —— 它是「这一轮走哪个专项通道」，
+	// 不是会话级状态：① 否则点一次「故障咨询」会把之后整段自由对话都钉在诊断通道上；
+	// ② 它**不能**从发送入口的早退分支漏出去（见 onInputSend 里「先取走」的位置）。
+	// 空串 = 通用对话（后端按通用助手计费）。
+	// 只影响**本轮对话**，不影响建会话：会话按功能键分区，而列表不查专项区（见 api/aiAssistant.uts）。
+	const pendingFeatureKey = ref<string>('')
+
 	// 档位横幅文案（两态单点；未解锁 = 兑换主曝光位，已解锁 = 只读状态）
 	const proBannerTitle = computed<string>(() : string => {
 		return proUnlocked.value ? '专业版 · 已解锁' : '解锁专业版'
@@ -202,12 +209,15 @@
 	})
 
 	// 专业版请求体
-	const buildBody : ChatBodyBuilder = (history : AiChatMessage[], sessionID : number) : UTSJSONObject => {
+	const buildBody : ChatBodyBuilder = (history : AiChatMessage[], sessionID : number, featureKey : string) : UTSJSONObject => {
 		const params : UTSJSONObject = {
 			session_id: sessionID,
 			model_source: currentModelSource.value,
 			messages: history,
 		}
+		// 专项功能键（#921）：只带宫格那一轮的键。带键时后端走专项通道（管理端单绑定 +
+		// 独立计费声明），不带键落通用对话 —— 空串显式发送，语义与「不发送」等价。
+		params['feature_key'] = featureKey
 		if (currentModelSource.value == 'admin') {
 			params['config_id'] = currentModelId.value
 		} else if (currentModelSource.value == 'user') {
@@ -222,6 +232,12 @@
 
 	// 发送
 	function onInputSend(text : string) : void {
+		// 功能键**先清空再取走**：它只属于「这一次点击」。放在早退分支之后会漏出去 ——
+		// 点宫格时若恰好还没拿到模型（loadModels 未回）就会 toast 并 return，键却留在 ref 里，
+		// 随后那条**无关**的自由提问／快捷提示语会带着 fault_diagnosis 走诊断通道（且限免不计费）。
+		// 取走即清（不依赖 sendInput 是否真的发出），异常路径也不残留到下一轮。
+		pendingFeatureKey.value = ''
+		const featureKey = pendingFeatureKey.value
 		if (models.value.length == 0 && userModels.value.length == 0 && currentModelSource.value != 'custom') {
 			uni.showToast({ title: '暂无可用的 AI 模型', icon: 'none' })
 			return
@@ -231,7 +247,7 @@
 			return
 		}
 		inputText.value = text
-		sendInput(currentModelName.value, buildBody, [])
+		sendInput(currentModelName.value, buildBody, [], featureKey)
 	}
 
 	function sendText(text : string) : void {
@@ -329,7 +345,10 @@
 		}
 	}
 
+	// 宫格入口：带专项功能键的那一格（如「故障咨询」→ fault_diagnosis）本轮走专项通道，
+	// 未带键的格子行为与从前一致（只发本地 prompt，落通用对话 —— 其余 4 格见 #971）
 	function onFunctionClick(item : AIFunctionItem) : void {
+		pendingFeatureKey.value = item.featureKey ?? ''
 		sendText(item.prompt)
 	}
 

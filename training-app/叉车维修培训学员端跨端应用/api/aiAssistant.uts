@@ -160,7 +160,15 @@ export function getAiModesApi() : Promise<UTSJSONObject> {
 	})
 }
 
-/** 会话列表 */
+/**
+ * 会话列表。
+ *
+ * ⚠️ 本调用**不带 `feature_key`**：后端 `ListSessions` 按功能键**分区**查询，缺参时落遗留
+ * `ai_assistant`（`ai_assistant_service.go:427-432`）。因此**新建会话时也不能带功能键** ——
+ * 否则该会话落进没人列的区（`fault_diagnosis`），在「最近对话」里永久不可见、不可重开/改名/删除，
+ * 但对话本身却以该键正常计费与路由（#921 首版实测到的回归）。**要按功能键分区会话，得先有
+ * 「列该区会话」的界面**（移动端当前没有专项功能页），属另立的产品决策。
+ */
 export function getAiSessionsApi() : Promise<AiSession[]> {
 	return get('/ai-assistant/sessions').then((data : UTSJSONObject) : AiSession[] => {
 		const arr = extractArray(data, 'sessions')
