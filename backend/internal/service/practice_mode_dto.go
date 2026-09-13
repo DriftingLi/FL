@@ -19,8 +19,9 @@ type ProgressResultDTO struct {
 	CurrentIndex int `json:"current_index"`
 	// PoolTotal 实时题库池总数（#413）：当前证件分区口径，与开始练习返回的题目数一致；
 	// Total 语义退回「上次会话数组长度」，仅供断点续练游标使用（字段名不变，新增字段零 diff）。
-	PoolTotal    int            `json:"pool_total"`
-	AnswersState map[string]any `json:"answers_state"`
+	PoolTotal int `json:"pool_total"`
+	// AnswersState 无进度时为 null（键仍在）→ x-nullable。
+	AnswersState map[string]any `json:"answers_state" extensions:"x-nullable"`
 }
 
 // SubmitResultDTO 单题提交判定结果（旧 SubmitAnswer map 输出）。
@@ -29,21 +30,21 @@ type ProgressResultDTO struct {
 // AI 评分成功追加 ai_score / ai_comment，降级时追加 ai_fallback。
 // 解析增强（spec #284）：全站正确率 accuracy_rate（样本<5 时不返回）与易错项 common_wrong（仅选择题，样本<5 或无错题时不返回）。
 type SubmitResultDTO struct {
-	IsCorrect       *bool    `json:"is_correct"`
+	IsCorrect       *bool    `json:"is_correct" extensions:"x-nullable"`
 	CorrectAnswer   string   `json:"correct_answer"`
 	Explanation     string   `json:"explanation"`
 	QuestionID      int      `json:"question_id"`
 	UserAnswer      any      `json:"user_answer"`
-	ReferenceAnswer string   `json:"reference_answer,omitempty"`
-	ScoringCriteria string   `json:"scoring_criteria,omitempty"`
-	MaxScore        int      `json:"max_score,omitempty"`
-	AIScore         *float64 `json:"ai_score,omitempty"`
-	AIComment       string   `json:"ai_comment,omitempty"`
-	AIFallback      *bool    `json:"ai_fallback,omitempty"`
-	AccuracyRate    *float64 `json:"accuracy_rate,omitempty"`
-	CommonWrong     *string  `json:"common_wrong,omitempty"`
-	TotalAttempts   int      `json:"total_attempts,omitempty"`
-	AIExplanation   string   `json:"ai_explanation,omitempty"`
+	ReferenceAnswer string   `json:"reference_answer,omitempty" extensions:"x-optional"`
+	ScoringCriteria string   `json:"scoring_criteria,omitempty" extensions:"x-optional"`
+	MaxScore        int      `json:"max_score,omitempty" extensions:"x-optional"`
+	AIScore         *float64 `json:"ai_score,omitempty" extensions:"x-optional"`
+	AIComment       string   `json:"ai_comment,omitempty" extensions:"x-optional"`
+	AIFallback      *bool    `json:"ai_fallback,omitempty" extensions:"x-optional"`
+	AccuracyRate    *float64 `json:"accuracy_rate,omitempty" extensions:"x-optional"`
+	CommonWrong     *string  `json:"common_wrong,omitempty" extensions:"x-optional"`
+	TotalAttempts   int      `json:"total_attempts,omitempty" extensions:"x-optional"`
+	AIExplanation   string   `json:"ai_explanation,omitempty" extensions:"x-optional"`
 }
 
 // HistoryResultDTO 练习历史分页结果（旧 GetHistory map 输出）。
@@ -63,7 +64,7 @@ type HistoryItemDTO struct {
 	PracticeType string       `json:"practice_type"`
 	UserAnswer   string       `json:"user_answer"`
 	CreatedAt    string       `json:"created_at"`
-	Question     *QuestionDTO `json:"question,omitempty"`
+	Question     *QuestionDTO `json:"question,omitempty" extensions:"x-optional"`
 }
 
 // PracticePracticeStatsDTO 刷题练习聚合统计（Ticket #329，独立于 stats_aggregate 的 PracticeStatsDTO）。

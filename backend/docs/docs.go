@@ -10178,7 +10178,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "file_id": {
-                    "type": "integer"
+                    "description": "FileID 暂存文件尚未落库：key 不存在（omitempty）→ x-optional。",
+                    "type": "integer",
+                    "x-optional": true
                 },
                 "file_name": {
                     "type": "string"
@@ -10195,7 +10197,12 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "author": {
-                    "$ref": "#/definitions/service.ContributionAuthor"
+                    "description": "Author 的 omitempty 对结构体取值**无效**（encoding/json 不省略零值结构体）：key 恒在，\n生成物按必填渲染是正确的，前端手写的 author? 属过时宽容。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/service.ContributionAuthor"
+                        }
+                    ]
                 },
                 "created_at": {
                     "type": "string"
@@ -10210,7 +10217,8 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/service.ContributionFileDTO"
-                    }
+                    },
+                    "x-optional": true
                 },
                 "id": {
                     "type": "integer"
@@ -10222,7 +10230,8 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "reject_reason": {
-                    "type": "string"
+                    "type": "string",
+                    "x-optional": true
                 },
                 "status": {
                     "type": "string"
@@ -10728,7 +10737,12 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "question": {
-                    "$ref": "#/definitions/service.QuestionDTO"
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/service.QuestionDTO"
+                        }
+                    ],
+                    "x-optional": true
                 },
                 "question_id": {
                     "type": "integer"
@@ -10811,14 +10825,17 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "ai_comment": {
-                    "type": "string"
+                    "type": "string",
+                    "x-optional": true
                 },
                 "ai_fallback": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "x-optional": true
                 },
                 "ai_score": {
                     "description": "AI 评分字段仅在短答 AI 评分成功时出现。",
-                    "type": "number"
+                    "type": "number",
+                    "x-optional": true
                 },
                 "content": {
                     "type": "string"
@@ -10830,7 +10847,8 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "is_correct": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "x-nullable": true
                 },
                 "max_score": {
                     "type": "number"
@@ -10883,7 +10901,8 @@ const docTemplate = `{
                 },
                 "paper_id": {
                     "description": "PaperID 真题卷来源（#386）：按卷开考时写入 mock_exam.paper_id，随机模考为 nil\n（omitempty——既有消费者对随机模考的响应零差异，向后兼容）。",
-                    "type": "integer"
+                    "type": "integer",
+                    "x-optional": true
                 },
                 "question_ids": {},
                 "remaining_time": {
@@ -10891,7 +10910,9 @@ const docTemplate = `{
                 },
                 "result": {},
                 "score": {
-                    "type": "number"
+                    "description": "Score 未交卷时为 null（键仍在）：x-nullable 让生成物渲染 number | null。",
+                    "type": "number",
+                    "x-nullable": true
                 },
                 "start_time": {
                     "type": "string"
@@ -11110,8 +11131,10 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "answers_state": {
+                    "description": "AnswersState 无进度时为 null（键仍在）→ x-nullable。",
                     "type": "object",
-                    "additionalProperties": {}
+                    "additionalProperties": {},
+                    "x-nullable": true
                 },
                 "completed": {
                     "type": "integer"
@@ -11133,7 +11156,8 @@ const docTemplate = `{
             "properties": {
                 "answer": {
                     "description": "学员侧（includeAnswer=false）省略以下四个字段。",
-                    "type": "string"
+                    "type": "string",
+                    "x-optional": true
                 },
                 "content": {
                     "type": "string"
@@ -11142,17 +11166,20 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "created_by": {
-                    "type": "integer"
+                    "type": "integer",
+                    "x-nullable": true
                 },
                 "created_by_type": {
                     "type": "string"
                 },
                 "credential_id": {
                     "description": "CredentialID 题目归属的目标证件（#412）：讲师端题库管理用证件列区分分区，学员侧形状不变。",
-                    "type": "integer"
+                    "type": "integer",
+                    "x-optional": true
                 },
                 "explanation": {
-                    "type": "string"
+                    "type": "string",
+                    "x-optional": true
                 },
                 "id": {
                     "type": "integer"
@@ -11162,7 +11189,8 @@ const docTemplate = `{
                 },
                 "options": {},
                 "reference_answer": {
-                    "type": "string"
+                    "type": "string",
+                    "x-optional": true
                 },
                 "reject_reason": {
                     "type": "string"
@@ -11171,13 +11199,15 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "scoring_criteria": {
-                    "type": "string"
+                    "type": "string",
+                    "x-optional": true
                 },
                 "status": {
                     "type": "string"
                 },
                 "tags": {
-                    "description": "Tags 题库管理面附加（未设置时省略；设置后保留 null/[] 形态与历史一致）。"
+                    "description": "Tags 题库管理面附加（未设置时省略；设置后保留 null/[] 形态与历史一致）。",
+                    "x-optional": true
                 },
                 "type": {
                     "type": "string"
@@ -11546,22 +11576,28 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "accuracy_rate": {
-                    "type": "number"
+                    "type": "number",
+                    "x-optional": true
                 },
                 "ai_comment": {
-                    "type": "string"
+                    "type": "string",
+                    "x-optional": true
                 },
                 "ai_explanation": {
-                    "type": "string"
+                    "type": "string",
+                    "x-optional": true
                 },
                 "ai_fallback": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "x-optional": true
                 },
                 "ai_score": {
-                    "type": "number"
+                    "type": "number",
+                    "x-optional": true
                 },
                 "common_wrong": {
-                    "type": "string"
+                    "type": "string",
+                    "x-optional": true
                 },
                 "correct_answer": {
                     "type": "string"
@@ -11570,22 +11606,27 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "is_correct": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "x-nullable": true
                 },
                 "max_score": {
-                    "type": "integer"
+                    "type": "integer",
+                    "x-optional": true
                 },
                 "question_id": {
                     "type": "integer"
                 },
                 "reference_answer": {
-                    "type": "string"
+                    "type": "string",
+                    "x-optional": true
                 },
                 "scoring_criteria": {
-                    "type": "string"
+                    "type": "string",
+                    "x-optional": true
                 },
                 "total_attempts": {
-                    "type": "integer"
+                    "type": "integer",
+                    "x-optional": true
                 },
                 "user_answer": {}
             }
