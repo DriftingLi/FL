@@ -10,7 +10,9 @@
 				<text class="drawer-new-icon">+</text>
 				<text class="drawer-new-text">新建对话</text>
 			</view>
-			<view v-if="sessions.length == 0" class="empty-tip">暂无历史对话</view>
+			<view v-if="sessions.length == 0" class="empty-tip">
+				<text class="empty-text">暂无历史对话</text>
+			</view>
 			<view v-for="(s, idx) in sessions" :key="idx" class="drawer-item" :class="{ active: currentSessionId == s.id }" @click="onSelect(s)">
 				<text class="drawer-item-title">{{ s.title }}</text>
 				<text class="drawer-item-del" @click.stop="onDelete(s.id)">&#10005;</text>
@@ -128,10 +130,14 @@
 	}
 
 	.empty-tip {
-		text-align: center;
+		align-items: center;
+		padding: 32rpx 0;
+	}
+
+	/* uvue：font-size / color / text-align 只允许用在 <text> 等元素上，不能加在 <view> 上 */
+	.empty-text {
 		font-size: 26rpx;
 		color: #999999;
-		padding: 32rpx 0;
 	}
 
 	.drawer-item {

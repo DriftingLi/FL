@@ -16,15 +16,9 @@
 				<text class="nav-subtitle">维修助手</text>
 			</view>
 
-			<!-- 右：菜单入口（原型里的白胶囊是小程序端 chrome，App 端不画）。
-			     2026-09-13（issue #947）：真机反馈「点 ⋯ 无反应」，而**左侧同一套写法可用** ⇒
-			     把右侧与左侧**对称化**：外层 view 持点击（同 .nav-left），内层给一个**有显式尺寸的盒子**
-			     （同 .panel-icon 有显式尺寸），排掉"内层是裸 text、没有命中区"这条可能。
-			     根因尚未定案（判别证据未取得），见 #947。 -->
+			<!-- 右：菜单入口（原型里的白胶囊是小程序端 chrome，App 端不画） -->
 			<view class="nav-right" @click="onMenuClick">
-				<view class="nav-more-box">
-					<text class="nav-more">&#8943;</text>
-				</view>
+				<text class="nav-more">&#8943;</text>
 			</view>
 		</view>
 	</view>
@@ -119,16 +113,9 @@
 		justify-content: center;
 	}
 
-	/* 与 .panel-icon 对称：内层给显式尺寸，保证存在命中区（#947） */
-	.nav-more-box {
-		width: 56rpx;
-		height: 56rpx;
-		align-items: center;
-		justify-content: center;
-	}
-
 	.nav-more {
 		font-size: 40rpx;
 		color: #333333;
+		padding: 8rpx 12rpx;
 	}
 </style>
