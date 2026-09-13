@@ -8,24 +8,24 @@ import (
 // question_dto_shape_test.go 冻结）。字段声明按 key 字母序，与 map 序列化字节序一致。
 type QuestionDTO struct {
 	// 学员侧（includeAnswer=false）省略以下四个字段。
-	Answer        *string `json:"answer,omitempty"`
+	Answer        *string `json:"answer,omitempty" extensions:"x-optional"`
 	Content       string  `json:"content"`
 	CreatedAt     string  `json:"created_at"`
-	CreatedBy     *int    `json:"created_by"`
+	CreatedBy     *int    `json:"created_by" extensions:"x-nullable"`
 	CreatedByType string  `json:"created_by_type"`
 	// CredentialID 题目归属的目标证件（#412）：讲师端题库管理用证件列区分分区，学员侧形状不变。
-	CredentialID    *int    `json:"credential_id,omitempty"`
-	Explanation     *string `json:"explanation,omitempty"`
+	CredentialID    *int    `json:"credential_id,omitempty" extensions:"x-optional"`
+	Explanation     *string `json:"explanation,omitempty" extensions:"x-optional"`
 	ID              int     `json:"id"`
 	ImageURL        string  `json:"image_url"`
 	Options         any     `json:"options"`
-	ReferenceAnswer *string `json:"reference_answer,omitempty"`
+	ReferenceAnswer *string `json:"reference_answer,omitempty" extensions:"x-optional"`
 	RejectReason    string  `json:"reject_reason"`
 	Score           int     `json:"score"`
-	ScoringCriteria *string `json:"scoring_criteria,omitempty"`
+	ScoringCriteria *string `json:"scoring_criteria,omitempty" extensions:"x-optional"`
 	Status          string  `json:"status"`
 	// Tags 题库管理面附加（未设置时省略；设置后保留 null/[] 形态与历史一致）。
-	Tags      any    `json:"tags,omitempty"`
+	Tags      any    `json:"tags,omitempty" extensions:"x-optional"`
 	Type      string `json:"type"`
 	UpdatedAt string `json:"updated_at"`
 }
