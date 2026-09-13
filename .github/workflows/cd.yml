@@ -594,6 +594,7 @@ jobs:
           tar czf /tmp/deploy-files.tar.gz \
             scripts/deploy-remote.sh \
             docker-compose.prod.yml \
+            deploy/env.defaults \
             frontend/nginx-host.conf
 
           scp -o ConnectTimeout=15 -o ServerAliveInterval=30 \
@@ -619,6 +620,21 @@ jobs:
             echo '# 由 GitHub Actions CD 自动生成 — 请勿手动编辑'
             echo "# 生成时间: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
             echo ''
+            # DEPLOY_PATH 必须先落地：下面的默认值 source 用它定位（spec #940 片四）
+            printf 'export DEPLOY_PATH=%q\n' "${DEPLOY_PATH:-/opt/forklift-training}"
+            echo ''
+            echo '# ---- 部署默认值：唯一事实源 deploy/env.defaults（ADR-0047 §5 / spec #940 片四）----'
+            # 生成物由 backend/internal/deploy 声明表渲染、随 tar 一起上传到 $DEPLOY_PATH；
+            # 文件缺失即中止部署（说明打包清单漏了它，而不是「静默用回 compose 默认值」）。
+            echo 'source "$DEPLOY_PATH/deploy/env.defaults"'
+            echo ''
+            echo '# ---- 覆盖段：secrets / 环境里确实提供了值的变量才写出（空值保留上面的默认）----'
+            echo '# 变量清单直接读生成物，workflow 里不再手抄一份默认值：'
+            for _name in $(grep -E '^export [A-Z_0-9]+=' deploy/env.defaults | sed -E 's/^export ([A-Z_0-9]+)=.*/\1/'); do
+              if [ -n "${!_name:-}" ]; then printf 'export %s=%q\n' "$_name" "${!_name}"; fi
+            done
+            echo ''
+            echo '# ---- 其余变量（密钥类：空默认交给 compose / 后端）----'
             printf 'export IMAGE_TAG=%q\n' "${IMAGE_TAG:-latest}"
             printf 'export IMAGE_TAG_BACKEND=%q\n' "${IMAGE_TAG_BACKEND:-}"
             printf 'export IMAGE_TAG_FRONTEND=%q\n' "${IMAGE_TAG_FRONTEND:-}"
@@ -628,31 +644,23 @@ jobs:
             printf 'export IMAGE_LIBREOFFICE=%q\n' "${IMAGE_LIBREOFFICE:-}"
             printf 'export SSL_FULLCHAIN=%q\n' "${SSL_FULLCHAIN:-}"
             printf 'export SSL_PRIVKEY=%q\n' "${SSL_PRIVKEY:-}"
-            printf 'export DOMAIN=%q\n' "${DOMAIN:-}"
             printf 'export GITHUB_TOKEN=%q\n' "${GITHUB_TOKEN:-}"
             printf 'export REGISTRY=%q\n' "${REGISTRY:-ghcr.io}"
             printf 'export REGISTRY_PROXY=%q\n' "${REGISTRY_PROXY:-}"
             printf 'export REGISTRY_PROXY_BIND=%q\n' "${REGISTRY_PROXY_BIND:-127.0.0.1}"
             printf 'export KEEP_IMAGES=%q\n' "${KEEP_IMAGES:-3}"
             printf 'export DATABASE_URL=%q\n' "${DATABASE_URL:-}"
-            printf 'export DB_USER=%q\n' "${DB_USER:-forklift}"
             printf 'export DB_PASSWORD=%q\n' "${DB_PASSWORD:-}"
             printf 'export SECRET_KEY=%q\n' "${SECRET_KEY:-}"
             printf 'export JWT_SECRET_KEY=%q\n' "${JWT_SECRET_KEY:-}"
-            printf 'export JWT_EXPIRES_HOURS=%q\n' "${JWT_EXPIRES_HOURS:-2}"
-            printf 'export JWT_REFRESH_EXPIRES_DAYS=%q\n' "${JWT_REFRESH_EXPIRES_DAYS:-7}"
-            printf 'export AUTH_COOKIE_NAME=%q\n' "${AUTH_COOKIE_NAME:-hrwai_token}"
             printf 'export AUTH_COOKIE_DOMAIN=%q\n' "${AUTH_COOKIE_DOMAIN:-}"
-            printf 'export AUTH_COOKIE_SECURE=%q\n' "${AUTH_COOKIE_SECURE:-true}"
             printf 'export ADMIN_DEFAULT_PASSWORD=%q\n' "${ADMIN_DEFAULT_PASSWORD:-}"
             printf 'export TUTOR_DEFAULT_PASSWORD=%q\n' "${TUTOR_DEFAULT_PASSWORD:-}"
             printf 'export STUDENT_DEFAULT_PASSWORD=%q\n' "${STUDENT_DEFAULT_PASSWORD:-}"
             printf 'export SMTP_HOST=%q\n' "${SMTP_HOST:-}"
-            printf 'export SMTP_PORT=%q\n' "${SMTP_PORT:-465}"
             printf 'export SMTP_USERNAME=%q\n' "${SMTP_USERNAME:-${SMTP_FROM:-}}"
             printf 'export SMTP_PASSWORD=%q\n' "${SMTP_PASSWORD:-}"
             printf 'export SMTP_FROM=%q\n' "${SMTP_FROM:-}"
-            printf 'export SMTP_FROM_NAME=%q\n' "${SMTP_FROM_NAME:-和润天下}"
             printf 'export TENCENT_SMS_SECRET_ID=%q\n' "${TENCENT_SMS_SECRET_ID:-}"
             printf 'export TENCENT_SMS_SECRET_KEY=%q\n' "${TENCENT_SMS_SECRET_KEY:-}"
             printf 'export TENCENT_SMS_SDK_APP_ID=%q\n' "${TENCENT_SMS_SDK_APP_ID:-}"
@@ -661,39 +669,29 @@ jobs:
             printf 'export TENCENT_SMS_TEMPLATE_LOGIN=%q\n' "${TENCENT_SMS_TEMPLATE_LOGIN:-}"
             printf 'export TENCENT_SMS_TEMPLATE_PASSWORD=%q\n' "${TENCENT_SMS_TEMPLATE_PASSWORD:-}"
             printf 'export TENCENT_SMS_TEMPLATE_BIND_PHONE=%q\n' "${TENCENT_SMS_TEMPLATE_BIND_PHONE:-}"
-            printf 'export TENCENT_SMS_REGION=%q\n' "${TENCENT_SMS_REGION:-ap-guangzhou}"
             printf 'export WECHAT_MINI_PROGRAM_APP_ID=%q\n' "${WECHAT_MINI_PROGRAM_APP_ID:-}"
             printf 'export WECHAT_MINI_PROGRAM_APP_SECRET=%q\n' "${WECHAT_MINI_PROGRAM_APP_SECRET:-}"
             printf 'export WECHAT_OPEN_PLATFORM_APP_ID=%q\n' "${WECHAT_OPEN_PLATFORM_APP_ID:-}"
             printf 'export WECHAT_OPEN_PLATFORM_APP_SECRET=%q\n' "${WECHAT_OPEN_PLATFORM_APP_SECRET:-}"
             printf 'export CORS_ORIGINS=%q\n' "${CORS_ORIGINS:-}"
             printf 'export COMPOSE_FILE=%q\n' "${COMPOSE_FILE:-docker-compose.prod.yml}"
-            printf 'export DEPLOY_PATH=%q\n' "${DEPLOY_PATH:-/opt/forklift-training}"
             printf 'export SKIP_MIGRATION=%q\n' "${SKIP_MIGRATION:-false}"
             printf 'export REDIS_PASSWORD=%q\n' "${REDIS_PASSWORD:-}"
-            printf 'export REDIS_DB=%q\n' "${REDIS_DB:-0}"
-            printf 'export REDIS_POOL_SIZE=%q\n' "${REDIS_POOL_SIZE:-20}"
-            printf 'export REDIS_KEY_PREFIX=%q\n' "${REDIS_KEY_PREFIX:-fl:}"
-            # 未配置时写出空串：compose 的 ${TRUSTED_PROXIES:-默认值} 会用文件里的默认值
-            printf 'export TRUSTED_PROXIES=%q\n' "${TRUSTED_PROXIES:-}"
-            printf 'export STORAGE_DRIVER=%q\n' "${STORAGE_DRIVER:-local}"
+            # REDIS_DB / REDIS_POOL_SIZE / REDIS_KEY_PREFIX / TRUSTED_PROXIES / STORAGE_DRIVER
+            # 的默认值由 deploy/env.defaults 提供（上面 source），此处不再自写。
             printf 'export R2_ENDPOINT=%q\n' "${R2_ENDPOINT:-}"
             printf 'export R2_ACCOUNT_ID=%q\n' "${R2_ACCOUNT_ID:-}"
             printf 'export R2_ACCESS_KEY_ID=%q\n' "${R2_ACCESS_KEY_ID:-}"
             printf 'export R2_SECRET_ACCESS_KEY=%q\n' "${R2_SECRET_ACCESS_KEY:-}"
             printf 'export R2_BUCKET=%q\n' "${R2_BUCKET:-}"
             printf 'export R2_PUBLIC_DOMAIN=%q\n' "${R2_PUBLIC_DOMAIN:-}"
-            printf 'export SWAGGER_ENABLED=%q\n' "${SWAGGER_ENABLED:-false}"
             printf 'export SWAGGER_USER=%q\n' "${SWAGGER_USER:-}"
             printf 'export SWAGGER_PASS=%q\n' "${SWAGGER_PASS:-}"
             printf 'export BACKUP_REMOTE_HOST=%q\n' "${BACKUP_REMOTE_HOST:-}"
             printf 'export BACKUP_REMOTE_DIR=%q\n' "${BACKUP_REMOTE_DIR:-}"
             printf 'export BACKUP_REMOTE_KEY=%q\n' "${BACKUP_REMOTE_KEY:-}"
-            printf 'export BACKEND_HOST_PORT=%q\n' "${BACKEND_HOST_PORT:-8080}"
-            printf 'export PG_VOLUME=%q\n' "${PG_VOLUME:-}"
-            printf 'export REDIS_VOLUME=%q\n' "${REDIS_VOLUME:-}"
-            printf 'export UPLOADS_VOLUME=%q\n' "${UPLOADS_VOLUME:-}"
-            printf 'export REPORTS_VOLUME=%q\n' "${REPORTS_VOLUME:-}"
+            # BACKEND_HOST_PORT / PG_VOLUME / REDIS_VOLUME / UPLOADS_VOLUME / REPORTS_VOLUME
+            # 同样来自 deploy/env.defaults。
             printf 'export SKIP_BACKUP=%q\n' "${SKIP_BACKUP:-false}"
             printf 'export COMPOSE_PROFILES=%q\n' "${COMPOSE_PROFILES:-}"
             printf 'export HEALTH_CHECK_RETRIES=%q\n' "${HEALTH_CHECK_RETRIES:-20}"

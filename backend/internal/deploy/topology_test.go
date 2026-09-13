@@ -96,3 +96,22 @@ func TestEnvVarsShape(t *testing.T) {
 		seen[v.Name] = true
 	}
 }
+
+// 生成物的真实消费者锁（spec #940 片四）：ADR-0047 §5 收尾时 deploy/env.defaults 是
+// 「零消费者」的死文件 —— 只有全等契约钉着它，部署链路仍各自写默认值。这条锁把接线钉住：
+// CD 生成的环境变量文件必须 source 它，且打包清单必须带上它（否则远端 source 会失败）。
+// 没有这条锁，某次重构可以把接线悄悄摘掉，「生成物与运行期行为脱节」会原样回来。
+func TestEnvDefaultsIsConsumed(t *testing.T) {
+	cdPath := filepath.Join("..", "..", "..", ".github", "workflows", "cd.yml")
+	data, err := os.ReadFile(cdPath)
+	if err != nil {
+		t.Fatalf("读取 %s 失败: %v", cdPath, err)
+	}
+	cd := string(data)
+	if !strings.Contains(cd, "source \"$DEPLOY_PATH/deploy/env.defaults\"") {
+		t.Fatal("CD 链路没有 source deploy/env.defaults：生成物又变回零消费者的死文件")
+	}
+	if !strings.Contains(cd, "deploy/env.defaults \\") {
+		t.Fatal("CD 的打包清单里没有 deploy/env.defaults：远端 source 会失败")
+	}
+}
