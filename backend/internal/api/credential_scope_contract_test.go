@@ -98,3 +98,57 @@ func TestCredentialScopeContract(t *testing.T) {
 		t.Fatalf("未选证件时显式传参仍生效：total=%d, want 2", got)
 	}
 }
+
+// 非学员角色不得被证件作用域过滤（ADR-0047 §4 / 代码审查发现）：admin / tutor / recruiter 的 JWT sub
+// 来自各自的表，而 current_credential_id 是 hrwai_users 的列——按 sub 直查会命中**同号的陌生学员行**，
+// 让控制台请求被静默按别人的证件过滤。改造前客户端也从不给这三端注入证件，故语义是「非学员 = 不分区」。
+func TestCredentialScopeIgnoresNonStudentRoles(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := testutil.NewMemoryDB(t)
+	cfg := &config.Config{JWTSecretKey: "credential-scope-secret"}
+	r := NewRouter(newContractDeps(t, db, cfg))
+
+	credA := &model.Credential{Code: "n1b", Name: "叉车司机N1", Category: "special_operation", Status: 1}
+	if err := db.Create(credA).Error; err != nil {
+		t.Fatalf("建证件失败: %v", err)
+	}
+	for i := 0; i < 3; i++ {
+		q := testutil.SeedQuestion(t, db, "single", "题干", "答案")
+		if err := db.Model(q).Update("credential_id", credA.ID).Error; err != nil {
+			t.Fatalf("题目挂证件失败: %v", err)
+		}
+	}
+	// 学员的当前证件刻意设为**没有题目**的 credB：这样「被误按学员证件过滤」会得到 0，
+	// 与「不分区」的 3 形成可判别差异（否则两种路径都得 3，用例退化成语义不变式）。
+	credB := &model.Credential{Code: "l5b", Name: "工程机械维修工L5", Category: "skill_level", Status: 1}
+	if err := db.Create(credB).Error; err != nil {
+		t.Fatalf("建证件失败: %v", err)
+	}
+	student := testutil.SeedStudent(t, db, "scope_student2", "x")
+	if err := db.Model(student).Update("current_credential_id", credB.ID).Error; err != nil {
+		t.Fatalf("设置当前证件失败: %v", err)
+	}
+	// 讲师 token：sub 与学员同号（正是审查指出的同号命中场景）——JWTAuth 只校验 token 本身，
+	// 不查 tutor 行，故这里直接签发即可，无需建讲师记录。
+	tutorTok, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).Issue(int(student.ID), "scope_tutor", "tutor")
+	if err != nil {
+		t.Fatalf("签发讲师 token 失败: %v", err)
+	}
+
+	req, _ := http.NewRequest(http.MethodGet, "/api/question-bank/stats", nil)
+	req.Header.Set("Authorization", "Bearer "+tutorTok)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("讲师访问题库统计 → %d %s", w.Code, w.Body.String())
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("解析响应失败: %v", err)
+	}
+	data, _ := raw["data"].(map[string]any)
+	total, _ := data["total"].(float64)
+	if int(total) != 3 {
+		t.Fatalf("讲师不应被证件作用域过滤（同号学员行不得命中）：total=%v, want 3", total)
+	}
+}

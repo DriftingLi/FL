@@ -153,6 +153,16 @@ var aiFeatureRegistry = []aiFeature{
 	{name: FeatureAIAssistant, label: "AI 助手对话", systemPrompt: forkliftExpertSystemPrompt, bindingKind: bindingAssistantLegacy, billed: true, adapter: aiAdapterLLM},
 }
 
+// aiFeatureAdapterOf 该功能键的传输适配器（注册表派生，ADR-0047 §7）：
+// 未注册键与遗留兼容位回退通用大模型通道——与「未知键落通用对话」的解析阶梯一致。
+// 分发点（routingAIModel 的 Complete/Stream）读它，不再比较功能键字符串。
+func aiFeatureAdapterOf(featureKey string) aiAdapter {
+	if f, ok := lookupAIFeature(aiFeatureRegistry, featureKey); ok {
+		return f.adapter
+	}
+	return aiAdapterLLM
+}
+
 // lookupAIFeature 注册表按功能键查找。
 func lookupAIFeature(reg []aiFeature, name string) (aiFeature, bool) {
 	for _, f := range reg {

@@ -597,17 +597,18 @@ func NewRoutingAIModel(normal, diagnosis AIModelPort) AIModelPort {
 
 var _ AIModelPort = (*routingAIModel)(nil)
 
-// Complete 诊断功能不支持阻塞补全；其余走 normal（评分/解析/章节生成等）。
+// Complete 走外部诊断适配器的功能不支持阻塞补全；其余走 normal（评分/解析/章节生成等）。
+// 分发判据来自注册表 adapter 列（ADR-0047 §7），不再是功能键字符串比较。
 func (r *routingAIModel) Complete(featureKey string, msgs []*schema.Message, opts AICompleteOptions) (string, error) {
-	if featureKey == FeatureFaultDiagnosis {
+	if aiFeatureAdapterOf(featureKey) == aiAdapterDiagnosis {
 		return r.diagnosis.Complete(featureKey, msgs, opts)
 	}
 	return r.normal.Complete(featureKey, msgs, opts)
 }
 
-// Stream 诊断功能分发到助手 adapter，其余走 eino（含未注册键回退路径）。
+// Stream 按注册表 adapter 分发：diagnosis 走外部诊断 RAG，其余走 eino（含未注册键回退路径）。
 func (r *routingAIModel) Stream(ctx context.Context, sel AIModelSelector, msgs []*schema.Message, onChunk func(string)) (string, *AIUsage, error) {
-	if sel.FeatureKey == FeatureFaultDiagnosis {
+	if aiFeatureAdapterOf(sel.FeatureKey) == aiAdapterDiagnosis {
 		return r.diagnosis.Stream(ctx, sel, msgs, onChunk)
 	}
 	return r.normal.Stream(ctx, sel, msgs, onChunk)

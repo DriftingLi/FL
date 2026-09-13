@@ -36,7 +36,11 @@ func TestEnvDefaultsNoDrift(t *testing.T) {
 		filepath.Join("..", "..", "..", "scripts", "deploy-remote.sh"),
 		filepath.Join("..", "..", "..", ".github", "workflows", "cd.yml"),
 	}
+	// 两种默认值写法都要认：
+	//   shell/compose 形态  ${VAR:-default}
+	//   GitHub 表达式形态    ${{ secrets.VAR || 'default' }}（cd.yml 的 env: 段用它，曾是漏检面）
 	pat := regexp.MustCompile(`([A-Z_][A-Z0-9_]*):-([^}]*)}`)
+	ghaPat := regexp.MustCompile(`secrets\.([A-Z_][A-Z0-9_]*)\s*\|\|\s*'([^']*)'`)
 	dollar := string(rune(36))
 	var violations []string
 	checked := 0
@@ -50,7 +54,9 @@ func TestEnvDefaultsNoDrift(t *testing.T) {
 			if strings.HasPrefix(trimmed, "#") {
 				continue // 注释里的示例不算声明（cd.yml 说明文字里出现过 ${VAR:-默认值}）
 			}
-			for _, m := range pat.FindAllStringSubmatch(line, -1) {
+			matches := pat.FindAllStringSubmatch(line, -1)
+			matches = append(matches, ghaPat.FindAllStringSubmatch(line, -1)...)
+			for _, m := range matches {
 				name, def := m[1], m[2]
 				v, ok := Lookup(name)
 				if !ok || v.Default == "" {

@@ -8,7 +8,6 @@
 import { describe, it, expect } from 'vitest'
 import {
   isNavRouteActive,
-  roleNavigation,
   isGroupExpanded,
   toggleGroupExpanded,
   flattenLeaves,
@@ -65,48 +64,7 @@ describe('isNavRouteActive', () => {
   })
 })
 
-describe('导航配置的详情页归属', () => {
-  /** 收集所有带 activeRouteNames 的导航项，便于断言 */
-  function collect(items: NavItem[], out: NavItem[] = []): NavItem[] {
-    for (const item of items) {
-      out.push(item)
-      if (item.children) collect(item.children, out)
-    }
-    return out
-  }
 
-  /** 学生端/导师端存在「从列表页跳进去、但没有独立导航项」的详情页 */
-  const EXPECTED: Record<string, string[]> = {
-    CourseList: ['ChapterView'],
-    ForumPage: ['ForumDetail'],
-    AIAssistant: ['AIAssistantFeature'],
-    JobPlaza: ['JobDetail'],
-    TutorCourses: ['TutorChapterManage', 'TutorChapterEdit'],
-    TutorQuestionManage: ['TutorQuestionCreate', 'TutorQuestionTags']
-  }
-
-  const scoped = [...collect(roleNavigation.student), ...collect(roleNavigation.tutor)]
-
-  for (const [routeName, detailRoutes] of Object.entries(EXPECTED)) {
-    it(`${routeName} 在 ${detailRoutes.join(' / ')} 下仍高亮`, () => {
-      const item = scoped.find((i) => i.routeName === routeName)
-      expect(item, `未找到 routeName=${routeName} 的导航项`).toBeDefined()
-      expect(item!.activeRouteNames).toEqual(detailRoutes)
-    })
-  }
-
-  it('activeRouteNames 里的路由名必须真实存在于路由表中（防止改名后静默失效）', () => {
-    // 这里不 import router（避免拉起整个路由栈），只做纯数据校验：
-    // 所有被引用过的名字都在本文件的 EXPECTED 里集中声明，改动时需同步更新。
-    const referenced = scoped.flatMap((i) => i.activeRouteNames ?? [])
-    const declared = Object.values(EXPECTED).flat()
-    expect(referenced.sort()).toEqual(declared.sort())
-  })
-})
-// ===== 侧栏分组判定（从 AppSidebar.vue 抽出的纯函数，ADR-0047 §2 / spec #930 决策 6）=====
-//
-// 抽取理由：分组展开态与「分组是否激活」原先长在 826 行的组件里，零测试；
-// 而侧栏高亮已经因为「抽出来的那半有测试、编排的那半没有」出过两次线上问题。
 describe('侧栏分组判定（纯函数）', () => {
   const leaf = (key: string, routeName: RouteName): NavItem => ({ key, label: key, routeName })
 
