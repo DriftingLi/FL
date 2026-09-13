@@ -1,0 +1,285 @@
+<template>
+	<view v-if="visible" class="sheet-mask" @click="onMaskClick"></view>
+	<view v-if="visible" class="pro-sheet">
+		<view class="sheet-head">
+			<text class="sheet-title">{{ headTitle }}</text>
+			<text class="sheet-close" @click="onMaskClick">&#10005;</text>
+		</view>
+		<text class="sheet-sub">{{ headSub }}</text>
+
+		<view class="cap-list">
+			<view v-for="(c, idx) in capabilities" :key="idx" class="cap-row">
+				<text class="cap-icon">{{ c.icon }}</text>
+				<view class="cap-text">
+					<text class="cap-title">{{ c.title }}</text>
+					<text class="cap-desc">{{ c.desc }}</text>
+				</view>
+				<text class="cap-state">{{ stateText }}</text>
+			</view>
+		</view>
+
+		<view v-if="!unlocked" class="cost-block">
+			<view class="cost-row">
+				<text class="cost-label">所需积分</text>
+				<text class="cost-value">{{ price }}</text>
+			</view>
+			<view class="cost-row">
+				<text class="cost-label">当前余额</text>
+				<text class="cost-value" :class="enough ? 'cost-enough' : 'cost-lack'">{{ balance }}</text>
+			</view>
+		</view>
+
+		<text v-if="!unlocked && degraded" class="sheet-hint">已兑换过？直接点「去兑换」，服务端会告知</text>
+
+		<view v-if="!unlocked" class="sheet-cta" :class="enough || degraded ? 'sheet-cta-on' : 'sheet-cta-off'" @click="onPrimary">
+			<text class="sheet-cta-text" :class="enough || degraded ? 'cta-text-on' : 'cta-text-off'">{{ ctaText }}</text>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	import { computed } from 'vue'
+	import type { ComputedRef } from 'vue'
+
+	/** 能力清单一行（被锁能力集合 = ADR-0009 决策 2：选择模型 / 自定义模型 / 发送图片） */
+	type ProCapability = {
+		icon : string
+		title : string
+		desc : string
+	}
+
+	const props = withDefaults(defineProps<{
+		visible?: boolean
+		unlocked?: boolean
+		price?: number
+		balance?: number
+		degraded?: boolean
+		redeeming?: boolean
+	}>(), {
+		visible: false,
+		unlocked: false,
+		price: 0,
+		balance: 0,
+		degraded: false,
+		redeeming: false
+	})
+
+	const emit = defineEmits<{
+		(e : 'close') : void
+		(e : 'redeem') : void
+		(e : 'earn') : void
+	}>()
+
+	// 能力清单（常量：与页面横幅文案同源口径，改动只在此处）
+	const capabilities : ProCapability[] = [
+		{ icon: '&#10022;', title: '选择模型', desc: '在管理员模型列表里自由切换' },
+		{ icon: '&#9881;', title: '自定义模型', desc: '填自己的 API Key 与地址' },
+		{ icon: '&#128206;', title: '发送图片', desc: '把故障照片发给 AI 看' }
+	]
+
+	// 余额够不够（客户端预判只为提示口径；**真正的判定在服务端兑换管线**）
+	const enough = computed<boolean>(() : boolean => {
+		return props.balance >= props.price
+	})
+
+	const headTitle = computed<string>(() : string => {
+		return props.unlocked ? 'AI 专业版 · 已解锁' : 'AI 专业版'
+	})
+
+	const headSub = computed<string>(() : string => {
+		if (props.unlocked) {
+			return '以下能力已全部可用'
+		}
+		return '积分兑换解锁以下能力'
+	})
+
+	const stateText = computed<string>(() : string => {
+		return props.unlocked ? '已解锁' : '需解锁'
+	})
+
+	const ctaText = computed<string>(() : string => {
+		if (props.redeeming) {
+			return '兑换中…'
+		}
+		if (enough.value || props.degraded) {
+			return '去兑换（' + props.price + ' 积分）'
+		}
+		return '积分不足 · 去赚积分'
+	})
+
+	function onMaskClick() : void {
+		emit('close')
+	}
+
+	function onPrimary() : void {
+		if (props.redeeming) {
+			return
+		}
+		if (enough.value || props.degraded) {
+			emit('redeem')
+			return
+		}
+		emit('earn')
+	}
+</script>
+
+<style>
+	.sheet-mask {
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background-color: rgba(0, 0, 0, 0.4);
+		z-index: 300;
+	}
+
+	.pro-sheet {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		/* 实色：本机型实测 background: linear-gradient(...) 静默不绘制 */
+		background-color: #ffffff;
+		border-top-left-radius: 24rpx;
+		border-top-right-radius: 24rpx;
+		padding: 32rpx;
+		z-index: 301;
+	}
+
+	.sheet-head {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	.sheet-title {
+		font-size: 32rpx;
+		font-weight: bold;
+		color: #333333;
+	}
+
+	.sheet-close {
+		font-size: 32rpx;
+		color: #999999;
+		padding-left: 24rpx;
+		padding-right: 8rpx;
+	}
+
+	.sheet-sub {
+		font-size: 24rpx;
+		color: #999999;
+		margin-top: 8rpx;
+	}
+
+	.cap-list {
+		flex-direction: column;
+		margin-top: 24rpx;
+	}
+
+	.cap-row {
+		flex-direction: row;
+		align-items: center;
+		padding-top: 16rpx;
+		padding-bottom: 16rpx;
+		border-bottom-width: 1rpx;
+		border-bottom-style: solid;
+		border-bottom-color: #f5f5f5;
+	}
+
+	.cap-icon {
+		font-size: 32rpx;
+		color: #2979ff;
+		width: 56rpx;
+	}
+
+	.cap-text {
+		flex: 1;
+		flex-direction: column;
+	}
+
+	.cap-title {
+		font-size: 28rpx;
+		color: #333333;
+	}
+
+	.cap-desc {
+		font-size: 22rpx;
+		color: #999999;
+		margin-top: 4rpx;
+	}
+
+	.cap-state {
+		font-size: 22rpx;
+		color: #999999;
+		margin-left: 16rpx;
+	}
+
+	.cost-block {
+		flex-direction: column;
+		margin-top: 24rpx;
+	}
+
+	.cost-row {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		padding-top: 8rpx;
+		padding-bottom: 8rpx;
+	}
+
+	.cost-label {
+		font-size: 26rpx;
+		color: #666666;
+	}
+
+	.cost-value {
+		font-size: 28rpx;
+		font-weight: bold;
+		color: #333333;
+	}
+
+	.cost-enough {
+		color: #2e9e5b;
+	}
+
+	.cost-lack {
+		color: #e2622c;
+	}
+
+	.sheet-hint {
+		font-size: 22rpx;
+		color: #999999;
+		margin-top: 12rpx;
+	}
+
+	.sheet-cta {
+		align-items: center;
+		justify-content: center;
+		border-radius: 44rpx;
+		padding-top: 22rpx;
+		padding-bottom: 22rpx;
+		margin-top: 28rpx;
+	}
+
+	.sheet-cta-on {
+		background-color: #ff9800;
+	}
+
+	.sheet-cta-off {
+		background-color: #f0f0f0;
+	}
+
+	.sheet-cta-text {
+		font-size: 28rpx;
+		font-weight: bold;
+	}
+
+	.cta-text-on {
+		color: #ffffff;
+	}
+
+	.cta-text-off {
+		color: #666666;
+	}
+</style>
