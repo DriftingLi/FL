@@ -409,3 +409,55 @@ describe('resolveGuardDecision（顺序与优先级）', () => {
     expect(resolveGuardDecision(input(), state())).toEqual({ action: 'allow' })
   })
 })
+// ===== 步骤 4b：能力校验（ADR-0047 §1/§2 / spec #930）=====
+//
+// 判据不再是页面自己抄的角色清单，而是「页面声明需要什么能力 + 生成的角色→能力表」。
+// 三条语义边界在这里钉死：需要登录的页面才判能力、公开页不因能力位被锁死、无能力声明则不判。
+describe('capabilityStep（能力校验）', () => {
+  const adminPage = (capability: string) => ({
+    path: '/admin/forum-manage',
+    fullPath: '/admin/forum-manage',
+    name: 'ForumManage',
+    meta: { requiresAuth: true, workspace: 'manage', capability },
+    matched: [{ requiresAuth: true, workspace: 'manage', capability }]
+  })
+
+  it('能力不匹配 → 回落到该角色的工作区（管理员回管理端）', () => {
+    const d = resolveGuardDecision(adminPage('forum.moderate'), state({ role: 'tutor', subdomain: 'admin' }))
+    expect(d).toEqual({ action: 'redirect', to: expect.any(String) })
+  })
+
+  it('能力匹配 → 放行', () => {
+    const d = resolveGuardDecision(adminPage('forum.moderate'), state({ role: 'admin', subdomain: 'admin' }))
+    expect(d.action).toBe('allow')
+  })
+
+  it('公开页声明了能力也不判：requiresAuth 全 false 时任意角色（含未登录）可访问', () => {
+    const aiPage = {
+      path: '/ai-assistant',
+      fullPath: '/ai-assistant',
+      name: 'AIAssistant',
+      meta: { requiresAuth: false, workspace: 'training', capability: 'ai_assistant.use' },
+      matched: [{ requiresAuth: false, workspace: 'training', capability: 'ai_assistant.use' }]
+    }
+    expect(resolveGuardDecision(aiPage, state({ role: 'admin' })).action).toBe('allow')
+    expect(resolveGuardDecision(aiPage, state({ isLoggedIn: false, role: '', hasValidToken: false })).action).toBe('allow')
+  })
+
+  it('未声明 capability 的页面不受能力校验影响（登录 + 角色即可）', () => {
+    const d = resolveGuardDecision(input({ meta: { requiresAuth: true, workspace: 'training' }, matched: [{ requiresAuth: true, workspace: 'training' }] }), state())
+    expect(d.action).toBe('allow')
+  })
+
+  it('能力位来自生成表：学员访问 forum.moderate 被拒、forum.participate 放行', () => {
+    const page = (capability: string) => ({
+      path: '/training/forum',
+      fullPath: '/training/forum',
+      name: 'ForumPage',
+      meta: { requiresAuth: true, workspace: 'training', capability },
+      matched: [{ requiresAuth: true, workspace: 'training', capability }]
+    })
+    expect(resolveGuardDecision(page('forum.moderate'), state()).action).toBe('redirect')
+    expect(resolveGuardDecision(page('forum.participate'), state()).action).toBe('allow')
+  })
+})
