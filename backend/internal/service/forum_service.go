@@ -200,9 +200,9 @@ type ForumService struct {
 	counters        ForumCounter // 计数列唯一写入口（spec #297）
 	// points 积分簿记通道（ADR-0023 forum 收编）：采纳奖励与违规回收经其事务内
 	// 导出方法落账，forum 内不再直写积分流水/余额；依赖方向 forum→points 单向无环。
-	points *PointsService
 	// rewards 奖励政策 module（ADR-0047 §3 / spec #927）：发放、回收与发放事实判定的
 	// 唯一实现处；论坛 service 只声明「发生了什么事实」，不再内联防刷与幂等判定。
+	// 积分簿记通道由本 module 持有（forum service 自身不再直接依赖 points）。
 	rewards *forumRewardPolicy
 
 	logger *zap.Logger
@@ -214,7 +214,7 @@ type ForumService struct {
 // counters 为 likes_count / reply_count 唯一写入口（与 AuthService 共享同一实例）；
 // points 为积分簿记通道（采纳奖励/违规回收经其事务内导出方法落账，ADR-0023）。
 func NewForumService(db *gorm.DB, fileSvc *FileStore, notificationSvc *NotificationService, counters ForumCounter, points *PointsService, logger *zap.Logger) *ForumService {
-	return &ForumService{db: db, fileSvc: fileSvc, notificationSvc: notificationSvc, counters: counters, points: points,
+	return &ForumService{db: db, fileSvc: fileSvc, notificationSvc: notificationSvc, counters: counters,
 		rewards: newForumRewardPolicy(points, notificationSvc), logger: logger}
 }
 
