@@ -14,6 +14,16 @@
 
 - **绝不** **`git add -A`**：共享工作区常混有其他会话/工具的未提交改动（如 `forum.uts`、`.aider-desk/`、`.monitor/`），只 `git add <本次文件>`。
 
+- **共享文件的最小面：`pages.json` / `manifest.json` / `platformConfig.json`**
+  （2026-09-13 补，血账）**这三个文件即使自己只改一行，也不要 `git add` / `git commit`。** 判据是
+  `git status --short -- <路径>` **本身是否已是 ` M`**：是 ⇒ 别人正持着它，此时只改工作区、交付给维护者，或等它干净。
+  理由有三条：① 它们**已被别的会话改着**时，`add` 会把别人的在飞改动一起提交（实测发生过）；
+  ② 它们是「运行时面 / 打包面」的判据来源 —— 误提交会让 PR 凭空命中 ④b 云打包门（见 `docs/adr/0008`）；
+  ③ HBuilderX 自己会往里写 `condition`（GUI 选的启动页，注释自述「仅开发期间生效」，属本地开发配置、禁止提交）。
+  适用面比「加一行探针页」宽得多：凡是动这三个文件，一律走「改工作区 → 交给维护者」，不走「自己提交」。
+
+- **提交前验分支归属的代价**（2026-09-13 补，血账）第 11 行已写明「查什么」；本条记的是**不查的代价**：主树被别的会话切走时，`git commit` 会把提交落进**别人的分支历史**，补救要「新建独立分支指向该提交 + 把别人的分支 `reset --mixed` 退回」——delta 为零，但过程不必要，且 `reset` 是改写别人历史的动作。实测：一条探针提交落进了别人的分支。
+
 用完 worktree 后记得清理：`git worktree remove <dir>` + `git branch -D <branch>`。
 
 ## Windows 上用 worktree 的注意事项
@@ -50,9 +60,11 @@ git worktree add E:\wt-probe -b chore/wt-probe HEAD # 唯一的实证：能建 =
 
 #### ⚠️ 旧配方的实害（此前没写，务必先读）
 
-旧配方的「优先」路径是 `Remove-Item -Recurse -Force E:\FL\.git\worktrees` + `git worktree prune`。它当时声明「低风险」的依据是**「该目录枚举为空、只有主树一条注册」** —— **该前提现在已经不成立**：
+旧配方的「优先」路径是 `Remove-Item -Recurse -Force E:\FL\.git\worktrees` + `git worktree prune`。它当时声明「低风险」的依据是**「该目录枚举为空、只有主树一条注册」** —— 该前提当时确实不成立：
 
-`E:\FL\.git\worktrees\wt-tabbar-align` 是**活 worktree**（`E:\wt-tabbar-align`）的登记目录，而活 worktree 的 `.git` 是个**文件**，内容写着 `gitdir: E:/FL/.git/worktrees/wt-tabbar-align`。**删掉那个目录 = 把该 worktree 孤儿化**（`.git` 指向不存在的路径）。
+`E:\FL\.git\worktrees\wt-tabbar-align` 曾是**活 worktree**（`E:\wt-tabbar-align`）的登记目录，而活 worktree 的 `.git` 是个**文件**，内容写着 `gitdir: E:/FL/.git/worktrees/wt-tabbar-align`。**删掉那个目录 = 把该 worktree 孤儿化**（`.git` 指向不存在的路径）。
+
+**2026-09-13 复测更新（状态已变，务必看这一条）**：`E:\FL\.git\worktrees` 现在**枚举为 0 条**，`git worktree list` 只剩主树一条 ⇒ 上面那个活 worktree 已被移除，**当前没有活 worktree 需要保护**。但**规矩不变**：这条判据每次都要现测，**不能按记忆走** —— 「有输出就别删」仍然是唯一的判据。
 
 所以：**只要 `git worktree list` 里除主树外还有别的 worktree，就绝对不要删 `.git\worktrees`。** 先检查（有输出就别删）：
 
@@ -74,7 +86,7 @@ cd E:\FL; git worktree list | Select-Object -Skip 1
 
 #### 重复副本的现状与清理纪律（2026-09-13 实测）
 
-- 实测 `E:\` 下有 **11 个同仓库克隆**，约 **1443 MB**（旧文档记的「约 618 MB / 892 MB」已过时）。
+- 实测 `E:\` 下有 **11 个同仓库克隆**，约 **1443 MB**（旧文档记的「约 618 MB / 892 MB」已过时）。**2026-09-13 复测：`git worktree list` 只剩主树，`.git/worktrees` 枚举为 0 条；我在 `E:\` 顶层看到 9 个 `_g*` 克隆 + 1 个 `wt-ai-single`；主树 `E:\FL` 约 308 MB，`_g1` 94 MB、`_g624c` 128 MB、`_g2` 169 MB。** 文件数与旧记录不一致（旧记 11 个克隆 vs 现见 10 个目录）⇒ **要清理时现测，不按本条数字行事。**
 - **不能按目录名盲删**：其中 **9 个持有未推送提交或脏文件**（`_g624c` 577 未推送 + 440 脏、`_spike` 411 脏）。删前必须逐个体检 `git status` 与 `git log --branches --not --remotes`，并查该分支的 PR 是否已合并（`gh pr list --head <分支> --state all`）—— **不要凭分支名或印象判断**。
 - **候选的正确判据**（首版按目录名扫，把无关仓库与活 worktree 都列成了待删项）：① `.git` 是**目录**（worktree 的 `.git` 是**文件**，`Test-Path` 对两者都为真，所以必须区分）；② 路径不在 `git worktree list` 里；③ `origin` 归一后与主树同仓库（`git@github.com:Owner/Repo.git` 与 `https://github.com/Owner/Repo.git` 视为同一个）。按此判据，`E:\deepseek-harness`（**别的仓库**）与 `E:\wt-tabbar-align`（**活 worktree**）必须排除。
 - 主树 `E:\FL` 上的游离提交 `5446e6f`（重复 #849）**勿 push / 勿 reset**。
