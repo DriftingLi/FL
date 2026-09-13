@@ -87,6 +87,28 @@ func (s *AdminService) ListHrwaiUsers(page, pageSize int, keyword string) (*Hrwa
 	}, nil
 }
 
+// HrwaiUserCreatedDTO 新增 HRWAI 用户的响应：只回非敏感字段（password 不入响应）。
+// 字段声明按 JSON key 字母序 —— 与改造前 map[string]any 的序列化字节序一致（#954 片二）。
+type HrwaiUserCreatedDTO struct {
+	Account  string `json:"account"`
+	ID       int    `json:"id"`
+	Phone    string `json:"phone"`
+	UID      string `json:"uid"`
+	Username string `json:"username"`
+}
+
+// NewHrwaiUserCreatedDTO 把用户模型投影为「新增成功」的响应形状。
+// 投影折叠进 DTO 构造（ADR-0009 §2）：handler 不再手抄字段，UID 也走 FormatUID 单点。
+func NewHrwaiUserCreatedDTO(u *model.HrwaiUser) HrwaiUserCreatedDTO {
+	return HrwaiUserCreatedDTO{
+		Account:  u.Account,
+		ID:       u.ID,
+		Phone:    u.Phone,
+		UID:      FormatUID(u.UID),
+		Username: u.Username,
+	}
+}
+
 // CreateHrwaiUser 管理员新增 HRWAI 用户。account 缺省时随机生成，昵称缺省时自动生成。
 func (s *AdminService) CreateHrwaiUser(phone, password, account, username, email, company string) (*model.HrwaiUser, error) {
 	if phone == "" || password == "" {
@@ -172,6 +194,13 @@ func (s *AdminService) DeleteHrwaiUser(id int) error {
 		return errors.New("用户 ID 非法")
 	}
 	return s.db.Delete(&model.HrwaiUser{}, id).Error
+}
+
+// StatusResultDTO 开关类端点的响应形状 {"status": N}（HRWAI 用户 / 导师 / 招聘者三个端点共用）。
+// Status 统一为 int：来源有 int16 与 int 两种来源，JSON 表现一致（#954 片二；
+// 字节级 shape-lock 见 response_bytes_lock_test.go）。
+type StatusResultDTO struct {
+	Status int `json:"status"`
 }
 
 // ToggleHrwaiUserStatus 切换 HRWAI 用户启用/禁用状态,返回切换后的新状态。

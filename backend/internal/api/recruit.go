@@ -3,6 +3,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"strconv"
 
@@ -109,11 +110,17 @@ func (h *RecruitHandler) GetResume(c *gin.Context) {
 	response.Success(c, card)
 }
 
-// recruitMe 招聘者当前用户信息 GET /api/recruit/me（复用 /auth/me 的 ProfileDTO 形状，但仅 recruiter 可访问）
+// recruitMe 招聘者当前用户信息 GET /api/recruit/me（仅 recruiter 可访问）。
+// 响应形状是 service.RecruitMeDTO —— **不是** /auth/me 的 ProfileDTO（只回 3 个字段）；
+// #954 片二把它从裸 handler 迁到 Endpoint 骨架，与其余端点同一条守卫链。
 func recruitMe(c *gin.Context) {
-	response.Success(c, map[string]any{
-		"user_id": middleware.CurrentUserID(c),
-		"account": middleware.CurrentAccount(c),
-		"role":    middleware.CurrentRole(c),
-	})
+	Endpoint[struct{}, service.RecruitMeDTO]{
+		Invoke: func(_ context.Context, _ *struct{}) (*service.RecruitMeDTO, error) {
+			return &service.RecruitMeDTO{
+				UserID:  middleware.CurrentUserID(c),
+				Account: middleware.CurrentAccount(c),
+				Role:    middleware.CurrentRole(c),
+			}, nil
+		},
+	}.Handle(c)
 }

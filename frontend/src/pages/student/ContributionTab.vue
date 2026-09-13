@@ -395,7 +395,7 @@ defineExpose({ loadMine })
               <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-2">
                   <span class="truncate text-[15px] font-medium text-ink">{{ item.title }}</span>
-                  <span class="shrink-0 rounded-full px-2 py-0.5 text-[11px]" :class="STATUS_CLASS[item.status]">{{ STATUS_LABEL[item.status] }}</span>
+                  <span class="shrink-0 rounded-full px-2 py-0.5 text-[11px]" :class="STATUS_CLASS[item.status as ContributionStatus]">{{ STATUS_LABEL[item.status as ContributionStatus] }}</span>
                 </div>
                 <div v-if="item.reject_reason" class="mt-1 text-xs text-danger">驳回/下架原因：{{ item.reject_reason }}</div>
                 <div class="mt-1 text-xs text-ink-3">{{ formatLocaleDateTime(item.created_at) }} · {{ item.downloads_count }} 次下载</div>

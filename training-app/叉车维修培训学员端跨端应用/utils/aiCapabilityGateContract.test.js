@@ -6,11 +6,12 @@
  * 输入区的模型芯片与附件按钮都按 `proUnlocked` 渲染了，**唯独抽屉里的「自定义模型」项没过门**，
  * 未解锁用户仍能从抽屉进入该页（票 #926）。本测试把「所有专业版入口必须同门」钉下来。
  *
- * 口径：`proUnlocked == false` 时（积分兑换未上线期间的恒态）——
- *   ① 输入区：模型芯片只读、附件按钮不渲染；
+ * 口径：能力门 `proUnlocked` 的**事实源是积分商城 SKU「ai_pro」的已拥有**（#920 落地；
+ * 由 `composables/useAiPro.uts` 单点适配器读出，实测无权益读面时用支出流水推导）。未解锁时——
+ *   ① 输入区：模型芯片不渲染、附件按钮不渲染；
  *   ② 抽屉菜单：不显示「自定义模型」；
- *   ③ 模型芯片点击：只给提示、不打开选择器；
- *   ④ 「解锁专业版」横幅用**实色**（本机型实测 background: linear-gradient(...) 静默不绘制）；
+ *   ③ 模型芯片点击：不打开选择器（走档位入口）；
+ *   ④ 「解锁专业版」横幅用**实色**（本机型实测 background: linear-gradient(...) 静默不绘制）。
  *   ⑥ **对话设置页是同一条门**（#939 口径 A）：该页的「＋ 新增」与空态卡按门隐藏 ——
  *      `pages/ai-assistant/custom-models` 有两条入口链，只收抽屉那条（#926/#936）不算收口。
  *      （抽屉自身那两个**真机实测**踩到的坑 —— 类型名义重复导致的 `ClassCastException`、`<view>`
@@ -21,16 +22,21 @@ const path = require('path');
 
 const PAGE = path.join(__dirname, '..', 'pages', 'ai-assistant', 'ai-assistant.uvue');
 const CONSTS = path.join(__dirname, '..', 'pages', 'ai-assistant', 'ai-assistant-constants.uts');
+const ADAPTER = path.join(__dirname, '..', 'composables', 'useAiPro.uts');
 const SETTINGS = path.join(__dirname, '..', 'pages', 'ai-assistant', 'ai-settings.uvue');
 const read = (p) => fs.readFileSync(p, 'utf8');
 
 describe('AI 助手专业版能力门（proUnlocked）契约', () => {
   const page = read(PAGE);
   const consts = read(CONSTS);
+  const adapter = read(ADAPTER);
   const settings = read(SETTINGS);
 
-  it('① 能力门存在且默认关闭（兑换未上线期间恒为 false）', () => {
-    expect(page).toMatch(/const\s+proUnlocked\s*=\s*ref<boolean>\(false\)/);
+  it('① 能力门由 useAiPro 单点适配器派生，且默认关闭（fail-closed）', () => {
+    // #920：门不再是页面里的写死常量，而是适配器读出的事实（事实源 = 已拥有 ai_pro）
+    expect(page).toMatch(/const \{[\s\S]*?proUnlocked[\s\S]*?\} = useAiPro\(\)/);
+    expect(page).not.toMatch(/const\s+proUnlocked\s*=\s*ref<boolean>\(false\)/);
+    expect(adapter).toMatch(/const proUnlocked = ref<boolean>\(false\)/);
   });
 
   it('② 输入区：模型芯片与附件按钮都按 proUnlocked 渲染，芯片在锁定时只读', () => {
@@ -46,7 +52,7 @@ describe('AI 助手专业版能力门（proUnlocked）契约', () => {
     expect(fn).toMatch(/showModelPicker\.value\s*=\s*true/);
   });
 
-  it('④ 抽屉菜单：未解锁时不显示「自定义模型」（本票 #926 修的漏网路径）', () => {
+  it('④ 抽屉菜单：未解锁时不显示「自定义模型」（#926 修的漏网路径）', () => {
     // 菜单必须是 computed（受能力门影响），不能是常量直赋
     expect(page).not.toMatch(/const\s+rightMenuItems\s*=\s*RIGHT_MENU_ITEMS\s*$/m);
     expect(page).toMatch(/const\s+rightMenuItems\s*=\s*computed<MenuItem\[\]>/);
@@ -69,7 +75,7 @@ describe('AI 助手专业版能力门（proUnlocked）契约', () => {
   });
 
   it('⑥ 对话设置页同门（#939 口径 A）：「＋ 新增」与空态卡按门隐藏', () => {
-    // 该页必须有**同一形态**的页面级门（ADR 0009 的口径：页面级 proUnlocked；#920 上线后两页一并改读后端判定）
+    // 该页按 ADR 0009 的口径保持页面级 proUnlocked（#920 上线后两页一并改读后端判定）
     expect(settings).toMatch(/const\s+proUnlocked\s*=\s*ref<boolean>\(false\)/);
     // 两条漏径都在门内：新增入口、空态卡
     expect(settings).toMatch(/<text v-if="proUnlocked" class="section-add"/);

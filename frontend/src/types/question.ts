@@ -37,6 +37,12 @@ export interface Question {
   tags?: QuestionTagItem[] | null
 }
 
+// 生成的响应 DTO 里凡有 questions 字段者，元素类型都是后端 QuestionDTO；而本项目页面消费的是
+// 上面这个 UI 模型 Question（跨域共用，见 ADR-0048 决策 7 的片序 —— 其收口归 questionBank 片）。
+// api 层用本别名把生成 DTO 的 questions 换回 UI 模型：除该元素类型外，响应字段全部走生成类型，
+// 替换点显式可见，不做隐式 cast。
+export type WithUIQuestions<T extends { questions: unknown }> = Omit<T, 'questions'> & { questions: Question[] }
+
 export interface PracticeProgress {
   completed: number
   // total：上次会话数组长度（断点续练游标语义）；

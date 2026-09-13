@@ -5,6 +5,7 @@
  * - GET  /points/ledger               流水分页（page / page_size / direction=in|out，#512）
  * - GET  /points/tasks                任务中心（todo / claimable / claimed 三态）
  * - POST /points/tasks/{code}/claim   领取任务积分
+ * - POST /points/shop/{sku}/redeem    商城兑换（AI 专业版走这条；#920）
  *
  * 后端从未注册过的路由不在本文件出现：/points/records 与 /points/course-view 是 #662
  * 实测 404 的幻影路由。旧版靠 api 层 .catch() 回落占位数据把 404 静默盖住（用户永远看到
@@ -13,7 +14,7 @@
  */
 import { getMapped, postMapped } from './request'
 import { toNumber, toStr } from './helpers'
-import type { PointsBalance, PointsLedgerItem, PointsLedgerResult, PointsTaskItem, PointsTasksResult, PointsClaimResult } from '../types/index'
+import type { PointsBalance, PointsLedgerItem, PointsLedgerResult, PointsTaskItem, PointsTasksResult, PointsClaimResult, PointsRedeemResult } from '../types/index'
 
 /** 从 UTSJSONObject 构造 PointsBalance（后端三字段直读，无历史别名回退） */
 function buildPointsBalance(obj : UTSJSONObject) : PointsBalance {
@@ -92,6 +93,16 @@ function buildPointsClaimResult(obj : UTSJSONObject) : PointsClaimResult {
 	} as PointsClaimResult
 }
 
+/** 从 UTSJSONObject 构造 PointsRedeemResult（后端 service.RedeemResult 四字段直读） */
+function buildPointsRedeemResult(obj : UTSJSONObject) : PointsRedeemResult {
+	return {
+		balance: toNumber(obj['balance']),
+		total_earned: toNumber(obj['total_earned']),
+		sku: toStr(obj['sku']),
+		ref_id: toStr(obj['ref_id']),
+	} as PointsRedeemResult
+}
+
 /**
  * 获取积分余额
  * 失败时 reject（request 层已提示），由调用方呈现错误态
@@ -132,4 +143,19 @@ export function getPointsTasksApi() : Promise<PointsTasksResult> {
 export function claimPointsTaskApi(code : string) : Promise<PointsClaimResult> {
 	const url = '/points/tasks/' + encodeURIComponent(code) + '/claim'
 	return postMapped<PointsClaimResult>(url, null, (data : UTSJSONObject) : PointsClaimResult => buildPointsClaimResult(data))
+}
+
+/**
+ * 商城兑换（POST /points/shop/{sku}/redeem）——后端兑换单管线唯一入口（#920 复用，不新造机制）。
+ *
+ * 管线的守卫全在服务端：锁 + 已拥有校验（重复兑换 → 400「已兑换」）+ 余额预检
+ * （余额不足 → 400「积分不足」）+ 商品在售校验（下架/不存在 → 400「商品不存在或已下架」）
+ * + 幂等键 redeem:{sku}。**客户端不得本地预扣余额或本地写「已解锁」**，
+ * 一律以本调用成功为事实（同 #609/#610 的「服务端是事实源」口径）。
+ *
+ * @param sku 商品 SKU（AI 专业版 = 'ai_pro'）
+ */
+export function redeemShopItemApi(sku : string) : Promise<PointsRedeemResult> {
+	const url = '/points/shop/' + encodeURIComponent(sku) + '/redeem'
+	return postMapped<PointsRedeemResult>(url, null, (data : UTSJSONObject) : PointsRedeemResult => buildPointsRedeemResult(data))
 }

@@ -1,0 +1,175 @@
+/**
+ * AI 专业版（AI pro）能力门 —— 移动端单点适配器（#920）
+ *
+ * 门的口径（维护者 2026-09-13 裁定，ADR-0009 门票）：**门的事实源 = 积分商城 SKU 'ai_pro' 的
+ * 「已拥有」**，被锁能力 = 选择模型 / 自定义模型 / 发送图片；本地 mock 付费（aiPay.uts）已随
+ * #911 退役，本文件是它的**唯一替代**。
+ *
+ * 数据源现状与代价（如实声明，票面 #920 记录）：
+ * 后端**尚未**提供「列可兑换项 / 暴露权益」的接口（`GET /points/shop` 未注册），而权益表
+ * `user_entitlement` 没有任何读面，故本适配器用**现有积分面**推导：
+ *   - **已拥有** ⇔ 支出流水（`GET /points/ledger?direction=out`）里存在
+ *     `reason='redeem_ai_pro'` 且 `ref_type='shop'` 且 `ref_id='ai_pro'` 的一条 ——
+ *     兑换是一次性 + 服务端「已拥有校验」挡住重复兑换 ⇒「有过该笔支出」⟺「当前持有」。
+ *   - **余额** 取 `GET /points/balance`（与 CTA「够不够」判定同源）。
+ *   - **上/下架** 后端未暴露 ⇒ 只能由**兑换调用的服务端应答**体现（「商品不存在或已下架」）。
+ *
+ * 这不是终态：后端接口就绪后**只改本文件**（数据源换成 `GET /points/shop` 的 `owned` 字段，
+ * 价格换成接口回的 `price`），页面与组件零改动 —— 适配器边界就是为此而设。
+ *
+ * 代价 ①（扫描面）：事实源是流水**历史**面，需翻页扫描，故设页上限
+ * `AI_PRO_SCAN_PAGE_SIZE` × `AI_PRO_SCAN_MAX_PAGES`；超限仍未命中时置 `proDegraded=true`
+ * （结论不可靠），此时 CTA **保持可点** —— 服务端答「已兑换」即当场判定已拥有（自愈路径），
+ * 绝不把已付费的老用户锁在门外。
+ * 代价 ②（价格）：`AI_PRO_PRICE` 是移动端常量（后端未暴露），与后端
+ * `points_shop_item` 种子同源；改额度须两处同步，已在票面记为待偿技术债。
+ * 代价 ③（服务端门）：本票不含后端改动 ⇒ **服务端未按权益拒绝**被锁能力的请求
+ * （验收标准第 3 条待后端落地），本文件只负责「不把入口给未解锁用户」。
+ */
+import { ref } from 'vue'
+import type { Ref } from 'vue'
+import { getPointsBalanceApi, getPointsLedgerApi, redeemShopItemApi } from '../api/points'
+import type { PointsLedgerItem } from '../types/index'
+
+/** 权益 SKU（与后端 points_shop_item 种子、ADR-0009 的 HasEntitlement('ai_pro') 同源） */
+export const AI_PRO_SKU : string = 'ai_pro'
+/** 档位名（横幅与 sheet 文案单点） */
+export const AI_PRO_TITLE : string = 'AI 专业版'
+/** 所需积分（移动端常量：后端未暴露价格，见文件头代价 ②） */
+export const AI_PRO_PRICE : number = 1000
+/** 兑换事由键 = 后端 redeem 单管线的 `'redeem_' + sku`（points_service.go RedeemShop） */
+export const AI_PRO_REDEEM_REASON : string = 'redeem_' + AI_PRO_SKU
+/** 商城项权益的 ref_type（RedeemShop：refType='shop'，refID=sku） */
+export const AI_PRO_REF_TYPE : string = 'shop'
+/** 单页条数：后端 pageSize>100 会归一为 20（points_service.go GetLedgerFiltered），故取满额 100 */
+export const AI_PRO_SCAN_PAGE_SIZE : number = 100
+/** 扫描页上限（= 1000 条支出流水；超限 ⇒ proDegraded） */
+export const AI_PRO_SCAN_MAX_PAGES : number = 10
+
+/**
+ * 一条流水是否即「AI 专业版兑换」那一笔（纯判定，三个字段全等才成立 ——
+ * 防止 'ai_pro_extra' 一类同前缀 SKU 被子串命中，ADR-0007「零命中锁被子串命中」教训）。
+ */
+export function isAiProRedeemEntry(reason : string, refType : string, refId : string) : boolean {
+	return reason == AI_PRO_REDEEM_REASON && refType == AI_PRO_REF_TYPE && refId == AI_PRO_SKU
+}
+
+/** 一页流水里是否含该笔 */
+export function containsAiProRedeem(items : PointsLedgerItem[]) : boolean {
+	for (let i = 0; i < items.length; i++) {
+		const it = items[i]
+		if (isAiProRedeemEntry(it.reason, it.ref_type, it.ref_id)) {
+			return true
+		}
+	}
+	return false
+}
+
+/** 兑换结果（面向页面的一句话 + 状态） */
+export type AiProRedeemOutcome = {
+	ok : boolean
+	unlocked : boolean
+	message : string
+	balance : number
+}
+
+/** useAiPro 返回值（显式声明：UTS 需要对返回对象的函数字段做箭头包裹，同 useAiChat / useResourcePoints 先例） */
+export type UseAiProResult = {
+	proUnlocked : Ref<boolean>
+	proPrice : Ref<number>
+	proBalance : Ref<number>
+	proDegraded : Ref<boolean>
+	proLoading : Ref<boolean>
+	proRedeeming : Ref<boolean>
+	loadAiProState : () => Promise<void>
+	redeemAiPro : () => Promise<AiProRedeemOutcome>
+}
+
+export function useAiPro() : UseAiProResult {
+	const proUnlocked = ref<boolean>(false)
+	const proPrice = ref<number>(AI_PRO_PRICE)
+	const proBalance = ref<number>(0)
+	/** 扫描超限 ⇒ 未解锁结论不可靠（页面据此把 CTA 说明改成「已兑换过？可直接点」） */
+	const proDegraded = ref<boolean>(false)
+	const proLoading = ref<boolean>(false)
+	const proRedeeming = ref<boolean>(false)
+
+	/**
+	 * 读门状态。读失败一律 **fail-closed 为未解锁**（与「兑换未上线」期间页面渲染基础版的
+	 * 行为逐字一致）：宁可少给能力入口，也不 fail-open 假绿（本仓 #916 的「编译成功 ≠ 已部署」
+	 * 同一条纪律 —— 判据不许退化成「没读到就当通过」）。
+	 */
+	async function loadAiProState() : Promise<void> {
+		proLoading.value = true
+		proDegraded.value = false
+		let unlocked = false
+		let totalPages = 1
+		try {
+			const bal = await getPointsBalanceApi()
+			proBalance.value = bal.balance
+		} catch (e) {
+			const be = e as Error
+			console.error('[aiPro] loadBalance failed:', be.message)
+		}
+		try {
+			for (let page = 1; page <= AI_PRO_SCAN_MAX_PAGES; page++) {
+				if (page > totalPages) {
+					break
+				}
+				const res = await getPointsLedgerApi(page, AI_PRO_SCAN_PAGE_SIZE, 'out')
+				totalPages = res.pages
+				if (containsAiProRedeem(res.items)) {
+					unlocked = true
+					break
+				}
+			}
+			if (!unlocked && totalPages > AI_PRO_SCAN_MAX_PAGES) {
+				proDegraded.value = true
+			}
+		} catch (e) {
+			const le = e as Error
+			console.error('[aiPro] loadLedger failed:', le.message)
+		}
+		proUnlocked.value = unlocked
+		proLoading.value = false
+	}
+
+	/**
+	 * 兑换（`POST /points/shop/ai_pro/redeem`，服务端单管线：锁 + 已拥有 + 余额预检 + 幂等）。
+	 * 三种应答各有归宿：成功 ⇒ 已解锁；「已兑换」⇒ 同样判定已解锁（对扫描超限/历史过长的用户
+	 * 是自愈路径）；其余（余额不足 / 已下架 / 网络）⇒ 原样透出可读文案，**不静默失败**。
+	 * 客户端不本地预扣余额、不本地改「已拥有」——一律以服务端应答为事实（#609/#610 口径）。
+	 */
+	async function redeemAiPro() : Promise<AiProRedeemOutcome> {
+		proRedeeming.value = true
+		try {
+			const res = await redeemShopItemApi(AI_PRO_SKU)
+			proRedeeming.value = false
+			proUnlocked.value = true
+			proDegraded.value = false
+			proBalance.value = res.balance
+			return { ok: true, unlocked: true, message: '已解锁 AI 专业版', balance: res.balance } as AiProRedeemOutcome
+		} catch (e) {
+			const re = e as Error
+			proRedeeming.value = false
+			const msg = re.message
+			if (msg.indexOf('已兑换') >= 0) {
+				proUnlocked.value = true
+				proDegraded.value = false
+				return { ok: true, unlocked: true, message: '已拥有 AI 专业版', balance: proBalance.value } as AiProRedeemOutcome
+			}
+			return { ok: false, unlocked: proUnlocked.value, message: msg, balance: proBalance.value } as AiProRedeemOutcome
+		}
+	}
+
+	return {
+		proUnlocked: proUnlocked,
+		proPrice: proPrice,
+		proBalance: proBalance,
+		proDegraded: proDegraded,
+		proLoading: proLoading,
+		proRedeeming: proRedeeming,
+		loadAiProState: () => loadAiProState(),
+		redeemAiPro: () => redeemAiPro(),
+	} as UseAiProResult
+}

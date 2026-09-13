@@ -227,12 +227,12 @@ type practiceSaveProgressReq struct {
 // @Produce json
 // @Security BearerAuth
 // @Param body body object true "进度" example({"index":5,"practice_mode":"sequential","total":20,"answers_state":{}})
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.ProgressSaveResultDTO} "success"
 // @Failure 400 {object} response.R "参数错误（含未知练习模式）"
 // @Failure 401 {object} response.R "未认证"
 // @Router /practice-mode/progress [post]
 func (h *PracticeModeHandler) SaveProgress(c *gin.Context) {
-	Endpoint[practiceSaveProgressReq, struct{}]{
+	Endpoint[practiceSaveProgressReq, service.ProgressSaveResultDTO]{
 		Parse: func(c *gin.Context) (*practiceSaveProgressReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
@@ -262,18 +262,18 @@ func (h *PracticeModeHandler) SaveProgress(c *gin.Context) {
 				CredentialID: req.CredentialID,
 			}, nil
 		},
-		Invoke: func(ctx context.Context, req *practiceSaveProgressReq) (*struct{}, error) {
+		Invoke: func(ctx context.Context, req *practiceSaveProgressReq) (*service.ProgressSaveResultDTO, error) {
 			if err := h.svc.SaveProgress(req.StudentID, req.Index, req.PracticeMode, req.Total, req.AnswersState, req.CredentialID); err != nil {
 				return nil, err
 			}
-			return nil, nil
+			return &service.ProgressSaveResultDTO{Index: req.Index, Saved: true}, nil
 		},
-		Render: func(c *gin.Context, req *practiceSaveProgressReq, _ *struct{}, err error) {
+		Render: func(c *gin.Context, _ *practiceSaveProgressReq, resp *service.ProgressSaveResultDTO, err error) {
 			if err != nil {
 				response.BadRequest(c, err.Error())
 				return
 			}
-			response.Success(c, map[string]any{"saved": true, "index": req.Index})
+			response.Success(c, resp)
 		},
 	}.Handle(c)
 }
