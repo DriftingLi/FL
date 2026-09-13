@@ -1,4 +1,4 @@
-// HTTP 客户端工厂（client.ts）单测：信封解包 / 业务失败抛错 + toast / 401 分发 / 证件过滤注入。
+// HTTP 客户端工厂（client.ts）单测：信封解包 / 业务失败抛错 + toast / 401 分发 / 证件作用域语义。
 // seam：axios adapter 层（mock adapter 模拟后端响应），不经过真实网络。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import axios, { AxiosError } from 'axios'
@@ -16,13 +16,8 @@ vi.mock('@/utils/storage', () => ({
   setRefreshToken: vi.fn()
 }))
 
-vi.mock('@/stores/credential', () => ({
-  useCredentialStore: vi.fn(() => ({ current: { id: 7, name: '叉车司机N1证' } }))
-}))
-
 import { ElMessage } from 'element-plus'
 import { createHttpClient, createDefaultUnauthorizedPolicy } from '../client'
-import { useCredentialStore } from '@/stores/credential'
 
 type Respond = (config: { url?: string; headers?: Record<string, unknown> }) => { status: number; body: unknown }
 
@@ -149,70 +144,33 @@ describe('createDefaultUnauthorizedPolicy 统一 401 策略', () => {
   })
 })
 
-describe('证件过滤默认注入（#387）', () => {
-  // 经 respond 捕获 adapter 收到的最终请求 config（拦截器已改写 params）
-  let captured: { url?: string; params?: Record<string, unknown> } | null = null
-
-  function makeInjectClient() {
-    return createHttpClient({
-      baseURL: '/api',
-      onUnauthorized: vi.fn(),
-      injectCredentialId: true
-    })
+// ===== 证件作用域（ADR-0047 §4 / spec #931）=====
+//
+// 客户端**不再**维护「哪些端点要注入 credential_id」的豁免表——事实源在服务端：
+// 受作用域端点在注册时声明作用域，缺省读用户当前证件。这里锁两件事：
+//   1. 请求拦截器不改写任何请求参数（旧豁免表与注入实现已删除）；
+//   2. 显式传入的 credential_id 原样透传（**公开路由**仍需调用方显式传，服务端无从兜底）。
+describe('请求拦截器：不做证件注入（事实源在服务端）', () => {
+  const captureParams = (): { value: unknown } => {
+    const box = { value: undefined as unknown }
+    respond = config => {
+      box.value = (config as { params?: unknown }).params
+      return { status: 200, body: { code: 200, message: 'ok', data: { total: 0 } } }
+    }
+    return box
   }
 
-  beforeEach(() => {
-    captured = null
-    vi.mocked(useCredentialStore).mockClear()
-    vi.mocked(useCredentialStore).mockReturnValue({ current: { id: 7, name: '叉车司机N1证' } } as never)
-    respond = config => {
-      captured = config
-      return { status: 200, body: { code: 200, message: 'ok', data: [] } }
-    }
+  it('params 原样透传，拦截器不添加 credential_id', async () => {
+    const seen = captureParams()
+    const client = createHttpClient({ baseURL: '/api', onUnauthorized: () => {} })
+    await client.get('/question-bank/stats', { params: { page: 1 } })
+    expect(seen.value).toEqual({ page: 1 })
   })
 
-  it('params 存在且未显式传 credential_id 时默认注入当前证件', async () => {
-    const client = makeInjectClient()
-    await client.get('/courses', { params: { page: 1 } })
-    expect(captured?.params).toEqual({ page: 1, credential_id: 7 })
-  })
-
-  it('显式传入 credential_id 时不覆盖', async () => {
-    const client = makeInjectClient()
-    await client.get('/courses', { params: { credential_id: 9 } })
-    expect(captured?.params).toEqual({ credential_id: 9 })
-  })
-
-  it('无 params / params 非普通对象时不注入', async () => {
-    const client = makeInjectClient()
-
-    await client.get('/practice-mode/sequential')
-    expect(captured?.params).toBeUndefined()
-
-    const search = new URLSearchParams({ mode: 'sequential' })
-    await client.get('/x', { params: search })
-    expect((search as unknown as Record<string, unknown>).credential_id).toBeUndefined()
-  })
-
-  it('当前证件为空时不注入', async () => {
-    vi.mocked(useCredentialStore).mockReturnValue({ current: null } as never)
-    const client = makeInjectClient()
-    await client.get('/courses', { params: { page: 1 } })
-    expect(captured?.params).toEqual({ page: 1 })
-  })
-
-  it.each(['/forum/topics', '/auth/me', '/me/credential', '/admin/courses', '/tutor/courses', '/recruit/resumes'])(
-    '豁免前缀 %s 不注入 credential_id',
-    async url => {
-      const client = makeInjectClient()
-      await client.get(url, { params: { page: 1 } })
-      expect(captured?.params).toEqual({ page: 1 })
-    }
-  )
-
-  it('未开启 injectCredentialId 的实例（估值/AI 客户端）不注入', async () => {
-    const client = makeClient()
-    await client.get('/somewhere', { params: { page: 1 } })
-    expect(captured?.params).toEqual({ page: 1 })
+  it('显式传入的 credential_id 原样透传', async () => {
+    const seen = captureParams()
+    const client = createHttpClient({ baseURL: '/api', onUnauthorized: () => {} })
+    await client.get('/question-bank/stats', { params: { credential_id: 7 } })
+    expect(seen.value).toEqual({ credential_id: 7 })
   })
 })

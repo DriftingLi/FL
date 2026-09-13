@@ -114,6 +114,7 @@ import { useRouter } from 'vue-router'
 import { Search } from '@element-plus/icons-vue'
 import { searchApi, type SearchAllResult, type SearchPageResult, type SearchItem, type SearchType } from '@/api/search'
 import { useAsyncPage } from '@/composables/useAsyncPage'
+import { useCredentialStore } from '@/stores/credential'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
@@ -154,21 +155,26 @@ const {
   const kw = keyword.value.trim()
   if (!kw) return
   if (activeType.value === 'all') {
+    // 证件作用域（ADR-0047 §4）：公开搜索路由无登录上下文，显式传当前证件
+    const credId = credentialStore.current?.id ?? undefined
     // type 缺省时后端返回各分区聚合（SearchAllResult）
-    allResult.value = (await searchApi.search({ keyword: kw })) as SearchAllResult
+    allResult.value = (await searchApi.search({ keyword: kw, credential_id: credId })) as SearchAllResult
     pageResult.value = null
   } else {
     const res = (await searchApi.search({
       keyword: kw,
       type: activeType.value,
       page: currentPage.value,
-      page_size: pageSize.value
+      page_size: pageSize.value,
+      credential_id: credentialStore.current?.id ?? undefined
     })) as SearchPageResult
     pageResult.value = res
     allResult.value = null
     total.value = res.total || 0
   }
 })
+
+const credentialStore = useCredentialStore()
 
 const sections = computed(() => {
   const r = allResult.value
