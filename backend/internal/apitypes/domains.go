@@ -86,6 +86,7 @@ var Domains = []Domain{
 		Roots: []string{
 			"service.PracticeStartResultDTO",
 			"service.ProgressResultDTO",
+			"service.ProgressSaveResultDTO",
 			"service.SubmitResultDTO",
 			"service.PracticePracticeStatsDTO",
 			"service.PracticeStatsDTO",
@@ -96,7 +97,7 @@ var Domains = []Domain{
 			{Method: "GET", Path: "/practice-mode/tag"},
 			{Method: "GET", Path: "/practice-mode/sequential"},
 			{Method: "GET", Path: "/practice-mode/sequential-progress"},
-			{Method: "POST", Path: "/practice-mode/progress", NoData: true},
+			{Method: "POST", Path: "/practice-mode/progress"},
 			{Method: "GET", Path: "/practice-mode/progress"},
 			{Method: "POST", Path: "/practice-mode/submit"},
 			{Method: "GET", Path: "/practice-mode/practice-stats"},

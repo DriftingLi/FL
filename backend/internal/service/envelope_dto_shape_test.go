@@ -262,6 +262,11 @@ func TestInlineResponseDTOBytes(t *testing.T) {
 			legacy: map[string]any{},
 			dto:    &RecruiterPasswordResetResult{},
 		},
+		{
+			name:   "ProgressSaveResultDTO（POST /practice-mode/progress：原 handler 内联 map）",
+			legacy: map[string]any{"saved": true, "index": 5},
+			dto:    &ProgressSaveResultDTO{Index: 5, Saved: true},
+		},
 	}
 
 	for _, tc := range cases {

@@ -34,6 +34,16 @@ ADR-0019 把「由 OpenAPI 生成前端类型」整体推迟，只留下方向�
 - **片一实测**：三个域 30 个 Web 消费端点、25 个已指认 data、5 个有意无 data（撤回 / 举报 / 处置举报 / `POST /practice-mode/progress` / `POST /mock-exam/{id}/save`）；字段级差异逐条判定后**全部落在 ② 手写类型过时**（3 个凭空字段 `practice_mode` / `finished_at` / `score`、2 个漏字段、若干过时可空性），无一例 ① 注解写错或 ③ 后端第三种形状。清单与处置见 PR 验收证据。
 - **已知限制（留后续片）**：**注解层还没有枚举词汇** —— `status` 一类封闭值集在 swag 侧可用 `enums:"..."` 标注，但生成器尚未把它渲染成 TS 联合类型，故 `ContributionItemDTO.status` 生成 `string`，前端的窄化联合（`ContributionStatus`）只能保留并在消费处断言（`ContributionTab.vue`）。这是注解表达力缺口，不是「注解写错」；补 enum 渲染属生成器能力，另立片；题目类型 `QuestionDTO` 同时是跨域 UI 模型（`frontend/src/types/question.ts`），其删除归 `questionBank` 片，本片在 api 模块用 `WithUIQuestions` 显式标注该边界；生成物按域重复包含共享类型（`QuestionDTO` 同时在 `practiceMode.ts` 与 `mockExam.ts`），暂不引入跨域共享文件。
 
+## 实施修订（2026-09-13，片二 #954）
+
+片二（handler 内联响应 map 收口）落地时的实测与口径修正：
+
+- **计数修订**：决策 6 记的「响应面 9 处 / 6 文件」，实测为 **12 处 / 6 文件**（admin.go 4、admin_recruiter.go 4、admin_points.go 1、recruit.go 1、training_catalog.go 1、practice_mode.go 1）。判据：`backend/internal/api/` 里以 `map[string]any{...}` 作为**响应体**手工拼装的点（Endpoint 骨架的响应类型参数，或裸 handler 的响应体）。
+- **`gin.H{}` 形态不在这一片**：另有 35 处 / 12 文件（contact / material / featured / notification / training / job / questionBank / aiAssistant / admin_inspection …），分布在各域自己的消费面里，按决策 7 由**各自域的片**在补注解时一并收口。
+- **这 12 个端点当时都不在 swagger 里**（admin / recruit / training 域零注解），故收口本身不改注解；除 `POST /practice-mode/progress` 外，其余 11 处的注解仍归各自域片补。
+- **字节契约机制**沿用 ADR-0009 的字节序纪律：`TestInlineResponseDTOBytes` 用「改造前的 map 形态 ↔ 新 DTO」表驱动逐字节比对（参照物是旧 map 本身，不是手抄字面量）；DTO 投影折叠进构造器（ADR-0009 §2）。
+- **保留的现状差异**：招聘者创建（10 字段，含 `status`）与编辑（9 字段）形状不同，按「字节不变」保留，是否统一交 admin 片；`POST /practice-mode/progress` 的 `data` 从「注解写作无、实际有」纠正为 `service.ProgressSaveResultDTO`（该端点此前被片一登记为 NoData，本片一并改正）。
+
 ## 备选
 
 - **继续全量推迟**：拒绝 —— 输入面已可信、管道已跑通（#940），继续等只会让手写副本继续漂移；按域解冻把风险限制在「每片独立验收」内。
