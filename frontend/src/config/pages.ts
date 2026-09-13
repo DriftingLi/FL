@@ -13,6 +13,7 @@
 import type { Component } from 'vue'
 import { routeNames, type RouteName } from './routeNames'
 import type { AuthzCapability } from './authz'
+import { AI_FEATURE_SLUG_PATTERN } from './aiFeatures'
 import {
   HomeFilled,
   Notebook,
@@ -185,7 +186,7 @@ export const pages: PageDescriptor[] = [
 
   // ---------- AI 助手（顶层，可选登录；归属 training 工作区）----------
   { name: routeNames.AIAssistant, path: '/ai-assistant', component: () => import('@/pages/ai-assistant/AIAssistantPage.vue'), workspace: 'training', requiresAuth: false, capability: 'ai_assistant.use', nav: { group: 'interactive', label: 'AI助手', icon: MagicStick, activeRouteNames: [routeNames.AIAssistantFeature], order: 2 } },
-  { name: routeNames.AIAssistantFeature, path: '/ai-assistant/:featureKey(maintenance|drawing|exercise|fault-diagnosis)', component: () => import('@/pages/ai-assistant/FeatureChatPage.vue'), workspace: 'training', requiresAuth: false, capability: 'ai_assistant.use' },
+  { name: routeNames.AIAssistantFeature, path: '/ai-assistant/:featureKey(' + AI_FEATURE_SLUG_PATTERN + ')', component: () => import('@/pages/ai-assistant/FeatureChatPage.vue'), workspace: 'training', requiresAuth: false, capability: 'ai_assistant.use' },
 
   // ---------- 管理端（AdminLayout）----------
   { name: routeNames.AdminDashboard, path: '/admin/dashboard', component: () => import('@/pages/admin/Dashboard.vue'), layout: 'manage', workspace: 'manage', capability: 'admin.access', nav: { group: 'overview', label: '仪表盘', icon: DataAnalysis, order: 1 } },

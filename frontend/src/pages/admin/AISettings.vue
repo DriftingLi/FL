@@ -15,7 +15,7 @@
             :model-value="normalBinding?.config_id || 0"
             placeholder="请选择配置"
             style="width: 100%"
-            @update:model-value="(val: number) => handleAssistantBind('ai_assistant_normal', val)"
+            @update:model-value="(val: number) => handleAssistantBind(AI_ASSISTANT_MODE_KEYS[0], val)"
           >
             <el-option :value="0" label="未绑定" />
             <el-option
@@ -33,7 +33,7 @@
             :model-value="expertBinding?.config_id || 0"
             placeholder="请选择配置"
             style="width: 100%"
-            @update:model-value="(val: number) => handleAssistantBind('ai_assistant_expert', val)"
+            @update:model-value="(val: number) => handleAssistantBind(AI_ASSISTANT_MODE_KEYS[1], val)"
           >
             <el-option :value="0" label="未绑定" />
             <el-option
@@ -176,6 +176,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { AI_ASSISTANT_MODE_KEYS } from '@/config/aiFeatures'
 import { ElMessage, type FormInstance, type FormItemRule } from 'element-plus'
 import { Plus, ArrowDown } from '@element-plus/icons-vue'
 import { adminApi, type AIConfig, type FeatureBinding } from '@/api/admin'
@@ -240,9 +241,11 @@ async function loadBindings() {
   }
 }
 
-const normalBinding = computed(() => bindings.value.find(b => b.feature_key === 'ai_assistant_normal'))
-const expertBinding = computed(() => bindings.value.find(b => b.feature_key === 'ai_assistant_expert'))
-const otherBindings = computed(() => bindings.value.filter(b => !['ai_assistant_normal', 'ai_assistant_expert', 'ai_assistant'].includes(b.feature_key)))
+const normalBinding = computed(() => bindings.value.find(b => b.feature_key === AI_ASSISTANT_MODE_KEYS[0]))
+const expertBinding = computed(() => bindings.value.find(b => b.feature_key === AI_ASSISTANT_MODE_KEYS[1]))
+const otherBindings = computed(() =>
+  bindings.value.filter(b => !([...AI_ASSISTANT_MODE_KEYS, 'ai_assistant'] as string[]).includes(b.feature_key))
+)
 
 async function handleAssistantBind(featureKey: string, configId: number) {
   try {

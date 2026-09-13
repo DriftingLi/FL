@@ -119,22 +119,38 @@ type aiFeature struct {
 	bindingKind  aiBindingKind // 绑定形态
 	billed       bool          // 计费声明位（闸门接线见 #619）：助手对话（双模式/遗留/专项聊天）true，阻塞消费 false
 	freePreview  bool          // 限免声明位（#计划 fault_diagnosis）：true 时闸门按免费放行（专用在位），false 计费
+	// slug 路由片段（ADR-0047 §7）：仅专项对话功能有；前端路由白名单由它 codegen 派生，
+	// 杜绝「注册表加了功能、前端正则没加 → 新页 404」。空串 = 无独立页面。
+	slug string
+	// adapter 传输适配器：走哪条后端通道。前端「专用 UI」判定读它，不再比较功能键字符串。
+	adapter aiAdapter
 }
+
+// aiAdapter AI 功能的传输适配器（ADR-0047 §7）。
+type aiAdapter string
+
+const (
+	// aiAdapterLLM 通用大模型通道（DeepSeek / OpenAI 兼容，ADR-0029 单 port）。
+	aiAdapterLLM aiAdapter = "llm"
+	// aiAdapterDiagnosis 外部诊断 RAG 服务（ADR-0032 第二 adapter）。
+	aiAdapterDiagnosis aiAdapter = "diagnosis"
+)
 
 // aiFeatureRegistry AI 功能注册表（唯一事实源，ADR-0030 决策 1）。
 // 行序 = 绑定列表展示序；遗留兼容位列于末尾、不进展示列表。
 var aiFeatureRegistry = []aiFeature{
-	{FeatureGradeShortAnswer, "简答题 AI 评分", gradingSystemPrompt, bindingAdminSingle, false, false},
-	{FeatureGenerateChapterContent, "课程内容生成", chapterContentSystemPrompt, bindingAdminSingle, false, false},
-	{FeatureAIAssistantNormal, "AI 助手 · 普通模式", forkliftExpertSystemPrompt, bindingAssistantMode, true, false},
-	{FeatureAIAssistantExpert, "AI 助手 · 专家模式", forkliftExpertSystemPrompt, bindingAssistantMode, true, false},
-	{FeatureQuestionExplanation, "题目 AI 解析", questionExplainSystemPrompt, bindingAdminSingle, false, false},
-	{FeatureMaintenanceKnowledge, "维保知识", maintenanceKnowledgeSystemPrompt, bindingAdminSingle, true, false},
-	{FeatureDrawingRecognition, "图纸识别", drawingRecognitionSystemPrompt, bindingAdminSingle, true, false},
-	{FeatureExerciseSolving, "习题解答", exerciseSolvingSystemPrompt, bindingAdminSingle, true, false},
-	{FeatureFaultDiagnosis, "智能维修诊断", diagnosisSystemPrompt, bindingAdminSingle, true, true},
+	// 具名字段（不用位置参数）：加列时不必逐行数参数，读起来也知道哪一列是什么。
+	{name: FeatureGradeShortAnswer, label: "简答题 AI 评分", systemPrompt: gradingSystemPrompt, bindingKind: bindingAdminSingle, billed: false, adapter: aiAdapterLLM},
+	{name: FeatureGenerateChapterContent, label: "课程内容生成", systemPrompt: chapterContentSystemPrompt, bindingKind: bindingAdminSingle, billed: false, adapter: aiAdapterLLM},
+	{name: FeatureAIAssistantNormal, label: "AI 助手 · 普通模式", systemPrompt: forkliftExpertSystemPrompt, bindingKind: bindingAssistantMode, billed: true, adapter: aiAdapterLLM},
+	{name: FeatureAIAssistantExpert, label: "AI 助手 · 专家模式", systemPrompt: forkliftExpertSystemPrompt, bindingKind: bindingAssistantMode, billed: true, adapter: aiAdapterLLM},
+	{name: FeatureQuestionExplanation, label: "题目 AI 解析", systemPrompt: questionExplainSystemPrompt, bindingKind: bindingAdminSingle, billed: false, adapter: aiAdapterLLM},
+	{name: FeatureMaintenanceKnowledge, label: "维保知识", systemPrompt: maintenanceKnowledgeSystemPrompt, bindingKind: bindingAdminSingle, billed: true, adapter: aiAdapterLLM, slug: "maintenance"},
+	{name: FeatureDrawingRecognition, label: "图纸识别", systemPrompt: drawingRecognitionSystemPrompt, bindingKind: bindingAdminSingle, billed: true, adapter: aiAdapterLLM, slug: "drawing"},
+	{name: FeatureExerciseSolving, label: "习题解答", systemPrompt: exerciseSolvingSystemPrompt, bindingKind: bindingAdminSingle, billed: true, adapter: aiAdapterLLM, slug: "exercise"},
+	{name: FeatureFaultDiagnosis, label: "智能维修诊断", systemPrompt: diagnosisSystemPrompt, bindingKind: bindingAdminSingle, billed: true, freePreview: true, adapter: aiAdapterDiagnosis, slug: "fault-diagnosis"},
 	// 遗留兼容：ai_assistant 多绑定回退位（仅解析存量绑定，不供新绑定）
-	{FeatureAIAssistant, "AI 助手对话", forkliftExpertSystemPrompt, bindingAssistantLegacy, true, false},
+	{name: FeatureAIAssistant, label: "AI 助手对话", systemPrompt: forkliftExpertSystemPrompt, bindingKind: bindingAssistantLegacy, billed: true, adapter: aiAdapterLLM},
 }
 
 // lookupAIFeature 注册表按功能键查找。
