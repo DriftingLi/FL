@@ -114,4 +114,11 @@ func TestEnvDefaultsIsConsumed(t *testing.T) {
 	if !strings.Contains(cd, "deploy/env.defaults \\") {
 		t.Fatal("CD 的打包清单里没有 deploy/env.defaults：远端 source 会失败")
 	}
+	// 生成物是**整体 export** 的，而 compose 的取值优先级是「shell 环境 > .env」：
+	// 镜像引用由 deploy-remote.sh 按 registry + tag 现算后写进 .env（不 export），
+	// 一旦生成物把 BACKEND_IMAGE/FRONTEND_IMAGE/LIBREOFFICE_IMAGE 留在环境里，就会盖掉计算值，
+	// compose 转而去 Docker Hub 拉不存在的 forklift-backend:latest（2026-09-13 testing 冒烟实测）。
+	if !strings.Contains(cd, "unset BACKEND_IMAGE FRONTEND_IMAGE LIBREOFFICE_IMAGE") {
+		t.Fatal("CD 的环境变量文件没有 unset 生成物里的镜像名：会把部署脚本算好的镜像引用盖掉")
+	}
 }

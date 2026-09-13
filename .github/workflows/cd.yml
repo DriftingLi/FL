@@ -629,6 +629,12 @@ jobs:
             # 文件缺失即中止部署（说明打包清单漏了它，而不是「静默用回 compose 默认值」）。
             echo 'source "$DEPLOY_PATH/deploy/env.defaults"'
             echo ''
+            echo '# ---- 让位：镜像引用由部署脚本按 registry + tag 现算并写进 .env ----'
+            echo '# compose 的取值优先级是 shell 环境 > .env。生成物里的 BACKEND_IMAGE/FRONTEND_IMAGE/'
+            echo '# LIBREOFFICE_IMAGE 是「本地镜像名」兜底值，若留在环境里会盖掉脚本算好的镜像引用，'
+            echo '# compose 就会去 Docker Hub 拉不存在的 forklift-backend:latest（2026-09-13 testing 冒烟实测踩到）。'
+            echo 'unset BACKEND_IMAGE FRONTEND_IMAGE LIBREOFFICE_IMAGE'
+            echo ''
             echo '# ---- 覆盖段：secrets / 环境里确实提供了值的变量才写出（空值保留上面的默认）----'
             echo '# 变量清单直接读生成物，workflow 里不再手抄一份默认值：'
             for _name in $(grep -E '^export [A-Z_0-9]+=' deploy/env.defaults | sed -E 's/^export ([A-Z_0-9]+)=.*/\1/'); do
