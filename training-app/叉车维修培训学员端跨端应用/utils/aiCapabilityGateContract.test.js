@@ -12,6 +12,10 @@
  *   ② 抽屉菜单：不显示「自定义模型」；
  *   ③ 模型芯片点击：不打开选择器（走档位入口）；
  *   ④ 「解锁专业版」横幅用**实色**（本机型实测 background: linear-gradient(...) 静默不绘制）。
+ *   ⑥ **对话设置页是同一条门**（#939 口径 A）：该页的「＋ 新增」与空态卡按门隐藏 ——
+ *      `pages/ai-assistant/custom-models` 有两条入口链，只收抽屉那条（#926/#936）不算收口。
+ *      （抽屉自身那两个**真机实测**踩到的坑 —— 类型名义重复导致的 `ClassCastException`、`<view>`
+ *      承载文字样式 —— 由 `utils/aiChatDrawerContract.test.js` 守护。）
  */
 const fs = require('fs');
 const path = require('path');
@@ -19,12 +23,14 @@ const path = require('path');
 const PAGE = path.join(__dirname, '..', 'pages', 'ai-assistant', 'ai-assistant.uvue');
 const CONSTS = path.join(__dirname, '..', 'pages', 'ai-assistant', 'ai-assistant-constants.uts');
 const ADAPTER = path.join(__dirname, '..', 'composables', 'useAiPro.uts');
+const SETTINGS = path.join(__dirname, '..', 'pages', 'ai-assistant', 'ai-settings.uvue');
 const read = (p) => fs.readFileSync(p, 'utf8');
 
 describe('AI 助手专业版能力门（proUnlocked）契约', () => {
   const page = read(PAGE);
   const consts = read(CONSTS);
   const adapter = read(ADAPTER);
+  const settings = read(SETTINGS);
 
   it('① 能力门由 useAiPro 单点适配器派生，且默认关闭（fail-closed）', () => {
     // #920：门不再是页面里的写死常量，而是适配器读出的事实（事实源 = 已拥有 ai_pro）
@@ -66,5 +72,17 @@ describe('AI 助手专业版能力门（proUnlocked）契约', () => {
     const style = page.slice(from, page.indexOf('.pro-banner-go {', from));
     expect(style).toMatch(/background-color:\s*#/);
     expect(style).not.toMatch(/gradient/);
+  });
+
+  it('⑥ 对话设置页同门（#939 口径 A）：「＋ 新增」与空态卡按门隐藏', () => {
+    // 该页按 ADR 0009 的口径保持页面级 proUnlocked（#920 上线后两页一并改读后端判定）
+    expect(settings).toMatch(/const\s+proUnlocked\s*=\s*ref<boolean>\(false\)/);
+    // 两条漏径都在门内：新增入口、空态卡
+    expect(settings).toMatch(/<text v-if="proUnlocked" class="section-add"/);
+    expect(settings).toMatch(/v-if="proUnlocked && userModels\.length == 0"/);
+    // 列表必须 v-else-if：若沿用 v-else，锁定时会把空态卡藏了却渲染一个空卡片
+    expect(settings).toMatch(/v-else-if="userModels\.length > 0"/);
+    // 门后唯一去处仍是自定义模型页（口径 A 只把入口收进同一门，不改目标页）
+    expect(settings).toMatch(/url:\s*'\/pages\/ai-assistant\/custom-models'/);
   });
 });
