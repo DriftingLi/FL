@@ -12,7 +12,6 @@ import {
 import type { AIFeatureKey, AIFeatureQuickOption } from './aiFeatures'
 
 export interface AIFeatureUIDescriptor {
-  routePath: string
   welcome: string
   /** AI 助手欢迎区入口卡片的一句话描述 */
   entryDesc: string
@@ -25,7 +24,6 @@ export interface AIFeatureUIDescriptor {
 
 export const aiFeatureUI: Record<AIFeatureKey, AIFeatureUIDescriptor> = {
   maintenance_knowledge: {
-    routePath: '/ai-assistant/maintenance',
     welcome: '保养周期项目标准，一问即懂',
     entryDesc: '保养周期、项目与标准',
     icon: Reading,
@@ -40,7 +38,6 @@ export const aiFeatureUI: Record<AIFeatureKey, AIFeatureUIDescriptor> = {
     ]
   },
   drawing_recognition: {
-    routePath: '/ai-assistant/drawing',
     welcome: '上传图纸即读懂部件原理',
     entryDesc: '上传图纸，识别部件与原理',
     icon: Picture,
@@ -56,7 +53,6 @@ export const aiFeatureUI: Record<AIFeatureKey, AIFeatureUIDescriptor> = {
     maxImages: 4
   },
   exercise_solving: {
-    routePath: '/ai-assistant/exercise',
     welcome: '上传习题即得答案解析',
     entryDesc: '上传习题照片，给出答案与解析',
     icon: EditPen,
@@ -71,7 +67,6 @@ export const aiFeatureUI: Record<AIFeatureKey, AIFeatureUIDescriptor> = {
     maxImages: 4
   },
   fault_diagnosis: {
-    routePath: '/ai-assistant/fault-diagnosis',
     welcome: '描述现象或拍照，基于手册生成排查 SOP',
     entryDesc: '基于维修手册生成排查 SOP',
     icon: FirstAidKit,

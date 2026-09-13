@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
@@ -32,7 +33,7 @@ func RegisterFeaturedRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Fea
 	rg.POST("/featured-content/:id/view", h.IncrementViewCount)
 
 	// ===== 管理端接口（需 admin 角色）=====
-	g := rg.Group("/admin", middleware.JWTAuth(rd.Session), middleware.RoleRequired("admin"))
+	g := rg.Group("/admin", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapContentManage))
 	g.GET("/featured-contents", h.AdminList)
 	g.GET("/featured-content/:id", h.AdminDetail)
 	g.POST("/featured-content", h.Create)

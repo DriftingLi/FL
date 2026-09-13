@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
@@ -30,10 +31,10 @@ var applicationErrStatus = &errStatusTable{
 func RegisterApplicationRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.JobApplicationService) {
 	h := NewApplicationHandler(svc)
 	// 学员侧职位投递动作挂在 /api/jobs 下
-	studentJobG := rg.Group("/jobs", middleware.JWTAuth(rd.Session), middleware.RoleRequired("hrwai_user"))
+	studentJobG := rg.Group("/jobs", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapJobApply))
 	studentJobG.POST("/:id/apply", h.Apply)
 	// 我的投递挂在 /api/resume 前缀下（对齐既有「学员侧招聘数据挂在简历前缀下」的写法）
-	studentG := rg.Group("/resume", middleware.JWTAuth(rd.Session), middleware.RoleRequired("hrwai_user"))
+	studentG := rg.Group("/resume", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapResumeManage))
 	studentG.GET("/applications", h.ListMine)
 	studentG.POST("/applications/:id/withdraw", h.Withdraw)
 }

@@ -294,7 +294,8 @@ const {
         params.level_id = levelId.value
       }
     }
-    // credential_id 由主 client 请求拦截器默认注入（#387）
+    // 证件作用域（ADR-0047 §4）：公开课程列表无登录上下文，服务端无法兜底，显式传当前证件
+    if (credentialStore.current?.id) params.credential_id = credentialStore.current.id
     const data = await courseApi.getCourses(params)
     courses.value = data.courses
     total.value = data.total
@@ -316,7 +317,7 @@ const {
   fetchCatalog,
   levelNameOf
 } = useCourseCatalog({
-  adapter: treeCatalogAdapter(() => trainingApi.getCatalogTree()),
+  adapter: treeCatalogAdapter(() => trainingApi.getCatalogTree(credentialStore.current?.id)),
   onSelect: () => {
     currentPage.value = 1
     loadCourses()

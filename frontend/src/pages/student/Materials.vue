@@ -167,7 +167,11 @@ function handleFilterChange() {
 async function loadCourses() {
   try {
     // 课程筛选选项（页大小取大值覆盖全部课程）
-    const res = await courseApi.getCourses({ page: 1, page_size: 100 })
+    const res = await courseApi.getCourses({
+      page: 1,
+      page_size: 100,
+      credential_id: credentialStore.current?.id ?? undefined
+    })
     courses.value = res.courses || []
   } catch (e) {
     console.error('加载课程列表失败:', e)

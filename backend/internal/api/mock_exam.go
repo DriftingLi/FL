@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
@@ -25,7 +26,7 @@ func NewMockExamHandler(svc *service.MockExamService) *MockExamHandler {
 func RegisterMockExamRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.MockExamService) {
 	h := NewMockExamHandler(svc)
 
-	g := rg.Group("/mock-exam", middleware.JWTAuth(rd.Session), middleware.RoleRequired("hrwai_user"))
+	g := rg.Group("/mock-exam", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapMockExamTake), middleware.CredentialScoped(rd.CredentialScope))
 
 	// POST /api/mock-exam/start  开始模拟考试（count 题量 + duration 时长）
 	g.POST("/start", h.Start)
@@ -85,7 +86,7 @@ func (h *MockExamHandler) Start(c *gin.Context) {
 			if duration == 0 {
 				duration = 90
 			}
-			return &startReq{StudentID: studentID, Count: count, Duration: duration, CredentialID: queryIDPtr(c, "credential_id")}, nil
+			return &startReq{StudentID: studentID, Count: count, Duration: duration, CredentialID: middleware.CredentialIDPtr(c)}, nil
 		},
 		Invoke: func(ctx context.Context, req *startReq) (*service.MockExamStartDTO, error) {
 			return h.svc.Start(req.StudentID, req.Count, req.Duration, req.CredentialID)

@@ -117,7 +117,7 @@ export interface ChapterDetail {
 
 export const courseApi = {
   getCourses(params: { page?: number; page_size?: number; keyword?: string; credential_id?: number; specialty_id?: number; level_id?: number; filter?: 'hot' | 'featured' | 'all' }) {
-    // credential_id 由主 client 请求拦截器默认注入（#387）
+    // 由调用方显式传入（证件作用域事实源在服务端，ADR-0047 §4）（#387）
     return unwrappedRequest.get<{ courses: CourseSummary[]; total: number }>('/courses', { params })
   },
 

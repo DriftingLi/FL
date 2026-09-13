@@ -5,6 +5,7 @@ package api
 import (
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
@@ -24,7 +25,7 @@ func NewFavoriteHandler(svc *service.FavoriteService) *FavoriteHandler {
 func RegisterFavoriteRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.FavoriteService) {
 	h := NewFavoriteHandler(svc)
 
-	g := rg.Group("/favorites", middleware.JWTAuth(rd.Session), middleware.RoleRequired("hrwai_user"))
+	g := rg.Group("/favorites", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapFavoriteManage), middleware.CredentialScoped(rd.CredentialScope))
 
 	// GET /api/favorites?target_type=&page=&page_size= 我的收藏列表（快照回填）
 	g.GET("", h.List)
@@ -51,7 +52,7 @@ func RegisterFavoriteRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Fav
 // @Router /favorites [get]
 func (h *FavoriteHandler) List(c *gin.Context) {
 	userID := middleware.CurrentUserID(c)
-	credID := queryIDPtr(c, "credential_id")
+	credID := middleware.CredentialIDPtr(c)
 	resp, err := h.svc.List(userID, c.Query("target_type"),
 		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 20), credID)
 	if err != nil {

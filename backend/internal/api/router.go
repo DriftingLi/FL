@@ -109,55 +109,19 @@ func NewRouter(deps *Deps) *gin.Engine {
 	}
 
 	// 邮箱验证码注册/登录（发码需过图形验证码）
-	RegisterEmailAuthRoutes(api, rd, deps.CodeSvc, deps.EmailCh, deps.CaptchaSvc, cfg.CaptchaEnabled)
 	// 手机号验证码注册/登录（发码需过图形验证码）
-	RegisterPhoneAuthRoutes(api, rd, deps.CodeSvc, deps.PhoneCh, deps.CaptchaSvc, cfg.CaptchaEnabled)
 	// 微信扫码登录（框架占位）
-	RegisterWechatAuthRoutes(api, deps.WechatAuthSvc)
 	// 个人信息页：手机号/邮箱绑定修改
-	RegisterProfileBindRoutes(api, rd, deps.CodeSvc, deps.EmailCh, deps.PhoneCh)
 
 	// 注册业务蓝图（定级考试与阅卷已下线，见 spec #284）：
 	//   auth/courses/student/question-bank/
 	//   tutor/wrong-questions/mock-exam/admin/practice-mode
-	RegisterCoursesRoutes(api, rd, deps.CourseSvc)
-	RegisterStudentRoutes(api, rd, deps.StudentSvc)
-	RegisterQuestionBankRoutes(api, rd, deps.QuestionBankSvc, deps.FileSvc)
-	RegisterPracticeModeRoutes(api, rd, deps.PracticeModeSvc)
-	RegisterAdminRoutes(api, rd, deps.AdminSvc, deps.AdminCourseSvc, deps.AuthSvc, deps.AIConfigSvc, deps.ContentGenSvc)
-	RegisterAdminRecruiterRoutes(api, rd, deps.AuthSvc)
-	RegisterRecruitRoutes(api, rd, deps.RecruitSvc)
-	RegisterTutorRoutes(api, rd, deps.TutorSvc, deps.FileSvc)
-	RegisterWrongQuestionRoutes(api, rd, deps.WrongQuestionSvc)
-	RegisterMockExamRoutes(api, rd, deps.MockExamSvc)
-	RegisterRealExamRoutes(api, rd, deps.RealExamSvc, deps.PointsSvc)
-	RegisterFeaturedRoutes(api, rd, deps.FeaturedSvc, deps.FileSvc)
-	RegisterAIAssistantRoutes(api, rd, deps.AIAssistantSvc)
-	RegisterDiagnosisRoutes(api.Group("/ai-assistant"), rd, deps.DiagnosisProxySvc)
-	RegisterForumRoutes(api, rd, deps.ForumSvc, deps.ForumImageSvc)
-	RegisterCheckInRoutes(api, rd, deps.CheckInSvc)
-	RegisterAdminPointsRoutes(api, rd, deps.PointsSvc, deps.NotificationSvc)
-	RegisterPointsRoutes(api, rd, deps.PointsSvc)
-	RegisterProfileReviewRoutes(api, rd, deps.ReviewSvc)
-	RegisterNotificationRoutes(api, rd, deps.NotificationSvc)
-	RegisterAuditRoutes(api, rd, deps.AuditSvc)
-	RegisterExportRoutes(api, rd, deps.ExportSvc)
-	RegisterTrainingCatalogRoutes(api, rd, deps.TrainingCatalogSvc)
-	RegisterQuestionInteractionRoutes(api, rd, deps.QuestionCommentSvc, deps.QuestionNoteSvc, deps.QuestionKnowledgeSvc)
 	// 移动端 P1 通用能力（ADR-0018）：通用收藏 / 全局搜索 / 学习资料聚合
-	RegisterFavoriteRoutes(api, rd, deps.FavoriteSvc)
-	RegisterSearchRoutes(api, rd, deps.SearchSvc)
-	RegisterMaterialRoutes(api, rd, deps.MaterialSvc)
-	RegisterJobCardRoutes(api, rd, deps.JobCardSvc, deps.FileSvc)
-	RegisterResumeViewRoutes(api, rd, deps.RecruitSvc)
-	RegisterResumePDFRoutes(api, rd, deps.RecruitSvc, deps.ResumePDFRenderer)
-	RegisterContactRoutes(api, rd, deps.ContactSvc)
-	RegisterJobRoutes(api, rd, deps.JobPostingSvc)
-	RegisterApplicationRoutes(api, rd, deps.JobApplicationSvc)
-	RegisterJobReportRoutes(api, rd, deps.JobReportSvc, deps.JobPostingSvc)
-	RegisterRecruiterApplicationRoutes(api, rd, deps.JobApplicationSvc)
-	RegisterAdminInspectionRoutes(api, rd, deps.DB, deps.PointsSvc)
-	RegisterContributionRoutes(api, rd, deps.ContributionSvc)
+
+	// 全部 /api 蓝图经域注册表登记（ADR-0047 §6 / spec #933）：顺序在 routes_registry.go 一处声明。
+	for _, reg := range routeRegistrars {
+		reg.Register(api, rd, deps)
+	}
 
 	return r
 }

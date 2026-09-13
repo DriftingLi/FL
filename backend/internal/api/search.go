@@ -5,6 +5,7 @@ package api
 import (
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
@@ -22,7 +23,7 @@ func NewSearchHandler(svc *service.SearchService) *SearchHandler {
 // RegisterSearchRoutes 注册 /api/search 蓝图（公开访问）。
 func RegisterSearchRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.SearchService) {
 	h := NewSearchHandler(svc)
-	rg.GET("/search", h.Search)
+	rg.GET("/search", middleware.CredentialScoped(rd.CredentialScope), h.Search)
 }
 
 // Search 全局搜索
@@ -39,7 +40,7 @@ func RegisterSearchRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Searc
 // @Failure 400 {object} response.R "参数错误"
 // @Router /search [get]
 func (h *SearchHandler) Search(c *gin.Context) {
-	credID := queryIDPtr(c, "credential_id")
+	credID := middleware.CredentialIDPtr(c)
 	resp, err := h.svc.Search(c.Query("keyword"), c.Query("type"),
 		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 20), credID)
 	if err != nil {

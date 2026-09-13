@@ -16,78 +16,49 @@ import (
 func sampleRegistry() []AIFeatureExport {
 	return []AIFeatureExport{
 		{Name: "grade_short_answer", Label: "简答题 AI 评分", BindingKind: string(bindingAdminSingle), Billed: false},
-		{Name: "fault_consult", Label: "故障咨询", BindingKind: string(bindingAdminSingle), Billed: true, FreePreview: true},
+		{Name: "fault_consult", Label: "故障咨询", BindingKind: string(bindingAdminSingle), Billed: true, FreePreview: true, Slug: "fault-consult", Adapter: string(aiAdapterDiagnosis)},
 		{Name: "ai_assistant_normal", Label: "AI 助手 · 普通模式", BindingKind: string(bindingAssistantMode), Billed: true},
-		{Name: "maintenance_knowledge", Label: "维保知识", BindingKind: string(bindingAdminSingle), Billed: true},
+		{Name: "maintenance_knowledge", Label: "维保知识", BindingKind: string(bindingAdminSingle), Billed: true, Slug: "maintenance", Adapter: string(aiAdapterLLM)},
 		{Name: "ai_assistant", Label: "AI 助手对话", BindingKind: string(bindingAssistantLegacy), Billed: true},
-		{Name: "exercise_solving", Label: "习题解答", BindingKind: string(bindingAdminSingle), Billed: true},
+		{Name: "exercise_solving", Label: "习题解答", BindingKind: string(bindingAdminSingle), Billed: true, Slug: "exercise", Adapter: string(aiAdapterLLM)},
 	}
 }
 
-// TestRenderFrontendAIFeaturesSnapshot 生成器单测（ADR-0030 验收 1）：注册表样例 → 输出快照
-// （快照钉死收录过滤、声明序、键/名转义与整份文件形状）。
+// TestRenderFrontendAIFeaturesSnapshot 生成器结构断言（ADR-0030 验收 1 / ADR-0047 §7）：
+// 用注册表样例钉住收录过滤、声明序，以及 slug / adapter / 助手双模式键三个派生面。
+//
+// 为什么不再是整文件快照：整份文件形状已由 TestFrontendAIFeaturesTSInSync 对**真实**注册表做
+// 字节级比对；对样例再钉一遍全文只会在每次模板调整时制造无信息的假红。这里改为断言可读的
+// 结构性质——收录集合、声明序、派生面的存在与取值。
 func TestRenderFrontendAIFeaturesSnapshot(t *testing.T) {
 	got, err := RenderFrontendAIFeaturesTS(sampleRegistry())
 	if err != nil {
 		t.Fatalf("渲染失败: %v", err)
 	}
-	want := `// 生成文件，勿手改（ADR-0030 前端 AI 功能配置窄域 codegen 试点，#613）。
-// 唯一事实源：后端 AI 功能注册表 backend/internal/service/ai_feature_registry.go。
-// 再生成：cd backend && go run ./cmd/gen-aifeatures
-// 同步契约：backend/internal/service/ai_features_codegen_test.go 将本文件与注册表渲染结果
-// 全等比对，手改或注册表变更未再生成时后端测试即红。功能键与展示名由注册表派生；
-// 路由/文案/图标等展示数据在 aiFeatureUI.ts 手写维护，新增功能键时需同步补齐。
-import type { Component } from 'vue'
-import { aiFeatureUI } from './aiFeatureUI'
-
-// 收录规则：注册表中管理端单绑定且声明计费的专项对话功能（与后端 featureChatKeys 同口径），
-// 键序 = 注册表声明序（助手主页入口卡片顺序）。
-export type AIFeatureKey =
-  | 'fault_consult'
-  | 'maintenance_knowledge'
-  | 'exercise_solving'
-
-// 注册表派生对：[功能键, 展示名, 是否限免]（展示名即后端 FeatureLabel；限免位供前端角标）。
-const AI_FEATURE_REGISTRY: ReadonlyArray<readonly [AIFeatureKey, string, boolean]> = [
-  ['fault_consult', '故障咨询', true],
-  ['maintenance_knowledge', '维保知识', false],
-  ['exercise_solving', '习题解答', false],
-]
-
-export interface AIFeatureQuickOption {
-  label: string
-  options: string[]
-}
-
-export interface AIFeatureConfig {
-  key: AIFeatureKey
-  title: string
-  routePath: string
-  welcome: string
-  /** AI 助手欢迎区入口卡片的一句话描述 */
-  entryDesc: string
-  icon: Component
-  suggestions: string[]
-  quickOptions?: AIFeatureQuickOption[]
-  supportsImage?: boolean
-  maxImages?: number
-  /** 限免声明位（注册表派生）：true 时展示「限免」角标，前端据此提示不扣积分 */
-  freePreview?: boolean
-}
-
-export const AI_FEATURES: AIFeatureConfig[] = AI_FEATURE_REGISTRY.map(([key, title, freePreview]) => ({
-  key,
-  title,
-  freePreview,
-  ...aiFeatureUI[key]
-}))
-
-export function getAIFeatureByRoute(path: string): AIFeatureConfig | undefined {
-  return AI_FEATURES.find(f => f.routePath === path)
-}
-`
-	if got != want {
-		t.Fatalf("渲染结果与快照不符:\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	// 收录过滤 + 声明序：只留 admin-single ∧ billed 三行，且保持注册表声明序
+	wantUnion := "export type AIFeatureKey =\n  | 'fault_consult'\n  | 'maintenance_knowledge'\n  | 'exercise_solving'\n"
+	if !strings.Contains(got, wantUnion) {
+		t.Fatalf("功能键联合类型与声明序不符:\n%s", got)
+	}
+	// 被过滤的行不进联合类型（免费阻塞 / 双模式 / 遗留兼容）
+	for _, absent := range []string{"  | 'grade_short_answer'", "  | 'ai_assistant_normal'", "  | 'ai_assistant'"} {
+		if strings.Contains(got, absent) {
+			t.Fatalf("被过滤的功能不应进功能键联合类型: %s", absent)
+		}
+	}
+	// slug 与 adapter 进生成表（ADR-0047 §7）
+	wantPair := "['fault_consult', '故障咨询', true, 'fault-consult', 'diagnosis'],"
+	if !strings.Contains(got, wantPair) {
+		t.Fatalf("派生对缺 slug/adapter，want 含 %s:\n%s", wantPair, got)
+	}
+	// 专项功能 slug 白名单（供前端路由正则）
+	wantSlugs := "export const AI_FEATURE_SLUG_PATTERN = 'fault-consult|maintenance|exercise'"
+	if !strings.Contains(got, wantSlugs) {
+		t.Fatalf("slug 白名单未派生，want 含 %s:\n%s", wantSlugs, got)
+	}
+	// 助手双模式键：独立于专项对话收录规则（设置页读它，替代硬编码）
+	if !strings.Contains(got, "export const AI_ASSISTANT_MODE_KEYS = [") || !strings.Contains(got, "  'ai_assistant_normal'") {
+		t.Fatalf("助手双模式键未派生:\n%s", got)
 	}
 }
 

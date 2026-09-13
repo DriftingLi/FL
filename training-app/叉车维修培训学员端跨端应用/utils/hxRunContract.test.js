@@ -19,10 +19,16 @@
  *   C9 头注释写明与 `compile-check.ps1` 的分工（门 = 全量，本脚本 = 日常增量）与「绝不 kill 主程序」
  *   C10 文档落锁：移动端 `AGENTS.md`「开发内循环（移动端 UI 迭代）」三层节奏 + 反模式、
  *       ADR-0008 非门辅助段的一行指针、`package.json` 注册 `hx:run`
- *   C11 **部署后置断言**（2026-09-12 假绿教训）：必须有 `Get-DeployedState`，主判据是**设备侧事实**
- *       （`topResumedActivity` 是否为目标 App；候选含 `io.dcloud.uniappx` 标准基座），并纳入实测停止标记
- *       `已停止运行`；必须输出 `HX_RUN_DEPLOY deployed=…` 机检行；`deployed=false` ⇒ `exit=env` + `exit 2`，
+ *   C11 **部署后置断言**（2026-09-12 假绿教训 v1 → 2026-09-13 v2 升级）：必须有 `Get-DeviceDeployFacts` /
+ *       `Get-DeployVerdict`，主判据是**基线相对的设备侧事实**（资源目录 mtime 相对基线前进，`stat -c %Y`），
+ *       `topResumedActivity` 只作辅助说明（**曾单独作判据 ⇒ 重复运行到同一台机器时恒真 ⇒ v2 假绿**）；
+ *       必须输出 `HX_RUN_DEPLOY deployed=… www=… pid_after=…` 机检行；`deployed=false` ⇒ `exit=env` + `exit 2`，
  *       且该判定必须出现在报成功（`-Exit 'ok'`）**之前**
+ *   C12 **真运行语义**（2026-09-13 事故根因）：
+ *       `launch app-android` 的 `--compile` 官方语义是「**仅编译代码**」⇒ 本脚本的 launch 参数里**不得出现** `--compile`
+ *       （它只属于全量编译门 `compile-check.ps1`）；必须显式传 `--deviceId`；launch 步必须走
+ *       `Start-CliLaunchDetached`（真运行会话**不会自己收口**，走会等待的路径必然假超时）；
+ *       且 `AGENTS.md` / ADR-0008 都必须写明「仅编译」这条坑位
  *
  * 设计沿用本仓既有守护测试形态（见 utils/emulatorSmokeContract.test.js、utils/hxBusyGateContract.test.js）：
  * 先对「注入违规」的变形样本断言检测有效（防空跑假绿），再对真实文件断言零命中。
@@ -154,21 +160,58 @@ function scanContract(sources) {
   must(raw.includes('scripts/lib/hx-busy.ps1'), 'C9', '头注释未指向 scripts/lib/hx-busy.ps1');
   must(raw.includes('不是门'), 'C9', '头注释未声明本脚本不是门（不进验收证据）');
 
-  // ---- C11 部署后置断言：编译成功 ≠ 运行成功（2026-09-12 假绿教训）----
-  must(/function\s+Get-DeployedState/.test(code), 'C11', '缺部署后置断言 Get-DeployedState（只扫 error 行会报出假绿）');
+  // ---- C11 部署后置断言：编译成功 ≠ 运行成功（v1 2026-09-12；判据必须**基线相对**，v2 2026-09-13）----
+  must(/function\s+Get-DeviceDeployFacts/.test(code), 'C11', '缺设备侧取数函数 Get-DeviceDeployFacts（只扫 error 行会报出假绿）');
+  must(/function\s+Get-DeployVerdict/.test(code), 'C11', '缺部署判定函数 Get-DeployVerdict');
+  must(/stat -c %Y/.test(code), 'C11', '未取「资源真落盘」这个设备侧事实（应有 stat -c %Y 取资源目录 mtime）');
+  must(/\$deployed = Get-DeployVerdict/.test(code), 'C11', '判定结果不是来自 Get-DeployVerdict（写成常量就是假绿）');
+  must(
+    /-Before \$factsBefore -After \$factsAfter/.test(code),
+    'C11',
+    '判定不是**基线相对**的（缺 -Before/-After 比对）—— 没有基线时恒真的判据会报出 v2 假绿'
+  );
   must(/HX_RUN_DEPLOY deployed=/.test(code), 'C11', '缺 HX_RUN_DEPLOY 机检行（「到底有没有到设备」必须可机检）');
-  must(/topResumedActivity/.test(code), 'C11', '后置断言未查设备侧事实（topResumedActivity）');
+  must(
+    /www=\$\(Format-WwwPair -Before \$factsBefore -After \$factsAfter\)/.test(code) && /pid_after=/.test(code),
+    'C11',
+    '机检行未同时报基线与现值（应为 … www=$(Format-WwwPair -Before $factsBefore -After $factsAfter) … pid_after=…）'
+  );
   must(/已停止运行/.test(code), 'C11', '未纳入实测停止标记「已停止运行」（2026-09-12 真机首跑的校准点）');
   must(/io\.dcloud\.uniappx/.test(code), 'C11', '候选包名缺 HBuilderX 标准基座（dev 运行的常见承载）');
+  must(/topResumedActivity/.test(code), 'C11', '未取前台包名（取它只为辅助说明；**不得单独作判据**）');
   const verdictAt = code.indexOf('if (-not $deployed.Deployed)');
   must(verdictAt !== -1, 'C11', '缺「未部署」分支（必须显式判未部署，不能只报成功）');
   const okAt = code.indexOf("-Exit 'ok'");
   if (verdictAt !== -1) {
-    const verdictSlice = code.slice(verdictAt, verdictAt + 900);
+    const verdictSlice = code.slice(verdictAt, verdictAt + 1600);
     must(/-Exit 'env'/.test(verdictSlice), 'C11', '未部署时未打 exit=env 的结果行（不得报 ok）');
     must(/exit 2/.test(verdictSlice), 'C11', '未部署时未 exit 2（以 0 退出就是假绿）');
     must(okAt !== -1 && verdictAt < okAt, 'C11', '部署后置断言必须在报成功（-Exit \'ok\'）之前 —— 否则成功先被报出去了');
   }
+
+  // ---- C12 真运行语义（2026-09-13 事故根因：--compile true 的官方语义是「仅编译代码」）----
+  const buildAt = code.indexOf("$launchArgs = @('launch', 'app-android'");
+  must(buildAt !== -1, 'C12', '未找到 launch 参数构造行（无法核对真运行语义）');
+  if (buildAt !== -1) {
+    const buildSlice = code.slice(buildAt, buildAt + 400);
+    must(
+      !/--compile/.test(buildSlice),
+      'C12',
+      'launch 参数里出现 --compile（官方语义是「仅编译代码」⇒ 只编译不运行；该参数只属于全量编译门 compile-check.ps1）'
+    );
+    must(/--cleanCache/.test(buildSlice), 'C12', 'launch 参数构造处未见 -Full 分支的干净缓存重建开关（C1 的落点应在这里）');
+  }
+  must(/--deviceId/.test(code), 'C12', 'launch 未显式传 --deviceId（官方文档：不指定时默认使用第一个设备；显式传才无歧义）');
+  must(/Start-CliLaunchDetached/.test(code), 'C12', 'launch 步未走「派发后不等待」路径（真运行会话不返回，等待必然假超时）');
+  must(
+    !/Invoke-CliStep -Name 'launch'/.test(code),
+    'C12',
+    'launch 步仍在用会等待收口的 Invoke-CliStep（真运行会话不返回 ⇒ 必然假超时）'
+  );
+  must(/\[int\]\$StepTimeoutSeconds/.test(code), 'C12', '缺 -StepTimeoutSeconds（open / project-open 两小步的超时）');
+  must(agents.includes('仅编译'), 'C12', 'AGENTS.md 未写明「--compile 的语义是仅编译」（下个会话会再踩同一个坑）');
+  must(adr.includes('仅编译'), 'C12', 'ADR-0008 未写明「仅编译」坑位（ADR 才是冷启动会话的必读面）');
+
 
   // ---- C10 文档落锁 ----
   must(agents.includes('## 开发内循环（移动端 UI 迭代）'), 'C10', 'AGENTS.md 缺「开发内循环（移动端 UI 迭代）」小节');
@@ -241,15 +284,36 @@ describe('日常增量运行契约（scripts/hx-run.ps1，2026-09-12）', () => 
         agents: s.agents.replace('## 开发内循环（移动端 UI 迭代）', '## 开发循环')
       })],
       ['C10', 'AGENTS.md 反模式清单被删', (s) => ({ ...s, agents: s.agents.replace(/反模式/g, '注意事项') })],
-      ['C10', 'ADR 指针被删', (s) => ({ ...s, adr: s.adr.replace('hx-run.ps1', 'other.ps1') })],
+      ['C10', 'ADR 指针被删', (s) => ({ ...s, adr: s.adr.replace(/hx-run\.ps1/g, 'other.ps1') })],
       ['C10', 'package.json 未注册', (s) => ({ ...s, pkg: s.pkg.replace('"hx:run"', '"hxrun"') })],
-      ['C11', '后置断言函数被删（退回只看 error 行）', (s) => ({
+      ['C11', '取数函数被删（退回只看 error 行）', (s) => ({
         ...s,
-        script: s.script.replace(/function Get-DeployedState/g, 'function X')
+        script: s.script.replace(/function Get-DeviceDeployFacts/g, 'function X')
+      })],
+      ['C11', '判定函数被删', (s) => ({
+        ...s,
+        script: s.script.replace(/function Get-DeployVerdict/g, 'function Y')
+      })],
+      ['C11', '资源 mtime 取数被删（不再看「资源真落盘」）', (s) => ({
+        ...s,
+        script: s.script.replace(/stat -c %Y/g, 'cat')
+      })],
+      ['C11', '判定被写成常量（不再来自判定函数）', (s) => ({
+        ...s,
+        script: s.script.replace('$deployed = Get-DeployVerdict', '$deployed = @{ Deployed = $true }')
+      })],
+      ['C11', '判据不再与基线比对（退回恒真）', (s) => ({
+        ...s,
+        script: s.script
+          .replace(/-Before \$factsBefore -After \$factsAfter/g, '-Before $factsAfter -After $factsAfter')
       })],
       ['C11', 'HX_RUN_DEPLOY 机检行被删', (s) => ({
         ...s,
         script: s.script.replace(/HX_RUN_DEPLOY deployed=/g, 'X')
+      })],
+      ['C11', '机检行不再报基线（只报现值）', (s) => ({
+        ...s,
+        script: s.script.replace('www=$(Format-WwwPair -Before $factsBefore -After $factsAfter)', 'www=none')
       })],
       ['C11', '不再查设备侧事实', (s) => ({ ...s, script: s.script.replace(/topResumedActivity/g, 'X') })],
       ['C11', '实测停止标记被删', (s) => ({ ...s, script: s.script.replace(/已停止运行/g, 'X') })],
@@ -257,7 +321,28 @@ describe('日常增量运行契约（scripts/hx-run.ps1，2026-09-12）', () => 
       ['C11', '未部署分支被删（退回只报成功）', (s) => ({
         ...s,
         script: s.script.replace('if (-not $deployed.Deployed) {', 'if ($false) {')
-      })]
+      })],
+      ['C12', 'launch 参数里塞回 --compile true（只编译不运行）', (s) => ({
+        ...s,
+        script: s.script.replace(
+          "$launchArgs = @('launch', 'app-android', '--project', $Project)",
+          "$launchArgs = @('launch', 'app-android', '--project', $Project, '--compile', 'true')"
+        )
+      })],
+      ['C12', '--deviceId 被删', (s) => ({ ...s, script: s.script.replace(/--deviceId/g, '--dev') })],
+      ['C12', 'launch 步退回会等待收口的路径', (s) => ({
+        ...s,
+        script: s.script.replace(/Start-CliLaunchDetached/g, 'Invoke-CliStep')
+      })],
+      ['C12', '两小步超时开关被删', (s) => ({
+        ...s,
+        script: s.script.replace('[int]$StepTimeoutSeconds = 180,', '')
+      })],
+      ['C12', 'AGENTS.md 不再写「仅编译」', (s) => ({
+        ...s,
+        agents: s.agents.replace(/仅编译/g, '只编译')
+      })],
+      ['C12', 'ADR 不再写「仅编译」', (s) => ({ ...s, adr: s.adr.replace(/仅编译/g, '只编译') })]
     ];
     cases.forEach(([rule, label, mutate]) => {
       const found = scanContract(mutate(real));
@@ -274,7 +359,19 @@ describe('日常增量运行契约（scripts/hx-run.ps1，2026-09-12）', () => 
     const blocks = code.match(/if\s*\(\s*\$Full\s*\)\s*\{[\s\S]*?\n\}/g) || [];
     expect(blocks).toHaveLength(1);
     expect(blocks[0]).toContain('--cleanCache');
-    expect(code).toContain("$launchArgs = @('launch', 'app-android', '--project', $Project, '--compile', 'true')");
+    expect(code).toContain("$launchArgs = @('launch', 'app-android', '--project', $Project)");
+  });
+
+  it('C12：launch 是真运行（参数里没有 --compile；带 --deviceId；走不等待的派发路径）', () => {
+    const code = maskDocBlocks(real.script);
+    const at = code.indexOf("$launchArgs = @('launch', 'app-android'");
+    expect(at).toBeGreaterThan(-1);
+    // 这条曾把错参数锁成「必须」：C1 的 happy-path 原来断言参数里**必须**有 --compile true。
+    // `--compile true` 的官方语义是「仅编译代码」⇒ 断言它等于断言「从不运行」。
+    expect(code.slice(at, at + 400)).not.toMatch(/--compile/);
+    expect(code).toContain('--deviceId');
+    expect(code).toContain('Start-CliLaunchDetached');
+    expect(code).not.toContain("Invoke-CliStep -Name 'launch'");
   });
 
   it('C2：正文不含任何强杀调用（头注释里的说明性字面量已被掩码排除）', () => {
@@ -294,10 +391,13 @@ describe('日常增量运行契约（scripts/hx-run.ps1，2026-09-12）', () => 
     expect(waitAt).toBeLessThan(dispatchAt);
   });
 
-  it('C11：部署后置断言存在、查设备事实、未部署时 exit=env/2 且在报成功之前', () => {
+  it('C11：部署判定存在、基线相对、未部署时 exit=env/2 且在报成功之前', () => {
     const code = maskDocBlocks(real.script);
-    expect(code).toMatch(/function\s+Get-DeployedState/);
+    expect(code).toMatch(/function\s+Get-DeviceDeployFacts/);
+    expect(code).toMatch(/function\s+Get-DeployVerdict/);
     expect(code).toContain('HX_RUN_DEPLOY deployed=');
+    expect(code).toContain('stat -c %Y');
+    expect(code).toContain('-Before $factsBefore -After $factsAfter');
     expect(code).toContain('topResumedActivity');
     expect(code).toContain('已停止运行');
     expect(code).toContain('io.dcloud.uniappx');
@@ -306,7 +406,7 @@ describe('日常增量运行契约（scripts/hx-run.ps1，2026-09-12）', () => 
     expect(verdictAt).toBeGreaterThan(-1);
     expect(okAt).toBeGreaterThan(-1);
     expect(verdictAt).toBeLessThan(okAt);
-    expect(code.slice(verdictAt, verdictAt + 900)).toContain('exit 2');
+    expect(code.slice(verdictAt, verdictAt + 1600)).toContain('exit 2');
   });
 
   it('C10：AGENTS.md 的三层节奏与 ADR-0008 的一行指针都在', () => {

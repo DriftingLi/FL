@@ -2,6 +2,8 @@
 
 这个 repo 的 issues 和 PRDs 存放在 GitHub issues 中。所有操作都使用 `gh` CLI。
 
+> **本机路径**：`gh` 由 bun 全局安装提供，位于 `~/.bun/bin/gh`（symlink → `gh-official`），**不在默认 PATH 里**。shell 报 `gh: command not found` 时用绝对路径 `~/.bun/bin/gh` 调用；已登录账号 `DriftingLi`（凭据在 `~/.config/gh/hosts.yml`）。
+
 ## Conventions
 
 - **Create an issue**: `gh issue create --title "..." --body "..."`。多行 body 使用 heredoc。
