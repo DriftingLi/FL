@@ -241,7 +241,7 @@ write_env_file() {
         echo "VALUATION_PDF_OUTPUT_DIR=/data/reports"
         echo "REDIS_PASSWORD=${REDIS_PASSWORD:-}"
         echo "REDIS_DB=${REDIS_DB:-0}"
-        echo "REDIS_POOL_SIZE=${REDIS_POOL_SIZE:-10}"
+        echo "REDIS_POOL_SIZE=${REDIS_POOL_SIZE:-20}"
         echo "REDIS_KEY_PREFIX=${REDIS_KEY_PREFIX:-fl:}"
 
         echo "# S3 兼容对象存储（STORAGE_DRIVER=r2；R2_ENDPOINT 空=Cloudflare R2，非空=自建 RGW）"
