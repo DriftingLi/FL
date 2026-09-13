@@ -22,6 +22,9 @@
   ③ HBuilderX 自己会往里写 `condition`（GUI 选的启动页，注释自述「仅开发期间生效」，属本地开发配置、禁止提交）。
   适用面比「加一行探针页」宽得多：凡是动这三个文件，一律走「改工作区 → 交给维护者」，不走「自己提交」。
 
+  ⚠️ **判据的边界（2026-09-13 实测补）**：光看 ` M` 会**误判**。HEAD 落在**落后 `origin/master`** 的分支上时，凡是 master 前进过的文件都会显示成 ` M`，而**没人在改它**。实测当日：相对 HEAD 有 **89 个 ` M`**，其中只有 **36 个**真的与 `origin/master` 内容不同。
+  所以判据要**两条同时成立**：`git status --short -- <路径>` 是 ` M` **且** `git diff --name-only origin/master -- <路径>` 非空。只看前者会挡住本该做的改动（当日因此一度放弃改一个字节与 `origin/master` 完全一致、根本没人持有的文件）。
+
 - **提交前验分支归属的代价**（2026-09-13 补，血账）第 11 行已写明「查什么」；本条记的是**不查的代价**：主树被别的会话切走时，`git commit` 会把提交落进**别人的分支历史**，补救要「新建独立分支指向该提交 + 把别人的分支 `reset --mixed` 退回」——delta 为零，但过程不必要，且 `reset` 是改写别人历史的动作。实测：一条探针提交落进了别人的分支。
 
 用完 worktree 后记得清理：`git worktree remove <dir>` + `git branch -D <branch>`。
@@ -58,6 +61,31 @@ git worktree add E:\wt-probe -b chore/wt-probe HEAD # 唯一的实证：能建 =
 
 **三条判据全过 ⇒ 无需修复**，下面那条破坏性配方**不要执行**。
 
+#### 2026-09-13 二次实测定案：不是 ACL，且**不可修**（本节结论以此为准）
+
+**先做的那次「试通」做了，结果是失败**（原文）：
+
+```
+git -C E:\FL worktree add --detach E:\wt-aclprobe origin/master
+  → fatal: could not create leading directories of '.git/worktrees/wt-aclprobe': Permission denied
+```
+
+**症状精确定性**：把它当「枚举为空」或「ACL 被拒」都不对。真实形态是**这一个目录项打不开、也删不掉**：
+
+| 操作 | 结果 |
+|---|---|
+| `dir E:\FL\.git` / `Get-Item` 读属性 | **成功**（名字 `worktrees`、9 个纯 ASCII 字符、`Attributes=Directory`、无 reparse point） |
+| `Get-ChildItem <该目录>` / 往里建文件 | `Access is denied` |
+| `rd` / `Remove-Item -Recurse` / `ren` / `attrib -r -s -h -a` / 加 `\\?\` 前缀绕规范化 | **全部** `Access is denied` |
+| `icacls`（含 `/reset`）/ `fsutil reparsepoint query` | `Access is denied` |
+| 往 `.git` 本身建文件（对照） | **成功** ⇒ 坏的只有这一个项，不是 `.git` 被锁 |
+
+**为什么「ACL 路线」根本不成立**：本卷是 **exFAT，没有 ACL**（同级 `.git\refs` 的 `icacls` 读数就是「No permissions are set」）；`takeown` 返回的就是结论本身：`ERROR: File ownership cannot be applied on insecure file systems; there is no support for ACLs.` ⇒ **`icacls /reset` 这类配方在本卷上不可能起作用**（下面是旧配方，保留仅为说明它为何失效）。
+
+**不是 exFAT 通病的对照实验**（同日实测）：同卷另一个仓库 `E:\_spike` 上 `git worktree add` **成功**（exit 0，建完干净移除）；`D:`（NTFS）上也**成功**。⇒ worktree 功能没坏、exFAT 也不必然坏，**坏的是 `E:\FL\.git` 里这一个目录项**。
+
+**与卷级损坏的关系（同日只读 `chkdsk E:` 的判决）**：`exit=3`，`Windows found errors on the disk, but will not fix them …` + `Corruption was found while examining files and directories` + `Corruption was found while examining the volume bitmap`。⇒ 这是**卷级元数据损坏**的一处症状，不是孤例（详见文末「卷健康与新工作放置」节）。**可修路径只剩 `chkdsk E: /f`，而它要卸载整卷**。
+
 #### ⚠️ 旧配方的实害（此前没写，务必先读）
 
 旧配方的「优先」路径是 `Remove-Item -Recurse -Force E:\FL\.git\worktrees` + `git worktree prune`。它当时声明「低风险」的依据是**「该目录枚举为空、只有主树一条注册」** —— 该前提当时确实不成立：
@@ -72,17 +100,15 @@ git worktree add E:\wt-probe -b chore/wt-probe HEAD # 唯一的实证：能建 =
 cd E:\FL; git worktree list | Select-Object -Skip 1
 ```
 
-#### 真要修时的安全顺序（需管理员）
+#### 真要修时的安全顺序（**2026-09-13 作废重写：旧配方的第 2 步已被证伪**）
 
 1. 先按上面的只读探测确认「确实坏了」，并**把报错原文留证**；
-2. **不要删目录**，改成重置该目录 ACL（**管理员** PowerShell）：
-   ```powershell
-   icacls "E:\FL\.git\worktrees" /reset /T /C
-   ```
-   若确实要删目录重建，必须先确认没有活 worktree，并逐个 `git worktree remove` 之后再删；
-3. 修完重跑一次 `git worktree add E:\wt-probe -b chore/wt-probe HEAD` 试通，再 `git worktree remove E:\wt-probe`。
+2. ~~重置该目录 ACL：`icacls "E:\FL\.git\worktrees" /reset /T /C`~~ —— **作废**：本卷是 exFAT、**没有 ACL**，`icacls` 连读都读不了（`Access is denied`），该命令不可能起作用（见上表与 `takeown` 的原话）。同理 `takeown` / `ren` / `attrib` / `rd` 全部已被实测否决；
+3. **剩下的可修路径只有一条：`chkdsk E: /f`**，而它**要卸载整卷**。卸载前必须：停掉所有会话与 HBuilderX、确认没有进程的 cwd 在 `E:`；并且**先备份只在此处、且未推送的数据**（exFAT 无日志，`chkdsk /f` 修位图/目录项时可能截断或把不可解析项丢进 `FOUND.000`）；
+4. 修完重跑一次 `git worktree add E:\wt-probe -b chore/wt-probe HEAD` 试通，再 `git worktree remove E:\wt-probe`。
 
-⚠️ **本节点截至 2026-09-13 仍是待办**（`docs/agents/handoff-验收门-2026-09-11.md` 六、待办）：复测显示枚举与 `worktree list` 都正常，但**尚未做过 `git worktree add` 试通** ⇒ 「ACL 是否已自愈」**未证实**，**不要**据本节的复测宣布待办已闭环。**在试通之前**，多会话隔离继续用独立 clone。
+✅ **待办状态（2026-09-13 实测结案）**：`docs/agents/handoff-验收门-2026-09-11.md` 六、待办里那条「ACL 是否自愈未证实」**已由试通结案，结论是「没自愈、且非 ACL 可修」** —— `git worktree add` 仍然 `Permission denied`，与卷级损坏同源。
+⇒ **多会话隔离继续用独立 clone（放 `D:`，见文末一节）；本仓主树里 `git worktree` 不可用**，替代手法是**游离提交**：临时索引 `read-tree <base>` + `update-index --cacheinfo` 只替换本次文件 + `commit-tree -p <base>`，全程不碰工作树、默认索引与 HEAD（2026-09-13 实测用它跑完了整票改动与一次跨分支同步合并）。
 
 #### 重复副本的现状与清理纪律（2026-09-13 实测）
 
@@ -111,4 +137,37 @@ New-Item -ItemType HardLink -Path E:\_t.txt -Target E:\_gh\README.md            
 2. **改已有文件**：把「精确旧文本 → 新文本」的替换对写成文件，用一个 10 行的 Node 脚本做**字面量拼接**（先断言锚点唯一），比在 shell 里做正则转义可靠。
    ⚠️ 拼接时**必须用函数式替换**（`s.replace(old, () => next)`）。用字符串替换会把替换文本里的 ``$` `` / `$'` / `$&` / `$1` 当成替换模式展开 —— 实测有一次把 PowerShell 脚本的**后半份整个复制了一遍**。
    ⚠️ **锚点也要按目标文件的 EOL 归一**：`*.yml` 没被 `.gitattributes` 钉 LF（见下节），在 Windows 工作树里是 **CRLF**。若拼接脚本只把**替换文本**转成 CRLF、**锚点**仍写成 LF，多行锚点会**匹配 0 次**，而失败信息是「锚点不唯一（found 0）」—— 看着像锚点写错，其实是换行符不一致。单行锚点不受影响，所以这个坑**只在多行锚点上露头**，且会让「注入自检」静默失效（实测踩到过一次：以为验证过了，其实是注入根本没生效）。
-3. **不要**把仓库整体搬到 `C:` 来规避（空间与 clone 体积都不划算），也不要因此改用 `git worktree`（见上一节的 ACL 待办）。
+
+## 卷健康与新工作放置：新克隆 / 新 worktree 放 `D:`（2026-09-13 实测 + 维护者决定）
+
+**现状（只读 `chkdsk E:`，2026-09-13 15:15，耗时约 19 分钟，未改盘）**：
+
+```
+Windows found errors on the disk, but will not fix them
+because disk checking was run without the /F (fix) parameter.
+Corruption was found while examining files and directories.
+Corruption was found while examining the volume bitmap.
+→ exit=3（500 GB 卷 / 1,421,107 个文件 / 203,182 个索引 / 125 GB 可用 / 0 KB bad sectors）
+```
+
+**物理层与范围**：
+
+- `E:` 挂在 **USB 外接 SSD** 上（`SSD AS2235`，477 GB，BusType=USB，Health 正常，**0 KB bad sectors**）⇒ 是**元数据损坏**，不是介质要坏；exFAT 无日志，最常见的成因是**未 eject 即拔 / 掉电 / USB 桥接丢写**。
+- 损坏**不止 `.git\worktrees` 一处**：报错集中在 `E:\比赛\区块链\…\GZ036 国赛10套题-前后端代码\projects\project2\SupplyChain_finish\front\node_modules\`（rxjs / core-js / babel-runtime 一类**可重装的依赖树**，几百条）。
+- 仓库本体**未被波及**：`git -C E:\FL fsck` 干净（exit 0，9 秒）。
+
+**决定（维护者，2026-09-13）**：**不跑 `chkdsk E: /f`**（要卸载 E:，而 E: 上挂着 14 个仓库、HBuilderX、Android SDK 与在跑会话）⇒ 属「**已接受未验证风险**」：**位图损坏保留未修**。配套纪律是按风险面收缩写入：
+
+- **新克隆 / 新 worktree / 新数据集放 `D:`** —— 实测 `D:` 是 **NTFS + 内置 NVMe**（`WD Blue SN580 1TB`，373 GB 可用），`git worktree add` 正常（同日实测 exit 0）。**不在 `E:` 上开新的重写入工作**。
+- **不整体迁移主树 `E:\FL`**（最小影响；迁移要重导 HBuilderX 项目、会踩上面「HBuilderX 按项目名解析」那条）。
+- 「先 eject 再拔」这条习惯是唯一能防复发的一环。
+
+**判据（每次现测，不按本条记忆行事）**：
+
+```powershell
+chkdsk E:                                                  # 只读；仍报 "will not fix them" + 卷位图损坏 ⇒ 未修
+git -C E:\FL worktree add --detach E:\wt-probe HEAD        # 仍 Permission denied ⇒ 坏项还在
+Get-Volume -DriveLetter E | Select DriveLetter,FileSystem  # exFAT
+```
+
+3. **不要**把仓库整体搬到 `C:` 来规避（空间与 clone 体积都不划算），也不要指望用它解决 `.git\worktrees` 那个坏目录项（见上一节：换成路径也不解决，因为坏项在 `.git` 里面）。**新工作放 `D:`** 见下一节。
