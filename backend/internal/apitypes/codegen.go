@@ -90,7 +90,8 @@ type operation struct {
 	} `json:"responses"`
 }
 
-// DataRef 取端点 200 响应里 response.R{data=…} 的 data 指认，返回类型引用与「是否指认了 data」。
+// DataRef 取端点成功响应（200，或 201 Created）里 response.R{data=…} 的 data 指认，
+// 返回类型引用与「是否指认了 data」。
 //
 // swag 把统一信封渲染成 allOf: [{$ref response.R}, {type: object, properties: {data: …}}]，
 // 故沿 allOf 找 properties.data。data 存在但不是 $ref（数组 / 内联对象）时类型名返回空串、
@@ -112,7 +113,12 @@ func (s *Spec) DataRef(method, path string) (string, bool) {
 	if err := json.Unmarshal(b, &op); err != nil {
 		return "", false
 	}
+	// 成功状态码可能是 200 或 201（response.Created）：两者都算「指认了 data」，
+	// 否则注册类端点会被误判成缺注解。
 	ok200, ok := op.Responses["200"]
+	if !ok {
+		ok200, ok = op.Responses["201"]
+	}
 	if !ok {
 		return "", false
 	}

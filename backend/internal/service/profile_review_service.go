@@ -39,8 +39,8 @@ type ProfileChangeRequestDTO struct {
 	NewValue     string  `json:"new_value"`
 	Status       string  `json:"status"`
 	RejectReason string  `json:"reject_reason"`
-	ReviewedBy   *int    `json:"reviewed_by,omitempty"`
-	ReviewedAt   *string `json:"reviewed_at,omitempty"`
+	ReviewedBy   *int    `json:"reviewed_by,omitempty" extensions:"x-optional"`
+	ReviewedAt   *string `json:"reviewed_at,omitempty" extensions:"x-optional"`
 	CreatedAt    string  `json:"created_at"`
 }
 
