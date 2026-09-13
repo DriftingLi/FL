@@ -201,6 +201,9 @@ type ForumService struct {
 	// points 积分簿记通道（ADR-0023 forum 收编）：采纳奖励与违规回收经其事务内
 	// 导出方法落账，forum 内不再直写积分流水/余额；依赖方向 forum→points 单向无环。
 	points *PointsService
+	// rewards 奖励政策 module（ADR-0047 §3 / spec #927）：发放、回收与发放事实判定的
+	// 唯一实现处；论坛 service 只声明「发生了什么事实」，不再内联防刷与幂等判定。
+	rewards *forumRewardPolicy
 
 	logger *zap.Logger
 }
@@ -211,7 +214,8 @@ type ForumService struct {
 // counters 为 likes_count / reply_count 唯一写入口（与 AuthService 共享同一实例）；
 // points 为积分簿记通道（采纳奖励/违规回收经其事务内导出方法落账，ADR-0023）。
 func NewForumService(db *gorm.DB, fileSvc *FileStore, notificationSvc *NotificationService, counters ForumCounter, points *PointsService, logger *zap.Logger) *ForumService {
-	return &ForumService{db: db, fileSvc: fileSvc, notificationSvc: notificationSvc, counters: counters, points: points, logger: logger}
+	return &ForumService{db: db, fileSvc: fileSvc, notificationSvc: notificationSvc, counters: counters, points: points,
+		rewards: newForumRewardPolicy(points, notificationSvc), logger: logger}
 }
 
 // topicRow 列表查询的扫描结构。
@@ -1064,14 +1068,10 @@ func (s *ForumService) AdminDeleteTopic(topicID int64) error {
 		// 违规回收（ADR-0041）：触发条件是「该帖存在任一正向直记奖励」，而不是「曾被采纳」——
 		// 否则「加精但未采纳」的帖子（正是备考经验帖的形状）会被整片漏掉。
 		// 范围含答主/楼主/帖主三方，RollbackByRef 内部按 user_id 分组各自追回、封底 0。
-		hasReward, err := s.hasAnyRewardForTopic(tx, topicID)
-		if err != nil {
+		// 违规回收交给奖励政策 module：触发条件（该帖存在任一正向直记奖励）与回收范围
+		// （全部直记奖励）都在它的 implementation 里判定，无奖励可回收时 no-op。
+		if _, err := s.rewards.Reclaim(tx, topicID); err != nil {
 			return err
-		}
-		if hasReward {
-			if err := s.rollbackTopicRewardsTx(tx, topicID); err != nil {
-				return err
-			}
 		}
 		return nil
 	})
@@ -1127,49 +1127,6 @@ func (s *ForumService) incrementDeletedAfterAccepted() error {
 	})
 }
 
-// rollbackTopicRewardsTx 论坛违规回收（#609 收编后的声明式入口）：回收哪个 ref 的哪些
-// reasons 交 PointsService.RollbackByRef 内部完成（原账 SUM 取反、封底 0、占坑防双扣、
-// 存量 rollback 标记防双扣）；占坑键 rollback:{topicID} 即「已处理」标记（格式逐字不动），
-// 余额不足按余额截断、余额为 0 时仅落占坑行（不再写 Delta:0 流水——#384 缺陷修复语义）。
-// 占坑冲突（已回收过）按论坛语义静默放行：删帖动作不因重复回收失败（ADR-0023 映射契约）。
-//
-// 范围 = 该帖产生的**全部直记奖励**（ADR-0041）：答主 accepted_bonus + 楼主 accept_action +
-// 帖主 featured_bonus（含经验认定奖励，两者共用同一条流水）。旧实现只声明 accepted_bonus，
-// 楼主与帖主的分一律不追。
-//
-// **一个 ref 只能有一次回收事件**：RollbackByRef 的护栏是 ref 级一次性（该 ref 只要存在任一条
-// rollback 流水就整体跳过；护栏保护占坑表上线前的历史数据，投稿域共用）。故 AdminDeleteReply
-// **不调用本方法**——否则先删回复会永久占掉该帖的回收机会，帖主的 featured_bonus 再也追不回。
-func (s *ForumService) rollbackTopicRewardsTx(tx *gorm.DB, topicID int64) error {
-	_, err := s.points.RollbackByRef(tx, PointsRollback{
-		RefType: "forum_topic",
-		RefID:   fmt.Sprintf("%d", topicID),
-		Reasons: topicDirectRewardReasons,
-		IdemKey: ForumRollbackIdemKey(topicID),
-	})
-	if errors.Is(err, ErrPointsProcessed) {
-		return nil
-	}
-	return err
-}
-
-// hasAnyRewardForTopic 该帖是否产生过任一直记奖励（正向流水）。
-//
-// 管理员删帖的回收触发器（ADR-0041）：不能只看 AcceptedReplyID——「加精但从未被采纳」的帖子
-// （正是备考经验帖的形状：经验蕴含精选且不可被采纳）没有采纳指针，旧守卫会让它的认定奖励
-// 永远落在回收盲区。只认正向流水，回收本身写的 reason=rollback 负向流水不会被误判。
-func (s *ForumService) hasAnyRewardForTopic(tx *gorm.DB, topicID int64) (bool, error) {
-	var n int64
-	if err := tx.Model(&model.PointsLedger{}).
-		Where("ref_type = ? AND ref_id = ? AND delta > 0 AND reason IN ?",
-			"forum_topic", fmt.Sprintf("%d", topicID),
-			topicDirectRewardReasons).
-		Count(&n).Error; err != nil {
-		return false, err
-	}
-	return n > 0, nil
-}
-
 // DeleteReply 删除回复（仅作者本人；其下级回复随外键级联删除）。
 // 本回复与全部下级回复（parent_id 链条）的图片一并清理。
 func (s *ForumService) DeleteReply(userID int, replyID int64) error {
@@ -1188,7 +1145,7 @@ func (s *ForumService) DeleteReply(userID int, replyID int64) error {
 
 // AdminDeleteReply 管理员删除任意回复（不校验作者；其下级回复随外键级联删除）。图片一并清理；站内信通知回复作者。
 // 若删的是被采纳的回答，只把主题打回未解决（清 accepted_reply_id/solved_at），**不回收积分**——
-// 奖励处置的唯一出口是 AdminDeleteTopic（见 rollbackTopicRewardsTx 的 ref 级一次性说明）。
+// 奖励处置的唯一出口是 AdminDeleteTopic（见奖励政策 module Reclaim 的 ref 级一次性说明）。
 func (s *ForumService) AdminDeleteReply(replyID int64) error {
 	var reply model.ForumReply
 	if err := s.db.First(&reply, replyID).Error; err != nil {
@@ -1895,7 +1852,6 @@ func (s *ForumService) AcceptReply(userID int, topicID, replyID int64) (*ForumTo
 	}
 	// 首次采纳：CAS + 积分直记（同一事务）。采纳他人回复（自采纳已在上层拒绝）。
 	now := beijingNow()
-	todayStart := clock.DayStart(now)
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		// CAS：仅当仍未采纳时才写入状态
 		res := tx.Model(&model.ForumTopic{}).Where("id = ? AND accepted_reply_id IS NULL", topicID).Updates(map[string]any{
@@ -1910,90 +1866,12 @@ func (s *ForumService) AcceptReply(userID int, topicID, replyID int64) (*ForumTo
 			// 并发抢采：已由先胜者写入，放弃发分
 			return nil
 		}
-		// 已采纳过是否已发过分（取消后重采场景）：以流水是否存在判定，每帖只发一次
-		var cnt int64
-		if err := tx.Model(&model.PointsLedger{}).Where("ref_type = ? AND ref_id = ? AND reason = ?", "forum_topic", fmt.Sprintf("%d", topicID), ReasonAcceptedBonus).Count(&cnt).Error; err != nil {
-			return err
-		}
-		if cnt > 0 {
-			// 已发过分（取消后重采），只保留状态迁移
-			return nil
-		}
-		// ===== 乙档防刷：日封顶 + 配对衰减（零新表，事务内算完） =====
-		var dailyAnsCnt int64
-		if err := tx.Model(&model.PointsLedger{}).Where("user_id = ? AND reason = ? AND created_at >= ?", reply.UserID, ReasonAcceptedBonus, todayStart).Count(&dailyAnsCnt).Error; err != nil {
-			return err
-		}
-		var dailyAskerCnt int64
-		if err := tx.Model(&model.PointsLedger{}).Where("user_id = ? AND reason = ? AND created_at >= ?", userID, ReasonAcceptAction, todayStart).Count(&dailyAskerCnt).Error; err != nil {
-			return err
-		}
-		// 配对次数的事实源是 points_ledger 本身（ADR-0041），不是当前挂着的 accepted_reply_id：
-		// 状态列可被 CancelAccept 置空、被删帖抹掉，拿它计数等于给配对衰减留了重置开关
-		// （每轮「采纳→取消/删帖」即可把计数打回 1，衰减永不触发）。
-		// 同一 topic 的两条流水——accepted_bonus 记在答主、accept_action 记在楼主——
-		// 按 ref_id 自连接即还原「楼主↔答主」配对；流水不可回退，取消与删帖都不影响。
-		// 口径是「**付过钱的**配对次数」：被日封顶拦下的采纳不计入（ADR-0041 已承认的边际）。
-		var pairCnt int64
-		if err := tx.Raw("SELECT COUNT(*) FROM points_ledger a "+
-			"JOIN points_ledger b ON b.ref_type = a.ref_type AND b.ref_id = a.ref_id "+
-			"WHERE a.ref_type = 'forum_topic' AND a.reason = ? AND a.user_id = ? "+
-			"AND b.reason = ? AND b.user_id = ?",
-			ReasonAcceptedBonus, reply.UserID, ReasonAcceptAction, userID).Scan(&pairCnt).Error; err != nil {
-			return err
-		}
-		bonusDelta := AcceptBonusPoints
-		actionDelta := AcceptActionPoints
-		// 阈值以「已付配对数」为基准：与旧实现（计数含当前帖、>=6 / >=4）数值等价，
-		// 见 forum_accept_caps_contract_test.go 断言的每对终身 3×40 + 2×20 = 160。
-		if pairCnt >= 5 {
-			bonusDelta = 0
-		} else if pairCnt >= 3 {
-			bonusDelta = bonusDelta / 2
-		}
-		if dailyAnsCnt >= 3 {
-			bonusDelta = 0
-		}
-		if dailyAskerCnt >= 5 {
-			actionDelta = 0
-		}
-		if bonusDelta == 0 && actionDelta == 0 {
-			return nil
-		}
-		if bonusDelta > 0 {
-			// 簿记经 PointsService 事务内通道（ADR-0023）：占坑键 accepted_bonus:{topicID}
-			// 与状态 CAS 双保险「每帖只发一次」
-			if err := s.points.SettleRewardTx(tx, PointsEntry{
-				UserID: reply.UserID, Delta: bonusDelta, Reason: ReasonAcceptedBonus,
-				RefType: "forum_topic", RefID: fmt.Sprintf("%d", topicID),
-				IdemKey: AcceptedBonusIdemKey(topicID),
-			}); err != nil {
-				return err
-			}
-		}
-		if actionDelta > 0 {
-			if err := s.points.SettleRewardTx(tx, PointsEntry{
-				UserID: userID, Delta: actionDelta, Reason: ReasonAcceptAction,
-				RefType: "forum_topic", RefID: fmt.Sprintf("%d", topicID),
-				IdemKey: AcceptActionIdemKey(topicID),
-			}); err != nil {
-				return err
-			}
-		}
-		// 站内信：答主/楼主（#369），payload 带实际分值，link 锚到回答（ADR-0024 C3 事件构造器单点构造）
-		if bonusDelta > 0 || actionDelta > 0 {
-			if bonusDelta > 0 {
-				if err := s.notificationSvc.CreateForumAcceptEvent(tx, NewAnswererAcceptEvent(reply.UserID, topic.Title, topicID, replyID, bonusDelta), now); err != nil {
-					return err
-				}
-			}
-			if actionDelta > 0 {
-				if err := s.notificationSvc.CreateForumAcceptEvent(tx, NewOwnerAcceptEvent(userID, topic.Title, topicID, replyID, actionDelta), now); err != nil {
-					return err
-				}
-			}
-		}
-		return nil
+		// 奖励发放交给奖励政策 module（ADR-0047 §3）：发放事实判定、防刷求值、幂等占坑、
+		// 写流水与站内信构造都在它的 implementation 里，这里只声明「采纳发生了」。
+		return s.rewards.Award(tx, forumRewardFact{
+			Kind: forumRewardAccept, TopicID: topicID, TopicTitle: topic.Title,
+			TopicOwner: userID, AnswererID: reply.UserID, ReplyID: replyID, At: now,
+		})
 	})
 	if err != nil {
 		return nil, err
@@ -2030,43 +1908,11 @@ func (s *ForumService) CancelAccept(userID int, topicID int64) (*ForumTopicDTO, 
 	return s.fetchTopicDTO(topicID, userID)
 }
 
-// awardDesignationRewardTx 认定奖励（加精 / 认定备考经验**共用同一笔**，ADR-0040）：
-// 每帖一次性直记 featured_bonus +30，以流水存在判定幂等（取消重精、先精后认定、先认定后精
-// 都只发一次），站内信与到账同事务（ADR-0023 + C3 事件构造器单点）。
-//
-// 流水 reason 字面量保持 featured_bonus 不变：points_ledger 是不可变流水，且幂等键格式改动
-// 等于同一事件重放拿到新键 → 双重发分/双重追回（ADR-0023 明文）。改名只发生在词汇与文案层。
-// designation 决定站内信文案（加精 / 认定备考经验），不影响流水。
-func (s *ForumService) awardDesignationRewardTx(tx *gorm.DB, topic model.ForumTopic, designation string, now time.Time) error {
-	var cnt int64
-	if err := tx.Model(&model.PointsLedger{}).
-		Where("ref_type = ? AND ref_id = ? AND reason = ?", "forum_topic", fmt.Sprintf("%d", topic.ID), ReasonFeaturedBonus).
-		Count(&cnt).Error; err != nil {
-		return err
-	}
-	if cnt > 0 {
-		return nil
-	}
-	// 积分直记（ADR-0023 事务内通道）：占坑键与状态 CAS 双保险
-	if err := s.points.SettleRewardTx(tx, PointsEntry{
-		UserID: topic.UserID, Delta: FeaturedBonusPoints, Reason: ReasonFeaturedBonus,
-		RefType: "forum_topic", RefID: fmt.Sprintf("%d", topic.ID),
-		IdemKey: FeaturedBonusIdemKey(topic.ID),
-	}); err != nil {
-		return err
-	}
-	// 两种认定共用同一笔流水，但文案必须区分（ADR-0040）：写「被加精」会让被认定经验的帖主看不懂。
-	if designation == DesignationExperience {
-		return s.notificationSvc.CreateTopicFeaturedEvent(tx, NewTopicExperienceEvent(topic.UserID, topic.Title, topic.ID, FeaturedBonusPoints), now)
-	}
-	return s.notificationSvc.CreateTopicFeaturedEvent(tx, NewTopicFeaturedEvent(topic.UserID, topic.Title, topic.ID, FeaturedBonusPoints), now)
-}
-
 // DesignateExperience 管理端认定「备考经验」（ADR-0040）。
 //
 // 一个认定动作同时置 is_experience 与 is_featured（经验蕴含精选，库层 CHECK 兜底），
 // 并按「认定奖励每帖一次」发 +30 —— 与加精共用同一条流水，故先加精后认定不会重复发分
-// （awardDesignationRewardTx 的流水存在判定短路），先认定后加精亦然。
+// （奖励政策 module 的发放事实判定短路），先认定后加精亦然。
 // 状态已一致时幂等短路（重复认定不发分不改状态）。
 func (s *ForumService) DesignateExperience(topicID int64) (*ForumTopicDTO, error) {
 	var topic model.ForumTopic
@@ -2102,7 +1948,10 @@ func (s *ForumService) DesignateExperience(topicID int64) (*ForumTopicDTO, error
 		if res.RowsAffected == 0 {
 			return nil // 并发抢认定：由先胜者完成副作用
 		}
-		return s.awardDesignationRewardTx(tx, topic, DesignationExperience, now)
+		return s.rewards.Award(tx, forumRewardFact{
+			Kind: forumRewardDesignation, TopicID: topic.ID, TopicTitle: topic.Title,
+			TopicOwner: topic.UserID, Designation: DesignationExperience, At: now,
+		})
 	})
 	if err != nil {
 		return nil, err
@@ -2174,7 +2023,10 @@ func (s *ForumService) SetFeatured(topicID int64, featured bool) (*ForumTopicDTO
 			return nil // 取消精选只改状态，已发分不回滚
 		}
 		// 认定奖励与「认定备考经验」共用同一实现：每帖只发一次，先认定后加精不重复发分。
-		return s.awardDesignationRewardTx(tx, topic, DesignationFeatured, now)
+		return s.rewards.Award(tx, forumRewardFact{
+			Kind: forumRewardDesignation, TopicID: topic.ID, TopicTitle: topic.Title,
+			TopicOwner: topic.UserID, Designation: DesignationFeatured, At: now,
+		})
 	})
 	if err != nil {
 		return nil, err
@@ -2208,69 +2060,31 @@ func (s *ForumService) fetchTopicDTO(topicID int64, viewerID int) (*ForumTopicDT
 	return &dto, nil
 }
 
-// topicDirectRewardReasons 论坛主题上「全部直记奖励」的流水 reason（ADR-0040/0041）。
-// 用途：违规回收范围（rollbackTopicRewardsTx）与回收触发条件（hasAnyRewardForTopic）。
-// **不要**拿它做 reward_issued——那个字段的判据见 acceptRewardLedgerReasons。
-var topicDirectRewardReasons = []string{ReasonAcceptedBonus, ReasonAcceptAction, ReasonFeaturedBonus}
-
-// acceptRewardLedgerReasons 「采纳类奖励」的流水 reason：答主被采纳 + 楼主采纳动作。
-//
-// reward_issued 的**唯一**判据（#367）。语义是「**该帖的采纳奖励是否已发放**」，不是
-// 「该帖是否发过任何奖励」——这个区别有真实后果：该字段的唯一消费方是采纳前二次确认
-// （ForumDetail.vue，文案「该帖采纳奖励已发放……不再产生积分」）。若把 featured_bonus
-// （加精 / 认定 +30）也算进来，一篇**只是被加精、从未被采纳**的问答帖会让楼主看到
-// 「采纳不再产生积分」，而实际上答主仍会拿到 40 分——错误提示会劝退真实采纳。
-// 故本集合**必须小于** topicDirectRewardReasons，两者不可合并。
-var acceptRewardLedgerReasons = []string{ReasonAcceptedBonus, ReasonAcceptAction}
-
 // enrichRewardIssued 批量回填 reward_issued（#367）。
 //
-// 语义 = 该帖的**采纳奖励**是否已发放（acceptRewardLedgerReasons）。与 hasRewardIssued
-// （详情单条）**必须同口径**：两处是两个实现，漂移过一次就是 bug。
-//
-// 历史：曾放宽为「任一直记奖励」并去掉类别限制，会让「只被加精」的帖子误报
-// 「采纳不再产生积分」，故收窄回采纳类；同时不再按类别过滤（非 question 帖不会持有
-// 采纳类流水，那道过滤只是无谓扫描）。
+// 判据（该帖的**采纳奖励**是否已发放）与查询实现都在奖励政策 module 里，与写入侧
+// 共用同一份 reason 集合——两处实现漂移过一次就是 bug，故收成单点。
 func (s *ForumService) enrichRewardIssued(items []ForumTopicDTO) {
 	if len(items) == 0 {
 		return
 	}
-	ids := make([]string, 0, len(items))
-	seen := make(map[string]struct{}, len(items))
+	ids := make([]int64, 0, len(items))
+	seen := make(map[int64]struct{}, len(items))
 	for _, t := range items {
-		sid := fmt.Sprintf("%d", t.ID)
-		if _, ok := seen[sid]; !ok {
-			seen[sid] = struct{}{}
-			ids = append(ids, sid)
+		if _, ok := seen[t.ID]; !ok {
+			seen[t.ID] = struct{}{}
+			ids = append(ids, t.ID)
 		}
 	}
-	if len(ids) == 0 {
-		return
-	}
-	var issued []string
-	if err := s.db.Model(&model.PointsLedger{}).
-		Where("ref_type = ? AND reason IN ? AND ref_id IN ?", "forum_topic", acceptRewardLedgerReasons, ids).
-		Distinct("ref_id").Pluck("ref_id", &issued).Error; err != nil {
-		return
-	}
-	m := make(map[string]bool, len(issued))
-	for _, id := range issued {
-		m[id] = true
-	}
+	issued := s.rewards.AcceptRewardIssued(s.db, ids)
 	for i := range items {
-		if m[fmt.Sprintf("%d", items[i].ID)] {
+		if issued[items[i].ID] {
 			items[i].RewardIssued = true
 		}
 	}
 }
 
-// hasRewardIssued 单条查询：该帖是否已产生过任一直记奖励（与 enrichRewardIssued 同口径）。
+// hasRewardIssued 单条查询：该帖的采纳奖励是否已发放（与 enrichRewardIssued 同口径）。
 func (s *ForumService) hasRewardIssued(topicID int64) bool {
-	var cnt int64
-	if err := s.db.Model(&model.PointsLedger{}).
-		Where("ref_type = ? AND reason IN ? AND ref_id = ?", "forum_topic", acceptRewardLedgerReasons, fmt.Sprintf("%d", topicID)).
-		Count(&cnt).Error; err != nil {
-		return false
-	}
-	return cnt > 0
+	return s.rewards.AcceptRewardIssued(s.db, []int64{topicID})[topicID]
 }
