@@ -15,15 +15,28 @@
 
     **默认行为（每条都是刻意的）**
       0. **真运行，不是「仅编译」**：`launch app-android` 的 `--compile` 官方语义是「**仅编译代码**」（默认 false），
-         所以本脚本**一律不传 `--compile`**——传了它就只编译、不运行（`--compile true` 只属于全量编译门
-         `compile-check.ps1`）。契约测试 hxRunContract C12 守护这条**语义**（2026-09-13 事故根因，见下条「假绿教训 v2」）。
+         所以本脚本**默认一律不传 `--compile`**——传了它就只编译、不运行（`--compile true` 只允许出现在
+         `-CompileOnly` 分支里；契约测试 C13 守护，全量编译门 `compile-check.ps1` 另有一份）。
+         **但「仅编译」正是拿编译期诊断的捷径** ⇒ 见下面的 `-CompileOnly` 与「日常循环分层」。
       1. **默认增量**：不加「干净缓存重建」开关——该字面量**只出现在 `if ($Full)` 分支里**（契约测试 hxRunContract C1 守护）。
       2. **不重装基座**：脚本里没有任何 `adb install`；「运行到手机」时的安装由 HBuilderX 自己处理。
-      3. **忙就等**：dot-source `scripts/lib/hx-busy.ps1` 后调 `Wait-HxFree`（agent 互斥锁 + 主程序忙探测 + 等待上限
-         `-WaitSeconds`，默认 600 秒）；**超时 ⇒ exit 2（环境不可用）**。
+      3. **忙就等，但只等一小会儿**：dot-source `scripts/lib/hx-busy.ps1` 后调 `Wait-HxFree`（agent 互斥锁 +
+         主程序忙探测 + 等待上限 `-WaitSeconds`，**默认 120 秒**）；**超时 ⇒ exit 2（环境不可用）**，
+         由调用者决定何时重试 —— **不无声等十分钟**（2026-09-13 实测：某次纯排队等了 ~10 分钟）。
       4. **绝不 kill 任何进程**：本脚本**不含** `Stop-Process` / `taskkill` / 任何强杀调用（契约测试 C2 守护）；
          HBuilderX 是单实例串行资源，**GUI 优先**（ADR-0008 坑位段）。某步超时也**不终止**已派生的 cli 子进程
          （cli 只是驱动主程序的客户端，会自行退出），只判「环境不可用」并 exit 2。
+
+    **日常循环分层（2026-09-13 定，起因见 #949）**
+      | 目的 | 载体 | 代价 |
+      | --- | --- | --- |
+      | 拿**编译期诊断**（类型、uvue 样式规则、模板编译错误） | **`-CompileOnly`** | ≈ 编译时间（实测 205–261 秒），**不推送/不启动/不轮询/不需要设备** |
+      | **肉眼看样式** | 你在 HBuilderX GUI 里跑「运行到手机」+ 热刷新 | 秒级～1 分钟（`AGENTS.md` 原记；本会话未实测） |
+      | **① 真机取证 / 收口** | 本脚本**默认模式**（真运行 + 设备侧基线判据） | 编译 + 推送 + 启动，实测 236–287 秒 |
+      **为什么要分层**：2026-09-13 实测那次会话，慢的**不是编译** —— 是两次「编译期诊断拖到真机才发现」的返工、
+      一次 ~10 分钟的锁排队、一次 ~20 分钟的 launch 卡死。编译（205–261 秒）是编译器的固定成本，
+      **返工却是可以消除的**：那两条诊断（`MenuItem` 类型名义重复 → `ClassCastException`；`<view>` 上用了
+      `text-align|font-size|color`）**用 `-CompileOnly` 第一次就会红在本地**。
 
     **判成败只解析 stdout**：HBuilderX CLI 失败时**退出码恒为 0**（ADR-0008 实测四处失败全返回 0），
     所以本脚本一律看输出文本，不依赖退出码。
@@ -62,20 +75,30 @@
     **不会自己返回**（实测一个会话活了 **51 分钟**，期间每约 10 分钟重试一次 `wakeUpDevice`；那次重试被设备以
     `INJECT_EVENTS` 拒绝，**非致命**，部署照常完成）；它最终是在**下一次 `launch` 发出后约 10 秒**打出
     `已停止运行...` 才收口 ⇒ **不需要手工清理**。只有「仅编译」调用才会自己立刻收口。
-    ⇒ 本脚本对 launch 步**不等待进程退出**：发出去 → **有界轮询设备侧事实**（`-TimeoutSeconds`，默认 1800 秒）→
+    ⇒ 本脚本对 launch 步**不等待进程退出**：发出去 → **有界轮询设备侧事实**（`-TimeoutSeconds`，默认 900 秒）→
     判完即返回，**既不等待也不终止**那个会话（要提前停就由人在 HBuilderX 里点停止）。
-    部署耗时实测：冷启 HBuilderX + 增量编译 205–610 秒，资源推送到落盘 16 秒–9 分钟（视缓存与设备而定）。
+    ⚠️ **副作用（2026-09-13 实测，一天踩到两次，勿删）**：那个常驻会话会把 `.ci-verify\launch-*.out/.err`
+    **攥在手里**（本脚本给它的输出做了重定向）⇒ **只要它还活着，项目目录就删不掉、也改不了名**
+    （Windows 下目录内有打开的文件句柄就拒绝 rename/delete，报 "being used by another process"）。
+    **收尾前先结束会话**：`cli project close --path <项目>`，或发起下一次 launch 把它顶掉。
+    这也是 `-CompileOnly` 的另一个好处：它**不留常驻会话**（见下条）。
+    **快速失败（2026-09-13 加，起因 #949）**：编译段已结束（命中 `$script:HxCompileEndMarkers`）之后，
+    若设备侧事实在 `-DeployStallSeconds`（默认 300 秒）内**毫无前进** ⇒ **提前判环境不可用**，
+    不再等满 `-TimeoutSeconds`（2026-09-13 实测某次 launch 卡死，白等了 ~20 分钟才到上限）。
+    部署耗时实测：冷启 HBuilderX + 增量编译 205–610 秒，资源推送到落盘 15 秒–9 分钟（视缓存与设备而定）。
 
-    **退出码**：0 = 运行到手机成功（设备侧事实已前进）；1 = 输出含 error 行（编译 / 运行失败）；
-    2 = 环境不可用（cli 或 adb 缺失、多设备未显式指定、与主程序连接中断、忙等待超时、轮询超时仍未见到部署事实）。
+    **退出码**：0 = 运行到手机成功（设备侧事实已前进）/ 仅编译干净（无编译期诊断行）；
+    1 = 输出含 error 行（编译 / 运行失败）；2 = 环境不可用（cli 或 adb 缺失、多设备未显式指定、
+    与主程序连接中断、忙等待超时、部署停滞后判环境不可用、轮询超时仍未见到部署事实）。
 
 .PARAMETER Project
     项目根目录。缺省为本脚本上一级目录（scripts/ 位于项目根下）。
 
 .PARAMETER Device
     目标设备序列号（`adb devices` 第一列）。缺省自动取**唯一在线设备**；**有多个设备时必须显式指定，否则 exit 2**。
-    注意：本参数**只做目标设备的前置判定与留痕**，不改写 cli 参数——`cli launch app-android` 是否支持指定设备
-    **未实测**，不拿未证实的参数去冒假失败。
+    ⚠️ **同一台机器可能以两个入口出现**（TCP `<ip>:<port>` 与 mDNS `adb-<serial>-…._adb-tls-connect._tcp`，
+    `serialno` 相同）⇒ 那种情况下必须显式 `-Device`，否则会被本守卫判成"多设备"而 exit 2（2026-09-13 实测踩到）。
+    本参数解析出的序列号会**显式传给** `launch --deviceId`（2026-09-13 实测该参数存在且有效）。
 
 .PARAMETER HBuilderX
     HBuilderX 安装目录（在其中找 `cli.exe`）。与 `-Cli` 二选一，`-Cli` 优先。
@@ -86,10 +109,17 @@
 
 .PARAMETER Full
     **只有显式给**才走全量（加干净缓存重建开关）。日常迭代**不要**给：全量 4.8–8 分钟，
-    而且那是全量门 `compile-check.ps1` 的活，不是本脚本的。
+    而且那是全量门 `compile-check.ps1` 的活，不是本脚本的。与 `-CompileOnly` 互斥。
+
+.PARAMETER CompileOnly
+    **只编译、拿编译期诊断**（2026-09-13 加，起因 #949）：底层是 `--compile true` 的官方语义「仅编译代码」——
+    **不推送、不启动、不轮询、不需要设备**，且该调用**会自己收口**（见脚本头「假绿教训 v2」①）。
+    用途：**在真机链路之前**把类型 / uvue 样式规则 / 模板编译错误拦在本地（实测 ≈ 编译时间）。
+    机检行 `mode=compile-only`；退出码 0 = 无诊断行、1 = 有诊断行、2 = 环境不可用。
 
 .PARAMETER WaitSeconds
-    `Wait-HxFree` 的忙等待上限（默认 600 秒）。超时 ⇒ exit 2；**绝不抢占主程序、绝不 kill**。
+    `Wait-HxFree` 的忙等待上限（**默认 120 秒**，2026-09-13 由 600 下调）。超时 ⇒ exit 2；
+    **绝不抢占主程序、绝不 kill**。下调理由：忙时无声等 10 分钟比"快速失败 + 调用者决定何时重试"更贵。
 
 .PARAMETER DryRun
     只打印将要执行的命令行，**完全不调用 HBuilderX、不调 adb、不写日志**（零副作用，任何机器上都能跑）。
@@ -98,8 +128,13 @@
     `open` / `project open` 两小步的超时秒数（默认 180）。超时**不强杀**，判环境不可用并 exit 2。
 
 .PARAMETER TimeoutSeconds
-    部署轮询上限（默认 1800 秒）：launch 发出后最多等这么久去观察**设备侧事实**是否前进。
+    部署轮询上限（**默认 900 秒**，2026-09-13 由 1800 下调）：launch 发出后最多等这么久去观察**设备侧事实**是否前进。
     超时**不强杀**任何进程（真运行会话本来就不返回），判未部署 ⇒ 环境不可用并 exit 2。
+    `-CompileOnly` 模式下它是"仅编译"那一步的超时。
+
+.PARAMETER DeployStallSeconds
+    **部署停滞阈值（默认 300 秒）**：编译段已结束 + 该秒数内设备侧事实无前进 ⇒ **提前判环境不可用**（exit 2），
+    不等满 `-TimeoutSeconds`。实测正常推送只需 15–21 秒，所以 300 秒已很宽松。
 
 .PARAMETER PollSeconds
     部署轮询间隔（默认 10 秒）。
@@ -109,6 +144,7 @@
 
 .EXAMPLE
     npm run hx:run                                            # 日常增量（推荐）
+    npm run hx:compile-only                                   # 只编译：拿编译期诊断，不碰设备（#949）
     pwsh -NoProfile -File scripts/hx-run.ps1 -DryRun           # 只看将要跑什么，零副作用
     pwsh -NoProfile -File scripts/hx-run.ps1 -Device emulator-5554
     pwsh -NoProfile -File scripts/hx-run.ps1 -Full             # 偶尔要全量时（仍是「运行」，不是门）
@@ -120,10 +156,12 @@ param(
     [string]$HBuilderX,
     [string]$Cli,
     [switch]$Full,
-    [int]$WaitSeconds = 600,
+    [int]$WaitSeconds = 120,
     [switch]$DryRun,
+    [switch]$CompileOnly,
     [int]$StepTimeoutSeconds = 180,
-    [int]$TimeoutSeconds = 1800,
+    [int]$TimeoutSeconds = 900,
+    [int]$DeployStallSeconds = 300,
     [int]$PollSeconds = 10,
     [string]$LogPath
 )
@@ -142,6 +180,26 @@ $script:HxCompileEndMarkers = @(
     '编译完成', '编译结束', '编译成功', '正在安装', '开始安装', '安装中',
     '运行到手机', '正在运行', '启动App', 'compile success', 'compile finished', 'built in'
 )
+
+function Test-HxCompileFinished {
+    <# 编译段是否已结束（命中结束标记表）—— 用于部署停滞的快速失败判据（#949）。 #>
+    param([string]$Output)
+    foreach ($m in $script:HxCompileEndMarkers) {
+        if ("$Output".Contains($m) -or "$Output".ToLower().Contains($m.ToLower())) { return $true }
+    }
+    return $false
+}
+
+function Get-HxErrorLines {
+    <#
+      判成败只解析 stdout（CLI 退出码恒 0）：扫 error / 编译失败 一类字样，再排除「0 error」这类否证行。
+      仅编译与真运行两条路径共用同一判据（#949 抽函数，避免两处漂移）。
+    #>
+    param([string]$Output)
+    return @("$Output" -split "`r?`n" |
+        Where-Object { $_ -match '(?i)\berror\b|unresolved reference|cannot infer type|找不到名称|类型不匹配|编译失败|运行失败' } |
+        Where-Object { $_ -notmatch '(?i)0\s*error|errors?\s*[:=]\s*0|no errors?|error count\s*[:=]\s*0' })
+}
 
 # ---------- 通用函数 ----------
 
@@ -517,10 +575,22 @@ $explicitCli = $Cli
 if (-not $explicitCli) { $explicitCli = $env:HBuilderX_CLI }
 $cliPath = Resolve-CliPath -Explicit $explicitCli -HxDir $HBuilderX -SkipRunningProbe:$DryRun
 
-# launch 参数：**真运行**（一律不传 `--compile` —— 官方语义是「仅编译代码」，传了就只编译不运行）；
+if ($CompileOnly -and $Full) {
+    Write-Host '[error] -CompileOnly 与 -Full 互斥：「只编译拿诊断」与「全量重编」不是一回事（全量门是 compile-check.ps1）。' -ForegroundColor Red
+    exit 2
+}
+
+# launch 参数：**真运行**（默认一律不传 `--compile` —— 官方语义是「仅编译代码」，传了就只编译不运行）；
 # `--deviceId` 在解析出目标设备之后追加（见「目标设备前置判定」之后那一行）。
-# 切全量 + 干净缓存重建开关**只在本文件唯一那个 `if ($Full)` 块里**（契约测试 C1 守护）
+# `--compile` **只允许出现在 `-CompileOnly` 分支里**（契约测试 C13 守护）；
+# 干净缓存重建开关只允许出现在本文件唯一那个 `if ($Full)` 块里（契约测试 C1 守护 —— 所以块外连注释都别写那个字面量）。
 $launchArgs = @('launch', 'app-android', '--project', $Project)
+if ($CompileOnly) {
+    # -CompileOnly（#949）：官方语义的「仅编译代码」——**不推送、不启动、不需要设备**（下面会跳过设备解析），
+    # 且该调用**会自己收口**（脚本头「假绿教训 v2」①实测）⇒ 用带超时的同步步跑它即可。
+    $mode = 'compile-only'
+    $launchArgs += @('--compile', 'true')
+}
 if ($Full) {
     # 只有显式 -Full 才切全量并加「干净缓存重建」开关；日常迭代不加（全量门的活归 compile-check.ps1）
     $mode = 'full'
@@ -549,7 +619,11 @@ if ($DryRun) {
     Write-Host ("  step 1  : {0}" -f (Format-ArgvLine -Exe $planCli -CliArgs @('open')))
     Write-Host ("  step 2  : {0}" -f (Format-ArgvLine -Exe $planCli -CliArgs @('project', 'open', '--path', $Project)))
     Write-Host ("  step 3  : {0}" -f (Format-ArgvLine -Exe $planCli -CliArgs $launchArgs))
-    Write-Host '  （step 3 另追加 --deviceId <解析出的设备序列号>；真运行会话常驻，本脚本不等待其收口，改判设备侧事实）'
+    if ($CompileOnly) {
+        Write-Host '  （-CompileOnly：**只编译**，不追加 --deviceId、不推送、不启动；该调用会自己收口）'
+    } else {
+        Write-Host '  （step 3 另追加 --deviceId <解析出的设备序列号>；真运行会话常驻，本脚本不等待其收口，改判设备侧事实）'
+    }
     Write-Host '  （脚本不自装基座：基座只装一次，装机由 HBuilderX 自己处理）'
     Write-HxRunResult -Mode $mode -Compile 0 -Deploy 0 -Total 0 -Exit 'dryrun' -LogFile $null
     exit 0
@@ -560,17 +634,22 @@ if (-not $cliPath) {
     exit 2
 }
 
-# ---------- 目标设备前置判定（缺/多 ⇒ exit 2，避免装到错的设备）----------
-$adbExe = Resolve-AdbExe
-if (-not $adbExe) {
-    Write-Host '[error] 找不到 adb.exe。设 $env:ANDROID_SDK_ROOT / $env:ANDROID_HOME，或跑 scripts/android-sdk-setup.ps1 装到 D:\android-sdk。' -ForegroundColor Red
-    exit 2
-}
-$target = Resolve-TargetDevice -Requested $Device -AdbExe $adbExe
+if ($CompileOnly) {
+    # 仅编译**不需要设备**：不碰 adb、不做设备前置判定（也让本模式能在不接设备的机器上跑，#949）
+    $target = @{ Serial = ''; Mode = 'compile-only' }
+} else {
+    # ---------- 目标设备前置判定（缺/多 ⇒ exit 2，避免装到错的设备）----------
+    $adbExe = Resolve-AdbExe
+    if (-not $adbExe) {
+        Write-Host '[error] 找不到 adb.exe。设 $env:ANDROID_SDK_ROOT / $env:ANDROID_HOME，或跑 scripts/android-sdk-setup.ps1 装到 D:\android-sdk。' -ForegroundColor Red
+        exit 2
+    }
+    $target = Resolve-TargetDevice -Requested $Device -AdbExe $adbExe
 
-# 把解析出的设备显式传给 launch（官方文档：不指定时默认使用第一个设备）。
-# 本脚本已断言「多设备必须显式 -Device」，所以这里传的就是那个唯一/显式的目标，语义无歧义。
-$launchArgs += @('--deviceId', $target.Serial)
+    # 把解析出的设备显式传给 launch（官方文档：不指定时默认使用第一个设备）。
+    # 本脚本已断言「多设备必须显式 -Device」，所以这里传的就是那个唯一/显式的目标，语义无歧义。
+    $launchArgs += @('--deviceId', $target.Serial)
+}
 
 # ---------- 日志 ----------
 $logDir = Split-Path -Parent $LogPath
@@ -590,6 +669,54 @@ $hx = Wait-HxFree -CliExe $cliPath -TimeoutSeconds $WaitSeconds -LogPath $LogPat
 try {
 
 $runClock = [System.Diagnostics.Stopwatch]::StartNew()
+
+# ---------- -CompileOnly：只编译、拿编译期诊断（不推送 / 不启动 / 不轮询 / 不需要设备；#949）----------
+# 为什么要有它：2026-09-13 实测那次会话，慢的不是编译，而是两次「编译期诊断拖到真机才发现」的返工
+# （`MenuItem` 类型名义重复 → ClassCastException；`<view>` 上用了 text-align|font-size|color）。
+# 这两条都是**编译期诊断** ⇒ 用「仅编译」就能在本地、在不接设备的机器上拦住。
+if ($CompileOnly) {
+    Write-Host '=== -CompileOnly：只编译（不推送 / 不启动 / 不轮询 / 不需要设备）===' -ForegroundColor Cyan
+    $steps = New-Object System.Collections.ArrayList
+    # [void] 是必须的：ArrayList.Add() 会把索引打到输出流，污染后面的文本解析
+    [void]$steps.Add((Invoke-CliStep -Name 'open' -CliArgs @('open') -StepTimeout $StepTimeoutSeconds -CliExe $cliPath -LogDir $logDir -LogFile $LogPath))
+    [void]$steps.Add((Invoke-CliStep -Name 'project-open' -CliArgs @('project', 'open', '--path', $Project) -StepTimeout $StepTimeoutSeconds -CliExe $cliPath -LogDir $logDir -LogFile $LogPath))
+    # 「仅编译」调用**会自己收口**（脚本头「假绿教训 v2」①实测）⇒ 用带超时的同步步，不像真运行那样常驻
+    [void]$steps.Add((Invoke-CliStep -Name 'compile-only' -CliArgs $launchArgs -StepTimeout $TimeoutSeconds -CliExe $cliPath -LogDir $logDir -LogFile $LogPath))
+
+    $compileStep = @($steps | Where-Object { $_.Name -eq 'compile-only' })[0]
+    $allOutput = (@($steps | ForEach-Object { $_.Output }) -join "`n")
+    $totalSeconds = [int]$runClock.Elapsed.TotalSeconds
+    $segment = Get-HxSegment -Output $compileStep.Output -LaunchSeconds $compileStep.Seconds
+    Write-SegmentTable -Steps $steps -Segment $segment -Total $totalSeconds
+
+    $notExited = @($steps | Where-Object { -not $_.Exited })
+    if ($notExited.Count -gt 0 -or $allOutput -match '与主程序的连接已中断|启动超时') {
+        Write-Host ''
+        Write-Host '[error] HBuilderX CLI 连不上主程序 / 某步未在超时内返回 ⇒ 环境不可用（exit 2）。' -ForegroundColor Red
+        Write-Host '        受限/沙箱会话会阻断 CLI 与主程序的本地 IPC；请在**全访问权限**的普通终端里跑。' -ForegroundColor Red
+        Write-Host '        本脚本**绝不 kill** HBuilderX / cli / 主程序（忙就等，超时就退出）。' -ForegroundColor Red
+        Write-HxRunResult -Mode $mode -Compile $segment.Compile -Deploy 0 -Total $totalSeconds -Exit 'env' -LogFile $LogPath
+        exit 2
+    }
+
+    # ⚠️ 调用点必须包 `@(...)`：函数 `return @(...)` 在空数组时会退化成 $null，
+    #    而 `Set-StrictMode -Latest` 下 `$null.Count` 直接抛错（2026-09-13 首次真跑踩到）
+    $errorLines = @(Get-HxErrorLines -Output $allOutput)
+    if ($errorLines.Count -gt 0) {
+        Write-Host ''
+        Write-Host "❌ 仅编译发现 $($errorLines.Count) 行编译期诊断 ——" -ForegroundColor Red
+        $errorLines | Select-Object -First 20 | ForEach-Object { Write-Host "   $_" -ForegroundColor Red }
+        Write-Host "完整日志：$LogPath" -ForegroundColor Yellow
+        Write-Host '   这类诊断**不该拖到真机**（#949）：先在本地清干净，再走真运行 / ① 取证。' -ForegroundColor Yellow
+        Write-HxRunResult -Mode $mode -Compile $segment.Compile -Deploy 0 -Total $totalSeconds -Exit 'fail' -LogFile $LogPath
+        exit 1
+    }
+
+    Write-Host ''
+    Write-Host '✅ 仅编译干净：没有编译期诊断行（本次未推送、未启动、未占用设备）。' -ForegroundColor Green
+    Write-HxRunResult -Mode $mode -Compile $segment.Compile -Deploy 0 -Total $totalSeconds -Exit 'ok' -LogFile $LogPath
+    exit 0
+}
 
 # ---------- 部署基线（判据是「相对基线是否前进」，见脚本头「假绿教训 v2」）----------
 # 候选包名：manifest 的 appid（__UNI__XXXX → uni.app.XXXX）+ HBuilderX 标准基座（dev 运行的常见承载）；
@@ -627,6 +754,7 @@ $factsAfter = $factsBefore
 $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
 $polledSeconds = 0
 $launchExitedEarly = $false
+$stalledEarly = $false
 while ((Get-Date) -lt $deadline) {
     Start-Sleep -Seconds $PollSeconds
     $polledSeconds += $PollSeconds
@@ -634,6 +762,12 @@ while ((Get-Date) -lt $deadline) {
     $probe = Get-DeployVerdict -Before $factsBefore -After $factsAfter -Stdout (Get-CapturedOutput -OutFile $launch.OutFile -ErrFile $launch.ErrFile)
     if ($probe.Deployed) { break }
     if ($launch.Proc.HasExited) { $launchExitedEarly = $true; break }
+    # 快速失败（#949）：**编译段已结束** + 该秒数内设备侧无前进 ⇒ 不必等满 -TimeoutSeconds
+    # （2026-09-13 实测某次 launch 卡死，白等了 ~20 分钟才到上限）
+    if ($polledSeconds -ge $DeployStallSeconds -and (Test-HxCompileFinished -Output (Get-CapturedOutput -OutFile $launch.OutFile -ErrFile $launch.ErrFile))) {
+        $stalledEarly = $true
+        break
+    }
     if (($polledSeconds % 60) -eq 0) {
         Write-Host ">>> [deploy] 已等 $polledSeconds 秒（上限 $TimeoutSeconds 秒），设备侧事实仍未前进…" -ForegroundColor Yellow
     }
@@ -646,10 +780,9 @@ $segment = Get-HxSegment -Output $launchOutput -LaunchSeconds $polledSeconds
 Write-SegmentTable -Steps $steps -Segment $segment -Total $totalSeconds
 Add-Content -LiteralPath $LogPath -Value "`n$launchOutput" -Encoding utf8
 
-# 判成败只解析 stdout（CLI 退出码恒 0）
-$errorLines = @($allOutput -split "`r?`n" |
-    Where-Object { $_ -match '(?i)\berror\b|unresolved reference|cannot infer type|找不到名称|类型不匹配|编译失败|运行失败' } |
-    Where-Object { $_ -notmatch '(?i)0\s*error|errors?\s*[:=]\s*0|no errors?|error count\s*[:=]\s*0' })
+# 判成败只解析 stdout（CLI 退出码恒 0）；判据与 -CompileOnly 共用同一个函数（#949，避免两处漂移）
+# ⚠️ 必须包 `@(...)`：函数 `return @(...)` 空数组会退化成 $null，`$null.Count` 在 StrictMode 下抛错
+$errorLines = @(Get-HxErrorLines -Output $allOutput)
 
 if ($errorLines.Count -gt 0) {
     Write-Host ''
@@ -678,6 +811,10 @@ if (-not $deployed.Deployed) {
     if ($launchExitedEarly) {
         Write-Host '   注意：那个会话**自己提前退出了**（真运行会话不会自己收口）—— 与「仅编译」调用同形，' -ForegroundColor Red
         Write-Host '         先确认本脚本的 launch 参数里**没有** `--compile`（官方语义是「仅编译代码」）。' -ForegroundColor Red
+    }
+    if ($stalledEarly) {
+        Write-Host "   注意：**编译段已结束、部署阶段 $polledSeconds 秒无前进** ⇒ 提前判环境不可用（不等满 $TimeoutSeconds 秒）。" -ForegroundColor Yellow
+        Write-Host '         实测正常推送只需 15–21 秒，所以这种"停滞"多半是会话卡住 / 设备被别的 App 占着 / 装机弹窗没人点。' -ForegroundColor Yellow
     }
     if ($deployed.StopMarkers.Count -gt 0) {
         Write-Host "   会话的停止/失败标记：$($deployed.StopMarkers -join '、')" -ForegroundColor Red
