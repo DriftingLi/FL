@@ -28,7 +28,7 @@
 |---|---|---|
 | `$primary-color` | `#2979ff` | 主色（按钮、选中态、Tab 高亮） |
 | `$primary-gradient-start` | `#CFE9FB` | 页面渐变顶部 |
-| `$primary-gradient-mid` | `#D0EBFD` | 页面渐变中部 |
+| ~~`$primary-gradient-mid`~~ | ~~`#D0EBFD`~~ | **已移除**（#937：App 平台渐变只支持 2 个颜色值、无百分比停靠，三色写法会被整条丢弃） |
 | `$bg-page` | `#F5F5F5` | 页面渐变底部 |
 | `$card-bg` | `#FFFFFF` | 卡片背景 |
 | `$text-color` | `#333333` | 主文字 |
