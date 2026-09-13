@@ -32,16 +32,12 @@ MODE="${1:-deploy}"  # deploy | rollback
 DEPLOY_PATH="${DEPLOY_PATH:-/opt/forklift-training}"
 BACKUP_DIR="${DEPLOY_PATH}/backups"
 
-# 部署默认值唯一事实源（ADR-0047 §5 / spec #940 片四）：CD 链路已在 /tmp/deploy-env.sh 里 source 过它，
-# 手工执行本脚本时在这里兜底 source 一次 —— 声明表内的变量因此不必在脚本里再写一遍默认值。
-if [ -f "${DEPLOY_PATH}/deploy/env.defaults" ]; then
-    # shellcheck disable=SC1090
-    . "${DEPLOY_PATH}/deploy/env.defaults"
-    # 镜像引用由本脚本按 registry + tag 现算后写进 .env；而 compose 的取值优先级是
-    # 「shell 环境 > .env」—— 生成物里的 forklift-*-image:latest 若留在环境里就会盖掉计算值，
-    # compose 转而去 Docker Hub 拉不存在的镜像（2026-09-13 testing 冒烟实测踩到）。
-    unset BACKEND_IMAGE FRONTEND_IMAGE LIBREOFFICE_IMAGE
-fi
+# 警告：不要在这里 source deploy/env.defaults（2026-09-13 生产事故的反面教材，见 ADR-0047「事故与修正」）。
+# source 是无条件赋值，会把 CD 传进来的环境整个盖成生成物默认值：当时 PG_VOLUME 从
+# /srv/ceph/pgdata 被改写成 pgdata-prod，compose 随即把 postgres 挂到另一个空卷 ——
+# 表现为「生产数据全没了」（真实数据完好，切回挂载即恢复）。
+# 现状：CD 链路的 /tmp/deploy-env.sh 已经 source 过生成物、且只覆盖「确实提供了值」的变量；
+# 手工执行本脚本时按 compose 的「有默认值的变量引用」兜底，不要在脚本里再赋一遍默认值。
 
 # Docker
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
