@@ -50,3 +50,19 @@
 - 约定：`AGENTS.md`（Tailwind 增量共存 R1~R4、禁止硬编码色值、冻结区）
 - Issues：`#714`（分段控件）、`#716`（弹窗收敛）、`#717`（空态归一）、`#718`（分页与筛选栏）；`#554`（裸 hex 治理，本 ADR 的直接前因）
 - 代码：`frontend/src/components/ui/`、`frontend/src/assets/styles/element-overrides.css`、`frontend/scripts/check-bare-hex.sh`
+
+## 备选转正（2026-09-13，spec #940 片一）：封装层守卫上 CI
+
+「备选」末条把**给封装层加 lint 强制规则**列为暂缓，条件是「等本轮四类收敛完成、封装层覆盖面足够后再评估」。条件已满足：
+
+- 四类收敛全部落地：#714（分段控件）/ #716（弹窗 46 处）/ #717（空态 23 + 分页 33）/ #718（筛选栏 12 文件 13 容器）；
+- 实测（165 个单文件组件全扫）：守卫集 10 类控件在 `frontend/src/components/ui/` 之外的模板用量 **= 0**；封装面在用 UiButton 312 / UiTag 93 / UiEmptyState 58 / UiDialog 51 / UiPagination 33 / UiSegmentTabs 18 / UiFilterBar 13。
+
+决定：
+
+1. **新增 `scripts/check-el-controls.mjs`**：`--all` 全量报告、`--diff` 只查新增行（形态对齐既有的裸色值守卫）。CI 在 `frontend-check` 跑**全量** —— 当前树 0 违规，规则可以绝对化执行，不需要 allowlist 逃生门。
+2. **判定面只认根 `<template>` 块并跳过 HTML 注释**：`<script>` 里的字符串与 EP 类名字面量（如确认框的 danger class）不算违规，避免把守卫做成噪声源。
+3. **放行面与第 3 条边界逐条一致**：`components/ui/**`（封装层内部本来就是 EP）、`el-radio` / `el-radio-button` / `el-checkbox`（组内内容项）、`el-table` / `el-table-column`（表格边界）、表单域与布局类 EP（未封装例外）。
+4. **守卫自己有表驱动自检**（`scripts/check-el-controls.test.mjs` + CI job `el-controls-selftest`）：守卫坏了必须报红 —— 否则「规则有执行面」会退化成假绿，比没有守卫更糟。
+
+本条的转正对象是**规则执行面**，不改变第 3 条「`el-table` 走全局样式覆盖、不封装」与「表单域属未封装例外」的既有决策。

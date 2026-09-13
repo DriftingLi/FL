@@ -16,6 +16,20 @@
 | **管理端列表状态机** | admin **列表页**一律 `useAdminTable`（页面只声明 `fetch` adapter 与 `actions` adapter，内置三态 / 分页 / 搜索 / 行操作分发 / 删除确认；ADR-0015 + ADR-0039）。**非列表页不套**（详情/仪表盘/配置页用 `useAsyncPage` 的三态即可）。`useAsyncPage` 是服务全站 34 处的通用三态件，**不要为 admin 改它**。 |
 | **确认框** | 一律 `useConfirm()`（`composables/useConfirm.ts`）：`confirm`（普通）/ `confirmDanger`（删除、清空、移除、驳回、撤销等不可逆操作 —— 红确认钮 + 焦点不落确认钮，连按回车不误执行）/ `prompt`（带输入）。**业务代码禁直接调 `ElMessageBox`**。 |
 
+### 已收敛控件的机械守卫（ADR-0035 备选转正 / spec #940）
+
+「业务页面不得直接使用 Element Plus 控件」不再只靠评审人眼守，CI 里有一条可核验的守卫：
+
+```
+node scripts/check-el-controls.mjs --all                  # 全量（CI 用这个），有违规则退出 1
+node scripts/check-el-controls.mjs --diff origin/master   # 只看新增行（本地/渐进期）
+```
+
+- **守卫集 = 已收敛的 10 类**：dialog / empty / pagination / button / tag / switch / checkbox-group / radio-group / upload / tooltip。命中即报红并给出「→ UiXxx」的对应关系。
+- **判定面只认根 `<template>` 块**并跳过 HTML 注释 —— `<script>` 里的字符串与 EP 类名字面量不算违规。
+- **放行面**（有意不进守卫集，别当成漏封装）：`components/ui/**`（封装层内部本来就是 EP）、`el-radio` / `el-radio-button` / `el-checkbox`（组的「内容项」而非容器）、`el-table` / `el-table-column`（表格边界）、表单域与布局类 EP（未封装例外）。
+- **守卫自己有表驱动自检**（`scripts/check-el-controls.test.mjs`，CI job `el-controls-selftest`）：守卫坏了必须报红，否则规则退化为假绿。
+
 页面保持整洁：不要写冗余的小标题、装饰性提示与说明性 hint 文本，有的话就清理，仅保留必要的功能性提示。删除 hint 时同步删除对应的 CSS class 与 scoped style，避免残留死代码。
 
 **明确例外（不要清）**：发帖 / 回复输入区的**属地披露提示**（「发布内容会显示 IP 属地」，文案单点 `frontend/src/utils/forumDisplay.ts` 的 `FORUM_REGION_NOTICE`）属于「必要的功能性提示」而非装饰——属地在点发布那一刻才产生，事前告知比事后解释便宜（ADR-0045）。按本条约定清理 hint 时**跳过它**。
