@@ -43,3 +43,20 @@
 - `backend/internal/api/*.go`（handler struct 化）、`backend/internal/api/deps.go`（按蓝图收窄的装配根）
 - `backend/internal/service/*_dto_test.go`（shape-lock 测试）
 - ADR-0005（响应信封统一）、ADR-0008（字典描述符驱动的管理面）
+
+## 执行收口（2026-09-13，spec #940 片三）：§2 的最后一公里
+
+§2 要求「service 层返回 `map[string]any` 的方法收敛为导出 typed DTO struct」。后续几波陆续收口后，仍余一批**穿过 handler seam 的 map 信封**，按 spec #940 片三决策 12 的清单收完（含同族的错题批量移除）：
+
+- 建号结果 → `TutorRegisterResultDTO`
+- 题库分页 → `QuestionPageDTO`；批量发布 / 批量驳回 → `QuestionPublishResultDTO` / `QuestionRejectResultDTO`
+- 批量导入（含 errors 内层元素）→ `QuestionImportResultDTO` + `QuestionImportErrorDTO`
+- 错题本列表 / 移除 → `WrongQuestionPageDTO` / `WrongQuestionDTO` / `WrongQuestionRemoveResultDTO`（手写 mapper `wrongQuestionToDict` 折叠进 DTO 构造）
+- 扫码占位 → `WechatQRCodeInfoDTO`
+- （片二同时收了论坛详情 → `ForumTopicDetailDTO`）
+
+**判据（避免把重构做成无收益的搬运）**：只有**穿过 handler seam 的 service 返回**才算违规 —— ORM 的 `Updates(map[string]any{…})` 载荷、模块内部的计数 helper 一律不动。
+
+**明确不在本片范围**：handler 里**内联构造**的响应 map（招聘者创建/编辑/状态切换、积分扣罚等）不是 §2 所指的 service 返回面；它们若要收口，另立片。
+
+**字节序纪律**：字段声明按 JSON key 字母序，`omitempty` 与「空切片 vs nil」逐一对齐旧 map 语义；新增 `envelope_dto_shape_test.go`，用「旧 map ↔ 新 DTO 的 `json.Marshal` 逐字节相等」表驱动钉住（先例：`question_dto_shape_test.go` 的 `legacyQuestionDict`）。

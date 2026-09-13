@@ -37,8 +37,8 @@ func seedWrongQuestion(t *testing.T, db *gorm.DB, studentID, questionID, wrongCo
 func TestGetWrongQuestions_Empty(t *testing.T) {
 	svc, _ := newWrongQuestionSvc(t)
 	result := svc.GetWrongQuestions(1, 1, 20, "", nil, false, "", nil)
-	if result["total"].(int64) != 0 {
-		t.Fatalf("空库总数应为 0, got %v", result["total"])
+	if result.Total != 0 {
+		t.Fatalf("空库总数应为 0, got %v", result.Total)
 	}
 }
 
@@ -49,19 +49,19 @@ func TestGetWrongQuestions_WithData(t *testing.T) {
 	seedWrongQuestion(t, db, 1, 2, 1)
 
 	result := svc.GetWrongQuestions(1, 1, 20, "", nil, false, "", nil)
-	if result["total"].(int64) != 2 {
-		t.Fatalf("总数应为 2, got %v", result["total"])
+	if result.Total != 2 {
+		t.Fatalf("总数应为 2, got %v", result.Total)
 	}
 }
 
 func TestGetWrongQuestions_DefaultPaging(t *testing.T) {
 	svc, _ := newWrongQuestionSvc(t)
 	result := svc.GetWrongQuestions(1, 0, 0, "", nil, false, "", nil)
-	if result["page"].(int) != 1 {
-		t.Fatalf("默认页码应为 1, got %v", result["page"])
+	if result.Page != 1 {
+		t.Fatalf("默认页码应为 1, got %v", result.Page)
 	}
-	if result["page_size"].(int) != 20 {
-		t.Fatalf("默认页大小应为 20, got %v", result["page_size"])
+	if result.PageSize != 20 {
+		t.Fatalf("默认页大小应为 20, got %v", result.PageSize)
 	}
 }
 
@@ -76,11 +76,11 @@ func TestGetWrongQuestions_FavoritedFilter(t *testing.T) {
 	}
 
 	result := svc.GetWrongQuestions(1, 1, 20, "", nil, true, "", nil)
-	if result["total"].(int64) != 1 {
-		t.Fatalf("收藏过滤后总数应为 1, got %v", result["total"])
+	if result.Total != 1 {
+		t.Fatalf("收藏过滤后总数应为 1, got %v", result.Total)
 	}
-	items := result["items"].([]map[string]any)
-	if len(items) != 1 || items[0]["question_id"].(int) != 1 {
+	items := result.Items
+	if len(items) != 1 || items[0].QuestionID != 1 {
 		t.Fatalf("收藏过滤后应仅剩题目 1, got %v", items)
 	}
 }
@@ -100,14 +100,14 @@ func TestGetWrongQuestions_SortAsc(t *testing.T) {
 	}
 
 	result := svc.GetWrongQuestions(1, 1, 20, "", nil, false, "time_asc", nil)
-	items := result["items"].([]map[string]any)
-	if len(items) != 2 || items[0]["question_id"].(int) != 1 {
+	items := result.Items
+	if len(items) != 2 || items[0].QuestionID != 1 {
 		t.Fatalf("升序时首项应为较早错误的题目 1, got %v", items)
 	}
 
 	result = svc.GetWrongQuestions(1, 1, 20, "", nil, false, "", nil)
-	items = result["items"].([]map[string]any)
-	if len(items) != 2 || items[0]["question_id"].(int) != 2 {
+	items = result.Items
+	if len(items) != 2 || items[0].QuestionID != 2 {
 		t.Fatalf("默认降序时首项应为最近错误的题目 2, got %v", items)
 	}
 }
@@ -124,15 +124,15 @@ func TestGetWrongQuestions_FavoritedField(t *testing.T) {
 	}
 
 	result := svc.GetWrongQuestions(1, 1, 20, "", nil, false, "", nil)
-	items := result["items"].([]map[string]any)
-	byQID := make(map[int]map[string]any, len(items))
+	items := result.Items
+	byQID := make(map[int]WrongQuestionDTO, len(items))
 	for _, item := range items {
-		byQID[item["question_id"].(int)] = item
+		byQID[item.QuestionID] = item
 	}
-	if !byQID[1]["favorited"].(bool) || byQID[1]["favorite_id"].(int64) != fav.FavoriteID {
+	if !byQID[1].Favorited || byQID[1].FavoriteID != fav.FavoriteID {
 		t.Fatalf("题目 1 应回填已收藏状态, got %v", byQID[1])
 	}
-	if byQID[2]["favorited"].(bool) || byQID[2]["favorite_id"].(int64) != 0 {
+	if byQID[2].Favorited || byQID[2].FavoriteID != 0 {
 		t.Fatalf("题目 2 应回填未收藏状态, got %v", byQID[2])
 	}
 }
@@ -157,27 +157,27 @@ func TestGetWrongQuestions_CredentialFilter(t *testing.T) {
 	seedWrongQuestion(t, db, 1, int(qB.ID), 1)
 
 	result := svc.GetWrongQuestions(1, 1, 20, "", nil, false, "", &credA)
-	if result["total"].(int64) != 1 {
-		t.Fatalf("按证件A过滤后总数应为 1, got %v", result["total"])
+	if result.Total != 1 {
+		t.Fatalf("按证件A过滤后总数应为 1, got %v", result.Total)
 	}
-	items := result["items"].([]map[string]any)
-	if len(items) != 1 || items[0]["question_id"].(int) != int(qA.ID) {
+	items := result.Items
+	if len(items) != 1 || items[0].QuestionID != int(qA.ID) {
 		t.Fatalf("按证件A过滤后应仅剩题目 %d, got %v", qA.ID, items)
 	}
 
 	// nil = 不过滤（旧行为）
 	result = svc.GetWrongQuestions(1, 1, 20, "", nil, false, "", nil)
-	if result["total"].(int64) != 2 {
-		t.Fatalf("不过滤时总数应为 2, got %v", result["total"])
+	if result.Total != 2 {
+		t.Fatalf("不过滤时总数应为 2, got %v", result.Total)
 	}
 
 	// 证件过滤与题型过滤叠加（同一 JOIN 作用域）
 	result = svc.GetWrongQuestions(1, 1, 20, "single_choice", nil, false, "", &credB)
-	if result["total"].(int64) != 1 {
-		t.Fatalf("证件B+单选过滤后总数应为 1, got %v", result["total"])
+	if result.Total != 1 {
+		t.Fatalf("证件B+单选过滤后总数应为 1, got %v", result.Total)
 	}
-	items = result["items"].([]map[string]any)
-	if len(items) != 1 || items[0]["question_id"].(int) != int(qB.ID) {
+	items = result.Items
+	if len(items) != 1 || items[0].QuestionID != int(qB.ID) {
 		t.Fatalf("证件B+单选过滤后应仅剩题目 %d, got %v", qB.ID, items)
 	}
 }
@@ -193,8 +193,8 @@ func TestRemoveWrongQuestion_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("移除错题失败: %v", err)
 	}
-	if removed, ok := result["removed"].(bool); !ok || !removed {
-		t.Fatalf("应返回 removed=true, got %v", result["removed"])
+	if !result.Removed {
+		t.Fatalf("应返回 removed=true, got %v", result.Removed)
 	}
 }
 

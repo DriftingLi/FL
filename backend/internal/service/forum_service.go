@@ -290,6 +290,19 @@ type ForumTopicPageResult struct {
 	Total  int64           `json:"total"`
 }
 
+// ForumTopicDetailDTO 主题详情（ADR-0047 §3 读面 module / ADR-0009 §2 typed DTO）。
+//
+// 字段声明**按 JSON key 字母序**（page / pages / replies / topic / total）：旧形态是
+// map[string]any，而 encoding/json 对 map 按 key 排序输出 —— 字母序声明保证换成 struct 后
+// 序列化字节序不变（ADR-0009 §2 把这条列为最高优先级约束）。
+type ForumTopicDetailDTO struct {
+	Page    int             `json:"page"`
+	Pages   int             `json:"pages"`
+	Replies []ForumReplyDTO `json:"replies"`
+	Topic   ForumTopicDTO   `json:"topic"`
+	Total   int64           `json:"total"`
+}
+
 // parseForumCategoryArg 解析**列表查询**的 category 参数。
 //
 // 注意与 normalizeForumCategory（发帖路径）语义相反，不要合并成一函数：
@@ -514,7 +527,7 @@ type TopicDetailInput struct {
 //
 // total 为**实时 COUNT**（分页必须与实际行数一致，否则会出现空页）；topic.reply_count 是
 // 列表页消费的反范式计数列，两者由计数单写入口保持同值。
-func (s *ForumService) GetTopic(in TopicDetailInput) (map[string]any, error) {
+func (s *ForumService) GetTopic(in TopicDetailInput) (*ForumTopicDetailDTO, error) {
 	topicID, viewerID := in.TopicID, in.ViewerID
 	replySort, order := in.ReplySort, in.Order
 	if replySort == "latest" {
@@ -628,12 +641,12 @@ func (s *ForumService) GetTopic(in TopicDetailInput) (map[string]any, error) {
 		topicDTO.RewardIssued = true
 	}
 
-	return map[string]any{
-		"topic":   topicDTO,
-		"replies": replyDTOs,
-		"page":    page,
-		"pages":   response.PageCount(total, pageSize),
-		"total":   total,
+	return &ForumTopicDetailDTO{
+		Page:    page,
+		Pages:   response.PageCount(total, pageSize),
+		Replies: replyDTOs,
+		Topic:   topicDTO,
+		Total:   total,
 	}, nil
 }
 

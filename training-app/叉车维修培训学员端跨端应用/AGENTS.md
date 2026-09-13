@@ -322,7 +322,7 @@ Use the skill tool to load a skill when a task matches its description.
 # 叉车维修培训学员端 - 移动端开发约定
 
 > 本文件为移动端（uni-app-x 跨端应用）的 AI agent 工作约定，覆盖开发、测试、构建、发布全流程。
-> 根目录 `E:\FL\AGENTS.md` 提供系统级全局约定，本文件补充移动端特有规范。
+> 根目录 `D:\FL\AGENTS.md` 提供系统级全局约定，本文件补充移动端特有规范。（主树位置与搬迁记录见 `docs/agents/multi-agent-git.md` 开头的「主树位置」段；2026-09-13 起主树为 `D:\FL`，`E:\FL` 为只读备胎。）
 
 ## 项目概述
 

@@ -326,8 +326,18 @@ func (s *AuthService) TutorLogin(username, password string) (*LoginResult, error
 	}, "tutor", "导师账号或密码错误")
 }
 
+// TutorRegisterResultDTO 导师建号结果（ADR-0009 §2 typed DTO / spec #940 片三）。
+//
+// 字段按 JSON key 字母序声明（name / tutor_id / username）：旧形态是 map[string]any，
+// encoding/json 对 map 按 key 排序输出 —— 字母序保证换成 struct 后字节序不变。
+type TutorRegisterResultDTO struct {
+	Name     string `json:"name"`
+	TutorID  int    `json:"tutor_id"`
+	Username string `json:"username"`
+}
+
 // TutorRegister 导师注册。
-func (s *AuthService) TutorRegister(username, password, name string) (map[string]any, error) {
+func (s *AuthService) TutorRegister(username, password, name string) (*TutorRegisterResultDTO, error) {
 	var count int64
 	s.db.Model(&model.Tutor{}).Where("username = ?", username).Count(&count)
 	if count > 0 {
@@ -347,10 +357,10 @@ func (s *AuthService) TutorRegister(username, password, name string) (map[string
 	if err := s.db.Create(&tutor).Error; err != nil {
 		return nil, err
 	}
-	return map[string]any{
-		"tutor_id": tutor.TutorID,
-		"username": tutor.Username,
-		"name":     tutor.Name,
+	return &TutorRegisterResultDTO{
+		Name:     tutor.Name,
+		TutorID:  tutor.TutorID,
+		Username: tutor.Username,
 	}, nil
 }
 

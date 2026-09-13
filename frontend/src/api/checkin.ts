@@ -1,55 +1,21 @@
 import { unwrappedRequest } from './request'
+import type {
+  CheckInCalendarResult,
+  CheckInDay,
+  CheckInRankItem,
+  CheckInRankResult,
+  CheckInResult
+} from './generated/checkin'
 
 /**
  * 每日打卡独立模块（ADR-0028：从论坛域迁出，路由 /api/check-in/*）。
  * Web 端唯一消费方；uni-app-x 移动端适配另见 GitHub #587。
+ *
+ * 响应类型**不再手写**：唯一事实源是后端注解 → backend/docs/swagger.json →
+ * `cd backend && go run ./cmd/gen-apitypes`（ADR-0019 契约 codegen 专项第一步 / spec #940 片五③）。
+ * 本文件只保留请求壳与端点装配，是薄 adapter；生成物由后端 codegen_test.go 字节级钉住。
  */
-
-export interface CheckInResult {
-  checked: boolean
-  streak: number
-  total: number
-  today_checked: boolean
-  /** 今日实发积分（基础 + 跨档阶梯，合并单笔；重复打卡/已打卡为 0） */
-  points: number
-}
-
-export interface CheckInDay {
-  date: string
-  checked: boolean
-  /** 该日实发积分（无流水的历史打卡为 0） */
-  points: number
-}
-
-export interface CheckInCalendarResult {
-  days: CheckInDay[]
-  streak: number
-  total: number
-  today_checked: boolean
-}
-
-export interface CheckInRankItem {
-  rank: number
-  user: { user_id: number; username: string; avatar_url: string }
-  total: number
-  streak: number
-  today_checked: boolean
-}
-
-export interface CheckInRankMe {
-  rank: number
-  total: number
-  streak: number
-  today_checked: boolean
-}
-
-export interface CheckInRankResult {
-  items: CheckInRankItem[]
-  total: number
-  page: number
-  pages: number
-  me: CheckInRankMe | null
-}
+export type { CheckInCalendarResult, CheckInDay, CheckInRankItem, CheckInRankResult, CheckInResult }
 
 // 静默头：打卡调用不依赖请求壳统一 toast（页面自有反馈）。
 const SILENT = { headers: { 'X-Silent': '1' } }

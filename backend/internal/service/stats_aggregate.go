@@ -32,9 +32,12 @@ type PracticeStatsDTO struct {
 }
 
 // WrongQuestionStatsDTO 错题统计（旧 wrong_question GetStats map 输出）。
+// swaggertype 显式钉住 map 值类型：swag 对 map[string]int64 的 format 推断**不稳定** ——
+// 同一份代码在不同环境生成的 swagger 产物，这一处会有/无 "format: int64"（实测 CI 与本机各执
+// 一边，正是它把「再生成后工作树必须干净」的新鲜度锁变成随机红）。钉住值类型即消除推断。
 type WrongQuestionStatsDTO struct {
 	Total  int64            `json:"total"`
-	ByType map[string]int64 `json:"by_type"`
+	ByType map[string]int64 `json:"by_type" swaggertype:"object,integer"`
 }
 
 // statGroupRow GROUP BY 单维结果行（key=维度值，count=行数）。

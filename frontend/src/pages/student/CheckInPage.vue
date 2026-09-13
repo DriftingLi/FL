@@ -139,7 +139,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowRight } from '@element-plus/icons-vue'
-import { checkInApi, type CheckInDay, type CheckInRankItem, type CheckInRankMe } from '@/api/checkin'
+import { checkInApi, type CheckInDay, type CheckInRankItem } from '@/api/checkin'
 import { shanghaiDateStr } from '@/utils/format'
 import { computeDayStates, type CheckInDayState } from '@/utils/checkinCalendar'
 import UiButton from '@/components/ui/UiButton.vue'
@@ -174,7 +174,9 @@ const checking = ref(false)
 
 // 排行榜
 const rankItems = ref<CheckInRankItem[]>([])
-const rankMe = ref<CheckInRankMe | null>(null)
+// me 的可空性由注解层不表达（生成物按非可选渲染），页面自己保留 null 分支：
+// 后端 me 是 Go 指针，未上榜时返回 null。
+const rankMe = ref<CheckInRankItem | null>(null)
 const rankTotal = ref(0)
 const rankPage = ref(1)
 const rankPageSize = ref(20)
