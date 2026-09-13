@@ -76,6 +76,14 @@
     本机为开发/CI 前置机时风险可接受；在**共享网络**上跑本门应先确认防火墙。本脚本无法从 CLI 侧收窄监听面
     （`cli auto -h` 无绑定地址参数），故只在此声明，不假装已处理。
 
+    **门计划 `GATE_PLAN` 与 `-DryRun`（#914 收束后守护的判据面）**：本脚本「步骤序列 / 每步参数与判据 /
+    超时预算与 exit 2 归属 / 结果行字段清单」四类不变量**集中在 `New-GatePlan` 一处声明**，执行路径按 id
+    取用（`Get-GateStep`）——调用点不再自带参数原文。`-DryRun` 只输出**一行** `GATE_PLAN {json}` 后 exit 0：
+    **不执行任何外部命令、不写工作树、不接 HBuilderX**（可在没有 HBuilderX / 没有开发者工具的机器上跑，
+    包括 Linux CI）。守护 `utils/mpWeixinGateContract.test.js` 的 C2 / C12 / C15 / C18 改为**运行 `-DryRun`
+    并断言这份 JSON**，不再断言调用点源码文本 —— 这样把调用点原文抽进共享库时，守护不会失配（原口径下
+    唯一的「修法」是放宽守护，等于把防护拆掉）。决策与代价见 `docs/adr/0008-移动端验收门与证据.md`。
+
     **非等价声明（勿删）**：② ≠ ① 真机门，也 ≠ ④b 云打包门。
       ② 只证明「小程序端在开发者工具里打开入口页 + 被改页时 console 无 error、无 exception」；
       **挡不住**的类别（#883 逐条实测）：`content://` 上传、生物识别门控（开发者工具明确回
@@ -126,11 +134,17 @@
     `.github/workflows/pr-evidence.yml` 只认「带该标记且 sha 与 PR head 相等」的评论，不校真伪。
     gh 不可用/取不到 sha 时只打印警告，**不影响门的结论**。
 
+.PARAMETER DryRun
+    只打印门计划（单行 `GATE_PLAN {json}`）后 exit 0：**不执行任何外部命令、不写工作树、不接 HBuilderX**。
+    用途是让守护断言「行为输出」而不是源码文本（#914）：JSON 覆盖步骤序列 / 每步参数与判据 / 超时预算与
+    exit 2 归属 / 结果行字段清单。与 `-Doctor` 同时给出时 `-DryRun` 优先（先打印计划即退出）。
+
 .EXAMPLE
     npm run build:mp-weixin-check
     pwsh -NoProfile -File scripts/mp-weixin-check.ps1 -SkipBuild
     pwsh -NoProfile -File scripts/mp-weixin-check.ps1 -Routes 'pages/index/index,pages/login/login'
     pwsh -NoProfile -File scripts/mp-weixin-check.ps1 -PostToPr 884
+    pwsh -NoProfile -File scripts/mp-weixin-check.ps1 -DryRun
 #>
 [CmdletBinding()]
 param(
@@ -156,7 +170,8 @@ param(
     [int]$ProbeTimeoutMs = 60000,
     [int]$ReadyWaitSeconds = 120,
     [switch]$Doctor,
-    [int]$PostToPr = 0
+    [int]$PostToPr = 0,
+    [switch]$DryRun
 )
 
 Set-StrictMode -Version Latest
@@ -179,6 +194,10 @@ $script:closed = $false
 # -Doctor：只做环境体检（不接 HBuilderX、不构建、不跑探针、不贴评论、**不产出门的通过结论**），
 # 逐层给 OK/WARN/FAIL。它复用主流程的 close → open → auto → 就绪闸门，所以体检走的就是门真正的路径。
 if ($Doctor) { $SkipBuild = $true }
+
+# 临时根：**不能只读 $env:TEMP** —— Linux 上（CI 跑 -DryRun）只有 TMPDIR，$env:TEMP 为 $null，
+# 而 Join-Path 拿到 $null 会直接抛（Set-StrictMode 下同理）⇒ 显式兜底到 .NET 的临时目录。
+$tempRoot = if ($env:TEMP) { $env:TEMP } elseif ($env:TMPDIR) { $env:TMPDIR } else { [System.IO.Path]::GetTempPath() }
 
 function Test-PeHeader {
     param([string]$Path)
@@ -270,23 +289,244 @@ function Get-Prop {
     return $null
 }
 
+# ---------- 门计划（GATE_PLAN）：步骤序列 / 每步参数与判据 / 预算与 exit 2 归属 / 结果行字段 ----------
+# 为什么有这一块（#914，勿删）：守护以前断言的是**调用点源码原文**（`-Arguments @('open', '--project', $dist)`
+# 之类）。后果是任何把这些原文抽进共享库的重构都会让守护失配，而唯一的「修法」是放宽守护 —— 等于把防护
+# 拆掉。收束办法：把「门要做什么」收成**一份数据**，执行路径按 id 取用（Get-GateStep），`-DryRun` 把同一
+# 份数据打成单行 JSON 交给守护断言 ⇒ 顺序/参数类不变量变成「行为的直接观测」，搬运不再碰守护。
+# 判据（守护 C18）：每个步骤都必须被执行路径按 id 取用一次，且调用点原文**至多**在脚本里出现一次。
+function New-GatePlan {
+    param(
+        [string]$Project,
+        [string]$Dist,
+        [string]$ProbePath,
+        [string]$ReadyPath,
+        [string]$AutoRoot,
+        [string]$LogDir,
+        [string]$LogRelative,
+        [string[]]$RouteList,
+        [int]$Port,
+        [int]$OpenTimeoutSeconds,
+        [int]$AutoTimeoutSeconds,
+        [int]$PortWaitSeconds,
+        [int]$ReadyWaitSeconds,
+        [int]$ProbeTimeoutMs,
+        [int]$ProbeTimeoutSeconds,
+        [int]$ProbeAttempts,
+        [int]$ProbeRetryDelaySeconds,
+        [int]$PublishTimeoutSeconds,
+        [bool]$SkipBuild,
+        [bool]$Doctor,
+        [int]$PostToPr
+    )
+    $ws = "ws://127.0.0.1:$Port"
+    $entryUrl = if (@($RouteList).Count -gt 0) { $RouteList[0] } else { '' }
+    $steps = @()
+
+    # 1) close：清残留自动化会话（不 close 会撞 pageStack 空，坑位 1）。失败只警告，不判 exit 2。
+    $steps += [ordered]@{
+        id = 'devtools-close'
+        tag = 'devtools-close'
+        exec = 'devToolsCli'
+        argv = @('close', '--project', $Dist)
+        timeoutSeconds = 120
+        awaitCompletion = $true
+        criteria = @('清残留自动化会话与自动化端口（不 close 会撞 pageStack 空）', '失败只警告，本步不判 exit 2')
+        exit2 = @()
+    }
+
+    # 2) open：close 会把项目窗口一起关掉，而 auto 不会重开（时序坑位 4）⇒ 必须是显式步骤且写进日志。
+    $steps += [ordered]@{
+        id = 'devtools-open'
+        tag = 'devtools-open'
+        exec = 'devToolsCli'
+        argv = @('open', '--project', $Dist)
+        timeoutSeconds = $OpenTimeoutSeconds
+        awaitCompletion = $true
+        logged = $true
+        criteria = @('close 之后、auto 之前必须重开项目窗口（缺这步 pageStack 恒空）', '项目目录须是构建产物目录（-SkipBuild 下同样定位得到）', '仅超时判 exit 2（窗口没重开就没法继续）')
+        exit2 = @([ordered]@{ on = 'timeout'; reason = 'devtools-open-timeout' })
+    }
+
+    # 3) auto：必须跑完 —— 中途 kill 会让端口永不监听；端口是延迟出现的，故后面还要轮询。
+    $steps += [ordered]@{
+        id = 'devtools-auto'
+        tag = 'devtools-auto'
+        exec = 'devToolsCli'
+        argv = @('auto', '--project', $Dist, '--auto-port', "$Port", '--trust-project')
+        timeoutSeconds = $AutoTimeoutSeconds
+        awaitCompletion = $true
+        criteria = @('auto 必须等它跑完（中途 kill ⇒ 端口永不监听）', "自动化端口由 --auto-port $Port 指定（监听面由开发者工具决定，实测绑通配地址）", '仅超时判 exit 2')
+        exit2 = @([ordered]@{ on = 'timeout'; reason = 'auto-timeout' })
+    }
+
+    # 4) 端口就绪：auto 返回 ≠ 端口已监听（实测延迟出现）。
+    $steps += [ordered]@{
+        id = 'port-listening'
+        tag = 'port-listening'
+        exec = 'none'
+        argv = @()
+        waitSeconds = $PortWaitSeconds
+        criteria = @("端口 $Port 须在 $PortWaitSeconds 秒内进入 listening（auto 返回后端口是延迟出现的）", '未监听 ⇒ exit 2（环境不可用，不是门未过）')
+        exit2 = @([ordered]@{ on = 'not-listening'; reason = 'port-not-listening' })
+    }
+
+    # 5) 就绪闸门：端口 listening ≠ 会话可用（实测 App.getPageStack 要 24–34s 才应答，坑位 5）。
+    $steps += [ordered]@{
+        id = 'ready-gate'
+        tag = 'ready-gate'
+        exec = 'node'
+        argv = @($ReadyPath, '--ws', $ws, '--wait-seconds', "$ReadyWaitSeconds", '--require-stack', '--require-root', $AutoRoot)
+        timeoutSeconds = $ReadyWaitSeconds + 60
+        awaitCompletion = $true
+        criteria = @('Tool.getInfo 须带 SDKVersion', 'App.getPageStack 须开始应答（只等 SDKVersion 不够）', '须解析出 MP_WEIXIN_READY 结果行')
+        exit2 = @(
+            [ordered]@{ on = 'timeout'; reason = 'no-ready-result' },
+            [ordered]@{ on = 'not-ready'; reason = 'automation-not-ready' }
+        )
+    }
+
+    # 6) 探针：判成败只看输出 MP_WEIXIN_PROBE（cli / 探针退出码一律不作判据）。
+    $steps += [ordered]@{
+        id = 'automator-probe'
+        tag = 'automator-probe'
+        exec = 'node'
+        argv = @($ProbePath, '--ws', $ws, '--routes', ($RouteList -join ','), '--entry-url', $entryUrl, '--shot-dir', $LogDir, '--require-root', $AutoRoot, '--timeout-ms', "$ProbeTimeoutMs")
+        timeoutSeconds = $ProbeTimeoutSeconds
+        attempts = $ProbeAttempts
+        retryDelaySeconds = $ProbeRetryDelaySeconds
+        awaitCompletion = $true
+        criteria = @('判成败只看输出 MP_WEIXIN_PROBE（HBuilderX CLI / cli.bat / 探针的退出码都不作判据）', 'pageStack 非空是前置断言，为空判环境不可用', '元素级 API 一律不得引入（page.$ 会挂起 15s）')
+        exit2 = @([ordered]@{ on = 'timeout'; reason = 'probe-timeout' })
+    }
+
+    # exit 2 归属的**汇总视图**：把每步的 exit2 摊平 + 标出是哪一步决定的（守护断言两者一致）。
+    $exit2Summary = @()
+    foreach ($st in $steps) {
+        foreach ($e in @($st['exit2'])) {
+            $exit2Summary += [ordered]@{ step = $st['id']; on = $e['on']; reason = $e['reason'] }
+        }
+    }
+
+    # 结果行字段清单：执行路径**按这份清单**拼结果行（Format-GateMetricLine），所以它与实际输出同一真源。
+    $resultFields = @()
+    foreach ($n in @('appid', 'pageStack', 'entry', 'errorsTotal', 'exceptionsTotal', 'logsTotal', 'shots', 'navigation', 'ready', 'sdk', 'ide')) {
+        $resultFields += [ordered]@{ name = $n }
+    }
+    $resultFields += [ordered]@{ name = 'navigationSkipReason'; optional = $true }
+    $resultFields += [ordered]@{ name = 'log' }
+
+    return [ordered]@{
+        schema = 'gate-plan/1'
+        gate = '②'
+        mode = [ordered]@{ dryRun = $true; skipBuild = $SkipBuild; doctor = $Doctor; postToPr = $PostToPr }
+        paths = [ordered]@{
+            project = $Project
+            dist = $Dist
+            distRelative = $DistRelative
+            probe = $ProbePath
+            probeRelative = $ProbeRelative
+            ready = $ReadyPath
+            readyRelative = $ReadyRelative
+            automatorRoot = $AutoRoot
+            logDir = $LogDir
+            logRelative = $LogRelative
+        }
+        endpoint = [ordered]@{ port = $Port; ws = $ws }
+        routes = @($RouteList)
+        steps = $steps
+        timeouts = [ordered]@{
+            publish = $PublishTimeoutSeconds
+            open = $OpenTimeoutSeconds
+            auto = $AutoTimeoutSeconds
+            portWait = $PortWaitSeconds
+            readyWait = $ReadyWaitSeconds
+            readyGate = $ReadyWaitSeconds + 60
+            probe = $ProbeTimeoutSeconds
+            probeTimeoutMs = $ProbeTimeoutMs
+            probeAttempts = $ProbeAttempts
+            probeRetryDelay = $ProbeRetryDelaySeconds
+        }
+        exit2 = $exit2Summary
+        resultLine = [ordered]@{ prefix = 'MP_WEIXIN_RESULT'; fields = $resultFields }
+    }
+}
+
+# 按 id 取用计划步骤：**执行路径唯一**的参数来源（取不到即抛，不给「脱节」留活口）。
+function Get-GateStep {
+    param($Plan, [string]$Id)
+    foreach ($s in @($Plan['steps'])) {
+        if ("$($s['id'])" -eq $Id) { return $s }
+    }
+    throw "门计划里没有步骤 '$Id'（Get-GateStep）—— 计划与执行脱节了"
+}
+
+# 结果行：按计划声明的字段清单拼（必填字段缺值即抛；可选字段无值就跳过）⇒ 清单不会与实际输出分叉。
+function Format-GateMetricLine {
+    param($Plan, [System.Collections.IDictionary]$Values)
+    $parts = @()
+    foreach ($f in @($Plan['resultLine']['fields'])) {
+        $name = "$($f['name'])"
+        $optional = if ($f.Contains('optional')) { [bool]$f['optional'] } else { $false }
+        if (-not $Values.Contains($name)) {
+            if ($optional) { continue }
+            throw "结果行字段 $name 在 Values 里没有取值（计划与执行脱节）"
+        }
+        $parts += "$name=$($Values[$name])"
+    }
+    return ($parts -join ' ')
+}
+
+# -DryRun 的唯一输出：**单行** `GATE_PLAN {json}`。强制 UTF-8 输出，免得中文判据在重定向下变乱码。
+function Write-GatePlanJson {
+    param($Plan)
+    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+    $json = $Plan | ConvertTo-Json -Depth 12 -Compress
+    Write-Output ('GATE_PLAN ' + $json)
+}
+
 # ---------- 项目与日志 ----------
 if (-not $Project) { $Project = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path }
 $Project = (Resolve-Path -LiteralPath $Project).Path
 $script:workDir = $Project
+
+# 以下都是**纯取值**（不建目录、不跑进程、不接 HBuilderX），先算齐 —— 门计划要用，而
+# `-DryRun` 必须在任何副作用之前退出（守护会带着一个空临时项目目录跑 -DryRun，并断言没写工作树）。
+$dist = Join-Path $Project $DistRelative
+$logDir = Join-Path $Project '.ci-verify'
+$logPath = Join-Path $logDir 'mp-weixin.log'
+$logRelative = '.ci-verify/mp-weixin.log'
+$probePath = Join-Path $Project $ProbeRelative
+$readyPath = Join-Path $Project $ReadyRelative
+$autoRoot = Join-Path $tempRoot 'mp-weixin-automator'
+$routeList = @($Routes -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+# 入口页 = 第一个路由；它进了门计划（探针的 --entry-url），这里不再另存一份，免得两处取值分叉
+
+$script:GatePlan = New-GatePlan -Project $Project -Dist $dist -ProbePath $probePath -ReadyPath $readyPath `
+    -AutoRoot $autoRoot -LogDir $logDir -LogRelative $logRelative -RouteList $routeList -Port $Port `
+    -OpenTimeoutSeconds $OpenTimeoutSeconds -AutoTimeoutSeconds $AutoTimeoutSeconds `
+    -PortWaitSeconds $PortWaitSeconds -ReadyWaitSeconds $ReadyWaitSeconds -ProbeTimeoutMs $ProbeTimeoutMs `
+    -ProbeTimeoutSeconds $ProbeTimeoutSeconds -ProbeAttempts $ProbeAttempts `
+    -ProbeRetryDelaySeconds $ProbeRetryDelaySeconds -PublishTimeoutSeconds $PublishTimeoutSeconds `
+    -SkipBuild ([bool]$SkipBuild) -Doctor ([bool]$Doctor) -PostToPr $PostToPr
+
+# -DryRun：打印门计划即退出。**这里之前不许有任何外部命令/写工作树/接 HBuilderX**（守护会断言这一点）。
+if ($DryRun) {
+    Write-GatePlanJson -Plan $script:GatePlan
+    exit 0
+}
+
 if (-not (Test-Path -LiteralPath (Join-Path $Project 'manifest.json'))) {
     Write-Host "[error] 不像 uni-app-x 项目根（缺 manifest.json）：$Project" -ForegroundColor Red
     exit 2
 }
-$logDir = Join-Path $Project '.ci-verify'
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
-$logPath = Join-Path $logDir 'mp-weixin.log'
-$logRelative = '.ci-verify/mp-weixin.log'
 Set-Content -LiteralPath $logPath -Encoding utf8 -Value @(
     "# mp-weixin-check (②) 开始 $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')",
     "# project = $Project",
     "# 期望 appid = $AppId ; 自动化端口 = $Port ; 路由 = $Routes ; SkipBuild = $([bool]$SkipBuild)",
-    "# 判成败只看输出：HBuilderX CLI / cli.bat / 探针的退出码一律不作门结论"
+    "# 判成败只看输出：HBuilderX CLI / cli.bat / 探针的退出码一律不作门结论",
+    "# 门计划（GATE_PLAN）是步骤/参数/预算/结果行字段的唯一真源；见 New-GatePlan 与 -DryRun"
 )
 function Write-Log { param([string]$Text) Add-Content -LiteralPath $logPath -Value $Text -Encoding utf8 }
 
@@ -335,20 +575,16 @@ function Get-DoctorExitCode {
     return 0
 }
 
-$dist = Join-Path $Project $DistRelative
-$probePath = Join-Path $Project $ProbeRelative
 if (-not (Test-Path -LiteralPath $probePath)) {
     Write-Host "[error] 缺探针脚本：$probePath" -ForegroundColor Red
     Write-Log 'MP_WEIXIN_RESULT errors=env reason=no-probe'
     exit 2
 }
-$routeList = @($Routes -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 if ($routeList.Count -eq 0) {
     Write-Host '[error] -Routes 为空：至少给一个入口页路由' -ForegroundColor Red
     Write-Log 'MP_WEIXIN_RESULT errors=env reason=no-routes'
     exit 2
 }
-$entryUrl = $routeList[0]
 
 # ---------- 环境面 ----------
 $hbxRoot = Resolve-HBuilderXRoot -Explicit $HBuilderX -ExplicitCli $Cli
@@ -432,9 +668,11 @@ function Invoke-DevToolsClose {
     if ($script:closed) { return }
     $script:closed = $true
     if (-not $devTools) { return }
+    # 参数（含 --project 与超时）一律取自门计划，不再写死在调用点（#914：判据面 = 计划，不是源码文本）
+    $closeStep = Get-GateStep -Plan $script:GatePlan -Id 'devtools-close'
     try {
-        $r = Invoke-Process -FilePath $devTools -Arguments @('close', '--project', $dist) -TimeoutSeconds 120 -Tag 'devtools-close'
-        Write-Log "`n>>> devtools-close`n$($r.Output)"
+        $r = Invoke-Process -FilePath $devTools -Arguments $closeStep.argv -TimeoutSeconds $closeStep.timeoutSeconds -Tag $closeStep.tag
+        Write-Log "`n>>> $($closeStep.tag)`n$($r.Output)"
         Write-Host $r.Output
     } catch {
         Write-Host "[warn] cli.bat close 失败（不影响门结论）：$_" -ForegroundColor Yellow
@@ -801,9 +1039,10 @@ try {
     #      `-SkipBuild` 下同样定位构建产物目录：$dist 在上面两个分支里都已做过存在性校验（缺 app.json 即 exit 2）。
     #      判据仍是输出/产物：本步只在**超时**时判环境不可用（窗口没重开就没法继续），其余一律记日志、
     #      由探针的 pageStack 前置断言给出真正的门结论（开发者工具 cli.bat 的输出与退出码不作门结论）。
-    $open = Invoke-Process -FilePath $devTools -Arguments @('open', '--project', $dist) `
-        -TimeoutSeconds $OpenTimeoutSeconds -Tag 'devtools-open'
-    Write-Log "`n>>> devtools-open（close 之后 auto 之前重开项目窗口；缺这步 pageStack 恒空）`n$($open.Output)"
+    $openStep = Get-GateStep -Plan $script:GatePlan -Id 'devtools-open'
+    $open = Invoke-Process -FilePath $devTools -Arguments $openStep.argv `
+        -TimeoutSeconds $openStep.timeoutSeconds -Tag $openStep.tag
+    Write-Log "`n>>> $($openStep.tag)（close 之后 auto 之前重开项目窗口；缺这步 pageStack 恒空）`n$($open.Output)"
     Write-Host $open.Output
     # 体检行必须记在**各自那一步**上，不能攒到就绪闸门再记：早期 exit（超时 / 端口没起来）会让报告缺层，
     # 而报告缺层恰恰发生在最需要它的时候（-Doctor 首跑实测抓到过这个形态）。
@@ -819,9 +1058,10 @@ try {
     # 5) 开自动化端口（无人值守，不需要人在 GUI 里点任何开关）
     #    ⚠️ 2026-09-12 实测最要紧的一条：auto **必须跑完**（它会派生子进程去起自动化服务；
     #    中途 kill 掉 auto 会让端口永远不监听），且跑完后端口是**延迟出现**的 ⇒ 之后必须轮询等待。
-    $auto = Invoke-Process -FilePath $devTools -Arguments @('auto', '--project', $dist, '--auto-port', "$Port", '--trust-project') `
-        -TimeoutSeconds $AutoTimeoutSeconds -Tag 'devtools-auto'
-    Write-Log "`n>>> devtools-auto`n$($auto.Output)"
+    $autoStep = Get-GateStep -Plan $script:GatePlan -Id 'devtools-auto'
+    $auto = Invoke-Process -FilePath $devTools -Arguments $autoStep.argv `
+        -TimeoutSeconds $autoStep.timeoutSeconds -Tag $autoStep.tag
+    Write-Log "`n>>> $($autoStep.tag)`n$($auto.Output)"
     Write-Host $auto.Output
     if ($auto.TimedOut) {
         if ($Doctor) { Add-DoctorRow -Layer 'L6 自动化端口' -Verdict 'FAIL' -Detail "cli.bat auto 超时（$AutoTimeoutSeconds 秒）：自动化端口没开起来（残留会话多时见过此形态）" }
@@ -840,9 +1080,10 @@ try {
         exit 1
     }
 
-    # 端口延迟出现：轮询到 listening（最长 $PortWaitSeconds 秒）
+    # 端口延迟出现：轮询到 listening（预算取自门计划的 port-listening 步骤）
+    $portStep = Get-GateStep -Plan $script:GatePlan -Id 'port-listening'
     $listening = $false
-    for ($i = 0; $i -lt $PortWaitSeconds; $i++) {
+    for ($i = 0; $i -lt $portStep.waitSeconds; $i++) {
         if (@(Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue).Count -gt 0) { $listening = $true; break }
         Start-Sleep -Seconds 1
     }
@@ -865,7 +1106,7 @@ try {
     # 6) 探针：pageStack 前置断言 + 入口页/被改页导航 + console/exception + 截图
     #    先确保 miniprogram-automator 可用：装到**项目外**的临时根（--no-save + --ignore-scripts），
     #    不动仓库的 package.json / package-lock.json；探针用 --require-root 指过去解析。
-    $autoRoot = Join-Path $env:TEMP 'mp-weixin-automator'
+    #    $autoRoot 在取计划时已算好（计划里的 --require-root 用它），此处只装配。
     $autoModule = Join-Path $autoRoot 'node_modules\miniprogram-automator\package.json'
     if (-not (Test-Path -LiteralPath $autoModule)) {
         $npmCmd = (Get-Command npm.cmd -ErrorAction SilentlyContinue | Select-Object -First 1).Source
@@ -896,16 +1137,15 @@ try {
     #      30s 超时又正落在 24–34s 中间 ⇒ 红绿不定。故这里先用裸 ws 等齐两个里程碑（只读、用完即关；
     #      实测**不影响**随后的 automator 会话），超预算才判环境不可用，且 reason 会明确写出缺的是
     #      哪个里程碑 —— 不再笼统说成「端口连不上」。
-    $readyPath = Join-Path $Project $ReadyRelative
     if (-not (Test-Path -LiteralPath $readyPath)) {
         Write-Host "[error] 缺就绪闸门脚本：$readyPath" -ForegroundColor Red
         Write-Log 'MP_WEIXIN_RESULT errors=env reason=no-ready-gate'
         exit 2
     }
-    $readyArgs = @($readyPath, '--ws', "ws://127.0.0.1:$Port", '--wait-seconds', "$ReadyWaitSeconds",
-        '--require-stack', '--require-root', $autoRoot)
-    $ready = Invoke-Process -FilePath $nodeExe -Arguments $readyArgs -TimeoutSeconds ($ReadyWaitSeconds + 60) -Tag 'ready-gate'
-    Write-Log "`n>>> ready-gate（等端口 + SDKVersion + pageStack 三个里程碑）`n$($ready.Output)"
+    # 命令、超时、wait 预算一律取自门计划（计划里写明判据：SDKVersion + App.getPageStack）
+    $readyStep = Get-GateStep -Plan $script:GatePlan -Id 'ready-gate'
+    $ready = Invoke-Process -FilePath $nodeExe -Arguments $readyStep.argv -TimeoutSeconds $readyStep.timeoutSeconds -Tag $readyStep.tag
+    Write-Log "`n>>> $($readyStep.tag)（等端口 + SDKVersion + pageStack 三个里程碑）`n$($ready.Output)"
     Write-Host $ready.Output
     $readyJson = $null
     foreach ($line in ($ready.Output -split "`r?`n")) {
@@ -936,20 +1176,19 @@ try {
         exit 2
     }
 
-    $probeArgs = @($probePath, '--ws', "ws://127.0.0.1:$Port", '--routes', ($routeList -join ','),
-        '--entry-url', $entryUrl, '--shot-dir', $logDir, '--require-root', $autoRoot,
-        '--timeout-ms', "$ProbeTimeoutMs")
+    $probeStep = Get-GateStep -Plan $script:GatePlan -Id 'automator-probe'
+    $probeArgs = $probeStep.argv
     # 探针重试：开发者工具把项目/小程序拉起来是**异步**的（实测连接与 pageStack 常在第 2–3 次才就绪，
     # 首次报 "check if target project window is opened with automation enabled"）⇒ 必须重试而不是一次定生死。
     $probe = $null
     $probeJson = $null
-    for ($attempt = 1; $attempt -le $ProbeAttempts; $attempt++) {
-        Write-Log "`n>>> automator-probe（第 $attempt/$ProbeAttempts 次）"
-        $probe = Invoke-Process -FilePath $nodeExe -Arguments $probeArgs -TimeoutSeconds $ProbeTimeoutSeconds -Tag "automator-probe#$attempt"
+    for ($attempt = 1; $attempt -le $probeStep.attempts; $attempt++) {
+        Write-Log "`n>>> $($probeStep.tag)（第 $attempt/$($probeStep.attempts) 次）"
+        $probe = Invoke-Process -FilePath $nodeExe -Arguments $probeArgs -TimeoutSeconds $probeStep.timeoutSeconds -Tag "$($probeStep.tag)#$attempt"
         Write-Log $probe.Output
         Write-Host $probe.Output
         if ($probe.TimedOut) {
-            Write-Host "[error] 探针超时（$ProbeTimeoutSeconds 秒）：元素级 API 会静默挂起，本门不得引入它们（#883 坑位 3）。" -ForegroundColor Red
+            Write-Host "[error] 探针超时（$($probeStep.timeoutSeconds) 秒）：元素级 API 会静默挂起，本门不得引入它们（#883 坑位 3）。" -ForegroundColor Red
             Write-Log 'MP_WEIXIN_RESULT errors=env reason=probe-timeout'
             exit 2
         }
@@ -966,9 +1205,9 @@ try {
         if ($probeJson -and @($probeJson.failures | Where-Object { $_ -match '找不到 miniprogram-automator' }).Count -gt 0 -and $attempt -ge 2) {
             break  # 缺模块重试无益
         }
-        if ($attempt -lt $ProbeAttempts) {
-            Write-Host ">>> 探针未就绪（第 $attempt 次），$ProbeRetryDelaySeconds 秒后重试 —— 开发者工具拉起项目是异步的" -ForegroundColor Yellow
-            Start-Sleep -Seconds $ProbeRetryDelaySeconds
+        if ($attempt -lt $probeStep.attempts) {
+            Write-Host ">>> 探针未就绪（第 $attempt 次），$($probeStep.retryDelaySeconds) 秒后重试 —— 开发者工具拉起项目是异步的" -ForegroundColor Yellow
+            Start-Sleep -Seconds $probeStep.retryDelaySeconds
         }
     }
 
@@ -991,13 +1230,25 @@ try {
     $navReason = "$(Get-Prop $nav 'detail')"
     # ok = 逐页导航可用；skip(unsupported) = 导航 API 不可用（诚实降级）；n/a = 没走到导航（环境早退）
     $navField = if ($navSkip) { "skip($(Get-Prop $nav 'reason'))" } elseif ($navStatus -eq 'ok') { 'ok' } else { 'n/a' }
-    # ready=/sdk=/ide=：就绪闸门的取证（会话就绪耗时可机检；缺了它，下次红绿不定又只能靠猜）
-    $metricLine = "appid=$productAppId pageStack=$stackLen entry=$($probeJson.entryPage) " +
-        "errorsTotal=$($probeJson.errorsTotal) exceptionsTotal=$($probeJson.exceptionsTotal) logsTotal=$($probeJson.logsTotal) " +
-        "shots=$($shotPng.Count) navigation=$navField ready=${readySeconds}s sdk=$sdkVersion ide=$ideVersion"
-    if ($navSkip) { $metricLine += " navigationSkipReason=$navReason" }
-    $metricLine += " log=$logRelative"
-    $resultLine = "MP_WEIXIN_RESULT $metricLine"
+    # 结果行：**按门计划声明的字段清单**拼（顺序与字段名都在计划里，Format-GateMetricLine 只取值）
+    $metricValues = [ordered]@{
+        appid = "$productAppId"
+        pageStack = "$stackLen"
+        entry = "$($probeJson.entryPage)"
+        errorsTotal = "$($probeJson.errorsTotal)"
+        exceptionsTotal = "$($probeJson.exceptionsTotal)"
+        logsTotal = "$($probeJson.logsTotal)"
+        shots = "$($shotPng.Count)"
+        navigation = "$navField"
+        ready = "${readySeconds}s"
+        sdk = "$sdkVersion"
+        ide = "$ideVersion"
+        log = "$logRelative"
+    }
+    # 降级字段是**可选**的：计划里标了 optional，只在真的降级时出现（不降级就不写这个字段）
+    if ($navSkip) { $metricValues['navigationSkipReason'] = "$navReason" }
+    $metricLine = Format-GateMetricLine -Plan $script:GatePlan -Values $metricValues
+    $resultLine = "$($script:GatePlan.resultLine.prefix) $metricLine"
     Write-Log "`n$resultLine"
     Write-Log ("shots: " + (@($shotPng | ForEach-Object { "$($_.path) $(Get-Prop $_ 'width')x$(Get-Prop $_ 'height') $(Get-Prop $_ 'bytes')B" }) -join ' | '))
     if ($navSkip) {
@@ -1055,7 +1306,7 @@ try {
             ForEach-Object { Write-Host "   [step] $($_.label) $($_.route)：$(Get-Prop $_ 'error')" -ForegroundColor Red }
         Write-Host "完整日志：$logPath" -ForegroundColor Yellow
         # failures= 只在**可验证子集**不过时非空（导航降级不产生 failures，只记 SKIP）
-        Write-Log ("MP_WEIXIN_RESULT errors=$($failed.Count) failures=" + ($failed -join ' / ') + " $metricLine")
+        Write-Log ("$($script:GatePlan.resultLine.prefix) errors=$($failed.Count) failures=" + ($failed -join ' / ') + " $metricLine")
         $exitCode = if (@($failed | Where-Object { $_ -match '环境不可用' }).Count -gt 0) { 2 } else { 1 }
     }
 } catch {
