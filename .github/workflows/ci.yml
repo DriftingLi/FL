@@ -76,6 +76,19 @@ jobs:
       - name: Go vet 静态分析
         run: go vet ./...
 
+      # Swagger 产物新鲜度（ADR-0019 专项第一步 / spec #940 片五①）：注解是唯一事实源，
+      # 生成物过期（改了注解没跑 make swagger）以前只有人肉发现 —— 这里让它直接红。
+      # swag 版本显式钉住：产物要字节可比，工具链漂移会让这条锁变成噪声源。
+      - name: Swagger 产物新鲜度（注解 → backend/docs 必须同步）
+        run: |
+          go install github.com/swaggo/swag/cmd/swag@v1.16.4
+          "$(go env GOPATH)/bin/swag" init -g cmd/server/main.go -o docs
+          cd "$GITHUB_WORKSPACE"
+          if ! git diff --exit-code -- backend/docs; then
+            echo "::error::backend/docs 与注解不同步：请在 backend 下执行 make swagger 并提交生成物"
+            exit 1
+          fi
+
       - name: golangci-lint 代码检查
         run: |
           # 固定版本安装，避免 @latest 随上游变动导致 CI 结果漂移

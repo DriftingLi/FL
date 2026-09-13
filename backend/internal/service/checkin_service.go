@@ -88,7 +88,9 @@ type CheckInRankResult struct {
 	Total int64             `json:"total"`
 	Page  int               `json:"page"`
 	Pages int               `json:"pages"`
-	Me    *CheckInRankItem  `json:"me"`
+	// Me 是 Go 指针：未上榜时为 null。extensions 把这条可空性**表达进注解层**，
+	// codegen 据此渲染 me: CheckInRankItem | null（spec #940 片五③）。
+	Me *CheckInRankItem `json:"me" extensions:"x-nullable"`
 }
 
 // CheckInService 每日打卡服务（独立 module，与论坛帖子/回复逻辑解耦）。

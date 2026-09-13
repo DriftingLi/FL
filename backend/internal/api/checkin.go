@@ -43,7 +43,7 @@ func RegisterCheckInRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Chec
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.CheckInResult} "打卡结果"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /check-in [post]
@@ -65,7 +65,7 @@ func (h *CheckInHandler) CheckIn(c *gin.Context) {
 // @Security BearerAuth
 // @Param year query int false "年份"
 // @Param month query int false "月份 1-12"
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.CheckInCalendarResult} "日历"
 // @Failure 401 {object} response.R "未认证"
 // @Router /check-in/calendar [get]
 func (h *CheckInHandler) GetCheckInCalendar(c *gin.Context) {
@@ -88,7 +88,7 @@ func (h *CheckInHandler) GetCheckInCalendar(c *gin.Context) {
 // @Security BearerAuth
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(20)
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.CheckInRankResult} "排行榜"
 // @Failure 401 {object} response.R "未认证"
 // @Router /check-in/rank [get]
 func (h *CheckInHandler) GetCheckInRank(c *gin.Context) {

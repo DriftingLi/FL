@@ -12,6 +12,7 @@
 - `go vet ./...`
 - `golangci-lint run ./...`（errcheck 等静态检查）
 - `go test ./...`
+- 改了 handler 的 swagger 注解（`@Success` / `@Param` / `@Router` 等）后：`cd backend && make swagger` 再生成 `backend/docs/{docs.go,swagger.json,swagger.yaml}` 并一并提交 —— CI 的 backend-lint 有**新鲜度锁**（按钉住的 swag 版本再生成后要求工作树干净），生成物过期直接红
 
 **环境 A：Windows 本机（Git Bash）—— 2026-09-08 起实测可用，优先使用**
 
