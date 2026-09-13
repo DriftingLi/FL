@@ -18,13 +18,13 @@ import (
 func RegisterContactRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.ContactService) {
 	h := NewContactHandler(svc)
 	// 招聘方：发起与查看我的申请 + 读取明文
-	recruitG := rg.Group("/recruit", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleRecruiter))
+	recruitG := rg.Group("/recruit", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapContactRequest))
 	recruitG.POST("/contact-requests", h.Create)
 	recruitG.GET("/contact-requests", h.ListForRecruiter)
 	recruitG.GET("/resumes/:id/contact", h.GetContact)
 
 	// 学员侧：查看收到的申请 + 同意/拒绝/撤回
-	studentG := rg.Group("/resume", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleStudent))
+	studentG := rg.Group("/resume", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapContactRespond))
 	studentG.GET("/contact-requests", h.ListForStudent)
 	studentG.POST("/contact-requests/:id/approve", h.Approve)
 	studentG.POST("/contact-requests/:id/reject", h.Reject)

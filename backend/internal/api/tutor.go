@@ -30,7 +30,7 @@ func NewTutorHandler(svc *service.TutorService, fileSvc *service.FileStore) *Tut
 func RegisterTutorRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.TutorService, fileSvc *service.FileStore) {
 	h := NewTutorHandler(svc, fileSvc)
 
-	g := rg.Group("/tutor", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleTutor))
+	g := rg.Group("/tutor", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapTutorAccess))
 
 	// GET /api/tutor/courses  导师课程列表
 	g.GET("/courses", h.ListCourses)

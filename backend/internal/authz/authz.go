@@ -58,8 +58,10 @@ const (
 	CapResumeManage       Capability = "resume.manage"       // 简历卡与在线简历
 	CapJobApply           Capability = "job.apply"           // 浏览职位与投递
 	CapJobReport          Capability = "job.report"          // 举报职位
-	CapContactExchange    Capability = "contact.exchange"    // 联系方式交换（双向）
-	CapResumePDF          Capability = "resume.pdf"          // 在线简历 PDF（学员自看 / 招聘方查看）
+	CapContactRequest     Capability = "contact.request"     // 联系方式交换：招聘方发起与查看
+	CapContactRespond     Capability = "contact.respond"     // 联系方式交换：学员同意/拒绝/撤回
+	CapResumePDF          Capability = "resume.pdf"          // 在线简历 PDF：学员看自己那份
+	CapResumePDFView      Capability = "recruit.resume_pdf"  // 在线简历 PDF：招聘方查看学员那份
 
 	// ===== 讲师侧 =====
 	CapTutorAccess    Capability = "tutor.access"    // 讲师工作区入口
@@ -69,7 +71,8 @@ const (
 	CapAdminAccess        Capability = "admin.access"        // 管理端入口与用户/招聘者管理
 	CapQuestionReview     Capability = "question.review"     // 题库审核（发布/驳回）
 	CapContributionReview Capability = "contribution.review" // 投稿审核（讲师与管理员同为审核者）
-	CapCatalogManage      Capability = "catalog.manage"      // 培训目录（证件/方向/等级/证书模板）
+	CapCatalogManage      Capability = "catalog.manage"      // 培训目录管理（证件/方向/等级/证书模板）
+	CapCatalogAuthor      Capability = "catalog.author"      // 目录作者面（题库标签等讲师可维护项）
 	CapContentManage      Capability = "content.manage"      // 内容精选与内容生成
 	CapProfileReview      Capability = "profile.review"      // 资料审核
 	CapPointsAdmin        Capability = "points.admin"        // 积分管理与扣罚
@@ -108,8 +111,10 @@ var roleCapabilities = map[Capability][]Role{
 	CapResumeManage:       {RoleStudent},
 	CapJobApply:           {RoleStudent},
 	CapJobReport:          {RoleStudent},
-	CapContactExchange:    {RoleStudent, RoleRecruiter},
-	CapResumePDF:          {RoleStudent, RoleRecruiter},
+	CapContactRequest:     {RoleRecruiter},
+	CapContactRespond:     {RoleStudent},
+	CapResumePDF:          {RoleStudent},
+	CapResumePDFView:      {RoleRecruiter},
 
 	CapTutorAccess:    {RoleTutor},
 	CapQuestionAuthor: {RoleTutor, RoleAdmin},
@@ -118,6 +123,7 @@ var roleCapabilities = map[Capability][]Role{
 	CapQuestionReview:     {RoleAdmin},
 	CapContributionReview: {RoleTutor, RoleAdmin},
 	CapCatalogManage:      {RoleAdmin},
+	CapCatalogAuthor:      {RoleTutor, RoleAdmin},
 	CapContentManage:      {RoleAdmin},
 	CapProfileReview:      {RoleAdmin},
 	CapPointsAdmin:        {RoleAdmin},

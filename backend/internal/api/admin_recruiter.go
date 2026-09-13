@@ -15,7 +15,7 @@ import (
 
 // RegisterAdminRecruiterRoutes 注册 /api/admin/recruiters 蓝图（管理员邀约制创建招聘者）。
 func RegisterAdminRecruiterRoutes(rg *gin.RouterGroup, rd RouterDeps, authSvc *service.AuthService) {
-	g := rg.Group("/admin/recruiters", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleAdmin))
+	g := rg.Group("/admin/recruiters", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapRecruiterManage))
 	g.POST("", NewAdminRecruiterHandler(authSvc).Create)
 	g.PUT("/:id/status", NewAdminRecruiterHandler(authSvc).ToggleStatus)
 	g.PUT("/:id", NewAdminRecruiterHandler(authSvc).Edit)

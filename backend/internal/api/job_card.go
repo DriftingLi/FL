@@ -26,7 +26,7 @@ func NewJobCardHandler(svc *service.JobCardService, fileSvc *service.FileStore) 
 
 func RegisterJobCardRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.JobCardService, fileSvc *service.FileStore) {
 	h := NewJobCardHandler(svc, fileSvc)
-	g := rg.Group("/resume", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleStudent))
+	g := rg.Group("/resume", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapResumeManage))
 	g.GET("", h.Get)
 	g.PUT("", h.Upsert)
 	g.PUT("/visibility", h.UpdateVisibility)

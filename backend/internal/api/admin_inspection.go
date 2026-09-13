@@ -17,7 +17,7 @@ import (
 // RegisterAdminInspectionRoutes 注册管理端巡检相关路由（#376）。
 // pointsSvc 按需注入：积分流水查询归位 service 层（#401），handler 不再裸查 PointsLedger。
 func RegisterAdminInspectionRoutes(rg *gin.RouterGroup, rd RouterDeps, db *gorm.DB, pointsSvc *service.PointsService) {
-	g := rg.Group("/admin", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleAdmin))
+	g := rg.Group("/admin", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapInspectionRead))
 	// 巡检计数：删除已解决帖计数
 	g.GET("/inspection/deleted-after-accepted", func(c *gin.Context) {
 		var setting model.SystemSetting

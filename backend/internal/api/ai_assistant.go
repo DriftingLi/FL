@@ -49,7 +49,7 @@ func RegisterAIAssistantRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.
 
 	// 需登录路由：会话管理 + 用户自定义模型管理（HRWAI 账号鉴权）
 	authed := g.Group("")
-	authed.Use(middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleStudent))
+	authed.Use(middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapAIAssistantUse))
 	authed.GET("/sessions", h.ListSessions)
 	authed.POST("/sessions", h.CreateSession)
 	authed.DELETE("/sessions/:id", h.DeleteSession)

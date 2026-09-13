@@ -14,7 +14,7 @@ import (
 // 仅学员可访问：招聘方无法读取留痕数据（避免暴露浏览习惯）。
 func RegisterResumeViewRoutes(rg *gin.RouterGroup, rd RouterDeps, recruitSvc *service.RecruitService) {
 	h := NewResumeViewHandler(recruitSvc)
-	g := rg.Group("/resume", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleStudent))
+	g := rg.Group("/resume", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapResumeManage))
 	g.GET("/view-stats", h.StudentViewStats)
 }
 

@@ -26,7 +26,7 @@ func NewMaterialHandler(svc *service.MaterialService) *MaterialHandler {
 func RegisterMaterialRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.MaterialService) {
 	h := NewMaterialHandler(svc)
 
-	g := rg.Group("", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleStudent))
+	g := rg.Group("", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapMaterialRead))
 
 	// GET /api/materials?course_id=&page=&page_size= 资料列表
 	g.GET("/materials", h.List)

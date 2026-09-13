@@ -26,7 +26,7 @@ func NewStudentHandler(svc *service.StudentService) *StudentHandler {
 func RegisterStudentRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.StudentService) {
 	h := NewStudentHandler(svc)
 
-	g := rg.Group("/student", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleStudent))
+	g := rg.Group("/student", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapStudentAccess))
 
 	// GET /api/student/profile  学员信息+学习统计+课程进度
 	g.GET("/profile", h.GetProfile)

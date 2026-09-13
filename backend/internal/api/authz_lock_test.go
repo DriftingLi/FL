@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -121,5 +122,42 @@ func TestAuthzLock_CapabilityNaming(t *testing.T) {
 		if len(authz.RolesFor(c)) == 0 {
 			t.Errorf("能力 %q 没有任何角色", key)
 		}
+	}
+}
+
+// 收敛锁（ADR-0047 §1 / spec #928 决策 1）：迁移完成后守卫只有一个形态——CapabilityRequired。
+// RoleRequired 若复活即为回归——它是 pass-through（21 行查表），删掉后复杂度只会散回 34 个蓝图；
+// 「角色 → 可达面」的事实源只能是 authz 能力表。
+func TestAuthzLock_RoleGuardRetired(t *testing.T) {
+	fset := token.NewFileSet()
+	var offenders []string
+	err := filepath.WalkDir(filepath.Join(".."), func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		f, perr := parser.ParseFile(fset, path, nil, 0)
+		if perr != nil {
+			return perr
+		}
+		ast.Inspect(f, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			if sel, ok := call.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "RoleRequired" {
+				offenders = append(offenders, path)
+			}
+			return true
+		})
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("扫描失败: %v", err)
+	}
+	if len(offenders) > 0 {
+		t.Fatalf("守卫必须统一为 CapabilityRequired，以下文件仍在用 RoleRequired: %v", offenders)
 	}
 }

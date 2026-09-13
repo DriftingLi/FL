@@ -44,14 +44,14 @@ func NewJobHandler(svc *service.JobPostingService) *JobHandler {
 func RegisterJobRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.JobPostingService) {
 	h := NewJobHandler(svc)
 	// 企业侧
-	recruitG := rg.Group("/recruit", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleRecruiter))
+	recruitG := rg.Group("/recruit", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapJobManage))
 	recruitG.POST("/jobs", h.Create)
 	recruitG.PUT("/jobs/:id", h.Update)
 	recruitG.POST("/jobs/:id/toggle-status", h.ToggleStatus)
 	recruitG.GET("/jobs", h.ListMine)
 	recruitG.GET("/jobs/:id", h.GetMine)
 	// 学员侧
-	studentG := rg.Group("/jobs", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleStudent))
+	studentG := rg.Group("/jobs", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapJobApply))
 	studentG.GET("", h.ListPublic)
 	studentG.GET("/:id", h.GetPublic)
 }

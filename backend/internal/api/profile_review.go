@@ -27,7 +27,7 @@ func NewProfileReviewHandler(svc *service.ProfileReviewService) *ProfileReviewHa
 func RegisterProfileReviewRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.ProfileReviewService) {
 	h := NewProfileReviewHandler(svc)
 
-	g := rg.Group("/admin/profile-reviews", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleAdmin))
+	g := rg.Group("/admin/profile-reviews", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapProfileReview))
 
 	// GET /api/admin/profile-reviews?status=pending|approved|rejected|all&page=&page_size=
 	g.GET("", h.ListRequests)

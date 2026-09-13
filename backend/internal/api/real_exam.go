@@ -27,7 +27,7 @@ func NewRealExamHandler(svc *service.RealExamService, points *service.PointsServ
 func RegisterRealExamRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.RealExamService, points *service.PointsService) {
 	h := NewRealExamHandler(svc, points)
 
-	g := rg.Group("/real-exam", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleStudent))
+	g := rg.Group("/real-exam", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapRealExamTake))
 
 	// GET /api/real-exam/papers  当前证件的套卷列表（含兑换状态与单价）
 	g.GET("/papers", h.ListPapers)

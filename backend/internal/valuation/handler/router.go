@@ -125,7 +125,7 @@ func RegisterRoutes(
 	// 评估历史/详情 + 电池 RUL CRUD + /auth/me
 	// 已统一到主体系 JWT,与培训学员端共用同一 token
 	valAuth := r.Group("/api/valuation")
-	valAuth.Use(middleware.JWTAuth(sess), middleware.RoleRequired(authz.RoleStudent))
+	valAuth.Use(middleware.JWTAuth(sess), middleware.CapabilityRequired(authz.CapValuationUse))
 	{
 		valAuth.GET("/evaluations", evalHandler.List)
 		valAuth.GET("/evaluations/:id", evalHandler.Get)
@@ -142,7 +142,7 @@ func RegisterRoutes(
 	// 不再逐实体手写路由。失效 pattern 来自 repository 缓存契约单点（PatternsOf）。
 	admin := r.Group("/api/valuation/admin")
 	admin.Use(middleware.JWTAuth(sess))
-	admin.Use(middleware.RoleRequired(authz.RoleAdmin))
+	admin.Use(middleware.CapabilityRequired(authz.CapValuationConfig))
 	// 管理员写操作审计：与主体系同一留痕口径（合规用途，ADR-0012 §7）
 	admin.Use(middleware.AuditLog(auditSvc, logger))
 	{

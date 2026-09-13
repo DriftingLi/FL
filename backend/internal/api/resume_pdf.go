@@ -35,9 +35,9 @@ func NewResumePDFHandler(recruitSvc *service.RecruitService, renderer *service.R
 //   - 学员侧 /api/resume/pdf（本人预览）
 func RegisterResumePDFRoutes(rg *gin.RouterGroup, rd RouterDeps, recruitSvc *service.RecruitService, renderer *service.ResumePDFRenderer) {
 	h := NewResumePDFHandler(recruitSvc, renderer)
-	recruitG := rg.Group("/recruit", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleRecruiter))
+	recruitG := rg.Group("/recruit", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapResumePDFView))
 	recruitG.GET("/resumes/:id/pdf", h.RecruiterResumePDF)
-	studentG := rg.Group("/resume", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleStudent))
+	studentG := rg.Group("/resume", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapResumePDF))
 	studentG.GET("/pdf", h.MyResumePDF)
 }
 

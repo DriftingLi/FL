@@ -27,7 +27,7 @@ func NewPracticeModeHandler(svc *service.PracticeModeService) *PracticeModeHandl
 func RegisterPracticeModeRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.PracticeModeService) {
 	h := NewPracticeModeHandler(svc)
 
-	g := rg.Group("/practice-mode", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleStudent))
+	g := rg.Group("/practice-mode", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapQuestionPractice))
 
 	g.GET("/free", h.GetFreeQuestions)
 	g.GET("/tag", h.StartTagPractice)

@@ -46,7 +46,7 @@ func NewAuditHandler(svc *service.AuditService) *AuditHandler {
 func RegisterAuditRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.AuditService) {
 	h := NewAuditHandler(svc)
 
-	g := rg.Group("/admin/audit-logs", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleAdmin))
+	g := rg.Group("/admin/audit-logs", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapAuditRead))
 
 	// GET /api/admin/audit-logs?page=&page_size=&actor_id=&role=&keyword=
 	g.GET("", h.List)

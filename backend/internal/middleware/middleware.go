@@ -137,31 +137,6 @@ func authCookieValue(c *gin.Context, sess *security.Session) string {
 	return ""
 }
 
-// RoleRequired 角色白名单守卫（authz 薄 adapter，ADR-0047 §1）：角色取值只来自 authz，
-// 调用方不再写字面量。逐域迁移到 CapabilityRequired 之前，它是全部蓝图的实际守卫。
-// 必须在 JWTAuth 之后使用。
-func RoleRequired(roles ...authz.Role) gin.HandlerFunc {
-	allowed := make(map[authz.Role]struct{}, len(roles))
-	for _, r := range roles {
-		allowed[r] = struct{}{}
-	}
-	return func(c *gin.Context) {
-		role, exists := c.Get(string(CtxUserRole))
-		if !exists {
-			response.Unauthorized(c, "Token无效或已过期，请重新登录")
-			c.Abort()
-			return
-		}
-		roleStr, _ := role.(string)
-		if _, ok := allowed[authz.Role(roleStr)]; !ok {
-			response.Forbidden(c, "权限不足")
-			c.Abort()
-			return
-		}
-		c.Next()
-	}
-}
-
 // CapabilityRequired 能力守卫（ADR-0047 §1）：判据是 authz 能力，不是角色字面量。
 // 这是逐域迁移的目标形态——端点声明「需要什么能力」，角色可达面由 authz 能力表回答。
 // 必须在 JWTAuth 之后使用。

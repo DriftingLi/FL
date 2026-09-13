@@ -26,7 +26,7 @@ func NewAdminPointsHandler(pointsSvc *service.PointsService, notificationSvc *se
 
 func RegisterAdminPointsRoutes(rg *gin.RouterGroup, rd RouterDeps, pointsSvc *service.PointsService, notificationSvc *service.NotificationService) {
 	h := NewAdminPointsHandler(pointsSvc, notificationSvc)
-	g := rg.Group("/admin/points", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleAdmin))
+	g := rg.Group("/admin/points", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapPointsAdmin))
 	g.POST("/penalty", h.Penalty)
 }
 

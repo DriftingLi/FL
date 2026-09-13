@@ -24,7 +24,7 @@ func NewAIConfigHandler(svc *service.AIConfigService) *AIConfigHandler {
 }
 
 // registerAIConfigRoutes 注册 /admin/ai-configs/* 与 /admin/ai-feature-bindings/* 子路由组。
-// 必须挂在 admin 路由组下（已应用 JWTAuth + RoleRequired(authz.RoleAdmin)）。
+// 必须挂在 admin 路由组下（已应用 JWTAuth + CapabilityRequired(authz.CapAdminAccess)）。
 func (h *AIConfigHandler) registerAIConfigRoutes(g *gin.RouterGroup) {
 	// ===== AI 多配置管理 =====
 	cfg := g.Group("/ai-configs")

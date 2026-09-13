@@ -19,9 +19,11 @@ export type AuthzCapability =
   | 'ai_assistant.use'
   | 'application.review'
   | 'audit.read'
+  | 'catalog.author'
   | 'catalog.manage'
   | 'check_in.use'
-  | 'contact.exchange'
+  | 'contact.request'
+  | 'contact.respond'
   | 'content.manage'
   | 'contribution.review'
   | 'contribution.submit'
@@ -46,6 +48,7 @@ export type AuthzCapability =
   | 'question.review'
   | 'real_exam.take'
   | 'recruit.access'
+  | 'recruit.resume_pdf'
   | 'recruiter.manage'
   | 'resume.manage'
   | 'resume.pdf'
@@ -58,10 +61,10 @@ export type AuthzCapability =
 
 /** 角色 → 能力集合（按能力键字典序，生成序稳定）。 */
 export const ROLE_CAPABILITIES: Readonly<Record<AuthzRole, readonly AuthzCapability[]>> = {
-  hrwai_user: ['ai_assistant.use', 'check_in.use', 'contact.exchange', 'contribution.submit', 'course.learn', 'favorite.manage', 'forum.participate', 'job.apply', 'job.report', 'material.read', 'mock_exam.take', 'notification.use', 'points.use', 'question.practice', 'real_exam.take', 'resume.manage', 'resume.pdf', 'search.use', 'student.access', 'valuation.use'],
-  tutor: ['contribution.review', 'question.author', 'tutor.access'],
-  admin: ['admin.access', 'audit.read', 'catalog.manage', 'content.manage', 'contribution.review', 'export.run', 'forum.moderate', 'inspection.read', 'job_report.handle', 'points.admin', 'profile.review', 'question.author', 'question.review', 'recruiter.manage', 'valuation.config'],
-  recruiter: ['application.review', 'contact.exchange', 'job.manage', 'recruit.access', 'resume.pdf'],
+  hrwai_user: ['ai_assistant.use', 'check_in.use', 'contact.respond', 'contribution.submit', 'course.learn', 'favorite.manage', 'forum.participate', 'job.apply', 'job.report', 'material.read', 'mock_exam.take', 'notification.use', 'points.use', 'question.practice', 'real_exam.take', 'resume.manage', 'resume.pdf', 'search.use', 'student.access', 'valuation.use'],
+  tutor: ['catalog.author', 'contribution.review', 'question.author', 'tutor.access'],
+  admin: ['admin.access', 'audit.read', 'catalog.author', 'catalog.manage', 'content.manage', 'contribution.review', 'export.run', 'forum.moderate', 'inspection.read', 'job_report.handle', 'points.admin', 'profile.review', 'question.author', 'question.review', 'recruiter.manage', 'valuation.config'],
+  recruiter: ['application.review', 'contact.request', 'job.manage', 'recruit.access', 'recruit.resume_pdf'],
 }
 
 /** 判定角色是否拥有能力：未知角色或未登记能力一律 false（与后端 Has 同口径，fail closed）。 */

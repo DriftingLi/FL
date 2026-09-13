@@ -44,13 +44,13 @@ func generateToken(t *testing.T, userID int, username, role string) string {
 	return s
 }
 
-// newTestRouter 创建带 JWTAuth + RoleRequired 的测试路由器。
-func newTestRouter(cfg *config.Config, roles ...authz.Role) *gin.Engine {
+// newTestRouter 创建带 JWTAuth + CapabilityRequired 的测试路由器。
+func newTestRouter(cfg *config.Config, capabilities ...authz.Capability) *gin.Engine {
 	r := gin.New()
 	sess := security.SessionFromConfig(cfg)
 	protected := r.Group("/protected", JWTAuth(sess))
-	if len(roles) > 0 {
-		protected.Use(RoleRequired(roles...))
+	if len(capabilities) > 0 {
+		protected.Use(CapabilityRequired(capabilities[0]))
 	}
 	protected.GET("/endpoint", func(c *gin.Context) {
 		uid, _ := c.Get(string(CtxUserID))
@@ -277,9 +277,9 @@ func TestOptionalAuth_LogoutRevokesRefreshOnly(t *testing.T) {
 	}
 }
 
-func TestRoleRequired_Allowed(t *testing.T) {
+func TestCapabilityRequired_Allowed(t *testing.T) {
 	cfg := &config.Config{JWTSecretKey: testSecret}
-	r := newTestRouter(cfg, authz.RoleAdmin, authz.RoleTutor)
+	r := newTestRouter(cfg, authz.CapQuestionAuthor) // [tutor, admin]
 
 	token := generateToken(t, 1, "admin01", "admin")
 	req, _ := http.NewRequest("GET", "/protected/endpoint", nil)
@@ -288,13 +288,13 @@ func TestRoleRequired_Allowed(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	if w.Code != 200 {
-		t.Fatalf("admin 角色应被允许，得到 %d", w.Code)
+		t.Fatalf("admin 拥有 question.author，应被允许，得到 %d", w.Code)
 	}
 }
 
-func TestRoleRequired_Denied(t *testing.T) {
+func TestCapabilityRequired_Denied(t *testing.T) {
 	cfg := &config.Config{JWTSecretKey: testSecret}
-	r := newTestRouter(cfg, authz.RoleAdmin)
+	r := newTestRouter(cfg, authz.CapAdminAccess) // [admin]
 
 	token := generateToken(t, 1, "hrwai01", "hrwai_user")
 	req, _ := http.NewRequest("GET", "/protected/endpoint", nil)
@@ -303,7 +303,7 @@ func TestRoleRequired_Denied(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	if w.Code != 403 {
-		t.Fatalf("hrwai_user 角色应被拒绝 (403)，得到 %d", w.Code)
+		t.Fatalf("hrwai_user 不具备 admin.access，应被拒绝 (403)，得到 %d", w.Code)
 	}
 }
 

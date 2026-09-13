@@ -34,7 +34,7 @@ func NewAdminHandler(adminSvc *service.AdminService, courseSvc *service.AdminCou
 func RegisterAdminRoutes(rg *gin.RouterGroup, rd RouterDeps, adminSvc *service.AdminService, courseSvc *service.AdminCourseService, authSvc *service.AuthService, aiConfigSvc *service.AIConfigService, contentGenSvc *service.ContentGenerateService) {
 	h := NewAdminHandler(adminSvc, courseSvc, authSvc, aiConfigSvc, contentGenSvc)
 
-	g := rg.Group("/admin", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleAdmin))
+	g := rg.Group("/admin", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapAdminAccess))
 
 	// ===== AI 配置（多配置管理 + 功能绑定）=====
 	NewAIConfigHandler(aiConfigSvc).registerAIConfigRoutes(g)

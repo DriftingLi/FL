@@ -26,7 +26,7 @@ func NewMockExamHandler(svc *service.MockExamService) *MockExamHandler {
 func RegisterMockExamRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.MockExamService) {
 	h := NewMockExamHandler(svc)
 
-	g := rg.Group("/mock-exam", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleStudent))
+	g := rg.Group("/mock-exam", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapMockExamTake))
 
 	// POST /api/mock-exam/start  开始模拟考试（count 题量 + duration 时长）
 	g.POST("/start", h.Start)
