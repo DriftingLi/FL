@@ -1,30 +1,12 @@
 import type { Component } from 'vue'
-import { routeNames, type RouteName } from './routeNames'
+import type { RouteName } from './routeNames'
 import {
-  HomeFilled,
-  Notebook,
-  EditPen,
-  Document,
-  CircleCloseFilled,
-  MagicStick,
-  Search,
-  Files,
-  Star,
-  DataAnalysis,
-  User,
-  TrendCharts,
-  UserFilled,
-  ChatDotRound,
-  PriceTag,
-  Setting,
-  Memo,
-  CircleCheck,
-  FolderOpened,
-  CollectionTag,
-  Trophy,
-  Calendar,
-  OfficeBuilding
-} from '@element-plus/icons-vue'
+  navGroups,
+  navPages,
+  externalNavItems,
+  type PageDescriptor,
+  type Workspace
+} from './pages'
 // 注：MagicStick 仍用于管理员"内容生成"菜单项
 
 export interface NavItem {
@@ -86,174 +68,79 @@ export function isNavRouteActive(
   return true
 }
 
-const studentNav: NavItem[] = [
-  {
-    key: 'learning',
-    label: '学习中心',
-    icon: HomeFilled,
-    children: [
-      { key: 'dashboard', label: '仪表盘', routeName: routeNames.StudentDashboard, icon: HomeFilled, exact: true },
-      {
-        key: 'courses',
-        label: '课程中心',
-        routeName: routeNames.CourseList,
-        activeRouteNames: [routeNames.ChapterView],
-        icon: Notebook
-      },
-      { key: 'materials', label: '学习资料', routeName: routeNames.StudentMaterials, icon: Files },
-      { key: 'search', label: '全局搜索', routeName: routeNames.StudentSearch, icon: Search }
-    ]
-  },
-  {
-    key: 'exam',
-    label: '题库与考试',
-    icon: EditPen,
-    children: [
-      {
-        key: 'question-bank',
-        label: '题库练习',
-        routeName: routeNames.QuestionBank,
-        icon: EditPen,
-        children: [{ key: 'real-exam', label: '真题练习', routeName: routeNames.RealExamPapers, icon: Document }]
-      },
-      { key: 'mock-exam', label: '模拟考试', routeName: routeNames.MockExam, icon: Document },
-      { key: 'wrong-questions', label: '错题本', routeName: routeNames.WrongQuestions, icon: CircleCloseFilled }
-    ]
-  },
-  {
-    key: 'interactive',
-    label: '互动与工具',
-    icon: ChatDotRound,
-    children: [
-      {
-        key: 'forum',
-        label: '学员论坛',
-        routeName: routeNames.ForumPage,
-        activeRouteNames: [routeNames.ForumDetail],
-        icon: ChatDotRound
-      },
-      {
-        key: 'ai-assistant',
-        label: 'AI助手',
-        routeName: routeNames.AIAssistant,
-        // 专项功能页（故障咨询/故障代码/维保知识/图纸识别/习题解答）是 AIAssistant 的
-        // 兄弟路由（router 里未嵌套），由 AIAssistantPage 的卡片 router.push 进入
-        activeRouteNames: [routeNames.AIAssistantFeature],
-        icon: MagicStick
-      },
-      { key: 'featured', label: '内容精选', icon: Document, externalUrl: 'https://www.gccsmile.com/news' }
-    ]
-  },
-  {
-    key: 'personal',
-    label: '个人',
-    icon: User,
-    children: [
-      { key: 'task-center', label: '任务中心', routeName: routeNames.TaskCenter, icon: Trophy },
-      { key: 'check-in', label: '每日打卡', routeName: routeNames.CheckIn, icon: Calendar },
-      { key: 'favorites', label: '我的收藏', routeName: routeNames.StudentFavorites, icon: Star },
-      { key: 'profile', label: '个人资料', routeName: routeNames.StudentProfile, icon: User },
-      { key: 'resume', label: '我的简历', routeName: routeNames.StudentResume, icon: Document },
-      {
-        key: 'jobs',
-        label: '职位广场',
-        routeName: routeNames.JobPlaza,
-        activeRouteNames: [routeNames.JobDetail],
-        icon: OfficeBuilding
-      },
-      { key: 'applications', label: '我的投递', routeName: routeNames.MyApplications, icon: Document }
-    ]
-  }
-]
+// ===== 导航树由页面描述符派生（ADR-0047 §2 / spec #930）=====
+// 分组标签与图标来自 navGroups，叶子项来自 pages 的 nav 字段；分组工作区按组装配，
+// 无分组工作区（导师/招聘）为扁平清单。侧栏不再各自维护菜单清单。
 
-const adminNav: NavItem[] = [
-  {
-    key: 'overview',
-    label: '总览',
-    icon: DataAnalysis,
-    children: [
-      { key: 'dashboard', label: '仪表盘', routeName: routeNames.AdminDashboard, icon: DataAnalysis },
-      { key: 'statistics', label: '统计分析', routeName: routeNames.Statistics, icon: TrendCharts }
-    ]
-  },
-  {
-    key: 'user-content',
-    label: '用户与内容',
-    icon: User,
-    children: [
-      { key: 'hrwai-users', label: '用户管理', routeName: routeNames.HrwaiUserManage, icon: User },
-      { key: 'profile-review', label: '资料审核', routeName: routeNames.ProfileReview, icon: CircleCheck },
-      { key: 'tutors', label: '导师管理', routeName: routeNames.TutorManage, icon: UserFilled },
-      { key: 'recruiters', label: '招聘者管理', routeName: routeNames.RecruiterManage, icon: OfficeBuilding },
-      { key: 'forum-manage', label: '论坛管理', routeName: routeNames.ForumManage, icon: ChatDotRound },
-      { key: 'contribution-manage', label: '投稿管理', routeName: routeNames.ContributionManage, icon: Document }
-    ]
-  },
-  {
-    key: 'teaching',
-    label: '教学管理',
-    icon: FolderOpened,
-    children: [
-      { key: 'course-catalog', label: '课程管理', routeName: routeNames.CourseCatalog, icon: FolderOpened },
-      { key: 'positions', label: '岗位管理', routeName: routeNames.PositionManage, icon: CollectionTag },
-      { key: 'credentials', label: '证件管理', routeName: routeNames.CredentialManage, icon: CollectionTag },
-      { key: 'question-review', label: '题库审核', routeName: routeNames.QuestionReview, icon: EditPen },
-    ]
-  },
-  {
-    key: 'system',
-    label: '系统',
-    icon: Setting,
-    children: [
-      { key: 'audit-logs', label: '审计日志', routeName: routeNames.AuditLogs, icon: Memo },
-      { key: 'inspection', label: '巡检视图', routeName: routeNames.AdminInspection, icon: DataAnalysis },
-      { key: 'valuation-config', label: '残值配置', routeName: routeNames.ValuationConfigManage, icon: PriceTag },
-      { key: 'ai-settings', label: 'AI 配置', routeName: routeNames.AISettings, icon: Setting },
-      { key: 'content-generate', label: '内容生成', routeName: routeNames.ContentGenerate, icon: MagicStick },
-      { key: 'featured-content', label: '内容精选', routeName: routeNames.AdminFeaturedContentList, icon: Document }
-    ]
+/** 描述符 → 导航项（key 用路由名，外链项见 externalNavItems）。 */
+function toNavItem(page: PageDescriptor): NavItem {
+  const nav = page.nav!
+  return {
+    key: page.name,
+    label: nav.label,
+    routeName: page.name,
+    activeRouteNames: nav.activeRouteNames,
+    routeParams: nav.routeParams,
+    icon: nav.icon,
+    exact: nav.exact
   }
-]
+}
 
-const tutorNav: NavItem[] = [
-  { key: 'dashboard', label: '仪表盘', routeName: routeNames.TutorDashboard, icon: HomeFilled, exact: true },
-  {
-    key: 'courses',
-    label: '我的课程',
-    routeName: routeNames.TutorCourses,
-    // 章节列表与章节编辑都在「我的课程」之下，两级都没有独立导航项
-    activeRouteNames: [routeNames.TutorChapterManage, routeNames.TutorChapterEdit],
-    icon: Notebook
-  },
-  {
-    key: 'question-manage',
-    label: '题库管理',
-    routeName: routeNames.TutorQuestionManage,
-    // 新增题目 / 编辑题目共用 TutorQuestionCreate（带 query.id 即编辑）；标签管理同组
-    activeRouteNames: [routeNames.TutorQuestionCreate, routeNames.TutorQuestionTags],
-    icon: EditPen
-  },
-  { key: 'question-tags', label: '标签管理', routeName: routeNames.TutorQuestionTags, icon: CollectionTag }
-]
-
-const recruiterNav: NavItem[] = [
-  { key: 'dashboard', label: '首页', routeName: routeNames.RecruitDashboard, icon: HomeFilled, exact: true },
-  {
-    key: 'resumes',
-    label: '简历库',
-    routeName: routeNames.RecruitResumes,
-    activeRouteNames: [routeNames.RecruitResumeDetail],
-    icon: Document
-  },
-  { key: 'requests', label: '我的申请', routeName: routeNames.RecruitRequests, icon: Document },
-  {
-    key: 'jobs',
-    label: '职位管理',
-    routeName: routeNames.RecruitJobManage,
-    activeRouteNames: [routeNames.RecruitApplicationList],
-    icon: OfficeBuilding
+/** 组内装配：先放顶层项，再把声明了 parent 的项挂到父项之下（父项缺失时降级为顶层，避免静默丢项）。 */
+function buildGroupChildren(entries: PageDescriptor[], workspace: Workspace, group: string): NavItem[] {
+  const out: NavItem[] = []
+  const byName = new Map<RouteName, NavItem>()
+  for (const page of entries.filter(e => !e.nav!.parent)) {
+    const item = toNavItem(page)
+    byName.set(page.name, item)
+    out.push(item)
   }
-]
+  for (const page of entries.filter(e => !!e.nav!.parent)) {
+    const parent = byName.get(page.nav!.parent!)
+    if (!parent) {
+      out.push(toNavItem(page))
+      continue
+    }
+    parent.children = [...(parent.children ?? []), toNavItem(page)]
+  }
+  for (const ext of externalNavItems[workspace] ?? []) {
+    if (ext.group !== group) continue
+    out.push({ key: ext.key, label: ext.label, icon: ext.icon, externalUrl: ext.externalUrl })
+  }
+  return out
+}
+
+/** 派生某工作区的导航树（按 nav.order 排序；分组工作区按 navGroups 组装）。 */
+export function buildNavigation(workspace: Workspace): NavItem[] {
+  const entries = navPages(workspace)
+  const groups = navGroups[workspace]
+  if (!groups) {
+    return entries
+      .filter(e => !e.nav!.parent)
+      .slice()
+      .sort((a, b) => (a.nav!.order ?? 0) - (b.nav!.order ?? 0))
+      .map(toNavItem)
+  }
+  return groups
+    .map(group => {
+      const inGroup = entries
+        .filter(e => e.nav!.group === group.key)
+        .slice()
+        .sort((a, b) => (a.nav!.order ?? 0) - (b.nav!.order ?? 0))
+      return {
+        key: group.key,
+        label: group.label,
+        icon: group.icon,
+        children: buildGroupChildren(inGroup, workspace, group.key)
+      } as NavItem
+    })
+    .filter(group => (group.children?.length ?? 0) > 0)
+}
+
+export const studentNav: NavItem[] = buildNavigation("training")
+export const tutorNav: NavItem[] = buildNavigation("tutor")
+export const adminNav: NavItem[] = buildNavigation("manage")
+export const recruiterNav: NavItem[] = buildNavigation("recruit")
 
 export const roleNavigation: Record<string, NavItem[]> = {
   student: studentNav,
