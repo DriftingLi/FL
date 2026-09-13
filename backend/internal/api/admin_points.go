@@ -42,8 +42,8 @@ func (h *AdminPointsHandler) Penalty(c *gin.Context) {
 		response.BadRequest(c, "请求参数错误：user_id/delta/reason 必填")
 		return
 	}
-	Endpoint[struct{}, map[string]any]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*map[string]any, error) {
+	Endpoint[struct{}, service.PointsPenaltyResultDTO]{
+		Invoke: func(ctx context.Context, _ *struct{}) (*service.PointsPenaltyResultDTO, error) {
 			deducted, err := h.pointsSvc.AdminPenalty(ctx, adminID, body.UserID, body.Delta, body.Reason)
 			if err != nil {
 				return nil, err
@@ -54,10 +54,9 @@ func (h *AdminPointsHandler) Penalty(c *gin.Context) {
 				payload := model.JSONB(b)
 				_ = h.notificationSvc.Create(body.UserID, "system", "积分扣罚", fmt.Sprintf("您的积分因“%s”被扣除 %d 分", body.Reason, deducted), "", payload)
 			}
-			m := map[string]any{"deducted": deducted}
-			return &m, nil
+			return &service.PointsPenaltyResultDTO{Deducted: deducted}, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *map[string]any, err error) {
+		Render: func(c *gin.Context, _ *struct{}, resp *service.PointsPenaltyResultDTO, err error) {
 			if err != nil {
 				response.BadRequest(c, err.Error())
 				return

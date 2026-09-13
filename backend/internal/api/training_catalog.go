@@ -676,7 +676,7 @@ type setQuestionTagsReq struct {
 
 // SetQuestionTags 全量替换题目标签 PUT /api/admin/question/:question_id/tags
 func (h *TrainingCatalogHandler) SetQuestionTags(c *gin.Context) {
-	Endpoint[setQuestionTagsReq, struct{}]{
+	Endpoint[setQuestionTagsReq, service.QuestionTagsResultDTO]{
 		Parse: func(c *gin.Context) (*setQuestionTagsReq, error) {
 			id, err := strconv.Atoi(c.Param("question_id"))
 			if err != nil {
@@ -690,18 +690,19 @@ func (h *TrainingCatalogHandler) SetQuestionTags(c *gin.Context) {
 			}
 			return &setQuestionTagsReq{QuestionID: id, TagIDs: req.TagIDs}, nil
 		},
-		Invoke: func(ctx context.Context, req *setQuestionTagsReq) (*struct{}, error) {
+		Invoke: func(ctx context.Context, req *setQuestionTagsReq) (*service.QuestionTagsResultDTO, error) {
 			if err := h.svc.SetQuestionTags(req.QuestionID, req.TagIDs); err != nil {
 				return nil, err
 			}
-			return &struct{}{}, nil
+			// 响应即「实际写入的标签集」回显，故在 Invoke 里成型（服务只负责落库）。
+			return &service.QuestionTagsResultDTO{TagIDs: req.TagIDs}, nil
 		},
-		Render: func(c *gin.Context, req *setQuestionTagsReq, _ *struct{}, err error) {
+		Render: func(c *gin.Context, _ *setQuestionTagsReq, resp *service.QuestionTagsResultDTO, err error) {
 			if err != nil {
 				response.BadRequest(c, err.Error())
 				return
 			}
-			response.SuccessWithMsg(c, "题目标签已更新", map[string]any{"tag_ids": req.TagIDs})
+			response.SuccessWithMsg(c, "题目标签已更新", resp)
 		},
 	}.Handle(c)
 }

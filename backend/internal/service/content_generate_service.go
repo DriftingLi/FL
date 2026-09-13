@@ -56,6 +56,11 @@ func NewContentGenerateService(db *gorm.DB, ai *AIService, logger *zap.Logger) *
 	return &ContentGenerateService{db: db, ai: ai, logger: logger}
 }
 
+// GenerateContentResultDTO 内容生成任务启动的响应 {"task_id": "..."}（#954 片二）。
+type GenerateContentResultDTO struct {
+	TaskID string `json:"task_id"`
+}
+
 // StartGeneration 启动异步生成任务，返回 task_id（字符串形式）。
 // 校验通过后创建 async_task 记录并启动 goroutine 后台执行 runGeneration。
 func (s *ContentGenerateService) StartGeneration(courseID int, chapterIDs []int, userID int) (string, error) {

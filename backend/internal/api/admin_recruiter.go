@@ -35,7 +35,7 @@ func NewAdminRecruiterHandler(authSvc *service.AuthService) *AdminRecruiterHandl
 
 // Create 创建招聘者账号 POST /api/admin/recruiters
 func (h *AdminRecruiterHandler) Create(c *gin.Context) {
-	Endpoint[service.RecruiterCreateInput, map[string]any]{
+	Endpoint[service.RecruiterCreateInput, service.RecruiterCreatedDTO]{
 		Parse: func(c *gin.Context) (*service.RecruiterCreateInput, error) {
 			req, err := bindJSON[service.RecruiterCreateInput](c)
 			if err != nil {
@@ -43,38 +43,27 @@ func (h *AdminRecruiterHandler) Create(c *gin.Context) {
 			}
 			return req, nil
 		},
-		Invoke: func(ctx context.Context, req *service.RecruiterCreateInput) (*map[string]any, error) {
+		Invoke: func(ctx context.Context, req *service.RecruiterCreateInput) (*service.RecruiterCreatedDTO, error) {
 			rec, err := h.authSvc.CreateRecruiter(*req)
 			if err != nil {
 				return nil, err
 			}
-			m := map[string]any{
-				"id":             rec.ID,
-				"username":       rec.Username,
-				"company_name":   rec.CompanyName,
-				"credit_code":    rec.CreditCode,
-				"business_scope": rec.BusinessScope,
-				"contact_name":   rec.ContactName,
-				"contact_phone":  rec.ContactPhone,
-				"contact_email":  rec.ContactEmail,
-				"wechat":         rec.Wechat,
-				"status":         rec.Status,
-			}
-			return &m, nil
+			dto := service.NewRecruiterCreatedDTO(rec)
+			return &dto, nil
 		},
-		Render: func(c *gin.Context, _ *service.RecruiterCreateInput, resp *map[string]any, err error) {
+		Render: func(c *gin.Context, _ *service.RecruiterCreateInput, resp *service.RecruiterCreatedDTO, err error) {
 			if err != nil {
 				response.BadRequest(c, err.Error())
 				return
 			}
-			response.Created(c, "招聘者账号创建成功", *resp)
+			response.Created(c, "招聘者账号创建成功", resp)
 		},
 	}.Handle(c)
 }
 
 // ToggleStatus 切换招聘者启用/禁用 PUT /api/admin/recruiters/:id/status
 func (h *AdminRecruiterHandler) ToggleStatus(c *gin.Context) {
-	Endpoint[idParam, map[string]any]{
+	Endpoint[idParam, service.StatusResultDTO]{
 		Parse: func(c *gin.Context) (*idParam, error) {
 			id, err := pathInt(c, "id", "招聘者ID无效")
 			if err != nil {
@@ -82,31 +71,30 @@ func (h *AdminRecruiterHandler) ToggleStatus(c *gin.Context) {
 			}
 			return &idParam{ID: id}, nil
 		},
-		Invoke: func(ctx context.Context, req *idParam) (*map[string]any, error) {
+		Invoke: func(ctx context.Context, req *idParam) (*service.StatusResultDTO, error) {
 			next, err := h.authSvc.ToggleRecruiterStatus(req.ID)
 			if err != nil {
 				return nil, err
 			}
-			m := map[string]any{"status": next}
-			return &m, nil
+			return &service.StatusResultDTO{Status: int(next)}, nil
 		},
-		Render: func(c *gin.Context, _ *idParam, resp *map[string]any, err error) {
+		Render: func(c *gin.Context, _ *idParam, resp *service.StatusResultDTO, err error) {
 			if err != nil {
 				response.NotFound(c, err.Error())
 				return
 			}
 			msg := "招聘者已启用"
-			if (*resp)["status"] == int16(0) {
+			if resp.Status == 0 {
 				msg = "招聘者已禁用"
 			}
-			response.SuccessWithMsg(c, msg, *resp)
+			response.SuccessWithMsg(c, msg, resp)
 		},
 	}.Handle(c)
 }
 
 // Edit 编辑招聘者企业信息 PUT /api/admin/recruiters/:id（#417）。
 func (h *AdminRecruiterHandler) Edit(c *gin.Context) {
-	Endpoint[idParam, map[string]any]{
+	Endpoint[idParam, service.RecruiterUpdatedDTO]{
 		Parse: func(c *gin.Context) (*idParam, error) {
 			id, err := pathInt(c, "id", "招聘者ID无效")
 			if err != nil {
@@ -114,7 +102,7 @@ func (h *AdminRecruiterHandler) Edit(c *gin.Context) {
 			}
 			return &idParam{ID: id}, nil
 		},
-		Invoke: func(ctx context.Context, req *idParam) (*map[string]any, error) {
+		Invoke: func(ctx context.Context, req *idParam) (*service.RecruiterUpdatedDTO, error) {
 			var in service.RecruiterEditInput
 			if err := c.ShouldBindJSON(&in); err != nil {
 				return nil, badRequest("请求数据无效")
@@ -123,32 +111,22 @@ func (h *AdminRecruiterHandler) Edit(c *gin.Context) {
 			if err != nil {
 				return nil, err
 			}
-			m := map[string]any{
-				"id":             rec.ID,
-				"username":       rec.Username,
-				"company_name":   rec.CompanyName,
-				"credit_code":    rec.CreditCode,
-				"business_scope": rec.BusinessScope,
-				"contact_name":   rec.ContactName,
-				"contact_phone":  rec.ContactPhone,
-				"contact_email":  rec.ContactEmail,
-				"wechat":         rec.Wechat,
-			}
-			return &m, nil
+			dto := service.NewRecruiterUpdatedDTO(rec)
+			return &dto, nil
 		},
-		Render: func(c *gin.Context, _ *idParam, resp *map[string]any, err error) {
+		Render: func(c *gin.Context, _ *idParam, resp *service.RecruiterUpdatedDTO, err error) {
 			if err != nil {
 				response.BadRequest(c, err.Error())
 				return
 			}
-			response.SuccessWithMsg(c, "招聘者信息已更新", *resp)
+			response.SuccessWithMsg(c, "招聘者信息已更新", resp)
 		},
 	}.Handle(c)
 }
 
 // ResetPassword 重置招聘者密码 PUT /api/admin/recruiters/:id/password（#417）。
 func (h *AdminRecruiterHandler) ResetPassword(c *gin.Context) {
-	Endpoint[idParam, struct{}]{
+	Endpoint[idParam, service.RecruiterPasswordResetResult]{
 		Parse: func(c *gin.Context) (*idParam, error) {
 			id, err := pathInt(c, "id", "招聘者ID无效")
 			if err != nil {
@@ -156,7 +134,7 @@ func (h *AdminRecruiterHandler) ResetPassword(c *gin.Context) {
 			}
 			return &idParam{ID: id}, nil
 		},
-		Invoke: func(ctx context.Context, req *idParam) (*struct{}, error) {
+		Invoke: func(ctx context.Context, req *idParam) (*service.RecruiterPasswordResetResult, error) {
 			var body struct {
 				Password string `json:"password"`
 			}
@@ -166,14 +144,14 @@ func (h *AdminRecruiterHandler) ResetPassword(c *gin.Context) {
 			if err := h.authSvc.ResetRecruiterPassword(ctx, req.ID, body.Password); err != nil {
 				return nil, err
 			}
-			return nil, nil
+			return &service.RecruiterPasswordResetResult{}, nil
 		},
-		Render: func(c *gin.Context, _ *idParam, _ *struct{}, err error) {
+		Render: func(c *gin.Context, _ *idParam, resp *service.RecruiterPasswordResetResult, err error) {
 			if err != nil {
 				response.BadRequest(c, err.Error())
 				return
 			}
-			response.SuccessWithMsg(c, "密码已重置", map[string]any{})
+			response.SuccessWithMsg(c, "密码已重置", resp)
 		},
 	}.Handle(c)
 }
