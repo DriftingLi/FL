@@ -6,11 +6,12 @@
 		<!-- 主内容区 -->
 		<view class="main">
 			<scroll-view scroll-y class="pro-scroll" :scroll-into-view="scrollIntoViewId" scroll-with-animation>
-				<!-- 专业版入口：积分兑换未上线，点击只给提示，不做任何付费 -->
-				<view class="pro-banner" @click="onProBannerClick">
-					<text class="pro-banner-title">解锁专业版</text>
-					<text class="pro-banner-sub">选模型 / 自定义模型 / 发图片 · 积分兑换即将开放</text>
-					<text class="pro-banner-go">查看</text>
+				<!-- 专业版档位横幅（#920）：未解锁=橙 +「查看权益」；已解锁=绿 + 只读状态。
+				     配色一律**实色**（本机型实测 background: linear-gradient(...) 静默不绘制） -->
+				<view class="pro-banner" :class="proUnlocked ? 'pro-banner-unlocked' : ''" @click="openProSheet">
+					<text class="pro-banner-title" :class="proUnlocked ? 'pro-title-unlocked' : ''">{{ proBannerTitle }}</text>
+					<text class="pro-banner-sub" :class="proUnlocked ? 'pro-sub-unlocked' : ''">{{ proBannerSub }}</text>
+					<text class="pro-banner-go" :class="proUnlocked ? 'pro-go-unlocked' : ''">{{ proBannerCta }}</text>
 				</view>
 
 				<!-- 功能入口 -->
@@ -59,6 +60,9 @@
 
 		<!-- 自定义 API Key 弹窗 -->
 		<AiChatCustomForm :visible="showCustomForm" :custom-model="customModel" :custom-base-url="customBaseUrl" :custom-api-key="customApiKey" @close="closeCustomForm" @update:custom-model="onCustomModelUpdate" @update:custom-base-url="onCustomBaseUrlUpdate" @update:custom-api-key="onCustomApiKeyUpdate" @confirm="confirmCustomModel" />
+
+		<!-- 专业版能力清单 / 兑换（半屏 sheet，ADR-0009 决策 4） -->
+		<AiChatProSheet :visible="showProSheet" :unlocked="proUnlocked" :price="proPrice" :balance="proBalance" :degraded="proDegraded" :redeeming="proRedeeming" @close="showProSheet = false" @redeem="onRedeemAiPro" @earn="onGoEarnPoints" />
 	</view>
 </template>
 
@@ -74,10 +78,12 @@
 	} from '../../api/aiAssistant'
 	import { useAiChat } from '../../composables/useAiChat'
 	import type { ChatBodyBuilder } from '../../composables/useAiChat'
+	import { useAiPro } from '../../composables/useAiPro'
 	import type { AiModel, AiUserModel, AIModelOption, AiChatMessage, AiSession, AIFunctionItem } from '../../types/index'
 
 	import { STORAGE_KEY_AI_SELECTED_USER_MODEL } from '../../constants/app'
 	import { FUNCTION_ITEMS, QUICK_PROMPTS, RIGHT_MENU_ITEMS } from './ai-assistant-constants'
+	import type { MenuItem } from './ai-assistant-constants'
 	import AiChatNav from '../../components/ai-chat/ai-chat-nav.uvue'
 	import AiChatBubble from '../../components/ai-chat/ai-chat-bubble.uvue'
 	import AiChatDrawerLeft from '../../components/ai-chat/ai-chat-drawer-left.uvue'
@@ -85,13 +91,24 @@
 	import AiChatInput from '../../components/ai-chat/ai-chat-input.uvue'
 	import AiChatModelPicker from '../../components/ai-chat/ai-chat-model-picker.uvue'
 	import AiChatCustomForm from '../../components/ai-chat/ai-chat-custom-form.uvue'
+	import AiChatProSheet from '../../components/ai-chat/ai-chat-pro-sheet.uvue'
 
 
 	const auth = useAuthStore()
 
-	// 专业版能力门：积分兑换尚未上线，故恒为 false（页面按基础版能力渲染）。
-	// 兑换上线后改读后端「已拥有」判定（#920），届时删除本常量。
-	const proUnlocked = ref<boolean>(false)
+	// 专业版能力门（#920）：事实源 = 积分商城 SKU「ai_pro」的**已拥有**，由 useAiPro 单点
+	// 适配器读出（后端尚未暴露权益读面，适配器用支出流水推导 —— 见 composables/useAiPro.uts
+	// 文件头的三条代价声明）。页面只消费 proUnlocked，以下四处共用它，**不得各自另立判据**：
+	// ① 输入区模型芯片 / 附件按钮；② 抽屉「自定义模型」菜单项；③ 模型芯片点击；④ 本页档位横幅。
+	const {
+		proUnlocked,
+		proPrice,
+		proBalance,
+		proDegraded,
+		proRedeeming,
+		loadAiProState,
+		redeemAiPro,
+	} = useAiPro()
 
 
 
@@ -118,6 +135,7 @@
 	// 视图状态
 	const showModelPicker = ref<boolean>(false)
 	const showCustomForm = ref<boolean>(false)
+	const showProSheet = ref<boolean>(false)
 	const customModel = ref<string>('')
 	const customBaseUrl = ref<string>('')
 	const customApiKey = ref<string>('')
@@ -154,12 +172,34 @@
 		return '选择模型'
 	})
 
-	// 右侧菜单项（从常量导入）
-	const rightMenuItems = RIGHT_MENU_ITEMS
+	// 右侧菜单：未解锁专业版时**不显示**「自定义模型」。
+	// 该页属专业版能力（门集合见 ADR 0009），必须与输入区的能力门同一口径 ——
+	// 否则未解锁用户仍能从抽屉进入该页（本改动修的正是这条漏网路径）。
+	// 用 computed 过滤而非改常量：常量仍描述「专业版全量菜单」，可见性由能力门决定。
+	const rightMenuItems = computed<MenuItem[]>(() : MenuItem[] => {
+		if (proUnlocked.value) {
+			return RIGHT_MENU_ITEMS
+		}
+		return RIGHT_MENU_ITEMS.filter((m : MenuItem) => m.key != 'custom-models')
+	})
 
 	// 功能入口（从常量导入）
 	const functionItems = FUNCTION_ITEMS
 	const quickPrompts = QUICK_PROMPTS
+
+	// 档位横幅文案（两态单点；未解锁 = 兑换主曝光位，已解锁 = 只读状态）
+	const proBannerTitle = computed<string>(() : string => {
+		return proUnlocked.value ? '专业版 · 已解锁' : '解锁专业版'
+	})
+	const proBannerSub = computed<string>(() : string => {
+		if (proUnlocked.value) {
+			return '选模型 / 自定义模型 / 发图片 已全部可用'
+		}
+		return '选模型 / 自定义模型 / 发图片 · 积分兑换解锁'
+	})
+	const proBannerCta = computed<string>(() : string => {
+		return proUnlocked.value ? '已解锁' : '查看权益'
+	})
 
 	// 专业版请求体
 	const buildBody : ChatBodyBuilder = (history : AiChatMessage[], sessionID : number) : UTSJSONObject => {
@@ -231,18 +271,38 @@
 
 
 
-	// 专业版入口：兑换未上线，点击只给提示，不做任何付费动作
-	function onProBannerClick() : void {
-		uni.showToast({ title: '积分兑换即将开放', icon: 'none' })
+	// 专业版横幅：未解锁 → 能力清单 + 所需积分 + 去兑换；已解锁 → 只读状态（同一个 sheet）
+	function openProSheet() : void {
+		showProSheet.value = true
 	}
 
-	// 模型芯片：未解锁时只读，点击同样只给提示
+	// 模型芯片：未解锁时该芯片**不渲染**（`show-model-bar` 由 proUnlocked 决定），
+	// 本分支是状态翻转竞态下的兜底 —— 走与横幅同一入口，不在页面另立第二套提示文案
 	function onModelBarClick() : void {
 		if (!proUnlocked.value) {
-			uni.showToast({ title: '积分兑换即将开放', icon: 'none' })
+			showProSheet.value = true
 			return
 		}
 		showModelPicker.value = true
+	}
+
+	// 兑换（服务端单管线）：成功 ⇒ 原地刷新门状态 —— 横幅转「已解锁」，输入区出现模型芯片与附件按钮
+	async function onRedeemAiPro() : Promise<void> {
+		const res = await redeemAiPro()
+		if (res.ok) {
+			showProSheet.value = false
+			uni.showToast({ title: res.message, icon: 'success' })
+			await loadAiProState()
+			return
+		}
+		// 失败不静默（验收标准第 4 条）：request 层已按服务端文案提示，此处兜底一次可读文案
+		uni.showToast({ title: res.message.length > 0 ? res.message : '兑换失败，请稍后再试', icon: 'none' })
+	}
+
+	// 积分不足 → 去任务中心赚积分；回页时 onShow 重读门状态
+	function onGoEarnPoints() : void {
+		showProSheet.value = false
+		uni.navigateTo({ url: '/pages/points/task-center' })
 	}
 
 	// 会话操作
@@ -445,6 +505,8 @@
 
 		loadModels()
 		loadSessions()
+		// 门状态与模型/会话并行读（失败 fail-closed 为未解锁，不阻塞首屏）
+		loadAiProState()
 	})
 
 	onShow(() => {
@@ -452,6 +514,11 @@
 			loadSessions()
 		}
 		hydrateFromSettings()
+		// 已解锁为**粘性**：权益一次兑换永久持有（user_entitlement 无过期列），
+		// 不为同一事实在每次回页重复扫流水；未解锁时重读 —— 用户可能刚在任务中心兑换或赚到积分
+		if (!proUnlocked.value) {
+			loadAiProState()
+		}
 
 		const selectedRaw = uni.getStorageSync(STORAGE_KEY_AI_SELECTED_USER_MODEL) as string
 		if (selectedRaw.length > 0) {
@@ -577,7 +644,7 @@
 		color: #333333;
 		line-height: 1.6;
 	}
-	/* 专业版入口横幅：实色配色（本机型不绘制渐变）；#920 兑换上线后接真解锁 */
+	/* 专业版档位横幅（#920）：**实色**配色（本机型不绘制渐变）；未解锁=橙、已解锁=绿 */
 	.pro-banner {
 		flex-direction: row;
 		align-items: center;
@@ -588,10 +655,20 @@
 		margin-bottom: 24rpx;
 	}
 
+	/* 已解锁：末尾追加覆盖（特异性天然更高，无需 !important，遵守 R4「变体一律追加覆盖」） */
+	.pro-banner.pro-banner-unlocked {
+		background-color: #e8f8ee;
+		border-color: #b6e3c7;
+	}
+
 	.pro-banner-title {
 		font-size: 28rpx;
 		font-weight: bold;
 		color: #8a4b00;
+	}
+
+	.pro-title-unlocked {
+		color: #1c6b3c;
 	}
 
 	.pro-banner-sub {
@@ -601,12 +678,20 @@
 		margin-left: 16rpx;
 	}
 
+	.pro-sub-unlocked {
+		color: #4a8f68;
+	}
+
 	.pro-banner-go {
 		font-size: 24rpx;
 		color: #ffffff;
 		background-color: #ff9800;
 		border-radius: 24rpx;
 		padding: 8rpx 20rpx;
+	}
+
+	.pro-go-unlocked {
+		background-color: #2e9e5b;
 	}
 
 </style>

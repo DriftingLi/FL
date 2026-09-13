@@ -47,6 +47,14 @@ export type PointsTasksResult = {
     tasks : PointsTaskItem[]
 }
 
+/** 商城兑换结果 POST /points/shop/{sku}/redeem（后端 service.RedeemResult 逐字段对齐，#920） */
+export type PointsRedeemResult = {
+    balance : number        // 兑换后余额
+    total_earned : number   // 兑换后累计获得
+    sku : string            // 兑换的 SKU
+    ref_id : string         // 权益 ref_id（商城项 = sku 本身）
+}
+
 /** 任务领取结果 POST /points/tasks/{code}/claim */
 export type PointsClaimResult = {
     balance : number        // 领取后余额

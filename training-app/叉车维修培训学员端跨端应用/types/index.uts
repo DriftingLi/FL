@@ -12,7 +12,7 @@ export { type ExamQuestion, type MockExamStartParams, type MockExamInfo, type Mo
 export { type AiChatMessage, type AiModel, type AiUserModel, type AiSession, type AiSessionMessage, type AiChatSettings, type AIModelOption, type AIFunctionItem } from './ai'
 export { type NotificationItem, type NotificationListResult } from './notification'
 export { type CredentialItem, type CredentialGroup, type CredentialSwitchResult } from './credential'
-export { type PointsBalance, type PointsLedgerItem, type PointsLedgerResult, type PointsTaskItem, type PointsTasksResult, type PointsClaimResult, type CheckInResult, type CheckInCalendarDay, type CheckInCalendarResult } from './points'
+export { type PointsBalance, type PointsLedgerItem, type PointsLedgerResult, type PointsTaskItem, type PointsTasksResult, type PointsClaimResult, type PointsRedeemResult, type CheckInResult, type CheckInCalendarDay, type CheckInCalendarResult } from './points'
 export { type ResumeExperience, type ResumeCertification, type ResumeData, type SaveResumeParams, type PositionItem } from './resume'
 export { type FeaturedContentItem, type FeaturedContentListResult, type FeaturedContentDetail } from './featured'
 export { type FavoriteItem, type FavoriteListResult, type FavoriteCheckResult } from './favorite'
