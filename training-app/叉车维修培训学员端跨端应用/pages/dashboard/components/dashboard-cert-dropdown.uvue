@@ -308,7 +308,8 @@
     .cert-dropdown-hot-card {
         flex: 1;
         padding: 20rpx 16rpx;
-        background: linear-gradient(135deg, #2979FF 0%, #1565C0 100%);
+        background-color: #1565C0;
+        background: linear-gradient(135deg, #2979FF, #1565C0);
         border-radius: 12rpx;
     }
 

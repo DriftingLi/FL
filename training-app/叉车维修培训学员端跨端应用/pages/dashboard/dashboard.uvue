@@ -209,7 +209,8 @@
 <style>
     .container {
         flex: 1;
-        background: linear-gradient(180deg, #CFE9FB 1%, #D0EBFD 16%, #F5F5F5 100%);
+        background-color: #F5F5F5;
+        background: linear-gradient(180deg, #CFE9FB, #F5F5F5);
         flex-direction: column;
     }
 

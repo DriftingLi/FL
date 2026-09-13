@@ -65,10 +65,12 @@
     }
 
     .summary-passed {
+        background-color: #4caf50;
         background: linear-gradient(135deg, #4caf50, #66bb6a);
     }
 
     .summary-failed {
+        background-color: #f44336;
         background: linear-gradient(135deg, #f44336, #ef5350);
     }
 

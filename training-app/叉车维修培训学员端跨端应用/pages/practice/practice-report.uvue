@@ -222,7 +222,8 @@
     /* 概览卡 */
     .overview-card {
         margin-top: 24rpx;
-        background: linear-gradient(135deg, #4facfe 0%, #239edd 100%);
+        background-color: #239edd;
+        background: linear-gradient(135deg, #4facfe, #239edd);
         border-radius: 20rpx;
         padding: 32rpx 0;
         flex-direction: row;
