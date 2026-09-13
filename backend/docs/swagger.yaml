@@ -239,7 +239,9 @@ definitions:
       content_type:
         type: string
       file_id:
+        description: FileID 暂存文件尚未落库：key 不存在（omitempty）→ x-optional。
         type: integer
+        x-optional: true
       file_name:
         type: string
       file_size:
@@ -250,7 +252,11 @@ definitions:
   service.ContributionItemDTO:
     properties:
       author:
-        $ref: '#/definitions/service.ContributionAuthor'
+        allOf:
+        - $ref: '#/definitions/service.ContributionAuthor'
+        description: |-
+          Author 的 omitempty 对结构体取值**无效**（encoding/json 不省略零值结构体）：key 恒在，
+          生成物按必填渲染是正确的，前端手写的 author? 属过时宽容。
       created_at:
         type: string
       credential_id:
@@ -261,6 +267,7 @@ definitions:
         items:
           $ref: '#/definitions/service.ContributionFileDTO'
         type: array
+        x-optional: true
       id:
         type: integer
       intro:
@@ -269,6 +276,7 @@ definitions:
         type: boolean
       reject_reason:
         type: string
+        x-optional: true
       status:
         type: string
       title:
@@ -611,7 +619,9 @@ definitions:
       practice_type:
         type: string
       question:
-        $ref: '#/definitions/service.QuestionDTO'
+        allOf:
+        - $ref: '#/definitions/service.QuestionDTO'
+        x-optional: true
       question_id:
         type: integer
       student_id:
@@ -666,11 +676,14 @@ definitions:
     properties:
       ai_comment:
         type: string
+        x-optional: true
       ai_fallback:
         type: boolean
+        x-optional: true
       ai_score:
         description: AI 评分字段仅在短答 AI 评分成功时出现。
         type: number
+        x-optional: true
       content:
         type: string
       correct_answer:
@@ -679,6 +692,7 @@ definitions:
         type: string
       is_correct:
         type: boolean
+        x-nullable: true
       max_score:
         type: number
       options: {}
@@ -717,12 +731,15 @@ definitions:
           PaperID 真题卷来源（#386）：按卷开考时写入 mock_exam.paper_id，随机模考为 nil
           （omitempty——既有消费者对随机模考的响应零差异，向后兼容）。
         type: integer
+        x-optional: true
       question_ids: {}
       remaining_time:
         type: integer
       result: {}
       score:
+        description: Score 未交卷时为 null（键仍在）：x-nullable 让生成物渲染 number | null。
         type: number
+        x-nullable: true
       start_time:
         type: string
       status:
@@ -866,7 +883,9 @@ definitions:
     properties:
       answers_state:
         additionalProperties: {}
+        description: AnswersState 无进度时为 null（键仍在）→ x-nullable。
         type: object
+        x-nullable: true
       completed:
         type: integer
       current_index:
@@ -884,19 +903,23 @@ definitions:
       answer:
         description: 学员侧（includeAnswer=false）省略以下四个字段。
         type: string
+        x-optional: true
       content:
         type: string
       created_at:
         type: string
       created_by:
         type: integer
+        x-nullable: true
       created_by_type:
         type: string
       credential_id:
         description: CredentialID 题目归属的目标证件（#412）：讲师端题库管理用证件列区分分区，学员侧形状不变。
         type: integer
+        x-optional: true
       explanation:
         type: string
+        x-optional: true
       id:
         type: integer
       image_url:
@@ -904,16 +927,19 @@ definitions:
       options: {}
       reference_answer:
         type: string
+        x-optional: true
       reject_reason:
         type: string
       score:
         type: integer
       scoring_criteria:
         type: string
+        x-optional: true
       status:
         type: string
       tags:
         description: Tags 题库管理面附加（未设置时省略；设置后保留 null/[] 形态与历史一致）。
+        x-optional: true
       type:
         type: string
       updated_at:
@@ -1155,32 +1181,43 @@ definitions:
     properties:
       accuracy_rate:
         type: number
+        x-optional: true
       ai_comment:
         type: string
+        x-optional: true
       ai_explanation:
         type: string
+        x-optional: true
       ai_fallback:
         type: boolean
+        x-optional: true
       ai_score:
         type: number
+        x-optional: true
       common_wrong:
         type: string
+        x-optional: true
       correct_answer:
         type: string
       explanation:
         type: string
       is_correct:
         type: boolean
+        x-nullable: true
       max_score:
         type: integer
+        x-optional: true
       question_id:
         type: integer
       reference_answer:
         type: string
+        x-optional: true
       scoring_criteria:
         type: string
+        x-optional: true
       total_attempts:
         type: integer
+        x-optional: true
       user_answer: {}
     type: object
   service.WrongQuestionStatsDTO:

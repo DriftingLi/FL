@@ -1,6 +1,37 @@
 import { unwrappedRequest } from './request'
 import { useCredentialStore } from '@/stores/credential'
-import type { PracticeProgress, Question, SubmitResult } from '@/types/question'
+import type { Question } from '@/types/question'
+import type {
+  HistoryItemDTO,
+  HistoryResultDTO,
+  PracticePracticeStatsDTO,
+  PracticeStartResultDTO,
+  PracticeStatsDTO,
+  ProgressResultDTO,
+  SubmitResultDTO
+} from './generated/practiceMode'
+
+// 响应类型**不再手写**：唯一事实源是后端注解 → backend/docs/swagger.json →
+// `cd backend && go run ./cmd/gen-apitypes`（ADR-0048 决策 1/3，spec #952 片一）。
+// 本文件只留请求壳与端点装配，生成类型经下面一行按既有 import 路径透出。
+//
+// **本片不接线的唯一边界**：题目元素仍是跨域共享 UI 模型 Question（@/types/question），
+// 不是生成的 QuestionDTO —— 该模型被题库 / 错题 / 考试多个域共用，收口归 questionBank 片
+// （ADR-0048 决策 7）。强行接线要么加一层运行时映射、要么把 UI 模型的 options / status
+// 降级成 unknown / string，两者都越过本片「响应字节不变 + 行为不变」的边界。
+// 除 questions 元素外，本域响应字段全部走生成类型。
+export type {
+  HistoryItemDTO,
+  HistoryResultDTO,
+  PracticePracticeStatsDTO,
+  PracticeStartResultDTO,
+  PracticeStatsDTO,
+  ProgressResultDTO,
+  SubmitResultDTO
+}
+
+/** 用 UI 模型的题目元素替换生成 DTO 的 questions（见文件头边界说明）。 */
+type WithUIQuestions<T extends { questions: unknown }> = Omit<T, 'questions'> & { questions: Question[] }
 
 /** 惰性读取当前证件 id（无 Pinia 环境/未选证件返回 undefined；容错不阻断保存） */
 function currentCredentialId(): number | undefined {
@@ -9,48 +40,6 @@ function currentCredentialId(): number | undefined {
   } catch {
     return undefined
   }
-}
-
-/** 练习进度（断点续练用，含答题状态；与后端 ProgressResultDTO 对齐） */
-export interface PracticeProgressData extends PracticeProgress {
-  answers_state?: Record<string, unknown>
-  practice_mode?: string
-}
-
-/** 练习统计（旧 /stats 聚合） */
-export interface PracticeStats {
-  total?: number
-  completed?: number
-  in_progress?: number
-  total_count?: number
-  correct_count?: number
-}
-
-/** 刷题数据展示聚合（新 /practice-stats，与后端 PracticePracticeStatsDTO 对齐，含重做，Asia/Shanghai 口径） */
-export interface PracticePracticeStats {
-  today_count: number
-  total_count: number
-  total_days: number
-}
-
-/** 练习历史分页结果（与后端 HistoryResultDTO 对齐） */
-export interface PracticeHistory {
-  total: number
-  page: number
-  page_size: number
-  records: PracticeHistoryItem[]
-}
-
-/** 练习历史项（与后端 HistoryItemDTO 对齐） */
-export interface PracticeHistoryItem {
-  id: number
-  student_id?: number
-  question_id?: number
-  is_correct?: boolean
-  practice_type?: string
-  user_answer?: string
-  created_at?: string
-  question?: Question
 }
 
 // 题库练习模式接口，对应后端 /api/practice-mode（credential_id 由主 client 拦截器默认注入，#387）
@@ -67,19 +56,16 @@ export const practiceModeApi = {
   },
   // 标签练习：开始/续练（返回当前批次题目 + 进度，mode 为 tag:<tagID>）
   startTagPractice(params: { tag_id: number; count?: number }) {
-    return unwrappedRequest.get<{ questions?: Question[]; current_index?: number; total?: number }>(
-      '/practice-mode/tag',
-      { params }
-    )
+    return unwrappedRequest.get<WithUIQuestions<PracticeStartResultDTO>>('/practice-mode/tag', { params })
   },
   // 顺序练习：开始/续练，返回当前批次题目 + 进度
   // #413：传参对象让「证件过滤默认注入」拦截器真正生效（此前不传 params 被跳过）。
   startSequential(params?: { credential_id?: number }) {
-    return unwrappedRequest.get<{ questions?: Question[]; progress?: PracticeProgressData }>('/practice-mode/sequential', { params: params || {} })
+    return unwrappedRequest.get<WithUIQuestions<PracticeStartResultDTO>>('/practice-mode/sequential', { params: params || {} })
   },
   // 顺序练习进度（卡片展示用；#413 返回体含实时池总数 pool_total）
   getSequentialProgress(params?: { credential_id?: number }) {
-    return unwrappedRequest.get<PracticeProgress>('/practice-mode/sequential-progress', { params: params || {} })
+    return unwrappedRequest.get<ProgressResultDTO>('/practice-mode/sequential-progress', { params: params || {} })
   },
   // 保存练习游标和答题状态（顺序/标签/按卷练习）
   // #505：顺序练习进度按证件分桶（#414），保存 body 必须携带当前证件 id——拦截器只注入
@@ -91,22 +77,22 @@ export const practiceModeApi = {
   },
   // 查询任意模式的练习进度和答题状态（断点续练用）
   getProgress(mode: PracticeModeKey = 'sequential') {
-    return unwrappedRequest.get<PracticeProgressData>('/practice-mode/progress', { params: { mode } })
+    return unwrappedRequest.get<ProgressResultDTO>('/practice-mode/progress', { params: { mode } })
   },
   // 提交单题答案并判定
   submitAnswer(data: { question_id: number; user_answer: string; practice_type?: string }) {
-    return unwrappedRequest.post<SubmitResult>('/practice-mode/submit', data)
+    return unwrappedRequest.post<SubmitResultDTO>('/practice-mode/submit', data)
   },
   // 练习统计
   getStats() {
-    return unwrappedRequest.get<PracticeStats>('/practice-mode/stats')
+    return unwrappedRequest.get<PracticeStatsDTO>('/practice-mode/stats')
   },
   // 刷题数据展示（顶部 3 宫格，credential_id 由主 client 拦截器默认注入，与 /stats 独立）
   getPracticeStats(params?: { credential_id?: number }) {
-    return unwrappedRequest.get<PracticePracticeStats>('/practice-mode/practice-stats', { params: params || {} })
+    return unwrappedRequest.get<PracticePracticeStatsDTO>('/practice-mode/practice-stats', { params: params || {} })
   },
   // 练习历史
   getHistory(params: { page?: number; page_size?: number }) {
-    return unwrappedRequest.get<PracticeHistory>('/practice-mode/history', { params })
+    return unwrappedRequest.get<HistoryResultDTO>('/practice-mode/history', { params })
   }
 }

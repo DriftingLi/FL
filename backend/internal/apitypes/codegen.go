@@ -15,7 +15,7 @@ import (
 // ——「字节级全等」契约测试（codegen_test.go）的前提。生成物过期由该测试直接变红暴露。
 
 // tsHeaderTemplate 生成物头部。%s₁ = 域标题，%s₂ = 端点清单，%s₃ = 本次生成覆盖的 Go 类型。
-const tsHeaderTemplate = `// 生成文件，勿手改（ADR-0019 契约 codegen 专项第一步 / spec #940 片五③）。
+const tsHeaderTemplate = `// 生成文件，勿手改（ADR-0019 契约 codegen 专项 / ADR-0048 按域解冻；spec #940 片五③、#952 片一）。
 // 域：%s
 // 唯一事实源：后端注解 → backend/docs/swagger.json（CI 有新鲜度锁：backend-lint 的 swagger 步骤）。
 // 再生成：cd backend && go run ./cmd/gen-apitypes
@@ -25,11 +25,15 @@ const tsHeaderTemplate = `// 生成文件，勿手改（ADR-0019 契约 codegen 
 %s//
 // 覆盖的 Go 类型：%s
 //
-// 已知限制（除显式标注 x-nullable 的字段外，一律按非可选渲染）：
-//   - 不区分「缺省 / null / 零值」三态（Go 指针与 omitempty 在 swagger 里默认不可见；
-//     需要精确可空时给字段加 extensions:"x-nullable"，本生成器会渲染 T | null）；
+// 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
+//   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
+//   - extensions:"x-optional" → 字段渲染 'T?'：键**可能整个不存在**（Go omitempty）；
+//   - 两者可同时标注（'T?' 且 '| null'）；未标注的一律按「键一定在、非 null」渲染 ——
+//     swag 看不到 Go 的 omitempty，漏标即契约撒谎。
+// 其余已知限制：
+//   - Go 侧 any 字段在 swagger 里是空 schema，渲染 'unknown'（不猜结构）；
 //   - 不生成 query / body 的入参类型（只生成响应形状）。
-// 需要精确可空或入参类型时，先在注解层补齐（见 spec #940 片五②的差集清单）。
+// 需要更精确的形状时先在注解层补齐（先例见 spec #940 片五②的差集清单）。
 
 `
 
@@ -42,6 +46,7 @@ type Schema struct {
 	AddProps  json.RawMessage   `json:"additionalProperties"`
 	AllOf     []Schema          `json:"allOf"`
 	XNullable bool              `json:"x-nullable"`
+	XOptional bool              `json:"x-optional"`
 }
 
 // normalize 折叠 swag 的 allOf 包装：字段带 @Description 时，swag 会把 $ref 包成
@@ -50,6 +55,7 @@ func normalize(s Schema) Schema {
 	if len(s.AllOf) == 1 {
 		merged := s.AllOf[0]
 		merged.XNullable = merged.XNullable || s.XNullable
+		merged.XOptional = merged.XOptional || s.XOptional
 		return merged
 	}
 	return s
@@ -161,14 +167,22 @@ func additionalSchema(s Schema) (Schema, bool) {
 }
 
 // tsType 把 swagger 类型渲染为 TS 类型表达式。
+// 可空性（x-nullable）作用于**字段本身**：数组字段是「数组可空」，元素可空写在 items 上。
+// 故先渲染基底类型，再统一追加 `| null` —— 与基底是引用 / 标量 / 数组无关。
 func tsType(s Schema) string {
 	s = normalize(s)
+	base := tsBaseType(s)
+	if s.XNullable && base != "unknown" {
+		// unknown 已包含 null，渲染 unknown | null 只是噪音（Go 侧 any 字段的常见形态）。
+		return base + " | null"
+	}
+	return base
+}
+
+// tsBaseType 渲染不含可空性的基底类型。
+func tsBaseType(s Schema) string {
 	if s.Ref != "" {
-		out := tsName(refName(s.Ref))
-		if s.XNullable {
-			out += " | null"
-		}
-		return out
+		return tsName(refName(s.Ref))
 	}
 	switch s.Type {
 	case "array":
@@ -186,7 +200,7 @@ func tsType(s Schema) string {
 		return "boolean"
 	case "string":
 		return "string"
-	case "object", "":
+	case "object":
 		if len(s.Props) > 0 {
 			return "{ [key: string]: unknown }"
 		}
@@ -195,6 +209,9 @@ func tsType(s Schema) string {
 		}
 		return "Record<string, unknown>"
 	default:
+		// 空 schema（Go 侧 any 在 swagger 里没有 type）语义是**任意值**：渲染 unknown，
+		// 消费方必须先收窄。此前落到 object 分支渲染 Record<string, unknown>，
+		// 对实际是 string / number / 数组的取值会撒谎。
 		return "unknown"
 	}
 }
@@ -235,7 +252,12 @@ func renderInterface(name string, s Schema) string {
 	}
 	sort.Strings(keys) // 显式排序：不依赖 swag 的输出顺序，保证渲染确定性
 	for _, k := range keys {
-		fmt.Fprintf(&b, "  %s: %s\n", tsKey(k), tsType(s.Props[k]))
+		field := s.Props[k]
+		opt := ""
+		if normalize(field).XOptional {
+			opt = "?"
+		}
+		fmt.Fprintf(&b, "  %s%s: %s\n", tsKey(k), opt, tsType(field))
 	}
 	b.WriteString("}\n")
 	return b.String()
