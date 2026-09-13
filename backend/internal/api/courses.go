@@ -25,12 +25,17 @@ func NewCourseHandler(svc *service.CourseService) *CourseHandler {
 func RegisterCoursesRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.CourseService) {
 	h := NewCourseHandler(svc)
 
+	// 证件作用域（ADR-0047 §4）：显式 credential_id 优先，学员缺省用服务端当前证件。
+	// **必须挂在本蓝图自己的 group 上**：挂在共享的 /api group 会隐式作用于其后注册的所有蓝图，
+	// 覆盖范围由注册顺序决定（还会给它们各加一次证件查询）。
+	g := rg.Group("", middleware.CredentialScoped(rd.CredentialScope))
+
 	// 公开访问
-	rg.GET("/courses", h.ListCourses)
-	rg.GET("/chapter/:chapter_id/slides", h.GetChapterSlides)
+	g.GET("/courses", h.ListCourses)
+	g.GET("/chapter/:chapter_id/slides", h.GetChapterSlides)
 
 	// 需要登录
-	auth := rg.Group("", middleware.JWTAuth(rd.Session))
+	auth := g.Group("", middleware.JWTAuth(rd.Session))
 	auth.GET("/course/:course_id", h.GetCourseDetail)
 	auth.GET("/course/:course_id/chapter/:chapter_id", h.GetChapterDetail)
 	auth.POST("/chapter/:chapter_id/slides/regenerate", h.RegenerateChapterSlides)
@@ -64,7 +69,7 @@ func (h *CourseHandler) ListCourses(c *gin.Context) {
 			return &courseListReq{
 				Page:         atoiDefault(c.Query("page"), 1),
 				PageSize:     atoiDefault(c.Query("page_size"), 12),
-				CredentialID: queryIDPtr(c, "credential_id"),
+				CredentialID: middleware.CredentialIDPtr(c),
 				SpecialtyID:  queryIDPtr(c, "specialty_id"),
 				LevelID:      queryIDPtr(c, "level_id"),
 				Filter:       f,

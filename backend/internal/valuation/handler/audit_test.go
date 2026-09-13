@@ -74,7 +74,7 @@ func TestValuationAdminWriteAudited(t *testing.T) {
 func TestValuationAdminWriteNotAuditedWithoutDB(t *testing.T) {
 	r, _, _, _ := newTestValuationEngineWithStorage(t, &memStorage{})
 
-	// hrwai_user token：JWTAuth 放行、RoleRequired 拒绝（403），
+	// hrwai_user token：JWTAuth 放行、能力守卫拒绝（403），
 	// 证明审计 DB 未装配时中间件链不受影响、写操作不 panic。
 	w := performRequestWithAuth(r, http.MethodPost, "/api/valuation/admin/brands",
 		map[string]interface{}{"name": "合力", "code": "HELI", "sort_order": 1}, authHeader(t, 1))

@@ -20,6 +20,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 
+	"forklift-training/internal/authz"
 	"forklift-training/internal/cache"
 	"forklift-training/internal/config"
 )
@@ -405,7 +406,7 @@ func (s *Session) ClearRecruiterCookie(w http.ResponseWriter) {
 
 // SetCookieForRole 按角色写 Cookie：recruiter 走 host-only 独立 cookie，其余走 hrwai 父域 cookie。
 func (s *Session) SetCookieForRole(w http.ResponseWriter, token, role string) {
-	if role == "recruiter" {
+	if role == string(authz.RoleRecruiter) {
 		s.SetRecruiterCookie(w, token)
 		return
 	}
@@ -414,7 +415,7 @@ func (s *Session) SetCookieForRole(w http.ResponseWriter, token, role string) {
 
 // ClearCookieForRole 按角色清除 Cookie。
 func (s *Session) ClearCookieForRole(w http.ResponseWriter, role string) {
-	if role == "recruiter" {
+	if role == string(authz.RoleRecruiter) {
 		s.ClearRecruiterCookie(w)
 		return
 	}

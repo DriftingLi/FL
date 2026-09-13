@@ -169,7 +169,10 @@ import type { UploadFile } from 'element-plus'
 import { ChatDotRound, Picture, Close } from '@element-plus/icons-vue'
 import ChatPageShell from '@/components/ai-assistant/ChatPageShell.vue'
 import { useAIAssistantStore } from '@/stores/aiAssistant'
-import { getAIFeatureByRoute } from '@/config/aiFeatures'
+import {
+  getAIFeatureByRoute,
+  isDiagnosisFeature
+} from '@/config/aiFeatures'
 import { aiAssistantApi, type DiagnosisBrandOption, type DiagnosisFaultCodeItem } from '@/api/aiAssistant'
 import DiagnosisSources from '@/components/ai-assistant/DiagnosisSources.vue'
 import UiCapsule from '@/components/ai-assistant/UiCapsule.vue'
@@ -185,7 +188,7 @@ const feature = computed(() => getAIFeatureByRoute(route.path))
 const supportsImage = computed(() => feature.value?.supportsImage === true)
 const maxImages = computed(() => feature.value?.maxImages ?? 4)
 // 智能维修诊断（fault_diagnosis）：品牌/车型联动 + 故障码面板 + 来源面板
-const isDiagnosis = computed(() => feature.value?.key === 'fault_diagnosis')
+const isDiagnosis = computed(() => isDiagnosisFeature(feature.value?.key))
 
 const inputText = ref('')
 const inputPlaceholder = computed(() => {

@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
@@ -27,7 +28,7 @@ func NewRecruitHandler(svc *service.RecruitService) *RecruitHandler {
 // RegisterRecruitRoutes 注册 /api/recruit 蓝图（企业招聘者工作区，角色守卫）。
 func RegisterRecruitRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.RecruitService) {
 	h := NewRecruitHandler(svc)
-	g := rg.Group("/recruit", middleware.JWTAuth(rd.Session), middleware.RoleRequired("recruiter"))
+	g := rg.Group("/recruit", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapRecruitAccess))
 	g.GET("/resumes", h.ListResumes)
 	g.GET("/resumes/:id", h.GetResume)
 	g.GET("/me", recruitMe)

@@ -52,12 +52,12 @@
           <div
             v-if="!effectiveCollapsed"
             class="nav-group-label is-accordion"
-            :class="{ 'is-active': isGroupActive(item) }"
+            :class="{ 'is-active': isGroupActiveLocal(item) }"
             @click="onGroupToggle(item.key)"
           >
             <el-icon v-if="item.icon" class="nav-group-icon"><component :is="item.icon" /></el-icon>
             <span>{{ item.label }}</span>
-            <el-icon class="nav-group-arrow" :class="{ expanded: isGroupExpanded(item.key) }"><ArrowDown /></el-icon>
+            <el-icon class="nav-group-arrow" :class="{ expanded: isGroupExpandedLocal(item.key) }"><ArrowDown /></el-icon>
           </div>
           <UiTooltip v-else placement="right" :show-after="300">
             <template #content>
@@ -71,11 +71,11 @@
                 {{ leaf.label }}
               </div>
             </template>
-            <div class="nav-group-icon-only" :class="{ 'is-active': isGroupActive(item) }">
+            <div class="nav-group-icon-only" :class="{ 'is-active': isGroupActiveLocal(item) }">
               <el-icon><component :is="item.icon" /></el-icon>
             </div>
           </UiTooltip>
-          <div v-show="isGroupExpanded(item.key)" class="nav-group-children">
+          <div v-show="isGroupExpandedLocal(item.key)" class="nav-group-children">
             <template v-for="child in item.children" :key="child.key">
               <!-- 二级嵌套：child 自身还有 children（如 题库练习 ┬ 真题练习） -->
               <template v-if="child.children && child.children.length">
@@ -102,7 +102,7 @@
                   </div>
                   <span v-if="!effectiveCollapsed" class="nav-item-label">{{ child.label }}</span>
                 </router-link>
-                <div v-else class="nav-group-label nav-sub-group-label" :class="{ 'is-active': isGroupActive(child) }">
+                <div v-else class="nav-group-label nav-sub-group-label" :class="{ 'is-active': isGroupActiveLocal(child) }">
                   <span>{{ child.label }}</span>
                 </div>
                 <template v-for="sub in child.children" :key="sub.key">
@@ -222,7 +222,14 @@ import { computed, reactive, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Expand, Fold, ArrowDown, SwitchButton } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
-import { isNavRouteActive, type NavItem } from '@/config/navigation'
+import {
+  isNavRouteActive,
+  isGroupExpanded,
+  toggleGroupExpanded,
+  flattenLeaves,
+  isGroupActive,
+  type NavItem
+} from '@/config/navigation'
 import NotificationPanel from '@/components/layout/NotificationPanel.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import UiTooltip from '@/components/ui/UiTooltip.vue'
@@ -274,43 +281,18 @@ watch(
   { immediate: true, deep: false }
 )
 
-function isGroupExpanded(key: string): boolean {
-  return expandedMap[key] !== false
+// 分组判定三条已抽到 config/navigation.ts（纯函数 + 单测，ADR-0047 §2 / spec #930）：
+// 组件只保留响应式状态与事件接线。展开态用 Object.assign 原地写，保持 reactive 引用不变。
+function isGroupExpandedLocal(key: string): boolean {
+  return isGroupExpanded(expandedMap, key)
 }
 
 function onGroupToggle(key: string): void {
-  expandedMap[key] = !isGroupExpanded(key)
+  Object.assign(expandedMap, toggleGroupExpanded(expandedMap, key))
 }
 
-function flattenLeaves(item: NavItem): NavItem[] {
-  const result: NavItem[] = []
-  const walk = (node: NavItem) => {
-    for (const child of node.children || []) {
-      if (child.routeName || child.externalUrl) result.push(child)
-      if (child.children?.length) {
-        for (const sub of child.children) {
-          if (sub.routeName || sub.externalUrl) result.push(sub)
-        }
-      }
-    }
-  }
-  walk(item)
-  return result
-}
-
-function isGroupActive(item: NavItem): boolean {
-  if (!item.children?.length) return false
-  for (const child of item.children) {
-    if (child.children?.length) {
-      if (isRouteActive(child)) return true
-      for (const sub of child.children) {
-        if (isRouteActive(sub)) return true
-      }
-    } else if (isRouteActive(child)) {
-      return true
-    }
-  }
-  return false
+function isGroupActiveLocal(item: NavItem): boolean {
+  return isGroupActive(item, route.name, route.params as Record<string, string | string[] | undefined>)
 }
 
 const roleLabel = computed(() => {

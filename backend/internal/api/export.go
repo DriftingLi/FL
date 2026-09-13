@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
@@ -32,7 +33,7 @@ func NewExportHandler(svc *service.ExportService) *ExportHandler {
 func RegisterExportRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.ExportService) {
 	h := NewExportHandler(svc)
 
-	g := rg.Group("/admin/export", middleware.JWTAuth(rd.Session), middleware.RoleRequired("admin"))
+	g := rg.Group("/admin/export", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapExportRun))
 
 	g.GET("/students", h.exportCSV(func() ([][]any, error) { return svc.Students() }, "学员名单.csv"))
 	g.GET("/questions", h.exportCSV(func() ([][]any, error) { return svc.Questions() }, "题库.csv"))

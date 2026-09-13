@@ -4,6 +4,7 @@ package api
 import (
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
@@ -13,7 +14,7 @@ import (
 // 仅学员可访问：招聘方无法读取留痕数据（避免暴露浏览习惯）。
 func RegisterResumeViewRoutes(rg *gin.RouterGroup, rd RouterDeps, recruitSvc *service.RecruitService) {
 	h := NewResumeViewHandler(recruitSvc)
-	g := rg.Group("/resume", middleware.JWTAuth(rd.Session), middleware.RoleRequired("hrwai_user"))
+	g := rg.Group("/resume", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapResumeManage))
 	g.GET("/view-stats", h.StudentViewStats)
 }
 

@@ -7,6 +7,7 @@ import (
 	"forklift-training/internal/captcha"
 	"forklift-training/internal/clock"
 	"forklift-training/internal/config"
+	"forklift-training/internal/middleware"
 	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/internal/storage"
@@ -19,6 +20,9 @@ type RouterDeps struct {
 	Session *security.Session
 	DB      *gorm.DB
 	Logger  *zap.Logger
+	// CredentialScope 证件作用域解析器（ADR-0047 §4）：受作用域端点用它解析「本次请求按哪个
+	// 证件过滤」，事实源在服务端（用户当前证件），客户端漏传不再静默返回全量。
+	CredentialScope middleware.CredentialResolver
 }
 
 // Deps 是后端 service 装配根：全部 service 在此构建一次，经 NewRouter 注入各蓝图注册。
@@ -188,5 +192,7 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 
 // RouterDeps 投影当前装配根的横切依赖，供 NewRouter 传给各蓝图注册（单一装配点）。
 func (d *Deps) RouterDeps() RouterDeps {
-	return RouterDeps{Session: d.Session, DB: d.DB, Logger: d.Logger}
+	return RouterDeps{Session: d.Session, DB: d.DB, Logger: d.Logger,
+		CredentialScope: d.TrainingCatalogSvc,
+	}
 }
