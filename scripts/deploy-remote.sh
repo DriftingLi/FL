@@ -37,6 +37,10 @@ BACKUP_DIR="${DEPLOY_PATH}/backups"
 if [ -f "${DEPLOY_PATH}/deploy/env.defaults" ]; then
     # shellcheck disable=SC1090
     . "${DEPLOY_PATH}/deploy/env.defaults"
+    # 镜像引用由本脚本按 registry + tag 现算后写进 .env；而 compose 的取值优先级是
+    # 「shell 环境 > .env」—— 生成物里的 forklift-*-image:latest 若留在环境里就会盖掉计算值，
+    # compose 转而去 Docker Hub 拉不存在的镜像（2026-09-13 testing 冒烟实测踩到）。
+    unset BACKEND_IMAGE FRONTEND_IMAGE LIBREOFFICE_IMAGE
 fi
 
 # Docker

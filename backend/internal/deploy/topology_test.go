@@ -121,4 +121,13 @@ func TestEnvDefaultsIsConsumed(t *testing.T) {
 	if !strings.Contains(cd, "unset BACKEND_IMAGE FRONTEND_IMAGE LIBREOFFICE_IMAGE") {
 		t.Fatal("CD 的环境变量文件没有 unset 生成物里的镜像名：会把部署脚本算好的镜像引用盖掉")
 	}
+	// 部署脚本自己也会 source 生成物（手工执行路径的兜底），因此同一处让位必须在那里也做一遍 ——
+	// 只在一侧让位，compose 仍会拿到生成物里的本地镜像名（2026-09-13 testing 冒烟两次实测）。
+	remote, err := os.ReadFile(filepath.Join("..", "..", "..", "scripts", "deploy-remote.sh"))
+	if err != nil {
+		t.Fatalf("读取 scripts/deploy-remote.sh 失败: %v", err)
+	}
+	if !strings.Contains(string(remote), "unset BACKEND_IMAGE FRONTEND_IMAGE LIBREOFFICE_IMAGE") {
+		t.Fatal("deploy-remote.sh source 生成物后没有 unset 镜像名：compose 会去拉不存在的本地镜像")
+	}
 }
