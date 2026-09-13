@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
@@ -38,7 +39,7 @@ func NewPointsHandler(svc *service.PointsService) *PointsHandler {
 // RegisterPointsRoutes 注册 /api/points 蓝图（需登录，hrwai_user）
 func RegisterPointsRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.PointsService) {
 	h := NewPointsHandler(svc)
-	g := rg.Group("/points", middleware.JWTAuth(rd.Session), middleware.RoleRequired("hrwai_user"))
+	g := rg.Group("/points", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleStudent))
 	g.GET("/balance", h.GetBalance)
 	g.GET("/ledger", h.GetLedger)
 	g.GET("/tasks", h.GetTasks)

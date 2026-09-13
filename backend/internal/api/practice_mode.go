@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
@@ -26,7 +27,7 @@ func NewPracticeModeHandler(svc *service.PracticeModeService) *PracticeModeHandl
 func RegisterPracticeModeRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.PracticeModeService) {
 	h := NewPracticeModeHandler(svc)
 
-	g := rg.Group("/practice-mode", middleware.JWTAuth(rd.Session), middleware.RoleRequired("hrwai_user"))
+	g := rg.Group("/practice-mode", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleStudent))
 
 	g.GET("/free", h.GetFreeQuestions)
 	g.GET("/tag", h.StartTagPractice)

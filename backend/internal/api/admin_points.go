@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/model"
 	"forklift-training/internal/service"
@@ -25,7 +26,7 @@ func NewAdminPointsHandler(pointsSvc *service.PointsService, notificationSvc *se
 
 func RegisterAdminPointsRoutes(rg *gin.RouterGroup, rd RouterDeps, pointsSvc *service.PointsService, notificationSvc *service.NotificationService) {
 	h := NewAdminPointsHandler(pointsSvc, notificationSvc)
-	g := rg.Group("/admin/points", middleware.JWTAuth(rd.Session), middleware.RoleRequired("admin"))
+	g := rg.Group("/admin/points", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleAdmin))
 	g.POST("/penalty", h.Penalty)
 }
 

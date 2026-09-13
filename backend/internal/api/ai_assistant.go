@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
@@ -48,7 +49,7 @@ func RegisterAIAssistantRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.
 
 	// 需登录路由：会话管理 + 用户自定义模型管理（HRWAI 账号鉴权）
 	authed := g.Group("")
-	authed.Use(middleware.JWTAuth(rd.Session), middleware.RoleRequired("hrwai_user"))
+	authed.Use(middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleStudent))
 	authed.GET("/sessions", h.ListSessions)
 	authed.POST("/sessions", h.CreateSession)
 	authed.DELETE("/sessions/:id", h.DeleteSession)

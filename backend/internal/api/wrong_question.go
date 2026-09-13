@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
@@ -26,7 +27,7 @@ func NewWrongQuestionHandler(svc *service.WrongQuestionService) *WrongQuestionHa
 func RegisterWrongQuestionRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.WrongQuestionService) {
 	h := NewWrongQuestionHandler(svc)
 
-	g := rg.Group("/wrong-questions", middleware.JWTAuth(rd.Session), middleware.RoleRequired("hrwai_user"))
+	g := rg.Group("/wrong-questions", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleStudent))
 
 	// GET /api/wrong-questions  错题列表（分页+过滤）
 	g.GET("", h.List)

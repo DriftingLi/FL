@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
@@ -43,14 +44,14 @@ func NewJobHandler(svc *service.JobPostingService) *JobHandler {
 func RegisterJobRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.JobPostingService) {
 	h := NewJobHandler(svc)
 	// 企业侧
-	recruitG := rg.Group("/recruit", middleware.JWTAuth(rd.Session), middleware.RoleRequired("recruiter"))
+	recruitG := rg.Group("/recruit", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleRecruiter))
 	recruitG.POST("/jobs", h.Create)
 	recruitG.PUT("/jobs/:id", h.Update)
 	recruitG.POST("/jobs/:id/toggle-status", h.ToggleStatus)
 	recruitG.GET("/jobs", h.ListMine)
 	recruitG.GET("/jobs/:id", h.GetMine)
 	// 学员侧
-	studentG := rg.Group("/jobs", middleware.JWTAuth(rd.Session), middleware.RoleRequired("hrwai_user"))
+	studentG := rg.Group("/jobs", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleStudent))
 	studentG.GET("", h.ListPublic)
 	studentG.GET("/:id", h.GetPublic)
 }

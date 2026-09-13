@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/model"
 	"forklift-training/internal/service"
@@ -45,7 +46,7 @@ func NewAuditHandler(svc *service.AuditService) *AuditHandler {
 func RegisterAuditRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.AuditService) {
 	h := NewAuditHandler(svc)
 
-	g := rg.Group("/admin/audit-logs", middleware.JWTAuth(rd.Session), middleware.RoleRequired("admin"))
+	g := rg.Group("/admin/audit-logs", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleAdmin))
 
 	// GET /api/admin/audit-logs?page=&page_size=&actor_id=&role=&keyword=
 	g.GET("", h.List)

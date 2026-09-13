@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
@@ -25,7 +26,7 @@ func NewJobCardHandler(svc *service.JobCardService, fileSvc *service.FileStore) 
 
 func RegisterJobCardRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.JobCardService, fileSvc *service.FileStore) {
 	h := NewJobCardHandler(svc, fileSvc)
-	g := rg.Group("/resume", middleware.JWTAuth(rd.Session), middleware.RoleRequired("hrwai_user"))
+	g := rg.Group("/resume", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleStudent))
 	g.GET("", h.Get)
 	g.PUT("", h.Upsert)
 	g.PUT("/visibility", h.UpdateVisibility)

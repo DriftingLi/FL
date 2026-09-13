@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
@@ -41,18 +42,18 @@ func RegisterQuestionBankRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service
 
 	// ===== 题目 CRUD =====
 	g.GET("/questions", h.ListQuestions)
-	g.POST("/questions", middleware.RoleRequired("tutor", "admin"), h.CreateQuestion)
+	g.POST("/questions", middleware.RoleRequired(authz.RoleTutor, authz.RoleAdmin), h.CreateQuestion)
 	// 注意：Gin 路由树中静态路径优先于参数路径，batch-publish/batch-import 需在 :question_id 之前注册
-	g.POST("/questions/batch-publish", middleware.RoleRequired("admin"), h.BatchPublish)
-	g.POST("/questions/batch-reject", middleware.RoleRequired("admin"), h.BatchReject)
-	g.POST("/questions/batch-import", middleware.RoleRequired("tutor", "admin"), h.BatchImport)
+	g.POST("/questions/batch-publish", middleware.RoleRequired(authz.RoleAdmin), h.BatchPublish)
+	g.POST("/questions/batch-reject", middleware.RoleRequired(authz.RoleAdmin), h.BatchReject)
+	g.POST("/questions/batch-import", middleware.RoleRequired(authz.RoleTutor, authz.RoleAdmin), h.BatchImport)
 	g.GET("/questions/:question_id", h.GetQuestion)
-	g.PUT("/questions/:question_id", middleware.RoleRequired("tutor", "admin"), h.UpdateQuestion)
-	g.DELETE("/questions/:question_id", middleware.RoleRequired("tutor", "admin"), h.DeleteQuestion)
-	g.POST("/questions/:question_id/publish", middleware.RoleRequired("admin"), h.PublishQuestion)
-	g.POST("/questions/:question_id/reject", middleware.RoleRequired("admin"), h.RejectQuestion)
+	g.PUT("/questions/:question_id", middleware.RoleRequired(authz.RoleTutor, authz.RoleAdmin), h.UpdateQuestion)
+	g.DELETE("/questions/:question_id", middleware.RoleRequired(authz.RoleTutor, authz.RoleAdmin), h.DeleteQuestion)
+	g.POST("/questions/:question_id/publish", middleware.RoleRequired(authz.RoleAdmin), h.PublishQuestion)
+	g.POST("/questions/:question_id/reject", middleware.RoleRequired(authz.RoleAdmin), h.RejectQuestion)
 	g.GET("/stats", h.GetStats)
-	g.POST("/upload-image", middleware.RoleRequired("tutor", "admin"), h.UploadImage)
+	g.POST("/upload-image", middleware.RoleRequired(authz.RoleTutor, authz.RoleAdmin), h.UploadImage)
 }
 
 // listQuestionsReq 题目列表查询参数。

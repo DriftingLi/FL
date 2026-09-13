@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
@@ -30,7 +31,7 @@ var recruiterApplicationErrStatus = &errStatusTable{
 // RegisterRecruiterApplicationRoutes 注册企业侧投递处理路由。
 func RegisterRecruiterApplicationRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.JobApplicationService) {
 	h := NewRecruiterApplicationHandler(svc)
-	g := rg.Group("/recruit", middleware.JWTAuth(rd.Session), middleware.RoleRequired("recruiter"))
+	g := rg.Group("/recruit", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleRecruiter))
 	g.GET("/jobs/:id/applications", h.ListByJob)
 	g.GET("/applications/:id", h.GetDetail)
 	g.POST("/applications/:id/reject", h.Reject)

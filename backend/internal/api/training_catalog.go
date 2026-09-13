@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
@@ -43,7 +44,7 @@ func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *serv
 	rg.PATCH("/me/credential", middleware.JWTAuth(rd.Session), h.SetCurrentCredential)
 
 	// ===== 管理端 CRUD =====
-	g := rg.Group("/admin", middleware.JWTAuth(rd.Session), middleware.RoleRequired("admin"))
+	g := rg.Group("/admin", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleAdmin))
 	g.GET("/catalog/tree", h.GetAdminCatalogTree)
 
 	// ---- 岗位字典（问题4：与专业方向解绑） ----
@@ -81,7 +82,7 @@ func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *serv
 	g.DELETE("/credential/:id", h.DeleteCredential)
 
 	// ===== 题库标签与题目打标（admin + tutor，#问题2：导师端题库管理需要） =====
-	tagG := rg.Group("/admin", middleware.JWTAuth(rd.Session), middleware.RoleRequired("admin", "tutor"))
+	tagG := rg.Group("/admin", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleAdmin, authz.RoleTutor))
 	tagG.GET("/question-tags", h.ListQuestionTags)
 	tagG.POST("/question-tag", h.CreateQuestionTag)
 	tagG.PUT("/question-tag/:id", h.UpdateQuestionTag)

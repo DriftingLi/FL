@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 
+	"forklift-training/internal/authz"
 	"forklift-training/internal/config"
 	"forklift-training/internal/security"
 )
@@ -44,7 +45,7 @@ func generateToken(t *testing.T, userID int, username, role string) string {
 }
 
 // newTestRouter 创建带 JWTAuth + RoleRequired 的测试路由器。
-func newTestRouter(cfg *config.Config, roles ...string) *gin.Engine {
+func newTestRouter(cfg *config.Config, roles ...authz.Role) *gin.Engine {
 	r := gin.New()
 	sess := security.SessionFromConfig(cfg)
 	protected := r.Group("/protected", JWTAuth(sess))
@@ -278,7 +279,7 @@ func TestOptionalAuth_LogoutRevokesRefreshOnly(t *testing.T) {
 
 func TestRoleRequired_Allowed(t *testing.T) {
 	cfg := &config.Config{JWTSecretKey: testSecret}
-	r := newTestRouter(cfg, "admin", "tutor")
+	r := newTestRouter(cfg, authz.RoleAdmin, authz.RoleTutor)
 
 	token := generateToken(t, 1, "admin01", "admin")
 	req, _ := http.NewRequest("GET", "/protected/endpoint", nil)
@@ -293,7 +294,7 @@ func TestRoleRequired_Allowed(t *testing.T) {
 
 func TestRoleRequired_Denied(t *testing.T) {
 	cfg := &config.Config{JWTSecretKey: testSecret}
-	r := newTestRouter(cfg, "admin")
+	r := newTestRouter(cfg, authz.RoleAdmin)
 
 	token := generateToken(t, 1, "hrwai01", "hrwai_user")
 	req, _ := http.NewRequest("GET", "/protected/endpoint", nil)

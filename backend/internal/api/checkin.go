@@ -6,6 +6,7 @@ package api
 import (
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
@@ -24,7 +25,7 @@ func NewCheckInHandler(svc *service.CheckInService) *CheckInHandler {
 // RegisterCheckInRoutes 注册 /api/check-in 蓝图（需登录，hrwai_user）。
 func RegisterCheckInRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.CheckInService) {
 	h := NewCheckInHandler(svc)
-	g := rg.Group("/check-in", middleware.JWTAuth(rd.Session), middleware.RoleRequired("hrwai_user"))
+	g := rg.Group("/check-in", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleStudent))
 
 	// POST /api/check-in 签到（幂等；首签直记积分：基础 + 跨档阶梯）
 	g.POST("", h.CheckIn)

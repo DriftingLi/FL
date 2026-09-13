@@ -6,6 +6,7 @@ package api
 import (
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
@@ -25,7 +26,7 @@ func NewMaterialHandler(svc *service.MaterialService) *MaterialHandler {
 func RegisterMaterialRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.MaterialService) {
 	h := NewMaterialHandler(svc)
 
-	g := rg.Group("", middleware.JWTAuth(rd.Session), middleware.RoleRequired("hrwai_user"))
+	g := rg.Group("", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleStudent))
 
 	// GET /api/materials?course_id=&page=&page_size= 资料列表
 	g.GET("/materials", h.List)

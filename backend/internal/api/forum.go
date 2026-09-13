@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
@@ -30,7 +31,7 @@ func NewForumHandler(svc *service.ForumService, imageSvc *service.ForumImageServ
 func RegisterForumRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.ForumService, imageSvc *service.ForumImageService) {
 	h := NewForumHandler(svc, imageSvc)
 
-	g := rg.Group("/forum", middleware.JWTAuth(rd.Session), middleware.RoleRequired("hrwai_user"))
+	g := rg.Group("/forum", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleStudent))
 
 	// POST /api/forum/upload-image  上传论坛图片（图文分离，先传图后随发帖/回复提交 URL）
 	g.POST("/upload-image", h.UploadImage)
@@ -78,7 +79,7 @@ func RegisterForumRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.ForumS
 	g.DELETE("/topics/:id/accept", h.CancelAccept)
 
 	// ===== 管理员论坛管理 =====
-	adminG := rg.Group("/admin/forum", middleware.JWTAuth(rd.Session), middleware.RoleRequired("admin"))
+	adminG := rg.Group("/admin/forum", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleAdmin))
 	adminG.GET("/topics", h.ListTopics)
 	adminG.GET("/topics/:id", h.AdminGetTopic)
 	adminG.DELETE("/topics/:id", h.AdminDeleteTopic)
@@ -659,7 +660,7 @@ func (h *ForumHandler) AdminRevokeExperience(c *gin.Context) {
 	h.handleExperience(c, false)
 }
 
-// handleExperience 认定/取消经验共用管线（ADR-0040）：权限由路由组的 RoleRequired("admin") 收口。
+// handleExperience 认定/取消经验共用管线（ADR-0040）：权限由路由组的 RoleRequired(authz.RoleAdmin) 收口。
 func (h *ForumHandler) handleExperience(c *gin.Context, designate bool) {
 	Endpoint[topicIDReq, service.ForumTopicDTO]{
 		Parse: func(c *gin.Context) (*topicIDReq, error) {

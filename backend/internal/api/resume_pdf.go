@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/model"
 	"forklift-training/internal/service"
@@ -34,9 +35,9 @@ func NewResumePDFHandler(recruitSvc *service.RecruitService, renderer *service.R
 //   - 学员侧 /api/resume/pdf（本人预览）
 func RegisterResumePDFRoutes(rg *gin.RouterGroup, rd RouterDeps, recruitSvc *service.RecruitService, renderer *service.ResumePDFRenderer) {
 	h := NewResumePDFHandler(recruitSvc, renderer)
-	recruitG := rg.Group("/recruit", middleware.JWTAuth(rd.Session), middleware.RoleRequired("recruiter"))
+	recruitG := rg.Group("/recruit", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleRecruiter))
 	recruitG.GET("/resumes/:id/pdf", h.RecruiterResumePDF)
-	studentG := rg.Group("/resume", middleware.JWTAuth(rd.Session), middleware.RoleRequired("hrwai_user"))
+	studentG := rg.Group("/resume", middleware.JWTAuth(rd.Session), middleware.RoleRequired(authz.RoleStudent))
 	studentG.GET("/pdf", h.MyResumePDF)
 }
 
