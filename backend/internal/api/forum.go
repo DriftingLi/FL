@@ -264,12 +264,12 @@ func (h *ForumHandler) CreateTopic(c *gin.Context) {
 // @Param order query string false "排序方向 asc|desc"
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页回复数" default(20)
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.ForumTopicDetailDTO} "详情"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "不存在"
 // @Router /forum/topics/{id} [get]
 func (h *ForumHandler) GetTopic(c *gin.Context) {
-	Endpoint[topicGetReq, map[string]any]{
+	Endpoint[topicGetReq, service.ForumTopicDetailDTO]{
 		Parse: func(c *gin.Context) (*topicGetReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			userID, _ := uid.(int)
@@ -283,14 +283,10 @@ func (h *ForumHandler) GetTopic(c *gin.Context) {
 				Page: atoiDefault(c.Query("page"), 1), PageSize: atoiDefault(c.Query("page_size"), 0),
 			}, nil
 		},
-		Invoke: func(ctx context.Context, req *topicGetReq) (*map[string]any, error) {
-			result, err := h.svc.GetTopic(req.toDetailInput())
-			if err != nil {
-				return nil, err
-			}
-			return &result, nil
+		Invoke: func(ctx context.Context, req *topicGetReq) (*service.ForumTopicDetailDTO, error) {
+			return h.svc.GetTopic(req.toDetailInput())
 		},
-		Render: func(c *gin.Context, _ *topicGetReq, resp *map[string]any, err error) {
+		Render: func(c *gin.Context, _ *topicGetReq, resp *service.ForumTopicDetailDTO, err error) {
 			if err != nil {
 				if errors.Is(err, gorm.ErrRecordNotFound) {
 					response.NotFound(c, "主题不存在")
@@ -524,39 +520,11 @@ func (h *ForumHandler) DeleteReply(c *gin.Context) {
 // @Failure 404 {object} response.R "主题不存在"
 // @Router /admin/forum/topics/{id} [get]
 func (h *ForumHandler) AdminGetTopic(c *gin.Context) {
-	Endpoint[topicGetReq, map[string]any]{
-		Parse: func(c *gin.Context) (*topicGetReq, error) {
-			uid, _ := c.Get(string(middleware.CtxUserID))
-			userID, _ := uid.(int)
-			topicID, err := pathInt64(c, "id", "主题ID无效")
-			if err != nil {
-				return nil, err
-			}
-			return &topicGetReq{
-				TopicID: topicID, UserID: userID,
-				Sort: c.Query("sort"), Order: c.Query("order"),
-				Page: atoiDefault(c.Query("page"), 1), PageSize: atoiDefault(c.Query("page_size"), 0),
-			}, nil
-		},
-		Invoke: func(ctx context.Context, req *topicGetReq) (*map[string]any, error) {
-			result, err := h.svc.GetTopic(req.toDetailInput())
-			if err != nil {
-				return nil, err
-			}
-			return &result, nil
-		},
-		Render: func(c *gin.Context, _ *topicGetReq, resp *map[string]any, err error) {
-			if err != nil {
-				if errors.Is(err, gorm.ErrRecordNotFound) {
-					response.NotFound(c, "主题不存在")
-					return
-				}
-				response.ServerError(c, "查询失败: "+err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	// 与 GetTopic 逐字重复的 Endpoint 装配已删除（ADR-0047 §3 / spec #940 片二）：
+	// 两处的请求形状、404 文案与错误分支完全同源，管理端沿用同一实现即可。
+	// 注解必须留在本函数上 —— swaggo 从函数注释生成 /admin/forum/topics/{id}，
+	// 把函数整个删掉会让该端点从 swagger 里消失（文档面缩水）。
+	h.GetTopic(c)
 }
 
 // AdminDeleteTopic 管理员删除任意主题 DELETE /api/admin/forum/topics/:id
