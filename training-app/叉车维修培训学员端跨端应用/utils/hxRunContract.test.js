@@ -29,6 +29,12 @@
  *       （它只属于全量编译门 `compile-check.ps1`）；必须显式传 `--deviceId`；launch 步必须走
  *       `Start-CliLaunchDetached`（真运行会话**不会自己收口**，走会等待的路径必然假超时）；
  *       且 `AGENTS.md` / ADR-0008 都必须写明「仅编译」这条坑位
+ *   C13 **`-CompileOnly` 诊断模式 + 快速失败**（2026-09-13，#949：慢的不是编译，是返工/排队/卡死）：
+ *       必须有 `-CompileOnly` 开关，其参数**只在这个分支里**传 `--compile true`（官方语义的「仅编译」）、
+ *       **不传 `--deviceId`**、并跳过设备解析（⇒ 不接设备的机器上也能拿到编译期诊断）；
+ *       必须有部署停滞判据（`Test-HxCompileFinished` + `-DeployStallSeconds`）；
+ *       忙等待默认 120（忙就快速 exit 2，不无声等十分钟）、轮询上限默认 900；
+ *       `package.json` 注册 `hx:compile-only`；`AGENTS.md` 写明分层内循环
  *
  * 设计沿用本仓既有守护测试形态（见 utils/emulatorSmokeContract.test.js、utils/hxBusyGateContract.test.js）：
  * 先对「注入违规」的变形样本断言检测有效（防空跑假绿），再对真实文件断言零命中。
@@ -101,7 +107,7 @@ function scanContract(sources) {
   }
 
   // ---- C4 忙/超时 = exit 2 ----
-  must(/\[int\]\$WaitSeconds\s*=\s*600/.test(code), 'C4', '-WaitSeconds 默认不是 600（忙等待上限必须显式且默认 600）');
+  must(/\[int\]\$WaitSeconds\s*=\s*120/.test(code), 'C4', '-WaitSeconds 默认不是 120（#949 要求：忙就快速 exit 2，不无声等十分钟）');
   const exit2 = (code.match(/exit 2/g) || []).length;
   must(exit2 >= 3, 'C4', `环境不可用路径未判 exit 2（应 ≥3 处：cli/adb 缺失、设备缺或多、连接中断或超时；实得 ${exit2} 处）`);
 
@@ -181,7 +187,7 @@ function scanContract(sources) {
   must(/topResumedActivity/.test(code), 'C11', '未取前台包名（取它只为辅助说明；**不得单独作判据**）');
   const verdictAt = code.indexOf('if (-not $deployed.Deployed)');
   must(verdictAt !== -1, 'C11', '缺「未部署」分支（必须显式判未部署，不能只报成功）');
-  const okAt = code.indexOf("-Exit 'ok'");
+  const okAt = verdictAt === -1 ? -1 : code.indexOf("-Exit 'ok'", verdictAt);
   if (verdictAt !== -1) {
     const verdictSlice = code.slice(verdictAt, verdictAt + 1600);
     must(/-Exit 'env'/.test(verdictSlice), 'C11', '未部署时未打 exit=env 的结果行（不得报 ok）');
@@ -192,15 +198,22 @@ function scanContract(sources) {
   // ---- C12 真运行语义（2026-09-13 事故根因：--compile true 的官方语义是「仅编译代码」）----
   const buildAt = code.indexOf("$launchArgs = @('launch', 'app-android'");
   must(buildAt !== -1, 'C12', '未找到 launch 参数构造行（无法核对真运行语义）');
-  if (buildAt !== -1) {
-    const buildSlice = code.slice(buildAt, buildAt + 400);
+  // 「真运行路径」= 从参数构造行到 -CompileOnly 分支之前（#949 加了那只分支，它**该**传 --compile）
+  const coStart = buildAt === -1 ? -1 : code.indexOf('if ($CompileOnly) {', buildAt);
+  must(coStart !== -1 && coStart > buildAt, 'C12', '未找到 -CompileOnly 分支（无法把真运行参数与仅编译参数分开核对）');
+  if (buildAt !== -1 && coStart > buildAt) {
+    const normalSlice = code.slice(buildAt, coStart);
     must(
-      !/--compile/.test(buildSlice),
+      !/--compile/.test(normalSlice),
       'C12',
-      'launch 参数里出现 --compile（官方语义是「仅编译代码」⇒ 只编译不运行；该参数只属于全量编译门 compile-check.ps1）'
+      '真运行路径的 launch 参数里出现 --compile（官方语义是「仅编译代码」⇒ 只编译不运行；它只属于 -CompileOnly 分支与全量编译门）'
     );
-    must(/--cleanCache/.test(buildSlice), 'C12', 'launch 参数构造处未见 -Full 分支的干净缓存重建开关（C1 的落点应在这里）');
   }
+  must(
+    /--cleanCache/.test(code.slice(buildAt, buildAt + 1200)),
+    'C12',
+    'launch 参数构造处未见 -Full 分支的干净缓存重建开关（C1 的落点应在这里）'
+  );
   must(/--deviceId/.test(code), 'C12', 'launch 未显式传 --deviceId（官方文档：不指定时默认使用第一个设备；显式传才无歧义）');
   must(/Start-CliLaunchDetached/.test(code), 'C12', 'launch 步未走「派发后不等待」路径（真运行会话不返回，等待必然假超时）');
   must(
@@ -211,6 +224,36 @@ function scanContract(sources) {
   must(/\[int\]\$StepTimeoutSeconds/.test(code), 'C12', '缺 -StepTimeoutSeconds（open / project-open 两小步的超时）');
   must(agents.includes('仅编译'), 'C12', 'AGENTS.md 未写明「--compile 的语义是仅编译」（下个会话会再踩同一个坑）');
   must(adr.includes('仅编译'), 'C12', 'ADR-0008 未写明「仅编译」坑位（ADR 才是冷启动会话的必读面）');
+
+  // ---- C13 -CompileOnly 诊断模式 + 快速失败（2026-09-13，#949）----
+  must(/\[switch\]\$CompileOnly/.test(code), 'C13', '缺 -CompileOnly 开关（编译期诊断必须在真机链路之前能拿到）');
+  const coAt = code.indexOf('if ($CompileOnly) {');
+  must(coAt !== -1, 'C13', '未找到 `if ($CompileOnly) {` 分支（无法核对「仅编译」参数的落点）');
+  if (coAt !== -1) {
+    const coSlice = code.slice(coAt, coAt + 700);
+    must(/--compile/.test(coSlice), 'C13', '-CompileOnly 分支未传 --compile（那才是官方语义的「仅编译代码」）');
+    must(!/--deviceId/.test(coSlice), 'C13', '-CompileOnly 分支不该传 --deviceId（仅编译不需要设备）');
+  }
+  must(
+    /\$target = @\{ Serial = ''; Mode = 'compile-only' \}/.test(code),
+    'C13',
+    '-CompileOnly 未跳过设备解析（会让「不接设备也能跑诊断」落空）'
+  );
+  must(/Test-HxCompileFinished/.test(code), 'C13', '缺部署停滞判据（编译段已结束 + 无前进 ⇒ 提前判环境不可用）');
+  // ⚠️ 每个 Get-HxErrorLines 调用点都必须包 @(...)：函数返回空数组会退化成 $null，
+  //    而 `$null.Count` 在 Set-StrictMode -Latest 下直接抛错（2026-09-13 首次真跑踩到）
+  const ghcCalls = (code.match(/Get-HxErrorLines -Output/g) || []).length;
+  const ghcSafe = (code.match(/@\(Get-HxErrorLines -Output/g) || []).length;
+  must(ghcCalls >= 2, 'C13', `Get-HxErrorLines 调用点应 ≥2（仅编译 + 真运行；实得 ${ghcCalls}）`);
+  must(
+    ghcCalls === ghcSafe,
+    'C13',
+    `有 Get-HxErrorLines 调用点没包 @()（${ghcSafe}/${ghcCalls}）—— 空数组退化成 $null 会让 StrictMode 抛错`
+  );
+  must(/\[int\]\$DeployStallSeconds\s*=\s*300/.test(code), 'C13', '缺 -DeployStallSeconds（默认 300）');
+  must(/\[int\]\$TimeoutSeconds\s*=\s*900/.test(code), 'C13', '部署轮询上限默认不是 900（#949 要求由 1800 下调）');
+  must(/"hx:compile-only"\s*:\s*"[^"]*hx-run\.ps1\s+-CompileOnly"/.test(pkg), 'C13', 'package.json 未注册 hx:compile-only');
+  must(agents.includes('CompileOnly') || agents.includes('compile-only'), 'C13', 'AGENTS.md 未写分层内循环（诊断走 CompileOnly）');
 
 
   // ---- C10 文档落锁 ----
@@ -256,13 +299,13 @@ describe('日常增量运行契约（scripts/hx-run.ps1，2026-09-12）', () => 
       ['C3', 'dot-source 被删', (s) => ({ ...s, script: s.script.replace(/lib\\hx-busy\.ps1/g, 'other.ps1') })],
       ['C3', 'Wait-HxFree 被删', (s) => ({ ...s, script: s.script.replace(/Wait-HxFree -CliExe/g, 'WaitNothing -CliExe') })],
       ['C3', '锁没在 finally 里释放', (s) => ({ ...s, script: s.script.replace(/Release-HxLock/g, 'ReleaseNothing') })],
-      ['C4', '忙等待上限被改大', (s) => ({ ...s, script: s.script.replace('[int]$WaitSeconds = 600', '[int]$WaitSeconds = 3600') })],
+      ['C4', '忙等待上限被改大', (s) => ({ ...s, script: s.script.replace('[int]$WaitSeconds = 120', '[int]$WaitSeconds = 3600') })],
       ['C4', '环境不可用不再 exit 2', (s) => ({ ...s, script: s.script.replace(/exit 2/g, 'exit 9') })],
       ['C5', '机检行格式被改', (s) => ({
         ...s,
         script: s.script.replace('HX_RUN mode={0} compile={1}', 'HX_RUN compile={1}')
       })],
-      ['C5', 'fail 出口被删', (s) => ({ ...s, script: s.script.replace("-Exit 'fail'", "-Exit 'bad'") })],
+      ['C5', 'fail 出口被删', (s) => ({ ...s, script: s.script.replace(/-Exit 'fail'/g, "-Exit 'bad'") })],
       ['C6', '拿退出码当判据', (s) => ({ ...s, script: s.script + '\nif ($LASTEXITCODE -ne 0) { exit 1 }\n' })],
       ['C6', '改用 ExitCode 判成败', (s) => ({ ...s, script: s.script + '\nif ($proc.ExitCode -ne 0) { exit 1 }\n' })],
       ['C7', '-DryRun 分支被改名', (s) => ({ ...s, script: s.script.replace('if ($DryRun) {', 'if ($false) {') })],
@@ -342,7 +385,34 @@ describe('日常增量运行契约（scripts/hx-run.ps1，2026-09-12）', () => 
         ...s,
         agents: s.agents.replace(/仅编译/g, '只编译')
       })],
-      ['C12', 'ADR 不再写「仅编译」', (s) => ({ ...s, adr: s.adr.replace(/仅编译/g, '只编译') })]
+      ['C12', 'ADR 不再写「仅编译」', (s) => ({ ...s, adr: s.adr.replace(/仅编译/g, '只编译') })],
+      ['C13', '-CompileOnly 开关被删', (s) => ({ ...s, script: s.script.replace('[switch]$CompileOnly,', '') })],
+      ['C13', '-CompileOnly 分支不再传 --compile（退化成真运行）', (s) => ({
+        ...s,
+        script: s.script.replace("$launchArgs += @('--compile', 'true')", '$null = $null')
+      })],
+      ['C13', '-CompileOnly 分支又去解析设备（"不接设备也能跑"落空）', (s) => ({
+        ...s,
+        script: s.script.replace(
+          "$target = @{ Serial = ''; Mode = 'compile-only' }",
+          '$target = Resolve-TargetDevice -Requested $Device -AdbExe $adbExe'
+        )
+      })],
+      ['C13', '部署停滞判据被删', (s) => ({ ...s, script: s.script.replace(/Test-HxCompileFinished/g, 'X') })],
+      ['C13', '停滞阈值被调到超过轮询上限（等于没有快速失败）', (s) => ({
+        ...s,
+        script: s.script.replace('[int]$DeployStallSeconds = 300', '[int]$DeployStallSeconds = 0')
+      })],
+      ['C13', '轮询上限被调回 1800', (s) => ({ ...s, script: s.script.replace('[int]$TimeoutSeconds = 900', '[int]$TimeoutSeconds = 1800') })],
+      ['C13', 'package.json 未注册 hx:compile-only', (s) => ({ ...s, pkg: s.pkg.replace('"hx:compile-only"', '"hxcompileonly"') })],
+      ['C13', 'AGENTS.md 不再写 CompileOnly 分层', (s) => ({
+        ...s,
+        agents: s.agents.replace(/CompileOnly|compile-only/g, 'XXX')
+      })],
+      ['C13', 'Get-HxErrorLines 调用点丢了 @()（空数组退化成 $null ⇒ StrictMode 抛错）', (s) => ({
+        ...s,
+        script: s.script.replace(/@\(Get-HxErrorLines -Output/g, 'Get-HxErrorLines -Output')
+      })]
     ];
     cases.forEach(([rule, label, mutate]) => {
       const found = scanContract(mutate(real));
@@ -362,13 +432,16 @@ describe('日常增量运行契约（scripts/hx-run.ps1，2026-09-12）', () => 
     expect(code).toContain("$launchArgs = @('launch', 'app-android', '--project', $Project)");
   });
 
-  it('C12：launch 是真运行（参数里没有 --compile；带 --deviceId；走不等待的派发路径）', () => {
+  it('C12：launch 是真运行（真运行路径参数里没有 --compile；带 --deviceId；走不等待的派发路径）', () => {
     const code = maskDocBlocks(real.script);
     const at = code.indexOf("$launchArgs = @('launch', 'app-android'");
     expect(at).toBeGreaterThan(-1);
     // 这条曾把错参数锁成「必须」：C1 的 happy-path 原来断言参数里**必须**有 --compile true。
     // `--compile true` 的官方语义是「仅编译代码」⇒ 断言它等于断言「从不运行」。
-    expect(code.slice(at, at + 400)).not.toMatch(/--compile/);
+    // #949 之后它只允许出现在 -CompileOnly 分支里，所以核对范围是「到该分支之前」（真运行路径）。
+    const coAt = code.indexOf('if ($CompileOnly) {', at);
+    expect(coAt).toBeGreaterThan(at);
+    expect(code.slice(at, coAt)).not.toMatch(/--compile/);
     expect(code).toContain('--deviceId');
     expect(code).toContain('Start-CliLaunchDetached');
     expect(code).not.toContain("Invoke-CliStep -Name 'launch'");
@@ -402,11 +475,26 @@ describe('日常增量运行契约（scripts/hx-run.ps1，2026-09-12）', () => 
     expect(code).toContain('已停止运行');
     expect(code).toContain('io.dcloud.uniappx');
     const verdictAt = code.indexOf('if (-not $deployed.Deployed)');
-    const okAt = code.indexOf("-Exit 'ok'");
+    // -Exit 'ok' 在 #949 之后也出现在 -CompileOnly 分支里 ⇒ 必须从「部署判定」之后开始找
+    const okAt = code.indexOf("-Exit 'ok'", verdictAt);
     expect(verdictAt).toBeGreaterThan(-1);
     expect(okAt).toBeGreaterThan(-1);
     expect(verdictAt).toBeLessThan(okAt);
     expect(code.slice(verdictAt, verdictAt + 1600)).toContain('exit 2');
+  });
+
+  it('C13：-CompileOnly 只编译拿诊断（不传 --deviceId、跳过设备解析）+ 快速失败参数就位', () => {
+    const code = maskDocBlocks(real.script);
+    const at = code.indexOf('if ($CompileOnly) {');
+    expect(at).toBeGreaterThan(-1);
+    expect(code.slice(at, at + 700)).toContain('--compile');
+    expect(code.slice(at, at + 700)).not.toContain('--deviceId');
+    expect(code).toContain("$target = @{ Serial = ''; Mode = 'compile-only' }");
+    expect(code).toContain('Test-HxCompileFinished');
+    expect(code).toMatch(/\[int\]\$DeployStallSeconds\s*=\s*300/);
+    expect(code).toMatch(/\[int\]\$TimeoutSeconds\s*=\s*900/);
+    expect(code).toMatch(/\[int\]\$WaitSeconds\s*=\s*120/);
+    expect(real.pkg).toMatch(/"hx:compile-only"\s*:\s*"[^"]*hx-run\.ps1\s+-CompileOnly"/);
   });
 
   it('C10：AGENTS.md 的三层节奏与 ADR-0008 的一行指针都在', () => {
