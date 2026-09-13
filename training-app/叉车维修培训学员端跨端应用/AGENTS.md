@@ -220,6 +220,8 @@ UTS（uni-app-x 的 TypeScript 变体）不支持以下 TypeScript 语法：
 
 **HBuilderX 回写坑位同样适用**：跑完任何 HBuilderX 步骤（含 `hx-run.ps1`）先 `git status` 看 `manifest.json` **与 `pages.json`** 是否被改脏，脏了就还原再继续 —— 后者会被写入一段 `condition`（GUI 选的启动页，注释自述「仅开发期间生效」），**属本地开发配置、禁止提交**；而 `pages.json` 同时是「运行时面 / 打包面」判据来源，误提交会让 PR 凭空命中 ④b 云打包门（详见 `docs/adr/0008-移动端验收门与证据.md`）。
 
+**另一条收尾坑位（2026-09-13 一天踩到两次）**：`hx:run` 的**真运行会话会常驻**，并把它自己写的 `.ci-verify\launch-*.out/.err` 攥在手里 ⇒ **只要会话还活着，那个项目目录既删不掉也改不了名**（报 `being used by another process`）。**删 worktree / 给项目目录改名之前**，先 `cli project close --path <项目>` 结束会话（或发起下一次 launch 把它顶掉）。`hx:compile-only` 不留常驻会话，因此**没有这个副作用**。
+
 ## 验收门与合并纪律（ADR-0008）
 
 改动触及运行时面（改动集含 `*.uvue` / `*.uts`，或 training-app 下的 `manifest.json` / `pages.json` / `platformConfig.json`）时，适用 `docs/adr/0008-移动端验收门与证据.md` 的四门与证据要求。
