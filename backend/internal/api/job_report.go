@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
@@ -30,10 +31,10 @@ var jobReportErrStatus = &errStatusTable{
 func RegisterJobReportRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.JobReportService, jobSvc *service.JobPostingService) {
 	h := NewJobReportHandler(svc, jobSvc)
 	// 学员侧举报
-	studentG := rg.Group("/jobs", middleware.JWTAuth(rd.Session), middleware.RoleRequired("hrwai_user"))
+	studentG := rg.Group("/jobs", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapJobReport))
 	studentG.POST("/:id/report", h.Report)
 	// 管理端只读巡检 + 处置
-	adminG := rg.Group("/admin", middleware.JWTAuth(rd.Session), middleware.RoleRequired("admin"))
+	adminG := rg.Group("/admin", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapJobReportHandle))
 	adminG.GET("/jobs", h.ListAll)
 	adminG.GET("/job-reports", h.ListReports)
 	adminG.POST("/job-reports/:id/handle", h.MarkHandled)

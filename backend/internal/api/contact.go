@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
@@ -17,13 +18,13 @@ import (
 func RegisterContactRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.ContactService) {
 	h := NewContactHandler(svc)
 	// 招聘方：发起与查看我的申请 + 读取明文
-	recruitG := rg.Group("/recruit", middleware.JWTAuth(rd.Session), middleware.RoleRequired("recruiter"))
+	recruitG := rg.Group("/recruit", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapContactRequest))
 	recruitG.POST("/contact-requests", h.Create)
 	recruitG.GET("/contact-requests", h.ListForRecruiter)
 	recruitG.GET("/resumes/:id/contact", h.GetContact)
 
 	// 学员侧：查看收到的申请 + 同意/拒绝/撤回
-	studentG := rg.Group("/resume", middleware.JWTAuth(rd.Session), middleware.RoleRequired("hrwai_user"))
+	studentG := rg.Group("/resume", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapContactRespond))
 	studentG.GET("/contact-requests", h.ListForStudent)
 	studentG.POST("/contact-requests/:id/approve", h.Approve)
 	studentG.POST("/contact-requests/:id/reject", h.Reject)

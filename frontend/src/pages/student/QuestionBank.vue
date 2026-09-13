@@ -235,6 +235,8 @@ import UiCard from '@/components/ui/UiCard.vue'
 import UiSectionHeader from '@/components/ui/UiSectionHeader.vue'
 import UiStatCard from '@/components/ui/UiStatCard.vue'
 
+const credentialStore = useCredentialStore()
+
 const stagger = useStagger()
 import { typeMap, questionTypeOptions, randomCountOptions } from '@/constants/question'
 import type { PracticeProgress, QuestionType } from '@/types/question'
@@ -251,6 +253,7 @@ import KnowledgeCard from '@/components/practice/KnowledgeCard.vue'
 import CommentCard from '@/components/practice/CommentCard.vue'
 import NoteCard from '@/components/practice/NoteCard.vue'
 import { useAsyncPage } from '@/composables/useAsyncPage'
+import { useCredentialStore } from '@/stores/credential'
 import { useConfirm } from '@/composables/useConfirm'
 import UiTag from '@/components/ui/UiTag.vue'
 
@@ -440,8 +443,8 @@ onMounted(() => {
 async function loadTags() {
   tagsLoading.value = true
   try {
-    // 拦截器已解包信封
-    const data = await trainingApi.getTags()
+    // 证件作用域（ADR-0047 §4）：公开标签接口无登录上下文，显式传当前证件
+    const data = await trainingApi.getTags(credentialStore.current?.id)
     tags.value = data.tags || []
   } catch (e) {
     // 静默失败，标签入口降级为不可用

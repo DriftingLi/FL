@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 
+	"forklift-training/internal/authz"
 	"forklift-training/internal/security"
 	"forklift-training/pkg/response"
 )
@@ -136,13 +137,10 @@ func authCookieValue(c *gin.Context, sess *security.Session) string {
 	return ""
 }
 
-// RoleRequired 角色校验中间件。
+// CapabilityRequired 能力守卫（ADR-0047 §1）：判据是 authz 能力，不是角色字面量。
+// 这是逐域迁移的目标形态——端点声明「需要什么能力」，角色可达面由 authz 能力表回答。
 // 必须在 JWTAuth 之后使用。
-func RoleRequired(roles ...string) gin.HandlerFunc {
-	allowed := make(map[string]struct{}, len(roles))
-	for _, r := range roles {
-		allowed[r] = struct{}{}
-	}
+func CapabilityRequired(capability authz.Capability) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		role, exists := c.Get(string(CtxUserRole))
 		if !exists {
@@ -151,7 +149,7 @@ func RoleRequired(roles ...string) gin.HandlerFunc {
 			return
 		}
 		roleStr, _ := role.(string)
-		if _, ok := allowed[roleStr]; !ok {
+		if !authz.Has(authz.Role(roleStr), capability) {
 			response.Forbidden(c, "权限不足")
 			c.Abort()
 			return

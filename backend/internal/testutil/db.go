@@ -29,7 +29,7 @@ func NewMemoryDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("打开内存数据库失败: %v", err)
 	}
-	if err := db.AutoMigrate(allModels()...); err != nil {
+	if err := db.AutoMigrate(model.AllModels()...); err != nil {
 		t.Fatalf("AutoMigrate 失败: %v", err)
 	}
 	return db
@@ -53,79 +53,10 @@ func NewFileDB(t *testing.T) *gorm.DB {
 			_ = sqlDB.Close()
 		}
 	})
-	if err := db.AutoMigrate(allModels()...); err != nil {
+	if err := db.AutoMigrate(model.AllModels()...); err != nil {
 		t.Fatalf("AutoMigrate 失败: %v", err)
 	}
 	return db
-}
-
-// allModels 返回全部模型，按外键依赖顺序排列。
-func allModels() []interface{} {
-	return []interface{}{
-		&model.Credential{},
-		&model.HrwaiUser{},
-		&model.RecruiterUser{},
-		&model.JobCard{},
-		&model.Notification{},
-		&model.AuditLog{},
-		&model.ProfileChangeRequest{},
-		&model.Admin{},
-		&model.Tutor{},
-		&model.Course{},
-		&model.Specialty{},
-		&model.Position{},
-		&model.CourseLevel{},
-		&model.CertificateTemplate{},
-		&model.CoursePrerequisite{},
-		&model.Chapter{},
-		&model.ChapterFile{},
-		&model.StudyRecord{},
-		&model.Question{},
-		&model.QuestionTag{},
-		&model.QuestionTagRelation{},
-		&model.QuestionComment{},
-		&model.QuestionNote{},
-		&model.QuestionPracticeRecord{},
-		&model.PracticeProgress{},
-		&model.WrongQuestion{},
-		&model.MockExam{},
-		&model.RealExamPaper{},
-		&model.RealExamPaperQuestion{},
-		&model.ForumTopic{},
-		&model.ForumReply{},
-		&model.ForumTopicLike{},
-		&model.ForumReplyLike{},
-		&model.ForumCheckIn{},
-		&model.ForumTopicView{},
-		&model.Favorite{},
-		&model.ForumReport{},
-		&model.AIGenerationLog{},
-		&model.AsyncTask{},
-		&model.FeaturedContent{},
-		&model.SystemSetting{},
-		&model.AIConfig{},
-		&model.AIFeatureBinding{},
-		&model.AIChatSession{},
-		&model.AIChatMessage{},
-		&model.AIUserModel{},
-		&model.PointsLedger{},
-		&model.PointsTaskConfig{},
-		&model.PointsTaskClaim{},
-		&model.PointsUserProgress{},
-		&model.UserDailyLogin{},
-		&model.PointsShopItem{},
-		&model.UserEntitlement{},
-		&model.PointsEntryIdem{},
-		&model.RecruitResumeView{},
-		&model.ContactRequest{},
-		&model.JobPosting{},
-		&model.JobApplication{},
-		&model.JobReport{},
-		&model.UserContribution{},
-		&model.UserContributionFile{},
-		&model.ContributionDownload{},
-		&model.ContributionReport{},
-	}
 }
 
 // seedUIDCounter 为测试用户生成递增 uid（雪花语义仅需唯一即可）。

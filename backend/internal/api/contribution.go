@@ -6,10 +6,10 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
@@ -33,7 +33,7 @@ func RegisterContributionRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service
 	h := NewContributionHandler(svc)
 
 	// ===== 学员端（hrwai_user）=====
-	g := rg.Group("/contributions", middleware.JWTAuth(rd.Session), middleware.RoleRequired("hrwai_user"))
+	g := rg.Group("/contributions", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapContributionSubmit), middleware.CredentialScoped(rd.CredentialScope))
 	// POST /api/contributions/upload-file 先传文件（暂存位）拿 URL
 	g.POST("/upload-file", h.UploadFile)
 	// POST /api/contributions 创建投稿
@@ -52,7 +52,7 @@ func RegisterContributionRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service
 	g.POST("/:id/report", h.Report)
 
 	// ===== 管理端审核队列（admin + tutor；讲师前端二期）=====
-	adminG := rg.Group("/admin/contributions", middleware.JWTAuth(rd.Session), middleware.RoleRequired("tutor", "admin"))
+	adminG := rg.Group("/admin/contributions", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapContributionReview))
 	// GET /api/admin/contributions/pending 待审核队列
 	adminG.GET("/pending", h.ListPending)
 	// POST /api/admin/contributions/:id/approve 通过（发分）
@@ -204,10 +204,11 @@ type listPublicReq struct {
 func (h *ContributionHandler) ListPublic(c *gin.Context) {
 	Endpoint[listPublicReq, service.ContributionPageResult]{
 		Parse: func(c *gin.Context) (*listPublicReq, error) {
-			credID, err := strconv.Atoi(c.Query("credential_id"))
-			if err != nil || credID <= 0 {
-				return nil, badRequest("credential_id 必填")
+			cred := middleware.CredentialIDPtr(c)
+			if cred == nil {
+				return nil, badRequest("credential_id 必填（未选择当前证件）")
 			}
+			credID := *cred
 			return &listPublicReq{
 				CredentialID: credID,
 				Sort:         c.Query("sort"),

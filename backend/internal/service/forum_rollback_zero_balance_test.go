@@ -59,7 +59,8 @@ func TestAdminDeleteTopicZeroBalanceRollback(t *testing.T) {
 	// 回收幂等：同键二次 settle 静默跳过，不再产生流水
 	for i := 0; i < 2; i++ {
 		if err := db.Transaction(func(tx *gorm.DB) error {
-			return svc.rollbackTopicRewardsTx(tx, topic.ID)
+			_, err := svc.rewards.Reclaim(tx, topic.ID)
+			return err
 		}); err != nil {
 			t.Fatalf("第 %d 次重复回收应幂等跳过: %v", i+1, err)
 		}
@@ -90,7 +91,7 @@ func TestAcceptReplyRewardIdempotentOccupy(t *testing.T) {
 
 	// 直接走 settle 通道断言占坑语义：奖励静默跳过、无流水
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		return svc.points.SettleRewardTx(tx, PointsEntry{
+		return svc.rewards.points.SettleRewardTx(tx, PointsEntry{
 			UserID: answerer.ID, Delta: AcceptBonusPoints, Reason: ReasonAcceptedBonus,
 			RefType: "forum_topic", RefID: strconv.FormatInt(topic.ID, 10),
 			IdemKey: idemKey,

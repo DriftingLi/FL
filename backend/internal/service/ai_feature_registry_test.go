@@ -187,3 +187,35 @@ func TestAIFeatureRegistry_Hygiene(t *testing.T) {
 		t.Fatalf("AllAIFeatures 应排除唯一的遗留兼容位: %d vs %d", len(AllAIFeatures), len(aiFeatureRegistry)-1)
 	}
 }
+
+// 注册表派生面卫生（ADR-0047 §7 / spec #934）：专项对话功能的 slug 非空且唯一、
+// adapter 取值合法、且 slug 与功能键的映射是显式声明（不是从键名猜出来的）。
+//
+// 为什么值得一条独立用例：codegen 会对空/重复 slug 报错，但那是「生成时」的失败；
+// 这条用例把失败点前移到注册表本身，且能钉住「slug 不与键名等同」这类有意的差异
+// （maintenance_knowledge → maintenance）。
+func TestAIFeatureRegistrySlugs(t *testing.T) {
+	seen := map[string]string{}
+	chatCount := 0
+	for _, f := range aiFeatureRegistry {
+		switch f.adapter {
+		case aiAdapterLLM, aiAdapterDiagnosis:
+		default:
+			t.Fatalf("功能 %s 的 adapter 取值非法: %q", f.name, f.adapter)
+		}
+		if !aiFeatureIsChat(f.bindingKind, f.billed) {
+			continue
+		}
+		chatCount++
+		if f.slug == "" {
+			t.Fatalf("专项对话功能 %s 缺少 slug（前端路由白名单无法派生）", f.name)
+		}
+		if prev, dup := seen[f.slug]; dup {
+			t.Fatalf("slug %q 重复: %s 与 %s", f.slug, prev, f.name)
+		}
+		seen[f.slug] = f.name
+	}
+	if chatCount == 0 {
+		t.Fatal("注册表没有任何专项对话功能——本用例失去意义（收录规则变了？）")
+	}
+}

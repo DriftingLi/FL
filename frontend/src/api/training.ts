@@ -94,9 +94,15 @@ export interface CertificateTemplatePayload {
 
 export const trainingApi = {
   // ===== 目录树 =====
-  /** 公开目录树（学员端筛选用）：GET /api/catalog/tree → {specialties}（credential_id 经拦截器注入，与课程列表同口径 #702） */
-  getCatalogTree() {
-    return unwrappedRequest.get<CatalogTree>('/catalog/tree', { params: {} })
+  /**
+   * 公开目录树（学员端筛选用）：GET /api/catalog/tree → {specialties}。
+   * **公开路由**（无 JWTAuth）拿不到登录上下文，服务端无法兜底当前证件，故由调用方显式传入
+   * （ADR-0047 §4 / #931；与课程列表同口径 #702）。
+   */
+  getCatalogTree(credentialId?: number | null) {
+    return unwrappedRequest.get<CatalogTree>('/catalog/tree', {
+      params: credentialId ? { credential_id: credentialId } : {}
+    })
   },
   /** 全局课程等级列表（仅启用项）：GET /api/levels */
   getLevels() {
@@ -152,9 +158,14 @@ export const trainingApi = {
   },
 
   // ===== 题库标签（后端管理端路由 /admin/question-tag*） =====
-  /** 学员端标签列表（公开，仅启用项，question_count=已发布题数；credential_id 经拦截器注入，与抽题池同口径 #702）：GET /api/tags */
-  getTags() {
-    return unwrappedRequest.get<{ tags: QuestionTag[] }>('/tags', { params: {} })
+  /**
+   * 学员端标签列表（公开，仅启用项，question_count=已发布题数）：GET /api/tags。
+   * 同上：公开路由由调用方显式传证件（与抽题池同口径 #702）。
+   */
+  getTags(credentialId?: number | null) {
+    return unwrappedRequest.get<{ tags: QuestionTag[] }>('/tags', {
+      params: credentialId ? { credential_id: credentialId } : {}
+    })
   },
   getQuestionTags() {
     return unwrappedRequest.get<{ tags: QuestionTag[] }>('/admin/question-tags')

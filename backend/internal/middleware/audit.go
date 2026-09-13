@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
+	"forklift-training/internal/authz"
 	"forklift-training/internal/model"
 	"forklift-training/internal/service"
 )
@@ -53,7 +54,7 @@ func AuditLog(svc *service.AuditService, logger *zap.Logger) gin.HandlerFunc {
 
 		role := CurrentRole(c)
 		userID := CurrentUserID(c)
-		if userID <= 0 || (role != "admin" && role != "tutor") {
+		if userID <= 0 || (role != string(authz.RoleAdmin) && role != string(authz.RoleTutor)) {
 			return
 		}
 

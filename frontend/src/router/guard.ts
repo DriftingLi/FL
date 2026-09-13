@@ -18,6 +18,7 @@ import type { SubdomainType } from '@/utils/subdomain'
 import { getTargetSubdomainForPath } from '@/utils/subdomain'
 import { resolveWorkspaceForRole } from '@/utils/authRedirect'
 import { routeNames } from '@/config/routeNames'
+import { hasCapability, type AuthzCapability, type AuthzRole } from '@/config/authz'
 
 /**
  * 工作区：产品区语义（≠子域名）。
@@ -156,6 +157,11 @@ export const roleStep: GuardStep = (input, state) => {
     ? requiredRoles.includes(state.role)
     : (requiredRole ? requiredRole === state.role : true)
   if (roleMatched) return null
+  return workspaceFallback(input, state)
+}
+
+/** 可见性不足时的统一回落：管理员/导师回各自工作台、估值受限页回估值首页、其余回学员工作区。 */
+function workspaceFallback(input: GuardInput, state: GuardState): GuardDecision {
   // 管理员/导师回各自工作台（角色 → 默认工作区单点）
   if (state.role === 'admin' || state.role === 'tutor') {
     return { action: 'redirect', to: resolveWorkspaceForRole(state.role) }
@@ -164,6 +170,22 @@ export const roleStep: GuardStep = (input, state) => {
   if (workspaceOf(input) === 'valuation') return { action: 'redirect', to: '/valuation' }
   // 其余 → 学员工作区
   return { action: 'redirect', to: '/training' }
+}
+
+/**
+ * 步骤 4b：能力校验（ADR-0047 §1/§2；meta.capability 由页面描述符注入）。
+ *
+ * 语义边界：能力是**角色资格**，只对「需要登录」的页面生效——公开页（requiresAuth 全 false）
+ * 今天对任意角色开放，加能力位不得把 /ai-assistant 这类页面锁死。判据来自后端能力表的
+ * codegen（config/authz.ts），前端不再各抄一份角色清单。
+ */
+export const capabilityStep: GuardStep = (input, state) => {
+  const required = input.meta?.capability as AuthzCapability | undefined
+  if (!required) return null
+  const requiresAuth = input.matched.some(record => record.requiresAuth === true)
+  if (!requiresAuth) return null
+  if (hasCapability(state.role as AuthzRole, required)) return null
+  return workspaceFallback(input, state)
 }
 
 /**
@@ -192,7 +214,7 @@ export const credentialStep: GuardStep = (input, state) => {
  * 步骤顺序 = 行为不变承诺的一部分，不可调整。
  */
 export function resolveGuardDecision(input: GuardInput, state: GuardState): GuardDecision {
-  const steps: GuardStep[] = [subdomainBoundaryStep, authPageStep, authRequiredStep, roleStep, credentialStep]
+  const steps: GuardStep[] = [subdomainBoundaryStep, authPageStep, authRequiredStep, roleStep, capabilityStep, credentialStep]
   for (const step of steps) {
     const decision = step(input, state)
     if (decision) return decision

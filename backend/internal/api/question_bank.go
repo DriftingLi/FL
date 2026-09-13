@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/response"
@@ -37,22 +38,22 @@ func NewQuestionBankHandler(svc *service.QuestionBankService, fileSvc *service.F
 func RegisterQuestionBankRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.QuestionBankService, fileSvc *service.FileStore) {
 	h := NewQuestionBankHandler(svc, fileSvc)
 
-	g := rg.Group("/question-bank", middleware.JWTAuth(rd.Session))
+	g := rg.Group("/question-bank", middleware.JWTAuth(rd.Session), middleware.CredentialScoped(rd.CredentialScope))
 
 	// ===== 题目 CRUD =====
 	g.GET("/questions", h.ListQuestions)
-	g.POST("/questions", middleware.RoleRequired("tutor", "admin"), h.CreateQuestion)
+	g.POST("/questions", middleware.CapabilityRequired(authz.CapQuestionAuthor), h.CreateQuestion)
 	// 注意：Gin 路由树中静态路径优先于参数路径，batch-publish/batch-import 需在 :question_id 之前注册
-	g.POST("/questions/batch-publish", middleware.RoleRequired("admin"), h.BatchPublish)
-	g.POST("/questions/batch-reject", middleware.RoleRequired("admin"), h.BatchReject)
-	g.POST("/questions/batch-import", middleware.RoleRequired("tutor", "admin"), h.BatchImport)
+	g.POST("/questions/batch-publish", middleware.CapabilityRequired(authz.CapQuestionReview), h.BatchPublish)
+	g.POST("/questions/batch-reject", middleware.CapabilityRequired(authz.CapQuestionReview), h.BatchReject)
+	g.POST("/questions/batch-import", middleware.CapabilityRequired(authz.CapQuestionAuthor), h.BatchImport)
 	g.GET("/questions/:question_id", h.GetQuestion)
-	g.PUT("/questions/:question_id", middleware.RoleRequired("tutor", "admin"), h.UpdateQuestion)
-	g.DELETE("/questions/:question_id", middleware.RoleRequired("tutor", "admin"), h.DeleteQuestion)
-	g.POST("/questions/:question_id/publish", middleware.RoleRequired("admin"), h.PublishQuestion)
-	g.POST("/questions/:question_id/reject", middleware.RoleRequired("admin"), h.RejectQuestion)
+	g.PUT("/questions/:question_id", middleware.CapabilityRequired(authz.CapQuestionAuthor), h.UpdateQuestion)
+	g.DELETE("/questions/:question_id", middleware.CapabilityRequired(authz.CapQuestionAuthor), h.DeleteQuestion)
+	g.POST("/questions/:question_id/publish", middleware.CapabilityRequired(authz.CapQuestionReview), h.PublishQuestion)
+	g.POST("/questions/:question_id/reject", middleware.CapabilityRequired(authz.CapQuestionReview), h.RejectQuestion)
 	g.GET("/stats", h.GetStats)
-	g.POST("/upload-image", middleware.RoleRequired("tutor", "admin"), h.UploadImage)
+	g.POST("/upload-image", middleware.CapabilityRequired(authz.CapQuestionAuthor), h.UploadImage)
 }
 
 // listQuestionsReq 题目列表查询参数。
@@ -79,7 +80,7 @@ func (h *QuestionBankHandler) ListQuestions(c *gin.Context) {
 				Status:       c.Query("status"),
 				Keyword:      c.Query("keyword"),
 				TagID:        queryIDPtr(c, "tag_id"),
-				CredentialID: queryIDPtr(c, "credential_id"),
+				CredentialID: middleware.CredentialIDPtr(c),
 				Sort:         c.Query("sort"),
 			}, nil
 		},
@@ -398,7 +399,7 @@ func (h *QuestionBankHandler) GetStats(c *gin.Context) {
 	Endpoint[struct{}, service.QuestionBankStatsDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.QuestionBankStatsDTO, error) {
 			// #413：总数按当前证件题库池口径（拦截器已注入 credential_id；缺省 = 不分区）。
-			return h.svc.GetStats(queryIDPtr(c, "credential_id")), nil
+			return h.svc.GetStats(middleware.CredentialIDPtr(c)), nil
 		},
 		Render: func(c *gin.Context, _ *struct{}, resp *service.QuestionBankStatsDTO, _ error) {
 			response.Success(c, resp)
