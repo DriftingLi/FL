@@ -27,7 +27,7 @@ func NewPracticeModeHandler(svc *service.PracticeModeService) *PracticeModeHandl
 func RegisterPracticeModeRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.PracticeModeService) {
 	h := NewPracticeModeHandler(svc)
 
-	g := rg.Group("/practice-mode", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapQuestionPractice))
+	g := rg.Group("/practice-mode", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapQuestionPractice), middleware.CredentialScoped(rd.CredentialScope))
 
 	g.GET("/free", h.GetFreeQuestions)
 	g.GET("/tag", h.StartTagPractice)
@@ -66,7 +66,7 @@ func (h *PracticeModeHandler) GetFreeQuestions(c *gin.Context) {
 			return &freeQuestionsReq{
 				QType:        c.Query("type"),
 				Count:        atoiDefault(c.Query("count"), 20),
-				CredentialID: queryIDPtr(c, "credential_id"),
+				CredentialID: middleware.CredentialIDPtr(c),
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *freeQuestionsReq) (*[]service.QuestionDTO, error) {
@@ -121,7 +121,7 @@ func (h *PracticeModeHandler) StartTagPractice(c *gin.Context) {
 			count := atoiDefault(c.Query("count"), 0) // 0=全部
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
-			return &tagPracticeReq{StudentID: studentID, TagID: tagID, Count: count, CredentialID: queryIDPtr(c, "credential_id")}, nil
+			return &tagPracticeReq{StudentID: studentID, TagID: tagID, Count: count, CredentialID: middleware.CredentialIDPtr(c)}, nil
 		},
 		Invoke: func(ctx context.Context, req *tagPracticeReq) (*service.PracticeStartResultDTO, error) {
 			return h.svc.StartTagPractice(req.StudentID, req.TagID, req.Count, req.CredentialID)
@@ -160,7 +160,7 @@ func (h *PracticeModeHandler) StartSequential(c *gin.Context) {
 			return &struct {
 				StudentID    int
 				CredentialID *int
-			}{StudentID: studentID, CredentialID: queryIDPtr(c, "credential_id")}, nil
+			}{StudentID: studentID, CredentialID: middleware.CredentialIDPtr(c)}, nil
 		},
 		Invoke: func(ctx context.Context, req *struct {
 			StudentID    int
@@ -201,7 +201,7 @@ func (h *PracticeModeHandler) GetSequentialProgress(c *gin.Context) {
 		Parse: h.parseStudentID,
 		Invoke: func(ctx context.Context, req *studentIDReq) (*service.ProgressResultDTO, error) {
 			// #413：透传证件参数，进度返回体附带实时池总数。
-			return h.svc.GetSequentialProgress(req.StudentID, queryIDPtr(c, "credential_id")), nil
+			return h.svc.GetSequentialProgress(req.StudentID, middleware.CredentialIDPtr(c)), nil
 		},
 		Render: func(c *gin.Context, _ *studentIDReq, resp *service.ProgressResultDTO, _ error) {
 			response.Success(c, resp)
@@ -310,7 +310,7 @@ func (h *PracticeModeHandler) GetProgress(c *gin.Context) {
 			if _, ok := service.ParsePracticeMode(mode); !ok {
 				return nil, badRequest("练习模式无效")
 			}
-			return &getProgressReq{StudentID: studentID, Mode: mode, CredentialID: queryIDPtr(c, "credential_id")}, nil
+			return &getProgressReq{StudentID: studentID, Mode: mode, CredentialID: middleware.CredentialIDPtr(c)}, nil
 		},
 		Invoke: func(ctx context.Context, req *getProgressReq) (*service.ProgressResultDTO, error) {
 			return h.svc.GetProgress(req.StudentID, req.Mode, req.CredentialID), nil
@@ -400,7 +400,7 @@ func (h *PracticeModeHandler) GetPracticeStats(c *gin.Context) {
 		Parse: func(c *gin.Context) (*practiceStatsReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
-			return &practiceStatsReq{StudentID: studentID, CredentialID: queryIDPtr(c, "credential_id")}, nil
+			return &practiceStatsReq{StudentID: studentID, CredentialID: middleware.CredentialIDPtr(c)}, nil
 		},
 		Invoke: func(ctx context.Context, req *practiceStatsReq) (*service.PracticePracticeStatsDTO, error) {
 			return h.svc.GetPracticeStats(req.StudentID, req.CredentialID)

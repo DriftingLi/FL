@@ -700,3 +700,16 @@ func newCatalogLevelNode(l *model.CourseLevel) CatalogLevelNode {
 		Status:      l.Status,
 	}
 }
+
+// CurrentCredentialID 当前证件的事实源查询（ADR-0047 §4）：供证件作用域守卫解析「本次请求
+// 按哪个证件过滤」。一次主键查询；未选证件返回 ok=false（端点按不分区处理）。
+func (s *TrainingCatalogService) CurrentCredentialID(userID int) (int, bool) {
+	var u model.HrwaiUser
+	if err := s.db.Select("current_credential_id").First(&u, userID).Error; err != nil {
+		return 0, false
+	}
+	if u.CurrentCredentialID == nil || *u.CurrentCredentialID <= 0 {
+		return 0, false
+	}
+	return *u.CurrentCredentialID, true
+}

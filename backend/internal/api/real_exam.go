@@ -27,7 +27,7 @@ func NewRealExamHandler(svc *service.RealExamService, points *service.PointsServ
 func RegisterRealExamRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.RealExamService, points *service.PointsService) {
 	h := NewRealExamHandler(svc, points)
 
-	g := rg.Group("/real-exam", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapRealExamTake))
+	g := rg.Group("/real-exam", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapRealExamTake), middleware.CredentialScoped(rd.CredentialScope))
 
 	// GET /api/real-exam/papers  当前证件的套卷列表（含兑换状态与单价）
 	g.GET("/papers", h.ListPapers)
@@ -62,7 +62,7 @@ func (h *RealExamHandler) ListPapers(c *gin.Context) {
 			userID, _ := uid.(int)
 			return &listPapersReq{
 				UserID:       userID,
-				CredentialID: atoiDefault(c.Query("credential_id"), 0),
+				CredentialID: middleware.CredentialIDValue(c),
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *listPapersReq) (*[]service.RealExamPaperDTO, error) {

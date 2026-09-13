@@ -27,7 +27,7 @@ func NewWrongQuestionHandler(svc *service.WrongQuestionService) *WrongQuestionHa
 func RegisterWrongQuestionRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.WrongQuestionService) {
 	h := NewWrongQuestionHandler(svc)
 
-	g := rg.Group("/wrong-questions", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapQuestionPractice))
+	g := rg.Group("/wrong-questions", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapQuestionPractice), middleware.CredentialScoped(rd.CredentialScope))
 
 	// GET /api/wrong-questions  错题列表（分页+过滤）
 	g.GET("", h.List)
@@ -85,7 +85,7 @@ func (h *WrongQuestionHandler) List(c *gin.Context) {
 				MinWrongCount: queryIntPtr(c, "min_wrong_count"),
 				Favorited:     c.Query("favorited") == "true",
 				Sort:          c.Query("sort"),
-				CredentialID:  queryIDPtr(c, "credential_id"),
+				CredentialID:  middleware.CredentialIDPtr(c),
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *listWrongQuestionsReq) (*map[string]any, error) {

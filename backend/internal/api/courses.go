@@ -25,6 +25,9 @@ func NewCourseHandler(svc *service.CourseService) *CourseHandler {
 func RegisterCoursesRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.CourseService) {
 	h := NewCourseHandler(svc)
 
+	// 证件作用域（ADR-0047 §4）：显式 credential_id 优先，登录用户缺省用服务端当前证件。
+	rg.Use(middleware.CredentialScoped(rd.CredentialScope))
+
 	// 公开访问
 	rg.GET("/courses", h.ListCourses)
 	rg.GET("/chapter/:chapter_id/slides", h.GetChapterSlides)
@@ -64,7 +67,7 @@ func (h *CourseHandler) ListCourses(c *gin.Context) {
 			return &courseListReq{
 				Page:         atoiDefault(c.Query("page"), 1),
 				PageSize:     atoiDefault(c.Query("page_size"), 12),
-				CredentialID: queryIDPtr(c, "credential_id"),
+				CredentialID: middleware.CredentialIDPtr(c),
 				SpecialtyID:  queryIDPtr(c, "specialty_id"),
 				LevelID:      queryIDPtr(c, "level_id"),
 				Filter:       f,

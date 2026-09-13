@@ -38,7 +38,7 @@ func NewQuestionBankHandler(svc *service.QuestionBankService, fileSvc *service.F
 func RegisterQuestionBankRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.QuestionBankService, fileSvc *service.FileStore) {
 	h := NewQuestionBankHandler(svc, fileSvc)
 
-	g := rg.Group("/question-bank", middleware.JWTAuth(rd.Session))
+	g := rg.Group("/question-bank", middleware.JWTAuth(rd.Session), middleware.CredentialScoped(rd.CredentialScope))
 
 	// ===== 题目 CRUD =====
 	g.GET("/questions", h.ListQuestions)
@@ -80,7 +80,7 @@ func (h *QuestionBankHandler) ListQuestions(c *gin.Context) {
 				Status:       c.Query("status"),
 				Keyword:      c.Query("keyword"),
 				TagID:        queryIDPtr(c, "tag_id"),
-				CredentialID: queryIDPtr(c, "credential_id"),
+				CredentialID: middleware.CredentialIDPtr(c),
 				Sort:         c.Query("sort"),
 			}, nil
 		},
@@ -399,7 +399,7 @@ func (h *QuestionBankHandler) GetStats(c *gin.Context) {
 	Endpoint[struct{}, service.QuestionBankStatsDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.QuestionBankStatsDTO, error) {
 			// #413：总数按当前证件题库池口径（拦截器已注入 credential_id；缺省 = 不分区）。
-			return h.svc.GetStats(queryIDPtr(c, "credential_id")), nil
+			return h.svc.GetStats(middleware.CredentialIDPtr(c)), nil
 		},
 		Render: func(c *gin.Context, _ *struct{}, resp *service.QuestionBankStatsDTO, _ error) {
 			response.Success(c, resp)
