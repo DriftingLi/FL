@@ -42,22 +42,54 @@ function stripComments(text) {
     .replace(/\/\*[\s\S]*?\*\//g, ' ');
 }
 
+/**
+ * 取一段 CSS 里所有 `linear-gradient(...)` 调用的「顶层」参数。
+ * **不能**用 `[^)]*` 抓参数 —— 遇到 `rgba(0, 0, 0, .5)` 会在它的 `)` 处截断，
+ * 把一个合法的两值写法误判成「4 个颜色值」（实测过的假阳性）。
+ */
+function gradientCalls(css) {
+  const calls = [];
+  const marker = 'linear-gradient(';
+  let idx = css.indexOf(marker);
+  while (idx !== -1) {
+    const start = idx + marker.length;
+    let depth = 1;
+    let i = start;
+    for (; i < css.length && depth > 0; i++) {
+      const ch = css[i];
+      if (ch === '(') depth += 1;
+      else if (ch === ')') depth -= 1;
+    }
+    if (depth !== 0) break; // 括号不配平：不猜，停止解析
+    const args = css.slice(start, i - 1).trim();
+    // 按**顶层**逗号切分（括号内的逗号不算，如 rgba 的通道分隔）
+    const parts = [];
+    let buf = '';
+    let d = 0;
+    for (const ch of args) {
+      if (ch === '(') d += 1;
+      else if (ch === ')') d -= 1;
+      if (ch === ',' && d === 0) { parts.push(buf.trim()); buf = ''; } else { buf += ch; }
+    }
+    if (buf.trim()) parts.push(buf.trim());
+    calls.push({ args, parts });
+    idx = css.indexOf(marker, i);
+  }
+  return calls;
+}
+
 /** 纯函数：单个文件源码 → 违规清单 */
 function scanGradients(source) {
   const violations = [];
   const css = stripComments(styleTextOf(source));
-  const re = /linear-gradient\(\s*([^)]*)\)/g;
-  let m;
-  while ((m = re.exec(css)) !== null) {
-    const args = m[1].trim();
-    // 参数切分：方向有两种写法 —— 关键字（`to bottom` / `to bottom right`，含空格）与
-    // **角度**（`135deg`）。两者都实测可用（#937 探针 A4 就是角度），都不计入颜色值个数。
-    const parts = args.split(',').map((s) => s.trim());
+  for (const { args, parts } of gradientCalls(css)) {
+    // 方向有两种写法 —— 关键字（`to bottom` / `to bottom right`，含空格）与**角度**（`135deg`）。
+    // 两者都实测可用（#937 探针 A4 就是角度），都不计入颜色值个数。
     const DIRECTION = /^(to\s+(right|left|top|bottom)(\s+(right|left))?|\d+(\.\d+)?deg)$/;
-    const hasDirection = DIRECTION.test(parts[0]);
+    const hasDirection = parts.length > 0 && DIRECTION.test(parts[0]);
     const stops = hasDirection ? parts.slice(1) : parts;
 
-    if (/.*%/.test(stops.join(','))) {
+    if (/%/.test(stops.join(','))) {
       violations.push(
         '带百分比停靠位（实测整条声明被丢弃）：linear-gradient(' + args + ')'
       );
@@ -71,6 +103,13 @@ function scanGradients(source) {
   // 背景图只支持 linear-gradient，且统一走简写 background（长写形态在全项目已收敛为 0 处）
   if (/background-image\s*:\s*linear-gradient/.test(css)) {
     violations.push('用 background-image 长写声明渐变（本仓统一走简写 background）');
+  }
+  // 兜底必须写在简写**之后**：CSS 简写 `background` 会把未列出的 `background-color`
+  // 重置为初始值，写在它前面的兜底等于没有（#937 复查发现）。
+  // 注意 `[^}]*` —— 必须限制在**同一条规则块内**，否则会把前一条规则的 background-color
+  // 与后一条规则的 background 误判成一对（实测过的假阳性）。
+  if (/background-color\s*:\s*#[0-9A-Fa-f]{3,8}\s*;[^}]*?background\s*:\s*linear-gradient/.test(css)) {
+    violations.push('实色兜底写在 background 简写之前 —— 会被简写重置，等于没有兜底');
   }
   return violations;
 }
@@ -111,6 +150,9 @@ describe('uvue 渐变语法契约（#937 真机实测口径）', () => {
       ['background-image 长写',
         '<style>.a { background-image: linear-gradient(135deg, #e3f0ff, #cfe4ff); }</style>',
         /长写声明渐变/],
+      ['兜底写在简写之前（会被 background 重置，等于没有兜底）',
+        '<style>.a { background-color: #1B5E20;\n  background: linear-gradient(135deg, #e3f0ff, #cfe4ff); }</style>',
+        /兜底写在 background 简写之前/],
     ];
     cases.forEach(([name, src, pattern]) => {
       it(name, () => {
@@ -134,6 +176,8 @@ describe('uvue 渐变语法契约（#937 真机实测口径）', () => {
         '<style>.a { background-color: #F5F5F5; }</style>'],
       ['注释里出现该词不算实现',
         '<style>.a { background-color: #fff; /* 实色：本机型不绘制 linear-gradient(...) */ }</style>'],
+      ['含 rgba() 的两值写法（括号内逗号不得被当成颜色值分隔）',
+        '<style>.a { background: linear-gradient(135deg, rgba(0,0,0,.5), rgba(255,255,255,1)); }</style>'],
     ];
     ok.forEach(([name, src]) => {
       it(name, () => {

@@ -47,8 +47,8 @@
 <style>
     .stat-bar {
         margin: 0 24rpx 24rpx 24rpx;
-        background-color: #2979ff;
         background: linear-gradient(135deg, #4facfe, #2979ff);
+        background-color: #2979ff;
         border-radius: 20rpx;
         padding: 24rpx 0;
         flex-direction: row;

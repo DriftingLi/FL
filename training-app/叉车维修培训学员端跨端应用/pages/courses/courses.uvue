@@ -242,8 +242,8 @@
 <style>
     .container {
         display: flex;
-        background-color: #F5F5F5;
-        background: linear-gradient(180deg, #CFE9FB, #F5F5F5);
+        background: linear-gradient(180deg, #CFE9FB, #D0EBFD);
+        background-color: #D0EBFD;
         flex-direction: column;
     }
 
@@ -276,8 +276,8 @@
         flex-direction: row;
         align-items: center;
         justify-content: center;
-        background-color: #3B82F6;
         background: linear-gradient(135deg, #60A5FA, #3B82F6);
+        background-color: #3B82F6;
         opacity: 0.7;
     }
 
