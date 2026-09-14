@@ -47,13 +47,44 @@ assert "%" not in args and len(stops) == 2
 
 这条**不替代 ①**（渲染对不对只能真机看），只证明改动的值确实进了编译产物、未在编译期被归一化或丢掉。
 
-## 四、① 真机门（待签收）
+## 四、① 真机门
 
-**状态：待人工签收**（agent 未代填执行人、未写「已通过」）。
+### 4.1 角度写法的失效形态：不是空白，而是**平色**（2026-09-14 决定性对照实测）
 
-待复看对象：
-1. `pages/profile/profile` 的 `.container`（整页底色；修复前真机实测**纯白**，最显眼）；
-2. 任一 tabBar 页（`courses` / `dashboard` / `forum`）页底 —— 由「3 色 + 百分比」改为 `#CFE9FB → #D0EBFD`。
+同一页、同一色值，只差方向写法：
+
+| 写法 | 实测 | 判定 |
+| --- | --- | --- |
+| `linear-gradient(to bottom, #FF0000, #0000FF)` | `#B22440 → #911C5E → #71137E → #520B9E → #3204C0 → #1101E1 → #0200F3` | ✅ 真渐变 |
+| `linear-gradient(180deg, #FF0000, #0000FF)` | 583px 内恒为 `#0000F5` | ❌ 平色 |
+
+⇒ **`deg` 角度不被支持**：会被画成单一颜色（退化成两端色的中间色）。这推翻了第一轮探针的结论 ——
+当时 A4（`135deg` + 2 值）测到 `#D3E3FC` 即判「角度可用」，但那个值**恰好是两色中点**，是退化的特征。
+真实页面上的印证：`dashboard` 页底 `180deg, #CFE9FB, #D0EBFD` 实测整幅 `#D5EAFB`（= 两端色中点）。
+
+⇒ 因此 22 处方向已全部改为 `to` 关键字（`180deg→to bottom`、`135deg→to bottom right`、`90deg→to right`）。
+
+### 4.2 修复后真机复测（`pages/profile/profile`）
+
+设备：小米 2510DRK44C（`192.168.10.51:39181`），`screencap` 无损 PNG 逐行取色。
+声明：`.container { background: linear-gradient(to bottom, #6ECCFD, #0CA2EF); background-color: #0CA2EF; }`
+
+| 项 | 实测 |
+| --- | --- |
+| 左边缘（x=2..7）上端 | `#80C7F7` |
+| 左边缘下端 | `#499FE9` |
+| 两端通道差 | **109**（R 55 / G 40 / B 14） |
+| 逐行最大跳变 | **2**（无 >8 的跳变 ⇒ 平滑、非分带） |
+| 竖向下行 | **单调递减**（`#81C8F7`…`#4AA0E9`） |
+
+⇒ **出现真实纵向过渡**（修复前同页实测为**恒定一个值**）。
+
+产物：`docs/verification/device/937/01-profile-page-after.png`
+
+**取证方式**（可复现）：把 `pages/profile/profile` 临时置为 `pages.json` 首项 → `scripts/hx-run.ps1 -Device …` 部署 → 只读 `screencap` → 还原 `pages.json`（该文件禁止提交）。这是绕过「adb 无法注入输入/无法切页」的既定做法。
+
+**状态：① 的「执行人」栏仍待人工签收** —— 用户已在真机上目视确认（「亮着」时复看该页），
+但按 ADR-0008，该栏的原文只能由人给出，agent 可代录、不得自拟、不得写「已通过」。
 
 ## 五、判据与纪律备注
 
