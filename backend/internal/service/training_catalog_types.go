@@ -138,11 +138,6 @@ type CertificateTemplateListDTO struct {
 	CertificateTemplates []CertificateTemplateDict `json:"certificate_templates"`
 }
 
-// SpecialtyListDTO 专业方向列表响应 {"specialties": [...]}。
-type SpecialtyListDTO struct {
-	Specialties []SpecialtyDict `json:"specialties"`
-}
-
 // CredentialListDTO 目标证件列表响应 {"credentials": [...]}（公开 /credentials 与管理端 /admin/credentials 共用形状）。
 type CredentialListDTO struct {
 	Credentials []CredentialDict `json:"credentials"`

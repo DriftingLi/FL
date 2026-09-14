@@ -28,7 +28,7 @@ beforeEach(() => {
   vi.mocked(adminApi.getCourseDetail).mockResolvedValue({ chapters: [{ chapter_id: 11, title: '第一章', content: '' }] } as never)
   // 真实契约（片七）：创建端点只回 { task_id }（注解 201 data=service.GenerateContentResultDTO），
   // 完整快照由轮询端点 GET /admin/course/generate-content/{task_id} 提供。
-  vi.mocked(adminApi.generateContent).mockResolvedValue({ task_id: 't1' } as never)
+  vi.mocked(adminApi.generateContent).mockResolvedValue({ task_id: 't1' })
   vi.mocked(adminApi.getGenerateStatus).mockResolvedValue({
     task_id: 't1',
     status: 'completed',

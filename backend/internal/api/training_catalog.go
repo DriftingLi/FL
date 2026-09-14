@@ -189,7 +189,7 @@ func (h *TrainingCatalogHandler) ListLevels(c *gin.Context) {
 			return &result, nil
 		},
 		Render: func(c *gin.Context, _ *struct{}, resp *[]service.LevelDict, _ error) {
-			response.Success(c, gin.H{"levels": deref(resp)})
+			response.Success(c, service.LevelListDTO{Levels: *resp})
 		},
 	}.Handle(c)
 }
@@ -231,7 +231,7 @@ func (h *TrainingCatalogHandler) ListQuestionTags(c *gin.Context) {
 			return &result, nil
 		},
 		Render: func(c *gin.Context, _ *struct{}, resp *[]service.QuestionTagDict, _ error) {
-			response.Success(c, gin.H{"tags": deref(resp)})
+			response.Success(c, service.QuestionTagListDTO{Tags: *resp})
 		},
 	}.Handle(c)
 }
@@ -959,7 +959,7 @@ func (h *TrainingCatalogHandler) ListCredentials(c *gin.Context) {
 			return &result, nil
 		},
 		Render: func(c *gin.Context, _ *struct{}, resp *[]service.CredentialDict, _ error) {
-			response.Success(c, gin.H{"credentials": deref(resp)})
+			response.Success(c, service.CredentialListDTO{Credentials: *resp})
 		},
 	}.Handle(c)
 }

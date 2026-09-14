@@ -26,7 +26,9 @@
 //   GET  /valuation/dictionaries/region-coefficients
 //   GET  /valuation/evaluations/stats
 //   POST /valuation/evaluations/{id}/report
+//   GET  /valuation/evaluations/{id}/report
 //   POST /valuation/battery/evaluations/{id}/report
+//   GET  /valuation/battery/evaluations/{id}/report
 //   POST /valuation/auth/logout
 //   POST /valuation/evaluations
 //   POST /valuation/battery/evaluations

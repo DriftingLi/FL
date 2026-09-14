@@ -57,7 +57,8 @@ async function loadDetail() {
   loading.value = true
   try {
     detailData.value = await getEvaluationDetail(id.value)
-    const pdfPath = detailData.value.report_pdf_path
+    // 生成类型虽声明非空，但信封解包出的负载运行期仍可能为空 —— 保留既有防御。
+    const pdfPath = detailData.value?.report_pdf_path
     if (pdfPath) {
       const filename = pdfPath.split(/[\\/]/).pop() ?? ''
       pdfInfo.value = { file_name: filename, file_size: 0 }

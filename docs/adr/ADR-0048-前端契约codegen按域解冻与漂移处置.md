@@ -58,9 +58,9 @@ auth 域片（注解缺口最深的域）落地时的口径补充：
 
 互动面五域（forum / notification / favorite / wrongQuestion / questionInteraction）落地时的实测与口径补充：
 
-- **计数**：Web 消费面 **51 个端点**（forum 30 / notification 4 / favorite 4 / wrongQuestion 6 / questionInteraction 7）→ **26 个指认 data、25 个有意无 data**；其中 **2 个端点此前完全不在 swagger**（`GET /admin/forum/topics`、`GET /admin/forum/reports`）；issue 记的「2 个缺席」与实测一致，但 `POST /wrong-questions/{question_id}/redo` 实为「在 swagger、只是路径参数名不同」，不在缺席之列。
+- **计数**：Web 消费面 **52 个端点**（forum 31 / notification 4 / favorite 4 / wrongQuestion 6 / questionInteraction 7）→ **39 个指认 data、13 个有意无 data**（本行计数按声明表逐条复核订正；同批的片五~片九计数复核无误）；其中 **2 个端点此前完全不在 swagger**（`GET /admin/forum/topics`、`GET /admin/forum/reports`）；issue 记的「2 个缺席」与实测一致，但 `POST /wrong-questions/{question_id}/redo` 实为「在 swagger、只是路径参数名不同」，不在缺席之列。
 - **共享 handler 的第二条路由**：`GET /admin/forum/topics` 与 `GET /forum/topics` 共用 `ListTopics`。处置沿用 `AdminGetTopic` 先例 —— 薄包装方法承载该路由的注解块，路由注册改指包装方法；否则管理端路由会从 swagger 消失（文档面缩水）。
-- **内联响应 map 收口 6 处**（决策 6 的 `gin.H{}` 形态）：forum 图片上传（`{url}`）、主题/回复的点赞与取消点赞 ×4（`{liked,likes_count}`）、通知未读数（`{count}`）、题目评论列表（`{items,page,page_size,total}`）—— 各自定型为 service DTO 并进 `TestEnvelopeDTOShapeLock`。**字段按 map 的 key 字母序声明**（`liked` 在 `likes_count` 前）才保证序列化字节序不变。
+- **内联响应 map 收口 7 处 / 4 个 DTO**（决策 6 的 `gin.H{}` 形态）：forum 图片上传（`{url}`）、主题/回复的点赞与取消点赞 ×4（`{liked,likes_count}`）、通知未读数（`{count}`）、题目评论列表（`{items,page,page_size,total}`）—— 各自定型为 service DTO 并进 `TestEnvelopeDTOShapeLock`。**字段按 map 的 key 字母序声明**（`liked` 在 `likes_count` 前）才保证序列化字节序不变。
 - **JSONB payload 的表达**：`NotificationDTO.Payload`（站内信 JSONB 落库 payload）此前让 swag 解析失败（`json.RawMessage` 无类型定义），`/notifications` 因此无法指认 `data`。处置：注解层用 `swaggertype:"object" extensions:"x-optional"` 钉成**不透明 object**（决策 6「非响应面不动」），生成物渲染 `Record<string, unknown>`；前端保留唯一的 UI 收窄类型 `NotificationPayload`，`NotificationItem` 由生成类型 `Omit` 掉 payload 后挂上它。
 - **可空性进注解层 12 处**：按「omitempty → `x-optional`（键可能不存在）；无 omitempty 的指针 → `x-nullable`（键在、值可 null）」逐字段标注，覆盖 `ForumTopicDTO` / `ForumReplyDTO` / `ForumReportDTO` / `MyReplyDTO` / `NotificationDTO` / `WrongQuestionDTO`。
 - **顶层 data 可空是注解层表达力缺口**：`GET /questions/{question_id}/note` 未写笔记时 `data` 为 `null`，而 `response.R{data=model.QuestionNote}` 只能指认 `$ref`。处置：前端 adapter 显式写 `QuestionNote | null` 并注明 —— 与枚举词汇缺口同类的已知限制，不是「注解写错」。
@@ -118,14 +118,15 @@ aiAssistant 域片（第一个「信封 + 流式」混合模块）落地时的�
 
 估值域（`internal/valuation/handler`，Web 消费面唯一「整块零注解」的区域）落地时的实测与口径：
 
-- **计数**：估值前端模块的**显式调用点 32 个**，但本片登记 **67 个端点** —— `valuation/admin.ts` 的字典 CRUD 是 `createCrud × 12 实体`（每个实体 list/create/update/remove 四态），按决策 2「域一旦开做就补全该域」登记该域**全部已注册路由**（69 op − 2 条 PDF 字节流 − `/valuation/health`）；显式调用点 32/32 全部命中 swagger。issue 记的「28 调用点 / 全部不在 swagger」是按模块字面调用点估的。
-- **注解块 69 个**：`config.go` 19 / `evaluation.go` 4 / `battery.go` 5 / `report.go` 2 / `auth.go` 2 / 新增 `dictcrud_docs.go` 37 —— 描述符工厂的闭包承载不了 swag 注解，管理端注解写在**薄包装方法**上（先例 `api/forum.go` 的 `AdminGetTopic`），方法体恒一行转发、零行为变更。
+- **计数**：估值前端模块的**显式调用点 32 个**（机械扫描为 36 个调用行 / 30 条去重路径；`valuation/admin.ts` 的 `createCrud × 12 实体` 让口径天然模糊），但本片登记 **69 个端点** —— 按决策 2「域一旦开做就补全该域」登记该域**全部已注册路由**（70 op − `/valuation/health`），其中 **2 条 PDF 字节流（GET report）登记 NoData**；显式调用点 32/32 全部命中 swagger。issue 记的「28 调用点 / 全部不在 swagger」是按模块字面调用点估的。issue 记的「28 调用点 / 全部不在 swagger」是按模块字面调用点估的。
+- **注解块 69 个**：`config.go` 19 / `evaluation.go` 4 / `battery.go` 5 / `report.go` 2 / `auth.go` 2 / 新增 `dictcrud_docs.go` 37 —— 描述符工厂的闭包承载不了 swag 注解，管理端注解写在**薄包装方法**上，方法体恒一行转发。**与 `AdminGetTopic` 先例的差异**：先例把包装方法注册进了路由，而本片的路由仍由 `registerDictCRUDRoutes` 的描述符循环注册匿名闭包，37 个包装方法**只是注解宿主、永不执行**（swag 仍按注解生成正确路径，行为由既有 valuation 测试与新增契约测试守住）。代价：注解与真实 handler 之间没有机械联系，描述符改名/删除时注解可能静默漂移 —— 已记为残留风险，收敛需把路由注册改成具名分派表。
 - **@Tags 用估值自己的体系**（估值-字典 / 评估 / 电池 / 报告 / 认证 / 管理端），不复用主 `/api` 的「学员端-*」—— 这正是决策 5 把它独立成片的理由之一。
 - **平行 auth 显性化**：逐个标注 `@Security` —— public 留空、optional 2 个（匿名可提交，注解里注明）、valAuth 5 个 BearerAuth、admin 37 个 BearerAuth；安全边界第一次在契约面可见。
 - **只补注解、不改形状**：7 处非统一信封（`gin.H` / 裸 `c.JSON`）**只登记不改造**，注解用 swag 内联 `object{}` 如实描述形状（故不误标 NoData）：`config.go` 的 ListOriginalPrices / GetEarliestFactoryYear、`evaluation.go` 的 List / Stats、`reportflow.go` 的 serveReportGenerate、`dictcrud_routes.go` 的 deleteDict、`auth.go` 的 Me。
 - **可空性 5 处** `x-optional`；本域无指针字段，故无 `x-nullable`。
 - **生成物的已知限制**：内联 `object{}` 形状不进生成物（渲染器只渲染具名类型），`generated/valuation.ts` 覆盖具名根类型；`EvaluationStats` / `GenerateReportResponse` 两处前端保留与注解逐字段对齐的窄手写类型 —— 彻底收敛需生成器支持匿名对象，属生成器能力片。
 - **字段级差异 8 条**全部落在 ② 手写类型过时：`/evaluations/{id}/report` 与电池报告的 `pdf_path` / `file_name` / `report_path` / `generated_at` 是**凭空字段**（实际是 `{evaluation_id,pdf_url,file_size}`），`EvaluationDetail` / `EvaluationResult` / `BatteryEvaluationDetail` / 12 个字典条目 / `CoefficientConfig` 的字段增减与可空性落后。① 0 条、③ 0 条。
+- **契约测试覆盖面**：新增 `valuation_contract_test.go` 的 10 条顶层 key 断言（片一先例）覆盖的是新补注解端点的一个子集；其余行为由既有 101 条 valuation 测试承担（issue 的「每个新注解端点补顶层 key 断言」在本片是部分执行）。
 - **swagger 产物可复现（本 PR head 实测）**：实施过程中一度观察到「恢复 backend/docs 后重跑产物大面积不同」，复核后确认那是把「含本片新注解的树」与「HEAD 的旧产物」相比所致，不是工具链不确定性 —— 在本 PR head 上重跑 `swag init` 后 `git status backend/docs` 干净，CI 的「Swagger 产物新鲜度」锁会通过。
 
 ## 备选
@@ -152,6 +153,7 @@ aiAssistant 域片（第一个「信封 + 流式」混合模块）落地时的�
 - **全量端点注解**（只做 Web 消费面）。
 - **站内信 JSONB 落库 payload / SSE 事件 payload 的定型**。
 - **`API.md` 重写**：它是人类可读叙述面，字段级以注解产物为准（优先级已写在文档顶部）。
+- **消费面口径之外的手写类型**：覆盖口径是 `frontend/src/api/**`（决策 2）。页面内直接裸调 `unwrappedRequest` 并用 `const res: any` 接的地方（如 `frontend/src/pages/admin/Inspection.vue` 的 4 个管理端端点）不在本批生成面内 —— 它们既不进声明表也不被生成物覆盖，收敛需先把调用点收回 api 层。
 - **估值模块 7 处非统一信封**（`gin.H` / 裸 `c.JSON`）：留到估值片单独决定。
 
 ## 相关

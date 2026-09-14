@@ -774,7 +774,9 @@ var Domains = []Domain{
 			// 公开组：评估统计与报告生成
 			{Method: "GET", Path: "/valuation/evaluations/stats"},
 			{Method: "POST", Path: "/valuation/evaluations/{id}/report"},
+			{Method: "GET", Path: "/valuation/evaluations/{id}/report", NoData: true},
 			{Method: "POST", Path: "/valuation/battery/evaluations/{id}/report"},
+			{Method: "GET", Path: "/valuation/battery/evaluations/{id}/report", NoData: true},
 			// 公开组：估值登出（有意无载荷）
 			{Method: "POST", Path: "/valuation/auth/logout", NoData: true},
 			// 可选认证组：匿名可提交（登录则记录 user_id）

@@ -22,12 +22,13 @@ import (
 // （响应字节会变——本片的铁律是字节不变）。
 //
 // 所以这里是一个「编解码行为与 json.RawMessage 逐字节相同」的具名类型：
-// 底层是 []byte（swag 认得出，配 swaggertype 渲染成数组），MarshalJSON 走 stdlib 同款
-// compact 分支（见 encoding/json RawMessage.MarshalJSON），UnmarshalJSON 直接存原始字节。
+// 底层是 []byte（swag 认得出，配 swaggertype 渲染成数组）；MarshalJSON/UnmarshalJSON 与
+// json.RawMessage 行为一致（紧凑化由外层 encoder 完成；nil 接收者上 UnmarshalJSON 静默忽略，
+// stdlib 那里返回 error —— 调用点不依赖这个差异）。
 type JSONArray []byte
 
-// MarshalJSON 与 encoding/json 的 RawMessage.MarshalJSON 同语义：nil → null，
-// 否则紧凑化后原样输出（不是 base64 字符串）。这一步是「响应字节不变」的关键。
+// MarshalJSON 与 encoding/json 的 RawMessage 同语义：nil → null，否则输出 JSON 字面量
+// （不是 base64 字符串；紧凑化在本方法内做一次，外层 encoder 也会再紧凑化，结果等价）。
 func (j JSONArray) MarshalJSON() ([]byte, error) {
 	if j == nil {
 		return []byte("null"), nil
