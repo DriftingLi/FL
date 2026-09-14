@@ -153,7 +153,7 @@ $evidenceResult = $null
 if ($detectedLevel -ne 'quick') {
     Write-Step 6 9 '自动截图'
     . (Join-Path $PSScriptRoot 'lib\auto-screenshot.ps1')
-    $screenshotResult = Invoke-AutoScreenshot -Device $Device -ProjectDir $ProjectDir
+    $screenshotResult = Invoke-AutoScreenshot -Device $Device -CliPath $envResult.CliPath -ProjectDir $ProjectDir
     if ($screenshotResult.Ok) {
         Write-Result $true "$($screenshotResult.Screenshots.Count)/$($screenshotResult.Screenshots.Count + $screenshotResult.Skipped.Count) 页面截图完成"
     } else {
