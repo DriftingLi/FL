@@ -120,7 +120,7 @@
 import { ref, computed, onUnmounted } from 'vue'
 import { MagicStick, CircleCheck, CircleClose, Loading } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { adminApi } from '@/api/admin'
+import { adminApi, type GenerateTask } from '@/api/admin'
 import PublishPreviewDialog from '@/components/render/PublishPreviewDialog.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiCard from '@/components/ui/UiCard.vue'
@@ -137,20 +137,6 @@ interface GenerateChapter {
   chapter_id: number
   title: string
   content?: string
-}
-
-interface GenerateTask {
-  task_id: string
-  status: string
-  total?: number
-  completed?: number
-  results?: {
-    chapter_id: number
-    title: string
-    status: string
-    content?: string
-    error?: string
-  }[]
 }
 
 const courses = ref<GenerateCourse[]>([])
@@ -225,14 +211,16 @@ async function handleGenerate() {
   generateTask.value = null
 
   try {
-    const task = await adminApi.generateContent({
+    const created = await adminApi.generateContent({
       course_id: selectedCourseId.value,
       chapter_ids: selectedChapterIds.value
     })
 
-    if (task) {
-      generateTask.value = task
-      startPolling(task.task_id)
+    if (created?.task_id) {
+      // 创建端点只回 { task_id }（注解 201 data=service.GenerateContentResultDTO），
+      // 完整快照由轮询端点提供：先摆 pending 态让进度卡立即出现，随后由轮询覆盖。
+      generateTask.value = { task_id: created.task_id, status: 'pending', total: 0, completed: 0, results: null }
+      startPolling(created.task_id)
     }
   } catch (error) {
     console.error('内容生成失败:', error)

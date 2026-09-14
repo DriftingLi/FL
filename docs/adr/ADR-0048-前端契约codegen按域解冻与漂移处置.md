@@ -67,6 +67,42 @@ auth 域片（注解缺口最深的域）落地时的口径补充：
 - **枚举词汇缺口**（片一已知限制）在本片的三处消费点：`ForumTopicDTO.category` / `content_format`、`FavoriteDTO.target_type` 在注解层是 `string`。处置：UI 联合保留；`content_format` 新增 `toForumContentFormat()` 在渲染前收窄（未知值回落到 `ForumContent` 的 text 缺省，与后端 `normalizeContentFormat` 同口径）。
 - **`model.*` 类型可直接作根**：`model.QuestionNote` / `model.QuestionTag` 是真实返回类型（无 service 包装），登记为根后生成物以去包名形式出现（`QuestionNote` / `QuestionTag`），本片不新增包装 DTO。
 - **字段级差异 12 条**全部落在 ② 手写类型过时：`NotificationItem.payload` 的 `?`、`parent_id` / `chapter_id` 把 omitempty（键缺失）当成了 null、`/wrong-questions/{id}/remove|batch-remove` 手写 `<null>` 实为 `{removed}`、`FavoriteDTO` 的 `title?/cover?/created_at?`、测试桩里的 `QuestionTag` 局部形状、错题页本地 `WrongItem` 副本。① 注解写错 0 条、③ 后端第三种形状 0 条。
+
+## 实施修订（2026-09-13，片五 #963）
+
+recruit + job + resume 三域（招聘端三模块）落地时的口径补充：
+
+- **计数**：三个 api 模块合计 **30 个调用点**（recruit.ts 6 / job.ts 14 / resume.ts 10）→ 去重后 **33 个唯一 method+path**（`/recruit/resumes/{id}` 与 `/recruit/contact-requests` 被多模块共用）→ **30 个有 data、3 个有意无 data**（两个 inline `application/pdf` 字节流 + `DELETE /resume/pdf`，后者 data 是空对象且前端不消费）；3 个端点（`/recruit/me`、`/recruit/resumes`、`/recruit/resumes/{id}`）此前**不在 swagger**，本片补完整注解块。
+- **`json.RawMessage` 是注解层的死路**：`swag` 解析不了它（`cannot find type definition: json.RawMessage`），会让**整个** swagger 生成失败；直接写 `[]byte` 又会被 `encoding/json` 编成 base64（响应字节会变）。简历卡的 4 个 JSONB 数组字段因此改用新增的 `service.JSONArray`：底层 `[]byte` + 与 `json.RawMessage` 同语义的 `MarshalJSON`/`UnmarshalJSON`，注解层配 `swaggertype:"array,string"` / `"array,object"` 渲染成真数组。**序列化字节不变**由 `TestJobCardContract` / `TestStudentSeesCompanyContactContract` 守住。
+- **注解层可以声明形状而不改响应构造**：`ContactRequestListResult` / `ContactPlainDTO` 是**只为 data 指认**新增的类型，handler 里的 `gin.H{...}` 一行未动（片二的口径是「改构造 + 字节锁」，本片的选择是「不动构造 + 只声明形状」；`gin.H` 的收口仍留给需要它的域片）。inline object（`data=object{url=string}` / `object{count=integer}`）是同一口径的轻量形态。
+- **枚举词汇缺口的直接后果**：招聘域的 `status` / `apply_state` / `contact_state` 等都是封闭值集，生成物只能到 `string`，前端手写的窄化联合随之删除、消费处按字符串比较。这是注解表达力缺口（片一已记录），不是「手写正确、注解写错」。
+- **本片实测差异 13 条**：① 注解写错 **1** 条——`/resume/view-stats` 的 data 从「标量 integer」自我纠正为 `object{count=integer}`（handler 是 `gin.H{"count": cnt}`；新契约测试的顶层 key 断言当场抓红）；② 手写类型过时 **11** 条（最典型：`RecruitResumeItem.expected_specialty_*` 是死字段，后端从 #492 起就叫 `expected_position_*`；`getContact` 的手写字面量漏了后端一直返回的 `photos`/`resume_certifications`）；③ 后端第三种形状 **2** 条（均只留证、无文件改动）。
+
+## 实施修订（2026-09-14，片六 #964）
+
+questionBank + tutor + training + search 四域，外带 course / material / realExam / student / credential 五个学习面模块（合计 **66 个 Web 消费端点**）落地时的实测与口径补充：
+
+- **计数（实测）**：66 个端点 → **57 个有 data、9 个有意无 data**（题目删除 + 目录四个删除/排序 + 证件删除/排序）；**42 个此前根本不在 swagger**（questionBank 12 / tutor 7 / training 18 / credential 5），逐条补了完整注解块。issue 的 66/42 计数与实测一致。
+- **「已注解但不指认 data」的 9 个端点实际几乎全有载荷**，其中 8 个的响应体是 handler 里的 `gin.H{...}`（levels / tags / admin-certificate-templates / admin-question-tags / credentials ×2 / me-credential ×2）——注解要指认类型就必须先有具名类型，故按决策 6 与片二修订在本片一并收口为 DTO（`LevelListDTO` / `QuestionTagListDTO` / `CertificateTemplateListDTO` / `CredentialListDTO` / `CurrentCredentialDTO` / `QuestionImageUploadDTO`，外加 map 形态的 `GroupedCredentialsDTO`）。**issue 正文的 Out of Scope 把 `gin.H{}` 列为不做，与片二修订「分布在各域消费面里、由各自域的片在补注解时一并收口」冲突**；实施按 ADR 与实施简报执行，且只收口本片消费面（`/admin/specialties`、`/admin/levels`、`/positions`、`/materials/{id}/download` 等非本片消费点未动）。
+- **swag 没有联合类型表达力**：`GET /api/search` 同一状态码两种形状（type 缺省 = `SearchAllDTO` 分区聚合，指定 type = `SearchPageDTO` 分页）。注解写两条 @Success，swag 同名状态码取最后一条，故 data 指认为聚合形状；分页形状同域生成，前端以联合类型消费。属注解表达力缺口，不是注解写错。
+- **具名 map 类型在生成物里会渲染成空 interface**：`GroupedCredentialsDTO` 故改用结构体（service 侧两个 key 恒初始化、字段序按 key 字母序，序列化字节不变，shape-lock 冻结），而不是具名 map。
+- **`json:",string"` 字段要显式钉住**：`StudentDTO.UID`（Go 侧 int64 + `json:"uid,string"`）若不写 `swaggertype:"string"`，生成物会渲染 `number` —— 与真实线上类型（字符串）撒谎。这是片一「注解是唯一事实源」的又一处输入面修正。
+- **非指针 `omitempty` 字段（集成时已补齐）**：`CourseDTO.certificate_name` / `RealExamPaperDTO.source` / `ChapterDetailDTO.study_status` 一类「非指针 + omitempty」字段，按片一修订的口径应标 `x-optional`（键可能不存在）——片六实施时误读为「只覆盖指针」，集成时按**生成闭包**统一补标（三处），生成物随之渲染 `?`。判据：**omitempty 在不在，与是不是指针无关**；唯一例外是结构体取值字段（`ContributionItemDTO.Author`）——encoding/json 不省略零值结构体，`omitempty` 对其无效，故不标。
+- **枚举窄化**（`QuestionType` / `QuestionStatus` / `SearchType` / `CredentialDict.category`）仍依赖尚未实现的 enum 渲染能力，UI 值集保留、消费处按域收窄。
+- **前端九个模块退化为薄 adapter**：旧名与生成形状对应者保留为别名（`CourseSummary` / `CourseChapter` / `ChapterDetail` / `ChapterFile` / `TutorCourse` / `TutorChapter` / `CatalogLevel` / `CatalogTree` / `QuestionTag` / `StudyStats` / `StudyRecordItem` / `StudentCourseDetail` / `MaterialItem` / `RealExamPaper` / `SearchItem` …），形状确实不同者删旧名（`QuestionBankStats` 凭空 published/pending/total_count、`StudentProfile` 扁平形状、`TutorChapterDetail` 的幻影 course/chapters、`RealExamPracticeStart` 等）。题目 UI 模型 `Question`（@/types/question）**保留**并由 `WithUIQuestions` 显式标注边界 —— 其删除仍等 enum 渲染能力。可空性收紧使一批测试夹具（课程/等级/标签/章节）补全必填字段。
+
+## 实施修订（2026-09-14，片七 #965）
+
+admin（最大片）+ points + featured 落地时的实测与口径补充：
+
+- **计数**：Web 消费面 **56 个端点路径**（issue 记 53 个调用点：`featured.ts` 的 `uploadImage` 未计入调用点统计；`export.ts` 的 1 个动态调用点对应 3 条字面路由）—— **50 个补完整注解块**（admin 40 + export 3 条改具名包装方法 + featured 7）、points 6 个已注解端点补 `data=`；**15 个有意无 data**。issue 记的「50 个不在 swagger」缺口量级成立。
+- **export 不单独成域**：3 条 CSV 下载流登记进 admin 域并 `NoData` —— 单独成域会撞 `RenderDomain` 的「根类型非空」硬约束（该域没有具名响应类型）。
+- **可空性 29 处**：指针 + omitempty → `x-optional` 12；指针无 omitempty → `x-nullable` 10；非指针 + omitempty → `x-optional` 4；**nil 切片、无 omitempty → `x-nullable`** 2（`GenTaskStatus.Results`、`api.AuditLogPageResult.Items`）；`model.AuditLog.Detail`（JSONB）→ `swaggertype:"object"` + `x-optional`。
+- **内联 map 本片 0 处新增**：admin 域 12 处已在片二定型并保留字节锁；剩 Vditor 上传（与 forum / tutor / questionBank 共用同一 helper，非信封）与门户消费的 `POST /featured-content/{id}/view`，均登记理由、未收口。
+- **端点差异按字节保留**：`POST /admin/recruiters`（10 字段含 `status`）与 `PUT /admin/recruiters/{id}`（9 字段无 `status`）—— 片二把「是否统一」留给本片，本片判定保留现状（统一要动后端响应字节，违反铁律；前端编辑后 `load()` 重取列表，无消费缺口）。
+- **字段级差异 32 条全部落在 ② 手写类型过时**：分页响应漏 `page`/`pages`；create 类端点被当成完整对象；无载荷端点被写成 `null`（`createAIConfig` / `updateAIConfig` / `testAIConfig` / 审核 approve·reject 等）或有载荷被写成 `null`（`deleteTutor` / `deleteCourse` / `deleteChapter` / `remove` / `publish`）；`resetRecruiterPassword` 实际 data 是 `{}` 而非 null；`GenerateTask` 创建端点只回 `task_id`（调用点改为先 pending 再轮询）；`FeatureBinding` 的多绑定字段是死代码（后端 DTO 注释明示全单绑定）；featured 的 `FeaturedContent` 一份全可选 interface 拆成列表 / 详情两个生成类型。① 0 条、③ 0 条。
+- **未覆盖的契约测试（已写明理由）**：`POST /admin/course/generate-content` 与其状态轮询端点（会拉起后台 goroutine 调外部 AI provider，离线断言不稳定）、`POST /admin/ai-configs/{id}/test`（需外部 AI 连通）—— 其 data 指认由 swagger + 生成物同步锁覆盖。
+
 ## 实施修订（2026-09-13，片八 #966）
 
 aiAssistant 域片（第一个「信封 + 流式」混合模块）落地时的口径补充：
@@ -77,15 +113,6 @@ aiAssistant 域片（第一个「信封 + 流式」混合模块）落地时的�
 - **非指针容器的可空性**：`AIChatMessageDTO.images` / `.sources` 是无 `omitempty` 的切片，空值出站是 `null`（**键在、值可 null**）→ 标 `extensions:"x-nullable"`。本片把「只动指针字段」的口径补成：**容器字段的 nil 同样是可空态**（判据仍是真实构造处是否总是赋值；先例 `ProgressResultDTO.answers_state map[string]any`）。
 - **嵌套匿名结构体定型**：`DiagnosisSource.Metadata` 原是匿名 struct —— swag 只把它吐成内联 object，而渲染规则对「带 properties 的 object」只给 `{ [key: string]: unknown }`，前端 `metadata.source_url` 会退化成 `unknown`。定型为命名类型 `service.DiagnosisSourceMetadata`（同字段序、同 tag，序列化字节不变）后进 definitions 传递闭包。
 - **标量数组 data**：`GET /ai-assistant/diagnosis/models` 的 data 是 `[]string`（`data=[]string`，无根类型、不进生成物）——声明表锁只要求「有 data 指认」，不要求 `$ref`。
-## 实施修订（2026-09-13，片五 #963）
-
-recruit + job + resume 三域（招聘端三模块）落地时的口径补充：
-
-- **计数**：三个 api 模块合计 **30 个调用点**（recruit.ts 6 / job.ts 14 / resume.ts 10）→ 去重后 **33 个唯一 method+path**（`/recruit/resumes/{id}` 与 `/recruit/contact-requests` 被多模块共用）→ **30 个有 data、3 个有意无 data**（两个 inline `application/pdf` 字节流 + `DELETE /resume/pdf`，后者 data 是空对象且前端不消费）；3 个端点（`/recruit/me`、`/recruit/resumes`、`/recruit/resumes/{id}`）此前**不在 swagger**，本片补完整注解块。
-- **`json.RawMessage` 是注解层的死路**：`swag` 解析不了它（`cannot find type definition: json.RawMessage`），会让**整个** swagger 生成失败；直接写 `[]byte` 又会被 `encoding/json` 编成 base64（响应字节会变）。简历卡的 4 个 JSONB 数组字段因此改用新增的 `service.JSONArray`：底层 `[]byte` + 与 `json.RawMessage` 同语义的 `MarshalJSON`/`UnmarshalJSON`，注解层配 `swaggertype:"array,string"` / `"array,object"` 渲染成真数组。**序列化字节不变**由 `TestJobCardContract` / `TestStudentSeesCompanyContactContract` 守住。
-- **注解层可以声明形状而不改响应构造**：`ContactRequestListResult` / `ContactPlainDTO` 是**只为 data 指认**新增的类型，handler 里的 `gin.H{...}` 一行未动（片二的口径是「改构造 + 字节锁」，本片的选择是「不动构造 + 只声明形状」；`gin.H` 的收口仍留给需要它的域片）。inline object（`data=object{url=string}` / `object{count=integer}`）是同一口径的轻量形态。
-- **枚举词汇缺口的直接后果**：招聘域的 `status` / `apply_state` / `contact_state` 等都是封闭值集，生成物只能到 `string`，前端手写的窄化联合随之删除、消费处按字符串比较。这是注解表达力缺口（片一已记录），不是「手写正确、注解写错」。
-- **本片实测差异 13 条**：① 注解写错 **1** 条——`/resume/view-stats` 的 data 从「标量 integer」自我纠正为 `object{count=integer}`（handler 是 `gin.H{"count": cnt}`；新契约测试的顶层 key 断言当场抓红）；② 手写类型过时 **11** 条（最典型：`RecruitResumeItem.expected_specialty_*` 是死字段，后端从 #492 起就叫 `expected_position_*`；`getContact` 的手写字面量漏了后端一直返回的 `photos`/`resume_certifications`）；③ 后端第三种形状 **2** 条（均只留证、无文件改动）。
 
 ## 实施修订（2026-09-14，片九 #967）
 
@@ -100,18 +127,6 @@ recruit + job + resume 三域（招聘端三模块）落地时的口径补充：
 - **生成物的已知限制**：内联 `object{}` 形状不进生成物（渲染器只渲染具名类型），`generated/valuation.ts` 覆盖具名根类型；`EvaluationStats` / `GenerateReportResponse` 两处前端保留与注解逐字段对齐的窄手写类型 —— 彻底收敛需生成器支持匿名对象，属生成器能力片。
 - **字段级差异 8 条**全部落在 ② 手写类型过时：`/evaluations/{id}/report` 与电池报告的 `pdf_path` / `file_name` / `report_path` / `generated_at` 是**凭空字段**（实际是 `{evaluation_id,pdf_url,file_size}`），`EvaluationDetail` / `EvaluationResult` / `BatteryEvaluationDetail` / 12 个字典条目 / `CoefficientConfig` 的字段增减与可空性落后。① 0 条、③ 0 条。
 - **swagger 产物可复现（本 PR head 实测）**：实施过程中一度观察到「恢复 backend/docs 后重跑产物大面积不同」，复核后确认那是把「含本片新注解的树」与「HEAD 的旧产物」相比所致，不是工具链不确定性 —— 在本 PR head 上重跑 `swag init` 后 `git status backend/docs` 干净，CI 的「Swagger 产物新鲜度」锁会通过。
-## 实施修订（2026-09-14，片六 #964）
-
-questionBank + tutor + training + search 四域，外带 course / material / realExam / student / credential 五个学习面模块（合计 **66 个 Web 消费端点**）落地时的实测与口径补充：
-
-- **计数（实测）**：66 个端点 → **57 个有 data、9 个有意无 data**（题目删除 + 目录四个删除/排序 + 证件删除/排序）；**42 个此前根本不在 swagger**（questionBank 12 / tutor 7 / training 18 / credential 5），逐条补了完整注解块。issue 的 66/42 计数与实测一致。
-- **「已注解但不指认 data」的 9 个端点实际几乎全有载荷**，其中 8 个的响应体是 handler 里的 `gin.H{...}`（levels / tags / admin-certificate-templates / admin-question-tags / credentials ×2 / me-credential ×2）——注解要指认类型就必须先有具名类型，故按决策 6 与片二修订在本片一并收口为 DTO（`LevelListDTO` / `QuestionTagListDTO` / `CertificateTemplateListDTO` / `CredentialListDTO` / `CurrentCredentialDTO` / `QuestionImageUploadDTO`，外加 map 形态的 `GroupedCredentialsDTO`）。**issue 正文的 Out of Scope 把 `gin.H{}` 列为不做，与片二修订「分布在各域消费面里、由各自域的片在补注解时一并收口」冲突**；实施按 ADR 与实施简报执行，且只收口本片消费面（`/admin/specialties`、`/admin/levels`、`/positions`、`/materials/{id}/download` 等非本片消费点未动）。
-- **swag 没有联合类型表达力**：`GET /api/search` 同一状态码两种形状（type 缺省 = `SearchAllDTO` 分区聚合，指定 type = `SearchPageDTO` 分页）。注解写两条 @Success，swag 同名状态码取最后一条，故 data 指认为聚合形状；分页形状同域生成，前端以联合类型消费。属注解表达力缺口，不是注解写错。
-- **具名 map 类型在生成物里会渲染成空 interface**：`GroupedCredentialsDTO` 故改用结构体（service 侧两个 key 恒初始化、字段序按 key 字母序，序列化字节不变，shape-lock 冻结），而不是具名 map。
-- **`json:",string"` 字段要显式钉住**：`StudentDTO.UID`（Go 侧 int64 + `json:"uid,string"`）若不写 `swaggertype:"string"`，生成物会渲染 `number` —— 与真实线上类型（字符串）撒谎。这是片一「注解是唯一事实源」的又一处输入面修正。
-- **非指针 `omitempty` 字段（集成时已补齐）**：`CourseDTO.certificate_name` / `RealExamPaperDTO.source` / `ChapterDetailDTO.study_status` 一类「非指针 + omitempty」字段，按片一修订的口径应标 `x-optional`（键可能不存在）——片六实施时误读为「只覆盖指针」，集成时按**生成闭包**统一补标（三处），生成物随之渲染 `?`。判据：**omitempty 在不在，与是不是指针无关**；唯一例外是结构体取值字段（`ContributionItemDTO.Author`）——encoding/json 不省略零值结构体，`omitempty` 对其无效，故不标。
-- **枚举窄化**（`QuestionType` / `QuestionStatus` / `SearchType` / `CredentialDict.category`）仍依赖尚未实现的 enum 渲染能力，UI 值集保留、消费处按域收窄。
-- **前端九个模块退化为薄 adapter**：旧名与生成形状对应者保留为别名（`CourseSummary` / `CourseChapter` / `ChapterDetail` / `ChapterFile` / `TutorCourse` / `TutorChapter` / `CatalogLevel` / `CatalogTree` / `QuestionTag` / `StudyStats` / `StudyRecordItem` / `StudentCourseDetail` / `MaterialItem` / `RealExamPaper` / `SearchItem` …），形状确实不同者删旧名（`QuestionBankStats` 凭空 published/pending/total_count、`StudentProfile` 扁平形状、`TutorChapterDetail` 的幻影 course/chapters、`RealExamPracticeStart` 等）。题目 UI 模型 `Question`（@/types/question）**保留**并由 `WithUIQuestions` 显式标注边界 —— 其删除仍等 enum 渲染能力。可空性收紧使一批测试夹具（课程/等级/标签/章节）补全必填字段。
 
 ## 备选
 

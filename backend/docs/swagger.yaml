@@ -1,5 +1,19 @@
 basePath: /api
 definitions:
+  api.AuditLogPageResult:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/model.AuditLog'
+        type: array
+        x-nullable: true
+      page:
+        type: integer
+      pages:
+        type: integer
+      total:
+        type: integer
+    type: object
   api.GenerateCaptchaDTO:
     properties:
       id:
@@ -46,6 +60,38 @@ definitions:
     properties:
       reason:
         type: string
+    type: object
+  model.AuditLog:
+    properties:
+      action:
+        type: string
+      actor_id:
+        type: integer
+      actor_name:
+        type: string
+      actor_role:
+        type: string
+      created_at:
+        type: string
+      detail:
+        description: |-
+          Detail 审计明细：落库恒为 JSON 对象（query/request_body/status/duration_ms）。
+          swaggertype 显式钉住注解类型：JSONB 是 json.RawMessage 的具名别名，swag 无法自解析
+          （片七 admin 域生成闭包用到本字段，仅影响注解渲染，不改序列化）。
+        type: object
+        x-optional: true
+      id:
+        type: integer
+      ip:
+        type: string
+      method:
+        type: string
+      path:
+        type: string
+      request_id:
+        type: string
+      status:
+        type: integer
     type: object
   model.BatteryEvaluation:
     properties:
@@ -758,6 +804,28 @@ definitions:
       updated_at:
         type: string
     type: object
+  service.AIConfigDTO:
+    properties:
+      api_key:
+        description: 脱敏后的 API Key（如 sk-da...9b3）
+        type: string
+      base_url:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      is_active:
+        type: boolean
+      model:
+        type: string
+      name:
+        type: string
+      updated_at:
+        type: string
+    type: object
   service.AIImageUploadResultDTO:
     properties:
       url:
@@ -767,6 +835,107 @@ definitions:
     properties:
       message:
         type: string
+    type: object
+  service.AdminCourseDetailDTO:
+    properties:
+      certificate_name:
+        type: string
+        x-optional: true
+      certificate_template:
+        allOf:
+        - $ref: '#/definitions/service.CertificateTemplateDTO'
+        x-optional: true
+      certificate_template_id:
+        type: integer
+        x-nullable: true
+      chapter_count:
+        type: integer
+        x-optional: true
+      chapters:
+        items:
+          $ref: '#/definitions/service.ChapterDTO'
+        type: array
+      course_id:
+        type: integer
+      cover_image:
+        type: string
+      created_at:
+        type: string
+      credential:
+        allOf:
+        - $ref: '#/definitions/service.CredentialBriefDTO'
+        x-optional: true
+      credential_id:
+        type: integer
+        x-nullable: true
+      description:
+        type: string
+      duration:
+        type: integer
+      is_featured:
+        type: boolean
+      is_hot:
+        type: boolean
+      level:
+        allOf:
+        - $ref: '#/definitions/service.LevelBriefDTO'
+        x-optional: true
+      level_id:
+        type: integer
+        x-nullable: true
+      name:
+        type: string
+      points_price:
+        type: integer
+        x-optional: true
+      practice_hours:
+        type: integer
+      prerequisite_course_ids:
+        items:
+          type: integer
+        type: array
+        x-optional: true
+      prerequisites:
+        items:
+          $ref: '#/definitions/service.CourseBriefDTO'
+        type: array
+        x-optional: true
+      sort_order:
+        type: integer
+      specialty:
+        allOf:
+        - $ref: '#/definitions/service.SpecialtyBriefDTO'
+        x-optional: true
+      specialty_id:
+        type: integer
+        x-nullable: true
+      status:
+        type: integer
+      student_count:
+        type: integer
+        x-optional: true
+      theory_hours:
+        type: integer
+    type: object
+  service.AdminOverviewDTO:
+    properties:
+      active_today:
+        type: integer
+      total_courses:
+        type: integer
+      total_students:
+        type: integer
+      total_study_duration:
+        type: integer
+    type: object
+  service.AdminStatisticsDTO:
+    properties:
+      course_stats:
+        items:
+          $ref: '#/definitions/service.CourseStatDTO'
+        type: array
+      overview:
+        $ref: '#/definitions/service.AdminOverviewDTO'
     type: object
   service.ApplicationDTO:
     properties:
@@ -1019,6 +1188,22 @@ definitions:
       file_size:
         type: integer
       file_url:
+        type: string
+    type: object
+  service.ChapterGenResult:
+    properties:
+      chapter_id:
+        type: integer
+      content:
+        type: string
+        x-optional: true
+      error:
+        type: string
+        x-optional: true
+      status:
+        description: '"success" | "failed"'
+        type: string
+      title:
         type: string
     type: object
   service.ChapterInput:
@@ -1427,6 +1612,19 @@ definitions:
       total_chapters:
         type: integer
     type: object
+  service.CourseStatDTO:
+    properties:
+      avg_progress:
+        type: number
+      course_id:
+        type: integer
+      name:
+        type: string
+      study_count:
+        type: integer
+      total_duration:
+        type: integer
+    type: object
   service.CredentialBriefDTO:
     properties:
       category:
@@ -1495,6 +1693,16 @@ definitions:
         allOf:
         - $ref: '#/definitions/service.CredentialDict'
         x-nullable: true
+    type: object
+  service.DeleteChapterResult:
+    properties:
+      chapter_id:
+        type: integer
+    type: object
+  service.DeleteCourseResult:
+    properties:
+      course_id:
+        type: integer
     type: object
   service.DeleteFileResult:
     properties:
@@ -1608,6 +1816,99 @@ definitions:
       pages:
         type: integer
       total:
+        type: integer
+    type: object
+  service.FeatureBindingDTO:
+    properties:
+      config_id:
+        type: integer
+        x-optional: true
+      config_name:
+        type: string
+        x-optional: true
+      feature_key:
+        type: string
+      feature_label:
+        type: string
+    type: object
+  service.FeaturedContentAdminDetailDTO:
+    properties:
+      category:
+        type: string
+      category_label:
+        type: string
+      content:
+        type: string
+      content_id:
+        type: integer
+      cover_image:
+        type: string
+      created_at:
+        type: string
+      published_at:
+        type: string
+        x-nullable: true
+      sort_order:
+        type: integer
+      source:
+        type: string
+      status:
+        type: integer
+      summary:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+      view_count:
+        type: integer
+    type: object
+  service.FeaturedContentDTO:
+    properties:
+      category:
+        type: string
+      category_label:
+        type: string
+      content_id:
+        type: integer
+      cover_image:
+        type: string
+      created_at:
+        type: string
+      published_at:
+        type: string
+        x-nullable: true
+      sort_order:
+        type: integer
+      source:
+        type: string
+      status:
+        type: integer
+      summary:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+      view_count:
+        type: integer
+    type: object
+  service.FeaturedContentPageResult:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/service.FeaturedContentDTO'
+        type: array
+      page:
+        type: integer
+      pages:
+        type: integer
+      total:
+        type: integer
+    type: object
+  service.FeaturedDeleteResult:
+    properties:
+      content_id:
         type: integer
     type: object
   service.ForumAuthor:
@@ -1806,6 +2107,28 @@ definitions:
       total:
         type: integer
     type: object
+  service.GenTaskStatus:
+    properties:
+      completed:
+        type: integer
+      results:
+        items:
+          $ref: '#/definitions/service.ChapterGenResult'
+        type: array
+        x-nullable: true
+      status:
+        description: '"pending"|"processing"|"completed"|"failed"'
+        type: string
+      task_id:
+        type: string
+      total:
+        type: integer
+    type: object
+  service.GenerateContentResultDTO:
+    properties:
+      task_id:
+        type: string
+    type: object
   service.GroupedCredentialsDTO:
     properties:
       skill_level:
@@ -1850,6 +2173,54 @@ definitions:
         type: array
       total:
         type: integer
+    type: object
+  service.HrwaiUserCreatedDTO:
+    properties:
+      account:
+        type: string
+      id:
+        type: integer
+      phone:
+        type: string
+      uid:
+        type: string
+      username:
+        type: string
+    type: object
+  service.HrwaiUserPageResult:
+    properties:
+      list:
+        items:
+          $ref: '#/definitions/service.HrwaiUserSummary'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+    type: object
+  service.HrwaiUserSummary:
+    properties:
+      account:
+        type: string
+      company:
+        type: string
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: integer
+      phone:
+        type: string
+      status:
+        type: integer
+      uid:
+        example: "0"
+        type: string
+      username:
+        type: string
     type: object
   service.JobCardDTO:
     properties:
@@ -2341,6 +2712,84 @@ definitions:
       count:
         type: integer
     type: object
+  service.PointsBalanceResult:
+    properties:
+      balance:
+        type: integer
+      total_earned:
+        type: integer
+      total_spent:
+        type: integer
+    type: object
+  service.PointsClaimResult:
+    properties:
+      balance:
+        type: integer
+      task_status:
+        type: string
+      total_earned:
+        type: integer
+    type: object
+  service.PointsLedgerItem:
+    properties:
+      created_at:
+        type: string
+      delta:
+        type: integer
+      expires_at:
+        type: string
+        x-nullable: true
+      id:
+        type: integer
+      reason:
+        type: string
+      ref_id:
+        type: string
+      ref_type:
+        type: string
+      user_id:
+        type: integer
+    type: object
+  service.PointsLedgerResult:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/service.PointsLedgerItem'
+        type: array
+      page:
+        type: integer
+      pages:
+        type: integer
+      total:
+        type: integer
+    type: object
+  service.PointsTaskItem:
+    properties:
+      code:
+        type: string
+      desc:
+        type: string
+      group:
+        type: string
+      points:
+        type: integer
+      progress:
+        type: integer
+      status:
+        description: todo/claimable/claimed
+        type: string
+      title:
+        type: string
+      total:
+        type: integer
+    type: object
+  service.PointsTasksResult:
+    properties:
+      tasks:
+        items:
+          $ref: '#/definitions/service.PointsTaskItem'
+        type: array
+    type: object
   service.PositionInput:
     properties:
       code:
@@ -2428,6 +2877,19 @@ definitions:
         type: integer
       username:
         type: string
+    type: object
+  service.ProfileChangeRequestPageResult:
+    properties:
+      page:
+        type: integer
+      pages:
+        type: integer
+      requests:
+        items:
+          $ref: '#/definitions/service.ProfileChangeRequestDTO'
+        type: array
+      total:
+        type: integer
     type: object
   service.ProfileDTO:
     properties:
@@ -2791,6 +3253,88 @@ definitions:
       unread_count:
         type: integer
     type: object
+  service.RecruiterCreatedDTO:
+    properties:
+      business_scope:
+        type: string
+      company_name:
+        type: string
+      contact_email:
+        type: string
+      contact_name:
+        type: string
+      contact_phone:
+        type: string
+      credit_code:
+        type: string
+      id:
+        type: integer
+      status:
+        type: integer
+      username:
+        type: string
+      wechat:
+        type: string
+    type: object
+  service.RecruiterListItem:
+    properties:
+      business_scope:
+        type: string
+      company_name:
+        type: string
+      contact_email:
+        type: string
+      contact_name:
+        type: string
+      contact_phone:
+        type: string
+      created_at:
+        type: string
+      credit_code:
+        type: string
+      id:
+        type: integer
+      status:
+        type: integer
+      username:
+        type: string
+      wechat:
+        type: string
+    type: object
+  service.RecruiterListResult:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/service.RecruiterListItem'
+        type: array
+      page:
+        type: integer
+      total:
+        type: integer
+    type: object
+  service.RecruiterPasswordResetResult:
+    type: object
+  service.RecruiterUpdatedDTO:
+    properties:
+      business_scope:
+        type: string
+      company_name:
+        type: string
+      contact_email:
+        type: string
+      contact_name:
+        type: string
+      contact_phone:
+        type: string
+      credit_code:
+        type: string
+      id:
+        type: integer
+      username:
+        type: string
+      wechat:
+        type: string
+    type: object
   service.RedeemResult:
     properties:
       balance:
@@ -2923,6 +3467,11 @@ definitions:
         type: string
       sort_order:
         type: integer
+      status:
+        type: integer
+    type: object
+  service.StatusResultDTO:
+    properties:
       status:
         type: integer
     type: object
@@ -3178,6 +3727,44 @@ definitions:
       course:
         $ref: '#/definitions/service.CourseDTO'
     type: object
+  service.TutorDTO:
+    properties:
+      created_at:
+        type: string
+      name:
+        type: string
+      status:
+        type: integer
+      tutor_id:
+        type: integer
+      username:
+        type: string
+    type: object
+  service.TutorDeletedDTO:
+    properties:
+      tutor_id:
+        type: integer
+    type: object
+  service.TutorListDTO:
+    properties:
+      page:
+        type: integer
+      total:
+        type: integer
+      tutors:
+        items:
+          $ref: '#/definitions/service.TutorDTO'
+        type: array
+    type: object
+  service.TutorRegisterResultDTO:
+    properties:
+      name:
+        type: string
+      tutor_id:
+        type: integer
+      username:
+        type: string
+    type: object
   service.UserModelDTO:
     properties:
       api_key:
@@ -3293,6 +3880,306 @@ info:
   title: 叉车维修培训系统-学员端 API
   version: "1.0"
 paths:
+  /admin/ai-configs:
+    get:
+      description: 管理员查看全部多 AI 配置（api_key 已脱敏）
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/service.AIConfigDTO'
+                  type: array
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: 查询失败
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: AI 配置列表
+      tags:
+      - 管理端-AI配置
+    post:
+      consumes:
+      - application/json
+      description: 管理员新建多 AI 配置（api_key 落库前加密），响应 data 为 null
+      parameters:
+      - description: 配置请求 {name,api_key,base_url,model,description}
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 配置已创建
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 新建 AI 配置
+      tags:
+      - 管理端-AI配置
+  /admin/ai-configs/{id}:
+    delete:
+      description: 管理员删除配置（被功能绑定时拒绝），响应 data 为 null
+      parameters:
+      - description: 配置 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 配置已删除
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 配置被绑定/不存在
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 删除 AI 配置
+      tags:
+      - 管理端-AI配置
+    put:
+      consumes:
+      - application/json
+      description: 管理员更新配置（api_key 为空表示不修改），响应 data 为 null
+      parameters:
+      - description: 配置 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 配置请求 {name,api_key,base_url,model,description,is_active}
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 配置已更新
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 更新 AI 配置
+      tags:
+      - 管理端-AI配置
+  /admin/ai-configs/{id}/test:
+    post:
+      description: 管理员测试指定配置能否调通（失败即 400），响应 data 为 null
+      parameters:
+      - description: 配置 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 连接成功
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 配置不存在/连接失败
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 测试 AI 配置连通性
+      tags:
+      - 管理端-AI配置
+  /admin/ai-feature-bindings:
+    get:
+      description: 管理员查看全部 AI 功能的绑定情况
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/service.FeatureBindingDTO'
+                  type: array
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: 查询失败
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: AI 功能绑定列表
+      tags:
+      - 管理端-AI配置
+  /admin/ai-feature-bindings/{feature_key}:
+    put:
+      consumes:
+      - application/json
+      description: 绑定功能到指定配置（config_id=0 表示解除绑定），响应 data 为 null
+      parameters:
+      - description: 功能键
+        in: path
+        name: feature_key
+        required: true
+        type: string
+      - description: 绑定请求 {config_id}
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 绑定已更新
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 设置 AI 功能绑定
+      tags:
+      - 管理端-AI配置
+  /admin/ai-feature-bindings/{feature_key}/configs/{config_id}:
+    delete:
+      description: 解除指定功能与指定配置的绑定，响应 data 为 null
+      parameters:
+      - description: 功能键
+        in: path
+        name: feature_key
+        required: true
+        type: string
+      - description: 配置 ID
+        in: path
+        name: config_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已解除绑定
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 解除 AI 功能的多绑定单项
+      tags:
+      - 管理端-AI配置
+  /admin/audit-logs:
+    get:
+      description: 管理员分页查询审计日志（actor/角色/关键字过滤，页大小上限 100）
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      - description: 操作人 ID
+        in: query
+        name: actor_id
+        type: integer
+      - description: 操作人角色
+        in: query
+        name: role
+        type: string
+      - description: 关键字
+        in: query
+        name: keyword
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/api.AuditLogPageResult'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 审计日志列表
+      tags:
+      - 管理端-审计
   /admin/catalog/tree:
     get:
       description: 含停用项与章节节点的完整目录树（需 CapCatalogManage）
@@ -3448,6 +4335,84 @@ paths:
       summary: 证书模板列表
       tags:
       - 管理端-培训目录
+  /admin/chapter/{chapter_id}:
+    delete:
+      description: 管理员删除章节，返回被删除的 chapter_id
+      parameters:
+      - description: 章节 ID
+        in: path
+        name: chapter_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 章节删除成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.DeleteChapterResult'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 章节不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 删除章节
+      tags:
+      - 管理端-章节
+    put:
+      consumes:
+      - application/json
+      description: 管理员更新章节字段
+      parameters:
+      - description: 章节 ID
+        in: path
+        name: chapter_id
+        required: true
+        type: integer
+      - description: 章节输入 {title,content,duration,order_num,description}
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 章节更新成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ChapterDTO'
+              type: object
+        "400":
+          description: 请求数据无效
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 章节不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 更新章节
+      tags:
+      - 管理端-章节
   /admin/contributions/{id}/approve:
     post:
       description: pending → approved，直记 +50 积分（幂等占坑防双发）+ 站内信，同事务
@@ -3649,6 +4614,356 @@ paths:
       summary: 处置投稿举报
       tags:
       - 管理端-投稿
+  /admin/course:
+    post:
+      consumes:
+      - application/json
+      description: 管理员创建课程（含培训目录扩展字段）
+      parameters:
+      - description: 课程输入 {name,description,cover_image,duration,status,...}
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 课程创建成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.CourseDTO'
+              type: object
+        "400":
+          description: 请求数据无效
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 创建课程
+      tags:
+      - 管理端-课程
+  /admin/course/{course_id}:
+    delete:
+      description: 管理员删除课程，返回被删除的 course_id
+      parameters:
+      - description: 课程 ID
+        in: path
+        name: course_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 课程删除成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.DeleteCourseResult'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 课程不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 删除课程
+      tags:
+      - 管理端-课程
+    get:
+      description: 课程字段平铺 + chapters（含停用项与嵌套元数据）
+      parameters:
+      - description: 课程 ID
+        in: path
+        name: course_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.AdminCourseDetailDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 课程不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 管理端课程详情
+      tags:
+      - 管理端-课程
+    put:
+      consumes:
+      - application/json
+      description: 管理员更新课程字段（未携带的指针字段保留现状）
+      parameters:
+      - description: 课程 ID
+        in: path
+        name: course_id
+        required: true
+        type: integer
+      - description: 课程输入 {name,description,cover_image,duration,status,...}
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 课程更新成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.CourseDTO'
+              type: object
+        "400":
+          description: 请求数据无效
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 课程不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 更新课程
+      tags:
+      - 管理端-课程
+  /admin/course/{course_id}/chapter:
+    post:
+      consumes:
+      - application/json
+      description: 管理员为课程创建章节
+      parameters:
+      - description: 课程 ID
+        in: path
+        name: course_id
+        required: true
+        type: integer
+      - description: 章节输入 {title,content,duration,order_num,description}
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 章节创建成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ChapterDTO'
+              type: object
+        "400":
+          description: 请求数据无效
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 创建章节
+      tags:
+      - 管理端-章节
+  /admin/course/{course_id}/sort:
+    put:
+      consumes:
+      - application/json
+      description: 同一方向+等级组内交换 sort_order，响应 data 为 null
+      parameters:
+      - description: 课程 ID
+        in: path
+        name: course_id
+        required: true
+        type: integer
+      - description: 交换请求 {swap_with}
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 排序已交换
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: swap_with 参数无效
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 交换课程排序
+      tags:
+      - 管理端-课程
+  /admin/course/generate-content:
+    post:
+      consumes:
+      - application/json
+      description: 管理员为指定课程的章节启动 AI 内容生成，返回 task_id 供轮询
+      parameters:
+      - description: 生成请求 {course_id,chapter_ids}
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 生成任务已启动
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.GenerateContentResultDTO'
+              type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 启动课程内容异步生成
+      tags:
+      - 管理端-课程
+  /admin/course/generate-content/{task_id}:
+    get:
+      description: 前端轮询生成进度（pending/processing/completed/failed + 逐章节结果）
+      parameters:
+      - description: 任务 ID
+        in: path
+        name: task_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.GenTaskStatus'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 任务不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 查询内容生成任务状态
+      tags:
+      - 管理端-课程
+  /admin/courses:
+    get:
+      description: 管理员课程列表（含草稿），支持关键字/证件/方向/等级/热门精品过滤
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      - description: 关键字
+        in: query
+        name: keyword
+        type: string
+      - description: 目标证件 ID
+        in: query
+        name: credential_id
+        type: integer
+      - description: 专业方向 ID
+        in: query
+        name: specialty_id
+        type: integer
+      - description: 等级 ID
+        in: query
+        name: level_id
+        type: integer
+      - default: all
+        description: 热门/精品筛选 hot|featured|all
+        in: query
+        name: filter
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.CoursePageResult'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 管理端课程列表
+      tags:
+      - 管理端-课程
   /admin/credential:
     post:
       consumes:
@@ -3817,6 +5132,324 @@ paths:
       summary: 证件列表（管理端）
       tags:
       - 管理端-培训目录
+  /admin/export/evaluations:
+    get:
+      description: 响应是 CSV 附件（非统一信封）：文件名随 Content-Disposition 下发（#230），前端按 blob 消费
+      produces:
+      - text/csv
+      responses:
+        "200":
+          description: CSV 附件（UTF-8 BOM）
+          schema:
+            type: string
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: 导出失败
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 导出评估记录（CSV）
+      tags:
+      - 管理端-导出
+  /admin/export/questions:
+    get:
+      description: 响应是 CSV 附件（非统一信封）：文件名随 Content-Disposition 下发（#230），前端按 blob 消费
+      produces:
+      - text/csv
+      responses:
+        "200":
+          description: CSV 附件（UTF-8 BOM）
+          schema:
+            type: string
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: 导出失败
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 导出题库（CSV）
+      tags:
+      - 管理端-导出
+  /admin/export/students:
+    get:
+      description: 响应是 CSV 附件（非统一信封）：文件名随 Content-Disposition 下发（#230），前端按 blob 消费
+      produces:
+      - text/csv
+      responses:
+        "200":
+          description: CSV 附件（UTF-8 BOM）
+          schema:
+            type: string
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: 导出失败
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 导出学员名单（CSV）
+      tags:
+      - 管理端-导出
+  /admin/featured-content:
+    post:
+      consumes:
+      - application/json
+      description: 管理员创建内容（status 缺省为草稿）
+      parameters:
+      - description: 内容输入 {title,category,summary,cover_image,content,source,status,sort_order}
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 内容创建成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.FeaturedContentAdminDetailDTO'
+              type: object
+        "400":
+          description: 请求数据无效
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 创建精选内容
+      tags:
+      - 管理端-精选内容
+  /admin/featured-content/{id}:
+    delete:
+      description: 管理员删除内容，返回被删除的 content_id
+      parameters:
+      - description: 内容 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 内容删除成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.FeaturedDeleteResult'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 内容不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 删除精选内容
+      tags:
+      - 管理端-精选内容
+    get:
+      description: 管理端详情（列表项 + 正文，无相关资讯与上下篇）
+      parameters:
+      - description: 内容 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.FeaturedContentAdminDetailDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 内容不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 精选内容详情（管理端）
+      tags:
+      - 管理端-精选内容
+    put:
+      consumes:
+      - application/json
+      description: 管理员更新内容（未携带的字段保留现状）
+      parameters:
+      - description: 内容 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 内容输入 {title,category,summary,cover_image,content,source,status,sort_order}
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 内容更新成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.FeaturedContentAdminDetailDTO'
+              type: object
+        "400":
+          description: 请求数据无效
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 更新精选内容
+      tags:
+      - 管理端-精选内容
+  /admin/featured-content/{id}/publish:
+    post:
+      description: 草稿 → 已发布，返回发布后的内容
+      parameters:
+      - description: 内容 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 内容发布成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.FeaturedContentAdminDetailDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 内容不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 发布精选内容
+      tags:
+      - 管理端-精选内容
+  /admin/featured-content/upload-image:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Markdown 编辑器内嵌图 + 封面上传；返回 Vditor 约定的**非统一信封**响应 {msg,code,data:{errFiles,succMap}}（code=0
+        表示成功）
+      parameters:
+      - description: 图片文件
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Vditor 响应（非统一信封）
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 上传精选内容图片
+      tags:
+      - 管理端-精选内容
+  /admin/featured-contents:
+    get:
+      description: 管理端列表（含草稿），支持分类与状态过滤
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      - description: 分类
+        in: query
+        name: category
+        type: string
+      - description: 状态
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.FeaturedContentPageResult'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 精选内容列表（管理端）
+      tags:
+      - 管理端-精选内容
   /admin/forum/replies/{id}:
     delete:
       description: 管理端删除任意回复（若为被采纳回答则按 rollback 对冲回收，封底 0，幂等）
@@ -4206,6 +5839,218 @@ paths:
       summary: 管理员加精帖子
       tags:
       - 管理端-论坛
+  /admin/hrwai-users:
+    get:
+      description: 管理员分页查询 hrwai_users（账号/昵称/手机号模糊搜索）
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      - description: 关键字（账号/昵称/手机号）
+        in: query
+        name: keyword
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.HrwaiUserPageResult'
+              type: object
+        "400":
+          description: 查询用户列表失败
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: HRWAI 用户列表
+      tags:
+      - 管理端-用户
+    post:
+      consumes:
+      - application/json
+      description: 管理员创建 hrwai_users 账号（account / username 缺省时后端生成）
+      parameters:
+      - description: 创建请求 {phone,password,account,username,email,company}
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 用户添加成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.HrwaiUserCreatedDTO'
+              type: object
+        "400":
+          description: 参数错误/手机号已注册
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 新增 HRWAI 用户
+      tags:
+      - 管理端-用户
+  /admin/hrwai-users/{id}:
+    delete:
+      description: 管理员删除用户，响应 data 为 null
+      parameters:
+      - description: 用户 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 用户删除成功
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 删除失败
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 删除 HRWAI 用户
+      tags:
+      - 管理端-用户
+    put:
+      consumes:
+      - application/json
+      description: 管理员更新用户昵称/邮箱/单位/状态（不含密码），响应 data 为 null
+      parameters:
+      - description: 用户 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 更新请求 {username,email,company,status}
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 用户资料已更新
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 更新 HRWAI 用户资料
+      tags:
+      - 管理端-用户
+  /admin/hrwai-users/{id}/password:
+    put:
+      consumes:
+      - application/json
+      description: 管理员重置用户口令，响应 data 为 null（不回显口令）
+      parameters:
+      - description: 用户 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 重置请求 {password}
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 密码已重置
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误/密码长度非法
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 重置 HRWAI 用户密码
+      tags:
+      - 管理端-用户
+  /admin/hrwai-users/{id}/status:
+    put:
+      description: 管理员切换用户状态，返回切换后的新状态
+      parameters:
+      - description: 用户 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 用户已启用/已禁用
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.StatusResultDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 用户不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 切换 HRWAI 用户启用/禁用状态
+      tags:
+      - 管理端-用户
   /admin/job-reports:
     get:
       description: 管理端查看待处理举报队列
@@ -4636,6 +6481,125 @@ paths:
       summary: 岗位列表
       tags:
       - 管理端-岗位字典
+  /admin/profile-reviews:
+    get:
+      description: 管理员分页查询昵称/头像修改审核单（status 缺省 pending）
+      parameters:
+      - default: pending
+        description: 状态 pending|approved|rejected|all
+        in: query
+        name: status
+        type: string
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ProfileChangeRequestPageResult'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: 查询失败
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 资料审核队列
+      tags:
+      - 管理端-资料审核
+  /admin/profile-reviews/{id}/approve:
+    post:
+      description: 审核通过并生效（头像换新清旧），返回审核单
+      parameters:
+      - description: 审核单 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已通过审核，修改已生效
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ProfileChangeRequestDTO'
+              type: object
+        "400":
+          description: 审核失败
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 通过资料修改审核
+      tags:
+      - 管理端-资料审核
+  /admin/profile-reviews/{id}/reject:
+    post:
+      consumes:
+      - application/json
+      description: 驳回并清理待审头像文件，返回审核单
+      parameters:
+      - description: 审核单 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 驳回请求 {reason}
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已驳回
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ProfileChangeRequestDTO'
+              type: object
+        "400":
+          description: 驳回失败
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 驳回资料修改审核
+      tags:
+      - 管理端-资料审核
   /admin/question-tag:
     post:
       consumes:
@@ -4809,6 +6773,200 @@ paths:
       summary: 题目打标
       tags:
       - 题库管理
+  /admin/recruiters:
+    get:
+      description: 管理员分页查询招聘者（企业名/账号模糊搜索，字段白名单无凭据）
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      - description: 关键字（企业名/账号）
+        in: query
+        name: keyword
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.RecruiterListResult'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: 查询失败
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 招聘者列表
+      tags:
+      - 管理端-招聘者
+    post:
+      consumes:
+      - application/json
+      description: 管理员邀约制创建企业招聘者（企业信息必填，响应不回显口令）
+      parameters:
+      - description: 创建请求 {username,password,company_name,credit_code,business_scope,contact_name,contact_phone,contact_email,wechat}
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 招聘者账号创建成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.RecruiterCreatedDTO'
+              type: object
+        "400":
+          description: 参数校验失败
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 创建招聘者账号
+      tags:
+      - 管理端-招聘者
+  /admin/recruiters/{id}:
+    put:
+      consumes:
+      - application/json
+      description: 管理员编辑企业信息与联系人（不改账号归属与角色；响应比创建少一个 status）
+      parameters:
+      - description: 招聘者 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 编辑请求 {username,company_name,credit_code,business_scope,contact_name,contact_phone,contact_email,wechat}
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 招聘者信息已更新
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.RecruiterUpdatedDTO'
+              type: object
+        "400":
+          description: 参数校验失败
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 编辑招聘者企业信息
+      tags:
+      - 管理端-招聘者
+  /admin/recruiters/{id}/password:
+    put:
+      consumes:
+      - application/json
+      description: 管理员强制重置招聘者口令（吊销其 refresh），响应 data 为 {}（空对象，不回显口令）
+      parameters:
+      - description: 招聘者 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 重置请求 {password}
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 密码已重置
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.RecruiterPasswordResetResult'
+              type: object
+        "400":
+          description: 新密码不能为空/长度非法
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 重置招聘者密码
+      tags:
+      - 管理端-招聘者
+  /admin/recruiters/{id}/status:
+    put:
+      description: 管理员切换招聘者状态，返回切换后的新状态
+      parameters:
+      - description: 招聘者 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 招聘者已启用/已禁用
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.StatusResultDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 招聘者不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 切换招聘者启用/禁用状态
+      tags:
+      - 管理端-招聘者
   /admin/specialty:
     post:
       consumes:
@@ -4953,6 +7111,209 @@ paths:
       summary: 交换专业方向排序
       tags:
       - 管理端-培训目录
+  /admin/statistics:
+    get:
+      description: 管理员查看学员/课程/学习时长概览与课程统计
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.AdminStatisticsDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 统计看板
+      tags:
+      - 管理端-统计
+  /admin/tutor:
+    post:
+      consumes:
+      - application/json
+      description: 管理员为导师建号（用户名/密码/姓名必填）
+      parameters:
+      - description: 建号请求 {username,password,name}
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 导师添加成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.TutorRegisterResultDTO'
+              type: object
+        "400":
+          description: 参数错误/用户名已被注册
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 添加导师
+      tags:
+      - 管理端-导师
+  /admin/tutor/{tutor_id}:
+    delete:
+      description: 管理员删除导师账号，返回被删除的 tutor_id
+      parameters:
+      - description: 导师 ID
+        in: path
+        name: tutor_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 导师删除成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.TutorDeletedDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 导师不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 删除导师
+      tags:
+      - 管理端-导师
+  /admin/tutor/{tutor_id}/password:
+    put:
+      consumes:
+      - application/json
+      description: 管理员重置导师口令，响应 data 为 null
+      parameters:
+      - description: 导师 ID
+        in: path
+        name: tutor_id
+        required: true
+        type: integer
+      - description: 重置请求 {password}
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 密码已重置
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数错误/密码长度非法
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 重置导师密码
+      tags:
+      - 管理端-导师
+  /admin/tutor/{tutor_id}/status:
+    put:
+      description: 管理员切换导师状态，返回切换后的新状态
+      parameters:
+      - description: 导师 ID
+        in: path
+        name: tutor_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 导师已启用/已禁用
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.StatusResultDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 导师不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 切换导师启用/禁用状态
+      tags:
+      - 管理端-导师
+  /admin/tutors:
+    get:
+      description: 管理员分页查询导师（用户名/姓名模糊搜索）
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      - description: 关键字（用户名/姓名）
+        in: query
+        name: keyword
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.TutorListDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 导师列表
+      tags:
+      - 管理端-导师
   /ai-assistant/chat:
     post:
       consumes:
@@ -8703,7 +11064,12 @@ paths:
         "200":
           description: 余额
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.PointsBalanceResult'
+              type: object
         "401":
           description: 未认证
           schema:
@@ -8731,7 +11097,12 @@ paths:
         "200":
           description: 流水
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.PointsLedgerResult'
+              type: object
         "401":
           description: 未认证
           schema:
@@ -8756,7 +11127,12 @@ paths:
         "200":
           description: 兑换成功
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.RedeemResult'
+              type: object
         "400":
           description: 余额不足/已拥有
           schema:
@@ -8785,7 +11161,12 @@ paths:
         "200":
           description: 兑换成功
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.RedeemResult'
+              type: object
         "400":
           description: 余额不足/已拥有
           schema:
@@ -8808,7 +11189,12 @@ paths:
         "200":
           description: 任务列表
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.PointsTasksResult'
+              type: object
         "401":
           description: 未认证
           schema:
@@ -8833,7 +11219,12 @@ paths:
         "200":
           description: 已领取
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.PointsClaimResult'
+              type: object
         "400":
           description: 已领取/额度不足
           schema:

@@ -33,7 +33,7 @@ type PointsLedgerItem struct {
 	RefType   string     `json:"ref_type"`
 	RefID     string     `json:"ref_id"`
 	CreatedAt time.Time  `json:"created_at"`
-	ExpiresAt *time.Time `json:"expires_at"`
+	ExpiresAt *time.Time `json:"expires_at" extensions:"x-nullable"`
 }
 
 // PointsLedgerResult 流水分页

@@ -8,6 +8,492 @@
     },
     "basePath": "/api",
     "paths": {
+        "/admin/ai-configs": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员查看全部多 AI 配置（api_key 已脱敏）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-AI配置"
+                ],
+                "summary": "AI 配置列表",
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/service.AIConfigDTO"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "查询失败",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员新建多 AI 配置（api_key 落库前加密），响应 data 为 null",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-AI配置"
+                ],
+                "summary": "新建 AI 配置",
+                "parameters": [
+                    {
+                        "description": "配置请求 {name,api_key,base_url,model,description}",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "配置已创建",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/ai-configs/{id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员更新配置（api_key 为空表示不修改），响应 data 为 null",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-AI配置"
+                ],
+                "summary": "更新 AI 配置",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "配置 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "配置请求 {name,api_key,base_url,model,description,is_active}",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "配置已更新",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员删除配置（被功能绑定时拒绝），响应 data 为 null",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-AI配置"
+                ],
+                "summary": "删除 AI 配置",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "配置 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "配置已删除",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "配置被绑定/不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/ai-configs/{id}/test": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员测试指定配置能否调通（失败即 400），响应 data 为 null",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-AI配置"
+                ],
+                "summary": "测试 AI 配置连通性",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "配置 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "连接成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "配置不存在/连接失败",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/ai-feature-bindings": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员查看全部 AI 功能的绑定情况",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-AI配置"
+                ],
+                "summary": "AI 功能绑定列表",
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/service.FeatureBindingDTO"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "查询失败",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/ai-feature-bindings/{feature_key}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "绑定功能到指定配置（config_id=0 表示解除绑定），响应 data 为 null",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-AI配置"
+                ],
+                "summary": "设置 AI 功能绑定",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "功能键",
+                        "name": "feature_key",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "绑定请求 {config_id}",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "绑定已更新",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/ai-feature-bindings/{feature_key}/configs/{config_id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "解除指定功能与指定配置的绑定，响应 data 为 null",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-AI配置"
+                ],
+                "summary": "解除 AI 功能的多绑定单项",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "功能键",
+                        "name": "feature_key",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "配置 ID",
+                        "name": "config_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "已解除绑定",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/audit-logs": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员分页查询审计日志（actor/角色/关键字过滤，页大小上限 100）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-审计"
+                ],
+                "summary": "审计日志列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "每页条数",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "操作人 ID",
+                        "name": "actor_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "操作人角色",
+                        "name": "role",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "关键字",
+                        "name": "keyword",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/api.AuditLogPageResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/catalog/tree": {
             "get": {
                 "security": [
@@ -264,6 +750,137 @@
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/chapter/{chapter_id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员更新章节字段",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-章节"
+                ],
+                "summary": "更新章节",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "章节 ID",
+                        "name": "chapter_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "章节输入 {title,content,duration,order_num,description}",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "章节更新成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ChapterDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "请求数据无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "章节不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员删除章节，返回被删除的 chapter_id",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-章节"
+                ],
+                "summary": "删除章节",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "章节 ID",
+                        "name": "chapter_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "章节删除成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.DeleteChapterResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "章节不存在",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -609,6 +1226,591 @@
                 }
             }
         },
+        "/admin/course": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员创建课程（含培训目录扩展字段）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-课程"
+                ],
+                "summary": "创建课程",
+                "parameters": [
+                    {
+                        "description": "课程输入 {name,description,cover_image,duration,status,...}",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "课程创建成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.CourseDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "请求数据无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/course/generate-content": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员为指定课程的章节启动 AI 内容生成，返回 task_id 供轮询",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-课程"
+                ],
+                "summary": "启动课程内容异步生成",
+                "parameters": [
+                    {
+                        "description": "生成请求 {course_id,chapter_ids}",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "生成任务已启动",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.GenerateContentResultDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/course/generate-content/{task_id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "前端轮询生成进度（pending/processing/completed/failed + 逐章节结果）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-课程"
+                ],
+                "summary": "查询内容生成任务状态",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "任务 ID",
+                        "name": "task_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.GenTaskStatus"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "任务不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/course/{course_id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "课程字段平铺 + chapters（含停用项与嵌套元数据）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-课程"
+                ],
+                "summary": "管理端课程详情",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "课程 ID",
+                        "name": "course_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.AdminCourseDetailDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "课程不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员更新课程字段（未携带的指针字段保留现状）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-课程"
+                ],
+                "summary": "更新课程",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "课程 ID",
+                        "name": "course_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "课程输入 {name,description,cover_image,duration,status,...}",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "课程更新成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.CourseDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "请求数据无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "课程不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员删除课程，返回被删除的 course_id",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-课程"
+                ],
+                "summary": "删除课程",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "课程 ID",
+                        "name": "course_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "课程删除成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.DeleteCourseResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "课程不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/course/{course_id}/chapter": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员为课程创建章节",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-章节"
+                ],
+                "summary": "创建章节",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "课程 ID",
+                        "name": "course_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "章节输入 {title,content,duration,order_num,description}",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "章节创建成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ChapterDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "请求数据无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/course/{course_id}/sort": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "同一方向+等级组内交换 sort_order，响应 data 为 null",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-课程"
+                ],
+                "summary": "交换课程排序",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "课程 ID",
+                        "name": "course_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "交换请求 {swap_with}",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "排序已交换",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "swap_with 参数无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/courses": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员课程列表（含草稿），支持关键字/证件/方向/等级/热门精品过滤",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-课程"
+                ],
+                "summary": "管理端课程列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 10,
+                        "description": "每页条数",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "关键字",
+                        "name": "keyword",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "目标证件 ID",
+                        "name": "credential_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "专业方向 ID",
+                        "name": "specialty_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "等级 ID",
+                        "name": "level_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "default": "all",
+                        "description": "热门/精品筛选 hot|featured|all",
+                        "name": "filter",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.CoursePageResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/credential": {
             "post": {
                 "security": [
@@ -872,6 +2074,533 @@
                                     "properties": {
                                         "data": {
                                             "$ref": "#/definitions/service.CredentialListDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/export/evaluations": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "响应是 CSV 附件（非统一信封）：文件名随 Content-Disposition 下发（#230），前端按 blob 消费",
+                "produces": [
+                    "text/csv"
+                ],
+                "tags": [
+                    "管理端-导出"
+                ],
+                "summary": "导出评估记录（CSV）",
+                "responses": {
+                    "200": {
+                        "description": "CSV 附件（UTF-8 BOM）",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "导出失败",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/export/questions": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "响应是 CSV 附件（非统一信封）：文件名随 Content-Disposition 下发（#230），前端按 blob 消费",
+                "produces": [
+                    "text/csv"
+                ],
+                "tags": [
+                    "管理端-导出"
+                ],
+                "summary": "导出题库（CSV）",
+                "responses": {
+                    "200": {
+                        "description": "CSV 附件（UTF-8 BOM）",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "导出失败",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/export/students": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "响应是 CSV 附件（非统一信封）：文件名随 Content-Disposition 下发（#230），前端按 blob 消费",
+                "produces": [
+                    "text/csv"
+                ],
+                "tags": [
+                    "管理端-导出"
+                ],
+                "summary": "导出学员名单（CSV）",
+                "responses": {
+                    "200": {
+                        "description": "CSV 附件（UTF-8 BOM）",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "导出失败",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/featured-content": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员创建内容（status 缺省为草稿）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-精选内容"
+                ],
+                "summary": "创建精选内容",
+                "parameters": [
+                    {
+                        "description": "内容输入 {title,category,summary,cover_image,content,source,status,sort_order}",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "内容创建成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.FeaturedContentAdminDetailDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "请求数据无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/featured-content/upload-image": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Markdown 编辑器内嵌图 + 封面上传；返回 Vditor 约定的**非统一信封**响应 {msg,code,data:{errFiles,succMap}}（code=0 表示成功）",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-精选内容"
+                ],
+                "summary": "上传精选内容图片",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "图片文件",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Vditor 响应（非统一信封）",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/featured-content/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理端详情（列表项 + 正文，无相关资讯与上下篇）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-精选内容"
+                ],
+                "summary": "精选内容详情（管理端）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "内容 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.FeaturedContentAdminDetailDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "内容不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员更新内容（未携带的字段保留现状）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-精选内容"
+                ],
+                "summary": "更新精选内容",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "内容 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "内容输入 {title,category,summary,cover_image,content,source,status,sort_order}",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "内容更新成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.FeaturedContentAdminDetailDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "请求数据无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员删除内容，返回被删除的 content_id",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-精选内容"
+                ],
+                "summary": "删除精选内容",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "内容 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "内容删除成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.FeaturedDeleteResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "内容不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/featured-content/{id}/publish": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "草稿 → 已发布，返回发布后的内容",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-精选内容"
+                ],
+                "summary": "发布精选内容",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "内容 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "内容发布成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.FeaturedContentAdminDetailDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "内容不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/featured-contents": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理端列表（含草稿），支持分类与状态过滤",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-精选内容"
+                ],
+                "summary": "精选内容列表（管理端）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 10,
+                        "description": "每页条数",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "分类",
+                        "name": "category",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "状态",
+                        "name": "status",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.FeaturedContentPageResult"
                                         }
                                     }
                                 }
@@ -1516,6 +3245,353 @@
                     },
                     "403": {
                         "description": "需要管理员角色",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/hrwai-users": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员分页查询 hrwai_users（账号/昵称/手机号模糊搜索）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-用户"
+                ],
+                "summary": "HRWAI 用户列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "每页条数",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "关键字（账号/昵称/手机号）",
+                        "name": "keyword",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.HrwaiUserPageResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "查询用户列表失败",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员创建 hrwai_users 账号（account / username 缺省时后端生成）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-用户"
+                ],
+                "summary": "新增 HRWAI 用户",
+                "parameters": [
+                    {
+                        "description": "创建请求 {phone,password,account,username,email,company}",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "用户添加成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.HrwaiUserCreatedDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误/手机号已注册",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/hrwai-users/{id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员更新用户昵称/邮箱/单位/状态（不含密码），响应 data 为 null",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-用户"
+                ],
+                "summary": "更新 HRWAI 用户资料",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "用户 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "更新请求 {username,email,company,status}",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "用户资料已更新",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员删除用户，响应 data 为 null",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-用户"
+                ],
+                "summary": "删除 HRWAI 用户",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "用户 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "用户删除成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "删除失败",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/hrwai-users/{id}/password": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员重置用户口令，响应 data 为 null（不回显口令）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-用户"
+                ],
+                "summary": "重置 HRWAI 用户密码",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "用户 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "重置请求 {password}",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "密码已重置",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误/密码长度非法",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/hrwai-users/{id}/status": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员切换用户状态，返回切换后的新状态",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-用户"
+                ],
+                "summary": "切换 HRWAI 用户启用/禁用状态",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "用户 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "用户已启用/已禁用",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.StatusResultDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "用户不存在",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -2211,6 +4287,205 @@
                 }
             }
         },
+        "/admin/profile-reviews": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员分页查询昵称/头像修改审核单（status 缺省 pending）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-资料审核"
+                ],
+                "summary": "资料审核队列",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "default": "pending",
+                        "description": "状态 pending|approved|rejected|all",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 10,
+                        "description": "每页条数",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ProfileChangeRequestPageResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "查询失败",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/profile-reviews/{id}/approve": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "审核通过并生效（头像换新清旧），返回审核单",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-资料审核"
+                ],
+                "summary": "通过资料修改审核",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "审核单 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "已通过审核，修改已生效",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ProfileChangeRequestDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "审核失败",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/profile-reviews/{id}/reject": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "驳回并清理待审头像文件，返回审核单",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-资料审核"
+                ],
+                "summary": "驳回资料修改审核",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "审核单 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "驳回请求 {reason}",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "已驳回",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ProfileChangeRequestDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "驳回失败",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/question-tag": {
             "post": {
                 "security": [
@@ -2501,6 +4776,333 @@
                 }
             }
         },
+        "/admin/recruiters": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员分页查询招聘者（企业名/账号模糊搜索，字段白名单无凭据）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-招聘者"
+                ],
+                "summary": "招聘者列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "每页条数",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "关键字（企业名/账号）",
+                        "name": "keyword",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.RecruiterListResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "查询失败",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员邀约制创建企业招聘者（企业信息必填，响应不回显口令）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-招聘者"
+                ],
+                "summary": "创建招聘者账号",
+                "parameters": [
+                    {
+                        "description": "创建请求 {username,password,company_name,credit_code,business_scope,contact_name,contact_phone,contact_email,wechat}",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "招聘者账号创建成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.RecruiterCreatedDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数校验失败",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/recruiters/{id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员编辑企业信息与联系人（不改账号归属与角色；响应比创建少一个 status）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-招聘者"
+                ],
+                "summary": "编辑招聘者企业信息",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "招聘者 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "编辑请求 {username,company_name,credit_code,business_scope,contact_name,contact_phone,contact_email,wechat}",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "招聘者信息已更新",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.RecruiterUpdatedDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数校验失败",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/recruiters/{id}/password": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员强制重置招聘者口令（吊销其 refresh），响应 data 为 {}（空对象，不回显口令）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-招聘者"
+                ],
+                "summary": "重置招聘者密码",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "招聘者 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "重置请求 {password}",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "密码已重置",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.RecruiterPasswordResetResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "新密码不能为空/长度非法",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/recruiters/{id}/status": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员切换招聘者状态，返回切换后的新状态",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-招聘者"
+                ],
+                "summary": "切换招聘者启用/禁用状态",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "招聘者 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "招聘者已启用/已禁用",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.StatusResultDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "招聘者不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/specialty": {
             "post": {
                 "security": [
@@ -2725,6 +5327,349 @@
                         "description": "参数错误",
                         "schema": {
                             "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/statistics": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员查看学员/课程/学习时长概览与课程统计",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-统计"
+                ],
+                "summary": "统计看板",
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.AdminStatisticsDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/tutor": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员为导师建号（用户名/密码/姓名必填）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-导师"
+                ],
+                "summary": "添加导师",
+                "parameters": [
+                    {
+                        "description": "建号请求 {username,password,name}",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "导师添加成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.TutorRegisterResultDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误/用户名已被注册",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/tutor/{tutor_id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员删除导师账号，返回被删除的 tutor_id",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-导师"
+                ],
+                "summary": "删除导师",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "导师 ID",
+                        "name": "tutor_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "导师删除成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.TutorDeletedDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "导师不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/tutor/{tutor_id}/password": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员重置导师口令，响应 data 为 null",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-导师"
+                ],
+                "summary": "重置导师密码",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "导师 ID",
+                        "name": "tutor_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "重置请求 {password}",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "密码已重置",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误/密码长度非法",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/tutor/{tutor_id}/status": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员切换导师状态，返回切换后的新状态",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-导师"
+                ],
+                "summary": "切换导师启用/禁用状态",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "导师 ID",
+                        "name": "tutor_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "导师已启用/已禁用",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.StatusResultDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "导师不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/tutors": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员分页查询导师（用户名/姓名模糊搜索）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-导师"
+                ],
+                "summary": "导师列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 10,
+                        "description": "每页条数",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "关键字（用户名/姓名）",
+                        "name": "keyword",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.TutorListDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -8934,7 +11879,19 @@
                     "200": {
                         "description": "余额",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.PointsBalanceResult"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -8979,7 +11936,19 @@
                     "200": {
                         "description": "流水",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.PointsLedgerResult"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -9019,7 +11988,19 @@
                     "200": {
                         "description": "兑换成功",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.RedeemResult"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -9065,7 +12046,19 @@
                     "200": {
                         "description": "兑换成功",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.RedeemResult"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -9102,7 +12095,19 @@
                     "200": {
                         "description": "任务列表",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.PointsTasksResult"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -9142,7 +12147,19 @@
                     "200": {
                         "description": "已领取",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.PointsClaimResult"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -18927,6 +21944,27 @@
         }
     },
     "definitions": {
+        "api.AuditLogPageResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.AuditLog"
+                    },
+                    "x-nullable": true
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
         "api.GenerateCaptchaDTO": {
             "type": "object",
             "properties": {
@@ -18997,6 +22035,49 @@
             "properties": {
                 "reason": {
                     "type": "string"
+                }
+            }
+        },
+        "model.AuditLog": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string"
+                },
+                "actor_id": {
+                    "type": "integer"
+                },
+                "actor_name": {
+                    "type": "string"
+                },
+                "actor_role": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "detail": {
+                    "description": "Detail 审计明细：落库恒为 JSON 对象（query/request_body/status/duration_ms）。\nswaggertype 显式钉住注解类型：JSONB 是 json.RawMessage 的具名别名，swag 无法自解析\n（片七 admin 域生成闭包用到本字段，仅影响注解渲染，不改序列化）。",
+                    "type": "object",
+                    "x-optional": true
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "ip": {
+                    "type": "string"
+                },
+                "method": {
+                    "type": "string"
+                },
+                "path": {
+                    "type": "string"
+                },
+                "request_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
                 }
             }
         },
@@ -20055,6 +23136,39 @@
                 }
             }
         },
+        "service.AIConfigDTO": {
+            "type": "object",
+            "properties": {
+                "api_key": {
+                    "description": "脱敏后的 API Key（如 sk-da...9b3）",
+                    "type": "string"
+                },
+                "base_url": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "model": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "service.AIImageUploadResultDTO": {
             "type": "object",
             "properties": {
@@ -20068,6 +23182,162 @@
             "properties": {
                 "message": {
                     "type": "string"
+                }
+            }
+        },
+        "service.AdminCourseDetailDTO": {
+            "type": "object",
+            "properties": {
+                "certificate_name": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "certificate_template": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/service.CertificateTemplateDTO"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "certificate_template_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "chapter_count": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "chapters": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.ChapterDTO"
+                    }
+                },
+                "course_id": {
+                    "type": "integer"
+                },
+                "cover_image": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "credential": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/service.CredentialBriefDTO"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "credential_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "description": {
+                    "type": "string"
+                },
+                "duration": {
+                    "type": "integer"
+                },
+                "is_featured": {
+                    "type": "boolean"
+                },
+                "is_hot": {
+                    "type": "boolean"
+                },
+                "level": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/service.LevelBriefDTO"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "level_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "name": {
+                    "type": "string"
+                },
+                "points_price": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "practice_hours": {
+                    "type": "integer"
+                },
+                "prerequisite_course_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    },
+                    "x-optional": true
+                },
+                "prerequisites": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.CourseBriefDTO"
+                    },
+                    "x-optional": true
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "specialty": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/service.SpecialtyBriefDTO"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "specialty_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "student_count": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "theory_hours": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.AdminOverviewDTO": {
+            "type": "object",
+            "properties": {
+                "active_today": {
+                    "type": "integer"
+                },
+                "total_courses": {
+                    "type": "integer"
+                },
+                "total_students": {
+                    "type": "integer"
+                },
+                "total_study_duration": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.AdminStatisticsDTO": {
+            "type": "object",
+            "properties": {
+                "course_stats": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.CourseStatDTO"
+                    }
+                },
+                "overview": {
+                    "$ref": "#/definitions/service.AdminOverviewDTO"
                 }
             }
         },
@@ -20446,6 +23716,29 @@
                     "type": "integer"
                 },
                 "file_url": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.ChapterGenResult": {
+            "type": "object",
+            "properties": {
+                "chapter_id": {
+                    "type": "integer"
+                },
+                "content": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "error": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "status": {
+                    "description": "\"success\" | \"failed\"",
+                    "type": "string"
+                },
+                "title": {
                     "type": "string"
                 }
             }
@@ -21061,6 +24354,26 @@
                 }
             }
         },
+        "service.CourseStatDTO": {
+            "type": "object",
+            "properties": {
+                "avg_progress": {
+                    "type": "number"
+                },
+                "course_id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "study_count": {
+                    "type": "integer"
+                },
+                "total_duration": {
+                    "type": "integer"
+                }
+            }
+        },
         "service.CredentialBriefDTO": {
             "type": "object",
             "properties": {
@@ -21165,6 +24478,22 @@
                         }
                     ],
                     "x-nullable": true
+                }
+            }
+        },
+        "service.DeleteChapterResult": {
+            "type": "object",
+            "properties": {
+                "chapter_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.DeleteCourseResult": {
+            "type": "object",
+            "properties": {
+                "course_id": {
+                    "type": "integer"
                 }
             }
         },
@@ -21339,6 +24668,146 @@
                     "type": "integer"
                 },
                 "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.FeatureBindingDTO": {
+            "type": "object",
+            "properties": {
+                "config_id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "config_name": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "feature_key": {
+                    "type": "string"
+                },
+                "feature_label": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.FeaturedContentAdminDetailDTO": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "string"
+                },
+                "category_label": {
+                    "type": "string"
+                },
+                "content": {
+                    "type": "string"
+                },
+                "content_id": {
+                    "type": "integer"
+                },
+                "cover_image": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "published_at": {
+                    "type": "string",
+                    "x-nullable": true
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "summary": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "view_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.FeaturedContentDTO": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "string"
+                },
+                "category_label": {
+                    "type": "string"
+                },
+                "content_id": {
+                    "type": "integer"
+                },
+                "cover_image": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "published_at": {
+                    "type": "string",
+                    "x-nullable": true
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "summary": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "view_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.FeaturedContentPageResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.FeaturedContentDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.FeaturedDeleteResult": {
+            "type": "object",
+            "properties": {
+                "content_id": {
                     "type": "integer"
                 }
             }
@@ -21622,6 +25091,39 @@
                 }
             }
         },
+        "service.GenTaskStatus": {
+            "type": "object",
+            "properties": {
+                "completed": {
+                    "type": "integer"
+                },
+                "results": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.ChapterGenResult"
+                    },
+                    "x-nullable": true
+                },
+                "status": {
+                    "description": "\"pending\"|\"processing\"|\"completed\"|\"failed\"",
+                    "type": "string"
+                },
+                "task_id": {
+                    "type": "string"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.GenerateContentResultDTO": {
+            "type": "object",
+            "properties": {
+                "task_id": {
+                    "type": "string"
+                }
+            }
+        },
         "service.GroupedCredentialsDTO": {
             "type": "object",
             "properties": {
@@ -21690,6 +25192,79 @@
                 },
                 "total": {
                     "type": "integer"
+                }
+            }
+        },
+        "service.HrwaiUserCreatedDTO": {
+            "type": "object",
+            "properties": {
+                "account": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "uid": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.HrwaiUserPageResult": {
+            "type": "object",
+            "properties": {
+                "list": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.HrwaiUserSummary"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.HrwaiUserSummary": {
+            "type": "object",
+            "properties": {
+                "account": {
+                    "type": "string"
+                },
+                "company": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "uid": {
+                    "type": "string",
+                    "example": "0"
+                },
+                "username": {
+                    "type": "string"
                 }
             }
         },
@@ -22414,6 +25989,125 @@
                 }
             }
         },
+        "service.PointsBalanceResult": {
+            "type": "object",
+            "properties": {
+                "balance": {
+                    "type": "integer"
+                },
+                "total_earned": {
+                    "type": "integer"
+                },
+                "total_spent": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.PointsClaimResult": {
+            "type": "object",
+            "properties": {
+                "balance": {
+                    "type": "integer"
+                },
+                "task_status": {
+                    "type": "string"
+                },
+                "total_earned": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.PointsLedgerItem": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "delta": {
+                    "type": "integer"
+                },
+                "expires_at": {
+                    "type": "string",
+                    "x-nullable": true
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "ref_id": {
+                    "type": "string"
+                },
+                "ref_type": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.PointsLedgerResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.PointsLedgerItem"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.PointsTaskItem": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "desc": {
+                    "type": "string"
+                },
+                "group": {
+                    "type": "string"
+                },
+                "points": {
+                    "type": "integer"
+                },
+                "progress": {
+                    "type": "integer"
+                },
+                "status": {
+                    "description": "todo/claimable/claimed",
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.PointsTasksResult": {
+            "type": "object",
+            "properties": {
+                "tasks": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.PointsTaskItem"
+                    }
+                }
+            }
+        },
         "service.PositionInput": {
             "type": "object",
             "properties": {
@@ -22545,6 +26239,26 @@
                 },
                 "username": {
                     "type": "string"
+                }
+            }
+        },
+        "service.ProfileChangeRequestPageResult": {
+            "type": "object",
+            "properties": {
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "requests": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.ProfileChangeRequestDTO"
+                    }
+                },
+                "total": {
+                    "type": "integer"
                 }
             }
         },
@@ -23082,6 +26796,131 @@
                 }
             }
         },
+        "service.RecruiterCreatedDTO": {
+            "type": "object",
+            "properties": {
+                "business_scope": {
+                    "type": "string"
+                },
+                "company_name": {
+                    "type": "string"
+                },
+                "contact_email": {
+                    "type": "string"
+                },
+                "contact_name": {
+                    "type": "string"
+                },
+                "contact_phone": {
+                    "type": "string"
+                },
+                "credit_code": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                },
+                "wechat": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.RecruiterListItem": {
+            "type": "object",
+            "properties": {
+                "business_scope": {
+                    "type": "string"
+                },
+                "company_name": {
+                    "type": "string"
+                },
+                "contact_email": {
+                    "type": "string"
+                },
+                "contact_name": {
+                    "type": "string"
+                },
+                "contact_phone": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "credit_code": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                },
+                "wechat": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.RecruiterListResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.RecruiterListItem"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.RecruiterPasswordResetResult": {
+            "type": "object"
+        },
+        "service.RecruiterUpdatedDTO": {
+            "type": "object",
+            "properties": {
+                "business_scope": {
+                    "type": "string"
+                },
+                "company_name": {
+                    "type": "string"
+                },
+                "contact_email": {
+                    "type": "string"
+                },
+                "contact_name": {
+                    "type": "string"
+                },
+                "contact_phone": {
+                    "type": "string"
+                },
+                "credit_code": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                },
+                "wechat": {
+                    "type": "string"
+                }
+            }
+        },
         "service.RedeemResult": {
             "type": "object",
             "properties": {
@@ -23284,6 +27123,14 @@
                 "sort_order": {
                     "type": "integer"
                 },
+                "status": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.StatusResultDTO": {
+            "type": "object",
+            "properties": {
                 "status": {
                     "type": "integer"
                 }
@@ -23660,6 +27507,65 @@
                 },
                 "course": {
                     "$ref": "#/definitions/service.CourseDTO"
+                }
+            }
+        },
+        "service.TutorDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "tutor_id": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.TutorDeletedDTO": {
+            "type": "object",
+            "properties": {
+                "tutor_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.TutorListDTO": {
+            "type": "object",
+            "properties": {
+                "page": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "tutors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.TutorDTO"
+                    }
+                }
+            }
+        },
+        "service.TutorRegisterResultDTO": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "tutor_id": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
                 }
             }
         },

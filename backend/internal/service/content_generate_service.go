@@ -17,8 +17,8 @@ type ChapterGenResult struct {
 	ChapterID int    `json:"chapter_id"`
 	Title     string `json:"title"`
 	Status    string `json:"status"` // "success" | "failed"
-	Content   string `json:"content,omitempty"`
-	Error     string `json:"error,omitempty"`
+	Content   string `json:"content,omitempty" extensions:"x-optional"`
+	Error     string `json:"error,omitempty" extensions:"x-optional"`
 }
 
 // GenTaskStatus 生成任务状态快照（前端轮询返回结构）。
@@ -27,7 +27,7 @@ type GenTaskStatus struct {
 	Status    string             `json:"status"` // "pending"|"processing"|"completed"|"failed"
 	Total     int                `json:"total"`
 	Completed int                `json:"completed"`
-	Results   []ChapterGenResult `json:"results"`
+	Results   []ChapterGenResult `json:"results" extensions:"x-nullable"`
 }
 
 // genTaskPayload async_task.payload 的结构。
