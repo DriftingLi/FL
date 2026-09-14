@@ -28,8 +28,8 @@ func NewRealExamService(db *gorm.DB, points *PointsService, logger *zap.Logger) 
 type RealExamPaperDTO struct {
 	PaperID         int    `json:"paper_id"`
 	Title           string `json:"title"`
-	Year            *int   `json:"year,omitempty"`
-	Source          string `json:"source,omitempty"`
+	Year            *int   `json:"year,omitempty" extensions:"x-optional"`
+	Source          string `json:"source,omitempty" extensions:"x-optional"`
 	QuestionCount   int    `json:"question_count"`
 	DurationMinutes int    `json:"duration_minutes"`
 	Entitled        bool   `json:"entitled"`

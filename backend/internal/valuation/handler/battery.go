@@ -63,6 +63,16 @@ func NewBatteryHandler(repo BatteryStore, svc *service.BatteryRULService, l *zap
 
 // Create 处理 POST /api/valuation/battery/evaluations
 // 接收循环充放电数据 → 调用 service 预测 → 持久化 → 返回 RUL/SOH
+// @Summary 提交电池 RUL 评估
+// @Description 接收循环充放电数据 → 预测 RUL/SOH → 持久化。**可选认证**：匿名可提交（user_id 落 NULL），带 Bearer 则归属当前用户。
+// @Tags 估值-电池
+// @Accept json
+// @Produce json
+// @Param body body model.CreateBatteryRequest true "电池循环数据（至少 10 个完整循环）"
+// @Success 200 {object} response.R{data=model.CreateBatteryResponse} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 500 {object} response.R "服务器内部错误"
+// @Router /valuation/battery/evaluations [post]
 func (h *BatteryHandler) Create(c *gin.Context) {
 	var req model.CreateBatteryRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -123,6 +133,20 @@ func (h *BatteryHandler) Create(c *gin.Context) {
 
 // List 处理 GET /api/valuation/battery/evaluations?battery_type=lfp
 // 分页查询评估历史摘要
+// @Summary 电池评估历史
+// @Description 分页查询电池 RUL 评估历史摘要（可按电池类型筛选），仅返回当前登录用户的记录。需登录（估值鉴权组）。
+// @Tags 估值-电池
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param page query integer false "页码（默认 1）"
+// @Param page_size query integer false "每页条数（默认 20，上限 100）"
+// @Param battery_type query string false "电池类型筛选（lfp / ncm / other）"
+// @Success 200 {object} response.R{data=model.ListBatteryResponse} "success"
+// @Failure 400 {object} response.R "电池类型非法"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 500 {object} response.R "服务器内部错误"
+// @Router /valuation/battery/evaluations [get]
 func (h *BatteryHandler) List(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
@@ -155,6 +179,19 @@ func (h *BatteryHandler) List(c *gin.Context) {
 
 // Get 处理 GET /api/valuation/battery/evaluations/:id
 // 查询评估详情（含周期特征），仅返回属于当前登录用户的记录
+// @Summary 电池评估详情
+// @Description 查询电池 RUL 评估详情（含 cycle_features 周期特征与 feature_importance），仅返回属于当前登录用户的记录。需登录（估值鉴权组）。
+// @Tags 估值-电池
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path integer true "电池评估记录 ID"
+// @Success 200 {object} response.R{data=model.BatteryEvaluation} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "电池评估记录不存在"
+// @Failure 500 {object} response.R "服务器内部错误"
+// @Router /valuation/battery/evaluations/{id} [get]
 func (h *BatteryHandler) Get(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -183,11 +220,32 @@ func (h *BatteryHandler) Get(c *gin.Context) {
 }
 
 // GenerateReport 处理 POST /api/valuation/battery/evaluations/:id/report
+// @Summary 生成电池报告
+// @Description 触发后端生成电池评估 PDF 报告（落盘 + 回写 report_pdf_path），返回 PDF URL 与大小。公开端点：无需登录。
+// @Tags 估值-报告
+// @Accept json
+// @Produce json
+// @Param id path integer true "电池评估记录 ID"
+// @Success 200 {object} response.R{data=object{evaluation_id=integer,pdf_url=string,file_size=integer}} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 404 {object} response.R "电池评估记录不存在"
+// @Failure 500 {object} response.R "服务器内部错误"
+// @Router /valuation/battery/evaluations/{id}/report [post]
 func (h *BatteryHandler) GenerateReport(c *gin.Context) {
 	serveReportGenerate(c, h.coord, "电池评估记录不存在", h.logger)
 }
 
 // DownloadReport 处理 GET /api/valuation/battery/evaluations/:id/report
+// @Summary 下载电池报告
+// @Description 经 storage 代理流式返回电池评估 PDF（Content-Disposition attachment）。公开端点：无需登录。
+// @Tags 估值-报告
+// @Produce application/pdf
+// @Param id path integer true "电池评估记录 ID"
+// @Success 200 {file} file "PDF 二进制流"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 404 {object} response.R "电池评估记录不存在"
+// @Failure 500 {object} response.R "服务器内部错误"
+// @Router /valuation/battery/evaluations/{id}/report [get]
 func (h *BatteryHandler) DownloadReport(c *gin.Context) {
 	serveReportDownload(c, h.coord, h.storage, "电池评估记录不存在", h.logger)
 }

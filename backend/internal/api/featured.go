@@ -144,6 +144,18 @@ func (h *FeaturedHandler) IncrementViewCount(c *gin.Context) {
 	}.Handle(c)
 }
 
+// @Summary 精选内容列表（管理端）
+// @Description 管理端列表（含草稿），支持分类与状态过滤
+// @Tags 管理端-精选内容
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(10)
+// @Param category query string false "分类"
+// @Param status query string false "状态"
+// @Success 200 {object} response.R{data=service.FeaturedContentPageResult} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/featured-contents [get]
 // AdminList 管理端列表（含草稿）GET /api/admin/featured-contents
 func (h *FeaturedHandler) AdminList(c *gin.Context) {
 	Endpoint[adminFeaturedListReq, service.FeaturedContentPageResult]{
@@ -165,6 +177,16 @@ func (h *FeaturedHandler) AdminList(c *gin.Context) {
 	}.Handle(c)
 }
 
+// @Summary 精选内容详情（管理端）
+// @Description 管理端详情（列表项 + 正文，无相关资讯与上下篇）
+// @Tags 管理端-精选内容
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "内容 ID"
+// @Success 200 {object} response.R{data=service.FeaturedContentAdminDetailDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "内容不存在"
+// @Router /admin/featured-content/{id} [get]
 // AdminDetail 管理端详情 GET /api/admin/featured-content/:id
 func (h *FeaturedHandler) AdminDetail(c *gin.Context) {
 	Endpoint[featuredIDReq, service.FeaturedContentAdminDetailDTO]{
@@ -182,6 +204,17 @@ func (h *FeaturedHandler) AdminDetail(c *gin.Context) {
 	}.Handle(c)
 }
 
+// @Summary 创建精选内容
+// @Description 管理员创建内容（status 缺省为草稿）
+// @Tags 管理端-精选内容
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object false "内容输入 {title,category,summary,cover_image,content,source,status,sort_order}"
+// @Success 201 {object} response.R{data=service.FeaturedContentAdminDetailDTO} "内容创建成功"
+// @Failure 400 {object} response.R "请求数据无效"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/featured-content [post]
 // Create 创建内容精选 POST /api/admin/featured-content
 func (h *FeaturedHandler) Create(c *gin.Context) {
 	Endpoint[service.FeaturedContentInput, service.FeaturedContentAdminDetailDTO]{
@@ -201,6 +234,18 @@ func (h *FeaturedHandler) Create(c *gin.Context) {
 	}.Handle(c)
 }
 
+// @Summary 更新精选内容
+// @Description 管理员更新内容（未携带的字段保留现状）
+// @Tags 管理端-精选内容
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "内容 ID"
+// @Param body body object false "内容输入 {title,category,summary,cover_image,content,source,status,sort_order}"
+// @Success 200 {object} response.R{data=service.FeaturedContentAdminDetailDTO} "内容更新成功"
+// @Failure 400 {object} response.R "请求数据无效"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/featured-content/{id} [put]
 // Update 更新内容精选 PUT /api/admin/featured-content/:id
 func (h *FeaturedHandler) Update(c *gin.Context) {
 	Endpoint[featuredUpdateReq, service.FeaturedContentAdminDetailDTO]{
@@ -218,6 +263,16 @@ func (h *FeaturedHandler) Update(c *gin.Context) {
 	}.Handle(c)
 }
 
+// @Summary 删除精选内容
+// @Description 管理员删除内容，返回被删除的 content_id
+// @Tags 管理端-精选内容
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "内容 ID"
+// @Success 200 {object} response.R{data=service.FeaturedDeleteResult} "内容删除成功"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "内容不存在"
+// @Router /admin/featured-content/{id} [delete]
 // Delete 删除内容精选 DELETE /api/admin/featured-content/:id
 func (h *FeaturedHandler) Delete(c *gin.Context) {
 	Endpoint[featuredIDReq, service.FeaturedDeleteResult]{
@@ -235,6 +290,16 @@ func (h *FeaturedHandler) Delete(c *gin.Context) {
 	}.Handle(c)
 }
 
+// @Summary 发布精选内容
+// @Description 草稿 → 已发布，返回发布后的内容
+// @Tags 管理端-精选内容
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "内容 ID"
+// @Success 200 {object} response.R{data=service.FeaturedContentAdminDetailDTO} "内容发布成功"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "内容不存在"
+// @Router /admin/featured-content/{id}/publish [post]
 // Publish 发布内容精选 POST /api/admin/featured-content/:id/publish
 func (h *FeaturedHandler) Publish(c *gin.Context) {
 	Endpoint[featuredIDReq, service.FeaturedContentAdminDetailDTO]{
@@ -252,6 +317,16 @@ func (h *FeaturedHandler) Publish(c *gin.Context) {
 	}.Handle(c)
 }
 
+// @Summary 上传精选内容图片
+// @Description Markdown 编辑器内嵌图 + 封面上传；返回 Vditor 约定的**非统一信封**响应 {msg,code,data:{errFiles,succMap}}（code=0 表示成功）
+// @Tags 管理端-精选内容
+// @Accept multipart/form-data
+// @Produce json
+// @Security BearerAuth
+// @Param file formData file true "图片文件"
+// @Success 200 {object} map[string]any "Vditor 响应（非统一信封）"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/featured-content/upload-image [post]
 // UploadImage 上传图片（Markdown 编辑器内嵌 + 封面）POST /api/admin/featured-content/upload-image
 // 返回 Vditor 期望的响应格式：{ msg: "", code: 0, data: { errFiles: [], succMap: { "name": "url" } } }
 func (h *FeaturedHandler) UploadImage(c *gin.Context) {

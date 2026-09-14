@@ -146,7 +146,9 @@ export const pages: PageDescriptor[] = [
   { name: routeNames.ForumPage, path: '/training/forum', component: () => import('@/pages/student/ForumPage.vue'), layout: 'training', workspace: 'training', capability: 'forum.participate', nav: { group: 'interactive', label: '学员论坛', icon: ChatDotRound, activeRouteNames: [routeNames.ForumDetail], order: 1 } },
   { name: routeNames.ForumAsk, path: '/training/forum/ask', component: () => import('@/pages/student/ForumAskPage.vue'), layout: 'training', workspace: 'training', capability: 'forum.participate' },
   { name: routeNames.ForumDetail, path: '/training/forum/:topicId', component: () => import('@/pages/student/ForumDetail.vue'), layout: 'training', workspace: 'training', capability: 'forum.participate' },
-  { name: routeNames.LinkOut, path: '/training/link-out', component: () => import('@/pages/student/LinkOutPage.vue'), layout: 'training', workspace: 'training' },
+  // 外链中转页是**独立页面**：不挂布局外壳（无侧栏、无主题切换入口），只继承全局主题。
+  // 脱离布局后，布局级的 role: hrwai_user 不再经 meta 继承，故在此显式声明（行为不变）。
+  { name: routeNames.LinkOut, path: '/training/link-out', component: () => import('@/pages/student/LinkOutPage.vue'), workspace: 'training', requiresAuth: true, roles: ['hrwai_user'] },
   { name: routeNames.ChapterView, path: '/training/course/:courseId/chapter/:chapterId', component: () => import('@/pages/student/ChapterView.vue'), layout: 'training', workspace: 'training', capability: 'course.learn' },
   { name: routeNames.QuestionBank, path: '/training/question-bank', component: () => import('@/pages/student/QuestionBank.vue'), layout: 'training', workspace: 'training', capability: 'question.practice', nav: { group: 'exam', label: '题库练习', icon: EditPen, order: 1 } },
   { name: routeNames.MockExam, path: '/training/mock-exam', component: () => import('@/pages/student/MockExam.vue'), layout: 'training', workspace: 'training', capability: 'mock_exam.take', nav: { group: 'exam', label: '模拟考试', icon: Document, order: 2 } },

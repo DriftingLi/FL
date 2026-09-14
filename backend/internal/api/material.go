@@ -40,7 +40,7 @@ func RegisterMaterialRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Mat
 
 // List 资料列表
 // @Summary 学习资料列表
-// @Description 基于 chapter_file 的聚合视图，支持按 course_id 过滤；与 /student/materials 同数据
+// @Description 基于 chapter_file 的聚合视图，支持按 course_id 过滤；与 /student/materials 同数据（本片只登记 /materials 为 Web 消费面）
 // @Tags 学员端-资料
 // @Accept json
 // @Produce json
@@ -48,7 +48,7 @@ func RegisterMaterialRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Mat
 // @Param course_id query int false "课程ID"
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(20)
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.MaterialPageResult} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /materials [get]
 // @Router /student/materials [get]

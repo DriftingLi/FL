@@ -24,9 +24,10 @@ import MarkdownRender from "markstream-vue"
 import "markstream-vue/index.css"
 import { isUnsafeHtmlUrl, type MarkdownIt, type ParsedNode } from "stream-markdown-parser"
 import { FORUM_LINK_OUT_PATH } from "@/config/forumLinks"
+import { isSameSiteUrl } from "@/utils/subdomain"
 import { MARKSTREAM_MERMAID_PROPS } from "@/utils/markstreamRuntime"
 
-/** 「即将离开本站」中转页路径（站外链接一律经它，不直接把读者带走）。
+/** 「即将离开本站」中转页路径（**站外**的绝对 http(s) 链接一律经它，不直接把读者带走）。
  *  字面量收在 config 一处，并由路由测试钉住它与路由表一致。 */
 const LINK_OUT_PATH = FORUM_LINK_OUT_PATH
 
@@ -43,17 +44,27 @@ interface LinkishNode {
 }
 
 /**
- * 链接改写（ADR-0044）：
+ * 链接改写（ADR-0044）。判据是**「这条链接会不会把读者带离本站」**，不是「以 / 开头」——
+ * 后者会把本站绝对地址（https://training.…/forum/1）与相对地址（foo/bar）误判成站外，
+ * 读者点站内链接也被「即将离开本站」拦一道。
+ *
+ *   - 站内（同源 / 本站域名族 / 相对地址 / 锚点）→ **直连**，不无谓打断；
+ *     判据单点在 `isSameSiteUrl`（utils/subdomain）；
+ *     已知边界：协议相对地址（//host/x）被库的 validateLink 在**解析期**判为不安全并展开成
+ *     文本，到不了本钩子 —— 本站协议相对地址同样是文本，本组件**有意不覆盖**库的安全策略；
  *   - 伪协议（javascript: 等）→ **就地展开成纯文本**，绝不渲染成可点链接；
- *   - linkPolicy=plain（管理端治理预览）→ 同样展开成纯文本：治理面看的是内容本身，
- *     顺带去掉一处「管理员在后台点到外站」的入口；
- *   - 站内（以 / 或 # 开头）→ 直连；
- *   - 其余站外 → 指向中转页，目标地址以参数带上。
+ *   - mailto: / tel: → 直连（写信、拨号不是网页导航，中转页承载不了它们，
+ *     以前送进去只会换回一个「链接无效」死胡同）；放行面是**白名单**，不是「非 http(s) 一律放行」；
+ *   - 其余非 http(s) 的协议（file: / weixin: / 自定义 scheme）→ 就地展开成纯文本：
+ *     它们同样把读者带离本站（离开的是浏览器本身），而中转页只能承载网页地址；
+ *   - 其余绝对 http(s) 站外地址 → 指向中转页，目标地址以参数带上；
+ *   - linkPolicy=plain（管理端治理预览）→ 一律展开成纯文本：治理面看的是内容本身，
+ *     顺带去掉一处「管理员在后台点到外站」的入口。
  *
  * 用 flatMap 把链接**就地替换**成它的行内内容而不是 `content` 字符串：
  * 这样 `[**重点**](url)` 里的加粗不会被吃掉。
  *
- * 幂等：中转页地址以 / 开头，二次处理时按站内放行；plain 处理后已无链接节点。
+ * 幂等：中转页地址是本站路径，二次处理时按站内放行；plain 处理后已无链接节点。
  * 故即使解析器对每层都调用一次本钩子，结果也一致。
  */
 function rewriteLinks(nodes: LinkishNode[], policy: "transit" | "plain"): LinkishNode[] {
@@ -67,8 +78,22 @@ function rewriteLinks(nodes: LinkishNode[], policy: "transit" | "plain"): Linkis
 
     const href = node.href ?? ""
     const inline = children?.length ? children : [{ type: "text", content: node.text ?? "" }]
-    if (!href || isUnsafeHtmlUrl(href) || policy === "plain") return inline
-    if (href.startsWith("/") || href.startsWith("#")) return [{ ...node, href, children: inline }]
+    if (!href || policy === "plain") return inline
+    // 伪协议（javascript: / data: 等）→ 就地展开成纯文本，绝不渲染成可点链接。
+    // 这一道先于本站判定：本站判定要求有主机名，伪协议天然无主机名，两者不相交。
+    if (isUnsafeHtmlUrl(href)) return inline
+    // 站内（同源 / 本站域名族 / 相对地址 / 锚点）→ 直连，不无谓打断。
+    // 判据单点在 isSameSiteUrl，不写字面量 startsWith('/')：否则本站在其它子域名下的
+    // 绝对地址（https://training.…/forum/1）会被当成站外，点站内链接也弹「即将离开本站」。
+    if (isSameSiteUrl(href)) return [{ ...node, href, children: inline }]
+    // mailto: / tel: → 直连：写信与拨号不是网页导航，中转页也承载不了（它只认绝对 http(s)），
+    // 以前送进去只会换回一个「链接无效」死胡同。放行面按**白名单**收口，不是「非 http(s) 一律放行」。
+    if (/^(?:mailto|tel):/i.test(href)) return [{ ...node, href, children: inline }]
+    // 其余非绝对 http(s) 的协议（file: / weixin: / 自定义 scheme）→ 展开成纯文本：
+    // 按 ADR-0044 的口径，它们同样属于「把读者带离本站」（且离开的是浏览器本身），
+    // 而中转页只能承载网页地址 —— 于是保守处理，不做可点导航。
+    if (!/^https?:[/][/]/i.test(href)) return inline
+    // 余下就是绝对 http(s) 的站外地址 → 经中转页，目标地址以参数带上
     return [{ ...node, href: `${LINK_OUT_PATH}?url=${encodeURIComponent(href)}`, children: inline }]
   })
 }

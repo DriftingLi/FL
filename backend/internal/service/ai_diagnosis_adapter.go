@@ -86,17 +86,23 @@ func (b *diagnosisSourcesBox) set(s []DiagnosisSource) {
 
 // ---- 助手 API 契约（2026-09-05 openapi 钉死）----
 
+// DiagnosisSourceMetadata 来源条目的元信息（PDF 原文外链 + 页码区间）。
+// 由内联匿名结构体定型：swag 对嵌套匿名对象只吐 properties（生成物渲染不出字段级形状），
+// 命名后进入 definitions 传递闭包 —— 序列化字节不变（同字段序、同 tag）。
+type DiagnosisSourceMetadata struct {
+	SourceURL string `json:"source_url"`
+	PageStart int    `json:"page_start"`
+	PageEnd   int    `json:"page_end"`
+}
+
 // DiagnosisSource 来源资料条目（answer_sources）：文本内嵌 <<IMAGE:/assistant/static/manual/...>>
 // 溯源标记；metadata.source_url 为 PDF 原文外链，page_start/end 为页码。
-// ID 兼容数字/字符串两态（实测结构化故障码来源吐 "fault-15" 字符串；数字仍原样透出）。
+// ID 兼容数字/字符串两态（实测结构化故障码来源吐 "fault-15" 字符串；数字仍原样透出）——
+// 出站恒为 JSON 字符串（diagnosisSourceID 底层是 string，只自定义了 UnmarshalJSON）。
 type DiagnosisSource struct {
-	ID       diagnosisSourceID `json:"id"`
-	Text     string            `json:"text"`
-	Metadata struct {
-		SourceURL string `json:"source_url"`
-		PageStart int    `json:"page_start"`
-		PageEnd   int    `json:"page_end"`
-	} `json:"metadata"`
+	ID       diagnosisSourceID       `json:"id"`
+	Text     string                  `json:"text"`
+	Metadata DiagnosisSourceMetadata `json:"metadata"`
 }
 
 // diagnosisSourceID 来源 ID：数字与字符串两态（与 diagnosisCode 同形问题的同族修复）。

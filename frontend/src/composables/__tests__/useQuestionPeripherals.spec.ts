@@ -304,7 +304,7 @@ describe('questionPeripheralAdapters（question 域默认 adapter 工厂）', ()
     await adapters.favorite!.check(11)
     expect(favoriteApi.check).toHaveBeenCalledWith({ target_type: 'question', target_id: 11 })
 
-    vi.mocked(favoriteApi.add).mockResolvedValue({ favorite_id: 4, target_type: 'question', target_id: 11 })
+    vi.mocked(favoriteApi.add).mockResolvedValue({ favorite_id: 4, target_type: 'question', target_id: 11, title: '', cover: '', created_at: '' })
     await adapters.favorite!.add(11)
     expect(favoriteApi.add).toHaveBeenCalledWith({ target_type: 'question', target_id: 11 })
 

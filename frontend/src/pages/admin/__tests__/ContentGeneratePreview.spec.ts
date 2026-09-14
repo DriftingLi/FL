@@ -26,7 +26,10 @@ let wrapper: ReturnType<typeof mount> | null = null
 beforeEach(() => {
   vi.mocked(adminApi.getCourses).mockResolvedValue({ courses: [{ course_id: 1, name: '叉车维修' }] } as never)
   vi.mocked(adminApi.getCourseDetail).mockResolvedValue({ chapters: [{ chapter_id: 11, title: '第一章', content: '' }] } as never)
-  vi.mocked(adminApi.generateContent).mockResolvedValue({
+  // 真实契约（片七）：创建端点只回 { task_id }（注解 201 data=service.GenerateContentResultDTO），
+  // 完整快照由轮询端点 GET /admin/course/generate-content/{task_id} 提供。
+  vi.mocked(adminApi.generateContent).mockResolvedValue({ task_id: 't1' })
+  vi.mocked(adminApi.getGenerateStatus).mockResolvedValue({
     task_id: 't1',
     status: 'completed',
     total: 1,
@@ -56,8 +59,14 @@ describe('ContentGenerate 预览（#903）', () => {
 
     const generateButton = wrapper.findAll('button').find((b) => b.text().includes('开始生成'))
     expect(generateButton).toBeTruthy()
+    // 只假造轮询用的 setInterval：setTimeout/setImmediate 保持真实，flushPromises 才不会被冻住。
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
     await generateButton!.trigger('click')
     await flushPromises()
+    // 推进一次 3s 轮询，把生成结果取回来（创建响应不含 results）
+    await vi.advanceTimersByTimeAsync(3000)
+    await flushPromises()
+    vi.useRealTimers()
 
     const previewButton = wrapper.findAll('button').find((b) => b.text() === '预览')
     expect(previewButton).toBeTruthy()

@@ -1,7 +1,33 @@
 // 已迁移模块：走 unwrappedRequest（拦截器解包信封，成功直接返回业务数据 Promise<T>，
 // 业务失败抛错并统一 toast，调用方不再自检 res.code）
+//
+// 响应类型**不再手写**：唯一事实源是后端注解 → backend/docs/swagger.json →
+// `cd backend && go run ./cmd/gen-apitypes`（ADR-0048 决策 1/3，issue #964 片六）。
+// 入参（body）类型不生成、仍手写（决策 3）。
 import { unwrappedRequest } from './request'
+import type {
+  ChapterDTO,
+  ChapterDetailDTO,
+  ChapterFileDTO,
+  ChapterSlidesDTO,
+  CourseDTO,
+  CourseDetailDTO,
+  CoursePageResult,
+  StudyProgressDTO
+} from './generated/course'
 
+export type {
+  ChapterDTO,
+  ChapterDetailDTO,
+  ChapterFileDTO,
+  ChapterSlidesDTO,
+  CourseDTO,
+  CourseDetailDTO,
+  CoursePageResult,
+  StudyProgressDTO
+}
+
+/** 进度上报入参（不生成，ADR-0048 决策 3） */
 export interface UpdateProgressPayload {
   progress?: number
   study_duration?: number
@@ -15,129 +41,46 @@ export interface UpdateProgressPayload {
   completed?: boolean
 }
 
-/** 课程摘要（列表项，courseToDict 字段，与后端 CourseDTO 契约对齐） */
-export interface CourseSummary {
-  course_id: number
-  name: string
-  cover_image?: string
-  description?: string
-  duration?: number
-  chapter_count?: number
-  status?: number
-  // ===== 培训目录扩展（LH-27/28）=====
-  credential_id?: number | null
-  credential?: { id: number; code: string; name: string; category: string; level: number | null }
-  specialty_id?: number | null
-  level_id?: number | null
-  theory_hours?: number
-  practice_hours?: number
-  certificate_template_id?: number | null
-  certificate_name?: string
-  prerequisite_course_ids?: number[]
-  sort_order?: number
-  created_at?: string
-  is_hot?: boolean
-  is_featured?: boolean
-  points_price?: number | null
-  /** 学习人数（详情元数据，导师端列表展示用） */
-  student_count?: number
-}
-
-/** 章节（课程详情内嵌，与后端 ChapterDTO 对齐） */
-export interface CourseChapter {
-  chapter_id: number
-  title: string
-  content?: string
-  content_type?: string
-  order_num?: number
-  duration?: number
-  course_id?: number
-  file_url?: string
-  description?: string
-}
-
-/** 课程详情主体（课程字段 + 嵌套 specialty/level/certificate_template/prerequisites） */
-export interface CourseDetail extends CourseSummary {
-  specialty?: { specialty_id: number; code?: string; name: string }
-  level?: { level_id: number; code?: string; name: string }
-  certificate_template?: {
-    id: number
-    code?: string
-    name: string
-    description?: string
-    validity_days?: number
-    template_url?: string
-  }
-  prerequisites?: { course_id: number; name: string }[]
-  chapter_count?: number
-  student_count?: number
-  study_progress?: number
-  chapters?: CourseChapter[]
-}
-
-/** 学员端课程详情响应（后端包一层 course_info；学习位置字段 ADR-0017） */
-export interface CourseDetailResponse {
-  course_info?: CourseDetail
-  chapters?: CourseChapter[]
-  progress?: number
-  is_enrolled?: boolean
-  completed_chapters?: number
-  last_chapter_id?: number | null
-  last_position?: number
-  last_studied_at?: string
-}
-
-/** 章节文件（与后端 ChapterFileDTO 对齐） */
-export interface ChapterFile {
-  chapter_id?: number | null
-  content_type?: string
-  created_at?: string
-  file_id?: number
-  file_name?: string
-  file_size?: number
-  file_url?: string
-}
-
-/** 章节详情（含文件与前后章节导航） */
-export interface ChapterDetail {
-  chapter_id: number
-  title: string
-  content?: string
-  course_id?: number
-  content_type?: string
-  file_url?: string
-  description?: string
-  duration?: number
-  order_num?: number
-  study_status?: string
-  previous_chapter_id?: number | null
-  next_chapter_id?: number | null
-  files?: ChapterFile[]
-}
+// 旧名保留为生成别名（既有 import 路径不破）。旧手写版把大量必填字段写成了可选，
+// 生成形状以注解为准 —— 差异进字段级清单第 ② 类。
+/** 课程摘要（列表项）= 生成 CourseDTO */
+export type CourseSummary = CourseDTO
+/** 章节 = 生成 ChapterDTO */
+export type CourseChapter = ChapterDTO
+/** 课程详情主体 = 生成 CourseDTO（/course/{id} 的 data.course_info） */
+export type CourseDetail = CourseDTO
+/** 学员端课程详情信封 = 生成 CourseDetailDTO（含 progress/is_enrolled/last_*） */
+export type CourseDetailResponse = CourseDetailDTO
+/** 章节文件 = 生成 ChapterFileDTO */
+export type ChapterFile = ChapterFileDTO
+/** 章节详情（含文件与前后章节导航）= 生成 ChapterDetailDTO */
+export type ChapterDetail = ChapterDetailDTO
 
 export const courseApi = {
   getCourses(params: { page?: number; page_size?: number; keyword?: string; credential_id?: number; specialty_id?: number; level_id?: number; filter?: 'hot' | 'featured' | 'all' }) {
     // 由调用方显式传入（证件作用域事实源在服务端，ADR-0047 §4）（#387）
-    return unwrappedRequest.get<{ courses: CourseSummary[]; total: number }>('/courses', { params })
+    return unwrappedRequest.get<CoursePageResult>('/courses', { params })
   },
 
   getCourseDetail(id: number) {
-    return unwrappedRequest.get<CourseDetailResponse>(`/course/${id}`)
+    return unwrappedRequest.get<CourseDetailDTO>(`/course/${id}`)
   },
 
+  /** 上报学习进度：后端返回 StudyProgressDTO（此前被当成无载荷） */
   updateProgress(courseId: number, data: UpdateProgressPayload) {
-    return unwrappedRequest.post<null>(`/course/${courseId}/progress`, data)
+    return unwrappedRequest.post<StudyProgressDTO>(`/course/${courseId}/progress`, data)
   },
 
   getChapterDetail(courseId: number, chapterId: number) {
-    return unwrappedRequest.get<ChapterDetail>(`/course/${courseId}/chapter/${chapterId}`)
+    return unwrappedRequest.get<ChapterDetailDTO>(`/course/${courseId}/chapter/${chapterId}`)
   },
 
   getChapterSlides(chapterId: number) {
-    return unwrappedRequest.get<{ slides?: string[] }>(`/chapter/${chapterId}/slides`)
+    return unwrappedRequest.get<ChapterSlidesDTO>(`/chapter/${chapterId}/slides`)
   },
 
+  /** 重新生成幻灯片：后端返回 ChapterSlidesDTO（此前被当成无载荷） */
   regenerateSlides(chapterId: number) {
-    return unwrappedRequest.post<null>(`/chapter/${chapterId}/slides/regenerate`)
+    return unwrappedRequest.post<ChapterSlidesDTO>(`/chapter/${chapterId}/slides/regenerate`)
   }
 }

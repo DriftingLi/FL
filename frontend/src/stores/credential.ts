@@ -51,18 +51,22 @@ export const useCredentialStore = defineStore('credential', () => {
 
   async function switchTo(credentialId: number): Promise<CredentialDict> {
     const data = await credentialApi.setCurrent(credentialId)
-    current.value = data.credential
+    // PATCH /me/credential 成功必回字典（service 侧查不到证件即 400）；生成形状沿用与 GET 共用的
+    // CurrentCredentialDTO（credential 可空），此处按端点事实收口。
+    const dict = data.credential
+    if (!dict) throw new Error('切换证件失败：响应未返回证件')
+    current.value = dict
     // 同步到 auth 的 localStorage userInfo（如有）
     try {
       const raw = localStorage.getItem('userInfo')
       if (raw) {
         const info = JSON.parse(raw)
         info.current_credential_id = credentialId
-        info.current_credential = data.credential
+        info.current_credential = dict
         localStorage.setItem('userInfo', JSON.stringify(info))
       }
     } catch {}
-    return data.credential
+    return dict
   }
 
   async function initialize(): Promise<void> {

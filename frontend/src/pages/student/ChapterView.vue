@@ -389,6 +389,7 @@ async function markCompleted() {
         chapter_id: chapterDetail.value.chapter_id,
         title: chapterDetail.value.title,
         progress: 100,
+        video_position: 0,
         completed: true
       })
     }

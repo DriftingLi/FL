@@ -26,7 +26,40 @@ vi.mock('@/composables/useLazyLoad', () => ({
 
 import { tutorApi } from '@/api/tutor'
 import { trainingApi } from '@/api/training'
+import type { CatalogDirectionNode, CatalogLevelNode } from '@/api/training'
+import type { CourseDTO } from '@/api/tutor'
 import TutorCourses from '../TutorCourses.vue'
+
+// 生成 DTO 的最小测试夹具：只填测试关心的字段，其余取 DTO 零值
+// （注解成为唯一事实源后，手写时代「只给两个字段」的 fixture 不再合法）。
+function courseOf(courseId: number, name: string, over: Partial<CourseDTO> = {}): CourseDTO {
+  return {
+    certificate_name: '',
+    certificate_template_id: null,
+    course_id: courseId,
+    cover_image: '',
+    created_at: '',
+    credential_id: null,
+    description: '',
+    duration: 0,
+    is_featured: false,
+    is_hot: false,
+    level_id: null,
+    name,
+    practice_hours: 0,
+    sort_order: 0,
+    specialty_id: null,
+    status: 1,
+    theory_hours: 0,
+    ...over
+  }
+}
+function levelNodeOf(levelId: number, name: string, sortOrder: number, courses: CourseDTO[]): CatalogLevelNode {
+  return { code: '', created_at: '', description: '', level_id: levelId, name, sort_order: sortOrder, status: 1, courses }
+}
+function specialtyOf(specialtyId: number, name: string, levels: CatalogLevelNode[]): CatalogDirectionNode {
+  return { code: '', created_at: '', description: '', levels, name, sort_order: 0, specialty_id: specialtyId, status: 1 }
+}
 
 function mountPage() {
   return mount(TutorCourses, {
@@ -37,21 +70,19 @@ function mountPage() {
 beforeEach(() => {
   vi.mocked(tutorApi.getCourses).mockResolvedValue({
     total: 2,
+    page: 1,
+    pages: 1,
     courses: [
-      { course_id: 1, name: '液压系统原理与维护', specialty_id: 2, level_id: 2, chapter_count: 7 },
-      { course_id: 2, name: '叉车基础知识概述', specialty_id: 2, level_id: 1, chapter_count: 6 }
+      courseOf(1, '液压系统原理与维护', { specialty_id: 2, level_id: 2, chapter_count: 7 }),
+      courseOf(2, '叉车基础知识概述', { specialty_id: 2, level_id: 1, chapter_count: 6 })
     ]
   })
   vi.mocked(trainingApi.getCatalogTree).mockResolvedValue({
     specialties: [
-      {
-        specialty_id: 2,
-        name: '维修',
-        levels: [
-          { level_id: 1, name: '入门', courses: [{ course_id: 2, name: '叉车基础知识概述' }] },
-          { level_id: 2, name: '进阶', courses: [{ course_id: 1, name: '液压系统原理与维护' }] }
-        ]
-      }
+      specialtyOf(2, '维修', [
+        levelNodeOf(1, '入门', 0, [courseOf(2, '叉车基础知识概述')]),
+        levelNodeOf(2, '进阶', 0, [courseOf(1, '液压系统原理与维护')])
+      ])
     ]
   })
 })

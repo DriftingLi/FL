@@ -29,7 +29,7 @@ func NewMaterialService(db *gorm.DB, logger *zap.Logger) *MaterialService {
 // MaterialDTO 资料条目（附件 + 归属课程/章节回填）。
 type MaterialDTO struct {
 	FileID       int    `json:"file_id"`
-	ChapterID    *int   `json:"chapter_id"`
+	ChapterID    *int   `json:"chapter_id" extensions:"x-nullable"`
 	ChapterTitle string `json:"chapter_title"`
 	CourseID     int    `json:"course_id"`
 	CourseName   string `json:"course_name"`

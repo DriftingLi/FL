@@ -49,7 +49,7 @@ beforeEach(() => {
   vi.mocked(wrongQuestionApi.getWrongQuestions).mockResolvedValue({
     items: [{ ...wrongItem }],
     total: 1
-  })
+  } as never)
   vi.mocked(wrongQuestionApi.redoWrongQuestion).mockResolvedValue({
     is_correct: true,
     correct_answer: 'A',
@@ -64,7 +64,10 @@ beforeEach(() => {
   vi.mocked(favoriteApi.add).mockResolvedValue({
     favorite_id: 9,
     target_type: 'question',
-    target_id: 101
+    target_id: 101,
+    title: '',
+    cover: '',
+    created_at: ''
   })
   vi.mocked(favoriteApi.remove).mockResolvedValue(null)
   vi.mocked(questionInteractionApi.listKnowledge).mockResolvedValue([])
@@ -119,7 +122,7 @@ describe('WrongQuestions 错题重做（会话单题变体 #617）', () => {
   })
 
   it('重做提交走会话提交管线：单选作答经 redoWrongQuestion 判分，结果卡与知识点同装配，答对标记已重做', async () => {
-    vi.mocked(questionInteractionApi.listKnowledge).mockResolvedValue([{ id: 3, name: '考点X' }])
+    vi.mocked(questionInteractionApi.listKnowledge).mockResolvedValue([{ id: 3, name: '考点X' } as never])
     const w = mountPage()
     await flushPromises()
     await openRedo(w)
@@ -146,7 +149,7 @@ describe('WrongQuestions 错题重做（会话单题变体 #617）', () => {
     vi.mocked(wrongQuestionApi.getWrongQuestions).mockResolvedValue({
       items: [{ ...wrongItem, question: { type: 'multi_choice', content: '多选', options: { A: '甲', B: '乙' } } }],
       total: 1
-    })
+    } as never)
     const w = mountPage()
     await flushPromises()
     await openRedo(w)

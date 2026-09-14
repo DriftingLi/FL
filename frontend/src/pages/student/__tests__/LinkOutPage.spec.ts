@@ -31,6 +31,13 @@ describe('外链中转页（#881 / ADR-0044）', () => {
     delete (window as unknown as Record<string, unknown>).__pwned;
   });
 
+  it('独立页壳：自己撑满视口并居中，不依赖布局组件（无侧栏、无主题入口）', async () => {
+    const w = mountPage({ url: 'https://example.com/doc' });
+    await flushPromises();
+    expect(w.element.classList.contains('min-h-screen')).toBe(true);
+    expect(w.element.classList.contains('bg-canvas')).toBe(true);
+  });
+
   it('合法站外地址：展示目标 + 继续访问带安全属性', async () => {
     const w = mountPage({ url: 'https://example.com/doc' });
     await flushPromises();

@@ -54,7 +54,7 @@ type notificationListReq struct {
 // @Security BearerAuth
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(10)
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.NotificationListPageResult} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /notifications [get]
 func (h *NotificationHandler) List(c *gin.Context) {
@@ -86,7 +86,7 @@ func (h *NotificationHandler) List(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.NotificationUnreadCountDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /notifications/unread-count [get]
 func (h *NotificationHandler) UnreadCount(c *gin.Context) {
@@ -106,7 +106,7 @@ func (h *NotificationHandler) UnreadCount(c *gin.Context) {
 				response.ServerError(c, "查询失败: "+err.Error())
 				return
 			}
-			response.Success(c, gin.H{"count": *resp})
+			response.Success(c, service.NotificationUnreadCountDTO{Count: *resp})
 		},
 	}.Handle(c)
 }

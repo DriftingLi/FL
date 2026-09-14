@@ -27,7 +27,13 @@ vi.mock('@/api/questionBank', () => ({
 
 import { trainingApi } from '@/api/training'
 import { questionBankApi } from '@/api/questionBank'
+import type { QuestionTagDict } from '@/api/training'
 import QuestionTags from '../QuestionTags.vue'
+
+/** 生成 QuestionTagDict 的最小测试夹具（注解成为唯一事实源后，手写时代的短 fixture 不再合法）。 */
+function tagOf(id: number, name: string, code: string, over: Partial<QuestionTagDict> = {}): QuestionTagDict {
+  return { id, name, code, created_at: '', description: '', sort_order: 0, status: 1, updated_at: '', ...over }
+}
 
 const successSpy = vi.spyOn(ElMessage, 'success').mockImplementation(() => undefined as never)
 
@@ -40,13 +46,13 @@ function mountPage() {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(trainingApi.getQuestionTags).mockResolvedValue({
-    tags: [{ id: 1, name: '液压', code: 'hydraulic', question_count: 3 }]
+    tags: [tagOf(1, '液压', 'hydraulic', { question_count: 3 })]
   })
-  vi.mocked(trainingApi.createQuestionTag).mockResolvedValue({ id: 2 })
+  vi.mocked(trainingApi.createQuestionTag).mockResolvedValue(tagOf(2, '制动', 'brake'))
   vi.mocked(trainingApi.getTags).mockResolvedValue({ tags: [] })
-  vi.mocked(trainingApi.setQuestionTags).mockResolvedValue(null)
-  vi.mocked(questionBankApi.getQuestions).mockResolvedValue({ questions: [], total: 0 })
-  vi.mocked(questionBankApi.getStats).mockResolvedValue({})
+  vi.mocked(trainingApi.setQuestionTags).mockResolvedValue({ tag_ids: [] })
+  vi.mocked(questionBankApi.getQuestions).mockResolvedValue({ questions: [], total: 0, page: 1, page_size: 20 })
+  vi.mocked(questionBankApi.getStats).mockResolvedValue({ total: 0, by_type: {}, by_status: {} })
 })
 
 describe('QuestionTags 新增标签', () => {

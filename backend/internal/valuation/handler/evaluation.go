@@ -34,6 +34,16 @@ func NewEvaluationHandler(v *service.ValuationService, evalRepo EvaluationStore,
 // Create 处理 POST /api/valuation/evaluations
 // 提交评估请求：调用 service.Evaluate → service.Persist 持久化 → 返回计算结果
 // 走可选认证：登录用户提交时记录 user_id，匿名提交 user_id 为 NULL
+// @Summary 提交评估
+// @Description 残值计算 + 持久化，返回 ID + 输入参数 + 全部 K 系数 + 残值 + 置信区间 + 维度评分 + 建议。**可选认证**：匿名可提交（user_id 落 NULL），带 Bearer 则归属当前用户。
+// @Tags 估值-评估
+// @Accept json
+// @Produce json
+// @Param body body model.EvaluationRequest true "评估请求"
+// @Success 200 {object} response.R{data=model.EvaluationResponse} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 500 {object} response.R "服务器内部错误"
+// @Router /valuation/evaluations [post]
 func (h *EvaluationHandler) Create(c *gin.Context) {
 	var req model.EvaluationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -67,6 +77,19 @@ func (h *EvaluationHandler) Create(c *gin.Context) {
 // 查询评估详情：输入参数 + 计算结果 + 时间戳
 // 仅返回属于当前登录用户的记录（不属于自己 → 404）
 // KTimeAdjusted 不入库，读取时实时由 KTime/KHours/KBrand 重算
+// @Summary 评估详情
+// @Description 查询评估详情（输入参数 + 计算结果 + 时间戳），仅返回属于当前登录用户的记录。需登录（估值鉴权组）。
+// @Tags 估值-评估
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path integer true "评估记录 ID"
+// @Success 200 {object} response.R{data=model.EvaluationDetail} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "评估记录不存在"
+// @Failure 500 {object} response.R "服务器内部错误"
+// @Router /valuation/evaluations/{id} [get]
 func (h *EvaluationHandler) Get(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -97,6 +120,20 @@ func (h *EvaluationHandler) Get(c *gin.Context) {
 
 // List 处理 GET /api/valuation/evaluations?page=1&page_size=20&brand=合力&vehicle_type=电动平衡重
 // 分页查询评估历史（可按品牌/车型筛选），仅返回当前登录用户的记录
+// @Summary 评估历史列表
+// @Description 分页查询评估历史（可按品牌/车型筛选），仅返回当前登录用户的记录。需登录（估值鉴权组）。
+// @Tags 估值-评估
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param page query integer false "页码（默认 1）"
+// @Param page_size query integer false "每页条数（默认 20，上限 100）"
+// @Param brand query string false "品牌筛选"
+// @Param vehicle_type query string false "车型筛选"
+// @Success 200 {object} response.R{data=object{total=integer,page=integer,page_size=integer,list=[]model.EvaluationDetail}} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 500 {object} response.R "服务器内部错误"
+// @Router /valuation/evaluations [get]
 func (h *EvaluationHandler) List(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
@@ -141,6 +178,14 @@ func (h *EvaluationHandler) List(c *gin.Context) {
 
 // Stats 处理 GET /api/valuation/evaluations/stats
 // 返回累计评估次数（公开统计全部记录，userID=0 不过滤）
+// @Summary 评估统计
+// @Description 累计评估次数（统计全部记录，不区分用户）。公开端点：无需登录。
+// @Tags 估值-评估
+// @Accept json
+// @Produce json
+// @Success 200 {object} response.R{data=object{total=integer}} "success"
+// @Failure 500 {object} response.R "服务器内部错误"
+// @Router /valuation/evaluations/stats [get]
 func (h *EvaluationHandler) Stats(c *gin.Context) {
 	total, err := h.evalRepo.CountEvaluations(c.Request.Context(), "", "", 0)
 	if err != nil {

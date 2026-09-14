@@ -61,27 +61,27 @@ type JobPostingDTO struct {
 	ID            int    `json:"id"`
 	RecruiterID   int    `json:"recruiter_id"`
 	Title         string `json:"title"`
-	PositionID    *int   `json:"position_id,omitempty"`
-	PositionName  string `json:"position_name,omitempty"`
+	PositionID    *int   `json:"position_id,omitempty" extensions:"x-optional"`
+	PositionName  string `json:"position_name,omitempty" extensions:"x-optional"`
 	Region        string `json:"region"`
-	SalaryMin     *int   `json:"salary_min,omitempty"`
-	SalaryMax     *int   `json:"salary_max,omitempty"`
+	SalaryMin     *int   `json:"salary_min,omitempty" extensions:"x-optional"`
+	SalaryMax     *int   `json:"salary_max,omitempty" extensions:"x-optional"`
 	SalaryText    string `json:"salary_text"`
 	ExperienceReq string `json:"experience_req"`
 	Description   string `json:"description"`
 	Status        string `json:"status"`
 	ForcedOffline bool   `json:"forced_offline"`
-	OfflineReason string `json:"offline_reason,omitempty"`
+	OfflineReason string `json:"offline_reason,omitempty" extensions:"x-optional"`
 	PublishedAt   string `json:"published_at"`
 	CreatedAt     string `json:"created_at"`
 	UpdatedAt     string `json:"updated_at"`
 	// 企业信息（学员侧可见，不含电话/邮箱/信用代码）
-	CompanyName   string `json:"company_name,omitempty"`
-	BusinessScope string `json:"business_scope,omitempty"`
-	ContactName   string `json:"contact_name,omitempty"`
+	CompanyName   string `json:"company_name,omitempty" extensions:"x-optional"`
+	BusinessScope string `json:"business_scope,omitempty" extensions:"x-optional"`
+	ContactName   string `json:"contact_name,omitempty" extensions:"x-optional"`
 	// 学员视角投递状态（#488）：none 可投递 / applied 已投递 / not_hired 未录用（30 天冷却中）
-	ApplyState   string `json:"apply_state,omitempty"`
-	CooldownDays int    `json:"cooldown_days,omitempty"` // not_hired 时距可再投天数（向上取整）
+	ApplyState   string `json:"apply_state,omitempty" extensions:"x-optional"`
+	CooldownDays int    `json:"cooldown_days,omitempty" extensions:"x-optional"` // not_hired 时距可再投天数（向上取整）
 }
 
 // validate 校验职位入参（岗位字典业务层必填）。

@@ -66,7 +66,7 @@
           <UiTag v-else-if="item.contact_state === 'pending'" tone="warning" size="small">待学员确认</UiTag>
         </div>
         <div class="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-xs text-ink-3">
-          <span v-if="item.expected_specialty_extra">{{ item.expected_specialty_extra }}</span>
+          <span v-if="item.expected_position_extra">{{ item.expected_position_extra }}</span>
           <span v-if="item.expected_regions && item.expected_regions.length">意向：{{ (item.expected_regions as any).join('、') }}</span>
           <span v-if="item.salary_negotiable">薪资面议</span>
           <span v-else-if="item.salary_min != null || item.salary_max != null">薪资：{{ item.salary_min ?? '-' }}-{{ item.salary_max ?? '-' }}</span>
