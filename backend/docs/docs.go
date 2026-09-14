@@ -399,6 +399,77 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/forum/reports": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "分页查询论坛举报（status 0 待处理 / 1 已处理，省略表示全部）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-论坛"
+                ],
+                "summary": "管理端举报列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "状态 0 待处理 / 1 已处理，省略表示全部",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "每页条数",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ForumReportPageResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/forum/reports/{id}": {
             "put": {
                 "security": [
@@ -457,6 +528,113 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/forum/topics": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "与学员端列表同一读面（scope/category/featured/chapter_id/keyword/sort/order 同参数）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-论坛"
+                ],
+                "summary": "管理员查看帖子列表",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "范围 all|general|chapter",
+                        "name": "scope",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "类别 discussion|question|experience，省略表示不过滤",
+                        "name": "category",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "精选过滤 true|false，省略表示不过滤",
+                        "name": "featured",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "章节ID",
+                        "name": "chapter_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 10,
+                        "description": "每页条数",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "关键词",
+                        "name": "keyword",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "排序 latest|hot|created",
+                        "name": "sort",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "排序方向 asc|desc",
+                        "name": "order",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ForumTopicPageResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/forum/topics/{id}": {
             "get": {
                 "security": [
@@ -485,7 +663,19 @@ const docTemplate = `{
                     "200": {
                         "description": "详情",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ForumTopicDetailDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -4245,7 +4435,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.FavoritePageResult"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -4288,7 +4490,19 @@ const docTemplate = `{
                     "201": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.FavoriteDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -4344,7 +4558,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.FavoriteCheckDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -4707,7 +4933,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.MyReplyPageResult"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -4757,7 +4995,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ForumTopicPageResult"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -4911,7 +5161,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ForumLikeResultDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -4958,7 +5220,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ForumLikeResultDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -5450,7 +5724,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ForumTopicDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -5503,7 +5789,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ForumTopicDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -5552,7 +5850,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ForumLikeResultDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -5599,7 +5909,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ForumLikeResultDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -5776,7 +6098,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ForumImageUploadResultDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -6694,7 +7028,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.NotificationListPageResult"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -6762,7 +7108,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.NotificationUnreadCountDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -7758,7 +8116,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.QuestionCommentPageResult"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     }
                 }
@@ -7802,7 +8172,19 @@ const docTemplate = `{
                     "201": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.QuestionCommentDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     }
                 }
@@ -7833,7 +8215,22 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/model.QuestionTag"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     }
                 }
@@ -7863,7 +8260,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.QuestionNote"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     }
                 }
@@ -7906,7 +8315,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.QuestionNote"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     }
                 }
@@ -9889,7 +10310,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.WrongQuestionPageDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -9934,7 +10367,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.WrongQuestionBatchRemoveResultDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     }
                 }
@@ -10118,7 +10563,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.WrongQuestionRemoveResultDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -10207,6 +10664,58 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "reason": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.QuestionNote": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "question_id": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "model.QuestionTag": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_source_tag": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "updated_at": {
                     "type": "string"
                 }
             }
@@ -10846,6 +11355,60 @@ const docTemplate = `{
                 }
             }
         },
+        "service.FavoriteCheckDTO": {
+            "type": "object",
+            "properties": {
+                "favorite_id": {
+                    "type": "integer"
+                },
+                "favorited": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "service.FavoriteDTO": {
+            "type": "object",
+            "properties": {
+                "cover": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "favorite_id": {
+                    "type": "integer"
+                },
+                "target_id": {
+                    "type": "integer"
+                },
+                "target_type": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.FavoritePageResult": {
+            "type": "object",
+            "properties": {
+                "favorites": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.FavoriteDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
         "service.ForumAuthor": {
             "type": "object",
             "properties": {
@@ -10857,6 +11420,25 @@ const docTemplate = `{
                 },
                 "username": {
                     "type": "string"
+                }
+            }
+        },
+        "service.ForumImageUploadResultDTO": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.ForumLikeResultDTO": {
+            "type": "object",
+            "properties": {
+                "liked": {
+                    "type": "boolean"
+                },
+                "likes_count": {
+                    "type": "integer"
                 }
             }
         },
@@ -10906,16 +11488,73 @@ const docTemplate = `{
                 },
                 "parent_avatar_url": {
                     "description": "ParentAvatarURL 被回复人的头像（ADR-0042「昵称 › 被回复人」行内形态所需）。\n与 ParentName 同口径 omitempty：顶层回复（无被回复人）两个字段都不出现。",
-                    "type": "string"
+                    "type": "string",
+                    "x-optional": true
                 },
                 "parent_id": {
-                    "type": "integer"
+                    "type": "integer",
+                    "x-optional": true
                 },
                 "parent_name": {
                     "description": "被回复人的展示名",
-                    "type": "string"
+                    "type": "string",
+                    "x-optional": true
                 },
                 "topic_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.ForumReportDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "reply_id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "reporter": {
+                    "type": "string"
+                },
+                "reporter_id": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "topic_id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "topic_title": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.ForumReportPageResult": {
+            "type": "object",
+            "properties": {
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "reports": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.ForumReportDTO"
+                    }
+                },
+                "total": {
                     "type": "integer"
                 }
             }
@@ -10924,7 +11563,8 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "accepted_reply_id": {
-                    "type": "integer"
+                    "type": "integer",
+                    "x-optional": true
                 },
                 "author": {
                     "$ref": "#/definitions/service.ForumAuthor"
@@ -10937,7 +11577,8 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "chapter_id": {
-                    "type": "integer"
+                    "type": "integer",
+                    "x-nullable": true
                 },
                 "chapter_title": {
                     "type": "string"
@@ -10977,7 +11618,8 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "last_reply_at": {
-                    "type": "string"
+                    "type": "string",
+                    "x-nullable": true
                 },
                 "liked_by_me": {
                     "type": "boolean"
@@ -10992,7 +11634,8 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "solved_at": {
-                    "type": "string"
+                    "type": "string",
+                    "x-optional": true
                 },
                 "title": {
                     "type": "string"
@@ -11383,6 +12026,129 @@ const docTemplate = `{
                 }
             }
         },
+        "service.MyReplyDTO": {
+            "type": "object",
+            "properties": {
+                "author": {
+                    "$ref": "#/definitions/service.ForumAuthor"
+                },
+                "content": {
+                    "type": "string"
+                },
+                "content_format": {
+                    "description": "ContentFormat 正文格式声明（ADR-0044）：列表摘要据此决定是否剥成纯文本。",
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "images": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "parent_id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "topic_id": {
+                    "type": "integer"
+                },
+                "topic_title": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.MyReplyPageResult": {
+            "type": "object",
+            "properties": {
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "replies": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.MyReplyDTO"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.NotificationDTO": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_read": {
+                    "type": "boolean"
+                },
+                "link": {
+                    "type": "string"
+                },
+                "payload": {
+                    "description": "Payload 站内信结构化标记（JSONB 落库 payload）。ADR-0048 决策 6：非响应面不定型，\n故用 swaggertype 钉成不透明 object（生成物渲染 Record\u003cstring, unknown\u003e），\n具体键的形状（review_status / topic_id / reply_id / points / reason）由前端 UI 收窄类型声明。",
+                    "type": "object",
+                    "x-optional": true
+                },
+                "read_at": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "title": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.NotificationListPageResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.NotificationDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "unread_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.NotificationUnreadCountDTO": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                }
+            }
+        },
         "service.PositionInput": {
             "type": "object",
             "properties": {
@@ -11604,6 +12370,52 @@ const docTemplate = `{
                 },
                 "saved": {
                     "type": "boolean"
+                }
+            }
+        },
+        "service.QuestionCommentDTO": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "type": "string"
+                },
+                "content": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "question_id": {
+                    "type": "integer"
+                },
+                "user_id": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.QuestionCommentPageResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.QuestionCommentDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
                 }
             }
         },
@@ -12109,6 +12921,85 @@ const docTemplate = `{
                 },
                 "qr_url": {
                     "type": "string"
+                }
+            }
+        },
+        "service.WrongQuestionBatchRemoveResultDTO": {
+            "type": "object",
+            "properties": {
+                "removed": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.WrongQuestionDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "favorite_id": {
+                    "type": "integer"
+                },
+                "favorited": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_redone": {
+                    "type": "boolean"
+                },
+                "is_removed": {
+                    "type": "boolean"
+                },
+                "last_wrong_at": {
+                    "type": "string"
+                },
+                "question": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/service.QuestionDTO"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "question_id": {
+                    "type": "integer"
+                },
+                "student_id": {
+                    "type": "integer"
+                },
+                "wrong_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.WrongQuestionPageDTO": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.WrongQuestionDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.WrongQuestionRemoveResultDTO": {
+            "type": "object",
+            "properties": {
+                "removed": {
+                    "type": "boolean"
                 }
             }
         },

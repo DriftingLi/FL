@@ -52,7 +52,7 @@
                由 ForumContent 内部按需加，这里不再重复；字号/行高仍由本页决定。 -->
           <ForumContent
             :content="topic.content"
-            :format="topic.content_format"
+            :format="toForumContentFormat(topic.content_format)"
             class="topic-content text-[15px] leading-[1.8] text-ink"
           />
           <ForumImageGallery :images="topic.images" />
@@ -176,7 +176,7 @@ import { ref, computed, nextTick, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, View, ChatDotRound, ArrowUp, ArrowDown } from '@element-plus/icons-vue'
-import { forumApi, type ForumTopicItem, type ForumReplyItem, type ForumContentFormat } from '@/api/forum'
+import { forumApi, toForumContentFormat, type ForumTopicItem, type ForumReplyItem, type ForumContentFormat } from '@/api/forum'
 import { favoriteApi } from '@/api/favorite'
 import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
 import ForumComposer from '@/components/student/ForumComposer.vue'

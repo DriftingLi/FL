@@ -268,6 +268,32 @@ func TestInlineResponseDTOBytes(t *testing.T) {
 			dto:    &ProgressSaveResultDTO{Index: 5, Saved: true},
 		},
 		{
+			name:   "ForumImageUploadResultDTO（POST /forum/upload-image：原 handler 内联 gin.H）",
+			legacy: map[string]any{"url": "https://cdn.example/1.png"},
+			dto:    &ForumImageUploadResultDTO{URL: "https://cdn.example/1.png"},
+		},
+		{
+			name:   "ForumLikeResultDTO（主题/回复的 like 与 unlike 四端点共用：原 handler 内联 gin.H）",
+			legacy: map[string]any{"likes_count": int64(7), "liked": true},
+			dto:    &ForumLikeResultDTO{Liked: true, LikesCount: 7},
+		},
+		{
+			name:   "NotificationUnreadCountDTO（GET /notifications/unread-count：原 handler 内联 gin.H）",
+			legacy: map[string]any{"count": int64(3)},
+			dto:    &NotificationUnreadCountDTO{Count: 3},
+		},
+		{
+			name: "QuestionCommentPageResult（GET /questions/{id}/comments：原 handler 内联 gin.H）",
+			legacy: map[string]any{
+				"items": []QuestionCommentDTO{{ID: 1, Content: "这题易错"}},
+				"total": int64(1), "page": 1, "page_size": 10,
+			},
+			dto: &QuestionCommentPageResult{
+				Items: []QuestionCommentDTO{{ID: 1, Content: "这题易错"}},
+				Page:  1, PageSize: 10, Total: 1,
+			},
+		},
+		{
 			name:   "RefreshResultDTO（POST /auth/refresh：原 raw handler 内联 map[string]string）",
 			legacy: map[string]string{"token": "acc-1", "refresh_token": "ref-1"},
 			dto:    &RefreshResultDTO{RefreshToken: "ref-1", Token: "acc-1"},

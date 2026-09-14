@@ -48,7 +48,7 @@ type WrongQuestionDTO struct {
 	IsRedone    bool         `json:"is_redone"`
 	IsRemoved   bool         `json:"is_removed"`
 	LastWrongAt string       `json:"last_wrong_at"`
-	Question    *QuestionDTO `json:"question,omitempty"`
+	Question    *QuestionDTO `json:"question,omitempty" extensions:"x-optional"`
 	QuestionID  int          `json:"question_id"`
 	StudentID   int          `json:"student_id"`
 	WrongCount  int          `json:"wrong_count"`

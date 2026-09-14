@@ -1,4 +1,16 @@
 import { unwrappedRequest } from './request'
+import type {
+  ForumImageUploadResultDTO,
+  ForumLikeResultDTO,
+  ForumReplyDTO,
+  ForumReportDTO,
+  ForumReportPageResult,
+  ForumTopicDTO,
+  ForumTopicDetailDTO,
+  ForumTopicPageResult,
+  MyReplyDTO,
+  MyReplyPageResult
+} from './generated/forum'
 
 /**
  * 论坛帖子意图（#364）：判"学员想干什么"的唯一依据，与判区域的 chapter_id 正交。
@@ -26,89 +38,35 @@ export type ForumPublishCategory = 'discussion' | 'question'
 export type ForumContentFormat = 'text' | 'markdown'
 
 /**
+ * 生成物的 content_format / category 是 string —— 注解层还没有枚举词汇（ADR-0048 片一已知限制）。
+ * 渲染前用它收窄回 UI 联合：只认 text / markdown，其余（空串 / 未来新值）返回 undefined，
+ * 交给 ForumContent 的缺省（text）处理，与后端 normalizeContentFormat 的归一一致。
+ */
+export function toForumContentFormat(value?: string): ForumContentFormat | undefined {
+  return value === 'markdown' ? 'markdown' : value === 'text' ? 'text' : undefined
+}
+
+/**
  * 论坛列表 Tab（#364）。学员端的「讨论 / 问答」与管理端的
  * 「全部帖子 / 综合讨论区 / 问答区」本质是同一片内容的三种切法，
  * 因此两端共用这一份映射，避免"讨论 Tab 必须带 category"这条规则各写一遍。
  */
 export type ForumTab = 'all' | ForumCategory
 
-export interface ForumTopicItem {
-  id: number
-  chapter_id?: number | null
-  category?: ForumCategory
-  chapter_title?: string
-  title: string
-  content: string
-  /** 正文格式声明（ADR-0044）：text | markdown，缺省按 text 渲染 */
-  content_format?: ForumContentFormat
-  /**
-   * 发布那一刻的 IP 属地快照（ADR-0045）：省/州 与 市。
-   * 空串 = 无属地（内网 / 保留地址 / 库无该段 / 存量帖）——展示侧**整段不渲染**，
-   * 不显示「未知」、不留占位。只显示一级，口径见 regionLabel()。
-   */
-  ip_province?: string
-  ip_city?: string
-  images?: string[]
-  view_count: number
-  reply_count: number
-  last_reply_at?: string | null
-  created_at: string
-  author: {
-    user_id: number
-    username: string
-    avatar_url: string
-  }
-  can_delete?: boolean
-  likes_count?: number
-  liked_by_me?: boolean
-  accepted_reply_id?: number | null
-  solved_at?: string | null
-  /** 精选位（#742）：管理端全类别可精/可撤，三 Tab 筛选与标识展示 */
-  is_featured?: boolean
-  /**
-   * 备考经验认定（ADR-0040）：管理端认定列，与 is_featured 同轴且**蕴含精选**
-   * （is_experience ⇒ is_featured，不存在"经验但非精选"）。
-   * 经验 Tab 的唯一判据就是这个字段；category 是学员自述的意图，别拿它当本字段的别名。
-   */
-  is_experience?: boolean
-  reward_issued?: boolean
-}
+/**
+ * 帖子对象 —— 响应形状来自生成物（ADR-0048）。
+ *
+ * 注解层 category / content_format 是 string（枚举词汇尚未进注解，片一已知限制），
+ * UI 侧窄化联合（ForumCategory / ForumContentFormat）保留在消费处按值断言。
+ */
+export type ForumTopicItem = ForumTopicDTO
 
-export interface ForumReplyItem {
-  id: number
-  topic_id: number
-  parent_id?: number | null
-  parent_name?: string
-  /** 被回复人的头像（ADR-0042「昵称 › 被回复人」行内形态）；顶层回复为空 */
-  parent_avatar_url?: string
-  content: string
-  /** 正文格式声明（ADR-0044）：text | markdown，缺省按 text 渲染 */
-  content_format?: ForumContentFormat
-  /** 发布那一刻的属地快照（ADR-0045），与 ForumTopicItem 同口径。 */
-  ip_province?: string
-  ip_city?: string
-  images?: string[]
-  created_at: string
-  author: {
-    user_id: number
-    username: string
-    avatar_url: string
-  }
-  can_delete?: boolean
-  likes_count?: number
-  liked_by_me?: boolean
-  is_accepted?: boolean
-}
+/** 回复对象 —— 响应形状来自生成物（ADR-0048）。 */
+export type ForumReplyItem = ForumReplyDTO
 
 /** 帖子详情响应（ADR-0042）：`topic` 与 `replies` 平级 + 分页信封 */
-export interface ForumTopicDetailData {
-  topic: ForumTopicItem
-  replies: ForumReplyItem[]
-  page: number
-  pages: number
-  /** 回复总数（含置顶条），与 topic.reply_count 同源 */
-  total: number
-}
+/** 帖子详情响应（ADR-0042）：topic 与 replies 平级 + 分页信封；响应形状来自生成物。 */
+export type ForumTopicDetailData = ForumTopicDetailDTO
 
 export interface ForumListParams {
   scope?: 'all' | 'general' | 'chapter'
@@ -158,7 +116,7 @@ export function forumTabQuery(tab: ForumTab): Pick<ForumListParams, 'scope' | 'c
 
 export const forumApi = {
   listTopics(params: ForumListParams) {
-    return unwrappedRequest.get<{ topics: ForumTopicItem[]; total: number }>('/forum/topics', { params })
+    return unwrappedRequest.get<ForumTopicPageResult>('/forum/topics', { params })
   },
 
   createTopic(data: {
@@ -211,7 +169,7 @@ export const forumApi = {
 
   // 上传论坛图片（图文分离：先传图拿 URL，随发帖/回复提交 images 数组）
   uploadImage(formData: FormData) {
-    return unwrappedRequest.post<{ url: string }>('/forum/upload-image', formData, {
+    return unwrappedRequest.post<ForumImageUploadResultDTO>('/forum/upload-image', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 120000
     })
@@ -229,12 +187,12 @@ export const forumApi = {
 
   /** 点赞主题（幂等，返回当前计数与状态） */
   likeTopic(id: number) {
-    return unwrappedRequest.post<{ likes_count: number; liked: boolean }>(`/forum/topics/${id}/like`)
+    return unwrappedRequest.post<ForumLikeResultDTO>(`/forum/topics/${id}/like`)
   },
 
   /** 取消点赞（幂等） */
   unlikeTopic(id: number) {
-    return unwrappedRequest.delete<{ likes_count: number; liked: boolean }>(`/forum/topics/${id}/like`)
+    return unwrappedRequest.delete<ForumLikeResultDTO>(`/forum/topics/${id}/like`)
   },
 
   /** 举报主题（reason 1-500 字） */
@@ -249,7 +207,7 @@ export const forumApi = {
 
   /** 我的帖子（复用主题列表结构） */
   getMyTopics(params: { page?: number; page_size?: number }) {
-    return unwrappedRequest.get<{ topics: ForumTopicItem[]; total: number; page: number; pages: number }>(
+    return unwrappedRequest.get<ForumTopicPageResult>(
       '/forum/my-topics',
       { params }
     )
@@ -262,7 +220,7 @@ export const forumApi = {
 
   /** 赞过（#701：响应逐字沿用 my-topics 形态，按点赞时间倒序） */
   getMyLikedTopics(params: { page?: number; page_size?: number }) {
-    return unwrappedRequest.get<{ topics: ForumTopicItem[]; total: number; page: number; pages: number }>(
+    return unwrappedRequest.get<ForumTopicPageResult>(
       '/forum/my-liked-topics',
       { params }
     )
@@ -270,7 +228,7 @@ export const forumApi = {
 
   /** 围观（#701：浏览减去四项直接互动，按最近浏览倒序） */
   getMyObservedTopics(params: { page?: number; page_size?: number }) {
-    return unwrappedRequest.get<{ topics: ForumTopicItem[]; total: number; page: number; pages: number }>(
+    return unwrappedRequest.get<ForumTopicPageResult>(
       '/forum/my-observed',
       { params }
     )
@@ -278,7 +236,7 @@ export const forumApi = {
 
   /** 浏览记录（#701：服务端替换本地 localStorage，按主题去重、最近浏览倒序） */
   getMyViewHistory(params: { page?: number; page_size?: number }) {
-    return unwrappedRequest.get<{ topics: ForumTopicItem[]; total: number; page: number; pages: number }>(
+    return unwrappedRequest.get<ForumTopicPageResult>(
       '/forum/my-view-history',
       { params }
     )
@@ -288,12 +246,12 @@ export const forumApi = {
 
   /** 点赞回复（幂等） */
   likeReply(id: number) {
-    return unwrappedRequest.post<{ likes_count: number; liked: boolean }>(`/forum/replies/${id}/like`)
+    return unwrappedRequest.post<ForumLikeResultDTO>(`/forum/replies/${id}/like`)
   },
 
   /** 取消点赞回复（幂等） */
   unlikeReply(id: number) {
-    return unwrappedRequest.delete<{ likes_count: number; liked: boolean }>(`/forum/replies/${id}/like`)
+    return unwrappedRequest.delete<ForumLikeResultDTO>(`/forum/replies/${id}/like`)
   },
 
   // ===== 采纳（#366/#367）=====
@@ -309,87 +267,24 @@ export const forumApi = {
   }
 }
 
-/** 我的回复条目（主题被删时 topic_title 为空串，条目保留） */
-/** 我的回复条目（主题被删时 topic_title 为空串，条目保留） */
-export interface MyReplyItem {
-  id: number
-  topic_id: number
-  topic_title?: string
-  parent_id?: number | null
-  content: string
-  /** 正文格式声明（ADR-0044）：列表摘要据此决定是否剥成纯文本 */
-  content_format?: ForumContentFormat
-  images?: string[]
-  created_at: string
-  author: {
-    user_id: number
-    username: string
-    avatar_url: string
-  }
-}
+/** 我的回复条目（主题被删时 topic_title 为空串，条目保留）——响应形状来自生成物。 */
+export type MyReplyItem = MyReplyDTO
 
 /** 我的回复分页响应 */
-export interface MyRepliesData {
-  replies: MyReplyItem[]
-  total: number
-  page: number
-  pages: number
-}
+/** 我的回复分页响应 */
+export type MyRepliesData = MyReplyPageResult
 
 // ===== 论坛管理（管理端）=====
 
-export interface AdminForumTopic {
-  id: number
-  chapter_id?: number | null
-  category?: ForumCategory
-  chapter_title?: string
-  title: string
-  content: string
-  /** 正文格式声明（ADR-0044）：text | markdown，缺省按 text 渲染 */
-  content_format?: ForumContentFormat
-  images?: string[]
-  view_count: number
-  reply_count: number
-  last_reply_at?: string | null
-  created_at: string
-  /** 精选位（#742） */
-  is_featured?: boolean
-  /** 备考经验认定（ADR-0040）：管理端授予的归类，蕴含精选；经验 Tab 的筛选判据 */
-  is_experience?: boolean
-  author: {
-    user_id: number
-    username: string
-    avatar_url: string
-  }
-}
+/** 管理端帖子（与学员端同一 DTO，字段全量）——响应形状来自生成物。 */
+export type AdminForumTopic = ForumTopicDTO
 
-export interface AdminForumReply {
-  id: number
-  topic_id: number
-  parent_id?: number | null
-  parent_name?: string
-  /** 被回复人的头像（与学员端同一 DTO）；管理端面板紧凑，只展示名字 */
-  parent_avatar_url?: string
-  content: string
-  /** 正文格式声明（ADR-0044）：text | markdown，缺省按 text 渲染 */
-  content_format?: ForumContentFormat
-  images?: string[]
-  created_at: string
-  author: {
-    user_id: number
-    username: string
-    avatar_url: string
-  }
-}
+/** 管理端回复（与学员端同一 DTO）——响应形状来自生成物。 */
+export type AdminForumReply = ForumReplyDTO
 
 /** 管理端帖子详情响应（ADR-0042：`topic` 与 `replies` 平级 + 分页信封） */
-export interface AdminForumTopicDetailData {
-  topic?: AdminForumTopic
-  replies?: AdminForumReply[]
-  page?: number
-  pages?: number
-  total?: number
-}
+/** 管理端帖子详情响应（ADR-0042：topic 与 replies 平级 + 分页信封）——响应形状来自生成物。 */
+export type AdminForumTopicDetailData = ForumTopicDetailDTO
 
 export interface AdminForumListParams {
   scope?: 'all' | 'general' | 'chapter'
@@ -408,7 +303,7 @@ export interface AdminForumListParams {
 
 export const adminForumApi = {
   listTopics(params: AdminForumListParams) {
-    return unwrappedRequest.get<{ topics: AdminForumTopic[]; total: number }>('/admin/forum/topics', { params })
+    return unwrappedRequest.get<ForumTopicPageResult>('/admin/forum/topics', { params })
   },
 
   /**
@@ -475,22 +370,9 @@ export const adminForumApi = {
 }
 
 /** 管理端举报条目（与后端 ForumReportDTO 对齐） */
-export interface AdminForumReportItem {
-  id: number
-  reporter_id: number
-  reporter?: string
-  topic_id?: number | null
-  topic_title?: string
-  reply_id?: number | null
-  reason: string
-  status: number
-  created_at: string
-}
+/** 管理端举报条目（与后端 ForumReportDTO 对齐）——响应形状来自生成物。 */
+export type AdminForumReportItem = ForumReportDTO
 
 /** 管理端举报列表响应 */
-export interface AdminForumReportsData {
-  reports: AdminForumReportItem[]
-  total: number
-  page: number
-  pages: number
-}
+/** 管理端举报列表响应 */
+export type AdminForumReportsData = ForumReportPageResult

@@ -54,7 +54,22 @@ auth 域片（注解缺口最深的域）落地时的口径补充：
 - **共享 client 也是消费面**：`api/client.ts` 的静默刷新直接裸读 axios 的 `res.data.data`；本片给它补上生成的 `RefreshResultDTO`（信封形状显式声明）。「唯一事实源」覆盖**所有**消费点，不只是域模块。
 - **会话态 UI 模型保留**：`UserProfile`（token ∪ 登录基础字段 ∪ `/auth/me` 全量资料）继续手写并注明边界；`PendingProfileChange` 改为从生成类型派生（删掉手写副本）。
 
+## 实施修订（2026-09-14，片四 #962）
+
+互动面五域（forum / notification / favorite / wrongQuestion / questionInteraction）落地时的实测与口径补充：
+
+- **计数**：Web 消费面 **51 个端点**（forum 30 / notification 4 / favorite 4 / wrongQuestion 6 / questionInteraction 7）→ **26 个指认 data、25 个有意无 data**；其中 **2 个端点此前完全不在 swagger**（`GET /admin/forum/topics`、`GET /admin/forum/reports`）；issue 记的「2 个缺席」与实测一致，但 `POST /wrong-questions/{question_id}/redo` 实为「在 swagger、只是路径参数名不同」，不在缺席之列。
+- **共享 handler 的第二条路由**：`GET /admin/forum/topics` 与 `GET /forum/topics` 共用 `ListTopics`。处置沿用 `AdminGetTopic` 先例 —— 薄包装方法承载该路由的注解块，路由注册改指包装方法；否则管理端路由会从 swagger 消失（文档面缩水）。
+- **内联响应 map 收口 6 处**（决策 6 的 `gin.H{}` 形态）：forum 图片上传（`{url}`）、主题/回复的点赞与取消点赞 ×4（`{liked,likes_count}`）、通知未读数（`{count}`）、题目评论列表（`{items,page,page_size,total}`）—— 各自定型为 service DTO 并进 `TestEnvelopeDTOShapeLock`。**字段按 map 的 key 字母序声明**（`liked` 在 `likes_count` 前）才保证序列化字节序不变。
+- **JSONB payload 的表达**：`NotificationDTO.Payload`（站内信 JSONB 落库 payload）此前让 swag 解析失败（`json.RawMessage` 无类型定义），`/notifications` 因此无法指认 `data`。处置：注解层用 `swaggertype:"object" extensions:"x-optional"` 钉成**不透明 object**（决策 6「非响应面不动」），生成物渲染 `Record<string, unknown>`；前端保留唯一的 UI 收窄类型 `NotificationPayload`，`NotificationItem` 由生成类型 `Omit` 掉 payload 后挂上它。
+- **可空性进注解层 12 处**：按「omitempty → `x-optional`（键可能不存在）；无 omitempty 的指针 → `x-nullable`（键在、值可 null）」逐字段标注，覆盖 `ForumTopicDTO` / `ForumReplyDTO` / `ForumReportDTO` / `MyReplyDTO` / `NotificationDTO` / `WrongQuestionDTO`。
+- **顶层 data 可空是注解层表达力缺口**：`GET /questions/{question_id}/note` 未写笔记时 `data` 为 `null`，而 `response.R{data=model.QuestionNote}` 只能指认 `$ref`。处置：前端 adapter 显式写 `QuestionNote | null` 并注明 —— 与枚举词汇缺口同类的已知限制，不是「注解写错」。
+- **枚举词汇缺口**（片一已知限制）在本片的三处消费点：`ForumTopicDTO.category` / `content_format`、`FavoriteDTO.target_type` 在注解层是 `string`。处置：UI 联合保留；`content_format` 新增 `toForumContentFormat()` 在渲染前收窄（未知值回落到 `ForumContent` 的 text 缺省，与后端 `normalizeContentFormat` 同口径）。
+- **`model.*` 类型可直接作根**：`model.QuestionNote` / `model.QuestionTag` 是真实返回类型（无 service 包装），登记为根后生成物以去包名形式出现（`QuestionNote` / `QuestionTag`），本片不新增包装 DTO。
+- **字段级差异 12 条**全部落在 ② 手写类型过时：`NotificationItem.payload` 的 `?`、`parent_id` / `chapter_id` 把 omitempty（键缺失）当成了 null、`/wrong-questions/{id}/remove|batch-remove` 手写 `<null>` 实为 `{removed}`、`FavoriteDTO` 的 `title?/cover?/created_at?`、测试桩里的 `QuestionTag` 局部形状、错题页本地 `WrongItem` 副本。① 注解写错 0 条、③ 后端第三种形状 0 条。
+
 ## 备选
+
 
 - **继续全量推迟**：拒绝 —— 输入面已可信、管道已跑通（#940），继续等只会让手写副本继续漂移；按域解冻把风险限制在「每片独立验收」内。
 - **一次性全量做（315 端点 + 全部前端模块）**：拒绝 —— 一半端点无人消费（注解写错也无人发现），单 PR 也无法评审。

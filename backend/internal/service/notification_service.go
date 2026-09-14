@@ -19,15 +19,18 @@ import (
 // NotificationDTO 站内信通知展示对象。
 // Payload 为结构化业务标记（JSONB，加性字段，如 review_status），旧契约字段不变。
 type NotificationDTO struct {
-	ID        int64       `json:"id"`
-	Type      string      `json:"type"`
-	Title     string      `json:"title"`
-	Content   string      `json:"content"`
-	Link      string      `json:"link"`
-	Payload   model.JSONB `json:"payload,omitempty"`
+	ID      int64  `json:"id"`
+	Type    string `json:"type"`
+	Title   string `json:"title"`
+	Content string `json:"content"`
+	Link    string `json:"link"`
+	// Payload 站内信结构化标记（JSONB 落库 payload）。ADR-0048 决策 6：非响应面不定型，
+	// 故用 swaggertype 钉成不透明 object（生成物渲染 Record<string, unknown>），
+	// 具体键的形状（review_status / topic_id / reply_id / points / reason）由前端 UI 收窄类型声明。
+	Payload   model.JSONB `json:"payload,omitempty" swaggertype:"object" extensions:"x-optional"`
 	IsRead    bool        `json:"is_read"`
 	CreatedAt string      `json:"created_at"`
-	ReadAt    *string     `json:"read_at,omitempty"`
+	ReadAt    *string     `json:"read_at,omitempty" extensions:"x-optional"`
 }
 
 // GormCreator 通知写入执行器（*gorm.DB 与 *gorm.Tx 均满足，事务内写入用）。
@@ -267,6 +270,11 @@ type NotificationListPageResult struct {
 	Pages       int               `json:"pages"`
 	Total       int64             `json:"total"`
 	UnreadCount int64             `json:"unread_count"`
+}
+
+// NotificationUnreadCountDTO 未读通知数（spec #962 片四：收口自 handler 内联 gin.H）。
+type NotificationUnreadCountDTO struct {
+	Count int64 `json:"count"`
 }
 
 // List 分页查询当前用户通知，并附带未读数（一次请求同时支撑列表与角标）。

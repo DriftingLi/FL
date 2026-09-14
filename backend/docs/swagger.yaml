@@ -47,6 +47,40 @@ definitions:
       reason:
         type: string
     type: object
+  model.QuestionNote:
+    properties:
+      content:
+        type: string
+      id:
+        type: integer
+      question_id:
+        type: integer
+      updated_at:
+        type: string
+      user_id:
+        type: integer
+    type: object
+  model.QuestionTag:
+    properties:
+      code:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      is_source_tag:
+        type: boolean
+      name:
+        type: string
+      sort_order:
+        type: integer
+      status:
+        type: integer
+      updated_at:
+        type: string
+    type: object
   response.R:
     properties:
       code:
@@ -467,6 +501,41 @@ definitions:
         description: 本次触发的达阶奖励（0=未触发）
         type: integer
     type: object
+  service.FavoriteCheckDTO:
+    properties:
+      favorite_id:
+        type: integer
+      favorited:
+        type: boolean
+    type: object
+  service.FavoriteDTO:
+    properties:
+      cover:
+        type: string
+      created_at:
+        type: string
+      favorite_id:
+        type: integer
+      target_id:
+        type: integer
+      target_type:
+        type: string
+      title:
+        type: string
+    type: object
+  service.FavoritePageResult:
+    properties:
+      favorites:
+        items:
+          $ref: '#/definitions/service.FavoriteDTO'
+        type: array
+      page:
+        type: integer
+      pages:
+        type: integer
+      total:
+        type: integer
+    type: object
   service.ForumAuthor:
     properties:
       avatar_url:
@@ -475,6 +544,18 @@ definitions:
         type: integer
       username:
         type: string
+    type: object
+  service.ForumImageUploadResultDTO:
+    properties:
+      url:
+        type: string
+    type: object
+  service.ForumLikeResultDTO:
+    properties:
+      liked:
+        type: boolean
+      likes_count:
+        type: integer
     type: object
   service.ForumReplyDTO:
     properties:
@@ -513,18 +594,58 @@ definitions:
           ParentAvatarURL 被回复人的头像（ADR-0042「昵称 › 被回复人」行内形态所需）。
           与 ParentName 同口径 omitempty：顶层回复（无被回复人）两个字段都不出现。
         type: string
+        x-optional: true
       parent_id:
         type: integer
+        x-optional: true
       parent_name:
         description: 被回复人的展示名
         type: string
+        x-optional: true
       topic_id:
+        type: integer
+    type: object
+  service.ForumReportDTO:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: integer
+      reason:
+        type: string
+      reply_id:
+        type: integer
+        x-optional: true
+      reporter:
+        type: string
+      reporter_id:
+        type: integer
+      status:
+        type: integer
+      topic_id:
+        type: integer
+        x-optional: true
+      topic_title:
+        type: string
+    type: object
+  service.ForumReportPageResult:
+    properties:
+      page:
+        type: integer
+      pages:
+        type: integer
+      reports:
+        items:
+          $ref: '#/definitions/service.ForumReportDTO'
+        type: array
+      total:
         type: integer
     type: object
   service.ForumTopicDTO:
     properties:
       accepted_reply_id:
         type: integer
+        x-optional: true
       author:
         $ref: '#/definitions/service.ForumAuthor'
       can_delete:
@@ -534,6 +655,7 @@ definitions:
         type: string
       chapter_id:
         type: integer
+        x-nullable: true
       chapter_title:
         type: string
       content:
@@ -565,6 +687,7 @@ definitions:
         type: boolean
       last_reply_at:
         type: string
+        x-nullable: true
       liked_by_me:
         type: boolean
       likes_count:
@@ -575,6 +698,7 @@ definitions:
         type: boolean
       solved_at:
         type: string
+        x-optional: true
       title:
         type: string
       view_count:
@@ -835,6 +959,91 @@ definitions:
       total_score:
         type: number
     type: object
+  service.MyReplyDTO:
+    properties:
+      author:
+        $ref: '#/definitions/service.ForumAuthor'
+      content:
+        type: string
+      content_format:
+        description: ContentFormat 正文格式声明（ADR-0044）：列表摘要据此决定是否剥成纯文本。
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      images:
+        items:
+          type: string
+        type: array
+      parent_id:
+        type: integer
+        x-optional: true
+      topic_id:
+        type: integer
+      topic_title:
+        type: string
+    type: object
+  service.MyReplyPageResult:
+    properties:
+      page:
+        type: integer
+      pages:
+        type: integer
+      replies:
+        items:
+          $ref: '#/definitions/service.MyReplyDTO'
+        type: array
+      total:
+        type: integer
+    type: object
+  service.NotificationDTO:
+    properties:
+      content:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      is_read:
+        type: boolean
+      link:
+        type: string
+      payload:
+        description: |-
+          Payload 站内信结构化标记（JSONB 落库 payload）。ADR-0048 决策 6：非响应面不定型，
+          故用 swaggertype 钉成不透明 object（生成物渲染 Record<string, unknown>），
+          具体键的形状（review_status / topic_id / reply_id / points / reason）由前端 UI 收窄类型声明。
+        type: object
+        x-optional: true
+      read_at:
+        type: string
+        x-optional: true
+      title:
+        type: string
+      type:
+        type: string
+    type: object
+  service.NotificationListPageResult:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/service.NotificationDTO'
+        type: array
+      page:
+        type: integer
+      pages:
+        type: integer
+      total:
+        type: integer
+      unread_count:
+        type: integer
+    type: object
+  service.NotificationUnreadCountDTO:
+    properties:
+      count:
+        type: integer
+    type: object
   service.PositionInput:
     properties:
       code:
@@ -986,6 +1195,36 @@ definitions:
         type: integer
       saved:
         type: boolean
+    type: object
+  service.QuestionCommentDTO:
+    properties:
+      avatar_url:
+        type: string
+      content:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      question_id:
+        type: integer
+      user_id:
+        type: integer
+      username:
+        type: string
+    type: object
+  service.QuestionCommentPageResult:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/service.QuestionCommentDTO'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
     type: object
   service.QuestionDTO:
     properties:
@@ -1325,6 +1564,56 @@ definitions:
       qr_url:
         type: string
     type: object
+  service.WrongQuestionBatchRemoveResultDTO:
+    properties:
+      removed:
+        type: integer
+    type: object
+  service.WrongQuestionDTO:
+    properties:
+      created_at:
+        type: string
+      favorite_id:
+        type: integer
+      favorited:
+        type: boolean
+      id:
+        type: integer
+      is_redone:
+        type: boolean
+      is_removed:
+        type: boolean
+      last_wrong_at:
+        type: string
+      question:
+        allOf:
+        - $ref: '#/definitions/service.QuestionDTO'
+        x-optional: true
+      question_id:
+        type: integer
+      student_id:
+        type: integer
+      wrong_count:
+        type: integer
+    type: object
+  service.WrongQuestionPageDTO:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/service.WrongQuestionDTO'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+    type: object
+  service.WrongQuestionRemoveResultDTO:
+    properties:
+      removed:
+        type: boolean
+    type: object
   service.WrongQuestionStatsDTO:
     properties:
       by_type:
@@ -1593,6 +1882,49 @@ paths:
       summary: 管理员删除回复
       tags:
       - 管理端-论坛
+  /admin/forum/reports:
+    get:
+      description: 分页查询论坛举报（status 0 待处理 / 1 已处理，省略表示全部）
+      parameters:
+      - description: 状态 0 待处理 / 1 已处理，省略表示全部
+        in: query
+        name: status
+        type: integer
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ForumReportPageResult'
+              type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 管理端举报列表
+      tags:
+      - 管理端-论坛
   /admin/forum/reports/{id}:
     put:
       consumes:
@@ -1628,6 +1960,74 @@ paths:
       security:
       - BearerAuth: []
       summary: 处理论坛举报
+      tags:
+      - 管理端-论坛
+  /admin/forum/topics:
+    get:
+      description: 与学员端列表同一读面（scope/category/featured/chapter_id/keyword/sort/order
+        同参数）
+      parameters:
+      - description: 范围 all|general|chapter
+        in: query
+        name: scope
+        type: string
+      - description: 类别 discussion|question|experience，省略表示不过滤
+        in: query
+        name: category
+        type: string
+      - description: 精选过滤 true|false，省略表示不过滤
+        in: query
+        name: featured
+        type: string
+      - description: 章节ID
+        in: query
+        name: chapter_id
+        type: integer
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      - description: 关键词
+        in: query
+        name: keyword
+        type: string
+      - description: 排序 latest|hot|created
+        in: query
+        name: sort
+        type: string
+      - description: 排序方向 asc|desc
+        in: query
+        name: order
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ForumTopicPageResult'
+              type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 管理员查看帖子列表
       tags:
       - 管理端-论坛
   /admin/forum/topics/{id}:
@@ -1673,7 +2073,12 @@ paths:
         "200":
           description: 详情
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ForumTopicDetailDTO'
+              type: object
         "401":
           description: 未认证
           schema:
@@ -3949,7 +4354,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.FavoritePageResult'
+              type: object
         "401":
           description: 未认证
           schema:
@@ -3976,7 +4386,12 @@ paths:
         "201":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.FavoriteDTO'
+              type: object
         "400":
           description: 参数错误
           schema:
@@ -4043,7 +4458,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.FavoriteCheckDTO'
+              type: object
         "400":
           description: 参数错误
           schema:
@@ -4242,7 +4662,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.MyReplyPageResult'
+              type: object
         "401":
           description: 未认证
           schema:
@@ -4274,7 +4699,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ForumTopicPageResult'
+              type: object
         "401":
           description: 未认证
           schema:
@@ -4369,7 +4799,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ForumLikeResultDTO'
+              type: object
         "400":
           description: 参数错误
           schema:
@@ -4399,7 +4834,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ForumLikeResultDTO'
+              type: object
         "400":
           description: 参数错误
           schema:
@@ -4702,7 +5142,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ForumTopicDTO'
+              type: object
         "401":
           description: 未认证
           schema:
@@ -4738,7 +5183,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ForumTopicDTO'
+              type: object
         "400":
           description: 参数错误
           schema:
@@ -4773,7 +5223,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ForumLikeResultDTO'
+              type: object
         "400":
           description: 参数错误
           schema:
@@ -4803,7 +5258,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ForumLikeResultDTO'
+              type: object
         "400":
           description: 参数错误
           schema:
@@ -4913,7 +5373,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ForumImageUploadResultDTO'
+              type: object
         "400":
           description: 参数错误
           schema:
@@ -5484,7 +5949,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.NotificationListPageResult'
+              type: object
         "401":
           description: 未认证
           schema:
@@ -5557,7 +6027,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.NotificationUnreadCountDTO'
+              type: object
         "401":
           description: 未认证
           schema:
@@ -6110,7 +6585,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.QuestionCommentPageResult'
+              type: object
       security:
       - BearerAuth: []
       summary: 题目评论列表
@@ -6138,7 +6618,12 @@ paths:
         "201":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.QuestionCommentDTO'
+              type: object
       security:
       - BearerAuth: []
       summary: 发表评论
@@ -6157,7 +6642,14 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/model.QuestionTag'
+                  type: array
+              type: object
       security:
       - BearerAuth: []
       summary: 考点标签
@@ -6192,7 +6684,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/model.QuestionNote'
+              type: object
       security:
       - BearerAuth: []
       summary: 获取笔记
@@ -6219,7 +6716,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/model.QuestionNote'
+              type: object
       security:
       - BearerAuth: []
       summary: 保存笔记
@@ -7454,7 +7956,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.WrongQuestionPageDTO'
+              type: object
         "401":
           description: 未认证
           schema:
@@ -7523,7 +8030,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.WrongQuestionRemoveResultDTO'
+              type: object
         "400":
           description: 参数错误
           schema:
@@ -7555,7 +8067,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.WrongQuestionBatchRemoveResultDTO'
+              type: object
       security:
       - BearerAuth: []
       summary: 批量移出

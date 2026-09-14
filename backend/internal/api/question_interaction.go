@@ -49,7 +49,7 @@ func RegisterQuestionInteractionRoutes(rg *gin.RouterGroup, rd RouterDeps, comme
 // @Param question_id path int true "题目ID"
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(10)
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.QuestionCommentPageResult} "success"
 // @Router /questions/{question_id}/comments [get]
 func (h *QuestionInteractionHandler) ListComments(c *gin.Context) {
 	qid, _ := strconv.Atoi(c.Param("question_id"))
@@ -60,7 +60,7 @@ func (h *QuestionInteractionHandler) ListComments(c *gin.Context) {
 		response.ServerError(c, err.Error())
 		return
 	}
-	response.Success(c, gin.H{"items": items, "total": total, "page": page, "page_size": pageSize})
+	response.Success(c, service.QuestionCommentPageResult{Items: items, Page: page, PageSize: pageSize, Total: total})
 }
 
 // CreateComment 发表题目评论
@@ -72,7 +72,7 @@ func (h *QuestionInteractionHandler) ListComments(c *gin.Context) {
 // @Security BearerAuth
 // @Param question_id path int true "题目ID"
 // @Param body body object true "内容" example({"content":"这题易错"})
-// @Success 201 {object} response.R "success"
+// @Success 201 {object} response.R{data=service.QuestionCommentDTO} "success"
 // @Router /questions/{question_id}/comments [post]
 func (h *QuestionInteractionHandler) CreateComment(c *gin.Context) {
 	qid, _ := strconv.Atoi(c.Param("question_id"))
@@ -114,7 +114,7 @@ func (h *QuestionInteractionHandler) DeleteComment(c *gin.Context) {
 // @Tags 学员端-题目互动
 // @Security BearerAuth
 // @Param question_id path int true "题目ID"
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=model.QuestionNote} "success"
 // @Router /questions/{question_id}/note [get]
 func (h *QuestionInteractionHandler) GetNote(c *gin.Context) {
 	qid, _ := strconv.Atoi(c.Param("question_id"))
@@ -139,7 +139,7 @@ func (h *QuestionInteractionHandler) GetNote(c *gin.Context) {
 // @Security BearerAuth
 // @Param question_id path int true "题目ID"
 // @Param body body object true "笔记" example({"content":"我的笔记"})
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=model.QuestionNote} "success"
 // @Router /questions/{question_id}/note [put]
 func (h *QuestionInteractionHandler) UpsertNote(c *gin.Context) {
 	qid, _ := strconv.Atoi(c.Param("question_id"))
@@ -182,7 +182,7 @@ func (h *QuestionInteractionHandler) DeleteNote(c *gin.Context) {
 // @Tags 学员端-题目互动
 // @Security BearerAuth
 // @Param question_id path int true "题目ID"
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=[]model.QuestionTag} "success"
 // @Router /questions/{question_id}/knowledge [get]
 func (h *QuestionInteractionHandler) ListKnowledge(c *gin.Context) {
 	qid, _ := strconv.Atoi(c.Param("question_id"))
