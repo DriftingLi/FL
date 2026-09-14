@@ -29,10 +29,12 @@ function childPath(page: PageDescriptor, basePath: string): string {
   return page.path.startsWith(basePath + '/') ? page.path.slice(basePath.length + 1) : page.path
 }
 
-/** 描述符 → meta：只写与父记录不同的部分（vue-router 会与父记录 meta 合并）。 */
+/** 描述符 → meta：布局子记录只写与父记录不同的部分（vue-router 会与父记录 meta 合并）。 */
 function routeMeta(page: PageDescriptor): Record<string, unknown> {
   const meta: Record<string, unknown> = { workspace: page.workspace }
-  if (page.requiresAuth === false) meta.requiresAuth = false
+  // requiresAuth 按**显式声明**直写（含 true）：布局子记录缺省靠父记录 meta 继承 true，
+  // 而顶层记录（无布局外壳，如外链中转页）没有父记录可继承 —— 不写就等于匿名可访问。
+  if (page.requiresAuth !== undefined) meta.requiresAuth = page.requiresAuth
   if (page.authPage) meta.authPage = true
   if (page.isValuationAuthPage) meta.isValuationAuthPage = true
   if (page.roles) meta.roles = page.roles
