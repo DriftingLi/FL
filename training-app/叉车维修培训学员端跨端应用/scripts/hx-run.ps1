@@ -95,7 +95,8 @@
     部署耗时实测：冷启 HBuilderX + 增量编译 205–610 秒，资源推送到落盘 15 秒–9 分钟（视缓存与设备而定）。
 
     **退出码**：0 = 运行到手机成功（设备侧事实已前进）/ 仅编译干净（无编译期诊断行）；
-    1 = 输出含 error 行（编译 / 运行失败）；2 = 环境不可用（cli 或 adb 缺失、多设备未显式指定、
+    1 = **仅编译路径**发现编译期诊断行（真运行路径不在此判失败，见 ADR-0012）；
+    2 = 环境不可用（cli 或 adb 缺失、多设备未显式指定、
     与主程序连接中断、忙等待超时、部署停滞后判环境不可用、轮询超时仍未见到部署事实）。
 
 .PARAMETER Project
@@ -204,16 +205,8 @@ function Test-HxCompileFinished {
     return $false
 }
 
-function Get-HxErrorLines {
-    <#
-      判成败只解析 stdout（CLI 退出码恒 0）：扫 error / 编译失败 一类字样，再排除「0 error」这类否证行。
-      仅编译与真运行两条路径共用同一判据（#949 抽函数，避免两处漂移）。
-    #>
-    param([string]$Output)
-    return @("$Output" -split "`r?`n" |
-        Where-Object { $_ -match '(?i)\berror\b|unresolved reference|cannot infer type|找不到名称|类型不匹配|编译失败|运行失败' } |
-        Where-Object { $_ -notmatch '(?i)0\s*error|errors?\s*[:=]\s*0|no errors?|error count\s*[:=]\s*0' })
-}
+# Get-HxErrorLines 已上移到 scripts/lib/hx-errors.ps1（ADR-0012）：纯判定抽成 lib 才能做运行期断言。
+# 本文件在下方统一 dot-source 它 —— 调用点仍是两处（仅编译 / 真运行），且都必须包 @()（契约 C13）。
 
 # ---------- 通用函数 ----------
 
@@ -681,6 +674,8 @@ Set-Content -LiteralPath $LogPath -Encoding utf8 -Value @(
 . (Join-Path $PSScriptRoot 'lib\hx-busy.ps1')
 # 部署观察窗的纯判定（#974）：抽成 lib 才能在**不接设备**的前提下做运行期断言（ADR-0011 ⑥）
 . (Join-Path $PSScriptRoot 'lib\hx-deploy.ps1')
+# 错误行判定的纯函数（ADR-0012）：同理抽成 lib —— 真运行路径必须能断言「设备日志不算失败」
+. (Join-Path $PSScriptRoot 'lib\hx-errors.ps1')
 $hx = Wait-HxFree -CliExe $cliPath -TimeoutSeconds $WaitSeconds -LogPath $LogPath
 try {
 
@@ -807,12 +802,15 @@ Add-Content -LiteralPath $LogPath -Value "`n$launchOutput" -Encoding utf8
 $errorLines = @(Get-HxErrorLines -Output $allOutput)
 
 if ($errorLines.Count -gt 0) {
+    # ⚠️ 真运行路径**不在这里判失败**（ADR-0012）：
+    #    设备侧 console 日志已被 Get-HxErrorLines 排除，剩下的这些属**编译期诊断** —— 编译没过，
+    #    部署判据随后自然会判未部署（exit 2）。此处若 exit 1 会**吃掉 `HX_RUN_DEPLOY` 证据行**，
+    #    让「到底有没有到设备」不可得；故降级为警告，交由下面的部署判据收口。
     Write-Host ''
-    Write-Host "❌ 运行没干净收口：$($errorLines.Count) 行含 error/失败字样 ——" -ForegroundColor Red
-    $errorLines | Select-Object -First 20 | ForEach-Object { Write-Host "   $_" -ForegroundColor Red }
+    Write-Host "⚠️ 输出含 $($errorLines.Count) 行 error/失败字样（设备侧运行日志已排除，以下按编译期诊断列出）——" -ForegroundColor Yellow
+    $errorLines | Select-Object -First 20 | ForEach-Object { Write-Host "   $_" -ForegroundColor Yellow }
+    Write-Host '   这不直接判失败：成败由下面的部署判据（设备侧事实是否前进）定。' -ForegroundColor Yellow
     Write-Host "完整日志：$LogPath" -ForegroundColor Yellow
-    Write-HxRunResult -Mode $mode -Compile $segment.Compile -Deploy $segment.Deploy -Total $totalSeconds -Exit 'fail' -LogFile $LogPath
-    exit 1
 }
 
 # ---------- 部署判定（**基线相对**：只有设备侧事实前进才算部署；旁证不判真）----------
