@@ -1,80 +1,63 @@
 // 已迁移模块：走 unwrappedRequest（拦截器解包信封，成功直接返回业务数据 Promise<T>，
 // 业务失败抛错并统一 toast，调用方不再自检 res.code）
+//
+// 响应类型**不再手写**：唯一事实源是后端注解 → backend/docs/swagger.json →
+// `cd backend && go run ./cmd/gen-apitypes`（ADR-0048 决策 1/3，issue #964 片六）。
+// 入参（body）类型不生成、仍手写（决策 3）。
 import { unwrappedRequest } from './request'
-import type { CourseSummary } from './course'
+import type {
+  CatalogLevelNode,
+  CatalogSpecialtyNode,
+  CatalogTreeDTO,
+  CertificateTemplateDict,
+  CertificateTemplateListDTO,
+  CourseDTO,
+  LevelDict,
+  LevelListDTO,
+  QuestionTagDict,
+  QuestionTagListDTO,
+  QuestionTagsResultDTO,
+  SpecialtyDict
+} from './generated/training'
+
+export type {
+  CatalogLevelNode,
+  CatalogSpecialtyNode,
+  CatalogTreeDTO,
+  CertificateTemplateDict,
+  CertificateTemplateListDTO,
+  CourseDTO,
+  LevelDict,
+  LevelListDTO,
+  QuestionTagDict,
+  QuestionTagListDTO,
+  QuestionTagsResultDTO,
+  SpecialtyDict
+}
 
 // ===== 培训目录体系：专业方向(specialty) → 等级(level) → 课程 → 章节 =====
 // 契约与后端 LH-27 真实路由/字段对齐：
-//   学员端公开  /catalog/tree、/specialties、/levels、/tags
+//   学员端公开  /catalog/tree、/levels、/tags
 //   管理端      /admin/specialty*、/admin/level*、/admin/certificate-template*、
-//              /admin/question-tag*、/admin/question/:id/tags、/admin/catalog/tree（后端补齐）
+//              /admin/question-tag*、/admin/question/:id/tags、/admin/catalog/tree
 
-/** 专业方向（与后端SpecialtyBrief/catalog direction 契约对齐） */
-export interface CatalogDirection {
-  specialty_id: number
-  name: string
-  code?: string
-  description?: string
-  sort_order?: number
-  status?: number
-  created_at?: string
-}
+// 旧名保留为生成别名（既有 import 路径不破）；旧手写版把必填字段写成可选，形状以注解为准（清单第 ② 类）。
+/** 专业方向 = 生成 SpecialtyDict */
+export type CatalogDirection = SpecialtyDict
+/** 课程等级（全局共享，不归属方向）= 生成 LevelDict */
+export type CatalogLevel = LevelDict
+/** 证书模板（有效期单位为天 validity_days）= 生成 CertificateTemplateDict */
+export type CertificateTemplate = CertificateTemplateDict
+/** 目录树中的课程节点 = 生成 CourseDTO（sort_order 为 CourseDTO 既有字段） */
+export type CatalogCourseNode = CourseDTO
+/** 方向节点（含等级）= 生成 CatalogSpecialtyNode */
+export type CatalogDirectionNode = CatalogSpecialtyNode
+/** 完整目录树（公开/管理端均为 {specialties}）= 生成 CatalogTreeDTO */
+export type CatalogTree = CatalogTreeDTO
+/** 题库标签 = 生成 QuestionTagDict */
+export type QuestionTag = QuestionTagDict
 
-/** 课程等级（全局共享，不归属方向） */
-export interface CatalogLevel {
-  level_id: number
-  name: string
-  code?: string
-  description?: string
-  sort_order?: number
-  status?: number
-  created_at?: string
-}
-
-/** 证书模板（有效期单位为天 validity_days） */
-export interface CertificateTemplate {
-  id: number
-  name: string
-  code?: string
-  description?: string
-  validity_days?: number
-  template_url?: string
-  status?: number
-  created_at?: string
-  updated_at?: string
-}
-
-/** 目录树中的课程节点 = CourseSummary + sort_order（sort_order 由后端补齐），单一事实源派生 */
-export type CatalogCourseNode = CourseSummary & { sort_order?: number }
-
-/** 等级节点（含课程） */
-export interface CatalogLevelNode extends CatalogLevel {
-  courses?: CatalogCourseNode[]
-}
-
-/** 方向节点（含等级） */
-export interface CatalogDirectionNode extends CatalogDirection {
-  levels?: CatalogLevelNode[]
-}
-
-/** 完整目录树（公开/管理端均为 {specialties}） */
-export interface CatalogTree {
-  specialties: CatalogDirectionNode[]
-}
-
-/** 题库标签（管理端含停用项，question_count 由后端补齐） */
-export interface QuestionTag {
-  id: number
-  name: string
-  code?: string
-  description?: string
-  sort_order?: number
-  status?: number
-  question_count?: number
-  created_at?: string
-  updated_at?: string
-}
-
+/** 标签创建/更新入参（不生成，ADR-0048 决策 3） */
 export interface TagPayload {
   name: string
   code?: string
@@ -83,6 +66,7 @@ export interface TagPayload {
   status?: number
 }
 
+/** 证书模板创建/更新入参（不生成，ADR-0048 决策 3） */
 export interface CertificateTemplatePayload {
   name: string
   code?: string
@@ -100,25 +84,27 @@ export const trainingApi = {
    * （ADR-0047 §4 / #931；与课程列表同口径 #702）。
    */
   getCatalogTree(credentialId?: number | null) {
-    return unwrappedRequest.get<CatalogTree>('/catalog/tree', {
+    return unwrappedRequest.get<CatalogTreeDTO>('/catalog/tree', {
       params: credentialId ? { credential_id: credentialId } : {}
     })
   },
   /** 全局课程等级列表（仅启用项）：GET /api/levels */
   getLevels() {
-    return unwrappedRequest.get<{ levels: CatalogLevel[] }>('/levels')
+    return unwrappedRequest.get<LevelListDTO>('/levels')
   },
-  /** 管理端目录树（含停用项/章节）：GET /api/admin/catalog/tree → {specialties}（后端补齐） */
+  /** 管理端目录树（含停用项/章节）：GET /api/admin/catalog/tree → {specialties} */
   getAdminCatalogTree() {
-    return unwrappedRequest.get<CatalogTree>('/admin/catalog/tree')
+    return unwrappedRequest.get<CatalogTreeDTO>('/admin/catalog/tree')
   },
 
   // ===== 专业方向（后端路由 /admin/specialty*） =====
+  /** 创建返回落库后的字典项（201 Created） */
   createDirection(data: { name: string; code?: string; description?: string; sort_order?: number; status?: number }) {
-    return unwrappedRequest.post<{ specialty_id: number }>('/admin/specialty', data)
+    return unwrappedRequest.post<SpecialtyDict>('/admin/specialty', data)
   },
+  /** 更新返回落库后的字典项（此前被当成无载荷） */
   updateDirection(id: number, data: { name?: string; code?: string; description?: string; sort_order?: number; status?: number }) {
-    return unwrappedRequest.put<null>(`/admin/specialty/${id}`, data)
+    return unwrappedRequest.put<SpecialtyDict>(`/admin/specialty/${id}`, data)
   },
   /** 交换专业方向排序：PUT /api/admin/specialty/:id/sort */
   swapDirection(id: number, swapWith: number) {
@@ -129,11 +115,13 @@ export const trainingApi = {
   },
 
   // ===== 课程等级（后端路由 /admin/level*，等级全局共享无方向维度） =====
+  /** 创建返回落库后的字典项（201 Created） */
   createLevel(data: { name: string; code?: string; description?: string; sort_order?: number; status?: number }) {
-    return unwrappedRequest.post<{ level_id: number }>('/admin/level', data)
+    return unwrappedRequest.post<LevelDict>('/admin/level', data)
   },
+  /** 更新返回落库后的字典项（此前被当成无载荷） */
   updateLevel(id: number, data: { name?: string; code?: string; description?: string; sort_order?: number; status?: number }) {
-    return unwrappedRequest.put<null>(`/admin/level/${id}`, data)
+    return unwrappedRequest.put<LevelDict>(`/admin/level/${id}`, data)
   },
   /** 交换课程等级排序：PUT /api/admin/level/:id/sort */
   swapLevel(id: number, swapWith: number) {
@@ -145,13 +133,13 @@ export const trainingApi = {
 
   // ===== 证书模板（后端单数路由 certificate-template，有效期单位天） =====
   getCertificateTemplates() {
-    return unwrappedRequest.get<{ certificate_templates: CertificateTemplate[] }>('/admin/certificate-templates')
+    return unwrappedRequest.get<CertificateTemplateListDTO>('/admin/certificate-templates')
   },
   createCertificateTemplate(data: CertificateTemplatePayload) {
-    return unwrappedRequest.post<CertificateTemplate>('/admin/certificate-template', data)
+    return unwrappedRequest.post<CertificateTemplateDict>('/admin/certificate-template', data)
   },
   updateCertificateTemplate(id: number, data: Partial<CertificateTemplatePayload>) {
-    return unwrappedRequest.put<CertificateTemplate>(`/admin/certificate-template/${id}`, data)
+    return unwrappedRequest.put<CertificateTemplateDict>(`/admin/certificate-template/${id}`, data)
   },
   deleteCertificateTemplate(id: number) {
     return unwrappedRequest.delete<null>(`/admin/certificate-template/${id}`)
@@ -163,24 +151,25 @@ export const trainingApi = {
    * 同上：公开路由由调用方显式传证件（与抽题池同口径 #702）。
    */
   getTags(credentialId?: number | null) {
-    return unwrappedRequest.get<{ tags: QuestionTag[] }>('/tags', {
+    return unwrappedRequest.get<QuestionTagListDTO>('/tags', {
       params: credentialId ? { credential_id: credentialId } : {}
     })
   },
   getQuestionTags() {
-    return unwrappedRequest.get<{ tags: QuestionTag[] }>('/admin/question-tags')
+    return unwrappedRequest.get<QuestionTagListDTO>('/admin/question-tags')
   },
   createQuestionTag(data: TagPayload) {
-    return unwrappedRequest.post<{ id: number }>('/admin/question-tag', data)
+    return unwrappedRequest.post<QuestionTagDict>('/admin/question-tag', data)
   },
+  /** 更新返回落库后的标签（此前被当成无载荷） */
   updateQuestionTag(id: number, data: Partial<TagPayload>) {
-    return unwrappedRequest.put<null>(`/admin/question-tag/${id}`, data)
+    return unwrappedRequest.put<QuestionTagDict>(`/admin/question-tag/${id}`, data)
   },
   deleteQuestionTag(id: number) {
     return unwrappedRequest.delete<null>(`/admin/question-tag/${id}`)
   },
-  /** 题目打标（管理端）：PUT /api/admin/question/:question_id/tags 全量替换 */
+  /** 题目打标（管理端）：PUT /api/admin/question/:question_id/tags 全量替换，返回写入后的标签ID集合 */
   setQuestionTags(questionId: number, tagIds: number[]) {
-    return unwrappedRequest.put<null>(`/admin/question/${questionId}/tags`, { tag_ids: tagIds })
+    return unwrappedRequest.put<QuestionTagsResultDTO>(`/admin/question/${questionId}/tags`, { tag_ids: tagIds })
   }
 }

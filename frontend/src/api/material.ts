@@ -1,29 +1,19 @@
+// 已迁移模块：响应类型**不再手写**，唯一事实源是后端注解 → backend/docs/swagger.json →
+// `cd backend && go run ./cmd/gen-apitypes`（ADR-0048 决策 1/3，issue #964 片六）。
+// 入参（query）类型不生成、仍手写（决策 3）。
 import { unwrappedRequest } from './request'
+import type { MaterialDTO, MaterialPageResult } from './generated/material'
 
-/** 学习资料条目（chapter_file 聚合视图，与后端 ADR-0018 MaterialDTO 对齐） */
-export interface MaterialItem {
-  file_id: number
-  chapter_id?: number | null
-  chapter_title?: string
-  course_id: number
-  course_name: string
-  file_name: string
-  file_url: string
-  content_type?: string
-  file_size?: number
-  created_at?: string
-}
+export type { MaterialDTO, MaterialPageResult }
 
-/** 资料列表响应 */
-export interface MaterialListData {
-  materials: MaterialItem[]
-  total: number
-  page: number
-  pages: number
-}
+/** 学习资料条目（chapter_file 聚合视图，与后端 MaterialDTO 对齐）—— 旧名保留为生成别名 */
+export type MaterialItem = MaterialDTO
+
+/** 资料列表响应——旧名保留为生成别名 */
+export type MaterialListData = MaterialPageResult
 
 export const materialApi = {
   list(params: { course_id?: number; page?: number; page_size?: number }) {
-    return unwrappedRequest.get<MaterialListData>('/materials', { params })
+    return unwrappedRequest.get<MaterialPageResult>('/materials', { params })
   }
 }

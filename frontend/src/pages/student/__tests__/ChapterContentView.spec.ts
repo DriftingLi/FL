@@ -82,7 +82,17 @@ beforeEach(() => {
     chapter_id: 2,
     title: '扭矩计算',
     content: CHAPTER_CONTENT,
-    files: []
+    files: [],
+    content_type: 'markdown',
+    course_id: 1,
+    created_at: '',
+    description: '',
+    duration: 0,
+    file_url: '',
+    next_chapter_id: null,
+    order_num: 0,
+    previous_chapter_id: null,
+    study_status: ''
   })
   vi.mocked(studentApi.getStudentCourseDetail).mockResolvedValue({ chapters: [] } as never)
 })

@@ -96,7 +96,7 @@ func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *serv
 // @Tags 学员端-培训目录
 // @Produce json
 // @Param credential_id query int false "目标证件ID"
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.CatalogTreeDTO} "success"
 // @Router /catalog/tree [get]
 func (h *TrainingCatalogHandler) GetCatalogTree(c *gin.Context) {
 	Endpoint[struct{}, service.CatalogTreeDTO]{
@@ -114,7 +114,7 @@ func (h *TrainingCatalogHandler) GetCatalogTree(c *gin.Context) {
 // @Description 仅启用项
 // @Tags 学员端-培训目录
 // @Produce json
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.LevelListDTO} "success"
 // @Router /levels [get]
 func (h *TrainingCatalogHandler) ListPublicLevels(c *gin.Context) {
 	Endpoint[struct{}, []service.LevelDict]{
@@ -123,7 +123,7 @@ func (h *TrainingCatalogHandler) ListPublicLevels(c *gin.Context) {
 			return &result, nil
 		},
 		Render: func(c *gin.Context, _ *struct{}, resp *[]service.LevelDict, _ error) {
-			response.Success(c, gin.H{"levels": deref(resp)})
+			response.Success(c, service.LevelListDTO{Levels: *resp})
 		},
 	}.Handle(c)
 }
@@ -134,7 +134,7 @@ func (h *TrainingCatalogHandler) ListPublicLevels(c *gin.Context) {
 // @Tags 学员端-培训目录
 // @Produce json
 // @Param credential_id query int false "目标证件ID"
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.QuestionTagListDTO} "success"
 // @Router /tags [get]
 func (h *TrainingCatalogHandler) ListPublicTags(c *gin.Context) {
 	Endpoint[struct{}, []service.QuestionTagDict]{
@@ -143,12 +143,20 @@ func (h *TrainingCatalogHandler) ListPublicTags(c *gin.Context) {
 			return &result, nil
 		},
 		Render: func(c *gin.Context, _ *struct{}, resp *[]service.QuestionTagDict, _ error) {
-			response.Success(c, gin.H{"tags": deref(resp)})
+			response.Success(c, service.QuestionTagListDTO{Tags: *resp})
 		},
 	}.Handle(c)
 }
 
-// GetAdminCatalogTree 管理端目录树（含停用项与章节节点）GET /api/admin/catalog/tree
+// GetAdminCatalogTree 管理端目录树（含停用项与章节节点）
+// @Summary 管理端目录树
+// @Description 含停用项与章节节点的完整目录树（需 CapCatalogManage）
+// @Tags 管理端-培训目录
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.R{data=service.CatalogTreeDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/catalog/tree [get]
 func (h *TrainingCatalogHandler) GetAdminCatalogTree(c *gin.Context) {
 	Endpoint[struct{}, service.CatalogTreeDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.CatalogTreeDTO, error) {
@@ -186,7 +194,15 @@ func (h *TrainingCatalogHandler) ListLevels(c *gin.Context) {
 	}.Handle(c)
 }
 
-// ListCertificateTemplates 证书模板列表（含停用项）GET /api/admin/certificate-templates
+// ListCertificateTemplates 证书模板列表（含停用项）
+// @Summary 证书模板列表
+// @Description 管理端证书模板列表（含停用项）
+// @Tags 管理端-培训目录
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.R{data=service.CertificateTemplateListDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/certificate-templates [get]
 func (h *TrainingCatalogHandler) ListCertificateTemplates(c *gin.Context) {
 	Endpoint[struct{}, []service.CertificateTemplateDict]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*[]service.CertificateTemplateDict, error) {
@@ -194,12 +210,20 @@ func (h *TrainingCatalogHandler) ListCertificateTemplates(c *gin.Context) {
 			return &result, nil
 		},
 		Render: func(c *gin.Context, _ *struct{}, resp *[]service.CertificateTemplateDict, _ error) {
-			response.Success(c, gin.H{"certificate_templates": deref(resp)})
+			response.Success(c, service.CertificateTemplateListDTO{CertificateTemplates: *resp})
 		},
 	}.Handle(c)
 }
 
-// ListQuestionTags 题库标签列表（含停用项）GET /api/admin/question-tags
+// ListQuestionTags 题库标签列表（含停用项）
+// @Summary 题库标签列表
+// @Description 管理端题库标签列表（含停用项与题目计数）
+// @Tags 题库管理
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.R{data=service.QuestionTagListDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/question-tags [get]
 func (h *TrainingCatalogHandler) ListQuestionTags(c *gin.Context) {
 	Endpoint[struct{}, []service.QuestionTagDict]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*[]service.QuestionTagDict, error) {
@@ -212,7 +236,18 @@ func (h *TrainingCatalogHandler) ListQuestionTags(c *gin.Context) {
 	}.Handle(c)
 }
 
-// CreateSpecialty 创建专业方向 POST /api/admin/specialty
+// CreateSpecialty 创建专业方向
+// @Summary 创建专业方向
+// @Description 管理员创建专业方向字典项
+// @Tags 管理端-培训目录
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body service.SpecialtyInput true "专业方向"
+// @Success 201 {object} response.R{data=service.SpecialtyDict} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/specialty [post]
 func (h *TrainingCatalogHandler) CreateSpecialty(c *gin.Context) {
 	Endpoint[service.SpecialtyInput, service.SpecialtyDict]{
 		Parse: func(c *gin.Context) (*service.SpecialtyInput, error) {
@@ -239,7 +274,18 @@ func (h *TrainingCatalogHandler) CreateSpecialty(c *gin.Context) {
 	}.Handle(c)
 }
 
-// CreateLevel 创建课程等级 POST /api/admin/level
+// CreateLevel 创建课程等级
+// @Summary 创建课程等级
+// @Description 管理员创建全局课程等级字典项
+// @Tags 管理端-培训目录
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body service.LevelInput true "课程等级"
+// @Success 201 {object} response.R{data=service.LevelDict} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/level [post]
 func (h *TrainingCatalogHandler) CreateLevel(c *gin.Context) {
 	Endpoint[service.LevelInput, service.LevelDict]{
 		Parse: func(c *gin.Context) (*service.LevelInput, error) {
@@ -266,7 +312,18 @@ func (h *TrainingCatalogHandler) CreateLevel(c *gin.Context) {
 	}.Handle(c)
 }
 
-// CreateCertificateTemplate 创建证书模板 POST /api/admin/certificate-template
+// CreateCertificateTemplate 创建证书模板
+// @Summary 创建证书模板
+// @Description 管理员创建证书模板（有效期单位天）
+// @Tags 管理端-培训目录
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body service.CertificateTemplateInput true "证书模板"
+// @Success 201 {object} response.R{data=service.CertificateTemplateDict} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/certificate-template [post]
 func (h *TrainingCatalogHandler) CreateCertificateTemplate(c *gin.Context) {
 	Endpoint[service.CertificateTemplateInput, service.CertificateTemplateDict]{
 		Parse: func(c *gin.Context) (*service.CertificateTemplateInput, error) {
@@ -293,7 +350,18 @@ func (h *TrainingCatalogHandler) CreateCertificateTemplate(c *gin.Context) {
 	}.Handle(c)
 }
 
-// CreateQuestionTag 创建题库标签 POST /api/admin/question-tag
+// CreateQuestionTag 创建题库标签
+// @Summary 创建题库标签
+// @Description 管理员/讲师创建题库标签
+// @Tags 题库管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body service.QuestionTagInput true "题库标签"
+// @Success 201 {object} response.R{data=service.QuestionTagDict} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/question-tag [post]
 func (h *TrainingCatalogHandler) CreateQuestionTag(c *gin.Context) {
 	Endpoint[service.QuestionTagInput, service.QuestionTagDict]{
 		Parse: func(c *gin.Context) (*service.QuestionTagInput, error) {
@@ -326,7 +394,19 @@ type specialtyUpdateReq struct {
 	In service.SpecialtyInput
 }
 
-// UpdateSpecialty 更新专业方向 PUT /api/admin/specialty/:specialty_id
+// UpdateSpecialty 更新专业方向
+// @Summary 更新专业方向
+// @Description 管理员更新专业方向字典项
+// @Tags 管理端-培训目录
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param specialty_id path int true "专业方向ID"
+// @Param body body service.SpecialtyInput true "专业方向"
+// @Success 200 {object} response.R{data=service.SpecialtyDict} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "专业方向不存在"
+// @Router /admin/specialty/{specialty_id} [put]
 func (h *TrainingCatalogHandler) UpdateSpecialty(c *gin.Context) {
 	Endpoint[specialtyUpdateReq, service.SpecialtyDict]{
 		Parse: func(c *gin.Context) (*specialtyUpdateReq, error) {
@@ -363,7 +443,19 @@ type levelUpdateReq struct {
 	In service.LevelInput
 }
 
-// UpdateLevel 更新课程等级 PUT /api/admin/level/:level_id
+// UpdateLevel 更新课程等级
+// @Summary 更新课程等级
+// @Description 管理员更新课程等级字典项
+// @Tags 管理端-培训目录
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param level_id path int true "等级ID"
+// @Param body body service.LevelInput true "课程等级"
+// @Success 200 {object} response.R{data=service.LevelDict} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "课程等级不存在"
+// @Router /admin/level/{level_id} [put]
 func (h *TrainingCatalogHandler) UpdateLevel(c *gin.Context) {
 	Endpoint[levelUpdateReq, service.LevelDict]{
 		Parse: func(c *gin.Context) (*levelUpdateReq, error) {
@@ -400,7 +492,19 @@ type certificateTemplateUpdateReq struct {
 	In service.CertificateTemplateInput
 }
 
-// UpdateCertificateTemplate 更新证书模板 PUT /api/admin/certificate-template/:id
+// UpdateCertificateTemplate 更新证书模板
+// @Summary 更新证书模板
+// @Description 管理员更新证书模板
+// @Tags 管理端-培训目录
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "模板ID"
+// @Param body body service.CertificateTemplateInput true "证书模板"
+// @Success 200 {object} response.R{data=service.CertificateTemplateDict} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "证书模板不存在"
+// @Router /admin/certificate-template/{id} [put]
 func (h *TrainingCatalogHandler) UpdateCertificateTemplate(c *gin.Context) {
 	Endpoint[certificateTemplateUpdateReq, service.CertificateTemplateDict]{
 		Parse: func(c *gin.Context) (*certificateTemplateUpdateReq, error) {
@@ -437,7 +541,19 @@ type questionTagUpdateReq struct {
 	In service.QuestionTagInput
 }
 
-// UpdateQuestionTag 更新题库标签 PUT /api/admin/question-tag/:id
+// UpdateQuestionTag 更新题库标签
+// @Summary 更新题库标签
+// @Description 管理员/讲师更新题库标签
+// @Tags 题库管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "标签ID"
+// @Param body body service.QuestionTagInput true "题库标签"
+// @Success 200 {object} response.R{data=service.QuestionTagDict} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "题库标签不存在"
+// @Router /admin/question-tag/{id} [put]
 func (h *TrainingCatalogHandler) UpdateQuestionTag(c *gin.Context) {
 	Endpoint[questionTagUpdateReq, service.QuestionTagDict]{
 		Parse: func(c *gin.Context) (*questionTagUpdateReq, error) {
@@ -473,7 +589,17 @@ type specialtyIDReq struct {
 	ID int
 }
 
-// DeleteSpecialty 删除专业方向 DELETE /api/admin/specialty/:specialty_id
+// DeleteSpecialty 删除专业方向
+// @Summary 删除专业方向
+// @Description 管理员删除专业方向字典项；无返回载荷
+// @Tags 管理端-培训目录
+// @Produce json
+// @Security BearerAuth
+// @Param specialty_id path int true "专业方向ID"
+// @Success 200 {object} response.R "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "专业方向不存在"
+// @Router /admin/specialty/{specialty_id} [delete]
 func (h *TrainingCatalogHandler) DeleteSpecialty(c *gin.Context) {
 	Endpoint[specialtyIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*specialtyIDReq, error) {
@@ -504,7 +630,17 @@ type levelIDReq struct {
 	ID int
 }
 
-// DeleteLevel 删除课程等级 DELETE /api/admin/level/:level_id
+// DeleteLevel 删除课程等级
+// @Summary 删除课程等级
+// @Description 管理员删除课程等级字典项；无返回载荷
+// @Tags 管理端-培训目录
+// @Produce json
+// @Security BearerAuth
+// @Param level_id path int true "等级ID"
+// @Success 200 {object} response.R "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "课程等级不存在"
+// @Router /admin/level/{level_id} [delete]
 func (h *TrainingCatalogHandler) DeleteLevel(c *gin.Context) {
 	Endpoint[levelIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*levelIDReq, error) {
@@ -535,7 +671,17 @@ type certificateTemplateIDReq struct {
 	ID int
 }
 
-// DeleteCertificateTemplate 删除证书模板 DELETE /api/admin/certificate-template/:id
+// DeleteCertificateTemplate 删除证书模板
+// @Summary 删除证书模板
+// @Description 管理员删除证书模板；无返回载荷
+// @Tags 管理端-培训目录
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "模板ID"
+// @Success 200 {object} response.R "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "证书模板不存在"
+// @Router /admin/certificate-template/{id} [delete]
 func (h *TrainingCatalogHandler) DeleteCertificateTemplate(c *gin.Context) {
 	Endpoint[certificateTemplateIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*certificateTemplateIDReq, error) {
@@ -566,7 +712,17 @@ type questionTagIDReq struct {
 	ID int
 }
 
-// DeleteQuestionTag 删除题库标签 DELETE /api/admin/question-tag/:id
+// DeleteQuestionTag 删除题库标签
+// @Summary 删除题库标签
+// @Description 管理员/讲师删除题库标签；无返回载荷
+// @Tags 题库管理
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "标签ID"
+// @Success 200 {object} response.R "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "题库标签不存在"
+// @Router /admin/question-tag/{id} [delete]
 func (h *TrainingCatalogHandler) DeleteQuestionTag(c *gin.Context) {
 	Endpoint[questionTagIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*questionTagIDReq, error) {
@@ -598,7 +754,19 @@ type swapSpecialtySortReq struct {
 	SwapWith int
 }
 
-// SwapSpecialtySort 交换专业方向排序 PUT /api/admin/specialty/:specialty_id/sort（body: {"swap_with": <id>}）
+// SwapSpecialtySort 交换专业方向排序
+// @Summary 交换专业方向排序
+// @Description 管理员交换两个专业方向的排序位置（body: {"swap_with": <id>}）；无返回载荷
+// @Tags 管理端-培训目录
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param specialty_id path int true "专业方向ID"
+// @Param body body object true "交换目标 {swap_with: int}"
+// @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/specialty/{specialty_id}/sort [put]
 func (h *TrainingCatalogHandler) SwapSpecialtySort(c *gin.Context) {
 	Endpoint[swapSpecialtySortReq, struct{}]{
 		Parse: func(c *gin.Context) (*swapSpecialtySortReq, error) {
@@ -636,7 +804,19 @@ type swapLevelSortReq struct {
 	SwapWith int
 }
 
-// SwapLevelSort 交换课程等级排序 PUT /api/admin/level/:level_id/sort（body: {"swap_with": <id>}）
+// SwapLevelSort 交换课程等级排序
+// @Summary 交换课程等级排序
+// @Description 管理员交换两个课程等级的排序位置（body: {"swap_with": <id>}）；无返回载荷
+// @Tags 管理端-培训目录
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param level_id path int true "等级ID"
+// @Param body body object true "交换目标 {swap_with: int}"
+// @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/level/{level_id}/sort [put]
 func (h *TrainingCatalogHandler) SwapLevelSort(c *gin.Context) {
 	Endpoint[swapLevelSortReq, struct{}]{
 		Parse: func(c *gin.Context) (*swapLevelSortReq, error) {
@@ -674,7 +854,19 @@ type setQuestionTagsReq struct {
 	TagIDs     []int
 }
 
-// SetQuestionTags 全量替换题目标签 PUT /api/admin/question/:question_id/tags
+// SetQuestionTags 全量替换题目标签
+// @Summary 题目打标
+// @Description 全量替换题目的题库标签（管理端/讲师端），返回写入后的标签ID集合
+// @Tags 题库管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param question_id path int true "题目ID"
+// @Param body body object true "标签ID列表" example({"tag_ids":[1,2]})
+// @Success 200 {object} response.R{data=service.QuestionTagsResultDTO} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/question/{question_id}/tags [put]
 func (h *TrainingCatalogHandler) SetQuestionTags(c *gin.Context) {
 	Endpoint[setQuestionTagsReq, service.QuestionTagsResultDTO]{
 		Parse: func(c *gin.Context) (*setQuestionTagsReq, error) {
@@ -716,7 +908,7 @@ func (h *TrainingCatalogHandler) SetQuestionTags(c *gin.Context) {
 // @Tags 学员端-目录
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} response.R "证件列表"
+// @Success 200 {object} response.R{data=service.CredentialListDTO} "success"
 // @Router /credentials [get]
 func (h *TrainingCatalogHandler) ListPublicCredentials(c *gin.Context) {
 	Endpoint[struct{}, []service.CredentialDict]{
@@ -725,7 +917,7 @@ func (h *TrainingCatalogHandler) ListPublicCredentials(c *gin.Context) {
 			return &result, nil
 		},
 		Render: func(c *gin.Context, _ *struct{}, resp *[]service.CredentialDict, _ error) {
-			response.Success(c, gin.H{"credentials": deref(resp)})
+			response.Success(c, service.CredentialListDTO{Credentials: *resp})
 		},
 	}.Handle(c)
 }
@@ -737,21 +929,29 @@ func (h *TrainingCatalogHandler) ListPublicCredentials(c *gin.Context) {
 // @Tags 学员端-目录
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} response.R "分组列表"
+// @Success 200 {object} response.R{data=service.GroupedCredentialsDTO} "success"
 // @Router /credentials/grouped [get]
 func (h *TrainingCatalogHandler) ListGroupedCredentials(c *gin.Context) {
-	Endpoint[struct{}, map[string][]service.CredentialDict]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*map[string][]service.CredentialDict, error) {
+	Endpoint[struct{}, service.GroupedCredentialsDTO]{
+		Invoke: func(ctx context.Context, _ *struct{}) (*service.GroupedCredentialsDTO, error) {
 			result := h.svc.ListGroupedCredentials()
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *map[string][]service.CredentialDict, _ error) {
-			response.Success(c, deref(resp))
+		Render: func(c *gin.Context, _ *struct{}, resp *service.GroupedCredentialsDTO, _ error) {
+			response.Success(c, *resp)
 		},
 	}.Handle(c)
 }
 
-// ListCredentials 目标证件列表（管理端，含停用）GET /api/admin/credentials
+// ListCredentials 目标证件列表（管理端，含停用）
+// @Summary 证件列表（管理端）
+// @Description 管理端目标证件列表（含停用项）
+// @Tags 管理端-培训目录
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.R{data=service.CredentialListDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/credentials [get]
 func (h *TrainingCatalogHandler) ListCredentials(c *gin.Context) {
 	Endpoint[struct{}, []service.CredentialDict]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*[]service.CredentialDict, error) {
@@ -764,7 +964,18 @@ func (h *TrainingCatalogHandler) ListCredentials(c *gin.Context) {
 	}.Handle(c)
 }
 
-// CreateCredential 创建目标证件 POST /api/admin/credential
+// CreateCredential 创建目标证件
+// @Summary 创建证件
+// @Description 管理员创建目标证件字典项
+// @Tags 管理端-培训目录
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body service.CredentialInput true "证件"
+// @Success 201 {object} response.R{data=service.CredentialDict} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/credential [post]
 func (h *TrainingCatalogHandler) CreateCredential(c *gin.Context) {
 	Endpoint[service.CredentialInput, service.CredentialDict]{
 		Parse: func(c *gin.Context) (*service.CredentialInput, error) {
@@ -797,7 +1008,19 @@ type credentialUpdateReq struct {
 	In service.CredentialInput
 }
 
-// UpdateCredential 更新目标证件 PUT /api/admin/credential/:id
+// UpdateCredential 更新目标证件
+// @Summary 更新证件
+// @Description 管理员更新目标证件字典项
+// @Tags 管理端-培训目录
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "证件ID"
+// @Param body body service.CredentialInput true "证件"
+// @Success 200 {object} response.R{data=service.CredentialDict} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "证件不存在"
+// @Router /admin/credential/{id} [put]
 func (h *TrainingCatalogHandler) UpdateCredential(c *gin.Context) {
 	Endpoint[credentialUpdateReq, service.CredentialDict]{
 		Parse: func(c *gin.Context) (*credentialUpdateReq, error) {
@@ -833,7 +1056,17 @@ type credentialIDReq struct {
 	ID int
 }
 
-// DeleteCredential 删除目标证件 DELETE /api/admin/credential/:id
+// DeleteCredential 删除目标证件
+// @Summary 删除证件
+// @Description 管理员删除目标证件字典项；无返回载荷
+// @Tags 管理端-培训目录
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "证件ID"
+// @Success 200 {object} response.R "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "证件不存在"
+// @Router /admin/credential/{id} [delete]
 func (h *TrainingCatalogHandler) DeleteCredential(c *gin.Context) {
 	Endpoint[credentialIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*credentialIDReq, error) {
@@ -865,7 +1098,19 @@ type swapCredentialSortReq struct {
 	SwapWith int
 }
 
-// SwapCredentialSort 交换目标证件排序 PUT /api/admin/credential/:id/sort
+// SwapCredentialSort 交换目标证件排序
+// @Summary 交换证件排序
+// @Description 管理员交换两个目标证件的排序位置（body: {"swap_with": <id>}）；无返回载荷
+// @Tags 管理端-培训目录
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "证件ID"
+// @Param body body object true "交换目标 {swap_with: int}"
+// @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/credential/{id}/sort [put]
 func (h *TrainingCatalogHandler) SwapCredentialSort(c *gin.Context) {
 	Endpoint[swapCredentialSortReq, struct{}]{
 		Parse: func(c *gin.Context) (*swapCredentialSortReq, error) {
@@ -904,7 +1149,7 @@ func (h *TrainingCatalogHandler) SwapCredentialSort(c *gin.Context) {
 // @Tags 学员端-目录
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} response.R "当前证件"
+// @Success 200 {object} response.R{data=service.CurrentCredentialDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /me/credential [get]
 func (h *TrainingCatalogHandler) GetCurrentCredential(c *gin.Context) {
@@ -919,10 +1164,10 @@ func (h *TrainingCatalogHandler) GetCurrentCredential(c *gin.Context) {
 		return
 	}
 	if dict == nil {
-		response.Success(c, gin.H{"credential": nil})
+		response.Success(c, service.CurrentCredentialDTO{Credential: nil})
 		return
 	}
-	response.Success(c, gin.H{"credential": dict})
+	response.Success(c, service.CurrentCredentialDTO{Credential: dict})
 }
 
 // SetCurrentCredential 设置当前证件 PATCH /api/me/credential
@@ -934,7 +1179,7 @@ func (h *TrainingCatalogHandler) GetCurrentCredential(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param body body object true "证件 ID {credential_id: int}"
-// @Success 200 {object} response.R "已切换"
+// @Success 200 {object} response.R{data=service.CurrentCredentialDTO} "success"
 // @Failure 400 {object} response.R "证件不存在"
 // @Failure 401 {object} response.R "未认证"
 // @Router /me/credential [patch]
@@ -960,7 +1205,7 @@ func (h *TrainingCatalogHandler) SetCurrentCredential(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
-	response.SuccessWithMsg(c, "当前证件已切换", gin.H{"credential": dict})
+	response.SuccessWithMsg(c, "当前证件已切换", service.CurrentCredentialDTO{Credential: dict})
 }
 
 // ListPositions 岗位列表（管理端含停用项）GET /api/admin/positions

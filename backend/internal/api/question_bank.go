@@ -69,7 +69,25 @@ type listQuestionsReq struct {
 	Sort string
 }
 
-// ListQuestions 题目列表分页 GET /api/question-bank/questions
+// ListQuestions 题目列表分页
+// @Summary 题目列表
+// @Description 题库分页查询（可按题型/状态/关键词/标签/证件过滤；sort=id_asc 按 ID 升序，缺省最新提交优先）
+// @Tags 题库管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(20)
+// @Param type query string false "题型 single_choice|multi_choice|true_false|fault_image|short_answer"
+// @Param status query string false "状态 draft|pending|published"
+// @Param keyword query string false "关键词"
+// @Param tag_id query int false "题库标签ID"
+// @Param credential_id query int false "目标证件ID"
+// @Param sort query string false "排序口径 id_asc"
+// @Success 200 {object} response.R{data=service.QuestionPageDTO} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /question-bank/questions [get]
 func (h *QuestionBankHandler) ListQuestions(c *gin.Context) {
 	Endpoint[listQuestionsReq, service.QuestionPageDTO]{
 		Parse: func(c *gin.Context) (*listQuestionsReq, error) {
@@ -100,7 +118,18 @@ type createQuestionReq struct {
 	CreatedByType string
 }
 
-// CreateQuestion 创建题目 POST /api/question-bank/questions
+// CreateQuestion 创建题目
+// @Summary 创建题目
+// @Description 创建题目（讲师/管理员，需 CapQuestionAuthor）
+// @Tags 题库管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "题目" example({"type":"single_choice","content":"题干","options":{"A":"选项A"},"answer":"A","score":3})
+// @Success 201 {object} response.R{data=service.QuestionDTO} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /question-bank/questions [post]
 func (h *QuestionBankHandler) CreateQuestion(c *gin.Context) {
 	Endpoint[createQuestionReq, service.QuestionDTO]{
 		Parse: func(c *gin.Context) (*createQuestionReq, error) {
@@ -136,7 +165,18 @@ type batchPublishReq struct {
 	QuestionIDs []int `json:"question_ids"`
 }
 
-// BatchPublish 批量发布（仅管理员）POST /api/question-bank/questions/batch-publish
+// BatchPublish 批量发布（仅管理员）
+// @Summary 批量发布题目
+// @Description 批量把待审题目置为已发布，返回发布条数
+// @Tags 题库管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "题目ID列表" example({"question_ids":[1,2]})
+// @Success 200 {object} response.R{data=service.QuestionPublishResultDTO} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /question-bank/questions/batch-publish [post]
 func (h *QuestionBankHandler) BatchPublish(c *gin.Context) {
 	Endpoint[batchPublishReq, service.QuestionPublishResultDTO]{
 		Parse: func(c *gin.Context) (*batchPublishReq, error) {
@@ -164,7 +204,18 @@ type batchRejectReq struct {
 	Reason      string `json:"reason"`
 }
 
-// BatchReject 批量驳回（仅管理员）POST /api/question-bank/questions/batch-reject
+// BatchReject 批量驳回（仅管理员）
+// @Summary 批量驳回题目
+// @Description 批量驳回题目并记录原因，返回驳回条数
+// @Tags 题库管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "题目ID列表与原因" example({"question_ids":[1,2],"reason":"题干不完整"})
+// @Success 200 {object} response.R{data=service.QuestionRejectResultDTO} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /question-bank/questions/batch-reject [post]
 func (h *QuestionBankHandler) BatchReject(c *gin.Context) {
 	Endpoint[batchRejectReq, service.QuestionRejectResultDTO]{
 		Parse: func(c *gin.Context) (*batchRejectReq, error) {
@@ -196,7 +247,18 @@ type batchImportReq struct {
 	UserID    int
 }
 
-// BatchImport 批量导入 POST /api/question-bank/questions/batch-import
+// BatchImport 批量导入
+// @Summary 批量导入题目
+// @Description 批量导入题目，返回成功/失败条数与逐条失败原因
+// @Tags 题库管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "题目数组" example({"questions":[{"type":"single_choice","content":"题干","answer":"A"}]})
+// @Success 200 {object} response.R{data=service.QuestionImportResultDTO} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /question-bank/questions/batch-import [post]
 func (h *QuestionBankHandler) BatchImport(c *gin.Context) {
 	Endpoint[batchImportReq, service.QuestionImportResultDTO]{
 		Parse: func(c *gin.Context) (*batchImportReq, error) {
@@ -227,7 +289,17 @@ type questionIDReq struct {
 	ID int
 }
 
-// GetQuestion 题目详情 GET /api/question-bank/questions/:question_id
+// GetQuestion 题目详情
+// @Summary 题目详情
+// @Description 按 ID 查询题目（含答案/解析，管理面口径）
+// @Tags 题库管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param question_id path int true "题目ID"
+// @Success 200 {object} response.R{data=service.QuestionDTO} "success"
+// @Failure 404 {object} response.R "题目不存在"
+// @Router /question-bank/questions/{question_id} [get]
 func (h *QuestionBankHandler) GetQuestion(c *gin.Context) {
 	Endpoint[questionIDReq, service.QuestionDTO]{
 		Parse: func(c *gin.Context) (*questionIDReq, error) {
@@ -260,7 +332,19 @@ type updateQuestionReq struct {
 	Data map[string]any
 }
 
-// UpdateQuestion 更新题目 PUT /api/question-bank/questions/:question_id
+// UpdateQuestion 更新题目
+// @Summary 更新题目
+// @Description 按 ID 更新题目字段（讲师/管理员，需 CapQuestionAuthor）
+// @Tags 题库管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param question_id path int true "题目ID"
+// @Param body body object true "题目字段（部分更新）"
+// @Success 200 {object} response.R{data=service.QuestionDTO} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /question-bank/questions/{question_id} [put]
 func (h *QuestionBankHandler) UpdateQuestion(c *gin.Context) {
 	Endpoint[updateQuestionReq, service.QuestionDTO]{
 		Parse: func(c *gin.Context) (*updateQuestionReq, error) {
@@ -291,7 +375,17 @@ func (h *QuestionBankHandler) UpdateQuestion(c *gin.Context) {
 	}.Handle(c)
 }
 
-// DeleteQuestion 删除题目 DELETE /api/question-bank/questions/:question_id
+// DeleteQuestion 删除题目
+// @Summary 删除题目
+// @Description 按 ID 删除题目（讲师/管理员，需 CapQuestionAuthor）；无返回载荷
+// @Tags 题库管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param question_id path int true "题目ID"
+// @Success 200 {object} response.R "success"
+// @Failure 404 {object} response.R "题目不存在"
+// @Router /question-bank/questions/{question_id} [delete]
 func (h *QuestionBankHandler) DeleteQuestion(c *gin.Context) {
 	Endpoint[questionIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*questionIDReq, error) {
@@ -317,7 +411,18 @@ func (h *QuestionBankHandler) DeleteQuestion(c *gin.Context) {
 	}.Handle(c)
 }
 
-// PublishQuestion 发布题目（仅管理员）POST /api/question-bank/questions/:question_id/publish
+// PublishQuestion 发布题目（仅管理员）
+// @Summary 发布题目
+// @Description 单题发布（需 CapQuestionReview），返回发布后的题目
+// @Tags 题库管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param question_id path int true "题目ID"
+// @Success 200 {object} response.R{data=service.QuestionDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "题目不存在"
+// @Router /question-bank/questions/{question_id}/publish [post]
 func (h *QuestionBankHandler) PublishQuestion(c *gin.Context) {
 	Endpoint[questionIDReq, service.QuestionDTO]{
 		Parse: func(c *gin.Context) (*questionIDReq, error) {
@@ -350,7 +455,19 @@ type rejectQuestionReq struct {
 	Reason string
 }
 
-// RejectQuestion 驳回题目（仅管理员）POST /api/question-bank/questions/:question_id/reject
+// RejectQuestion 驳回题目（仅管理员）
+// @Summary 驳回题目
+// @Description 单题驳回并记录原因（需 CapQuestionReview），返回驳回后的题目
+// @Tags 题库管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param question_id path int true "题目ID"
+// @Param body body object true "驳回原因" example({"reason":"题干不完整"})
+// @Success 200 {object} response.R{data=service.QuestionDTO} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /question-bank/questions/{question_id}/reject [post]
 func (h *QuestionBankHandler) RejectQuestion(c *gin.Context) {
 	Endpoint[rejectQuestionReq, service.QuestionDTO]{
 		Parse: func(c *gin.Context) (*rejectQuestionReq, error) {
@@ -383,7 +500,16 @@ func (h *QuestionBankHandler) RejectQuestion(c *gin.Context) {
 	}.Handle(c)
 }
 
-// GetStats 题库统计 GET /api/question-bank/stats
+// GetStats 题库统计
+// @Summary 题库统计
+// @Description 按当前证件题库池口径统计总数/按题型/按状态
+// @Tags 题库管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.R{data=service.QuestionBankStatsDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /question-bank/stats [get]
 func (h *QuestionBankHandler) GetStats(c *gin.Context) {
 	Endpoint[struct{}, service.QuestionBankStatsDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.QuestionBankStatsDTO, error) {
@@ -396,7 +522,18 @@ func (h *QuestionBankHandler) GetStats(c *gin.Context) {
 	}.Handle(c)
 }
 
-// UploadImage 上传题目图片 POST /api/question-bank/upload-image
+// UploadImage 上传题目图片
+// @Summary 上传题目图片
+// @Description multipart 上传题干图片，返回可访问的图片直链
+// @Tags 题库管理
+// @Accept multipart/form-data
+// @Produce json
+// @Security BearerAuth
+// @Param image formData file true "图片文件"
+// @Success 200 {object} response.R{data=service.QuestionImageUploadDTO} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /question-bank/upload-image [post]
 func (h *QuestionBankHandler) UploadImage(c *gin.Context) {
 	file, err := c.FormFile("image")
 	if err != nil {
@@ -428,5 +565,5 @@ func (h *QuestionBankHandler) UploadImage(c *gin.Context) {
 		response.ServerError(c, "图片上传失败: "+err.Error())
 		return
 	}
-	response.SuccessWithMsg(c, "图片上传成功", gin.H{"url": url})
+	response.SuccessWithMsg(c, "图片上传成功", service.QuestionImageUploadDTO{URL: url})
 }
