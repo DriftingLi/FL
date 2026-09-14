@@ -663,13 +663,16 @@ var Domains = []Domain{
 		Name:  "featured",
 		Title: "内容精选管理端（/api/admin/featured-content*：列表 / 详情 / 增删改 / 发布 / 图片上传）",
 		// 公开精选端点（/featured-contents、/featured-content/{id}、/featured-content/{id}/view）
-		// 的消费者是独立 Nuxt 门户仓（ADR-0001），不在本仓 frontend/src/api/** 消费面内，故不登记。
+		// 的主要消费者是独立 Nuxt 门户仓（ADR-0001）；**详情**自 ADR-0049 决策 4 起多了一个
+		// 消费者：训练域 Web 的「内容精选详情页」（搜索结果落点），故详情类型与端点在此登记。
 		Roots: []string{
 			"service.FeaturedContentPageResult",
 			"service.FeaturedContentAdminDetailDTO",
+			"service.FeaturedContentDetailDTO",
 			"service.FeaturedDeleteResult",
 		},
 		Endpoints: []Endpoint{
+			{Method: "GET", Path: "/featured-content/{id}"},
 			{Method: "GET", Path: "/admin/featured-contents"},
 			{Method: "GET", Path: "/admin/featured-content/{id}"},
 			{Method: "POST", Path: "/admin/featured-content"},

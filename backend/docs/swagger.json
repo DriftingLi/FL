@@ -9317,7 +9317,19 @@
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.FeaturedContentDetailDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "404": {
@@ -24849,6 +24861,66 @@
                 }
             }
         },
+        "service.FeaturedContentDetailDTO": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "string"
+                },
+                "category_label": {
+                    "type": "string"
+                },
+                "content": {
+                    "type": "string"
+                },
+                "content_id": {
+                    "type": "integer"
+                },
+                "cover_image": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "next": {
+                    "$ref": "#/definitions/service.FeaturedNavDTO"
+                },
+                "prev": {
+                    "$ref": "#/definitions/service.FeaturedNavDTO"
+                },
+                "published_at": {
+                    "type": "string",
+                    "x-nullable": true
+                },
+                "related": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.FeaturedContentDTO"
+                    }
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "summary": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "view_count": {
+                    "type": "integer"
+                }
+            }
+        },
         "service.FeaturedContentPageResult": {
             "type": "object",
             "properties": {
@@ -24874,6 +24946,26 @@
             "properties": {
                 "content_id": {
                     "type": "integer"
+                }
+            }
+        },
+        "service.FeaturedNavDTO": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "string"
+                },
+                "category_label": {
+                    "type": "string"
+                },
+                "content_id": {
+                    "type": "integer"
+                },
+                "published_at": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
                 }
             }
         },

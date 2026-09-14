@@ -1893,6 +1893,46 @@ definitions:
       view_count:
         type: integer
     type: object
+  service.FeaturedContentDetailDTO:
+    properties:
+      category:
+        type: string
+      category_label:
+        type: string
+      content:
+        type: string
+      content_id:
+        type: integer
+      cover_image:
+        type: string
+      created_at:
+        type: string
+      next:
+        $ref: '#/definitions/service.FeaturedNavDTO'
+      prev:
+        $ref: '#/definitions/service.FeaturedNavDTO'
+      published_at:
+        type: string
+        x-nullable: true
+      related:
+        items:
+          $ref: '#/definitions/service.FeaturedContentDTO'
+        type: array
+      sort_order:
+        type: integer
+      source:
+        type: string
+      status:
+        type: integer
+      summary:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+      view_count:
+        type: integer
+    type: object
   service.FeaturedContentPageResult:
     properties:
       items:
@@ -1910,6 +1950,19 @@ definitions:
     properties:
       content_id:
         type: integer
+    type: object
+  service.FeaturedNavDTO:
+    properties:
+      category:
+        type: string
+      category_label:
+        type: string
+      content_id:
+        type: integer
+      published_at:
+        type: string
+      title:
+        type: string
     type: object
   service.ForumAuthor:
     properties:
@@ -9528,7 +9581,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.FeaturedContentDetailDTO'
+              type: object
         "404":
           description: 不存在
           schema:

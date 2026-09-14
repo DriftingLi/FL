@@ -8,15 +8,32 @@
     content-width="narrow"
   >
     <template #top="{ collapsed }">
-      <CredentialSwitcher v-if="!chapterCourseId" :collapsed="collapsed" theme="dark" />
+      <div class="flex flex-col gap-2">
+        <CredentialSwitcher v-if="!chapterCourseId" :collapsed="collapsed" theme="dark" />
+        <!-- 布局级搜索入口（#984）：侧栏顶部一处 + ⌘/Ctrl+K 全工作区可达 -->
+        <button
+          type="button"
+          class="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] text-white/80 transition-colors hover:bg-white/10"
+          :class="collapsed ? 'justify-center' : ''"
+          aria-label="全局搜索"
+          @click="openSearch"
+        >
+          <el-icon><Search /></el-icon>
+          <template v-if="!collapsed">
+            <span>搜索</span>
+            <span class="ml-auto rounded border border-white/25 px-1 text-[11px]">⌘K</span>
+          </template>
+        </button>
+      </div>
     </template>
   </SidebarLayout>
 </template>
 
 <script setup lang="ts">
-import { computed, h, watch } from 'vue'
+import { computed, h, onBeforeUnmount, onMounted, watch } from 'vue'
 import type { Component } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { Search } from '@element-plus/icons-vue'
 import SidebarLayout from './SidebarLayout.vue'
 import CredentialSwitcher from '@/components/credential/CredentialSwitcher.vue'
 import { roleNavigation } from '@/config/navigation'
@@ -25,7 +42,33 @@ import type { NavItem } from '@/config/navigation'
 
 const studentNav = roleNavigation.student
 const route = useRoute()
+const router = useRouter()
 const courseStore = useCourseStore()
+
+/** 布局级搜索入口（#984）：已在搜索页则直接聚焦（自定义事件），否则带 focus=1 跳过去。 */
+function openSearch(): void {
+  if (route.path === '/training/search') {
+    window.dispatchEvent(new Event('focus-global-search'))
+    return
+  }
+  void router.push({ path: '/training/search', query: { focus: '1' } })
+}
+
+/** ⌘/Ctrl+K 打开搜索（全工作区可达）；卸载时摘掉监听，避免布局切换后残留。 */
+function onGlobalKeydown(e: KeyboardEvent): void {
+  if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+    e.preventDefault()
+    openSearch()
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onGlobalKeydown)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onGlobalKeydown)
+})
 
 // 章节学习路由下进入"课程章节模式"：侧栏第一项为返回课程中心，其余为章节列表
 const chapterCourseId = computed(() => {

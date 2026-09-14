@@ -3,6 +3,7 @@ import { unwrappedRequest } from './request'
 import { getValidAccessToken } from './client'
 import type {
   FeaturedContentAdminDetailDTO,
+  FeaturedContentDetailDTO,
   FeaturedContentDTO,
   FeaturedContentPageResult,
   FeaturedDeleteResult
@@ -38,9 +39,16 @@ export function categoryLabel(category: string): string {
   return featuredCategoryLabels[category] || '政策法规'
 }
 
-// ===== 公开接口已移除 =====
-// 官网门户重构为独立 Nuxt 仓库（ADR-0001）后，公开接口改由门户数据访问层消费
-// （portal/api/featured.ts，含 no_view=1 与客户端计数端点）；管理端接口保留于此。
+// ===== 公开详情：本仓 training 域的第二个消费者（ADR-0049 决策 4）=====
+// 公开列表/计数端点的消费者仍是独立 Nuxt 门户仓（ADR-0001，portal/api/featured.ts）；
+// 但**详情**自 ADR-0049 决策 4 起也被训练域消费——搜索结果的「内容精选」落点需要一个
+// 自包含的详情页（不再把学员带出工作区），故这里保留一个公开详情读取。
+export const featuredApi = {
+  /** 内容精选详情（公开端点；默认计数阅读量，传 no_view=1 时不计数） */
+  getDetail(id: number, params?: { no_view?: string }) {
+    return unwrappedRequest.get<FeaturedContentDetailDTO>(`/featured-content/${id}`, { params })
+  }
+}
 
 /** 管理端接口 */
 export const adminFeaturedApi = {

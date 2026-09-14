@@ -6,28 +6,49 @@
 
     <div class="mb-5 flex gap-3">
       <el-input
+        ref="inputRef"
         v-model="keyword"
         size="large"
-        placeholder="搜索课程 / 题目 / 资讯 / 帖子"
+        placeholder="搜索课程 / 章节 / 题目 / 内容精选 / 帖子"
         clearable
         class="flex-1"
-        @keyup.enter="doSearch"
+        @keyup.enter="submitSearch"
         @clear="resetSearch"
       >
         <template #prefix>
           <el-icon><Search /></el-icon>
         </template>
       </el-input>
-      <UiButton variant="primary" size="large" :loading="loading" @click="doSearch">搜索</UiButton>
+      <UiButton variant="primary" size="large" :loading="loading" @click="submitSearch">搜索</UiButton>
     </div>
 
-    <template v-if="searched">
-      <!-- #511：分类 tab 统一分段控件 -->
+    <!-- 未搜索态（空态两级之一）：本地历史 + 输入提示；历史只在端上（ADR-0049 决策 7） -->
+    <div v-if="!searched" class="rounded-card bg-panel p-5 shadow-card">
+      <template v-if="history.length > 0">
+        <div class="mb-3 flex items-center justify-between">
+          <span class="text-[15px] font-semibold text-ink">搜索历史</span>
+          <UiButton variant="text" size="small" @click="onClearHistory">清空</UiButton>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <span
+            v-for="kw in history"
+            :key="kw"
+            class="inline-flex items-center gap-1.5 rounded-full bg-canvas px-3 py-1 text-[13px] text-ink-2"
+          >
+            <span class="cursor-pointer" @click="searchWith(kw)">{{ kw }}</span>
+            <el-icon class="cursor-pointer text-ink-muted hover:text-bad" @click="onRemoveHistory(kw)"><Close /></el-icon>
+          </span>
+        </div>
+      </template>
+      <p v-else class="text-[13px] text-ink-3">输入关键词，搜索课程、章节正文、题目、内容精选与帖子</p>
+    </div>
+
+    <template v-else>
       <UiSegmentTabs
         :model-value="activeType"
         :options="typeTabOptions"
-        @update:model-value="(v: string) => { activeType = v as 'all' | SearchType; handleTabChange() }"
         class="mb-3"
+        @update:model-value="onTypeChange"
       />
 
       <div class="min-h-[200px] rounded-card bg-panel px-5 pb-4 shadow-card">
@@ -36,70 +57,70 @@
           title="搜索失败"
           description="网络或服务端异常，可重试"
           :retrying="retrying"
-          @retry="retryLoad"
+          @retry="retry"
         />
 
-        <UiSkeleton v-else-if="loading" variant="list" :count="6" />
+        <UiSkeleton v-else-if="loading && !hasAnyResult" variant="list" :count="6" />
 
         <template v-else>
-          <!-- 全部模式：四分区 -->
+          <!-- 全部模式：分区并列（ADR-0049 决策 5），区内已由后端排好 -->
           <template v-if="activeType === 'all' && allResult">
-            <div
-              v-for="section in sections"
-              :key="section.key"
-              class="border-b border-line py-3.5 last:border-b-0"
-            >
+            <div v-for="section in sections" :key="section.key" class="border-b border-line py-3.5 last:border-b-0">
               <div class="mb-2 flex items-baseline gap-2.5">
                 <span class="text-[15px] font-semibold text-ink">{{ section.label }}</span>
                 <span class="text-xs text-ink-3">{{ section.data.total }} 条</span>
+                <span
+                  v-if="section.data.total > section.data.items.length"
+                  class="ml-auto cursor-pointer text-[13px] text-brand"
+                  @click="onTypeChange(section.key)"
+                >查看全部</span>
               </div>
               <template v-if="section.data.items.length > 0">
                 <div
                   v-for="item in section.data.items"
-                  :key="`${item.type}-${item.id}`"
-                  class="flex items-baseline gap-2.5 rounded-[6px] px-2.5 py-2"
-                  :class="
-                    itemPath(item)
-                      ? 'cursor-pointer transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)] hover:bg-canvas'
-                      : ''
-                  "
+                  :key="item.type + '-' + item.id"
+                  class="cursor-pointer rounded-[6px] px-2.5 py-2 transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)] hover:bg-canvas"
                   @click="goItem(item)"
                 >
-                  <span class="max-w-[50%] shrink-0 truncate text-sm text-ink">{{ item.title }}</span>
-                  <span v-if="item.summary" class="truncate text-[13px] text-ink-3">{{ item.summary }}</span>
+                  <SearchResultRow :item="item" :keyword="keyword" />
                 </div>
               </template>
               <div v-else class="py-1 text-[13px] text-ink-muted">无匹配结果</div>
             </div>
+            <UiEmptyState v-if="isAllEmpty" description="没有找到相关内容">
+              <div class="mt-2 flex gap-2">
+                <UiButton size="small" @click="goPath('/training/question-bank')">去题库练习</UiButton>
+                <UiButton size="small" @click="goPath('/training/forum')">去论坛提问</UiButton>
+              </div>
+            </UiEmptyState>
           </template>
 
-          <!-- 指定类型模式：分页列表 -->
+          <!-- 指定类型：分页列表 -->
           <template v-else-if="pageResult">
             <template v-if="pageResult.items.length > 0">
               <div
                 v-for="item in pageResult.items"
-                :key="`${item.type}-${item.id}`"
-                class="flex items-baseline gap-2.5 rounded-[6px] px-2.5 py-2"
-                :class="
-                  itemPath(item)
-                    ? 'cursor-pointer transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)] hover:bg-canvas'
-                    : ''
-                "
+                :key="item.type + '-' + item.id"
+                class="cursor-pointer rounded-[6px] px-2.5 py-2 transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)] hover:bg-canvas"
                 @click="goItem(item)"
               >
-                <span class="max-w-[50%] shrink-0 truncate text-sm text-ink">{{ item.title }}</span>
-                <span v-if="item.summary" class="truncate text-[13px] text-ink-3">{{ item.summary }}</span>
+                <SearchResultRow :item="item" :keyword="keyword" />
               </div>
             </template>
-            <UiEmptyState v-else description="无匹配结果" />
+            <UiEmptyState v-else description="没有找到相关内容">
+              <div class="mt-2 flex gap-2">
+                <UiButton size="small" @click="goPath('/training/question-bank')">去题库练习</UiButton>
+                <UiButton size="small" @click="goPath('/training/forum')">去论坛提问</UiButton>
+              </div>
+            </UiEmptyState>
 
-            <div class="mt-4 flex justify-center" v-if="total > pageSize">
+            <div v-if="total > pageSize" class="mt-4 flex justify-center">
               <UiPagination
-      v-model:current-page="currentPage"
-      :page-size="pageSize"
-      :total="total"
-      @current-change="handlePageChange"
-    />
+                :current-page="currentPage"
+                :page-size="pageSize"
+                :total="total"
+                @current-change="onPageChange"
+              />
             </div>
           </template>
         </template>
@@ -109,12 +130,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
-import { Search } from '@element-plus/icons-vue'
-import { searchApi, type SearchAllResult, type SearchPageResult, type SearchItem, type SearchType } from '@/api/search'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { Close, Search } from '@element-plus/icons-vue'
+import { searchApi, type SearchAllResult, type SearchItem, type SearchPageResult, type SearchType } from '@/api/search'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useCredentialStore } from '@/stores/credential'
+import { clearSearchHistory, loadSearchHistory, pushSearchHistory, removeSearchHistory } from '@/utils/searchHistory'
+import SearchResultRow from '@/components/student/SearchResultRow.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
@@ -122,42 +145,30 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 
+const route = useRoute()
 const router = useRouter()
+const credentialStore = useCredentialStore()
+
+type TypeKey = 'all' | SearchType
+const VALID_TYPES: SearchType[] = ['course', 'chapter', 'question', 'content', 'topic']
 
 const keyword = ref('')
 const searched = ref(false)
-const activeType = ref<'all' | SearchType>('all')
+/** 输入框 ref：供 ⌘/Ctrl+K 跳到本页后聚焦（#984） */
+const inputRef = ref<{ focus?: () => void } | null>(null)
+const activeType = ref<TypeKey>('all')
+const history = ref<string[]>(loadSearchHistory())
 
-// #511：UiSegmentTabs 选项（全部分类 tab）
-const typeTabOptions = [
-  { label: '全部', value: 'all' },
-  { label: '课程', value: 'course' },
-  { label: '题目', value: 'question' },
-  { label: '资讯', value: 'content' },
-  { label: '帖子', value: 'topic' }
-]
 const allResult = ref<SearchAllResult | null>(null)
 const pageResult = ref<SearchPageResult | null>(null)
 
-// 三态 + 分页三件套收编（#388）：loader 按 activeType 分流（聚合 / 指定类型分页），
-// retry 因此天然回到触发失败的那次查询
-const {
-  loading,
-  loadError,
-  retrying,
-  retry: retryLoad,
-  page: currentPage,
-  pageSize,
-  total,
-  run: runSearch,
-  handlePageChange
-} = useAsyncPage(async () => {
+// 三态 + 分页三件套（#388）：loader 按 activeType 分流（聚合 / 指定类型分页），
+// retry 因此天然回到触发失败的那次查询。
+const { loading, loadError, retrying, retry, page: currentPage, pageSize, total, run } = useAsyncPage(async () => {
   const kw = keyword.value.trim()
   if (!kw) return
+  const credId = credentialStore.current?.id ?? undefined
   if (activeType.value === 'all') {
-    // 证件作用域（ADR-0047 §4）：公开搜索路由无登录上下文，显式传当前证件
-    const credId = credentialStore.current?.id ?? undefined
-    // type 缺省时后端返回各分区聚合（SearchAllResult）
     allResult.value = (await searchApi.search({ keyword: kw, credential_id: credId })) as SearchAllResult
     pageResult.value = null
   } else {
@@ -166,7 +177,7 @@ const {
       type: activeType.value,
       page: currentPage.value,
       page_size: pageSize.value,
-      credential_id: credentialStore.current?.id ?? undefined
+      credential_id: credId
     })) as SearchPageResult
     pageResult.value = res
     allResult.value = null
@@ -174,54 +185,172 @@ const {
   }
 })
 
-const credentialStore = useCredentialStore()
-
 const sections = computed(() => {
   const r = allResult.value
   if (!r) return []
   return [
-    { key: 'course', label: '课程', data: r.courses },
-    { key: 'question', label: '题目', data: r.questions },
-    { key: 'content', label: '资讯', data: r.contents },
-    { key: 'topic', label: '帖子', data: r.topics }
+    { key: 'course' as SearchType, label: '课程', data: r.courses },
+    { key: 'chapter' as SearchType, label: '章节', data: r.chapters },
+    { key: 'question' as SearchType, label: '题目', data: r.questions },
+    { key: 'content' as SearchType, label: '内容精选', data: r.contents },
+    { key: 'topic' as SearchType, label: '帖子', data: r.topics }
   ]
 })
 
-// 可跳转类型：课程 → 课程中心详情（query 打开），帖子 → 论坛详情；题目/资讯仅展示
+// 类型 tab 计数：聚合响应本来就带每分区 total（候选 W5），不必额外请求。
+const typeTabOptions = computed(() => {
+  const r = allResult.value
+  const count = (v: number | undefined) => (searched.value && r ? '(' + (v ?? 0) + ')' : '')
+  return [
+    { label: '全部', value: 'all' },
+    { label: '课程' + count(r?.courses.total), value: 'course' },
+    { label: '章节' + count(r?.chapters.total), value: 'chapter' },
+    { label: '题目' + count(r?.questions.total), value: 'question' },
+    { label: '内容精选' + count(r?.contents.total), value: 'content' },
+    { label: '帖子' + count(r?.topics.total), value: 'topic' }
+  ]
+})
+
+const hasAnyResult = computed(() => allResult.value !== null || pageResult.value !== null)
+const isAllEmpty = computed(() => {
+  const r = allResult.value
+  if (!r) return false
+  return r.courses.items.length === 0 && r.chapters.items.length === 0 && r.questions.items.length === 0 &&
+    r.contents.items.length === 0 && r.topics.items.length === 0
+})
+
+/** 落点：每条结果都必须能打开（ADR-0049 决策 2 的落点判据） */
 function itemPath(item: SearchItem): string {
-  if (item.type === 'course') {
-    return `/training/courses?course_id=${item.id}`
+  switch (item.type) {
+    case 'course':
+      return '/training/courses?course_id=' + item.id
+    case 'chapter':
+      return item.parent_id > 0 ? '/training/course/' + item.parent_id + '/chapter/' + item.id : ''
+    case 'question':
+      return '/training/questions/' + item.id
+    case 'content':
+      return '/training/featured/' + item.id
+    case 'topic':
+      return '/training/forum/' + item.id
+    default:
+      return ''
   }
-  if (item.type === 'topic') {
-    return `/training/forum/${item.id}`
-  }
-  return ''
 }
 
 function goItem(item: SearchItem) {
   const path = itemPath(item)
-  if (path) {
-    router.push(path)
-  }
+  if (path) void router.push(path)
 }
 
-/** 新搜索入口：回到聚合视图并重置页码，装载交给 runSearch（按 activeType 分流） */
-async function doSearch() {
-  if (!keyword.value.trim()) return
+function goPath(path: string) {
+  void router.push(path)
+}
+
+/** URL 状态同步（候选 W2）：刷新、后退、分享都能复现同一次搜索 */
+function syncUrl() {
+  const query: Record<string, string> = {}
+  const kw = keyword.value.trim()
+  if (kw) query.keyword = kw
+  if (activeType.value !== 'all') query.type = activeType.value
+  if (currentPage.value > 1) query.page = String(currentPage.value)
+  void router.replace({ query })
+}
+
+async function submitSearch() {
+  const kw = keyword.value.trim()
+  if (!kw) {
+    resetSearch()
+    return
+  }
+  history.value = pushSearchHistory(kw)
   searched.value = true
   activeType.value = 'all'
   currentPage.value = 1
-  await runSearch()
+  syncUrl()
+  await run()
 }
 
-function handleTabChange() {
+function searchWith(kw: string) {
+  keyword.value = kw
+  void submitSearch()
+}
+
+function onTypeChange(value: string) {
+  const next = value as TypeKey
+  if (next === activeType.value) return
+  activeType.value = next
   currentPage.value = 1
-  void runSearch()
+  syncUrl()
+  void run()
+}
+
+function onPageChange(page: number) {
+  currentPage.value = page
+  syncUrl()
+  void run()
 }
 
 function resetSearch() {
+  keyword.value = ''
   searched.value = false
+  activeType.value = 'all'
+  currentPage.value = 1
   allResult.value = null
   pageResult.value = null
+  syncUrl()
 }
+
+function onRemoveHistory(kw: string) {
+  history.value = removeSearchHistory(kw)
+}
+
+function onClearHistory() {
+  clearSearchHistory()
+  history.value = []
+}
+
+function normalizeType(raw: unknown): TypeKey {
+  return typeof raw === 'string' && (VALID_TYPES as string[]).includes(raw) ? (raw as SearchType) : 'all'
+}
+
+/** 首屏从 URL 复现搜索态；带 query 打开即直接出结果；⌘/Ctrl+K 带 focus=1 时聚焦输入框 */
+function focusInput() {
+  void nextTick(() => inputRef.value?.focus?.())
+}
+
+onMounted(async () => {
+  window.addEventListener('focus-global-search', focusInput)
+  if (route.query.focus === '1') {
+    focusInput()
+  }
+  const kw = typeof route.query.keyword === 'string' ? route.query.keyword : ''
+  if (!kw) return
+  keyword.value = kw
+  activeType.value = normalizeType(route.query.type)
+  currentPage.value = Number(route.query.page ?? 1) || 1
+  searched.value = true
+  await run()
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('focus-global-search', focusInput)
+})
+
+// 浏览器前进/后退：只在与当前输入不一致时重装，避免与 replace 形成回环
+watch(
+  () => route.query.keyword,
+  (raw) => {
+    const kw = typeof raw === 'string' ? raw : ''
+    if (kw === keyword.value) return
+    keyword.value = kw
+    if (!kw) {
+      resetSearch()
+      return
+    }
+    activeType.value = normalizeType(route.query.type)
+    currentPage.value = Number(route.query.page ?? 1) || 1
+    searched.value = true
+    void run()
+  }
+)
 </script>
