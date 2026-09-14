@@ -94,6 +94,19 @@ function scanContract(sources) {
   must(adr.includes('hx-busy.ps1'), 'H9', 'ADR-0008 未记录 hx-busy.ps1 这个共享载体');
   must(adr.includes('git status'), 'H9', 'ADR-0008 未写「跑完 HBuilderX 门后先 git status 看 manifest 是否被改脏」');
 
+  // H10 锁交接（2026-09-14 加）：dev-finish 要在**一个临界区**里连跑三个需要 HBuilderX 的步骤
+  // （编译门 → 真运行部署 → 逐页截图），若它自己持锁再调子脚本，子进程会看到父进程的新鲜锁
+  // 而一直等到超时 → **自死锁**。故引入 `$env:HX_LOCK_OWNER` 交接：父持锁后把 PID 写进 env，
+  // 子脚本认到「同一个持有者」就直接复用，不再加锁。
+  must(helper.includes('HX_LOCK_OWNER'), 'H10', 'helper 未实现 $env:HX_LOCK_OWNER 锁交接（dev-finish 持锁时会自死锁）');
+  must(helper.includes('function Test-HxLockInherited'), 'H10', 'helper 缺 Test-HxLockInherited');
+  must(helper.includes('result=inherited'), 'H10', 'helper 未输出 HX_BUSY ... result=inherited 交接行');
+
+  // H11 交接必须 fail-safe：**只有 env 里的 PID 与锁文件里的 PID 一致**才允许跳过加锁。
+  // 否则父进程崩溃后 env 残留（或被子进程继承到无关场景）会让后续脚本**绕过互斥锁**，
+  // 直接回到「并发抢主程序 → 假失败」那个坑里。
+  must(helper.includes('-eq "$($env:HX_LOCK_OWNER)"'), 'H11', 'helper 的交接未比对「env PID == 锁文件 PID」（照抄即放开互斥锁）');
+
   return violations;
 }
 
@@ -119,7 +132,10 @@ describe('HBuilderX 忙检测契约（单实例串行资源，2026-09-12）', ()
       ['H7', { ...real, helper: real.helper.replace(/\[switch\]\$NoWait/g, '[switch]$WaitForever') }],
       ['H8', { ...real, helper: real.helper.replace(/HX_BUSY wait=/g, 'BUSY wait=') }],
       ['H9', { ...real, adr: real.adr.replace(/单实例/g, '多实例') }],
-      ['H9', { ...real, adr: real.adr.replace(/git status/g, 'git diff') }]
+      ['H9', { ...real, adr: real.adr.replace(/git status/g, 'git diff') }],
+      // H10/H11：交接机制与其 fail-safe 分开注入，确保两条规则各自有效
+      ['H10', { ...real, helper: real.helper.replace(/HX_LOCK_OWNER/g, 'HX_LOCK_OTHER') }],
+      ['H11', { ...real, helper: real.helper.replace(/-eq "\$\(\$env:HX_LOCK_OWNER\)"/g, '-ne ""') }]
     ];
     // 注入一律用**全局**替换（/…/g）：判据多用 includes 判「存在」，若目标文本在文件里有第二处，
     // 只替换第一处会让注入静默失效 ⇒ 自检假绿。2026-09-13 实测踩中：ADR-0008 新增一句
