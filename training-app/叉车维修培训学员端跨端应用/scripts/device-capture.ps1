@@ -31,6 +31,10 @@
 
     原因一句话：**取证不该改变被取证的对象**——而维护者的调试会话本身正是要被取证的对象。
 
+    ⚠️ **这些限制不只是自律，也是系统硬约束**：2026-09-13 实测，本机 `INJECT_EVENTS` 被系统硬拒
+    （见下「切页」一节的三条根因）⇒ 即使想注入输入事件也做不到。也就是说，「只读」在这台设备上
+    既是纪律，也是**唯一可行**的方式 —— 所以上面的禁令没有「只是保守」的余地。
+
     只用只读命令：adb devices、adb -s <dev> exec-out screencap -p、adb -s <dev> shell dumpsys …、
     adb -s <dev> shell logcat -d（-d = dump 后立即退出，**不清**缓冲）。
 
@@ -52,8 +56,41 @@
     **实测该意图未能让 App 换页**：五页连跑，`*-after.png` 的 SHA256 **完全相同**、实拍内容为同一页（App 停在原页）。
     即：**`-AllowAppStart` 目前只能采到「当前那一页」，做不到逐页。**
     `docs/verification/device/624-checklist.md` 原文已注明该分支「未在真机跑过」——本次是它的第一次真机实测，结论是不工作。
-    已知可用的替代切页机制是 HBuilderX 的 `cli launch app-android --pagePath <页>`（实测能进目标页），
-    但每页都要过一遍 HBuilderX，成本高 ⇒ **是否为此更换切页机制待裁定**，本脚本不做猜测性改动。
+
+    #### 为什么「不生效」：三条机械根因（2026-09-13 实测 · #937 取证会话补记）
+    上面只记了「不生效」，**没记「为什么」**。2026-09-13 为 #937 做真机探针取证时把「为什么」查清了 ——
+    结论比原文更硬：**这不是「意图没生效」，是机械上根本不可能**。
+    设备：小米 2510DRK44C（`annibale`）无线调试；adb `D:\android-sdk\platform-tools\adb.exe` v1.0.41。三条路全部堵死：
+
+    1. **输入注入被系统硬拒** ⇒ 无法滚动、无法点按。
+       `adb shell input swipe 578 2100 578 300 800` 与备选 `adb shell input roll 0 -8` 均报
+       `java.lang.SecurityException: Injecting input events requires the caller … to have the INJECT_EVENTS permission`。
+    2. **`UniPortraitPageActivity` 未导出** ⇒ adb 无法向它发 intent。
+       `am start -n io.dcloud.uniappx/…UniPortraitPageActivity -a android.intent.action.VIEW -d uniapp://…` 报
+       `SecurityException: Permission Denial: … not exported from uid 10411`。
+       **这正是 #898 那次「五图同哈希」的机制**：意图从未送达，App 自然停在原页 —— 与下面「页身份」那条硬规互为印证。
+    3. **`uniapp://` scheme 未注册** ⇒ 连按包名解析都失败（`Error: Activity not started, unable to resolve Intent`）
+       ⇒ **不存在「换个 intent 写法就能切页」的余地**。
+
+    ⚠️ 因此**不要再去试新的 deeplink / intent 写法**：三条里两条是**系统级拒绝**（权限 + 未导出），不是拼写问题
+    —— #937 会话一开始正是在这条路上白试了一轮。
+
+    #### 可靠替代（本次实测可用）：把目标页临时置为 `pages.json` 的**首个 page**
+    把目标页**临时**放进 `pages.json` 的 `pages` 数组**首项**（= App 的**启动页**），由**人**点一次「运行到手机」，
+    App 一启动就在目标页 —— 无需滚动、无需点按、无需 deeplink。本次探针取证就是这么做的：
+    改 `pages.json` → 人点运行 → `adb exec-out screencap -p` 只读抓图 → **还原**。
+    ⚠️ `pages.json` 是「运行时面 / 打包面」判据来源（AGENTS.md 已钉此坑位）：临时改动用完**必须** `git status`
+    核对并还原，**别误提交**（误提交会让 PR 凭空命中 ④b 云打包门）。
+
+    #### 订正：`cli launch --pagePath` 在本脚本语境下**不是**可用替代（2026-09-13 实测）
+    上游原文曾把 HBuilderX 的 `cli launch app-android --pagePath <页>` 写成可用的替代切页机制（未注明前提）。
+    按实测订正为下面两条 —— 缺任何一条都会误导后续会话：
+    - 该路径**需先建立 CLI 通道**：GUI 已在运行时直接调 `cli.exe` 报「与主程序的连接已中断，可能已关闭。
+      请运行 `cli open` 重新启动后再试」（CLI 靠与主程序的本地 IPC）；
+    - 且**每页都要过一遍 HBuilderX**（单实例串行资源 ⇒ 会与维护者的 GUI 编译 / 运行互相排队），成本高。
+
+    ⇒ 在「本脚本可能正跑在维护者**正在调试**的真机上」这一前提下，该路径**不可靠**，本脚本**不采用**它；
+    **是否为此更换切页机制仍待裁定**，本脚本不做猜测性改动。
 
     ## 判成败（只看输出里的 DEVICE_CAPTURE_RESULT=）
     断言（不满足 ⇒ exit 1）：前台 Activity 可取得、截图落盘且非 0 字节、窗口内无 FATAL EXCEPTION、
@@ -116,6 +153,8 @@
     退出码：0 = 通过；1 = 断言失败；2 = 环境不可用。
     实测状态：**设备探测 / 截图 / dumpsys / logcat -d 只读路径已实测**（2026-09-12，见 PR 正文）；
     -AllowAppStart 切页分支与归档入库**待跑**（维护者当时正在用这台真机调试 #781，不得打断）。
+    切页**已定性为机械上不可用**（2026-09-13 实测三条根因，见上「切页」一节）；可靠替代是
+    **临时把目标页置为 `pages.json` 首项 + 人点一次运行**，用完还原。
 #>
 [CmdletBinding()]
 param(

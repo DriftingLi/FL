@@ -20,6 +20,11 @@
  *   D10 切页模式必须有「页身份」fail-closed 断言：截图记 SHA256，多页哈希相同即判相关页 FAIL
  *      —— 2026-09-12 PR #898 实测 `am start -d uniapp://<page>` 未让 App 换页、五图同哈希却各判 PASS
  *      （原有四项断言覆盖不到「目标页是否真的加载」），故把这条补成硬规
+ *   D11 头部文档块必须记有「adb 无法滚动 / 切页」的**机械根因**（INJECT_EVENTS 拒注入 /
+ *      UniPortraitPageActivity 未导出 / uniapp:// scheme 未注册）与**可靠替代**（临时把目标页置为
+ *      pages.json 首项 + 人点一次运行），且不得把已按实测订正的旧说法写回
+ *      —— 2026-09-13 真机实测（#937 取证会话）。只记「不生效」不记「为什么」，后续会话会把它读成
+ *      「写法不对、换个 intent 就好」，反复重试一条**机械上不可能**的路（#970）
  *
  * 设计沿用本仓既有守护测试的形态（见 utils/emulatorSmokeContract.test.js）：
  * 先对「注入违规」的变形样本断言检测有效（防空跑假绿），再对真实文件断言零命中。
@@ -38,6 +43,18 @@ const PAGE_SWITCH_OFF_NOTE = '切页动作默认关闭：会打断维护者的�
 const GATE_FORBID = '$ForbidStart = ($NoStartApp -or $SkipAppStart)';
 const GATE_CAN = '$CanStart = ($AllowAppStart -and -not $ForbidStart)';
 const TEARDOWN_ANCHOR = "    Stop-LeftoverChildren\n    Write-Log '收尾完成";
+
+// D11（2026-09-14 补，#970）——「切页为何不可用」的机械根因与可靠替代必须留在文档块里。
+// 判据取自 2026-09-13 真机实测（#937 取证会话）：三条路全部堵死，而其中两条是**系统级拒绝**，
+// 不是拼写问题 ⇒ 这段「为什么」被删掉，后人就会去重试一条不可能的路。
+const ADB_INJECT_DENIED = 'INJECT_EVENTS';
+const ADB_ACTIVITY_NOT_EXPORTED = 'UniPortraitPageActivity';
+const ADB_NOT_EXPORTED_NOTE = '未导出';
+const ADB_SCHEME_UNREGISTERED = '未注册';
+const ADB_FALLBACK_PAGES_JSON = 'pages.json';
+const ADB_FALLBACK_FIRST_PAGE = '首项';
+const ADB_CLI_CHANNEL_PREREQ = 'cli open';
+const ADB_LAUNCH_STALE_CLAIM = '已知可用的替代切页机制是';
 
 function readSource(rel) {
   return fs.readFileSync(path.join(ROOT, rel), 'utf8');
@@ -254,6 +271,30 @@ function scanContract(sources) {
     violations.push('D10 汇总未打出页身份断言状态（人无法一眼核）');
   }
 
+  // D11 adb 机械根因与其可靠替代（#970）——「为什么不可用」这段不许被删。
+  //      判据落在**文档块**（docTextOf）而非正文：这是文档纪律，正文里本来就不该出现这些机制。
+  if (!doc.includes(ADB_INJECT_DENIED)) {
+    violations.push('D11 文档块缺「输入注入被系统硬拒」的根因（' + ADB_INJECT_DENIED + '）');
+  }
+  if (!doc.includes(ADB_ACTIVITY_NOT_EXPORTED)) {
+    violations.push('D11 文档块缺未导出 Activity 名（' + ADB_ACTIVITY_NOT_EXPORTED + '）——它是「意图从未送达」的直接证据');
+  }
+  if (!doc.includes(ADB_NOT_EXPORTED_NOTE)) {
+    violations.push('D11 文档块缺「' + ADB_NOT_EXPORTED_NOTE + '」判据（只写活动名不足以说明 intent 送不到）');
+  }
+  if (!doc.includes(ADB_SCHEME_UNREGISTERED)) {
+    violations.push('D11 文档块缺「uniapp:// scheme ' + ADB_SCHEME_UNREGISTERED + '」（这条说明不存在换写法绕过的余地）');
+  }
+  if (!doc.includes(ADB_FALLBACK_PAGES_JSON) || !doc.includes(ADB_FALLBACK_FIRST_PAGE)) {
+    violations.push('D11 文档块缺可靠替代：把目标页临时置为 ' + ADB_FALLBACK_PAGES_JSON + ' 的 ' + ADB_FALLBACK_FIRST_PAGE + '（启动页）');
+  }
+  if (!doc.includes(ADB_CLI_CHANNEL_PREREQ)) {
+    violations.push('D11 文档块缺 cli launch 路径的前提「' + ADB_CLI_CHANNEL_PREREQ + '」（GUI 已运行时该路径不可用，不得写成随手可用）');
+  }
+  if (doc.includes(ADB_LAUNCH_STALE_CLAIM)) {
+    violations.push('D11 已按实测订正的旧说法被写回：' + ADB_LAUNCH_STALE_CLAIM + '（该路径需先建 CLI 通道，非随手可用）');
+  }
+
   return violations;
 }
 
@@ -283,7 +324,14 @@ describe('真机只读取证契约（①a 预置 · 非门 · 不替代 ①b）'
       ['D10', '按截图名回查哈希被删', (s) => ({ ...s, script: s.script.replace('$script:ShotRecords | Where-Object { $_.Name -eq $r.Shot }', '$script:ShotRecords') })],
       ['D10', '哈希撞车不再判 FAIL', (s) => ({ ...s, script: s.script.replace("$hit.Status = 'FAIL'", '$hit.Status = $hit.Status') })],
       ['D10', '「切页未生效」文案被删', (s) => ({ ...s, script: s.script.replace(/切页未生效/g, '页问题') })],
-      ['D10', '汇总页身份行被删', (s) => ({ ...s, script: s.script.replace('页身份断言：', '备注：') })]
+      ['D10', '汇总页身份行被删', (s) => ({ ...s, script: s.script.replace('页身份断言：', '备注：') })],
+      ['D11', '输入注入被拒的根因被删', (s) => ({ ...s, script: s.script.replace(/INJECT_EVENTS/g, '注入被系统拒绝') })],
+      ['D11', '未导出 Activity 名被删', (s) => ({ ...s, script: s.script.replace(/UniPortraitPageActivity/g, '某 Activity') })],
+      ['D11', '「未导出」判据被删', (s) => ({ ...s, script: s.script.replace(/未导出/g, '不可用') })],
+      ['D11', 'scheme 未注册判据被删', (s) => ({ ...s, script: s.script.replace(/未注册/g, '不可达') })],
+      ['D11', '可靠替代（pages.json 首项）被删', (s) => ({ ...s, script: s.script.replace(/pages\.json/g, '页面配置') })],
+      ['D11', 'cli 通道前提被删', (s) => ({ ...s, script: s.script.replace(/cli open/g, 'cli 已连通') })],
+      ['D11', '已订正的旧说法被写回', (s) => ({ ...s, script: s.script + '\n<#\n已知可用的替代切页机制是 HBuilderX 的 cli launch app-android --pagePath。\n#>\n' })]
     ];
     cases.forEach(([rule, label, mutate]) => {
       const found = scanContract(mutate(real));
@@ -326,6 +374,18 @@ describe('真机只读取证契约（①a 预置 · 非门 · 不替代 ①b）'
     const startIdx = code.indexOf('Start-AppPage -Page');
     expect(startIdx).toBeGreaterThan(-1);
     expect(code.indexOf('切页未生效')).toBeGreaterThan(startIdx);
+  });
+
+  it('文档块记有 adb 机械根因与可靠替代，且已订正的旧说法未回写（D11）', () => {
+    const doc = docTextOf(real.script);
+    expect(doc).toContain(ADB_INJECT_DENIED);
+    expect(doc).toContain(ADB_ACTIVITY_NOT_EXPORTED);
+    expect(doc).toContain(ADB_NOT_EXPORTED_NOTE);
+    expect(doc).toContain(ADB_SCHEME_UNREGISTERED);
+    expect(doc).toContain(ADB_FALLBACK_PAGES_JSON);
+    expect(doc).toContain(ADB_FALLBACK_FIRST_PAGE);
+    expect(doc).toContain(ADB_CLI_CHANNEL_PREREQ);
+    expect(doc.includes(ADB_LAUNCH_STALE_CLAIM)).toBe(false);
   });
 
   it('默认（不加开关）就是只读：切页闸门与提示语都在', () => {
