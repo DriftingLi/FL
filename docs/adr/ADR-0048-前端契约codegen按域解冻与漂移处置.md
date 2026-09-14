@@ -67,6 +67,16 @@ auth 域片（注解缺口最深的域）落地时的口径补充：
 - **枚举词汇缺口**（片一已知限制）在本片的三处消费点：`ForumTopicDTO.category` / `content_format`、`FavoriteDTO.target_type` 在注解层是 `string`。处置：UI 联合保留；`content_format` 新增 `toForumContentFormat()` 在渲染前收窄（未知值回落到 `ForumContent` 的 text 缺省，与后端 `normalizeContentFormat` 同口径）。
 - **`model.*` 类型可直接作根**：`model.QuestionNote` / `model.QuestionTag` 是真实返回类型（无 service 包装），登记为根后生成物以去包名形式出现（`QuestionNote` / `QuestionTag`），本片不新增包装 DTO。
 - **字段级差异 12 条**全部落在 ② 手写类型过时：`NotificationItem.payload` 的 `?`、`parent_id` / `chapter_id` 把 omitempty（键缺失）当成了 null、`/wrong-questions/{id}/remove|batch-remove` 手写 `<null>` 实为 `{removed}`、`FavoriteDTO` 的 `title?/cover?/created_at?`、测试桩里的 `QuestionTag` 局部形状、错题页本地 `WrongItem` 副本。① 注解写错 0 条、③ 后端第三种形状 0 条。
+## 实施修订（2026-09-13，片八 #966）
+
+aiAssistant 域片（第一个「信封 + 流式」混合模块）落地时的口径补充：
+
+- **计数修订**：Web 消费面 **15 个端点**（`api/aiAssistant.ts`）—— **11 个在 swagger 但 `@Success` 一律不指认 data**（本片逐条补/纠），**4 个诊断端点**（`/ai-assistant/diagnosis/*`，含手册字节流）此前**零注解**（本片补完整注解块）→ **11 个有 data、4 个有意无 data**（user-models POST / DELETE、sessions DELETE、diagnosis/manual 字节流）。issue 正文记的「9 个端点不在 swagger」实测不成立：真正缺席的是 4 个诊断端点，另 11 个是「在 swagger 但不指认 data」。
+- **SSE 端点的切片样板（决策 6 的落地口径）**：`POST /ai-assistant/chat` **不登记进域声明表**（没有 data 类型可指认，登记只能靠 NoData 撒谎），排除口径写进域 `Title`（随生成物头部渲染给读者），注解维持 `@Success 200 {string} string` 并在 `@Description` 注明「不走统一信封、不在契约生成面」；SSE 事件 payload（message / sources / usage / error / done）在 `api/aiAssistant.ts` 手写并逐条注明「非生成面」。唯一例外：`sources` 事件复用生成类型 `DiagnosisSource`（与历史回放同一形状，不是第二份事实源）。
+- **裸 fetch 逐个判定**：模块里 2 处裸 fetch —— `upload-image` **走统一信封**（读 `body.data.url`），纳入生成面并接上 `AIImageUploadResultDTO`；`chat` 是 SSE，排除。
+- **非指针容器的可空性**：`AIChatMessageDTO.images` / `.sources` 是无 `omitempty` 的切片，空值出站是 `null`（**键在、值可 null**）→ 标 `extensions:"x-nullable"`。本片把「只动指针字段」的口径补成：**容器字段的 nil 同样是可空态**（判据仍是真实构造处是否总是赋值；先例 `ProgressResultDTO.answers_state map[string]any`）。
+- **嵌套匿名结构体定型**：`DiagnosisSource.Metadata` 原是匿名 struct —— swag 只把它吐成内联 object，而渲染规则对「带 properties 的 object」只给 `{ [key: string]: unknown }`，前端 `metadata.source_url` 会退化成 `unknown`。定型为命名类型 `service.DiagnosisSourceMetadata`（同字段序、同 tag，序列化字节不变）后进 definitions 传递闭包。
+- **标量数组 data**：`GET /ai-assistant/diagnosis/models` 的 data 是 `[]string`（`data=[]string`，无根类型、不进生成物）——声明表锁只要求「有 data 指认」，不要求 `$ref`。
 
 ## 备选
 

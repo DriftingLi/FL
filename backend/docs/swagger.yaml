@@ -89,6 +89,65 @@ definitions:
       message:
         type: string
     type: object
+  service.AIAssistantModeModels:
+    properties:
+      expert:
+        allOf:
+        - $ref: '#/definitions/service.ModelOption'
+        x-nullable: true
+      normal:
+        allOf:
+        - $ref: '#/definitions/service.ModelOption'
+        x-nullable: true
+    type: object
+  service.AIChatMessageDTO:
+    properties:
+      content:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      images:
+        description: 用户消息附带的图片 URL（无图时键在、值为 null）
+        items:
+          type: string
+        type: array
+        x-nullable: true
+      role:
+        type: string
+      sources:
+        description: 助手消息的诊断来源（T5 历史回放；无来源时键在、值为 null）
+        items:
+          $ref: '#/definitions/service.DiagnosisSource'
+        type: array
+        x-nullable: true
+    type: object
+  service.AIChatSessionDTO:
+    properties:
+      created_at:
+        type: string
+      feature_key:
+        type: string
+      id:
+        type: integer
+      model_name:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  service.AIImageUploadResultDTO:
+    properties:
+      url:
+        type: string
+    type: object
+  service.AISessionRenameResultDTO:
+    properties:
+      message:
+        type: string
+    type: object
   service.CertificateTemplateDTO:
     properties:
       code:
@@ -490,6 +549,69 @@ definitions:
       level:
         type: integer
       name:
+        type: string
+    type: object
+  service.DiagnosisBrandOption:
+    properties:
+      label:
+        type: string
+      value:
+        type: string
+    type: object
+  service.DiagnosisFaultCodeItem:
+    properties:
+      brand:
+        type: string
+      brand_cn:
+        type: string
+      causes:
+        type: string
+      fault_code:
+        type: string
+      fault_name:
+        type: string
+      id:
+        type: integer
+      model_series:
+        type: string
+      page_num:
+        type: integer
+      part_numbers:
+        type: string
+      safety_warning:
+        type: string
+      sop_steps:
+        type: string
+      source_file:
+        type: string
+      symptom:
+        type: string
+    type: object
+  service.DiagnosisFaultCodePage:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/service.DiagnosisFaultCodeItem'
+        type: array
+      total:
+        type: integer
+    type: object
+  service.DiagnosisSource:
+    properties:
+      id:
+        type: string
+      metadata:
+        $ref: '#/definitions/service.DiagnosisSourceMetadata'
+      text:
+        type: string
+    type: object
+  service.DiagnosisSourceMetadata:
+    properties:
+      page_end:
+        type: integer
+      page_start:
+        type: integer
+      source_url:
         type: string
     type: object
   service.DownloadResult:
@@ -958,6 +1080,17 @@ definitions:
         type: integer
       total_score:
         type: number
+    type: object
+  service.ModelOption:
+    properties:
+      base_url:
+        type: string
+      id:
+        type: integer
+      model:
+        type: string
+      name:
+        type: string
     type: object
   service.MyReplyDTO:
     properties:
@@ -1554,6 +1687,24 @@ definitions:
         type: integer
         x-optional: true
       user_answer: {}
+    type: object
+  service.UserModelDTO:
+    properties:
+      api_key:
+        description: 脱敏后的 API Key
+        type: string
+      base_url:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      model:
+        type: string
+      name:
+        type: string
+      updated_at:
+        type: string
     type: object
   service.WechatQRCodeInfoDTO:
     properties:
@@ -2532,7 +2683,7 @@ paths:
     post:
       consumes:
       - application/json
-      description: 可选认证的 SSE 流式响应，不走统一 JSON 信封；事件 message/error/done
+      description: 可选认证的 SSE 流式响应（ADR-0048 决策 6：**不走统一 JSON 信封，不在契约生成面**）；事件 message/sources/usage/error/done
       parameters:
       - description: 消息
         in: body
@@ -2554,6 +2705,129 @@ paths:
       summary: AI 流式对话（SSE）
       tags:
       - 学员端-AI助手
+  /ai-assistant/diagnosis/brands:
+    get:
+      consumes:
+      - application/json
+      description: 可选认证；代理外部诊断助手的品牌选项（[{value,label}]，value=all 表示全部品牌）
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/service.DiagnosisBrandOption'
+                  type: array
+              type: object
+        "500":
+          description: 诊断服务不可用
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 诊断品牌列表
+      tags:
+      - 学员端-AI助手
+  /ai-assistant/diagnosis/fault-codes:
+    get:
+      consumes:
+      - application/json
+      description: 可选认证；按品牌/关键词分页查询结构化故障码（page_size 上限 100）
+      parameters:
+      - description: 品牌 value（all/空 = 全部品牌）
+        in: query
+        name: brand
+        type: string
+      - description: 关键词（故障码/名称/现象）
+        in: query
+        name: keyword
+        type: string
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页条数（上限 100）
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.DiagnosisFaultCodePage'
+              type: object
+        "500":
+          description: 诊断服务不可用
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 诊断故障码分页查询
+      tags:
+      - 学员端-AI助手
+  /ai-assistant/diagnosis/manual/{filepath}:
+    get:
+      description: 可选认证；外部诊断助手手册文件的流式代理（**非统一信封**：原样字节流 + Content-Type），子路径白名单防 SSRF
+      parameters:
+      - description: 手册相对子路径（带扩展名，如 manual/xxx/page_1.png）
+        in: path
+        name: filepath
+        required: true
+        type: string
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: 手册文件字节流（非统一信封）
+          schema:
+            type: string
+        "404":
+          description: 资源不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 诊断手册静态资源（图片 / PDF）
+      tags:
+      - 学员端-AI助手
+  /ai-assistant/diagnosis/models:
+    get:
+      consumes:
+      - application/json
+      description: 可选认证；某品牌车型名称列表（brand 缺省/all 时返回全部车型）
+      parameters:
+      - description: 品牌 value（all/空 = 全部车型）
+        in: query
+        name: brand
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  items:
+                    type: string
+                  type: array
+              type: object
+        "500":
+          description: 诊断服务不可用
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 诊断车型列表
+      tags:
+      - 学员端-AI助手
   /ai-assistant/models:
     get:
       description: 列出管理员配置的 is_active=true 模型
@@ -2563,7 +2837,14 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/service.ModelOption'
+                  type: array
+              type: object
       summary: AI 可用模型（公开）
       tags:
       - 学员端-AI助手
@@ -2576,7 +2857,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.AIAssistantModeModels'
+              type: object
       summary: AI 双模式模型（公开）
       tags:
       - 学员端-AI助手
@@ -2591,7 +2877,14 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/service.AIChatSessionDTO'
+                  type: array
+              type: object
         "401":
           description: 未认证
           schema:
@@ -2617,7 +2910,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.AIChatSessionDTO'
+              type: object
         "401":
           description: 未认证
           schema:
@@ -2675,7 +2973,14 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/service.AIChatMessageDTO'
+                  type: array
+              type: object
         "401":
           description: 未认证
           schema:
@@ -2712,7 +3017,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.AISessionRenameResultDTO'
+              type: object
         "400":
           description: 参数错误
           schema:
@@ -2743,7 +3053,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.AIImageUploadResultDTO'
+              type: object
         "400":
           description: 参数错误
           schema:
@@ -2762,7 +3077,14 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/service.UserModelDTO'
+                  type: array
+              type: object
         "401":
           description: 未认证
           schema:

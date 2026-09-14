@@ -1444,7 +1444,7 @@ const docTemplate = `{
         },
         "/ai-assistant/chat": {
             "post": {
-                "description": "可选认证的 SSE 流式响应，不走统一 JSON 信封；事件 message/error/done",
+                "description": "可选认证的 SSE 流式响应（ADR-0048 决策 6：**不走统一 JSON 信封，不在契约生成面**）；事件 message/sources/usage/error/done",
                 "consumes": [
                     "application/json"
                 ],
@@ -1482,6 +1482,206 @@ const docTemplate = `{
                 }
             }
         },
+        "/ai-assistant/diagnosis/brands": {
+            "get": {
+                "description": "可选认证；代理外部诊断助手的品牌选项（[{value,label}]，value=all 表示全部品牌）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-AI助手"
+                ],
+                "summary": "诊断品牌列表",
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/service.DiagnosisBrandOption"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "诊断服务不可用",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/ai-assistant/diagnosis/fault-codes": {
+            "get": {
+                "description": "可选认证；按品牌/关键词分页查询结构化故障码（page_size 上限 100）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-AI助手"
+                ],
+                "summary": "诊断故障码分页查询",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "品牌 value（all/空 = 全部品牌）",
+                        "name": "brand",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "关键词（故障码/名称/现象）",
+                        "name": "keyword",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "每页条数（上限 100）",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.DiagnosisFaultCodePage"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "诊断服务不可用",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/ai-assistant/diagnosis/manual/{filepath}": {
+            "get": {
+                "description": "可选认证；外部诊断助手手册文件的流式代理（**非统一信封**：原样字节流 + Content-Type），子路径白名单防 SSRF",
+                "produces": [
+                    "application/octet-stream"
+                ],
+                "tags": [
+                    "学员端-AI助手"
+                ],
+                "summary": "诊断手册静态资源（图片 / PDF）",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "手册相对子路径（带扩展名，如 manual/xxx/page_1.png）",
+                        "name": "filepath",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "手册文件字节流（非统一信封）",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "资源不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/ai-assistant/diagnosis/models": {
+            "get": {
+                "description": "可选认证；某品牌车型名称列表（brand 缺省/all 时返回全部车型）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-AI助手"
+                ],
+                "summary": "诊断车型列表",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "品牌 value（all/空 = 全部车型）",
+                        "name": "brand",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "诊断服务不可用",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/ai-assistant/models": {
             "get": {
                 "description": "列出管理员配置的 is_active=true 模型",
@@ -1496,7 +1696,22 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/service.ModelOption"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     }
                 }
@@ -1516,7 +1731,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.AIAssistantModeModels"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     }
                 }
@@ -1544,7 +1771,22 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/service.AIChatSessionDTO"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -1586,7 +1828,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.AIChatSessionDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -1678,7 +1932,22 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/service.AIChatMessageDTO"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -1736,7 +2005,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.AISessionRenameResultDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -1780,7 +2061,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.AIImageUploadResultDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -1814,7 +2107,22 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/service.UserModelDTO"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -10732,6 +11040,99 @@ const docTemplate = `{
                 }
             }
         },
+        "service.AIAssistantModeModels": {
+            "type": "object",
+            "properties": {
+                "expert": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/service.ModelOption"
+                        }
+                    ],
+                    "x-nullable": true
+                },
+                "normal": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/service.ModelOption"
+                        }
+                    ],
+                    "x-nullable": true
+                }
+            }
+        },
+        "service.AIChatMessageDTO": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "images": {
+                    "description": "用户消息附带的图片 URL（无图时键在、值为 null）",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "x-nullable": true
+                },
+                "role": {
+                    "type": "string"
+                },
+                "sources": {
+                    "description": "助手消息的诊断来源（T5 历史回放；无来源时键在、值为 null）",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.DiagnosisSource"
+                    },
+                    "x-nullable": true
+                }
+            }
+        },
+        "service.AIChatSessionDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "feature_key": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "model_name": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.AIImageUploadResultDTO": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.AISessionRenameResultDTO": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
         "service.CertificateTemplateDTO": {
             "type": "object",
             "properties": {
@@ -11338,6 +11739,103 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.DiagnosisBrandOption": {
+            "type": "object",
+            "properties": {
+                "label": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.DiagnosisFaultCodeItem": {
+            "type": "object",
+            "properties": {
+                "brand": {
+                    "type": "string"
+                },
+                "brand_cn": {
+                    "type": "string"
+                },
+                "causes": {
+                    "type": "string"
+                },
+                "fault_code": {
+                    "type": "string"
+                },
+                "fault_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "model_series": {
+                    "type": "string"
+                },
+                "page_num": {
+                    "type": "integer"
+                },
+                "part_numbers": {
+                    "type": "string"
+                },
+                "safety_warning": {
+                    "type": "string"
+                },
+                "sop_steps": {
+                    "type": "string"
+                },
+                "source_file": {
+                    "type": "string"
+                },
+                "symptom": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.DiagnosisFaultCodePage": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.DiagnosisFaultCodeItem"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.DiagnosisSource": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/service.DiagnosisSourceMetadata"
+                },
+                "text": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.DiagnosisSourceMetadata": {
+            "type": "object",
+            "properties": {
+                "page_end": {
+                    "type": "integer"
+                },
+                "page_start": {
+                    "type": "integer"
+                },
+                "source_url": {
                     "type": "string"
                 }
             }
@@ -12023,6 +12521,23 @@ const docTemplate = `{
                 },
                 "total_score": {
                     "type": "number"
+                }
+            }
+        },
+        "service.ModelOption": {
+            "type": "object",
+            "properties": {
+                "base_url": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "model": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
                 }
             }
         },
@@ -12908,6 +13423,33 @@ const docTemplate = `{
                     "x-optional": true
                 },
                 "user_answer": {}
+            }
+        },
+        "service.UserModelDTO": {
+            "type": "object",
+            "properties": {
+                "api_key": {
+                    "description": "脱敏后的 API Key",
+                    "type": "string"
+                },
+                "base_url": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "model": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
             }
         },
         "service.WechatQRCodeInfoDTO": {

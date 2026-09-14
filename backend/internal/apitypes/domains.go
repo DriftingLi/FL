@@ -282,4 +282,40 @@ var Domains = []Domain{
 			{Method: "GET", Path: "/questions/{question_id}/knowledge"},
 		},
 	},
+	{
+		// ADR-0048 决策 7 的第八片。SSE 流式对话（POST /ai-assistant/chat）与事件 payload
+		// 按决策 6 明确排除：它不走统一信封、没有 data 类型可指认，故**不登记**在端点表里
+		//（排除口径写在 Title，会渲染进生成物头部）。
+		Name:  "aiAssistant",
+		Title: "AI 助手信封面（/api/ai-assistant/*：模型 / 会话 / 消息 / 用户模型 / 诊断字典）；SSE 流式对话 POST /ai-assistant/chat 不走统一信封、事件 payload 不定型，不在本域生成面（ADR-0048 决策 6）",
+		Roots: []string{
+			"service.ModelOption",
+			"service.AIAssistantModeModels",
+			"service.UserModelDTO",
+			"service.AIChatSessionDTO",
+			"service.AIChatMessageDTO",
+			"service.AISessionRenameResultDTO",
+			"service.AIImageUploadResultDTO",
+			"service.DiagnosisBrandOption",
+			"service.DiagnosisFaultCodePage",
+		},
+		Endpoints: []Endpoint{
+			{Method: "GET", Path: "/ai-assistant/models"},
+			{Method: "GET", Path: "/ai-assistant/modes"},
+			{Method: "GET", Path: "/ai-assistant/user-models"},
+			{Method: "POST", Path: "/ai-assistant/user-models", NoData: true},
+			{Method: "DELETE", Path: "/ai-assistant/user-models/{id}", NoData: true},
+			{Method: "GET", Path: "/ai-assistant/sessions"},
+			{Method: "POST", Path: "/ai-assistant/sessions"},
+			{Method: "DELETE", Path: "/ai-assistant/sessions/{id}", NoData: true},
+			{Method: "PATCH", Path: "/ai-assistant/sessions/{id}/title"},
+			{Method: "GET", Path: "/ai-assistant/sessions/{id}/messages"},
+			{Method: "POST", Path: "/ai-assistant/upload-image"},
+			{Method: "GET", Path: "/ai-assistant/diagnosis/brands"},
+			{Method: "GET", Path: "/ai-assistant/diagnosis/models"},
+			{Method: "GET", Path: "/ai-assistant/diagnosis/fault-codes"},
+			// 手册静态资源是原样字节流（非信封），无 data 指认 —— 显式登记为有意无载荷。
+			{Method: "GET", Path: "/ai-assistant/diagnosis/manual/{filepath}", NoData: true},
+		},
+	},
 }

@@ -62,9 +62,21 @@ type AIChatMessageDTO struct {
 	ID        int               `json:"id"`
 	Role      string            `json:"role"`
 	Content   string            `json:"content"`
-	Images    []string          `json:"images"`  // 用户消息附带的图片 URL
-	Sources   []DiagnosisSource `json:"sources"` // 助手消息的诊断来源（T5 历史回放；非诊断/存量为空）
+	Images    []string          `json:"images" extensions:"x-nullable"`  // 用户消息附带的图片 URL（无图时键在、值为 null）
+	Sources   []DiagnosisSource `json:"sources" extensions:"x-nullable"` // 助手消息的诊断来源（T5 历史回放；无来源时键在、值为 null）
 	CreatedAt time.Time         `json:"created_at"`
+}
+
+// AISessionRenameResultDTO 会话重命名响应（PATCH /ai-assistant/sessions/{id}/title：
+// 原 handler 内联 map[string]string{"message":…} 定型，序列化字节不变）。
+type AISessionRenameResultDTO struct {
+	Message string `json:"message"`
+}
+
+// AIImageUploadResultDTO 对话图片上传响应（POST /ai-assistant/upload-image：
+// 原 handler 内联 gin.H{"url":…} 定型，序列化字节不变）。
+type AIImageUploadResultDTO struct {
+	URL string `json:"url"`
 }
 
 // AIAssistantMode AI 助手模式（隐藏底层模型，对用户仅暴露双模式）。
@@ -77,8 +89,8 @@ const (
 
 // AIAssistantModeModels 双模式可用模型（按普通/专家分别返回，null 表示未绑定）。
 type AIAssistantModeModels struct {
-	Normal *ModelOption `json:"normal"`
-	Expert *ModelOption `json:"expert"`
+	Normal *ModelOption `json:"normal" extensions:"x-nullable"`
+	Expert *ModelOption `json:"expert" extensions:"x-nullable"`
 }
 
 // StreamChatReq 流式对话请求。

@@ -298,6 +298,16 @@ func TestInlineResponseDTOBytes(t *testing.T) {
 			legacy: map[string]string{"token": "acc-1", "refresh_token": "ref-1"},
 			dto:    &RefreshResultDTO{RefreshToken: "ref-1", Token: "acc-1"},
 		},
+		{
+			name:   "AISessionRenameResultDTO（PATCH /ai-assistant/sessions/{id}/title：原 handler 内联 map[string]string）",
+			legacy: map[string]string{"message": "已更新会话标题"},
+			dto:    &AISessionRenameResultDTO{Message: "已更新会话标题"},
+		},
+		{
+			name:   "AIImageUploadResultDTO（POST /ai-assistant/upload-image：原 handler 内联 gin.H{url}）",
+			legacy: map[string]any{"url": "https://cdn.test/images/ai-assistant/chat_1.png"},
+			dto:    &AIImageUploadResultDTO{URL: "https://cdn.test/images/ai-assistant/chat_1.png"},
+		},
 	}
 
 	for _, tc := range cases {
@@ -314,5 +324,40 @@ func TestInlineResponseDTOBytes(t *testing.T) {
 				t.Fatalf("字节不一致（字段顺序 / omitempty / 空对象语义漂移）：\nmap   = %s\nstruct= %s", want, got)
 			}
 		})
+	}
+}
+
+// spec #966 片八：内联**匿名结构体**（不是 map）定型为命名类型后的同一套字节锁。
+//
+// swag 对匿名嵌套对象只吐内联 object，而渲染规则对「带 properties 的 object」只给
+// { [key: string]: unknown } —— 前端 metadata.source_url 会退化成 unknown，故必须命名
+// （service.DiagnosisSourceMetadata）。命名不得改动任何字节：字段序 / json tag / 可空性都不动。
+func TestDiagnosisSourceMetadataShapeLock(t *testing.T) {
+	type legacyDiagnosisSource struct {
+		ID       diagnosisSourceID `json:"id"`
+		Text     string            `json:"text"`
+		Metadata struct {
+			SourceURL string `json:"source_url"`
+			PageStart int    `json:"page_start"`
+			PageEnd   int    `json:"page_end"`
+		} `json:"metadata"`
+	}
+	legacy := legacyDiagnosisSource{ID: "fault-15", Text: "手册第 3 页"}
+	legacy.Metadata.SourceURL = "https://example.com/manual/x.pdf"
+	legacy.Metadata.PageStart, legacy.Metadata.PageEnd = 3, 4
+	dto := DiagnosisSource{ID: "fault-15", Text: "手册第 3 页"}
+	dto.Metadata.SourceURL = "https://example.com/manual/x.pdf"
+	dto.Metadata.PageStart, dto.Metadata.PageEnd = 3, 4
+
+	want, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatalf("marshal legacy: %v", err)
+	}
+	got, err := json.Marshal(dto)
+	if err != nil {
+		t.Fatalf("marshal dto: %v", err)
+	}
+	if string(want) != string(got) {
+		t.Fatalf("字节不一致（字段序 / tag 漂移）：\nlegacy = %s\ndto    = %s", want, got)
 	}
 }
