@@ -64,9 +64,12 @@ function Invoke-TestAndCompile {
         # `hxTimingBehavior`（运行期）。一个 dev:finish **永远不跑**的守护等于空跑，
         # 正是本仓反复踩过的假绿形态（守护 T13）。
         # ADR-0012：再加 `hxError` —— 覆盖**错误行判据**的运行期守护 `hxErrorLinesBehavior`。
-        # ⚠️ 注意 `--testPathPattern` 是**子串**匹配：`hxRun` **匹配不到** `hxErrorLinesBehavior`
-        #    （已用 `jest --listTests` 实证），故必须显式加这个 token，否则该守护**永不执行**。
-        $testPattern = 'levelDetect|envCheck|testCompile|buildDeploy|autoScreenshot|screenshotDiff|evidenceGen|devFinish|hxBusyGate|hxRun|hxTimingBehavior|hxError'
+        # ⚠️ 2026-09-14：pattern 改取**唯一真源** `lib\contract-tests.ps1` —— 本文件与 `dev-finish.ps1`
+        #    步骤 3 曾各抄一份**并漂移**（步骤 3 那份少 3 个 token，而它先跑且失败即 exit 1
+        #    ⇒ 实际门禁是更窄的那份）。本文件**不得**再抄自己的 pattern 字面量。
+        #    守护：utils/contractTestPatternBehavior.test.js（运行期）。
+        . (Join-Path $PSScriptRoot 'contract-tests.ps1')
+        $testPattern = Get-ContractTestPattern
         try {
             $testOutput = & npx jest --config jest.config.unit.js -i --testPathPattern $testPattern --forceExit 2>&1 | Out-String
         }

@@ -6,7 +6,9 @@
     按改动复杂度自动判定级别（🟢快速 / 🟡标准 / 🔴完整），执行对应流程：
 
       🟢 快速（默认 **Q-A 静态守护**）：契约测试已跑；**秒级**、不取锁、不占设备、**未做编译诊断**
-      🟢 快速 `-Compile`（**Q-B 编译诊断**）：追加 `hx-run -CompileOnly`，约 3 分钟起、冷缓存 >15 分钟
+      🟢 快速 `-Compile`（**Q-B 编译诊断**）：追加 `hx-run -CompileOnly`；**热缓存 257 秒**，
+         **冷 / 上次被打断后 826–901+ 秒**（2026-09-14 两次实测，48 页工程）
+         —— **勿再引用旧口径「约 3 分钟起 / 冷 >15 分钟」**，两者都已被实测推翻
       🟡 标准：④c 编译门 + 真运行到设备 + 只截改动页 + 简要证据
       🔴 完整：④c 编译门 + 真运行到设备 + 只截改动页 + 完整证据
 
@@ -149,7 +151,11 @@ else {
 # Step 3: 单元测试
 # ============================================================
 Write-Step 3 9 '单元测试'
-$testPattern = 'levelDetect|envCheck|testCompile|buildDeploy|autoScreenshot|screenshotDiff|evidenceGen|devFinish|hxBusyGate'
+# ⚠️ pattern 取自**唯一真源** `lib\contract-tests.ps1`，本文件**不得**再抄一份自己的字面量
+#    （曾有第二份、且与 test-compile 的那份漂移：少了 hxRun/hxTimingBehavior/hxError，
+#     而步骤 3 先跑且失败即 exit 1 ⇒ 实际门禁是**更窄的那份**）。守护：contractTestPatternBehavior.test.js
+. (Join-Path $PSScriptRoot 'lib\contract-tests.ps1')
+$testPattern = Get-ContractTestPattern
 try {
     $testOutput = & npx jest --config jest.config.unit.js -i --testPathPattern $testPattern --forceExit 2>&1 | Out-String
 }
