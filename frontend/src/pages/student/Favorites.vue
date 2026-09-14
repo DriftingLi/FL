@@ -131,7 +131,7 @@ const TYPE_LABELS: Record<string, string> = {
   course: '课程',
   chapter: '章节',
   question: '题目',
-  featured: '资讯',
+  featured: '内容精选',
   topic: '帖子'
 }
 
@@ -159,14 +159,21 @@ function typeTagColor(type: string) {
   return TYPE_COLORS[type] || 'info'
 }
 
-// 可跳转类型：课程 → 课程中心详情（query 打开），帖子 → 论坛详情；
-// 章节/题目/资讯在 web 端无对应详情页，仅展示
+// 可跳转类型：课程 → 课程中心详情（query 打开），帖子 → 论坛详情，
+// 题目 / 内容精选 → ADR-0049 决策 4 的落点页（搜索结果与收藏页共用同一落点）。
+// **章节仍无落点**：收藏条目不带所属课程 ID，构造不出章节学习页的路径（不猜、不乱跳）。
 function itemPath(item: FavoriteItem): string {
   if (item.target_type === 'course') {
     return `/training/courses?course_id=${item.target_id}`
   }
   if (item.target_type === 'topic') {
     return `/training/forum/${item.target_id}`
+  }
+  if (item.target_type === 'featured') {
+    return `/training/featured/${item.target_id}`
+  }
+  if (item.target_type === 'question') {
+    return `/training/questions/${item.target_id}`
   }
   return ''
 }
