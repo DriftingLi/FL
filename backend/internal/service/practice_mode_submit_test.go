@@ -16,7 +16,7 @@ func TestSubmitAnswer_ObjectiveCorrect(t *testing.T) {
 	q := testutil.SeedQuestion(t, db, "single_choice", "单选", "A")
 	student := testutil.SeedStudent(t, db, "李四", "x")
 
-	result, err := svc.SubmitAnswer(student.ID, q.ID, "A", "free")
+	result, err := svc.SubmitAnswer(student.ID, q.ID, "A", "free", nil)
 	if err != nil {
 		t.Fatalf("提交失败: %v", err)
 	}
@@ -43,7 +43,7 @@ func TestSubmitAnswer_ShortAnswer_AIPassed_OverridesRecord(t *testing.T) {
 
 	svc.grader = &fakeGrader{res: &AIGradeResult{Score: 4, Comment: "回答到位"}} // 题目自定义满分 5，4≥3 及格
 
-	result, err := svc.SubmitAnswer(student.ID, q.ID, "我的作答", "free")
+	result, err := svc.SubmitAnswer(student.ID, q.ID, "我的作答", "free", nil)
 	if err != nil {
 		t.Fatalf("提交失败: %v", err)
 	}
@@ -71,7 +71,7 @@ func TestSubmitAnswer_ShortAnswer_NoAI_FallsBack(t *testing.T) {
 	db.Model(&model.Question{}).Where("id = ?", q.ID).Update("explanation", "静态解析")
 	student := testutil.SeedStudent(t, db, "赵六", "x")
 
-	result, err := svc.SubmitAnswer(student.ID, q.ID, "我的作答", "free")
+	result, err := svc.SubmitAnswer(student.ID, q.ID, "我的作答", "free", nil)
 	if err != nil {
 		t.Fatalf("提交失败: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestSubmitAnswer_AIExplanation_CacheHit(t *testing.T) {
 	db.Model(&model.Question{}).Where("id = ?", q.ID).Update("ai_explanation", "缓存解析")
 	student := testutil.SeedStudent(t, db, "孙七", "x")
 
-	result, err := svc.SubmitAnswer(student.ID, q.ID, "B", "free")
+	result, err := svc.SubmitAnswer(student.ID, q.ID, "B", "free", nil)
 	if err != nil {
 		t.Fatalf("提交失败: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestSubmitAnswer_AIExplanation_CacheHit(t *testing.T) {
 
 func TestSubmitAnswer_QuestionMissing(t *testing.T) {
 	svc, _ := newPracticeSvc(t)
-	if _, err := svc.SubmitAnswer(1, 9999, "A", "free"); err == nil {
+	if _, err := svc.SubmitAnswer(1, 9999, "A", "free", nil); err == nil {
 		t.Fatal("题目不存在应返回错误")
 	}
 }
@@ -115,7 +115,7 @@ func TestSubmitAnswer_AIExplanation_GeneratedAndPersisted(t *testing.T) {
 	gen := &fakeExplGen{content: "现场生成的解析"}
 	svc.explainer = &QuestionExplanation{db: db, gen: gen, logger: zap.NewNop()}
 
-	result, err := svc.SubmitAnswer(student.ID, q.ID, "A", "free")
+	result, err := svc.SubmitAnswer(student.ID, q.ID, "A", "free", nil)
 	if err != nil {
 		t.Fatalf("提交失败: %v", err)
 	}

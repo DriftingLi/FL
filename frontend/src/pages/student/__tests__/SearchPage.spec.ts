@@ -20,6 +20,7 @@ vi.mock('@/stores/credential', () => ({ useCredentialStore: () => ({ current: { 
 import { searchApi } from '@/api/search'
 import SearchPage from '../SearchPage.vue'
 import SearchResultRow from '@/components/student/SearchResultRow.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
 
 function item(type: string, id: number, over: Record<string, unknown> = {}) {
   return {
@@ -107,6 +108,33 @@ describe('SearchPage 全局搜索页', () => {
     await flushPromises()
     expect(h.replace).toHaveBeenCalledWith({ query: { keyword: '液压', type: 'chapter' } })
     expect(searchApi.search).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'chapter', page: 1 }))
+  })
+
+  it('指定类型分页：翻页携带 page、URL 同步、分区计数不因切换而消失', async () => {
+    const w = mountPage()
+    await flushPromises()
+    const input = w.find('input')
+    await input.setValue('液压')
+    await w.findAll('button').find((b) => b.text() === '搜索')!.trigger('click')
+    await flushPromises()
+
+    // 切到课程分区：分页形状（total 45 → 3 页）
+    vi.mocked(searchApi.search).mockImplementation((async (params: { keyword: string; type?: string; page?: number }) => {
+      if (params?.type) {
+        return { keyword: params.keyword, type: params.type, total: 45, page: params.page ?? 1, pages: 3, items: [item(params.type, 4)] }
+      }
+      return allResult()
+    }) as never)
+    await w.findAll('button').find((b) => b.text().startsWith('课程'))!.trigger('click')
+    await flushPromises()
+    expect(w.text()).toContain('章节(2)')
+
+    const pag = w.findComponent(UiPagination)
+    expect(pag.exists()).toBe(true)
+    pag.vm.$emit('current-change', 2)
+    await flushPromises()
+    expect(searchApi.search).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'course', page: 2 }))
+    expect(h.replace).toHaveBeenCalledWith({ query: { keyword: '液压', type: 'course', page: '2' } })
   })
 
   it('两级空态：未搜索给提示 + 本地历史；无匹配给替代路径', async () => {

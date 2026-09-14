@@ -323,7 +323,7 @@ func (s *SearchService) searchChapters(keyword, like string, page, pageSize int,
 			body = r.Description
 		}
 		hitField, snippet := hitOf(r.Title, body, keyword)
-		if hitField == SearchHitBody && !strings.Contains(strings.ToLower(body), strings.ToLower(keyword)) {
+		if hitField == SearchHitBody && !containsFold(body, keyword) {
 			// 命中在 description 而 content 非空：片段改用 description，避免片段与命中无关
 			if s2, ok := snippetAround(r.Description, keyword); ok {
 				snippet = s2
@@ -393,8 +393,9 @@ func (s *SearchService) searchContents(keyword, like string, page, pageSize int)
 			body = r.Summary
 		}
 		hitField, snippet := hitOf(r.Title, body, keyword)
-		if hitField == SearchHitBody {
-			if s2, ok := snippetAround(r.Summary, keyword); ok && !strings.Contains(strings.ToLower(body), strings.ToLower(keyword)) {
+		if hitField == SearchHitBody && !containsFold(body, keyword) {
+			// 同上：命中落在 summary 而正文更长时，片段跟着命中的字段走
+			if s2, ok := snippetAround(r.Summary, keyword); ok {
 				snippet = s2
 			}
 		}
@@ -485,8 +486,10 @@ func (s *SearchService) Search(keyword, searchType string, page, pageSize int, c
 		if err != nil {
 			return nil, err
 		}
-		total := courses.Total + chapters.Total + questions.Total + contents.Total + topics.Total
-		s.recordSearchFact(keyword, "", total)
+		s.recordSearchFact(keyword, "", searchFactCounts{
+			course: courses.Total, chapter: chapters.Total, question: questions.Total,
+			content: contents.Total, topic: topics.Total,
+		})
 		return &SearchAllDTO{
 			Keyword: keyword, Courses: courses, Chapters: chapters,
 			Questions: questions, Contents: contents, Topics: topics,
@@ -496,17 +499,54 @@ func (s *SearchService) Search(keyword, searchType string, page, pageSize int, c
 	if err != nil {
 		return nil, err
 	}
-	s.recordSearchFact(keyword, searchType, total)
+	s.recordSearchFact(keyword, searchType, countsForType(searchType, total))
 	return &SearchPageDTO{
 		Keyword: keyword, Type: searchType, Total: total,
 		Page: page, Pages: response.PageCount(total, pageSize), Items: items,
 	}, nil
 }
 
+// countsForType 指定类型搜索的命中数：只落在该分区，其余分区为 0。
+func countsForType(searchType string, total int64) searchFactCounts {
+	switch searchType {
+	case SearchTypeCourse:
+		return searchFactCounts{course: total}
+	case SearchTypeChapter:
+		return searchFactCounts{chapter: total}
+	case SearchTypeQuestion:
+		return searchFactCounts{question: total}
+	case SearchTypeContent:
+		return searchFactCounts{content: total}
+	case SearchTypeTopic:
+		return searchFactCounts{topic: total}
+	default:
+		return searchFactCounts{}
+	}
+}
+
+// searchFactCounts 一次搜索的各分区命中数（聚合搜索逐区落数，指定类型只落该区）。
+type searchFactCounts struct {
+	course   int64
+	chapter  int64
+	question int64
+	content  int64
+	topic    int64
+}
+
+// total 各分区命中数之和（= 该次搜索的总命中数）。
+func (c searchFactCounts) total() int64 {
+	return c.course + c.chapter + c.question + c.content + c.topic
+}
+
 // recordSearchFact 检索事实（ADR-0049 决策 7）：匿名、尽力而为——
 // 埋点失败绝不影响搜索本身，也绝不记录 user / 证件 / 设备。
-func (s *SearchService) recordSearchFact(keyword, searchType string, total int64) {
-	fact := model.SearchFact{Keyword: keyword, SearchType: searchType, TotalHits: total, CreatedAt: beijingNow()}
+func (s *SearchService) recordSearchFact(keyword, searchType string, counts searchFactCounts) {
+	fact := model.SearchFact{
+		Keyword: keyword, SearchType: searchType,
+		CourseHits: counts.course, ChapterHits: counts.chapter, QuestionHits: counts.question,
+		ContentHits: counts.content, TopicHits: counts.topic,
+		TotalHits: counts.total(), CreatedAt: beijingNow(),
+	}
 	if err := s.db.Create(&fact).Error; err != nil && s.logger != nil {
 		s.logger.Warn("记录检索事实失败", zap.Error(err))
 	}
@@ -529,7 +569,7 @@ func normalizeDBTime(raw string) string {
 }
 
 // ZeroResultKeywords 零结果词（运营面）：按关键词聚合次数与最近出现时间。
-// days <= 0 取 30 天；limit 收敛到 [1, 200]，缺省 50。
+// days <= 0 取 30 天；limit 缺省 50，越界（<=0 或 >200）同样回落到 50。
 func (s *SearchService) ZeroResultKeywords(days, limit int) ([]ZeroResultKeywordDTO, error) {
 	if days <= 0 {
 		days = 30
@@ -547,7 +587,9 @@ func (s *SearchService) ZeroResultKeywords(days, limit int) ([]ZeroResultKeyword
 	}
 	if err := s.db.Model(&model.SearchFact{}).
 		Select("keyword, COUNT(*) AS times, MAX(created_at) AS last_seen_at").
-		Where("total_hits = 0 AND created_at >= ?", since).
+		// 零结果词 = **聚合搜索**（search_type 空串）且总命中为 0：
+		// 指定类型搜索的 0 命中只说明「该分区没有」，不等于「平台没有」。
+		Where("search_type = '' AND total_hits = 0 AND created_at >= ?", since).
 		Group("keyword").
 		Order("times DESC, last_seen_at DESC").
 		Limit(limit).Scan(&rows).Error; err != nil {

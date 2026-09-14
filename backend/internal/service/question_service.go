@@ -374,6 +374,7 @@ func (s *QuestionBankService) GetQuestionForStudent(id int, credentialID *int) (
 	return d, nil
 }
 
+// GetQuestion 查询题目详情（编辑面：作者/审核者，含 draft）。
 func (s *QuestionBankService) GetQuestion(id int) (QuestionDTO, error) {
 	var q model.Question
 	if err := s.db.First(&q, id).Error; err != nil {

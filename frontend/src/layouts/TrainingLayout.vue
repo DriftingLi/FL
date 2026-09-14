@@ -54,12 +54,20 @@ function openSearch(): void {
   void router.push({ path: '/training/search', query: { focus: '1' } })
 }
 
+/** 事件目标是不是可编辑元素（输入框 / 文本域 / 下拉 / contenteditable）。 */
+function isEditableTarget(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null
+  if (!el || !el.tagName) return false
+  return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable === true
+}
+
 /** ⌘/Ctrl+K 打开搜索（全工作区可达）；卸载时摘掉监听，避免布局切换后残留。 */
 function onGlobalKeydown(e: KeyboardEvent): void {
-  if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
-    e.preventDefault()
-    openSearch()
-  }
+  if (!(e.metaKey || e.ctrlKey) || (e.key !== 'k' && e.key !== 'K')) return
+  // 编辑区内的 Ctrl+K 是编辑器 / 浏览器的既有绑定（发帖、搜索框、笔记），不劫持
+  if (isEditableTarget(e.target)) return
+  e.preventDefault()
+  openSearch()
 }
 
 onMounted(() => {

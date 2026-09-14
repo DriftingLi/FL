@@ -81,7 +81,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft } from '@element-plus/icons-vue'
-import { questionInteractionApi } from '@/api/questionInteraction'
+// by-id 取题复用既有题库 API（端点同一，读路径由后端按能力分流：#981 之后学员走题库池口径）
+import { questionBankApi } from '@/api/questionBank'
 import { practiceModeApi } from '@/api/practiceMode'
 import type { QuestionDTO } from '@/api/generated/questionBank'
 import type { Question, QuestionType, SubmitResult } from '@/types/question'
@@ -143,7 +144,7 @@ async function fetchQuestion(): Promise<void> {
   loading.value = true
   loadError.value = false
   try {
-    question.value = toUIQuestion(await questionInteractionApi.getQuestion(id))
+    question.value = toUIQuestion(await questionBankApi.getQuestion(id))
   } catch {
     loadError.value = true
     question.value = null

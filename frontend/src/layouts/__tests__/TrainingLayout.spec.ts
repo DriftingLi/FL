@@ -19,11 +19,13 @@ vi.mock('@/stores/course', () => ({
 }))
 vi.mock('@/config/navigation', () => ({ roleNavigation: { student: [] } }))
 
+import { epLite } from '@/test/element-lite'
 import TrainingLayout from '../TrainingLayout.vue'
 
 function mountLayout() {
   return mount(TrainingLayout, {
     global: {
+      plugins: [epLite()],
       stubs: {
         SidebarLayout: { template: '<div class="sidebar-stub"><slot name="top" :collapsed="false" /></div>' },
         CredentialSwitcher: true
@@ -70,6 +72,15 @@ describe('TrainingLayout 搜索入口', () => {
     expect(spy).toHaveBeenCalled()
     expect(h.push).not.toHaveBeenCalled()
     window.removeEventListener('focus-global-search', spy)
+  })
+
+  it('输入框内按 Ctrl+K 不劫持（编辑器/浏览器既有绑定）', async () => {
+    wrapper = mountLayout()
+    const input = document.createElement('input')
+    document.body.appendChild(input)
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }))
+    expect(h.push).not.toHaveBeenCalled()
+    input.remove()
   })
 
   it('卸载后摘掉快捷键监听（布局切换不留残留）', async () => {

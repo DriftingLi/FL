@@ -19,14 +19,25 @@ func TestSearchChapterPartitionFollowsCourseVisibility(t *testing.T) {
 	credA, credB := 1, 2
 	spID, lvID := 1, 1
 
-	mkCourse := func(name string, cred *int, mounted bool) model.Course {
-		c := model.Course{Name: name, Status: 1, CredentialID: cred, CreatedAt: testutil.Now()}
+	mkCourse := func(name string, cred *int, mounted bool, status ...int16) model.Course {
+		st := int16(1)
+		if len(status) > 0 {
+			st = status[0]
+		}
+		c := model.Course{Name: name, Status: st, CredentialID: cred, CreatedAt: testutil.Now()}
 		if mounted {
 			c.SpecialtyID = &spID
 			c.LevelID = &lvID
 		}
 		if err := db.Create(&c).Error; err != nil {
 			t.Fatalf("建课失败: %v", err)
+		}
+		// Course.Status 的 gorm default:1 会把零值写成 1（GORM 对带默认值的零值字段走 DB 默认），
+		// 所以「未发布」必须显式回写一次，否则用例自己在骗自己。
+		if st != 1 {
+			if err := db.Model(&model.Course{}).Where("course_id = ?", c.CourseID).Update("status", st).Error; err != nil {
+				t.Fatalf("回写课程状态失败: %v", err)
+			}
 		}
 		return c
 	}
@@ -41,6 +52,8 @@ func TestSearchChapterPartitionFollowsCourseVisibility(t *testing.T) {
 	mkChapter(mkCourse("证件A课程", &credA, true).CourseID, "液压系统拆装")
 	mkChapter(mkCourse("证件B课程", &credB, true).CourseID, "液压系统拆装B")
 	mkChapter(mkCourse("未挂载课程", &credA, false).CourseID, "液压系统拆装未挂载")
+	// 未发布课程下的章节同样不可检索（章节可见性跟随课程的 published 口径）
+	mkChapter(mkCourse("未发布课程", &credA, true, 0).CourseID, "液压系统拆装未发布")
 
 	got, err := svc.Search("液压", SearchTypeChapter, 1, 20, &credA)
 	if err != nil {
@@ -195,7 +208,8 @@ func TestSearchFactsAreAnonymousAndZeroResultQueryable(t *testing.T) {
 		}
 	}
 
-	if _, err := svc.Search("查无此词的液压", SearchTypeCourse, 1, 20); err != nil {
+	// 聚合搜索（type 缺省）+ 零命中 = 零结果搜索
+	if _, err := svc.Search("查无此词的液压", "", 1, 20); err != nil {
 		t.Fatalf("搜索失败: %v", err)
 	}
 	var facts int64
@@ -211,13 +225,8 @@ func TestSearchFactsAreAnonymousAndZeroResultQueryable(t *testing.T) {
 		t.Fatalf("零结果词应含该关键词: %+v", zero)
 	}
 
-	// 有命中的词不进零结果列表
-	spID, lvID := 1, 1
-	c := model.Course{Name: "液压系统", Status: 1, SpecialtyID: &spID, LevelID: &lvID, CreatedAt: testutil.Now()}
-	if err := db.Create(&c).Error; err != nil {
-		t.Fatalf("建课失败: %v", err)
-	}
-	if _, err := svc.Search("液压系统", SearchTypeCourse, 1, 20); err != nil {
+	// **指定类型**搜索的 0 命中不算零结果词：那只说明该分区没有，不等于平台没有
+	if _, err := svc.Search("查无此词的章节", SearchTypeChapter, 1, 20); err != nil {
 		t.Fatalf("搜索失败: %v", err)
 	}
 	zero, err = svc.ZeroResultKeywords(30, 20)
@@ -225,9 +234,88 @@ func TestSearchFactsAreAnonymousAndZeroResultQueryable(t *testing.T) {
 		t.Fatalf("零结果词查询失败: %v", err)
 	}
 	for _, z := range zero {
-		if z.Keyword == "液压系统" {
+		if z.Keyword == "查无此词的章节" {
+			t.Fatalf("指定类型搜索的 0 命中不得进零结果列表: %+v", zero)
+		}
+	}
+
+	// 聚合搜索的分区命中数逐区落库（哪一类内容搜不到可回答）
+	spID, lvID := 1, 1
+	c := model.Course{Name: "液压系统", Status: 1, SpecialtyID: &spID, LevelID: &lvID, CreatedAt: testutil.Now()}
+	if err := db.Create(&c).Error; err != nil {
+		t.Fatalf("建课失败: %v", err)
+	}
+	if err := db.Create(&model.Chapter{CourseID: c.CourseID, Title: "液压章节", Content: "x", CreatedAt: testutil.Now()}).Error; err != nil {
+		t.Fatalf("建章节失败: %v", err)
+	}
+	if _, err := svc.Search("液压", "", 1, 20); err != nil {
+		t.Fatalf("搜索失败: %v", err)
+	}
+	var last model.SearchFact
+	if err := db.Order("id DESC").First(&last).Error; err != nil {
+		t.Fatalf("读检索事实失败: %v", err)
+	}
+	if last.SearchType != "" || last.CourseHits != 1 || last.ChapterHits != 1 || last.TotalHits != 2 {
+		t.Fatalf("聚合检索事实的分区命中数不对: %+v", last)
+	}
+	if last.QuestionHits != 0 || last.ContentHits != 0 || last.TopicHits != 0 {
+		t.Fatalf("未命中分区的计数应为 0: %+v", last)
+	}
+	// 有命中的词不进零结果列表
+	zero, err = svc.ZeroResultKeywords(30, 20)
+	if err != nil {
+		t.Fatalf("零结果词查询失败: %v", err)
+	}
+	for _, z := range zero {
+		if z.Keyword == "液压" {
 			t.Fatalf("有命中的词不得进零结果列表: %+v", zero)
 		}
+	}
+}
+
+// 二级排序键真正生效（一级键是命中位置，这里固定为同一级再比二级键）。
+func TestSearchSecondaryOrderKeys(t *testing.T) {
+	db := testutil.NewMemoryDB(t)
+	svc := NewSearchService(db, nil)
+	spID, lvID := 1, 1
+	mk := func(name string, sortOrder int) model.Course {
+		c := model.Course{Name: name, Status: 1, SpecialtyID: &spID, LevelID: &lvID, SortOrder: sortOrder, CreatedAt: testutil.Now()}
+		if err := db.Create(&c).Error; err != nil {
+			t.Fatalf("建课失败: %v", err)
+		}
+		return c
+	}
+	// 两门都是标题命中：id 大的 sort_order 更靠前 → 必须按 sort_order 排，而不是 course_id
+	mk("液压入门", 9)
+	mk("液压进阶", 1)
+
+	got, err := svc.Search("液压", SearchTypeCourse, 1, 20)
+	if err != nil {
+		t.Fatalf("搜索失败: %v", err)
+	}
+	items := got.(*SearchPageDTO).Items
+	if len(items) != 2 || items[0].Title != "液压进阶" {
+		t.Fatalf("课程二级键 sort_order 未生效: %+v", items)
+	}
+
+	// 时效内容：两条都是正文命中，最近有回复的排前
+	older := testutil.Now().AddDate(0, 0, -3)
+	newer := testutil.Now()
+	t1 := model.ForumTopic{UserID: 1, Title: "老帖", Content: "液压泵异响", Category: "discussion", ContentFormat: "text", LastReplyAt: &older, CreatedAt: older, UpdatedAt: older}
+	t2 := model.ForumTopic{UserID: 1, Title: "新帖", Content: "液压泵异响", Category: "discussion", ContentFormat: "text", LastReplyAt: &newer, CreatedAt: newer, UpdatedAt: newer}
+	if err := db.Create(&t1).Error; err != nil {
+		t.Fatalf("建帖失败: %v", err)
+	}
+	if err := db.Create(&t2).Error; err != nil {
+		t.Fatalf("建帖失败: %v", err)
+	}
+	topics, err := svc.Search("液压泵", SearchTypeTopic, 1, 20)
+	if err != nil {
+		t.Fatalf("搜索失败: %v", err)
+	}
+	tItems := topics.(*SearchPageDTO).Items
+	if len(tItems) != 2 || tItems[0].Title != "新帖" {
+		t.Fatalf("论坛帖二级键 last_reply_at 未生效: %+v", tItems)
 	}
 }
 

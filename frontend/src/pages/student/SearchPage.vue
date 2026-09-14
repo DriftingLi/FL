@@ -65,13 +65,14 @@
         <template v-else>
           <!-- 全部模式：分区并列（ADR-0049 决策 5），区内已由后端排好 -->
           <template v-if="activeType === 'all' && allResult">
+            <template v-if="!isAllEmpty">
             <div v-for="section in sections" :key="section.key" class="border-b border-line py-3.5 last:border-b-0">
               <div class="mb-2 flex items-baseline gap-2.5">
                 <span class="text-[15px] font-semibold text-ink">{{ section.label }}</span>
                 <span class="text-xs text-ink-3">{{ section.data.total }} 条</span>
                 <span
                   v-if="section.data.total > section.data.items.length"
-                  class="ml-auto cursor-pointer text-[13px] text-brand"
+                  class="ml-auto cursor-pointer text-[13px] text-ui-600"
                   @click="onTypeChange(section.key)"
                 >查看全部</span>
               </div>
@@ -79,7 +80,8 @@
                 <div
                   v-for="item in section.data.items"
                   :key="item.type + '-' + item.id"
-                  class="cursor-pointer rounded-[6px] px-2.5 py-2 transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)] hover:bg-canvas"
+                  class="rounded-[6px] px-2.5 py-2 transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)]"
+                  :class="itemPath(item) ? 'cursor-pointer hover:bg-canvas' : ''"
                   @click="goItem(item)"
                 >
                   <SearchResultRow :item="item" :keyword="keyword" />
@@ -87,7 +89,8 @@
               </template>
               <div v-else class="py-1 text-[13px] text-ink-muted">无匹配结果</div>
             </div>
-            <UiEmptyState v-if="isAllEmpty" description="没有找到相关内容">
+            </template>
+            <UiEmptyState v-else description="没有找到相关内容">
               <div class="mt-2 flex gap-2">
                 <UiButton size="small" @click="goPath('/training/question-bank')">去题库练习</UiButton>
                 <UiButton size="small" @click="goPath('/training/forum')">去论坛提问</UiButton>
@@ -101,7 +104,8 @@
               <div
                 v-for="item in pageResult.items"
                 :key="item.type + '-' + item.id"
-                class="cursor-pointer rounded-[6px] px-2.5 py-2 transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)] hover:bg-canvas"
+                class="rounded-[6px] px-2.5 py-2 transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)]"
+                :class="itemPath(item) ? 'cursor-pointer hover:bg-canvas' : ''"
                 @click="goItem(item)"
               >
                 <SearchResultRow :item="item" :keyword="keyword" />
@@ -161,6 +165,8 @@ const history = ref<string[]>(loadSearchHistory())
 
 const allResult = ref<SearchAllResult | null>(null)
 const pageResult = ref<SearchPageResult | null>(null)
+// 各分区命中数：聚合搜索时拿到并**留住**——切到指定类型后 tab 计数不该消失
+const sectionTotals = ref<Record<string, number>>({})
 
 // 三态 + 分页三件套（#388）：loader 按 activeType 分流（聚合 / 指定类型分页），
 // retry 因此天然回到触发失败的那次查询。
@@ -169,8 +175,16 @@ const { loading, loadError, retrying, retry, page: currentPage, pageSize, total,
   if (!kw) return
   const credId = credentialStore.current?.id ?? undefined
   if (activeType.value === 'all') {
-    allResult.value = (await searchApi.search({ keyword: kw, credential_id: credId })) as SearchAllResult
+    const res = (await searchApi.search({ keyword: kw, credential_id: credId })) as SearchAllResult
+    allResult.value = res
     pageResult.value = null
+    sectionTotals.value = {
+      course: res.courses.total,
+      chapter: res.chapters.total,
+      question: res.questions.total,
+      content: res.contents.total,
+      topic: res.topics.total
+    }
   } else {
     const res = (await searchApi.search({
       keyword: kw,
@@ -199,15 +213,15 @@ const sections = computed(() => {
 
 // 类型 tab 计数：聚合响应本来就带每分区 total（候选 W5），不必额外请求。
 const typeTabOptions = computed(() => {
-  const r = allResult.value
-  const count = (v: number | undefined) => (searched.value && r ? '(' + (v ?? 0) + ')' : '')
+  const hasCounts = searched.value && Object.keys(sectionTotals.value).length > 0
+  const count = (key: string) => (hasCounts ? '(' + (sectionTotals.value[key] ?? 0) + ')' : '')
   return [
     { label: '全部', value: 'all' },
-    { label: '课程' + count(r?.courses.total), value: 'course' },
-    { label: '章节' + count(r?.chapters.total), value: 'chapter' },
-    { label: '题目' + count(r?.questions.total), value: 'question' },
-    { label: '内容精选' + count(r?.contents.total), value: 'content' },
-    { label: '帖子' + count(r?.topics.total), value: 'topic' }
+    { label: '课程' + count('course'), value: 'course' },
+    { label: '章节' + count('chapter'), value: 'chapter' },
+    { label: '题目' + count('question'), value: 'question' },
+    { label: '内容精选' + count('content'), value: 'content' },
+    { label: '帖子' + count('topic'), value: 'topic' }
   ]
 })
 
