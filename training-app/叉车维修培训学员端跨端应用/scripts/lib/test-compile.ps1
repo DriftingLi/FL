@@ -63,7 +63,10 @@ function Invoke-TestAndCompile {
         # #974：把**部署判定的时序守护**也纳入 Q-A —— `hxRun`（C1–C14，文本层）与
         # `hxTimingBehavior`（运行期）。一个 dev:finish **永远不跑**的守护等于空跑，
         # 正是本仓反复踩过的假绿形态（守护 T13）。
-        $testPattern = 'levelDetect|envCheck|testCompile|buildDeploy|autoScreenshot|screenshotDiff|evidenceGen|devFinish|hxBusyGate|hxRun|hxTimingBehavior'
+        # ADR-0012：再加 `hxError` —— 覆盖**错误行判据**的运行期守护 `hxErrorLinesBehavior`。
+        # ⚠️ 注意 `--testPathPattern` 是**子串**匹配：`hxRun` **匹配不到** `hxErrorLinesBehavior`
+        #    （已用 `jest --listTests` 实证），故必须显式加这个 token，否则该守护**永不执行**。
+        $testPattern = 'levelDetect|envCheck|testCompile|buildDeploy|autoScreenshot|screenshotDiff|evidenceGen|devFinish|hxBusyGate|hxRun|hxTimingBehavior|hxError'
         try {
             $testOutput = & npx jest --config jest.config.unit.js -i --testPathPattern $testPattern --forceExit 2>&1 | Out-String
         }
