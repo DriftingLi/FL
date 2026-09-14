@@ -5,6 +5,7 @@
 // 同步契约：backend/internal/apitypes/codegen_test.go 把本文件与注解渲染结果全等比对。
 //
 // 覆盖端点：
+//   GET  /featured-content/{id}
 //   GET  /admin/featured-contents
 //   GET  /admin/featured-content/{id}
 //   POST /admin/featured-content
@@ -13,7 +14,7 @@
 //   POST /admin/featured-content/{id}/publish
 //   POST /admin/featured-content/upload-image
 //
-// 覆盖的 Go 类型：FeaturedContentAdminDetailDTO / FeaturedContentDTO / FeaturedContentPageResult / FeaturedDeleteResult
+// 覆盖的 Go 类型：FeaturedContentAdminDetailDTO / FeaturedContentDTO / FeaturedContentDetailDTO / FeaturedContentPageResult / FeaturedDeleteResult / FeaturedNavDTO
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -58,6 +59,26 @@ export interface FeaturedContentDTO {
   view_count: number
 }
 
+export interface FeaturedContentDetailDTO {
+  category: string
+  category_label: string
+  content: string
+  content_id: number
+  cover_image: string
+  created_at: string
+  next: FeaturedNavDTO
+  prev: FeaturedNavDTO
+  published_at: string | null
+  related: FeaturedContentDTO[]
+  sort_order: number
+  source: string
+  status: number
+  summary: string
+  title: string
+  updated_at: string
+  view_count: number
+}
+
 export interface FeaturedContentPageResult {
   items: FeaturedContentDTO[]
   page: number
@@ -67,4 +88,12 @@ export interface FeaturedContentPageResult {
 
 export interface FeaturedDeleteResult {
   content_id: number
+}
+
+export interface FeaturedNavDTO {
+  category: string
+  category_label: string
+  content_id: number
+  published_at: string
+  title: string
 }

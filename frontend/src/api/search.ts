@@ -6,8 +6,11 @@ import type { SearchAllDTO, SearchItemDTO, SearchPageDTO, SearchSectionDTO } fro
 
 export type { SearchAllDTO, SearchItemDTO, SearchPageDTO, SearchSectionDTO }
 
-/** 搜索类型（与后端 ADR-0018 一致；featured 在学员端称资讯）—— 封闭值集，入参用，不生成（决策 3） */
-export type SearchType = 'course' | 'question' | 'content' | 'topic'
+/**
+ * 搜索类型（与后端 ADR-0049 一致；featured 在学员端称「内容精选」）—— 封闭值集，入参用，不生成（决策 3）。
+ * chapter 自 ADR-0049 决策 3 起进入可检索面。
+ */
+export type SearchType = 'course' | 'chapter' | 'question' | 'content' | 'topic'
 
 // 旧名保留为生成类型别名（既有 import 路径不破）；形状差异（cover/summary 由可选变必填）进字段级清单。
 export type SearchItem = SearchItemDTO
@@ -23,7 +26,7 @@ export type SearchPageResult = SearchPageDTO
 export type SearchResult = SearchAllResult | SearchPageResult
 
 export const searchApi = {
-  /** type 缺省返回各分区聚合，指定类型返回分页结果 */
+  /** type 缺省返回各分区聚合（含 chapters），指定类型返回分页结果 */
   search(params: { keyword: string; type?: SearchType; page?: number; page_size?: number; credential_id?: number }) {
     // credential_id 由主 client 请求拦截器默认注入（#387）
     return unwrappedRequest.get<SearchResult>('/search', { params })

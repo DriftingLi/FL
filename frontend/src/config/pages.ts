@@ -150,6 +150,9 @@ export const pages: PageDescriptor[] = [
   // 脱离布局后，布局级的 role: hrwai_user 不再经 meta 继承，故在此显式声明（行为不变）。
   { name: routeNames.LinkOut, path: '/training/link-out', component: () => import('@/pages/student/LinkOutPage.vue'), workspace: 'training', requiresAuth: true, roles: ['hrwai_user'] },
   { name: routeNames.ChapterView, path: '/training/course/:courseId/chapter/:chapterId', component: () => import('@/pages/student/ChapterView.vue'), layout: 'training', workspace: 'training', capability: 'course.learn' },
+  // ADR-0049 决策 4：搜索结果的落点（无落点者不得进搜索结果）
+  { name: routeNames.StudentFeaturedDetail, path: '/training/featured/:id', component: () => import('@/pages/student/FeaturedDetail.vue'), layout: 'training', workspace: 'training', capability: 'student.access' },
+  { name: routeNames.StudentQuestionDetail, path: '/training/questions/:id', component: () => import('@/pages/student/QuestionDetail.vue'), layout: 'training', workspace: 'training', capability: 'question.practice' },
   { name: routeNames.QuestionBank, path: '/training/question-bank', component: () => import('@/pages/student/QuestionBank.vue'), layout: 'training', workspace: 'training', capability: 'question.practice', nav: { group: 'exam', label: '题库练习', icon: EditPen, order: 1 } },
   { name: routeNames.MockExam, path: '/training/mock-exam', component: () => import('@/pages/student/MockExam.vue'), layout: 'training', workspace: 'training', capability: 'mock_exam.take', nav: { group: 'exam', label: '模拟考试', icon: Document, order: 2 } },
   { name: routeNames.WrongQuestions, path: '/training/wrong-questions', component: () => import('@/pages/student/WrongQuestions.vue'), layout: 'training', workspace: 'training', capability: 'question.practice', nav: { group: 'exam', label: '错题本', icon: CircleCloseFilled, order: 3 } },

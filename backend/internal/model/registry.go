@@ -89,6 +89,7 @@ var ModelBlocks = []ModelBlock{
 			&AIGenerationLog{},
 			&AsyncTask{},
 			&FeaturedContent{},
+			&SearchFact{},
 			&SystemSetting{},
 		},
 	},

@@ -6,8 +6,9 @@
 //
 // 覆盖端点：
 //   GET  /search
+//   GET  /admin/search-facts/zero-results
 //
-// 覆盖的 Go 类型：SearchAllDTO / SearchItemDTO / SearchPageDTO / SearchSectionDTO
+// 覆盖的 Go 类型：SearchAllDTO / SearchItemDTO / SearchPageDTO / SearchSectionDTO / ZeroResultKeywordDTO
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -20,6 +21,7 @@
 // 需要更精确的形状时先在注解层补齐（先例见 spec #940 片五②的差集清单）。
 
 export interface SearchAllDTO {
+  chapters: SearchSectionDTO
   contents: SearchSectionDTO
   courses: SearchSectionDTO
   keyword: string
@@ -29,7 +31,10 @@ export interface SearchAllDTO {
 
 export interface SearchItemDTO {
   cover: string
+  hit_field: string
   id: number
+  parent_id: number
+  snippet: string
   summary: string
   title: string
   type: string
@@ -47,4 +52,10 @@ export interface SearchPageDTO {
 export interface SearchSectionDTO {
   items: SearchItemDTO[]
   total: number
+}
+
+export interface ZeroResultKeywordDTO {
+  keyword: string
+  last_seen_at: string
+  times: number
 }

@@ -372,7 +372,7 @@ func (h *PracticeModeHandler) SubmitAnswer(c *gin.Context) {
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *submitAnswerReq) (*service.SubmitResultDTO, error) {
-			return h.svc.SubmitAnswer(req.StudentID, req.QuestionID, req.UserAnswer, req.PracticeType)
+			return h.svc.SubmitAnswer(req.StudentID, req.QuestionID, req.UserAnswer, req.PracticeType, middleware.CredentialIDPtr(c))
 		},
 		Render: func(c *gin.Context, _ *submitAnswerReq, resp *service.SubmitResultDTO, err error) {
 			if err != nil {

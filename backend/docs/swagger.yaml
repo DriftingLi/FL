@@ -1893,6 +1893,46 @@ definitions:
       view_count:
         type: integer
     type: object
+  service.FeaturedContentDetailDTO:
+    properties:
+      category:
+        type: string
+      category_label:
+        type: string
+      content:
+        type: string
+      content_id:
+        type: integer
+      cover_image:
+        type: string
+      created_at:
+        type: string
+      next:
+        $ref: '#/definitions/service.FeaturedNavDTO'
+      prev:
+        $ref: '#/definitions/service.FeaturedNavDTO'
+      published_at:
+        type: string
+        x-nullable: true
+      related:
+        items:
+          $ref: '#/definitions/service.FeaturedContentDTO'
+        type: array
+      sort_order:
+        type: integer
+      source:
+        type: string
+      status:
+        type: integer
+      summary:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+      view_count:
+        type: integer
+    type: object
   service.FeaturedContentPageResult:
     properties:
       items:
@@ -1910,6 +1950,19 @@ definitions:
     properties:
       content_id:
         type: integer
+    type: object
+  service.FeaturedNavDTO:
+    properties:
+      category:
+        type: string
+      category_label:
+        type: string
+      content_id:
+        type: integer
+      published_at:
+        type: string
+      title:
+        type: string
     type: object
   service.ForumAuthor:
     properties:
@@ -3379,6 +3432,8 @@ definitions:
     type: object
   service.SearchAllDTO:
     properties:
+      chapters:
+        $ref: '#/definitions/service.SearchSectionDTO'
       contents:
         $ref: '#/definitions/service.SearchSectionDTO'
       courses:
@@ -3394,9 +3449,19 @@ definitions:
     properties:
       cover:
         type: string
+      hit_field:
+        description: HitField 命中位置：title | body | reply。
+        type: string
       id:
         type: integer
+      parent_id:
+        description: ParentID 章节结果所属课程 ID（其余类型为 0）——章节落点需要课程与章节两个参数。
+        type: integer
+      snippet:
+        description: Snippet 命中片段：源串中首个命中位置前后的窗口（ADR-0049 决策 6）。
+        type: string
       summary:
+        description: Summary 开头截断的旧口径，**保留**：移动端老客户端仍读它（ADR-0048 契约只增不破）。
         type: string
       title:
         type: string
@@ -3869,6 +3934,15 @@ definitions:
         type: integer
       username:
         type: string
+    type: object
+  service.ZeroResultKeywordDTO:
+    properties:
+      keyword:
+        type: string
+      last_seen_at:
+        type: string
+      times:
+        type: integer
     type: object
 info:
   contact: {}
@@ -6965,6 +7039,45 @@ paths:
       summary: 切换招聘者启用/禁用状态
       tags:
       - 管理端-招聘者
+  /admin/search-facts/zero-results:
+    get:
+      consumes:
+      - application/json
+      description: 按关键词聚合「总命中数为 0」的检索事实（ADR-0049 决策 7）。检索事实匿名：不含 user / 证件 / 设备，也不用于个性化。
+      parameters:
+      - default: 30
+        description: 统计窗口（天）
+        in: query
+        name: days
+        type: integer
+      - default: 50
+        description: 返回条数上限
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/service.ZeroResultKeywordDTO'
+                  type: array
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 零结果词列表
+      tags:
+      - 学员端-搜索
   /admin/specialty:
     post:
       consumes:
@@ -9468,7 +9581,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.FeaturedContentDetailDTO'
+              type: object
         "404":
           description: 不存在
           schema:
@@ -13397,16 +13515,17 @@ paths:
       consumes:
       - application/json
       description: |-
-        公开访问，keyword 模糊匹配 course/question/content/topic；type 缺省返回各分区聚合（courses/questions/contents/topics），
+        公开访问，keyword 模糊匹配 course/chapter/question/content/topic（LIKE 元字符按字面处理）；type 缺省返回各分区聚合（courses/chapters/questions/contents/topics），
         指定 type 时返回该类型的分页结果 —— 同一端点两种响应形状（swag 无联合类型表达力，data 取聚合形状；
         分页形状 service.SearchPageDTO 同域生成，前端以联合类型消费）。
+        每条结果带命中位置 hit_field（title|body|reply）与命中片段 snippet（源串窗口，投影与高亮由各端自行处理，ADR-0049 决策 6）。
       parameters:
       - description: 关键词
         in: query
         name: keyword
         required: true
         type: string
-      - description: 类型 course|question|content|topic
+      - description: 类型 course|chapter|question|content|topic
         in: query
         name: type
         type: string

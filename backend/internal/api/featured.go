@@ -83,7 +83,7 @@ func (h *FeaturedHandler) GetPublicList(c *gin.Context) {
 // @Produce json
 // @Param id path int true "内容ID"
 // @Param no_view query string false "1 不计数"
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.FeaturedContentDetailDTO} "success"
 // @Failure 404 {object} response.R "不存在"
 // @Router /featured-content/{id} [get]
 func (h *FeaturedHandler) GetPublicDetail(c *gin.Context) {

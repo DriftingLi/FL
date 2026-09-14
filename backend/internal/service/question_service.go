@@ -359,6 +359,22 @@ func (s *QuestionBankService) CreateQuestion(data map[string]any, createdBy *int
 }
 
 // GetQuestion 查询题目详情。
+// GetQuestionForStudent 学员侧按 id 取题（ADR-0049「题库池是可见性口径，覆盖每条读路径」）：
+// 过池口径（published + 排源标记真题题 + 当前证件）；不满足一律 ErrQuestionNotFound ——
+// 404 而不是 403，避免把「这题存在但不能看」变成存在性泄露。
+func (s *QuestionBankService) GetQuestionForStudent(id int, credentialID *int) (QuestionDTO, error) {
+	var q model.Question
+	err := poolFilter(s.db.Model(&model.Question{}), sampleQuestionsOpts{cred: credentialID}).
+		Where("id = ?", id).First(&q).Error
+	if err != nil {
+		return QuestionDTO{}, ErrQuestionNotFound
+	}
+	d := newQuestionDTO(&q, true)
+	d.Tags = s.loadTagsByQuestion(q.ID)
+	return d, nil
+}
+
+// GetQuestion 查询题目详情（编辑面：作者/审核者，含 draft）。
 func (s *QuestionBankService) GetQuestion(id int) (QuestionDTO, error) {
 	var q model.Question
 	if err := s.db.First(&q, id).Error; err != nil {

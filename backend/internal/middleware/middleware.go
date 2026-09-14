@@ -158,6 +158,13 @@ func CapabilityRequired(capability authz.Capability) gin.HandlerFunc {
 	}
 }
 
+// HasCapability 读当前请求角色的能力判定（JWTAuth 未应用或未登录时一律 false）。
+// 与 CapabilityRequired 同源（都走 authz 能力表），供 handler 在**同一端点内分流**读路径
+// 时使用（如题目 by-id：作者/审核者走编辑面，学员走题库池口径）。
+func HasCapability(c *gin.Context, capability authz.Capability) bool {
+	return authz.Has(authz.Role(CurrentRole(c)), capability)
+}
+
 // CurrentUserID 从 gin.Context 读取当前登录用户 ID(未登录返回 0)。
 // 统一供主体系与估值模块使用,替代原 vhandler.CurrentValuationUserID。
 func CurrentUserID(c *gin.Context) int {
