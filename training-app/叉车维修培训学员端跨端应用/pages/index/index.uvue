@@ -100,7 +100,7 @@
         flex-direction: column;
         position: relative;
         overflow: hidden;
-        background: linear-gradient(180deg, #0066FF, #00CC99);
+        background: linear-gradient(to bottom, #0066FF, #00CC99);
         background-color: #00CC99;
     }
 

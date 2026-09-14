@@ -35,7 +35,7 @@
 
     .banner-image-area {
         height: 260rpx;
-        background: linear-gradient(135deg, #e8f4ff, #d0e8ff);
+        background: linear-gradient(to bottom right, #e8f4ff, #d0e8ff);
         background-color: #e8f4ff;
         flex-direction: row;
         align-items: center;

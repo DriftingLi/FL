@@ -1,19 +1,25 @@
 /**
  * uvue 渐变语法契约守护（#937）—— 源码契约测试缝（读源文本、断言语法形态）。
  *
- * 为什么需要它：2026-09-13 在真机上跑了 10 种写法的探针页（小米 2510DRK44C，`screencap` 无损 PNG
- * + 逐块精确取色），实测结论是 —— uvue 原生端的 `linear-gradient` **只接受「恰好 2 个颜色值、
- * 且不带百分比停靠位」**：
+ * 为什么需要它：在真机上（小米 2510DRK44C，`screencap` 无损 PNG + 精确取色）分两轮实测，
+ * 结论是 —— uvue 原生端的 `linear-gradient` 只接受**「`to` 关键字方向 + 恰好 2 个颜色值 +
+ * 不带百分比停靠位」**：
  *
- *   可用：`linear-gradient(135deg, #e3f0ff, #cfe4ff)`        （角度、2 值、无 %）
- *   可用：`linear-gradient(to bottom, #FF0000, #0000FF)`      （关键字、2 值、无 %）
- *   丢弃：`linear-gradient(135deg, #FF1493 0%, #FF1493 100%)` （带 %）
+ *   可用：`linear-gradient(to bottom, #FF0000, #0000FF)`      （关键字、2 值、无 %）→ 真渐变
+ *   平色：`linear-gradient(180deg, #FF0000, #0000FF)`         （角度）→ 整幅退化成单一颜色
+ *   丢弃：`linear-gradient(135deg, #FF1493 0%, #FF1493 100%)` （角度 + 带 %）
  *   丢弃：`linear-gradient(to bottom, #F00, #FF0, #0F0, #00F)`（4 值）
  *
- * 两条容易搞反的事实，别再复述错：
- *   ① **角度合法** —— 实测 `135deg` 画得出来 ⇒ **不要**把「不得出现 `deg`」写成守护规则；
- *   ② **失败是整条声明被丢弃** —— 连同一处的 `background-color` 兜底也不生效（实测该显示兜底色
- *      的几块全是纯白）⇒ 兜底是好实践，但**不是**静默失败的保护网，只能靠语法本身合规。
+ * **§ 角度（deg）的结论修过一次，别再复述错**：第一轮探针里 A4（`135deg` + 2 值）测到
+ * `#D3E3FC`，当时判「角度可用」；第二轮做了**同页同色值的对照**才发现 —— 那个值**恰好是两色
+ * 中点**，是「角度不被解析、整幅退化成中间色」的特征。对照实测（红→蓝）：
+ * `to bottom` 出平滑过渡、`180deg` 在 583px 内恒为同一个值 ⇒ **角度不被支持**。
+ * 所以本测试**断言禁止 `deg`**，且新写渐变一律用 8 个 `to` 关键字之一。
+ *
+ * 另一条实测事实：**失败时连同一处的 `background-color` 兜底也不生效**（该显示兜底色的几块
+ * 实测为纯白）⇒ 兜底是好实践，但**不是**静默失败的保护网，只能靠语法本身合规。
+ * （例外：探针里兜底写在简写**之前**，与「整条被丢弃」不可分辨 ⇒ 不宣称兜底一定生效，
+ * 只规定书写顺序 = 写在 `background` 之后。）
  *
  * 本测试把「语法形态」锁死，让后续会话不会再写回不可用的写法（#937 之前全项目 22 处里 15 处中招，
  * 而且**不报错不警告**地静默失败）。
@@ -83,12 +89,18 @@ function scanGradients(source) {
   const violations = [];
   const css = stripComments(styleTextOf(source));
   for (const { args, parts } of gradientCalls(css)) {
-    // 方向有两种写法 —— 关键字（`to bottom` / `to bottom right`，含空格）与**角度**（`135deg`）。
-    // 两者都实测可用（#937 探针 A4 就是角度），都不计入颜色值个数。
+    // 方向：**只接受** 8 个 `to` 关键字之一（见文件头 § 角度的结论）。
+    // 角度仍要被识别为「方向」以便正确计数颜色值 —— 否则 `135deg` 会被误算成一个颜色值，
+    // 报出「颜色值个数 3」这种错位的违规文案；角度本身由下面单独判违规。
     const DIRECTION = /^(to\s+(right|left|top|bottom)(\s+(right|left))?|\d+(\.\d+)?deg)$/;
     const hasDirection = parts.length > 0 && DIRECTION.test(parts[0]);
     const stops = hasDirection ? parts.slice(1) : parts;
 
+    if (hasDirection && /deg$/.test(parts[0])) {
+      violations.push(
+        '用 deg 角度写方向（实测角度不被支持、整幅退化成单一颜色；只接受 to 关键字）：linear-gradient(' + args + ')'
+      );
+    }
     if (/%/.test(stops.join(','))) {
       violations.push(
         '带百分比停靠位（实测整条声明被丢弃）：linear-gradient(' + args + ')'
@@ -138,20 +150,26 @@ describe('uvue 渐变语法契约（#937 真机实测口径）', () => {
   // ---- 注入自检：检测器必须能抓住违规，否则本测试是空跑假绿 ----
   describe('① 检测器自检（注入违规样本必须被判红）', () => {
     const cases = [
+      ['角度写法（实测退化成平色，方向必须用 to 关键字）',
+        '<style>.a { background: linear-gradient(180deg, #FF0000, #0000FF); }</style>',
+        /用 deg 角度写方向/],
+      ['角度 + 两值 + 无百分比（第一轮探针曾误判为可用）',
+        '<style>.a { background: linear-gradient(135deg, #e3f0ff, #cfe4ff); }</style>',
+        /用 deg 角度写方向/],
       ['三值 + 百分比（本仓原页底写法）',
-        '<style>.a { background: linear-gradient(180deg, #CFE9FB 1%, #D0EBFD 16%, #F5F5F5 100%); }</style>',
+        '<style>.a { background: linear-gradient(to bottom, #CFE9FB 1%, #D0EBFD 16%, #F5F5F5 100%); }</style>',
         /百分比停靠位[\s\S]*颜色值个数 3/],
       ['两值但带百分比（探针 A1 写法）',
-        '<style>.a { background: linear-gradient(135deg, #FF1493 0%, #FF1493 100%); }</style>',
+        '<style>.a { background: linear-gradient(to bottom, #FF1493 0%, #FF1493 100%); }</style>',
         /百分比停靠位/],
       ['四值无百分比（探针 B3 写法，实测同样被丢弃）',
         '<style>.a { background: linear-gradient(to bottom, #FF0000, #FFFF00, #00FF00, #0000FF); }</style>',
         /颜色值个数 4/],
       ['background-image 长写',
-        '<style>.a { background-image: linear-gradient(135deg, #e3f0ff, #cfe4ff); }</style>',
+        '<style>.a { background-image: linear-gradient(to bottom, #e3f0ff, #cfe4ff); }</style>',
         /长写声明渐变/],
       ['兜底写在简写之前（会被 background 重置，等于没有兜底）',
-        '<style>.a { background-color: #1B5E20;\n  background: linear-gradient(135deg, #e3f0ff, #cfe4ff); }</style>',
+        '<style>.a { background-color: #1B5E20;\n  background: linear-gradient(to bottom, #e3f0ff, #cfe4ff); }</style>',
         /兜底写在 background 简写之前/],
     ];
     cases.forEach(([name, src, pattern]) => {
@@ -166,9 +184,7 @@ describe('uvue 渐变语法契约（#937 真机实测口径）', () => {
   // ---- 自检的另一半：合规写法与「注释里出现该词」不得误报 ----
   describe('② 检测器自检（合规样本必须判绿，防误报）', () => {
     const ok = [
-      ['角度 + 两值 + 无百分比（探针 A4 实测可用）',
-        '<style>.a { background: linear-gradient(135deg, #e3f0ff, #cfe4ff); }</style>'],
-      ['关键字 + 两值 + 无百分比（探针 B1 实测可用）',
+      ['关键字 + 两值 + 无百分比（探针 B1；2026-09-14 对照实测出真渐变）',
         '<style>.a { background: linear-gradient(to bottom, #FF0000, #0000FF); }</style>'],
       ['两词方向（to bottom right）',
         '<style>.a { background: linear-gradient(to bottom right, #CFE9FB, #F5F5F5); }</style>'],
@@ -177,7 +193,9 @@ describe('uvue 渐变语法契约（#937 真机实测口径）', () => {
       ['注释里出现该词不算实现',
         '<style>.a { background-color: #fff; /* 实色：本机型不绘制 linear-gradient(...) */ }</style>'],
       ['含 rgba() 的两值写法（括号内逗号不得被当成颜色值分隔）',
-        '<style>.a { background: linear-gradient(135deg, rgba(0,0,0,.5), rgba(255,255,255,1)); }</style>'],
+        '<style>.a { background: linear-gradient(to bottom, rgba(0,0,0,.5), rgba(255,255,255,1)); }</style>'],
+      ['兜底写在简写之后（正确顺序）',
+        '<style>.a { background: linear-gradient(to bottom, #e3f0ff, #cfe4ff);\n  background-color: #e3f0ff; }</style>'],
     ];
     ok.forEach(([name, src]) => {
       it(name, () => {
@@ -187,7 +205,7 @@ describe('uvue 渐变语法契约（#937 真机实测口径）', () => {
   });
 
   // ---- 对真实文件断言零命中 ----
-  it('③ 全项目 .uvue 的渐变声明均为「恰好 2 个颜色值 + 无百分比 + 简写 background」', () => {
+  it('③ 全项目 .uvue 的渐变声明均为「to 关键字 + 恰好 2 个颜色值 + 无百分比 + 简写 background」', () => {
     const files = [
       ...collectUvue(path.join(ROOT, 'pages')),
       ...collectUvue(path.join(ROOT, 'components')),

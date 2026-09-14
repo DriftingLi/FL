@@ -65,12 +65,12 @@
     }
 
     .summary-passed {
-        background: linear-gradient(135deg, #4caf50, #66bb6a);
+        background: linear-gradient(to bottom right, #4caf50, #66bb6a);
         background-color: #4caf50;
     }
 
     .summary-failed {
-        background: linear-gradient(135deg, #f44336, #ef5350);
+        background: linear-gradient(to bottom right, #f44336, #ef5350);
         background-color: #f44336;
     }
 

@@ -248,7 +248,7 @@
 
     /* ===== 用户信息卡 ===== */
     .user-card {
-        background: linear-gradient(135deg, #e3f0ff, #cfe4ff);
+        background: linear-gradient(to bottom right, #e3f0ff, #cfe4ff);
         background-color: #e3f0ff;
         border-radius: 24rpx;
         padding: 32rpx 24rpx 24rpx 24rpx;

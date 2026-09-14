@@ -343,7 +343,7 @@
 <style>
     .container {
         flex: 1;
-        background: linear-gradient(180deg, #6ECCFD, #0CA2EF);
+        background: linear-gradient(to bottom, #6ECCFD, #0CA2EF);
         background-color: #0CA2EF;
         flex-direction: column;
     }
