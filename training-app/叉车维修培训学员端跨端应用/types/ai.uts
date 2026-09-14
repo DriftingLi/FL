@@ -75,4 +75,8 @@ export type AIFunctionItem = {
     icon : string          // emoji 字符（专业版当前使用）
     prompt : string
     iconPath ?: string     // 图片路径（基础版原型使用自定义图标）
+    // 后端 AI 功能注册表的功能键（根仓库 ADR-0030；`#921` 加）——`key` 是本地 UI 标识（图标/引用），
+    // 两者是两回事：带 featureKey 的格子走专项通道（管理端单绑定 + 独立计费声明），
+    // 不带的落通用对话。字段缺省（未接线）时行为与从前一致。
+    featureKey ?: string
 }
