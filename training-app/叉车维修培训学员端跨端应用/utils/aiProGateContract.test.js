@@ -116,11 +116,14 @@ describe('AI 专业版 = 积分兑换权益（#920）契约', () => {
     });
   });
 
-  describe('④ 两态横幅与能力清单（实色，本机型不绘制渐变）', () => {
+  describe('④ 两态横幅与能力清单（横幅按设计用实色；#937 口径）', () => {
     it('未解锁 = 橙 / 已解锁 = 绿，均为实色 background-color', () => {
       expect(PAGE).toMatch(/\.pro-banner\.pro-banner-unlocked \{/);
       expect(PAGE).toMatch(/background-color: #fff3e0/);
       expect(PAGE).toMatch(/background-color: #e8f8ee/);
+      // 横幅**按设计**不用渐变（两态用实色更干净），不是「渐变画不出来」——
+      // 2026-09-13 真机实测已证伪后者：合规语法（角度/关键字 + 2 颜色值、无百分比）
+      // 是画得出来的，见 utils/gradientSyntaxContract.test.js（#937）。
       const from = PAGE.indexOf('.pro-banner {');
       const style = PAGE.slice(from, PAGE.indexOf('.pro-banner-go {', from));
       expect(style).not.toMatch(/gradient/);

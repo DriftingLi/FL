@@ -17,10 +17,14 @@
 
 ### 1.2 页面背景渐变
 
+> ⚠️ **App 平台（uvue 原生端）的 `linear-gradient` 只接受「恰好 2 个颜色值 + 不带百分比停靠位」**
+> （2026-09-13 真机实测，见 **#937**；守护 `utils/gradientSyntaxContract.test.js`）。原先的三色写法
+> 会被原生端**整条丢弃**，故 `$gradient-mid` 已从本表移除（它的唯一用途就是那个三色写法）。
+> 另注：`.uvue` 不支持 CSS 变量 ⇒ 示例里写的是**字面色值**，与页面里的写法一致。
+
 | Token | 色值 | 用途 |
 |---|---|---|
 | `$gradient-start` | `#CFE9FB` | 渐变顶部（tabBar 页面专用） |
-| `$gradient-mid` | `#D0EBFD` | 渐变中部 |
 | `$bg-page` | `#F5F5F5` | 渐变底部 / 通用页面背景 |
 
 ### 1.3 语义色
@@ -177,7 +181,9 @@
 <style>
 .container {
   flex: 1;
-  background: linear-gradient(180deg, $gradient-start 1%, $gradient-mid 16%, $bg-page 100%);
+  /* App 平台只支持 2 个颜色值、无百分比停靠（见 §1.2 注）；.uvue 不支持 CSS 变量，故写字面色值 */
+  background: linear-gradient(180deg, #CFE9FB, #D0EBFD);
+  background-color: #D0EBFD;
   flex-direction: column;
 }
 .status-bar { background-color: transparent; }

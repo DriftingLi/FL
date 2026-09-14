@@ -92,7 +92,8 @@
         margin: 24rpx;
         padding: 28rpx 32rpx;
         border-radius: 20rpx;
-        background: linear-gradient(90deg, #6FB9F7, #1E88E5);
+        background: linear-gradient(to right, #6FB9F7, #1E88E5);
+        background-color: #1E88E5;
         flex-direction: row;
         align-items: center;
         justify-content: space-between;

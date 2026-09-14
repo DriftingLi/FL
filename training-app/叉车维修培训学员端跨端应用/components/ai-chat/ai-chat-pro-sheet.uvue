@@ -139,7 +139,7 @@
 		left: 0;
 		right: 0;
 		bottom: 0;
-		/* 实色：本机型实测 background: linear-gradient(...) 静默不绘制 */
+		/* 实色：按设计（非能力限制 —— #937 真机实测已证伪「本机型不绘制渐变」） */
 		background-color: #ffffff;
 		border-top-left-radius: 24rpx;
 		border-top-right-radius: 24rpx;
