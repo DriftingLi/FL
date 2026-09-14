@@ -19,8 +19,17 @@
         真正的并发保护靠**跨进程文件锁**（`$env:TEMP\hx-agent.lock`）＋**等待上限**。
       若能接受更保守的默认，可加 `-NoWait`：探测到「不可响应」立即 `exit 2`，不做等待。
 
-    **锁**：`$env:TEMP\hx-agent.lock`，内容为两行（pid / 起始时间）。**陈旧判定：持有超过 30 分钟视为失效可抢占**
-    （防止上一个会话被强杀后留下死锁）。取锁后必须用 `Release-HxLock` 释放，且**要在 `finally` 路径里释放**。
+    **锁**：`$env:TEMP\hx-agent.lock`，内容为两行（pid / 起始时间）。**陈旧判定有两条（#974 起）**：
+
+      ① **持有进程已不存在** ⇒ 立即视为陈旧、可抢占 —— **这正是 30 分钟线本来要防的那个场景**
+         （上一个会话被强杀 / 崩溃后留下的死锁）。2026-09-14 实测：锁里 pid 已死、锁只放了 3 分钟，
+         旧判据手里**有 pid 却只看时间** ⇒ 调用方只能反复 `exit 2`，白等到 30 分钟（当日实测白等 ~25 分钟）。
+      ② 否则回落到**原有时间线**：持有超过 30 分钟视为失效可抢占。
+
+    **两条的优先级不可颠倒（fail-safe）**：只有**确定**持有者已退出（`Get-Process` 明确报
+    「Cannot find a process with the process identifier …」）才走 ①；**pid 非数字 / 拿不到 pid /
+    查询报其它错（如权限不足）一律当作「未知」**，回落到 ② 的时间判据 ⇒ 新判据**只可能提前放行死锁，
+    绝不放行任何活会话**。取锁后必须用 `Release-HxLock` 释放，且**要在 `finally` 路径里释放**。
 
     **锁交接（H10/H11，2026-09-14 加）**：本锁**按 PID 判定且不可重入** —— 若 `dev-finish.ps1` 自己持锁、
     再去调需要 HBuilderX 的子脚本（`kotlin-all-check.ps1` / `hx-run.ps1` / `mp-weixin-check.ps1`），
@@ -55,9 +64,41 @@ function Get-HxLockInfo {
     } catch { return $null }
 }
 
+function Test-HxProcessAlive {
+    <#
+      锁持有者存活探测（#974 现象一）。**刻意返回三态而不是布尔** ——
+      因为「拿不准」必须与「确定已死」分开，否则新判据会放行活会话：
+        $true  = 进程存在（活会话）
+        $false = **确定**不存在（`Get-Process` 明确报「Cannot find a process …」）
+        $null  = **未知**（pid 非数字 / 越界 / 查询报其它错，如权限不足）
+      调用方只允许在 $false 时走「持有者已死 ⇒ 陈旧」这条快路；$null 必须回落时间判据（fail-safe）。
+      实测（PowerShell 7.6.5，2026-09-14）：pid 不存在时 `Get-Process -Id … -ErrorAction Stop`
+      抛的正是 `Microsoft.PowerShell.Commands.ProcessCommandException`。
+    #>
+    param([string]$PidText)
+    $t = "$PidText".Trim()
+    if ($t -notmatch '^\d+$') { return $null }
+    try {
+        $p = Get-Process -Id ([int]$t) -ErrorAction Stop
+        if ($null -ne $p) { return $true }
+        return $null
+    } catch [Microsoft.PowerShell.Commands.ProcessCommandException] {
+        return $false
+    } catch {
+        return $null
+    }
+}
+
 function Test-HxLockStale {
+    <#
+      陈旧判定（#974 起两条，优先级见文件头）：
+        ① 持有进程**已确定不存在** ⇒ 陈旧（被强杀/崩溃的会话留下的死锁，不该再等满 30 分钟）；
+        ② 否则（拿不准，或持有者仍活）回落到时间线：持有超过 HxLockStaleMinutes 分钟。
+      **顺序不可颠倒**：① 只在 Test-HxProcessAlive 明确返回 $false 时成立。
+    #>
     param($Info)
     if (-not $Info) { return $true }
+    if ((Test-HxProcessAlive -PidText $Info.Pid) -eq $false) { return $true }
     try { return ((Get-Date) - $Info.MTime).TotalMinutes -gt $script:HxLockStaleMinutes } catch { return $true }
 }
 
@@ -67,7 +108,13 @@ function Acquire-HxLock {
         $info = Get-HxLockInfo
         if ($info -and -not (Test-HxLockStale -Info $info)) { return $false }
         if ($info) {
-            Write-Host ">>> [hx-busy] 抢占陈旧锁（持有者 pid=$($info.Pid)，起始 $($info.Started)，已超 $script:HxLockStaleMinutes 分钟）" -ForegroundColor Yellow
+            # 把**为什么**判陈旧写进日志：#974 的两条判据对应两种完全不同的处置，日志里分不清就没法复盘
+            $why = if ((Test-HxProcessAlive -PidText $info.Pid) -eq $false) {
+                "持有进程 pid=$($info.Pid) 已不存在（#974：不必再等满 $script:HxLockStaleMinutes 分钟）"
+            } else {
+                "已超 $script:HxLockStaleMinutes 分钟"
+            }
+            Write-Host ">>> [hx-busy] 抢占陈旧锁（pid=$($info.Pid)，起始 $($info.Started)：$why）" -ForegroundColor Yellow
             Remove-Item -LiteralPath $script:HxLockPath -Force -ErrorAction SilentlyContinue
         }
         try {

@@ -99,4 +99,13 @@ describe('test-compile.ps1 contract', () => {
     expect(src).toContain('未做编译诊断');
     expect(src).toContain('quick_static_only');
   });
+
+  // T13（2026-09-14，#974）：Q-A 的契约测试范围必须覆盖**部署判定的时序守护** ——
+  // 「一个 dev:finish 永远不跑的守护」等于空跑，正是本仓反复踩过的假绿形态。
+  test('T13: Q-A contract-test pattern covers the deploy-timing guards', () => {
+    expect(src).toMatch(/\$testPattern\s*=/);
+    expect(src).toContain('hxBusyGate');
+    expect(src).toContain('hxRun');
+    expect(src).toContain('hxTimingBehavior');
+  });
 });
