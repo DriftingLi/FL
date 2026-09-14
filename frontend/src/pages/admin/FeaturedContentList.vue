@@ -97,7 +97,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Plus, ArrowDown } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { adminFeaturedApi, featuredCategoryOptions, categoryLabel, type FeaturedContent } from '@/api/featured'
+import { adminFeaturedApi, featuredCategoryOptions, categoryLabel, type FeaturedContentDTO } from '@/api/featured'
 import { useAdminTable } from '@/composables/useAdminTable'
 import { formatDateTime } from '@/utils/format'
 import UiButton from '@/components/ui/UiButton.vue'
@@ -111,7 +111,7 @@ const filterCategory = ref('')
 const filterStatus = ref<number | undefined>(undefined)
 
 // admin 列表状态机：本页只声明 fetch 与行操作 adapter
-const table = useAdminTable<FeaturedContent>({
+const table = useAdminTable<FeaturedContentDTO>({
   fetch: async (paging, filters) => {
     const params: { page?: number; page_size?: number; category?: string; status?: string } = {
       page: paging.page,
@@ -125,14 +125,14 @@ const table = useAdminTable<FeaturedContent>({
     return { list: res.items || [], total: res.total || 0 }
   },
   actions: {
-    edit: (row: FeaturedContent) => goEdit(row.content_id),
-    publish: (row: FeaturedContent) => handlePublish(row.content_id),
+    edit: (row: FeaturedContentDTO) => goEdit(row.content_id),
+    publish: (row: FeaturedContentDTO) => handlePublish(row.content_id),
     delete: deleteRow
   }
 })
 const { loading, list, total, currentPage, pageSize, load, handleAction } = table
 
-function deleteRow(row: FeaturedContent): Promise<void> {
+function deleteRow(row: FeaturedContentDTO): Promise<void> {
   return table.confirmDelete(row, r => handleDelete(r.content_id), '确定删除该内容？删除后不可恢复')
 }
 

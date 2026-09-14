@@ -26,6 +26,7 @@ function mountPage() {
 function ledgerItem(over: Record<string, unknown> = {}) {
   return {
     id: 1,
+    user_id: 1,
     delta: 10,
     reason: 'task_daily_checkin',
     ref_type: 'task',

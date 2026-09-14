@@ -39,8 +39,8 @@ type AIConfigDTO struct {
 type FeatureBindingDTO struct {
 	FeatureKey   string `json:"feature_key"`
 	FeatureLabel string `json:"feature_label"`
-	ConfigID     *int   `json:"config_id,omitempty"`
-	ConfigName   string `json:"config_name,omitempty"`
+	ConfigID     *int   `json:"config_id,omitempty" extensions:"x-optional"`
+	ConfigName   string `json:"config_name,omitempty" extensions:"x-optional"`
 }
 
 // ModelOption 供 AI 助手用户选择的模型选项（不含 api_key）。

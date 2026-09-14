@@ -128,7 +128,7 @@
 import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowRight } from '@element-plus/icons-vue'
-import { tutorApi, type TutorCourse } from '@/api/tutor'
+import { tutorApi, type CourseDTO } from '@/api/tutor'
 import { trainingApi } from '@/api/training'
 import { credentialApi, type CredentialDict } from '@/api/credential'
 import { levelTagType, type LevelTagType } from '@/constants/level'
@@ -146,8 +146,8 @@ import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 
-/** 导师端课程行：后端额外返回 credential_id，TutorCourse 尚未收录 */
-type TutorCourseRow = TutorCourse & { credential_id?: number }
+/** 导师端课程行：生成 CourseDTO（已含 credential_id，原「TutorCourse 尚未收录」的手写补充随之删除） */
+type TutorCourseRow = CourseDTO
 
 const router = useRouter()
 const credentials = ref<CredentialDict[]>([])
@@ -217,7 +217,8 @@ const {
   }
 })
 
-function credentialNameOf(id?: number): string {
+// credential_id 由生成契约声明为 number | null（未归属证件时后端回 null）
+function credentialNameOf(id?: number | null): string {
   if (!id) return ''
   return credentials.value.find((c) => c.id === id)?.name || ''
 }

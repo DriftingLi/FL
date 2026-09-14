@@ -9,10 +9,14 @@ import (
 // 各消费方保留各自业务语义（是否零填充维度 / 是否含正确率），shape-lock 测试冻结契约。
 
 // QuestionBankStatsDTO 题库统计（旧 question_service GetStats map 输出）。
+//
+// 两个 map 与 WrongQuestionStatsDTO 同因同解：swag 对 map[string]int64 的 format 推断不稳定
+// （同一份代码在不同环境会生成 有/无 "format: int64" 两种产物），显式 swaggertype 钉住值类型即消除
+// —— 该定义在片六随 questionBank 端点首次进入 swagger，随即把新鲜度锁变成随机红（CI 实测）。
 type QuestionBankStatsDTO struct {
 	Total    int64            `json:"total"`
-	ByType   map[string]int64 `json:"by_type"`
-	ByStatus map[string]int64 `json:"by_status"`
+	ByType   map[string]int64 `json:"by_type" swaggertype:"object,integer"`
+	ByStatus map[string]int64 `json:"by_status" swaggertype:"object,integer"`
 }
 
 // PracticeTypeStat 练习统计按题型明细（旧内层 map {total, correct}），accuracy 为加性新增 key（#226）。

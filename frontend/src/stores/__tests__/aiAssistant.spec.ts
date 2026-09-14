@@ -183,7 +183,7 @@ describe('会话链路（T6：序号守卫/删除对账/选中抛错/init 全清
     setActivePinia(createPinia()) // 按登录态重建 store（前一个用例可能切到未登录）
     const store = createStore()
     vi.mocked(aiAssistantApi.listSessions).mockResolvedValueOnce([
-      { id: 2, title: '二', model_name: '', created_at: '', updated_at: '' }
+      { id: 2, title: '二', model_name: '', feature_key: '', created_at: '', updated_at: '' }
     ])
     await store.deleteSession(1)
     await flush()

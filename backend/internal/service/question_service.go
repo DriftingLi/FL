@@ -454,6 +454,11 @@ type QuestionPublishResultDTO struct {
 	PublishedCount int `json:"published_count"`
 }
 
+// QuestionImageUploadDTO 题目图片上传结果 {"url": "..."}（原 handler 内联 gin.H，ADR-0048 片六收口）。
+type QuestionImageUploadDTO struct {
+	URL string `json:"url"`
+}
+
 // QuestionRejectResultDTO 批量驳回结果。
 type QuestionRejectResultDTO struct {
 	RejectedCount int `json:"rejected_count"`

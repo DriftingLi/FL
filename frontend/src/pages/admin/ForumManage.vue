@@ -146,7 +146,7 @@
                     <!-- 回复同样按声明格式渲染：管理员判断违规依据的是学员实际看到的样子 -->
                     <ForumContent
                       :content="reply.content"
-                      :format="reply.content_format"
+                      :format="toForumContentFormat(reply.content_format)"
                       link-policy="plain"
                       class="reply-content"
                     />
@@ -253,6 +253,7 @@ import { Refresh, Search } from '@element-plus/icons-vue'
 import {
   adminForumApi,
   forumTabQuery,
+  toForumContentFormat,
   type ForumTab,
   type AdminForumTopic,
   type AdminForumReply,

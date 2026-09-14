@@ -71,7 +71,7 @@ beforeEach(() => {
   } as never)
   vi.mocked(favoriteApi.check).mockResolvedValue({ favorited: false, favorite_id: 0 })
   vi.mocked(favoriteApi.add).mockResolvedValue({ favorite_id: 8 } as never)
-  vi.mocked(questionInteractionApi.listKnowledge).mockResolvedValue([{ id: 1, name: '考点K' }])
+  vi.mocked(questionInteractionApi.listKnowledge).mockResolvedValue([{ id: 1, name: '考点K' } as never])
 })
 
 describe('RealExamPractice 外围交互接入（#616）', () => {

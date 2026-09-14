@@ -44,6 +44,18 @@ type listRequestsReq struct {
 	PageSize int
 }
 
+// @Summary 资料审核队列
+// @Description 管理员分页查询昵称/头像修改审核单（status 缺省 pending）
+// @Tags 管理端-资料审核
+// @Produce json
+// @Security BearerAuth
+// @Param status query string false "状态 pending|approved|rejected|all" default(pending)
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(10)
+// @Success 200 {object} response.R{data=service.ProfileChangeRequestPageResult} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 500 {object} response.R "查询失败"
+// @Router /admin/profile-reviews [get]
 // ListRequests 审核请求列表 GET /api/admin/profile-reviews?status=pending|approved|rejected|all&page=&page_size=
 func (h *ProfileReviewHandler) ListRequests(c *gin.Context) {
 	Endpoint[listRequestsReq, service.ProfileChangeRequestPageResult]{
@@ -77,6 +89,16 @@ type approveReq struct {
 	ReviewerID int
 }
 
+// @Summary 通过资料修改审核
+// @Description 审核通过并生效（头像换新清旧），返回审核单
+// @Tags 管理端-资料审核
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "审核单 ID"
+// @Success 200 {object} response.R{data=service.ProfileChangeRequestDTO} "已通过审核，修改已生效"
+// @Failure 400 {object} response.R "审核失败"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/profile-reviews/{id}/approve [post]
 // Approve 通过审核 POST /api/admin/profile-reviews/:id/approve
 func (h *ProfileReviewHandler) Approve(c *gin.Context) {
 	Endpoint[approveReq, service.ProfileChangeRequestDTO]{
@@ -109,6 +131,18 @@ type rejectReq struct {
 	Reason     string
 }
 
+// @Summary 驳回资料修改审核
+// @Description 驳回并清理待审头像文件，返回审核单
+// @Tags 管理端-资料审核
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "审核单 ID"
+// @Param body body object false "驳回请求 {reason}"
+// @Success 200 {object} response.R{data=service.ProfileChangeRequestDTO} "已驳回"
+// @Failure 400 {object} response.R "驳回失败"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/profile-reviews/{id}/reject [post]
 // Reject 驳回 POST /api/admin/profile-reviews/:id/reject（body: {"reason": "..."}）
 func (h *ProfileReviewHandler) Reject(c *gin.Context) {
 	Endpoint[rejectReq, service.ProfileChangeRequestDTO]{

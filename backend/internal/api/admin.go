@@ -72,6 +72,21 @@ func RegisterAdminRoutes(rg *gin.RouterGroup, rd RouterDeps, adminSvc *service.A
 	g.GET("/statistics", h.GetStatistics)
 }
 
+// @Summary 管理端课程列表
+// @Description 管理员课程列表（含草稿），支持关键字/证件/方向/等级/热门精品过滤
+// @Tags 管理端-课程
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(10)
+// @Param keyword query string false "关键字"
+// @Param credential_id query int false "目标证件 ID"
+// @Param specialty_id query int false "专业方向 ID"
+// @Param level_id query int false "等级 ID"
+// @Param filter query string false "热门/精品筛选 hot|featured|all" default(all)
+// @Success 200 {object} response.R{data=service.CoursePageResult} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/courses [get]
 // ListCourses 课程列表 GET /api/admin/courses（filter=hot|featured|all，缺省 all）
 func (h *AdminHandler) ListCourses(c *gin.Context) {
 	Endpoint[adminCourseListReq, service.CoursePageResult]{
@@ -103,6 +118,17 @@ func (h *AdminHandler) ListCourses(c *gin.Context) {
 	}.Handle(c)
 }
 
+// @Summary 创建课程
+// @Description 管理员创建课程（含培训目录扩展字段）
+// @Tags 管理端-课程
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object false "课程输入 {name,description,cover_image,duration,status,...}"
+// @Success 201 {object} response.R{data=service.CourseDTO} "课程创建成功"
+// @Failure 400 {object} response.R "请求数据无效"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/course [post]
 // CreateCourse 创建课程 POST /api/admin/course
 func (h *AdminHandler) CreateCourse(c *gin.Context) {
 	Endpoint[service.CourseInput, service.CourseDTO]{
@@ -122,6 +148,16 @@ func (h *AdminHandler) CreateCourse(c *gin.Context) {
 	}.Handle(c)
 }
 
+// @Summary 管理端课程详情
+// @Description 课程字段平铺 + chapters（含停用项与嵌套元数据）
+// @Tags 管理端-课程
+// @Produce json
+// @Security BearerAuth
+// @Param course_id path int true "课程 ID"
+// @Success 200 {object} response.R{data=service.AdminCourseDetailDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "课程不存在"
+// @Router /admin/course/{course_id} [get]
 // GetCourseDetail 课程详情 GET /api/admin/course/:course_id
 func (h *AdminHandler) GetCourseDetail(c *gin.Context) {
 	Endpoint[idParam, service.AdminCourseDetailDTO]{
@@ -145,6 +181,19 @@ func (h *AdminHandler) GetCourseDetail(c *gin.Context) {
 	}.Handle(c)
 }
 
+// @Summary 更新课程
+// @Description 管理员更新课程字段（未携带的指针字段保留现状）
+// @Tags 管理端-课程
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param course_id path int true "课程 ID"
+// @Param body body object false "课程输入 {name,description,cover_image,duration,status,...}"
+// @Success 200 {object} response.R{data=service.CourseDTO} "课程更新成功"
+// @Failure 400 {object} response.R "请求数据无效"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "课程不存在"
+// @Router /admin/course/{course_id} [put]
 // UpdateCourse 更新课程 PUT /api/admin/course/:course_id
 func (h *AdminHandler) UpdateCourse(c *gin.Context) {
 	Endpoint[courseIDInput, service.CourseDTO]{
@@ -172,6 +221,18 @@ func (h *AdminHandler) UpdateCourse(c *gin.Context) {
 	}.Handle(c)
 }
 
+// @Summary 交换课程排序
+// @Description 同一方向+等级组内交换 sort_order，响应 data 为 null
+// @Tags 管理端-课程
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param course_id path int true "课程 ID"
+// @Param body body object false "交换请求 {swap_with}"
+// @Success 200 {object} response.R "排序已交换"
+// @Failure 400 {object} response.R "swap_with 参数无效"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/course/{course_id}/sort [put]
 // SwapCourseSort 交换课程排序 PUT /api/admin/course/:course_id/sort（同一方向+等级组内，body: {"swap_with": <id>}）
 func (h *AdminHandler) SwapCourseSort(c *gin.Context) {
 	Endpoint[swapCourseSortReq, struct{}]{
@@ -204,6 +265,16 @@ func (h *AdminHandler) SwapCourseSort(c *gin.Context) {
 	}.Handle(c)
 }
 
+// @Summary 删除课程
+// @Description 管理员删除课程，返回被删除的 course_id
+// @Tags 管理端-课程
+// @Produce json
+// @Security BearerAuth
+// @Param course_id path int true "课程 ID"
+// @Success 200 {object} response.R{data=service.DeleteCourseResult} "课程删除成功"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "课程不存在"
+// @Router /admin/course/{course_id} [delete]
 // DeleteCourse 删除课程 DELETE /api/admin/course/:course_id
 func (h *AdminHandler) DeleteCourse(c *gin.Context) {
 	Endpoint[idParam, service.DeleteCourseResult]{
@@ -227,6 +298,18 @@ func (h *AdminHandler) DeleteCourse(c *gin.Context) {
 	}.Handle(c)
 }
 
+// @Summary 创建章节
+// @Description 管理员为课程创建章节
+// @Tags 管理端-章节
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param course_id path int true "课程 ID"
+// @Param body body object false "章节输入 {title,content,duration,order_num,description}"
+// @Success 201 {object} response.R{data=service.ChapterDTO} "章节创建成功"
+// @Failure 400 {object} response.R "请求数据无效"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/course/{course_id}/chapter [post]
 // CreateChapter 创建章节 POST /api/admin/course/:course_id/chapter
 func (h *AdminHandler) CreateChapter(c *gin.Context) {
 	Endpoint[chapterIDInput, service.ChapterDTO]{
@@ -254,6 +337,19 @@ func (h *AdminHandler) CreateChapter(c *gin.Context) {
 	}.Handle(c)
 }
 
+// @Summary 更新章节
+// @Description 管理员更新章节字段
+// @Tags 管理端-章节
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param chapter_id path int true "章节 ID"
+// @Param body body object false "章节输入 {title,content,duration,order_num,description}"
+// @Success 200 {object} response.R{data=service.ChapterDTO} "章节更新成功"
+// @Failure 400 {object} response.R "请求数据无效"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "章节不存在"
+// @Router /admin/chapter/{chapter_id} [put]
 // UpdateChapter 更新章节 PUT /api/admin/chapter/:chapter_id
 func (h *AdminHandler) UpdateChapter(c *gin.Context) {
 	Endpoint[chapterIDInput, service.ChapterDTO]{
@@ -281,6 +377,16 @@ func (h *AdminHandler) UpdateChapter(c *gin.Context) {
 	}.Handle(c)
 }
 
+// @Summary 删除章节
+// @Description 管理员删除章节，返回被删除的 chapter_id
+// @Tags 管理端-章节
+// @Produce json
+// @Security BearerAuth
+// @Param chapter_id path int true "章节 ID"
+// @Success 200 {object} response.R{data=service.DeleteChapterResult} "章节删除成功"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "章节不存在"
+// @Router /admin/chapter/{chapter_id} [delete]
 // DeleteChapter 删除章节 DELETE /api/admin/chapter/:chapter_id
 func (h *AdminHandler) DeleteChapter(c *gin.Context) {
 	Endpoint[idParam, service.DeleteChapterResult]{
@@ -304,6 +410,17 @@ func (h *AdminHandler) DeleteChapter(c *gin.Context) {
 	}.Handle(c)
 }
 
+// @Summary 启动课程内容异步生成
+// @Description 管理员为指定课程的章节启动 AI 内容生成，返回 task_id 供轮询
+// @Tags 管理端-课程
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object false "生成请求 {course_id,chapter_ids}"
+// @Success 201 {object} response.R{data=service.GenerateContentResultDTO} "生成任务已启动"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/course/generate-content [post]
 // GenerateContent 异步生成课程内容 POST /api/admin/course/generate-content
 func (h *AdminHandler) GenerateContent(c *gin.Context) {
 	Endpoint[generateContentReq, service.GenerateContentResultDTO]{
@@ -337,6 +454,16 @@ func (h *AdminHandler) GenerateContent(c *gin.Context) {
 	}.Handle(c)
 }
 
+// @Summary 查询内容生成任务状态
+// @Description 前端轮询生成进度（pending/processing/completed/failed + 逐章节结果）
+// @Tags 管理端-课程
+// @Produce json
+// @Security BearerAuth
+// @Param task_id path string true "任务 ID"
+// @Success 200 {object} response.R{data=service.GenTaskStatus} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "任务不存在"
+// @Router /admin/course/generate-content/{task_id} [get]
 // GetGenerationTask 查询生成任务状态（前端轮询）GET /api/admin/course/generate-content/:task_id
 func (h *AdminHandler) GetGenerationTask(c *gin.Context) {
 	Endpoint[taskIDParam, service.GenTaskStatus]{
@@ -356,6 +483,18 @@ func (h *AdminHandler) GetGenerationTask(c *gin.Context) {
 	}.Handle(c)
 }
 
+// @Summary HRWAI 用户列表
+// @Description 管理员分页查询 hrwai_users（账号/昵称/手机号模糊搜索）
+// @Tags 管理端-用户
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(20)
+// @Param keyword query string false "关键字（账号/昵称/手机号）"
+// @Success 200 {object} response.R{data=service.HrwaiUserPageResult} "success"
+// @Failure 400 {object} response.R "查询用户列表失败"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/hrwai-users [get]
 // ListHrwaiUsers HRWAI 用户列表 GET /api/admin/hrwai-users
 func (h *AdminHandler) ListHrwaiUsers(c *gin.Context) {
 	Endpoint[hrwaiUserListReq, service.HrwaiUserPageResult]{
@@ -379,6 +518,17 @@ func (h *AdminHandler) ListHrwaiUsers(c *gin.Context) {
 	}.Handle(c)
 }
 
+// @Summary 新增 HRWAI 用户
+// @Description 管理员创建 hrwai_users 账号（account / username 缺省时后端生成）
+// @Tags 管理端-用户
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object false "创建请求 {phone,password,account,username,email,company}"
+// @Success 201 {object} response.R{data=service.HrwaiUserCreatedDTO} "用户添加成功"
+// @Failure 400 {object} response.R "参数错误/手机号已注册"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/hrwai-users [post]
 // CreateHrwaiUser 新增 HRWAI 用户 POST /api/admin/hrwai-users
 func (h *AdminHandler) CreateHrwaiUser(c *gin.Context) {
 	Endpoint[createHrwaiUserReq, service.HrwaiUserCreatedDTO]{
@@ -403,6 +553,18 @@ func (h *AdminHandler) CreateHrwaiUser(c *gin.Context) {
 	}.Handle(c)
 }
 
+// @Summary 更新 HRWAI 用户资料
+// @Description 管理员更新用户昵称/邮箱/单位/状态（不含密码），响应 data 为 null
+// @Tags 管理端-用户
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "用户 ID"
+// @Param body body object false "更新请求 {username,email,company,status}"
+// @Success 200 {object} response.R "用户资料已更新"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/hrwai-users/{id} [put]
 // UpdateHrwaiUser 更新 HRWAI 用户资料(不含密码) PUT /api/admin/hrwai-users/:id
 func (h *AdminHandler) UpdateHrwaiUser(c *gin.Context) {
 	Endpoint[updateHrwaiUserReq, struct{}]{
@@ -441,6 +603,18 @@ func (h *AdminHandler) UpdateHrwaiUser(c *gin.Context) {
 	}.Handle(c)
 }
 
+// @Summary 重置 HRWAI 用户密码
+// @Description 管理员重置用户口令，响应 data 为 null（不回显口令）
+// @Tags 管理端-用户
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "用户 ID"
+// @Param body body object false "重置请求 {password}"
+// @Success 200 {object} response.R "密码已重置"
+// @Failure 400 {object} response.R "参数错误/密码长度非法"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/hrwai-users/{id}/password [put]
 // ResetHrwaiUserPassword 重置 HRWAI 用户密码 PUT /api/admin/hrwai-users/:id/password
 func (h *AdminHandler) ResetHrwaiUserPassword(c *gin.Context) {
 	Endpoint[resetPasswordReq, struct{}]{
@@ -476,6 +650,16 @@ func (h *AdminHandler) ResetHrwaiUserPassword(c *gin.Context) {
 	}.Handle(c)
 }
 
+// @Summary 切换 HRWAI 用户启用/禁用状态
+// @Description 管理员切换用户状态，返回切换后的新状态
+// @Tags 管理端-用户
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "用户 ID"
+// @Success 200 {object} response.R{data=service.StatusResultDTO} "用户已启用/已禁用"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "用户不存在"
+// @Router /admin/hrwai-users/{id}/status [put]
 // ToggleHrwaiUserStatus 切换 HRWAI 用户启用/禁用状态 PUT /api/admin/hrwai-users/:id/status
 func (h *AdminHandler) ToggleHrwaiUserStatus(c *gin.Context) {
 	Endpoint[idParam, service.StatusResultDTO]{
@@ -507,6 +691,16 @@ func (h *AdminHandler) ToggleHrwaiUserStatus(c *gin.Context) {
 	}.Handle(c)
 }
 
+// @Summary 删除 HRWAI 用户
+// @Description 管理员删除用户，响应 data 为 null
+// @Tags 管理端-用户
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "用户 ID"
+// @Success 200 {object} response.R "用户删除成功"
+// @Failure 400 {object} response.R "删除失败"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/hrwai-users/{id} [delete]
 // DeleteHrwaiUser 删除 HRWAI 用户 DELETE /api/admin/hrwai-users/:id
 func (h *AdminHandler) DeleteHrwaiUser(c *gin.Context) {
 	Endpoint[idParam, struct{}]{
@@ -533,6 +727,17 @@ func (h *AdminHandler) DeleteHrwaiUser(c *gin.Context) {
 	}.Handle(c)
 }
 
+// @Summary 导师列表
+// @Description 管理员分页查询导师（用户名/姓名模糊搜索）
+// @Tags 管理端-导师
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(10)
+// @Param keyword query string false "关键字（用户名/姓名）"
+// @Success 200 {object} response.R{data=service.TutorListDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/tutors [get]
 // ListTutors 导师列表 GET /api/admin/tutors
 func (h *AdminHandler) ListTutors(c *gin.Context) {
 	Endpoint[tutorListReq, service.TutorListDTO]{
@@ -552,6 +757,17 @@ func (h *AdminHandler) ListTutors(c *gin.Context) {
 	}.Handle(c)
 }
 
+// @Summary 添加导师
+// @Description 管理员为导师建号（用户名/密码/姓名必填）
+// @Tags 管理端-导师
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object false "建号请求 {username,password,name}"
+// @Success 201 {object} response.R{data=service.TutorRegisterResultDTO} "导师添加成功"
+// @Failure 400 {object} response.R "参数错误/用户名已被注册"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/tutor [post]
 // CreateTutor 添加导师 POST /api/admin/tutor
 func (h *AdminHandler) CreateTutor(c *gin.Context) {
 	Endpoint[createTutorReq, service.TutorRegisterResultDTO]{
@@ -578,6 +794,16 @@ func (h *AdminHandler) CreateTutor(c *gin.Context) {
 	}.Handle(c)
 }
 
+// @Summary 删除导师
+// @Description 管理员删除导师账号，返回被删除的 tutor_id
+// @Tags 管理端-导师
+// @Produce json
+// @Security BearerAuth
+// @Param tutor_id path int true "导师 ID"
+// @Success 200 {object} response.R{data=service.TutorDeletedDTO} "导师删除成功"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "导师不存在"
+// @Router /admin/tutor/{tutor_id} [delete]
 // DeleteTutor 删除导师 DELETE /api/admin/tutor/:tutor_id
 func (h *AdminHandler) DeleteTutor(c *gin.Context) {
 	Endpoint[idParam, service.TutorDeletedDTO]{
@@ -601,6 +827,18 @@ func (h *AdminHandler) DeleteTutor(c *gin.Context) {
 	}.Handle(c)
 }
 
+// @Summary 重置导师密码
+// @Description 管理员重置导师口令，响应 data 为 null
+// @Tags 管理端-导师
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param tutor_id path int true "导师 ID"
+// @Param body body object false "重置请求 {password}"
+// @Success 200 {object} response.R "密码已重置"
+// @Failure 400 {object} response.R "参数错误/密码长度非法"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/tutor/{tutor_id}/password [put]
 // ResetTutorPassword 重置导师密码 PUT /api/admin/tutor/:tutor_id/password
 func (h *AdminHandler) ResetTutorPassword(c *gin.Context) {
 	Endpoint[resetPasswordReq, struct{}]{
@@ -636,6 +874,16 @@ func (h *AdminHandler) ResetTutorPassword(c *gin.Context) {
 	}.Handle(c)
 }
 
+// @Summary 切换导师启用/禁用状态
+// @Description 管理员切换导师状态，返回切换后的新状态
+// @Tags 管理端-导师
+// @Produce json
+// @Security BearerAuth
+// @Param tutor_id path int true "导师 ID"
+// @Success 200 {object} response.R{data=service.StatusResultDTO} "导师已启用/已禁用"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "导师不存在"
+// @Router /admin/tutor/{tutor_id}/status [put]
 // ToggleTutorStatus 切换导师启用/禁用状态 PUT /api/admin/tutor/:tutor_id/status
 func (h *AdminHandler) ToggleTutorStatus(c *gin.Context) {
 	Endpoint[idParam, service.StatusResultDTO]{
@@ -667,6 +915,14 @@ func (h *AdminHandler) ToggleTutorStatus(c *gin.Context) {
 	}.Handle(c)
 }
 
+// @Summary 统计看板
+// @Description 管理员查看学员/课程/学习时长概览与课程统计
+// @Tags 管理端-统计
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.R{data=service.AdminStatisticsDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/statistics [get]
 // GetStatistics 统计看板 GET /api/admin/statistics
 func (h *AdminHandler) GetStatistics(c *gin.Context) {
 	Endpoint[struct{}, service.AdminStatisticsDTO]{

@@ -30,8 +30,9 @@ func NewStudentService(db *gorm.DB, logger *zap.Logger) *StudentService {
 
 // StudentDTO 学员基本信息。
 type StudentDTO struct {
-	StudentID int    `json:"student_id"`
-	UID       int64  `json:"uid,string"`
+	StudentID int `json:"student_id"`
+	// UID 在 JSON 里是字符串（json:",string"）：swag 只看到 int64，用 swaggertype 钉住真实线上类型。
+	UID       int64  `json:"uid,string" swaggertype:"string"`
 	Account   string `json:"account"`
 	Username  string `json:"username"`
 	AvatarURL string `json:"avatar_url"`
@@ -79,12 +80,12 @@ type StudyRecordDTO struct {
 	RecordID      int     `json:"record_id"`
 	StudentID     int     `json:"student_id"`
 	CourseID      int     `json:"course_id"`
-	ChapterID     *int    `json:"chapter_id"`
+	ChapterID     *int    `json:"chapter_id" extensions:"x-nullable"`
 	StudyDuration int     `json:"study_duration"`
 	Progress      float64 `json:"progress"`
 	StudyDate     string  `json:"study_date"`
 	CourseName    string  `json:"course_name"`
-	ChapterTitle  *string `json:"chapter_title"`
+	ChapterTitle  *string `json:"chapter_title" extensions:"x-nullable"`
 }
 
 // GetProfile 学员档案。
@@ -316,13 +317,13 @@ type StudentCourseDTO struct {
 	CourseID          int     `json:"course_id"`
 	CourseName        string  `json:"course_name"`
 	Cover             string  `json:"cover"`
-	SpecialtyID       *int    `json:"specialty_id"`
-	LevelID           *int    `json:"level_id"`
+	SpecialtyID       *int    `json:"specialty_id" extensions:"x-nullable"`
+	LevelID           *int    `json:"level_id" extensions:"x-nullable"`
 	Progress          float64 `json:"progress"`
 	CompletedChapters int64   `json:"completed_chapters"`
 	TotalChapters     int64   `json:"total_chapters"`
 	StudyDuration     int64   `json:"study_duration"`
-	LastChapterID     *int    `json:"last_chapter_id"`
+	LastChapterID     *int    `json:"last_chapter_id" extensions:"x-nullable"`
 	LastChapterTitle  string  `json:"last_chapter_title"`
 	LastPosition      int     `json:"last_position"`
 	LastStudiedAt     string  `json:"last_studied_at"`
@@ -331,7 +332,7 @@ type StudentCourseDTO struct {
 // StudentCoursesDTO 我的课程信封（continue_learning 为最后学习时间最新的课程）。
 type StudentCoursesDTO struct {
 	Courses          []StudentCourseDTO `json:"courses"`
-	ContinueLearning *StudentCourseDTO  `json:"continue_learning"`
+	ContinueLearning *StudentCourseDTO  `json:"continue_learning" extensions:"x-nullable"`
 }
 
 // StudentCourseChapterDTO 单课程章节学习状态。

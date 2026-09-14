@@ -30,7 +30,7 @@ import Materials from '../Materials.vue'
 
 beforeEach(() => {
   vi.mocked(materialApi.list).mockResolvedValue({ materials: [], total: 0, page: 1, pages: 1 })
-  vi.mocked(courseApi.getCourses).mockResolvedValue({ courses: [], total: 0 })
+  vi.mocked(courseApi.getCourses).mockResolvedValue({ courses: [], total: 0, page: 1, pages: 0 })
 })
 
 describe('Materials 学习资料页（#517 双 tab）', () => {

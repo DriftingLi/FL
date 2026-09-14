@@ -67,7 +67,7 @@ func RegisterAIAssistantRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.
 // @Description 列出管理员配置的 is_active=true 模型
 // @Tags 学员端-AI助手
 // @Produce json
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=[]service.ModelOption} "success"
 // @Router /ai-assistant/models [get]
 func (h *AIAssistantHandler) ListPublicModels(c *gin.Context) {
 	Endpoint[struct{}, []service.ModelOption]{
@@ -86,7 +86,7 @@ func (h *AIAssistantHandler) ListPublicModels(c *gin.Context) {
 // @Description 返回普通/专家分别绑定的可用模型（隐藏底层 model 细节，前端仅暴露模式）
 // @Tags 学员端-AI助手
 // @Produce json
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.AIAssistantModeModels} "success"
 // @Router /ai-assistant/modes [get]
 func (h *AIAssistantHandler) ListAssistantModes(c *gin.Context) {
 	Endpoint[struct{}, service.AIAssistantModeModels]{
@@ -107,7 +107,7 @@ func (h *AIAssistantHandler) ListAssistantModes(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=[]service.UserModelDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /ai-assistant/user-models [get]
 func (h *AIAssistantHandler) ListUserModels(c *gin.Context) {
@@ -225,7 +225,7 @@ func (h *AIAssistantHandler) DeleteUserModel(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=[]service.AIChatSessionDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /ai-assistant/sessions [get]
 func (h *AIAssistantHandler) ListSessions(c *gin.Context) {
@@ -255,7 +255,7 @@ func (h *AIAssistantHandler) ListSessions(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param body body object false "标题/模型" example({"title":"新对话","model_name":"gpt-4"})
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.AIChatSessionDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /ai-assistant/sessions [post]
 func (h *AIAssistantHandler) CreateSession(c *gin.Context) {
@@ -333,7 +333,7 @@ func (h *AIAssistantHandler) DeleteSession(c *gin.Context) {
 // @Security BearerAuth
 // @Param id path int true "会话ID"
 // @Param body body object true "标题" example({"title":"新标题"})
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.AISessionRenameResultDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /ai-assistant/sessions/{id}/title [patch]
@@ -369,7 +369,7 @@ func (h *AIAssistantHandler) RenameSession(c *gin.Context) {
 				response.BadRequest(c, err.Error())
 				return
 			}
-			response.Success(c, map[string]string{"message": "已更新会话标题"})
+			response.Success(c, service.AISessionRenameResultDTO{Message: "已更新会话标题"})
 		},
 	}.Handle(c)
 }
@@ -382,7 +382,7 @@ func (h *AIAssistantHandler) RenameSession(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "会话ID"
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=[]service.AIChatMessageDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "不存在"
 // @Router /ai-assistant/sessions/{id}/messages [get]
@@ -431,7 +431,7 @@ func writeSSEHeaders(c *gin.Context) {
 
 // StreamChat 流式对话
 // @Summary AI 流式对话（SSE）
-// @Description 可选认证的 SSE 流式响应，不走统一 JSON 信封；事件 message/error/done
+// @Description 可选认证的 SSE 流式响应（ADR-0048 决策 6：**不走统一 JSON 信封，不在契约生成面**）；事件 message/sources/usage/error/done
 // @Tags 学员端-AI助手
 // @Accept json
 // @Produce text/event-stream
@@ -513,7 +513,7 @@ func (h *AIAssistantHandler) StreamChat(c *gin.Context) {
 // @Accept multipart/form-data
 // @Produce json
 // @Param file formData file true "图片文件"
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.AIImageUploadResultDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Router /ai-assistant/upload-image [post]
 func (h *AIAssistantHandler) UploadImage(c *gin.Context) {
@@ -527,7 +527,7 @@ func (h *AIAssistantHandler) UploadImage(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
-	response.SuccessWithMsg(c, "图片上传成功", gin.H{"url": url})
+	response.SuccessWithMsg(c, "图片上传成功", service.AIImageUploadResultDTO{URL: url})
 }
 
 // ===== typed request structs =====

@@ -1,108 +1,87 @@
-// 与后端新 DTO 一一对应的 TypeScript 类型
-// 后端路径：backend/internal/model/evaluation.go
-// 重构说明：删除旧的 ForkliftType / WorkCondition / FuelType / ItemStatus / BrandTier
-//         改用统一的字典化字段：brand / vehicle_type / series / tonnage 等
+// 估值评估响应类型 —— **唯一事实源**是后端注解 → backend/docs/swagger.json →
+// `cd backend && go run ./cmd/gen-apitypes`（ADR-0048 决策 1/3，issue #967 片九）。
+//
+// 本文件只保留两类东西：
+//   1) 生成类型的再导出（旧名 → 生成名，调用点 import 路径与名字不变）；
+//   2) 生成器表达力覆盖不到的**前端窄化/入参**类型：ConditionRating / PowerType 是封闭值集
+//      联合，注解层目前只有 string（枚举词汇缺口，ADR-0048 片一「已知限制」）；入参
+//      （CreateEvaluationRequest / PageQuery）不生成（决策 3）。
+import type {
+  DimensionScore,
+  EvaluationDetail,
+  EvaluationResponse,
+  ConfigOption,
+  VehicleType,
+  Series,
+  Tonnage,
+  MastType,
+  MastHeight,
+  BatteryTypeDict,
+  TransmissionType,
+  EngineType,
+  SeriesConfigOptions,
+  ConditionRating as ConditionRatingItem,
+  CoefficientConfig
+} from '@/api/generated/valuation'
 
-/** 动力类型（车辆类型字典中的 power_type） */
+export type {
+  DimensionScore,
+  EvaluationDetail,
+  EvaluationResponse,
+  ConfigOption,
+  CoefficientConfig,
+  SeriesConfigOptions,
+  VehicleType,
+  Series,
+  Tonnage,
+  MastType,
+  MastHeight,
+  BatteryTypeDict,
+  TransmissionType,
+  EngineType
+}
+
+/** 动力类型（车辆类型字典中的 power_type；生成面是 string，此处收窄） */
 export type PowerType = 'electric' | 'combustion'
 
-/** 车况评级（A 优 → E 差） */
+/** 车况评级（A 优 → E 差）；生成面是 string，此处收窄 */
 export type ConditionRating = 'A' | 'B' | 'C' | 'D' | 'E'
 
-/** 维度评分项（详情/结果中返回的 6 维评分，按维度顺序展示） */
-export interface DimensionScore {
-  label: string
-  value: number
-}
-
-// ========== 字典条目类型 ==========
-// 仅用于内部类型推导，实际数据全部从后端字典接口加载
+// ========== 字典条目类型（生成类型别名，旧名保留） ==========
 
 /** 车辆类型字典项 */
-export interface VehicleTypeOption {
-  id: number
-  name: string
-  power_type: PowerType
-  /** 该车型最早出厂年份（用于前端级联限制出厂年份选择） */
-  earliest_factory_year: number
-}
+export type VehicleTypeOption = VehicleType
 
 /** 系列字典项 */
-export interface SeriesOption {
-  id: number
-  brand: string
-  name: string
-  /** 该系列最早出厂年份（用于前端级联限制出厂年份选择） */
-  earliest_factory_year: number
-}
+export type SeriesOption = Series
 
 /** 吨位字典项 */
-export interface TonnageOption {
-  id: number
-  value: number
-}
+export type TonnageOption = Tonnage
 
 /** 配置类型字典项 */
-export interface ConfigTypeOption {
-  id: number
-  name: string
-}
+export type ConfigTypeOption = ConfigOption
 
 /** 门架类型字典项 */
-export interface MastTypeOption {
-  id: number
-  name: string
-}
+export type MastTypeOption = MastType
 
 /** 门架高度字典项 */
-export interface MastHeightOption {
-  id: number
-  value_mm: number
-}
+export type MastHeightOption = MastHeight
 
 /** 电池类型字典项 */
-export interface BatteryTypeOption {
-  id: number
-  name: string
-}
+export type BatteryTypeOption = BatteryTypeDict
 
 /** 传动系统字典项（手波/自波/无级变速/无） */
-export interface TransmissionTypeOption {
-  id: number
-  name: string
-}
+export type TransmissionTypeOption = TransmissionType
 
 /** 发动机类型字典项（国产发动机/进口发动机/混合动力/无） */
-export interface EngineTypeOption {
-  id: number
-  name: string
-}
+export type EngineTypeOption = EngineType
 
-/** 系列配置选项：某 series 支持的三维度可选项（数组为空表示该 series 不支持此维度） */
-export interface SeriesConfigOptions {
-  transmission: string[]
-  engine: string[]
-  battery: string[]
-}
-
-/** 车况评级字典项 */
-export interface ConditionRatingOption {
-  id: number
-  rating: ConditionRating
-  label: string
-  base_coefficient: number
-}
-
-/** 算法参数（系数表） */
-export interface CoefficientConfig {
-  key: string
-  value: number
-  description: string
-}
+/** 车况评级字典项（rating 生成面是 string，消费处按 ConditionRating 收窄） */
+export type ConditionRatingOption = ConditionRatingItem
 
 // ========== 评估请求/响应 ==========
 
-/** 提交评估请求体（与后端 CreateEvaluationRequest 一致） */
+/** 提交评估请求体（入参，不生成 —— ADR-0048 决策 3） */
 export interface CreateEvaluationRequest {
   brand: string
   vehicle_type: string
@@ -123,70 +102,18 @@ export interface CreateEvaluationRequest {
   condition_rating: ConditionRating
 }
 
-/** 评估结果（POST /evaluations 响应）
- * 创建响应即含输入参数（后端与详情同源返回，ADR-0004）：
- * 匿名用户提交后可直接渲染结果页，无需调用需登录的详情接口。
+/**
+ * 评估结果（POST /evaluations 响应）：生成类型别名。
+ * 创建响应即含输入参数（后端与详情同源返回，ADR-0004）：匿名用户提交后可直接渲染结果页。
  */
-export interface EvaluationResult {
-  id: number
-  /** 输入参数（与 CreateEvaluationRequest 一致） */
-  brand: string
-  vehicle_type: string
-  series: string
-  tonnage: number
-  config_type: string
-  mast_type: string
-  mast_height_mm: number
-  factory_year: number
-  sale_year: number
-  usage_hours: number
-  original_paint: boolean
-  province: string
-  city: string
-  has_license_plate: boolean
-  has_registration_certificate: boolean
-  has_maintenance_records: boolean
-  condition_rating: ConditionRating
-  /** 估算残值（元，前端 formatWan 除以 10000 展示） */
-  estimated_value: number
-  /** 置信区间下限（元） */
-  confidence_low: number
-  /** 置信区间上限（元） */
-  confidence_high: number
-  /** 原始购买价格（元） */
-  original_price: number
-  /** 时间衰减系数 */
-  k_time: number
-  /** 使用强度系数 */
-  k_hours: number
-  /** 品牌系数 */
-  k_brand: number
-  /** 车况系数 */
-  k_condition: number
-  /** 市场系数 */
-  k_market: number
-  /** 5 维度评分列表 */
-  dimension_scores: DimensionScore[]
-  /** 文本建议 */
-  suggestions: string[]
-  /** 评估时点锁定的 λ 值（ADR-0004，供走势图数据驱动） */
-  lambda_electric: number
-  /** 未来价值曲线锚点（评估时点锁定，前端只做 d^n 渲染） */
-  decay_anchor?: number
-  lambda_combustion: number
-}
+export type EvaluationResult = EvaluationResponse
 
-/** 评估详情（GET /evaluations/:id 响应，继承结果字段并补全报告字段） */
-export interface EvaluationDetail extends EvaluationResult {
-  report_pdf_path?: string
-  created_at?: string
-}
-
-/** 详情接口响应（与 EvaluationDetail 同构） */
+/** 详情接口响应（GET /evaluations/:id）：与生成类型同构 */
 export type EvaluationDetailResponse = EvaluationDetail
 
 // ========== 分页/列表 ==========
 
+/** 分页查询入参（不生成 —— ADR-0048 决策 3） */
 export interface PageQuery {
   page?: number
   page_size?: number
@@ -196,6 +123,7 @@ export interface PageQuery {
   brand?: string
 }
 
+/** 分页响应壳（泛型形状，非某端点线格式） */
 export interface PageResult<T> {
   list: T[]
   total: number
@@ -203,7 +131,11 @@ export interface PageResult<T> {
   page_size: number
 }
 
-/** 评估统计（GET /evaluations/stats 响应） */
+/**
+ * 评估统计（GET /evaluations/stats 响应）。
+ * 注解层用 swag 内联 object{total=integer} 描述（无具名 Go 类型），生成器只渲染具名类型，
+ * 故此处保留该窄形状 —— 唯一来源仍是注解（见 generated/valuation.ts 头部端点清单）。
+ */
 export interface EvaluationStats {
   /** 累计评估次数 */
   total: number

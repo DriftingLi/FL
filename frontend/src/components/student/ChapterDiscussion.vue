@@ -13,7 +13,7 @@ import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { EditPen, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
-import { forumApi, type ForumTopicItem, type ForumReplyItem, type ForumContentFormat } from '@/api/forum'
+import { forumApi, toForumContentFormat, type ForumTopicItem, type ForumReplyItem, type ForumContentFormat } from '@/api/forum'
 import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
 import ForumPostForm from '@/components/student/ForumPostForm.vue'
 import ForumComposer from '@/components/student/ForumComposer.vue'
@@ -282,7 +282,7 @@ watch(() => props.chapterId, () => {
             <!-- 展开的帖子正文按声明格式渲染（ADR-0044），与详情页同源 -->
             <ForumContent
               :content="detailContent"
-              :format="expandedTopic?.content_format"
+              :format="toForumContentFormat(expandedTopic?.content_format)"
               class="mb-3.5 text-sm leading-[1.7] text-ink"
             />
             <ForumImageGallery :images="expandedTopic?.images" />

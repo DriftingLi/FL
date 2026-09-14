@@ -268,9 +268,144 @@ func TestInlineResponseDTOBytes(t *testing.T) {
 			dto:    &ProgressSaveResultDTO{Index: 5, Saved: true},
 		},
 		{
+			name:   "ForumImageUploadResultDTO（POST /forum/upload-image：原 handler 内联 gin.H）",
+			legacy: map[string]any{"url": "https://cdn.example/1.png"},
+			dto:    &ForumImageUploadResultDTO{URL: "https://cdn.example/1.png"},
+		},
+		{
+			name:   "ForumLikeResultDTO（主题/回复的 like 与 unlike 四端点共用：原 handler 内联 gin.H）",
+			legacy: map[string]any{"likes_count": int64(7), "liked": true},
+			dto:    &ForumLikeResultDTO{Liked: true, LikesCount: 7},
+		},
+		{
+			name:   "NotificationUnreadCountDTO（GET /notifications/unread-count：原 handler 内联 gin.H）",
+			legacy: map[string]any{"count": int64(3)},
+			dto:    &NotificationUnreadCountDTO{Count: 3},
+		},
+		{
+			name: "QuestionCommentPageResult（GET /questions/{id}/comments：原 handler 内联 gin.H）",
+			legacy: map[string]any{
+				"items": []QuestionCommentDTO{{ID: 1, Content: "这题易错"}},
+				"total": int64(1), "page": 1, "page_size": 10,
+			},
+			dto: &QuestionCommentPageResult{
+				Items: []QuestionCommentDTO{{ID: 1, Content: "这题易错"}},
+				Page:  1, PageSize: 10, Total: 1,
+			},
+		},
+		{
 			name:   "RefreshResultDTO（POST /auth/refresh：原 raw handler 内联 map[string]string）",
 			legacy: map[string]string{"token": "acc-1", "refresh_token": "ref-1"},
 			dto:    &RefreshResultDTO{RefreshToken: "ref-1", Token: "acc-1"},
+		},
+		{
+			name:   "AISessionRenameResultDTO（PATCH /ai-assistant/sessions/{id}/title：原 handler 内联 map[string]string）",
+			legacy: map[string]string{"message": "已更新会话标题"},
+			dto:    &AISessionRenameResultDTO{Message: "已更新会话标题"},
+		},
+		{
+			name:   "AIImageUploadResultDTO（POST /ai-assistant/upload-image：原 handler 内联 gin.H{url}）",
+			legacy: map[string]any{"url": "https://cdn.test/images/ai-assistant/chat_1.png"},
+			dto:    &AIImageUploadResultDTO{URL: "https://cdn.test/images/ai-assistant/chat_1.png"},
+		},
+		// ===== ADR-0048 片六（#964）：培训目录 / 题库 / 证件域的 handler 内联 map 收口 =====
+		{
+			name:   "QuestionImageUploadDTO（POST /question-bank/upload-image）",
+			legacy: map[string]any{"url": "/uploads/images/questions/1.png"},
+			dto:    &QuestionImageUploadDTO{URL: "/uploads/images/questions/1.png"},
+		},
+		{
+			name: "LevelListDTO（GET /levels 与 /admin/levels：原 gin.H 的 levels 键）",
+			legacy: map[string]any{"levels": []LevelDict{{
+				Code: "L1", CreatedAt: "2026-09-13T10:00:00.000000+08:00", Description: "初级",
+				LevelID: 1, Name: "初级", SortOrder: 1, Status: 1,
+			}}},
+			dto: &LevelListDTO{Levels: []LevelDict{{
+				Code: "L1", CreatedAt: "2026-09-13T10:00:00.000000+08:00", Description: "初级",
+				LevelID: 1, Name: "初级", SortOrder: 1, Status: 1,
+			}}},
+		},
+		{
+			name: "QuestionTagListDTO（GET /tags 与 /admin/question-tags：原 gin.H 的 tags 键）",
+			legacy: map[string]any{"tags": []QuestionTagDict{{
+				Code: "T1", CreatedAt: "2026-09-13T10:00:00.000000+08:00", Description: "标签",
+				ID: 3, Name: "难点", QuestionCount: int64Ptr(5), SortOrder: 1, Status: 1,
+				UpdatedAt: "2026-09-13T10:00:00.000000+08:00",
+			}}},
+			dto: &QuestionTagListDTO{Tags: []QuestionTagDict{{
+				Code: "T1", CreatedAt: "2026-09-13T10:00:00.000000+08:00", Description: "标签",
+				ID: 3, Name: "难点", QuestionCount: int64Ptr(5), SortOrder: 1, Status: 1,
+				UpdatedAt: "2026-09-13T10:00:00.000000+08:00",
+			}}},
+		},
+		{
+			name: "QuestionTagListDTO（question_count 缺省时整个 key 不出现）",
+			legacy: map[string]any{"tags": []QuestionTagDict{{
+				Code: "T1", ID: 3, Name: "难点",
+			}}},
+			dto: &QuestionTagListDTO{Tags: []QuestionTagDict{{Code: "T1", ID: 3, Name: "难点"}}},
+		},
+		{
+			name: "CertificateTemplateListDTO（GET /admin/certificate-templates：原 gin.H 的 certificate_templates 键）",
+			legacy: map[string]any{"certificate_templates": []CertificateTemplateDict{{
+				Code: "C1", CreatedAt: "2026-09-13T10:00:00.000000+08:00", Description: "模板",
+				ID: 2, Name: "特种作业证", Status: 1, TemplateURL: "/uploads/t.png",
+				UpdatedAt: "2026-09-13T10:00:00.000000+08:00", ValidityDays: 365,
+			}}},
+			dto: &CertificateTemplateListDTO{CertificateTemplates: []CertificateTemplateDict{{
+				Code: "C1", CreatedAt: "2026-09-13T10:00:00.000000+08:00", Description: "模板",
+				ID: 2, Name: "特种作业证", Status: 1, TemplateURL: "/uploads/t.png",
+				UpdatedAt: "2026-09-13T10:00:00.000000+08:00", ValidityDays: 365,
+			}}},
+		},
+		{
+			name: "CredentialListDTO（GET /credentials 与 /admin/credentials：原 gin.H 的 credentials 键）",
+			legacy: map[string]any{"credentials": []CredentialDict{{
+				Category: "special_operation", Code: "N1", CreatedAt: "2026-09-13T10:00:00.000000+08:00",
+				Description: "叉车证", ID: 1, Level: intPtr(1), Name: "叉车司机", SortOrder: 1,
+				Status: 1, UpdatedAt: "2026-09-13T10:00:00.000000+08:00",
+			}}},
+			dto: &CredentialListDTO{Credentials: []CredentialDict{{
+				Category: "special_operation", Code: "N1", CreatedAt: "2026-09-13T10:00:00.000000+08:00",
+				Description: "叉车证", ID: 1, Level: intPtr(1), Name: "叉车司机", SortOrder: 1,
+				Status: 1, UpdatedAt: "2026-09-13T10:00:00.000000+08:00",
+			}}},
+		},
+		{
+			name:   "CurrentCredentialDTO（未选证件：key 在、值为 null）",
+			legacy: map[string]any{"credential": nil},
+			dto:    &CurrentCredentialDTO{},
+		},
+		{
+			name: "CurrentCredentialDTO（已选证件 / PATCH 切换：同一形状）",
+			legacy: map[string]any{"credential": &CredentialDict{
+				Category: "skill_level", Code: "S3", ID: 7, Level: intPtr(3), Name: "高级",
+			}},
+			dto: &CurrentCredentialDTO{Credential: &CredentialDict{
+				Category: "skill_level", Code: "S3", ID: 7, Level: intPtr(3), Name: "高级",
+			}},
+		},
+		{
+			name: "GroupedCredentialsDTO（GET /credentials/grouped：两个 key 恒在，map 序按 key 排序）",
+			legacy: map[string][]CredentialDict{
+				"special_operation": {{ID: 1, Category: "special_operation", Name: "叉车司机"}},
+				"skill_level":       {{ID: 7, Category: "skill_level", Name: "高级", Level: intPtr(3)}},
+			},
+			dto: &GroupedCredentialsDTO{
+				SkillLevel:       []CredentialDict{{ID: 7, Category: "skill_level", Name: "高级", Level: intPtr(3)}},
+				SpecialOperation: []CredentialDict{{ID: 1, Category: "special_operation", Name: "叉车司机"}},
+			},
+		},
+		{
+			name: "GroupedCredentialsDTO（空列表：两个 key 的值都是 [] 而不是 null）",
+			legacy: map[string][]CredentialDict{
+				"special_operation": {},
+				"skill_level":       {},
+			},
+			dto: &GroupedCredentialsDTO{
+				SkillLevel:       []CredentialDict{},
+				SpecialOperation: []CredentialDict{},
+			},
 		},
 	}
 
@@ -290,3 +425,41 @@ func TestInlineResponseDTOBytes(t *testing.T) {
 		})
 	}
 }
+
+// spec #966 片八：内联**匿名结构体**（不是 map）定型为命名类型后的同一套字节锁。
+//
+// swag 对匿名嵌套对象只吐内联 object，而渲染规则对「带 properties 的 object」只给
+// { [key: string]: unknown } —— 前端 metadata.source_url 会退化成 unknown，故必须命名
+// （service.DiagnosisSourceMetadata）。命名不得改动任何字节：字段序 / json tag / 可空性都不动。
+func TestDiagnosisSourceMetadataShapeLock(t *testing.T) {
+	type legacyDiagnosisSource struct {
+		ID       diagnosisSourceID `json:"id"`
+		Text     string            `json:"text"`
+		Metadata struct {
+			SourceURL string `json:"source_url"`
+			PageStart int    `json:"page_start"`
+			PageEnd   int    `json:"page_end"`
+		} `json:"metadata"`
+	}
+	legacy := legacyDiagnosisSource{ID: "fault-15", Text: "手册第 3 页"}
+	legacy.Metadata.SourceURL = "https://example.com/manual/x.pdf"
+	legacy.Metadata.PageStart, legacy.Metadata.PageEnd = 3, 4
+	dto := DiagnosisSource{ID: "fault-15", Text: "手册第 3 页"}
+	dto.Metadata.SourceURL = "https://example.com/manual/x.pdf"
+	dto.Metadata.PageStart, dto.Metadata.PageEnd = 3, 4
+
+	want, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatalf("marshal legacy: %v", err)
+	}
+	got, err := json.Marshal(dto)
+	if err != nil {
+		t.Fatalf("marshal dto: %v", err)
+	}
+	if string(want) != string(got) {
+		t.Fatalf("字节不一致（字段序 / tag 漂移）：\nlegacy = %s\ndto    = %s", want, got)
+	}
+}
+
+// int64Ptr 构造 *int64（片六 QuestionTagDict.question_count 的「键在/键缺」两态用例）。
+func int64Ptr(v int64) *int64 { return &v }

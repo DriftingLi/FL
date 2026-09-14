@@ -49,25 +49,25 @@ type RecruitListParams struct {
 
 // RecruitResumeCard 脱敏卡（L2 可见字段；打码姓名，无 phone/wechat/region/PDF/cert image）。
 type RecruitResumeCard struct {
-	UserID                int             `json:"user_id"`
-	RealName              string          `json:"real_name"`        // 已打码（如 张* 或 张*丰）
-	RealNameMasked        string          `json:"real_name_masked"` // 同上，兼容验收对打码字段的显式断言
-	ExpectedPositionID    *int            `json:"expected_position_id,omitempty"`
-	ExpectedPositionExtra string          `json:"expected_position_extra"`
-	ExpectedRegions       json.RawMessage `json:"expected_regions"`
-	SalaryMin             *int            `json:"salary_min,omitempty"`
-	SalaryMax             *int            `json:"salary_max,omitempty"`
-	SalaryNegotiable      bool            `json:"salary_negotiable"`
-	AvailableIn           string          `json:"available_in"`
-	JobNature             string          `json:"job_nature"`
-	ExperienceYears       int             `json:"experience_years"`
-	SelfIntro             string          `json:"self_intro"`
-	ResumeExperiences     json.RawMessage `json:"resume_experiences"`
-	ResumeCertifications  json.RawMessage `json:"resume_certifications"` // 已去 image_urls
-	UpdatedAt             string          `json:"updated_at"`
+	UserID                int       `json:"user_id"`
+	RealName              string    `json:"real_name"`        // 已打码（如 张* 或 张*丰）
+	RealNameMasked        string    `json:"real_name_masked"` // 同上，兼容验收对打码字段的显式断言
+	ExpectedPositionID    *int      `json:"expected_position_id,omitempty" extensions:"x-optional"`
+	ExpectedPositionExtra string    `json:"expected_position_extra"`
+	ExpectedRegions       JSONArray `json:"expected_regions" swaggertype:"array,string"`
+	SalaryMin             *int      `json:"salary_min,omitempty" extensions:"x-optional"`
+	SalaryMax             *int      `json:"salary_max,omitempty" extensions:"x-optional"`
+	SalaryNegotiable      bool      `json:"salary_negotiable"`
+	AvailableIn           string    `json:"available_in"`
+	JobNature             string    `json:"job_nature"`
+	ExperienceYears       int       `json:"experience_years"`
+	SelfIntro             string    `json:"self_intro"`
+	ResumeExperiences     JSONArray `json:"resume_experiences" swaggertype:"array,object"`
+	ResumeCertifications  JSONArray `json:"resume_certifications" swaggertype:"array,object"` // 已去 image_urls
+	UpdatedAt             string    `json:"updated_at"`
 	// #489：企业视角联系状态（none/pending/approved，approved 带来源）
-	ContactState  string `json:"contact_state,omitempty"`
-	ContactSource string `json:"contact_source,omitempty"` // recruiter/application
+	ContactState  string `json:"contact_state,omitempty" extensions:"x-optional"`
+	ContactSource string `json:"contact_source,omitempty" extensions:"x-optional"` // recruiter/application
 }
 
 // RecruitListResult 列表结果。
@@ -131,7 +131,7 @@ func desensitize(m *model.JobCard) RecruitResumeCard {
 		RealNameMasked:        masked,
 		ExpectedPositionID:    m.ExpectedPositionID,
 		ExpectedPositionExtra: m.ExpectedPositionExtra,
-		ExpectedRegions:       json.RawMessage(expRegions),
+		ExpectedRegions:       JSONArray(expRegions),
 		SalaryMin:             m.SalaryMin,
 		SalaryMax:             m.SalaryMax,
 		SalaryNegotiable:      m.SalaryNegotiable,
@@ -139,8 +139,8 @@ func desensitize(m *model.JobCard) RecruitResumeCard {
 		JobNature:             m.JobNature,
 		ExperienceYears:       m.ExperienceYears,
 		SelfIntro:             m.SelfIntro,
-		ResumeExperiences:     json.RawMessage(exps),
-		ResumeCertifications:  json.RawMessage(certsRaw),
+		ResumeExperiences:     JSONArray(exps),
+		ResumeCertifications:  JSONArray(certsRaw),
 		UpdatedAt:             m.UpdatedAt.Format(time.RFC3339),
 	}
 }

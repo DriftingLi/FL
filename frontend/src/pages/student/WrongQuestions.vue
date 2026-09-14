@@ -114,7 +114,7 @@
 import { ref, watch, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Star, StarFilled, SortDown, SortUp } from '@element-plus/icons-vue'
-import { wrongQuestionApi } from '@/api/wrongQuestion'
+import { wrongQuestionApi, type WrongQuestionItem } from '@/api/wrongQuestion'
 import { favoriteApi } from '@/api/favorite'
 import { typeMap } from '@/constants/question'
 import { downloadBlob } from '@/composables/useReportDownload'
@@ -139,21 +139,9 @@ import { useConfirm } from '@/composables/useConfirm'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiCheckbox from '@/components/ui/UiCheckbox.vue'
 
-interface WrongItem {
-  id: number
-  question_id: number
-  wrong_count?: number
-  is_redone?: boolean
-  favorited?: boolean
-  favorite_id?: number
-  question?: {
-    type?: string
-    options?: Record<string, string>
-    content?: string
-  }
-}
 
-const wrongList = ref<WrongItem[]>([])
+
+const wrongList = ref<WrongQuestionItem[]>([])
 
 // 三态 + 分页三件套收编（#388）
 const {
@@ -195,7 +183,7 @@ const selectedIds = ref<Set<number>>(new Set())
 // 无推进节奏、单题即时提交：提交管线/判分装配与练习同源（usePracticeSession），
 // 收藏/知识点/计时外围三件经 questionPeripheralAdapters 工厂接入（与练习页同一绑定点），
 // 内联重做状态机（redoAnswer/redoResults/wrongKnowledge 等）删除。
-const redoItem = ref<WrongItem | null>(null)
+const redoItem = ref<WrongQuestionItem | null>(null)
 
 const session = usePracticeSession({
   // 单题变体 start：把当前重做项包装成单题会话（无断点进度）
@@ -203,7 +191,8 @@ const session = usePracticeSession({
     const item = redoItem.value
     if (mode !== 'single' || !item?.question) return null
     return {
-      questions: [{ id: item.question_id, ...item.question } as Question],
+      // 生成物 QuestionDTO 自带 id（题库主键），单题会话的 id 用 question_id（与练习会话同口径）
+      questions: [{ ...item.question, id: item.question_id } as Question],
       startIndex: 0,
       answersState: null
     }
@@ -247,7 +236,7 @@ const { favorited, toggleFavorite: togglePanelFavorite, knowledgeTags, lastDurat
   questionPeripheralAdapters({ knowledgeTrigger: 'result' })
 )
 
-async function startRedo(item: WrongItem) {
+async function startRedo(item: WrongQuestionItem) {
   if (!item.question) return
   redoItem.value = item
   const ok = await start('single')
@@ -330,7 +319,7 @@ function resetFilters() {
   loadData()
 }
 
-async function toggleFavorite(item: WrongItem) {
+async function toggleFavorite(item: WrongQuestionItem) {
   try {
     if (item.favorited) {
       await favoriteApi.remove(item.favorite_id!)
@@ -386,9 +375,12 @@ async function handleExport(){
       const q = item.question
       lines.push(`题型: ${(typeMap as any)[q?.type||''] || q?.type || ''}`)
       lines.push(`题目: ${q?.content||''}`)
-      if(q?.options){
+      // options 在注解层是 any（生成物渲染 unknown，ADR-0048 片一已知限制）：
+      // 导出为纯文本时按「选项键 → 选项文案」收窄，与题型/内容同源。
+      const opts = q?.options as Record<string, string> | null | undefined
+      if (opts) {
         lines.push('选项:')
-        Object.keys(q.options).sort().forEach(k=> lines.push(`  ${k}. ${q.options![k]}`))
+        Object.keys(opts).sort().forEach(k=> lines.push(`  ${k}. ${opts[k]}`))
       }
       lines.push(`错误次数: ${item.wrong_count||0}`)
       lines.push('-'.repeat(40))

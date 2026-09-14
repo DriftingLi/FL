@@ -84,7 +84,7 @@ type QuestionTagDict struct {
 	Description   string `json:"description"`
 	ID            int    `json:"id"`
 	Name          string `json:"name"`
-	QuestionCount *int64 `json:"question_count,omitempty"`
+	QuestionCount *int64 `json:"question_count,omitempty" extensions:"x-optional"`
 	SortOrder     int    `json:"sort_order"`
 	Status        int16  `json:"status"`
 	UpdatedAt     string `json:"updated_at"`
@@ -110,11 +110,51 @@ type CredentialDict struct {
 	CreatedAt   string `json:"created_at"`
 	Description string `json:"description"`
 	ID          int    `json:"id"`
-	Level       *int   `json:"level"`
+	Level       *int   `json:"level" extensions:"x-nullable"`
 	Name        string `json:"name"`
 	SortOrder   int    `json:"sort_order"`
 	Status      int16  `json:"status"`
 	UpdatedAt   string `json:"updated_at"`
+}
+
+// ===== 列表信封（ADR-0048 片六：handler 内联 gin.H 收口为 typed DTO，序列化字节不变）=====
+//
+// 这些端点的响应体此前是 handler 里手工拼的 gin.H{"<key>": …}；注解要指认 data 类型
+// 就必须先有具名类型（swag 无法表达「内联对象」），故按域片收口，字节锁见
+// internal/service/envelope_dto_shape_test.go 的 TestInlineResponseDTOBytes。
+
+// LevelListDTO 课程等级列表响应 {"levels": [...]}（公开 /levels 与管理端 /admin/levels 共用形状）。
+type LevelListDTO struct {
+	Levels []LevelDict `json:"levels"`
+}
+
+// QuestionTagListDTO 题库标签列表响应 {"tags": [...]}（公开 /tags 与管理端 /admin/question-tags 共用形状）。
+type QuestionTagListDTO struct {
+	Tags []QuestionTagDict `json:"tags"`
+}
+
+// CertificateTemplateListDTO 证书模板列表响应 {"certificate_templates": [...]}。
+type CertificateTemplateListDTO struct {
+	CertificateTemplates []CertificateTemplateDict `json:"certificate_templates"`
+}
+
+// CredentialListDTO 目标证件列表响应 {"credentials": [...]}（公开 /credentials 与管理端 /admin/credentials 共用形状）。
+type CredentialListDTO struct {
+	Credentials []CredentialDict `json:"credentials"`
+}
+
+// CurrentCredentialDTO 当前证件响应 {"credential": <dict|null>}：未选择证件时 data.credential 为 null
+// （键一定在，值可空 —— 对应 x-nullable）。
+type CurrentCredentialDTO struct {
+	Credential *CredentialDict `json:"credential" extensions:"x-nullable"`
+}
+
+// GroupedCredentialsDTO 目标证件分组响应。
+// 字段声明序 = 旧 map 的 JSON 键序（encoding/json 对 map 按 key 排序：skill_level < special_operation），
+// 且两个字段恒非 nil（ListGroupedCredentials 空集也初始化 []），故字节序与旧 map 逐字节一致（shape-lock 冻结）。
+type GroupedCredentialsDTO struct {
+	SkillLevel       []CredentialDict `json:"skill_level"`
+	SpecialOperation []CredentialDict `json:"special_operation"`
 }
 
 // QuestionTagRef 题目-标签关联摘要（id/code/name/sort_order/status，无时间戳等扩展字段）。

@@ -217,11 +217,14 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
         .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
     historyMessages.push({ role: 'user', content, images: reqImages })
 
+    // 线格式（生成类型）里 images/sources 是「键在、值可 null」（ADR-0048 片八）：
+    // 本地乐观消息与线消息同形，消费处一律 ?. 判空
     const userMsg: ChatMessage = {
       id: Date.now(),
       role: 'user',
       content,
-      images: reqImages,
+      images: reqImages ?? null,
+      sources: null,
       created_at: new Date().toISOString()
     }
     messages.value.push(userMsg)
@@ -268,8 +271,9 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
             id: assistantMsgId,
             role: 'assistant',
             content: finalContent,
+            images: null,
             // 当轮来源快照进消息（ADR-0033 逐轮回放；后端落库后历史以持久化字段为准）
-            sources: lastSources.value.length ? [...lastSources.value] : undefined,
+            sources: lastSources.value.length ? [...lastSources.value] : null,
             created_at: new Date().toISOString()
           }
           messages.value.push(assistantMsg)
@@ -289,6 +293,8 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
             id: assistantMsgId,
             role: 'assistant',
             content: streamingContent.value + '\n\n[生成中断：' + message + ']',
+            images: null,
+            sources: null,
             created_at: new Date().toISOString()
           }
           messages.value.push(assistantMsg)
@@ -297,6 +303,8 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
             id: assistantMsgId,
             role: 'assistant',
             content: '[生成失败：' + message + ']',
+            images: null,
+            sources: null,
             created_at: new Date().toISOString()
           }
           messages.value.push(errorMsg)
@@ -320,6 +328,8 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
         id: Date.now(),
         role: 'assistant',
         content: streamingContent.value + '\n\n[已中断]',
+        images: null,
+        sources: null,
         created_at: new Date().toISOString()
       }
       messages.value.push(assistantMsg)

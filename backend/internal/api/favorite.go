@@ -47,7 +47,7 @@ func RegisterFavoriteRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Fav
 // @Param target_type query string false "目标类型 course/chapter/question/featured/topic"
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(20)
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.FavoritePageResult} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /favorites [get]
 func (h *FavoriteHandler) List(c *gin.Context) {
@@ -70,7 +70,7 @@ func (h *FavoriteHandler) List(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param body body object true "目标" example({"target_type":"course","target_id":1})
-// @Success 201 {object} response.R "success"
+// @Success 201 {object} response.R{data=service.FavoriteDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /favorites [post]
@@ -125,7 +125,7 @@ func (h *FavoriteHandler) Remove(c *gin.Context) {
 // @Security BearerAuth
 // @Param target_type query string true "目标类型"
 // @Param target_id query int true "目标ID"
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.FavoriteCheckDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /favorites/check [get]

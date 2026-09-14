@@ -15,7 +15,7 @@ type FeaturedContentDTO struct {
 	ContentID     int     `json:"content_id"`
 	CoverImage    string  `json:"cover_image"`
 	CreatedAt     string  `json:"created_at"`
-	PublishedAt   *string `json:"published_at"`
+	PublishedAt   *string `json:"published_at" extensions:"x-nullable"`
 	SortOrder     int     `json:"sort_order"`
 	Source        string  `json:"source"`
 	Status        int16   `json:"status"`
@@ -35,7 +35,7 @@ type FeaturedContentDetailDTO struct {
 	CreatedAt     string               `json:"created_at"`
 	Next          *FeaturedNavDTO      `json:"next"`
 	Prev          *FeaturedNavDTO      `json:"prev"`
-	PublishedAt   *string              `json:"published_at"`
+	PublishedAt   *string              `json:"published_at" extensions:"x-nullable"`
 	Related       []FeaturedContentDTO `json:"related"`
 	SortOrder     int                  `json:"sort_order"`
 	Source        string               `json:"source"`
@@ -54,7 +54,7 @@ type FeaturedContentAdminDetailDTO struct {
 	ContentID     int     `json:"content_id"`
 	CoverImage    string  `json:"cover_image"`
 	CreatedAt     string  `json:"created_at"`
-	PublishedAt   *string `json:"published_at"`
+	PublishedAt   *string `json:"published_at" extensions:"x-nullable"`
 	SortOrder     int     `json:"sort_order"`
 	Source        string  `json:"source"`
 	Status        int16   `json:"status"`

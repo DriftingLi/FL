@@ -1,49 +1,30 @@
+// 已迁移模块：响应类型**不再手写**，唯一事实源是后端注解 → backend/docs/swagger.json →
+// `cd backend && go run ./cmd/gen-apitypes`（ADR-0048 决策 1/3，issue #964 片六）。
 import { unwrappedRequest } from './request'
-import type { Question } from '@/types/question'
+import type { WithUIQuestions } from '@/types/question'
+import type { MockExamStartDTO, PracticeStartResultDTO, RealExamPaperDTO, RedeemResult } from './generated/realExam'
 
-/** 真题套卷列表项（与后端 RealExamPaperDTO 对齐） */
-export interface RealExamPaper {
-  paper_id: number
-  title: string
-  year?: number
-  source?: string
-  question_count: number
-  duration_minutes: number
-  entitled: boolean
-  price: number
-}
+export type { MockExamStartDTO, PracticeStartResultDTO, RealExamPaperDTO, RedeemResult }
 
+/** 真题套卷列表项（与后端 RealExamPaperDTO 对齐）—— 旧名保留为生成别名 */
+export type RealExamPaper = RealExamPaperDTO
+
+// questions 元素是跨域共享 UI 模型 Question（枚举窄化无法由注解表达，见 questionBank.ts 的边界说明），
+// 故这两个响应用 WithUIQuestions 显式标注元素替换点，其余字段全部走生成类型。
 /** 按卷练习开始/续练（与后端 PracticeStartResultDTO 对齐） */
-export interface RealExamPracticeStart {
-  questions: Question[]
-  current_index: number
-  total: number
-  completed: number
-}
+export type RealExamPracticeStart = WithUIQuestions<PracticeStartResultDTO>
 
 /** 按卷开考（与后端 MockExamStartDTO 对齐，后续复用 mock-exam 端点） */
-export interface RealExamStartResult {
-  mock_exam_id: number
-  duration: number
-  total_score: number
-  total_questions: number
-  remaining_time: number
-  questions: Question[]
-}
+export type RealExamStartResult = WithUIQuestions<MockExamStartDTO>
 
-/** 兑换结果（与后端 RedeemResult 对齐） */
-export interface RealExamRedeemResult {
-  balance: number
-  total_earned: number
-  sku: string
-  ref_id: string
-}
+/** 兑换结果（与后端 RedeemResult 对齐）—— 旧名保留为生成别名 */
+export type RealExamRedeemResult = RedeemResult
 
 // 真题套卷接口，对应后端 /api/real-exam
 export const realExamApi = {
   // 套卷列表：按当前证件分区（credential_id 由主 client 拦截器默认注入，#387），附兑换状态与单价
   listPapers() {
-    return unwrappedRequest.get<RealExamPaper[]>('/real-exam/papers', { params: {} })
+    return unwrappedRequest.get<RealExamPaperDTO[]>('/real-exam/papers', { params: {} })
   },
   // 按卷练习开始/续练（未兑换时后端拒绝）
   startPractice(paperId: number) {
@@ -55,6 +36,6 @@ export const realExamApi = {
   },
   // 积分兑换单套卷（重复兑换后端报"已兑换"）
   redeemPaper(paperId: number) {
-    return unwrappedRequest.post<RealExamRedeemResult>(`/real-exam/papers/${paperId}/redeem`)
+    return unwrappedRequest.post<RedeemResult>(`/real-exam/papers/${paperId}/redeem`)
   }
 }

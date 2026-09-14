@@ -2,30 +2,49 @@
 // seam：composable 接口——data-source adapter 用内存 fixture，不触达 API 层。
 import { describe, it, expect } from 'vitest'
 import { useCourseCatalog, treeCatalogAdapter } from '@/composables/useCourseCatalog'
-import type { CatalogDirectionNode } from '@/api/training'
+import type { CatalogDirectionNode, CatalogLevelNode, LevelDict } from '@/api/training'
+import type { CourseDTO } from '@/api/course'
+
+// 生成 DTO 的最小测试夹具：只填测试关心的字段，其余取 DTO 零值
+// （注解成为唯一事实源后，手写时代「只给两个字段」的 fixture 不再合法）。
+function courseOf(courseId: number, name: string, over: Partial<CourseDTO> = {}): CourseDTO {
+  return {
+    certificate_name: '',
+    certificate_template_id: null,
+    course_id: courseId,
+    cover_image: '',
+    created_at: '',
+    credential_id: null,
+    description: '',
+    duration: 0,
+    is_featured: false,
+    is_hot: false,
+    level_id: null,
+    name,
+    practice_hours: 0,
+    sort_order: 0,
+    specialty_id: null,
+    status: 1,
+    theory_hours: 0,
+    ...over
+  }
+}
+function levelDictOf(levelId: number, name: string, over: Partial<LevelDict> = {}): LevelDict {
+  return { code: '', created_at: '', description: '', level_id: levelId, name, sort_order: 0, status: 1, ...over }
+}
+function levelNodeOf(levelId: number, name: string, sortOrder: number, courses: CourseDTO[]): CatalogLevelNode {
+  return { ...levelDictOf(levelId, name), sort_order: sortOrder, courses }
+}
+function specialtyOf(specialtyId: number, name: string, levels: CatalogLevelNode[]): CatalogDirectionNode {
+  return { code: '', created_at: '', description: '', levels, name, sort_order: 0, specialty_id: specialtyId, status: 1 }
+}
 
 const tree: CatalogDirectionNode[] = [
-  {
-    specialty_id: 2,
-    name: '维修',
-    levels: [
-      { level_id: 1, name: '入门', sort_order: 1, courses: [{ course_id: 1, name: 'A' }] },
-      {
-        level_id: 2,
-        name: '进阶',
-        sort_order: 2,
-        courses: [
-          { course_id: 2, name: 'B' },
-          { course_id: 3, name: 'C' }
-        ]
-      }
-    ]
-  },
-  {
-    specialty_id: 3,
-    name: '安全',
-    levels: [{ level_id: 1, name: '入门', sort_order: 1, courses: [{ course_id: 4, name: 'D' }] }]
-  }
+  specialtyOf(2, '维修', [
+    levelNodeOf(1, '入门', 1, [courseOf(1, 'A')]),
+    levelNodeOf(2, '进阶', 2, [courseOf(2, 'B'), courseOf(3, 'C')])
+  ]),
+  specialtyOf(3, '安全', [levelNodeOf(1, '入门', 1, [courseOf(4, 'D')])])
 ]
 
 function mountTree() {
@@ -40,8 +59,8 @@ function mountFlat() {
     adapter: {
       async load() {
         return {
-          directions: [{ specialty_id: 2, name: '维修' }],
-          levels: [{ level_id: 1, name: '入门' }],
+          directions: [specialtyOf(2, '维修', [])],
+          levels: [levelDictOf(1, '入门')],
           items: [
             { specialty_id: 2, level_id: 1, count: 1 },
             { specialty_id: 2, level_id: 1, count: 1 },

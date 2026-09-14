@@ -338,8 +338,9 @@ async function handleDelete(row: AIConfig) {
 async function handleTest(row: AIConfig) {
   testingId.value = row.id
   try {
-    const data = await adminApi.testAIConfig(row.id)
-    ElMessage.success(data?.message || '连接成功')
+    // 该端点响应 data 为 null（域声明 NoData），成败由信封 message/errcode 表达，拦截器已统一处理
+    await adminApi.testAIConfig(row.id)
+    ElMessage.success('连接成功')
   } catch {
     // 拦截器已统一 toast 业务失败信息
   } finally {

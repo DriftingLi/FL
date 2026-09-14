@@ -17,7 +17,7 @@ import (
 
 // AuditLogPageResult 审计日志分页结果。
 type AuditLogPageResult struct {
-	Items []model.AuditLog `json:"items"`
+	Items []model.AuditLog `json:"items" extensions:"x-nullable"`
 	Page  int              `json:"page"`
 	Pages int              `json:"pages"`
 	Total int64            `json:"total"`
@@ -52,6 +52,19 @@ func RegisterAuditRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.AuditS
 	g.GET("", h.List)
 }
 
+// @Summary 审计日志列表
+// @Description 管理员分页查询审计日志（actor/角色/关键字过滤，页大小上限 100）
+// @Tags 管理端-审计
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(20)
+// @Param actor_id query int false "操作人 ID"
+// @Param role query string false "操作人角色"
+// @Param keyword query string false "关键字"
+// @Success 200 {object} response.R{data=api.AuditLogPageResult} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/audit-logs [get]
 // List 审计日志列表 GET /api/admin/audit-logs?page=&page_size=&actor_id=&role=&keyword=
 func (h *AuditHandler) List(c *gin.Context) {
 	// 分页钳制（含页大小上限 100）收进 AuditService.List，handler 只负责传参。

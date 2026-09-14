@@ -65,9 +65,11 @@ function reply(id: number, over: Partial<ForumReplyItem> = {}): ForumReplyItem {
   return {
     id,
     topic_id: 1,
-    parent_id: null,
     parent_name: '',
     content: `回复${id}`,
+    content_format: 'text',
+    ip_province: '',
+    ip_city: '',
     images: [],
     created_at: '2026-08-02T10:00:00+08:00',
     author: { user_id: 2, username: `答主${id}`, avatar_url: '' },

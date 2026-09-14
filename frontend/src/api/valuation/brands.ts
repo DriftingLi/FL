@@ -1,6 +1,7 @@
 // 品牌 API（全量加载，模块级内存缓存，避免每次进 InputView 都请求）
 import client from './client'
-import type { Brand } from '@/types/valuation/brand'
+// 响应类型来自生成物（ADR-0048 决策 1/3，issue #967 片九）。
+import type { Brand } from '@/api/generated/valuation'
 
 let cache: Brand[] | null = null
 let inflight: Promise<Brand[]> | null = null
