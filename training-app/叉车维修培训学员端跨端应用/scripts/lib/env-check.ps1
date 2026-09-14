@@ -162,3 +162,34 @@ function Test-BuildEnv {
         AdbExe = $adbExe
     }
 }
+
+function Test-StaticEnv {
+    <#
+      **Q-A（静态守护）用的轻量环境检查**（2026-09-14 加）：
+      Q-A 只跑契约测试（jest 静态守护），**既不需要设备、也不需要 HBuilderX**，
+      因此**不得**调用 `Test-BuildEnv` —— 后者内部会取 HBuilderX 互斥锁，若别的会话正持锁
+      就会让「本应秒级」的 Q-A 白等（直至超时 exit 2）。
+
+      本函数只校验「能跑静态检查」的最低前提：项目根像 uni-app-x 工程 + git 可用。
+    #>
+    [CmdletBinding()]
+    param([string]$ProjectDir)
+
+    if (-not $ProjectDir) {
+        $ProjectDir = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $ProjectDir 'pages.json'))) {
+        return [pscustomobject]@{ Ok = $false; Error = "缺 pages.json（不像 uni-app-x 项目根）：$ProjectDir"; Mode = 'static' }
+    }
+    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+        return [pscustomobject]@{ Ok = $false; Error = '缺 git（级别判定需要 git diff）'; Mode = 'static' }
+    }
+
+    return [pscustomobject]@{
+        Ok      = $true
+        Device  = ''
+        CliPath = ''
+        AdbExe  = ''
+        Mode    = 'static'
+    }
+}

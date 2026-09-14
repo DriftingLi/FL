@@ -31,6 +31,11 @@ function Invoke-TestAndCompile {
         [string]$CliPath,
         [string]$Device,
         [switch]$SkipTests,
+        # Q-2 修正（2026-09-14 用户裁定）：quick 默认只做**静态守护（Q-A）**，
+        # 需要编译期诊断时由调用方显式开启本开关（Q-B）。
+        # 理由：实测本项目 compile-only 在冷/失效缓存下 **>901 秒**，比真运行（4–5 分钟）还慢 ⇒
+        # 把「编译」塞进默认的 quick 路径等于谎称「快速」。
+        [switch]$QuickCompile,
         [int]$TestTimeout = 300,
         # hx-run 的 `-TimeoutSeconds`：CompileOnly 模式下它是「仅编译」那一步的超时。
         # 默认 1800（30 分钟）而非 hx-run 自身的 900 —— 2026-09-14 实测本项目
@@ -77,8 +82,23 @@ function Invoke-TestAndCompile {
     }
 
     # ================= Step 2: 按级别做编译验证 =================
+    if ($Level -eq 'quick' -and -not $QuickCompile) {
+        # 🟢 Q-A 静态守护：契约测试已在 Step 1 跑过；**显式声明未做编译诊断**
+        # （不是静默跳过 —— 静默跳过才是旧口径被废止的原因）
+        Write-Host '[test-compile] 🟢 Q-A 静态守护：契约测试已通过；未做编译诊断（需要编译请加 -Compile 或 -Level standard）' -ForegroundColor Gray
+        return [pscustomobject]@{
+            Ok            = $true
+            Step          = 'compile'
+            Error         = ''
+            TestOutput    = $testOutput
+            CompileResult = 'STATIC_ONLY skipped=true quick_static_only（未做编译诊断）'
+            Duration      = [int]((Get-Date) - $started).TotalSeconds
+        }
+    }
+
     if ($Level -eq 'quick') {
-        # 🟢 快速：hx-run -CompileOnly 拿编译期诊断（不推送 / 不启动 / 不需要设备）
+        # 🟢 Q-B 编译诊断：hx-run -CompileOnly（不推送 / 不启动 / 不需要设备）
+        # 成本写实：冷/失效缓存下实测 >901 秒 —— 这是调用方显式要的，不是默认。
         $hxRun = Join-Path $ProjectDir 'scripts\hx-run.ps1'
         if (-not (Test-Path -LiteralPath $hxRun)) {
             return [pscustomobject]@{
