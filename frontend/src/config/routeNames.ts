@@ -24,6 +24,10 @@ export const routeNames = {
   /** 「即将离开本站」中转页（#881 / ADR-0044） */
   LinkOut: 'LinkOut',
   ChapterView: 'ChapterView',
+  /** 搜索结果落点：内容精选详情（ADR-0049 决策 4） */
+  StudentFeaturedDetail: 'StudentFeaturedDetail',
+  /** 搜索结果落点：题目承载页（ADR-0049 决策 4） */
+  StudentQuestionDetail: 'StudentQuestionDetail',
   QuestionBank: 'QuestionBank',
   MockExam: 'MockExam',
   WrongQuestions: 'WrongQuestions',

@@ -41,7 +41,7 @@ func RegisterJobCardRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.JobC
 // @Tags 学员端-简历卡
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} response.R "简历"
+// @Success 200 {object} response.R{data=service.JobCardDTO} "简历"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "简历不存在"
 // @Router /resume [get]
@@ -75,7 +75,7 @@ func (h *JobCardHandler) Get(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param body body service.JobCardInput true "简历内容"
-// @Success 200 {object} response.R "已保存"
+// @Success 200 {object} response.R{data=service.JobCardDTO} "已保存"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /resume [put]
@@ -110,7 +110,7 @@ func (h *JobCardHandler) Upsert(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param body body object true "可见性 {visibility: hidden|open}"
-// @Success 200 {object} response.R "已切换"
+// @Success 200 {object} response.R{data=service.JobCardDTO} "已切换"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /resume/visibility [put]
@@ -139,7 +139,7 @@ func (h *JobCardHandler) UpdateVisibility(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param file formData file true "PDF 简历"
-// @Success 200 {object} response.R "上传成功 {url}"
+// @Success 200 {object} response.R{data=object{url=string}} "上传成功 {url}"
 // @Failure 400 {object} response.R "文件错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /resume/pdf [post]
@@ -197,7 +197,7 @@ func (h *JobCardHandler) DeletePDF(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param file formData file true "工作照"
-// @Success 200 {object} response.R "上传成功 {url}"
+// @Success 200 {object} response.R{data=object{url=string}} "上传成功 {url}"
 // @Failure 400 {object} response.R "文件错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /resume/image [post]

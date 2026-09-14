@@ -17,7 +17,7 @@
  */
 import { computed } from 'vue'
 import { ChatDotRound } from '@element-plus/icons-vue'
-import type { ForumReplyItem } from '@/api/forum'
+import { toForumContentFormat, type ForumReplyItem } from '@/api/forum'
 import { displayName, authorLetter, regionLabel } from '@/utils/forumDisplay'
 import { formatRelativeTime } from '@/utils/format'
 import ForumImageGallery from './ForumImageGallery.vue'
@@ -122,7 +122,7 @@ function onMoreSelect(key: string) {
            由 ForumContent 内部按需加，密度（字号/行高）仍由本卡的 variant 决定。 -->
       <ForumContent
         :content="reply.content"
-        :format="reply.content_format"
+        :format="toForumContentFormat(reply.content_format)"
         class="reply-content mt-1.5 text-ink"
         :class="contentClass"
       />

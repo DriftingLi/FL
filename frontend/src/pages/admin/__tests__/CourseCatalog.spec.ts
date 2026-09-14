@@ -39,12 +39,50 @@ vi.mock('@/api/training', () => ({
   }
 }))
 
-import { adminApi, type AdminCourseItem } from '@/api/admin'
+import { adminApi, type AdminCourseItem, type AdminCourseDetail } from '@/api/admin'
 import { trainingApi } from '@/api/training'
+import type { CatalogDirectionNode, CatalogLevelNode, LevelDict } from '@/api/training'
 import CourseCatalog from '../CourseCatalog.vue'
+
 
 const warnSpy = vi.spyOn(ElMessage, 'warning').mockImplementation(() => undefined as never)
 const successSpy = vi.spyOn(ElMessage, 'success').mockImplementation(() => undefined as never)
+
+// AdminCourseItem = 生成的 CourseDTO（注解产物，必填字段比旧手写类型多）：
+// 用工厂补齐默认值，用例只写自己的差异面。
+function courseDTO(over: Partial<AdminCourseItem> = {}): AdminCourseItem {
+  return {
+    certificate_template_id: null,
+    course_id: 0,
+    cover_image: '',
+    created_at: '2026-09-01T10:00:00+08:00',
+    credential_id: null,
+    description: '',
+    duration: 0,
+    is_featured: false,
+    is_hot: false,
+    level_id: null,
+    name: '',
+    practice_hours: 0,
+    sort_order: 0,
+    specialty_id: null,
+    status: 1,
+    theory_hours: 0,
+    ...over
+  }
+}
+
+function courseDetailDTO(over: Partial<AdminCourseDetail> = {}): AdminCourseDetail {
+  return { ...courseDTO(), chapters: [], ...over }
+}
+
+function levelDictOf(levelId: number, name: string, over: Partial<LevelDict> = {}): LevelDict {
+  return { code: '', created_at: '', description: '', level_id: levelId, name, sort_order: 0, status: 1, ...over }
+}
+
+function specialtyOf(specialtyId: number, name: string, levels: CatalogLevelNode[]): CatalogDirectionNode {
+  return { code: '', created_at: '', description: '', levels, name, sort_order: 0, specialty_id: specialtyId, status: 1 }
+}
 
 function mountPage() {
   return mount(CourseCatalog, {
@@ -55,29 +93,27 @@ function mountPage() {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(adminApi.getCourses).mockResolvedValue({
+    page: 1,
+    pages: 1,
     total: 3,
     courses: [
-      { course_id: 1, name: '液压系统', specialty_id: 2, level_id: 2, status: 1, chapter_count: 7, theory_hours: 24, practice_hours: 16 },
-      { course_id: 2, name: '未挂载遗留课程', specialty_id: null, level_id: null, status: 0, chapter_count: 2 },
-      { course_id: 3, name: '草稿课程', specialty_id: 2, level_id: 1, status: 0, chapter_count: 0 }
+      courseDTO({ course_id: 1, name: '液压系统', specialty_id: 2, level_id: 2, status: 1, chapter_count: 7, theory_hours: 24, practice_hours: 16 }),
+      courseDTO({ course_id: 2, name: '未挂载遗留课程', specialty_id: null, level_id: null, status: 0, chapter_count: 2 }),
+      courseDTO({ course_id: 3, name: '草稿课程', specialty_id: 2, level_id: 1, status: 0, chapter_count: 0 })
     ]
   })
-  vi.mocked(adminApi.getCourseDetail).mockResolvedValue({
+  vi.mocked(adminApi.getCourseDetail).mockResolvedValue(courseDetailDTO({
     course_id: 1,
     name: '液压系统',
     specialty_id: 2,
-    level_id: 2,
-    chapters: []
-  })
-  vi.mocked(adminApi.updateCourse).mockResolvedValue({} as AdminCourseItem)
+    level_id: 2
+  }))
+  vi.mocked(adminApi.updateCourse).mockResolvedValue(courseDTO())
   vi.mocked(trainingApi.getAdminCatalogTree).mockResolvedValue({
-    specialties: [{ specialty_id: 2, name: '维修', levels: [] }]
+    specialties: [specialtyOf(2, '维修', [])]
   })
   vi.mocked(trainingApi.getLevels).mockResolvedValue({
-    levels: [
-      { level_id: 1, name: '入门' },
-      { level_id: 2, name: '进阶' }
-    ]
+    levels: [levelDictOf(1, '入门'), levelDictOf(2, '进阶')]
   })
   vi.mocked(trainingApi.getCertificateTemplates).mockResolvedValue({
     certificate_templates: []

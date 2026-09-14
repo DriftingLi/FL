@@ -22,7 +22,8 @@ import {
   formatTonnage
 } from '@/utils/valuationFormat'
 import { CONDITION_RATING_COLOR } from '@/utils/valuationConstants'
-import type { EvaluationDetailResponse } from '@/types/valuation/evaluation'
+import type { EvaluationResponse } from '@/api/generated/valuation'
+import type { EvaluationDetail } from '@/types/valuation/evaluation'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 
@@ -37,10 +38,12 @@ const id = computed(() => {
   return 0
 })
 
-const detailData = ref<EvaluationDetailResponse | null>(null)
+const detailData = ref<EvaluationDetail | null>(null)
 // 渲染数据：优先提交后的内存结果（匿名用户可完整渲染，创建响应含输入参数），
-// 详情接口数据仅作刷新/直达兜底（详情需登录，匿名时保持 null）
-const data = computed<EvaluationDetailResponse | null>(() => store.currentResult ?? detailData.value)
+// 详情接口数据仅作刷新/直达兜底（详情需登录，匿名时保持 null）。
+// 创建响应（EvaluationResponse）与详情响应（EvaluationDetail）字段集不同：并集渲染，报告路径只在详情里。
+type ReportViewData = EvaluationResponse | EvaluationDetail
+const data = computed<ReportViewData | null>(() => store.currentResult ?? detailData.value)
 const loading = ref(false)
 const generating = ref(false)
 const pdfInfo = ref<{ file_name: string; file_size: number } | null>(null)
@@ -54,6 +57,7 @@ async function loadDetail() {
   loading.value = true
   try {
     detailData.value = await getEvaluationDetail(id.value)
+    // 生成类型虽声明非空，但信封解包出的负载运行期仍可能为空 —— 保留既有防御。
     const pdfPath = detailData.value?.report_pdf_path
     if (pdfPath) {
       const filename = pdfPath.split(/[\\/]/).pop() ?? ''
@@ -68,8 +72,11 @@ async function onGenerate() {
   if (!id.value || generating.value) return
   generating.value = true
   try {
+    // 后端响应是 {evaluation_id, pdf_url, file_size}（注解内联 object，无 file_name ——
+    // 旧手写类型的 file_name 是凭空字段，判定 ②）：文件名从 pdf_url 末段派生，与下载端点同源。
     const r = await generateReport(id.value)
-    pdfInfo.value = { file_name: r.file_name, file_size: r.file_size }
+    const filename = r.pdf_url.split(/[\\/]/).pop() || 'evaluation_report_' + String(id.value) + '.pdf'
+    pdfInfo.value = { file_name: filename, file_size: r.file_size }
   } finally {
     generating.value = false
   }

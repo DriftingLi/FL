@@ -44,7 +44,11 @@ export function treeCatalogAdapter(fetchTree: () => Promise<CatalogTree>): Cours
       for (const d of directions) {
         for (const lv of d.levels ?? []) {
           if (!levelMap.has(lv.level_id)) {
+            // 等级字典 = 生成 LevelDict：树节点本来就只有字典字段，直接透传（含 code/created_at/description）
             levelMap.set(lv.level_id, {
+              code: lv.code,
+              created_at: lv.created_at,
+              description: lv.description,
               level_id: lv.level_id,
               name: lv.name,
               sort_order: lv.sort_order,

@@ -27,6 +27,8 @@ beforeEach(() => {
   })
   vi.mocked(questionBankApi.getQuestions).mockResolvedValue({
     total: 1,
+    page: 1,
+    page_size: 20,
     questions: [
       {
         id: 42,

@@ -368,17 +368,17 @@ func (s *TrainingCatalogService) SetCurrentCredential(userID int, credentialID i
 }
 
 // ListGroupedCredentials 分组返回启用证件（特种作业/技能等级各一组，按 sort_order）。
-func (s *TrainingCatalogService) ListGroupedCredentials() map[string][]CredentialDict {
+func (s *TrainingCatalogService) ListGroupedCredentials() GroupedCredentialsDTO {
 	list := s.ListCredentials(true)
-	grouped := map[string][]CredentialDict{
-		"special_operation": {},
-		"skill_level":       {},
+	grouped := GroupedCredentialsDTO{
+		SkillLevel:       []CredentialDict{},
+		SpecialOperation: []CredentialDict{},
 	}
 	for _, d := range list {
 		if d.Category == "skill_level" {
-			grouped["skill_level"] = append(grouped["skill_level"], d)
+			grouped.SkillLevel = append(grouped.SkillLevel, d)
 		} else {
-			grouped["special_operation"] = append(grouped["special_operation"], d)
+			grouped.SpecialOperation = append(grouped.SpecialOperation, d)
 		}
 	}
 	return grouped

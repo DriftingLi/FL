@@ -268,9 +268,11 @@ function onSubmit() {
   submit()
 }
 
-function onConditionSelect(rating: ConditionRating) {
+function onConditionSelect(rating: string) {
+  // 生成面 rating 是 string（枚举词汇缺口，ADR-0048 片一）：值域由字典表约束，此处收窄为 ConditionRating
+  const value = rating as ConditionRating
   // 再次点击同一项则取消选择
-  form.condition_rating = form.condition_rating === rating ? undefined : rating
+  form.condition_rating = form.condition_rating === value ? undefined : value
 }
 </script>
 
@@ -704,12 +706,12 @@ function onConditionSelect(rating: ConditionRating) {
               :key="cr.id"
               type="button"
               class="rating-pill"
-              :class="{ 'is-active': form.condition_rating === cr.rating }"
+              :class="{ 'is-active': form.condition_rating === (cr.rating as ConditionRating) }"
               :aria-pressed="form.condition_rating === cr.rating"
               @click="onConditionSelect(cr.rating)"
             >
               <span class="rating-pill-name">{{ cr.rating }} · {{ cr.label }}</span>
-              <span class="rating-pill-desc">{{ RATING_DESC[cr.rating] }}</span>
+              <span class="rating-pill-desc">{{ RATING_DESC[cr.rating as ConditionRating] }}</span>
             </button>
           </div>
         </div>

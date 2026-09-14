@@ -64,7 +64,7 @@ func RegisterJobRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.JobPosti
 // @Produce json
 // @Security BearerAuth
 // @Param body body service.JobPostingInput true "职位信息"
-// @Success 201 {object} response.R "发布成功"
+// @Success 201 {object} response.R{data=service.JobPostingDTO} "发布成功"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /recruit/jobs [post]
@@ -95,7 +95,7 @@ func (h *JobHandler) Create(c *gin.Context) {
 // @Security BearerAuth
 // @Param id path int true "职位 ID"
 // @Param body body service.JobPostingInput true "职位信息"
-// @Success 200 {object} response.R "更新成功"
+// @Success 200 {object} response.R{data=service.JobPostingDTO} "更新成功"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 403 {object} response.R "无权操作"
 // @Failure 401 {object} response.R "未认证"
@@ -133,7 +133,7 @@ func (h *JobHandler) Update(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "职位 ID"
-// @Success 200 {object} response.R "操作成功"
+// @Success 200 {object} response.R{data=service.JobPostingDTO} "操作成功"
 // @Failure 400 {object} response.R "被强制下架或超上限"
 // @Failure 403 {object} response.R "无权操作"
 // @Failure 401 {object} response.R "未认证"
@@ -169,7 +169,7 @@ func (h *JobHandler) ToggleStatus(c *gin.Context) {
 // @Security BearerAuth
 // @Param page query int false "页码"
 // @Param page_size query int false "每页数量"
-// @Success 200 {object} response.R "列表"
+// @Success 200 {object} response.R{data=service.JobListResult} "列表"
 // @Failure 401 {object} response.R "未认证"
 // @Router /recruit/jobs [get]
 func (h *JobHandler) ListMine(c *gin.Context) {
@@ -196,7 +196,7 @@ func (h *JobHandler) ListMine(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "职位 ID"
-// @Success 200 {object} response.R "详情"
+// @Success 200 {object} response.R{data=service.JobPostingDTO} "详情"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 403 {object} response.R "无权操作"
 // @Router /recruit/jobs/{id} [get]
@@ -227,7 +227,7 @@ func (h *JobHandler) GetMine(c *gin.Context) {
 // @Param experience query string false "经验要求"
 // @Param page query int false "页码"
 // @Param page_size query int false "每页数量"
-// @Success 200 {object} response.R "列表"
+// @Success 200 {object} response.R{data=service.JobListResult} "列表"
 // @Failure 401 {object} response.R "未认证（L1 不公开）"
 // @Router /jobs [get]
 func (h *JobHandler) ListPublic(c *gin.Context) {
@@ -262,7 +262,7 @@ func (h *JobHandler) ListPublic(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "职位 ID"
-// @Success 200 {object} response.R "详情"
+// @Success 200 {object} response.R{data=service.JobPostingDTO} "详情"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "不存在或已下架"
 // @Router /jobs/{id} [get]

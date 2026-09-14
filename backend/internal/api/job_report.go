@@ -61,7 +61,7 @@ func NewJobReportHandler(svc *service.JobReportService, jobSvc *service.JobPosti
 // @Security BearerAuth
 // @Param id path int true "职位 ID"
 // @Param body body service.ReportInput true "举报原因"
-// @Success 201 {object} response.R "举报已提交"
+// @Success 201 {object} response.R{data=service.ReportDTO} "举报已提交"
 // @Failure 400 {object} response.R "原因不能为空"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "职位不存在或已下架"

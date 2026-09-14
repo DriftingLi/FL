@@ -29,33 +29,33 @@ type CoursePageResult struct {
 // CourseDTO 课程。可选字段（chapter_count 等）在未填充路径省略，与旧 map 行为一致。
 // 字段声明按 key 字母序，保持与旧 map 序列化的字节序一致。
 type CourseDTO struct {
-	CertificateName       string                  `json:"certificate_name,omitempty"`
-	CertificateTemplate   *CertificateTemplateDTO `json:"certificate_template,omitempty"`
-	CertificateTemplateID *int                    `json:"certificate_template_id"`
-	ChapterCount          *int64                  `json:"chapter_count,omitempty"`
+	CertificateName       string                  `json:"certificate_name,omitempty" extensions:"x-optional"`
+	CertificateTemplate   *CertificateTemplateDTO `json:"certificate_template,omitempty" extensions:"x-optional"`
+	CertificateTemplateID *int                    `json:"certificate_template_id" extensions:"x-nullable"`
+	ChapterCount          *int64                  `json:"chapter_count,omitempty" extensions:"x-optional"`
 	CoverImage            string                  `json:"cover_image"`
 	CourseID              int                     `json:"course_id"`
 	CreatedAt             string                  `json:"created_at"`
-	Credential            *CredentialBriefDTO     `json:"credential,omitempty"`
-	CredentialID          *int                    `json:"credential_id"`
+	Credential            *CredentialBriefDTO     `json:"credential,omitempty" extensions:"x-optional"`
+	CredentialID          *int                    `json:"credential_id" extensions:"x-nullable"`
 	Description           string                  `json:"description"`
 	Duration              int                     `json:"duration"`
 	IsFeatured            bool                    `json:"is_featured"`
 	IsHot                 bool                    `json:"is_hot"`
-	Level                 *LevelBriefDTO          `json:"level,omitempty"`
-	LevelID               *int                    `json:"level_id"`
+	Level                 *LevelBriefDTO          `json:"level,omitempty" extensions:"x-optional"`
+	LevelID               *int                    `json:"level_id" extensions:"x-nullable"`
 	Name                  string                  `json:"name"`
-	PointsPrice           *int                    `json:"points_price,omitempty"`
+	PointsPrice           *int                    `json:"points_price,omitempty" extensions:"x-optional"`
 	PracticeHours         int                     `json:"practice_hours"`
-	PrerequisiteCourseIDs *[]int                  `json:"prerequisite_course_ids,omitempty"`
-	Prerequisites         *[]CourseBriefDTO       `json:"prerequisites,omitempty"`
+	PrerequisiteCourseIDs *[]int                  `json:"prerequisite_course_ids,omitempty" extensions:"x-optional"`
+	Prerequisites         *[]CourseBriefDTO       `json:"prerequisites,omitempty" extensions:"x-optional"`
 	SortOrder             int                     `json:"sort_order"`
-	Specialty             *SpecialtyBriefDTO      `json:"specialty,omitempty"`
-	SpecialtyID           *int                    `json:"specialty_id"`
+	Specialty             *SpecialtyBriefDTO      `json:"specialty,omitempty" extensions:"x-optional"`
+	SpecialtyID           *int                    `json:"specialty_id" extensions:"x-nullable"`
 	Status                int16                   `json:"status"`
-	StudentCount          *int64                  `json:"student_count,omitempty"`
+	StudentCount          *int64                  `json:"student_count,omitempty" extensions:"x-optional"`
 	TheoryHours           int                     `json:"theory_hours"`
-	Chapters              *[]ChapterDTO           `json:"chapters,omitempty"`
+	Chapters              *[]ChapterDTO           `json:"chapters,omitempty" extensions:"x-optional"`
 }
 
 // CredentialBriefDTO 目标证件简述（课程详情元数据）。
@@ -63,7 +63,7 @@ type CredentialBriefDTO struct {
 	Category string `json:"category"`
 	Code     string `json:"code"`
 	ID       int    `json:"id"`
-	Level    *int   `json:"level"`
+	Level    *int   `json:"level" extensions:"x-nullable"`
 	Name     string `json:"name"`
 }
 
@@ -110,12 +110,12 @@ type ChapterDTO struct {
 	FileURL     string            `json:"file_url"`
 	OrderNum    int               `json:"order_num"`
 	Title       string            `json:"title"`
-	Files       *[]ChapterFileDTO `json:"files,omitempty"`
+	Files       *[]ChapterFileDTO `json:"files,omitempty" extensions:"x-optional"`
 }
 
 // ChapterFileDTO 章节文件（chapter_file 表条目与旧版 chapter.file_url 兼容条目同构）。
 type ChapterFileDTO struct {
-	ChapterID   *int   `json:"chapter_id"`
+	ChapterID   *int   `json:"chapter_id" extensions:"x-nullable"`
 	ContentType string `json:"content_type"`
 	CreatedAt   string `json:"created_at"`
 	FileID      int    `json:"file_id"`
@@ -128,9 +128,9 @@ type ChapterFileDTO struct {
 type ChapterDetailDTO struct {
 	ChapterDTO
 	Files             []ChapterFileDTO `json:"files"`
-	NextChapterID     *int             `json:"next_chapter_id"`
-	PreviousChapterID *int             `json:"previous_chapter_id"`
-	StudyStatus       string           `json:"study_status,omitempty"`
+	NextChapterID     *int             `json:"next_chapter_id" extensions:"x-nullable"`
+	PreviousChapterID *int             `json:"previous_chapter_id" extensions:"x-nullable"`
+	StudyStatus       string           `json:"study_status,omitempty" extensions:"x-optional"`
 }
 
 // CourseDetailDTO 学员端课程详情信封。
@@ -142,7 +142,7 @@ type CourseDetailDTO struct {
 	Progress          float64      `json:"progress"`
 	IsEnrolled        bool         `json:"is_enrolled"`
 	CompletedChapters int64        `json:"completed_chapters"`
-	LastChapterID     *int         `json:"last_chapter_id"`
+	LastChapterID     *int         `json:"last_chapter_id" extensions:"x-nullable"`
 	LastPosition      int          `json:"last_position"`
 	LastStudiedAt     string       `json:"last_studied_at"`
 }

@@ -139,7 +139,7 @@ func (a ForumAuthor) DisplayName() string {
 // ForumTopicDTO 论坛主题列表/详情对象。
 type ForumTopicDTO struct {
 	ID           int64  `json:"id"`
-	ChapterID    *int   `json:"chapter_id"`
+	ChapterID    *int   `json:"chapter_id" extensions:"x-nullable"`
 	Category     string `json:"category"` // 意图：discussion | question（ADR-0040）
 	ChapterTitle string `json:"chapter_title"`
 	Title        string `json:"title"`
@@ -154,14 +154,14 @@ type ForumTopicDTO struct {
 	IPCity          string      `json:"ip_city"`
 	ViewCount       int         `json:"view_count"`
 	ReplyCount      int         `json:"reply_count"`
-	LastReplyAt     *string     `json:"last_reply_at"`
+	LastReplyAt     *string     `json:"last_reply_at" extensions:"x-nullable"`
 	CreatedAt       string      `json:"created_at"`
 	Author          ForumAuthor `json:"author"`
 	CanDelete       bool        `json:"can_delete"`
 	LikesCount      int64       `json:"likes_count"`
 	LikedByMe       bool        `json:"liked_by_me"`
-	AcceptedReplyID *int64      `json:"accepted_reply_id,omitempty"`
-	SolvedAt        *string     `json:"solved_at,omitempty"`
+	AcceptedReplyID *int64      `json:"accepted_reply_id,omitempty" extensions:"x-optional"`
+	SolvedAt        *string     `json:"solved_at,omitempty" extensions:"x-optional"`
 	IsFeatured      bool        `json:"is_featured"`   // 认定：精选位
 	IsExperience    bool        `json:"is_experience"` // 认定：备考经验（蕴含 is_featured）
 	RewardIssued    bool        `json:"reward_issued"`
@@ -171,11 +171,11 @@ type ForumTopicDTO struct {
 type ForumReplyDTO struct {
 	ID         int64  `json:"id"`
 	TopicID    int64  `json:"topic_id"`
-	ParentID   *int64 `json:"parent_id,omitempty"`
-	ParentName string `json:"parent_name,omitempty"` // 被回复人的展示名
+	ParentID   *int64 `json:"parent_id,omitempty" extensions:"x-optional"`
+	ParentName string `json:"parent_name,omitempty" extensions:"x-optional"` // 被回复人的展示名
 	// ParentAvatarURL 被回复人的头像（ADR-0042「昵称 › 被回复人」行内形态所需）。
 	// 与 ParentName 同口径 omitempty：顶层回复（无被回复人）两个字段都不出现。
-	ParentAvatarURL string `json:"parent_avatar_url,omitempty"`
+	ParentAvatarURL string `json:"parent_avatar_url,omitempty" extensions:"x-optional"`
 	Content         string `json:"content"`
 	// ContentFormat 正文格式声明（ADR-0044）：text | markdown。与主题同口径。
 	ContentFormat string      `json:"content_format"`
@@ -190,6 +190,20 @@ type ForumReplyDTO struct {
 	// 空串 = 无属地，展示侧接在相对时间之后（「18 小时前 · 上海」），为空则整段不渲染。
 	IPProvince string `json:"ip_province"`
 	IPCity     string `json:"ip_city"`
+}
+
+// ForumImageUploadResultDTO 论坛图片上传结果（spec #962 片四：收口自 handler 内联 gin.H）。
+type ForumImageUploadResultDTO struct {
+	URL string `json:"url"`
+}
+
+// ForumLikeResultDTO 点赞 / 取消点赞结果（主题与回复的 like/unlike 四个端点共用同一形状）。
+//
+// 字段按 JSON key 字母序声明（liked < likes_count）：旧形态是 gin.H，encoding/json 对 map
+// 按 key 排序输出，换成 struct 后序列化字节序不变（ADR-0009 §2 / 片二字节锁口径）。
+type ForumLikeResultDTO struct {
+	Liked      bool  `json:"liked"`
+	LikesCount int64 `json:"likes_count"`
 }
 
 // ForumService 论坛服务。
@@ -1479,9 +1493,9 @@ type ForumReportDTO struct {
 	ID         int64  `json:"id"`
 	ReporterID int    `json:"reporter_id"`
 	Reporter   string `json:"reporter"`
-	TopicID    *int64 `json:"topic_id,omitempty"`
+	TopicID    *int64 `json:"topic_id,omitempty" extensions:"x-optional"`
 	TopicTitle string `json:"topic_title"`
-	ReplyID    *int64 `json:"reply_id,omitempty"`
+	ReplyID    *int64 `json:"reply_id,omitempty" extensions:"x-optional"`
 	Reason     string `json:"reason"`
 	Status     int16  `json:"status"`
 	CreatedAt  string `json:"created_at"`
@@ -1686,7 +1700,7 @@ type MyReplyDTO struct {
 	ID         int64  `json:"id"`
 	TopicID    int64  `json:"topic_id"`
 	TopicTitle string `json:"topic_title"`
-	ParentID   *int64 `json:"parent_id,omitempty"`
+	ParentID   *int64 `json:"parent_id,omitempty" extensions:"x-optional"`
 	Content    string `json:"content"`
 	// ContentFormat 正文格式声明（ADR-0044）：列表摘要据此决定是否剥成纯文本。
 	ContentFormat string      `json:"content_format"`

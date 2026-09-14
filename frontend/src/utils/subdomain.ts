@@ -85,6 +85,38 @@ export function isIpDirectMode(): boolean {
   return /^\d+\.\d+\.\d+\.\d+$/.test(host)
 }
 
+/**
+ * 本站地址判定：该链接是否指向本站（同源 / 本站域名族）。
+ *
+ * 为什么需要它：外链中转的判据应当是「**这条链接会不会把读者带离本站**」，
+ * 而不是「href 是不是以 `/` 开头」这种字面判断 —— 后者会把
+ * `https://training.example.com/forum/1`（本站绝对地址）、`//training.example.com/x`
+ * （协议相对）与 `foo/bar`（相对地址）一并误判成站外，读者点站内链接也被拦一道。
+ *
+ * 口径：hostname 与当前一致（相对地址按当前页面解析），或落在本站域名族内
+ * （根域名 + training / www / valuation / mentor / manage / recruit 等子域名）→ 本站。
+ * 非 http(s)、无主机名的协议（mailto: / tel: 等）**不算本站**：它们不是网页导航，
+ * 由调用方另行分类（见 ForumContent 的链接改写）。
+ */
+export function isSameSiteUrl(raw: string): boolean {
+  if (typeof window === 'undefined') return false
+  const host = hostnameOf(raw)
+  if (!host) return false
+  if (host === window.location.hostname.toLowerCase()) return true
+  const root = getRootDomain()
+  return host === root || host.endsWith('.' + root)
+}
+
+/** 绝对化后的 hostname（相对地址按当前页面解析）；空串 / 无主机名 / 无法解析一律返回空串。 */
+function hostnameOf(raw: string): string {
+  if (!raw.trim()) return ''
+  try {
+    return new URL(raw.trim(), window.location.href).hostname.toLowerCase()
+  } catch {
+    return ''
+  }
+}
+
 // 根据路径推导应该所在的子域名类型。
 // 用于路由守卫：当前子域名与目标子域名不一致时触发跨子域名跳转。
 // 注意：/login 和 /register 不在此处理，由路由守卫特殊处理（每个子域名都可有自己的登录页）。

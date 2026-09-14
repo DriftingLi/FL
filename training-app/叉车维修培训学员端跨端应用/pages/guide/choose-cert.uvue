@@ -401,7 +401,8 @@
     .hot-card {
         flex: 1;
         padding: 24rpx 20rpx;
-        background: linear-gradient(135deg, #2979FF 0%, #1565C0 100%);
+        background: linear-gradient(to bottom right, #2979FF, #1565C0);
+        background-color: #1565C0;
         border-radius: 16rpx;
     }
 
@@ -484,7 +485,8 @@
 
     .btn-confirm {
         height: 96rpx;
-        background: linear-gradient(135deg, #2979FF 0%, #1565C0 100%);
+        background: linear-gradient(to bottom right, #2979FF, #1565C0);
+        background-color: #1565C0;
         border-radius: 48rpx;
         align-items: center;
         justify-content: center;

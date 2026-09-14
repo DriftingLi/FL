@@ -69,7 +69,7 @@ type listWrongQuestionsReq struct {
 // @Param favorited query bool false "仅看收藏"
 // @Param sort query string false "排序 time_desc/time_asc" default(time_desc)
 // @Param credential_id query int false "目标证件ID（按题目所属证件分区）"
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.WrongQuestionPageDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /wrong-questions [get]
 func (h *WrongQuestionHandler) List(c *gin.Context) {
@@ -161,7 +161,7 @@ type removeWrongQuestionReq struct {
 // @Produce json
 // @Security BearerAuth
 // @Param question_id path int true "题目ID"
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.WrongQuestionRemoveResultDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /wrong-questions/{question_id}/remove [post]
@@ -197,7 +197,7 @@ func (h *WrongQuestionHandler) Remove(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param body body object true "题目IDs" example({"question_ids":[1,2,3]})
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.WrongQuestionBatchRemoveResultDTO} "success"
 // @Router /wrong-questions/batch-remove [post]
 func (h *WrongQuestionHandler) BatchRemove(c *gin.Context) {
 	Endpoint[batchRemoveReq, service.WrongQuestionBatchRemoveResultDTO]{

@@ -7,7 +7,7 @@
 		<view class="main">
 			<scroll-view scroll-y class="pro-scroll" :scroll-into-view="scrollIntoViewId" scroll-with-animation>
 				<!-- 专业版档位横幅（#920）：未解锁=橙 +「查看权益」；已解锁=绿 + 只读状态。
-				     配色一律**实色**（本机型实测 background: linear-gradient(...) 静默不绘制） -->
+				     配色按设计用**实色**（两态实色更干净；不是能力限制 —— #937 真机实测已证伪「本机型不绘制渐变」） -->
 				<view class="pro-banner" :class="proUnlocked ? 'pro-banner-unlocked' : ''" @click="openProSheet">
 					<text class="pro-banner-title" :class="proUnlocked ? 'pro-title-unlocked' : ''">{{ proBannerTitle }}</text>
 					<text class="pro-banner-sub" :class="proUnlocked ? 'pro-sub-unlocked' : ''">{{ proBannerSub }}</text>
@@ -559,7 +559,7 @@
 		flex: 1;
 		display: flex;
 		flex-direction: column;
-		/* 底色用实色：本机型实测 background: linear-gradient(...) 静默不绘制 */
+		/* 底色按设计用实色（非能力限制）；渐变语法口径见 utils/gradientSyntaxContract.test.js（#937） */
 		background-color: #dfeffb;
 	}
 
@@ -663,7 +663,7 @@
 		color: #333333;
 		line-height: 1.6;
 	}
-	/* 专业版档位横幅（#920）：**实色**配色（本机型不绘制渐变）；未解锁=橙、已解锁=绿 */
+	/* 专业版档位横幅（#920）：**实色**配色（按设计；#937 已证伪「本机型不绘制渐变」）；未解锁=橙、已解锁=绿 */
 	.pro-banner {
 		flex-direction: row;
 		align-items: center;

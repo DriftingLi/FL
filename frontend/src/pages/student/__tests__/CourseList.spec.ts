@@ -32,7 +32,41 @@ import { courseApi } from '@/api/course'
 import { trainingApi } from '@/api/training'
 import { useCredentialStore } from '@/stores/credential'
 import type { CredentialDict } from '@/api/credential'
+import type { CatalogDirectionNode, CatalogLevelNode } from '@/api/training'
+import type { CourseDTO } from '@/api/course'
 import CourseList from '../CourseList.vue'
+
+// 生成 DTO 的最小测试夹具：只填测试关心的字段，其余取 DTO 零值
+// （注解成为唯一事实源后，手写时代「只给两个字段」的 fixture 不再合法）。
+function courseOf(courseId: number, name: string, over: Partial<CourseDTO> = {}): CourseDTO {
+  return {
+    certificate_name: '',
+    certificate_template_id: null,
+    course_id: courseId,
+    cover_image: '',
+    created_at: '',
+    credential_id: null,
+    description: '',
+    duration: 0,
+    is_featured: false,
+    is_hot: false,
+    level_id: null,
+    name,
+    practice_hours: 0,
+    sort_order: 0,
+    specialty_id: null,
+    status: 1,
+    theory_hours: 0,
+    ...over
+  }
+}
+function levelNodeOf(levelId: number, name: string, sortOrder: number, courses: CourseDTO[]): CatalogLevelNode {
+  return { code: '', created_at: '', description: '', level_id: levelId, name, sort_order: sortOrder, status: 1, courses }
+}
+function specialtyOf(specialtyId: number, name: string, levels: CatalogLevelNode[]): CatalogDirectionNode {
+  return { code: '', created_at: '', description: '', levels, name, sort_order: 0, specialty_id: specialtyId, status: 1 }
+}
+
 
 function credentialOf(id: number): CredentialDict {
   return { id, code: `C${id}`, name: `证件${id}`, description: '', category: 'special_operation', level: null, sort_order: 0, status: 1, created_at: '', updated_at: '' }
@@ -47,10 +81,10 @@ function mountPage() {
 beforeEach(() => {
   vi.mocked(courseApi.getCourses).mockResolvedValue({
     total: 2,
+    page: 1,
+    pages: 1,
     courses: [
-      {
-        course_id: 1,
-        name: '液压系统原理与维护',
+      courseOf(1, '液压系统原理与维护', {
         description: '液压传动原理',
         specialty_id: 2,
         level_id: 2,
@@ -58,33 +92,33 @@ beforeEach(() => {
         theory_hours: 24,
         practice_hours: 16,
         certificate_name: '叉车维修技能培训合格证书'
-      },
-      {
-        course_id: 2,
-        name: '叉车基础知识概述',
+      }),
+      courseOf(2, '叉车基础知识概述', {
         description: '入门知识',
         specialty_id: 2,
         level_id: 1,
         chapter_count: 6,
         theory_hours: 16,
         practice_hours: 8
-      }
+      })
     ]
   })
   vi.mocked(courseApi.getCourseDetail).mockResolvedValue({
-    course_info: { course_id: 1, name: '液压系统原理与维护' },
-    chapters: []
+    course_info: courseOf(1, '液压系统原理与维护'),
+    chapters: [],
+    completed_chapters: 0,
+    is_enrolled: false,
+    last_chapter_id: null,
+    last_position: 0,
+    last_studied_at: '',
+    progress: 0
   })
   vi.mocked(trainingApi.getCatalogTree).mockResolvedValue({
     specialties: [
-      {
-        specialty_id: 2,
-        name: '维修',
-        levels: [
-          { level_id: 1, name: '入门', courses: [{ course_id: 2, name: '叉车基础知识概述' }] },
-          { level_id: 2, name: '进阶', courses: [{ course_id: 1, name: '液压系统原理与维护' }] }
-        ]
-      }
+      specialtyOf(2, '维修', [
+        levelNodeOf(1, '入门', 0, [courseOf(2, '叉车基础知识概述')]),
+        levelNodeOf(2, '进阶', 0, [courseOf(1, '液压系统原理与维护')])
+      ])
     ]
   })
 })

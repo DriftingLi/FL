@@ -145,7 +145,9 @@ function openDialog(row?: CredentialDict) {
     form.id = row.id
     form.code = row.code
     form.name = row.name
-    form.category = row.category
+    // 生成形状的 category 是 string（注解层暂无枚举词汇，见 ADR-0048 片一已知限制）；
+    // 后端取值域就是这两个，表单模型是封闭值集，此处按域收窄。
+    form.category = row.category as 'special_operation' | 'skill_level'
     form.level = row.level
     form.description = row.description
     form.sort_order = row.sort_order

@@ -80,7 +80,7 @@ func RegisterForumRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.ForumS
 
 	// ===== 管理员论坛管理 =====
 	adminG := rg.Group("/admin/forum", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapForumModerate))
-	adminG.GET("/topics", h.ListTopics)
+	adminG.GET("/topics", h.AdminListTopics)
 	adminG.GET("/topics/:id", h.AdminGetTopic)
 	adminG.DELETE("/topics/:id", h.AdminDeleteTopic)
 	adminG.DELETE("/replies/:id", h.AdminDeleteReply)
@@ -102,7 +102,7 @@ func RegisterForumRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.ForumS
 // @Produce json
 // @Security BearerAuth
 // @Param file formData file true "图片文件"
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.ForumImageUploadResultDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /forum/upload-image [post]
@@ -126,7 +126,7 @@ func (h *ForumHandler) UploadImage(c *gin.Context) {
 		response.ServerError(c, "图片上传失败")
 		return
 	}
-	response.SuccessWithMsg(c, "图片上传成功", gin.H{"url": url})
+	response.SuccessWithMsg(c, "图片上传成功", service.ForumImageUploadResultDTO{URL: url})
 }
 
 // ListTopics 帖子列表
@@ -507,6 +507,33 @@ func (h *ForumHandler) DeleteReply(c *gin.Context) {
 	}.Handle(c)
 }
 
+// AdminListTopics 管理员帖子列表 GET /api/admin/forum/topics?scope=&category=&page=
+//
+// 与 ListTopics 同一读面（管理端沿用学员端实现，ADR-0047 §3）：注解必须留在本函数上，
+// 否则 /admin/forum/topics 会从 swagger 里消失（文档面缩水，spec #962 片四）。
+//
+// @Summary 管理员查看帖子列表
+// @Description 与学员端列表同一读面（scope/category/featured/chapter_id/keyword/sort/order 同参数）
+// @Tags 管理端-论坛
+// @Produce json
+// @Security BearerAuth
+// @Param scope query string false "范围 all|general|chapter"
+// @Param category query string false "类别 discussion|question|experience，省略表示不过滤"
+// @Param featured query string false "精选过滤 true|false，省略表示不过滤"
+// @Param chapter_id query int false "章节ID"
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(10)
+// @Param keyword query string false "关键词"
+// @Param sort query string false "排序 latest|hot|created"
+// @Param order query string false "排序方向 asc|desc"
+// @Success 200 {object} response.R{data=service.ForumTopicPageResult} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/forum/topics [get]
+func (h *ForumHandler) AdminListTopics(c *gin.Context) {
+	h.ListTopics(c)
+}
+
 // AdminGetTopic 管理员查看帖子详情（含回复）GET /api/admin/forum/topics/:id?sort=time|hot
 // AdminGetTopic 管理员查看帖子详情 GET /api/admin/forum/topics/:id
 // @Summary 管理员查看帖子
@@ -515,7 +542,7 @@ func (h *ForumHandler) DeleteReply(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "主题 ID"
-// @Success 200 {object} response.R "详情"
+// @Success 200 {object} response.R{data=service.ForumTopicDetailDTO} "详情"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "主题不存在"
 // @Router /admin/forum/topics/{id} [get]
@@ -826,7 +853,7 @@ type replyIDReq struct {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "主题ID"
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.ForumLikeResultDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /forum/topics/{id}/like [post]
@@ -841,7 +868,7 @@ func (h *ForumHandler) LikeTopic(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
-	response.SuccessWithMsg(c, "点赞成功", gin.H{"likes_count": count, "liked": true})
+	response.SuccessWithMsg(c, "点赞成功", service.ForumLikeResultDTO{Liked: true, LikesCount: count})
 }
 
 // UnlikeTopic 取消点赞帖子
@@ -852,7 +879,7 @@ func (h *ForumHandler) LikeTopic(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "主题ID"
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.ForumLikeResultDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /forum/topics/{id}/like [delete]
@@ -867,7 +894,7 @@ func (h *ForumHandler) UnlikeTopic(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
-	response.SuccessWithMsg(c, "已取消点赞", gin.H{"likes_count": count, "liked": false})
+	response.SuccessWithMsg(c, "已取消点赞", service.ForumLikeResultDTO{Liked: false, LikesCount: count})
 }
 
 // ReportTopic 举报帖子
@@ -941,7 +968,7 @@ func (h *ForumHandler) report(c *gin.Context, kind string) {
 // @Security BearerAuth
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(10)
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.ForumTopicPageResult} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /forum/my-topics [get]
 func (h *ForumHandler) MyTopics(c *gin.Context) {
@@ -963,7 +990,7 @@ func (h *ForumHandler) MyTopics(c *gin.Context) {
 // @Security BearerAuth
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(10)
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.MyReplyPageResult} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /forum/my-replies [get]
 func (h *ForumHandler) MyReplies(c *gin.Context) {
@@ -1028,6 +1055,19 @@ func (h *ForumHandler) MyViewHistory(c *gin.Context) {
 }
 
 // ListReports 管理端举报列表 GET /api/admin/forum/reports?status=&page=&page_size=
+// ListReports 管理端举报列表（GET /api/admin/forum/reports?status=&page=&page_size=）
+// @Summary 管理端举报列表
+// @Description 分页查询论坛举报（status 0 待处理 / 1 已处理，省略表示全部）
+// @Tags 管理端-论坛
+// @Produce json
+// @Security BearerAuth
+// @Param status query int false "状态 0 待处理 / 1 已处理，省略表示全部"
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(20)
+// @Success 200 {object} response.R{data=service.ForumReportPageResult} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/forum/reports [get]
 func (h *ForumHandler) ListReports(c *gin.Context) {
 	var status *int16
 	if raw := c.Query("status"); raw != "" {
@@ -1088,7 +1128,7 @@ func (h *ForumHandler) HandleReport(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "回复ID"
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.ForumLikeResultDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /forum/replies/{id}/like [post]
@@ -1103,7 +1143,7 @@ func (h *ForumHandler) LikeReply(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
-	response.SuccessWithMsg(c, "点赞成功", gin.H{"likes_count": count, "liked": true})
+	response.SuccessWithMsg(c, "点赞成功", service.ForumLikeResultDTO{Liked: true, LikesCount: count})
 }
 
 // UnlikeReply 取消点赞回复
@@ -1114,7 +1154,7 @@ func (h *ForumHandler) LikeReply(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "回复ID"
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.ForumLikeResultDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /forum/replies/{id}/like [delete]
@@ -1129,7 +1169,7 @@ func (h *ForumHandler) UnlikeReply(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
-	response.SuccessWithMsg(c, "已取消点赞", gin.H{"likes_count": count, "liked": false})
+	response.SuccessWithMsg(c, "已取消点赞", service.ForumLikeResultDTO{Liked: false, LikesCount: count})
 }
 
 // AcceptTopic 采纳回答（#366）
@@ -1141,7 +1181,7 @@ func (h *ForumHandler) UnlikeReply(c *gin.Context) {
 // @Security BearerAuth
 // @Param id path int true "主题ID"
 // @Param body body object true "采纳" example({"reply_id":123})
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.ForumTopicDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 403 {object} response.R "无权限"
@@ -1179,7 +1219,7 @@ func (h *ForumHandler) AcceptTopic(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "主题ID"
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=service.ForumTopicDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 403 {object} response.R "无权限"
 // @Router /forum/topics/{id}/accept [delete]

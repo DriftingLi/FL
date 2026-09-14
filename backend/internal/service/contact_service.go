@@ -50,17 +50,42 @@ type ContactRequestDTO struct {
 	Status        string  `json:"status"`
 	CreatedAt     string  `json:"created_at"`
 	UpdatedAt     string  `json:"updated_at"`
-	DecidedAt     *string `json:"decided_at,omitempty"`
+	DecidedAt     *string `json:"decided_at,omitempty" extensions:"x-optional"`
 	ExpiresAt     string  `json:"expires_at"`
 	// 企业信息（学员侧可见）
-	CompanyName string `json:"company_name,omitempty"`
-	ContactName string `json:"contact_name,omitempty"`
+	CompanyName string `json:"company_name,omitempty" extensions:"x-optional"`
+	ContactName string `json:"contact_name,omitempty" extensions:"x-optional"`
 	// 企业联系信息（#487：仅 status=approved 时透出——电话/邮箱/微信；其余状态一律缺失）
-	ContactPhone string `json:"contact_phone,omitempty"`
-	ContactEmail string `json:"contact_email,omitempty"`
-	Wechat       string `json:"wechat,omitempty"`
+	ContactPhone string `json:"contact_phone,omitempty" extensions:"x-optional"`
+	ContactEmail string `json:"contact_email,omitempty" extensions:"x-optional"`
+	Wechat       string `json:"wechat,omitempty" extensions:"x-optional"`
 	// Source 授权来源（recruiter 企业发起 / application 投递产生）
-	Source string `json:"source,omitempty"`
+	Source string `json:"source,omitempty" extensions:"x-optional"`
+}
+
+// ContactRequestListResult 交换申请分页结果。
+//
+// 形状与 handler 既有的 gin.H{"items","total","page","page_size"} 逐字段一致（本片只补注解，
+// 不动任何响应构造；键序不重要——这里只用于 swagger 的 data 指认）。
+type ContactRequestListResult struct {
+	Items    []ContactRequestDTO `json:"items"`
+	Total    int64               `json:"total"`
+	Page     int                 `json:"page"`
+	PageSize int                 `json:"page_size"`
+}
+
+// ContactPlainDTO 明文联系方式及其补齐面（GET /api/recruit/resumes/{id}/contact）。
+//
+// 同样与 handler 既有内联 map 的字段集一致（仅注解层的形状声明，不改响应构造）。
+// Photos / ResumeCertifications 是 JSONB 直出的数组，用 service.JSONArray 承接
+// （json.RawMessage 会让 swag 解析失败，见该类型的注释）。
+type ContactPlainDTO struct {
+	RealName             string    `json:"real_name"`
+	ContactPhone         string    `json:"contact_phone"`
+	Wechat               string    `json:"wechat"`
+	ResumeFileURL        string    `json:"resume_file_url"`
+	Photos               JSONArray `json:"photos" swaggertype:"array,string"`
+	ResumeCertifications JSONArray `json:"resume_certifications" swaggertype:"array,object"`
 }
 
 // toDTO 转换 DB 行为 DTO，带企业信息（学员侧用）。

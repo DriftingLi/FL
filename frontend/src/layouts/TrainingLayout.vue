@@ -8,15 +8,35 @@
     content-width="narrow"
   >
     <template #top="{ collapsed }">
-      <CredentialSwitcher v-if="!chapterCourseId" :collapsed="collapsed" theme="dark" />
+      <div class="flex flex-col gap-2">
+        <CredentialSwitcher v-if="!chapterCourseId" :collapsed="collapsed" theme="dark" />
+        <!-- 布局级搜索入口（#984）：侧栏顶部一处 + ⌘/Ctrl+K 全工作区可达。
+             暗底上必须**显式给底色**：本仓有意不引入 Tailwind preflight（见 tailwind.css 注释），
+             裸 <button> 会保留浏览器默认浅底，配浅色文字就成了亮色药丸。
+             配色照 CredentialSwitcher 的 dark 分支：白 8% 填充 + 12% 内描边 + 浅色文字。 -->
+        <button
+          type="button"
+          class="flex items-center gap-2 rounded-md bg-white/[0.08] px-2.5 py-1.5 text-[13px] text-white/70 ring-1 ring-white/[0.12] ring-inset transition-colors hover:bg-white/[0.16] hover:text-white"
+          :class="collapsed ? 'justify-center' : ''"
+          aria-label="全局搜索"
+          @click="openSearch"
+        >
+          <el-icon><Search /></el-icon>
+          <template v-if="!collapsed">
+            <span>搜索</span>
+            <span class="ml-auto rounded border border-white/20 px-1 text-[11px] text-white/60">⌘K</span>
+          </template>
+        </button>
+      </div>
     </template>
   </SidebarLayout>
 </template>
 
 <script setup lang="ts">
-import { computed, h, watch } from 'vue'
+import { computed, h, onBeforeUnmount, onMounted, watch } from 'vue'
 import type { Component } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { Search } from '@element-plus/icons-vue'
 import SidebarLayout from './SidebarLayout.vue'
 import CredentialSwitcher from '@/components/credential/CredentialSwitcher.vue'
 import { roleNavigation } from '@/config/navigation'
@@ -25,7 +45,41 @@ import type { NavItem } from '@/config/navigation'
 
 const studentNav = roleNavigation.student
 const route = useRoute()
+const router = useRouter()
 const courseStore = useCourseStore()
+
+/** 布局级搜索入口（#984）：已在搜索页则直接聚焦（自定义事件），否则带 focus=1 跳过去。 */
+function openSearch(): void {
+  if (route.path === '/training/search') {
+    window.dispatchEvent(new Event('focus-global-search'))
+    return
+  }
+  void router.push({ path: '/training/search', query: { focus: '1' } })
+}
+
+/** 事件目标是不是可编辑元素（输入框 / 文本域 / 下拉 / contenteditable）。 */
+function isEditableTarget(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null
+  if (!el || !el.tagName) return false
+  return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable === true
+}
+
+/** ⌘/Ctrl+K 打开搜索（全工作区可达）；卸载时摘掉监听，避免布局切换后残留。 */
+function onGlobalKeydown(e: KeyboardEvent): void {
+  if (!(e.metaKey || e.ctrlKey) || (e.key !== 'k' && e.key !== 'K')) return
+  // 编辑区内的 Ctrl+K 是编辑器 / 浏览器的既有绑定（发帖、搜索框、笔记），不劫持
+  if (isEditableTarget(e.target)) return
+  e.preventDefault()
+  openSearch()
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onGlobalKeydown)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onGlobalKeydown)
+})
 
 // 章节学习路由下进入"课程章节模式"：侧栏第一项为返回课程中心，其余为章节列表
 const chapterCourseId = computed(() => {

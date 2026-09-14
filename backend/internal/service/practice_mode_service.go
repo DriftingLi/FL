@@ -321,9 +321,13 @@ func (s *PracticeModeService) GetSequentialProgress(studentID int, credentialID 
 }
 
 // SubmitAnswer 提交答案并判定。判分经 grading_engine.gradeOne 单题入口（错题入库/分值表经 flow 注入）。
-func (s *PracticeModeService) SubmitAnswer(studentID, questionID int, userAnswer any, practiceType string) (*SubmitResultDTO, error) {
+func (s *PracticeModeService) SubmitAnswer(studentID, questionID int, userAnswer any, practiceType string, credentialID *int) (*SubmitResultDTO, error) {
+	// 池口径守卫（ADR-0049 约束：题库池覆盖每条读路径）：提交即回传答案与解析，
+	// 故按 id 直取的提交路径同样不得越过 published / 排源标记真题题 / 当前证件。
+	// credentialID 是**必填形参**（nil = 不分区）：可见性口径不许做成 fail-open 的可选变参。
 	var q model.Question
-	if err := s.db.First(&q, questionID).Error; err != nil {
+	if err := poolFilter(s.db.Model(&model.Question{}), sampleQuestionsOpts{cred: credentialID}).
+		Where("id = ?", questionID).First(&q).Error; err != nil {
 		return nil, errors.New("题目不存在")
 	}
 

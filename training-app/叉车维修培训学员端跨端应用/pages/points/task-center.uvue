@@ -377,7 +377,8 @@
         width: 80rpx;
         height: 80rpx;
         border-radius: 40rpx;
-        background: linear-gradient(135deg, #FFD700, #FFA000);
+        background: linear-gradient(to bottom right, #FFD700, #FFA000);
+        background-color: #FFA000;
         align-items: center;
         justify-content: center;
         margin-right: 24rpx;

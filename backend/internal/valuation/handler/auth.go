@@ -24,6 +24,16 @@ func NewValuationAuthHandler(authSvc ValuationAuth, sess *security.Session) *Val
 }
 
 // Me 处理 GET /api/valuation/auth/me（需 middleware.JWTAuth）
+// @Summary 当前估值用户
+// @Description 返回当前登录估值用户的基础资料（user_id/uid/account/username/phone/email/company/role），手机号脱敏。需登录（估值鉴权组）。
+// @Tags 估值-认证
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.R{data=object{user_id=integer,uid=string,account=string,username=string,phone=string,email=string,company=string,role=string}} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "用户不存在"
+// @Router /valuation/auth/me [get]
 func (h *ValuationAuthHandler) Me(c *gin.Context) {
 	uid := middleware.CurrentUserID(c)
 	if uid == 0 {
@@ -50,6 +60,14 @@ func (h *ValuationAuthHandler) Me(c *gin.Context) {
 // Logout 处理 POST /api/valuation/auth/logout（与主站 /auth/logout 同口径，ADR-0016）：
 // 接收 refresh_token（请求体优先，回退 Bearer 头）并吊销；不依赖 JWTAuth，
 // access 过期时也能登出。黑名单只管理 refresh，access 自然过期。
+// @Summary 估值用户登出
+// @Description 以 refresh_token 自证身份吊销会话（请求体优先，回退 Bearer 头）；不依赖 JWTAuth。公开端点：无需登录。
+// @Tags 估值-认证
+// @Accept json
+// @Produce json
+// @Param body body object false "refresh_token" example({"refresh_token":"eyJhbGciOi..."})
+// @Success 200 {object} response.R "success"
+// @Router /valuation/auth/logout [post]
 func (h *ValuationAuthHandler) Logout(c *gin.Context) {
 	var req struct {
 		RefreshToken string `json:"refresh_token"`

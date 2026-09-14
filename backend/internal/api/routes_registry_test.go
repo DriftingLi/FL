@@ -38,5 +38,6 @@ func TestRouteRegistryCoverage(t *testing.T) {
 	}
 }
 
-// expectedRouteCount 域注册表构出的路由总数基线（2026-09-13，第八波片六）。
-const expectedRouteCount = 314
+// expectedRouteCount 域注册表构出的路由总数基线（2026-09-14，全局搜索升级 #982 新增
+// GET /api/admin/search-facts/zero-results）。
+const expectedRouteCount = 315

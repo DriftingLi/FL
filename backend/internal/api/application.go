@@ -56,7 +56,7 @@ func NewApplicationHandler(svc *service.JobApplicationService) *ApplicationHandl
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "职位 ID"
-// @Success 201 {object} response.R "投递成功"
+// @Success 201 {object} response.R{data=service.ApplicationDTO} "投递成功"
 // @Failure 400 {object} response.R "重复投递/冷却/日限/简历不完整"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "职位不可投递"
@@ -88,7 +88,7 @@ func (h *ApplicationHandler) Apply(c *gin.Context) {
 // @Security BearerAuth
 // @Param page query int false "页码"
 // @Param page_size query int false "每页数量"
-// @Success 200 {object} response.R "列表"
+// @Success 200 {object} response.R{data=service.ApplicationListResult} "列表"
 // @Failure 401 {object} response.R "未认证"
 // @Router /resume/applications [get]
 func (h *ApplicationHandler) ListMine(c *gin.Context) {
@@ -114,7 +114,7 @@ func (h *ApplicationHandler) ListMine(c *gin.Context) {
 // @Security BearerAuth
 // @Param id path int true "投递 ID"
 // @Param body body object false "撤回选项 {revoke_contact?: boolean}"
-// @Success 200 {object} response.R "已撤回"
+// @Success 200 {object} response.R{data=service.ApplicationDTO} "已撤回"
 // @Failure 400 {object} response.R "状态不允许"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 403 {object} response.R "无权操作"

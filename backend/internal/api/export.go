@@ -35,9 +35,52 @@ func RegisterExportRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Expor
 
 	g := rg.Group("/admin/export", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapExportRun))
 
-	g.GET("/students", h.exportCSV(func() ([][]any, error) { return svc.Students() }, "学员名单.csv"))
-	g.GET("/questions", h.exportCSV(func() ([][]any, error) { return svc.Questions() }, "题库.csv"))
-	g.GET("/evaluations", h.exportCSV(func() ([][]any, error) { return svc.Evaluations() }, "评估记录.csv"))
+	// 注解携带在具名包装方法上：swag 只能从函数声明的注释块取注解，匿名闭包无法被登记（片七）。
+	g.GET("/students", h.ExportStudents)
+	g.GET("/questions", h.ExportQuestions)
+	g.GET("/evaluations", h.ExportEvaluations)
+}
+
+// ExportStudents 导出学员名单 GET /api/admin/export/students
+// @Summary 导出学员名单（CSV）
+// @Description 响应是 CSV 附件（非统一信封）：文件名随 Content-Disposition 下发（#230），前端按 blob 消费
+// @Tags 管理端-导出
+// @Produce text/csv
+// @Security BearerAuth
+// @Success 200 {string} string "CSV 附件（UTF-8 BOM）"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 500 {object} response.R "导出失败"
+// @Router /admin/export/students [get]
+func (h *ExportHandler) ExportStudents(c *gin.Context) {
+	h.exportCSV(func() ([][]any, error) { return h.svc.Students() }, "学员名单.csv")(c)
+}
+
+// ExportQuestions 导出题库 GET /api/admin/export/questions
+// @Summary 导出题库（CSV）
+// @Description 响应是 CSV 附件（非统一信封）：文件名随 Content-Disposition 下发（#230），前端按 blob 消费
+// @Tags 管理端-导出
+// @Produce text/csv
+// @Security BearerAuth
+// @Success 200 {string} string "CSV 附件（UTF-8 BOM）"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 500 {object} response.R "导出失败"
+// @Router /admin/export/questions [get]
+func (h *ExportHandler) ExportQuestions(c *gin.Context) {
+	h.exportCSV(func() ([][]any, error) { return h.svc.Questions() }, "题库.csv")(c)
+}
+
+// ExportEvaluations 导出评估记录 GET /api/admin/export/evaluations
+// @Summary 导出评估记录（CSV）
+// @Description 响应是 CSV 附件（非统一信封）：文件名随 Content-Disposition 下发（#230），前端按 blob 消费
+// @Tags 管理端-导出
+// @Produce text/csv
+// @Security BearerAuth
+// @Success 200 {string} string "CSV 附件（UTF-8 BOM）"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 500 {object} response.R "导出失败"
+// @Router /admin/export/evaluations [get]
+func (h *ExportHandler) ExportEvaluations(c *gin.Context) {
+	h.exportCSV(func() ([][]any, error) { return h.svc.Evaluations() }, "评估记录.csv")(c)
 }
 
 // exportCSV 将取数结果生成为 CSV 附件响应（带 UTF-8 BOM，Excel 可直接打开不乱码）。

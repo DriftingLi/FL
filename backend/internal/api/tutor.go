@@ -50,7 +50,21 @@ func RegisterTutorRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.TutorS
 	g.POST("/files/batch-delete", h.BatchDeleteChapterFiles)
 }
 
-// ListCourses 导师课程列表 GET /api/tutor/courses
+// ListCourses 导师课程列表
+// @Summary 导师课程列表
+// @Description 导师端课程分页列表（可选按证件/专业方向/等级过滤）
+// @Tags 讲师端-课程
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(10)
+// @Param credential_id query int false "目标证件ID"
+// @Param specialty_id query int false "专业方向ID"
+// @Param level_id query int false "等级ID"
+// @Success 200 {object} response.R{data=service.CoursePageResult} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /tutor/courses [get]
 func (h *TutorHandler) ListCourses(c *gin.Context) {
 	Endpoint[tutorCourseListReq, service.CoursePageResult]{
 		Parse: func(c *gin.Context) (*tutorCourseListReq, error) {
@@ -72,7 +86,18 @@ func (h *TutorHandler) ListCourses(c *gin.Context) {
 	}.Handle(c)
 }
 
-// GetCourseChapters 课程章节列表（含文件）GET /api/tutor/course/:course_id/chapters
+// GetCourseChapters 课程章节列表（含文件）
+// @Summary 导师端课程章节
+// @Description 返回课程摘要 + 章节列表（含每章文件）
+// @Tags 讲师端-课程
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param course_id path int true "课程ID"
+// @Success 200 {object} response.R{data=service.TutorCourseChaptersDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "课程不存在"
+// @Router /tutor/course/{course_id}/chapters [get]
 func (h *TutorHandler) GetCourseChapters(c *gin.Context) {
 	Endpoint[idParam, service.TutorCourseChaptersDTO]{
 		Parse: func(c *gin.Context) (*idParam, error) {
@@ -95,7 +120,18 @@ func (h *TutorHandler) GetCourseChapters(c *gin.Context) {
 	}.Handle(c)
 }
 
-// GetChapterDetail 章节详情（含上下章ID + 文件列表）GET /api/tutor/chapter/:chapter_id
+// GetChapterDetail 章节详情（含上下章ID + 文件列表）
+// @Summary 导师端章节详情
+// @Description 返回章节详情（含相邻章节ID与文件列表），字段平铺，不含 course/chapters
+// @Tags 讲师端-课程
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param chapter_id path int true "章节ID"
+// @Success 200 {object} response.R{data=service.ChapterDetailDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "章节不存在"
+// @Router /tutor/chapter/{chapter_id} [get]
 func (h *TutorHandler) GetChapterDetail(c *gin.Context) {
 	Endpoint[idParam, service.ChapterDetailDTO]{
 		Parse: func(c *gin.Context) (*idParam, error) {
@@ -118,7 +154,19 @@ func (h *TutorHandler) GetChapterDetail(c *gin.Context) {
 	}.Handle(c)
 }
 
-// UploadChapterFile 上传章节文件 POST /api/tutor/chapter/:chapter_id/upload
+// UploadChapterFile 上传章节文件
+// @Summary 上传章节文件
+// @Description multipart 上传章节课件附件，返回落库后的文件条目
+// @Tags 讲师端-课程
+// @Accept multipart/form-data
+// @Produce json
+// @Security BearerAuth
+// @Param chapter_id path int true "章节ID"
+// @Param file formData file true "课件文件"
+// @Success 200 {object} response.R{data=service.ChapterFileDTO} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /tutor/chapter/{chapter_id}/upload [post]
 func (h *TutorHandler) UploadChapterFile(c *gin.Context) {
 	chapterID, err := strconv.Atoi(c.Param("chapter_id"))
 	if err != nil {
@@ -172,7 +220,19 @@ func (h *TutorHandler) UploadImage(c *gin.Context) {
 	})
 }
 
-// UpdateChapterInfo 更新章节信息 PUT /api/tutor/chapter/:chapter_id
+// UpdateChapterInfo 更新章节信息
+// @Summary 更新章节信息
+// @Description 更新章节标题/内容/时长/排序等（nil 字段表示不改动）
+// @Tags 讲师端-课程
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param chapter_id path int true "章节ID"
+// @Param body body service.ChapterInput true "章节信息"
+// @Success 200 {object} response.R{data=service.ChapterDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "章节不存在"
+// @Router /tutor/chapter/{chapter_id} [put]
 func (h *TutorHandler) UpdateChapterInfo(c *gin.Context) {
 	Endpoint[chapterIDInput, service.ChapterDTO]{
 		Parse: func(c *gin.Context) (*chapterIDInput, error) {
@@ -199,7 +259,18 @@ func (h *TutorHandler) UpdateChapterInfo(c *gin.Context) {
 	}.Handle(c)
 }
 
-// DeleteChapterFile 删除章节文件 DELETE /api/tutor/file/:file_id
+// DeleteChapterFile 删除章节文件
+// @Summary 删除章节文件
+// @Description 按文件ID删除章节附件，返回 file_id 与 deleted
+// @Tags 讲师端-课程
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param file_id path int true "文件ID"
+// @Success 200 {object} response.R{data=service.DeleteFileResult} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "文件不存在"
+// @Router /tutor/file/{file_id} [delete]
 func (h *TutorHandler) DeleteChapterFile(c *gin.Context) {
 	Endpoint[idParam, service.DeleteFileResult]{
 		Parse: func(c *gin.Context) (*idParam, error) {
@@ -222,7 +293,18 @@ func (h *TutorHandler) DeleteChapterFile(c *gin.Context) {
 	}.Handle(c)
 }
 
-// BatchDeleteChapterFiles 批量删除文件 POST /api/tutor/files/batch-delete
+// BatchDeleteChapterFiles 批量删除文件
+// @Summary 批量删除章节文件
+// @Description 批量删除章节附件，返回成功/失败条数与失败ID
+// @Tags 讲师端-课程
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "文件ID列表" example({"file_ids":[1,2]})
+// @Success 200 {object} response.R{data=service.BatchDeleteFilesResult} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /tutor/files/batch-delete [post]
 func (h *TutorHandler) BatchDeleteChapterFiles(c *gin.Context) {
 	Endpoint[batchDeleteFilesReq, service.BatchDeleteFilesResult]{
 		Parse: func(c *gin.Context) (*batchDeleteFilesReq, error) {
