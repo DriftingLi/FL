@@ -60,7 +60,10 @@ function Invoke-TestAndCompile {
     # ================= Step 1: 单元测试（默认只跑本工具链的契约测试） =================
     if (-not $SkipTests) {
         Write-Host '[test-compile] 执行单元测试（dev:finish 契约测试）...' -ForegroundColor Cyan
-        $testPattern = 'levelDetect|envCheck|testCompile|buildDeploy|autoScreenshot|screenshotDiff|evidenceGen|devFinish|hxBusyGate'
+        # #974：把**部署判定的时序守护**也纳入 Q-A —— `hxRun`（C1–C14，文本层）与
+        # `hxTimingBehavior`（运行期）。一个 dev:finish **永远不跑**的守护等于空跑，
+        # 正是本仓反复踩过的假绿形态（守护 T13）。
+        $testPattern = 'levelDetect|envCheck|testCompile|buildDeploy|autoScreenshot|screenshotDiff|evidenceGen|devFinish|hxBusyGate|hxRun|hxTimingBehavior'
         try {
             $testOutput = & npx jest --config jest.config.unit.js -i --testPathPattern $testPattern --forceExit 2>&1 | Out-String
         }

@@ -85,6 +85,13 @@
     **快速失败（2026-09-13 加，起因 #949）**：编译段已结束（命中 `$script:HxCompileEndMarkers`）之后，
     若设备侧事实在 `-DeployStallSeconds`（默认 300 秒）内**毫无前进** ⇒ **提前判环境不可用**，
     不再等满 `-TimeoutSeconds`（2026-09-13 实测某次 launch 卡死，白等了 ~20 分钟才到上限）。
+
+    **最短观察窗（2026-09-14 加，起因 #974；与上条配套，勿只留一条）**：快速失败**不能短于资源落盘时间** ——
+    实测落盘发生在推送到设备之后 **7–21 秒**。旧实现只要 launch 进程一退出就立刻收手（当日实测 **3 秒**就下了结论），
+    于是把「7 秒后才落盘」误判成 `deployed=false / exit=env` ⇒ 使用者以为部署失败，**白重跑一整轮编译（约 7 分钟）**。
+    故收紧为：**设备侧事实一旦前进就立即 PASS**；未前进时**必须等满 `-DeployDeadlineSeconds`（默认 60 秒）**
+    才允许因「会话退出 / 停滞 / 到顶」收手。判定逻辑集中在 `scripts/lib/hx-deploy.ps1`（纯函数 ⇒
+    **可被运行期断言**，见 utils/hxTimingBehavior.test.js；这也是它单独放 lib 的唯一理由）。
     部署耗时实测：冷启 HBuilderX + 增量编译 205–610 秒，资源推送到落盘 15 秒–9 分钟（视缓存与设备而定）。
 
     **退出码**：0 = 运行到手机成功（设备侧事实已前进）/ 仅编译干净（无编译期诊断行）；
@@ -136,6 +143,12 @@
     **部署停滞阈值（默认 300 秒）**：编译段已结束 + 该秒数内设备侧事实无前进 ⇒ **提前判环境不可用**（exit 2），
     不等满 `-TimeoutSeconds`。实测正常推送只需 15–21 秒，所以 300 秒已很宽松。
 
+.PARAMETER DeployDeadlineSeconds
+    **最短部署观察窗（默认 60 秒，#974）**：设备侧事实一旦前进就立即 PASS；**未前进时至少要看到这个秒数**
+    才允许收手（会话提前退出 / 停滞 / 到顶）。下限取 60 的依据：**实测资源落盘比推送晚 7–21 秒** ——
+    窗口比它短就会把「稍后才落盘」误判成未部署（2026-09-14 实测 3 秒就收手 ⇒ 白重跑一轮约 7 分钟编译）。
+    **不要把默认值调到 21 秒以下。**
+
 .PARAMETER PollSeconds
     部署轮询间隔（默认 10 秒）。
 
@@ -162,6 +175,7 @@ param(
     [int]$StepTimeoutSeconds = 180,
     [int]$TimeoutSeconds = 900,
     [int]$DeployStallSeconds = 300,
+    [int]$DeployDeadlineSeconds = 60,
     [int]$PollSeconds = 10,
     [string]$LogPath
 )
@@ -665,6 +679,8 @@ Set-Content -LiteralPath $LogPath -Encoding utf8 -Value @(
 
 # ---------- HBuilderX 忙检测（单实例串行资源，ADR-0008 坑位段）----------
 . (Join-Path $PSScriptRoot 'lib\hx-busy.ps1')
+# 部署观察窗的纯判定（#974）：抽成 lib 才能在**不接设备**的前提下做运行期断言（ADR-0011 ⑥）
+. (Join-Path $PSScriptRoot 'lib\hx-deploy.ps1')
 $hx = Wait-HxFree -CliExe $cliPath -TimeoutSeconds $WaitSeconds -LogPath $LogPath
 try {
 
@@ -759,15 +775,21 @@ while ((Get-Date) -lt $deadline) {
     Start-Sleep -Seconds $PollSeconds
     $polledSeconds += $PollSeconds
     $factsAfter = Get-DeviceDeployFacts -AdbExe $adbExe -Serial $target.Serial -WwwPaths $wwwPaths -Packages $candidatePkgs
-    $probe = Get-DeployVerdict -Before $factsBefore -After $factsAfter -Stdout (Get-CapturedOutput -OutFile $launch.OutFile -ErrFile $launch.ErrFile)
-    if ($probe.Deployed) { break }
-    if ($launch.Proc.HasExited) { $launchExitedEarly = $true; break }
-    # 快速失败（#949）：**编译段已结束** + 该秒数内设备侧无前进 ⇒ 不必等满 -TimeoutSeconds
-    # （2026-09-13 实测某次 launch 卡死，白等了 ~20 分钟才到上限）
-    if ($polledSeconds -ge $DeployStallSeconds -and (Test-HxCompileFinished -Output (Get-CapturedOutput -OutFile $launch.OutFile -ErrFile $launch.ErrFile))) {
-        $stalledEarly = $true
+    $tickOutput = Get-CapturedOutput -OutFile $launch.OutFile -ErrFile $launch.ErrFile
+    $probe = Get-DeployVerdict -Before $factsBefore -After $factsAfter -Stdout $tickOutput
+    # 编译段是否结束只在**停滞阈值**之后才算（否则每轮都要解析整份日志，白白变慢）
+    $compileFinished = $false
+    if ($polledSeconds -ge $DeployStallSeconds) { $compileFinished = (Test-HxCompileFinished -Output $tickOutput) }
+    # #974：收手判定集中到纯函数 —— 前进即 PASS；未前进时必须等满 -DeployDeadlineSeconds（默认 60 秒）
+    # 才允许因「会话退出 / 停滞 / 到顶」收手。**不要**改回「会话一退出就 break」：
+    # 实测资源落盘比推送晚 7–21 秒，那样会把「稍后落盘」误判成未部署（白重跑一轮约 7 分钟编译）。
+    $stop = Test-DeployObservationStop -Deployed $probe.Deployed -PolledSeconds $polledSeconds -Exited $launch.Proc.HasExited -CompileFinished $compileFinished -DeployDeadlineSeconds $DeployDeadlineSeconds -StallSeconds $DeployStallSeconds -TimeoutSeconds $TimeoutSeconds
+    if ($stop.Stop) {
+        if ($stop.Outcome -eq 'exited') { $launchExitedEarly = $true }
+        if ($stop.Outcome -eq 'stalled') { $stalledEarly = $true }
         break
     }
+    # （原「停滞即 break」的快速失败判据已上移到 Test-DeployObservationStop：#974 要求它不得早于最短观察窗）
     if (($polledSeconds % 60) -eq 0) {
         Write-Host ">>> [deploy] 已等 $polledSeconds 秒（上限 $TimeoutSeconds 秒），设备侧事实仍未前进…" -ForegroundColor Yellow
     }

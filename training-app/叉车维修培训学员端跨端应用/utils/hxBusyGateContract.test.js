@@ -19,6 +19,9 @@
  *   H7 锁的陈旧判定（30 分钟）与 `-NoWait` 逃生都实现且写进注释
  *   H8 HX_BUSY 结果行（便于日志/评论里核对实际等待时长）
  *   H9 ADR-0008 已记录「HBuilderX 单实例/串行」坑位 + 「跑完 HBuilderX 门后 git status 看 manifest 是否被改脏」
+ *   H12 陈旧锁必须查「持有者 pid 是否还活着」（#974，2026-09-14 实测白等 ~25 分钟）：锁文件里本来就存着 pid，
+ *       旧判据只比 mtime ⇒ 持有会话被强杀后仍要白等到 30 分钟。**优先级不可颠倒**：只有**确定**找不到该 pid
+ *       才判死，拿不准（非数字 / 权限）一律回落 30 分钟时间线 —— 绝不放行活会话
  *
  * 设计沿用本仓既有守护测试形态（见 utils/kotlinAllGateContract.test.js）：先对注入违规断言检测有效，再对真实文件断言零命中。
  *
@@ -107,6 +110,33 @@ function scanContract(sources) {
   // 直接回到「并发抢主程序 → 假失败」那个坑里。
   must(helper.includes('-eq "$($env:HX_LOCK_OWNER)"'), 'H11', 'helper 的交接未比对「env PID == 锁文件 PID」（照抄即放开互斥锁）');
 
+  // H12 陈旧锁必须查「持有者是否还活着」（#974 现象一，2026-09-14 实测白等 ~25 分钟）：
+  // 锁文件里本来就存着 pid（Acquire 写入 "$PID"），旧判据手里有更强的信号却只比 mtime。
+  // **优先级不可颠倒**：先判「确定已死」，否则回落时间线；拿不准（非数字 / 权限）必须回落，绝不放行活会话。
+  must(helper.includes('function Test-HxProcessAlive'), 'H12', 'helper 缺持有者存活探测 Test-HxProcessAlive（锁里存着 pid 却没用）');
+  must(
+    helper.includes('catch [System.ArgumentException]'),
+    'H12',
+    'helper 未把「确定找不到该 pid」与「其它查询错误」分开（混为一谈会把权限错误当成持有者已死）'
+  );
+  must(
+    helper.includes('Test-HxProcessAlive -PidText $Info.Pid'),
+    'H12',
+    'Test-HxLockStale 未查持有者存活（陈旧判据仍只看时间）'
+  );
+  must(
+    /\(Get-Date\) - \$Info\.MTime\)\.TotalMinutes\s*-gt\s*\$script:HxLockStaleMinutes/.test(helper),
+    'H12',
+    '陈旧判定丢了「超过 30 分钟」这条时间线回落（新判据会把拿不准的锁也放行）'
+  );
+  const aliveProbeAt = helper.indexOf('Test-HxProcessAlive -PidText $Info.Pid');
+  const timeLineAt = helper.indexOf('-gt $script:HxLockStaleMinutes');
+  must(
+    aliveProbeAt !== -1 && timeLineAt !== -1 && aliveProbeAt < timeLineAt,
+    'H12',
+    '「持有者已死」判定没有排在时间线之前（优先级颠倒 ⇒ 新判据形同虚设）'
+  );
+
   return violations;
 }
 
@@ -135,7 +165,19 @@ describe('HBuilderX 忙检测契约（单实例串行资源，2026-09-12）', ()
       ['H9', { ...real, adr: real.adr.replace(/git status/g, 'git diff') }],
       // H10/H11：交接机制与其 fail-safe 分开注入，确保两条规则各自有效
       ['H10', { ...real, helper: real.helper.replace(/HX_LOCK_OWNER/g, 'HX_LOCK_OTHER') }],
-      ['H11', { ...real, helper: real.helper.replace(/-eq "\$\(\$env:HX_LOCK_OWNER\)"/g, '-ne ""') }]
+      ['H11', { ...real, helper: real.helper.replace(/-eq "\$\(\$env:HX_LOCK_OWNER\)"/g, '-ne ""') }],
+      // H12：存活判据（#974）—— 每条各自注入，避免某一条失效而其余掩盖它
+      ['H12', { ...real, helper: real.helper.replace(/function Test-HxProcessAlive/g, 'function X') }],
+      ['H12', { ...real, helper: real.helper.replace(/catch \[System\.ArgumentException\]/g, 'catch {') }],
+      ['H12', { ...real, helper: real.helper.replace('Test-HxProcessAlive -PidText $Info.Pid', '$false') }],
+      ['H12', { ...real, helper: real.helper.replace('-gt $script:HxLockStaleMinutes', '-gt 0') }],
+      ['H12', {
+        ...real,
+        helper: real.helper.replace(
+          'function Test-HxLockStale {',
+          'function Test-HxLockStale {\n    try { if (((Get-Date) - $Info.MTime).TotalMinutes -gt $script:HxLockStaleMinutes) { return $true } } catch { }'
+        )
+      }]
     ];
     // 注入一律用**全局**替换（/…/g）：判据多用 includes 判「存在」，若目标文本在文件里有第二处，
     // 只替换第一处会让注入静默失效 ⇒ 自检假绿。2026-09-13 实测踩中：ADR-0008 新增一句
@@ -163,5 +205,18 @@ describe('HBuilderX 忙检测契约（单实例串行资源，2026-09-12）', ()
       expect(finallyAt).toBeGreaterThan(-1);
       expect(text.slice(finallyAt)).toContain('Release-HxLock');
     });
+  });
+
+  it('H12：陈旧锁先查持有者存活，再回落 30 分钟时间线（#974）', () => {
+    expect(real.helper).toContain('function Test-HxProcessAlive');
+    expect(real.helper).toContain('catch [System.ArgumentException]');
+    const aliveAt = real.helper.indexOf('Test-HxProcessAlive -PidText $Info.Pid');
+    const timeAt = real.helper.indexOf('-gt $script:HxLockStaleMinutes');
+    expect(aliveAt).toBeGreaterThan(-1);
+    expect(timeAt).toBeGreaterThan(-1);
+    expect(aliveAt).toBeLessThan(timeAt); // 优先级：先判死，再回落时间线
+    // 时间线必须**还在**（#974 是追加一条判据，不是替代它）
+    expect(real.helper).toMatch(/\(Get-Date\) - \$Info\.MTime\)\.TotalMinutes\s*-gt\s*\$script:HxLockStaleMinutes/);
+    expect(real.helper).toContain('HxLockStaleMinutes = 30');
   });
 });
