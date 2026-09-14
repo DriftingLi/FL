@@ -66,7 +66,7 @@ describe('dev-finish.ps1 contract', () => {
   });
 
   test('F5: dot-sources all sub-modules', () => {
-    ['env-check.ps1', 'level-detect.ps1', 'test-compile.ps1', 'build-deploy.ps1', 'auto-screenshot.ps1', 'screenshot-diff.ps1', 'evidence-gen.ps1'].forEach((m) => {
+    ['env-check.ps1', 'level-detect.ps1', 'test-compile.ps1', 'build-deploy.ps1', 'auto-screenshot.ps1', 'screenshot-diff.ps1', 'evidence-gen.ps1', 'contract-tests.ps1'].forEach((m) => {
       expect(src).toContain(m);
     });
   });

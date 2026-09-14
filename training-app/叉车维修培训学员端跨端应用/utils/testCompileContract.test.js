@@ -100,12 +100,17 @@ describe('test-compile.ps1 contract', () => {
     expect(src).toContain('quick_static_only');
   });
 
-  // T13（2026-09-14，#974）：Q-A 的契约测试范围必须覆盖**部署判定的时序守护** ——
-  // 「一个 dev:finish 永远不跑的守护」等于空跑，正是本仓反复踩过的假绿形态。
-  test('T13: Q-A contract-test pattern covers the deploy-timing guards', () => {
-    expect(src).toMatch(/\$testPattern\s*=/);
-    expect(src).toContain('hxBusyGate');
-    expect(src).toContain('hxRun');
-    expect(src).toContain('hxTimingBehavior');
+  // T13（2026-09-14，#974；2026-09-14 二修：改为「唯一真源」口径）：Q-A 的契约测试范围必须覆盖
+  // **部署判定的时序守护** ——「一个 dev:finish 永远不跑的守护」等于空跑，正是本仓反复踩过的假绿形态。
+  //
+  // 为什么不再 pin 源码字面量：原实现把 pattern 抄成本文件里的字符串，`dev-finish.ps1` 步骤 3 **另抄了一份**，
+  // 两份漂移（步骤 3 少 3 个 token），而步骤 3 先跑且失败即 exit 1 ⇒ **实际门禁是更窄的那份**。
+  // ⇒ 改为：pattern 只允许来自 `lib\contract-tests.ps1`，**运行期**断言在
+  //   utils/contractTestPatternBehavior.test.js（覆盖各组关键守护）；本用例只钉「不许再抄自己的」。
+  test('T13: Q-A contract-test pattern comes from the single source (no second copy)', () => {
+    expect(src).toContain('Get-ContractTestPattern');
+    expect(src).toMatch(/contract-tests\.ps1/);
+    // 不得再有「自己抄一份 pattern 字面量」的赋值（漂移正是这样产生的）
+    expect(src).not.toMatch(/\$testPattern\s*=\s*'/);
   });
 });
