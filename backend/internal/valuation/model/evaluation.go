@@ -172,7 +172,7 @@ type EvaluationDetail struct {
 	EstimatedValue  float64          `json:"estimated_value"`
 	ConfidenceLow   float64          `json:"confidence_low"`
 	ConfidenceHigh  float64          `json:"confidence_high"`
-	ReportPdfPath   string           `json:"report_pdf_path,omitempty"`
+	ReportPdfPath   string           `json:"report_pdf_path,omitempty" extensions:"x-optional"` // omitempty：键可能整个不存在
 	DimensionScores []DimensionScore `json:"dimension_scores"`
 	// 评估时点锁定的建议与 λ 值（ADR-0004 评估事实性）
 	Suggestions      []string `json:"suggestions"`

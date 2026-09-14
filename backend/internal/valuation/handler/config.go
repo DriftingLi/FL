@@ -47,6 +47,14 @@ func NewConfigHandler(dictRepo DictionaryConfigStore, l *zap.Logger) *ConfigHand
 
 // ListBrands 处理 GET /api/valuation/dictionaries/brands
 // 返回全部启用品牌（按 k_brand 倒序）
+// @Summary 品牌字典
+// @Description 返回全部品牌（按 k_brand 倒序）。公开端点：无需登录。
+// @Tags 估值-字典
+// @Accept json
+// @Produce json
+// @Success 200 {object} response.R{data=[]repository.Brand} "success"
+// @Failure 500 {object} response.R "服务器内部错误"
+// @Router /valuation/dictionaries/brands [get]
 func (h *ConfigHandler) ListBrands(c *gin.Context) {
 	list, err := h.dictRepo.ListBrands(c.Request.Context())
 	if err != nil {
@@ -79,6 +87,15 @@ func listCascadeOrFull[T any](h *ConfigHandler, c *gin.Context, paramsOK bool, c
 
 // ListVehicleTypes 处理 GET /api/valuation/dictionaries/vehicle-types?brand=林德
 // brand 可选：传入时基于 original_prices 级联过滤；不传时返回全部车型
+// @Summary 车型字典
+// @Description 叉车车型列表；传 brand 时按 original_prices 级联过滤。公开端点：无需登录。
+// @Tags 估值-字典
+// @Accept json
+// @Produce json
+// @Param brand query string false "品牌名（级联过滤）"
+// @Success 200 {object} response.R{data=[]repository.VehicleType} "success"
+// @Failure 500 {object} response.R "服务器内部错误"
+// @Router /valuation/dictionaries/vehicle-types [get]
 func (h *ConfigHandler) ListVehicleTypes(c *gin.Context) {
 	brand := c.Query("brand")
 	listCascadeOrFull(h, c, brand != "",
@@ -91,6 +108,16 @@ func (h *ConfigHandler) ListVehicleTypes(c *gin.Context) {
 
 // ListSeries 处理 GET /api/valuation/dictionaries/series?brand=林德&vehicle_type=电动平衡重式
 // brand + vehicle_type 可选：同时传入时基于 original_prices 级联过滤
+// @Summary 系列字典
+// @Description 车辆系列列表；brand + vehicle_type 同时传入时按 original_prices 级联过滤。公开端点：无需登录。
+// @Tags 估值-字典
+// @Accept json
+// @Produce json
+// @Param brand query string false "品牌名"
+// @Param vehicle_type query string false "车型名"
+// @Success 200 {object} response.R{data=[]repository.Series} "success"
+// @Failure 500 {object} response.R "服务器内部错误"
+// @Router /valuation/dictionaries/series [get]
 func (h *ConfigHandler) ListSeries(c *gin.Context) {
 	brand := c.Query("brand")
 	vehicleType := c.Query("vehicle_type")
@@ -107,6 +134,17 @@ func (h *ConfigHandler) ListSeries(c *gin.Context) {
 
 // ListTonnages 处理 GET /api/valuation/dictionaries/tonnages?brand=&vehicle_type=&series=
 // 级联参数全传时基于 original_prices 过滤；否则返回全部吨位
+// @Summary 吨位字典
+// @Description 吨位列表；brand/vehicle_type/series 全传时按 original_prices 级联过滤。公开端点：无需登录。
+// @Tags 估值-字典
+// @Accept json
+// @Produce json
+// @Param brand query string false "品牌名"
+// @Param vehicle_type query string false "车型名"
+// @Param series query string false "系列名"
+// @Success 200 {object} response.R{data=[]repository.Tonnage} "success"
+// @Failure 500 {object} response.R "服务器内部错误"
+// @Router /valuation/dictionaries/tonnages [get]
 func (h *ConfigHandler) ListTonnages(c *gin.Context) {
 	brand := c.Query("brand")
 	vehicleType := c.Query("vehicle_type")
@@ -122,6 +160,18 @@ func (h *ConfigHandler) ListTonnages(c *gin.Context) {
 
 // ListConfigTypes 处理 GET /api/valuation/dictionaries/config-types?brand=&vehicle_type=&series=&tonnage=
 // 级联参数全传时基于 original_prices 过滤；否则返回空数组
+// @Summary 配置类型字典
+// @Description 配置类型选项（original_prices DISTINCT 派生）；级联参数不全时返回空数组。公开端点：无需登录。
+// @Tags 估值-字典
+// @Accept json
+// @Produce json
+// @Param brand query string false "品牌名"
+// @Param vehicle_type query string false "车型名"
+// @Param series query string false "系列名"
+// @Param tonnage query string false "吨位"
+// @Success 200 {object} response.R{data=[]repository.ConfigOption} "success"
+// @Failure 500 {object} response.R "服务器内部错误"
+// @Router /valuation/dictionaries/config-types [get]
 func (h *ConfigHandler) ListConfigTypes(c *gin.Context) {
 	brand := c.Query("brand")
 	vehicleType := c.Query("vehicle_type")
@@ -142,6 +192,19 @@ func (h *ConfigHandler) ListConfigTypes(c *gin.Context) {
 
 // ListMastTypes 处理 GET /api/valuation/dictionaries/mast-types?brand=&vehicle_type=&series=&tonnage=&config_type=
 // 级联参数全传时基于 original_prices 过滤；否则返回全部门架类型
+// @Summary 门架类型字典
+// @Description 门架类型列表；级联参数全传时按 original_prices 过滤。公开端点：无需登录。
+// @Tags 估值-字典
+// @Accept json
+// @Produce json
+// @Param brand query string false "品牌名"
+// @Param vehicle_type query string false "车型名"
+// @Param series query string false "系列名"
+// @Param tonnage query string false "吨位"
+// @Param config_type query string false "配置类型"
+// @Success 200 {object} response.R{data=[]repository.MastType} "success"
+// @Failure 500 {object} response.R "服务器内部错误"
+// @Router /valuation/dictionaries/mast-types [get]
 func (h *ConfigHandler) ListMastTypes(c *gin.Context) {
 	brand := c.Query("brand")
 	vehicleType := c.Query("vehicle_type")
@@ -159,6 +222,20 @@ func (h *ConfigHandler) ListMastTypes(c *gin.Context) {
 
 // ListMastHeights 处理 GET /api/valuation/dictionaries/mast-heights?brand=&vehicle_type=&series=&tonnage=&config_type=&mast_type=
 // 级联参数全传时基于 original_prices 过滤；否则返回全部门架高度
+// @Summary 门架高度字典
+// @Description 门架高度列表（value_mm）；级联参数全传时按 original_prices 过滤。公开端点：无需登录。
+// @Tags 估值-字典
+// @Accept json
+// @Produce json
+// @Param brand query string false "品牌名"
+// @Param vehicle_type query string false "车型名"
+// @Param series query string false "系列名"
+// @Param tonnage query string false "吨位"
+// @Param config_type query string false "配置类型"
+// @Param mast_type query string false "门架类型"
+// @Success 200 {object} response.R{data=[]repository.MastHeight} "success"
+// @Failure 500 {object} response.R "服务器内部错误"
+// @Router /valuation/dictionaries/mast-heights [get]
 func (h *ConfigHandler) ListMastHeights(c *gin.Context) {
 	brand := c.Query("brand")
 	vehicleType := c.Query("vehicle_type")
@@ -177,6 +254,18 @@ func (h *ConfigHandler) ListMastHeights(c *gin.Context) {
 
 // ListBatteryTypes 处理 GET /api/valuation/dictionaries/battery-types?brand=&vehicle_type=&series=&tonnage=
 // 级联参数全传时基于 original_prices 过滤；否则返回全部电池类型
+// @Summary 电池类型字典
+// @Description 电池类型列表；级联参数全传时按 original_prices 过滤。公开端点：无需登录。
+// @Tags 估值-字典
+// @Accept json
+// @Produce json
+// @Param brand query string false "品牌名"
+// @Param vehicle_type query string false "车型名"
+// @Param series query string false "系列名"
+// @Param tonnage query string false "吨位"
+// @Success 200 {object} response.R{data=[]repository.BatteryTypeDict} "success"
+// @Failure 500 {object} response.R "服务器内部错误"
+// @Router /valuation/dictionaries/battery-types [get]
 func (h *ConfigHandler) ListBatteryTypes(c *gin.Context) {
 	brand := c.Query("brand")
 	vehicleType := c.Query("vehicle_type")
@@ -192,6 +281,14 @@ func (h *ConfigHandler) ListBatteryTypes(c *gin.Context) {
 }
 
 // ListTransmissionTypes 处理 GET /api/valuation/dictionaries/transmission-types
+// @Summary 传动系统字典
+// @Description 传动系统类型字典（手波/自波/无级变速/无）。公开端点：无需登录。
+// @Tags 估值-字典
+// @Accept json
+// @Produce json
+// @Success 200 {object} response.R{data=[]repository.TransmissionType} "success"
+// @Failure 500 {object} response.R "服务器内部错误"
+// @Router /valuation/dictionaries/transmission-types [get]
 func (h *ConfigHandler) ListTransmissionTypes(c *gin.Context) {
 	list, err := h.dictRepo.ListTransmissionTypes(c.Request.Context())
 	if err != nil {
@@ -203,6 +300,14 @@ func (h *ConfigHandler) ListTransmissionTypes(c *gin.Context) {
 }
 
 // ListEngineTypes 处理 GET /api/valuation/dictionaries/engine-types
+// @Summary 发动机类型字典
+// @Description 发动机类型字典（国产/进口/混合动力/无）。公开端点：无需登录。
+// @Tags 估值-字典
+// @Accept json
+// @Produce json
+// @Success 200 {object} response.R{data=[]repository.EngineType} "success"
+// @Failure 500 {object} response.R "服务器内部错误"
+// @Router /valuation/dictionaries/engine-types [get]
 func (h *ConfigHandler) ListEngineTypes(c *gin.Context) {
 	list, err := h.dictRepo.ListEngineTypes(c.Request.Context())
 	if err != nil {
@@ -215,6 +320,17 @@ func (h *ConfigHandler) ListEngineTypes(c *gin.Context) {
 
 // ListSeriesConfigOptions 处理 GET /api/valuation/dictionaries/series-config-options?brand=&series=
 // 返回指定 series 支持的三维度（传动/发动机/电池）可选项
+// @Summary 系列配置选项
+// @Description 指定 series 支持的三维度（传动/发动机/电池）可选项；数组为空表示该维度不适用。公开端点：无需登录。
+// @Tags 估值-字典
+// @Accept json
+// @Produce json
+// @Param brand query string true "品牌名"
+// @Param series query string true "系列名"
+// @Success 200 {object} response.R{data=repository.SeriesConfigOptions} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 500 {object} response.R "服务器内部错误"
+// @Router /valuation/dictionaries/series-config-options [get]
 func (h *ConfigHandler) ListSeriesConfigOptions(c *gin.Context) {
 	brand := c.Query("brand")
 	series := c.Query("series")
@@ -232,6 +348,14 @@ func (h *ConfigHandler) ListSeriesConfigOptions(c *gin.Context) {
 }
 
 // ListConditionRatings 处理 GET /api/valuation/dictionaries/condition-ratings
+// @Summary 车况评级字典
+// @Description 车况评级（A–E）与基础系数。公开端点：无需登录。
+// @Tags 估值-字典
+// @Accept json
+// @Produce json
+// @Success 200 {object} response.R{data=[]repository.ConditionRating} "success"
+// @Failure 500 {object} response.R "服务器内部错误"
+// @Router /valuation/dictionaries/condition-ratings [get]
 func (h *ConfigHandler) ListConditionRatings(c *gin.Context) {
 	list, err := h.dictRepo.ListConditionRatings(c.Request.Context())
 	if err != nil {
@@ -244,6 +368,15 @@ func (h *ConfigHandler) ListConditionRatings(c *gin.Context) {
 
 // ListRegionCoefficients 处理 GET /api/valuation/dictionaries/region-coefficients?province=江苏
 // province 可选，为空时返回全部区域系数
+// @Summary 区域系数字典
+// @Description 区域系数列表；province 可选。公开端点：无需登录。
+// @Tags 估值-字典
+// @Accept json
+// @Produce json
+// @Param province query string false "省份名"
+// @Success 200 {object} response.R{data=[]repository.RegionCoefficient} "success"
+// @Failure 500 {object} response.R "服务器内部错误"
+// @Router /valuation/dictionaries/region-coefficients [get]
 func (h *ConfigHandler) ListRegionCoefficients(c *gin.Context) {
 	province := c.Query("province")
 	list, err := h.dictRepo.ListRegionCoefficients(c.Request.Context(), province)
@@ -257,6 +390,14 @@ func (h *ConfigHandler) ListRegionCoefficients(c *gin.Context) {
 
 // ListProvinces 处理 GET /api/valuation/dictionaries/provinces
 // 返回全部省份（去重），用于前端省市级联
+// @Summary 省份列表
+// @Description 全部省份（去重），用于省市级联。公开端点：无需登录。
+// @Tags 估值-字典
+// @Accept json
+// @Produce json
+// @Success 200 {object} response.R{data=[]string} "success"
+// @Failure 500 {object} response.R "服务器内部错误"
+// @Router /valuation/dictionaries/provinces [get]
 func (h *ConfigHandler) ListProvinces(c *gin.Context) {
 	list, err := h.dictRepo.ListProvinces(c.Request.Context())
 	if err != nil {
@@ -269,6 +410,16 @@ func (h *ConfigHandler) ListProvinces(c *gin.Context) {
 
 // ListCities 处理 GET /api/valuation/dictionaries/cities?province=江苏
 // 返回指定省份的全部城市
+// @Summary 城市列表
+// @Description 指定省份的全部城市（去重）。公开端点：无需登录。
+// @Tags 估值-字典
+// @Accept json
+// @Produce json
+// @Param province query string true "省份名"
+// @Success 200 {object} response.R{data=[]string} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 500 {object} response.R "服务器内部错误"
+// @Router /valuation/dictionaries/cities [get]
 func (h *ConfigHandler) ListCities(c *gin.Context) {
 	province := c.Query("province")
 	if province == "" {
@@ -286,6 +437,14 @@ func (h *ConfigHandler) ListCities(c *gin.Context) {
 
 // ListCoefficientConfigs 处理 GET /api/valuation/dictionaries/coefficient-configs
 // 返回全部系数配置（学生端只读，仅用于查看默认值）
+// @Summary 系数配置字典
+// @Description 全局可调系数配置（学生端只读）。公开端点：无需登录。
+// @Tags 估值-字典
+// @Accept json
+// @Produce json
+// @Success 200 {object} response.R{data=[]repository.CoefficientConfig} "success"
+// @Failure 500 {object} response.R "服务器内部错误"
+// @Router /valuation/dictionaries/coefficient-configs [get]
 func (h *ConfigHandler) ListCoefficientConfigs(c *gin.Context) {
 	list, err := h.dictRepo.ListCoefficientConfigs(c.Request.Context())
 	if err != nil {
@@ -298,6 +457,16 @@ func (h *ConfigHandler) ListCoefficientConfigs(c *gin.Context) {
 
 // ListOriginalPrices 处理 GET /api/valuation/dictionaries/original-prices?page=1&page_size=20
 // 分页查询基准原价记录
+// @Summary 原价记录分页
+// @Description 分页查询基准原价记录（管理端原价表）。公开端点：无需登录。
+// @Tags 估值-字典
+// @Accept json
+// @Produce json
+// @Param page query integer false "页码（默认 1）"
+// @Param page_size query integer false "每页条数（默认 20，上限 100）"
+// @Success 200 {object} response.R{data=object{total=integer,page=integer,page_size=integer,list=[]repository.OriginalPrice}} "success"
+// @Failure 500 {object} response.R "服务器内部错误"
+// @Router /valuation/dictionaries/original-prices [get]
 func (h *ConfigHandler) ListOriginalPrices(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
@@ -327,6 +496,19 @@ func (h *ConfigHandler) ListOriginalPrices(c *gin.Context) {
 // Query: brand, vehicle_type, series(可选), tonnage
 // 返回该组合下 active 原价记录 earliest_factory_year 的最小值，作为学生端出厂年份输入下限
 // series 为空或"其它"时忽略 series 条件做降级查询
+// @Summary 最早出厂年份
+// @Description 该组合下 active 原价记录 earliest_factory_year 的最小值（出厂年份输入下限）。公开端点：无需登录。
+// @Tags 估值-字典
+// @Accept json
+// @Produce json
+// @Param brand query string true "品牌名"
+// @Param vehicle_type query string true "车型名"
+// @Param series query string false "系列名（为空或「其它」时降级查询）"
+// @Param tonnage query string true "吨位（数字）"
+// @Success 200 {object} response.R{data=object{earliest_factory_year=integer}} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 500 {object} response.R "服务器内部错误"
+// @Router /valuation/dictionaries/earliest-factory-year [get]
 func (h *ConfigHandler) GetEarliestFactoryYear(c *gin.Context) {
 	brand := c.Query("brand")
 	vehicleType := c.Query("vehicle_type")
@@ -352,6 +534,14 @@ func (h *ConfigHandler) GetEarliestFactoryYear(c *gin.Context) {
 
 // ListAlgorithmParameters 处理 GET /api/valuation/dictionaries/algorithm-parameters
 // 聚合返回 4 类算法参数（全局系数 + 品牌系数 + 车况系数 + 区域系数），供管理员后台一次加载
+// @Summary 算法参数聚合
+// @Description 一次返回 4 类算法参数（全局系数 + 品牌系数 + 车况系数 + 区域系数）。公开端点：无需登录。
+// @Tags 估值-字典
+// @Accept json
+// @Produce json
+// @Success 200 {object} response.R{data=repository.AlgorithmParameters} "success"
+// @Failure 500 {object} response.R "服务器内部错误"
+// @Router /valuation/dictionaries/algorithm-parameters [get]
 func (h *ConfigHandler) ListAlgorithmParameters(c *gin.Context) {
 	result, err := h.dictRepo.ListAlgorithmParameters(c.Request.Context())
 	if err != nil {

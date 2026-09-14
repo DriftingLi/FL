@@ -3,21 +3,24 @@
 // 级联契约：vehicle_types / series / tonnages / config_types / mast_types / mast_heights
 //           均支持按前序已选层级过滤，参数全传时走 original_prices DISTINCT 查询
 import client from './client'
+// 响应类型**不再手写**：唯一事实源是后端注解 → generated/valuation.ts
+// （ADR-0048 决策 1/3，issue #967 片九）。旧名（VehicleTypeOption 等）在
+// @/types/valuation/evaluation 里是生成类型的别名，此处直接用生成名。
 import type {
-  VehicleTypeOption,
-  SeriesOption,
-  TonnageOption,
-  ConfigTypeOption,
-  MastTypeOption,
-  MastHeightOption,
-  BatteryTypeOption,
-  TransmissionTypeOption,
-  EngineTypeOption,
+  Brand,
+  VehicleType,
+  Series,
+  Tonnage,
+  ConfigOption,
+  MastType,
+  MastHeight,
+  BatteryTypeDict,
+  TransmissionType,
+  EngineType,
   SeriesConfigOptions,
-  ConditionRatingOption,
+  ConditionRating,
   CoefficientConfig
-} from '@/types/valuation/evaluation'
-import type { Brand } from '@/types/valuation/brand'
+} from '@/api/generated/valuation'
 
 /** 全部品牌（按 k_brand 倒序） */
 export async function listBrands(): Promise<Brand[]> {
@@ -26,24 +29,24 @@ export async function listBrands(): Promise<Brand[]> {
 }
 
 /** 车辆类型（按品牌级联过滤） */
-export async function listVehicleTypes(brand?: string): Promise<VehicleTypeOption[]> {
-  const resp = await client.get<VehicleTypeOption[]>('/dictionaries/vehicle-types', {
+export async function listVehicleTypes(brand?: string): Promise<VehicleType[]> {
+  const resp = await client.get<VehicleType[]>('/dictionaries/vehicle-types', {
     params: brand ? { brand } : undefined
   })
   return resp ?? []
 }
 
 /** 系列（按品牌+车辆类型级联过滤） */
-export async function listSeries(brand?: string, vehicleType?: string): Promise<SeriesOption[]> {
-  const resp = await client.get<SeriesOption[]>('/dictionaries/series', {
+export async function listSeries(brand?: string, vehicleType?: string): Promise<Series[]> {
+  const resp = await client.get<Series[]>('/dictionaries/series', {
     params: { brand, vehicle_type: vehicleType }
   })
   return resp ?? []
 }
 
 /** 吨位（按品牌+车辆类型+系列级联过滤） */
-export async function listTonnages(brand?: string, vehicleType?: string, series?: string): Promise<TonnageOption[]> {
-  const resp = await client.get<TonnageOption[]>('/dictionaries/tonnages', {
+export async function listTonnages(brand?: string, vehicleType?: string, series?: string): Promise<Tonnage[]> {
+  const resp = await client.get<Tonnage[]>('/dictionaries/tonnages', {
     params: { brand, vehicle_type: vehicleType, series }
   })
   return resp ?? []
@@ -52,8 +55,8 @@ export async function listTonnages(brand?: string, vehicleType?: string, series?
 /** 配置类型（按前序层级级联过滤） */
 export async function listConfigTypes(
   brand?: string, vehicleType?: string, series?: string, tonnage?: number | string
-): Promise<ConfigTypeOption[]> {
-  const resp = await client.get<ConfigTypeOption[]>('/dictionaries/config-types', {
+): Promise<ConfigOption[]> {
+  const resp = await client.get<ConfigOption[]>('/dictionaries/config-types', {
     params: { brand, vehicle_type: vehicleType, series, tonnage }
   })
   return resp ?? []
@@ -62,8 +65,8 @@ export async function listConfigTypes(
 /** 门架类型（按前序层级级联过滤） */
 export async function listMastTypes(
   brand?: string, vehicleType?: string, series?: string, tonnage?: number | string, configType?: string
-): Promise<MastTypeOption[]> {
-  const resp = await client.get<MastTypeOption[]>('/dictionaries/mast-types', {
+): Promise<MastType[]> {
+  const resp = await client.get<MastType[]>('/dictionaries/mast-types', {
     params: { brand, vehicle_type: vehicleType, series, tonnage, config_type: configType }
   })
   return resp ?? []
@@ -73,8 +76,8 @@ export async function listMastTypes(
 export async function listMastHeights(
   brand?: string, vehicleType?: string, series?: string, tonnage?: number | string,
   configType?: string, mastType?: string
-): Promise<MastHeightOption[]> {
-  const resp = await client.get<MastHeightOption[]>('/dictionaries/mast-heights', {
+): Promise<MastHeight[]> {
+  const resp = await client.get<MastHeight[]>('/dictionaries/mast-heights', {
     params: { brand, vehicle_type: vehicleType, series, tonnage, config_type: configType, mast_type: mastType }
   })
   return resp ?? []
@@ -95,22 +98,22 @@ export async function getEarliestFactoryYear(
 /** 电池类型（按品牌+车型+系列+吨位级联过滤；不传参数时返回全部） */
 export async function listBatteryTypes(
   brand?: string, vehicleType?: string, series?: string, tonnage?: number | string
-): Promise<BatteryTypeOption[]> {
-  const resp = await client.get<BatteryTypeOption[]>('/dictionaries/battery-types', {
+): Promise<BatteryTypeDict[]> {
+  const resp = await client.get<BatteryTypeDict[]>('/dictionaries/battery-types', {
     params: { brand, vehicle_type: vehicleType, series, tonnage }
   })
   return resp ?? []
 }
 
 /** 传动系统字典（手波/自波/无级变速/无） */
-export async function listTransmissionTypes(): Promise<TransmissionTypeOption[]> {
-  const resp = await client.get<TransmissionTypeOption[]>('/dictionaries/transmission-types')
+export async function listTransmissionTypes(): Promise<TransmissionType[]> {
+  const resp = await client.get<TransmissionType[]>('/dictionaries/transmission-types')
   return resp ?? []
 }
 
 /** 发动机类型字典（国产发动机/进口发动机/混合动力/无） */
-export async function listEngineTypes(): Promise<EngineTypeOption[]> {
-  const resp = await client.get<EngineTypeOption[]>('/dictionaries/engine-types')
+export async function listEngineTypes(): Promise<EngineType[]> {
+  const resp = await client.get<EngineType[]>('/dictionaries/engine-types')
   return resp ?? []
 }
 
@@ -123,8 +126,8 @@ export async function listSeriesConfigOptions(brand: string, series: string): Pr
 }
 
 /** 车况评级 */
-export async function listConditionRatings(): Promise<ConditionRatingOption[]> {
-  const resp = await client.get<ConditionRatingOption[]>('/dictionaries/condition-ratings')
+export async function listConditionRatings(): Promise<ConditionRating[]> {
+  const resp = await client.get<ConditionRating[]>('/dictionaries/condition-ratings')
   return resp ?? []
 }
 

@@ -87,6 +87,20 @@ recruit + job + resume 三域（招聘端三模块）落地时的口径补充：
 - **枚举词汇缺口的直接后果**：招聘域的 `status` / `apply_state` / `contact_state` 等都是封闭值集，生成物只能到 `string`，前端手写的窄化联合随之删除、消费处按字符串比较。这是注解表达力缺口（片一已记录），不是「手写正确、注解写错」。
 - **本片实测差异 13 条**：① 注解写错 **1** 条——`/resume/view-stats` 的 data 从「标量 integer」自我纠正为 `object{count=integer}`（handler 是 `gin.H{"count": cnt}`；新契约测试的顶层 key 断言当场抓红）；② 手写类型过时 **11** 条（最典型：`RecruitResumeItem.expected_specialty_*` 是死字段，后端从 #492 起就叫 `expected_position_*`；`getContact` 的手写字面量漏了后端一直返回的 `photos`/`resume_certifications`）；③ 后端第三种形状 **2** 条（均只留证、无文件改动）。
 
+## 实施修订（2026-09-14，片九 #967）
+
+估值域（`internal/valuation/handler`，Web 消费面唯一「整块零注解」的区域）落地时的实测与口径：
+
+- **计数**：估值前端模块的**显式调用点 32 个**，但本片登记 **67 个端点** —— `valuation/admin.ts` 的字典 CRUD 是 `createCrud × 12 实体`（每个实体 list/create/update/remove 四态），按决策 2「域一旦开做就补全该域」登记该域**全部已注册路由**（69 op − 2 条 PDF 字节流 − `/valuation/health`）；显式调用点 32/32 全部命中 swagger。issue 记的「28 调用点 / 全部不在 swagger」是按模块字面调用点估的。
+- **注解块 69 个**：`config.go` 19 / `evaluation.go` 4 / `battery.go` 5 / `report.go` 2 / `auth.go` 2 / 新增 `dictcrud_docs.go` 37 —— 描述符工厂的闭包承载不了 swag 注解，管理端注解写在**薄包装方法**上（先例 `api/forum.go` 的 `AdminGetTopic`），方法体恒一行转发、零行为变更。
+- **@Tags 用估值自己的体系**（估值-字典 / 评估 / 电池 / 报告 / 认证 / 管理端），不复用主 `/api` 的「学员端-*」—— 这正是决策 5 把它独立成片的理由之一。
+- **平行 auth 显性化**：逐个标注 `@Security` —— public 留空、optional 2 个（匿名可提交，注解里注明）、valAuth 5 个 BearerAuth、admin 37 个 BearerAuth；安全边界第一次在契约面可见。
+- **只补注解、不改形状**：7 处非统一信封（`gin.H` / 裸 `c.JSON`）**只登记不改造**，注解用 swag 内联 `object{}` 如实描述形状（故不误标 NoData）：`config.go` 的 ListOriginalPrices / GetEarliestFactoryYear、`evaluation.go` 的 List / Stats、`reportflow.go` 的 serveReportGenerate、`dictcrud_routes.go` 的 deleteDict、`auth.go` 的 Me。
+- **可空性 5 处** `x-optional`；本域无指针字段，故无 `x-nullable`。
+- **生成物的已知限制**：内联 `object{}` 形状不进生成物（渲染器只渲染具名类型），`generated/valuation.ts` 覆盖具名根类型；`EvaluationStats` / `GenerateReportResponse` 两处前端保留与注解逐字段对齐的窄手写类型 —— 彻底收敛需生成器支持匿名对象，属生成器能力片。
+- **字段级差异 8 条**全部落在 ② 手写类型过时：`/evaluations/{id}/report` 与电池报告的 `pdf_path` / `file_name` / `report_path` / `generated_at` 是**凭空字段**（实际是 `{evaluation_id,pdf_url,file_size}`），`EvaluationDetail` / `EvaluationResult` / `BatteryEvaluationDetail` / 12 个字典条目 / `CoefficientConfig` 的字段增减与可空性落后。① 0 条、③ 0 条。
+- **swagger 产物可复现（本 PR head 实测）**：实施过程中一度观察到「恢复 backend/docs 后重跑产物大面积不同」，复核后确认那是把「含本片新注解的树」与「HEAD 的旧产物」相比所致，不是工具链不确定性 —— 在本 PR head 上重跑 `swag init` 后 `git status backend/docs` 干净，CI 的「Swagger 产物新鲜度」锁会通过。
+
 ## 备选
 
 

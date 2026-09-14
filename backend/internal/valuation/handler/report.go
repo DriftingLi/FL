@@ -49,11 +49,32 @@ func NewReportHandler(evalRepo EvaluationStore, gen ReportGenerator, l *zap.Logg
 }
 
 // Generate 处理 POST /api/valuation/evaluations/:id/report
+// @Summary 生成评估报告
+// @Description 触发后端生成评估 PDF 报告（落盘 + 回写 report_pdf_path），返回 PDF URL 与大小。公开端点：无需登录。
+// @Tags 估值-报告
+// @Accept json
+// @Produce json
+// @Param id path integer true "评估记录 ID"
+// @Success 200 {object} response.R{data=object{evaluation_id=integer,pdf_url=string,file_size=integer}} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 404 {object} response.R "评估记录不存在"
+// @Failure 500 {object} response.R "服务器内部错误"
+// @Router /valuation/evaluations/{id}/report [post]
 func (h *ReportHandler) Generate(c *gin.Context) {
 	serveReportGenerate(c, h.coord, "评估记录不存在", h.logger)
 }
 
 // Download 处理 GET /api/valuation/evaluations/:id/report
+// @Summary 下载评估报告
+// @Description 经 storage 代理流式返回评估 PDF（Content-Disposition attachment）；URL 失效时并发安全地再生成。公开端点：无需登录。
+// @Tags 估值-报告
+// @Produce application/pdf
+// @Param id path integer true "评估记录 ID"
+// @Success 200 {file} file "PDF 二进制流"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 404 {object} response.R "评估记录不存在"
+// @Failure 500 {object} response.R "服务器内部错误"
+// @Router /valuation/evaluations/{id}/report [get]
 func (h *ReportHandler) Download(c *gin.Context) {
 	serveReportDownload(c, h.coord, h.storage, "评估记录不存在", h.logger)
 }

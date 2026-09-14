@@ -3,11 +3,12 @@
 import { defineStore } from 'pinia'
 import { computed } from 'vue'
 import { createEvaluation, getEvaluationDetail } from '@/api/valuation/evaluation'
-import type { CreateEvaluationRequest, EvaluationDetailResponse } from '@/types/valuation/evaluation'
+import type { CreateEvaluationRequest, EvaluationDetail } from '@/types/valuation/evaluation'
+import type { EvaluationResponse } from '@/api/generated/valuation'
 import { createValuationJourney } from '@/composables/createValuationJourney'
 
 export const useEvaluationStore = defineStore('evaluation', () => {
-  const journey = createValuationJourney<CreateEvaluationRequest, EvaluationDetailResponse, EvaluationDetailResponse>(
+  const journey = createValuationJourney<CreateEvaluationRequest, EvaluationResponse, EvaluationDetail>(
     {
       submit: createEvaluation,
       fetch: getEvaluationDetail
@@ -25,7 +26,7 @@ export const useEvaluationStore = defineStore('evaluation', () => {
   const submitting = computed(() => journey.loading.value)
 
   /** 写入评估结果（保留旧 setResult 兼容入口） */
-  function setResult(r: EvaluationDetailResponse, id: number) {
+  function setResult(r: EvaluationResponse, id: number) {
     journey.currentResult.value = r
     journey.currentId.value = id
   }
