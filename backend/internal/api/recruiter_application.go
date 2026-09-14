@@ -56,7 +56,7 @@ func NewRecruiterApplicationHandler(svc *service.JobApplicationService) *Recruit
 // @Param id path int true "职位 ID"
 // @Param page query int false "页码"
 // @Param page_size query int false "每页数量"
-// @Success 200 {object} response.R "列表（含 unread_count）"
+// @Success 200 {object} response.R{data=service.RecruiterApplicationListResult} "列表（含 unread_count）"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 403 {object} response.R "越权"
 // @Router /recruit/jobs/{id}/applications [get]
@@ -83,7 +83,7 @@ func (h *RecruiterApplicationHandler) ListByJob(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "投递 ID"
-// @Success 200 {object} response.R "详情"
+// @Success 200 {object} response.R{data=service.ApplicationDTO} "详情"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 403 {object} response.R "越权"
 // @Router /recruit/applications/{id} [get]
@@ -108,7 +108,7 @@ func (h *RecruiterApplicationHandler) GetDetail(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "投递 ID"
-// @Success 200 {object} response.R "已标记"
+// @Success 200 {object} response.R{data=service.ApplicationDTO} "已标记"
 // @Failure 400 {object} response.R "状态不允许"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 403 {object} response.R "越权"

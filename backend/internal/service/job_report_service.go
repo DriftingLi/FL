@@ -59,12 +59,12 @@ type ReportInput struct {
 type ReportDTO struct {
 	ID            int64   `json:"id"`
 	JobPostingID  int     `json:"job_posting_id"`
-	JobTitle      string  `json:"job_title,omitempty"`
+	JobTitle      string  `json:"job_title,omitempty" extensions:"x-optional"`
 	StudentUserID int     `json:"student_user_id"`
 	Reason        string  `json:"reason"`
 	Status        string  `json:"status"`
 	CreatedAt     string  `json:"created_at"`
-	HandledAt     *string `json:"handled_at,omitempty"`
+	HandledAt     *string `json:"handled_at,omitempty" extensions:"x-optional"`
 }
 
 // Report 学员举报职位；同一学员对同一职位唯一，重复举报被合并而非堆叠。

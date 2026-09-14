@@ -1,36 +1,28 @@
+// 已迁移模块：走 unwrappedRequest（拦截器解包信封，成功直接返回业务负载 Promise<T>）。
+//
+// 响应类型**不再手写**：唯一事实源是后端注解 → backend/docs/swagger.json →
+// `cd backend && go run ./cmd/gen-apitypes`（ADR-0048 决策 1/3，issue #963 片五）。
+// 本文件只留请求壳、端点装配与名称适配；入参（query / body）类型不生成、仍手写。
 import { unwrappedRequest } from './request'
+import type {
+  ApplicationDTO,
+  ApplicationListResult,
+  JobListResult,
+  JobPostingDTO,
+  RecruiterApplicationListResult,
+  ReportDTO
+} from './generated/job'
 
-export interface JobPosting {
-  id: number
-  recruiter_id: number
-  title: string
-  position_id?: number | null
-  position_name?: string
-  region: string
-  salary_min?: number | null
-  salary_max?: number | null
-  salary_text: string
-  experience_req: string
-  description: string
-  status: 'open' | 'closed'
-  forced_offline: boolean
-  offline_reason?: string
-  published_at: string
-  created_at: string
-  updated_at: string
-  company_name?: string
-  business_scope?: string
-  contact_name?: string
-  // #488：学员视角投递状态（可投递/已投递/未录用冷却中）
-  apply_state?: 'none' | 'applied' | 'not_hired'
-  cooldown_days?: number
+// 名称适配：生成物沿用后端 DTO 命名，前端域词汇不带 DTO 后缀（既有 import 路径与类型名不破）。
+export type {
+  ApplicationDTO as JobApplication,
+  ApplicationListResult as ApplicationListResp,
+  JobListResult as JobListResp,
+  JobPostingDTO as JobPosting,
+  RecruiterApplicationListResult as RecruiterApplicationListResp
 }
 
-export interface JobListResp {
-  items: JobPosting[]
-  total: number
-}
-
+/** 职位发布/编辑入参（不生成：ADR-0048 决策 3）。 */
 export interface JobPostingInput {
   title: string
   position_id?: number | null
@@ -42,87 +34,53 @@ export interface JobPostingInput {
   description?: string
 }
 
-export interface JobApplication {
-  id: number
-  job_posting_id: number
-  job_title?: string
-  recruiter_id: number
-  student_user_id: number
-  status: 'applied' | 'rejected' | 'withdrawn'
-  resume_updated_at: string
-  employer_viewed_at?: string | null
-  created_at: string
-  updated_at: string
-  company_name?: string
-  // 企业侧脱敏字段（唯一脱敏路径）
-  student_real_name_masked?: string
-  student_resume_updated_at?: string
-  resume_updated_at_snapshot?: string
-}
-
-export interface ApplicationListResp {
-  items: JobApplication[]
-  total: number
-  page: number
-  page_size: number
-}
-
-export interface RecruiterApplicationListResp {
-  items: JobApplication[]
-  total: number
-  page: number
-  page_size: number
-  unread_count: number
-  job_title: string
-}
-
 export const jobApi = {
   // 企业侧
   createJob(data: JobPostingInput) {
-    return unwrappedRequest.post<JobPosting>('/recruit/jobs', data)
+    return unwrappedRequest.post<JobPostingDTO>('/recruit/jobs', data)
   },
   updateJob(id: number, data: JobPostingInput) {
-    return unwrappedRequest.put<JobPosting>(`/recruit/jobs/${id}`, data)
+    return unwrappedRequest.put<JobPostingDTO>(`/recruit/jobs/${id}`, data)
   },
   toggleJobStatus(id: number) {
-    return unwrappedRequest.post<JobPosting>(`/recruit/jobs/${id}/toggle-status`)
+    return unwrappedRequest.post<JobPostingDTO>(`/recruit/jobs/${id}/toggle-status`)
   },
   listMyJobs(params?: { page?: number; page_size?: number; position_id?: number }) {
-    return unwrappedRequest.get<JobListResp>('/recruit/jobs', { params })
+    return unwrappedRequest.get<JobListResult>('/recruit/jobs', { params })
   },
   getMyJob(id: number) {
-    return unwrappedRequest.get<JobPosting>(`/recruit/jobs/${id}`)
+    return unwrappedRequest.get<JobPostingDTO>(`/recruit/jobs/${id}`)
   },
   // 学员侧
   listPublicJobs(params?: { page?: number; page_size?: number; position_id?: number; region?: string; salary_min?: number; salary_max?: number; experience?: string }) {
-    return unwrappedRequest.get<JobListResp>('/jobs', { params })
+    return unwrappedRequest.get<JobListResult>('/jobs', { params })
   },
   getPublicJob(id: number) {
-    return unwrappedRequest.get<JobPosting>(`/jobs/${id}`)
+    return unwrappedRequest.get<JobPostingDTO>(`/jobs/${id}`)
   },
   // 投递（投递即授权）
   applyJob(id: number) {
-    return unwrappedRequest.post<JobApplication>(`/jobs/${id}/apply`)
+    return unwrappedRequest.post<ApplicationDTO>(`/jobs/${id}/apply`)
   },
   // 我的投递
   listMyApplications(params?: { page?: number; page_size?: number }) {
-    return unwrappedRequest.get<ApplicationListResp>('/resume/applications', { params })
+    return unwrappedRequest.get<ApplicationListResult>('/resume/applications', { params })
   },
   withdrawApplication(id: number, revokeContact: boolean) {
-    return unwrappedRequest.post<JobApplication>(`/resume/applications/${id}/withdraw`, { revoke_contact: revokeContact })
+    return unwrappedRequest.post<ApplicationDTO>(`/resume/applications/${id}/withdraw`, { revoke_contact: revokeContact })
   },
   // 举报
   reportJob(id: number, reason: string) {
-    return unwrappedRequest.post<{ id: number }>(`/jobs/${id}/report`, { reason })
+    return unwrappedRequest.post<ReportDTO>(`/jobs/${id}/report`, { reason })
   },
   // 企业侧投递处理
   listJobApplications(jobId: number, params?: { page?: number; page_size?: number }) {
-    return unwrappedRequest.get<RecruiterApplicationListResp>(`/recruit/jobs/${jobId}/applications`, { params })
+    return unwrappedRequest.get<RecruiterApplicationListResult>(`/recruit/jobs/${jobId}/applications`, { params })
   },
   getApplicationDetail(id: number) {
-    return unwrappedRequest.get<JobApplication>(`/recruit/applications/${id}`)
+    return unwrappedRequest.get<ApplicationDTO>(`/recruit/applications/${id}`)
   },
   rejectApplication(id: number) {
-    return unwrappedRequest.post<JobApplication>(`/recruit/applications/${id}/reject`)
+    return unwrappedRequest.post<ApplicationDTO>(`/recruit/applications/${id}/reject`)
   }
 }

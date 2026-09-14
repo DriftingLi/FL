@@ -49,7 +49,7 @@ func NewContactHandler(svc *service.ContactService) *ContactHandler {
 // @Produce json
 // @Security BearerAuth
 // @Param body body object true "申请 {student_user_id, message(1-200)}"
-// @Success 201 {object} response.R "申请已提交"
+// @Success 201 {object} response.R{data=service.ContactRequestDTO} "申请已提交"
 // @Failure 400 {object} response.R "参数错误/唯一/冷却/日限"
 // @Failure 401 {object} response.R "未认证"
 // @Router /recruit/contact-requests [post]
@@ -79,7 +79,7 @@ func (h *ContactHandler) Create(c *gin.Context) {
 // @Security BearerAuth
 // @Param page query int false "页码"
 // @Param page_size query int false "每页数量"
-// @Success 200 {object} response.R "列表"
+// @Success 200 {object} response.R{data=service.ContactRequestListResult} "列表"
 // @Failure 401 {object} response.R "未认证"
 // @Router /recruit/contact-requests [get]
 func (h *ContactHandler) ListForRecruiter(c *gin.Context) {
@@ -101,7 +101,7 @@ func (h *ContactHandler) ListForRecruiter(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "学员 ID"
-// @Success 200 {object} response.R "明文 {real_name, contact_phone, wechat, resume_file_url}"
+// @Success 200 {object} response.R{data=service.ContactPlainDTO} "明文 {real_name, contact_phone, wechat, resume_file_url}"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 403 {object} response.R "无有效授权"
 // @Router /recruit/resumes/{id}/contact [get]
@@ -142,7 +142,7 @@ func (h *ContactHandler) GetContact(c *gin.Context) {
 // @Security BearerAuth
 // @Param page query int false "页码"
 // @Param page_size query int false "每页数量"
-// @Success 200 {object} response.R "列表"
+// @Success 200 {object} response.R{data=service.ContactRequestListResult} "列表"
 // @Failure 401 {object} response.R "未认证"
 // @Router /resume/contact-requests [get]
 func (h *ContactHandler) ListForStudent(c *gin.Context) {
@@ -164,7 +164,7 @@ func (h *ContactHandler) ListForStudent(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "申请 ID"
-// @Success 200 {object} response.R "已同意"
+// @Success 200 {object} response.R{data=service.ContactRequestDTO} "已同意"
 // @Failure 400 {object} response.R "状态不允许/已过期"
 // @Failure 401 {object} response.R "未认证"
 // @Router /resume/contact-requests/{id}/approve [post]
@@ -190,7 +190,7 @@ func (h *ContactHandler) Approve(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "申请 ID"
-// @Success 200 {object} response.R "已拒绝"
+// @Success 200 {object} response.R{data=service.ContactRequestDTO} "已拒绝"
 // @Failure 400 {object} response.R "状态不允许"
 // @Failure 401 {object} response.R "未认证"
 // @Router /resume/contact-requests/{id}/reject [post]
@@ -216,7 +216,7 @@ func (h *ContactHandler) Reject(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "申请 ID"
-// @Success 200 {object} response.R "已撤回"
+// @Success 200 {object} response.R{data=service.ContactRequestDTO} "已撤回"
 // @Failure 400 {object} response.R "状态不允许"
 // @Failure 401 {object} response.R "未认证"
 // @Router /resume/contact-requests/{id}/revoke [post]

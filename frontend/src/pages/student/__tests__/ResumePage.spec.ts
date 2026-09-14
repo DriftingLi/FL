@@ -34,7 +34,7 @@ beforeEach(() => {
   vi.mocked(unwrappedRequest.get).mockReset()
   vi.mocked(unwrappedRequest.get).mockResolvedValue({ positions: [], credentials: [] })
   vi.mocked(resumeApi.getViewStats).mockResolvedValue({ count: 0 })
-  vi.mocked(resumeApi.listContactRequests).mockResolvedValue({ items: [], total: 0 } as any)
+  vi.mocked(resumeApi.listContactRequests).mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20 })
 })
 
 describe('ResumePage 未建简历空态（#415）', () => {
@@ -78,10 +78,12 @@ describe('ResumePage 企业联系方式透出（#487）', () => {
     })
     vi.mocked(resumeApi.listContactRequests).mockResolvedValue({
       items: [
-        { id: 1, company_name: '测试企业A', contact_name: '王五', message: '想联系', status: 'approved', created_at: '2026-01-01', contact_phone: '13800001111', contact_email: 'a@example.com', wechat: 'wx_a' },
-        { id: 2, company_name: '测试企业B', contact_name: '赵六', message: '考虑中', status: 'pending', created_at: '2026-01-02' },
+        { id: 1, recruiter_id: 7, student_user_id: 1, message: '想联系', status: 'approved', created_at: '2026-01-01', updated_at: '2026-01-01', expires_at: '2026-01-31', source: 'recruiter', company_name: '测试企业A', contact_name: '王五', contact_phone: '13800001111', contact_email: 'a@example.com', wechat: 'wx_a' },
+        { id: 2, recruiter_id: 8, student_user_id: 1, message: '考虑中', status: 'pending', created_at: '2026-01-02', updated_at: '2026-01-02', expires_at: '2026-02-01', source: 'recruiter', company_name: '测试企业B', contact_name: '赵六' },
       ],
       total: 2,
+      page: 1,
+      page_size: 20,
     })
     const wrapper = mountPage()
     await flushPromises()

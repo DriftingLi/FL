@@ -6499,7 +6499,19 @@ const docTemplate = `{
                     "200": {
                         "description": "列表",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.JobListResult"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -6539,7 +6551,19 @@ const docTemplate = `{
                     "200": {
                         "description": "详情",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.JobPostingDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -6585,7 +6609,19 @@ const docTemplate = `{
                     "201": {
                         "description": "投递成功",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ApplicationDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -6649,7 +6685,19 @@ const docTemplate = `{
                     "201": {
                         "description": "举报已提交",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ReportDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -8926,7 +8974,19 @@ const docTemplate = `{
                     "200": {
                         "description": "详情",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ApplicationDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -8972,7 +9032,19 @@ const docTemplate = `{
                     "200": {
                         "description": "已标记",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ApplicationDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -9029,7 +9101,19 @@ const docTemplate = `{
                     "200": {
                         "description": "列表",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ContactRequestListResult"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -9072,7 +9156,19 @@ const docTemplate = `{
                     "201": {
                         "description": "申请已提交",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ContactRequestDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -9123,7 +9219,19 @@ const docTemplate = `{
                     "200": {
                         "description": "列表",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.JobListResult"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -9166,7 +9274,19 @@ const docTemplate = `{
                     "201": {
                         "description": "发布成功",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.JobPostingDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -9212,7 +9332,19 @@ const docTemplate = `{
                     "200": {
                         "description": "详情",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.JobPostingDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -9268,7 +9400,19 @@ const docTemplate = `{
                     "200": {
                         "description": "更新成功",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.JobPostingDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -9332,7 +9476,19 @@ const docTemplate = `{
                     "200": {
                         "description": "列表（含 unread_count）",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.RecruiterApplicationListResult"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -9378,7 +9534,19 @@ const docTemplate = `{
                     "200": {
                         "description": "操作成功",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.JobPostingDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -9395,6 +9563,218 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "无权操作",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/recruit/me": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "招聘者自助信息（只回 3 个字段，不是 /auth/me 的 ProfileDTO）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "招聘域-招聘者"
+                ],
+                "summary": "招聘者当前用户信息",
+                "responses": {
+                    "200": {
+                        "description": "招聘者信息",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.RecruitMeDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/recruit/resumes": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "招聘端分页浏览公开（visibility=open）的脱敏简历卡：姓名打码、无电话/微信/PDF/证书原图；叠加地区/岗位/证书/薪资/经验/到岗时间/用工性质筛选，updated_at DESC",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "招聘域-简历"
+                ],
+                "summary": "简历库",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "意向地区（市）",
+                        "name": "region",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "期望岗位 ID",
+                        "name": "position_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "持有证书 ID",
+                        "name": "credential_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "最低薪资",
+                        "name": "salary_min",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "最高薪资",
+                        "name": "salary_max",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "经验年限",
+                        "name": "experience_years",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "到岗时间",
+                        "name": "available_in",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "用工性质",
+                        "name": "job_nature",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "简历列表",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.RecruitListResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/recruit/resumes/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "招聘端查看单份脱敏简历卡（与列表同一脱敏实现）；非 open 或不存在 404；读取后审计留痕",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "招聘域-简历"
+                ],
+                "summary": "简历详情",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "学员 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "简历详情",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.RecruitResumeCard"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "简历 ID 无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "简历不存在",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -9430,7 +9810,19 @@ const docTemplate = `{
                     "200": {
                         "description": "明文 {real_name, contact_phone, wechat, resume_file_url}",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ContactPlainDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -9474,7 +9866,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "PDF 字节流",
+                        "description": "PDF 字节流（非统一信封：二进制流无 data）",
                         "schema": {
                             "type": "string"
                         }
@@ -9513,7 +9905,19 @@ const docTemplate = `{
                     "200": {
                         "description": "简历",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.JobCardDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -9562,7 +9966,19 @@ const docTemplate = `{
                     "200": {
                         "description": "已保存",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.JobCardDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -9613,7 +10029,19 @@ const docTemplate = `{
                     "200": {
                         "description": "列表",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ApplicationListResult"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -9664,7 +10092,19 @@ const docTemplate = `{
                     "200": {
                         "description": "已撤回",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ApplicationDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -9721,7 +10161,19 @@ const docTemplate = `{
                     "200": {
                         "description": "列表",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ContactRequestListResult"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -9761,7 +10213,19 @@ const docTemplate = `{
                     "200": {
                         "description": "已同意",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ContactRequestDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -9807,7 +10271,19 @@ const docTemplate = `{
                     "200": {
                         "description": "已拒绝",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ContactRequestDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -9853,7 +10329,19 @@ const docTemplate = `{
                     "200": {
                         "description": "已撤回",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ContactRequestDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -9902,7 +10390,24 @@ const docTemplate = `{
                     "200": {
                         "description": "上传成功 {url}",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "url": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -9937,7 +10442,7 @@ const docTemplate = `{
                 "summary": "我的在线简历 PDF",
                 "responses": {
                     "200": {
-                        "description": "PDF 字节流",
+                        "description": "PDF 字节流（非统一信封：二进制流无 data）",
                         "schema": {
                             "type": "string"
                         }
@@ -9986,7 +10491,24 @@ const docTemplate = `{
                     "200": {
                         "description": "上传成功 {url}",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "url": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -10052,7 +10574,24 @@ const docTemplate = `{
                     "200": {
                         "description": "聚合数 {count}",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "count": {
+                                                    "type": "integer"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -10097,7 +10636,19 @@ const docTemplate = `{
                     "200": {
                         "description": "已切换",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.JobCardDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -11133,6 +11684,82 @@ const docTemplate = `{
                 }
             }
         },
+        "service.ApplicationDTO": {
+            "type": "object",
+            "properties": {
+                "company_name": {
+                    "description": "企业信息（学员侧可见）",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "employer_viewed_at": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "job_posting_id": {
+                    "type": "integer"
+                },
+                "job_title": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "recruiter_id": {
+                    "type": "integer"
+                },
+                "resume_updated_at": {
+                    "type": "string"
+                },
+                "resume_updated_at_snapshot": {
+                    "description": "投递那一刻的简历更新时间（版本指针），前端据此提示「收到后简历已更新」",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "status": {
+                    "type": "string"
+                },
+                "student_real_name_masked": {
+                    "description": "学员信息（企业侧可见，走脱敏路径）",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "student_resume_updated_at": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "student_user_id": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.ApplicationListResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.ApplicationDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
         "service.CertificateTemplateDTO": {
             "type": "object",
             "properties": {
@@ -11385,6 +12012,115 @@ const docTemplate = `{
                 },
                 "today_checked": {
                     "type": "boolean"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.ContactPlainDTO": {
+            "type": "object",
+            "properties": {
+                "contact_phone": {
+                    "type": "string"
+                },
+                "photos": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "real_name": {
+                    "type": "string"
+                },
+                "resume_certifications": {
+                    "type": "array",
+                    "items": {
+                        "type": "object"
+                    }
+                },
+                "resume_file_url": {
+                    "type": "string"
+                },
+                "wechat": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.ContactRequestDTO": {
+            "type": "object",
+            "properties": {
+                "company_name": {
+                    "description": "企业信息（学员侧可见）",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "contact_email": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "contact_name": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "contact_phone": {
+                    "description": "企业联系信息（#487：仅 status=approved 时透出——电话/邮箱/微信；其余状态一律缺失）",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "decided_at": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "recruiter_id": {
+                    "type": "integer"
+                },
+                "source": {
+                    "description": "Source 授权来源（recruiter 企业发起 / application 投递产生）",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "status": {
+                    "type": "string"
+                },
+                "student_user_id": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "wechat": {
+                    "type": "string",
+                    "x-optional": true
+                }
+            }
+        },
+        "service.ContactRequestListResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.ContactRequestDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
                 },
                 "total": {
                     "type": "integer"
@@ -12240,8 +12976,192 @@ const docTemplate = `{
                 }
             }
         },
+        "service.JobCardDTO": {
+            "type": "object",
+            "properties": {
+                "available_in": {
+                    "type": "string"
+                },
+                "contact_phone": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "expected_position_extra": {
+                    "type": "string"
+                },
+                "expected_position_id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "expected_regions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "experience_years": {
+                    "type": "integer"
+                },
+                "job_nature": {
+                    "type": "string"
+                },
+                "photos": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "real_name": {
+                    "type": "string"
+                },
+                "region": {
+                    "type": "string"
+                },
+                "resume_certifications": {
+                    "type": "array",
+                    "items": {
+                        "type": "object"
+                    }
+                },
+                "resume_experiences": {
+                    "type": "array",
+                    "items": {
+                        "type": "object"
+                    }
+                },
+                "resume_file_url": {
+                    "type": "string"
+                },
+                "salary_max": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "salary_min": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "salary_negotiable": {
+                    "type": "boolean"
+                },
+                "self_intro": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                },
+                "visibility": {
+                    "type": "string"
+                },
+                "wechat": {
+                    "type": "string"
+                }
+            }
+        },
         "service.JobCardInput": {
             "type": "object"
+        },
+        "service.JobListResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.JobPostingDTO"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.JobPostingDTO": {
+            "type": "object",
+            "properties": {
+                "apply_state": {
+                    "description": "学员视角投递状态（#488）：none 可投递 / applied 已投递 / not_hired 未录用（30 天冷却中）",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "business_scope": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "company_name": {
+                    "description": "企业信息（学员侧可见，不含电话/邮箱/信用代码）",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "contact_name": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "cooldown_days": {
+                    "description": "not_hired 时距可再投天数（向上取整）",
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "experience_req": {
+                    "type": "string"
+                },
+                "forced_offline": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "offline_reason": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "position_id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "position_name": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "published_at": {
+                    "type": "string"
+                },
+                "recruiter_id": {
+                    "type": "integer"
+                },
+                "region": {
+                    "type": "string"
+                },
+                "salary_max": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "salary_min": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "salary_text": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
         },
         "service.JobPostingInput": {
             "type": "object",
@@ -13029,6 +13949,138 @@ const docTemplate = `{
                 }
             }
         },
+        "service.RecruitListResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.RecruitResumeCard"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.RecruitMeDTO": {
+            "type": "object",
+            "properties": {
+                "account": {
+                    "type": "string"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.RecruitResumeCard": {
+            "type": "object",
+            "properties": {
+                "available_in": {
+                    "type": "string"
+                },
+                "contact_source": {
+                    "description": "recruiter/application",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "contact_state": {
+                    "description": "#489：企业视角联系状态（none/pending/approved，approved 带来源）",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "expected_position_extra": {
+                    "type": "string"
+                },
+                "expected_position_id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "expected_regions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "experience_years": {
+                    "type": "integer"
+                },
+                "job_nature": {
+                    "type": "string"
+                },
+                "real_name": {
+                    "description": "已打码（如 张* 或 张*丰）",
+                    "type": "string"
+                },
+                "real_name_masked": {
+                    "description": "同上，兼容验收对打码字段的显式断言",
+                    "type": "string"
+                },
+                "resume_certifications": {
+                    "description": "已去 image_urls",
+                    "type": "array",
+                    "items": {
+                        "type": "object"
+                    }
+                },
+                "resume_experiences": {
+                    "type": "array",
+                    "items": {
+                        "type": "object"
+                    }
+                },
+                "salary_max": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "salary_min": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "salary_negotiable": {
+                    "type": "boolean"
+                },
+                "self_intro": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.RecruiterApplicationListResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.ApplicationDTO"
+                    }
+                },
+                "job_title": {
+                    "type": "string"
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "unread_count": {
+                    "type": "integer"
+                }
+            }
+        },
         "service.RedeemResult": {
             "type": "object",
             "properties": {
@@ -13054,6 +14106,37 @@ const docTemplate = `{
                 },
                 "token": {
                     "type": "string"
+                }
+            }
+        },
+        "service.ReportDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "handled_at": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "job_posting_id": {
+                    "type": "integer"
+                },
+                "job_title": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "student_user_id": {
+                    "type": "integer"
                 }
             }
         },

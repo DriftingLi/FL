@@ -200,8 +200,8 @@ async function load() {
     }
   }
   try {
-    const stats: any = await resumeApi.getViewStats()
-    viewCount.value = stats?.count || 0
+    // 注解层：@Success 200 response.R{data=object{count=integer}}
+    viewCount.value = (await resumeApi.getViewStats())?.count || 0
   } catch {}
 }
 

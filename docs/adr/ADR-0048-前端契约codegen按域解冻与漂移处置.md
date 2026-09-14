@@ -77,6 +77,15 @@ aiAssistant 域片（第一个「信封 + 流式」混合模块）落地时的�
 - **非指针容器的可空性**：`AIChatMessageDTO.images` / `.sources` 是无 `omitempty` 的切片，空值出站是 `null`（**键在、值可 null**）→ 标 `extensions:"x-nullable"`。本片把「只动指针字段」的口径补成：**容器字段的 nil 同样是可空态**（判据仍是真实构造处是否总是赋值；先例 `ProgressResultDTO.answers_state map[string]any`）。
 - **嵌套匿名结构体定型**：`DiagnosisSource.Metadata` 原是匿名 struct —— swag 只把它吐成内联 object，而渲染规则对「带 properties 的 object」只给 `{ [key: string]: unknown }`，前端 `metadata.source_url` 会退化成 `unknown`。定型为命名类型 `service.DiagnosisSourceMetadata`（同字段序、同 tag，序列化字节不变）后进 definitions 传递闭包。
 - **标量数组 data**：`GET /ai-assistant/diagnosis/models` 的 data 是 `[]string`（`data=[]string`，无根类型、不进生成物）——声明表锁只要求「有 data 指认」，不要求 `$ref`。
+## 实施修订（2026-09-13，片五 #963）
+
+recruit + job + resume 三域（招聘端三模块）落地时的口径补充：
+
+- **计数**：三个 api 模块合计 **30 个调用点**（recruit.ts 6 / job.ts 14 / resume.ts 10）→ 去重后 **33 个唯一 method+path**（`/recruit/resumes/{id}` 与 `/recruit/contact-requests` 被多模块共用）→ **30 个有 data、3 个有意无 data**（两个 inline `application/pdf` 字节流 + `DELETE /resume/pdf`，后者 data 是空对象且前端不消费）；3 个端点（`/recruit/me`、`/recruit/resumes`、`/recruit/resumes/{id}`）此前**不在 swagger**，本片补完整注解块。
+- **`json.RawMessage` 是注解层的死路**：`swag` 解析不了它（`cannot find type definition: json.RawMessage`），会让**整个** swagger 生成失败；直接写 `[]byte` 又会被 `encoding/json` 编成 base64（响应字节会变）。简历卡的 4 个 JSONB 数组字段因此改用新增的 `service.JSONArray`：底层 `[]byte` + 与 `json.RawMessage` 同语义的 `MarshalJSON`/`UnmarshalJSON`，注解层配 `swaggertype:"array,string"` / `"array,object"` 渲染成真数组。**序列化字节不变**由 `TestJobCardContract` / `TestStudentSeesCompanyContactContract` 守住。
+- **注解层可以声明形状而不改响应构造**：`ContactRequestListResult` / `ContactPlainDTO` 是**只为 data 指认**新增的类型，handler 里的 `gin.H{...}` 一行未动（片二的口径是「改构造 + 字节锁」，本片的选择是「不动构造 + 只声明形状」；`gin.H` 的收口仍留给需要它的域片）。inline object（`data=object{url=string}` / `object{count=integer}`）是同一口径的轻量形态。
+- **枚举词汇缺口的直接后果**：招聘域的 `status` / `apply_state` / `contact_state` 等都是封闭值集，生成物只能到 `string`，前端手写的窄化联合随之删除、消费处按字符串比较。这是注解表达力缺口（片一已记录），不是「手写正确、注解写错」。
+- **本片实测差异 13 条**：① 注解写错 **1** 条——`/resume/view-stats` 的 data 从「标量 integer」自我纠正为 `object{count=integer}`（handler 是 `gin.H{"count": cnt}`；新契约测试的顶层 key 断言当场抓红）；② 手写类型过时 **11** 条（最典型：`RecruitResumeItem.expected_specialty_*` 是死字段，后端从 #492 起就叫 `expected_position_*`；`getContact` 的手写字面量漏了后端一直返回的 `photos`/`resume_certifications`）；③ 后端第三种形状 **2** 条（均只留证、无文件改动）。
 
 ## 备选
 

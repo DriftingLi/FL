@@ -69,7 +69,7 @@ func (h *ResumePDFHandler) serveResumePDF(c *gin.Context, card *model.JobCard, c
 // @Produce application/pdf
 // @Security BearerAuth
 // @Param id path int true "学员 ID"
-// @Success 200 {string} binary "PDF 字节流"
+// @Success 200 {string} binary "PDF 字节流（非统一信封：二进制流无 data）"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "简历不存在"
 // @Router /recruit/resumes/{id}/pdf [get]
@@ -100,7 +100,7 @@ func (h *ResumePDFHandler) RecruiterResumePDF(c *gin.Context) {
 // @Tags 学员端-简历卡
 // @Produce application/pdf
 // @Security BearerAuth
-// @Success 200 {string} binary "PDF 字节流"
+// @Success 200 {string} binary "PDF 字节流（非统一信封：二进制流无 data）"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "简历不存在"
 // @Router /resume/pdf [get]

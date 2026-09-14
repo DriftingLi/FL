@@ -34,7 +34,7 @@ func NewResumeViewHandler(recruitSvc *service.RecruitService) *ResumeViewHandler
 // @Tags 学员端-简历卡
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} response.R "聚合数 {count}"
+// @Success 200 {object} response.R{data=object{count=integer}} "聚合数 {count}"
 // @Failure 401 {object} response.R "未认证"
 // @Router /resume/view-stats [get]
 func (h *ResumeViewHandler) StudentViewStats(c *gin.Context) {
@@ -45,5 +45,6 @@ func (h *ResumeViewHandler) StudentViewStats(c *gin.Context) {
 		return
 	}
 	// 仅返回聚合数，不含企业名与任何身份信息
+	// 注解层声明的 data 形状：object{count=integer}（见上方 @Success；本片只补注解，不动构造）。
 	response.Success(c, gin.H{"count": cnt})
 }

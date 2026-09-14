@@ -125,6 +125,80 @@ var Domains = []Domain{
 		},
 	},
 	{
+		Name:  "recruit",
+		Title: "招聘者工作区（/api/recruit/me、/api/recruit/resumes*、/api/recruit/contact-requests：简历库与联系方式交换）",
+		Roots: []string{
+			"service.RecruitResumeCard",
+			"service.RecruitListResult",
+			"service.ContactRequestListResult",
+			"service.ContactPlainDTO",
+			"service.RecruitMeDTO",
+		},
+		Endpoints: []Endpoint{
+			{Method: "GET", Path: "/recruit/me"},
+			{Method: "GET", Path: "/recruit/resumes"},
+			{Method: "GET", Path: "/recruit/resumes/{id}"},
+			{Method: "GET", Path: "/recruit/resumes/{id}/contact"},
+			{Method: "GET", Path: "/recruit/contact-requests"},
+			{Method: "POST", Path: "/recruit/contact-requests"},
+			// 非统一信封：招聘者预览的打码在线简历 PDF 是 inline 二进制流（无 data，NoData 显式登记）。
+			{Method: "GET", Path: "/recruit/resumes/{id}/pdf", NoData: true},
+		},
+	},
+	{
+		Name:  "job",
+		Title: "职位与投递（/api/recruit/jobs*、/api/jobs*、/api/resume/applications*、/api/recruit/applications*）",
+		Roots: []string{
+			"service.JobPostingDTO",
+			"service.JobListResult",
+			"service.ApplicationDTO",
+			"service.ApplicationListResult",
+			"service.RecruiterApplicationListResult",
+			"service.ReportDTO",
+		},
+		Endpoints: []Endpoint{
+			{Method: "POST", Path: "/recruit/jobs"},
+			{Method: "PUT", Path: "/recruit/jobs/{id}"},
+			{Method: "POST", Path: "/recruit/jobs/{id}/toggle-status"},
+			{Method: "GET", Path: "/recruit/jobs"},
+			{Method: "GET", Path: "/recruit/jobs/{id}"},
+			{Method: "GET", Path: "/jobs"},
+			{Method: "GET", Path: "/jobs/{id}"},
+			{Method: "POST", Path: "/jobs/{id}/apply"},
+			{Method: "POST", Path: "/jobs/{id}/report"},
+			{Method: "GET", Path: "/resume/applications"},
+			{Method: "POST", Path: "/resume/applications/{id}/withdraw"},
+			{Method: "GET", Path: "/recruit/jobs/{id}/applications"},
+			{Method: "GET", Path: "/recruit/applications/{id}"},
+			{Method: "POST", Path: "/recruit/applications/{id}/reject"},
+		},
+	},
+	{
+		Name:  "resume",
+		Title: "学员简历卡（/api/resume/*：简历 CRUD / 可见性 / PDF 与工作照附件 / 查看留痕 / 收到的联系方式申请）",
+		Roots: []string{
+			"service.JobCardDTO",
+			"service.ContactRequestListResult",
+		},
+		Endpoints: []Endpoint{
+			{Method: "GET", Path: "/resume"},
+			{Method: "PUT", Path: "/resume"},
+			{Method: "PUT", Path: "/resume/visibility"},
+			{Method: "POST", Path: "/resume/pdf"},
+			// 有意无载荷：响应 data 是空对象（response.SuccessWithMsg(c, "附件已删除", gin.H{})），
+			// 前端不消费任何字段（片二口径的「handler 手工拼响应体」；本片只补注解，不动构造）。
+			{Method: "DELETE", Path: "/resume/pdf", NoData: true},
+			{Method: "POST", Path: "/resume/image"},
+			{Method: "GET", Path: "/resume/view-stats"},
+			{Method: "GET", Path: "/resume/contact-requests"},
+			{Method: "POST", Path: "/resume/contact-requests/{id}/approve"},
+			{Method: "POST", Path: "/resume/contact-requests/{id}/reject"},
+			{Method: "POST", Path: "/resume/contact-requests/{id}/revoke"},
+			// 非统一信封：学员预览自己的在线简历 PDF 是 inline 二进制流（无 data，NoData 显式登记）。
+			{Method: "GET", Path: "/resume/pdf", NoData: true},
+		},
+	},
+	{
 		Name:  "auth",
 		Title: "认证与账号（/api/auth/*、/api/captcha：登录 / 双令牌 / 资料 / 验证码 / 微信）",
 		Roots: []string{

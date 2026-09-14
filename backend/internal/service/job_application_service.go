@@ -60,21 +60,21 @@ func (s *JobApplicationService) SetMailer(m MailSender) { s.mailer = m }
 type ApplicationDTO struct {
 	ID              int64   `json:"id"`
 	JobPostingID    int     `json:"job_posting_id"`
-	JobTitle        string  `json:"job_title,omitempty"`
+	JobTitle        string  `json:"job_title,omitempty" extensions:"x-optional"`
 	RecruiterID     int     `json:"recruiter_id"`
 	StudentUserID   int     `json:"student_user_id"`
 	Status          string  `json:"status"`
 	ResumeUpdatedAt string  `json:"resume_updated_at"`
-	EmployerViewAt  *string `json:"employer_viewed_at,omitempty"`
+	EmployerViewAt  *string `json:"employer_viewed_at,omitempty" extensions:"x-optional"`
 	CreatedAt       string  `json:"created_at"`
 	UpdatedAt       string  `json:"updated_at"`
 	// 企业信息（学员侧可见）
-	CompanyName string `json:"company_name,omitempty"`
+	CompanyName string `json:"company_name,omitempty" extensions:"x-optional"`
 	// 学员信息（企业侧可见，走脱敏路径）
-	StudentRealNameMasked  string `json:"student_real_name_masked,omitempty"`
-	StudentResumeUpdatedAt string `json:"student_resume_updated_at,omitempty"`
+	StudentRealNameMasked  string `json:"student_real_name_masked,omitempty" extensions:"x-optional"`
+	StudentResumeUpdatedAt string `json:"student_resume_updated_at,omitempty" extensions:"x-optional"`
 	// 投递那一刻的简历更新时间（版本指针），前端据此提示「收到后简历已更新」
-	ResumeUpdatedAtSnapshot string `json:"resume_updated_at_snapshot,omitempty"`
+	ResumeUpdatedAtSnapshot string `json:"resume_updated_at_snapshot,omitempty" extensions:"x-optional"`
 }
 
 // ApplicationListResult 我的投递分页结果。

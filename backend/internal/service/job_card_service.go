@@ -2,6 +2,7 @@
 package service
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +15,39 @@ import (
 	"forklift-training/internal/model"
 )
 
+// JSONArray 简历卡里的 JSONB 数组字段（期望地区 / 工作经历 / 证书 / 工作照）。
+//
+// 为什么不是 json.RawMessage：swag 解析不了它（"cannot find type definition: json.RawMessage"），
+// 会让整个 swagger 生成失败；直接写 []byte 又会被 encoding/json 编成 base64 字符串
+// （响应字节会变——本片的铁律是字节不变）。
+//
+// 所以这里是一个「编解码行为与 json.RawMessage 逐字节相同」的具名类型：
+// 底层是 []byte（swag 认得出，配 swaggertype 渲染成数组），MarshalJSON 走 stdlib 同款
+// compact 分支（见 encoding/json RawMessage.MarshalJSON），UnmarshalJSON 直接存原始字节。
+type JSONArray []byte
+
+// MarshalJSON 与 encoding/json 的 RawMessage.MarshalJSON 同语义：nil → null，
+// 否则紧凑化后原样输出（不是 base64 字符串）。这一步是「响应字节不变」的关键。
+func (j JSONArray) MarshalJSON() ([]byte, error) {
+	if j == nil {
+		return []byte("null"), nil
+	}
+	var buf bytes.Buffer
+	if err := json.Compact(&buf, j); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+// UnmarshalJSON 直接存原始字节（与 RawMessage 一致：不校验、除拷贝外不加加工）。
+func (j *JSONArray) UnmarshalJSON(b []byte) error {
+	if j == nil {
+		return nil
+	}
+	*j = append((*j)[0:0], b...)
+	return nil
+}
+
 type JobCardService struct {
 	db      *gorm.DB
 	fileSvc *FileStore
@@ -25,28 +59,28 @@ func NewJobCardService(db *gorm.DB, fileSvc *FileStore, logger *zap.Logger) *Job
 }
 
 type JobCardDTO struct {
-	UserID                int             `json:"user_id"`
-	RealName              string          `json:"real_name"`
-	ContactPhone          string          `json:"contact_phone"`
-	Wechat                string          `json:"wechat"`
-	Region                string          `json:"region"`
-	ExpectedPositionID    *int            `json:"expected_position_id,omitempty"`
-	ExpectedPositionExtra string          `json:"expected_position_extra"`
-	ExpectedRegions       json.RawMessage `json:"expected_regions"`
-	SalaryMin             *int            `json:"salary_min,omitempty"`
-	SalaryMax             *int            `json:"salary_max,omitempty"`
-	SalaryNegotiable      bool            `json:"salary_negotiable"`
-	AvailableIn           string          `json:"available_in"`
-	JobNature             string          `json:"job_nature"`
-	ExperienceYears       int             `json:"experience_years"`
-	SelfIntro             string          `json:"self_intro"`
-	ResumeExperiences     json.RawMessage `json:"resume_experiences"`
-	ResumeCertifications  json.RawMessage `json:"resume_certifications"`
-	ResumeFileURL         string          `json:"resume_file_url"`
-	Photos                json.RawMessage `json:"photos"`
-	Visibility            string          `json:"visibility"`
-	CreatedAt             string          `json:"created_at"`
-	UpdatedAt             string          `json:"updated_at"`
+	UserID                int       `json:"user_id"`
+	RealName              string    `json:"real_name"`
+	ContactPhone          string    `json:"contact_phone"`
+	Wechat                string    `json:"wechat"`
+	Region                string    `json:"region"`
+	ExpectedPositionID    *int      `json:"expected_position_id,omitempty" extensions:"x-optional"`
+	ExpectedPositionExtra string    `json:"expected_position_extra"`
+	ExpectedRegions       JSONArray `json:"expected_regions" swaggertype:"array,string"`
+	SalaryMin             *int      `json:"salary_min,omitempty" extensions:"x-optional"`
+	SalaryMax             *int      `json:"salary_max,omitempty" extensions:"x-optional"`
+	SalaryNegotiable      bool      `json:"salary_negotiable"`
+	AvailableIn           string    `json:"available_in"`
+	JobNature             string    `json:"job_nature"`
+	ExperienceYears       int       `json:"experience_years"`
+	SelfIntro             string    `json:"self_intro"`
+	ResumeExperiences     JSONArray `json:"resume_experiences" swaggertype:"array,object"`
+	ResumeCertifications  JSONArray `json:"resume_certifications" swaggertype:"array,object"`
+	ResumeFileURL         string    `json:"resume_file_url"`
+	Photos                JSONArray `json:"photos" swaggertype:"array,string"`
+	Visibility            string    `json:"visibility"`
+	CreatedAt             string    `json:"created_at"`
+	UpdatedAt             string    `json:"updated_at"`
 }
 
 type JobCardInput struct {
@@ -349,7 +383,7 @@ func toJobCardDTO(m *model.JobCard) JobCardDTO {
 		Region:                m.Region,
 		ExpectedPositionID:    m.ExpectedPositionID,
 		ExpectedPositionExtra: m.ExpectedPositionExtra,
-		ExpectedRegions:       json.RawMessage(m.ExpectedRegions),
+		ExpectedRegions:       JSONArray(m.ExpectedRegions),
 		SalaryMin:             m.SalaryMin,
 		SalaryMax:             m.SalaryMax,
 		SalaryNegotiable:      m.SalaryNegotiable,
@@ -357,10 +391,10 @@ func toJobCardDTO(m *model.JobCard) JobCardDTO {
 		JobNature:             m.JobNature,
 		ExperienceYears:       m.ExperienceYears,
 		SelfIntro:             m.SelfIntro,
-		ResumeExperiences:     json.RawMessage(m.ResumeExperiences),
-		ResumeCertifications:  json.RawMessage(m.ResumeCertifications),
+		ResumeExperiences:     JSONArray(m.ResumeExperiences),
+		ResumeCertifications:  JSONArray(m.ResumeCertifications),
 		ResumeFileURL:         m.ResumeFileURL,
-		Photos:                json.RawMessage(m.Photos),
+		Photos:                JSONArray(m.Photos),
 		Visibility:            m.Visibility,
 		CreatedAt:             m.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:             m.UpdatedAt.Format(time.RFC3339),

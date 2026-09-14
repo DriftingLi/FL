@@ -36,6 +36,24 @@ func RegisterRecruitRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Recr
 }
 
 // ListResumes 招聘端脱敏简历列表 GET /api/recruit/resumes
+// @Summary 简历库
+// @Description 招聘端分页浏览公开（visibility=open）的脱敏简历卡：姓名打码、无电话/微信/PDF/证书原图；叠加地区/岗位/证书/薪资/经验/到岗时间/用工性质筛选，updated_at DESC
+// @Tags 招聘域-简历
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码"
+// @Param page_size query int false "每页数量"
+// @Param region query string false "意向地区（市）"
+// @Param position_id query int false "期望岗位 ID"
+// @Param credential_id query int false "持有证书 ID"
+// @Param salary_min query int false "最低薪资"
+// @Param salary_max query int false "最高薪资"
+// @Param experience_years query int false "经验年限"
+// @Param available_in query string false "到岗时间"
+// @Param job_nature query string false "用工性质"
+// @Success 200 {object} response.R{data=service.RecruitListResult} "简历列表"
+// @Failure 401 {object} response.R "未认证"
+// @Router /recruit/resumes [get]
 // 过滤轴：region / position_id / credential_id / salary_min / salary_max / experience_years / available_in
 // 默认排序 updated_at DESC（service 层保证）；读写最新，无缓存；读取后审计留痕。
 func (h *RecruitHandler) ListResumes(c *gin.Context) {
@@ -88,6 +106,17 @@ func (h *RecruitHandler) ListResumes(c *gin.Context) {
 }
 
 // GetResume 招聘端脱敏简历详情 GET /api/recruit/resumes/:id
+// @Summary 简历详情
+// @Description 招聘端查看单份脱敏简历卡（与列表同一脱敏实现）；非 open 或不存在 404；读取后审计留痕
+// @Tags 招聘域-简历
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "学员 ID"
+// @Success 200 {object} response.R{data=service.RecruitResumeCard} "简历详情"
+// @Failure 400 {object} response.R "简历 ID 无效"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "简历不存在"
+// @Router /recruit/resumes/{id} [get]
 // 与列表共用同一脱敏实现（service 层 desensitize），不存在两套逻辑；隐藏卡 404。
 func (h *RecruitHandler) GetResume(c *gin.Context) {
 	idStr := c.Param("id")
@@ -111,6 +140,14 @@ func (h *RecruitHandler) GetResume(c *gin.Context) {
 }
 
 // recruitMe 招聘者当前用户信息 GET /api/recruit/me（仅 recruiter 可访问）。
+// @Summary 招聘者当前用户信息
+// @Description 招聘者自助信息（只回 3 个字段，不是 /auth/me 的 ProfileDTO）
+// @Tags 招聘域-招聘者
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.R{data=service.RecruitMeDTO} "招聘者信息"
+// @Failure 401 {object} response.R "未认证"
+// @Router /recruit/me [get]
 // 响应形状是 service.RecruitMeDTO —— **不是** /auth/me 的 ProfileDTO（只回 3 个字段）；
 // #954 片二把它从裸 handler 迁到 Endpoint 骨架，与其余端点同一条守卫链。
 func recruitMe(c *gin.Context) {
