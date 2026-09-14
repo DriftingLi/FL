@@ -115,7 +115,7 @@ function scanContract(sources) {
   // **优先级不可颠倒**：先判「确定已死」，否则回落时间线；拿不准（非数字 / 权限）必须回落，绝不放行活会话。
   must(helper.includes('function Test-HxProcessAlive'), 'H12', 'helper 缺持有者存活探测 Test-HxProcessAlive（锁里存着 pid 却没用）');
   must(
-    helper.includes('catch [Microsoft.PowerShell.Commands.ProcessCommandException]'),
+    helper.includes('catch [System.ArgumentException]'),
     'H12',
     'helper 未把「确定找不到该 pid」与「其它查询错误」分开（混为一谈会把权限错误当成持有者已死）'
   );
@@ -168,7 +168,7 @@ describe('HBuilderX 忙检测契约（单实例串行资源，2026-09-12）', ()
       ['H11', { ...real, helper: real.helper.replace(/-eq "\$\(\$env:HX_LOCK_OWNER\)"/g, '-ne ""') }],
       // H12：存活判据（#974）—— 每条各自注入，避免某一条失效而其余掩盖它
       ['H12', { ...real, helper: real.helper.replace(/function Test-HxProcessAlive/g, 'function X') }],
-      ['H12', { ...real, helper: real.helper.replace(/catch \[Microsoft\.PowerShell\.Commands\.ProcessCommandException\]/g, 'catch {') }],
+      ['H12', { ...real, helper: real.helper.replace(/catch \[System\.ArgumentException\]/g, 'catch {') }],
       ['H12', { ...real, helper: real.helper.replace('Test-HxProcessAlive -PidText $Info.Pid', '$false') }],
       ['H12', { ...real, helper: real.helper.replace('-gt $script:HxLockStaleMinutes', '-gt 0') }],
       ['H12', {
@@ -209,7 +209,7 @@ describe('HBuilderX 忙检测契约（单实例串行资源，2026-09-12）', ()
 
   it('H12：陈旧锁先查持有者存活，再回落 30 分钟时间线（#974）', () => {
     expect(real.helper).toContain('function Test-HxProcessAlive');
-    expect(real.helper).toContain('catch [Microsoft.PowerShell.Commands.ProcessCommandException]');
+    expect(real.helper).toContain('catch [System.ArgumentException]');
     const aliveAt = real.helper.indexOf('Test-HxProcessAlive -PidText $Info.Pid');
     const timeAt = real.helper.indexOf('-gt $script:HxLockStaleMinutes');
     expect(aliveAt).toBeGreaterThan(-1);

@@ -50,7 +50,12 @@
     try { ...HBuilderX 步骤... } finally { Release-HxLock }
 #>
 
-$script:HxLockPath = Join-Path $env:TEMP 'hx-agent.lock'
+# 锁目录：优先 `$env:TEMP`（Windows 常规路径，文档与 ADR-0008 都这么写）；**为空时回落到 .NET 的
+# GetTempPath()**。Linux（本仓单测跑在 CI 的 ubuntu-latest 上）与被裁剪的环境里 `$env:TEMP` 不存在，
+# 此时 `Join-Path $env:TEMP …` 会抛「Cannot bind argument to parameter 'Path' because it is null」
+# —— 2026-09-14 CI 实测：dot-source 本模块即失败，整套契约测试 fail-closed 转红。
+$script:HxLockDir = if ($env:TEMP) { $env:TEMP } else { [System.IO.Path]::GetTempPath() }
+$script:HxLockPath = Join-Path $script:HxLockDir 'hx-agent.lock'
 $script:HxLockStaleMinutes = 30
 $script:HxLockOwned = $false
 $script:HxBusyWaitSeconds = 0
@@ -72,17 +77,18 @@ function Test-HxProcessAlive {
         $false = **确定**不存在（`Get-Process` 明确报「Cannot find a process …」）
         $null  = **未知**（pid 非数字 / 越界 / 查询报其它错，如权限不足）
       调用方只允许在 $false 时走「持有者已死 ⇒ 陈旧」这条快路；$null 必须回落时间判据（fail-safe）。
-      实测（PowerShell 7.6.5，2026-09-14）：pid 不存在时 `Get-Process -Id … -ErrorAction Stop`
-      抛的正是 `Microsoft.PowerShell.Commands.ProcessCommandException`。
+      用 .NET 的 `GetProcessById` 而**不是** `Get-Process` 这条 cmdlet：「进程不存在」在前者是
+      **跨平台稳定**的 `ArgumentException`（.NET 文档 + Windows 实测，2026-09-14），
+      后者抛的 `ProcessCommandException` 是实现细节 —— 本仓单测跑在 ubuntu-latest 上，必须跨平台可靠。
     #>
     param([string]$PidText)
     $t = "$PidText".Trim()
     if ($t -notmatch '^\d+$') { return $null }
     try {
-        $p = Get-Process -Id ([int]$t) -ErrorAction Stop
+        $p = [System.Diagnostics.Process]::GetProcessById([int]$t)
         if ($null -ne $p) { return $true }
         return $null
-    } catch [Microsoft.PowerShell.Commands.ProcessCommandException] {
+    } catch [System.ArgumentException] {
         return $false
     } catch {
         return $null
