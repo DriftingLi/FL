@@ -10,10 +10,13 @@
     <template #top="{ collapsed }">
       <div class="flex flex-col gap-2">
         <CredentialSwitcher v-if="!chapterCourseId" :collapsed="collapsed" theme="dark" />
-        <!-- 布局级搜索入口（#984）：侧栏顶部一处 + ⌘/Ctrl+K 全工作区可达 -->
+        <!-- 布局级搜索入口（#984）：侧栏顶部一处 + ⌘/Ctrl+K 全工作区可达。
+             暗底上必须**显式给底色**：本仓有意不引入 Tailwind preflight（见 tailwind.css 注释），
+             裸 <button> 会保留浏览器默认浅底，配浅色文字就成了亮色药丸。
+             配色照 CredentialSwitcher 的 dark 分支：白 8% 填充 + 12% 内描边 + 浅色文字。 -->
         <button
           type="button"
-          class="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] text-white/80 transition-colors hover:bg-white/10"
+          class="flex items-center gap-2 rounded-md bg-white/[0.08] px-2.5 py-1.5 text-[13px] text-white/70 ring-1 ring-white/[0.12] ring-inset transition-colors hover:bg-white/[0.16] hover:text-white"
           :class="collapsed ? 'justify-center' : ''"
           aria-label="全局搜索"
           @click="openSearch"
@@ -21,7 +24,7 @@
           <el-icon><Search /></el-icon>
           <template v-if="!collapsed">
             <span>搜索</span>
-            <span class="ml-auto rounded border border-white/25 px-1 text-[11px]">⌘K</span>
+            <span class="ml-auto rounded border border-white/20 px-1 text-[11px] text-white/60">⌘K</span>
           </template>
         </button>
       </div>
