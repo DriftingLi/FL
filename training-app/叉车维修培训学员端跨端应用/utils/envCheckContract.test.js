@@ -77,4 +77,19 @@ describe('env-check.ps1 contract', () => {
     expect(src).toContain('hx-busy.ps1');
     expect(src).toContain('Wait-HxFree');
   });
+
+  // E9（2026-09-14 加）：Q-A 用的轻量检查 Test-StaticEnv **必须不取锁**。
+  // 否则「秒级静态守护」会在别的会话持锁时白等到超时 ⇒ 定位名不副实。
+  test('E9: Test-StaticEnv exists and does NOT take the HBuilderX lock', () => {
+    const at = src.indexOf('function Test-StaticEnv');
+    expect(at).toBeGreaterThan(-1);
+    const rest = src.slice(at);
+    const nextFn = rest.slice(1).search(/\nfunction\s/);
+    const body = nextFn === -1 ? rest : rest.slice(0, nextFn + 1);
+    expect(body).not.toContain('Wait-HxFree');
+    expect(body).not.toContain('Acquire-HxLock');
+    expect(body).not.toContain('Resolve-TargetDevice');
+    expect(body).not.toContain('Resolve-CliPathLocal');
+    expect(body).toContain('pages.json');
+  });
 });

@@ -88,4 +88,15 @@ describe('test-compile.ps1 contract', () => {
     expect(src).toMatch(/-TimeoutSeconds/);
     expect(src).toContain('$HxRunTimeoutSeconds');
   });
+
+  // T12（2026-09-14 Q-2 修正）：quick **默认不编译**（Q-A 静态守护），只有显式 -QuickCompile 才编译（Q-B）。
+  // 依据：实测 compile-only 在冷/失效缓存下 >901 秒，比真运行（4–5 分钟）还慢 ⇒
+  // 把编译塞进默认 quick 路径等于谎称「快速」。
+  test('T12: quick defaults to static-only (Q-A); compile only when -QuickCompile given', () => {
+    expect(src).toContain('$QuickCompile');
+    expect(src).toMatch(/\$Level -eq 'quick' -and -not \$QuickCompile/);
+    // Q-A 必须**显式声明未做编译诊断**（不是静默跳过）
+    expect(src).toContain('未做编译诊断');
+    expect(src).toContain('quick_static_only');
+  });
 });

@@ -116,4 +116,25 @@ describe('dev-finish.ps1 contract', () => {
     const finallyAt = src.lastIndexOf('} finally {');
     expect(src.slice(finallyAt)).toContain('Clear-HxLockOwnerEnv');
   });
+
+  // F10（2026-09-14 Q-2 修正）：Q-A（quick 且未 -Compile）**不取锁**。
+  // 否则别的会话持锁时，「秒级静态守护」会白等到超时 ⇒ 定位名不副实。
+  test('F10: 【Q-A】lock acquisition is conditional on needing HBuilderX', () => {
+    expect(src).toContain('$needsHx');
+    // 取锁必须在 $needsHx 分支内
+    const hxAt = src.indexOf('Wait-HxFree');
+    expect(hxAt).toBeGreaterThan(-1);
+    const guard = src.slice(Math.max(0, hxAt - 600), hxAt);
+    expect(guard).toMatch(/if\s*\(\s*\$needsHx\s*\)/);
+    // Q-A 路径必须走轻量检查（不要求设备）
+    expect(src).toContain('Test-StaticEnv');
+  });
+
+  // F11（2026-09-14 Q-2 修正）：quick 的编译诊断由**显式开关**开启（Q-B），是默认行为之外的选择。
+  test('F11: 【Q-B】-Compile switch exists and gates the quick compile', () => {
+    expect(src).toMatch(/\[switch\]\$Compile\b/);
+    expect(src).toContain('QuickCompile:$Compile');
+    // $needsHx 必须把「quick + -Compile」算作需要 HBuilderX
+    expect(src).toMatch(/\$needsHx\s*=\s*\(\$detectedLevel -ne 'quick'\)\s*-or\s*\$Compile/);
+  });
 });
