@@ -357,7 +357,8 @@ func TestSlice6SearchAndRealExamEnvelopeKeys(t *testing.T) {
 	token := slice6Token(t, cfg, student.ID, student.Account, "hrwai_user")
 
 	rec := catalogRequest(t, r, "", "GET", "/api/search?keyword=%E5%8F%89%E8%BD%A6", "")
-	slice6AssertKeys(t, rec, 200, "contents", "courses", "keyword", "questions", "topics")
+	// #982 / ADR-0049 决策 3：聚合新增 chapters 分区（章节正文进可检索面）。
+	slice6AssertKeys(t, rec, 200, "chapters", "contents", "courses", "keyword", "questions", "topics")
 
 	rec = catalogRequest(t, r, "", "GET", "/api/search?keyword=%E5%8F%89%E8%BD%A6&type=course", "")
 	slice6AssertKeys(t, rec, 200, "items", "keyword", "page", "pages", "total", "type")

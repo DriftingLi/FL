@@ -5110,6 +5110,71 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/search-facts/zero-results": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "按关键词聚合「总命中数为 0」的检索事实（ADR-0049 决策 7）。检索事实匿名：不含 user / 证件 / 设备，也不用于个性化。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-搜索"
+                ],
+                "summary": "零结果词列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 30,
+                        "description": "统计窗口（天）",
+                        "name": "days",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 50,
+                        "description": "返回条数上限",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/service.ZeroResultKeywordDTO"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/specialty": {
             "post": {
                 "security": [
@@ -15826,7 +15891,7 @@ const docTemplate = `{
         },
         "/search": {
             "get": {
-                "description": "公开访问，keyword 模糊匹配 course/question/content/topic；type 缺省返回各分区聚合（courses/questions/contents/topics），\n指定 type 时返回该类型的分页结果 —— 同一端点两种响应形状（swag 无联合类型表达力，data 取聚合形状；\n分页形状 service.SearchPageDTO 同域生成，前端以联合类型消费）。",
+                "description": "公开访问，keyword 模糊匹配 course/chapter/question/content/topic（LIKE 元字符按字面处理）；type 缺省返回各分区聚合（courses/chapters/questions/contents/topics），\n指定 type 时返回该类型的分页结果 —— 同一端点两种响应形状（swag 无联合类型表达力，data 取聚合形状；\n分页形状 service.SearchPageDTO 同域生成，前端以联合类型消费）。\n每条结果带命中位置 hit_field（title|body|reply）与命中片段 snippet（源串窗口，投影与高亮由各端自行处理，ADR-0049 决策 6）。",
                 "consumes": [
                     "application/json"
                 ],
@@ -15847,7 +15912,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "类型 course|question|content|topic",
+                        "description": "类型 course|chapter|question|content|topic",
                         "name": "type",
                         "in": "query"
                     },
@@ -26996,6 +27061,9 @@ const docTemplate = `{
         "service.SearchAllDTO": {
             "type": "object",
             "properties": {
+                "chapters": {
+                    "$ref": "#/definitions/service.SearchSectionDTO"
+                },
                 "contents": {
                     "$ref": "#/definitions/service.SearchSectionDTO"
                 },
@@ -27019,10 +27087,23 @@ const docTemplate = `{
                 "cover": {
                     "type": "string"
                 },
+                "hit_field": {
+                    "description": "HitField 命中位置：title | body | reply。",
+                    "type": "string"
+                },
                 "id": {
                     "type": "integer"
                 },
+                "parent_id": {
+                    "description": "ParentID 章节结果所属课程 ID（其余类型为 0）——章节落点需要课程与章节两个参数。",
+                    "type": "integer"
+                },
+                "snippet": {
+                    "description": "Snippet 命中片段：源串中首个命中位置前后的窗口（ADR-0049 决策 6）。",
+                    "type": "string"
+                },
                 "summary": {
+                    "description": "Summary 开头截断的旧口径，**保留**：移动端老客户端仍读它（ADR-0048 契约只增不破）。",
                     "type": "string"
                 },
                 "title": {
@@ -27737,6 +27818,20 @@ const docTemplate = `{
                 },
                 "username": {
                     "type": "string"
+                }
+            }
+        },
+        "service.ZeroResultKeywordDTO": {
+            "type": "object",
+            "properties": {
+                "keyword": {
+                    "type": "string"
+                },
+                "last_seen_at": {
+                    "type": "string"
+                },
+                "times": {
+                    "type": "integer"
                 }
             }
         }

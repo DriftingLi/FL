@@ -465,9 +465,13 @@ var Domains = []Domain{
 		Roots: []string{
 			"service.SearchAllDTO",
 			"service.SearchPageDTO",
+			// #982 / ADR-0049 决策 7：零结果词（运营面）。端点指认了它，故必须进覆盖类型。
+			"service.ZeroResultKeywordDTO",
 		},
 		Endpoints: []Endpoint{
 			{Method: "GET", Path: "/search"},
+			// #982 / ADR-0049 决策 7：零结果词运营面（响应是数组，不入 Roots —— 前端暂无消费方）。
+			{Method: "GET", Path: "/admin/search-facts/zero-results"},
 		},
 	},
 
