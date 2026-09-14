@@ -68,7 +68,11 @@ function Get-DetectLevel {
     } catch { }
 
     # 合并去重
-    $allFiles = @($changedFiles + $stagedFiles) | Select-Object -Unique
+    # ⚠️ `@()` 必须包住**整条管道**（含 Select-Object），不能只包前面的相加：
+    #    空 diff 时管道**什么都不输出** ⇒ 变量本身为 $null ⇒ `Set-StrictMode -Latest` 下
+    #    `$allFiles.Count` 直接抛「The property 'Count' cannot be found on this object」
+    #    （2026-09-14 冷启动会话按交接文档 §8 跑第一条命令时踩到；同类先例见 hx-run.ps1「调用点必须包 @()」）
+    $allFiles = @(@($changedFiles + $stagedFiles) | Select-Object -Unique)
 
     if ($allFiles.Count -eq 0) {
         return [pscustomobject]@{
