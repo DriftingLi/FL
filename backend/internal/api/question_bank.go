@@ -310,7 +310,15 @@ func (h *QuestionBankHandler) GetQuestion(c *gin.Context) {
 			return &questionIDReq{ID: id}, nil
 		},
 		Invoke: func(ctx context.Context, req *questionIDReq) (*service.QuestionDTO, error) {
-			result, err := h.svc.GetQuestion(req.ID)
+			// 分流读路径（#981）：题库作者/审核者走编辑面（可读 draft），其余（学员）走题库池口径。
+			if middleware.HasCapability(c, authz.CapQuestionAuthor) || middleware.HasCapability(c, authz.CapQuestionReview) {
+				result, err := h.svc.GetQuestion(req.ID)
+				if err != nil {
+					return nil, err
+				}
+				return &result, nil
+			}
+			result, err := h.svc.GetQuestionForStudent(req.ID, middleware.CredentialIDPtr(c))
 			if err != nil {
 				return nil, err
 			}
