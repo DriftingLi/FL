@@ -7,7 +7,9 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -15,6 +17,24 @@ import (
 	"forklift-training/internal/model"
 	"forklift-training/pkg/response"
 )
+
+// maxSearchKeywordLen 关键词长度上限（按**字符**计，非字节）：超长关键词只会拖慢顺序 LIKE，
+// 对学员没有任何可用性收益（#980）。
+const maxSearchKeywordLen = 200
+
+// escapeLike 转义 LIKE 的元字符（ % _）：用户串必须按**字面**匹配——
+// 否则「100%」会退化成「以 100 开头」、「%」直接命中全表（#980）。
+func escapeLike(s string) string {
+	s = strings.ReplaceAll(s, "\\", "\\\\")
+	s = strings.ReplaceAll(s, "%", "\\%")
+	s = strings.ReplaceAll(s, "_", "\\_")
+	return s
+}
+
+// likePattern 构造 LIKE 模式串；与 escapeLike 成对使用，查询侧一律带 ESCAPE '\'。
+func likePattern(keyword string) string {
+	return "%" + escapeLike(strings.ToLower(keyword)) + "%"
+}
 
 // 搜索类型。
 const (
@@ -86,7 +106,7 @@ func (s *SearchService) searchItems(searchType, keyword string, page, pageSize i
 	if pageSize < 1 || pageSize > 100 {
 		pageSize = 20
 	}
-	like := "%" + strings.ToLower(keyword) + "%"
+	like := likePattern(keyword)
 
 	var (
 		total int64
@@ -96,7 +116,7 @@ func (s *SearchService) searchItems(searchType, keyword string, page, pageSize i
 	case SearchTypeCourse:
 		var cnt int64
 		q := s.db.Model(&model.Course{}).
-			Where("status = 1 AND specialty_id IS NOT NULL AND level_id IS NOT NULL AND LOWER(name) LIKE ?", like)
+			Where("status = 1 AND specialty_id IS NOT NULL AND level_id IS NOT NULL AND LOWER(name) LIKE ? ESCAPE '\\'", like)
 		if len(credentialID) > 0 && credentialID[0] != nil {
 			q = q.Where("credential_id = ?", *credentialID[0])
 		}
@@ -114,7 +134,7 @@ func (s *SearchService) searchItems(searchType, keyword string, page, pageSize i
 	case SearchTypeQuestion:
 		var cnt int64
 		q := s.db.Model(&model.Question{}).
-			Where("status = ? AND LOWER(content) LIKE ?", "published", like).
+			Where("status = ? AND LOWER(content) LIKE ? ESCAPE '\\'", "published", like).
 			// 题库池口径（#386，同练习/模考抽题）：来源标记标签的真题题退出搜索，
 			// 「真题题只经真题卷出现」的按套解锁门禁不因搜索豁免
 			Where(excludeSourceTagsSQL)
@@ -134,7 +154,7 @@ func (s *SearchService) searchItems(searchType, keyword string, page, pageSize i
 	case SearchTypeContent:
 		var cnt int64
 		q := s.db.Model(&model.FeaturedContent{}).
-			Where("status = 1 AND (LOWER(title) LIKE ? OR LOWER(summary) LIKE ?)", like, like)
+			Where("status = 1 AND (LOWER(title) LIKE ? ESCAPE '\\' OR LOWER(summary) LIKE ? ESCAPE '\\')", like, like)
 		q.Count(&cnt)
 		total = cnt
 		var rows []model.FeaturedContent
@@ -149,7 +169,7 @@ func (s *SearchService) searchItems(searchType, keyword string, page, pageSize i
 	case SearchTypeTopic:
 		var cnt int64
 		q := s.db.Model(&model.ForumTopic{}).
-			Where("LOWER(title) LIKE ? OR LOWER(content) LIKE ?", like, like)
+			Where("LOWER(title) LIKE ? ESCAPE '\\' OR LOWER(content) LIKE ? ESCAPE '\\'", like, like)
 		q.Count(&cnt)
 		total = cnt
 		var rows []model.ForumTopic
@@ -174,6 +194,9 @@ func (s *SearchService) Search(keyword, searchType string, page, pageSize int, c
 	keyword = strings.TrimSpace(keyword)
 	if keyword == "" {
 		return nil, errors.New("关键词不能为空")
+	}
+	if utf8.RuneCountInString(keyword) > maxSearchKeywordLen {
+		return nil, fmt.Errorf("关键词过长（最多 %d 个字符）", maxSearchKeywordLen)
 	}
 	var cred *int
 	if len(credentialID) > 0 {
