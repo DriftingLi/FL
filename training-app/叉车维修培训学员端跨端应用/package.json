@@ -17,7 +17,10 @@
     "build:mp-weixin-doctor": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/mp-weixin-check.ps1 -Doctor",
     "smoke:emulator": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/emulator-smoke.ps1",
     "capture:device": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/device-capture.ps1",
-    "setup:android-sdk": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/android-sdk-setup.ps1"
+    "setup:android-sdk": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/android-sdk-setup.ps1",
+    "dev:finish": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/dev-finish.ps1",
+    "dev:finish:dry": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/dev-finish.ps1 -DryRun",
+    "dev:finish:distribute": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/dev-finish.ps1 -Distribute"
   },
   "devDependencies": {
     "@dcloudio/uni-automator": "^2.0.0",
