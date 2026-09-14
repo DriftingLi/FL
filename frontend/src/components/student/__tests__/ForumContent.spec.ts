@@ -6,7 +6,7 @@
 // htmlPolicy 这个 **prop 被传对了**；本文件**不 stub**，断言的是真实行为——
 // 「把 script 标签发进去，读出来没有 script 元素，且这段字面量以文本可见」。
 // 断言 prop 的做法无法发现「prop 传对了但库的默认策略变了 / 被别处覆盖了」。
-import { describe, it, expect, vi, afterEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from "vitest"
 import { mount } from "@vue/test-utils"
 import { epLite } from "@/test/element-lite"
 import ForumContent from "../ForumContent.vue"
@@ -104,6 +104,66 @@ describe("ForumContent 子集边界（#876 / ADR-0044）", () => {
     expect(w.text()).toContain("故障图");
   });
 });
+
+describe("ForumContent 本站链接判定（外链中转不再拦站内）", () => {
+  // 本站判定读 window.location.hostname，故这一组显式把自己放在 training.example.com 上；
+  // 换掉的 location 在本组结束时还回去，避免污染同文件其余用例（它们按默认 localhost 跑）。
+  const originalLocation = window.location
+  beforeEach(() => {
+    Object.defineProperty(window, "location", {
+      value: new URL("https://training.example.com/training/forum/topic-1"),
+      writable: true
+    })
+  })
+  afterAll(() => {
+    Object.defineProperty(window, "location", { value: originalLocation, writable: true })
+  })
+
+  function hrefs(content: string) {
+    return mountContent(content).findAll("a").map((a) => a.attributes("href") ?? "")
+  }
+
+  it("本站域名族的绝对地址直连（含其它子域名与根域名）", () => {
+    // 这是本次修复的缺陷：以前 href 不以 / 开头就一律送中转页，点自己站内的链接也弹确认
+    expect(hrefs("见 [同站帖](https://training.example.com/forum/2)")).toEqual([
+      "https://training.example.com/forum/2"
+    ])
+    expect(hrefs("见 [门户](https://www.example.com/news)")).toEqual(["https://www.example.com/news"])
+    expect(hrefs("见 [根域](https://example.com/x)")).toEqual(["https://example.com/x"])
+  })
+
+  it("相对地址直连（以前会被送进中转页，再被中转页判成「链接无效」）", () => {
+    expect(hrefs("见 [相对](foo/bar)")).toEqual(["foo/bar"])
+  })
+
+  it("外站绝对地址仍经中转页（站外这一道不松）", () => {
+    const h = hrefs("见 [手册](https://manual.example.org/doc)")
+    expect(h.length).toBe(1)
+    expect(h[0].startsWith("/training/link-out?url=")).toBe(true)
+    expect(decodeURIComponent(h[0])).toContain("https://manual.example.org/doc")
+  })
+
+  it("mailto: / tel: 直连 —— 中转页只认绝对 http(s)，送进去只会得到死胡同", () => {
+    expect(hrefs("联系 [作者](mailto:a@b.com)")).toEqual(["mailto:a@b.com"])
+    expect(hrefs("电话 [客服](tel:123456)")).toEqual(["tel:123456"])
+  })
+
+  it("其它非 http(s) 协议展开成纯文本（白名单之外不放行可点导航）", () => {
+    // 这些 schema 同样「把读者带离本站」，且中转页承载不了 —— 保守处理，不做可点链接
+    expect(hrefs("见 [微信](weixin://dl/business)")).toEqual([])
+    expect(hrefs("见 [本地文件](file:///etc/passwd)")).toEqual([])
+  })
+
+  it("伪协议仍不得渲染成可点击链接（本站判定不构成放行面）", () => {
+    expect(hrefs("[点我](javascript:window.__pwned=1)")).toEqual([])
+    expect((window as unknown as Record<string, unknown>).__pwned).toBeUndefined()
+  })
+
+  it("协议相对地址仍是纯文本（库在解析期拦下，本组件有意不覆盖库的安全策略）", () => {
+    // 含本站协议相对地址：放开它要覆盖库的 validateLink，属越权改安全策略，故不做
+    expect(hrefs("见 [协议相对](//training.example.com/x)")).toEqual([])
+  })
+})
 
 describe("ForumContent 两种格式的渲染差异", () => {
   it("format=text：不解释语法，保留换行", () => {

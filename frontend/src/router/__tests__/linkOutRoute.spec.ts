@@ -13,10 +13,15 @@ describe('外链中转页路由（#881）', () => {
     expect(resolved.name).toBe(routeNames.LinkOut)
   })
 
-  it('中转页在学员工作区下（继承布局与主题入口，且带上工作区声明）', () => {
+  it('中转页是独立页面：不挂布局外壳（无侧栏/主题入口），工作区与登录要求不丢', () => {
     const resolved = router.resolve({ name: routeNames.LinkOut })
     expect(resolved.meta.workspace).toBe('training')
     expect(resolved.meta.requiresAuth).toBe(true)
+    // 顶层记录：matched 只有自身一条 —— 没有布局外壳，也就没有侧栏与主题切换入口
+    expect(resolved.matched.length).toBe(1)
+    expect(resolved.matched[0].path).toBe(FORUM_LINK_OUT_PATH)
+    // 角色约束不因脱离布局而丢失（原由布局 meta.role: hrwai_user 继承）
+    expect(resolved.meta.roles).toEqual(['hrwai_user'])
   })
 
   it('反查：LinkOut 路由的完整路径就是常量本身（改名漏改即红）', () => {
