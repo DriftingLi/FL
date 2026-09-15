@@ -29,6 +29,17 @@ export type UseTopicDetailResult = {
     loading : Ref<boolean>
     replySortField : Ref<string>
     replySortOrder : Ref<string>
+    /** 已加载的回复页码（ADR-0042 分页态；首页 = 1） */
+    replyPage : Ref<number>
+    /** 回复总条数（响应 total，含置顶条；「剩余 N 条」与它同源，不读 topic.replies_count） */
+    replyTotal : Ref<number>
+    /** 是否还有下一页（page < pages）——加载更多入口的唯一判据 */
+    hasMoreReplies : ComputedRef<boolean>
+    /** 加载更多进行中（防重复点击） */
+    loadingMore : Ref<boolean>
+    /** 尚未加载的回复条数（加载更多入口上的剩余量） */
+    remainingReplies : ComputedRef<number>
+    loadMoreReplies : () => Promise<void>
     canDelete : ComputedRef<boolean>
     canEdit : ComputedRef<boolean>
     currentUserId : ComputedRef<number>
@@ -59,6 +70,14 @@ export function useTopicDetail() : UseTopicDetailResult {
     const replySortOrder = ref<string>('asc')    // asc | desc
     const replies = ref<ForumReply[]>([])
     const loading = ref<boolean>(false)
+    // ===== 回复分页态（ADR-0042）=====
+    // 分页是回复列表的**唯一读取形态**（不存在「不传参数 = 全量」）；被采纳回复由**后端**
+    // 保证占首页第一条，本层不做任何置顶派生——分页后前端只拿得到一页，派生必然失效。
+    const REPLY_PAGE_SIZE = 20
+    const replyPage = ref<number>(1)
+    const replyPages = ref<number>(1)
+    const replyTotal = ref<number>(0)
+    const loadingMore = ref<boolean>(false)
     const topicFavoriteId = ref<number>(0)
     // 回复点赞本地态：key 为 reply.id 字符串，value 为 { liked: boolean, likes_count: number }，持久化到本地存储防止刷新丢失（后端暂未在 GetTopic 下发 replies[].liked/likes_count）
     const replyLikeState = ref<UTSJSONObject>({} as UTSJSONObject)
@@ -106,6 +125,16 @@ export function useTopicDetail() : UseTopicDetailResult {
         // 首次回填后即持久化，保证刷新后数据不丢
         persistReplyLikeState()
     }
+
+    /** 是否还有未加载的回复页：以响应 pages 为唯一判据（不读 topic.replies_count，
+     *  那是列表页消费的反范式列，两者漂移会让「剩余 N 条」与翻页行为自相矛盾） */
+    const hasMoreReplies = computed<boolean>(() : boolean => replyPage.value < replyPages.value)
+
+    /** 尚未加载的回复条数（加载更多入口上的剩余量），与 total 同源 */
+    const remainingReplies = computed<number>(() : number => {
+        const left = replyTotal.value - replies.value.length
+        return left > 0 ? left : 0
+    })
 
     /** 当前用户 ID */
     const currentUserId = computed<number>(() : number => {
@@ -181,9 +210,13 @@ export function useTopicDetail() : UseTopicDetailResult {
         if (topicId.value == 0) return
         loading.value = true
         try {
-            const data = await getForumTopicDetailApi(topicId.value, replySortField.value, replySortOrder.value)
+            // 首次进入 / 切排序维度 / 重试：一律回到第 1 页并**替换**列表（分页语义，不是追加）
+            const data = await getForumTopicDetailApi(topicId.value, replySortField.value, replySortOrder.value, 1, REPLY_PAGE_SIZE)
             topic.value = data
             replies.value = data.replies
+            replyPage.value = data.page > 0 ? data.page : 1
+            replyPages.value = data.pages > 0 ? data.pages : 1
+            replyTotal.value = data.total
             console.log('[forum-detail] DIAG can_delete=', data.can_delete, 'author_id=', data.author_id, 'currentUserId=', currentUserId.value, 'user=', JSON.stringify(authStore.user.value), 'canDelete=', canDelete.value)
             // 回填回复点赞态（后端暂未下发时靠本地存储恢复，避免刷新后数据/样式丢失）
             hydrateReplyLikesFromReplies()
@@ -194,6 +227,47 @@ export function useTopicDetail() : UseTopicDetailResult {
             uni.showToast({ title: '加载帖子失败', icon: 'none' })
         } finally {
             loading.value = false
+        }
+    }
+
+    /**
+     * 加载更多回复（ADR-0042）：**追加**下一页，不替换已渲染内容；到底后由 pages 判定入口消失。
+     * 追加前按 id 去重——删回复 / 本地新回复会让本地窗口相对服务端页码漂移（第 N 页不再逐条对齐），
+     * 不去重就会在页码边界渲染出重复行。
+     */
+    async function loadMoreReplies() : Promise<void> {
+        if (loadingMore.value || !hasMoreReplies.value) return
+        if (topicId.value == 0) return
+        loadingMore.value = true
+        try {
+            const next = replyPage.value + 1
+            const data = await getForumTopicDetailApi(topicId.value, replySortField.value, replySortOrder.value, next, REPLY_PAGE_SIZE)
+            const merged : ForumReply[] = []
+            for (let i = 0; i < replies.value.length; i++) {
+                merged.push(replies.value[i])
+            }
+            for (let j = 0; j < data.replies.length; j++) {
+                const incoming = data.replies[j]
+                let seen = false
+                for (let k = 0; k < merged.length; k++) {
+                    if (merged[k].id == incoming.id) {
+                        seen = true
+                        break
+                    }
+                }
+                if (!seen) merged.push(incoming)
+            }
+            replies.value = merged
+            replyPage.value = data.page > 0 ? data.page : next
+            replyPages.value = data.pages > 0 ? data.pages : replyPages.value
+            if (data.total > 0) replyTotal.value = data.total
+            // 回填新加载页的点赞态（后端未下发时靠本地存储恢复）
+            hydrateReplyLikesFromReplies()
+        } catch (e) {
+            console.error('[forum-detail] load more replies failed:', e)
+            uni.showToast({ title: '加载更多失败', icon: 'none' })
+        } finally {
+            loadingMore.value = false
         }
     }
 
@@ -240,7 +314,9 @@ export function useTopicDetail() : UseTopicDetailResult {
                 }
             }
             replies.value = newReplies
-            // 更新回复数
+            // 更新回复数（total 同步：分页后「剩余 N 条」读的是响应 total，
+            // 本地位移一条却不减 total 会让剩余量与可加载内容自相矛盾）
+            replyTotal.value = Math.max(0, replyTotal.value - 1)
             const t = topic.value
             if (t != null) {
                 t.replies_count = Math.max(0, t.replies_count - 1)
@@ -363,9 +439,12 @@ export function useTopicDetail() : UseTopicDetailResult {
         }
     }
 
-    /** 回复提交成功后的列表侧变更（composer 经回调注入，避免反向下钻） */
+    /** 回复提交成功后的列表侧变更（composer 经回调注入，避免反向下钻）
+     *  分页后（ADR-0042）本地新回复不在服务端任何一页的窗口里，故本地追加并同步 total；
+     *  loadMoreReplies 的 id 去重保证翻页时不会把同一条再渲染一次。 */
     function afterReplyPosted(reply : ForumReply) : void {
         replies.value.push(reply)
+        replyTotal.value = replyTotal.value + 1
         const t = topic.value
         if (t != null) {
             t.replies_count = t.replies_count + 1
@@ -398,6 +477,9 @@ export function useTopicDetail() : UseTopicDetailResult {
             // 以服务端返回为准回填
             t.accepted_reply_id = result.accepted_reply_id
             t.status = result.status
+            // 置顶是**后端事实**（ADR-0042）：本地翻 is_accepted 改不了位置，会让「已采纳」
+            // 停在原位、与「恒占首页第一条」自相矛盾 ⇒ 重载第 1 页取回服务端顺序（对齐 Web）
+            await loadDetail()
         } catch (e) {
             // 回滚
             replies.value = oldReplies
@@ -426,6 +508,8 @@ export function useTopicDetail() : UseTopicDetailResult {
             const result = await cancelAcceptApi(t.id)
             t.accepted_reply_id = result.accepted_reply_id
             t.status = result.status
+            // 同 onAcceptReply：取消采纳后该条回到自然排序位置，只能由后端重排 ⇒ 重载第 1 页
+            await loadDetail()
         } catch (e) {
             // 回滚
             replies.value = oldReplies
@@ -436,6 +520,7 @@ export function useTopicDetail() : UseTopicDetailResult {
     }
 
     // ===== 回复排序 =====
+    // 切维度一律经 loadDetail()：它把页码重置回第 1 页并替换列表（沿用列表页既有惯例，ADR-0042）
     function onReplySortFieldChange(field : string) : void {
         if (replySortField.value === field) return
         replySortField.value = field
@@ -455,6 +540,12 @@ export function useTopicDetail() : UseTopicDetailResult {
         loading: loading,
         replySortField: replySortField,
         replySortOrder: replySortOrder,
+        replyPage: replyPage,
+        replyTotal: replyTotal,
+        hasMoreReplies: hasMoreReplies,
+        loadingMore: loadingMore,
+        remainingReplies: remainingReplies,
+        loadMoreReplies: () => loadMoreReplies(),
         canDelete: canDelete,
         canEdit: canEdit,
         currentUserId: currentUserId,
