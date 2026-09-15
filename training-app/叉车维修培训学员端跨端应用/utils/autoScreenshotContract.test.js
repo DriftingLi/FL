@@ -25,6 +25,10 @@
  *   S14 【2026-09-15】**改动页推导的路径形状**：两条 git 调用都必须 `--relative`，输出必须过
  *       `ConvertFrom-GitQuotedPath`（否则仓库根相对 + quotepath 转义 ⇒ `^pages/` 恒失配 ⇒ 推导恒 0 页，
  *       步骤 6 必然报「无改动页面」⇒ HashConflicts / TargetPages 永远取不到真值）
+ *   S15 【2026-09-15】**切页派发必须分离**：不得再出现前台同步调用那个永不收口的真运行 cli
+ *       （实测 18 分钟挂住），必须走 `UseShellExecute` 新进程树 + 有界落定判据 + fail-closed 出口
+ *   S16 【2026-09-15】`Wait-NavSettled` 必须**有界**：同时有「等满 MinSeconds 且连续采样一致 ⇒ 落定」
+ *       与「到 TimeoutSeconds ⇒ 未落定」两条出口，并以 `Settled` 布尔回报
  */
 const fs = require('fs');
 const path = require('path');
@@ -63,8 +67,12 @@ describe('auto-screenshot.ps1 contract', () => {
 
   test('S5: 【文本层】navigates via HBuilderX CLI --pagePath (not am start deep link)', () => {
     expect(src).toContain('--pagePath');
-    // 必须是**真的调用** cli（`& $CliPath …`），只出现路径字符串会被注释满足
-    expect(src).toMatch(/&\s*\$CliPath/);
+    // 2026-09-15：导航改**分离派发**（Start-NavLaunchDetached）后，正向判据**不能再吃注释里的 `& $CliPath`**
+    //   （旧写法只会被自己文档注释满足 —— 假通过）。改成钉两件事：
+    //     ① 派发调用真的把 `$CliPath` 传进去；② 仍不允许退回 `am start` 深链（实测不生效，见 S5 原意）。
+    const code = src.replace(/<#[\s\S]*?#>/g, '').replace(/^\s*#.*$/gm, '');
+    expect(code).toMatch(/Start-NavLaunchDetached[^\r\n]*-CliExe\s+\$CliPath/);
+    expect(code).not.toMatch(/am\s+start/);
   });
 
   test('S6: SHA256 anti-false-green (identical consecutive hashes ⇒ navigation failed)', () => {
@@ -154,5 +162,41 @@ describe('auto-screenshot.ps1 contract', () => {
     // 正例：输出必须过解码器，且解码器来自唯一真源（不在此另抄一份实现）
     expect(block).toMatch(/ConvertFrom-GitQuotedPath/);
     expect(block).toMatch(/level-detect\.ps1/);
+  });
+
+  // S15（2026-09-15）：切页派发**必须分离**。
+  //   症状：先前是 `& $CliPath @launchArgs 2>&1 | Out-String` —— 前台同步等待一个**永不自己收口**的
+  //   真运行会话（实测存活 18 分钟、CPU 0.08 秒）⇒ 步骤 6 永久挂住，截图不落盘，
+  //   HashConflicts / TargetPages 永远算不出来。
+  //   ⚠️ 反向断言必须**先剥注释**：脚本与本文件的注释里都会引用旧形态（本仓血账：注释会命中断言）。
+  test('S15: 【2026-09-15】navigation dispatch is detached (no foreground sync call)', () => {
+    const code = src.replace(/<#[\s\S]*?#>/g, '').replace(/^\s*#.*$/gm, '');
+    expect(code).not.toMatch(/&\s*\$CliPath\s*@launchArgs/);
+    expect(code).not.toMatch(/\$CliPath\s*@launchArgs[^\r\n]*\|\s*Out-String/);
+
+    // 必须走「新进程树」派发（与 hx-run.ps1 同一套）
+    expect(code).toMatch(/Start-NavLaunchDetached/);
+    expect(src).toContain('UseShellExecute');
+
+    // 必须有有界的落定判据，且未落定时 fail-closed（记 Skipped 且不产截图）
+    expect(src).toMatch(/Wait-NavSettled/);
+    expect(src).toMatch(/NavigateTimeoutSeconds/);
+    const navAt = src.indexOf('if (-not $settle.Settled)');
+    expect(navAt).toBeGreaterThan(-1);
+    const navBlock = src.slice(navAt, navAt + 400);
+    expect(navBlock).toMatch(/\$skipped\s*\+=/);
+    expect(navBlock).toMatch(/continue/);
+  });
+
+  // S16（2026-09-15）：落定判据必须**有界**，且有明确的布尔回报（否则调用方又会退化成「无限等」）。
+  test('S16: 【2026-09-15】Wait-NavSettled is bounded and reports a Settled flag', () => {
+    const fnAt = src.indexOf('function Wait-NavSettled');
+    expect(fnAt).toBeGreaterThan(-1);
+    expect(src).toMatch(/Settled\s*=\s*\$true/);
+    expect(src).toMatch(/Settled\s*=\s*\$false/);
+    // 两条出口：等满 MinSeconds 且连续采样一致 / 到 TimeoutSeconds
+    expect(src).toMatch(/\$elapsed\s*-ge\s*\$MinSeconds/);
+    expect(src).toMatch(/\$elapsed\s*-ge\s*\$TimeoutSeconds/);
+    expect(src).toMatch(/\$stable\s*-ge\s*1/);
   });
 });
