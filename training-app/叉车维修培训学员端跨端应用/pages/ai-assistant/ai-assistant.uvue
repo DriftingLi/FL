@@ -49,6 +49,14 @@
 		<!-- 底部输入区（专业版带模型选择器） -->
 		<AiChatInput :show-model-bar="proUnlocked" :model-name="currentModelName" :model-readonly="!proUnlocked" :show-image-button="proUnlocked" @send="onInputSend" @model-click="onModelBarClick" @voice-click="onVoiceClick" @image-click="onImageClick" />
 
+		<!-- 功能入口悬浮按钮（#998 剩余部分）：有对话后宫格被顶出视口，此入口保证随时可达。
+		     `messages.length > 0` 是刻意判据 —— 无对话时宫格本就在首屏，若常驻则是**同一功能两个入口**。
+		     形态照 pages/mall/components/mall-float-actions.uvue 的既有悬浮范式（fixed + 白底圆角 + 阴影）。 -->
+		<view v-if="messages.length > 0" class="func-fab" @click="showFunctionSheet = true">
+			<text class="func-fab-icon">&#129513;</text>
+			<text class="func-fab-label">功能</text>
+		</view>
+
 		<!-- 左侧会话抽屉 -->
 		<AiChatDrawerLeft :visible="sidebarLeft" :sessions="sessions" :current-session-id="currentSession?.id ?? 0" :status-bar-height="statusBarHeight" @close="sidebarLeft = false" @new-chat="onNewChat" @select="onSelectSession" @delete="onDeleteSession" />
 
@@ -63,6 +71,10 @@
 
 		<!-- 专业版能力清单 / 兑换（半屏 sheet，ADR-0009 决策 4） -->
 		<AiChatProSheet :visible="showProSheet" :unlocked="proUnlocked" :price="proPrice" :balance="proBalance" :degraded="proDegraded" :redeeming="proRedeeming" @close="showProSheet = false" @redeem="onRedeemAiPro" @earn="onGoEarnPoints" />
+
+		<!-- 功能入口半屏 sheet（#998）：items 传**同一份** functionItems（= FUNCTION_ITEMS），
+		     不另立清单；选中后回到首屏宫格同一条发送路径。 -->
+		<AiChatFunctionSheet :visible="showFunctionSheet" :items="functionItems" @close="showFunctionSheet = false" @select="onFunctionEntrySelect" />
 	</view>
 </template>
 
@@ -92,6 +104,7 @@
 	import AiChatModelPicker from '../../components/ai-chat/ai-chat-model-picker.uvue'
 	import AiChatCustomForm from '../../components/ai-chat/ai-chat-custom-form.uvue'
 	import AiChatProSheet from '../../components/ai-chat/ai-chat-pro-sheet.uvue'
+	import AiChatFunctionSheet from '../../components/ai-chat/ai-chat-function-sheet.uvue'
 
 
 	const auth = useAuthStore()
@@ -193,6 +206,10 @@
 	// 空串 = 通用对话（后端按通用助手计费）。
 	// 只影响**本轮对话**，不影响建会话：会话按功能键分区，而列表不查专项区（见 api/aiAssistant.uts）。
 	const pendingFeatureKey = ref<string>('')
+
+	// 功能入口悬浮 sheet 的开关（#998）：有对话后 5 宫格被顶出视口，由悬浮按钮唤起本 sheet 承载
+	// **同一组**入口（不新增清单、不新增发送路径 —— 见 onFunctionEntrySelect）。
+	const showFunctionSheet = ref<boolean>(false)
 
 	// 根容器高度（#998）：与 ai-settings.uvue 同款，给根节点一个确定高度；onLoad 里赋值。
 	const pageHeight = ref<number>(0)
@@ -355,6 +372,13 @@
 	function onFunctionClick(item : AIFunctionItem) : void {
 		pendingFeatureKey.value = item.featureKey ?? ''
 		sendText(item.prompt)
+	}
+
+	// 悬浮入口（#998）：与首屏宫格**共用** onFunctionClick —— 刻意不新增第二条发送路径。
+	// 两条路径必然漂移（一条带功能键、一条不带），那正是 #999 那类「静默失效」的温床。
+	function onFunctionEntrySelect(item : AIFunctionItem) : void {
+		showFunctionSheet.value = false
+		onFunctionClick(item)
 	}
 
 	// 持久化设置
@@ -722,6 +746,38 @@
 
 	.pro-go-unlocked {
 		background-color: #2e9e5b;
+	}
+
+	/* 功能入口悬浮按钮（#998）。
+	   bottom 必须避开输入区：.input-card 的高度 = padding-top 20 + .input-top 72 + .input-bottom
+	   (margin-top 8 + .action-btn 64) + padding-bottom 14 = 178rpx，加卡片上下 margin 12+12 = 202rpx
+	   （逐条见 components/ai-chat/ai-chat-input.uvue:72-107,148-156）⇒ 取 240rpx，留 38rpx 余量。
+	   该值与「必须避开输入区」由 utils/aiFunctionEntryContract.test.js 守护。
+	   z-index 100 < sheet 的 300/301 ⇒ 开 sheet 时被遮罩覆盖，不会浮在 sheet 之上。 */
+	.func-fab {
+		position: fixed;
+		right: 24rpx;
+		bottom: 240rpx;
+		width: 80rpx;
+		height: 100rpx;
+		border-radius: 40rpx;
+		background-color: #ffffff;
+		align-items: center;
+		justify-content: center;
+		flex-direction: column;
+		padding-top: 8rpx;
+		box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.15);
+		z-index: 100;
+	}
+
+	.func-fab-icon {
+		font-size: 32rpx;
+	}
+
+	.func-fab-label {
+		font-size: 20rpx;
+		color: #666666;
+		margin-top: 4rpx;
 	}
 
 </style>

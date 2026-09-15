@@ -1,0 +1,129 @@
+<template>
+	<!-- 功能入口半屏 sheet（#998）：有对话后 5 宫格被顶出视口，由悬浮按钮唤起本 sheet 承载同一组入口。
+	     ⚠️ 样式隔离（manifest.json `styleIsolationVersion: "2"`）⇒ 宫格样式**必须自带**，不能复用页面
+	     的 `.function-grid` 等 class。两者的一致性由 utils/aiFunctionEntryContract.test.js 守护。 -->
+	<view v-if="visible" class="func-sheet-mask" @click="onMaskClick"></view>
+	<view v-if="visible" class="func-sheet">
+		<view class="func-sheet-head">
+			<text class="func-sheet-title">功能入口</text>
+			<text class="func-sheet-close" @click="onMaskClick">&#10005;</text>
+		</view>
+		<view class="func-grid">
+			<view v-for="(item, idx) in items" :key="idx" class="func-item" @click="onSelect(item)">
+				<view class="func-icon-box">
+					<image v-if="item.iconPath && item.iconPath.length > 0" class="func-icon-img" :src="item.iconPath" mode="aspectFit" />
+					<text v-else class="func-icon-emoji">{{ item.icon }}</text>
+				</view>
+				<text class="func-title">{{ item.title }}</text>
+			</view>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	import type { AIFunctionItem } from '../../types/index'
+
+	// items 由调用方传入**同一份** FUNCTION_ITEMS（不得在本组件内另立一份清单：
+	// 两份清单会漂移，且「哪格带功能键」是后端注册表的事实，只应有一个事实源）。
+	withDefaults(defineProps<{
+		visible?: boolean
+		items?: AIFunctionItem[]
+	}>(), {
+		visible: false,
+		items: () => [] as AIFunctionItem[]
+	})
+
+	const emit = defineEmits<{
+		(e: 'close'): void
+		(e: 'select', item: AIFunctionItem): void
+	}>()
+
+	function onMaskClick() : void {
+		emit('close')
+	}
+
+	function onSelect(item : AIFunctionItem) : void {
+		emit('select', item)
+	}
+</script>
+
+<style>
+	/* z-index 与 ai-chat-pro-sheet.uvue 同档（300/301）：同一时刻只会开一个半屏 sheet */
+	.func-sheet-mask {
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background-color: rgba(0, 0, 0, 0.4);
+		z-index: 300;
+	}
+
+	.func-sheet {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background-color: #ffffff;
+		border-top-left-radius: 24rpx;
+		border-top-right-radius: 24rpx;
+		padding: 32rpx;
+		z-index: 301;
+	}
+
+	.func-sheet-head {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 24rpx;
+	}
+
+	.func-sheet-title {
+		font-size: 32rpx;
+		font-weight: bold;
+		color: #333333;
+	}
+
+	.func-sheet-close {
+		font-size: 32rpx;
+		color: #999999;
+		padding-left: 24rpx;
+		padding-right: 8rpx;
+	}
+
+	/* 以下五条与页面 .function-grid / .function-item / .function-icon-box / .function-icon-img /
+	   .function-icon-emoji / .function-title 逐值一致（页面版本见 pages/ai-assistant/ai-assistant.uvue）。
+	   改动任一侧都必须同步另一侧 —— 由契约测试断言两侧逐值相等。 */
+	.func-grid {
+		flex-direction: row;
+		justify-content: space-between;
+	}
+
+	.func-item {
+		align-items: center;
+		width: 19%;
+	}
+
+	.func-icon-box {
+		width: 84rpx;
+		height: 84rpx;
+		align-items: center;
+		justify-content: center;
+		margin-bottom: 10rpx;
+	}
+
+	.func-icon-img {
+		width: 84rpx;
+		height: 84rpx;
+	}
+
+	.func-icon-emoji {
+		font-size: 68rpx;
+	}
+
+	.func-title {
+		font-size: 20rpx;
+		color: #333333;
+		text-align: center;
+	}
+</style>
