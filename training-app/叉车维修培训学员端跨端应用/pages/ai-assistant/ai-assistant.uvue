@@ -232,12 +232,14 @@
 
 	// 发送
 	function onInputSend(text : string) : void {
-		// 功能键**先清空再取走**：它只属于「这一次点击」。放在早退分支之后会漏出去 ——
-		// 点宫格时若恰好还没拿到模型（loadModels 未回）就会 toast 并 return，键却留在 ref 里，
-		// 随后那条**无关**的自由提问／快捷提示语会带着 fault_diagnosis 走诊断通道（且限免不计费）。
+		// 功能键**先取走、再清空**：它只属于「这一次点击」。顺序写反（先清后取）会让每轮都送空键、
+		// 专项通道静默失效（#999 真机实测：featureKey 恒为 ''，诊断通道从未生效）。
+		// 清空必须仍在两条早退守卫**之前**：点宫格时若恰好还没拿到模型（loadModels 未回）就会
+		// toast 并 return，键若留在 ref 里，随后那条**无关**的自由提问／快捷提示语会带着
+		// fault_diagnosis 走诊断通道（且限免不计费）。
 		// 取走即清（不依赖 sendInput 是否真的发出），异常路径也不残留到下一轮。
-		pendingFeatureKey.value = ''
 		const featureKey = pendingFeatureKey.value
+		pendingFeatureKey.value = ''
 		if (models.value.length == 0 && userModels.value.length == 0 && currentModelSource.value != 'custom') {
 			uni.showToast({ title: '暂无可用的 AI 模型', icon: 'none' })
 			return
