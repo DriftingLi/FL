@@ -77,7 +77,7 @@ var routeRegistrars = []routeRegistrar{
 	{
 		Domain: "论坛与打卡",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
-			RegisterForumRoutes(api, rd, deps.ForumSvc, deps.ForumImageSvc)
+			RegisterForumRoutes(api, rd, deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
 			RegisterCheckInRoutes(api, rd, deps.CheckInSvc)
 		},
 	},

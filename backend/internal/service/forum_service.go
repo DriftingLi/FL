@@ -1,5 +1,7 @@
 // Package service 实现业务服务层。
-// 本文件：学员端论坛（综合讨论区 + 章节讨论区，支持回复别人的回复，图文分离发图）。
+// 本文件：学员端论坛（综合讨论区 + 章节讨论区，支持回复别人的回复，图文分离发图）——
+// 学员交互 + 个人集合。管理端治理动作（举报处置 / 意图认定 / 强删与违规回收）在
+// forum_moderation_service.go；共享依赖与私有 helper 在 forum_core.go（ADR-0050 决策 3）。
 package service
 
 import (
@@ -206,20 +208,12 @@ type ForumLikeResultDTO struct {
 	LikesCount int64 `json:"likes_count"`
 }
 
-// ForumService 论坛服务。
+// ForumService 论坛服务（学员交互 + 个人集合，ADR-0050 决策 3）。
+//
+// 治理动作（举报处置 / 意图认定 / 管理端强制删除与违规回收）在 ForumModerationService
+// （forum_moderation_service.go）；两者共享 forumCore 的依赖与私有 helper，实例分离。
 type ForumService struct {
-	db              *gorm.DB
-	fileSvc         *FileStore
-	notificationSvc *NotificationService
-	counters        ForumCounter // 计数列唯一写入口（spec #297）
-	// points 积分簿记通道（ADR-0023 forum 收编）：采纳奖励与违规回收经其事务内
-	// 导出方法落账，forum 内不再直写积分流水/余额；依赖方向 forum→points 单向无环。
-	// rewards 奖励政策 module（ADR-0047 §3 / spec #927）：发放、回收与发放事实判定的
-	// 唯一实现处；论坛 service 只声明「发生了什么事实」，不再内联防刷与幂等判定。
-	// 积分簿记通道由本 module 持有（forum service 自身不再直接依赖 points）。
-	rewards *forumRewardPolicy
-
-	logger *zap.Logger
+	forumCore
 }
 
 // NewForumService 构造论坛服务。
@@ -228,8 +222,7 @@ type ForumService struct {
 // counters 为 likes_count / reply_count 唯一写入口（与 AuthService 共享同一实例）；
 // points 为积分簿记通道（采纳奖励/违规回收经其事务内导出方法落账，ADR-0023）。
 func NewForumService(db *gorm.DB, fileSvc *FileStore, notificationSvc *NotificationService, counters ForumCounter, points *PointsService, logger *zap.Logger) *ForumService {
-	return &ForumService{db: db, fileSvc: fileSvc, notificationSvc: notificationSvc, counters: counters,
-		rewards: newForumRewardPolicy(points, notificationSvc), logger: logger}
+	return &ForumService{forumCore: newForumCore(db, fileSvc, notificationSvc, counters, points, logger)}
 }
 
 // topicRow 列表查询的扫描结构。
@@ -1063,55 +1056,6 @@ func (s *ForumService) DeleteTopic(userID int, topicID int64) error {
 	return s.deleteTopicWithImages(topicID)
 }
 
-// AdminDeleteTopic 管理员删除任意主题（不校验作者）。图片一并清理；站内信通知作者。
-// 若该帖产生过任一直记奖励（被采纳 / 采纳动作 / 认定），则按 rollback 原因写对冲流水并扣减余额
-// （封底 0，幂等，按 user_id 分组各自追回）。
-func (s *ForumService) AdminDeleteTopic(topicID int64) error {
-	var topic model.ForumTopic
-	if err := s.db.First(&topic, topicID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrTopicNotFound
-		}
-		return err
-	}
-	// 先收集图片（需在删除前读取）
-	urls := []string{}
-	// 复用 deleteTopicWithImages 的图片收集逻辑，但在此处先做以便事务外清理
-	var rawTopic model.ForumTopic
-	_ = s.db.First(&rawTopic, topicID).Error
-	if rawTopic.ID != 0 {
-		urls = append(urls, parseImageURLs(string(rawTopic.Images))...)
-		var replyImages []string
-		_ = s.db.Model(&model.ForumReply{}).Where("topic_id = ?", topicID).Pluck("images", &replyImages).Error
-		for _, raw := range replyImages {
-			urls = append(urls, parseImageURLs(raw)...)
-		}
-	}
-	// 事务内：删帖 + 违规回收（复用封底 0 语义）
-	err := s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Delete(&model.ForumTopic{}, topicID).Error; err != nil {
-			return err
-		}
-		// 违规回收（ADR-0041）：触发条件是「该帖存在任一正向直记奖励」，而不是「曾被采纳」——
-		// 否则「加精但未采纳」的帖子（正是备考经验帖的形状）会被整片漏掉。
-		// 范围含答主/楼主/帖主三方，RollbackByRef 内部按 user_id 分组各自追回、封底 0。
-		// 违规回收交给奖励政策 module：触发条件（该帖存在任一正向直记奖励）与回收范围
-		// （全部直记奖励）都在它的 implementation 里判定，无奖励可回收时 no-op。
-		if _, err := s.rewards.Reclaim(tx, topicID); err != nil {
-			return err
-		}
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-	// 清理文件（事务外，尽力而为）
-	s.deleteImages(urls)
-	// 通知作者（尽力而为：内容已删，通知失败不回滚，仅记日志；ADR-0027 C1 收编）
-	s.notificationSvc.TryCreateForumTopicDeletedEvent(NewForumTopicDeletedEvent(topic.UserID, topic.Title))
-	return nil
-}
-
 // deleteTopicWithImages 删除主题前收集主题 + 全部回复（含子回复）的图片并清理存储。
 func (s *ForumService) deleteTopicWithImages(topicID int64) error {
 	var topic model.ForumTopic
@@ -1168,124 +1112,6 @@ func (s *ForumService) DeleteReply(userID int, replyID int64) error {
 		return errors.New("只能删除自己发布的回复")
 	}
 	return s.deleteReplyWithImages(replyID, reply.TopicID)
-}
-
-// AdminDeleteReply 管理员删除任意回复（不校验作者；其下级回复随外键级联删除）。图片一并清理；站内信通知回复作者。
-// 若删的是被采纳的回答，只把主题打回未解决（清 accepted_reply_id/solved_at），**不回收积分**——
-// 奖励处置的唯一出口是 AdminDeleteTopic（见奖励政策 module Reclaim 的 ref 级一次性说明）。
-func (s *ForumService) AdminDeleteReply(replyID int64) error {
-	var reply model.ForumReply
-	if err := s.db.First(&reply, replyID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("回复不存在")
-		}
-		return err
-	}
-	var topic model.ForumTopic
-	if err := s.db.First(&topic, reply.TopicID).Error; err != nil {
-		topic.Title = ""
-	}
-	topicTitle := topic.Title
-	// 若该回复是被采纳的回答，只把主题打回未解决——**不回收奖励**（ADR-0041）。
-	// 理由：RollbackByRef 是 ref 级一次性护栏，这里回收会永久占掉该帖的回收机会，
-	// 之后管理员删整帖时帖主的 featured_bonus 再也追不回。**删帖才是奖励处置的唯一出口**，
-	// 届时答主/楼主/帖主三笔一次全部追回（回收能力最大化）。
-	// solved_at 必须显式清：accepted_reply_id 有 ON DELETE SET NULL 外键兜底，solved_at 没有。
-	if topic.AcceptedReplyID != nil && *topic.AcceptedReplyID == replyID {
-		if err := s.db.Model(&model.ForumTopic{}).Where("id = ?", topic.ID).Updates(map[string]any{
-			"accepted_reply_id": nil,
-			"solved_at":         nil,
-			"updated_at":        beijingNow(),
-		}).Error; err != nil {
-			return err
-		}
-	}
-	if err := s.deleteReplyWithImages(replyID, reply.TopicID); err != nil {
-		return err
-	}
-	// 通知回复作者（尽力而为：内容已删，通知失败不回滚，仅记日志；ADR-0027 C1 收编）
-	s.notificationSvc.TryCreateForumReplyDeletedEvent(NewForumReplyDeletedEvent(reply.UserID, topicTitle, reply.TopicID))
-	return nil
-}
-
-// deleteReplyWithImages 删除回复前收集本回复 + 全部下级回复的图片并清理存储。
-// 下级回复通过 parent_id 递归收集（单表递归 CTE 或逐层查询）。
-func (s *ForumService) deleteReplyWithImages(replyID, topicID int64) error {
-	urls, err := s.collectReplyImages(replyID)
-	if err != nil {
-		return err
-	}
-	if err := s.deleteReplyByID(replyID, topicID); err != nil {
-		return err
-	}
-	s.deleteImages(urls)
-	return nil
-}
-
-// collectReplyImages 收集回复及其全部下级回复（parent_id 链条）的图片 URL。
-func (s *ForumService) collectReplyImages(replyID int64) ([]string, error) {
-	var urls []string
-
-	var self model.ForumReply
-	if err := s.db.First(&self, replyID).Error; err != nil {
-		return nil, err
-	}
-	urls = append(urls, parseImageURLs(string(self.Images))...)
-
-	// BFS 收集下级回复
-	level := []int64{replyID}
-	for len(level) > 0 {
-		var children []model.ForumReply
-		if err := s.db.Where("parent_id IN ?", level).Find(&children).Error; err != nil {
-			return nil, err
-		}
-		if len(children) == 0 {
-			break
-		}
-		level = level[:0]
-		for _, ch := range children {
-			urls = append(urls, parseImageURLs(string(ch.Images))...)
-			level = append(level, ch.ID)
-		}
-	}
-	return urls, nil
-}
-
-// deleteImages 清理图片存储文件（fileSvc 为 nil 时跳过，尽力而为）。
-func (s *ForumService) deleteImages(urls []string) {
-	if s.fileSvc == nil || len(urls) == 0 {
-		return
-	}
-	s.fileSvc.DeleteFiles(urls)
-}
-
-// deleteReplyByID 删除回复并回扣主题回复数、刷新最后回复时间。
-// 回扣量取回复子树大小 N（parent_id 链，含自身）：外键 ON DELETE CASCADE 会连带删除全部下级回复，
-// 固定 -1 会让楼中楼场景计数虚高（spec #297 级联少减修复）。
-func (s *ForumService) deleteReplyByID(replyID, topicID int64) error {
-	return s.db.Transaction(func(tx *gorm.DB) error {
-		n, err := countReplySubtree(tx, replyID)
-		if err != nil {
-			return err
-		}
-		if err := tx.Delete(&model.ForumReply{}, replyID).Error; err != nil {
-			return err
-		}
-		if err := s.counters.AdjustReplyCounts(tx, topicID, -int(n)); err != nil {
-			return err
-		}
-		var last model.ForumReply
-		if err := tx.Where("topic_id = ?", topicID).Order("created_at DESC, id DESC").
-			Limit(1).Find(&last).Error; err != nil {
-			return err
-		}
-		var lastAt *time.Time
-		if last.ID > 0 {
-			lastAt = &last.CreatedAt
-		}
-		return tx.Model(&model.ForumTopic{}).Where("id = ?", topicID).
-			Update("last_reply_at", lastAt).Error
-	})
 }
 
 // countReplySubtree 统计回复子树大小（parent_id 链，含自身），递归 CTE 双方言兼容（PG/SQLite）。
@@ -1399,35 +1225,6 @@ func (s *ForumService) topicLikesCount(topicID int64) int64 {
 	return n
 }
 
-// enrichTopicLikedByMe 批量回填主题是否已赞（计数已由 likes_count 列提供，LikedByMe 单一 helper 收敛）。
-func (s *ForumService) enrichTopicLikedByMe(topics []*ForumTopicDTO, viewerID int) {
-	if len(topics) == 0 || viewerID <= 0 {
-		return
-	}
-	ids := make([]int64, 0, len(topics))
-	for _, t := range topics {
-		if t != nil {
-			ids = append(ids, t.ID)
-		}
-	}
-	if len(ids) == 0 {
-		return
-	}
-	var liked []int64
-	if err := s.db.Model(&model.ForumTopicLike{}).Where("user_id = ? AND topic_id IN ?", viewerID, ids).Pluck("topic_id", &liked).Error; err != nil {
-		return
-	}
-	lm := make(map[int64]bool, len(liked))
-	for _, id := range liked {
-		lm[id] = true
-	}
-	for _, t := range topics {
-		if t != nil {
-			t.LikedByMe = lm[t.ID]
-		}
-	}
-}
-
 // toDTORefs 将 ForumTopicDTO 值切片转为指针切片，供 enrich helpers 修改原切片元素。
 func toDTORefs(items []ForumTopicDTO) []*ForumTopicDTO {
 	refs := make([]*ForumTopicDTO, len(items))
@@ -1486,104 +1283,6 @@ func (s *ForumService) CreateReport(userID int, topicID, replyID *int64, reason 
 		ReporterID: userID, TopicID: topicID, ReplyID: replyID,
 		Reason: reason, Status: 0, CreatedAt: beijingNow(),
 	}).Error
-}
-
-// ForumReportDTO 管理端举报条目。
-type ForumReportDTO struct {
-	ID         int64  `json:"id"`
-	ReporterID int    `json:"reporter_id"`
-	Reporter   string `json:"reporter"`
-	TopicID    *int64 `json:"topic_id,omitempty" extensions:"x-optional"`
-	TopicTitle string `json:"topic_title"`
-	ReplyID    *int64 `json:"reply_id,omitempty" extensions:"x-optional"`
-	Reason     string `json:"reason"`
-	Status     int16  `json:"status"`
-	CreatedAt  string `json:"created_at"`
-}
-
-// ForumReportPageResult 举报分页结果。
-type ForumReportPageResult struct {
-	Page    int              `json:"page"`
-	Pages   int              `json:"pages"`
-	Total   int64            `json:"total"`
-	Reports []ForumReportDTO `json:"reports"`
-}
-
-// ListReports 管理端举报列表（status: nil 全部 / 0 待处理 / 1 已处理）。
-func (s *ForumService) ListReports(page, pageSize int, status *int16) (*ForumReportPageResult, error) {
-	type reportRow struct {
-		ID         int64
-		ReporterID int
-		Reporter   string
-		TopicID    *int64
-		TopicTitle string
-		ReplyID    *int64
-		Reason     string
-		Status     int16
-		CreatedAt  time.Time
-	}
-	rows, total, page, pageSize := paging.QueryWithScan[reportRow](s.db, page, pageSize, 20, 100,
-		"r.created_at DESC, r.id DESC",
-		func(q *gorm.DB) *gorm.DB {
-			q = q.Table("forum_report AS r").
-				Select("r.id, r.reporter_id, r.topic_id, r.reply_id, r.reason, r.status, r.created_at, " +
-					"COALESCE(u.username, '') AS reporter, COALESCE(t.title, '') AS topic_title").
-				Joins("LEFT JOIN hrwai_users AS u ON u.id = r.reporter_id").
-				Joins("LEFT JOIN forum_topics AS t ON t.id = r.topic_id")
-			if status != nil {
-				q = q.Where("r.status = ?", *status)
-			}
-			return q
-		})
-	items := make([]ForumReportDTO, 0, len(rows))
-	for _, r := range rows {
-		items = append(items, ForumReportDTO{
-			ID: r.ID, ReporterID: r.ReporterID, Reporter: r.Reporter,
-			TopicID: r.TopicID, TopicTitle: r.TopicTitle, ReplyID: r.ReplyID,
-			Reason: r.Reason, Status: r.Status, CreatedAt: formatISO(r.CreatedAt),
-		})
-	}
-	return &ForumReportPageResult{
-		Page: page, Pages: response.PageCount(total, pageSize),
-		Total: total, Reports: items,
-	}, nil
-}
-
-// HandleReport 管理端处理举报（status: 0 待处理 / 1 已处理）；标记已处理时站内信通知举报人。
-func (s *ForumService) HandleReport(reportID int64, status int16) error {
-	if status != 0 && status != 1 {
-		return errors.New("状态仅支持 0（待处理）/ 1（已处理）")
-	}
-	var report model.ForumReport
-	if err := s.db.First(&report, reportID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("举报不存在")
-		}
-		return err
-	}
-	if err := s.db.Model(&model.ForumReport{}).Where("id = ?", reportID).
-		Update("status", status).Error; err != nil {
-		return err
-	}
-	// 待处理 → 已处理时通知举报人（重复标记不重复通知；尽力而为，失败仅记日志）
-	if status == 1 && report.Status != 1 {
-		s.notifyReportHandled(&report)
-	}
-	return nil
-}
-
-// notifyReportHandled 举报处理完成站内信。举报对象可能已被删除：
-// 主题已删时降级文案（不带标题与链接）；文案/链接/payload 由事件构造器单点（ADR-0027 C1）。
-func (s *ForumService) notifyReportHandled(report *model.ForumReport) {
-	topicID := report.TopicID
-	topicTitle := ""
-	if report.TopicID != nil {
-		var topic model.ForumTopic
-		if err := s.db.Select("title").First(&topic, *report.TopicID).Error; err == nil {
-			topicTitle = topic.Title
-		}
-	}
-	s.notificationSvc.TryCreateForumReportHandledEvent(NewForumReportHandledEvent(report.ReporterID, report.ReplyID != nil, topicID, topicTitle))
 }
 
 // MyTopics 我的帖子（复用主题列表行装配，按最后活跃倒序）。
@@ -1933,185 +1632,4 @@ func (s *ForumService) CancelAccept(userID int, topicID int64) (*ForumTopicDTO, 
 		return nil, err
 	}
 	return s.fetchTopicDTO(topicID, userID)
-}
-
-// DesignateExperience 管理端认定「备考经验」（ADR-0040）。
-//
-// 一个认定动作同时置 is_experience 与 is_featured（经验蕴含精选，库层 CHECK 兜底），
-// 并按「认定奖励每帖一次」发 +30 —— 与加精共用同一条流水，故先加精后认定不会重复发分
-// （奖励政策 module 的发放事实判定短路），先认定后加精亦然。
-// 状态已一致时幂等短路（重复认定不发分不改状态）。
-func (s *ForumService) DesignateExperience(topicID int64) (*ForumTopicDTO, error) {
-	var topic model.ForumTopic
-	if err := s.db.First(&topic, topicID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrTopicNotFound
-		}
-		return nil, err
-	}
-	if topic.IsExperience {
-		return s.fetchTopicDTO(topicID, 0)
-	}
-	// 已采纳的帖不可被认定为经验（与 AcceptReply 的守卫互为镜像，二者缺一即有漏洞）：
-	// 逃生口是先取消采纳。库层 CHECK 兜底见迁移 000028。
-	// 只判「是否有采纳指针」而非意图——同一条规则也兜住历史遗留的悬挂行。
-	if topic.AcceptedReplyID != nil {
-		return nil, errors.New("已采纳的帖子不可认定为备考经验，请先取消采纳")
-	}
-	now := beijingNow()
-	err := s.db.Transaction(func(tx *gorm.DB) error {
-		// CAS：认定与精选一并置位（两者必须同进，否则撞蕴含 CHECK）。
-		// WHERE is_experience = false 保证并发下只有先胜者发分。
-		res := tx.Model(&model.ForumTopic{}).
-			Where("id = ? AND is_experience = ?", topicID, false).
-			Updates(map[string]any{
-				"is_experience": true,
-				"is_featured":   true,
-				"updated_at":    now,
-			})
-		if res.Error != nil {
-			return res.Error
-		}
-		if res.RowsAffected == 0 {
-			return nil // 并发抢认定：由先胜者完成副作用
-		}
-		return s.rewards.Award(tx, forumRewardFact{
-			Kind: forumRewardDesignation, TopicID: topic.ID, TopicTitle: topic.Title,
-			TopicOwner: topic.UserID, Designation: DesignationExperience, At: now,
-		})
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.fetchTopicDTO(topicID, 0)
-}
-
-// RevokeExperience 管理端取消经验认定（ADR-0040）：只撤 is_experience，
-// **保留精选位**（撤的是归类不是质量认可，管理员可继续让它挂着精选）；已发分不回滚
-// （与撤精同政策：认定动作不是违规，回滚会让管理员不敢认定）。
-// 状态已一致时幂等短路。
-func (s *ForumService) RevokeExperience(topicID int64) (*ForumTopicDTO, error) {
-	var topic model.ForumTopic
-	if err := s.db.First(&topic, topicID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrTopicNotFound
-		}
-		return nil, err
-	}
-	if !topic.IsExperience {
-		return s.fetchTopicDTO(topicID, 0)
-	}
-	// CAS：只改 is_experience，is_featured 原样保留（不写它，避免覆盖并发下的精选变更）
-	if err := s.db.Model(&model.ForumTopic{}).
-		Where("id = ? AND is_experience = ?", topicID, true).
-		Updates(map[string]any{"is_experience": false, "updated_at": beijingNow()}).Error; err != nil {
-		return nil, err
-	}
-	return s.fetchTopicDTO(topicID, 0)
-}
-
-// SetFeatured 管理端设置精选位（#742，全类别可用）。
-//
-// featured=true 且发生状态迁移时，同事务给帖主一次性直记 featured_bonus +30
-// （幂等键 featured_bonus:{topicID} + 流水存在判定双保险，取消重精不重复发分，
-// 沿用 accepted_bonus 同模式）；featured=false 只改状态，已发分不回滚。
-// 状态已一致时幂等短路，不触发任何副作用。
-func (s *ForumService) SetFeatured(topicID int64, featured bool) (*ForumTopicDTO, error) {
-	var topic model.ForumTopic
-	if err := s.db.First(&topic, topicID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrTopicNotFound
-		}
-		return nil, err
-	}
-	// 经验帖蕴含精选（库层 CHECK 兜底）：直接撤精会撞 CHECK，或留下「经验但非精选」的悬挂态。
-	// 逃生口是「先取消经验认定」——文案与 #811「已采纳的问答帖不能改类别，请先取消采纳」同构。
-	// 判定按认定事实（IsExperience），与意图 Category 无关。
-	if !featured && topic.IsExperience {
-		return nil, errors.New("备考经验帖蕴含精选位，请先取消经验认定")
-	}
-	if topic.IsFeatured == featured {
-		// 幂等：状态已一致（重复加精/重复取消），不发分不改状态
-		return s.fetchTopicDTO(topicID, 0)
-	}
-	now := beijingNow()
-	err := s.db.Transaction(func(tx *gorm.DB) error {
-		// CAS：仅当状态仍为旧值时写入，并发下先胜者负责发分
-		res := tx.Model(&model.ForumTopic{}).
-			Where("id = ? AND is_featured = ?", topicID, !featured).
-			Update("is_featured", featured)
-		if res.Error != nil {
-			return res.Error
-		}
-		if res.RowsAffected == 0 {
-			return nil // 并发抢改：由先胜者完成副作用
-		}
-		if !featured {
-			return nil // 取消精选只改状态，已发分不回滚
-		}
-		// 认定奖励与「认定备考经验」共用同一实现：每帖只发一次，先认定后加精不重复发分。
-		return s.rewards.Award(tx, forumRewardFact{
-			Kind: forumRewardDesignation, TopicID: topic.ID, TopicTitle: topic.Title,
-			TopicOwner: topic.UserID, Designation: DesignationFeatured, At: now,
-		})
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.fetchTopicDTO(topicID, 0)
-}
-
-// fetchTopicDTO 查询主题 DTO（用于采纳后回显，复用 topicRow 装配，不累浏览量）。
-func (s *ForumService) fetchTopicDTO(topicID int64, viewerID int) (*ForumTopicDTO, error) {
-	var row topicRow
-	err := s.db.Table("forum_topics AS t").
-		Select(topicRowSelect+
-			"u.id AS user_id, u.username, u.avatar_url, "+
-			"COALESCE(ch.title, '') AS chapter_title").
-		Joins("JOIN hrwai_users AS u ON u.id = t.user_id").
-		Joins("LEFT JOIN chapter AS ch ON ch.chapter_id = t.chapter_id").
-		Where("t.id = ?", topicID).
-		Scan(&row).Error
-	if err != nil {
-		return nil, err
-	}
-	if row.ID == 0 {
-		return nil, gorm.ErrRecordNotFound
-	}
-	dto := row.toDTO(viewerID)
-	// 点赞回填保持与详情一致（尽力而为）
-	s.enrichTopicLikedByMe([]*ForumTopicDTO{&dto}, viewerID)
-	if s.hasRewardIssued(topicID) {
-		dto.RewardIssued = true
-	}
-	return &dto, nil
-}
-
-// enrichRewardIssued 批量回填 reward_issued（#367）。
-//
-// 判据（该帖的**采纳奖励**是否已发放）与查询实现都在奖励政策 module 里，与写入侧
-// 共用同一份 reason 集合——两处实现漂移过一次就是 bug，故收成单点。
-func (s *ForumService) enrichRewardIssued(items []ForumTopicDTO) {
-	if len(items) == 0 {
-		return
-	}
-	ids := make([]int64, 0, len(items))
-	seen := make(map[int64]struct{}, len(items))
-	for _, t := range items {
-		if _, ok := seen[t.ID]; !ok {
-			seen[t.ID] = struct{}{}
-			ids = append(ids, t.ID)
-		}
-	}
-	issued := s.rewards.AcceptRewardIssued(s.db, ids)
-	for i := range items {
-		if issued[items[i].ID] {
-			items[i].RewardIssued = true
-		}
-	}
-}
-
-// hasRewardIssued 单条查询：该帖的采纳奖励是否已发放（与 enrichRewardIssued 同口径）。
-func (s *ForumService) hasRewardIssued(topicID int64) bool {
-	return s.rewards.AcceptRewardIssued(s.db, []int64{topicID})[topicID]
 }

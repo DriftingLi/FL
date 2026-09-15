@@ -74,7 +74,7 @@ func TestForumContentFormatContract(t *testing.T) {
 	r := gin.New()
 	api := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
-	RegisterForumRoutes(api, deps.RouterDeps(), deps.ForumSvc, deps.ForumImageSvc)
+	RegisterForumRoutes(api, deps.RouterDeps(), deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
 
 	now := testutil.Now()
 	mkUser := func(account, phone, name string) model.HrwaiUser {

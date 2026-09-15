@@ -191,10 +191,6 @@ var contentPartition = partitionSpec[model.FeaturedContent]{
 		return hitField, snippet
 	},
 	assemble: func(r model.FeaturedContent, hitField, snippet string) SearchItemDTO {
-		body := r.Content
-		if body == "" {
-			body = r.Summary
-		}
 		return SearchItemDTO{
 			Type: SearchTypeContent, ID: int64(r.ContentID), Title: r.Title, Cover: r.CoverImage,
 			Summary: snippetOf(r.Summary, 80), Snippet: snippet, HitField: hitField,
