@@ -9,6 +9,9 @@
                 <text class="nav-arrow">▾</text>
             </view>
             <view class="nav-right">
+                <view class="nav-icon-btn" @click="onSearchClick">
+                    <text class="nav-icon-text">🔍</text>
+                </view>
                 <view class="nav-icon-btn" @click="onNotificationClick">
                     <text class="nav-icon-text">🔔</text>
                     <view v-if="unreadCount > 0" class="unread-badge">
@@ -159,6 +162,11 @@
 
     function onNotificationClick() : void {
         uni.navigateTo({ url: '/pages/notifications/notifications' })
+    }
+
+    /** 全局搜索入口（#979 M2：此前只有题库页与商城页能进搜索，dashboard 无入口） */
+    function onSearchClick() : void {
+        uni.navigateTo({ url: '/pages/search/search' })
     }
 
     // 页面显示时刷新数据

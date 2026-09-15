@@ -82,9 +82,11 @@ function menuEntries() {
 }
 
 describe('首页格式契约（对照设计稿截图）', () => {
-  it('顶部导航两个图标必须可见（历史 bug：icon 文本为空导致图标消失）', () => {
+  it('顶部导航三个图标（搜索 / 通知 / 购物车）必须可见（历史 bug：icon 文本为空导致图标消失）', () => {
     const icons = [...template.matchAll(/class="nav-icon-text">([^<]*)</g)].map((m) => m[1]);
-    expect(icons.length).toBe(2);
+    // #979 M2：dashboard 补全局搜索入口，故由 2 变 3
+    expect(icons.length).toBe(3);
+    expect(icons.map((i) => i.trim())).toEqual(['🔍', '🔔', '🛒']);
     for (const icon of icons) {
       expect(icon.trim().length).toBeGreaterThan(0);
     }
