@@ -73,12 +73,44 @@ jobs:
 
               // ② 触发条件（ADR-0008）：命中 MP-WEIXIN 面 —— 条件编译段 / manifest.json / platformConfig.json。
               // （初版实现漏了这条，对任何运行时面 PR 都强制要求第②门，比 ADR 更严；此处对齐 ADR。）
+              //
+              // 2026-09-15 修订（#1030）：初版的第二条是 `(f.patch || '').includes('MP-WEIXIN')` ——
+              // 判的是「改动文本里出现过这个字符串」，与 ADR 的「命中 MP-WEIXIN **面**（交付形态）」不是一回事
+              // （更严），实害有二：① 误报 —— 在 ADR/文档里写「② 免（未命中 MP-WEIXIN 面）」这句话**本身**
+              // 就把门点亮（#1028 实测，改写措辞即消失；同族还有 `utils/useBiometric.test.js` 用字符串断言
+              // `// #ifdef APP || MP-WEIXIN`）；② 反向激励 —— 想不被误报只能**不写**这个术语，而 ADR-0008
+              // 恰恰要求把这类口径写进文档。
+              // 新判据（两条，任一命中即需过 ②）：
+              //   ① 文件清单：training-app 下的 manifest.json / platformConfig.json（不读 diff 文本）；
+              //   ② 运行时面文件（*.uvue / *.uts / 三份 json —— 与 isRuntimeFile 同一判据）的 diff 里
+              //      **增删了一条真正的条件编译指令行**：去掉 +/- 标记后行首（允许 `//` `/*` `<!--` `"` `'`
+              //      注释/键包装）是 `#ifdef|#ifndef|#if`，且**条件表达式**里含 `MP-WEIXIN`
+              //      （`#ifdef APP || MP-WEIXIN` 同算；删除指令行同样算 —— 那也是交付形态变了）。
+              //      表达式**之后**的部分不判：`// #ifdef APP-PLUS // 与 MP-WEIXIN 分支不同` 这类
+              //      「真指令行 + 同行散文提及」不算命中（表达式只允许平台表达式字符）。
+              //      **提到**该术语（.md 正文、*.test.js 的断言字符串、散文提及）一律不算：
+              //      ② 是「交付形态变了」的门，不是「文本里出现了这个词」的门。
+              // 已知边界（写实，本次不收紧）：第 ② 条读 `patch`，而 GitHub 对超大 diff / 二进制**不给** `patch`
+              //   ⇒ 这类文件判不出指令行，该路径 fail-open（与 ④b 当年因此改成文件清单的动机同源；但条件编译段
+              //   天然只能从文本判，改不成文件清单）。收紧（`patch` 缺失即判 needs2）会把改名的 .uvue 也拖进 ②，
+              //   收益不抵成本，故照实记为边界。
               const MP_WEIXIN_FILES = ['manifest.json', 'platformConfig.json'];
-              const needs2 = files.some(
-                (f) =>
-                  (f.filename.startsWith('training-app/') && MP_WEIXIN_FILES.includes(f.filename.split('/').pop())) ||
-                  (f.patch || '').includes('MP-WEIXIN'),
-              );
+              // 指令行判据：`#ifdef|#ifndef|#if` 之后到 `MP-WEIXIN` 之间**只允许平台表达式字符**
+              // （字母数字、空白、`|` `&` `(` `)` `!` `-`）—— 于是「指令行 + 同行散文/注释提及」被排除在外。
+              const MP_WEIXIN_DIRECTIVE = /^\s*(?:\/{2,}|\/\*|<!--|["'])?\s*#\s*(?:ifdef|ifndef|if)\s+[A-Za-z0-9_\s|&()!-]*\bMP-WEIXIN\b/;
+              const hasMpWeixinDirective = (patch) =>
+                String(patch || '')
+                  .split('\n')
+                  // 只看 diff 里**增删的内容行**：`+` / `-` 开头（`+++ b/…` / `--- a/…` 是文件头，不是内容）
+                  .filter((line) => /^[+-]/.test(line) && !/^(?:\+\+\+|---)/.test(line))
+                  .map((line) => line.slice(1))
+                  .some((content) => MP_WEIXIN_DIRECTIVE.test(content));
+              const isMpWeixinJson = (p) =>
+                p.startsWith('training-app/') && MP_WEIXIN_FILES.includes(p.split('/').pop());
+              const hitsMpWeixinFace = (f) =>
+                isMpWeixinJson(f.filename) || (isRuntimeFile(f.filename) && hasMpWeixinDirective(f.patch));
+              const needs2 = files.some(hitsMpWeixinFace);
+              const needs2Why = files.filter(hitsMpWeixinFace).map((f) => f.filename);
 
               const runtime = files.filter((f) => isRuntimeFile(f.filename)).map((f) => f.filename);
               const errors = [];
@@ -362,7 +394,15 @@ jobs:
                   lowRiskRuntime,
                 };
               }
-              if (!needs2) notes.push('未命中 MP-WEIXIN 面（无 MP-WEIXIN 条件编译 / manifest.json / platformConfig.json 改动）→ 第②门免（ADR-0008）。');
+              // ② 的**触发理由**要写在摘要里（#1030 的另一半诉求）：门被点亮时让人一眼看见是**哪个文件**
+              // 命中了 MP-WEIXIN 面，而不是让人去猜/去试措辞（旧判据下唯一「排查手段」是改文档措辞重推）。
+              if (needs2) {
+                notes.push(
+                  `② 触发面命中（MP-WEIXIN 面）：${needs2Why.slice(0, 5).join('、')}${needs2Why.length > 5 ? ' 等' : ''}（低风险运行时面时仍按分层减免）。`,
+                );
+              } else {
+                notes.push('未命中 MP-WEIXIN 面（条件编译段增删 / manifest.json / platformConfig.json 改动）→ 第②门免（ADR-0008）。');
+              }
               if (errors.length === 0) notes.push('证据结构完整（pr-evidence 只校结构，真伪由维护者判定）。');
               // 门证据「绑上但非 sha 相等」（祖先 + 运行时面未变）写成明示说明：不静默放宽
               if (gate4Comment && g4.reason && !/commit == head/.test(g4.reason)) {
