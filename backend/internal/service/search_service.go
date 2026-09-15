@@ -266,8 +266,7 @@ func (s *SearchService) searchItems(searchType, keyword string, page, pageSize i
 func (s *SearchService) searchCourses(keyword, like string, page, pageSize int, cred *int) ([]SearchItemDTO, int64, error) {
 	const titleHit = "LOWER(name) LIKE ? ESCAPE '\\'"
 	bodyHit := "LOWER(description) LIKE ? ESCAPE '\\'"
-	q := s.db.Model(&model.Course{}).
-		Where("status = 1 AND specialty_id IS NOT NULL AND level_id IS NOT NULL").
+	q := MountedCourseScope(s.db.Model(&model.Course{}).Where("status = 1")).
 		Where("("+titleHit+" OR "+bodyHit+")", like, like)
 	if cred != nil {
 		q = q.Where("credential_id = ?", *cred)
@@ -298,8 +297,7 @@ func (s *SearchService) searchChapters(keyword, like string, page, pageSize int,
 	const titleHit = "LOWER(chapter.title) LIKE ? ESCAPE '\\'"
 	contentHit := "LOWER(chapter.content) LIKE ? ESCAPE '\\'"
 	descHit := "LOWER(chapter.description) LIKE ? ESCAPE '\\'"
-	mounted := s.db.Model(&model.Course{}).Select("course_id").
-		Where("status = 1 AND specialty_id IS NOT NULL AND level_id IS NOT NULL")
+	mounted := MountedCourseScope(s.db.Model(&model.Course{}).Select("course_id").Where("status = 1"))
 	if cred != nil {
 		mounted = mounted.Where("credential_id = ?", *cred)
 	}
@@ -340,12 +338,8 @@ func (s *SearchService) searchChapters(keyword, like string, page, pageSize int,
 // searchQuestions 题目分区：只匹配题干（解析与答案**不进**匹配面，ADR-0049「明确不做」）；
 // 走题库池口径（published + 排源标记真题题 + 当前证件）。
 func (s *SearchService) searchQuestions(keyword, like string, page, pageSize int, cred *int) ([]SearchItemDTO, int64, error) {
-	q := s.db.Model(&model.Question{}).
-		Where("status = ? AND LOWER(content) LIKE ? ESCAPE '\\'", "published", like).
-		Where(excludeSourceTagsSQL)
-	if cred != nil {
-		q = q.Where("credential_id = ?", *cred)
-	}
+	q := QuestionPoolScope(s.db.Model(&model.Question{}), cred).
+		Where("LOWER(content) LIKE ? ESCAPE '\\'", like)
 	var total int64
 	if err := q.Count(&total).Error; err != nil {
 		return nil, 0, err

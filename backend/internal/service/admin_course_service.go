@@ -154,7 +154,7 @@ func (s *AdminCourseService) SwapCourseSort(a, b int) error {
 	if err := s.db.First(&cb, b).Error; err != nil {
 		return errors.New("课程不存在")
 	}
-	if !courseMounted(ca.SpecialtyID, ca.LevelID) || !courseMounted(cb.SpecialtyID, cb.LevelID) {
+	if !CourseMounted(ca.SpecialtyID, ca.LevelID) || !CourseMounted(cb.SpecialtyID, cb.LevelID) {
 		return errors.New("未挂载方向/等级的课程不能参与排序")
 	}
 	if *ca.SpecialtyID != *cb.SpecialtyID || *ca.LevelID != *cb.LevelID {

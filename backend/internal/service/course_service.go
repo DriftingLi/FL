@@ -185,20 +185,7 @@ type StudyProgressInput struct {
 	Completed     bool
 }
 
-// ===== 课程挂载不变式（唯一事实源）=====
-//
-// 领域规则：课程必须同时挂专业方向与课程等级才「存在/可见」——
-// 学员端列表与目录树只展示已挂载课程；创建/编辑/排序校验同源（ADR-0006 口径）。
-
-// courseMounted 挂载判定。
-func courseMounted(specialtyID, levelID *int) bool {
-	return specialtyID != nil && levelID != nil
-}
-
-// mountedCourseScope 学员端可见课程查询范围：挂载不变式的 SQL 形态。
-func mountedCourseScope(q *gorm.DB) *gorm.DB {
-	return q.Where("specialty_id IS NOT NULL AND level_id IS NOT NULL")
-}
+// ===== 课程挂载不变式（唯一事实源）见 course_mount_scope.go（ADR-0050 决策 1）=====
 
 // validateMountedCourseInput 挂载不变式的写入校验（typed）：创建必填；编辑携带时不允许清空。
 // 语义与旧 map 版一致：Create 由 CreateCourse 显式校验，此处收编「编辑携带 0/负数」分支。
