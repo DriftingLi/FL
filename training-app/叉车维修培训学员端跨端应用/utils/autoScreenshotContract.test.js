@@ -35,6 +35,14 @@
  *   S19 【2026-09-15】**灭屏前置**：`mWakefulness` 非 Awake ⇒ 直接拒绝截图（fail-closed，不注入 input）
  *   S20 【2026-09-15】**包装脚本必须钉 UTF-8 解码**：否则 CLI 的 UTF-8 输出被按 OEM 码页解码后再写盘
  *       ⇒ 页面进入行变双重编码乱码 ⇒ S17 的页身份判据永远匹配不到（本地假 cli 已实证）
+ *   S21 【2026-09-15，#1027】**adb 解析不得再有第二份**：必须复用 `lib/env-check.ps1` 的
+ *       `Resolve-AdbExeLocal`（代码里不得再出现候选集原文；独立调用时懒加载补唯一真源）。
+ *       两份漂移的后果实测：步骤 2/5 能过而步骤 6 恒报「找不到 adb.exe」，步骤 7–9 永远到不了。
+ *       行为面的一致性（结论必须相同）由 `autoScreenshotAdbAgreementBehavior.test.js`（A1–A3）另钉。
+ *   S22 【2026-09-15，#1027 收尾真机实测】**「画面稳定」不得用全帧 hash 相等**：系统状态栏的实时读数
+ *       （MIUI 实时网速）会让整帧 hash 恒不同 ⇒ 判据永远不可能满足、步骤 7–9 永远跑不到；
+ *       必须走 `Compare-ScreenFrames` 的宽容比较（差异像素占比 ≤ `-StableMaxDiffPercent`，默认 0.5%）。
+ *       宽容比较本身的语义由 `autoScreenshotStabilityBehavior.test.js`（B1–B4）在运行期另钉。
  */
 const fs = require('fs');
 const path = require('path');
@@ -257,5 +265,62 @@ describe('auto-screenshot.ps1 contract', () => {
     const block = src.slice(at, at + 800);
     expect(block).toMatch(/\[Console\]::OutputEncoding/);
     expect(block).toMatch(/\*>\s*'\$outFile'/);
+  });
+
+  // S21（2026-09-15，#1027）：adb 解析**不得再有第二份**。
+  //   症状：本文件曾内联自己的候选集（只查 `$env:ANDROID_SDK_ROOT` / `$env:ANDROID_HOME` / `Get-Command adb`），
+  //   比 `env-check.ps1` 的 `Resolve-AdbExeLocal` 少了 `D:\android-sdk\platform-tools\adb.exe` 兜底 ⇒
+  //   本机（两个 env 未设、adb 不在 PATH、adb 在 D 盘）步骤 2/5 能过、**步骤 6 恒报「找不到 adb.exe」**，
+  //   而步骤 4/5 已真跑完并产生副作用（编译 + 部署），步骤 7–9 永远到不了 ——
+  //   这正是 ADR-0008「门脚本共享载体」记的「解析器被复制而不是复用」那类分叉。
+  //   ⚠️ 断言前**必须剥注释**：本文件、脚本头与调用点的注释里都会引用旧候选集原文（本仓血账：注释会命中断言）。
+  test('S21: 【2026-09-15，#1027】adb resolution delegates to the single source (no second candidate list)', () => {
+    const code = src.replace(/<#[\s\S]*?#>/g, '').replace(/^\s*#.*$/gm, '');
+
+    // 反例：代码里不得再出现第二份候选集
+    expect(code).not.toMatch(/ANDROID_SDK_ROOT|ANDROID_HOME/);
+    expect(code).not.toMatch(/platform-tools/);
+    expect(code).not.toMatch(/Get-Command\s+adb/);
+
+    // 正例：复用唯一真源 `env-check.ps1` 的解析器，且**懒加载**（本模块被单独调用时也能补上）
+    expect(code).toMatch(/\.\s*\(Join-Path\s+\$PSScriptRoot\s+'env-check\.ps1'\)/);
+    expect(code).toMatch(/Get-Command\s+Resolve-AdbExeLocal\s+-ErrorAction\s+SilentlyContinue/);
+
+    // 解析不到时仍必须 fail-closed 返回（不得静默继续跑到后面拿 $null 当路径用）
+    const assignAt = code.indexOf('$adbExe = Resolve-AdbExeLocal');
+    expect(assignAt).toBeGreaterThan(-1);
+    const after = code.slice(assignAt, assignAt + 400);
+    expect(after).toMatch(/if\s*\(-not\s+\$adbExe\)\s*\{/);
+    expect(after).toMatch(/找不到 adb\.exe/);
+    expect(after).toMatch(/return\s+\[pscustomobject\]/);
+  });
+
+  // S22（2026-09-15，#1027 收尾**真机实测**）：「画面稳定」**不得**用全帧 hash 相等。
+  //   症状：系统状态栏里有**应用控制不了**的实时读数（MIUI「显示实时网速」的 KB/s，每 1–2 秒就变）⇒
+  //   连拍三帧的整帧 sha256 **两两不同**（实测差异**只在顶部 0–99px 状态栏**、MaxDiff 188，
+  //   其余整幅逐字节相同）⇒ 「连续两次采样一致」在该设备上**永远不可能满足** ⇒ 步骤 6 必然 420 秒超时、
+  //   步骤 7–9 永远跑不到（而 app 画面早就落定了）。
+  //   判据：必须走 `Compare-ScreenFrames` 的**宽容**比较（网格差异像素占比 ≤ 阈值），旧 hash 写法不得回写。
+  //   实测标定（同一台设备，1080×2400）：状态栏量级的 churn 在 24/48/96 网格上 = 0%、192 网格 = 0.011%；
+  //   真切页（对照全黑帧）= ~100% ⇒ 默认阈值 0.5% 卡在噪声上方 ~45×、真变化下方 ~200×。
+  test('S22: 【2026-09-15，#1027】screen stability uses tolerant frame comparison, not full-frame hash equality', () => {
+    expect(src).toContain('function Compare-ScreenFrames');
+
+    // 反例（旧写法）：不得再出现「取探针帧的全帧 hash 再与上一帧比相等」这三行
+    expect(src).not.toMatch(/\$h\s*=\s*\(Get-FileHash[^\r\n]*ProbeFile/);
+    expect(src).not.toMatch(/\$h\s*-eq\s*\$prev/);
+    expect(src).not.toMatch(/\$prev\s*=\s*\$h/);
+
+    // 正例：落定循环里必须真的调用宽容比较，并把上一帧留在盘上（否则没有可比对象）
+    expect(src).toMatch(/Compare-ScreenFrames\s+-Path\s+\$ProbeFile\s+-PrevPath\s+\$prevFile/);
+    expect(src).toMatch(/nav-probe-prev\.png/);
+
+    // 阈值必须是**可调参数 + 有默认值**（不许写死在函数体里，也不许悄悄调成 0）
+    expect(src).toMatch(/\$StableMaxDiffPercent\s*=\s*0\.5/);
+    expect(src).toMatch(/-StableMaxDiffPercent\s+\$StableMaxDiffPercent/);
+
+    // 「连续两次采样一致」的语义没变（仍是 stable ≥ 1），fail-closed 出口照旧
+    expect(src).toMatch(/\$stable\s*-ge\s*1/);
+    expect(src).toMatch(/Settled\s*=\s*\$false/);
   });
 });

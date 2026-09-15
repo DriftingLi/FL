@@ -23,8 +23,10 @@
 							<view v-if="settings.model_source == 'admin'" class="radio-dot"></view>
 						</view>
 					</view>
-					<view class="divider"></view>
-					<view class="source-row" @click="onSelectSource('user')">
+					<!-- 自带 key 的两个来源（#1024 ② 裁定：归专业版）⇒ 未解锁时整行不渲染。
+					     只剩「平台模型」一项：不留「选中了来源、下方却一片空白」的死行。 -->
+					<view v-if="proUnlocked" class="divider"></view>
+					<view v-if="proUnlocked" class="source-row" @click="onSelectSource('user')">
 						<view class="source-left">
 							<text class="source-name">已保存模型</text>
 							<text class="source-desc">从我的自定义模型中选用</text>
@@ -33,8 +35,8 @@
 							<view v-if="settings.model_source == 'user'" class="radio-dot"></view>
 						</view>
 					</view>
-					<view class="divider"></view>
-					<view class="source-row" @click="onSelectSource('custom')">
+					<view v-if="proUnlocked" class="divider"></view>
+					<view v-if="proUnlocked" class="source-row" @click="onSelectSource('custom')">
 						<view class="source-left">
 							<text class="source-name">临时自定义</text>
 							<text class="source-desc">本次填写 API 地址与密钥</text>
@@ -68,8 +70,8 @@
 				</view>
 			</view>
 
-			<!-- 自定义模型表单 -->
-			<view v-if="settings.model_source == 'custom'" class="section">
+			<!-- 自定义模型表单（#1024 ① 配置面：自带 key 的配置归专业版 ⇒ 未解锁不渲染） -->
+			<view v-if="proUnlocked && settings.model_source == 'custom'" class="section">
 				<text class="section-title">自定义配置</text>
 				<view class="card form-card">
 					<view class="form-item">
@@ -96,8 +98,8 @@
 
 			</view>
 
-			<!-- 已保存的自定义模型（user / custom 均可选用） -->
-			<view v-if="settings.model_source == 'user' || settings.model_source == 'custom'" class="section">
+			<!-- 已保存的自定义模型（user / custom 均可选用）—— #1024 ② 使用面：同样在门内 -->
+			<view v-if="proUnlocked && (settings.model_source == 'user' || settings.model_source == 'custom')" class="section">
 				<view class="section-head">
 					<text class="section-title">已保存模型</text>
 					<text v-if="proUnlocked" class="section-add" @click="goManageModels">＋ 新增</text>
@@ -150,6 +152,7 @@
 		defaultAiChatSettings,
 	} from '../../api/aiAssistant'
 	import type { AiModel, AiUserModel, AiChatSettings } from '../../types/index'
+	import { useAiPro } from '../../composables/useAiPro'
 
 	const statusBarHeight = useStatusBarHeight()
 	const windowHeight = uni.getSystemInfoSync().windowHeight
@@ -160,13 +163,19 @@
 	const saving = ref<boolean>(false)
 
 	/**
-	 * 专业版能力门（#939 口径 A：门落在本页的「进入自定义模型」入口上）。
-	 * 与 AI 助手页**同一口径**：积分兑换未上线 ⇒ 恒 false（基础版）。
-	 * 本页是 `pages/ai-assistant/custom-models` 的第二条入口链（第一条在抽屉里，由 #926/#936 收口），
-	 * 故这里也要有门，否则「对话设置 → ＋ 新增 / 空态卡」仍能进该页。
-	 * #920 兑换上线后：两页一并改为读后端「已拥有」判定（届时本常量删除）。
+	 * 专业版能力门（#1024）：事实源与 AI 助手页**同源** —— 单点适配器 `useAiPro`
+	 * （= 积分商城 SKU「ai_pro」的已拥有，#920 落地）。本页**不再自持** `ref(false)` 常量：
+	 * #936 时期那样写只是为了避开与 #942 撞车，该前提已随 #942 合入消失（票面约束：
+	 * 「不要新立第二个判据」）。本页共用这一个门的三个能力面：
+	 *   ① 配置面：`model_source == 'custom'` 的自带 key 表单；
+	 *   ② 使用面：已保存的自定义模型列表的选用（维护者 2026-09-15 裁定：归 pro）；
+	 *   ③ 入口面：`＋ 新增` / 空态卡 → `custom-models`（#939 口径 A）。
+	 * 未解锁时来源选择器**只剩「平台模型」一项**，不留「点了却看到空段」的死行。
 	 */
-	const proUnlocked = ref<boolean>(false)
+	const {
+		proUnlocked,
+		loadAiProState,
+	} = useAiPro()
 
 	const formName = ref<string>('')
 	const formBaseUrl = ref<string>('')
@@ -174,6 +183,8 @@
 	const formApiKey = ref<string>('')
 
 	function goManageModels() : void {
+		// 未解锁：两个入口（「＋ 新增」/ 空态卡）本身就在门内，这里是不该发生的兜底（#1024）
+		if (!proUnlocked.value) return
 		uni.navigateTo({ url: '/pages/ai-assistant/custom-models' })
 	}
 
@@ -204,6 +215,8 @@
 	}
 
 	function onSelectSource(source : string) : void {
+		// 未解锁：来源选择器只渲染「平台模型」一项（#1024），这里是不该发生的兜底
+		if (!proUnlocked.value && source != 'admin') return
 		settings.value.model_source = source
 		if (source == 'admin') {
 			// 默认选第一个平台模型
@@ -327,6 +340,32 @@
 		}
 	}
 
+	/**
+	 * 存量回收（#1024）：自带 key 的来源（user / custom）是**本地持久态**（`saveAiChatSettings`）——
+	 * 只关「入口」的话，未解锁用户**存量**选中的来源仍在生效（AI 助手页据此送 `user_model_id`
+	 * 或明文 `custom_api_key`）。未解锁 ⇒ 回收为「平台模型」并落盘。
+	 * 只在门状态**读完之后**调用：已解锁时原样返回（解锁态零回归）。
+	 */
+	function reclaimLockedModelSource() : void {
+		if (proUnlocked.value) return
+		const src = settings.value.model_source
+		if (src != 'user' && src != 'custom') return
+		settings.value.model_source = 'admin'
+		settings.value.model_id = 0
+		settings.value.model_name = '默认模型'
+		settings.value.model = ''
+		settings.value.base_url = ''
+		settings.value.api_key = ''
+		formName.value = ''
+		formBaseUrl.value = ''
+		formModel.value = ''
+		formApiKey.value = ''
+		if (platformModels.value.length > 0) {
+			onSelectPlatformModel(platformModels.value[0])
+		}
+		saveAiChatSettings(settings.value)
+	}
+
 	async function loadData() : Promise<void> {
 		settings.value = loadAiChatSettings()
 		formName.value = settings.value.model_name
@@ -346,8 +385,22 @@
 		}
 	}
 
+	/**
+	 * 顺序有语义（#1024）：先 `loadData` 拿到平台模型与存量设置，再读门，**最后**才回收 ——
+	 * 在门状态回来之前回收会把「已解锁用户」的存量来源误清（`proUnlocked` 初值 false 只是
+	 * fail-closed 的起点，不是结论）。
+	 */
+	async function refreshProStateAndReclaim() : Promise<void> {
+		await loadData()
+		// 已解锁为**粘性**（同 AI 助手页）：不为同一事实在每次回页重复扫流水
+		if (!proUnlocked.value) {
+			await loadAiProState()
+		}
+		reclaimLockedModelSource()
+	}
+
 	onShow(() => {
-		loadData()
+		refreshProStateAndReclaim()
 	})
 </script>
 

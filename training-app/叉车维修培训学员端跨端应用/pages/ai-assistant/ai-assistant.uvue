@@ -63,8 +63,8 @@
 		<!-- 右侧菜单抽屉 -->
 		<AiChatDrawerRight :visible="sidebarRight" :menu-items="rightMenuItems" :status-bar-height="statusBarHeight" @close="sidebarRight = false" @action="onMenuAction" />
 
-		<!-- 模型选择弹窗 -->
-		<AiChatModelPicker :visible="showModelPicker" :all-models="allModels" :current-model-id="currentModelId" :current-model-source="currentModelSource" @close="showModelPicker = false" @select="selectModel" @custom="showCustomForm = true" @manage="goManageModels" />
+		<!-- 模型选择弹窗（三条自带 key 路径都由页面侧过门：#1024 ③④⑤） -->
+		<AiChatModelPicker :visible="showModelPicker" :all-models="allModels" :current-model-id="currentModelId" :current-model-source="currentModelSource" @close="showModelPicker = false" @select="selectModel" @custom="onCustomClick" @manage="goManageModels" />
 
 		<!-- 自定义 API Key 弹窗 -->
 		<AiChatCustomForm :visible="showCustomForm" :custom-model="customModel" :custom-base-url="customBaseUrl" :custom-api-key="customApiKey" @close="closeCustomForm" @update:custom-model="onCustomModelUpdate" @update:custom-base-url="onCustomBaseUrlUpdate" @update:custom-api-key="onCustomApiKeyUpdate" @confirm="confirmCustomModel" />
@@ -161,9 +161,13 @@
 			const m = models.value[i]
 			arr.push({ id: m.id, name: m.name, model: m.model, source: m.source, description: m.description })
 		}
-		for (let i = 0; i < userModels.value.length; i++) {
-			const m = userModels.value[i]
-			arr.push({ id: m.id, name: m.name, model: m.model, source: 'user', base_url: m.base_url })
+		// 已保存的自定义模型 = 自带 key 的**使用面**（#1024 ⑤；与设置页 ② 同一能力、同一门）：
+		// 未解锁时不进选择器 —— 否则点选即 currentModelSource='user'，等于绕过专业版
+		if (proUnlocked.value) {
+			for (let i = 0; i < userModels.value.length; i++) {
+				const m = userModels.value[i]
+				arr.push({ id: m.id, name: m.name, model: m.model, source: 'user', base_url: m.base_url })
+			}
 		}
 		return arr
 	})
@@ -452,12 +456,28 @@
 		persistSettings()
 	}
 
+	// 「管理自定义模型」（#1024 ③）：未解锁时**到不了** custom-models —— 与模型芯片点击
+	// （onModelBarClick）走同一入口：关掉选择器、开本页档位 sheet，不静默失败、不留第二套文案。
 	function goManageModels() : void {
 		showModelPicker.value = false
+		if (!proUnlocked.value) {
+			showProSheet.value = true
+			return
+		}
 		uni.navigateTo({ url: '/pages/ai-assistant/custom-models' })
 	}
 
 	// 自定义 API Key
+	// 「自定义 API Key」（#1024 ④）：自带 key 的**配置面**（与设置页 ① 同一能力），同一门同一入口。
+	function onCustomClick() : void {
+		showModelPicker.value = false
+		if (!proUnlocked.value) {
+			showProSheet.value = true
+			return
+		}
+		showCustomForm.value = true
+	}
+
 	function closeCustomForm() : void {
 		showCustomForm.value = false
 	}
@@ -521,6 +541,63 @@
 		currentModelSource.value = 'admin'
 	}
 
+	/**
+	 * 存量回收（#1024）：「自带 key 的来源」（user / custom）是**本地持久态**，而且它是
+	 * `buildBody` 真正送上去的东西（user ⇒ `user_model_id`；custom ⇒ 明文 `custom_api_key`）。
+	 * 只关「入口」的话，未解锁用户**存量**选中的来源仍在生效 ⇒ 未解锁时强制回收为「平台模型」
+	 * 并落盘（与设置页同一口径）。
+	 *
+	 * 两个前置条件都是异步、先后不定（门状态 / 模型列表）⇒ 各自就绪时都试一次；`proStateSettled`
+	 * 保证「未解锁」是**已知结论**而不是初始值 —— `proUnlocked` 初值 false 只是 fail-closed 的
+	 * 起点，若在扫描回包前就回收，会把**已解锁用户**的来源误清。
+	 */
+	const proStateSettled = ref<boolean>(false)
+	const modelsHydrated = ref<boolean>(false)
+
+	function tryReclaimLockedSource() : void {
+		if (!proStateSettled.value || !modelsHydrated.value) return
+		if (proUnlocked.value) return
+		const src = currentModelSource.value
+		if (src != 'user' && src != 'custom') return
+		currentModelSource.value = 'admin'
+		currentModelId.value = models.value.length > 0 ? models.value[0].id : 0
+		customModel.value = ''
+		customBaseUrl.value = ''
+		customApiKey.value = ''
+		showCustomForm.value = false
+		showModelPicker.value = false
+		persistSettings()
+	}
+
+	/**
+	 * 「刚在自定义模型页新增并选用」的信号（本地键）—— **唯一的消费点**：未解锁时不应用
+	 * （自带 key 的来源不许带进来），键一律消费掉。门状态未知时不消费（不拿 fail-closed 的
+	 * 初值去猜），留给门读完之后的那次调用（`refreshProState`）。
+	 * 声明在 `refreshProState` 之前：Kotlin 局部函数不支持前向引用（UTS error18）。
+	 */
+	function applyPendingSelectedUserModel() : void {
+		if (!proStateSettled.value) return
+		const selectedRaw = uni.getStorageSync(STORAGE_KEY_AI_SELECTED_USER_MODEL) as string
+		if (selectedRaw.length == 0) return
+		uni.removeStorageSync(STORAGE_KEY_AI_SELECTED_USER_MODEL)
+		if (!proUnlocked.value) return
+		try {
+			const sel = JSON.parse(selectedRaw) as UTSJSONObject
+			const id = parseFloat(`${sel['id']}`)
+			const name = `${sel['name'] ?? ''}`
+			selectUserModelById(id, name)
+		} catch (e) {
+			console.error('[ai-assistant] apply selected model failed:', e)
+		}
+	}
+
+	async function refreshProState() : Promise<void> {
+		await loadAiProState()
+		proStateSettled.value = true
+		tryReclaimLockedSource()
+		applyPendingSelectedUserModel()
+	}
+
 	// 数据加载
 	async function loadModels() : Promise<void> {
 		try {
@@ -538,6 +615,8 @@
 			}
 		}
 		hydrateFromSettings()
+		modelsHydrated.value = true
+		tryReclaimLockedSource()
 	}
 
 	// 生命周期
@@ -557,8 +636,8 @@
 
 		loadModels()
 		loadSessions()
-		// 门状态与模型/会话并行读（失败 fail-closed 为未解锁，不阻塞首屏）
-		loadAiProState()
+		// 门状态与模型/会话并行读（失败 fail-closed 为未解锁，不阻塞首屏）；读完顺带做存量回收
+		refreshProState()
 	})
 
 	onShow(() => {
@@ -569,21 +648,14 @@
 		// 已解锁为**粘性**：权益一次兑换永久持有（user_entitlement 无过期列），
 		// 不为同一事实在每次回页重复扫流水；未解锁时重读 —— 用户可能刚在任务中心兑换或赚到积分
 		if (!proUnlocked.value) {
-			loadAiProState()
+			refreshProState()
+		} else {
+			proStateSettled.value = true
 		}
 
-		const selectedRaw = uni.getStorageSync(STORAGE_KEY_AI_SELECTED_USER_MODEL) as string
-		if (selectedRaw.length > 0) {
-			uni.removeStorageSync(STORAGE_KEY_AI_SELECTED_USER_MODEL)
-			try {
-				const sel = JSON.parse(selectedRaw) as UTSJSONObject
-				const id = parseFloat(`${sel['id']}`)
-				const name = `${sel['name'] ?? ''}`
-				selectUserModelById(id, name)
-			} catch (e) {
-				console.error('[ai-assistant] apply selected model failed:', e)
-			}
-		}
+		// 「刚在自定义模型页新增并选用」的信号：门状态未知时它自己会留着（不消费），
+		// 由门读完之后的那次调用（refreshProState → applyPendingSelectedUserModel）消费。
+		applyPendingSelectedUserModel()
 	})
 </script>
 

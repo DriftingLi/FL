@@ -701,3 +701,117 @@ test('j2) 老评论（绑旧 sha）+ 新评论（绑当前 head）共存 ⇒ 认
   assert.equal(counts.calls, 0, '「恰好等于 head」的候选必须优先判（既省配额，也不让 API 抖动把可用评论拖红）');
   assert.doesNotMatch(r.notes.join(), /绑定口径/, '按 sha 相等口径绑上的不必记「放宽」说明');
 });
+
+// ===========================================================================================
+// 2026-09-15 修订（#1030）：② 的触发判据从「改动文本里出现过 MP-WEIXIN 字面量」
+// 收窄为「**条件编译指令行**的增删（且限定运行时面文件）+ 两份 json 的文件清单」。
+//
+// 旧判据 `(f.patch || '').includes('MP-WEIXIN')` 判的是「文本里出现过这个字符串」，与**移动端**
+// `docs/adr/0008-移动端验收门与证据.md` 的「命中 MP-WEIXIN **面**（交付形态）」不是一回事（更严），实害有二：
+//   ① 误报（#1028 实测）：在 ADR/文档里写「② 免（未命中 MP-WEIXIN 面）」这句话**本身**就把门点亮，
+//      改写措辞（「未命中微信小程序面」）后即消失；同族还有 `utils/useBiometric.test.js` 用字符串
+//      **断言** `// #ifdef APP || MP-WEIXIN` ⇒ 改那个测试文件也会凭空要求 ②；
+//   ② 反向激励：想不被误报只能**不写**这个术语 —— 而该 ADR 恰恰要求把这类口径写进文档。
+// 本节的用例是这次修订的判别力证明：负例（提到 ≠ 命中）与正例（真指令增删仍必须点亮）成对存在。
+// ===========================================================================================
+
+/** 只在文本里「提到」该术语的文件（不是交付面）：patch 里那句就是 #1028 踩到的那句 */
+const mentionsOnly = (filename, added) => ({
+  filename,
+  status: 'modified',
+  patch: `@@ -86,3 +86,4 @@\n+${added}\n`,
+});
+const ADR_0014 = 'training-app/叉车维修培训学员端跨端应用/docs/adr/0014-移动端全局搜索落点与投影口径.md';
+
+test('#1030 负例：ADR/文档里写「未命中 MP-WEIXIN 面」不再点亮 ②（正文缺 ② 行仍绿）', async () => {
+  const files = [
+    uvue(),
+    mentionsOnly(ADR_0014, '> **二轮门证据**：③ CI run 全绿；**②** 免（未命中 MP-WEIXIN 面：无条件编译段、未改两份 json）。'),
+  ];
+  const r = await run({ files, body: dropLines(['- ② ']) });
+  assert.equal(r.ok, true, r.errors.join('；'));
+  assert.match(r.notes.join(), /第②门免/);
+});
+
+test('#1030 负例：*.test.js 里的指令断言字符串不算交付面（同族误报，改测试不再凭空要求 ②）', async () => {
+  const files = [
+    uvue(),
+    mentionsOnly(
+      'training-app/叉车维修培训学员端跨端应用/utils/useBiometric.test.js',
+      "    const app = () => branch('// #ifdef APP || MP-WEIXIN');",
+    ),
+  ];
+  const r = await run({ files, body: dropLines(['- ② ']) });
+  assert.equal(r.ok, true, r.errors.join('；'));
+  assert.match(r.notes.join(), /第②门免/);
+});
+
+test('#1030 负例：非运行时面文件里引一条真指令（.md 的代码块）也不算 —— 文件类型与行形态都要满足', async () => {
+  const files = [uvue(), mentionsOnly('docs/agents/handoff-验收门-2026-09-11.md', '```js\n// #ifdef MP-WEIXIN\n```')];
+  const r = await run({ files, body: dropLines(['- ② ']) });
+  assert.equal(r.ok, true, r.errors.join('；'));
+  assert.match(r.notes.join(), /第②门免/);
+});
+
+test('#1030 负例：运行时面文件里的散文提及 / 非行首字样不算（判据是「指令行」不是「这个词」）', async () => {
+  const cases = [
+    ['中文散文提及', uvue('utils/x.uts', { patch: '@@ -1,2 +1,3 @@\n+// 本模块不涉及 MP-WEIXIN 面，无需条件编译\n' })],
+    ['断言字符串形态', uvue('utils/x.uts', { patch: '@@ -1,2 +1,3 @@\n+  expect(src).toContain("// #ifdef APP 与 MP-WEIXIN 分支");\n' })],
+    ['没有 # 指令前缀', uvue('utils/x.uts', { patch: '@@ -1,2 +1,3 @@\n+// MP-WEIXIN 面未命中\n' })],
+    // 判据只看**条件表达式**那一段：真指令行后面再写散文提及（表达式之外）不算命中。
+    // 少了这条收窄，「指令行 + 同行解释」会把门凭空点亮 —— 与 #1030 要修的是同一个病。
+    ['指令行 + 同行散文提及（表达式之外不判）', uvue('utils/x.uts', { patch: '@@ -1,2 +1,3 @@\n+// #ifdef APP-PLUS // 与 MP-WEIXIN 分支不同\n' })],
+  ];
+  for (const [label, file] of cases) {
+    const r = await run({ files: [uvue(), file], body: dropLines(['- ② ']) });
+    assert.equal(r.ok, true, `${label} ⇒ ${r.errors.join('；')}`);
+    assert.match(r.notes.join(), /第②门免/, label);
+  }
+});
+
+test('#1030 正例（判别力）：真正的条件编译指令行增删仍点亮 ②，缺 ② 行即红', async () => {
+  const cases = [
+    ['新增 .uvue 指令', uvue('pages/login/login.uvue', { patch: '@@ -1,2 +1,3 @@\n+// #ifdef MP-WEIXIN\n+// #endif\n' })],
+    ['删除 .uvue 指令（交付形态同样变了）', uvue('pages/login/login.uvue', { patch: '@@ -1,3 +1,2 @@\n-// #ifndef MP-WEIXIN\n' })],
+    ['多平台表达式 APP || MP-WEIXIN', uvue('composables/useBiometric.uts', { patch: '@@ -1,2 +1,3 @@\n+        // #ifdef APP || MP-WEIXIN\n' })],
+    ['模板注释形态 <!-- #ifdef … -->', uvue('pages/login/login.uvue', { patch: '@@ -1,2 +1,3 @@\n+            <!-- #ifdef MP-WEIXIN -->\n' })],
+    ['样式块注释形态 /* #ifdef … */', uvue('pages/login/login.uvue', { patch: '@@ -1,2 +1,3 @@\n+  /* #ifdef MP-WEIXIN */\n' })],
+    ['pages.json 的条件编译键', uvue('pages.json', { patch: '@@ -1,2 +1,3 @@\n+  "#ifdef MP-WEIXIN": {}\n' })],
+  ];
+  for (const [label, file] of cases) {
+    // pages.json 同时命中 ④b 打包面 ⇒ 带上 ④b 行，让红的原因只可能是 ②
+    const r = await run({ files: [uvue(), file], body: `${dropLines(['- ② '])}\n${GATE4B_LINE}\n` });
+    assert.equal(r.ok, false, `${label}：应要求 ② 行`);
+    assert.match(r.errors.join(), /② 微信开发者工具无报错/, label);
+    assert.match(r.notes.join(), /② 触发面命中/, `${label}：点亮理由要写在摘要里（#1030 的可见性诉求）`);
+  }
+});
+
+test('#1030：② 未被点亮时不写「触发面命中」，点亮时摘要点名是哪个文件', async () => {
+  const off = await run({ files: [uvue()], body: FULL_EVIDENCE });
+  assert.match(off.notes.join(), /第②门免/);
+  assert.doesNotMatch(off.notes.join(), /② 触发面命中/);
+
+  const on = await run({ files: mpWeixinFiles(), body: `${dropLines(['- ② '])}\n${GATE4B_LINE}\n` });
+  const notes = on.notes.join('\n');
+  assert.match(notes, /② 触发面命中/);
+  assert.match(notes, /manifest\.json/, '摘要必须点名命中文件，别让人去猜门为什么亮');
+});
+
+test('#1030 静态自检：判据不得退回「扫改动文本里的字面量」（文本判据与语义脱节的复发防线）', () => {
+  const src = readFileSync(workflowPath, 'utf8');
+  // 只对**代码行**判：修订说明里刻意引用了旧判据原文（`.includes('MP-WEIXIN')`）作对照，
+  // 拿全文判会误报帮助文本（ADR-0008 记的 C14 就是这一坑位）。
+  const codeLines = src
+    .split('\n')
+    .filter((l) => !/^\s*(?:\/\/|#)/.test(l))
+    .join('\n');
+  assert.doesNotMatch(codeLines, /\.includes\('MP-WEIXIN'\)/, '不得再按「文本里出现过 MP-WEIXIN」判 ②');
+  assert.match(src, /const MP_WEIXIN_DIRECTIVE\s*=/, '缺「条件编译指令行」的显式判据');
+  assert.match(src, /hasMpWeixinDirective\(f\.patch\)/, '② 的 patch 面必须走指令行判据');
+  assert.match(
+    src,
+    /isRuntimeFile\(f\.filename\)\s*&&\s*hasMpWeixinDirective\(f\.patch\)/,
+    '② 的 patch 面必须限定在运行时面文件（否则文档/测试又能点亮它）',
+  );
+});
