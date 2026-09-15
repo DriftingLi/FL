@@ -116,6 +116,43 @@ cd E:\FL; git worktree list | Select-Object -Skip 1
 ✅ **待办状态（2026-09-13 实测结案）**：`docs/agents/handoff-验收门-2026-09-11.md` 六、待办里那条「ACL 是否自愈未证实」**已由试通结案，结论是「没自愈、且非 ACL 可修」** —— `git worktree add` 仍然 `Permission denied`，与卷级损坏同源。
 ⇒ **多会话隔离继续用独立 clone（放 `D:`，见文末一节）；本仓主树里 `git worktree` 不可用**，替代手法是**游离提交**：临时索引 `read-tree <base>` + `update-index --cacheinfo` 只替换本次文件 + `commit-tree -p <base>`，全程不碰工作树、默认索引与 HEAD（2026-09-13 实测用它跑完了整票改动与一次跨分支同步合并）。
 
+⚠️ **上面那句「主树里 `git worktree` 不可用」是 `E:\FL` 的结论（exFAT + `.git/worktrees` 坏项），不是 `D:\FL` 的**：2026-09-15 在 `D:\FL` 主树实测 `git worktree add D:\wt-850-docs -b docs/xxx origin/master` **一次成功**（检出 1615 个文件，`git worktree list` 正常列出三条）。⇒ **主树在 `D:` 时首选独立 worktree 做隔离**；只有「工作树已被别的会话占着、来不及另开」或「只提交一两个文件」时才用下面的游离提交。
+
+#### 游离提交：完整配方（2026-09-15 补全）
+
+**适用场景**：共享工作树里有别的会话的未提交改动（此时 `git checkout` / `git merge` 会被 git **正确地**拒绝），而你只需要**提交本次文件**，或**把 master 同步进自己的分支**。
+
+```powershell
+# 1) 只提交本次文件 —— 不碰工作树 / 默认索引 / HEAD
+$tmp = "$env:TEMP\my-task-index"; Remove-Item $tmp -Force -ErrorAction SilentlyContinue
+$env:GIT_INDEX_FILE = $tmp                       # ← 关键：临时索引，别污染共享 index
+git read-tree <base>                             # 用基线（本分支 tip）填充临时索引
+foreach ($f in $files) {                         # 只替换本次改动的文件
+  $sha = (git hash-object -w $f).Trim()
+  git update-index --add --cacheinfo "100644,$sha,$relPath"
+}
+$tree   = (git write-tree).Trim()
+$commit = (git commit-tree $tree -p <base> -F msg.txt).Trim()
+Remove-Item Env:\GIT_INDEX_FILE
+git update-ref refs/heads/<branch> $commit       # 本地分支跟上
+git push origin "${commit}:refs/heads/<branch>"  # 不用 checkout 就能推
+```
+
+```powershell
+# 2) 把 master 同步进自己的分支 —— 三方合并在「索引内」完成，工作树全程不动
+$env:GIT_INDEX_FILE = $tmp
+git read-tree -m (git merge-base origin/master <branch>) <branch> origin/master   # 无冲突 ⇒ exit 0
+$tree   = (git write-tree).Trim()
+$commit = (git commit-tree $tree -p <branch> -p origin/master -F merge-msg.txt).Trim()
+Remove-Item Env:\GIT_INDEX_FILE
+```
+（2026-09-15 实测：用 1) 提交了 4 张真机取证截图、用 2) 把当时领先 6 个提交的 master 并进分支并推送，全程没碰并发会话的工作树。**冲突时 `read-tree -m` 会直接失败**（不产生半成品）⇒ 那时才需要另开 worktree，不要在共享树里解冲突。）
+
+**两条纪律（2026-09-15 均实际踩到）**：
+
+1. **不要往共享的默认索引里 `git add`**：一旦暂存，别的会话 `git commit` 会把你的文件一起带走。要么一开始就用 `GIT_INDEX_FILE`，要么发现后立刻 `git reset HEAD -- <paths>` 撤回（只动这两条路径，不碰别人的暂存）。
+2. **不留未跟踪残留**：取证产物（截图等）若只落在共享工作树而不入库，别的会话日后 `git merge master` 会报 `untracked working tree files would be overwritten by merge`。**入库确认后再删工作树副本**：逐个比对 `git hash-object <file>` 与 `git rev-parse origin/master:<path>` 一致，再删。
+
 #### 重复副本的现状与清理纪律（2026-09-13 实测）
 
 - 实测 `E:\` 下有 **11 个同仓库克隆**，约 **1443 MB**（旧文档记的「约 618 MB / 892 MB」已过时）。**2026-09-13 复测：`git worktree list` 只剩主树，`.git/worktrees` 枚举为 0 条；我在 `E:\` 顶层看到 9 个 `_g*` 克隆 + 1 个 `wt-ai-single`；主树 `E:\FL` 约 308 MB，`_g1` 94 MB、`_g624c` 128 MB、`_g2` 169 MB。** 文件数与旧记录不一致（旧记 11 个克隆 vs 现见 10 个目录）⇒ **要清理时现测，不按本条数字行事。**

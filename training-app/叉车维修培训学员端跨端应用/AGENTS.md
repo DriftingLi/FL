@@ -41,6 +41,8 @@ AI 安全审计用 DeepSec（Shield）。See `docs/agents/security-scan.md`.
 
 页面保持整洁：不要写冗余的小标题、装饰性提示与说明性 hint 文本，有的话就清理，仅保留必要的功能性提示。删除 hint 时同步删除对应的 CSS class 与 scoped style，避免残留死代码。
 
+**明确例外（不要清）**：论坛**发帖 / 回复输入区的属地披露提示**（「发布内容会显示 IP 属地」，文案单点 `utils/forumDisplay.uts` 的 `FORUM_REGION_NOTICE`）属「必要的功能性提示」而非装饰——属地在点发布那一刻才产生，事前告知比事后解释便宜（ADR-0045）。按本条约定清理 hint 时**跳过它**，并一并保留其 `.reply-region-notice` / `.form-region-notice` 样式。
+
 ### Tailwind 增量共存四条边界规则
 
 项目已引入 Tailwind CSS v4，与既有 `<style scoped>` 长期共存（详细背景见 `.workbuddy/plans/student-ui-redesign.md`）。共存期间遵守：
@@ -271,6 +273,7 @@ UTS（uni-app-x 的 TypeScript 变体）不支持以下 TypeScript 语法：
 - **签收在人、合并不限人**：把 PR 正文的 `## 验收证据` 段填齐（每门四字段 + 产物），其中人工门（①）的「执行人」栏由**人**给出原文（agent 可代录、不得自拟）；填齐后 **agent 可直接合并**，不必停在「待人工签收」。
 - 非运行时面的 PR（纯文档 / 测试 / CI 配置）不受此限，agent 可自行合并。
 - **人工门只剩 ① Android 真机逐页截图**（2026-09-12 修订：② 已移出人工门清单，见下条）；① 的「执行人」栏由**人**给出原文（agent 代录，不得自拟、不得写「已通过」）。
+- **①a 真机取证的具体手法**（`--pagePath` + `--pageQuery` 深链、点击坐标取 `uiautomator dump` 的 bounds、`input` 可注入性**每次现测**、造取证夹具的「人登录一次 + CDP 驱动 + 页面内 fetch」做法）见 `docs/adr/0008-移动端验收门与证据.md` 的「①a 取证手法补遗（2026-09-15 实测）」。**多会话并发时如何不动别人的工作树就提交/同步 master** 见 `docs/agents/multi-agent-git.md` 的「游离提交：完整配方」。
 - **② 微信开发者工具门 = 半自动门（2026-09-12，#883 收口）**：spike #883 实测全链路**完全无人值守**（HBuilderX `publish mp-weixin` 构建并自己拉起开发者工具 → `cli.bat close` 清残留 → `cli.bat auto --auto-port` 开自动化端口 → `miniprogram-automator` 读 pageStack / console / exceptions + 截图；≈4.5 分钟/次）。agent 可执行 `npm run build:mp-weixin-check`（= `scripts/mp-weixin-check.ps1`）产出 `MP_WEIXIN_RESULT` + `.ci-verify/mp-weixin.log` + `.ci-verify/*.png`，**结果可由脚本 `-PostToPr <PR号>` 贴成 sha 绑定的 PR 评论承载**（正文该行写「见评论 <链接>」即可）。**「执行人」栏仍由人给出原文（agent 代录，不得自拟、不得写「已通过」）。**
   - **运行前提（硬前提）**：CLI 靠与 HBuilderX 主程序的本地 IPC ⇒ **须以全访问权限执行**（同 ④a）；微信开发者工具**需处于已登录状态**（`cli.bat islogin` → `{"login":true}`），登录态过期时由人补扫一次码（agent 不得索取/代填任何凭证）；项目目录须用**唯一名**（HBuilderX 按项目名解析，同名目录会被误命中）。
   - **HBuilderX 是单实例串行资源（2026-09-12 追加）**：`cli.exe` 只驱动同一个主程序，重活排进主程序的编译队列 ⇒ **维护者用 GUI 编译/运行时，agent 的门脚本并发发起会既拖慢维护者、又因排队产生假失败**（实测 publish 停在「正在编译中...」不返回）。四个门脚本（② / ④a / ④c 的 publish 段）统一 dot-source **`scripts/lib/hx-busy.ps1`**：agent 互斥锁（`$env:TEMP\hx-agent.lock`，>30 分钟视为陈旧可抢占）+ 主程序忙探测（`cli project list` 带 5 秒硬超时）+ 等待上限（`-HxWaitSeconds`，默认 600；`-HxNoWait` 立即判忙）；**忙/超时 ⇒ `exit 2`（环境不可用），绝不 kill 主程序、绝不抢占项目**。**限制写实**：机械上无法可靠探测「维护者 GUI 是否正在编译」——本机制是「锁 + 探测 + 上限」的 fail-safe，**GUI 优先**。日志/评论里会打 `HX_BUSY wait=<秒> result=free|timeout`。守护：`utils/hxBusyGateContract.test.js`（H1–H9）。
