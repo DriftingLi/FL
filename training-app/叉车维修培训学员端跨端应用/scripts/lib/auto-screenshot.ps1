@@ -30,6 +30,14 @@
 
     `Ok=true` 仅当：至少截到 1 页、无跳过、无 hash 冲突。
 
+    **adb 解析的唯一真源**（2026-09-15，#1027 血账）：本文件**不得**自带候选集 ——
+    这里曾内联第二份（只查 `$env:ANDROID_SDK_ROOT` / `$env:ANDROID_HOME` / `Get-Command adb`），
+    比 `lib/env-check.ps1` 的 `Resolve-AdbExeLocal` **少了 `D:\android-sdk\platform-tools\adb.exe` 兜底**
+    ⇒ 本机（两个 env 都没设、`adb` 不在 PATH、adb 在 D 盘）**步骤 2/5 能过、步骤 6 恒报「找不到 adb.exe」**；
+    而步骤 4/5 已经真跑完并产生副作用（编译 + 部署），步骤 7–9（对比 / 证据 / 还原）永远到不了。
+    现统一复用 `env-check.ps1` 的解析器（详因与裁定见
+    `docs/adr/0008-移动端验收门与证据.md`「adb 解析的唯一真源」）。
+
 .EXAMPLE
     . scripts/lib/auto-screenshot.ps1
     # 默认：从 git diff 推导改动页面
@@ -256,17 +264,19 @@ function Invoke-AutoScreenshot {
     New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 
     # ---------- adb ----------
-    $adbExe = $null
-    foreach ($root in @($env:ANDROID_SDK_ROOT, $env:ANDROID_HOME)) {
-        if ($root) {
-            $c = Join-Path $root 'platform-tools\adb.exe'
-            if (Test-Path -LiteralPath $c) { $adbExe = $c; break }
-        }
+    # ⚠️ **解析器的唯一真源在 `lib/env-check.ps1`**（`Resolve-AdbExeLocal`）：本文件**不得**再自带候选集。
+    #    2026-09-15 血账（#1027）：这里曾内联第二份（只查 `$env:ANDROID_SDK_ROOT` / `$env:ANDROID_HOME` /
+    #    `Get-Command adb`），比 env-check 那份**少了 `D:\android-sdk\platform-tools\adb.exe` 兜底**
+    #    ⇒ 本机（两个 env 都未设、adb 不在 PATH、adb 在 D 盘）步骤 2/5 能过、**步骤 6 恒报「找不到 adb.exe」**，
+    #    而步骤 4/5 已真跑完并产生副作用（编译 + 部署），步骤 7–9 永远到不了 ——
+    #    这正是 ADR-0008「门脚本共享载体」记的那类分叉：解析器被复制而不是复用，两份悄悄漂移。
+    #    env-check.ps1 只含函数定义（dot-source 无副作用）；本模块**独立调用**时补加载，
+    #    在 dev:finish 里它已在步骤 2 被 dot-source ⇒ 这里不会重复加载（与下面 `ConvertFrom-GitQuotedPath`
+    #    同一套懒加载写法，故 `$PSScriptRoot` 同源指向 `scripts/lib`）。
+    if (-not (Get-Command Resolve-AdbExeLocal -ErrorAction SilentlyContinue)) {
+        . (Join-Path $PSScriptRoot 'env-check.ps1')
     }
-    if (-not $adbExe) {
-        $cmd = Get-Command adb -ErrorAction SilentlyContinue
-        if ($cmd) { $adbExe = $cmd.Source }
-    }
+    $adbExe = Resolve-AdbExeLocal
     if (-not $adbExe) {
         return [pscustomobject]@{ Ok = $false; Screenshots = @(); Skipped = @(); HashConflicts = @(); TargetPages = @(); Error = '找不到 adb.exe' }
     }

@@ -35,6 +35,10 @@
  *   S19 【2026-09-15】**灭屏前置**：`mWakefulness` 非 Awake ⇒ 直接拒绝截图（fail-closed，不注入 input）
  *   S20 【2026-09-15】**包装脚本必须钉 UTF-8 解码**：否则 CLI 的 UTF-8 输出被按 OEM 码页解码后再写盘
  *       ⇒ 页面进入行变双重编码乱码 ⇒ S17 的页身份判据永远匹配不到（本地假 cli 已实证）
+ *   S21 【2026-09-15，#1027】**adb 解析不得再有第二份**：必须复用 `lib/env-check.ps1` 的
+ *       `Resolve-AdbExeLocal`（代码里不得再出现候选集原文；独立调用时懒加载补唯一真源）。
+ *       两份漂移的后果实测：步骤 2/5 能过而步骤 6 恒报「找不到 adb.exe」，步骤 7–9 永远到不了。
+ *       行为面的一致性（结论必须相同）由 `autoScreenshotAdbAgreementBehavior.test.js`（A1–A3）另钉。
  */
 const fs = require('fs');
 const path = require('path');
@@ -257,5 +261,33 @@ describe('auto-screenshot.ps1 contract', () => {
     const block = src.slice(at, at + 800);
     expect(block).toMatch(/\[Console\]::OutputEncoding/);
     expect(block).toMatch(/\*>\s*'\$outFile'/);
+  });
+
+  // S21（2026-09-15，#1027）：adb 解析**不得再有第二份**。
+  //   症状：本文件曾内联自己的候选集（只查 `$env:ANDROID_SDK_ROOT` / `$env:ANDROID_HOME` / `Get-Command adb`），
+  //   比 `env-check.ps1` 的 `Resolve-AdbExeLocal` 少了 `D:\android-sdk\platform-tools\adb.exe` 兜底 ⇒
+  //   本机（两个 env 未设、adb 不在 PATH、adb 在 D 盘）步骤 2/5 能过、**步骤 6 恒报「找不到 adb.exe」**，
+  //   而步骤 4/5 已真跑完并产生副作用（编译 + 部署），步骤 7–9 永远到不了 ——
+  //   这正是 ADR-0008「门脚本共享载体」记的「解析器被复制而不是复用」那类分叉。
+  //   ⚠️ 断言前**必须剥注释**：本文件、脚本头与调用点的注释里都会引用旧候选集原文（本仓血账：注释会命中断言）。
+  test('S21: 【2026-09-15，#1027】adb resolution delegates to the single source (no second candidate list)', () => {
+    const code = src.replace(/<#[\s\S]*?#>/g, '').replace(/^\s*#.*$/gm, '');
+
+    // 反例：代码里不得再出现第二份候选集
+    expect(code).not.toMatch(/ANDROID_SDK_ROOT|ANDROID_HOME/);
+    expect(code).not.toMatch(/platform-tools/);
+    expect(code).not.toMatch(/Get-Command\s+adb/);
+
+    // 正例：复用唯一真源 `env-check.ps1` 的解析器，且**懒加载**（本模块被单独调用时也能补上）
+    expect(code).toMatch(/\.\s*\(Join-Path\s+\$PSScriptRoot\s+'env-check\.ps1'\)/);
+    expect(code).toMatch(/Get-Command\s+Resolve-AdbExeLocal\s+-ErrorAction\s+SilentlyContinue/);
+
+    // 解析不到时仍必须 fail-closed 返回（不得静默继续跑到后面拿 $null 当路径用）
+    const assignAt = code.indexOf('$adbExe = Resolve-AdbExeLocal');
+    expect(assignAt).toBeGreaterThan(-1);
+    const after = code.slice(assignAt, assignAt + 400);
+    expect(after).toMatch(/if\s*\(-not\s+\$adbExe\)\s*\{/);
+    expect(after).toMatch(/找不到 adb\.exe/);
+    expect(after).toMatch(/return\s+\[pscustomobject\]/);
   });
 });
