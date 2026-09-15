@@ -227,7 +227,7 @@ defineProps<{
 | 设置 | `pages/profile/settings.uvue` |
 | 个人信息 | `pages/profile/personal-info.uvue` |
 | 消息通知 | `pages/notifications/notifications.uvue` |
-| 搜索 | `pages/search/search.uvue` |
+| 搜索 | `pages/search/search.uvue` ✅ 已改造（#979，2026-09-15） |
 | 签到 | `pages/forum/check-in.uvue` |
 
 ### P3 — 其余页面
@@ -242,19 +242,25 @@ defineProps<{
 
 全局搜索并替换以下硬编码值：
 
+> ⚠️ 本表的变量名以 `uni.scss` **实际定义**为准（2026-09-15 校正，#979 实测）：
+> 此前表里写的 `$text-secondary` / `$text-placeholder` / `$text-disabled` / `$bg-page` **在 `uni.scss` 里都不存在**——
+> 照着旧表写会**静默失效**（`<style>` 未声明 `lang="scss"` 时变量不预处理、声明被丢弃，页面看不出报错，只是颜色没生效；
+> `components/app-chip` 与 `components/app-empty-state` 就是这样中招的）。
+> 机检：`utils/searchContract.test.js`「引用的 $变量在 uni.scss 里都存在」。
+
 | 硬编码值 | 替换为 Token |
 |---|---|
 | `#2979ff` | `$primary-color` |
 | `#5b9aff` | `$primary-color-light` |
 | `#1c9eff` | `$primary-color-dark` |
 | `#333333` / `#333` | `$text-color` |
-| `#666666` / `#666` | `$text-secondary` |
-| `#999999` / `#999` | `$text-placeholder` |
-| `#cccccc` / `#ccc` | `$text-disabled` |
-| `#f8f8f8` / `#F5F5F5` | `$bg-page` |
-| `#ffffff` / `#FFFFFF` | `$card-bg` |
+| `#666666` / `#666` | `$text-color-secondary` |
+| `#999999` / `#999` | `$text-color-placeholder` |
+| `#cccccc` / `#ccc` | 无对应 token（uni.scss 未定义；如确需请先补 token 再引用） |
+| `#f8f8f8` / `#F5F5F5` | `$bg-color`（`uni.scss` 定义为 `#f8f8f8`） |
+| `#ffffff` / `#FFFFFF` | `$card-bg`（白字用 `$text-color-inverse`） |
 | `#e5e5e5` / `#e0e0e0` | `$border-color` |
-| `#F0F0F0` | `$border-color` |
+| `#F0F0F0` | `$border-color-light`（`$border-color` 是 `#e5e5e5`） |
 
 ### 4.2 border-radius 统一
 
