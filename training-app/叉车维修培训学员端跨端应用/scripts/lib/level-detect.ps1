@@ -7,7 +7,11 @@
       - 改动集包含 manifest.json / pages.json / platformConfig.json → full（🔴）
       - 改动集包含新增的 .uvue 页面文件 → full（🔴）
       - 改动集包含 .uts 文件 → standard（🟡）
-      - 其他（只改 .uvue 模板/样式）→ quick（🟢）
+      - 其他（未命中运行时面）→ quick（🟢），且 `Reason` **分两种写清**：
+          · 改动集里**只有**工具链/测试/文档类文件（`.ps1`/`.js`/`.mjs`/`.json`/`.md`）
+            ⇒ 原因写「工具链/测试改动，未命中运行时面」——**不要**把它报成「纯样式/文案改动」
+            （改脚本不是样式改动；这类改动按契约测试间接验证，不会自动跑真机）
+          · 其余（含只改 `.uvue` 模板/样式）⇒ 原因写「纯样式/文案改动，未命中运行时面」
 
     支持 -ForceLevel 参数覆盖自动判定。
 
@@ -16,6 +20,41 @@
     $result = Get-DetectLevel -ProjectDir "D:\FL\training-app\叉车维修培训学员端跨端应用"
     Write-Host "Level: $($result.Level) — $($result.Reason)"
 #>
+
+function ConvertFrom-GitQuotedPath {
+    <#
+      把 git 的**引号+八进制转义**路径还原成真实路径（纯函数，便于运行期断言）。
+      为什么需要：`core.quotepath=true`（git 默认）下，**非 ASCII 路径**会被整条加引号并转义，
+      例如 `"training-app/\345\217\211.../AGENTS.md"` —— 末尾是 `md"` 而**不是** `md`
+      ⇒ 任何 `-match '\.md$'` / `'\.uvue$'` / `'\.uts$'` 一律**静默失配**。
+      2026-09-15 实测踩到：改了一堆中文目录下的 `.ps1`/`.js`/`.md`，工具链分支从未命中。
+      ⇒ 纯 ASCII 路径（如 `pages/**/*.uvue`）不受影响，但**中文名**的页面/脚本会漏判。
+
+      ⚠️ 不能把 `\ooo` 直接转成 `[char]`：那会把 UTF-8 的**每个字节**当成一个 Latin-1 字符
+      （`叉` = E5 8F 89 ⇒ 长度 3 而非 1），路径就废了。必须**先攒字节数组、再按 UTF-8 解码**。
+    #>
+    param([string]$Path)
+    if ([string]::IsNullOrEmpty($Path)) { return $Path }
+    if ($Path -notmatch '^"(.*)"$') { return $Path }
+    $inner = $Matches[1]
+    $bytes = New-Object System.Collections.Generic.List[byte]
+    $i = 0
+    while ($i -lt $inner.Length) {
+        if ($inner[$i] -eq '\' -and ($i + 3) -lt $inner.Length -and $inner.Substring($i + 1, 3) -match '^[0-7]{3}$') {
+            $bytes.Add([byte][Convert]::ToInt32($inner.Substring($i + 1, 3), 8))
+            $i += 4
+        }
+        elseif ($inner[$i] -eq '\' -and ($i + 1) -lt $inner.Length) {
+            $bytes.Add([byte][int][char]$inner[$i + 1])   # 转义的字面字符（ASCII）
+            $i += 2
+        }
+        else {
+            $bytes.Add([byte][int][char]$inner[$i])
+            $i++
+        }
+    }
+    return [System.Text.Encoding]::UTF8.GetString($bytes.ToArray())
+}
 
 function Get-DetectLevel {
     [CmdletBinding()]
@@ -34,6 +73,8 @@ function Get-DetectLevel {
         }
     }
 
+    # 路径归一化见**文件作用域**的 ConvertFrom-GitQuotedPath（与本函数同级，便于被运行期断言直接测）。
+
     # 获取改动文件列表
     $changedFiles = @()
     $gitArgs = @('diff', '--name-only', 'HEAD')
@@ -43,7 +84,7 @@ function Get-DetectLevel {
     try {
         $raw = & git @gitArgs 2>$null
         if ($raw) {
-            $changedFiles = @($raw | Where-Object { $_ -and $_.Trim() } | ForEach-Object { $_.Trim() })
+            $changedFiles = @($raw | Where-Object { $_ -and $_.Trim() } | ForEach-Object { ConvertFrom-GitQuotedPath $_.Trim() })
         }
     } catch {
         # git 不可用，降级为 quick
@@ -63,7 +104,7 @@ function Get-DetectLevel {
     try {
         $stagedRaw = & git @stagedArgs 2>$null
         if ($stagedRaw) {
-            $stagedFiles = @($stagedRaw | Where-Object { $_ -and $_.Trim() } | ForEach-Object { $_.Trim() })
+            $stagedFiles = @($stagedRaw | Where-Object { $_ -and $_.Trim() } | ForEach-Object { ConvertFrom-GitQuotedPath $_.Trim() })
         }
     } catch { }
 
@@ -107,7 +148,7 @@ function Get-DetectLevel {
     try {
         $newRaw = & git @statusArgs 2>$null
         if ($newRaw) {
-            $newPages = @($newRaw | Where-Object { $_ -match '\.uvue$' })
+            $newPages = @($newRaw | Where-Object { $_ -and $_.Trim() } | ForEach-Object { ConvertFrom-GitQuotedPath $_.Trim() } | Where-Object { $_ -match '\.uvue$' })
         }
     } catch { }
 
@@ -129,10 +170,24 @@ function Get-DetectLevel {
         }
     }
 
-    # 🟢 快速：只改 .uvue 模板/样式或其他文件
+    # 🟢 快速：未命中运行时面（`.uvue` / `.uts` / 三份 json 都不是）。但**原因分两种写清** ——
+    #    否则「改了工具链脚本」会被报成「纯样式/文案改动」。2026-09-14 两次实际会话都踩到这个误导：
+    #    改 `.ps1` 被判 🟢、文案却说成样式改动，而真相是「工具链改动、按契约测试间接验证」。
+    #    分档本身（🟢）不变：这些文件确实不命中运行时面；变的是**告诉用户为什么**。
+    $uvueFiles = @($allFiles | Where-Object { $_ -match '\.uvue$' })
+    $toolchainFiles = @($allFiles | Where-Object { $_ -match '\.(ps1|js|mjs|json|md)$' })
+
+    if ($uvueFiles.Count -eq 0 -and $toolchainFiles.Count -gt 0) {
+        return [pscustomobject]@{
+            Level        = 'quick'
+            Reason       = "工具链/测试改动，未命中运行时面（$($toolchainFiles.Count) 个文件）—— 按契约测试间接验证，不会自动跑真机"
+            ChangedFiles = $allFiles
+        }
+    }
+
     return [pscustomobject]@{
         Level        = 'quick'
-        Reason       = "纯样式/文案改动（$($allFiles.Count) 个文件）"
+        Reason       = "纯样式/文案改动，未命中运行时面（$($allFiles.Count) 个文件）"
         ChangedFiles = $allFiles
     }
 }
