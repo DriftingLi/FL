@@ -1,11 +1,11 @@
 <template>
-	<view class="ai-page">
+	<view class="ai-page" :style="{ height: pageHeight + 'px' }">
 		<!-- 自定义导航栏 -->
 		<AiChatNav :status-bar-height="statusBarHeight" @left-click="toggleSidebarLeft" @menu-click="toggleSidebarRight" />
 
 		<!-- 主内容区 -->
 		<view class="main">
-			<scroll-view scroll-y class="pro-scroll" :scroll-into-view="scrollIntoViewId" scroll-with-animation>
+			<scroll-view class="pro-scroll" scroll-y="true" :scroll-into-view="scrollIntoViewId" scroll-with-animation>
 				<!-- 专业版档位横幅（#920）：未解锁=橙 +「查看权益」；已解锁=绿 + 只读状态。
 				     配色按设计用**实色**（两态实色更干净；不是能力限制 —— #937 真机实测已证伪「本机型不绘制渐变」） -->
 				<view class="pro-banner" :class="proUnlocked ? 'pro-banner-unlocked' : ''" @click="openProSheet">
@@ -193,6 +193,9 @@
 	// 空串 = 通用对话（后端按通用助手计费）。
 	// 只影响**本轮对话**，不影响建会话：会话按功能键分区，而列表不查专项区（见 api/aiAssistant.uts）。
 	const pendingFeatureKey = ref<string>('')
+
+	// 根容器高度（#998）：与 ai-settings.uvue 同款，给根节点一个确定高度；onLoad 里赋值。
+	const pageHeight = ref<number>(0)
 
 	// 档位横幅文案（两态单点；未解锁 = 兑换主曝光位，已解锁 = 只读状态）
 	const proBannerTitle = computed<string>(() : string => {
@@ -515,6 +518,8 @@
 	onLoad((options : OnLoadOptions) => {
 		const sysInfo = uni.getSystemInfoSync()
 		statusBarHeight.value = sysInfo.statusBarHeight
+		// 根容器高度（#998）：与 ai-settings.uvue 同款
+		pageHeight.value = sysInfo.windowHeight
 
 		auth.restoreFromStorage()
 		if (!auth.isLoggedIn.value) {
@@ -571,6 +576,10 @@
 
 	.pro-scroll {
 		flex: 1;
+		/* #998：必须 height:0 + flex:1（同 ai-settings.uvue 的 .content-scroll）——只给 flex:1 时
+		   滚动容器会长到内容高度（实测背景区域 846rpx > 窗口 771），没有可滚动余量 ⇒ 手势滚不动；
+		   而 scroll-into-view 仍会视觉上跳到底部，所以看起来「能滚」。 */
+		height: 0;
 		padding: 24rpx;
 	}
 
