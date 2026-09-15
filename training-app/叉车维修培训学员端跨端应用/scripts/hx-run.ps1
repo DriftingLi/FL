@@ -415,6 +415,16 @@ function Start-CliLaunchDetached {
       launch 步专用：**派发后不等待**（真运行会话不返回，见脚本头「真运行会话常驻」）。
       输出重定向到日志目录里的文件，返回该文件路径，供后续扫 error 行 / 抽时间戳。
       **不 kill、不等待、不设超时** —— 那个会话什么时候结束，由人在 HBuilderX 里决定。
+
+      ⚠️ **为什么用「包装脚本 + UseShellExecute 新进程树」而不是 Start-Process -Redirect***（2026-09-15 实测）：
+        `Start-Process -NoNewWindow -PassThru -RedirectStandard*` 会把**本进程的 stdout 句柄**
+        继承给那个常驻的 cli 进程 ⇒ 调用链上**任意祖先**的 `| Out-String` / `*> logfile` 都要等它结束。
+        实测（假 cli 常驻 20 秒）：经 build-deploy → hx-run 这条链，外层管道**22 秒**才收口；
+        而 `hx-run` 的主进程因此走不到 `finally { Release-HxLock }` ⇒ **锁残留**，
+        把别的会话卡到 180 秒超时（维护者 2026-09-15 实测踩到）。
+        改用 `UseShellExecute = $true` 让子进程拿到**自己的进程树**（不继承句柄），
+        并让**包装脚本自己**把输出写进日志文件（`*>`，不经 cmd 重解析）⇒ 同时满足「断开」与「有日志」。
+        实测同一链条：**2 秒**收口、且日志照常写入。
     #>
     param([string[]]$CliArgs, [string]$CliExe, [string]$LogDir, [string]$LogFile)
     $display = Format-ArgvLine -Exe $CliExe -CliArgs $CliArgs
@@ -423,9 +433,33 @@ function Start-CliLaunchDetached {
     $stamp = [guid]::NewGuid().ToString('N')
     $outFile = Join-Path $LogDir "launch-$stamp.out"
     $errFile = Join-Path $LogDir "launch-$stamp.err"
+
+    # 包装脚本：自己把 cli 的输出落到日志文件（父进程不参与任何重定向 ⇒ 不持有子进程的流）
+    $pwshExe = (Get-Process -Id $PID).Path
+    if (-not $pwshExe) { $pwshExe = 'pwsh' }
+    $wrapFile = Join-Path $LogDir "launch-$stamp.wrap.ps1"
     $argLine = ($CliArgs | ForEach-Object { if ("$_" -match '\s') { '"' + $_ + '"' } else { "$_" } }) -join ' '
-    $proc = Start-Process -FilePath $CliExe -ArgumentList $argLine -NoNewWindow -PassThru `
-        -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+    $wrapLines = @(
+        '$ErrorActionPreference = ''Continue'''
+        "& '$CliExe' $argLine *> '$outFile'"
+    )
+    # 不写 BOM、按 UTF-8 落盘：脚本体内一律 ASCII（含 cli 路径/参数），避免编码坑
+    [System.IO.File]::WriteAllLines($wrapFile, $wrapLines, (New-Object System.Text.UTF8Encoding($false)))
+
+    $si = New-Object System.Diagnostics.ProcessStartInfo
+    $si.FileName = $pwshExe
+    $si.Arguments = '-NoProfile -ExecutionPolicy Bypass -File "' + $wrapFile + '"'
+    $si.UseShellExecute = $true          # ← 关键：新进程树，**不继承**本进程的 stdout/stderr 句柄
+    $si.WindowStyle = 'Hidden'
+    $si.WorkingDirectory = (Split-Path -Parent $LogDir)
+    try {
+        $proc = [System.Diagnostics.Process]::Start($si)
+    }
+    catch {
+        # 派发失败也要让调用方拿到对象（fail-closed：Proc=$null，主循环已判空并按「已退出」处理）
+        $proc = $null
+        Add-Content -LiteralPath $LogFile -Value "[error] 派发 launch 失败：$($_.Exception.Message)" -Encoding utf8
+    }
     return [pscustomobject]@{ Proc = $proc; OutFile = $outFile; ErrFile = $errFile; Display = $display; Started = (Get-Date) }
 }
 
@@ -778,7 +812,12 @@ while ((Get-Date) -lt $deadline) {
     # #974：收手判定集中到纯函数 —— 前进即 PASS；未前进时必须等满 -DeployDeadlineSeconds（默认 60 秒）
     # 才允许因「会话退出 / 停滞 / 到顶」收手。**不要**改回「会话一退出就 break」：
     # 实测资源落盘比推送晚 7–21 秒，那样会把「稍后落盘」误判成未部署（白重跑一轮约 7 分钟编译）。
-    $stop = Test-DeployObservationStop -Deployed $probe.Deployed -PolledSeconds $polledSeconds -Exited $launch.Proc.HasExited -CompileFinished $compileFinished -DeployDeadlineSeconds $DeployDeadlineSeconds -StallSeconds $DeployStallSeconds -TimeoutSeconds $TimeoutSeconds
+    # ⚠️ `$launch.Proc` 可能是 $null（派发失败，见 Start-CliLaunchDetached 的 catch）：
+    #    `Set-StrictMode -Latest` 下直接访问 `$null.HasExited` 会**抛错**，
+    #    故必须先判空；判空后按「已退出」处理是 fail-closed（让收手判定走 exited 分支，不空转）。
+    $launchExited = $true
+    if ($launch.Proc) { $launchExited = [bool]$launch.Proc.HasExited }
+    $stop = Test-DeployObservationStop -Deployed $probe.Deployed -PolledSeconds $polledSeconds -Exited $launchExited -CompileFinished $compileFinished -DeployDeadlineSeconds $DeployDeadlineSeconds -StallSeconds $DeployStallSeconds -TimeoutSeconds $TimeoutSeconds
     if ($stop.Stop) {
         if ($stop.Outcome -eq 'exited') { $launchExitedEarly = $true }
         if ($stop.Outcome -eq 'stalled') { $stalledEarly = $true }
