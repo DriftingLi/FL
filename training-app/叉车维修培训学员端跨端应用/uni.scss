@@ -90,10 +90,16 @@ $text-color: #333333;
 $text-color-secondary: #666666;
 $text-color-placeholder: #999999;
 $text-color-inverse: #ffffff;
+/* 禁用 / 弱化文字（ui-spec 1.4 记作 $text-disabled；此前只在页面上以 #cccccc 字面值出现） */
+$text-disabled: #cccccc;
 
 /* 背景色 */
 $bg-color: #f8f8f8;
 $card-bg: #ffffff;
+/* 页面画布淡蓝调（#979 搜索页：白卡浮在淡蓝画布上，避免整页纯白/纯灰） */
+$bg-tint: #f1f6ff;
+/* 主色浅底（分区标题带、选中标签、历史 chip 底；收敛此前散落的 #EBF5FF 字面值） */
+$primary-tint: #ebf5ff;
 
 /* 边框色 */
 $border-color: #e5e5e5;

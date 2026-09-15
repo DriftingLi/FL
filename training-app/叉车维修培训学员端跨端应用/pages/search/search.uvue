@@ -2,7 +2,7 @@
 	<view class="search-page">
 		<view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
 
-		<!-- 搜索栏 -->
+		<!-- 搜索栏：主色区 + 白色胶囊输入（对齐 course-detail / featured-list 等非 tabBar 页的既有写法） -->
 		<view class="search-header">
 			<view class="search-input-wrap">
 				<text class="search-icon">🔍</text>
@@ -31,22 +31,24 @@
 			<view v-if="activeTypeIdx == 0">
 				<view v-for="(section, sIdx) in sections" :key="section.key" class="result-section">
 					<view class="section-header">
+						<view class="section-accent"></view>
 						<text class="section-title">{{ section.label }}</text>
 						<text class="section-total">{{ section.total }} 条</text>
 						<text v-if="section.total > section.items.length" class="section-more"
 							@click="onSectionMore(section.key)">查看全部</text>
 					</view>
 					<view v-if="section.items.length > 0">
-						<view v-for="(item, idx) in section.items" :key="idx" class="result-item" @click="onItemClick(item)">
+						<view v-for="(item, idx) in section.items" :key="idx" class="result-item"
+							:class="{ 'result-item--last': idx == section.items.length - 1 }" @click="onItemClick(item)">
 							<image v-if="item.cover.length > 0" class="item-cover" :src="item.cover" mode="aspectFill" />
 							<view class="item-content">
 								<text class="item-title">
 									<text v-for="(seg, tIdx) in itemTitleSegments(item)" :key="tIdx"
-										:class="seg.hit ? 'item-hl' : 'item-plain'">{{ seg.text }}</text>
+										:class="seg.hit ? 'item-hl' : 'item-title-plain'">{{ seg.text }}</text>
 								</text>
-								<text v-if="itemSnippetText(item).length > 0" class="item-summary">
+								<text v-if="showSnippet(item)" class="item-summary">
 									<text v-for="(seg, pIdx) in itemSnippetSegments(item)" :key="pIdx"
-										:class="seg.hit ? 'item-hl' : 'item-plain'">{{ seg.text }}</text>
+										:class="seg.hit ? 'item-hl' : 'item-summary-plain'">{{ seg.text }}</text>
 								</text>
 								<text v-if="itemHitLabel(item).length > 0" class="item-hit">{{ itemHitLabel(item) }}</text>
 							</view>
@@ -57,31 +59,33 @@
 				</view>
 
 				<view v-if="isAllEmpty" class="empty-wrap">
-					<AppEmptyState icon="" text="未找到相关内容" />
+					<AppEmptyState icon="🔍" text="未找到相关内容" />
 				</view>
 			</view>
 
 			<!-- 指定类型结果（分页） -->
 			<view v-else>
-				<view v-for="(item, idx) in typedResult.items" :key="idx" class="result-item"
-					@click="onItemClick(item)">
-					<image v-if="item.cover.length > 0" class="item-cover" :src="item.cover" mode="aspectFill" />
-					<view class="item-content">
-						<text class="item-title">
-							<text v-for="(seg, tIdx) in itemTitleSegments(item)" :key="tIdx"
-								:class="seg.hit ? 'item-hl' : 'item-plain'">{{ seg.text }}</text>
-						</text>
-						<text v-if="itemSnippetText(item).length > 0" class="item-summary">
-							<text v-for="(seg, pIdx) in itemSnippetSegments(item)" :key="pIdx"
-								:class="seg.hit ? 'item-hl' : 'item-plain'">{{ seg.text }}</text>
-						</text>
-						<text v-if="itemHitLabel(item).length > 0" class="item-hit">{{ itemHitLabel(item) }}</text>
+				<view class="typed-card">
+					<view v-for="(item, idx) in typedResult.items" :key="idx" class="result-item"
+						:class="{ 'result-item--last': idx == typedResult.items.length - 1 }" @click="onItemClick(item)">
+						<image v-if="item.cover.length > 0" class="item-cover" :src="item.cover" mode="aspectFill" />
+						<view class="item-content">
+							<text class="item-title">
+								<text v-for="(seg, tIdx) in itemTitleSegments(item)" :key="tIdx"
+									:class="seg.hit ? 'item-hl' : 'item-title-plain'">{{ seg.text }}</text>
+							</text>
+							<text v-if="showSnippet(item)" class="item-summary">
+								<text v-for="(seg, pIdx) in itemSnippetSegments(item)" :key="pIdx"
+									:class="seg.hit ? 'item-hl' : 'item-summary-plain'">{{ seg.text }}</text>
+							</text>
+							<text v-if="itemHitLabel(item).length > 0" class="item-hit">{{ itemHitLabel(item) }}</text>
+						</view>
+						<text class="item-arrow">›</text>
 					</view>
-					<text class="item-arrow">›</text>
 				</view>
 
 				<view v-if="typedResult.items.length == 0 && !loading" class="empty-wrap">
-					<AppEmptyState icon="" text="未找到相关内容" />
+					<AppEmptyState icon="🔍" text="未找到相关内容" />
 				</view>
 
 				<view v-if="loading" class="loading-wrap">
@@ -97,6 +101,7 @@
 		<!-- 初始态：搜索历史（只留端上，ADR-0049 决策 7；与 Web searchHistory 同口径） -->
 		<view v-if="!hasSearched && searchHistory.length > 0" class="history-section">
 			<view class="history-header">
+				<view class="section-accent"></view>
 				<text class="history-title">搜索历史</text>
 				<text class="history-clear" @click="onClearHistory">清空</text>
 			</view>
@@ -116,7 +121,7 @@
 	import { useStatusBarHeight } from '../../utils/system'
 	import { getCurrentCredentialApi } from '../../api/credential'
 	import { searchAllApi, searchByTypeApi } from '../../api/search'
-	import { splitHighlight, searchItemPath, hitLabel, displaySnippet, sectionLabel } from '../../utils/searchDisplay'
+	import { splitHighlight, searchItemPath, hitLabel, displaySnippet, sectionLabel, itemPrimaryText, shouldShowSnippet } from '../../utils/searchDisplay'
 	import AppChip from '../../components/app-chip/app-chip.uvue'
 	import AppEmptyState from '../../components/app-empty-state/app-empty-state.uvue'
 	import type { SearchItem, SearchCategoryResult, SearchResult, SearchPagedResult, HighlightSegment } from '../../types/index'
@@ -197,8 +202,9 @@
 
 	// ===== 展示包装（uvue 模板不能直调 import 的函数，先例 featured-detail 的 displayTime） =====
 
+	/** 主行 = 结果行的「身份」文案；题目分区的主行是命中窗口（见 searchDisplay.itemPrimaryText） */
 	function itemTitleSegments(item : SearchItem) : HighlightSegment[] {
-		return splitHighlight(item.title, keyword.value)
+		return splitHighlight(itemPrimaryText(item), keyword.value)
 	}
 
 	function itemSnippetText(item : SearchItem) : string {
@@ -207,6 +213,12 @@
 
 	function itemSnippetSegments(item : SearchItem) : HighlightSegment[] {
 		return splitHighlight(itemSnippetText(item), keyword.value)
+	}
+
+	/** 片段行是否该出现：题目只留一行；片段与标题属同一段文本时也不重复渲染 */
+	function showSnippet(item : SearchItem) : boolean {
+		if (!shouldShowSnippet(item)) return false
+		return itemSnippetText(item).length > 0
 	}
 
 	function itemHitLabel(item : SearchItem) : string {
@@ -394,34 +406,37 @@
 </script>
 
 <style lang="scss">
+	/* 画布：淡蓝调（$bg-tint）——白卡浮在其上，整页不再是一片纯白/纯灰 */
 	.search-page {
 		flex: 1;
-		background-color: $bg-color;
+		background-color: $bg-tint;
 		flex-direction: column;
 	}
 
+	/* 主色区（对齐 course-detail / featured-list / chapter-view 等非 tabBar 页的既有写法） */
 	.status-bar {
-		background-color: $card-bg;
+		background-color: $primary-color;
 	}
 
 	.search-header {
 		flex-direction: row;
 		align-items: center;
 		padding: 16rpx 24rpx;
-		background-color: $card-bg;
+		background-color: $primary-color;
 	}
 
 	.search-input-wrap {
 		flex: 1;
 		flex-direction: row;
 		align-items: center;
-		background-color: $bg-color;
-		border-radius: $radius-xl;
-		padding: 16rpx 24rpx;
+		height: 88rpx;
+		background-color: $card-bg;
+		border-radius: $radius-pill;
+		padding: 0 8rpx 0 24rpx;
 	}
 
 	.search-icon {
-		font-size: $font-size-md;
+		font-size: 28rpx;
 		margin-right: 12rpx;
 	}
 
@@ -431,27 +446,27 @@
 		color: $text-color;
 	}
 
+	/* 清空：无底色裸 ✕，命中区 88rpx（44px，满足 AGENTS 的触摸区下限） */
 	.search-clear {
-		width: 40rpx;
-		height: 40rpx;
-		border-radius: 50%;
-		background-color: #cccccc;
+		width: 88rpx;
+		height: 88rpx;
 		align-items: center;
 		justify-content: center;
-		margin-left: 12rpx;
 	}
 
 	.search-clear-text {
-		font-size: 20rpx;
-		color: $text-color-inverse;
+		font-size: 30rpx;
+		color: $text-color-placeholder;
 	}
 
 	.search-cancel {
 		font-size: $font-size-md;
-		color: $primary-color;
-		margin-left: 20rpx;
+		color: $text-color-inverse;
+		padding: 24rpx 8rpx 24rpx 24rpx;
+		margin-left: 8rpx;
 	}
 
+	/* 筛选条：白底 + 细分隔线；选中档位由 AppChip 的主色实底承担 */
 	.type-tabs-scroll {
 		background-color: $card-bg;
 		border-bottom-width: 1rpx;
@@ -476,23 +491,42 @@
 		flex: 1;
 	}
 
+	/* 分区卡片（全部态）：白卡 + 主色浅底标题带 + 主色小竖条 */
 	.result-section {
 		background-color: $card-bg;
 		margin: 16rpx 24rpx;
 		border-radius: $radius-md;
-		padding: 24rpx;
+		padding: 16rpx 24rpx 8rpx;
+	}
+
+	.typed-card {
+		background-color: $card-bg;
+		margin: 16rpx 24rpx;
+		border-radius: $radius-md;
+		padding: 8rpx 24rpx;
 	}
 
 	.section-header {
 		flex-direction: row;
 		align-items: center;
-		margin-bottom: 16rpx;
+		background-color: $primary-tint;
+		border-radius: $radius-sm;
+		padding: 12rpx 16rpx;
+		margin-bottom: 8rpx;
+	}
+
+	.section-accent {
+		width: 6rpx;
+		height: 28rpx;
+		border-radius: 3rpx;
+		background-color: $primary-color;
 	}
 
 	.section-title {
 		font-size: 30rpx;
 		font-weight: bold;
 		color: $text-color;
+		margin-left: 14rpx;
 	}
 
 	.section-total {
@@ -510,15 +544,20 @@
 	.section-empty {
 		font-size: $font-size-sm;
 		color: $text-color-placeholder;
-		padding: 8rpx 0;
+		padding: 20rpx 0;
 	}
 
 	.result-item {
 		flex-direction: row;
 		align-items: center;
-		padding: 20rpx 0;
+		padding: 24rpx 0;
 		border-bottom-width: 1rpx;
 		border-bottom-color: $border-color-light;
+	}
+
+	/* uvue 不支持 :last-child ⇒ 由模板给末行加类去分隔线 */
+	.result-item--last {
+		border-bottom-width: 0;
 	}
 
 	.item-cover {
@@ -542,7 +581,7 @@
 
 	.item-summary {
 		font-size: $font-size-sm;
-		color: $text-color-placeholder;
+		color: $text-color-secondary;
 		margin-top: 8rpx;
 		lines: 2;
 		text-overflow: ellipsis;
@@ -554,24 +593,28 @@
 		margin-top: 6rpx;
 	}
 
-	/* 关键词命中：只改字重与颜色，不加背景（uvue 不支持伪元素/内联 mark） */
+	/* 命中：主色 + 加粗；普通段各自沿用所在行的字号与字色（两套类，避免用一套把层级压平） */
 	.item-hl {
 		color: $primary-color;
 		font-weight: 600;
 	}
 
-	.item-plain {
+	.item-title-plain {
 		color: $text-color;
 	}
 
+	.item-summary-plain {
+		color: $text-color-secondary;
+	}
+
 	.item-arrow {
-		font-size: $font-size-xl;
-		color: $text-color-placeholder;
-		margin-left: 16rpx;
+		font-size: $font-size-lg;
+		color: $text-disabled;
+		margin-left: 12rpx;
 	}
 
 	.empty-wrap {
-		padding: 60rpx 0;
+		padding: 40rpx 0;
 	}
 
 	.loading-wrap {
@@ -594,17 +637,20 @@
 		color: $text-color-placeholder;
 	}
 
+	/* 搜索历史：白卡 + 主色浅底胶囊（每条带单删） */
 	.history-section {
 		background-color: $card-bg;
 		margin: 16rpx 24rpx;
 		border-radius: $radius-md;
-		padding: 24rpx;
+		padding: 16rpx 24rpx 24rpx;
 	}
 
 	.history-header {
 		flex-direction: row;
-		justify-content: space-between;
 		align-items: center;
+		background-color: $primary-tint;
+		border-radius: $radius-sm;
+		padding: 12rpx 16rpx;
 		margin-bottom: 20rpx;
 	}
 
@@ -612,11 +658,14 @@
 		font-size: $font-size-md;
 		font-weight: bold;
 		color: $text-color;
+		margin-left: 14rpx;
+		flex: 1;
 	}
 
 	.history-clear {
 		font-size: $font-size-sm;
-		color: $text-color-placeholder;
+		color: $primary-color;
+		padding: 12rpx 8rpx;
 	}
 
 	.history-tags {
@@ -627,20 +676,24 @@
 	.history-tag {
 		flex-direction: row;
 		align-items: center;
-		padding: 12rpx 20rpx;
-		background-color: $bg-color;
-		border-radius: $radius-lg;
+		height: 88rpx;
+		padding-left: 28rpx;
+		background-color: $primary-tint;
+		border-radius: $radius-pill;
 	}
 
 	.history-tag-text {
 		font-size: 26rpx;
-		color: $text-color-secondary;
+		color: $primary-color;
 	}
 
 	.history-tag-delete {
-		font-size: 22rpx;
+		width: 88rpx;
+		height: 88rpx;
+		font-size: 24rpx;
 		color: $text-color-placeholder;
-		margin-left: 12rpx;
+		text-align: center;
+		line-height: 88rpx;
 	}
 
 	.mr-16-mb-16 { margin-right: 16rpx; margin-bottom: 16rpx; }
