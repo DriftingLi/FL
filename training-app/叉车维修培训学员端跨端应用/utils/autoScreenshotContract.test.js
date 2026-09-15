@@ -39,6 +39,10 @@
  *       `Resolve-AdbExeLocal`（代码里不得再出现候选集原文；独立调用时懒加载补唯一真源）。
  *       两份漂移的后果实测：步骤 2/5 能过而步骤 6 恒报「找不到 adb.exe」，步骤 7–9 永远到不了。
  *       行为面的一致性（结论必须相同）由 `autoScreenshotAdbAgreementBehavior.test.js`（A1–A3）另钉。
+ *   S22 【2026-09-15，#1027 收尾真机实测】**「画面稳定」不得用全帧 hash 相等**：系统状态栏的实时读数
+ *       （MIUI 实时网速）会让整帧 hash 恒不同 ⇒ 判据永远不可能满足、步骤 7–9 永远跑不到；
+ *       必须走 `Compare-ScreenFrames` 的宽容比较（差异像素占比 ≤ `-StableMaxDiffPercent`，默认 0.5%）。
+ *       宽容比较本身的语义由 `autoScreenshotStabilityBehavior.test.js`（B1–B4）在运行期另钉。
  */
 const fs = require('fs');
 const path = require('path');
@@ -289,5 +293,34 @@ describe('auto-screenshot.ps1 contract', () => {
     expect(after).toMatch(/if\s*\(-not\s+\$adbExe\)\s*\{/);
     expect(after).toMatch(/找不到 adb\.exe/);
     expect(after).toMatch(/return\s+\[pscustomobject\]/);
+  });
+
+  // S22（2026-09-15，#1027 收尾**真机实测**）：「画面稳定」**不得**用全帧 hash 相等。
+  //   症状：系统状态栏里有**应用控制不了**的实时读数（MIUI「显示实时网速」的 KB/s，每 1–2 秒就变）⇒
+  //   连拍三帧的整帧 sha256 **两两不同**（实测差异**只在顶部 0–99px 状态栏**、MaxDiff 188，
+  //   其余整幅逐字节相同）⇒ 「连续两次采样一致」在该设备上**永远不可能满足** ⇒ 步骤 6 必然 420 秒超时、
+  //   步骤 7–9 永远跑不到（而 app 画面早就落定了）。
+  //   判据：必须走 `Compare-ScreenFrames` 的**宽容**比较（网格差异像素占比 ≤ 阈值），旧 hash 写法不得回写。
+  //   实测标定（同一台设备，1080×2400）：状态栏量级的 churn 在 24/48/96 网格上 = 0%、192 网格 = 0.011%；
+  //   真切页（对照全黑帧）= ~100% ⇒ 默认阈值 0.5% 卡在噪声上方 ~45×、真变化下方 ~200×。
+  test('S22: 【2026-09-15，#1027】screen stability uses tolerant frame comparison, not full-frame hash equality', () => {
+    expect(src).toContain('function Compare-ScreenFrames');
+
+    // 反例（旧写法）：不得再出现「取探针帧的全帧 hash 再与上一帧比相等」这三行
+    expect(src).not.toMatch(/\$h\s*=\s*\(Get-FileHash[^\r\n]*ProbeFile/);
+    expect(src).not.toMatch(/\$h\s*-eq\s*\$prev/);
+    expect(src).not.toMatch(/\$prev\s*=\s*\$h/);
+
+    // 正例：落定循环里必须真的调用宽容比较，并把上一帧留在盘上（否则没有可比对象）
+    expect(src).toMatch(/Compare-ScreenFrames\s+-Path\s+\$ProbeFile\s+-PrevPath\s+\$prevFile/);
+    expect(src).toMatch(/nav-probe-prev\.png/);
+
+    // 阈值必须是**可调参数 + 有默认值**（不许写死在函数体里，也不许悄悄调成 0）
+    expect(src).toMatch(/\$StableMaxDiffPercent\s*=\s*0\.5/);
+    expect(src).toMatch(/-StableMaxDiffPercent\s+\$StableMaxDiffPercent/);
+
+    // 「连续两次采样一致」的语义没变（仍是 stable ≥ 1），fail-closed 出口照旧
+    expect(src).toMatch(/\$stable\s*-ge\s*1/);
+    expect(src).toMatch(/Settled\s*=\s*\$false/);
   });
 });

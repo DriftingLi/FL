@@ -21,7 +21,10 @@
         ⚠️ 派发**必须分离**（`Start-NavLaunchDetached`）：那个 cli 会话**永不自己收口**，
         前台同步等待会让步骤 6 **永久挂住**（2026-09-15 实测：18 分钟零输出、CPU 0.08 秒）。
       · 「导航已落定」= 有界设备侧判据（`Wait-NavSettled`）：等满 `-NavigateMinSeconds`（默认 15s）
-        且画面**连续两次采样一致**；到 `-NavigateTimeoutSeconds`（默认 420s）仍未落定 ⇒ 该页记 `Skipped`
+        且画面**连续两次采样内容一致**（`Compare-ScreenFrames` 的**宽容**比较：差异像素占比 ≤
+        `-StableMaxDiffPercent`，默认 0.5%）—— **不得**用全帧 hash 相等：系统状态栏里的实时读数
+        （MIUI「显示实时网速」）每 1–2 秒就变，会让全帧 hash 恒不同 ⇒ 判据永远不可能满足（2026-09-15 真机实测）。
+        到 `-NavigateTimeoutSeconds`（默认 420s）仍未落定 ⇒ 该页记 `Skipped`
         且**不产截图**（fail-closed：宁可可核地明报，也不拿上一页/白屏当本次证据）。
       · 每页截图算 **SHA256**；与上一页**相同 ⇒ 判切页未生效**（记入 `HashConflicts`，令 `Ok=$false`）
       · **截图文件的时间戳必须晚于本次运行起点**：`$OutputDir` 不清理、文件名按页名固定，
@@ -170,15 +173,76 @@ function Test-ScreenBlank {
     }
 }
 
+function Compare-ScreenFrames {
+    <#
+      两帧是否**内容一致**（宽容比较，而不是逐字节相同）。
+      为什么不能再用全帧 SHA256（2026-09-15 真机实测，血账）：系统状态栏里有**应用控制不了**的实时读数
+      （MIUI「显示实时网速」的 KB/s），它每 1–2 秒就变。实测连拍三帧（间隔 5 秒，1080×2400）：
+        frame-1 / -2 / -3 的整帧 sha256 **两两不同**；按 100px 横带逐带比较发现
+        **只有顶部 0–99px（状态栏）有 >8 的像素差（MaxDiff 188），其余整幅逐字节相同**。
+      ⇒ 全帧 hash 恒不同 ⇒ 「画面稳定」判据**在该设备上永远不可能满足** ⇒ 步骤 6 必然 420 秒超时、
+        步骤 7–9（对比 / 证据 / 还原）永远跑不到 —— 而 app 画面其实早就落定了。
+      现口径：按与 `Test-ScreenBlank` 同一套网格采样，统计**差异像素占比**；≤ `-MaxDiffPercent` 即判内容一致。
+        真切页 / 滚动 / 过渡帧是大面积变化（占比远高于阈值）⇒ 该拦的照旧拦，fail-closed 语义不放宽。
+      **写实边界（不许假称它更严）**：面积小于阈值的动态元素（例如某个 100×100 的动画角标）会被判成「稳定」。
+      取色失败（缺 System.Drawing）⇒ `Same=$false` 且回带 Error：**不**因环境缺件判「稳定」（宁可不落定）。
+    #>
+    param(
+        [string]$Path,
+        [string]$PrevPath,
+        # 单个采样点被判「变了」的通道差阈值（0–255）
+        [int]$DiffThreshold = 8,
+        # 差异像素占比上限（%）：超过即判「画面未落定」
+        [double]$MaxDiffPercent = 0.5
+    )
+    if (-not (Test-Path -LiteralPath $Path) -or -not (Test-Path -LiteralPath $PrevPath)) {
+        return [pscustomobject]@{ Same = $false; DiffPercent = -1; Sampled = 0; Error = '缺帧文件（首帧无可比对象）' }
+    }
+    try {
+        Add-Type -AssemblyName System.Drawing -ErrorAction Stop
+        $imgA = [System.Drawing.Image]::FromFile($Path)
+        $imgB = [System.Drawing.Image]::FromFile($PrevPath)
+        try {
+            $bmpA = New-Object System.Drawing.Bitmap $imgA
+            $bmpB = New-Object System.Drawing.Bitmap $imgB
+            try {
+                if ($bmpA.Width -ne $bmpB.Width -or $bmpA.Height -ne $bmpB.Height) {
+                    return [pscustomobject]@{ Same = $false; DiffPercent = -1; Sampled = 0; Error = "两帧尺寸不同（$($bmpA.Width)x$($bmpA.Height) vs $($bmpB.Width)x$($bmpB.Height)）" }
+                }
+                $stepX = [Math]::Max(1, [int]($bmpA.Width / 24))
+                $stepY = [Math]::Max(1, [int]($bmpA.Height / 24))
+                $diff = 0; $n = 0
+                for ($x = 0; $x -lt $bmpA.Width; $x += $stepX) {
+                    for ($y = 0; $y -lt $bmpA.Height; $y += $stepY) {
+                        $ca = $bmpA.GetPixel($x, $y); $cb = $bmpB.GetPixel($x, $y)
+                        $d = [Math]::Max([Math]::Abs($ca.R - $cb.R), [Math]::Max([Math]::Abs($ca.G - $cb.G), [Math]::Abs($ca.B - $cb.B)))
+                        if ($d -gt $DiffThreshold) { $diff++ }
+                        $n++
+                    }
+                }
+                $pct = if ($n -gt 0) { [Math]::Round(100.0 * $diff / $n, 3) } else { -1 }
+                return [pscustomobject]@{ Same = ($n -gt 0 -and $pct -le $MaxDiffPercent); DiffPercent = $pct; Sampled = $n }
+            }
+            finally { $bmpA.Dispose(); $bmpB.Dispose() }
+        }
+        finally { $imgA.Dispose(); $imgB.Dispose() }
+    }
+    catch {
+        return [pscustomobject]@{ Same = $false; DiffPercent = -1; Sampled = 0; Error = $_.Exception.Message }
+    }
+}
+
 function Wait-NavSettled {
     <#
       有界的「导航已落定」判据（**设备侧事实**，不靠退出码、不靠固定 sleep）。
-      **2026-09-15 修订（血账）**：旧版只要求「画面连续两次采样一致」——实测被**全黑帧**骗过：
+      **2026-09-15 修订一（血账）**：旧版只要求「画面连续两次采样一致」——实测被**全黑帧**骗过：
       灭屏 / 编译期间的黑屏天然稳定，16 秒就「落定」，两张黑图当成了本次证据。
+      **2026-09-15 修订二（#1027 收尾，真机实测）**：那条「一致」原先是**全帧 hash 相等**，
+      在系统状态栏带实时读数的设备上**永远不可能满足**（详见 `Compare-ScreenFrames`）⇒ 改宽容比较。
       现在三条**同时**满足才算落定：
         ① 应用日志里出现**目标页**的页面进入行（`进入页面:"<目标页>"`）—— 页身份的唯一设备侧证据；
         ② 采样帧**不是全黑 / 无内容**（`Test-ScreenBlank`）；
-        ③ 已等满 -MinSeconds 且画面连续两次采样一致。
+        ③ 已等满 -MinSeconds 且相邻两次采样**内容一致**（`Compare-ScreenFrames`，差异占比 ≤ `-StableMaxDiffPercent`）。
       到 -TimeoutSeconds 仍不满足 ⇒ Settled=$false，调用方记 Skipped 且**不产截图**（fail-closed）。
       日志里进的是**别的页**时，Reason 会点名「请求页 X，实际进入 Y」—— 这就是 ADR-0008 要的**页身份**判据。
     #>
@@ -190,33 +254,43 @@ function Wait-NavSettled {
         [string]$ExpectedPage,
         [int]$MinSeconds = 15,
         [int]$TimeoutSeconds = 420,
-        [int]$PollSeconds = 5
+        [int]$PollSeconds = 5,
+        # 「画面稳定」的宽容阈值（差异像素占比 %），见 Compare-ScreenFrames。
+        # 默认 0.5：系统状态栏的实时网速读数约占 0.05%（实测），真切页 / 滚动远高于它。
+        [double]$StableMaxDiffPercent = 0.5
     )
     $start = Get-Date
-    $prev = ''
+    # 宽容比较需要**两帧同时在盘**：探针文件每轮被覆盖，故留一份上一帧的副本。
+    $prevFile = Join-Path (Split-Path -Parent $ProbeFile) 'nav-probe-prev.png'
+    if (Test-Path -LiteralPath $prevFile) { Remove-Item -LiteralPath $prevFile -Force -ErrorAction SilentlyContinue }
     $stable = 0
     $sampled = 0
     $entered = ''
     $blankSeen = 0
+    $lastDiff = -1
     while ($true) {
         Start-Sleep -Seconds $PollSeconds
         $elapsed = [int]((Get-Date) - $start).TotalSeconds
         $cmd = '"{0}" -s {1} exec-out screencap -p > "{2}"' -f $AdbExe, $Serial, $ProbeFile
         & cmd.exe /c $cmd 2>&1 | Out-Null
         $blankNow = $false
+        $sameNow = $false
         if ((Test-Path -LiteralPath $ProbeFile) -and (Get-Item -LiteralPath $ProbeFile).Length -gt 0) {
             $sampled++
             $blankNow = (Test-ScreenBlank -Path $ProbeFile).Blank
             if ($blankNow) { $blankSeen++ }
-            $h = (Get-FileHash -LiteralPath $ProbeFile -Algorithm SHA256).Hash
-            if ($h -eq $prev) { $stable++ } else { $stable = 0 }
-            $prev = $h
+            # ⚠️ **不得**退回「全帧 hash 相等」：那正是被系统状态栏实时读数钉死的写法（见 Compare-ScreenFrames）。
+            $cmp = Compare-ScreenFrames -Path $ProbeFile -PrevPath $prevFile -MaxDiffPercent $StableMaxDiffPercent
+            $sameNow = [bool]$cmp.Same
+            $lastDiff = $cmp.DiffPercent
+            if ($sameNow) { $stable++ } else { $stable = 0 }
+            Copy-Item -LiteralPath $ProbeFile -Destination $prevFile -Force -ErrorAction SilentlyContinue
         }
         $enter = Get-NavEnteredPage -NavOutFile $NavOutFile
         if ($enter) { $entered = $enter }
 
         if ($entered -and $entered -eq $ExpectedPage -and -not $blankNow -and $elapsed -ge $MinSeconds -and $stable -ge 1) {
-            return [pscustomobject]@{ Settled = $true; Seconds = $elapsed; Samples = $sampled; EnteredPage = $entered; Reason = '已进入目标页且画面稳定（连续两次采样一致）' }
+            return [pscustomobject]@{ Settled = $true; Seconds = $elapsed; Samples = $sampled; EnteredPage = $entered; DiffPercent = $lastDiff; Reason = "已进入目标页且画面稳定（相邻两次采样差异 $lastDiff% ≤ $StableMaxDiffPercent%）" }
         }
         if ($elapsed -ge $TimeoutSeconds) {
             $why = if ($entered -and $entered -ne $ExpectedPage) {
@@ -229,9 +303,9 @@ function Wait-NavSettled {
                 "到上限 $TimeoutSeconds 秒日志里始终没有页面进入行（launch 未真正跑起来）"
             }
             else {
-                "到上限 $TimeoutSeconds 秒未同时满足「进入目标页 + 非全黑 + 画面稳定」"
+                "到上限 $TimeoutSeconds 秒未同时满足「进入目标页 + 非全黑 + 画面稳定（相邻帧差异 ≤ $StableMaxDiffPercent%）」（最后一次差异 $lastDiff%）"
             }
-            return [pscustomobject]@{ Settled = $false; Seconds = $elapsed; Samples = $sampled; EnteredPage = $entered; Reason = $why }
+            return [pscustomobject]@{ Settled = $false; Seconds = $elapsed; Samples = $sampled; EnteredPage = $entered; DiffPercent = $lastDiff; Reason = $why }
         }
     }
 }
@@ -247,11 +321,13 @@ function Invoke-AutoScreenshot {
         [switch]$ChangedOnly,
         [int]$MaxPages = 5,
         [int]$WaitSeconds = 3,
-        # 导航落定的有界判据（见 Wait-NavSettled）：等满 MinSeconds 且画面连续两次采样一致才算落定；
+        # 导航落定的有界判据（见 Wait-NavSettled）：等满 MinSeconds 且相邻两次采样**内容一致**才算落定；
         # 到 TimeoutSeconds 仍未落定 ⇒ fail-closed 记 Skipped（不产截图，避免拿上一页当本次证据）。
+        # StableMaxDiffPercent 是「内容一致」的宽容阈值（差异像素占比 %）—— 不得退回全帧 hash 相等。
         [int]$NavigateMinSeconds = 15,
         [int]$NavigateTimeoutSeconds = 420,
-        [int]$PollSeconds = 5
+        [int]$PollSeconds = 5,
+        [double]$StableMaxDiffPercent = 0.5
     )
 
     if (-not $ProjectDir) {
@@ -424,7 +500,8 @@ function Invoke-AutoScreenshot {
             $probeFile = Join-Path $navLogDir 'nav-probe.png'
             $settle = Wait-NavSettled -AdbExe $adbExe -Serial $Device -ProbeFile $probeFile `
                 -NavOutFile $nav.OutFile -ExpectedPage $page `
-                -MinSeconds $NavigateMinSeconds -TimeoutSeconds $NavigateTimeoutSeconds -PollSeconds $PollSeconds
+                -MinSeconds $NavigateMinSeconds -TimeoutSeconds $NavigateTimeoutSeconds -PollSeconds $PollSeconds `
+                -StableMaxDiffPercent $StableMaxDiffPercent
             if (-not $settle.Settled) {
                 $skipped += $pageName
                 Write-Host "  ❌ $pageName 导航未在 $NavigateTimeoutSeconds 秒内落定（$($settle.Reason)；launch 日志：$($nav.OutFile)）——不截这张图" -ForegroundColor Red

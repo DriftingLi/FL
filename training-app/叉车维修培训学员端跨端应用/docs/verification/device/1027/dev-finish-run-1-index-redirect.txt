@@ -1,0 +1,49 @@
+### verify run start 2026-09-15T21:27:42.0400752+08:00  device=b32d8398  level=standard
+npm warn Unknown user config "python". This will stop working in the next major version of npm.
+npm warn Unknown user config "disturl". This will stop working in the next major version of npm.
+npm warn Unknown user config "electron-mirror". This will stop working in the next major version of npm.
+npm warn Unknown user config "chromedriver-cdnurl". This will stop working in the next major version of npm.
+npm warn Unknown user config "phantomjs-cdnurl". This will stop working in the next major version of npm.
+npm warn Unknown user config "puppeteer-download-host". This will stop working in the next major version of npm.
+npm warn Unknown user config "sass_binary_site". This will stop working in the next major version of npm.
+npm warn Unknown user config "sass-binary-site". This will stop working in the next major version of npm.
+npm warn Unknown user config "node-sqlite3-binary-host-mirror". This will stop working in the next major version of npm.
+npm warn Unknown user config "sqlite3-binary-site". This will stop working in the next major version of npm.
+npm warn Unknown user config "grpc-node-binary-host-mirror". This will stop working in the next major version of npm.
+npm warn Unknown user config "leveldown-binary-host-mirror". This will stop working in the next major version of npm.
+npm warn Unknown user config "leveldown-hyper-binary-host-mirror". This will stop working in the next major version of npm.
+npm warn Unknown user config "utf-8-validate-binary-host-mirror". This will stop working in the next major version of npm.
+
+> forklift-training-app@1.0.0 dev:finish
+> pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/dev-finish.ps1 -Level standard -Device b32d8398
+
+
+[1/9] 级别判定
+  ✅ 🟡 standard — 强制指定 -Level standard
+
+[2/9] 环境检测
+HX_BUSY wait=0 result=free
+  ✅ 设备 b32d8398 在线，HBuilderX cli 可用
+
+[3/9] 单元测试
+  ✅ 单元测试通过
+
+>>> 进入 HBuilderX 锁临界区（步骤 4-6）
+HX_BUSY wait=0 result=free
+
+[4/9] 编译
+[test-compile] 执行编译门（④c 整模块）...
+[test-compile] 编译门通过（④c）
+  ✅ 编译门通过（）
+
+[5/9] 部署
+[build-deploy] 调 hx-run.ps1 真运行（standard 模式）...
+  ✅ 已到设备（耗时 237s）
+
+[6/9] 自动截图
+[auto-screenshot] (1/1) 导航: pages/index/index
+>>> D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe launch app-android --pagePath pages/index/index --project D:\wt-1027-verify\training-app\叉车维修培训学员端跨端应用 --deviceId b32d8398
+  ❌ index 导航未在 420 秒内落定（请求页 pages/index/index，日志里最后进入的是 pages/dashboard/dashboard（页身份不符）；launch 日志：D:\wt-1027-verify\training-app\叉车维修培训学员端跨端应用\.ci-verify\launch-nav-83fc7261e0a04fa89b4e38c60929c1c1.out）——不截这张图
+  ❌ 截图未通过: 没有任何页面截图成功
+>>> 已退出锁临界区
+### EXIT=1  2026-09-15T21:42:12.7132319+08:00

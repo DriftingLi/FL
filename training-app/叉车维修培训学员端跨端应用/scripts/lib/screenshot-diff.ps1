@@ -39,9 +39,13 @@ function Compare-ScreenshotBaseline {
     }
 
     # 获取当前截图列表
+    # ⚠️ 必须用 `@(...)` 包住：`Get-ChildItem` 只命中**一个**文件时会退化成**标量**，而调用方
+    #    `dev-finish.ps1` 是以 `Set-StrictMode -Version Latest` 跑的 ⇒ 标量取 `.Count` 直接抛
+    #    「在此对象上找不到属性 Count」。2026-09-15 真机实测（#1027 收尾）：基线目录不存在且
+    #    **恰好一页**改动时，步骤 7 就崩在这里 —— 而「单页改动 + 首次运行」恰恰是最常见的形态。
     $currentFiles = @()
     if (Test-Path -LiteralPath $CurrentDir) {
-        $currentFiles = Get-ChildItem -Path $CurrentDir -Filter '*.png' -File
+        $currentFiles = @(Get-ChildItem -Path $CurrentDir -Filter '*.png' -File)
     }
 
     if ($currentFiles.Count -eq 0) {
@@ -85,7 +89,8 @@ function Compare-ScreenshotBaseline {
 
     # 检查基线中有但当前没有的文件（缺失）
     if (Test-Path -LiteralPath $BaselineDir) {
-        $baselineFiles = Get-ChildItem -Path $BaselineDir -Filter '*.png' -File
+        # 同上的 `@(...)` 理由：单文件时若退化成标量，后续任何 `.Count` 都会在 StrictMode 下抛错
+        $baselineFiles = @(Get-ChildItem -Path $BaselineDir -Filter '*.png' -File)
         foreach ($bFile in $baselineFiles) {
             $currentFile = Join-Path $CurrentDir $bFile.Name
             if (-not (Test-Path -LiteralPath $currentFile)) {
