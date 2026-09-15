@@ -1,4 +1,4 @@
-// 论坛正文输入框（#1014 / ADR-0052）：守三件事——
+// 论坛正文输入框（#1017 / ADR-0052）：守三件事——
 // ① 纯文本档不出现 tab / 工具栏 / 提示行；② Markdown 档三样都在，且工具能改正文；
 // ③ 预览走发布端同一个渲染单点（ForumContent），不是第二套渲染。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -10,22 +10,31 @@ import ForumContent from '../ForumContent.vue'
 import ForumImageUploader from '../ForumImageUploader.vue'
 import MarkdownToolbar from '@/components/markdown/MarkdownToolbar.vue'
 import UiUnderlineTabs from '@/components/ui/UiUnderlineTabs.vue'
+import { ElMessage } from 'element-plus'
 import { FORUM_MARKDOWN_HINT } from '@/utils/forumDisplay'
 import { MARKDOWN_TOOLBAR_ITEMS } from '@/utils/markdownToolbar'
 
 vi.mock('markstream-vue/index.css', () => ({}))
 
-const uploadMocks = vi.hoisted(() => ({ handlePaste: vi.fn(), uploadFiles: vi.fn() }))
+const uploadMocks = vi.hoisted(() => ({
+  /** 让用例能把「上传中」这一态喂给组件（B6） */
+  uploading: false,
+  handlePaste: vi.fn(),
+  handleDragOver: vi.fn(),
+  handleDragLeave: vi.fn(),
+  handleDrop: vi.fn(),
+  uploadFiles: vi.fn()
+}))
 vi.mock('@/composables/useForumImageUpload', () => ({
   useForumImageUpload: () => ({
-    uploading: false,
+    uploading: { value: uploadMocks.uploading },
     dragging: { value: false },
     uploadFiles: uploadMocks.uploadFiles,
     removeImage: vi.fn(),
     handlePaste: uploadMocks.handlePaste,
-    handleDragOver: vi.fn(),
-    handleDragLeave: vi.fn(),
-    handleDrop: vi.fn()
+    handleDragOver: uploadMocks.handleDragOver,
+    handleDragLeave: uploadMocks.handleDragLeave,
+    handleDrop: uploadMocks.handleDrop
   })
 }))
 
@@ -112,6 +121,83 @@ describe('Markdown 档', () => {
     expect([textarea.selectionStart, textarea.selectionEnd]).toEqual([3, 5])
   })
 
+  it('原生插入路径（execCommand）：保住选区，EP 在 nextTick 里的光标复位不会赢', async () => {
+    // happy-dom 没有 execCommand 实现，这里注入一个「真的会插入并派发 input」的替身，
+    // 从而跑通 insertNatively 的成功分支（回退分支由「按真实选区插入」那条用例覆盖）。
+    const doc = document as unknown as { execCommand?: unknown }
+    const original = doc.execCommand
+    // VTU 默认把组件挂在**游离**容器里，document.querySelector 找不到那个 textarea，
+    // 所以由测试显式把目标元素交给替身（等价于浏览器里「焦点所在的 textarea」）。
+    let target: HTMLTextAreaElement | null = null
+    doc.execCommand = (_command: string, _ui: boolean, text: string) => {
+      const active = target
+      if (!active) return false
+      const start = active.selectionStart
+      const end = active.selectionEnd
+      active.value = active.value.slice(0, start) + text + active.value.slice(end)
+      const caret = start + text.length
+      active.setSelectionRange(caret, caret)
+      active.dispatchEvent(new Event('input', { bubbles: true }))
+      // 如实模拟 Element Plus 的 useCursor：它在 input 后的**自己的 nextTick** 里
+      // 按「插入段末尾」复位光标（setSelectionRange(pos, pos) → 选区被塌陷）。
+      // 组件若不在更晚的一次 tick 里补回选区，这里就会把选区吃掉（评审 A1）。
+      void nextTick(() => {
+        active.setSelectionRange(caret, caret)
+      })
+      return true
+    }
+
+    try {
+      const Host = defineComponent({
+        components: { ForumMarkdownInput },
+        setup() {
+          return { text: ref('abcd'), imgs: ref<string[]>([]) }
+        },
+        template: '<ForumMarkdownInput v-model="text" v-model:images="imgs" format="markdown" />'
+      })
+      const host = mount(Host, { global: { plugins: [epLite()] } })
+      const child = host.findComponent(ForumMarkdownInput)
+      const textarea = child.find('textarea').element as HTMLTextAreaElement
+      target = textarea
+      textarea.setSelectionRange(1, 3)
+      await child.findComponent(MarkdownToolbar).findAll('button')[1].trigger('click')
+      await flushPromises()
+      await nextTick()
+      await nextTick()
+      expect(host.vm.text).toBe('a**bc**d')
+      // EP 的 useCursor 会在自己的 nextTick 里把选区塌陷成 caret：组件补的那次必须赢
+      expect([textarea.selectionStart, textarea.selectionEnd]).toEqual([3, 5])
+    } finally {
+      doc.execCommand = original
+    }
+  })
+
+  it('B6 上传中：虚线区进入上传中态（点击不再弹选择器）', () => {
+    uploadMocks.uploading = true
+    try {
+      const w = mountInput({ format: 'markdown' })
+      const zone = w.findComponent(ForumImageUploader).find('button')
+      expect(zone.classes()).toContain('cursor-wait')
+      expect(w.text()).toContain('上传中…')
+    } finally {
+      uploadMocks.uploading = false
+    }
+  })
+
+  it('B9 已在字数上限：工具栏插入被挡住并提示，不改正文', async () => {
+    const warn = vi.spyOn(ElMessage, 'warning').mockReturnValue(undefined as never)
+    try {
+      const w = mountInput({ format: 'markdown', modelValue: 'abcd', maxlength: 4 })
+      await w.findComponent(MarkdownToolbar).findAll('button')[1].trigger('click')
+      await flushPromises()
+      expect(w.emitted('update:modelValue')).toBeFalsy()
+      expect(warn).toHaveBeenCalled()
+      expect(w.find('.forum-md-input-count').text()).toBe('4/4')
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
   it('切到预览：渲染 ForumContent（发布端单点）且工具栏置灰', async () => {
     const w = mountInput({ format: 'markdown', modelValue: '## 标题' })
     expect(w.findComponent(ForumContent).exists()).toBe(false)
@@ -164,6 +250,20 @@ describe('粘贴与键盘', () => {
     const w = mountInput({ format: 'markdown' })
     await w.find('.forum-md-input').trigger('paste')
     expect(uploadMocks.handlePaste).toHaveBeenCalledTimes(1)
+  })
+
+  it('卡片上任意位置拖拽都转发给上传单点（拖到正文上也不许浏览器导航走）', async () => {
+    const w = mountInput({ format: 'markdown' })
+    const card = w.find('.forum-md-input')
+    await card.trigger('dragover')
+    await card.trigger('dragleave')
+    await card.trigger('drop')
+    expect(uploadMocks.handleDragOver).toHaveBeenCalledTimes(1)
+    expect(uploadMocks.handleDragLeave).toHaveBeenCalledTimes(1)
+    expect(uploadMocks.handleDrop).toHaveBeenCalledTimes(1)
+    // 正文也在转发面内（这是评审 A2 的要点：拖到正文上不该让浏览器导航走）
+    await w.find('textarea').trigger('dragover')
+    expect(uploadMocks.handleDragOver).toHaveBeenCalledTimes(2)
   })
 
   it('textarea 的 keydown 透传给调用方（Ctrl/Cmd+Enter 提交由上层决定）', async () => {

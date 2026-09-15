@@ -60,7 +60,9 @@ defineExpose({
   focus: () => inputRef.value?.focus?.(),
   getTextarea: (): HTMLTextAreaElement | undefined => {
     const el = inputRef.value?.textarea
-    return el instanceof HTMLTextAreaElement ? el : (el as HTMLTextAreaElement | undefined)
+    // 只认真正的 textarea：EP 若把 expose 从「元素」改回「Ref」，这里返回 undefined 让调用方
+    // 走退化分支，而不是把一个 Ref 当成元素去读 selectionStart（会把正文写坏）。
+    return el instanceof HTMLTextAreaElement ? el : undefined
   }
 })
 </script>

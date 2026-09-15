@@ -18,7 +18,7 @@ export interface UseForumImageUploadOptions {
  * UI 形态（缩略图条、虚线区、监听挂在哪）留给组件与页面，
  * 上传校验与状态机统一在此 —— 回复框与发帖表单共用同一份口径。
  *
- * #1014：**拖拽**登记到本单点。区域内的 dragover 一律 preventDefault —— 不接管的话
+ * #1017：**拖拽**登记到本单点。区域内的 dragover 一律 preventDefault —— 不接管的话
  * 浏览器会直接把拖进来的图片当成一次导航（离开当前页去打开那张图），这是既有毛病。
  */
 export function useForumImageUpload(max: MaybeRefOrGetter<number>, options: UseForumImageUploadOptions = {}) {
@@ -93,21 +93,38 @@ export function useForumImageUpload(max: MaybeRefOrGetter<number>, options: UseF
     }
   }
 
+  /**
+   * 拖的是不是**文件**：不看这个的话，框内拖动选中的文字也会被判成拖拽 ——
+   * 虚线区无端高亮，还把文本拖拽的默认行为吃掉了。
+   */
+  function hasFilePayload(event: DragEvent): boolean {
+    const types = event.dataTransfer?.types
+    return !!types && Array.from(types).includes('Files')
+  }
+
   /** 拖拽进入区域：接管默认行为并高亮；已达上限时不再高亮（放下也不会传） */
   function handleDragOver(event: DragEvent): void {
+    if (!hasFilePayload(event)) return
     event.preventDefault()
     if (urls.value.length >= toValue(max)) return
     if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
     dragging.value = true
   }
 
-  /** 离开区域或放下：复位高亮。dragleave 在子元素之间也会冒泡，调用方用 .self 过滤 */
-  function handleDragLeave(): void {
+  /**
+   * 离开区域或放下：复位高亮。
+   * 子元素之间的 dragleave 同样会冒泡，判据收在这里 —— 调用方不必记得写 `.self`。
+   * 不传参数 = 无条件复位，供 window 级 dragend / drop 兜底使用（拖拽被 ESC 取消、
+   * 或指针直接离开窗口时，浏览器不保证补发 dragleave）。
+   */
+  function handleDragLeave(event?: DragEvent): void {
+    if (event && event.target !== event.currentTarget) return
     dragging.value = false
   }
 
   /** 放下：接管默认行为（否则浏览器会导航到该文件），只收图片 */
   function handleDrop(event: DragEvent): void {
+    if (!hasFilePayload(event)) return
     event.preventDefault()
     dragging.value = false
     if (urls.value.length >= toValue(max)) return

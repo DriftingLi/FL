@@ -41,4 +41,5 @@ export const FORUM_REGION_NOTICE = '发布内容会显示 IP 属地'
  * 已经有这么一行，论坛作者同样需要知道**表格不渲染**、**图片要走粘贴区**这两条硬边界
  * （正文里的 `![]()` 会按 ADR-0044 展开成 alt 文本）。清理 hint 时不要连它一起删。
  */
-export const FORUM_MARKDOWN_HINT = '支持 标题、加粗、斜体、引用、代码、链接、列表、任务列表；表格不渲染，图片请用下方粘贴区'
+export const FORUM_MARKDOWN_HINT =
+  '支持 标题、加粗、斜体、引用、代码、链接、列表、任务列表、公式与图表；表格不渲染，图片请用下方粘贴区'

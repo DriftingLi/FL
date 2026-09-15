@@ -15,6 +15,7 @@
  * 恢复选区」，此时原生撤销栈会丢 —— happy-dom 下走的就是回退路径，真实浏览器行为需人工确认。
  */
 import { computed, nextTick, ref, watch } from 'vue'
+import { ElMessage } from 'element-plus'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiUnderlineTabs from '@/components/ui/UiUnderlineTabs.vue'
 import MarkdownToolbar from '@/components/markdown/MarkdownToolbar.vue'
@@ -92,7 +93,12 @@ watch(mode, async (next) => {
 
 // ===== 工具栏插入 =====
 const inputRef = ref<{ focus?: () => void; getTextarea?: () => HTMLTextAreaElement | undefined } | null>(null)
-const imageUploaderRef = ref<{ handlePaste?: (event: ClipboardEvent) => void } | null>(null)
+const imageUploaderRef = ref<{
+  handlePaste?: (event: ClipboardEvent) => void
+  handleDragOver?: (event: DragEvent) => void
+  handleDragLeave?: (event?: DragEvent) => void
+  handleDrop?: (event: DragEvent) => void
+} | null>(null)
 
 /** 两串文本的最小差异区间：execCommand 只替换这一段，撤销栈里就是一步 */
 function diffRange(before: string, after: string) {
@@ -122,6 +128,15 @@ function insertNatively(textarea: HTMLTextAreaElement, next: string, result: Mar
     // 有的环境 execCommand 返回 true 却什么也没做：以实际值为准
     if (ok === false || textarea.value !== next) return false
     textarea.setSelectionRange(result.start, result.end)
+    // ⚠️ Element Plus 的 useCursor 会在它自己的 nextTick 里按「插入段末尾」复位光标
+    // （element-plus/es/hooks/use-cursor），那个回调先注册、先执行，会把上面这次选区**塌陷**成 caret。
+    // 结果就是「选中一段点加粗 → 选区没了」「光标处点加粗 → 接着打字落在星号外面」。
+    // 再晚一个 tick 补一次：那时 EP 的 setCursor 已经跑完。
+    void nextTick(() => {
+      if (inputRef.value?.getTextarea?.() === textarea) {
+        textarea.setSelectionRange(result.start, result.end)
+      }
+    })
     return true
   } catch {
     return false
@@ -138,6 +153,12 @@ function runCommand(command: MarkdownCommandKey) {
   const end = textarea ? textarea.selectionEnd : current.length
   const result = applyMarkdownCommand(current, start, end, command)
   if (result.text === current) return
+  // textarea 的 maxlength 拦不住程序化写回（回退路径直接改 v-model），
+  // 插到上限之外会让计数显示 5002/5000，回复侧还只有后端会报错——这里就地挡住。
+  if (result.text.length > props.maxlength) {
+    ElMessage.warning(`已达字数上限（${props.maxlength}）`)
+    return
+  }
 
   if (textarea && insertNatively(textarea, result.text, result)) return
 
@@ -154,6 +175,23 @@ function onPaste(event: ClipboardEvent) {
   imageUploaderRef.value?.handlePaste?.(event)
 }
 
+/**
+ * 拖拽同样转发给上传单点，但**命中面是整个卡片**（#1017 评审 A2）：
+ * 只挂在虚线区上的话，把图片拖到正文 / 工具栏 / 卡片留白上，浏览器会执行 drop 默认动作
+ * ——直接导航去打开那张图，草稿全丢。用户最自然的动作恰恰是「拖到正文上」。
+ */
+function onDragOver(event: DragEvent) {
+  imageUploaderRef.value?.handleDragOver?.(event)
+}
+
+function onDragLeave(event: DragEvent) {
+  imageUploaderRef.value?.handleDragLeave?.(event)
+}
+
+function onDrop(event: DragEvent) {
+  imageUploaderRef.value?.handleDrop?.(event)
+}
+
 defineExpose({
   focus: () => inputRef.value?.focus?.(),
   /** 提交/重置后复位到编写态：停在预览里只会看到一块空预览 */
@@ -167,6 +205,9 @@ defineExpose({
   <div
     class="forum-md-input rounded-[10px] border border-line bg-panel transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)] focus-within:border-ui-500"
     @paste="onPaste"
+    @dragover="onDragOver"
+    @dragleave="onDragLeave"
+    @drop="onDrop"
   >
     <div
       v-if="isMarkdown"

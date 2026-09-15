@@ -192,6 +192,35 @@ describe('三种列表', () => {
   })
 })
 
+describe('评审补记（#1017 评审 B1–B4）', () => {
+  it('B1 整块围栏选中再点「代码」→ 去壳，不套娃', () => {
+    const src = '```\nab\n```'
+    const r = apply(src, 0, src.length, 'code')
+    expect(r.text).toBe('ab')
+    expect(r.text.slice(r.start, r.end)).toBe('ab')
+  })
+
+  it('B2 光标在文首且正文以换行开头：只改第一行空行，不吞下一行', () => {
+    expect(textOf('\nabc', 0, 0, 'ul')).toBe('- \nabc')
+    expect(textOf('\nabc', 0, 0, 'quote')).toBe('> \nabc')
+  })
+
+  it('B3 斜体在 ***x*** 上再点只脱一层（回到加粗），不会越点越多星', () => {
+    const once = apply('a**bc**d', 3, 5, 'italic')
+    expect(once.text).toBe('a***bc***d')
+    const twice = apply(once.text, once.start, once.end, 'italic')
+    expect(twice.text).toBe('a**bc**d')
+    expect(twice.text.slice(twice.start, twice.end)).toBe('bc')
+  })
+
+  it('B4 整条链接选中再点「链接」→ 去壳回到文字', () => {
+    const src = '[文字](https://a.b)'
+    const r = apply(src, 0, src.length, 'link')
+    expect(r.text).toBe('文字')
+    expect(r.text.slice(r.start, r.end)).toBe('文字')
+  })
+})
+
 describe('边界', () => {
   it('越界选区被夹回文本范围，不抛错', () => {
     const r = apply('ab', 99, 120, 'bold')

@@ -6,10 +6,11 @@
  * DOM 层的插入（选区读写、撤销栈）留在 `components/markdown/MarkdownToolbar.vue`。
  *
  * 语义约定：
- * - 所有命令都是**切换**：命中已应用的标记再点一次即撤销，按钮不会越点越乱；
+ * - 命令都是**切换**：命中已应用的标记再点一次即撤销，按钮不会越点越乱
+ *   （唯一例外见 `applyLink`：链接插入后选区停在 url 占位上，「再点一次」是接着改地址）；
  * - 多行命令（三级标题 / 引用 / 三种列表）按「涉及行」整行处理，不做局部字符串拼接；
  * - 命令集合与论坛**已声明子集**一一对应（ADR-0044 子集补记）：表格不在子集内，
- *   所以这里没有表格命令；任务列表在 #1014 之后的子集内，故有 `task`。
+ *   所以这里没有表格命令；任务列表在 #1017 之后的子集内，故有 `task`。
  */
 
 /** 工具栏命令键。新增命令必须同时更新 `MARKDOWN_TOOLBAR_ITEMS`（提示文案单点） */
@@ -73,7 +74,9 @@ function clamp(value: number, min: number, max: number): number {
  * 该行不算「涉及行」（否则在行尾拖选到下一行行首会多改一行）。
  */
 function lineSpan(text: string, start: number, end: number): { from: number; to: number } {
-  const from = text.lastIndexOf('\n', start - 1) + 1
+  // start=0 时 lastIndexOf 的 fromIndex 会被规范夹到 0 → 返回 0（而不是 -1），
+  // 于是 from=1：正文以换行开头时「首行空行」会被算进光标所在行。显式分支掉。
+  const from = start > 0 ? text.lastIndexOf('\n', start - 1) + 1 : 0
   let effectiveEnd = end
   if (end > start && text[effectiveEnd - 1] === '\n') effectiveEnd -= 1
   const newline = text.indexOf('\n', effectiveEnd)
@@ -160,6 +163,12 @@ function wrapInline(text: string, start: number, end: number, marker: string): M
     const inner = selected.slice(width, selected.length - width)
     return { text: text.slice(0, start) + inner + text.slice(end), start, end: start + inner.length }
   }
+  // 与加粗共存的斜体（两侧各三颗星）再点一次只脱**一层**，回到 **x**；
+  // 不加这条会越点越多星（***x*** → ****x****），与「再点一次撤销」的约定矛盾。
+  if (marker === '*' && text.slice(start - 3, start) === '***' && text.slice(end, end + 3) === '***') {
+    const next = text.slice(0, start - 1) + selected + text.slice(end + 1)
+    return { text: next, start: start - 1, end: end - 1 }
+  }
   // 选区外侧正好是标记 → 去外层壳（斜体要排除 ** 的情形，否则会把加粗拆成斜体）
   const outerWrapped =
     text.slice(start - width, start) === marker &&
@@ -184,6 +193,12 @@ function applyCode(text: string, start: number, end: number): MarkdownEditResult
     const next = text.slice(0, start - 1) + selected + text.slice(end + 1)
     return { text: next, start: start - 1, end: end - 1 }
   }
+  // 选区本身就是一整块围栏代码（作者整块选中再点「代码」）→ 去壳。
+  // 不加这条会套娃，而 CommonMark 下第一对围栏成空代码块、正文掉成普通段落，代码块反而丢了。
+  if (selected.startsWith(FENCE + '\n') && selected.endsWith('\n' + FENCE)) {
+    const inner = selected.slice(FENCE.length + 1, selected.length - FENCE.length - 1)
+    return { text: text.slice(0, start) + inner + text.slice(end), start, end: start + inner.length }
+  }
   if (!selected.includes('\n')) {
     const next = text.slice(0, start) + TICK + selected + TICK + text.slice(end)
     return { text: next, start: start + 1, end: end + 1 }
@@ -200,8 +215,17 @@ function applyCode(text: string, start: number, end: number): MarkdownEditResult
   }
 }
 
-/** 链接：选中文字包成链接，并把 `url` 占位选中，作者直接打字即可覆写 */
+/**
+ * 链接：选中文字包成链接，并把 `url` 占位选中，作者直接打字即可覆写。
+ * 链接是**半切换**：把整条 `[文字](url)` 选中再点则去壳；但刚插入时选区停在 url 占位上，
+ * 「再点一次」不会撤销——这是有意的，作者多半是要改地址。
+ */
 function applyLink(text: string, start: number, end: number): MarkdownEditResult {
+  const whole = /^\[([^\]]*)\]\(([^)]*)\)$/.exec(text.slice(start, end))
+  if (whole) {
+    const inner = whole[1]
+    return { text: text.slice(0, start) + inner + text.slice(end), start, end: start + inner.length }
+  }
   const label = start === end ? '链接文字' : text.slice(start, end)
   const inserted = `[${label}](url)`
   const urlStart = start + 1 + label.length + 2

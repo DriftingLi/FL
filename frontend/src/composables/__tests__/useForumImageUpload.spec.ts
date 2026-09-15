@@ -1,4 +1,4 @@
-// 论坛图片上传单点（#389 / #1014）：拖拽与粘贴两个入口的漏斗口径。
+// 论坛图片上传单点（#389 / #1017）：拖拽与粘贴两个入口的漏斗口径。
 // 这里只测状态机——「虚线区长什么样」由组件层负责。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { nextTick } from 'vue'
@@ -21,11 +21,15 @@ function imageFile(name = 'a.png', size = 1024) {
   return file
 }
 
-/** 最小拖拽事件替身：只带 dataTransfer.files 与 preventDefault 记录 */
-function dragEvent(files: File[]) {
+/**
+ * 最小拖拽事件替身：dataTransfer.files + types（#1017 评审后，判据要求 types 含 'Files'）
+ * 与 preventDefault 记录。
+ */
+function dragEvent(files: File[], types: string[] = ['Files']) {
   const state = { prevented: false, dropEffect: '' }
   const event = {
     dataTransfer: {
+      types,
       files,
       get dropEffect() {
         return state.dropEffect
@@ -95,6 +99,36 @@ describe('useForumImageUpload 拖拽入口', () => {
     upload.handleDrop(over)
     await nextTick()
     expect(mockUpload).not.toHaveBeenCalled()
+  })
+
+  it('框内拖动选中文字（types 无 Files）：不高亮、不接管默认行为', async () => {
+    const upload = useForumImageUpload(3)
+    const textDrag = dragEvent([], ['text/plain'])
+    upload.handleDragOver(textDrag)
+    expect(upload.dragging.value).toBe(false)
+    expect(textDrag.defaultPrevented()).toBe(false)
+    upload.handleDrop(textDrag)
+    await nextTick()
+    expect(upload.dragging.value).toBe(false)
+    expect(mockUpload).not.toHaveBeenCalled()
+  })
+
+  it('dragleave 判据收在 composable：子元素冒泡不清高亮，且支持无条件复位', () => {
+    const upload = useForumImageUpload(3)
+    upload.handleDragOver(dragEvent([imageFile()]))
+    expect(upload.dragging.value).toBe(true)
+    // 子元素冒泡：target ≠ currentTarget → 不动高亮（调用方不必记得写 .self）
+    const inner = { target: {}, currentTarget: {} } as unknown as DragEvent
+    upload.handleDragLeave(inner)
+    expect(upload.dragging.value).toBe(true)
+    // 离开容器本身：target === currentTarget → 复位
+    const self = {} as unknown as Record<string, unknown>
+    upload.handleDragLeave({ target: self, currentTarget: self } as unknown as DragEvent)
+    expect(upload.dragging.value).toBe(false)
+    // 不传参数 = 无条件复位（window 级 dragend / drop 兜底）
+    upload.handleDragOver(dragEvent([imageFile()]))
+    upload.handleDragLeave()
+    expect(upload.dragging.value).toBe(false)
   })
 
   it('dragenter/leave 维护高亮，放下后复位', () => {

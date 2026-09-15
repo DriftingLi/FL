@@ -6,20 +6,16 @@
   所以虚线框写成 `border border-dashed` —— 只写 border-dashed 而不给宽度，
   其余三条边会渲染成 3px。
 
-  监听分工（#1014 起）：
-  - **拖拽**监听挂在本组件根容器上：拖到缩略图或虚线区上都算落在区域内；
-  - **粘贴**不再挂 document：改由父级（ForumMarkdownInput）在卡片上接住后经
-    `defineExpose({ handlePaste })` 转发进来。原来 document 级监听要在多处
-    同时挂载时互相抢事件（见 ForumComposer 的历史注释），转发后这个隐患消失，
-    且只有焦点在正文输入框内粘贴图片才会被接管。
+  监听分工（#1017 起）：
+  - **拖拽与粘贴都不在本组件挂 DOM 监听**：父级（ForumMarkdownInput）在**整张卡片**上
+    接住后经 `defineExpose` 转发进来。粘贴原来是 document 级（多处同时挂载会互相抢
+    事件，见 ForumComposer 的历史注释）；拖拽原来只挂在虚线区上 —— 拖到正文 / 工具栏上
+    浏览器会执行 drop 默认动作直接导航走，而「拖到正文上」恰恰是最自然的动作。
+  - 本组件保留 window 级 `dragend` / `drop` 兜底：ESC 取消拖拽或指针离开窗口时，
+    浏览器不保证补发 dragleave，高亮会卡在「拖拽悬停」态。
 -->
 <template>
-  <div
-    class="flex w-full flex-col gap-2"
-    @dragover="handleDragOver"
-    @dragleave.self="handleDragLeave"
-    @drop="handleDrop"
-  >
+  <div class="flex w-full flex-col gap-2">
     <!-- 已选图片缩略图 -->
     <div v-if="props.modelValue.length > 0" class="flex flex-wrap gap-1.5">
       <div
@@ -80,7 +76,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { Loading, Close } from '@element-plus/icons-vue'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import { useForumImageUpload } from '@/composables/useForumImageUpload'
@@ -110,16 +106,17 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const isFull = computed(() => props.modelValue.length >= props.max)
 const zoneTitle = computed(() => (isFull.value ? `最多 ${props.max} 张图片` : '粘贴、拖拽或点击添加图片'))
 
-/** 虚线区四态：常态 / 拖拽悬停 / 已达上限 / 上传中。冲突工具类不共存（cursor 只在分支里给） */
+/** 虚线区四态：已达上限 / 上传中 / 拖拽悬停 / 常态。冲突工具类不共存（cursor 只在分支里给） */
 const zoneClass = computed(() => {
   if (isFull.value) return 'cursor-not-allowed border-line bg-canvas text-ink-3 opacity-70'
+  if (uploading.value) return 'cursor-wait border-line-strong bg-canvas text-ink-2 opacity-80'
   if (dragging.value) return 'cursor-copy border-ui-500 bg-ui-50 text-ui-600'
   return 'cursor-pointer border-line-strong bg-canvas text-ink-2 hover:border-ui-500 hover:bg-ui-50 hover:text-ui-600'
 })
 
 function triggerSelect() {
-  // 已达上限：点了也不弹选择器（不是靠原生 disabled —— 那会让 title 提示失效）
-  if (isFull.value) return
+  // 已达上限 / 上传中：点了也不弹选择器（不用原生 disabled —— 那会让 title 提示失效）
+  if (isFull.value || uploading.value) return
   fileInput.value?.click()
 }
 
@@ -133,6 +130,21 @@ function handleSelect(event: Event) {
   target.value = ''
 }
 
-// 粘贴监听由父级卡片转发进来（见文件头注释）；拖拽监听在本组件根容器上
-defineExpose({ handlePaste })
+// 粘贴与拖拽监听都由父级卡片转发进来（见文件头注释）
+onMounted(() => {
+  window.addEventListener('dragend', onWindowDragEnd)
+  window.addEventListener('drop', onWindowDragEnd)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('dragend', onWindowDragEnd)
+  window.removeEventListener('drop', onWindowDragEnd)
+})
+
+/** 兜底复位：不传事件 = 无条件清高亮（ESC 取消拖拽 / 指针离开窗口都不会补发 dragleave） */
+function onWindowDragEnd() {
+  handleDragLeave()
+}
+
+defineExpose({ handlePaste, handleDragOver, handleDragLeave, handleDrop })
 </script>

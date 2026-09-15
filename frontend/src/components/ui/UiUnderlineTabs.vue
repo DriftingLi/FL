@@ -15,6 +15,9 @@
  * 3. `-mb-px` 是为了让激活下划线压住父级顶栏的 1px 底边（调用方请给顶栏 `border-b`）。
  *
  * 不做右侧插槽：顶栏 = `flex` 行里「本组件 + 工具栏」，由调用方拼，组件不替调用方决定间距。
+ *
+ * ARIA 与 `UiSegmentTabs` 同口径（role=tablist/tab + aria-selected），**方向键漫游没有做**：
+ * 两件是同一类控件，要补应当一起补；只给这一件加会让「分段控件」这一族出现两套键盘行为。
  */
 export interface UiUnderlineOption {
   label: string
