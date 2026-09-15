@@ -7,25 +7,33 @@
 
 ## 1. 色彩体系
 
+> ⚠️ **本表的变量名以 `uni.scss` 实际定义为准**（2026-09-15 校正，#979 实测）：
+> 此前表里写的 `$text-secondary` / `$text-placeholder` / `$text-inverse` / `$bg-page` **在 `uni.scss` 里都不存在**
+> （真实名是 `$text-color-secondary` / `$text-color-placeholder` / `$text-color-inverse` / `$bg-color`）；
+> 照旧表写会**静默失效**（`<style>` 未声明 `lang="scss"` 时变量不预处理、声明被直接丢弃，页面无报错、只是颜色没生效）。
+> 机检：`utils/searchContract.test.js`「引用的 `$变量` 在 `uni.scss` 里都存在」。
+
 ### 1.1 主色
 
 | Token | 色值 | 用途 |
 |---|---|---|
-| `$primary-color` | `#2979ff` | 按钮、选中态、Tab 高亮、链接 |
+| `$primary-color` | `#2979ff` | 按钮、选中态、Tab 高亮、链接、**主色 header / 状态栏** |
 | `$primary-color-light` | `#5b9aff` | 渐变底部、hover 态 |
 | `$primary-color-dark` | `#1c9eff` | 按钮 pressed 态 |
+| `$primary-tint` | `#ebf5ff` | 主色浅底（分区标题带、选中标签底、历史 chip 底） |
 
-### 1.2 页面背景渐变
+### 1.2 页面背景
 
-> ⚠️ **App 平台（uvue 原生端）的 `linear-gradient` 只接受「恰好 2 个颜色值 + 不带百分比停靠位」**
-> （2026-09-13 真机实测，见 **#937**；守护 `utils/gradientSyntaxContract.test.js`）。原先的三色写法
-> 会被原生端**整条丢弃**，故 `$gradient-mid` 已从本表移除（它的唯一用途就是那个三色写法）。
-> 另注：`.uvue` 不支持 CSS 变量 ⇒ 示例里写的是**字面色值**，与页面里的写法一致。
+> ⚠️ **App 平台（uvue 原生端）的 `linear-gradient` 只接受「恰好 2 个颜色值 + 不带百分比停靠位 + `to` 关键字方向」**
+> （2026-09-13 真机实测，见 **#937** / ADR-0010；守护 `utils/gradientSyntaxContract.test.js`）。
+> 三色写法与 `deg` 角度都会被原生端**整条丢弃**（`deg` 的失效形态是**整幅退化成两端色的中点**，不是空白）。
+> 另注：`.uvue` 不支持 CSS 变量 ⇒ 渐变只能逐处写字面色值。
 
 | Token | 色值 | 用途 |
 |---|---|---|
 | `$gradient-start` | `#CFE9FB` | 渐变顶部（tabBar 页面专用） |
-| `$bg-page` | `#F5F5F5` | 渐变底部 / 通用页面背景 |
+| `$bg-color` | `#F8F8F8` | 通用页面背景 |
+| `$bg-tint` | `#F1F6FF` | 淡蓝画布（列表/结果页：白卡浮于其上，避免整页纯白） |
 
 ### 1.3 语义色
 
@@ -40,10 +48,10 @@
 | Token | 色值 | 用途 |
 |---|---|---|
 | `$text-color` | `#333333` | 主文字（标题、正文） |
-| `$text-secondary` | `#666666` | 次要文字（描述、副标题） |
-| `$text-placeholder` | `#999999` | 辅助文字（日期、placeholder） |
-| `$text-disabled` | `#cccccc` | 禁用文字 |
-| `$text-inverse` | `#ffffff` | 反色文字（深色背景上） |
+| `$text-color-secondary` | `#666666` | 次要文字（描述、副标题、结果片段） |
+| `$text-color-placeholder` | `#999999` | 辅助文字（日期、placeholder） |
+| `$text-disabled` | `#cccccc` | 禁用 / 弱化文字 |
+| `$text-color-inverse` | `#ffffff` | 反色文字（深色背景上） |
 
 ### 1.5 表面与边框
 
@@ -51,6 +59,7 @@
 |---|---|---|
 | `$card-bg` | `#ffffff` | 卡片背景 |
 | `$border-color` | `#f0f0f0` | 分隔线、卡片边框 |
+| `$border-color-light` | `#f0f0f0` | 更浅的分隔线（列表行内分隔） |
 | `$input-border` | `#e5e5e5` | 输入框边框 |
 
 ---
@@ -110,8 +119,8 @@
 
 ### 5.3 主按钮（appButton type=primary）
 
-- 背景：`linear-gradient(135deg, #2979ff, #5b9aff)` 或纯色 `#2979ff`
-- 文字：`$text-inverse`，`$font-size-lg`，font-weight bold
+- 背景：`linear-gradient(to bottom right, #2979ff, #5b9aff)` 或纯色 `#2979ff`（**方向只能写 `to` 关键字，禁 `deg`** —— ADR-0010）
+- 文字：`$text-color-inverse`，`$font-size-lg`，font-weight bold
 - 圆角：`$radius-pill`（999rpx 胶囊形）
 - 高度：`80rpx`
 - 禁用态：opacity 0.5
@@ -125,18 +134,21 @@
 
 ### 5.5 筛选标签（appChip）
 
-- 圆角：`$radius-sm`（8rpx）
-- 未选中：白底 + `$border-color` 描边 + `$text-secondary` 文字
-- 选中：浅蓝底（`#EBF5FF`）+ `$primary-color` 描边 + `$primary-color` 文字
-- 内边距：`8rpx 24rpx`
+- 圆角：`$radius-pill`（胶囊）
+- 未选中：`$bg-color` 浅灰底 + `$text-color-secondary` 文字
+- 选中：`$primary-color` **实底** + `$text-color-inverse` 反白文字 + font-weight 600
+- 内边距：`16rpx 32rpx`
 - 字号：`$font-size-sm`（24rpx）
+
+> 2026-09-15（#979）改版：原「白底描边 + 浅蓝底描边」两态在真机上就是一片白，选中态几乎看不出；
+> 改为「浅灰底 / 主色实底」后，色彩只落在**当前档位**上。
 
 ### 5.6 Tab 栏（appTabs）
 
 - underline 风格：文字下方 4rpx 蓝色指示条
 - pill 风格：胶囊标签（同 appChip 选中态）
 - 字号：`$font-size-md`（28rpx）
-- 未选中：`$text-secondary`
+- 未选中：`$text-color-secondary`
 - 选中：`$primary-color` + font-weight 600
 
 ### 5.7 列表项（appListItem）
