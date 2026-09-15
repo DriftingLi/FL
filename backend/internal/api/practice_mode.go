@@ -415,7 +415,8 @@ func (h *PracticeModeHandler) GetPracticeStats(c *gin.Context) {
 	}.Handle(c)
 }
 
-// practiceStatsReq 刷题数据展示请求（学员 ID + 可选证件分区）。
+// practiceStatsReq 练习统计类请求（学员 ID + 可选证件分区）：/practice-stats 与 /stats 共用。
+// 证件来自 CredentialScoped 中间件（显式 query 优先，否则服务端当前证件）；nil = 未设置，按不分区处理。
 type practiceStatsReq struct {
 	StudentID    int
 	CredentialID *int
@@ -423,43 +424,50 @@ type practiceStatsReq struct {
 
 // GetStats 练习统计
 // @Summary 练习统计
-// @Description 汇总练习正确率/已练题量等
+// @Description 汇总练习正确率/已练题量等（按当前证件分区：credential_id 可选，经拦截器注入当前证件）
 // @Tags 学员端-练习
 // @Accept json
 // @Produce json
 // @Security BearerAuth
+// @Param credential_id query int false "目标证件ID"
 // @Success 200 {object} response.R{data=service.PracticeStatsDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /practice-mode/stats [get]
 func (h *PracticeModeHandler) GetStats(c *gin.Context) {
-	Endpoint[studentIDReq, service.PracticeStatsDTO]{
-		Parse: h.parseStudentID,
-		Invoke: func(ctx context.Context, req *studentIDReq) (*service.PracticeStatsDTO, error) {
-			return h.svc.GetStats(req.StudentID), nil
+	Endpoint[practiceStatsReq, service.PracticeStatsDTO]{
+		Parse: func(c *gin.Context) (*practiceStatsReq, error) {
+			uid, _ := c.Get(string(middleware.CtxUserID))
+			studentID, _ := uid.(int)
+			return &practiceStatsReq{StudentID: studentID, CredentialID: middleware.CredentialIDPtr(c)}, nil
 		},
-		Render: func(c *gin.Context, _ *studentIDReq, resp *service.PracticeStatsDTO, _ error) {
+		Invoke: func(ctx context.Context, req *practiceStatsReq) (*service.PracticeStatsDTO, error) {
+			return h.svc.GetStats(req.StudentID, req.CredentialID), nil
+		},
+		Render: func(c *gin.Context, _ *practiceStatsReq, resp *service.PracticeStatsDTO, _ error) {
 			response.Success(c, resp)
 		},
 	}.Handle(c)
 }
 
-// practiceHistoryReq 练习历史请求（学员 ID + 分页 + 过滤）。
+// practiceHistoryReq 练习历史请求（学员 ID + 当前证件 + 分页 + 过滤）。
 type practiceHistoryReq struct {
-	StudentID int
-	Page      int
-	PageSize  int
-	QType     string
-	StartDate string
-	EndDate   string
+	StudentID    int
+	CredentialID *int
+	Page         int
+	PageSize     int
+	QType        string
+	StartDate    string
+	EndDate      string
 }
 
 // GetHistory 练习历史
 // @Summary 练习历史
-// @Description 分页查询练习历史，支持按题型/日期过滤
+// @Description 分页查询练习历史，支持按题型/日期过滤（按当前证件分区：credential_id 可选，经拦截器注入当前证件）
 // @Tags 学员端-练习
 // @Accept json
 // @Produce json
 // @Security BearerAuth
+// @Param credential_id query int false "目标证件ID"
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(20)
 // @Param type query string false "题型"
@@ -474,16 +482,17 @@ func (h *PracticeModeHandler) GetHistory(c *gin.Context) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
 			return &practiceHistoryReq{
-				StudentID: studentID,
-				Page:      atoiDefault(c.Query("page"), 1),
-				PageSize:  atoiDefault(c.Query("page_size"), 20),
-				QType:     c.Query("type"),
-				StartDate: c.Query("start_date"),
-				EndDate:   c.Query("end_date"),
+				StudentID:    studentID,
+				CredentialID: middleware.CredentialIDPtr(c),
+				Page:         atoiDefault(c.Query("page"), 1),
+				PageSize:     atoiDefault(c.Query("page_size"), 20),
+				QType:        c.Query("type"),
+				StartDate:    c.Query("start_date"),
+				EndDate:      c.Query("end_date"),
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *practiceHistoryReq) (*service.HistoryResultDTO, error) {
-			return h.svc.GetHistory(req.StudentID, req.Page, req.PageSize, req.QType, req.StartDate, req.EndDate), nil
+			return h.svc.GetHistory(req.StudentID, req.CredentialID, req.Page, req.PageSize, req.QType, req.StartDate, req.EndDate), nil
 		},
 		Render: func(c *gin.Context, _ *practiceHistoryReq, resp *service.HistoryResultDTO, _ error) {
 			response.Success(c, resp)

@@ -1,7 +1,7 @@
 <template>
     <view class="replies-section">
         <view class="replies-header">
-            <text class="replies-title">全部回复（{{ items.length }}）</text>
+            <text class="replies-title">全部回复（{{ countText }}）</text>
             <view class="replies-sort-bar">
                 <view class="reply-sort-chip" :class="{ active: sortField === 'latest' }" @click="onField('latest')">
                     <text class="reply-sort-text" :class="{ active: sortField === 'latest' }">最新</text>
@@ -75,10 +75,22 @@
                 </view>
             </view>
         </view>
+
+        <!-- 加载更多（ADR-0042 分页）：入口只在还有下一页时渲染，点击**追加**下一页而非替换；
+             到底显示结束态，否则用户会把「按钮消失」读成加载失败。 -->
+        <view v-if="items.length > 0 && hasMore" class="replies-more">
+            <view class="replies-more-btn" @click="onLoadMore">
+                <text class="replies-more-text">{{ loadMoreText }}</text>
+            </view>
+        </view>
+        <view v-else-if="items.length > 0" class="replies-end">
+            <text class="replies-end-text">没有更多回复了</text>
+        </view>
     </view>
 </template>
 
 <script setup lang="uts">
+    import { computed } from 'vue'
     import { previewImages } from '../../../utils/forumDetailDisplay'
     import type { ForumReplyDisplay } from '../../../utils/forumDetailDisplay'
 
@@ -89,14 +101,36 @@
         sortOrder? : string
         /** 保留供「取消采纳」判定；「采纳」判定改由 item.canAcceptReply 下发（#816 后续） */
         isTopicOwner? : boolean
+        /** 是否还有未加载的回复页（ADR-0042 分页）：false ⇒ 加载更多入口消失 */
+        hasMore? : boolean
+        /** 加载更多进行中（入口文案 + 防重复点击） */
+        loadingMore? : boolean
+        /** 回复总条数（分页后 items.length 只是**已加载**条数，标题计数须读 total） */
+        totalCount? : number
+        /** 尚未加载的回复条数（入口文案上的剩余量） */
+        remaining? : number
     }>(), {
         items: () => [] as ForumReplyDisplay[],
         sortField: 'latest',
         sortOrder: 'asc',
         isTopicOwner: false,
+        hasMore: false,
+        loadingMore: false,
+        totalCount: 0,
+        remaining: 0,
     })
 
-    const emit = defineEmits(['sortFieldChange', 'sortOrderChange', 'deleteReply', 'reportReply', 'toggleReplyLike', 'replyToUser', 'acceptReply', 'cancelAccept'])
+    const emit = defineEmits(['sortFieldChange', 'sortOrderChange', 'deleteReply', 'reportReply', 'toggleReplyLike', 'replyToUser', 'acceptReply', 'cancelAccept', 'loadMore'])
+
+    /** 标题计数：优先 total（分页后已加载条数 ≠ 总条数），total 未知时退回已加载条数 */
+    const countText = computed<string>(() : string => props.totalCount > 0 ? props.totalCount.toString() : props.items.length.toString())
+
+    /** 加载更多入口文案（模板零拼接：格式化收在脚本层，uvue 模板表达式能力有限） */
+    const loadMoreText = computed<string>(() : string => props.loadingMore ? '加载中...' : '加载更多回复（剩余 ' + props.remaining.toString() + ' 条）')
+
+    function onLoadMore() : void {
+        emit('loadMore')
+    }
 
     function onField(field : string) : void {
         emit('sortFieldChange', field)
@@ -413,5 +447,36 @@
     .reply-cancel-accept-btn-text {
         font-size: 24rpx;
         color: #666666;
+    }
+
+    /* 加载更多 / 到底（ADR-0042 分页） */
+    .replies-more {
+        align-items: center;
+        padding: 24rpx 0 8rpx;
+    }
+
+    .replies-more-btn {
+        background-color: #e8f0fe;
+        border: 1rpx solid #2979ff;
+        border-radius: 32rpx;
+        padding: 14rpx 40rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .replies-more-text {
+        font-size: 26rpx;
+        color: #2979ff;
+        font-weight: bold;
+    }
+
+    .replies-end {
+        align-items: center;
+        padding: 24rpx 0 8rpx;
+    }
+
+    .replies-end-text {
+        font-size: 24rpx;
+        color: #999999;
     }
 </style>
