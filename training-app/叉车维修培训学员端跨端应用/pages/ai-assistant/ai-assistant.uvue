@@ -3,6 +3,25 @@
 		<!-- 自定义导航栏 -->
 		<AiChatNav :status-bar-height="statusBarHeight" @left-click="toggleSidebarLeft" @menu-click="toggleSidebarRight" />
 
+		<!-- 功能入口头部（#998）：**移出滚动容器** ⇒ 滑动时天然不丢失（**结构性保证**，不依赖
+		     `position: sticky` —— 该属性在本项目 0 处先例、uvue 支持亦无文档）。
+		     `^` 收起 / `v` 展开；默认展开、不跨会话记忆（维护者 2026-09-15 口径）。
+		     代价如实记：头部位于档位横幅**之上**，横幅不再是首屏第一个元素。 -->
+		<view class="func-head">
+			<view class="func-head-handle" @click="toggleFunctionHeader">
+				<text class="func-head-arrow">{{ functionHeaderCollapsed ? 'v' : '^' }}</text>
+			</view>
+			<view v-if="!functionHeaderCollapsed" class="function-grid">
+				<view v-for="(item, idx) in functionItems" :key="idx" class="function-item" @click="onFunctionClick(item)">
+					<view class="function-icon-box">
+						<image v-if="item.iconPath && item.iconPath.length > 0" class="function-icon-img" :src="item.iconPath" mode="aspectFit" />
+						<text v-else class="function-icon-emoji">{{ item.icon }}</text>
+					</view>
+					<text class="function-title">{{ item.title }}</text>
+				</view>
+			</view>
+		</view>
+
 		<!-- 主内容区 -->
 		<view class="main">
 			<scroll-view class="pro-scroll" scroll-y="true" :scroll-into-view="scrollIntoViewId" scroll-with-animation>
@@ -12,17 +31,6 @@
 					<text class="pro-banner-title" :class="proUnlocked ? 'pro-title-unlocked' : ''">{{ proBannerTitle }}</text>
 					<text class="pro-banner-sub" :class="proUnlocked ? 'pro-sub-unlocked' : ''">{{ proBannerSub }}</text>
 					<text class="pro-banner-go" :class="proUnlocked ? 'pro-go-unlocked' : ''">{{ proBannerCta }}</text>
-				</view>
-
-				<!-- 功能入口 -->
-				<view class="function-grid">
-					<view v-for="(item, idx) in functionItems" :key="idx" class="function-item" @click="onFunctionClick(item)">
-						<view class="function-icon-box">
-							<image v-if="item.iconPath && item.iconPath.length > 0" class="function-icon-img" :src="item.iconPath" mode="aspectFit" />
-							<text v-else class="function-icon-emoji">{{ item.icon }}</text>
-						</view>
-						<text class="function-title">{{ item.title }}</text>
-					</view>
 				</view>
 
 				<!-- 快捷提示语 -->
@@ -63,6 +71,7 @@
 
 		<!-- 专业版能力清单 / 兑换（半屏 sheet，ADR-0009 决策 4） -->
 		<AiChatProSheet :visible="showProSheet" :unlocked="proUnlocked" :price="proPrice" :balance="proBalance" :degraded="proDegraded" :redeeming="proRedeeming" @close="showProSheet = false" @redeem="onRedeemAiPro" @earn="onGoEarnPoints" />
+
 	</view>
 </template>
 
@@ -194,6 +203,14 @@
 	// 只影响**本轮对话**，不影响建会话：会话按功能键分区，而列表不查专项区（见 api/aiAssistant.uts）。
 	const pendingFeatureKey = ref<string>('')
 
+	// 功能入口头部的收起态（#998）：默认展开、**不跨会话记忆**（维护者 2026-09-15 口径）。
+	// 宫格已移出滚动容器 ⇒ 收起/展开只改头部自身高度，与滚动位置无关。
+	const functionHeaderCollapsed = ref<boolean>(false)
+
+	function toggleFunctionHeader() : void {
+		functionHeaderCollapsed.value = !functionHeaderCollapsed.value
+	}
+
 	// 根容器高度（#998）：与 ai-settings.uvue 同款，给根节点一个确定高度；onLoad 里赋值。
 	const pageHeight = ref<number>(0)
 
@@ -221,6 +238,12 @@
 		// 专项功能键（#921）：只带宫格那一轮的键。带键时后端走专项通道（管理端单绑定 +
 		// 独立计费声明），不带键落通用对话 —— 空串显式发送，语义与「不发送」等价。
 		params['feature_key'] = featureKey
+		// 专项通道：后端**忽略**选择子中的模型来源字段（`ai_config_service.go:494`「防绕过」），
+		// 由管理端单绑定解析模型 ⇒ 客户端不该把自定义模型的密钥/地址送上去
+		// （维护者 2026-09-15 口径：故障咨询不需要调用自定义模型能力）。
+		if (featureKey.length > 0) {
+			return params
+		}
 		if (currentModelSource.value == 'admin') {
 			params['config_id'] = currentModelId.value
 		} else if (currentModelSource.value == 'user') {
@@ -247,7 +270,10 @@
 			uni.showToast({ title: '暂无可用的 AI 模型', icon: 'none' })
 			return
 		}
-		if (currentModelSource.value == 'custom' && customModel.value.trim().length == 0) {
+		// 专项通道（带键）由管理端单绑定解析模型，与「自定义模型」无关 ⇒ 不该被它的前置校验拦住
+		// （#998 维护者 2026-09-15 口径）。**不带键的通用对话照旧校验**。
+		// 位置仍在「取走 → 清空」之后、发送之前 ⇒ 契约测试 ③ 的有序断言不受影响。
+		if (featureKey.length == 0 && currentModelSource.value == 'custom' && customModel.value.trim().length == 0) {
 			uni.showToast({ title: '请先配置自定义模型', icon: 'none' })
 			return
 		}
@@ -722,6 +748,27 @@
 
 	.pro-go-unlocked {
 		background-color: #2e9e5b;
+	}
+
+	/* 功能入口头部（#998）：宫格**移出滚动容器**后的容器，故本块只需处理外观与收起态，
+	   不含任何 `position` 定位 —— 「滑动不丢失」由**结构**保证（它在 scroll-view 之外），
+	   这正是刻意不选 `position: sticky` 的原因（本项目 0 处先例、uvue 支持无文档）。
+	   水平 padding 与 `.pro-scroll` 的 24rpx 对齐，使宫格左右位置与改动前一致。 */
+	.func-head {
+		background-color: #dfeffb;
+		padding-left: 24rpx;
+		padding-right: 24rpx;
+	}
+
+	.func-head-handle {
+		height: 44rpx;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.func-head-arrow {
+		font-size: 24rpx;
+		color: #8aa9c0;
 	}
 
 </style>
