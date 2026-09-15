@@ -33,7 +33,7 @@ func ListCourses(db *gorm.DB, page, pageSize int, opts CourseListOptions) Course
 		if opts.OnlyMounted {
 			// 挂载不变式 + 上架：学员端/导师端可见性口径
 			q = q.Where("status = ?", 1)
-			q = mountedCourseScope(q)
+			q = MountedCourseScope(q)
 		}
 		if opts.Keyword != "" {
 			q = q.Where("name LIKE ?", "%"+opts.Keyword+"%")

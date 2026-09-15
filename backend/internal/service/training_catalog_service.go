@@ -247,33 +247,32 @@ func (s *TrainingCatalogService) ListQuestionTags(activeOnly, includeSourceTags 
 	}
 
 	// 一次查询全部标签的题目数（LEFT JOIN 保证无题目标签也返回 0，避免 N+1）。
-	// 分区语义（#702）：学员端（activeOnly）在 published 计数上叠加题库池三元组——
-	// 排除来源标记标签题 + 可选证件分区，与抽题/进度池同口径；管理端（activeOnly=false）保持全量。
+	// 分区语义（#702）：学员端（activeOnly）在 published 计数上叠加题库池 scope——
+	// 与抽题/搜索/按 id 取详情逐字同源（question_pool_scope.go，ADR-0050 决策 1）；
+	// 管理端（activeOnly=false）保持全量。
 	type countRow struct {
 		TagID          int
 		TotalCount     int64
 		PublishedCount int64
 	}
-	cred := credOf(credentialID)
-	var rows []countRow
-	if cred != nil {
-		s.db.Raw("SELECT t.id AS tag_id, COUNT(qtr.question_id) AS total_count, "+
-			"COUNT(qtr.question_id) FILTER (WHERE q.status = 'published' AND NOT EXISTS "+
-			"(SELECT 1 FROM question_tag_relation qtr2 JOIN question_tag qt ON qt.id = qtr2.tag_id WHERE qtr2.question_id = q.id AND qt.is_source_tag)"+
-			" AND q.credential_id = ?) AS published_count "+
-			"FROM question_tag AS t LEFT JOIN question_tag_relation AS qtr ON qtr.tag_id = t.id "+
-			"LEFT JOIN question AS q ON q.id = qtr.question_id WHERE t.id IN ? GROUP BY t.id",
-			*cred, ids).Scan(&rows)
-	} else {
-		s.db.Table("question_tag AS t").
-			Select("t.id AS tag_id, COUNT(qtr.question_id) AS total_count, "+
-				"COUNT(qtr.question_id) FILTER (WHERE q.status = 'published') AS published_count").
-			Joins("LEFT JOIN question_tag_relation AS qtr ON qtr.tag_id = t.id").
-			Joins("LEFT JOIN question AS q ON q.id = qtr.question_id").
-			Where("t.id IN ?", ids).
-			Group("t.id").
-			Scan(&rows)
+	// 池谓词 raw 形态：直接拼接题库池 scope 导出的 SQL 片段（表别名对齐为 question），
+	// 不就地重写——「raw 重写与常量脱钩」是漂移窗口（ADR-0050 决策 1）。
+	// 带证件与不带证件两个分支由此同源同口径：#702 的原始声明就是「学员端在 published 计数上
+	// 叠加排除来源标记标签题 + 可选证件分区」，原实现只在带证件分支做了排除，
+	// 不带证件分支（GET /api/tags 不传 credential_id）漏了——本票按该声明口径补齐。
+	query := "SELECT t.id AS tag_id, COUNT(qtr.question_id) AS total_count, " +
+		"COUNT(qtr.question_id) FILTER (WHERE " + QuestionPoolPublishedSQL + " AND " + QuestionPoolExcludeSourceTagsSQL
+	var args []any
+	if cred := credOf(credentialID); cred != nil {
+		query += " AND " + QuestionPoolCredentialColumn + " = ?"
+		args = append(args, *cred)
 	}
+	query += ") AS published_count " +
+		"FROM question_tag AS t LEFT JOIN question_tag_relation AS qtr ON qtr.tag_id = t.id " +
+		"LEFT JOIN question AS question ON question.id = qtr.question_id WHERE t.id IN ? GROUP BY t.id"
+	args = append(args, ids)
+	var rows []countRow
+	s.db.Raw(query, args...).Scan(&rows)
 	counts := make(map[int]countRow, len(rows))
 	for i := range rows {
 		counts[rows[i].TagID] = rows[i]
@@ -507,7 +506,7 @@ func (s *TrainingCatalogService) getCatalogTree(activeOnly, withChapters bool, c
 			lv := newCatalogLevelNode(&levels[j])
 			courses := make([]CourseDTO, 0)
 			for k := range rows {
-				if !courseMounted(rows[k].SpecialtyID, rows[k].LevelID) {
+				if !CourseMounted(rows[k].SpecialtyID, rows[k].LevelID) {
 					continue
 				}
 				if *rows[k].SpecialtyID != specialties[i].SpecialtyID || *rows[k].LevelID != levels[j].LevelID {
