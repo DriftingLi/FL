@@ -37,6 +37,10 @@
                         :placeholder="isResourceMode ? '介绍这份资料的内容与用途（≤2000 字）' : '请输入内容（1-10000 字）'"
                         :maxlength="isResourceMode ? 2000 : 10000" v-model="content" />
                     <text class="form-counter">{{ content.length }}/{{ isResourceMode ? 2000 : 10000 }}</text>
+                    <!-- 发布前披露（ADR-0045）：ui-conventions「不写说明性 hint 文本」的**明确例外**，
+                         文案单点在 utils/forumDisplay.FORUM_REGION_NOTICE —— 别在这里另抄一份，也别当装饰删掉。
+                         资源投稿走的是投稿接口（不落属地），故资源态不显示。 -->
+                    <text v-if="!isResourceMode" class="form-region-notice">{{ regionNotice }}</text>
                 </view>
 
                 <view v-if="!isResourceMode" class="form-item">
@@ -76,6 +80,7 @@
     import { onLoad, onShow } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
+    import { FORUM_REGION_NOTICE } from '../../utils/forumDisplay'
     import { createForumTopicApi, updateForumTopicApi, uploadForumImageApi, getForumTopicDetailApi } from '../../api/forum'
     import { getCurrentCredentialApi } from '../../api/credential'
     import { useAuthStore } from '../../stores/auth'
@@ -94,6 +99,9 @@
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
     const authStore = useAuthStore()
+
+    /** 发布前披露文案单点在 utils/forumDisplay（ADR-0045）；模板不直调 import 函数，先落局部标识 */
+    const regionNotice : string = FORUM_REGION_NOTICE
 
     // ===== 分类选项（#760：资源 tab 承载投稿表单，为真模式非论坛类别） =====
     // ADR-0040：「备考经验」改为管理端认定，发布口不再提供 —— 分类行三段 = 广场/资源/知识问答
@@ -443,6 +451,13 @@
         font-size: 22rpx;
         color: #999999;
         text-align: right;
+        margin-top: 8rpx;
+    }
+
+    /* 发布前属地披露（ADR-0045 明确例外，勿清） */
+    .form-region-notice {
+        font-size: 22rpx;
+        color: #999999;
         margin-top: 8rpx;
     }
 
