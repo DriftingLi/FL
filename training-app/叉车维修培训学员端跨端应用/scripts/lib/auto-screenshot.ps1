@@ -19,6 +19,9 @@
       · 切页用 `cli launch app-android --pagePath <页>`（`device-capture.ps1` #898 spike 实测：
         `am start` 的 uniapp 深链**不被 App 处理**，会停在原页）
       · 每页截图算 **SHA256**；与上一页**相同 ⇒ 判切页未生效**（记入 `HashConflicts`，令 `Ok=$false`）
+      · **截图文件的时间戳必须晚于本次运行起点**：`$OutputDir` 不清理、文件名按页名固定，
+        故 adb 静默失败时**上一次运行的同名残留 PNG** 会让「存在且非空」照样通过 ——
+        那正是把陈旧截图当本次证据的路径。早于起点的记入 `StaleShots`，并按跳过处理。
 
     `Ok=true` 仅当：至少截到 1 页、无跳过、无 hash 冲突。
 
@@ -147,8 +150,13 @@ function Invoke-AutoScreenshot {
     $screenshots = @()
     $skipped = @($capped)
     $hashConflicts = @()
+    $staleShots = @()
     $seenHashes = @{}
     $prevHash = ''
+
+    # 本次运行的起点：用于「截图必须是本次新落的」判据（见下方陈旧截图检查）。
+    # ⚠️ 必须在**进入循环之前**取，否则每页各取一次会让判据退化成恒真。
+    $runStarted = Get-Date
 
     $pageNum = 0
     foreach ($page in $targetPages) {
@@ -173,6 +181,19 @@ function Invoke-AutoScreenshot {
             if (-not (Test-Path -LiteralPath $outputFile) -or (Get-Item -LiteralPath $outputFile).Length -eq 0) {
                 $skipped += $pageName
                 Write-Host "  ⚠️ $pageName 截图失败" -ForegroundColor Yellow
+                continue
+            }
+
+            # 反假绿：截图**必须是本次运行新落的**。
+            # ⚠️ 为什么必须有这条：`$OutputDir` 默认 `.ci-verify\screenshots`，目录**不清理**，
+            #    文件名按页名固定。若 adb 截图静默失败（写入 0 字节或没写），上面那条只查
+            #    「文件存在且非空」——**上一次运行残留的同名 PNG 会让它照样通过**，
+            #    于是把陈旧截图当成本次证据。时间戳判据把这种情形钉死。
+            $shotWritten = (Get-Item -LiteralPath $outputFile).LastWriteTime
+            if ($shotWritten -lt $runStarted) {
+                $staleShots += $pageName
+                $skipped += $pageName
+                Write-Host "  ❌ $pageName 的截图时间戳早于本次运行起点（陈旧文件，疑似本次截图未真正落盘）" -ForegroundColor Red
                 continue
             }
 
@@ -212,6 +233,7 @@ function Invoke-AutoScreenshot {
         Screenshots   = $screenshots
         Skipped       = $skipped
         HashConflicts = $hashConflicts
+        StaleShots    = $staleShots
         TargetPages   = $targetPages
         Error         = $errorMsg
     }

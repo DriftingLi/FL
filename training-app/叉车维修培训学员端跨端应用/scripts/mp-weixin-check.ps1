@@ -181,8 +181,8 @@ $DistRelative = 'unpackage\dist\build\mp-weixin'
 $ProbeRelative = 'scripts\mp-weixin-probe.mjs'
 $ReadyRelative = 'scripts\mp-weixin-ready.mjs'
 $WxDevToolsPatterns = @(
-    'E:\微信web开发者工具\cli.bat',
     'D:\微信web开发者工具\cli.bat',
+    'D:\软件\微信web开发者工具\cli.bat',
     'C:\Program Files (x86)\Tencent\微信web开发者工具\cli.bat',
     'C:\Program Files\Tencent\微信web开发者工具\cli.bat',
     "$env:LOCALAPPDATA\微信web开发者工具\cli.bat"
@@ -231,7 +231,7 @@ function Resolve-HBuilderXRoot {
     $candidates = @()
     if ($env:HBuilderX_HOME) { $candidates += $env:HBuilderX_HOME }
     foreach ($pattern in @(
-            'D:\软件\HBuilderX*\HBuilderX', 'D:\HBuilderX*\HBuilderX', 'E:\HBuilderX*\HBuilderX',
+            'D:\软件\HBuilderX*\HBuilderX', 'D:\HBuilderX*\HBuilderX',
             'C:\Program Files\HBuilderX*\HBuilderX', 'C:\Program Files\HBuilderX', "$env:LOCALAPPDATA\HBuilderX")) {
         $candidates += (Get-ChildItem -Path $pattern -Directory -ErrorAction SilentlyContinue |
             Sort-Object FullName -Descending | ForEach-Object { $_.FullName })
