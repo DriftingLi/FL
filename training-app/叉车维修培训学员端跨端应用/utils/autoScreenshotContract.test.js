@@ -25,6 +25,16 @@
  *   S14 【2026-09-15】**改动页推导的路径形状**：两条 git 调用都必须 `--relative`，输出必须过
  *       `ConvertFrom-GitQuotedPath`（否则仓库根相对 + quotepath 转义 ⇒ `^pages/` 恒失配 ⇒ 推导恒 0 页，
  *       步骤 6 必然报「无改动页面」⇒ HashConflicts / TargetPages 永远取不到真值）
+ *   S15 【2026-09-15】**切页派发必须分离**：不得再出现前台同步调用那个永不收口的真运行 cli
+ *       （实测 18 分钟挂住），必须走 `UseShellExecute` 新进程树 + 有界落定判据 + fail-closed 出口
+ *   S16 【2026-09-15】`Wait-NavSettled` 必须**有界**：同时有「等满 MinSeconds 且连续采样一致 ⇒ 落定」
+ *       与「到 TimeoutSeconds ⇒ 未落定」两条出口，并以 `Settled` 布尔回报
+ *   S17 【2026-09-15】**落定必须有页身份**：日志里出现**目标页**的页面进入行才算落定；
+ *       进的是别的页 ⇒ 未落定且原因点名「请求页 X，实际进入 Y」
+ *   S18 【2026-09-15】**全黑帧不是证据**：截图整帧无内容 ⇒ 记 Skipped（灭屏时 screencap 只给黑帧）
+ *   S19 【2026-09-15】**灭屏前置**：`mWakefulness` 非 Awake ⇒ 直接拒绝截图（fail-closed，不注入 input）
+ *   S20 【2026-09-15】**包装脚本必须钉 UTF-8 解码**：否则 CLI 的 UTF-8 输出被按 OEM 码页解码后再写盘
+ *       ⇒ 页面进入行变双重编码乱码 ⇒ S17 的页身份判据永远匹配不到（本地假 cli 已实证）
  */
 const fs = require('fs');
 const path = require('path');
@@ -63,8 +73,12 @@ describe('auto-screenshot.ps1 contract', () => {
 
   test('S5: 【文本层】navigates via HBuilderX CLI --pagePath (not am start deep link)', () => {
     expect(src).toContain('--pagePath');
-    // 必须是**真的调用** cli（`& $CliPath …`），只出现路径字符串会被注释满足
-    expect(src).toMatch(/&\s*\$CliPath/);
+    // 2026-09-15：导航改**分离派发**（Start-NavLaunchDetached）后，正向判据**不能再吃注释里的 `& $CliPath`**
+    //   （旧写法只会被自己文档注释满足 —— 假通过）。改成钉两件事：
+    //     ① 派发调用真的把 `$CliPath` 传进去；② 仍不允许退回 `am start` 深链（实测不生效，见 S5 原意）。
+    const code = src.replace(/<#[\s\S]*?#>/g, '').replace(/^\s*#.*$/gm, '');
+    expect(code).toMatch(/Start-NavLaunchDetached[^\r\n]*-CliExe\s+\$CliPath/);
+    expect(code).not.toMatch(/am\s+start/);
   });
 
   test('S6: SHA256 anti-false-green (identical consecutive hashes ⇒ navigation failed)', () => {
@@ -154,5 +168,94 @@ describe('auto-screenshot.ps1 contract', () => {
     // 正例：输出必须过解码器，且解码器来自唯一真源（不在此另抄一份实现）
     expect(block).toMatch(/ConvertFrom-GitQuotedPath/);
     expect(block).toMatch(/level-detect\.ps1/);
+  });
+
+  // S15（2026-09-15）：切页派发**必须分离**。
+  //   症状：先前是 `& $CliPath @launchArgs 2>&1 | Out-String` —— 前台同步等待一个**永不自己收口**的
+  //   真运行会话（实测存活 18 分钟、CPU 0.08 秒）⇒ 步骤 6 永久挂住，截图不落盘，
+  //   HashConflicts / TargetPages 永远算不出来。
+  //   ⚠️ 反向断言必须**先剥注释**：脚本与本文件的注释里都会引用旧形态（本仓血账：注释会命中断言）。
+  test('S15: 【2026-09-15】navigation dispatch is detached (no foreground sync call)', () => {
+    const code = src.replace(/<#[\s\S]*?#>/g, '').replace(/^\s*#.*$/gm, '');
+    expect(code).not.toMatch(/&\s*\$CliPath\s*@launchArgs/);
+    expect(code).not.toMatch(/\$CliPath\s*@launchArgs[^\r\n]*\|\s*Out-String/);
+
+    // 必须走「新进程树」派发（与 hx-run.ps1 同一套）
+    expect(code).toMatch(/Start-NavLaunchDetached/);
+    expect(src).toContain('UseShellExecute');
+
+    // 必须有有界的落定判据，且未落定时 fail-closed（记 Skipped 且不产截图）
+    expect(src).toMatch(/Wait-NavSettled/);
+    expect(src).toMatch(/NavigateTimeoutSeconds/);
+    const navAt = src.indexOf('if (-not $settle.Settled)');
+    expect(navAt).toBeGreaterThan(-1);
+    const navBlock = src.slice(navAt, navAt + 400);
+    expect(navBlock).toMatch(/\$skipped\s*\+=/);
+    expect(navBlock).toMatch(/continue/);
+  });
+
+  // S16（2026-09-15）：落定判据必须**有界**，且有明确的布尔回报（否则调用方又会退化成「无限等」）。
+  test('S16: 【2026-09-15】Wait-NavSettled is bounded and reports a Settled flag', () => {
+    const fnAt = src.indexOf('function Wait-NavSettled');
+    expect(fnAt).toBeGreaterThan(-1);
+    expect(src).toMatch(/Settled\s*=\s*\$true/);
+    expect(src).toMatch(/Settled\s*=\s*\$false/);
+    // 两条出口：等满 MinSeconds 且连续采样一致 / 到 TimeoutSeconds
+    expect(src).toMatch(/\$elapsed\s*-ge\s*\$MinSeconds/);
+    expect(src).toMatch(/\$elapsed\s*-ge\s*\$TimeoutSeconds/);
+    expect(src).toMatch(/\$stable\s*-ge\s*1/);
+  });
+
+  // S17（2026-09-15）：**页身份**判据 —— ADR-0008 记的那条缺口（「四项断言覆盖不到『目标页是否真的加载』」）
+  //   在 dev:finish 载体上的落锁。旧判据只要求「画面稳定」，已被全黑帧骗过一次；现在必须由**应用自己
+  //   打的页面进入行**证明进的是目标页，进错了要在原因里点名。
+  test('S17: 【2026-09-15】settle requires the app-side page-identity line for the TARGET page', () => {
+    expect(src).toContain('function Get-NavEnteredPage');
+    // 页面进入行标记（中文；脚本文件是 UTF-8 ⇒ 字面量可直接写）
+    expect(src).toMatch(/进入页面/);
+    expect(src).toMatch(/\$entered\s*-eq\s*\$ExpectedPage/);
+    expect(src).toMatch(/EnteredPage\s*=/);
+    // 未落定的原因必须能点名「请求页 X，实际进入 Y」
+    expect(src).toMatch(/请求页 \$ExpectedPage，日志里最后进入的是 \$entered/);
+    // 且该判据必须真的被调用方接上（参数名不能只写在函数签名里）
+    expect(src).toMatch(/-NavOutFile\s+\$nav\.OutFile\s+-ExpectedPage\s+\$page/);
+  });
+
+  // S18（2026-09-15）：全黑帧**不是证据**。实测 17208 字节的全黑 PNG 曾一路通过
+  //   「存在且非空 + 时间戳新 + hash 不变」三条判据 ⇒ 必须有一条「整帧无内容」的判据把它挡掉。
+  test('S18: 【2026-09-15】all-black frames are rejected as evidence', () => {
+    expect(src).toContain('function Test-ScreenBlank');
+    const at = src.indexOf('$blankInfo = Test-ScreenBlank -Path $outputFile');
+    expect(at).toBeGreaterThan(-1);
+    const block = src.slice(at, at + 400);
+    expect(block).toMatch(/\$blankInfo\.Blank/);
+    expect(block).toMatch(/\$skipped\s*\+=/);
+    expect(block).toMatch(/continue/);
+  });
+
+  // S19（2026-09-15）：灭屏前置 —— 灭屏时 screencap 只给全黑帧（且天然「稳定」）⇒ 必须在循环**之前**
+  //   fail-closed 拒绝，并写明「唤醒设备是人来做」（脚本不注入 input）。
+  test('S19: 【2026-09-15】screen must be awake before screenshotting (fail-closed, no input injection)', () => {
+    expect(src).toContain('function Test-ScreenAwake');
+    expect(src).toMatch(/mWakefulness/);
+    expect(src).toMatch(/设备屏幕未唤醒/);
+    const at = src.indexOf('$awake = Test-ScreenAwake');
+    expect(at).toBeGreaterThan(-1);
+    expect(src.slice(at, at + 700)).toMatch(/return\s+\[pscustomobject\]/);
+    // 不得用 input 注入去「自动唤醒设备」
+    const code = src.replace(/<#[\s\S]*?#>/g, '').replace(/^\s*#.*$/gm, '');
+    expect(code).not.toMatch(/keyevent\s+KEYCODE_WAKEUP/i);
+  });
+
+  // S20（2026-09-15）：包装脚本必须**钉死 UTF-8 解码**。
+  //   实测（本机假 cli）：不钉的话，DCloud CLI 的 UTF-8 输出被 pwsh 按 OEM 码页(GBK)解码、再以 UTF-8
+  //   写盘 ⇒ 双重编码乱码，`进入页面:` 永远匹配不到 ⇒ S17 的页身份判据恒不可用。
+  test('S20: 【2026-09-15】nav wrapper pins UTF-8 output decoding', () => {
+    expect(src).toMatch(/\[Console\]::OutputEncoding\s*=\s*\[System\.Text\.Encoding\]::UTF8/);
+    const at = src.indexOf('$wrapLines = @(');
+    expect(at).toBeGreaterThan(-1);
+    const block = src.slice(at, at + 800);
+    expect(block).toMatch(/\[Console\]::OutputEncoding/);
+    expect(block).toMatch(/\*>\s*'\$outFile'/);
   });
 });
