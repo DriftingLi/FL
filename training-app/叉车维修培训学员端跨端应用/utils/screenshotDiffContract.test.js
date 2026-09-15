@@ -51,4 +51,16 @@ describe('screenshot-diff.ps1 contract', () => {
     expect(src).toContain('MD5');
     expect(src).toContain('Get-FileHash');
   });
+
+  // D7（2026-09-15，#1027 收尾真机实测）：`Get-ChildItem` 的结果**必须**用 `@(...)` 包住。
+  //   症状：只命中**一个** png 时它会退化成**标量**，而调用方 `dev-finish.ps1` 是以
+  //   `Set-StrictMode -Version Latest` 跑的 ⇒ `$currentFiles.Count` 抛「在此对象上找不到属性 Count」
+  //   ⇒ **步骤 7 直接崩**（基线目录不存在 + 恰好一页改动 = 最常见的首次运行形态；实测撞到）。
+  //   行为面由 `screenshotDiffSingleFileBehavior.test.js`（C1–C4）在运行期另钉。
+  test('D7: 【2026-09-15】Get-ChildItem 结果必须 @() 包住（StrictMode 下单文件会退化成标量）', () => {
+    const code = src.replace(/<#[\s\S]*?#>/g, '').replace(/^\s*#.*$/gm, '');
+    expect(code).not.toMatch(/\$\w+\s*=\s*Get-ChildItem/);
+    expect(code).toMatch(/\$currentFiles\s*=\s*@\(Get-ChildItem/);
+    expect(code).toMatch(/\$baselineFiles\s*=\s*@\(Get-ChildItem/);
+  });
 });
