@@ -31,3 +31,15 @@ export function regionLabel(item: { ip_province?: string; ip_city?: string }): s
  * 约定文件里已登记该例外，清理 hint 文案时不要连它一起删。
  */
 export const FORUM_REGION_NOTICE = '发布内容会显示 IP 属地'
+
+/**
+ * Markdown 档的能力与边界提示（ADR-0052）。
+ *
+ * ⚠️ 与属地披露一样，这是 docs/agents/ui-conventions.md「不写说明性 hint 文本」的
+ * **明确例外**（约定文件里已登记）。理由是 ADR-0046 自己的决策：
+ * 「判据放在作者看得见的地方（编辑器提示 + 预览里的越界说明）」——内容精选编辑器
+ * 已经有这么一行，论坛作者同样需要知道**表格不渲染**、**图片要走粘贴区**这两条硬边界
+ * （正文里的 `![]()` 会按 ADR-0044 展开成 alt 文本）。清理 hint 时不要连它一起删。
+ */
+export const FORUM_MARKDOWN_HINT =
+  '支持 标题、加粗、斜体、引用、代码、链接、列表、任务列表、公式与图表；表格不渲染，图片请用下方粘贴区'

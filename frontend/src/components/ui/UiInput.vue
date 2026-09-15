@@ -4,11 +4,20 @@
  * 圆角与聚焦环由 element-overrides.css 的 `.el-input__wrapper` 统一处理，
  * 这里不重复声明样式，只做 v-model 与 size 的收口。
  *
- * 约定（R2 纯增量）：variant / maxlength / showWordLimit / autosize 都是后加的，
+ * 约定（R2 纯增量）：variant / maxlength / showWordLimit / autosize / expose 都是后加的，
  * 默认值一律对齐改造前行为 —— boxed 走 EP 原厂外观、不传 maxlength 就不显示计数，
  * 让已经在本组件上的存量调用方零 diff。
  */
+import { ref } from 'vue'
+
 const value = defineModel<string>({ default: '' })
+
+/**
+ * 内层 el-input 实例：只为**选区编辑**（Markdown 工具栏）暴露原生 textarea。
+ * 类型放宽成结构化对象：EP 的 expose 走 proxyRefs，`textarea` 读出来是元素本身，
+ * 而它的 .d.ts 写的是 ShallowRef —— 直接按 d.ts 标类型会得到 Ref，反而对不上运行期。
+ */
+const inputRef = ref<{ focus?: () => void; textarea?: unknown } | null>(null)
 
 withDefaults(
   defineProps<{
@@ -42,10 +51,25 @@ withDefaults(
     variant: 'boxed'
   }
 )
+
+/**
+ * 选区编辑需要原生 textarea（Markdown 工具栏按光标位置插入标记）。
+ * `focus` 与 `getTextarea` 都是**纯增量**：既有调用方不传 ref 时行为完全不变。
+ */
+defineExpose({
+  focus: () => inputRef.value?.focus?.(),
+  getTextarea: (): HTMLTextAreaElement | undefined => {
+    const el = inputRef.value?.textarea
+    // 只认真正的 textarea：EP 若把 expose 从「元素」改回「Ref」，这里返回 undefined 让调用方
+    // 走退化分支，而不是把一个 Ref 当成元素去读 selectionStart（会把正文写坏）。
+    return el instanceof HTMLTextAreaElement ? el : undefined
+  }
+})
 </script>
 
 <template>
   <el-input
+    ref="inputRef"
     v-model="value"
     :class="variant === 'bare' ? 'ui-input-bare' : undefined"
     :placeholder="placeholder"

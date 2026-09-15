@@ -34,6 +34,22 @@ describe("ForumContent 安全闸门（UGC 不可信输入）", () => {
     expect(w.text()).toContain("<script>")
   })
 
+  it("任务列表渲染成勾选图形（#1017 起在声明子集内，工具栏有对应按钮）", () => {
+    const w = mountContent("- [ ] 待办\n- [x] 已完成")
+    // 工具栏按钮承诺的语法必须真能渲染——这是「按钮集 = 声明子集」的运行时证据。
+    // markstream 把它渲染成**只读**图形（span.checkbox-node + aria-label），不是可点的 input：
+    // 勾选状态由源串决定，读者侧不可切换。
+    expect(w.element.querySelectorAll(".checkbox-node")).toHaveLength(2)
+    expect(w.element.querySelector(".checkbox-checked")).not.toBeNull()
+    expect(w.element.querySelector('.checkbox-node[aria-label="unchecked"]')).not.toBeNull()
+    expect(w.text()).toContain("待办")
+  })
+
+  it("表格仍不在子集内：竖线表格不渲染成 table", () => {
+    const w = mountContent("| a | b |\n| - | - |\n| 1 | 2 |")
+    expect(w.element.querySelector("table")).toBeNull()
+  })
+
   it("img onerror 不产生带事件处理器的元素", () => {
     const w = mountContent('<img src=x onerror="window.__pwned = 2">')
     expect((window as unknown as Record<string, unknown>).__pwned).toBeUndefined()
