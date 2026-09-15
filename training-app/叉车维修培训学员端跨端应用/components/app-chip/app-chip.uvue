@@ -20,7 +20,7 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     .app-chip {
         padding: 8rpx 24rpx;
         border-radius: $radius-sm;
@@ -37,7 +37,7 @@
 
     .app-chip-text {
         font-size: $font-size-sm;
-        color: $text-secondary;
+        color: $text-color-secondary;
     }
 
     .app-chip-text--active {
