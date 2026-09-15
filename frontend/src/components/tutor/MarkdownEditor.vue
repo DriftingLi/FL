@@ -1,25 +1,16 @@
 <template>
   <div class="md-editor flex flex-col overflow-hidden rounded-[6px] border border-line-strong bg-panel" :style="{ height: bodyHeight }">
-    <!-- 模式切换 Tab -->
-    <div class="md-mode-tabs flex shrink-0 border-b border-line bg-canvas">
-      <button
-        type="button"
-        class="md-mode-tab cursor-pointer border-0 bg-transparent px-[18px] py-2 text-sm font-[inherit] text-ink-2 border-b-2 border-transparent transition-all duration-[var(--duration-base)] ease-[var(--ease-default)] not-disabled:hover:text-ui-500 disabled:cursor-not-allowed disabled:opacity-50"
-        :class="mode === 'ir' ? 'text-ui-500 border-ui-500 bg-panel' : ''"
+    <!--
+      模式切换 Tab：形态单点收在 UiUnderlineTabs（与论坛输入框同一件）——
+      原来是本组件手搓的下划线 tab，属于全站第三处 tab 形态，#1014 一并收敛。
+    -->
+    <div class="md-mode-tabs flex shrink-0 border-b border-line bg-canvas px-1.5">
+      <UiUnderlineTabs
+        :model-value="mode"
+        :options="MODE_OPTIONS"
         :disabled="!isReady"
-        @click="switchMode('ir')"
-      >
-        预览编辑
-      </button>
-      <button
-        type="button"
-        class="md-mode-tab cursor-pointer border-0 bg-transparent px-[18px] py-2 text-sm font-[inherit] text-ink-2 border-b-2 border-transparent transition-all duration-[var(--duration-base)] ease-[var(--ease-default)] not-disabled:hover:text-ui-500 disabled:cursor-not-allowed disabled:opacity-50"
-        :class="mode === 'sv' ? 'text-ui-500 border-ui-500 bg-panel' : ''"
-        :disabled="!isReady"
-        @click="switchMode('sv')"
-      >
-        源码
-      </button>
+        @update:model-value="onModeChange"
+      />
     </div>
     <!-- vditor 挂载点 -->
     <div ref="vditorRef" class="md-vditor-host flex-1 overflow-hidden relative"></div>
@@ -32,6 +23,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import UiUnderlineTabs from '@/components/ui/UiUnderlineTabs.vue'
 // vditor 是浏览器 DOM 库，动态导入避免 SSR/构建期问题
 import Vditor from 'vditor'
 import 'vditor/dist/index.css'
@@ -55,6 +47,17 @@ const emit = defineEmits(['update:modelValue'])
 
 const vditorRef = ref<HTMLElement | null>(null)
 const mode = ref<'ir' | 'sv'>('ir')
+
+/** Tab 选项（值与 Vditor 的 mode 同名：ir=即时渲染 / sv=源码） */
+const MODE_OPTIONS = [
+  { label: '预览编辑', value: 'ir' },
+  { label: '源码', value: 'sv' }
+]
+
+/** UiUnderlineTabs 的载荷是 string，这里收窄回 Vditor 的两档 */
+function onModeChange(value: string) {
+  if (value === 'ir' || value === 'sv') switchMode(value)
+}
 // Vditor 是否真正初始化完成（after 回调触发后才算 ready）
 // 在 ready 之前调用 getValue/setValue 会触发 VditorIRDOM2Md undefined 报错
 const isReady = ref(false)

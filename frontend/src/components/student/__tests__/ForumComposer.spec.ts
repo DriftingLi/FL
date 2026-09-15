@@ -18,11 +18,24 @@ vi.mock('markstream-vue/index.css', () => ({}))
 vi.mock('@/composables/useForumImageUpload', () => ({
   useForumImageUpload: () => ({
     uploading: false,
+    // #1014：拖拽三件套 + 高亮状态也在单点里（缺字段会让虚线区渲染直接炸）
+    dragging: { value: false },
     uploadFiles: vi.fn(),
     removeImage: vi.fn(),
-    handlePaste: vi.fn()
+    handlePaste: vi.fn(),
+    handleDragOver: vi.fn(),
+    handleDragLeave: vi.fn(),
+    handleDrop: vi.fn()
   })
 }))
+
+/** 预览入口 = 下划线 tab 里的「预览」项（#1014 起取代原来的文字按钮） */
+function previewTab(w: ReturnType<typeof mountComposer>) {
+  return w
+    .findAllComponents({ name: 'UiUnderlineTabs' })[0]
+    .findAll('button')
+    .find((b) => b.text().includes('预览'))
+}
 
 function mountComposer() {
   return mount(ForumComposer, {
@@ -55,12 +68,13 @@ describe('回复框正文格式（#879 / ADR-0044）', () => {
     expect(w.emitted('submit')?.[0]?.[0]).toEqual({ contentFormat: 'markdown' });
   })
 
-  it('选 Markdown 才出现预览；预览复用 UGC 渲染单点', async () => {
+  it('选 Markdown 才出现编写/预览 tab；预览复用 UGC 渲染单点', async () => {
     const w = mountComposer();
-    expect(w.findAll('button').find((b) => b.text().includes('预览'))).toBeUndefined();
+    // 纯文本档：连 tab 都不存在（没有可预览的渲染结果）
+    expect(w.findAllComponents({ name: 'UiUnderlineTabs' })).toHaveLength(0);
     w.findAllComponents({ name: 'UiSegmentTabs' })[0].vm.$emit('update:modelValue', 'markdown');
     await flushPromises();
-    const btn = w.findAll('button').find((b) => b.text().includes('预览'));
+    const btn = previewTab(w);
     expect(btn).toBeTruthy();
     expect(w.findComponent(ForumContent).exists()).toBe(false);
     await btn!.trigger('click');
@@ -75,7 +89,7 @@ describe('回复框正文格式（#879 / ADR-0044）', () => {
     const w = mountComposer();
     w.findAllComponents({ name: 'UiSegmentTabs' })[0].vm.$emit('update:modelValue', 'markdown');
     await flushPromises();
-    const btn = w.findAll('button').find((b) => b.text().includes('预览'));
+    const btn = previewTab(w);
     await btn!.trigger('click');
     await flushPromises();
     expect(w.findComponent(ForumContent).exists()).toBe(true);

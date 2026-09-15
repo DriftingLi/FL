@@ -868,6 +868,8 @@ multipart/form-data：`file`。响应 200：data 为 `{ "url": "/static/uploads/
 
 `content_format` 取值 `text`（默认）或 `markdown`；响应 `data` 亦回传该字段。主题与回复各自独立声明，互不影响。
 
+**正文子集口径（ADR-0044 / ADR-0052）**：`markdown` 档按**受限子集**渲染 —— 标题 / 有序无序列表 / 加粗 / 斜体 / 行内代码 / 代码块 / 引用 / 链接 / 任务列表 / 公式 / mermaid 图表；**表格与脚注不在子集内**（服务端不校验、不阻断，越界内容只是渲染不出预期形态）。客户端工具栏的按钮集合与这份子集**一一对应**（判据单点 `frontend/src/utils/markdownToolbar.ts`），改子集必须同时改按钮表。
+
 **DELETE /api/forum/topics/:id** / **DELETE /api/forum/replies/:id**：请求体 `{}`，响应 200 `{ "code": 200, "message": "删除成功", "data": null }`。
 
 ---
