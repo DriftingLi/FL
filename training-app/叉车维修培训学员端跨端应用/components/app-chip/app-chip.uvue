@@ -21,18 +21,15 @@
 </script>
 
 <style lang="scss">
+    /* 筛选标签（#979）：未选中 = 浅灰底次要字；选中 = 主色实底反白 —— 把色彩留给「当前档位」 */
     .app-chip {
-        padding: 8rpx 24rpx;
-        border-radius: $radius-sm;
-        border-width: 1rpx;
-        border-style: solid;
-        border-color: $border-color;
-        background-color: $card-bg;
+        padding: 16rpx 32rpx;
+        border-radius: $radius-pill;
+        background-color: $bg-color;
     }
 
     .app-chip--active {
-        background-color: #EBF5FF;
-        border-color: $primary-color;
+        background-color: $primary-color;
     }
 
     .app-chip-text {
@@ -41,7 +38,7 @@
     }
 
     .app-chip-text--active {
-        color: $primary-color;
+        color: $text-color-inverse;
         font-weight: 600;
     }
 </style>

@@ -82,11 +82,43 @@ describe('M3 封装层与 token 化', () => {
     expect(styleBlock(SEARCH_PAGE)).toMatch(/<style lang="scss">/);
   });
 
-  it('已 token 化的色值不再以裸 hex 出现', () => {
+  it('样式块内零裸 hex（色值一律走 token；本轮起收紧成硬断言）', () => {
+    const hex = styleBlock(SEARCH_PAGE).match(/#[0-9a-fA-F]{3,8}\b/g) || [];
+    expect(hex).toEqual([]);
+  });
+
+  it('视觉语言对齐既有页面：主色 header + 主色状态栏 + 淡蓝画布（course-detail / featured-list 同款写法）', () => {
     const style = styleBlock(SEARCH_PAGE);
-    for (const hex of ['#2979ff', '#333333', '#666666', '#999999', '#ffffff', '#f0f0f0', '#f5f5f5']) {
-      expect(style.toLowerCase()).not.toContain(hex);
-    }
+    expect(style).toMatch(/\.status-bar\s*\{[^}]*background-color:\s*\$primary-color/);
+    expect(style).toMatch(/\.search-header\s*\{[^}]*background-color:\s*\$primary-color/);
+    expect(style).toMatch(/\.search-page\s*\{[^}]*background-color:\s*\$bg-tint/);
+  });
+
+  it('每个分区有色彩锚点：主色浅底标题带 + 主色小竖条', () => {
+    expect(SEARCH_PAGE).toContain('class="section-accent"');
+    const style = styleBlock(SEARCH_PAGE);
+    expect(style).toMatch(/\.section-header\s*\{[^}]*background-color:\s*\$primary-tint/);
+    expect(style).toMatch(/\.section-accent\s*\{[^}]*background-color:\s*\$primary-color/);
+  });
+
+  it('触摸区达标：清空 ✕ 与历史删除 ✕ 的命中区 88rpx（44px，AGENTS 下限）', () => {
+    const style = styleBlock(SEARCH_PAGE);
+    expect(style).toMatch(/\.search-clear\s*\{[^}]*height:\s*88rpx/);
+    expect(style).toMatch(/\.history-tag-delete\s*\{[^}]*width:\s*88rpx/);
+    expect(style).toMatch(/\.history-tag-delete\s*\{[^}]*height:\s*88rpx/);
+  });
+
+  it('uvue 无 :last-child ⇒ 末行去分隔线由模板显式加类', () => {
+    expect(SEARCH_PAGE).toContain("'result-item--last': idx == section.items.length - 1");
+    expect(SEARCH_PAGE).toContain("'result-item--last': idx == typedResult.items.length - 1");
+    expect(styleBlock(SEARCH_PAGE)).toMatch(/\.result-item--last\s*\{[^}]*border-bottom-width:\s*0/);
+  });
+
+  it('选中档位改主色实底反白（app-chip），未选中用浅灰底', () => {
+    const chip = read('components/app-chip/app-chip.uvue');
+    expect(chip).toMatch(/\.app-chip--active\s*\{[^}]*background-color:\s*\$primary-color/);
+    expect(chip).toMatch(/\.app-chip-text--active\s*\{[^}]*color:\s*\$text-color-inverse/);
+    expect(chip).toMatch(/\.app-chip\s*\{[^}]*background-color:\s*\$bg-color/);
   });
 
   const TOKEN_FILES = {
@@ -107,11 +139,24 @@ describe('M3 封装层与 token 化', () => {
 });
 
 describe('M4 呈现：投影 + 高亮 + 命中标注 + 历史单条删除', () => {
-  it('标题与片段都走高亮切段，命中片段用 item-hl 加粗描色', () => {
+  it('标题与片段都走高亮切段；普通段按所在行给色（两套 plain 类，避免把片段染成标题色）', () => {
     expect(SEARCH_PAGE).toContain('itemTitleSegments(item)');
     expect(SEARCH_PAGE).toContain('itemSnippetSegments(item)');
-    expect(SEARCH_PAGE).toContain(":class=\"seg.hit ? 'item-hl' : 'item-plain'\"");
-    expect(styleBlock(SEARCH_PAGE)).toContain('.item-hl');
+    expect(SEARCH_PAGE).toContain(":class=\"seg.hit ? 'item-hl' : 'item-title-plain'\"");
+    expect(SEARCH_PAGE).toContain(":class=\"seg.hit ? 'item-hl' : 'item-summary-plain'\"");
+    const style = styleBlock(SEARCH_PAGE);
+    expect(style).toContain('.item-hl');
+    expect(style).toMatch(/\.item-summary-plain\s*\{[^}]*color:\s*\$text-color-secondary/);
+  });
+
+  it('题目行不重复渲染同一句话：主行用 itemPrimaryText，第二行由 showSnippet 把关', () => {
+    expect(SEARCH_PAGE).toContain('itemPrimaryText');
+    expect(SEARCH_PAGE).toContain('shouldShowSnippet(item)');
+    expect(SEARCH_PAGE).toContain('function showSnippet(item : SearchItem) : boolean');
+    expect(SEARCH_DISPLAY).toContain('export function itemPrimaryText');
+    expect(SEARCH_DISPLAY).toContain('export function shouldShowSnippet');
+    // 第二行必须用 showSnippet 把关，不得退回「只看文本非空」
+    expect(SEARCH_PAGE).not.toContain('v-if="itemSnippetText(item).length > 0"');
   });
 
   it('片段投影走 utils/searchDisplay.displaySnippet（snippet 优先、summary 兜底）', () => {

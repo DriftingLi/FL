@@ -106,3 +106,45 @@ export function displaySnippet(item : SearchItem) : string {
     const raw = item.snippet.length > 0 ? item.snippet : item.summary
     return projectSnippet(raw)
 }
+
+/** 去掉首尾的省略号（后端片段是**窗口**，两端可能带 `…`） */
+function stripEdges(text : string) : string {
+    let t = text
+    if (t.startsWith('…')) t = t.substring(1)
+    while (t.length > 0 && t.endsWith('…')) t = t.substring(0, t.length - 1)
+    return t
+}
+
+/** 两串是否同一段文本（去掉首尾省略号后互为前缀） */
+function isSameText(a : string, b : string) : boolean {
+    const x = stripEdges(a)
+    const y = stripEdges(b)
+    if (x.length == 0 || y.length == 0) return false
+    const short = x.length <= y.length ? x : y
+    const long = x.length <= y.length ? y : x
+    return long.substring(0, short.length) == short
+}
+
+/**
+ * 结果行**主行**文本。
+ *
+ * 题目分区没有独立标题面：后端把 `title` 与 `summary` 都填成**题干截断**（`title == summary`，
+ * 即 snippetOf(content, 50)），而 `snippet` 是同一段题干的**命中窗口** ⇒ 两行会渲染同一句话的
+ * 两种截断（#979 第一版的观感缺陷）。故题目主行改用命中窗口：既去掉重复，又保住「为什么命中」。
+ */
+export function itemPrimaryText(item : SearchItem) : string {
+    if (item.type == 'question' && item.snippet.length > 0) return item.snippet
+    return item.title
+}
+
+/**
+ * 是否还需要第二行（片段行）。
+ * 题目恒不需要（主行已是命中窗口）；其余分区在「片段与标题是同一段文本」时也不需要。
+ */
+export function shouldShowSnippet(item : SearchItem) : boolean {
+    if (item.type == 'question') return false
+    const raw = item.snippet.length > 0 ? item.snippet : item.summary
+    if (raw.length == 0) return false
+    if (item.title.length == 0) return true
+    return !isSameText(item.title, raw)
+}

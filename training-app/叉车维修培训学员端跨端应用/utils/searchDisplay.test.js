@@ -65,6 +65,35 @@ function splitHighlight(text, keyword) {
   return segments;
 }
 
+function stripEdges(text) {
+  let t = text;
+  if (t.startsWith('…')) t = t.substring(1);
+  while (t.length > 0 && t.endsWith('…')) t = t.substring(0, t.length - 1);
+  return t;
+}
+
+function isSameText(a, b) {
+  const x = stripEdges(a);
+  const y = stripEdges(b);
+  if (x.length === 0 || y.length === 0) return false;
+  const short = x.length <= y.length ? x : y;
+  const long = x.length <= y.length ? y : x;
+  return long.substring(0, short.length) === short;
+}
+
+function itemPrimaryText(item) {
+  if (item.type === 'question' && item.snippet.length > 0) return item.snippet;
+  return item.title;
+}
+
+function shouldShowSnippet(item) {
+  if (item.type === 'question') return false;
+  const raw = item.snippet.length > 0 ? item.snippet : item.summary;
+  if (raw.length === 0) return false;
+  if (item.title.length === 0) return true;
+  return !isSameText(item.title, raw);
+}
+
 // ===== 用例 =====
 
 describe('splitHighlight：关键词切段（高亮由端上做，ADR-0049 决策 6）', () => {
@@ -112,6 +141,49 @@ describe('hitLabel：命中位置标注（回复命中必须说清）', () => {
     expect(hitLabel('title')).toBe('');
     expect(hitLabel('body')).toBe('');
     expect(hitLabel('')).toBe('');
+  });
+});
+
+describe('itemPrimaryText / shouldShowSnippet：结果行不重复渲染同一句话（#979 观感修复）', () => {
+  const Q = {
+    type: 'question',
+    title: '气压制动的机动车辆，当气压升至600kPa且不适用制动的情况下，停止空气压缩机（）后，其气压的…',
+    summary: '气压制动的机动车辆，当气压升至600kPa且不适用制动的情况下，停止空气压缩机（）后，其气压的…',
+    snippet: '…适用制动的情况下，停止空气压缩机（）后，其气压的降低不应超过10kPa。',
+  };
+
+  it('题目：主行改用命中窗口，且不再渲染第二行（后端 title == summary == 题干截断）', () => {
+    expect(itemPrimaryText(Q)).toBe(Q.snippet);
+    expect(shouldShowSnippet(Q)).toBe(false);
+  });
+
+  it('题目无 snippet 时退回 title（老客户端口径，不空行）', () => {
+    const old = { type: 'question', title: '题干', summary: '题干', snippet: '' };
+    expect(itemPrimaryText(old)).toBe('题干');
+    expect(shouldShowSnippet(old)).toBe(false);
+  });
+
+  it('课程/帖子：有独立标题面 ⇒ 主行是标题、第二行是片段', () => {
+    const c = { type: 'course', title: '场（厂）内机动车辆基础', summary: '场车的工作原理…', snippet: '…对标 N1 考试大纲第一章。' };
+    expect(itemPrimaryText(c)).toBe('场（厂）内机动车辆基础');
+    expect(shouldShowSnippet(c)).toBe(true);
+  });
+
+  it('片段与标题属同一段文本（截断关系，含首尾省略号）⇒ 不显示第二行', () => {
+    const ch = { type: 'chapter', title: '第一章 起步与行驶安全', summary: '', snippet: '第一章 起步与行驶安全 起步操作规程…' };
+    expect(shouldShowSnippet(ch)).toBe(false);
+    const rev = { type: 'chapter', title: '…第一章 起步与行驶安全', summary: '', snippet: '第一章 起步与行驶安全' };
+    expect(shouldShowSnippet(rev)).toBe(false);
+  });
+
+  it('无片段（snippet 与 summary 都空）⇒ 不显示第二行；标题为空但片段在 ⇒ 显示', () => {
+    expect(shouldShowSnippet({ type: 'topic', title: '帖子标题', summary: '', snippet: '' })).toBe(false);
+    expect(shouldShowSnippet({ type: 'topic', title: '', summary: '', snippet: '正文窗口' })).toBe(true);
+  });
+
+  it('snippet 为空时回退 summary 做同一段文本比较（后端「只增不破」兼容字段）', () => {
+    const legacy = { type: 'course', title: '课程名', summary: '课程名', snippet: '' };
+    expect(shouldShowSnippet(legacy)).toBe(false);
   });
 });
 
@@ -175,6 +247,15 @@ describe('镜像同步：searchDisplay.uts 与本文件逐条一致', () => {
     expect(src).toContain("'/pages/practice/practice-do?mode=single&question_id=' + id");
     expect(src).toContain("'/pages/featured/featured-detail?id=' + id");
     expect(src).toContain("'/pages/forum/forum-detail?id=' + id");
+  });
+
+  it('去重口径在本文件与 .uts 内同式（题目主行=命中窗口；截断关系比较去首尾省略号）', () => {
+    expect(src).toContain('export function itemPrimaryText');
+    expect(src).toContain('export function shouldShowSnippet');
+    expect(src).toContain("if (item.type == 'question' && item.snippet.length > 0) return item.snippet");
+    expect(src).toContain("if (item.type == 'question') return false");
+    expect(src).toContain('function stripEdges');
+    expect(src).toContain('function isSameText');
   });
 
   it('高亮镜像同式：小写比较 + indexOf 循环推进游标', () => {
