@@ -48,14 +48,37 @@ func (m *memForumStorage) Get(_ context.Context, url string) (io.ReadCloser, err
 	return io.NopCloser(bytes.NewReader([]byte(url))), nil
 }
 
-// newForumTestSvc 构造论坛服务 + 内存存储（记录删除调用）。
-func newForumTestSvc(t *testing.T) (*ForumService, *gorm.DB, *memForumStorage) {
+// forumTestEnv 论坛测试装置：同一组依赖实例上的两片 service（ADR-0050 决策 3 后治理动作
+// 不再挂在学员交互 interface 上——治理用例经 mod 装配，学员用例经 svc）。
+type forumTestEnv struct {
+	svc *ForumService
+	mod *ForumModerationService
+	db  *gorm.DB
+	st  *memForumStorage
+}
+
+// newForumTestEnv 构造论坛测试装置（依赖同源、实例分离，与 deps.go 的装配同形）。
+func newForumTestEnv(t *testing.T) *forumTestEnv {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
 	st := &memForumStorage{}
 	fileSvc := NewFileStore("", st, zap.NewNop())
-	svc := NewForumService(db, fileSvc, NewNotificationService(db, zap.NewNop()), NewForumCounter(), NewPointsService(db, zap.NewNop(), nil), zap.NewNop())
-	return svc, db, st
+	notificationSvc := NewNotificationService(db, zap.NewNop())
+	counters := NewForumCounter()
+	points := NewPointsService(db, zap.NewNop(), nil)
+	return &forumTestEnv{
+		svc: NewForumService(db, fileSvc, notificationSvc, counters, points, zap.NewNop()),
+		mod: NewForumModerationService(db, fileSvc, notificationSvc, counters, points, zap.NewNop()),
+		db:  db,
+		st:  st,
+	}
+}
+
+// newForumTestSvc 构造论坛服务 + 内存存储（记录删除调用）。治理侧用例用 newForumTestEnv 取 mod。
+func newForumTestSvc(t *testing.T) (*ForumService, *gorm.DB, *memForumStorage) {
+	t.Helper()
+	env := newForumTestEnv(t)
+	return env.svc, env.db, env.st
 }
 
 func seedForumUser(t *testing.T, db *gorm.DB, name string) *model.HrwaiUser {

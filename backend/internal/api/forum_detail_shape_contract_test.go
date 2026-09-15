@@ -67,7 +67,7 @@ func TestForumTopicDetailShapeContract(t *testing.T) {
 	r := gin.New()
 	api := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
-	RegisterForumRoutes(api, deps.RouterDeps(), deps.ForumSvc, deps.ForumImageSvc)
+	RegisterForumRoutes(api, deps.RouterDeps(), deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
 
 	now := testutil.Now()
 	author := model.HrwaiUser{Account: "shape_author", Phone: "13800000901", Username: "楼主", Status: 1, CreatedAt: now}

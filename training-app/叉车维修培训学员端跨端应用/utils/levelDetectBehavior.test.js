@@ -48,10 +48,16 @@ function invokeDetectLevel(projectDir, forceLevel) {
   const force = forceLevel ? `-ForceLevel ${q(forceLevel)}` : '';
   const script = [
     '$ErrorActionPreference = "Stop"',
+    // ⚠️ 必须先把输出编码钉成 UTF-8：脚本打的是中文 `Reason`，而 pwsh 在被管道捕获时
+    //    默认用 **OEM 代码页**（本机 GBK）输出 ⇒ Node 按 UTF-8 解码会得到乱码，
+    //    于是「不含某中文子串」这类断言**恒真**（假通过）。ASCII-only 的断言察觉不到这个坑。
+    '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+    '$OutputEncoding = [System.Text.Encoding]::UTF8',
     'Set-StrictMode -Version Latest',
     `. ${q(path.join(ROOT, LIB_REL))}`,
     `$r = Get-DetectLevel -ProjectDir ${q(projectDir)} ${force}`.trim(),
     'Write-Output ("LEVEL=" + $r.Level)',
+    'Write-Output ("REASON=" + $r.Reason)',
     'Write-Output ("CF_ARRAY=" + ($r.ChangedFiles -is [array]))',
   ].join('; ');
 
@@ -81,7 +87,7 @@ function parseResult(stdout) {
     const m = String(stdout).match(new RegExp(`^${key}=(.*)$`, 'm'));
     return m ? m[1].trim() : null;
   };
-  return { level: pick('LEVEL'), cfArray: pick('CF_ARRAY') };
+  return { level: pick('LEVEL'), reason: pick('REASON'), cfArray: pick('CF_ARRAY') };
 }
 
 /** 建一个干净工作树的临时仓库（空 diff 场景的确定性复现）。 */
@@ -98,7 +104,11 @@ function withCleanRepo(files, fn) {
     git('init', '-q');
     git('config', 'user.email', 'test@example.com');
     git('config', 'user.name', 'test');
-    files.forEach((f) => fs.writeFileSync(path.join(tmp, f), 'x\n'));
+    files.forEach((f) => {
+      const full = path.join(tmp, f);
+      fs.mkdirSync(path.dirname(full), { recursive: true });
+      fs.writeFileSync(full, 'x\n');
+    });
     files.forEach((f) => git('add', f));
     git('commit', '-qm', 'init');
     return fn(tmp, git);
@@ -153,5 +163,34 @@ describe('level-detect.ps1 行为级守护（运行期）', () => {
     const parsed = parseResult(r.stdout);
     expect(parsed.level).toBe('full');
     expect(parsed.cfArray).toBe('True');
+  });
+
+  // G4/G5（2026-09-15）：🟢 的 `Reason` 必须**区分**「工具链/测试改动」与「纯样式/文案改动」。
+  // 文本断言只能证明「源码里出现过那两句话」，证明不了「哪一类改动真的走哪个分支」——
+  // 这里用临时仓库真跑一遍（G4 只改 .ps1 / G5 只改 .uvue），钉住分支选择。
+  test('G4: 只改 .ps1（未命中运行时面）⇒ quick 且原因点名「工具链」', () => {
+    withCleanRepo(['run.ps1'], (tmp) => {
+      fs.appendFileSync(path.join(tmp, 'run.ps1'), '\n# tweak\n');
+      const r = invokeDetectLevel(tmp, '');
+      if (!r.ok) throw new Error(`工具链改动场景崩溃：\nexit=${r.status}\nstderr=${r.stderr}`);
+      const parsed = parseResult(r.stdout);
+      expect(parsed.level).toBe('quick');
+      expect(parsed.reason).toContain('工具链/测试改动');
+      // 关键：**不得**把它说成样式改动（那正是本次要修的误导）
+      expect(parsed.reason).not.toContain('纯样式');
+    });
+  });
+
+  test('G5: 只改 .uvue ⇒ quick 且原因写「纯样式/文案」并注明未命中运行时面', () => {
+    withCleanRepo(['pages/home/home.uvue'], (tmp) => {
+      fs.appendFileSync(path.join(tmp, 'pages/home/home.uvue'), '\n<!-- tweak -->\n');
+      const r = invokeDetectLevel(tmp, '');
+      if (!r.ok) throw new Error(`样式改动场景崩溃：\nexit=${r.status}\nstderr=${r.stderr}`);
+      const parsed = parseResult(r.stdout);
+      expect(parsed.level).toBe('quick');
+      expect(parsed.reason).toContain('纯样式/文案改动');
+      expect(parsed.reason).toContain('未命中运行时面');
+      expect(parsed.reason).not.toContain('工具链');
+    });
   });
 });

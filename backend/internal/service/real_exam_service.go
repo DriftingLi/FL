@@ -182,7 +182,10 @@ func (s *RealExamService) StartPaperExam(studentID, paperID int) (*MockExamStart
 	startTime := beijingNow()
 	paperIDCopy := paperID
 	mock := model.MockExam{
-		StudentID:     studentID,
+		StudentID: studentID,
+		// 分区取**卷所属证件**（不是学员当前证件）：按卷开考的分区由卷本身决定 ——
+		// 学员显式浏览别的证件的卷时，记录也该落在卷的证件下，否则切回本证件反而看不到它（#1003）。
+		CredentialID:  &paper.CredentialID,
 		QuestionIDs:   model.JSONB(idsJSON),
 		Answers:       model.JSONB(emptyJSON),
 		Duration:      duration,

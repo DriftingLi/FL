@@ -209,6 +209,15 @@ func TestRealPaperExam(t *testing.T) {
 	if mock.PaperID == nil || *mock.PaperID != paperID {
 		t.Fatalf("mock_exam.paper_id 应为 %d", paperID)
 	}
+	// 分区取**卷所属证件**（#1003）：按卷开考的记录必须落进卷的证件分区，
+	// 否则在「当前证件」的历史里看不到按卷开考的记录（NULL 分区只在未选证件时可见）。
+	var paper model.RealExamPaper
+	if err := db.First(&paper, paperID).Error; err != nil {
+		t.Fatalf("查真题卷失败: %v", err)
+	}
+	if mock.CredentialID == nil || *mock.CredentialID != paper.CredentialID {
+		t.Fatalf("mock_exam.credential_id 应为卷所属证件 %d, got %v", paper.CredentialID, mock.CredentialID)
+	}
 	// 交卷走模拟考链路（客观题判分）
 	msvc := NewMockExamService(db, nil, zap.NewNop())
 	if err := msvc.SaveProgress(got.MockExamID, 1, map[string]any{itoa(qIDs[0]): "A"}, 80*60); err != nil {

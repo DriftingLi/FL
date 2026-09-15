@@ -11389,7 +11389,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "分页查询模拟考试历史记录",
+                "description": "分页查询模拟考试历史记录（按当前证件分区：credential_id 可选，经拦截器注入当前证件）",
                 "consumes": [
                     "application/json"
                 ],
@@ -11401,6 +11401,12 @@ const docTemplate = `{
                 ],
                 "summary": "模拟考试历史",
                 "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "目标证件ID",
+                        "name": "credential_id",
+                        "in": "query"
+                    },
                     {
                         "type": "integer",
                         "default": 1,

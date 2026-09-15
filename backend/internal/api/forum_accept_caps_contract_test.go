@@ -90,7 +90,7 @@ func TestForumAcceptCapsContract(t *testing.T) {
 		cfg := &config.Config{JWTSecretKey: "caps-contract-secret", AuthCookie: config.AuthCookieConfig{Name: "hrwai_token"}}
 		r := gin.New()
 		deps := newContractDeps(t, db, cfg)
-		RegisterForumRoutes(r.Group("/api"), deps.RouterDeps(), deps.ForumSvc, deps.ForumImageSvc)
+		RegisterForumRoutes(r.Group("/api"), deps.RouterDeps(), deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
 		RegisterPointsRoutes(r.Group("/api"), deps.RouterDeps(), deps.PointsSvc)
 		author := model.HrwaiUser{Account: "caps_self", Phone: "13800001001", Username: "自答楼主", Status: 1, CreatedAt: testutil.Now()}
 		if err := db.Create(&author).Error; err != nil {
@@ -130,7 +130,7 @@ func TestForumAcceptCapsContract(t *testing.T) {
 		cfg := &config.Config{JWTSecretKey: "caps-contract-secret", AuthCookie: config.AuthCookieConfig{Name: "hrwai_token"}}
 		r := gin.New()
 		deps := newContractDeps(t, db, cfg)
-		RegisterForumRoutes(r.Group("/api"), deps.RouterDeps(), deps.ForumSvc, deps.ForumImageSvc)
+		RegisterForumRoutes(r.Group("/api"), deps.RouterDeps(), deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
 		RegisterPointsRoutes(r.Group("/api"), deps.RouterDeps(), deps.PointsSvc)
 		ans := model.HrwaiUser{Account: "caps_ans_daily", Phone: "13800001002", Username: "答主日封", Status: 1, CreatedAt: testutil.Now()}
 		db.Create(&ans)
@@ -168,7 +168,7 @@ func TestForumAcceptCapsContract(t *testing.T) {
 		cfg := &config.Config{JWTSecretKey: "caps-contract-secret", AuthCookie: config.AuthCookieConfig{Name: "hrwai_token"}}
 		r := gin.New()
 		deps := newContractDeps(t, db, cfg)
-		RegisterForumRoutes(r.Group("/api"), deps.RouterDeps(), deps.ForumSvc, deps.ForumImageSvc)
+		RegisterForumRoutes(r.Group("/api"), deps.RouterDeps(), deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
 		RegisterPointsRoutes(r.Group("/api"), deps.RouterDeps(), deps.PointsSvc)
 		asker := model.HrwaiUser{Account: "caps_asker_daily", Phone: "13800001003", Username: "楼主日封", Status: 1, CreatedAt: testutil.Now()}
 		db.Create(&asker)
@@ -194,7 +194,7 @@ func TestForumAcceptCapsContract(t *testing.T) {
 		cfg := &config.Config{JWTSecretKey: "caps-contract-secret", AuthCookie: config.AuthCookieConfig{Name: "hrwai_token"}}
 		r := gin.New()
 		deps := newContractDeps(t, db, cfg)
-		RegisterForumRoutes(r.Group("/api"), deps.RouterDeps(), deps.ForumSvc, deps.ForumImageSvc)
+		RegisterForumRoutes(r.Group("/api"), deps.RouterDeps(), deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
 		RegisterPointsRoutes(r.Group("/api"), deps.RouterDeps(), deps.PointsSvc)
 		asker := model.HrwaiUser{Account: "caps_pair_asker", Phone: "13800001004", Username: "配对楼主", Status: 1, CreatedAt: testutil.Now()}
 		db.Create(&asker)

@@ -24,10 +24,6 @@ var (
 	validQuestionStatus = []string{"draft", "pending", "published"}
 )
 
-// excludeSourceTagsSQL 排除来源标记标签（is_source_tag，如真题）题目的公共过滤片段：
-// 这类题目只能经真题卷作答，不进顺序/随机/专项练习与模拟考抽题池（ADR-0022）。
-const excludeSourceTagsSQL = "NOT EXISTS (SELECT 1 FROM question_tag_relation qtr JOIN question_tag qt ON qt.id = qtr.tag_id WHERE qtr.question_id = question.id AND qt.is_source_tag)"
-
 // sampleQuestions 统一抽题函数：从 published 题库按条件随机抽取 count 题。
 // qType 为空表示不限题型。始终排除来源标记标签的题目。
 func sampleQuestions(db *gorm.DB, qType string, count int, credentialID ...*int) ([]model.Question, error) {
@@ -45,19 +41,16 @@ type sampleQuestionsOpts struct {
 }
 
 // sampleQuestionsByOpts 抽题池统一实现（#385 单点）：收编随机练习、标签专项、
-// 顺序练习与模拟考抽题的池过滤三元组（published + excludeSourceTagsSQL + 证件分区）。
+// 顺序练习与模拟考抽题的题库池 scope（question_pool_scope.go，ADR-0050 决策 1）。
 // shuffle=false 时按 id 升序返回全量（顺序练习/标签专项的固定顺序来源）；
 // shuffle=true 时洗牌、count>0 且超额则截断（随机练习/模拟考的抽样语义）。
-// poolFilter 题库池过滤三元组的唯一出处（已发布 + 排除来源标记标签 + 证件分区，可叠加题型/标签）。
+// poolFilter 抽题侧在题库池 scope（question_pool_scope.go，唯一出处）之上叠加题型/标签读面差异。
 // sampleQuestionsByOpts（抽题）与 countPoolByOpts（计数）共用，保证同参下「计数 == 抽题数量」
 // 的一致性断言成立（#413 池计数单点，口径定义见 CONTEXT.md「题库池」）。
 func poolFilter(q *gorm.DB, o sampleQuestionsOpts) *gorm.DB {
-	q = q.Where("status = ?", "published").Where(excludeSourceTagsSQL)
+	q = QuestionPoolScope(q, o.cred)
 	if o.tagID > 0 {
 		q = q.Where("id IN (SELECT question_id FROM question_tag_relation WHERE tag_id = ?)", o.tagID)
-	}
-	if o.cred != nil {
-		q = q.Where("credential_id = ?", *o.cred)
 	}
 	if o.qType != "" {
 		q = q.Where("type = ?", o.qType)
