@@ -10983,8 +10983,12 @@ paths:
     get:
       consumes:
       - application/json
-      description: 分页查询模拟考试历史记录
+      description: 分页查询模拟考试历史记录（按当前证件分区：credential_id 可选，经拦截器注入当前证件）
       parameters:
+      - description: 目标证件ID
+        in: query
+        name: credential_id
+        type: integer
       - default: 1
         description: 页码
         in: query
