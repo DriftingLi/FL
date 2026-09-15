@@ -18,7 +18,7 @@ vi.mock('markstream-vue/index.css', () => ({}))
 vi.mock('@/composables/useForumImageUpload', () => ({
   useForumImageUpload: () => ({
     uploading: false,
-    // #1014：拖拽三件套 + 高亮状态也在单点里（缺字段会让虚线区渲染直接炸）
+    // #1017：拖拽三件套 + 高亮状态也在单点里（缺字段会让虚线区渲染直接炸）
     dragging: { value: false },
     uploadFiles: vi.fn(),
     removeImage: vi.fn(),
@@ -29,7 +29,7 @@ vi.mock('@/composables/useForumImageUpload', () => ({
   })
 }))
 
-/** 预览入口 = 下划线 tab 里的「预览」项（#1014 起取代原来的文字按钮） */
+/** 预览入口 = 下划线 tab 里的「预览」项（#1017 起取代原来的文字按钮） */
 function previewTab(w: ReturnType<typeof mountComposer>) {
   return w
     .findAllComponents({ name: 'UiUnderlineTabs' })[0]

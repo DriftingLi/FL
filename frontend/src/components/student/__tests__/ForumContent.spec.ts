@@ -34,7 +34,7 @@ describe("ForumContent 安全闸门（UGC 不可信输入）", () => {
     expect(w.text()).toContain("<script>")
   })
 
-  it("任务列表渲染成勾选图形（#1014 起在声明子集内，工具栏有对应按钮）", () => {
+  it("任务列表渲染成勾选图形（#1017 起在声明子集内，工具栏有对应按钮）", () => {
     const w = mountContent("- [ ] 待办\n- [x] 已完成")
     // 工具栏按钮承诺的语法必须真能渲染——这是「按钮集 = 声明子集」的运行时证据。
     // markstream 把它渲染成**只读**图形（span.checkbox-node + aria-label），不是可点的 input：

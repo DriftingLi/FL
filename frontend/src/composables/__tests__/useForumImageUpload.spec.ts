@@ -1,4 +1,4 @@
-// 论坛图片上传单点（#389 / #1017）：拖拽与粘贴两个入口的漏斗口径。
+// 论坛图片上传单点（#389 / #1017）：拖拽、粘贴与传中态的漏斗口径。
 // 这里只测状态机——「虚线区长什么样」由组件层负责。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { nextTick } from 'vue'

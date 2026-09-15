@@ -2,7 +2,7 @@
   <div class="md-editor flex flex-col overflow-hidden rounded-[6px] border border-line-strong bg-panel" :style="{ height: bodyHeight }">
     <!--
       模式切换 Tab：形态单点收在 UiUnderlineTabs（与论坛输入框同一件）——
-      原来是本组件手搓的下划线 tab，属于全站第三处 tab 形态，#1014 一并收敛。
+      原来是本组件手搓的下划线 tab，属于全站第三处 tab 形态，#1017 一并收敛。
     -->
     <div class="md-mode-tabs flex shrink-0 border-b border-line bg-canvas px-1.5">
       <UiUnderlineTabs

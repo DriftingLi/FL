@@ -1,4 +1,4 @@
-// Vditor 编辑器的模式 tab（#1014）：形态换成共享的 UiUnderlineTabs 之后，
+// Vditor 编辑器的模式 tab（#1017）：形态换成共享的 UiUnderlineTabs 之后，
 // 守两件事：① 两档选项与文案没变（讲师/管理员的操作记忆）；
 // ② Vditor 真正 ready 之前 tab 不可点 —— 早期切换会触发 VditorIRDOM2Md undefined，
 //    这是历史上修过的坑，换控件不许把它带回来。

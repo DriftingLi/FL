@@ -72,7 +72,7 @@ const submitting = ref(false)
 // ===== 正文格式（#878 / ADR-0044）=====
 // 首次默认纯文本、之后记住上次选择；声明位置于「作者自述」，不由系统猜测。
 // 偏好与切换处理收在 composable 一处，与回复框共用同一套口径；编写/预览是输入框组件
-// 自有的视图档位（#1014），不在偏好里。
+// 自有的视图档位（#1017），不在偏好里。
 const { format: contentFormat, handleFormatChange } = useForumContentFormat()
 
 /** 输入框组件：reset 时复位到编写态（组件自有视图档位） */
@@ -231,7 +231,7 @@ defineExpose({ canSubmit, submitting, submit, reset })
       <label class="mb-1.5 block text-sm font-medium text-ink">
         <span class="mr-0.5 text-bad">*</span>{{ contentLabel }}
       </label>
-      <!-- 正文 + 图片走同一个输入框组件（#1014）：编写/预览、工具栏、图二粘贴区都在里面，
+      <!-- 正文 + 图片走同一个输入框组件（#1017）：编写/预览、工具栏、图二粘贴区都在里面，
            预览与发布同源（ForumContent 单点），图片不再单列一个字段。 -->
       <ForumMarkdownInput
         ref="contentInputRef"
