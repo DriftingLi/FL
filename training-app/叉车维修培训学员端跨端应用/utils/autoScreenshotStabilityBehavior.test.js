@@ -15,7 +15,8 @@
  *   真切页（对照全黑帧）= ~100% ⇒ 默认阈值 0.5% 在噪声上方 ~45×、真变化下方 ~200×。
  *
  * ⚠️ **判别力的平台边界（写实，不许假称处处有判别力）**：本函数靠 `System.Drawing` 取色，而它
- *   **只在 Windows 可用**（PowerShell 7 的 System.Drawing.Common 是 Windows-only）。所以每个用例
+ *   **只在 Windows 可用**（PowerShell 7 的 System.Drawing.Common 是 Windows-only；注意 **Linux 上
+ *   `Add-Type -AssemblyName System.Drawing` 是成功的**，真正抛错的是构造 `Bitmap` ⇒ 能力探测必须真建一次位图）。所以每个用例
  *   都显式分两支、**两支都断言**（没有静默跳过），只是各自在自己平台上验该验的那一面：
  *     · Windows（本工具链的运行平台）：验「微变宽容 + 巨变拦得住」；
  *     · Linux（本仓 CI 的 ubuntu runner）：验**缺件时的 fail-closed 语义**（判不出 ⇒ 不判稳定，
@@ -57,7 +58,16 @@ function probeFrames(ctx) {
     'Set-StrictMode -Version Latest',
     '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
     `. "${AUTO_SHOT}"`,
-    'try { Add-Type -AssemblyName System.Drawing -ErrorAction Stop; $drawing = $true } catch { $drawing = $false }',
+    // ⚠️ 能力探测**必须真建一次位图**：`Add-Type -AssemblyName System.Drawing` 在 Linux 上**会成功**
+    //    （程序集能加载），真正抛错的是构造 Bitmap（`The type initializer for 'Windows.Win32.PInvokeGdiPlus'
+    //    threw an exception`）—— 本用例第一版只 try 了 Add-Type ⇒ 在 ubuntu runner 上判成「可用」，
+    //    接着在建图处 abort，整条探针没有任何 token（CI 实测就这么红的）。
+    'try {',
+    '  Add-Type -AssemblyName System.Drawing -ErrorAction Stop',
+    '  $probeBmp = New-Object System.Drawing.Bitmap 2, 2',
+    '  $probeBmp.Dispose()',
+    '  $drawing = $true',
+    '} catch { $drawing = $false }',
     'Write-Output ("DRAWING_AVAILABLE=" + [bool]$drawing)',
     `$dir = '${q(ctx.tmp)}'`,
     'if ($drawing) {',
