@@ -192,6 +192,18 @@ export function getQuestionListApi(page : number = 1, pageSize : number = 20, ty
 	return get('/question-bank/questions', params)
 }
 
+/**
+ * 按 ID 取单题（搜索「题目」落点的承载读路径，ADR-0049 决策 4）
+ *
+ * 读路径由后端按能力分流（#981）：学员走**题库池口径**——draft、源标记真题题、
+ * 非当前证件一律 404，因此这里不会成为「真题题免费刷」的入口。
+ * 证件由 `/question-bank` 路由组的 CredentialScoped 解析（JWTAuth 在场 ⇒ 服务端兜底生效），
+ * 客户端无需显式传 credential_id（与 `/search` 的区别正在于此）。
+ */
+export function getQuestionByIdApi(questionId : number) : Promise<Question> {
+	return getMapped<Question>('/question-bank/questions/' + questionId.toString(), null, (data : UTSJSONObject) : Question => buildQuestion(data))
+}
+
 // ========== 练习模式 ==========
 
 /**
