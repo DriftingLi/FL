@@ -2,6 +2,7 @@
 // ① 纯文本档不出现 tab / 工具栏 / 提示行；② Markdown 档三样都在，且工具能改正文；
 // ③ 预览走发布端同一个渲染单点（ForumContent），不是第二套渲染。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { defineComponent, ref, nextTick } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 import { epLite } from '@/test/element-lite'
 import ForumMarkdownInput from '../ForumMarkdownInput.vue'
@@ -60,6 +61,15 @@ describe('Markdown 档', () => {
     expect(toolbar.findAll('button')).toHaveLength(MARKDOWN_TOOLBAR_ITEMS.length)
   })
 
+  it('窄屏不撑破卡片：tab 不许缩，工具栏允许缩到容器宽后横向滚动', () => {
+    const w = mountInput({ format: 'markdown' })
+    expect(w.findComponent(UiUnderlineTabs).classes()).toContain('shrink-0')
+    const toolbar = w.findComponent(MarkdownToolbar)
+    expect(toolbar.classes()).toContain('min-w-0')
+    expect(toolbar.classes()).toContain('overflow-x-auto')
+    expect(toolbar.classes()).not.toContain('shrink-0')
+  })
+
   it('提示行给的是 forumDisplay 的单点文案（表格不渲染 / 图片走粘贴区）', () => {
     const w = mountInput({ format: 'markdown' })
     const hint = w.find('.forum-markdown-hint')
@@ -77,6 +87,29 @@ describe('Markdown 档', () => {
     expect(emitted).toBeTruthy()
     // 无选区时插一对标记（选区信息来自真实 textarea，happy-dom 下光标在 0）
     expect(String(emitted![0]?.[0])).toContain('**')
+  })
+
+  it('按真实选区插入：选中 bc 点加粗 → a**bc**d，选区留在 bc 上', async () => {
+    // 用 v-model 宿主挂载（贴近真实用法）：不绑 v-model 的话正文不会回写，
+    // 选区端点会被旧值长度夹住，测不到真实行为。
+    const Host = defineComponent({
+      components: { ForumMarkdownInput },
+      setup() {
+        return { text: ref('abcd'), imgs: ref<string[]>([]) }
+      },
+      template: '<ForumMarkdownInput v-model="text" v-model:images="imgs" format="markdown" />'
+    })
+    const host = mount(Host, { global: { plugins: [epLite()] } })
+    const child = host.findComponent(ForumMarkdownInput)
+    const textarea = child.find('textarea').element as HTMLTextAreaElement
+    // 这一步同时验证了 UiInput 暴露的 getTextarea() 真拿到了原生元素
+    textarea.setSelectionRange(1, 3)
+    await child.findComponent(MarkdownToolbar).findAll('button')[1].trigger('click')
+    await flushPromises()
+    await nextTick()
+    expect(host.vm.text).toBe('a**bc**d')
+    // 包上标记后仍选中原来的 bc（作者可以接着改）
+    expect([textarea.selectionStart, textarea.selectionEnd]).toEqual([3, 5])
   })
 
   it('切到预览：渲染 ForumContent（发布端单点）且工具栏置灰', async () => {

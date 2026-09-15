@@ -40,7 +40,7 @@ function run(key: MarkdownCommandKey) {
 
 <template>
   <div
-    class="markdown-toolbar flex shrink-0 items-center gap-0.5 overflow-x-auto [scrollbar-width:none]"
+    class="markdown-toolbar flex min-w-0 items-center gap-0.5 overflow-x-auto [scrollbar-width:none]"
     role="toolbar"
     aria-label="Markdown 工具栏"
   >

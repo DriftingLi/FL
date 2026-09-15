@@ -172,7 +172,11 @@ defineExpose({
       v-if="isMarkdown"
       class="flex items-center justify-between gap-2 border-b border-line pr-1 pl-1.5"
     >
-      <UiUnderlineTabs :model-value="mode" :options="MODE_OPTIONS" @update:model-value="onModeChange" />
+      <!--
+        窄屏取舍：tab 不许被压（shrink-0），工具栏允许被压到容器宽后**横向滚动**
+        （min-w-0 是让 flex 子项能缩到内容宽以下的关键，否则它会撑破卡片）。
+      -->
+      <UiUnderlineTabs class="shrink-0" :model-value="mode" :options="MODE_OPTIONS" @update:model-value="onModeChange" />
       <MarkdownToolbar :disabled="previewing" @command="runCommand" />
     </div>
 
