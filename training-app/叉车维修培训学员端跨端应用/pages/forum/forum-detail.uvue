@@ -38,11 +38,14 @@
             <!-- 回复列表 -->
             <ForumReplyList v-if="topic != null" :items="replyItems" :sort-field="replySortField"
                 :sort-order="replySortOrder" :is-topic-owner="isTopicOwner"
+                :total-count="replyTotal" :has-more="hasMoreReplies"
+                :loading-more="loadingMore" :remaining="remainingReplies"
                 @sort-field-change="onReplySortFieldChange"
                 @sort-order-change="onReplySortOrderChange" @delete-reply="onDeleteReply"
                 @report-reply="onReportReply" @toggle-reply-like="onToggleReplyLikeById"
                 @reply-to-user="onReplyToUserById"
-                @accept-reply="onAcceptReplyById" @cancel-accept="onCancelAcceptById" />
+                @accept-reply="onAcceptReplyById" @cancel-accept="onCancelAcceptById"
+                @load-more="loadMoreReplies" />
         </scroll-view>
 
         <!-- 底部回复输入栏 -->
@@ -94,6 +97,7 @@
     const detail = useTopicDetail()
     const {
         topicId, topic, replies, loading, replySortField, replySortOrder,
+        replyTotal, hasMoreReplies, loadingMore, remainingReplies, loadMoreReplies,
         canDelete, canEdit, currentUserId, onToggleLike, onToggleFavorite, onDelete, onEditTopic,
         onReplySortFieldChange, onReplySortOrderChange, onDeleteReply, afterReplyPosted, loadDetail,
         isTopicOwner, onAcceptReply, onCancelAccept,
