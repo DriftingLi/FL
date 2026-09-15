@@ -3,6 +3,25 @@
 		<!-- 自定义导航栏 -->
 		<AiChatNav :status-bar-height="statusBarHeight" @left-click="toggleSidebarLeft" @menu-click="toggleSidebarRight" />
 
+		<!-- 功能入口头部（#998）：**移出滚动容器** ⇒ 滑动时天然不丢失（**结构性保证**，不依赖
+		     `position: sticky` —— 该属性在本项目 0 处先例、uvue 支持亦无文档）。
+		     `^` 收起 / `v` 展开；默认展开、不跨会话记忆（维护者 2026-09-15 口径）。
+		     代价如实记：头部位于档位横幅**之上**，横幅不再是首屏第一个元素。 -->
+		<view class="func-head">
+			<view class="func-head-handle" @click="toggleFunctionHeader">
+				<text class="func-head-arrow">{{ functionHeaderCollapsed ? 'v' : '^' }}</text>
+			</view>
+			<view v-if="!functionHeaderCollapsed" class="function-grid">
+				<view v-for="(item, idx) in functionItems" :key="idx" class="function-item" @click="onFunctionClick(item)">
+					<view class="function-icon-box">
+						<image v-if="item.iconPath && item.iconPath.length > 0" class="function-icon-img" :src="item.iconPath" mode="aspectFit" />
+						<text v-else class="function-icon-emoji">{{ item.icon }}</text>
+					</view>
+					<text class="function-title">{{ item.title }}</text>
+				</view>
+			</view>
+		</view>
+
 		<!-- 主内容区 -->
 		<view class="main">
 			<scroll-view class="pro-scroll" scroll-y="true" :scroll-into-view="scrollIntoViewId" scroll-with-animation>
@@ -12,17 +31,6 @@
 					<text class="pro-banner-title" :class="proUnlocked ? 'pro-title-unlocked' : ''">{{ proBannerTitle }}</text>
 					<text class="pro-banner-sub" :class="proUnlocked ? 'pro-sub-unlocked' : ''">{{ proBannerSub }}</text>
 					<text class="pro-banner-go" :class="proUnlocked ? 'pro-go-unlocked' : ''">{{ proBannerCta }}</text>
-				</view>
-
-				<!-- 功能入口 -->
-				<view class="function-grid">
-					<view v-for="(item, idx) in functionItems" :key="idx" class="function-item" @click="onFunctionClick(item)">
-						<view class="function-icon-box">
-							<image v-if="item.iconPath && item.iconPath.length > 0" class="function-icon-img" :src="item.iconPath" mode="aspectFit" />
-							<text v-else class="function-icon-emoji">{{ item.icon }}</text>
-						</view>
-						<text class="function-title">{{ item.title }}</text>
-					</view>
 				</view>
 
 				<!-- 快捷提示语 -->
@@ -49,14 +57,6 @@
 		<!-- 底部输入区（专业版带模型选择器） -->
 		<AiChatInput :show-model-bar="proUnlocked" :model-name="currentModelName" :model-readonly="!proUnlocked" :show-image-button="proUnlocked" @send="onInputSend" @model-click="onModelBarClick" @voice-click="onVoiceClick" @image-click="onImageClick" />
 
-		<!-- 功能入口悬浮按钮（#998 剩余部分）：有对话后宫格被顶出视口，此入口保证随时可达。
-		     `messages.length > 0` 是刻意判据 —— 无对话时宫格本就在首屏，若常驻则是**同一功能两个入口**。
-		     形态照 pages/mall/components/mall-float-actions.uvue 的既有悬浮范式（fixed + 白底圆角 + 阴影）。 -->
-		<view v-if="messages.length > 0" class="func-fab" @click="showFunctionSheet = true">
-			<text class="func-fab-icon">&#129513;</text>
-			<text class="func-fab-label">功能</text>
-		</view>
-
 		<!-- 左侧会话抽屉 -->
 		<AiChatDrawerLeft :visible="sidebarLeft" :sessions="sessions" :current-session-id="currentSession?.id ?? 0" :status-bar-height="statusBarHeight" @close="sidebarLeft = false" @new-chat="onNewChat" @select="onSelectSession" @delete="onDeleteSession" />
 
@@ -72,9 +72,6 @@
 		<!-- 专业版能力清单 / 兑换（半屏 sheet，ADR-0009 决策 4） -->
 		<AiChatProSheet :visible="showProSheet" :unlocked="proUnlocked" :price="proPrice" :balance="proBalance" :degraded="proDegraded" :redeeming="proRedeeming" @close="showProSheet = false" @redeem="onRedeemAiPro" @earn="onGoEarnPoints" />
 
-		<!-- 功能入口半屏 sheet（#998）：items 传**同一份** functionItems（= FUNCTION_ITEMS），
-		     不另立清单；选中后回到首屏宫格同一条发送路径。 -->
-		<AiChatFunctionSheet :visible="showFunctionSheet" :items="functionItems" @close="showFunctionSheet = false" @select="onFunctionEntrySelect" />
 	</view>
 </template>
 
@@ -104,7 +101,6 @@
 	import AiChatModelPicker from '../../components/ai-chat/ai-chat-model-picker.uvue'
 	import AiChatCustomForm from '../../components/ai-chat/ai-chat-custom-form.uvue'
 	import AiChatProSheet from '../../components/ai-chat/ai-chat-pro-sheet.uvue'
-	import AiChatFunctionSheet from '../../components/ai-chat/ai-chat-function-sheet.uvue'
 
 
 	const auth = useAuthStore()
@@ -207,9 +203,13 @@
 	// 只影响**本轮对话**，不影响建会话：会话按功能键分区，而列表不查专项区（见 api/aiAssistant.uts）。
 	const pendingFeatureKey = ref<string>('')
 
-	// 功能入口悬浮 sheet 的开关（#998）：有对话后 5 宫格被顶出视口，由悬浮按钮唤起本 sheet 承载
-	// **同一组**入口（不新增清单、不新增发送路径 —— 见 onFunctionEntrySelect）。
-	const showFunctionSheet = ref<boolean>(false)
+	// 功能入口头部的收起态（#998）：默认展开、**不跨会话记忆**（维护者 2026-09-15 口径）。
+	// 宫格已移出滚动容器 ⇒ 收起/展开只改头部自身高度，与滚动位置无关。
+	const functionHeaderCollapsed = ref<boolean>(false)
+
+	function toggleFunctionHeader() : void {
+		functionHeaderCollapsed.value = !functionHeaderCollapsed.value
+	}
 
 	// 根容器高度（#998）：与 ai-settings.uvue 同款，给根节点一个确定高度；onLoad 里赋值。
 	const pageHeight = ref<number>(0)
@@ -238,6 +238,12 @@
 		// 专项功能键（#921）：只带宫格那一轮的键。带键时后端走专项通道（管理端单绑定 +
 		// 独立计费声明），不带键落通用对话 —— 空串显式发送，语义与「不发送」等价。
 		params['feature_key'] = featureKey
+		// 专项通道：后端**忽略**选择子中的模型来源字段（`ai_config_service.go:494`「防绕过」），
+		// 由管理端单绑定解析模型 ⇒ 客户端不该把自定义模型的密钥/地址送上去
+		// （维护者 2026-09-15 口径：故障咨询不需要调用自定义模型能力）。
+		if (featureKey.length > 0) {
+			return params
+		}
 		if (currentModelSource.value == 'admin') {
 			params['config_id'] = currentModelId.value
 		} else if (currentModelSource.value == 'user') {
@@ -264,7 +270,10 @@
 			uni.showToast({ title: '暂无可用的 AI 模型', icon: 'none' })
 			return
 		}
-		if (currentModelSource.value == 'custom' && customModel.value.trim().length == 0) {
+		// 专项通道（带键）由管理端单绑定解析模型，与「自定义模型」无关 ⇒ 不该被它的前置校验拦住
+		// （#998 维护者 2026-09-15 口径）。**不带键的通用对话照旧校验**。
+		// 位置仍在「取走 → 清空」之后、发送之前 ⇒ 契约测试 ③ 的有序断言不受影响。
+		if (featureKey.length == 0 && currentModelSource.value == 'custom' && customModel.value.trim().length == 0) {
 			uni.showToast({ title: '请先配置自定义模型', icon: 'none' })
 			return
 		}
@@ -372,13 +381,6 @@
 	function onFunctionClick(item : AIFunctionItem) : void {
 		pendingFeatureKey.value = item.featureKey ?? ''
 		sendText(item.prompt)
-	}
-
-	// 悬浮入口（#998）：与首屏宫格**共用** onFunctionClick —— 刻意不新增第二条发送路径。
-	// 两条路径必然漂移（一条带功能键、一条不带），那正是 #999 那类「静默失效」的温床。
-	function onFunctionEntrySelect(item : AIFunctionItem) : void {
-		showFunctionSheet.value = false
-		onFunctionClick(item)
 	}
 
 	// 持久化设置
@@ -748,36 +750,25 @@
 		background-color: #2e9e5b;
 	}
 
-	/* 功能入口悬浮按钮（#998）。
-	   bottom 必须避开输入区：.input-card 的高度 = padding-top 20 + .input-top 72 + .input-bottom
-	   (margin-top 8 + .action-btn 64) + padding-bottom 14 = 178rpx，加卡片上下 margin 12+12 = 202rpx
-	   （逐条见 components/ai-chat/ai-chat-input.uvue:72-107,148-156）⇒ 取 240rpx，留 38rpx 余量。
-	   该值与「必须避开输入区」由 utils/aiFunctionEntryContract.test.js 守护。
-	   z-index 100 < sheet 的 300/301 ⇒ 开 sheet 时被遮罩覆盖，不会浮在 sheet 之上。 */
-	.func-fab {
-		position: fixed;
-		right: 24rpx;
-		bottom: 240rpx;
-		width: 80rpx;
-		height: 100rpx;
-		border-radius: 40rpx;
-		background-color: #ffffff;
+	/* 功能入口头部（#998）：宫格**移出滚动容器**后的容器，故本块只需处理外观与收起态，
+	   不含任何 `position` 定位 —— 「滑动不丢失」由**结构**保证（它在 scroll-view 之外），
+	   这正是刻意不选 `position: sticky` 的原因（本项目 0 处先例、uvue 支持无文档）。
+	   水平 padding 与 `.pro-scroll` 的 24rpx 对齐，使宫格左右位置与改动前一致。 */
+	.func-head {
+		background-color: #dfeffb;
+		padding-left: 24rpx;
+		padding-right: 24rpx;
+	}
+
+	.func-head-handle {
+		height: 44rpx;
 		align-items: center;
 		justify-content: center;
-		flex-direction: column;
-		padding-top: 8rpx;
-		box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.15);
-		z-index: 100;
 	}
 
-	.func-fab-icon {
-		font-size: 32rpx;
-	}
-
-	.func-fab-label {
-		font-size: 20rpx;
-		color: #666666;
-		margin-top: 4rpx;
+	.func-head-arrow {
+		font-size: 24rpx;
+		color: #8aa9c0;
 	}
 
 </style>

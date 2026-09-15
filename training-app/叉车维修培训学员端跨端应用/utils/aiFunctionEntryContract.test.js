@@ -1,75 +1,33 @@
 /**
- * AI 助手「功能入口悬浮」契约（#998 剩余部分）—— 源码契约测试缝（读源文本、断言形态）。
+ * AI 助手「功能入口常驻 + 专项通道口径」契约（#998）—— 源码契约测试缝（读源文本、断言形态）。
  *
- * 为什么需要它：#998 的原始缺陷是「有对话后上方 5 宫格被顶出视口、且划不回来」。滚动修好
- * （`.pro-scroll` 补 `height: 0`）后，宫格**能**滑回去够到，但入口仍不在手边 ⇒ 本票补一个悬浮入口
- * （FAB → 半屏 sheet）。这里锁三件**写错不报错、只会静默坏**的形态：
+ * 本文件锁四件**写错不报错、只会静默坏**的事：
  *
- * ① **只有有对话时出现**（`messages.length > 0`）：无对话时宫格本就在首屏，常驻即「同一功能两个
- *    入口」，既冗余又永久占屏。
- * ② **FAB 必须避开底部输入区**（`.input-card` 实测 202rpx 高，见页面样式注释），否则遮挡输入；
- *    且 `z-index` 必须低于半屏 sheet 的 300/301，否则开 sheet 后会浮在遮罩之上。
- * ③ **宫格样式自带且与页面逐值一致**：`manifest.json` 的 `styleIsolationVersion: "2"` 使**组件样式
- *    默认隔离** ⇒ sheet 组件拿不到页面 `.function-grid` 等规则（对照证据：`ai-chat-bubble.uvue`
- *    自己重复定义了 `.message-*`）。于是同一套宫格视觉必然存在**两份**定义，必须防漂移。
- * ④ **不得新增第二条发送路径**：悬浮入口与首屏宫格必须共用 `onFunctionClick`。两条路径必然漂移
- *    （一条带功能键、一条不带），那正是 #999「每轮送空键、专项通道静默失效」的成因形态。
+ * ① **宫格必须在滚动容器之外**：这是「滑动时不丢失」的**结构性保证**。刻意不用 `position: sticky`
+ *    —— 该属性在整个移动端项目里 **0 处先例**，uvue 是否支持亦无文档，写错会静默失效（不报错、
+ *    只是滑动时入口消失）。把宫格放进 `scroll-view` 里就等于回到 #998 的原缺陷形态。
+ * ② **不得残留悬浮入口 / 半屏 sheet**：改形态前的 FAB + sheet 已删除；残留会变成「同一功能两个入口」。
+ * ③ **`^` 收起/展开**：默认展开、不跨会话记忆；收起态只影响头部自身，不碰滚动。
+ * ④ **专项通道不吃「自定义模型」**：带 `featureKey` 的一轮由后端按管理端单绑定解析模型
+ *    （`ai_config_service.go:494` 明确「忽略选择子中的模型来源字段（防绕过）」）⇒ 客户端既不该被
+ *    「请先配置自定义模型」的前置校验拦住，也不该把 `custom_*` 字段送上去。（维护者 2026-09-15 口径）
  *
- * 设计沿用既有守护测试的形态（见 utils/aiAssistantScrollContract.test.js）：先对**注入违规**的变形
- * 样本断言检测有效（防空跑假绿），再对真实文件断言合规。
+ * 设计沿用本仓既有守护形态（见 utils/aiAssistantScrollContract.test.js、aiFeatureEntryWiringContract.test.js）：
+ * 先对**注入违规**的变形样本断言检测有效（防空跑假绿），再对真实文件断言合规。
  */
 const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const PAGE = fs.readFileSync(path.join(ROOT, 'pages/ai-assistant/ai-assistant.uvue'), 'utf8');
-const SHEET = fs.readFileSync(path.join(ROOT, 'components/ai-chat/ai-chat-function-sheet.uvue'), 'utf8');
-const CONSTANTS = fs.readFileSync(path.join(ROOT, 'pages/ai-assistant/ai-assistant-constants.uts'), 'utf8');
+const SHEET_PATH = path.join(ROOT, 'components/ai-chat/ai-chat-function-sheet.uvue');
 
-/** 去掉 CSS 注释 —— 注释里写着某个值不算实现（本仓契约测试的主要假阳性来源） */
-function stripCssComments(text) {
-  return text.replace(/\/\*[\s\S]*?\*\//g, '');
-}
-
-/** 去掉模板/JS 注释 —— 「注释里提到某标识」不等于「代码里用了它」 */
+/** 去掉模板/JS/CSS 注释 —— 「注释里提到某标识」不等于「代码里用了它」 */
 function stripCodeComments(text) {
   return text
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/(^|\s)\/\/[^\n]*/g, '$1');
-}
-
-/** 取某个 class 的规则体（从 `.name {` 切到大括号配平处） */
-function classRule(src, name) {
-  const m = src.match(new RegExp('\\.' + name + '\\s*\\{'));
-  if (!m) throw new Error(`找不到样式规则 .${name}`);
-  const open = src.indexOf('{', m.index);
-  let depth = 0;
-  for (let i = open; i < src.length; i++) {
-    if (src[i] === '{') depth++;
-    else if (src[i] === '}') {
-      depth--;
-      if (depth === 0) return src.slice(open, i + 1);
-    }
-  }
-  throw new Error(`.${name} 大括号未配平`);
-}
-
-/** 取某个 class 的某个属性值（未声明返回 null） */
-function ruleVal(src, cls, prop) {
-  const body = stripCssComments(classRule(src, cls));
-  const m = body.match(new RegExp('(?:^|;|\\{)\\s*' + prop + '\\s*:\\s*([^;]+);'));
-  return m ? m[1].trim() : null;
-}
-
-/**
- * 取带指定 class 的那个模板行。
- * 刻意**不**用 `<view[^>]*class="x"[^>]*>`：`[^>]*` 会被属性值里的 `>` 截断
- * （本票的判据正好是 `messages.length > 0`，用它必然取不到标签 —— 自测踩过）。
- */
-function classLine(src, cls) {
-  const hit = src.split('\n').find((l) => l.indexOf('class="' + cls + '"') >= 0);
-  return hit == null ? null : hit;
 }
 
 /** 取某个函数声明起（含）到其大括号配平处的函数体原文 */
@@ -88,173 +46,118 @@ function fnBody(src, decl) {
   throw new Error(`函数大括号未配平：${decl}`);
 }
 
-/** 数字解析（用于 bottom / z-index 的数值比较；解析不出返回 NaN 以便断言失败） */
-function num(v) {
-  if (v == null) return NaN;
-  const m = String(v).match(/-?\d+(\.\d+)?/);
-  return m ? Number(m[0]) : NaN;
+/** 宫格是否在滚动容器之外（「滑动不丢失」的结构性判据） */
+function gridOutsideScroll(src) {
+  const grid = src.indexOf('class="function-grid"');
+  const scroll = src.indexOf('<scroll-view');
+  const main = src.indexOf('class="main"');
+  return grid >= 0 && scroll >= 0 && main >= 0 && grid < main && grid < scroll;
 }
 
-/** 悬浮按钮的 `messages.length > 0` 判据是否在位 */
-function fabHasConversationGuard(src) {
-  const line = classLine(src, 'func-fab');
-  return line != null && /messages\.length > 0/.test(line);
+/** 头部收起态相关的三要素（默认值 / 切换 / 绑定）是否齐备 */
+function headerToggleWired(src) {
+  return (
+    /const functionHeaderCollapsed = ref<boolean>\(false\)/.test(src) &&
+    /function toggleFunctionHeader\(\) : void \{\s*functionHeaderCollapsed\.value = !functionHeaderCollapsed\.value/.test(src) &&
+    /class="func-head-handle" @click="toggleFunctionHeader"/.test(src) &&
+    /v-if="!functionHeaderCollapsed"/.test(src)
+  );
 }
 
-/** FAB 的 bottom（rpx 数值） */
-function fabBottom(src) {
-  return num(ruleVal(src, 'func-fab', 'bottom'));
-}
-
-/** FAB 的 z-index 数值 */
-function fabZIndex(src) {
-  return num(ruleVal(src, 'func-fab', 'z-index'));
-}
-
-// 底部输入区实际占用（rpx）：见 pages/ai-assistant/ai-assistant.uvue 的 .func-fab 注释推导
-const INPUT_AREA_RPX = 202;
-const FAB_MIN_BOTTOM_RPX = 240;
-
-// 组件样式隔离下必须逐值一致的两套宫格类（页面类名 ↔ 组件类名）
-const GRID_STYLE_PAIRS = [
-  ['function-item', 'func-item', 'width'],
-  ['function-icon-box', 'func-icon-box', 'width'],
-  ['function-icon-box', 'func-icon-box', 'height'],
-  ['function-icon-box', 'func-icon-box', 'margin-bottom'],
-  ['function-icon-img', 'func-icon-img', 'width'],
-  ['function-icon-img', 'func-icon-img', 'height'],
-  ['function-icon-emoji', 'func-icon-emoji', 'font-size'],
-  ['function-title', 'func-title', 'font-size'],
-  ['function-title', 'func-title', 'color'],
-];
-
-describe('AI 助手「功能入口悬浮」契约（#998 剩余部分）', () => {
-  describe('① 只有有对话时出现（messages.length > 0）', () => {
-    it('页面 FAB 带 messages.length > 0 判据', () => {
-      expect(fabHasConversationGuard(PAGE)).toBe(true);
+describe('AI 助手「功能入口常驻」契约（#998）', () => {
+  describe('① 宫格在滚动容器之外（滑动不丢失的结构性保证）', () => {
+    it('function-grid 出现在 .main / scroll-view 之前', () => {
+      expect(gridOutsideScroll(PAGE)).toBe(true);
     });
 
-    it('去掉判据的变形样本会被检出（防检测器空跑假绿）', () => {
-      // 必须**只**改 func-fab 那一行：页面 L37 的消息区同样是 `v-if="messages.length > 0"`，
-      // 用全局 replace 会改到那一处，样本失真（自测踩过）。
-      const fabLine = classLine(PAGE, 'func-fab');
-      const broken = PAGE.replace(fabLine, fabLine.replace(/ v-if="messages\.length > 0"/, ''));
-      expect(fabHasConversationGuard(broken)).toBe(false);
+    it('把宫格塞回 scroll-view 内的变形样本会被检出（防检测器空跑假绿）', () => {
+      const gridTag = PAGE.match(/[ \t]*<view v-if="!functionHeaderCollapsed" class="function-grid">[\s\S]*?<\/view>/);
+      expect(gridTag).not.toBeNull();
+      // 把宫格整块搬到 scroll-view 之后 ⇒ 顺序判据必须变红
+      const moved = PAGE.replace(gridTag[0], '') + gridTag[0];
+      expect(gridOutsideScroll(moved)).toBe(false);
+    });
+
+    it('头部容器不得依赖 position 定位（sticky 本项目零先例、uvue 无文档）', () => {
+      const head = PAGE.match(/\.func-head\s*\{[\s\S]*?\}/);
+      expect(head).not.toBeNull();
+      expect(head[0]).not.toMatch(/position\s*:/);
     });
   });
 
-  describe('② 悬浮定位：避开输入区 + 位于 sheet 之下', () => {
-    it('FAB 是 position: fixed（否则不悬浮）', () => {
-      expect(ruleVal(PAGE, 'func-fab', 'position')).toBe('fixed');
+  describe('② 不残留悬浮入口与半屏 sheet（同一功能两个入口 = 缺陷）', () => {
+    it('页面无 func-fab / AiChatFunctionSheet 残留', () => {
+      const code = stripCodeComments(PAGE);
+      expect(code).not.toMatch(/func-fab/);
+      expect(code).not.toMatch(/AiChatFunctionSheet/);
     });
 
-    it(`FAB 的 bottom >= ${FAB_MIN_BOTTOM_RPX}rpx（输入区实测 ${INPUT_AREA_RPX}rpx）`, () => {
-      expect(fabBottom(PAGE)).toBeGreaterThanOrEqual(FAB_MIN_BOTTOM_RPX);
-      expect(fabBottom(PAGE)).toBeGreaterThan(INPUT_AREA_RPX);
+    it('旧的 sheet 组件文件已删除', () => {
+      expect(fs.existsSync(SHEET_PATH)).toBe(false);
     });
 
-    it('bottom 过小的变形样本会被检出（防检测器空跑假绿）', () => {
-      const broken = PAGE.replace(/bottom:\s*240rpx;/, 'bottom: 100rpx;');
-      expect(fabBottom(broken)).toBeLessThan(FAB_MIN_BOTTOM_RPX);
-    });
-
-    it('FAB 的 z-index 低于半屏 sheet 的 300（否则会浮在遮罩之上）', () => {
-      expect(fabZIndex(PAGE)).toBeLessThan(300);
-      expect(num(ruleVal(SHEET, 'func-sheet-mask', 'z-index'))).toBe(300);
-      expect(num(ruleVal(SHEET, 'func-sheet', 'z-index'))).toBe(301);
-    });
-  });
-
-  describe('③ 宫格样式自带（组件样式隔离）且与页面逐值一致', () => {
-    it('sheet 组件定义了自带的宫格类（不依赖页面样式）', () => {
-      for (const cls of ['func-grid', 'func-item', 'func-icon-box', 'func-icon-img', 'func-icon-emoji', 'func-title']) {
-        expect(classRule(SHEET, cls)).toBeTruthy();
-      }
-    });
-
-    it.each(GRID_STYLE_PAIRS)('页面 .%s 与组件 .%s 的 %s 逐值一致', (pageCls, sheetCls, prop) => {
-      const a = ruleVal(PAGE, pageCls, prop);
-      const b = ruleVal(SHEET, sheetCls, prop);
-      expect(a).not.toBeNull();
-      expect(b).toBe(a);
-    });
-
-    it('两侧的图标渲染判据一致（图片优先、emoji 兜底）', () => {
-      const cond = 'item.iconPath && item.iconPath.length > 0';
-      expect(PAGE).toContain(cond);
-      expect(SHEET).toContain(cond);
-    });
-
-    it('组件内不得另立功能清单（items 只能由调用方经 props 传入）', () => {
-      // 剥注释后判定：组件注释里会**提到** FUNCTION_ITEMS（说明「传的是同一份」），那是说明不是用法。
-      expect(stripCodeComments(SHEET)).not.toMatch(/FUNCTION_ITEMS/);
-      expect(SHEET).toMatch(/items\?: AIFunctionItem\[\]/);
-      expect(PAGE).toMatch(/<AiChatFunctionSheet[^>]*:items="functionItems"/);
-    });
-
-    it('在组件内另立清单的变形样本会被检出（防检测器空跑假绿）', () => {
-      const broken = stripCodeComments(SHEET).replace(
-        'visible?: boolean',
-        "import { FUNCTION_ITEMS } from './x'\n\t\tvisible?: boolean"
+    it('把 func-fab 加回来的变形样本会被检出（防检测器空跑假绿）', () => {
+      const broken = stripCodeComments(PAGE).replace(
+        '<view class="main">',
+        '<view class="func-fab">功能</view>\n\t\t<view class="main">'
       );
-      expect(broken).toMatch(/FUNCTION_ITEMS/);
-    });
-
-    it('页面 functionItems 出自唯一事实源 FUNCTION_ITEMS', () => {
-      expect(PAGE).toMatch(/const functionItems = FUNCTION_ITEMS/);
-      expect(CONSTANTS).toMatch(/export const FUNCTION_ITEMS\s*:\s*AIFunctionItem\[\]/);
-    });
-
-    it('样式漂移的变形样本会被检出（防检测器空跑假绿）', () => {
-      const drifted = SHEET.replace(/\.func-item\s*\{[\s\S]*?\}/, '.func-item { align-items: center; width: 25%; }');
-      expect(ruleVal(drifted, 'func-item', 'width')).not.toBe(ruleVal(PAGE, 'function-item', 'width'));
+      expect(broken).toMatch(/func-fab/);
     });
   });
 
-  describe('④ 悬浮入口与首屏宫格共用同一条发送路径', () => {
-    it('sheet 的 select 事件接到 onFunctionEntrySelect', () => {
-      expect(PAGE).toMatch(/<AiChatFunctionSheet[^>]*@select="onFunctionEntrySelect"/);
+  describe('③ `^` 收起 / 展开（默认展开、不记忆）', () => {
+    it('默认展开：functionHeaderCollapsed 初值为 false', () => {
+      expect(PAGE).toMatch(/const functionHeaderCollapsed = ref<boolean>\(false\)/);
     });
 
-    it('onFunctionEntrySelect 先收起 sheet、再调用 onFunctionClick', () => {
-      const fn = fnBody(PAGE, 'function onFunctionEntrySelect');
-      expect(fn).toContain('showFunctionSheet.value = false');
-      expect(fn).toContain('onFunctionClick(item)');
+    it('切换函数、点击绑定、宫格的 v-if 三处齐备', () => {
+      expect(headerToggleWired(PAGE)).toBe(true);
     });
 
-    it('该处理函数**不**自己发消息（不得长出第二条发送路径）', () => {
-      const fn = fnBody(PAGE, 'function onFunctionEntrySelect');
-      for (const forbidden of ['sendText(', 'sendInput(', 'pendingFeatureKey', 'buildBody']) {
-        expect(fn).not.toContain(forbidden);
-      }
-    });
-
-    it('长出发送路径的变形样本会被检出（防检测器空跑假绿）', () => {
-      const broken = fnBody(PAGE, 'function onFunctionEntrySelect').replace(
-        'onFunctionClick(item)',
-        "pendingFeatureKey.value = item.featureKey ?? ''\nsendText(item.prompt)"
+    it('默认收起 / 未绑定 v-if 的变形样本会被检出（防检测器空跑假绿）', () => {
+      // 必须锚定**完整声明**：页面里还有别的 `ref<boolean>(false)`（侧栏、thinking 等），
+      // 用裸 `ref<boolean>(false)` 做 replace 会改到别处、样本失真（本文件自测踩过）。
+      const defaultCollapsed = PAGE.replace(
+        'const functionHeaderCollapsed = ref<boolean>(false)',
+        'const functionHeaderCollapsed = ref<boolean>(true)'
       );
-      expect(broken).toContain('pendingFeatureKey');
-      expect(broken).toContain('sendText(');
+      expect(headerToggleWired(defaultCollapsed)).toBe(false);
+      expect(headerToggleWired(PAGE.replace(' v-if="!functionHeaderCollapsed"', ''))).toBe(false);
     });
 
-    it('onFunctionClick 仍是「置键 → 发 prompt」的唯一入口', () => {
-      const fn = fnBody(PAGE, 'function onFunctionClick');
-      expect(fn).toContain("pendingFeatureKey.value = item.featureKey ?? ''");
-      expect(fn).toContain('sendText(item.prompt)');
+    it('箭头随收起态切换（收起显示 v）', () => {
+      expect(PAGE).toMatch(/\{\{ functionHeaderCollapsed \? 'v' : '\^' \}\}/);
     });
   });
 
-  describe('⑤ 组件交互闭合（遮罩可关、选中回传整项）', () => {
-    it('遮罩点击 emit close', () => {
-      const fn = fnBody(SHEET, 'function onMaskClick');
-      expect(fn).toContain("emit('close')");
+  describe('④ 专项通道不吃「自定义模型」能力', () => {
+    it('带 featureKey 时 buildBody 早退，不发 custom_* 字段', () => {
+      const fn = fnBody(PAGE, 'const buildBody : ChatBodyBuilder');
+      expect(fn).toMatch(/if \(featureKey\.length > 0\) \{\s*return params/);
+      // 早退必须**先于**自定义模型分支（否则等于没早退）
+      expect(fn.indexOf('featureKey.length > 0')).toBeLessThan(fn.indexOf('custom_api_key'));
     });
 
-    it('选中回传整项 AIFunctionItem（调用方才能拿到 featureKey）', () => {
-      const fn = fnBody(SHEET, 'function onSelect');
-      expect(fn).toContain("emit('select', item)");
-      expect(SHEET).toMatch(/\(e: 'select', item: AIFunctionItem\): void/);
+    it('「请先配置自定义模型」的前置校验只在不带键时生效', () => {
+      const fn = fnBody(PAGE, 'function onInputSend');
+      expect(fn).toMatch(/featureKey\.length == 0 && currentModelSource\.value == 'custom'/);
+    });
+
+    it('仍保留「取走 → 清空」在早退守卫之前（#999 不变量，不得被本次改动破坏）', () => {
+      const fn = fnBody(PAGE, 'function onInputSend');
+      const take = fn.indexOf('const featureKey = pendingFeatureKey.value');
+      const clear = fn.indexOf("pendingFeatureKey.value = ''");
+      const guard = fn.indexOf('请先配置自定义模型');
+      const send = fn.indexOf('sendInput(currentModelName.value, buildBody, [], featureKey)');
+      expect(take).toBeGreaterThanOrEqual(0);
+      expect(clear).toBeGreaterThan(take);
+      expect(guard).toBeGreaterThan(clear);
+      expect(send).toBeGreaterThan(guard);
+    });
+
+    it('去掉 featureKey 条件的变形样本会被检出（防检测器空跑假绿）', () => {
+      const fn = fnBody(PAGE, 'function onInputSend');
+      expect(fn).not.toMatch(/^[\s\S]*if \(currentModelSource\.value == 'custom' && customModel\.value\.trim\(\)\.length == 0\)/m);
     });
   });
 });
