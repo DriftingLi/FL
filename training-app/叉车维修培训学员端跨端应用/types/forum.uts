@@ -65,6 +65,10 @@ export type ForumReply = {
     like_count ?: number
     /** 是否被楼主采纳（后端 is_accepted 字段，仅问答帖有效） */
     is_accepted : boolean
+    /** 被回复人展示名（ADR-0042：楼中楼为扁平一层，后端 join 回填；无则空串） */
+    parent_name : string
+    /** 被回复人头像（ADR-0042 新增，可空 → 空串；供「昵称 › 被回复人」行内形态） */
+    parent_avatar_url : string
     /** IP 属地快照（ADR-0045）：空串 = 无属地（存量回复 / 内网来源）；展示口径见 utils/forumDisplay.regionLabel */
     ip_province : string
     ip_city : string
@@ -87,7 +91,17 @@ export type ForumTopicDetail = {
     created_at : string
     /** 是否可删除（后端返回，贴主本人为 true） */
     can_delete : boolean
+    /**
+     * 回复列表（ADR-0042：分页后的**当前页**，不是全量；topic 与 replies 在响应里平级）。
+     * 首页第一条恒为被采纳回复（若该帖有采纳），后端置顶并已从排序结果中剔除。
+     */
     replies : ForumReply[]
+    /** 回复分页元信息（ADR-0042）：当前页码 */
+    page : number
+    /** 回复分页元信息（ADR-0042）：总页数；page < pages 即还有下一页 */
+    pages : number
+    /** 回复分页元信息（ADR-0042）：总条数（含置顶条，与 replies_count 同源） */
+    total : number
     /** 帖子分类：general / resource / video / exam */
     scope : string
     /** 帖子类别：discussion / question / experience（#727） */

@@ -68,7 +68,7 @@ func TestForumPersonalListsContract(t *testing.T) {
 	r := gin.New()
 	api := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
-	RegisterForumRoutes(api, deps.RouterDeps(), deps.ForumSvc, deps.ForumImageSvc)
+	RegisterForumRoutes(api, deps.RouterDeps(), deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
 
 	issueToken := func(u model.HrwaiUser) string {
 		tok, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).

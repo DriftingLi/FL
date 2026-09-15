@@ -20,6 +20,8 @@
  *   S10 【Q3+结构层】推导出 0 页 ⇒ **明报「无改动页面」并返回**，绝不回退到全量截图
  *   S11 【Q3】-MaxPages 上限兜底
  *   S12 【Q3】遍历的是**目标页集合**，不是 pages.json 的全量清单
+ *   S13 【2026-09-15】**陈旧截图判据**：文件时间戳必须晚于本次运行起点
+ *       （否则上次运行的同名残留 PNG 会被当成本次证据）
  */
 const fs = require('fs');
 const path = require('path');
@@ -42,8 +44,8 @@ describe('auto-screenshot.ps1 contract', () => {
     expect(src).toContain('function Invoke-AutoScreenshot');
   });
 
-  test('S2: returns Ok/Screenshots/Skipped/HashConflicts/Error', () => {
-    ['Ok', 'Screenshots', 'Skipped', 'HashConflicts', 'Error'].forEach((f) => {
+  test('S2: returns Ok/Screenshots/Skipped/HashConflicts/StaleShots/Error', () => {
+    ['Ok', 'Screenshots', 'Skipped', 'HashConflicts', 'StaleShots', 'Error'].forEach((f) => {
       expect(src).toContain(f);
     });
   });
@@ -101,5 +103,24 @@ describe('auto-screenshot.ps1 contract', () => {
     expect(src).toMatch(/foreach\s*\(\s*\$page\s+in\s+\$targetPages\s*\)/);
     // 不得再直接遍历全量 $pages
     expect(src).not.toMatch(/foreach\s*\(\s*\$page\s+in\s+\$pages\s*\)/);
+  });
+
+  // S13（2026-09-15）：截图**陈旧文件**判据。`$OutputDir` 不清理、文件名按页名固定
+  // ⇒ adb 静默失败时上一次运行的同名残留 PNG 会让「存在且非空」（S4 那条）照样通过，
+  //    把陈旧截图当本次证据。必须有一条「文件时间戳晚于本次运行起点」的判据。
+  test('S13: rejects stale screenshots (file mtime must be newer than this run)', () => {
+    // 必须有运行起点，且**在循环之前**取（循环内各取一次会让判据退化成恒真）
+    const runStartAt = src.indexOf('$runStarted');
+    const loopAt = src.indexOf('foreach ($page in $targetPages)');
+    expect(runStartAt).toBeGreaterThan(-1);
+    expect(loopAt).toBeGreaterThan(-1);
+    expect(runStartAt).toBeLessThan(loopAt);
+    // 必须有「时间戳早于起点 ⇒ 判陈旧」的比较与归类
+    expect(src).toMatch(/\$shotWritten\s+-lt\s+\$runStarted/);
+    expect(src).toMatch(/\$staleShots\s*\+=/);
+    // 陈旧截图必须计入 Skipped（否则不会让 Ok=false ⇒ 仍会假绿）
+    const staleAt = src.indexOf('$staleShots += $pageName');
+    expect(staleAt).toBeGreaterThan(-1);
+    expect(src.slice(staleAt, staleAt + 300)).toMatch(/\$skipped\s*\+=/);
   });
 });

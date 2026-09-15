@@ -102,7 +102,6 @@ function Resolve-HBuilderXRoot {
     foreach ($pattern in @(
             'D:\软件\HBuilderX*\HBuilderX',
             'D:\HBuilderX*\HBuilderX',
-            'E:\HBuilderX*\HBuilderX',
             'C:\Program Files\HBuilderX*\HBuilderX',
             'C:\Program Files\HBuilderX',
             "$env:LOCALAPPDATA\HBuilderX")) {

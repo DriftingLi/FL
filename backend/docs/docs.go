@@ -11389,7 +11389,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "分页查询模拟考试历史记录",
+                "description": "分页查询模拟考试历史记录（按当前证件分区：credential_id 可选，经拦截器注入当前证件）",
                 "consumes": [
                     "application/json"
                 ],
@@ -11401,6 +11401,12 @@ const docTemplate = `{
                 ],
                 "summary": "模拟考试历史",
                 "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "目标证件ID",
+                        "name": "credential_id",
+                        "in": "query"
+                    },
                     {
                         "type": "integer",
                         "default": 1,
@@ -12357,7 +12363,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "分页查询练习历史，支持按题型/日期过滤",
+                "description": "分页查询练习历史，支持按题型/日期过滤（按当前证件分区：credential_id 可选，经拦截器注入当前证件）",
                 "consumes": [
                     "application/json"
                 ],
@@ -12369,6 +12375,12 @@ const docTemplate = `{
                 ],
                 "summary": "练习历史",
                 "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "目标证件ID",
+                        "name": "credential_id",
+                        "in": "query"
+                    },
                     {
                         "type": "integer",
                         "default": 1,
@@ -12706,7 +12718,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "汇总练习正确率/已练题量等",
+                "description": "汇总练习正确率/已练题量等（按当前证件分区：credential_id 可选，经拦截器注入当前证件）",
                 "consumes": [
                     "application/json"
                 ],
@@ -12717,6 +12729,14 @@ const docTemplate = `{
                     "学员端-练习"
                 ],
                 "summary": "练习统计",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "目标证件ID",
+                        "name": "credential_id",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "success",

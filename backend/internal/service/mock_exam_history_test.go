@@ -44,7 +44,7 @@ func TestGetHistoryOnlySubmitted(t *testing.T) {
 		}
 	}
 
-	got := svc.GetHistory(student.ID, 1, 10)
+	got := svc.GetHistory(student.ID, nil, 1, 10)
 	if got.Total != 1 {
 		t.Fatalf("历史应只含 1 条已交卷记录, got total=%d", got.Total)
 	}
@@ -140,8 +140,68 @@ func TestStartCredentialPartition(t *testing.T) {
 	if got.TotalQuestions != 1 {
 		t.Fatalf("A证件分区应抽到 1 题, got %d", got.TotalQuestions)
 	}
+	// 开考记录必须落住当时的证件（#1003）：历史读面按记录上的分区过滤，只抽题不落库就会漏。
+	var started model.MockExam
+	if err := db.First(&started, got.MockExamID).Error; err != nil {
+		t.Fatalf("查开考记录失败: %v", err)
+	}
+	if started.CredentialID == nil || *started.CredentialID != credA.ID {
+		t.Fatalf("开考记录应落当前证件 %d, got %v", credA.ID, started.CredentialID)
+	}
 	if _, err := svc.Start(student.ID, 10, 90, &credB.ID); err == nil {
 		t.Fatalf("B证件空池应返回错误")
+	}
+}
+
+// TestGetHistoryCredentialPartition 历史按证件分区（#1003）：
+// 同一学员在两个证件下各有已交卷记录时，传证件只回该证件分区；nil = 不分区（看全部）。
+// 未分区（credential_id IS NULL）的行只在「不分区」读面出现 —— 与错题本 / 题库池的 nil 语义一致。
+func TestGetHistoryCredentialPartition(t *testing.T) {
+	db := testutil.NewMemoryDB(t)
+	svc := NewMockExamService(db, nil, zap.NewNop())
+	student := testutil.SeedStudent(t, db, "分区考生", "x")
+
+	credA := model.Credential{Code: "N1h", Name: "叉车司机N1"}
+	credB := model.Credential{Code: "ELECh", Name: "低压电工"}
+	for _, c := range []*model.Credential{&credA, &credB} {
+		if err := db.Create(c).Error; err != nil {
+			t.Fatalf("建证件失败: %v", err)
+		}
+	}
+
+	now := time.Now()
+	examA := model.MockExam{StudentID: student.ID, CredentialID: &credA.ID, Status: mockExamStatusSubmitted, StartTime: &now, SubmitTime: &now, CreatedAt: now}
+	examB := model.MockExam{StudentID: student.ID, CredentialID: &credB.ID, Status: mockExamStatusSubmitted, StartTime: &now, SubmitTime: &now, CreatedAt: now}
+	unpartitioned := model.MockExam{StudentID: student.ID, Status: mockExamStatusSubmitted, StartTime: &now, SubmitTime: &now, CreatedAt: now}
+	// 用指针插入：自增 ID 才会写回局部变量（值拷贝插入的话本地 ID 恒为 0，断言会退化成「应含记录 0」）
+	for _, m := range []*model.MockExam{&examA, &examB, &unpartitioned} {
+		if err := db.Create(m).Error; err != nil {
+			t.Fatalf("插入模拟考试失败: %v", err)
+		}
+	}
+
+	for _, tc := range []struct {
+		name    string
+		cred    *int
+		wantIDs []int
+	}{
+		{"A 证件分区只回 A", &credA.ID, []int{examA.ID}},
+		{"B 证件分区只回 B", &credB.ID, []int{examB.ID}},
+		{"nil 证件不分区，三条都在", nil, []int{examA.ID, examB.ID, unpartitioned.ID}},
+	} {
+		got := svc.GetHistory(student.ID, tc.cred, 1, 10)
+		if int(got.Total) != len(tc.wantIDs) {
+			t.Fatalf("%s: total=%d, want %d", tc.name, got.Total, len(tc.wantIDs))
+		}
+		seen := map[int]bool{}
+		for _, e := range got.Exams {
+			seen[e.ID] = true
+		}
+		for _, want := range tc.wantIDs {
+			if !seen[want] {
+				t.Fatalf("%s: 应含记录 %d, got %+v", tc.name, want, got.Exams)
+			}
+		}
 	}
 }
 

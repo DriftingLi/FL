@@ -40,12 +40,21 @@ describe('level-detect.ps1 contract', () => {
     expect(src).toContain('ChangedFiles');
   });
 
-  // L3: quick 判定（只改 .uvue）
-  test('L3: .uvue only changes → quick', () => {
+  // L3: quick 判定（未命中运行时面）
+  // 2026-09-15 修订：🟢 的 `Reason` 必须**分两种写清** —— 「工具链/测试改动」≠「纯样式/文案改动」。
+  // 起因：两次实际会话改的是 `.ps1`，却被报成「纯样式/文案改动（1 个文件）」，误导使用者以为改动面是 UI。
+  // 分档（🟢）不变，变的是**为什么**。
+  test('L3: no runtime surface → quick, and Reason distinguishes toolchain from UI', () => {
     expect(src).toContain("Level        = 'quick'");
+    // 空 diff 仍走 quick（独立措辞）
     expect(src).toContain("Reason       = '无改动文件");
-    // quick 的最终返回
-    expect(src).toMatch(/Level\s+=\s+'quick'[\s\S]*Reason\s+=\s+"纯样式\/文案改动/);
+    // 分支一：只有工具链/测试/文档类文件 ⇒ 必须点名「工具链」，不得混进「纯样式」
+    expect(src).toMatch(/工具链\/测试改动，未命中运行时面/);
+    // 分支二：其余（含只改 .uvue）⇒ 补上「未命中运行时面」
+    expect(src).toMatch(/Level\s+=\s+'quick'[\s\S]*Reason\s+=\s+"纯样式\/文案改动，未命中运行时面/);
+    // 两个分支都必须存在（防止有人删掉工具链分支、又退回单一文案）
+    expect(src).toContain('$toolchainFiles');
+    expect(src).toContain('$uvueFiles');
   });
 
   // L4: standard 判定（.uts 变更）

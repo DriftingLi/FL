@@ -159,13 +159,23 @@ func (s *WrongQuestionService) loadFavoriteIDs(studentID int, questionIDs []int)
 
 // RedoWrongQuestion 重做错题：与练习/模拟考试共享同一判分管线（gradeOne）与解析五模块装配。
 // 单题即时重做形态（无会话生命周期）；结果落 question_practice_record，正确率/易错项统计含重做。
-func (s *WrongQuestionService) RedoWrongQuestion(studentID, questionID int, userAnswer interface{}) (*SubmitResultDTO, error) {
+//
+// credentialID 与练习提交同源（本次请求的当前证件，nil = 不分区）：取题按它校验（错题本列表本就按题目证件
+// 过滤，这里补上同一道校验，避免绕过列表直调重做别的证件的题）；重做记录的分区也在写入时冻结（ADR-0051），
+// 与练习记录同口径。
+// 有意**不**施加完整池 scope（published / 排真题）：错题本是「我曾经做错的题」的历史面，题目下架或改标后若
+// 在这里被拦，列表会出现点不动的死链 —— 那是错题本读面 scope 的独立议题，不在本票范围。
+func (s *WrongQuestionService) RedoWrongQuestion(studentID, questionID int, userAnswer interface{}, credentialID *int) (*SubmitResultDTO, error) {
 	var wq model.WrongQuestion
 	if err := s.db.Where("student_id = ? AND question_id = ? AND is_removed = ?", studentID, questionID, false).First(&wq).Error; err != nil {
 		return nil, errors.New("错题记录不存在")
 	}
+	q := s.db.Model(&model.Question{}).Where("id = ?", questionID)
+	if credentialID != nil {
+		q = q.Where("credential_id = ?", *credentialID)
+	}
 	var question model.Question
-	if err := s.db.First(&question, questionID).Error; err != nil {
+	if err := q.First(&question).Error; err != nil {
 		return nil, errors.New("题目不存在")
 	}
 
@@ -176,6 +186,7 @@ func (s *WrongQuestionService) RedoWrongQuestion(studentID, questionID int, user
 	// 重做结果与练习同口径落练习记录（统计事实源单一）。
 	rec := model.QuestionPracticeRecord{
 		StudentID:    studentID,
+		CredentialID: credentialID, // 写入时冻结（ADR-0051）：与练习记录同口径
 		QuestionID:   questionID,
 		IsCorrect:    gr.IsCorrect != nil && *gr.IsCorrect,
 		PracticeType: "redo",

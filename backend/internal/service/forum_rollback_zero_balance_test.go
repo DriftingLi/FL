@@ -17,7 +17,8 @@ import (
 
 func TestAdminDeleteTopicZeroBalanceRollback(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewForumService(db, nil, NewNotificationService(db, zap.NewNop()), NewForumCounter(), NewPointsService(db, zap.NewNop(), nil), zap.NewNop())
+	// 管理端强删属治理动作：经 ForumModerationService 自己的 interface 装配（ADR-0050 决策 3）
+	mod := NewForumModerationService(db, nil, NewNotificationService(db, zap.NewNop()), NewForumCounter(), NewPointsService(db, zap.NewNop(), nil), zap.NewNop())
 
 	answerer := testutil.SeedStudent(t, db, "zero_bal_answerer", "x")
 	if err := db.Model(&model.HrwaiUser{}).Where("id = ?", answerer.ID).UpdateColumn("points_balance", 0).Error; err != nil {
@@ -36,7 +37,7 @@ func TestAdminDeleteTopicZeroBalanceRollback(t *testing.T) {
 	}
 
 	// 删帖（同事务内回收）：修复前此处因 Delta:0 违反 CHECK 整笔失败
-	if err := svc.AdminDeleteTopic(topic.ID); err != nil {
+	if err := mod.AdminDeleteTopic(topic.ID); err != nil {
 		t.Fatalf("删帖应成功（余额 0 回收仅落占坑行）: %v", err)
 	}
 	var topicCnt int64
@@ -59,7 +60,7 @@ func TestAdminDeleteTopicZeroBalanceRollback(t *testing.T) {
 	// 回收幂等：同键二次 settle 静默跳过，不再产生流水
 	for i := 0; i < 2; i++ {
 		if err := db.Transaction(func(tx *gorm.DB) error {
-			_, err := svc.rewards.Reclaim(tx, topic.ID)
+			_, err := mod.rewards.Reclaim(tx, topic.ID)
 			return err
 		}); err != nil {
 			t.Fatalf("第 %d 次重复回收应幂等跳过: %v", i+1, err)

@@ -526,3 +526,101 @@ describe('allowlist 不回潮（forum 域违例清零的锁）', () => {
     expect(block).not.toMatch(/api[/\\]forum\.uts/);
   });
 });
+
+describe('回复分页契约（ADR-0042 / #850：详情回复改分页读取 + 「加载更多」）', () => {
+  const src = read('api/forum.uts');
+  const types = read('types/forum.uts');
+  const detail = read('composables/useTopicDetail.uts');
+  const page = read('pages/forum/forum-detail.uvue');
+  const list = read('pages/forum/components/forum-reply-list.uvue');
+
+  it('api：详情接口透传 page/page_size（分页是回复列表的唯一读取形态，参数名勿改）', () => {
+    expect(src).toMatch(/getForumTopicDetailApi\(topicId : number, sort : string = 'latest', order : string = 'asc', page : number = 1, pageSize : number = 20\)/);
+    expect(src).toContain('page: page.toString(),');
+    expect(src).toContain('page_size: pageSize.toString(),');
+  });
+
+  it('api：buildTopicDetail 回显分页三元组（采纳接口无三元组时垫成「只有一页」，不退化成「还有更多」）', () => {
+    expect(src).toContain("page: toNumber(obj['page'], 1),");
+    expect(src).toContain("pages: toNumber(obj['pages'], 1),");
+    expect(src).toContain("total: toNumber(obj['total'], replies.length),");
+  });
+
+  it('api：buildReply 映射被回复人 parent_name / parent_avatar_url（ADR-0042 一并新增，勿丢）', () => {
+    expect(src).toContain("parent_name: toStr(obj['parent_name']),");
+    expect(src).toContain("parent_avatar_url: toStr(obj['parent_avatar_url']),");
+  });
+
+  it('types：ForumTopicDetail 携带分页三元组；ForumReply 携带被回复人两字段', () => {
+    const detailType = types.slice(types.indexOf('export type ForumTopicDetail'), types.indexOf('export type LikeTopicResult'));
+    expect(detailType).toMatch(/page : number/);
+    expect(detailType).toMatch(/pages : number/);
+    expect(detailType).toMatch(/total : number/);
+    const replyType = types.slice(types.indexOf('export type ForumReply'), types.indexOf('export type ForumTopicDetail'));
+    expect(replyType).toMatch(/parent_name : string/);
+    expect(replyType).toMatch(/parent_avatar_url : string/);
+  });
+
+  it('detail：分页态沉在 useTopicDetail（page/pages/total + hasMore/loadingMore/remaining），判据是 pages 不是 reply_count', () => {
+    expect(detail).toContain('const replyPage = ref<number>(1)');
+    expect(detail).toContain('const replyPages = ref<number>(1)');
+    expect(detail).toContain('const replyTotal = ref<number>(0)');
+    expect(detail).toContain('const loadingMore = ref<boolean>(false)');
+    expect(detail).toContain('const hasMoreReplies = computed<boolean>(() : boolean => replyPage.value < replyPages.value)');
+    expect(detail).toContain('const remainingReplies = computed<number>');
+  });
+
+  it('detail：首屏 / 切排序 / 重试都回第 1 页并**替换**列表（分页语义，不是追加）', () => {
+    expect(detail).toMatch(/getForumTopicDetailApi\(topicId\.value, replySortField\.value, replySortOrder\.value, 1, REPLY_PAGE_SIZE\)/);
+    expect(detail).toContain('replies.value = data.replies');
+    expect(detail).toContain('replyPage.value = data.page > 0 ? data.page : 1');
+    expect(detail).toContain('replyPages.value = data.pages > 0 ? data.pages : 1');
+    // 切排序维度经 loadDetail 重置页码（沿用列表页既有惯例）
+    expect(detail).toMatch(/function onReplySortFieldChange[\s\S]{0,200}?loadDetail\(\)/);
+  });
+
+  it('detail：loadMoreReplies **追加**下一页（不替换已渲染内容）、按 id 去重、以 pages 判定到底', () => {
+    expect(detail).toContain('async function loadMoreReplies() : Promise<void>');
+    expect(detail).toContain('if (loadingMore.value || !hasMoreReplies.value) return');
+    expect(detail).toContain('const next = replyPage.value + 1');
+    expect(detail).toContain('if (!seen) merged.push(incoming)');
+    expect(detail).toContain('replyPage.value = data.page > 0 ? data.page : next');
+    // 反范式锁：加载更多不得整体替换列表
+    expect(detail).not.toMatch(/async function loadMoreReplies[\s\S]{0,800}?replies\.value = data\.replies/);
+  });
+
+  it('list：有「加载更多」入口、到底显示结束态，事件经 loadMore 上抛', () => {
+    expect(list).toContain('加载更多回复');
+    expect(list).toContain('没有更多回复了');
+    expect(list).toMatch(/v-if="items\.length > 0 && hasMore"/);
+    expect(list).toMatch(/v-else-if="items\.length > 0"/);
+    expect(list).toContain("emit('loadMore')");
+    expect(list).toMatch(/hasMore\? : boolean/);
+    expect(list).toMatch(/loadingMore\? : boolean/);
+    expect(list).toMatch(/totalCount\? : number/);
+  });
+
+  it('list：标题计数读 total（分页后 items.length 只是已加载条数），文案在脚本层拼接', () => {
+    expect(list).toContain('全部回复（{{ countText }}）');
+    expect(list).toMatch(/const countText = computed<string>/);
+    expect(list).toContain('props.totalCount > 0 ? props.totalCount.toString() : props.items.length.toString()');
+    expect(list).toMatch(/const loadMoreText = computed<string>/);
+  });
+
+  it('壳层接线：分页态与 loadMore 事件扁平下发（页面不含分页逻辑）', () => {
+    expect(page).toContain(':total-count="replyTotal"');
+    expect(page).toContain(':has-more="hasMoreReplies"');
+    expect(page).toContain(':loading-more="loadingMore"');
+    expect(page).toContain(':remaining="remainingReplies"');
+    expect(page).toContain('@load-more="loadMoreReplies"');
+  });
+
+  it('采纳 / 取消采纳后重载第 1 页：置顶是后端事实，本地翻标记改不了位置（对齐 Web）', () => {
+    const acceptAt = detail.indexOf('await acceptReplyApi(');
+    expect(acceptAt).toBeGreaterThan(-1);
+    expect(detail.slice(acceptAt, acceptAt + 600)).toContain('await loadDetail()');
+    const cancelAt = detail.indexOf('await cancelAcceptApi(');
+    expect(cancelAt).toBeGreaterThan(-1);
+    expect(detail.slice(cancelAt, cancelAt + 600)).toContain('await loadDetail()');
+  });
+});

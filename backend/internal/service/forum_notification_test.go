@@ -129,7 +129,8 @@ func TestForumNotify_ReplyToReply(t *testing.T) {
 
 // TestForumNotify_ReportHandled 举报标记已处理：举报人收到 forum_report 通知；重复标记不重复通知。
 func TestForumNotify_ReportHandled(t *testing.T) {
-	svc, db, _ := newForumTestSvc(t)
+	env := newForumTestEnv(t)
+	db := env.db
 	reporter := seedForumUser(t, db, "reporter")
 	author := seedForumUser(t, db, "r-author")
 	topic := seedNotificationTopic(t, db, author, "被举报帖")
@@ -140,7 +141,7 @@ func TestForumNotify_ReportHandled(t *testing.T) {
 		t.Fatalf("创建举报失败: %v", err)
 	}
 
-	if err := svc.HandleReport(report.ID, 1); err != nil {
+	if err := env.mod.HandleReport(report.ID, 1); err != nil {
 		t.Fatalf("处理举报失败: %v", err)
 	}
 	ns := notificationsOf(t, db, reporter.ID)
@@ -152,7 +153,7 @@ func TestForumNotify_ReportHandled(t *testing.T) {
 	}
 
 	// 重复标记已处理：不再通知
-	if err := svc.HandleReport(report.ID, 1); err != nil {
+	if err := env.mod.HandleReport(report.ID, 1); err != nil {
 		t.Fatalf("重复处理失败: %v", err)
 	}
 	if ns := notificationsOf(t, db, reporter.ID); len(ns) != 1 {
@@ -162,7 +163,8 @@ func TestForumNotify_ReportHandled(t *testing.T) {
 
 // TestForumNotify_ReportHandledTopicDeleted 被举报主题已删除：降级文案（无链接）。
 func TestForumNotify_ReportHandledTopicDeleted(t *testing.T) {
-	svc, db, _ := newForumTestSvc(t)
+	env := newForumTestEnv(t)
+	db := env.db
 	reporter := seedForumUser(t, db, "reporter2")
 	deletedID := int64(999)
 	report := &model.ForumReport{ReporterID: reporter.ID, TopicID: &deletedID,
@@ -171,7 +173,7 @@ func TestForumNotify_ReportHandledTopicDeleted(t *testing.T) {
 		t.Fatalf("创建举报失败: %v", err)
 	}
 
-	if err := svc.HandleReport(report.ID, 1); err != nil {
+	if err := env.mod.HandleReport(report.ID, 1); err != nil {
 		t.Fatalf("处理举报失败: %v", err)
 	}
 	ns := notificationsOf(t, db, reporter.ID)
@@ -182,11 +184,12 @@ func TestForumNotify_ReportHandledTopicDeleted(t *testing.T) {
 
 // TestForumNotify_AdminDeleteTopic 管理员删帖：作者收到删除通知（无链接）。
 func TestForumNotify_AdminDeleteTopic(t *testing.T) {
-	svc, db, _ := newForumTestSvc(t)
+	env := newForumTestEnv(t)
+	db := env.db
 	author := seedForumUser(t, db, "del-author")
 	topic := seedNotificationTopic(t, db, author, "待删帖")
 
-	if err := svc.AdminDeleteTopic(topic.ID); err != nil {
+	if err := env.mod.AdminDeleteTopic(topic.ID); err != nil {
 		t.Fatalf("删帖失败: %v", err)
 	}
 	ns := notificationsOf(t, db, author.ID)
@@ -200,15 +203,16 @@ func TestForumNotify_AdminDeleteTopic(t *testing.T) {
 
 // TestForumNotify_AdminDeleteReply 管理员删回复：回复作者收到通知（带帖子链接）。
 func TestForumNotify_AdminDeleteReply(t *testing.T) {
-	svc, db, _ := newForumTestSvc(t)
+	env := newForumTestEnv(t)
+	db := env.db
 	author := seedForumUser(t, db, "reply-author")
 	topic := seedNotificationTopic(t, db, seedForumUser(t, db, "lz2"), "有回复的帖")
 
-	reply, err := svc.ReplyTopic(ReplyTopicInput{UserID: author.ID, TopicID: topic.ID, Content: "待删回复", ParentReplyID: nil, Images: nil})
+	reply, err := env.svc.ReplyTopic(ReplyTopicInput{UserID: author.ID, TopicID: topic.ID, Content: "待删回复", ParentReplyID: nil, Images: nil})
 	if err != nil {
 		t.Fatalf("回复失败: %v", err)
 	}
-	if err := svc.AdminDeleteReply(reply.ID); err != nil {
+	if err := env.mod.AdminDeleteReply(reply.ID); err != nil {
 		t.Fatalf("删回复失败: %v", err)
 	}
 	ns := notificationsOf(t, db, author.ID)

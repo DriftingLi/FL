@@ -253,54 +253,46 @@ func (h *MockExamHandler) GetResult(c *gin.Context) {
 
 // GetHistory 模拟考试历史
 // @Summary 模拟考试历史
-// @Description 分页查询模拟考试历史记录
+// @Description 分页查询模拟考试历史记录（按当前证件分区：credential_id 可选，经拦截器注入当前证件）
 // @Tags 学员端-模拟考试
 // @Accept json
 // @Produce json
 // @Security BearerAuth
+// @Param credential_id query int false "目标证件ID"
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(10)
 // @Success 200 {object} response.R{data=service.MockExamHistoryDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /mock-exam/history [get]
 func (h *MockExamHandler) GetHistory(c *gin.Context) {
-	Endpoint[struct {
-		StudentID int
-		Page      int
-		PageSize  int
-	}, service.MockExamHistoryDTO]{
-		Parse: func(c *gin.Context) (*struct {
-			StudentID int
-			Page      int
-			PageSize  int
-		}, error) {
+	Endpoint[mockExamHistoryReq, service.MockExamHistoryDTO]{
+		Parse: func(c *gin.Context) (*mockExamHistoryReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
-			return &struct {
-				StudentID int
-				Page      int
-				PageSize  int
-			}{
-				StudentID: studentID,
-				Page:      atoiDefault(c.Query("page"), 1),
-				PageSize:  atoiDefault(c.Query("page_size"), 10),
+			return &mockExamHistoryReq{
+				StudentID:    studentID,
+				CredentialID: middleware.CredentialIDPtr(c),
+				Page:         atoiDefault(c.Query("page"), 1),
+				PageSize:     atoiDefault(c.Query("page_size"), 10),
 			}, nil
 		},
-		Invoke: func(ctx context.Context, req *struct {
-			StudentID int
-			Page      int
-			PageSize  int
-		}) (*service.MockExamHistoryDTO, error) {
-			return h.svc.GetHistory(req.StudentID, req.Page, req.PageSize), nil
+		Invoke: func(ctx context.Context, req *mockExamHistoryReq) (*service.MockExamHistoryDTO, error) {
+			return h.svc.GetHistory(req.StudentID, req.CredentialID, req.Page, req.PageSize), nil
 		},
-		Render: func(c *gin.Context, _ *struct {
-			StudentID int
-			Page      int
-			PageSize  int
-		}, resp *service.MockExamHistoryDTO, _ error) {
+		Render: func(c *gin.Context, _ *mockExamHistoryReq, resp *service.MockExamHistoryDTO, _ error) {
 			response.Success(c, resp)
 		},
 	}.Handle(c)
+}
+
+// mockExamHistoryReq 历史列表请求（学员 ID + 当前证件 + 分页）。
+// 证件来自 CredentialScoped 中间件（显式 query 优先，否则服务端当前证件），
+// 与 Start 同源；nil = 未设置，按不分区处理。
+type mockExamHistoryReq struct {
+	StudentID    int
+	CredentialID *int
+	Page         int
+	PageSize     int
 }
 
 // parseMockExamID 解析 mock_exam_id 路径参数与学员 ID。
