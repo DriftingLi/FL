@@ -69,9 +69,7 @@ func validateFavoriteTarget(db *gorm.DB, targetType string, targetID int) error 
 	switch targetType {
 	case FavoriteTargetCourse:
 		var cnt int64
-		db.Model(&model.Course{}).
-			Where("course_id = ? AND status = 1 AND specialty_id IS NOT NULL AND level_id IS NOT NULL", targetID).
-			Count(&cnt)
+		MountedCourseScope(db.Model(&model.Course{}).Where("course_id = ? AND status = 1", targetID)).Count(&cnt)
 		if cnt == 0 {
 			return errors.New("课程不存在或不可收藏")
 		}

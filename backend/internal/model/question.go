@@ -87,8 +87,11 @@ func (WrongQuestion) TableName() string { return "wrong_question" }
 // ===== 18. 模拟考试 =====
 
 type MockExam struct {
-	ID            int        `gorm:"column:id;primaryKey" json:"id"`
-	StudentID     int        `gorm:"column:student_id" json:"student_id"`
+	ID        int `gorm:"column:id;primaryKey" json:"id"`
+	StudentID int `gorm:"column:student_id" json:"student_id"`
+	// CredentialID 本次考试所属的目标证件分区（顶层分区，单归属）：
+	// 开考时按当前证件抽题并落库，历史读面按它过滤（ADR-0034「模考按证件分区」的落库面）。
+	CredentialID  *int       `gorm:"column:credential_id" json:"credential_id,omitempty"`
 	QuestionIDs   JSONB      `gorm:"column:question_ids;type:jsonb" json:"question_ids,omitempty"`
 	Answers       JSONB      `gorm:"column:answers;type:jsonb" json:"answers,omitempty"`
 	StartTime     *time.Time `gorm:"column:start_time" json:"start_time,omitempty"`

@@ -54,6 +54,7 @@ type Deps struct {
 	AdminSvc             *service.AdminService
 	AdminCourseSvc       *service.AdminCourseService
 	ForumSvc             *service.ForumService
+	ForumModSvc          *service.ForumModerationService
 	CheckInSvc           *service.CheckInService
 	ForumImageSvc        *service.ForumImageService
 	FeaturedSvc          *service.FeaturedService
@@ -90,7 +91,7 @@ type Deps struct {
 func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Logger, exportStore service.ExportStore) *Deps {
 	// 会话唯一实例：签发（AuthService）与校验（中间件/估值模块）共用同一实例
 	sess := security.SessionFromConfig(cfg)
-	// 论坛计数器唯一实例：ForumService 与 AuthService 共享（计数列唯一写入口，spec #297）
+	// 论坛计数器唯一实例：ForumService / ForumModerationService 与 AuthService 共享（计数列唯一写入口，spec #297）
 	forumCnt := service.NewForumCounter()
 	authSvc := service.NewAuthService(db, sess, forumCnt,
 		cfg.DefaultPasswords.Admin, cfg.DefaultPasswords.Tutor, cfg.DefaultPasswords.Student, logger)
@@ -148,6 +149,7 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		AdminSvc:             service.NewAdminService(db, logger),
 		AdminCourseSvc:       service.NewAdminCourseService(db, fileSvc, logger),
 		ForumSvc:             service.NewForumService(db, fileSvc, notificationSvc, forumCnt, pointsSvc, logger),
+		ForumModSvc:          service.NewForumModerationService(db, fileSvc, notificationSvc, forumCnt, pointsSvc, logger),
 		CheckInSvc:           service.NewCheckInService(db, logger, clock.Real(), pointsSvc),
 		ForumImageSvc:        service.NewForumImageService(db, fileSvc, logger),
 		FeaturedSvc:          service.NewFeaturedService(db, fileSvc, logger),

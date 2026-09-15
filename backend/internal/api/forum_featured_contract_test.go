@@ -56,7 +56,7 @@ func TestForumFeaturedContract(t *testing.T) {
 	r := gin.New()
 	apiGroup := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
-	RegisterForumRoutes(apiGroup, deps.RouterDeps(), deps.ForumSvc, deps.ForumImageSvc)
+	RegisterForumRoutes(apiGroup, deps.RouterDeps(), deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
 	RegisterPointsRoutes(apiGroup, deps.RouterDeps(), deps.PointsSvc)
 
 	authorToken, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).

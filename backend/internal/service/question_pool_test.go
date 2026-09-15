@@ -3,6 +3,8 @@ package service
 import (
 	"testing"
 
+	"go.uber.org/zap"
+
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
 )
@@ -76,5 +78,73 @@ func TestPoolCountConsistency(t *testing.T) {
 		if q.ID == realQ.ID {
 			t.Fatal("真题题不应出现在池内")
 		}
+	}
+}
+
+// TestQuestionPoolScopeCoversTagCountAndSearch 题库池 scope 单点落到「标签计数」与
+// 「搜索题目分区」两个读路径（ADR-0050 决策 1）：四条读路径（作答抽题 / 搜索结果 /
+// 按 id 取详情 / 标签计数）同走一个 scope——draft 与源标记真题题在任何入口都不可见。
+// 本用例是 question_pool_test.go 池三元组断言向两个新落点的扩展。
+func TestQuestionPoolScopeCoversTagCountAndSearch(t *testing.T) {
+	db := testutil.NewMemoryDB(t)
+	catalogSvc := NewTrainingCatalogService(db, zap.NewNop())
+	qsvc := NewQuestionBankService(db, nil, zap.NewNop())
+	searchSvc := NewSearchService(db, zap.NewNop())
+
+	tag, _ := catalogSvc.CreateQuestionTag(QuestionTagInput{Code: "hydraulic", Name: "液压"})
+	srcTag, _ := catalogSvc.CreateQuestionTag(QuestionTagInput{Code: "real_exam", Name: "真题"})
+	if err := db.Model(&model.QuestionTag{}).Where("id = ?", srcTag.ID).Update("is_source_tag", true).Error; err != nil {
+		t.Fatalf("置 source 标签失败: %v", err)
+	}
+
+	cred := &model.Credential{Code: "forklift_n1", Name: "N1证"}
+	if err := db.Create(cred).Error; err != nil {
+		t.Fatalf("建证件失败: %v", err)
+	}
+	mk := func(status string, tagIDs []int, content string) int {
+		t.Helper()
+		q, err := qsvc.CreateQuestion(map[string]any{
+			"type": "single_choice", "content": content, "options": []string{"A", "B"}, "answer": "A",
+			"status": status, "tag_ids": tagIDs, "credential_id": cred.ID,
+		}, nil, "tutor")
+		if err != nil {
+			t.Fatalf("建题失败: %v", err)
+		}
+		return q.ID
+	}
+	inPool := mk("published", []int{tag.ID}, "液压泵池内题")
+	mk("draft", []int{tag.ID}, "液压泵草稿题")
+	mk("published", []int{srcTag.ID}, "液压泵真题题")
+	// 同带主题标签与来源标记标签：源标记排除必须压过主题标签（无证件分区时的漂移点）
+	mk("published", []int{tag.ID, srcTag.ID}, "液压泵双标签真题题")
+
+	// 落点一：catalog 标签池计数 = 池口径（1 道池内题；草稿与两道源标记题都不计）。
+	// 带证件与不带证件两个分支同源——不带证件（全局池）同样排源标记题，不再有漂移窗口。
+	for _, tc := range []struct {
+		name string
+		cred *int
+	}{
+		{"带证件分区", &cred.ID},
+		{"不带证件全局", nil},
+	} {
+		counts := map[int]int64{}
+		for _, d := range catalogSvc.ListQuestionTags(true, false, tc.cred) {
+			if d.QuestionCount != nil {
+				counts[d.ID] = *d.QuestionCount
+			}
+		}
+		if counts[tag.ID] != 1 {
+			t.Fatalf("%s：标签计数应走池口径 = 1（草稿与源标记题不计）, got %d", tc.name, counts[tag.ID])
+		}
+	}
+
+	// 落点二：搜索题目分区 = 池口径（只有池内题命中，且命中数与返回条目一致）
+	got, err := searchSvc.Search("液压泵", SearchTypeQuestion, 1, 20, &cred.ID)
+	if err != nil {
+		t.Fatalf("题目分区搜索失败: %v", err)
+	}
+	page := got.(*SearchPageDTO)
+	if page.Total != 1 || len(page.Items) != 1 || page.Items[0].ID != int64(inPool) {
+		t.Fatalf("题目分区应只含池内题 %d, got total=%d items=%+v", inPool, page.Total, page.Items)
 	}
 }

@@ -17,19 +17,24 @@ import (
 )
 
 // ForumHandler 论坛 handler（帖子/回复/互动；打卡已迁独立蓝图 /api/check-in，ADR-0028）。
+//
+// 两片依赖（ADR-0050 决策 3）：svc = 学员交互 + 个人集合（学员端路由）；modSvc = 论坛治理
+// （管理端 /admin/forum 路由）——管理端处置动作经治理 module 自己的 interface 组装，
+// 不再穿学员交互的宽面。
 type ForumHandler struct {
 	svc      *service.ForumService
+	modSvc   *service.ForumModerationService
 	imageSvc *service.ForumImageService
 }
 
 // NewForumHandler 创建论坛 handler。
-func NewForumHandler(svc *service.ForumService, imageSvc *service.ForumImageService) *ForumHandler {
-	return &ForumHandler{svc: svc, imageSvc: imageSvc}
+func NewForumHandler(svc *service.ForumService, modSvc *service.ForumModerationService, imageSvc *service.ForumImageService) *ForumHandler {
+	return &ForumHandler{svc: svc, modSvc: modSvc, imageSvc: imageSvc}
 }
 
 // RegisterForumRoutes 注册 /api/forum 蓝图（需登录，hrwai_user）。
-func RegisterForumRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.ForumService, imageSvc *service.ForumImageService) {
-	h := NewForumHandler(svc, imageSvc)
+func RegisterForumRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.ForumService, modSvc *service.ForumModerationService, imageSvc *service.ForumImageService) {
+	h := NewForumHandler(svc, modSvc, imageSvc)
 
 	g := rg.Group("/forum", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapForumParticipate))
 
@@ -576,7 +581,7 @@ func (h *ForumHandler) AdminDeleteTopic(c *gin.Context) {
 			return &topicIDReq{TopicID: topicID}, nil
 		},
 		Invoke: func(ctx context.Context, req *topicIDReq) (*struct{}, error) {
-			if err := h.svc.AdminDeleteTopic(req.TopicID); err != nil {
+			if err := h.modSvc.AdminDeleteTopic(req.TopicID); err != nil {
 				return nil, err
 			}
 			return &struct{}{}, nil
@@ -667,9 +672,9 @@ func (h *ForumHandler) handleExperience(c *gin.Context, designate bool) {
 		},
 		Invoke: func(ctx context.Context, req *topicIDReq) (*service.ForumTopicDTO, error) {
 			if designate {
-				return h.svc.DesignateExperience(req.TopicID)
+				return h.modSvc.DesignateExperience(req.TopicID)
 			}
-			return h.svc.RevokeExperience(req.TopicID)
+			return h.modSvc.RevokeExperience(req.TopicID)
 		},
 		Render: func(c *gin.Context, _ *topicIDReq, resp *service.ForumTopicDTO, err error) {
 			if err != nil {
@@ -696,7 +701,7 @@ func (h *ForumHandler) handleSetFeatured(c *gin.Context, featured bool) {
 			return &topicIDReq{TopicID: topicID}, nil
 		},
 		Invoke: func(ctx context.Context, req *topicIDReq) (*service.ForumTopicDTO, error) {
-			return h.svc.SetFeatured(req.TopicID, featured)
+			return h.modSvc.SetFeatured(req.TopicID, featured)
 		},
 		Render: func(c *gin.Context, _ *topicIDReq, resp *service.ForumTopicDTO, err error) {
 			if err != nil {
@@ -734,7 +739,7 @@ func (h *ForumHandler) AdminDeleteReply(c *gin.Context) {
 			return &replyIDReq{ReplyID: replyID}, nil
 		},
 		Invoke: func(ctx context.Context, req *replyIDReq) (*struct{}, error) {
-			if err := h.svc.AdminDeleteReply(req.ReplyID); err != nil {
+			if err := h.modSvc.AdminDeleteReply(req.ReplyID); err != nil {
 				return nil, err
 			}
 			return &struct{}{}, nil
@@ -1078,7 +1083,7 @@ func (h *ForumHandler) ListReports(c *gin.Context) {
 		}
 		status = &v
 	}
-	resp, err := h.svc.ListReports(atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 20), status)
+	resp, err := h.modSvc.ListReports(atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 20), status)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -1113,7 +1118,7 @@ func (h *ForumHandler) HandleReport(c *gin.Context) {
 		response.BadRequest(c, "请求参数错误")
 		return
 	}
-	if err := h.svc.HandleReport(id, body.Status); err != nil {
+	if err := h.modSvc.HandleReport(id, body.Status); err != nil {
 		response.BadRequest(c, err.Error())
 		return
 	}

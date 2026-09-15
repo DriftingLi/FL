@@ -126,7 +126,8 @@ type MockExamHistoryDTO struct {
 }
 
 // Start 生成模拟考试：从 published 题库随机抽 count 题（不分等级、不分题型）。
-// credentialID 非 nil 时按当前证件分区（#702：与练习池同口径——已发布 + 排真题 + 证件分区）。
+// credentialID 非 nil 时按当前证件分区（#702：与练习池同口径——已发布 + 排真题 + 证件分区），
+// 并把该证件**落进记录**（#1003）：历史读面按记录上的分区过滤，抽题与落库共用同一个值，不两处各算。
 func (s *MockExamService) Start(studentID, count, duration int, credentialID ...*int) (*MockExamStartDTO, error) {
 	if count <= 0 {
 		count = mockExamDefaultCount
@@ -135,7 +136,8 @@ func (s *MockExamService) Start(studentID, count, duration int, credentialID ...
 		duration = 90
 	}
 
-	selected, err := sampleQuestions(s.db, "", count, credentialID...)
+	cred := credOf(credentialID)
+	selected, err := sampleQuestions(s.db, "", count, cred)
 	if err != nil {
 		return nil, errors.New("查询题目失败")
 	}
@@ -165,6 +167,7 @@ func (s *MockExamService) Start(studentID, count, duration int, credentialID ...
 	startTime := beijingNow()
 	mock := model.MockExam{
 		StudentID:     studentID,
+		CredentialID:  cred,
 		QuestionIDs:   model.JSONB(idsJSON),
 		Answers:       model.JSONB(emptyJSON),
 		Duration:      duration,
@@ -362,9 +365,17 @@ func (s *MockExamService) GetResult(mockExamID, studentID int) (*MockExamResultD
 // GetHistory 历史列表。
 // 只返回已交卷（submitted）的记录：未完成的废弃尝试没有成绩，展示出来只会让用户
 // 困惑（"我明明没考过，为什么有历史记录"）。废弃记录由 Start 中的清理逻辑兜底。
-func (s *MockExamService) GetHistory(studentID, page, pageSize int) *MockExamHistoryDTO {
+//
+// credentialID 非 nil 时按证件分区过滤（#1003）：分区是**开考那一刻**的当前证件（Start 落库），
+// 故切到别的证件不会看到别的证件的模考 —— 与「当前证件 = 全局过滤器」同口径。
+// nil = 不分区、看全部：与错题本 / 题库池的既有 nil 语义一致（未选证件的学员不该看不到自己的历史）。
+func (s *MockExamService) GetHistory(studentID int, credentialID *int, page, pageSize int) *MockExamHistoryDTO {
 	exams, total, page, pageSize := paging.Query[model.MockExam](s.db, page, pageSize, 10, "created_at DESC", func(q *gorm.DB) *gorm.DB {
-		return q.Where("student_id = ? AND status = ?", studentID, mockExamStatusSubmitted)
+		q = q.Where("student_id = ? AND status = ?", studentID, mockExamStatusSubmitted)
+		if credentialID != nil {
+			q = q.Where("credential_id = ?", *credentialID)
+		}
+		return q
 	})
 	items := make([]MockExamHistoryItemDTO, 0, len(exams))
 	for i := range exams {

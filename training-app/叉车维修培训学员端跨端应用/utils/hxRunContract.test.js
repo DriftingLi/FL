@@ -35,6 +35,12 @@
  *       必须有部署停滞判据（`Test-HxCompileFinished` + `-DeployStallSeconds`）；
  *       忙等待默认 120（忙就快速 exit 2，不无声等十分钟）、轮询上限默认 900；
  *       `package.json` 注册 `hx:compile-only`；`AGENTS.md` 写明分层内循环
+ *   C14 **最短部署观察窗**（2026-09-14，#974 假阴性）：部署判定必须有 `-DeployDeadlineSeconds`（默认 ≥60 秒）——
+ *       设备侧事实一旦前进就立即 PASS；**未前进时必须等满这个窗**才允许因「会话退出 / 停滞 / 到顶」收手。
+ *       依据：实测资源落盘比推送晚 **7–21 秒**，窗口比它短就会把「稍后落盘」误判成未部署
+ *       （当日实测 3 秒就下结论 ⇒ 白重跑一轮约 7 分钟编译）。收手判定必须来自
+ *       `scripts/lib/hx-deploy.ps1` 的纯函数 `Test-DeployObservationStop`（可被运行期断言），
+ *       且**不得**退回「`$launch.Proc.HasExited` 一为真就 break」的旧形态
  *
  * 设计沿用本仓既有守护测试形态（见 utils/emulatorSmokeContract.test.js、utils/hxBusyGateContract.test.js）：
  * 先对「注入违规」的变形样本断言检测有效（防空跑假绿），再对真实文件断言零命中。
@@ -54,6 +60,7 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const SCRIPT_REL = 'scripts/hx-run.ps1';
+const DEPLOY_LIB_REL = 'scripts/lib/hx-deploy.ps1';
 const AGENTS_REL = 'AGENTS.md';
 const ADR_REL = 'docs/adr/0008-移动端验收门与证据.md';
 const PKG_REL = 'package.json';
@@ -80,6 +87,7 @@ function scanContract(sources) {
   const agents = sources.agents || '';
   const adr = sources.adr || '';
   const pkg = sources.pkg || '';
+  const lib = sources.deployLib || '';
 
   // ---- C1 默认增量：干净缓存重建开关只允许出现在唯一的 if ($Full) 块里 ----
   const blocks = code.match(/if\s*\(\s*\$Full\s*\)\s*\{[\s\S]*?\n\}/g) || [];
@@ -271,6 +279,43 @@ function scanContract(sources) {
   must(adr.includes('hx-run.ps1'), 'C10', 'ADR-0008 指针未指向 scripts/hx-run.ps1');
   must(/"hx:run"\s*:\s*"[^"]*scripts\/hx-run\.ps1"/.test(pkg), 'C10', 'package.json 未注册 hx:run → scripts/hx-run.ps1');
 
+  // ---- C14 最短部署观察窗（#974 假阴性：落盘比推送晚 7–21 秒，窗口比它短就会误判未部署）----
+  const dds = code.match(/\[int\]\$DeployDeadlineSeconds\s*=\s*(\d+)/);
+  must(dds !== null, 'C14', '缺 -DeployDeadlineSeconds（最短部署观察窗；没有它「会话一退出 / 首采样无前进」就会直接判 env）');
+  if (dds) {
+    must(
+      Number(dds[1]) >= 60,
+      'C14',
+      `-DeployDeadlineSeconds 默认 ${dds[1]} 秒 < 60 —— 实测资源落盘要 7–21 秒，窗口更短会把「稍后落盘」误判成未部署`
+    );
+  }
+  must(/lib[\\/]hx-deploy\.ps1/.test(code), 'C14', '未 dot-source scripts/lib/hx-deploy.ps1（收手判定必须来自可做运行期断言的纯函数）');
+  must(/Test-DeployObservationStop\s+-Deployed/.test(code), 'C14', '主循环未调用 Test-DeployObservationStop（收手判定没接线）');
+  must(
+    code.includes('-DeployDeadlineSeconds $DeployDeadlineSeconds'),
+    'C14',
+    '未把 -DeployDeadlineSeconds 透传给收手判定（参数形同虚设）'
+  );
+  must(
+    !/\$launch\.Proc\.HasExited\)\s*\{\s*\$launchExitedEarly\s*=\s*\$true;\s*break\s*\}/.test(code),
+    'C14',
+    '收手判定退回「会话一退出就 break」—— 资源落盘比推送晚 7–21 秒，那会把「稍后落盘」误判成未部署（#974 的原始缺陷）'
+  );
+  // 纯函数自身的不变量：① 前进即 PASS；② 「会话退出」必须被最短观察窗挡住，否则窗口形同虚设
+  must(lib.includes('function Test-DeployObservationStop'), 'C14', DEPLOY_LIB_REL + ' 缺 Test-DeployObservationStop');
+  // ⚠️ 锚点刻意取**代码形状**（`Stop = $true; Outcome = 'advanced'`），不取裸的 `Outcome = 'advanced'`：
+  //    后者在纯函数的注释（返回值说明）里也出现 ⇒ 守卫会被注释满足，删掉真正的代码行也不报（本仓踩过多次）
+  must(
+    lib.includes("Stop = $true; Outcome = 'advanced'"),
+    'C14',
+    DEPLOY_LIB_REL + ' 缺「一旦前进就 PASS」的收手代码（advanced 收手分支）'
+  );
+  must(
+    /\$windowElapsed\s*-and\s*\$Exited/.test(lib),
+    'C14',
+    DEPLOY_LIB_REL + ' 的「会话退出」收手未被最短观察窗挡住（等于没加窗口）'
+  );
+
   return violations;
 }
 
@@ -279,7 +324,8 @@ describe('日常增量运行契约（scripts/hx-run.ps1，2026-09-12）', () => 
     script: readSource(SCRIPT_REL),
     agents: readSource(AGENTS_REL),
     adr: readSource(ADR_REL),
-    pkg: readSource(PKG_REL)
+    pkg: readSource(PKG_REL),
+    deployLib: readSource(DEPLOY_LIB_REL)
   };
 
   it('自检：注入违规必须被检出（防空跑假绿）', () => {
@@ -412,6 +458,42 @@ describe('日常增量运行契约（scripts/hx-run.ps1，2026-09-12）', () => 
       ['C13', 'Get-HxErrorLines 调用点丢了 @()（空数组退化成 $null ⇒ StrictMode 抛错）', (s) => ({
         ...s,
         script: s.script.replace(/@\(Get-HxErrorLines -Output/g, 'Get-HxErrorLines -Output')
+      })],
+      // C14：最短部署观察窗（#974）—— 每条各自注入，避免某条失效被其余掩盖
+      ['C14', '观察窗默认值被压到实测落盘时间以下', (s) => ({
+        ...s,
+        script: s.script.replace('[int]$DeployDeadlineSeconds = 60', '[int]$DeployDeadlineSeconds = 5')
+      })],
+      ['C14', '观察窗参数被删（退回「首采样无前进就判 env」）', (s) => ({
+        ...s,
+        script: s.script.replace(/\[int\]\$DeployDeadlineSeconds\s*=\s*60,\r?\n/, '')
+      })],
+      ['C14', '收手判定没接线', (s) => ({
+        ...s,
+        script: s.script.replace('Test-DeployObservationStop -Deployed', 'Get-SomethingElse -Deployed')
+      })],
+      ['C14', '观察窗没透传给判定（参数形同虚设）', (s) => ({
+        ...s,
+        script: s.script.replace('-DeployDeadlineSeconds $DeployDeadlineSeconds', '-DeployDeadlineSeconds 0')
+      })],
+      ['C14', '收手判定退回「会话一退出就 break」', (s) => ({
+        ...s,
+        script: s.script.replace(
+          '    if ($stop.Stop) {',
+          '    if ($launch.Proc.HasExited) { $launchExitedEarly = $true; break }\n    if ($stop.Stop) {'
+        )
+      })],
+      ['C14', '纯函数库的 dot-source 被删', (s) => ({
+        ...s,
+        script: s.script.replace(/lib\\hx-deploy\.ps1/, 'lib\\other.ps1')
+      })],
+      ['C14', '「会话退出」不再被窗口挡住（窗口形同虚设）', (s) => ({
+        ...s,
+        deployLib: s.deployLib.replace('$windowElapsed -and $Exited', '$Exited')
+      })],
+      ['C14', '纯函数丢了「前进即 PASS」', (s) => ({
+        ...s,
+        deployLib: s.deployLib.replace("Stop = $true; Outcome = 'advanced'", "Stop = $true; Outcome = 'x'")
       })]
     ];
     cases.forEach(([rule, label, mutate]) => {
@@ -495,6 +577,21 @@ describe('日常增量运行契约（scripts/hx-run.ps1，2026-09-12）', () => 
     expect(code).toMatch(/\[int\]\$TimeoutSeconds\s*=\s*900/);
     expect(code).toMatch(/\[int\]\$WaitSeconds\s*=\s*120/);
     expect(real.pkg).toMatch(/"hx:compile-only"\s*:\s*"[^"]*hx-run\.ps1\s+-CompileOnly"/);
+  });
+
+  it('C14：部署收手不再早于最短观察窗（会话退出也必须等满 60 秒）', () => {
+    const code = maskDocBlocks(real.script);
+    const dds = code.match(/\[int\]\$DeployDeadlineSeconds\s*=\s*(\d+)/);
+    expect(dds).not.toBeNull();
+    expect(Number(dds[1])).toBeGreaterThanOrEqual(60);
+    expect(code).toContain('Test-DeployObservationStop -Deployed');
+    expect(code).toContain('-DeployDeadlineSeconds $DeployDeadlineSeconds');
+    // 旧形态（会话一退出就 break）不得回来 —— 它正是 #974 的假阴性
+    expect(code).not.toMatch(/\$launch\.Proc\.HasExited\)\s*\{\s*\$launchExitedEarly\s*=\s*\$true;\s*break\s*\}/);
+    // 纯函数的不变量：前进即 PASS；「会话退出」被最短观察窗挡住
+    expect(real.deployLib).toContain('function Test-DeployObservationStop');
+    expect(real.deployLib).toContain("Stop = $true; Outcome = 'advanced'");
+    expect(real.deployLib).toMatch(/\$windowElapsed\s*-and\s*\$Exited/);
   });
 
   it('C10：AGENTS.md 的三层节奏与 ADR-0008 的一行指针都在', () => {
