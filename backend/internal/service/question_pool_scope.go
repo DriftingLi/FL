@@ -24,14 +24,18 @@ const (
 	// QuestionPoolExcludeSourceTagsSQL 排除来源标记标签（is_source_tag，如真题）题目的公共过滤片段：
 	// 这类题目只能经真题卷作答，不进顺序/随机/专项练习与模拟考抽题池（ADR-0022）。
 	QuestionPoolExcludeSourceTagsSQL = "NOT EXISTS (SELECT 1 FROM question_tag_relation qtr JOIN question_tag qt ON qt.id = qtr.tag_id WHERE qtr.question_id = question.id AND qt.is_source_tag)"
+	// QuestionPoolCredentialColumn 题库池的证件分区列：raw 计数按方言追加占位符时引用同一列名，
+	// 池的第三个元（当前证件分区）也就只有这一处出处。
+	QuestionPoolCredentialColumn = "question.credential_id"
 )
 
 // QuestionPoolScope 题库池 scope（gorm 链式形态）：已发布 + 排除来源标记标签题 + 证件分区。
-// cred 为 nil 时不作证件分区（全局池，管理端口径）；调用方可继续叠加题型/标签等读面差异。
+// cred 为 nil 时不作证件分区（全局池）；是否传证件由读面语义决定（学员读面传当前证件）。
+// 调用方可继续叠加题型/标签等读面差异。
 func QuestionPoolScope(q *gorm.DB, cred *int) *gorm.DB {
 	q = q.Where(QuestionPoolPublishedSQL).Where(QuestionPoolExcludeSourceTagsSQL)
 	if cred != nil {
-		q = q.Where("question.credential_id = ?", *cred)
+		q = q.Where(QuestionPoolCredentialColumn+" = ?", *cred)
 	}
 	return q
 }

@@ -1056,29 +1056,6 @@ func (s *ForumService) DeleteTopic(userID int, topicID int64) error {
 	return s.deleteTopicWithImages(topicID)
 }
 
-// deleteTopicWithImages 删除主题前收集主题 + 全部回复（含子回复）的图片并清理存储。
-func (s *ForumService) deleteTopicWithImages(topicID int64) error {
-	var topic model.ForumTopic
-	if err := s.db.First(&topic, topicID).Error; err != nil {
-		return err
-	}
-	urls := parseImageURLs(string(topic.Images))
-	var replyImages []string
-	if err := s.db.Model(&model.ForumReply{}).
-		Where("topic_id = ?", topicID).
-		Pluck("images", &replyImages).Error; err != nil {
-		return err
-	}
-	for _, raw := range replyImages {
-		urls = append(urls, parseImageURLs(raw)...)
-	}
-	if err := s.db.Delete(&model.ForumTopic{}, topicID).Error; err != nil {
-		return err
-	}
-	s.deleteImages(urls)
-	return nil
-}
-
 // incrementDeletedAfterAccepted 楼主删除已解决帖的巡检计数 +1（存于 system_settings）。
 func (s *ForumService) incrementDeletedAfterAccepted() error {
 	return s.db.Transaction(func(tx *gorm.DB) error {

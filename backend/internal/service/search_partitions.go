@@ -28,17 +28,17 @@ type partitionSpec[R any] struct {
 	// （MountedCourseScope / QuestionPoolScope）；nil = 该分区无额外可见性谓词。
 	scope func(s *SearchService, q *gorm.DB, p searchParams) *gorm.DB
 
-	// selects：scan 列（只取 DTO 用得到的列）。
-	selects string
-	// titleHit：一级排序判据「标题命中优先」的 SQL（带 like 占位符）；空串 = 该分区无标题面。
-	titleHit string
-	// 槽位⑤：二级排序键——按内容性质分派（常青内容用编辑信号，时效内容用活跃度）。
-	secondary string
-
 	// 槽位④：hit 函数——命中位置与片段（hitOf / hitOfTopic）。
 	hit func(s *SearchService, r *R, p searchParams) (string, string)
+	// 槽位⑤：二级排序键——按内容性质分派（常青内容用编辑信号，时效内容用活跃度）。
+	secondary string
 	// 槽位⑥：DTO 装配函数。
 	assemble func(r R, hitField, snippet string) SearchItemDTO
+
+	// selects：机械槽位——scan 列（只取 DTO 用得到的列）。
+	selects string
+	// titleHit：机械槽位——一级排序判据「标题命中优先」的 SQL（带 like 占位符）；空串 = 该分区无标题面。
+	titleHit string
 }
 
 // ===== 课程分区：匹配课名 + 简介；常青内容 → 编辑信号排序 =====

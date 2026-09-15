@@ -34,6 +34,39 @@ func newForumCore(db *gorm.DB, fileSvc *FileStore, notificationSvc *Notification
 		rewards: newForumRewardPolicy(points, notificationSvc), logger: logger}
 }
 
+// collectTopicImages 收集主题 + 全部回复（含子回复）的图片 URL（须在删除前调用）。
+// 作者自删（deleteTopicWithImages）与管理端强删（AdminDeleteTopic）共用同一收集实现。
+func (s *forumCore) collectTopicImages(topic *model.ForumTopic) ([]string, error) {
+	urls := parseImageURLs(string(topic.Images))
+	var replyImages []string
+	if err := s.db.Model(&model.ForumReply{}).
+		Where("topic_id = ?", topic.ID).
+		Pluck("images", &replyImages).Error; err != nil {
+		return nil, err
+	}
+	for _, raw := range replyImages {
+		urls = append(urls, parseImageURLs(raw)...)
+	}
+	return urls, nil
+}
+
+// deleteTopicWithImages 删除主题前收集主题 + 全部回复（含子回复）的图片并清理存储。
+func (s *forumCore) deleteTopicWithImages(topicID int64) error {
+	var topic model.ForumTopic
+	if err := s.db.First(&topic, topicID).Error; err != nil {
+		return err
+	}
+	urls, err := s.collectTopicImages(&topic)
+	if err != nil {
+		return err
+	}
+	if err := s.db.Delete(&model.ForumTopic{}, topicID).Error; err != nil {
+		return err
+	}
+	s.deleteImages(urls)
+	return nil
+}
+
 // deleteReplyWithImages 删除回复前收集本回复 + 全部下级回复的图片并清理存储。
 // 下级回复通过 parent_id 递归收集（单表递归 CTE 或逐层查询）。
 func (s *forumCore) deleteReplyWithImages(replyID, topicID int64) error {

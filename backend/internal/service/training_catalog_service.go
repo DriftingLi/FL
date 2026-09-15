@@ -257,11 +257,14 @@ func (s *TrainingCatalogService) ListQuestionTags(activeOnly, includeSourceTags 
 	}
 	// 池谓词 raw 形态：直接拼接题库池 scope 导出的 SQL 片段（表别名对齐为 question），
 	// 不就地重写——「raw 重写与常量脱钩」是漂移窗口（ADR-0050 决策 1）。
+	// 带证件与不带证件两个分支由此同源同口径：#702 的原始声明就是「学员端在 published 计数上
+	// 叠加排除来源标记标签题 + 可选证件分区」，原实现只在带证件分支做了排除，
+	// 不带证件分支（GET /api/tags 不传 credential_id）漏了——本票按该声明口径补齐。
 	query := "SELECT t.id AS tag_id, COUNT(qtr.question_id) AS total_count, " +
 		"COUNT(qtr.question_id) FILTER (WHERE " + QuestionPoolPublishedSQL + " AND " + QuestionPoolExcludeSourceTagsSQL
 	var args []any
 	if cred := credOf(credentialID); cred != nil {
-		query += " AND question.credential_id = ?"
+		query += " AND " + QuestionPoolCredentialColumn + " = ?"
 		args = append(args, *cred)
 	}
 	query += ") AS published_count " +

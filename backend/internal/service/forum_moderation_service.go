@@ -64,21 +64,13 @@ func (s *ForumModerationService) AdminDeleteTopic(topicID int64) error {
 		}
 		return err
 	}
-	// 先收集图片（需在删除前读取）
-	urls := []string{}
-	// 复用 deleteTopicWithImages 的图片收集逻辑，但在此处先做以便事务外清理
-	var rawTopic model.ForumTopic
-	_ = s.db.First(&rawTopic, topicID).Error
-	if rawTopic.ID != 0 {
-		urls = append(urls, parseImageURLs(string(rawTopic.Images))...)
-		var replyImages []string
-		_ = s.db.Model(&model.ForumReply{}).Where("topic_id = ?", topicID).Pluck("images", &replyImages).Error
-		for _, raw := range replyImages {
-			urls = append(urls, parseImageURLs(raw)...)
-		}
+	// 先收集图片（需在删除前读取，事务外清理）：与作者自删同源的收集实现。
+	urls, err := s.collectTopicImages(&topic)
+	if err != nil {
+		return err
 	}
 	// 事务内：删帖 + 违规回收（复用封底 0 语义）
-	err := s.db.Transaction(func(tx *gorm.DB) error {
+	err = s.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Delete(&model.ForumTopic{}, topicID).Error; err != nil {
 			return err
 		}
