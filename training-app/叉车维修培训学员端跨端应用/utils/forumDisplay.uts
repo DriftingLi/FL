@@ -37,6 +37,28 @@ export function getAuthorInitial(name : string) : string {
     return name.substring(0, 1)
 }
 
+/**
+ * 属地展示文案（ADR-0045）：**市优先、市为空退到省**，两者都空返回空串。
+ *
+ * 为什么只显示一级：署名行是窄的（时间 · 属地 · 采纳徽章），两级叠加会互相挤压；
+ * 数据仍按两级存（ip_province / ip_city），日后想改成「省 · 市」不必回填。
+ * 空串是展示侧的**唯一**「没有属地」信号——调用方据此整段不渲染
+ * （不显示「未知」、不留占位、不出现悬空的分隔符），存量帖因此看起来与今天完全一样。
+ */
+export function regionLabel(province : string, city : string) : string {
+    if (city.length > 0) return city
+    return province
+}
+
+/**
+ * 发布前的属地披露文案（ADR-0045）。
+ *
+ * ⚠️ 这一行是 `docs/agents/ui-conventions.md`「不写说明性 hint 文本」的**明确例外**：
+ * 属地是发布那一刻才产生的事实，事前告知比事后解释便宜——它是功能性提示，不是装饰。
+ * 约定文件已登记该例外，按约定清理 hint 文案时**跳过它**。
+ */
+export const FORUM_REGION_NOTICE : string = '发布内容会显示 IP 属地'
+
 /** 基于 author_id 稳定生成头像背景色 */
 export function getAvatarColor(authorId : number) : string {
     const colors : string[] = ['#2979ff', '#4caf50', '#ff9800', '#9c27b0', '#e91e63', '#009688', '#795548', '#607d8b']

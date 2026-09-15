@@ -7,7 +7,11 @@
         </view>
         <view class="author-info">
             <text class="author-name">{{ authorName }}</text>
-            <text class="post-time">{{ createdAtText }}</text>
+            <view class="author-meta">
+                <text class="post-time">{{ createdAtText }}</text>
+                <!-- 属地（ADR-0045）：与作者名 / 时间同一行；为空即整段不渲染 -->
+                <text v-if="regionText.length > 0" class="post-region">· {{ regionText }}</text>
+            </view>
         </view>
         <view class="topic-stats">
             <view :class="liked ? 'stat-like stat-like-liked' : 'stat-like'" @click="onLike">
@@ -34,6 +38,8 @@
         authorAvatar? : string
         avatarColor? : string
         createdAtText? : string
+        /** 属地文案（ADR-0045，市优先退省）；空串 = 无属地，不渲染 */
+        regionText? : string
         likesCount? : number
         liked? : boolean
         favorited? : boolean
@@ -45,6 +51,7 @@
         authorAvatar: '',
         avatarColor: '#2979ff',
         createdAtText: '',
+        regionText: '',
         likesCount: 0,
         liked: false,
         favorited: false,
@@ -113,6 +120,18 @@
     .post-time {
         font-size: 22rpx;
         color: #999999;
+    }
+
+    /* 作者行第二行：时间 + 属地同一行（ADR-0045，属地空则不渲染） */
+    .author-meta {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .post-region {
+        font-size: 22rpx;
+        color: #999999;
+        margin-left: 8rpx;
     }
 
     .topic-stats {

@@ -29,6 +29,7 @@
                 <!--   <text class="topic-title">{{ topic.title }}</text> -->
                 <ForumTopicHeader :author-name="tAuthorName" :author-initial="tAuthorInitial"
                     :author-avatar="tAuthorAvatar" :avatar-color="tAvatarColor" :created-at-text="tCreatedAtText"
+                    :region-text="tRegionText"
                     :likes-count="tLikesCount" :liked="tLiked" :favorited="tFavorited"
                     :views-count="tViewsCount" :can-delete="canDelete"
                     @toggle-like="onToggleLike" @toggle-favorite="onToggleFavorite" @delete="onDelete" />
@@ -50,20 +51,25 @@
 
         <!-- 底部回复输入栏 -->
         <view v-if="topic != null" class="reply-bar">
-            <view v-for="(img, idx) in replyPreviewImages" :key="idx" class="reply-preview"
-                @click="onPreviewReplyImage(idx)">
-                <image class="reply-preview-img" :src="img" mode="aspectFill" />
-                <view class="reply-preview-remove" @click.stop="onRemoveReplyImage(idx)">
-                    <text class="reply-preview-remove-text">×</text>
+            <!-- 发布前披露（ADR-0045）：ui-conventions「不写说明性 hint 文本」的**明确例外**，
+                 文案单点在 utils/forumDisplay.FORUM_REGION_NOTICE —— 别在这里另抄一份，也别当装饰删掉 -->
+            <text class="reply-region-notice">{{ regionNotice }}</text>
+            <view class="reply-bar-row">
+                <view v-for="(img, idx) in replyPreviewImages" :key="idx" class="reply-preview"
+                    @click="onPreviewReplyImage(idx)">
+                    <image class="reply-preview-img" :src="img" mode="aspectFill" />
+                    <view class="reply-preview-remove" @click.stop="onRemoveReplyImage(idx)">
+                        <text class="reply-preview-remove-text">×</text>
+                    </view>
                 </view>
-            </view>
-            <view v-if="replyImages.length < 3" class="reply-add" @click="onAddReplyImage">
-                <text class="reply-add-text">{{ uploadingReplyImage ? '…' : '＋' }}</text>
-            </view>
-            <input class="reply-input" type="text" placeholder="写下你的回复..." v-model="replyContent" />
-            <view class="reply-btn" :class="{ disabled: replyContent.length == 0 || submitting }"
-                @click="onSubmitReply">
-                <text class="reply-btn-text">{{ submitting ? '发送中' : '发送' }}</text>
+                <view v-if="replyImages.length < 3" class="reply-add" @click="onAddReplyImage">
+                    <text class="reply-add-text">{{ uploadingReplyImage ? '…' : '＋' }}</text>
+                </view>
+                <input class="reply-input" type="text" placeholder="写下你的回复..." v-model="replyContent" />
+                <view class="reply-btn" :class="{ disabled: replyContent.length == 0 || submitting }"
+                    @click="onSubmitReply">
+                    <text class="reply-btn-text">{{ submitting ? '发送中' : '发送' }}</text>
+                </view>
             </view>
         </view>
 
@@ -87,8 +93,11 @@
     import { goBack } from '../../utils/navigation'
     import { formatDateTimeStr } from '../../utils/format'
     import type { ForumReplyDisplay } from '../../utils/forumDetailDisplay'
-    import { resolveFileUrl, getAuthorInitial, getAvatarColor } from '../../utils/forumDisplay'
+    import { resolveFileUrl, getAuthorInitial, getAvatarColor, regionLabel, FORUM_REGION_NOTICE } from '../../utils/forumDisplay'
     import type { ForumReply } from '../../types/index'
+
+    /** 发布前披露文案单点在 utils/forumDisplay（ADR-0045）；模板不直调 import 函数，先落局部标识 */
+    const regionNotice : string = FORUM_REGION_NOTICE
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
@@ -140,6 +149,12 @@
         const t = topic.value
         if (t == null) return ''
         return formatDateTimeStr(t.created_at)
+    })
+    /** 帖子属地快照（ADR-0045）：空串 = 无属地，作者行那段整段不渲染 */
+    const tRegionText = computed<string>(() : string => {
+        const t = topic.value
+        if (t == null) return ''
+        return regionLabel(t.ip_province, t.ip_city)
     })
     const tLikesCount = computed<number>(() : number => {
         const t = topic.value
@@ -218,6 +233,8 @@
                 likesCount: detail.getReplyLikesCount(r),
                 isAccepted: r.is_accepted,
                 canAcceptReply: canAcceptReply(r),
+                // 属地快照（ADR-0045）：市优先退省，空串即无属地（署名行整段不渲染）
+                regionText: regionLabel(r.ip_province, r.ip_city),
             }
             out.push(display)
         }
@@ -381,11 +398,22 @@
 
     /* 底部回复栏 */
     .reply-bar {
-        flex-direction: row;
-        align-items: center;
-        padding: 16rpx 24rpx;
+        flex-direction: column;
+        padding: 12rpx 24rpx;
         background-color: #ffffff;
         border-top: 1rpx solid #eeeeee;
+    }
+
+    /* 发布前属地披露（ADR-0045 明确例外，勿清） */
+    .reply-region-notice {
+        font-size: 20rpx;
+        color: #999999;
+    }
+
+    .reply-bar-row {
+        flex-direction: row;
+        align-items: center;
+        margin-top: 8rpx;
     }
 
     .reply-preview {
