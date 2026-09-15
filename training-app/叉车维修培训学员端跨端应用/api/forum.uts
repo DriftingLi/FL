@@ -107,6 +107,9 @@ function buildReply(obj : UTSJSONObject, fallbackTopicId : number = 0) : ForumRe
         likes_count: likesCnt,
         liked: likedVal,
         is_accepted: toBool(obj['is_accepted']),
+        // IP 属地快照（ADR-0045）：只在发布时由服务端落库，客户端原样读，空串即无属地
+        ip_province: toStr(obj['ip_province']),
+        ip_city: toStr(obj['ip_city']),
     } as ForumReply
 }
 
@@ -143,6 +146,9 @@ function buildTopic(obj : UTSJSONObject) : ForumTopic {
         status: statusVal,
         is_featured: toBool(obj['is_featured']),
         is_experience: toBool(obj['is_experience']),
+        // IP 属地快照（ADR-0045）：列表卡片不展示，字段仍原样带上（DTO 契约单一，展示口径由组件决定）
+        ip_province: toStr(obj['ip_province']),
+        ip_city: toStr(obj['ip_city']),
     } as ForumTopic
 }
 
@@ -222,6 +228,9 @@ function buildTopicDetail(obj : UTSJSONObject) : ForumTopicDetail {
         is_experience: toBool(topicObj['is_experience']),
         status: statusVal,
         accepted_reply_id: (acceptedReplyId != null && toNumber(acceptedReplyId) > 0) ? toNumber(acceptedReplyId) : null,
+        // IP 属地快照（ADR-0045）：帖子作者行展示，空串整段不渲染
+        ip_province: toStr(topicObj['ip_province']),
+        ip_city: toStr(topicObj['ip_city']),
     } as ForumTopicDetail
     return detail
 }

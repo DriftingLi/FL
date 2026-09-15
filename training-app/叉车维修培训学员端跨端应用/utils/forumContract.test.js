@@ -445,6 +445,77 @@ describe('600 行软预算机检（pages/forum/** 达标后锁定）', () => {
   });
 });
 
+describe('IP 属地契约（ADR-0045：发布那一刻的快照，市优先退省，为空整段不渲染）', () => {
+  const src = read('api/forum.uts');
+  const types = read('types/forum.uts');
+  const display = read('utils/forumDisplay.uts');
+  const detailDisplay = read('utils/forumDetailDisplay.uts');
+  const detailPage = read('pages/forum/forum-detail.uvue');
+  const replyList = read('pages/forum/components/forum-reply-list.uvue');
+  const header = read('pages/forum/components/forum-topic-header.uvue');
+  const createPage = read('pages/forum/forum-create.uvue');
+  const card = read('pages/forum/components/forum-topic-card.uvue');
+
+  it('types：帖子 / 回复 / 详情三处 DTO 都带 ip_province + ip_city（空串仍是字段，不是可空）', () => {
+    expect((types.match(/ip_province : string/g) || []).length).toBe(3);
+    expect((types.match(/ip_city : string/g) || []).length).toBe(3);
+  });
+
+  it('api：三个 builder 原样映射两字段（列表 DTO 也带，但展示口径由组件决定）', () => {
+    expect((src.match(/ip_province: toStr\(obj\['ip_province'\]\)/g) || []).length).toBe(2);
+    expect(src).toContain("ip_province: toStr(topicObj['ip_province'])");
+    expect((src.match(/ip_city: toStr\(/g) || []).length).toBe(3);
+    // 属地是服务端快照：客户端不得反写 / 重解析（发帖与回复载荷都不含这两个字段）
+    expect(src).not.toMatch(/payload\['ip_(province|city)'\]/);
+  });
+
+  it('展示口径单点在 regionLabel：市优先、市为空退到省', () => {
+    expect(display).toContain('export function regionLabel(province : string, city : string) : string');
+    expect(display).toMatch(/if \(city\.length > 0\) return city/);
+    expect(display).toMatch(/if \(city\.length > 0\) return city[\s\S]{0,40}return province/);
+  });
+
+  it('披露文案单点导出，两个输入区都不另抄字面量', () => {
+    expect(display).toContain("export const FORUM_REGION_NOTICE : string = '发布内容会显示 IP 属地'");
+    for (const f of [detailPage, createPage]) {
+      expect(f).toContain('FORUM_REGION_NOTICE');
+      expect(f).not.toContain('发布内容会显示 IP 属地');
+    }
+  });
+
+  it('详情壳层扁平下发属地：帖子作者行 + 每条回复（组件不自行拼口径）', () => {
+    expect(detailDisplay).toMatch(/regionText : string/);
+    expect(detailPage).toContain(':region-text="tRegionText"');
+    expect(detailPage).toContain('regionLabel(t.ip_province, t.ip_city)');
+    expect(detailPage).toContain('regionText: regionLabel(r.ip_province, r.ip_city)');
+    expect(replyList).not.toMatch(/ip_province|ip_city/);
+    expect(header).not.toMatch(/ip_province|ip_city/);
+  });
+
+  it('回复署名行：属地接在相对时间之后；为空整段不渲染（分隔符也在条件节点内，不悬空）', () => {
+    expect(replyList).toMatch(/reply-action-time">\{\{ item\.createdAtText \}\}<\/text>/);
+    expect(replyList).toMatch(/v-if="item\.regionText\.length > 0" class="reply-region">· \{\{ item\.regionText \}\}/);
+  });
+
+  it('帖子作者行：属地与作者名 / 时间同一行；为空整段不渲染', () => {
+    expect(header).toMatch(/regionText\? : string/);
+    expect(header).toContain('class="author-meta"');
+    expect(header).toMatch(/v-if="regionText\.length > 0" class="post-region">· \{\{ regionText \}\}/);
+  });
+
+  it('发布前披露在场：回复输入区与发帖表单各一行（ADR-0045 明确例外，勿清）', () => {
+    expect(detailPage).toContain('class="reply-region-notice">{{ regionNotice }}');
+    expect(createPage).toContain('class="form-region-notice">{{ regionNotice }}');
+    // 版面里那两行确实是渲染出来的节点，不是只留注释
+    expect(detailPage).toMatch(/<text class="reply-region-notice">/);
+    expect(createPage).toMatch(/<text v-if="!isResourceMode" class="form-region-notice">/);
+  });
+
+  it('列表卡片不加属地（ADR-0045：卡片信息密度已高）', () => {
+    expect(card).not.toMatch(/regionText|ip_province|ip_city|reply-region|post-region/);
+  });
+});
+
 describe('allowlist 不回潮（forum 域违例清零的锁）', () => {
   it('GUARD_ALLOWLIST 不含 forum 域文件（页面与 api 双清零）', () => {
     const guardSrc = read('utils/utsAndroidCompile.test.js');

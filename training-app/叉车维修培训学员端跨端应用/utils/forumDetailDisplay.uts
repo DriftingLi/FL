@@ -22,6 +22,8 @@ export type ForumReplyDisplay = {
     isAccepted : boolean
     /** 该条能否被当前用户采纳（问答帖 + 楼主本人 + 非自己回复 + 尚未采纳） */
     canAcceptReply : boolean
+    /** 属地文案（ADR-0045，市优先退省）；空串 = 无属地，署名行那段整段不渲染 */
+    regionText : string
 }
 
 /** 预览一组图片（帖子/回复共用；URL 解析幂等，传入已解析列表与原始列表结果一致） */

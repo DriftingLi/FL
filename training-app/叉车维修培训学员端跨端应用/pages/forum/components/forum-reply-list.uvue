@@ -63,7 +63,12 @@
                 </view>
             </view>
             <view class="reply-action-row">
-                <text class="reply-action-time">{{ item.createdAtText }}</text>
+                <view class="reply-action-left">
+                    <text class="reply-action-time">{{ item.createdAtText }}</text>
+                    <!-- 属地（ADR-0045）：接在相对时间之后（「18 小时前 · 上海」）。
+                         为空即整段不渲染 —— 连分隔符也不出现（历史回复看起来与今天一样）。 -->
+                    <text v-if="item.regionText.length > 0" class="reply-region">· {{ item.regionText }}</text>
+                </view>
                 <view class="reply-action-right">
                     <view :class="item.liked ? 'reply-like reply-like-liked' : 'reply-like'" @click="onLike(item.id)">
                         <text :class="item.liked ? 'reply-like-icon reply-like-icon-liked' : 'reply-like-icon'">{{ item.liked ? '♥' : '♡' }}</text>
@@ -316,6 +321,18 @@
     .reply-action-time {
         font-size: 22rpx;
         color: #cccccc;
+    }
+
+    /* 署名行左侧：相对时间 + 属地（ADR-0045，属地单独成节，空则不渲染） */
+    .reply-action-left {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .reply-region {
+        font-size: 22rpx;
+        color: #cccccc;
+        margin-left: 8rpx;
     }
 
     .reply-action-btn {
