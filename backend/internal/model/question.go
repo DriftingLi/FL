@@ -58,8 +58,11 @@ func (QuestionTagRelation) TableName() string { return "question_tag_relation" }
 // ===== 15. 题库练习记录 =====
 
 type QuestionPracticeRecord struct {
-	ID           int       `gorm:"column:id;primaryKey" json:"id"`
-	StudentID    int       `gorm:"column:student_id" json:"student_id"`
+	ID        int `gorm:"column:id;primaryKey" json:"id"`
+	StudentID int `gorm:"column:student_id" json:"student_id"`
+	// CredentialID 该次作答所属的目标证件分区（顶层分区，单归属）：
+	// 作答那一刻的当前证件在写入时冻结，读面（历史 / 刷题统计 / 练习统计）按它过滤（ADR-0051）。
+	CredentialID *int      `gorm:"column:credential_id" json:"credential_id,omitempty"`
 	QuestionID   int       `gorm:"column:question_id" json:"question_id"`
 	IsCorrect    bool      `gorm:"column:is_correct;default:false" json:"is_correct"`
 	PracticeType string    `gorm:"column:practice_type;default:free" json:"practice_type"`

@@ -340,6 +340,7 @@ func (s *PracticeModeService) SubmitAnswer(studentID, questionID int, userAnswer
 
 	rec := model.QuestionPracticeRecord{
 		StudentID:    studentID,
+		CredentialID: credentialID, // 写入时冻结（ADR-0051）：落作答那一刻的当前证件，读面按它分区
 		QuestionID:   questionID,
 		IsCorrect:    gr.IsCorrect != nil && *gr.IsCorrect,
 		PracticeType: orDefault(practiceType, "free"),
@@ -407,10 +408,9 @@ func practiceMaxScore(q *model.Question) float64 {
 // total_count 为全量（含重做，question_practice_record 事实源），
 // total_days 为 distinct 自然日去重（Go 侧按 Asia/Shanghai day string 去重，兼容 postgres/sqlite 双驱动，
 // 语义等价于 COUNT(DISTINCT DATE(created_at AT TIME ZONE 'Asia/Shanghai'))）。
-// 均按 student_id 过滤，credentialID 非空时 JOIN question 按 credential_id 分区（复用 sampleQuestions 的 JOIN 模式）。
-// 索引说明：现有 idx_qpr_student(student_id) + idx_qpr_created(created_at) 已覆盖范围扫描；
-// JOIN 分区路径依赖 question.credential_id 索引（question 表相关索引）与 question_practice_record.question_id；
-// 高并发可追加复合索引 (student_id, created_at) 或 (student_id, question_id, created_at)，本期仅注释说明，无新增 migration。
+// 均按 student_id 过滤；credentialID 非空时按**记录上的分区列**过滤（写入时冻结，ADR-0051）——
+// 不再 JOIN question：分区是「作答那一刻的证件」，不是题目当前的归属；题目改归属不该让历史统计搬家。
+// 索引说明：idx_qpr_student_credential (student_id, credential_id, created_at DESC) 覆盖本查询的过滤与排序（迁移 000033）。
 func (s *PracticeModeService) GetPracticeStats(studentID int, credentialID *int) (*PracticePracticeStatsDTO, error) {
 	clk := s.clk
 	if clk == nil {
@@ -424,7 +424,7 @@ func (s *PracticeModeService) GetPracticeStats(studentID int, credentialID *int)
 	base := func() *gorm.DB {
 		q := s.db.Model(&model.QuestionPracticeRecord{}).Where("question_practice_record.student_id = ?", studentID)
 		if credentialID != nil {
-			q = q.Joins("JOIN question ON question.id = question_practice_record.question_id").Where("question.credential_id = ?", *credentialID)
+			q = q.Where("question_practice_record.credential_id = ?", *credentialID)
 		}
 		return q
 	}
@@ -440,11 +440,7 @@ func (s *PracticeModeService) GetPracticeStats(studentID int, credentialID *int)
 	}
 
 	var timestamps []time.Time
-	pluckQ := s.db.Model(&model.QuestionPracticeRecord{}).Where("question_practice_record.student_id = ?", studentID)
-	if credentialID != nil {
-		pluckQ = pluckQ.Joins("JOIN question ON question.id = question_practice_record.question_id").Where("question.credential_id = ?", *credentialID)
-	}
-	if err := pluckQ.Pluck("question_practice_record.created_at", &timestamps).Error; err != nil {
+	if err := base().Pluck("question_practice_record.created_at", &timestamps).Error; err != nil {
 		return nil, err
 	}
 	daySet := make(map[string]struct{}, len(timestamps))
@@ -460,19 +456,28 @@ func (s *PracticeModeService) GetPracticeStats(studentID int, credentialID *int)
 }
 
 // GetStats 学员练习统计（经统计聚合 module，一次 GROUP BY 按题型聚合；by_type 正确率为加性新增 key）。
-func (s *PracticeModeService) GetStats(studentID int) *PracticeStatsDTO {
+//
+// credentialID 非空时按**记录上的分区列**过滤（写入时冻结，ADR-0051）：与 /practice-stats、/history 同口径。
+// 本端点的消费者（移动端「数据报告」页）把总览与 by_type 明细渲染在同一页 —— 口径不一致就是同页自相矛盾。
+func (s *PracticeModeService) GetStats(studentID int, credentialID *int) *PracticeStatsDTO {
+	base := func() *gorm.DB {
+		q := s.db.Model(&model.QuestionPracticeRecord{}).Where("question_practice_record.student_id = ?", studentID)
+		if credentialID != nil {
+			q = q.Where("question_practice_record.credential_id = ?", *credentialID)
+		}
+		return q
+	}
 	var total, correct int64
-	s.db.Model(&model.QuestionPracticeRecord{}).Where("student_id = ?", studentID).Count(&total)
-	s.db.Model(&model.QuestionPracticeRecord{}).Where("student_id = ? AND is_correct = ?", studentID, true).Count(&correct)
+	base().Count(&total)
+	base().Where("question_practice_record.is_correct = ?", true).Count(&correct)
 	wrong := total - correct
 	accuracy := 0.0
 	if total > 0 {
 		accuracy = roundFloat1(float64(correct) / float64(total) * 100)
 	}
-	base := s.db.Model(&model.QuestionPracticeRecord{}).
-		Joins("JOIN question ON question.id = question_practice_record.question_id").
-		Where("question_practice_record.student_id = ?", studentID)
-	all, filtered := groupByCountWithFilter(base, "question.type", "CASE WHEN question_practice_record.is_correct THEN 1 ELSE 0 END")
+	byTypeBase := base().
+		Joins("JOIN question ON question.id = question_practice_record.question_id")
+	all, filtered := groupByCountWithFilter(byTypeBase, "question.type", "CASE WHEN question_practice_record.is_correct THEN 1 ELSE 0 END")
 	// 保留旧语义：by_type 对合法题型零填充；accuracy 为每题型正确率（加性新 key）。
 	byType := make(map[string]PracticeTypeStat, len(validQuestionTypes))
 	for _, t := range validQuestionTypes {
@@ -534,9 +539,17 @@ func questionStats(db *gorm.DB, questionID int, qType string) *questionStatResul
 }
 
 // GetHistory 练习历史分页。
-func (s *PracticeModeService) GetHistory(studentID, page, pageSize int, qType, startDate, endDate string) *HistoryResultDTO {
+//
+// credentialID 非空时按**记录上的分区列**过滤（写入时冻结，ADR-0051）：练习历史是学习内容读面，
+// 与 /practice-stats、/stats 同口径；nil = 不分区、看全部（与题库池 / 错题本的既有 nil 语义一致）。
+// 认下的代价：切到「没练过的证件」会看到空历史（空态而非数据丢失）。
+func (s *PracticeModeService) GetHistory(studentID int, credentialID *int, page, pageSize int, qType, startDate, endDate string) *HistoryResultDTO {
 	records, total, page, pageSize := paging.Query[model.QuestionPracticeRecord](s.db, page, pageSize, 20, "created_at DESC", func(q *gorm.DB) *gorm.DB {
 		q = q.Where("student_id = ?", studentID)
+		if credentialID != nil {
+			// 必须带表名前缀：qType 分支会 JOIN question，而两张表都有 credential_id（否则歧义列报错）
+			q = q.Where("question_practice_record.credential_id = ?", *credentialID)
+		}
 		if qType != "" {
 			q = q.Joins("JOIN question ON question.id = question_practice_record.question_id").Where("question.type = ?", qType)
 		}
