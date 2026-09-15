@@ -16,5 +16,5 @@ export { type PointsBalance, type PointsLedgerItem, type PointsLedgerResult, typ
 export { type ResumeExperience, type ResumeCertification, type ResumeData, type SaveResumeParams, type PositionItem } from './resume'
 export { type FeaturedContentItem, type FeaturedContentListResult, type FeaturedContentDetail } from './featured'
 export { type FavoriteItem, type FavoriteListResult, type FavoriteCheckResult } from './favorite'
-export { type SearchItem, type SearchCategoryResult, type SearchResult, type SearchPagedResult } from './search'
+export { type SearchItem, type SearchCategoryResult, type SearchResult, type SearchPagedResult, type HighlightSegment } from './search'
 export { type StudyStats, type CourseProgressItem, type StudentProfile, type StudyRecord, type StudyRecordsResult, type StudentCourse, type StudentCourseListResult, type StudentCourseChapterProgress, type StudentCourseDetail } from './student'

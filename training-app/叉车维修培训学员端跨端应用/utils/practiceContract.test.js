@@ -130,6 +130,7 @@ describe('域 api 收紧（T06 / ADR-0007）：DTO 函数经 mapper-callback 出
     'getFreePracticeApi',
     'getSequentialPracticeApi',
     'getTagPracticeApi',
+    'getQuestionByIdApi',
     'submitAnswerApi',
     'getPracticeProgressApi',
     'getPracticeOverviewApi',
@@ -141,7 +142,8 @@ describe('域 api 收紧（T06 / ADR-0007）：DTO 函数经 mapper-callback 出
     const start = api.indexOf('export function ' + name);
     expect(start).toBeGreaterThan(-1);
     const body = api.slice(start, api.indexOf('\n}', start));
-    expect(body).toMatch(/(get|post)Mapped<[A-Za-z_$][\w$]*(?:\[\])?>\('[^']+', [^,]+, \(data : UTSJSONObject\) : [A-Za-z_$][\w$]*(?:\[\])? => build[A-Za-z_$][\w$]*\(data\)\)/);
+    // URL 允许「字面量」与「字面量 + id 变量拼接」两种形态（by-id 端点后者才有意义，先例 examContract）
+    expect(body).toMatch(/(get|post)Mapped<[A-Za-z_$][\w$]*(?:\[\])?>\('[^']+'(?:\s*\+\s*[^,]+)?, [^,]+, \(data : UTSJSONObject\) : [A-Za-z_$][\w$]*(?:\[\])? => build[A-Za-z_$][\w$]*\(data\)\)/);
   });
 
   // raw 透传白名单：刻意保留裸 get/post（不硬套 identity map，T03/T05 口径）
@@ -185,7 +187,14 @@ describe('幻影路由锁（#662 口径）：api 层路由必须落在后端已�
     expect(registered.length).toBeGreaterThan(10);
 
     const api = stripComments(read('api/practice.uts'));
-    const used = [...api.matchAll(/'(\/(?:practice-mode|question-bank)\/[^']*)'/g)].map((m) => m[1]);
+    // 拼接连形态：'/question-bank/questions/' + <id 变量> → /question-bank/questions/:question_id
+    // （后端把路径参数写作 :question_id，故拼接段归一成同名占位符，先例 examContract 的 :mock_exam_id）
+    const concatRe = /'(\/(?:practice-mode|question-bank)\/[^']*\/)'\s*\+\s*[A-Za-z_$][\w$.]*/g;
+    const used = [];
+    let c;
+    while ((c = concatRe.exec(api)) !== null) used.push(c[1] + ':question_id');
+    const rest = api.replace(concatRe, '');
+    used.push(...[...rest.matchAll(/'(\/(?:practice-mode|question-bank)\/[^']*)'/g)].map((m) => m[1]));
     expect(used.length).toBeGreaterThan(8);
 
     const phantom = used.filter((u) => !registered.includes(u));

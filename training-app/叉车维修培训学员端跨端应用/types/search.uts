@@ -1,14 +1,27 @@
 /**
  * 搜索模块类型
+ *
+ * 契约事实源：后端 `SearchItemDTO` / `SearchAllDTO`（ADR-0049 落地回写，PR #986）。
+ * 移动端消费面必须与后端字段逐一对应——漏字段的后果是「静默丢分区」（此前 chapters
+ * 就是这么丢的），故本文件按后端字段顺序登记。
  */
+
+/** 一条高亮分段：hit=true 表示该段是关键词命中（渲染层据此加粗/描色） */
+export type HighlightSegment = {
+    text : string
+    hit : boolean
+}
 
 /** 搜索结果条目 */
 export type SearchItem = {
-    type : string                   // course / question / content / topic
+    type : string                   // course / chapter / question / content / topic
     id : number
     title : string
-    cover : string
-    summary : string
+    cover : string                  // 课程与内容精选有封面；题目/章节/帖子恒空
+    summary : string                // 兼容字段：正文开头截断（老客户端读它）
+    snippet : string                // 命中窗口（源串原文，投影与高亮在端上做，ADR-0049 决策 6）
+    hit_field : string              // 命中位置：title / body / reply
+    parent_id : number              // 章节结果所属课程 ID（其余类型为 0）
 }
 
 /** 搜索分类结果 */
@@ -17,10 +30,11 @@ export type SearchCategoryResult = {
     total : number
 }
 
-/** 全部搜索结果 */
+/** 全部搜索结果（缺省 type 的聚合形状：五分区并列） */
 export type SearchResult = {
     keyword : string
     courses : SearchCategoryResult
+    chapters : SearchCategoryResult
     questions : SearchCategoryResult
     contents : SearchCategoryResult
     topics : SearchCategoryResult

@@ -26,7 +26,7 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     .app-empty {
         flex-direction: column;
         align-items: center;
@@ -41,7 +41,7 @@
 
     .app-empty-text {
         font-size: $font-size-md;
-        color: $text-placeholder;
+        color: $text-color-placeholder;
     }
 
     .app-empty-action {

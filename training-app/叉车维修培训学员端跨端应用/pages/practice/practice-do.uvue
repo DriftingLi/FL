@@ -4,8 +4,8 @@
         <view class="nav-bar">
             <view class="nav-left" @click="onBack"><text class="nav-back">‹</text></view>
             <view class="nav-center">
-                <text class="nav-timer">⏱ {{ session.timerText.value }}</text>
-                <text class="nav-progress ml-24">{{ session.currentIndex.value + 1 }}/{{ session.questions.value.length }}</text>
+                <text v-if="!isSingle" class="nav-timer">⏱ {{ session.timerText.value }}</text>
+                <text v-if="!isSingle" class="nav-progress ml-24">{{ session.currentIndex.value + 1 }}/{{ session.questions.value.length }}</text>
             </view>
             <view class="nav-right"></view>
         </view>
@@ -13,7 +13,7 @@
             <text class="loading-text">正在加载题目...</text>
         </view>
         <view v-else-if="session.questions.value.length == 0" class="empty-wrap">
-            <text class="empty-text">暂无题目</text>
+            <text class="empty-text">{{ isSingle ? '题目不存在或不在当前证件的题库内' : '暂无题目' }}</text>
         </view>
         <scroll-view v-else class="content-scroll" scroll-y="true">
             <view class="question-section">
@@ -87,7 +87,7 @@
         </scroll-view>
         <view v-if="session.questions.value.length > 0" class="bottom-bar">
             <view class="bottom-actions">
-                <view class="bottom-icon-btn" @click="session.onToggleAnswerCard()">
+                <view v-if="!isSingle" class="bottom-icon-btn" @click="session.onToggleAnswerCard()">
                     <image class="bottom-icon-img" src="/static/icons/answer-card.png" mode="aspectFit" />
                     <text class="bottom-icon-label">答题卡</text>
                 </view>
@@ -95,12 +95,13 @@
                     <image class="bottom-icon-img" :src="session.isFavorited.value ? '/static/icons/star-filled.png' : '/static/icons/star.png'" mode="aspectFit" />
                     <text class="bottom-icon-label">{{ session.isFavorited.value ? '已收藏' : '收藏' }}</text>
                 </view>
-                <view v-if="!session.showResult.value" class="submit-btn ml-16" @click="onSubmit"><text class="submit-btn-text">提交答案</text></view>
+                <view v-if="isSingle && session.showResult.value" class="submit-btn ml-16" @click="onGoPractice"><text class="submit-btn-text">去题库练习同类题</text></view>
+                <view v-else-if="!session.showResult.value" class="submit-btn ml-16" @click="onSubmit"><text class="submit-btn-text">提交答案</text></view>
                 <view v-else class="submit-btn next-btn ml-16" @click="onNext"><text class="submit-btn-text">{{ session.currentIndex.value >= session.questions.value.length - 1 ? '查看结果' : '下一题' }}</text></view>
             </view>
         </view>
-        <!-- 答题卡弹窗 -->
-        <view v-if="session.showAnswerCard.value" class="answer-card-mask" @click="session.onCloseAnswerCard()">
+        <!-- 答题卡弹窗（单题承载无答题卡） -->
+        <view v-if="session.showAnswerCard.value && !isSingle" class="answer-card-mask" @click="session.onCloseAnswerCard()">
             <view class="answer-card-sheet" @click.stop>
                 <view class="answer-card-header"><text class="answer-card-title">答题卡</text></view>
                 <view class="answer-card-grid">
@@ -111,8 +112,8 @@
                 <view class="answer-card-footer"><view class="submit-paper-btn" @click="session.onSubmitPaper()"><text class="submit-paper-text">交卷</text></view></view>
             </view>
         </view>
-        <!-- 结果汇总弹窗 -->
-        <view v-if="session.showSummary.value" class="summary-mask">
+        <!-- 结果汇总弹窗（单题承载不交卷） -->
+        <view v-if="session.showSummary.value && !isSingle" class="summary-mask">
             <view class="summary-box">
                 <text class="summary-title">练习完成</text>
                 <view class="summary-stats">
@@ -150,6 +151,9 @@
     const practiceCount = ref<number>(20)
     const tagId = ref<number>(0)
     const tagName = ref<string>('')
+    /** 单题承载（搜索「题目」落点，ADR-0049 决策 4）：>0 即单题模式，无答题卡/交卷/进度 */
+    const questionId = ref<number>(0)
+    const isSingle = computed<boolean>(() : boolean => questionId.value > 0)
 
     const session = usePracticeSession()
     const comments = usePracticeComments(currentUserId.value)
@@ -168,19 +172,29 @@
         return (m < 10 ? '0' + m.toString() : m.toString()) + '-' + (day < 10 ? '0' + day.toString() : day.toString()) + ' ' + (h < 10 ? '0' + h.toString() : h.toString()) + ':' + (min < 10 ? '0' + min.toString() : min.toString())
     }
 
-    function onNext() : void { session.onNext(); comments.resetComments(); notes.resetNotes(); knowledgeTags.value = []; loadKnowledge() }
+    function onNext() : void { if (isSingle.value) return; session.onNext(); comments.resetComments(); notes.resetNotes(); knowledgeTags.value = []; loadKnowledge() }
     function onSubmit() : void { session.onSubmit(mode.value) }
     function onShareExplanation() : void { uni.showToast({ title: '分享功能开发中', icon: 'none' }) }
     function onBack() : void { goBack() }
     function onExit() : void { session.stopTimer(); goBack() }
-    function onRestart() : void { session.onRestart(); comments.resetComments(); notes.resetNotes(); knowledgeTags.value = []; session.loadQuestions(mode.value, practiceCount.value, tagId.value); loadKnowledge() }
+    function onGoPractice() : void { uni.navigateTo({ url: '/pages/practice/practice' }) }
+
+    /** 单题模式重载（「再练一次」语义收敛为重新拉这道题） */
+    function onReloadSingle() : void { session.onRestart(); comments.resetComments(); notes.resetNotes(); knowledgeTags.value = []; session.loadQuestions('single', practiceCount.value, tagId.value, questionId.value); loadKnowledge() }
+
+    function onRestart() : void { if (isSingle.value) { onReloadSingle(); return }; session.onRestart(); comments.resetComments(); notes.resetNotes(); knowledgeTags.value = []; session.loadQuestions(mode.value, practiceCount.value, tagId.value, 0); loadKnowledge() }
 
     onLoad((options : UTSJSONObject) => {
         const m = options['mode']; if (m != null) mode.value = m.toString()
         const cnt = options['count']; if (cnt != null) practiceCount.value = parseInt(cnt.toString())
         const tagIdParam = options['tag_id']; if (tagIdParam != null) tagId.value = parseInt(tagIdParam.toString())
         const tagNameParam = options['tag_name']; if (tagNameParam != null) { tagName.value = decodeURIComponent(tagNameParam.toString()) ?? '' }
-        session.loadQuestions(mode.value, practiceCount.value, tagId.value); loadKnowledge()
+        const qidParam = options['question_id']
+        if (qidParam != null) {
+            const parsed = parseInt(qidParam.toString())
+            if (!isNaN(parsed) && parsed > 0) { questionId.value = parsed; mode.value = 'single' }
+        }
+        session.loadQuestions(mode.value, practiceCount.value, tagId.value, questionId.value); loadKnowledge()
     })
 </script>
 

@@ -1,13 +1,21 @@
 /**
- * 全局搜索 API（ADR-0018）
+ * 全局搜索 API（ADR-0018 引入 / ADR-0049 定口径）
  *
  * 接口：GET /search（公开访问，无需登录）
- *   keyword  必填，模糊匹配 course/question/content/topic
- *   type     可选，course | question | content | topic
- *   page     可选，默认 1
- *   page_size 可选，默认 20
+ *   keyword       必填，模糊匹配 course/chapter/question/content/topic
+ *   type          可选，course | chapter | question | content | topic
+ *   page          可选，默认 1
+ *   page_size     可选，默认 20
+ *   credential_id 可选，显式声明的当前证件（ADR-0047 §4）
  *
  *   缺省返回各分区 top 5 + 总数；指定 type 时按分页返回
+ *
+ * ## 证件分区为什么必须显式传（#979 M6，2026-09-15 核验）
+ *
+ * `/api/search` 挂在 `api` 组下，该组**没有** `JWTAuth` / `OptionalAuth`（router.go:89-91），
+ * 而 `middleware.CredentialScoped` 的兜底分支要求 `roleOf(c) == student`（credential_scope.go:42）
+ * —— 没有 JWT 解析就没有角色 ⇒ **兜底永不生效**。因此不传 `credential_id` 时搜索是
+ * 「全证件不分区」，不是「按当前证件」。Web 侧是显式传的（SearchPage.vue），移动端此前漏传。
  */
 import { get } from './request'
 import { toNumber, toStr } from './helpers'
@@ -22,6 +30,9 @@ function buildSearchItem(obj : UTSJSONObject) : SearchItem {
 		title: toStr(obj['title']),
 		cover: toStr(obj['cover']),
 		summary: toStr(obj['summary']),
+		snippet: toStr(obj['snippet']),
+		hit_field: toStr(obj['hit_field']),
+		parent_id: toNumber(obj['parent_id']),
 	} as SearchItem
 }
 
@@ -43,20 +54,31 @@ function buildSearchCategoryResult(obj : UTSJSONObject | null) : SearchCategoryR
 	} as SearchCategoryResult
 }
 
+/** 显式证件参数：>0 才下发（0 表示「未声明」，与服务端 nil 语义一致） */
+function withCredential(params : UTSJSONObject, credentialId : number) : UTSJSONObject {
+	if (credentialId > 0) {
+		params['credential_id'] = credentialId.toString()
+	}
+	return params
+}
+
 /**
  * 全局搜索（全部分区，缺省各分区 top 5）
  * @param keyword 搜索关键词（必填）
+ * @param credentialId 当前证件 ID（>0 时下发 credential_id，见文件头「证件分区」）
  */
-export function searchAllApi(keyword : string) : Promise<SearchResult> {
-	const params : UTSJSONObject = { keyword: keyword } as UTSJSONObject
+export function searchAllApi(keyword : string, credentialId : number = 0) : Promise<SearchResult> {
+	const params : UTSJSONObject = withCredential({ keyword: keyword } as UTSJSONObject, credentialId)
 	return get('/search', params).then((data : UTSJSONObject) : SearchResult => {
 		const coursesRaw = data['courses']
+		const chaptersRaw = data['chapters']
 		const questionsRaw = data['questions']
 		const contentsRaw = data['contents']
 		const topicsRaw = data['topics']
 		return {
 			keyword: toStr(data['keyword'], keyword),
 			courses: buildSearchCategoryResult(coursesRaw != null ? coursesRaw as UTSJSONObject : null),
+			chapters: buildSearchCategoryResult(chaptersRaw != null ? chaptersRaw as UTSJSONObject : null),
 			questions: buildSearchCategoryResult(questionsRaw != null ? questionsRaw as UTSJSONObject : null),
 			contents: buildSearchCategoryResult(contentsRaw != null ? contentsRaw as UTSJSONObject : null),
 			topics: buildSearchCategoryResult(topicsRaw != null ? topicsRaw as UTSJSONObject : null),
@@ -67,17 +89,18 @@ export function searchAllApi(keyword : string) : Promise<SearchResult> {
 /**
  * 指定类型搜索（分页）
  * @param keyword 搜索关键词
- * @param type 类型：course / question / content / topic
+ * @param type 类型：course / chapter / question / content / topic
  * @param page 页码
  * @param pageSize 每页条数
+ * @param credentialId 当前证件 ID（>0 时下发 credential_id）
  */
-export function searchByTypeApi(keyword : string, type : string, page : number = 1, pageSize : number = 20) : Promise<SearchPagedResult> {
-	const params : UTSJSONObject = {
+export function searchByTypeApi(keyword : string, type : string, page : number = 1, pageSize : number = 20, credentialId : number = 0) : Promise<SearchPagedResult> {
+	const params : UTSJSONObject = withCredential({
 		keyword: keyword,
 		type: type,
 		page: page.toString(),
 		page_size: pageSize.toString(),
-	} as UTSJSONObject
+	} as UTSJSONObject, credentialId)
 	return get('/search', params).then((data : UTSJSONObject) : SearchPagedResult => {
 		const items : SearchItem[] = []
 		const itemsRaw = data['items']

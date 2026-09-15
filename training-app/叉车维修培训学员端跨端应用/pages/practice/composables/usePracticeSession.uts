@@ -3,7 +3,7 @@
  */
 import { ref, computed } from 'vue'
 import type { Ref, ComputedRef } from 'vue'
-import { getFreePracticeApi, getSequentialPracticeApi, getTagPracticeApi, submitAnswerApi, savePracticeProgressApi } from '../../../api/practice'
+import { getFreePracticeApi, getSequentialPracticeApi, getTagPracticeApi, getQuestionByIdApi, submitAnswerApi, savePracticeProgressApi } from '../../../api/practice'
 import { checkFavoriteApi, addFavoriteApi, removeFavoriteApi } from '../../../api/favorite'
 import type { Question, SubmitAnswerResult, AnswerState, QuestionOption, SubmitAnswerParams, FavoriteCheckResult } from '../../../types/index'
 
@@ -45,7 +45,7 @@ export type UsePracticeSessionResult = {
     getAnswerCardNumClass : (idx : number) => string
     onOptionClick : (key : string) => void
     onToggleFavorite : () => void
-    loadQuestions : (mode : string, practiceCount : number, tagId : number) => Promise<void>
+    loadQuestions : (mode : string, practiceCount : number, tagId : number, questionId : number) => Promise<void>
     onSubmit : (mode : string) => Promise<void>
     onNext : () => void
     onJumpToQuestion : (idx : number) => void
@@ -113,9 +113,31 @@ export function usePracticeSession() : UsePracticeSessionResult {
     function recordQuestionTime() { const now = Date.now(); if (questionStartTime.value > 0) { questionElapsed.value = Math.floor((now - questionStartTime.value) / 1000) }; questionStartTime.value = now }
     async function checkFavorite() : Promise<void> { const qid = currentQuestion.value.question_id; if (qid <= 0) return; try { const r = await checkFavoriteApi('question', qid); isFavorited.value = r.favorited; favoriteId.value = r.favorite_id } catch (e) { console.warn('[practice-do] checkFavorite failed:', e) } }
     function onToggleFavorite() : void { const qid = currentQuestion.value.question_id; if (qid <= 0) return; if (isFavorited.value) { const fid = favoriteId.value; if (fid > 0) { removeFavoriteApi(fid).then(() => { isFavorited.value = false; favoriteId.value = 0; uni.showToast({ title: '已取消收藏', icon: 'none' }) }).catch((e) => { console.warn('[practice-do] removeFavorite failed:', e); uni.showToast({ title: '操作失败', icon: 'none' }) }) } } else { addFavoriteApi('question', qid).then((item) => { isFavorited.value = true; favoriteId.value = item.favorite_id; uni.showToast({ title: '已收藏', icon: 'none' }) }).catch((e) => { console.warn('[practice-do] addFavorite failed:', e); uni.showToast({ title: '操作失败', icon: 'none' }) }) } }
-    async function loadQuestions(mode : string, practiceCount : number, tagId : number) : Promise<void> { loading.value = true; try { if (mode == 'free') { questions.value = await getFreePracticeApi(practiceCount) } else if (mode == 'sequential') { questions.value = await getSequentialPracticeApi() } else if (mode == 'tag') { questions.value = await getTagPracticeApi(tagId, 0) }; if (questions.value.length > 0) { startTimer(); recordQuestionTime(); checkFavorite() } } catch (e) { console.error('[practice-do] load questions failed:', e); uni.showToast({ title: '加载题目失败', icon: 'none' }) } finally { loading.value = false } }
-    function saveProgress(mode : string, tagId : number) { if (mode == 'free') return; const saveMode = mode == 'tag' ? 'tag:' + tagId.toString() : mode; const a : UTSJSONObject = {} as UTSJSONObject; for (let i = 0; i < answerStates.value.length; i++) { const s = answerStates.value[i]; a[s.question_id.toString()] = s.user_answer }; savePracticeProgressApi(currentIndex.value + 1, saveMode, questions.value.length, a).catch((e) => { console.warn('[practice-do] save progress failed:', e) }) }
-    async function onSubmit(mode : string) : Promise<void> { if (selectedKeys.value.length == 0) { uni.showToast({ title: '请选择答案', icon: 'none' }); return }; let ua = ''; if (isMultiChoice()) { ua = selectedKeys.value.slice().sort().join(',') } else { ua = selectedKeys.value[0] }; lastUserAnswer.value = ua; const qid = currentQuestion.value.question_id; try { const p : SubmitAnswerParams = { question_id: qid, user_answer: ua, practice_type: mode } as SubmitAnswerParams; const r = await submitAnswerApi(p); lastResult.value = r; showResult.value = true; recordQuestionTime(); const s : AnswerState = { question_id: qid, user_answer: ua, is_correct: r.correct, correct_answer: r.correct_answer, submitted: true } as AnswerState; answerStates.value.push(s); if (mode != 'free') { saveProgress(mode, 0) } } catch (e) { console.error('[practice-do] submit failed:', e); uni.showToast({ title: '提交失败', icon: 'none' }) } }
+    async function loadQuestions(mode : string, practiceCount : number, tagId : number, questionId : number = 0) : Promise<void> {
+        loading.value = true
+        try {
+            if (mode == 'single') {
+                // 单题承载（ADR-0049 决策 4）：按 id 取题，可见性由后端题库池口径兜底（#981）
+                const one = await getQuestionByIdApi(questionId)
+                questions.value = [one]
+            } else if (mode == 'free') {
+                questions.value = await getFreePracticeApi(practiceCount)
+            } else if (mode == 'sequential') {
+                questions.value = await getSequentialPracticeApi()
+            } else if (mode == 'tag') {
+                questions.value = await getTagPracticeApi(tagId, 0)
+            }
+            if (questions.value.length > 0) { startTimer(); recordQuestionTime(); checkFavorite() }
+        } catch (e) {
+            console.error('[practice-do] load questions failed:', e)
+            questions.value = [] as Question[]
+            uni.showToast({ title: mode == 'single' ? '题目不存在或不在当前证件题库内' : '加载题目失败', icon: 'none' })
+        } finally {
+            loading.value = false
+        }
+    }
+    function saveProgress(mode : string, tagId : number) { if (mode != 'sequential' && mode != 'tag') return; const saveMode = mode == 'tag' ? 'tag:' + tagId.toString() : mode; const a : UTSJSONObject = {} as UTSJSONObject; for (let i = 0; i < answerStates.value.length; i++) { const s = answerStates.value[i]; a[s.question_id.toString()] = s.user_answer }; savePracticeProgressApi(currentIndex.value + 1, saveMode, questions.value.length, a).catch((e) => { console.warn('[practice-do] save progress failed:', e) }) }
+    async function onSubmit(mode : string) : Promise<void> { if (selectedKeys.value.length == 0) { uni.showToast({ title: '请选择答案', icon: 'none' }); return }; let ua = ''; if (isMultiChoice()) { ua = selectedKeys.value.slice().sort().join(',') } else { ua = selectedKeys.value[0] }; lastUserAnswer.value = ua; const qid = currentQuestion.value.question_id; try { const p : SubmitAnswerParams = { question_id: qid, user_answer: ua, practice_type: mode == 'single' ? 'free' : mode } as SubmitAnswerParams; const r = await submitAnswerApi(p); lastResult.value = r; showResult.value = true; recordQuestionTime(); const s : AnswerState = { question_id: qid, user_answer: ua, is_correct: r.correct, correct_answer: r.correct_answer, submitted: true } as AnswerState; answerStates.value.push(s); if (mode != 'free' && mode != 'single') { saveProgress(mode, 0) } } catch (e) { console.error('[practice-do] submit failed:', e); uni.showToast({ title: '提交失败', icon: 'none' }) } }
     function resetQuestionState() : void { showResult.value = false; lastUserAnswer.value = ''; lastResult.value = { correct: false, correct_answer: '', explanation: '' } as SubmitAnswerResult }
     function onNext() : void { if (currentIndex.value >= questions.value.length - 1) { showSummary.value = true; stopTimer(); return }; currentIndex.value = currentIndex.value + 1; selectedKeys.value = []; resetQuestionState(); recordQuestionTime(); checkFavorite() }
     function onJumpToQuestion(idx : number) : void { if (idx == currentIndex.value) { showAnswerCard.value = false; return }; currentIndex.value = idx; selectedKeys.value = []; resetQuestionState(); const q = questions.value[idx]; for (let i = 0; i < answerStates.value.length; i++) { if (answerStates.value[i].question_id == q.question_id) { const st = answerStates.value[i]; lastUserAnswer.value = st.user_answer; lastResult.value = { correct: st.is_correct, correct_answer: st.correct_answer, explanation: '' } as SubmitAnswerResult; showResult.value = true; break } }; showAnswerCard.value = false; recordQuestionTime(); checkFavorite() }
@@ -157,7 +179,7 @@ export function usePracticeSession() : UsePracticeSessionResult {
         getAnswerCardNumClass: (idx : number) => getAnswerCardNumClass(idx),
         onOptionClick: (key : string) => onOptionClick(key),
         onToggleFavorite: () => onToggleFavorite(),
-        loadQuestions: (mode : string, practiceCount : number, tagId : number) => loadQuestions(mode, practiceCount, tagId),
+        loadQuestions: (mode : string, practiceCount : number, tagId : number, questionId : number) => loadQuestions(mode, practiceCount, tagId, questionId),
         onSubmit: (mode : string) => onSubmit(mode),
         onNext: () => onNext(),
         onJumpToQuestion: (idx : number) => onJumpToQuestion(idx),
