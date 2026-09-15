@@ -6,7 +6,7 @@
 		<view class="search-header">
 			<view class="search-input-wrap">
 				<text class="search-icon">🔍</text>
-				<input class="search-input" type="text" v-model="keyword" placeholder="搜索课程、题目、资料、帖子"
+				<input class="search-input" type="text" v-model="keyword" placeholder="搜索课程、章节、题目、精选、帖子"
 					confirm-type="search" @confirm="onSearch" />
 				<view v-if="keyword.length > 0" class="search-clear" @click="onClear">
 					<text class="search-clear-text">✕</text>
@@ -15,79 +15,49 @@
 			<text class="search-cancel" @click="onCancel">取消</text>
 		</view>
 
-		<!-- 类型筛选 -->
-		<view v-if="hasSearched" class="type-tabs">
-			<view v-for="(tab, idx) in typeTabs" :key="idx" class="type-tab"
-				:class="{ 'type-tab--active': activeTypeIdx == idx }" @click="onTypeChange(idx)">
-				<text class="type-tab-text" :class="{ 'type-tab-text--active': activeTypeIdx == idx }">{{ tab.label }}</text>
+		<!-- 类型筛选：全部 + 五分区（章节分区见 ADR-0049 决策 3） -->
+		<scroll-view v-if="hasSearched" class="type-tabs-scroll" scroll-x="true">
+			<view class="type-tabs">
+				<view v-for="(tab, idx) in typeTabs" :key="idx" class="type-tab-item"
+					:class="{ 'type-tab-item--lead': idx == 0 }">
+					<AppChip :text="tab.label" :active="activeTypeIdx == idx" @click="onTypeChange(idx)" />
+				</view>
 			</view>
-		</view>
+		</scroll-view>
 
 		<!-- 搜索结果 -->
 		<scroll-view v-if="hasSearched" class="result-scroll" scroll-y="true" @scrolltolower="onLoadMore">
-			<!-- 全部结果（各分区 top 5） -->
+			<!-- 全部结果（各分区 top 5，区内已由后端排好序） -->
 			<view v-if="activeTypeIdx == 0">
-				<view v-if="allResult.courses.items.length > 0" class="result-section">
+				<view v-for="(section, sIdx) in sections" :key="section.key" class="result-section">
 					<view class="section-header">
-						<text class="section-title">课程</text>
-						<text class="section-more" @click="onTypeChange(1)">查看全部({{ allResult.courses.total }})</text>
+						<text class="section-title">{{ section.label }}</text>
+						<text class="section-total">{{ section.total }} 条</text>
+						<text v-if="section.total > section.items.length" class="section-more"
+							@click="onSectionMore(section.key)">查看全部</text>
 					</view>
-					<view v-for="(item, idx) in allResult.courses.items" :key="idx" class="result-item"
-						@click="onItemClick(item)">
-						<view class="item-content">
-							<text class="item-title">{{ item.title }}</text>
-							<text class="item-summary" v-if="item.summary.length > 0">{{ item.summary }}</text>
+					<view v-if="section.items.length > 0">
+						<view v-for="(item, idx) in section.items" :key="idx" class="result-item" @click="onItemClick(item)">
+							<image v-if="item.cover.length > 0" class="item-cover" :src="item.cover" mode="aspectFill" />
+							<view class="item-content">
+								<text class="item-title">
+									<text v-for="(seg, tIdx) in itemTitleSegments(item)" :key="tIdx"
+										:class="seg.hit ? 'item-hl' : 'item-plain'">{{ seg.text }}</text>
+								</text>
+								<text v-if="itemSnippetText(item).length > 0" class="item-summary">
+									<text v-for="(seg, pIdx) in itemSnippetSegments(item)" :key="pIdx"
+										:class="seg.hit ? 'item-hl' : 'item-plain'">{{ seg.text }}</text>
+								</text>
+								<text v-if="itemHitLabel(item).length > 0" class="item-hit">{{ itemHitLabel(item) }}</text>
+							</view>
+							<text class="item-arrow">›</text>
 						</view>
-						<text class="item-arrow">›</text>
 					</view>
-				</view>
-
-				<view v-if="allResult.questions.items.length > 0" class="result-section">
-					<view class="section-header">
-						<text class="section-title">题目</text>
-						<text class="section-more" @click="onTypeChange(2)">查看全部({{ allResult.questions.total }})</text>
-					</view>
-					<view v-for="(item, idx) in allResult.questions.items" :key="idx" class="result-item"
-						@click="onItemClick(item)">
-						<view class="item-content">
-							<text class="item-title">{{ item.title }}</text>
-						</view>
-						<text class="item-arrow">›</text>
-					</view>
-				</view>
-
-				<view v-if="allResult.contents.items.length > 0" class="result-section">
-					<view class="section-header">
-						<text class="section-title">精选内容</text>
-						<text class="section-more" @click="onTypeChange(3)">查看全部({{ allResult.contents.total }})</text>
-					</view>
-					<view v-for="(item, idx) in allResult.contents.items" :key="idx" class="result-item"
-						@click="onItemClick(item)">
-						<view class="item-content">
-							<text class="item-title">{{ item.title }}</text>
-							<text class="item-summary" v-if="item.summary.length > 0">{{ item.summary }}</text>
-						</view>
-						<text class="item-arrow">›</text>
-					</view>
-				</view>
-
-				<view v-if="allResult.topics.items.length > 0" class="result-section">
-					<view class="section-header">
-						<text class="section-title">帖子</text>
-						<text class="section-more" @click="onTypeChange(4)">查看全部({{ allResult.topics.total }})</text>
-					</view>
-					<view v-for="(item, idx) in allResult.topics.items" :key="idx" class="result-item"
-						@click="onItemClick(item)">
-						<view class="item-content">
-							<text class="item-title">{{ item.title }}</text>
-							<text class="item-summary" v-if="item.summary.length > 0">{{ item.summary }}</text>
-						</view>
-						<text class="item-arrow">›</text>
-					</view>
+					<text v-else class="section-empty">无匹配结果</text>
 				</view>
 
 				<view v-if="isAllEmpty" class="empty-wrap">
-					<text class="empty-text">未找到相关内容</text>
+					<AppEmptyState icon="" text="未找到相关内容" />
 				</view>
 			</view>
 
@@ -95,15 +65,23 @@
 			<view v-else>
 				<view v-for="(item, idx) in typedResult.items" :key="idx" class="result-item"
 					@click="onItemClick(item)">
+					<image v-if="item.cover.length > 0" class="item-cover" :src="item.cover" mode="aspectFill" />
 					<view class="item-content">
-						<text class="item-title">{{ item.title }}</text>
-						<text class="item-summary" v-if="item.summary.length > 0">{{ item.summary }}</text>
+						<text class="item-title">
+							<text v-for="(seg, tIdx) in itemTitleSegments(item)" :key="tIdx"
+								:class="seg.hit ? 'item-hl' : 'item-plain'">{{ seg.text }}</text>
+						</text>
+						<text v-if="itemSnippetText(item).length > 0" class="item-summary">
+							<text v-for="(seg, pIdx) in itemSnippetSegments(item)" :key="pIdx"
+								:class="seg.hit ? 'item-hl' : 'item-plain'">{{ seg.text }}</text>
+						</text>
+						<text v-if="itemHitLabel(item).length > 0" class="item-hit">{{ itemHitLabel(item) }}</text>
 					</view>
 					<text class="item-arrow">›</text>
 				</view>
 
 				<view v-if="typedResult.items.length == 0 && !loading" class="empty-wrap">
-					<text class="empty-text">未找到相关内容</text>
+					<AppEmptyState icon="" text="未找到相关内容" />
 				</view>
 
 				<view v-if="loading" class="loading-wrap">
@@ -116,15 +94,16 @@
 			</view>
 		</scroll-view>
 
-		<!-- 初始态：搜索历史 -->
+		<!-- 初始态：搜索历史（只留端上，ADR-0049 决策 7；与 Web searchHistory 同口径） -->
 		<view v-if="!hasSearched && searchHistory.length > 0" class="history-section">
 			<view class="history-header">
 				<text class="history-title">搜索历史</text>
 				<text class="history-clear" @click="onClearHistory">清空</text>
 			</view>
 			<view class="history-tags">
-				<view v-for="(kw, idx) in searchHistory" :key="idx" class="history-tag mr-16-mb-16" @click="onHistoryClick(kw)">
-					<text class="history-tag-text">{{ kw }}</text>
+				<view v-for="(kw, idx) in searchHistory" :key="idx" class="history-tag mr-16-mb-16">
+					<text class="history-tag-text" @click="onHistoryClick(kw)">{{ kw }}</text>
+					<text class="history-tag-delete" @click="onRemoveHistory(kw)">✕</text>
 				</view>
 			</view>
 		</view>
@@ -133,9 +112,14 @@
 
 <script setup lang="uts">
 	import { ref, computed } from 'vue'
+	import { onShow } from '@dcloudio/uni-app'
 	import { useStatusBarHeight } from '../../utils/system'
+	import { getCurrentCredentialApi } from '../../api/credential'
 	import { searchAllApi, searchByTypeApi } from '../../api/search'
-	import type { SearchItem, SearchCategoryResult, SearchResult, SearchPagedResult } from '../../types/index'
+	import { splitHighlight, searchItemPath, hitLabel, displaySnippet, sectionLabel } from '../../utils/searchDisplay'
+	import AppChip from '../../components/app-chip/app-chip.uvue'
+	import AppEmptyState from '../../components/app-empty-state/app-empty-state.uvue'
+	import type { SearchItem, SearchCategoryResult, SearchResult, SearchPagedResult, HighlightSegment } from '../../types/index'
 
 	const statusBarHeight = useStatusBarHeight()
 
@@ -143,6 +127,7 @@
 	const typeTabs: TypeTab[] = [
 		{ label: '全部', value: '' },
 		{ label: '课程', value: 'course' },
+		{ label: '章节', value: 'chapter' },
 		{ label: '题目', value: 'question' },
 		{ label: '精选', value: 'content' },
 		{ label: '帖子', value: 'topic' },
@@ -152,43 +137,88 @@
 	const keyword = ref<string>('')
 	const loading = ref<boolean>(false)
 	const hasSearched = ref<boolean>(false)
+	/** 已**成功**加载的页码：只在成功后前进，失败不推进（#979 M5「失败静默丢一页」） */
 	const page = ref<number>(1)
 	const pageSize = ref<number>(20)
 
+	/** 当前证件（>0 才随请求下发）：搜索是公开路由，证件必须由客户端显式声明（#979 M6） */
+	const credentialId = ref<number>(0)
+	let credentialRefresh : Promise<void> | null = null
+
 	const emptySection: SearchCategoryResult = { items: [] as SearchItem[], total: 0 } as SearchCategoryResult
+
+	/** 空的分页结果（切换类型 / 重新搜索时先清空，避免旧关键词的结果留在屏上） */
+	function emptyPagedResult() : SearchPagedResult {
+		return {
+			keyword: '',
+			type: '',
+			total: 0,
+			page: 1,
+			pages: 0,
+			items: [] as SearchItem[],
+		} as SearchPagedResult
+	}
+
 	const allResult = ref<SearchResult>({
 		keyword: '',
 		courses: { ...emptySection },
+		chapters: { ...emptySection },
 		questions: { ...emptySection },
 		contents: { ...emptySection },
 		topics: { ...emptySection },
 	} as SearchResult)
 
-	const typedResult = ref<SearchPagedResult>({
-		keyword: '',
-		type: '',
-		total: 0,
-		page: 1,
-		pages: 0,
-		items: [] as SearchItem[],
-	} as SearchPagedResult)
+	const typedResult = ref<SearchPagedResult>(emptyPagedResult())
 
-	const isAllEmpty = computed<boolean>((): boolean => {
+	type SectionView = { key: string; label: string; items: SearchItem[]; total: number }
+	const sections = computed<SectionView[]>(() : SectionView[] => {
+		const r = allResult.value
+		return [
+			{ key: 'course', label: sectionLabel('course'), items: r.courses.items, total: r.courses.total } as SectionView,
+			{ key: 'chapter', label: sectionLabel('chapter'), items: r.chapters.items, total: r.chapters.total } as SectionView,
+			{ key: 'question', label: sectionLabel('question'), items: r.questions.items, total: r.questions.total } as SectionView,
+			{ key: 'content', label: sectionLabel('content'), items: r.contents.items, total: r.contents.total } as SectionView,
+			{ key: 'topic', label: sectionLabel('topic'), items: r.topics.items, total: r.topics.total } as SectionView,
+		] as SectionView[]
+	})
+
+	const isAllEmpty = computed<boolean>(() : boolean => {
 		const r = allResult.value
 		return r.courses.items.length == 0
+			&& r.chapters.items.length == 0
 			&& r.questions.items.length == 0
 			&& r.contents.items.length == 0
 			&& r.topics.items.length == 0
 	})
 
-	const hasMore = computed<boolean>((): boolean => {
+	const hasMore = computed<boolean>(() : boolean => {
 		return page.value < typedResult.value.pages
 	})
+
+	// ===== 展示包装（uvue 模板不能直调 import 的函数，先例 featured-detail 的 displayTime） =====
+
+	function itemTitleSegments(item : SearchItem) : HighlightSegment[] {
+		return splitHighlight(item.title, keyword.value)
+	}
+
+	function itemSnippetText(item : SearchItem) : string {
+		return displaySnippet(item)
+	}
+
+	function itemSnippetSegments(item : SearchItem) : HighlightSegment[] {
+		return splitHighlight(itemSnippetText(item), keyword.value)
+	}
+
+	function itemHitLabel(item : SearchItem) : string {
+		return hitLabel(item.hit_field)
+	}
+
+	// ===== 搜索历史（上限 10 / 去重前置 / 单条删除 / 清空，与 Web searchHistory.ts 同口径） =====
 
 	const HISTORY_KEY = 'search_history'
 	const HISTORY_MAX = 10
 
-	function loadHistory(): string[] {
+	function loadHistory() : string[] {
 		const raw = uni.getStorageSync(HISTORY_KEY) as string
 		if (raw.length == 0) return [] as string[]
 		try {
@@ -200,52 +230,90 @@
 
 	const searchHistory = ref<string[]>(loadHistory())
 
-	function saveHistory(kw: string): void {
-		if (kw.length == 0) return
-		let list = searchHistory.value.filter((s: string): boolean => s != kw)
-		list.unshift(kw)
-		if (list.length > HISTORY_MAX) {
-			list = list.slice(0, HISTORY_MAX)
-		}
+	function persistHistory(list : string[]) : void {
 		searchHistory.value = list
 		uni.setStorageSync(HISTORY_KEY, JSON.stringify(list))
 	}
 
-	async function doSearch(): Promise<void> {
+	function saveHistory(kw : string) : void {
+		if (kw.length == 0) return
+		let list = searchHistory.value.filter((s : string) : boolean => s != kw)
+		list.unshift(kw)
+		if (list.length > HISTORY_MAX) {
+			list = list.slice(0, HISTORY_MAX)
+		}
+		persistHistory(list)
+	}
+
+	// ===== 证件 =====
+
+	function loadCredential() : Promise<void> {
+		return getCurrentCredentialApi().then((cred) : void => {
+			credentialId.value = cred != null ? cred.id : 0
+		}).catch(() : void => {
+			credentialId.value = 0
+		})
+	}
+
+	/** 首次搜索前确认证件已解析；onShow 会把它置空以便跟随证件切换 */
+	function ensureCredential() : Promise<void> {
+		if (credentialRefresh == null) {
+			credentialRefresh = loadCredential()
+		}
+		return credentialRefresh!
+	}
+
+	onShow(() : void => {
+		credentialRefresh = loadCredential()
+	})
+
+	// ===== 检索（请求序号 + 成功才推进页码） =====
+
+	/** 请求序号：旧响应回来时序号已变 ⇒ 直接丢弃，不覆盖新结果（#979 M5 竞态） */
+	let searchSeq = 0
+
+	async function runSearch(requestPage : number, append : boolean) : Promise<void> {
 		const kw = keyword.value.trim()
+		if (kw.length == 0) return
 		const tab = typeTabs[activeTypeIdx.value]
+		const seq = searchSeq + 1
+		searchSeq = seq
 		loading.value = true
-		hasSearched.value = true
 		try {
+			await ensureCredential()
 			if (tab.value.length == 0) {
-				const result = await searchAllApi(kw)
+				const result = await searchAllApi(kw, credentialId.value)
+				if (seq != searchSeq) return
 				allResult.value = result
 			} else {
-				const result = await searchByTypeApi(kw, tab.value, page.value, pageSize.value)
-				if (page.value == 1) {
-					typedResult.value = result
-				} else {
-					const prev = typedResult.value.items
-					const merged = prev.concat(result.items)
-					typedResult.value = {
+				const result = await searchByTypeApi(kw, tab.value, requestPage, pageSize.value, credentialId.value)
+				if (seq != searchSeq) return
+				if (append && requestPage > 1) {
+					const prev = typedResult.value
+					const merged : SearchPagedResult = {
 						keyword: result.keyword,
 						type: result.type,
 						total: result.total,
 						page: result.page,
 						pages: result.pages,
-						items: merged,
+						items: prev.items.concat(result.items),
 					} as SearchPagedResult
+					typedResult.value = merged
+				} else {
+					typedResult.value = result
 				}
+				page.value = requestPage
 			}
 		} catch (e) {
+			if (seq != searchSeq) return
 			console.warn('[search] doSearch failed:', e)
 			uni.showToast({ title: '搜索失败，请重试', icon: 'none' })
 		} finally {
-			loading.value = false
+			if (seq == searchSeq) loading.value = false
 		}
 	}
 
-	async function onSearch(): Promise<void> {
+	async function onSearch() : Promise<void> {
 		const kw = keyword.value.trim()
 		if (kw.length == 0) {
 			uni.showToast({ title: '请输入搜索关键词', icon: 'none' })
@@ -254,31 +322,44 @@
 		saveHistory(kw)
 		page.value = 1
 		activeTypeIdx.value = 0
-		await doSearch()
+		typedResult.value = emptyPagedResult()
+		hasSearched.value = true
+		await runSearch(1, false)
 	}
 
-	function onLoadMore(): void {
+	function onLoadMore() : void {
 		if (loading.value) return
+		if (activeTypeIdx.value == 0) return
 		if (!hasMore.value) return
-		page.value++
-		doSearch()
+		runSearch(page.value + 1, true)
 	}
 
-	async function onTypeChange(idx: number): Promise<void> {
+	async function onTypeChange(idx : number) : Promise<void> {
 		if (activeTypeIdx.value == idx) return
 		activeTypeIdx.value = idx
 		page.value = 1
-		await doSearch()
+		typedResult.value = emptyPagedResult()
+		await runSearch(1, false)
 	}
 
-	function onClear(): void {
+	/** 分区「查看全部」→ 切到对应类型 tab */
+	function onSectionMore(key : string) : void {
+		for (let i = 0; i < typeTabs.length; i++) {
+			if (typeTabs[i].value == key) {
+				onTypeChange(i)
+				return
+			}
+		}
+	}
+
+	function onClear() : void {
 		keyword.value = ''
 		hasSearched.value = false
 		activeTypeIdx.value = 0
 		page.value = 1
 	}
 
-	function onCancel(): void {
+	function onCancel() : void {
 		const pages = getCurrentPages()
 		if (pages != null && pages.length > 1) {
 			uni.navigateBack({})
@@ -287,74 +368,67 @@
 		}
 	}
 
-	function onItemClick(item: SearchItem): void {
-		const id = item.id.toString()
-		switch (item.type) {
-			case 'course':
-				uni.navigateTo({ url: '/pages/courses/course-detail?id=' + id })
-				break
-			case 'content':
-				uni.showToast({ title: '资料详情开发中', icon: 'none' })
-				break
-			case 'topic':
-				uni.navigateTo({ url: '/pages/forum/forum-detail?id=' + id })
-				break
-			case 'question':
-				uni.showToast({ title: '题目详情开发中', icon: 'none' })
-				break
-			default:
-				uni.showToast({ title: '页面开发中', icon: 'none' })
-				break
+	/** 落点由 utils/searchDisplay.searchItemPath 单点给出（ADR-0049 决策 2：搜到必须能打开） */
+	function onItemClick(item : SearchItem) : void {
+		const url = searchItemPath(item)
+		if (url.length == 0) {
+			uni.showToast({ title: '该结果暂无详情页', icon: 'none' })
+			return
 		}
+		uni.navigateTo({ url: url })
 	}
 
-	function onHistoryClick(kw: string): void {
+	function onHistoryClick(kw : string) : void {
 		keyword.value = kw
 		onSearch()
 	}
 
-	function onClearHistory(): void {
+	function onRemoveHistory(kw : string) : void {
+		persistHistory(searchHistory.value.filter((s : string) : boolean => s != kw))
+	}
+
+	function onClearHistory() : void {
 		searchHistory.value = [] as string[]
 		uni.removeStorageSync(HISTORY_KEY)
 	}
 </script>
 
-<style>
+<style lang="scss">
 	.search-page {
 		flex: 1;
-		background-color: #f5f5f5;
+		background-color: $bg-color;
 		flex-direction: column;
 	}
 
 	.status-bar {
-		background-color: #ffffff;
+		background-color: $card-bg;
 	}
 
 	.search-header {
 		flex-direction: row;
 		align-items: center;
 		padding: 16rpx 24rpx;
-		background-color: #ffffff;
+		background-color: $card-bg;
 	}
 
 	.search-input-wrap {
 		flex: 1;
 		flex-direction: row;
 		align-items: center;
-		background-color: #f5f5f5;
-		border-radius: 32rpx;
+		background-color: $bg-color;
+		border-radius: $radius-xl;
 		padding: 16rpx 24rpx;
 	}
 
 	.search-icon {
-		font-size: 28rpx;
+		font-size: $font-size-md;
 		margin-right: 12rpx;
 	}
 
 	.search-input {
 		flex: 1;
-		font-size: 28rpx;
-		color: #333333;
+		font-size: $font-size-md;
+		color: $text-color;
 	}
 
 	.search-clear {
@@ -369,42 +443,33 @@
 
 	.search-clear-text {
 		font-size: 20rpx;
-		color: #ffffff;
+		color: $text-color-inverse;
 	}
 
 	.search-cancel {
-		font-size: 28rpx;
-		color: #2979ff;
+		font-size: $font-size-md;
+		color: $primary-color;
 		margin-left: 20rpx;
+	}
+
+	.type-tabs-scroll {
+		background-color: $card-bg;
+		border-bottom-width: 1rpx;
+		border-bottom-color: $border-color-light;
 	}
 
 	.type-tabs {
 		flex-direction: row;
-		background-color: #ffffff;
+		align-items: center;
 		padding: 16rpx 24rpx;
-		border-bottom-width: 1rpx;
-		border-bottom-color: #f0f0f0;
 	}
 
-	.type-tab {
-		padding: 12rpx 28rpx;
-		border-radius: 28rpx;
-		margin-right: 16rpx;
-		background-color: #f5f5f5;
+	.type-tab-item {
+		margin-left: 16rpx;
 	}
 
-	.type-tab--active {
-		background-color: #e8f0fe;
-	}
-
-	.type-tab-text {
-		font-size: 26rpx;
-		color: #666666;
-	}
-
-	.type-tab-text--active {
-		color: #2979ff;
-		font-weight: 600;
+	.type-tab-item--lead {
+		margin-left: 0;
 	}
 
 	.result-scroll {
@@ -412,15 +477,14 @@
 	}
 
 	.result-section {
-		background-color: #ffffff;
+		background-color: $card-bg;
 		margin: 16rpx 24rpx;
-		border-radius: 16rpx;
+		border-radius: $radius-md;
 		padding: 24rpx;
 	}
 
 	.section-header {
 		flex-direction: row;
-		justify-content: space-between;
 		align-items: center;
 		margin-bottom: 16rpx;
 	}
@@ -428,12 +492,25 @@
 	.section-title {
 		font-size: 30rpx;
 		font-weight: bold;
-		color: #333333;
+		color: $text-color;
+	}
+
+	.section-total {
+		font-size: $font-size-sm;
+		color: $text-color-placeholder;
+		margin-left: 12rpx;
+		flex: 1;
 	}
 
 	.section-more {
-		font-size: 24rpx;
-		color: #2979ff;
+		font-size: $font-size-sm;
+		color: $primary-color;
+	}
+
+	.section-empty {
+		font-size: $font-size-sm;
+		color: $text-color-placeholder;
+		padding: 8rpx 0;
 	}
 
 	.result-item {
@@ -441,7 +518,14 @@
 		align-items: center;
 		padding: 20rpx 0;
 		border-bottom-width: 1rpx;
-		border-bottom-color: #f5f5f5;
+		border-bottom-color: $border-color-light;
+	}
+
+	.item-cover {
+		width: 120rpx;
+		height: 80rpx;
+		border-radius: $radius-sm;
+		margin-right: 20rpx;
 	}
 
 	.item-content {
@@ -450,34 +534,44 @@
 	}
 
 	.item-title {
-		font-size: 28rpx;
-		color: #333333;
+		font-size: $font-size-md;
+		color: $text-color;
 		lines: 2;
 		text-overflow: ellipsis;
 	}
 
 	.item-summary {
-		font-size: 24rpx;
-		color: #999999;
+		font-size: $font-size-sm;
+		color: $text-color-placeholder;
 		margin-top: 8rpx;
-		lines: 1;
+		lines: 2;
 		text-overflow: ellipsis;
 	}
 
+	.item-hit {
+		font-size: 22rpx;
+		color: $primary-color;
+		margin-top: 6rpx;
+	}
+
+	/* 关键词命中：只改字重与颜色，不加背景（uvue 不支持伪元素/内联 mark） */
+	.item-hl {
+		color: $primary-color;
+		font-weight: 600;
+	}
+
+	.item-plain {
+		color: $text-color;
+	}
+
 	.item-arrow {
-		font-size: 36rpx;
-		color: #cccccc;
+		font-size: $font-size-xl;
+		color: $text-color-placeholder;
 		margin-left: 16rpx;
 	}
 
 	.empty-wrap {
-		padding: 120rpx 0;
-		align-items: center;
-	}
-
-	.empty-text {
-		font-size: 28rpx;
-		color: #999999;
+		padding: 60rpx 0;
 	}
 
 	.loading-wrap {
@@ -487,7 +581,7 @@
 
 	.loading-text {
 		font-size: 26rpx;
-		color: #999999;
+		color: $text-color-placeholder;
 	}
 
 	.no-more-wrap {
@@ -496,14 +590,14 @@
 	}
 
 	.no-more-text {
-		font-size: 24rpx;
-		color: #cccccc;
+		font-size: $font-size-sm;
+		color: $text-color-placeholder;
 	}
 
 	.history-section {
-		background-color: #ffffff;
+		background-color: $card-bg;
 		margin: 16rpx 24rpx;
-		border-radius: 16rpx;
+		border-radius: $radius-md;
 		padding: 24rpx;
 	}
 
@@ -515,14 +609,14 @@
 	}
 
 	.history-title {
-		font-size: 28rpx;
+		font-size: $font-size-md;
 		font-weight: bold;
-		color: #333333;
+		color: $text-color;
 	}
 
 	.history-clear {
-		font-size: 24rpx;
-		color: #999999;
+		font-size: $font-size-sm;
+		color: $text-color-placeholder;
 	}
 
 	.history-tags {
@@ -531,14 +625,22 @@
 	}
 
 	.history-tag {
-		padding: 12rpx 24rpx;
-		background-color: #f5f5f5;
-		border-radius: 24rpx;
+		flex-direction: row;
+		align-items: center;
+		padding: 12rpx 20rpx;
+		background-color: $bg-color;
+		border-radius: $radius-lg;
 	}
 
 	.history-tag-text {
 		font-size: 26rpx;
-		color: #666666;
+		color: $text-color-secondary;
+	}
+
+	.history-tag-delete {
+		font-size: 22rpx;
+		color: $text-color-placeholder;
+		margin-left: 12rpx;
 	}
 
 	.mr-16-mb-16 { margin-right: 16rpx; margin-bottom: 16rpx; }

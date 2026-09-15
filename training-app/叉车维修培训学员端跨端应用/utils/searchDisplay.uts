@@ -1,0 +1,108 @@
+/**
+ * 搜索展示纯函数（高亮切段 / 命中标注 / 落点 / 片段投影）
+ *
+ * 页面与测试共用同一份口径；先例 utils/wrongQuestionDisplay.uts / utils/pointsDisplay.uts
+ * （模块内纯函数 + jest 镜像测试）。
+ *
+ * 两条 ADR 口径落在这里：
+ * - **ADR-0049 决策 6**：后端给的是**源串命中窗口**（snippet），投影与高亮在端上做；
+ * - **ADR-0044 同源原则**：投影走本端**渲染同源**的解析器（parseMarkdown），
+ *   不是直接拿正则剥标记（utils/markdown.uts 的 stripInline 是私有实现，
+ *   只要投影与渲染都经 parseMarkdown，两端显示不一致的风险就被约束在同一份解析规则里）。
+ */
+import { parseMarkdown } from './markdown'
+import type { SearchItem, HighlightSegment, MarkdownBlock } from '../types/index'
+
+/** 命中在回复里的标注（论坛主题的命中可能落在回复里，不标注则点进去找不到关键词） */
+export const HIT_REPLY_LABEL = '命中在回复'
+
+/** 分区类型 → 中文标题（章节分区 ADR-0049 决策 3） */
+export function sectionLabel(type : string) : string {
+    if (type == 'course') return '课程'
+    if (type == 'chapter') return '章节'
+    if (type == 'question') return '题目'
+    if (type == 'content') return '精选内容'
+    if (type == 'topic') return '帖子'
+    return ''
+}
+
+/** 命中位置 → 标注文案（仅 reply 需要说清；title/body 由高亮本身表达） */
+export function hitLabel(hitField : string) : string {
+    if (hitField == 'reply') return HIT_REPLY_LABEL
+    return ''
+}
+
+/** 结果条目的落点路由；'' = 无落点（调用方不绑定点击，ADR-0049 决策 2「搜到但打不开不合格」） */
+export function searchItemPath(item : SearchItem) : string {
+    const id = item.id.toString()
+    if (item.type == 'course') return '/pages/courses/course-detail?id=' + id
+    if (item.type == 'chapter') {
+        // 章节落点需要课程与章节两个参数（后端 parent_id = 所属课程 ID）
+        if (item.parent_id <= 0) return ''
+        return '/pages/courses/chapter-view?course_id=' + item.parent_id.toString() + '&chapter_id=' + id
+    }
+    if (item.type == 'question') return '/pages/practice/practice-do?mode=single&question_id=' + id
+    if (item.type == 'content') return '/pages/featured/featured-detail?id=' + id
+    if (item.type == 'topic') return '/pages/forum/forum-detail?id=' + id
+    return ''
+}
+
+/**
+ * 关键词高亮切段：大小写无关、多次命中全部切出。
+ * @returns 片段数组；keyword 为空或 text 为空时返回「单段不命中」/空数组
+ */
+export function splitHighlight(text : string, keyword : string) : HighlightSegment[] {
+    const segments : HighlightSegment[] = []
+    const plain = text
+    if (plain.length == 0) return segments
+    const kw = keyword.trim()
+    if (kw.length == 0) {
+        segments.push({ text: plain, hit: false } as HighlightSegment)
+        return segments
+    }
+    const lower = plain.toLowerCase()
+    const needle = kw.toLowerCase()
+    let cursor = 0
+    while (true) {
+        const idx = lower.indexOf(needle, cursor)
+        if (idx < 0) break
+        if (idx > cursor) {
+            segments.push({ text: plain.substring(cursor, idx), hit: false } as HighlightSegment)
+        }
+        segments.push({ text: plain.substring(idx, idx + needle.length), hit: true } as HighlightSegment)
+        cursor = idx + needle.length
+    }
+    if (cursor < plain.length) {
+        segments.push({ text: plain.substring(cursor), hit: false } as HighlightSegment)
+    }
+    return segments
+}
+
+/**
+ * 源串 → 纯文本（渲染同源投影）。
+ * 走 parseMarkdown 的块结果再拼接，而不是对原文直接跑行内正则：
+ * 渲染层怎么理解这段 markdown，投影就怎么理解它。
+ */
+export function projectSnippet(raw : string) : string {
+    if (raw.length == 0) return ''
+    const blocks : MarkdownBlock[] = parseMarkdown(raw)
+    const parts : string[] = []
+    for (let i = 0; i < blocks.length; i++) {
+        const b = blocks[i]
+        if (b.type == 'image' || b.type == 'divider') continue
+        if (b.type == 'list') {
+            for (let j = 0; j < b.items.length; j++) {
+                if (b.items[j].length > 0) parts.push(b.items[j])
+            }
+            continue
+        }
+        if (b.text.length > 0) parts.push(b.text)
+    }
+    return parts.join(' ')
+}
+
+/** 结果条目要展示的正文文本：snippet 优先，兼容字段 summary 兜底（后端「只增不破」） */
+export function displaySnippet(item : SearchItem) : string {
+    const raw = item.snippet.length > 0 ? item.snippet : item.summary
+    return projectSnippet(raw)
+}
