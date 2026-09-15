@@ -270,7 +270,15 @@ else {
     . (Join-Path $PSScriptRoot 'lib\screenshot-diff.ps1')
     $diffResult = Compare-ScreenshotBaseline -ProjectDir $ProjectDir -UpdateBaseline:$UpdateBaseline
     if ($diffResult.NewBaseline) {
-        Write-Result $true '首次运行，已建立基线'
+        # ⚠️ 不许再无条件写「已建立基线」：`Compare-ScreenshotBaseline` 只在 **-UpdateBaseline** 时才把本轮
+        #    截图拷进基线目录，否则只建了个**空目录**。原文案会把「空基线」说成「已建立」（2026-09-15 实测：
+        #    步骤 7 通过但下次运行仍会报「新增」）。文案据实分流。
+        if ($UpdateBaseline) {
+            Write-Result $true '首次运行，已建立基线（本轮截图已写入基线）'
+        }
+        else {
+            Write-Result $true '首次运行：基线目录为空，**未**建立基线（要以此为本轮基线请加 -UpdateBaseline）'
+        }
     }
     elseif ($diffResult.ChangedCount -eq 0) {
         Write-Result $true '所有页面无变化'
