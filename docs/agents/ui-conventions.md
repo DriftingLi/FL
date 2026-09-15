@@ -8,6 +8,8 @@
 | --- | --- |
 | **封装层** | `components/ui/` 下的自建组件集合。业务页面**不得直接使用 Element Plus 控件**，一律经此层（ADR-0035）。例外：`el-table`（197 处，走全局样式覆盖，ADR-0037）与 `el-radio` / `el-radio-button`（组内内容项，ADR-0038）。 |
 | **分段控件** | `UiSegmentTabs`，带滑动指示条的选项卡。激活态必须用品牌语义色，**不可用 `bg-panel`** —— 与卡片同值会让滑块在卡片内彻底隐身（浅色 `#FFFFFF` on `#FFFFFF`、深色 `#1E293B` on `#1E293B`，两套主题都失效）。 |
+| **下划线 tab** | `UiUnderlineTabs`，**视图档位**用（临时切换看什么，如 编写/预览）。**数据档位**（会被保存的选择，如 纯文本/Markdown）仍用 `UiSegmentTabs`（胶囊 + 实心品牌色滑块）。两者**不可互换**：同一卡片里并排两组同款胶囊，用户分不清哪组会永久保存。激活下划线必须用品牌语义色 `--color-ui-*`，**不可 `bg-panel`**（与卡片同值会隐身，同分段控件的硬约束）；调用方给顶栏 1px 底边，组件用 `-mb-px` 压住它。 |
+| **图标工具栏** | `MarkdownToolbar`，一排图标按钮：**每个按钮都要有 `UiTooltip` 中文提示 + `aria-label`**（文案与图标名的唯一来源是命令表 `utils/markdownToolbar.ts`，不许在组件里另抄）。置灰用 `aria-disabled` + 视觉降透明度，**不用原生 `disabled`** —— 原生 disabled 的按钮不派发鼠标事件，提示气泡会整排消失。 |
 | **空态两级** | 独立占据内容区的空态（整页 / 列表 / 面板）用 `UiEmptyState`；**卡片正文内嵌**的一行提示保留纯文案（统一 `text-ink-3`），不塞组件 —— 后者换成组件会多出图标与整块留白，比问题本身更重。 |
 | **筛选栏** | `UiFilterBar`，只提供容器与 `#filters` / `#actions` 两个插槽，字段由各页自写；**不做 prop 化** —— 各页字段数与按钮语义不一致，prop 化会让组件持续膨胀。 |
 | **表格** | `<el-table>` 走 `element-overrides.css` 的 `--el-table-*` 全局变量（ADR-0037），**不封装 UiTable**。两条硬边界：**不动行高与单元格内边距**；**禁用 `primary-*`/`accent-*` 做表格底色**（深色块未重定义这两个色阶，会出「暗底亮块」）。表格显式空态用 `UiEmptyState`，默认空态走全局文字色。 |
@@ -32,7 +34,12 @@ node scripts/check-el-controls.mjs --diff origin/master   # 只看新增行（�
 
 页面保持整洁：不要写冗余的小标题、装饰性提示与说明性 hint 文本，有的话就清理，仅保留必要的功能性提示。删除 hint 时同步删除对应的 CSS class 与 scoped style，避免残留死代码。
 
-**明确例外（不要清）**：发帖 / 回复输入区的**属地披露提示**（「发布内容会显示 IP 属地」，文案单点 `frontend/src/utils/forumDisplay.ts` 的 `FORUM_REGION_NOTICE`）属于「必要的功能性提示」而非装饰——属地在点发布那一刻才产生，事前告知比事后解释便宜（ADR-0045）。按本条约定清理 hint 时**跳过它**。
+**明确例外（不要清）**：
+
+1. 发帖 / 回复输入区的**属地披露提示**（「发布内容会显示 IP 属地」，文案单点 `frontend/src/utils/forumDisplay.ts` 的 `FORUM_REGION_NOTICE`）属于「必要的功能性提示」而非装饰——属地在点发布那一刻才产生，事前告知比事后解释便宜（ADR-0045）。
+2. Markdown 档的**能力与边界提示**（文案单点 `forumDisplay.FORUM_MARKDOWN_HINT`，由 `ForumMarkdownInput` 渲染在输入框底部）——它告知两条硬边界：**表格不渲染**、**图片要走粘贴区**（正文里的 `![]()` 会被展开成文字）。依据是 ADR-0046 自己的判据「判据放在作者看得见的地方（编辑器提示 + 预览里的越界说明）」，内容精选编辑器已有同款（ADR-0052）。
+
+按本条约定清理 hint 时**跳过这两条**。
 
 ## Tailwind 增量共存四条边界规则
 

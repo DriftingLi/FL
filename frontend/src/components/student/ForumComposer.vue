@@ -1,27 +1,27 @@
 <script setup lang="ts">
 /**
- * 论坛输入区（发帖回复共用）
+ * 论坛输入区（发帖回复共用）：回复胶囊 + 正文输入框 + 正文格式 + 属地披露 + 提交。
  *
  * 收编前，ForumDetail 与 ChapterDiscussion 各自写了一遍几乎相同的回复框
  * （内容 / 图片 / 回复目标 / 上传 / 提交），却长成两套样式。这里合成一个，
- * 上传状态机仍复用 useForumImageUpload（#389 单点），本组件只负责形态。
+ * 上传状态机与输入框形态各自单点：`useForumImageUpload`（#389）管上传，
+ * `ForumMarkdownInput`（#1017）管形态。
  *
- * 形态要点：外层卡片承担边框与聚焦反馈（focus-within），内层文本框走
- * UiInput 的 bare 变体去掉自身边框 —— 高亮落在外框上，而不是文本框内部。
+ * #1017 起本组件**不再自己摆图片入口与缩略图**：图二那块虚线粘贴区在
+ * `ForumMarkdownInput` 里，发帖表单与回复框共用同一个。同理，粘贴监听不再是
+ * document 级（原来要靠 stopPropagation 防止一次粘贴被两处各传一遍）——
+ * 现在是「卡片内粘贴 → 转发给上传单点」，两处同时挂载也不会互相抢事件。
  *
  * ⚠️ Tailwind 坑：本项目不引 preflight，浏览器默认 border-width 是 medium(3px)。
  * 因此凡是写 border-* 样式类的地方，必须显式给出宽度工具类（border / border-t），
  * 否则没宽度的边会被渲染成 3px。
  */
 import { computed, ref } from 'vue'
-import { Picture, Promotion, Close } from '@element-plus/icons-vue'
+import { Promotion } from '@element-plus/icons-vue'
 import UiButton from '@/components/ui/UiButton.vue'
-import UiInput from '@/components/ui/UiInput.vue'
-import { useForumImageUpload } from '@/composables/useForumImageUpload'
-import { resolveFileUrl } from '@/utils/fileUrl'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
-import ForumContent from './ForumContent.vue'
+import ForumMarkdownInput from './ForumMarkdownInput.vue'
 import { useForumContentFormat, FORUM_FORMAT_OPTIONS } from '@/composables/useForumContentFormat'
 import { FORUM_REGION_NOTICE } from '@/utils/forumDisplay'
 import type { ForumContentFormat } from '@/api/forum'
@@ -59,7 +59,7 @@ const emit = defineEmits<{
   'update:images': [string[]]
   'update:replyingTo': [{ id: number; username: string } | null]
   /**
-   * 提交。带上正文格式：格式状态在本组件内（与发帖侧共用同一偏好），
+   * 提交。带上正文格式：格式状态与发帖侧共用同一偏好，
    * 父级调 replyTopic 时需要它——不带上父级就只能猜。
    */
   submit: [{ contentFormat: ForumContentFormat }]
@@ -70,57 +70,28 @@ const content = computed({
   set: (v: string) => emit('update:modelValue', v)
 })
 
-// 受控回写父级的 images：上传成功与删除都经由 useForumImageUpload 写回这里
+// 受控回写父级的 images：上传成功与删除都经由 ForumMarkdownInput 透传上来
 const images = computed({
   get: () => props.images,
   set: (v: string[]) => emit('update:images', v)
 })
 
-const { uploading, uploadFiles, removeImage, handlePaste } = useForumImageUpload(
-  () => props.maxImages,
-  { urls: images }
-)
-
-const fileInput = ref<HTMLInputElement | null>(null)
-
 // ===== 正文格式（#879 / ADR-0044）=====
 // 与发帖侧**共用同一个偏好键与同一套切换态**（composable 单点）：
 // 同一个人对正文格式的偏好与他写的是主题还是回复无关。
-const { format: contentFormat, isMarkdown, previewing, handleFormatChange, resetPreview } = useForumContentFormat()
+const { format: contentFormat, handleFormatChange } = useForumContentFormat()
 
 /** 提交口径沿用改造前：内容非空或图片非空 */
 const canSubmit = computed(() => content.value.trim().length > 0 || props.images.length > 0)
+
+const inputRef = ref<{ resetPreview?: () => void } | null>(null)
 
 function submit() {
   if (!canSubmit.value || props.submitting) return
   emit('submit', { contentFormat: contentFormat.value })
   // 提交后父级会清空正文：此时若仍停在预览态，用户看到的是一块空预览、
-  // 还得手动点「继续编辑」才能写下一句。复位到编辑态（与发帖表单 reset 同口径）。
-  resetPreview()
-}
-
-function triggerSelect() {
-  fileInput.value?.click()
-}
-
-function onFileChange(event: Event) {
-  const target = event.target as HTMLInputElement
-  const files = Array.from(target.files ?? [])
-  if (files.length > 0) void uploadFiles(files)
-  // 清空以便重复选择同一文件
-  target.value = ''
-}
-
-/**
- * 粘贴上传。
- *
- * 额外 stopPropagation 的原因：ForumImageUploader 是在 **document** 上监听 paste 的，
- * 而章节讨论里回复框（本组件）与发帖表单（含 ForumImageUploader）会同时挂载 ——
- * 不拦住冒泡，同一次粘贴会被两处各上传一遍，图片凭空多出一倍。
- */
-function onPaste(event: ClipboardEvent) {
-  handlePaste(event)
-  event.stopPropagation()
+  // 还得手动点「编写」才能写下一句。复位到编写态（与发帖表单 reset 同口径）。
+  inputRef.value?.resetPreview?.()
 }
 
 /** Ctrl / Cmd + Enter 发送 */
@@ -140,99 +111,42 @@ function onKeydown(event: KeyboardEvent) {
       </UiTag>
     </div>
 
-    <!--
-      粘贴监听挂在卡片上而非 document：只有焦点在本输入框内粘贴图片才接管，
-      避免用户在页面其他输入框粘贴时被抢走。
-    -->
-    <div
-      class="rounded-[10px] border border-line bg-panel p-3 transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)] focus-within:border-ui-500"
-      @paste="onPaste"
-    >
-      <div v-if="props.images.length > 0" class="mb-2 flex flex-wrap gap-1.5">
-        <div
-          v-for="(url, index) in props.images"
-          :key="url + index"
-          class="relative size-12 shrink-0 overflow-hidden rounded-[6px] border border-line"
-        >
-          <el-image :src="resolveFileUrl(url)" fit="cover" class="h-full w-full" />
-          <button
-            type="button"
-            class="absolute right-0 top-0 flex size-4 items-center justify-center rounded-bl-[6px] border-0 bg-black/55 p-0 text-[10px] text-panel hover:bg-bad/90"
-            @click="removeImage(index)"
-          >
-            <el-icon><Close /></el-icon>
-          </button>
-        </div>
-      </div>
+    <ForumMarkdownInput
+      ref="inputRef"
+      v-model="content"
+      v-model:images="images"
+      :format="contentFormat"
+      :max-images="props.maxImages"
+      :maxlength="props.maxlength"
+      :rows="props.rows"
+      :placeholder="props.placeholder"
+      @keydown="onKeydown"
+    />
 
-      <!-- 预览与发布同源：都走 ForumContent 这一个渲染单点 -->
-      <ForumContent
-        v-if="previewing"
-        :content="props.modelValue"
-        format="markdown"
-        class="min-h-[60px] text-sm leading-[1.7] text-ink"
+    <!-- 正文格式：与发帖侧同控件同口径（数据档位，与输入框内的视图档位分工见 UiUnderlineTabs） -->
+    <div class="mt-2 flex flex-wrap items-center gap-2">
+      <UiSegmentTabs
+        :model-value="contentFormat"
+        :options="FORUM_FORMAT_OPTIONS"
+        @update:model-value="handleFormatChange"
       />
-      <UiInput
-        v-else
-        v-model="content"
-        type="textarea"
-        variant="bare"
-        :rows="props.rows"
-        :maxlength="props.maxlength"
-        :placeholder="props.placeholder"
-        @keydown="onKeydown"
-      />
-
-      <!-- 正文格式：与发帖侧同控件同口径 -->
-      <div class="mt-2 flex flex-wrap items-center gap-2">
-        <UiSegmentTabs
-          :model-value="contentFormat"
-          :options="FORUM_FORMAT_OPTIONS"
-          @update:model-value="handleFormatChange"
-        />
-        <UiButton v-if="isMarkdown" variant="text" size="small" @click="previewing = !previewing">
-          {{ previewing ? '继续编辑' : '预览' }}
-        </UiButton>
-      </div>
-
-      <!-- 发布前披露（ADR-0045）：ui-conventions「不写说明性 hint」的明确例外，
-           文案单点在 forumDisplay.FORUM_REGION_NOTICE —— 别在这里另抄一份。 -->
-      <p class="forum-region-notice mt-1.5 mb-0 text-xs text-ink-3">{{ FORUM_REGION_NOTICE }}</p>
-
-      <div class="mt-2 flex items-center gap-2 border-t border-line pt-2">
-        <UiButton
-          variant="text"
-          :icon="Picture"
-          circle
-          size="small"
-          :loading="uploading"
-          :disabled="props.images.length >= props.maxImages"
-          title="添加图片（也可直接粘贴）"
-          @click="triggerSelect"
-        />
-        <span class="text-xs text-ink-3">{{ props.images.length }}/{{ props.maxImages }}</span>
-
-        <span class="ml-auto text-xs text-ink-3">{{ content.length }}/{{ props.maxlength }}</span>
-        <UiButton
-          variant="primary"
-          :icon="Promotion"
-          circle
-          size="small"
-          :loading="props.submitting"
-          :disabled="!canSubmit"
-          title="发表回复（Ctrl / Cmd + Enter）"
-          @click="submit"
-        />
-      </div>
     </div>
 
-    <input
-      ref="fileInput"
-      type="file"
-      accept="image/*"
-      multiple
-      class="hidden"
-      @change="onFileChange"
-    />
+    <!-- 发布前披露（ADR-0045）：ui-conventions「不写说明性 hint」的明确例外，
+         文案单点在 forumDisplay.FORUM_REGION_NOTICE —— 别在这里另抄一份。 -->
+    <p class="forum-region-notice mt-1.5 mb-0 text-xs text-ink-3">{{ FORUM_REGION_NOTICE }}</p>
+
+    <div class="mt-2 flex items-center justify-end gap-2">
+      <UiButton
+        variant="primary"
+        :icon="Promotion"
+        circle
+        size="small"
+        :loading="props.submitting"
+        :disabled="!canSubmit"
+        title="发表回复（Ctrl / Cmd + Enter）"
+        @click="submit"
+      />
+    </div>
   </div>
 </template>

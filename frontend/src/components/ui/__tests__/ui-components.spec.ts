@@ -26,6 +26,7 @@ import UiStatCard from '../UiStatCard.vue'
 import UiTag from '../UiTag.vue'
 import UiActionChip from '../UiActionChip.vue'
 import UiSegmentTabs from '../UiSegmentTabs.vue'
+import UiUnderlineTabs from '../UiUnderlineTabs.vue'
 import UiPagination from '../UiPagination.vue'
 import UiFilterBar from '../UiFilterBar.vue'
 import UiSwitch from '../UiSwitch.vue'
@@ -388,6 +389,56 @@ describe('UiSegmentTabs（分段选项卡）', () => {
     expect(btns).toHaveLength(3)
     expect(btns[0].attributes('aria-selected')).toBe('true')
     expect(btns[2].attributes('aria-selected')).toBe('false')
+  })
+})
+
+describe('UiUnderlineTabs（下划线选项卡）', () => {
+  const opts = [
+    { label: '编写', value: 'write' },
+    { label: '预览', value: 'preview' }
+  ]
+
+  it('渲染选项并标记激活项 aria-selected', () => {
+    const w = mountWith(UiUnderlineTabs, { modelValue: 'write', options: opts })
+    const btns = w.findAll('button')
+    expect(w.attributes('role')).toBe('tablist')
+    expect(btns).toHaveLength(2)
+    expect(btns[0].attributes('role')).toBe('tab')
+    expect(btns[0].attributes('aria-selected')).toBe('true')
+    expect(btns[1].attributes('aria-selected')).toBe('false')
+  })
+
+  it('点击选项发 update:modelValue + change', async () => {
+    const w = mountWith(UiUnderlineTabs, { modelValue: 'write', options: opts })
+    await w.findAll('button')[1].trigger('click')
+    expect(w.emitted('update:modelValue')?.[0]).toEqual(['preview'])
+    expect(w.emitted('change')?.[0]).toEqual(['preview'])
+  })
+
+  it('disabled 时按钮置灰且点击不发事件', async () => {
+    const w = mountWith(UiUnderlineTabs, { modelValue: 'write', options: opts, disabled: true })
+    const btn = w.findAll('button')[1]
+    expect(btn.attributes('disabled')).toBeDefined()
+    await btn.trigger('click')
+    expect(w.emitted('update:modelValue')).toBeFalsy()
+  })
+
+  it('激活下划线用品牌语义色，不用 bg-panel / border-panel（否则与卡片同色隐身）', () => {
+    const w = mountWith(UiUnderlineTabs, { modelValue: 'write', options: opts })
+    const active = w.findAll('button')[0]
+    expect(active.classes()).toContain('border-ui-500')
+    expect(active.classes()).toContain('text-ui-600')
+    expect(active.classes()).not.toContain('border-panel')
+    const inactive = w.findAll('button')[1]
+    expect(inactive.classes()).toContain('border-transparent')
+    expect(inactive.classes()).toContain('text-ink-3')
+  })
+
+  it('按钮必须 bg-transparent——项目无 preflight，button 默认不透明背景会糊住顶栏', () => {
+    const w = mountWith(UiUnderlineTabs, { modelValue: 'write', options: opts })
+    for (const btn of w.findAll('button')) {
+      expect(btn.classes()).toContain('bg-transparent')
+    }
   })
 })
 
