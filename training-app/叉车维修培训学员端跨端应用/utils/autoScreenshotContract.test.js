@@ -22,6 +22,9 @@
  *   S12 【Q3】遍历的是**目标页集合**，不是 pages.json 的全量清单
  *   S13 【2026-09-15】**陈旧截图判据**：文件时间戳必须晚于本次运行起点
  *       （否则上次运行的同名残留 PNG 会被当成本次证据）
+ *   S14 【2026-09-15】**改动页推导的路径形状**：两条 git 调用都必须 `--relative`，输出必须过
+ *       `ConvertFrom-GitQuotedPath`（否则仓库根相对 + quotepath 转义 ⇒ `^pages/` 恒失配 ⇒ 推导恒 0 页，
+ *       步骤 6 必然报「无改动页面」⇒ HashConflicts / TargetPages 永远取不到真值）
  */
 const fs = require('fs');
 const path = require('path');
@@ -122,5 +125,34 @@ describe('auto-screenshot.ps1 contract', () => {
     const staleAt = src.indexOf('$staleShots += $pageName');
     expect(staleAt).toBeGreaterThan(-1);
     expect(src.slice(staleAt, staleAt + 300)).toMatch(/\$skipped\s*\+=/);
+  });
+
+  // S14（2026-09-15）：S9 只断言「源码里出现了 git … diff」（文本层），**推导坏掉它照样绿**。
+  //   实际症状：`git diff --name-only` 在本仓输出的是**仓库根相对**路径（本项目位于
+  //   training-app/<中文目录>/ 之下），且非 ASCII 段被 core.quotepath 转义成引号 + \ooo；
+  //   而下面的映射按 `^pages/` 锚定 ⇒ 一条也匹配不上 ⇒ 恒推导出 0 页 ⇒ dev:finish 步骤 6
+  //   必然报「无改动页面」⇒ HashConflicts / TargetPages 永远取不到真值（长跑不出来的验证债）。
+  //   本条是**回归钉**，钉死「必须 --relative + 必须解码 + 解码器来自唯一真源」三点，旧代码必红。
+  test('S14: 【2026-09-15】derivation uses --relative and decodes git-quoted paths', () => {
+    const from = src.indexOf('确定目标页集合');
+    // ⚠️ 右边界必须**从 from 之后再找**：文件头说明里就有「…本仓 `pages.json` 有 50 页 ⇒…」，
+    //    直接 indexOf 那个词会命中它 ⇒ 切片为空 ⇒ 整条守护退化成恒真的空断言（正是要防的弱守护）。
+    const to = src.indexOf('3) 0 页', from);
+    expect(from).toBeGreaterThan(-1);
+    expect(to).toBeGreaterThan(from);
+    const block = src.slice(from, to);
+
+    // 反例：不得再出现**不带走相对**的那两种调用形态
+    expect(block).not.toMatch(/'--name-only',\s*'HEAD'/);
+    expect(block).not.toMatch(/'--name-only',\s*'origin\/master\.\.\.HEAD'/);
+    expect(block).not.toMatch(/'--name-only',\s*'--cached'/);
+
+    // 正例：两条调用都带 --relative（锚定 '^pages/' 只有在路径相对项目根时才可能命中）
+    expect(block).toMatch(/'--name-only',\s*'--relative',\s*'HEAD'/);
+    expect(block).toMatch(/'--name-only',\s*'--relative',\s*'origin\/master\.\.\.HEAD'/);
+
+    // 正例：输出必须过解码器，且解码器来自唯一真源（不在此另抄一份实现）
+    expect(block).toMatch(/ConvertFrom-GitQuotedPath/);
+    expect(block).toMatch(/level-detect\.ps1/);
   });
 });

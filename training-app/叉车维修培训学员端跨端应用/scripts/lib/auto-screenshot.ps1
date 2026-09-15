@@ -104,11 +104,24 @@ function Invoke-AutoScreenshot {
     }
     else {
         # 默认（含 -ChangedOnly）：从 git diff 推导改动涉及的页面
+        # ⚠️ `--relative` 不能省（2026-09-15 实测）：git 默认输出**仓库根相对**路径，而本项目整套源码位于
+        #    `training-app/<中文目录名>/` 之下 ⇒ 路径前面挂着一串非 ASCII 段，下面的映射按 `^pages/` 锚定
+        #    ⇒ 一条也匹配不上 ⇒ **推导恒为 0 页** ⇒ 步骤 6 必然报「无改动页面」并 exit 1
+        #    ⇒ HashConflicts / TargetPages 永远取不到真值（这正是长跑不出来的那条验证债）。
+        #    实测：临时改 pages/index/index.uvue，raw 是 "training-app/\345.../pages/index/index.uvue"，
+        #    推导 = 0 页；加 --relative 后得到 `pages/index/index.uvue`，与下面的锚定同形状。
+        # ⚠️ 解码同样不能省：`core.quotepath`（git 默认 true）把非 ASCII 路径整条加引号 + `\ooo` 转义
+        #    ⇒ 末尾是 `uvue"` 而不是 `uvue`，后缀/锚定匹配一律静默失配（level-detect.ps1 踩过同一个陷阱）。
+        if (-not (Get-Command ConvertFrom-GitQuotedPath -ErrorAction SilentlyContinue)) {
+            # 解码器的**唯一真源**在 level-detect.ps1（纯函数定义、无副作用）；独立调用本模块时补加载，
+            # 在 dev:finish 里它已在步骤 1 被 dot-source ⇒ 这里不会重复加载。
+            . (Join-Path $PSScriptRoot 'level-detect.ps1')
+        }
         $diffFiles = @()
-        foreach ($gitArgs in @(@('diff', '--name-only', 'HEAD'), @('diff', '--name-only', 'origin/master...HEAD'))) {
+        foreach ($gitArgs in @(@('diff', '--name-only', '--relative', 'HEAD'), @('diff', '--name-only', '--relative', 'origin/master...HEAD'))) {
             try {
                 $raw = & git -C $ProjectDir @gitArgs 2>$null
-                if ($raw) { $diffFiles += @($raw | Where-Object { $_ -and "$_".Trim() } | ForEach-Object { "$_".Trim() }) }
+                if ($raw) { $diffFiles += @($raw | Where-Object { $_ -and "$_".Trim() } | ForEach-Object { ConvertFrom-GitQuotedPath "$_".Trim() }) }
             }
             catch { }
         }
