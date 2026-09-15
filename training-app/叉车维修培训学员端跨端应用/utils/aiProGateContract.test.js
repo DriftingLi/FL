@@ -86,8 +86,13 @@ describe('AI 专业版 = 积分兑换权益（#920）契约', () => {
 
     it('进页面读门状态；回页时未解锁才重读（已解锁为粘性，不重复扫流水）', () => {
       expect(PAGE).toMatch(/loadAiProState\(\)/);
-      const onShow = PAGE.slice(PAGE.indexOf('onShow(() => {'));
-      expect(onShow).toMatch(/if \(!proUnlocked\.value\) \{\s*\n\s*loadAiProState\(\)/);
+      const from = PAGE.indexOf('onShow(() => {');
+      const onShow = PAGE.slice(from, PAGE.indexOf('</script>', from));
+      // #1024：重读这一步改经 refreshProState（读完门状态顺带做「存量来源回收」），
+      // 「未解锁才重读」的粘性语义不变 —— 已解锁分支只置 settled，不得再扫流水
+      expect(onShow).toMatch(/if \(!proUnlocked\.value\) \{\s*\n\s*refreshProState\(\)/);
+      expect(onShow).toMatch(/proStateSettled\.value = true/);
+      expect(onShow).not.toMatch(/else\s*\{[^}]*refreshProState\(\)/);
     });
   });
 
