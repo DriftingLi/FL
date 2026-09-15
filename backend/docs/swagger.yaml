@@ -11415,8 +11415,12 @@ paths:
     get:
       consumes:
       - application/json
-      description: 分页查询练习历史，支持按题型/日期过滤
+      description: 分页查询练习历史，支持按题型/日期过滤（按当前证件分区：credential_id 可选，经拦截器注入当前证件）
       parameters:
+      - description: 目标证件ID
+        in: query
+        name: credential_id
+        type: integer
       - default: 1
         description: 页码
         in: query
@@ -11621,7 +11625,12 @@ paths:
     get:
       consumes:
       - application/json
-      description: 汇总练习正确率/已练题量等
+      description: 汇总练习正确率/已练题量等（按当前证件分区：credential_id 可选，经拦截器注入当前证件）
+      parameters:
+      - description: 目标证件ID
+        in: query
+        name: credential_id
+        type: integer
       produces:
       - application/json
       responses:

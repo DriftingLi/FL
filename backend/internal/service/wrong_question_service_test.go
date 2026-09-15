@@ -302,7 +302,7 @@ func TestRedoWrongQuestion_Correct(t *testing.T) {
 	q := testutil.SeedQuestion(t, db, "single_choice", "重做题", "A")
 	seedWrongQuestion(t, db, 1, q.ID, 2)
 
-	result, err := svc.RedoWrongQuestion(1, q.ID, "A")
+	result, err := svc.RedoWrongQuestion(1, q.ID, "A", nil)
 	if err != nil {
 		t.Fatalf("重做失败: %v", err)
 	}
@@ -337,7 +337,7 @@ func TestRedoWrongQuestion_Wrong(t *testing.T) {
 	q := testutil.SeedQuestion(t, db, "single_choice", "重做题", "A")
 	seedWrongQuestion(t, db, 1, q.ID, 2)
 
-	result, err := svc.RedoWrongQuestion(1, q.ID, "B")
+	result, err := svc.RedoWrongQuestion(1, q.ID, "B", nil)
 	if err != nil {
 		t.Fatalf("答错也不应报错: %v", err)
 	}
@@ -364,9 +364,50 @@ func TestRedoWrongQuestion_NotInWrongList(t *testing.T) {
 	svc, db := newWrongQuestionSvc(t)
 	q := testutil.SeedQuestion(t, db, "single_choice", "test", "A")
 	// 不在错题本中
-	_, err := svc.RedoWrongQuestion(1, q.ID, "A")
+	_, err := svc.RedoWrongQuestion(1, q.ID, "A", nil)
 	if err == nil {
 		t.Fatal("不在错题本中应返回错误")
+	}
+}
+
+// TestRedoWrongQuestion_CredentialScope 重做的证件口径（#1007 / ADR-0051）：
+//  1. 传证件时取题按该证件校验 —— 别的证件的题不得重做（错题本列表本就按题目证件过滤）；
+//  2. 重做记录落「重做那一刻的当前证件」（写入时冻结，与练习记录同口径）。
+func TestRedoWrongQuestion_CredentialScope(t *testing.T) {
+	svc, db := newWrongQuestionSvc(t)
+	credA := model.Credential{Code: "redoScopeA", Name: "叉车司机N1", Category: "special_operation", Status: 1}
+	credB := model.Credential{Code: "redoScopeB", Name: "低压电工", Category: "special_operation", Status: 1}
+	for _, c := range []*model.Credential{&credA, &credB} {
+		if err := db.Create(c).Error; err != nil {
+			t.Fatalf("建证件失败: %v", err)
+		}
+	}
+	qA := testutil.SeedQuestion(t, db, "single_choice", "A 证重做题", "A")
+	if err := db.Model(qA).Update("credential_id", credA.ID).Error; err != nil {
+		t.Fatalf("题目挂证件失败: %v", err)
+	}
+	seedWrongQuestion(t, db, 1, qA.ID, 1)
+
+	// 用 B 证件重做 A 证件的题 → 拒绝（且不落记录）
+	if _, err := svc.RedoWrongQuestion(1, qA.ID, "A", &credB.ID); err == nil {
+		t.Fatal("跨证件重做应被拒绝")
+	}
+	var cnt int64
+	db.Model(&model.QuestionPracticeRecord{}).Where("student_id = ? AND practice_type = ?", 1, "redo").Count(&cnt)
+	if cnt != 0 {
+		t.Fatalf("被拒绝的重做不得落记录, got %d 条", cnt)
+	}
+
+	// 用 A 证件重做 → 落记录且分区 = 作答那一刻的证件
+	if _, err := svc.RedoWrongQuestion(1, qA.ID, "A", &credA.ID); err != nil {
+		t.Fatalf("同证件重做失败: %v", err)
+	}
+	var rec model.QuestionPracticeRecord
+	if err := db.Where("student_id = ? AND question_id = ? AND practice_type = ?", 1, qA.ID, "redo").First(&rec).Error; err != nil {
+		t.Fatalf("查重做记录失败: %v", err)
+	}
+	if rec.CredentialID == nil || *rec.CredentialID != credA.ID {
+		t.Fatalf("重做记录应落证件 %d（写入时冻结）, got %v", credA.ID, rec.CredentialID)
 	}
 }
 
@@ -376,7 +417,7 @@ func TestRedoWrongQuestion_AIExplanationCached(t *testing.T) {
 	db.Model(&model.Question{}).Where("id = ?", q.ID).Update("ai_explanation", "缓存解析")
 	seedWrongQuestion(t, db, 1, q.ID, 1)
 
-	result, err := svc.RedoWrongQuestion(1, q.ID, "A")
+	result, err := svc.RedoWrongQuestion(1, q.ID, "A", nil)
 	if err != nil {
 		t.Fatalf("重做失败: %v", err)
 	}

@@ -99,9 +99,10 @@ func (h *WrongQuestionHandler) List(c *gin.Context) {
 
 // redoWrongQuestionReq 重做错题请求。
 type redoWrongQuestionReq struct {
-	StudentID  int
-	QuestionID int
-	UserAnswer interface{}
+	StudentID    int
+	QuestionID   int
+	UserAnswer   interface{}
+	CredentialID *int
 }
 
 // Redo 重做错题
@@ -132,10 +133,10 @@ func (h *WrongQuestionHandler) Redo(c *gin.Context) {
 			if err := c.ShouldBindJSON(&req); err != nil {
 				return nil, badRequest("请求数据无效")
 			}
-			return &redoWrongQuestionReq{StudentID: studentID, QuestionID: questionID, UserAnswer: req.UserAnswer}, nil
+			return &redoWrongQuestionReq{StudentID: studentID, QuestionID: questionID, UserAnswer: req.UserAnswer, CredentialID: middleware.CredentialIDPtr(c)}, nil
 		},
 		Invoke: func(ctx context.Context, req *redoWrongQuestionReq) (*service.SubmitResultDTO, error) {
-			return h.svc.RedoWrongQuestion(req.StudentID, req.QuestionID, req.UserAnswer)
+			return h.svc.RedoWrongQuestion(req.StudentID, req.QuestionID, req.UserAnswer, req.CredentialID)
 		},
 		Render: func(c *gin.Context, _ *redoWrongQuestionReq, resp *service.SubmitResultDTO, err error) {
 			if err != nil {
