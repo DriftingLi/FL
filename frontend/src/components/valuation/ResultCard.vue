@@ -129,27 +129,9 @@ const rate = computed(() => {
   );
   margin: var(--sp-6, 24px) 0;
 }
-.metric-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: var(--sp-4, 16px);
-}
-.metric {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.metric-label {
-  font-size: var(--text-xs, 12px);
-  color: var(--color-text-tertiary, #64748B);
-}
-.metric-value {
-  font-size: var(--fs-lg, 18px);
-  font-weight: var(--fw-semibold, 600);
-  color: var(--color-text, #0F172A);
-  font-family: var(--font-mono, 'JetBrains Mono', monospace);
-  font-feature-settings: 'tnum' 1;
-}
+/* .metric-row / .metric / .metric-label / .metric-value 的结构与档位差异
+   （mono 数字 + 半粗字重 + 12px 标签）已收敛到 assets/styles/valuation-view-sections.css；
+   仅本卡使用的强调变体保留在下面。 */
 .metric-value-accent {
   background: var(--gradient-brand, linear-gradient(135deg, #0EA5E9, #14B8A6));
   -webkit-background-clip: text;
@@ -169,13 +151,6 @@ const rate = computed(() => {
   }
   .result-card-unit {
     font-size: 20px;
-  }
-  .metric-row {
-    grid-template-columns: 1fr;
-    gap: var(--sp-3, 12px);
-  }
-  .metric-value {
-    font-size: var(--fs-md, 16px);
   }
 }
 </style>

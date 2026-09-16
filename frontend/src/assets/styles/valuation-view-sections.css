@@ -1,0 +1,108 @@
+/**
+ * 残值评估「结果/报告视图」的共享分区块样式（ADR-0053 §8 / issue #1056 后半）。
+ *
+ * 收敛前：`.top-row` / `.radar-block, .section-block` / `.section-title` 与
+ * 768px 响应式块（分区块缩窄 + 雷达图定高）在三个视图
+ * （ValuationResultView / BatteryResultView / ValuationReportView）各抄一份；
+ * 两张结果卡（ResultCard / BatteryResultCard）的 metric 网格结构同构、取值有档位差异。
+ *
+ * 作用域与层级约定：
+ * - 全部规则限定在 `.valuation-root` 内（与 valuation-tokens.css 同口径，不外溢）；
+ * - `.section-title` 额外要求 `.valuation-view` 锚类——因为 ValuationForm 的
+ *   `<h2 class="section-title">`（24px/700 字重的表单标题）也在估值域内，
+ *   裸类名会误伤；三个视图根元素带 `valuation-view`，表单不带；
+ * - 本文件经 tailwind.css 引入 `layer(base)`：**组件 scoped 样式（未分层）天然可以
+ *   覆盖这里的一切**——共享版是基座，视图/卡片级的变体走各自 scoped 追加；
+ * - 零视觉意图变更：以下取值逐字来自收敛前三个视图/两张卡的 scoped 规则
+ *   （交集进基础，差异按卡根类档位追加，不改任何值）。
+ */
+
+/* ===== 视图骨架：顶部行 / 分区块 / 分区标题（三视图逐字交集） ===== */
+
+.valuation-root .valuation-view .top-row {
+  margin-top: 0;
+}
+.valuation-root .valuation-view .radar-block,
+.valuation-root .valuation-view .section-block {
+  margin-top: var(--sp-5);
+  padding: var(--sp-6) var(--sp-7);
+}
+.valuation-root .valuation-view .section-title {
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-medium);
+  margin: 0 0 var(--sp-5);
+  color: var(--color-text);
+}
+/* BatteryResultView 的标题带图标：档位追加（原值） */
+.valuation-root .valuation-view.battery-result-view .section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 768px) {
+  .valuation-root .valuation-view .radar-block,
+  .valuation-root .valuation-view .section-block {
+    margin-top: var(--sp-4);
+    padding: var(--sp-5) var(--sp-4);
+  }
+  /* 雷达图定高（与收敛前一致：!important 压图表组件的容器高度） */
+  .valuation-root .valuation-view .radar-block .echarts {
+    height: 260px !important;
+  }
+}
+
+/* ===== 结果卡 metric 网格：两卡结构交集 ===== */
+
+.valuation-root .metric-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+}
+.valuation-root .metric {
+  display: flex;
+  flex-direction: column;
+}
+.valuation-root .metric-label {
+  color: var(--color-text-tertiary);
+}
+.valuation-root .metric-value {
+  font-size: var(--fs-lg);
+  color: var(--color-text);
+}
+/* 档位差异（ResultCard = 整机 / BatteryResultCard = 电池），原值逐字保留 */
+.valuation-root .result-card .metric-row {
+  gap: var(--sp-4, 16px);
+}
+.valuation-root .battery-result-card .metric-row {
+  gap: var(--sp-5);
+}
+.valuation-root .result-card .metric {
+  gap: 4px;
+}
+.valuation-root .battery-result-card .metric {
+  gap: 2px;
+}
+.valuation-root .result-card .metric-label {
+  font-size: var(--text-xs, 12px);
+}
+.valuation-root .battery-result-card .metric-label {
+  font-size: var(--fs-sm);
+}
+.valuation-root .result-card .metric-value {
+  font-weight: var(--fw-semibold, 600);
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-feature-settings: 'tnum' 1;
+}
+.valuation-root .battery-result-card .metric-value {
+  font-weight: var(--fw-medium);
+}
+
+@media (max-width: 768px) {
+  .valuation-root .metric-row {
+    grid-template-columns: 1fr;
+    gap: var(--sp-3, 12px);
+  }
+  .valuation-root .metric-value {
+    font-size: var(--fs-md, 16px);
+  }
+}

@@ -113,25 +113,8 @@ const sohColor = computed(() => {
   background: var(--color-border);
   margin: var(--sp-3) 0;
 }
-.metric-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: var(--sp-5);
-}
-.metric {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.metric-label {
-  font-size: var(--fs-sm);
-  color: var(--color-text-tertiary);
-}
-.metric-value {
-  font-size: var(--fs-lg);
-  font-weight: var(--fw-medium);
-  color: var(--color-text);
-}
+/* .metric-row / .metric / .metric-label / .metric-value 的结构与档位差异
+   （14px 标签 + 中等字重）已收敛到 assets/styles/valuation-view-sections.css。 */
 
 /* ===== 移动端适配 ===== */
 @media (max-width: 768px) {
@@ -145,13 +128,6 @@ const sohColor = computed(() => {
   }
   .battery-result-unit {
     font-size: 20px;
-  }
-  .metric-row {
-    grid-template-columns: 1fr;
-    gap: var(--sp-3);
-  }
-  .metric-value {
-    font-size: var(--fs-md);
   }
 }
 </style>
