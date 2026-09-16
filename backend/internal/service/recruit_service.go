@@ -5,11 +5,9 @@
 package service
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -74,75 +72,6 @@ type RecruitResumeCard struct {
 type RecruitListResult struct {
 	Items []RecruitResumeCard `json:"items"`
 	Total int64               `json:"total"`
-}
-
-// MaskRealName 真实姓名打码：1 字→*，2 字→首字+*，≥3 字→首字+中间*+尾字。
-func MaskRealName(name string) string {
-	s := strings.TrimSpace(name)
-	if s == "" {
-		return ""
-	}
-	rs := []rune(s)
-	n := len(rs)
-	if n == 1 {
-		return "*"
-	}
-	if n == 2 {
-		return string(rs[0]) + "*"
-	}
-	return string(rs[0]) + strings.Repeat("*", n-2) + string(rs[n-1])
-}
-
-// desensitize 将原始 JobCard 转为脱敏卡（唯一脱敏路径，列表与详情共用）。
-func desensitize(m *model.JobCard) RecruitResumeCard {
-	masked := MaskRealName(m.RealName)
-	// 持证去图：strip image_urls
-	certsRaw := m.ResumeCertifications
-	if len(certsRaw) == 0 {
-		certsRaw = model.JSONB([]byte("[]"))
-	}
-	// 解析并重建，避免原图泄露
-	var certs []map[string]any
-	if err := json.Unmarshal([]byte(certsRaw), &certs); err == nil {
-		for i := range certs {
-			delete(certs[i], "image_urls")
-			delete(certs[i], "imageUrls")
-		}
-		if b, err := json.Marshal(certs); err == nil {
-			certsRaw = model.JSONB(b)
-		} else {
-			certsRaw = model.JSONB([]byte("[]"))
-		}
-	} else {
-		certsRaw = model.JSONB([]byte("[]"))
-	}
-	// expected_regions / experiences 保持原样（无敏感字段）
-	expRegions := m.ExpectedRegions
-	if len(expRegions) == 0 {
-		expRegions = model.JSONB([]byte("[]"))
-	}
-	exps := m.ResumeExperiences
-	if len(exps) == 0 {
-		exps = model.JSONB([]byte("[]"))
-	}
-	return RecruitResumeCard{
-		UserID:                m.UserID,
-		RealName:              masked,
-		RealNameMasked:        masked,
-		ExpectedPositionID:    m.ExpectedPositionID,
-		ExpectedPositionExtra: m.ExpectedPositionExtra,
-		ExpectedRegions:       JSONArray(expRegions),
-		SalaryMin:             m.SalaryMin,
-		SalaryMax:             m.SalaryMax,
-		SalaryNegotiable:      m.SalaryNegotiable,
-		AvailableIn:           m.AvailableIn,
-		JobNature:             m.JobNature,
-		ExperienceYears:       m.ExperienceYears,
-		SelfIntro:             m.SelfIntro,
-		ResumeExperiences:     JSONArray(exps),
-		ResumeCertifications:  JSONArray(certsRaw),
-		UpdatedAt:             m.UpdatedAt.Format(time.RFC3339),
-	}
 }
 
 // fillContactStates 批量回填企业视角联系状态（#489，禁止 N+1）。

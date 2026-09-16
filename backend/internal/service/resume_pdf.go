@@ -6,7 +6,6 @@ package service
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -45,9 +44,11 @@ func (g *ResumePDFRenderer) RenderResumePDF(m *model.JobCard, testCompress bool)
 	}
 
 	pdf.AddPage()
-	g.renderHeader(pdf, m)
-	g.renderBasicInfo(pdf, m)
-	g.renderSections(pdf, m)
+	// 取值由投影模块给出（resume_projection.go：打码规则与三处字段清单同文件）
+	view := resumePDFViewOf(m)
+	g.renderHeader(pdf, view)
+	g.renderBasicInfo(pdf, view)
+	g.renderSections(pdf, view)
 
 	buf := &bytes.Buffer{}
 	if err := pdf.Output(buf); err != nil {
@@ -76,14 +77,13 @@ var (
 )
 
 // renderHeader 页头：姓名（打码）+ 一句话定位（期望岗位/意向地区）。
-func (g *ResumePDFRenderer) renderHeader(pdf *gofpdf.Fpdf, m *model.JobCard) {
-	masked := MaskRealName(m.RealName)
+func (g *ResumePDFRenderer) renderHeader(pdf *gofpdf.Fpdf, v resumePDFView) {
 	pdf.SetFont(pdfutil.FontSimHeiBold, "B", 20)
 	pdf.SetTextColor(resumeText[0], resumeText[1], resumeText[2])
 	pdf.SetXY(pdfutil.PageMarginMm, pdfutil.PageMarginMm+2)
-	pdf.CellFormat(resumeContentW, 10, masked, "", 1, "L", false, 0, "")
+	pdf.CellFormat(resumeContentW, 10, v.RealNameMasked, "", 1, "L", false, 0, "")
 
-	sub := g.headerLine(m)
+	sub := headerLine(v)
 	if sub != "" {
 		pdf.SetFont(pdfutil.FontSimHei, "", 10)
 		pdf.SetTextColor(resumeTextSub[0], resumeTextSub[1], resumeTextSub[2])
@@ -98,39 +98,39 @@ func (g *ResumePDFRenderer) renderHeader(pdf *gofpdf.Fpdf, m *model.JobCard) {
 }
 
 // headerLine 头部定位行（期望岗位 · 意向地区 · 期望薪资）。
-func (g *ResumePDFRenderer) headerLine(m *model.JobCard) string {
+func headerLine(v resumePDFView) string {
 	parts := make([]string, 0, 3)
-	if m.ExpectedPositionExtra != "" {
-		parts = append(parts, m.ExpectedPositionExtra)
-	} else if m.ExpectedPositionID != nil {
+	if v.PositionExtra != "" {
+		parts = append(parts, v.PositionExtra)
+	} else if v.PositionPicked {
 		parts = append(parts, "期望岗位已选")
 	}
-	if regs := resumeRegions(m.ExpectedRegions); len(regs) > 0 {
-		parts = append(parts, "意向："+strings.Join(regs, "、"))
+	if len(v.Regions) > 0 {
+		parts = append(parts, "意向："+strings.Join(v.Regions, "、"))
 	}
-	if m.SalaryNegotiable {
+	if v.SalaryNegotiable {
 		parts = append(parts, "薪资面议")
-	} else if m.SalaryMin != nil || m.SalaryMax != nil {
+	} else if v.SalaryMin != nil || v.SalaryMax != nil {
 		lo, hi := "-", "-"
-		if m.SalaryMin != nil {
-			lo = fmt.Sprintf("%d", *m.SalaryMin)
+		if v.SalaryMin != nil {
+			lo = fmt.Sprintf("%d", *v.SalaryMin)
 		}
-		if m.SalaryMax != nil {
-			hi = fmt.Sprintf("%d", *m.SalaryMax)
+		if v.SalaryMax != nil {
+			hi = fmt.Sprintf("%d", *v.SalaryMax)
 		}
 		parts = append(parts, fmt.Sprintf("期望薪资 %s-%s", lo, hi))
 	}
 	return strings.Join(parts, "  |  ")
 }
 
-// renderBasicInfo 基本信息区（无电话/微信；现居地截断到市）。
-func (g *ResumePDFRenderer) renderBasicInfo(pdf *gofpdf.Fpdf, m *model.JobCard) {
+// renderBasicInfo 基本信息区（无电话/微信；现居地已由投影截断到市）。
+func (g *ResumePDFRenderer) renderBasicInfo(pdf *gofpdf.Fpdf, v resumePDFView) {
 	g.sectionTitle(pdf, "基本信息")
 	rows := [][2]string{
-		{"现居地", cityLevelRegion(m.Region)},
-		{"工作年限", fmt.Sprintf("%d 年", m.ExperienceYears)},
-		{"到岗时间", availableLabel(m.AvailableIn)},
-		{"用工性质", jobNatureLabel(m.JobNature)},
+		{"现居地", v.RegionCity},
+		{"工作年限", fmt.Sprintf("%d 年", v.ExperienceYears)},
+		{"到岗时间", availableLabel(v.AvailableIn)},
+		{"用工性质", jobNatureLabel(v.JobNature)},
 	}
 	for _, r := range rows {
 		if r[1] == "" || r[1] == "-" {
@@ -142,20 +142,20 @@ func (g *ResumePDFRenderer) renderBasicInfo(pdf *gofpdf.Fpdf, m *model.JobCard) 
 }
 
 // renderSections 分段：自我介绍 / 工作经历 / 持证（只出名称）。
-func (g *ResumePDFRenderer) renderSections(pdf *gofpdf.Fpdf, m *model.JobCard) {
-	if strings.TrimSpace(m.SelfIntro) != "" {
+// 取值已由投影模块解析与打码，本函数只排版。
+func (g *ResumePDFRenderer) renderSections(pdf *gofpdf.Fpdf, v resumePDFView) {
+	if strings.TrimSpace(v.SelfIntro) != "" {
 		g.sectionTitle(pdf, "自我介绍")
 		pdf.SetFont(pdfutil.FontSimHei, "", resumeBodyPt)
 		pdf.SetTextColor(resumeText[0], resumeText[1], resumeText[2])
-		pdf.MultiCell(resumeContentW, resumeLineH, strings.TrimSpace(m.SelfIntro), "", "L", false)
+		pdf.MultiCell(resumeContentW, resumeLineH, strings.TrimSpace(v.SelfIntro), "", "L", false)
 		pdf.Ln(2)
 	}
 
 	// 工作经历
-	var exps []map[string]any
-	if err := json.Unmarshal(m.ResumeExperiences, &exps); err == nil && len(exps) > 0 {
+	if len(v.Experiences) > 0 {
 		g.sectionTitle(pdf, "工作经历")
-		for _, e := range exps {
+		for _, e := range v.Experiences {
 			company, _ := e["company"].(string)
 			role, _ := e["role"].(string)
 			startM, _ := e["start_month"].(string)
@@ -188,11 +188,10 @@ func (g *ResumePDFRenderer) renderSections(pdf *gofpdf.Fpdf, m *model.JobCard) {
 		}
 	}
 
-	// 持证（只出名称，不出原图）
-	var certs []map[string]any
-	if err := json.Unmarshal(m.ResumeCertifications, &certs); err == nil && len(certs) > 0 {
+	// 持证（只出编号与有效期，不出原图——投影模块已按白名单去图）
+	if len(v.Certifications) > 0 {
 		g.sectionTitle(pdf, "持证情况")
-		for _, c := range certs {
+		for _, c := range v.Certifications {
 			certNo, _ := c["cert_no"].(string)
 			expire, _ := c["expire_date"].(string)
 			line := "持证"
@@ -230,49 +229,6 @@ func (g *ResumePDFRenderer) labelValueRow(pdf *gofpdf.Fpdf, label, value string)
 	pdf.SetFont(pdfutil.FontSimHei, "", resumeBodyPt)
 	pdf.SetTextColor(resumeText[0], resumeText[1], resumeText[2])
 	pdf.CellFormat(resumeContentW-26, resumeLineH, value, "", 1, "L", false, 0, "")
-}
-
-// resumeRegions 解析 expected_regions JSONB 为字符串数组（兼容历史格式）。
-func resumeRegions(raw model.JSONB) []string {
-	var arr []string
-	if err := json.Unmarshal([]byte(raw), &arr); err != nil {
-		return nil
-	}
-	out := make([]string, 0, len(arr))
-	for _, r := range arr {
-		if v := strings.TrimSpace(r); v != "" {
-			out = append(out, v)
-		}
-	}
-	return out
-}
-
-// cityLevelRegion 现居地截断到市（#485 打码口径 / #486 数据契约）：
-//   - 两段「省/市」保留两段
-//   - 直辖市一段保留一段
-//   - 历史无分隔串（如「江苏苏州精确地址123号」）按省/市字典拆分到市
-func cityLevelRegion(region string) string {
-	r := strings.TrimSpace(region)
-	if r == "" {
-		return "-"
-	}
-	parts := strings.Split(r, "/")
-	// #486：直辖市一段式——即使存量出现「北京市/东城区」等两段，也只保留一段（区不入 PDF）
-	if regionMunicipalities[parts[0]] {
-		return parts[0]
-	}
-	if len(parts) >= 2 {
-		return strings.Join(parts[:2], "/")
-	}
-	// 无分隔：直辖市整段保留
-	if regionMunicipalities[r] {
-		return r
-	}
-	// 尝试按省名 + 市名拆分（如「江苏苏州精确地址123号」→「江苏/苏州」）
-	if prov, city := SplitRegionNoSeparator(r); city != "" {
-		return prov + "/" + city
-	}
-	return r
 }
 
 func availableLabel(v string) string {
