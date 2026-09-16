@@ -17,7 +17,7 @@
 ## 账号与认证
 
 - **统一账号**：hrwai_users 表 + 统一 JWT（角色 hrwai_user）；支持用户名或手机号登录。
-- **验证码（code）**：邮箱/手机号注册、登录、绑定、改账号、找回/修改密码的 6 位数字验证码。用途六态：register / login / bind / account_change / reset_password / change_password。错误上限 5 次，发送节流 60 秒，TTL 5 分钟。
+- **验证码（code）**：邮箱/手机号注册、登录、绑定、改账号、找回/修改密码的 6 位数字验证码。用途六态：register / login / bind / account_change / reset_password / change_password。错误上限 5 次，发送节流 60 秒，TTL 5 分钟。**用途是这条状态机的分区键**：每个用途自带两项属性——**入口前置**（完成该用途的动作是否需要已登录会话）与**目标占用口径**（目标须未注册 / 须已注册 / 无需校验，后者适用于目标是当前用户自己账号的场景）。
 - **验证码通道（channel）**：邮箱（SMTP，开发降级日志）与短信（腾讯云 SMS SendSms，开发降级日志）是同一验证码状态机两侧的 adapter。
 - **会话（session）**：签发（issue）/ 校验（verify）/ 吊销（revoke）JWT 的生命周期。双令牌（ADR-0016）：access 2h（中间件仅收 access）+ refresh 7 天轮换；黑名单（`jwt:blacklist:`）只管理 refresh——刷新轮换即作废旧 refresh（防重放），登出撤销 refresh；access 生命周期短，不入黑名单、自然过期。
 - **登录态 Cookie**：父域名 httpOnly Cookie（hrwai_token），子域名间共享登录；Bearer 头优先于 Cookie。生产已启用 HTTPS（PR #254），Cookie 通道恢复、仅携带 access（不自动续期，见 ADR-0016）；HTTP 时期的历史约束见 ADR-0003（已解决）。
@@ -122,6 +122,8 @@
   **`visibility` 口径**：仅管控 L2 被动浏览面（简历库可被搜到与否），不是招聘可见性的总开关。投递是学员的主动点对点动作（最强的一次同意），`hidden` 简历同样可投递——同一个学员可能**在简历库里搜不到、却出现在某企业自己职位的投递列表中**；两条读路径的门禁条件不同（简历库按 `visibility=open`，投递列表按「投递即授权」）。
 - **联系方式交换（contact exchange）**：L3 闭环，招聘方带附言（1-200 字）发起 `contact_requests`（`pending`→`approved`/`rejected`/`expired`/`revoked`，`pending` 14 天过期、`rejected`/`revoked` 后 30 天冷却、同一企业对同一学员 `pending` 唯一、单企业日限 20），学员站内信收到申请（企业名/联系人/附言，不含企业电话，`link=/training/resume`）后可同意/拒绝/撤回（永久授权、撤回实时生效、明文不缓存现查 `approved` 状态）；**双向对等（spec #484/#487）**：授权 `approved` 后（无论来源 recruiter/application）学员侧申请列表/投递列表可见企业全量联系信息（企业名/联系人/**电话/邮箱/微信**，微信为 `recruiter_users.wechat` 可空列，管理员创建/编辑招聘者时录入），撤回后实时消失；pending/rejected/revoked/expired 一律不透出明文，招聘方同意后邮件通知并可在「我的申请」列表查看状态，学员注销时申请与授权一并失效。「企业」粒度与招聘者账号 1:1，由 `recruiter_users.credit_code` 唯一索引保证（spec #449 决定 4）。
   **授权双来源（`source`）**：`recruiter`（企业发起）与 `application`（投递产生）——投递在学员点下那一刻于同一事务写入/复活一条 `approved` 的授权，明文载体**仍然只有联系方式交换这一个**（GetContact 与授权撤回实现不变）；投递产生的授权不计入企业日限、不受冷却限制。撤回投递默认**不连带**收回授权（学员显式选择才置 `revoked`）。
+- **授权有效态（effective grant）**：某个 **(企业, 学员)** 关系上「可取对方明文联系方式」的资格——判据是存在一条经批准的授权，且双方账号均未注销（学员注销时授权一并失效）。**学员侧看企业明文与招聘方看学员明文共用这一条判据**（双向对等）；招聘方在简历库与投递列表上看到的「未授权 / 待确认 / 已授权」三值徽章是它的投影，不是另一套状态。
+  _Avoid_: 把「已授权」说成招聘者账号的属性（它挂在 (企业, 学员) 这一对上，同一招聘者对不同学员的授权态不同）；把「撤回投递」等同于收回授权（撤回投递默认不连带收回，是否收回由学员显式选择，见「投递」）
 - **简历查看留痕（resume view trail）**：招聘方每次查看含个人信息的脱敏卡即写入 `recruit_resume_views`（`recruiter_id`/`resume_user_id`/`viewed_at`，粒度同一招聘方对同一学员每日一次，健康检查与自身访问不写），学员侧仅见聚合数「近 7 天 N 家企业查看过你的简历」（按企业去重，`WHERE resume_user_id=? AND viewed_at>=now-7d` 走 `(resume_user_id, viewed_at)` 索引，不返回企业名），招聘方无法反查。
 - **职位（job posting）**：企业招聘者在平台上的供给侧表达「我在招什么人」（`job_postings` 表，spec #449）。职位名是自由文本，**不叫「岗位」**——本系统「岗位」已是专业方向的历史别名（术语登记见下）；专业方向必填（复用培训域 `specialty` 字典，业务层必填、库层可空——字典项删除置空不级联），另带地区/薪资/经验要求/职位描述。生命周期二态 `open`/`closed`（无草稿态、无有效期自动过期、**无招聘人数 headcount**——砍掉录用后「招满」无事实来源），另记首次发布时间 `published_at` 用于新鲜度排序。单企业活跃职位上限 50（宽松值只防误操作）。先发后审：学员可举报，管理员可带原因强制下架（见「职位举报与强制下架」）；被强制下架的职位学员侧不可见、企业不能自行重新上架（只能新发或等平台处理）。**学员视角投递状态（spec #484/#488）**：职位列表/详情响应按「该学员 × 该职位」批量 join 回传 `apply_state`（none 可投递/applied 已投递/not_hired 未录用且 30 天冷却中，带 `cooldown_days` 剩余天数），前端按钮三态与卡片角标据此渲染，不再靠吃后端 400。
   _Avoid_: 岗位、招聘岗位

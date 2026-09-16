@@ -298,7 +298,7 @@ Query：`page`（默认 1）、`page_size`（默认 12）、`specialty_id`、`le
 
 `content_type`：`text` | `video` | `document` | `ppt` | `image`；`study_status`：`completed` / `studying` / 空。
 
-**正文格式（ADR-0046）**：`content` 是 Markdown，由讲师在 Web 编辑端（Vditor）撰写，Web 学员端用**发布端渲染器**（marked + highlight.js + KaTeX）渲染——支持表格、代码高亮与公式（`$...$` / `$$...$$`）。接口本身不感知渲染器、字段不变；**移动端不渲染公式**（属「降级仍可读」，公式以源码呈现），移动端的表格渲染缺口另立 issue。编辑端的「发布端预览」与学员端同源，不是 Vditor 内部引擎的解释。
+**正文格式（ADR-0046）**：`content` 是 Markdown，由讲师在 Web 编辑端（Vditor）撰写，Web 学员端用**发布端渲染器**（marked + highlight.js + KaTeX）渲染——支持表格、代码高亮与公式（`$...$` / `$$...$$`）。接口本身不感知渲染器、字段不变；**移动端**按内容面分子集（ADR-0046 决定 6）：**章节面**把表格渲染成原生表格，**公式**降级为源码原样呈现（属「降级仍可读」）。编辑端的「发布端预览」与学员端同源，不是 Vditor 内部引擎的解释。
 
 **POST /api/course/:course_id/progress**
 

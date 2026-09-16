@@ -1,11 +1,41 @@
 /**
  * 轻量级 Markdown 解析器
  * 将 markdown 文本解析为 MarkdownBlock[]，由原生组件渲染
- * 支持：标题(1-6)、段落、代码块、无序/有序列表、引用、分隔线、图片、行内样式(粗体/斜体/代码)
+ * 支持：标题(1-6)、段落、代码块、无序/有序列表、引用、分隔线、图片、表格、行内样式(粗体/斜体/代码)
+ *
+ * **子集档位**（ADR-0046 的「内容面 × 端 × 能力」矩阵，移动端一列）：
+ * - `chapter`（章节正文，可信面）：表格解析成 `table` 块，由页面渲染成原生表格；
+ * - `featured`（内容精选）：正文子集是**三端交集**（不含表格与公式），表格在这里**不解析**，
+ *   退回逐行原始文本——与 Web `featuredMarked` 的降级同口径（那边把 `token.raw` 转义后原样输出）。
+ *
+ * **表格的块形状（#905 实测钉住，勿改成「自定义类型数组字段」的写法）**：UTS 会把**自定义类型的
+ * 数组字段**在编译期改写名字——给 `MarkdownBlock` 加 `rows : MarkdownTableRow[]` 后，产出的是
+ * `class MarkdownTableRow__1`，而引用处仍是 `MarkdownTableRow`，整模块 kotlinc 报 60 条
+ * unresolved reference（④c 门实测）。故表格**按行**解析，只用既有扁平字段：
+ * 每行一个 `type: 'table'` 块，`items` = 该行单元格，`level` = {@link TABLE_LEVEL_HEAD} 表示表头行
+ * （表头恒为表格第一行），列数由表头行归一（少补空串、多则截断）。页面据此「逐行 flex + 等宽单元格」
+ * 渲染，既不需要嵌套数组，也不需要新增类型。
+ *
+ * **公式的降级表现（ADR-0046 矩阵「移动端 · 公式」= 降级为源码）**：移动端不做数学排版，
+ * `$...$` / `$$...$$` 一律**原样呈现源码**（属「降级仍可读」）。为此行内标记剥离会**跳过公式跨度**——
+ * 否则 `$a_1 + b_2$` 会被斜体规则 `_..._` 撕掉下划线，降级产物就不再是源码。
  *
  * @note 不依赖 DOM API，跨端通用（App/小程序/H5）
  */
 import type { MarkdownBlock } from '../types/index'
+
+/** 子集档位：章节正文（可信面全集——含表格） */
+export const SUBSET_CHAPTER = 'chapter'
+/** 子集档位：内容精选（三端交集——表格与公式都降级为原始文本） */
+export const SUBSET_FEATURED = 'featured'
+
+/** 表格块的 level 取值：表头行（表格第一行） */
+export const TABLE_LEVEL_HEAD = 1
+/** 表格块的 level 取值：正文行 */
+export const TABLE_LEVEL_BODY = 0
+
+/** 转义竖线的临时占位符：切分单元格前先替换，避免 `\|` 被当成列分隔符 */
+const ESCAPED_PIPE = '\u0001'
 
 /** 去除行首尾空白 */
 function trim(line : string) : string {
@@ -15,8 +45,9 @@ function trim(line : string) : string {
 /**
  * 去除行内 markdown 标记符号，保留纯文本
  * 支持 **粗体** *斜体* `代码` [链接](url) ![图片](url)
+ * 注意：公式跨度不在这里保护，见 stripInline
  */
-function stripInline(text : string) : string {
+function stripInlinePlain(text : string) : string {
 	let s = text
 	// 图片 ![alt](url) → alt
 	s = s.replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
@@ -33,15 +64,125 @@ function stripInline(text : string) : string {
 	return s
 }
 
+/** 从 from 起连续 `$` 的个数（定界符长度判定用） */
+function dollarRun(text : string, from : number) : number {
+	let n = 0
+	while (from + n < text.length && text.substring(from + n, from + n + 1) == '$') {
+		n++
+	}
+	return n
+}
+
+/**
+ * 收集行内公式跨度，返回扁平数组 `[start, end, start, end, ...]`。
+ *
+ * 判据只认「成对的 `$` / `$$`、内部非空」——移动端对公式只做**原样保留**、不做数学排版，
+ * 所以这里**宽进**：`价格 $5 到 $10 元` 这类误判的后果也只是「保留原文」，与不保护的结果一致。
+ */
+function collectMathSpans(text : string) : number[] {
+	const spans : number[] = []
+	let i = 0
+	while (i < text.length) {
+		if (text.substring(i, i + 1) != '$') {
+			i++
+			continue
+		}
+		const run = dollarRun(text, i)
+		const want = run >= 2 ? 2 : 1
+		let cursor = i + want
+		let close = -1
+		while (cursor < text.length) {
+			if (text.substring(cursor, cursor + 1) != '$') {
+				cursor++
+				continue
+			}
+			const closeRun = dollarRun(text, cursor)
+			if (closeRun >= want) {
+				close = cursor
+				break
+			}
+			cursor = cursor + closeRun
+		}
+		if (close > i + want) {
+			spans.push(i)
+			spans.push(close + want)
+			i = close + want
+		} else {
+			i = i + want
+		}
+	}
+	return spans
+}
+
+/**
+ * 去除行内 markdown 标记符号，保留纯文本；**公式跨度原样跳过**（降级为源码的保证）。
+ */
+function stripInline(text : string) : string {
+	const spans = collectMathSpans(text)
+	if (spans.length == 0) return stripInlinePlain(text)
+	let out = ''
+	let cursor = 0
+	for (let i = 0; i + 1 < spans.length; i += 2) {
+		const start = spans[i]
+		const end = spans[i + 1]
+		out = out + stripInlinePlain(text.substring(cursor, start))
+		out = out + text.substring(start, end)
+		cursor = end
+	}
+	out = out + stripInlinePlain(text.substring(cursor))
+	return out
+}
+
+/** 行内是否含列分隔（GFM 表格行必须有竖线） */
+function hasTablePipe(line : string) : boolean {
+	return line.indexOf('|') >= 0
+}
+
+/** 原样切分一行的各列（保留行内标记，公式不动） */
+function splitTableRowRaw(line : string) : string[] {
+	let s = trim(line)
+	if (s.startsWith('|')) s = s.substring(1)
+	if (s.endsWith('|')) s = s.substring(0, s.length - 1)
+	const guarded = s.replace(/\\\|/g, ESCAPED_PIPE)
+	const parts = guarded.split('|')
+	const cells : string[] = []
+	for (let i = 0; i < parts.length; i++) {
+		cells.push(trim(parts[i].split(ESCAPED_PIPE).join('|')))
+	}
+	return cells
+}
+
+/** 表头下的分隔行：`| --- | :---: | ---: |` */
+function isTableDelimiterRow(line : string) : boolean {
+	if (!hasTablePipe(line)) return false
+	const cells = splitTableRowRaw(line)
+	if (cells.length == 0) return false
+	for (let i = 0; i < cells.length; i++) {
+		if (cells[i].match(/^:?-+:?$/) == null) return false
+	}
+	return true
+}
+
+/** 一行的单元格归一：少补空串、多则截断（列宽靠等宽单元格，多出的格子无处安放） */
+function normalizeTableRow(raw : string[], width : number) : string[] {
+	const cells : string[] = []
+	for (let i = 0; i < width; i++) {
+		cells.push(i < raw.length ? stripInline(raw[i]) : '')
+	}
+	return cells
+}
+
 /**
  * 解析 markdown 文本为块数组
  * @param markdown 原始 markdown 文本
+ * @param subset 子集档位：`chapter`（缺省，章节正文）/ `featured`（内容精选，三端交集）
  * @returns MarkdownBlock[] 渲染块列表
  */
-export function parseMarkdown(markdown : string) : MarkdownBlock[] {
+export function parseMarkdown(markdown : string, subset : string = SUBSET_CHAPTER) : MarkdownBlock[] {
 	const blocks : MarkdownBlock[] = []
 	if (markdown.length == 0) return blocks
 
+	const isFeatured = subset == SUBSET_FEATURED
 	const lines = markdown.split('\n')
 	let i = 0
 	let inCodeBlock = false
@@ -73,6 +214,16 @@ export function parseMarkdown(markdown : string) : MarkdownBlock[] {
 			} as MarkdownBlock)
 			quoteLines = []
 		}
+	}
+
+	/** 表格按行入块：每行一个 table 块，level 区分表头/正文，text 是该行的纯文本投影 */
+	function pushTableRow(cells : string[], isHead : boolean) {
+		blocks.push({
+			type: 'table',
+			level: isHead ? TABLE_LEVEL_HEAD : TABLE_LEVEL_BODY,
+			text: cells.join(' '),
+			items: cells,
+		} as MarkdownBlock)
 	}
 
 	while (i < lines.length) {
@@ -113,6 +264,52 @@ export function parseMarkdown(markdown : string) : MarkdownBlock[] {
 			flushList()
 			flushQuote()
 			i++
+			continue
+		}
+
+		// 块级公式 $$ ... $$（降级口径：原样呈现源码，逐行保留，不做数学排版）
+		if (line.startsWith('$$')) {
+			flushList()
+			flushQuote()
+			const formulaLines : string[] = []
+			formulaLines.push(rawLine)
+			i++
+			if (!(line.length > 4 && line.endsWith('$$'))) {
+				while (i < lines.length) {
+					const nextLine = lines[i]
+					formulaLines.push(nextLine)
+					i++
+					const closing = trim(nextLine)
+					if (closing == '$$' || closing.endsWith('$$')) break
+				}
+			}
+			blocks.push({
+				type: 'paragraph',
+				level: 0,
+				text: formulaLines.join('\n'),
+				items: [] as string[],
+			} as MarkdownBlock)
+			continue
+		}
+
+		// 表格（仅章节档；内容精选档走三端交集，表格退回逐行原始文本）
+		// 表头行本身不能是分隔行，否则孤立的 `| --- |` 会自成一格单列表
+		if (!isFeatured && hasTablePipe(line) && !isTableDelimiterRow(line)
+			&& i + 1 < lines.length && isTableDelimiterRow(trim(lines[i + 1]))) {
+			flushList()
+			flushQuote()
+			const headerRaw = splitTableRowRaw(line)
+			const width = headerRaw.length
+			pushTableRow(normalizeTableRow(headerRaw, width), true)
+			i = i + 2
+			while (i < lines.length) {
+				const bodyLine = trim(lines[i])
+				if (bodyLine.length == 0) break
+				if (!hasTablePipe(bodyLine)) break
+				if (isTableDelimiterRow(bodyLine)) break
+				pushTableRow(normalizeTableRow(splitTableRowRaw(bodyLine), width), false)
+				i++
+			}
 			continue
 		}
 
