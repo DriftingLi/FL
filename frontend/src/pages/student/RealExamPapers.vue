@@ -11,20 +11,26 @@
       </div>
     </div>
 
-    <UiErrorState
-      v-if="loadError"
-      title="真题卷加载失败"
-      description="网络或服务端异常，可重试"
+    <UiAsyncSection
+      :error="loadError"
+      :loading="loading"
+      :empty="papers.length === 0"
       :retrying="retrying"
+      error-title="真题卷加载失败"
+      error-description="网络或服务端异常，可重试"
       @retry="handleRetry"
-    />
-    <div v-else-if="loading" class="empty-wrap rounded-card border border-line bg-panel py-6">
-      <el-skeleton :rows="4" animated />
-    </div>
-    <div v-else-if="papers.length === 0" class="empty-wrap rounded-card border border-line bg-panel py-6">
-      <UiEmptyState :description="emptyDescription" />
-    </div>
-    <div v-else class="variant-c-timeline flex flex-col gap-5">
+    >
+      <template #skeleton>
+        <div class="empty-wrap rounded-card border border-line bg-panel py-6">
+          <el-skeleton :rows="4" animated />
+        </div>
+      </template>
+      <template #empty>
+        <div class="empty-wrap rounded-card border border-line bg-panel py-6">
+          <UiEmptyState :description="emptyDescription" />
+        </div>
+      </template>
+    <div class="variant-c-timeline flex flex-col gap-5">
       <div v-for="[year, list] in grouped" :key="year" class="timeline-year">
         <div class="timeline-year-head mb-2.5 flex items-center gap-2.5">
           <span class="timeline-dot size-2.5 shrink-0 rounded-full bg-ui-500 ring-4 ring-ui-100"></span>
@@ -59,6 +65,7 @@
         </div>
       </div>
     </div>
+    </UiAsyncSection>
   </div>
 </template>
 
@@ -70,8 +77,8 @@ import { useCredentialStore } from '@/stores/credential'
 import { realExamApi, type RealExamPaper } from '@/api/realExam'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useStagger } from '@/composables/useStagger'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
-import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import { useConfirm } from '@/composables/useConfirm'

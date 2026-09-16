@@ -43,7 +43,7 @@
 
 				<!-- 聊天消息 -->
 				<view v-if="messages.length > 0" class="chat-area">
-					<AiChatBubble v-for="(msg, idx) in messages" :key="idx" :role="msg.role" :content="msg.content" :show-actions="msg.role == 'assistant'" :is-last="idx == messages.length - 1" @copy="onCopyText(msg.content)" @retry="onRetry" />
+					<AiChatBubble v-for="(msg, idx) in messages" :key="idx" :role="msg.role" :content="msg.content" :sources="msg.sources" :show-actions="msg.role == 'assistant'" :is-last="idx == messages.length - 1" @copy="onCopyText(msg.content)" @retry="onRetry" />
 					<view v-if="thinking" class="message-row assistant">
 						<view class="message-bubble thinking">
 							<text class="message-text">思考中...</text>
@@ -259,7 +259,14 @@
 	// 通用页**结构上**不再持有功能键，也就没有「从早退分支漏键」这条路径了。
 	function onInputSend(text : string) : void {
 		if (models.value.length == 0 && userModels.value.length == 0 && currentModelSource.value != 'custom') {
-			uni.showToast({ title: '暂无可用的 AI 模型', icon: 'none' })
+			// 平台模型为空是**长期状态**（#1044 裁定「通用对话接受不可用」）⇒ 这句是学员长期看到的文案，
+			// 必须指向可执行动作（#1062）。先给对**所有**学员都可走的路径：自定义模型的入口与配置面
+			// 都在专业版门内（未解锁时右侧菜单过滤掉 `custom-models`、设置页 user/custom 来源整行不渲染，#1024）
+			// ⇒ 只写「去配置自定义模型」对未解锁学员是死路一条，那正是本句要防的回归。
+			// 字数上限（①a 真机实测，2026-09-16，Redmi 23049RAD8C / b32d8398）：uni.showToast 的文本区是
+			// **两行 × 18 字** —— 首版文案 37 字，末字「型」不渲染（OCR 三帧一致）⇒ 定稿压到 34 字。
+			// 改这句时**必须数字数**，别超过 36（留余量），否则线上就是缺字的文案。
+			uni.showToast({ title: '平台模型未配置，请联系管理员；专业版可在「对话设置」中配置自定义模型', icon: 'none' })
 			return
 		}
 		if (currentModelSource.value == 'custom' && customModel.value.trim().length == 0) {

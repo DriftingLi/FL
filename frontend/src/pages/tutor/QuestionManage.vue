@@ -45,17 +45,19 @@
     </UiCard>
 
     <!-- 列表：错误 → 加载 → 内容 / 空态 -->
-    <UiErrorState
-      v-if="loadError"
-      title="题目加载失败"
-      description="网络或服务端异常，可重试"
+    <UiAsyncSection
+      :error="loadError"
+      :loading="loading"
+      :empty="questions.length === 0"
       :retrying="retrying"
+      error-title="题目加载失败"
+      error-description="网络或服务端异常，可重试"
       @retry="handleRetry"
-    />
+    >
+      <template #skeleton>
+        <UiSkeleton variant="table" :count="8" />
+      </template>
 
-    <UiSkeleton v-else-if="loading" variant="table" :count="8" />
-
-    <template v-else-if="questions.length > 0">
       <el-table :data="questions" stripe row-key="id">
         <el-table-column prop="id" label="ID" width="60" />
         <el-table-column prop="type" label="题型" width="100">
@@ -105,15 +107,15 @@
       @current-change="handlePageChange"
     />
       </div>
-    </template>
-
-    <UiEmptyState
-      v-else
+          <template #empty>
+        <UiEmptyState
       title="暂无题目"
       :description="hasFilters ? '当前筛选条件下没有匹配的题目' : '还没有创建任何题目'"
       :action-text="hasFilters ? '清空筛选' : '新增题目'"
       @action="hasFilters ? resetFilters() : router.push({ name: 'TutorQuestionCreate' })"
     />
+            </template>
+      </UiAsyncSection>
 
     <UiDialog v-model="detailVisible" title="题目详情" width="600px">
       <div v-if="currentQuestion" class="flex flex-col gap-2 text-sm">
@@ -162,7 +164,7 @@ import UiCard from '@/components/ui/UiCard.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
-import UiErrorState from '@/components/ui/UiErrorState.vue'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiPagination from '@/components/ui/UiPagination.vue'

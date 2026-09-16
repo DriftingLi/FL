@@ -56,25 +56,19 @@
 
       <!-- 右栏：课程网格 -->
       <main class="min-w-0 flex-1">
-        <UiErrorState
-          v-if="loadError"
-          title="课程加载失败"
-          description="网络或服务端异常，可重试"
+        <UiAsyncSection
+          :error="loadError"
+          :loading="loading"
+          :empty="courses.length === 0"
           :retrying="retrying"
+          error-title="课程加载失败"
+          error-description="网络或服务端异常，可重试"
           @retry="handleRetry"
-        />
+        >
+          <template #skeleton>
+            <UiSkeleton variant="card" :count="6"  />
+          </template>
 
-        <UiSkeleton v-else-if="loading" variant="card" :count="6" />
-
-        <UiEmptyState
-          v-else-if="courses.length === 0"
-          title="暂无课程"
-          description="当前筛选条件下没有课程，试试切换专业方向或课程等级。"
-          action-text="重置筛选"
-          @action="resetFilters"
-        />
-
-        <template v-else>
           <div class="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4 max-[560px]:grid-cols-1">
             <CourseCard
               v-for="course in courses"
@@ -118,7 +112,15 @@
             align="center"
             @current-change="handlePageChange"
           />
-        </template>
+          <template #empty>
+            <UiEmptyState
+              title="暂无课程"
+              description="当前筛选条件下没有课程，试试切换专业方向或课程等级。"
+              action-text="重置筛选"
+              @action="resetFilters"
+            />
+          </template>
+        </UiAsyncSection>
       </main>
     </div>
   </div>
@@ -142,8 +144,8 @@ import UiSelect from '@/components/ui/UiSelect.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
-import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 
 /** 导师端课程行：生成 CourseDTO（已含 credential_id，原「TutorCourse 尚未收录」的手写补充随之删除） */

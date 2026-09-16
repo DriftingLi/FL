@@ -12,18 +12,26 @@
       <el-input v-model="filters.experience" placeholder="经验要求" clearable class="!w-28" @change="resetAndLoad" />
     </div>
 
-    <UiErrorState
-      v-if="loadError"
-      title="职位加载失败"
-      description="网络或服务端异常，可重试"
+    <UiAsyncSection
+      :error="loadError"
+      :loading="loading"
+      :empty="items.length === 0"
       :retrying="retrying"
+      :skeleton="false"
+      error-title="职位加载失败"
+      error-description="网络或服务端异常，可重试"
       @retry="handleRetry"
-    />
-    <UiSkeleton v-else-if="loading && items.length === 0" variant="list" :count="4" />
-    <UiEmptyState v-else-if="items.length === 0" description="暂无招聘中的职位" />
+    >
+      <template #empty>
+        <UiEmptyState description="暂无招聘中的职位" />
+      </template>
 
-    <!-- #493：响应式方形网格（手机 1 列 → 平板 2-3 列 → 桌面 4 列） -->
-    <div v-else class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <!-- 首屏才骨架（翻页时旧列表原地保持——原 v-else-if="loading && items.length === 0" 的口径）；
+           错误/空态/内容的互斥已由 UiAsyncSection 保证。 -->
+      <UiSkeleton v-if="loading && items.length === 0" variant="list" :count="4" />
+
+      <!-- #493：响应式方形网格（手机 1 列 → 平板 2-3 列 → 桌面 4 列） -->
+      <div v-else class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       <router-link
         v-for="item in items"
         :key="String(item.id)"
@@ -48,6 +56,7 @@
         </div>
       </router-link>
     </div>
+    </UiAsyncSection>
 
     <!-- 加载更多（#493）：每批 20，不足一批即到底 -->
     <div v-if="hasMore" class="flex justify-center">
@@ -63,8 +72,8 @@ import { jobApi, type JobPosting } from '@/api/job'
 import { positionApi } from '@/api/position'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
-import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 

@@ -13,8 +13,8 @@ import { formatLocaleDateTime } from '@/utils/format'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
-import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useCredentialStore } from '@/stores/credential'
@@ -341,9 +341,19 @@ defineExpose({ loadMine })
         />
       </div>
       <div class="min-h-[200px] rounded-card bg-panel shadow-card">
-        <UiErrorState v-if="loadError" title="投稿加载失败" description="网络或服务端异常，可重试" :retrying="retrying" @retry="retryLoad" />
-        <UiSkeleton v-else-if="loading" variant="list" :count="4" />
-        <template v-else-if="contributions.length > 0">
+        <UiAsyncSection
+          :error="loadError"
+          :loading="loading"
+          :empty="contributions.length === 0"
+          :retrying="retrying"
+          error-title="投稿加载失败"
+          error-description="网络或服务端异常，可重试"
+          @retry="retryLoad"
+        >
+          <template #skeleton>
+            <UiSkeleton variant="list" :count="4" />
+          </template>
+
           <div v-for="item in contributions" :key="item.id"
             class="border-b border-line px-5 py-4 last:border-b-0">
             <div class="flex items-start gap-3">
@@ -373,8 +383,10 @@ defineExpose({ loadMine })
               </div>
             </div>
           </div>
-        </template>
-        <UiEmptyState v-else description="暂无学员投稿，快来上传第一份" />
+                  <template #empty>
+            <UiEmptyState description="暂无学员投稿，快来上传第一份" />
+                    </template>
+          </UiAsyncSection>
       </div>
       <div v-if="total > pageSize" class="mt-4 flex justify-center">
         <UiPagination

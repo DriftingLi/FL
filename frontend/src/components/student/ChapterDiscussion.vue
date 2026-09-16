@@ -27,8 +27,8 @@ import { useLike } from '@/composables/useLike'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiInput from '@/components/ui/UiInput.vue'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
-import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { useForumReport } from '@/composables/useForumReport'
@@ -232,18 +232,19 @@ watch(() => props.chapterId, () => {
       <UiButton variant="primary" size="small" :icon="EditPen" @click="openCreate">发新帖</UiButton>
     </div>
 
-    <!-- 列表四段式：错误态 → 骨架 → 内容 → 空态 -->
-    <UiErrorState
-      v-if="loadError"
-      title="讨论加载失败"
-      description="网络或服务端异常，可重试"
+    <!-- 列表四段式（#1054）：错误态 → 骨架 → 内容 → 空态由 UiAsyncSection 编排 -->
+    <UiAsyncSection
+      :error="loadError"
+      :loading="listLoading"
+      :empty="topics.length === 0"
       :retrying="retrying"
+      error-title="讨论加载失败"
+      error-description="网络或服务端异常，可重试"
       @retry="retryLoad"
-    />
-
-    <UiSkeleton v-else-if="listLoading" variant="list" :count="3" />
-
-    <template v-else-if="topics.length > 0">
+    >
+      <template #skeleton>
+        <UiSkeleton variant="list" :count="3" />
+      </template>
       <div
         v-for="topic in topics"
         :key="topic.id"
@@ -356,14 +357,14 @@ watch(() => props.chapterId, () => {
           </template>
         </div>
       </div>
-    </template>
-
-    <UiEmptyState
-      v-else
-      description="本章还没有讨论，来发第一帖吧"
-      action-text="发新帖"
-      @action="openCreate"
-    />
+      <template #empty>
+        <UiEmptyState
+          description="本章还没有讨论，来发第一帖吧"
+          action-text="发新帖"
+          @action="openCreate"
+        />
+      </template>
+    </UiAsyncSection>
 
     <!-- 发帖对话框：表单与论坛页共用 ForumPostForm，只保留壳 -->
     <UiDialog

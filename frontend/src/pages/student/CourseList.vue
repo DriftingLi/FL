@@ -46,20 +46,20 @@
 
       <main class="min-w-0 flex-1">
         <div class="cc-content">
-          <!-- 加载：骨架屏（替代原全容器 v-loading，避免整块变灰遮挡已有内容） -->
-          <UiSkeleton v-if="loading" variant="card" :count="6" />
-
-          <!-- 错误：带重试 -->
-          <UiErrorState
-            v-else-if="loadError"
-            title="课程加载失败"
-            description="网络或服务端异常，可重试"
+          <UiAsyncSection
+            :error="loadError"
+            :loading="loading"
+            :empty="courses.length === 0"
             :retrying="retrying"
+            error-title="课程加载失败"
+            error-description="网络或服务端异常，可重试"
             @retry="retryLoad"
-          />
+          >
+            <template #skeleton>
+              <UiSkeleton variant="card" :count="6" />
+            </template>
 
-          <template v-else>
-            <div v-if="courses.length > 0" class="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4 max-[560px]:grid-cols-1">
+            <div class="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4 max-[560px]:grid-cols-1">
               <CourseCard
                 v-for="(course, i) in courses"
                 :key="course.course_id"
@@ -99,8 +99,8 @@
             </CourseCard>
           </div>
 
-          <UiEmptyState
-              v-else
+          <template #empty>
+            <UiEmptyState
               size="sm"
               :description="
                 credentialStore.current
@@ -109,6 +109,7 @@
               "
             />
           </template>
+          </UiAsyncSection>
         </div>
 
         <div class="cc-pagination mt-5 flex justify-center" v-if="total > pageSize">
@@ -234,8 +235,8 @@ import { useCredentialStore } from '@/stores/credential'
 import FacetCard from '@/components/catalog/FacetCard.vue'
 import FacetItem from '@/components/catalog/FacetItem.vue'
 import CourseCard from '@/components/catalog/CourseCard.vue'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
-import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiProgress from '@/components/ui/UiProgress.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiButton from '@/components/ui/UiButton.vue'

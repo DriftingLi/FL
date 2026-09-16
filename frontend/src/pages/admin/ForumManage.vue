@@ -95,15 +95,16 @@
         </template>
       </UiFilterBar>
 
-      <UiErrorState
-        v-if="loadError"
-        title="帖子加载失败"
-        description="网络或服务端异常，可重试"
+      <UiAsyncSection
+        :error="loadError"
+        :loading="loading"
         :retrying="retrying"
+        :skeleton="false"
+        error-title="帖子加载失败"
+        error-description="网络或服务端异常，可重试"
         @retry="retryLoad"
-      />
+      >
       <el-table
-        v-else
         v-loading="loading"
         :data="topics"
         stripe
@@ -233,6 +234,7 @@
           </template>
         </el-table-column>
       </el-table>
+      </UiAsyncSection>
 
         <UiPagination v-if="total > pageSize"
       v-model:current-page="currentPage"
@@ -264,8 +266,8 @@ import ForumContent from '@/components/student/ForumContent.vue'
 import { formatLocaleDateTime } from '@/utils/format'
 import { useAdminTable } from '@/composables/useAdminTable'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
-import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 import { useConfirm } from '@/composables/useConfirm'

@@ -1,4 +1,4 @@
-import { ref, watch, type Ref } from 'vue'
+import { computed, ref, watch, type Ref } from 'vue'
 import { useCredentialStore } from '@/stores/credential'
 
 export interface UseAsyncPageOptions {
@@ -19,6 +19,21 @@ export interface UseAsyncPageOptions {
    * 同页其他证件口径数据面（如课程目录 facet 由其所属装载流收敛）不在此限。
    */
   credentialScoped?: boolean
+  /**
+   * 筛选轴（#1054）：任一 ref 变化 → 回第一页重装一次。声明式入口取代每页手写的
+   * 「筛选条件变了要回到第一页」（此前 26 处手写、漏写某条筛选轴用户就会停在
+   * 越界页码上看到空列表）。同一同步块内多轴齐变只触发一次回调（Vue watch 批处理）；
+   * 与证件切换（credentialScoped）是两条独立 watch，同时发生时各触发一次
+   * ——与既有「证件切换即重装」行为一致，不在本入口里合并去重。
+   */
+  filterDeps?: Array<Ref<unknown>>
+  /**
+   * 列表条目 ref（loader 装载后写入的那个数组；#1054）：提供即生成 `isEmpty` 空态判据
+   * ——「加载成功且无数据」才为真，错误/装载中恒为 false（四段式里空态的合法位置）。
+   * 判据形状特殊的页面（如以 total 为准）可不传，自行声明后直接喂给
+   * UiAsyncSection 的 `empty` prop——组件的空态判定本来就是外部声明。
+   */
+  itemsRef?: Ref<{ length: number } | undefined | null>
 }
 
 /**
@@ -32,6 +47,9 @@ export interface UseAsyncPageOptions {
  *   `handleSizeChange` 改页大小回第一页重装（与存量页行为一致）。
  * - 证件切换即失效刷新（#604）：内部 watch 当前证件 id，变化即回第一页重装
  *   （`credentialScoped: false` 显式关闭）。
+ * - 筛选轴失效刷新（#1054）：`filterDeps` 声明筛选轴 refs，任一变化回第一页重装；
+ *   `itemsRef` 提供后生成 `isEmpty` 空态判据（加载成功且无数据），直接喂给
+ *   UiAsyncSection 的 `empty` prop。
  *
  * 不分页的页面（详情/聚合页）只解构三态部分即可，分页字段闲置无害。
  */
@@ -75,6 +93,24 @@ export function useAsyncPage(load: () => Promise<unknown>, options: UseAsyncPage
     void run()
   }
 
+  // #1054 筛选轴：任一变化 → 回第一页重装（声明式，单点取代每页手写）。
+  if (options.filterDeps?.length) {
+    watch(options.filterDeps, () => {
+      page.value = 1
+      void run()
+    })
+  }
+
+  // #1054 空态判据：加载成功且无数据。错误态与装载中恒为 false——
+  // 空态在四段式里的合法位置只在「装载完成且确实没有条目」时。
+  // 判据 opt-in：未提供 itemsRef 时恒 false（判据形状特殊的页面自行声明后
+  // 直接喂给 UiAsyncSection 的 empty prop），不替调用方猜「没有数据=空」。
+  const isEmpty = computed(() => {
+    const items = options.itemsRef?.value
+    if (!options.itemsRef || loading.value || loadError.value) return false
+    return !items || items.length === 0
+  })
+
   // #604/#605 证件切换即失效刷新：回第一页重装，单点替代已删除的每页 opt-in 失效 composable。
   // watch 在调用方 setup 作用域内建立，随组件卸载自动销毁；
   // Pinia 未激活（无 store 依赖的页面单测直挂）时静默跳过：无证件上下文即无切换信号，
@@ -94,5 +130,17 @@ export function useAsyncPage(load: () => Promise<unknown>, options: UseAsyncPage
     }
   }
 
-  return { loading, loadError, retrying, run, retry, page, pageSize, total, handlePageChange, handleSizeChange }
+  return {
+    loading,
+    loadError,
+    retrying,
+    isEmpty,
+    run,
+    retry,
+    page,
+    pageSize,
+    total,
+    handlePageChange,
+    handleSizeChange
+  }
 }

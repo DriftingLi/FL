@@ -8,16 +8,20 @@
       <span v-if="unreadCount > 0" class="text-xs text-ink-3">{{ unreadCount }} 条未读</span>
     </div>
 
-    <UiErrorState
-      v-if="loadError"
-      title="投递加载失败"
-      description="网络或服务端异常，可重试"
+    <UiAsyncSection
+      :error="loadError"
+      :loading="loading"
+      :empty="items.length === 0"
       :retrying="retrying"
+      error-title="投递加载失败"
+      error-description="网络或服务端异常，可重试"
       @retry="handleRetry"
-    />
-    <UiSkeleton v-else-if="loading" variant="list" :count="4" />
-    <UiEmptyState v-else-if="items.length === 0" description="暂无投递" />
-    <div v-else class="grid gap-3">
+    >
+      <template #skeleton>
+        <UiSkeleton variant="list" :count="4"  />
+      </template>
+
+      <div class="grid gap-3">
       <div
         v-for="item in items"
         :key="String(item.id)"
@@ -41,6 +45,10 @@
         </div>
       </div>
     </div>
+      <template #empty>
+        <UiEmptyState description="暂无投递"  />
+      </template>
+    </UiAsyncSection>
     <div v-if="total > 0" class="flex justify-center">
       <UiPagination
       v-model:current-page="page"
@@ -92,9 +100,9 @@ import { jobApi, type JobApplication } from '@/api/job'
 import { recruitApi } from '@/api/recruit'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
-import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import OnlineResumePdf from '@/components/recruit/OnlineResumePdf.vue'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiTag from '@/components/ui/UiTag.vue'

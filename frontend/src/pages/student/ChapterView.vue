@@ -1,26 +1,29 @@
 <template>
   <div class="mx-auto max-w-[900px] px-5 pb-10 max-md:px-3 max-md:pb-[30px]">
-    <!-- 加载：骨架屏（替代原整页 v-loading，避免整块变灰） -->
-    <UiSkeleton v-if="loading" variant="list" :count="3" />
-
-    <!-- 404：有明确去向，给「返回课程」而不是重试 -->
-    <UiEmptyState
-      v-else-if="chapterNotFound"
-      title="章节不存在或已删除"
-      action-text="返回课程"
-      @action="goBackToCourse"
-    />
-
-    <!-- 其他异常：可重试 -->
-    <UiErrorState
-      v-else-if="loadError"
-      title="章节加载失败"
-      description="网络或服务端异常，可重试"
+    <UiAsyncSection
+      :error="loadError"
+      :loading="loading"
+      :empty="chapterNotFound"
       :retrying="retrying"
+      error-title="章节加载失败"
+      error-description="网络或服务端异常，可重试"
       @retry="retryLoadChapter"
-    />
+    >
+      <template #skeleton>
+        <UiSkeleton variant="list" :count="3" />
+      </template>
 
-    <template v-else-if="chapterDetail">
+      <!-- 404 展示型第五态走空态槽：有明确去向，给「返回课程」而不是重试
+           （loader 里 404 置 chapterNotFound 且不上抛 loadError，两判据互斥） -->
+      <template #empty>
+        <UiEmptyState
+          title="章节不存在或已删除"
+          action-text="返回课程"
+          @action="goBackToCourse"
+        />
+      </template>
+
+    <template v-if="chapterDetail">
       <div class="chapter-header mb-5">
         <div class="header-left flex flex-wrap items-center gap-2.5">
           <h1 class="chapter-title m-0 text-[22px] font-semibold text-ink max-md:text-lg">{{ chapterDetail.title }}</h1>
@@ -129,6 +132,7 @@
         </div>
       </div>
     </template>
+    </UiAsyncSection>
   </div>
 </template>
 
@@ -144,8 +148,8 @@ import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useStudyTracker } from '@/composables/useStudyTracker'
 import VideoPlayer from '@/components/student/VideoPlayer.vue'
 import DocumentViewer from '@/components/student/DocumentViewer.vue'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
-import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 import PptViewer from '@/components/student/PptViewer.vue'

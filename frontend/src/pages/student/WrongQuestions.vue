@@ -23,17 +23,20 @@
       <UiButton variant="success" :disabled="wrongList.length===0" @click="handleExport">导出错题</UiButton>
     </div>
 
-    <UiErrorState
-      v-if="loadError"
-      title="错题加载失败"
-      description="网络或服务端异常，可重试"
+    <UiAsyncSection
+      :error="loadError"
+      :loading="loading"
+      :empty="wrongList.length === 0"
       :retrying="retrying"
+      error-title="错题加载失败"
+      error-description="网络或服务端异常，可重试"
       @retry="retryLoad"
-    />
+    >
+      <template #skeleton>
+        <UiSkeleton variant="card" :count="4" />
+      </template>
 
-    <UiSkeleton v-else-if="loading" variant="card" :count="4" />
-
-    <div v-else-if="wrongList.length > 0">
+      <div>
       <el-card
         v-for="(item, i) in wrongList"
         :key="item.id"
@@ -106,7 +109,10 @@
       @current-change="handlePageChange"
     />
     </div>
-    <UiEmptyState v-else description="暂无错题" />
+      <template #empty>
+        <UiEmptyState description="暂无错题" />
+      </template>
+    </UiAsyncSection>
   </div>
 </template>
 
@@ -129,8 +135,8 @@ import CommentCard from '@/components/practice/CommentCard.vue'
 import NoteCard from '@/components/practice/NoteCard.vue'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useStagger } from '@/composables/useStagger'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
-import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiActionChip from '@/components/ui/UiActionChip.vue'

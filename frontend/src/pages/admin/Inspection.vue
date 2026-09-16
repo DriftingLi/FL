@@ -21,21 +21,27 @@
         <el-input v-model="userId" placeholder="按用户ID过滤" clearable class="!w-40" @change="loadLedger" />
         <UiButton size="small" @click="loadLedger">刷新</UiButton>
       </div>
-      <div v-if="ledgerLoading" class="text-sm text-ink-3">加载中...</div>
-      <UiErrorState
-        v-else-if="ledgerError"
-        title="流水加载失败"
-        description="网络或服务端异常，可重试"
+      <UiAsyncSection
+        :error="ledgerError"
+        :loading="ledgerLoading"
+        :empty="ledger.length === 0"
         :retrying="ledgerRetrying"
+        :skeleton="false"
+        error-title="流水加载失败"
+        error-description="网络或服务端异常，可重试"
         @retry="retryLedger"
-      />
-      <UiEmptyState v-else-if="ledger.length === 0" description="暂无数据" size="sm" />
-      <div v-else class="grid gap-2">
+      >
+        <div v-if="ledgerLoading" class="text-sm text-ink-3">加载中...</div>
+        <div v-else class="grid gap-2">
         <div v-for="item in ledger" :key="String(item.id)" class="border border-line rounded p-2 text-xs">
           <div>用户 {{ item.user_id }} · {{ item.reason }} · {{ item.delta }} 分 · {{ refLabel(item.ref_type) }} {{ item.ref_id }}</div>
           <div class="text-ink-3">{{ item.created_at }}</div>
         </div>
       </div>
+        <template #empty>
+          <UiEmptyState description="暂无数据" size="sm" />
+        </template>
+      </UiAsyncSection>
       <div class="mt-3 flex justify-end">
         <UiPagination
       v-model:current-page="page"
@@ -171,8 +177,8 @@ import { inspectionApi, type PageParams, type PointsLedgerParams } from '@/api/i
 import { useAdminTable } from '@/composables/useAdminTable'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
-import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 
 // #411：默认锁定问答域（forum_topic），显式切换才跨域全量——卡片标题与内容同域。
