@@ -360,7 +360,7 @@ describe('宫格入口 → 参数化专项页 接线（#1040）契约', () => {
       expect(PAGE).not.toMatch(/mode\s*:\s*'(normal|expert)'/);
     });
 
-    it('专项页不含用户上传图片（ADR-0009 修订 ② 已排除；#1042 的检索栏也不在本票）', () => {
+    it('专项页不含用户上传图片（ADR-0009 修订 ② 已排除；#1042 只加了检索/筛选，图片仍不做）', () => {
       expect(FEATURE_PAGE).not.toMatch(/chooseImage|uploadAiImageApi|showImageButton/);
     });
   });
