@@ -38,6 +38,22 @@ export type AiSession = {
     updated_at : string
 }
 
+/**
+ * 诊断来源资料条目（对齐后端 `DiagnosisSource` 与 web 生成类型，见根仓库 ADR-0033）。
+ *
+ * `metadata` 在线上是嵌套对象（`{page_start, page_end, source_url}`），这里**展平**成可选顶层字段：
+ * UTS 编译到 Kotlin 后嵌套可空对象的空值检查很难过（见移动端 AGENTS.md 的 UTS 类型限制表），
+ * 展平后每个字段都是「可空标量」，取值一律走 `toStr` / `toNumber` 兜底。
+ * 三字段全部可选：后端 `metadata` 允许为空对象（#988 取证的 web 单测即用 `metadata: {}`）。
+ */
+export type AiDiagnosisSource = {
+    id : string
+    text : string               // 来源正文，含内嵌 `<<IMAGE:/assistant/static/manual/...>>` 标记
+    page_start ?: number        // 来源手册起始页（缺省不显示页码）
+    page_end ?: number
+    source_url ?: string        // 来源 PDF 的内网路径（本票不渲染，留作后续外链）
+}
+
 /** AI 会话消息（含 id） */
 export type AiSessionMessage = {
     id : number
@@ -45,6 +61,8 @@ export type AiSessionMessage = {
     content : string
     created_at : string
     images ?: string[]  // 用户消息附带图片 URL（仅最后一条用户消息生效）
+    // 诊断来源资料（#988）：仅诊断通道的**助手**消息会有；SSE `sources` 事件与回看 DTO 两条路都落到此字段。
+    sources ?: AiDiagnosisSource[]
 }
 
 /** 对话设置（本地缓存） */

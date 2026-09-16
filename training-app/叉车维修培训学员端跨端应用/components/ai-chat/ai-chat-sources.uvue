@@ -1,0 +1,221 @@
+<template>
+	<!-- 诊断来源资料（#988；根仓库 ADR-0033）：默认折叠，与 web `DiagnosisSources.vue` 同构 -->
+	<view class="sources">
+		<view class="sources-head" @click="onToggle">
+			<text class="sources-head-title">{{ headTitle }}</text>
+			<text class="sources-head-action">{{ open ? '收起' : '展开' }}</text>
+		</view>
+		<view v-if="open" class="sources-body">
+			<view v-for="(card, ci) in cards" :key="ci" class="source-card" :class="{ 'source-card-gap': ci > 0 }">
+				<image
+					v-for="(img, ii) in card.images"
+					:key="ii"
+					class="source-image"
+					:class="{ 'source-image-gap': ii > 0 }"
+					:src="img"
+					mode="widthFix"
+					@click="onPreview(card.images, img)"
+				/>
+				<text v-if="card.text.length > 0" class="source-text">{{ card.text }}</text>
+				<text v-if="card.page.length > 0" class="source-page">{{ card.page }}</text>
+			</view>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	/**
+	 * 诊断来源资料展示（#988）：助手回答下方的「资料来源（N 条）」折叠区。
+	 *
+	 * 为什么需要它：后端在 SSE 里发独立事件 `sources`（`answer_sources` 透传），并在
+	 * **助手消息行**上持久化该列（根仓库 ADR-0033）——移动端此前把该事件整个丢弃、
+	 * 回看 DTO 也没读该列 ⇒ 回答引用的手册页码与溯源图看不见。
+	 *
+	 * 与 web 的差异（本票口径，见 issue #988「口径裁定记录」第 2 条）：
+	 * **不做** web 的「打开 PDF 来源」外链 —— 原生端没有内嵌 PDF 阅读器，站外跳转收益低。
+	 * 手册图片、页码、正文剥标记三条与 web 一致。
+	 *
+	 * `<<IMAGE:…>>` 解析**不用正则**：全仓 `.uts` 无 RegExp 字面量先例（Kotlin 目标下不可靠），
+	 * 按 `indexOf` / `substring` 走，与 `utils/markdown.uts` 同风格。
+	 */
+	import { computed, ref } from 'vue'
+	import { aiManualUrl } from '../../api/aiAssistant'
+	import type { AiDiagnosisSource } from '../../types/index'
+
+	/** 单条来源的展示模型：图片 URL / 正文 / 页码在壳层一次算好，模板不重复解析 */
+	type SourceCard = {
+		images : string[]
+		text : string
+		page : string
+	}
+
+	const props = withDefaults(defineProps<{
+		sources?: AiDiagnosisSource[]
+	}>(), {
+		sources: () => [] as AiDiagnosisSource[]
+	})
+
+	const open = ref<boolean>(false)
+
+	const IMAGE_OPEN = '<<IMAGE:'
+	const IMAGE_CLOSE = '>>'
+	const ASSISTANT_STATIC_PREFIX = 'assistant/static/'
+	const MANUAL_PREFIX = 'manual/'
+
+	/**
+	 * 剥掉助手内网前缀（对齐 web `stripAssistantPrefix`）：可选前导 `/` → `assistant/static/` → `manual/`。
+	 * `manual/` 段是**目录名的一部分**（外部助手吐 `/assistant/static/manual/<doc>/page_N.png`），
+	 * 剥掉后交给 `aiManualUrl` 重新拼回 `/diagnosis/manual/<doc>/page_N.png`。
+	 */
+	function stripAssistantPrefix(path : string) : string {
+		let p = path
+		if (p.startsWith('/')) p = p.substring(1)
+		if (p.startsWith(ASSISTANT_STATIC_PREFIX)) p = p.substring(ASSISTANT_STATIC_PREFIX.length)
+		if (p.startsWith(MANUAL_PREFIX)) p = p.substring(MANUAL_PREFIX.length)
+		return p
+	}
+
+	/** 提取来源文本里的手册图片**完整代理 URL**列表（保持出现顺序，去重交给后端缓存） */
+	function extractImageUrls(text : string) : string[] {
+		const out : string[] = []
+		let from = 0
+		while (true) {
+			const start = text.indexOf(IMAGE_OPEN, from)
+			if (start < 0) break
+			const end = text.indexOf(IMAGE_CLOSE, start + IMAGE_OPEN.length)
+			if (end < 0) break
+			const path = stripAssistantPrefix(text.substring(start + IMAGE_OPEN.length, end).trim())
+			if (path.length > 0) out.push(aiManualUrl(path))
+			from = end + IMAGE_CLOSE.length
+		}
+		return out
+	}
+
+	/** 剥掉全部 `<<IMAGE:…>>` 标记后的正文 —— 标记不进正文，否则用户看到一串内网路径 */
+	function stripImageMarkers(text : string) : string {
+		let out = ''
+		let from = 0
+		while (true) {
+			const start = text.indexOf(IMAGE_OPEN, from)
+			if (start < 0) {
+				out += text.substring(from)
+				break
+			}
+			const end = text.indexOf(IMAGE_CLOSE, start + IMAGE_OPEN.length)
+			if (end < 0) {
+				out += text.substring(from)
+				break
+			}
+			out += text.substring(from, start)
+			from = end + IMAGE_CLOSE.length
+		}
+		return out.trim()
+	}
+
+	/** 页码标签（对齐 web「第 N 页 / 第 N-M 页」）；起始页缺失或为 0 时不显示 */
+	function pageLabel(src : AiDiagnosisSource) : string {
+		const ps = src.page_start ?? 0
+		if (ps <= 0) return ''
+		const pe = src.page_end ?? 0
+		if (pe > ps) return '第 ' + ps.toString() + '-' + pe.toString() + ' 页'
+		return '第 ' + ps.toString() + ' 页'
+	}
+
+	const cards = computed<SourceCard[]>(() : SourceCard[] => {
+		const list : SourceCard[] = []
+		const src = props.sources
+		for (let i = 0; i < src.length; i++) {
+			const s = src[i]
+			list.push({
+				images: extractImageUrls(s.text),
+				text: stripImageMarkers(s.text),
+				page: pageLabel(s),
+			} as SourceCard)
+		}
+		return list
+	})
+
+	const headTitle = computed<string>(() : string => {
+		return '资料来源（' + cards.value.length.toString() + ' 条）'
+	})
+
+	function onToggle() : void {
+		open.value = !open.value
+	}
+
+	/** 点图看大图：`current` 传 URL 字符串（与 `chapter-view.uvue` 的本机先例一致，不用下标） */
+	function onPreview(urls : string[], url : string) : void {
+		if (urls.length == 0) return
+		uni.previewImage({
+			urls: urls,
+			current: url,
+		})
+	}
+</script>
+
+<style lang="scss">
+	.sources {
+		flex-direction: column;
+		max-width: 600rpx;
+		margin-top: 8rpx;
+	}
+
+	.sources-head {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		padding: 8rpx 0;
+	}
+
+	.sources-head-title {
+		font-size: 22rpx;
+		color: #999999;
+	}
+
+	.sources-head-action {
+		font-size: 22rpx;
+		color: #2979ff;
+		margin-left: 16rpx;
+	}
+
+	.sources-body {
+		flex-direction: column;
+	}
+
+	.source-card {
+		flex-direction: column;
+		background-color: #f7f8fa;
+		border-width: 1rpx;
+		border-style: solid;
+		border-color: #e5e7eb;
+		border-radius: 12rpx;
+		padding: 16rpx;
+	}
+
+	.source-card-gap {
+		margin-top: 12rpx;
+	}
+
+	.source-image {
+		width: 480rpx;
+		border-radius: 8rpx;
+		background-color: #eeeeee;
+	}
+
+	.source-image-gap {
+		margin-top: 8rpx;
+	}
+
+	.source-text {
+		font-size: 24rpx;
+		color: #555555;
+		line-height: 1.6;
+		margin-top: 8rpx;
+	}
+
+	.source-page {
+		font-size: 22rpx;
+		color: #999999;
+		margin-top: 8rpx;
+	}
+</style>

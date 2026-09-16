@@ -19,6 +19,7 @@ import type {
 	AiUserModel,
 	AiSession,
 	AiSessionMessage,
+	AiDiagnosisSource,
 	AiChatSettings,
 } from '../types/index'
 
@@ -56,13 +57,74 @@ export function buildSession(obj : UTSJSONObject) : AiSession {
 	} as AiSession
 }
 
+/**
+ * 解析诊断来源资料（**单点**）：SSE `sources` 事件与回看消息 DTO 走同一份实现。
+ *
+ * 为什么必须单点：两条路的数据同源（后端 `ai_chat_messages.sources` 列与 SSE 透传的是同一个
+ * `answer_sources`），形状必须一致；分成两份解析就会出现「当轮有来源、回看没有」这类假差异。
+ *
+ * metadata 展平（见 `types/ai.uts` 的 `AiDiagnosisSource` 说明）：`metadata` 允许缺失（后端也可能给
+ * 空对象），字段逐个兜底；`text` 为空视为坏条目丢弃（空卡片对用户是噪声）。
+ */
+export function parseDiagnosisSources(arr : Array<UTSJSONObject>) : AiDiagnosisSource[] {
+	const out : AiDiagnosisSource[] = []
+	for (let i = 0; i < arr.length; i++) {
+		const item = arr[i]
+		const text = toStr(item['text'])
+		if (text.length == 0) continue
+		const src : AiDiagnosisSource = {
+			id: toStr(item['id']),
+			text: text,
+		}
+		const meta = item['metadata']
+		if (meta != null) {
+			const m = meta as UTSJSONObject
+			const ps = m['page_start']
+			if (ps != null) src.page_start = toNumber(ps)
+			const pe = m['page_end']
+			if (pe != null) src.page_end = toNumber(pe)
+			const url = toStr(m['source_url'])
+			if (url.length > 0) src.source_url = url
+		}
+		out.push(src)
+	}
+	return out
+}
+
 function buildSessionMessage(obj : UTSJSONObject) : AiSessionMessage {
-	return {
+	const msg : AiSessionMessage = {
 		id: toNumber(obj['id'], toNumber(obj['message_id'])),
 		role: toStr(obj['role'], 'assistant'),
 		content: toStr(obj['content']),
 		created_at: toStr(obj['created_at']),
-	} as AiSessionMessage
+	}
+	// 回看来源（#988）：后端按 ADR-0033 把 sources 存在助手消息行上，该列可为 null（存量消息/非诊断轮）
+	const rawSources = obj['sources']
+	if (rawSources != null) {
+		const list = parseDiagnosisSources(rawSources as Array<UTSJSONObject>)
+		if (list.length > 0) msg.sources = list
+	}
+	return msg
+}
+
+/**
+ * 手册静态资源代理 URL（溯源图片 `<<IMAGE:…>>` 的渲染面，单点）。
+ *
+ * 端点 `GET /api/ai-assistant/diagnosis/manual/*` 是**原样字节流（非统一信封）**，
+ * 故这里只拼 URL、不经 `request` 层解包（web 先例：`frontend/src/api/aiAssistant.ts` 的 `manualUrl`）。
+ * 逐段 encodeURIComponent：手册子路径含中文目录名，不编码会 400。
+ */
+export function aiManualUrl(subpath : string) : string {
+	const parts = subpath.split('/')
+	const segs : string[] = []
+	for (let i = 0; i < parts.length; i++) {
+		const p = parts[i]
+		// `encodeURIComponent` 在 UTS 的签名返回 `String?`（Kotlin 侧实测：直接 push 进 string[] 会
+		// 报 'actual type is String?, but String was expected'）——故 `?? p` 兜底；
+		// 字符串拼接处（本仓既有用法）不需要，因为 `String + String?` 合法。
+		if (p.length > 0) segs.push(encodeURIComponent(p) ?? p)
+	}
+	return API_BASE_URL + '/diagnosis/manual/' + segs.join('/')
 }
 
 /** 从 data 中提取数组（兼容直接数组 / {key:[]}） */
@@ -273,11 +335,14 @@ function extractDeltaText(obj : UTSJSONObject) : string {
 	return ''
 }
 
-// ─── 回调式流式对话（兼容后端 message/error/done 事件） ───────────────
+// ─── 回调式流式对话（兼容后端 message/sources/error/done 事件） ───────────────
 
 /** 流式对话回调 */
 export type StreamChatCallbacks = {
 	onMessage ?: (chunk : string) => void
+	// 诊断来源（#988）：后端仅在 RAG 命中 answer_sources 时发该事件 ⇒ 不是每轮都有，
+	// 且**不是**「诊断通道生效」的必要条件（见 #999 收尾评论的更正）。
+	onSources ?: (sources : AiDiagnosisSource[]) => void
 	onError ?: (msg : string) => void
 	onDone ?: () => void
 }
@@ -290,7 +355,7 @@ function emitStreamError(callbacks : StreamChatCallbacks, msg : string) : void {
 	}
 }
 
-/** 简单解析 SSE 文本（兼容后端 message / error / done 事件） */
+/** 简单解析 SSE 文本（兼容后端 message / sources / error / done 事件） */
 function parseStreamSSE(text : string, callbacks : StreamChatCallbacks) : void {
 	const lines = text.split('\n')
 	let event = ''
@@ -324,6 +389,17 @@ function handleStreamSSEEvent(event : string, data : string, callbacks : StreamC
 			}
 		} catch (e) {
 			console.error('[streamChat] parse message error:', e)
+		}
+	} else if (event == 'sources') {
+		// 诊断来源资料（#988；根仓库 ADR-0032/0033）：此前该事件被静默丢弃 ⇒ 回答里的出处看不见。
+		try {
+			const obj = JSON.parse(data) as UTSJSONObject
+			const raw = obj['sources']
+			if (raw != null && callbacks.onSources != null) {
+				callbacks.onSources(parseDiagnosisSources(raw as Array<UTSJSONObject>))
+			}
+		} catch (e) {
+			console.error('[streamChat] parse sources error:', e)
 		}
 	} else if (event == 'error') {
 		let msg = '对话出错'
