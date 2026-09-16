@@ -98,7 +98,14 @@ describe('平台模型为空的空态可执行性契约（#1062）', () => {
     expect(platformModelGuardMessage(PAGE)).not.toBe('暂无可用的 AI 模型');
   });
 
-  it('④ 检测器自检（变异）：把文案换回旧裸提示后必须判红 —— 检测器有牙', () => {
+  it('④ 字数上限：文本区是**两行 × 18 字**，超了末字会被吞（①a 真机实测）', () => {
+    // 实测（2026-09-16，Redmi 23049RAD8C / b32d8398）：首版 37 字的文案，末字「型」**不渲染**
+    // （OCR 三帧一致，每行恰好 18 字）⇒ 上限 36，留余量按 ≤36 判。
+    // 这条是「指向可执行动作」的**必要配套**：字数超了，句子就会被吃掉结尾 —— 同样不可执行。
+    expect(platformModelGuardMessage(PAGE).length).toBeLessThanOrEqual(36);
+  });
+
+  it('⑤ 检测器自检（变异）：把文案换回旧裸提示后必须判红 —— 检测器有牙', () => {
     const mutated = PAGE.replace(
       /(if \(models\.value\.length == 0[\s\S]*?uni\.showToast\(\{ title: ')[^']*(')/,
       '$1暂无可用的 AI 模型$2'
