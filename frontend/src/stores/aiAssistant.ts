@@ -199,7 +199,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     // 专项功能模式：模型由后端按功能绑定解析；通用模式校验双模式可用性
     if (!isFeatureMode.value) {
       const modeAvailable = selectedMode.value === 'normal' ? !!modeModels.value.normal : !!modeModels.value.expert
-      if (!modeAvailable) throw new Error('当前模式未绑定模型，请联系管理员配置')
+      if (!modeAvailable) throw new Error('通用对话暂不可用（平台模型未配置）；可改用「智能维修诊断」等专项功能，或联系管理员配置')
     }
 
     // 懒创建会话：后端仅在 session_id > 0 时持久化消息，因此「开启新对话」只切本地草稿态，
