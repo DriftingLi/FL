@@ -106,10 +106,34 @@ export function addedLineList(diffText) {
 }
 
 /** 取某 base 到 HEAD 的 diff 文本（`core.quotepath=false` 让路径免于转义；解码器仍作兜底）。 */
-export function gitDiff(base, pathspec) {
-  const args = ['-c', 'core.quotepath=false', 'diff', '-U0', base + '...HEAD']
-  if (pathspec) args.push('--', pathspec)
-  return execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+export function gitDiff(base, pathspec, cwd = ROOT) {
+  const spec = pathspec ? ['--', pathspec] : []
+  const run = (rangeArgs) =>
+    execFileSync(
+      'git',
+      ['-c', 'core.quotepath=false', 'diff', '-U0', ...rangeArgs, ...spec],
+      { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }
+    )
+  const run2 = (a, b) => run([a, b])
+  try {
+    // 首选三点：以「分支基点」为界，不含 master 在分支切出之后的新增
+    return run([base + '...HEAD'])
+  } catch (e) {
+    // 浅克隆 + 浅 fetch 的 CI 里没有 merge base（"no merge base"）——
+    // 退化为双点（直接比两棵树，不需要历史）。两点在「分支包含其基点」时与三点等价；
+    // 分支落后 master 时会把 master 的新增当成相对 HEAD 的改动，由分支必须 up-to-date 的
+    // 合并规则兜住。
+    const detail = [e && e.stderr, e && e.message].filter(Boolean).join(' | ')
+    if (!/no merge base/.test(detail)) {
+      throw new Error('git diff 失败: ' + detail)
+    }
+    try {
+      // 双点：两个 revision 必须是独立参数（'base HEAD' 会被 git 当成一个 revision 名）
+      return run2(base, 'HEAD')
+    } catch (e2) {
+      throw new Error('git diff 失败: ' + [e2 && e2.stderr, e2 && e2.message].filter(Boolean).join(' | '))
+    }
+  }
 }
 
 function main(argv) {
@@ -133,7 +157,8 @@ function main(argv) {
   try {
     diff = gitDiff(base, pathspec)
   } catch (e) {
-    console.error('[added-lines] git diff 失败: ' + (e && e.message ? e.message : e))
+    // 失败必须可见（判据坏了装作没问题是假绿）：打出 git 的 stderr
+    console.error('[added-lines] ' + (e && e.message ? e.message : String(e)))
     return 2
   }
   const list = addedLineList(diff)

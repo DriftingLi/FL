@@ -26,6 +26,12 @@ test('ci-summary 聚合：两个 workflow 都调单点脚本，且不再内联�
       wf + ' 不应再内联 ci-summary 的 jq（改回双份即报红）'
     )
   }
+  // 那个脚本依赖 checkout 才存在：cd.yml 的 gate 原本就有，testing-smoke 是为它补的
+  // （该 job 原先刻意不 checkout，脚本一上线它就 127——这条锁把这一课钉住）
+  for (const wf of ['.github/workflows/cd.yml', '.github/workflows/testing-smoke.yml']) {
+    const src = read(wf)
+    assert.ok(/actions\/checkout@v4/.test(src), wf + ' 需要 checkout（聚合脚本在工作区里）')
+  }
 })
 
 test('聚合脚本的判定分支与 ADR 记录的口径一致（failure > success > missing > other）', () => {

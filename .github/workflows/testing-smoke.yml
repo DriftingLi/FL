@@ -30,6 +30,15 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
+      # ADR-0053 §10：ci-summary 的聚合收成了单点脚本（scripts/ci-summary-status.sh），
+      # 本 job 原先刻意不 checkout（gh 用 --repo 显式指定仓库），但脚本文件必须存在于工作区 ——
+      # 故补一个浅 checkout（只取文件，不取历史），代价 ~1s。
+      - name: Checkout（仅为取到聚合脚本）
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
       - name: 判定并补发 testing 冒烟
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

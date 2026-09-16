@@ -5,7 +5,11 @@
 // 上下文行推进行号 / /dev/null（删除文件）。
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { addedLineList, decodeGitPath, parseAddedLines } from './added-lines.mjs'
+import { execFileSync } from 'node:child_process'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { addedLineList, decodeGitPath, gitDiff, parseAddedLines } from './added-lines.mjs'
 
 test('普通路径：逐行走 hunk，新增行号正确', () => {
   const diff = [
@@ -97,4 +101,63 @@ test('多文件：行号各自独立累计', () => {
 test('"\\ No newline at end of file" 不推进行号', () => {
   const diff = ['+++ b/a.ts', '@@ -1 +1,2 @@', '+第一行', '\\ No newline at end of file', '+第二行'].join('\n')
   assert.deepEqual(addedLineList(diff), ['a.ts:1', 'a.ts:2'])
+})
+
+// ===== git 调用层的集成测试（真实仓库，不 mock）=====
+
+/** 建一个独立临时仓库并执行 git 命令（独立身份，不碰用户配置）。 */
+function git(cwd, ...args) {
+  return execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], {
+    cwd,
+    encoding: 'utf8'
+  })
+}
+
+function newRepo() {
+  const dir = mkdtempSync(join(tmpdir(), 'added-lines-'))
+  git(dir, 'init', '-b', 'master')
+  return dir
+}
+
+test('gitDiff：常规仓库三点 diff 只取分支新增（不含 master 之后的新增）', () => {
+  const dir = newRepo()
+  writeFileSync(join(dir, 'a.vue'), 'base\n')
+  git(dir, 'add', '.')
+  git(dir, 'commit', '-m', 'A')
+
+  git(dir, 'checkout', '-b', 'topic')
+  writeFileSync(join(dir, 'a.vue'), 'base\n+NEW LINE\n')
+  git(dir, 'add', '.')
+  git(dir, 'commit', '-m', 'B')
+
+  // master 也前进（新增一行）——三点形态不应把它算进「分支新增」
+  writeFileSync(join(dir, 'a.vue'), 'base\n+MASTER ONLY\n')
+  git(dir, 'add', '.')
+  git(dir, 'commit', '-m', 'C')
+
+  git(dir, 'checkout', 'topic')
+  const diff = gitDiff('master', '*.vue', dir)
+  assert.deepEqual(addedLineList(diff), ['a.vue:2'])
+})
+
+test('gitDiff：无 merge base（CI 浅克隆形态）退化为双点 diff，不再静默跳过', () => {
+  const dir = newRepo()
+  writeFileSync(join(dir, 'a.vue'), 'base\n')
+  git(dir, 'add', '.')
+  git(dir, 'commit', '-m', 'A')
+
+  // orphan 分支：与 master 没有共同祖先 —— 等价于 CI 里浅克隆 + 浅 fetch 的「no merge base」
+  git(dir, 'checkout', '--orphan', 'topic')
+  rmSync(join(dir, 'a.vue'))
+  writeFileSync(join(dir, 'b.vue'), 'const NEW = 1\n')
+  git(dir, 'add', '.')
+  git(dir, 'commit', '-m', 'B')
+
+  // 三点必失败（这正是今天 CI 上 frontend-check 变红的根因：
+  // 旧 awk 版在同一形态下把失败吞成「无新增行」——守卫一直在静默空转）
+  assert.throws(() => execFileSync('git', ['diff', '-U0', 'master...HEAD', '--', '*.vue'], { cwd: dir }))
+
+  // 库会退化成双点，给出可用结果而不是「跳过」
+  const diff = gitDiff('master', '*.vue', dir)
+  assert.deepEqual(addedLineList(diff), ['b.vue:1'])
 })
