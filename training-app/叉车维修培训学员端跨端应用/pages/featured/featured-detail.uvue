@@ -71,7 +71,7 @@
     import { goBack } from '../../utils/navigation'
     import { getFeaturedContentDetailApi, viewFeaturedContentApi } from '../../api/featured'
     import { checkFavoriteApi, addFavoriteApi, removeFavoriteApi } from '../../api/favorite'
-    import { parseMarkdown } from '../../utils/markdown'
+    import { parseMarkdown, SUBSET_FEATURED } from '../../utils/markdown'
     import type { FeaturedContentDetail, FeaturedContentItem, MarkdownBlock } from '../../types/index'
     import { formatDateStr } from '../../utils/format'
 
@@ -90,9 +90,11 @@
     const isFavorited = ref<boolean>(false)
     const favoriteId = ref<number>(0)
 
+    // 内容精选属可信面，但正文子集取**三端交集**（ADR-0046 决定 3）：表格与公式都不渲染，
+    // 与 Web `featuredMarked`（表格降级为转义原文）和门户保持一致。故固定走 featured 档。
     const contentBlocks = computed<MarkdownBlock[]>(() : MarkdownBlock[] => {
         if (detail.value == null || detail.value!.content.length == 0) return []
-        return parseMarkdown(detail.value!.content)
+        return parseMarkdown(detail.value!.content, SUBSET_FEATURED)
     })
 
     function getHeadingSize(level : number) : string {
