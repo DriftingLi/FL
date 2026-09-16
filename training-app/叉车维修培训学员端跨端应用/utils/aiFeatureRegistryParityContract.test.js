@@ -221,10 +221,12 @@ describe('功能入口清单 ⟷ 后端注册表 一致性契约（ADR-0009 修�
       expect(code).not.toMatch(/fault[_-]code/i);
       expect(code).not.toMatch(/fault_code_query/);
       expect(code).not.toMatch(/故障代码查询/);
-      // 检测器自证：把该格加回清单 ⇒ 判据变红
+      // 检测器自证：把该格加回清单 ⇒ 判据变红。
+      // 样本必须写成**完整的格形态**（含 adapter）—— 少了 adapter 的话它压根不被
+      // `parseMobileItems` 认作一格，自证会静默空跑（写这条时踩过：样本缺列 ⇒ 断言拿到空串）。
       const revived = CONSTANTS.replace(
         /\n\]/,
-        "\n    { key: 'fault-code', title: '故障代码查询', icon: '\\uD83D\\uDD0D', featureKey: 'fault_code_query', freePreview: false },\n]"
+        "\n    { key: 'fault-code', title: '故障代码查询', icon: '\\uD83D\\uDD0D', featureKey: 'fault_code_query', freePreview: false, adapter: 'llm' },\n]"
       );
       expect(stripCodeComments(revived)).toMatch(/故障代码查询/);
       expect(parityIssues(parseMobileItems(revived), CHAT_FEATURES).join()).toMatch(/伪入口/);
