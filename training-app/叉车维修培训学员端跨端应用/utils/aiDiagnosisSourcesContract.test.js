@@ -238,13 +238,50 @@ describe('#988 诊断来源资料消费契约', () => {
   });
 
   // ────────────────────────────────────────────────────────────────
-  describe('⑦ 手册代理 URL 单点：路径与编码都对', () => {
-    it('`aiManualUrl` 拼 `/diagnosis/manual/` 且逐段 encodeURIComponent', () => {
+  describe('⑦ 手册代理 URL：断言**产物**，不是片段（复盘：片段断言放过过一个 404）', () => {
+    /**
+     * 检测器：`aiManualUrl` 是否拼了**完整**路径段。
+     * 提成纯函数是为了让「注入变异必须判红」能真的验证这个判据本身 —— 只断言片段存在
+     * （旧版写 `expect(body).toContain("'/diagnosis/manual/'")`）对**丢段**完全无感：
+     * 少了 `/ai-assistant` 的坏实现照样满足它，而线上每张手册图都 404。
+     */
+    function manualSegmentIsComplete(src) {
+      const body = fnBody(src, 'export function aiManualUrl');
+      return body.includes("API_BASE_URL + '/ai-assistant/diagnosis/manual/'");
+    }
+
+    it('锚点：`API_BASE_URL` 不含 `/ai-assistant` ⇒ 构造器必须自己带上这一段', () => {
+      const env = read('config/env.uts');
+      expect(env).toContain("const DEV_API_BASE_URL = 'https://www.gccsmile.com/api'");
+      expect(env).toContain("const PROD_API_BASE_URL = 'https://www.gccsmile.com/api'");
+      // 若哪天 base 自带 /ai-assistant，这条会红 —— 那时才允许改构造器（并同步本组）。
+      expect(env).not.toContain('/api/ai-assistant');
+    });
+
+    it('`aiManualUrl` 拼出 `/ai-assistant/diagnosis/manual/` **全段**', () => {
+      expect(manualSegmentIsComplete(API)).toBe(true);
+    });
+
+    it('⑦a 检测器自检：改回「丢 /ai-assistant」的历史写法必须判红', () => {
       const body = fnBody(API, 'export function aiManualUrl');
-      expect(body).toContain("'/diagnosis/manual/'");
+      const mutated = API.replace(body, body.replace(
+        "'/ai-assistant/diagnosis/manual/'", "'/diagnosis/manual/'"));
+      expect(manualSegmentIsComplete(mutated)).toBe(false);   // 判据真的能判红，不是空跑
+    });
+
+    it('产物形状：三片拼起来 == 直连实测可用的那条 URL', () => {
+      // 三片 = base（config/env.uts 的常量） + 段（构造器自己拼） + 已编码子路径。
+      const BASE = 'https://www.gccsmile.com/api';
+      const SEGMENT = '/ai-assistant/diagnosis/manual/';
+      const SUBPATH = 'ep_byd_pmw20_service_manual_en/page_85_643.png';
+      // 这条 URL 是 2026-09-16 直连生产验过的：带段 → 200 / image/png；丢段 → 404。
+      expect(BASE + SEGMENT + SUBPATH).toBe(
+        'https://www.gccsmile.com/api/ai-assistant/diagnosis/manual/ep_byd_pmw20_service_manual_en/page_85_643.png');
+      const body = fnBody(API, 'export function aiManualUrl');
+      expect(body).toContain("API_BASE_URL + '" + SEGMENT + "'");   // 与上面同一个 SEGMENT 常量
+      expect(body).toContain("segs.join('/')");                     // 子路径那一片
       expect(body).toContain('encodeURIComponent(');
       expect(body).toContain("split('/')");
-      expect(body).toContain("join('/')");
     });
 
     it('⑦b 检测器自检：去掉 encodeURIComponent 后必须判红（中文目录名会 400）', () => {
