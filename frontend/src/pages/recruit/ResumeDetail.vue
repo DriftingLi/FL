@@ -4,16 +4,23 @@
       <router-link to="/recruit/resumes" class="text-sm text-ui-600 hover:text-ui-700">← 返回简历库</router-link>
     </div>
 
-    <UiErrorState
-      v-if="loadError"
-      title="简历加载失败"
-      description="网络或服务端异常，可重试"
+    <UiAsyncSection
+      :error="loadError"
+      :loading="loading"
+      :empty="!data"
       :retrying="retrying"
+      error-title="简历加载失败"
+      error-description="网络或服务端异常，可重试"
       @retry="handleRetry"
-    />
-    <UiSkeleton v-else-if="loading" variant="list" :count="4" />
-    <div v-else-if="!data" class="rounded-card border border-line bg-panel p-8 text-center text-ink-3">未找到该简历</div>
-    <div v-else class="rounded-card border border-line bg-panel p-6">
+    >
+      <template #skeleton>
+        <UiSkeleton variant="list" :count="4"  />
+      </template>
+      <template #empty>
+        <div class="rounded-card border border-line bg-panel p-8 text-center text-ink-3">未找到该简历</div>
+      </template>
+
+    <div v-if="data" class="rounded-card border border-line bg-panel p-6">
       <h1 class="text-lg font-bold text-ink">{{ data.real_name || data.real_name_masked || '学员简历' }}</h1>
       <p class="mt-1 text-sm text-ink-3">更新于 {{ data.updated_at }}</p>
 
@@ -53,6 +60,7 @@
         <el-input v-model="message" type="textarea" :rows="3" maxlength="200" show-word-limit placeholder="请填写申请附言（1-200字）" />
       </UiDialog>
     </div>
+    </UiAsyncSection>
   </div>
 </template>
 
@@ -63,7 +71,7 @@ import { ElMessage } from 'element-plus'
 import { recruitApi, type RecruitResumeItem } from '@/api/recruit'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
-import UiErrorState from '@/components/ui/UiErrorState.vue'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import OnlineResumePdf from '@/components/recruit/OnlineResumePdf.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'

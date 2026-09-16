@@ -13,17 +13,19 @@
     />
 
     <div class="min-h-[200px] rounded-card bg-panel shadow-card">
-      <UiErrorState
-        v-if="loadError"
-        title="收藏加载失败"
-        description="网络或服务端异常，可重试"
+      <UiAsyncSection
+        :error="loadError"
+        :loading="loading"
+        :empty="favorites.length === 0"
         :retrying="retrying"
+        error-title="收藏加载失败"
+        error-description="网络或服务端异常，可重试"
         @retry="retryLoad"
-      />
+      >
+        <template #skeleton>
+          <UiSkeleton variant="list" :count="5" />
+        </template>
 
-      <UiSkeleton v-else-if="loading" variant="list" :count="5" />
-
-      <template v-else-if="favorites.length > 0">
         <div
           v-for="(item, i) in favorites"
           :key="item.favorite_id"
@@ -66,8 +68,10 @@
             <UiButton variant="text" size="small" @click="removeFavorite(item)" class="text-bad">移除</UiButton>
           </div>
         </div>
-      </template>
-      <UiEmptyState v-else description="暂无收藏" />
+              <template #empty>
+          <UiEmptyState description="暂无收藏" />
+                </template>
+        </UiAsyncSection>
     </div>
 
     <div class="mt-4 flex justify-center" v-if="total > pageSize">
@@ -90,8 +94,8 @@ import { resolveFileUrl } from '@/utils/fileUrl'
 import { formatLocaleDateTime } from '@/utils/format'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useStagger } from '@/composables/useStagger'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
-import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
