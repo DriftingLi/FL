@@ -465,15 +465,19 @@ describe('镜像同步：utils/markdown.uts 与本文件镜像逐条一致', () 
 
 describe('页面级契约：章节面渲染表格、内容精选面走交集', () => {
   const chapter = read('pages/courses/chapter-view.uvue');
+  // T08 手术（#646）：章节正文的渲染分支搬进模块私有 section 组件，因此「表格怎么渲染」这几条
+  // 的**路径指向**随之改指该组件 —— 断言一条未删、未弱化（ADR-0007：「手术 PR 内可更新文件路径
+  // 指向，禁删/弱化断言」）；「走哪一档」仍钉在页面（档位是页面侧决策，组件只渲染下发的块）。
+  const chapterMd = read('pages/courses/components/chapter-markdown.uvue');
   const featured = read('pages/featured/featured-detail.uvue');
 
   it('chapter-view：table 块渲染成逐行 flex 的原生表格（单元格取自 items）', () => {
-    expect(chapter).toContain("block.type == 'table'");
-    expect(chapter).toContain('v-for="(cell, ci) in block.items"');
-    expect(chapter).toContain("'md-table-cell-head': block.level == 1");
-    expect(chapter).toContain('.md-table-cell-head');
+    expect(chapterMd).toContain("block.type == 'table'");
+    expect(chapterMd).toContain('v-for="(cell, ci) in block.items"');
+    expect(chapterMd).toContain("'md-table-cell-head': block.level == 1");
+    expect(chapterMd).toContain('.md-table-cell-head');
     // 表格行必须归零 .md-block 的块间距，否则同一张表会被拆成一格一格的横条
-    expect(chapter).toMatch(/\.md-table-row\s*\{[^}]*margin-bottom:\s*0/);
+    expect(chapterMd).toMatch(/\.md-table-row\s*\{[^}]*margin-bottom:\s*0/);
   });
 
   it('chapter-view：走缺省档（章节正文 = 可信面全集）', () => {
