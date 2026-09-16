@@ -157,16 +157,17 @@ func TestAIMeterBilledBranches(t *testing.T) {
 	}
 }
 
-// TestAIMeterDeclaredPromptCharsWins 计费事实声明优先（口径锚定请求 DTO 层）：meter 取调用方
-// 声明的 promptChars，端口消息推导仅作未声明时的回退——传输重组注入的注记文本不参与计费。
+// TestAIMeterDeclaredPromptCharsWins 计费事实声明优先（口径锚定请求 DTO 层）：meter 用调用方
+// 交来的**消息列表**算字符数，端口消息推导仅作未声明时的回退——传输重组注入的注记文本不参与计费。
 func TestAIMeterDeclaredPromptCharsWins(t *testing.T) {
 	ctx := context.Background()
 	meter := &fakeAIMeter{}
 	port, _ := newMeteredStack("回复", meter)
-	// 端口消息含长文本（推导会取其长度），声明值为 0（DTO 纯图片消息 Content 为空）
+	// 端口消息含长文本（推导会取其长度），DTO 侧是纯图片消息（Content 为空）→ 计 0
 	msgs := []*schema.Message{schema.UserMessage("[部分图片加载失败: 注记文本不参与计费]")}
+	dtoMsgs := []AIStreamMessage{{Role: "user", Content: ""}}
 
-	_, usage, err := port.Stream(withAIPromptChars(WithAIRequestID(ctx, "req-declared"), 0),
+	_, usage, err := port.Stream(withAIPromptMessages(WithAIRequestID(ctx, "req-declared"), aiPromptMessagesFromDTO(dtoMsgs)),
 		AIModelSelector{FeatureKey: FeatureMaintenanceKnowledge, UserID: 7}, msgs, nil)
 	if err != nil || usage == nil || usage.Res == nil {
 		t.Fatalf("声明路径调用异常: usage=%+v err=%v", usage, err)
@@ -273,8 +274,8 @@ func TestAIMeterPromptChars(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := aiPromptChars(tc.msgs); got != tc.want {
-				t.Fatalf("aiPromptChars = %d, want %d", got, tc.want)
+			if got := aiPromptCharsOf(aiPromptMessagesFromPort(tc.msgs)); got != tc.want {
+				t.Fatalf("口径函数 = %d, want %d", got, tc.want)
 			}
 		})
 	}
@@ -299,11 +300,7 @@ func TestAIMeterAutoTitleNoDoubleCharge(t *testing.T) {
 	_, usage, err := assistant.StreamChat(ctx, 7, StreamChatReq{
 		SessionID:  session.ID,
 		FeatureKey: FeatureMaintenanceKnowledge,
-		Messages: []struct {
-			Role    string   `json:"role"`
-			Content string   `json:"content"`
-			Images  []string `json:"images"`
-		}{{Role: "user", Content: "叉车启动困难怎么办"}},
+		Messages:   []AIStreamMessage{{Role: "user", Content: "叉车启动困难怎么办"}},
 	}, nil)
 	if err != nil {
 		t.Fatalf("StreamChat 失败: %v", err)
@@ -377,7 +374,9 @@ func meteredHandlerPipeline(ctx context.Context, port AIModelPort, f billingFact
 	if ctxReqID != "" {
 		callCtx = WithAIRequestID(callCtx, ctxReqID)
 	}
-	callCtx = withAIPromptChars(callCtx, len(f.prompt))
+	// 与生产同一路径：交消息列表，由闸门侧的唯一口径实现算字符数（此前这里复制了
+	// 「len(最后一条消息 Content)」那一行，等于把口径抄进测试，分叉永远测不红）
+	callCtx = withAIPromptMessages(callCtx, aiPromptMessagesFromDTO([]AIStreamMessage{{Role: "user", Content: f.prompt}}))
 	msgs := []*schema.Message{schema.SystemMessage(forkliftExpertSystemPrompt)}
 	portText := f.prompt
 	if f.portText != "" {
