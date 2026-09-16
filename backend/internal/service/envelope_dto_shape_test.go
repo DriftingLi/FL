@@ -377,6 +377,28 @@ func TestInlineResponseDTOBytes(t *testing.T) {
 			dto:    &CurrentCredentialDTO{},
 		},
 		{
+			name: "SpecialtyListDTO（GET /admin/specialties：原 handler 内联 gin.H 的 specialties 键）",
+			legacy: map[string]any{"specialties": []SpecialtyDict{{
+				Code: "operation", CreatedAt: "2026-09-16T10:00:00.000000+08:00", Description: "操作",
+				Name: "操作", SortOrder: 1, SpecialtyID: 1, Status: 1,
+			}}},
+			dto: &SpecialtyListDTO{Specialties: []SpecialtyDict{{
+				Code: "operation", CreatedAt: "2026-09-16T10:00:00.000000+08:00", Description: "操作",
+				Name: "操作", SortOrder: 1, SpecialtyID: 1, Status: 1,
+			}}},
+		},
+		{
+			name: "PositionListDTO（GET /positions 与 /admin/positions：原 handler 内联 gin.H 的 positions 键）",
+			legacy: map[string]any{"positions": []PositionDict{{
+				Code: "driver", CreatedAt: "2026-09-16T10:00:00.000000+08:00", Description: "叉车司机",
+				Name: "叉车司机", PositionID: 4, SortOrder: 2, Status: 1,
+			}}},
+			dto: &PositionListDTO{Positions: []PositionDict{{
+				Code: "driver", CreatedAt: "2026-09-16T10:00:00.000000+08:00", Description: "叉车司机",
+				Name: "叉车司机", PositionID: 4, SortOrder: 2, Status: 1,
+			}}},
+		},
+		{
 			name: "CurrentCredentialDTO（已选证件 / PATCH 切换：同一形状）",
 			legacy: map[string]any{"credential": &CredentialDict{
 				Category: "skill_level", Code: "S3", ID: 7, Level: intPtr(3), Name: "高级",

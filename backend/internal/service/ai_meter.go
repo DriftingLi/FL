@@ -1,9 +1,10 @@
 // Package service AI 计量闸门（ADR-0031，#619）：AIMeter adapter 挂在 AIModelPort 上，
 // 所有经端口的 LLM 消费过同一道闸——是否计费由功能注册表 billed 声明驱动（ADR-0030，
 // Stream 流向查询单点 aiFeatureChatBilled），请求标识降级键生成内移进本文件。
-// 「什么算 prompt」以调用方在请求 DTO 可见作用域的声明（withAIPromptChars，随计费意图
-// 透传）为准，未声明回退本文件 aiPromptChars 的端口消息推导——传输层消息经 service 重组，
-// DTO 才是口径事实源。HTTP 层不持有计费编排。计费金额口径单点仍在积分域
+// 「什么算 prompt」的**唯一实现**在 ai_prompt_chars.go：调用方（请求 DTO 可见作用域）把
+// 消息列表交给闸门，未声明时回退端口消息推导，两条路径投影到同一中立形态后走同一个函数
+// （ADR-0053 §5：此前是「调用方算好数字 + 闸门自己再推导一遍」两份实现，测试断言的是镜像）。
+// HTTP 层不持有计费编排。计费金额口径单点仍在积分域
 // （estimateAITokens / aiPointsForTokens / AIPreflight / DeductAI），本文件零口径知识、零常量。
 package service
 
@@ -71,27 +72,6 @@ func aiMeterFreeDeclared(ctx context.Context) bool {
 	return v
 }
 
-// aiPromptCharsCtxKey ctx 键：调用方随计费意图声明的 promptChars（请求 DTO 层事实）。
-type aiPromptCharsCtxKey struct{}
-
-// withAIPromptChars 声明本次调用的 promptChars 计费事实（与 withAIMeterFree 同机制、同样
-// 不导出）：在请求 DTO 可见的作用域随调用声明，meter 优先取用。口径锚定 DTO 的理由：传输层
-// 消息在 service 内重组（多模态消息经 buildImageUserMessage 构建，图片全部加载失败时注入
-// 注记文本），端口消息不再是口径事实源——迁移前 handler 的取值即 DTO 的 len(最后一条消息
-// Content)。未声明时 meter 回退 aiPromptChars 推导（消费方直发端口消息、DTO 不可见的形态）。
-func withAIPromptChars(ctx context.Context, n int) context.Context {
-	if n < 0 {
-		n = 0
-	}
-	return context.WithValue(ctx, aiPromptCharsCtxKey{}, n)
-}
-
-// aiPromptCharsDeclared 读取声明的 promptChars 事实。
-func aiPromptCharsDeclared(ctx context.Context) (int, bool) {
-	v, ok := ctx.Value(aiPromptCharsCtxKey{}).(int)
-	return v, ok
-}
-
 // ---- billed 判定路径（调用方声明 > 注册表默认）----
 
 // Stream 流向的 billed 注册表默认查询 = aiFeatureChatBilled（ai_feature_registry.go 单点：
@@ -105,31 +85,6 @@ func aiCompleteBilled(featureKey string) bool {
 		return false
 	}
 	return f.billed
-}
-
-// ---- 计费口径事实单点（与迁移前 handler 逐字同口径）----
-
-// aiPromptChars 「什么算 prompt」的回退推导（ADR-0031 决策 3）：只算最后一条用户消息的
-// 文本长度，system 提示词、历史消息与图片一律不计。多模态消息的请求原文在首个文本 part
-// （Content 为空），纯图片消息计 0。调用方在 DTO 可见作用域声明事实（withAIPromptChars）
-// 时本函数不被调用——传输重组注入的注记文本（图片加载失败）不参与计费。
-func aiPromptChars(msgs []*schema.Message) int {
-	for i := len(msgs) - 1; i >= 0; i-- {
-		msg := msgs[i]
-		if msg == nil || msg.Role != schema.User {
-			continue
-		}
-		if msg.Content != "" {
-			return len(msg.Content)
-		}
-		for _, part := range msg.UserInputMultiContent {
-			if part.Type == schema.ChatMessagePartTypeText {
-				return len(part.Text)
-			}
-		}
-		return 0
-	}
-	return 0
 }
 
 // aiFallbackRequestID 请求标识降级键（迁移前 handler 现场生成策略内移，格式逐字不变）：
@@ -172,7 +127,7 @@ func (m *meteredAIModel) Complete(featureKey string, msgs []*schema.Message, opt
 
 // Stream 流式调用过闸：预检（发起前）→ 裸传输 → 扣费（成功后）。billed 判定路径 =
 // ctx 显式免费声明（内部二次消费）> 注册表对话计费声明（aiFeatureChatBilled 单点）；
-// 计费事实 = 调用方声明的 DTO 层 promptChars 优先，未声明回退 aiPromptChars 端口消息推导；
+// 计费事实 = 调用方声明的 DTO 层消息列表优先，未声明回退端口消息推导（同一口径函数）；
 // 请求标识与降级键见 aiFallbackRequestID。usage 事件数据面原样回传，形状不变。
 func (m *meteredAIModel) Stream(ctx context.Context, sel AIModelSelector, msgs []*schema.Message, onChunk func(string)) (string, *AIUsage, error) {
 	billed := !aiMeterFreeDeclared(ctx) && aiFeatureChatBilled(sel.FeatureKey)
@@ -197,11 +152,13 @@ func (m *meteredAIModel) Stream(ctx context.Context, sel AIModelSelector, msgs [
 	if requestID == "" {
 		requestID = aiFallbackRequestID(sel.UserID)
 	}
-	// 计费事实：调用方声明（DTO 层）优先，未声明回退端口消息推导
-	promptChars, declared := aiPromptCharsDeclared(ctx)
+	// 计费事实：口径唯一实现在 ai_prompt_chars.go。调用方（请求 DTO 可见作用域）声明消息列表
+	// 时用它，未声明才回退端口消息推导——两条路径投影到同一中立形态后走同一个函数。
+	promptMsgs, declared := aiPromptMessagesDeclared(ctx)
 	if !declared {
-		promptChars = aiPromptChars(msgs)
+		promptMsgs = aiPromptMessagesFromPort(msgs)
 	}
+	promptChars := aiPromptCharsOf(promptMsgs)
 	res, err := m.meter.DeductAI(ctx, sel.UserID, requestID, promptChars, len(content))
 	if err != nil {
 		return content, &AIUsage{Err: err}, nil

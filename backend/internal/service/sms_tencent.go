@@ -69,20 +69,15 @@ func (p *TencentSMSProvider) Send(to, code string, minutes int, purpose CodePurp
 	return nil
 }
 
-// templateFor 按用途返回已审核模板 ID 与模板参数（与控制台审核通过的模板一一对应）：
-// 注册/密码重置/修改密码/绑定手机号/修改账号模板为单参数（{1}=验证码）；
-// 登录模板为双参数（{1}=验证码，{2}=有效分钟数）。
+// templateFor 按用途返回已审核模板 ID 与模板参数：模板键与参数量都取自用途声明表
+// （登录模板双参数 {1}=验证码、{2}=有效分钟数；其余单参数 {1}=验证码）。
 func (p *TencentSMSProvider) templateFor(purpose CodePurpose, code string, minutes int) (string, []string) {
-	switch purpose {
-	case CodePurposeRegister:
-		return p.cfg.TplRegister, []string{code}
-	case CodePurposeResetPassword, CodePurposeChangePassword:
-		return p.cfg.TplPassword, []string{code}
-	case CodePurposeBind, CodePurposeAccountChange:
-		return p.cfg.TplBindPhone, []string{code}
-	default: // CodePurposeLogin
-		return p.cfg.TplLogin, []string{code, strconv.Itoa(minutes)}
+	spec, _ := codePurposeSpecFor(purpose)
+	tplID := p.cfg.Template(spec.SMSTemplate)
+	if spec.SMSParamCount > 1 {
+		return tplID, []string{code, strconv.Itoa(minutes)}
 	}
+	return tplID, []string{code}
 }
 
 // ValidateReady 校验签名与全部用途模板均已审核通过（启动自检用，失败不阻断发送）。
@@ -103,9 +98,11 @@ func (p *TencentSMSProvider) ValidateReady(ctx context.Context) error {
 		return fmt.Errorf("短信签名「%s」未审核通过或不存在", p.cfg.SignName)
 	}
 
-	// 模板审核状态：四个用途模板一次查询，全部通过才算就绪
-	tplIDs := make([]int64, 0, 4)
-	for _, id := range []string{p.cfg.TplRegister, p.cfg.TplLogin, p.cfg.TplPassword, p.cfg.TplBindPhone} {
+	// 模板审核状态：用途表引用的全部模板一次查询（模板集合从表派生，不写死四个），全部通过才算就绪
+	keys := CodePurposeSMSTemplates()
+	tplIDs := make([]int64, 0, len(keys))
+	for _, key := range keys {
+		id := p.cfg.Template(key)
 		v, err := strconv.ParseInt(id, 10, 64)
 		if err != nil {
 			return fmt.Errorf("短信模板 ID 非法: %s", id)

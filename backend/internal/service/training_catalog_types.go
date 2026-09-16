@@ -128,6 +128,14 @@ type LevelListDTO struct {
 	Levels []LevelDict `json:"levels"`
 }
 
+// SpecialtyListDTO 专业方向列表响应 {"specialties": [...]}。
+//
+// 来源是 handler 里手工拼的 gin.H{"specialties": …}（ADR-0053 §1 把这两个列表端点补进契约：
+// 注解要指认 data 类型就必须先有具名类型，故补此 DTO，字节形状不变）。
+type SpecialtyListDTO struct {
+	Specialties []SpecialtyDict `json:"specialties"`
+}
+
 // QuestionTagListDTO 题库标签列表响应 {"tags": [...]}（公开 /tags 与管理端 /admin/question-tags 共用形状）。
 type QuestionTagListDTO struct {
 	Tags []QuestionTagDict `json:"tags"`

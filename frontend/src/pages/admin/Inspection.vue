@@ -167,7 +167,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { unwrappedRequest } from '@/api/request'
+import { inspectionApi, type PageParams, type PointsLedgerParams } from '@/api/inspection'
 import { useAdminTable } from '@/composables/useAdminTable'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
@@ -193,11 +193,11 @@ const {
   retry: retryLedger
 } = useAdminTable<LedgerItem>({
   fetch: async (paging) => {
-    const params: Record<string, any> = { page: paging.page, page_size: paging.pageSize }
+    const params: PointsLedgerParams = { page: paging.page, page_size: paging.pageSize }
     if (domain.value) params.ref_type = domain.value
     if (reason.value) params.reason = reason.value
     if (userId.value) params.user_id = userId.value
-    const res: any = await unwrappedRequest.get('/admin/points/ledger', { params, headers: { 'X-Silent': '1' } })
+    const res = await inspectionApi.pointsLedger<LedgerItem>(params)
     return { list: res?.items || [], total: res?.total ?? 0 }
   }
 })
@@ -241,7 +241,7 @@ function refLabel(refType: string): string {
 const deletedCount = ref(0)
 async function loadCount() {
   try {
-    const res: any = await unwrappedRequest.get('/admin/inspection/deleted-after-accepted', { headers: { 'X-Silent': '1' } })
+    const res = await inspectionApi.deletedAfterAccepted()
     deletedCount.value = res?.count ?? 0
   } catch {}
 }
@@ -288,10 +288,7 @@ function requestStatusLabel(s: string): string {
 async function loadViews() {
   viewsLoading.value = true
   try {
-    const res: any = await unwrappedRequest.get('/admin/recruit/views', {
-      params: { page: viewsPage.value, page_size: 20 },
-      headers: { 'X-Silent': '1' },
-    })
+    const res = await inspectionApi.resumeViews<TrailView>({ page: viewsPage.value, page_size: 20 })
     views.value = res?.items || []
     viewsTotal.value = res?.total ?? 0
   } catch {}
@@ -301,10 +298,7 @@ async function loadViews() {
 async function loadRequests() {
   requestsLoading.value = true
   try {
-    const res: any = await unwrappedRequest.get('/admin/recruit/requests', {
-      params: { page: requestsPage.value, page_size: 20 },
-      headers: { 'X-Silent': '1' },
-    })
+    const res = await inspectionApi.contactRequests<TrailRequest>({ page: requestsPage.value, page_size: 20 })
     requests.value = res?.items || []
     requestsTotal.value = res?.total ?? 0
   } catch {}
@@ -329,9 +323,9 @@ const forceOfflineing = ref(false)
 async function loadJobs() {
   jobsLoading.value = true
   try {
-    const params: Record<string, any> = { page: jobsPage.value, page_size: 20 }
+    const params: PageParams = { page: jobsPage.value, page_size: 20 }
     if (jobFilterRecruiter.value) params.recruiter_id = jobFilterRecruiter.value
-    const res: any = await unwrappedRequest.get('/admin/jobs', { params, headers: { 'X-Silent': '1' } })
+    const res = await inspectionApi.jobs(params)
     jobs.value = res?.items || []
     jobsTotal.value = res?.total ?? 0
   } catch {}
@@ -341,10 +335,7 @@ async function loadJobs() {
 async function loadReports() {
   reportsLoading.value = true
   try {
-    const res: any = await unwrappedRequest.get('/admin/job-reports', {
-      params: { page: reportsPage.value, page_size: 20 },
-      headers: { 'X-Silent': '1' },
-    })
+    const res = await inspectionApi.jobReports({ page: reportsPage.value, page_size: 20 })
     reports.value = res?.items || []
     reportsTotal.value = res?.total ?? 0
   } catch {}
@@ -365,7 +356,7 @@ async function confirmForceOffline() {
   }
   forceOfflineing.value = true
   try {
-    await unwrappedRequest.post(`/admin/jobs/${forceOfflineJob.value.id}/force-offline`, { reason: forceOfflineReason.value.trim() })
+    await inspectionApi.forceOfflineJob(forceOfflineJob.value.id, forceOfflineReason.value.trim())
     ElMessage.success('职位已强制下架')
     forceOfflineVisible.value = false
     loadJobs()
@@ -379,7 +370,7 @@ async function confirmForceOffline() {
 
 async function markHandled(item: any) {
   try {
-    await unwrappedRequest.post(`/admin/job-reports/${item.id}/handle`)
+    await inspectionApi.handleJobReport(item.id)
     ElMessage.success('举报已标记为已处理')
     loadReports()
   } catch (e: any) {

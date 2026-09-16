@@ -1,5 +1,5 @@
 // 生成文件，勿手改（ADR-0019 契约 codegen 专项 / ADR-0048 按域解冻；spec #940 片五③、#952 片一）。
-// 域：培训目录与字典（/api/catalog|levels|tags、/api/admin 下的专业方向 / 等级 / 证书模板 / 题库标签）
+// 域：培训目录与字典（/api/catalog|levels|tags|positions、/api/admin 下的专业方向 / 等级 / 证书模板 / 题库标签 / 岗位字典）
 // 唯一事实源：后端注解 → backend/docs/swagger.json（CI 有新鲜度锁：backend-lint 的 swagger 步骤）。
 // 再生成：cd backend && go run ./cmd/gen-apitypes
 // 同步契约：backend/internal/apitypes/codegen_test.go 把本文件与注解渲染结果全等比对。
@@ -7,12 +7,16 @@
 // 覆盖端点：
 //   GET  /catalog/tree
 //   GET  /levels
+//   GET  /tags
+//   GET  /positions
 //   GET  /admin/catalog/tree
 //   POST /admin/specialty
+//   GET  /admin/specialties
 //   PUT  /admin/specialty/{specialty_id}
 //   PUT  /admin/specialty/{specialty_id}/sort
 //   DELETE /admin/specialty/{specialty_id}
 //   POST /admin/level
+//   GET  /admin/levels
 //   PUT  /admin/level/{level_id}
 //   PUT  /admin/level/{level_id}/sort
 //   DELETE /admin/level/{level_id}
@@ -20,14 +24,18 @@
 //   POST /admin/certificate-template
 //   PUT  /admin/certificate-template/{id}
 //   DELETE /admin/certificate-template/{id}
-//   GET  /tags
 //   GET  /admin/question-tags
 //   POST /admin/question-tag
 //   PUT  /admin/question-tag/{id}
 //   DELETE /admin/question-tag/{id}
 //   PUT  /admin/question/{question_id}/tags
+//   GET  /admin/positions
+//   POST /admin/position
+//   PUT  /admin/position/{position_id}
+//   PUT  /admin/position/{position_id}/sort
+//   DELETE /admin/position/{position_id}
 //
-// 覆盖的 Go 类型：CatalogLevelNode / CatalogSpecialtyNode / CatalogTreeDTO / CertificateTemplateDTO / CertificateTemplateDict / CertificateTemplateListDTO / ChapterDTO / ChapterFileDTO / CourseBriefDTO / CourseDTO / CredentialBriefDTO / LevelBriefDTO / LevelDict / LevelListDTO / QuestionTagDict / QuestionTagListDTO / QuestionTagsResultDTO / SpecialtyBriefDTO / SpecialtyDict
+// 覆盖的 Go 类型：CatalogLevelNode / CatalogSpecialtyNode / CatalogTreeDTO / CertificateTemplateDTO / CertificateTemplateDict / CertificateTemplateListDTO / ChapterDTO / ChapterFileDTO / CourseBriefDTO / CourseDTO / CredentialBriefDTO / LevelBriefDTO / LevelDict / LevelListDTO / PositionDict / PositionListDTO / QuestionTagDict / QuestionTagListDTO / QuestionTagsResultDTO / SpecialtyBriefDTO / SpecialtyDict / SpecialtyListDTO
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -177,6 +185,20 @@ export interface LevelListDTO {
   levels: LevelDict[]
 }
 
+export interface PositionDict {
+  code: string
+  created_at: string
+  description: string
+  name: string
+  position_id: number
+  sort_order: number
+  status: number
+}
+
+export interface PositionListDTO {
+  positions: PositionDict[]
+}
+
 export interface QuestionTagDict {
   code: string
   created_at: string
@@ -211,4 +233,8 @@ export interface SpecialtyDict {
   sort_order: number
   specialty_id: number
   status: number
+}
+
+export interface SpecialtyListDTO {
+  specialties: SpecialtyDict[]
 }

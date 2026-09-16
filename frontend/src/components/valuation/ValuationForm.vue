@@ -29,6 +29,10 @@ import type {
   ConditionRating
 } from '@/types/valuation/evaluation'
 import type { Brand } from '@/types/valuation/brand'
+// 字段容器（ADR-0053 §8 票②）：15 个逐字重复的「容器 + 标签」块收敛为「容器 + 控件」。
+// 原生表单控件（select/input）保持不变——封装层的下拉是浮层形态，而原生 select 在移动端
+// 会调起系统选择器（迁移需另案 + 真机对比）。
+import UiFormField from '@/components/ui/UiFormField.vue'
 
 // ========== 字典数据 ==========
 const brands = ref<Brand[]>([])
@@ -300,401 +304,386 @@ function onConditionSelect(rating: string) {
 
         <!-- Row 1: 品牌 + 车辆类型 -->
         <div class="form-row form-row-2">
-          <div class="field">
-            <label class="field-label" for="vh-brand">品牌</label>
-            <div class="select-wrap">
-              <select
-                id="vh-brand"
-                v-model="form.brand"
-                class="form-control"
-                :disabled="brands.length === 0"
+          <UiFormField label="品牌" for-id="vh-brand">
+          <div class="select-wrap">
+            <select
+              id="vh-brand"
+              v-model="form.brand"
+              class="form-control"
+              :disabled="brands.length === 0"
+            >
+              <option :value="undefined" disabled>请选择品牌</option>
+              <option v-for="b in brands" :key="b.id" :value="b.name">{{ b.name }}</option>
+            </select>
+            <span class="select-icon" aria-hidden="true">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
               >
-                <option :value="undefined" disabled>请选择品牌</option>
-                <option v-for="b in brands" :key="b.id" :value="b.name">{{ b.name }}</option>
-              </select>
-              <span class="select-icon" aria-hidden="true">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </span>
-            </div>
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </span>
           </div>
-          <div class="field">
-            <label class="field-label" for="vh-vehicle-type">车辆类型</label>
-            <div class="select-wrap">
-              <select
-                id="vh-vehicle-type"
-                v-model="form.vehicle_type"
-                class="form-control"
-                :disabled="!form.brand || vehicleTypes.length === 0"
+          </UiFormField>
+          <UiFormField label="车辆类型" for-id="vh-vehicle-type">
+          <div class="select-wrap">
+            <select
+              id="vh-vehicle-type"
+              v-model="form.vehicle_type"
+              class="form-control"
+              :disabled="!form.brand || vehicleTypes.length === 0"
+            >
+              <option :value="undefined" disabled>请选择车辆类型</option>
+              <option v-for="vt in vehicleTypes" :key="vt" :value="vt">{{ vt }}</option>
+            </select>
+            <span class="select-icon" aria-hidden="true">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
               >
-                <option :value="undefined" disabled>请选择车辆类型</option>
-                <option v-for="vt in vehicleTypes" :key="vt" :value="vt">{{ vt }}</option>
-              </select>
-              <span class="select-icon" aria-hidden="true">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </span>
-            </div>
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </span>
           </div>
+          </UiFormField>
         </div>
 
         <!-- Row 2: 系列 + 吨位 + 出厂年份 -->
         <div class="form-row form-row-3">
-          <div class="field">
-            <label class="field-label" for="vh-series">系列</label>
-            <div class="select-wrap">
-              <select
-                id="vh-series"
-                v-model="form.series"
-                class="form-control"
-                :disabled="!form.vehicle_type"
+          <UiFormField label="系列" for-id="vh-series">
+          <div class="select-wrap">
+            <select
+              id="vh-series"
+              v-model="form.series"
+              class="form-control"
+              :disabled="!form.vehicle_type"
+            >
+              <option :value="undefined" disabled>请选择系列</option>
+              <option v-for="s in seriesOptions" :key="s.id" :value="s.name">{{ s.name }}</option>
+            </select>
+            <span class="select-icon" aria-hidden="true">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
               >
-                <option :value="undefined" disabled>请选择系列</option>
-                <option v-for="s in seriesOptions" :key="s.id" :value="s.name">{{ s.name }}</option>
-              </select>
-              <span class="select-icon" aria-hidden="true">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </span>
-            </div>
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </span>
           </div>
-          <div class="field">
-            <label class="field-label" for="vh-tonnage">吨位</label>
-            <div class="select-wrap">
-              <select
-                id="vh-tonnage"
-                v-model="form.tonnage"
-                class="form-control"
-                :disabled="!form.series"
+          </UiFormField>
+          <UiFormField label="吨位" for-id="vh-tonnage">
+          <div class="select-wrap">
+            <select
+              id="vh-tonnage"
+              v-model="form.tonnage"
+              class="form-control"
+              :disabled="!form.series"
+            >
+              <option :value="undefined" disabled>请选择吨位</option>
+              <option v-for="t in tonnages" :key="t" :value="t">{{ t }} 吨</option>
+            </select>
+            <span class="select-icon" aria-hidden="true">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
               >
-                <option :value="undefined" disabled>请选择吨位</option>
-                <option v-for="t in tonnages" :key="t" :value="t">{{ t }} 吨</option>
-              </select>
-              <span class="select-icon" aria-hidden="true">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </span>
-            </div>
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </span>
           </div>
-          <div class="field">
-            <label class="field-label" for="vh-factory-year">出厂年份</label>
-            <div class="select-wrap">
-              <select
-                id="vh-factory-year"
-                v-model="form.factory_year"
-                class="form-control"
-                :disabled="form.tonnage == null"
+          </UiFormField>
+          <UiFormField label="出厂年份" for-id="vh-factory-year">
+          <div class="select-wrap">
+            <select
+              id="vh-factory-year"
+              v-model="form.factory_year"
+              class="form-control"
+              :disabled="form.tonnage == null"
+            >
+              <option :value="undefined" disabled>请选择出厂年份</option>
+              <option v-for="y in factoryYearOptions" :key="y" :value="y">{{ y }} 年</option>
+            </select>
+            <span class="select-icon" aria-hidden="true">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
               >
-                <option :value="undefined" disabled>请选择出厂年份</option>
-                <option v-for="y in factoryYearOptions" :key="y" :value="y">{{ y }} 年</option>
-              </select>
-              <span class="select-icon" aria-hidden="true">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </span>
-            </div>
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </span>
           </div>
+          </UiFormField>
         </div>
 
         <!-- Row 3: 配置类型 + 门架类型 + 门架高度 -->
         <div class="form-row form-row-3">
-          <div class="field">
-            <label class="field-label" for="vh-config-type">配置类型</label>
-            <div class="select-wrap">
-              <select
-                id="vh-config-type"
-                v-model="form.config_type"
-                class="form-control"
-                :disabled="form.tonnage == null"
+          <UiFormField label="配置类型" for-id="vh-config-type">
+          <div class="select-wrap">
+            <select
+              id="vh-config-type"
+              v-model="form.config_type"
+              class="form-control"
+              :disabled="form.tonnage == null"
+            >
+              <option :value="undefined" disabled>请选择</option>
+              <option v-for="c in configTypes" :key="c.id" :value="c.name">
+                {{ c.name }}
+              </option>
+            </select>
+            <span class="select-icon" aria-hidden="true">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
               >
-                <option :value="undefined" disabled>请选择</option>
-                <option v-for="c in configTypes" :key="c.id" :value="c.name">
-                  {{ c.name }}
-                </option>
-              </select>
-              <span class="select-icon" aria-hidden="true">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </span>
-            </div>
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </span>
           </div>
-          <div class="field">
-            <label class="field-label" for="vh-mast-type">门架类型</label>
-            <div class="select-wrap">
-              <select
-                id="vh-mast-type"
-                v-model="form.mast_type"
-                class="form-control"
-                :disabled="!form.config_type"
+          </UiFormField>
+          <UiFormField label="门架类型" for-id="vh-mast-type">
+          <div class="select-wrap">
+            <select
+              id="vh-mast-type"
+              v-model="form.mast_type"
+              class="form-control"
+              :disabled="!form.config_type"
+            >
+              <option :value="undefined" disabled>请选择</option>
+              <option v-for="m in mastTypeOptions" :key="m.id" :value="m.name">
+                {{ m.name }}
+              </option>
+            </select>
+            <span class="select-icon" aria-hidden="true">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
               >
-                <option :value="undefined" disabled>请选择</option>
-                <option v-for="m in mastTypeOptions" :key="m.id" :value="m.name">
-                  {{ m.name }}
-                </option>
-              </select>
-              <span class="select-icon" aria-hidden="true">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </span>
-            </div>
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </span>
           </div>
-          <div class="field">
-            <label class="field-label" for="vh-mast-height">门架高度</label>
-            <div class="select-wrap">
-              <select
-                id="vh-mast-height"
-                v-model="form.mast_height_mm"
-                class="form-control"
-                :disabled="!form.mast_type"
+          </UiFormField>
+          <UiFormField label="门架高度" for-id="vh-mast-height">
+          <div class="select-wrap">
+            <select
+              id="vh-mast-height"
+              v-model="form.mast_height_mm"
+              class="form-control"
+              :disabled="!form.mast_type"
+            >
+              <option :value="undefined" disabled>请选择</option>
+              <option v-for="mh in mastHeightOptions" :key="mh.id" :value="mh.value_mm">
+                {{ mh.value_mm === NONE_MAST_HEIGHT ? '无' : `${mh.value_mm} mm` }}
+              </option>
+            </select>
+            <span class="select-icon" aria-hidden="true">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
               >
-                <option :value="undefined" disabled>请选择</option>
-                <option v-for="mh in mastHeightOptions" :key="mh.id" :value="mh.value_mm">
-                  {{ mh.value_mm === NONE_MAST_HEIGHT ? '无' : `${mh.value_mm} mm` }}
-                </option>
-              </select>
-              <span class="select-icon" aria-hidden="true">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </span>
-            </div>
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </span>
           </div>
+          </UiFormField>
         </div>
 
         <!-- Row 4: 累计工时 + 原厂原漆 -->
         <div class="form-row form-row-2">
-          <div class="field">
-            <label class="field-label" for="vh-usage-hours">累计工时</label>
-            <input
-              id="vh-usage-hours"
-              v-model.number="form.usage_hours"
-              type="number"
-              class="form-control"
-              :min="0"
-              :max="100000"
-              :step="100"
-              placeholder="请输入工时数"
-            />
+          <UiFormField label="累计工时" for-id="vh-usage-hours">
+          <input
+            id="vh-usage-hours"
+            v-model.number="form.usage_hours"
+            type="number"
+            class="form-control"
+            :min="0"
+            :max="100000"
+            :step="100"
+            placeholder="请输入工时数"
+          />
+          </UiFormField>
+          <UiFormField label="原厂原漆">
+          <div class="toggle-row">
+            <button
+              type="button"
+              class="toggle-switch"
+              :class="{ 'is-on': form.original_paint }"
+              :aria-pressed="form.original_paint"
+              aria-label="原厂原漆开关"
+              @click="form.original_paint = !form.original_paint"
+            >
+              <span class="toggle-thumb"></span>
+            </button>
+            <span class="toggle-state" :class="{ 'is-on': form.original_paint }">
+              {{ form.original_paint ? '是' : '否' }}
+            </span>
           </div>
-          <div class="field">
-            <label class="field-label">原厂原漆</label>
-            <div class="toggle-row">
-              <button
-                type="button"
-                class="toggle-switch"
-                :class="{ 'is-on': form.original_paint }"
-                :aria-pressed="form.original_paint"
-                aria-label="原厂原漆开关"
-                @click="form.original_paint = !form.original_paint"
-              >
-                <span class="toggle-thumb"></span>
-              </button>
-              <span class="toggle-state" :class="{ 'is-on': form.original_paint }">
-                {{ form.original_paint ? '是' : '否' }}
-              </span>
-            </div>
-          </div>
+          </UiFormField>
         </div>
 
         <!-- Row 5: 省份 + 城市 -->
         <div class="form-row form-row-2">
-          <div class="field">
-            <label class="field-label" for="vh-province">省份</label>
-            <div class="select-wrap">
-              <select
-                id="vh-province"
-                v-model="form.province"
-                class="form-control"
+          <UiFormField label="省份" for-id="vh-province">
+          <div class="select-wrap">
+            <select
+              id="vh-province"
+              v-model="form.province"
+              class="form-control"
+            >
+              <option :value="undefined" disabled>请选择省份</option>
+              <option v-for="p in provinces" :key="p" :value="p">{{ p }}</option>
+            </select>
+            <span class="select-icon" aria-hidden="true">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
               >
-                <option :value="undefined" disabled>请选择省份</option>
-                <option v-for="p in provinces" :key="p" :value="p">{{ p }}</option>
-              </select>
-              <span class="select-icon" aria-hidden="true">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </span>
-            </div>
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </span>
           </div>
-          <div class="field">
-            <label class="field-label" for="vh-city">城市</label>
-            <div class="select-wrap">
-              <select
-                id="vh-city"
-                v-model="form.city"
-                class="form-control"
-                :disabled="!form.province"
+          </UiFormField>
+          <UiFormField label="城市" for-id="vh-city">
+          <div class="select-wrap">
+            <select
+              id="vh-city"
+              v-model="form.city"
+              class="form-control"
+              :disabled="!form.province"
+            >
+              <option :value="undefined" disabled>请选择城市</option>
+              <option v-for="c in cities" :key="c" :value="c">{{ c }}</option>
+            </select>
+            <span class="select-icon" aria-hidden="true">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
               >
-                <option :value="undefined" disabled>请选择城市</option>
-                <option v-for="c in cities" :key="c" :value="c">{{ c }}</option>
-              </select>
-              <span class="select-icon" aria-hidden="true">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </span>
-            </div>
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </span>
           </div>
+          </UiFormField>
         </div>
 
         <!-- Row 6: 证件与保养 -->
         <div class="form-row form-row-3">
-          <div class="field">
-            <label class="field-label">是否有车牌</label>
-            <div class="toggle-row">
-              <button
-                type="button"
-                class="toggle-switch"
-                :class="{ 'is-on': form.has_license_plate }"
-                :aria-pressed="form.has_license_plate"
-                aria-label="是否有车牌开关"
-                @click="form.has_license_plate = !form.has_license_plate"
-              >
-                <span class="toggle-thumb"></span>
-              </button>
-              <span class="toggle-state" :class="{ 'is-on': form.has_license_plate }">
-                {{ form.has_license_plate ? '是' : '否' }}
-              </span>
-            </div>
+          <UiFormField label="是否有车牌">
+          <div class="toggle-row">
+            <button
+              type="button"
+              class="toggle-switch"
+              :class="{ 'is-on': form.has_license_plate }"
+              :aria-pressed="form.has_license_plate"
+              aria-label="是否有车牌开关"
+              @click="form.has_license_plate = !form.has_license_plate"
+            >
+              <span class="toggle-thumb"></span>
+            </button>
+            <span class="toggle-state" :class="{ 'is-on': form.has_license_plate }">
+              {{ form.has_license_plate ? '是' : '否' }}
+            </span>
           </div>
-          <div class="field">
-            <label class="field-label">特种设备登记证</label>
-            <div class="toggle-row">
-              <button
-                type="button"
-                class="toggle-switch"
-                :class="{ 'is-on': form.has_registration_certificate }"
-                :aria-pressed="form.has_registration_certificate"
-                aria-label="特种设备登记证开关"
-                @click="
-                  form.has_registration_certificate = !form.has_registration_certificate
-                "
-              >
-                <span class="toggle-thumb"></span>
-              </button>
-              <span
-                class="toggle-state"
-                :class="{ 'is-on': form.has_registration_certificate }"
-              >
-                {{ form.has_registration_certificate ? '是' : '否' }}
-              </span>
-            </div>
+          </UiFormField>
+          <UiFormField label="特种设备登记证">
+          <div class="toggle-row">
+            <button
+              type="button"
+              class="toggle-switch"
+              :class="{ 'is-on': form.has_registration_certificate }"
+              :aria-pressed="form.has_registration_certificate"
+              aria-label="特种设备登记证开关"
+              @click="
+                form.has_registration_certificate = !form.has_registration_certificate
+              "
+            >
+              <span class="toggle-thumb"></span>
+            </button>
+            <span
+              class="toggle-state"
+              :class="{ 'is-on': form.has_registration_certificate }"
+            >
+              {{ form.has_registration_certificate ? '是' : '否' }}
+            </span>
           </div>
-          <div class="field">
-            <label class="field-label">保养记录</label>
-            <div class="toggle-row">
-              <button
-                type="button"
-                class="toggle-switch"
-                :class="{ 'is-on': form.has_maintenance_records }"
-                :aria-pressed="form.has_maintenance_records"
-                aria-label="保养记录开关"
-                @click="form.has_maintenance_records = !form.has_maintenance_records"
-              >
-                <span class="toggle-thumb"></span>
-              </button>
-              <span class="toggle-state" :class="{ 'is-on': form.has_maintenance_records }">
-                {{ form.has_maintenance_records ? '是' : '否' }}
-              </span>
-            </div>
+          </UiFormField>
+          <UiFormField label="保养记录">
+          <div class="toggle-row">
+            <button
+              type="button"
+              class="toggle-switch"
+              :class="{ 'is-on': form.has_maintenance_records }"
+              :aria-pressed="form.has_maintenance_records"
+              aria-label="保养记录开关"
+              @click="form.has_maintenance_records = !form.has_maintenance_records"
+            >
+              <span class="toggle-thumb"></span>
+            </button>
+            <span class="toggle-state" :class="{ 'is-on': form.has_maintenance_records }">
+              {{ form.has_maintenance_records ? '是' : '否' }}
+            </span>
           </div>
+          </UiFormField>
         </div>
 
         <!-- 车况评级 -->
@@ -854,24 +843,9 @@ function onConditionSelect(rating: string) {
 }
 
 /* ===== Field ===== */
-.field {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-.field-label {
-  display: block;
-  font-size: 14px;
-  font-weight: 500;
-  margin-bottom: 6px;
-  color: var(--color-text-secondary, #475569);
-  font-family: var(--font-text, 'Noto Sans SC', sans-serif);
-  transition: color var(--duration-base) var(--ease-default);
-}
-/* 锁定态：label 同步变灰 */
-.field:has(.form-control:disabled) .field-label {
-  color: var(--color-text-muted, #94A3B8);
-}
+/* .field / .field-label / 锁定态标签变灰三条规则已随字段容器搬到
+   components/ui/UiFormField.vue —— 作用域 CSS 的规则只作用于本模板的节点，
+   父组件里的同名规则选不到子组件渲染出的元素。 */
 
 /* ===== Form control (input + select shared) ===== */
 .form-control {

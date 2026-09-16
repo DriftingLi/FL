@@ -140,7 +140,8 @@ import { reactive, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { resumeApi } from '@/api/resume'
-import { unwrappedRequest } from '@/api/request'
+import { positionApi } from '@/api/position'
+import { credentialApi } from '@/api/credential'
 import { buildCityLevelRegionOptions, splitRegionPath, regionElementsToPaths, cascaderToRegionStrings } from '@/utils/region'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiCard from '@/components/ui/UiCard.vue'
@@ -299,11 +300,11 @@ function onRegionsChange(val: any) {
 
 onMounted(async () => {
   try {
-    const res: any = await unwrappedRequest.get('/positions', { headers: { 'X-Silent': '1' } })
+    const res = await positionApi.listPublic({ silent: true })
     positions.value = res?.positions || []
   } catch {}
   try {
-    const res: any = await unwrappedRequest.get('/credentials')
+    const res = await credentialApi.listCredentials()
     credentials.value = res?.credentials || []
   } catch {}
   load()

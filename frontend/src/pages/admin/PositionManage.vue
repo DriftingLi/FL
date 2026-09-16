@@ -64,7 +64,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useAdminTable } from '@/composables/useAdminTable'
 import { Plus } from '@element-plus/icons-vue'
 import { ElMessage, type FormInstance } from 'element-plus'
-import { unwrappedRequest } from '@/api/request'
+import { positionApi } from '@/api/position'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
@@ -100,7 +100,7 @@ const {
   retry: retryLoad
 } = useAdminTable<PositionItem>({
   fetch: async () => {
-    const res: any = await unwrappedRequest.get('/admin/positions', { headers: { 'X-Silent': '1' } })
+    const res = await positionApi.listAdmin({ silent: true })
     const positions: PositionItem[] = res?.positions || []
     return { list: positions, total: positions.length }
   }
@@ -123,10 +123,10 @@ async function handleSubmit() {
   try {
     const payload = { name: form.name, code: form.code, description: form.description, status: form.status }
     if (editing.value && form.id != null) {
-      await unwrappedRequest.put(`/admin/position/${form.id}`, payload)
+      await positionApi.update(form.id, payload)
       ElMessage.success('岗位已更新')
     } else {
-      await unwrappedRequest.post('/admin/position', payload)
+      await positionApi.create(payload)
       ElMessage.success('岗位创建成功')
     }
     dialogVisible.value = false
@@ -140,7 +140,7 @@ async function handleSubmit() {
 
 async function handleDelete(item: PositionItem) {
   try {
-    await unwrappedRequest.delete(`/admin/position/${item.position_id}`)
+    await positionApi.remove(item.position_id)
     ElMessage.success('岗位已删除')
     load()
   } catch (e: any) {

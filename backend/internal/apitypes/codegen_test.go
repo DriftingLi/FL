@@ -1,25 +1,25 @@
 package apitypes
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
+
+	"forklift-training/internal/codegen"
 )
 
 // spec #940 片五③：前端契约类型的生成物同步契约。
 //
 // 手改生成物、或改了注解却忘记再生成（也不跑 swagger 新鲜度锁），本测试即红。
 // prior art：internal/authz/codegen_test.go 与 internal/deploy/topology_test.go。
+// 定位与比对自 ADR-0053 §9 起走 codegen（不再手写 `../../../`）。
 
 func specPath(t *testing.T) string {
 	t.Helper()
-	return filepath.Join("..", "..", "..", "backend", "docs", "swagger.json")
-}
-
-func outPath(t *testing.T, domain string) string {
-	t.Helper()
-	return filepath.Join("..", "..", "..", "frontend", "src", "api", "generated", domain+".ts")
+	path, err := codegen.Resolve("", LocateSwaggerSpec, NotFoundSwaggerSpec)
+	if err != nil {
+		t.Fatalf("定位 swagger 产物失败: %v", err)
+	}
+	return path
 }
 
 func TestFrontendAPITypesInSync(t *testing.T) {
@@ -27,22 +27,14 @@ func TestFrontendAPITypesInSync(t *testing.T) {
 	if err != nil {
 		t.Fatalf("读取 swagger 产物失败（先 cd backend && make swagger）: %v", err)
 	}
-	rendered, err := RenderAll(spec)
-	if err != nil {
-		t.Fatalf("渲染失败: %v", err)
-	}
-	if len(rendered) == 0 {
+	if len(Domains) == 0 {
 		t.Fatal("声明表为空，拒绝静默通过")
 	}
 	for _, d := range Domains {
-		path := outPath(t, d.Name)
-		got, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("读取生成物 %s 失败（应先运行 cd backend && go run ./cmd/gen-apitypes）: %v", path, err)
-		}
-		if string(got) != rendered[d.Name] {
-			t.Fatalf("生成物与注解不同步：请 cd backend && go run ./cmd/gen-apitypes（域 %s）", d.Name)
-		}
+		domain := d
+		codegen.AssertInSync(t, GeneratedTSGen(domain.Name, func() (string, error) {
+			return RenderDomain(spec, domain)
+		}))
 	}
 }
 
