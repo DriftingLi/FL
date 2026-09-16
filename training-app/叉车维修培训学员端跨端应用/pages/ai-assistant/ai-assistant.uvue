@@ -121,7 +121,13 @@
 
 
 
-	// 聊天核心逻辑
+	// 聊天核心逻辑。
+	// 会话作用域**恒为空串**：通用页的会话一律落遗留 `ai_assistant` 区（空串 ⇒ 不发
+	// `feature_key`，与从前逐字一致 ⇒ 零回归）。分区由专项页承担 —— 它把自己的功能键当作用域
+	// 传进同一个 composable（ADR-0013）；本页**不得**在这里塞任何键：给会话带键却没有「列该区」
+	// 的界面时，会话在「最近对话」里永久不可见（#921 首版实测回归）。
+	const featureScope = ref<string>('')
+
 	const {
 		statusBarHeight,
 		sessions,
@@ -139,7 +145,7 @@
 		toggleSidebarLeft,
 		toggleSidebarRight,
 		sendInput,
-	} = useAiChat()
+	} = useAiChat(featureScope)
 
 	// 视图状态
 	const showModelPicker = ref<boolean>(false)
