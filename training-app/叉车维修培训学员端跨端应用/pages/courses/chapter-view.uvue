@@ -62,6 +62,13 @@
                     <!-- 图片 -->
                     <image v-else-if="block.type == 'image'" class="md-image" :src="block.text" mode="widthFix"
                         @click="onImageClick(block.text)"></image>
+                    <!-- 表格（ADR-0046：章节正文渲染成表格；解析器按行出块，表头行 level=1） -->
+                    <view v-else-if="block.type == 'table'" class="md-table-row">
+                        <view v-for="(cell, ci) in block.items" :key="ci"
+                            :class="{ 'md-table-cell': true, 'md-table-cell-first': ci == 0, 'md-table-cell-head': block.level == 1 }">
+                            <text :class="{ 'md-table-cell-text': true, 'md-table-cell-text-head': block.level == 1 }">{{ cell }}</text>
+                        </view>
+                    </view>
                 </view>
             </view>
 
@@ -616,6 +623,44 @@
         width: 100%;
         border-radius: 12rpx;
         margin: 16rpx 0;
+    }
+
+    /* 表格（ADR-0046：章节正文的表格渲染；uvue 无 grid，逐行 flex + 等宽单元格；
+       解析器按行出块，同一张表的多行共用这一套样式、margin 归零连成一片） */
+    .md-table-row {
+        flex-direction: row;
+        margin-bottom: 0;
+    }
+
+    .md-table-cell {
+        flex: 1;
+        padding: 16rpx 20rpx;
+        border-right-width: 1rpx;
+        border-right-color: #e0e0e0;
+        border-bottom-width: 1rpx;
+        border-bottom-color: #e0e0e0;
+    }
+
+    .md-table-cell-first {
+        border-left-width: 1rpx;
+        border-left-color: #e0e0e0;
+    }
+
+    .md-table-cell-head {
+        border-top-width: 1rpx;
+        border-top-color: #e0e0e0;
+        background-color: #f6f8fa;
+    }
+
+    .md-table-cell-text {
+        font-size: 26rpx;
+        color: #333333;
+        line-height: 40rpx;
+    }
+
+    .md-table-cell-text-head {
+        font-weight: bold;
+        color: #1a1a1a;
     }
 
     /* 附件列表 */

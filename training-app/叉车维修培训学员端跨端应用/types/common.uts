@@ -24,8 +24,8 @@ export type GridItem = {
 
 /** Markdown 解析后的块类型 */
 export type MarkdownBlock = {
-    type : string      // heading / paragraph / code / list / quote / divider / image
-    level : number     // 标题层级 1-6（非标题为 0）
-    text : string      // 文本内容
-    items : string[]   // 列表项（仅 list 类型）
+    type : string      // heading / paragraph / code / list / quote / divider / image / table
+    level : number     // 标题层级 1-6（非标题为 0）；table 块用它区分表头行（1）与正文行（0）
+    text : string      // 文本内容（table 块为整行单元格的纯文本投影）
+    items : string[]   // 列表项（仅 list 类型）；table 块为该行的各列单元格
 }
