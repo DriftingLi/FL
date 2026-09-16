@@ -4,7 +4,7 @@
  * 守护的不变量：
  *   L1 Get-DetectLevel 函数存在且可被 dot-source
  *   L2 返回对象包含 Level / Reason / ChangedFiles 三个字段
- *   L3 只改 .uvue 样式 → Level=quick
+ *   L3 quick 判定 + `Reason` 的三类分流（2026-09-16 修订：`[.uvue]` 分支不得声称「未命中运行时面」）
  *   L4 有 .uts 改动 → Level=standard
  *   L5 有 manifest.json 改动 → Level=full
  *   L6 有新增 .uvue 页面 → Level=full
@@ -40,21 +40,27 @@ describe('level-detect.ps1 contract', () => {
     expect(src).toContain('ChangedFiles');
   });
 
-  // L3: quick 判定（未命中运行时面）
-  // 2026-09-15 修订：🟢 的 `Reason` 必须**分两种写清** —— 「工具链/测试改动」≠「纯样式/文案改动」。
-  // 起因：两次实际会话改的是 `.ps1`，却被报成「纯样式/文案改动（1 个文件）」，误导使用者以为改动面是 UI。
-  // 分档（🟢）不变，变的是**为什么**。
-  test('L3: no runtime surface → quick, and Reason distinguishes toolchain from UI', () => {
+  // L3: quick 判定（**本地**口径）—— `Reason` 必须分三类写清，且不得混淆两个口径
+  // 2026-09-15 修订：改 `.ps1` 被报成样式改动 ⇒ 点名「工具链/测试改动」。
+  // 2026-09-16 修订（#1037）：只改既有 `.uvue` 被报成「未命中运行时面」，而 `.uvue` 在验收门口径
+  //   （`pr-evidence` 的 `isRuntimeFile`）里就是运行时面 ⇒ 该分支必须写出「验收门口径 / ①③④」。
+  //   ⚠️ 本用例是**文本**断言（会被注释满足）；分支真的走哪条由 levelDetectBehavior.test.js 的
+  //   G4–G6 用临时仓库真跑一遍来钉 —— 这是 ADR-0011 G1–G3 的教训：文本断言证明不了分支可执行。
+  test('L3: quick 判定 + Reason 三类分流（工具链 / .uvue / 其余）', () => {
     expect(src).toContain("Level        = 'quick'");
     // 空 diff 仍走 quick（独立措辞）
     expect(src).toContain("Reason       = '无改动文件");
-    // 分支一：只有工具链/测试/文档类文件 ⇒ 必须点名「工具链」，不得混进「纯样式」
+    // 分支一：含 .uvue ⇒ 写出「门口径 + ①③④」，不得把它当免证据
+    expect(src).toMatch(/模板\/样式改动[\s\S]{0,400}?验收门口径[\s\S]{0,200}?①③④/);
+    // 分支二：只有工具链/测试/文档类文件 ⇒ 必须点名「工具链」
     expect(src).toMatch(/工具链\/测试改动，未命中运行时面/);
-    // 分支二：其余（含只改 .uvue）⇒ 补上「未命中运行时面」
-    expect(src).toMatch(/Level\s+=\s+'quick'[\s\S]*Reason\s+=\s+"纯样式\/文案改动，未命中运行时面/);
-    // 两个分支都必须存在（防止有人删掉工具链分支、又退回单一文案）
+    // 分支三：其余 ⇒ 「非运行时面改动」+「未命中运行时面」
+    expect(src).toMatch(/非运行时面改动，未命中运行时面/);
+    // 三个分支都必须存在（防止有人删掉某支、又退回单一文案）
     expect(src).toContain('$toolchainFiles');
     expect(src).toContain('$uvueFiles');
+    // 🟢 收尾建议句的单点真源（行为断言见 levelDetectBehavior.test.js G7）
+    expect(src).toContain('function Get-QuickEvidenceHint');
   });
 
   // L4: standard 判定（.uts 变更）

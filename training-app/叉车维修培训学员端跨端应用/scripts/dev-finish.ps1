@@ -342,7 +342,11 @@ if ($evidenceResult -and $evidenceResult.Generated) {
 }
 elseif ($detectedLevel -eq 'quick') {
     Write-Host ''
-    Write-Host '📝 快速模式：PR 验收证据段写「免（低风险运行时面：仅 .uvue 样式/文案改动）」' -ForegroundColor Gray
+    # 2026-09-16（#1037）：旧文案「免（低风险运行时面：仅 .uvue 样式/文案改动）」把两个口径混成一个
+    # （「低风险运行时面」在 ADR-0008 里恰是「**无 .uvue**」的 .uts 改动），对 `.uvue` 改动照它写正文
+    # 会被 `pr-evidence` 判红。建议句的**单点真源**放在 level-detect.ps1 的 Get-QuickEvidenceHint
+    # （纯函数、有运行期断言 G7），这里只负责打印。
+    Write-Host "📝 快速模式（本地）：$(Get-QuickEvidenceHint -ChangedFiles @($levelResult.ChangedFiles))" -ForegroundColor Gray
 }
 
 exit 0
