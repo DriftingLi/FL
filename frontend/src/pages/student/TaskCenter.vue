@@ -28,17 +28,20 @@
       </RouterLink>
     </div>
 
-    <UiErrorState
-      v-if="loadError"
-      title="任务加载失败"
-      description="网络或服务端异常，可重试"
+    <UiAsyncSection
+      :error="loadError"
+      :loading="loading"
+      :empty="false"
       :retrying="retrying"
+      error-title="任务加载失败"
+      error-description="网络或服务端异常，可重试"
       @retry="retryLoad"
-    />
+    >
+      <template #skeleton>
+        <UiSkeleton variant="card" :count="6"  />
+      </template>
 
-    <UiSkeleton v-else-if="loading" variant="card" :count="6" />
-
-    <div v-else class="flex flex-col gap-5">
+<div class="flex flex-col gap-5">
       <div
         v-for="(group, gi) in grouped"
         :key="group.key"
@@ -93,6 +96,7 @@
         </div>
       </div>
     </div>
+    </UiAsyncSection>
   </div>
 </template>
 
@@ -106,7 +110,7 @@ import type { TaskGroup } from '@/utils/taskCenter'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useStagger } from '@/composables/useStagger'
 import UiProgress from '@/components/ui/UiProgress.vue'
-import UiErrorState from '@/components/ui/UiErrorState.vue'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiCard from '@/components/ui/UiCard.vue'

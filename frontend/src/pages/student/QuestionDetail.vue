@@ -7,16 +7,19 @@
       </UiButton>
     </div>
 
-    <UiErrorState
-      v-if="loadError"
-      title="题目加载失败"
-      description="题目可能已下架，或不在当前证件的题库内"
+    <UiAsyncSection
+      :error="loadError"
+      :loading="loading"
+      :empty="false"
       :retrying="retrying"
+      error-title="题目加载失败"
+      error-description="题目可能已下架，或不在当前证件的题库内"
       @retry="retryLoad"
-    />
-    <UiSkeleton v-else-if="loading" variant="card" :count="1" />
-
-    <template v-else-if="question">
+    >
+      <template #skeleton>
+        <UiSkeleton variant="card" :count="1"  />
+      </template>
+      <template v-if="question">
       <div class="mb-2 flex items-center gap-2">
         <UiTag size="small">{{ typeLabel }}</UiTag>
         <UiActionChip
@@ -67,7 +70,8 @@
           </div>
         </template>
       </div>
-    </template>
+      </template>
+    </UiAsyncSection>
   </div>
 </template>
 
@@ -97,8 +101,8 @@ import NoteCard from '@/components/practice/NoteCard.vue'
 import UiActionChip from '@/components/ui/UiActionChip.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiTag from '@/components/ui/UiTag.vue'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
-import UiErrorState from '@/components/ui/UiErrorState.vue'
 
 const route = useRoute()
 const router = useRouter()

@@ -6,17 +6,19 @@
       <h1 class="m-0 text-xl font-semibold text-ink">积分明细</h1>
     </div>
 
-    <UiErrorState
-      v-if="loadError"
-      title="明细加载失败"
-      description="网络或服务端异常，可重试"
+    <UiAsyncSection
+      :error="loadError"
+      :loading="loading"
+      :empty="false"
       :retrying="retrying"
+      error-title="明细加载失败"
+      error-description="网络或服务端异常，可重试"
       @retry="retryLoad"
-    />
+    >
+      <template #skeleton>
+        <UiSkeleton variant="card" :count="3"  />
+      </template>
 
-    <UiSkeleton v-else-if="loading" variant="card" :count="3" />
-
-    <template v-else>
       <!-- 账户四格卡 -->
       <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div class="rounded-card border border-line bg-panel p-4">
@@ -91,7 +93,7 @@
           </div>
         </template>
       </div>
-    </template>
+   >
 
     <!-- 积分规则抽屉 -->
     <el-drawer v-model="rulesVisible" title="积分规则" size="360px" append-to-body>
@@ -118,6 +120,7 @@
         </section>
       </div>
     </el-drawer>
+    </UiAsyncSection>
   </div>
 </template>
 
@@ -130,9 +133,9 @@ import { formatDateTime } from '@/utils/format'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 import UiButton from '@/components/ui/UiButton.vue'
-import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 
 const balance = ref<PointsBalance>({ balance: 0, total_earned: 0, total_spent: 0 })

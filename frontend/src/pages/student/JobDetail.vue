@@ -4,16 +4,23 @@
       <router-link to="/training/jobs" class="text-sm text-ui-600 hover:text-ui-700">← 返回职位广场</router-link>
     </div>
 
-    <UiErrorState
-      v-if="loadError"
-      title="职位加载失败"
-      description="网络或服务端异常，可重试"
+    <UiAsyncSection
+      :error="loadError"
+      :loading="loading"
+      :empty="!data"
       :retrying="retrying"
+      error-title="职位加载失败"
+      error-description="网络或服务端异常，可重试"
       @retry="handleRetry"
-    />
-    <UiSkeleton v-else-if="loading" variant="list" :count="4" />
-    <div v-else-if="!data" class="rounded-card border border-line bg-panel p-8 text-center text-ink-3">职位不存在或已下架</div>
-    <div v-else class="rounded-card border border-line bg-panel p-6">
+    >
+      <template #skeleton>
+        <UiSkeleton variant="list" :count="4"  />
+      </template>
+      <template #empty>
+        <div class="rounded-card border border-line bg-panel p-8 text-center text-ink-3">职位不存在或已下架</div>
+      </template>
+
+    <div v-if="data" class="rounded-card border border-line bg-panel p-6">
       <h1 class="text-lg font-bold text-ink">{{ data.title }}</h1>
       <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-3">
         <span v-if="data.position_name">{{ data.position_name }}</span>
@@ -46,6 +53,7 @@
         <p v-if="applyError" class="mt-2 text-xs text-red-500">{{ applyError }}</p>
       </div>
     </div>
+    </UiAsyncSection>
 
     <!-- 投递确认弹窗（spec #449 决定 1 的 UI 落点）：明确告知「投递即授权…与简历是否公开无关」 -->
     <UiDialog v-model="showApplyDialog" title="确认投递" width="440px" confirm-text="确认投递" :confirm-loading="applying" @confirm="confirmApply">
@@ -68,7 +76,7 @@ import { ElMessage } from 'element-plus'
 import { jobApi, type JobPosting } from '@/api/job'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
-import UiErrorState from '@/components/ui/UiErrorState.vue'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 

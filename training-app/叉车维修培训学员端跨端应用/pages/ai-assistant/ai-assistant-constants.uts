@@ -8,8 +8,8 @@ import type { AIFunctionItem } from '../../types/index'
  * 功能入口列表（宫格，4 项）—— **收敛到后端功能注册表的专项对话功能**
  * （`maintenance_knowledge` / `drawing_recognition` / `exercise_solving` / `fault_diagnosis`）。
  *
- * 三处口径（ADR-0009 2026-09-15 修订 ②，本文件是实现面）：
- * - 清单仍**移动端手写**（不走 web 那套 codegen），但**键集合 / 展示名 / 限免位**必须与后端注册表
+ * 四处口径（ADR-0009 2026-09-15 修订 ②，本文件是实现面）：
+ * - 清单仍**移动端手写**（不走 web 那套 codegen），但**键集合 / 展示名 / 限免位 / 传输适配器**必须与后端注册表
  *   `backend/internal/service/ai_feature_registry.go` 全等，由 `utils/aiFeatureRegistryParityContract.test.js` 锁住。
  * - 「故障代码查询」**已下线**：它在注册表里**没有键**（根仓库 ADR-0032 决策 3 下线了 `fault_code_query`），
  *   留着就是个「点了走通用对话」的伪入口。**不要**为了补齐 5 格把它接回。
@@ -29,11 +29,28 @@ export const FUNCTION_ITEMS : AIFunctionItem[] = [
     // —— 本格即其继任者，故复用既有键 fault_diagnosis（#921）。
     // 本地 key 仍是 `fault-consult`：它是 UI 标识（图标/引用），不因展示名与形态变更而改。
     // freePreview=true 是注册表的**限免声明位**（本格限免、不扣积分），本清单如实镜像。
-    { key: 'fault-consult', title: '智能维修诊断', icon: '\uD83D\uDC77', iconPath: '/static/icons/ai-functions/fault-consult.png', featureKey: 'fault_diagnosis', freePreview: true },
-    { key: 'drawing', title: '图纸识别', icon: '\uD83D\uDCDC', iconPath: '/static/icons/ai-functions/drawing-recognition.png', featureKey: 'drawing_recognition', freePreview: false },
-    { key: 'exercise', title: '习题解答', icon: '\uD83D\uDCDD', iconPath: '/static/icons/ai-functions/exercise-solving.png', featureKey: 'exercise_solving', freePreview: false },
-    { key: 'knowledge', title: '维保知识', icon: '\uD83D\uDD27', iconPath: '/static/icons/ai-functions/maintenance-knowledge.png', featureKey: 'maintenance_knowledge', freePreview: false },
+    { key: 'fault-consult', title: '智能维修诊断', icon: '\uD83D\uDC77', iconPath: '/static/icons/ai-functions/fault-consult.png', featureKey: 'fault_diagnosis', freePreview: true, adapter: 'diagnosis' },
+    { key: 'drawing', title: '图纸识别', icon: '\uD83D\uDCDC', iconPath: '/static/icons/ai-functions/drawing-recognition.png', featureKey: 'drawing_recognition', freePreview: false, adapter: 'llm' },
+    { key: 'exercise', title: '习题解答', icon: '\uD83D\uDCDD', iconPath: '/static/icons/ai-functions/exercise-solving.png', featureKey: 'exercise_solving', freePreview: false, adapter: 'llm' },
+    { key: 'knowledge', title: '维保知识', icon: '\uD83D\uDD27', iconPath: '/static/icons/ai-functions/maintenance-knowledge.png', featureKey: 'maintenance_knowledge', freePreview: false, adapter: 'llm' },
 ]
+
+/**
+ * 是否走**外部诊断适配器**（注册表 `adapter` 镜像）—— 「专用 UI」判定的**唯一入口**。
+ *
+ * 判据是 `adapter`，**不是功能键字符串**（根仓库 ADR-0047 §7、web 侧先例
+ * `frontend/src/config/aiFeatures.ts` 的 `isDiagnosisFeature`）。理由：功能键标识「走哪条后端通道」，
+ * 适配器标识「哪一套客户端 UI」；按键判会把「换一个诊断类功能键」变成「到处改一遍」，
+ * 而按适配器判只需注册表多一行。故页面上任何「诊断专有 UI」都必须经此函数，不得写 `featureKey == 'fault_diagnosis'`。
+ */
+export function isDiagnosisFeature(featureKey : string) : boolean {
+    for (let i = 0; i < FUNCTION_ITEMS.length; i++) {
+        if (FUNCTION_ITEMS[i].featureKey == featureKey) {
+            return FUNCTION_ITEMS[i].adapter == 'diagnosis'
+        }
+    }
+    return false
+}
 
 /** 快捷提示语列表 */
 export const QUICK_PROMPTS : string[] = [

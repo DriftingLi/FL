@@ -92,17 +92,18 @@
     <!-- 我的帖子 / 赞过 / 围观 / 浏览记录共用主题列表渲染（仅我的回复走独立分支） -->
     <!-- 我的回复列表（条目带主题标题回填，点击跳对应帖子） -->
     <div v-if="showReplies" class="min-h-[300px] rounded-card bg-panel shadow-card">
-      <UiErrorState
-        v-if="loadError"
-        title="回复加载失败"
-        description="网络或服务端异常，可重试"
+      <UiAsyncSection
+        :error="loadError"
+        :loading="loading"
+        :empty="myReplies.length === 0"
         :retrying="retrying"
+        error-title="回复加载失败"
+        error-description="网络或服务端异常，可重试"
         @retry="retryLoad"
-      />
-
-      <UiSkeleton v-else-if="loading" variant="list" :count="5" />
-
-      <template v-else-if="myReplies.length > 0">
+      >
+        <template #skeleton>
+          <UiSkeleton variant="list" :count="5" />
+        </template>
         <div
           v-for="(reply, i) in myReplies"
           :key="reply.id"
@@ -121,22 +122,25 @@
             </div>
           </div>
         </div>
-      </template>
-      <UiEmptyState v-else description="暂无回复" />
+        <template #empty>
+          <UiEmptyState description="暂无回复" />
+        </template>
+      </UiAsyncSection>
     </div>
 
     <div v-else class="min-h-[300px] rounded-card bg-panel shadow-card">
-      <UiErrorState
-        v-if="loadError"
-        title="帖子加载失败"
-        description="网络或服务端异常，可重试"
+      <UiAsyncSection
+        :error="loadError"
+        :loading="loading"
+        :empty="topics.length === 0"
         :retrying="retrying"
+        error-title="帖子加载失败"
+        error-description="网络或服务端异常，可重试"
         @retry="retryLoad"
-      />
-
-      <UiSkeleton v-else-if="loading" variant="list" :count="5" />
-
-      <template v-else-if="topics.length > 0">
+      >
+        <template #skeleton>
+          <UiSkeleton variant="list" :count="5" />
+        </template>
         <div
           v-for="(topic, i) in topics"
           :key="topic.id"
@@ -186,8 +190,10 @@
             </div>
           </div>
         </div>
-      </template>
-      <UiEmptyState v-else :description="emptyDescription" :action-text="mainTab === 'question' ? '我要提问' : undefined" @action="goAsk" />
+        <template #empty>
+          <UiEmptyState :description="emptyDescription" :action-text="mainTab === 'question' ? '我要提问' : undefined" @action="goAsk" />
+        </template>
+      </UiAsyncSection>
     </div>
 
     <div class="mt-5 flex justify-center" v-if="total > pageSize">
@@ -232,8 +238,8 @@ import ForumPostForm from '@/components/student/ForumPostForm.vue'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useForumSort } from '@/composables/useForumSort'
 import { useStagger } from '@/composables/useStagger'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
-import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
