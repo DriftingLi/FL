@@ -19,88 +19,24 @@
         <!-- 课程内容 -->
         <scroll-view v-else-if="detail != null" class="content-scroll" scroll-y="true">
             <!-- 课程封面 -->
-            <view class="cover-section">
-                <view class="cover-bg" :style="{ backgroundColor: coverColor }">
-                    <text class="cover-icon">{{ getCategoryIcon(detail!.category) }}</text>
-                </view>
-                <view class="cover-info">
-                    <text class="cover-title">{{ detail!.title }}</text>
-                    <view class="cover-tags">
-                        <text v-if="detail!.level_name.length > 0" class="tag tag-level">{{ detail!.level_name }}</text>
-                        <text v-if="detail!.specialty_name.length > 0" class="tag tag-specialty">{{ detail!.specialty_name }}</text>
-                        <text v-if="detail!.certificate_name.length > 0" class="tag tag-cert">{{ detail!.certificate_name }}</text>
-                    </view>
-                    <text class="cover-desc">{{ detail!.description.length > 0 ? detail!.description : '暂无简介' }}</text>
-                </view>
-            </view>
+            <CourseCoverSection :title="detail!.title" :level-name="detail!.level_name"
+                :specialty-name="detail!.specialty_name" :certificate-name="detail!.certificate_name"
+                :description="detail!.description" :category-icon="coverIcon" :cover-color="coverColor" />
 
             <!-- 学习进度 -->
-            <view v-if="isEnrolled" class="progress-section">
-                <view class="progress-header">
-                    <text class="progress-label">学习进度</text>
-                    <text class="progress-percent">{{ learningProgress }}%</text>
-                </view>
-                <view class="progress-bar-wrap">
-                    <view class="progress-bar" :style="{ width: learningProgress + '%' }"></view>
-                </view>
-                <text class="progress-detail">已完成 {{ learningCompleted }}/{{ detail!.chapters.length }} 章</text>
-            </view>
+            <CourseProgressSection v-if="isEnrolled" :progress="learningProgress" :completed="learningCompleted"
+                :total-chapters="detail!.chapters.length" />
 
             <!-- 课程信息网格 -->
-            <view class="info-grid">
-                <view class="info-item">
-                    <text class="info-label">理论学时</text>
-                    <text class="info-value">{{ detail!.theory_hours > 0 ? detail!.theory_hours + ' 学时' : '-' }}</text>
-                </view>
-                <view class="info-item">
-                    <text class="info-label">实操学时</text>
-                    <text class="info-value">{{ detail!.practice_hours > 0 ? detail!.practice_hours + ' 学时' : '-' }}</text>
-                </view>
-                <view class="info-item">
-                    <text class="info-label">章节数</text>
-                    <text class="info-value">{{ detail!.chapters.length }}</text>
-                </view>
-                <view class="info-item">
-                    <text class="info-label">课程时长</text>
-                    <text class="info-value">{{ formatDuration(detail!.duration) }}</text>
-                </view>
-                <view v-if="detail!.certificate_name.length > 0" class="info-item info-full">
-                    <text class="info-label">关联证书</text>
-                    <text class="info-value">{{ detail!.certificate_name }}<text v-if="detail!.certificate_validity_days > 0" class="info-sub">（有效期 {{ detail!.certificate_validity_days }} 天）</text></text>
-                </view>
-                <view v-if="detail!.prerequisites.length > 0" class="info-item info-full">
-                    <text class="info-label">前置课程</text>
-                    <view class="prereq-list">
-                        <text v-for="(pre, idx) in detail!.prerequisites" :key="idx" class="prereq-tag">{{ pre.name }}</text>
-                    </view>
-                </view>
-            </view>
+            <CourseInfoGrid :theory-hours="detail!.theory_hours" :practice-hours="detail!.practice_hours"
+                :chapter-count="detail!.chapters.length" :duration-text="durationText"
+                :certificate-name="detail!.certificate_name"
+                :certificate-validity-days="detail!.certificate_validity_days"
+                :prerequisites="detail!.prerequisites" />
 
             <!-- 章节列表 -->
-            <view class="section">
-                <view class="section-header">
-                    <text class="section-title">课程内容</text>
-                    <text class="chapter-count">{{ detail!.chapters.length }} 个章节</text>
-                </view>
-                <view v-if="detail!.chapters.length == 0" class="empty-tip">
-                    <text class="empty-text">暂无章节内容</text>
-                </view>
-                <view class="chapter-list">
-                    <view v-for="(chapter, idx) in detail!.chapters" :key="idx" class="chapter-item"
-                        :class="{ 'chapter-completed': isChapterCompleted(chapter.chapter_id), 'chapter-current': isCurrentChapter(chapter.chapter_id) }"
-                        @click="onChapterClick(chapter.chapter_id)">
-                        <view class="chapter-index">
-                            <text v-if="isChapterCompleted(chapter.chapter_id)" class="chapter-check">✓</text>
-                            <text v-else class="chapter-index-text">{{ idx + 1 }}</text>
-                        </view>
-                        <view class="chapter-info">
-                            <text class="chapter-title">{{ chapter.title }}</text>
-                            <text v-if="chapter.duration > 0" class="chapter-duration">{{ chapter.duration }} 分钟</text>
-                        </view>
-                        <text class="chapter-arrow">›</text>
-                    </view>
-                </view>
-            </view>
+            <CourseChapterList :chapters="detail!.chapters" :completed-ids="completedIds"
+                :continue-chapter-id="continueChapterId" @chapter-click="onChapterClick" />
 
             <!-- 底部操作栏 -->
             <view class="action-bar">
@@ -121,13 +57,17 @@
 </template>
 
 <script setup lang="uts">
-    import { ref } from 'vue'
+    import { ref, computed } from 'vue'
     import { onLoad } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
     import { getCourseDetailApi } from '../../api/course'
     import { getStudentCourseDetailApi } from '../../api/student'
     import { checkFavoriteApi, addFavoriteApi, removeFavoriteApi } from '../../api/favorite'
+    import CourseCoverSection from './components/course-cover-section.uvue'
+    import CourseProgressSection from './components/course-progress-section.uvue'
+    import CourseInfoGrid from './components/course-info-grid.uvue'
+    import CourseChapterList from './components/course-chapter-list.uvue'
     import type { CourseDetail, ChapterItem, StudentCourseChapterProgress } from '../../types/index'
 
     const statusBarHeight = useStatusBarHeight()
@@ -178,20 +118,6 @@
         }
     }
 
-    /** 检查章节是否已完成 */
-    function isChapterCompleted(chapterId : number) : boolean {
-        const ids = completedIds.value
-        for (let i = 0; i < ids.length; i++) {
-            if (ids[i] == chapterId) return true
-        }
-        return false
-    }
-
-    /** 检查是否为当前继续学习的章节 */
-    function isCurrentChapter(chapterId : number) : boolean {
-        return continueChapterId.value == chapterId && continueChapterId.value > 0
-    }
-
     function getCategoryIcon(category : string) : string {
         if (category == 'theory' || category == 'CATEGORY_01') return ''
         if (category == 'safety' || category == 'CATEGORY_02') return '⚠️'
@@ -220,8 +146,6 @@
         return '#f0f0f0'
     }
 
-    const coverColor = ref<string>('#e3f2fd')
-
     function formatDuration(minutes : number) : string {
         if (minutes <= 0) return '-'
         if (minutes < 60) return minutes + '分钟'
@@ -229,6 +153,23 @@
         const mins = minutes % 60
         return hours + '小时' + (mins > 0 ? mins + '分' : '')
     }
+
+    // 封面图标/底色与课程时长文案由 detail 派生。原来 coverColor 是 ref、在 loadDetail 里赋值 ——
+    // 同一事实两处持有属可派生状态；改 computed 后取值对同一 detail 完全一致，且去掉一处失效风险。
+    const coverColor = computed<string>(() : string => {
+        if (detail.value == null) return '#e3f2fd'
+        return getCoverColor(detail.value!.category)
+    })
+
+    const coverIcon = computed<string>(() : string => {
+        if (detail.value == null) return ''
+        return getCategoryIcon(detail.value!.category)
+    })
+
+    const durationText = computed<string>(() : string => {
+        if (detail.value == null) return '-'
+        return formatDuration(detail.value!.duration)
+    })
 
     /** 从章节列表中计算继续学习的章节 ID */
     function computeContinueChapterId(chapters : ChapterItem[]) : void {
@@ -287,7 +228,6 @@
         try {
             const data = await getCourseDetailApi(courseId.value)
             detail.value = data
-            coverColor.value = getCoverColor(data.category)
             // 使用课程详情自带的进度
             if (data.is_enrolled) {
                 isEnrolled.value = true
@@ -385,274 +325,6 @@
     .content-scroll {
         flex: 1;
         height: 0;
-    }
-
-    /* ===== 封面区 ===== */
-    .cover-section {
-        background-color: #ffffff;
-        flex-direction: column;
-    }
-
-    .cover-bg {
-        height: 280rpx;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .cover-icon {
-        font-size: 100rpx;
-    }
-
-    .cover-info {
-        padding: 28rpx 32rpx;
-        flex-direction: column;
-    }
-
-    .cover-title {
-        font-size: 40rpx;
-        font-weight: bold;
-        color: #1a1a1a;
-        line-height: 56rpx;
-        margin-bottom: 16rpx;
-    }
-
-    .cover-tags {
-        flex-direction: row;
-        flex-wrap: wrap;
-        margin-bottom: 16rpx;
-    }
-
-    .tag {
-        font-size: 22rpx;
-        padding: 6rpx 16rpx;
-        border-radius: 8rpx;
-        margin-right: 12rpx;
-        margin-bottom: 8rpx;
-    }
-
-    .tag-level {
-        color: #e6a23c;
-        background-color: #fdf6ec;
-    }
-
-    .tag-specialty {
-        color: #409eff;
-        background-color: #ecf5ff;
-    }
-
-    .tag-cert {
-        color: #67c23a;
-        background-color: #f0f9eb;
-    }
-
-    .cover-desc {
-        font-size: 26rpx;
-        color: #666666;
-        line-height: 42rpx;
-    }
-
-    /* ===== 学习进度 ===== */
-    .progress-section {
-        background-color: #ffffff;
-        padding: 24rpx 32rpx;
-        border-top: 1rpx solid #f5f5f5;
-    }
-
-    .progress-header {
-        flex-direction: row;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 12rpx;
-    }
-
-    .progress-label {
-        font-size: 26rpx;
-        color: #666666;
-    }
-
-    .progress-percent {
-        font-size: 28rpx;
-        font-weight: bold;
-        color: #2979ff;
-    }
-
-    .progress-bar-wrap {
-        height: 12rpx;
-        background-color: #e8eaec;
-        border-radius: 6rpx;
-        overflow: hidden;
-    }
-
-    .progress-bar {
-        height: 12rpx;
-        background-color: #2979ff;
-        border-radius: 6rpx;
-    }
-
-    .progress-detail {
-        font-size: 22rpx;
-        color: #999999;
-        margin-top: 8rpx;
-    }
-
-    /* ===== 课程信息网格 ===== */
-    .info-grid {
-        background-color: #ffffff;
-        margin-top: 16rpx;
-        padding: 28rpx 32rpx;
-        flex-direction: row;
-        flex-wrap: wrap;
-    }
-
-    .info-item {
-        width: 50%;
-        flex-direction: column;
-        margin-bottom: 24rpx;
-    }
-
-    .info-full {
-        width: 100%;
-    }
-
-    .info-label {
-        font-size: 22rpx;
-        color: #999999;
-        margin-bottom: 6rpx;
-    }
-
-    .info-value {
-        font-size: 28rpx;
-        color: #333333;
-        font-weight: 500;
-    }
-
-    .info-sub {
-        font-size: 22rpx;
-        color: #999999;
-        font-weight: normal;
-    }
-
-    .prereq-list {
-        flex-direction: row;
-        flex-wrap: wrap;
-    }
-
-    .prereq-tag {
-        font-size: 22rpx;
-        color: #909399;
-        background-color: #f5f7fa;
-        padding: 6rpx 14rpx;
-        border-radius: 6rpx;
-        margin-right: 12rpx;
-        margin-top: 6rpx;
-    }
-
-    /* ===== 通用 section ===== */
-    .section {
-        background-color: #ffffff;
-        margin-top: 16rpx;
-        padding: 28rpx 32rpx;
-    }
-
-    .section-header {
-        flex-direction: row;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 24rpx;
-    }
-
-    .section-title {
-        font-size: 32rpx;
-        font-weight: bold;
-        color: #1a1a1a;
-    }
-
-    .chapter-count {
-        font-size: 24rpx;
-        color: #999999;
-    }
-
-    /* ===== 章节列表 ===== */
-    .chapter-list {
-        flex-direction: column;
-    }
-
-    .chapter-item {
-        flex-direction: row;
-        align-items: center;
-        padding: 24rpx 0;
-        border-bottom: 1rpx solid #f5f5f5;
-    }
-
-    .chapter-item:last-child {
-        border-bottom: none;
-    }
-
-    .chapter-item:active {
-        background-color: #f5f7fa;
-    }
-
-    .chapter-item.chapter-current {
-        background-color: #ecf5ff;
-        margin: 0 -32rpx;
-        padding: 24rpx 32rpx;
-        border-radius: 12rpx;
-    }
-
-    .chapter-index {
-        width: 56rpx;
-        height: 56rpx;
-        border-radius: 28rpx;
-        background-color: #e3f2fd;
-        align-items: center;
-        justify-content: center;
-        margin-right: 20rpx;
-        flex-shrink: 0;
-    }
-
-    .chapter-item.chapter-completed .chapter-index {
-        background-color: #e8f5e9;
-    }
-
-    .chapter-index-text {
-        font-size: 28rpx;
-        font-weight: bold;
-        color: #2979ff;
-    }
-
-    .chapter-check {
-        font-size: 28rpx;
-        font-weight: bold;
-        color: #4caf50;
-    }
-
-    .chapter-info {
-        flex: 1;
-        flex-direction: column;
-    }
-
-    .chapter-title {
-        font-size: 28rpx;
-        color: #333333;
-        margin-bottom: 6rpx;
-        lines: 2;
-        text-overflow: ellipsis;
-    }
-
-    .chapter-item.chapter-completed .chapter-title {
-        color: #999999;
-    }
-
-    .chapter-duration {
-        font-size: 22rpx;
-        color: #999999;
-    }
-
-    .chapter-arrow {
-        font-size: 40rpx;
-        color: #cccccc;
-        margin-left: 12rpx;
-        flex-shrink: 0;
     }
 
     /* ===== 操作按钮 ===== */

@@ -1,0 +1,146 @@
+<template>
+    <!-- 章节附件资料 —— T08 手术自 pages/courses/chapter-view.uvue 逐段搬出（parent #646 / ADR-0007）。
+         类名与结构逐字不变；图标/类型映射（原页面 getFileIcon / getFileIconClass / getFileTypeName）
+         是全仓唯一实现，随本段一并搬入；下载/打开逻辑属页面行为，改为 emit 回页面壳层。 -->
+    <view class="section">
+        <text class="section-title">附件资料</text>
+        <view class="file-list">
+            <view v-for="(file, idx) in files" :key="idx" class="file-item" @click="onFileTap(file)">
+                <view class="file-icon-wrap" :class="getFileIconClass(file.content_type)">
+                    <text class="file-icon">{{ getFileIcon(file.content_type) }}</text>
+                </view>
+                <view class="file-info">
+                    <text class="file-name">{{ file.file_name }}</text>
+                    <text class="file-type">{{ getFileTypeName(file.content_type) }}</text>
+                </view>
+                <text class="file-arrow">›</text>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import type { ChapterFile } from '../../../types/index'
+
+    const props = withDefaults(defineProps<{
+        files? : ChapterFile[]
+    }>(), {
+        files: () => [] as ChapterFile[]
+    })
+
+    const emit = defineEmits(['fileClick'])
+
+    function onFileTap(file : ChapterFile) : void {
+        emit('fileClick', file)
+    }
+
+    // ---- 以下三个纯展示函数自页面逐字搬入（单实现，无第二处消费面） ----
+    function getFileIcon(contentType : string) : string {
+        if (contentType == 'video') return ''
+        if (contentType == 'document') return ''
+        if (contentType == 'ppt') return ''
+        if (contentType == 'image') return '️'
+        return ''
+    }
+
+    function getFileIconClass(contentType : string) : string {
+        if (contentType == 'video') return 'file-icon-video'
+        if (contentType == 'document') return 'file-icon-doc'
+        if (contentType == 'ppt') return 'file-icon-ppt'
+        if (contentType == 'image') return 'file-icon-image'
+        return 'file-icon-default'
+    }
+
+    function getFileTypeName(contentType : string) : string {
+        if (contentType == 'video') return '视频'
+        if (contentType == 'document') return '文档'
+        if (contentType == 'ppt') return 'PPT'
+        if (contentType == 'image') return '图片'
+        return '附件'
+    }
+</script>
+
+<style>
+    .section {
+        background-color: #ffffff;
+        margin-top: 16rpx;
+        padding: 32rpx;
+    }
+
+    .section-title {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 20rpx;
+    }
+
+    /* 附件列表 */
+    .file-list {
+        flex-direction: column;
+    }
+
+    .file-item {
+        flex-direction: row;
+        align-items: center;
+        padding: 24rpx 0;
+        border-bottom: 1rpx solid #f5f5f5;
+    }
+
+    .file-item:last-child {
+        border-bottom: none;
+    }
+
+    .file-icon-wrap {
+        width: 72rpx;
+        height: 72rpx;
+        border-radius: 12rpx;
+        align-items: center;
+        justify-content: center;
+        margin-right: 20rpx;
+    }
+
+    .file-icon-video {
+        background-color: #ffebee;
+    }
+
+    .file-icon-doc {
+        background-color: #e3f2fd;
+    }
+
+    .file-icon-ppt {
+        background-color: #fff3e0;
+    }
+
+    .file-icon-image {
+        background-color: #e8f5e9;
+    }
+
+    .file-icon-default {
+        background-color: #f5f5f5;
+    }
+
+    .file-icon {
+        font-size: 36rpx;
+    }
+
+    .file-info {
+        flex: 1;
+        flex-direction: column;
+    }
+
+    .file-name {
+        font-size: 28rpx;
+        color: #333333;
+        margin-bottom: 4rpx;
+    }
+
+    .file-type {
+        font-size: 22rpx;
+        color: #999999;
+    }
+
+    .file-arrow {
+        font-size: 40rpx;
+        color: #cccccc;
+    }
+</style>

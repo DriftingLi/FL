@@ -11,8 +11,17 @@
  *   课程：后端返回 { name, cover_image }，前端类型用 { title, cover_url }
  *   详情：后端返回 { course_info: {...}, progress }，前端类型用 { course_id, progress_pct }
  *   buildXxx 函数负责字段映射转换
+ *
+ * @note 出口家族（T08 手术收紧；ADR-0007「api 契约收紧」，T01 #639 出入口）：
+ *   本域除 updateCourseProgressApi 外的全部请求都经 getMapped<T> mapper-callback 出口，
+ *   映射函数一律箭头包裹 build*（守护规则 M 禁「裸 builder 引用作 mapper」）；
+ *   params 仍沿用手动 query 序列化、请求形态未变（getMapped 的 URL 构造段与历史 get 逐字一致）。
+ * @note 唯一裸出口 = updateCourseProgressApi（确认型透传、无 DTO 可映射），理由见其函数注释，
+ *   并由 utils/coursesContract.test.js 的白名单锁死「未误加 DTO」。
+ * @note catch-mock 静默回退保持 T02 试点的既有决策（utils/mallPilotContract.test.js 锁定
+ *   getMockCourseList 保留）；退役回退属「改口径」，本票不做。
  */
-import { get, getMapped, post } from './request'
+import { getMapped, post } from './request'
 import { toNumber, toStr } from './helpers'
 import type { CourseListResult, CourseDetail, CourseItem, ChapterItem, ChapterDetail, ChapterFile, SpecialtyItem, LevelItem, CourseCategory, TagItem, CoursePrereq } from '../types/index'
 
@@ -356,48 +365,58 @@ export function getCourseListApi(page : number = 1, pageSize : number = 12, spec
 	})
 }
 
+/** 从 /catalog/tree 响应中提取专业方向列表（学员端无独立 /specialties 端点） */
+function buildSpecialtyListFromCatalog(obj : UTSJSONObject) : SpecialtyItem[] {
+	const items : SpecialtyItem[] = []
+	const raw = obj['specialties']
+	if (raw != null) {
+		const arr = raw as Array<UTSJSONObject>
+		for (let i = 0; i < arr.length; i++) {
+			const node = arr[i]
+			const id = toNumber(node['specialty_id'])
+			const name = toStr(node['name'])
+			if (id > 0 && name.length > 0) {
+				items.push({ specialty_id: id, name: name } as SpecialtyItem)
+			}
+		}
+	}
+	return items
+}
+
 /**
  * 从课程目录树提取专业方向（学员端公开接口）
  * 后端无独立的学员端 /specialties 端点，通过 /catalog/tree 获取后提取
  */
 export function getCatalogTreeSpecialties() : Promise<SpecialtyItem[]> {
-	return get('/catalog/tree').then((data : UTSJSONObject) : SpecialtyItem[] => {
+	return getMapped<SpecialtyItem[]>('/catalog/tree', null, (data : UTSJSONObject) : SpecialtyItem[] => {
 		console.log('[getCatalogTreeSpecialties] raw data:', JSON.stringify(data))
-		const items : SpecialtyItem[] = []
-		const raw = data['specialties']
-		if (raw != null) {
-			const arr = raw as Array<UTSJSONObject>
-			for (let i = 0; i < arr.length; i++) {
-				const node = arr[i]
-				const id = toNumber(node['specialty_id'])
-				const name = toStr(node['name'])
-				if (id > 0 && name.length > 0) {
-					items.push({ specialty_id: id, name: name } as SpecialtyItem)
-				}
-			}
-		}
-		return items
+		return buildSpecialtyListFromCatalog(data)
 	}).catch((e) : SpecialtyItem[] => {
 		console.warn('[getCatalogTreeSpecialties] failed, using mock data:', e)
 		return getMockSpecialties()
 	})
 }
 
+/** 从 /levels 响应中提取课程等级列表 */
+function buildLevelList(obj : UTSJSONObject) : LevelItem[] {
+	const items : LevelItem[] = []
+	const raw = obj['levels']
+	if (raw != null) {
+		const arr = raw as Array<UTSJSONObject>
+		for (let i = 0; i < arr.length; i++) {
+			items.push(buildLevelItem(arr[i]))
+		}
+	}
+	return items
+}
+
 /**
  * 课程等级列表（公开，仅启用项）
  */
 export function getLevelsApi() : Promise<LevelItem[]> {
-	return get('/levels').then((data : UTSJSONObject) : LevelItem[] => {
+	return getMapped<LevelItem[]>('/levels', null, (data : UTSJSONObject) : LevelItem[] => {
 		console.log('[getLevelsApi] raw data:', JSON.stringify(data))
-		const items : LevelItem[] = []
-		const raw = data['levels']
-		if (raw != null) {
-			const arr = raw as Array<UTSJSONObject>
-			for (let i = 0; i < arr.length; i++) {
-				items.push(buildLevelItem(arr[i]))
-			}
-		}
-		return items
+		return buildLevelList(data)
 	}).catch((e) : LevelItem[] => {
 		console.warn('[getLevelsApi] network failed, using mock data:', e)
 		return getMockLevels()
@@ -409,7 +428,7 @@ export function getLevelsApi() : Promise<LevelItem[]> {
  * @param courseId 课程 ID
  */
 export function getCourseDetailApi(courseId : number) : Promise<CourseDetail> {
-	return get('/course/' + courseId).then((data : UTSJSONObject) : CourseDetail => {
+	return getMapped<CourseDetail>('/course/' + courseId, null, (data : UTSJSONObject) : CourseDetail => {
 		console.log('[getCourseDetailApi] raw data:', JSON.stringify(data))
 		return buildCourseDetail(data)
 	}).catch((e) : CourseDetail => {
@@ -424,7 +443,7 @@ export function getCourseDetailApi(courseId : number) : Promise<CourseDetail> {
  * @param chapterId 章节 ID
  */
 export function getChapterDetailApi(courseId : number, chapterId : number) : Promise<ChapterDetail> {
-	return get('/course/' + courseId + '/chapter/' + chapterId).then((data : UTSJSONObject) : ChapterDetail => {
+	return getMapped<ChapterDetail>('/course/' + courseId + '/chapter/' + chapterId, null, (data : UTSJSONObject) : ChapterDetail => {
 		return buildChapterDetail(data)
 	}).catch((e) : ChapterDetail => {
 		console.warn('[getChapterDetailApi] network failed:', e)
@@ -442,11 +461,14 @@ export function getChapterDetailApi(courseId : number, chapterId : number) : Pro
 	})
 }
 
+
 /**
  * 更新学习进度
  * @param courseId 课程 ID
  * @param chapterId 当前学习章节 ID
  * @param duration 本次学习时长（分钟）
+ * @note 保持裸 post 透传：后端只回确认型载荷、无领域 DTO 可映射，按 T03/T06 口径
+ *   「void / 确认型透传不硬套 identity map」，本函数是本域白名单内唯一 raw 出口。
  */
 export function updateCourseProgressApi(courseId : number, chapterId : number, duration : number) : Promise<UTSJSONObject> {
 	const payload : UTSJSONObject = {
@@ -471,27 +493,32 @@ function buildTagItem(obj : UTSJSONObject) : TagItem {
 	} as TagItem
 }
 
+/** 从 UTSJSONObject 构造题库标签列表（兼容 { tags } / { list } / 直接数组三种形态） */
+function buildTagList(obj : UTSJSONObject) : TagItem[] {
+	const items : TagItem[] = []
+	let listRaw = obj['tags']
+	if (listRaw == null) {
+		listRaw = obj['list']
+	}
+	if (listRaw != null) {
+		const arr = listRaw as Array<UTSJSONObject>
+		for (let i = 0; i < arr.length; i++) {
+			items.push(buildTagItem(arr[i]))
+		}
+	} else {
+		// 可能直接是数组
+		const arr = obj as Array<UTSJSONObject>
+		for (let i = 0; i < arr.length; i++) {
+			items.push(buildTagItem(arr[i]))
+		}
+	}
+	return items
+}
+
 /** 题库标签列表（仅启用项，含已发布题目数） */
 export function getTagsApi() : Promise<TagItem[]> {
-	return get('/tags').then((data : UTSJSONObject) : TagItem[] => {
-		const items : TagItem[] = []
-		// data 可能是数组或 { tags: [...] }
-		let listRaw = data['tags']
-		if (listRaw == null) {
-			listRaw = data['list']
-		}
-		if (listRaw != null) {
-			const arr = listRaw as Array<UTSJSONObject>
-			for (let i = 0; i < arr.length; i++) {
-				items.push(buildTagItem(arr[i]))
-			}
-		} else {
-			// 可能直接是数组
-			const arr = data as Array<UTSJSONObject>
-			for (let i = 0; i < arr.length; i++) {
-				items.push(buildTagItem(arr[i]))
-			}
-		}
-		return items
+	return getMapped<TagItem[]>('/tags', null, (data : UTSJSONObject) : TagItem[] => {
+		return buildTagList(data)
 	})
 }
+

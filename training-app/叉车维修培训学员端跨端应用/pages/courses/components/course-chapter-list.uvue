@@ -1,0 +1,186 @@
+<template>
+    <!-- 课程章节列表 —— T08 手术自 pages/courses/course-detail.uvue 逐段搬出（parent #646 / ADR-0007）。
+         类名与结构逐字不变；原来直读 detail!.chapters / completedIds / continueChapterId，
+         改为扁平 props 下发；已完成/当前章判定（isChapterCompleted / isCurrentChapter）随本段搬入，
+         章节点击改为 emit 回页面壳层（跳转是页面行为）。 -->
+    <view class="section">
+        <view class="section-header">
+            <text class="section-title">课程内容</text>
+            <text class="chapter-count">{{ chapters.length }} 个章节</text>
+        </view>
+        <view v-if="chapters.length == 0" class="empty-tip">
+            <text class="empty-text">暂无章节内容</text>
+        </view>
+        <view class="chapter-list">
+            <view v-for="(chapter, idx) in chapters" :key="idx" class="chapter-item"
+                :class="{ 'chapter-completed': isChapterCompleted(chapter.chapter_id), 'chapter-current': isCurrentChapter(chapter.chapter_id) }"
+                @click="onChapterTap(chapter.chapter_id)">
+                <view class="chapter-index">
+                    <text v-if="isChapterCompleted(chapter.chapter_id)" class="chapter-check">✓</text>
+                    <text v-else class="chapter-index-text">{{ idx + 1 }}</text>
+                </view>
+                <view class="chapter-info">
+                    <text class="chapter-title">{{ chapter.title }}</text>
+                    <text v-if="chapter.duration > 0" class="chapter-duration">{{ chapter.duration }} 分钟</text>
+                </view>
+                <text class="chapter-arrow">›</text>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import type { ChapterItem } from '../../../types/index'
+
+    const props = withDefaults(defineProps<{
+        chapters? : ChapterItem[]
+        completedIds? : number[]
+        continueChapterId? : number
+    }>(), {
+        chapters: () => [] as ChapterItem[],
+        completedIds: () => [] as number[],
+        continueChapterId: 0
+    })
+
+    const emit = defineEmits(['chapterClick'])
+
+    function onChapterTap(chapterId : number) : void {
+        emit('chapterClick', chapterId)
+    }
+
+    // ---- 以下两个判定自页面逐字搬入（消费面只有本段模板） ----
+    /** 检查章节是否已完成 */
+    function isChapterCompleted(chapterId : number) : boolean {
+        const ids = props.completedIds
+        for (let i = 0; i < ids.length; i++) {
+            if (ids[i] == chapterId) return true
+        }
+        return false
+    }
+
+    /** 检查是否为当前继续学习的章节 */
+    function isCurrentChapter(chapterId : number) : boolean {
+        return props.continueChapterId == chapterId && props.continueChapterId > 0
+    }
+</script>
+
+<style>
+    /* ===== 通用 section ===== */
+    .section {
+        background-color: #ffffff;
+        margin-top: 16rpx;
+        padding: 28rpx 32rpx;
+    }
+
+    .section-header {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24rpx;
+    }
+
+    .section-title {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #1a1a1a;
+    }
+
+    .chapter-count {
+        font-size: 24rpx;
+        color: #999999;
+    }
+
+    /* ===== 章节列表 ===== */
+    .chapter-list {
+        flex-direction: column;
+    }
+
+    .chapter-item {
+        flex-direction: row;
+        align-items: center;
+        padding: 24rpx 0;
+        border-bottom: 1rpx solid #f5f5f5;
+    }
+
+    .chapter-item:last-child {
+        border-bottom: none;
+    }
+
+    .chapter-item:active {
+        background-color: #f5f7fa;
+    }
+
+    .chapter-item.chapter-current {
+        background-color: #ecf5ff;
+        margin: 0 -32rpx;
+        padding: 24rpx 32rpx;
+        border-radius: 12rpx;
+    }
+
+    .chapter-index {
+        width: 56rpx;
+        height: 56rpx;
+        border-radius: 28rpx;
+        background-color: #e3f2fd;
+        align-items: center;
+        justify-content: center;
+        margin-right: 20rpx;
+        flex-shrink: 0;
+    }
+
+    .chapter-item.chapter-completed .chapter-index {
+        background-color: #e8f5e9;
+    }
+
+    .chapter-index-text {
+        font-size: 28rpx;
+        font-weight: bold;
+        color: #2979ff;
+    }
+
+    .chapter-check {
+        font-size: 28rpx;
+        font-weight: bold;
+        color: #4caf50;
+    }
+
+    .chapter-info {
+        flex: 1;
+        flex-direction: column;
+    }
+
+    .chapter-title {
+        font-size: 28rpx;
+        color: #333333;
+        margin-bottom: 6rpx;
+        lines: 2;
+        text-overflow: ellipsis;
+    }
+
+    .chapter-item.chapter-completed .chapter-title {
+        color: #999999;
+    }
+
+    .chapter-duration {
+        font-size: 22rpx;
+        color: #999999;
+    }
+
+    .chapter-arrow {
+        font-size: 40rpx;
+        color: #cccccc;
+        margin-left: 12rpx;
+        flex-shrink: 0;
+    }
+
+    .empty-text {
+        font-size: 28rpx;
+        color: #999999;
+        margin-bottom: 24rpx;
+    }
+
+    .empty-tip {
+        align-items: center;
+        padding: 60rpx 0;
+    }
+</style>

@@ -1,0 +1,109 @@
+<template>
+    <!-- 课程信息网格 —— T08 手术自 pages/courses/course-detail.uvue 逐段搬出（parent #646 / ADR-0007）。
+         类名与结构逐字不变；原来直读 detail!.xxx，改为扁平原始 props（含 durationText：文案由页面算好下发，
+         避免组件层再持一份 formatDuration）。prerequisites 走数组 prop（先例 exam-result-detail-list）。 -->
+    <view class="info-grid">
+        <view class="info-item">
+            <text class="info-label">理论学时</text>
+            <text class="info-value">{{ theoryHours > 0 ? theoryHours + ' 学时' : '-' }}</text>
+        </view>
+        <view class="info-item">
+            <text class="info-label">实操学时</text>
+            <text class="info-value">{{ practiceHours > 0 ? practiceHours + ' 学时' : '-' }}</text>
+        </view>
+        <view class="info-item">
+            <text class="info-label">章节数</text>
+            <text class="info-value">{{ chapterCount }}</text>
+        </view>
+        <view class="info-item">
+            <text class="info-label">课程时长</text>
+            <text class="info-value">{{ durationText }}</text>
+        </view>
+        <view v-if="certificateName.length > 0" class="info-item info-full">
+            <text class="info-label">关联证书</text>
+            <text class="info-value">{{ certificateName }}<text v-if="certificateValidityDays > 0" class="info-sub">（有效期 {{ certificateValidityDays }} 天）</text></text>
+        </view>
+        <view v-if="prerequisites.length > 0" class="info-item info-full">
+            <text class="info-label">前置课程</text>
+            <view class="prereq-list">
+                <text v-for="(pre, idx) in prerequisites" :key="idx" class="prereq-tag">{{ pre.name }}</text>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import type { CoursePrereq } from '../../../types/index'
+
+    const props = withDefaults(defineProps<{
+        theoryHours? : number
+        practiceHours? : number
+        chapterCount? : number
+        durationText? : string
+        certificateName? : string
+        certificateValidityDays? : number
+        prerequisites? : CoursePrereq[]
+    }>(), {
+        theoryHours: 0,
+        practiceHours: 0,
+        chapterCount: 0,
+        durationText: '-',
+        certificateName: '',
+        certificateValidityDays: 0,
+        prerequisites: () => [] as CoursePrereq[]
+    })
+</script>
+
+<style>
+    /* ===== 课程信息网格 ===== */
+    .info-grid {
+        background-color: #ffffff;
+        margin-top: 16rpx;
+        padding: 28rpx 32rpx;
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+
+    .info-item {
+        width: 50%;
+        flex-direction: column;
+        margin-bottom: 24rpx;
+    }
+
+    .info-full {
+        width: 100%;
+    }
+
+    .info-label {
+        font-size: 22rpx;
+        color: #999999;
+        margin-bottom: 6rpx;
+    }
+
+    .info-value {
+        font-size: 28rpx;
+        color: #333333;
+        font-weight: 500;
+    }
+
+    .info-sub {
+        font-size: 22rpx;
+        color: #999999;
+        font-weight: normal;
+    }
+
+    .prereq-list {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+
+    .prereq-tag {
+        font-size: 22rpx;
+        color: #909399;
+        background-color: #f5f7fa;
+        padding: 6rpx 14rpx;
+        border-radius: 6rpx;
+        margin-right: 12rpx;
+        margin-top: 6rpx;
+    }
+</style>
