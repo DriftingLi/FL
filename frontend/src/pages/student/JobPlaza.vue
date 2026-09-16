@@ -60,7 +60,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { jobApi, type JobPosting } from '@/api/job'
-import { unwrappedRequest } from '@/api/request'
+import { positionApi } from '@/api/position'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
@@ -140,7 +140,7 @@ async function loadMore() {
 
 onMounted(async () => {
   try {
-    const res: any = await unwrappedRequest.get('/positions', { headers: { 'X-Silent': '1' } })
+    const res = await positionApi.listPublic({ silent: true })
     positions.value = res?.positions || []
   } catch {}
   load()

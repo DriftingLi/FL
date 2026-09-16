@@ -97,7 +97,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { jobApi, type JobPosting, type JobPostingInput } from '@/api/job'
-import { unwrappedRequest } from '@/api/request'
+import { positionApi } from '@/api/position'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
@@ -208,7 +208,7 @@ async function toggleStatus(item: JobPosting) {
 
 onMounted(async () => {
   try {
-    const res: any = await unwrappedRequest.get('/positions', { headers: { 'X-Silent': '1' } })
+    const res = await positionApi.listPublic({ silent: true })
     positions.value = res?.positions || []
   } catch {}
   load()

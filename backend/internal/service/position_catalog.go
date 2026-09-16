@@ -27,6 +27,14 @@ type PositionDict struct {
 	Status      int16  `json:"status"`
 }
 
+// PositionListDTO 岗位字典列表响应 {"positions": [...]}（公开 /positions 与管理端 /admin/positions 共用形状）。
+//
+// 来源是 handler 里手工拼的 gin.H{"positions": …}（ADR-0053 §1 把这两个端点补进契约：
+// 注解要指认 data 类型就必须先有具名类型，故补此 DTO，字节形状不变）。
+type PositionListDTO struct {
+	Positions []PositionDict `json:"positions"`
+}
+
 // positionCatalogSpec 岗位字典的 catalog descriptor。
 func positionCatalogSpec() CatalogEntitySpec[model.Position, PositionInput, PositionDict] {
 	return CatalogEntitySpec[model.Position, PositionInput, PositionDict]{

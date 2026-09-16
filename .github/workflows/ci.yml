@@ -184,6 +184,13 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: node scripts/check-el-controls.mjs --all
 
+      # api seam 守卫（ADR-0053 §7 / spec #1049）：页面与业务组件不得直接引用请求层。
+      # 同样用全量模式：本次收口把 18 处调用点全部收回 api 模块，当前树实测 0 违规
+      # （唯一例外在脚本白名单里逐条登记了理由）。判定逻辑的自检在 api-seam-selftest。
+      - name: api seam 守卫（页面不得直连请求层）
+        working-directory: ${{ github.workspace }}
+        run: node scripts/check-api-seam.mjs --all
+
       - name: 前端单元测试
         run: npm test
 
@@ -354,6 +361,9 @@ jobs:
           node-version: '22'
       - name: 表驱动单测（守卫判定逻辑）
         run: node --test scripts/check-el-controls.test.mjs
+
+      - name: 表驱动单测（api seam 守卫判定逻辑）
+        run: node --test scripts/check-api-seam.test.mjs
 
   # ============================================================
   # Stage 7: CI 汇总 + testing 冒烟部署门禁
