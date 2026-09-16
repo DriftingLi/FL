@@ -6,7 +6,12 @@
 				<text class="back-icon">&#8249;</text>
 			</view>
 			<text class="header-title">{{ featureTitle }}</text>
-			<view class="header-right"></view>
+			<!-- 右：会话抽屉入口（「列该区」的界面，ADR-0013）。内层给**显式尺寸**的盒子 ⇒ 有命中区（#947 血账） -->
+			<view class="header-right" @click="toggleSidebarLeft">
+				<view class="panel-icon">
+					<view class="panel-icon-line"></view>
+				</view>
+			</view>
 		</view>
 
 		<!-- 会话区：本页**没有**宫格、没有档位横幅、没有模型选择器 —— 专项通道由管理端单绑定
@@ -24,6 +29,11 @@
 		</scroll-view>
 
 		<AiChatInput @send="onInputSend" @voice-click="onVoiceClick" />
+
+		<!-- 左侧会话抽屉：本页**只列本功能区**的会话（list/create 都带本页键，见 useAiChat 的 featureScope）。
+		     它就是 ADR-0013「带键必有列它的界面」里的那个**界面** —— 缺了它，本页建的会话
+		     在通用页「最近对话」里也看不到（#921 首版实测回归形态）。 -->
+		<AiChatDrawerLeft :visible="sidebarLeft" :sessions="sessions" :current-session-id="currentSession?.id ?? 0" :status-bar-height="statusBarHeight" @close="sidebarLeft = false" @new-chat="onNewChat" @select="onSelectSession" @delete="onDeleteSession" />
 	</view>
 </template>
 
@@ -33,10 +43,11 @@
 	import { useAuthStore } from '../../stores/auth'
 	import { useAiChat } from '../../composables/useAiChat'
 	import type { ChatBodyBuilder } from '../../composables/useAiChat'
-	import type { AiChatMessage, AIFunctionItem } from '../../types/index'
+	import type { AiChatMessage, AIFunctionItem, AiSession } from '../../types/index'
 
 	import { FUNCTION_ITEMS } from './ai-assistant-constants'
 	import AiChatBubble from '../../components/ai-chat/ai-chat-bubble.uvue'
+	import AiChatDrawerLeft from '../../components/ai-chat/ai-chat-drawer-left.uvue'
 	import AiChatInput from '../../components/ai-chat/ai-chat-input.uvue'
 
 	/**
@@ -51,26 +62,38 @@
 	 * - 本页不读模型列表、不带模型芯片、不做「请先配置自定义模型」前置校验 ——
 	 *   专项通道由后端按管理端单绑定解析模型，与「用户自选模型」无关（#998 口径的形态化）。
 	 *
-	 * 会话归属**不变**（分区属 #1041）：建/列会话仍不带键（`createAiSessionApi` 只收 title/modelName），
-	 * 故本页产生的会话落遗留 `ai_assistant` 区、在通用页「最近对话」里可见、可重开/改名/删除；
-	 * 键只进**本轮对话请求体**。若在此处给会话带键，会让会话落进没人列的区而永久不可见
-	 * （#921 首版实测回归，见 `api/aiAssistant.uts` `getAiSessionsApi` 的说明）。
+	 * 会话归属（ADR-0013，2026-09-16 落地）：本页会话**按功能键真分区** —— 建/列会话都带本页键
+	 * （`useAiChat(currentFeatureKey)` 的 `featureScope`），且本页有**列该区**的界面（右上的「最近对话」
+	 * 抽屉）⇒ ADR-0013 那条「带键必有列它的界面」的 ⇔ 两向都在本页成立。通用页则恒传空串
+	 * （不发键 ⇒ 遗留 `ai_assistant` 区，与从前逐字一致）。
+	 * **不得只做一半**：在本页给会话带键却不列该区 ⇒ 会话在通用页也看不到（#921 首版实测回归）。
 	 */
 
 	const auth = useAuthStore()
 
+	// 本页的专项功能键与展示名（由入口跳转时的查询参数定位，见 onLoad）。
+	// ⚠️ 必须声明在 `useAiChat(...)` **之前**：该键同时是本页的**会话作用域**（list/create 都带它），
+	// 而 Kotlin 局部 const 无提升（UTS error18）。
+	const currentFeatureKey = ref<string>('')
+	const featureTitle = ref<string>('')
+
+	// 会话作用域 = 本页的功能键（传 **ref**、不传值：键在 onLoad 里才定位，传值只会读到初值空串）
 	const {
 		statusBarHeight,
+		sessions,
+		currentSession,
 		messages,
 		inputText,
 		thinking,
 		scrollIntoViewId,
+		sidebarLeft,
+		loadSessions,
+		loadSession,
+		startNewChat,
+		onDeleteSession,
+		toggleSidebarLeft,
 		sendInput,
-	} = useAiChat()
-
-	// 本页的专项功能键与展示名（由入口跳转时的查询参数定位，见 onLoad）
-	const currentFeatureKey = ref<string>('')
-	const featureTitle = ref<string>('')
+	} = useAiChat(currentFeatureKey)
 
 	// 根容器高度（同 ai-settings.uvue / 通用页）：给根节点一个确定高度，onLoad 里赋值
 	const pageHeight = ref<number>(0)
@@ -109,6 +132,17 @@
 
 	function onBack() : void {
 		uni.navigateBack()
+	}
+
+	/** 抽屉：新建对话（只清空当前会话；真会话由首轮发送时按本页键创建） */
+	function onNewChat() : void {
+		startNewChat()
+		sidebarLeft.value = false
+	}
+
+	/** 抽屉：重开该区的某个历史会话（消息按 session_id 取，与分区无关） */
+	function onSelectSession(s : AiSession) : void {
+		loadSession(s)
 	}
 
 	function onCopyText(content : string) : void {
@@ -170,6 +204,9 @@
 		}
 		currentFeatureKey.value = item.featureKey
 		featureTitle.value = item.title
+
+		// **定位键之后**再拉本区会话（顺序在此承重：先列后定键会拉到遗留区，抽屉就列错区了）
+		loadSessions()
 	})
 </script>
 
@@ -199,6 +236,23 @@
 		height: 72rpx;
 		align-items: center;
 		justify-content: center;
+	}
+
+	/* 会话抽屉入口：与通用页导航左侧同一套「面板」视觉；内层给**显式尺寸** ⇒ 有命中区（#947 血账） */
+	.panel-icon {
+		width: 44rpx;
+		height: 36rpx;
+		border: 3rpx solid #6b6b6b;
+		border-radius: 8rpx;
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.panel-icon-line {
+		width: 3rpx;
+		height: 24rpx;
+		background-color: #6b6b6b;
+		margin-left: 9rpx;
 	}
 
 	.back-icon {

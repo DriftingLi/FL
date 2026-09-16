@@ -161,16 +161,23 @@ export function getAiModesApi() : Promise<UTSJSONObject> {
 }
 
 /**
- * 会话列表。
+ * 会话列表（按功能键**分区**）。
  *
- * ⚠️ 本调用**不带 `feature_key`**：后端 `ListSessions` 按功能键**分区**查询，缺参时落遗留
- * `ai_assistant`（`ai_assistant_service.go:427-432`）。因此**新建会话时也不能带功能键** ——
- * 否则该会话落进没人列的区（`fault_diagnosis`），在「最近对话」里永久不可见、不可重开/改名/删除，
- * 但对话本身却以该键正常计费与路由（#921 首版实测到的回归）。**要按功能键分区会话，得先有
- * 「列该区会话」的界面**（移动端当前没有专项功能页），属另立的产品决策。
+ * `featureKey` 为空串 ⇒ **不发** `feature_key` ⇒ 后端落遗留 `ai_assistant` 区
+ * （`ai_assistant_service.go` 的 `ListSessions`：`featureKey == ""` → `FeatureAIAssistant`），
+ * 与从前逐字一致 —— 通用页零回归。非空 ⇒ 只列该功能区会话（专项页）。
+ *
+ * ⚠️ **不变式（移动端 ADR-0013）：带键必有「列该区」的界面。** 给会话带键却没有任何界面列该区
+ * ⇒ 该会话在「最近对话」里永久不可见、不可重开/改名/删除，而对话本身却以该键正常计费与路由
+ * （#921 首版实测到的回归）。⇒ 新增带键调用点时，**调用方页面必须真的能列出该区**
+ * （专项页的「最近对话」抽屉即该界面；守护见 `utils/aiFeatureEntryWiringContract.test.js` ④ 组）。
  */
-export function getAiSessionsApi() : Promise<AiSession[]> {
-	return get('/ai-assistant/sessions').then((data : UTSJSONObject) : AiSession[] => {
+export function getAiSessionsApi(featureKey : string) : Promise<AiSession[]> {
+	const params : UTSJSONObject = {}
+	if (featureKey.length > 0) {
+		params['feature_key'] = featureKey
+	}
+	return get('/ai-assistant/sessions', params).then((data : UTSJSONObject) : AiSession[] => {
 		const arr = extractArray(data, 'sessions')
 		const out : AiSession[] = []
 		for (let i = 0; i < arr.length; i++) {
@@ -180,11 +187,19 @@ export function getAiSessionsApi() : Promise<AiSession[]> {
 	})
 }
 
-/** 创建会话 */
-export function createAiSessionApi(title : string = '新对话', modelName : string = '') : Promise<AiSession> {
+/**
+ * 创建会话（`featureKey` 同 `getAiSessionsApi`：空串 = 不发键 ⇒ 遗留通用区；非空 = 该功能区）。
+ *
+ * 三个形参**全部必填**（不给 `featureKey` 默认值）：UTS 的默认值编译到 Kotlin 后不生效，
+ * 而**默认值会让「忘了传键」静默通过** —— 分区归属是必须显式表态的事，守护按调用点判（ADR-0013）。
+ */
+export function createAiSessionApi(title : string, modelName : string, featureKey : string) : Promise<AiSession> {
 	const payload : UTSJSONObject = { title: title }
 	if (modelName.length > 0) {
 		payload['model_name'] = modelName
+	}
+	if (featureKey.length > 0) {
+		payload['feature_key'] = featureKey
 	}
 	return post('/ai-assistant/sessions', payload).then((data : UTSJSONObject) : AiSession => {
 		const s = data['session']
