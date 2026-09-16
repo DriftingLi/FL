@@ -1,24 +1,27 @@
 <template>
   <div class="pb-15">
-    <UiEmptyState
-      v-if="chapterNotFound"
-      title="章节不存在或已删除"
-      description="该章节可能已被移除，或链接中的章节编号有误。"
-      action-text="返回章节列表"
-      @action="goBackToChapters"
-    />
-
-    <UiErrorState
-      v-else-if="loadError"
-      title="章节加载失败"
-      description="未能读取章节内容，请检查网络后重试。"
+    <UiAsyncSection
+      :error="loadError"
+      :loading="loading"
+      :empty="chapterNotFound"
       :retrying="retrying"
+      error-title="章节加载失败"
+      error-description="未能读取章节内容，请检查网络后重试。"
       @retry="handleRetry"
-    />
+    >
+      <template #skeleton>
+        <UiSkeleton variant="text" :rows="12" />
+      </template>
+      <template #empty>
+        <UiEmptyState
+          title="章节不存在或已删除"
+          description="该章节可能已被移除，或链接中的章节编号有误。"
+          action-text="返回章节列表"
+          @action="goBackToChapters"
+        />
+      </template>
 
-    <UiSkeleton v-else-if="loading" variant="text" :rows="12" />
-
-    <template v-else-if="chapterDetail">
+    <template v-if="chapterDetail">
       <UiPageHeader
         :title="chapterDetail.title"
         :subtitle="courseName || undefined"
@@ -174,6 +177,7 @@
         </div>
       </nav>
     </template>
+    </UiAsyncSection>
 
     <!-- 元信息编辑弹窗 -->
     <UiDialog v-model="metaDialogVisible" title="编辑章节信息" width="500px" confirm-text="保存" :confirm-loading="savingMeta" @confirm="saveMeta">
@@ -246,8 +250,8 @@ import UiCard from '@/components/ui/UiCard.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
-import UiErrorState from '@/components/ui/UiErrorState.vue'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import { useConfirm } from '@/composables/useConfirm'

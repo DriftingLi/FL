@@ -12,21 +12,22 @@
         近 7 天 {{ viewCount }} 家企业查看过你的简历
       </div>
 
-      <UiEmptyState
-        v-if="resumeMissing"
-        title="简历尚未创建"
-        description="完善后可被招聘企业看到"
-        action-text="去填写"
-        @action="goEdit"
-      />
-      <UiErrorState
-        v-else-if="resumeError"
-        title="简历加载失败"
-        description="网络或服务端异常，可重试"
-        :retrying="false"
+      <UiAsyncSection
+        :error="resumeError"
+        :empty="resumeMissing"
+        :skeleton="false"
+        error-title="简历加载失败"
+        error-description="网络或服务端异常，可重试"
         @retry="load()"
-      />
-      <template v-else>
+      >
+        <template #empty>
+          <UiEmptyState
+            title="简历尚未创建"
+            description="完善后可被招聘企业看到"
+            action-text="去填写"
+            @action="goEdit"
+          />
+        </template>
         <!-- 操作区（#491）：编辑简历 / PDF 附件上传·更换·删除 -->
         <div class="mb-4 flex flex-wrap items-center gap-2">
           <UiButton variant="primary" size="small" @click="goEdit">编辑简历</UiButton>
@@ -79,7 +80,7 @@
             />
           </div>
         </div>
-      </template>
+      </UiAsyncSection>
     </UiCard>
   </div>
 </template>
@@ -89,8 +90,8 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { resumeApi } from '@/api/resume'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
-import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import OnlineResumePdf from '@/components/recruit/OnlineResumePdf.vue'
