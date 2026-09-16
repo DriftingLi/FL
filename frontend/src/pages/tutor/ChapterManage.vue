@@ -11,25 +11,20 @@
       </template>
     </UiPageHeader>
 
-    <UiErrorState
-      v-if="loadError"
-      title="章节加载失败"
-      description="未能获取该课程的章节列表，请检查网络后重试。"
+    <UiAsyncSection
+      :error="loadError"
+      :loading="loading"
+      :empty="chapters.length === 0"
       :retrying="retrying"
+      error-title="章节加载失败"
+      error-description="未能获取该课程的章节列表，请检查网络后重试。"
       @retry="handleRetry"
-    />
+    >
+      <template #skeleton>
+        <UiSkeleton variant="list" :count="5"  />
+      </template>
 
-    <UiSkeleton v-else-if="loading" variant="list" :count="5" />
-
-    <UiEmptyState
-      v-else-if="chapters.length === 0"
-      title="暂无章节"
-      description="该课程还没有任何章节，可返回课程列表继续其他操作。"
-      action-text="返回课程列表"
-      @action="goBack"
-    />
-
-    <div v-else class="flex flex-col gap-3">
+      <div class="flex flex-col gap-3">
       <UiCard
         v-for="(chapter, index) in chapters"
         :key="chapter.chapter_id"
@@ -66,6 +61,15 @@
         </el-icon>
       </UiCard>
     </div>
+      <template #empty>
+        <UiEmptyState
+      title="暂无章节"
+      description="该课程还没有任何章节，可返回课程列表继续其他操作。"
+      action-text="返回课程列表"
+      @action="goBack"
+     />
+      </template>
+    </UiAsyncSection>
   </div>
 </template>
 
@@ -78,8 +82,8 @@ import UiCard from '@/components/ui/UiCard.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiPageHeader from '@/components/ui/UiPageHeader.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
-import UiErrorState from '@/components/ui/UiErrorState.vue'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 
 type ChapterRow = TutorChapter & { content_type?: string; files?: unknown[] }

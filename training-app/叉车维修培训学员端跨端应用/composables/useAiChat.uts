@@ -8,6 +8,13 @@
  *
  * 每页独立状态：每次调用 useAiChat() 都新建 ref，两页互不共享。
  * 有差异的「模型可用性校验」仍留在各页面（依赖页面私有状态 models/userModels/custom 等）。
+ *
+ * `featureScope` = **本页的会话作用域**（本页 list/create 会话时带的功能键）：专项页传自己的
+ * `currentFeatureKey`（会话按功能键分区），通用页传一个恒为空串的 ref（不发键 ⇒ 遗留
+ * `ai_assistant` 区，与从前逐字一致）。传 **ref 而非字符串**：键在 `onLoad` 才定位，
+ * 传值会读到初值 ''（#999 那类「键恒为空」的形态），传 ref 则每次调用现读，无时序可踩。
+ * 与 `sendInput` 的第四参（**本轮**对话请求体的键）是两件事：那个是每轮变的东西，
+ * 这个是页面的分区归属（ADR-0013）。
  */
 import { ref, type Ref } from 'vue'
 import {
@@ -43,7 +50,7 @@ export type UseAiChatResult = {
 	sendInput : (sessionTag : string, buildBody : ChatBodyBuilder, images : string[], featureKey : string) => void
 }
 
-export function useAiChat() {
+export function useAiChat(featureScope : Ref<string>) {
 	// ===== 状态（每页独立） =====
 	const statusBarHeight = ref<number>(20)
 	const sessions = ref<AiSession[]>([])
@@ -65,10 +72,10 @@ export function useAiChat() {
 		}, 300)
 	}
 
-	/** 加载当前用户会话列表 */
+	/** 加载**本页作用域**内的会话列表（专项页 = 该功能区；通用页 = 遗留通用区） */
 	async function loadSessions() : Promise<void> {
 		try {
-			sessions.value = await getAiSessionsApi()
+			sessions.value = await getAiSessionsApi(featureScope.value)
 		} catch (e) {
 			console.error('loadSessions failed:', e)
 			sessions.value = []
@@ -170,7 +177,9 @@ export function useAiChat() {
 				if (history.length > 0 && history[0].content.length > 0) {
 					sessionTitle = history[0].content.length > 20 ? history[0].content.substring(0, 20) : history[0].content
 				}
-				const s = await createAiSessionApi(sessionTitle, sessionTag)
+				// 会话归属取**页面作用域**（不是本轮 featureKey）：专项页 ⇒ 该功能区、通用页 ⇒ 遗留通用区，
+				// 与 loadSessions 同源同值 ⇒ 「建到哪一区」与「列哪一区」不可能对不上（ADR-0013 的 ⇔）
+				const s = await createAiSessionApi(sessionTitle, sessionTag, featureScope.value)
 				currentSession.value = s
 				sessionID = s.id
 				await loadSessions()
@@ -219,10 +228,12 @@ export function useAiChat() {
 	 * @param buildBody  构造差异化请求体（接收历史消息、sessionID 与本轮功能键，返回完整 body）
 	 * @param images     本条用户消息附带的图片 URL（无图传空数组；UTS 可选参数编译到 Kotlin
 	 *                   后无默认值机制，调用方必须显式传参）
-	 * @param featureKey 本轮的后端 AI 功能键（宫格入口触发时为其专项键，自由输入传空串）——
-	 *                   只进**本轮对话请求体**（专项通道）。**不进建会话**：会话按功能键分区，
-	 *                   而客户端列表不查该区（见 `api/aiAssistant.uts` `getAiSessionsApi` 的说明），
-	 *                   带了会让会话在「最近对话」里永久不可见（#921 首版实测回归）。
+	 * @param featureKey 本轮的后端 AI 功能键（专业页/专项页按其页面常量传键，通用页传空串）——
+	 *                   只进**本轮对话请求体**（专项通道）。
+	 * @note 会话的**分区归属**不取自本参，而取自本 composable 的 `featureScope`（页面级、恒定）：
+	 *       「建/列会话在哪一区」是页面属性，不是单轮属性。带上 `featureScope` 的页面必须能**列出**
+	 *       该区（专项页的「最近对话」抽屉即该界面），否则会话在「最近对话」里永久不可见
+	 *       （#921 首版实测回归；不变式与守护见 `api/aiAssistant.uts` 与接线契约 ④ 组）。
 	 */
 	function sendInput(sessionTag : string, buildBody : ChatBodyBuilder, images : string[], featureKey : string) : void {
 		const text = inputText.value.trim()

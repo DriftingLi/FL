@@ -1,16 +1,20 @@
 <template>
   <div class="flex flex-col gap-4">
     <h1 class="text-xl font-bold text-ink">我的申请</h1>
-    <UiErrorState
-      v-if="loadError"
-      title="申请记录加载失败"
-      description="网络或服务端异常，可重试"
+    <UiAsyncSection
+      :error="loadError"
+      :loading="loading"
+      :empty="items.length === 0"
       :retrying="retrying"
+      error-title="申请记录加载失败"
+      error-description="网络或服务端异常，可重试"
       @retry="handleRetry"
-    />
-    <UiSkeleton v-else-if="loading" variant="list" :count="4" />
-    <UiEmptyState v-else-if="items.length === 0" description="暂无申请记录" />
-    <div v-else class="grid gap-3">
+    >
+      <template #skeleton>
+        <UiSkeleton variant="list" :count="4"  />
+      </template>
+
+      <div class="grid gap-3">
       <div v-for="item in items" :key="String(item.id)" class="rounded-card border border-line bg-panel p-4">
         <div class="flex items-center justify-between">
           <div class="text-sm text-ink">学员 ID：{{ item.student_user_id }}</div>
@@ -20,6 +24,10 @@
         <div class="mt-1 text-xs text-ink-3">申请时间：{{ item.created_at }}</div>
       </div>
     </div>
+      <template #empty>
+        <UiEmptyState description="暂无申请记录"  />
+      </template>
+    </UiAsyncSection>
     <div v-if="total > 0" class="text-xs text-ink-3 text-center">共 {{ total }} 条</div>
   </div>
 </template>
@@ -28,8 +36,8 @@
 import { ref, onMounted } from 'vue'
 import { recruitApi } from '@/api/recruit'
 import { useAsyncPage } from '@/composables/useAsyncPage'
-import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 

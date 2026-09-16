@@ -7,16 +7,19 @@
       </UiButton>
     </div>
 
-    <UiErrorState
-      v-if="loadError"
-      title="内容加载失败"
-      description="内容可能已下架，或网络异常"
+    <UiAsyncSection
+      :error="loadError"
+      :loading="loading"
+      :empty="false"
       :retrying="retrying"
+      error-title="内容加载失败"
+      error-description="内容可能已下架，或网络异常"
       @retry="retry"
-    />
-    <UiSkeleton v-else-if="loading" variant="card" :count="1" />
-
-    <template v-else-if="detail">
+    >
+      <template #skeleton>
+        <UiSkeleton variant="card" :count="1"  />
+      </template>
+      <template v-if="detail">
       <h1 class="text-[22px] leading-[1.4] text-ink">{{ detail.title }}</h1>
       <div class="mt-2 flex items-center gap-2.5 text-[13px] text-ink-3">
         <UiTag tone="primary" size="small">{{ detail.category_label }}</UiTag>
@@ -46,7 +49,8 @@
           下一篇：{{ detail.next.title }}
         </UiButton>
       </div>
-    </template>
+      </template>
+    </UiAsyncSection>
   </div>
 </template>
 
@@ -62,8 +66,8 @@ import { useAsyncPage } from '@/composables/useAsyncPage'
 import PublishMarkdown from '@/components/render/PublishMarkdown.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiTag from '@/components/ui/UiTag.vue'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
-import UiErrorState from '@/components/ui/UiErrorState.vue'
 
 const route = useRoute()
 const router = useRouter()

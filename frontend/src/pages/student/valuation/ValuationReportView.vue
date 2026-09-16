@@ -133,7 +133,7 @@ const basicInfoItems = computed(() => {
 
 <template>
   <div v-loading="loading">
-    <div v-if="data" class="app-container report-view valuation-root">
+    <div v-if="data" class="app-container report-view valuation-root valuation-view">
       <PageHeader
         :title="`评估报告 #${id}`"
         :subtitle="`生成于 ${formatDateTime(new Date().toISOString())}`"
@@ -227,7 +227,7 @@ const basicInfoItems = computed(() => {
       </div>
     </div>
     <!-- 匿名/无数据降级：报告生成与下载为公开接口，详情展示需登录 -->
-    <div v-else class="app-container report-view valuation-root">
+    <div v-else class="app-container report-view valuation-root valuation-view">
       <PageHeader :title="`评估报告 #${id}`" :subtitle="`生成于 ${formatDateTime(new Date().toISOString())}`">
         <template #actions>
           <UiButton :icon="ArrowLeft" @click="backToResult">返回结果</UiButton>
@@ -248,20 +248,8 @@ const basicInfoItems = computed(() => {
   background: var(--color-surface);
   min-height: calc(100vh - var(--header-h));
 }
-.top-row {
-  margin-top: 0;
-}
-.radar-block,
-.section-block {
-  margin-top: var(--sp-5);
-  padding: var(--sp-6) var(--sp-7);
-}
-.section-title {
-  font-size: var(--fs-lg);
-  font-weight: var(--fw-medium);
-  margin: 0 0 var(--sp-5);
-  color: var(--color-text);
-}
+/* .top-row / .radar-block / .section-block / .section-title 与 768px 分区块规则
+   已收敛到 assets/styles/valuation-view-sections.css（layer(base)，本组件 scoped 可覆盖）。 */
 
 /* ===== 基本信息网格 ===== */
 .info-grid {
@@ -339,14 +327,6 @@ const basicInfoItems = computed(() => {
   }
   .info-grid {
     grid-template-columns: 1fr;
-  }
-  .radar-block,
-  .section-block {
-    margin-top: var(--sp-4);
-    padding: var(--sp-5) var(--sp-4);
-  }
-  .radar-block :deep(.echarts) {
-    height: 260px !important;
   }
   .pdf-hint {
     flex-direction: column;

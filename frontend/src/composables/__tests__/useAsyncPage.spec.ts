@@ -218,3 +218,105 @@ describe('useAsyncPage 证件切换失效刷新（#604 内聚）', () => {
     expect(() => useAsyncPage(async () => {})).not.toThrow()
   })
 })
+
+describe('useAsyncPage 筛选轴与空态判据（#1054）', () => {
+  it('filterDeps：任一轴变化 → 回第一页重装一次', async () => {
+    const keyword = ref('')
+    const specialty = ref(0)
+    let seenPage = 0
+    const loads: Array<[number, string, number]> = []
+    const { page, run, handleSizeChange } = useAsyncPage(
+      async () => {
+        seenPage = page.value
+        loads.push([page.value, keyword.value, specialty.value])
+      },
+      { filterDeps: [keyword, specialty] }
+    )
+
+    await run()
+    page.value = 4
+    await run()
+    expect(seenPage).toBe(4)
+
+    // 改一条筛选轴：回第一页并重装
+    keyword.value = '叉车'
+    await nextTick()
+    await Promise.resolve()
+    expect(seenPage).toBe(1)
+    // 翻页/改页大小的既有行为不受影响
+    handleSizeChange()
+    await run()
+    expect(loads.at(-1)).toEqual([1, '叉车', 0])
+  })
+
+  it('filterDeps：同一同步块内多轴齐变只触发一次重装', async () => {
+    const keyword = ref('')
+    const specialty = ref(0)
+    const load = vi.fn()
+    useAsyncPage(load, { filterDeps: [keyword, specialty] })
+
+    await nextTick()
+    load.mockClear()
+    keyword.value = 'a'
+    specialty.value = 7
+    await nextTick()
+    await Promise.resolve()
+    expect(load).toHaveBeenCalledTimes(1)
+  })
+
+  it('filterDeps：轴变化与证件切换是两条独立 watch，各触发一次', async () => {
+    // 上一个 describe 的末例把 pinia 解除激活了：本用例需要证件信号源，先重建
+    setActivePinia(createPinia())
+    const store = useCredentialStore()
+    store.current = credentialOf(1)
+    const keyword = ref('')
+    const load = vi.fn()
+    useAsyncPage(load, { filterDeps: [keyword] })
+
+    await nextTick()
+    load.mockClear()
+    keyword.value = 'x'
+    store.current = credentialOf(2)
+    await nextTick()
+    await Promise.resolve()
+    await nextTick()
+    // 两条 watch 不合并去重：各跑一次（与既有「证件切换即重装」行为一致）
+    expect(load).toHaveBeenCalledTimes(2)
+  })
+
+  it('isEmpty：装载中与错误态恒为 false；装载成功且条目为空才为 true', async () => {
+    const items = ref<number[] | null>(null)
+    let shouldFail = false
+    let writeEmpty = true
+    const { isEmpty, run } = useAsyncPage(
+      async () => {
+        if (shouldFail) throw new Error('boom')
+        items.value = writeEmpty ? [] : [1, 2]
+      },
+      { itemsRef: items }
+    )
+
+    // 装载成功且无条目 → 空
+    await run()
+    expect(isEmpty.value).toBe(true)
+
+    // 错误态：false（即使上一轮条目是空的）
+    shouldFail = true
+    await run()
+    expect(isEmpty.value).toBe(false)
+
+    // 装载中：false；装载成功且有条目 → false
+    shouldFail = false
+    writeEmpty = false
+    const p = run()
+    expect(isEmpty.value).toBe(false)
+    await p
+    expect(isEmpty.value).toBe(false)
+  })
+
+  it('isEmpty：未提供 itemsRef 时恒 false（不替调用方猜空）', async () => {
+    const { isEmpty, run } = useAsyncPage(async () => {})
+    await run()
+    expect(isEmpty.value).toBe(false)
+  })
+})

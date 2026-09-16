@@ -107,4 +107,42 @@ export type AIFunctionItem = {
     iconPath ?: string     // 图片路径（自定义图标）
     featureKey : string    // 后端 AI 功能注册表的功能键（根仓库 ADR-0030 / ADR-0047）
     freePreview : boolean  // 限免声明位（注册表镜像）
+    /**
+     * 传输适配器（注册表 `adapter` 的镜像，根仓库 ADR-0047 §7）—— `'llm' | 'diagnosis'`。
+     *
+     * **「专用 UI」一律读它，不允许比较功能键字符串**（如 `featureKey == 'fault_diagnosis'`）：
+     * 键是「走哪条后端通道」的标识、适配器是「哪一套客户端 UI」的标识，二者不是同一个维度
+     * （web 侧先例 `frontend/src/config/aiFeatures.ts` 的 `isDiagnosisFeature` 同此口径）。
+     * 移动端清单是**手写**的，故该位与后端注册表等值由 `aiFeatureRegistryParityContract.test.js` 锁住。
+     */
+    adapter : string
+}
+
+/** 诊断品牌选项（GET /ai-assistant/diagnosis/brands）：`value` 是过滤值，`value == 'all'` 表示全部品牌。 */
+export type AiDiagnosisBrandOption = {
+    value : string
+    label : string
+}
+
+/** 诊断故障码条目（GET /ai-assistant/diagnosis/fault-codes 的 `items[]`，字段与外部助手一致）。 */
+export type AiDiagnosisFaultCodeItem = {
+    id : number
+    brand : string
+    brand_cn : string
+    model_series : string
+    fault_code : string
+    fault_name : string
+    symptom : string
+    causes : string
+    sop_steps : string
+    safety_warning : string
+    part_numbers : string
+    source_file : string
+    page_num : number
+}
+
+/** 诊断故障码分页（`items` + `total`）。 */
+export type AiDiagnosisFaultCodePage = {
+    items : AiDiagnosisFaultCodeItem[]
+    total : number
 }

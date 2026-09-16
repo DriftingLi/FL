@@ -2,16 +2,20 @@
   <div class="flex flex-col gap-4">
     <h1 class="text-xl font-bold text-ink">我的投递</h1>
 
-    <UiErrorState
-      v-if="loadError"
-      title="投递记录加载失败"
-      description="网络或服务端异常，可重试"
+    <UiAsyncSection
+      :error="loadError"
+      :loading="loading"
+      :empty="items.length === 0"
       :retrying="retrying"
+      error-title="投递记录加载失败"
+      error-description="网络或服务端异常，可重试"
       @retry="handleRetry"
-    />
-    <UiSkeleton v-else-if="loading" variant="list" :count="4" />
-    <UiEmptyState v-else-if="items.length === 0" description="暂无投递记录" />
-    <div v-else class="grid gap-3">
+    >
+      <template #skeleton>
+        <UiSkeleton variant="list" :count="4"  />
+      </template>
+
+      <div class="grid gap-3">
       <div v-for="item in items" :key="String(item.id)" class="rounded-card border border-line bg-panel p-4">
         <div class="flex items-center justify-between gap-3">
           <div class="min-w-0 flex-1">
@@ -39,6 +43,10 @@
         </div>
       </div>
     </div>
+      <template #empty>
+        <UiEmptyState description="暂无投递记录"  />
+      </template>
+    </UiAsyncSection>
     <div v-if="total > 0" class="flex justify-center">
       <UiPagination
       v-model:current-page="page"
@@ -64,9 +72,9 @@ import { jobApi, type JobApplication } from '@/api/job'
 import { resumeApi } from '@/api/resume'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
-import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import CompanyContactInfo from '@/components/recruit/CompanyContactInfo.vue'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'

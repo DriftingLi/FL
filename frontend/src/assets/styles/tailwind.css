@@ -50,6 +50,7 @@
 @import "./design-tokens.css" layer(base);
 @import "./element-overrides.css" layer(base);
 @import "./valuation-tokens.css" layer(base);
+@import "./valuation-view-sections.css" layer(base);
 
 /* 原子类扫描范围：frontend/src（相对于本文件 ../../ ） */
 @source "../../";

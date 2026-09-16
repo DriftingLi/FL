@@ -66,7 +66,7 @@ async function downloadPdf() {
 </script>
 
 <template>
-  <div v-if="r && id" class="app-container battery-result-view valuation-root">
+  <div v-if="r && id" class="app-container battery-result-view valuation-root valuation-view">
     <PageHeader
       title="电池评估结果"
       :subtitle="`battery #${id} · ${batteryTypeName}`"
@@ -138,23 +138,8 @@ async function downloadPdf() {
 .battery-result-view {
   padding: 0;
 }
-.top-row {
-  margin-top: 0;
-}
-.radar-block,
-.section-block {
-  margin-top: var(--sp-5);
-  padding: var(--sp-6) var(--sp-7);
-}
-.section-title {
-  font-size: var(--fs-lg);
-  font-weight: var(--fw-medium);
-  margin: 0 0 var(--sp-5);
-  color: var(--color-text);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
+/* .top-row / .radar-block / .section-block / .section-title（含标题图标的 flex 排列）
+   已收敛到 assets/styles/valuation-view-sections.css（layer(base)，本组件 scoped 可覆盖）。 */
 .title-icon {
   color: var(--color-primary);
   font-size: 18px;
@@ -190,15 +175,4 @@ async function downloadPdf() {
 }
 .feature-group {
   font-size: var(--fs-xs);
-}
-@media (max-width: 768px) {
-  .radar-block,
-  .section-block {
-    margin-top: var(--sp-4);
-    padding: var(--sp-5) var(--sp-4);
-  }
-  .radar-block :deep(.echarts) {
-    height: 260px !important;
-  }
-}
-</style>
+}</style>

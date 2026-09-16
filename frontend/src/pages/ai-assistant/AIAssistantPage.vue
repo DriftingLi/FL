@@ -39,7 +39,7 @@
     <!-- 输入区差异内容：模式未绑定提示 -->
     <template #input-extra>
       <div v-if="isModeUnavailable" class="model-warning">
-        当前模式未配置，请联系管理员在“AI 配置”中绑定
+        通用对话暂不可用（平台模型未配置）；可改用上方「智能维修诊断」等专项功能，或联系管理员在“AI 配置”中绑定
       </div>
     </template>
   </ChatPageShell>
@@ -85,7 +85,7 @@ async function handleSend() {
   const text = inputText.value.trim()
   if (!text) return
   if (isModeUnavailable.value) {
-    ElMessage.warning('当前模式未配置，请联系管理员')
+    ElMessage.warning('通用对话暂不可用；可改用「智能维修诊断」等专项功能，或联系管理员')
     return
   }
   if (store.streaming) return
