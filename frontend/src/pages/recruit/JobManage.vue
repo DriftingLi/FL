@@ -5,16 +5,20 @@
       <UiButton variant="primary" size="small" @click="openCreate">发布职位</UiButton>
     </div>
 
-    <UiErrorState
-      v-if="loadError"
-      title="职位加载失败"
-      description="网络或服务端异常，可重试"
+    <UiAsyncSection
+      :error="loadError"
+      :loading="loading"
+      :empty="items.length === 0"
       :retrying="retrying"
+      error-title="职位加载失败"
+      error-description="网络或服务端异常，可重试"
       @retry="handleRetry"
-    />
-    <UiSkeleton v-else-if="loading" variant="list" :count="4" />
-    <UiEmptyState v-else-if="items.length === 0" description="暂无职位，点击右上角「发布职位」开始招聘" />
-    <div v-else class="grid gap-3">
+    >
+      <template #skeleton>
+        <UiSkeleton variant="list" :count="4"  />
+      </template>
+
+      <div class="grid gap-3">
       <div
         v-for="item in items"
         :key="String(item.id)"
@@ -51,6 +55,10 @@
         </div>
       </div>
     </div>
+      <template #empty>
+        <UiEmptyState description="暂无职位，点击右上角「发布职位」开始招聘"  />
+      </template>
+    </UiAsyncSection>
     <div v-if="total > 0" class="flex justify-center">
       <UiPagination
       v-model:current-page="page"
@@ -100,8 +108,8 @@ import { jobApi, type JobPosting, type JobPostingInput } from '@/api/job'
 import { positionApi } from '@/api/position'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
-import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'

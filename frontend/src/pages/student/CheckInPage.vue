@@ -27,16 +27,19 @@
       </div>
     </div>
 
-    <UiErrorState
-      v-if="loadError"
-      title="打卡数据加载失败"
-      description="网络或服务端异常，可重试"
+    <UiAsyncSection
+      :error="loadError"
+      :loading="loading"
+      :empty="false"
       :retrying="retrying"
+      error-title="打卡数据加载失败"
+      error-description="网络或服务端异常，可重试"
       @retry="retryLoad"
-    />
-    <UiSkeleton v-else-if="loading" variant="card" :count="3" />
+    >
+      <template #skeleton>
+        <UiSkeleton variant="card" :count="3"  />
+      </template>
 
-    <template v-else>
       <div class="rounded-card border border-line bg-panel p-4 shadow-card">
         <!-- 月份切换 + 打卡按钮 -->
         <div class="mb-3 flex items-center justify-between gap-3">
@@ -131,7 +134,8 @@
           </div>
         </div>
       </div>
-    </template>
+   >
+    </UiAsyncSection>
   </div>
 </template>
 
@@ -144,7 +148,7 @@ import { shanghaiDateStr } from '@/utils/format'
 import { computeDayStates, type CheckInDayState } from '@/utils/checkinCalendar'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiTag from '@/components/ui/UiTag.vue'
-import UiErrorState from '@/components/ui/UiErrorState.vue'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiPagination from '@/components/ui/UiPagination.vue'
