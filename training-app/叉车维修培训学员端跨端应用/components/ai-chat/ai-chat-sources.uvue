@@ -35,11 +35,13 @@
 	 * **不做** web 的「打开 PDF 来源」外链 —— 原生端没有内嵌 PDF 阅读器，站外跳转收益低。
 	 * 手册图片、页码、正文剥标记三条与 web 一致。
 	 *
-	 * `<<IMAGE:…>>` 解析**不用正则**：全仓 `.uts` 无 RegExp 字面量先例（Kotlin 目标下不可靠），
-	 * 按 `indexOf` / `substring` 走，与 `utils/markdown.uts` 同风格。
+	 * `<<IMAGE:…>>` 标记解析、内网前缀剥离、页码标签一律走 `utils/aiSourcesDisplay.uts`
+	 * （展示层纯函数落 `utils/<域>Display.uts`，移动端 ADR-0007）—— 本组件只做「子路径 → 代理 URL」
+	 * 与折叠交互；纯函数留在 `.uvue` 里就不可测（jest 无法 import `.uvue`，守护只能退化成断言源码文本）。
 	 */
 	import { computed, ref } from 'vue'
 	import { aiManualUrl } from '../../api/aiAssistant'
+	import { extractImagePaths, stripImageMarkers, pageLabel } from '../../utils/aiSourcesDisplay'
 	import type { AiDiagnosisSource } from '../../types/index'
 
 	/** 单条来源的展示模型：图片 URL / 正文 / 页码在壳层一次算好，模板不重复解析 */
@@ -57,68 +59,16 @@
 
 	const open = ref<boolean>(false)
 
-	const IMAGE_OPEN = '<<IMAGE:'
-	const IMAGE_CLOSE = '>>'
-	const ASSISTANT_STATIC_PREFIX = 'assistant/static/'
-	const MANUAL_PREFIX = 'manual/'
-
 	/**
-	 * 剥掉助手内网前缀（对齐 web `stripAssistantPrefix`）：可选前导 `/` → `assistant/static/` → `manual/`。
-	 * `manual/` 段是**目录名的一部分**（外部助手吐 `/assistant/static/manual/<doc>/page_N.png`），
-	 * 剥掉后交给 `aiManualUrl` 重新拼回 `/diagnosis/manual/<doc>/page_N.png`。
+	 * 子路径 → 手册代理 URL（**组件层**负责拼 URL：`utils/aiSourcesDisplay` 只解析、不依赖 api）。
 	 */
-	function stripAssistantPrefix(path : string) : string {
-		let p = path
-		if (p.startsWith('/')) p = p.substring(1)
-		if (p.startsWith(ASSISTANT_STATIC_PREFIX)) p = p.substring(ASSISTANT_STATIC_PREFIX.length)
-		if (p.startsWith(MANUAL_PREFIX)) p = p.substring(MANUAL_PREFIX.length)
-		return p
-	}
-
-	/** 提取来源文本里的手册图片**完整代理 URL**列表（保持出现顺序，去重交给后端缓存） */
-	function extractImageUrls(text : string) : string[] {
-		const out : string[] = []
-		let from = 0
-		while (true) {
-			const start = text.indexOf(IMAGE_OPEN, from)
-			if (start < 0) break
-			const end = text.indexOf(IMAGE_CLOSE, start + IMAGE_OPEN.length)
-			if (end < 0) break
-			const path = stripAssistantPrefix(text.substring(start + IMAGE_OPEN.length, end).trim())
-			if (path.length > 0) out.push(aiManualUrl(path))
-			from = end + IMAGE_CLOSE.length
+	function toManualUrls(text : string) : string[] {
+		const paths = extractImagePaths(text)
+		const urls : string[] = []
+		for (let i = 0; i < paths.length; i++) {
+			urls.push(aiManualUrl(paths[i]))
 		}
-		return out
-	}
-
-	/** 剥掉全部 `<<IMAGE:…>>` 标记后的正文 —— 标记不进正文，否则用户看到一串内网路径 */
-	function stripImageMarkers(text : string) : string {
-		let out = ''
-		let from = 0
-		while (true) {
-			const start = text.indexOf(IMAGE_OPEN, from)
-			if (start < 0) {
-				out += text.substring(from)
-				break
-			}
-			const end = text.indexOf(IMAGE_CLOSE, start + IMAGE_OPEN.length)
-			if (end < 0) {
-				out += text.substring(from)
-				break
-			}
-			out += text.substring(from, start)
-			from = end + IMAGE_CLOSE.length
-		}
-		return out.trim()
-	}
-
-	/** 页码标签（对齐 web「第 N 页 / 第 N-M 页」）；起始页缺失或为 0 时不显示 */
-	function pageLabel(src : AiDiagnosisSource) : string {
-		const ps = src.page_start ?? 0
-		if (ps <= 0) return ''
-		const pe = src.page_end ?? 0
-		if (pe > ps) return '第 ' + ps.toString() + '-' + pe.toString() + ' 页'
-		return '第 ' + ps.toString() + ' 页'
+		return urls
 	}
 
 	const cards = computed<SourceCard[]>(() : SourceCard[] => {
@@ -127,7 +77,7 @@
 		for (let i = 0; i < src.length; i++) {
 			const s = src[i]
 			list.push({
-				images: extractImageUrls(s.text),
+				images: toManualUrls(s.text),
 				text: stripImageMarkers(s.text),
 				page: pageLabel(s),
 			} as SourceCard)

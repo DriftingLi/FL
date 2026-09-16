@@ -190,28 +190,30 @@ describe('#988 诊断来源资料消费契约', () => {
 
   // ────────────────────────────────────────────────────────────────
   describe('⑥ 渲染：来源组件 + 气泡接线 + 页面传参', () => {
-    it('来源组件不用正则解析 `<<IMAGE:…>>`（全仓 .uts 无 RegExp 先例，Kotlin 目标下按 indexOf 走）', () => {
-      expect(SOURCES).toContain("const IMAGE_OPEN = '<<IMAGE:'");
-      expect(SOURCES).toContain("const IMAGE_CLOSE = '>>'");
-      expect(SOURCES).toContain('text.indexOf(IMAGE_OPEN');
-      // 只禁**正则字面量赋值**（`= /…<<IMAGE…/`）；注释里提到标记是合法的，
-      // 早期版本写成 `/\/[^/\n]*<<IMAGE/` 会被 `/** 剥掉全部 \`<<IMAGE…\`` 那行注释误判（假阳性）。
-      expect(SOURCES).not.toMatch(/=\s*\/[^/\n]*<<IMAGE/);
-      expect(SOURCES).not.toContain('new RegExp(');
-      expect(SOURCES).not.toMatch(/IMAGE_RE/);
+    it('来源组件**不再自己解析**：纯函数走 utils/aiSourcesDisplay（ADR-0007 单点，禁第二实现）', () => {
+      // 为什么这条是承重的：这些纯函数原先住在组件里 ⇒ jest 无法 import `.uvue` ⇒ 守护只能
+      // 断言**源码文本**（改坏行为、文本还在，测试照样绿）。抽到 utils 后行为由**真单测**执行
+      // （`utils/aiSourcesDisplay.test.js` 的镜像实现），本组只守「组件没有长出第二实现」。
+      expect(SOURCES).toContain("import { extractImagePaths, stripImageMarkers, pageLabel } from '../../utils/aiSourcesDisplay'");
+      expect(SOURCES).not.toContain('function stripAssistantPrefix');
+      expect(SOURCES).not.toContain('function extractImagePaths');
+      expect(SOURCES).not.toContain('function stripImageMarkers');
+      expect(SOURCES).not.toContain('function pageLabel');
+      expect(SOURCES).not.toContain("const IMAGE_OPEN = '<<IMAGE:'");
     });
 
-    it('剥前缀走单点、图片 URL 交给 aiManualUrl（不手拼字符串）', () => {
-      expect(SOURCES).toContain('function stripAssistantPrefix');
+    it('真单测在位（防「把镜像测试删掉、只留文本断言」的回潮）', () => {
+      // 锚点：`<<IMAGE:…>>` 的解析行为必须有一份**可执行**的测试在守。
+      const displayTest = read('utils/aiSourcesDisplay.test.js');
+      expect(displayTest).toContain('function extractImagePaths');
+      expect(displayTest).toContain('function stripImageMarkers');
+      expect(displayTest).toContain("describe('aiSourcesDisplay：镜像同步");
+    });
+
+    it('子路径 → URL 走 aiManualUrl（组件不手拼 base）', () => {
       expect(SOURCES).toContain("import { aiManualUrl } from '../../api/aiAssistant'");
-      expect(SOURCES).toContain('aiManualUrl(path)');
+      expect(SOURCES).toContain('aiManualUrl(paths[i])');
       expect(SOURCES).not.toMatch(/API_BASE_URL\s*\+/);     // 页面/组件里不许自己拼 base
-    });
-
-    it('标记被从正文里剥掉（否则用户看到一串内网路径）', () => {
-      const body = fnBody(SOURCES, 'function stripImageMarkers');
-      expect(body).toContain('text.indexOf(IMAGE_OPEN');
-      expect(body).toMatch(/return out\.trim\(\)/);
     });
 
     it('图片可点开大图（uni.previewImage）', () => {
