@@ -1,0 +1,90 @@
+/**
+ * 诊断来源展示纯函数（#988）—— 展示层纯函数落 `utils/<域>Display.uts`（移动端 ADR-0007）。
+ *
+ * 为什么单独成文件（不是洁癖，是**可测性**）：这些是纯函数（`<<IMAGE:…>>` 标记解析、助手内网
+ * 前缀剥离、页码标签），与组件生命周期无关。留在 `.uvue` 里它们就**不可测** —— jest 既不能 import
+ * `.uts`、更不能 import `.uvue`，于是守护只能退化成「断言源码文本」（`expect(SOURCES).toContain(...)`），
+ * 那正是本仓库反复踩过的假绿形态：改坏行为、文本还在，测试照样绿。
+ * 抽到这里后，`utils/aiSourcesDisplay.test.js` 以**镜像实现**验证算法行为（先例：`pointsDisplay.test.js`
+ * / `checkinCalendar.test.js`），并用「镜像同步」用例把源码与镜像钉在一起防分叉。
+ *
+ * 层次：本模块**不**拼 URL —— 解析只吐子路径，URL 由 `api/aiAssistant.uts` 的 `aiManualUrl()` 负责
+ * （utils 不依赖 api）。
+ *
+ * `<<IMAGE:…>>` 解析**不用正则**：全仓 `.uts` 无 RegExp 字面量先例（Kotlin 目标下不可靠），
+ * 按 `indexOf` / `substring` 走，与 `utils/markdown.uts` 同风格。
+ *
+ * 线上格式（2026-09-16 直连生产实测，`BMS` 一问的 `sources` 事件）：
+ *   `<<IMAGE:/assistant/static/manual/ep_byd_pmw20_service_manual_en/page_85_643.png>>`
+ * 注意 `manual/` 段是**目录名的一部分**：剥掉 `assistant/static/` 与 `manual/` 后剩下的
+ * `ep_byd_pmw20_service_manual_en/page_85_643.png` 才是代理端点的子路径。
+ */
+import type { AiDiagnosisSource } from '../types/index'
+
+/** 标记定界符（两处扫描共用一份字面量，不各写一遍） */
+export const IMAGE_OPEN = '<<IMAGE:'
+export const IMAGE_CLOSE = '>>'
+
+/** 助手内网前缀（按剥离顺序） */
+const ASSISTANT_STATIC_PREFIX = 'assistant/static/'
+const MANUAL_PREFIX = 'manual/'
+
+/**
+ * 剥掉助手内网前缀（对齐 web `stripAssistantPrefix`）：可选前导 `/` → `assistant/static/` → `manual/`。
+ */
+export function stripAssistantPrefix(path : string) : string {
+	let p = path
+	if (p.startsWith('/')) p = p.substring(1)
+	if (p.startsWith(ASSISTANT_STATIC_PREFIX)) p = p.substring(ASSISTANT_STATIC_PREFIX.length)
+	if (p.startsWith(MANUAL_PREFIX)) p = p.substring(MANUAL_PREFIX.length)
+	return p
+}
+
+/**
+ * 提取来源文本里的手册图片**子路径**列表（保持出现顺序；同一页多图会出现多条）。
+ * 空路径的标记直接丢弃（不给用户渲染空气泡）。
+ */
+export function extractImagePaths(text : string) : string[] {
+	const out : string[] = []
+	let from = 0
+	while (true) {
+		const start = text.indexOf(IMAGE_OPEN, from)
+		if (start < 0) break
+		const end = text.indexOf(IMAGE_CLOSE, start + IMAGE_OPEN.length)
+		if (end < 0) break
+		const path = stripAssistantPrefix(text.substring(start + IMAGE_OPEN.length, end).trim())
+		if (path.length > 0) out.push(path)
+		from = end + IMAGE_CLOSE.length
+	}
+	return out
+}
+
+/** 剥掉全部 `<<IMAGE:…>>` 标记后的正文 —— 标记不进正文，否则用户看到一串内网路径 */
+export function stripImageMarkers(text : string) : string {
+	let out = ''
+	let from = 0
+	while (true) {
+		const start = text.indexOf(IMAGE_OPEN, from)
+		if (start < 0) {
+			out += text.substring(from)
+			break
+		}
+		const end = text.indexOf(IMAGE_CLOSE, start + IMAGE_OPEN.length)
+		if (end < 0) {
+			out += text.substring(from)
+			break
+		}
+		out += text.substring(from, start)
+		from = end + IMAGE_CLOSE.length
+	}
+	return out.trim()
+}
+
+/** 页码标签（对齐 web「第 N 页 / 第 N-M 页」）；起始页缺失或为 0 时不显示 */
+export function pageLabel(src : AiDiagnosisSource) : string {
+	const ps = src.page_start ?? 0
+	if (ps <= 0) return ''
+	const pe = src.page_end ?? 0
+	if (pe > ps) return '第 ' + ps.toString() + '-' + pe.toString() + ' 页'
+	return '第 ' + ps.toString() + ' 页'
+}

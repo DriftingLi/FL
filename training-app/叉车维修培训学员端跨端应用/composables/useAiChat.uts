@@ -24,7 +24,7 @@ import {
 	getAiSessionMessagesApi,
 	streamChatApi,
 } from '../api/aiAssistant'
-import type { AiSession, AiSessionMessage, AiChatMessage } from '../types/index'
+import type { AiSession, AiSessionMessage, AiChatMessage, AiDiagnosisSource } from '../types/index'
 
 /** 构造差异化请求体：基础版固定 admin，专业版按 model_source 分支 */
 export type ChatBodyBuilder = (history : AiChatMessage[], sessionID : number, featureKey : string) => UTSJSONObject
@@ -193,6 +193,14 @@ export function useAiChat(featureScope : Ref<string>) {
 			onMessage: (chunk : string) => {
 				assistantMsg.content += chunk
 				scrollToBottom()
+			},
+			onSources: (sources : AiDiagnosisSource[]) => {
+				// 当轮诊断来源（#988）：该事件在 `done` 之前到达，挂到**同一条**助手消息上 ——
+				// 与回看路径（`buildSessionMessage` 读 sources 列）落同一个字段，故两条路渲染一致。
+				if (sources.length > 0) {
+					assistantMsg.sources = sources
+					scrollToBottom()
+				}
 			},
 			onError: (msg : string) => {
 				thinking.value = false

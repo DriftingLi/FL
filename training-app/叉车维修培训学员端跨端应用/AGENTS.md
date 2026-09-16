@@ -12,6 +12,11 @@
 
 Issues 存放在 GitHub Issues（使用 `gh` CLI）。See `docs/agents/issue-tracker.md`.
 
+### 派活与执行契约（移动端）
+
+接到**移动端** issue 时的唯一事实源：形态判定 / 读现状（认领、**查承载面**、状态现测）/ 执行 / **阶段闸门** / 收尾（进度契约、重复票处置）/ 正文格式。派活只需一行：`按 training-app/叉车维修培训学员端跨端应用/docs/agents/issue-dispatch.md 执行 <issue URL>`。See `docs/agents/issue-dispatch.md`.
+（**仅移动端**：这套「阶段闸门 / 进度契约」是这条线的工作方式，不是全仓约定 —— 故它落在移动端 `docs/agents/`，前后端会话不读、不受约束。）
+
 ### Triage labels
 
 五个 canonical triage roles，label 与 role 同名（`needs-triage` 等）。See `docs/agents/triage-labels.md`.

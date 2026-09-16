@@ -32,8 +32,8 @@
 | 文件 | 内容 |
 | --- | --- |
 | `issue-tracker.md` | Issue 存放与使用（GitHub Issues + `gh` CLI） |
-| `triage-labels.md` | 五个 canonical triage labels |
-| `domain.md` | Single-context 领域文档纪律（CONTEXT.md + ADR） |
+| `triage-labels.md` | 五个 canonical triage labels + **重复票处置**（不新增 label，用 `close` + 指向评论表达） |
+| `domain.md` | Single-context 领域文档纪律（CONTEXT.md + ADR）+ **持久 / 临时文档分层** |
 | `security-scan.md` | DeepSec（Shield）安全审计用法与已知误报 |
 | `ui-conventions.md` | 前端 UI 约定（UI 词汇 / Tailwind R1-R4 / 不得触碰的边界） |
 | `checks.md` | 测试与检查流程（后端 Windows/WSL 双环境、前端、部署配置、安全检测） |
