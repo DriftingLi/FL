@@ -4,17 +4,35 @@
  */
 import type { AIFunctionItem } from '../../types/index'
 
-/** 功能入口列表（5 项，含自定义图标路径） */
+/**
+ * 功能入口列表（宫格，4 项）—— **收敛到后端功能注册表的专项对话功能**
+ * （`maintenance_knowledge` / `drawing_recognition` / `exercise_solving` / `fault_diagnosis`）。
+ *
+ * 三处口径（ADR-0009 2026-09-15 修订 ②，本文件是实现面）：
+ * - 清单仍**移动端手写**（不走 web 那套 codegen），但**键集合 / 展示名 / 限免位**必须与后端注册表
+ *   `backend/internal/service/ai_feature_registry.go` 全等，由 `utils/aiFeatureRegistryParityContract.test.js` 锁住。
+ * - 「故障代码查询」**已下线**：它在注册表里**没有键**（根仓库 ADR-0032 决策 3 下线了 `fault_code_query`），
+ *   留着就是个「点了走通用对话」的伪入口。**不要**为了补齐 5 格把它接回。
+ * - 每一项都带 `featureKey`，且点击 = **跳转专项页**（`pages/ai-assistant/ai-feature?featureKey=…`），
+ *   不再是「在本页带键发一轮」—— 后者要维护「键只属于本轮」的轮次边界（#999 真机实测踩过），
+ *   现在通用页**结构上**没有键状态。
+ *
+ * 记法：本文件引用的 ADR-0030 / ADR-0032 / ADR-0047 属**根仓库**编号体系（见根 docs/adr/），
+ * 与移动端 0001-0016 无关；ADR-0009 属**移动端**编号体系（见本目录 docs/adr/）。
+ *
+ * 格序**不跟注册表序**（曾考虑过）：一致性契约锁的是**键集合**（见交付物 5 原文），
+ * 故格序保持既有的用户可见顺序（诊断、图纸、习题、维保），只删格、不改序，减少无谓的界面变更。
+ */
 export const FUNCTION_ITEMS : AIFunctionItem[] = [
-    // 「故障咨询」接后端专项功能键 fault_diagnosis（智能维修诊断）：根仓库 ADR-0032 决策 3 已把
+    // 「智能维修诊断」= 注册表 FeatureFaultDiagnosis 的 label。根仓库 ADR-0032 决策 3 已把
     // fault_consult / fault_code_query 下线，替代物写明就是「同一用户入口（智能维修诊断）」
-    // —— 本格即其继任者，故复用既有键（#921；其余 4 格的接线另见 #971）。
-    // 记法：本文件引用的 ADR-0030 / ADR-0032 属**根仓库**编号体系（见根 docs/adr/），与移动端 0001-0009 无关。
-    { key: 'fault-consult', title: '故障咨询', icon: '\uD83D\uDC77', prompt: '故障咨询', iconPath: '/static/icons/ai-functions/fault-consult.png', featureKey: 'fault_diagnosis' },
-    { key: 'fault-code', title: '故障代码查询', icon: '\uD83D\uDD0D', prompt: '帮我查询叉车故障代码含义', iconPath: '/static/icons/ai-functions/fault-code-query.png' },
-    { key: 'drawing', title: '图纸识别', icon: '\uD83D\uDCDC', prompt: '请识别这张叉车图纸', iconPath: '/static/icons/ai-functions/drawing-recognition.png' },
-    { key: 'exercise', title: '习题解答', icon: '\uD83D\uDCDD', prompt: '请解答这道叉车维修题目', iconPath: '/static/icons/ai-functions/exercise-solving.png' },
-    { key: 'knowledge', title: '维保知识', icon: '\uD83D\uDD27', prompt: '请介绍叉车维保相关知识', iconPath: '/static/icons/ai-functions/maintenance-knowledge.png' },
+    // —— 本格即其继任者，故复用既有键 fault_diagnosis（#921）。
+    // 本地 key 仍是 `fault-consult`：它是 UI 标识（图标/引用），不因展示名与形态变更而改。
+    // freePreview=true 是注册表的**限免声明位**（本格限免、不扣积分），本清单如实镜像。
+    { key: 'fault-consult', title: '智能维修诊断', icon: '\uD83D\uDC77', iconPath: '/static/icons/ai-functions/fault-consult.png', featureKey: 'fault_diagnosis', freePreview: true },
+    { key: 'drawing', title: '图纸识别', icon: '\uD83D\uDCDC', iconPath: '/static/icons/ai-functions/drawing-recognition.png', featureKey: 'drawing_recognition', freePreview: false },
+    { key: 'exercise', title: '习题解答', icon: '\uD83D\uDCDD', iconPath: '/static/icons/ai-functions/exercise-solving.png', featureKey: 'exercise_solving', freePreview: false },
+    { key: 'knowledge', title: '维保知识', icon: '\uD83D\uDD27', iconPath: '/static/icons/ai-functions/maintenance-knowledge.png', featureKey: 'maintenance_knowledge', freePreview: false },
 ]
 
 /** 快捷提示语列表 */
