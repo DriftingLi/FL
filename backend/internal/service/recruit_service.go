@@ -155,25 +155,16 @@ func fillContactStates(db *gorm.DB, recruiterID int, cards []RecruitResumeCard) 
 	for _, c := range cards {
 		ids = append(ids, c.UserID)
 	}
-	var reqs []model.ContactRequest
-	if err := db.Where("recruiter_id = ? AND student_user_id IN ?", recruiterID, ids).
-		Order("created_at DESC").Find(&reqs).Error; err != nil {
+	// 授权态单点在 contact_authz.go（ADR-0053 §3）：徽章是「有效授权态」的三值投影，
+	// 不再自带「approved > pending」优先级，也不再自己判「学员注销即失效」。
+	grants, err := contactGrantOfManyEffective(db, recruiterID, ids)
+	if err != nil {
 		return
 	}
-	// 对每个学员取优先级最高的状态：approved > pending（approved 覆盖 pending）
-	state := make(map[int]struct{ status, source string }, len(cards))
-	for _, r := range reqs {
-		cur, ok := state[r.StudentUserID]
-		if r.Status == "approved" && (!ok || cur.status != "approved") {
-			state[r.StudentUserID] = struct{ status, source string }{"approved", r.Source}
-		} else if r.Status == "pending" && !ok {
-			state[r.StudentUserID] = struct{ status, source string }{"pending", r.Source}
-		}
-	}
 	for i := range cards {
-		if st, ok := state[cards[i].UserID]; ok && st.status != "" {
-			cards[i].ContactState = st.status
-			cards[i].ContactSource = st.source
+		if g, ok := grants[cards[i].UserID]; ok && g.State != "" {
+			cards[i].ContactState = string(g.State)
+			cards[i].ContactSource = string(g.Source)
 		}
 	}
 }
