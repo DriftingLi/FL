@@ -1,0 +1,105 @@
+<template>
+    <!-- 课程封面区 —— T08 手术自 pages/courses/course-detail.uvue 逐段搬出（parent #646 / ADR-0007）。
+         类名与结构逐字不变；原来直读 detail!.xxx，改为扁平原始 props 下发（数据所有权单一：detail 归页面）。
+         图标与底色由页面按 category 映射后下发（映射表仍只有页面那一份实现）。 -->
+    <view class="cover-section">
+        <view class="cover-bg" :style="{ backgroundColor: coverColor }">
+            <text class="cover-icon">{{ categoryIcon }}</text>
+        </view>
+        <view class="cover-info">
+            <text class="cover-title">{{ title }}</text>
+            <view class="cover-tags">
+                <text v-if="levelName.length > 0" class="tag tag-level">{{ levelName }}</text>
+                <text v-if="specialtyName.length > 0" class="tag tag-specialty">{{ specialtyName }}</text>
+                <text v-if="certificateName.length > 0" class="tag tag-cert">{{ certificateName }}</text>
+            </view>
+            <text class="cover-desc">{{ description.length > 0 ? description : '暂无简介' }}</text>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    const props = withDefaults(defineProps<{
+        title? : string
+        levelName? : string
+        specialtyName? : string
+        certificateName? : string
+        description? : string
+        categoryIcon? : string
+        coverColor? : string
+    }>(), {
+        title: '',
+        levelName: '',
+        specialtyName: '',
+        certificateName: '',
+        description: '',
+        categoryIcon: '',
+        coverColor: '#e3f2fd'
+    })
+</script>
+
+<style>
+    /* ===== 封面区 ===== */
+    .cover-section {
+        background-color: #ffffff;
+        flex-direction: column;
+    }
+
+    .cover-bg {
+        height: 280rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .cover-icon {
+        font-size: 100rpx;
+    }
+
+    .cover-info {
+        padding: 28rpx 32rpx;
+        flex-direction: column;
+    }
+
+    .cover-title {
+        font-size: 40rpx;
+        font-weight: bold;
+        color: #1a1a1a;
+        line-height: 56rpx;
+        margin-bottom: 16rpx;
+    }
+
+    .cover-tags {
+        flex-direction: row;
+        flex-wrap: wrap;
+        margin-bottom: 16rpx;
+    }
+
+    .tag {
+        font-size: 22rpx;
+        padding: 6rpx 16rpx;
+        border-radius: 8rpx;
+        margin-right: 12rpx;
+        margin-bottom: 8rpx;
+    }
+
+    .tag-level {
+        color: #e6a23c;
+        background-color: #fdf6ec;
+    }
+
+    .tag-specialty {
+        color: #409eff;
+        background-color: #ecf5ff;
+    }
+
+    .tag-cert {
+        color: #67c23a;
+        background-color: #f0f9eb;
+    }
+
+    .cover-desc {
+        font-size: 26rpx;
+        color: #666666;
+        line-height: 42rpx;
+    }
+</style>
