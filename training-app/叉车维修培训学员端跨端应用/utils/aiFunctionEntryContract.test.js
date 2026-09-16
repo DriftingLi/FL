@@ -11,6 +11,8 @@
  * ④ **专项通道不吃「自定义模型」**：带 `featureKey` 的一轮由后端按管理端单绑定解析模型
  *    （`ai_config_service.go:494` 明确「忽略选择子中的模型来源字段（防绕过）」）⇒ 客户端既不该被
  *    「请先配置自定义模型」的前置校验拦住，也不该把 `custom_*` 字段送上去。（维护者 2026-09-15 口径）
+ *    **落点已随形态变更搬家（#1040 / ADR-0009 修订 ②）**：专项通道不再是「通用页带键发一轮」，
+ *    而是独立的参数化专项页 `pages/ai-assistant/ai-feature.uvue` ⇒ 第 ④ 组断言的是那一页。
  *
  * 设计沿用本仓既有守护形态（见 utils/aiAssistantScrollContract.test.js、aiFeatureEntryWiringContract.test.js）：
  * 先对**注入违规**的变形样本断言检测有效（防空跑假绿），再对真实文件断言合规。
@@ -20,6 +22,7 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const PAGE = fs.readFileSync(path.join(ROOT, 'pages/ai-assistant/ai-assistant.uvue'), 'utf8');
+const FEATURE_PAGE = fs.readFileSync(path.join(ROOT, 'pages/ai-assistant/ai-feature.uvue'), 'utf8');
 const SHEET_PATH = path.join(ROOT, 'components/ai-chat/ai-chat-function-sheet.uvue');
 
 /** 去掉模板/JS/CSS 注释 —— 「注释里提到某标识」不等于「代码里用了它」 */
@@ -130,34 +133,41 @@ describe('AI 助手「功能入口常驻」契约（#998）', () => {
     });
   });
 
-  describe('④ 专项通道不吃「自定义模型」能力', () => {
-    it('带 featureKey 时 buildBody 早退，不发 custom_* 字段', () => {
-      const fn = fnBody(PAGE, 'const buildBody : ChatBodyBuilder');
-      expect(fn).toMatch(/if \(featureKey\.length > 0\) \{\s*return params/);
-      // 早退必须**先于**自定义模型分支（否则等于没早退）
-      expect(fn.indexOf('featureKey.length > 0')).toBeLessThan(fn.indexOf('custom_api_key'));
+  describe('④ 专项通道不吃「自定义模型」能力（#1040 形态变更后落在专项页）', () => {
+    // 形态变更（ADR-0009 2026-09-15 修订 ②）：专项通道不再是「通用页带键发一轮」，
+    // 而是独立的参数化专项页 ⇒ 本组断言搬到那一页，且判据更强：专项页**压根不加载模型列表**，
+    // 请求体里没有 model_source / custom_* 可送（旧的「早退」写法要求读代码的人相信它真的早退）。
+    it('专项页请求体只送 session_id + 历史 + 本轮键', () => {
+      const fn = fnBody(FEATURE_PAGE, 'const buildBody : ChatBodyBuilder');
+      expect(fn).toMatch(/params\['feature_key'\] = featureKey/);
+      expect(fn).not.toMatch(/model_source|custom_api_key|config_id|user_model_id/);
     });
 
-    it('「请先配置自定义模型」的前置校验只在不带键时生效', () => {
-      const fn = fnBody(PAGE, 'function onInputSend');
-      expect(fn).toMatch(/featureKey\.length == 0 && currentModelSource\.value == 'custom'/);
+    it('专项页不做「请先配置自定义模型」前置校验（它没有可自选的模型）', () => {
+      const fn = fnBody(FEATURE_PAGE, 'function onInputSend');
+      expect(fn).not.toMatch(/请先配置自定义模型/);
+      expect(fn).not.toMatch(/暂无可用的 AI 模型/);
     });
 
-    it('仍保留「取走 → 清空」在早退守卫之前（#999 不变量，不得被本次改动破坏）', () => {
+    it('通用页的该校验不再按键分流（通用页恒无键）', () => {
       const fn = fnBody(PAGE, 'function onInputSend');
-      const take = fn.indexOf('const featureKey = pendingFeatureKey.value');
-      const clear = fn.indexOf("pendingFeatureKey.value = ''");
-      const guard = fn.indexOf('请先配置自定义模型');
-      const send = fn.indexOf('sendInput(currentModelName.value, buildBody, [], featureKey)');
-      expect(take).toBeGreaterThanOrEqual(0);
-      expect(clear).toBeGreaterThan(take);
-      expect(guard).toBeGreaterThan(clear);
-      expect(send).toBeGreaterThan(guard);
+      expect(fn).toMatch(/if \(currentModelSource\.value == 'custom' && customModel\.value\.trim\(\)\.length == 0\)/);
+      expect(fn).not.toMatch(/featureKey\.length == 0/);
     });
 
-    it('去掉 featureKey 条件的变形样本会被检出（防检测器空跑假绿）', () => {
-      const fn = fnBody(PAGE, 'function onInputSend');
-      expect(fn).not.toMatch(/^[\s\S]*if \(currentModelSource\.value == 'custom' && customModel\.value\.trim\(\)\.length == 0\)/m);
+    it('「键只属于那一轮」的旧不变量改由**结构**保证（#999 的失效形态不可表达）', () => {
+      // #999 真机实测的失效形态（先清后取 ⇒ 键恒为空）以「存在一个本轮键状态」为前提。
+      // 现在：通用页无键状态、专项页的键是页面常量 ⇒ 该缺陷类写不出来，而不是「小心维护」。
+      expect(stripCodeComments(PAGE)).not.toMatch(/pendingFeatureKey/);
+      expect(FEATURE_PAGE).toMatch(/const currentFeatureKey = ref<string>\(''\)/);
+      // 专项页的键不经过任何「发送入口赋值」的路径
+      expect(fnBody(FEATURE_PAGE, 'function onInputSend')).not.toMatch(/currentFeatureKey\.value\s*=/);
+    });
+
+    it('去掉 featureKey 字段的变形样本会被检出（防检测器空跑假绿）', () => {
+      const broken = FEATURE_PAGE.replace("params['feature_key'] = featureKey", '');
+      const fn = fnBody(broken, 'const buildBody : ChatBodyBuilder');
+      expect(fn).not.toMatch(/feature_key/);
     });
   });
 });

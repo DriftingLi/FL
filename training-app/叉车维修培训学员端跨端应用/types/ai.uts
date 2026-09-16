@@ -68,15 +68,25 @@ export type AIModelOption = {
     api_key ?: string
 }
 
-/** AI 功能快捷入口 */
+/**
+ * AI 功能快捷入口（AI 助手宫格项）。
+ *
+ * **每一项都必须带后端功能键**（`featureKey` 必填）：宫格点击 = 跳转参数化专项页
+ * （`pages/ai-assistant/ai-feature`），没有键的格子就是「点了走通用对话」的伪入口 ——
+ * ADR-0009 2026-09-15 修订 ② 正是据此下线了「故障代码查询」。故字段设为**必填**，
+ * 让「新增一格却没接线」在类型层就写不出来（旧形态是可选的 `featureKey ?: string`）。
+ *
+ * `key` 是本地 UI 标识（图标 / 引用），与 `featureKey` 是两回事。
+ * `freePreview` 是注册表的**限免声明位**镜像（键集合 / 展示名 / 限免位与后端注册表全等，
+ * 由 `utils/aiFeatureRegistryParityContract.test.js` 锁住），同样必填 —— 漏声明即测试红。
+ *
+ * 已删除 `prompt`：点击不再「就发那句预设话」，专项页由用户自己输入 ⇒ 该字段无消费者。
+ */
 export type AIFunctionItem = {
     key : string
     title : string
-    icon : string          // emoji 字符（专业版当前使用）
-    prompt : string
-    iconPath ?: string     // 图片路径（基础版原型使用自定义图标）
-    // 后端 AI 功能注册表的功能键（根仓库 ADR-0030；`#921` 加）——`key` 是本地 UI 标识（图标/引用），
-    // 两者是两回事：带 featureKey 的格子走专项通道（管理端单绑定 + 独立计费声明），
-    // 不带的落通用对话。字段缺省（未接线）时行为与从前一致。
-    featureKey ?: string
+    icon : string          // emoji 字符（无 iconPath 时的兜底）
+    iconPath ?: string     // 图片路径（自定义图标）
+    featureKey : string    // 后端 AI 功能注册表的功能键（根仓库 ADR-0030 / ADR-0047）
+    freePreview : boolean  // 限免声明位（注册表镜像）
 }
