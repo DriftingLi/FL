@@ -200,13 +200,6 @@
 	const functionItems = FUNCTION_ITEMS
 	const quickPrompts = QUICK_PROMPTS
 
-	// 待发功能键（#921）：宫格点击时置入、**该轮发完即清** —— 它是「这一轮走哪个专项通道」，
-	// 不是会话级状态：① 否则点一次「故障咨询」会把之后整段自由对话都钉在诊断通道上；
-	// ② 它**不能**从发送入口的早退分支漏出去（见 onInputSend 里「先取走」的位置）。
-	// 空串 = 通用对话（后端按通用助手计费）。
-	// 只影响**本轮对话**，不影响建会话：会话按功能键分区，而列表不查专项区（见 api/aiAssistant.uts）。
-	const pendingFeatureKey = ref<string>('')
-
 	// 功能入口头部的收起态（#998）：默认展开、**不跨会话记忆**（维护者 2026-09-15 口径）。
 	// 宫格已移出滚动容器 ⇒ 收起/展开只改头部自身高度，与滚动位置无关。
 	const functionHeaderCollapsed = ref<boolean>(false)
@@ -232,22 +225,17 @@
 		return proUnlocked.value ? '已解锁' : '查看权益'
 	})
 
-	// 专业版请求体
+	// 通用对话请求体。本页**不带**专项功能键：宫格点击已改为跳转专项页（ADR-0009 2026-09-15 修订 ②），
+	// 键只由 `pages/ai-assistant/ai-feature.uvue` 的页面状态提供。这里的 `featureKey` 恒为空串，
+	// 空串即通用通道（后端按通用助手解析模型与计费）。专项通道「不吃自定义模型」那条口径
+	// 随形态移到专项页 —— 那一页干脆不送 `model_source` / `custom_*`（见其 buildBody 注释）。
 	const buildBody : ChatBodyBuilder = (history : AiChatMessage[], sessionID : number, featureKey : string) : UTSJSONObject => {
 		const params : UTSJSONObject = {
 			session_id: sessionID,
 			model_source: currentModelSource.value,
 			messages: history,
 		}
-		// 专项功能键（#921）：只带宫格那一轮的键。带键时后端走专项通道（管理端单绑定 +
-		// 独立计费声明），不带键落通用对话 —— 空串显式发送，语义与「不发送」等价。
 		params['feature_key'] = featureKey
-		// 专项通道：后端**忽略**选择子中的模型来源字段（`ai_config_service.go:494`「防绕过」），
-		// 由管理端单绑定解析模型 ⇒ 客户端不该把自定义模型的密钥/地址送上去
-		// （维护者 2026-09-15 口径：故障咨询不需要调用自定义模型能力）。
-		if (featureKey.length > 0) {
-			return params
-		}
 		if (currentModelSource.value == 'admin') {
 			params['config_id'] = currentModelId.value
 		} else if (currentModelSource.value == 'user') {
@@ -260,29 +248,20 @@
 		return params
 	}
 
-	// 发送
+	// 发送：本页恒为通用对话 —— `sendInput` 的第四参（功能键）显式传空串。
+	// 从前「先取走 → 再清空」那套轮次边界（#999 真机实测的键恒为空）随 `pendingFeatureKey` 一起消失：
+	// 通用页**结构上**不再持有功能键，也就没有「从早退分支漏键」这条路径了。
 	function onInputSend(text : string) : void {
-		// 功能键**先取走、再清空**：它只属于「这一次点击」。顺序写反（先清后取）会让每轮都送空键、
-		// 专项通道静默失效（#999 真机实测：featureKey 恒为 ''，诊断通道从未生效）。
-		// 清空必须仍在两条早退守卫**之前**：点宫格时若恰好还没拿到模型（loadModels 未回）就会
-		// toast 并 return，键若留在 ref 里，随后那条**无关**的自由提问／快捷提示语会带着
-		// fault_diagnosis 走诊断通道（且限免不计费）。
-		// 取走即清（不依赖 sendInput 是否真的发出），异常路径也不残留到下一轮。
-		const featureKey = pendingFeatureKey.value
-		pendingFeatureKey.value = ''
 		if (models.value.length == 0 && userModels.value.length == 0 && currentModelSource.value != 'custom') {
 			uni.showToast({ title: '暂无可用的 AI 模型', icon: 'none' })
 			return
 		}
-		// 专项通道（带键）由管理端单绑定解析模型，与「自定义模型」无关 ⇒ 不该被它的前置校验拦住
-		// （#998 维护者 2026-09-15 口径）。**不带键的通用对话照旧校验**。
-		// 位置仍在「取走 → 清空」之后、发送之前 ⇒ 契约测试 ③ 的有序断言不受影响。
-		if (featureKey.length == 0 && currentModelSource.value == 'custom' && customModel.value.trim().length == 0) {
+		if (currentModelSource.value == 'custom' && customModel.value.trim().length == 0) {
 			uni.showToast({ title: '请先配置自定义模型', icon: 'none' })
 			return
 		}
 		inputText.value = text
-		sendInput(currentModelName.value, buildBody, [], featureKey)
+		sendInput(currentModelName.value, buildBody, [], '')
 	}
 
 	function sendText(text : string) : void {
@@ -380,11 +359,11 @@
 		}
 	}
 
-	// 宫格入口：带专项功能键的那一格（如「故障咨询」→ fault_diagnosis）本轮走专项通道，
-	// 未带键的格子行为与从前一致（只发本地 prompt，落通用对话 —— 其余 4 格见 #971）
+	// 宫格入口 = **跳转参数化专项页**（ADR-0009 2026-09-15 修订 ②；#921 的「在本页带键发一轮」作废）。
+	// 键由目标页持有、只进本轮对话请求体 ⇒ 本页不再有任何轮次级的键状态。
+	// 不再发 `item.prompt`：专项页由用户自己输入（宫格项已无 `prompt` 字段）。
 	function onFunctionClick(item : AIFunctionItem) : void {
-		pendingFeatureKey.value = item.featureKey ?? ''
-		sendText(item.prompt)
+		uni.navigateTo({ url: '/pages/ai-assistant/ai-feature?featureKey=' + item.featureKey })
 	}
 
 	// 持久化设置

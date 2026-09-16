@@ -223,6 +223,13 @@
             }
         },
         {
+            "path": "pages/ai-assistant/ai-feature",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "AI 专项"
+            }
+        },
+        {
             "path": "pages/ai-assistant/ai-settings",
             "style": {
                 "navigationStyle": "custom",
