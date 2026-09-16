@@ -8,8 +8,8 @@
  * @note chat 为 SSE 流：event: delta/done/error + data: {...}
  *       uni.request 不支持增量流式回调，这里整包接收后解析 delta 文本。
  */
-import { get, post, del, patch, uploadFile } from './request'
-import { toNumber, toStr } from './helpers'
+import { get, getMapped, post, del, patch, uploadFile } from './request'
+import { toNumber, toStr, toList } from './helpers'
 import { API_BASE_URL, AI_REQUEST_TIMEOUT } from '../config/env'
 import { STORAGE_KEY_TOKEN } from '../constants/app'
 import { getStorage } from '../utils/storage'
@@ -19,6 +19,9 @@ import type {
 	AiUserModel,
 	AiSession,
 	AiSessionMessage,
+	AiDiagnosisBrandOption,
+	AiDiagnosisFaultCodeItem,
+	AiDiagnosisFaultCodePage,
 	AiChatSettings,
 } from '../types/index'
 
@@ -233,6 +236,109 @@ export function getAiSessionMessagesApi(id : number) : Promise<AiSessionMessage[
 		}
 		return out
 	})
+}
+
+// ===== 智能维修诊断（fault_diagnosis）周边只读代理 =====
+//
+// 三个端点与 chat 同簇（`/api/ai-assistant/diagnosis/*`，后端 `internal/api/diagnosis.go`），
+// 均可选认证。它们是专项页**筛选面板的数据源**，与「本轮对话」的请求体无耦合：面板只负责
+// 把用户选的品牌/车型写进请求体、把搜到的故障码写进输入框。
+//
+// **过滤为什么必须走结构化字段（#1042 的裁定，别照 ADR-0009 修订 ② 那句字面改回文本拼接）**：
+// 品牌/车型由后端 `AIAssistantChatRequest.Brand/Model`（`ai_assistant_service.go:109`）经
+// `WithDiagnosisParams` 透传给诊断适配器，适配器再塞进外部助手请求体的 `brand`/`model` 字段
+// （`ai_diagnosis_adapter.go:272-278`，**缺省 `brand=all`**）。⇒ 把「杭叉」拼进消息**文本**，
+// 外部助手的结构过滤位依旧是「全部」，筛选不真生效。web 侧同样走结构化（`api/aiAssistant.ts:93`
+// 原文「结构化传参，不走文本注入」）。故本页文本只承载用户问题本身。
+
+/** 品牌列表映射：data 是**裸数组**，由 request 层包装为 `{ list: [...] }`（同 `toList` 的约定） */
+function buildDiagnosisBrands(data : UTSJSONObject) : AiDiagnosisBrandOption[] {
+	const out : AiDiagnosisBrandOption[] = []
+	const arr = toList(data)
+	for (let i = 0; i < arr.length; i++) {
+		out.push({
+			value: toStr(arr[i]['value']),
+			label: toStr(arr[i]['label']),
+		} as AiDiagnosisBrandOption)
+	}
+	return out
+}
+
+/**
+ * 车型列表映射：data 是**标量裸数组**（`["CBD20", "CPD15", …]`）⇒ 元素不是对象，
+ * 不能用 `toList`（它返回 `Array<UTSJSONObject>`）。按标量数组取，先例 `api/student.uts`
+ * 的 `labelsRaw as Array<string>`（同款「JSON 标量数组 → 类型化数组」写法）。
+ */
+function buildDiagnosisModels(data : UTSJSONObject) : string[] {
+	const out : string[] = []
+	const raw = data['list']
+	if (raw != null) {
+		const arr = raw as Array<string>
+		for (let i = 0; i < arr.length; i++) {
+			out.push(arr[i])
+		}
+	}
+	return out
+}
+
+/** 故障码分页映射：data 是**对象** `{ items: [...], total }`（不是裸数组，故这里读 items 而非 list） */
+function buildDiagnosisFaultCodePage(data : UTSJSONObject) : AiDiagnosisFaultCodePage {
+	const items : AiDiagnosisFaultCodeItem[] = []
+	const raw = data['items']
+	if (raw != null) {
+		const arr = raw as Array<UTSJSONObject>
+		for (let i = 0; i < arr.length; i++) {
+			const o = arr[i]
+			items.push({
+				id: toNumber(o['id']),
+				brand: toStr(o['brand']),
+				brand_cn: toStr(o['brand_cn']),
+				model_series: toStr(o['model_series']),
+				fault_code: toStr(o['fault_code']),
+				fault_name: toStr(o['fault_name']),
+				symptom: toStr(o['symptom']),
+				causes: toStr(o['causes']),
+				sop_steps: toStr(o['sop_steps']),
+				safety_warning: toStr(o['safety_warning']),
+				part_numbers: toStr(o['part_numbers']),
+				source_file: toStr(o['source_file']),
+				page_num: toNumber(o['page_num']),
+			} as AiDiagnosisFaultCodeItem)
+		}
+	}
+	return {
+		items: items,
+		total: toNumber(data['total']),
+	} as AiDiagnosisFaultCodePage
+}
+
+/** 品牌列表（可选认证；含 `value='all'` 的「全部品牌」项，故消费方无需自己造这一项） */
+export function getDiagnosisBrandsApi() : Promise<AiDiagnosisBrandOption[]> {
+	return getMapped<AiDiagnosisBrandOption[]>('/ai-assistant/diagnosis/brands', null, (data : UTSJSONObject) : AiDiagnosisBrandOption[] => buildDiagnosisBrands(data))
+}
+
+/** 车型列表（`brand` 为空或 `all` 时**不附加查询参数**，后端回全量车型，同 web 侧行为） */
+export function getDiagnosisModelsApi(brand : string) : Promise<string[]> {
+	const params : UTSJSONObject = {}
+	if (brand.length > 0 && brand != 'all') {
+		params['brand'] = brand
+	}
+	return getMapped<string[]>('/ai-assistant/diagnosis/models', params, (data : UTSJSONObject) : string[] => buildDiagnosisModels(data))
+}
+
+/** 故障码分页查询（按品牌 / 关键词；分页参数按本仓惯例 `.toString()` 后进 query） */
+export function getDiagnosisFaultCodesApi(brand : string, keyword : string, page : number, pageSize : number) : Promise<AiDiagnosisFaultCodePage> {
+	const params : UTSJSONObject = {
+		page: page.toString(),
+		page_size: pageSize.toString(),
+	}
+	if (brand.length > 0 && brand != 'all') {
+		params['brand'] = brand
+	}
+	if (keyword.length > 0) {
+		params['keyword'] = keyword
+	}
+	return getMapped<AiDiagnosisFaultCodePage>('/ai-assistant/diagnosis/fault-codes', params, (data : UTSJSONObject) : AiDiagnosisFaultCodePage => buildDiagnosisFaultCodePage(data))
 }
 
 /**

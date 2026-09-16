@@ -28,6 +28,47 @@
 			<view id="bottom-anchor"></view>
 		</scroll-view>
 
+		<!-- 诊断筛选面板：**只对注册表 adapter=diagnosis 的功能渲染**（判据 `isDiagnosisFeature`，
+		     不是比较功能键字符串）。品牌/车型联动 + 故障码检索。
+		     筛选走**结构化请求字段**（buildBody 带 brand/model），**不是拼进消息文本** ——
+		     后端诊断适配器用这两个字段做过滤（缺省 all），文本拼接改不动它们（见 api/aiAssistant.uts 的长注释）。 -->
+		<view v-if="isDiagnosis" class="diag-bar">
+			<view class="diag-head" @click="onToggleFilter">
+				<text class="diag-head-title">筛选</text>
+				<text class="diag-head-summary">{{ filterSummaryText() }}</text>
+				<text class="diag-head-toggle">{{ filterOpen ? '收起' : '展开' }}</text>
+			</view>
+			<view v-if="filterOpen" class="diag-panel">
+				<!-- 品牌（数据源 /diagnosis/brands；含 value=all 的「全部品牌」项） -->
+				<scroll-view class="diag-chips" scroll-x="true">
+					<view v-for="(b, idx) in brands" :key="idx" class="filter-chip" :class="{ active: selectedBrand == b.value }" @click="onBrandSelect(b.value)">
+						<text class="filter-chip-text" :class="{ active: selectedBrand == b.value }">{{ b.label }}</text>
+					</view>
+				</scroll-view>
+				<!-- 车型（品牌联动：选中品牌后才拉；brand=all 时后端回全量车型，故此处仍可展示） -->
+				<scroll-view v-if="models.length > 0" class="diag-chips" scroll-x="true">
+					<view v-for="(m, idx) in models" :key="idx" class="filter-chip" :class="{ active: selectedModel == m }" @click="onModelSelect(m)">
+						<text class="filter-chip-text" :class="{ active: selectedModel == m }">{{ m }}</text>
+					</view>
+				</scroll-view>
+				<!-- 故障码检索（直连 fault-codes 代理，精确命中秒回；点条目 = 套用该码发一轮） -->
+				<view class="diag-search">
+					<input v-model="faultKeyword" class="diag-search-input" placeholder="搜索故障码或现象" confirm-type="search" @confirm="onFaultSearch" />
+					<text class="diag-search-btn" @click="onFaultSearch">查询</text>
+				</view>
+				<scroll-view v-if="faultCodes.length > 0" class="diag-faults" scroll-y="true">
+					<view v-for="(fc, idx) in faultCodes" :key="idx" class="diag-fault-item" @click="onUseFaultCode(fc)">
+						<text class="diag-fault-code">{{ fc.fault_code }}</text>
+						<text class="diag-fault-name">{{ fc.fault_name }}</text>
+					</view>
+					<view v-if="faultTotal > faultCodes.length" class="diag-fault-more" @click="onFaultMore">
+						<text class="diag-fault-more-text">加载更多（共 {{ faultTotal }} 条）</text>
+					</view>
+				</scroll-view>
+				<text v-if="faultSearched && faultCodes.length == 0 && !faultLoading" class="diag-fault-empty">没有匹配的故障码</text>
+			</view>
+		</view>
+
 		<AiChatInput @send="onInputSend" @voice-click="onVoiceClick" />
 
 		<!-- 左侧会话抽屉：本页**只列本功能区**的会话（list/create 都带本页键，见 useAiChat 的 featureScope）。
@@ -39,13 +80,14 @@
 
 <script setup lang="uts">
 	import { onLoad } from '@dcloudio/uni-app'
-	import { ref } from 'vue'
+	import { ref, computed } from 'vue'
 	import { useAuthStore } from '../../stores/auth'
 	import { useAiChat } from '../../composables/useAiChat'
 	import type { ChatBodyBuilder } from '../../composables/useAiChat'
-	import type { AiChatMessage, AIFunctionItem, AiSession } from '../../types/index'
+	import type { AiChatMessage, AIFunctionItem, AiSession, AiDiagnosisBrandOption, AiDiagnosisFaultCodeItem } from '../../types/index'
+	import { getDiagnosisBrandsApi, getDiagnosisModelsApi, getDiagnosisFaultCodesApi } from '../../api/aiAssistant'
 
-	import { FUNCTION_ITEMS } from './ai-assistant-constants'
+	import { FUNCTION_ITEMS, isDiagnosisFeature } from './ai-assistant-constants'
 	import AiChatBubble from '../../components/ai-chat/ai-chat-bubble.uvue'
 	import AiChatDrawerLeft from '../../components/ai-chat/ai-chat-drawer-left.uvue'
 	import AiChatInput from '../../components/ai-chat/ai-chat-input.uvue'
@@ -98,6 +140,29 @@
 	// 根容器高度（同 ai-settings.uvue / 通用页）：给根节点一个确定高度，onLoad 里赋值
 	const pageHeight = ref<number>(0)
 
+	// ===== 诊断筛选（只对注册表 adapter=diagnosis 的功能启用）=====
+	//
+	// 判据是**传输适配器**，不是功能键字符串（根仓库 ADR-0047 §7；web 先例 aiFeatures.ts 的
+	// isDiagnosisFeature）—— 经 isDiagnosisFeature 单点判定。
+	// 数据源是三个只读代理端点（api/aiAssistant.uts 的 getDiagnosis*Api），与「本轮对话」解耦：
+	// 面板只负责把选中的品牌/车型写进请求体、把搜到的故障码写进输入框。
+	const isDiagnosis = computed(() : boolean => isDiagnosisFeature(currentFeatureKey.value))
+	/** 面板默认**折叠**（同 web 诊断页 T2 决定：不撑爆会话空态）；头部常驻并显示当前筛选摘要。 */
+	const filterOpen = ref<boolean>(false)
+	const brands = ref<AiDiagnosisBrandOption[]>([])
+	const models = ref<string[]>([])
+	const selectedBrand = ref<string>('')
+	const selectedModel = ref<string>('')
+	const faultKeyword = ref<string>('')
+	const faultCodes = ref<AiDiagnosisFaultCodeItem[]>([])
+	const faultTotal = ref<number>(0)
+	const faultPage = ref<number>(1)
+	const faultLoading = ref<boolean>(false)
+	const faultSearched = ref<boolean>(false)
+
+	/** 故障码每页条数（与 web 诊断页的 page_size: 5 一致：首屏一屏读完，不足时给「加载更多」） */
+	const DIAG_FAULT_PAGE_SIZE : number = 5
+
 	/**
 	 * 按键定位宫格项。清单是**移动端手写**的（ADR-0009 修订 ② 的配套口径），
 	 * 与后端注册表的键集合 / 展示名 / 限免位由 `utils/aiFeatureRegistryParityContract.test.js` 锁一致。
@@ -113,13 +178,20 @@
 	}
 
 	/**
-	 * 专项通道请求体：只送 `session_id` + 历史 + 本轮键。
+	 * 专项通道请求体：只送 `session_id` + 历史 + 本轮键（**诊断功能另带品牌/车型过滤**）。
 	 *
 	 * **不送** `model_source` / `config_id` / `user_model_id` / `custom_*` —— 后端
 	 * `ResolveChatSettings` 的专项分支命中 `featureChatKeys` 后按管理端单绑定解析模型，
 	 * 并**忽略**选择子里的模型来源字段（`ai_config_service.go` 原文「防绕过」）⇒ 送了也是死字段，
 	 * 而 `custom_api_key` 是明文密钥，更不该发出去（维护者 2026-09-15 口径：#998）。
 	 * 键为空时后端落通用对话并照通用对话计费（`aiFeatureChatBilled`），故本页**必须**有键。
+	 *
+	 * **诊断功能额外带 `brand` / `model`**（`AIAssistantChatRequest` 的**既有**字段，不是新增契约）：
+	 * 后端经 `WithDiagnosisParams` 透传给诊断适配器，适配器再放进外部助手请求体
+	 * （`ai_diagnosis_adapter.go:272-278`，**缺省 `brand=all`**）
+	 * ⇒ **过滤靠这两个字段，不靠把品牌拼进消息文本**（`frontend/src/api/aiAssistant.ts:93`
+	 * 原文「结构化传参，不走文本注入」）。判据用 `isDiagnosisFeature`（读 adapter）而不是
+	 * 比较功能键字符串；**非诊断功能一个字段都不多送**。
 	 */
 	const buildBody : ChatBodyBuilder = (history : AiChatMessage[], sessionID : number, featureKey : string) : UTSJSONObject => {
 		const params : UTSJSONObject = {
@@ -127,6 +199,15 @@
 			messages: history,
 		}
 		params['feature_key'] = featureKey
+		if (isDiagnosisFeature(featureKey)) {
+			// 'all' 等价于不过滤 ⇒ 不送，让后端缺省值生效（与 web 侧同一判据）
+			if (selectedBrand.value.length > 0 && selectedBrand.value != 'all') {
+				params['brand'] = selectedBrand.value
+			}
+			if (selectedModel.value.length > 0) {
+				params['model'] = selectedModel.value
+			}
+		}
 		return params
 	}
 
@@ -180,6 +261,110 @@
 		sendInput(featureTitle.value, buildBody, [], currentFeatureKey.value)
 	}
 
+	// ===== 诊断筛选：交互与数据 =====
+	// 声明位置：整块落在 `buildBody` **之后** —— Kotlin 局部函数无前向引用（onUseFaultCode 要用
+	// buildBody），见 mobile AGENTS.md 的 UTS error18 坑位。
+
+	function onToggleFilter() : void {
+		filterOpen.value = !filterOpen.value
+	}
+
+	/** 品牌 value → 展示名（清单来自 /diagnosis/brands；查不到时回退 value 本身） */
+	function brandLabelOf(brandValue : string) : string {
+		for (let i = 0; i < brands.value.length; i++) {
+			if (brands.value[i].value == brandValue) {
+				return brands.value[i].label
+			}
+		}
+		return brandValue
+	}
+
+	/** 折叠态头部摘要：未选品牌即「全部品牌」（后端缺省就是 all） */
+	function filterSummaryText() : string {
+		const parts : string[] = []
+		if (selectedBrand.value.length > 0 && selectedBrand.value != 'all') {
+			parts.push(brandLabelOf(selectedBrand.value))
+		}
+		if (selectedModel.value.length > 0) {
+			parts.push(selectedModel.value)
+		}
+		if (parts.length == 0) {
+			return '全部品牌'
+		}
+		return parts.join(' / ')
+	}
+
+	/** 拉品牌清单：失败静默（数据源不可用时保持空面板，自由诊断不受影响 —— 同 web 侧降级口径） */
+	async function loadBrands() : Promise<void> {
+		try {
+			brands.value = await getDiagnosisBrandsApi()
+		} catch (e) {
+			brands.value = []
+		}
+	}
+
+	/** 选品牌 ⇒ 清车型并联动拉该品牌车型（同 web 的 onBrandChange）；选「全部」不发请求。 */
+	async function onBrandSelect(brandValue : string) : Promise<void> {
+		selectedBrand.value = brandValue
+		selectedModel.value = ''
+		models.value = []
+		if (brandValue.length == 0 || brandValue == 'all') {
+			return
+		}
+		try {
+			models.value = await getDiagnosisModelsApi(brandValue)
+		} catch (e) {
+			models.value = []
+		}
+	}
+
+	/** 选车型（最后一级筛选；同 web 的 onModelChange：选完收起面板，把画面还给会话） */
+	function onModelSelect(model : string) : void {
+		selectedModel.value = model
+		filterOpen.value = false
+	}
+
+	/** 故障码查询：page<=1 覆盖、>1 追加（「加载更多」）；失败静默（输入框仍可自由发起诊断）。 */
+	async function loadFaultCodes(page : number) : Promise<void> {
+		if (faultLoading.value) {
+			return
+		}
+		faultLoading.value = true
+		try {
+			const data = await getDiagnosisFaultCodesApi(selectedBrand.value, faultKeyword.value.trim(), page, DIAG_FAULT_PAGE_SIZE)
+			if (page <= 1) {
+				faultCodes.value = data.items
+			} else {
+				for (let i = 0; i < data.items.length; i++) {
+					faultCodes.value.push(data.items[i])
+				}
+			}
+			faultTotal.value = data.total
+			faultPage.value = page
+			faultSearched.value = true
+		} catch (e) {
+			if (page <= 1) {
+				faultCodes.value = []
+			}
+			faultSearched.value = true
+		}
+		faultLoading.value = false
+	}
+
+	function onFaultSearch() : void {
+		loadFaultCodes(1)
+	}
+
+	function onFaultMore() : void {
+		loadFaultCodes(faultPage.value + 1)
+	}
+
+	/** 套用故障码：填进输入框并立即发一轮（与 web 的 useFaultCode 同款）。 */
+	function onUseFaultCode(item : AiDiagnosisFaultCodeItem) : void {
+		inputText.value = `故障码 ${item.fault_code}（${item.fault_name}），怎么处理？`
+		sendInput(featureTitle.value, buildBody, [], currentFeatureKey.value)
+	}
+
 	// 生命周期
 	onLoad((options : OnLoadOptions) => {
 		const sysInfo = uni.getSystemInfoSync()
@@ -207,6 +392,12 @@
 
 		// **定位键之后**再拉本区会话（顺序在此承重：先列后定键会拉到遗留区，抽屉就列错区了）
 		loadSessions()
+
+		// 诊断功能：进页拉一次品牌清单（全量、无级联依赖）。判据经 isDiagnosis（读 adapter），
+		// **不比较功能键字符串** ⇒ 以后新增诊断类功能只需在清单里把 adapter 写成 diagnosis。
+		if (isDiagnosis.value) {
+			loadBrands()
+		}
 	})
 </script>
 
@@ -304,5 +495,135 @@
 		font-size: 28rpx;
 		color: #333333;
 		line-height: 1.6;
+	}
+
+	/* ===== 诊断筛选面板（仅 adapter=diagnosis 的功能渲染）=====
+	   样式沿用本仓筛选栏惯例（先例 pages/featured/featured-list.uvue）：横滑 chip 行 +
+	   `.filter-chip` / `.filter-chip-text` 的 active 双类；active 类直接落在 text 上，
+	   不用 `.a .b` 后代选择器（uvue 支持但有运行时损耗，见 mobile AGENTS.md）。 */
+	.diag-bar {
+		background-color: #ffffff;
+		border-top: 1rpx solid #f0f0f0;
+		padding: 12rpx 24rpx;
+	}
+
+	.diag-head {
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.diag-head-title {
+		font-size: 26rpx;
+		color: #333333;
+		font-weight: bold;
+		margin-right: 16rpx;
+	}
+
+	.diag-head-summary {
+		flex: 1;
+		font-size: 24rpx;
+		color: #6db8e8;
+	}
+
+	.diag-head-toggle {
+		font-size: 24rpx;
+		color: #999999;
+		padding-left: 16rpx;
+	}
+
+	.diag-panel {
+		margin-top: 12rpx;
+	}
+
+	/* 横滑行：scroll-view 上 white-space:nowrap + 子项 flex-shrink:0（同 featured-list 的 .filter-scroll） */
+	.diag-chips {
+		white-space: nowrap;
+		flex-direction: row;
+		align-items: center;
+		margin-bottom: 12rpx;
+	}
+
+	.filter-chip {
+		padding: 10rpx 24rpx;
+		border-radius: 32rpx;
+		background-color: #f5f5f5;
+		margin-right: 12rpx;
+		flex-shrink: 0;
+	}
+
+	.filter-chip.active {
+		background-color: #6db8e8;
+	}
+
+	.filter-chip-text {
+		font-size: 24rpx;
+		color: #666666;
+	}
+
+	.filter-chip-text.active {
+		color: #ffffff;
+	}
+
+	.diag-search {
+		flex-direction: row;
+		align-items: center;
+		background-color: #f5f5f5;
+		border-radius: 32rpx;
+		padding: 4rpx 20rpx;
+		margin-bottom: 12rpx;
+	}
+
+	.diag-search-input {
+		flex: 1;
+		height: 64rpx;
+		font-size: 26rpx;
+		color: #333333;
+	}
+
+	.diag-search-btn {
+		font-size: 26rpx;
+		color: #6db8e8;
+		padding-left: 20rpx;
+	}
+
+	/* 故障码结果列表：固定高度（uvue 不支持 max-height 百分比，且滚动容器必须有确定高度） */
+	.diag-faults {
+		height: 320rpx;
+	}
+
+	.diag-fault-item {
+		flex-direction: row;
+		align-items: center;
+		padding: 16rpx 0;
+		border-bottom: 1rpx solid #f0f0f0;
+	}
+
+	.diag-fault-code {
+		font-size: 26rpx;
+		color: #222222;
+		font-weight: bold;
+		margin-right: 16rpx;
+	}
+
+	.diag-fault-name {
+		flex: 1;
+		font-size: 24rpx;
+		color: #666666;
+	}
+
+	.diag-fault-more {
+		padding: 16rpx 0;
+		align-items: center;
+	}
+
+	.diag-fault-more-text {
+		font-size: 24rpx;
+		color: #6db8e8;
+	}
+
+	.diag-fault-empty {
+		font-size: 24rpx;
+		color: #999999;
+		padding: 12rpx 0;
 	}
 </style>
