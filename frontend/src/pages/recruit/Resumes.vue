@@ -98,7 +98,8 @@
 import { ref, reactive, onMounted } from 'vue'
 import { recruitApi, type RecruitResumeItem } from '@/api/recruit'
 import { buildCityLevelRegionOptions, joinRegionPath } from '@/utils/region'
-import { unwrappedRequest } from '@/api/request'
+import { positionApi } from '@/api/position'
+import { credentialApi } from '@/api/credential'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
@@ -184,11 +185,11 @@ const filters = reactive<{
 
 async function loadMeta() {
   try {
-    const res: any = await unwrappedRequest.get('/positions')
+    const res = await positionApi.listPublic()
     if (res?.positions) positions.value = res.positions
   } catch {}
   try {
-    const res: any = await unwrappedRequest.get('/credentials')
+    const res = await credentialApi.listCredentials()
     if (res?.credentials) credentials.value = res.credentials
   } catch {}
 }

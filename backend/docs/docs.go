@@ -4052,6 +4052,49 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/levels": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理端课程等级字典列表（含停用项）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-培训目录"
+                ],
+                "summary": "课程等级列表",
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.LevelListDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/position": {
             "post": {
                 "security": [
@@ -4085,7 +4128,19 @@ const docTemplate = `{
                     "201": {
                         "description": "创建成功",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.PositionDict"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -4143,7 +4198,19 @@ const docTemplate = `{
                     "200": {
                         "description": "更新成功",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.PositionDict"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -4282,7 +4349,19 @@ const docTemplate = `{
                     "200": {
                         "description": "岗位列表",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.PositionListDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -5160,6 +5239,49 @@ const docTemplate = `{
                                             "items": {
                                                 "$ref": "#/definitions/service.ZeroResultKeywordDTO"
                                             }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/specialties": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理端专业方向字典列表（含停用项）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-培训目录"
+                ],
+                "summary": "专业方向列表",
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.SpecialtyListDTO"
                                         }
                                     }
                                 }
@@ -12286,7 +12408,19 @@ const docTemplate = `{
                     "200": {
                         "description": "岗位列表",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.PositionListDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     }
                 }
@@ -26292,6 +26426,32 @@ const docTemplate = `{
                 }
             }
         },
+        "service.PositionDict": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "position_id": {
+                    "type": "integer"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                }
+            }
+        },
         "service.PositionInput": {
             "type": "object",
             "properties": {
@@ -26309,6 +26469,17 @@ const docTemplate = `{
                 },
                 "status": {
                     "type": "integer"
+                }
+            }
+        },
+        "service.PositionListDTO": {
+            "type": "object",
+            "properties": {
+                "positions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.PositionDict"
+                    }
                 }
             }
         },
@@ -27323,6 +27494,17 @@ const docTemplate = `{
                 },
                 "status": {
                     "type": "integer"
+                }
+            }
+        },
+        "service.SpecialtyListDTO": {
+            "type": "object",
+            "properties": {
+                "specialties": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.SpecialtyDict"
+                    }
                 }
             }
         },

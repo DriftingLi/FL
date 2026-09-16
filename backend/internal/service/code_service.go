@@ -320,25 +320,14 @@ func (c *EmailChannel) FindUser(ctx context.Context, db *gorm.DB, target string)
 }
 
 // Render 生成邮件主题与正文。
+// 前置条件：purpose 已在用途声明表中声明（send 已前置校验，未声明用途渲染出空文案即 fail-closed）。
 func (c *EmailChannel) Render(purpose CodePurpose, code string, ttl time.Duration) (string, string) {
-	title, op := "【和润天下】注册验证码", "注册"
-	switch purpose {
-	case CodePurposeLogin:
-		title, op = "【和润天下】登录验证码", "登录"
-	case CodePurposeBind:
-		title, op = "【和润天下】邮箱绑定验证码", "绑定/修改邮箱"
-	case CodePurposeAccountChange:
-		title, op = "【和润天下】修改登录账号验证码", "修改登录账号"
-	case CodePurposeResetPassword:
-		title, op = "【和润天下】找回密码验证码", "找回密码"
-	case CodePurposeChangePassword:
-		title, op = "【和润天下】修改密码验证码", "修改密码"
-	}
+	spec, _ := codePurposeSpecFor(purpose)
 	body := fmt.Sprintf(
 		"您好！\n\n您正在进行%s操作，本次验证码为：%s\n验证码 %d 分钟内有效，请勿泄露给他人。\n\n如非本人操作，请忽略本邮件。",
-		op, code, int(ttl.Minutes()),
+		spec.EmailOp, code, int(ttl.Minutes()),
 	)
-	return title, body
+	return spec.EmailTitle, body
 }
 
 // Send 发送验证码邮件（code/ttl/purpose 已由 Render 拼入 body，此处忽略）。
@@ -373,7 +362,8 @@ type SmsChannel struct {
 // 已配置腾讯云短信时接入真实 provider；未配置时生产报错、开发降级为日志打印验证码。
 func NewSmsChannel(smsCfg config.SMSConfig, isProd bool, logger *zap.Logger) *SmsChannel {
 	var sms SMSProvider = LogSMSProvider{logger: logger}
-	if smsCfg.Configured() {
+	// 就绪判据：凭证齐全 + 用途表引用的每个短信模板都有 ID（模板清单从表派生，不写死四个）
+	if smsCfg.Configured(CodePurposeSMSTemplates()...) {
 		sms = NewTencentSMSProvider(smsCfg)
 	} else if isProd {
 		sms = nil
@@ -505,35 +495,28 @@ func (s *VerifyCodeService) send(ctx context.Context, ch CodeChannel, purpose Co
 		return err
 	}
 
-	// 注册/绑定：目标必须未被占用；登录：目标必须已注册
+	// 用途声明行（规则、文案、模板、参数量同源，见 code_purpose_table.go）
+	spec, ok := codePurposeSpecFor(purpose)
+	if !ok {
+		return errors.New("无效的验证码用途")
+	}
+
+	// 目标占用校验：规则与文案均来自用途声明表
 	count, err := ch.FindAccount(ctx, s.db, target, excludeUserID)
 	if err != nil {
 		return err
 	}
-	switch purpose {
-	case CodePurposeRegister:
+	switch spec.TargetRule {
+	case codeTargetFree:
 		if count > 0 {
-			return errors.New("该" + ch.Noun() + "已注册，请直接登录")
+			return errors.New(targetRuleMessage(spec, ch.Noun()))
 		}
-	case CodePurposeBind:
-		if count > 0 {
-			return errors.New("该" + ch.Noun() + "已被其他账号使用")
-		}
-	case CodePurposeLogin:
+	case codeTargetExist:
 		if count == 0 {
-			return errors.New("该" + ch.Noun() + "尚未注册")
+			return errors.New(targetRuleMessage(spec, ch.Noun()))
 		}
-	case CodePurposeResetPassword:
-		// 忘记密码：账号必须已存在
-		if count == 0 {
-			return errors.New("该" + ch.Noun() + "尚未注册")
-		}
-	case CodePurposeAccountChange:
-		// 目标是当前用户自己的手机号，无需占用校验
-	case CodePurposeChangePassword:
-		// 目标是当前用户自己的手机号，无需占用校验
-	default:
-		return errors.New("无效的验证码用途")
+	case codeTargetNone:
+		// 目标是当前用户自己的账号，无需占用校验
 	}
 
 	// 发送频率限制：同一目标同一用途 60 秒内只能发送一次

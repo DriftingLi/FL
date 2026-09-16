@@ -106,12 +106,13 @@ func (s *ContactService) toDTO(m *model.ContactRequest) ContactRequestDTO {
 		DecidedAt:     decided,
 		ExpiresAt:     m.ExpiresAt.Format(time.RFC3339),
 	}
-	// 回填企业信息（尽力而为，不让查询失败阻塞）；#487：仅 approved 时透出联系信息
+	// 回填企业信息（尽力而为，不让查询失败阻塞）
+	// #487：仅已批准时透出联系信息——谓词单点在 contact_authz.go（GrantsPlaintext）
 	var rec model.RecruiterUser
 	if err := s.db.First(&rec, m.RecruiterID).Error; err == nil {
 		dto.CompanyName = rec.CompanyName
 		dto.ContactName = rec.ContactName
-		if m.Status == "approved" {
+		if ContactGrantState(m.Status).GrantsPlaintext() {
 			dto.ContactPhone = rec.ContactPhone
 			dto.ContactEmail = rec.ContactEmail
 			dto.Wechat = rec.Wechat
@@ -150,19 +151,19 @@ func (s *ContactService) Create(recruiterID, studentUserID int, message string) 
 	now := clock.Now()
 	// pending 唯一：同一企业对同一学员在 pending 期间只能有一条
 	var pendingCnt int64
-	if err := s.db.Model(&model.ContactRequest{}).Where("recruiter_id = ? AND student_user_id = ? AND status = ?", recruiterID, studentUserID, "pending").Count(&pendingCnt).Error; err != nil {
+	if err := s.db.Model(&model.ContactRequest{}).Where("recruiter_id = ? AND student_user_id = ? AND status = ?", recruiterID, studentUserID, string(ContactGrantPending)).Count(&pendingCnt).Error; err != nil {
 		return nil, err
 	}
 	if pendingCnt > 0 {
 		var existing model.ContactRequest
-		_ = s.db.Where("recruiter_id = ? AND student_user_id = ? AND status = ?", recruiterID, studentUserID, "pending").First(&existing).Error
+		_ = s.db.Where("recruiter_id = ? AND student_user_id = ? AND status = ?", recruiterID, studentUserID, string(ContactGrantPending)).First(&existing).Error
 		dto := s.toDTO(&existing)
 		return &dto, errors.New("已存在待处理的申请")
 	}
 	// 30 天冷却：被拒绝或被撤回后 30 天内不能再申请
 	var lastRejected *model.ContactRequest
 	var last model.ContactRequest
-	if err := s.db.Where("recruiter_id = ? AND student_user_id = ? AND status IN ?", recruiterID, studentUserID, []string{"rejected", "revoked"}).Order("decided_at DESC").First(&last).Error; err == nil {
+	if err := s.db.Where("recruiter_id = ? AND student_user_id = ? AND status IN ?", recruiterID, studentUserID, []string{string(ContactGrantRejected), string(ContactGrantRevoked)}).Order("decided_at DESC").First(&last).Error; err == nil {
 		lastRejected = &last
 		if last.DecidedAt != nil && now.Sub(*last.DecidedAt) < 30*24*time.Hour {
 			return nil, errors.New("该学员 30 天内拒绝或撤回过申请，冷却期内不能重复申请")
@@ -185,7 +186,7 @@ func (s *ContactService) Create(recruiterID, studentUserID int, message string) 
 		RecruiterID:   recruiterID,
 		StudentUserID: studentUserID,
 		Message:       msg,
-		Status:        "pending",
+		Status:        string(ContactGrantPending),
 		CreatedAt:     now,
 		UpdatedAt:     now,
 		ExpiresAt:     expiresAt,
@@ -210,14 +211,14 @@ func (s *ContactService) Create(recruiterID, studentUserID int, message string) 
 func (s *ContactService) EnsureApproved(tx *gorm.DB, recruiterID, studentUserID int, message string, now time.Time) error {
 	// 1/2. pending 覆盖 or 新建 approved
 	var pending model.ContactRequest
-	pendingErr := tx.Where("recruiter_id = ? AND student_user_id = ? AND status = ?", recruiterID, studentUserID, "pending").First(&pending).Error
+	pendingErr := tx.Where("recruiter_id = ? AND student_user_id = ? AND status = ?", recruiterID, studentUserID, string(ContactGrantPending)).First(&pending).Error
 	switch {
 	case pendingErr == nil:
 		if err := tx.Model(&model.ContactRequest{}).Where("id = ?", pending.ID).Updates(map[string]any{
-			"status":     "approved",
+			"status":     string(ContactGrantApproved),
 			"decided_at": now,
 			"updated_at": now,
-			"source":     "application",
+			"source":     string(ContactGrantSourceApplication),
 		}).Error; err != nil {
 			return err
 		}
@@ -226,8 +227,8 @@ func (s *ContactService) EnsureApproved(tx *gorm.DB, recruiterID, studentUserID 
 			RecruiterID:   recruiterID,
 			StudentUserID: studentUserID,
 			Message:       message,
-			Status:        "approved",
-			Source:        "application",
+			Status:        string(ContactGrantApproved),
+			Source:        string(ContactGrantSourceApplication),
 			CreatedAt:     now,
 			UpdatedAt:     now,
 			DecidedAt:     &now,
@@ -241,10 +242,10 @@ func (s *ContactService) EnsureApproved(tx *gorm.DB, recruiterID, studentUserID 
 	}
 	// 3. 已存在 revoked 的授权 → 复活为 approved（学员重新投递即重新授权）
 	var revoked model.ContactRequest
-	revokedErr := tx.Where("recruiter_id = ? AND student_user_id = ? AND status = ?", recruiterID, studentUserID, "revoked").Order("decided_at DESC").First(&revoked).Error
+	revokedErr := tx.Where("recruiter_id = ? AND student_user_id = ? AND status = ?", recruiterID, studentUserID, string(ContactGrantRevoked)).Order("decided_at DESC").First(&revoked).Error
 	if revokedErr == nil {
 		return tx.Model(&model.ContactRequest{}).Where("id = ?", revoked.ID).Updates(map[string]any{
-			"status":     "approved",
+			"status":     string(ContactGrantApproved),
 			"decided_at": now,
 			"updated_at": now,
 		}).Error
@@ -310,16 +311,16 @@ func (s *ContactService) Approve(studentUserID int, requestID int64) (*ContactRe
 	if req.StudentUserID != studentUserID {
 		return nil, errors.New("无权操作")
 	}
-	if req.Status != "pending" {
+	if req.Status != string(ContactGrantPending) {
 		return nil, errors.New("仅 pending 申请可同意")
 	}
 	if clock.Now().After(req.ExpiresAt) {
 		// 已过期，自动标记 expired
-		_ = s.db.Model(&model.ContactRequest{}).Where("id = ? AND status = ?", req.ID, "pending").Updates(map[string]any{"status": "expired", "updated_at": clock.Now()}).Error
+		_ = s.db.Model(&model.ContactRequest{}).Where("id = ? AND status = ?", req.ID, string(ContactGrantPending)).Updates(map[string]any{"status": string(ContactGrantExpired), "updated_at": clock.Now()}).Error
 		return nil, errors.New("申请已过期")
 	}
 	now := clock.Now()
-	if err := s.db.Model(&model.ContactRequest{}).Where("id = ? AND status = ?", req.ID, "pending").Updates(map[string]any{"status": "approved", "decided_at": now, "updated_at": now}).Error; err != nil {
+	if err := s.db.Model(&model.ContactRequest{}).Where("id = ? AND status = ?", req.ID, string(ContactGrantPending)).Updates(map[string]any{"status": string(ContactGrantApproved), "decided_at": now, "updated_at": now}).Error; err != nil {
 		return nil, err
 	}
 	// 重新加载
@@ -346,11 +347,11 @@ func (s *ContactService) Reject(studentUserID int, requestID int64) (*ContactReq
 	if req.StudentUserID != studentUserID {
 		return nil, errors.New("无权操作")
 	}
-	if req.Status != "pending" {
+	if req.Status != string(ContactGrantPending) {
 		return nil, errors.New("仅 pending 申请可拒绝")
 	}
 	now := clock.Now()
-	if err := s.db.Model(&model.ContactRequest{}).Where("id = ? AND status = ?", req.ID, "pending").Updates(map[string]any{"status": "rejected", "decided_at": now, "updated_at": now}).Error; err != nil {
+	if err := s.db.Model(&model.ContactRequest{}).Where("id = ? AND status = ?", req.ID, string(ContactGrantPending)).Updates(map[string]any{"status": string(ContactGrantRejected), "decided_at": now, "updated_at": now}).Error; err != nil {
 		return nil, err
 	}
 	_ = s.db.First(&req, requestID).Error
@@ -367,11 +368,11 @@ func (s *ContactService) Revoke(studentUserID int, requestID int64) (*ContactReq
 	if req.StudentUserID != studentUserID {
 		return nil, errors.New("无权操作")
 	}
-	if req.Status != "approved" {
+	if req.Status != string(ContactGrantApproved) {
 		return nil, errors.New("仅已同意的申请可撤回")
 	}
 	now := clock.Now()
-	if err := s.db.Model(&model.ContactRequest{}).Where("id = ? AND status = ?", req.ID, "approved").Updates(map[string]any{"status": "revoked", "decided_at": now, "updated_at": now}).Error; err != nil {
+	if err := s.db.Model(&model.ContactRequest{}).Where("id = ? AND status = ?", req.ID, string(ContactGrantApproved)).Updates(map[string]any{"status": string(ContactGrantRevoked), "decided_at": now, "updated_at": now}).Error; err != nil {
 		return nil, err
 	}
 	_ = s.db.First(&req, requestID).Error
@@ -385,26 +386,16 @@ func (s *ContactService) ExpirePending(now time.Time) (int64, error) {
 	if now.IsZero() {
 		now = clock.Now()
 	}
-	res := s.db.Model(&model.ContactRequest{}).Where("status = ? AND expires_at <= ?", "pending", now).Updates(map[string]any{"status": "expired", "updated_at": now})
+	res := s.db.Model(&model.ContactRequest{}).Where("status = ? AND expires_at <= ?", string(ContactGrantPending), now).Updates(map[string]any{"status": string(ContactGrantExpired), "updated_at": now})
 	return res.RowsAffected, res.Error
 }
 
-// GetContact 明文联系方式与 PDF 仅在有效授权下返回（approved 且未 revoked/expired，实时校验，无缓存）。
+// GetContact 明文联系方式与 PDF 仅在有效授权下返回（存在已批准授权，实时校验，无缓存）。
+// 授权判据与「学员注销即失效」收口在 contact_authz.go（ADR-0053 §3）。
 // 返回的 JobCardDTO 包含明文 phone/wechat/real_name/resume_file_url。
 func (s *ContactService) GetContact(recruiterID, studentUserID int) (*JobCardDTO, error) {
-	// 校验授权存在且为 approved
-	var req model.ContactRequest
-	err := s.db.Where("recruiter_id = ? AND student_user_id = ? AND status = ?", recruiterID, studentUserID, "approved").Order("decided_at DESC").First(&req).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrContactNoAuth
-		}
+	if _, err := contactGrantEffectiveOf(s.db, recruiterID, studentUserID); err != nil {
 		return nil, err
-	}
-	// 学员是否已注销（hrwai_users 不存在则授权一并失效）
-	var stu model.HrwaiUser
-	if err := s.db.First(&stu, studentUserID).Error; err != nil {
-		return nil, ErrStudentGone
 	}
 	// 读取简历卡（实时，无缓存）
 	var card model.JobCard
@@ -413,6 +404,20 @@ func (s *ContactService) GetContact(recruiterID, studentUserID int) (*JobCardDTO
 	}
 	dto := toJobCardDTO(&card)
 	return &dto, nil
+}
+
+// RevokeApplicationGrant 撤投的连带迁移：把「投递产生」的已批准授权置为已撤回
+// （此后明文端点即无有效授权）。与 EnsureApproved 对称——授权的全部迁移只剩这两个出口。
+// 只在事务内调用（tx 传入，不带新事务边界）。
+func (s *ContactService) RevokeApplicationGrant(tx *gorm.DB, recruiterID, studentUserID int, now time.Time) error {
+	return tx.Model(&model.ContactRequest{}).
+		Where("recruiter_id = ? AND student_user_id = ? AND status = ? AND source = ?",
+			recruiterID, studentUserID, string(ContactGrantApproved), string(ContactGrantSourceApplication)).
+		Updates(map[string]any{
+			"status":     string(ContactGrantRevoked),
+			"decided_at": now,
+			"updated_at": now,
+		}).Error
 }
 
 // SetDailyLimit 测试用：覆盖每日上限。

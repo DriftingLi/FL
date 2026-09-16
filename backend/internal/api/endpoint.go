@@ -219,6 +219,91 @@ func bindJSONMsg[T any](c *gin.Context, failMsg string) (*T, error) {
 	return &req, nil
 }
 
+// bindJSONMsgFunc 返回「绑定请求体 + 固定失败文案」的解析函数。
+// 供 Parse 字段直接引用，避免每个 handler 写一层只转调的闭包。
+func bindJSONMsgFunc[T any](failMsg string) ParseFunc[T] {
+	return func(c *gin.Context) (*T, error) { return bindJSONMsg[T](c, failMsg) }
+}
+
+// ===== 域中立端点适配器（ADR-0053 §1） =====
+//
+// 目录域六类实体 × CRUD 是同构复制：api 层每个 handler 原本手写「解析 → 取结构体 →
+// 返回指针 → 判空 → 按文案/状态码渲染」约 20 行，差异只有类型参数、成功文案与状态码。
+// 下面两个适配器把这两段样板抹平，且都是域中立的（不含任何目录域词汇）：
+
+// invoke 把「取结构体、返回 (结果, error)」的 service 方法适配成端点调用签名，
+// 吸收取地址与判空。
+//
+// 两种用法（都让 Invoke 退化为一行）：
+//
+//	Invoke: invoke(h.svc.CreateSpecialty)                                  // 方法值，Req 即方法入参
+//	Invoke: invoke(func(req *updateReq) (Dict, error) { ... })             // Req 是复合请求体时自行拆参
+func invoke[Req, Resp any](fn func(Req) (Resp, error)) InvokeFunc[Req, Resp] {
+	return func(_ context.Context, req *Req) (*Resp, error) {
+		result, err := fn(*req)
+		if err != nil {
+			return nil, err
+		}
+		return &result, nil
+	}
+}
+
+// success 成功路径的渲染描述：状态码 + 文案 + 是否带载荷。
+type success struct {
+	// Status 成功状态码；0 表示 200。
+	Status int
+	// Msg 成功文案。
+	Msg string
+	// NoData 成功响应不带载荷（老 API 的 data:null 语义）。
+	NoData bool
+}
+
+// created 成功描述：201 + 文案 + 载荷（对齐 response.Created）。
+func created(msg string) *success {
+	return &success{Status: http.StatusCreated, Msg: msg}
+}
+
+// okMsg 成功描述：200 + 文案 + 载荷（对齐 response.SuccessWithMsg(msg, deref(resp))）。
+func okMsg(msg string) *success { return &success{Msg: msg} }
+
+// okMsgNoData 成功描述：200 + 文案 + 无载荷（对齐 response.SuccessWithMsg(msg, nil)）。
+func okMsgNoData(msg string) *success { return &success{Msg: msg, NoData: true} }
+
+// renderMsg 返回「成功按 success 描述渲染、错误一律按 errStatus 渲染」的 Render。
+//
+// 错误分支刻意直接走 renderStatus（不查 ParseError、不查域表），与目录域既有 handler 的
+// 写法逐字等价：解析错误与业务错误在该域共用同一个错误状态码。
+func renderMsg[Req, Resp any](ok *success, errStatus int) RenderFunc[Req, Resp] {
+	return func(c *gin.Context, _ *Req, resp *Resp, err error) {
+		if err != nil {
+			renderStatus(c, errStatus, err.Error())
+			return
+		}
+		if ok.NoData {
+			response.SuccessWithMsg(c, ok.Msg, nil)
+			return
+		}
+		if ok.Status == http.StatusCreated {
+			response.Created(c, ok.Msg, deref(resp))
+			return
+		}
+		response.SuccessWithMsg(c, ok.Msg, deref(resp))
+	}
+}
+
+// WithSuccess 按「成功描述 + 错误状态码」装配标准 Render（见 renderMsg），返回自身便于链式声明：
+//
+//	Endpoint[In, Out]{
+//		Parse:  bindJSONMsgFunc[In]("请求数据无效"),
+//		Invoke: invoke(h.svc.Create),
+//	}.WithSuccess(created("XX创建成功"), http.StatusBadRequest).Handle(c)
+//
+// 需要真正定制渲染的端点是少数（见本文件末尾的清单），它们继续显式设置 Render。
+func (e Endpoint[Req, Resp]) WithSuccess(ok *success, errStatus int) Endpoint[Req, Resp] {
+	e.Render = renderMsg[Req, Resp](ok, errStatus)
+	return e
+}
+
 // pathInt 解析路径参数为 int，失败返回 400 自定义文案。
 func pathInt(c *gin.Context, key, failMsg string) (int, error) {
 	v, err := strconv.Atoi(c.Param(key))

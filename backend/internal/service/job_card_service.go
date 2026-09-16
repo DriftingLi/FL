@@ -375,33 +375,6 @@ func (s *JobCardService) validateInput(in JobCardInput) error {
 	return nil
 }
 
-func toJobCardDTO(m *model.JobCard) JobCardDTO {
-	return JobCardDTO{
-		UserID:                m.UserID,
-		RealName:              m.RealName,
-		ContactPhone:          m.ContactPhone,
-		Wechat:                m.Wechat,
-		Region:                m.Region,
-		ExpectedPositionID:    m.ExpectedPositionID,
-		ExpectedPositionExtra: m.ExpectedPositionExtra,
-		ExpectedRegions:       JSONArray(m.ExpectedRegions),
-		SalaryMin:             m.SalaryMin,
-		SalaryMax:             m.SalaryMax,
-		SalaryNegotiable:      m.SalaryNegotiable,
-		AvailableIn:           m.AvailableIn,
-		JobNature:             m.JobNature,
-		ExperienceYears:       m.ExperienceYears,
-		SelfIntro:             m.SelfIntro,
-		ResumeExperiences:     JSONArray(m.ResumeExperiences),
-		ResumeCertifications:  JSONArray(m.ResumeCertifications),
-		ResumeFileURL:         m.ResumeFileURL,
-		Photos:                JSONArray(m.Photos),
-		Visibility:            m.Visibility,
-		CreatedAt:             m.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:             m.UpdatedAt.Format(time.RFC3339),
-	}
-}
-
 // DeleteResumeFile 删除上传的 PDF 附件（#491：预览页操作区「删除 PDF 附件」）。
 // DB 置空为事实源；对象存储文件 best-effort 回收（沿用论坛「删除即清理」惯例，失败仅日志）。
 func (s *JobCardService) DeleteResumeFile(userID int) error {

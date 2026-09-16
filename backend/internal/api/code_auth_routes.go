@@ -45,14 +45,28 @@ func registerCodeChannelAuthRoutes(g *gin.RouterGroup, sess *security.Session, c
 	g.POST("/reset-password", h.ResetPassword)
 }
 
+// anonymousSendPurposes 匿名发码口（`/auth/<通道>/send-code`）允许的用途。
+//
+// 这是一条**显式清单**，刻意不从用途表的 RequiresSession 推导：它镜像的是挂在匿名蓝图上的
+// 路由注册（send-code / register / login / reset-password），而不是「该用途要不要会话」这条属性。
+// 若改成投影，以后新增一个不要求会话的用途就会**自动**多出一个公网发码口（fail-open）。
+// 新增用途默认不暴露；要暴露必须显式加到这里。
+// 单向不变式：本清单 ⊆ 非 RequiresSession 用途（见 anonymous_send_purpose_test.go）。
+var anonymousSendPurposes = []service.CodePurpose{
+	service.CodePurposeRegister,
+	service.CodePurposeLogin,
+	service.CodePurposeResetPassword,
+}
+
 // resolvePurpose 显式化 purpose 白名单校验：非法值报错（与既有文案逐字一致）。
 func resolvePurpose(purpose string) (service.CodePurpose, error) {
-	switch service.CodePurpose(purpose) {
-	case service.CodePurposeRegister, service.CodePurposeLogin, service.CodePurposeResetPassword:
-		return service.CodePurpose(purpose), nil
-	default:
-		return "", badRequest("purpose 必须为 register、login 或 reset_password")
+	p := service.CodePurpose(purpose)
+	for _, allowed := range anonymousSendPurposes {
+		if p == allowed {
+			return p, nil
+		}
 	}
+	return "", badRequest("purpose 必须为 register、login 或 reset_password")
 }
 
 // codeSendReq 发码请求：Target/Purpose/Captcha* 由单次绑定填充（targetField 动态字段以两个小 struct 表达）。

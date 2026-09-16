@@ -24,6 +24,13 @@ import { execFileSync } from 'node:child_process'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
+// 新增行解析的**单点实现**（ADR-0053 §10）：含 git core.quotepath 下的路径转义解码，
+// 此前本文件与 check-bare-hex.sh 各写一遍、只有一边处理了转义。
+import { parseAddedLines } from './lib/added-lines.mjs'
+
+// 保持本模块的导出面（自检脚本按它 import）。
+export { parseAddedLines }
+
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const DEFAULT_SCAN_DIR = join(ROOT, 'frontend', 'src')
 
@@ -160,40 +167,6 @@ function reportAll(scanDir) {
   console.log('  el-upload→UiUpload / el-tooltip→UiTooltip')
   console.log('（表格 el-table、组内内容项 el-radio / el-checkbox、表单域与布局类 EP 不在守卫集，属有意放行。）')
   return 1
-}
-
-/** 解析 git diff 的新增行 → Map<相对路径, Set<行号>>（逐行走 hunk，上下文行也推进新侧行号）。 */
-export function parseAddedLines(diffText) {
-  const added = new Map()
-  let file = null
-  let lineNo = 0
-  let inHunk = false
-  for (const line of String(diffText).split('\n')) {
-    const f = line.match(/^\+\+\+ b\/(.+)$/)
-    if (f) {
-      file = f[1]
-      if (!added.has(file)) added.set(file, new Set())
-      inHunk = false
-      continue
-    }
-    const h = line.match(/^@@ -[0-9]+(?:,[0-9]+)? \+([0-9]+)(?:,[0-9]+)? @@/)
-    if (h) {
-      lineNo = Number(h[1])
-      inHunk = true
-      continue
-    }
-    if (!inHunk || !file) continue
-    if (line.startsWith('+')) {
-      if (line.startsWith('+++')) continue
-      added.get(file).add(lineNo)
-      lineNo++
-      continue
-    }
-    if (line.startsWith('-')) continue // 删除行不影响新侧行号
-    if (line.startsWith('\\')) continue // "\ No newline at end of file"
-    lineNo++ // 上下文行（含空行）推进新侧行号
-  }
-  return added
 }
 
 function reportDiff(base) {

@@ -5,10 +5,10 @@
 package service
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
+
+	"forklift-training/internal/codegen"
 )
 
 // sampleRegistry 注册表样例（非真实注册表）：覆盖收录规则四态——
@@ -116,20 +116,8 @@ func TestFrontendIncludeMatchesChatKeys(t *testing.T) {
 
 // TestFrontendAIFeaturesTSInSync 生成物一致性契约（ADR-0030 验收 2，#613）：真实注册表渲染
 // 结果与 frontend/src/config/aiFeatures.ts 全等。手改生成物或改注册表未再生成时本测试红，
-// 提示重新生成（go run ./cmd/gen-aifeatures）。行尾归一仅防 Windows 检出差异假红
-// （.gitattributes 已强制 *.ts LF），内容以 LF 语义比对。
+// 提示重新生成（go run ./cmd/gen-aifeatures）。定位与比对走 codegen.AssertInSync
+// （ADR-0053 §9，行尾已按 LF 语义归一）。
 func TestFrontendAIFeaturesTSInSync(t *testing.T) {
-	want, err := GenerateFrontendAIFeaturesTS()
-	if err != nil {
-		t.Fatalf("渲染真实注册表失败: %v", err)
-	}
-	path := filepath.Join("..", "..", "..", "frontend", "src", "config", "aiFeatures.ts")
-	raw, err := os.ReadFile(filepath.FromSlash(path))
-	if err != nil {
-		t.Fatalf("读取前端生成物失败（%s）: %v", path, err)
-	}
-	got := strings.ReplaceAll(string(raw), "\r\n", "\n")
-	if got != want {
-		t.Fatalf("frontend/src/config/aiFeatures.ts 与注册表渲染结果不一致（生成物过期，请运行 cd backend && go run ./cmd/gen-aifeatures）:\n--- 渲染结果 ---\n%s\n--- 仓库文件 ---\n%s", want, got)
-	}
+	codegen.AssertInSync(t, FrontendAIFeaturesGen)
 }

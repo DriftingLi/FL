@@ -227,11 +227,7 @@ func TestStreamingPortInjectedEndToEnd(t *testing.T) {
 		SessionID:    session.ID,
 		ModelSource:  "custom",
 		CustomAPIKey: "sk-custom", CustomBaseURL: "https://custom.example.com/v1", CustomModel: "gpt-4o",
-		Messages: []struct {
-			Role    string   `json:"role"`
-			Content string   `json:"content"`
-			Images  []string `json:"images"`
-		}{{Role: "user", Content: "叉车启动困难怎么办"}},
+		Messages: []AIStreamMessage{{Role: "user", Content: "叉车启动困难怎么办"}},
 	}, func(c string) { chunks = append(chunks, c) })
 	if err != nil {
 		t.Fatalf("StreamChat 失败: %v", err)

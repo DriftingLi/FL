@@ -1,12 +1,13 @@
 package credentialscope
 
 import (
-	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"testing"
+
+	"forklift-training/internal/codegen"
 )
 
 // spec #940 片六：登记表的两条契约。
@@ -15,18 +16,7 @@ import (
 // （覆盖锁：新增调用点必须登记）。
 
 func TestFrontendCredentialScopeTSInSync(t *testing.T) {
-	want, err := RenderFrontendTS()
-	if err != nil {
-		t.Fatalf("渲染失败: %v", err)
-	}
-	path := filepath.Join("..", "..", "..", "frontend", "src", "config", "credentialScope.ts")
-	got, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("读取生成物 %s 失败（应先运行 cd backend && go run ./cmd/gen-credscope）: %v", path, err)
-	}
-	if string(got) != want {
-		t.Fatalf("生成物与登记表不同步：请 cd backend && go run ./cmd/gen-credscope")
-	}
+	codegen.AssertInSync(t, FrontendCredentialScopeGen)
 }
 
 // TestCredentialScopeCoverageLock 覆盖锁（**按出现次数**）：前端源码里每一处 opt-out 都必须

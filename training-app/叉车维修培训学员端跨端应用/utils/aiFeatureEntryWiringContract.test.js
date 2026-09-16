@@ -22,7 +22,12 @@
  * 关键处的「检测器有没有牙」先用手工变形样本自证。
  *
  * 已知边界（如实声明）：契约测试只钉客户端这一半；真机门与本地编译门（移动端 `docs/adr/0008` 的
- * ① / ④）另行执行并在 PR 证据段如实记录。会话按键**分区**不在本票（见 #1041），故 ④ 组维持原样。
+ * ① / ④）另行执行并在 PR 证据段如实记录。
+ *
+ * ④ 组是**本次唯一被放宽的硬约束**（ADR-0013 ⑤「不得静默改」，实现 PR 正文须显式声明这一处）：
+ * 原锁「建会话**一律不得**带 `feature_key`」，现改为**条件式不变式**「**带键 ⇒ 必有列该区的界面**」。
+ * 放宽的理由见 ADR-0013 ②：#921 的回归**不是「带了键」，而是「带了键却没有任何界面列它」**
+ * ⇒ 该钉死的是这条不变式，不是「永不带键」这个手段（被否备选「带键建会话但不改守护」也在此列）。
  */
 const fs = require('fs');
 const path = require('path');
@@ -91,6 +96,37 @@ function clickNavigates(src) {
 /** 通用页是否**结构上**没有键状态：类型属性/函数体里都不再出现该状态名。 */
 function noRoundKeyState(src) {
   return !/pendingFeatureKey/.test(stripCodeComments(src));
+}
+
+/** 页面交给 `useAiChat(...)` 的**会话作用域**实参名（例 `currentFeatureKey` / `featureScope`）；未调用则 null。 */
+function scopeArg(src) {
+  const m = /useAiChat\(\s*([A-Za-z_$][\w$]*)\s*\)/.exec(stripCodeComments(src));
+  return m ? m[1] : null;
+}
+
+/** 该作用域是否**恒为空串**（= 本页会话不带键）：声明为 `ref<string>('')` 且全页无赋值。 */
+function scopeAlwaysEmpty(src, name) {
+  const code = stripCodeComments(src);
+  return new RegExp(`const\\s+${name}\\s*=\\s*ref<string>\\(''\\)`).test(code)
+    && !new RegExp(`${name}\\.value\\s*=`).test(code);
+}
+
+/** 页面是否渲染「列该区会话」的界面：抽屉 + 绑上会话列表 + 真的拉过本页列表。 */
+function rendersRegionSessionList(src) {
+  const code = stripCodeComments(src);
+  return /<AiChatDrawerLeft/.test(code)
+    && /:sessions="sessions"/.test(code)
+    && /loadSessions\(\)/.test(code);
+}
+
+/**
+ * 条件式不变式（ADR-0013）：**带键 ⇒ 必须有列该区的界面**。
+ * 不带键的页面自动成立（通用页就是这一支）—— 这不是「一律要界面」，而是「不许只带键不列区」。
+ */
+function regionInvariantHolds(src) {
+  const arg = scopeArg(src);
+  if (arg === null) throw new Error('页面没有调用 useAiChat(...)：会话作用域判据无从判定');
+  return scopeAlwaysEmpty(src, arg) ? true : rendersRegionSessionList(src);
 }
 
 describe('宫格入口 → 参数化专项页 接线（#1040）契约', () => {
@@ -201,29 +237,61 @@ describe('宫格入口 → 参数化专项页 接线（#1040）契约', () => {
     });
   });
 
-  describe('④ 会话归属：**不得**给会话带功能键（带了就永久不可见；分区见 #1041，本票不改）', () => {
-    it('建会话 API 不接受也不发送 feature_key', () => {
-      expect(API).toMatch(/export function createAiSessionApi\(title : string = '新对话', modelName : string = ''\)/);
-      expect(API).not.toMatch(/payload\['feature_key'\]/);
+  describe('④ 会话分区：**带键 ⇒ 必有列该区的界面**（ADR-0013 条件式守护；本组是本次唯一放宽处）', () => {
+    it('底层 api：两处都收 featureKey，且**空串不发键**（缺参 ⇒ 后端落遗留 ai_assistant 区）', () => {
+      expect(API).toMatch(/export function getAiSessionsApi\(featureKey : string\)/);
+      expect(API).toMatch(/export function createAiSessionApi\(title : string, modelName : string, featureKey : string\)/);
+
+      const listFn = fnBody(API, 'export function getAiSessionsApi(featureKey : string)');
+      expect(listFn).toMatch(/if \(featureKey\.length > 0\)/);
+      expect(listFn).toMatch(/params\['feature_key'\] = featureKey/);
+
+      const createFn = fnBody(API, 'export function createAiSessionApi(title : string, modelName : string, featureKey : string)');
+      expect(createFn).toMatch(/if \(featureKey\.length > 0\)/);
+      expect(createFn).toMatch(/payload\['feature_key'\] = featureKey/);
     });
 
-    it('列表 API 不带功能键（后端按功能键分区，缺参落遗留 ai_assistant）', () => {
-      // 后端 ListSessions：featureKey=="" ⇒ FeatureAIAssistant，WHERE feature_key = ?
-      // ⇒ 若会话带了专项键而列表不查该区，该会话在「最近对话」里**永久不可见**（#921 首版实测回归）。
-      expect(API).toMatch(/export function getAiSessionsApi\(\)/);
-      const fn = fnBody(API, 'export function getAiSessionsApi()');
-      expect(fn).not.toMatch(/feature_key/);
+    it('composable 把**页面作用域**透传给 list 与 create（单点，页面不另立一套）', () => {
+      // 后端 ListSessions：featureKey=="" ⇒ FeatureAIAssistant（遗留区）
+      // ⇒ 建会话与列会话**必须同一个作用域**，否则会话落进「没人列」的区（#921 首版实测回归）
+      expect(fnBody(CHAT, 'async function loadSessions')).toMatch(/getAiSessionsApi\(featureScope\.value\)/);
+      const streamFn = fnBody(CHAT, 'async function doStreamChat');
+      expect(streamFn).toMatch(/createAiSessionApi\(sessionTitle, sessionTag, featureScope\.value\)/);
+      // 本轮对话的键仍按轮次走 buildBody —— 「会话归属哪一区」与「本轮用哪个键」是两件事
+      expect(streamFn).toMatch(/buildBody\(history, sessionID, featureKey\)/);
     });
 
-    it('建会话调用传且只传两个实参（键只走本轮对话请求）', () => {
-      const fn = fnBody(CHAT, 'async function doStreamChat');
-      expect(fn).toMatch(/createAiSessionApi\(sessionTitle, sessionTag\)/);
-      expect(fn).not.toMatch(/createAiSessionApi\(sessionTitle, sessionTag, featureKey\)/);
+    it('专项页：带本区键 **且** 有列该区的界面（⇔ 两向都成立）', () => {
+      expect(scopeArg(FEATURE_PAGE)).toBe('currentFeatureKey');
+      expect(FEATURE_PAGE).toMatch(/currentFeatureKey\.value = item\.featureKey/);
+      expect(rendersRegionSessionList(FEATURE_PAGE)).toBe(true);
+      expect(regionInvariantHolds(FEATURE_PAGE)).toBe(true);
+      // 顺序承重：**先定位键、后拉本区列表**（反了就是「列表查了遗留区」这种假分区）
+      const loadFn = fnBody(FEATURE_PAGE, 'onLoad((options : OnLoadOptions)');
+      expect(loadFn.indexOf('currentFeatureKey.value = item.featureKey')).toBeGreaterThan(-1);
+      expect(loadFn.indexOf('currentFeatureKey.value = item.featureKey')).toBeLessThan(loadFn.indexOf('loadSessions()'));
     });
 
-    it('buildBody 仍按轮次拿键（会话不带键 ≠ 对话不带键）', () => {
-      const fn = fnBody(CHAT, 'async function doStreamChat');
-      expect(fn).toMatch(/buildBody\(history, sessionID, featureKey\)/);
+    it('通用页：作用域**恒为空串**（不带键 ⇒ 行为与从前逐字一致），故不受「必有界面」约束', () => {
+      expect(scopeArg(PAGE)).toBe('featureScope');
+      expect(scopeAlwaysEmpty(PAGE, 'featureScope')).toBe(true);
+    });
+
+    it('变形样本：专项页少了抽屉 ⇒「带键却无界面」必须被检出（检测器自证）', () => {
+      const broken = FEATURE_PAGE.replace(/<AiChatDrawerLeft[\s\S]*?\/>/, '');
+      expect(rendersRegionSessionList(broken)).toBe(false);
+      expect(regionInvariantHolds(broken)).toBe(false); // 键还在、界面没了 ⇒ 不变式被击穿
+    });
+
+    it('变形样本：专项页不再带键 ⇒ 条件式「不要求界面」那一侧成立（不是「一律要界面」）', () => {
+      const noKey = FEATURE_PAGE.replace('currentFeatureKey.value = item.featureKey', '');
+      expect(scopeAlwaysEmpty(noKey, 'currentFeatureKey')).toBe(true);
+      expect(regionInvariantHolds(noKey)).toBe(true);
+    });
+
+    it('变形样本：通用页被塞进任何键 ⇒「通用页不带键」必须被检出（零回归的另一半）', () => {
+      const broken = PAGE.replace("const featureScope = ref<string>('')", "const featureScope = ref<string>('fault_diagnosis')");
+      expect(scopeAlwaysEmpty(broken, 'featureScope')).toBe(false);
     });
   });
 
