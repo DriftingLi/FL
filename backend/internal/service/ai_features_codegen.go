@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"forklift-training/internal/codegen"
 )
 
 // AIFeatureExport 注册表 → 生成管道的结构化导出行（ADR-0030「读后端注册表的结构化导出」）。
@@ -179,4 +181,16 @@ func RenderFrontendAIFeaturesTS(rows []AIFeatureExport) (string, error) {
 // GenerateFrontendAIFeaturesTS 渲染当前注册表（cmd/gen-aifeatures 与契约测试共用入口）。
 func GenerateFrontendAIFeaturesTS() (string, error) {
 	return RenderFrontendAIFeaturesTS(ExportAIFeatureRegistry())
+}
+
+// FrontendAIFeaturesGen gen-aifeatures 的生成器声明：输出定位与渲染函数同源，
+// cmd/gen-aifeatures 与 ai_features_codegen_test.go 的同步断言共用一份（ADR-0053 §9）。
+var FrontendAIFeaturesGen = codegen.Spec{
+	Name: "gen-aifeatures",
+	Hint: "frontend/src/config/aiFeatures.ts",
+	Locate: func(dir string) (string, bool) {
+		return codegen.LocateInFrontendConfig(dir, "aiFeatures.ts")
+	},
+	NotFound: codegen.NotFoundFrontendConfigDir,
+	Render:   GenerateFrontendAIFeaturesTS,
 }

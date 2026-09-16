@@ -245,10 +245,9 @@ func (s *JobApplicationService) Withdraw(studentUserID int, applicationID int64,
 			return err
 		}
 		if revokeContact {
-			// 连带：把投递产生的 approved 授权置 revoked（此后明文端点 403）
-			if err := tx.Model(&model.ContactRequest{}).
-				Where("recruiter_id = ? AND student_user_id = ? AND status = ? AND source = ?", app.RecruiterID, studentUserID, "approved", "application").
-				Updates(map[string]any{"status": "revoked", "decided_at": now, "updated_at": now}).Error; err != nil {
+			// 连带：把投递产生的已批准授权置为已撤回（此后明文端点即无有效授权）。
+			// 迁移收口在联络域（与 EnsureApproved 对称，ADR-0053 §3）。
+			if err := s.contactSvc.RevokeApplicationGrant(tx, app.RecruiterID, studentUserID, now); err != nil {
 				return err
 			}
 		}

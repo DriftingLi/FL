@@ -108,13 +108,17 @@ type StreamChatReq struct {
 	CustomModel   string          `json:"custom_model"`
 	// Brand/Model 智能维修诊断（fault_diagnosis）专用可选参数：品牌/车型过滤（空 = 全部）。
 	// 经 ctx 透传到 diagnosis adapter（withDiagnosisParams），仅该功能消费；通用对话忽略。
-	Brand    string `json:"brand,omitempty"`
-	Model    string `json:"model,omitempty"`
-	Messages []struct {
-		Role    string   `json:"role"`
-		Content string   `json:"content"`
-		Images  []string `json:"images"` // 用户消息附带的图片 URL（仅最后一条用户消息生效）
-	} `json:"messages"`
+	Brand    string            `json:"brand,omitempty"`
+	Model    string            `json:"model,omitempty"`
+	Messages []AIStreamMessage `json:"messages"`
+}
+
+// AIStreamMessage 对话请求体里的一条消息（具名类型：计费口径的 DTO adapter 需要它，
+// 且具名后 swagger 能给出可引用的定义）。
+type AIStreamMessage struct {
+	Role    string   `json:"role"`
+	Content string   `json:"content"`
+	Images  []string `json:"images"` // 用户消息附带的图片 URL（仅最后一条用户消息生效）
 }
 
 // AIAssistantService AI 助手模块服务。
@@ -537,20 +541,16 @@ func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req Str
 		}
 	}
 
-	// 计费事实随计费意图声明（口径锚定请求 DTO，与迁移前 handler 取值逐字一致：最后一条
-	// 消息原文长度）。多模态消息经 buildImageUserMessage 重组，图片全部加载失败时注入的
-	// 注记文本只存在于传输层消息——DTO Content 才是口径事实，注记不参与计费。声明经 ctx
-	// 透传给端口上的计量闸门（ADR-0031），meter 优先取声明值、未声明才回退端口消息推导。
-	var promptChars int
-	if len(req.Messages) > 0 {
-		promptChars = len(req.Messages[len(req.Messages)-1].Content)
-	}
+	// 计费事实随计费意图交给闸门：**传消息列表而不是算好的字符数**——口径（取哪一条用户
+	// 消息、怎么取文本）只允许有一份实现（ai_prompt_chars.go）。多模态消息经
+	// buildImageUserMessage 重组，图片全部加载失败时注入的注记文本只存在于传输层消息——
+	// DTO 才是口径事实源，注记不参与计费（ADR-0031 / ADR-0053 §5）。
 	// 诊断参数（品牌/车型）经 ctx 透传到 diagnosis adapter（fault_diagnosis 消费）
 	if req.Brand != "" || req.Model != "" {
 		ctx = WithDiagnosisParams(ctx, req.Brand, req.Model)
 	}
 
-	fullContent, usage, err := s.port.Stream(withAIPromptChars(ctx, promptChars), sel, msgs, onChunk)
+	fullContent, usage, err := s.port.Stream(withAIPromptMessages(ctx, aiPromptMessagesFromDTO(req.Messages)), sel, msgs, onChunk)
 	if err != nil {
 		return fullContent, usage, err
 	}

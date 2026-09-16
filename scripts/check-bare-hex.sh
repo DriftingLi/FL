@@ -10,6 +10,9 @@
 #   check-bare-hex.sh --diff [base]   只查相对 base 的新增行（有违规则退出 1，CI 阻断用）
 #                                     base 默认 origin/master
 #
+# --diff 的「新增行解析」不再是本脚本的 awk：那是与 check-el-controls.mjs 重复的第二份实现，
+# 且只有一份处理了 git 的路径转义。现统一走 scripts/lib/added-lines.mjs（ADR-0053 §10）。
+#
 # 豁免规则（故意放过，不算违规）：
 #   1. 同一行含 var(-- 的 —— 即 var(--token, #fallback) 防御写法
 #   2. #fff / #ffffff / #000 / #000000 —— 中性色，深浅底都成立
@@ -85,12 +88,13 @@ report_diff() {
   added="$(mktemp)"
   tmp="$(mktemp)"
 
-  # 收集新增行的 "file:lineno"，供后续与全量扫描结果求交集
-  git diff -U0 "$DIFF_BASE"...HEAD -- '*.vue' | awk '
-    /^\+\+\+ b\// { f = substr($0, 7); next }
-    /^@@/         { match($0, /\+[0-9]+/); ln = substr($0, RSTART + 1, RLENGTH - 1) + 0; next }
-    /^\+/ && !/^\+\+\+/ { printf "%s:%d\n", f, ln; ln++ }
-  ' | sort -u >"$added"
+  # 收集新增行的 "file:lineno"（单点实现：scripts/lib/added-lines.mjs，含 core.quotepath
+  # 下的路径转义解码——此前本脚本的 awk 版本没处理转义，中文路径的改动会被静默漏扫。ADR-0053 §10）
+  if ! node scripts/lib/added-lines.mjs --diff "$DIFF_BASE" --pathspec '*.vue' >"$added"; then
+    echo "[check-bare-hex] 解析新增行失败（见上）" >&2
+    rm -f "$added" "$tmp"
+    return 1
+  fi
 
   if [[ ! -s "$added" ]]; then
     echo "[check-bare-hex] 相对 $DIFF_BASE 无 .vue 新增行，跳过。"

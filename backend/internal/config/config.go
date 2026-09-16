@@ -94,10 +94,52 @@ type SMSConfig struct {
 	TplBindPhone string // TENCENT_SMS_TEMPLATE_BIND_PHONE 绑定/修改手机号、修改账号模板（{1}=验证码）
 }
 
-// Configured 返回短信通道是否已完整配置（生产发送必需）。
-func (c SMSConfig) Configured() bool {
-	return c.SecretID != "" && c.SecretKey != "" && c.SdkAppID != "" && c.SignName != "" &&
-		c.TplRegister != "" && c.TplLogin != "" && c.TplPassword != "" && c.TplBindPhone != ""
+// SMSTemplateKey 短信模板键：验证码用途表里「短信模板键」槽位的取值域。
+// 一个键对应一个已审核模板（一个环境变量 + 一个配置字段）；键与用途不是 1:1
+// （密码重置与修改密码共用一个模板，绑定与修改账号共用一个模板）。
+type SMSTemplateKey string
+
+const (
+	// SMSTemplateKeyRegister 注册验证码模板（{1}=验证码）。
+	SMSTemplateKeyRegister SMSTemplateKey = "register"
+	// SMSTemplateKeyLogin 登录验证码模板（{1}=验证码 {2}=有效分钟数）。
+	SMSTemplateKeyLogin SMSTemplateKey = "login"
+	// SMSTemplateKeyPassword 密码重置 / 修改密码模板（{1}=验证码）。
+	SMSTemplateKeyPassword SMSTemplateKey = "password"
+	// SMSTemplateKeyBindPhone 绑定 / 修改手机号、修改账号模板（{1}=验证码）。
+	SMSTemplateKeyBindPhone SMSTemplateKey = "bind_phone"
+)
+
+// Template 按模板键返回已配置的模板 ID；未知键返回空串。
+func (c SMSConfig) Template(key SMSTemplateKey) string {
+	switch key {
+	case SMSTemplateKeyRegister:
+		return c.TplRegister
+	case SMSTemplateKeyLogin:
+		return c.TplLogin
+	case SMSTemplateKeyPassword:
+		return c.TplPassword
+	case SMSTemplateKeyBindPhone:
+		return c.TplBindPhone
+	}
+	return ""
+}
+
+// Configured 返回短信通道是否已完整配置（生产发送必需）：凭证齐全，且 required 里的
+// 每个模板键都已配模板 ID。
+//
+// required 由验证码用途表派生（`service.CodePurposeSMSTemplates()`）——这里刻意不写死
+// 模板清单，新增用途（或新增模板键）不必改本函数。调用方必须传入派生结果，否则等于只校验凭证。
+func (c SMSConfig) Configured(required ...SMSTemplateKey) bool {
+	if c.SecretID == "" || c.SecretKey == "" || c.SdkAppID == "" || c.SignName == "" {
+		return false
+	}
+	for _, key := range required {
+		if c.Template(key) == "" {
+			return false
+		}
+	}
+	return true
 }
 
 // WechatAppConfig 一组微信应用凭证（AppID 为公开标识，AppSecret 必须仅存服务端）。

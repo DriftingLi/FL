@@ -2843,6 +2843,23 @@ definitions:
           $ref: '#/definitions/service.PointsTaskItem'
         type: array
     type: object
+  service.PositionDict:
+    properties:
+      code:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      name:
+        type: string
+      position_id:
+        type: integer
+      sort_order:
+        type: integer
+      status:
+        type: integer
+    type: object
   service.PositionInput:
     properties:
       code:
@@ -2855,6 +2872,13 @@ definitions:
         type: integer
       status:
         type: integer
+    type: object
+  service.PositionListDTO:
+    properties:
+      positions:
+        items:
+          $ref: '#/definitions/service.PositionDict'
+        type: array
     type: object
   service.PracticePracticeStatsDTO:
     properties:
@@ -3532,6 +3556,13 @@ definitions:
         type: integer
       status:
         type: integer
+    type: object
+  service.SpecialtyListDTO:
+    properties:
+      specialties:
+        items:
+          $ref: '#/definitions/service.SpecialtyDict'
+        type: array
     type: object
   service.StatusResultDTO:
     properties:
@@ -6400,6 +6431,30 @@ paths:
       summary: 交换课程等级排序
       tags:
       - 管理端-培训目录
+  /admin/levels:
+    get:
+      description: 管理端课程等级字典列表（含停用项）
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.LevelListDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 课程等级列表
+      tags:
+      - 管理端-培训目录
   /admin/position:
     post:
       consumes:
@@ -6418,7 +6473,12 @@ paths:
         "201":
           description: 创建成功
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.PositionDict'
+              type: object
         "400":
           description: 参数错误
           schema:
@@ -6483,7 +6543,12 @@ paths:
         "200":
           description: 更新成功
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.PositionDict'
+              type: object
         "400":
           description: 参数错误
           schema:
@@ -6543,7 +6608,12 @@ paths:
         "200":
           description: 岗位列表
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.PositionListDTO'
+              type: object
         "401":
           description: 未认证
           schema:
@@ -7078,6 +7148,30 @@ paths:
       summary: 零结果词列表
       tags:
       - 学员端-搜索
+  /admin/specialties:
+    get:
+      description: 管理端专业方向字典列表（含停用项）
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.SpecialtyListDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 专业方向列表
+      tags:
+      - 管理端-培训目录
   /admin/specialty:
     post:
       consumes:
@@ -11367,7 +11461,12 @@ paths:
         "200":
           description: 岗位列表
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.PositionListDTO'
+              type: object
       security:
       - BearerAuth: []
       summary: 岗位字典

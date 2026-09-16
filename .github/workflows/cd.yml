@@ -136,14 +136,9 @@ jobs:
             exit 1
           fi
 
-          # 1) CI 结论:同一 SHA 可能有多条 ci-summary 记录(旧版 push+pull_request 双跑),
-          #    按「任一 failure 即失败 / 有 success 即通过」聚合,避免 head -1 取到 skipped 误判
-          CI=$(gh api "repos/$GITHUB_REPOSITORY/commits/$SHA/check-runs?per_page=100" --jq '
-            [.check_runs[] | select(.name=="ci-summary") | .conclusion]
-            | if any(. == "failure") then "failure"
-              elif any(. == "success") then "success"
-              elif length == 0 then "missing"
-              else "other" end')
+          # 1) CI 结论:聚合逻辑单点在 scripts/ci-summary-status.sh(ADR-0053 §10 —— 此前
+          #    本 job 与 testing-smoke.yml 各内联了一份逐字相同的 jq)
+          CI=$(bash scripts/ci-summary-status.sh "$SHA")
           if [ "$CI" != "success" ]; then
             echo "::error::PR #$PR head $SHA 的 ci-summary 结论为 $CI,阻断生产部署"
             echo "    missing/other 通常说明该分支跑的还是旧版流水线(ci-summary 仅 master 上报),merge master 后重推分支即可"

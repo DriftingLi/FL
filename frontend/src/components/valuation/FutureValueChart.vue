@@ -34,10 +34,6 @@ const COLOR_TEXT_MUTED = '#999999'
 const COLOR_GRID = '#F0F0F0'
 const COLOR_AXIS = '#EEEEEE'
 
-function computeAnnualDecay(): number {
-  return props.decayAnchor
-}
-
 interface FuturePoint {
   label: string
   value: number
@@ -45,7 +41,8 @@ interface FuturePoint {
 
 /** 未来估价序列（含当前年，共 years+1 个点） */
 const futureValues = computed<FuturePoint[]>(() => {
-  const decay = computeAnnualDecay()
+  // 锚点直接来自后端下发（不打码、不重算）：本组件只做 base × anchor^n 的乘法
+  const decay = props.decayAnchor
   const base = props.estimatedValue
   const points: FuturePoint[] = []
 
@@ -64,8 +61,8 @@ const futureValues = computed<FuturePoint[]>(() => {
 
 /** 年衰减率（用于副标题展示） */
 const annualDecayRate = computed(() => {
-  const decay = computeAnnualDecay()
-  return Math.max(0, 1 - decay)
+  // 展示派生值（不是领域公式）：年衰减率 = 1 - 锚点
+  return Math.max(0, 1 - props.decayAnchor)
 })
 
 const chartOption = computed(() => {
