@@ -12,6 +12,8 @@ master 有仓库 ruleset「protect master」保护（直接 push 会被拒，`pu
 6. **Squash merge → 直发 production**：`gh pr merge <n> --squash --delete-branch`。master 的 push **不跑 CI**，直接触发 `cd.yml` 的 `gate` job：从 commit 主题解析 `(#N)` → 校验该 PR head 的 `ci-summary=success`、该 commit 的 testing 冒烟 `success`（冒烟可能晚于合并，gate 最多轮询 15 分钟）→ 通过后才构建镜像并部署 production。若报 "requirements have not been met"，用 `gh pr view <n> --json statusCheckRollup` 排查。
 7. **收尾**：`git fetch --prune` → `git checkout master && git pull --ff-only` → 删除本地 feat 分支（若 gh 已自动删）。
 
+**合并前一行披露（2026-09-16 立）**：**授权不变** —— 证据齐、无例外通道时 **agent 可直接合并**（口径见下方「验收门」段）。加的是**可见性**：合并前必须在 PR 上留**一行**说明「**本次合并将触发 `cd.yml` 的 production 部署**」（贴 PR 评论或正文均可，先例 #1063）—— 让维护者知道这一步会动生产，而不必自己推断「这个 PR 改的是文档，为什么也会上生产」。走**例外通道**（「已接受未验证风险」）的 PR 仍**必须由人**执行合并。
+
 **开 PR 的时机：一件事「做完并验完」之后才开 PR（2026-09-15 裁定）**。上面七步讲的是**机制**（机制允许你随时 push / 开 PR），不是节奏 —— 节奏由本条管。
 
 - **一个 PR = 一件做完且已在目标环境验证过的事**。不得边做边开 PR、不得把 PR 当进度容器，也不得用「后续 PR 再修」把**已知未验证**的改动送进 master。
