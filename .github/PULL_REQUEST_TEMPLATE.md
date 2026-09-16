@@ -1,7 +1,7 @@
 <!--
 合并方式固定 Squash and merge；目标分支固定 master（本模板此前写在移动端目录下且写着 main，GitHub 读不到、分支名也是错的）。
 master 有 ruleset「protect master」，必检只有 ci-summary；pr-evidence 在本仓是**可见检查**（本仓有可用 admin 通道，但裁定不装必检——逐 PR 审批成本高于约束收益）。
-真正的阻塞是行为约束：**证据段由人签收，签收后 agent 可直接合并** —— 人工门（①）的「执行人」栏由人给出原文（agent 代录），证据填齐即可合并，不必停在「待人工签收」；例外通道（「已接受未验证风险」）仍由人执行合并。口径见 `training-app/叉车维修培训学员端跨端应用/docs/adr/0008-移动端验收门与证据.md`（**必须写全路径**：该 ADR 属**移动端编号体系**，根仓库另有一个同名的 `docs/adr/ADR-0008-字典描述符驱动的管理面.md`，只写 `docs/adr/0008-…` 在根目录解析不到）。
+真正的阻塞是行为约束：**证据段由人签收，签收后 agent 可直接合并** —— 人工门已收缩为 **①b**（只在命中「能力面」时必过），其「执行人」栏由人给出原文（agent 代录）；**①a**（agent 出证的逐页截图，按一次分支收口跑）的执行人栏允许写「agent 执行」（2026-09-16 修订，见 `training-app/叉车维修培训学员端跨端应用/docs/adr/0016-真机门的人工性收缩与按批取证.md`）。证据填齐即可合并，不必停在「待人工签收」；例外通道（「已接受未验证风险」）仍由人执行合并。口径见 `training-app/叉车维修培训学员端跨端应用/docs/adr/0008-移动端验收门与证据.md`（**必须写全路径**：该 ADR 属**移动端编号体系**，根仓库另有一个同名的 `docs/adr/ADR-0008-字典描述符驱动的管理面.md`，只写 `docs/adr/0008-…` 在根目录解析不到）。
 -->
 
 ## 改了什么 / 为什么改
@@ -19,6 +19,8 @@ master 有 ruleset「protect master」，必检只有 ci-summary；pr-evidence �
 ## 影响范围 / 风险点
 <!-- 涉及哪些模块、是否影响线上、有无数据库/接口变更；跨模块夹带必须显式写明 -->
 
+- [ ] **本次改动触及「agent 观测不到的能力面」**（指纹 / 运行时权限弹窗 / 真机上传 / 厂商 ROM 交互）—— 勾上则 **①b 必做、由人给出原文**；实际触及却没勾属**漏报**（`pr-evidence` 不做机械判据，靠 ①a 的 logcat、评审与事后验证回执兜；口径见 `training-app/叉车维修培训学员端跨端应用/docs/adr/0016-真机门的人工性收缩与按批取证.md`）
+
 ## 验收证据
 
 <!--
@@ -26,7 +28,7 @@ master 有 ruleset「protect master」，必检只有 ci-summary；pr-evidence �
 manifest.json / pages.json / platformConfig.json 时，本段必须逐门填写；未命中的 PR
 只需保留本段并写「免（未命中运行时面）」。
 
-字段格式固定：执行人（真的做这门验证的人；agent 不得代填） · 日期（YYYY-MM-DD） · 复测对象 · 结论（含产物）
+字段格式固定：执行人（④ / ② / ①a 填执行会话所用账号并注明「agent 执行」；含 ①b 时必须是**人**给出的原文，agent 只可代录） · 日期（YYYY-MM-DD） · 复测对象 · 结论（含产物）
 「待人工」「⏳」或只有勾选 = 缺证据，pr-evidence 会直接红；结论必须引用可核验产物：
 截图及其链接、CI run 链接、.ci-verify/kotlin-all.log（④c）/ .ci-verify/build.log（④a）（只写「已验证」不算）。
 ④ 的证据可由脚本贴的「sha 绑定评论」承载：本仓 `npm run build:kotlin-all` 不转发参数，
@@ -51,7 +53,7 @@ manifest.json / pages.json / platformConfig.json 时，本段必须逐门填写�
 例外通道：正文写明「已接受未验证风险」+ 理由 + 事后验证计划，检查会打警告放行，但**这类 PR 必须由人执行合并**。
 -->
 
-- ① Android 真机逐页截图对比 — 执行人： · 日期： · 复测对象： · 结论（含产物）：
+- ① Android 真机逐页截图对比（**①a**：agent 出证、按一次分支收口跑；**①b**：命中「能力面」时由人签收） — 执行人： · 日期： · 复测对象： · 结论（含产物）：
 - ② 微信开发者工具无报错（半自动：可跑 `scripts/mp-weixin-check.ps1` 产出证据，执行人栏仍由人签收） — 执行人： · 日期： · 复测对象： · 结论（含产物，引用 `MP_WEIXIN_RESULT` + 截图 `.ci-verify/*.png`；也可写「见评论 <链接>」）：
 - ③ `npm run test:unit` 全绿 — 结论（含产物，贴 CI run 链接）：
 - ④ 本地编译门（默认 ④c `npm run build:kotlin-all`；dev 面追加 ④a `npm run build:compile`） — 执行人： · 日期： · 复测对象： · 结论（含产物，引用 `.ci-verify/kotlin-all.log` 或 `.ci-verify/build.log`；也可写「见评论 <链接>」）：
