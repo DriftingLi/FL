@@ -42,18 +42,25 @@
       </el-select>
     </div>
 
-    <UiErrorState
-      v-if="loadError"
-      title="简历加载失败"
-      description="网络或服务端异常，可重试"
+    <UiAsyncSection
+      :error="loadError"
+      :loading="loading"
+      :empty="items.length === 0"
       :retrying="retrying"
+      :skeleton="false"
+      error-title="简历加载失败"
+      error-description="网络或服务端异常，可重试"
       @retry="handleRetry"
-    />
-    <UiSkeleton v-else-if="loading && items.length === 0" variant="list" :count="4" />
-    <UiEmptyState v-else-if="items.length === 0" description="暂无公开简历" />
+    >
+      <template #empty>
+        <UiEmptyState description="暂无公开简历" />
+      </template>
 
-    <!-- #493：响应式方形网格（手机 1 列 → 平板 2-3 列 → 桌面 4 列）；卡面仅核心字段 -->
-    <div v-else class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <!-- 首屏才骨架（翻页时旧列表原地保持——原 loading && items.length === 0 口径） -->
+      <UiSkeleton v-if="loading && items.length === 0" variant="list" :count="4" />
+
+      <!-- #493：响应式方形网格（手机 1 列 → 平板 2-3 列 → 桌面 4 列）；卡面仅核心字段 -->
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       <div
         v-for="item in items"
         :key="String(item.user_id)"
@@ -85,6 +92,7 @@
         </div>
       </div>
     </div>
+    </UiAsyncSection>
 
     <!-- 加载更多（#493）：每批 20，不足一批即到底 -->
     <div v-if="hasMore" class="flex justify-center">
@@ -102,8 +110,8 @@ import { positionApi } from '@/api/position'
 import { credentialApi } from '@/api/credential'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
-import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 

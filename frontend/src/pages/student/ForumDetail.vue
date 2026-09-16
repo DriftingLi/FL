@@ -4,20 +4,20 @@
       <UiButton variant="text" :icon="ArrowLeft" @click="goBack">返回列表</UiButton>
     </div>
 
-    <UiErrorState
-      v-if="loadError"
-      title="帖子加载失败"
-      description="网络或服务端异常，可重试"
+    <UiAsyncSection
+      :error="loadError"
+      :loading="loading"
       :retrying="retrying"
+      error-title="帖子加载失败"
+      error-description="网络或服务端异常，可重试"
       @retry="retryLoad"
-    />
+    >
+      <template #skeleton>
+        <UiSkeleton variant="card" :count="1" />
+        <UiSkeleton variant="list" :count="4" />
+      </template>
 
-    <template v-else-if="loading">
-      <UiSkeleton variant="card" :count="1" />
-      <UiSkeleton variant="list" :count="4" />
-    </template>
-
-    <template v-else-if="topic">
+    <template v-if="topic">
       <div class="topic-card mb-4 rounded-card bg-panel p-5 shadow-card">
         <div class="topic-header flex items-center gap-3">
           <el-avatar :size="46" :src="topic.author.avatar_url || undefined">
@@ -168,6 +168,7 @@
         />
       </div>
     </template>
+    </UiAsyncSection>
   </div>
 </template>
 
@@ -190,7 +191,7 @@ import { useForumSort } from '@/composables/useForumSort'
 import { useLike } from '@/composables/useLike'
 import { useStagger } from '@/composables/useStagger'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
-import UiErrorState from '@/components/ui/UiErrorState.vue'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'

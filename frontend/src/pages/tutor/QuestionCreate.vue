@@ -9,17 +9,19 @@
 
     <!-- 编辑态下题目本体加载失败必须阻断渲染：
          否则会以空表单呈现，保存时把原题内容整体覆盖掉 -->
-    <UiErrorState
-      v-if="pageError"
-      title="题目加载失败"
-      description="未能读取该题目内容，重试成功前不会渲染表单，避免误覆盖原题。"
+    <UiAsyncSection
+      :error="pageError"
+      :loading="pageLoading"
       :retrying="retrying"
+      error-title="题目加载失败"
+      error-description="未能读取该题目内容，重试成功前不会渲染表单，避免误覆盖原题。"
       @retry="handleRetry"
-    />
+    >
+      <template #skeleton>
+        <UiSkeleton variant="text" :rows="10" />
+      </template>
 
-    <UiSkeleton v-else-if="pageLoading" variant="text" :rows="10" />
-
-    <UiCard v-else padding="lg">
+    <UiCard padding="lg">
       <el-form :model="form" label-width="100px" class="max-w-[700px]">
         <el-form-item label="题型" required>
           <UiSelect
@@ -147,6 +149,7 @@
         </el-form-item>
       </el-form>
     </UiCard>
+    </UiAsyncSection>
   </div>
 </template>
 
@@ -163,8 +166,8 @@ import UiCard from '@/components/ui/UiCard.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiSelect, { type UiSelectOption } from '@/components/ui/UiSelect.vue'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
-import UiErrorState from '@/components/ui/UiErrorState.vue'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiCheckboxGroup from '@/components/ui/UiCheckboxGroup.vue'
 import UiRadioGroup from '@/components/ui/UiRadioGroup.vue'

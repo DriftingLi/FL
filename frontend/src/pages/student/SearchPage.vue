@@ -52,17 +52,20 @@
       />
 
       <div class="min-h-[200px] rounded-card bg-panel px-5 pb-4 shadow-card">
-        <UiErrorState
-          v-if="loadError"
-          title="搜索失败"
-          description="网络或服务端异常，可重试"
+        <UiAsyncSection
+          :error="loadError"
+          :loading="loading"
           :retrying="retrying"
+          :skeleton="false"
+          error-title="搜索失败"
+          error-description="网络或服务端异常，可重试"
           @retry="retry"
-        />
+        >
+          <!-- 首屏才骨架（有结果后翻页/追加不闪——原 loading && !hasAnyResult 口径）；
+               空态展示（全部模式/单模式）留在内容区内部，口径与原实现一致 -->
+          <UiSkeleton v-if="loading && !hasAnyResult" variant="list" :count="6" />
 
-        <UiSkeleton v-else-if="loading && !hasAnyResult" variant="list" :count="6" />
-
-        <template v-else>
+          <template v-else>
           <!-- 全部模式：分区并列（ADR-0049 决策 5），区内已由后端排好 -->
           <template v-if="activeType === 'all' && allResult">
             <template v-if="!isAllEmpty">
@@ -128,6 +131,7 @@
             </div>
           </template>
         </template>
+        </UiAsyncSection>
       </div>
     </template>
   </div>
@@ -143,7 +147,7 @@ import { useCredentialStore } from '@/stores/credential'
 import { clearSearchHistory, loadSearchHistory, pushSearchHistory, removeSearchHistory } from '@/utils/searchHistory'
 import SearchResultRow from '@/components/student/SearchResultRow.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
-import UiErrorState from '@/components/ui/UiErrorState.vue'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'

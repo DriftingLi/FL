@@ -1,25 +1,23 @@
 <template>
   <div class="flex flex-col gap-6">
-    <!-- 首屏骨架 -->
-    <template v-if="pageLoading">
-      <div class="h-32 rounded-card border border-line bg-panel" />
-      <div class="grid gap-4 md:grid-cols-2">
-        <div class="h-64 rounded-card border border-line bg-panel" />
-        <div class="h-64 rounded-card border border-line bg-panel" />
-      </div>
-      <UiSkeleton variant="chart" />
-    </template>
-
-    <!-- 整页错误态：拦截器已 toast，这里只给可操作的重试入口 -->
-    <UiErrorState
-      v-else-if="pageError"
-      title="页面加载失败"
-      description="网络或服务端异常，可重试"
+    <UiAsyncSection
+      :error="pageError"
+      :loading="pageLoading"
       :retrying="retrying"
+      error-title="页面加载失败"
+      error-description="网络或服务端异常，可重试"
       @retry="handleRetry"
-    />
+    >
+      <!-- 首屏骨架（多块占位：横幅 + 双卡 + 图表） -->
+      <template #skeleton>
+        <div class="h-32 rounded-card border border-line bg-panel" />
+        <div class="grid gap-4 md:grid-cols-2">
+          <div class="h-64 rounded-card border border-line bg-panel" />
+          <div class="h-64 rounded-card border border-line bg-panel" />
+        </div>
+        <UiSkeleton variant="chart" />
+      </template>
 
-    <template v-else>
       <!-- Welcome Banner -->
       <section
         class="rounded-card border border-ui-100 bg-gradient-to-br from-ui-50 to-panel p-6 sm:p-8"
@@ -125,7 +123,7 @@
           <div v-show="!statsLoading && !statsEmpty" ref="chartRef" class="h-[260px] w-full"></div>
         </div>
       </section>
-    </template>
+    </UiAsyncSection>
   </div>
 </template>
 
@@ -137,9 +135,9 @@ import QuickCard from '@/components/dashboard/QuickCard.vue'
 import type { QuickCardItem } from '@/components/dashboard/QuickCard.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiStatCard from '@/components/ui/UiStatCard.vue'
-import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiSectionHeader from '@/components/ui/UiSectionHeader.vue'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import { useRoleDashboard } from '@/composables/useRoleDashboard'
 import { useAsyncPage } from '@/composables/useAsyncPage'

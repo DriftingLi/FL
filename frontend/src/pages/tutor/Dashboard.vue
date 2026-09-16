@@ -1,21 +1,18 @@
 <template>
   <div class="flex flex-col gap-6">
-    <!-- 首屏骨架 -->
-    <template v-if="pageLoading">
-      <div class="h-32 rounded-card border border-line bg-panel" />
-      <UiSkeleton variant="card" :count="2" />
-    </template>
-
-    <!-- 整页错误态：拦截器已 toast，这里只给可操作的重试入口 -->
-    <UiErrorState
-      v-else-if="pageError"
-      title="页面加载失败"
-      description="网络或服务端异常，可重试"
+    <UiAsyncSection
+      :error="pageError"
+      :loading="pageLoading"
       :retrying="retrying"
+      error-title="页面加载失败"
+      error-description="网络或服务端异常，可重试"
       @retry="handleRetry"
-    />
-
-    <template v-else>
+    >
+      <!-- 首屏骨架（横幅 + 卡片组） -->
+      <template #skeleton>
+        <div class="h-32 rounded-card border border-line bg-panel" />
+        <UiSkeleton variant="card" :count="2" />
+      </template>
       <!-- Welcome Banner -->
       <section
         class="rounded-card border border-ui-100 bg-gradient-to-br from-ui-50 to-panel p-6 sm:p-8"
@@ -48,7 +45,7 @@
           empty-text="暂无课程"
         />
       </div>
-    </template>
+    </UiAsyncSection>
   </div>
 </template>
 
@@ -58,8 +55,8 @@ import { ArrowRight } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import QuickCard from '@/components/dashboard/QuickCard.vue'
 import type { QuickCardItem } from '@/components/dashboard/QuickCard.vue'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
-import UiErrorState from '@/components/ui/UiErrorState.vue'
 import { tutorApi } from '@/api/tutor'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { displayNameOf } from '@/types/user'
