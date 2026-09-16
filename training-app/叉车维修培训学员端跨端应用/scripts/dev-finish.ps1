@@ -12,6 +12,11 @@
       🟡 标准：④c 编译门 + 真运行到设备 + 只截改动页 + 简要证据
       🔴 完整：④c 编译门 + 真运行到设备 + 只截改动页 + 完整证据
 
+    **收口提示（ADR-0016 ①b，2026-09-16）**：摘要前会打「本批触及能力面：是 / 否」+ 原生能力调用点扫描。
+    口径真源是 `lib/capability-surface.ps1` 的**路径白名单**（指纹 / 运行时权限弹窗 / 真机上传 / 厂商 ROM 交互）；
+    **只做提示、不判红** —— 不进 `pr-evidence` 的判红路径、不影响本脚本退出码。
+    命中 ⇒ ①b 必做且由**人**给出原文；未命中 ⇒ 提示行不新增任何必做项（普通运行时面改动不会被这行字加要求）。
+
     **Q-2 修正（2026-09-14）**：原本让 🟢 默认跑 `hx-run -CompileOnly` 当「快速」，但**实测推翻了前提** ——
     冷 / 失效缓存下 compile-only **>901 秒**，**比真运行（4–5 分钟）还慢**。故 🟢 默认降级为 **Q-A 静态守护**
     （秒级、不取锁、不占设备），编译诊断改为**显式 `-Compile`**。要看真机效果请用 🟡，或用 HBuilderX GUI 热刷新（秒级）。
@@ -91,6 +96,7 @@ if ($DryRun) {
     Write-Host "  7. 截图对比基线（🟡🔴）"
     Write-Host "  8. 生成验收证据（🟡🔴）"
     Write-Host "  9. 还原 manifest.json / pages.json"
+    Write-Host "  + 能力面提示（ADR-0016 ①b）：本批触及能力面 是/否 + 原生能力调用点扫描（只做提示、不判红）"
     Write-Host ""
     Write-Host "参数："
     Write-Host "  -Device:              ${Device:-<自动检测>}"
@@ -101,6 +107,18 @@ if ($DryRun) {
     Write-Host "  -MaxScreenshotPages:  $MaxScreenshotPages"
     Write-Host "  -HxWaitSeconds:       $HxWaitSeconds"
     Write-Host "  -HxRunTimeoutSeconds: $HxRunTimeoutSeconds"
+    Write-Host ""
+
+    # DryRun 也把**真实的**能力面判定打出来：白名单判定 + 调用点扫描都是 git diff 的纯函数
+    # （不取锁 / 不占设备 / 不跑测试），所以这里能给出「脚本真的接线了」的**行为级**证据
+    # —— 守护 H7 就是跑这条路径，而不是断言源码文本（ADR-0008 的收束方向）。
+    . (Join-Path $PSScriptRoot 'lib\level-detect.ps1')
+    . (Join-Path $PSScriptRoot 'lib\capability-surface.ps1')
+    $dryLevel = Get-DetectLevel -ProjectDir $ProjectDir -ForceLevel $Level
+    Write-Host '--- 能力面提示（真实结果；正式收口时打在摘要之前）---' -ForegroundColor DarkCyan
+    foreach ($line in @(Format-CapabilityHint -ChangedFiles @($dryLevel.ChangedFiles) -ProjectDir $ProjectDir)) {
+        Write-Host $line
+    }
     exit 0
 }
 
@@ -319,6 +337,21 @@ if ($deployResult -and ($deployResult.ManifestRestored -or $deployResult.PagesRe
 }
 else {
     Write-Result $true '配置文件未被改脏'
+}
+
+# ============================================================
+# 能力面提示（ADR-0016 ①b）：**只做提示、不判红**
+#   口径真源 scripts/lib/capability-surface.ps1（路径白名单 + 原生能力调用点扫描）。
+#   不进 `pr-evidence` 的判红路径、不影响本脚本退出码 —— 判错的代价是「看一眼」，不是「门红」。
+#   位置：步骤 9 之后、摘要之前 —— 收口的人先看到「要不要人签 ①b」，再读下面的证据段建议句。
+# ============================================================
+. (Join-Path $PSScriptRoot 'lib\capability-surface.ps1')
+Write-Host ''
+Write-Host '========================================' -ForegroundColor DarkCyan
+Write-Host '  能力面（ADR-0016 ①b）' -ForegroundColor Cyan
+Write-Host '========================================' -ForegroundColor DarkCyan
+foreach ($line in @(Format-CapabilityHint -ChangedFiles @($levelResult.ChangedFiles) -ProjectDir $ProjectDir)) {
+    Write-Host $line
 }
 
 # ============================================================
