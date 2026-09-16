@@ -3,6 +3,9 @@
 		<view class="message-bubble">
 			<text class="message-text">{{ content }}</text>
 		</view>
+		<!-- 诊断来源资料（#988）：位置对齐 web 的 `#assistant-extra`（回答下方、操作按钮上方）。
+		     仅助手消息且有来源才出现；调用方不传 `sources` 时行为与从前完全一致。 -->
+		<AiChatSources v-if="role == 'assistant' && sources.length > 0" :sources="sources" />
 		<view v-if="showActions" class="message-actions">
 			<text class="action-btn" @click="onCopy">&#x1F4CB; 复制</text>
 			<text v-if="isLast" class="action-btn" @click="onRetry">&#x1F504; 重试</text>
@@ -11,16 +14,21 @@
 </template>
 
 <script setup lang="uts">
+	import AiChatSources from './ai-chat-sources.uvue'
+	import type { AiDiagnosisSource } from '../../types/index'
+
 	withDefaults(defineProps<{
 		role?: string
 		content?: string
 		showActions?: boolean
 		isLast?: boolean
+		sources?: AiDiagnosisSource[]
 	}>(), {
 		role: 'assistant',
 		content: '',
 		showActions: false,
-		isLast: false
+		isLast: false,
+		sources: () => [] as AiDiagnosisSource[]
 	})
 
 	const emit = defineEmits(['copy', 'retry'])

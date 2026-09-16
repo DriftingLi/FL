@@ -1,0 +1,171 @@
+<template>
+	<!-- 诊断来源资料（#988；根仓库 ADR-0033）：默认折叠，与 web `DiagnosisSources.vue` 同构 -->
+	<view class="sources">
+		<view class="sources-head" @click="onToggle">
+			<text class="sources-head-title">{{ headTitle }}</text>
+			<text class="sources-head-action">{{ open ? '收起' : '展开' }}</text>
+		</view>
+		<view v-if="open" class="sources-body">
+			<view v-for="(card, ci) in cards" :key="ci" class="source-card" :class="{ 'source-card-gap': ci > 0 }">
+				<image
+					v-for="(img, ii) in card.images"
+					:key="ii"
+					class="source-image"
+					:class="{ 'source-image-gap': ii > 0 }"
+					:src="img"
+					mode="widthFix"
+					@click="onPreview(card.images, img)"
+				/>
+				<text v-if="card.text.length > 0" class="source-text">{{ card.text }}</text>
+				<text v-if="card.page.length > 0" class="source-page">{{ card.page }}</text>
+			</view>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	/**
+	 * 诊断来源资料展示（#988）：助手回答下方的「资料来源（N 条）」折叠区。
+	 *
+	 * 为什么需要它：后端在 SSE 里发独立事件 `sources`（`answer_sources` 透传），并在
+	 * **助手消息行**上持久化该列（根仓库 ADR-0033）——移动端此前把该事件整个丢弃、
+	 * 回看 DTO 也没读该列 ⇒ 回答引用的手册页码与溯源图看不见。
+	 *
+	 * 与 web 的差异（本票口径，见 issue #988「口径裁定记录」第 2 条）：
+	 * **不做** web 的「打开 PDF 来源」外链 —— 原生端没有内嵌 PDF 阅读器，站外跳转收益低。
+	 * 手册图片、页码、正文剥标记三条与 web 一致。
+	 *
+	 * `<<IMAGE:…>>` 标记解析、内网前缀剥离、页码标签一律走 `utils/aiSourcesDisplay.uts`
+	 * （展示层纯函数落 `utils/<域>Display.uts`，移动端 ADR-0007）—— 本组件只做「子路径 → 代理 URL」
+	 * 与折叠交互；纯函数留在 `.uvue` 里就不可测（jest 无法 import `.uvue`，守护只能退化成断言源码文本）。
+	 */
+	import { computed, ref } from 'vue'
+	import { aiManualUrl } from '../../api/aiAssistant'
+	import { extractImagePaths, stripImageMarkers, pageLabel } from '../../utils/aiSourcesDisplay'
+	import type { AiDiagnosisSource } from '../../types/index'
+
+	/** 单条来源的展示模型：图片 URL / 正文 / 页码在壳层一次算好，模板不重复解析 */
+	type SourceCard = {
+		images : string[]
+		text : string
+		page : string
+	}
+
+	const props = withDefaults(defineProps<{
+		sources?: AiDiagnosisSource[]
+	}>(), {
+		sources: () => [] as AiDiagnosisSource[]
+	})
+
+	const open = ref<boolean>(false)
+
+	/**
+	 * 子路径 → 手册代理 URL（**组件层**负责拼 URL：`utils/aiSourcesDisplay` 只解析、不依赖 api）。
+	 */
+	function toManualUrls(text : string) : string[] {
+		const paths = extractImagePaths(text)
+		const urls : string[] = []
+		for (let i = 0; i < paths.length; i++) {
+			urls.push(aiManualUrl(paths[i]))
+		}
+		return urls
+	}
+
+	const cards = computed<SourceCard[]>(() : SourceCard[] => {
+		const list : SourceCard[] = []
+		const src = props.sources
+		for (let i = 0; i < src.length; i++) {
+			const s = src[i]
+			list.push({
+				images: toManualUrls(s.text),
+				text: stripImageMarkers(s.text),
+				page: pageLabel(s),
+			} as SourceCard)
+		}
+		return list
+	})
+
+	const headTitle = computed<string>(() : string => {
+		return '资料来源（' + cards.value.length.toString() + ' 条）'
+	})
+
+	function onToggle() : void {
+		open.value = !open.value
+	}
+
+	/** 点图看大图：`current` 传 URL 字符串（与 `chapter-view.uvue` 的本机先例一致，不用下标） */
+	function onPreview(urls : string[], url : string) : void {
+		if (urls.length == 0) return
+		uni.previewImage({
+			urls: urls,
+			current: url,
+		})
+	}
+</script>
+
+<style lang="scss">
+	.sources {
+		flex-direction: column;
+		max-width: 600rpx;
+		margin-top: 8rpx;
+	}
+
+	.sources-head {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		padding: 8rpx 0;
+	}
+
+	.sources-head-title {
+		font-size: 22rpx;
+		color: #999999;
+	}
+
+	.sources-head-action {
+		font-size: 22rpx;
+		color: #2979ff;
+		margin-left: 16rpx;
+	}
+
+	.sources-body {
+		flex-direction: column;
+	}
+
+	.source-card {
+		flex-direction: column;
+		background-color: #f7f8fa;
+		border-width: 1rpx;
+		border-style: solid;
+		border-color: #e5e7eb;
+		border-radius: 12rpx;
+		padding: 16rpx;
+	}
+
+	.source-card-gap {
+		margin-top: 12rpx;
+	}
+
+	.source-image {
+		width: 480rpx;
+		border-radius: 8rpx;
+		background-color: #eeeeee;
+	}
+
+	.source-image-gap {
+		margin-top: 8rpx;
+	}
+
+	.source-text {
+		font-size: 24rpx;
+		color: #555555;
+		line-height: 1.6;
+		margin-top: 8rpx;
+	}
+
+	.source-page {
+		font-size: 22rpx;
+		color: #999999;
+		margin-top: 8rpx;
+	}
+</style>
