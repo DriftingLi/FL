@@ -1,0 +1,61 @@
+{
+  "label": "after",
+  "device": "b32d8398",
+  "measuredAt": "2026-09-16 08:39:31",
+  "literalCount": 0,
+  "literalHits": [],
+  "realRefCount": 2,
+  "perIcon": {
+    "U+2726 ✦": {
+      "literal": false,
+      "realRef": false,
+      "realChar": true
+    },
+    "U+2699 ⚙": {
+      "literal": false,
+      "realRef": false,
+      "realChar": true
+    },
+    "U+1F4CE 📎": {
+      "literal": false,
+      "realRef": true,
+      "realChar": false
+    }
+  },
+  "closeGlyphDecoded": true,
+  "iconNodes": [
+    {
+      "Code": "10022",
+      "Char": "✦",
+      "Text": "✦",
+      "X1": 46,
+      "Y1": 1466,
+      "X2": 127,
+      "Y2": 1528,
+      "W": 81,
+      "H": 62
+    },
+    {
+      "Code": "9881",
+      "Char": "⚙",
+      "Text": "⚙",
+      "X1": 46,
+      "Y1": 1615,
+      "X2": 127,
+      "Y2": 1677,
+      "W": 81,
+      "H": 62
+    },
+    {
+      "Code": "128206",
+      "Char": "📎",
+      "Text": "&#128206;",
+      "X1": 46,
+      "Y1": 1765,
+      "X2": 127,
+      "Y2": 1827,
+      "W": 81,
+      "H": 62
+    }
+  ]
+}

@@ -1,0 +1,118 @@
+{
+  "self_test": {
+    "ok": true,
+    "synth_tofu": {
+      "ink_bbox": [
+        2,
+        2,
+        41,
+        41
+      ],
+      "bbox_w": 40,
+      "bbox_h": 40,
+      "aspect": 1.0,
+      "width_cv": 0.0,
+      "mid_ink_median": 0.15,
+      "ink_ratio_in_bbox": 0.2775,
+      "inked_rows": 40
+    },
+    "synth_gear": {
+      "ink_bbox": [
+        4,
+        4,
+        39,
+        39
+      ],
+      "bbox_w": 36,
+      "bbox_h": 36,
+      "aspect": 1.0,
+      "width_cv": 0.4644,
+      "mid_ink_median": 0.6667,
+      "ink_ratio_in_bbox": 0.5123,
+      "inked_rows": 36
+    }
+  },
+  "icons": {
+    "✦": {
+      "code": "10022",
+      "text": "&amp;#10022;",
+      "crop_box": [
+        40,
+        1132,
+        133,
+        1328
+      ],
+      "threshold": 128,
+      "metrics": {
+        "ink_bbox": [
+          9,
+          21,
+          92,
+          182
+        ],
+        "bbox_w": 84,
+        "bbox_h": 162,
+        "aspect": 0.519,
+        "width_cv": 0.4386,
+        "mid_ink_median": 0.1786,
+        "ink_ratio_in_bbox": 0.1204,
+        "inked_rows": 114
+      },
+      "verdict": "glyph-like"
+    },
+    "⚙": {
+      "code": "9881",
+      "text": "&amp;#9881;",
+      "crop_box": [
+        40,
+        1364,
+        133,
+        1560
+      ],
+      "threshold": 128,
+      "metrics": {
+        "ink_bbox": [
+          9,
+          21,
+          66,
+          182
+        ],
+        "bbox_w": 58,
+        "bbox_h": 162,
+        "aspect": 0.358,
+        "width_cv": 0.2792,
+        "mid_ink_median": 0.2069,
+        "ink_ratio_in_bbox": 0.1569,
+        "inked_rows": 108
+      },
+      "verdict": "glyph-like"
+    },
+    "📎": {
+      "code": "128206",
+      "text": "&amp;#128206;",
+      "crop_box": [
+        40,
+        1595,
+        133,
+        1852
+      ],
+      "threshold": 128,
+      "metrics": {
+        "ink_bbox": [
+          9,
+          21,
+          92,
+          243
+        ],
+        "bbox_w": 84,
+        "bbox_h": 223,
+        "aspect": 0.377,
+        "width_cv": 0.5214,
+        "mid_ink_median": 0.1429,
+        "ink_ratio_in_bbox": 0.1002,
+        "inked_rows": 147
+      },
+      "verdict": "glyph-like"
+    }
+  }
+}

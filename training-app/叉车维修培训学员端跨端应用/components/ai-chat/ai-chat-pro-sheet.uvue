@@ -71,10 +71,13 @@
 	}>()
 
 	// 能力清单（常量：与页面横幅文案同源口径，改动只在此处）
+	// 图标一律写**真实码点字符**，不要写 HTML 实体：实体只在模板静态文本里被解码，
+	// `<script>` 里的字符串会原样上屏（#957；守护见 utils/uvueEntityLiteralContract.test.js，
+	// 口径见移动端 docs/adr/0015-uvue实体解码边界.md —— 移动端 ADR 编号与根仓库 ADR-00xx 是两套）
 	const capabilities : ProCapability[] = [
-		{ icon: '&#10022;', title: '选择模型', desc: '在管理员模型列表里自由切换' },
-		{ icon: '&#9881;', title: '自定义模型', desc: '填自己的 API Key 与地址' },
-		{ icon: '&#128206;', title: '发送图片', desc: '把故障照片发给 AI 看' }
+		{ icon: '✦', title: '选择模型', desc: '在管理员模型列表里自由切换' },
+		{ icon: '⚙', title: '自定义模型', desc: '填自己的 API Key 与地址' },
+		{ icon: '📎', title: '发送图片', desc: '把故障照片发给 AI 看' }
 	]
 
 	// 余额够不够（客户端预判只为提示口径；**真正的判定在服务端兑换管线**）
