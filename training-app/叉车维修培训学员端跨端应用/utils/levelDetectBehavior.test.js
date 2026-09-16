@@ -13,7 +13,11 @@
  *   G1  干净工作树（本仓真实调用，本次崩溃的原始场景）：不抛错
  *   G1b 空 diff（临时干净仓库）⇒ Level=quick 且不抛错 —— 崩溃分支的确定性复现
  *   G2  单个改动文件 ⇒ 不崩，且 ChangedFiles 保持数组语义（未包 @() 会退化成标量）
- *   G3  -ForceLevel 覆盖自动判定，且 ChangedFiles 仍是数组
+ *   G3  -ForceLevel 覆盖自动判定，且 ChangedFiles 仍是数组（**且带上真实改动集**，2026-09-16）
+ *   G4  只改 .ps1 ⇒ quick 且原因点名「工具链」（2026-09-15）
+ *   G5  只改 .uvue ⇒ quick，但原因必须点名「验收门口径 / ①③④」，**不得**声称「未命中运行时面」（2026-09-16，#1037）
+ *   G6  只改 .ts（非 .uvue 非工具链）⇒ quick 且原因写「非运行时面改动，未命中运行时面」
+ *   G7  Get-QuickEvidenceHint 的行为分流：含 .uvue ⇒ 明说「不要写『免』」；否则 ⇒ 「免（未命中运行时面）」
  *
  * 运行前提：需要 `pwsh`（PowerShell 7）。**不可用时 fail-closed 抛错，不 skip** ——
  * 与仓库先例 `mpWeixinGateContract.test.js:143` 一致；静默跳过等于假绿。
@@ -43,10 +47,14 @@ function psArgs(extra) {
  * 脚本体通过 -EncodedCommand 传入，避免与 PowerShell 的引号 / `$` 转义打架。
  * 返回 { ok, status, stdout, stderr }；失败不吞异常（fail-closed）。
  */
-function invokeDetectLevel(projectDir, forceLevel) {
-  const q = (s) => `'${String(s).replace(/'/g, "''")}'`;
-  const force = forceLevel ? `-ForceLevel ${q(forceLevel)}` : '';
-  const script = [
+/** 单引号转义（PowerShell 字面量）。 */
+function q(s) {
+  return `'${String(s).replace(/'/g, "''")}'`;
+}
+
+/** dot-source 目标模块的前导语句（输出编码钉法见注释，别删）。 */
+function psPrelude() {
+  return [
     '$ErrorActionPreference = "Stop"',
     // ⚠️ 必须先把输出编码钉成 UTF-8：脚本打的是中文 `Reason`，而 pwsh 在被管道捕获时
     //    默认用 **OEM 代码页**（本机 GBK）输出 ⇒ Node 按 UTF-8 解码会得到乱码，
@@ -55,12 +63,16 @@ function invokeDetectLevel(projectDir, forceLevel) {
     '$OutputEncoding = [System.Text.Encoding]::UTF8',
     'Set-StrictMode -Version Latest',
     `. ${q(path.join(ROOT, LIB_REL))}`,
-    `$r = Get-DetectLevel -ProjectDir ${q(projectDir)} ${force}`.trim(),
-    'Write-Output ("LEVEL=" + $r.Level)',
-    'Write-Output ("REASON=" + $r.Reason)',
-    'Write-Output ("CF_ARRAY=" + ($r.ChangedFiles -is [array]))',
-  ].join('; ');
+  ];
+}
 
+/**
+ * 在 Set-StrictMode -Latest 下 dot-source 目标模块并执行若干语句。
+ * 脚本体通过 -EncodedCommand 传入，避免与 PowerShell 的引号 / `$` 转义打架。
+ * 返回 { ok, status, stdout, stderr }；失败不吞异常（fail-closed）。
+ */
+function runInModule(statements) {
+  const script = psPrelude().concat(statements).join('; ');
   const encoded = Buffer.from(script, 'utf16le').toString('base64');
   const exe = powershellExe();
   const args = psArgs(['-EncodedCommand', encoded]);
@@ -80,6 +92,25 @@ function invokeDetectLevel(projectDir, forceLevel) {
       stderr: String(e.stderr || e.message || ''),
     };
   }
+}
+
+function invokeDetectLevel(projectDir, forceLevel) {
+  const force = forceLevel ? `-ForceLevel ${q(forceLevel)}` : '';
+  return runInModule([
+    `$r = Get-DetectLevel -ProjectDir ${q(projectDir)} ${force}`.trim(),
+    'Write-Output ("LEVEL=" + $r.Level)',
+    'Write-Output ("REASON=" + $r.Reason)',
+    'Write-Output ("CF_ARRAY=" + ($r.ChangedFiles -is [array]))',
+  ]);
+}
+
+/** 调 Get-QuickEvidenceHint（🟢 收尾建议句的单点真源，#1037）。 */
+function invokeQuickHint(files) {
+  const list = '@(' + files.map(q).join(', ') + ')';
+  return runInModule([
+    `$h = Get-QuickEvidenceHint -ChangedFiles ${list}`,
+    'Write-Output ("HINT=" + $h)',
+  ]);
 }
 
 function parseResult(stdout) {
@@ -181,16 +212,55 @@ describe('level-detect.ps1 行为级守护（运行期）', () => {
     });
   });
 
-  test('G5: 只改 .uvue ⇒ quick 且原因写「纯样式/文案」并注明未命中运行时面', () => {
+  // G5 于 2026-09-16 改写（#1037）：**旧断言恰好锁着这个 bug** —— 它要求 `.uvue` 的 Reason 里出现
+  // 「未命中运行时面」，而 `.uvue` 在验收门口径（`pr-evidence` 的 `isRuntimeFile`）里就是运行时面。
+  // 旧文案于是被两条断言（文本 L3 + 行为 G5）一起钉死，改文案必须先改断言 —— 这正是本次要做的。
+  test('G5: 只改 .uvue ⇒ quick，但原因必须点名验收门口径，且不得声称「未命中运行时面」', () => {
     withCleanRepo(['pages/home/home.uvue'], (tmp) => {
       fs.appendFileSync(path.join(tmp, 'pages/home/home.uvue'), '\n<!-- tweak -->\n');
       const r = invokeDetectLevel(tmp, '');
       if (!r.ok) throw new Error(`样式改动场景崩溃：\nexit=${r.status}\nstderr=${r.stderr}`);
       const parsed = parseResult(r.stdout);
       expect(parsed.level).toBe('quick');
-      expect(parsed.reason).toContain('纯样式/文案改动');
+      expect(parsed.reason).toContain('验收门口径');
+      expect(parsed.reason).toContain('①③④');
+      // 关键：**不得**再说「未命中运行时面」（那正是本次要修的误导）
+      expect(parsed.reason).not.toContain('未命中运行时面');
+      expect(parsed.reason).not.toContain('工具链');
+    });
+  });
+
+  test('G6: 只改 .ts（非 .uvue、非工具链）⇒ quick 且原因写「非运行时面改动，未命中运行时面」', () => {
+    withCleanRepo(['utils/a.ts'], (tmp) => {
+      fs.appendFileSync(path.join(tmp, 'utils/a.ts'), '\n// tweak\n');
+      const r = invokeDetectLevel(tmp, '');
+      if (!r.ok) throw new Error(`非运行时面场景崩溃：\nexit=${r.status}\nstderr=${r.stderr}`);
+      const parsed = parseResult(r.stdout);
+      expect(parsed.level).toBe('quick');
+      expect(parsed.reason).toContain('非运行时面改动');
       expect(parsed.reason).toContain('未命中运行时面');
       expect(parsed.reason).not.toContain('工具链');
     });
+  });
+
+  // G7（2026-09-16，#1037）：🟢 收尾建议句的**行为**决定人往 PR 正文里写什么 ——
+  // 写错就让一个本该绿的 PR 判红（「免（低风险运行时面：仅 .uvue 样式/文案改动）」就是这么来的）。
+  // 纯函数，不需要临时仓库。
+  test('G7: Get-QuickEvidenceHint 按改动集分流', () => {
+    const hintOf = (files) => {
+      const r = invokeQuickHint(files);
+      if (!r.ok) throw new Error(`QuickHint(${files.join(',')}) 崩溃：\nexit=${r.status}\nstderr=${r.stderr}`);
+      const m = String(r.stdout).match(/^HINT=(.*)$/m);
+      if (!m) throw new Error(`QuickHint(${files.join(',')}) 没打出 HINT 行：${r.stdout}`);
+      return m[1];
+    };
+
+    const uvueHint = hintOf(['pages/home/home.uvue']);
+    expect(uvueHint).toContain('不要写「免」');
+    expect(uvueHint).toContain('运行时面');
+    expect(uvueHint).not.toContain('免（未命中运行时面）');
+
+    expect(hintOf(['utils/a.ts'])).toContain('免（未命中运行时面）');
+    expect(hintOf([])).toContain('免（未命中运行时面）');
   });
 });
