@@ -266,3 +266,31 @@ describe('clearMessages action（#620）', () => {
     expect(store.messages.filter(m => m.role === 'assistant')).toEqual([])
   })
 })
+
+// #1061：双模式均未绑定时，通用对话守卫给出的必须是一条**可据以行动**的文案。
+// 背景（#1044）：旧文案「当前模式未绑定模型，请联系管理员配置」把学员逼到死路——
+// 基础版学员在 Web 端没有任何自助配置入口，提示说了等于没说。
+describe('双模式未绑定时的空态引导（#1061）', () => {
+  it('双模式均未绑定：抛出的文案说明状态，并指向页内仍可用的专项功能', async () => {
+    const store = useAIAssistantStore()
+    store.modeModels = { normal: null, expert: null }
+    store.selectedMode = 'normal'
+
+    const err = await store.sendMessage('叉车液压压力不足怎么查？').then(
+      () => null,
+      (e: Error) => e
+    )
+    expect(err).toBeInstanceOf(Error)
+    const msg = (err as Error).message
+    // 可执行性判据：① 说清「哪条通道不可用」② 点到学员当下真能用的入口
+    // （「智能维修诊断」与页内功能胶囊同名，是线上确认可用的那条）
+    expect(msg).toContain('通用对话暂不可用')
+    expect(msg).toContain('智能维修诊断')
+  })
+
+  it('只绑一条模式即放行：守卫只在双模式都空时拦截（不误伤可用模式）', async () => {
+    const store = createStore() // normal 已绑、expert 为空
+    const { p } = await startSend(store, '普通模式可用')
+    await expect(p).resolves.toBeUndefined()
+  })
+})
