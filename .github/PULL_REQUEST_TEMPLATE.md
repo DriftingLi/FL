@@ -24,9 +24,10 @@ master 有 ruleset「protect master」，必检只有 ci-summary；pr-evidence �
 ## 验收证据
 
 <!--
-口径见 ADR-0008。分级判据：改动集命中 *.uvue / *.uts，或 training-app 下的
-manifest.json / pages.json / platformConfig.json 时，本段必须逐门填写；未命中的 PR
-只需保留本段并写「免（未命中运行时面）」。
+口径见 ADR-0008。**分级判据（哪些改动算命中运行时面）的权威定义在**
+`.github/workflows/pr-evidence.yml` 的校验器源码里（逐 PR 运行、以它为准）——
+本模板**刻意不再复述那份文件清单**：复述品会与权威定义漂移，历史上已因此产生过一次假红
+（作者照模板写正文，却被校验器判红）。**未命中运行时面的 PR 仍按约定写「免（未命中运行时面）」**。
 
 字段格式固定：执行人（④ / ② / ①a 填执行会话所用账号并注明「agent 执行」；含 ①b 时必须是**人**给出的原文，agent 只可代录） · 日期（YYYY-MM-DD） · 复测对象 · 结论（含产物）
 「待人工」「⏳」或只有勾选 = 缺证据，pr-evidence 会直接红；结论必须引用可核验产物：

@@ -27,6 +27,11 @@ import { execFileSync } from 'node:child_process'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
+// 新增行解析的单点实现（ADR-0053 §10）——两个守卫共用一份，含 quotepath 转义解码。
+import { parseAddedLines } from './lib/added-lines.mjs'
+
+export { parseAddedLines }
+
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const DEFAULT_SCAN_DIR = join(ROOT, 'frontend', 'src')
 
@@ -149,40 +154,6 @@ function reportAll(scanDir) {
   console.log('共 ' + violations.length + ' 处。请在 frontend/src/api/ 下补具名方法，页面只调它：')
   console.log('  —— 响应类型取 `@/api/generated/*`（后端注解 → swagger → go run ./cmd/gen-apitypes），不手写。')
   return 1
-}
-
-/** 解析 git diff 的新增行 → Map<相对路径, Set<行号>>（逐行走 hunk，上下文行也推进新侧行号）。 */
-export function parseAddedLines(diffText) {
-  const added = new Map()
-  let file = null
-  let lineNo = 0
-  let inHunk = false
-  for (const line of String(diffText).split('\n')) {
-    const f = line.match(/^\+\+\+ b\/(.+)$/)
-    if (f) {
-      file = f[1]
-      if (!added.has(file)) added.set(file, new Set())
-      inHunk = false
-      continue
-    }
-    const h = line.match(/^@@ -[0-9]+(?:,[0-9]+)? \+([0-9]+)(?:,[0-9]+)? @@/)
-    if (h) {
-      lineNo = Number(h[1])
-      inHunk = true
-      continue
-    }
-    if (!inHunk || !file) continue
-    if (line.startsWith('+')) {
-      if (line.startsWith('+++')) continue
-      added.get(file).add(lineNo)
-      lineNo++
-      continue
-    }
-    if (line.startsWith('-')) continue // 删除行不影响新侧行号
-    if (line.startsWith('\\')) continue // "\ No newline at end of file"
-    lineNo++ // 上下文行（含空行）推进新侧行号
-  }
-  return added
 }
 
 function reportDiff(base) {

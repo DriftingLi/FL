@@ -44,13 +44,8 @@ jobs:
             exit 0
           fi
 
-          # 与 cd.yml gate 同款的聚合判定：同一 SHA 可能有多条 ci-summary 记录
-          CI=$(gh api "repos/$GITHUB_REPOSITORY/commits/$SHA/check-runs?per_page=100" --jq '
-            [.check_runs[] | select(.name=="ci-summary") | .conclusion]
-            | if any(. == "failure") then "failure"
-              elif any(. == "success") then "success"
-              elif length == 0 then "missing"
-              else "other" end')
+          # 与 cd.yml gate 共用同一份聚合实现（ADR-0053 §10 的单点）
+          CI=$(bash scripts/ci-summary-status.sh "$SHA")
           if [ "$CI" != "success" ]; then
             # 含 CI 仍在跑（missing/other）与 CI 失败（failure）两种情况：
             # 前者跑完会自己派发冒烟，后者本就不该部署

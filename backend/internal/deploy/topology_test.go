@@ -24,9 +24,12 @@ func TestEnvDefaultsInSync(t *testing.T) {
 // 这条测试正是能抓住已发生的漂移（REDIS_POOL_SIZE 在 CD/compose 是 20、在部署脚本曾是 10）的那条：
 // 「两条部署路径默认值不同」以前只有对着生产跑一次才发现。
 func TestEnvDefaultsNoDrift(t *testing.T) {
+	// 声明这些默认值的**全部**位置都要进锁：漏一个就漏一处漂移（deploy.sh 的 ${DB_USER:-forklift}
+	// 此前在锁外，ADR-0053 §10）。
 	files := []string{
 		filepath.Join("..", "..", "..", "docker-compose.prod.yml"),
 		filepath.Join("..", "..", "..", "scripts", "deploy-remote.sh"),
+		filepath.Join("..", "..", "..", "deploy.sh"),
 		filepath.Join("..", "..", "..", ".github", "workflows", "cd.yml"),
 	}
 	// 两种默认值写法都要认：

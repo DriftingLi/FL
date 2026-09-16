@@ -365,6 +365,13 @@ jobs:
       - name: 表驱动单测（api seam 守卫判定逻辑）
         run: node --test scripts/check-api-seam.test.mjs
 
+      # ADR-0053 §10：新增行解析是「判据的判据」，它错了两个守卫都会静默漏扫（假绿）
+      - name: 表驱动单测（新增行解析单点实现）
+        run: node --test scripts/lib/added-lines.test.mjs
+
+      - name: 一致性锁（判据不许改回双份）
+        run: node --test scripts/gate-predicates.test.mjs
+
   # ============================================================
   # Stage 7: CI 汇总 + testing 冒烟部署门禁
   #   1) 汇总各 job 结论。本 job 的 check run 名（ci-summary）是 ruleset 配置的
