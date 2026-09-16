@@ -32,7 +32,6 @@ AI 安全审计用 DeepSec（Shield）。See `docs/agents/security-scan.md`.
 
 | 文件 | 内容 | 什么时候读 |
 | --- | --- | --- |
-| [`docs/agents/issue-dispatch.md`](docs/agents/issue-dispatch.md) | Issue 派活模板与执行契约：形态判定（**本仓无 wayfinder map**）/ 读现状（认领、**查承载面**、状态现测）/ 执行与阶段闸门 / 收尾（进度契约、重复票处置）/ 正文格式（真实换行、禁 BOM） | **接到一个 issue 时（先读它）** |
 | [`docs/agents/ui-conventions.md`](docs/agents/ui-conventions.md) | 前端 UI 约定：UI 词汇（封装层/分段控件/空态两级/筛选栏/表格/确认框）、Tailwind 共存四条边界规则（R1-R4）、不得触碰的边界（brand 色域/冻结区/裸 hex/主题入口） | 改前端模板或样式前 |
 | [`docs/agents/checks.md`](docs/agents/checks.md) | 测试与检查流程：后端四件套（**Windows 本机** / WSL 双环境）、前端 type-check + vitest、部署配置校验、DeepSec 安全检测 | 每次提交前 |
 | [`docs/agents/release.md`](docs/agents/release.md) | 发布流程：分支 + PR + ruleset 门禁 + squash 直发 production，含应急通道与「禁 timeout 包 git/gh」铁律 | push / PR / merge 前 |

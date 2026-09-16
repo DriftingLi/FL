@@ -3,8 +3,12 @@
 **用法（派活时只需这一行）**：
 
 ```
-按 docs/agents/issue-dispatch.md 执行 https://github.com/DriftingLi/FL/issues/<N>
+按 training-app/叉车维修培训学员端跨端应用/docs/agents/issue-dispatch.md 执行 https://github.com/DriftingLi/FL/issues/<N>
 ```
+
+（在移动端树里作业时，本文件即该树的 `docs/agents/issue-dispatch.md`，相对路径同样可用。）
+
+**适用面（为什么它落在移动端层）**：本文件服务**移动端（uni-app-x 学员端）那条线**的派活与执行。「阶段闸门 / 进度契约 / 收尾口径」是**这条线的工作方式**，**不是全仓约定** —— 实测全仓带 `## 进度：N%` 的票绝大多数是移动端票。故它随移动端 `AGENTS.md` 导航；**前后端会话不读它、也不受它约束**。（根层 `docs/agents/` 只放跨栈的 tracker / 文档纪律。）
 
 本文件是那份长清单的**唯一事实源** —— 派活不再手写检查表。手写会漂移：模板曾长期以 `/wayfinder` 开头，而本仓**没有 map**，于是每个新会话都要重新发现一次「这里没有 map」（上一份 handoff 不得不专门写一条「**不要去找 map**」来兜，这就是那笔税）。
 

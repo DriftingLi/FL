@@ -9,7 +9,7 @@
 | 目录 | 入库 | 用途 |
 | --- | --- | --- |
 | `docs/adr/` | ✅ | 架构决策记录（`ADR-0001-…`，49 篇；移动端另有独立 ADR 体系见 `training-app/…/docs/adr/`） |
-| `docs/agents/` | ✅ | AI/agent 工作约定，由根 `AGENTS.md` 导航（issue-tracker / issue-dispatch / triage-labels / domain / security-scan / ui-conventions / checks / release / multi-agent-git） |
+| `docs/agents/` | ✅ | AI/agent 工作约定，由根 `AGENTS.md` 导航（issue-tracker / triage-labels / domain / security-scan / ui-conventions / checks / release / multi-agent-git） |
 | `docs/README.md` | ✅ | 本索引 |
 | `docs/plans/` | ❌ | 产品 / 技术方案、实施计划（当前为空；命名建议 `主题-方案.md`） |
 | `docs/reference/` | ❌ | 参考资料：业务数据表、评估填报界面、代码 Wiki 等 |
@@ -32,7 +32,6 @@
 | 文件 | 内容 |
 | --- | --- |
 | `issue-tracker.md` | Issue 存放与使用（GitHub Issues + `gh` CLI） |
-| `issue-dispatch.md` | Issue 派活模板与执行契约（形态判定 / 承载面 / 阶段闸门 / 收尾 / 正文格式） |
 | `triage-labels.md` | 五个 canonical triage labels + **重复票处置**（不新增 label，用 `close` + 指向评论表达） |
 | `domain.md` | Single-context 领域文档纪律（CONTEXT.md + ADR）+ **持久 / 临时文档分层** |
 | `security-scan.md` | DeepSec（Shield）安全审计用法与已知误报 |
