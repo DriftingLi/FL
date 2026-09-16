@@ -19,7 +19,7 @@ master 有 ruleset「protect master」，必检只有 ci-summary；pr-evidence �
 ## 影响范围 / 风险点
 <!-- 涉及哪些模块、是否影响线上、有无数据库/接口变更；跨模块夹带必须显式写明 -->
 
-- [ ] **本次改动触及「agent 观测不到的能力面」**（指纹 / 运行时权限弹窗 / 真机上传 / 厂商 ROM 交互）—— 勾上则 **①b 必做、由人给出原文**；实际触及却没勾属**漏报**（`pr-evidence` 不做机械判据，靠 ①a 的 logcat、评审与事后验证回执兜；口径见 `training-app/叉车维修培训学员端跨端应用/docs/adr/0016-真机门的人工性收缩与按批取证.md`）
+- [ ] **本次改动触及「agent 观测不到的能力面」**（指纹 / 运行时权限弹窗 / 真机上传 / 厂商 ROM 交互）—— 勾上则 **①b 必做、由人给出原文**；机检口径 = `training-app/叉车维修培训学员端跨端应用/scripts/lib/capability-surface.ps1` 的**路径白名单** + 收口脚本提示行（`dev:finish` 打 `CAPABILITY_SURFACE touched=…`），两者**只做提示、不判红**；实际触及却没勾属**漏报**（`pr-evidence` 不做机械判据，靠 ①a 的 logcat、评审与事后验证回执兜；口径见 `training-app/叉车维修培训学员端跨端应用/docs/adr/0016-真机门的人工性收缩与按批取证.md`）
 
 ## 验收证据
 
