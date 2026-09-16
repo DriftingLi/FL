@@ -8,23 +8,15 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"forklift-training/internal/codegen"
 )
 
 // 生成物同步契约（ADR-0047 §5 / spec #932）：deploy/env.defaults 必须与声明表渲染结果字节级全等。
-// 手改生成物、或改了声明表却忘记再生成，本测试即红（prior art：TestFrontendAuthzTSInSync）。
+// 手改生成物、或改了声明表却忘记再生成，本测试即红（定位与提示走 codegen.AssertInSync，
+// ADR-0053 §9；行尾按 LF 语义比对，避免 Windows 检出差异假红）。
 func TestEnvDefaultsInSync(t *testing.T) {
-	want, err := RenderEnvDefaults()
-	if err != nil {
-		t.Fatalf("渲染失败: %v", err)
-	}
-	path := filepath.Join("..", "..", "..", "deploy", "env.defaults")
-	got, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("读取生成物 %s 失败（应先运行 cd backend && go run ./cmd/gen-deploy）: %v", path, err)
-	}
-	if string(got) != want {
-		t.Fatalf("deploy/env.defaults 与声明表不同步：请 cd backend && go run ./cmd/gen-deploy")
-	}
+	codegen.AssertInSync(t, EnvDefaultsGen)
 }
 
 // 漂移锁：三份部署文件里的 `VAR:-默认值` 必须与声明表逐字一致。

@@ -1,27 +1,16 @@
 package authz
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
+
+	"forklift-training/internal/codegen"
 )
 
 // 生成物同步契约（ADR-0047 §1 / spec #928 决策 5）：前端 config/authz.ts 必须与能力表
-// 渲染结果**字节级全等**。手改生成物、或改了能力表却忘记再生成，本测试即红——
-// 与 ai_features_codegen_test.go 同一形态（ADR-0030 先例）。
+// 渲染结果**字节级全等**。手改生成物、或改了能力表却忘记再生成，本测试即红。
+// 定位与提示走 codegen.AssertInSync（ADR-0053 §9），五个域形态一致。
 func TestFrontendAuthzTSInSync(t *testing.T) {
-	want, err := RenderFrontendAuthzTS()
-	if err != nil {
-		t.Fatalf("渲染失败: %v", err)
-	}
-	path := filepath.Join("..", "..", "..", "frontend", "src", "config", "authz.ts")
-	got, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("读取生成物 %s 失败（应先运行 go run ./cmd/gen-authz）: %v", path, err)
-	}
-	if string(got) != want {
-		t.Fatalf("前端 authz.ts 与能力表不同步：请 cd backend && go run ./cmd/gen-authz\n--- want ---\n%s\n--- got ---\n%s", want, string(got))
-	}
+	codegen.AssertInSync(t, FrontendAuthzGen)
 }
 
 // 渲染是纯函数：连续两次渲染字节级一致（无时间戳、无随机序），否则同步契约无法成立。
