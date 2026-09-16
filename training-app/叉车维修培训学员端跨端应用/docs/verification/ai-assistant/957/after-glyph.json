@@ -107,9 +107,9 @@
         "bbox_w": 83,
         "bbox_h": 64,
         "aspect": 1.297,
-        "width_cv": 1.1197,
+        "width_cv": 1.1101,
         "mid_ink_median": 0.0482,
-        "ink_ratio_in_bbox": 0.0311,
+        "ink_ratio_in_bbox": 0.0309,
         "inked_rows": 52
       },
       "verdict": "glyph-like"
