@@ -1,0 +1,113 @@
+<template>
+    <!-- 上一章 / 下一章导航 —— T08 手术自 pages/courses/chapter-view.uvue 逐段搬出（parent #646 / ADR-0007）。
+         类名与结构逐字不变；原来直读 detail!.previous_chapter_id / next_chapter_id，改为扁平数字 props 下发
+         （数据所有权单一：detail 由页面持有），标题文案由页面计算后下发，切章动作 emit 回页面。 -->
+    <view class="chapter-nav">
+        <view class="nav-item nav-prev" :class="{ disabled: prevChapterId == 0 }"
+            @click="onPrevTap">
+            <text class="nav-arrow">‹</text>
+            <view class="nav-content">
+                <text class="nav-label">上一章节</text>
+                <text v-if="prevChapterId != 0" class="nav-title">{{ prevTitle }}</text>
+                <text v-else class="nav-title-muted">没有上一章节</text>
+            </view>
+        </view>
+        <view class="nav-item nav-next" :class="{ disabled: nextChapterId == 0 }"
+            @click="onNextTap">
+            <view class="nav-content nav-content-right">
+                <text class="nav-label">下一章节</text>
+                <text v-if="nextChapterId != 0" class="nav-title">{{ nextTitle }}</text>
+                <text v-else class="nav-title-muted">没有下一章节</text>
+            </view>
+            <text class="nav-arrow">›</text>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    const props = withDefaults(defineProps<{
+        prevChapterId? : number
+        nextChapterId? : number
+        prevTitle? : string
+        nextTitle? : string
+    }>(), {
+        prevChapterId: 0,
+        nextChapterId: 0,
+        prevTitle: '',
+        nextTitle: ''
+    })
+
+    const emit = defineEmits(['prev', 'next'])
+
+    function onPrevTap() : void {
+        emit('prev')
+    }
+
+    function onNextTap() : void {
+        emit('next')
+    }
+</script>
+
+<style>
+    /* 上/下章导航 */
+    .chapter-nav {
+        flex-direction: row;
+        background-color: #ffffff;
+        margin-top: 16rpx;
+        padding: 24rpx 32rpx;
+    }
+
+    .nav-item {
+        flex: 1;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .nav-item.disabled {
+        opacity: 0.4;
+    }
+
+    .nav-prev {
+        padding-right: 16rpx;
+    }
+
+    .nav-next {
+        padding-left: 16rpx;
+        justify-content: flex-end;
+    }
+
+    .nav-arrow {
+        font-size: 48rpx;
+        color: #2979ff;
+    }
+
+    .nav-content {
+        flex-direction: column;
+        margin-left: 12rpx;
+    }
+
+    .nav-content-right {
+        margin-left: 0;
+        margin-right: 12rpx;
+        align-items: flex-end;
+    }
+
+    .nav-label {
+        font-size: 22rpx;
+        color: #999999;
+        margin-bottom: 4rpx;
+    }
+
+    .nav-title {
+        font-size: 26rpx;
+        color: #333333;
+        lines: 1;
+        text-overflow: ellipsis;
+        max-width: 220rpx;
+    }
+
+    .nav-title-muted {
+        font-size: 26rpx;
+        color: #cccccc;
+    }
+</style>

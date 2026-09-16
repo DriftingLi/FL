@@ -1,0 +1,96 @@
+/**
+ * 章节学习计时与进度上报 composable（T08 courses 手术，parent #646 / ADR-0007）
+ *
+ * 逐段搬自 pages/courses/chapter-view.uvue 的 <script setup>，行为逐字保持：
+ * 进入章节起 1s 心跳计时 → 每 60s 增量上报 → 离开 / 切章前补报剩余时长（isFinal）。
+ * 上报通道 = 域 api 的 updateCourseProgressApi（页面层不直接发请求，收紧口径见本票 ⑥）。
+ *
+ * uni 生命周期钩子（onHide / onUnload）留在页面壳层，由壳层调用 stopStudy + reportIncremental(true)
+ * —— 照 T06/T07 先例：composable 不注册 uni 生命周期，页面用薄包装驱动。
+ *
+ * 计时状态（studySeconds / reportedSeconds / 两个 timer）页面不消费，故不进返回面
+ * （T05 死代码消费面核对口径：返回面只暴露真实被消费的符号）。
+ */
+import { ref } from 'vue'
+import { updateCourseProgressApi } from '../../../api/course'
+
+/** 自动增量上报间隔（秒）—— 原页面常量，逐字搬入 */
+const AUTO_REPORT_INTERVAL = 60
+
+/** 本 composable 的显式返回类型（Kotlin error18 规避，先例 useMockExamResult / usePracticeSession） */
+export type UseChapterStudyResult = {
+    beginStudy : (courseId : number, chapterId : number) => void
+    stopStudy : () => void
+    reportIncremental : (isFinal : boolean) => Promise<void>
+}
+
+export function useChapterStudy() : UseChapterStudyResult {
+    const studySeconds = ref<number>(0)
+    let studyTimer : number | null = null
+    let studyStartTime : number | null = null
+    let autoReportTimer : number | null = null
+    let reportedSeconds = 0
+    // 上报目标在进入章节时记下：切章是「先补报旧章、再换 chapterId」，故不能用「当前章节」反推
+    let reportCourseId = 0
+    let reportChapterId = 0
+
+    async function reportIncremental(isFinal : boolean = false) : Promise<void> {
+        if (reportCourseId <= 0 || reportChapterId <= 0) return
+        const incremental = studySeconds.value - reportedSeconds
+        if (incremental <= 0) return
+        if (!isFinal && incremental < 60) return
+        const durationMinutes = Math.max(Math.ceil(incremental / 60), 1)
+        try {
+            await updateCourseProgressApi(reportCourseId, reportChapterId, durationMinutes)
+            reportedSeconds += incremental
+        } catch (e) {
+            if (!isFinal) {
+                console.warn('[chapter-view] report incremental failed:', e)
+            }
+        }
+    }
+
+    function beginStudy(courseId : number, chapterId : number) : void {
+        reportCourseId = courseId
+        reportChapterId = chapterId
+        studySeconds.value = 0
+        reportedSeconds = 0
+        studyStartTime = Date.now()
+        // 局部变量承接后判空（studyTimer 被闭包捕获修改，Kotlin 禁止智能转换）
+        const st1 = studyTimer
+        if (st1 != null) clearInterval(st1)
+        const at1 = autoReportTimer
+        if (at1 != null) clearInterval(at1)
+        studyTimer = setInterval(() : void => {
+            // studyStartTime 被本闭包捕获且他处修改，Kotlin 禁止智能转换，用局部变量承接
+            const sst = studyStartTime
+            if (sst != null) {
+                studySeconds.value = Math.floor((Date.now() - sst) / 1000)
+            }
+        }, 1000)
+        autoReportTimer = setInterval(() : void => {
+            reportIncremental(false)
+        }, AUTO_REPORT_INTERVAL * 1000)
+    }
+
+    function stopStudy() : void {
+        // 局部变量承接后判空（studyTimer 被闭包捕获修改，Kotlin 禁止智能转换）
+        const st2 = studyTimer
+        if (st2 != null) {
+            clearInterval(st2)
+            studyTimer = null
+        }
+        const at2 = autoReportTimer
+        if (at2 != null) {
+            clearInterval(at2)
+            autoReportTimer = null
+        }
+        studyStartTime = null
+    }
+
+    return {
+        beginStudy: (courseId : number, chapterId : number) => beginStudy(courseId, chapterId),
+        stopStudy: () => stopStudy(),
+        reportIncremental: (isFinal : boolean) => reportIncremental(isFinal),
+    } as UseChapterStudyResult
+}
