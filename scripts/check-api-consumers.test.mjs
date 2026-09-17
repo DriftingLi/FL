@@ -192,27 +192,64 @@ test('销账信号（必须红）：已登记端点仍挂在 ALLOWLIST 里', () 
 
 // ===== ALLOWLIST 卫生：不许有死条目（文件里已经没有这个消费）=====
 
-test('ALLOWLIST 逐条可解释且不许有死条目：摘掉条目后该消费必须真的报红', () => {
-  const keys = Object.keys(ALLOWLIST)
-  assert.ok(keys.length > 0, 'ALLOWLIST 为空时请删掉本用例（现状 4 条 createCrud 动态欠条；4 条巡检端点已随 #1097 销账）')
-  for (const key of keys) {
-    const sep = key.indexOf('::')
-    assert.ok(sep > 0, 'ALLOWLIST 键格式必须是 "<文件>::<METHOD> <模式>"：' + key)
-    const file = key.slice(0, sep)
-    const rest = key.slice(sep + 2)
-    assert.equal(isGuardedPath(file), true, 'ALLOWLIST 文件不在守卫面：' + file)
-    assert.match(rest, /^(GET|POST|PUT|DELETE|PATCH) \S/, 'ALLOWLIST 键缺 METHOD/模式：' + key)
-    const source = readFileSync(resolve(ROOT, file), 'utf8')
-    const reason = ALLOWLIST[key]
-    delete ALLOWLIST[key]
-    try {
-      const live = scanSource(source, file).some(
-        (v) => file + '::' + v.method + ' ' + v.pattern === key
-      )
-      assert.ok(live, 'ALLOWLIST 死条目（文件里已经没有这个消费，删掉它）：' + key)
-    } finally {
-      ALLOWLIST[key] = reason
-    }
+/**
+ * 摘掉条目后，该消费是否仍在这份源码里报红（true = 条目还活着：文件里确实还有这个消费，
+ * 且没有豁免时它本身就是违规）。sourceOverride 只给下面的合成探针用。
+ */
+function allowlistEntryIsLive(key, sourceOverride) {
+  const sep = key.indexOf('::')
+  assert.ok(sep > 0, 'ALLOWLIST 键格式必须是 "<文件>::<METHOD> <模式>"：' + key)
+  const file = key.slice(0, sep)
+  const rest = key.slice(sep + 2)
+  assert.equal(isGuardedPath(file), true, 'ALLOWLIST 文件不在守卫面：' + file)
+  assert.match(rest, /^(GET|POST|PUT|DELETE|PATCH) \S/, 'ALLOWLIST 键缺 METHOD/模式：' + key)
+  const source = sourceOverride ?? readFileSync(resolve(ROOT, file), 'utf8')
+  const reason = ALLOWLIST[key]
+  delete ALLOWLIST[key]
+  try {
+    return scanSource(source, file).some((v) => file + '::' + v.method + ' ' + v.pattern === key)
+  } finally {
+    ALLOWLIST[key] = reason
+  }
+}
+
+test('ALLOWLIST 清零：#1120 销掉最后 4 条 createCrud 动态欠条', () => {
+  assert.deepEqual(
+    Object.keys(ALLOWLIST),
+    [],
+    'ALLOWLIST 应为空表；新增欠条要逐条写明理由（补一个销一个，见脚本头部）'
+  )
+})
+
+test('ALLOWLIST 卫生：逐条可解释且不许有死条目（摘掉条目后该消费必须真的报红）', () => {
+  for (const key of Object.keys(ALLOWLIST)) {
+    assert.ok(allowlistEntryIsLive(key), 'ALLOWLIST 死条目（文件里已经没有这个消费，删掉它）：' + key)
+  }
+})
+
+// 空表之后，「不许有死条目」这条判据靠下面两个合成探针继续钉住：判定面对「消费已消失」的
+// 条目必须仍然敏感（否则将来补的欠条可以永远挂着不被发现）。
+test('ALLOWLIST 死条目判定仍然有效（合成探针）：活条目判活、死条目判死', () => {
+  const file = CONSUMER_DIR + '/inspection.ts'
+  // 活条目：源码里确有这条消费，且摘掉欠条后它本身就是违规（未登记端点）→ 必须判活。
+  const live = file + '::GET /admin/never-declared-1120'
+  ALLOWLIST[live] = '探针：合成源码里消费了这个未登记端点'
+  try {
+    assert.equal(
+      allowlistEntryIsLive(live, "await unwrappedRequest.get('/admin/never-declared-1120')"),
+      true,
+      '活条目必须判活'
+    )
+  } finally {
+    delete ALLOWLIST[live]
+  }
+  // 死条目：真实源码里没有这个消费 → 必须判死（这是「不许有死条目」判据的底线）。
+  const dead = file + '::GET /admin/never-consumed-1120'
+  ALLOWLIST[dead] = '探针：这份源码里没有这个消费'
+  try {
+    assert.equal(allowlistEntryIsLive(dead), false, '死条目必须判死')
+  } finally {
+    delete ALLOWLIST[dead]
   }
 })
 
