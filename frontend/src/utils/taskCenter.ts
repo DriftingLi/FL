@@ -2,7 +2,9 @@
 // #388 前占位页遗留的 mock 任务数据与 localStorage 辅助函数（loadTasks/saveTasks/
 // loadPoints/savePoints/resetTaskCenter）已移除——任务中心只信任后端实时任务列表，
 // 不再有任何本地占位回退（spec #408「占位数据不再是后端异常的正确呈现」）。
-export type TaskGroup = 'daily' | 'newbie' | 'growth'
+// 分组值域（ADR-0054）：growth 已退役并入 daily —— 三项 growth 任务的
+// (daily_limit, total_limit) 与 daily_* 逐字一致，group 本就是 total_limit 的投影。
+export type TaskGroup = 'daily' | 'newbie'
 export type TaskStatus = 'todo' | 'claimable' | 'claimed'
 
 export interface TaskItem {
@@ -24,15 +26,14 @@ export interface PointsSummary {
 export const groupLabelMap: Record<TaskGroup, string> = {
   daily: '每日任务',
   newbie: '新手任务',
-  growth: '成长任务',
 }
 
-// 分组口径文案与后端配置同源：#410 后成长任务与每日任务同为「每日可领」，
-// 不再保留「累计达成可领取」这类与每日口径冲突的占位文案。
+// 分组口径文案与后端配置同源。#410 后 growth 与 daily 同为「每日可领」；
+// ADR-0054 干脆把 growth 并入 daily —— 旧文案「当日达成当日领」也随之收紧：
+// daily_login 已无行为前置（进任务中心即可领），不再对全组成立。
 export const groupDescMap: Record<TaskGroup, string> = {
-  daily: '每日 0 点重置，当日达成当日领',
+  daily: '每日 0 点重置，当日各可领一次',
   newbie: '一次性任务，完成后不再出现',
-  growth: '每日达成每日领，当日 0 点重置',
 }
 
 // 幂等错误的语义分级（#409）：按任务分组区分提示文案，不再依赖后端中文字串匹配。

@@ -147,7 +147,7 @@ const todayEarnable = computed(() =>
 )
 
 const grouped = computed(() => {
-  const order: TaskGroup[] = ['daily', 'newbie', 'growth']
+  const order: TaskGroup[] = ['daily', 'newbie']
   return order.map((key) => ({
     key,
     label: groupLabelMap[key],

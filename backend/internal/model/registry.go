@@ -110,7 +110,6 @@ var ModelBlocks = []ModelBlock{
 			&PointsTaskConfig{},
 			&PointsTaskClaim{},
 			&PointsUserProgress{},
-			&UserDailyLogin{},
 			&PointsShopItem{},
 			&UserEntitlement{},
 			&PointsEntryIdem{},
