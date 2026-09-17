@@ -10,6 +10,7 @@ import (
 
 	"github.com/jung-kurt/gofpdf"
 
+	"forklift-training/internal/pdfutil"
 	"forklift-training/internal/valuation/model"
 )
 
@@ -31,7 +32,7 @@ func GenerateBatteryReportBytes(eval *model.BatteryEvaluation) ([]byte, error) {
 	pdf := gofpdf.New("P", "mm", "A4", "")
 	pdf.SetMargins(pageMargin, pageMargin, pageMargin)
 	pdf.SetAutoPageBreak(true, pageMargin)
-	if err := ensureFontLoaded(pdf); err != nil {
+	if err := pdfutil.EnsureFontLoaded(pdf); err != nil {
 		return nil, err
 	}
 	g := &Generator{}
@@ -52,15 +53,15 @@ func GenerateBatteryReportBytes(eval *model.BatteryEvaluation) ([]byte, error) {
 
 // renderBatteryCover 电池报告封面
 func (g *Generator) renderBatteryCover(pdf *gofpdf.Fpdf, eval *model.BatteryEvaluation) {
-	pdf.SetFont(FontSimHeiBold, "B", batteryTitleSize)
+	pdf.SetFont(pdfutil.FontSimHeiBold, "B", batteryTitleSize)
 	pdf.SetXY(pageMargin, 60)
 	pdf.CellFormat(contentWidth, 15, "锂电池 RUL 评估报告", "", 1, "C", false, 0, "")
 
-	pdf.SetFont(FontSimHei, "", batteryH1Size)
+	pdf.SetFont(pdfutil.FontSimHei, "", batteryH1Size)
 	pdf.SetXY(pageMargin, 85)
 	pdf.CellFormat(contentWidth, 10, "Lithium Battery Remaining Useful Life Report", "", 1, "C", false, 0, "")
 
-	pdf.SetFont(FontSimHei, "", batteryH2Size)
+	pdf.SetFont(pdfutil.FontSimHei, "", batteryH2Size)
 	pdf.SetXY(pageMargin, 120)
 	pdf.CellFormat(contentWidth, 8, fmt.Sprintf("报告编号：BAT-%06d", eval.ID), "", 1, "C", false, 0, "")
 
@@ -71,18 +72,18 @@ func (g *Generator) renderBatteryCover(pdf *gofpdf.Fpdf, eval *model.BatteryEval
 	btName := batteryTypeName(eval.BatteryType)
 	pdf.CellFormat(contentWidth, 8, fmt.Sprintf("电池类型：%s", btName), "", 1, "C", false, 0, "")
 
-	pdf.SetFont(FontSimHei, "", batteryBodySize)
+	pdf.SetFont(pdfutil.FontSimHei, "", batteryBodySize)
 	pdf.SetXY(pageMargin, 250)
 	pdf.CellFormat(contentWidth, 6, "本报告由系统自动生成，仅供参考", "", 1, "C", false, 0, "")
 }
 
 // renderBatteryInfo 渲染电池基本信息
 func (g *Generator) renderBatteryInfo(pdf *gofpdf.Fpdf, eval *model.BatteryEvaluation) {
-	pdf.SetFont(FontSimHeiBold, "B", batteryH1Size)
+	pdf.SetFont(pdfutil.FontSimHeiBold, "B", batteryH1Size)
 	pdf.CellFormat(contentWidth, 10, "一、电池基本信息", "", 1, "L", false, 0, "")
 	pdf.Ln(2)
 
-	pdf.SetFont(FontSimHei, "", batteryBodySize)
+	pdf.SetFont(pdfutil.FontSimHei, "", batteryBodySize)
 	rows := [][2]string{
 		{"电池类型", batteryTypeName(eval.BatteryType)},
 		{"电池型号", defaultIfEmpty(eval.BatteryModel, "-")},
@@ -90,9 +91,9 @@ func (g *Generator) renderBatteryInfo(pdf *gofpdf.Fpdf, eval *model.BatteryEvalu
 		{"评估时间", eval.CreatedAt},
 	}
 	for _, row := range rows {
-		pdf.SetFont(FontSimHeiBold, "B", batteryBodySize)
+		pdf.SetFont(pdfutil.FontSimHeiBold, "B", batteryBodySize)
 		pdf.CellFormat(40, batteryTableRowSize, row[0]+"：", "", 0, "L", false, 0, "")
-		pdf.SetFont(FontSimHei, "", batteryBodySize)
+		pdf.SetFont(pdfutil.FontSimHei, "", batteryBodySize)
 		pdf.CellFormat(contentWidth-40, batteryTableRowSize, row[1], "", 1, "L", false, 0, "")
 	}
 	pdf.Ln(3)
@@ -100,45 +101,45 @@ func (g *Generator) renderBatteryInfo(pdf *gofpdf.Fpdf, eval *model.BatteryEvalu
 
 // renderBatteryConclusion 评估结论（健康度 + RUL）
 func (g *Generator) renderBatteryConclusion(pdf *gofpdf.Fpdf, eval *model.BatteryEvaluation) {
-	pdf.SetFont(FontSimHeiBold, "B", batteryH1Size)
+	pdf.SetFont(pdfutil.FontSimHeiBold, "B", batteryH1Size)
 	pdf.CellFormat(contentWidth, 10, "二、评估结论", "", 1, "L", false, 0, "")
 	pdf.Ln(2)
 
 	// 健康度大字
-	pdf.SetFont(FontSimHeiBold, "B", 36)
+	pdf.SetFont(pdfutil.FontSimHeiBold, "B", 36)
 	pdf.SetTextColor(62, 106, 225) // Electric Blue
 	pdf.CellFormat(contentWidth, 18, fmt.Sprintf("SOH %.1f %%", eval.SohPercent), "", 1, "C", false, 0, "")
 	pdf.SetTextColor(0, 0, 0)
-	pdf.SetFont(FontSimHei, "", batteryBodySize)
+	pdf.SetFont(pdfutil.FontSimHei, "", batteryBodySize)
 	pdf.CellFormat(contentWidth, 6, "当前健康度（State of Health）", "", 1, "C", false, 0, "")
 	pdf.Ln(4)
 
 	// RUL 大字
-	pdf.SetFont(FontSimHeiBold, "B", 36)
+	pdf.SetFont(pdfutil.FontSimHeiBold, "B", 36)
 	pdf.SetTextColor(62, 106, 225)
 	pdf.CellFormat(contentWidth, 18, fmt.Sprintf("%d 循环", eval.RulCycles), "", 1, "C", false, 0, "")
 	pdf.SetTextColor(0, 0, 0)
-	pdf.SetFont(FontSimHei, "", batteryBodySize)
+	pdf.SetFont(pdfutil.FontSimHei, "", batteryBodySize)
 	pdf.CellFormat(contentWidth, 6, "预测剩余循环数（Remaining Useful Life）", "", 1, "C", false, 0, "")
 	pdf.Ln(4)
 
 	// 置信度
-	pdf.SetFont(FontSimHei, "", batteryBodySize)
+	pdf.SetFont(pdfutil.FontSimHei, "", batteryBodySize)
 	pdf.CellFormat(contentWidth, 6, fmt.Sprintf("预测置信度：%.1f%%（置信区间 %d ~ %d 循环）", eval.Confidence*100, eval.ConfidenceLow, eval.ConfidenceHigh), "", 1, "C", false, 0, "")
 	pdf.Ln(4)
 }
 
 // renderBatteryTopFeatures Top-5 特征重要性
 func (g *Generator) renderBatteryTopFeatures(pdf *gofpdf.Fpdf, eval *model.BatteryEvaluation) {
-	pdf.SetFont(FontSimHeiBold, "B", batteryH1Size)
+	pdf.SetFont(pdfutil.FontSimHeiBold, "B", batteryH1Size)
 	pdf.CellFormat(contentWidth, 10, "三、Top-5 关键特征", "", 1, "L", false, 0, "")
 	pdf.Ln(2)
-	pdf.SetFont(FontSimHei, "", batteryBodySize)
+	pdf.SetFont(pdfutil.FontSimHei, "", batteryBodySize)
 	pdf.CellFormat(contentWidth, 6, "按重要性排序的特征组（基于充电 CC-CV 段 20 维特征聚合）", "", 1, "L", false, 0, "")
 	pdf.Ln(2)
 
 	// 表头
-	pdf.SetFont(FontSimHeiBold, "B", batteryBodySize)
+	pdf.SetFont(pdfutil.FontSimHeiBold, "B", batteryBodySize)
 	pdf.SetFillColor(240, 240, 240)
 	pdf.CellFormat(15, batteryTableRowSize, "序号", "1", 0, "C", true, 0, "")
 	pdf.CellFormat(60, batteryTableRowSize, "特征名称", "1", 0, "C", true, 0, "")
@@ -151,7 +152,7 @@ func (g *Generator) renderBatteryTopFeatures(pdf *gofpdf.Fpdf, eval *model.Batte
 	if len(eval.FeatureImportance) < limit {
 		limit = len(eval.FeatureImportance)
 	}
-	pdf.SetFont(FontSimHei, "", batteryBodySize)
+	pdf.SetFont(pdfutil.FontSimHei, "", batteryBodySize)
 	for i := 0; i < limit; i++ {
 		f := eval.FeatureImportance[i]
 		pdf.CellFormat(15, batteryTableRowSize, fmt.Sprintf("%d", i+1), "1", 0, "C", false, 0, "")
@@ -171,19 +172,19 @@ func (g *Generator) renderBatteryTopFeatures(pdf *gofpdf.Fpdf, eval *model.Batte
 
 // renderBatteryConfidence 置信区间
 func (g *Generator) renderBatteryConfidence(pdf *gofpdf.Fpdf, eval *model.BatteryEvaluation) {
-	pdf.SetFont(FontSimHeiBold, "B", batteryH1Size)
+	pdf.SetFont(pdfutil.FontSimHeiBold, "B", batteryH1Size)
 	pdf.CellFormat(contentWidth, 10, "四、置信区间与评估建议", "", 1, "L", false, 0, "")
 	pdf.Ln(2)
-	pdf.SetFont(FontSimHei, "", batteryBodySize)
+	pdf.SetFont(pdfutil.FontSimHei, "", batteryBodySize)
 	pdf.CellFormat(contentWidth, 6, fmt.Sprintf("置信区间：%d ~ %d 循环（中心值 %d）",
 		eval.ConfidenceLow, eval.ConfidenceHigh, eval.RulCycles), "", 1, "L", false, 0, "")
 	pdf.Ln(2)
 
 	// 建议列表
 	if len(eval.Suggestions) > 0 {
-		pdf.SetFont(FontSimHeiBold, "B", batteryBodySize)
+		pdf.SetFont(pdfutil.FontSimHeiBold, "B", batteryBodySize)
 		pdf.CellFormat(contentWidth, 6, "评估建议：", "", 1, "L", false, 0, "")
-		pdf.SetFont(FontSimHei, "", batteryBodySize)
+		pdf.SetFont(pdfutil.FontSimHei, "", batteryBodySize)
 		for i, s := range eval.Suggestions {
 			pdf.MultiCell(contentWidth, batteryTableRowSize, fmt.Sprintf("• %s", s), "", "L", false)
 			_ = i
@@ -194,10 +195,10 @@ func (g *Generator) renderBatteryConfidence(pdf *gofpdf.Fpdf, eval *model.Batter
 
 // renderBatteryDisclaimer 免责声明
 func (g *Generator) renderBatteryDisclaimer(pdf *gofpdf.Fpdf) {
-	pdf.SetFont(FontSimHeiBold, "B", batteryH1Size)
+	pdf.SetFont(pdfutil.FontSimHeiBold, "B", batteryH1Size)
 	pdf.CellFormat(contentWidth, 10, "五、免责声明", "", 1, "L", false, 0, "")
 	pdf.Ln(2)
-	pdf.SetFont(FontSimHei, "", batteryBodySize)
+	pdf.SetFont(pdfutil.FontSimHei, "", batteryBodySize)
 	disclaimers := []string{
 		"1. 本报告基于用户提交的充放电循环数据与论文启发算法生成，仅供研究、评估与决策参考。",
 		"2. 预测结果受数据质量、传感器精度、电池使用工况等因素影响，实际剩余寿命可能与预测存在偏差。",

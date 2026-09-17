@@ -7,17 +7,28 @@
       </UiButton>
     </div>
 
+    <!-- 三态收编（#1101）：404（已下架 / 不在当前证件题库内）= 空态，其余 = 错误态 + retry。
+         判据在 useAsyncPage 内（loadErrorKind 复用 ApiErrorKind），页面不再自建三态。 -->
     <UiAsyncSection
       :error="loadError"
       :loading="loading"
-      :empty="false"
+      :empty="isEmpty"
       :retrying="retrying"
       error-title="题目加载失败"
-      error-description="题目可能已下架，或不在当前证件的题库内"
-      @retry="retryLoad"
+      error-description="网络或服务端异常，可重试"
+      @retry="retry"
     >
       <template #skeleton>
         <UiSkeleton variant="card" :count="1"  />
+      </template>
+
+      <template #empty>
+        <UiEmptyState
+          title="题目不存在或已下架"
+          description="该题目可能已下架，或不在当前证件的题库内。"
+          action-text="去题库看看"
+          @action="goQuestionBank"
+        />
       </template>
       <template v-if="question">
       <div class="mb-2 flex items-center gap-2">
@@ -83,6 +94,7 @@
 // 题干本身来自题库池口径的 by-id 读取（#981）：draft、源标记真题题、非当前证件一律 404，
 // 所以这里不会成为「真题题免费刷」的入口。
 import { computed, onMounted, ref } from 'vue'
+import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft } from '@element-plus/icons-vue'
 // by-id 取题复用既有题库 API（端点同一，读路径由后端按能力分流：#981 之后学员走题库池口径）
@@ -103,6 +115,7 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -116,9 +129,6 @@ const TYPE_LABELS: Record<string, string> = {
 }
 
 const question = ref<Question | null>(null)
-const loading = ref(false)
-const loadError = ref(false)
-const retrying = ref(false)
 const submitting = ref(false)
 
 /** 生成物 QuestionDTO → 页面消费的 UI 模型 Question：显式映射，不做隐式断言（ADR-0048 决策 7）。 */
@@ -142,20 +152,16 @@ function toUIQuestion(dto: QuestionDTO): Question {
   }
 }
 
-async function fetchQuestion(): Promise<void> {
-  const id = Number(route.params.id)
-  if (!id) return
-  loading.value = true
-  loadError.value = false
-  try {
+// 三态 +「404 = 空态」判据收在 composable（#1101）：loader 只管拉数据 + 写响应，
+// 错误分类（ApiErrorKind）由拦截器挂载、composable 收敛。
+const { loading, loadError, retrying, isEmpty, retry, run: load } = useAsyncPage(
+  async () => {
+    const id = Number(route.params.id)
+    if (!id) return
     question.value = toUIQuestion(await questionBankApi.getQuestion(id))
-  } catch {
-    loadError.value = true
-    question.value = null
-  } finally {
-    loading.value = false
-  }
-}
+  },
+  { itemsRef: question, credentialScoped: false }
+)
 
 // 单题变体：无推进节奏、无断点进度（与错题重做同一形态）
 const session = usePracticeSession({
@@ -205,18 +211,6 @@ async function onSubmit() {
   }
 }
 
-async function load() {
-  await fetchQuestion()
-  if (question.value) await start('single')
-}
-
-async function retryLoad() {
-  if (retrying.value) return
-  retrying.value = true
-  await load()
-  retrying.value = false
-}
-
 function goBack() {
   router.back()
 }
@@ -225,7 +219,8 @@ function goQuestionBank() {
   void router.push('/training/question-bank')
 }
 
-onMounted(() => {
-  void load()
+onMounted(async () => {
+  await load()
+  if (question.value) await start('single')
 })
 </script>

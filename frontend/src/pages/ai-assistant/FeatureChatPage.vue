@@ -9,7 +9,7 @@
     :welcome-desc="feature?.welcome || ''"
     :suggestions="feature?.suggestions || []"
     :input-placeholder="inputPlaceholder"
-    :can-send="canSend"
+    :can-send="draftReady"
     v-model:input-text="inputText"
     @send="handleSend"
     @suggest="useSuggestion"
@@ -168,7 +168,7 @@ import { ElMessage } from 'element-plus'
 import type { UploadFile } from 'element-plus'
 import { ChatDotRound, Picture, Close } from '@element-plus/icons-vue'
 import ChatPageShell from '@/components/ai-assistant/ChatPageShell.vue'
-import { useAIAssistantStore } from '@/stores/aiAssistant'
+import { useAIAssistantStore, type SendOptions } from '@/stores/aiAssistant'
 import {
   getAIFeatureByRoute,
   isDiagnosisFeature
@@ -285,7 +285,9 @@ interface PendingImage {
 }
 const pendingImages = ref<PendingImage[]>([])
 
-const canSend = computed(() =>
+// 草稿就绪（页面 UI 态，#1104）：有文本或有图片，且没有还在上传的图片；
+// store 侧闸门（无在飞轮次）由壳合成后作为唯一发送判据（Enter 与发送按钮同一值）。
+const draftReady = computed(() =>
   (!inputText.value.trim() && pendingImages.value.length === 0)
     ? false
     : !pendingImages.value.some(p => p.uploading)
@@ -320,24 +322,21 @@ async function handleSend() {
     ElMessage.warning('图片上传中，请稍候')
     return
   }
-  if (store.streaming) return
+
+  const opts: SendOptions = images.length > 0 ? { images } : {}
+  // 智能维修诊断：品牌/车型结构化过滤（不进正文）
+  if (isDiagnosis.value) {
+    opts.brand = selectedBrand.value && selectedBrand.value !== 'all' ? selectedBrand.value : undefined
+    opts.model = selectedModel.value || undefined
+  }
 
   inputText.value = ''
   pendingImages.value = []
   try {
-    await store.sendMessage(
-      buildContent(text),
-      images.length > 0 ? images : undefined,
-      // 智能维修诊断：品牌/车型结构化过滤（不进正文）
-      isDiagnosis.value
-        ? {
-            brand: selectedBrand.value && selectedBrand.value !== 'all' ? selectedBrand.value : undefined,
-            model: selectedModel.value || undefined
-          }
-        : undefined
-    )
+    // 发送编排与终态都在 store（#1104）：失败/中断走 store.lastTurnError，由壳渲染重试入口
+    await store.send(buildContent(text), opts)
   } catch (e: any) {
-    // 错误已由 store 处理
+    ElMessage.error(e?.message || '发送失败，请稍后再试')
   }
 }
 

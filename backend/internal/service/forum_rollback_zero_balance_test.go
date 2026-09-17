@@ -18,7 +18,7 @@ import (
 func TestAdminDeleteTopicZeroBalanceRollback(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	// 管理端强删属治理动作：经 ForumModerationService 自己的 interface 装配（ADR-0050 决策 3）
-	mod := NewForumModerationService(db, nil, NewNotificationService(db, zap.NewNop()), NewForumCounter(), NewPointsService(db, zap.NewNop(), nil), zap.NewNop())
+	mod := NewForumModerationService(db, nil, NewNotificationService(db, zap.NewNop()), NewForumCounter(), NewPointsService(db, zap.NewNop(), nil, NewNotificationService(db, zap.NewNop())), zap.NewNop())
 
 	answerer := testutil.SeedStudent(t, db, "zero_bal_answerer", "x")
 	if err := db.Model(&model.HrwaiUser{}).Where("id = ?", answerer.ID).UpdateColumn("points_balance", 0).Error; err != nil {
@@ -75,7 +75,7 @@ func TestAdminDeleteTopicZeroBalanceRollback(t *testing.T) {
 // 同帖重复发放（占坑冲突）静默跳过且不影响状态迁移。
 func TestAcceptReplyRewardIdempotentOccupy(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewForumService(db, nil, NewNotificationService(db, zap.NewNop()), NewForumCounter(), NewPointsService(db, zap.NewNop(), nil), zap.NewNop())
+	svc := NewForumService(db, nil, NewNotificationService(db, zap.NewNop()), NewForumCounter(), NewPointsService(db, zap.NewNop(), nil, NewNotificationService(db, zap.NewNop())), zap.NewNop())
 
 	answerer := testutil.SeedStudent(t, db, "occ_answerer", "x")
 	asker := testutil.SeedStudent(t, db, "occ_asker", "x")

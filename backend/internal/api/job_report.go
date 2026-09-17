@@ -98,7 +98,7 @@ func (h *JobReportHandler) Report(c *gin.Context) {
 // @Param specialty_id query int false "专业方向 ID"
 // @Param page query int false "页码"
 // @Param page_size query int false "每页数量"
-// @Success 200 {object} response.R "列表"
+// @Success 200 {object} response.R{data=service.JobListResult} "列表"
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/jobs [get]
 func (h *JobReportHandler) ListAll(c *gin.Context) {
@@ -129,7 +129,7 @@ func (h *JobReportHandler) ListAll(c *gin.Context) {
 // @Security BearerAuth
 // @Param page query int false "页码"
 // @Param page_size query int false "每页数量"
-// @Success 200 {object} response.R "列表"
+// @Success 200 {object} response.R{data=service.ReportListResult} "列表"
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/job-reports [get]
 func (h *JobReportHandler) ListReports(c *gin.Context) {
@@ -153,7 +153,7 @@ func (h *JobReportHandler) ListReports(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "举报 ID"
-// @Success 200 {object} response.R "已处理"
+// @Success 200 {object} response.R{data=service.ReportDTO} "已处理（响应为处理后的举报行）"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "举报不存在"
 // @Router /admin/job-reports/{id}/handle [post]
@@ -185,7 +185,7 @@ func (h *JobReportHandler) MarkHandled(c *gin.Context) {
 // @Security BearerAuth
 // @Param id path int true "职位 ID"
 // @Param body body object false "下架原因 {reason: string}"
-// @Success 200 {object} response.R "已强制下架"
+// @Success 200 {object} response.R{data=service.JobPostingDTO} "已强制下架（响应为下架后的职位行）"
 // @Failure 400 {object} response.R "原因不能为空"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "职位不存在"

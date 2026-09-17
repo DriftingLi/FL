@@ -26,8 +26,8 @@ var (
 
 // sampleQuestions 统一抽题函数：从 published 题库按条件随机抽取 count 题。
 // qType 为空表示不限题型。始终排除来源标记标签的题目。
-func sampleQuestions(db *gorm.DB, qType string, count int, credentialID ...*int) ([]model.Question, error) {
-	return sampleQuestionsByOpts(db, sampleQuestionsOpts{qType: qType, count: count, cred: credOf(credentialID), shuffle: true})
+func sampleQuestions(db *gorm.DB, qType string, count int, credentialID *int) ([]model.Question, error) {
+	return sampleQuestionsByOpts(db, sampleQuestionsOpts{qType: qType, count: count, cred: credentialID, shuffle: true})
 }
 
 // sampleQuestionsOpts 抽题参数面（#385）：题库池口径（published + 排真题 + 证件分区）
@@ -80,14 +80,6 @@ func sampleQuestionsByOpts(db *gorm.DB, o sampleQuestionsOpts) ([]model.Question
 		all = shuffleTruncate(all, o.count)
 	}
 	return all, nil
-}
-
-// credOf 变参证件分区取首元素（无参/nil → 不分区）。
-func credOf(credentialID []*int) *int {
-	if len(credentialID) > 0 {
-		return credentialID[0]
-	}
-	return nil
 }
 
 // shuffleTruncate 洗牌截断（抽样固定顺序）：count<=0 或题量不足时原样返回。
@@ -474,14 +466,15 @@ type QuestionRejectResultDTO struct {
 }
 
 // ListQuestions 题目列表分页查询（可按标签 tagID 过滤，结果附带标签列表）。
-func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, status, keyword string, tagID *int, credentialID *int, sort ...string) *QuestionPageDTO {
+func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, status, keyword string, tagID *int, credentialID *int, sortBy string) (*QuestionPageDTO, error) {
 	// 排序口径（#412）：缺省保持现状「最新提交优先」（created_at DESC, id ASC）；
 	// 讲师端显式传 id_asc 请求按 ID 升序，翻页时 ID 单调推进、不再呈锯齿跳回。
+	// #1096：排序位由变参改显式命名参数（空串 = 缺省口径）。
 	order := "created_at DESC, id ASC"
-	if len(sort) > 0 && sort[0] == "id_asc" {
+	if sortBy == "id_asc" {
 		order = "id ASC"
 	}
-	list, total, page, pageSize := paging.Query[model.Question](s.db, page, pageSize, 20, order, func(q *gorm.DB) *gorm.DB {
+	list, total, page, pageSize, err := paging.Query[model.Question](s.db, page, pageSize, 20, order, func(q *gorm.DB) *gorm.DB {
 		if qType != "" {
 			q = q.Where("type = ?", qType)
 		}
@@ -494,11 +487,12 @@ func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, st
 		if tagID != nil {
 			q = q.Where("id IN (SELECT question_id FROM question_tag_relation WHERE tag_id = ?)", *tagID)
 		}
-		if credentialID != nil {
-			q = q.Where("credential_id = ?", *credentialID)
-		}
+		q = EntityOwnedBy(q, "credential_id", credentialID)
 		return q
 	})
+	if err != nil {
+		return nil, err
+	}
 	out := make([]QuestionDTO, 0, len(list))
 	ids := make([]int, 0, len(list))
 	for i := range list {
@@ -511,7 +505,7 @@ func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, st
 		PageSize:  pageSize,
 		Questions: out,
 		Total:     total,
-	}
+	}, nil
 }
 
 // loadTagsByQuestion 加载单题标签列表。

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+// 列表档位：useAdminTable（分页列表）—— 待审核队列 / 举报处置队列（同页两个实例）
+// 依据 ADR-0056 §9；判定口径见 docs/agents/ui-conventions.md「管理端列表两档归属」。
 /**
  * 投稿审核管理（#517）：待审核队列（通过/驳回）+ 举报处置队列（下架/驳回举报）。
  * 后端 V1 即 tutor+admin 双角色鉴权；讲师端前端二期，本页现仅在管理端挂出。
@@ -20,6 +22,7 @@ import { useConfirm } from '@/composables/useConfirm'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiRadioGroup from '@/components/ui/UiRadioGroup.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import { useAdminTable } from '@/composables/useAdminTable'
 
 const activeTab = ref<'pending' | 'reports'>('pending')
@@ -45,31 +48,32 @@ const {
   }
 })
 
-// ===== 举报队列 =====
-const reports = ref<ContributionReportItem[]>([])
-const reportLoading = ref(false)
+// ===== 举报队列（档位一：分页列表 → useAdminTable，同页第二个实例）=====
+// reportStatus 是页面自管筛选轴，由 fetch adapter 读取；失败由 loadError 承载并给出重试入口
+// （此前手写 loading + ElMessage 错误提示，错误态与重试入口都没有）。
 const reportStatus = ref<number>(-1)
-const reportPage = ref(1)
-const reportPageSize = 20
-const reportTotal = ref(0)
-
-async function loadReports() {
-  reportLoading.value = true
-  try {
+const {
+  loading: reportLoading,
+  loadError: reportError,
+  retrying: reportRetrying,
+  list: reports,
+  total: reportTotal,
+  currentPage: reportPage,
+  pageSize: reportPageSize,
+  load: loadReports,
+  retry: retryReports
+} = useAdminTable<ContributionReportItem>({
+  pageSize: 20,
+  fetch: async (paging) => {
     const st = reportStatus.value
     const res = await adminContributionApi.listReports({
       status: st >= 0 ? st : undefined,
-      page: reportPage.value,
-      page_size: reportPageSize
+      page: paging.page,
+      page_size: paging.pageSize
     })
-    reports.value = res.items || []
-    reportTotal.value = res.total || 0
-  } catch (e: any) {
-    ElMessage.error(e?.message || '加载举报队列失败')
-  } finally {
-    reportLoading.value = false
+    return { list: res.items || [], total: res.total || 0 }
   }
-}
+})
 
 const REPORT_REASON_LABEL: Record<string, string> = {
   piracy: '盗版',
@@ -242,6 +246,15 @@ onMounted(() => {
           </UiRadioGroup>
         </template>
       </UiFilterBar>
+        <UiAsyncSection
+          :error="reportError"
+          :loading="reportLoading"
+          :retrying="reportRetrying"
+          :skeleton="false"
+          error-title="举报队列加载失败"
+          error-description="网络或服务端异常，可重试"
+          @retry="retryReports"
+        >
         <el-table v-loading="reportLoading" :data="reports" border>
           <el-table-column prop="id" label="ID" width="70" align="center" />
           <el-table-column label="被举报投稿" min-width="220">
@@ -270,6 +283,7 @@ onMounted(() => {
             </template>
           </el-table-column>
         </el-table>
+        </UiAsyncSection>
           <UiPagination v-if="reportTotal > reportPageSize"
       v-model:current-page="reportPage"
       :page-size="reportPageSize"

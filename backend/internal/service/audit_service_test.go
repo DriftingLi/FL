@@ -85,7 +85,10 @@ func TestAuditService_List_PageSizeCap(t *testing.T) {
 	}
 
 	// pageSize 超上限（1000）→ ClampMax 回退默认（20），cap 语义生效
-	items, total, page, pageSize := svc.List(1, 1000, 0, "", "")
+	items, total, page, pageSize, err := svc.List(1, 1000, 0, "", "")
+	if err != nil {
+		t.Fatalf("List 失败: %v", err)
+	}
 	if total != 2 {
 		t.Fatalf("total = %d, want 2", total)
 	}
@@ -97,13 +100,19 @@ func TestAuditService_List_PageSizeCap(t *testing.T) {
 	}
 
 	// page/pageSize 非正 → 默认钳制
-	_, _, page2, pageSize2 := svc.List(0, 0, 0, "", "")
+	_, _, page2, pageSize2, err := svc.List(0, 0, 0, "", "")
+	if err != nil {
+		t.Fatalf("List 失败: %v", err)
+	}
 	if page2 != 1 || pageSize2 != 20 {
 		t.Fatalf("默认分页 = %d/%d, want 1/20", page2, pageSize2)
 	}
 
 	// 合法 pageSize（2）不被钳制，且 actor 过滤生效
-	_, total3, page3, pageSize3 := svc.List(1, 2, 999, "", "")
+	_, total3, page3, pageSize3, err := svc.List(1, 2, 999, "", "")
+	if err != nil {
+		t.Fatalf("List 失败: %v", err)
+	}
 	if total3 != 0 {
 		t.Fatalf("按 actor_id=999 过滤后 total = %d, want 0", total3)
 	}

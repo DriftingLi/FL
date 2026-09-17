@@ -5,13 +5,14 @@
 // 本文件只留请求壳、端点装配与名称适配；入参（query / body）类型不生成、仍手写。
 import { unwrappedRequest } from './request'
 import type { ContactRequestDTO, ContactRequestListResult, JobCardDTO } from './generated/resume'
+import type { ContactRequestStatus } from '@/utils/contactRequestStatus'
 
 // 名称适配：生成物沿用后端 DTO 命名，前端域词汇不带 DTO 后缀（既有 import 路径与类型名不破）。
-export type {
-  ContactRequestDTO as ResumeContactRequest,
-  ContactRequestListResult as ResumeContactRequestList,
-  JobCardDTO as ResumeData
-}
+// status 在生成物里只到 string（注解层无 enum，ADR-0056 §8 否掉了补 enum 那条路）：
+// 这里按 utils/contactRequestStatus 的 union 收窄，取值集合与后端 ContactGrantState 有对账锁。
+export type ResumeContactRequest = Omit<ContactRequestDTO, 'status'> & { status: ContactRequestStatus }
+export type ResumeContactRequestList = Omit<ContactRequestListResult, 'items'> & { items: ResumeContactRequest[] }
+export type { JobCardDTO as ResumeData }
 
 /** PDF / 工作照上传的 data 形状（注解层 inline object，非根类型，故此处内联）。 */
 export interface ResumeUploadResult {
@@ -34,15 +35,15 @@ export const resumeApi = {
   uploadImage(formData: FormData) { return unwrappedRequest.post<ResumeUploadResult>('/resume/image', formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120000 }) },
   getViewStats() { return unwrappedRequest.get<ResumeViewStats>('/resume/view-stats') },
   listContactRequests(params?: { page?: number; page_size?: number }) {
-    return unwrappedRequest.get<ContactRequestListResult>('/resume/contact-requests', { params })
+    return unwrappedRequest.get<ResumeContactRequestList>('/resume/contact-requests', { params })
   },
   approveContactRequest(id: number | string) {
-    return unwrappedRequest.post<ContactRequestDTO>(`/resume/contact-requests/${id}/approve`)
+    return unwrappedRequest.post<ResumeContactRequest>(`/resume/contact-requests/${id}/approve`)
   },
   rejectContactRequest(id: number | string) {
-    return unwrappedRequest.post<ContactRequestDTO>(`/resume/contact-requests/${id}/reject`)
+    return unwrappedRequest.post<ResumeContactRequest>(`/resume/contact-requests/${id}/reject`)
   },
   revokeContactRequest(id: number | string) {
-    return unwrappedRequest.post<ContactRequestDTO>(`/resume/contact-requests/${id}/revoke`)
+    return unwrappedRequest.post<ResumeContactRequest>(`/resume/contact-requests/${id}/revoke`)
   }
 }

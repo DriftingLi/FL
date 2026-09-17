@@ -12,7 +12,7 @@
     <UiCard variant="flat" padding="sm" class="mb-4">
       <div class="flex flex-wrap items-center gap-2">
         <el-select
-          v-model="credentialId"
+          v-model="browseCredentialId"
           placeholder="所属证件"
           clearable
           class="!w-[180px]"
@@ -48,7 +48,7 @@
     <UiAsyncSection
       :error="loadError"
       :loading="loading"
-      :empty="questions.length === 0"
+      :empty="isEmpty"
       :retrying="retrying"
       error-title="题目加载失败"
       error-description="网络或服务端异常，可重试"
@@ -182,7 +182,8 @@ const statusTone: Record<string, 'neutral' | 'warning' | 'success'> = {
 }
 
 const credentials = ref<CredentialDict[]>([])
-const credentialId = ref<number | null>(null)
+/** 「浏览指定证件」：导师端筛选栏选择的证件（非「当前证件」——导师没有 current_credential_id）。 */
+const browseCredentialId = ref<number | null>(null)
 const questions = ref<Question[]>([])
 const filters = ref({ type: '', status: '', keyword: '' })
 const detailVisible = ref(false)
@@ -193,6 +194,7 @@ const {
   loading,
   loadError,
   retrying,
+  isEmpty,
   retry: handleRetry,
   page,
   pageSize,
@@ -202,15 +204,15 @@ const {
 } = useAsyncPage(async () => {
   // #412：讲师端显式请求按 ID 升序，翻页时 ID 单调推进（默认「最新提交优先」保留给其它调用方）。
   const params: any = { page: page.value, page_size: pageSize.value, sort: 'id_asc', ...filters.value }
-  if (credentialId.value) params.credential_id = credentialId.value
+  if (browseCredentialId.value) params.credential_id = browseCredentialId.value
   const res = await questionBankApi.getQuestions(params)
   questions.value = res?.questions || []
   total.value = res?.total || 0
-})
+}, { itemsRef: questions })
 
 const hasFilters = computed(
   () =>
-    credentialId.value !== null ||
+    browseCredentialId.value !== null ||
     filters.value.type !== '' ||
     filters.value.status !== '' ||
     filters.value.keyword.trim() !== ''
@@ -231,7 +233,7 @@ async function loadCredentials() {
 }
 
 function resetFilters() {
-  credentialId.value = null
+  browseCredentialId.value = null
   filters.value = { type: '', status: '', keyword: '' }
   page.value = 1
   loadData()

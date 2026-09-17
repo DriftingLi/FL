@@ -14,6 +14,7 @@ import (
 	"forklift-training/internal/clock"
 	"forklift-training/internal/daemon"
 	"forklift-training/internal/model"
+	"forklift-training/pkg/paging"
 )
 
 // 联系方式交换域业务错误哨兵（ADR-0024）：handler 以 errors.Is 映射状态码，不做字符串比对。
@@ -63,15 +64,15 @@ type ContactRequestDTO struct {
 	Source string `json:"source,omitempty" extensions:"x-optional"`
 }
 
-// ContactRequestListResult 交换申请分页结果。
+// ContactRequestListResult 交换申请分页结果：**真返回类型**（#1095 前只服务 swagger，运行时出字节的是 gin.H）。
 //
-// 形状与 handler 既有的 gin.H{"items","total","page","page_size"} 逐字段一致（本片只补注解，
-// 不动任何响应构造；键序不重要——这里只用于 swagger 的 data 指认）。
+// 字段声明序 = 旧 gin.H map 输出的键序（encoding/json 对 map 按 key 排序：items < page < page_size < total），
+// 故换成 typed DTO 后响应字节逐字节不变（ADR-0009 §2；字节锁见 envelope_dto_shape_test.go 与信封登记表）。
 type ContactRequestListResult struct {
 	Items    []ContactRequestDTO `json:"items"`
-	Total    int64               `json:"total"`
 	Page     int                 `json:"page"`
 	PageSize int                 `json:"page_size"`
+	Total    int64               `json:"total"`
 }
 
 // ContactPlainDTO 明文联系方式及其补齐面（GET /api/recruit/resumes/{id}/contact）。
@@ -258,18 +259,11 @@ func (s *ContactService) EnsureApproved(tx *gorm.DB, recruiterID, studentUserID 
 
 // ListForRecruiter 招聘方查看我的申请列表。
 func (s *ContactService) ListForRecruiter(recruiterID, page, pageSize int) ([]ContactRequestDTO, int64, error) {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 || pageSize > 50 {
-		pageSize = 20
-	}
-	var total int64
-	if err := s.db.Model(&model.ContactRequest{}).Where("recruiter_id = ?", recruiterID).Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-	var rows []model.ContactRequest
-	if err := s.db.Where("recruiter_id = ?", recruiterID).Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error; err != nil {
+	rows, total, _, _, err := paging.QueryWithMax[model.ContactRequest](s.db, page, pageSize, 20, 50,
+		"created_at DESC", func(q *gorm.DB) *gorm.DB {
+			return q.Where("recruiter_id = ?", recruiterID)
+		})
+	if err != nil {
 		return nil, 0, err
 	}
 	dtos := make([]ContactRequestDTO, 0, len(rows))
@@ -281,18 +275,11 @@ func (s *ContactService) ListForRecruiter(recruiterID, page, pageSize int) ([]Co
 
 // ListForStudent 学员侧查看收到的申请。
 func (s *ContactService) ListForStudent(studentUserID, page, pageSize int) ([]ContactRequestDTO, int64, error) {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 || pageSize > 50 {
-		pageSize = 20
-	}
-	var total int64
-	if err := s.db.Model(&model.ContactRequest{}).Where("student_user_id = ?", studentUserID).Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-	var rows []model.ContactRequest
-	if err := s.db.Where("student_user_id = ?", studentUserID).Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error; err != nil {
+	rows, total, _, _, err := paging.QueryWithMax[model.ContactRequest](s.db, page, pageSize, 20, 50,
+		"created_at DESC", func(q *gorm.DB) *gorm.DB {
+			return q.Where("student_user_id = ?", studentUserID)
+		})
+	if err != nil {
 		return nil, 0, err
 	}
 	dtos := make([]ContactRequestDTO, 0, len(rows))

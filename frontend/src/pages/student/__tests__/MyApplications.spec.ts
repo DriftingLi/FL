@@ -33,6 +33,15 @@ beforeEach(() => {
   vi.mocked(resumeApi.listContactRequests).mockResolvedValue({ items: [], total: 0 } as any)
 })
 
+describe('MyApplications 状态词（#1103）', () => {
+  it('applied 走 descriptor 文案「投递中」（旧「待处理」已按状态事实统一）', async () => {
+    const wrapper = mountPage()
+    await flushPromises()
+    expect(wrapper.text()).toContain('投递中')
+    expect(wrapper.text()).not.toContain('待处理')
+  })
+})
+
 describe('MyApplications 撤回弹窗（#452 决定 10 UI 落点）', () => {
   it('撤回弹窗的「一并撤回联系方式授权」默认不勾选', async () => {
     const wrapper = mountPage()

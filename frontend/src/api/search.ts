@@ -28,7 +28,9 @@ export type SearchResult = SearchAllResult | SearchPageResult
 export const searchApi = {
   /** type 缺省返回各分区聚合（含 chapters），指定类型返回分页结果 */
   search(params: { keyword: string; type?: SearchType; page?: number; page_size?: number; credential_id?: number }) {
-    // credential_id 由主 client 请求拦截器默认注入（#387）
+    // 证件作用域（服务端 CredentialScoped 兜底）：显式 query credential_id 优先，其次才是登录学员的
+    // 当前证件；匿名（本例是公开端点）或非学员角色**不兜底**，按不分区处理 ⇒ 要按证件分区，调用端
+    // 必须显式下发 credential_id（客户端半边 #1106；客户端拦截器不再注入任何证件参数）。
     return unwrappedRequest.get<SearchResult>('/search', { params })
   }
 }

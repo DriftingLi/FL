@@ -5,7 +5,7 @@
     <UiAsyncSection
       :error="loadError"
       :loading="loading"
-      :empty="items.length === 0"
+      :empty="isEmpty"
       :retrying="retrying"
       error-title="投递记录加载失败"
       error-description="网络或服务端异常，可重试"
@@ -21,7 +21,7 @@
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2">
               <span class="text-sm font-semibold text-ink">{{ item.job_title || '职位 #' + item.job_posting_id }}</span>
-              <UiTag :tone="tagType(item.status)" size="small">{{ statusLabel(item.status) }}</UiTag>
+              <UiTag :tone="describeApplication(item.status).tone" size="small">{{ describeApplication(item.status).label }}</UiTag>
               <UiTag v-if="item.employer_viewed_at" tone="info" size="small">企业已查看</UiTag>
             </div>
             <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-3">
@@ -69,7 +69,8 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { jobApi, type JobApplication } from '@/api/job'
-import { resumeApi } from '@/api/resume'
+import { resumeApi, type ResumeContactRequest } from '@/api/resume'
+import { describeApplication } from '@/utils/applicationStatus'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
@@ -83,7 +84,7 @@ import UiCheckbox from '@/components/ui/UiCheckbox.vue'
 
 const items = ref<JobApplication[]>([])
 // #487：approved 的联系方式交换（投递产生/企业发起）用于企业联系方式展示
-const approvedContacts = ref<any[]>([])
+const approvedContacts = ref<ResumeContactRequest[]>([])
 const withdrawVisible = ref(false)
 const withdrawing = ref(false)
 const revokeContact = ref(false) // 默认不勾选（决定 10）
@@ -93,6 +94,7 @@ const {
   loading,
   loadError,
   retrying,
+  isEmpty,
   retry: handleRetry,
   total,
   page,
@@ -108,29 +110,19 @@ const {
       // 后端列表单页上限 20：翻页取全量 approved，避免申请多时较早企业的联系方式缺失（Standards 审查）
       approvedContacts.value = []
       for (let p = 1; p <= 10; p++) {
-        const reqs: any = await resumeApi.listContactRequests({ page: p, page_size: 20 })
+        const reqs = await resumeApi.listContactRequests({ page: p, page_size: 20 })
         const items = reqs?.items || []
-        approvedContacts.value.push(...items.filter((r: any) => r.status === 'approved'))
+        approvedContacts.value.push(...items.filter((r) => r.status === 'approved'))
         if (items.length < 20) break
       }
     } catch {}
   },
-  { credentialScoped: false } // 招聘域不受证件过滤（#604 opt-out）
+  { credentialScoped: false, itemsRef: items } // 招聘域不受证件过滤（#604 opt-out）
 )
 
 // 找该投递对应企业的已授权联系方式（按 recruiter_id 匹配）
 function approvedContactFor(item: JobApplication) {
   return approvedContacts.value.find((r: any) => r.recruiter_id === item.recruiter_id) || null
-}
-
-function statusLabel(s: string) {
-  const m: Record<string, string> = { applied: '待处理', rejected: '不合适', withdrawn: '已撤回' }
-  return m[s] || s
-}
-function tagType(s: string) {
-  if (s === 'applied') return 'warning'
-  if (s === 'rejected') return 'danger'
-  return 'info'
 }
 
 function openWithdraw(item: JobApplication) {

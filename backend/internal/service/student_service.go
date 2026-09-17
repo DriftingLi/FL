@@ -232,8 +232,8 @@ type StudyRecordPageResult struct {
 }
 
 // GetRecords 学习记录列表。
-func (s *StudentService) GetRecords(studentID, page, pageSize int, startDate, endDate string) StudyRecordPageResult {
-	records, total, page, pageSize := paging.Query[model.StudyRecord](s.db, page, pageSize, 10, "study_date DESC", func(q *gorm.DB) *gorm.DB {
+func (s *StudentService) GetRecords(studentID, page, pageSize int, startDate, endDate string) (StudyRecordPageResult, error) {
+	records, total, page, pageSize, err := paging.Query[model.StudyRecord](s.db, page, pageSize, 10, "study_date DESC", func(q *gorm.DB) *gorm.DB {
 		q = q.Where("student_id = ?", studentID)
 		if startDate != "" {
 			if t, err := time.Parse("2006-01-02", startDate); err == nil {
@@ -247,6 +247,9 @@ func (s *StudentService) GetRecords(studentID, page, pageSize int, startDate, en
 		}
 		return q
 	})
+	if err != nil {
+		return StudyRecordPageResult{}, err
+	}
 
 	// 批量回填课程名与章节标题（batch_backfill module），消除逐记录 N+1。
 	// 未知课程缺省文案由 courseName 统一解析为 UnknownCourseName；
@@ -280,7 +283,7 @@ func (s *StudentService) GetRecords(studentID, page, pageSize int, startDate, en
 		Pages:   response.PageCount(total, pageSize),
 		Records: items,
 		Total:   total,
-	}
+	}, nil
 }
 
 // ===== DTO 构造（原 studentToDict/studyRecordToDict 折叠入内）=====

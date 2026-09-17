@@ -57,7 +57,7 @@ func newContributionTestSvc(t *testing.T) (*ContributionService, *gorm.DB) {
 	db := testutil.NewFileDB(t)
 	fileSvc := NewFileStore("", &memContributionStorage{}, zap.NewNop())
 	notif := NewNotificationService(db, zap.NewNop())
-	points := NewPointsService(db, zap.NewNop(), nil)
+	points := NewPointsService(db, zap.NewNop(), nil, notif)
 	svc := NewContributionService(db, fileSvc, notif, points, zap.NewNop(), clock.Real())
 	return svc, db
 }
@@ -403,7 +403,7 @@ func TestContribution_CleanupOrphans(t *testing.T) {
 	}
 	fileSvc := NewFileStore("", st, zap.NewNop())
 	notif := NewNotificationService(db, zap.NewNop())
-	points := NewPointsService(db, zap.NewNop(), nil)
+	points := NewPointsService(db, zap.NewNop(), nil, notif)
 	svc := NewContributionService(db, fileSvc, notif, points, zap.NewNop(), clock.Real())
 	// 一条已提交投稿引用 used 文件
 	cred := seedCredential(t, db)

@@ -6,6 +6,10 @@ import { reactive, nextTick } from 'vue'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import { epLite } from '@/test/element-lite'
 
+// 壳在重试被拒时把原因弹给用户（断言用；epLite 走 element-plus/es 子路径，不受影响）
+const ElMessage = vi.hoisted(() => ({ warning: vi.fn(), error: vi.fn(), success: vi.fn() }))
+vi.mock('element-plus', () => ({ ElMessage }))
+
 import ChatPageShell from '../ChatPageShell.vue'
 
 // ===== 模块替身：store / auth / 路由工具 / markstream =====
@@ -55,6 +59,10 @@ function makeStore(overrides: Record<string, unknown> = {}) {
     streamingContent: '',
     // #620：当轮 usage 独立 state + 状态变更 action（壳渲染脚注、登出走 action）
     lastUsage: null as Record<string, number> | null,
+    // #1104：发送判据（壳把页面 prop 与 store 闸门合成）与当轮失败/中断独立通道
+    canSend: true,
+    lastTurnError: null as Record<string, unknown> | null,
+    retryLastTurn: vi.fn().mockResolvedValue(undefined),
     clearMessages: vi.fn(),
     loadSessions: vi.fn().mockResolvedValue(undefined),
     selectSession: vi.fn(),
@@ -281,6 +289,34 @@ describe('ChatPageShell 输入与发送', () => {
     expect(w.emitted('send')!.length).toBe(2)
   })
 
+  it('Enter 与发送按钮读同一判据（#1104）：不能发送时两者都不发出 send', async () => {
+    const w = mountShell({ canSend: false })
+    await w.find('textarea').trigger('keydown.enter')
+    expect(w.emitted('send')).toBeFalsy()
+    const sendBtn = w.findAll('button').find(b => b.text().includes('发送'))
+    expect(sendBtn!.attributes('disabled')).toBeDefined()
+    await sendBtn!.trigger('click')
+    expect(w.emitted('send')).toBeFalsy()
+  })
+
+  it('Enter 与发送按钮读同一判据：store 闸门关闭（流式中）时 Enter 也不发出 send', async () => {
+    mocks.store.canSend = false
+    mocks.store.streaming = true
+    const w = mountShell({ canSend: true })
+    await w.find('textarea').trigger('keydown.enter')
+    expect(w.emitted('send')).toBeFalsy()
+  })
+
+  it('流式进行中：「新对话」入口显式反馈（禁用 + 标题说明），不再静默吞掉点击', async () => {
+    mocks.store.streaming = true
+    const w = mountShell({})
+    const newChat = w.find('.new-chat-btn')
+    expect(newChat.attributes('disabled')).toBeDefined()
+    expect(newChat.attributes('title')).toContain('生成中')
+    await newChat.trigger('click')
+    expect(w.emitted('new-session')).toBeFalsy()
+  })
+
   it('流式中切换为停止按钮并调用 stopStreaming', async () => {
     mocks.store.streaming = true
     const w = mountShell({})
@@ -294,6 +330,46 @@ describe('ChatPageShell 输入与发送', () => {
     const w = mountShell({ backLinkTo: '/ai-assistant', backLinkText: '返回 AI 助手' })
     expect(w.find('.logo-sub').text()).toBe('AI 叉车助手 · 测试')
     expect(w.find('.back-link').text()).toContain('返回 AI 助手')
+  })
+})
+
+// #1104：失败/中断走 store.lastTurnError 独立通道——正文不再拼「[生成失败：…]」，
+// 壳在输入框上方渲染可重试入口，重试原样重发该轮输入与差异参数（store.retryLastTurn）。
+describe('ChatPageShell 当轮失败/中断与重试入口（#1104）', () => {
+  it('无失败通道时不渲染重试入口', () => {
+    const w = mountShell({})
+    expect(w.find('.turn-error').exists()).toBe(false)
+  })
+
+  it('生成失败：渲染原因文案 + 点击重试调用 store.retryLastTurn', async () => {
+    mocks.store.lastTurnError = { kind: 'error', message: '上游超时', content: '再问一次', opts: {} }
+    const w = mountShell({})
+    const banner = w.find('.turn-error')
+    expect(banner.exists()).toBe(true)
+    expect(banner.text()).toContain('生成失败：上游超时')
+
+    const retry = banner.findAll('button').find(b => b.text().includes('重试'))
+    expect(retry).toBeTruthy()
+    await retry!.trigger('click')
+    expect(mocks.store.retryLastTurn).toHaveBeenCalledTimes(1)
+  })
+
+  it('用户中断：文案只描述中断事实，同样给重试入口', async () => {
+    mocks.store.lastTurnError = { kind: 'aborted', message: '', content: '中断的问题', opts: {} }
+    const w = mountShell({})
+    const banner = w.find('.turn-error')
+    expect(banner.text()).toContain('已中断生成')
+    expect(banner.findAll('button').some(b => b.text().includes('重试'))).toBe(true)
+  })
+
+  it('重试被前置校验拒绝：把可执行原因弹给用户，不静默', async () => {
+    mocks.store.lastTurnError = { kind: 'error', message: '上游超时', content: '再问一次', opts: {} }
+    mocks.store.retryLastTurn = vi.fn().mockRejectedValue(new Error('通用对话暂不可用；可改用「智能维修诊断」'))
+    const w = mountShell({})
+    const retry = w.find('.turn-error').findAll('button').find(b => b.text().includes('重试'))
+    await retry!.trigger('click')
+    await flushPromises()
+    expect(ElMessage.warning).toHaveBeenCalled()
   })
 })
 

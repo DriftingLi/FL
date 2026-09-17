@@ -8,7 +8,7 @@
     enable-rename
     raised-input
     :input-placeholder="'输入您的问题...（Enter 发送，Shift+Enter 换行）'"
-    :can-send="!!inputText.trim() && !isModeUnavailable"
+    :can-send="draftReady"
     v-model:input-text="inputText"
     @send="handleSend"
     @suggest="useSuggestion"
@@ -60,7 +60,10 @@ import { AI_FEATURES } from '@/config/aiFeatures'
 const store = useAIAssistantStore()
 const router = useRouter()
 
+// 输入文本是页面 UI 态（#1104 有意不搬进 store）；draftReady 只表达「草稿就绪」，
+// store 侧闸门（无在飞轮次）由壳合成，Enter 与发送按钮读同一判据。
 const inputText = ref('')
+const draftReady = computed(() => !!inputText.value.trim())
 
 const selectedMode = computed({
   get: () => store.selectedMode,
@@ -84,17 +87,14 @@ const suggestions = [
 async function handleSend() {
   const text = inputText.value.trim()
   if (!text) return
-  if (isModeUnavailable.value) {
-    ElMessage.warning('通用对话暂不可用；可改用「智能维修诊断」等专项功能，或联系管理员')
-    return
-  }
-  if (store.streaming) return
-
+  // 发送编排与终态都在 store（#1104）：失败/中断走 store.lastTurnError，由壳渲染重试入口。
+  // 清空即「已提交」；前置校验拒绝时把问题还给输入框，并把可执行原因告诉用户（#1061）。
   inputText.value = ''
   try {
-    await store.sendMessage(text)
+    await store.send(text)
   } catch (e: any) {
-    // 错误已由 store 处理
+    inputText.value = text
+    ElMessage.warning(e?.message || '发送失败，请稍后再试')
   }
 }
 

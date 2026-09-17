@@ -95,7 +95,7 @@
       <UiAsyncSection
         :error="loadError"
         :loading="loading"
-        :empty="myReplies.length === 0"
+        :empty="isEmpty"
         :retrying="retrying"
         error-title="回复加载失败"
         error-description="网络或服务端异常，可重试"
@@ -132,7 +132,7 @@
       <UiAsyncSection
         :error="loadError"
         :loading="loading"
-        :empty="topics.length === 0"
+        :empty="isEmpty"
         :retrying="retrying"
         error-title="帖子加载失败"
         error-description="网络或服务端异常，可重试"
@@ -236,6 +236,7 @@ import { markdownToPlainText } from '@/utils/markdownText'
 import { displayName, authorLetter } from '@/utils/forumDisplay'
 import ForumPostForm from '@/components/student/ForumPostForm.vue'
 import { useAsyncPage } from '@/composables/useAsyncPage'
+import { isEmptyList } from '@/utils/listState'
 import { useForumSort } from '@/composables/useForumSort'
 import { useStagger } from '@/composables/useStagger'
 import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
@@ -365,6 +366,7 @@ const {
   loadError,
   retrying,
   retry: retryLoad,
+  loadErrorKind,
   pageSize,
   total,
   run: loadTopics,
@@ -373,7 +375,18 @@ const {
   pageRef: currentPage,
   defaultPageSize: 10,
   // 论坛不受证件过滤（CONTEXT.md「当前证件」），不随切换重装/重置页码（#604 opt-out）
-  credentialScoped: false
+  credentialScoped: false,
+  itemsRef: topics
+})
+
+/**
+ * 空态判据（#1101）：本页两个列表（主题 / 我的回复）由同一次装载按 Tab 二选一写入，
+ * 取**本次可见的那个**——loading 与「404 = 空态」来自 useAsyncPage，仅列表源按视图切换。
+ */
+const isEmpty = computed(() => {
+  if (loading.value) return false
+  const active = showReplies.value ? myReplies.value : topics.value
+  return isEmptyList(active, { error: loadError.value, kind: loadErrorKind.value })
 })
 
 async function loadTopicsOnce() {

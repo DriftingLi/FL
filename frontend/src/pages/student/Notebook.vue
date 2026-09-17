@@ -10,7 +10,7 @@
     <UiAsyncSection
       :error="loadError"
       :loading="loading"
-      :empty="notes.length === 0"
+      :empty="isEmpty"
       :retrying="retrying"
       error-title="笔记加载失败"
       error-description="网络或服务端异常，可重试"
@@ -110,6 +110,7 @@ const {
   loadError,
   retrying,
   retry: retryLoad,
+  isEmpty,
   page,
   pageSize,
   total,
@@ -119,7 +120,7 @@ const {
   const res = await noteApi.list({ scope: scope.value, page: page.value, page_size: pageSize.value })
   notes.value = res?.items || []
   total.value = res?.total || 0
-})
+}, { itemsRef: notes })
 
 const emptyText = computed(() => {
   if (scope.value === 'question') return '还没有题目笔记'

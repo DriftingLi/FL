@@ -27,7 +27,7 @@ func TestSearchKeywordWildcardsAreLiteral(t *testing.T) {
 
 	names := func(keyword string) []string {
 		t.Helper()
-		got, err := svc.Search(keyword, SearchTypeCourse, 1, 20)
+		got, err := svc.Search(keyword, SearchTypeCourse, 1, 20, nil)
 		if err != nil {
 			t.Fatalf("搜索 %q 失败: %v", keyword, err)
 		}
@@ -58,10 +58,10 @@ func TestSearchKeywordLengthCap(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	svc := NewSearchService(db, nil)
 
-	if _, err := svc.Search(strings.Repeat("液", maxSearchKeywordLen), SearchTypeCourse, 1, 20); err != nil {
+	if _, err := svc.Search(strings.Repeat("液", maxSearchKeywordLen), SearchTypeCourse, 1, 20, nil); err != nil {
 		t.Fatalf("恰好 %d 字符应放行, got %v", maxSearchKeywordLen, err)
 	}
-	if _, err := svc.Search(strings.Repeat("液", maxSearchKeywordLen+1), SearchTypeCourse, 1, 20); err == nil {
+	if _, err := svc.Search(strings.Repeat("液", maxSearchKeywordLen+1), SearchTypeCourse, 1, 20, nil); err == nil {
 		t.Fatalf("超过 %d 字符应报错", maxSearchKeywordLen)
 	}
 }

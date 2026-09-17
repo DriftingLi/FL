@@ -1,8 +1,8 @@
 // practiceMode.ts 契约测试：练习进度保存的证件分桶（#505）。
-// 背景：顺序练习进度按「当前证件」分桶（#414），读路径 GET sequential/progress 由主 client
-// 拦截器自动注入 query credential_id，但 POST /progress 的凭证只从 JSON body 解析——拦截器
-// 不触碰 body，因此保存方必须显式携带。若保存漏带，游标落进 credential_id IS NULL 孤儿行，
-// 证件桶游标冻结（断点回跳 bug 根因）。
+// 背景：顺序练习进度按「当前证件」分桶（#414）。读路径 GET sequential/progress 不带 credential_id
+// 时由服务端 CredentialScoped 兜底（登录学员 = 当前证件；客户端拦截器不注入任何证件参数），
+// 但 POST /progress 的凭证只从 JSON body 解析——服务端对 body 没有兜底路径，因此保存方必须显式携带。
+// 若保存漏带，游标落进 credential_id IS NULL 孤儿行，证件桶游标冻结（断点回跳 bug 根因）。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('@/api/request', () => ({
@@ -68,7 +68,7 @@ describe('practiceModeApi.saveProgress（#505 读写同桶）', () => {
 })
 
 describe('practiceModeApi 既有端点回归', () => {
-  it('startSequential：传空 params 走拦截器注入 credential_id', async () => {
+  it('startSequential：传空 params（不带 credential_id，留给服务端兜底）', async () => {
     mockGet.mockResolvedValue({ questions: [], progress: {} })
     await practiceModeApi.startSequential()
     expect(mockGet).toHaveBeenCalledWith('/practice-mode/sequential', { params: {} })
