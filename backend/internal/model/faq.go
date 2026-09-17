@@ -30,11 +30,9 @@ type Faq struct {
 	Answer     string `gorm:"column:answer" json:"answer"`
 	SortOrder  int    `gorm:"column:sort_order;default:0" json:"sort_order"`
 	// 同上：`default:true` 会让「未发布」存不进去。
-	Published bool `gorm:"column:published" json:"published"`
-	// #1099 验收探针（临时）：模型有列、迁移没有 —— 用于验证 migration-check 的单向列对账会红。
-	ProbeMissing string    `gorm:"column:probe_missing_col" json:"-"`
-	CreatedAt    time.Time `gorm:"column:created_at" json:"created_at"`
-	UpdatedAt    time.Time `gorm:"column:updated_at" json:"updated_at"`
+	Published bool      `gorm:"column:published" json:"published"`
+	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt time.Time `gorm:"column:updated_at" json:"updated_at"`
 }
 
 func (Faq) TableName() string { return "faq" }
