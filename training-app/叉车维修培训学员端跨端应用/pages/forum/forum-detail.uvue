@@ -31,6 +31,7 @@
                     :author-avatar="tAuthorAvatar" :avatar-color="tAvatarColor" :created-at-text="tCreatedAtText"
                     :region-text="tRegionText"
                     :likes-count="tLikesCount" :liked="tLiked" :favorited="tFavorited"
+                    :replies-count="tRepliesCount"
                     :views-count="tViewsCount" :can-delete="canDelete"
                     @toggle-like="onToggleLike" @toggle-favorite="onToggleFavorite" @delete="onDelete" />
                 <ForumTopicBody :content="topicContent" :image-urls="topicImages" />
@@ -175,6 +176,12 @@
         const t = topic.value
         if (t == null) return 0
         return t.views_count
+    })
+    /** 回复数（只读统计，与卡片侧 💬 对齐）：与 replies_count 同源，不另持一份 */
+    const tRepliesCount = computed<number>(() : number => {
+        const t = topic.value
+        if (t == null) return 0
+        return t.replies_count
     })
     const topicContent = computed<string>(() : string => {
         const t = topic.value

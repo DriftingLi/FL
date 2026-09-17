@@ -22,6 +22,10 @@
                 <text :class="favorited ? 'stat-like-icon stat-like-icon-favorited' : 'stat-like-icon'">{{ favorited ? '★' : '☆' }}</text>
                 <text :class="favorited ? 'stat-like-count stat-like-count-favorited' : 'stat-like-count'">收藏</text>
             </view>
+            <view class="stat-like stat-plain">
+                <text class="stat-like-icon">💬</text>
+                <text class="stat-like-count">{{ repliesCount }}</text>
+            </view>
             <text class="stat-text">👁 {{ viewsCount }}</text>
         </view>
         <view v-if="canDelete" class="topic-delete" @click="onDelete">
@@ -43,6 +47,8 @@
         likesCount? : number
         liked? : boolean
         favorited? : boolean
+        /** 回复数（只读统计，与卡片侧 💬 对齐；#1071 真机复核裁定 A） */
+        repliesCount? : number
         viewsCount? : number
         canDelete? : boolean
     }>(), {
@@ -55,6 +61,7 @@
         likesCount: 0,
         liked: false,
         favorited: false,
+        repliesCount: 0,
         viewsCount: 0,
         canDelete: false
     })
@@ -186,6 +193,15 @@
     .stat-like-count-favorited {
         color: #ffffff;
         font-weight: bold;
+    }
+
+    /* 只读统计项（回复数）：与 👁 浏览量同属「只读数字」，故去掉 .stat-like 的胶囊底/边框/内边距，
+       只留图标+数字的横向排布 —— 与卡片侧 💬/👁 的只读统计口径一致（#1071 真机复核裁定 A）。
+       注意 uvue 只支持 class 选择器、且本文件无 `gap`，故间距沿用 .stat-like 的 margin-right。 */
+    .stat-plain {
+        padding: 0;
+        background-color: transparent;
+        border-width: 0;
     }
 
     .stat-text {
