@@ -25403,7 +25403,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "decided_at": {
-                    "type": "string"
+                    "description": "DecidedAt 未决申请为 nil：**键整个不出现**（omitempty）→ x-optional；\n漏标会让 swag 把它渲染成必填（ADR-0056 §11 / #1100 的契约撒谎面）。",
+                    "type": "string",
+                    "x-optional": true
                 },
                 "expires_at": {
                     "type": "string"

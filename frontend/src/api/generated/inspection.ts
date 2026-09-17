@@ -24,7 +24,7 @@
 
 export interface ContactRequestRowDTO {
   created_at: string
-  decided_at: string
+  decided_at?: string
   expires_at: string
   id: number
   message: string

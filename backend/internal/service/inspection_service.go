@@ -66,16 +66,18 @@ type RecruitResumeViewDTO struct {
 // 后者是展示投影（时间为字符串、带企业信息、多处 omitempty），巡检读面必须逐字节保持
 // 裸 model 的既有输出，不能复用。
 type ContactRequestRowDTO struct {
-	ID            int64      `json:"id"`
-	RecruiterID   int        `json:"recruiter_id"`
-	StudentUserID int        `json:"student_user_id"`
-	Message       string     `json:"message"`
-	Status        string     `json:"status"`
-	Source        string     `json:"source"`
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
-	DecidedAt     *time.Time `json:"decided_at,omitempty"`
-	ExpiresAt     time.Time  `json:"expires_at"`
+	ID            int64     `json:"id"`
+	RecruiterID   int       `json:"recruiter_id"`
+	StudentUserID int       `json:"student_user_id"`
+	Message       string    `json:"message"`
+	Status        string    `json:"status"`
+	Source        string    `json:"source"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	// DecidedAt 未决申请为 nil：**键整个不出现**（omitempty）→ x-optional；
+	// 漏标会让 swag 把它渲染成必填（ADR-0056 §11 / #1100 的契约撒谎面）。
+	DecidedAt *time.Time `json:"decided_at,omitempty" extensions:"x-optional"`
+	ExpiresAt time.Time  `json:"expires_at"`
 }
 
 // InspectionCountDTO 巡检单值计数（GET /admin/inspection/deleted-after-accepted）。
