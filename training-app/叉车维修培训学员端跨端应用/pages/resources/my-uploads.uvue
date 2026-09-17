@@ -58,6 +58,7 @@
     import { goBack } from '../../utils/navigation'
     import { getMyContributionsApi } from '../../api/contribution'
     import type { ContributionItem } from '../../api/contribution'
+    import { describeContributionStatus } from '../../utils/contributionStatus'
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
@@ -70,34 +71,15 @@
     const page = ref<number>(1)
     const pageSize = 20
 
-    /** 状态文案（pending/未知值兜底为待审核） */
-    function statusLabel(status : string) : string {
-        if (status == 'approved') return '已上架'
-        if (status == 'rejected') return '未通过'
-        if (status == 'withdrawn') return '已撤回'
-        if (status == 'archived') return '已下架'
-        return '待审核'
-    }
-
-    function statusIcon(status : string) : string {
-        if (status == 'approved') return '✅'
-        if (status == 'rejected') return '✖️'
-        return '🕐'
-    }
-
-    function statusColor(status : string) : string {
-        if (status == 'approved') return '#22A45D'
-        if (status == 'rejected') return '#E5484D'
-        if (status == 'withdrawn' || status == 'archived') return '#999999'
-        return '#FF9800'
-    }
-
-    function statusBg(status : string) : string {
-        if (status == 'approved') return '#F0FFF0'
-        if (status == 'rejected') return '#FFF0F0'
-        if (status == 'withdrawn' || status == 'archived') return '#F5F5F5'
-        return '#FFF7E6'
-    }
+    /**
+     * 模板侧本地薄包装（守护规则 S：模板不可直调 import 函数）。
+     * 判定（文案 / 图标 / 配色）**只有一份**，在 utils/contributionStatus.uts；
+     * 这里只把描述子投影成模板要用的四个标量，日后新增投稿页照此消费，不再自写 if 链。
+     */
+    function statusLabel(status : string) : string { return describeContributionStatus(status).label }
+    function statusIcon(status : string) : string { return describeContributionStatus(status).icon }
+    function statusColor(status : string) : string { return describeContributionStatus(status).color }
+    function statusBg(status : string) : string { return describeContributionStatus(status).bg }
 
     /** RFC3339 → yyyy-MM-dd */
     function fmtDate(iso : string) : string {
