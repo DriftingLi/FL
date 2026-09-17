@@ -75,6 +75,7 @@ type Deps struct {
 	QuestionCommentSvc   *service.QuestionCommentService
 	NoteSvc              *service.NoteService
 	QuestionKnowledgeSvc *service.QuestionKnowledgeService
+	FaqSvc               *service.FaqService
 	PointsSvc            *service.PointsService
 	JobCardSvc           *service.JobCardService
 	ResumePDFRenderer    *service.ResumePDFRenderer
@@ -169,6 +170,7 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		QuestionCommentSvc:   service.NewQuestionCommentService(db, logger),
 		NoteSvc:              service.NewNoteService(db, logger),
 		QuestionKnowledgeSvc: service.NewQuestionKnowledgeService(db),
+		FaqSvc:               service.NewFaqService(db, logger),
 		PointsSvc:            pointsSvc,
 		JobCardSvc:           service.NewJobCardService(db, fileSvc, logger),
 		ResumePDFRenderer:    service.NewResumePDFRenderer(),
