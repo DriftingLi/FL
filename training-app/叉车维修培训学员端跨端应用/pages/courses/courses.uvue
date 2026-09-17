@@ -207,16 +207,16 @@
                 }
             }
         }
-        if (course.category == 'practice' || course.category == 'CATEGORY_03') return '实操'
-        if (course.category == 'safety' || course.category == 'CATEGORY_02') return '安全'
+        // #1087：旧 course.category 已退役（后端 /api/courses 不返回该字段 ⇒ 旧两条分支恒不命中）。
+        // 真实数据下 specialty_id / level_id 必有值（backend/internal/service/course_mount_scope.go 强制两者非空），
+        // 故此处仅剩 level/specialty 名称查不到时的兜底。
         return '基础'
     }
 
     function getBadgeColor(course : CourseItem) : string {
         const text = getBadgeText(course)
-        if (text == '入门' || text == '冲刺' || text == '安全') return '#2979ff'
+        if (text == '入门' || text == '冲刺') return '#2979ff'
         if (text == '进阶' || text == '专项') return '#e6a23c'
-        if (text == '实操') return '#67c23a'
         return '#909399'
     }
 

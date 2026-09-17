@@ -1,10 +1,12 @@
 <template>
     <!-- 课程封面区 —— T08 手术自 pages/courses/course-detail.uvue 逐段搬出（parent #646 / ADR-0007）。
          类名与结构逐字不变；原来直读 detail!.xxx，改为扁平原始 props 下发（数据所有权单一：detail 归页面）。
-         图标与底色由页面按 category 映射后下发（映射表仍只有页面那一份实现）。 -->
+         图标与底色由页面按 specialty_id 映射后下发（映射表仍只有页面那一份实现）。
+         #1087：旧 course.category 已退役 ⇒ prop 随之更名 categoryIcon → specialtyIcon，
+         避免「名category 实 specialty」的歧义。 -->
     <view class="cover-section">
         <view class="cover-bg" :style="{ backgroundColor: coverColor }">
-            <text class="cover-icon">{{ categoryIcon }}</text>
+            <text class="cover-icon">{{ specialtyIcon }}</text>
         </view>
         <view class="cover-info">
             <text class="cover-title">{{ title }}</text>
@@ -25,7 +27,7 @@
         specialtyName? : string
         certificateName? : string
         description? : string
-        categoryIcon? : string
+        specialtyIcon? : string
         coverColor? : string
     }>(), {
         title: '',
@@ -33,7 +35,7 @@
         specialtyName: '',
         certificateName: '',
         description: '',
-        categoryIcon: '',
+        specialtyIcon: '',
         coverColor: '#e3f2fd'
     })
 </script>
