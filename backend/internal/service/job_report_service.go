@@ -13,6 +13,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/pkg/paging"
 )
 
 // 举报域业务错误哨兵（ADR-0024）：handler 以 errors.Is 映射状态码，不做字符串比对。
@@ -117,18 +118,11 @@ func (s *JobReportService) Report(studentUserID, jobPostingID int, reason string
 
 // ListPendingReports 管理端待处理举报队列（分页）。
 func (s *JobReportService) ListPendingReports(page, pageSize int) ([]ReportDTO, int64, error) {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 || pageSize > 50 {
-		pageSize = 20
-	}
-	var total int64
-	if err := s.db.Model(&model.JobReport{}).Where("status = ?", "pending").Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-	var rows []model.JobReport
-	if err := s.db.Where("status = ?", "pending").Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error; err != nil {
+	rows, total, _, _, err := paging.QueryWithMax[model.JobReport](s.db, page, pageSize, 20, 50,
+		"created_at DESC", func(q *gorm.DB) *gorm.DB {
+			return q.Where("status = ?", "pending")
+		})
+	if err != nil {
 		return nil, 0, err
 	}
 	dtos := make([]ReportDTO, 0, len(rows))

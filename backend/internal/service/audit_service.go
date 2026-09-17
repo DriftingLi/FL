@@ -29,9 +29,10 @@ func (s *AuditService) Write(record model.AuditLog) error {
 	return s.db.Create(&record).Error
 }
 
-// List 审计日志分页查询：过滤 + count + find，返回 (items, total, page, pageSize)。
-// 页大小上限 100 在本层钳制（ClampMax 语义：超上限回退默认值，而非截断到上限）。
-func (s *AuditService) List(page, pageSize, actorID int, role, keyword string) ([]model.AuditLog, int64, int, int) {
+// List 审计日志分页查询：过滤 + count + find，返回 (items, total, page, pageSize, error)。
+// 页大小上限 100 在本层钳制（ClampMax 语义：超上限回退默认值，而非截断到上限）；
+// 查询失败上抛（ADR-0056 §1），由 api 层渲染 500 信封。
+func (s *AuditService) List(page, pageSize, actorID int, role, keyword string) ([]model.AuditLog, int64, int, int, error) {
 	build := func(q *gorm.DB) *gorm.DB {
 		if actorID > 0 {
 			q = q.Where("actor_id = ?", actorID)

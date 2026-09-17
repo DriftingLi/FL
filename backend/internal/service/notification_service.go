@@ -285,11 +285,14 @@ func (s *NotificationService) List(userID int, page, pageSize int) (*Notificatio
 		return nil, err
 	}
 
-	rows, total, page, pageSize := paging.QueryWithScan[model.Notification](s.db, page, pageSize, 10, 50,
+	rows, total, page, pageSize, err := paging.QueryWithScan[model.Notification](s.db, page, pageSize, 10, 50,
 		"id DESC",
 		func(q *gorm.DB) *gorm.DB {
 			return q.Model(&model.Notification{}).Where("user_id = ?", userID)
 		})
+	if err != nil {
+		return nil, err
+	}
 
 	items := make([]NotificationDTO, 0, len(rows))
 	for i := range rows {

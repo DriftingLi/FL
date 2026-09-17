@@ -157,7 +157,7 @@ type ProfileChangeRequestPageResult struct {
 
 // ListRequests 分页查询审核请求（可按下单状态过滤）。
 func (s *ProfileReviewService) ListRequests(status string, page, pageSize int) (*ProfileChangeRequestPageResult, error) {
-	rows, total, page, pageSize := paging.QueryWithScan[reviewRequestRow](s.db, page, pageSize, 10, 100,
+	rows, total, page, pageSize, err := paging.QueryWithScan[reviewRequestRow](s.db, page, pageSize, 10, 100,
 		"r.id DESC",
 		func(q *gorm.DB) *gorm.DB {
 			q = q.Table("profile_change_requests AS r").
@@ -170,6 +170,9 @@ func (s *ProfileReviewService) ListRequests(status string, page, pageSize int) (
 			}
 			return q
 		})
+	if err != nil {
+		return nil, err
+	}
 
 	items := make([]ProfileChangeRequestDTO, 0, len(rows))
 	for i := range rows {

@@ -66,7 +66,7 @@ func assertLedgerDomainFilter(t *testing.T, db *gorm.DB) {
 	r := gin.New()
 	api := r.Group(`/api`)
 	deps := newContractDeps(t, db, cfg)
-	RegisterAdminInspectionRoutes(api, deps.RouterDeps(), db, deps.PointsSvc)
+	RegisterAdminInspectionRoutes(api, deps.RouterDeps(), deps.InspectionSvc, deps.PointsSvc)
 
 	adminSess := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{})
 	adminToken, err := adminSess.Issue(admin.AdminID, admin.Username, `admin`)

@@ -9,6 +9,7 @@ import (
 
 	"github.com/jung-kurt/gofpdf"
 
+	"forklift-training/internal/pdfutil"
 	"forklift-training/internal/valuation/model"
 )
 
@@ -76,7 +77,7 @@ func drawRadarChart(pdf *gofpdf.Fpdf, cx, cy, radius float64, dimensionScores []
 	}
 
 	// 4. 绘制刻度标签（在顶部轴线上标注刻度值）
-	pdf.SetFont(FontSimHei, "", 7.0)
+	pdf.SetFont(pdfutil.FontSimHei, "", 7.0)
 	pdf.SetTextColor(150, 150, 150)
 	for _, level := range gridLevels {
 		ratio := level / radarMaxValue
@@ -119,7 +120,7 @@ func drawRadarChart(pdf *gofpdf.Fpdf, cx, cy, radius float64, dimensionScores []
 	}
 
 	// 7. 绘制维度标签（在外圈外侧，根据角度精确定位）
-	pdf.SetFont(FontSimHei, "", 8.5)
+	pdf.SetFont(pdfutil.FontSimHei, "", 8.5)
 	pdf.SetTextColor(71, 85, 105) // #475569
 	for i, dimName := range radarDimensionOrder {
 		// 标签位置：外圈外侧 3mm

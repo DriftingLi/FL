@@ -1,5 +1,5 @@
 // 生成文件，勿手改（ADR-0019 契约 codegen 专项 / ADR-0048 按域解冻；spec #940 片五③、#952 片一）。
-// 域：职位与投递（/api/recruit/jobs*、/api/jobs*、/api/resume/applications*、/api/recruit/applications*）
+// 域：职位与投递（/api/recruit/jobs*、/api/jobs*、/api/resume/applications*、/api/recruit/applications*、/api/admin/jobs* 巡检与举报治理）
 // 唯一事实源：后端注解 → backend/docs/swagger.json（CI 有新鲜度锁：backend-lint 的 swagger 步骤）。
 // 再生成：cd backend && go run ./cmd/gen-apitypes
 // 同步契约：backend/internal/apitypes/codegen_test.go 把本文件与注解渲染结果全等比对。
@@ -19,8 +19,12 @@
 //   GET  /recruit/jobs/{id}/applications
 //   GET  /recruit/applications/{id}
 //   POST /recruit/applications/{id}/reject
+//   GET  /admin/jobs
+//   GET  /admin/job-reports
+//   POST /admin/jobs/{id}/force-offline
+//   POST /admin/job-reports/{id}/handle
 //
-// 覆盖的 Go 类型：ApplicationDTO / ApplicationListResult / JobListResult / JobPostingDTO / RecruiterApplicationListResult / ReportDTO
+// 覆盖的 Go 类型：ApplicationDTO / ApplicationListResult / JobListResult / JobPostingDTO / RecruiterApplicationListResult / ReportDTO / ReportListResult
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -104,4 +108,11 @@ export interface ReportDTO {
   reason: string
   status: string
   student_user_id: number
+}
+
+export interface ReportListResult {
+  items: ReportDTO[]
+  page: number
+  page_size: number
+  total: number
 }

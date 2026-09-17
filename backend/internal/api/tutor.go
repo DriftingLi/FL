@@ -77,10 +77,17 @@ func (h *TutorHandler) ListCourses(c *gin.Context) {
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *tutorCourseListReq) (*service.CoursePageResult, error) {
-			result := h.svc.GetCourses(req.Page, req.PageSize, req.CredentialID, req.SpecialtyID, req.LevelID)
+			result, err := h.svc.GetCourses(req.Page, req.PageSize, req.CredentialID, req.SpecialtyID, req.LevelID)
+			if err != nil {
+				return nil, err
+			}
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *tutorCourseListReq, resp *service.CoursePageResult, _ error) {
+		Render: func(c *gin.Context, _ *tutorCourseListReq, resp *service.CoursePageResult, err error) {
+			if err != nil {
+				response.ServerError(c, err.Error())
+				return
+			}
 			response.Success(c, resp)
 		},
 	}.Handle(c)

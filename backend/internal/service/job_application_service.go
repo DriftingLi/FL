@@ -15,6 +15,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/pkg/paging"
 )
 
 // 投递状态值域（单一事实源，调用侧不得另立；照 contribution_service.go 的状态常量先例）。
@@ -274,18 +275,11 @@ func (s *JobApplicationService) Withdraw(studentUserID int, applicationID int64,
 
 // ListForStudent 学员「我的投递」列表。
 func (s *JobApplicationService) ListForStudent(studentUserID, page, pageSize int) ([]ApplicationDTO, int64, error) {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 || pageSize > 50 {
-		pageSize = 20
-	}
-	var total int64
-	if err := s.db.Model(&model.JobApplication{}).Where("student_user_id = ?", studentUserID).Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-	var rows []model.JobApplication
-	if err := s.db.Where("student_user_id = ?", studentUserID).Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error; err != nil {
+	rows, total, _, _, err := paging.QueryWithMax[model.JobApplication](s.db, page, pageSize, 20, 50,
+		"created_at DESC", func(q *gorm.DB) *gorm.DB {
+			return q.Where("student_user_id = ?", studentUserID)
+		})
+	if err != nil {
 		return nil, 0, err
 	}
 	dtos := make([]ApplicationDTO, 0, len(rows))

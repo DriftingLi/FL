@@ -186,28 +186,47 @@ func (s *FavoriteService) Remove(userID int, favoriteID int64) error {
 	return nil
 }
 
+// favoriteTargetSubquery 收藏目标的归属分区子查询：course → course_id / question → id。
+// 谓词由归属分区具名谓词给出（ADR-0056 §2）；credentialID 为 nil 时返回空串（调用方整支跳过，
+// 不生成半截 SQL）。
+func favoriteTargetSubquery(targetType string, credentialID *int) (string, []any) {
+	clause, args := entityOwnedByClause("credential_id", credentialID)
+	if clause == "" {
+		return "", nil
+	}
+	table, column := "question", "id"
+	if targetType == FavoriteTargetCourse {
+		table, column = "course", "course_id"
+	}
+	return "SELECT " + column + " FROM " + table + " WHERE " + clause, args
+}
+
 // List 我的收藏列表（targetType 可选过滤；目标已删除的条目跳过）。
-func (s *FavoriteService) List(userID int, targetType string, page, pageSize int, credentialID ...*int) (*FavoritePageResult, error) {
+func (s *FavoriteService) List(userID int, targetType string, page, pageSize int, credentialID *int) (*FavoritePageResult, error) {
 	targetType = strings.TrimSpace(targetType)
-	rows, total, page, pageSize := paging.QueryWithMax[model.Favorite](s.db, page, pageSize, 20, 100,
+	rows, total, page, pageSize, err := paging.QueryWithMax[model.Favorite](s.db, page, pageSize, 20, 100,
 		"created_at DESC, favorite_id DESC",
 		func(q *gorm.DB) *gorm.DB {
 			q = q.Where("user_id = ?", userID)
 			if targetType != "" {
 				q = q.Where("target_type = ?", targetType)
 			}
-			if len(credentialID) > 0 && credentialID[0] != nil && (targetType == FavoriteTargetCourse || targetType == FavoriteTargetQuestion) {
-				if targetType == FavoriteTargetCourse {
-					q = q.Where("target_id IN (SELECT course_id FROM course WHERE credential_id = ?)", *credentialID[0])
-				} else {
-					q = q.Where("target_id IN (SELECT id FROM question WHERE credential_id = ?)", *credentialID[0])
-				}
-			} else if len(credentialID) > 0 && credentialID[0] != nil && targetType == "" {
-				// 混合类型时，仅过滤 course/question 分区，其余类型保持
-				q = q.Where("(target_type NOT IN (?, ?) OR (target_type = ? AND target_id IN (SELECT course_id FROM course WHERE credential_id = ?)) OR (target_type = ? AND target_id IN (SELECT id FROM question WHERE credential_id = ?)))", FavoriteTargetCourse, FavoriteTargetQuestion, FavoriteTargetCourse, *credentialID[0], FavoriteTargetQuestion, *credentialID[0])
+			// 收藏目标的证件分区是**归属分区**（ADR-0056 §2）：读目标自身的证件列，nil = 不分区、看全部。
+			// 「混合类型」分支只过滤 course/question 两个分区，其余类型保持（既有语义）。
+			if credentialID != nil && (targetType == FavoriteTargetCourse || targetType == FavoriteTargetQuestion) {
+				sub, args := favoriteTargetSubquery(targetType, credentialID)
+				q = q.Where("target_id IN ("+sub+")", args...)
+			} else if credentialID != nil && targetType == "" {
+				courseSub, courseArgs := favoriteTargetSubquery(FavoriteTargetCourse, credentialID)
+				questionSub, questionArgs := favoriteTargetSubquery(FavoriteTargetQuestion, credentialID)
+				q = q.Where("(target_type NOT IN (?, ?) OR (target_type = ? AND target_id IN ("+courseSub+")) OR (target_type = ? AND target_id IN ("+questionSub+")))",
+					FavoriteTargetCourse, FavoriteTargetQuestion, FavoriteTargetCourse, courseArgs[0], FavoriteTargetQuestion, questionArgs[0])
 			}
 			return q
 		})
+	if err != nil {
+		return nil, err
+	}
 	items := make([]FavoriteDTO, 0, len(rows))
 	if len(rows) > 0 {
 		byType := make(map[string][]int)
