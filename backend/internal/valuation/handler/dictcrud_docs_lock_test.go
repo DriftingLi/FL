@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"reflect"
 	"runtime"
+	"sort"
 	"strings"
 	"testing"
 
@@ -15,7 +16,7 @@ import (
 	"forklift-training/internal/valuation/dictcrud"
 )
 
-// 管理端 37 条 CRUD 注解的「路径 + 方法 + 响应字段集」== AllDescriptors() 的派生集合
+// 管理端 31 条 CRUD 注解的「路径 + 方法 + 响应字段集」== AllDescriptors() 的派生集合
 // （ADR-0056 §11 的锁 / issue #1100）。
 //
 // 此前注解是描述符之外的第二份手抄：改描述符 Path、加一个字段、换更新子集，运行期路由与
@@ -23,42 +24,22 @@ import (
 // 单向校验。本文件把三方钉死：
 //
 //	1. 具名分派表（dictcrud_dispatch.go）↔ AllDescriptors()：声明了操作就必须有具名方法，
-//	   表里不得有孤儿；注解宿主必须全部落在分派表里（死注解 = 零引用代码）；
-//	2. 每条注解的 @Router 反解回 (描述符, 操作)：路径/参数名必须等于派生值；
-//	3. @Success 的 object{} 字段表 ↔ dictcrud.ResponseFields：逐字段（名 + 类型）全等。
+//	   表里不得有孤儿；
+//	2. 注解集合 ↔ AllDescriptors() 派生集合：**直接全等**（多一条或漏一条都红，无豁免表）；
+//	3. 每条注解的 @Router 反解回 (描述符, 操作)：路径/参数名必须等于派生值，宿主 == 分派表执行体；
+//	4. @Success 的 object{} 字段表 ↔ dictcrud.ResponseFields：逐字段（名 + 类型）全等。
 //
 // 判定面是**源码文本**（dictcrud_docs.go 的注释）—— swag 只认函数级注释，注解无法在运行期
 // 派生，故这里用「派生期望 + 全等断言」把「手抄」变成可执行判据。
 //
-// 实测发现（#1100）：37 条注解里有 **6 条是幻影** —— 描述符从未声明 Update、路由从未注册，
-// 但注解与 apitypes 域声明表都写了 PUT（swagger 随之撒谎）。逐条登记在 phantomAnnotations，
-// 本票不做行为变更（见该表注释）。
+// 历史（第十一批 #1100 → 第十二批 #1119）：#1100 实测出 37 条注解里有 6 条**幻影 PUT** ——
+// 规格族描述符从未声明 Update、路由从未注册，但注解与 apitypes 域声明表都写了 PUT。当时逐条登记在
+// phantomAnnotations（「正好 6 条」的豁免表）；#1119 删净那 6 条注解与域表条目后豁免表随之删除，
+// 本锁改为**直接全等** —— 幻影不可能再悄悄多出来。
 
 // adminSwaggerPrefix 注解侧路径前缀 = 路由组前缀去掉 swag 的 /api（swag paths 不含 basePath）。
 func adminSwaggerPrefix() string {
 	return strings.TrimPrefix(valuationAdminGroupPath, "/api")
-}
-
-// phantomAnnotations 描述符未声明该操作、路由从未注册，但注解与域声明表都存在的幻影注解
-// （键 = "<描述符名>/<HTTP 方法>"）。
-//
-// 证据（#1100 实测）：
-//   - descriptors.go 的 6 个规格族描述符（tonnages / mast_types / mast_heights / battery_types /
-//     transmission_types / engine_types）只声明 Create + Delete —— 文件头口径「单字段唯一列 + C/D」；
-//   - specs_crud_contract_test.go 的 TestSpecsCrud_NoPutRoute 逐条断言这 6 条 PUT 必须是 404；
-//   - 于是「注解/swagger/域声明表」比运行期多 6 条 PUT（前端 valuation/admin.ts 的
-//     createCrud('tonnages').update() 一类调用打的是不存在的路由）。
-//
-// 处置归另一票（二选一：删注解与域表条目 + 前端收口；或给描述符补 Update、同步契约测试与前端）。
-// 本表的作用是让「幻影」不可能悄悄多出来：条目必须仍然是「未声明」状态，一旦描述符补上 Update，
-// 本锁会要求把它移出本表并登记进分派表。
-var phantomAnnotations = map[string]string{
-	"tonnages/put":           "规格族描述符无 Update；specs 契约测试断言 PUT tonnages/{id} = 404（证据见上）",
-	"mast_types/put":         "规格族描述符无 Update；specs 契约测试断言 PUT mast-types/{id} = 404",
-	"mast_heights/put":       "规格族描述符无 Update；specs 契约测试断言 PUT mast-heights/{id} = 404",
-	"battery_types/put":      "规格族描述符无 Update；specs 契约测试断言 PUT battery-types/{id} = 404",
-	"transmission_types/put": "规格族描述符无 Update；specs 契约测试断言 PUT transmission-types/{id} = 404",
-	"engine_types/put":       "规格族描述符无 Update；specs 契约测试断言 PUT engine-types/{id} = 404",
 }
 
 // dictOpFunc 取一个描述符在某操作上的具名方法（nil = 未声明/未登记）。
@@ -240,11 +221,6 @@ func resolveAnnotation(descriptors []dictcrud.Descriptor, router string) (dictcr
 	return dictcrud.Descriptor{}, 0, false
 }
 
-// phantomKey 幻影表的键。
-func phantomKey(d dictcrud.Descriptor, op dictcrud.Op) string {
-	return d.Name + "/" + strings.ToLower(op.Method())
-}
-
 // TestDictDispatchMatchesDescriptors 分派表 ↔ AllDescriptors()：声明了操作就必须有具名方法
 // （注册期 panic 的同一判据），表里不得有孤儿。
 func TestDictDispatchMatchesDescriptors(t *testing.T) {
@@ -286,102 +262,86 @@ func TestDictDispatchMatchesDescriptors(t *testing.T) {
 	}
 }
 
-// TestDictAnnotationsMatchDescriptors 本票的主锁：37 条注解 == AllDescriptors() 派生集合。
+// TestDictAnnotationsMatchDescriptors 本锁的主判据：注解集合 == AllDescriptors() 派生集合（直接全等）。
 func TestDictAnnotationsMatchDescriptors(t *testing.T) {
 	docs := loadDictDocAnnotations(t)
 	table := (&ConfigHandler{}).dictDispatch()
 	descriptors := dictcrud.AllDescriptors()
 
-	// 1) 执行体方向：分派表里每个具名方法都必须有注解块（注解面不许漏）。
+	// 1) 派生集合：描述符声明了操作 → 分派表的具名方法名（注解宿主 == 执行体）。
+	wantHosts := map[string]bool{}
 	for _, d := range descriptors {
 		for _, op := range dictOps() {
 			if !dictDeclaresOp(d, op) {
 				continue
 			}
 			host := funcName(dictOpFunc(table[d.Name], op))
-			if _, ok := docs[host]; !ok {
-				t.Fatalf("描述符 %q 的 %s 执行体 %s 在 dictcrud_docs.go 里没有注解块（swagger 会漏这条路由）",
-					d.Name, op.Method(), host)
+			if host == "" {
+				t.Fatalf("描述符 %q 的 %s 在具名分派表里没有方法（dictcrud_dispatch.go 漏登记）", d.Name, op.Method())
 			}
+			wantHosts[host] = true
 		}
 	}
 
-	// 2) 逐条注解：反解 (描述符, 操作) → 路径/字段表必须等于派生值；并且与分派表指向同一个宿主。
-	checked := 0
+	// 2) 注解集合：dictcrud_docs.go 里全部估值管理端写路由注解（键 = 宿主方法名）。
+	gotHosts := map[string]bool{}
+	for name, ann := range docs {
+		if isAdminWriteRouter(ann.router) {
+			gotHosts[name] = true
+		}
+	}
+	// 直接全等：多一条（幻影注解）或漏一条（swagger 少一条路由）都在这里红，不存在豁免表。
+	if !reflect.DeepEqual(gotHosts, wantHosts) {
+		t.Fatalf("注解集合 != AllDescriptors() 派生集合\n  多出的注解 = %v\n  漏掉的注解 = %v",
+			diffKeys(gotHosts, wantHosts), diffKeys(wantHosts, gotHosts))
+	}
+
+	// 3) 逐条注解：反解 (描述符, 操作) → 路径/字段表必须等于派生值，且宿主 == 分派表执行体。
 	for _, ann := range docs {
-		if !strings.HasPrefix(ann.router, "POST "+adminSwaggerPrefix()+"/") &&
-			!strings.HasPrefix(ann.router, "PUT "+adminSwaggerPrefix()+"/") &&
-			!strings.HasPrefix(ann.router, "DELETE "+adminSwaggerPrefix()+"/") {
+		if !isAdminWriteRouter(ann.router) {
 			continue
 		}
 		d, op, ok := resolveAnnotation(descriptors, ann.router)
 		if !ok {
 			t.Fatalf("%s：@Router %q 不对应任何描述符的任何操作（路径/参数名漂移？）", ann.method, ann.router)
 		}
-		// 已注册的操作：注解宿主必须就是分派表里的那个具名方法（注解宿主 == 执行体），
-		// 且 @Success 字段表逐字段等于描述符派生值。
-		if dictDeclaresOp(d, op) {
-			host := funcName(dictOpFunc(table[d.Name], op))
-			if host != ann.method {
-				t.Fatalf("描述符 %q 的 %s：分派表执行体 = %s，注解宿主 = %s —— 必须同一个方法",
-					d.Name, op.Method(), host, ann.method)
-			}
-			wantFields := dictcrud.ResponseFields(d, op)
-			if !reflect.DeepEqual(ann.success, wantFields) {
-				t.Fatalf("%s：@Success 字段表与描述符派生不一致\n  注解   = %s\n  描述符 = %s",
-					ann.method, formatFields(ann.success), formatFields(wantFields))
-			}
-			checked++
-			continue
-		}
-		// 未声明的操作：只允许在本票登记的幻影表里（多一条即红）。
-		// 注意：幻影操作的 @Success 字段表**没有派生源**（描述符没有该操作），故这里只断言
-		// 路径/方法/参数名（上面已由 resolveAnnotation 断过）与「字段都是该描述符声明过的字段」
-		// —— 前者可派生，后者是不许凭空造字段的底线；完整字段表派生要等幻影处置（见 phantomAnnotations）。
-		key := phantomKey(d, op)
-		if _, ok := phantomAnnotations[key]; !ok {
-			t.Fatalf("%s：描述符 %q 未声明 %s（路由不会注册），但注解与域声明表都在 —— "+
-				"要么登记进分派表（补描述符 + 补 Update 声明），要么删注解并开票处置",
+		if !dictDeclaresOp(d, op) {
+			t.Fatalf("%s：描述符 %q 未声明 %s（路由不会注册），注解不得有它 —— 删注解与域表条目（#1119 口径）",
 				ann.method, d.Name, op.Method())
 		}
-		if len(ann.success) == 0 {
-			t.Fatalf("%s：幻影注解的 @Success 没有字段表", ann.method)
+		host := funcName(dictOpFunc(table[d.Name], op))
+		if host != ann.method {
+			t.Fatalf("描述符 %q 的 %s：分派表执行体 = %s，注解宿主 = %s —— 必须同一个方法",
+				d.Name, op.Method(), host, ann.method)
 		}
-		for _, field := range ann.success {
-			if field.Name == "id" {
-				continue
-			}
-			if _, ok := d.Field(field.Name); !ok {
-				t.Fatalf("%s：幻影注解声明了描述符未声明的字段 %q", ann.method, field.Name)
-			}
+		wantFields := dictcrud.ResponseFields(d, op)
+		if !reflect.DeepEqual(ann.success, wantFields) {
+			t.Fatalf("%s：@Success 字段表与描述符派生不一致\n  注解   = %s\n  描述符 = %s",
+				ann.method, formatFields(ann.success), formatFields(wantFields))
 		}
-		checked++
 	}
-	if checked != 37 {
-		t.Fatalf("覆盖的注解条数 = %d，期望 37", checked)
-	}
-	if len(phantomAnnotations) != 6 {
-		t.Fatalf("幻影注解表 %d 条，期望 6（#1100 实测：6 个规格族描述符无 Update）", len(phantomAnnotations))
-	}
+}
 
-	// 3) 反向：幻影表不得过期——描述符一旦补上 Update，条目必须移出本表。
-	for key := range phantomAnnotations {
-		parts := strings.SplitN(key, "/", 2)
-		var d dictcrud.Descriptor
-		found := false
-		for _, cand := range descriptors {
-			if cand.Name == parts[0] {
-				d, found = cand, true
-				break
-			}
-		}
-		if !found {
-			t.Fatalf("幻影表条目 %q 指向不存在的描述符", key)
-		}
-		if dictDeclaresOp(d, dictcrud.OpUpdate) {
-			t.Fatalf("幻影表条目 %q 已过期：描述符已声明 Update —— 请登记进分派表并删掉本条目", key)
+// isAdminWriteRouter 注解是否指向估值管理端写路由（POST/PUT/DELETE + 管理端前缀）。
+func isAdminWriteRouter(router string) bool {
+	for _, m := range []string{"POST ", "PUT ", "DELETE "} {
+		if strings.HasPrefix(router, m+adminSwaggerPrefix()+"/") {
+			return true
 		}
 	}
+	return false
+}
+
+// diffKeys 返回 a 有而 b 没有的键（排序后，让失败信息可读）。
+func diffKeys(a, b map[string]bool) []string {
+	var out []string
+	for k := range a {
+		if !b[k] {
+			out = append(out, k)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // TestDictDispatchRegistrationFailClosed 缺具名方法在注册期 panic，不静默少注册

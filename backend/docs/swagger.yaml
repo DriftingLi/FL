@@ -15085,52 +15085,6 @@ paths:
       summary: 删除电池类型
       tags:
       - 估值-管理端
-    put:
-      description: name；响应为 {id} ∪ 更新字段。需管理员（主体系 JWT + role=admin）。
-      parameters:
-      - description: 记录 ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: 字段
-        in: body
-        name: body
-        required: true
-        schema:
-          type: object
-      responses:
-        "200":
-          description: success
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.R'
-            - properties:
-                data:
-                  properties:
-                    id:
-                      type: integer
-                    name:
-                      type: string
-                  type: object
-              type: object
-        "400":
-          description: 参数错误
-          schema:
-            $ref: '#/definitions/response.R'
-        "403":
-          description: 无权限
-          schema:
-            $ref: '#/definitions/response.R'
-        "404":
-          description: 记录不存在
-          schema:
-            $ref: '#/definitions/response.R'
-      security:
-      - BearerAuth: []
-      summary: 更新电池类型
-      tags:
-      - 估值-管理端
   /valuation/admin/brands:
     post:
       consumes:
@@ -15570,52 +15524,6 @@ paths:
       summary: 删除发动机类型
       tags:
       - 估值-管理端
-    put:
-      description: name；响应为 {id} ∪ 更新字段。需管理员（主体系 JWT + role=admin）。
-      parameters:
-      - description: 记录 ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: 字段
-        in: body
-        name: body
-        required: true
-        schema:
-          type: object
-      responses:
-        "200":
-          description: success
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.R'
-            - properties:
-                data:
-                  properties:
-                    id:
-                      type: integer
-                    name:
-                      type: string
-                  type: object
-              type: object
-        "400":
-          description: 参数错误
-          schema:
-            $ref: '#/definitions/response.R'
-        "403":
-          description: 无权限
-          schema:
-            $ref: '#/definitions/response.R'
-        "404":
-          description: 记录不存在
-          schema:
-            $ref: '#/definitions/response.R'
-      security:
-      - BearerAuth: []
-      summary: 更新发动机类型
-      tags:
-      - 估值-管理端
   /valuation/admin/mast-heights:
     post:
       consumes:
@@ -15702,52 +15610,6 @@ paths:
       summary: 删除门架高度
       tags:
       - 估值-管理端
-    put:
-      description: value_mm；响应为 {id} ∪ 更新字段。需管理员（主体系 JWT + role=admin）。
-      parameters:
-      - description: 记录 ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: 字段
-        in: body
-        name: body
-        required: true
-        schema:
-          type: object
-      responses:
-        "200":
-          description: success
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.R'
-            - properties:
-                data:
-                  properties:
-                    id:
-                      type: integer
-                    value_mm:
-                      type: integer
-                  type: object
-              type: object
-        "400":
-          description: 参数错误
-          schema:
-            $ref: '#/definitions/response.R'
-        "403":
-          description: 无权限
-          schema:
-            $ref: '#/definitions/response.R'
-        "404":
-          description: 记录不存在
-          schema:
-            $ref: '#/definitions/response.R'
-      security:
-      - BearerAuth: []
-      summary: 更新门架高度
-      tags:
-      - 估值-管理端
   /valuation/admin/mast-types:
     post:
       consumes:
@@ -15831,52 +15693,6 @@ paths:
       security:
       - BearerAuth: []
       summary: 删除门架类型
-      tags:
-      - 估值-管理端
-    put:
-      description: name；响应为 {id} ∪ 更新字段。需管理员（主体系 JWT + role=admin）。
-      parameters:
-      - description: 记录 ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: 字段
-        in: body
-        name: body
-        required: true
-        schema:
-          type: object
-      responses:
-        "200":
-          description: success
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.R'
-            - properties:
-                data:
-                  properties:
-                    id:
-                      type: integer
-                    name:
-                      type: string
-                  type: object
-              type: object
-        "400":
-          description: 参数错误
-          schema:
-            $ref: '#/definitions/response.R'
-        "403":
-          description: 无权限
-          schema:
-            $ref: '#/definitions/response.R'
-        "404":
-          description: 记录不存在
-          schema:
-            $ref: '#/definitions/response.R'
-      security:
-      - BearerAuth: []
-      summary: 更新门架类型
       tags:
       - 估值-管理端
   /valuation/admin/original-prices:
@@ -16440,52 +16256,6 @@ paths:
       summary: 删除吨位
       tags:
       - 估值-管理端
-    put:
-      description: value；响应为 {id} ∪ 更新字段。需管理员（主体系 JWT + role=admin）。
-      parameters:
-      - description: 记录 ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: 字段
-        in: body
-        name: body
-        required: true
-        schema:
-          type: object
-      responses:
-        "200":
-          description: success
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.R'
-            - properties:
-                data:
-                  properties:
-                    id:
-                      type: integer
-                    value:
-                      type: number
-                  type: object
-              type: object
-        "400":
-          description: 参数错误
-          schema:
-            $ref: '#/definitions/response.R'
-        "403":
-          description: 无权限
-          schema:
-            $ref: '#/definitions/response.R'
-        "404":
-          description: 记录不存在
-          schema:
-            $ref: '#/definitions/response.R'
-      security:
-      - BearerAuth: []
-      summary: 更新吨位
-      tags:
-      - 估值-管理端
   /valuation/admin/transmission-types:
     post:
       consumes:
@@ -16569,52 +16339,6 @@ paths:
       security:
       - BearerAuth: []
       summary: 删除传动系统类型
-      tags:
-      - 估值-管理端
-    put:
-      description: name；响应为 {id} ∪ 更新字段。需管理员（主体系 JWT + role=admin）。
-      parameters:
-      - description: 记录 ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: 字段
-        in: body
-        name: body
-        required: true
-        schema:
-          type: object
-      responses:
-        "200":
-          description: success
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.R'
-            - properties:
-                data:
-                  properties:
-                    id:
-                      type: integer
-                    name:
-                      type: string
-                  type: object
-              type: object
-        "400":
-          description: 参数错误
-          schema:
-            $ref: '#/definitions/response.R'
-        "403":
-          description: 无权限
-          schema:
-            $ref: '#/definitions/response.R'
-        "404":
-          description: 记录不存在
-          schema:
-            $ref: '#/definitions/response.R'
-      security:
-      - BearerAuth: []
-      summary: 更新传动系统类型
       tags:
       - 估值-管理端
   /valuation/admin/vehicle-types:
