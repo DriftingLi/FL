@@ -10,15 +10,9 @@ import assert from 'node:assert/strict'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
-import {
-  ALLOWLIST,
-  GUARDED_MODULES,
-  guardedSpecifier,
-  isGuardedPath,
-  isTestFile,
-  parseAddedLines,
-  scanSource
-} from './check-api-seam.mjs'
+// 新增行解析的单点实现在 lib/added-lines.mjs（守卫只留判定面，runner 在 lib/guard.mjs）
+import { parseAddedLines } from './lib/added-lines.mjs'
+import { ALLOWLIST, GUARDED_MODULES, guardedSpecifier, isGuardedPath, isTestFile, scanSource } from './check-api-seam.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 

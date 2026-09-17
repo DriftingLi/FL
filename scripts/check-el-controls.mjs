@@ -6,7 +6,7 @@
  * 「业务页面不得直接使用 Element Plus 控件」这条规则一直靠评审人眼守。本脚本把它变成
  * CI 可核验的事实：已收敛控件出现在业务模板里 → 报红并指路封装组件。
  *
- * 用法：
+ * 用法（runner 面单点在 `scripts/lib/guard.mjs`，ADR-0056 §5 / #1094；本文件只有判定面）：
  *   node scripts/check-el-controls.mjs --all  [目录]   全量扫描（默认 frontend/src；有违规则退出 1）
  *   node scripts/check-el-controls.mjs --diff [base]   只查相对 base 的新增行（base 默认 origin/master）
  *
@@ -19,20 +19,7 @@
  *   3. el-table / el-table-column —— 明确的适用边界，走全局样式变量、不封装；
  *   4. 表单域与布局类 EP（el-input / el-form / el-select / el-icon / el-row …）—— 尚未封装的例外。
  */
-import { readFileSync, readdirSync, statSync } from 'node:fs'
-import { execFileSync } from 'node:child_process'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
-
-// 新增行解析的**单点实现**（ADR-0053 §10）：含 git core.quotepath 下的路径转义解码，
-// 此前本文件与 check-bare-hex.sh 各写一遍、只有一边处理了转义。
-import { parseAddedLines } from './lib/added-lines.mjs'
-
-// 保持本模块的导出面（自检脚本按它 import）。
-export { parseAddedLines }
-
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const DEFAULT_SCAN_DIR = join(ROOT, 'frontend', 'src')
+import { isDirectRun, runGuardCli } from './lib/guard.mjs'
 
 /** 守卫集：已收敛到封装层的控件，业务代码出现即违规。 */
 export const GUARDED_CONTROLS = [
@@ -126,105 +113,53 @@ export function scanSource(source, filePath) {
   return findViolations(source)
 }
 
-function walkVue(dir) {
-  const out = []
-  for (const name of readdirSync(dir)) {
-    const p = join(dir, name)
-    const st = statSync(p)
-    if (st.isDirectory()) out.push(...walkVue(p))
-    else if (name.endsWith('.vue')) out.push(p)
-  }
-  return out
+/**
+ * 本守卫的声明：判定面 + 报告措辞。runner（argv / 走查 / --diff / allowlist / 退出码）
+ * 在 scripts/lib/guard.mjs —— 新增守卫只需实现 scanSource 并声明这一份。
+ */
+export const GUARD_SPEC = {
+  name: 'check-el-controls',
+  usage: '用法: node scripts/check-el-controls.mjs --all [目录] | --diff [base]',
+  cli: { noArgs: 'all', helpFlag: false, scanDirArg: true, usageOnUnknown: true, usageStream: 'stderr' },
+  all: {
+    scanDir: 'frontend/src',
+    extensions: ['.vue'],
+    skipNodeModules: false,
+    tolerateWalkErrors: false,
+    stream: 'stdout',
+    header: (ctx) => [
+      '===== 已收敛控件守卫：全量扫描（业务模板不得裸用封装层已收的控件）=====',
+      '扫描目录: ' + ctx.scanDirRel,
+      '守卫集: ' + GUARDED_CONTROLS.join(' / '),
+      '---'
+    ],
+    ok: (ctx) => '无违规。' + ctx.files.length + ' 个单文件组件的模板均未裸用已收敛控件。',
+    violation: (v) => v.file + ':' + v.line + ': <' + v.tag + '>  ' + v.text,
+    footer: (ctx) => [
+      '---',
+      '共 ' + ctx.count + ' 处。请改用 components/ui/ 的对应封装组件：',
+      '  el-dialog→UiDialog / el-empty→UiEmptyState / el-pagination→UiPagination / el-button→UiButton',
+      '  el-tag→UiTag / el-switch→UiSwitch / el-checkbox-group→UiCheckboxGroup / el-radio-group→UiRadioGroup',
+      '  el-upload→UiUpload / el-tooltip→UiTooltip',
+      '（表格 el-table、组内内容项 el-radio / el-checkbox、表单域与布局类 EP 不在守卫集，属有意放行。）'
+    ]
+  },
+  diff: {
+    pathspec: ['*.vue'],
+    defaultBase: 'origin/master',
+    stream: 'stderr',
+    empty: (base) => '[check-el-controls] 相对 ' + base + ' 无 .vue 新增行，跳过。',
+    ok: () => '[check-el-controls] 新增行未裸用已收敛控件，通过。',
+    header: () => ['===== 新增行裸用了已收敛控件（业务页面一律走 components/ui/ 封装层）====='],
+    violation: (v) => v.file + ':' + v.line + ': <' + v.tag + '>  ' + v.text,
+    footer: (ctx) => [
+      '---',
+      '共 ' + ctx.count + ' 处。请改用对应封装组件（见 ADR-0035 / docs/agents/ui-conventions.md）。'
+    ]
+  },
+  isGuardedPath: (filePath) => !isAllowedPath(filePath),
+  scanSource,
+  allowlist: null
 }
 
-function scanFiles(files) {
-  const violations = []
-  for (const file of files) {
-    const source = readFileSync(file, 'utf8')
-    for (const v of scanSource(source, file)) {
-      violations.push({ file: file.replace(ROOT + '/', ''), ...v })
-    }
-  }
-  return violations
-}
-
-function reportAll(scanDir) {
-  const files = walkVue(scanDir)
-  const violations = scanFiles(files)
-  console.log('===== 已收敛控件守卫：全量扫描（业务模板不得裸用封装层已收的控件）=====')
-  console.log('扫描目录: ' + scanDir.replace(ROOT + '/', ''))
-  console.log('守卫集: ' + GUARDED_CONTROLS.join(' / '))
-  console.log('---')
-  if (violations.length === 0) {
-    console.log('无违规。' + files.length + ' 个单文件组件的模板均未裸用已收敛控件。')
-    return 0
-  }
-  for (const v of violations) console.log(v.file + ':' + v.line + ': <' + v.tag + '>  ' + v.text)
-  console.log('---')
-  console.log('共 ' + violations.length + ' 处。请改用 components/ui/ 的对应封装组件：')
-  console.log('  el-dialog→UiDialog / el-empty→UiEmptyState / el-pagination→UiPagination / el-button→UiButton')
-  console.log('  el-tag→UiTag / el-switch→UiSwitch / el-checkbox-group→UiCheckboxGroup / el-radio-group→UiRadioGroup')
-  console.log('  el-upload→UiUpload / el-tooltip→UiTooltip')
-  console.log('（表格 el-table、组内内容项 el-radio / el-checkbox、表单域与布局类 EP 不在守卫集，属有意放行。）')
-  return 1
-}
-
-function reportDiff(base) {
-  try {
-    execFileSync('git', ['rev-parse', '--verify', base], { cwd: ROOT, stdio: 'ignore' })
-  } catch {
-    console.error('[check-el-controls] 无法解析 base ref: ' + base + '（CI 上请先 git fetch）')
-    return 2
-  }
-  const diff = execFileSync('git', ['diff', '-U0', base + '...HEAD', '--', '*.vue'], {
-    cwd: ROOT,
-    encoding: 'utf8',
-    maxBuffer: 64 * 1024 * 1024
-  })
-  const added = parseAddedLines(diff)
-  if (added.size === 0) {
-    console.log('[check-el-controls] 相对 ' + base + ' 无 .vue 新增行，跳过。')
-    return 0
-  }
-  const violations = []
-  for (const [file, lines] of added) {
-    const abs = join(ROOT, file)
-    let source
-    try {
-      source = readFileSync(abs, 'utf8')
-    } catch {
-      continue // 删除的文件
-    }
-    for (const v of scanSource(source, file)) {
-      if (lines.has(v.line)) violations.push({ file, ...v })
-    }
-  }
-  if (violations.length === 0) {
-    console.log('[check-el-controls] 新增行未裸用已收敛控件，通过。')
-    return 0
-  }
-  console.error('===== 新增行裸用了已收敛控件（业务页面一律走 components/ui/ 封装层）=====')
-  for (const v of violations) console.error(v.file + ':' + v.line + ': <' + v.tag + '>  ' + v.text)
-  console.error('---')
-  console.error('共 ' + violations.length + ' 处。请改用对应封装组件（见 ADR-0035 / docs/agents/ui-conventions.md）。')
-  return 1
-}
-
-function main(argv) {
-  const mode = argv[0] ?? '--all'
-  if (mode === '--all') {
-    const dir = argv[1] ? resolve(argv[1]) : DEFAULT_SCAN_DIR
-    return reportAll(dir)
-  }
-  if (mode === '--diff') {
-    return reportDiff(argv[1] ?? 'origin/master')
-  }
-  console.error('用法: node scripts/check-el-controls.mjs --all [目录] | --diff [base]')
-  return 2
-}
-
-// 仅作为 CLI 直接运行时才执行：被 import（自检里喂源码文本）时不产生副作用，
-// 否则「导入即全树扫描」会让自检继承工作树的结论。
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  process.exitCode = main(process.argv.slice(2))
-}
+if (isDirectRun(import.meta.url)) runGuardCli(GUARD_SPEC)

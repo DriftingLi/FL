@@ -198,6 +198,20 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: node scripts/check-async-section.mjs --all
 
+      # 守卫增量门（ADR-0056 §5 / #1094）：除上面的 --all 全量外，再按「相对默认分支的新增行」
+      # 跑一遍三个守卫 —— 全量是绝对底线，增量是「新增行不得引入违规」的 PR 口径。
+      # 本 job 的 checkout 是浅克隆（默认 depth=1），base 历史不在工作区里，这里显式取回默认分支；
+      # 取不回 → 本步红。守卫的 --diff 自身也 fail-closed（base 解析不了 / git diff 失败 /
+      # 新增文件读不出来都报错并非零退出），不会静默判绿。
+      # 注：--diff 的判定面是 --all 的子集（同一棵树、只看新增行号），不比全量更严，只补「新增」口径。
+      - name: 守卫增量门（三个守卫只看相对默认分支的新增行）
+        working-directory: ${{ github.workspace }}
+        run: |
+          git fetch --no-tags --depth=1 origin "${{ github.event.repository.default_branch }}"
+          node scripts/check-el-controls.mjs --diff "origin/${{ github.event.repository.default_branch }}"
+          node scripts/check-api-seam.mjs --diff "origin/${{ github.event.repository.default_branch }}"
+          node scripts/check-async-section.mjs --diff "origin/${{ github.event.repository.default_branch }}"
+
       - name: 前端单元测试
         run: npm test
 
@@ -374,6 +388,12 @@ jobs:
 
       - name: 表驱动单测（列表四段式守卫判定逻辑）
         run: node --test scripts/check-async-section.test.mjs
+
+      # ADR-0056 §5 / #1094：三个守卫共用的 runner 单点（argv / 走查 / --diff / allowlist /
+      # 报告与退出码）—— 表驱动自测用合成 diff 端到端驱动，正样本必须红、负样本必须绿；
+      # 历史病根是 --diff 实参形态错导致恒 0 违规而无人接住。
+      - name: 表驱动单测（守卫 runner 单点）
+        run: node --test scripts/guard.test.mjs
 
       # ADR-0053 §10：新增行解析是「判据的判据」，它错了两个守卫都会静默漏扫（假绿）
       - name: 表驱动单测（新增行解析单点实现）
