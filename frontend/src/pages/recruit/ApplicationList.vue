@@ -11,7 +11,7 @@
     <UiAsyncSection
       :error="loadError"
       :loading="loading"
-      :empty="items.length === 0"
+      :empty="isEmpty"
       :retrying="retrying"
       error-title="投递加载失败"
       error-description="网络或服务端异常，可重试"
@@ -124,6 +124,7 @@ const {
   loading,
   loadError,
   retrying,
+  isEmpty,
   retry: handleRetry,
   total,
   page,
@@ -136,7 +137,7 @@ const {
   total.value = res?.total || 0
   unreadCount.value = res?.unread_count || 0
   jobTitle.value = res?.job_title || ''
-})
+}, { itemsRef: items })
 
 function statusLabel(s: string) {
   const m: Record<string, string> = { applied: '投递中', rejected: '不合适', withdrawn: '已撤回' }

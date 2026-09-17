@@ -60,5 +60,38 @@ describe('简历库网格与加载更多（#493）', () => {
     const wrapper = mountPage()
     await flushPromises()
     expect(wrapper.text()).toContain('暂无公开简历')
+    // 空态不是错误态：不给「重试」入口
+    expect(wrapper.findAll('button').some(b => b.text().includes('重试'))).toBe(false)
+  })
+
+  it('错误态：加载失败渲染错误态 + 重试（与空态互斥）', async () => {
+    vi.mocked(recruitApi.listResumes).mockRejectedValue(new Error('boom'))
+    const wrapper = mountPage()
+    await flushPromises()
+    expect(wrapper.text()).toContain('简历加载失败')
+    expect(wrapper.text()).not.toContain('暂无公开简历')
+  })
+
+  // #1101：append 式分页只剩 useAsyncPage 一个实现（filterDeps 承担筛选重置，
+  // 页面不再有 resetAndLoad / loadMore / hasMore 三份手抄）。
+  it('filterDeps：改筛选轴即清空累积 + 回第 1 批重装', async () => {
+    const b1 = Array.from({ length: 20 }, (_, i) => mkCard(i + 1))
+    const b2 = Array.from({ length: 20 }, (_, i) => mkCard(200 + i))
+    vi.mocked(recruitApi.listResumes)
+      .mockResolvedValueOnce({ items: b1, total: 40 } as any)
+      .mockResolvedValueOnce({ items: b2, total: 40 } as any)
+
+    const wrapper = mountPage()
+    await flushPromises()
+    expect(wrapper.text()).toContain('张*')
+
+    // 模拟筛选轴变化：控件 @change 后生效快照变化 → filterDeps 触发重置重装
+    const salary = wrapper.find('input[placeholder="最低薪资"]')
+    await salary.setValue('8000')
+    await salary.trigger('change')
+    await flushPromises()
+
+    expect(recruitApi.listResumes).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(recruitApi.listResumes).mock.calls[1][0]).toMatchObject({ page: 1, salary_min: 8000 })
   })
 })

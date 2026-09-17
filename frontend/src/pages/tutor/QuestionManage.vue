@@ -48,7 +48,7 @@
     <UiAsyncSection
       :error="loadError"
       :loading="loading"
-      :empty="questions.length === 0"
+      :empty="isEmpty"
       :retrying="retrying"
       error-title="题目加载失败"
       error-description="网络或服务端异常，可重试"
@@ -193,6 +193,7 @@ const {
   loading,
   loadError,
   retrying,
+  isEmpty,
   retry: handleRetry,
   page,
   pageSize,
@@ -206,7 +207,7 @@ const {
   const res = await questionBankApi.getQuestions(params)
   questions.value = res?.questions || []
   total.value = res?.total || 0
-})
+}, { itemsRef: questions })
 
 const hasFilters = computed(
   () =>

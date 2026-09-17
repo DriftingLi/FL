@@ -5,7 +5,7 @@
     <UiAsyncSection
       :error="loadError"
       :loading="loading"
-      :empty="items.length === 0"
+      :empty="isEmpty"
       :retrying="retrying"
       error-title="投递记录加载失败"
       error-description="网络或服务端异常，可重试"
@@ -93,6 +93,7 @@ const {
   loading,
   loadError,
   retrying,
+  isEmpty,
   retry: handleRetry,
   total,
   page,
@@ -115,7 +116,7 @@ const {
       }
     } catch {}
   },
-  { credentialScoped: false } // 招聘域不受证件过滤（#604 opt-out）
+  { credentialScoped: false, itemsRef: items } // 招聘域不受证件过滤（#604 opt-out）
 )
 
 // 找该投递对应企业的已授权联系方式（按 recruiter_id 匹配）

@@ -13,12 +13,13 @@
       </div>
 
       <UiAsyncSection
-        :error="resumeError"
-        :empty="resumeMissing"
+        :error="loadError"
+        :empty="isEmpty"
+        :retrying="retrying"
         :skeleton="false"
         error-title="简历加载失败"
         error-description="网络或服务端异常，可重试"
-        @retry="load()"
+        @retry="retry"
       >
         <template #empty>
           <UiEmptyState
@@ -87,6 +88,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { resumeApi } from '@/api/resume'
@@ -102,8 +104,8 @@ import UiSwitch from '@/components/ui/UiSwitch.vue'
 const router = useRouter()
 const pdfInput = ref<HTMLInputElement | null>(null)
 const deletingPdf = ref(false)
-const resumeMissing = ref(false)
-const resumeError = ref(false)
+// 简历本体（404 = 空态判据的载体，见 useAsyncPage itemsRef）
+const resume = ref<{ real_name?: string; contact_phone?: string; wechat?: string; resume_file_url?: string; visibility?: string } | null>(null)
 const viewCount = ref(0)
 const visibilityOpen = ref(false)
 const contactRequests = ref<any[]>([])
@@ -149,6 +151,7 @@ async function onPdfChange(e: Event) {
     resumeFileUrl.value = res.url || res.data?.url || ''
     ElMessage.success('上传成功')
     load()
+    loadViewStats()
   } catch {}
   input.value = ''
 }
@@ -181,25 +184,21 @@ async function toggleVisibility(val: boolean) {
   }
 }
 
-async function load() {
-  resumeMissing.value = false
-  resumeError.value = false
-  try {
-    const data: any = await resumeApi.get()
-    if (!data) return
-    realName.value = data.real_name || ''
-    contactPhone.value = data.contact_phone || ''
-    wechat.value = data.wechat || ''
-    resumeFileUrl.value = data.resume_file_url || ''
-    visibilityOpen.value = data.visibility === 'open'
-  } catch (e) {
-    const kind = (e as { kind?: string }).kind
-    if (kind === 'notfound') {
-      resumeMissing.value = true
-    } else {
-      resumeError.value = true
-    }
-  }
+// 三态收编（#1101）：loader 只管拉数据与写响应；404（尚未创建简历）= 空态、
+// 其余 = 错误态，均由 useAsyncPage 判定（loadErrorKind 复用 ApiErrorKind）。
+const { loadError, retrying, isEmpty, retry, run: load } = useAsyncPage(async () => {
+  const data: any = await resumeApi.get()
+  resume.value = data || null
+  if (!data) return
+  realName.value = data.real_name || ''
+  contactPhone.value = data.contact_phone || ''
+  wechat.value = data.wechat || ''
+  resumeFileUrl.value = data.resume_file_url || ''
+  visibilityOpen.value = data.visibility === 'open'
+}, { itemsRef: resume })
+
+/** 浏览统计是旁路数据（失败静默降级），不参与本页三态。 */
+async function loadViewStats() {
   try {
     // 注解层：@Success 200 response.R{data=object{count=integer}}
     viewCount.value = (await resumeApi.getViewStats())?.count || 0
@@ -224,6 +223,7 @@ async function revokeReq(id: number) {
 
 onMounted(() => {
   load()
+  loadViewStats()
   loadContactRequests()
 })
 </script>

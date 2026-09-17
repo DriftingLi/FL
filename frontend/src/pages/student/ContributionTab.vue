@@ -41,6 +41,7 @@ const {
   loadError,
   retrying,
   retry: retryLoad,
+  isEmpty,
   page: currentPage,
   pageSize,
   total,
@@ -55,7 +56,7 @@ const {
   })
   contributions.value = res.items || []
   total.value = res.total || 0
-})
+}, { itemsRef: contributions })
 
 /** 我的投稿加载（轻量、失败静默降级） */
 async function loadMine() {
@@ -344,7 +345,7 @@ defineExpose({ loadMine })
         <UiAsyncSection
           :error="loadError"
           :loading="loading"
-          :empty="contributions.length === 0"
+          :empty="isEmpty"
           :retrying="retrying"
           error-title="投稿加载失败"
           error-description="网络或服务端异常，可重试"

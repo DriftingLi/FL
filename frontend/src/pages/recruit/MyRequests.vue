@@ -4,7 +4,7 @@
     <UiAsyncSection
       :error="loadError"
       :loading="loading"
-      :empty="items.length === 0"
+      :empty="isEmpty"
       :retrying="retrying"
       error-title="申请记录加载失败"
       error-description="网络或服务端异常，可重试"
@@ -48,6 +48,7 @@ const {
   loading,
   loadError,
   retrying,
+  isEmpty,
   retry: handleRetry,
   total,
   run: load
@@ -55,7 +56,7 @@ const {
   const res: any = await recruitApi.listMyRequests({ page: 1, page_size: 20 })
   items.value = res?.items || []
   total.value = res?.total || 0
-})
+}, { itemsRef: items })
 
 function statusLabel(s: string) {
   const m: Record<string, string> = { pending: '待处理', approved: '已同意', rejected: '已拒绝', expired: '已过期', revoked: '已撤回' }

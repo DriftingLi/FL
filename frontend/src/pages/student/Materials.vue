@@ -34,7 +34,7 @@
       <UiAsyncSection
         :error="loadError"
         :loading="loading"
-        :empty="materials.length === 0"
+        :empty="isEmpty"
         :retrying="retrying"
         error-title="资料加载失败"
         error-description="网络或服务端异常，可重试"
@@ -127,6 +127,7 @@ const {
   loadError,
   retrying,
   retry: retryLoad,
+  isEmpty,
   page: currentPage,
   pageSize,
   total,
@@ -140,7 +141,7 @@ const {
   })
   materials.value = res.materials || []
   total.value = res.total || 0
-})
+}, { itemsRef: materials })
 
 const staggerStyle = useStagger()
 

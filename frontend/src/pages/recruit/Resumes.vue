@@ -2,7 +2,7 @@
   <div class="flex flex-col gap-4">
     <div class="flex items-center justify-between">
       <h1 class="text-xl font-bold text-ink">简历库</h1>
-      <UiButton size="small" :loading="loading" @click="resetAndLoad">刷新</UiButton>
+      <UiButton size="small" :loading="loading" @click="reset">刷新</UiButton>
     </div>
 
     <div class="rounded-card border border-line bg-panel p-4 flex flex-wrap gap-2">
@@ -13,28 +13,28 @@
         placeholder="意向地区（市）"
         clearable
         class="!w-44"
-        @change="resetAndLoad"
+        @change="applyFilters"
       />
-      <el-select v-model="filters.position_id" clearable placeholder="期望岗位" class="!w-36" @change="resetAndLoad">
+      <el-select v-model="filters.position_id" clearable placeholder="期望岗位" class="!w-36" @change="applyFilters">
         <!-- #492：期望岗位选项与学员简历同源（positions 岗位字典），参数 position_id -->
         <el-option v-for="p in positions" :key="p.position_id" :label="p.name" :value="p.position_id" />
       </el-select>
-      <el-select v-model="filters.credential_id" clearable placeholder="证书" class="!w-36" @change="resetAndLoad">
+      <el-select v-model="filters.credential_id" clearable placeholder="证书" class="!w-36" @change="applyFilters">
         <el-option v-for="c in credentials" :key="c.id" :label="c.name" :value="c.id" />
       </el-select>
-      <el-input v-model.number="filters.salary_min" placeholder="最低薪资" type="number" clearable class="!w-28" @change="resetAndLoad" />
-      <el-input v-model.number="filters.salary_max" placeholder="最高薪资" type="number" clearable class="!w-28" @change="resetAndLoad" />
-      <el-select v-model="filters.experience_min" clearable placeholder="经验年限" class="!w-32" @change="resetAndLoad">
+      <el-input v-model.number="filters.salary_min" placeholder="最低薪资" type="number" clearable class="!w-28" @change="applyFilters" />
+      <el-input v-model.number="filters.salary_max" placeholder="最高薪资" type="number" clearable class="!w-28" @change="applyFilters" />
+      <el-select v-model="filters.experience_min" clearable placeholder="经验年限" class="!w-32" @change="applyFilters">
         <!-- #492：经验年限档位「N 年及以上」（后端 >= 匹配） -->
         <el-option v-for="n in experienceOptions" :key="String(n)" :label="`${n}年及以上`" :value="n" />
       </el-select>
-      <el-select v-model="filters.job_nature" clearable placeholder="用工性质" class="!w-32" @change="resetAndLoad">
+      <el-select v-model="filters.job_nature" clearable placeholder="用工性质" class="!w-32" @change="applyFilters">
         <!-- #492：新增用工性质筛选 -->
         <el-option label="全职" value="fulltime" />
         <el-option label="兼职" value="parttime" />
         <el-option label="合同" value="contract" />
       </el-select>
-      <el-select v-model="filters.available_in" clearable placeholder="到岗时间" class="!w-32" @change="resetAndLoad">
+      <el-select v-model="filters.available_in" clearable placeholder="到岗时间" class="!w-32" @change="applyFilters">
         <el-option label="随时" value="immediate" />
         <el-option label="1周内" value="1w" />
         <el-option label="2周内" value="2w" />
@@ -42,12 +42,12 @@
       </el-select>
     </div>
 
+    <!-- 空态 / 错误态（+retry）/ 首屏骨架：判据与互斥由 useAsyncPage + UiAsyncSection 负责（#1101） -->
     <UiAsyncSection
       :error="loadError"
       :loading="loading"
-      :empty="items.length === 0"
+      :empty="isEmpty"
       :retrying="retrying"
-      :skeleton="false"
       error-title="简历加载失败"
       error-description="网络或服务端异常，可重试"
       @retry="handleRetry"
@@ -56,8 +56,10 @@
         <UiEmptyState description="暂无公开简历" />
       </template>
 
-      <!-- 首屏才骨架（翻页时旧列表原地保持——原 loading && items.length === 0 口径） -->
-      <UiSkeleton v-if="loading && items.length === 0" variant="list" :count="4" />
+      <!-- 首屏才骨架（追加时旧列表原地保持——原 loading && items.length === 0 口径） -->
+      <template #skeleton>
+        <UiSkeleton v-if="items.length === 0" variant="list" :count="4" />
+      </template>
 
       <!-- #493：响应式方形网格（手机 1 列 → 平板 2-3 列 → 桌面 4 列）；卡面仅核心字段 -->
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -117,60 +119,9 @@ import UiTag from '@/components/ui/UiTag.vue'
 
 const BATCH = 20
 const items = ref<RecruitResumeItem[]>([])
-const loadingMore = ref(false)
-const hasMore = ref(true)
 
-function buildParams(page: number) {
-  const params: any = { page, page_size: BATCH }
-  if (filters.region_path.length) params.region = joinRegionPath(filters.region_path)
-  if (filters.position_id) params.position_id = filters.position_id
-  if (filters.credential_id) params.credential_id = filters.credential_id
-  if (filters.salary_min != null) params.salary_min = filters.salary_min
-  if (filters.salary_max != null) params.salary_max = filters.salary_max
-  if (filters.experience_min != null) params.experience_min = filters.experience_min
-  if (filters.job_nature) params.job_nature = filters.job_nature
-  if (filters.available_in) params.available_in = filters.available_in
-  return params
-}
-
-const { loading, loadError, retrying, retry: handleRetry, run: load } = useAsyncPage(async () => {
-  const res = await recruitApi.listResumes(buildParams(1))
-  items.value = res?.items || []
-  hasMore.value = (res?.items?.length || 0) >= BATCH
-})
-
-// #493：筛选变化 → 清空累积并回第一批
-function resetAndLoad() {
-  items.value = []
-  hasMore.value = true
-  load()
-}
-
-// #493：加载更多（append 第 N+1 批）
-async function loadMore() {
-  if (loadingMore.value) return
-  loadingMore.value = true
-  try {
-    const nextPage = Math.floor(items.value.length / BATCH) + 1
-    const res = await recruitApi.listResumes(buildParams(nextPage))
-    const batch = res?.items || []
-    items.value.push(...batch)
-    if (batch.length < BATCH) hasMore.value = false
-  } catch {
-    /* 拦截器已 toast */
-  } finally {
-    loadingMore.value = false
-  }
-}
-
-// #492：期望岗位选项与简历编辑同源（/positions 岗位字典）
-const positions = ref<any[]>([])
-const credentials = ref<any[]>([])
-// #486：地区筛选项与录入同源（省→市两级级联，value 取 label），参数传市级
-const regionOptions = buildCityLevelRegionOptions()
-// #492：经验档位「N 年及以上」
-const experienceOptions = [1, 3, 5, 10]
-
+// 筛选轴（#1101）：直接以 getter 形态喂给 useAsyncPage 的 filterDeps，
+// 任一轴变化即「清空累积 + 回第 1 批重装」，不再靠每个控件的 @change 回调兜底。
 const filters = reactive<{
   region_path: string[]
   position_id: number | null
@@ -190,6 +141,68 @@ const filters = reactive<{
   job_nature: '',
   available_in: ''
 })
+
+/** 生效筛选快照（#1101）：控件 @change 时快照一次，由 filterDeps 触发重置重装。 */
+const applied = reactive({ ...filters })
+
+function applyFilters(): void {
+  Object.assign(applied, filters)
+}
+
+function buildParams(page: number) {
+  const params: any = { page, page_size: BATCH }
+  if (applied.region_path.length) params.region = joinRegionPath(applied.region_path)
+  if (applied.position_id) params.position_id = applied.position_id
+  if (applied.credential_id) params.credential_id = applied.credential_id
+  if (applied.salary_min != null) params.salary_min = applied.salary_min
+  if (applied.salary_max != null) params.salary_max = applied.salary_max
+  if (applied.experience_min != null) params.experience_min = applied.experience_min
+  if (applied.job_nature) params.job_nature = applied.job_nature
+  if (applied.available_in) params.available_in = applied.available_in
+  return params
+}
+
+// 追加式分页（#493）+「筛选变化 → 清空累积并回第 1 批」都收在 useAsyncPage（#1101）：
+// filterDeps 任一轴变化即清空 + 回第 1 批 + 重装，页面不再手写 resetAndLoad / loadMore / hasMore。
+const {
+  loading,
+  loadError,
+  retrying,
+  retry: handleRetry,
+  isEmpty,
+  hasMore,
+  loadingMore,
+  loadMore,
+  reset,
+  run: load
+} = useAsyncPage(
+  async (page) => recruitApi.listResumes(buildParams(page ?? 1)),
+  {
+    mode: 'append',
+    batchSize: BATCH,
+    itemsRef: items,
+    // 生效的筛选快照：控件 @change（失焦/回车/选中）时更新一次，filterDeps 看它，
+    // 于是「筛选变化 → 清空累积 + 回第 1 批」成为声明式单点，且不多发半成品请求。
+    filterDeps: [
+      () => applied.region_path,
+      () => applied.position_id,
+      () => applied.credential_id,
+      () => applied.salary_min,
+      () => applied.salary_max,
+      () => applied.experience_min,
+      () => applied.job_nature,
+      () => applied.available_in
+    ]
+  }
+)
+
+// #492：期望岗位选项与简历编辑同源（/positions 岗位字典）
+const positions = ref<any[]>([])
+const credentials = ref<any[]>([])
+// #486：地区筛选项与录入同源（省→市两级级联，value 取 label），参数传市级
+const regionOptions = buildCityLevelRegionOptions()
+// #492：经验档位「N 年及以上」
+const experienceOptions = [1, 3, 5, 10]
 
 async function loadMeta() {
   try {

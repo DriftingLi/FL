@@ -59,7 +59,7 @@
         <UiAsyncSection
           :error="loadError"
           :loading="loading"
-          :empty="courses.length === 0"
+          :empty="isEmpty"
           :retrying="retrying"
           error-title="课程加载失败"
           error-description="网络或服务端异常，可重试"
@@ -161,6 +161,7 @@ const {
   loading,
   loadError,
   retrying,
+  isEmpty,
   retry: handleRetry,
   page,
   pageSize,
@@ -181,7 +182,7 @@ const {
     courses.value = res.courses
     total.value = res.total
   },
-  { defaultPageSize: 12 }
+  { defaultPageSize: 12, itemsRef: courses }
 )
 
 const credentialOptions = computed(() =>
