@@ -160,6 +160,18 @@ function glyphProblem(literal) {
  * 只判 icon 类名 + 内容整体为空。**带绑定**的槽（`{{ getTypeIcon(item.type) }}`）不在靶内 ——
  * 它的字形由函数提供，那半边由 `scanIconFnEmptyReturns` 守；两半合起来覆盖
  * 「函数返回空」与「模板直接写空」两种坏点形态。
+ *
+ * ⚠️ **已知边界（真机复核实测踩到，勿把本守护当全量）**：坏点其实有**三**形态，本守护只覆盖前两形态。
+ * 第三形态是「**绑定还在、字形没了**」—— 原 `<text class="stat-text">👁 {{ viewsCount }}</text>`
+ * 被吃成 `<text class="stat-text"> {{ viewsCount }}</text>`（#1071 真机复核发现，见 ADR-0007「坑位四」）。
+ * 它既不是空串、也不是孤立 U+FE0F（`👁` 后本来就不跟变体选择符，故该指纹在此时**不存在**）；
+ * 而它的 class 是 `stat-text`（**不含 icon**）⇒ 连扫描面都进不来。
+ *
+ * 为什么**不**顺手放宽到「任意 `<text>`」：实测「`<text>` 内容以空白开头」在全仓有 44 处命中，
+ * 绝大多数合法（`{{ value }}` 前留空格的排版习惯、开标签换行的多行内容）⇒ 会误报成灾，
+ * 而按本 ADR 的既有教训，误报成灾的规则最终会被 allowlist 废掉。故这里**如实声明边界**，
+ * 第三形态继续靠人工/真机复核兜；要机检它，判据面应落在真实源码结构（统计槽的白名单/表格），
+ * 而不是空白字符这类高误报信号。
  */
 function scanEmptyTemplateIconSlots(source) {
   const violations = [];
