@@ -17,7 +17,28 @@
 | **剩余控件** | 标签一律 `UiTag` 的 `tone`（**不写 `type`**；新值 `brand/primary/success/info/warning/danger/neutral`，映射表用导出的 `UiTagTone` 类型收窄）；开关/多选/单选组/上传/提示气泡对应 `UiSwitch` / `UiCheckbox`（+`UiCheckboxGroup`）/ `UiRadioGroup` / `UiUpload` / `UiTooltip`。全部薄封装（attrs/事件/slot 全透传、**不设默认值**，ADR-0038）；`el-radio` / `el-radio-button` 保持原生（组内内容项）。 |
 | **溢出菜单** | `UiMoreMenu`，卡片/列表项右上角「⋯」触发的**治理动作收纳**（举报 / 删除等低频、破坏性、非互动类操作）。**互动动作不进菜单**——回复 / 点赞这类高频社交动作留在卡片底部主操作行，两者不可混放（ADR-0042 的回复区形态）。菜单项由调用方提供，**可见性判定也在调用方**（如自己的回复不出现「举报」）。 |
 | **管理端列表状态机** | admin **列表页**一律 `useAdminTable`（页面只声明 `fetch` adapter 与 `actions` adapter，内置三态 / 分页 / 搜索 / 行操作分发 / 删除确认；ADR-0015 + ADR-0039）。**非列表页不套**（详情/仪表盘/配置页用 `useAsyncPage` 的三态即可）。`useAsyncPage` 是服务全站 34 处的通用三态件，**不要为 admin 改它**。**同一页面里的第二档要写明归属**（第十一波）：分页列表 → `useAdminTable`；只读/计数 section（巡检计数、汇总卡）→ `useAsyncPage` + `UiAsyncSection`。两档都不得 `catch {}` 静默吞错，档位在文件顶部注释里登记——判定口径与登记格式见下「管理端列表两档归属」。 |
-| **状态词表** | 同一业务状态（联络授权 / 投递 / 题目状态…）的 **label 与 tone 各只有一个 descriptor**：输入 status，输出 `{ label, tone }`，列表、抽屉、角标、admin 留痕只消费它；status 收成 union（取值集合与后端常量表对齐），**模板里不得内联状态文案裸串**（第十一波）。 |
+| **状态词表** | 同一业务状态（联络授权 / 投递 / 题目状态…）的 **label 与 tone 各只有一个 descriptor**：输入 status，输出 `{ label, tone }`，列表、抽屉、角标、admin 留痕只消费它；status 收成 union（取值集合与后端常量表对齐），**模板里不得内联状态文案裸串**（第十一波）。已落地的两个域见下「状态词表（联络授权 / 投递）」——**状态词按「描述状态事实」取词**，同一个取值不得有两种文案。 |
+
+### 状态词表（联络授权 / 投递）（第十一波 #1103 / ADR-0056 §8）
+
+| 域 | descriptor（唯一判定处） | 取值（union == 后端常量表） | label（状态事实） | tone |
+| --- | --- | --- | --- | --- |
+| 联络授权 `contact_requests.status` | `utils/contactRequestStatus.ts` → `describeContactRequest(status)` | `pending` / `approved` / `rejected` / `expired` / `revoked`（后端 `service.ContactGrantState`，`contact_authz.go`） | 待同意 / 已同意 / 已拒绝 / 已过期 / 已撤回 | warning / success / danger / info / danger |
+| 投递 `job_applications.status` | `utils/applicationStatus.ts` → `describeApplication(status)` | `applied` / `rejected` / `withdrawn`（后端 `service.ApplicationStatus*`，`job_application_service.go`） | 投递中 / 不合适 / 已撤回 | warning / danger / info |
+
+**漂移裁定**（取「描述状态事实」的那个词，旧词不得回流）：
+
+| 取值 | 旧文案 → 新文案 | 消费面 |
+| --- | --- | --- |
+| `applied` | 「待处理」→「**投递中**」 | 我的投递（`MyApplications`）、企业投递列表与详情抽屉（`ApplicationList`） |
+| `pending`（联络授权） | 「待处理」→「**待同意**」 | 我的申请（`MyRequests`）、收到的申请（`ResumePage`）、admin 留痕（`Inspection`） |
+| 企业侧角标 | 「已授权」→「**已同意**」、「待学员确认」→「**待同意**」 | 简历库卡面角标（`Resumes`） |
+
+- **消费面只调 descriptor**：列表 / 抽屉 / 角标 / admin 留痕不得自写 `Record<string, string>`、`if (s === …) return '…'` 或模板内联字面量（含插值与属性里的裸串）。扫描：`src/utils/__tests__/statusWordsTemplate.spec.ts`（把 `<template>` 编译成渲染函数，命中状态文案即红）。
+- **取值集合与后端常量表对账**：`src/utils/__tests__/statusWords.spec.ts` 直接读 Go 源里的常量表断言集合相等——**新增状态要先加 Go 常量表**（先例 `contact_authz.go` / `contribution_service.go`），再加 TS union 与 `Record<Status, …>`（漏一个取值编译报错）。
+- **三值投影不是第二套状态**：企业侧 `contact_state`（`approved` / `pending` / 空 = 未授权，后端 `contactGrant.State`）由 `contactBadge(state)` 决定出不出角标，label / tone 仍取同一张表。
+- 相邻域（题目状态、证件审核状态…）按同一形状收编，各建自己的 descriptor module，不共用一张表。
+
 ### 管理端列表两档归属（第十一波 #1102 / ADR-0056 §9）
 
 admin 页里「三态 + 分页 + 筛选」**只有两档**，页面按 section 声明归属，不允许第三份手写实现：

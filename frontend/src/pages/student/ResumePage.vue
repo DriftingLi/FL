@@ -61,7 +61,7 @@
               <div class="text-sm text-ink">
                 <div>{{ req.company_name }} · {{ req.contact_name }}</div>
                 <div class="text-xs text-ink-3">附言：{{ req.message }}</div>
-                <div class="text-xs text-ink-3">{{ statusLabel(req.status) }} · {{ req.created_at }}</div>
+                <div class="text-xs text-ink-3">{{ describeContactRequest(req.status).label }} · {{ req.created_at }}</div>
               </div>
               <div class="flex gap-1">
                 <UiButton variant="primary" v-if="req.status === 'pending'" size="small" @click="approveReq(req.id)">同意</UiButton>
@@ -91,7 +91,8 @@ import { ref, onMounted } from 'vue'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { resumeApi } from '@/api/resume'
+import { resumeApi, type ResumeContactRequest } from '@/api/resume'
+import { describeContactRequest } from '@/utils/contactRequestStatus'
 import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiButton from '@/components/ui/UiButton.vue'
@@ -108,7 +109,7 @@ const deletingPdf = ref(false)
 const resume = ref<{ real_name?: string; contact_phone?: string; wechat?: string; resume_file_url?: string; visibility?: string } | null>(null)
 const viewCount = ref(0)
 const visibilityOpen = ref(false)
-const contactRequests = ref<any[]>([])
+const contactRequests = ref<ResumeContactRequest[]>([])
 const realName = ref('')
 const contactPhone = ref('')
 const wechat = ref('')
@@ -119,11 +120,6 @@ function goBack() {
 }
 function goEdit() {
   router.push({ name: 'StudentResumeEdit' })
-}
-
-function statusLabel(s: string) {
-  const m: Record<string, string> = { pending: '待处理', approved: '已同意', rejected: '已拒绝', revoked: '已撤回', expired: '已过期' }
-  return m[s] || s
 }
 
 function triggerPdf() {
@@ -207,7 +203,7 @@ async function loadViewStats() {
 
 async function loadContactRequests() {
   try {
-    const res: any = await resumeApi.listContactRequests({ page: 1, page_size: 20 })
+    const res = await resumeApi.listContactRequests({ page: 1, page_size: 20 })
     contactRequests.value = res?.items || []
   } catch {}
 }

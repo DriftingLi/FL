@@ -64,15 +64,14 @@
       <!-- #493：响应式方形网格（手机 1 列 → 平板 2-3 列 → 桌面 4 列）；卡面仅核心字段 -->
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       <div
-        v-for="item in items"
+        v-for="{ item, badge } in cards"
         :key="String(item.user_id)"
         class="flex aspect-[4/3] flex-col rounded-card border border-line bg-panel p-4 transition-colors hover:border-ui-200 hover:shadow-card"
       >
         <div class="flex items-center justify-between gap-2">
           <div class="min-w-0 flex-1 truncate text-sm font-semibold text-ink">{{ item.real_name || item.real_name_masked || '匿名学员' }}</div>
-          <!-- #489：联系状态角标 -->
-          <UiTag v-if="item.contact_state === 'approved'" tone="success" size="small">已授权</UiTag>
-          <UiTag v-else-if="item.contact_state === 'pending'" tone="warning" size="small">待学员确认</UiTag>
+          <!-- #489：联系状态角标——label/tone 来自联络授权 descriptor 单点（#1103） -->
+          <UiTag v-if="badge" :tone="badge.tone" size="small">{{ badge.label }}</UiTag>
         </div>
         <div class="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-xs text-ink-3">
           <span v-if="item.expected_position_extra">{{ item.expected_position_extra }}</span>
@@ -105,8 +104,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { recruitApi, type RecruitResumeItem } from '@/api/recruit'
+import { contactBadge } from '@/utils/contactRequestStatus'
 import { buildCityLevelRegionOptions, joinRegionPath } from '@/utils/region'
 import { positionApi } from '@/api/position'
 import { credentialApi } from '@/api/credential'
@@ -119,6 +119,9 @@ import UiTag from '@/components/ui/UiTag.vue'
 
 const BATCH = 20
 const items = ref<RecruitResumeItem[]>([])
+
+// 卡片 = 简历 + 其联系状态角标（角标文案与 tone 的唯一来源是 descriptor，页面不自写状态词）。
+const cards = computed(() => items.value.map((item) => ({ item, badge: contactBadge(item.contact_state) })))
 
 // 筛选轴（#1101）：直接以 getter 形态喂给 useAsyncPage 的 filterDeps，
 // 任一轴变化即「清空累积 + 回第 1 批重装」，不再靠每个控件的 @change 回调兜底。

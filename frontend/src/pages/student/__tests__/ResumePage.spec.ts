@@ -94,5 +94,9 @@ describe('ResumePage 企业联系方式透出（#487）', () => {
     // pending 项显示企业名但不透出电话（无 contact_phone 字段）
     expect(text).toContain('测试企业B')
     expect(text).not.toContain('wx_b')
+    // #1103：状态词走 descriptor 单点；pending 的漂移文案（旧「待处理」）按状态事实统一为「待同意」
+    expect(text).toContain('已同意')
+    expect(text).toContain('待同意')
+    expect(text).not.toContain('待处理')
   })
 })

@@ -55,6 +55,25 @@ describe('简历库网格与加载更多（#493）', () => {
     expect(recruitApi.listResumes).toHaveBeenCalledTimes(2)
   })
 
+  // #1103：联系状态角标走联络授权 descriptor（旧内联「已授权」/「待学员确认」已并回状态词表单点）。
+  it('contact_state 角标：approved / pending 出 descriptor 文案，none 不出角标', async () => {
+    vi.mocked(recruitApi.listResumes).mockResolvedValue({
+      items: [
+        { ...mkCard(1), contact_state: 'approved' },
+        { ...mkCard(2), contact_state: 'pending' },
+        { ...mkCard(3), contact_state: '' },
+      ],
+      total: 3,
+    } as any)
+    const wrapper = mountPage()
+    await flushPromises()
+    const text = wrapper.text()
+    expect(text).toContain('已同意')
+    expect(text).toContain('待同意')
+    expect(text).not.toContain('已授权')
+    expect(text).not.toContain('待学员确认')
+  })
+
   it('空结果显示空态', async () => {
     vi.mocked(recruitApi.listResumes).mockResolvedValue({ items: [], total: 0 } as any)
     const wrapper = mountPage()

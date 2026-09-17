@@ -12,14 +12,17 @@ import type {
   RecruiterApplicationListResult,
   ReportDTO
 } from './generated/job'
+import type { ApplicationStatus } from '@/utils/applicationStatus'
 
 // 名称适配：生成物沿用后端 DTO 命名，前端域词汇不带 DTO 后缀（既有 import 路径与类型名不破）。
+// status 在生成物里只到 string：这里按 utils/applicationStatus 的 union 收窄，
+// 取值集合与后端 service.ApplicationStatus* 常量表有对账锁。
+export type JobApplication = Omit<ApplicationDTO, 'status'> & { status: ApplicationStatus }
+export type ApplicationListResp = Omit<ApplicationListResult, 'items'> & { items: JobApplication[] }
+export type RecruiterApplicationListResp = Omit<RecruiterApplicationListResult, 'items'> & { items: JobApplication[] }
 export type {
-  ApplicationDTO as JobApplication,
-  ApplicationListResult as ApplicationListResp,
   JobListResult as JobListResp,
-  JobPostingDTO as JobPosting,
-  RecruiterApplicationListResult as RecruiterApplicationListResp
+  JobPostingDTO as JobPosting
 }
 
 /** 职位发布/编辑入参（不生成：ADR-0048 决策 3）。 */
@@ -60,14 +63,14 @@ export const jobApi = {
   },
   // 投递（投递即授权）
   applyJob(id: number) {
-    return unwrappedRequest.post<ApplicationDTO>(`/jobs/${id}/apply`)
+    return unwrappedRequest.post<JobApplication>(`/jobs/${id}/apply`)
   },
   // 我的投递
   listMyApplications(params?: { page?: number; page_size?: number }) {
-    return unwrappedRequest.get<ApplicationListResult>('/resume/applications', { params })
+    return unwrappedRequest.get<ApplicationListResp>('/resume/applications', { params })
   },
   withdrawApplication(id: number, revokeContact: boolean) {
-    return unwrappedRequest.post<ApplicationDTO>(`/resume/applications/${id}/withdraw`, { revoke_contact: revokeContact })
+    return unwrappedRequest.post<JobApplication>(`/resume/applications/${id}/withdraw`, { revoke_contact: revokeContact })
   },
   // 举报
   reportJob(id: number, reason: string) {
@@ -75,12 +78,12 @@ export const jobApi = {
   },
   // 企业侧投递处理
   listJobApplications(jobId: number, params?: { page?: number; page_size?: number }) {
-    return unwrappedRequest.get<RecruiterApplicationListResult>(`/recruit/jobs/${jobId}/applications`, { params })
+    return unwrappedRequest.get<RecruiterApplicationListResp>(`/recruit/jobs/${jobId}/applications`, { params })
   },
   getApplicationDetail(id: number) {
-    return unwrappedRequest.get<ApplicationDTO>(`/recruit/applications/${id}`)
+    return unwrappedRequest.get<JobApplication>(`/recruit/applications/${id}`)
   },
   rejectApplication(id: number) {
-    return unwrappedRequest.post<ApplicationDTO>(`/recruit/applications/${id}/reject`)
+    return unwrappedRequest.post<JobApplication>(`/recruit/applications/${id}/reject`)
   }
 }

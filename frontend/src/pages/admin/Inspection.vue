@@ -125,7 +125,7 @@
         <div v-if="requestsLoading" class="text-sm text-ink-3">加载中...</div>
         <div v-else class="grid gap-2">
           <div v-for="item in requests" :key="String(item.id)" class="border border-line rounded p-2 text-xs">
-            <div>招聘方 {{ item.recruiter_id }} · 学员 {{ item.student_user_id }} · {{ requestStatusLabel(item.status) }}</div>
+            <div>招聘方 {{ item.recruiter_id }} · 学员 {{ item.student_user_id }} · {{ describeContactRequest(item.status).label }}</div>
             <div class="text-ink-3">{{ item.created_at }}</div>
           </div>
         </div>
@@ -245,6 +245,7 @@ import { ElMessage } from 'element-plus'
 import { inspectionApi, type PageParams, type PointsLedgerParams } from '@/api/inspection'
 import { useAdminTable } from '@/composables/useAdminTable'
 import { useAsyncPage } from '@/composables/useAsyncPage'
+import { describeContactRequest, type ContactRequestStatus } from '@/utils/contactRequestStatus'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
@@ -378,20 +379,9 @@ interface TrailRequest {
   id: number
   recruiter_id: number
   student_user_id: number
-  status: string
+  // 联络授权状态：与学员/企业侧同一 union（admin 留痕只是消费面，不自立取值域）。
+  status: ContactRequestStatus
   created_at: string
-}
-
-// 申请状态文案与学员侧一致（pending/approved/rejected/expired/revoked）
-const requestStatusText: Record<string, string> = {
-  pending: '待同意',
-  approved: '已同意',
-  rejected: '已拒绝',
-  expired: '已过期',
-  revoked: '已撤回',
-}
-function requestStatusLabel(s: string): string {
-  return requestStatusText[s] || s
 }
 
 // #454：招聘职位巡检 + 举报队列（职位治理）——两段都是档位一：分页列表。

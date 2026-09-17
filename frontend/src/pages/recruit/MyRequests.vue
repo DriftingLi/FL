@@ -18,7 +18,7 @@
       <div v-for="item in items" :key="String(item.id)" class="rounded-card border border-line bg-panel p-4">
         <div class="flex items-center justify-between">
           <div class="text-sm text-ink">学员 ID：{{ item.student_user_id }}</div>
-          <UiTag :tone="tagType(item.status)" size="small">{{ statusLabel(item.status) }}</UiTag>
+          <UiTag :tone="describeContactRequest(item.status).tone" size="small">{{ describeContactRequest(item.status).label }}</UiTag>
         </div>
         <div class="mt-2 text-xs text-ink-3">附言：{{ item.message }}</div>
         <div class="mt-1 text-xs text-ink-3">申请时间：{{ item.created_at }}</div>
@@ -34,14 +34,15 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { recruitApi } from '@/api/recruit'
+import { recruitApi, type RecruitContactRequest } from '@/api/recruit'
+import { describeContactRequest } from '@/utils/contactRequestStatus'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 
-const items = ref<any[]>([])
+const items = ref<RecruitContactRequest[]>([])
 
 // 三态收编 useAsyncPage（#439）：loader 纯装配，错误收敛 loadError
 const {
@@ -53,21 +54,10 @@ const {
   total,
   run: load
 } = useAsyncPage(async () => {
-  const res: any = await recruitApi.listMyRequests({ page: 1, page_size: 20 })
+  const res = await recruitApi.listMyRequests({ page: 1, page_size: 20 })
   items.value = res?.items || []
   total.value = res?.total || 0
 }, { itemsRef: items })
-
-function statusLabel(s: string) {
-  const m: Record<string, string> = { pending: '待处理', approved: '已同意', rejected: '已拒绝', expired: '已过期', revoked: '已撤回' }
-  return m[s] || s
-}
-function tagType(s: string) {
-  if (s === 'approved') return 'success'
-  if (s === 'rejected' || s === 'revoked') return 'danger'
-  if (s === 'expired') return 'info'
-  return 'primary'
-}
 
 onMounted(load)
 </script>
