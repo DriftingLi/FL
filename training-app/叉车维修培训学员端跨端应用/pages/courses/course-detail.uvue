@@ -119,17 +119,17 @@
     }
 
     function getCategoryIcon(category : string) : string {
-        if (category == 'theory' || category == 'CATEGORY_01') return ''
+        if (category == 'theory' || category == 'CATEGORY_01') return '📖'
         if (category == 'safety' || category == 'CATEGORY_02') return '⚠️'
-        if (category == 'practice' || category == 'CATEGORY_03') return ''
-        if (category == 'advanced' || category == 'CATEGORY_04') return ''
-        if (category == 'structure') return '️'
+        if (category == 'practice' || category == 'CATEGORY_03') return '🔧'
+        if (category == 'advanced' || category == 'CATEGORY_04') return '🚀'
+        if (category == 'structure') return '🏗️'
         if (category == 'hydraulic') return '⚙️'
-        if (category == 'driving') return ''
-        if (category == 'maintenance') return ''
-        if (category == 'cargo') return ''
-        if (category == 'troubleshooting') return ''
-        return ''
+        if (category == 'driving') return '🚜'
+        if (category == 'maintenance') return '🔨'
+        if (category == 'cargo') return '📦'
+        if (category == 'troubleshooting') return '🔍'
+        return '📚'
     }
 
     function getCoverColor(category : string) : string {

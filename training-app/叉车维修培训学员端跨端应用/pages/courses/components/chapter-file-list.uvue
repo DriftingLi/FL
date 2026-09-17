@@ -36,11 +36,11 @@
 
     // ---- 以下三个纯展示函数自页面逐字搬入（单实现，无第二处消费面） ----
     function getFileIcon(contentType : string) : string {
-        if (contentType == 'video') return ''
-        if (contentType == 'document') return ''
-        if (contentType == 'ppt') return ''
-        if (contentType == 'image') return '️'
-        return ''
+        if (contentType == 'video') return '🎬'
+        if (contentType == 'document') return '📄'
+        if (contentType == 'ppt') return '📊'
+        if (contentType == 'image') return '🖼️'
+        return '📎'
     }
 
     function getFileIconClass(contentType : string) : string {

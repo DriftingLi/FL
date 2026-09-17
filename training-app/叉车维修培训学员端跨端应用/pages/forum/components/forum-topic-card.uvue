@@ -68,11 +68,11 @@
                 <text class="action-text">{{ likesText }}</text>
             </view>
             <view class="action-item" @click.stop="onReplyClick">
-                <text class="action-icon"></text>
+                <text class="action-icon">💬</text>
                 <text class="action-text">{{ repliesText }}</text>
             </view>
             <view class="action-item">
-                <text class="action-icon"></text>
+                <text class="action-icon">👁</text>
                 <text class="action-text">{{ viewsText }}</text>
             </view>
         </view>
