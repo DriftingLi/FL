@@ -14,6 +14,7 @@ import (
 	"forklift-training/internal/clock"
 	"forklift-training/internal/daemon"
 	"forklift-training/internal/model"
+	"forklift-training/pkg/paging"
 )
 
 // 联系方式交换域业务错误哨兵（ADR-0024）：handler 以 errors.Is 映射状态码，不做字符串比对。
@@ -258,18 +259,11 @@ func (s *ContactService) EnsureApproved(tx *gorm.DB, recruiterID, studentUserID 
 
 // ListForRecruiter 招聘方查看我的申请列表。
 func (s *ContactService) ListForRecruiter(recruiterID, page, pageSize int) ([]ContactRequestDTO, int64, error) {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 || pageSize > 50 {
-		pageSize = 20
-	}
-	var total int64
-	if err := s.db.Model(&model.ContactRequest{}).Where("recruiter_id = ?", recruiterID).Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-	var rows []model.ContactRequest
-	if err := s.db.Where("recruiter_id = ?", recruiterID).Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error; err != nil {
+	rows, total, _, _, err := paging.QueryWithMax[model.ContactRequest](s.db, page, pageSize, 20, 50,
+		"created_at DESC", func(q *gorm.DB) *gorm.DB {
+			return q.Where("recruiter_id = ?", recruiterID)
+		})
+	if err != nil {
 		return nil, 0, err
 	}
 	dtos := make([]ContactRequestDTO, 0, len(rows))
@@ -281,18 +275,11 @@ func (s *ContactService) ListForRecruiter(recruiterID, page, pageSize int) ([]Co
 
 // ListForStudent 学员侧查看收到的申请。
 func (s *ContactService) ListForStudent(studentUserID, page, pageSize int) ([]ContactRequestDTO, int64, error) {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 || pageSize > 50 {
-		pageSize = 20
-	}
-	var total int64
-	if err := s.db.Model(&model.ContactRequest{}).Where("student_user_id = ?", studentUserID).Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-	var rows []model.ContactRequest
-	if err := s.db.Where("student_user_id = ?", studentUserID).Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error; err != nil {
+	rows, total, _, _, err := paging.QueryWithMax[model.ContactRequest](s.db, page, pageSize, 20, 50,
+		"created_at DESC", func(q *gorm.DB) *gorm.DB {
+			return q.Where("student_user_id = ?", studentUserID)
+		})
+	if err != nil {
 		return nil, 0, err
 	}
 	dtos := make([]ContactRequestDTO, 0, len(rows))

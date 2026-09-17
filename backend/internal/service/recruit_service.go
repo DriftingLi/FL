@@ -14,6 +14,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/pkg/paging"
 )
 
 // RecruitService 招聘端简历服务（脱敏读）。
@@ -172,6 +173,8 @@ func applyRegionCityFilter(region string) any {
 
 // List 脱敏列表：仅 open，叠筛选，updated_at DESC，分页，无缓存（读最新）。
 func (s *RecruitService) List(p RecruitListParams) (*RecruitListResult, error) {
+	// 页大小上限保留既有「超上限截断到上限」语义（与 ClampMax 的「超上限回退默认」不同），
+	// 先归一化再交给 paging：钳制在本层做，查询骨架（count/find/offset）收编到 paging.Query。
 	if p.Page <= 0 {
 		p.Page = 1
 	}
@@ -181,14 +184,11 @@ func (s *RecruitService) List(p RecruitListParams) (*RecruitListResult, error) {
 	if p.PageSize > 50 {
 		p.PageSize = 50
 	}
-	q := s.db.Model(&model.JobCard{}).Where("visibility = ?", "open")
-	q = s.applyFilters(q, p)
-	var total int64
-	if err := q.Count(&total).Error; err != nil {
-		return nil, err
-	}
-	var cards []model.JobCard
-	if err := q.Order("updated_at DESC").Offset((p.Page - 1) * p.PageSize).Limit(p.PageSize).Find(&cards).Error; err != nil {
+	cards, total, _, _, err := paging.Query[model.JobCard](s.db, p.Page, p.PageSize, 20, "updated_at DESC",
+		func(q *gorm.DB) *gorm.DB {
+			return s.applyFilters(q.Where("visibility = ?", "open"), p)
+		})
+	if err != nil {
 		return nil, err
 	}
 	items := make([]RecruitResumeCard, 0, len(cards))

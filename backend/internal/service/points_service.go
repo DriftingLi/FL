@@ -13,6 +13,7 @@ import (
 	"forklift-training/internal/cache"
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
 )
 
@@ -425,13 +426,7 @@ func (s *PointsService) GetLedger(userID, page, pageSize int, reason string, ref
 // GetLedgerFiltered 流水分页 + 收支方向筛选（#512 积分明细页）——direction: "" 全部 /
 // "in" 仅收入(delta>0) / "out" 仅支出(delta<0)；其余参数语义同 GetLedger。
 func (s *PointsService) GetLedgerFiltered(userID, page, pageSize int, reason, direction string, refType ...string) (*PointsLedgerResult, error) {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 || pageSize > 100 {
-		pageSize = 20
-	}
-	// count 与 find 各自独立装配（gorm 复用同一链有条件残留风险），过滤条件单一出处
+	// count 与 find 同走 paging.QueryWithMax（过滤条件单一出处）
 	build := func(q *gorm.DB) *gorm.DB {
 		if userID > 0 {
 			q = q.Where("user_id = ?", userID)
@@ -452,18 +447,18 @@ func (s *PointsService) GetLedgerFiltered(userID, page, pageSize int, reason, di
 		}
 		return q
 	}
-	var total int64
-	if err := build(s.db.Model(&model.PointsLedger{})).Count(&total).Error; err != nil {
+	rows, total, page, pageSize, err := paging.QueryWithMax[model.PointsLedger](s.db, page, pageSize, 20, 100,
+		"created_at DESC", build)
+	if err != nil {
 		return nil, err
 	}
 	pages := response.PageCount(total, pageSize)
+	// 越界页回退末页（既有语义，收编 #1095 时原样保留）：total 已知后按末页重取一次。
 	if page > pages && pages > 0 {
 		page = pages
-	}
-	offset := (page - 1) * pageSize
-	var rows []model.PointsLedger
-	if err := build(s.db.Model(&model.PointsLedger{})).Order("created_at DESC").Limit(pageSize).Offset(offset).Find(&rows).Error; err != nil {
-		return nil, err
+		if rows, _, _, _, err = paging.QueryWithMax[model.PointsLedger](s.db, page, pageSize, 20, 100, "created_at DESC", build); err != nil {
+			return nil, err
+		}
 	}
 	items := make([]PointsLedgerItem, 0, len(rows))
 	for _, r := range rows {

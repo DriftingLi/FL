@@ -18,6 +18,7 @@ import (
 
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
+	"forklift-training/pkg/paging"
 )
 
 // 招聘者账号域业务错误哨兵（ADR-0024 / spec #449 决定 4）：handler 以 errors.Is 映射状态码，不做字符串比对。
@@ -569,23 +570,15 @@ type RecruiterListResult struct {
 // ListRecruiters 招聘者列表（分页 + 关键字过滤企业名/账号；#416 真实现替换硬编码空数组桩）。
 // 响应只含白名单字段（无 Password 等凭据）。
 func (s *AuthService) ListRecruiters(page, pageSize int, keyword string) (*RecruiterListResult, error) {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 || pageSize > 100 {
-		pageSize = 20
-	}
-	q := s.db.Model(&model.RecruiterUser{})
-	if keyword != "" {
-		kw := "%" + keyword + "%"
-		q = q.Where("username LIKE ? OR company_name LIKE ?", kw, kw)
-	}
-	var total int64
-	if err := q.Count(&total).Error; err != nil {
-		return nil, err
-	}
-	var rows []model.RecruiterUser
-	if err := q.Order("created_at DESC").Limit(pageSize).Offset((page - 1) * pageSize).Find(&rows).Error; err != nil {
+	rows, total, page, _, err := paging.QueryWithMax[model.RecruiterUser](s.db, page, pageSize, 20, 100,
+		"created_at DESC", func(q *gorm.DB) *gorm.DB {
+			if keyword != "" {
+				kw := "%" + keyword + "%"
+				q = q.Where("username LIKE ? OR company_name LIKE ?", kw, kw)
+			}
+			return q
+		})
+	if err != nil {
 		return nil, err
 	}
 	items := make([]RecruiterListItem, 0, len(rows))
