@@ -14,6 +14,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/pkg/paging"
 )
 
 // 职位域业务错误哨兵（ADR-0024）：handler 以 errors.Is 映射状态码，不做字符串比对。
@@ -294,46 +295,38 @@ type JobListResult struct {
 // List 职位列表。学员侧：只见 open 且未强制下架，按新鲜度排序；
 // 企业侧（MineOnly）：含 closed/强制下架历史，同样按新鲜度排序。
 func (s *JobPostingService) List(recruiterID int, p JobListParams) (*JobListResult, error) {
-	if p.Page <= 0 {
-		p.Page = 1
-	}
-	if p.PageSize <= 0 || p.PageSize > 50 {
-		p.PageSize = 20
-	}
-	q := s.db.Model(&model.JobPosting{})
-	if p.MineOnly {
-		q = q.Where("recruiter_id = ?", recruiterID)
-	} else if p.All {
-		// 管理端巡检：全量（含 closed/强制下架），可按企业筛
-		if p.RecruiterID > 0 {
-			q = q.Where("recruiter_id = ?", p.RecruiterID)
-		}
-	} else if p.RecruiterID > 0 {
-		q = q.Where("recruiter_id = ?", p.RecruiterID)
-	} else {
-		q = q.Where("status = ? AND forced_offline = ?", "open", false)
-	}
-	if p.PositionID != nil {
-		q = q.Where("position_id = ?", *p.PositionID)
-	}
-	if p.Region != "" {
-		q = q.Where("region LIKE ?", "%"+p.Region+"%")
-	}
-	if p.SalaryMin != nil {
-		q = q.Where("salary_max IS NULL OR salary_max >= ?", *p.SalaryMin)
-	}
-	if p.SalaryMax != nil {
-		q = q.Where("salary_min IS NULL OR salary_min <= ?", *p.SalaryMax)
-	}
-	if p.Experience != "" {
-		q = q.Where("experience_req LIKE ?", "%"+p.Experience+"%")
-	}
-	var total int64
-	if err := q.Count(&total).Error; err != nil {
-		return nil, err
-	}
-	var rows []model.JobPosting
-	if err := q.Order("published_at DESC, id DESC").Offset((p.Page - 1) * p.PageSize).Limit(p.PageSize).Find(&rows).Error; err != nil {
+	rows, total, _, _, err := paging.QueryWithMax[model.JobPosting](s.db, p.Page, p.PageSize, 20, 50,
+		"published_at DESC, id DESC", func(q *gorm.DB) *gorm.DB {
+			if p.MineOnly {
+				q = q.Where("recruiter_id = ?", recruiterID)
+			} else if p.All {
+				// 管理端巡检：全量（含 closed/强制下架），可按企业筛
+				if p.RecruiterID > 0 {
+					q = q.Where("recruiter_id = ?", p.RecruiterID)
+				}
+			} else if p.RecruiterID > 0 {
+				q = q.Where("recruiter_id = ?", p.RecruiterID)
+			} else {
+				q = q.Where("status = ? AND forced_offline = ?", "open", false)
+			}
+			if p.PositionID != nil {
+				q = q.Where("position_id = ?", *p.PositionID)
+			}
+			if p.Region != "" {
+				q = q.Where("region LIKE ?", "%"+p.Region+"%")
+			}
+			if p.SalaryMin != nil {
+				q = q.Where("salary_max IS NULL OR salary_max >= ?", *p.SalaryMin)
+			}
+			if p.SalaryMax != nil {
+				q = q.Where("salary_min IS NULL OR salary_min <= ?", *p.SalaryMax)
+			}
+			if p.Experience != "" {
+				q = q.Where("experience_req LIKE ?", "%"+p.Experience+"%")
+			}
+			return q
+		})
+	if err != nil {
 		return nil, err
 	}
 	items := make([]JobPostingDTO, 0, len(rows))

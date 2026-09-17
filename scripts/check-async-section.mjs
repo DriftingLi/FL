@@ -7,18 +7,17 @@
  * （UiErrorState）又出现骨架或空态组件（UiSkeleton / UiEmptyState）——这正是
  * 「四态先后与互斥在页面里重新表述」的信号（收敛前 39 页各写一遍、顺序还不一致）。
  *
- * 用法：
+ * 用法（runner 面单点在 `scripts/lib/guard.mjs`，ADR-0056 §5 / #1094；本文件只有判定面）：
  *   node scripts/check-async-section.mjs --all            全量扫描（CI 用）
- *   node scripts/check-async-section.mjs --diff [base]    只查相对 base 的新增行（本地用）
+ *   node scripts/check-async-section.mjs --diff [base]    只查相对 base 的新增行（base 默认 origin/master）
  *
- * 退出码：有违规 1，否则 0。
+ * 退出码：有违规 1，否则 0；判据坏了（base 取不到 / git diff 失败）2。
  */
-import { readFileSync, readdirSync } from 'node:fs'
-import { fileURLToPath, pathToFileURL } from 'node:url'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { isDirectRun, runGuardCli } from './lib/guard.mjs'
 
-const __filename = fileURLToPath(import.meta.url)
-const ROOT = path.resolve(path.dirname(__filename), '..')
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 /**
  * 逐条登记的有意例外（相对路径 → 理由）。全部是 #1054 的**存量待迁移**页面——
@@ -86,88 +85,38 @@ export function scanSource(source, file) {
   return violations
 }
 
-/** 递归收集 .vue 文件。 */
-function walk(dir, out = []) {
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name)
-    if (entry.isDirectory()) walk(full, out)
-    else if (entry.name.endsWith('.vue')) out.push(full)
-  }
-  return out
+/**
+ * 本守卫的声明：判定面 + 报告措辞。runner（argv / 走查 / --diff / allowlist / 退出码）
+ * 在 scripts/lib/guard.mjs —— 新增守卫只需实现 scanSource 并声明这一份。
+ * 注：全量与增量都把 ALLOWLIST 当整体放行（存量页面迁移前不报），语义与收敛前一致。
+ */
+export const GUARD_SPEC = {
+  name: 'check-async-section',
+  usage: '用法: node scripts/check-async-section.mjs --all | --diff [base]',
+  cli: { noArgs: 'usage', helpFlag: true, scanDirArg: false, usageOnUnknown: false, usageStream: 'stdout' },
+  all: {
+    scanDir: 'frontend/src',
+    extensions: ['.vue'],
+    skipNodeModules: false,
+    tolerateWalkErrors: false,
+    stream: 'stderr',
+    ok: () => '✓ 未发现手写四分支链',
+    violation: (v) => '✗ ' + v.file + ':' + v.line + '\n  ' + v.message,
+    footer: (ctx) => ['', '共 ' + ctx.count + ' 处违规。']
+  },
+  diff: {
+    pathspec: ['*.vue'],
+    defaultBase: 'origin/master',
+    stream: 'stderr',
+    empty: (base) => '[check-async-section] 相对 ' + base + ' 无 .vue 新增行，跳过。',
+    ok: () => '[check-async-section] 新增行未手写四分支链，通过。',
+    header: () => ['===== 新增行手写了四分支链（业务页面一律走 components/ui/UiAsyncSection.vue）====='],
+    violation: (v) => '✗ ' + v.file + ':' + v.line + '\n  ' + v.message,
+    footer: (ctx) => ['---', '共 ' + ctx.count + ' 处违规。']
+  },
+  isGuardedPath,
+  scanSource,
+  allowlist: ALLOWLIST
 }
 
-function runAll() {
-  const files = walk(path.join(ROOT, 'frontend', 'src'))
-  let count = 0
-  for (const f of files) {
-    const r = rel(f)
-    const vs = scanSource(readFileSync(f, 'utf8'), f)
-    if (vs.length && ALLOWLIST[r]) continue
-    for (const v of vs) {
-      count++
-      console.error(`✗ ${r}:${v.line}\n  ${v.message}`)
-    }
-  }
-  return count
-}
-
-function runDiff(parseAddedLines, base) {
-  let added
-  try {
-    added = parseAddedLines(base, '*.vue')
-  } catch (e) {
-    console.error('[check-async-section] 解析新增行失败: ' + (e && e.message ? e.message : e))
-    return 1
-  }
-  let count = 0
-  for (const [file, lineSet] of added) {
-    if (!isGuardedPath(file)) continue
-    const r = rel(file)
-    let source
-    try {
-      source = readFileSync(path.join(ROOT, file), 'utf8')
-    } catch {
-      continue
-    }
-    const vs = scanSource(source, file)
-    for (const v of vs) {
-      if (!lineSet.has(v.line)) continue
-      if (ALLOWLIST[r]) continue
-      count++
-      console.error(`✗ ${r}:${v.line}\n  ${v.message}`)
-    }
-  }
-  return count
-}
-
-async function main() {
-  const argv = process.argv.slice(2)
-  if (argv.length === 0 || argv[0] === '--help') {
-    console.log('用法: node scripts/check-async-section.mjs --all | --diff [base]')
-    process.exit(0)
-  }
-  let count
-  if (argv[0] === '--all') {
-    count = runAll()
-  } else if (argv[0] === '--diff') {
-    const { parseAddedLines } = await import('./lib/added-lines.mjs')
-    count = runDiff(parseAddedLines, argv[1] || 'origin/master')
-  } else {
-    console.error('未知参数: ' + argv[0])
-    process.exit(2)
-  }
-  if (count > 0) {
-    console.error(`\n共 ${count} 处违规。`)
-    process.exit(1)
-  }
-  console.log('✓ 未发现手写四分支链')
-}
-
-
-const isDirectRun = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url
-if (isDirectRun) {
-  main().catch((e) => {
-    console.error(e)
-    process.exit(2)
-  })
-}
+if (isDirectRun(import.meta.url)) runGuardCli(GUARD_SPEC)

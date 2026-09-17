@@ -1,8 +1,8 @@
 // 迁移文件可发现性测试（#364 顺带补的守卫）。
 //
-// 为什么需要：CI 的 migration-check job 只比较 *.up.sql 与 *.down.sql 的**数量**是否相等，
-// 从不连数据库、从不执行 SQL（虽设了 DATABASE_URL 但没有命令消费它）。所以迁移 SQL 真正
-// 跑起来的地方只有部署时。本测试把"部署前就能查出的一类错误"补上：
+// 为什么需要：本测试补的是**静态可发现性**，与 CI 的 migration-check 分工不同。
+// （#1099 之后 migration-check 已在 postgres:15-alpine 上真跑 up / check-columns / down，
+// 「只比较文件数量、从不连数据库」是收编前的旧口径。）本测试仍守着 SQL 语义之外的那一层：
 //   - 文件名不符合 <version>_<title>.(up|down).sql（golang-migrate 直接读不到）
 //   - 版本号重复（migrate 启动即失败）
 //   - 缺 down 配对（要回滚时才发现没救）

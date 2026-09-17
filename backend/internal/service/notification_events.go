@@ -1,6 +1,6 @@
 // Package service 实现业务服务层。
 // 本文件：站内信事件构造器全域收编（ADR-0027 C1 / ADR-0024 C3 执行欠账）——
-// 论坛互动 / 投稿生命周期 / 联系方式交换申请全部手拼调用点收回站内信域，
+// 论坛互动 / 投稿生命周期 / 联系方式交换申请 / 积分扣罚（#1098 收编最后一处 api 层第二源）全部手拼调用点收回站内信域，
 // 事件形状统一为 ForumAcceptEvent 已验证形态：事件 struct + New*Event 构造函数 + 域内写入方法。
 //
 // 错误语义两族：
@@ -39,6 +39,9 @@ const NotifTypeContactRequest = "contact_request"
 
 // 资料审核通知类型。
 const NotifTypeProfileReview = "profile_review"
+
+// 管理员扣罚通知类型（历史值 "system"，#1098 随事件收编，逐字不变）。
+const NotifTypeAdminPenalty = "system"
 
 // ===== 论坛：收到新回复（强一致族，与回复写入同事务） =====
 
@@ -271,6 +274,45 @@ func (s *NotificationService) CreateContributionArchivedEvent(tx GormCreator, ev
 	return s.CreateWithTx(tx, ev.UserID, NotifTypeContributionArchived, "资料投稿已下架", msg,
 		"/training/materials?tab=contribution&view=mine",
 		contributionPayload(ev.ContributionID, ev.Title, -ev.ClawedBack, ev.Reason), createdAt)
+}
+
+// ===== 积分：管理员扣罚（强一致族，与扣罚流水同事务，#1098） =====
+
+// adminPenaltyPayload 构造扣罚事件结构化标记（deducted + reason），
+// 键序与 api 层原手拼 payload 逐字一致（ADR-0027 C1 payload 随事件归位站内信域）。
+// Deducted 为按余额截断后的实际扣减额。
+func adminPenaltyPayload(deducted int, reason string) model.JSONB {
+	b, err := json.Marshal(struct {
+		Deducted int    `json:"deducted"`
+		Reason   string `json:"reason"`
+	}{Deducted: deducted, Reason: reason})
+	if err != nil {
+		return nil
+	}
+	return model.JSONB(b)
+}
+
+// AdminPenaltyEvent 管理员扣罚事件（强一致族：与扣罚流水同事务，通知写失败则扣罚整体不生效）。
+type AdminPenaltyEvent struct {
+	// UserID 收件人（被扣罚学员）。
+	UserID int
+	// Deducted 实际扣减分（按余额截断后的值；0 表示余额不足未产生流水，文案照发）。
+	Deducted int
+	// Reason 扣罚事由（管理端输入，文案与 payload 用）。
+	Reason string
+}
+
+// NewAdminPenaltyEvent 构造管理员扣罚通知事件。
+// deducted 是**按余额截断后的实际扣减额**（调用点 actualDeduct），不是请求扣罚额：
+// 形参名与 AdminPenaltyEvent.Deducted、payload 的 "deducted" 键同义（文案按它写）。
+func NewAdminPenaltyEvent(userID, deducted int, reason string) AdminPenaltyEvent {
+	return AdminPenaltyEvent{UserID: userID, Deducted: deducted, Reason: reason}
+}
+
+// CreateAdminPenaltyEvent 在指定事务内创建扣罚站内信（与扣罚流水同事务）。
+func (s *NotificationService) CreateAdminPenaltyEvent(tx GormCreator, ev AdminPenaltyEvent, createdAt time.Time) error {
+	content := fmt.Sprintf("您的积分因“%s”被扣除 %d 分", ev.Reason, ev.Deducted)
+	return s.CreateWithTx(tx, ev.UserID, NotifTypeAdminPenalty, "积分扣罚", content, "", adminPenaltyPayload(ev.Deducted, ev.Reason), createdAt)
 }
 
 // ===== 联系方式交换申请（尽力而为族） =====

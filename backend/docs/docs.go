@@ -4035,6 +4035,55 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/inspection/deleted-after-accepted": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员查看「楼主删除自己已解决的帖子」累计计数（system_settings.deleted_after_accepted，行缺失 = 0）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-巡检"
+                ],
+                "summary": "巡检计数：删除已解决帖",
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.InspectionCountDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/job-reports": {
             "get": {
                 "security": [
@@ -4068,7 +4117,19 @@ const docTemplate = `{
                     "200": {
                         "description": "列表",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ReportListResult"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -4106,9 +4167,21 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "已处理",
+                        "description": "已处理（响应为处理后的举报行）",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ReportDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -4171,7 +4244,19 @@ const docTemplate = `{
                     "200": {
                         "description": "列表",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.JobListResult"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -4220,9 +4305,21 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "已强制下架",
+                        "description": "已强制下架（响应为下架后的职位行）",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.JobPostingDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -4517,6 +4614,89 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/points/ledger": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员按原因 / 业务域 / 用户筛选积分流水（不传 ref_type = 跨域全量；页大小上限 100）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-巡检"
+                ],
+                "summary": "积分流水（管理端）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "每页条数",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "积分原因（如 accepted_bonus / rollback）",
+                        "name": "reason",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "业务域（forum_topic / task / course / ai_chat 等）；不传 = 跨域全量",
+                        "name": "ref_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "用户 ID（\u003e0 生效）",
+                        "name": "user_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.PointsLedgerResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -5284,6 +5464,200 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/recruit/requests": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员分页查询联系方式交换申请（可按招聘者/学员/状态过滤）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-巡检"
+                ],
+                "summary": "联系方式交换申请列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "每页条数",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "招聘者 ID（\u003e0 生效）",
+                        "name": "recruiter_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "学员用户 ID（\u003e0 生效）",
+                        "name": "student_user_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "申请状态（pending/approved/rejected/expired/revoked）",
+                        "name": "status",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "items": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "$ref": "#/definitions/service.ContactRequestRowDTO"
+                                                    }
+                                                },
+                                                "page": {
+                                                    "type": "integer"
+                                                },
+                                                "page_size": {
+                                                    "type": "integer"
+                                                },
+                                                "total": {
+                                                    "type": "integer"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/recruit/views": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员分页查询招聘企业查看学员简历的留痕（可按招聘者/学员过滤；只呈现事实字段，不含联系方式明文）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-巡检"
+                ],
+                "summary": "简历查看留痕列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "每页条数",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "招聘者 ID（\u003e0 生效）",
+                        "name": "recruiter_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "学员用户 ID（\u003e0 生效）",
+                        "name": "student_user_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "items": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "$ref": "#/definitions/service.RecruitResumeViewDTO"
+                                                    }
+                                                },
+                                                "page": {
+                                                    "type": "integer"
+                                                },
+                                                "page_size": {
+                                                    "type": "integer"
+                                                },
+                                                "total": {
+                                                    "type": "integer"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -25022,6 +25396,43 @@ const docTemplate = `{
                 }
             }
         },
+        "service.ContactRequestRowDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "decided_at": {
+                    "description": "DecidedAt 未决申请为 nil：**键整个不出现**（omitempty）→ x-optional；\n漏标会让 swag 把它渲染成必填（ADR-0056 §11 / #1100 的契约撒谎面）。",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "recruiter_id": {
+                    "type": "integer"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "student_user_id": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "service.ContributionAuthor": {
             "type": "object",
             "properties": {
@@ -26428,6 +26839,14 @@ const docTemplate = `{
                 },
                 "username": {
                     "type": "string"
+                }
+            }
+        },
+        "service.InspectionCountDTO": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
                 }
             }
         },
@@ -28009,6 +28428,23 @@ const docTemplate = `{
                 }
             }
         },
+        "service.RecruitResumeViewDTO": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "recruiter_id": {
+                    "type": "integer"
+                },
+                "resume_user_id": {
+                    "type": "integer"
+                },
+                "viewed_at": {
+                    "type": "string"
+                }
+            }
+        },
         "service.RecruiterApplicationListResult": {
             "type": "object",
             "properties": {
@@ -28224,6 +28660,26 @@ const docTemplate = `{
             "properties": {
                 "reason": {
                     "type": "string"
+                }
+            }
+        },
+        "service.ReportListResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.ReportDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
                 }
             }
         },

@@ -18,7 +18,7 @@ import (
 func newRewardPolicyTest(t *testing.T) (*forumRewardPolicy, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	points := NewPointsService(db, zap.NewNop(), nil)
+	points := NewPointsService(db, zap.NewNop(), nil, NewNotificationService(db, zap.NewNop()))
 	policy := newForumRewardPolicy(points, NewNotificationService(db, zap.NewNop()))
 	return policy, db
 }

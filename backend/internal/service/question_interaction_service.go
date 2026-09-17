@@ -8,6 +8,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/pkg/paging"
 )
 
 // QuestionCommentDTO 题目评论返回（带作者信息）
@@ -43,23 +44,23 @@ func NewQuestionCommentService(db *gorm.DB, logger *zap.Logger) *QuestionComment
 }
 
 func (s *QuestionCommentService) List(questionID, page, pageSize int) ([]QuestionCommentDTO, int64, error) {
-	var total int64
-	s.db.Model(&model.QuestionComment{}).Where("question_id = ?", questionID).Count(&total)
 	type row struct {
 		model.QuestionComment
 		Username  string `gorm:"column:username"`
 		AvatarURL string `gorm:"column:avatar_url"`
 	}
-	var rows []row
-	offset := (page - 1) * pageSize
-	if offset < 0 {
-		offset = 0
-	}
-	if err := s.db.Table("question_comment AS c").
-		Select("c.*, u.username, u.avatar_url").
-		Joins("LEFT JOIN hrwai_users AS u ON u.id = c.user_id").
-		Where("c.question_id = ?", questionID).
-		Order("c.created_at DESC").Offset(offset).Limit(pageSize).Find(&rows).Error; err != nil {
+	// 既有语义保留：本列表无页大小上限、pageSize<=0 不回落默认（Limit(0) 即空页；负值取消 LIMIT），
+	// 默认值由 HTTP 层 atoiDefault(page_size,10) 保证。故 default/max 都传 pageSize 自身，
+	// 让 paging 的钳制在这些维度上成为空操作；page<=0 → 1 与既有的 offset 下限 0 等价
+	//（本方法的返回不含 page，调用方用自己的请求值装配信封）。
+	rows, total, _, _, err := paging.QueryWithScan[row](s.db, page, pageSize, pageSize, pageSize,
+		"c.created_at DESC", func(q *gorm.DB) *gorm.DB {
+			return q.Table("question_comment AS c").
+				Select("c.*, u.username, u.avatar_url").
+				Joins("LEFT JOIN hrwai_users AS u ON u.id = c.user_id").
+				Where("c.question_id = ?", questionID)
+		})
+	if err != nil {
 		return nil, 0, err
 	}
 	items := make([]QuestionCommentDTO, len(rows))

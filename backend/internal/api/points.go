@@ -13,16 +13,20 @@ import (
 )
 
 // pointsErrStatus 积分域哨兵→状态码表（#610，ADR-0024）：已领取/额度/余额不足/已兑换等
-// 业务冲突 → 400，不存在类 → 404；未命中兜底 400——积分域 service 错误均为业务错误，不以 500 暴露。
+// 业务冲突 → 400，不存在类 → 404；未命中兜底 400——积分域 service 错误均为业务错误。
+// 例外（#1098 扣罚回归域内）：ErrUserNotFound → 404（不再是「一律 400」，与 /points/claim
+// 同域同判）；ErrPenaltyNotifyFailed → 500（强一致族下扣罚整笔回滚，管理端可见原因并可重试）。
 var pointsErrStatus = &errStatusTable{
 	entries: []errStatusEntry{
 		{service.ErrTaskNotFound, http.StatusNotFound},
+		{service.ErrUserNotFound, http.StatusNotFound},
 		{service.ErrCourseNotFound, http.StatusBadRequest},
 		{service.ErrCourseNotRedeemable, http.StatusBadRequest},
 		{service.ErrAlreadyClaimed, http.StatusBadRequest},
 		{service.ErrDailyClaimLimit, http.StatusBadRequest},
 		{service.ErrInsufficientPoints, http.StatusBadRequest},
 		{service.ErrAlreadyRedeemed, http.StatusBadRequest},
+		{service.ErrPenaltyNotifyFailed, http.StatusInternalServerError},
 	},
 	fallback: http.StatusBadRequest,
 }

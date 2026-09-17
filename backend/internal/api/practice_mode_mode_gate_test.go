@@ -41,7 +41,7 @@ func TestSearchQuestionExcludesSourceTagged(t *testing.T) {
 	mk(nil, "液压系统真题卷关键词") // 去重折叠进公共池的未打标真题题
 
 	svc := service.NewSearchService(db, nil)
-	items, err := svc.Search("液压系统", service.SearchTypeQuestion, 1, 20)
+	items, err := svc.Search("液压系统", service.SearchTypeQuestion, 1, 20, nil)
 	if err != nil {
 		t.Fatalf("搜索失败: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestSearchQuestionExcludesSourceTagged(t *testing.T) {
 	}
 
 	// 聚合路径（type 缺省各分区 top5）同样过滤
-	all, err := svc.Search("液压系统", "", 1, 20)
+	all, err := svc.Search("液压系统", "", 1, 20, nil)
 	if err != nil {
 		t.Fatalf("聚合搜索失败: %v", err)
 	}
@@ -146,7 +146,10 @@ func TestMockExamHistoryCarriesPaperID(t *testing.T) {
 		}
 	}
 
-	got := svc.GetHistory(student.ID, nil, 1, 10)
+	got, err := svc.GetHistory(student.ID, nil, 1, 10)
+	if err != nil {
+		t.Fatalf("GetHistory 失败: %v", err)
+	}
 	if got.Total != 2 {
 		t.Fatalf("应有 2 条历史, got %d", got.Total)
 	}

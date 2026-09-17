@@ -18,7 +18,7 @@ import (
 func newPointsSvc(t *testing.T) (*PointsService, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	return NewPointsService(db, zap.NewNop(), nil), db
+	return NewPointsService(db, zap.NewNop(), nil, NewNotificationService(db, zap.NewNop())), db
 }
 
 // seedUserWithBalance 插入带余额的测试用户，返回用户 ID。
@@ -154,7 +154,7 @@ func TestApplyTxFloorZero(t *testing.T) {
 // 并发重复兑换恰有一笔成功，余额不击穿、流水与权益各一行。
 func TestRedeemShopConcurrentDoubleSpend(t *testing.T) {
 	db := testutil.NewFileDB(t) // :memory: 每连接独立库，并发场景须文件库
-	svc := NewPointsService(db, zap.NewNop(), nil)
+	svc := NewPointsService(db, zap.NewNop(), nil, NewNotificationService(db, zap.NewNop()))
 	uid := seedUserWithBalance(t, db, 300)
 	if err := db.Create(&model.PointsShopItem{SKU: "unlock_gold", Title: "金牌", Price: 300, Enabled: true}).Error; err != nil {
 		t.Fatalf("建商城项失败: %v", err)

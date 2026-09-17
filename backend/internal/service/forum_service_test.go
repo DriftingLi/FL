@@ -65,7 +65,7 @@ func newForumTestEnv(t *testing.T) *forumTestEnv {
 	fileSvc := NewFileStore("", st, zap.NewNop())
 	notificationSvc := NewNotificationService(db, zap.NewNop())
 	counters := NewForumCounter()
-	points := NewPointsService(db, zap.NewNop(), nil)
+	points := NewPointsService(db, zap.NewNop(), nil, notificationSvc)
 	return &forumTestEnv{
 		svc: NewForumService(db, fileSvc, notificationSvc, counters, points, zap.NewNop()),
 		mod: NewForumModerationService(db, fileSvc, notificationSvc, counters, points, zap.NewNop()),

@@ -277,9 +277,13 @@ func (h *MockExamHandler) GetHistory(c *gin.Context) {
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *mockExamHistoryReq) (*service.MockExamHistoryDTO, error) {
-			return h.svc.GetHistory(req.StudentID, req.CredentialID, req.Page, req.PageSize), nil
+			return h.svc.GetHistory(req.StudentID, req.CredentialID, req.Page, req.PageSize)
 		},
-		Render: func(c *gin.Context, _ *mockExamHistoryReq, resp *service.MockExamHistoryDTO, _ error) {
+		Render: func(c *gin.Context, _ *mockExamHistoryReq, resp *service.MockExamHistoryDTO, err error) {
+			if err != nil {
+				response.ServerError(c, err.Error())
+				return
+			}
 			response.Success(c, resp)
 		},
 	}.Handle(c)

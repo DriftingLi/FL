@@ -81,14 +81,26 @@ func TestPracticeReadSurfacesCredentialPartition(t *testing.T) {
 		{"B 证件分区", &credB.ID, 1},
 		{"nil 不分区（看全部）", nil, 3},
 	} {
-		hist := svc.GetHistory(student.ID, tc.cred, 1, 10, "", "", "")
+		hist, err := svc.GetHistory(student.ID, tc.cred, 1, 10, "", "", "")
+		if err != nil {
+			t.Fatalf("GetHistory 失败: %v", err)
+		}
 		if hist.Total != tc.want {
 			t.Fatalf("%s: history.Total=%d, want %d", tc.name, hist.Total, tc.want)
 		}
 		// 带题型过滤的分支会 JOIN question（两张表都有 credential_id）—— 锁住「分区列仍不歧义」
-		byType := svc.GetHistory(student.ID, tc.cred, 1, 10, "single_choice", "", "")
+		byType, err := svc.GetHistory(student.ID, tc.cred, 1, 10, "single_choice", "", "")
+		if err != nil {
+			t.Fatalf("GetHistory 失败: %v", err)
+		}
 		if byType.Total != tc.want {
 			t.Fatalf("%s: history(type=single_choice).Total=%d, want %d", tc.name, byType.Total, tc.want)
+		}
+		// 该分支会 JOIN question（两张表都有 created_at/credential_id）：锁住「不再是恒空」——
+		// #1095 之前歧义列报错被吞，形状正是 total 正确而 records 恒空（静默 fail-open）。
+		if len(byType.Records) != int(tc.want) {
+			t.Fatalf("%s: history(type=single_choice).Records 长度=%d, want %d（歧义列修复的回归判据）",
+				tc.name, len(byType.Records), tc.want)
 		}
 		overview, err := svc.GetPracticeStats(student.ID, tc.cred)
 		if err != nil {
@@ -142,7 +154,11 @@ func TestPracticeStatsCountsRedoRecordsUnderTheirCredential(t *testing.T) {
 	if overviewB.TotalCount != 1 {
 		t.Fatalf("B 证件 total_count=%d, want 1（重做记录按其分区计数）", overviewB.TotalCount)
 	}
-	if got := svc.GetHistory(student.ID, &credB.ID, 1, 10, "", "", "").Total; got != 1 {
+	histB, err := svc.GetHistory(student.ID, &credB.ID, 1, 10, "", "", "")
+	if err != nil {
+		t.Fatalf("GetHistory 失败: %v", err)
+	}
+	if got := histB.Total; got != 1 {
 		t.Fatalf("B 证件 history.Total=%d, want 1", got)
 	}
 }

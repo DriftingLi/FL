@@ -95,8 +95,8 @@ func (s *PracticeModeService) SetClock(clk clock.Clock) {
 
 // GetFreeQuestions 随机练习抽题：从 published 题库按条件随机抽取 count 题。
 // count <= 0 时返回全部符合条件的题目（按 id 升序，不打乱）。
-func (s *PracticeModeService) GetFreeQuestions(qType string, count int, credentialID ...*int) ([]QuestionDTO, error) {
-	selected, err := sampleQuestions(s.db, qType, count, credentialID...)
+func (s *PracticeModeService) GetFreeQuestions(qType string, count int, credentialID *int) ([]QuestionDTO, error) {
+	selected, err := sampleQuestions(s.db, qType, count, credentialID)
 	if err != nil {
 		return nil, errors.New("查询题目失败")
 	}
@@ -114,7 +114,7 @@ func (s *PracticeModeService) GetFreeQuestions(qType string, count int, credenti
 // 再次进入复用已保存顺序与游标（断点续练）；已完成则重新抽题。
 // mode = "tag:<tagID>"，count <= 0 表示该标签全部题目。
 // 装配形态（#385）：抽题走池单点（sampleQuestionsByOpts），续练协商走 ResumeSet 单点。
-func (s *PracticeModeService) StartTagPractice(studentID, tagID, count int, credentialID ...*int) (*PracticeStartResultDTO, error) {
+func (s *PracticeModeService) StartTagPractice(studentID, tagID, count int, credentialID *int) (*PracticeStartResultDTO, error) {
 	if tagID <= 0 {
 		return nil, errors.New("请指定题库标签")
 	}
@@ -128,7 +128,7 @@ func (s *PracticeModeService) StartTagPractice(studentID, tagID, count int, cred
 	if tag.IsSourceTag {
 		return nil, errors.New("该标签不支持专项练习")
 	}
-	all, err := sampleQuestionsByOpts(s.db, sampleQuestionsOpts{tagID: tagID, cred: credOf(credentialID)})
+	all, err := sampleQuestionsByOpts(s.db, sampleQuestionsOpts{tagID: tagID, cred: credentialID})
 	if err != nil {
 		return nil, errors.New("查询题目失败")
 	}
@@ -171,8 +171,8 @@ func (s *PracticeModeService) StartTagPractice(studentID, tagID, count int, cred
 // StartSequential 顺序练习：加载全部 published 题目（按 id 升序），
 // 复用已有 practice_progress 游标续练；一次性返回全部题目，前端从游标处开始作答。
 // 装配形态（#385）：抽题走池单点（sampleQuestionsByOpts），续练协商走 ResumeSet 单点。
-func (s *PracticeModeService) StartSequential(studentID int, credentialID ...*int) (*PracticeStartResultDTO, error) {
-	questions, err := sampleQuestionsByOpts(s.db, sampleQuestionsOpts{cred: credOf(credentialID)})
+func (s *PracticeModeService) StartSequential(studentID int, credentialID *int) (*PracticeStartResultDTO, error) {
+	questions, err := sampleQuestionsByOpts(s.db, sampleQuestionsOpts{cred: credentialID})
 	if err != nil {
 		return nil, errors.New("查询题目失败")
 	}
@@ -184,7 +184,7 @@ func (s *PracticeModeService) StartSequential(studentID int, credentialID ...*in
 		ids[i] = q.ID
 	}
 
-	ids, startIdx, err := ResumeSet(s.db, studentID, credOf(credentialID), ResumeSetSpec{
+	ids, startIdx, err := ResumeSet(s.db, studentID, credentialID, ResumeSetSpec{
 		Mode:                "sequential",
 		FreshIDs:            ids,
 		KeepCursorOnRefresh: true,
@@ -213,21 +213,21 @@ func (s *PracticeModeService) StartSequential(studentID int, credentialID ...*in
 // 守卫口径（session_progress.go）：practice_progress 无 status 字段（schema 冻结
 // ADR-0010），经 (student_id, practice_mode) 定位即天然归属本人，且无终端状态，
 // 恒视为在途——故无需在途校验。
-func (s *PracticeModeService) SaveProgress(studentID, index int, practiceMode string, total int, answersState json.RawMessage, credentialID ...*int) error {
+func (s *PracticeModeService) SaveProgress(studentID, index int, practiceMode string, total int, answersState json.RawMessage, credentialID *int) error {
 	if practiceMode == "" {
 		practiceMode = "sequential"
 	}
 	// #414：顺序练习进度按证件分桶（其余模式保持 NULL 兼容）
 	var cred *int
-	if practiceMode == "sequential" && len(credentialID) > 0 {
-		cred = credentialID[0]
+	if practiceMode == "sequential" {
+		cred = credentialID
 	}
 	return SaveSet(s.db, studentID, practiceMode, cred, nil, index, total, initAnswersState(answersState))
 }
 
 // GetProgress 查询任意模式的练习进度（卡片展示/断点续练用）。
 // 使用 Limit(1).Find() 替代 First()，避免首次进入时 GORM logger 误报 record not found
-func (s *PracticeModeService) GetProgress(studentID int, practiceMode string, credentialID ...*int) *ProgressResultDTO {
+func (s *PracticeModeService) GetProgress(studentID int, practiceMode string, credentialID *int) *ProgressResultDTO {
 	if practiceMode == "" {
 		practiceMode = "sequential"
 	}
@@ -236,12 +236,14 @@ func (s *PracticeModeService) GetProgress(studentID int, practiceMode string, cr
 	poolTotal := int(s.poolTotalForMode(practiceMode, credentialID))
 	// #414：顺序练习按证件分区定位进度（其余模式 NULL 兼容）
 	var cred *int
-	if practiceMode == "sequential" && len(credentialID) > 0 {
-		cred = credentialID[0]
+	if practiceMode == "sequential" {
+		cred = credentialID
 	}
 	var prog model.PracticeProgress
-	clause, args := credentialClause(cred)
-	if err := s.db.Where("student_id = ? AND practice_mode = ? AND "+clause, append([]any{studentID, practiceMode}, args...)...).Limit(1).Find(&prog).Error; err != nil {
+	// ADR-0056 §2：进度是 NULL 桶分区——nil 只取「未选定证件」那一桶（不是看全部）。
+	q := PartitionBucket(s.db.Model(&model.PracticeProgress{}), "credential_id", cred).
+		Where("student_id = ? AND practice_mode = ?", studentID, practiceMode)
+	if err := q.Limit(1).Find(&prog).Error; err != nil {
 		return &ProgressResultDTO{PoolTotal: poolTotal}
 	}
 	if prog.ID == 0 {
@@ -288,8 +290,8 @@ func (s *PracticeModeService) GetProgress(studentID int, practiceMode string, cr
 
 // poolTotalForMode 按模式取池计数（#413）：sequential → 证件分区池；tag:<id> → 标签 + 证件；
 // 其余模式（paper 等）返回 0——池口径只对顺序/标签练习有意义。
-func (s *PracticeModeService) poolTotalForMode(mode string, credentialID []*int) int64 {
-	o := sampleQuestionsOpts{cred: credOf(credentialID)}
+func (s *PracticeModeService) poolTotalForMode(mode string, credentialID *int) int64 {
+	o := sampleQuestionsOpts{cred: credentialID}
 	if pm, ok := ParsePracticeMode(mode); ok {
 		if tagID, ok := pmTagID(pm); ok {
 			o.tagID = tagID
@@ -315,9 +317,9 @@ func pmTagID(pm PracticeMode) (int, bool) {
 }
 
 // GetSequentialProgress 查询顺序练习进度（卡片展示用，向后兼容）。
-// #413：credentialID 可变参透传——进度返回体附带实时池总数 pool_total。
-func (s *PracticeModeService) GetSequentialProgress(studentID int, credentialID ...*int) *ProgressResultDTO {
-	return s.GetProgress(studentID, "sequential", credentialID...)
+// #413：credentialID 透传——进度返回体附带实时池总数 pool_total。
+func (s *PracticeModeService) GetSequentialProgress(studentID int, credentialID *int) *ProgressResultDTO {
+	return s.GetProgress(studentID, "sequential", credentialID)
 }
 
 // SubmitAnswer 提交答案并判定。判分经 grading_engine.gradeOne 单题入口（错题入库/分值表经 flow 注入）。
@@ -422,11 +424,8 @@ func (s *PracticeModeService) GetPracticeStats(studentID int, credentialID *int)
 	tomorrow := todayStart.AddDate(0, 0, 1)
 
 	base := func() *gorm.DB {
-		q := s.db.Model(&model.QuestionPracticeRecord{}).Where("question_practice_record.student_id = ?", studentID)
-		if credentialID != nil {
-			q = q.Where("question_practice_record.credential_id = ?", *credentialID)
-		}
-		return q
+		return RecordPartitionOf(s.db.Model(&model.QuestionPracticeRecord{}), "question_practice_record.credential_id", credentialID).
+			Where("question_practice_record.student_id = ?", studentID)
 	}
 
 	var totalCount int64
@@ -461,11 +460,8 @@ func (s *PracticeModeService) GetPracticeStats(studentID int, credentialID *int)
 // 本端点的消费者（移动端「数据报告」页）把总览与 by_type 明细渲染在同一页 —— 口径不一致就是同页自相矛盾。
 func (s *PracticeModeService) GetStats(studentID int, credentialID *int) *PracticeStatsDTO {
 	base := func() *gorm.DB {
-		q := s.db.Model(&model.QuestionPracticeRecord{}).Where("question_practice_record.student_id = ?", studentID)
-		if credentialID != nil {
-			q = q.Where("question_practice_record.credential_id = ?", *credentialID)
-		}
-		return q
+		return RecordPartitionOf(s.db.Model(&model.QuestionPracticeRecord{}), "question_practice_record.credential_id", credentialID).
+			Where("question_practice_record.student_id = ?", studentID)
 	}
 	var total, correct int64
 	base().Count(&total)
@@ -543,24 +539,27 @@ func questionStats(db *gorm.DB, questionID int, qType string) *questionStatResul
 // credentialID 非空时按**记录上的分区列**过滤（写入时冻结，ADR-0051）：练习历史是学习内容读面，
 // 与 /practice-stats、/stats 同口径；nil = 不分区、看全部（与题库池 / 错题本的既有 nil 语义一致）。
 // 认下的代价：切到「没练过的证件」会看到空历史（空态而非数据丢失）。
-func (s *PracticeModeService) GetHistory(studentID int, credentialID *int, page, pageSize int, qType, startDate, endDate string) *HistoryResultDTO {
-	records, total, page, pageSize := paging.Query[model.QuestionPracticeRecord](s.db, page, pageSize, 20, "created_at DESC", func(q *gorm.DB) *gorm.DB {
+func (s *PracticeModeService) GetHistory(studentID int, credentialID *int, page, pageSize int, qType, startDate, endDate string) (*HistoryResultDTO, error) {
+	records, total, page, pageSize, err := paging.Query[model.QuestionPracticeRecord](s.db, page, pageSize, 20, "question_practice_record.created_at DESC", func(q *gorm.DB) *gorm.DB {
 		q = q.Where("student_id = ?", studentID)
-		if credentialID != nil {
-			// 必须带表名前缀：qType 分支会 JOIN question，而两张表都有 credential_id（否则歧义列报错）
-			q = q.Where("question_practice_record.credential_id = ?", *credentialID)
-		}
+		// 必须带表名前缀：qType 分支会 JOIN question，而两张表都有 credential_id（否则歧义列报错）
+		q = RecordPartitionOf(q, "question_practice_record.credential_id", credentialID)
 		if qType != "" {
 			q = q.Joins("JOIN question ON question.id = question_practice_record.question_id").Where("question.type = ?", qType)
 		}
+		// 日期过滤与排序同样必须带表名前缀：#1095 收编错误模式后，qType 分支的
+		// 「ambiguous column name: created_at」不再被吞（此前 total 正确、items 恒空 —— 静默 fail-open）。
 		if startDate != "" {
-			q = q.Where("created_at >= ?", startDate)
+			q = q.Where("question_practice_record.created_at >= ?", startDate)
 		}
 		if endDate != "" {
-			q = q.Where("created_at <= ?", endDate)
+			q = q.Where("question_practice_record.created_at <= ?", endDate)
 		}
 		return q
 	})
+	if err != nil {
+		return nil, err
+	}
 	questionIDs := make([]int, 0, len(records))
 	for i := range records {
 		questionIDs = append(questionIDs, records[i].QuestionID)
@@ -589,7 +588,7 @@ func (s *PracticeModeService) GetHistory(studentID int, credentialID *int, page,
 		Page:     page,
 		PageSize: pageSize,
 		Records:  items,
-	}
+	}, nil
 }
 
 // sameIDSet 判断两个 ID 列表是否为同一集合（忽略顺序）。

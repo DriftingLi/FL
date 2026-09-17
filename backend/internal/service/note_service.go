@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/pkg/paging"
 )
 
 // 笔记域（ADR-0055）：题目笔记与独立笔记共用一张 note 表，靠 question_id 是否为空区分。
@@ -186,6 +187,8 @@ func (s *NoteService) Delete(id, userID int) error {
 // standalone（未知值按 all 处理）。题目笔记一并带回题干摘要：一次 LEFT JOIN 覆盖整页
 // （禁 N+1），供列表卡片显示「这条笔记挂在哪道题上」与跳题。
 func (s *NoteService) List(userID int, scope string, page, pageSize int) (*NotePageDTO, error) {
+	// 页大小上限保留既有「超上限截断到上限」语义（与 ClampMax 的「超上限回退默认」不同），
+	// 先归一化再交给 paging（其钳制对已归一化的值成为空操作）。
 	if page <= 0 {
 		page = 1
 	}
@@ -205,10 +208,6 @@ func (s *NoteService) List(userID int, scope string, page, pageSize int) (*NoteP
 		}
 		return q
 	}
-	var total int64
-	if err := base().Count(&total).Error; err != nil {
-		return nil, err
-	}
 	type row struct {
 		ID              int
 		QuestionID      *int
@@ -216,13 +215,14 @@ func (s *NoteService) List(userID int, scope string, page, pageSize int) (*NoteP
 		UpdatedAt       time.Time
 		QuestionContent string
 	}
-	var rows []row
-	if err := base().
-		Select("note.id, note.question_id, note.content, note.updated_at, COALESCE(question.content, '') AS question_content").
-		Joins("LEFT JOIN question ON question.id = note.question_id").
-		Order("note.updated_at DESC, note.id DESC").
-		Offset((page - 1) * pageSize).Limit(pageSize).
-		Scan(&rows).Error; err != nil {
+	rows, total, page, pageSize, err := paging.QueryWithScan[row](s.db, page, pageSize, 20, 100,
+		"note.updated_at DESC, note.id DESC",
+		func(q *gorm.DB) *gorm.DB {
+			return base().
+				Select("note.id, note.question_id, note.content, note.updated_at, COALESCE(question.content, '') AS question_content").
+				Joins("LEFT JOIN question ON question.id = note.question_id")
+		})
+	if err != nil {
 		return nil, err
 	}
 	items := make([]NoteDTO, 0, len(rows))

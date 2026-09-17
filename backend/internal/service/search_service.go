@@ -26,6 +26,7 @@ import (
 	"gorm.io/gorm/clause"
 
 	"forklift-training/internal/model"
+	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
 )
 
@@ -230,7 +231,15 @@ func orderWithHitRank(titleHitSQL, secondary, like string) clause.OrderBy {
 	}}
 }
 
+// 搜索分页的钳制口径：默认页大小 20、上限 100，越界（<=0 或 >100）**回退默认值**（不截断到上限）。
+// 实现在 paging.ClampMax（装配单点的钳制面），本文件不再自留第二份（ADR-0056 §1）。
+const (
+	searchDefaultPageSize = 20
+	searchMaxPageSize     = 100
+)
+
 // searchParams 引擎骨架的入参面：分区声明之外的全部差异（关键词、命中模式串、分页、证件分区）。
+// page/pageSize 保存**原始入参**：钳制在 searchPartitionPage 里由 paging 单点完成。
 type searchParams struct {
 	keyword  string
 	like     string
@@ -239,14 +248,8 @@ type searchParams struct {
 	cred     *int
 }
 
-// newSearchParams 归一化分页（页码下界 1；页大小越界回退 20、上限 100）并构造 LIKE 模式串。
+// newSearchParams 构造 LIKE 模式串 + 原始分页参数（钳制见 searchPartitionPage）。
 func newSearchParams(keyword string, page, pageSize int, cred *int) searchParams {
-	if page < 1 {
-		page = 1
-	}
-	if pageSize < 1 || pageSize > 100 {
-		pageSize = 20
-	}
 	return searchParams{keyword: keyword, like: likePattern(keyword), page: page, pageSize: pageSize, cred: cred}
 }
 
@@ -267,19 +270,28 @@ func bind[R any](spec partitionSpec[R]) searchPartitionRunner {
 
 // searchPartitionPage 分区搜索引擎骨架（唯一实现）：count → 命中排序 → 分页 scan → DTO 装配。
 // 五个分区共用本函数；分区差异全部收敛在 partitionSpec 的槽位里（ADR-0050 决策 2）。
+//
+// 分页/错误模式收编到 paging.QueryWithScan（ADR-0056 §1 的装配单点；本处是最后一处手写 count/offset，
+// 由 #1095 的新错误模式暴露）。逐处核对过的语义等价：
+//   - 钳制：paging.ClampMax(page, pageSize, 20, 100)，与收编前 newSearchParams 的口径逐字一致
+//     （越界**回退默认值**，不截断到上限）；本函数收到的 page/pageSize 是原始入参，钳制后用于 offset/limit。
+//   - count 口径：build 里的 Select/Order 只作用于行查询——GORM 的 Count 用 count(*) 覆盖 SELECT 子句、
+//     并在无 GROUP BY 时删掉 ORDER BY，故 count SQL 仍是 `SELECT count(*) FROM … WHERE …`，
+//     与收编前「先 Count（只有 where/joins）再 Select+Order+分页」逐字同形。
+//   - 命中排序（标题命中优先）：LIKE 模式串**必须参数化**，所以 clause.OrderBy 走 build 而不是
+//     QueryWithScan 的 order 形参（后者是字符串，塞不下带 Vars 的 CASE 表达式）。
+//   - 响应里的 page/pages 不经过本函数：Search 仍按**原始**入参算 response.PageCount(total, pageSize)
+//     （越界页的响应字节零漂移；钳制只影响这一页取哪几行）。
 func searchPartitionPage[R any](s *SearchService, spec partitionSpec[R], p searchParams) ([]SearchItemDTO, int64, error) {
-	q := spec.match(s, p)
-	if spec.scope != nil {
-		q = spec.scope(s, q, p)
-	}
-	var total int64
-	if err := q.Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-	var rows []R
-	if err := q.Select(spec.selects).
-		Order(orderWithHitRank(spec.titleHit, spec.secondary, p.like)).
-		Offset((p.page - 1) * p.pageSize).Limit(p.pageSize).Find(&rows).Error; err != nil {
+	rows, total, _, _, err := paging.QueryWithScan[R](s.db, p.page, p.pageSize, searchDefaultPageSize, searchMaxPageSize, "",
+		func(_ *gorm.DB) *gorm.DB {
+			q := spec.match(s, p)
+			if spec.scope != nil {
+				q = spec.scope(s, q, p)
+			}
+			return q.Select(spec.selects).Order(orderWithHitRank(spec.titleHit, spec.secondary, p.like))
+		})
+	if err != nil {
 		return nil, 0, err
 	}
 	items := make([]SearchItemDTO, 0, len(rows))
@@ -291,12 +303,12 @@ func searchPartitionPage[R any](s *SearchService, spec partitionSpec[R], p searc
 }
 
 // searchItems 单类型分页搜索：分发 = 分区表查表（无 switch——加分区不会漏改分发分支）。
-func (s *SearchService) searchItems(searchType, keyword string, page, pageSize int, credentialID ...*int) ([]SearchItemDTO, int64, error) {
+func (s *SearchService) searchItems(searchType, keyword string, page, pageSize int, credentialID *int) ([]SearchItemDTO, int64, error) {
 	part, ok := searchPartitionByKey(searchType)
 	if !ok {
 		return nil, 0, fmt.Errorf("搜索类型仅支持 %s", strings.Join(searchPartitionKeys(), "/"))
 	}
-	return part.search(s, newSearchParams(keyword, page, pageSize, credOf(credentialID)))
+	return part.search(s, newSearchParams(keyword, page, pageSize, credentialID))
 }
 
 // containsFold 大小写不敏感的包含判定（按字符，不做 Unicode 折叠的长度假设）。
@@ -305,7 +317,7 @@ func containsFold(haystack, needle string) bool {
 }
 
 // Search 全局搜索。searchType 为空时返回各分区 top 5；否则该类型分页结果。
-func (s *SearchService) Search(keyword, searchType string, page, pageSize int, credentialID ...*int) (any, error) {
+func (s *SearchService) Search(keyword, searchType string, page, pageSize int, credentialID *int) (any, error) {
 	keyword = strings.TrimSpace(keyword)
 	if keyword == "" {
 		return nil, errors.New("关键词不能为空")
@@ -313,10 +325,7 @@ func (s *SearchService) Search(keyword, searchType string, page, pageSize int, c
 	if utf8.RuneCountInString(keyword) > maxSearchKeywordLen {
 		return nil, fmt.Errorf("关键词过长（最多 %d 个字符）", maxSearchKeywordLen)
 	}
-	var cred *int
-	if len(credentialID) > 0 {
-		cred = credentialID[0]
-	}
+	cred := credentialID
 	if searchType == "" {
 		// 聚合 = 遍历分区声明表逐区装配（top N + 总数）：响应形状零漂移，加分区只改声明表。
 		sections := make(map[string]SearchSectionDTO, len(searchPartitions))

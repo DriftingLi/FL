@@ -34,8 +34,6 @@ const (
 // 调用方可继续叠加题型/标签等读面差异。
 func QuestionPoolScope(q *gorm.DB, cred *int) *gorm.DB {
 	q = q.Where(QuestionPoolPublishedSQL).Where(QuestionPoolExcludeSourceTagsSQL)
-	if cred != nil {
-		q = q.Where(QuestionPoolCredentialColumn+" = ?", *cred)
-	}
-	return q
+	// 池的第三个元（证件分区）走归属分区具名谓词（ADR-0056 §2）：nil = 不分区、看全部。
+	return EntityOwnedBy(q, QuestionPoolCredentialColumn, cred)
 }

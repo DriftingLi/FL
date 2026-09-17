@@ -1021,8 +1021,13 @@ func (h *ForumHandler) MyReplies(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /forum/my-liked-topics [get]
 func (h *ForumHandler) MyLikedTopics(c *gin.Context) {
-	response.Success(c, h.svc.MyLikedTopics(middleware.CurrentUserID(c),
-		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 10)))
+	resp, err := h.svc.MyLikedTopics(middleware.CurrentUserID(c),
+		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 10))
+	if err != nil {
+		response.ServerError(c, err.Error())
+		return
+	}
+	response.Success(c, resp)
 }
 
 // MyObservedTopics 围观（#701：响应逐字沿用 my-topics 形态）
@@ -1038,8 +1043,13 @@ func (h *ForumHandler) MyLikedTopics(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /forum/my-observed [get]
 func (h *ForumHandler) MyObservedTopics(c *gin.Context) {
-	response.Success(c, h.svc.MyObservedTopics(middleware.CurrentUserID(c),
-		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 10)))
+	resp, err := h.svc.MyObservedTopics(middleware.CurrentUserID(c),
+		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 10))
+	if err != nil {
+		response.ServerError(c, err.Error())
+		return
+	}
+	response.Success(c, resp)
 }
 
 // MyViewHistory 浏览记录（#701：响应逐字沿用 my-topics 形态）
@@ -1055,8 +1065,13 @@ func (h *ForumHandler) MyObservedTopics(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /forum/my-view-history [get]
 func (h *ForumHandler) MyViewHistory(c *gin.Context) {
-	response.Success(c, h.svc.MyViewHistory(middleware.CurrentUserID(c),
-		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 10)))
+	resp, err := h.svc.MyViewHistory(middleware.CurrentUserID(c),
+		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 10))
+	if err != nil {
+		response.ServerError(c, err.Error())
+		return
+	}
+	response.Success(c, resp)
 }
 
 // ListReports 管理端举报列表 GET /api/admin/forum/reports?status=&page=&page_size=
