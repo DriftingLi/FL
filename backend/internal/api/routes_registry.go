@@ -96,7 +96,7 @@ var routeRegistrars = []routeRegistrar{
 			RegisterAuditRoutes(api, rd, deps.AuditSvc)
 			RegisterExportRoutes(api, rd, deps.ExportSvc)
 			RegisterTrainingCatalogRoutes(api, rd, deps.TrainingCatalogSvc)
-			RegisterQuestionInteractionRoutes(api, rd, deps.QuestionCommentSvc, deps.QuestionNoteSvc, deps.QuestionKnowledgeSvc)
+			RegisterQuestionInteractionRoutes(api, rd, deps.QuestionCommentSvc, deps.NoteSvc, deps.QuestionKnowledgeSvc)
 		},
 	},
 	{
@@ -107,6 +107,15 @@ var routeRegistrars = []routeRegistrar{
 			RegisterSearchRoutes(api, rd, deps.SearchSvc)
 			RegisterSearchAdminRoutes(api, rd, deps.SearchSvc)
 			RegisterMaterialRoutes(api, rd, deps.MaterialSvc)
+			// 学员笔记（ADR-0055）：题目笔记 + 独立笔记的汇集读面与独立笔记 CRUD
+			RegisterNoteRoutes(api, rd, deps.NoteSvc)
+		},
+	},
+	{
+		Domain: "帮助中心",
+		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
+			// #1079：学员端只读整页（faq.read）+ 管理端分类与条目 CRUD（faq.manage）
+			RegisterFaqRoutes(api, rd, deps.FaqSvc)
 		},
 	},
 	{

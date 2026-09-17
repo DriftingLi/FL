@@ -13,15 +13,15 @@ import (
 
 type QuestionInteractionHandler struct {
 	commentSvc   *service.QuestionCommentService
-	noteSvc      *service.QuestionNoteService
+	noteSvc      *service.NoteService
 	knowledgeSvc *service.QuestionKnowledgeService
 }
 
-func NewQuestionInteractionHandler(c *service.QuestionCommentService, n *service.QuestionNoteService, k *service.QuestionKnowledgeService) *QuestionInteractionHandler {
+func NewQuestionInteractionHandler(c *service.QuestionCommentService, n *service.NoteService, k *service.QuestionKnowledgeService) *QuestionInteractionHandler {
 	return &QuestionInteractionHandler{commentSvc: c, noteSvc: n, knowledgeSvc: k}
 }
 
-func RegisterQuestionInteractionRoutes(rg *gin.RouterGroup, rd RouterDeps, commentSvc *service.QuestionCommentService, noteSvc *service.QuestionNoteService, knowledgeSvc *service.QuestionKnowledgeService) {
+func RegisterQuestionInteractionRoutes(rg *gin.RouterGroup, rd RouterDeps, commentSvc *service.QuestionCommentService, noteSvc *service.NoteService, knowledgeSvc *service.QuestionKnowledgeService) {
 	h := NewQuestionInteractionHandler(commentSvc, noteSvc, knowledgeSvc)
 	g := rg.Group("/questions", middleware.JWTAuth(rd.Session))
 
@@ -114,12 +114,12 @@ func (h *QuestionInteractionHandler) DeleteComment(c *gin.Context) {
 // @Tags 学员端-题目互动
 // @Security BearerAuth
 // @Param question_id path int true "题目ID"
-// @Success 200 {object} response.R{data=model.QuestionNote} "success"
+// @Success 200 {object} response.R{data=model.Note} "success"
 // @Router /questions/{question_id}/note [get]
 func (h *QuestionInteractionHandler) GetNote(c *gin.Context) {
 	qid, _ := strconv.Atoi(c.Param("question_id"))
 	uid := middleware.CurrentUserID(c)
-	n, err := h.noteSvc.Get(qid, uid)
+	n, err := h.noteSvc.GetForQuestion(qid, uid)
 	if err != nil {
 		response.ServerError(c, err.Error())
 		return
@@ -139,7 +139,7 @@ func (h *QuestionInteractionHandler) GetNote(c *gin.Context) {
 // @Security BearerAuth
 // @Param question_id path int true "题目ID"
 // @Param body body object true "笔记" example({"content":"我的笔记"})
-// @Success 200 {object} response.R{data=model.QuestionNote} "success"
+// @Success 200 {object} response.R{data=model.Note} "success"
 // @Router /questions/{question_id}/note [put]
 func (h *QuestionInteractionHandler) UpsertNote(c *gin.Context) {
 	qid, _ := strconv.Atoi(c.Param("question_id"))
@@ -151,7 +151,7 @@ func (h *QuestionInteractionHandler) UpsertNote(c *gin.Context) {
 		response.BadRequest(c, "参数错误")
 		return
 	}
-	n, err := h.noteSvc.Upsert(qid, uid, req.Content)
+	n, err := h.noteSvc.UpsertForQuestion(qid, uid, req.Content)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -169,7 +169,7 @@ func (h *QuestionInteractionHandler) UpsertNote(c *gin.Context) {
 func (h *QuestionInteractionHandler) DeleteNote(c *gin.Context) {
 	qid, _ := strconv.Atoi(c.Param("question_id"))
 	uid := middleware.CurrentUserID(c)
-	if err := h.noteSvc.Delete(qid, uid); err != nil {
+	if err := h.noteSvc.DeleteForQuestion(qid, uid); err != nil {
 		response.ServerError(c, err.Error())
 		return
 	}

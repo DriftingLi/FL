@@ -29,6 +29,8 @@ export type AuthzCapability =
   | 'contribution.submit'
   | 'course.learn'
   | 'export.run'
+  | 'faq.manage'
+  | 'faq.read'
   | 'favorite.manage'
   | 'forum.moderate'
   | 'forum.participate'
@@ -61,9 +63,9 @@ export type AuthzCapability =
 
 /** 角色 → 能力集合（按能力键字典序，生成序稳定）。 */
 export const ROLE_CAPABILITIES: Readonly<Record<AuthzRole, readonly AuthzCapability[]>> = {
-  hrwai_user: ['ai_assistant.use', 'check_in.use', 'contact.respond', 'contribution.submit', 'course.learn', 'favorite.manage', 'forum.participate', 'job.apply', 'job.report', 'material.read', 'mock_exam.take', 'notification.use', 'points.use', 'question.practice', 'real_exam.take', 'resume.manage', 'resume.pdf', 'search.use', 'student.access', 'valuation.use'],
+  hrwai_user: ['ai_assistant.use', 'check_in.use', 'contact.respond', 'contribution.submit', 'course.learn', 'faq.read', 'favorite.manage', 'forum.participate', 'job.apply', 'job.report', 'material.read', 'mock_exam.take', 'notification.use', 'points.use', 'question.practice', 'real_exam.take', 'resume.manage', 'resume.pdf', 'search.use', 'student.access', 'valuation.use'],
   tutor: ['catalog.author', 'contribution.review', 'question.author', 'tutor.access'],
-  admin: ['admin.access', 'audit.read', 'catalog.author', 'catalog.manage', 'content.manage', 'contribution.review', 'export.run', 'forum.moderate', 'inspection.read', 'job_report.handle', 'points.admin', 'profile.review', 'question.author', 'question.review', 'recruiter.manage', 'valuation.config'],
+  admin: ['admin.access', 'audit.read', 'catalog.author', 'catalog.manage', 'content.manage', 'contribution.review', 'export.run', 'faq.manage', 'forum.moderate', 'inspection.read', 'job_report.handle', 'points.admin', 'profile.review', 'question.author', 'question.review', 'recruiter.manage', 'valuation.config'],
   recruiter: ['application.review', 'contact.request', 'job.manage', 'recruit.access', 'recruit.resume_pdf'],
 }
 

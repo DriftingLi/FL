@@ -2,7 +2,7 @@ import { unwrappedRequest } from './request'
 import type {
   QuestionCommentDTO,
   QuestionCommentPageResult,
-  QuestionNote,
+  Note,
   QuestionTag
 } from './generated/questionInteraction'
 
@@ -21,10 +21,10 @@ export const questionInteractionApi = {
    * 故这里显式加 `| null`，调用方必须判空。
    */
   getNote(questionId: number) {
-    return unwrappedRequest.get<QuestionNote | null>(`/questions/${questionId}/note`)
+    return unwrappedRequest.get<Note | null>(`/questions/${questionId}/note`)
   },
   upsertNote(questionId: number, data: { content: string }) {
-    return unwrappedRequest.put<QuestionNote>(`/questions/${questionId}/note`, data)
+    return unwrappedRequest.put<Note>(`/questions/${questionId}/note`, data)
   },
   deleteNote(questionId: number) {
     return unwrappedRequest.delete(`/questions/${questionId}/note`)

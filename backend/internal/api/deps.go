@@ -73,8 +73,9 @@ type Deps struct {
 	AIAssistantSvc       *service.AIAssistantService
 	DiagnosisProxySvc    *service.DiagnosisProxyService
 	QuestionCommentSvc   *service.QuestionCommentService
-	QuestionNoteSvc      *service.QuestionNoteService
+	NoteSvc              *service.NoteService
 	QuestionKnowledgeSvc *service.QuestionKnowledgeService
+	FaqSvc               *service.FaqService
 	PointsSvc            *service.PointsService
 	JobCardSvc           *service.JobCardService
 	ResumePDFRenderer    *service.ResumePDFRenderer
@@ -122,8 +123,6 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 	aiModelPort := service.NewMeteredAIModel(aiRouting, pointsSvc, logger)
 	aiSvc := service.NewAIService(db, aiModelPort, logger)
 	contentGenSvc := service.NewContentGenerateService(db, aiSvc, logger)
-	// 每日登录事实（ADR-0028）：登录签发与 refresh 续期都算今日到访；回调注入避免循环依赖。
-	authSvc.SetDailyLoginMarker(pointsSvc.MarkDailyLogin)
 	// 联系方式交换唯一实例：申请/授权状态机（EnsureApproved）与投递侧共用（ADR-0027 C5）
 	contactSvc := service.NewContactService(db, logger, notificationSvc, mailSender)
 
@@ -169,8 +168,9 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		AIAssistantSvc:       service.NewAIAssistantService(db, aiConfigSvc, fileSvc, cfg.SecretKey, logger, aiModelPort),
 		DiagnosisProxySvc:    service.NewDiagnosisProxyService(cfg.DiagnosisAssistantURL, logger),
 		QuestionCommentSvc:   service.NewQuestionCommentService(db, logger),
-		QuestionNoteSvc:      service.NewQuestionNoteService(db, logger),
+		NoteSvc:              service.NewNoteService(db, logger),
 		QuestionKnowledgeSvc: service.NewQuestionKnowledgeService(db),
+		FaqSvc:               service.NewFaqService(db, logger),
 		PointsSvc:            pointsSvc,
 		JobCardSvc:           service.NewJobCardService(db, fileSvc, logger),
 		ResumePDFRenderer:    service.NewResumePDFRenderer(),

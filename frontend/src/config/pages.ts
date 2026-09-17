@@ -32,6 +32,7 @@ import {
   PriceTag,
   Setting,
   Memo,
+  QuestionFilled,
   CircleCheck,
   FolderOpened,
   CollectionTag,
@@ -143,6 +144,10 @@ export const pages: PageDescriptor[] = [
   { name: routeNames.StudentSearch, path: '/training/search', component: () => import('@/pages/student/SearchPage.vue'), layout: 'training', workspace: 'training', capability: 'search.use', nav: { group: 'learning', label: '全局搜索', icon: Search, order: 4 } },
   { name: routeNames.StudentMaterials, path: '/training/materials', component: () => import('@/pages/student/Materials.vue'), layout: 'training', workspace: 'training', capability: 'material.read', nav: { group: 'learning', label: '学习资料', icon: Files, order: 3 } },
   { name: routeNames.StudentFavorites, path: '/training/favorites', component: () => import('@/pages/student/Favorites.vue'), layout: 'training', workspace: 'training', capability: 'favorite.manage', nav: { group: 'personal', label: '我的收藏', icon: Star, order: 3 } },
+  // 我的笔记（ADR-0055）：题目笔记的汇集读面 + 独立笔记 CRUD。
+  // 能力点用 student.access（学员工作区入口）而非新建能力位：笔记是纯用户私有数据，
+  // 后端 /api/notes 与既有 /api/questions/:id/note 一样只要求登录（口径见 ADR-0055）。
+  { name: routeNames.StudentNotebook, path: '/training/notes', component: () => import('@/pages/student/Notebook.vue'), layout: 'training', workspace: 'training', capability: 'student.access', nav: { group: 'personal', label: '我的笔记', icon: Memo, order: 4 } },
   { name: routeNames.ForumPage, path: '/training/forum', component: () => import('@/pages/student/ForumPage.vue'), layout: 'training', workspace: 'training', capability: 'forum.participate', nav: { group: 'interactive', label: '学员论坛', icon: ChatDotRound, activeRouteNames: [routeNames.ForumDetail], order: 1 } },
   { name: routeNames.ForumAsk, path: '/training/forum/ask', component: () => import('@/pages/student/ForumAskPage.vue'), layout: 'training', workspace: 'training', capability: 'forum.participate' },
   { name: routeNames.ForumDetail, path: '/training/forum/:topicId', component: () => import('@/pages/student/ForumDetail.vue'), layout: 'training', workspace: 'training', capability: 'forum.participate' },
@@ -161,12 +166,12 @@ export const pages: PageDescriptor[] = [
   { name: routeNames.CheckIn, path: '/training/check-in', component: () => import('@/pages/student/CheckInPage.vue'), layout: 'training', workspace: 'training', capability: 'check_in.use', nav: { group: 'personal', label: '每日打卡', icon: Calendar, order: 2 } },
   { name: routeNames.TaskCenter, path: '/training/task-center', component: () => import('@/pages/student/TaskCenter.vue'), layout: 'training', workspace: 'training', capability: 'points.use', nav: { group: 'personal', label: '任务中心', icon: Trophy, order: 1 } },
   { name: routeNames.PointsLedger, path: '/training/task-center/points', component: () => import('@/pages/student/PointsLedger.vue'), layout: 'training', workspace: 'training', capability: 'points.use' },
-  { name: routeNames.StudentProfile, path: '/training/profile', component: () => import('@/pages/student/Profile.vue'), layout: 'training', workspace: 'training', capability: 'student.access', nav: { group: 'personal', label: '个人资料', icon: User, order: 4 } },
-  { name: routeNames.StudentResume, path: '/training/resume', component: () => import('@/pages/student/ResumePage.vue'), layout: 'training', workspace: 'training', capability: 'resume.manage', nav: { group: 'personal', label: '我的简历', icon: Document, order: 5 } },
+  { name: routeNames.StudentProfile, path: '/training/profile', component: () => import('@/pages/student/Profile.vue'), layout: 'training', workspace: 'training', capability: 'student.access', nav: { group: 'personal', label: '个人资料', icon: User, order: 5 } },
+  { name: routeNames.StudentResume, path: '/training/resume', component: () => import('@/pages/student/ResumePage.vue'), layout: 'training', workspace: 'training', capability: 'resume.manage', nav: { group: 'personal', label: '我的简历', icon: Document, order: 6 } },
   { name: routeNames.StudentResumeEdit, path: '/training/resume/edit', component: () => import('@/pages/student/ResumeEdit.vue'), layout: 'training', workspace: 'training', capability: 'resume.manage' },
-  { name: routeNames.JobPlaza, path: '/training/jobs', component: () => import('@/pages/student/JobPlaza.vue'), layout: 'training', workspace: 'training', capability: 'job.apply', nav: { group: 'personal', label: '职位广场', icon: OfficeBuilding, activeRouteNames: [routeNames.JobDetail], order: 6 } },
+  { name: routeNames.JobPlaza, path: '/training/jobs', component: () => import('@/pages/student/JobPlaza.vue'), layout: 'training', workspace: 'training', capability: 'job.apply', nav: { group: 'personal', label: '职位广场', icon: OfficeBuilding, activeRouteNames: [routeNames.JobDetail], order: 7 } },
   { name: routeNames.JobDetail, path: '/training/jobs/:id', component: () => import('@/pages/student/JobDetail.vue'), layout: 'training', workspace: 'training', capability: 'job.apply' },
-  { name: routeNames.MyApplications, path: '/training/applications', component: () => import('@/pages/student/MyApplications.vue'), layout: 'training', workspace: 'training', capability: 'job.apply', nav: { group: 'personal', label: '我的投递', icon: Document, order: 7 } },
+  { name: routeNames.MyApplications, path: '/training/applications', component: () => import('@/pages/student/MyApplications.vue'), layout: 'training', workspace: 'training', capability: 'job.apply', nav: { group: 'personal', label: '我的投递', icon: Document, order: 8 } },
   { name: routeNames.CredentialOnboarding, path: '/training/onboarding/credential', component: () => import('@/pages/onboarding/CredentialOnboarding.vue'), layout: 'training', workspace: 'training', capability: 'student.access' },
 
   // ---------- 导师工作区（TutorLayout）----------
@@ -191,6 +196,8 @@ export const pages: PageDescriptor[] = [
 
   // ---------- AI 助手（顶层，可选登录；归属 training 工作区）----------
   { name: routeNames.AIAssistant, path: '/ai-assistant', component: () => import('@/pages/ai-assistant/AIAssistantPage.vue'), workspace: 'training', requiresAuth: false, capability: 'ai_assistant.use', nav: { group: 'interactive', label: 'AI助手', icon: MagicStick, activeRouteNames: [routeNames.AIAssistantFeature], order: 2 } },
+  // 帮助中心（#1079）：分类 + 手风琴 Q&A，搜索走端上过滤（不新增搜索接口、不进全局搜索域）
+  { name: routeNames.StudentHelpCenter, path: '/training/help', component: () => import('@/pages/student/HelpCenter.vue'), layout: 'training', workspace: 'training', capability: 'faq.read', nav: { group: 'interactive', label: '帮助中心', icon: QuestionFilled, order: 3 } },
   { name: routeNames.AIAssistantFeature, path: '/ai-assistant/:featureKey(' + AI_FEATURE_SLUG_PATTERN + ')', component: () => import('@/pages/ai-assistant/FeatureChatPage.vue'), workspace: 'training', requiresAuth: false, capability: 'ai_assistant.use' },
 
   // ---------- 管理端（AdminLayout）----------
@@ -213,6 +220,7 @@ export const pages: PageDescriptor[] = [
   { name: routeNames.ContentGenerate, path: '/admin/content-generate', component: () => import('@/pages/admin/ContentGenerate.vue'), layout: 'manage', workspace: 'manage', capability: 'content.manage', nav: { group: 'system', label: '内容生成', icon: MagicStick, order: 5 } },
   { name: routeNames.AdminFeaturedContentList, path: '/admin/featured-content', component: () => import('@/pages/admin/FeaturedContentList.vue'), layout: 'manage', workspace: 'manage', capability: 'content.manage', nav: { group: 'system', label: '内容精选', icon: Document, order: 6 } },
   { name: routeNames.AdminFeaturedContentEdit, path: '/admin/featured-content/edit/:id?', component: () => import('@/pages/admin/FeaturedContentEdit.vue'), layout: 'manage', workspace: 'manage', capability: 'content.manage' },
+  { name: routeNames.AdminFaqManage, path: '/admin/faq', component: () => import('@/pages/admin/FaqManage.vue'), layout: 'manage', workspace: 'manage', capability: 'faq.manage', nav: { group: 'system', label: '帮助中心管理', icon: QuestionFilled, order: 7 } },
 
   // ---------- 招聘端（RecruitLayout）----------
   { name: routeNames.RecruitDashboard, path: '/recruit', component: () => import('@/pages/recruit/Dashboard.vue'), layout: 'recruit', workspace: 'recruit', capability: 'recruit.access', nav: { group: 'recruit', label: '首页', icon: HomeFilled, exact: true, order: 1 } },

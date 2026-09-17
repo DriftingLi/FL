@@ -137,6 +137,47 @@ func TestGetWrongQuestions_FavoritedField(t *testing.T) {
 	}
 }
 
+// TestGetWrongQuestions_LastUserAnswer（#1077）：错题卡片要展示「我上次选的答案」，
+// 事实源是**最近一条** question_practice_record（不是最早、不是任意一条），且只认本人记录。
+func TestGetWrongQuestions_LastUserAnswer(t *testing.T) {
+	svc, db := newWrongQuestionSvc(t)
+	q1 := testutil.SeedQuestion(t, db, "single_choice", "错题1", "A")
+	q2 := testutil.SeedQuestion(t, db, "single_choice", "错题2", "B")
+	q3 := testutil.SeedQuestion(t, db, "multi_choice", "从未作答过的错题", "C")
+	seedWrongQuestion(t, db, 1, q1.ID, 3)
+	seedWrongQuestion(t, db, 1, q2.ID, 2)
+	seedWrongQuestion(t, db, 1, q3.ID, 1)
+
+	now := testutil.Now()
+	recs := []model.QuestionPracticeRecord{
+		// q1 先答 B（早）、后答 D（晚）——应取 D
+		{StudentID: 1, QuestionID: q1.ID, IsCorrect: false, PracticeType: "free", UserAnswer: "B", CreatedAt: now.Add(-2 * time.Hour)},
+		{StudentID: 1, QuestionID: q1.ID, IsCorrect: false, PracticeType: "redo", UserAnswer: "D", CreatedAt: now},
+		// q2 只有**别人**的记录——不得串入
+		{StudentID: 2, QuestionID: q2.ID, IsCorrect: false, PracticeType: "free", UserAnswer: "别人选的", CreatedAt: now},
+	}
+	for i := range recs {
+		if err := db.Create(&recs[i]).Error; err != nil {
+			t.Fatalf("插入练习记录失败: %v", err)
+		}
+	}
+
+	result := svc.GetWrongQuestions(1, 1, 20, "", nil, false, "", nil)
+	byQID := make(map[int]WrongQuestionDTO, len(result.Items))
+	for _, item := range result.Items {
+		byQID[item.QuestionID] = item
+	}
+	if got := byQID[q1.ID].LastUserAnswer; got != "D" {
+		t.Fatalf("应取最近一条作答（D），got %q", got)
+	}
+	if got := byQID[q2.ID].LastUserAnswer; got != "" {
+		t.Fatalf("别的学员的作答不得串入，got %q", got)
+	}
+	if got := byQID[q3.ID].LastUserAnswer; got != "" {
+		t.Fatalf("从未作答过应为空串，got %q", got)
+	}
+}
+
 // credentialID 过滤（#387）：错题按题目所属证件分区，与课程/题库同口径；
 // qType 与 credentialID 同时传入时共用一次 JOIN question，不产生重复 JOIN。
 func TestGetWrongQuestions_CredentialFilter(t *testing.T) {

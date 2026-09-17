@@ -56,7 +56,7 @@ var ModelBlocks = []ModelBlock{
 			&QuestionTag{},
 			&QuestionTagRelation{},
 			&QuestionComment{},
-			&QuestionNote{},
+			&Note{},
 			&QuestionPracticeRecord{},
 			&PracticeProgress{},
 			&WrongQuestion{},
@@ -110,7 +110,6 @@ var ModelBlocks = []ModelBlock{
 			&PointsTaskConfig{},
 			&PointsTaskClaim{},
 			&PointsUserProgress{},
-			&UserDailyLogin{},
 			&PointsShopItem{},
 			&UserEntitlement{},
 			&PointsEntryIdem{},
@@ -133,6 +132,13 @@ var ModelBlocks = []ModelBlock{
 			&UserContributionFile{},
 			&ContributionDownload{},
 			&ContributionReport{},
+		},
+	},
+	{
+		Name: "帮助中心",
+		Models: []any{
+			&FaqCategory{}, // 先建分类：faq.category_id 外键指向它
+			&Faq{},
 		},
 	},
 }

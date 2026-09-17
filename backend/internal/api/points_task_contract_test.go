@@ -1,10 +1,11 @@
-// ADR-0028 契约测试：任务中心行为判定收紧与资料任务进度真实化。
+// 任务中心契约测试：行为判定收紧、资料任务进度真实化、分组收敛（ADR-0054）。
 //
 // 覆盖不变式（与 spec 对应）：
 //   - growth_reply 只统计回复「他人主题」（自问自答不可计分，排除自帖回复）；
-//   - 未达成行为时 Claim 返回 400（ErrTaskNotDone 哨兵），todo 任务不可空领；
+//   - 有行为前置的任务未达成时 Claim 返回 400（ErrTaskNotDone 哨兵），todo 任务不可空领；
 //   - newbie_profile_* 返回 total=2 且 progress 为已满足子项数（进度条真实化）；
-//   - daily_login 需登录落表（MarkDailyLogin）后才能领取。
+//   - daily_login 无行为前置（ADR-0054）：每日进任务中心即可领；
+//   - 任务清单不再出现已退役的 growth 分组，成长三项已改判 daily。
 //
 // Main seam：HTTP contract（router -> httptest -> 断言状态码 + 任务形状）。
 package api
@@ -30,6 +31,7 @@ type tasksTaskSlice struct {
 	Data struct {
 		Tasks []struct {
 			Code     string `json:"code"`
+			Group    string `json:"group"`
 			Status   string `json:"status"`
 			Progress int    `json:"progress"`
 			Total    int    `json:"total"`
@@ -88,6 +90,15 @@ func TestPointsTaskBehaviorContract(t *testing.T) {
 		}
 		t.Fatalf("任务 %s 不存在", code)
 		return "", 0, 0
+	}
+	groupOf := func(code string) string {
+		for _, tk := range fetchTasks().Data.Tasks {
+			if tk.Code == code {
+				return tk.Group
+			}
+		}
+		t.Fatalf("任务 %s 不存在", code)
+		return ""
 	}
 
 	// ===== 1. growth_reply 只统计他人主题 =====
@@ -148,20 +159,25 @@ func TestPointsTaskBehaviorContract(t *testing.T) {
 		t.Fatalf("资料齐 basic 应 claimable/2/2, got %s/%d/%d", st, pr, tt)
 	}
 
-	// ===== 4. daily_login 登录落表后 claimable；未落表空领 400 =====
-	if st, _, _ := statusOf("daily_login"); st != "todo" {
-		t.Fatalf("未登录 daily_login 应 todo, got %s", st)
-	}
-	rec = doWithToken(t, r, token, http.MethodPost, "/api/points/tasks/daily_login/claim", nil)
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("未登录空领 daily_login 应 400, got %d", rec.Code)
-	}
-	deps.PointsSvc.MarkDailyLogin(student.ID)
+	// ===== 4. daily_login 无行为前置（ADR-0054）：初始即可领 =====
+	// 「空领不可」的闸门不再由行为判定承担，而由配置额度（daily_limit）承担——见下方重复领取。
 	if st, pr, tt := statusOf("daily_login"); st != "claimable" || pr != 1 || tt != 1 {
-		t.Fatalf("登录后 daily_login 应 claimable/1/1, got %s/%d/%d", st, pr, tt)
+		t.Fatalf("无行为前置的 daily_login 应 claimable/1/1, got %s/%d/%d", st, pr, tt)
 	}
 	rec = doWithToken(t, r, token, http.MethodPost, "/api/points/tasks/daily_login/claim", nil)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("登录后领取 daily_login 应 200, got %d %s", rec.Code, rec.Body.String())
+		t.Fatalf("领取 daily_login 应 200, got %d %s", rec.Code, rec.Body.String())
+	}
+
+	// ===== 5. 分组收敛（ADR-0054）：growth 退役，成长三项改判 daily =====
+	for _, tk := range fetchTasks().Data.Tasks {
+		if tk.Group == "growth" {
+			t.Fatalf("任务 %s 仍带已退役的 growth 分组", tk.Code)
+		}
+	}
+	for _, code := range []string{"growth_post", "growth_reply", "growth_mock"} {
+		if g := groupOf(code); g != "daily" {
+			t.Fatalf("%s 应已改判为 daily, got %q", code, g)
+		}
 	}
 }

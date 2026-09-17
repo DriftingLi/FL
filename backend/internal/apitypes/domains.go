@@ -278,7 +278,7 @@ var Domains = []Domain{
 		Roots: []string{
 			"service.QuestionCommentPageResult",
 			"service.QuestionCommentDTO",
-			"model.QuestionNote",
+			"model.Note",
 			"model.QuestionTag",
 		},
 		Endpoints: []Endpoint{
@@ -844,6 +844,46 @@ var Domains = []Domain{
 			{Method: "DELETE", Path: "/valuation/admin/engine-types/{id}"},
 			{Method: "DELETE", Path: "/valuation/admin/condition-ratings/{id}"},
 			{Method: "DELETE", Path: "/valuation/admin/region-coefficients/{id}"},
+		},
+	},
+	{
+		Name:  "note",
+		Title: "学员笔记（/api/notes/*：列表 / 新建独立笔记 / 改 / 删）",
+		Roots: []string{
+			"service.NoteDTO",
+			"service.NotePageDTO",
+		},
+		Endpoints: []Endpoint{
+			{Method: "GET", Path: "/notes"},
+			{Method: "POST", Path: "/notes"},
+			{Method: "PUT", Path: "/notes/{id}"},
+			// 删除无返回载荷（response.R，无 data）
+			{Method: "DELETE", Path: "/notes/{id}", NoData: true},
+		},
+	},
+	{
+		Name:  "faq",
+		Title: "帮助中心（/api/faq 学员端只读；/api/admin/faq 管理端分类与条目 CRUD）",
+		Roots: []string{
+			"service.FaqResult",
+			"service.FaqCategoryDTO",
+			"service.FaqEntryDTO",
+			"service.AdminFaqCategoriesResult",
+			"service.AdminFaqCategoryDTO",
+			"service.AdminFaqEntriesResult",
+			"service.AdminFaqEntryDTO",
+		},
+		Endpoints: []Endpoint{
+			{Method: "GET", Path: "/faq"},
+			{Method: "GET", Path: "/admin/faq/categories"},
+			{Method: "POST", Path: "/admin/faq/categories"},
+			{Method: "PUT", Path: "/admin/faq/categories/{id}"},
+			// 删除无返回载荷（response.R，无 data）
+			{Method: "DELETE", Path: "/admin/faq/categories/{id}", NoData: true},
+			{Method: "GET", Path: "/admin/faq/entries"},
+			{Method: "POST", Path: "/admin/faq/entries"},
+			{Method: "PUT", Path: "/admin/faq/entries/{id}"},
+			{Method: "DELETE", Path: "/admin/faq/entries/{id}", NoData: true},
 		},
 	},
 }

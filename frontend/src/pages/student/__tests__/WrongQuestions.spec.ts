@@ -42,7 +42,10 @@ const wrongItem = {
   question_id: 101,
   wrong_count: 2,
   is_redone: false,
-  question: { type: 'single_choice', content: '测试题目', options: { A: '选项A', B: '选项B' } }
+  // 最近一次作答的答案与最近错误时间（#1077 后端新增/既有字段，客户端此前未渲染）
+  last_user_answer: 'B',
+  last_wrong_at: '2026-09-17T02:00:00Z',
+  question: { type: 'single_choice', content: '测试题目', options: { A: '选项A', B: '选项B' }, answer: 'A' }
 }
 
 beforeEach(() => {
@@ -205,5 +208,87 @@ describe('WrongQuestions 错题重做（会话单题变体 #617）', () => {
     await flushPromises()
 
     expect(favoriteApi.add).toHaveBeenCalledWith({ target_type: 'question', target_id: 101 })
+  })
+})
+
+// 卡片展示补齐（#1077）：题干图 / 最近错误时间 / 折叠态「答案与解析」/ 我上次选的答案。
+// 断言只落在渲染出来的可见文本与 img 属性上（外部行为），不碰内部 ref。
+describe('WrongQuestions 卡片展示补齐（#1077）', () => {
+  function itemWith(over: Record<string, unknown> = {}) {
+    return {
+      ...wrongItem,
+      last_user_answer: 'B',
+      question: {
+        type: 'fault_image',
+        content: '看图判断故障点',
+        options: { A: '选项A', B: '选项B' },
+        image_url: 'https://cdn.example.com/q/101.png',
+        answer: 'A',
+        explanation: '液压油路堵塞'
+      },
+      ...over
+    }
+  }
+
+  function mockList(item: Record<string, unknown>) {
+    vi.mocked(wrongQuestionApi.getWrongQuestions).mockResolvedValue({ items: [item], total: 1 } as never)
+  }
+
+  it('渲染题干图片（故障识图题此前在列表里只见文字）', async () => {
+    mockList(itemWith())
+    const w = mountPage()
+    await flushPromises()
+    const img = w.find('img')
+    expect(img.exists()).toBe(true)
+    expect(img.attributes('src')).toBe('https://cdn.example.com/q/101.png')
+  })
+
+  it('无图题目不渲染 img（零占位，不塌陷）', async () => {
+    mockList(itemWith({ question: { type: 'single_choice', content: '纯文字题', options: { A: '甲' }, answer: 'A' } }))
+    const w = mountPage()
+    await flushPromises()
+    expect(w.find('img').exists()).toBe(false)
+  })
+
+  it('渲染最近错误时间（last_wrong_at，此前只有错误次数没有时间）', async () => {
+    mockList(itemWith())
+    const w = mountPage()
+    await flushPromises()
+    // 断到日粒度：跨时区（CI UTC / 本机 CST）都落在 2026-09-17
+    expect(w.text()).toContain('最近 2026-09-17')
+  })
+
+  it('折叠态「查看答案与解析」：默认收起 → 展开显示我的答案/正确答案/解析 → 再点收起', async () => {
+    mockList(itemWith())
+    const w = mountPage()
+    await flushPromises()
+    expect(w.text()).not.toContain('液压油路堵塞')
+
+    const open = w.findAll('button').find(b => b.text().includes('查看答案与解析'))
+    expect(open).toBeTruthy()
+    await open!.trigger('click')
+    expect(w.text()).toContain('我上次选的答案：B')
+    expect(w.text()).toContain('正确答案：A')
+    expect(w.text()).toContain('液压油路堵塞')
+
+    const close = w.findAll('button').find(b => b.text().includes('收起答案'))
+    expect(close).toBeTruthy()
+    await close!.trigger('click')
+    expect(w.text()).not.toContain('液压油路堵塞')
+  })
+
+  it('无作答记录 / 无解析时走空态文案，不渲染空白', async () => {
+    mockList(
+      itemWith({
+        last_user_answer: '',
+        question: { type: 'single_choice', content: '从未作答', options: { A: '甲' }, answer: 'A' }
+      })
+    )
+    const w = mountPage()
+    await flushPromises()
+    const open = w.findAll('button').find(b => b.text().includes('查看答案与解析'))
+    await open!.trigger('click')
+    expect(w.text()).toContain('（无作答记录）')
+    expect(w.text()).toContain('暂无解析')
   })
 })
