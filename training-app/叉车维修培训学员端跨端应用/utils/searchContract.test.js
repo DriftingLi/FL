@@ -221,8 +221,9 @@ describe('M6 证件分区：公开路由必须显式传 credential_id', () => {
     expect(SEARCH_PAGE).toContain('getCurrentCredentialApi');
     expect(SEARCH_PAGE).toContain('function ensureCredential() : Promise<void>');
     expect(SEARCH_PAGE).toContain('await ensureCredential()');
-    expect(SEARCH_PAGE).toContain('searchAllApi(kw, credentialId.value)');
-    expect(SEARCH_PAGE).toContain('searchByTypeApi(kw, tab.value, requestPage, pageSize.value, credentialId.value)');
+    // 页面级传参点用自解释名 browseCredentialId（#1107 对齐根仓 #1106 的意图拆名）
+    expect(SEARCH_PAGE).toContain('searchAllApi(kw, browseCredentialId.value)');
+    expect(SEARCH_PAGE).toContain('searchByTypeApi(kw, tab.value, requestPage, pageSize.value, browseCredentialId.value)');
   });
 
   it('onShow 重新解析证件（跟随证件切换，不吃上一个证件的分区结果）', () => {

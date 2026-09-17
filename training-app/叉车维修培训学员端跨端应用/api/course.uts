@@ -340,12 +340,24 @@ function getMockLevels() : LevelItem[] {
 
 /**
  * 课程列表
+ *
+ * ## 证件分区为什么必须显式传（#1107）
+ *
+ * `/api/courses` 挂在 `courses.go` 自己的 group 上、该 group 的 `CredentialScoped` 在**公开访问**的
+ * 课程 group 上（`backend/internal/api/courses.go:31`、公开路由 `:34`），而 `CredentialScoped` 的兜底
+ * 分支要求 `roleOf(c) == student`（`backend/internal/middleware/credential_scope.go:42`）
+ * —— 公开面拿不到角色 ⇒ **兜底永不生效**，不传 `credential_id` 就是「全证件不分区」。
+ * 根仓已把这条例外登记进 ADR-0056 §2（并给这两类例外决策落点；Web 端在 `api/client.ts` 的注释与
+ * `api/__tests__/credentialScopeContract.spec.ts` 的冻结清单里登记，见 #1106）。移动端口径表见
+ * `docs/agents/credential-scope.md`，守护见 `utils/credentialScopeContract.test.js`。
+ *
  * @param page 页码，默认 1
  * @param pageSize 每页条数，默认 12
  * @param specialtyId 专业方向 ID 过滤（可选，0 表示全部）
  * @param levelId 课程等级 ID 过滤（可选，0 表示全部）
+ * @param credentialId 当前证件 ID（>0 才下发；0 = 未声明，与服务端 nil 语义一致）
  */
-export function getCourseListApi(page : number = 1, pageSize : number = 12, specialtyId : number = 0, levelId : number = 0) : Promise<CourseListResult> {
+export function getCourseListApi(page : number = 1, pageSize : number = 12, specialtyId : number = 0, levelId : number = 0, credentialId : number = 0) : Promise<CourseListResult> {
 	const params : UTSJSONObject = {
 		page: page.toString(),
 		page_size: pageSize.toString(),
@@ -355,6 +367,9 @@ export function getCourseListApi(page : number = 1, pageSize : number = 12, spec
 	}
 	if (levelId > 0) {
 		params['level_id'] = levelId.toString()
+	}
+	if (credentialId > 0) {
+		params['credential_id'] = credentialId.toString()
 	}
 	return getMapped<CourseListResult>('/courses', params, (data : UTSJSONObject) : CourseListResult => {
 		console.log('[getCourseListApi] raw data:', JSON.stringify(data))
@@ -386,6 +401,13 @@ function buildSpecialtyListFromCatalog(obj : UTSJSONObject) : SpecialtyItem[] {
 /**
  * 从课程目录树提取专业方向（学员端公开接口）
  * 后端无独立的学员端 /specialties 端点，通过 /catalog/tree 获取后提取
+ *
+ * 证件分区：`/api/catalog/tree` **未挂** `CredentialScoped`，handler 自读 query
+ * （`backend/internal/api/training_catalog.go:105`），传 `credential_id` 只分区**课程节点**
+ * —— `service.getCatalogTree` 的专业方向列表与等级列表恒为全量启用项
+ * （`backend/internal/service/training_catalog_service.go:456-475`）。本函数**只消费 `specialties`**
+ * （全局共享字典），故**不传证件**：传了也是 no-op。要改成消费课程节点时才需要补参数，
+ * 届时回来登记 `docs/agents/credential-scope.md`。
  */
 export function getCatalogTreeSpecialties() : Promise<SpecialtyItem[]> {
 	return getMapped<SpecialtyItem[]>('/catalog/tree', null, (data : UTSJSONObject) : SpecialtyItem[] => {
@@ -523,9 +545,23 @@ function buildTagList(obj : UTSJSONObject) : TagItem[] {
 	return items
 }
 
-/** 题库标签列表（仅启用项，含已发布题目数） */
-export function getTagsApi() : Promise<TagItem[]> {
-	return getMapped<TagItem[]>('/tags', null, (data : UTSJSONObject) : TagItem[] => {
+/**
+ * 题库标签列表（仅启用项，含已发布题目数）
+ *
+ * 证件分区：`/api/tags` 是**公开路由**且**未挂** `CredentialScoped`，handler 用
+ * `queryIDPtr(c, "credential_id")` **自读 query**（`backend/internal/api/training_catalog.go:143`）
+ * ⇒ 显式传参是它唯一的分区通道，未传 = 不分区。`question_count` 与**抽题池**同口径
+ * （`service.ListQuestionTags` 的 #702 注释）：不传时标签题数是全证件计数，
+ * 与学员实际能抽到的题量对不上 —— 故「标签练习」消费面必须传当前证件。
+ *
+ * @param credentialId 当前证件 ID（>0 才下发；0 = 未声明，不分区）
+ */
+export function getTagsApi(credentialId : number = 0) : Promise<TagItem[]> {
+	let params : UTSJSONObject | null = null
+	if (credentialId > 0) {
+		params = { credential_id: credentialId.toString() } as UTSJSONObject
+	}
+	return getMapped<TagItem[]>('/tags', params, (data : UTSJSONObject) : TagItem[] => {
 		return buildTagList(data)
 	})
 }

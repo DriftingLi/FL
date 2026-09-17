@@ -271,15 +271,30 @@ export function submitAnswerApi(params : SubmitAnswerParams) : Promise<SubmitAns
 
 /**
  * 保存练习进度（断点续练）
+ *
+ * ## 证件为什么必须显式放在 body 里（#1107）
+ *
+ * `POST /practice-mode/progress` 的证件**不是**从 `CredentialScoped` 上下文取的：handler 自己
+ * `ShouldBindJSON` 出 `credential_id *int`（`backend/internal/api/practice_mode.go:244`），
+ * 中间件对 body 无能为力 ⇒ 服务端兜底在这条写路径上**不生效**。顺序练习是 **NULL 桶**分区
+ * （`CONTEXT.md`「当前证件」三族语义：未选证件只取「未选定证件」那一桶），漏传即把游标写进
+ * NULL 桶，学员下次续练读当前证件桶会读空（同类历史坑与合并迁移见
+ * `migrations/000013_practice_progress_credential.up.sql`、`000019_practice_progress_orphan_merge.up.sql`）。
+ * 非 sequential 模式不分桶，**不得**携带（与 Web `api/practiceMode.ts` 同口径）。
+ *
  * @param practiceMode 后端封闭枚举：'sequential' | 'tag:<id>' | 'paper:<id>'，其他值 400
+ * @param credentialId 当前证件 ID（仅 `sequential` 且 >0 时写进 body）
  */
-export function savePracticeProgressApi(index : number, practiceMode : string, total : number, answersState : UTSJSONObject) : Promise<UTSJSONObject> {
+export function savePracticeProgressApi(index : number, practiceMode : string, total : number, answersState : UTSJSONObject, credentialId : number = 0) : Promise<UTSJSONObject> {
 	const payload : UTSJSONObject = {
 		practice_mode: practiceMode,
 		index: index,
 		total: total,
 		answers_state: answersState,
 	} as UTSJSONObject
+	if (practiceMode == 'sequential' && credentialId > 0) {
+		payload['credential_id'] = credentialId
+	}
 	return post('/practice-mode/progress', payload)
 }
 

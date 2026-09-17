@@ -91,6 +91,7 @@
     import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
     import { getCourseListApi } from '../../api/course'
+    import { getCurrentCredentialApi } from '../../api/credential'
     import type { CourseItem, CourseListResult } from '../../types/index'
     import MallSortBar from './components/mall-sort-bar.uvue'
     import MallCategorySidebar from './components/mall-category-sidebar.uvue'
@@ -106,12 +107,28 @@
     const activeCategory = ref<number>(0)
 
     // ---- 商品列表 ----
+    // `/courses` 是公开路由：服务端 CredentialScoped 兜底永不生效（见 api/course.uts 文件头、
+    // docs/agents/credential-scope.md）⇒ 必须显式下发当前证件，否则货架是全证件课程。
+    // 本页是 pushed 页（每次进入重新 onLoad），故在 onLoad 取一次证件、不在 onShow 跟切换。
     const products = ref<CourseItem[]>([])
     const mustBuyList = ref<CourseItem[]>([])
     const page = ref<number>(1)
     const pageSize = 12
     const loading = ref<boolean>(false)
     const noMore = ref<boolean>(false)
+    /** 「浏览指定」证件：随请求下发的分区参数（自解释名，与 Web api/client 半边同口径 #1106） */
+    const browseCredentialId = ref<number>(0)
+
+    async function loadBrowseCredential() : Promise<void> {
+        try {
+            const cred = await getCurrentCredentialApi()
+            if (cred != null) {
+                browseCredentialId.value = cred!.id
+            }
+        } catch (e) {
+            console.warn('[mall] load credential failed:', e)
+        }
+    }
 
     async function loadProducts(reset : boolean = false) : Promise<void> {
         if (loading.value) return
@@ -123,7 +140,7 @@
 
         loading.value = true
         try {
-            const result : CourseListResult = await getCourseListApi(page.value, pageSize, 0, 0)
+            const result : CourseListResult = await getCourseListApi(page.value, pageSize, 0, 0, browseCredentialId.value)
             if (reset) {
                 products.value = result.items
             } else {
@@ -186,8 +203,11 @@
     }
 
     // onLoad 必须带 options 形参：Kotlin Function1<OnLoadOptions, Unit>，零参即 error17
+    // 回到调必须是 Unit（非 Promise）⇒ 用 .then 串证件解析，不写 async 回调
     onLoad((options : OnLoadOptions) => {
-        loadProducts(true)
+        loadBrowseCredential().then(() : void => {
+            loadProducts(true)
+        })
     })
 </script>
 

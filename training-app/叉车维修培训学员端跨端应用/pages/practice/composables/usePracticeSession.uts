@@ -5,6 +5,7 @@ import { ref, computed } from 'vue'
 import type { Ref, ComputedRef } from 'vue'
 import { getFreePracticeApi, getSequentialPracticeApi, getTagPracticeApi, getQuestionByIdApi, submitAnswerApi, savePracticeProgressApi } from '../../../api/practice'
 import { checkFavoriteApi, addFavoriteApi, removeFavoriteApi } from '../../../api/favorite'
+import { getCurrentCredentialApi } from '../../../api/credential'
 import type { Question, SubmitAnswerResult, AnswerState, QuestionOption, SubmitAnswerParams, FavoriteCheckResult } from '../../../types/index'
 
 /** 本 composable 的显式返回类型。
@@ -79,6 +80,10 @@ export function usePracticeSession() : UsePracticeSessionResult {
     let timerInterval : number | null = null
     const siteAccuracy = ref<number>(85)
     const difficultyLevel = ref<string>('C')
+    /** 「跟随当前」的证件 ID：顺序练习进度是 NULL 桶分区，保存时**必须**显式写进 body
+     *  （中间件对 body 无能为力，见 api/practice.uts savePracticeProgressApi /
+     *  docs/agents/credential-scope.md）。会话开始时解析一次——一次练习期间不会切证件。 */
+    let browseCredentialId = 0
 
     const currentQuestion = computed<Question>(() : Question => {
         if (questions.value.length == 0) { return { question_id: 0, type: '', title: '', options: [] as QuestionOption[], correct_answer: '', explanation: '' } as Question }
@@ -116,6 +121,8 @@ export function usePracticeSession() : UsePracticeSessionResult {
     async function loadQuestions(mode : string, practiceCount : number, tagId : number, questionId : number = 0) : Promise<void> {
         loading.value = true
         try {
+            // 证件只在会话开始时解析一次：保存进度要用它（见 browseCredentialId 声明处）
+            try { const cred = await getCurrentCredentialApi(); if (cred != null) { browseCredentialId = cred!.id } } catch (e) { console.warn('[practice-do] load credential failed:', e) }
             if (mode == 'single') {
                 // 单题承载（ADR-0049 决策 4）：按 id 取题，可见性由后端题库池口径兜底（#981）
                 const one = await getQuestionByIdApi(questionId)
@@ -136,7 +143,7 @@ export function usePracticeSession() : UsePracticeSessionResult {
             loading.value = false
         }
     }
-    function saveProgress(mode : string, tagId : number) { if (mode != 'sequential' && mode != 'tag') return; const saveMode = mode == 'tag' ? 'tag:' + tagId.toString() : mode; const a : UTSJSONObject = {} as UTSJSONObject; for (let i = 0; i < answerStates.value.length; i++) { const s = answerStates.value[i]; a[s.question_id.toString()] = s.user_answer }; savePracticeProgressApi(currentIndex.value + 1, saveMode, questions.value.length, a).catch((e) => { console.warn('[practice-do] save progress failed:', e) }) }
+    function saveProgress(mode : string, tagId : number) { if (mode != 'sequential' && mode != 'tag') return; const saveMode = mode == 'tag' ? 'tag:' + tagId.toString() : mode; const a : UTSJSONObject = {} as UTSJSONObject; for (let i = 0; i < answerStates.value.length; i++) { const s = answerStates.value[i]; a[s.question_id.toString()] = s.user_answer }; savePracticeProgressApi(currentIndex.value + 1, saveMode, questions.value.length, a, browseCredentialId).catch((e) => { console.warn('[practice-do] save progress failed:', e) }) }
     async function onSubmit(mode : string) : Promise<void> { if (selectedKeys.value.length == 0) { uni.showToast({ title: '请选择答案', icon: 'none' }); return }; let ua = ''; if (isMultiChoice()) { ua = selectedKeys.value.slice().sort().join(',') } else { ua = selectedKeys.value[0] }; lastUserAnswer.value = ua; const qid = currentQuestion.value.question_id; try { const p : SubmitAnswerParams = { question_id: qid, user_answer: ua, practice_type: mode == 'single' ? 'free' : mode } as SubmitAnswerParams; const r = await submitAnswerApi(p); lastResult.value = r; showResult.value = true; recordQuestionTime(); const s : AnswerState = { question_id: qid, user_answer: ua, is_correct: r.correct, correct_answer: r.correct_answer, submitted: true } as AnswerState; answerStates.value.push(s); if (mode != 'free' && mode != 'single') { saveProgress(mode, 0) } } catch (e) { console.error('[practice-do] submit failed:', e); uni.showToast({ title: '提交失败', icon: 'none' }) } }
     function resetQuestionState() : void { showResult.value = false; lastUserAnswer.value = ''; lastResult.value = { correct: false, correct_answer: '', explanation: '' } as SubmitAnswerResult }
     function onNext() : void { if (currentIndex.value >= questions.value.length - 1) { showSummary.value = true; stopTimer(); return }; currentIndex.value = currentIndex.value + 1; selectedKeys.value = []; resetQuestionState(); recordQuestionTime(); checkFavorite() }

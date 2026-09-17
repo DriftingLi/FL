@@ -97,18 +97,32 @@
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
-    // ---- 当前证件名称 ----
+    // ---- 当前证件（名称 + 分区参数）----
+    // `/courses` 是公开路由，服务端 CredentialScoped 兜底永不生效（见 api/course.uts 文件头、
+    // docs/agents/credential-scope.md）⇒ 页面必须显式下发当前证件，否则列出的是全证件课程。
     const currentCertName = ref<string>('')
+    /** 「浏览指定」证件：随请求下发的分区参数（自解释名，与 Web api/client 半边同口径 #1106） */
+    const browseCredentialId = ref<number>(0)
+    let credentialRefresh : Promise<void> | null = null
 
-    async function loadCredentialName() : Promise<void> {
+    async function loadBrowseCredential() : Promise<void> {
         try {
             const cred = await getCurrentCredentialApi()
             if (cred != null) {
                 currentCertName.value = cred!.name
+                browseCredentialId.value = cred!.id
             }
         } catch (e) {
             console.warn('[courses] load credential failed:', e)
         }
+    }
+
+    /** 取数前确认证件已解析（onShow 会重置它，以便跟随证件切换） */
+    function ensureBrowseCredential() : Promise<void> {
+        if (credentialRefresh == null) {
+            credentialRefresh = loadBrowseCredential()
+        }
+        return credentialRefresh!
     }
 
     // ---- 顶部分类 ----
@@ -144,7 +158,8 @@
 
         loading.value = true
         try {
-            const result = await getCourseListApi(page.value, pageSize, 0, 0)
+            await ensureBrowseCredential()
+            const result = await getCourseListApi(page.value, pageSize, 0, 0, browseCredentialId.value)
             if (reset) {
                 courses.value = result.items
             } else {
@@ -231,9 +246,15 @@
     }
 
     onShow(async () => {
-        loadCredentialName()
+        const prevCredentialId = browseCredentialId.value
+        credentialRefresh = loadBrowseCredential()
         await Promise.all([loadSpecialties(), loadLevels()])
-        if (courses.value.length == 0) {
+        await ensureBrowseCredential()
+        // 证件切换 ⇒ 受过滤视图立即按新证件重取（CONTEXT.md「当前证件」：切换立即生效、回到第一页）；
+        // 证件未变时保持既有行为（列表非空不重取，避免从课程详情返回时丢掉滚动位置）
+        if (browseCredentialId.value != prevCredentialId) {
+            loadCourses(true)
+        } else if (courses.value.length == 0) {
             loadCourses(true)
         }
     })

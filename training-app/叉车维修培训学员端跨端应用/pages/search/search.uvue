@@ -146,8 +146,9 @@
 	const page = ref<number>(1)
 	const pageSize = ref<number>(20)
 
-	/** 当前证件（>0 才随请求下发）：搜索是公开路由，证件必须由客户端显式声明（#979 M6） */
-	const credentialId = ref<number>(0)
+	/** 「浏览指定」证件（>0 才随请求下发）：搜索是公开路由，服务端兜底永不生效，
+	 *  证件必须由客户端显式声明（#979 M6；口径表 docs/agents/credential-scope.md） */
+	const browseCredentialId = ref<number>(0)
 	let credentialRefresh : Promise<void> | null = null
 
 	const emptySection: SearchCategoryResult = { items: [] as SearchItem[], total: 0 } as SearchCategoryResult
@@ -261,9 +262,9 @@
 
 	function loadCredential() : Promise<void> {
 		return getCurrentCredentialApi().then((cred) : void => {
-			credentialId.value = cred != null ? cred.id : 0
+			browseCredentialId.value = cred != null ? cred.id : 0
 		}).catch(() : void => {
-			credentialId.value = 0
+			browseCredentialId.value = 0
 		})
 	}
 
@@ -294,11 +295,11 @@
 		try {
 			await ensureCredential()
 			if (tab.value.length == 0) {
-				const result = await searchAllApi(kw, credentialId.value)
+				const result = await searchAllApi(kw, browseCredentialId.value)
 				if (seq != searchSeq) return
 				allResult.value = result
 			} else {
-				const result = await searchByTypeApi(kw, tab.value, requestPage, pageSize.value, credentialId.value)
+				const result = await searchByTypeApi(kw, tab.value, requestPage, pageSize.value, browseCredentialId.value)
 				if (seq != searchSeq) return
 				if (append && requestPage > 1) {
 					const prev = typedResult.value
