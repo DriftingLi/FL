@@ -50,15 +50,8 @@ type PointsTaskClaim struct {
 
 func (PointsTaskClaim) TableName() string { return "points_task_claim" }
 
-// UserDailyLogin 每日登录事实源（user_id + login_date 唯一，Asia/Shanghai 自然日）。
-// 登录成功与 refresh 轮换均写入一行；同一自然日幂等。供任务中心 daily_login 判定当日达成。
-type UserDailyLogin struct {
-	UserID    int       `gorm:"column:user_id;primaryKey" json:"user_id"`
-	LoginDate time.Time `gorm:"column:login_date;primaryKey;type:date" json:"login_date"`
-	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
-}
-
-func (UserDailyLogin) TableName() string { return "user_daily_login" }
+// 每日登录事实源（user_daily_login）已于 ADR-0054 退役：daily_login 任务不再有行为前置，
+// 该表不再有消费方，表由迁移 000034 删除。
 
 // PointsUserProgress 用户任务进度快照。
 type PointsUserProgress struct {

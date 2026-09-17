@@ -122,8 +122,6 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 	aiModelPort := service.NewMeteredAIModel(aiRouting, pointsSvc, logger)
 	aiSvc := service.NewAIService(db, aiModelPort, logger)
 	contentGenSvc := service.NewContentGenerateService(db, aiSvc, logger)
-	// 每日登录事实（ADR-0028）：登录签发与 refresh 续期都算今日到访；回调注入避免循环依赖。
-	authSvc.SetDailyLoginMarker(pointsSvc.MarkDailyLogin)
 	// 联系方式交换唯一实例：申请/授权状态机（EnsureApproved）与投递侧共用（ADR-0027 C5）
 	contactSvc := service.NewContactService(db, logger, notificationSvc, mailSender)
 

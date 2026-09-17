@@ -78,16 +78,17 @@ func taskStatusOf(resp pointsTasksResp, code string) (string, int, int) {
 func seedPointsTaskConfigs(t *testing.T, db *gorm.DB) {
 	t.Helper()
 	configs := []model.PointsTaskConfig{
-		{Code: "daily_login", Title: "每日登录", Group: "daily", Points: 5, DailyLimit: 1, EventType: "login", Description: "每日登录或续期会话即达成"},
+		{Code: "daily_login", Title: "每日登录", Group: "daily", Points: 5, DailyLimit: 1, EventType: "login", Description: "每日进入任务中心即可领取"},
 		{Code: "daily_quiz", Title: "每日答题 1 次", Group: "daily", Points: 10, DailyLimit: 1, EventType: "question_submit", Description: "每日完成任意练习/模考 1 次"},
 		{Code: "daily_browse", Title: "浏览 3 篇帖子", Group: "daily", Points: 5, DailyLimit: 1, EventType: "forum_view", Description: "每日浏览 3 篇帖子"},
 		{Code: "newbie_profile_basic", Title: "完善基础资料", Group: "newbie", Points: 10, DailyLimit: 1, TotalLimit: intPtr(1), EventType: "profile_complete", Description: "上传头像且设置昵称"},
 		{Code: "newbie_profile_contact", Title: "完善联系资料", Group: "newbie", Points: 10, DailyLimit: 1, TotalLimit: intPtr(1), EventType: "profile_complete", Description: "填写单位且绑定手机/邮箱"},
 		{Code: "newbie_credential", Title: "选定目标证件", Group: "newbie", Points: 10, DailyLimit: 1, TotalLimit: intPtr(1), EventType: "credential_onboarding", Description: "完成 onboarding 选定当前证件"},
 		{Code: "newbie_first_course", Title: "完成首节课程", Group: "newbie", Points: 20, DailyLimit: 1, TotalLimit: intPtr(1), EventType: "course_complete", Description: "完成首节课程学习"},
-		{Code: "growth_post", Title: "发布 1 篇帖子", Group: "growth", Points: 10, DailyLimit: 1, EventType: "topic_create", Description: "每日发布 1 篇帖子"},
-		{Code: "growth_reply", Title: "回复 3 次", Group: "growth", Points: 10, DailyLimit: 1, EventType: "reply_create", Description: "每日回复他人主题 3 次"},
-		{Code: "growth_mock", Title: "完成 1 次模考", Group: "growth", Points: 20, DailyLimit: 1, EventType: "mock_submit", Description: "每日完成 1 次模考"},
+		// 分组收敛（ADR-0054）：growth 退役，三项改判 daily——夹具与迁移 000034 后的生产种子同形。
+		{Code: "growth_post", Title: "发布 1 篇帖子", Group: "daily", Points: 10, DailyLimit: 1, EventType: "topic_create", Description: "每日发布 1 篇帖子"},
+		{Code: "growth_reply", Title: "回复 3 次", Group: "daily", Points: 10, DailyLimit: 1, EventType: "reply_create", Description: "每日回复他人主题 3 次"},
+		{Code: "growth_mock", Title: "完成 1 次模考", Group: "daily", Points: 20, DailyLimit: 1, EventType: "mock_submit", Description: "每日完成 1 次模考"},
 	}
 	for i := range configs {
 		if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&configs[i]).Error; err != nil {
@@ -118,18 +119,12 @@ func assertPointsClaimStateMachine(t *testing.T, db *gorm.DB) {
 		t.Fatalf("issue student token failed: %v", err)
 	}
 
-	// 1. no behavior yet -> todo（daily_login 未登录落表）
+	// 1. daily_login 无行为前置（ADR-0054）：不再依赖任何登录落表，初始即 claimable/1/1
 	resp := fetchPointsTasks(t, r, token)
-	if st, _, _ := taskStatusOf(resp, "daily_login"); st != "todo" {
-		t.Fatalf("initial daily_login should be todo, got %q", st)
+	if st, pr, tt := taskStatusOf(resp, "daily_login"); st != "claimable" || pr != 1 || tt != 1 {
+		t.Fatalf("daily_login without behavior should be claimable/1/1, got %q %d/%d", st, pr, tt)
 	}
-	// 2. behavior done（登录落表）-> claimable
-	deps.PointsSvc.MarkDailyLogin(student.ID)
-	resp = fetchPointsTasks(t, r, token)
-	if st, _, _ := taskStatusOf(resp, "daily_login"); st != "claimable" {
-		t.Fatalf("after behavior daily_login should be claimable, got %q", st)
-	}
-	// 3. claim -> 200, task_status claimed, +5 points
+	// 2. claim -> 200, task_status claimed, +5 points
 	rec := doWithToken(t, r, token, http.MethodPost, "/api/points/tasks/daily_login/claim", nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("first claim should be 200, got %d body=%s", rec.Code, rec.Body.String())
@@ -141,12 +136,12 @@ func assertPointsClaimStateMachine(t *testing.T, db *gorm.DB) {
 	if cr.Data.TaskStatus != "claimed" || cr.Data.Balance != 5 {
 		t.Fatalf("claim result unexpected: %+v", cr.Data)
 	}
-	// 4. tasks again -> still claimed (behavior done + claimed does not fall back)
+	// 3. tasks again -> still claimed (claimed does not fall back)
 	resp = fetchPointsTasks(t, r, token)
 	if st, pr, tt := taskStatusOf(resp, "daily_login"); st != "claimed" || pr != 1 || tt != 1 {
 		t.Fatalf("after claim daily_login should be claimed 1/1, got %q %d/%d", st, pr, tt)
 	}
-	// 5. duplicate claim -> single 400, no second claim row
+	// 4. duplicate claim -> single 400「今日已领取」（闸门由配置额度承担，不再由行为判定承担）
 	rec = doWithToken(t, r, token, http.MethodPost, "/api/points/tasks/daily_login/claim", nil)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("duplicate claim should be 400, got %d body=%s", rec.Code, rec.Body.String())
@@ -161,19 +156,7 @@ func assertPointsClaimStateMachine(t *testing.T, db *gorm.DB) {
 	if dailyRows != 1 {
 		t.Fatalf("daily_login claim rows should be exactly 1, got %d", dailyRows)
 	}
-	// 5b. 未落登录前（清表后）claim 应 400 任务未完成
-	if err := db.Model(&model.PointsTaskClaim{}).Where("user_id = ? AND task_code = ?", student.ID, "daily_login").Delete(&model.PointsTaskClaim{}).Error; err != nil {
-		t.Fatalf("clean task claim failed: %v", err)
-	}
-	if err := db.Model(&model.UserDailyLogin{}).Where("user_id = ?", student.ID).Delete(&model.UserDailyLogin{}).Error; err != nil {
-		t.Fatalf("clean daily login rows failed: %v", err)
-	}
-	rec = doWithToken(t, r, token, http.MethodPost, "/api/points/tasks/daily_login/claim", nil)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "任务未完成") {
-		t.Fatalf("claim without login behavior should be 400 任务未完成, got %d %s", rec.Code, rec.Body.String())
-	}
-	deps.PointsSvc.MarkDailyLogin(student.ID)
-	// 6. points_user_progress no longer written
+	// 5. points_user_progress no longer written
 	var progressRows int64
 	if err := db.Model(&model.PointsUserProgress{}).Where("user_id = ?", student.ID).Count(&progressRows).Error; err != nil {
 		t.Fatalf("count progress rows failed: %v", err)
