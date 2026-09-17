@@ -93,7 +93,8 @@ describe('帮助中心 分类筛选（#1079）', () => {
   it('点左侧分类只显示该分类下的条目', async () => {
     const w = mountPage()
     await flushPromises()
-    const nav = w.findAll('div').find((d) => d.text().trim().startsWith('积分与任务'))
+    // 分类导航项是 button（不是 div）—— 用 button 定位，否则点到外层容器上什么也不会发生
+    const nav = w.findAll('button').find((b) => b.text().includes('积分与任务'))
     expect(nav).toBeTruthy()
     await nav!.trigger('click')
     await flushPromises()
