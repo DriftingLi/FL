@@ -225,6 +225,7 @@ func TestDeductAIStableRequestIdempotent(t *testing.T) {
 }
 
 // TestClaimThroughApplyTx 任务领取走簿记核心：占坑 + 流水 + 余额一次成型，重复领取拒绝。
+// daily_login 无行为前置（ADR-0054），故领取路径不需要任何「先达成」的前置动作。
 func TestClaimThroughApplyTx(t *testing.T) {
 	svc, db := newPointsSvc(t)
 	uid := seedUserWithBalance(t, db, 0)
@@ -232,8 +233,6 @@ func TestClaimThroughApplyTx(t *testing.T) {
 		t.Fatalf("建任务配置失败: %v", err)
 	}
 	ctx := context.Background()
-	// 行为达成（今日登录落表）后才能领（ADR-0028 空领防护）
-	svc.MarkDailyLogin(uid)
 	if _, err := svc.Claim(ctx, uid, "daily_login"); err != nil {
 		t.Fatalf("首次领取失败: %v", err)
 	}
