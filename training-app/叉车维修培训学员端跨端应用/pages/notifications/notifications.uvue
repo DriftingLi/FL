@@ -14,7 +14,7 @@
         <scroll-view class="content-scroll" scroll-y="true" :refresher-enabled="true" :refresher-triggered="refreshing"
             @refresherrefresh="onRefresh" @scrolltolower="onLoadMore">
             <view v-if="items.length == 0 && !loading" class="empty-tip">
-                <text class="empty-icon"></text>
+                <text class="empty-icon">🔔</text>
                 <text class="empty-text">暂无消息通知</text>
             </view>
             <view class="notify-list">
@@ -162,12 +162,12 @@
 
     /** 根据类型返回图标 */
     function getTypeIcon(type : string) : string {
-        if (type == 'forum_reply') return ''
-        if (type == 'forum_report') return ''
-        if (type == 'forum_topic_deleted') return '️'
-        if (type == 'forum_reply_deleted') return '️'
-        if (type == 'profile_review') return ''
-        return ''
+        if (type == 'forum_reply') return '💬'
+        if (type == 'forum_report') return '🚩'
+        if (type == 'forum_topic_deleted') return '🗑️'
+        if (type == 'forum_reply_deleted') return '🗑️'
+        if (type == 'profile_review') return '📝'
+        return '🔔'
     }
 
     /** 根据类型返回背景色 */
