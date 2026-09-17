@@ -62,6 +62,11 @@ func ExpectedColumns(models []any) (map[string][]string, error) {
 		sort.Strings(cols)
 		out[s.Table] = cols
 	}
+	// 兜底（fail-closed）：期望集合为空时不得进入对账——否则 AllModels() 变空 / 传参写错会让
+	// DiffColumns 报出「0 表 0 列」的通过（CheckColumns 随即打印「对账通过 表=0 列=0」）。
+	if len(out) == 0 {
+		return nil, fmt.Errorf("期望列集合为空（传入模型 %d 个）：拒绝在空集合上判「对账通过」", len(models))
+	}
 	return out, nil
 }
 

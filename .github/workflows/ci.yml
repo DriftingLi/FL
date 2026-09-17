@@ -193,8 +193,9 @@ jobs:
 
       # 契约消费面覆盖锁（ADR-0056 §11 / #1100）：请求层打出的每个 method+path 必须落在
       # apitypes.Domains 的端点集内（此前没有任何守卫管这个方向：消费了未登记端点无人变红）。
-      # 存量欠条逐条登记在脚本 ALLOWLIST（现状 8 条：4 条巡检端点等 #1097 补注解 + 4 条 createCrud
-      # 动态拼装），补一个销一个；条目挂在已登记端点上会被判红（销账信号）。
+      # 存量欠条逐条登记在脚本 ALLOWLIST（现状 4 条，全是 createCrud 动态拼装；4 条巡检端点已随
+      # #1097 补齐注解并登记域声明表后销账，脚本头部保留历史留痕），补一个销一个；
+      # 条目挂在已登记端点上会被判红（销账信号）。
       # 判定逻辑的自检在 el-controls-selftest job 的「契约消费面覆盖锁」一步。
       - name: 契约消费面覆盖锁（请求层消费的端点必须已登记）
         working-directory: ${{ github.workspace }}
@@ -208,12 +209,12 @@ jobs:
         run: node scripts/check-async-section.mjs --all
 
       # 守卫增量门（ADR-0056 §5 / #1094）：除上面的 --all 全量外，再按「相对默认分支的新增行」
-      # 跑一遍四个守卫 —— 全量是绝对底线，增量是「新增行不得引入违规」的 PR 口径。
+      # 跑一遍四个守卫。**口径要说准**：增量门不比全量更严——判定面是同一棵树 --all 的子集
+      # （同一条 scanSource，只是再按新增行号过滤），它补的是两件事：① CI 里真的走通「取 diff →
+      # 解析新增行 → 扫描」这条管道（收敛前 check-async-section 的 --diff 因实参形态错恒 0 违规）；
+      # ② --diff 自身 fail-closed（base 解析不了 / git diff 失败 / 新增文件读不出来都非零退出）。
       # 本 job 的 checkout 是浅克隆（默认 depth=1），base 历史不在工作区里，这里显式取回默认分支；
-      # 取不回 → 本步红。守卫的 --diff 自身也 fail-closed（base 解析不了 / git diff 失败 /
-      # 新增文件读不出来都报错并非零退出），不会静默判绿。
-      # 注：--diff 的判定面是 --all 的子集（同一棵树、只看新增行号），不比全量更严，只补「新增」口径；
-      # 浅历史里没有 merge base，added-lines 会按它既有的 CI 口径退成双点 diff。
+      # 取不回 → 本步红。浅历史里没有 merge base，added-lines 会按它既有的 CI 口径退成双点 diff。
       - name: 守卫增量门（四个守卫只看相对默认分支的新增行）
         working-directory: ${{ github.workspace }}
         run: |

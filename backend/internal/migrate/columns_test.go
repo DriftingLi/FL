@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/glebarez/sqlite"
@@ -111,6 +112,39 @@ func TestDiffColumnsAgainstRealDatabase(t *testing.T) {
 	}
 	if diff.CheckedTables != 2 || diff.CheckedColumns != 5 {
 		t.Fatalf("对账计数 = %d 表 / %d 列，want 2 / 5", diff.CheckedTables, diff.CheckedColumns)
+	}
+}
+
+// TestExpectedColumnsRejectsEmptyModelSet 兜底（fail-closed）：期望列集合为空必须直接报错，
+// 不得让 CheckColumns 落到「对账通过 表=0 列=0」（AllModels() 变空 / 传参写错时的假绿面）。
+func TestExpectedColumnsRejectsEmptyModelSet(t *testing.T) {
+	if got, err := ExpectedColumns(nil); err == nil {
+		t.Fatalf("空模型列表必须报错，实际返回 %v", got)
+	}
+	if got, err := ExpectedColumns([]any{}); err == nil {
+		t.Fatalf("空模型切片必须报错，实际返回 %v", got)
+	}
+	// 反例：非空模型仍必须走通（兜底不得误伤正常路径）。
+	if _, err := ExpectedColumns([]any{&colFixture{}}); err != nil {
+		t.Fatalf("非空模型不得被兜底拦下: %v", err)
+	}
+}
+
+// TestInformationSchemaColumnsSQLShape 生产口径 SQL 的形状锁（#1099 的 L 面）：
+// 单测跑的是 SQLite 自省（sqliteColumnsSQL），CI 真正执行的却是 informationSchemaColumnsSQL ——
+// 这条断言把它钉在「只读 information_schema.columns、按 current_schema() 限定、只取两列且列序
+// 与 queryColumns 的 Scan 顺序一致」上；改成别的表/多取列/换列序都必须在这里变红。
+func TestInformationSchemaColumnsSQLShape(t *testing.T) {
+	flat := strings.Join(strings.Fields(informationSchemaColumnsSQL), " ")
+	lower := strings.ToLower(flat)
+	if !strings.HasPrefix(lower, "select table_name, column_name from information_schema.columns") {
+		t.Fatalf("SQL 的 SELECT 形态变了（Scan 顺序绑定 table_name, column_name）：%s", flat)
+	}
+	if !strings.Contains(lower, "where table_schema = current_schema()") {
+		t.Fatalf("SQL 必须按 current_schema() 限定对账范围：%s", flat)
+	}
+	if n := strings.Count(flat, ","); n != 1 {
+		t.Fatalf("SQL 只允许取 table_name / column_name 两列（逗号数 = %d）：%s", n, flat)
 	}
 }
 

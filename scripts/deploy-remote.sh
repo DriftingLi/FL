@@ -8,6 +8,7 @@ echo "[deploy-remote.sh] 版本: env_val v3 (全栈)"
 # 也可以手动执行：
 #   bash deploy-remote.sh            # 正常部署
 #   bash deploy-remote.sh --rollback # 回滚到上一个版本
+#   bash deploy-remote.sh --migration-gate  # 只打印迁移失败后的去向（abort/continue），不碰 docker
 # ======================================================================
 set -euo pipefail
 
@@ -126,6 +127,23 @@ SKIP_MIGRATION="${SKIP_MIGRATION:-false}"
 # ALLOW_MIGRATION_FAILURE=1；变量名与理由同步登记在 docs/agents/checks.md。
 # 不得靠改日志级别/注释绕过——默认路径必须中止部署。
 ALLOW_MIGRATION_FAILURE="${ALLOW_MIGRATION_FAILURE:-}"
+
+# migration_failure_action 迁移失败后的去向（**唯一判据点**，纯函数）：参数 = ALLOW_MIGRATION_FAILURE
+# 的取值；"1" = 带已知风险继续，其余（含未声明/空串）= 中止。真实失败路径见 run_migration。
+migration_failure_action() {
+    if [ "${1:-}" = "1" ]; then
+        echo "continue"
+    else
+        echo "abort"
+    fi
+}
+
+# --migration-gate：dry-run 入口，只打印上面的判定结果就退出（不做任何部署动作、不碰 docker）。
+# 常驻判据物：scripts/deploy-migration-gate.test.mjs 用它断言两条分支（#1099「可 dry-run 断言」）。
+if [ "$MODE" = "--migration-gate" ]; then
+    migration_failure_action "$ALLOW_MIGRATION_FAILURE"
+    exit 0
+fi
 
 # 清理策略：保留最近 N 个镜像
 KEEP_IMAGES="${KEEP_IMAGES:-3}"
@@ -917,7 +935,7 @@ run_migration() {
 
     # 迁移失败默认**硬失败**（ADR-0056 §6 / #1099）：此前只 log_warn 后继续部署，
     # 结果是「旧 schema + 新代码」上线，schema 与代码的差异要到线上报错才可见。
-    if [ "${ALLOW_MIGRATION_FAILURE}" = "1" ]; then
+    if [ "$(migration_failure_action "$ALLOW_MIGRATION_FAILURE")" = "continue" ]; then
         log_warn "自动迁移失败，但 ALLOW_MIGRATION_FAILURE=1 已显式声明——带已知风险继续部署"
         log_warn "待办（值班人）: cd backend && go run ./cmd/migrate up，确认 schema 已补齐"
         return 0
