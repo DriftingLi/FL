@@ -38,6 +38,7 @@ func TestRouteRegistryCoverage(t *testing.T) {
 	}
 }
 
-// expectedRouteCount 域注册表构出的路由总数基线（2026-09-14，全局搜索升级 #982 新增
-// GET /api/admin/search-facts/zero-results）。
-const expectedRouteCount = 315
+// expectedRouteCount 域注册表构出的路由总数基线（2026-09-17，学员笔记域 #1078 新增
+// GET/POST /api/notes 与 PUT/DELETE /api/notes/{id} 共 4 条）。
+// 历史：2026-09-14 全局搜索升级 #982 新增 GET /api/admin/search-facts/zero-results → 315。
+const expectedRouteCount = 319

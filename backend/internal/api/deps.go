@@ -73,7 +73,7 @@ type Deps struct {
 	AIAssistantSvc       *service.AIAssistantService
 	DiagnosisProxySvc    *service.DiagnosisProxyService
 	QuestionCommentSvc   *service.QuestionCommentService
-	QuestionNoteSvc      *service.QuestionNoteService
+	NoteSvc              *service.NoteService
 	QuestionKnowledgeSvc *service.QuestionKnowledgeService
 	PointsSvc            *service.PointsService
 	JobCardSvc           *service.JobCardService
@@ -169,7 +169,7 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		AIAssistantSvc:       service.NewAIAssistantService(db, aiConfigSvc, fileSvc, cfg.SecretKey, logger, aiModelPort),
 		DiagnosisProxySvc:    service.NewDiagnosisProxyService(cfg.DiagnosisAssistantURL, logger),
 		QuestionCommentSvc:   service.NewQuestionCommentService(db, logger),
-		QuestionNoteSvc:      service.NewQuestionNoteService(db, logger),
+		NoteSvc:              service.NewNoteService(db, logger),
 		QuestionKnowledgeSvc: service.NewQuestionKnowledgeService(db),
 		PointsSvc:            pointsSvc,
 		JobCardSvc:           service.NewJobCardService(db, fileSvc, logger),

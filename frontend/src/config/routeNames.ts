@@ -18,6 +18,7 @@ export const routeNames = {
   StudentSearch: 'StudentSearch',
   StudentMaterials: 'StudentMaterials',
   StudentFavorites: 'StudentFavorites',
+  StudentNotebook: 'StudentNotebook',
   ForumPage: 'ForumPage',
   ForumAsk: 'ForumAsk',
   ForumDetail: 'ForumDetail',

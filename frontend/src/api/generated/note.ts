@@ -1,19 +1,16 @@
 // 生成文件，勿手改（ADR-0019 契约 codegen 专项 / ADR-0048 按域解冻；spec #940 片五③、#952 片一）。
-// 域：题目互动（/api/questions/*：评论 / 笔记 / 考点标签）
+// 域：学员笔记（/api/notes/*：列表 / 新建独立笔记 / 改 / 删）
 // 唯一事实源：后端注解 → backend/docs/swagger.json（CI 有新鲜度锁：backend-lint 的 swagger 步骤）。
 // 再生成：cd backend && go run ./cmd/gen-apitypes
 // 同步契约：backend/internal/apitypes/codegen_test.go 把本文件与注解渲染结果全等比对。
 //
 // 覆盖端点：
-//   GET  /questions/{question_id}/comments
-//   POST /questions/{question_id}/comments
-//   DELETE /questions/comments/{comment_id}
-//   GET  /questions/{question_id}/note
-//   PUT  /questions/{question_id}/note
-//   DELETE /questions/{question_id}/note
-//   GET  /questions/{question_id}/knowledge
+//   GET  /notes
+//   POST /notes
+//   PUT  /notes/{id}
+//   DELETE /notes/{id}
 //
-// 覆盖的 Go 类型：Note / QuestionTag / QuestionCommentDTO / QuestionCommentPageResult
+// 覆盖的 Go 类型：NoteDTO / NotePageDTO
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -25,38 +22,16 @@
 //   - 不生成 query / body 的入参类型（只生成响应形状）。
 // 需要更精确的形状时先在注解层补齐（先例见 spec #940 片五②的差集清单）。
 
-export interface Note {
+export interface NoteDTO {
   content: string
   id: number
-  question_id: number
-  updated_at: string
-  user_id: number
-}
-
-export interface QuestionTag {
-  code: string
-  created_at: string
-  description: string
-  id: number
-  is_source_tag: boolean
-  name: string
-  sort_order: number
-  status: number
+  question_content: string
+  question_id: number | null
   updated_at: string
 }
 
-export interface QuestionCommentDTO {
-  avatar_url: string
-  content: string
-  created_at: string
-  id: number
-  question_id: number
-  user_id: number
-  username: string
-}
-
-export interface QuestionCommentPageResult {
-  items: QuestionCommentDTO[]
+export interface NotePageDTO {
+  items: NoteDTO[]
   page: number
   page_size: number
   total: number
