@@ -70,7 +70,8 @@ export interface BatchRejectPayload {
 
 export const questionBankApi = {
   getQuestions(params: QuestionsQuery) {
-    // credential_id 由主 client 请求拦截器默认注入（#387）
+    // 证件分区走服务端 CredentialScoped 兜底（本组 JWT + 学员角色 ⇒ 不传即按登录学员当前证件；
+    // 非学员/匿名不兜底，按不分区处理）；显式 credential_id 优先，导师端筛选栏即走这条。
     return unwrappedRequest.get<WithUIQuestions<QuestionPageDTO>>('/question-bank/questions', { params })
   },
 
