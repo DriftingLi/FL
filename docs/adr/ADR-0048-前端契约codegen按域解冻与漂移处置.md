@@ -118,10 +118,10 @@ aiAssistant 域片（第一个「信封 + 流式」混合模块）落地时的�
 
 估值域（`internal/valuation/handler`，Web 消费面唯一「整块零注解」的区域）落地时的实测与口径：
 
-- **计数**：估值前端模块的**显式调用点 32 个**（机械扫描为 36 个调用行 / 30 条去重路径；`valuation/admin.ts` 的 `createCrud × 12 实体` 让口径天然模糊），但本片登记 **69 个端点** —— 按决策 2「域一旦开做就补全该域」登记该域**全部已注册路由**（70 op − `/valuation/health`），其中 **2 条 PDF 字节流（GET report）登记 NoData**；显式调用点 32/32 全部命中 swagger。issue 记的「28 调用点 / 全部不在 swagger」是按模块字面调用点估的。issue 记的「28 调用点 / 全部不在 swagger」是按模块字面调用点估的。
-- **注解块 69 个**：`config.go` 19 / `evaluation.go` 4 / `battery.go` 5 / `report.go` 2 / `auth.go` 2 / 新增 `dictcrud_docs.go` 37 —— 描述符工厂的闭包承载不了 swag 注解，管理端注解写在**薄包装方法**上，方法体恒一行转发。**与 `AdminGetTopic` 先例的差异**：先例把包装方法注册进了路由，而本片的路由仍由 `registerDictCRUDRoutes` 的描述符循环注册匿名闭包，37 个包装方法**只是注解宿主、永不执行**（swag 仍按注解生成正确路径，行为由既有 valuation 测试与新增契约测试守住）。代价：注解与真实 handler 之间没有机械联系，描述符改名/删除时注解可能静默漂移 —— 已记为残留风险，收敛需把路由注册改成具名分派表。
+- **计数**：估值前端模块的**显式调用点 32 个**（机械扫描为 36 个调用行 / 30 条去重路径；`valuation/admin.ts` 的 `createCrud × 12 实体` 让口径天然模糊），但本片登记 **63 个端点** —— 按决策 2「域一旦开做就补全该域」登记该域**全部已注册路由**（64 op − `/valuation/health`），其中 **2 条 PDF 字节流（GET report）登记 NoData**；显式调用点 32/32 全部命中 swagger。issue 记的「28 调用点 / 全部不在 swagger」是按模块字面调用点估的。
+- **注解块 63 个**（本片落笔时写作 69/37，第十一波 #1100 与第十二批 #1119 两次收敛后的现值）：`config.go` 19 / `evaluation.go` 4 / `battery.go` 5 / `report.go` 2 / `auth.go` 2 / `dictcrud_docs.go` **31** —— 描述符工厂的闭包承载不了 swag 注解，管理端注解写在**薄包装方法**上，方法体恒一行转发。**与 `AdminGetTopic` 先例的差异**：先例把包装方法注册进了路由；本片的路由注册在第十一波 #1100 改成了 `dictcrud_dispatch.go` 的**具名分派表**，注解宿主**同时就是执行体**（原「37 个包装方法只是注解宿主、永不执行」的形态已收敛）。同批登记了 6 条规格族幻影 PUT（描述符只有 Create + Delete），第十二批 #1119 已删净并使本句计数与真实路由对齐。代价：注解与真实 handler 之间没有机械联系这一残留风险，已由 `dictcrud_docs_lock_test.go` 的「注解集合 == `AllDescriptors()` 派生集合」**全等锁**接管。
 - **@Tags 用估值自己的体系**（估值-字典 / 评估 / 电池 / 报告 / 认证 / 管理端），不复用主 `/api` 的「学员端-*」—— 这正是决策 5 把它独立成片的理由之一。
-- **平行 auth 显性化**：逐个标注 `@Security` —— public 留空、optional 2 个（匿名可提交，注解里注明）、valAuth 5 个 BearerAuth、admin 37 个 BearerAuth；安全边界第一次在契约面可见。
+- **平行 auth 显性化**：逐个标注 `@Security` —— public 留空、optional 2 个（匿名可提交，注解里注明）、valAuth 5 个 BearerAuth、admin 31 个 BearerAuth；安全边界第一次在契约面可见。
 - **只补注解、不改形状**：7 处非统一信封（`gin.H` / 裸 `c.JSON`）**只登记不改造**，注解用 swag 内联 `object{}` 如实描述形状（故不误标 NoData）：`config.go` 的 ListOriginalPrices / GetEarliestFactoryYear、`evaluation.go` 的 List / Stats、`reportflow.go` 的 serveReportGenerate、`dictcrud_routes.go` 的 deleteDict、`auth.go` 的 Me。
 - **可空性 5 处** `x-optional`；本域无指针字段，故无 `x-nullable`。
 - **生成物的已知限制**：内联 `object{}` 形状不进生成物（渲染器只渲染具名类型），`generated/valuation.ts` 覆盖具名根类型；`EvaluationStats` / `GenerateReportResponse` 两处前端保留与注解逐字段对齐的窄手写类型 —— 彻底收敛需生成器支持匿名对象，属生成器能力片。

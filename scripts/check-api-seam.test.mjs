@@ -86,10 +86,13 @@ test('负例：URL 字符串字面量与注释不进判定（只认 import 说�
   assert.deepEqual(scanSource(src, 'frontend/src/pages/admin/PositionManage.vue'), [])
 })
 
-test('白名单：登记的例外放行，且理由非空', () => {
+test('白名单：例外文件仍在判定面内（豁免由 runner 逐行放行），且理由非空', () => {
+  // #1123：豁免从 isGuardedPath 移交给 runner（`--all` 整体放行 / `--diff` 只放行基线违规行号）。
+  // 例外文件必须仍在判定面内，否则 scanSource 对它恒返回空 —— 行号级放行会静默退化成整文件例外。
   const entries = Object.entries(ALLOWLIST)
   for (const [p, reason] of entries) {
-    assert.equal(isGuardedPath(p), false, p + ' 应在白名单内放行')
+    assert.equal(isGuardedPath(p), true, p + ' 必须在判定面内（豁免交给 runner 逐行判）')
+    assert.ok(scanSource("import { x } from '@/api/request'", p).length === 1, p + ' 的判定面必须真的扫得动')
     assert.ok(typeof reason === 'string' && reason.length > 10, p + ' 的理由要写清')
   }
 })

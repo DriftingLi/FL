@@ -10,6 +10,8 @@
  * 用法（runner 面单点在 `scripts/lib/guard.mjs`，ADR-0056 §5 / #1094；本文件只有判定面）：
  *   node scripts/check-api-seam.mjs --all  [目录]   全量扫描（默认 frontend/src；有违规则退出 1）
  *   node scripts/check-api-seam.mjs --diff [base]   只查相对 base 的新增行（base 默认 origin/master）
+ *     —— 例外文件（ALLOWLIST）在增量门里也是**逐行**判定：只有基线即违规的行号放行，新增行上的
+ *        违规照报；基线取不到即非零退出（行号级口径见 scripts/lib/guard.mjs）。
  *
  * 判定面：只扫**页面与业务组件**（`/pages/` 与 `/components/` 下的 .vue / .ts）的
  * import / export-from / 动态 import 语句里的模块说明符。
@@ -36,6 +38,9 @@ export const SCAN_EXTENSIONS = ['.vue', '.ts']
 /**
  * 逐条登记的有意例外（路径 → 理由）。收口本身把 18 处调用点全部收回 api 模块，
  * 没有为它们预留豁免；本表只有「跑守卫时实际发现、且经判定不属本次规则射程」的一条。
+ *
+ * 口径（#1123）：`--all` 整体放行；`--diff` 只放行**基线即违规的行号** —— 往例外文件里新增
+ * 一条直接引用、或把违规挪到别的行号，增量门照报。
  * @type {Record<string, string>}
  */
 export const ALLOWLIST = {
@@ -50,12 +55,15 @@ export function isTestFile(filePath) {
   return p.includes('/__tests__/') || /\.(spec|test)\.[jt]s$/.test(p)
 }
 
-/** 路径是否在守卫面（页面 / 业务组件，且不是测试、不在白名单）。 */
+/**
+ * 路径是否在守卫面（页面 / 业务组件，且不是测试）。
+ * **ALLOWLIST 不在这里判**（#1123）：豁免是 runner 的事（`--all` 整体放行 / `--diff` 只放行基线
+ * 违规行号）。判定面若先把例外文件吞掉，`scanSource` 对它恒返回空，行号级放行就无从谈起。
+ */
 export function isGuardedPath(filePath) {
   const p = String(filePath).replace(/\\/g, '/')
   if (isTestFile(p)) return false
-  if (!GUARDED_PATH_SEGMENTS.some((seg) => p.includes(seg))) return false
-  return !Object.prototype.hasOwnProperty.call(ALLOWLIST, p)
+  return GUARDED_PATH_SEGMENTS.some((seg) => p.includes(seg))
 }
 
 /** 模块说明符是否指向请求层（支持 `@/api/request`、`../api/request`、`./api/client` 写法）。 */

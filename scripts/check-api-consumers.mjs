@@ -55,32 +55,20 @@ export const SCAN_EXTENSIONS = ['.ts']
 
 /**
  * 存量欠条（键 = "<仓库相对文件>::<METHOD> <归一模式>" → 理由，一行一条）。
- * 现状 4 条（全是 createCrud 动态拼装）。**补一个销一个**：条目一旦可销账，--all 会判红并给出删行提示
- * （自测 scripts/check-api-consumers.test.mjs 的「ALLOWLIST 逐条可解释且不许有死条目」用例同时拦住删错/漏删）。
+ * **现状 0 条 —— 已全部销账**。新增欠条必须逐条写明理由，并守同一条纪律：**补一个销一个**——
+ * 条目一旦可销账，--all 会判红并给出删行提示；条目挂在文件里已经没有的消费上，自测
+ * （scripts/check-api-consumers.test.mjs 的「不许有死条目」用例）判红。
  *
- * #1100 已销账的 4 条（保留此行做历史留痕）：inspection.ts 的 GET /admin/points/ledger、
- * /admin/inspection/deleted-after-accepted、/admin/recruit/views、/admin/recruit/requests —— #1097 补齐
- * swagger 注解并在 apitypes.Domains 新建 inspection 域登记后销账。
- *
- * 剩下 4 条（createCrud 动态拼装）的销账是另一票：把 valuation/admin.ts 的封装从「resource 形参拼路径」
- * 改成「显式资源 → 显式路径」的具名方法表。
+ * 历史留痕（条目已删，不再挂在这里）：
+ *   - 第十一波 #1100（4 条）：inspection.ts 的 GET /admin/points/ledger、
+ *     /admin/inspection/deleted-after-accepted、/admin/recruit/views、/admin/recruit/requests ——
+ *     #1097 补齐 swagger 注解并在 apitypes.Domains 新建 inspection 域登记后销账。
+ *   - 第十二批 #1120（4 条）：valuation/admin.ts 的 createCrud 动态拼装（GET {} / POST {} /
+ *     PUT {}/{} / DELETE {}/{}）—— 封装改成「显式资源 → 显式路径」的具名方法表后，路径全是字面量，
+ *     本守卫可静态判定，欠条随之销清。
  * @type {Record<string, string>}
  */
-export const ALLOWLIST = {
-  'frontend/src/api/valuation/admin.ts::GET {}':
-    'createCrud 通用封装：路径由 resource 形参拼装（列表 = /dictionaries/<resource>），静态面只看到变量。' +
-    '资源名在同文件的 adminResources 表逐个给出（brands/series/tonnages/...），全部是域内已登记端点，' +
-    '但守卫读不出这个映射。销账要把封装改成「显式资源 → 显式路径」的具名方法（另开票）。',
-  'frontend/src/api/valuation/admin.ts::POST {}':
-    '同上（createCrud 的 create = /admin/<resource>）。',
-  'frontend/src/api/valuation/admin.ts::PUT {}/{}':
-    '同上（createCrud 的 update = /admin/<resource>/<id>）。注意：规格族 6 个资源' +
-    '（tonnages/mast-types/mast-heights/battery-types/transmission-types/engine-types）的 update() 打的是' +
-    '从未注册的幻影 PUT（见 backend/internal/valuation/handler/dictcrud_docs_lock_test.go 的 phantomAnnotations）；' +
-    '前端目前无调用点（ValuationConfigManage.vue 只对 original-prices 用 CRUD）。',
-  'frontend/src/api/valuation/admin.ts::DELETE {}/{}':
-    '同上（createCrud 的 remove = /admin/<resource>/<id>）。'
-}
+export const ALLOWLIST = {}
 
 /** 测试文件不进判定面（按定义要断言路径字面量）。 */
 export function isTestFile(filePath) {
