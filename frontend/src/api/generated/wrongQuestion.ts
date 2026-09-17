@@ -74,6 +74,7 @@ export interface WrongQuestionDTO {
   id: number
   is_redone: boolean
   is_removed: boolean
+  last_user_answer: string
   last_wrong_at: string
   question?: QuestionDTO
   question_id: number

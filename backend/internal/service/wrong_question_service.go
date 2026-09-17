@@ -37,21 +37,25 @@ func NewWrongQuestionService(db *gorm.DB, ai *AIService, logger *zap.Logger) *Wr
 // WrongQuestionDTO 错题本条目（ADR-0009 §2 typed DTO / spec #940 片三）。
 //
 // 字段按 JSON key 字母序声明（created_at / favorite_id / favorited / id / is_redone /
-// is_removed / last_wrong_at / question / question_id / student_id / wrong_count）——
-// 旧形态是 map[string]any，encoding/json 对 map 按 key 排序输出，字母序保证换 struct
-// 后序列化字节序不变。Question 带 omitempty：题目行缺失时旧 map 根本不写该 key。
+// is_removed / last_user_answer / last_wrong_at / question / question_id / student_id /
+// wrong_count）——旧形态是 map[string]any，encoding/json 对 map 按 key 排序输出，字母序
+// 保证换 struct 后序列化字节序不变。Question 带 omitempty：题目行缺失时旧 map 根本不写该 key。
+//
+// LastUserAnswer（#1077）：学员**最近一次**作答这道题时提交的答案原文，供错题本卡片在
+// 折叠态直接做「我的答案 vs 正确答案」对照。从未作答过（错题来自何处无记录）为空串。
 type WrongQuestionDTO struct {
-	CreatedAt   string       `json:"created_at"`
-	FavoriteID  int64        `json:"favorite_id"`
-	Favorited   bool         `json:"favorited"`
-	ID          int          `json:"id"`
-	IsRedone    bool         `json:"is_redone"`
-	IsRemoved   bool         `json:"is_removed"`
-	LastWrongAt string       `json:"last_wrong_at"`
-	Question    *QuestionDTO `json:"question,omitempty" extensions:"x-optional"`
-	QuestionID  int          `json:"question_id"`
-	StudentID   int          `json:"student_id"`
-	WrongCount  int          `json:"wrong_count"`
+	CreatedAt      string       `json:"created_at"`
+	FavoriteID     int64        `json:"favorite_id"`
+	Favorited      bool         `json:"favorited"`
+	ID             int          `json:"id"`
+	IsRedone       bool         `json:"is_redone"`
+	IsRemoved      bool         `json:"is_removed"`
+	LastUserAnswer string       `json:"last_user_answer"`
+	LastWrongAt    string       `json:"last_wrong_at"`
+	Question       *QuestionDTO `json:"question,omitempty" extensions:"x-optional"`
+	QuestionID     int          `json:"question_id"`
+	StudentID      int          `json:"student_id"`
+	WrongCount     int          `json:"wrong_count"`
 }
 
 // WrongQuestionPageDTO 错题本分页（字段按 JSON key 字母序：items / page / page_size / total）。
@@ -111,6 +115,7 @@ func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, 
 	}
 	questions := loadQuestionsByIDs(s.db, questionIDs)
 	favoriteIDs := s.loadFavoriteIDs(studentID, questionIDs)
+	lastAnswers := s.loadLastUserAnswers(studentID, questionIDs)
 
 	result := make([]WrongQuestionDTO, 0, len(items))
 	for i := range items {
@@ -122,17 +127,18 @@ func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, 
 			question = &dto
 		}
 		result = append(result, WrongQuestionDTO{
-			CreatedAt:   formatISO(wq.CreatedAt),
-			FavoriteID:  favoriteID,
-			Favorited:   favoriteID > 0,
-			ID:          wq.ID,
-			IsRedone:    wq.IsRedone,
-			IsRemoved:   wq.IsRemoved,
-			LastWrongAt: formatISO(wq.LastWrongAt),
-			Question:    question,
-			QuestionID:  wq.QuestionID,
-			StudentID:   wq.StudentID,
-			WrongCount:  wq.WrongCount,
+			CreatedAt:      formatISO(wq.CreatedAt),
+			FavoriteID:     favoriteID,
+			Favorited:      favoriteID > 0,
+			ID:             wq.ID,
+			IsRedone:       wq.IsRedone,
+			IsRemoved:      wq.IsRemoved,
+			LastUserAnswer: lastAnswers[wq.QuestionID],
+			LastWrongAt:    formatISO(wq.LastWrongAt),
+			Question:       question,
+			QuestionID:     wq.QuestionID,
+			StudentID:      wq.StudentID,
+			WrongCount:     wq.WrongCount,
 		})
 	}
 	return &WrongQuestionPageDTO{
@@ -141,6 +147,40 @@ func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, 
 		PageSize: pageSize,
 		Total:    total,
 	}
+}
+
+// loadLastUserAnswers 批量查询每题「学员最近一次作答」的答案（question_id → user_answer）。
+// 「最近」按 (created_at DESC, id DESC) 取首条——同刻并列时用 id 兜底，保证结果稳定可断言。
+// 相关子查询在 Postgres 与 SQLite 两方言通用，且一次查询覆盖整页（禁 N+1）。
+// 从未作答过的题不出现在结果里，调用方按零值（空串）取值。
+func (s *WrongQuestionService) loadLastUserAnswers(studentID int, questionIDs []int) map[int]string {
+	result := make(map[int]string, len(questionIDs))
+	if len(questionIDs) == 0 {
+		return result
+	}
+	var rows []struct {
+		QuestionID int
+		UserAnswer string
+	}
+	if err := s.db.Raw(
+		`SELECT r.question_id, r.user_answer
+		   FROM question_practice_record r
+		  WHERE r.student_id = ?
+		    AND r.question_id IN ?
+		    AND r.id = (SELECT r2.id
+		                  FROM question_practice_record r2
+		                 WHERE r2.student_id = r.student_id
+		                   AND r2.question_id = r.question_id
+		                 ORDER BY r2.created_at DESC, r2.id DESC
+		                 LIMIT 1)`,
+		studentID, questionIDs,
+	).Scan(&rows).Error; err != nil {
+		return result
+	}
+	for _, r := range rows {
+		result[r.QuestionID] = r.UserAnswer
+	}
+	return result
 }
 
 // loadFavoriteIDs 批量查询题目收藏 ID（question_id → favorite_id，未收藏为 0）。

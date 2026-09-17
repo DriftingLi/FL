@@ -52,9 +52,16 @@
               <StarFilled v-if="item.favorited" /><Star v-else />
             </el-icon>
           </div>
-          <span class="text-[13px] text-bad">错误 {{ item.wrong_count }} 次</span>
+          <span class="text-[13px] text-bad">错误 {{ item.wrong_count }} 次 · 最近 {{ formatDateTime(item.last_wrong_at) }}</span>
         </div>
         <p class="mb-2.5 text-[15px] leading-[1.6]">{{ item.question?.content }}</p>
+        <!-- 题干配图（#1077）：故障识图题的图此前在列表里完全不可见 -->
+        <img
+          v-if="item.question?.image_url"
+          :src="item.question.image_url"
+          alt="题目配图"
+          class="mb-2.5 max-h-[280px] rounded-card border border-line object-contain"
+        />
         <div v-if="redoItem?.id === item.id" class="mt-2.5">
           <template v-if="submitted && lastResult">
             <AnswerResultCard
@@ -96,10 +103,27 @@
             </div>
           </template>
         </div>
-        <div v-else class="flex gap-2">
-          <UiButton variant="primary" size="small" @click="startRedo(item)">重做</UiButton>
-          <UiButton variant="danger" size="small" @click="removeWrong(item.question_id)">移出</UiButton>
-        </div>
+        <template v-else>
+          <!-- 折叠态「答案与解析」（#1077）：不重做也能复习。默认收起，同一时间只开一道 -->
+          <div v-if="answerOpenId === item.question_id" class="mb-2.5 rounded-card border border-line bg-canvas px-3 py-2.5">
+            <div class="mb-1 text-[13px] text-ink-3">
+              我上次选的答案：<span class="font-semibold text-bad">{{ item.last_user_answer || '（无作答记录）' }}</span>
+            </div>
+            <div class="mb-1 text-[13px] text-ink-3">
+              正确答案：<span class="font-semibold text-ok-strong">{{ item.question?.answer || '—' }}</span>
+            </div>
+            <div class="text-[13px] leading-[1.6] text-ink-2">
+              解析：{{ item.question?.explanation || '暂无解析' }}
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <UiButton size="small" @click="toggleAnswer(item.question_id)">
+              {{ answerOpenId === item.question_id ? '收起答案' : '查看答案与解析' }}
+            </UiButton>
+            <UiButton variant="primary" size="small" @click="startRedo(item)">重做</UiButton>
+            <UiButton variant="danger" size="small" @click="removeWrong(item.question_id)">移出</UiButton>
+          </div>
+        </template>
       </el-card>
       <UiPagination
       v-model:current-page="page"
@@ -124,6 +148,7 @@ import { wrongQuestionApi, type WrongQuestionItem } from '@/api/wrongQuestion'
 import { favoriteApi } from '@/api/favorite'
 import { typeMap } from '@/constants/question'
 import { downloadBlob } from '@/composables/useReportDownload'
+import { formatDateTime } from '@/utils/format'
 import type { Question } from '@/types/question'
 import { usePracticeSession } from '@/composables/usePracticeSession'
 import { useQuestionPeripherals, questionPeripheralAdapters } from '@/composables/useQuestionPeripherals'
@@ -184,6 +209,13 @@ const sortOrder = ref<'desc' | 'asc'>('desc')
 const filterFavorited = ref(false)
 const filterMultiWrong = ref(false)
 const selectedIds = ref<Set<number>>(new Set())
+
+// 折叠态「答案与解析」的展开位（#1077）：同一时间只开一道；该卡进入重做态时本区不渲染
+const answerOpenId = ref<number | null>(null)
+
+function toggleAnswer(questionId: number) {
+  answerOpenId.value = answerOpenId.value === questionId ? null : questionId
+}
 
 // ===== 错题重做 = 答题会话的单题变体（#617）=====
 // 无推进节奏、单题即时提交：提交管线/判分装配与练习同源（usePracticeSession），

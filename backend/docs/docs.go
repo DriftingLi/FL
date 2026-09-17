@@ -28019,6 +28019,9 @@ const docTemplate = `{
                 "is_removed": {
                     "type": "boolean"
                 },
+                "last_user_answer": {
+                    "type": "string"
+                },
                 "last_wrong_at": {
                     "type": "string"
                 },
