@@ -49,6 +49,8 @@ const {
   handlePageChange
 } = useAsyncPage(async () => {
   const res = await contributionApi.listPublic({
+    // 「跟随当前证件」语义：本 prop 是父级 store.current.id 的纯投影（非用户选择的浏览对象），
+    // 显式下发只是把当前证件传实；/contributions 是 JWT 面，登录学员不传也会被服务端兜底。
     credential_id: props.credentialId ?? undefined,
     sort: sort.value,
     page: currentPage.value,

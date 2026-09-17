@@ -296,8 +296,10 @@ const {
         params.level_id = levelId.value
       }
     }
-    // 证件作用域（ADR-0047 §4）：公开课程列表无登录上下文，服务端无法兜底，显式传当前证件
-    if (credentialStore.current?.id) params.credential_id = credentialStore.current.id
+    // 「浏览指定证件」语义：/courses 是公开端点（无 JWT），服务端兜底只在登录学员上生效，要按证件
+    // 分区只能显式下发；未选证件时不传 = 不分区。
+    const browseCredentialId = credentialStore.current?.id
+    if (browseCredentialId) params.credential_id = browseCredentialId
     const data = await courseApi.getCourses(params)
     courses.value = data.courses
     total.value = data.total
