@@ -11,6 +11,7 @@ import (
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/model"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
 )
 
@@ -65,7 +66,8 @@ func RegisterAdminInspectionRoutes(rg *gin.RouterGroup, rd RouterDeps, db *gorm.
 		_ = q.Count(&total).Error
 		var rows []model.RecruitResumeView
 		_ = q.Order("viewed_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error
-		response.Success(c, gin.H{"items": rows, "total": total, "page": page, "page_size": pageSize})
+		// typed page（#1095）：键序 = 旧 gin.H 的 map 键序（items/page/page_size/total），响应字节不变。
+		response.Success(c, paging.ItemsPage[model.RecruitResumeView]{Items: rows, Page: page, PageSize: pageSize, Total: total})
 	})
 	g.GET("/recruit/requests", func(c *gin.Context) {
 		recruiterIDStr := c.Query("recruiter_id")
@@ -91,6 +93,7 @@ func RegisterAdminInspectionRoutes(rg *gin.RouterGroup, rd RouterDeps, db *gorm.
 		_ = q.Count(&total).Error
 		var rows []model.ContactRequest
 		_ = q.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error
-		response.Success(c, gin.H{"items": rows, "total": total, "page": page, "page_size": pageSize})
+		// typed page（#1095）：同上（巡检两条读路径的 DTO 搬迁见 #1097）。
+		response.Success(c, paging.ItemsPage[model.ContactRequest]{Items: rows, Page: page, PageSize: pageSize, Total: total})
 	})
 }

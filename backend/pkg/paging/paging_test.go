@@ -1,6 +1,7 @@
 package paging
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -83,6 +84,19 @@ func TestQueryWithMax(t *testing.T) {
 	}
 	if pageSize2 != 2 {
 		t.Fatalf("pageSize2 = %d, want 2 (合法页大小不被钳制)", pageSize2)
+	}
+}
+
+// TestItemsPageBytes ItemsPage 的字节锁（#1095）：键序必须与 api 层既有
+// gin.H{"items","page","page_size","total"} 的输出逐字节一致（encoding/json 对 map 按 key 排序）。
+func TestItemsPageBytes(t *testing.T) {
+	raw, err := json.Marshal(ItemsPage[model.Question]{})
+	if err != nil {
+		t.Fatalf("marshal 失败: %v", err)
+	}
+	want := `{"items":null,"page":0,"page_size":0,"total":0}`
+	if string(raw) != want {
+		t.Fatalf("ItemsPage 字节序漂移: got %s, want %s", raw, want)
 	}
 }
 

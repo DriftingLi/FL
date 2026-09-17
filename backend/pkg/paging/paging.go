@@ -25,13 +25,6 @@ func ClampMax(page, pageSize, defaultPageSize, maxPageSize int) (int, int) {
 	return page, pageSize
 }
 
-// Page 分页信封字段（total/page/page_size，各列表接口共用）。
-type Page struct {
-	Total    int64 `json:"total"`
-	Page     int   `json:"page"`
-	PageSize int   `json:"page_size"`
-}
-
 // QueryWithScan 分页查询（Scan 到自定义行）：ClampMax 钳制 → count → order → offset/limit → scan。
 // 面向 JOIN/多列 Select 到自定义行的列表（无法走 Query[T] 的 Find）；钳制上限 maxPageSize 由调用方保留业务差异。
 // build 装配查询（Select/Joins/Where 同一作用域，count 与 scan 共用）；order 为空跳过排序。

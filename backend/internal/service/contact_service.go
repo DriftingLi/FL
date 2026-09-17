@@ -64,15 +64,15 @@ type ContactRequestDTO struct {
 	Source string `json:"source,omitempty" extensions:"x-optional"`
 }
 
-// ContactRequestListResult 交换申请分页结果。
+// ContactRequestListResult 交换申请分页结果：**真返回类型**（#1095 前只服务 swagger，运行时出字节的是 gin.H）。
 //
-// 形状与 handler 既有的 gin.H{"items","total","page","page_size"} 逐字段一致（本片只补注解，
-// 不动任何响应构造；键序不重要——这里只用于 swagger 的 data 指认）。
+// 字段声明序 = 旧 gin.H map 输出的键序（encoding/json 对 map 按 key 排序：items < page < page_size < total），
+// 故换成 typed DTO 后响应字节逐字节不变（ADR-0009 §2；字节锁见 envelope_dto_shape_test.go 与信封登记表）。
 type ContactRequestListResult struct {
 	Items    []ContactRequestDTO `json:"items"`
-	Total    int64               `json:"total"`
 	Page     int                 `json:"page"`
 	PageSize int                 `json:"page_size"`
+	Total    int64               `json:"total"`
 }
 
 // ContactPlainDTO 明文联系方式及其补齐面（GET /api/recruit/resumes/{id}/contact）。
