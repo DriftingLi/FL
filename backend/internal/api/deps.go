@@ -110,7 +110,7 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 	authSvc.SetProfileReviewService(reviewSvc)
 	aiConfigSvc := service.NewAIConfigService(db, cfg.SecretKey, logger)
 	// 积分服务唯一实例：积分端点与真题卷权益校验共用
-	pointsSvc := service.NewPointsService(db, logger, clock.Real())
+	pointsSvc := service.NewPointsService(db, logger, clock.Real(), notificationSvc)
 	// 单一模型端口（ADR-0029 T2）：唯一 eino adapter 实例，阻塞/流式消费方共享同一 client 签名缓存。
 	// 计量闸门（ADR-0031）作为装饰器挂在该端口上：所有 LLM 消费（含会话自动命名）过同一道闸，
 	// 生产 meter 即积分域 *PointsService（预检与扣费下限同源），装配单点在此。

@@ -26,7 +26,7 @@ func TestPointsBalanceTotalSpent(t *testing.T) {
 	if err := db.Model(&model.HrwaiUser{}).Where("id = ?", stu.ID).Update("points_balance", 50).Error; err != nil {
 		t.Fatalf("设余额失败: %v", err)
 	}
-	svc := NewPointsService(db, nil, nil)
+	svc := NewPointsService(db, nil, nil, NewNotificationService(db, nil))
 	bal, err := svc.GetBalance(stu.ID)
 	if err != nil {
 		t.Fatalf("GetBalance 失败: %v", err)
@@ -50,7 +50,7 @@ func TestPointsLedgerExposesExpiresAt(t *testing.T) {
 	if err := db.Create(&row).Error; err != nil {
 		t.Fatalf("建流水失败: %v", err)
 	}
-	svc := NewPointsService(db, nil, nil)
+	svc := NewPointsService(db, nil, nil, NewNotificationService(db, nil))
 	res, err := svc.GetLedger(stu.ID, 1, 20, "")
 	if err != nil {
 		t.Fatalf("GetLedger 失败: %v", err)
@@ -79,7 +79,7 @@ func TestPointsLedgerDirectionFilter(t *testing.T) {
 			t.Fatalf("建流水失败: %v", err)
 		}
 	}
-	svc := NewPointsService(db, nil, nil)
+	svc := NewPointsService(db, nil, nil, NewNotificationService(db, nil))
 	inRes, err := svc.GetLedgerFiltered(stu.ID, 1, 20, "", "in")
 	if err != nil {
 		t.Fatalf("in 查询失败: %v", err)
