@@ -42,7 +42,7 @@
                 <text class="loading-text">加载中...</text>
             </view>
 
-            <!-- 任务分组：daily / newbie / growth 由后端 group 直分 -->
+            <!-- 任务分组：daily / newbie 由后端 group 直分（ADR-0054 起 growth 已并入 daily） -->
             <view v-for="g in grouped" :key="g.key" class="section">
                 <view class="section-header">
                     <text class="section-title">{{ g.label }}</text>
@@ -122,22 +122,19 @@
     function groupLabelOf(group : string) : string {
         if (group == 'daily') return '每日任务'
         if (group == 'newbie') return '新手任务'
-        if (group == 'growth') return '成长任务'
         return '其他任务'
     }
 
-    /** 分组口径文案与后端配置同源（daily/growth 同为当日达成当日领，#410） */
+    /** 分组口径文案与后端配置同源（#410；ADR-0054 后分组只剩 daily / newbie 两组） */
     function groupDescOf(group : string) : string {
         if (group == 'daily') return '每日 0 点重置，当日达成当日领'
         if (group == 'newbie') return '一次性任务，完成后不再出现'
-        if (group == 'growth') return '每日达成每日领，当日 0 点重置'
         return ''
     }
 
     function groupIconClass(group : string) : string {
         if (group == 'daily') return 'icon-daily'
         if (group == 'newbie') return 'icon-newbie'
-        if (group == 'growth') return 'icon-growth'
         return 'icon-other'
     }
 
@@ -170,7 +167,7 @@
 
     /** 按后端 group 分组（口径同 Web TaskCenter groupLabelMap，不另造端上分组） */
     function buildGroups(list : PointsTaskItem[]) : TaskGroupView[] {
-        const order : string[] = ['daily', 'newbie', 'growth']
+        const order : string[] = ['daily', 'newbie']
         const out : TaskGroupView[] = []
         for (let i = 0; i < order.length; i++) {
             const bucket : PointsTaskItem[] = []
@@ -493,10 +490,6 @@
 
     .icon-newbie {
         background-color: #E8F5E9;
-    }
-
-    .icon-growth {
-        background-color: #E3F2FD;
     }
 
     .icon-other {

@@ -187,7 +187,6 @@ describe('task-center.uvue 接线（真任务 + 真余额 + 三态领取）', ()
   it('任务分组与三态取自后端 group / status，按钮含领取动作', () => {
     expect(taskSrc).toMatch(/'daily'/);
     expect(taskSrc).toMatch(/'newbie'/);
-    expect(taskSrc).toMatch(/'growth'/);
     expect(taskSrc).toMatch(/'claimable'/);
     expect(taskSrc).toMatch(/'claimed'/);
     expect(taskSrc).toMatch(/'todo'/);
@@ -199,6 +198,43 @@ describe('task-center.uvue 接线（真任务 + 真余额 + 三态领取）', ()
     for (const f of ['task.title', 'task.desc', 'task.points', 'task.status', 'task.progress', 'task.total']) {
       expect(tpl).toContain(f);
     }
+  });
+});
+
+describe('task-center.uvue 分组收敛（ADR-0054：growth 组退役，任务 code 保留）', () => {
+  /** 取源码里的 order 白名单 —— 分组值域与顺序的唯一来源 */
+  function groupOrder(src) {
+    const m = src.match(/const\s+order\s*:\s*string\[\]\s*=\s*\[([^\]]*)\]/);
+    expect(m).not.toBeNull();
+    return m[1].split(',').map((s) => s.trim().replace(/'/g, '')).filter((s) => s.length > 0);
+  }
+
+  it('growth 分组死代码绝迹：label / desc / icon 三处分支 + order 白名单 + .icon-growth CSS', () => {
+    // 'growth' 带引号 ⇒ 只可能来自分组字面量，不会误伤 'growth_post' 这类任务 code
+    expect(taskSrc).not.toMatch(/'growth'/);
+    expect(taskSrc).not.toContain('icon-growth'); // groupIconClass 的返回分支及其 CSS 规则
+    expect(taskSrc).not.toContain('成长任务');
+    expect(taskSrc).not.toContain('每日达成每日领');
+  });
+
+  it('三个 growth_* 任务 code 未被误删（分组改判 daily，code 是流水里的历史标识）', () => {
+    for (const code of ['growth_post', 'growth_reply', 'growth_mock']) {
+      expect(taskSrc).toContain(`'${code}'`);
+    }
+  });
+
+  it('order 白名单只剩 daily / newbie；迁移 000034 后的真实形状落成两段且兜底段永不命中', () => {
+    const order = groupOrder(taskSrc);
+    expect(order).toEqual(['daily', 'newbie']);
+    // 夹具与迁移 000034 后的生产种子同形：三条 growth_* 的 group 已改判 daily
+    const tasks = ['daily_login', 'daily_quiz', 'daily_browse', 'growth_post', 'growth_reply', 'growth_mock']
+      .map((code) => ({ code, group: 'daily' }))
+      .concat(['newbie_profile_basic', 'newbie_profile_contact', 'newbie_credential', 'newbie_first_course']
+        .map((code) => ({ code, group: 'newbie' })));
+    // 空段判据：order 内每个分组都非空（buildGroups 只在 bucket.length > 0 时 push 一段）
+    expect(order.map((g) => tasks.filter((t) => t.group === g).length)).toEqual([6, 4]);
+    // 兜底判据：没有任务落在 order 之外 ⇒ rest 恒空，「其他任务」段不会渲染
+    expect(tasks.filter((t) => order.indexOf(t.group) < 0)).toEqual([]);
   });
 });
 
