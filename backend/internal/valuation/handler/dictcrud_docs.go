@@ -1,15 +1,23 @@
-// 管理端 CRUD 端点的注解壳（ADR-0048 片九 / issue #967）。
+// 管理端 CRUD 端点的注解宿主 + 执行体（ADR-0048 片九 / issue #967；具名分派表见 ADR-0056 §11 / #1100）。
 //
-// 估值管理端写路由由描述符注册表驱动（dictcrud 包 + registerDictCRUDRoutes，
-// 见 ADR-0008）：路由在循环里注册，注解**无法写在闭包上**（swag 只认函数级注释）。
-// 故此处为每条路由写一个薄包装方法，注解块放在包装方法上，方法体直接转发到
-// 既有描述符驱动骨架（先例：internal/api/forum.go 的 AdminGetTopic）。
+// 估值管理端写路由由描述符注册表驱动（dictcrud 包，见 ADR-0008）：注解**无法写在循环闭包上**
+// （swag 只认函数级注释），故每条路由一个具名方法，注解块放在方法上，方法体一行转发到
+// 描述符驱动骨架（先例：internal/api/forum.go 的 AdminGetTopic）。
 //
-// 判据：包装方法**只加注解、不改任何响应形状** —— 方法体恒为一行转发。
+// 第十一波起这些方法不再只是注解壳：路由注册由具名分派表（dictcrud_dispatch.go）指向它们，
+// 注解宿主与执行体合成一份。判据仍是**只加注解、不改任何响应形状** —— 方法体恒为一行转发；
 // 每个实体的 create/update/delete 均由同一条骨架构造响应（dictcrud.BuildCreateResult /
-// BuildUpdateResult / gin.H{"id"}），故响应形状对全部实体同构：
+// BuildUpdateResult / BuildUpdateKeySQL / gin.H{"id"}），故响应形状对全部实体同构：
 //
 //	{id} ∪ 该操作的声明字段。swag 的 object{} 是字段并集描述（实际字段随描述符变化）。
+//
+// 注解的 path/method/字段表由描述符派生（dictcrud.RoutePath / SwaggerPath / ResponseFields），
+// 与分派表、AllDescriptors() 的全等锁在 dictcrud_docs_lock_test.go —— 改描述符不改注解即红。
+//
+// 实测（#1100）：37 条注解里 6 条是**幻影** —— 规格族（tonnages / mast_types / mast_heights /
+// battery_types / transmission_types / engine_types）的描述符只声明 Create + Delete（无 PUT，
+// specs_crud_contract_test.go 的 TestSpecsCrud_NoPutRoute 断言 404），这 6 条 AdminUpdate*
+// 注解与域声明表却都写了 PUT。逐条登记在 dictcrud_docs_lock_test.go 的 phantomAnnotations，待另票处置。
 package handler
 
 import (
