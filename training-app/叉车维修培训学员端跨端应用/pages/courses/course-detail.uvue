@@ -7,7 +7,7 @@
             </view>
             <text class="header-title">课程详情</text>
             <view class="header-right" @click="toggleFavorite">
-                <text class="favorite-icon">{{ isFavorited ? '❤️' : '' }}</text>
+                <text class="favorite-icon">{{ isFavorited ? '♥' : '♡' }}</text>
             </view>
         </view>
 
@@ -58,7 +58,7 @@
 
 <script setup lang="uts">
     import { ref, computed } from 'vue'
-    import { onLoad } from '@dcloudio/uni-app'
+    import { onLoad, onShow } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
     import { getCourseDetailApi } from '../../api/course'
@@ -275,6 +275,19 @@
         const id = options['id']
         if (id != null) {
             courseId.value = parseInt(`${id}`)
+        }
+    })
+
+    /**
+     * 取数统一放 onShow（#1126）：从章节页 `navigateBack` 返回时，本页实例仍然存活、
+     * `onLoad` 不再触发 ⇒ 只挂 onLoad 会一直显示进入时的陈旧进度（真机实测：标记完成
+     * 后端已是 14.29%，返回后界面仍 0%）。
+     *
+     * onShow 在**首次进入时也会触发**（onLoad → onShow 相邻），故取数**只放这里**、
+     * onLoad 仅记 courseId，避免两个钩子各取一次造成首个请求翻倍（单一取数入口）。
+     */
+    onShow(() : void => {
+        if (courseId.value > 0) {
             loadDetail()
         } else {
             loading.value = false
@@ -391,7 +404,11 @@
     }
 
     /* ===== 收藏按钮 ===== */
+    /* 两态都渲染字形（♥ 已收藏 / ♡ 未收藏），靠**实心与空心**区分选中态 ——
+       与论坛 stat-like-icon（♥/♡ 同色）同一套先例。此前未收藏态渲染空串，
+       点击区虽在、却没有任何可点的视觉提示，观感等同「没有收藏功能」。 */
     .favorite-icon {
         font-size: 40rpx;
+        color: #ffffff;
     }
 </style>

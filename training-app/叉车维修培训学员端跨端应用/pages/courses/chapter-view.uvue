@@ -47,6 +47,13 @@
                 <text class="empty-text">该章节暂无内容</text>
             </view>
 
+            <!-- 标记完成（#1111：对齐 web 的显式完成路径；已完成则收起入口） -->
+            <view v-if="!isChapterCompleted" class="mark-done-wrap">
+                <view class="mark-done-btn" :class="{ 'mark-done-btn--busy': markingCompleted }" @click="onMarkCompleted">
+                    <text class="mark-done-text">{{ markingCompleted ? '提交中...' : '标记本章完成' }}</text>
+                </view>
+            </view>
+
             <!-- 上/下章导航：标题由页面计算下发，切章 emit 回页面 -->
             <ChapterNav :prev-chapter-id="detail!.previous_chapter_id" :next-chapter-id="detail!.next_chapter_id"
                 :prev-title="prevTitle" :next-title="nextTitle"
@@ -89,6 +96,15 @@
         if (detail.value == null) return [] as MarkdownBlock[]
         if (detail.value!.content.length == 0) return [] as MarkdownBlock[]
         return parseMarkdown(detail.value!.content)
+    })
+
+    /**
+     * 本章是否已完成 —— 以后端 `study_status` 为唯一判据（不在前端另存一份完成态，
+     * 照 T05「同一事实不两处持有」）。「标记完成」入口据此隐藏。
+     */
+    const isChapterCompleted = computed<boolean>(() : boolean => {
+        if (detail.value == null) return false
+        return detail.value!.study_status == 'completed'
     })
 
     function formatDuration(minutes : number) : string {
@@ -143,6 +159,33 @@
 
     function onBack() : void {
         goBack()
+    }
+
+    /**
+     * 标记本章完成（#1111：对齐 web frontend/src/pages/student/ChapterView.vue:374 的显式完成路径）。
+     *
+     * 上报走模块私有 composable（页面层不直接发请求，T08 收紧口径）；
+     * 成功后刷新章节详情，让 `study_status` 由后端权威值翻转（web 同样在标记后重取详情）。
+     */
+    const markingCompleted = ref<boolean>(false)
+
+    async function onMarkCompleted() : Promise<void> {
+        if (detail.value == null || markingCompleted.value) return
+        if (isChapterCompleted.value) return
+        markingCompleted.value = true
+        try {
+            // 先补报剩余时长，再发显式完成 —— 时长与完成是两条独立上报，不互相替代
+            study.stopStudy()
+            await study.reportIncremental(true)
+            await study.reportCompleted()
+            uni.showToast({ title: '已标记完成', icon: 'none' })
+            await loadDetail()
+        } catch (e) {
+            console.warn('[chapter-view] mark completed failed:', e)
+            uni.showToast({ title: '标记失败', icon: 'none' })
+        } finally {
+            markingCompleted.value = false
+        }
     }
 
     function onImageClick(url : string) : void {
@@ -349,6 +392,29 @@
 
     .retry-btn-text {
         font-size: 28rpx;
+        color: #ffffff;
+    }
+
+    /* 标记完成（#1111）：与页面骨架同构的底部主操作，非 hint 文本 */
+    .mark-done-wrap {
+        padding: 32rpx;
+    }
+
+    .mark-done-btn {
+        background-color: #2979ff;
+        border-radius: 16rpx;
+        align-items: center;
+        justify-content: center;
+        padding: 24rpx 0;
+    }
+
+    /* 提交中态：追加类覆盖，不改写上面的基类（变体一律追加覆盖） */
+    .mark-done-btn--busy {
+        background-color: #a0c4ff;
+    }
+
+    .mark-done-text {
+        font-size: 30rpx;
         color: #ffffff;
     }
 </style>

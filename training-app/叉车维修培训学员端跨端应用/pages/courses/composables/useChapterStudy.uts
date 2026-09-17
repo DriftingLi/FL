@@ -22,6 +22,7 @@ export type UseChapterStudyResult = {
     beginStudy : (courseId : number, chapterId : number) => void
     stopStudy : () => void
     reportIncremental : (isFinal : boolean) => Promise<void>
+    reportCompleted : () => Promise<void>
 }
 
 export function useChapterStudy() : UseChapterStudyResult {
@@ -48,6 +49,22 @@ export function useChapterStudy() : UseChapterStudyResult {
                 console.warn('[chapter-view] report incremental failed:', e)
             }
         }
+    }
+
+    /**
+     * 显式标记本章完成（#1111）。
+     *
+     * 与 reportIncremental 是**两条独立路径**，互不替代：
+     * - reportIncremental 只报学习时长，章节 progress 由后端「学满 chapter.Duration 自动置 100」兜底；
+     * - reportCompleted 发 `completed: true`，后端直接置 progress=100（ADR-0017 的显式完成路径）。
+     * web 端自 ADR-0017 起一直走显式路径，移动端此前缺失 ⇒ 课程进度恒 0。
+     *
+     * **不 stopStudy**：标记完成不等于停止学习，计时与心跳照常（调用方决定是否离开页面）。
+     */
+    async function reportCompleted() : Promise<void> {
+        if (reportCourseId <= 0 || reportChapterId <= 0) return
+        // 成功即静默；失败向上抛，由页面决定提示（与本文件其余路径的「页面层负责 UI」口径一致）
+        await updateCourseProgressApi(reportCourseId, reportChapterId, 0, true)
     }
 
     function beginStudy(courseId : number, chapterId : number) : void {
@@ -92,5 +109,6 @@ export function useChapterStudy() : UseChapterStudyResult {
         beginStudy: (courseId : number, chapterId : number) => beginStudy(courseId, chapterId),
         stopStudy: () => stopStudy(),
         reportIncremental: (isFinal : boolean) => reportIncremental(isFinal),
+        reportCompleted: () => reportCompleted(),
     } as UseChapterStudyResult
 }

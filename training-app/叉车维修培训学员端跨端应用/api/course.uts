@@ -489,14 +489,22 @@ export function getChapterDetailApi(courseId : number, chapterId : number) : Pro
  * @param courseId 课程 ID
  * @param chapterId 当前学习章节 ID
  * @param duration 本次学习时长（分钟）
+ * @param completed 是否显式标记本章完成（#1111）
  * @note 保持裸 post 透传：后端只回确认型载荷、无领域 DTO 可映射，按 T03/T06 口径
  *   「void / 确认型透传不硬套 identity map」，本函数是本域白名单内唯一 raw 出口。
+ * @note `completed` 对应后端 StudyProgressInput.Completed（已由 courses.go 接收 →
+ *   course_service.go 置章节 progress=100）。web 端自 ADR-0017 起一直走这条显式完成路径，
+ *   移动端此前**从不发送**该字段 ⇒ 章节永远攒不到完成、课程进度恒 0（#1111）。
+ *   不传时保持原行为（只报时长），故本参数对既有调用方向后兼容。
  */
-export function updateCourseProgressApi(courseId : number, chapterId : number, duration : number) : Promise<UTSJSONObject> {
+export function updateCourseProgressApi(courseId : number, chapterId : number, duration : number, completed : boolean = false) : Promise<UTSJSONObject> {
 	const payload : UTSJSONObject = {
 		chapter_id: chapterId,
 		duration: duration,
 	} as UTSJSONObject
+	if (completed) {
+		payload['completed'] = true
+	}
 	return post('/course/' + courseId + '/progress', payload)
 }
 
