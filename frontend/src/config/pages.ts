@@ -32,6 +32,7 @@ import {
   PriceTag,
   Setting,
   Memo,
+  QuestionFilled,
   CircleCheck,
   FolderOpened,
   CollectionTag,
@@ -195,6 +196,8 @@ export const pages: PageDescriptor[] = [
 
   // ---------- AI 助手（顶层，可选登录；归属 training 工作区）----------
   { name: routeNames.AIAssistant, path: '/ai-assistant', component: () => import('@/pages/ai-assistant/AIAssistantPage.vue'), workspace: 'training', requiresAuth: false, capability: 'ai_assistant.use', nav: { group: 'interactive', label: 'AI助手', icon: MagicStick, activeRouteNames: [routeNames.AIAssistantFeature], order: 2 } },
+  // 帮助中心（#1079）：分类 + 手风琴 Q&A，搜索走端上过滤（不新增搜索接口、不进全局搜索域）
+  { name: routeNames.StudentHelpCenter, path: '/training/help', component: () => import('@/pages/student/HelpCenter.vue'), layout: 'training', workspace: 'training', capability: 'faq.read', nav: { group: 'interactive', label: '帮助中心', icon: QuestionFilled, order: 3 } },
   { name: routeNames.AIAssistantFeature, path: '/ai-assistant/:featureKey(' + AI_FEATURE_SLUG_PATTERN + ')', component: () => import('@/pages/ai-assistant/FeatureChatPage.vue'), workspace: 'training', requiresAuth: false, capability: 'ai_assistant.use' },
 
   // ---------- 管理端（AdminLayout）----------
@@ -217,6 +220,7 @@ export const pages: PageDescriptor[] = [
   { name: routeNames.ContentGenerate, path: '/admin/content-generate', component: () => import('@/pages/admin/ContentGenerate.vue'), layout: 'manage', workspace: 'manage', capability: 'content.manage', nav: { group: 'system', label: '内容生成', icon: MagicStick, order: 5 } },
   { name: routeNames.AdminFeaturedContentList, path: '/admin/featured-content', component: () => import('@/pages/admin/FeaturedContentList.vue'), layout: 'manage', workspace: 'manage', capability: 'content.manage', nav: { group: 'system', label: '内容精选', icon: Document, order: 6 } },
   { name: routeNames.AdminFeaturedContentEdit, path: '/admin/featured-content/edit/:id?', component: () => import('@/pages/admin/FeaturedContentEdit.vue'), layout: 'manage', workspace: 'manage', capability: 'content.manage' },
+  { name: routeNames.AdminFaqManage, path: '/admin/faq', component: () => import('@/pages/admin/FaqManage.vue'), layout: 'manage', workspace: 'manage', capability: 'faq.manage', nav: { group: 'system', label: '帮助中心管理', icon: QuestionFilled, order: 7 } },
 
   // ---------- 招聘端（RecruitLayout）----------
   { name: routeNames.RecruitDashboard, path: '/recruit', component: () => import('@/pages/recruit/Dashboard.vue'), layout: 'recruit', workspace: 'recruit', capability: 'recruit.access', nav: { group: 'recruit', label: '首页', icon: HomeFilled, exact: true, order: 1 } },

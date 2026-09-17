@@ -112,6 +112,13 @@ var routeRegistrars = []routeRegistrar{
 		},
 	},
 	{
+		Domain: "帮助中心",
+		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
+			// #1079：学员端只读整页（faq.read）+ 管理端分类与条目 CRUD（faq.manage）
+			RegisterFaqRoutes(api, rd, deps.FaqSvc)
+		},
+	},
+	{
 		Domain: "简历与职位",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
 			RegisterJobCardRoutes(api, rd, deps.JobCardSvc, deps.FileSvc)

@@ -134,6 +134,13 @@ var ModelBlocks = []ModelBlock{
 			&ContributionReport{},
 		},
 	},
+	{
+		Name: "帮助中心",
+		Models: []any{
+			&FaqCategory{}, // 先建分类：faq.category_id 外键指向它
+			&Faq{},
+		},
+	},
 }
 
 // AllModels 按域块顺序汇总全部模型（建表顺序的唯一来源）。

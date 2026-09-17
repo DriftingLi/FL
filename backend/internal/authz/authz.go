@@ -54,6 +54,7 @@ const (
 	CapAIAssistantUse     Capability = "ai_assistant.use"    // AI 助手与维修诊断
 	CapContributionSubmit Capability = "contribution.submit" // 资料投稿（学员侧）
 	CapValuationUse       Capability = "valuation.use"       // 残值评估
+	CapFaqRead            Capability = "faq.read"            // 帮助中心（FAQ）只读
 	CapForumParticipate   Capability = "forum.participate"   // 论坛参与（发帖/回复/互动）
 	CapResumeManage       Capability = "resume.manage"       // 简历卡与在线简历
 	CapJobApply           Capability = "job.apply"           // 浏览职位与投递
@@ -83,6 +84,7 @@ const (
 	CapExportRun          Capability = "export.run"          // 数据导出
 	CapRecruiterManage    Capability = "recruiter.manage"    // 招聘者账号管理
 	CapJobReportHandle    Capability = "job_report.handle"   // 职位举报处置
+	CapFaqManage          Capability = "faq.manage"          // 帮助中心内容维护（分类与条目 CRUD）
 
 	// ===== 招聘方 =====
 	CapRecruitAccess     Capability = "recruit.access"     // 招聘工作区入口
@@ -107,6 +109,7 @@ var roleCapabilities = map[Capability][]Role{
 	CapAIAssistantUse:     {RoleStudent},
 	CapContributionSubmit: {RoleStudent},
 	CapValuationUse:       {RoleStudent},
+	CapFaqRead:            {RoleStudent},
 	CapForumParticipate:   {RoleStudent},
 	CapResumeManage:       {RoleStudent},
 	CapJobApply:           {RoleStudent},
@@ -134,6 +137,7 @@ var roleCapabilities = map[Capability][]Role{
 	CapExportRun:          {RoleAdmin},
 	CapRecruiterManage:    {RoleAdmin},
 	CapJobReportHandle:    {RoleAdmin},
+	CapFaqManage:          {RoleAdmin},
 
 	CapRecruitAccess:     {RoleRecruiter},
 	CapJobManage:         {RoleRecruiter},

@@ -861,4 +861,29 @@ var Domains = []Domain{
 			{Method: "DELETE", Path: "/notes/{id}", NoData: true},
 		},
 	},
+	{
+		Name:  "faq",
+		Title: "帮助中心（/api/faq 学员端只读；/api/admin/faq 管理端分类与条目 CRUD）",
+		Roots: []string{
+			"service.FaqResult",
+			"service.FaqCategoryDTO",
+			"service.FaqEntryDTO",
+			"service.AdminFaqCategoriesResult",
+			"service.AdminFaqCategoryDTO",
+			"service.AdminFaqEntriesResult",
+			"service.AdminFaqEntryDTO",
+		},
+		Endpoints: []Endpoint{
+			{Method: "GET", Path: "/faq"},
+			{Method: "GET", Path: "/admin/faq/categories"},
+			{Method: "POST", Path: "/admin/faq/categories"},
+			{Method: "PUT", Path: "/admin/faq/categories/{id}"},
+			// 删除无返回载荷（response.R，无 data）
+			{Method: "DELETE", Path: "/admin/faq/categories/{id}", NoData: true},
+			{Method: "GET", Path: "/admin/faq/entries"},
+			{Method: "POST", Path: "/admin/faq/entries"},
+			{Method: "PUT", Path: "/admin/faq/entries/{id}"},
+			{Method: "DELETE", Path: "/admin/faq/entries/{id}", NoData: true},
+		},
+	},
 }
