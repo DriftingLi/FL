@@ -203,14 +203,18 @@ jobs:
       # 本 job 的 checkout 是浅克隆（默认 depth=1），base 历史不在工作区里，这里显式取回默认分支；
       # 取不回 → 本步红。守卫的 --diff 自身也 fail-closed（base 解析不了 / git diff 失败 /
       # 新增文件读不出来都报错并非零退出），不会静默判绿。
-      # 注：--diff 的判定面是 --all 的子集（同一棵树、只看新增行号），不比全量更严，只补「新增」口径。
+      # 注：--diff 的判定面是 --all 的子集（同一棵树、只看新增行号），不比全量更严，只补「新增」口径；
+      # 浅历史里没有 merge base，added-lines 会按它既有的 CI 口径退成双点 diff。
       - name: 守卫增量门（三个守卫只看相对默认分支的新增行）
         working-directory: ${{ github.workspace }}
         run: |
-          git fetch --no-tags --depth=1 origin "${{ github.event.repository.default_branch }}"
-          node scripts/check-el-controls.mjs --diff "origin/${{ github.event.repository.default_branch }}"
-          node scripts/check-api-seam.mjs --diff "origin/${{ github.event.repository.default_branch }}"
-          node scripts/check-async-section.mjs --diff "origin/${{ github.event.repository.default_branch }}"
+          DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
+          # 显式写目标 ref：checkout 是单分支浅克隆时，裸 `git fetch origin <branch>` 只写 FETCH_HEAD，
+          # 不会建 origin/<branch>（本机用浅克隆实测过），守卫会因 base 不可得而红。
+          git fetch --no-tags --depth=1 origin "+refs/heads/$DEFAULT_BRANCH:refs/remotes/origin/$DEFAULT_BRANCH"
+          node scripts/check-el-controls.mjs --diff "origin/$DEFAULT_BRANCH"
+          node scripts/check-api-seam.mjs --diff "origin/$DEFAULT_BRANCH"
+          node scripts/check-async-section.mjs --diff "origin/$DEFAULT_BRANCH"
 
       - name: 前端单元测试
         run: npm test
