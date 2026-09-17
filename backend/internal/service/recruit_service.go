@@ -99,6 +99,18 @@ func fillContactStates(db *gorm.DB, recruiterID int, cards []RecruitResumeCard) 
 	}
 }
 
+// resumeHoldsCredential 简历持证筛选：简历卡的 resume_certifications JSONB 数组内含该 credential_id
+// （CAST 兼容 pg 与 sqlite；精确匹配 "credential_id":<id>，避免数字误匹配日期等）。
+//
+// **不是证件分区**：一张简历可持有多个证件，故不能并入 credential_scope.go 的归属分区谓词
+// （那个谓词按行自身的单个证件列过滤）；本谓词属招聘域的持证筛选口径（ADR-0056 §2 边界外）。
+func resumeHoldsCredential(q *gorm.DB, credentialID int) *gorm.DB {
+	idStr := strconv.Itoa(credentialID)
+	pat1 := fmt.Sprintf("%%\"credential_id\":%s%%", idStr)
+	pat2 := fmt.Sprintf("%%\"credential_id\": %s%%", idStr)
+	return q.Where("(CAST(resume_certifications AS TEXT) LIKE ? OR CAST(resume_certifications AS TEXT) LIKE ?)", pat1, pat2)
+}
+
 // applyFilters 在查询上叠加筛选轴（visibility=open 已由调用方保证）。
 func (s *RecruitService) applyFilters(q *gorm.DB, p RecruitListParams) *gorm.DB {
 	if v := strings.TrimSpace(p.Region); v != "" {
@@ -112,11 +124,7 @@ func (s *RecruitService) applyFilters(q *gorm.DB, p RecruitListParams) *gorm.DB 
 		q = q.Where("expected_position_id = ?", *p.PositionID)
 	}
 	if p.CredentialID != nil && *p.CredentialID > 0 {
-		// 持证 JSON 中包含该 credential_id（CAST 兼容，精确匹配 "credential_id":<id> 避免数字误匹配日期等）
-		idStr := strconv.Itoa(*p.CredentialID)
-		pat1 := fmt.Sprintf("%%\"credential_id\":%s%%", idStr)
-		pat2 := fmt.Sprintf("%%\"credential_id\": %s%%", idStr)
-		q = q.Where("(CAST(resume_certifications AS TEXT) LIKE ? OR CAST(resume_certifications AS TEXT) LIKE ?)", pat1, pat2)
+		q = resumeHoldsCredential(q, *p.CredentialID)
 	}
 	if p.SalaryMin != nil {
 		// 候选期望不低于招聘方给出的下限视为匹配；面议视为通过

@@ -97,9 +97,7 @@ func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, 
 		if qType != "" {
 			q = q.Where("question.type = ?", qType)
 		}
-		if credentialID != nil {
-			q = q.Where("question.credential_id = ?", *credentialID)
-		}
+		q = EntityOwnedBy(q, "question.credential_id", credentialID)
 		if minWrongCount != nil {
 			q = q.Where("wrong_question.wrong_count >= ?", *minWrongCount)
 		}
@@ -213,10 +211,7 @@ func (s *WrongQuestionService) RedoWrongQuestion(studentID, questionID int, user
 	if err := s.db.Where("student_id = ? AND question_id = ? AND is_removed = ?", studentID, questionID, false).First(&wq).Error; err != nil {
 		return nil, errors.New("错题记录不存在")
 	}
-	q := s.db.Model(&model.Question{}).Where("id = ?", questionID)
-	if credentialID != nil {
-		q = q.Where("credential_id = ?", *credentialID)
-	}
+	q := EntityOwnedBy(s.db.Model(&model.Question{}), "credential_id", credentialID).Where("id = ?", questionID)
 	var question model.Question
 	if err := q.First(&question).Error; err != nil {
 		return nil, errors.New("题目不存在")

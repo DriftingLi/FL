@@ -45,9 +45,7 @@ func ListCourses(db *gorm.DB, page, pageSize int, opts CourseListOptions) (Cours
 		if opts.LevelID != nil {
 			q = q.Where("level_id = ?", *opts.LevelID)
 		}
-		if opts.CredentialID != nil {
-			q = q.Where("credential_id = ?", *opts.CredentialID)
-		}
+		q = EntityOwnedBy(q, "credential_id", opts.CredentialID)
 		if opts.Filter == "hot" {
 			q = q.Where("is_hot = ?", true)
 		} else if opts.Filter == "featured" {

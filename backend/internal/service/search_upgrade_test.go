@@ -88,7 +88,7 @@ func TestSearchHitPositionOrderingAndSnippet(t *testing.T) {
 	_ = bodyHit
 	mk("液压系统原理", "与本关键词无关的正文")
 
-	got, err := svc.Search("液压", SearchTypeCourse, 1, 20)
+	got, err := svc.Search("液压", SearchTypeCourse, 1, 20, nil)
 	if err != nil {
 		t.Fatalf("搜索失败: %v", err)
 	}
@@ -131,11 +131,11 @@ func TestSearchMatchesCourseDescriptionAndFeaturedBody(t *testing.T) {
 		t.Fatalf("建精选失败: %v", err)
 	}
 
-	coursePage, err := svc.Search("液压", SearchTypeCourse, 1, 20)
+	coursePage, err := svc.Search("液压", SearchTypeCourse, 1, 20, nil)
 	if err != nil || coursePage.(*SearchPageDTO).Total != 1 {
 		t.Fatalf("课程简介应参与匹配: %v %+v", err, coursePage)
 	}
-	contentPage, err := svc.Search("液压", SearchTypeContent, 1, 20)
+	contentPage, err := svc.Search("液压", SearchTypeContent, 1, 20, nil)
 	if err != nil || contentPage.(*SearchPageDTO).Total != 1 {
 		t.Fatalf("内容精选正文应参与匹配: %v %+v", err, contentPage)
 	}
@@ -154,7 +154,7 @@ func TestSearchTopicMatchesReplyContent(t *testing.T) {
 		t.Fatalf("建回复失败: %v", err)
 	}
 
-	got, err := svc.Search("液压泵", SearchTypeTopic, 1, 20)
+	got, err := svc.Search("液压泵", SearchTypeTopic, 1, 20, nil)
 	if err != nil {
 		t.Fatalf("搜索失败: %v", err)
 	}
@@ -183,7 +183,7 @@ func TestSearchAllIncludesChapterSection(t *testing.T) {
 	if err := db.Create(&ch).Error; err != nil {
 		t.Fatalf("建章节失败: %v", err)
 	}
-	all, err := svc.Search("液压", "", 1, 20)
+	all, err := svc.Search("液压", "", 1, 20, nil)
 	if err != nil {
 		t.Fatalf("聚合搜索失败: %v", err)
 	}
@@ -209,7 +209,7 @@ func TestSearchFactsAreAnonymousAndZeroResultQueryable(t *testing.T) {
 	}
 
 	// 聚合搜索（type 缺省）+ 零命中 = 零结果搜索
-	if _, err := svc.Search("查无此词的液压", "", 1, 20); err != nil {
+	if _, err := svc.Search("查无此词的液压", "", 1, 20, nil); err != nil {
 		t.Fatalf("搜索失败: %v", err)
 	}
 	var facts int64
@@ -226,7 +226,7 @@ func TestSearchFactsAreAnonymousAndZeroResultQueryable(t *testing.T) {
 	}
 
 	// **指定类型**搜索的 0 命中不算零结果词：那只说明该分区没有，不等于平台没有
-	if _, err := svc.Search("查无此词的章节", SearchTypeChapter, 1, 20); err != nil {
+	if _, err := svc.Search("查无此词的章节", SearchTypeChapter, 1, 20, nil); err != nil {
 		t.Fatalf("搜索失败: %v", err)
 	}
 	zero, err = svc.ZeroResultKeywords(30, 20)
@@ -248,7 +248,7 @@ func TestSearchFactsAreAnonymousAndZeroResultQueryable(t *testing.T) {
 	if err := db.Create(&model.Chapter{CourseID: c.CourseID, Title: "液压章节", Content: "x", CreatedAt: testutil.Now()}).Error; err != nil {
 		t.Fatalf("建章节失败: %v", err)
 	}
-	if _, err := svc.Search("液压", "", 1, 20); err != nil {
+	if _, err := svc.Search("液压", "", 1, 20, nil); err != nil {
 		t.Fatalf("搜索失败: %v", err)
 	}
 	var last model.SearchFact
@@ -289,7 +289,7 @@ func TestSearchSecondaryOrderKeys(t *testing.T) {
 	mk("液压入门", 9)
 	mk("液压进阶", 1)
 
-	got, err := svc.Search("液压", SearchTypeCourse, 1, 20)
+	got, err := svc.Search("液压", SearchTypeCourse, 1, 20, nil)
 	if err != nil {
 		t.Fatalf("搜索失败: %v", err)
 	}
@@ -309,7 +309,7 @@ func TestSearchSecondaryOrderKeys(t *testing.T) {
 	if err := db.Create(&t2).Error; err != nil {
 		t.Fatalf("建帖失败: %v", err)
 	}
-	topics, err := svc.Search("液压泵", SearchTypeTopic, 1, 20)
+	topics, err := svc.Search("液压泵", SearchTypeTopic, 1, 20, nil)
 	if err != nil {
 		t.Fatalf("搜索失败: %v", err)
 	}

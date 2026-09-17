@@ -291,12 +291,12 @@ func searchPartitionPage[R any](s *SearchService, spec partitionSpec[R], p searc
 }
 
 // searchItems 单类型分页搜索：分发 = 分区表查表（无 switch——加分区不会漏改分发分支）。
-func (s *SearchService) searchItems(searchType, keyword string, page, pageSize int, credentialID ...*int) ([]SearchItemDTO, int64, error) {
+func (s *SearchService) searchItems(searchType, keyword string, page, pageSize int, credentialID *int) ([]SearchItemDTO, int64, error) {
 	part, ok := searchPartitionByKey(searchType)
 	if !ok {
 		return nil, 0, fmt.Errorf("搜索类型仅支持 %s", strings.Join(searchPartitionKeys(), "/"))
 	}
-	return part.search(s, newSearchParams(keyword, page, pageSize, credOf(credentialID)))
+	return part.search(s, newSearchParams(keyword, page, pageSize, credentialID))
 }
 
 // containsFold 大小写不敏感的包含判定（按字符，不做 Unicode 折叠的长度假设）。
@@ -305,7 +305,7 @@ func containsFold(haystack, needle string) bool {
 }
 
 // Search 全局搜索。searchType 为空时返回各分区 top 5；否则该类型分页结果。
-func (s *SearchService) Search(keyword, searchType string, page, pageSize int, credentialID ...*int) (any, error) {
+func (s *SearchService) Search(keyword, searchType string, page, pageSize int, credentialID *int) (any, error) {
 	keyword = strings.TrimSpace(keyword)
 	if keyword == "" {
 		return nil, errors.New("关键词不能为空")
@@ -313,10 +313,7 @@ func (s *SearchService) Search(keyword, searchType string, page, pageSize int, c
 	if utf8.RuneCountInString(keyword) > maxSearchKeywordLen {
 		return nil, fmt.Errorf("关键词过长（最多 %d 个字符）", maxSearchKeywordLen)
 	}
-	var cred *int
-	if len(credentialID) > 0 {
-		cred = credentialID[0]
-	}
+	cred := credentialID
 	if searchType == "" {
 		// 聚合 = 遍历分区声明表逐区装配（top N + 总数）：响应形状零漂移，加分区只改声明表。
 		sections := make(map[string]SearchSectionDTO, len(searchPartitions))

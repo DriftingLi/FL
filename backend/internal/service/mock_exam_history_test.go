@@ -97,7 +97,7 @@ func TestStartCleansAbandonedExams(t *testing.T) {
 		t.Fatalf("回写 created_at 失败: %v", err)
 	}
 
-	if _, err := svc.Start(student.ID, 1, 90); err != nil {
+	if _, err := svc.Start(student.ID, 1, 90, nil); err != nil {
 		t.Fatalf("开始考试失败: %v", err)
 	}
 
@@ -233,7 +233,7 @@ func TestStartKeepsOtherStudentsAbandoned(t *testing.T) {
 		t.Fatalf("回写 created_at 失败: %v", err)
 	}
 
-	if _, err := svc.Start(me.ID, 1, 90); err != nil {
+	if _, err := svc.Start(me.ID, 1, 90, nil); err != nil {
 		t.Fatalf("开始考试失败: %v", err)
 	}
 

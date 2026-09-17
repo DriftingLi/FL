@@ -239,7 +239,7 @@ func TestQuestionTagCRUD(t *testing.T) {
 	if updated.Name != "液压系统" {
 		t.Fatalf("更新结果不匹配: %+v", updated)
 	}
-	active := svc.ListQuestionTags(true, true)
+	active := svc.ListQuestionTags(true, true, nil)
 	if len(active) != 1 {
 		t.Fatal("应看到 1 条标签")
 	}
@@ -310,7 +310,7 @@ func TestListQuestionTags_QuestionCount(t *testing.T) {
 	// 另一个无题目标签
 	empty, _ := svc.CreateQuestionTag(QuestionTagInput{Code: "brake", Name: "制动"})
 
-	studentTags := svc.ListQuestionTags(true, false)
+	studentTags := svc.ListQuestionTags(true, false, nil)
 	byID := map[int]QuestionTagDict{}
 	for _, d := range studentTags {
 		byID[d.ID] = d
@@ -322,7 +322,7 @@ func TestListQuestionTags_QuestionCount(t *testing.T) {
 		t.Fatalf("无题目标签应为 0, got %v", byID[empty.ID].QuestionCount)
 	}
 
-	adminTags := svc.ListQuestionTags(false, true)
+	adminTags := svc.ListQuestionTags(false, true, nil)
 	byID2 := map[int]QuestionTagDict{}
 	for _, d := range adminTags {
 		byID2[d.ID] = d
@@ -379,7 +379,7 @@ func TestListQuestionTags_CredentialPartition(t *testing.T) {
 			t.Fatalf("B证件分区应为 0, got %v", d.QuestionCount)
 		}
 	}
-	global := svc.ListQuestionTags(true, false)
+	global := svc.ListQuestionTags(true, false, nil)
 	for _, d := range global {
 		if d.ID == tag.ID && (d.QuestionCount == nil || *d.QuestionCount != 3) {
 			t.Fatalf("不分区应统计全部 3 道, got %v", d.QuestionCount)
@@ -465,7 +465,7 @@ func TestGetCatalogTree(t *testing.T) {
 		t.Fatalf("创建章节失败: %v", err)
 	}
 
-	tree := svc.GetCatalogTree()
+	tree := svc.GetCatalogTree(nil)
 	if len(tree.Specialties) != 1 {
 		t.Fatalf("应只返回启用的专业方向, got %d", len(tree.Specialties))
 	}
@@ -515,7 +515,7 @@ func TestGetCatalogTree_CredentialPartition(t *testing.T) {
 	if n := countCourses(svc.GetCatalogTree(&credB.ID)); n != 0 {
 		t.Fatalf("B证件分区应 0 门课, got %d", n)
 	}
-	if n := countCourses(svc.GetCatalogTree()); n != 1 {
+	if n := countCourses(svc.GetCatalogTree(nil)); n != 1 {
 		t.Fatalf("不分区应 1 门课, got %d", n)
 	}
 }
@@ -695,7 +695,7 @@ func TestCourseSortOrder(t *testing.T) {
 	c0 := model.Course{Name: "课程C", Status: 1, SortOrder: 0,
 		SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID), CreatedAt: testutil.Now()}
 	db.Create(&c0)
-	page, err := svc.GetCourses(1, 10, "", nil, nil, nil)
+	page, err := svc.GetCourses(1, 10, "", nil, nil, nil, "")
 	if err != nil {
 		t.Fatalf("GetCourses 失败: %v", err)
 	}
@@ -840,14 +840,14 @@ func TestCourseService_TrainingFields(t *testing.T) {
 	}
 
 	// 学员端列表按专业方向/等级过滤
-	list, err := svc.GetCourses(1, 10, nil, ptrInt(spec.SpecialtyID), ptrInt(lv.LevelID))
+	list, err := svc.GetCourses(1, 10, nil, ptrInt(spec.SpecialtyID), ptrInt(lv.LevelID), "")
 	if err != nil {
 		t.Fatalf("GetCourses 失败: %v", err)
 	}
 	if list.Total != 1 {
 		t.Fatalf("过滤后应 1 条, got %v", list.Total)
 	}
-	empty, err := svc.GetCourses(1, 10, nil, ptrInt(spec.SpecialtyID), ptrInt(9999))
+	empty, err := svc.GetCourses(1, 10, nil, ptrInt(spec.SpecialtyID), ptrInt(9999), "")
 	if err != nil {
 		t.Fatalf("GetCourses 失败: %v", err)
 	}
@@ -898,7 +898,7 @@ func TestQuestionBank_Tags(t *testing.T) {
 	}
 
 	// 按标签过滤
-	byTag, err := qsvc.ListQuestions(1, 20, "", "", "", ptrInt(tag2.ID), nil)
+	byTag, err := qsvc.ListQuestions(1, 20, "", "", "", ptrInt(tag2.ID), nil, "")
 	if err != nil {
 		t.Fatalf("ListQuestions 失败: %v", err)
 	}

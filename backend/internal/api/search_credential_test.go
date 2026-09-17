@@ -74,7 +74,7 @@ func TestSearchAggregationFollowsCredential(t *testing.T) {
 	}
 
 	// 聚合路径不带证件：不过滤（两分区各 2 条）
-	all, err = svc.Search("叉车", "", 1, 20)
+	all, err = svc.Search("叉车", "", 1, 20, nil)
 	if err != nil {
 		t.Fatalf("聚合搜索失败: %v", err)
 	}
