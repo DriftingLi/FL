@@ -58,6 +58,12 @@ func RunMigrations(dsn, direction string, logger *zap.Logger, args ...string) er
 			return fmt.Errorf("migrate force %d 失败: %w", version, err)
 		}
 		logger.Info("迁移版本已强制设置", zap.Int("version", version))
+	case "check-columns":
+		// 单向列对账（#1099 / ADR-0056 §6）：GORM 模型期望的列 ⊆ information_schema 实际列。
+		// 用法: DATABASE_URL=... go run ./cmd/migrate check-columns
+		if err := CheckColumns(dsn, logger); err != nil {
+			return err
+		}
 	case "status":
 		// 查看当前迁移版本和 dirty 状态
 		version, dirty, err := m.Version()

@@ -10,7 +10,7 @@
     <UiAsyncSection
       :error="loadError"
       :loading="loading"
-      :empty="false"
+      :empty="isEmpty"
       :retrying="retrying"
       error-title="内容加载失败"
       error-description="内容可能已下架，或网络异常"
@@ -74,11 +74,15 @@ const router = useRouter()
 
 const detail = ref<FeaturedContentDetailDTO | null>(null)
 
-const { loading, loadError, retrying, retry, run } = useAsyncPage(async () => {
-  const id = Number(route.params.id)
-  if (!id) return
-  detail.value = await featuredApi.getDetail(id)
-})
+// 404（内容已下架）= 空态、其余 = 错误态 + retry；判据收在 useAsyncPage（#1101）
+const { loading, loadError, retrying, isEmpty, retry, run } = useAsyncPage(
+  async () => {
+    const id = Number(route.params.id)
+    if (!id) return
+    detail.value = await featuredApi.getDetail(id)
+  },
+  { itemsRef: detail }
+)
 
 const publishedText = computed(() => ((detail.value?.published_at ?? detail.value?.created_at) ?? '').slice(0, 10))
 

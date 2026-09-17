@@ -191,12 +191,49 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: node scripts/check-api-seam.mjs --all
 
+      # 契约消费面覆盖锁（ADR-0056 §11 / #1100）：请求层打出的每个 method+path 必须落在
+      # apitypes.Domains 的端点集内（此前没有任何守卫管这个方向：消费了未登记端点无人变红）。
+      # 存量欠条逐条登记在脚本 ALLOWLIST（现状 4 条，全是 createCrud 动态拼装；4 条巡检端点已随
+      # #1097 补齐注解并登记域声明表后销账，脚本头部保留历史留痕），补一个销一个；
+      # 条目挂在已登记端点上会被判红（销账信号）。
+      # 判定逻辑的自检在 el-controls-selftest job 的「契约消费面覆盖锁」一步。
+      - name: 契约消费面覆盖锁（请求层消费的端点必须已登记）
+        working-directory: ${{ github.workspace }}
+        run: node scripts/check-api-consumers.mjs --all
+
       # 列表四段式守卫（ADR-0053 §6 / #1054）：页面不得重新手写四分支链。
       # 存量 15 个文件在脚本 ALLOWLIST 里逐条登记（迁移按批推进、迁一个销一个号）；
       # 新代码命中即报红。
       - name: 列表四段式守卫（页面不得手写四分支链）
         working-directory: ${{ github.workspace }}
         run: node scripts/check-async-section.mjs --all
+
+      # AI 助手发送编排守卫（ADR-0056 §10 / #1104）：pages/ai-assistant 不得再出现发送编排
+      # （sendMessage / streamChat 两个入口名字），一轮发送的编排与三种终态在 store。
+      # 判定逻辑的自检在 el-controls-selftest job。
+      - name: AI 助手发送编排守卫（页面不得再起流式编排）
+        working-directory: ${{ github.workspace }}
+        run: node scripts/check-ai-assistant-send.mjs --all
+
+      # 守卫增量门（ADR-0056 §5 / #1094）：除上面的 --all 全量外，再按「相对默认分支的新增行」
+      # 跑一遍四个守卫。**口径要说准**：增量门不比全量更严——判定面是同一棵树 --all 的子集
+      # （同一条 scanSource，只是再按新增行号过滤），它补的是两件事：① CI 里真的走通「取 diff →
+      # 解析新增行 → 扫描」这条管道（收敛前 check-async-section 的 --diff 因实参形态错恒 0 违规）；
+      # ② --diff 自身 fail-closed（base 解析不了 / git diff 失败 / 新增文件读不出来都非零退出）。
+      # 本 job 的 checkout 是浅克隆（默认 depth=1），base 历史不在工作区里，这里显式取回默认分支；
+      # 取不回 → 本步红。浅历史里没有 merge base，added-lines 会按它既有的 CI 口径退成双点 diff。
+      - name: 守卫增量门（四个守卫只看相对默认分支的新增行）
+        working-directory: ${{ github.workspace }}
+        run: |
+          DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
+          # 显式写目标 ref：checkout 是单分支浅克隆时，裸 `git fetch origin <branch>` 只写 FETCH_HEAD，
+          # 不会建 origin/<branch>（本机用浅克隆实测过），守卫会因 base 不可得而红。
+          git fetch --no-tags --depth=1 origin "+refs/heads/$DEFAULT_BRANCH:refs/remotes/origin/$DEFAULT_BRANCH"
+          node scripts/check-el-controls.mjs --diff "origin/$DEFAULT_BRANCH"
+          node scripts/check-api-seam.mjs --diff "origin/$DEFAULT_BRANCH"
+          node scripts/check-async-section.mjs --diff "origin/$DEFAULT_BRANCH"
+          node scripts/check-api-consumers.mjs --diff "origin/$DEFAULT_BRANCH"
+          node scripts/check-ai-assistant-send.mjs --diff "origin/$DEFAULT_BRANCH"
 
       - name: 前端单元测试
         run: npm test
@@ -265,7 +302,9 @@ jobs:
           version: v0.74.0
 
   # ============================================================
-  # Stage 6: 数据库迁移校验
+  # Stage 6: 数据库迁移校验（#1099 / ADR-0056 §6）
+  #   空库真跑 up（重建 baseline）→ 单向列对账（模型 ⊆ 实际）→ 真跑 down（回滚到空库，
+  #   并断言对账仍能报出缺表）。此前的版本只 find | wc -l 数文件个数，一行都没连过这里起的库。
   # ============================================================
   migration-check:
     needs: changes
@@ -288,6 +327,9 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    env:
+      # 迁移 / 对账 / 回滚三步共用同一个空库连接串（服务容器见上方 services.postgres）
+      DATABASE_URL: postgres://migrateuser:migratepass@localhost:5432/forklift_migrate?sslmode=disable
     steps:
       - uses: actions/checkout@v4
 
@@ -297,9 +339,7 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: backend/go.sum
 
-      - name: 验证迁移脚本完整性（up + down）
-        env:
-          DATABASE_URL: postgres://migrateuser:migratepass@localhost:5432/forklift_migrate?sslmode=disable
+      - name: 迁移文件成对性预检（命名 + up/down 配对，不连库）
         run: |
           echo ">>> 检查迁移脚本..."
           UP_COUNT=$(find migrations -name "*.up.sql" | wc -l)
@@ -310,6 +350,38 @@ jobs:
             exit 1
           fi
           echo "迁移文件完整性检查通过"
+
+      - name: 真跑 migrate up（空库重建 baseline）
+        run: |
+          echo ">>> 在空库上执行全部 up 迁移..."
+          go run ./cmd/migrate up
+
+      - name: 单向列对账（GORM 模型期望的列 ⊆ information_schema 实际列）
+        run: |
+          echo ">>> 列对账：模型加了字段却忘写迁移，在这里红..."
+          go run ./cmd/migrate check-columns
+
+      - name: 真跑 migrate down（回滚到空库；此时对账必须报缺表）
+        run: |
+          echo ">>> 回滚全部迁移..."
+          go run ./cmd/migrate down
+          # down 之后业务表应当全部消失。用上一步同一个对账命令做**反向断言**：
+          # 它必须非零退出，且失败输出里必须点名 baseline 的关键表。这样
+          # 「回滚干净」与「缺表确实会被报出来」在同一条真实链路上各验证一次，
+          # 而不是靠人数一遍。
+          if go run ./cmd/migrate check-columns >/tmp/after-down.log 2>&1; then
+            echo "错误: down 之后列对账仍然通过——业务表没有随迁移一起回滚"
+            cat /tmp/after-down.log
+            exit 1
+          fi
+          for t in hrwai_users question credential; do
+            grep -q "\"$t\"" /tmp/after-down.log || {
+              echo "错误: down 后对账未报出整表缺失: $t"
+              cat /tmp/after-down.log
+              exit 1
+            }
+          done
+          echo "回滚验证通过：hrwai_users / question / credential 已随 down 消失，且对账能报出缺表"
 
   # ============================================================
   # Stage 6.5: 移动端 - 契约与静态守护单测（jest node 环境，无浏览器依赖）
@@ -374,6 +446,19 @@ jobs:
 
       - name: 表驱动单测（列表四段式守卫判定逻辑）
         run: node --test scripts/check-async-section.test.mjs
+
+      - name: 表驱动单测（AI 助手发送编排守卫判定逻辑）
+        run: node --test scripts/check-ai-assistant-send.test.mjs
+
+      # ADR-0056 §11 / #1100：消费面覆盖锁的判定面（嵌套泛型实参 / 变量路径 / 欠条销账 / 死条目）
+      - name: 表驱动单测（契约消费面覆盖锁判定逻辑）
+        run: node --test scripts/check-api-consumers.test.mjs
+
+      # ADR-0056 §5 / #1094：三个守卫共用的 runner 单点（argv / 走查 / --diff / allowlist /
+      # 报告与退出码）—— 表驱动自测用合成 diff 端到端驱动，正样本必须红、负样本必须绿；
+      # 历史病根是 --diff 实参形态错导致恒 0 违规而无人接住。
+      - name: 表驱动单测（守卫 runner 单点）
+        run: node --test scripts/guard.test.mjs
 
       # ADR-0053 §10：新增行解析是「判据的判据」，它错了两个守卫都会静默漏扫（假绿）
       - name: 表驱动单测（新增行解析单点实现）

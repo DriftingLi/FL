@@ -482,12 +482,18 @@ func (s *ContributionService) ListPublic(in ListPublicInput) (*ContributionPageR
 	if in.Sort == "hot" {
 		order = "downloads_count DESC, created_at DESC"
 	}
-	items, total, page, pageSize := paging.QueryWithMax[model.UserContribution](
+	items, total, page, pageSize, err := paging.QueryWithMax[model.UserContribution](
 		s.db, in.Page, in.PageSize, 20, 50, order,
 		func(q *gorm.DB) *gorm.DB {
-			return q.Where("credential_id = ? AND status = ?", in.CredentialID, ContributionStatusApproved)
+			// 投稿浏览按目标证件分区（归属分区，ADR-0056 §2）：CredentialID 是必填位，
+			// 不存在「未选证件」的 nil 分支。
+			return EntityOwnedBy(q, "credential_id", &in.CredentialID).
+				Where("status = ?", ContributionStatusApproved)
 		},
 	)
+	if err != nil {
+		return nil, err
+	}
 	dto := make([]ContributionItemDTO, 0, len(items))
 	for i := range items {
 		dto = append(dto, *s.toDTO(&items[i], false))
@@ -497,12 +503,15 @@ func (s *ContributionService) ListPublic(in ListPublicInput) (*ContributionPageR
 
 // ListMine 我的投稿：全部状态，按创建时间倒序。
 func (s *ContributionService) ListMine(userID, page, pageSize int) (*ContributionPageResult, error) {
-	items, total, page, pageSize := paging.QueryWithMax[model.UserContribution](
+	items, total, page, pageSize, err := paging.QueryWithMax[model.UserContribution](
 		s.db, page, pageSize, 20, 50, "created_at DESC",
 		func(q *gorm.DB) *gorm.DB {
 			return q.Where("user_id = ?", userID)
 		},
 	)
+	if err != nil {
+		return nil, err
+	}
 	dto := make([]ContributionItemDTO, 0, len(items))
 	for i := range items {
 		dto = append(dto, *s.toDTO(&items[i], true))
@@ -593,12 +602,15 @@ func (s *ContributionService) Withdraw(userID int, contributionID int64) error {
 
 // ListPending 审核队列（pending 分页；管理端/讲师端共用）。
 func (s *ContributionService) ListPending(page, pageSize int) (*ContributionPageResult, error) {
-	items, total, page, pageSize := paging.QueryWithMax[model.UserContribution](
+	items, total, page, pageSize, err := paging.QueryWithMax[model.UserContribution](
 		s.db, page, pageSize, 20, 50, "created_at ASC",
 		func(q *gorm.DB) *gorm.DB {
 			return q.Where("status = ?", ContributionStatusPending)
 		},
 	)
+	if err != nil {
+		return nil, err
+	}
 	dto := make([]ContributionItemDTO, 0, len(items))
 	for i := range items {
 		dto = append(dto, *s.toDTO(&items[i], true))
@@ -847,7 +859,7 @@ type ContributionReportPageResult struct {
 
 // ListReports 举报队列（status 0 待处理 / 1 已处理；nil=全部）。
 func (s *ContributionService) ListReports(page, pageSize int, status *int) (*ContributionReportPageResult, error) {
-	items, total, page, pageSize := paging.QueryWithMax[model.ContributionReport](
+	items, total, page, pageSize, err := paging.QueryWithMax[model.ContributionReport](
 		s.db, page, pageSize, 20, 50, "created_at DESC",
 		func(q *gorm.DB) *gorm.DB {
 			if status != nil {
@@ -856,6 +868,9 @@ func (s *ContributionService) ListReports(page, pageSize int, status *int) (*Con
 			return q
 		},
 	)
+	if err != nil {
+		return nil, err
+	}
 	dto := make([]ContributionReportItemDTO, 0, len(items))
 	for i := range items {
 		it := &items[i]

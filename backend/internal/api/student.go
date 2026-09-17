@@ -95,10 +95,17 @@ func (h *StudentHandler) GetRecords(c *gin.Context) {
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *studyRecordsReq) (*service.StudyRecordPageResult, error) {
-			result := h.svc.GetRecords(req.UserID, req.Page, req.PageSize, req.StartDate, req.EndDate)
+			result, err := h.svc.GetRecords(req.UserID, req.Page, req.PageSize, req.StartDate, req.EndDate)
+			if err != nil {
+				return nil, err
+			}
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *studyRecordsReq, resp *service.StudyRecordPageResult, _ error) {
+		Render: func(c *gin.Context, _ *studyRecordsReq, resp *service.StudyRecordPageResult, err error) {
+			if err != nil {
+				response.ServerError(c, err.Error())
+				return
+			}
 			response.Success(c, resp)
 		},
 	}.Handle(c)

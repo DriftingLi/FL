@@ -41,6 +41,10 @@ Windows 本机（`E:\` 盘）上 worktree 可用，但有几处与 Linux 不同�
 
 - **一 worktree 一分支一会话**：`git worktree add E:\wt-<task> -b feat/<task> origin/master`，全程在 `E:\wt-<task>` 内改、提交、push、开 PR；用完 `git worktree remove E:\wt-<task>` + `git branch -D feat/<task>`。放在 `E:\wt-<task>`（与主树同级）而非盘符根，便于一眼看清是哪个会话的目录。
 
+- **worktree 目录名不要以 `.` 开头**（2026-09-17 实测，血账）：`jest` 的 haste-map 爬取**跳过点开头的目录** ⇒ 项目放在 `D:\FL\.wt-<task>` 时 `npm run test:unit` 报
+  `No tests found … testMatch: … - 0 matches`（同一条命令在主树与 `D:\FL\wt-<task>` 下能列出全部 76 个套件；`git worktree move .wt-1082 wt-1082b` 后立刻恢复）。
+  它**不报错、也不提示配置问题**，只是「一个测试都找不到」，很容易被读成「测试坏了」。⇒ 会话 worktree 用 `D:\FL\wt-<task>`（无点），**不要**用 `D:\FL\.wt-<task>`。
+
 - **`node_modules` 不要每个 worktree 重装**：目录联接（junction）共享主树那一份，省掉每个 worktree 2–5 分钟的 `npm ci`：
   ```
   cmd /c mklink /J <worktree>\training-app\叉车维修培训学员端跨端应用\node_modules <主树>\training-app\叉车维修培训学员端跨端应用\node_modules

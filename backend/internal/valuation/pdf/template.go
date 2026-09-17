@@ -15,6 +15,7 @@ import (
 
 	"github.com/jung-kurt/gofpdf"
 
+	"forklift-training/internal/pdfutil"
 	"forklift-training/internal/valuation/model"
 )
 
@@ -102,7 +103,7 @@ func (g *Generator) GenerateReport(r *model.EvaluationDetail, dimensionScores []
 	pdf.SetMargins(pageMargin, pageMargin, pageMargin)
 	// 关闭自动分页,由 3 个 render 方法自行控制 AddPage
 	pdf.SetAutoPageBreak(false, pageMargin)
-	if err := ensureFontLoaded(pdf); err != nil {
+	if err := pdfutil.EnsureFontLoaded(pdf); err != nil {
 		return nil, err
 	}
 
@@ -142,12 +143,12 @@ func (g *Generator) renderCover(pdf *gofpdf.Fpdf, r *model.EvaluationDetail) {
 	drawForkliftIcon(pdf, cx, logoY+logoSize/2)
 
 	// 公司中文名
-	pdf.SetFont(FontSimHeiBold, "B", 15)
+	pdf.SetFont(pdfutil.FontSimHeiBold, "B", 15)
 	pdf.SetTextColor(primary[0], primary[1], primary[2])
 	pdf.SetXY(pageMargin, logoY+logoSize+4)
 	pdf.CellFormat(contentWidth, 6, orgName, "", 1, "C", false, 0, "")
 	// 公司英文名
-	pdf.SetFont(FontSimHei, "", 10.5)
+	pdf.SetFont(pdfutil.FontSimHei, "", 10.5)
 	pdf.SetTextColor(textLite[0], textLite[1], textLite[2])
 	pdf.SetXY(pageMargin, logoY+logoSize+12)
 	pdf.CellFormat(contentWidth, 5, orgNameEN, "", 1, "C", false, 0, "")
@@ -157,12 +158,12 @@ func (g *Generator) renderCover(pdf *gofpdf.Fpdf, r *model.EvaluationDetail) {
 	drawCenterFadeBar(pdf, cx, dividerY, 30, 0.6, primary)
 
 	// 大标题
-	pdf.SetFont(FontSimHeiBold, "B", 28)
+	pdf.SetFont(pdfutil.FontSimHeiBold, "B", 28)
 	pdf.SetTextColor(text[0], text[1], text[2])
 	pdf.SetXY(pageMargin, dividerY+10)
 	pdf.CellFormat(contentWidth, 14, "叉车残值评估报告", "", 1, "C", false, 0, "")
 	// 英文副标题
-	pdf.SetFont(FontSimHei, "", 12)
+	pdf.SetFont(pdfutil.FontSimHei, "", 12)
 	pdf.SetTextColor(textLabel[0], textLabel[1], textLabel[2])
 	pdf.SetXY(pageMargin, dividerY+26)
 	pdf.CellFormat(contentWidth, 6, reportTitleEN, "", 1, "C", false, 0, "")
@@ -189,7 +190,7 @@ func (g *Generator) renderCover(pdf *gofpdf.Fpdf, r *model.EvaluationDetail) {
 	drawCenterFadeBar(pdf, cx, 244, 30, 0.6, primary)
 
 	// 底部提示
-	pdf.SetFont(FontSimHei, "", 10.5)
+	pdf.SetFont(pdfutil.FontSimHei, "", 10.5)
 	pdf.SetTextColor(textLite[0], textLite[1], textLite[2])
 	pdf.SetXY(pageMargin, 250)
 	pdf.CellFormat(contentWidth, 5, "本报告由系统自动生成,仅供参考", "", 1, "C", false, 0, "")
@@ -220,12 +221,12 @@ func coverVehicleLabel(r *model.EvaluationDetail) string {
 
 func drawCoverMetaRow(pdf *gofpdf.Fpdf, x, y, w float64, label, value string, valueBold bool, vc, lc rgb) {
 	gap := 3.0
-	pdf.SetFont(FontSimHei, "", 11.5)
+	pdf.SetFont(pdfutil.FontSimHei, "", 11.5)
 	labelW := pdf.GetStringWidth(label)
 	if valueBold {
-		pdf.SetFont(FontSimHeiBold, "B", 13)
+		pdf.SetFont(pdfutil.FontSimHeiBold, "B", 13)
 	} else {
-		pdf.SetFont(FontSimHei, "", 13)
+		pdf.SetFont(pdfutil.FontSimHei, "", 13)
 	}
 	valueW := pdf.GetStringWidth(value)
 	totalW := labelW + gap + valueW
@@ -234,14 +235,14 @@ func drawCoverMetaRow(pdf *gofpdf.Fpdf, x, y, w float64, label, value string, va
 		startX = x + (w-totalW)/2
 	}
 
-	pdf.SetFont(FontSimHei, "", 11.5)
+	pdf.SetFont(pdfutil.FontSimHei, "", 11.5)
 	pdf.SetTextColor(lc[0], lc[1], lc[2])
 	pdf.SetXY(startX, y)
 	pdf.CellFormat(labelW, 6, label, "", 0, "L", false, 0, "")
 	if valueBold {
-		pdf.SetFont(FontSimHeiBold, "B", 13)
+		pdf.SetFont(pdfutil.FontSimHeiBold, "B", 13)
 	} else {
-		pdf.SetFont(FontSimHei, "", 13)
+		pdf.SetFont(pdfutil.FontSimHei, "", 13)
 	}
 	pdf.SetTextColor(vc[0], vc[1], vc[2])
 	pdf.SetXY(startX+labelW+gap, y)
@@ -349,19 +350,19 @@ func (g *Generator) renderBasicInfoAndSummary(pdf *gofpdf.Fpdf, r *model.Evaluat
 func drawPageHeader(pdf *gofpdf.Fpdf, r *model.EvaluationDetail) {
 	y := 18.0
 	// 左:报告名
-	pdf.SetFont(FontSimHeiBold, "B", 14)
+	pdf.SetFont(pdfutil.FontSimHeiBold, "B", 14)
 	pdf.SetTextColor(primary[0], primary[1], primary[2])
 	pdf.SetXY(pageMargin, y)
 	pdf.CellFormat(120, 6, "叉车残值评估报告", "", 0, "L", false, 0, "")
 	// 副行
-	pdf.SetFont(FontSimHei, "", 9.5)
+	pdf.SetFont(pdfutil.FontSimHei, "", 9.5)
 	pdf.SetTextColor(textLite[0], textLite[1], textLite[2])
 	pdf.SetXY(pageMargin, y+6.5)
 	pdf.CellFormat(120, 4, fmt.Sprintf("报告编号: EV-%06d  |  生成日期: %s",
 		r.ID, time.Now().Format("2006-01-02")), "", 0, "L", false, 0, "")
 
 	// 右:公司名
-	pdf.SetFont(FontSimHei, "", 9.5)
+	pdf.SetFont(pdfutil.FontSimHei, "", 9.5)
 	pdf.SetTextColor(textLite[0], textLite[1], textLite[2])
 	pdf.SetXY(pageWidth-pageMargin-70, y+3)
 	pdf.CellFormat(70, 5, orgName, "", 0, "R", false, 0, "")
@@ -377,7 +378,7 @@ func drawPageFooter(pdf *gofpdf.Fpdf, page, total int) {
 	pdf.SetDrawColor(borderLite[0], borderLite[1], borderLite[2])
 	pdf.SetLineWidth(0.2)
 	pdf.Line(pageMargin, y-5, pageWidth-pageMargin, y-5)
-	pdf.SetFont(FontSimHei, "", 8.5)
+	pdf.SetFont(pdfutil.FontSimHei, "", 8.5)
 	pdf.SetTextColor(textPale[0], textPale[1], textPale[2])
 	pdf.SetXY(pageMargin, y-3)
 	pdf.CellFormat(80, 4, orgName, "", 0, "L", false, 0, "")
@@ -390,7 +391,7 @@ func drawSectionHeader(pdf *gofpdf.Fpdf, title string, x, y float64) {
 	pdf.SetFillColor(primary[0], primary[1], primary[2])
 	pdf.RoundedRect(x, y+1.5, 1.4, 6.5, 0.7, "1234", "F")
 	// 标题(与下方表格内容左对齐)
-	pdf.SetFont(FontSimHeiBold, "B", h1Pt)
+	pdf.SetFont(pdfutil.FontSimHeiBold, "B", h1Pt)
 	pdf.SetTextColor(text[0], text[1], text[2])
 	pdf.SetXY(x+3.5, y)
 	pdf.CellFormat(150, 7, title, "", 0, "L", false, 0, "")
@@ -443,7 +444,7 @@ func drawBasicInfoTable(pdf *gofpdf.Fpdf, r *model.EvaluationDetail, x, y, w flo
 			pdf.Rect(x, ry, w, float64(rowH), "F")
 		}
 		// 第一组 label
-		pdf.SetFont(FontSimHei, "", 10)
+		pdf.SetFont(pdfutil.FontSimHei, "", 10)
 		pdf.SetTextColor(textMuted[0], textMuted[1], textMuted[2])
 		pdf.SetXY(x+3, ry+1.5)
 		pdf.CellFormat(colLabelW-3, float64(rowH)-1.5, row.label1, "", 0, "L", false, 0, "")
@@ -451,21 +452,21 @@ func drawBasicInfoTable(pdf *gofpdf.Fpdf, r *model.EvaluationDetail, x, y, w flo
 		if row.badge1 {
 			drawStatusBadge(pdf, x+colLabelW+3, ry+1.5, colValueW-6, row.value1)
 		} else {
-			pdf.SetFont(FontSimHei, "", 10)
+			pdf.SetFont(pdfutil.FontSimHei, "", 10)
 			pdf.SetTextColor(text[0], text[1], text[2])
 			pdf.SetXY(x+colLabelW+3, ry+1.5)
 			pdf.CellFormat(colValueW-3, float64(rowH)-1.5, row.value1, "", 0, "L", false, 0, "")
 		}
 		// 第二组(非跨列)
 		if !row.span1 {
-			pdf.SetFont(FontSimHei, "", 10)
+			pdf.SetFont(pdfutil.FontSimHei, "", 10)
 			pdf.SetTextColor(textMuted[0], textMuted[1], textMuted[2])
 			pdf.SetXY(x+colTotal+3, ry+1.5)
 			pdf.CellFormat(colLabelW-3, float64(rowH)-1.5, row.label2, "", 0, "L", false, 0, "")
 			if row.badge2 {
 				drawStatusBadge(pdf, x+colTotal+colLabelW+3, ry+1.5, colValueW-6, row.value2)
 			} else {
-				pdf.SetFont(FontSimHei, "", 10)
+				pdf.SetFont(pdfutil.FontSimHei, "", 10)
 				pdf.SetTextColor(text[0], text[1], text[2])
 				pdf.SetXY(x+colTotal+colLabelW+3, ry+1.5)
 				pdf.CellFormat(colValueW-3, float64(rowH)-1.5, row.value2, "", 0, "L", false, 0, "")
@@ -534,7 +535,7 @@ func drawStatusBadge(pdf *gofpdf.Fpdf, x, y, w float64, text string) {
 	pdf.SetFillColor(c[0], c[1], c[2])
 	pdf.Circle(x+4, y+h/2, 0.9, "F")
 	// 文字
-	pdf.SetFont(FontSimHei, "", 9.5)
+	pdf.SetFont(pdfutil.FontSimHei, "", 9.5)
 	pdf.SetTextColor(c[0], c[1], c[2])
 	pdf.SetXY(x+8, y+1)
 	pdf.CellFormat(w-10, h-1, text, "", 0, "L", false, 0, "")
@@ -558,7 +559,7 @@ func drawValueHero(pdf *gofpdf.Fpdf, x, y, w, h float64, r *model.EvaluationDeta
 	pdf.SetAlpha(1, "Normal")
 
 	// 标签
-	pdf.SetFont(FontSimHei, "", 9.5)
+	pdf.SetFont(pdfutil.FontSimHei, "", 9.5)
 	pdf.SetTextColor(255, 255, 255)
 	pdf.SetAlpha(0.7, "Normal")
 	pdf.SetXY(x+6, y+4)
@@ -566,14 +567,14 @@ func drawValueHero(pdf *gofpdf.Fpdf, x, y, w, h float64, r *model.EvaluationDeta
 	pdf.SetAlpha(1, "Normal")
 
 	// 大数字行(￥ + 数值 + 万元)
-	pdf.SetFont(FontSimHei, "", 14)
+	pdf.SetFont(pdfutil.FontSimHei, "", 14)
 	pdf.SetTextColor(255, 255, 255)
 	pdf.SetXY(x+6, y+11)
 	pdf.CellFormat(7, 11, "￥", "", 0, "L", false, 0, "")
-	pdf.SetFont(FontSimHeiBold, "B", heroValuePt)
+	pdf.SetFont(pdfutil.FontSimHeiBold, "B", heroValuePt)
 	pdf.SetXY(x+12, y+9)
 	pdf.CellFormat(60, 14, fmt.Sprintf("%.2f", yuanToWan(r.EstimatedValue)), "", 0, "L", false, 0, "")
-	pdf.SetFont(FontSimHei, "", 14)
+	pdf.SetFont(pdfutil.FontSimHei, "", 14)
 	pdf.SetXY(x+72, y+18)
 	pdf.CellFormat(20, 7, "万元", "", 0, "L", false, 0, "")
 
@@ -591,13 +592,13 @@ func drawValueHero(pdf *gofpdf.Fpdf, x, y, w, h float64, r *model.EvaluationDeta
 }
 
 func drawHeroStat(pdf *gofpdf.Fpdf, x, y, w float64, label, value string) {
-	pdf.SetFont(FontSimHei, "", 8.5)
+	pdf.SetFont(pdfutil.FontSimHei, "", 8.5)
 	pdf.SetTextColor(255, 255, 255)
 	pdf.SetAlpha(0.55, "Normal")
 	pdf.SetXY(x, y)
 	pdf.CellFormat(w, 3.5, label, "", 0, "L", false, 0, "")
 	pdf.SetAlpha(1, "Normal")
-	pdf.SetFont(FontSimHeiBold, "B", 12)
+	pdf.SetFont(pdfutil.FontSimHeiBold, "B", 12)
 	pdf.SetTextColor(255, 255, 255)
 	pdf.SetXY(x, y+4)
 	pdf.CellFormat(w, 5, value, "", 0, "L", false, 0, "")
@@ -625,11 +626,11 @@ func gradeFromRate(rate float64) (gradeInfo, rgb) {
 // drawConfidenceBar 置信区间可视化
 func drawConfidenceBar(pdf *gofpdf.Fpdf, x, y, w float64, r *model.EvaluationDetail) {
 	// 文字行
-	pdf.SetFont(FontSimHei, "", 9.5)
+	pdf.SetFont(pdfutil.FontSimHei, "", 9.5)
 	pdf.SetTextColor(textLabel[0], textLabel[1], textLabel[2])
 	pdf.SetXY(x, y)
 	pdf.CellFormat(40, 4, "置信区间分布", "", 0, "L", false, 0, "")
-	pdf.SetFont(FontSimHei, "", 9)
+	pdf.SetFont(pdfutil.FontSimHei, "", 9)
 	pdf.SetTextColor(textMuted[0], textMuted[1], textMuted[2])
 	pdf.SetXY(x+w-110, y)
 	pdf.CellFormat(110, 4, fmt.Sprintf("%.2f 万元  ←  %.2f 万元  →  %.2f 万元",
@@ -650,7 +651,7 @@ func drawConfidenceBar(pdf *gofpdf.Fpdf, x, y, w float64, r *model.EvaluationDet
 
 	// 下方标签
 	labelY := barY + barH + 1.5
-	pdf.SetFont(FontSimHei, "", 8.5)
+	pdf.SetFont(pdfutil.FontSimHei, "", 8.5)
 	pdf.SetTextColor(textLite[0], textLite[1], textLite[2])
 	pdf.SetXY(x, labelY)
 	pdf.CellFormat(40, 3, "较低估值", "", 0, "L", false, 0, "")
@@ -670,7 +671,7 @@ func drawRadarAndDimensions(pdf *gofpdf.Fpdf, x, y, w float64, dimensionScores [
 	dimW := w - radarW - 4
 
 	// 标题
-	pdf.SetFont(FontSimHei, "", 10.5)
+	pdf.SetFont(pdfutil.FontSimHei, "", 10.5)
 	pdf.SetTextColor(textLabel[0], textLabel[1], textLabel[2])
 	pdf.SetXY(x, y)
 	pdf.CellFormat(radarW, 4, "综合评分雷达图", "", 0, "L", false, 0, "")
@@ -683,7 +684,7 @@ func drawRadarAndDimensions(pdf *gofpdf.Fpdf, x, y, w float64, dimensionScores [
 		rcy := y + 44
 		drawRadarChart(pdf, rcx, rcy, 18, dimensionScores)
 	} else {
-		pdf.SetFont(FontSimHei, "", 9.5)
+		pdf.SetFont(pdfutil.FontSimHei, "", 9.5)
 		pdf.SetTextColor(textLite[0], textLite[1], textLite[2])
 		pdf.SetXY(x+radarW/2-15, y+30)
 		pdf.CellFormat(30, 4, "(无数据)", "", 0, "C", false, 0, "")
@@ -701,7 +702,7 @@ func drawRadarAndDimensions(pdf *gofpdf.Fpdf, x, y, w float64, dimensionScores [
 		v := scoreByLabel[dim]
 		rowY := dimY0 + float64(i)*rowH
 		// 维度名
-		pdf.SetFont(FontSimHei, "", 9.5)
+		pdf.SetFont(pdfutil.FontSimHei, "", 9.5)
 		pdf.SetTextColor(textSub[0], textSub[1], textSub[2])
 		pdf.SetXY(dimX, rowY+0.5)
 		pdf.CellFormat(labelW, 3, dim, "", 0, "L", false, 0, "")
@@ -725,7 +726,7 @@ func drawRadarAndDimensions(pdf *gofpdf.Fpdf, x, y, w float64, dimensionScores [
 			pdf.RoundedRect(barX, barY, fillW, barH, 0.9, "1234", "F")
 		}
 		// 数值
-		pdf.SetFont(FontSimHeiBold, "B", 9.5)
+		pdf.SetFont(pdfutil.FontSimHeiBold, "B", 9.5)
 		pdf.SetTextColor(fillColor[0], fillColor[1], fillColor[2])
 		pdf.SetXY(dimX+labelW+barW+1, rowY+0.5)
 		pdf.CellFormat(valW, 3, fmt.Sprintf("%.2f", v), "", 0, "R", false, 0, "")
@@ -800,15 +801,15 @@ func drawGradeCards(pdf *gofpdf.Fpdf, x, y, w float64, grade gradeInfo, _, estVa
 	pdf.SetDrawColor(bgPrimary2[0], bgPrimary2[1], bgPrimary2[2])
 	pdf.SetLineWidth(0.3)
 	pdf.RoundedRect(x, y, cardW, cardH, 2, "1234", "FD")
-	pdf.SetFont(FontSimHei, "", 9)
+	pdf.SetFont(pdfutil.FontSimHei, "", 9)
 	pdf.SetTextColor(textLabel[0], textLabel[1], textLabel[2])
 	pdf.SetXY(x, y+3)
 	pdf.CellFormat(cardW, 4, "综合等级评定", "", 0, "C", false, 0, "")
-	pdf.SetFont(FontSimHeiBold, "B", 22)
+	pdf.SetFont(pdfutil.FontSimHeiBold, "B", 22)
 	pdf.SetTextColor(primary[0], primary[1], primary[2])
 	pdf.SetXY(x, y+7)
 	pdf.CellFormat(cardW, 10, grade.letter, "", 0, "C", false, 0, "")
-	pdf.SetFont(FontSimHei, "", 10)
+	pdf.SetFont(pdfutil.FontSimHei, "", 10)
 	pdf.SetTextColor(primaryLite[0], primaryLite[1], primaryLite[2])
 	pdf.SetXY(x, y+18)
 	pdf.CellFormat(cardW, 4, grade.cn, "", 0, "C", false, 0, "")
@@ -819,11 +820,11 @@ func drawGradeCards(pdf *gofpdf.Fpdf, x, y, w float64, grade gradeInfo, _, estVa
 	pdf.SetDrawColor(errBord[0], errBord[1], errBord[2])
 	pdf.SetLineWidth(0.3)
 	pdf.RoundedRect(ex, y, estW, cardH, 2, "1234", "FD")
-	pdf.SetFont(FontSimHei, "", 9)
+	pdf.SetFont(pdfutil.FontSimHei, "", 9)
 	pdf.SetTextColor(textLabel[0], textLabel[1], textLabel[2])
 	pdf.SetXY(ex, y+3)
 	pdf.CellFormat(estW, 4, "估算残值", "", 0, "C", false, 0, "")
-	pdf.SetFont(FontSimHeiBold, "B", 22)
+	pdf.SetFont(pdfutil.FontSimHeiBold, "B", 22)
 	pdf.SetTextColor(errColor[0], errColor[1], errColor[2])
 	pdf.SetXY(ex, y+7)
 	pdf.CellFormat(estW, 10, fmt.Sprintf("%.2f 万元", yuanToWan(estValue)), "", 0, "C", false, 0, "")
@@ -831,14 +832,14 @@ func drawGradeCards(pdf *gofpdf.Fpdf, x, y, w float64, grade gradeInfo, _, estVa
 
 func drawRecommendations(pdf *gofpdf.Fpdf, x, y, w float64, suggs []string) float64 {
 	// 标题
-	pdf.SetFont(FontSimHeiBold, "B", 11)
+	pdf.SetFont(pdfutil.FontSimHeiBold, "B", 11)
 	pdf.SetTextColor(textSub[0], textSub[1], textSub[2])
 	pdf.SetXY(x, y)
 	pdf.CellFormat(80, 5, "处置建议", "", 0, "L", false, 0, "")
 
 	// 列表(根据文字长度动态计算每行高度,避免换行重叠)
 	rowY := y + 7
-	pdf.SetFont(FontSimHei, "", 10)
+	pdf.SetFont(pdfutil.FontSimHei, "", 10)
 	availW := w - 7
 	for i, s := range suggs {
 		sw := pdf.GetStringWidth(s)
@@ -848,12 +849,12 @@ func drawRecommendations(pdf *gofpdf.Fpdf, x, y, w float64, suggs []string) floa
 		}
 		itemH := 4*lines + 2
 		// 编号
-		pdf.SetFont(FontSimHeiBold, "B", 10.5)
+		pdf.SetFont(pdfutil.FontSimHeiBold, "B", 10.5)
 		pdf.SetTextColor(primary[0], primary[1], primary[2])
 		pdf.SetXY(x, rowY)
 		pdf.CellFormat(6, itemH, fmt.Sprintf("%d.", i+1), "", 0, "L", false, 0, "")
 		// 文字
-		pdf.SetFont(FontSimHei, "", 10)
+		pdf.SetFont(pdfutil.FontSimHei, "", 10)
 		pdf.SetTextColor(textMuted[0], textMuted[1], textMuted[2])
 		pdf.SetXY(x+7, rowY)
 		pdf.MultiCell(availW, 4, s, "", "L", false)
@@ -864,7 +865,7 @@ func drawRecommendations(pdf *gofpdf.Fpdf, x, y, w float64, suggs []string) floa
 
 func drawRiskWarnings(pdf *gofpdf.Fpdf, x, y, w float64) float64 {
 	// 标题
-	pdf.SetFont(FontSimHeiBold, "B", 11)
+	pdf.SetFont(pdfutil.FontSimHeiBold, "B", 11)
 	pdf.SetTextColor(errColor[0], errColor[1], errColor[2])
 	pdf.SetXY(x, y)
 	pdf.CellFormat(80, 5, "风险提示", "", 0, "L", false, 0, "")
@@ -876,7 +877,7 @@ func drawRiskWarnings(pdf *gofpdf.Fpdf, x, y, w float64) float64 {
 	}
 
 	// 根据文字折行情况动态计算警示卡高度
-	pdf.SetFont(FontSimHei, "", 9.5)
+	pdf.SetFont(pdfutil.FontSimHei, "", 9.5)
 	availTextW := w - 13
 	itemHs := make([]float64, len(risks))
 	totalTextH := 0.0
@@ -899,7 +900,7 @@ func drawRiskWarnings(pdf *gofpdf.Fpdf, x, y, w float64) float64 {
 	pdf.RoundedRect(x, cardY, w, cardH, 1.5, "1234", "FD")
 	rowY := cardY + 2
 	for i, r := range risks {
-		pdf.SetFont(FontSimHei, "", 9.5)
+		pdf.SetFont(pdfutil.FontSimHei, "", 9.5)
 		pdf.SetTextColor(warningText[0], warningText[1], warningText[2])
 		pdf.SetXY(x+4, rowY)
 		pdf.CellFormat(4, 4, "-", "", 0, "L", false, 0, "")
@@ -914,11 +915,11 @@ func drawDisclaimer(pdf *gofpdf.Fpdf, x, y, w float64) {
 	pdf.SetDrawColor(border[0], border[1], border[2])
 	pdf.SetLineWidth(0.2)
 	pdf.Line(x, y, x+w, y)
-	pdf.SetFont(FontSimHeiBold, "B", 10)
+	pdf.SetFont(pdfutil.FontSimHeiBold, "B", 10)
 	pdf.SetTextColor(textLabel[0], textLabel[1], textLabel[2])
 	pdf.SetXY(x, y+3)
 	pdf.CellFormat(80, 4, "免责声明", "", 0, "L", false, 0, "")
-	pdf.SetFont(FontSimHei, "", 9)
+	pdf.SetFont(pdfutil.FontSimHei, "", 9)
 	pdf.SetTextColor(textLite[0], textLite[1], textLite[2])
 	pdf.SetXY(x, y+8)
 	pdf.MultiCell(w, 3.5,

@@ -103,9 +103,13 @@ func (h *QuestionBankHandler) ListQuestions(c *gin.Context) {
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *listQuestionsReq) (*service.QuestionPageDTO, error) {
-			return h.svc.ListQuestions(req.Page, req.PageSize, req.QType, req.Status, req.Keyword, req.TagID, req.CredentialID, req.Sort), nil
+			return h.svc.ListQuestions(req.Page, req.PageSize, req.QType, req.Status, req.Keyword, req.TagID, req.CredentialID, req.Sort)
 		},
-		Render: func(c *gin.Context, _ *listQuestionsReq, resp *service.QuestionPageDTO, _ error) {
+		Render: func(c *gin.Context, _ *listQuestionsReq, resp *service.QuestionPageDTO, err error) {
+			if err != nil {
+				response.ServerError(c, err.Error())
+				return
+			}
 			response.Success(c, *resp)
 		},
 	}.Handle(c)

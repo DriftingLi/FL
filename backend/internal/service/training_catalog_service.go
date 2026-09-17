@@ -216,7 +216,7 @@ func (s *TrainingCatalogService) DeleteCertificateTemplate(id int) error {
 // 附带 question_count：学员端统计已发布题目数，管理端统计全部题目数。
 // credentialID 非 nil 时按目标证件分区（#702：学员端标签计数与抽题池同口径——
 // 已发布 + 排除来源标记标签 + 证件分区；nil = 不分区，保持管理端全局口径）。
-func (s *TrainingCatalogService) ListQuestionTags(activeOnly, includeSourceTags bool, credentialID ...*int) []QuestionTagDict {
+func (s *TrainingCatalogService) ListQuestionTags(activeOnly, includeSourceTags bool, credentialID *int) []QuestionTagDict {
 	list := catalogList(s.db, questionTagCatalogSpec(), activeOnly)
 	if len(list) == 0 {
 		return list
@@ -263,9 +263,10 @@ func (s *TrainingCatalogService) ListQuestionTags(activeOnly, includeSourceTags 
 	query := "SELECT t.id AS tag_id, COUNT(qtr.question_id) AS total_count, " +
 		"COUNT(qtr.question_id) FILTER (WHERE " + QuestionPoolPublishedSQL + " AND " + QuestionPoolExcludeSourceTagsSQL
 	var args []any
-	if cred := credOf(credentialID); cred != nil {
-		query += " AND " + QuestionPoolCredentialColumn + " = ?"
-		args = append(args, *cred)
+	// 池的证件分区走归属分区具名谓词的 SQL 片段形态（ADR-0056 §2）：nil → 空片段 = 不分区。
+	if clause, credArgs := entityOwnedByClause(QuestionPoolCredentialColumn, credentialID); clause != "" {
+		query += " AND " + clause
+		args = append(args, credArgs...)
 	}
 	query += ") AS published_count " +
 		"FROM question_tag AS t LEFT JOIN question_tag_relation AS qtr ON qtr.tag_id = t.id " +
@@ -436,8 +437,8 @@ func replaceQuestionTags(db *gorm.DB, questionID int, tagIDs []int) error {
 
 // GetCatalogTree 目录树（学员端）：专业方向 → 等级 → 课程（仅启用项，课程含章节数）。
 // credentialID 非 nil 时按目标证件分区（#702：与课程列表同口径；nil = 不分区）。
-func (s *TrainingCatalogService) GetCatalogTree(credentialID ...*int) *CatalogTreeDTO {
-	return s.getCatalogTree(true, false, credOf(credentialID))
+func (s *TrainingCatalogService) GetCatalogTree(credentialID *int) *CatalogTreeDTO {
+	return s.getCatalogTree(true, false, credentialID)
 }
 
 // GetAdminCatalogTree 目录树（管理端）：专业方向 → 等级 → 课程 → 章节。
@@ -481,9 +482,7 @@ func (s *TrainingCatalogService) getCatalogTree(activeOnly, withChapters bool, c
 		if activeOnly {
 			q = q.Where("course.status = ?", 1)
 		}
-		if cred != nil {
-			q = q.Where("course.credential_id = ?", *cred)
-		}
+		q = EntityOwnedBy(q, "course.credential_id", cred)
 		q.Order("course.sort_order ASC, course.course_id ASC").Find(&rows)
 	}
 

@@ -245,7 +245,7 @@ func (h *TrainingCatalogHandler) ListCertificateTemplates(c *gin.Context) {
 func (h *TrainingCatalogHandler) ListQuestionTags(c *gin.Context) {
 	Endpoint[struct{}, []service.QuestionTagDict]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*[]service.QuestionTagDict, error) {
-			result := h.svc.ListQuestionTags(false, true) // 管理端：全部可见
+			result := h.svc.ListQuestionTags(false, true, nil) // 管理端：全部可见、不分区
 			return &result, nil
 		},
 		Render: func(c *gin.Context, _ *struct{}, resp *[]service.QuestionTagDict, _ error) {

@@ -12,7 +12,6 @@
     <UiAsyncSection
       :error="loadError"
       :loading="loading"
-      :empty="false"
       :retrying="retrying"
       error-title="帮助中心管理数据加载失败"
       error-description="网络或服务端异常，可重试"

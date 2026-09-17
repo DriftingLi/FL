@@ -8,7 +8,7 @@
     <UiAsyncSection
       :error="loadError"
       :loading="loading"
-      :empty="categories.length === 0"
+      :empty="isEmpty"
       :retrying="retrying"
       error-title="帮助内容加载失败"
       error-description="网络或服务端异常，可重试"
@@ -74,10 +74,17 @@ const keyword = ref('')
 // 空串 = 全部分类；搜索时忽略该选择（命中项可能跨分类）
 const activeCode = ref('')
 
-const { loading, loadError, retrying, retry: retryLoad, run: loadData } = useAsyncPage(async () => {
+const {
+  loading,
+  loadError,
+  retrying,
+  retry: retryLoad,
+  isEmpty,
+  run: loadData
+} = useAsyncPage(async () => {
   const res = await faqApi.getHelpCenter()
   center.value = res || { categories: [] }
-})
+}, { itemsRef: center })
 
 const categories = computed(() => center.value.categories || [])
 

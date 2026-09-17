@@ -7,8 +7,11 @@ import (
 	"errors"
 	"time"
 
+	"gorm.io/gorm"
+
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/pkg/paging"
 )
 
 // RecruiterApplicationListResult 企业侧投递列表结果。
@@ -32,18 +35,11 @@ func (s *JobApplicationService) ListForRecruiter(recruiterID, jobPostingID, page
 	if job.RecruiterID != recruiterID {
 		return nil, ErrApplyNotYours
 	}
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 || pageSize > 50 {
-		pageSize = 20
-	}
-	var total int64
-	if err := s.db.Model(&model.JobApplication{}).Where("job_posting_id = ?", jobPostingID).Count(&total).Error; err != nil {
-		return nil, err
-	}
-	var rows []model.JobApplication
-	if err := s.db.Where("job_posting_id = ?", jobPostingID).Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error; err != nil {
+	rows, total, page, pageSize, err := paging.QueryWithMax[model.JobApplication](s.db, page, pageSize, 20, 50,
+		"created_at DESC", func(q *gorm.DB) *gorm.DB {
+			return q.Where("job_posting_id = ?", jobPostingID)
+		})
+	if err != nil {
 		return nil, err
 	}
 	var unread int64

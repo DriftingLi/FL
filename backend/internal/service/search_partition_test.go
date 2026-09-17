@@ -24,11 +24,11 @@ func TestSearchPartitionRegistryConsistency(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	svc := NewSearchService(db, zap.NewNop())
 	for _, key := range want {
-		if _, _, err := svc.searchItems(key, "液压", 1, 20); err != nil {
+		if _, _, err := svc.searchItems(key, "液压", 1, 20, nil); err != nil {
 			t.Fatalf("分区 %s 已声明但分发不认识: %v", key, err)
 		}
 	}
-	if _, _, err := svc.searchItems("hydraulic", "液压", 1, 20); err == nil {
+	if _, _, err := svc.searchItems("hydraulic", "液压", 1, 20, nil); err == nil {
 		t.Fatal("未声明的类型键必须报错（不能静默返回空结果）")
 	}
 
@@ -49,7 +49,7 @@ func TestSearchPartitionRegistryConsistency(t *testing.T) {
 		}
 	}
 
-	all, err := svc.Search("液压", "", 1, 20)
+	all, err := svc.Search("液压", "", 1, 20, nil)
 	if err != nil {
 		t.Fatalf("聚合搜索失败: %v", err)
 	}

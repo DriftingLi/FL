@@ -7,7 +7,7 @@
             </view>
             <text class="header-title">课程详情</text>
             <view class="header-right" @click="toggleFavorite">
-                <text class="favorite-icon">{{ isFavorited ? '❤️' : '' }}</text>
+                <text class="favorite-icon">{{ isFavorited ? '♥' : '♡' }}</text>
             </view>
         </view>
 
@@ -404,7 +404,11 @@
     }
 
     /* ===== 收藏按钮 ===== */
+    /* 两态都渲染字形（♥ 已收藏 / ♡ 未收藏），靠**实心与空心**区分选中态 ——
+       与论坛 stat-like-icon（♥/♡ 同色）同一套先例。此前未收藏态渲染空串，
+       点击区虽在、却没有任何可点的视觉提示，观感等同「没有收藏功能」。 */
     .favorite-icon {
         font-size: 40rpx;
+        color: #ffffff;
     }
 </style>

@@ -54,7 +54,7 @@ func TestStartTagPractice(t *testing.T) {
 	}
 
 	// 首次进入：抽该标签全部已发布题（草稿不出现），游标 0
-	got, err := svc.StartTagPractice(1, tag1.ID, 0)
+	got, err := svc.StartTagPractice(1, tag1.ID, 0, nil)
 	if err != nil {
 		t.Fatalf("抽题失败: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestStartTagPractice(t *testing.T) {
 	}
 
 	// 断点续练：保存游标后再次进入，顺序不变、游标恢复
-	r1, err := svc.StartTagPractice(1, tag2.ID, 0)
+	r1, err := svc.StartTagPractice(1, tag2.ID, 0, nil)
 	if err != nil {
 		t.Fatalf("抽题失败: %v", err)
 	}
@@ -83,10 +83,10 @@ func TestStartTagPractice(t *testing.T) {
 		order1 = append(order1, q.ID)
 	}
 	mode := fmt.Sprintf("tag:%d", tag2.ID)
-	if err := svc.SaveProgress(1, 1, mode, len(order1), nil); err != nil {
+	if err := svc.SaveProgress(1, 1, mode, len(order1), nil, nil); err != nil {
 		t.Fatalf("保存进度失败: %v", err)
 	}
-	r2, err := svc.StartTagPractice(1, tag2.ID, 0)
+	r2, err := svc.StartTagPractice(1, tag2.ID, 0, nil)
 	if err != nil {
 		t.Fatalf("续练失败: %v", err)
 	}
@@ -107,10 +107,10 @@ func TestStartTagPractice(t *testing.T) {
 	}
 
 	// 已完成（游标==总数）：再次进入重新抽题、游标归零
-	if err := svc.SaveProgress(1, len(order1), mode, len(order1), nil); err != nil {
+	if err := svc.SaveProgress(1, len(order1), mode, len(order1), nil, nil); err != nil {
 		t.Fatalf("保存完成进度失败: %v", err)
 	}
-	r3, err := svc.StartTagPractice(1, tag2.ID, 0)
+	r3, err := svc.StartTagPractice(1, tag2.ID, 0, nil)
 	if err != nil {
 		t.Fatalf("重新抽题失败: %v", err)
 	}
@@ -119,7 +119,7 @@ func TestStartTagPractice(t *testing.T) {
 	}
 
 	// count 限制（新学生首次进入）
-	limited, err := svc.StartTagPractice(2, tag2.ID, 1)
+	limited, err := svc.StartTagPractice(2, tag2.ID, 1, nil)
 	if err != nil {
 		t.Fatalf("抽题失败: %v", err)
 	}
@@ -129,17 +129,17 @@ func TestStartTagPractice(t *testing.T) {
 
 	// 错误分支
 	empty, _ := catalogSvc.CreateQuestionTag(QuestionTagInput{Code: "emergency", Name: "应急"})
-	if _, err := svc.StartTagPractice(3, empty.ID, 0); err == nil {
+	if _, err := svc.StartTagPractice(3, empty.ID, 0, nil); err == nil {
 		t.Fatal("无题目标签应报错")
 	}
-	if _, err := svc.StartTagPractice(3, 9999, 0); err == nil {
+	if _, err := svc.StartTagPractice(3, 9999, 0, nil); err == nil {
 		t.Fatal("不存在的标签应报错")
 	}
-	if _, err := svc.StartTagPractice(3, 0, 0); err == nil {
+	if _, err := svc.StartTagPractice(3, 0, 0, nil); err == nil {
 		t.Fatal("非法标签 ID 应报错")
 	}
 	disabled, _ := catalogSvc.CreateQuestionTag(QuestionTagInput{Code: "off", Name: "停用", Status: p16(0)})
-	if _, err := svc.StartTagPractice(3, disabled.ID, 0); err == nil {
+	if _, err := svc.StartTagPractice(3, disabled.ID, 0, nil); err == nil {
 		t.Fatal("停用标签应报错")
 	}
 }
@@ -158,7 +158,7 @@ func TestGetTagQuestions_QuestionToDict(t *testing.T) {
 	if err := catalogSvc.SetQuestionTags(q.ID, []int{tag.ID}); err != nil {
 		t.Fatalf("打标失败: %v", err)
 	}
-	got, err := svc.StartTagPractice(4, tag.ID, 0)
+	got, err := svc.StartTagPractice(4, tag.ID, 0, nil)
 	if err != nil {
 		t.Fatalf("抽题失败: %v", err)
 	}

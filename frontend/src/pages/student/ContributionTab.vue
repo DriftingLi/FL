@@ -41,6 +41,7 @@ const {
   loadError,
   retrying,
   retry: retryLoad,
+  isEmpty,
   page: currentPage,
   pageSize,
   total,
@@ -48,6 +49,8 @@ const {
   handlePageChange
 } = useAsyncPage(async () => {
   const res = await contributionApi.listPublic({
+    // 「跟随当前证件」语义：本 prop 是父级 store.current.id 的纯投影（非用户选择的浏览对象），
+    // 显式下发只是把当前证件传实；/contributions 是 JWT 面，登录学员不传也会被服务端兜底。
     credential_id: props.credentialId ?? undefined,
     sort: sort.value,
     page: currentPage.value,
@@ -55,7 +58,7 @@ const {
   })
   contributions.value = res.items || []
   total.value = res.total || 0
-})
+}, { itemsRef: contributions })
 
 /** 我的投稿加载（轻量、失败静默降级） */
 async function loadMine() {
@@ -344,7 +347,7 @@ defineExpose({ loadMine })
         <UiAsyncSection
           :error="loadError"
           :loading="loading"
-          :empty="contributions.length === 0"
+          :empty="isEmpty"
           :retrying="retrying"
           error-title="投稿加载失败"
           error-description="网络或服务端异常，可重试"

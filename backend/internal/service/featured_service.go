@@ -45,20 +45,23 @@ func (s *FeaturedService) IsValidCategory(category string) bool {
 }
 
 // GetPublicList 公开列表（仅已发布），支持排序：latest（按时间，默认）/ hot（按浏览量）。
-func (s *FeaturedService) GetPublicList(page, pageSize int, category string, sort ...string) FeaturedContentPageResult {
+func (s *FeaturedService) GetPublicList(page, pageSize int, category string, sort ...string) (FeaturedContentPageResult, error) {
 	sorted := ""
 	if len(sort) > 0 && sort[0] == "hot" {
 		sorted = "view_count DESC, published_at DESC, content_id DESC"
 	} else {
 		sorted = "published_at DESC, content_id DESC"
 	}
-	items, total, page, pageSize := paging.Query[model.FeaturedContent](s.db, page, pageSize, 10, sorted, func(q *gorm.DB) *gorm.DB {
+	items, total, page, pageSize, err := paging.Query[model.FeaturedContent](s.db, page, pageSize, 10, sorted, func(q *gorm.DB) *gorm.DB {
 		q = q.Where("status = ?", 1)
 		if category != "" {
 			q = q.Where("category = ?", category)
 		}
 		return q
 	})
+	if err != nil {
+		return FeaturedContentPageResult{}, err
+	}
 	list := make([]FeaturedContentDTO, 0, len(items))
 	for i := range items {
 		list = append(list, featuredContentDTO(&items[i]))
@@ -68,7 +71,7 @@ func (s *FeaturedService) GetPublicList(page, pageSize int, category string, sor
 		Page:  page,
 		Pages: response.PageCount(total, pageSize),
 		Total: total,
-	}
+	}, nil
 }
 
 // GetPublicDetail 公开详情（含相关资讯 + 上一篇/下一篇）。
@@ -124,8 +127,8 @@ func (s *FeaturedService) GetPublicDetail(id int, countView bool) (*FeaturedCont
 }
 
 // AdminList 管理端列表（含草稿）。
-func (s *FeaturedService) AdminList(page, pageSize int, category, status string) FeaturedContentPageResult {
-	items, total, page, pageSize := paging.Query[model.FeaturedContent](s.db, page, pageSize, 10, "created_at DESC, content_id DESC", func(q *gorm.DB) *gorm.DB {
+func (s *FeaturedService) AdminList(page, pageSize int, category, status string) (FeaturedContentPageResult, error) {
+	items, total, page, pageSize, err := paging.Query[model.FeaturedContent](s.db, page, pageSize, 10, "created_at DESC, content_id DESC", func(q *gorm.DB) *gorm.DB {
 		if category != "" {
 			q = q.Where("category = ?", category)
 		}
@@ -134,6 +137,9 @@ func (s *FeaturedService) AdminList(page, pageSize int, category, status string)
 		}
 		return q
 	})
+	if err != nil {
+		return FeaturedContentPageResult{}, err
+	}
 	list := make([]FeaturedContentDTO, 0, len(items))
 	for i := range items {
 		list = append(list, featuredContentDTO(&items[i]))
@@ -143,7 +149,7 @@ func (s *FeaturedService) AdminList(page, pageSize int, category, status string)
 		Page:  page,
 		Pages: response.PageCount(total, pageSize),
 		Total: total,
-	}
+	}, nil
 }
 
 // AdminDetail 管理端详情（含正文 Markdown）。

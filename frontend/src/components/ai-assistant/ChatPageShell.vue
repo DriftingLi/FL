@@ -23,8 +23,9 @@
         </button>
         <button
           v-if="store.isLoggedIn"
-          class="floating-icon-btn flex h-8 w-8 cursor-pointer items-center justify-center rounded-pill border-0 bg-transparent text-ink-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas hover:text-ink"
-          title="开启新对话"
+          class="floating-icon-btn flex h-8 w-8 cursor-pointer items-center justify-center rounded-pill border-0 bg-transparent text-ink-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+          :disabled="store.streaming"
+          :title="newSessionTitle"
           @click="emit('new-session')"
         >
           <el-icon :size="16"><Plus /></el-icon>
@@ -79,7 +80,9 @@
       <!-- 新建会话（登录可见，DeepSeek 胶囊样式） -->
       <div v-if="store.isLoggedIn" class="px-3 pt-1">
         <button
-          class="new-chat-btn flex w-full cursor-pointer items-center justify-center gap-2 rounded-pill border border-line bg-panel px-4 py-2.5 text-sm font-medium text-ink shadow-card transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:border-ui-400 hover:bg-panel"
+          class="new-chat-btn flex w-full cursor-pointer items-center justify-center gap-2 rounded-pill border border-line bg-panel px-4 py-2.5 text-sm font-medium text-ink shadow-card transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:border-ui-400 hover:bg-panel disabled:cursor-not-allowed disabled:opacity-40"
+          :disabled="store.streaming"
+          :title="newSessionTitle"
           @click="emit('new-session')"
         >
           <el-icon :size="15"><Plus /></el-icon>开启新对话
@@ -310,6 +313,15 @@
       >
         <slot name="input-toolbar" />
         <slot name="input-above" />
+        <!-- 当轮失败/中断（#1104）：原因走 store.lastTurnError 独立通道（正文不再拼「[生成失败：…]」），
+             这里给可重发入口；重试原样重发该轮输入与差异参数（图片/结构化过滤） -->
+        <div
+          v-if="store.lastTurnError"
+          class="turn-error mb-2 flex items-center justify-between gap-3 rounded-ctl border border-line bg-bad-soft px-3 py-2 text-[13px] text-bad"
+        >
+          <span class="turn-error-text min-w-0 flex-1 truncate">{{ turnErrorText }}</span>
+          <UiButton variant="primary" @click="handleRetry">重试</UiButton>
+        </div>
         <div class="input-wrap flex items-center gap-2 rounded-xl border border-line bg-panel px-3 py-2 shadow-card transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] focus-within:border-ui-400" :class="[raisedInput ? 'input-wrap--raised min-h-[132px] flex-col items-stretch p-3 gap-3' : '', !raisedInput && !!slots['input-prefix'] ? 'has-image items-end' : '']">
           <slot v-if="!raisedInput" name="input-prefix" />
           <el-input
@@ -410,7 +422,7 @@ const props = withDefaults(
     /** 输入区拉高布局（主页：模式选择器 footer） */
     raisedInput?: boolean
     inputPlaceholder?: string
-    /** 发送按钮可用性（流式更新时由壳切换为停止按钮） */
+    /** 页面侧草稿就绪（文本非空 / 图片队列就绪）；壳再与 store.canSend 合成唯一发送判据（#1104） */
     canSend?: boolean
   }>(),
   {
@@ -442,6 +454,13 @@ const logoSrc = '/images/HRWAIlogo.jpg'
 const displayName = computed(() => authStore.userInfo?.username || 'HRWAI 用户')
 // 空状态判定（欢迎区渲染条件 + 消息列表垂直居中开关）
 const isWelcome = computed(() => store.messages.length === 0 && !store.streaming)
+
+// 发送判据单点（#1104）：页面草稿就绪（prop）× store 闸门（无在飞轮次）——
+// Enter 与发送按钮读同一个值，页面不再有「Enter 直通」的旁路。
+const canSend = computed(() => Boolean(props.canSend && store.canSend))
+
+// 流式进行中的「新对话」显式反馈（#1104）：入口禁用 + 标题说明为什么不可点（不再静默吞掉点击）
+const newSessionTitle = computed(() => (store.streaming ? '生成中，请先停止再开启新对话' : '开启新对话'))
 
 const messageListRef = ref<HTMLElement>()
 
@@ -639,7 +658,25 @@ watch(() => props.suggestions, () => {
 function handleEnter(e: KeyboardEvent) {
   if (e.shiftKey) return
   e.preventDefault()
+  // #1104：Enter 与发送按钮读同一判据（此前 Enter 直通、不看 canSend），不可发送时不发出 send
+  if (!canSend.value) return
   emit('send')
+}
+
+// 当轮失败/中断的提示文案（#1104）：error 带后端/网络原因；aborted 只描述中断事实
+const turnErrorText = computed(() => {
+  const err = store.lastTurnError
+  if (!err) return ''
+  return err.kind === 'error' ? `生成失败：${err.message}` : '已中断生成'
+})
+
+/** 重试上一轮（store.retryLastTurn）：被前置校验拒绝时把可执行原因告诉用户，不静默 */
+async function handleRetry() {
+  try {
+    await store.retryLastTurn()
+  } catch (e: any) {
+    ElMessage.warning(e?.message || '重试失败，请稍后再试')
+  }
 }
 
 // ===== 自动滚底（拖底） =====

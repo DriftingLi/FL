@@ -89,9 +89,13 @@ func (h *WrongQuestionHandler) List(c *gin.Context) {
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *listWrongQuestionsReq) (*service.WrongQuestionPageDTO, error) {
-			return h.svc.GetWrongQuestions(req.StudentID, req.Page, req.PageSize, req.QType, req.MinWrongCount, req.Favorited, req.Sort, req.CredentialID), nil
+			return h.svc.GetWrongQuestions(req.StudentID, req.Page, req.PageSize, req.QType, req.MinWrongCount, req.Favorited, req.Sort, req.CredentialID)
 		},
-		Render: func(c *gin.Context, _ *listWrongQuestionsReq, resp *service.WrongQuestionPageDTO, _ error) {
+		Render: func(c *gin.Context, _ *listWrongQuestionsReq, resp *service.WrongQuestionPageDTO, err error) {
+			if err != nil {
+				response.ServerError(c, err.Error())
+				return
+			}
 			response.Success(c, *resp)
 		},
 	}.Handle(c)

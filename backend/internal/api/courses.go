@@ -76,10 +76,17 @@ func (h *CourseHandler) ListCourses(c *gin.Context) {
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *courseListReq) (*service.CoursePageResult, error) {
-			result := h.svc.GetCourses(req.Page, req.PageSize, req.CredentialID, req.SpecialtyID, req.LevelID, req.Filter)
+			result, err := h.svc.GetCourses(req.Page, req.PageSize, req.CredentialID, req.SpecialtyID, req.LevelID, req.Filter)
+			if err != nil {
+				return nil, err
+			}
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *courseListReq, resp *service.CoursePageResult, _ error) {
+		Render: func(c *gin.Context, _ *courseListReq, resp *service.CoursePageResult, err error) {
+			if err != nil {
+				response.ServerError(c, err.Error())
+				return
+			}
 			response.Success(c, resp)
 		},
 	}.Handle(c)
