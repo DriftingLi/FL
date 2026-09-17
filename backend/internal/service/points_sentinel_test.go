@@ -41,19 +41,24 @@ func TestClaimSentinelSemantics(t *testing.T) {
 		t.Fatalf("重复领取 newbie 应报 ErrAlreadyClaimed, got %v", err)
 	}
 
-	// daily 任务：行为未达成 → ErrTaskNotDone；达成（登录落表）后首次领取成功 → 重复领取报 ErrDailyClaimLimit
+	// daily 型任务（有行为前置）：未达成 → ErrTaskNotDone。用 daily_quiz 覆盖——daily_login
+	// 已无行为前置（ADR-0054），不能再承担这条覆盖。
+	seedTaskConfig(t, db, model.PointsTaskConfig{
+		Code: "daily_quiz", Group: "daily", Points: 10, DailyLimit: 1,
+	})
+	if _, err := svc.Claim(context.Background(), uid, "daily_quiz"); !errors.Is(err, ErrTaskNotDone) {
+		t.Fatalf("未答题应报 ErrTaskNotDone, got %v", err)
+	}
+
+	// daily_login 无行为前置（ADR-0054）：首次领取直接成功 → 重复领取报 ErrDailyClaimLimit
 	seedTaskConfig(t, db, model.PointsTaskConfig{
 		Code: "daily_login", Group: "daily", Points: 5, DailyLimit: 1,
 	})
-	if _, err := svc.Claim(context.Background(), uid, "daily_login"); !errors.Is(err, ErrTaskNotDone) {
-		t.Fatalf("未登录应报 ErrTaskNotDone, got %v", err)
-	}
-	svc.MarkDailyLogin(uid)
 	if _, err := svc.Claim(context.Background(), uid, "daily_login"); err != nil {
-		t.Fatalf("首次领取 daily 失败: %v", err)
+		t.Fatalf("无行为前置的 daily_login 首次领取应成功, got %v", err)
 	}
 	if _, err := svc.Claim(context.Background(), uid, "daily_login"); !errors.Is(err, ErrDailyClaimLimit) {
-		t.Fatalf("重复领取 daily 应报 ErrDailyClaimLimit, got %v", err)
+		t.Fatalf("重复领取 daily_login 应报 ErrDailyClaimLimit, got %v", err)
 	}
 }
 

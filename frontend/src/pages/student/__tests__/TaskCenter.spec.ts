@@ -1,4 +1,5 @@
-// 任务中心三态契约（#409）：领取成功/业务幂等失败后按钮三态正确、提示只出现一次。
+// 任务中心三态契约（#409）+ 分组收敛（ADR-0054）：领取成功/业务幂等失败后按钮三态正确、
+// 提示只出现一次；任务中心只渲染「每日任务 / 新手任务」两段。
 // seam：组件层，mock '@/api/points'（不依赖真实后端）；错误分类使用客户端 kind。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
@@ -23,10 +24,12 @@ function mountPage() {
   })
 }
 
+// 夹具与迁移 000034 后的生产种子同形：growth_mock 的 code 保留（任务本身没退役），
+// 但它与另两项 growth_* 的分组已改判为 daily。
 function claimableTask(over: Partial<PointsTaskItem> = {}): PointsTaskItem {
   return {
     code: 'growth_mock',
-    group: 'growth',
+    group: 'daily',
     title: '完成 1 次模考',
     desc: '每日完成 1 次模考',
     points: 20,
@@ -93,5 +96,23 @@ describe('TaskCenter 领取三态与单次提示（#409）', () => {
     expect(wrapper.find('button').exists()).toBe(true)
     expect(ElMessage.error).toHaveBeenCalledTimes(1)
     expect(ElMessage.error).toHaveBeenCalledWith('网络异常')
+  })
+})
+
+describe('任务分组收敛（ADR-0054）', () => {
+  it('只渲染「每日任务」「新手任务」两段，不再出现已退役的成长任务分组', async () => {
+    vi.mocked(pointsApi.getTasks).mockResolvedValue({
+      tasks: [
+        claimableTask({ code: 'growth_mock', group: 'daily' }),
+        claimableTask({ code: 'daily_login', group: 'daily', title: '每日登录', desc: '每日进入任务中心即可领取', points: 5 }),
+        claimableTask({ code: 'newbie_credential', group: 'newbie', title: '选定目标证件', desc: '完成 onboarding 选定当前证件', points: 10 }),
+      ],
+    })
+    const wrapper = mountPage()
+    await flushPromises()
+    const text = wrapper.text()
+    expect(text).toContain('每日任务')
+    expect(text).toContain('新手任务')
+    expect(text).not.toContain('成长任务')
   })
 })

@@ -71,7 +71,6 @@ type taskMeta struct {
 	TodayOtherReply int  // 回复他人主题数（自帖回复不计，上限 3）
 	TodayBrowse     int  // 浏览他人帖子数（上限 3）
 	CourseDone      bool // 完成过 ≥1 节课程
-	TodayLoggedIn   bool // 每日登录（登录/refresh 落表）达成
 }
 
 // loadTaskMeta 一次查询取齐全部行为判定所需数据（读错误向上传播，沿用 #409 口径）。
@@ -119,7 +118,6 @@ func (s *PointsService) loadTaskMeta(userID int) (*taskMeta, error) {
 		return nil, err
 	}
 	m.CourseDone = n > 0
-	m.TodayLoggedIn = s.hasDailyLogin(userID)
 	return m, nil
 }
 
@@ -166,7 +164,11 @@ func taskProgressFor(cfg model.PointsTaskConfig, m *taskMeta) *taskProgress {
 	case "daily_browse":
 		return &taskProgress{Claimable: m.TodayBrowse >= 3, Progress: m.TodayBrowse, Total: 3}
 	case "daily_login":
-		return &taskProgress{Claimable: m.TodayLoggedIn, Progress: 0, Total: 1}
+		// 无行为前置（ADR-0054）：每日进任务中心即可领。原判定挂在「当日 user_daily_login 行
+		// 存在」上，而落表取决于客户端是否续期会话（Web 端「本地 token 未过期就直接用」）——
+		// 客户端实现细节在决定一项每日任务的可用性。事实源表与两条落表路径已随之退役
+		// （迁移 000034）。每日限领一次仍由配置 daily_limit=1 承担。
+		return nil
 	case "newbie_profile_basic":
 		done := profileBasicProgress(&m.User)
 		return &taskProgress{Claimable: done == 2, Progress: done, Total: 2}
@@ -231,31 +233,9 @@ func (s *PointsService) shanghaiDateTime() time.Time {
 	return clock.DayStart(s.clk.Now())
 }
 
-// MarkDailyLogin 记录一次「今日到访」（登录成功或 refresh 轮换；(user_id, 日期) 幂等落行）。
-// daily_login 任务的达成判定即当日行是否存在（ADR-0028）。失败不阻断登录主流程。
-func (s *PointsService) MarkDailyLogin(userID int) {
-	if userID <= 0 {
-		return
-	}
-	now := s.clk.Now()
-	err := s.db.Exec(
-		"INSERT INTO user_daily_login (user_id, login_date, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING",
-		userID, clock.DayStart(now), now,
-	).Error
-	if err != nil {
-		s.logger.Warn("记录每日登录失败", zap.Int("user_id", userID), zap.Error(err))
-	}
-}
-
-// hasDailyLogin 今日是否已记录登录（daily_login 任务行为判定/单点）。
-func (s *PointsService) hasDailyLogin(userID int) bool {
-	var cnt int64
-	if err := s.db.Model(&model.UserDailyLogin{}).
-		Where("user_id = ? AND login_date = ?", userID, s.shanghaiDateTime()).Count(&cnt).Error; err != nil {
-		return false
-	}
-	return cnt > 0
-}
+// 每日登录事实源（MarkDailyLogin / hasDailyLogin）已于 ADR-0054 退役：daily_login 任务
+// 不再有行为前置，落表路径（登录签发、/auth/refresh 轮换、注销清理）与表本身一并删除
+// （迁移 000034）。
 
 // claimCounts 单用户领取计数：按 task_code 分组一次取「终身计数 + 当日计数」。
 // 当日臂在 SQL 内用 FILTER（claim_date = 今日 或 无标记遗留行）完成，日期参数以文本传入、
