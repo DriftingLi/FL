@@ -296,6 +296,11 @@ function updateUser(patch : UpdateProfileParams) : void {
 }
 
 async function tryRefreshToken() : Promise<boolean> {
+    // 内存 user 为空 ⇒ 本地已不是登录态（登出 / 401 清态后 `restoreFromStorage()` 已归零），
+    // 此处**不刷新**。refresh 只续「已有会话」的 access token；否则会拿留下的 refresh_token 把
+    // 会话**悄悄复活**，而 `setAuthData` 需要非空 user —— Kotlin 侧 `user.value!` 是 `!!`，
+    // 空值直接 NPE ⇒ 折成「刷新失败」再弹一次「登录已过期」，正是本票要消灭的那句文案。
+    if (user.value == null) return false
     const rt = getRefreshToken()
     if (rt.length == 0) return false
     try {

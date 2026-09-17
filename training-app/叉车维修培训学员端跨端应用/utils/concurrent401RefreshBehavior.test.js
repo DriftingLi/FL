@@ -282,6 +282,32 @@ describe('并发 401（刷新成功）—— 只发一次刷新，各自重试�
   });
 });
 
+describe('登出后遗留 refresh_token 不得悄悄复活会话', () => {
+  test('I5: 内存已归零时，无凭据的 401 不刷新、也不写回 token/user', async () => {
+    const app = buildApp({ refreshOk: true }); // refresh_token 仍有效 —— 故意诱使「复活」
+
+    // 造出「401 登出 + 登录页 onLoad 已归零内存」的现场：
+    // handleUnauthorized 只清 access 侧凭据（refresh_token 按 ADR-0004 保留）
+    app.uni.removeStorageSync(KEY_TOKEN);
+    app.uni.removeStorageSync(KEY_USER);
+    expect(app.store.restoreFromStorage()).toBe(false); // 登录页 onLoad
+    expect(app.store.isLoggedIn.value).toBe(false);
+    expect(app.store.user.value).toBe(null);
+
+    // 此刻来一个**无凭据**的受保护请求（`pages/resume/resume.uvue` 这类 onLoad 无守卫的页面会发）
+    const p = app.request.get('/api/courses');
+    expect(app.stormAll()).toBe(1); // 无凭据 ⇒ 401
+    await expect(p).rejects.toThrow('登录已过期');
+
+    // 关键：rt 有效也不许用它刷新，更不许把 token/user 写回来
+    // （写回 user 只会是 JSON.stringify(null) = "null" 的脏值；Kotlin 侧则是 `user.value!` 的 !! NPE）
+    expect(app.refreshCalls.length).toBe(0);
+    expect(app.uni.kv.has(KEY_TOKEN)).toBe(false);
+    expect(app.uni.kv.has(KEY_USER)).toBe(false);
+    expect(app.store.isLoggedIn.value).toBe(false);
+  });
+});
+
 describe('并发 401（refresh_token 也无效）—— 恰好一次登出，登录页不弹回首页', () => {
   test('I2/I3/I4: 一次跳转、access 侧凭据清空、refresh_token 保留、内存登录态归零', async () => {
     const app = buildApp({ refreshOk: false });

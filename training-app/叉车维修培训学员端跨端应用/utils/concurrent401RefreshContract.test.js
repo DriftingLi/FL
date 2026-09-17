@@ -154,3 +154,13 @@ describe('C4 清理缓存不削掉续期能力', () => {
     });
   });
 });
+
+describe('C5 已登出时不得用遗留的 refresh_token 悄悄复活会话', () => {
+  test('tryRefreshToken 先判内存 user 为空即拒绝，之后才可以用 user.value!', () => {
+    const body = fnBody(authSrc, 'tryRefreshToken');
+    const guardIdx = body.indexOf('if (user.value == null) return false');
+    const derefIdx = body.indexOf('setAuthData(result.token, user.value!');
+    expect(guardIdx).toBeGreaterThan(-1);
+    expect(derefIdx).toBeGreaterThan(guardIdx);
+  });
+});
