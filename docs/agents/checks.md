@@ -41,7 +41,15 @@
 
 改 `docker-compose*.yml` / `deploy.sh` 后可用 `docker compose -f docker-compose.prod.yml config -q` 做语法校验。
 
-**迁移失败即中止部署**（第十一波）：`scripts/deploy-remote.sh` 不再把迁移失败降级为 `log_warn` 后继续；线上事故确需继续时走显式逃生开关（变量名写在脚本内并登记理由），不得靠改日志绕过。CI 侧 `migration-check` 在现成的 Postgres 上真跑 `go run ./cmd/migrate up`（空库 baseline），并做**单向列对账**：GORM 模型期望的列集合必须 ⊆ `information_schema` 实际列集合，缺列即红（防「模型加字段、忘写迁移」）。
+**迁移失败即中止部署**（第十一波 / #1099）：`scripts/deploy-remote.sh` 的 `run_migration` 失败不再降级为 `log_warn` 后继续，而是 `return 1`、调用点 `exit 1`（默认路径必须中止）。线上事故确需带「新代码跑在旧 schema」这个已知风险继续时，走**唯一**逃生开关：显式声明 `ALLOW_MIGRATION_FAILURE=1`（变量名与理由写在脚本「迁移」配置段，判定点只有一处）；未显式声明一律中止，不得靠改日志绕过。
+
+CI 的 `migration-check`（`ci.yml` Stage 6）在服务容器 `postgres:15-alpine` 上空库真跑三步，共用 job 级 `DATABASE_URL`：
+
+1. `go run ./cmd/migrate up` —— 空库重建 baseline（全部 up 迁移真执行一次）。
+2. `go run ./cmd/migrate check-columns` —— **单向列对账**：GORM 模型期望的列集合必须 ⊆ `information_schema` 实际列集合，**缺列/缺表即非零退出并逐条打印「表.列」**；实际库多出来的列（迁移里有、模型刻意不映射）不算错（不做反向对账）。实现：`backend/internal/migrate/columns.go`（子命令复用 `cmd/migrate` 既有的 direction 分派，不改 CLI 入口）。
+3. `go run ./cmd/migrate down` —— 真跑回滚到空库，随后用 `check-columns` 做**反向断言**：它必须报红且点名 `hrwai_users` / `question` / `credential`（回滚不干净即红）。
+
+口径澄清：`migrate up` 此前并非从没在 CI 跑过——`backend-test` 已注入 `DATABASE_URL`，`internal/testutil/pg.go` 的 `NewPostgresDB` 会为每个 Postgres 契约测试在独立 schema 上真跑迁移（各用例 `DROP SCHEMA CASCADE` 清理）。`migration-check` 补的是**空库 baseline + 列对账 + down 回滚**这三件此前没有的事。本地无 Postgres/Docker 时，对账口径的回归跑 `go test ./internal/migrate/`（含缺列/多列正负样本）；真实迁移链路只能在 CI 上验。
 
 **反代到后端的每个 `location` 必须显式设置 `X-Forwarded-For`**（`frontend/nginx-host.conf`、`frontend/nginx.default.conf`）：nginx 只在设置时才覆写/追加该头，没设置的 location 会把客户端自带的同名头原样透传；后端信任本机对端（`TRUSTED_PROXIES`）之后会采信那个伪造值——限流键可被轮换、访问日志与审计日志写入假 IP。新增或改动反代 location 时逐条核对（#888 的 `/static/` 就是漏网的那条）。
 

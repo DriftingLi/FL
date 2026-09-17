@@ -283,7 +283,9 @@ jobs:
           version: v0.74.0
 
   # ============================================================
-  # Stage 6: 数据库迁移校验
+  # Stage 6: 数据库迁移校验（#1099 / ADR-0056 §6）
+  #   空库真跑 up（重建 baseline）→ 单向列对账（模型 ⊆ 实际）→ 真跑 down（回滚到空库，
+  #   并断言对账仍能报出缺表）。此前的版本只 find | wc -l 数文件个数，一行都没连过这里起的库。
   # ============================================================
   migration-check:
     needs: changes
@@ -306,6 +308,9 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    env:
+      # 迁移 / 对账 / 回滚三步共用同一个空库连接串（服务容器见上方 services.postgres）
+      DATABASE_URL: postgres://migrateuser:migratepass@localhost:5432/forklift_migrate?sslmode=disable
     steps:
       - uses: actions/checkout@v4
 
@@ -315,9 +320,7 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: backend/go.sum
 
-      - name: 验证迁移脚本完整性（up + down）
-        env:
-          DATABASE_URL: postgres://migrateuser:migratepass@localhost:5432/forklift_migrate?sslmode=disable
+      - name: 迁移文件成对性预检（命名 + up/down 配对，不连库）
         run: |
           echo ">>> 检查迁移脚本..."
           UP_COUNT=$(find migrations -name "*.up.sql" | wc -l)
@@ -328,6 +331,38 @@ jobs:
             exit 1
           fi
           echo "迁移文件完整性检查通过"
+
+      - name: 真跑 migrate up（空库重建 baseline）
+        run: |
+          echo ">>> 在空库上执行全部 up 迁移..."
+          go run ./cmd/migrate up
+
+      - name: 单向列对账（GORM 模型期望的列 ⊆ information_schema 实际列）
+        run: |
+          echo ">>> 列对账：模型加了字段却忘写迁移，在这里红..."
+          go run ./cmd/migrate check-columns
+
+      - name: 真跑 migrate down（回滚到空库；此时对账必须报缺表）
+        run: |
+          echo ">>> 回滚全部迁移..."
+          go run ./cmd/migrate down
+          # down 之后业务表应当全部消失。用上一步同一个对账命令做**反向断言**：
+          # 它必须非零退出，且失败输出里必须点名 baseline 的关键表。这样
+          # 「回滚干净」与「缺表确实会被报出来」在同一条真实链路上各验证一次，
+          # 而不是靠人数一遍。
+          if go run ./cmd/migrate check-columns >/tmp/after-down.log 2>&1; then
+            echo "错误: down 之后列对账仍然通过——业务表没有随迁移一起回滚"
+            cat /tmp/after-down.log
+            exit 1
+          fi
+          for t in hrwai_users question credential; do
+            grep -q "\"$t\"" /tmp/after-down.log || {
+              echo "错误: down 后对账未报出整表缺失: $t"
+              cat /tmp/after-down.log
+              exit 1
+            }
+          done
+          echo "回滚验证通过：hrwai_users / question / credential 已随 down 消失，且对账能报出缺表"
 
   # ============================================================
   # Stage 6.5: 移动端 - 契约与静态守护单测（jest node 环境，无浏览器依赖）
