@@ -134,7 +134,7 @@ var routeRegistrars = []routeRegistrar{
 	{
 		Domain: "巡检与投稿",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
-			RegisterAdminInspectionRoutes(api, rd, deps.DB, deps.PointsSvc)
+			RegisterAdminInspectionRoutes(api, rd, deps.InspectionSvc, deps.PointsSvc)
 			RegisterContributionRoutes(api, rd, deps.ContributionSvc)
 		},
 	},

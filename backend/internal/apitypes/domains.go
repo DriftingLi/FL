@@ -893,4 +893,24 @@ var Domains = []Domain{
 			{Method: "DELETE", Path: "/admin/faq/entries/{id}", NoData: true},
 		},
 	},
+
+	{
+		// 域边界按**前端模块**切（#1097 补登记）：frontend/src/api/inspection.ts 是管理端页面级
+		// 分组，不是后端蓝图分组 —— 该模块消费 8 个端点，其中 4 条的后端面在 admin_inspection.go
+		// 注册函数下（本域），另 4 条（/admin/jobs*、/admin/job-reports*）落在既有 job 域（#1100）。
+		Name:  "inspection",
+		Title: "管理端巡检面（frontend/src/api/inspection.ts 的 4 条：简历查看留痕 / 联系方式交换申请 / 已受理后删除计数 / 积分流水）",
+		Roots: []string{
+			"service.RecruitResumeViewDTO",
+			"service.ContactRequestRowDTO",
+			"service.InspectionCountDTO",
+			"service.PointsLedgerResult",
+		},
+		Endpoints: []Endpoint{
+			{Method: "GET", Path: "/admin/recruit/views"},
+			{Method: "GET", Path: "/admin/recruit/requests"},
+			{Method: "GET", Path: "/admin/inspection/deleted-after-accepted"},
+			{Method: "GET", Path: "/admin/points/ledger"},
+		},
+	},
 }

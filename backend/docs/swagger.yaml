@@ -1421,6 +1421,29 @@ definitions:
       total:
         type: integer
     type: object
+  service.ContactRequestRowDTO:
+    properties:
+      created_at:
+        type: string
+      decided_at:
+        type: string
+      expires_at:
+        type: string
+      id:
+        type: integer
+      message:
+        type: string
+      recruiter_id:
+        type: integer
+      source:
+        type: string
+      status:
+        type: string
+      student_user_id:
+        type: integer
+      updated_at:
+        type: string
+    type: object
   service.ContributionAuthor:
     properties:
       anonymous:
@@ -2356,6 +2379,11 @@ definitions:
         type: string
       username:
         type: string
+    type: object
+  service.InspectionCountDTO:
+    properties:
+      count:
+        type: integer
     type: object
   service.JobCardDTO:
     properties:
@@ -3419,6 +3447,17 @@ definitions:
         type: string
       user_id:
         type: integer
+    type: object
+  service.RecruitResumeViewDTO:
+    properties:
+      id:
+        type: integer
+      recruiter_id:
+        type: integer
+      resume_user_id:
+        type: integer
+      viewed_at:
+        type: string
     type: object
   service.RecruiterApplicationListResult:
     properties:
@@ -6532,6 +6571,35 @@ paths:
       summary: 切换 HRWAI 用户启用/禁用状态
       tags:
       - 管理端-用户
+  /admin/inspection/deleted-after-accepted:
+    get:
+      description: 管理员查看「楼主删除自己已解决的帖子」累计计数（system_settings.deleted_after_accepted，行缺失
+        = 0）
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.InspectionCountDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 巡检计数：删除已解决帖
+      tags:
+      - 管理端-巡检
   /admin/job-reports:
     get:
       description: 管理端查看待处理举报队列
@@ -6853,6 +6921,57 @@ paths:
       summary: 课程等级列表
       tags:
       - 管理端-培训目录
+  /admin/points/ledger:
+    get:
+      description: 管理员按原因 / 业务域 / 用户筛选积分流水（不传 ref_type = 跨域全量；页大小上限 100）
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      - description: 积分原因（如 accepted_bonus / rollback）
+        in: query
+        name: reason
+        type: string
+      - description: 业务域（forum_topic / task / course / ai_chat 等）；不传 = 跨域全量
+        in: query
+        name: ref_type
+        type: string
+      - description: 用户 ID（>0 生效）
+        in: query
+        name: user_id
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.PointsLedgerResult'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 积分流水（管理端）
+      tags:
+      - 管理端-巡检
   /admin/position:
     post:
       consumes:
@@ -7313,6 +7432,126 @@ paths:
       summary: 题目打标
       tags:
       - 题库管理
+  /admin/recruit/requests:
+    get:
+      description: 管理员分页查询联系方式交换申请（可按招聘者/学员/状态过滤）
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      - description: 招聘者 ID（>0 生效）
+        in: query
+        name: recruiter_id
+        type: integer
+      - description: 学员用户 ID（>0 生效）
+        in: query
+        name: student_user_id
+        type: integer
+      - description: 申请状态（pending/approved/rejected/expired/revoked）
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  properties:
+                    items:
+                      items:
+                        $ref: '#/definitions/service.ContactRequestRowDTO'
+                      type: array
+                    page:
+                      type: integer
+                    page_size:
+                      type: integer
+                    total:
+                      type: integer
+                  type: object
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 联系方式交换申请列表
+      tags:
+      - 管理端-巡检
+  /admin/recruit/views:
+    get:
+      description: 管理员分页查询招聘企业查看学员简历的留痕（可按招聘者/学员过滤；只呈现事实字段，不含联系方式明文）
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      - description: 招聘者 ID（>0 生效）
+        in: query
+        name: recruiter_id
+        type: integer
+      - description: 学员用户 ID（>0 生效）
+        in: query
+        name: student_user_id
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  properties:
+                    items:
+                      items:
+                        $ref: '#/definitions/service.RecruitResumeViewDTO'
+                      type: array
+                    page:
+                      type: integer
+                    page_size:
+                      type: integer
+                    total:
+                      type: integer
+                  type: object
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 简历查看留痕列表
+      tags:
+      - 管理端-巡检
   /admin/recruiters:
     get:
       description: 管理员分页查询招聘者（企业名/账号模糊搜索，字段白名单无凭据）

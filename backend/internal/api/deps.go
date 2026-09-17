@@ -84,6 +84,7 @@ type Deps struct {
 	JobPostingSvc        *service.JobPostingService
 	JobApplicationSvc    *service.JobApplicationService
 	JobReportSvc         *service.JobReportService
+	InspectionSvc        *service.InspectionService
 	ContributionSvc      *service.ContributionService
 }
 
@@ -179,6 +180,7 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		JobPostingSvc:        service.NewJobPostingService(db, logger),
 		JobApplicationSvc:    service.NewJobApplicationService(db, logger, notificationSvc, contactSvc),
 		JobReportSvc:         service.NewJobReportService(db, logger),
+		InspectionSvc:        service.NewInspectionService(db),
 		ContributionSvc:      service.NewContributionService(db, fileSvc, notificationSvc, pointsSvc, logger, clock.Real()),
 	}
 	// 投递通知与联系方式交换共用邮件单点（spec #449 决定 15）
