@@ -543,8 +543,8 @@ func questionStats(db *gorm.DB, questionID int, qType string) *questionStatResul
 // credentialID 非空时按**记录上的分区列**过滤（写入时冻结，ADR-0051）：练习历史是学习内容读面，
 // 与 /practice-stats、/stats 同口径；nil = 不分区、看全部（与题库池 / 错题本的既有 nil 语义一致）。
 // 认下的代价：切到「没练过的证件」会看到空历史（空态而非数据丢失）。
-func (s *PracticeModeService) GetHistory(studentID int, credentialID *int, page, pageSize int, qType, startDate, endDate string) *HistoryResultDTO {
-	records, total, page, pageSize := paging.Query[model.QuestionPracticeRecord](s.db, page, pageSize, 20, "created_at DESC", func(q *gorm.DB) *gorm.DB {
+func (s *PracticeModeService) GetHistory(studentID int, credentialID *int, page, pageSize int, qType, startDate, endDate string) (*HistoryResultDTO, error) {
+	records, total, page, pageSize, err := paging.Query[model.QuestionPracticeRecord](s.db, page, pageSize, 20, "question_practice_record.created_at DESC", func(q *gorm.DB) *gorm.DB {
 		q = q.Where("student_id = ?", studentID)
 		if credentialID != nil {
 			// 必须带表名前缀：qType 分支会 JOIN question，而两张表都有 credential_id（否则歧义列报错）
@@ -553,14 +553,19 @@ func (s *PracticeModeService) GetHistory(studentID int, credentialID *int, page,
 		if qType != "" {
 			q = q.Joins("JOIN question ON question.id = question_practice_record.question_id").Where("question.type = ?", qType)
 		}
+		// 日期过滤与排序同样必须带表名前缀：#1095 收编错误模式后，qType 分支的
+		// 「ambiguous column name: created_at」不再被吞（此前 total 正确、items 恒空 —— 静默 fail-open）。
 		if startDate != "" {
-			q = q.Where("created_at >= ?", startDate)
+			q = q.Where("question_practice_record.created_at >= ?", startDate)
 		}
 		if endDate != "" {
-			q = q.Where("created_at <= ?", endDate)
+			q = q.Where("question_practice_record.created_at <= ?", endDate)
 		}
 		return q
 	})
+	if err != nil {
+		return nil, err
+	}
 	questionIDs := make([]int, 0, len(records))
 	for i := range records {
 		questionIDs = append(questionIDs, records[i].QuestionID)
@@ -589,7 +594,7 @@ func (s *PracticeModeService) GetHistory(studentID int, credentialID *int, page,
 		Page:     page,
 		PageSize: pageSize,
 		Records:  items,
-	}
+	}, nil
 }
 
 // sameIDSet 判断两个 ID 列表是否为同一集合（忽略顺序）。

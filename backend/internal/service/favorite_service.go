@@ -189,7 +189,7 @@ func (s *FavoriteService) Remove(userID int, favoriteID int64) error {
 // List 我的收藏列表（targetType 可选过滤；目标已删除的条目跳过）。
 func (s *FavoriteService) List(userID int, targetType string, page, pageSize int, credentialID ...*int) (*FavoritePageResult, error) {
 	targetType = strings.TrimSpace(targetType)
-	rows, total, page, pageSize := paging.QueryWithMax[model.Favorite](s.db, page, pageSize, 20, 100,
+	rows, total, page, pageSize, err := paging.QueryWithMax[model.Favorite](s.db, page, pageSize, 20, 100,
 		"created_at DESC, favorite_id DESC",
 		func(q *gorm.DB) *gorm.DB {
 			q = q.Where("user_id = ?", userID)
@@ -208,6 +208,9 @@ func (s *FavoriteService) List(userID int, targetType string, page, pageSize int
 			}
 			return q
 		})
+	if err != nil {
+		return nil, err
+	}
 	items := make([]FavoriteDTO, 0, len(rows))
 	if len(rows) > 0 {
 		byType := make(map[string][]int)

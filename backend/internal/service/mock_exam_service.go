@@ -369,14 +369,17 @@ func (s *MockExamService) GetResult(mockExamID, studentID int) (*MockExamResultD
 // credentialID 非 nil 时按证件分区过滤（#1003）：分区是**开考那一刻**的当前证件（Start 落库），
 // 故切到别的证件不会看到别的证件的模考 —— 与「当前证件 = 全局过滤器」同口径。
 // nil = 不分区、看全部：与错题本 / 题库池的既有 nil 语义一致（未选证件的学员不该看不到自己的历史）。
-func (s *MockExamService) GetHistory(studentID int, credentialID *int, page, pageSize int) *MockExamHistoryDTO {
-	exams, total, page, pageSize := paging.Query[model.MockExam](s.db, page, pageSize, 10, "created_at DESC", func(q *gorm.DB) *gorm.DB {
+func (s *MockExamService) GetHistory(studentID int, credentialID *int, page, pageSize int) (*MockExamHistoryDTO, error) {
+	exams, total, page, pageSize, err := paging.Query[model.MockExam](s.db, page, pageSize, 10, "created_at DESC", func(q *gorm.DB) *gorm.DB {
 		q = q.Where("student_id = ? AND status = ?", studentID, mockExamStatusSubmitted)
 		if credentialID != nil {
 			q = q.Where("credential_id = ?", *credentialID)
 		}
 		return q
 	})
+	if err != nil {
+		return nil, err
+	}
 	items := make([]MockExamHistoryItemDTO, 0, len(exams))
 	for i := range exams {
 		items = append(items, mockExamToDTO(&exams[i]))
@@ -386,7 +389,7 @@ func (s *MockExamService) GetHistory(studentID int, credentialID *int, page, pag
 		Page:     page,
 		PageSize: pageSize,
 		Exams:    items,
-	}
+	}, nil
 }
 
 // ===== 辅助 =====

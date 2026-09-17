@@ -84,12 +84,12 @@ type WrongQuestionBatchRemoveResultDTO struct {
 // sort: "time_asc" 按最近错误时间升序，其余按降序（默认）；
 // favorited: 仅返回已收藏的错题（JOIN favorite，user_id 与 student_id 同源）；
 // credentialID: 按题目所属证件分区（与课程/题库同口径，#387；nil 表示不过滤）。
-func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, qType string, minWrongCount *int, favorited bool, sort string, credentialID *int) *WrongQuestionPageDTO {
+func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, qType string, minWrongCount *int, favorited bool, sort string, credentialID *int) (*WrongQuestionPageDTO, error) {
 	orderBy := "wrong_question.last_wrong_at DESC"
 	if sort == "time_asc" {
 		orderBy = "wrong_question.last_wrong_at ASC"
 	}
-	items, total, page, pageSize := paging.Query[model.WrongQuestion](s.db, page, pageSize, 20, orderBy, func(q *gorm.DB) *gorm.DB {
+	items, total, page, pageSize, err := paging.Query[model.WrongQuestion](s.db, page, pageSize, 20, orderBy, func(q *gorm.DB) *gorm.DB {
 		q = q.Where("student_id = ? AND is_removed = ?", studentID, false)
 		if qType != "" || credentialID != nil {
 			q = q.Joins("JOIN question ON question.id = wrong_question.question_id")
@@ -108,6 +108,9 @@ func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, 
 		}
 		return q
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	questionIDs := make([]int, 0, len(items))
 	for i := range items {
@@ -146,7 +149,7 @@ func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, 
 		Page:     page,
 		PageSize: pageSize,
 		Total:    total,
-	}
+	}, nil
 }
 
 // loadLastUserAnswers 批量查询每题「学员最近一次作答」的答案（question_id → user_answer）。

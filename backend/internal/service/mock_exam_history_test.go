@@ -44,7 +44,10 @@ func TestGetHistoryOnlySubmitted(t *testing.T) {
 		}
 	}
 
-	got := svc.GetHistory(student.ID, nil, 1, 10)
+	got, err := svc.GetHistory(student.ID, nil, 1, 10)
+	if err != nil {
+		t.Fatalf("GetHistory 失败: %v", err)
+	}
 	if got.Total != 1 {
 		t.Fatalf("历史应只含 1 条已交卷记录, got total=%d", got.Total)
 	}
@@ -189,7 +192,10 @@ func TestGetHistoryCredentialPartition(t *testing.T) {
 		{"B 证件分区只回 B", &credB.ID, []int{examB.ID}},
 		{"nil 证件不分区，三条都在", nil, []int{examA.ID, examB.ID, unpartitioned.ID}},
 	} {
-		got := svc.GetHistory(student.ID, tc.cred, 1, 10)
+		got, err := svc.GetHistory(student.ID, tc.cred, 1, 10)
+		if err != nil {
+			t.Fatalf("GetHistory 失败: %v", err)
+		}
 		if int(got.Total) != len(tc.wantIDs) {
 			t.Fatalf("%s: total=%d, want %d", tc.name, got.Total, len(tc.wantIDs))
 		}

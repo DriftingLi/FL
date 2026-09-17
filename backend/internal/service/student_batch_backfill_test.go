@@ -78,7 +78,10 @@ func TestGetRecordsBatchBackfill(t *testing.T) {
 	// 未知课程记录（course_id 找不到 → course_name = "未知课程"）
 	seedStudyRecord(t, db, student.ID, 9999, nil, 20, 5, d1)
 
-	res := svc.GetRecords(student.ID, 1, 10, "", "")
+	res, err := svc.GetRecords(student.ID, 1, 10, "", "")
+	if err != nil {
+		t.Fatalf("GetRecords 失败: %v", err)
+	}
 
 	if res.Total != 3 {
 		t.Fatalf("total = %d, want 3", res.Total)
@@ -144,7 +147,10 @@ func TestGetRecordsUnknownCourseStillBackfillsChapterTitle(t *testing.T) {
 	d1 := time.Date(2026, 8, 1, 9, 0, 0, 0, time.UTC)
 	seedStudyRecord(t, db, student.ID, 8888, &ch.ChapterID, 50, 15, d1)
 
-	res := svc.GetRecords(student.ID, 1, 10, "", "")
+	res, err := svc.GetRecords(student.ID, 1, 10, "", "")
+	if err != nil {
+		t.Fatalf("GetRecords 失败: %v", err)
+	}
 	if res.Total != 1 {
 		t.Fatalf("total = %d, want 1", res.Total)
 	}

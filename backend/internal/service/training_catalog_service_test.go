@@ -695,7 +695,11 @@ func TestCourseSortOrder(t *testing.T) {
 	c0 := model.Course{Name: "课程C", Status: 1, SortOrder: 0,
 		SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID), CreatedAt: testutil.Now()}
 	db.Create(&c0)
-	list := svc.GetCourses(1, 10, "", nil, nil, nil).Courses
+	page, err := svc.GetCourses(1, 10, "", nil, nil, nil)
+	if err != nil {
+		t.Fatalf("GetCourses 失败: %v", err)
+	}
+	list := page.Courses
 	if len(list) != 2 {
 		t.Fatalf("应 2 门课程, got %d", len(list))
 	}
@@ -836,11 +840,17 @@ func TestCourseService_TrainingFields(t *testing.T) {
 	}
 
 	// 学员端列表按专业方向/等级过滤
-	list := svc.GetCourses(1, 10, nil, ptrInt(spec.SpecialtyID), ptrInt(lv.LevelID))
+	list, err := svc.GetCourses(1, 10, nil, ptrInt(spec.SpecialtyID), ptrInt(lv.LevelID))
+	if err != nil {
+		t.Fatalf("GetCourses 失败: %v", err)
+	}
 	if list.Total != 1 {
 		t.Fatalf("过滤后应 1 条, got %v", list.Total)
 	}
-	empty := svc.GetCourses(1, 10, nil, ptrInt(spec.SpecialtyID), ptrInt(9999))
+	empty, err := svc.GetCourses(1, 10, nil, ptrInt(spec.SpecialtyID), ptrInt(9999))
+	if err != nil {
+		t.Fatalf("GetCourses 失败: %v", err)
+	}
 	if empty.Total != 0 {
 		t.Fatal("不存在的等级应过滤为空")
 	}
@@ -888,7 +898,10 @@ func TestQuestionBank_Tags(t *testing.T) {
 	}
 
 	// 按标签过滤
-	byTag := qsvc.ListQuestions(1, 20, "", "", "", ptrInt(tag2.ID), nil)
+	byTag, err := qsvc.ListQuestions(1, 20, "", "", "", ptrInt(tag2.ID), nil)
+	if err != nil {
+		t.Fatalf("ListQuestions 失败: %v", err)
+	}
 	if byTag.Total != 1 {
 		t.Fatalf("按标签过滤应 1 条, got %v", byTag.Total)
 	}

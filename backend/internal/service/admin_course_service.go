@@ -25,7 +25,7 @@ func NewAdminCourseService(db *gorm.DB, fileSvc *FileStore, logger *zap.Logger) 
 }
 
 // GetCourses 管理端课程列表。filter 支持 hot|featured|all（缺省 all）。
-func (s *AdminCourseService) GetCourses(page, pageSize int, keyword string, credentialID, specialtyID, levelID *int, filter ...string) CoursePageResult {
+func (s *AdminCourseService) GetCourses(page, pageSize int, keyword string, credentialID, specialtyID, levelID *int, filter ...string) (CoursePageResult, error) {
 	f := ""
 	if len(filter) > 0 {
 		f = filter[0]

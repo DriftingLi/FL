@@ -269,14 +269,17 @@ type AdminStatisticsDTO struct {
 }
 
 // GetTutors 导师列表。
-func (s *AdminService) GetTutors(page, pageSize int, keyword string) *TutorListDTO {
-	tutors, total, page, _ := paging.Query[model.Tutor](s.db, page, pageSize, 10, "created_at DESC", func(q *gorm.DB) *gorm.DB {
+func (s *AdminService) GetTutors(page, pageSize int, keyword string) (*TutorListDTO, error) {
+	tutors, total, page, _, err := paging.Query[model.Tutor](s.db, page, pageSize, 10, "created_at DESC", func(q *gorm.DB) *gorm.DB {
 		if keyword != "" {
 			like := "%" + keyword + "%"
 			q = q.Where("username LIKE ? OR name LIKE ?", like, like)
 		}
 		return q
 	})
+	if err != nil {
+		return nil, err
+	}
 	items := make([]TutorDTO, 0, len(tutors))
 	for i := range tutors {
 		items = append(items, tutorToDTO(&tutors[i]))
@@ -285,7 +288,7 @@ func (s *AdminService) GetTutors(page, pageSize int, keyword string) *TutorListD
 		Total:  total,
 		Page:   page,
 		Tutors: items,
-	}
+	}, nil
 }
 
 // DeleteTutor 删除导师。

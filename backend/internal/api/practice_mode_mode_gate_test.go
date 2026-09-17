@@ -146,7 +146,10 @@ func TestMockExamHistoryCarriesPaperID(t *testing.T) {
 		}
 	}
 
-	got := svc.GetHistory(student.ID, nil, 1, 10)
+	got, err := svc.GetHistory(student.ID, nil, 1, 10)
+	if err != nil {
+		t.Fatalf("GetHistory 失败: %v", err)
+	}
 	if got.Total != 2 {
 		t.Fatalf("应有 2 条历史, got %d", got.Total)
 	}

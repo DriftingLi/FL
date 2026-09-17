@@ -28,8 +28,9 @@ type CourseListOptions struct {
 }
 
 // ListCourses 课程列表共享实现（分页归一化、章节数/前置课程/学员数批量回填、信封组装只此一份）。
-func ListCourses(db *gorm.DB, page, pageSize int, opts CourseListOptions) CoursePageResult {
-	courses, total, page, pageSize := paging.Query[model.Course](db, page, pageSize, opts.DefaultPageSize, "sort_order ASC, created_at DESC, course_id DESC", func(q *gorm.DB) *gorm.DB {
+// 查询失败上抛（ADR-0056 §1），由 api 层渲染 500 信封。
+func ListCourses(db *gorm.DB, page, pageSize int, opts CourseListOptions) (CoursePageResult, error) {
+	courses, total, page, pageSize, err := paging.Query[model.Course](db, page, pageSize, opts.DefaultPageSize, "sort_order ASC, created_at DESC, course_id DESC", func(q *gorm.DB) *gorm.DB {
 		if opts.OnlyMounted {
 			// 挂载不变式 + 上架：学员端/导师端可见性口径
 			q = q.Where("status = ?", 1)
@@ -54,6 +55,9 @@ func ListCourses(db *gorm.DB, page, pageSize int, opts CourseListOptions) Course
 		}
 		return q
 	})
+	if err != nil {
+		return CoursePageResult{}, err
+	}
 
 	ids := make([]int, 0, len(courses))
 	for i := range courses {
@@ -105,7 +109,7 @@ func ListCourses(db *gorm.DB, page, pageSize int, opts CourseListOptions) Course
 		Page:    page,
 		Pages:   response.PageCount(total, pageSize),
 		Total:   total,
-	}
+	}, nil
 }
 
 // 批量回填已收敛到 batch_backfill.go（批量回填 module，课程列表/学员档案/学习记录共享）。

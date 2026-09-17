@@ -474,14 +474,14 @@ type QuestionRejectResultDTO struct {
 }
 
 // ListQuestions 题目列表分页查询（可按标签 tagID 过滤，结果附带标签列表）。
-func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, status, keyword string, tagID *int, credentialID *int, sort ...string) *QuestionPageDTO {
+func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, status, keyword string, tagID *int, credentialID *int, sort ...string) (*QuestionPageDTO, error) {
 	// 排序口径（#412）：缺省保持现状「最新提交优先」（created_at DESC, id ASC）；
 	// 讲师端显式传 id_asc 请求按 ID 升序，翻页时 ID 单调推进、不再呈锯齿跳回。
 	order := "created_at DESC, id ASC"
 	if len(sort) > 0 && sort[0] == "id_asc" {
 		order = "id ASC"
 	}
-	list, total, page, pageSize := paging.Query[model.Question](s.db, page, pageSize, 20, order, func(q *gorm.DB) *gorm.DB {
+	list, total, page, pageSize, err := paging.Query[model.Question](s.db, page, pageSize, 20, order, func(q *gorm.DB) *gorm.DB {
 		if qType != "" {
 			q = q.Where("type = ?", qType)
 		}
@@ -499,6 +499,9 @@ func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, st
 		}
 		return q
 	})
+	if err != nil {
+		return nil, err
+	}
 	out := make([]QuestionDTO, 0, len(list))
 	ids := make([]int, 0, len(list))
 	for i := range list {
@@ -511,7 +514,7 @@ func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, st
 		PageSize:  pageSize,
 		Questions: out,
 		Total:     total,
-	}
+	}, nil
 }
 
 // loadTagsByQuestion 加载单题标签列表。

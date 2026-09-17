@@ -230,7 +230,7 @@ func NewCourseService(db *gorm.DB, slideRenderer *SlideRenderer, logger *zap.Log
 
 // GetCourses 课程列表（可额外按专业方向/课程等级/目标证件过滤；filter=hot|featured|all，热门默认）。
 // 未挂专业方向/等级/证件的课程不展示（与目录树口径统一，见挂载不变式）。
-func (s *CourseService) GetCourses(page, pageSize int, credentialID, specialtyID, levelID *int, filter ...string) CoursePageResult {
+func (s *CourseService) GetCourses(page, pageSize int, credentialID, specialtyID, levelID *int, filter ...string) (CoursePageResult, error) {
 	f := ""
 	if len(filter) > 0 {
 		f = filter[0]
