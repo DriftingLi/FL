@@ -70,10 +70,14 @@ describe('my-uploads 接真数据契约', () => {
   it('onShow 刷新（投稿后返回可见最新）', () => {
     expect(src).toMatch(/onShow\s*\(/);
   });
-  it('状态徽标覆盖后端五态值域', () => {
-    for (const s of ['approved', 'rejected', 'withdrawn', 'archived', '待审核']) {
-      expect(src).toContain(s);
+  it('状态徽标覆盖后端五态值域（判定收在 utils/contributionStatus 单点，#1108）', () => {
+    const status = read('utils/contributionStatus.uts');
+    for (const s of ['pending', 'approved', 'rejected', 'withdrawn', 'archived']) {
+      expect(status).toContain(s);
     }
+    expect(src).toMatch(
+      /import\s*\{[^}]*\bdescribeContributionStatus\b[^}]*\}\s*from\s*'\.\.\/\.\.\/utils\/contributionStatus'/
+    );
   });
 });
 

@@ -13,8 +13,9 @@ import type { RequestOptions } from './request'
 import { toNumber, toStr, toBool, errMsg } from './helpers'
 
 /**
- * 投稿状态值域（后端 ContributionStatus* 常量）：
- * pending 待审核 / approved 已上架 / rejected 未通过 / withdrawn 已撤回 / archived 已下架
+ * 投稿状态值域（后端 `service.ContributionStatus*` 常量，五态）。
+ * 文案 / 图标 / 配色的**唯一判定处**是 `utils/contributionStatus.uts`（#1108 起，与 Web 端同源）；
+ * 本文件只声明 wire 形状，不再复述取值与文案（避免第二份口径）。
  * @note UTS 联合字面量不能用于运行时强转，统一 string
  */
 
@@ -119,7 +120,7 @@ export function uploadContributionFileApi(filePath : string) : Promise<Contribut
 }
 
 /**
- * 创建投稿（pending，待审核）
+ * 创建投稿（新建即 pending 态）
  * POST /contributions
  * @param credentialId 目标证件 ID（必填 >0；移动端取当前证件）
  * @param title 标题（≤120 字，必填）

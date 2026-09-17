@@ -1,0 +1,50 @@
+/**
+ * 投稿状态词表单点（根仓 ADR-0056 §8 的移动端落点；issue #1108；决策记录 docs/adr/0018）。
+ *
+ * 为什么有这个文件：投稿状态（后端 `service.ContributionStatus*` 五态，contribution_service.go:52-56）
+ * 的文案与配色原先内联在 `pages/resources/my-uploads.uvue`，且与 Web 端漂移两条
+ * （`pending`「待审核」vs「审核中」、`rejected`「未通过」vs「已驳回」）。
+ * 判定收在本文件一份，消费面只做投影；日后的投递记录 / 联系方式交换页复用同一张表。
+ *
+ * **两端同源口径**：label 逐字对齐 Web `frontend/src/pages/student/ContributionTab.vue` 的
+ * `STATUS_LABEL`（#1103 只落了联络授权 / 投递两个 descriptor，投稿域在 Web 侧仍是这张 Record）。
+ * 移动端**不另立口径** —— 同一个后端契约在两端出现两种词是漂移，不是端内差异。
+ *
+ * **穷尽性怎么保证**：UTS 没有编译期穷尽 `Record`（联合字面量不能用于运行时强转，
+ * `Map` 取值可空），故由 `utils/contributionStatusContract.test.js` 三重对账兜底：
+ * ① 本表取值集合 == 后端 Go 常量表；② 本表 label == Web 的 `STATUS_LABEL`；③ 消费面不内联状态文案。
+ * 后端新增第六态而这里没加行 ⇒ ① 报红（这是本域「漏一个取值」的暴露机制）。
+ */
+
+/** 投稿状态描述子：label 是给用户看的**状态事实**，icon/color/bg 是列表徽标与图标底的观感。 */
+export type ContributionStatusDescriptor = {
+    status : string
+    label : string
+    icon : string
+    color : string
+    bg : string
+}
+
+/**
+ * 唯一判定表（全仓只此一份）：一行一个取值，`status` 与后端常量表逐值对齐。
+ * @note 行序与展示无关（查找按 `status` 命中），新增取值只需加一行；
+ *       色值与图标沿用 #758 列表视觉语言，本次只统一文案。
+ */
+export const CONTRIBUTION_STATUS_DESCRIPTORS : ContributionStatusDescriptor[] = [
+    { status: 'pending', label: '审核中', icon: '🕐', color: '#FF9800', bg: '#FFF7E6' } as ContributionStatusDescriptor,
+    { status: 'approved', label: '已上架', icon: '✅', color: '#22A45D', bg: '#F0FFF0' } as ContributionStatusDescriptor,
+    { status: 'rejected', label: '已驳回', icon: '✖️', color: '#E5484D', bg: '#FFF0F0' } as ContributionStatusDescriptor,
+    { status: 'withdrawn', label: '已撤回', icon: '🕐', color: '#999999', bg: '#F5F5F5' } as ContributionStatusDescriptor,
+    { status: 'archived', label: '已下架', icon: '🕐', color: '#999999', bg: '#F5F5F5' } as ContributionStatusDescriptor,
+]
+
+/** 认不出的取值兜底（旧行为：按待审观感呈现；「忘加取值」由契约锁的 ① 对账负责暴露，不靠兜底）。 */
+const UNKNOWN_DESCRIPTOR : ContributionStatusDescriptor = { status: '', label: '审核中', icon: '🕐', color: '#FF9800', bg: '#FFF7E6' } as ContributionStatusDescriptor
+
+/** 输入状态 → 描述子；取值域外回落 `UNKNOWN_DESCRIPTOR`。 */
+export function describeContributionStatus(status : string) : ContributionStatusDescriptor {
+    for (let i = 0; i < CONTRIBUTION_STATUS_DESCRIPTORS.length; i++) {
+        if (CONTRIBUTION_STATUS_DESCRIPTORS[i].status == status) return CONTRIBUTION_STATUS_DESCRIPTORS[i]
+    }
+    return UNKNOWN_DESCRIPTOR
+}
