@@ -38,7 +38,7 @@
         <scroll-view v-if="currentTab == 'square' || currentTab == 'hot' || currentTab == 'experience'" class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
             <ForumCheckinCard v-if="currentTab === 'square'" :players="checkinPlayers" @click="onCheckInClick" />
             <view v-if="topics.length == 0 && !loading" class="empty-tip">
-                <text class="empty-icon"></text>
+                <text class="empty-icon">💬</text>
                 <text class="empty-text">{{ emptyText }}</text>
                 <view v-if="currentTab !== 'experience'" class="empty-btn" @click="onCreate">
                     <text class="empty-btn-text">发布新帖</text>

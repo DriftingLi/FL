@@ -23,7 +23,7 @@
             <!-- 我的帖子 -->
             <view v-if="currentTab === 'topics'">
                 <view v-if="topics.length === 0 && !loading" class="empty-tip">
-                    <text class="empty-icon"></text>
+                    <text class="empty-icon">💬</text>
                     <text class="empty-text">还没有发过帖子</text>
                 </view>
 
@@ -37,8 +37,8 @@
                             <view class="topic-meta">
                                 <text class="meta-like-icon">{{ item.liked ? '❤️' : '' }}
                                     {{ item.likes_count > 0 ? item.likes_count : '' }}</text>
-                                <text class="meta-item"> {{ item.replies_count }}</text>
-                                <text class="meta-item"> {{ item.views_count }}</text>
+                                <text class="meta-item">💬 {{ item.replies_count }}</text>
+                                <text class="meta-item">👁 {{ item.views_count }}</text>
                             </view>
                             <view class="topic-footer-right">
                                 <view class="topic-edit-btn" @click.stop="onEditTopic(item.id)">
@@ -54,7 +54,7 @@
             <!-- 我的回复 -->
             <view v-if="currentTab === 'replies'">
                 <view v-if="replies.length === 0 && !loading" class="empty-tip">
-                    <text class="empty-icon"></text>
+                    <text class="empty-icon">💬</text>
                     <text class="empty-text">还没有回复过帖子</text>
                 </view>
 
