@@ -4,6 +4,7 @@
 import { ref } from 'vue'
 import type { Ref } from 'vue'
 import { getTagsApi } from '../../../api/course'
+import { getCurrentCredentialApi } from '../../../api/credential'
 import { getPracticeOverviewApi, getPracticeProgressApi } from '../../../api/practice'
 import type { TagItem, PracticeOverview } from '../../../types/index'
 
@@ -32,8 +33,12 @@ export function usePracticeOverview() : UsePracticeOverviewResult {
 
     async function loadModules() : Promise<void> {
         listLoading.value = true; listError.value = ''
+        // 标签题数要与**抽题池**同口径（#702）：/tags 是公开路由、handler 自读 query，
+        // 不传证件即全证件计数（见 api/course.uts getTagsApi 与 docs/agents/credential-scope.md）
+        let browseCredentialId = 0
+        try { const cred = await getCurrentCredentialApi(); if (cred != null) { browseCredentialId = cred!.id } } catch (e) { console.warn('[practice] load credential failed:', e) }
         let tags : TagItem[] = []
-        try { tags = await getTagsApi() } catch (e) { console.error('[practice] load tags failed:', e); listError.value = '加载失败，请点击重试'; listLoading.value = false; return }
+        try { tags = await getTagsApi(browseCredentialId) } catch (e) { console.error('[practice] load tags failed:', e); listError.value = '加载失败，请点击重试'; listLoading.value = false; return }
         const rows : ModuleRow[] = []
         for (let i = 0; i < tags.length; i++) { const t = tags[i]; rows.push({ tag_id: t.id, name: t.name, total: t.question_count, completed: 0 } as ModuleRow) }
         modules.value = rows; listLoading.value = false
