@@ -162,8 +162,9 @@ describe('「我的」页面跳转契约', () => {
 
   it('原型中尚无对应页的条目走占位提示而非死链', () => {
     const placeholder = allEntries.filter((i) => !i.available).map((i) => i.key);
+    // 「帮助中心」已随 #1081 接线、「笔记本」已随 #1082 接线（占位项名单同步收缩：available:true + 已注册 path）
     expect(placeholder.sort()).toEqual(
-      ['address', 'help', 'orders', 'study-plan'].sort()
+      ['address', 'orders', 'study-plan'].sort()
     );
   });
 

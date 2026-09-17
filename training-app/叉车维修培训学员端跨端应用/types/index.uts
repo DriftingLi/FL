@@ -19,3 +19,4 @@ export { type FavoriteItem, type FavoriteListResult, type FavoriteCheckResult } 
 export { type SearchItem, type SearchCategoryResult, type SearchResult, type SearchPagedResult, type HighlightSegment } from './search'
 export { type StudyStats, type CourseProgressItem, type StudentProfile, type StudyRecord, type StudyRecordsResult, type StudentCourse, type StudentCourseListResult, type StudentCourseChapterProgress, type StudentCourseDetail } from './student'
 export { type NoteItem, type NoteListResult } from './note'
+export { type FaqEntry, type FaqCategory, type FaqNavItem, type FaqGroup } from './faq'

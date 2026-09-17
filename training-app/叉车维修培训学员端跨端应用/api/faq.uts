@@ -1,0 +1,61 @@
+/**
+ * 帮助中心 API（#1081）
+ *
+ * 接口：
+ *   GET  /api/faq   一次返回全部分类与其下已发布条目（按 sort_order 升序）
+ *
+ * 口径（#1079 定案，本层只消费）：
+ *   - **不分页、不新增搜索接口**：搜索走端上过滤，不进全局搜索域（ADR-0049）；
+ *   - `answer` 是纯文本、原样换行，不引入 Markdown 渲染口径（ADR-0046）；
+ *   - 空分类返回 `entries: []`，整体 `categories` 可能为空数组（页面据此走空态）。
+ */
+import { getMapped } from './request'
+import { toNumber, toStr } from './helpers'
+import type { FaqCategory, FaqEntry } from '../types/index'
+
+/** 构造 FaqEntry（ADR-0003 手动 JSON 映射：Android 端不能 as 强转 Kotlin data class） */
+function buildFaqEntry(obj : UTSJSONObject) : FaqEntry {
+    return {
+        id: toNumber(obj['id']),
+        question: toStr(obj['question']),
+        answer: toStr(obj['answer']),
+        sort_order: toNumber(obj['sort_order']),
+    }
+}
+
+/** 构造 FaqCategory（含其下条目；entries 缺省 / null 都按空数组兜底） */
+function buildFaqCategory(obj : UTSJSONObject) : FaqCategory {
+    const entries : FaqEntry[] = []
+    const rawEntries = obj['entries']
+    if (rawEntries != null) {
+        const arr = rawEntries as Array<UTSJSONObject>
+        for (let i = 0; i < arr.length; i++) {
+            entries.push(buildFaqEntry(arr[i]))
+        }
+    }
+    return {
+        code: toStr(obj['code']),
+        id: toNumber(obj['id']),
+        sort_order: toNumber(obj['sort_order']),
+        title: toStr(obj['title']),
+        entries: entries,
+    }
+}
+
+/**
+ * 帮助中心整页（分类 + 全部已发布条目）
+ * @returns 分类数组；后端无任何内容时返回空数组（页面据此走空态，不区分「无分类」与「全空」）
+ */
+export function getFaqApi() : Promise<FaqCategory[]> {
+    return getMapped<FaqCategory[]>('/faq', null, (data : UTSJSONObject) : FaqCategory[] => {
+        const categories : FaqCategory[] = []
+        const raw = data['categories']
+        if (raw != null) {
+            const arr = raw as Array<UTSJSONObject>
+            for (let i = 0; i < arr.length; i++) {
+                categories.push(buildFaqCategory(arr[i]))
+            }
+        }
+        return categories
+    })
+}
