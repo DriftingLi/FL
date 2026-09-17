@@ -60,8 +60,14 @@ test('新增行解析：守卫 runner 与裸色值守卫都走 lib/added-lines.m
       f + ' 不应再有本地的 hunk 解析实现'
     )
   }
-  // 三个守卫只留判定面：runner 面来自 lib/guard.mjs，不得各自再引新增行解析（改回双份即报红）
-  for (const f of ['scripts/check-el-controls.mjs', 'scripts/check-api-seam.mjs', 'scripts/check-async-section.mjs']) {
+  // 每个守卫只留判定面：runner 面来自 lib/guard.mjs，不得各自再引新增行解析（改回双份即报红）
+  // （#1100 的消费面覆盖锁同样走共享 runner，一并纳入本锁）
+  for (const f of [
+    'scripts/check-el-controls.mjs',
+    'scripts/check-api-seam.mjs',
+    'scripts/check-async-section.mjs',
+    'scripts/check-api-consumers.mjs'
+  ]) {
     const src = read(f)
     assert.ok(src.includes("from './lib/guard.mjs'"), f + ' 应走共享 runner（scripts/lib/guard.mjs）')
     assert.ok(!src.includes('added-lines.mjs'), f + ' 不应各自引用新增行解析（runner 是唯一消费面）')
@@ -72,6 +78,10 @@ test('新增行解析的宿主是 Node（前端 job 没有 Go 工具链，ADR §
   const ci = read('.github/workflows/ci.yml')
   // frontend-check job 只有 setup-node；引入 Go 工具会让该 job 多一套工具链时间
   assert.ok(ci.includes('node scripts/check-api-seam.mjs --all'), '前端 job 跑 api seam 守卫')
+  assert.ok(
+    ci.includes('node scripts/check-api-consumers.mjs --all'),
+    '前端 job 跑契约消费面覆盖锁（#1100）'
+  )
   assert.ok(ci.includes('node --test scripts/check-api-seam.test.mjs'), '自检 job 跑守卫自检')
   assert.ok(
     ci.includes('node --test scripts/lib/added-lines.test.mjs'),

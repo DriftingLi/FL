@@ -191,6 +191,15 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: node scripts/check-api-seam.mjs --all
 
+      # 契约消费面覆盖锁（ADR-0056 §11 / #1100）：请求层打出的每个 method+path 必须落在
+      # apitypes.Domains 的端点集内（此前没有任何守卫管这个方向：消费了未登记端点无人变红）。
+      # 存量欠条逐条登记在脚本 ALLOWLIST（现状 8 条：4 条巡检端点等 #1097 补注解 + 4 条 createCrud
+      # 动态拼装），补一个销一个；条目挂在已登记端点上会被判红（销账信号）。
+      # 判定逻辑的自检在 el-controls-selftest job 的「契约消费面覆盖锁」一步。
+      - name: 契约消费面覆盖锁（请求层消费的端点必须已登记）
+        working-directory: ${{ github.workspace }}
+        run: node scripts/check-api-consumers.mjs --all
+
       # 列表四段式守卫（ADR-0053 §6 / #1054）：页面不得重新手写四分支链。
       # 存量 15 个文件在脚本 ALLOWLIST 里逐条登记（迁移按批推进、迁一个销一个号）；
       # 新代码命中即报红。
@@ -199,13 +208,13 @@ jobs:
         run: node scripts/check-async-section.mjs --all
 
       # 守卫增量门（ADR-0056 §5 / #1094）：除上面的 --all 全量外，再按「相对默认分支的新增行」
-      # 跑一遍三个守卫 —— 全量是绝对底线，增量是「新增行不得引入违规」的 PR 口径。
+      # 跑一遍四个守卫 —— 全量是绝对底线，增量是「新增行不得引入违规」的 PR 口径。
       # 本 job 的 checkout 是浅克隆（默认 depth=1），base 历史不在工作区里，这里显式取回默认分支；
       # 取不回 → 本步红。守卫的 --diff 自身也 fail-closed（base 解析不了 / git diff 失败 /
       # 新增文件读不出来都报错并非零退出），不会静默判绿。
       # 注：--diff 的判定面是 --all 的子集（同一棵树、只看新增行号），不比全量更严，只补「新增」口径；
       # 浅历史里没有 merge base，added-lines 会按它既有的 CI 口径退成双点 diff。
-      - name: 守卫增量门（三个守卫只看相对默认分支的新增行）
+      - name: 守卫增量门（四个守卫只看相对默认分支的新增行）
         working-directory: ${{ github.workspace }}
         run: |
           DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
@@ -215,6 +224,7 @@ jobs:
           node scripts/check-el-controls.mjs --diff "origin/$DEFAULT_BRANCH"
           node scripts/check-api-seam.mjs --diff "origin/$DEFAULT_BRANCH"
           node scripts/check-async-section.mjs --diff "origin/$DEFAULT_BRANCH"
+          node scripts/check-api-consumers.mjs --diff "origin/$DEFAULT_BRANCH"
 
       - name: 前端单元测试
         run: npm test
@@ -427,6 +437,10 @@ jobs:
 
       - name: 表驱动单测（列表四段式守卫判定逻辑）
         run: node --test scripts/check-async-section.test.mjs
+
+      # ADR-0056 §11 / #1100：消费面覆盖锁的判定面（嵌套泛型实参 / 变量路径 / 欠条销账 / 死条目）
+      - name: 表驱动单测（契约消费面覆盖锁判定逻辑）
+        run: node --test scripts/check-api-consumers.test.mjs
 
       # ADR-0056 §5 / #1094：三个守卫共用的 runner 单点（argv / 走查 / --diff / allowlist /
       # 报告与退出码）—— 表驱动自测用合成 diff 端到端驱动，正样本必须红、负样本必须绿；
