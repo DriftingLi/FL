@@ -23,7 +23,7 @@
  */
 import { getMapped, post } from './request'
 import { toNumber, toStr } from './helpers'
-import type { CourseListResult, CourseDetail, CourseItem, ChapterItem, ChapterDetail, ChapterFile, SpecialtyItem, LevelItem, CourseCategory, TagItem, CoursePrereq } from '../types/index'
+import type { CourseListResult, CourseDetail, CourseItem, ChapterItem, ChapterDetail, ChapterFile, SpecialtyItem, LevelItem, TagItem, CoursePrereq } from '../types/index'
 
 
 
@@ -36,7 +36,6 @@ function buildCourseItem(obj : UTSJSONObject) : CourseItem {
 	const item : CourseItem = {
 		course_id: toNumber(obj['course_id']),
 		title: toStr(obj['name']),           // 后端 name → 前端 title
-		category: toStr(obj['category']),
 		description: toStr(obj['description']),
 		cover_url: toStr(obj['cover_image']), // 后端 cover_image → 前端 cover_url
 		duration: toNumber(obj['duration']),
@@ -123,7 +122,6 @@ function buildCourseDetail(obj : UTSJSONObject) : CourseDetail {
 	let courseId : number = 0
 	let courseTitle : string = ''
 	let courseDesc : string = ''
-	let courseCategory : string = ''
 	let courseCover : string = ''
 	let courseDuration : number = 0
 	let courseSpecialtyId : number = 0
@@ -141,7 +139,6 @@ function buildCourseDetail(obj : UTSJSONObject) : CourseDetail {
 		courseId = toNumber(infoObj['course_id'])
 		courseTitle = toStr(infoObj['name'])
 		courseDesc = toStr(infoObj['description'])
-		courseCategory = toStr(infoObj['category'])
 		courseCover = toStr(infoObj['cover_image'])
 		courseDuration = toNumber(infoObj['duration'])
 		courseSpecialtyId = toNumber(infoObj['specialty_id'])
@@ -185,7 +182,6 @@ function buildCourseDetail(obj : UTSJSONObject) : CourseDetail {
 		courseId = toNumber(obj['course_id'])
 		courseTitle = toStr(obj['name'])
 		courseDesc = toStr(obj['description'])
-		courseCategory = toStr(obj['category'])
 		courseCover = toStr(obj['cover_image'])
 		courseDuration = toNumber(obj['duration'])
 		courseSpecialtyId = toNumber(obj['specialty_id'])
@@ -203,7 +199,6 @@ function buildCourseDetail(obj : UTSJSONObject) : CourseDetail {
 		course_id: courseId,
 		title: courseTitle,
 		description: courseDesc,
-		category: courseCategory,
 		cover_url: courseCover,
 		duration: courseDuration,
 		chapters: chapters,
@@ -273,12 +268,12 @@ function buildLevelItem(obj : UTSJSONObject) : LevelItem {
 /** mock 课程列表（网络不可用时回退） */
 function getMockCourseList() : CourseListResult {
 	const items : CourseItem[] = [
-		{ course_id: 1, title: '叉车基本构造', category: 'structure', description: '学习叉车基本构造知识', cover_url: '', duration: 120, chapter_count: 3, specialty_id: 1, level_id: 1 } as CourseItem,
-		{ course_id: 2, title: '液压传动系统', category: 'hydraulic', description: '掌握液压系统原理', cover_url: '', duration: 90, chapter_count: 4, specialty_id: 1, level_id: 2 } as CourseItem,
-		{ course_id: 3, title: '叉车驾驶操作', category: 'driving', description: '叉车驾驶技能培训', cover_url: '', duration: 150, chapter_count: 5, specialty_id: 1, level_id: 1 } as CourseItem,
-		{ course_id: 4, title: '日常维护保养', category: 'maintenance', description: '叉车日常保养知识', cover_url: '', duration: 100, chapter_count: 4, specialty_id: 2, level_id: 2 } as CourseItem,
-		{ course_id: 5, title: '货物装卸作业', category: 'cargo', description: '安全装卸作业规范', cover_url: '', duration: 80, chapter_count: 3, specialty_id: 2, level_id: 1 } as CourseItem,
-		{ course_id: 6, title: '故障排查与应急', category: 'troubleshooting', description: '故障诊断与处理', cover_url: '', duration: 110, chapter_count: 4, specialty_id: 2, level_id: 3 } as CourseItem,
+		{ course_id: 1, title: '叉车基本构造', description: '学习叉车基本构造知识', cover_url: '', duration: 120, chapter_count: 3, specialty_id: 1, level_id: 1 } as CourseItem,
+		{ course_id: 2, title: '液压传动系统', description: '掌握液压系统原理', cover_url: '', duration: 90, chapter_count: 4, specialty_id: 1, level_id: 2 } as CourseItem,
+		{ course_id: 3, title: '叉车驾驶操作', description: '叉车驾驶技能培训', cover_url: '', duration: 150, chapter_count: 5, specialty_id: 1, level_id: 1 } as CourseItem,
+		{ course_id: 4, title: '日常维护保养', description: '叉车日常保养知识', cover_url: '', duration: 100, chapter_count: 4, specialty_id: 2, level_id: 2 } as CourseItem,
+		{ course_id: 5, title: '货物装卸作业', description: '安全装卸作业规范', cover_url: '', duration: 80, chapter_count: 3, specialty_id: 2, level_id: 1 } as CourseItem,
+		{ course_id: 6, title: '故障排查与应急', description: '故障诊断与处理', cover_url: '', duration: 110, chapter_count: 4, specialty_id: 2, level_id: 3 } as CourseItem,
 	]
 	return {
 		items: items,
@@ -299,7 +294,6 @@ function getMockCourseDetail(courseId : number) : CourseDetail {
 		course_id: courseId,
 		title: '叉车基础知识概述',
 		description: '叉车分类、基本结构、主要技术参数等入门知识，为后续维修与操作学习奠定基础。',
-		category: 'CATEGORY_01',
 		cover_url: '',
 		duration: 120,
 		chapters: chapters,
