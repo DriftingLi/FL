@@ -63,12 +63,15 @@ export function isTestFile(filePath) {
   return p.includes('/__tests__/') || /\.(spec|test)\.[jt]s$/.test(p)
 }
 
-/** 路径是否在守卫面（pages/ai-assistant 下的页面文件，且不是测试、不在白名单）。 */
+/**
+ * 路径是否在守卫面（pages/ai-assistant 下的页面文件，且不是测试）。
+ * **ALLOWLIST 不在这里判**（#1123）：豁免由 runner 承载（`--all` 整体放行 / `--diff` 只放行基线
+ * 违规行号）—— 判定面先吞掉例外文件的话 `scanSource` 恒返回空，行号级放行会静默失效。
+ */
 export function isGuardedPath(filePath) {
   const p = String(filePath).replace(/\\/g, '/')
   if (isTestFile(p)) return false
-  if (!p.includes(GUARDED_PATH_SEGMENT)) return false
-  return !Object.prototype.hasOwnProperty.call(ALLOWLIST, p)
+  return p.includes(GUARDED_PATH_SEGMENT)
 }
 
 /** 标识符级匹配：`resendMessage` / `streamChatter` 这类形近名不误报。 */

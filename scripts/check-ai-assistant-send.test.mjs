@@ -97,9 +97,10 @@ test('负例：编排宿主不在守卫面（stores / components / 其它页面�
   assert.equal(isGuardedPath('frontend/src/pages/ai-assistant/FeatureChatPage.vue'), true)
 })
 
-test('白名单：登记的例外放行且理由非空（当前为空表，规则绝对执行）', () => {
+test('白名单：例外文件仍在判定面内（豁免由 runner 逐行放行）且理由非空（当前为空表，规则绝对执行）', () => {
+  // #1123：豁免从 isGuardedPath 移交给 runner（--all 整体放行 / --diff 只放行基线违规行号）。
   for (const [p, reason] of Object.entries(ALLOWLIST)) {
-    assert.equal(isGuardedPath(p), false, p + ' 应在白名单内放行')
+    assert.equal(isGuardedPath(p), true, p + ' 必须在判定面内（豁免交给 runner 逐行判）')
     assert.ok(typeof reason === 'string' && reason.length > 10, p + ' 的理由要写清')
   }
 })
