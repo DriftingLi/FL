@@ -42,6 +42,11 @@ import (
 	vservice "forklift-training/internal/valuation/service"
 )
 
+// valuationAdminGroupPath 估值管理端路由组前缀。
+// 37 条 CRUD 注解的 @Router 去掉 swag 的 /api 前缀后必须与它逐字一致 ——
+// 锁测试（dictcrud_docs_lock_test.go）用它派生期望路径，改这里就必须同步注解。
+const valuationAdminGroupPath = "/api/valuation/admin"
+
 // RegisterRoutes 注册残值评估模块路由。
 // 路由分五组：
 //   - 公开组 /api/valuation：字典查询、统计、健康检查、报告生成/下载、登录/注册（匿名可访问）
@@ -140,7 +145,7 @@ func RegisterRoutes(
 	// 残值配置管理仍走主体系 admin JWT，不参与此次独立化
 	// 全部字典写面由描述符注册表驱动（ADR-0008）：POST/PUT/DELETE 按描述符声明注册，
 	// 不再逐实体手写路由。失效 pattern 来自 repository 缓存契约单点（PatternsOf）。
-	admin := r.Group("/api/valuation/admin")
+	admin := r.Group(valuationAdminGroupPath)
 	admin.Use(middleware.JWTAuth(sess))
 	admin.Use(middleware.CapabilityRequired(authz.CapValuationConfig))
 	// 管理员写操作审计：与主体系同一留痕口径（合规用途，ADR-0012 §7）

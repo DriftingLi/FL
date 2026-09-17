@@ -17,7 +17,7 @@ import (
 func newRealExamSvc(t *testing.T) (*RealExamService, *PointsService, *QuestionBankService, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	points := NewPointsService(db, zap.NewNop(), clock.Real())
+	points := NewPointsService(db, zap.NewNop(), clock.Real(), NewNotificationService(db, zap.NewNop()))
 	qsvc := NewQuestionBankService(db, nil, zap.NewNop())
 	return NewRealExamService(db, points, zap.NewNop()), points, qsvc, db
 }

@@ -84,7 +84,7 @@ var routeRegistrars = []routeRegistrar{
 	{
 		Domain: "积分",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
-			RegisterAdminPointsRoutes(api, rd, deps.PointsSvc, deps.NotificationSvc)
+			RegisterAdminPointsRoutes(api, rd, deps.PointsSvc)
 			RegisterPointsRoutes(api, rd, deps.PointsSvc)
 		},
 	},

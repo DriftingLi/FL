@@ -121,6 +121,11 @@ SSL_CERT_DIR="${DEPLOY_PATH}/nginx/ssl"
 
 # 迁移
 SKIP_MIGRATION="${SKIP_MIGRATION:-false}"
+# 迁移失败逃生开关（第十一波 / #1099 / ADR-0056 §6）：**默认空 = 硬失败**。
+# 只有线上事故、值班人愿意带「新代码跑在旧 schema」这个已知风险继续部署时，才显式声明
+# ALLOW_MIGRATION_FAILURE=1；变量名与理由同步登记在 docs/agents/checks.md。
+# 不得靠改日志级别/注释绕过——默认路径必须中止部署。
+ALLOW_MIGRATION_FAILURE="${ALLOW_MIGRATION_FAILURE:-}"
 
 # 清理策略：保留最近 N 个镜像
 KEEP_IMAGES="${KEEP_IMAGES:-3}"
@@ -907,9 +912,21 @@ run_migration() {
         "${IMAGE_BACKEND}:${IMAGE_TAG}" \
         /app/bin/migrate up 2>&1; then
         log_ok "数据库迁移完成"
-    else
-        log_warn "自动迁移失败，请手动执行: cd backend && go run ./cmd/migrate up"
+        return 0
     fi
+
+    # 迁移失败默认**硬失败**（ADR-0056 §6 / #1099）：此前只 log_warn 后继续部署，
+    # 结果是「旧 schema + 新代码」上线，schema 与代码的差异要到线上报错才可见。
+    if [ "${ALLOW_MIGRATION_FAILURE}" = "1" ]; then
+        log_warn "自动迁移失败，但 ALLOW_MIGRATION_FAILURE=1 已显式声明——带已知风险继续部署"
+        log_warn "待办（值班人）: cd backend && go run ./cmd/migrate up，确认 schema 已补齐"
+        return 0
+    fi
+
+    log_error "自动迁移失败，中止部署（避免新代码跑在旧 schema 上）"
+    log_info "手动修复: cd backend && go run ./cmd/migrate up"
+    log_info "线上事故确需继续: 显式声明 ALLOW_MIGRATION_FAILURE=1 后重跑（逃生开关，见 docs/agents/checks.md）"
+    return 1
 }
 
 # ======================================================================
@@ -1321,7 +1338,11 @@ main() {
 
             # 重启全栈（postgres/redis 已运行，此处拉起 backend + frontend）
             restart_services
-            run_migration
+            # 迁移失败即中止部署（#1099 / ADR-0056 §6）；逃生开关在 run_migration 内判定
+            if ! run_migration; then
+                log_error "迁移失败，终止部署"
+                exit 1
+            fi
 
             if ! health_check; then
                 log_error "健康检查失败!"

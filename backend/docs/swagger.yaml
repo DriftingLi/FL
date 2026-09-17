@@ -3563,6 +3563,19 @@ definitions:
       reason:
         type: string
     type: object
+  service.ReportListResult:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/service.ReportDTO'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+    type: object
   service.SearchAllDTO:
     properties:
       chapters:
@@ -6537,7 +6550,12 @@ paths:
         "200":
           description: 列表
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ReportListResult'
+              type: object
         "401":
           description: 未认证
           schema:
@@ -6560,9 +6578,14 @@ paths:
       - application/json
       responses:
         "200":
-          description: 已处理
+          description: 已处理（响应为处理后的举报行）
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.ReportDTO'
+              type: object
         "401":
           description: 未认证
           schema:
@@ -6602,7 +6625,12 @@ paths:
         "200":
           description: 列表
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.JobListResult'
+              type: object
         "401":
           description: 未认证
           schema:
@@ -6632,9 +6660,14 @@ paths:
       - application/json
       responses:
         "200":
-          description: 已强制下架
+          description: 已强制下架（响应为下架后的职位行）
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.JobPostingDTO'
+              type: object
         "400":
           description: 原因不能为空
           schema:
