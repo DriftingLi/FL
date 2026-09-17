@@ -4068,7 +4068,19 @@ const docTemplate = `{
                     "200": {
                         "description": "列表",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ReportListResult"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -4106,9 +4118,21 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "已处理",
+                        "description": "已处理（响应为处理后的举报行）",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.ReportDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -4171,7 +4195,19 @@ const docTemplate = `{
                     "200": {
                         "description": "列表",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.JobListResult"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -4220,9 +4256,21 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "已强制下架",
+                        "description": "已强制下架（响应为下架后的职位行）",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.JobPostingDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -28224,6 +28272,26 @@ const docTemplate = `{
             "properties": {
                 "reason": {
                     "type": "string"
+                }
+            }
+        },
+        "service.ReportListResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.ReportDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
                 }
             }
         },

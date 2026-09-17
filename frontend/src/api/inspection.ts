@@ -1,10 +1,14 @@
 // 管理端巡检面（ADR-0053 §7：页面不再直连请求层，端点与筛选参数的知识收敛到本模块）。
 //
-// 类型说明：本模块覆盖的端点**尚未进契约生成面**（它们的响应在此之前都是页面里的 `any`），
-// 所以这里只提供**形状要点 + 调用签名**，行类型由调用方给出（`PagedResult<LedgerItem>`）——
-// 不新造一套与后端注解平行的「手写契约」。这些端点补上注解与 apitypes 登记后，
-// 再把本模块的返回类型替换为 generated 产物（与 api/position.ts 同一收口方式）。
+// 类型说明（ADR-0056 §11 / issue #1100）：本模块的 8 个端点分两类：
+//   - 4 个职位治理巡检端点（/admin/jobs、/admin/job-reports 及其处置动作）已进契约生成面：
+//     行类型**缺省值**取自 generated/job.ts（泛型参数保留，调用方仍可显式给类型 —— 页面侧旧类型
+//     因此不需要跟着改，页面换生成物属 PR-2 的面）；
+//   - 4 个巡检端点（积分流水 / 删除计数 / 简历留痕 / 联系方式申请）尚未进 swagger（handler 在
+//     internal/api/admin_inspection.go，注解由 #1097 补），行类型仍由调用方给出 —— 逐条登记在
+//     scripts/check-api-consumers.mjs 的 ALLOWLIST 欠条，补注解 + 登记域声明表后销账。
 import { unwrappedRequest } from './request'
+import type { JobPostingDTO, ReportDTO } from '@/api/generated/job'
 
 /** X-Silent：巡检面多为轮询/汇总型加载，失败不弹全局 toast（由调用方自行分类呈现）。 */
 const SILENT = { headers: { 'X-Silent': '1' } }
@@ -53,20 +57,20 @@ export const inspectionApi = {
   contactRequests<T>(params: PageParams) {
     return unwrappedRequest.get<PagedResult<T>>('/admin/recruit/requests', { params, ...SILENT })
   },
-  /** 职位巡检分页（#454，可按招聘者过滤）。 */
-  jobs<T>(params: PageParams) {
+  /** 职位巡检分页（#454，可按招聘者过滤）。行类型缺省 = 生成物的 JobPostingDTO。 */
+  jobs<T = JobPostingDTO>(params: PageParams) {
     return unwrappedRequest.get<PagedResult<T>>('/admin/jobs', { params, ...SILENT })
   },
-  /** 职位举报队列分页（#454）。 */
-  jobReports<T>(params: PageParams) {
+  /** 职位举报队列分页（#454）。行类型缺省 = 生成物的 ReportDTO。 */
+  jobReports<T = ReportDTO>(params: PageParams) {
     return unwrappedRequest.get<PagedResult<T>>('/admin/job-reports', { params, ...SILENT })
   },
-  /** 强制下架职位（带原因，邮件通知企业）。 */
+  /** 强制下架职位（带原因，邮件通知企业）。响应是下架后的职位行（生成物 JobPostingDTO）。 */
   forceOfflineJob(id: number, reason: string) {
-    return unwrappedRequest.post<null>(`/admin/jobs/${id}/force-offline`, { reason })
+    return unwrappedRequest.post<JobPostingDTO>(`/admin/jobs/${id}/force-offline`, { reason })
   },
-  /** 把举报标记为已处理。 */
+  /** 把举报标记为已处理。响应是处理后的举报行（生成物 ReportDTO）。 */
   handleJobReport(id: number) {
-    return unwrappedRequest.post<null>(`/admin/job-reports/${id}/handle`)
+    return unwrappedRequest.post<ReportDTO>(`/admin/job-reports/${id}/handle`)
   }
 }
