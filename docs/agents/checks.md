@@ -33,11 +33,15 @@
 - 新建 spec 一律用 `epLite()`（`src/test/element-lite.ts`）按需注册 EP 组件，**禁止全量挂载 `plugins: [ElementPlus]`** —— 全量挂载是 CourseCatalog flaky（CI 2 核下 import 争抢超时）的根因；组件清单可用 `node scripts/scan-el-components.mjs` 扫描
 - 已收敛控件守卫：`node scripts/check-el-controls.mjs --all`（CI 在 frontend-check 里跑全量；本地也可 `--diff origin/master` 只看新增行）。守卫判定逻辑的自检：`node --test scripts/check-el-controls.test.mjs`
 - api seam 守卫（ADR-0053 §7）：`node scripts/check-api-seam.mjs --all`（页面与业务组件不得直接引用 `@/api/request` / `@/api/client`；同样在 frontend-check 跑全量，本地可 `--diff origin/master`）。自检：`node --test scripts/check-api-seam.test.mjs`。逐条登记的例外写在脚本的 `ALLOWLIST`（每条带理由）
+- **守卫 runner 单点（第十一波）**：三个守卫（api-seam / el-controls / async-section）共享 `scripts/lib/guard.mjs`；每个守卫的自检用**合成 diff** 断言 `--diff` 路径真的会报违规（历史上 `--diff` 曾因实参形态错而恒 0 违规、CI 只跑 `--all` 无人接住）。CI 除 `--all` 外，PR 增量门也跑 `--diff <base>`
+- **契约消费面覆盖锁（第十一波）**：`frontend/src/api/**` 里出现的 method+path 必须落在 `backend/internal/apitypes` 的域声明表内（消费了未登记端点即红）；存量欠条登记在脚本 ALLOWLIST，补注解后销号
 - 覆盖率：`npx vitest run --coverage`（istanbul provider，text + html 报告落 `coverage/`，不设阈值不挂门禁）；baseline（2026-09-10）：全站 lines 33.3%，admin 10.4% 为最大盲区
 
 ## 部署配置
 
 改 `docker-compose*.yml` / `deploy.sh` 后可用 `docker compose -f docker-compose.prod.yml config -q` 做语法校验。
+
+**迁移失败即中止部署**（第十一波）：`scripts/deploy-remote.sh` 不再把迁移失败降级为 `log_warn` 后继续；线上事故确需继续时走显式逃生开关（变量名写在脚本内并登记理由），不得靠改日志绕过。CI 侧 `migration-check` 在现成的 Postgres 上真跑 `go run ./cmd/migrate up`（空库 baseline），并做**单向列对账**：GORM 模型期望的列集合必须 ⊆ `information_schema` 实际列集合，缺列即红（防「模型加字段、忘写迁移」）。
 
 **反代到后端的每个 `location` 必须显式设置 `X-Forwarded-For`**（`frontend/nginx-host.conf`、`frontend/nginx.default.conf`）：nginx 只在设置时才覆写/追加该头，没设置的 location 会把客户端自带的同名头原样透传；后端信任本机对端（`TRUSTED_PROXIES`）之后会采信那个伪造值——限流键可被轮换、访问日志与审计日志写入假 IP。新增或改动反代 location 时逐条核对（#888 的 `/static/` 就是漏网的那条）。
 
