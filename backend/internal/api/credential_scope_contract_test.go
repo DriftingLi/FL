@@ -152,3 +152,148 @@ func TestCredentialScopeIgnoresNonStudentRoles(t *testing.T) {
 		t.Fatalf("讲师不应被证件作用域过滤（同号学员行不得命中）：total=%v, want 3", total)
 	}
 }
+
+// 公开端点的证件口径（ADR-0057 / issue #1121）：/api/catalog/tree 与 /api/tags 属于「**未挂**
+// CredentialScoped、handler 自读 query」的那一类 —— 未传 credential_id 即不分区，**登录学员也一样**。
+// 本用例钉住现状：将来有人顺手在这两个端点上挂 OptionalAuth + CredentialScoped，「未传即按当前
+// 证件收敛」会立刻在这里判红（跨端默认口径的静默改变是本决策否掉挂载的核心理由）。
+//
+// 判别力前置：同一端点显式传 credential_id 必须**真的**改变结果 —— 否则「两种调用都返回全量」
+// 会让用例退化成语义不变式（挂不挂中间件都绿）。
+func TestPublicCatalogEndpointsAreNotCredentialScoped(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := testutil.NewMemoryDB(t)
+	cfg := &config.Config{JWTSecretKey: "credential-scope-secret"}
+	r := NewRouter(newContractDeps(t, db, cfg))
+
+	credA := &model.Credential{Code: "n1e", Name: "叉车司机N1", Category: "special_operation", Status: 1}
+	credB := &model.Credential{Code: "l5e", Name: "工程机械维修工L5", Category: "skill_level", Status: 1}
+	for _, cred := range []*model.Credential{credA, credB} {
+		if err := db.Create(cred).Error; err != nil {
+			t.Fatalf("建证件失败: %v", err)
+		}
+	}
+
+	// —— 目录树：两门课程挂同一专业方向 + 等级，只有目标证件不同 ——
+	spec := &model.Specialty{Code: "op-public-scope", Name: "操作", Status: 1}
+	if err := db.Create(spec).Error; err != nil {
+		t.Fatalf("建专业方向失败: %v", err)
+	}
+	lv := &model.CourseLevel{Code: "basic-public-scope", Name: "入门", Status: 1}
+	if err := db.Create(lv).Error; err != nil {
+		t.Fatalf("建课程等级失败: %v", err)
+	}
+	for _, c := range []struct {
+		name string
+		cred int
+	}{{"A 证件课程", credA.ID}, {"B 证件课程", credB.ID}} {
+		course := testutil.SeedCourse(t, db, c.name)
+		if err := db.Model(course).Updates(map[string]any{
+			"credential_id": c.cred, "specialty_id": spec.SpecialtyID, "level_id": lv.LevelID,
+		}).Error; err != nil {
+			t.Fatalf("课程挂证件/专业方向失败: %v", err)
+		}
+	}
+
+	// —— 标签：两个标签各挂一道已发布题目，题目分属 A / B 证件（计数即分区信号）——
+	for _, tg := range []struct {
+		code string
+		name string
+		cred int
+	}{{"tag-a", "标签A", credA.ID}, {"tag-b", "标签B", credB.ID}} {
+		tag := &model.QuestionTag{Code: tg.code, Name: tg.name, Status: 1}
+		if err := db.Create(tag).Error; err != nil {
+			t.Fatalf("建标签失败: %v", err)
+		}
+		q := testutil.SeedQuestion(t, db, "single", "题干-"+tg.name, "答案")
+		if err := db.Model(q).Update("credential_id", tg.cred).Error; err != nil {
+			t.Fatalf("题目挂证件失败: %v", err)
+		}
+		if err := db.Create(&model.QuestionTagRelation{QuestionID: q.ID, TagID: tag.ID}).Error; err != nil {
+			t.Fatalf("建题目标签关联失败: %v", err)
+		}
+	}
+
+	student := testutil.SeedStudent(t, db, "public_scope_student", "x")
+	if err := db.Model(student).Update("current_credential_id", credA.ID).Error; err != nil {
+		t.Fatalf("设置当前证件失败: %v", err)
+	}
+	tok, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).
+		Issue(int(student.ID), student.Account, "hrwai_user")
+	if err != nil {
+		t.Fatalf("签发 token 失败: %v", err)
+	}
+
+	// ===== /api/catalog/tree =====
+	treeData := func(token, path string) (string, []string) {
+		t.Helper()
+		_, _, data := unpackData(t, catalogRequest(t, r, token, http.MethodGet, path, ""), http.StatusOK)
+		var payload struct {
+			Specialties []struct {
+				Levels []struct {
+					Courses []struct {
+						Name string `json:"name"`
+					} `json:"courses"`
+				} `json:"levels"`
+			} `json:"specialties"`
+		}
+		if err := json.Unmarshal([]byte(data), &payload); err != nil {
+			t.Fatalf("解析目录树失败: %v", err)
+		}
+		names := []string{}
+		for _, s := range payload.Specialties {
+			for _, l := range s.Levels {
+				for _, c := range l.Courses {
+					names = append(names, c.Name)
+				}
+			}
+		}
+		return data, names
+	}
+
+	anonTree, anonNames := treeData("", "/api/catalog/tree")
+	if len(anonNames) != 2 {
+		t.Fatalf("前置：不分区应看到两门课程，got %v", anonNames)
+	}
+	loggedTree, _ := treeData(tok, "/api/catalog/tree")
+	if loggedTree != anonTree {
+		t.Fatalf("登录学员不传 credential_id 必须仍是不分区（ADR-0057）：\n匿名=%s\n登录=%s", anonTree, loggedTree)
+	}
+	if _, explicit := treeData(tok, "/api/catalog/tree?credential_id="+strconv.Itoa(credA.ID)); len(explicit) != 1 || explicit[0] != "A 证件课程" {
+		t.Fatalf("判别力前置：显式 credential_id 应按证件分区，got %v", explicit)
+	}
+
+	// ===== /api/tags（同族端点，同一条口径）=====
+	tagData := func(token, path string) (string, map[string]int64) {
+		t.Helper()
+		_, _, data := unpackData(t, catalogRequest(t, r, token, http.MethodGet, path, ""), http.StatusOK)
+		var payload struct {
+			Tags []struct {
+				Name          string `json:"name"`
+				QuestionCount *int64 `json:"question_count"`
+			} `json:"tags"`
+		}
+		if err := json.Unmarshal([]byte(data), &payload); err != nil {
+			t.Fatalf("解析标签列表失败: %v", err)
+		}
+		counts := map[string]int64{}
+		for _, tg := range payload.Tags {
+			if tg.QuestionCount != nil {
+				counts[tg.Name] = *tg.QuestionCount
+			}
+		}
+		return data, counts
+	}
+
+	anonTags, anonCounts := tagData("", "/api/tags")
+	if anonCounts["标签A"] != 1 || anonCounts["标签B"] != 1 {
+		t.Fatalf("前置：不分区时两个标签各计 1 道题，got %v", anonCounts)
+	}
+	loggedTags, _ := tagData(tok, "/api/tags")
+	if loggedTags != anonTags {
+		t.Fatalf("登录学员不传 credential_id 必须仍是不分区（ADR-0057）：\n匿名=%s\n登录=%s", anonTags, loggedTags)
+	}
+	if _, explicit := tagData(tok, "/api/tags?credential_id="+strconv.Itoa(credA.ID)); explicit["标签B"] != 0 {
+		t.Fatalf("判别力前置：显式 credential_id 应按证件分区（标签B 计数应为 0），got %v", explicit)
+	}
+}

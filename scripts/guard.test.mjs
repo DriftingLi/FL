@@ -17,6 +17,7 @@ import { GUARD_SPEC as apiSeam } from './check-api-seam.mjs'
 import { GUARD_SPEC as elControls } from './check-el-controls.mjs'
 import { GUARD_SPEC as asyncSection } from './check-async-section.mjs'
 import { GUARD_SPEC as apiConsumers } from './check-api-consumers.mjs'
+import { GUARD_SPEC as aiAssistantSend } from './check-ai-assistant-send.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -163,18 +164,89 @@ test('负样本（必须跳过）：纯删除的 diff（文件在、新增行集
   assert.doesNotMatch(r.stdout, /通过。/)
 })
 
-test('边界（必须绿）：paths 不在守卫面 / 在 allowlist 的新增行整体放行', () => {
-  // api-seam 的 ALLOWLIST 第一条（OnlineResumePdf.vue）：即使新增行真的违规也不报。
-  // （async-section 的 15 条存量已在 #1101 全部销号，它的 ALLOWLIST 现在是空表，
-  //  不能再拿它证明「登记的例外整体放行」。）
-  const allowed = 'frontend/src/components/recruit/OnlineResumePdf.vue'
-  const violating = synthDiff(allowed, 2, ["import { request } from '@/api/request'"])
-  const r1 = probeDiff(apiSeam, violating, { [allowed]: "import { request } from '@/api/request'" })
-  assert.equal(r1.code, 0, 'ALLOWLIST 语义不变：登记的例外整体放行')
-  // 守卫面外的路径（ui 封装层）同样不报
+test('边界（必须绿）：paths 不在守卫面的新增行不报', () => {
+  // 守卫面外的路径（ui 封装层）不报
   const ui = 'frontend/src/components/ui/UiAsyncSection.vue'
-  const r2 = probeDiff(asyncSection, synthDiff(ui, 2, ['  <UiErrorState v-if="e" />', '  <UiSkeleton v-else />']), { [ui]: 'x' })
-  assert.equal(r2.code, 0)
+  const r = probeDiff(asyncSection, synthDiff(ui, 2, ['  <UiErrorState v-if="e" />', '  <UiSkeleton v-else />']), { [ui]: 'x' })
+  assert.equal(r.code, 0)
+})
+
+// ===== #1123：`--diff` 下 ALLOWLIST 收窄为行号级 =====
+//
+// 收窄前：例外文件在 `--diff` 里**整文件放行**（runner 按路径直接跳过 scanSource）⇒ 往存量例外
+// 文件里新增违规永远不会被增量门接住（docs/agents/checks.md 登记过的已知洞）。
+// 收窄后：只有**基线即违规的行号**放行；新增行上的违规照报；基线取不到即非零退出。
+
+const ALLOWED_FILE = 'frontend/src/components/recruit/OnlineResumePdf.vue'
+// 基线源码：第 2 行是已登记的存量违规（import 请求层），其余行无关
+const ALLOWED_BASELINE = [
+  '<script setup lang="ts">',
+  "import { getValidAccessToken } from '@/api/client'",
+  "import UiButton from '@/components/ui/UiButton.vue'",
+  '</script>'
+].join('\n')
+const readBaseline = () => ALLOWED_BASELINE
+
+test('正样本（必须红）：往 ALLOWLIST 例外文件的新增行注入违规（#1123 的核心判据）', () => {
+  const injected = "import { unwrappedRequest } from '@/api/request'"
+  const source = [
+    '<script setup lang="ts">',
+    "import { getValidAccessToken } from '@/api/client'",
+    "import UiButton from '@/components/ui/UiButton.vue'",
+    injected,
+    '</script>'
+  ].join('\n')
+  const r = probeDiff(apiSeam, synthDiff(ALLOWED_FILE, 4, [injected]), { [ALLOWED_FILE]: source }, { readBaseline })
+  assert.equal(r.code, 1, '例外文件的新增行违规必须判红（收窄前这里恒 ✓）')
+  assert.match(r.stderr, /OnlineResumePdf\.vue:4/)
+  assert.match(r.stderr, /api\/request/)
+  assert.match(r.stderr, /共 1 处/)
+  assert.doesNotMatch(r.stdout + r.stderr, /通过。/)
+})
+
+test('负样本（必须绿）：例外文件的存量违规行未被本次改动碰到（仍未改动的行不进判定）', () => {
+  const addedLine = 'const endpoint = ref("")'
+  const source = [
+    '<script setup lang="ts">',
+    "import { getValidAccessToken } from '@/api/client'", // 第 2 行：存量例外，未改动
+    "import UiButton from '@/components/ui/UiButton.vue'",
+    addedLine, // 第 4 行：本次新增，不违规
+    '</script>'
+  ].join('\n')
+  const r = probeDiff(apiSeam, synthDiff(ALLOWED_FILE, 4, [addedLine]), { [ALLOWED_FILE]: source }, { readBaseline })
+  assert.equal(r.code, 0)
+  assert.match(r.stdout, /通过。/)
+})
+
+test('口径（必须绿）：基线即违规的行号仍放行 —— 例外是**行号级**的（票面口径的边界）', () => {
+  // 同一行号在基线上就是违规 ⇒ 落在放行集合里。行号级口径的已知边界：原地改写一条存量例外行
+  // 不会被增量门接住（内容级判定不属本票射程）；改动行号/新增行则会报。
+  const rewritten = "import { getValidAccessToken } from '@/api/client' /* 仍走请求层 */"
+  const source = ['<script setup lang="ts">', rewritten, '</script>'].join('\n')
+  const r = probeDiff(apiSeam, synthDiff(ALLOWED_FILE, 2, [rewritten]), { [ALLOWED_FILE]: source }, { readBaseline })
+  assert.equal(r.code, 0, '第 2 行在基线上就是违规 ⇒ 落在放行集合里')
+  assert.match(r.stdout, /通过。/)
+})
+
+test('fail-closed（必须非零退出、不得判绿）：例外文件取不到基线内容', () => {
+  const source = { [ALLOWED_FILE]: "import { unwrappedRequest } from '@/api/request'" }
+  const diff = synthDiff(ALLOWED_FILE, 2, ["import { unwrappedRequest } from '@/api/request'"])
+  const r = probeDiff(apiSeam, diff, source, {
+    readBaseline: () => {
+      throw new Error("fatal: path 'frontend/src/components/recruit/OnlineResumePdf.vue' does not exist in 'origin/master'")
+    }
+  })
+  assert.equal(r.code, 2)
+  assert.match(r.stderr, /取不到 ALLOWLIST 例外文件的基线内容: frontend\/src\/components\/recruit\/OnlineResumePdf\.vue @ origin\/master/)
+  assert.doesNotMatch(r.stdout + r.stderr, /通过。|✓/)
+})
+
+test('fail-closed：基线内容不是文本（替身给错类型）→ 非零退出', () => {
+  const source = { [ALLOWED_FILE]: "import { unwrappedRequest } from '@/api/request'" }
+  const diff = synthDiff(ALLOWED_FILE, 2, ["import { unwrappedRequest } from '@/api/request'"])
+  const r = probeDiff(apiSeam, diff, source, { readBaseline: () => undefined })
+  assert.equal(r.code, 2)
+  assert.match(r.stderr, /基线内容不是文本/)
 })
 
 // ===== fail-closed：判据坏了必须报错并非零退出（#1094 的另一半病根）=====
@@ -288,6 +360,54 @@ test('真实 git（不注入 readDiff）：--diff <历史提交> 报违规/跳�
   }
 })
 
+test('真实 git（不注入 readBaseline）：例外文件的新增违规判红、存量违规行不进报告；缺基线则非零退出', () => {
+  const repo = mkdtempSync(join(tmpdir(), 'guard-allowlist-baseline-'))
+  try {
+    const git = (...args) =>
+      execFileSync('git', args, { cwd: repo, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+    git('init', '-q')
+    git('config', 'user.email', 'guard-test@example.com')
+    git('config', 'user.name', 'guard-test')
+    writeFileSync(join(repo, 'README.md'), 'base\n')
+    git('add', '.')
+    git('-c', 'commit.gpgsign=false', 'commit', '-qm', 'base')
+    mkdirSync(join(repo, 'frontend/src/components/recruit'), { recursive: true })
+    const rel = ALLOWED_FILE
+    const existing = "import { getValidAccessToken } from '@/api/client'"
+    writeFileSync(join(repo, rel), '<script setup lang="ts">\n' + existing + '\n</script>\n')
+    git('add', '.')
+    git('-c', 'commit.gpgsign=false', 'commit', '-qm', '存量例外')
+    const injected = "import { unwrappedRequest } from '@/api/request'"
+    writeFileSync(join(repo, rel), '<script setup lang="ts">\n' + existing + '\n' + injected + '\n</script>\n')
+    git('add', '.')
+    git('-c', 'commit.gpgsign=false', 'commit', '-qm', '新增违规')
+
+    const probe = (base) => {
+      const out = []
+      const err = []
+      const code = runGuard(apiSeam, {
+        argv: ['--diff', base],
+        root: repo,
+        stdout: (l) => out.push(l),
+        stderr: (l) => err.push(l)
+      })
+      return { code, stdout: out.join('\n'), stderr: err.join('\n') }
+    }
+    const r = probe('HEAD~1') // base 树上有例外文件的基线（默认 readBaseline = git show）
+    assert.equal(r.code, 1, '真实 git 链路上，例外文件的新增行违规必须判红')
+    assert.match(r.stderr, /OnlineResumePdf\.vue:3/)
+    assert.doesNotMatch(r.stderr, /OnlineResumePdf\.vue:2/, '存量例外行不进报告')
+    assert.match(r.stderr, /共 1 处/)
+
+    const r2 = probe('HEAD~2') // base 树上没有这个文件（例外路径 + 无基线）
+    assert.equal(r2.code, 2, '例外文件缺基线必须 fail-closed（不得退回整文件放行）')
+    assert.match(r2.stderr, /取不到 ALLOWLIST 例外文件的基线内容/)
+    assert.doesNotMatch(r2.stdout + r2.stderr, /通过。/)
+  } finally {
+    rmSync(repo, { recursive: true, force: true })
+  }
+})
+
 test('CLI 面不变：argv 解析表', () => {
   // 无参数：api-seam / el-controls 默认全量；async-section 打印用法（0）
   assert.deepEqual(parseArgs(apiSeam, []), { mode: 'all', scanDir: null })
@@ -373,6 +493,14 @@ test('契约：三个守卫都声明了 runner 需要的面（新增守卫只需
     assert.equal(typeof spec.diff.defaultBase, 'string')
     assert.equal(typeof spec.all.violation, 'function')
     assert.equal(typeof spec.diff.violation, 'function')
+  }
+})
+
+test('契约：#1123 —— 非空 ALLOWLIST 的例外文件必须在判定面内（否则 scanSource 恒空 = 行号级收窄静默失效）', () => {
+  for (const spec of [apiSeam, elControls, asyncSection, apiConsumers, aiAssistantSend]) {
+    for (const p of Object.keys(spec.allowlist ?? {})) {
+      assert.equal(spec.isGuardedPath(p), true, spec.name + ' 的 ALLOWLIST 例外不在判定面内: ' + p)
+    }
   }
 })
 

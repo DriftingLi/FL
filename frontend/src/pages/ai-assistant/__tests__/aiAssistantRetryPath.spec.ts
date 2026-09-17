@@ -146,6 +146,37 @@ describe('AI 助手失败 → 重试页面路径（#1104）', () => {
     expect(w.find('.turn-error').exists()).toBe(false)
   })
 
+  it('流式中点侧栏会话：旧流被丢弃，页面回到可发送态且不出现重试横幅（#1122）', async () => {
+    const w = await mountPage()
+    await typeAndSend(w, '在飞的一轮')
+    expect(mocks.streamChat).toHaveBeenCalledTimes(1)
+    handlersAt().onChunk?.('旧会话的一半')
+    await flushPromises()
+    // 流式中：发送按钮换成「停止」
+    expect(w.findAll('button').some(b => b.text().includes('停止'))).toBe(true)
+
+    // 点侧栏会话（真壳 → store.selectSession）
+    const item = w.find('.session-item')
+    expect(item.exists()).toBe(true)
+    await item.trigger('click')
+    await flushPromises()
+
+    // 切会话后状态正确：当轮态复位（不再是流式），失败通道为空（没有重试横幅）
+    expect(w.findAll('button').some(b => b.text().includes('停止'))).toBe(false)
+    expect(w.find('.turn-error').exists()).toBe(false)
+    expect(bubbleText(w)).not.toContain('旧会话的一半')
+
+    // abort 后迟到的回调（api 层把 AbortError 归到 onDone）不得写进新会话
+    handlersAt().onChunk?.('迟到的增量')
+    handlersAt().onDone?.()
+    handlersAt().onError?.('迟到的失败')
+    await flushPromises()
+    expect(bubbleText(w)).not.toContain('迟到的增量')
+    expect(bubbleText(w)).not.toContain('旧会话的一半')
+    expect(w.find('.turn-error').exists()).toBe(false)
+    expect(w.findAll('button').some(b => b.text().includes('停止'))).toBe(false)
+  })
+
   it('用户中断（停止）：部分正文保留、不出现「[已中断]」后缀，同样给重试入口', async () => {
     const w = await mountPage()
     await typeAndSend(w, '再讲讲电池保养')

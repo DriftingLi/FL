@@ -16,13 +16,20 @@
  *     cli,             // 入口形态（无参数 / --help / --all 是否收目录 / 未知参数，见 parseArgs）
  *     all,             // --all 的走查面与报告措辞
  *     diff,            // --diff 的 pathspec、默认 base 与报告措辞
- *     isGuardedPath,   // (仓库相对路径) => 是否进判定面
+ *     isGuardedPath,   // (仓库相对路径) => 是否进判定面（**不得**把 allowlist 吞进来：例外由 runner 承载）
  *     scanSource,      // (源码, 仓库相对路径) => 违规项（至少含 line）
- *     allowlist        // { 仓库相对路径: 理由 } 逐条登记的例外（整体放行，两种模式一致）
+ *     allowlist        // { 仓库相对路径: 理由 } 逐条登记的例外
  *   }
  *
- * `--diff` 一律 **fail-closed**：base 解析不了 / `git diff` 失败 / 新增文件读不出来 —— 任一情形都
- * 报错并非零退出，绝不落到「✓ 通过」。只有「diff 取成功且新增行面为空」才是合法的绿。
+ * allowlist 在两种模式下的口径（#1123 起分化）：
+ *   `--all`  整体放行：例外文件不进判定、也不进 checked 计数（与收敛前逐字一致）；
+ *   `--diff` **行号级**放行：对例外文件先取**基线内容**（`io.readBaseline`，默认
+ *            `git show <base>:<path>`）跑一次 `spec.scanSource` 得基线违规行号集合，只放行落在
+ *            集合里的行 —— 新增行上的违规照报（此前是整文件放行，等于给例外文件开了永久后门）。
+ *
+ * `--diff` 一律 **fail-closed**：base 解析不了 / `git diff` 失败 / 新增文件读不出来 / 例外文件
+ * 基线取不到 —— 任一情形都报错并非零退出，绝不落到「✓ 通过」。只有「diff 取成功且新增行面为空」
+ * 才是合法的绿。
  */
 import { execFileSync } from 'node:child_process'
 import { readFileSync, readdirSync } from 'node:fs'
@@ -116,9 +123,11 @@ function runAll(spec, plan, io) {
   const violations = []
   for (const abs of files) {
     const file = relTo(io.root, abs)
+    // 逐条登记的例外整体放行（先于 isGuardedPath / checked++：例外文件不进判定面也不进计数，
+    // 口径与收敛前逐字一致；行号级收窄只在 `--diff`，见 runDiff）
+    if (isAllowlisted(spec, file)) continue
     if (!spec.isGuardedPath(file)) continue
     ctx.checked++
-    if (isAllowlisted(spec, file)) continue // 逐条登记的例外整体放行
     for (const v of spec.scanSource(io.readSource(abs), file)) violations.push({ ...v, file })
   }
   ctx.count = violations.length
@@ -129,6 +138,16 @@ function runAll(spec, plan, io) {
   for (const v of violations) emit(io, cfg.stream, cfg.violation(v, ctx))
   for (const line of cfg.footer ? cfg.footer(ctx) : []) emit(io, cfg.stream, line)
   return 1
+}
+
+/**
+ * 例外文件的**基线违规行号集合**（#1123）：对 base 树上的同一份源码跑一次判定面。
+ * 取不到基线就抛错 —— 由调用方 fail-closed，绝不静默退回「整文件放行」（那正是本次要收掉的洞）。
+ */
+function baselineViolationLines(spec, base, file, io) {
+  const baseline = io.readBaseline(base, file)
+  if (typeof baseline !== 'string') throw new Error('基线内容不是文本（' + typeof baseline + '）')
+  return new Set(spec.scanSource(baseline, file).map((v) => v.line))
 }
 
 function runDiff(spec, plan, io) {
@@ -163,7 +182,6 @@ function runDiff(spec, plan, io) {
   const violations = []
   for (const [file, lines] of added) {
     if (!spec.isGuardedPath(file)) continue
-    if (isAllowlisted(spec, file)) continue
     let source
     try {
       source = io.readSource(file)
@@ -172,8 +190,23 @@ function runDiff(spec, plan, io) {
       io.err('[' + spec.name + '] 读取新增文件失败: ' + file + '（' + errorText(e) + '）')
       return 2
     }
+    // 例外文件：先算基线违规行号集合，逐行放行（#1123）。取不到基线 = 判据坏了 → fail-closed。
+    let exempt = null
+    if (isAllowlisted(spec, file)) {
+      try {
+        exempt = baselineViolationLines(spec, base, file, io)
+      } catch (e) {
+        io.err(
+          '[' + spec.name + '] 取不到 ALLOWLIST 例外文件的基线内容: ' + file + ' @ ' + base +
+            '（' + errorText(e) + '）—— 行号级放行需要基线，绝不静默整体放行'
+        )
+        return 2
+      }
+    }
     for (const v of spec.scanSource(source, file)) {
-      if (lines.has(v.line)) violations.push({ ...v, file })
+      if (!lines.has(v.line)) continue // 未改动的行不进本次判定
+      if (exempt !== null && exempt.has(v.line)) continue // 基线即违规的存量行：登记的例外
+      violations.push({ ...v, file })
     }
   }
   if (violations.length === 0) {
@@ -213,7 +246,17 @@ export function runGuard(spec, options = {}) {
           return false
         }
       }),
-    readDiff: options.readDiff ?? ((base, pathspec) => gitDiff(base, pathspec, root))
+    readDiff: options.readDiff ?? ((base, pathspec) => gitDiff(base, pathspec, root)),
+    // 例外文件的基线内容（#1123）：默认取 base 树上的那一份源码；取不到即抛错（调用方 fail-closed）。
+    readBaseline:
+      options.readBaseline ??
+      ((base, file) =>
+        execFileSync('git', ['show', base + ':' + file], {
+          cwd: root,
+          encoding: 'utf8',
+          maxBuffer: 64 * 1024 * 1024,
+          stdio: ['ignore', 'pipe', 'pipe']
+        }))
   }
   const plan = parseArgs(spec, options.argv ?? process.argv.slice(2))
   if (plan.mode === 'usage') {
