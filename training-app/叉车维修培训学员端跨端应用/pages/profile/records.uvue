@@ -226,7 +226,7 @@
             })
         } else if (item.course_id > 0) {
             uni.navigateTo({
-                url: '/pages/courses/course-detail?course_id=' + item.course_id.toString()
+                url: '/pages/courses/course-detail?id=' + item.course_id.toString()
             })
         }
     }
