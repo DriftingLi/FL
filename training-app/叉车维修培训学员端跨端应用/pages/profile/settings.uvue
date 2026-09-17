@@ -99,7 +99,7 @@
     import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
     import { useAuthStore } from '../../stores/auth'
-    import { STORAGE_KEY_TOKEN, STORAGE_KEY_USER } from '../../constants/app'
+    import { STORAGE_KEY_TOKEN, STORAGE_KEY_REFRESH_TOKEN, STORAGE_KEY_USER, STORAGE_KEY_LOGIN_PROVIDER } from '../../constants/app'
 
     const authStore = useAuthStore()
     const statusBarHeight = useStatusBarHeight()
@@ -162,6 +162,10 @@
                         // 保留登录信息（使用正确的 key）
                         const token = uni.getStorageSync(STORAGE_KEY_TOKEN)
                         const userInfo = uni.getStorageSync(STORAGE_KEY_USER)
+                        // 清缓存不得削掉续期能力（#1124 根因 5）：refresh_token 是 access
+                        // 过期后唯一的自动续期凭据，丢了它会话从此只能重新登录。
+                        const refreshToken = uni.getStorageSync(STORAGE_KEY_REFRESH_TOKEN)
+                        const loginProvider = uni.getStorageSync(STORAGE_KEY_LOGIN_PROVIDER)
                         const careMode = uni.getStorageSync('care_mode')
 
                         // 清除所有缓存
@@ -170,6 +174,8 @@
                         // 恢复必要信息
                         if (token != null) uni.setStorageSync(STORAGE_KEY_TOKEN, token as any)
                         if (userInfo != null) uni.setStorageSync(STORAGE_KEY_USER, userInfo as any)
+                        if (refreshToken != null) uni.setStorageSync(STORAGE_KEY_REFRESH_TOKEN, refreshToken as any)
+                        if (loginProvider != null) uni.setStorageSync(STORAGE_KEY_LOGIN_PROVIDER, loginProvider as any)
                         if (careMode != null) uni.setStorageSync('care_mode', careMode as any)
 
                         calculateCacheSize()

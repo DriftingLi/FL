@@ -58,10 +58,22 @@ function getRefreshToken() : string {
     return getStorage(STORAGE_KEY_REFRESH_TOKEN)
 }
 
-function clearAuthData() : void {
+/**
+ * 重置内存登录态（storage 清理由调用方决定）
+ * 单一重置点：`clearAuthData()`（登出）与 `restoreFromStorage()`（storage 判为不可用）共用，
+ * 避免两处各写一份而漂移 —— 漂移的后果就是 #1124 的二阶循环：
+ * `handleUnauthorized()` 只清了 storage，内存 `isLoggedIn` 仍为 true，
+ * 登录页 `onLoad` 随即把用户 reLaunch 回首页。
+ */
+function resetAuthState() : void {
     token.value = ''
     user.value = null
     loginProvider.value = ''
+    syncDerived()
+}
+
+function clearAuthData() : void {
+    resetAuthState()
     removeStorage(STORAGE_KEY_TOKEN)
     removeStorage(STORAGE_KEY_REFRESH_TOKEN)
     removeStorage(STORAGE_KEY_USER)
@@ -69,16 +81,21 @@ function clearAuthData() : void {
 
     // 安全凭据（STORAGE_KEY_CREDENTIALS）故意不移除：
     // 生物识别门控回填，退出登录不清理，下次登录时可通过生物识别恢复。
-    syncDerived()
 }
 
 function restoreFromStorage() : boolean {
     const t = getStorage(STORAGE_KEY_TOKEN)
     if (t.length == 0) {
+        // storage 已无 access token ⇒ 内存登录态**同步归零**（#1124 根因 2）：
+        // 否则调用方会拿到陈旧的 isLoggedIn=true（登录页据此弹回首页）。
+        // 只重置内存、**不动 storage**：refresh_token 按 ADR-0004 保留给生物识别快捷登录。
+        resetAuthState()
         return false
     }
     const uObj = getStorageJSON(STORAGE_KEY_USER)
     if (uObj == null) {
+        // token 在但 user 读不出来：同样不可判为已登录，内存态一并归零
+        resetAuthState()
         return false
     }
     const user_id = uObj['user_id'] as number
