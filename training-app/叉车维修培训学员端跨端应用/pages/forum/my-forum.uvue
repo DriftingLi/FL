@@ -37,8 +37,8 @@
                             <view class="topic-meta">
                                 <text class="meta-like-icon">{{ item.liked ? '❤️' : '' }}
                                     {{ item.likes_count > 0 ? item.likes_count : '' }}</text>
-                                <text class="meta-item"> {{ item.replies_count }}</text>
-                                <text class="meta-item"> {{ item.views_count }}</text>
+                                <text class="meta-item">💬 {{ item.replies_count }}</text>
+                                <text class="meta-item">👁 {{ item.views_count }}</text>
                             </view>
                             <view class="topic-footer-right">
                                 <view class="topic-edit-btn" @click.stop="onEditTopic(item.id)">
