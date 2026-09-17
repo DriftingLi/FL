@@ -22,7 +22,7 @@
                 <text :class="favorited ? 'stat-like-icon stat-like-icon-favorited' : 'stat-like-icon'">{{ favorited ? '★' : '☆' }}</text>
                 <text :class="favorited ? 'stat-like-count stat-like-count-favorited' : 'stat-like-count'">收藏</text>
             </view>
-            <text class="stat-text"> {{ viewsCount }}</text>
+            <text class="stat-text">👁 {{ viewsCount }}</text>
         </view>
         <view v-if="canDelete" class="topic-delete" @click="onDelete">
             <text class="topic-delete-text">删除</text>
