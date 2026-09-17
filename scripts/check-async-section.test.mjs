@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
-import { scanSource, scanEmptyProps, isGuardedPath, ALLOWLIST, EMPTY_EXCEPTIONS, ALLOWED_EMPTY_VALUES } from './check-async-section.mjs'
+import { scanSource, scanEmptyProps, isGuardedPath, ALLOWLIST, EMPTY_EXCEPTIONS, ALLOWED_EMPTY_VALUES, scanAdminTiers, parseTierLine, TIER_FORMS } from './check-async-section.mjs'
 
 test('正例：UiErrorState + UiSkeleton 同文件 → 违规（手写四分支链信号）', () => {
   const src = [
@@ -69,10 +69,8 @@ test('ALLOWLIST 清零：#1054 的 15 条存量错误态支已全部结清（#11
   assert.deepEqual(Object.keys(ALLOWLIST), [])
 })
 
-test('EMPTY_EXCEPTIONS：剩余登记例外逐条写明理由，且没被扫出更多内联', () => {
-  for (const [file, reason] of Object.entries(EMPTY_EXCEPTIONS)) {
-    assert.ok(reason.includes('#1101'), `${file} 的例外理由要能追到票号`)
-  }
+test('EMPTY_EXCEPTIONS 清零：#1101 唯一一条例外（Inspection 走 useAdminTable、无对等判据）已由 #1102 销号', () => {
+  assert.deepEqual(Object.keys(EMPTY_EXCEPTIONS), [])
   assert.ok(ALLOWED_EMPTY_VALUES.includes('isEmpty'))
 })
 
@@ -185,4 +183,105 @@ test('负例：ui 封装层自身与守卫面外文件不受 :empty= 规则约�
   assert.equal(scanEmptyProps(['<UiAsyncSection :empty="items.length === 0" />']).length, 1)
   assert.equal(scanEmptyProps(['<UiAsyncSection :empty="isEmpty" />']).length, 0)
   assert.equal(scanEmptyProps(['<UiAsyncSection :empty=\'isEmpty\' />']).length, 0)
+})
+// ===== 规则 ② 的补充：同页多实例的具名判据（#1102）=====
+
+test('负例：:empty="isEmptyViews" 由档位 composable 解构改名而来 → 放行（同页五个列表各一个具名判据）', () => {
+  const src = [
+    '<template>',
+    '  <UiAsyncSection :empty="isEmptyViews" @retry="retryViews" />',
+    '</template>',
+    '<script setup lang="ts">',
+    'const { isEmpty: isEmptyViews, load: loadViews, retry: retryViews } = useAdminTable<TrailView>({ fetch })',
+    '</script>'
+  ].join('\n')
+  assert.equal(scanEmptyProps(src.split('\n')).length, 0)
+})
+
+test('正例：没声明过的 isEmptyXxx 仍然报红（不能靠改名字绕过）', () => {
+  const lines = [
+    '<template>',
+    '  <UiAsyncSection :empty="isEmptyViews" @retry="retryViews" />',
+    '</template>'
+  ]
+  assert.equal(scanEmptyProps(lines).length, 1)
+})
+
+// ===== 规则 ③：admin 页两档档位登记（#1102，ADR-0056 §9）=====
+
+const TWO_TIER_BODY = [
+  '<script setup lang="ts">',
+  "import { useAdminTable } from '@/composables/useAdminTable'",
+  "import { useAsyncPage } from '@/composables/useAsyncPage'",
+  'const table = useAdminTable<Row>({ fetch: async () => ({ list: [], total: 0 }) })',
+  'const count = useAsyncPage(async () => {})',
+  '</script>'
+].join('\n')
+
+test('正例：两档在场的页面逐档登记且实据成立 → 放行', () => {
+  const src = [
+    '<!--',
+    '  列表档位：useAdminTable（分页列表）—— 流水 / 留痕',
+    '  列表档位：useAsyncPage（只读计数）—— 删除已解决帖计数',
+    '-->',
+    TWO_TIER_BODY
+  ].join('\n')
+  assert.equal(scanAdminTiers(src, 'frontend/src/pages/admin/Demo.vue').length, 0)
+})
+
+test('正例：两档在场却没登记 → 违规（第二档没写明归属）', () => {
+  const v = scanAdminTiers(TWO_TIER_BODY, 'frontend/src/pages/admin/Demo.vue')
+  assert.equal(v.length, 1)
+  assert.match(v[0].message, /没有在文件顶部登记档位/)
+})
+
+test('正例：单档页面不要求登记（归属由既有约定唯一确定）', () => {
+  const one = [
+    '<script setup lang="ts">',
+    'const table = useAdminTable<Row>({ fetch: async () => ({ list: [], total: 0 }) })',
+    '</script>'
+  ].join('\n')
+  assert.equal(scanAdminTiers(one, 'frontend/src/pages/admin/Demo.vue').length, 0)
+})
+
+test('正例：自造档位形态的登记行 → 违规（登记表只有三行）', () => {
+  const src = [
+    '// 列表档位：useCrudTable（分页列表）',
+    '<script setup lang="ts">',
+    'const table = useAdminTable<Row>({ fetch: async () => ({ list: [], total: 0 }) })',
+    '</script>'
+  ].join('\n')
+  const v = scanAdminTiers(src, 'frontend/src/pages/admin/Demo.vue')
+  assert.equal(v.length, 1)
+  assert.match(v[0].message, /不在登记表里/)
+  assert.ok(TIER_FORMS.every(f => f.evidence instanceof RegExp))
+})
+
+test('正例：登记了却拿不出实据 → 违规（登记行不能是一句没兑现的声明）', () => {
+  const src = [
+    '// 列表档位：useAsyncPage（只读计数）',
+    '<script setup lang="ts">',
+    'const table = useAdminTable<Row>({ fetch: async () => ({ list: [], total: 0 }) })',
+    '</script>'
+  ].join('\n')
+  const v = scanAdminTiers(src, 'frontend/src/pages/admin/Demo.vue')
+  assert.equal(v.length, 1)
+  assert.match(v[0].message, /拿不出实据/)
+})
+
+test('负例：非 admin 页不适用档位规则；解析器只认登记行', () => {
+  assert.equal(scanAdminTiers(TWO_TIER_BODY, 'frontend/src/pages/student/Demo.vue').length, 0)
+  assert.equal(scanAdminTiers(TWO_TIER_BODY, 'backend/x.vue').length, 0)
+  const parsed = parseTierLine('  // 列表档位：useAsyncPage（只读计数）—— 计数')
+  assert.equal(parsed.tier, 'useAsyncPage')
+  assert.equal(parsed.form, '只读计数')
+  assert.equal(parseTierLine('<!-- 列表档位：useAdminTable（分页列表）—— 列表 -->').tier, 'useAdminTable')
+  assert.equal(parseTierLine('// 列表档位：useCrudTable（分页列表）').tier, '')
+  assert.equal(parseTierLine('// 这段说明 why 两档归属要写明'), null)
+})
+
+test('CLI 正向：真实 admin 页四份档位登记在 --all 下全绿（守卫不假红）', () => {
+  const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+  const out = execFileSync('node', [path.join(ROOT, 'scripts/check-async-section.mjs'), '--all'], { cwd: ROOT, encoding: 'utf8' })
+  assert.match(out, /档位登记齐备/)
 })
