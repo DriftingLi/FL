@@ -110,6 +110,7 @@ uvue 原生端**只支持 class 选择器**，以下选择器均不可用：
 | `currentColor` | 具体颜色值 | 如 `#2979ff`、`#999999` |
 | `display: grid` / `grid-*` | flex 布局 | grid 布局不支持 |
 | `transition` / `animation` | uni-app API 动画 | 原生端不支持 CSS 动画 |
+| `white-space` 写在 `<text>` / `<button>` **之外**的元素上 | 横滑行改用 `flex-direction: row` + 子项 `flex-shrink: 0` 撑出溢出 | 该属性**只在 `<text>` / `<button>` 上有效**；写在 `<scroll-view>` 等元素上会被渲染层判错并**忽略**：真机日志原文 `style property white-space is only supported on <text>\|<button>. there is an error on <scroll-view …>`（2026-09-17 #1081 ①a 实测）。存量 `.filter-scroll` 系列（favorites / records / featured-list / ai-feature / mock-exam / personal-info / practice-records）有同款写法，属**既有**缺陷，另票清理 |
 
 #### `gap` 替换模式
 

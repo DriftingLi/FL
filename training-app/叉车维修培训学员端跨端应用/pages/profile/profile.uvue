@@ -166,7 +166,7 @@
     /** 服务宫格：按原型「设置」落在第二行首列 */
     const serviceItems : ProfileEntry[] = [
         { key: 'orders', title: '我的订单', icon: '📋', path: '', available: false },
-        { key: 'help', title: '帮助中心', icon: '🎧', path: '', available: false },
+        { key: 'help', title: '帮助中心', icon: '🎧', path: '/pages/profile/help-center', available: true },
         { key: 'address', title: '地址管理', icon: '📍', path: '', available: false },
         { key: 'messages', title: '消息中心', icon: '🔔', path: '/pages/notifications/notifications', available: true },
         { key: 'settings', title: '设置', icon: '⚙', path: '/pages/profile/settings', available: true },
