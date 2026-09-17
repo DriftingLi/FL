@@ -108,11 +108,14 @@ export function addedLineList(diffText) {
 /** 取某 base 到 HEAD 的 diff 文本（`core.quotepath=false` 让路径免于转义；解码器仍作兜底）。 */
 export function gitDiff(base, pathspec, cwd = ROOT) {
   const spec = pathspec ? ['--', pathspec] : []
+  // stdio 显式收敛子进程 stderr：execFileSync 默认会把 stderr **继承**给父进程，浅克隆下
+  // 「三点失败 → 退双点」这条正常路径的 fatal: no merge base 会直接漏进 CI 绿步日志
+  // （读起来像门坏了）；这里捕获进 e.stderr，只在两条路都失败时才随错误信息浮出。
   const run = (rangeArgs) =>
     execFileSync(
       'git',
       ['-c', 'core.quotepath=false', 'diff', '-U0', ...rangeArgs, ...spec],
-      { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }
+      { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] }
     )
   const run2 = (a, b) => run([a, b])
   try {

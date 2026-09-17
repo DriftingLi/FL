@@ -153,8 +153,10 @@ function runDiff(spec, plan, io) {
     io.err('[' + spec.name + '] ' + errorText(e))
     return 2
   }
-  // 3) 「diff 成功且新增行面为空」才是合法的绿
-  if (added.size === 0) {
+  // 3) 「diff 成功且新增行面为空」才是合法的绿。
+  //    判据是**新增行集合为空**，不是「diff 里没有文件」：纯删除的 diff 会留下 file → 空 Set 的条目，
+  //    只看 added.size 会把它当「有新增行」走去扫描，最后打印「通过」而不是「跳过」（无中生有的绿）。
+  if ([...added.values()].every((lines) => lines.size === 0)) {
     io.out(cfg.empty(base))
     return 0
   }

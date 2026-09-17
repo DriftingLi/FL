@@ -18,6 +18,7 @@ import {
   CONSUMER_DIR,
   DECLARATION_FILE,
   GUARD_SPEC,
+  isAnchoredPattern,
   isGuardedPath,
   matchDeclared,
   parseDeclaredEndpoints,
@@ -104,6 +105,18 @@ const RED_CASES = [
     name: '实参是变量（路径完全不可静态判定）',
     source: 'const cached = store.get(key)',
     expect: /路径由变量\/表达式拼装，无法静态判定/
+  },
+  {
+    // 单段字面量：没有可锚定的首段，尾段比较只能靠声明侧 {} 兜住 —— 历史上被
+    // 尾段通配吃进 /contributions/{id} 而判绿（'page' / 'cache' 这类分页缓存键误读）。
+    name: '单段字面量（.get(\'page\')：尾段通配的假绿逃生口）',
+    source: "await unwrappedRequest.get('page')",
+    expect: /路径不是绝对路径（不以 \/ 开头、也无前导 base 占位），无法静态判定/
+  },
+  {
+    name: '单段字面量（.delete(\'cache\')）',
+    source: "await unwrappedRequest.delete('cache')",
+    expect: /无法静态判定/
   }
 ]
 
@@ -158,7 +171,7 @@ test('边界（必须绿）：测试 / 生成物 / 非请求层目录不进判�
   assert.equal(isGuardedPath(CONSUMER_DIR + '/generated/valuation.ts'), false)
 })
 
-test('真实 inspection.ts：4 个 job_report 端点已登记、4 个巡检端点走欠条 → 0 违规', () => {
+test('真实 inspection.ts：8 个端点（职位治理 4 + 巡检 4）全部已登记 → 0 违规', () => {
   const file = CONSUMER_DIR + '/inspection.ts'
   assert.deepEqual(scanSource(readFileSync(resolve(ROOT, file), 'utf8'), file), [])
 })
@@ -181,7 +194,7 @@ test('销账信号（必须红）：已登记端点仍挂在 ALLOWLIST 里', () 
 
 test('ALLOWLIST 逐条可解释且不许有死条目：摘掉条目后该消费必须真的报红', () => {
   const keys = Object.keys(ALLOWLIST)
-  assert.ok(keys.length > 0, 'ALLOWLIST 为空时请删掉本用例（现状 8 条欠条）')
+  assert.ok(keys.length > 0, 'ALLOWLIST 为空时请删掉本用例（现状 4 条 createCrud 动态欠条；4 条巡检端点已随 #1097 销账）')
   for (const key of keys) {
     const sep = key.indexOf('::')
     assert.ok(sep > 0, 'ALLOWLIST 键格式必须是 "<文件>::<METHOD> <模式>"：' + key)
@@ -227,6 +240,23 @@ test('matchDeclared：参数名不同/前缀缺失/前导通配可命中；全�
   assert.equal(matchDeclared('POST', '/recruit/jobs/{}', declared), null, '方法必须一致')
 })
 
+test('matchDeclared：声明侧参数位不得被消费侧字面量顶上（单段字面量的假绿逃生口）', () => {
+  const declared = parseDeclaredEndpoints('var Domains = []Domain{\n{\n\t\tName:  "contribution",\n\t\tEndpoints: []Endpoint{\n\t\t\t{Method: "GET", Path: "/contributions/{id}"},\n\t\t},\n},\n}')
+  // 'page' 只有一段、且声明末段是参数位：旧实现靠 decl === '{}' 通配判绿（假绿逃生口）。
+  assert.equal(matchDeclared('GET', 'page', declared), null, '单段字面量不得被尾段通配吃进 /contributions/{id}')
+  assert.equal(matchDeclared('GET', '/page', declared), null, '同形但带 / 前缀也只是「没命中」，不是「通配命中」')
+  // 消费侧 {} 仍是通配（运行时才定的值），声明侧参数位不变。
+  assert.ok(matchDeclared('GET', '/contributions/{}', declared))
+  assert.ok(matchDeclared('GET', '{}/contributions/{}', declared), '前导 base 占位 + 消费侧参数位')
+})
+
+test('isAnchoredPattern：绝对路径 / 前导 base 占位可锚定；单段相对字面量不可', () => {
+  assert.equal(isAnchoredPattern('/admin/jobs'), true)
+  assert.equal(isAnchoredPattern('{}/admin/jobs'), true)
+  assert.equal(isAnchoredPattern('page'), false)
+  assert.equal(isAnchoredPattern('admin/jobs'), false)
+})
+
 test('真实声明表可解析（端点规模非零）', () => {
   const declared = parseDeclaredEndpoints(readFileSync(resolve(ROOT, DECLARATION_FILE), 'utf8'))
   assert.ok(declared.size > 100, '域声明表端点数 = ' + declared.size)
@@ -242,6 +272,14 @@ test('--diff 正样本（必须红）：新增行消费未登记端点 → 退�
   assert.match(r.stderr, new RegExp(UNDECLARED.replace(/\//g, '\\/')))
   assert.match(r.stderr, /共 1 处/)
   assert.doesNotMatch(r.stdout + r.stderr, /通过。/)
+})
+
+test('--diff 正样本（必须红）：新增行是单段字面量（尾段通配的假绿逃生口）', () => {
+  const line = "await unwrappedRequest.get('page')"
+  const r = probeDiff(synthDiff(API_FILE, 3, [line]), { [API_FILE]: 'line1\nline2\n' + line })
+  assert.equal(r.code, 1)
+  assert.match(r.stderr, /无法静态判定/)
+  assert.match(r.stderr, /共 1 处/)
 })
 
 test('--diff 负样本（必须绿）：新增行消费已登记端点', () => {

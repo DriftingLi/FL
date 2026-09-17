@@ -15,9 +15,15 @@
  * 判定面：请求层调用（.get / .post / .put / .delete / .patch，含嵌套泛型 get<PagedResult<T>>）的
  * **第一个实参**路径字面量。模板字符串插值与字符串拼接的表达式统一归一为一个路径段占位 {}。
  * 归一后的模式必须命中域声明表里的某个端点：
- *   - 尾段逐段相等，声明参数名与消费参数名允许不同（{id} vs {course_id}），{} 是单段通配；
+ *   - 尾段逐段相等，声明参数名与消费参数名允许不同（{id} vs {course_id}）；
+ *   - **只有消费侧的 {} 是通配**（运行时才定的值）：声明侧的 {} 是参数位，不能被消费侧的字面量顶上——
+ *     否则 `.get('page')` 会被尾段通配吃进 /contributions/{id} 而判绿（后段逐段相等即可），
+ *     那是「写个单段字面量绕过去」的假绿逃生口；
  *   - 允许消费侧少掉 baseURL 前缀（估值模块 client 的 baseURL 是 /api/valuation，模块里写 /dictionaries/...）；
- *   - 全段都是 {}、或首参是变量（路径由变量给出）→ **不可静态判定**，判违规（放过去就是假绿逃生口）。
+ *   - 路径必须是绝对路径（以 / 开头）或带前导 base 占位（{}/...）：单段相对字面量没有可锚定的首段，
+ *     任何尾段比较都是猜 → 与下列情形同判「不可静态判定」；
+ *   - 全段都是 {}、首参是变量（路径由变量给出）、或不是绝对路径 → **不可静态判定**，
+ *     判违规（放过去就是假绿逃生口）。
  *
  * 放行面（有意不进判定集）：
  *   1. __tests__ / *.spec.* / *.test.* —— 测试按定义要断言路径字面量；
@@ -129,6 +135,14 @@ export function pathSegments(p) {
   return parts
 }
 
+/**
+ * 消费模式是否可锚定：以 / 开头（绝对路径）或带前导 base 占位（{}/...，如 `${baseURL}/x`）。
+ * 单段相对字面量（'page'）没有可锚定的首段：任何尾段比较都只能靠声明侧通配兜住，判不可静态判定。
+ */
+export function isAnchoredPattern(pattern) {
+  return String(pattern).startsWith('/') || pathSegments(pattern)[0] === '{}'
+}
+
 const declaredCache = new Map()
 
 /** 按仓库根读取并缓存域声明表（scanSource 无 root 参数，事实源按仓库根定位）。 */
@@ -142,7 +156,7 @@ export function declaredEndpoints(root = ROOT) {
 
 /**
  * 消费模式是否命中声明端点：返回命中的端点（含所属域），否则 null。
- * 尾段逐段相等；{} 是单段通配；全部段都是 {} → 视为不可静态判定（返回 null）。
+ * 尾段逐段相等；**只有消费侧的 {} 是通配**（声明侧的 {} 是参数位）；全部段都是 {} → 不可静态判定。
  */
 export function matchDeclared(method, pattern, declared) {
   let segments = pathSegments(pattern)
@@ -158,7 +172,8 @@ export function matchDeclared(method, pattern, declared) {
     for (let i = 0; i < segments.length; i++) {
       const consumed = segments[segments.length - 1 - i]
       const decl = declSegments[declSegments.length - 1 - i]
-      if (consumed === '{}' || decl === '{}' || consumed === decl) continue
+      // 消费侧 {} = 运行时才定的值（可对上任一段）；声明侧 {} = 参数位，只有消费侧也是 {} 才算对上。
+      if (consumed === '{}' || consumed === decl) continue
       ok = false
       break
     }
@@ -296,11 +311,14 @@ export function scanSource(source, file) {
       continue
     }
     if (matched) continue
+    const undecidable = arg.unresolved || pathSegments(pattern).every((s) => s === '{}')
     violations.push({
       ...site,
-      reason: arg.unresolved || pathSegments(pattern).every((s) => s === '{}')
-        ? '路径由变量/表达式拼装，无法静态判定（拒绝假绿逃生口）'
-        : '未落在 ' + DECLARATION_FILE + ' 的域端点集内'
+      reason: !isAnchoredPattern(pattern)
+        ? '路径不是绝对路径（不以 / 开头、也无前导 base 占位），无法静态判定（拒绝假绿逃生口）'
+        : undecidable
+          ? '路径由变量/表达式拼装，无法静态判定（拒绝假绿逃生口）'
+          : '未落在 ' + DECLARATION_FILE + ' 的域端点集内'
     })
   }
   return violations

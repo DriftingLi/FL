@@ -16,6 +16,7 @@ import { isDirectRun, parseArgs, runGuard, walkFiles } from './lib/guard.mjs'
 import { GUARD_SPEC as apiSeam } from './check-api-seam.mjs'
 import { GUARD_SPEC as elControls } from './check-el-controls.mjs'
 import { GUARD_SPEC as asyncSection } from './check-async-section.mjs'
+import { GUARD_SPEC as apiConsumers } from './check-api-consumers.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -145,6 +146,22 @@ test('负样本（必须绿）：diff 成功但没有新增行 → 打印「跳�
   assert.match(r.stdout, /相对 origin\/master 无 \.vue\/\.ts 新增行，跳过。/)
 })
 
+test('负样本（必须跳过）：纯删除的 diff（文件在、新增行集为空）→ 「跳过」而不是「通过」', () => {
+  // -U0 的纯删除 hunk：+++ 头会留下 file → 空 Set 的条目；判据必须看**新增行集合为空**，
+  // 只看 Map.size 会误判成「有新增行」，最后打印无中生有的通过语。
+  const delDiff = [
+    'diff --git a/' + PAGE + ' b/' + PAGE,
+    '--- a/' + PAGE,
+    '+++ b/' + PAGE,
+    '@@ -3,1 +2,0 @@',
+    '-  <UiErrorState v-if="e" />'
+  ].join('\n')
+  const r = probeDiff(asyncSection, delDiff)
+  assert.equal(r.code, 0)
+  assert.match(r.stdout, /相对 origin\/master 无 \.vue 新增行，跳过。/)
+  assert.doesNotMatch(r.stdout, /通过。/)
+})
+
 test('边界（必须绿）：paths 不在守卫面 / 在 allowlist 的新增行整体放行', () => {
   // async-section 的 ALLOWLIST 第一条（存量页面）：即使新增行真的违规也不报
   const legacy = 'frontend/src/pages/student/ChapterView.vue'
@@ -216,6 +233,57 @@ test('CLI fail-closed：--diff 指向不存在的 base → 退出 2，不打印 
 })
 
 // ===== CLI 面不变（三个守卫各自的入口形态）=====
+
+// ===== 真实 git：runner ↔ added-lines 的默认连线（#1094 的病根）=====
+
+test('真实 git（不注入 readDiff）：--diff <历史提交> 报违规/跳过，而不是恒绿', () => {
+  // 收敛前 check-async-section 把 parseAddedLines(diffText) 写成 parseAddedLines(base, pathspec)，
+  // --diff 恒拿空 Map；本用例不注入 readDiff/readSource，只给一个真仓库 + 真实历史提交，
+  // 让 runGuard 走默认的 gitDiff/parseAddedLines 连线 —— 那条连线此后有回归锁。
+  const repo = mkdtempSync(join(tmpdir(), 'guard-real-git-'))
+  try {
+    const git = (...args) =>
+      execFileSync('git', args, { cwd: repo, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+    git('init', '-q')
+    git('config', 'user.email', 'guard-test@example.com')
+    git('config', 'user.name', 'guard-test')
+    const rel = 'frontend/src/api/demo.ts'
+    mkdirSync(join(repo, 'frontend/src/api'), { recursive: true })
+    writeFileSync(join(repo, rel), 'line1\nline2\n')
+    git('add', '.')
+    git('-c', 'commit.gpgsign=false', 'commit', '-qm', 'base')
+    const red = "await unwrappedRequest.get('/admin/never-declared-1094')"
+    writeFileSync(join(repo, rel), 'line1\nline2\n' + red + '\n')
+    git('add', '.')
+    git('-c', 'commit.gpgsign=false', 'commit', '-qm', 'add undeclared consumer')
+
+    const out = []
+    const err = []
+    const code = runGuard(apiConsumers, {
+      argv: ['--diff', 'HEAD~1'],
+      root: repo,
+      stdout: (l) => out.push(l),
+      stderr: (l) => err.push(l)
+    })
+    assert.equal(code, 1, '真实 git 链路上新增的未登记消费必须判红（收敛前这里是恒绿的死路径）')
+    assert.match(err.join('\n'), /never-declared-1094/)
+    assert.doesNotMatch(out.join('\n') + err.join('\n'), /跳过。|通过。/)
+
+    // 同一链路的另一侧：base = HEAD（无新增行）→ 合法的绿是「跳过」，不是「通过」。
+    const out2 = []
+    const err2 = []
+    const code2 = runGuard(apiConsumers, {
+      argv: ['--diff', 'HEAD'],
+      root: repo,
+      stdout: (l) => out2.push(l),
+      stderr: (l) => err2.push(l)
+    })
+    assert.equal(code2, 0)
+    assert.match(out2.join('\n'), /相对 HEAD 无 \.ts 新增行，跳过。/)
+  } finally {
+    rmSync(repo, { recursive: true, force: true })
+  }
+})
 
 test('CLI 面不变：argv 解析表', () => {
   // 无参数：api-seam / el-controls 默认全量；async-section 打印用法（0）
