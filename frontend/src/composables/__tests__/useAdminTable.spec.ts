@@ -189,4 +189,56 @@ describe('useAdminTable（admin 列表状态机）', () => {
     await table.search()
     expect(table.loadError.value).toBe(false)
   })
+
+  // ---- 空态判据与错误分类（第十一波 #1102，ADR-0056 §9）：
+  //      isEmpty 与 useAsyncPage.isEmpty 同源（utils/listState.isEmptyList）----
+
+  it('isEmpty：装载成功且没有条目为真，有条目为假', async () => {
+    let rows: Row[] = []
+    const table = useAdminTable<Row>({ fetch: async () => ({ list: rows, total: rows.length }) })
+
+    await table.load()
+    expect(table.isEmpty.value).toBe(true)
+
+    rows = [{ id: 1, name: 'a' }]
+    await table.load()
+    expect(table.isEmpty.value).toBe(false)
+  })
+
+  it('loadErrorKind：404 归空态（isEmpty 仍为真）、其余错误是错误态', async () => {
+    const notFound = useAdminTable<Row>({
+      fetch: async () => {
+        throw Object.assign(new Error('nf'), { kind: 'notfound' })
+      }
+    })
+    await notFound.load()
+    expect(notFound.loadErrorKind.value).toBe('notfound')
+    expect(notFound.isEmpty.value).toBe(true)
+
+    const broken = useAdminTable<Row>({
+      fetch: async () => {
+        throw Object.assign(new Error('boom'), { kind: 'network' })
+      }
+    })
+    await broken.load()
+    expect(broken.loadErrorKind.value).toBe('network')
+    expect(broken.isEmpty.value).toBe(false)
+  })
+
+  it('loadErrorKind：装载成功即清空上一次的错误分类', async () => {
+    let fail = true
+    const table = useAdminTable<Row>({
+      fetch: async () => {
+        if (fail) throw Object.assign(new Error('boom'), { kind: 'server' })
+        return { list: [{ id: 1, name: 'a' }], total: 1 }
+      }
+    })
+
+    await table.load()
+    expect(table.loadErrorKind.value).toBe('server')
+
+    fail = false
+    await table.load()
+    expect(table.loadErrorKind.value).toBe(null)
+  })
 })

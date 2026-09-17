@@ -16,9 +16,39 @@
 | **表格** | `<el-table>` 走 `element-overrides.css` 的 `--el-table-*` 全局变量（ADR-0037），**不封装 UiTable**。两条硬边界：**不动行高与单元格内边距**；**禁用 `primary-*`/`accent-*` 做表格底色**（深色块未重定义这两个色阶，会出「暗底亮块」）。表格显式空态用 `UiEmptyState`，默认空态走全局文字色。 |
 | **剩余控件** | 标签一律 `UiTag` 的 `tone`（**不写 `type`**；新值 `brand/primary/success/info/warning/danger/neutral`，映射表用导出的 `UiTagTone` 类型收窄）；开关/多选/单选组/上传/提示气泡对应 `UiSwitch` / `UiCheckbox`（+`UiCheckboxGroup`）/ `UiRadioGroup` / `UiUpload` / `UiTooltip`。全部薄封装（attrs/事件/slot 全透传、**不设默认值**，ADR-0038）；`el-radio` / `el-radio-button` 保持原生（组内内容项）。 |
 | **溢出菜单** | `UiMoreMenu`，卡片/列表项右上角「⋯」触发的**治理动作收纳**（举报 / 删除等低频、破坏性、非互动类操作）。**互动动作不进菜单**——回复 / 点赞这类高频社交动作留在卡片底部主操作行，两者不可混放（ADR-0042 的回复区形态）。菜单项由调用方提供，**可见性判定也在调用方**（如自己的回复不出现「举报」）。 |
-| **管理端列表状态机** | admin **列表页**一律 `useAdminTable`（页面只声明 `fetch` adapter 与 `actions` adapter，内置三态 / 分页 / 搜索 / 行操作分发 / 删除确认；ADR-0015 + ADR-0039）。**非列表页不套**（详情/仪表盘/配置页用 `useAsyncPage` 的三态即可）。`useAsyncPage` 是服务全站 34 处的通用三态件，**不要为 admin 改它**。**同一页面里的第二档要写明归属**（第十一波）：分页列表 → `useAdminTable`；只读/计数 section（巡检计数、汇总卡）→ `useAsyncPage` + `UiAsyncSection`。两档都不得 `catch {}` 静默吞错，档位在文件顶部注释里登记。 |
+| **管理端列表状态机** | admin **列表页**一律 `useAdminTable`（页面只声明 `fetch` adapter 与 `actions` adapter，内置三态 / 分页 / 搜索 / 行操作分发 / 删除确认；ADR-0015 + ADR-0039）。**非列表页不套**（详情/仪表盘/配置页用 `useAsyncPage` 的三态即可）。`useAsyncPage` 是服务全站 34 处的通用三态件，**不要为 admin 改它**。**同一页面里的第二档要写明归属**（第十一波）：分页列表 → `useAdminTable`；只读/计数 section（巡检计数、汇总卡）→ `useAsyncPage` + `UiAsyncSection`。两档都不得 `catch {}` 静默吞错，档位在文件顶部注释里登记——判定口径与登记格式见下「管理端列表两档归属」。 |
 | **状态词表** | 同一业务状态（联络授权 / 投递 / 题目状态…）的 **label 与 tone 各只有一个 descriptor**：输入 status，输出 `{ label, tone }`，列表、抽屉、角标、admin 留痕只消费它；status 收成 union（取值集合与后端常量表对齐），**模板里不得内联状态文案裸串**（第十一波）。 |
-| **确认框** | 一律 `useConfirm()`（`composables/useConfirm.ts`）：`confirm`（普通）/ `confirmDanger`（删除、清空、移除、驳回、撤销等不可逆操作 —— 红确认钮 + 焦点不落确认钮，连按回车不误执行）/ `prompt`（带输入）。**业务代码禁直接调 `ElMessageBox`**。 |
+### 管理端列表两档归属（第十一波 #1102 / ADR-0056 §9）
+
+admin 页里「三态 + 分页 + 筛选」**只有两档**，页面按 section 声明归属，不允许第三份手写实现：
+
+| 档位 | 用于 | 错误通道与判据 |
+| --- | --- | --- |
+| **档位一** `useAdminTable`（分页列表） | 任何会翻页的列表（服务端分页）。页面只声明 `fetch` adapter 与行操作 adapter；筛选轴（`domain` / `reportStatus` / `jobFilterRecruiter` 这类页面 ref）由 adapter 自己读，不塞进 composable | `loadError` / `loadErrorKind` / `retrying` / `retry` / `isEmpty`；可同页多实例 |
+| **档位二** `useAsyncPage`（只读计数） | 只读/计数/汇总 section：单值计数（`deleted-after-accepted`）、汇总卡、facet 计数、非分页聚合页（如课程目录） | `loadError` / `loadErrorKind` / `retrying` / `retry` / `isEmpty` + `UiAsyncSection` |
+| **档位二的行内形态** `useAsyncPage`（行内追加） | 装不进页面级实例的行内追加式分页：帖子展开面板里的回复分页（按行实例化——setup 之外不能建 `watch`，所以不能直接持有 `useAsyncPage`） | 判据复用同源 `utils/listState.isEmptyList`；错误态与重试入口**按行**（ADR-0042 回复区） |
+
+**判定口径**（按顺序问）：
+
+1. 这段**会翻页**吗？会 → 档位一。同页多段列表就多实例（每段一个 `useAdminTable`），不要合并成一个大状态机。
+2. 不会翻页、只是**一个值 / 一组计数 / 一张汇总卡**吗？是 → 档位二。**不硬套列表状态机**（伪造成 items 只为套组件是 ADR-0056 §9 被否的备选）。
+3. 都不是（行内追加分页）→ 登记为**档位二的行内形态**：判据必须同源（`isEmptyList`），状态按行维护，页面上不得出现第二份 `length === 0`。
+
+**空态判据同源**：两档的 `isEmpty` 是同一份实现（`utils/listState.isEmptyList`），`loadErrorKind` 同名同义（**404 = 空态、其余 = 错误态**）。同页多实例用解构改名取具名判据 —— `const { isEmpty: isEmptyViews, … } = useAdminTable(…)`，模板里 `:empty="isEmptyViews"`；`:empty=` 不接受表达式与写死值（守卫 `check-async-section` 机械拦截）。
+
+**两档都不得静默吞错**：失败必须有 error 态 + 重试入口，走各自档位的既有通道（`@retry` 接 `retry`），不得 `catch {}` 了事。
+
+**档位登记**（文件顶部注释，脚本在前的页面用 `//`、模板在前的页面用 HTML 注释；守卫可扫）：
+
+```
+// 列表档位：useAdminTable（分页列表）—— 待审核队列 / 举报处置队列
+<!-- 列表档位：useAsyncPage（只读计数）—— 删除已解决帖计数 -->
+<!-- 列表档位：useAsyncPage（行内追加）—— 帖子展开面板的行内回复分页 -->
+```
+
+- 可写的只有上表三行（档位 + 形态）；**两档在场的页面必须逐档登记**——单档页面的归属由上表唯一确定，不必登记。
+- 登记行**要拿得出实据**（页面里真有 `useAdminTable(` / `useAsyncPage(`，行内形态真有 `isEmptyList(`）：登记了却对不上即报红，登记行不能退化成一句注释。
+- 扫描：`node scripts/check-async-section.mjs --all`（规则 ③；`--diff <base>` 只看新增行）。
 
 ### 已收敛控件的机械守卫（ADR-0035 备选转正 / spec #940）
 
