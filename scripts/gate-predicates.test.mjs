@@ -2,7 +2,8 @@
 //
 // 收敛过的「同判据两处实现」必须**不许改回双份**：这里用文本级断言盯住
 //   1) 两个 workflow 都调同一份 ci-summary 聚合脚本，且不再内联那段 jq；
-//   2) 三个守卫的新增行解析都来自 scripts/lib/added-lines.mjs，没有第二份实现。
+//   2) 新增行解析只由「守卫 runner（scripts/lib/guard.mjs）」与 check-bare-hex.sh 消费
+//      scripts/lib/added-lines.mjs；三个守卫不再各自引用它（runner 是唯一消费面）。
 // 这类断言必须存在，否则下一次「顺手复制一份」在评审里几乎看不出来。
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -42,10 +43,9 @@ test('聚合脚本的判定分支与 ADR 记录的口径一致（failure > succe
   assert.ok(src.includes('ci-summary'), '聚合脚本应筛 ci-summary 记录')
 })
 
-test('新增行解析：三个消费面都走 lib/added-lines.mjs，没有本地第二份实现', () => {
+test('新增行解析：守卫 runner 与裸色值守卫都走 lib/added-lines.mjs，没有本地第二份实现', () => {
   const consumers = [
-    'scripts/check-el-controls.mjs',
-    'scripts/check-api-seam.mjs',
+    'scripts/lib/guard.mjs', // 三个守卫共用的 runner：--diff 取 diff 文本 + 调 parseAddedLines
     'scripts/check-bare-hex.sh'
   ]
   for (const f of consumers) {
@@ -59,6 +59,12 @@ test('新增行解析：三个消费面都走 lib/added-lines.mjs，没有本地
       !/\^@@ -\[0-9\]\+\+/.test(src) && !/\+\[0-9\]\+/.test(src),
       f + ' 不应再有本地的 hunk 解析实现'
     )
+  }
+  // 三个守卫只留判定面：runner 面来自 lib/guard.mjs，不得各自再引新增行解析（改回双份即报红）
+  for (const f of ['scripts/check-el-controls.mjs', 'scripts/check-api-seam.mjs', 'scripts/check-async-section.mjs']) {
+    const src = read(f)
+    assert.ok(src.includes("from './lib/guard.mjs'"), f + ' 应走共享 runner（scripts/lib/guard.mjs）')
+    assert.ok(!src.includes('added-lines.mjs'), f + ' 不应各自引用新增行解析（runner 是唯一消费面）')
   }
 })
 

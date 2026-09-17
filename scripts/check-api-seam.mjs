@@ -7,7 +7,7 @@
  * 同一个端点在很多文件里各打一遍。这次把它们收回 api 模块后，本脚本把「页面/组件不得
  * 直接引用请求层」变成 CI 可核验的事实。
  *
- * 用法：
+ * 用法（runner 面单点在 `scripts/lib/guard.mjs`，ADR-0056 §5 / #1094；本文件只有判定面）：
  *   node scripts/check-api-seam.mjs --all  [目录]   全量扫描（默认 frontend/src；有违规则退出 1）
  *   node scripts/check-api-seam.mjs --diff [base]   只查相对 base 的新增行（base 默认 origin/master）
  *
@@ -22,18 +22,7 @@
  *   3. 其余目录（utils / composables / stores …）—— 本守卫的适用面是页面与业务组件。
  * 白名单（ALLOWLIST）初始为空：确有例外时逐条登记并写明理由，不要放宽规则本身。
  */
-import { readFileSync, readdirSync } from 'node:fs'
-import { execFileSync } from 'node:child_process'
-import { dirname, join, relative, resolve } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
-
-// 新增行解析的单点实现（ADR-0053 §10）——两个守卫共用一份，含 quotepath 转义解码。
-import { parseAddedLines } from './lib/added-lines.mjs'
-
-export { parseAddedLines }
-
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const DEFAULT_SCAN_DIR = join(ROOT, 'frontend', 'src')
+import { isDirectRun, runGuardCli } from './lib/guard.mjs'
 
 /** 请求层模块（页面不得直接引用）。含 `@/api/request` 与相对写法 `../api/request`。 */
 export const GUARDED_MODULES = ['api/request', 'api/client']
@@ -106,111 +95,48 @@ export function scanSource(source, file) {
   return violations
 }
 
-function walk(dir) {
-  const out = []
-  let entries
-  try {
-    entries = readdirSync(dir, { withFileTypes: true })
-  } catch {
-    return out
-  }
-  for (const e of entries) {
-    const p = join(dir, e.name)
-    if (e.isDirectory()) {
-      if (e.name === 'node_modules') continue
-      out.push(...walk(p))
-      continue
-    }
-    if (SCAN_EXTENSIONS.some((ext) => e.name.endsWith(ext))) out.push(p)
-  }
-  return out
+/**
+ * 本守卫的声明：判定面 + 报告措辞。runner（argv / 走查 / --diff / allowlist / 退出码）
+ * 在 scripts/lib/guard.mjs —— 新增守卫只需实现 scanSource 并声明这一份。
+ */
+export const GUARD_SPEC = {
+  name: 'check-api-seam',
+  usage: '用法: node scripts/check-api-seam.mjs --all [目录] | --diff [base]',
+  cli: { noArgs: 'all', helpFlag: false, scanDirArg: true, usageOnUnknown: true, usageStream: 'stderr' },
+  all: {
+    scanDir: 'frontend/src',
+    extensions: SCAN_EXTENSIONS,
+    skipNodeModules: true,
+    tolerateWalkErrors: true,
+    stream: 'stdout',
+    header: (ctx) => [
+      '===== api seam 守卫：全量扫描（页面与业务组件不得直接引用请求层）=====',
+      '扫描目录: ' + ctx.scanDirRel,
+      '守卫面: ' + GUARDED_PATH_SEGMENTS.join(' / ') + '（跳过测试与白名单）',
+      '请求层: ' + GUARDED_MODULES.map((m) => '@/' + m).join(' / '),
+      '---'
+    ],
+    ok: (ctx) => '无违规。' + ctx.checked + ' 个文件均未直接引用请求层。',
+    violation: (v) => v.file + ':' + v.line + ': ' + v.spec + '  ' + v.text,
+    footer: (ctx) => [
+      '---',
+      '共 ' + ctx.count + ' 处。请在 frontend/src/api/ 下补具名方法，页面只调它：',
+      '  —— 响应类型取 `@/api/generated/*`（后端注解 → swagger → go run ./cmd/gen-apitypes），不手写。'
+    ]
+  },
+  diff: {
+    pathspec: ['*.vue', '*.ts'],
+    defaultBase: 'origin/master',
+    stream: 'stderr',
+    empty: (base) => '[check-api-seam] 相对 ' + base + ' 无 .vue/.ts 新增行，跳过。',
+    ok: () => '[check-api-seam] 新增行未直接引用请求层，通过。',
+    header: () => ['===== 新增行直接引用了请求层（页面与业务组件一律走 api/ 具名方法）====='],
+    violation: (v) => v.file + ':' + v.line + ': ' + v.spec + '  ' + v.text,
+    footer: (ctx) => ['---', '共 ' + ctx.count + ' 处。见 ADR-0053 §7 与 docs/agents/ui-conventions.md。']
+  },
+  isGuardedPath,
+  scanSource,
+  allowlist: ALLOWLIST
 }
 
-function relToRoot(abs) {
-  return relative(ROOT, abs).replace(/\\/g, '/')
-}
-
-function reportAll(scanDir) {
-  const files = walk(scanDir)
-  const violations = []
-  let checked = 0
-  for (const abs of files) {
-    const rel = relToRoot(abs)
-    if (!isGuardedPath(rel)) continue
-    checked++
-    violations.push(...scanSource(readFileSync(abs, 'utf8'), rel))
-  }
-  console.log('===== api seam 守卫：全量扫描（页面与业务组件不得直接引用请求层）=====')
-  console.log('扫描目录: ' + relToRoot(scanDir))
-  console.log('守卫面: ' + GUARDED_PATH_SEGMENTS.join(' / ') + '（跳过测试与白名单）')
-  console.log('请求层: ' + GUARDED_MODULES.map((m) => '@/' + m).join(' / '))
-  console.log('---')
-  if (violations.length === 0) {
-    console.log('无违规。' + checked + ' 个文件均未直接引用请求层。')
-    return 0
-  }
-  for (const v of violations) console.log(v.file + ':' + v.line + ': ' + v.spec + '  ' + v.text)
-  console.log('---')
-  console.log('共 ' + violations.length + ' 处。请在 frontend/src/api/ 下补具名方法，页面只调它：')
-  console.log('  —— 响应类型取 `@/api/generated/*`（后端注解 → swagger → go run ./cmd/gen-apitypes），不手写。')
-  return 1
-}
-
-function reportDiff(base) {
-  try {
-    execFileSync('git', ['rev-parse', '--verify', base], { cwd: ROOT, stdio: 'ignore' })
-  } catch {
-    console.error('[check-api-seam] 无法解析 base ref: ' + base + '（CI 上请先 git fetch）')
-    return 2
-  }
-  const diff = execFileSync('git', ['diff', '-U0', base + '...HEAD', '--', '*.vue', '*.ts'], {
-    cwd: ROOT,
-    encoding: 'utf8',
-    maxBuffer: 64 * 1024 * 1024
-  })
-  const added = parseAddedLines(diff)
-  if (added.size === 0) {
-    console.log('[check-api-seam] 相对 ' + base + ' 无 .vue/.ts 新增行，跳过。')
-    return 0
-  }
-  const violations = []
-  for (const [file, lines] of added) {
-    if (!isGuardedPath(file)) continue
-    let source
-    try {
-      source = readFileSync(join(ROOT, file), 'utf8')
-    } catch {
-      continue // 删除的文件
-    }
-    for (const v of scanSource(source, file)) {
-      if (lines.has(v.line)) violations.push(v)
-    }
-  }
-  if (violations.length === 0) {
-    console.log('[check-api-seam] 新增行未直接引用请求层，通过。')
-    return 0
-  }
-  console.error('===== 新增行直接引用了请求层（页面与业务组件一律走 api/ 具名方法）=====')
-  for (const v of violations) console.error(v.file + ':' + v.line + ': ' + v.spec + '  ' + v.text)
-  console.error('---')
-  console.error('共 ' + violations.length + ' 处。见 ADR-0053 §7 与 docs/agents/ui-conventions.md。')
-  return 1
-}
-
-function main(argv) {
-  const mode = argv[0] ?? '--all'
-  if (mode === '--all') {
-    const dir = argv[1] ? resolve(argv[1]) : DEFAULT_SCAN_DIR
-    return reportAll(dir)
-  }
-  if (mode === '--diff') {
-    return reportDiff(argv[1] ?? 'origin/master')
-  }
-  console.error('用法: node scripts/check-api-seam.mjs --all [目录] | --diff [base]')
-  return 2
-}
-
-// 仅作为 CLI 直接运行时才执行：被 import（自检里喂源码文本）时不产生副作用。
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  process.exitCode = main(process.argv.slice(2))
-}
+if (isDirectRun(import.meta.url)) runGuardCli(GUARD_SPEC)
