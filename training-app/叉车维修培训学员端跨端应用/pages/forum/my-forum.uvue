@@ -23,7 +23,7 @@
             <!-- 我的帖子 -->
             <view v-if="currentTab === 'topics'">
                 <view v-if="topics.length === 0 && !loading" class="empty-tip">
-                    <text class="empty-icon"></text>
+                    <text class="empty-icon">💬</text>
                     <text class="empty-text">还没有发过帖子</text>
                 </view>
 
@@ -54,7 +54,7 @@
             <!-- 我的回复 -->
             <view v-if="currentTab === 'replies'">
                 <view v-if="replies.length === 0 && !loading" class="empty-tip">
-                    <text class="empty-icon"></text>
+                    <text class="empty-icon">💬</text>
                     <text class="empty-text">还没有回复过帖子</text>
                 </view>
 

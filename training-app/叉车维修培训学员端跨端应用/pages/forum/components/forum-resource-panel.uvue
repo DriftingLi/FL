@@ -19,19 +19,19 @@
         <view class="res-feature-grid">
             <view class="res-feature-card" @click="onResourceClick('course-mall')">
                 <view class="res-feature-card-icon-wrap res-card-bg-red">
-                    <text class="res-feature-card-icon"></text>
+                    <text class="res-feature-card-icon">🛒</text>
                 </view>
                 <text class="res-feature-card-title res-title-red">课程商城</text>
             </view>
             <view class="res-feature-card" @click="onResourceClick('my-purchases')">
                 <view class="res-feature-card-icon-wrap res-card-bg-blue">
-                    <text class="res-feature-card-icon"></text>
+                    <text class="res-feature-card-icon">🛍️</text>
                 </view>
                 <text class="res-feature-card-title res-title-blue">我的已购</text>
             </view>
             <view class="res-feature-card" @click="onResourceClick('my-uploads')">
                 <view class="res-feature-card-icon-wrap res-card-bg-green">
-                    <text class="res-feature-card-icon"></text>
+                    <text class="res-feature-card-icon">📤</text>
                 </view>
                 <text class="res-feature-card-title res-title-green">我的上传</text>
             </view>
