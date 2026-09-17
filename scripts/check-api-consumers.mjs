@@ -49,32 +49,18 @@ export const SCAN_EXTENSIONS = ['.ts']
 
 /**
  * 存量欠条（键 = "<仓库相对文件>::<METHOD> <归一模式>" → 理由，一行一条）。
- * 现状 8 条：4 条巡检端点（等 #1097 补注解 + 登记域声明表）+ 4 条 createCrud 动态拼装。补一个销一个。
+ * 现状 4 条（全是 createCrud 动态拼装）。**补一个销一个**：条目一旦可销账，--all 会判红并给出删行提示
+ * （自测 scripts/check-api-consumers.test.mjs 的「ALLOWLIST 逐条可解释且不许有死条目」用例同时拦住删错/漏删）。
  *
- * 销账操作单（#1100 编排者裁决：4 个巡检端点由 INSP 车道补注解并登记进 apitypes.Domains）：
- *   INSP 合并后跑一次 node scripts/check-api-consumers.mjs --all —— 这 4 条会被判红，
- *   报「ALLOWLIST 欠条已可销账：<METHOD> <path> 已在域声明表（域 X）」，此时**删掉下面这 4 行**：
- *     'frontend/src/api/inspection.ts::GET /admin/points/ledger'
- *     'frontend/src/api/inspection.ts::GET /admin/inspection/deleted-after-accepted'
- *     'frontend/src/api/inspection.ts::GET /admin/recruit/views'
- *     'frontend/src/api/inspection.ts::GET /admin/recruit/requests'
- *   （自测 scripts/check-api-consumers.test.mjs 的「ALLOWLIST 逐条可解释且不许有死条目」用例
- *     同时会拦住删错/漏删：条目必须在文件里真的还有对应消费。）
- * 另 4 条（createCrud 动态拼装）的销账是另一票：把 valuation/admin.ts 的封装从「resource 形参拼路径」
+ * #1100 已销账的 4 条（保留此行做历史留痕）：inspection.ts 的 GET /admin/points/ledger、
+ * /admin/inspection/deleted-after-accepted、/admin/recruit/views、/admin/recruit/requests —— #1097 补齐
+ * swagger 注解并在 apitypes.Domains 新建 inspection 域登记后销账。
+ *
+ * 剩下 4 条（createCrud 动态拼装）的销账是另一票：把 valuation/admin.ts 的封装从「resource 形参拼路径」
  * 改成「显式资源 → 显式路径」的具名方法表。
  * @type {Record<string, string>}
  */
 export const ALLOWLIST = {
-  'frontend/src/api/inspection.ts::GET /admin/points/ledger':
-    '巡检面端点：handler 是 internal/api/admin_inspection.go 的闭包，没有 swagger 注解（swagger 无此路径），' +
-    '故暂时无法登记进 apitypes.Domains（TestDomainEndpointsExist 要求域内端点必须在 swagger paths 里）。' +
-    '#1097 补注解后：登记进域声明表并删掉本条。',
-  'frontend/src/api/inspection.ts::GET /admin/inspection/deleted-after-accepted':
-    '同上（巡检计数端点，#1097 补注解后登记进域声明表并删掉本条）。',
-  'frontend/src/api/inspection.ts::GET /admin/recruit/views':
-    '同上（简历查看留痕巡检端点，#1097 补注解后登记进域声明表并删掉本条）。',
-  'frontend/src/api/inspection.ts::GET /admin/recruit/requests':
-    '同上（联系方式交换申请巡检端点，#1097 补注解后登记进域声明表并删掉本条）。',
   'frontend/src/api/valuation/admin.ts::GET {}':
     'createCrud 通用封装：路径由 resource 形参拼装（列表 = /dictionaries/<resource>），静态面只看到变量。' +
     '资源名在同文件的 adminResources 表逐个给出（brands/series/tonnages/...），全部是域内已登记端点，' +
