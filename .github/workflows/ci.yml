@@ -208,6 +208,13 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: node scripts/check-async-section.mjs --all
 
+      # AI 助手发送编排守卫（ADR-0056 §10 / #1104）：pages/ai-assistant 不得再出现发送编排
+      # （sendMessage / streamChat 两个入口名字），一轮发送的编排与三种终态在 store。
+      # 判定逻辑的自检在 el-controls-selftest job。
+      - name: AI 助手发送编排守卫（页面不得再起流式编排）
+        working-directory: ${{ github.workspace }}
+        run: node scripts/check-ai-assistant-send.mjs --all
+
       # 守卫增量门（ADR-0056 §5 / #1094）：除上面的 --all 全量外，再按「相对默认分支的新增行」
       # 跑一遍四个守卫。**口径要说准**：增量门不比全量更严——判定面是同一棵树 --all 的子集
       # （同一条 scanSource，只是再按新增行号过滤），它补的是两件事：① CI 里真的走通「取 diff →
@@ -226,6 +233,7 @@ jobs:
           node scripts/check-api-seam.mjs --diff "origin/$DEFAULT_BRANCH"
           node scripts/check-async-section.mjs --diff "origin/$DEFAULT_BRANCH"
           node scripts/check-api-consumers.mjs --diff "origin/$DEFAULT_BRANCH"
+          node scripts/check-ai-assistant-send.mjs --diff "origin/$DEFAULT_BRANCH"
 
       - name: 前端单元测试
         run: npm test
@@ -438,6 +446,9 @@ jobs:
 
       - name: 表驱动单测（列表四段式守卫判定逻辑）
         run: node --test scripts/check-async-section.test.mjs
+
+      - name: 表驱动单测（AI 助手发送编排守卫判定逻辑）
+        run: node --test scripts/check-ai-assistant-send.test.mjs
 
       # ADR-0056 §11 / #1100：消费面覆盖锁的判定面（嵌套泛型实参 / 变量路径 / 欠条销账 / 死条目）
       - name: 表驱动单测（契约消费面覆盖锁判定逻辑）

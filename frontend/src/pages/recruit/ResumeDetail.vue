@@ -7,7 +7,7 @@
     <UiAsyncSection
       :error="loadError"
       :loading="loading"
-      :empty="!data"
+      :empty="isEmpty"
       :retrying="retrying"
       error-title="简历加载失败"
       error-description="网络或服务端异常，可重试"
@@ -85,27 +85,22 @@ const contact = ref<any>(null)
 const contactLoading = ref(false)
 const contactError = ref('')
 
+// 三态收编（#1101）：loader 只管拉数据与写响应；404（简历不存在）= 空态、
+// 其余 = 错误态，均由 useAsyncPage 判定（loadErrorKind 复用 ApiErrorKind）。
 const {
   loading,
   loadError,
   retrying,
+  isEmpty,
   retry: handleRetry,
   run: load
 } = useAsyncPage(async () => {
   const id = String(route.params.id)
-  try {
-    const res = await recruitApi.getResume(id)
-    data.value = res as any || null
-    loadContact()
-    startApprovedPolling()
-  } catch (e: any) {
-    if (e?.response?.status === 404 || String(e?.message || '').includes('不存在')) {
-      data.value = null
-    } else {
-      throw e
-    }
-  }
-})
+  const res = await recruitApi.getResume(id)
+  data.value = (res as any) || null
+  loadContact()
+  startApprovedPolling()
+}, { itemsRef: data })
 
 // #489：授权后透出的工作照与证书原图
 const contactPhotos = computed(() => {

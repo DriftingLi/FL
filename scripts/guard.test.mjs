@@ -118,8 +118,9 @@ const GREEN_CASES = [
     name: 'async-section：新增行是迁移后的 UiAsyncSection',
     spec: asyncSection,
     file: PAGE,
-    added: ['  <UiAsyncSection :error="loadError" :loading="loading" :empty="empty" @retry="retry">'],
-    source: '<template>\n  <UiAsyncSection :error="loadError" :loading="loading" :empty="empty" @retry="retry">\n</template>',
+    // 注：#1101 的 :empty= 规则只认 isEmpty（或已登记例外），样本必须用生产写法
+    added: ['  <UiAsyncSection :error="loadError" :loading="loading" :empty="isEmpty" @retry="retry">'],
+    source: '<template>\n  <UiAsyncSection :error="loadError" :loading="loading" :empty="isEmpty" @retry="retry">\n</template>',
     ok: /\[check-async-section\] 新增行未手写四分支链，通过。/
   }
 ]
@@ -163,11 +164,13 @@ test('负样本（必须跳过）：纯删除的 diff（文件在、新增行集
 })
 
 test('边界（必须绿）：paths 不在守卫面 / 在 allowlist 的新增行整体放行', () => {
-  // async-section 的 ALLOWLIST 第一条（存量页面）：即使新增行真的违规也不报
-  const legacy = 'frontend/src/pages/student/ChapterView.vue'
-  const violating = synthDiff(legacy, 2, ['  <UiErrorState v-if="e" />', '  <UiSkeleton v-else />'])
-  const r1 = probeDiff(asyncSection, violating, { [legacy]: '<template>\n  <UiErrorState v-if="e" />\n  <UiSkeleton v-else />\n</template>' })
-  assert.equal(r1.code, 0, 'ALLOWLIST 语义不变：存量迁移前整体放行')
+  // api-seam 的 ALLOWLIST 第一条（OnlineResumePdf.vue）：即使新增行真的违规也不报。
+  // （async-section 的 15 条存量已在 #1101 全部销号，它的 ALLOWLIST 现在是空表，
+  //  不能再拿它证明「登记的例外整体放行」。）
+  const allowed = 'frontend/src/components/recruit/OnlineResumePdf.vue'
+  const violating = synthDiff(allowed, 2, ["import { request } from '@/api/request'"])
+  const r1 = probeDiff(apiSeam, violating, { [allowed]: "import { request } from '@/api/request'" })
+  assert.equal(r1.code, 0, 'ALLOWLIST 语义不变：登记的例外整体放行')
   // 守卫面外的路径（ui 封装层）同样不报
   const ui = 'frontend/src/components/ui/UiAsyncSection.vue'
   const r2 = probeDiff(asyncSection, synthDiff(ui, 2, ['  <UiErrorState v-if="e" />', '  <UiSkeleton v-else />']), { [ui]: 'x' })
@@ -377,5 +380,6 @@ test('集成：三个守卫的 --all 在当前工作树上为绿（不假红）�
   const run = (script) => execFileSync(process.execPath, [script, '--all'], { cwd: ROOT, encoding: 'utf8' })
   assert.match(run('scripts/check-api-seam.mjs'), /无违规。[1-9][0-9]* 个文件均未直接引用请求层。/)
   assert.match(run('scripts/check-el-controls.mjs'), /无违规。[1-9][0-9]* 个单文件组件的模板均未裸用已收敛控件。/)
-  assert.equal(run('scripts/check-async-section.mjs'), '✓ 未发现手写四分支链\n')
+  // #1101/#1102 给 async-section 加了 :empty= 与 admin 两档两条规则，通过语随之扩展（措辞锁）
+  assert.equal(run('scripts/check-async-section.mjs'), '✓ 未发现手写四分支链；:empty= 判据均来自 isEmpty（或已登记例外）；admin 页两档档位登记齐备\n')
 })

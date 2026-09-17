@@ -34,7 +34,7 @@
       <UiAsyncSection
         :error="loadError"
         :loading="loading"
-        :empty="materials.length === 0"
+        :empty="isEmpty"
         :retrying="retrying"
         error-title="资料加载失败"
         error-description="网络或服务端异常，可重试"
@@ -127,6 +127,7 @@ const {
   loadError,
   retrying,
   retry: retryLoad,
+  isEmpty,
   page: currentPage,
   pageSize,
   total,
@@ -140,7 +141,7 @@ const {
   })
   materials.value = res.materials || []
   total.value = res.total || 0
-})
+}, { itemsRef: materials })
 
 const staggerStyle = useStagger()
 
@@ -171,10 +172,12 @@ function handleFilterChange() {
 async function loadCourses() {
   try {
     // 课程筛选选项（页大小取大值覆盖全部课程）
+    // 「浏览指定证件」语义：/courses 是公开端点，服务端兜底不覆盖匿名/非学员，要按证件分区只能显式下发
+    const browseCredentialId = credentialStore.current?.id ?? undefined
     const res = await courseApi.getCourses({
       page: 1,
       page_size: 100,
-      credential_id: credentialStore.current?.id ?? undefined
+      credential_id: browseCredentialId
     })
     courses.value = res.courses || []
   } catch (e) {

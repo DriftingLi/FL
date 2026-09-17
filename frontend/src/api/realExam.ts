@@ -22,7 +22,8 @@ export type RealExamRedeemResult = RedeemResult
 
 // 真题套卷接口，对应后端 /api/real-exam
 export const realExamApi = {
-  // 套卷列表：按当前证件分区（credential_id 由主 client 拦截器默认注入，#387），附兑换状态与单价
+  /** 套卷列表：附兑换状态与单价；证件分区走服务端 CredentialScoped 兜底（本组 JWT + 学员角色 ⇒ 不传
+   *  即按登录学员当前证件；非学员/匿名不兜底，按不分区处理）。 */
   listPapers() {
     return unwrappedRequest.get<RealExamPaperDTO[]>('/real-exam/papers', { params: {} })
   },

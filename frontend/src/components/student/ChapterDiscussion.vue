@@ -79,9 +79,10 @@ const {
   loading: listLoading,
   loadError,
   retrying,
+  isEmpty,
   retry: retryLoad,
   run: loadTopics
-} = useAsyncPage(loadTopicsOnce, { credentialScoped: false }) // 论坛不受证件过滤（#604 opt-out）
+} = useAsyncPage(loadTopicsOnce, { credentialScoped: false, itemsRef: topics }) // 论坛不受证件过滤（#604 opt-out）
 
 async function toggleTopic(topicId: number) {
   if (expandedTopicId.value === topicId) {
@@ -236,7 +237,7 @@ watch(() => props.chapterId, () => {
     <UiAsyncSection
       :error="loadError"
       :loading="listLoading"
-      :empty="topics.length === 0"
+      :empty="isEmpty"
       :retrying="retrying"
       error-title="讨论加载失败"
       error-description="网络或服务端异常，可重试"

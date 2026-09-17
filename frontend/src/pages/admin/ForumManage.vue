@@ -1,3 +1,8 @@
+<!--
+  列表档位：useAdminTable（分页列表）—— 帖子列表 / 举报队列
+  列表档位：useAsyncPage（行内追加）—— 帖子展开面板的行内回复分页（按行实例，判据同源 utils/listState）
+  依据 ADR-0056 §9；判定口径见 docs/agents/ui-conventions.md「管理端列表两档归属」。
+-->
 <template>
   <div class="forum-manage-page">
     <el-card>
@@ -26,6 +31,15 @@
         </template>
       </UiFilterBar>
 
+        <UiAsyncSection
+          :error="reportError"
+          :loading="reportLoading"
+          :retrying="reportRetrying"
+          :skeleton="false"
+          error-title="举报队列加载失败"
+          error-description="网络或服务端异常，可重试"
+          @retry="retryReports"
+        >
         <el-table v-loading="reportLoading" :data="reports" border>
           <el-table-column prop="id" label="ID" width="60" align="center" />
           <el-table-column label="举报人" width="110">
@@ -59,6 +73,7 @@
             </template>
           </el-table-column>
         </el-table>
+        </UiAsyncSection>
 
           <UiPagination v-if="reportTotal > reportPageSize"
       v-model:current-page="reportCurrentPage"
@@ -115,6 +130,14 @@
       >
         <el-table-column type="expand" width="40">
           <template #default="{ row }">
+            <UiAsyncSection
+              :error="replyErrors.includes(row.id)"
+              :loading="detailLoadingId === row.id"
+              :skeleton="false"
+              error-title="回复加载失败"
+              error-description="网络或服务端异常，可重试"
+              @retry="loadReplies(row.id)"
+            >
             <div v-loading="detailLoadingId === row.id" class="expand-replies">
               <template v-if="replyMap[row.id]">
                 <div class="topic-content">
@@ -156,6 +179,7 @@
                 </div>
                 <!-- 回复分页（ADR-0042）：治理面必须能翻到底，不能只看首页 -->
                 <div v-if="replyMap[row.id] && hasMoreReplies(row.id)" class="reply-more">
+                  <span v-if="replyMoreErrors.includes(row.id)" class="reply-error">加载失败，可重试</span>
                   <UiButton
                     size="small"
                     :loading="replyLoadingMoreIds.includes(row.id)"
@@ -164,10 +188,11 @@
                     加载更多回复（剩余 {{ remainingRepliesOf(row.id) }} 条）
                   </UiButton>
                 </div>
-                <UiEmptyState v-else-if="!replyMap[row.id] || replyMap[row.id].length === 0" description="暂无回复" size="sm" />
+                <UiEmptyState v-else-if="isEmptyReplies(row.id)" description="暂无回复" size="sm" />
               </template>
               <div v-else class="reply-loading">加载中…</div>
             </div>
+            </UiAsyncSection>
           </template>
         </el-table-column>
         <el-table-column prop="id" label="ID" width="70" align="center" />
@@ -265,6 +290,7 @@ import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
 import ForumContent from '@/components/student/ForumContent.vue'
 import { formatLocaleDateTime } from '@/utils/format'
 import { useAdminTable } from '@/composables/useAdminTable'
+import { isEmptyList } from '@/utils/listState'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
@@ -320,15 +346,48 @@ const ADMIN_REPLY_PAGE_SIZE = 20
 const replyMeta = ref<Record<number, { page: number; pages: number; total: number }>>({})
 // 按行记加载态：单个全局 id 会让「另一行同时点加载更多」被静默忽略
 const replyLoadingMoreIds = ref<number[]>([])
+// 行内追加形态的错误通道（第二档，按行）：首屏装载与「加载更多」各自可见，
+// 重试入口就在原地（错误态自带的重试钮 / 那颗「加载更多」按钮本身就是重试）。
+const replyErrors = ref<number[]>([])
+const replyMoreErrors = ref<number[]>([])
+
+/**
+ * 该行回复的空态判据：与两档同源（utils/listState.isEmptyList），不手写 length === 0。
+ * 行内追加形态装不进页面级的 useAsyncPage 实例——按行实例化会在 setup 之外建 watch——
+ * 所以这里复用**同一条判定的实现**，而不是把它的表达式再抄一份。
+ */
+function isEmptyReplies(topicId: number): boolean {
+  return isEmptyList(replyMap.value[topicId] ?? null, {
+    error: replyErrors.value.includes(topicId),
+    kind: null
+  })
+}
 
 // ===== 举报管理（ADR-0018）=====
+// 档位一：分页列表 → useAdminTable（同页第二个实例）；reportStatus 是页面自管筛选轴。
 const activeMainTab = ref<'topics' | 'reports'>('topics')
-const reportLoading = ref(false)
-const reports = ref<AdminForumReportItem[]>([])
-const reportTotal = ref(0)
-const reportCurrentPage = ref(1)
-const reportPageSize = ref(20)
 const reportStatus = ref(-1)
+const {
+  loading: reportLoading,
+  loadError: reportError,
+  retrying: reportRetrying,
+  list: reports,
+  total: reportTotal,
+  currentPage: reportCurrentPage,
+  pageSize: reportPageSize,
+  load: loadReports,
+  retry: retryReports
+} = useAdminTable<AdminForumReportItem>({
+  pageSize: 20,
+  fetch: async (paging) => {
+    const res = await adminForumApi.listReports({
+      status: reportStatus.value >= 0 ? reportStatus.value : undefined,
+      page: paging.page,
+      page_size: paging.pageSize
+    })
+    return { list: res.reports || [], total: res.total || 0 }
+  }
+})
 
 function handleMainTabChange(tab: string | number) {
   if (tab === 'reports' && reports.value.length === 0) {
@@ -339,24 +398,6 @@ function handleMainTabChange(tab: string | number) {
 function handleReportStatusChange() {
   reportCurrentPage.value = 1
   loadReports()
-}
-
-async function loadReports() {
-  reportLoading.value = true
-  try {
-    const res = await adminForumApi.listReports({
-      status: reportStatus.value >= 0 ? reportStatus.value : undefined,
-      page: reportCurrentPage.value,
-      page_size: reportPageSize.value
-    })
-    reports.value = res.reports || []
-    reportTotal.value = res.total || 0
-  } catch (e) {
-    console.error('加载举报列表失败:', e)
-    /* 错误已由拦截器提示 */
-  } finally {
-    reportLoading.value = false
-  }
 }
 
 async function handleReport(row: AdminForumReportItem) {
@@ -399,6 +440,7 @@ async function handleExpand(row: AdminForumTopic, expandedRowsNow: AdminForumTop
 
 async function loadReplies(topicId: number) {
   detailLoadingId.value = topicId
+  replyErrors.value = replyErrors.value.filter(id => id !== topicId)
   try {
     const res = await adminForumApi.getTopic(topicId, 1, ADMIN_REPLY_PAGE_SIZE)
     replyMap.value = { ...replyMap.value, [topicId]: res.replies || [] }
@@ -408,7 +450,8 @@ async function loadReplies(topicId: number) {
     }
   } catch (e) {
     console.error('加载回复失败:', e)
-    /* 错误已由拦截器提示 */
+    /* 拦截器已 toast；错误态由本行的 replyErrors 承载（展开面板内可见 + 可重试） */
+    replyErrors.value = [...replyErrors.value, topicId]
   } finally {
     detailLoadingId.value = null
   }
@@ -431,6 +474,7 @@ function remainingRepliesOf(topicId: number) {
 async function loadMoreReplies(topicId: number) {
   if (replyLoadingMoreIds.value.includes(topicId) || !hasMoreReplies(topicId)) return
   replyLoadingMoreIds.value = [...replyLoadingMoreIds.value, topicId]
+  replyMoreErrors.value = replyMoreErrors.value.filter(id => id !== topicId)
   try {
     const next = (replyMeta.value[topicId]?.page ?? 1) + 1
     const res = await adminForumApi.getTopic(topicId, next, ADMIN_REPLY_PAGE_SIZE)
@@ -448,7 +492,8 @@ async function loadMoreReplies(topicId: number) {
     }
   } catch (e) {
     console.error('加载更多回复失败:', e)
-    /* 错误已由拦截器提示 */
+    /* 拦截器已 toast；失败可见（行内提示）且按钮原位可再点 = 重试同一批 */
+    replyMoreErrors.value = [...replyMoreErrors.value, topicId]
   } finally {
     replyLoadingMoreIds.value = replyLoadingMoreIds.value.filter((id) => id !== topicId)
   }
@@ -644,7 +689,15 @@ onMounted(loadList)
 .reply-more {
   display: flex;
   justify-content: center;
+  align-items: center;
+  gap: 8px;
   padding-top: 4px;
+}
+
+/* 行内追加形态的失败提示（#1102）：与按钮同一行，按钮本身即重试入口 */
+.reply-error {
+  font-size: 12px;
+  color: var(--color-danger);
 }
 
 .reply-item {

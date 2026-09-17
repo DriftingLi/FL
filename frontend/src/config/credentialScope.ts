@@ -33,5 +33,6 @@ export const CREDENTIAL_SCOPE_OPT_OUTS: readonly CredentialScopeOptOut[] = [
   { file: 'pages/student/JobPlaza.vue', count: 1, reason: '招聘域职位广场不受证件过滤（#604 opt-out）' },
   { file: 'pages/student/MyApplications.vue', count: 1, reason: '招聘域投递记录不受证件过滤（#604 opt-out）' },
   { file: 'pages/student/PointsLedger.vue', count: 1, reason: '积分流水不按当前证件分区，切换后不重置页码（#604 opt-out）' },
+  { file: 'pages/student/QuestionDetail.vue', count: 1, reason: '单题详情按 route id 装载，页内没有按当前证件分区的数据；切证件重装既无意义、也会打断正在阅读的题（#1101 收编三态时显式声明）' },
   { file: 'pages/student/TaskCenter.vue', count: 1, reason: '积分任务中心不按当前证件分区（#604 opt-out）' },
 ]
