@@ -512,13 +512,16 @@ definitions:
       total:
         type: integer
     type: object
-  model.QuestionNote:
+  model.Note:
     properties:
       content:
         type: string
       id:
         type: integer
       question_id:
+        description: |-
+          QuestionID 挂载的题目；nil = 独立笔记。用指针而非零值哨兵：题目 id 从 1 起，
+          拿 0 表达「不挂题」会把「没挂」和「挂了不存在的题」混成一谈。
         type: integer
       updated_at:
         type: string
@@ -2715,6 +2718,33 @@ definitions:
         items:
           $ref: '#/definitions/service.MyReplyDTO'
         type: array
+      total:
+        type: integer
+    type: object
+  service.NoteDTO:
+    properties:
+      content:
+        type: string
+      id:
+        type: integer
+      question_content:
+        type: string
+      question_id:
+        type: integer
+        x-nullable: true
+      updated_at:
+        type: string
+    type: object
+  service.NotePageDTO:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/service.NoteDTO'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
       total:
         type: integer
     type: object
@@ -11156,6 +11186,158 @@ paths:
       summary: 开始模拟考试
       tags:
       - 学员端-模拟考试
+  /notes:
+    get:
+      consumes:
+      - application/json
+      description: 分页查询本人笔记（按更新时间倒序）；scope 筛全部/题目笔记/独立笔记
+      parameters:
+      - default: all
+        description: 筛选：all/question/standalone
+        in: query
+        name: scope
+        type: string
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.NotePageDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 我的笔记
+      tags:
+      - 学员端-笔记
+    post:
+      consumes:
+      - application/json
+      description: 新建一条与题目无关的笔记（question_id 为空）
+      parameters:
+      - description: 笔记
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.NoteDTO'
+              type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 新建独立笔记
+      tags:
+      - 学员端-笔记
+  /notes/{id}:
+    delete:
+      description: 按笔记 id 删除（只认本人）
+      parameters:
+      - description: 笔记 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 笔记不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 删笔记
+      tags:
+      - 学员端-笔记
+    put:
+      consumes:
+      - application/json
+      description: 按笔记 id 改正文（只认本人；他人笔记按不存在处理）
+      parameters:
+      - description: 笔记 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 笔记
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.NoteDTO'
+              type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 笔记不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 改笔记正文
+      tags:
+      - 学员端-笔记
   /notifications:
     get:
       consumes:
@@ -12412,7 +12594,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/model.QuestionNote'
+                  $ref: '#/definitions/model.Note'
               type: object
       security:
       - BearerAuth: []
@@ -12444,7 +12626,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/model.QuestionNote'
+                  $ref: '#/definitions/model.Note'
               type: object
       security:
       - BearerAuth: []

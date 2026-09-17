@@ -56,7 +56,7 @@ var ModelBlocks = []ModelBlock{
 			&QuestionTag{},
 			&QuestionTagRelation{},
 			&QuestionComment{},
-			&QuestionNote{},
+			&Note{},
 			&QuestionPracticeRecord{},
 			&PracticeProgress{},
 			&WrongQuestion{},

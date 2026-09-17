@@ -167,13 +167,17 @@ type QuestionComment struct {
 
 func (QuestionComment) TableName() string { return "question_comment" }
 
-// QuestionNote 题目笔记（每人每题一条，私有）。
-type QuestionNote struct {
-	ID         int       `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	QuestionID int       `gorm:"column:question_id" json:"question_id"`
+// Note 学员笔记（ADR-0055，私有）。一个概念两个形态，靠 question_id 是否为空区分：
+//   - 非空 = **题目笔记**：每人每题一条，由 UNIQUE(question_id, user_id) 保证；
+//   - 为空 = **独立笔记**：与题目无关，可多条（Postgres 唯一索引里 NULL 互不冲突）。
+type Note struct {
+	ID int `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	// QuestionID 挂载的题目；nil = 独立笔记。用指针而非零值哨兵：题目 id 从 1 起，
+	// 拿 0 表达「不挂题」会把「没挂」和「挂了不存在的题」混成一谈。
+	QuestionID *int      `gorm:"column:question_id" json:"question_id"`
 	UserID     int       `gorm:"column:user_id" json:"user_id"`
 	Content    string    `gorm:"column:content" json:"content"`
 	UpdatedAt  time.Time `gorm:"column:updated_at" json:"updated_at"`
 }
 
-func (QuestionNote) TableName() string { return "question_note" }
+func (Note) TableName() string { return "note" }

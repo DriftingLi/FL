@@ -31,6 +31,7 @@ func TestBlueprintCapabilityCoverage(t *testing.T) {
 		"RegisterNotificationRoutes":        "站内信按收件人鉴权（任何已登录角色都可能收到），不是资源域能力",
 		"RegisterQuestionInteractionRoutes": "题目评论/笔记/考点为学员面，但讲师与管理端审核读同一份；能力位细化留待后续",
 		"RegisterQuestionBankRoutes":        "题库蓝图混合学员读写与管理端审核：管理端路由逐条挂能力守卫，学员侧继承组级 JWTAuth",
+		"RegisterNoteRoutes":                "学员笔记：纯用户私有数据（读写一律以 user_id 收口，越权按「不存在」处理），门禁与既有题目笔记端点一致——只要求登录；同一资源的两条路径挂两套门才是真不一致（ADR-0055）",
 	}
 	entries, err := os.ReadDir(".")
 	if err != nil {

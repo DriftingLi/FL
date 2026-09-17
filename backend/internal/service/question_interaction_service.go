@@ -121,67 +121,7 @@ func (s *QuestionCommentService) Delete(commentID int, userID int) error {
 	return s.db.Delete(&c).Error
 }
 
-// QuestionNoteService 题目笔记服务（每人每题一条）
-type QuestionNoteService struct {
-	db     *gorm.DB
-	logger *zap.Logger
-}
-
-func NewQuestionNoteService(db *gorm.DB, logger *zap.Logger) *QuestionNoteService {
-	return &QuestionNoteService{db: db, logger: logger}
-}
-
-func (s *QuestionNoteService) Get(questionID, userID int) (*model.QuestionNote, error) {
-	var n model.QuestionNote
-	if err := s.db.Where("question_id = ? AND user_id = ?", questionID, userID).First(&n).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return &n, nil
-}
-
-func (s *QuestionNoteService) Upsert(questionID, userID int, content string) (*model.QuestionNote, error) {
-	content = strings.TrimSpace(content)
-	if content == "" {
-		return nil, errors.New("笔记内容不能为空")
-	}
-	if len(content) > 2000 {
-		return nil, errors.New("笔记不能超过2000字")
-	}
-	var q model.Question
-	if err := s.db.First(&q, questionID).Error; err != nil {
-		return nil, errors.New("题目不存在")
-	}
-	var n model.QuestionNote
-	err := s.db.Where("question_id = ? AND user_id = ?", questionID, userID).First(&n).Error
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, err
-	}
-	if n.ID != 0 {
-		n.Content = content
-		n.UpdatedAt = beijingNow()
-		if err := s.db.Save(&n).Error; err != nil {
-			return nil, err
-		}
-		return &n, nil
-	}
-	n = model.QuestionNote{
-		QuestionID: questionID,
-		UserID:     userID,
-		Content:    content,
-		UpdatedAt:  beijingNow(),
-	}
-	if err := s.db.Create(&n).Error; err != nil {
-		return nil, err
-	}
-	return &n, nil
-}
-
-func (s *QuestionNoteService) Delete(questionID, userID int) error {
-	return s.db.Where("question_id = ? AND user_id = ?", questionID, userID).Delete(&model.QuestionNote{}).Error
-}
+// 笔记服务已随 ADR-0055 迁到 note_service.go（NoteService）——本文件只管评论与考点。
 
 // QuestionKnowledgeService 考点（题库标签只读）
 type QuestionKnowledgeService struct {

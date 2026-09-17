@@ -844,7 +844,7 @@ func (s *AuthService) DeleteAccount(userID int) error {
 		tx.Where("user_id = ?", userID).Delete(&model.AIChatSession{})
 		tx.Where("user_id = ?", userID).Delete(&model.AIUserModel{})
 		tx.Where("user_id = ?", userID).Delete(&model.QuestionComment{})
-		tx.Where("user_id = ?", userID).Delete(&model.QuestionNote{})
+		tx.Where("user_id = ?", userID).Delete(&model.Note{})
 		tx.Where("user_id = ?", userID).Delete(&model.JobCard{})
 		tx.Where("student_user_id = ?", userID).Delete(&model.ContactRequest{})
 		// #452：注销时投递一并失效（投递产生的授权随 ContactRequest 已级联/显式删除）
