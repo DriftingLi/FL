@@ -303,8 +303,10 @@ type AdminPenaltyEvent struct {
 }
 
 // NewAdminPenaltyEvent 构造管理员扣罚通知事件。
-func NewAdminPenaltyEvent(userID, delta int, reason string) AdminPenaltyEvent {
-	return AdminPenaltyEvent{UserID: userID, Deducted: delta, Reason: reason}
+// deducted 是**按余额截断后的实际扣减额**（调用点 actualDeduct），不是请求扣罚额：
+// 形参名与 AdminPenaltyEvent.Deducted、payload 的 "deducted" 键同义（文案按它写）。
+func NewAdminPenaltyEvent(userID, deducted int, reason string) AdminPenaltyEvent {
+	return AdminPenaltyEvent{UserID: userID, Deducted: deducted, Reason: reason}
 }
 
 // CreateAdminPenaltyEvent 在指定事务内创建扣罚站内信（与扣罚流水同事务）。

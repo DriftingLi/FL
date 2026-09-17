@@ -639,13 +639,17 @@ func (h *ConfigHandler) AdminDeleteRegionCoefficient(c *gin.Context) {
 
 // originalPriceDescriptor / regionCoefficientDescriptor / coefficientConfigDescriptor /
 // brandDescriptor / ... 按名取描述符的单点：注解壳与路由注册共用同一份描述符列表。
+//
+// 查不到即 panic（fail-closed）：名字打错或描述符被删时返回零值 Descriptor{} 会让
+// 「无字段、无路由」静默成立（注解照发、路由少注册），到运行期才以 404/空响应暴露。
+// 注册期纪律同 requireDictRoute（dictcrud_dispatch.go）——描述符缺失必须在启动前炸。
 func descriptorByName(name string) dictcrud.Descriptor {
 	for _, d := range dictcrud.AllDescriptors() {
 		if d.Name == name {
 			return d
 		}
 	}
-	return dictcrud.Descriptor{}
+	panic("字典描述符不存在: " + name + "（名字打错或描述符被删？）")
 }
 
 func originalPriceDescriptor() dictcrud.Descriptor { return descriptorByName("original_prices") }

@@ -96,6 +96,12 @@ func TestPracticeReadSurfacesCredentialPartition(t *testing.T) {
 		if byType.Total != tc.want {
 			t.Fatalf("%s: history(type=single_choice).Total=%d, want %d", tc.name, byType.Total, tc.want)
 		}
+		// 该分支会 JOIN question（两张表都有 created_at/credential_id）：锁住「不再是恒空」——
+		// #1095 之前歧义列报错被吞，形状正是 total 正确而 records 恒空（静默 fail-open）。
+		if len(byType.Records) != int(tc.want) {
+			t.Fatalf("%s: history(type=single_choice).Records 长度=%d, want %d（歧义列修复的回归判据）",
+				tc.name, len(byType.Records), tc.want)
+		}
 		overview, err := svc.GetPracticeStats(student.ID, tc.cred)
 		if err != nil {
 			t.Fatalf("%s: practice-stats 查询失败: %v", tc.name, err)

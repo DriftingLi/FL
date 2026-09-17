@@ -11,7 +11,8 @@ import (
 	"github.com/jung-kurt/gofpdf"
 )
 
-// 字体常量（与残值域 pdf.FontSimHei 同名同值，供两个域共用）
+// 字体常量（培训域简历与**估值域**报告共用：估值域不再自带字体常量/内嵌字节，
+// 两个域都经本包注册同一份 simhei，#1105 删掉了第二份 //go:embed）
 const (
 	// FontSimHei 黑体（正文，支持中文）
 	FontSimHei = "simhei"

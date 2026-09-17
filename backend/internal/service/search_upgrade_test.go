@@ -319,4 +319,34 @@ func TestSearchSecondaryOrderKeys(t *testing.T) {
 	}
 }
 
+// 越界页行为（#1095 收编 paging.QueryWithScan 的等价判据）：页大小 >100 回退默认 20（不是截断到 100），
+// 页码 <=0 回退第 1 页；total 口径与钳制无关（永远是匹配总数）。响应里的 page/pages 仍按原始入参算。
+func TestSearchPageClampFallsBackToDefaults(t *testing.T) {
+	db := testutil.NewMemoryDB(t)
+	svc := NewSearchService(db, nil)
+	for i := 0; i < 25; i++ {
+		testutil.SeedQuestion(t, db, "single_choice", fmt.Sprintf("液压滤芯 %02d", i), "A")
+	}
+
+	got, err := svc.Search("液压", SearchTypeQuestion, 1, 1000, nil)
+	if err != nil {
+		t.Fatalf("搜索失败: %v", err)
+	}
+	page := got.(*SearchPageDTO)
+	if page.Total != 25 {
+		t.Fatalf("total=%d, want 25（钳制不影响总数口径）", page.Total)
+	}
+	if len(page.Items) != 20 {
+		t.Fatalf("page_size=1000 必须回退默认 20（不是 1000、也不是截断到 100），实得 %d 条", len(page.Items))
+	}
+
+	first, err := svc.Search("液压", SearchTypeQuestion, 0, 20, nil)
+	if err != nil {
+		t.Fatalf("搜索失败: %v", err)
+	}
+	if n := len(first.(*SearchPageDTO).Items); n != 20 {
+		t.Fatalf("page=0 必须回退第 1 页（取满 20 条），实得 %d 条", n)
+	}
+}
+
 var _ = fmt.Sprintf

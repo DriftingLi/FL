@@ -25,6 +25,27 @@ var notificationCompositionForbidden = []struct {
 	{"扣罚站内信正文字面量", "您的积分因"},
 }
 
+// notificationHit 一处命中（判定面与报告共用，行号 1-based）。
+type notificationHit struct {
+	what   string
+	needle string
+	line   int
+}
+
+// scanNotificationComposition 判定面：返回源码里命中的禁止形态（空 = 通过）。
+// 文件锁与下面的正负样本探针共用同一实现——探针若另写一份，锁本身仍可能空转。
+func scanNotificationComposition(source string) []notificationHit {
+	var out []notificationHit
+	for _, f := range notificationCompositionForbidden {
+		idx := strings.Index(source, f.needle)
+		if idx < 0 {
+			continue
+		}
+		out = append(out, notificationHit{what: f.what, needle: f.needle, line: 1 + strings.Count(source[:idx], "\n")})
+	}
+	return out
+}
+
 // TestAPILayerHasNoNotificationComposition 扫描 api 包源码：出现任一禁止形态即红。
 func TestAPILayerHasNoNotificationComposition(t *testing.T) {
 	entries, err := os.ReadDir(".")
@@ -42,18 +63,32 @@ func TestAPILayerHasNoNotificationComposition(t *testing.T) {
 			t.Fatalf("读取 %s 失败: %v", name, err)
 		}
 		scanned++
-		text := string(src)
-		for _, f := range notificationCompositionForbidden {
-			idx := strings.Index(text, f.needle)
-			if idx < 0 {
-				continue
-			}
-			line := 1 + strings.Count(text[:idx], "\n")
+		for _, hit := range scanNotificationComposition(string(src)) {
 			t.Errorf("%s:%d 出现%s（%q）——站内信口径只能来自 service/notification_events.go 的事件构造器",
-				name, line, f.what, f.needle)
+				name, hit.line, hit.what, hit.needle)
 		}
 	}
 	if scanned == 0 {
 		t.Fatal("未扫描到任何 api 非测试源文件（判据宿主失效）")
+	}
+}
+
+// TestNotificationCompositionProbe 判定面的正负样本（合成源码）：
+//   - 负样本：每个禁止形态各造一份含它的源码，必须都报出来（少一条 = 该形态的锁空转）；
+//   - 正样本：收编后的干净形态（Endpoint + Render）不得报红；
+//   - 行号也是判据：第 3 行的命中不得报成第 1 行。
+func TestNotificationCompositionProbe(t *testing.T) {
+	for _, f := range notificationCompositionForbidden {
+		hits := scanNotificationComposition("package api\nfunc probe() { _ = " + f.needle + " }\n")
+		if len(hits) != 1 || hits[0].needle != f.needle {
+			t.Fatalf("负样本必须报出形态 %q（%s），实得 %+v", f.needle, f.what, hits)
+		}
+	}
+	clean := "package api\n\nfunc probe(c *gin.Context) {\n\tEndpoint[struct{}, DTO]{}.Handle(c)\n}\n"
+	if hits := scanNotificationComposition(clean); len(hits) != 0 {
+		t.Fatalf("正样本（收编后的端点骨架）不得报红，实得 %+v", hits)
+	}
+	if hits := scanNotificationComposition("package api\n// 注释\nvar _ = TryCreate\n"); len(hits) != 1 || hits[0].line != 3 {
+		t.Fatalf("命中行号应为 3，实得 %+v", hits)
 	}
 }

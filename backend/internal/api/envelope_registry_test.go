@@ -3,10 +3,12 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -23,6 +25,9 @@ import (
 //     （键序是契约，ADR-0009 §2）；方言必须与键集合自洽（pages 与 page_size 不共存）。
 //  2. 覆盖锁：源码里每个「含 total + 切片字段」的导出 struct 都必须在登记表内
 //     （信封或载荷）；反向也查——登记表里的名字必须还在源码里存在。
+//     **泛型不再一律放行**：pkg/paging 之外的泛型 total+切片类型（形如 Page[T]）同样计入覆盖锁，
+//     只有声明在 pkg/paging 包内（装配原语与登记表宿主，走查入口排除）才免登记——否则未来的
+//     新信封形状可以长成泛型静默逃出登记表。
 //  3. 判定面自测：覆盖锁不是空转（空登记表跑扫描必须报出已知类型）。
 
 // jsonKeyOrder 取 v marshal 后的顶层 key 顺序。
@@ -144,6 +149,8 @@ func moduleRoot(t *testing.T) string {
 
 // scanTotalListTypes 扫描模块源码，返回「含 json:"total" 且至少一个切片字段」的**导出** struct 类型
 // （包名.类型名）。跳过 paging 包（它是装配原语与登记表的宿主）与非导出类型（不出现在跨包响应里）。
+// 泛型类型照收：走查入口已排除 pkg/paging，所以留在这里的泛型就是「pkg/paging 之外的泛型信封」，
+// 必须进登记表（历史上 ts.TypeParams != nil 一律跳过 = Page[T] 形状的假绿面）。
 func scanTotalListTypes(t *testing.T, root string) []string {
 	t.Helper()
 	var out []string
@@ -179,7 +186,7 @@ func scanTotalListTypes(t *testing.T, root string) []string {
 			}
 			for _, spec := range gd.Specs {
 				ts, ok := spec.(*ast.TypeSpec)
-				if !ok || !ts.Name.IsExported() || ts.TypeParams != nil {
+				if !ok || !ts.Name.IsExported() {
 					continue
 				}
 				st, ok := ts.Type.(*ast.StructType)
@@ -254,5 +261,36 @@ func TestEnvelopeCoverageDetectsMissingRegistration(t *testing.T) {
 		if !containsString(found, want) {
 			t.Fatalf("覆盖锁判定面失效：扫描未报出 %s（扫描结果 %v）", want, found)
 		}
+	}
+}
+
+// TestEnvelopeCoverageTreatsForeignGenericsAsTotalListTypes 泛型面的正负样本（合成源码）：
+//   - pkg/paging 之外的 Page[T] 形状（total + 切片）**必须**被扫描面报出 → 覆盖锁据此要求登记；
+//   - 同一形状声明在 pkg/paging 包内（装配原语）按约定放行，不得报出。
+//
+// 历史形态是 ts.TypeParams != nil 一律 skip：新信封只要写成泛型就静默逃出登记表。
+func TestEnvelopeCoverageTreatsForeignGenericsAsTotalListTypes(t *testing.T) {
+	root := t.TempDir()
+	foreign := filepath.Join(root, "service", "envelope.go")
+	pagingHost := filepath.Join(root, "pkg", "paging", "envelope.go")
+	for _, dir := range []string{filepath.Dir(foreign), filepath.Dir(pagingHost)} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("建目录失败: %v", err)
+		}
+	}
+	const genericPage = "package %s\n\ntype Page[T any] struct {\n\tItems []T   \x60json:\"items\"\x60\n\tTotal int64 \x60json:\"total\"\x60\n}\n"
+	if err := os.WriteFile(foreign, []byte(fmt.Sprintf(genericPage, "service")), 0o600); err != nil {
+		t.Fatalf("写合成源码失败: %v", err)
+	}
+	if err := os.WriteFile(pagingHost, []byte(fmt.Sprintf(genericPage, "paging")), 0o600); err != nil {
+		t.Fatalf("写合成源码失败: %v", err)
+	}
+
+	found := scanTotalListTypes(t, root)
+	if !containsString(found, "service.Page") {
+		t.Fatalf("pkg/paging 之外的泛型 total+切片类型必须被报出（否则可静默逃出登记表），实得 %v", found)
+	}
+	if containsString(found, "paging.Page") {
+		t.Fatalf("pkg/paging 包内的泛型装配原语应放行，实得 %v", found)
 	}
 }
