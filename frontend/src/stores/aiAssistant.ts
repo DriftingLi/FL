@@ -194,6 +194,9 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
    */
   function startDraft(): boolean {
     if (streaming.value) return false
+    // #1122：「离开当轮上下文」的入口统一走 dropInflightTurn —— 这里覆盖仍未置 streaming 的在飞轮次
+    // （懒创建会话的 await 窗口：activeTurn 已领号、流还没起）。send 恢复后据 activeTurn 失效自行退出。
+    dropInflightTurn()
     currentSessionId.value = null
     messages.value = []
     streamingContent.value = ''
@@ -234,6 +237,9 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
 
   async function selectSession(id: number) {
     if (!isLoggedIn.value) throw new Error('请先登录后查看会话历史')
+    // #1122：切换会话即离开当轮上下文 —— 在飞轮次先丢弃（abort 在飞请求 + 复位当轮态），否则旧流
+    // 仍会把 chunk / 终态写进**新会话**上下文（迟到的 onChunk/onDone/onError 由轮次守卫丢弃）。
+    dropInflightTurn()
     const previousId = currentSessionId.value
     const previousMessages = messages.value
     const previousUsage = lastUsage.value
@@ -362,6 +368,9 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
         return
       }
     }
+    // #1122：懒创建的 await 期间当轮可能已被丢弃（切会话 / 切上下文 / 新草稿）—— 此时不得再落消息、
+    // 起流：否则终态会被轮次守卫丢弃，streaming 永远停在 true（停止按钮也失效）。
+    if (turn !== activeTurn) return
 
     const reqImages = images
     // 拼装消息历史（仅传当前会话已有消息 + 新消息）；历史消息仅文本（后端只取末条图片）
