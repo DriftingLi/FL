@@ -1,9 +1,16 @@
 // 管理员 CRUD 接口：封装 /api/valuation/admin/* 下所有资源配置接口
 // 设计说明：
-//   - 通用资源 CRUD（createCrud）：列表走 /dictionaries/RES（学生端只读），
-//     新增/编辑/删除走 /admin/RES（需 JWT role=admin）
+//   - 资源 CRUD 走**具名方法表** adminResources（显式资源 → 显式路径）：列表走
+//     /dictionaries/<resource>（学生端只读，admin 与学生共用），新增/编辑/删除走
+//     /admin/<resource>（需 JWT role=admin）。路径一律写成字面量 —— 消费面覆盖锁
+//     （scripts/check-api-consumers.mjs）只认「第一个实参是字面量」的调用，用 resource 形参
+//     拼路径会让锁读不出端点（#1120 销掉它最后 4 条欠条）。
+//   - 规格族 6 个资源（tonnages / mast-types / mast-heights / battery-types /
+//     transmission-types / engine-types）只有 create / remove：描述符只声明 Create + Delete，
+//     PUT 路由从未注册（#1119）；能力面由 SpecCrudEndpoints 钉死，给它们补 update 会编译不过。
 //   - original-prices 后端为分页响应 { total, page, page_size, list }，list() 自动解包 .list
 //   - 系数表（coefficient-configs）：list 走 /dictionaries，update 走 /admin/coefficient-configs/:key（按 key 单个更新）
+//   - 只读字典查询（表单下拉用）在 api/valuation/dictionaries.ts；本模块只管管理端写面 + 列表
 //
 // 响应类型**不再手写**（ADR-0048 决策 1/3，issue #967 片九）：本模块直接用生成物
 // frontend/src/api/generated/valuation.ts 的类型；入参（Record<string, unknown>）不生成。
@@ -18,6 +25,7 @@ export type AdminRow = Record<string, unknown> & { id?: number }
 /** 资源标识符：通常为 id（number） */
 export type AdminResourceId = string | number
 
+/** 一个资源的能力面（列表 + 增删改）；路径在 adminResources 里逐资源写死。 */
 interface CrudEndpoints<Row = AdminRow> {
   list: (params?: Record<string, unknown>) => Promise<Row[]>
   create: (payload: Record<string, unknown>) => Promise<Row>
@@ -27,64 +35,165 @@ interface CrudEndpoints<Row = AdminRow> {
   getIdOf: (row: Row | null | undefined) => AdminResourceId | undefined
 }
 
-/** createCrud 选项 */
-interface CreateCrudOptions {
-  /** list() 是否为分页响应（{total, page, page_size, list}） */
-  isPaginated?: boolean
+/** 规格族资源的能力面：描述符只声明 Create + Delete（无 PUT 路由，#1119），故没有 update。 */
+type SpecCrudEndpoints<Row = AdminRow> = Pick<CrudEndpoints<Row>, 'create' | 'remove' | 'getIdOf'>
+
+/** 具名方法表的类型面：显式列出 12 个资源，规格族 6 个写不进 update。 */
+interface AdminResourceTable {
+  originalPrices: CrudEndpoints
+  brands: CrudEndpoints
+  vehicleTypes: CrudEndpoints
+  series: CrudEndpoints
+  tonnages: SpecCrudEndpoints
+  mastTypes: SpecCrudEndpoints
+  mastHeights: SpecCrudEndpoints
+  batteryTypes: SpecCrudEndpoints
+  transmissionTypes: SpecCrudEndpoints
+  engineTypes: SpecCrudEndpoints
+  conditionRatings: CrudEndpoints
+  regionCoefficients: CrudEndpoints
 }
 
-/** 创建一个资源的 CRUD 封装（Row 为生成物里的响应类型） */
-function createCrud<Row extends AdminRow = AdminRow>(
-  resource: string,
-  options: CreateCrudOptions = {}
-): CrudEndpoints<Row> {
-  const { isPaginated = false } = options
-  const dictBase = `/dictionaries/${resource}` // GET 列表（学生端字典端点，admin 与学生共用）
-  const adminBase = `/admin/${resource}` // POST/PUT/DELETE 写操作（需 admin）
-  return {
+/** 从行数据中提取标识符；不存在返回 undefined（全部资源同构，单点实现）。 */
+function getIdOf(row: AdminRow | null | undefined): AdminResourceId | undefined {
+  const v = row?.id
+  if (typeof v === 'string' || typeof v === 'number') return v
+  return undefined
+}
+
+/** 列表响应解包：拦截器已解包信封，data 即业务负载；分页资源（original-prices）再解包 .list。 */
+function toRows(
+  data: AdminRow[] | { list: AdminRow[] } | null | undefined,
+  isPaginated: boolean
+): AdminRow[] {
+  if (isPaginated && data && typeof data === 'object' && 'list' in data) {
+    return (data as { list?: AdminRow[] }).list ?? []
+  }
+  return (data as AdminRow[]) ?? []
+}
+
+// ========== 各资源配置 CRUD（路径字面量写死，消费面锁可静态判定）==========
+export const adminResources: AdminResourceTable = {
+  // original-prices 后端为分页响应，需特殊解包；其余实体列表为扁平数组。
+  originalPrices: {
     async list(params?: Record<string, unknown>) {
-      const merged = isPaginated ? { page: 1, page_size: 100, ...params } : params
-      // 拦截器已解包信封，data 即业务负载；original-prices 分页时解包 .list
-      const data = await client.get<Row[] | { list: Row[] }>(dictBase, { params: merged })
-      if (isPaginated && data && typeof data === 'object' && 'list' in data) {
-        return data.list ?? []
-      }
-      return (data as Row[]) ?? []
+      const data = await client.get<AdminRow[] | { list: AdminRow[] }>('/dictionaries/original-prices', {
+        params: { page: 1, page_size: 100, ...params }
+      })
+      return toRows(data, true)
     },
-    async create(payload: Record<string, unknown>) {
-      return client.post<Row>(adminBase, payload)
-    },
-    async update(id: AdminResourceId, payload: Record<string, unknown>) {
-      return client.put<Row>(`${adminBase}/${encodeURIComponent(id)}`, payload)
-    },
+    create: (payload: Record<string, unknown>) => client.post<AdminRow>('/admin/original-prices', payload),
+    update: (id: AdminResourceId, payload: Record<string, unknown>) =>
+      client.put<AdminRow>(`/admin/original-prices/${encodeURIComponent(id)}`, payload),
     async remove(id: AdminResourceId): Promise<void> {
-      await client.delete(`${adminBase}/${encodeURIComponent(id)}`)
-      return undefined
+      await client.delete(`/admin/original-prices/${encodeURIComponent(id)}`)
     },
-    getIdOf(row: Row | null | undefined): AdminResourceId | undefined {
-      const v = row?.id
-      if (typeof v === 'string' || typeof v === 'number') return v
-      return undefined
-    }
+    getIdOf
+  },
+  brands: {
+    async list(params?: Record<string, unknown>) {
+      return toRows(await client.get<AdminRow[]>('/dictionaries/brands', { params }), false)
+    },
+    create: (payload: Record<string, unknown>) => client.post<AdminRow>('/admin/brands', payload),
+    update: (id: AdminResourceId, payload: Record<string, unknown>) =>
+      client.put<AdminRow>(`/admin/brands/${encodeURIComponent(id)}`, payload),
+    async remove(id: AdminResourceId): Promise<void> {
+      await client.delete(`/admin/brands/${encodeURIComponent(id)}`)
+    },
+    getIdOf
+  },
+  vehicleTypes: {
+    async list(params?: Record<string, unknown>) {
+      return toRows(await client.get<AdminRow[]>('/dictionaries/vehicle-types', { params }), false)
+    },
+    create: (payload: Record<string, unknown>) => client.post<AdminRow>('/admin/vehicle-types', payload),
+    update: (id: AdminResourceId, payload: Record<string, unknown>) =>
+      client.put<AdminRow>(`/admin/vehicle-types/${encodeURIComponent(id)}`, payload),
+    async remove(id: AdminResourceId): Promise<void> {
+      await client.delete(`/admin/vehicle-types/${encodeURIComponent(id)}`)
+    },
+    getIdOf
+  },
+  series: {
+    async list(params?: Record<string, unknown>) {
+      return toRows(await client.get<AdminRow[]>('/dictionaries/series', { params }), false)
+    },
+    create: (payload: Record<string, unknown>) => client.post<AdminRow>('/admin/series', payload),
+    update: (id: AdminResourceId, payload: Record<string, unknown>) =>
+      client.put<AdminRow>(`/admin/series/${encodeURIComponent(id)}`, payload),
+    async remove(id: AdminResourceId): Promise<void> {
+      await client.delete(`/admin/series/${encodeURIComponent(id)}`)
+    },
+    getIdOf
+  },
+  // 规格族：单字段唯一列 + Create/Delete（描述符无 Update ⇒ 无 PUT 路由，#1119）
+  tonnages: {
+    create: (payload: Record<string, unknown>) => client.post<AdminRow>('/admin/tonnages', payload),
+    async remove(id: AdminResourceId): Promise<void> {
+      await client.delete(`/admin/tonnages/${encodeURIComponent(id)}`)
+    },
+    getIdOf
+  },
+  mastTypes: {
+    create: (payload: Record<string, unknown>) => client.post<AdminRow>('/admin/mast-types', payload),
+    async remove(id: AdminResourceId): Promise<void> {
+      await client.delete(`/admin/mast-types/${encodeURIComponent(id)}`)
+    },
+    getIdOf
+  },
+  mastHeights: {
+    create: (payload: Record<string, unknown>) => client.post<AdminRow>('/admin/mast-heights', payload),
+    async remove(id: AdminResourceId): Promise<void> {
+      await client.delete(`/admin/mast-heights/${encodeURIComponent(id)}`)
+    },
+    getIdOf
+  },
+  batteryTypes: {
+    create: (payload: Record<string, unknown>) => client.post<AdminRow>('/admin/battery-types', payload),
+    async remove(id: AdminResourceId): Promise<void> {
+      await client.delete(`/admin/battery-types/${encodeURIComponent(id)}`)
+    },
+    getIdOf
+  },
+  transmissionTypes: {
+    create: (payload: Record<string, unknown>) => client.post<AdminRow>('/admin/transmission-types', payload),
+    async remove(id: AdminResourceId): Promise<void> {
+      await client.delete(`/admin/transmission-types/${encodeURIComponent(id)}`)
+    },
+    getIdOf
+  },
+  engineTypes: {
+    create: (payload: Record<string, unknown>) => client.post<AdminRow>('/admin/engine-types', payload),
+    async remove(id: AdminResourceId): Promise<void> {
+      await client.delete(`/admin/engine-types/${encodeURIComponent(id)}`)
+    },
+    getIdOf
+  },
+  conditionRatings: {
+    async list(params?: Record<string, unknown>) {
+      return toRows(await client.get<AdminRow[]>('/dictionaries/condition-ratings', { params }), false)
+    },
+    create: (payload: Record<string, unknown>) => client.post<AdminRow>('/admin/condition-ratings', payload),
+    update: (id: AdminResourceId, payload: Record<string, unknown>) =>
+      client.put<AdminRow>(`/admin/condition-ratings/${encodeURIComponent(id)}`, payload),
+    async remove(id: AdminResourceId): Promise<void> {
+      await client.delete(`/admin/condition-ratings/${encodeURIComponent(id)}`)
+    },
+    getIdOf
+  },
+  regionCoefficients: {
+    async list(params?: Record<string, unknown>) {
+      return toRows(await client.get<AdminRow[]>('/dictionaries/region-coefficients', { params }), false)
+    },
+    create: (payload: Record<string, unknown>) => client.post<AdminRow>('/admin/region-coefficients', payload),
+    update: (id: AdminResourceId, payload: Record<string, unknown>) =>
+      client.put<AdminRow>(`/admin/region-coefficients/${encodeURIComponent(id)}`, payload),
+    async remove(id: AdminResourceId): Promise<void> {
+      await client.delete(`/admin/region-coefficients/${encodeURIComponent(id)}`)
+    },
+    getIdOf
   }
 }
-
-// ========== 各资源配置 CRUD ==========
-// original-prices 后端为分页响应，需特殊解包；其余实体列表为扁平数组。
-export const adminResources = {
-  originalPrices: createCrud('original-prices', { isPaginated: true }),
-  brands: createCrud('brands'),
-  vehicleTypes: createCrud('vehicle-types'),
-  series: createCrud('series'),
-  tonnages: createCrud('tonnages'),
-  mastTypes: createCrud('mast-types'),
-  mastHeights: createCrud('mast-heights'),
-  batteryTypes: createCrud('battery-types'),
-  transmissionTypes: createCrud('transmission-types'),
-  engineTypes: createCrud('engine-types'),
-  conditionRatings: createCrud('condition-ratings'),
-  regionCoefficients: createCrud('region-coefficients')
-} as const
 
 export type AdminResourceKey = keyof typeof adminResources
 

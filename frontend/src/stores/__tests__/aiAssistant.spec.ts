@@ -347,6 +347,84 @@ describe('新对话草稿态（#1104：流式中显式拒绝，不静默吞）',
   })
 })
 
+// #1122：流式中切走 —— 「离开当轮上下文」的入口统一走 dropInflightTurn（abort 在飞请求 +
+// 复位当轮态 + 轮次守卫让迟到回调失效），旧流的 chunk / 终态不得写进**新会话**上下文。
+describe('切会话/新草稿丢弃在飞轮次（#1122）', () => {
+  it('流式中 selectSession：abort 在飞请求、当轮态复位，迟到回调不写进新会话', async () => {
+    const store = createStore()
+    const { p, h } = await startSend(store, '在飞的一轮')
+    h.onChunk?.('旧会话的一半')
+    expect(store.streaming).toBe(true)
+
+    await store.selectSession(11)
+    await flush()
+
+    expect(controllerAt().abort).toHaveBeenCalledTimes(1)
+    expect(store.currentSessionId).toBe(11)
+    expect(store.streaming).toBe(false)
+    expect(store.streamingContent).toBe('')
+    expect(store.messages).toEqual([])
+
+    // abort 后迟到的回调（api 层把 AbortError 归到 onDone）：chunk / usage / done / error 全丢弃
+    h.onChunk?.('迟到的增量')
+    h.onUsage?.(USAGE)
+    h.onDone?.()
+    h.onError?.('迟到失败')
+    await p
+    await flush()
+    expect(store.streamingContent).toBe('')
+    expect(store.messages).toEqual([])
+    expect(store.lastUsage).toBeNull()
+    expect(store.lastTurnError).toBeNull()
+    expect(store.streaming).toBe(false)
+  })
+
+  it('懒创建 await 期间切会话：恢复后的 send 不再落消息/起流（streaming 不卡死）', async () => {
+    const store = createStore()
+    let resolveCreate!: (v: unknown) => void
+    vi.mocked(aiAssistantApi.createSession).mockReturnValueOnce(
+      new Promise((r) => {
+        resolveCreate = r
+      }) as never
+    )
+    const p = store.send('第一条')
+    await flush()
+    expect(streamChatMock).not.toHaveBeenCalled() // 卡在懒创建会话
+
+    await store.selectSession(11) // 此时流还没起，丢弃的仍是在飞轮次
+    resolveCreate({ id: 12, title: '新会话', model_name: 'deepseek', created_at: '', updated_at: '' })
+    await p
+    await flush()
+
+    expect(streamChatMock).not.toHaveBeenCalled()
+    expect(store.streaming).toBe(false)
+    expect(store.messages).toEqual([])
+  })
+
+  it('懒创建 await 期间开新草稿：丢弃在飞轮次后放行（不是静默拒绝），恢复后的 send 不起流', async () => {
+    const store = createStore()
+    let resolveCreate!: (v: unknown) => void
+    vi.mocked(aiAssistantApi.createSession).mockReturnValueOnce(
+      new Promise((r) => {
+        resolveCreate = r
+      }) as never
+    )
+    const p = store.send('第一条')
+    await flush()
+
+    expect(store.startDraft()).toBe(true)
+    resolveCreate({ id: 12, title: '新会话', model_name: 'deepseek', created_at: '', updated_at: '' })
+    await p
+    await flush()
+
+    expect(streamChatMock).not.toHaveBeenCalled()
+    expect(store.streaming).toBe(false)
+    expect(store.messages).toEqual([])
+    // 注：懒创建的响应仍会把新建会话选上（createSession 自身的选择副作用，见票面外相邻观察）——
+    // 本用例只钉「被丢弃的当轮不再落消息/起流」，不把该残留写成期望。
+  })
+})
+
 describe('done 后精确重拉一次会话列表（#620）', () => {
   it('done → loadSessions 恰好一次；推进 10s 亦不触发（5 秒定时器已删除）', async () => {
     const store = createStore()

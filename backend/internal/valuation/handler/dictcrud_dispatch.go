@@ -61,8 +61,7 @@ func (h *ConfigHandler) dictDispatch() map[string]dictRoute {
 		},
 		// 规格族（tonnages / mast_types / mast_heights / battery_types / transmission_types /
 		// engine_types）描述符只声明 Create + Delete（「单字段唯一列 + C/D」，见 specs_crud_contract_test.go
-		// 的 TestSpecsCrud_NoPutRoute），故没有 update 执行体；6 条 AdminUpdate* 注解是幻影
-		// （见 dictcrud_docs_lock_test.go 的 phantomAnnotations）。
+		// 的 TestSpecsCrud_NoPutRoute），故没有 update 执行体（#1119 已删净对应的幻影 PUT 注解与域表条目）。
 		"tonnages": {
 			create: h.AdminCreateTonnage,
 			delete: h.AdminDeleteTonnage,

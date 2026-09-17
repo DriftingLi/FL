@@ -14,10 +14,11 @@
 // 注解的 path/method/字段表由描述符派生（dictcrud.RoutePath / SwaggerPath / ResponseFields），
 // 与分派表、AllDescriptors() 的全等锁在 dictcrud_docs_lock_test.go —— 改描述符不改注解即红。
 //
-// 实测（#1100）：37 条注解里 6 条是**幻影** —— 规格族（tonnages / mast_types / mast_heights /
-// battery_types / transmission_types / engine_types）的描述符只声明 Create + Delete（无 PUT，
-// specs_crud_contract_test.go 的 TestSpecsCrud_NoPutRoute 断言 404），这 6 条 AdminUpdate*
-// 注解与域声明表却都写了 PUT。逐条登记在 dictcrud_docs_lock_test.go 的 phantomAnnotations，待另票处置。
+// 第十一波（#1100）实测出 37 条注解里有 6 条**幻影 PUT**：规格族（tonnages / mast_types /
+// mast_heights / battery_types / transmission_types / engine_types）的描述符只声明 Create + Delete
+// （无 PUT，specs_crud_contract_test.go 的 TestSpecsCrud_NoPutRoute 断言 404），注解与域声明表
+// 却都写了 PUT。第十二批（#1119）把这 6 条注解与域声明表条目删净 → 注解 31 条 == 描述符声明的
+// 操作数（12 create + 7 update + 12 delete）；锁随之改成「注解集合 == AllDescriptors() 派生集合」全等。
 package handler
 
 import (
@@ -150,8 +151,9 @@ func (h *ConfigHandler) AdminUpdateCoefficientConfig(c *gin.Context) {
 // =====================================================
 // 其余字典实体（brands / vehicle-types / series / tonnages / mast-types /
 // mast-heights / battery-types / transmission-types / engine-types /
-// condition-ratings）：前端 admin.ts 以 createCrud 统一声明 create/update/remove，
-// 故按同一形状逐实体登记（形状同构，仅字段并集不同）。
+// condition-ratings）：按同一形状逐实体登记（形状同构，仅字段并集不同）。
+// 规格族（tonnages / mast-types / mast-heights / battery-types / transmission-types /
+// engine-types）只有 create/delete 两条 —— 描述符无 Update，故没有 AdminUpdate* 注解。
 // =====================================================
 
 // AdminCreateBrand 新增品牌
@@ -386,98 +388,6 @@ func (h *ConfigHandler) AdminCreateTransmissionType(c *gin.Context) {
 // @Router /valuation/admin/engine-types [post]
 func (h *ConfigHandler) AdminCreateEngineType(c *gin.Context) {
 	h.createDict(c, engineTypeDescriptor())
-}
-
-// AdminUpdateTonnage 更新吨位
-// @Summary 更新吨位
-// @Description value；响应为 {id} ∪ 更新字段。需管理员（主体系 JWT + role=admin）。
-// @Tags 估值-管理端
-// @Security BearerAuth
-// @Param id path integer true "记录 ID"
-// @Param body body object true "字段"
-// @Success 200 {object} response.R{data=object{id=integer,value=number}} "success"
-// @Failure 400 {object} response.R "参数错误"
-// @Failure 403 {object} response.R "无权限"
-// @Failure 404 {object} response.R "记录不存在"
-// @Router /valuation/admin/tonnages/{id} [put]
-func (h *ConfigHandler) AdminUpdateTonnage(c *gin.Context) { h.updateDict(c, tonnageDescriptor()) }
-
-// AdminUpdateMastType 更新门架类型
-// @Summary 更新门架类型
-// @Description name；响应为 {id} ∪ 更新字段。需管理员（主体系 JWT + role=admin）。
-// @Tags 估值-管理端
-// @Security BearerAuth
-// @Param id path integer true "记录 ID"
-// @Param body body object true "字段"
-// @Success 200 {object} response.R{data=object{id=integer,name=string}} "success"
-// @Failure 400 {object} response.R "参数错误"
-// @Failure 403 {object} response.R "无权限"
-// @Failure 404 {object} response.R "记录不存在"
-// @Router /valuation/admin/mast-types/{id} [put]
-func (h *ConfigHandler) AdminUpdateMastType(c *gin.Context) { h.updateDict(c, mastTypeDescriptor()) }
-
-// AdminUpdateMastHeight 更新门架高度
-// @Summary 更新门架高度
-// @Description value_mm；响应为 {id} ∪ 更新字段。需管理员（主体系 JWT + role=admin）。
-// @Tags 估值-管理端
-// @Security BearerAuth
-// @Param id path integer true "记录 ID"
-// @Param body body object true "字段"
-// @Success 200 {object} response.R{data=object{id=integer,value_mm=integer}} "success"
-// @Failure 400 {object} response.R "参数错误"
-// @Failure 403 {object} response.R "无权限"
-// @Failure 404 {object} response.R "记录不存在"
-// @Router /valuation/admin/mast-heights/{id} [put]
-func (h *ConfigHandler) AdminUpdateMastHeight(c *gin.Context) {
-	h.updateDict(c, mastHeightDescriptor())
-}
-
-// AdminUpdateBatteryType 更新电池类型
-// @Summary 更新电池类型
-// @Description name；响应为 {id} ∪ 更新字段。需管理员（主体系 JWT + role=admin）。
-// @Tags 估值-管理端
-// @Security BearerAuth
-// @Param id path integer true "记录 ID"
-// @Param body body object true "字段"
-// @Success 200 {object} response.R{data=object{id=integer,name=string}} "success"
-// @Failure 400 {object} response.R "参数错误"
-// @Failure 403 {object} response.R "无权限"
-// @Failure 404 {object} response.R "记录不存在"
-// @Router /valuation/admin/battery-types/{id} [put]
-func (h *ConfigHandler) AdminUpdateBatteryType(c *gin.Context) {
-	h.updateDict(c, batteryTypeDescriptor())
-}
-
-// AdminUpdateTransmissionType 更新传动系统类型
-// @Summary 更新传动系统类型
-// @Description name；响应为 {id} ∪ 更新字段。需管理员（主体系 JWT + role=admin）。
-// @Tags 估值-管理端
-// @Security BearerAuth
-// @Param id path integer true "记录 ID"
-// @Param body body object true "字段"
-// @Success 200 {object} response.R{data=object{id=integer,name=string}} "success"
-// @Failure 400 {object} response.R "参数错误"
-// @Failure 403 {object} response.R "无权限"
-// @Failure 404 {object} response.R "记录不存在"
-// @Router /valuation/admin/transmission-types/{id} [put]
-func (h *ConfigHandler) AdminUpdateTransmissionType(c *gin.Context) {
-	h.updateDict(c, transmissionTypeDescriptor())
-}
-
-// AdminUpdateEngineType 更新发动机类型
-// @Summary 更新发动机类型
-// @Description name；响应为 {id} ∪ 更新字段。需管理员（主体系 JWT + role=admin）。
-// @Tags 估值-管理端
-// @Security BearerAuth
-// @Param id path integer true "记录 ID"
-// @Param body body object true "字段"
-// @Success 200 {object} response.R{data=object{id=integer,name=string}} "success"
-// @Failure 400 {object} response.R "参数错误"
-// @Failure 403 {object} response.R "无权限"
-// @Failure 404 {object} response.R "记录不存在"
-// @Router /valuation/admin/engine-types/{id} [put]
-func (h *ConfigHandler) AdminUpdateEngineType(c *gin.Context) {
-	h.updateDict(c, engineTypeDescriptor())
 }
 
 // AdminDeleteBrand 删除品牌
