@@ -7,7 +7,6 @@
 export type CourseItem = {
     course_id : number
     title : string
-    category : string
     description : string
     cover_url : string
     duration : number
@@ -34,13 +33,6 @@ export type SpecialtyItem = {
 export type LevelItem = {
     level_id : number
     name : string
-}
-
-/** 课程分类（兼容旧接口，value 为专业方向 ID 字符串） */
-export type CourseCategory = {
-    id : number
-    name : string
-    value : string
 }
 
 /** 课程列表响应 */
@@ -84,7 +76,6 @@ export type CourseDetail = {
     course_id : number
     title : string
     description : string
-    category : string
     cover_url : string
     duration : number
     chapters : ChapterItem[]
