@@ -77,8 +77,21 @@ type pointsLedgerReq struct {
 	RefType  string
 }
 
+// @Summary 积分流水（管理端）
+// @Description 管理员按原因 / 业务域 / 用户筛选积分流水（不传 ref_type = 跨域全量；页大小上限 100）
+// @Tags 管理端-巡检
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(20)
+// @Param reason query string false "积分原因（如 accepted_bonus / rollback）"
+// @Param ref_type query string false "业务域（forum_topic / task / course / ai_chat 等）；不传 = 跨域全量"
+// @Param user_id query int false "用户 ID（>0 生效）"
+// @Success 200 {object} response.R{data=service.PointsLedgerResult} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 403 {object} response.R "权限不足"
+// @Router /admin/points/ledger [get]
 // PointsLedger 问答积分流水 GET /api/admin/points/ledger?page=&page_size=&reason=&ref_type=&user_id=
-// （注解与 apitypes 登记见 #1100 巡检端点收编，本票只保证读路径仍走 service。）
 func (h *InspectionHandler) PointsLedger(c *gin.Context) {
 	Endpoint[pointsLedgerReq, service.PointsLedgerResult]{
 		Parse: func(c *gin.Context) (*pointsLedgerReq, error) {

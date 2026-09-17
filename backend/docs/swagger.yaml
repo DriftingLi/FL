@@ -6888,6 +6888,57 @@ paths:
       summary: 课程等级列表
       tags:
       - 管理端-培训目录
+  /admin/points/ledger:
+    get:
+      description: 管理员按原因 / 业务域 / 用户筛选积分流水（不传 ref_type = 跨域全量；页大小上限 100）
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      - description: 积分原因（如 accepted_bonus / rollback）
+        in: query
+        name: reason
+        type: string
+      - description: 业务域（forum_topic / task / course / ai_chat 等）；不传 = 跨域全量
+        in: query
+        name: ref_type
+        type: string
+      - description: 用户 ID（>0 生效）
+        in: query
+        name: user_id
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.PointsLedgerResult'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 积分流水（管理端）
+      tags:
+      - 管理端-巡检
   /admin/position:
     post:
       consumes:
