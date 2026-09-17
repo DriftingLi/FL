@@ -243,7 +243,9 @@ describe('类型与契约来源', () => {
 });
 
 describe('uvue CSS 约束（逐条对齐 AGENTS.md 的兼容性表）', () => {
-  const style = styleOf(page);
+  /** 去掉 CSS 注释后再判：注释里的属性名 / 类名不是实现（否则「说明为什么禁它」的注释会把守护本身判红） */
+  const stripCssComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '');
+  const style = stripCssComments(styleOf(page));
 
   it('style 块声明 lang="scss"', () => {
     expect(page).toMatch(/<style lang="scss">/);
@@ -272,10 +274,17 @@ describe('uvue CSS 约束（逐条对齐 AGENTS.md 的兼容性表）', () => {
     expect(/^[^.@}\s][\w-]*\s*\{/m.test(style)).toBe(false);
   });
 
+  it('不写 `white-space`：uvue 原生端只支持 `<text>` / `<button>`（真机日志实测的错行）', () => {
+    // 2026-09-17 真机（①a）实测：`.category-scroll`（scroll-view）上的 `white-space: nowrap`
+    // 被渲染层判错并忽略 —— `style property white-space is only supported on <text>|<button>`。
+    // 本条是按**设备侧日志**补的守护：AGENTS.md 的 uvue CSS 黑名单里没有这一项，静态表查不出来。
+    // 横滑行改由 `flex-direction: row` + 子项 `flex-shrink: 0` 撑出溢出（已同批真机复验）。
+    expect(style).not.toContain('white-space');
+  });
+
   it('模板 class 与样式定义一一对应（无死样式、无裸 class）', () => {
     const tpl = tplOf(page);
     const script = scriptOf(page);
-    const st = styleOf(page);
     const used = new Set();
     for (const m of tpl.matchAll(/(?<!:)class="([^"]+)"/g)) {
       m[1].split(/\s+/).filter(Boolean).forEach((c) => used.add(c));
@@ -297,7 +306,7 @@ describe('uvue CSS 约束（逐条对齐 AGENTS.md 的兼容性表）', () => {
       }
     }
     const defined = new Set();
-    for (const m of st.matchAll(/\.([A-Za-z][A-Za-z0-9_-]*)/g)) defined.add(m[1]);
+    for (const m of style.matchAll(/\.([A-Za-z][A-Za-z0-9_-]*)/g)) defined.add(m[1]);
 
     expect({ undefinedClasses: [...used].filter((c) => !defined.has(c)) }).toEqual({ undefinedClasses: [] });
     expect({ deadClasses: [...defined].filter((c) => !used.has(c)) }).toEqual({ deadClasses: [] });

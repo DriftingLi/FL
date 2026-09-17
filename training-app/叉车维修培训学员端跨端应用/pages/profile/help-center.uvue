@@ -244,10 +244,13 @@
         color: #ffffff;
     }
 
-    /* 分类 chip 行（横滑；white-space + flex-shrink 为 uvue 横滑行的既有形态） */
+    /* 分类 chip 行（横滑）：靠 flex-direction:row + 子项 flex-shrink:0 撑出横向溢出。
+       ⚠️ **不写 `white-space: nowrap`** —— uvue 原生端该属性只支持 `<text>` / `<button>`，
+       写在 `<scroll-view>` 上会被渲染层直接判错并忽略（2026-09-17 真机日志实测：
+       `style property white-space is only supported on <text>|<button>. there is an error on
+       <scroll-view class="category-scroll" …>`）。旧的 `.filter-scroll` 写法照抄不得。 */
     .category-scroll {
         background-color: #f5f5f5;
-        white-space: nowrap;
         flex-direction: row;
         align-items: center;
         padding: 20rpx 24rpx;
