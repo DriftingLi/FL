@@ -51,6 +51,17 @@ Windows 本机（`E:\` 盘）上 worktree 可用，但有几处与 Linux 不同�
 
 - **HBuilderX 仍要唯一项目名（worktree 解决不了）**：HBuilderX 按**项目名**解析，worktree / 完整 clone 里的项目目录 basename 与主树相同 ⇒ 跑 HBuilderX 前要把该项目目录改成**唯一名**。改名期间 `git diff --name-only` 会误报整目录删除（删除 + 未跟踪新增），所以**任何 git 操作前必须先把项目目录名改回**。
 
+  ⚠️ **但「改回来」这一步在本机会卡住，成因与解（2026-09-17 实测补，血账）**：本文件与 `hx-run.ps1` / `auto-screenshot.ps1` 的收尾建议都写「先 `cli project close --path <项目>` 结束会话」——
+  **HBuilderX 5.23 没有 `project` 这个子命令**（实测 `cli project close --path …` → `命令'project'不存在或缺少参数`），故这条配方**在本机不可用**。
+  而「真运行」（`launch app-android`，不带 `--compile`）的会话**不自己收口**，且派发它的包装 `pwsh` 与其 `cli.exe` 子进程**把项目目录当作 CWD、并攥着 `.ci-verify\launch-*.out`**
+  ⇒ **整个项目目录既改不回来也删不掉**（`Rename-Item` 报 `The process cannot access the file because it is being used by another process`；`git worktree remove` 同理）。
+  **唯一的非破坏解**是本文件已写的另外半句「发起下一次 launch 把它顶掉」：**任何一次新的 `cli launch`** 都会让旧会话退出、句柄随之释放（实测：卡住期间 `pwsh` 30040 + `cli.exe` 32676 一直活着；这两个进程属于**你自己那次 launch**，但这不改变纪律）。
+  **禁止**用 `Stop-Process` / `taskkill` 绕过（AGENTS.md 反模式「kill `cli` 或 HBuilderX 主程序」；`hx-run.ps1` 的契约测试 C2 也钉死脚本内不得引入强杀）。
+  ⇒ **实操**：在 worktree 里跑真运行（🟡/🔴，即 ①a 取证那类）**之前**先想清楚「这个项目目录还要不要改名 / 删 worktree」；改名必须发生在**任何 HBuilderX 步骤之前**，
+  而改回来只能等到**下一次 launch 之后**（或维护者在 HBuilderX GUI 里点「停止」）。
+  **退路**：真的必须在同一会话里继续交付时，不要与锁硬碰 —— 证据文件仍可正常**读/复制**（只有改名与删除被拒），可用本文件下面「游离提交：完整配方」把产物按**正确入库路径**提交，交付不受影响；
+  被卡住的 worktree 待旧会话退出后再 `改名 → git worktree remove` 收尾。
+
 - **`stash` 是全仓共享的**：所有 worktree 共用同一个 stash 栈。别在多 worktree 之间长期留 stash，用完即 `pop`/`drop`；否则另一会话 `/clear` 后无法分辨哪条 stash 是自己的。
 
 - **worktree 元数据也在 `.git` 下**：`.git/worktrees/` 与 `git worktree list` 全局共享，不是每个 worktree 一份。
