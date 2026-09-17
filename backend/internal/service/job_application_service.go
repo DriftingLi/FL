@@ -17,6 +17,17 @@ import (
 	"forklift-training/internal/model"
 )
 
+// 投递状态值域（单一事实源，调用侧不得另立；照 contribution_service.go 的状态常量先例）。
+// 前端 union 与 TS↔Go 对账锁见 frontend/src/utils/applicationStatus.ts 及同目录 spec。
+const (
+	// ApplicationStatusApplied 已投递、待企业处理。
+	ApplicationStatusApplied = "applied"
+	// ApplicationStatusRejected 企业标记不合适（学员 30 天冷却）。
+	ApplicationStatusRejected = "rejected"
+	// ApplicationStatusWithdrawn 学员已撤回。
+	ApplicationStatusWithdrawn = "withdrawn"
+)
+
 // 投递域业务错误哨兵（ADR-0024）：handler 以 errors.Is 映射状态码，不做字符串比对。
 var (
 	// ErrApplyNotFound 投递记录不存在。
@@ -142,7 +153,7 @@ func (s *JobApplicationService) Apply(studentUserID, jobPostingID int) (*Applica
 	}
 	// applied 期间唯一（业务层判定；部分唯一索引在生产由迁移保证，sqlite 契约测试靠本判定）
 	var dup int64
-	if err := s.db.Model(&model.JobApplication{}).Where("job_posting_id = ? AND student_user_id = ? AND status = ?", jobPostingID, studentUserID, "applied").Count(&dup).Error; err != nil {
+	if err := s.db.Model(&model.JobApplication{}).Where("job_posting_id = ? AND student_user_id = ? AND status = ?", jobPostingID, studentUserID, ApplicationStatusApplied).Count(&dup).Error; err != nil {
 		return nil, err
 	}
 	if dup > 0 {
@@ -151,7 +162,7 @@ func (s *JobApplicationService) Apply(studentUserID, jobPostingID int) (*Applica
 	// 被拒绝后 30 天冷却（复用联系方式交换的数值与「拒绝是有记忆的」哲学）
 	var lastRejected *model.JobApplication
 	var last model.JobApplication
-	if err := s.db.Where("job_posting_id = ? AND student_user_id = ? AND status = ?", jobPostingID, studentUserID, "rejected").Order("rejected_at DESC").First(&last).Error; err == nil {
+	if err := s.db.Where("job_posting_id = ? AND student_user_id = ? AND status = ?", jobPostingID, studentUserID, ApplicationStatusRejected).Order("rejected_at DESC").First(&last).Error; err == nil {
 		lastRejected = &last
 		if last.RejectedAt != nil && clock.Now().Sub(*last.RejectedAt) < 30*24*time.Hour {
 			return nil, ErrApplyCooldown
@@ -178,7 +189,7 @@ func (s *JobApplicationService) Apply(studentUserID, jobPostingID int) (*Applica
 			JobPostingID:    jobPostingID,
 			RecruiterID:     job.RecruiterID,
 			StudentUserID:   studentUserID,
-			Status:          "applied",
+			Status:          ApplicationStatusApplied,
 			ResumeUpdatedAt: card.UpdatedAt,
 			CreatedAt:       now,
 			UpdatedAt:       now,
@@ -232,13 +243,13 @@ func (s *JobApplicationService) Withdraw(studentUserID int, applicationID int64,
 	if app.StudentUserID != studentUserID {
 		return nil, ErrApplyNotYours
 	}
-	if app.Status != "applied" {
+	if app.Status != ApplicationStatusApplied {
 		return nil, errors.New("仅投递中的申请可撤回")
 	}
 	now := clock.Now()
 	err := s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&model.JobApplication{}).Where("id = ? AND status = ?", applicationID, "applied").Updates(map[string]any{
-			"status":       "withdrawn",
+		if err := tx.Model(&model.JobApplication{}).Where("id = ? AND status = ?", applicationID, ApplicationStatusApplied).Updates(map[string]any{
+			"status":       ApplicationStatusWithdrawn,
 			"withdrawn_at": now,
 			"updated_at":   now,
 		}).Error; err != nil {
