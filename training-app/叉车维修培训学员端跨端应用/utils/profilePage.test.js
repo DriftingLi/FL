@@ -163,8 +163,16 @@ describe('「我的」页面跳转契约', () => {
   it('原型中尚无对应页的条目走占位提示而非死链', () => {
     const placeholder = allEntries.filter((i) => !i.available).map((i) => i.key);
     expect(placeholder.sort()).toEqual(
-      ['address', 'help', 'notebook', 'orders', 'study-plan'].sort()
+      ['address', 'help', 'orders', 'study-plan'].sort()
     );
+  });
+
+  it('已落地的入口不再停留在占位态（#1082 笔记本接线）', () => {
+    const notebook = allEntries.find((i) => i.key === 'notebook');
+    expect(notebook).toBeDefined();
+    expect(notebook.available).toBe(true);
+    expect(notebook.path).toBe('/pages/profile/notebook');
+    expect(registeredPages.has(notebook.path.slice(1))).toBe(true);
   });
 
   it('写死的跳转 url 均已注册，且区分 switchTab 与 navigateTo', () => {

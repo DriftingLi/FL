@@ -1,0 +1,81 @@
+/**
+ * 学员笔记域 API（ADR-0055 笔记域泛化）
+ *
+ * 接口：
+ *   GET    /api/notes       我的笔记（scope=all|question|standalone + 分页，按 updated_at 倒序）
+ *   POST   /api/notes       新建独立笔记
+ *   PUT    /api/notes/:id   改笔记正文（只认本人）
+ *   DELETE /api/notes/:id   删笔记（只认本人）
+ *
+ * 题目维度上的**单条**读写仍在 `api/questionInteraction.uts`（老契约
+ * `/api/questions/:id/note` 逐字不变，practice-do 在消费）；本文件只服务「我的笔记」列表页。
+ * 两条路径是同一资源的两副面孔，不互相改写。
+ */
+import { getMapped, postMapped, put, del } from './request'
+import { toNumber, toNumberOrNull, toStr } from './helpers'
+import type { NoteItem, NoteListResult } from '../types/index'
+
+/** scope 取值与后端 query 参数同名（ADR-0055），不另造端上词表 */
+export const NOTE_SCOPE_ALL = 'all'
+export const NOTE_SCOPE_QUESTION = 'question'
+export const NOTE_SCOPE_STANDALONE = 'standalone'
+
+/** 从 UTSJSONObject 构造 NoteItem（ADR-0003 手动 JSON 映射） */
+function buildNoteItem(obj : UTSJSONObject) : NoteItem {
+	return {
+		id: toNumber(obj['id']),
+		content: toStr(obj['content']),
+		question_id: toNumberOrNull(obj['question_id']),
+		question_content: toStr(obj['question_content']),
+		updated_at: toStr(obj['updated_at']),
+	} as NoteItem
+}
+
+/** 从 UTSJSONObject 构造 NoteListResult（后端分页字段为 items / total / page / page_size） */
+function buildNoteListResult(data : UTSJSONObject) : NoteListResult {
+	const items : NoteItem[] = []
+	const listRaw = data['items']
+	if (listRaw != null) {
+		const arr = listRaw as Array<UTSJSONObject>
+		for (let i = 0; i < arr.length; i++) {
+			items.push(buildNoteItem(arr[i]))
+		}
+	}
+	return {
+		items: items,
+		total: toNumber(data['total'], items.length),
+		page: toNumber(data['page'], 1),
+		page_size: toNumber(data['page_size'], 20),
+	} as NoteListResult
+}
+
+/**
+ * 我的笔记列表（scope 筛选 + 分页；排序由后端给，端上不重排）
+ */
+export function listNotesApi(scope : string, page : number = 1, pageSize : number = 20) : Promise<NoteListResult> {
+	const params : UTSJSONObject = {
+		scope: scope,
+		page: page.toString(),
+		page_size: pageSize.toString(),
+	} as UTSJSONObject
+	return getMapped<NoteListResult>('/notes', params, (data : UTSJSONObject) : NoteListResult => buildNoteListResult(data))
+}
+
+/** 新建独立笔记（与题目无关；question_id 由后端置空） */
+export function createNoteApi(content : string) : Promise<NoteItem> {
+	const payload : UTSJSONObject = { content: content } as UTSJSONObject
+	return postMapped<NoteItem>('/notes', payload, (data : UTSJSONObject) : NoteItem => buildNoteItem(data))
+}
+
+/** 改笔记正文（只认本人；他人笔记后端按「不存在」404，不泄漏存在性） */
+export function updateNoteApi(id : number, content : string) : Promise<NoteItem> {
+	const payload : UTSJSONObject = { content: content } as UTSJSONObject
+	return put('/notes/' + id.toString(), payload).then((data : UTSJSONObject) : NoteItem => buildNoteItem(data))
+}
+
+/** 删笔记（只认本人） */
+export function removeNoteApi(id : number) : Promise<void> {
+	return del('/notes/' + id.toString()).then(() : void => {
+		// 无返回数据
+	})
+}

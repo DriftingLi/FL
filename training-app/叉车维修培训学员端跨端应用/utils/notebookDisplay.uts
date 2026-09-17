@@ -1,0 +1,66 @@
+/**
+ * 笔记展示纯函数（标题 / 摘要 / 题目徽标 / 独立笔记判定 / 空态文案）
+ *
+ * 页面与 jest 镜像测试共用同一份口径；先例 utils/pointsDisplay.uts / utils/searchDisplay.uts
+ * （模块内纯函数 + jest 镜像测试 + 文末「镜像同步」用例逐字对齐）。
+ *
+ * 三条口径来自 ADR-0055 决策 3（**不给笔记加 title 列**）：
+ * - 正文首行即标题，首行之外折叠成单行摘要，两处都截断 ⇒ 卡片高度可预期；
+ * - 题目笔记的徽标带题干摘要（后端 LEFT JOIN 带回 question_content），点它跳题；
+ * - 独立笔记（question_id 为空）没有跳题目标，徽标退化为纯标签。
+ *
+ * 截断长度与 Web 侧 `frontend/src/pages/student/Notebook.vue` 的 noteTitle / noteExcerpt
+ * 逐字对齐（40 / 80 / 18）——两端同一列表观感，改一处必须同改。
+ */
+
+/**
+ * 正文首行即标题（截断 40）。
+ * @param content 笔记正文（纯文本，允许空串）
+ */
+export function noteTitle(content : string) : string {
+	const first = content.split('\n')[0].trim()
+	if (first.length > 40) return first.substring(0, 40) + '…'
+	return first
+}
+
+/**
+ * 首行之后的摘要（多行折叠成一行、超长截断 80）；只有一行时返回空串。
+ * @param content 笔记正文（纯文本，允许空串）
+ */
+export function noteExcerpt(content : string) : string {
+	const lines = content.split('\n')
+	if (lines.length <= 1) return ''
+	const rest = lines.slice(1).join(' ').trim()
+	if (rest.length > 80) return rest.substring(0, 80) + '…'
+	return rest
+}
+
+/**
+ * 题目徽标文案：带回题干摘要时显示摘要，缺摘要时退回通用文案。
+ * @param questionContent 后端带回的题干摘要（可能为空）
+ */
+export function noteBadgeText(questionContent : string) : string {
+	const t = questionContent.trim()
+	if (t.length == 0) return '题目笔记'
+	if (t.length > 18) return '题目：' + t.substring(0, 18) + '…'
+	return '题目：' + t
+}
+
+/**
+ * 独立笔记判定：question_id 为空（null）或非正数即与题目无关。
+ * 后端用 NULL 表达「不挂题」，但契约漂移时零值也会出现 ⇒ 两者都按独立笔记处理。
+ */
+export function isStandaloneNote(questionId : number | null) : boolean {
+	if (questionId == null) return true
+	return questionId <= 0
+}
+
+/**
+ * 空态文案按当前筛选项分档（scope 三态与后端 /api/notes 参数同名）。
+ * @param scope 'all' | 'question' | 'standalone'
+ */
+export function noteEmptyText(scope : string) : string {
+	if (scope == 'question') return '还没有题目笔记'
+	if (scope == 'standalone') return '还没有独立笔记'
+	return '还没有笔记'
+}
