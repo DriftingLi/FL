@@ -45,10 +45,11 @@ AUTO_SCREENSHOT_RESULT ok=True pages=4 skipped=0
 
 ## 未主张事项（写实）
 
-1. **`POST /practice-mode/progress` 的 body 传参没有运行期证据**：要答完一题才触发保存，本轮不注入输入事件
-   （`device-capture.ps1` 的只读红线；该设备 `INJECT_EVENTS` 历史性被拒）。该条只有契约锁 +
-   与 Web `api/practiceMode.ts` 同口径的源码判据。
-2. **`/search` 无请求侧日志**：搜索需要输入关键词。该页改动是变量改名（显式下发行为自 #979 M6 起已在），
+1. **`POST /practice-mode/progress` 的 body 传参没有运行期证据**：要答完一题才触发保存。本轮**刻意不注入**输入事件 ——
+   一次提交会在真机上写入一条练习记录（真实业务数据），而取证不该改被取证的对象；`scripts/device-capture.ps1` 的只读红线同理。
+   ⚠️ 这是**取舍、不是能力限制**：ADR-0008 ①a 手法补遗第 3 条与 #1127（同日合并）已证实该设备（`b32d8398`）`input tap/swipe` 可用，
+   故不得把本条读成「注入不可用」。该条改由契约锁 + 与 Web `api/practiceMode.ts` 同口径的源码判据支撑。
+2. **`/search` 无请求侧日志**：搜索需要输入关键词（同上，本轮不注入）。该页改动是变量改名（显式下发行为自 #979 M6 起已在），
    本帧只证「页面未回归」；传参由 `utils/searchContract.test.js` + `utils/credentialScopeContract.test.js` 双锁覆盖。
 3. **未做像素级基线对比**：`docs/verification/` 下没有这四页的历史基线，本轮**未**建立（避免拿本轮 after 自证基线）
    ⇒ 只主张「目标页落定 + 帧内内容如上」，不主张「与某历史版本逐像素一致」。
