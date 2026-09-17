@@ -7,8 +7,17 @@
 // **绝不向上 reject**（此前 try/finally 无 catch，未 await 的调用点会产生
 // unhandled rejection）；retry 带 retrying 防重入，可直接驱动错误态重试按钮。
 // admin 域统一用本件，非 admin 场景仍用 useAsyncPage（全站 40 处）。
-import { ref } from 'vue'
+//
+// 第十一波 #1102（ADR-0056 §9「admin 多列表页的第二档写明归属」）：本件补齐**列表档
+// 与只读档共用的那一条空态判据**——isEmpty 与 useAsyncPage.isEmpty 走同一份实现
+// （utils/listState.isEmptyList），loadErrorKind 与 useAsyncPage 同名同义（404 = 空态）。
+// 于是「分页列表 → useAdminTable；只读/计数 → useAsyncPage」两档的空态与错误语义一致，
+// 页面不必再为走本件的那一档手写 list.length === 0（同一条不变式的第二份实现）。
+import { computed, ref } from 'vue'
 import { useConfirm } from '@/composables/useConfirm'
+// 只取类型：client.ts 会建 axios 实例，不因这条依赖把网络侧带进 composable 的运行时
+import type { ApiErrorKind } from '@/api/client'
+import { isEmptyList } from '@/utils/listState'
 
 export interface AdminTablePaging {
   page: number
@@ -30,6 +39,8 @@ export interface AdminTableOptions<T> {
 export function useAdminTable<T>(options: AdminTableOptions<T>) {
   const loading = ref(false)
   const loadError = ref(false)
+  /** 最近一次装载失败的错误分类（ApiErrorKind，成功时清空）；404 归空态见 isEmpty。 */
+  const loadErrorKind = ref<ApiErrorKind | null>(null)
   const retrying = ref(false)
   const list = ref<T[]>([])
   const total = ref(0)
@@ -38,10 +49,17 @@ export function useAdminTable<T>(options: AdminTableOptions<T>) {
   const searchKeyword = ref('')
   const filters = ref<Record<string, unknown>>({})
 
+  /** 拦截器把 ApiErrorKind 挂在错误对象上（client.ts attachKind）；无 kind 视为未分类。 */
+  function kindOf(error: unknown): ApiErrorKind | null {
+    const kind = (error as { kind?: ApiErrorKind } | null)?.kind
+    return typeof kind === 'string' ? kind : null
+  }
+
   /** 装载（首屏/翻页/筛选变化共用）：错误收敛为 loadError，绝不 reject */
   async function load() {
     loading.value = true
     loadError.value = false
+    loadErrorKind.value = null
     try {
       const payload: Record<string, unknown> = { ...filters.value }
       if (options.searchable && searchKeyword.value) {
@@ -50,9 +68,10 @@ export function useAdminTable<T>(options: AdminTableOptions<T>) {
       const result = await options.fetch({ page: currentPage.value, pageSize: pageSize.value }, payload)
       list.value = result.list || []
       total.value = result.total || 0
-    } catch {
+    } catch (error) {
       // 错误态由 loadError 承载（拦截器已统一 toast），不向上抛：调用点常不 await load()
       loadError.value = true
+      loadErrorKind.value = kindOf(error)
     } finally {
       loading.value = false
       retrying.value = false
@@ -106,11 +125,22 @@ export function useAdminTable<T>(options: AdminTableOptions<T>) {
     await load()
   }
 
+  /**
+   * 空态判据（第十一波 #1102）：喂 UiAsyncSection 的 empty prop 的默认路径，
+   * 与 useAsyncPage.isEmpty 同源（utils/listState.isEmptyList）——「加载成功且没有条目」
+   * 或「后端 404」才为真，装载中恒为 false。走本档的页面不再手写 list.length === 0。
+   */
+  const isEmpty = computed(() =>
+    isEmptyList(list.value, { error: loadError.value, kind: loadErrorKind.value })
+  )
+
   return {
     loading,
     loadError,
+    loadErrorKind,
     retrying,
     list,
+    isEmpty,
     total,
     currentPage,
     pageSize,

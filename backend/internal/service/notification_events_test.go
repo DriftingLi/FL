@@ -298,6 +298,42 @@ func TestContactRequestEventContract(t *testing.T) {
 	}
 }
 
+// TestAdminPenaltyEventContract 扣罚通知口径逐字锁定（#1098：文案/payload 单点。
+// 与收编前 api 层第二源逐字一致：type=system、title=积分扣罚、无 link、
+// payload {deducted, reason}；Deducted 为按余额截断后的实际扣减额）。
+func TestAdminPenaltyEventContract(t *testing.T) {
+	db := testutil.NewMemoryDB(t)
+	svc := NewNotificationService(db, zap.NewNop())
+	now := time.Now()
+
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		return svc.CreateAdminPenaltyEvent(tx, NewAdminPenaltyEvent(7, 30, "违规操作"), now)
+	}); err != nil {
+		t.Fatalf("事务内创建失败: %v", err)
+	}
+
+	var n model.Notification
+	if err := db.Where("user_id = ?", 7).First(&n).Error; err != nil {
+		t.Fatalf("查询扣罚通知失败: %v", err)
+	}
+	if n.Type != "system" || n.Title != "积分扣罚" {
+		t.Fatalf("扣罚通知类型/标题不符: %+v", n)
+	}
+	if n.Content != "您的积分因“违规操作”被扣除 30 分" {
+		t.Fatalf("扣罚通知文案不符: %s", n.Content)
+	}
+	if n.Link != "" {
+		t.Fatalf("扣罚通知不应带链接: %s", n.Link)
+	}
+	var m map[string]any
+	if err := json.Unmarshal([]byte(n.Payload), &m); err != nil {
+		t.Fatalf("payload 解析失败: %v", err)
+	}
+	if m["deducted"] != float64(30) || m["reason"] != "违规操作" {
+		t.Fatalf("扣罚通知 payload 不符: %v", m)
+	}
+}
+
 // TestTryCreateNilReceiver 尽力而为族对 nil receiver 不 panic（旧 contact 调用的 nil 守卫语义收编）。
 func TestTryCreateNilReceiver(t *testing.T) {
 	var svc *NotificationService

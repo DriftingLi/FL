@@ -58,7 +58,9 @@ export type ChapterDetail = ChapterDetailDTO
 
 export const courseApi = {
   getCourses(params: { page?: number; page_size?: number; keyword?: string; credential_id?: number; specialty_id?: number; level_id?: number; filter?: 'hot' | 'featured' | 'all' }) {
-    // 由调用方显式传入（证件作用域事实源在服务端，ADR-0047 §4）（#387）
+    // 证件作用域（服务端 CredentialScoped 兜底）：显式 credential_id 优先，其次才是登录学员的当前证件；
+    // /courses 是公开端点，匿名/非学员角色不兜底、按不分区处理 ⇒ 要按证件分区时由调用方显式传入
+    // （客户端半边 #1106；客户端拦截器不再注入任何证件参数）。
     return unwrappedRequest.get<CoursePageResult>('/courses', { params })
   },
 

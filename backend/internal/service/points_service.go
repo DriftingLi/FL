@@ -13,6 +13,7 @@ import (
 	"forklift-training/internal/cache"
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
 )
 
@@ -203,13 +204,16 @@ type PointsService struct {
 	db     *gorm.DB
 	logger *zap.Logger
 	clk    clock.Clock
+	// notificationSvc 站内信域单点（#1098）：AdminPenalty 在扣罚事务内经事件构造器发信，
+	// 文案/payload 口径不落积分域。
+	notificationSvc *NotificationService
 }
 
-func NewPointsService(db *gorm.DB, logger *zap.Logger, clk clock.Clock) *PointsService {
+func NewPointsService(db *gorm.DB, logger *zap.Logger, clk clock.Clock, notificationSvc *NotificationService) *PointsService {
 	if clk == nil {
 		clk = clock.Real()
 	}
-	return &PointsService{db: db, logger: logger, clk: clk}
+	return &PointsService{db: db, logger: logger, clk: clk, notificationSvc: notificationSvc}
 }
 
 // tryLock 瞬态并发护栏锁单点（#609 内聚，直记入口 Claim/redeem/DeductAI/AdminPenalty 共用，
@@ -322,6 +326,9 @@ var (
 	ErrTaskNotDone = errors.New("任务未完成")
 	// ErrUserNotFound 用户不存在。
 	ErrUserNotFound = errors.New("用户不存在")
+	// ErrPenaltyNotifyFailed 扣罚站内信写入失败（#1098 强一致族）：通知与扣罚同事务，
+	// 写失败即扣罚整体不生效；管理端经 pointsErrStatus 看到 500 + 可见原因，可原样重试。
+	ErrPenaltyNotifyFailed = errors.New("扣罚未生效：站内信写入失败，请重试")
 )
 
 // PointsEntry 单笔积分簿记的参数面（ADR-0023 事务内簿记核心 applyTx 的唯一入参）。
@@ -425,13 +432,7 @@ func (s *PointsService) GetLedger(userID, page, pageSize int, reason string, ref
 // GetLedgerFiltered 流水分页 + 收支方向筛选（#512 积分明细页）——direction: "" 全部 /
 // "in" 仅收入(delta>0) / "out" 仅支出(delta<0)；其余参数语义同 GetLedger。
 func (s *PointsService) GetLedgerFiltered(userID, page, pageSize int, reason, direction string, refType ...string) (*PointsLedgerResult, error) {
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 || pageSize > 100 {
-		pageSize = 20
-	}
-	// count 与 find 各自独立装配（gorm 复用同一链有条件残留风险），过滤条件单一出处
+	// count 与 find 同走 paging.QueryWithMax（过滤条件单一出处）
 	build := func(q *gorm.DB) *gorm.DB {
 		if userID > 0 {
 			q = q.Where("user_id = ?", userID)
@@ -452,18 +453,18 @@ func (s *PointsService) GetLedgerFiltered(userID, page, pageSize int, reason, di
 		}
 		return q
 	}
-	var total int64
-	if err := build(s.db.Model(&model.PointsLedger{})).Count(&total).Error; err != nil {
+	rows, total, page, pageSize, err := paging.QueryWithMax[model.PointsLedger](s.db, page, pageSize, 20, 100,
+		"created_at DESC", build)
+	if err != nil {
 		return nil, err
 	}
 	pages := response.PageCount(total, pageSize)
+	// 越界页回退末页（既有语义，收编 #1095 时原样保留）：total 已知后按末页重取一次。
 	if page > pages && pages > 0 {
 		page = pages
-	}
-	offset := (page - 1) * pageSize
-	var rows []model.PointsLedger
-	if err := build(s.db.Model(&model.PointsLedger{})).Order("created_at DESC").Limit(pageSize).Offset(offset).Find(&rows).Error; err != nil {
-		return nil, err
+		if rows, _, _, _, err = paging.QueryWithMax[model.PointsLedger](s.db, page, pageSize, 20, 100, "created_at DESC", build); err != nil {
+			return nil, err
+		}
 	}
 	items := make([]PointsLedgerItem, 0, len(rows))
 	for _, r := range rows {
@@ -955,7 +956,10 @@ type PointsPenaltyResultDTO struct {
 	Deducted int `json:"deducted"`
 }
 
-// AdminPenalty 管理员扣罚（自定义 1-500，截断到 0）
+// AdminPenalty 管理员扣罚（自定义 1-500，截断到 0）。
+//
+// #1098：站内信回归积分域并与扣罚流水同事务（强一致族）——通知写失败则整笔扣罚不生效，
+// 管理端经 pointsErrStatus 看到 500 + 可见原因并可重试；审计仍由中间件承载，不在此处。
 func (s *PointsService) AdminPenalty(ctx context.Context, adminID, userID, delta int, reason string) (int, error) {
 	if delta <= 0 || delta > 500 {
 		return 0, ErrInvalidPenalty
@@ -974,18 +978,27 @@ func (s *PointsService) AdminPenalty(ctx context.Context, adminID, userID, delta
 	if user.PointsBalance < delta {
 		actualDeduct = user.PointsBalance
 	}
-	if actualDeduct <= 0 {
-		return 0, nil
+	if actualDeduct < 0 {
+		// 余额列约定非负（脏数据兜底）：非正数即不扣、不发负额文案——与既有
+		// 「actualDeduct <= 0 直接返回 0」的行为逐字一致。
+		actualDeduct = 0
 	}
 	requestID := fmt.Sprintf("penalty-%d-%d", userID, time.Now().UnixNano())
 	err := s.db.Transaction(func(tx *gorm.DB) error {
-		// 不传幂等键（ADR-0023 §5）：有意重复罚分合法；封底 0，扣减量按余额截断
-		// 站内信与审计由 handler 层触发（此处仅落账）
-		_, err := ApplyTx(tx, PointsEntry{
-			UserID: userID, Delta: -actualDeduct, Reason: "admin_penalty", RefType: "admin", RefID: requestID,
-			FloorZero: true,
-		})
-		return err
+		// 余额不足时按余额截断（截断后为 0 则无流水可写——points_ledger CHECK (delta <> 0)），
+		// 通知照发（既有语义：扣 0 分也告知）。不传幂等键（ADR-0023 §5）：有意重复罚分合法。
+		if actualDeduct > 0 {
+			if _, err := ApplyTx(tx, PointsEntry{
+				UserID: userID, Delta: -actualDeduct, Reason: "admin_penalty", RefType: "admin", RefID: requestID,
+				FloorZero: true,
+			}); err != nil {
+				return err
+			}
+		}
+		if err := s.notificationSvc.CreateAdminPenaltyEvent(tx, NewAdminPenaltyEvent(userID, actualDeduct, reason), time.Now()); err != nil {
+			return fmt.Errorf("%w：%v", ErrPenaltyNotifyFailed, err)
+		}
+		return nil
 	})
 	if err != nil {
 		return 0, err

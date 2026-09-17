@@ -74,7 +74,9 @@ func (s *RealExamService) ListPapers(userID, credentialID int) []RealExamPaperDT
 		return out
 	}
 	var papers []model.RealExamPaper
-	if err := s.db.Where("credential_id = ? AND status = 1", credentialID).
+	// 套卷按自身证件列分区（归属分区，ADR-0056 §2）：上方 credentialID<=0 已早退，不存在 nil 分支。
+	if err := EntityOwnedBy(s.db.Model(&model.RealExamPaper{}), "credential_id", &credentialID).
+		Where("status = 1").
 		Order("year DESC NULLS LAST, paper_id DESC").
 		Find(&papers).Error; err != nil {
 		s.logger.Warn("查询真题卷列表失败", zap.Int("credential_id", credentialID), zap.Error(err))

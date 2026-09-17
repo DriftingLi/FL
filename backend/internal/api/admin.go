@@ -109,10 +109,17 @@ func (h *AdminHandler) ListCourses(c *gin.Context) {
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *adminCourseListReq) (*service.CoursePageResult, error) {
-			result := h.courseSvc.GetCourses(req.Page, req.PageSize, req.Keyword, req.CredentialID, req.SpecialtyID, req.LevelID, req.Filter)
+			result, err := h.courseSvc.GetCourses(req.Page, req.PageSize, req.Keyword, req.CredentialID, req.SpecialtyID, req.LevelID, req.Filter)
+			if err != nil {
+				return nil, err
+			}
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *adminCourseListReq, resp *service.CoursePageResult, _ error) {
+		Render: func(c *gin.Context, _ *adminCourseListReq, resp *service.CoursePageResult, err error) {
+			if err != nil {
+				response.ServerError(c, err.Error())
+				return
+			}
 			response.Success(c, resp)
 		},
 	}.Handle(c)
@@ -749,9 +756,13 @@ func (h *AdminHandler) ListTutors(c *gin.Context) {
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *tutorListReq) (*service.TutorListDTO, error) {
-			return h.adminSvc.GetTutors(req.Page, req.PageSize, req.Keyword), nil
+			return h.adminSvc.GetTutors(req.Page, req.PageSize, req.Keyword)
 		},
-		Render: func(c *gin.Context, _ *tutorListReq, resp *service.TutorListDTO, _ error) {
+		Render: func(c *gin.Context, _ *tutorListReq, resp *service.TutorListDTO, err error) {
+			if err != nil {
+				response.ServerError(c, err.Error())
+				return
+			}
 			response.Success(c, resp)
 		},
 	}.Handle(c)

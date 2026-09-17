@@ -87,11 +87,14 @@ func materialToDTO(r materialRow) MaterialDTO {
 
 // ListMaterials 资料列表（courseID 可选过滤，按 file_id 倒序）。
 func (s *MaterialService) ListMaterials(page, pageSize, courseID int) (*MaterialPageResult, error) {
-	rows, total, page, pageSize := paging.QueryWithScan[materialRow](s.db, page, pageSize, 20, 100,
+	rows, total, page, pageSize, err := paging.QueryWithScan[materialRow](s.db, page, pageSize, 20, 100,
 		"cf.file_id DESC",
 		func(q *gorm.DB) *gorm.DB {
 			return materialScope(q, courseID)
 		})
+	if err != nil {
+		return nil, err
+	}
 	items := make([]MaterialDTO, 0, len(rows))
 	for _, r := range rows {
 		items = append(items, materialToDTO(r))

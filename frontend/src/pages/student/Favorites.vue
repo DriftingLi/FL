@@ -16,7 +16,7 @@
       <UiAsyncSection
         :error="loadError"
         :loading="loading"
-        :empty="favorites.length === 0"
+        :empty="isEmpty"
         :retrying="retrying"
         error-title="收藏加载失败"
         error-description="网络或服务端异常，可重试"
@@ -114,6 +114,7 @@ const {
   loadError,
   retrying,
   retry: retryLoad,
+  isEmpty,
   page: currentPage,
   pageSize,
   total,
@@ -127,7 +128,7 @@ const {
   })
   favorites.value = res.favorites || []
   total.value = res.total || 0
-})
+}, { itemsRef: favorites })
 
 const staggerStyle = useStagger()
 

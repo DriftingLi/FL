@@ -3,7 +3,7 @@
     <UiAsyncSection
       :error="loadError"
       :loading="loading"
-      :empty="chapterNotFound"
+      :empty="isEmpty"
       :retrying="retrying"
       error-title="章节加载失败"
       error-description="未能读取章节内容，请检查网络后重试。"
@@ -259,7 +259,6 @@ import { useConfirm } from '@/composables/useConfirm'
 const route = useRoute()
 const router = useRouter()
 
-const chapterNotFound = ref(false)
 const chapterDetail = ref<TutorChapterDetail | null>(null)
 const courseName = ref('')
 const chapters = ref<TutorChapter[]>([])
@@ -450,32 +449,23 @@ async function handleDeleteFile(file: ChapterFile) {
   }
 }
 
-// 数据加载
-// 三态收编 useAsyncPage（#401，详情页无分页）：404 归 chapterNotFound 自行渲染，其余异常上抛进 loadError；
-// 错误详情由拦截器统一 toast
-const { loading, loadError, retrying, retry: handleRetry, run: loadChapterDetail } = useAsyncPage(
+// 数据加载：三态收编 useAsyncPage（#401，详情页无分页 / #1101）——loader 只管拉数据与写响应；
+// 「404 = 空态、其余 = 错误态」由 useAsyncPage 的 isEmpty / loadError 判定
+// （复用 ApiErrorKind），页面不自建 chapterNotFound；错误详情由拦截器统一 toast。
+const { loading, loadError, retrying, isEmpty, retry: handleRetry, run: loadChapterDetail } = useAsyncPage(
   async () => {
-    chapterNotFound.value = false
-    try {
-      const chapterId = Number(route.params.chapterId)
-      const res = await tutorApi.getChapterDetail(chapterId)
-      chapterDetail.value = res
-      editContent.value = res.content || ''
-      originalContent.value = res.content || ''
-      // 默认 tab：图文优先，否则第一个媒体 tab
-      activeTab.value = 'content'
-      selectedFileId.value = null
-      // 顺便加载课程信息拿课程名 + 章节列表（用于上下章标题）
-      await loadCourseInfo()
-    } catch (e: unknown) {
-      const status = (e as { response?: { status?: number } })?.response?.status
-      if (status === 404) {
-        chapterNotFound.value = true
-      } else {
-        throw e
-      }
-    }
-  }
+    const chapterId = Number(route.params.chapterId)
+    const res = await tutorApi.getChapterDetail(chapterId)
+    chapterDetail.value = res
+    editContent.value = res.content || ''
+    originalContent.value = res.content || ''
+    // 默认 tab：图文优先，否则第一个媒体 tab
+    activeTab.value = 'content'
+    selectedFileId.value = null
+    // 顺便加载课程信息拿课程名 + 章节列表（用于上下章标题）
+    await loadCourseInfo()
+  },
+  { itemsRef: chapterDetail }
 )
 
 async function loadCourseInfo() {

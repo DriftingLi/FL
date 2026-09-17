@@ -46,7 +46,7 @@ function currentCredentialId(): number | undefined {
   }
 }
 
-// 题库练习模式接口，对应后端 /api/practice-mode（credential_id 由主 client 拦截器默认注入，#387）
+// 题库练习模式接口，对应后端 /api/practice-mode（JWT + CapQuestionPractice + CredentialScoped）。
 //
 // 练习模式标识白名单（#390，与后端 ParsePracticeMode 封闭校验对齐 #386）：
 // 顺序 'sequential' / 标签 'tag:<tagID>' / 按卷 'paper:<paperID>'；未知 mode 后端 400。
@@ -63,7 +63,7 @@ export const practiceModeApi = {
     return unwrappedRequest.get<WithUIQuestions<PracticeStartResultDTO>>('/practice-mode/tag', { params })
   },
   // 顺序练习：开始/续练，返回当前批次题目 + 进度
-  // #413：传参对象让「证件过滤默认注入」拦截器真正生效（此前不传 params 被跳过）。
+  // #413：传参对象让 params 占位存在（缺省不携带 credential_id，证件分区由服务端兜底）。
   startSequential(params?: { credential_id?: number }) {
     return unwrappedRequest.get<WithUIQuestions<PracticeStartResultDTO>>('/practice-mode/sequential', { params: params || {} })
   },
@@ -72,10 +72,12 @@ export const practiceModeApi = {
     return unwrappedRequest.get<ProgressResultDTO>('/practice-mode/sequential-progress', { params: params || {} })
   },
   // 保存练习游标和答题状态（顺序/标签/按卷练习）
-  // #505：顺序练习进度按证件分桶（#414），保存 body 必须携带当前证件 id——拦截器只注入
-  // GET query 不触碰 POST body，漏带会把游标写进 NULL 孤儿行（断点回跳根因）。非 sequential
-  // 模式（标签/按卷）不分桶，不携带。
+  // #505：顺序练习进度按证件分桶（#414），保存 body 必须携带当前证件 id——服务端对 body 没有
+  // 兜底路径（客户端拦截器也不注入证件），漏带会把游标写进 NULL 孤儿行（断点回跳根因）。
+  // 非 sequential 模式（标签/按卷）不分桶，不携带。
   saveProgress(index: number, mode: PracticeModeKey = 'sequential', total: number = 0, answersState: Record<string, unknown> = {}) {
+    // body 里的 credential_id 只可能是「保存时的当前证件」（用户没有指定证件的入口）：与 query 侧
+    // 的显式浏览参数同名不同义，此处由客户端下发、服务端无兜底路径（拦截器不碰 POST body）。
     const credentialId = mode === 'sequential' ? currentCredentialId() : undefined
     return unwrappedRequest.post<ProgressSaveResultDTO>('/practice-mode/progress', { index, practice_mode: mode, total, answers_state: answersState, credential_id: credentialId })
   },
@@ -91,7 +93,8 @@ export const practiceModeApi = {
   getStats() {
     return unwrappedRequest.get<PracticeStatsDTO>('/practice-mode/stats')
   },
-  // 刷题数据展示（顶部 3 宫格，credential_id 由主 client 拦截器默认注入，与 /stats 独立）
+  // 刷题数据展示（顶部 3 宫格，与 /stats 独立）。证件分区走服务端 CredentialScoped 兜底：不传即按
+  // 登录学员当前证件，显式 credential_id 优先。
   getPracticeStats(params?: { credential_id?: number }) {
     return unwrappedRequest.get<PracticePracticeStatsDTO>('/practice-mode/practice-stats', { params: params || {} })
   },

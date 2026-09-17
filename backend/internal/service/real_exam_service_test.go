@@ -17,7 +17,7 @@ import (
 func newRealExamSvc(t *testing.T) (*RealExamService, *PointsService, *QuestionBankService, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	points := NewPointsService(db, zap.NewNop(), clock.Real())
+	points := NewPointsService(db, zap.NewNop(), clock.Real(), NewNotificationService(db, zap.NewNop()))
 	qsvc := NewQuestionBankService(db, nil, zap.NewNop())
 	return NewRealExamService(db, points, zap.NewNop()), points, qsvc, db
 }
@@ -93,7 +93,7 @@ func TestRealPaperPoolIsolation(t *testing.T) {
 
 	// 随机/专项抽题池不含真题题
 	psvc := NewPracticeModeService(db, nil, zap.NewNop())
-	free, err := psvc.GetFreeQuestions("", 0)
+	free, err := psvc.GetFreeQuestions("", 0, nil)
 	if err != nil {
 		t.Fatalf("随机抽题失败: %v", err)
 	}
@@ -102,7 +102,7 @@ func TestRealPaperPoolIsolation(t *testing.T) {
 			t.Fatal("真题题不应出现在随机抽题池")
 		}
 	}
-	seq, err := psvc.StartSequential(1)
+	seq, err := psvc.StartSequential(1, nil)
 	if err != nil {
 		t.Fatalf("顺序练习失败: %v", err)
 	}
@@ -113,13 +113,13 @@ func TestRealPaperPoolIsolation(t *testing.T) {
 	}
 
 	// 学员端标签列表不出现 source 标签；管理端保留
-	studentTags := catalogSvc.ListQuestionTags(true, false)
+	studentTags := catalogSvc.ListQuestionTags(true, false, nil)
 	for _, tg := range studentTags {
 		if tg.Code == "real_exam" {
 			t.Fatal("学员端标签列表不应出现真题标签")
 		}
 	}
-	adminTags := catalogSvc.ListQuestionTags(true, true)
+	adminTags := catalogSvc.ListQuestionTags(true, true, nil)
 	found := false
 	for _, tg := range adminTags {
 		if tg.Code == "real_exam" {
@@ -131,7 +131,7 @@ func TestRealPaperPoolIsolation(t *testing.T) {
 	}
 
 	// StartTagPractice 对 source 标签直接拒绝
-	if _, err := psvc.StartTagPractice(1, srcTag.ID, 0); err == nil {
+	if _, err := psvc.StartTagPractice(1, srcTag.ID, 0, nil); err == nil {
 		t.Fatal("source 标签应拒绝专项练习")
 	}
 }
@@ -165,7 +165,7 @@ func TestRealPaperPractice(t *testing.T) {
 
 	// 断点续练：保存游标后再进入，从游标处恢复
 	pm := NewPracticeModeService(db, nil, zap.NewNop())
-	if err := pm.SaveProgress(1, 2, "paper:"+itoa(paperID), 3, nil); err != nil {
+	if err := pm.SaveProgress(1, 2, "paper:"+itoa(paperID), 3, nil, nil); err != nil {
 		t.Fatalf("保存进度失败: %v", err)
 	}
 	resumed, err := svc.StartPaperPractice(1, paperID)

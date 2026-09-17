@@ -177,9 +177,11 @@ const sectionTotals = ref<Record<string, number>>({})
 const { loading, loadError, retrying, retry, page: currentPage, pageSize, total, run } = useAsyncPage(async () => {
   const kw = keyword.value.trim()
   if (!kw) return
-  const credId = credentialStore.current?.id ?? undefined
+  // 「浏览指定证件」语义：/search 是无 JWT 的公开端点，匿名/非学员角色服务端不兜底（按不分区处理），
+  // 要按证件分区只能显式下发；未选证件时本值本就是 undefined（不传 = 不分区，与兜底无关）。
+  const browseCredentialId = credentialStore.current?.id ?? undefined
   if (activeType.value === 'all') {
-    const res = (await searchApi.search({ keyword: kw, credential_id: credId })) as SearchAllResult
+    const res = (await searchApi.search({ keyword: kw, credential_id: browseCredentialId })) as SearchAllResult
     allResult.value = res
     pageResult.value = null
     sectionTotals.value = {
@@ -195,7 +197,7 @@ const { loading, loadError, retrying, retry, page: currentPage, pageSize, total,
       type: activeType.value,
       page: currentPage.value,
       page_size: pageSize.value,
-      credential_id: credId
+      credential_id: browseCredentialId
     })) as SearchPageResult
     pageResult.value = res
     allResult.value = null

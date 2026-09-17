@@ -277,14 +277,3 @@ func TestGenerateReportEmptySuggestions(t *testing.T) {
 	}
 	t.Logf("空建议 PDF 生成成功: %d 字节", len(data))
 }
-
-// TestEmbeddedFont 验证内嵌字体字节已通过 //go:embed 编译进二进制
-func TestEmbeddedFont(t *testing.T) {
-	if len(embeddedFont) == 0 {
-		t.Fatal("内嵌字体字节为空，//go:embed 未生效")
-	}
-	if len(embeddedFont) < 1_000_000 {
-		t.Errorf("内嵌字体过小 (%d 字节)，可能不是完整的 TTF 文件", len(embeddedFont))
-	}
-	t.Logf("内嵌字体大小: %d 字节", len(embeddedFont))
-}

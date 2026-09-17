@@ -153,6 +153,20 @@
             }
         },
         {
+            "path": "pages/profile/notebook",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "我的笔记"
+            }
+        },
+        {
+            "path": "pages/profile/help-center",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "帮助中心"
+            }
+        },
+        {
             "path": "pages/practice/practice",
             "style": {
                 "navigationStyle": "custom",

@@ -1,0 +1,372 @@
+<template>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+        <view class="header">
+            <view class="header-left" @click="onBack">
+                <text class="back-icon">‹</text>
+            </view>
+            <text class="header-title">帮助中心</text>
+            <view class="header-right"></view>
+        </view>
+
+        <!-- 端上搜索：问题或答案命中即算（口径同 Web 帮助中心，不新增搜索接口） -->
+        <view class="search-bar">
+            <text class="search-icon">🔍</text>
+            <input class="search-input" type="text" v-model="keyword" placeholder="搜索问题关键词"
+                confirm-type="search" />
+            <view v-if="keyword.length > 0" class="search-clear" @click="onClearKeyword">
+                <text class="search-clear-text">✕</text>
+            </view>
+        </view>
+
+        <!-- 分类切换：数字为当前搜索命中数 -->
+        <scroll-view v-if="hasCategories" class="category-scroll" scroll-x="true">
+            <view v-for="(c, idx) in categoryNav" :key="c.code" class="category-chip"
+                :class="{ 'category-chip-active': c.active }" @click="onSelectCategory(c.code)">
+                <text class="category-text" :class="{ 'category-text-active': c.active }">{{ c.label }}</text>
+            </view>
+        </scroll-view>
+
+        <scroll-view class="content-scroll" scroll-y="true">
+            <!-- 加载态 -->
+            <view v-if="loading" class="state-tip">
+                <text class="state-text">加载中...</text>
+            </view>
+
+            <!-- 失败态：给重试位，不伪装成「暂无内容」 -->
+            <view v-if="!loading && failed" class="state-tip">
+                <text class="state-icon">📡</text>
+                <text class="state-text">帮助内容加载失败</text>
+                <view class="state-btn" @click="reload">
+                    <text class="state-btn-text">重试</text>
+                </view>
+            </view>
+
+            <!-- 空态：接口无内容，或搜索无命中 -->
+            <view v-if="!loading && !failed && groups.length == 0" class="state-tip">
+                <text class="state-icon">{{ emptyIcon }}</text>
+                <text class="state-text">{{ emptyText }}</text>
+            </view>
+
+            <!-- 问答分组：折叠 Q&A -->
+            <view class="group-list">
+                <view v-for="(g, gi) in groups" :key="g.code" class="group-card">
+                    <text v-if="g.title.length > 0" class="group-title">{{ g.title }}</text>
+                    <view v-for="(e, ei) in g.entries" :key="e.id" class="entry">
+                        <view class="entry-head" @click="onToggle(e.id)">
+                            <text class="entry-question">{{ e.question }}</text>
+                            <text class="entry-arrow">{{ isExpanded(e.id) ? '▾' : '▸' }}</text>
+                        </view>
+                        <view v-if="isExpanded(e.id)" class="entry-answer-box">
+                            <text class="entry-answer">{{ e.answer }}</text>
+                        </view>
+                    </view>
+                </view>
+            </view>
+        </scroll-view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref, computed } from 'vue'
+    import { onShow } from '@dcloudio/uni-app'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { goBack } from '../../utils/navigation'
+    import { getFaqApi } from '../../api/faq'
+    import { buildFaqNav, buildFaqGroups, faqEmptyText, faqEmptyIcon } from '../../utils/faqDisplay'
+    import type { FaqCategory, FaqGroup, FaqNavItem } from '../../types/index'
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    /** 整页数据：一次取回分类 + 全部已发布条目（#1079 契约，无分页、无搜索接口） */
+    const categories = ref<FaqCategory[]>([])
+    const loading = ref<boolean>(false)
+    const failed = ref<boolean>(false)
+    /** 端上搜索关键词（问题或答案命中即算） */
+    const keyword = ref<string>('')
+    /** 选中分类；空串 = 全部 */
+    const activeCode = ref<string>('')
+    /** 已展开的条目 id（uvue 无 CSS 过渡，展开靠 v-if 切换） */
+    const expandedIds = ref<number[]>([])
+
+    /** 分类栏数据（纯函数在 utils/faqDisplay，页面只做绑定） */
+    const categoryNav = computed<FaqNavItem[]>(() : FaqNavItem[] => buildFaqNav(categories.value, keyword.value, activeCode.value))
+
+    /** 列表数据：搜索时跨分类，单分组时隐藏分类标题 */
+    const groups = computed<FaqGroup[]>(() : FaqGroup[] => buildFaqGroups(categories.value, keyword.value, activeCode.value))
+
+    /** 分类栏是否展示：拿到分类才展示（加载中 / 失败 / 整体为空都不展示） */
+    const hasCategories = computed<boolean>(() : boolean => !loading.value && !failed.value && categories.value.length > 0)
+
+    const emptyText = computed<string>(() : string => faqEmptyText(keyword.value))
+
+    const emptyIcon = computed<string>(() : string => faqEmptyIcon(keyword.value))
+
+    /** 拉取帮助中心（失败置 failed，由重试位重新进入） */
+    async function loadFaq() : Promise<void> {
+        if (loading.value) return
+        loading.value = true
+        failed.value = false
+        try {
+            const data : FaqCategory[] = await getFaqApi()
+            categories.value = data
+        } catch (e) {
+            console.error('[help-center] load failed:', e)
+            failed.value = true
+        } finally {
+            loading.value = false
+        }
+    }
+
+    /** 失败重试 */
+    function reload() : void {
+        failed.value = false
+        loadFaq()
+    }
+
+    function onBack() : void {
+        goBack()
+    }
+
+    function isExpanded(id : number) : boolean {
+        for (let i = 0; i < expandedIds.value.length; i++) {
+            if (expandedIds.value[i] == id) return true
+        }
+        return false
+    }
+
+    /** 折叠 / 展开：重赋新数组以触发响应式 */
+    function onToggle(id : number) : void {
+        const next : number[] = []
+        let removed = false
+        for (let i = 0; i < expandedIds.value.length; i++) {
+            const cur = expandedIds.value[i]
+            if (cur == id) {
+                removed = true
+            } else {
+                next.push(cur)
+            }
+        }
+        if (!removed) next.push(id)
+        expandedIds.value = next
+    }
+
+    /** 切分类即清关键词（同 Web 帮助中心：分类选择与搜索互斥） */
+    function onSelectCategory(code : string) : void {
+        activeCode.value = code
+        keyword.value = ''
+    }
+
+    function onClearKeyword() : void {
+        keyword.value = ''
+    }
+
+    onShow(() => {
+        loadFaq()
+    })
+</script>
+
+<style lang="scss">
+    .container {
+        flex: 1;
+        background-color: #f5f5f5;
+        flex-direction: column;
+    }
+
+    .status-bar {
+        background-color: #2979ff;
+    }
+
+    .header {
+        background-color: #2979ff;
+        padding: 16rpx 32rpx;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .header-left {
+        width: 80rpx;
+        align-items: center;
+    }
+
+    .back-icon {
+        font-size: 48rpx;
+        color: #ffffff;
+    }
+
+    .header-title {
+        flex: 1;
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #ffffff;
+        text-align: center;
+    }
+
+    .header-right {
+        width: 80rpx;
+    }
+
+    /* 搜索栏 */
+    .search-bar {
+        background-color: #2979ff;
+        padding: 0 32rpx 24rpx 32rpx;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .search-icon {
+        font-size: 30rpx;
+        margin-right: 12rpx;
+    }
+
+    .search-input {
+        flex: 1;
+        height: 68rpx;
+        background-color: #ffffff;
+        border-radius: 34rpx;
+        padding: 0 24rpx;
+        font-size: 26rpx;
+        color: #333333;
+    }
+
+    .search-clear {
+        width: 56rpx;
+        height: 56rpx;
+        align-items: center;
+        justify-content: center;
+        margin-left: 12rpx;
+    }
+
+    .search-clear-text {
+        font-size: 30rpx;
+        color: #ffffff;
+    }
+
+    /* 分类 chip 行（横滑）：靠 flex-direction:row + 子项 flex-shrink:0 撑出横向溢出。
+       ⚠️ **不写 `white-space: nowrap`** —— uvue 原生端该属性只支持 `<text>` / `<button>`，
+       写在 `<scroll-view>` 上会被渲染层直接判错并忽略（2026-09-17 真机日志实测：
+       `style property white-space is only supported on <text>|<button>. there is an error on
+       <scroll-view class="category-scroll" …>`）。旧的 `.filter-scroll` 写法照抄不得。 */
+    .category-scroll {
+        background-color: #f5f5f5;
+        flex-direction: row;
+        align-items: center;
+        padding: 20rpx 24rpx;
+    }
+
+    .category-chip {
+        padding: 10rpx 24rpx;
+        border-radius: 32rpx;
+        background-color: #ffffff;
+        margin-right: 16rpx;
+        flex-shrink: 0;
+    }
+
+    .category-chip-active {
+        background-color: #2979ff;
+    }
+
+    .category-text {
+        font-size: 24rpx;
+        color: #666666;
+    }
+
+    .category-text-active {
+        color: #ffffff;
+    }
+
+    /* 内容区 */
+    .content-scroll {
+        flex: 1;
+        height: 0;
+    }
+
+    /* 加载 / 失败 / 空 三态 */
+    .state-tip {
+        align-items: center;
+        padding: 160rpx 0 80rpx 0;
+        flex-direction: column;
+    }
+
+    .state-icon {
+        font-size: 80rpx;
+        margin-bottom: 24rpx;
+    }
+
+    .state-text {
+        font-size: 28rpx;
+        color: #999999;
+    }
+
+    .state-btn {
+        background-color: #2979ff;
+        padding: 16rpx 48rpx;
+        border-radius: 32rpx;
+        margin-top: 32rpx;
+    }
+
+    .state-btn-text {
+        font-size: 28rpx;
+        color: #ffffff;
+    }
+
+    /* 问答分组 */
+    .group-list {
+        flex-direction: column;
+        padding: 8rpx 24rpx 40rpx 24rpx;
+    }
+
+    .group-card {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 8rpx 24rpx;
+        margin-bottom: 16rpx;
+    }
+
+    .group-title {
+        font-size: 26rpx;
+        font-weight: bold;
+        color: #999999;
+        padding: 20rpx 0 8rpx 0;
+    }
+
+    .entry {
+        flex-direction: column;
+    }
+
+    .entry-head {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        padding: 24rpx 0;
+    }
+
+    .entry-question {
+        flex: 1;
+        font-size: 28rpx;
+        color: #333333;
+    }
+
+    .entry-arrow {
+        font-size: 28rpx;
+        color: #999999;
+        margin-left: 16rpx;
+    }
+
+    .entry-answer-box {
+        flex-direction: column;
+        background-color: #f7f8fa;
+        border-radius: 12rpx;
+        padding: 20rpx;
+        margin-bottom: 24rpx;
+    }
+
+    /* 答案：纯文本、原样换行（不引 Markdown 渲染口径） */
+    .entry-answer {
+        font-size: 26rpx;
+        color: #666666;
+        line-height: 42rpx;
+    }
+</style>

@@ -66,10 +66,17 @@ func (h *FeaturedHandler) GetPublicList(c *gin.Context) {
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *featuredListReq) (*service.FeaturedContentPageResult, error) {
-			result := h.svc.GetPublicList(req.Page, req.PageSize, req.Category, req.Sort)
+			result, err := h.svc.GetPublicList(req.Page, req.PageSize, req.Category, req.Sort)
+			if err != nil {
+				return nil, err
+			}
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *featuredListReq, resp *service.FeaturedContentPageResult, _ error) {
+		Render: func(c *gin.Context, _ *featuredListReq, resp *service.FeaturedContentPageResult, err error) {
+			if err != nil {
+				response.ServerError(c, err.Error())
+				return
+			}
 			response.Success(c, resp)
 		},
 	}.Handle(c)
@@ -168,10 +175,17 @@ func (h *FeaturedHandler) AdminList(c *gin.Context) {
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *adminFeaturedListReq) (*service.FeaturedContentPageResult, error) {
-			result := h.svc.AdminList(req.Page, req.PageSize, req.Category, req.Status)
+			result, err := h.svc.AdminList(req.Page, req.PageSize, req.Category, req.Status)
+			if err != nil {
+				return nil, err
+			}
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *adminFeaturedListReq, resp *service.FeaturedContentPageResult, _ error) {
+		Render: func(c *gin.Context, _ *adminFeaturedListReq, resp *service.FeaturedContentPageResult, err error) {
+			if err != nil {
+				response.ServerError(c, err.Error())
+				return
+			}
 			response.Success(c, resp)
 		},
 	}.Handle(c)

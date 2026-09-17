@@ -14,7 +14,7 @@
     <UiAsyncSection
       :error="loadError"
       :loading="loading"
-      :empty="papers.length === 0"
+      :empty="isEmpty"
       :retrying="retrying"
       error-title="真题卷加载失败"
       error-description="网络或服务端异常，可重试"
@@ -97,10 +97,11 @@ const {
   loadError,
   retrying,
   retry: handleRetry,
+  isEmpty,
   run: loadPapers
 } = useAsyncPage(async () => {
   papers.value = (await realExamApi.listPapers()) || []
-})
+}, { itemsRef: papers })
 
 const currentCredentialName = computed(() => credentialStore.current?.name || '')
 

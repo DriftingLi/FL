@@ -31,7 +31,7 @@ func newCheckInSvcWithPointsAt(t *testing.T, now time.Time) (*CheckInService, *c
 	t.Helper()
 	f := clock.At(now)
 	db := testutil.NewMemoryDB(t)
-	points := NewPointsService(db, zap.NewNop(), f)
+	points := NewPointsService(db, zap.NewNop(), f, NewNotificationService(db, zap.NewNop()))
 	svc := NewCheckInService(db, zap.NewNop(), f, points)
 	return svc, f, points
 }

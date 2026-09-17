@@ -7,7 +7,7 @@
     <UiAsyncSection
       :error="loadError"
       :loading="loading"
-      :empty="!data"
+      :empty="isEmpty"
       :retrying="retrying"
       error-title="职位加载失败"
       error-description="网络或服务端异常，可重试"
@@ -93,6 +93,7 @@ const {
   loading,
   loadError,
   retrying,
+  isEmpty,
   retry: handleRetry,
   run: load
 } = useAsyncPage(
@@ -101,7 +102,8 @@ const {
     const res = await jobApi.getPublicJob(id)
     data.value = (res as any) || null
   },
-  { credentialScoped: false } // 招聘域不受证件过滤（#604 opt-out）
+  // 招聘域不受证件过滤（#604 opt-out）；404（职位已下线/不存在）归空态（#1101）
+  { credentialScoped: false, itemsRef: data }
 )
 
 // #488：可投递 = 无记录或冷却期满/已撤回

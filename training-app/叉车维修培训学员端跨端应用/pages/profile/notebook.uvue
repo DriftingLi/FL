@@ -1,0 +1,563 @@
+<template>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+        <view class="header">
+            <view class="header-left" @click="onBack">
+                <text class="back-icon">‹</text>
+            </view>
+            <text class="header-title">我的笔记</text>
+            <view class="header-right" @click="onCreate">
+                <text class="header-action">新建</text>
+            </view>
+        </view>
+
+        <!-- 分段控件：三态取值与后端 scope 参数同名（ADR-0055），不另造端上词表 -->
+        <view class="segment-bar">
+            <view v-for="(opt, idx) in scopeOptions" :key="opt.value" class="segment-item"
+                :class="opt.value == scope ? 'segment-item-active' : ''" @click="onScopeClick(opt.value)">
+                <text class="segment-text" :class="opt.value == scope ? 'segment-text-active' : ''">{{ opt.label }}</text>
+            </view>
+        </view>
+
+        <scroll-view class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
+            <!-- 失败态：给重试位而不是空态（#816 口径：失败与「没有数据」必须分开） -->
+            <view v-if="loadError.length > 0" class="state-box">
+                <text class="state-text">{{ loadError }}</text>
+                <view class="state-btn" @click="onRetry">
+                    <text class="state-btn-text">点击重试</text>
+                </view>
+            </view>
+
+            <!-- 加载态 -->
+            <view v-else-if="loading" class="state-box">
+                <text class="state-text">加载中...</text>
+            </view>
+
+            <!-- 空态：文案按当前筛选项分档 -->
+            <view v-else-if="items.length == 0" class="state-box">
+                <text class="state-icon">📔</text>
+                <text class="state-text">{{ emptyText }}</text>
+            </view>
+
+            <template v-else>
+                <view class="note-list">
+                    <view v-for="(item, idx) in items" :key="item.id" class="note-card">
+                        <view class="note-top">
+                            <view v-if="isStandalone(item)" class="note-tag note-tag-standalone">
+                                <text class="note-tag-text">独立笔记</text>
+                            </view>
+                            <view v-else class="note-tag note-tag-question" @click="onJumpQuestion(item)">
+                                <text class="note-tag-text">{{ badgeText(item.question_content) }}</text>
+                                <text class="note-tag-arrow">›</text>
+                            </view>
+                            <text class="note-time">{{ displayTime(item.updated_at) }}</text>
+                        </view>
+                        <text class="note-title">{{ titleText(item.content) }}</text>
+                        <text v-if="excerptText(item.content).length > 0" class="note-excerpt">{{ excerptText(item.content) }}</text>
+                        <view class="note-actions">
+                            <view class="note-action" @click="onEdit(item)">
+                                <text class="note-action-text">编辑</text>
+                            </view>
+                            <view class="note-action note-action-danger" @click="onRemove(item)">
+                                <text class="note-action-text-danger">删除</text>
+                            </view>
+                        </view>
+                    </view>
+                </view>
+                <view v-if="loadingMore" class="foot-tip">
+                    <text class="foot-text">加载中...</text>
+                </view>
+                <view v-else-if="moreError" class="foot-tip" @click="onRetryMore">
+                    <text class="foot-text">加载失败，点击重试</text>
+                </view>
+                <view v-else-if="noMore" class="foot-tip">
+                    <text class="foot-text">没有更多了</text>
+                </view>
+            </template>
+        </scroll-view>
+
+        <!-- 新建（独立笔记）/ 编辑共用一个弹窗壳：纯文本 + 2000 上限，与 practice-do 的笔记同构。
+             壳复用模块内 InfoDialog（表单真值源与提交流程留在本页，先例 personal-info 的设置弹窗） -->
+        <InfoDialog :show="editorVisible" :title="editorTitle" cancel-text="取消"
+            :confirm-text="editorConfirmText" @close="onEditorCancel" @confirm="onSave">
+            <textarea class="editor-textarea" v-model="draft" placeholder="记点什么…" maxlength="2000" />
+        </InfoDialog>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { computed, ref } from 'vue'
+    import { onShow } from '@dcloudio/uni-app'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { goBack } from '../../utils/navigation'
+    import { listNotesApi, createNoteApi, updateNoteApi, removeNoteApi, NOTE_SCOPE_ALL, NOTE_SCOPE_QUESTION, NOTE_SCOPE_STANDALONE } from '../../api/note'
+    import type { NoteItem } from '../../types/index'
+    import { noteTitle, noteExcerpt, noteBadgeText, isStandaloneNote, noteEmptyText } from '../../utils/notebookDisplay'
+    import { formatDateTimeStr } from '../../utils/format'
+    import InfoDialog from './components/info-dialog.uvue'
+
+    /** 模板不可直调 import 函数（uvue 模板 import 调用编译为 .invoke() = Kotlin error18，先例 #677）；
+     *  本地薄包装消费 utils/notebookDisplay 唯一实现（展示纯函数零第二实现） */
+    function titleText(content : string) : string {
+        return noteTitle(content)
+    }
+
+    function excerptText(content : string) : string {
+        return noteExcerpt(content)
+    }
+
+    function badgeText(questionContent : string) : string {
+        return noteBadgeText(questionContent)
+    }
+
+    function isStandalone(item : NoteItem) : boolean {
+        return isStandaloneNote(item.question_id)
+    }
+
+    /** 更新时间到分钟（后端给 RFC3339，端上只展示到分钟） */
+    function displayTime(dateStr : string) : string {
+        return formatDateTimeStr(dateStr)
+    }
+
+    /** 分段控件选项 */
+    type ScopeOption = {
+        label : string
+        value : string
+    }
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    const scopeOptions : ScopeOption[] = [
+        { label: '全部', value: NOTE_SCOPE_ALL },
+        { label: '题目笔记', value: NOTE_SCOPE_QUESTION },
+        { label: '独立笔记', value: NOTE_SCOPE_STANDALONE },
+    ]
+
+    // ===== 列表三态 + 分页 =====
+    const scope = ref<string>(NOTE_SCOPE_ALL)
+    const items = ref<NoteItem[]>([])
+    const page = ref<number>(1)
+    const pageSize = 20
+    const total = ref<number>(0)
+    const loading = ref<boolean>(false)
+    const loadingMore = ref<boolean>(false)
+    const noMore = ref<boolean>(false)
+    /** 整屏失败文案（非空 = 失败态；与空态互斥） */
+    const loadError = ref<string>('')
+    /** 翻页失败（列表已有着落，只在页脚补一个可点重试位，不清屏） */
+    const moreError = ref<boolean>(false)
+
+    // ===== 编辑器（新建独立笔记 / 编辑既有笔记共用） =====
+    const editorVisible = ref<boolean>(false)
+    const editingId = ref<number>(0)
+    const draft = ref<string>('')
+    const saving = ref<boolean>(false)
+
+    const editorTitle = computed<string>(() : string => {
+        return editingId.value > 0 ? '编辑笔记' : '新建笔记'
+    })
+
+    /** 保存中不给重复提交的入口文案（真值源仍是 saving，弹窗壳只管展示） */
+    const editorConfirmText = computed<string>(() : string => {
+        return saving.value ? '保存中...' : '保存'
+    })
+
+    const emptyText = computed<string>(() : string => {
+        return noteEmptyText(scope.value)
+    })
+
+    /** 首屏 / 切段 / 重试：整屏三态由 loadError / loading / items 决定 */
+    async function loadNotes() : Promise<void> {
+        if (loading.value) return
+        loading.value = true
+        loadError.value = ''
+        moreError.value = false
+        noMore.value = false
+        try {
+            const result = await listNotesApi(scope.value, 1, pageSize)
+            items.value = result.items
+            total.value = result.total
+            page.value = 1
+            if (items.value.length >= result.total || result.items.length == 0) {
+                noMore.value = true
+            }
+        } catch (e) {
+            console.error('[notebook] load failed:', e)
+            items.value = []
+            total.value = 0
+            loadError.value = '笔记加载失败，请检查网络后重试'
+        } finally {
+            loading.value = false
+        }
+    }
+
+    /** 触底翻页：失败停在当前页，页脚给重试位（已加载部分不丢） */
+    async function onLoadMore() : Promise<void> {
+        if (loading.value || loadingMore.value || noMore.value) return
+        loadingMore.value = true
+        moreError.value = false
+        const next = page.value + 1
+        try {
+            const result = await listNotesApi(scope.value, next, pageSize)
+            items.value = items.value.concat(result.items)
+            total.value = result.total
+            page.value = next
+            if (items.value.length >= result.total || result.items.length == 0) {
+                noMore.value = true
+            }
+        } catch (e) {
+            console.error('[notebook] load more failed:', e)
+            moreError.value = true
+        } finally {
+            loadingMore.value = false
+        }
+    }
+
+    function onRetry() : void {
+        loadNotes()
+    }
+
+    function onRetryMore() : void {
+        onLoadMore()
+    }
+
+    /** 切段：清空列表后重取（避免旧筛选的行残留在新筛选下） */
+    function onScopeClick(val : string) : void {
+        if (scope.value == val) return
+        scope.value = val
+        items.value = []
+        total.value = 0
+        loadNotes()
+    }
+
+    /** 题目徽标：跳到该笔记挂靠的题目（practice-do 读 mode + question_id） */
+    function onJumpQuestion(item : NoteItem) : void {
+        const qid = item.question_id
+        if (qid == null || qid <= 0) return
+        uni.navigateTo({ url: '/pages/practice/practice-do?mode=single&question_id=' + qid!.toString() })
+    }
+
+    function openEditor(id : number, content : string) : void {
+        editingId.value = id
+        draft.value = content
+        editorVisible.value = true
+    }
+
+    function onCreate() : void {
+        openEditor(0, '')
+    }
+
+    function onEdit(item : NoteItem) : void {
+        openEditor(item.id, item.content)
+    }
+
+    function onEditorCancel() : void {
+        if (saving.value) return
+        editorVisible.value = false
+        editingId.value = 0
+        draft.value = ''
+    }
+
+    /** 保存：新建走 POST /notes（独立笔记），编辑走 PUT /notes/:id；成功后回列表重取 */
+    async function onSave() : Promise<void> {
+        if (saving.value) return
+        const content = draft.value
+        if (content.trim().length == 0) {
+            uni.showToast({ title: '笔记内容不能为空', icon: 'none' })
+            return
+        }
+        saving.value = true
+        try {
+            if (editingId.value > 0) {
+                await updateNoteApi(editingId.value, content)
+            } else {
+                await createNoteApi(content)
+            }
+            editorVisible.value = false
+            editingId.value = 0
+            draft.value = ''
+            uni.showToast({ title: '已保存', icon: 'none' })
+            await loadNotes()
+        } catch (e) {
+            console.error('[notebook] save failed:', e)
+            // 失败保持浮层打开（输入不丢）；错误 toast 由 request 层统一给
+        } finally {
+            saving.value = false
+        }
+    }
+
+    function onRemove(item : NoteItem) : void {
+        uni.showModal({
+            title: '提示',
+            content: '确定删除这条笔记吗？',
+            success: (res) => {
+                if (res.confirm) {
+                    removeNoteApi(item.id).then(() : void => {
+                        uni.showToast({ title: '笔记已删除', icon: 'none' })
+                        loadNotes()
+                    }).catch((e) => {
+                        console.warn('[notebook] delete failed:', e)
+                    })
+                }
+            }
+        })
+    }
+
+    function onBack() : void {
+        goBack()
+    }
+
+    onShow(() => {
+        loadNotes()
+    })
+</script>
+
+<style lang="scss">
+    .container {
+        flex: 1;
+        background-color: #f5f5f5;
+        flex-direction: column;
+    }
+
+    .status-bar {
+        background-color: #2979ff;
+    }
+
+    .header {
+        background-color: #2979ff;
+        padding: 16rpx 32rpx;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .header-left {
+        width: 120rpx;
+        align-items: flex-start;
+    }
+
+    .back-icon {
+        font-size: 48rpx;
+        color: #ffffff;
+    }
+
+    .header-title {
+        flex: 1;
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #ffffff;
+        text-align: center;
+    }
+
+    .header-right {
+        width: 120rpx;
+        align-items: flex-end;
+    }
+
+    .header-action {
+        font-size: 28rpx;
+        color: #ffffff;
+    }
+
+    .segment-bar {
+        flex-direction: row;
+        background-color: #ffffff;
+        margin: 16rpx 24rpx;
+        padding: 6rpx;
+        border-radius: 12rpx;
+        border: 1px solid #eeeeee;
+    }
+
+    .segment-item {
+        flex: 1;
+        height: 64rpx;
+        border-radius: 10rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .segment-item-active {
+        background-color: #2979ff;
+    }
+
+    .segment-text {
+        font-size: 26rpx;
+        color: #666666;
+    }
+
+    .segment-text-active {
+        color: #ffffff;
+    }
+
+    .content-scroll {
+        flex: 1;
+        height: 0;
+    }
+
+    .state-box {
+        flex-direction: column;
+        align-items: center;
+        padding: 160rpx 48rpx;
+    }
+
+    .state-icon {
+        font-size: 80rpx;
+        margin-bottom: 24rpx;
+    }
+
+    .state-text {
+        font-size: 28rpx;
+        color: #999999;
+        text-align: center;
+    }
+
+    .state-btn {
+        margin-top: 32rpx;
+        padding: 16rpx 40rpx;
+        border-radius: 32rpx;
+        border: 1rpx solid #2979ff;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .state-btn-text {
+        font-size: 26rpx;
+        color: #2979ff;
+    }
+
+    .note-list {
+        flex-direction: column;
+        padding: 0 24rpx;
+    }
+
+    .note-card {
+        flex-direction: column;
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 24rpx;
+        margin-bottom: 16rpx;
+        border: 1px solid #eeeeee;
+    }
+
+    .note-top {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12rpx;
+    }
+
+    .note-tag {
+        flex-direction: row;
+        align-items: center;
+        padding: 4rpx 12rpx;
+        border-radius: 8rpx;
+        flex-shrink: 1;
+    }
+
+    .note-tag-standalone {
+        background-color: #eef3ff;
+    }
+
+    .note-tag-question {
+        background-color: #fff3e0;
+    }
+
+    .note-tag-text {
+        font-size: 20rpx;
+        color: #666666;
+        overflow: hidden;
+        lines: 1;
+    }
+
+    .note-tag-standalone .note-tag-text {
+        color: #2979ff;
+    }
+
+    .note-tag-question .note-tag-text {
+        color: #ff9800;
+    }
+
+    .note-tag-arrow {
+        font-size: 22rpx;
+        color: #ff9800;
+        margin-left: 4rpx;
+    }
+
+    .note-time {
+        font-size: 22rpx;
+        color: #999999;
+        flex-shrink: 0;
+        margin-left: 16rpx;
+    }
+
+    .note-title {
+        font-size: 30rpx;
+        font-weight: 500;
+        color: #333333;
+        margin-bottom: 8rpx;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        lines: 2;
+    }
+
+    .note-excerpt {
+        font-size: 26rpx;
+        color: #888888;
+        line-height: 40rpx;
+        margin-bottom: 16rpx;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        lines: 2;
+    }
+
+    .note-actions {
+        flex-direction: row;
+        margin-top: 8rpx;
+    }
+
+    .note-action {
+        padding: 8rpx 28rpx;
+        border-radius: 24rpx;
+        border: 1rpx solid #dddddd;
+        align-items: center;
+        justify-content: center;
+        margin-right: 16rpx;
+    }
+
+    .note-action-danger {
+        border: 1rpx solid #f44336;
+    }
+
+    .note-action-text {
+        font-size: 24rpx;
+        color: #666666;
+    }
+
+    .note-action-text-danger {
+        font-size: 24rpx;
+        color: #f44336;
+    }
+
+    .foot-tip {
+        align-items: center;
+        padding: 24rpx 0;
+    }
+
+    .foot-text {
+        font-size: 24rpx;
+        color: #999999;
+    }
+
+    .editor-textarea {
+        width: 100%;
+        min-height: 240rpx;
+        background-color: #fafafa;
+        border: 1rpx solid #f0f0f0;
+        border-radius: 12rpx;
+        padding: 20rpx;
+        font-size: 28rpx;
+        color: #333333;
+        line-height: 44rpx;
+    }
+</style>

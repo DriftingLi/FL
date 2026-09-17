@@ -12,15 +12,18 @@ import type {
   RecruitMeDTO,
   RecruitResumeCard
 } from './generated/recruit'
+import type { ContactRequestStatus, ContactState } from '@/utils/contactRequestStatus'
 
 // 名称适配：生成物沿用后端 DTO 命名，前端域词汇不带 DTO 后缀（既有 import 路径与类型名不破）。
+// 两处状态在生成物里只到 string：这里按 utils/contactRequestStatus 收窄——
+// status 是五态 union（与后端 ContactGrantState 对账），contact_state 是它的三值投影。
+export type RecruitContactRequest = Omit<ContactRequestDTO, 'status'> & { status: ContactRequestStatus }
+export type RecruitContactRequestList = Omit<ContactRequestListResult, 'items'> & { items: RecruitContactRequest[] }
+export type RecruitResumeItem = Omit<RecruitResumeCard, 'contact_state'> & { contact_state?: ContactState }
+export type RecruitResumeListResp = Omit<RecruitListResult, 'items'> & { items: RecruitResumeItem[] }
 export type {
   ContactPlainDTO as RecruitContactPlain,
-  ContactRequestDTO as RecruitContactRequest,
-  ContactRequestListResult as RecruitContactRequestList,
-  RecruitListResult as RecruitResumeListResp,
-  RecruitMeDTO,
-  RecruitResumeCard as RecruitResumeItem
+  RecruitMeDTO
 }
 
 /** 简历库筛选（入参，不生成：ADR-0048 决策 3）。 */
@@ -42,16 +45,16 @@ export const recruitApi = {
     return unwrappedRequest.get<RecruitMeDTO>('/recruit/me')
   },
   listResumes(params?: RecruitResumeListParams) {
-    return unwrappedRequest.get<RecruitListResult>('/recruit/resumes', { params })
+    return unwrappedRequest.get<RecruitResumeListResp>('/recruit/resumes', { params })
   },
   getResume(id: number | string) {
-    return unwrappedRequest.get<RecruitResumeCard>(`/recruit/resumes/${id}`)
+    return unwrappedRequest.get<RecruitResumeItem>(`/recruit/resumes/${id}`)
   },
   createContactRequest(data: { student_user_id: number; message: string }) {
-    return unwrappedRequest.post<ContactRequestDTO>('/recruit/contact-requests', data)
+    return unwrappedRequest.post<RecruitContactRequest>('/recruit/contact-requests', data)
   },
   listMyRequests(params?: { page?: number; page_size?: number }) {
-    return unwrappedRequest.get<ContactRequestListResult>('/recruit/contact-requests', { params })
+    return unwrappedRequest.get<RecruitContactRequestList>('/recruit/contact-requests', { params })
   },
   getContact(studentUserId: number | string) {
     return unwrappedRequest.get<ContactPlainDTO>(`/recruit/resumes/${studentUserId}/contact`)

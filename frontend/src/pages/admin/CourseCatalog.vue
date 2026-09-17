@@ -1,3 +1,8 @@
+<!--
+  列表档位：useAsyncPage（只读计数）—— 课程目录档：目录树 + facet 计数 + 课程汇总卡
+  （非服务端分页列表：筛选/分页在客户端，故不套 useAdminTable；依据 ADR-0056 §9）
+  判定口径见 docs/agents/ui-conventions.md「管理端列表两档归属」。
+-->
 <template>
   <div class="cc-layout">
     <!-- 左侧目录导航 -->
