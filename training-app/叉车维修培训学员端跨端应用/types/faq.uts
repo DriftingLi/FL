@@ -1,0 +1,41 @@
+/**
+ * 帮助中心（FAQ）模块类型（#1081）
+ *
+ * 契约来源：后端 `GET /api/faq`（#1079，随 PR #1088 上线）。Web 侧同形状见
+ * `frontend/src/api/generated/faq.ts` 的 `FaqCategoryDTO` / `FaqEntryDTO` / `FaqResult`。
+ *
+ * 口径（#1079 定案，本页只消费不新增）：
+ *   - 一次返回「分类 + 全部已发布条目」，分页与搜索都不做（搜索走端上过滤）；
+ *   - `answer` 是**纯文本、原样换行**，不引入 Markdown 渲染口径（ADR-0046）。
+ */
+
+/** 帮助中心条目（学员端只读，仅含已发布） */
+export type FaqEntry = {
+    id : number
+    question : string
+    answer : string
+    sort_order : number
+}
+
+/** 帮助中心分类（含其下已发布条目；无条目时 entries 为 []，不是 null） */
+export type FaqCategory = {
+    code : string
+    id : number
+    sort_order : number
+    title : string
+    entries : FaqEntry[]
+}
+
+/** 分类 chip 行的一项（label 已含命中数，端上拼好，模板不再算） */
+export type FaqNavItem = {
+    code : string
+    label : string
+    active : boolean
+}
+
+/** 展示分组（搜索时跨分类；只有一个分组有内容时 title 为空串） */
+export type FaqGroup = {
+    code : string
+    title : string
+    entries : FaqEntry[]
+}

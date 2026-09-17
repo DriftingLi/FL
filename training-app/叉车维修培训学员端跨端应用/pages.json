@@ -153,6 +153,13 @@
             }
         },
         {
+            "path": "pages/profile/help-center",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "帮助中心"
+            }
+        },
+        {
             "path": "pages/practice/practice",
             "style": {
                 "navigationStyle": "custom",
