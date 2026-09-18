@@ -91,7 +91,8 @@ func (h *ContactHandler) ListForRecruiter(c *gin.Context) {
 		response.ServerError(c, err.Error())
 		return
 	}
-	response.Success(c, gin.H{"items": items, "total": total, "page": page, "page_size": pageSize})
+	// typed page（#1095）：键序 = 旧 gin.H 的 map 键序，响应字节不变（登记表 service.ContactRequestListResult）。
+	response.Success(c, service.ContactRequestListResult{Items: items, Page: page, PageSize: pageSize, Total: total})
 }
 
 // GetContact 明文联系方式 GET /api/recruit/resumes/:id/contact
@@ -154,7 +155,8 @@ func (h *ContactHandler) ListForStudent(c *gin.Context) {
 		response.ServerError(c, err.Error())
 		return
 	}
-	response.Success(c, gin.H{"items": items, "total": total, "page": page, "page_size": pageSize})
+	// typed page（#1095）：同上，学员侧共用同一 DTO。
+	response.Success(c, service.ContactRequestListResult{Items: items, Page: page, PageSize: pageSize, Total: total})
 }
 
 // Approve 学员同意申请 POST /api/resume/contact-requests/:id/approve

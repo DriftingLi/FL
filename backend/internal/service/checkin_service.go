@@ -14,6 +14,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
 )
 
@@ -311,28 +312,23 @@ type aggRow struct {
 // GetCheckInRank 排行榜（累计总榜，tie-break 见 checkInRankOrderBy 单点定义）。
 func (s *CheckInService) GetCheckInRank(requesterID, page, pageSize int) (*CheckInRankResult, error) {
 	now := s.clk.Now()
-	if page <= 0 {
-		page = 1
+	// 排行榜聚合子查询（count 与 scan 同作用域，单一出处）。
+	aggQuery := func(q *gorm.DB) *gorm.DB {
+		return q.Table("(" + checkInAggSubquery + ") AS agg").Select("user_id, total, last_date")
 	}
-	if pageSize <= 0 || pageSize > 100 {
-		pageSize = 20
-	}
-	var totalUsers int64
-	if err := s.db.Table("(" + checkInAggSubquery + ") AS agg").Count(&totalUsers).Error; err != nil {
+	rows, totalUsers, page, pageSize, err := paging.QueryWithScan[aggRow](s.db, page, pageSize, 20, 100, checkInRankOrderBy, aggQuery)
+	if err != nil {
 		return nil, err
 	}
+	// 越界页回退末页（既有语义，收编 #1095 时原样保留）：total 已知后按末页重取一次。
 	pages := response.PageCount(totalUsers, pageSize)
 	if page > pages && pages > 0 {
 		page = pages
+		if rows, _, _, _, err = paging.QueryWithScan[aggRow](s.db, page, pageSize, 20, 100, checkInRankOrderBy, aggQuery); err != nil {
+			return nil, err
+		}
 	}
 	offset := (page - 1) * pageSize
-	var rows []aggRow
-	if err := s.db.Table("(" + checkInAggSubquery + ") AS agg").
-		Select("user_id, total, last_date").
-		Order(checkInRankOrderBy).
-		Limit(pageSize).Offset(offset).Scan(&rows).Error; err != nil {
-		return nil, err
-	}
 	// 批量取用户信息
 	userIDs := make([]int, 0, len(rows))
 	for _, r := range rows {

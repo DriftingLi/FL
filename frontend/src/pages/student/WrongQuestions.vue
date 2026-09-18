@@ -26,7 +26,7 @@
     <UiAsyncSection
       :error="loadError"
       :loading="loading"
-      :empty="wrongList.length === 0"
+      :empty="isEmpty"
       :retrying="retrying"
       error-title="错题加载失败"
       error-description="网络或服务端异常，可重试"
@@ -180,6 +180,7 @@ const {
   loadError,
   retrying,
   retry: retryLoad,
+  isEmpty,
   page,
   pageSize,
   total,
@@ -201,7 +202,7 @@ const {
   const n = new Set<number>()
   selectedIds.value.forEach(id => { if (ids.has(id)) n.add(id) })
   selectedIds.value = n
-})
+}, { itemsRef: wrongList })
 
 const staggerStyle = useStagger()
 const filterType = ref('')

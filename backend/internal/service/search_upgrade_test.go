@@ -88,7 +88,7 @@ func TestSearchHitPositionOrderingAndSnippet(t *testing.T) {
 	_ = bodyHit
 	mk("液压系统原理", "与本关键词无关的正文")
 
-	got, err := svc.Search("液压", SearchTypeCourse, 1, 20)
+	got, err := svc.Search("液压", SearchTypeCourse, 1, 20, nil)
 	if err != nil {
 		t.Fatalf("搜索失败: %v", err)
 	}
@@ -131,11 +131,11 @@ func TestSearchMatchesCourseDescriptionAndFeaturedBody(t *testing.T) {
 		t.Fatalf("建精选失败: %v", err)
 	}
 
-	coursePage, err := svc.Search("液压", SearchTypeCourse, 1, 20)
+	coursePage, err := svc.Search("液压", SearchTypeCourse, 1, 20, nil)
 	if err != nil || coursePage.(*SearchPageDTO).Total != 1 {
 		t.Fatalf("课程简介应参与匹配: %v %+v", err, coursePage)
 	}
-	contentPage, err := svc.Search("液压", SearchTypeContent, 1, 20)
+	contentPage, err := svc.Search("液压", SearchTypeContent, 1, 20, nil)
 	if err != nil || contentPage.(*SearchPageDTO).Total != 1 {
 		t.Fatalf("内容精选正文应参与匹配: %v %+v", err, contentPage)
 	}
@@ -154,7 +154,7 @@ func TestSearchTopicMatchesReplyContent(t *testing.T) {
 		t.Fatalf("建回复失败: %v", err)
 	}
 
-	got, err := svc.Search("液压泵", SearchTypeTopic, 1, 20)
+	got, err := svc.Search("液压泵", SearchTypeTopic, 1, 20, nil)
 	if err != nil {
 		t.Fatalf("搜索失败: %v", err)
 	}
@@ -183,7 +183,7 @@ func TestSearchAllIncludesChapterSection(t *testing.T) {
 	if err := db.Create(&ch).Error; err != nil {
 		t.Fatalf("建章节失败: %v", err)
 	}
-	all, err := svc.Search("液压", "", 1, 20)
+	all, err := svc.Search("液压", "", 1, 20, nil)
 	if err != nil {
 		t.Fatalf("聚合搜索失败: %v", err)
 	}
@@ -209,7 +209,7 @@ func TestSearchFactsAreAnonymousAndZeroResultQueryable(t *testing.T) {
 	}
 
 	// 聚合搜索（type 缺省）+ 零命中 = 零结果搜索
-	if _, err := svc.Search("查无此词的液压", "", 1, 20); err != nil {
+	if _, err := svc.Search("查无此词的液压", "", 1, 20, nil); err != nil {
 		t.Fatalf("搜索失败: %v", err)
 	}
 	var facts int64
@@ -226,7 +226,7 @@ func TestSearchFactsAreAnonymousAndZeroResultQueryable(t *testing.T) {
 	}
 
 	// **指定类型**搜索的 0 命中不算零结果词：那只说明该分区没有，不等于平台没有
-	if _, err := svc.Search("查无此词的章节", SearchTypeChapter, 1, 20); err != nil {
+	if _, err := svc.Search("查无此词的章节", SearchTypeChapter, 1, 20, nil); err != nil {
 		t.Fatalf("搜索失败: %v", err)
 	}
 	zero, err = svc.ZeroResultKeywords(30, 20)
@@ -248,7 +248,7 @@ func TestSearchFactsAreAnonymousAndZeroResultQueryable(t *testing.T) {
 	if err := db.Create(&model.Chapter{CourseID: c.CourseID, Title: "液压章节", Content: "x", CreatedAt: testutil.Now()}).Error; err != nil {
 		t.Fatalf("建章节失败: %v", err)
 	}
-	if _, err := svc.Search("液压", "", 1, 20); err != nil {
+	if _, err := svc.Search("液压", "", 1, 20, nil); err != nil {
 		t.Fatalf("搜索失败: %v", err)
 	}
 	var last model.SearchFact
@@ -289,7 +289,7 @@ func TestSearchSecondaryOrderKeys(t *testing.T) {
 	mk("液压入门", 9)
 	mk("液压进阶", 1)
 
-	got, err := svc.Search("液压", SearchTypeCourse, 1, 20)
+	got, err := svc.Search("液压", SearchTypeCourse, 1, 20, nil)
 	if err != nil {
 		t.Fatalf("搜索失败: %v", err)
 	}
@@ -309,13 +309,43 @@ func TestSearchSecondaryOrderKeys(t *testing.T) {
 	if err := db.Create(&t2).Error; err != nil {
 		t.Fatalf("建帖失败: %v", err)
 	}
-	topics, err := svc.Search("液压泵", SearchTypeTopic, 1, 20)
+	topics, err := svc.Search("液压泵", SearchTypeTopic, 1, 20, nil)
 	if err != nil {
 		t.Fatalf("搜索失败: %v", err)
 	}
 	tItems := topics.(*SearchPageDTO).Items
 	if len(tItems) != 2 || tItems[0].Title != "新帖" {
 		t.Fatalf("论坛帖二级键 last_reply_at 未生效: %+v", tItems)
+	}
+}
+
+// 越界页行为（#1095 收编 paging.QueryWithScan 的等价判据）：页大小 >100 回退默认 20（不是截断到 100），
+// 页码 <=0 回退第 1 页；total 口径与钳制无关（永远是匹配总数）。响应里的 page/pages 仍按原始入参算。
+func TestSearchPageClampFallsBackToDefaults(t *testing.T) {
+	db := testutil.NewMemoryDB(t)
+	svc := NewSearchService(db, nil)
+	for i := 0; i < 25; i++ {
+		testutil.SeedQuestion(t, db, "single_choice", fmt.Sprintf("液压滤芯 %02d", i), "A")
+	}
+
+	got, err := svc.Search("液压", SearchTypeQuestion, 1, 1000, nil)
+	if err != nil {
+		t.Fatalf("搜索失败: %v", err)
+	}
+	page := got.(*SearchPageDTO)
+	if page.Total != 25 {
+		t.Fatalf("total=%d, want 25（钳制不影响总数口径）", page.Total)
+	}
+	if len(page.Items) != 20 {
+		t.Fatalf("page_size=1000 必须回退默认 20（不是 1000、也不是截断到 100），实得 %d 条", len(page.Items))
+	}
+
+	first, err := svc.Search("液压", SearchTypeQuestion, 0, 20, nil)
+	if err != nil {
+		t.Fatalf("搜索失败: %v", err)
+	}
+	if n := len(first.(*SearchPageDTO).Items); n != 20 {
+		t.Fatalf("page=0 必须回退第 1 页（取满 20 条），实得 %d 条", n)
 	}
 }
 

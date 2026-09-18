@@ -16,7 +16,7 @@
       <UiAsyncSection
         :error="loadError"
         :loading="loading"
-        :empty="favorites.length === 0"
+        :empty="isEmpty"
         :retrying="retrying"
         error-title="收藏加载失败"
         error-description="网络或服务端异常，可重试"
@@ -114,6 +114,7 @@ const {
   loadError,
   retrying,
   retry: retryLoad,
+  isEmpty,
   page: currentPage,
   pageSize,
   total,
@@ -127,7 +128,7 @@ const {
   })
   favorites.value = res.favorites || []
   total.value = res.total || 0
-})
+}, { itemsRef: favorites })
 
 const staggerStyle = useStagger()
 
@@ -139,10 +140,15 @@ const TYPE_LABELS: Record<string, string> = {
   topic: '帖子'
 }
 
-// #511：UiSegmentTabs 分类选项（顶部 tab 轴：全部/课程/题目/帖子）
+// #511：UiSegmentTabs 分类选项。本轮补「章节」（#1132 复审）：Web 章节页已能创建章节收藏，
+// 缺 tab 会让新产生的条目只能在「全部」里翻。
+// **「内容精选」刻意不补**（2026-09-18 裁定）：精选内容的阅读面在门户（hrwai-portal，导航即外链），
+// 门户无收藏实现，唯一创建点是移动端 ⇒ 此处补 tab 会得到一个长期为空的筛选项；
+// 资讯收藏要不要做、做在哪，属跨仓产品决定（留档见 #1132）。
 const typeTabOptions = [
   { label: '全部', value: 'all' },
   { label: '课程', value: 'course' },
+  { label: '章节', value: 'chapter' },
   { label: '题目', value: 'question' },
   { label: '帖子', value: 'topic' }
 ]
@@ -164,8 +170,9 @@ function typeTagColor(type: string) {
 }
 
 // 可跳转类型：课程 → 课程中心详情（query 打开），帖子 → 论坛详情，
-// 题目 / 内容精选 → ADR-0049 决策 4 的落点页（搜索结果与收藏页共用同一落点）。
-// **章节仍无落点**：收藏条目不带所属课程 ID，构造不出章节学习页的路径（不猜、不乱跳）。
+// 题目 / 内容精选 → ADR-0049 决策 4 的落点页（搜索结果与收藏页共用同一落点），
+// 章节 → 章节学习页（与 SearchPage.vue 同一落点：course_id + chapter_id 两个路径参数）。
+// 章节的所属课程 ID 由后端 FavoriteDTO.course_id 给出（#1089）；缺失时**不可点**（不猜、不乱跳）。
 function itemPath(item: FavoriteItem): string {
   if (item.target_type === 'course') {
     return `/training/courses?course_id=${item.target_id}`
@@ -178,6 +185,9 @@ function itemPath(item: FavoriteItem): string {
   }
   if (item.target_type === 'question') {
     return `/training/questions/${item.target_id}`
+  }
+  if (item.target_type === 'chapter') {
+    return item.course_id > 0 ? `/training/course/${item.course_id}/chapter/${item.target_id}` : ''
   }
   return ''
 }

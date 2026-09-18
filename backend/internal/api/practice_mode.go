@@ -492,9 +492,13 @@ func (h *PracticeModeHandler) GetHistory(c *gin.Context) {
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *practiceHistoryReq) (*service.HistoryResultDTO, error) {
-			return h.svc.GetHistory(req.StudentID, req.CredentialID, req.Page, req.PageSize, req.QType, req.StartDate, req.EndDate), nil
+			return h.svc.GetHistory(req.StudentID, req.CredentialID, req.Page, req.PageSize, req.QType, req.StartDate, req.EndDate)
 		},
-		Render: func(c *gin.Context, _ *practiceHistoryReq, resp *service.HistoryResultDTO, _ error) {
+		Render: func(c *gin.Context, _ *practiceHistoryReq, resp *service.HistoryResultDTO, err error) {
+			if err != nil {
+				response.ServerError(c, err.Error())
+				return
+			}
 			response.Success(c, resp)
 		},
 	}.Handle(c)

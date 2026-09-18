@@ -3,7 +3,7 @@
     <UiAsyncSection
       :error="loadError"
       :loading="loading"
-      :empty="chapterNotFound"
+      :empty="isEmpty"
       :retrying="retrying"
       error-title="章节加载失败"
       error-description="网络或服务端异常，可重试"
@@ -14,7 +14,7 @@
       </template>
 
       <!-- 404 展示型第五态走空态槽：有明确去向，给「返回课程」而不是重试
-           （loader 里 404 置 chapterNotFound 且不上抛 loadError，两判据互斥） -->
+           （2026-09-17 #1101：404 = 空态由 useAsyncPage 的 isEmpty 判定，页面不再自建 chapterNotFound） -->
       <template #empty>
         <UiEmptyState
           title="章节不存在或已删除"
@@ -37,6 +37,15 @@
           <UiButton v-else size="small" :loading="markingCompleted" @click="markCompleted">
             标记完成
           </UiButton>
+          <!-- 章节收藏（#1132）：收藏目标是章节本身；打开落点由后端 FavoriteDTO.course_id 给出（#1089） -->
+          <UiActionChip
+            icon="fav"
+            :label="chapterFavorited ? '已收藏' : '收藏'"
+            tone="fav"
+            borderless
+            :active="chapterFavorited"
+            @click="toggleChapterFavorite"
+          />
         </div>
       </div>
 
@@ -142,6 +151,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, ArrowRight, VideoCamera, Document, Picture } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { courseApi, type ChapterDetail } from '@/api/course'
+import { favoriteApi } from '@/api/favorite'
 import { studentApi, type StudentChapterProgress } from '@/api/student'
 import { useCourseStore } from '@/stores/course'
 import { useAsyncPage } from '@/composables/useAsyncPage'
@@ -157,6 +167,7 @@ import ImageViewer from '@/components/student/ImageViewer.vue'
 import ChapterDiscussion from '@/components/student/ChapterDiscussion.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiTag from '@/components/ui/UiTag.vue'
+import UiActionChip from '@/components/ui/UiActionChip.vue'
 import PublishMarkdown from '@/components/render/PublishMarkdown.vue'
 
 const route = useRoute()
@@ -168,41 +179,31 @@ interface ChapterItem {
   title: string
 }
 
-// 三态：notFound（404，有明确去向）/ loadError（其他异常，可重试）/ 内容
-const chapterNotFound = ref(false)
+// 三态收编（#1101）：404 = 空态（有明确去向）/ 其余 = 错误态（可重试）/ 内容
 const chapterDetail = ref<ChapterDetail | null>(null)
 const courseName = ref('')
 const chapters = ref<ChapterItem[]>([])
 const activeTab = ref('')
 
-// 三态收编（#388，详情页无分页）：404 归 chapterNotFound 自行渲染，其余异常上抛进 loadError
-const { loading, loadError, retrying, retry: retryLoadChapter, run: loadChapterDetail } = useAsyncPage(
+// 三态收编（#388 / #1101，详情页无分页）：loader 只管拉数据与写响应；
+// 「404 = 空态、其余 = 错误态」由 useAsyncPage 的 isEmpty / loadError 判定，页面不自建三态。
+const { loading, loadError, retrying, isEmpty, retry: retryLoadChapter, run: loadChapterDetail } = useAsyncPage(
   async () => {
-    chapterNotFound.value = false
     // 切换章节前先上报当前章节的增量时长，再停表（先报增量再停表）
     await studyTracker.reportIncremental(false)
     studyTracker.stop()
-    try {
-      // 拦截器已解包信封；章节不存在由后端 404 触发 catch 分支
-      const detail = await courseApi.getChapterDetail(Number(courseId.value), Number(chapterId.value))
-      chapterDetail.value = detail
-      // 断点续播位置（学习状态缓存；无记录为 0）
-      chapterVideoPosition.value = chapterStateMap.value.get(detail.chapter_id)?.video_position || 0
-      latestVideoPosition = chapterVideoPosition.value
-      // 章节加载成功后启动学习计时
-      studyTracker.begin()
-    } catch (error) {
-      const err = error as { response?: { status?: number } }
-      if (err?.response?.status === 404) {
-        chapterNotFound.value = true
-      } else {
-        throw error
-      }
-    }
+    // 拦截器已解包信封；章节不存在由后端 404 触发（归空态）
+    const detail = await courseApi.getChapterDetail(Number(courseId.value), Number(chapterId.value))
+    chapterDetail.value = detail
+    // 断点续播位置（学习状态缓存；无记录为 0）
+    chapterVideoPosition.value = chapterStateMap.value.get(detail.chapter_id)?.video_position || 0
+    latestVideoPosition = chapterVideoPosition.value
+    // 章节加载成功后启动学习计时
+    studyTracker.begin()
   },
   // 学习位置/进行中学习的证件切换联动属 #594 Out of Scope（另案决策），
   // 本页保持现状不随切换重装——loader 内含学习计时上报副作用，重装会重复上报（#604 opt-out）
-  { credentialScoped: false }
+  { credentialScoped: false, itemsRef: chapterDetail }
 )
 
 // 学习状态（ADR-0017）：每课程加载一次（切章不重复请求），
@@ -409,9 +410,51 @@ async function markCompleted() {
   }
 }
 
+// 章节收藏（#1132）：入口此前两端都缺 —— 收藏表里 chapter 是「没有创建点的类型」，
+// 而收藏页早已把章节当一等公民（Web 的类型标签色、移动端的「章节」筛选 chip）。
+// 交互形状对齐 ForumDetail 的帖子收藏（同一 UiActionChip 写法）。
+const chapterFavorited = ref(false)
+const chapterFavoriteId = ref<number>(0)
+
+async function loadChapterFavoriteState() {
+  chapterFavorited.value = false
+  chapterFavoriteId.value = 0
+  const id = Number(chapterId.value)
+  if (!id) return
+  try {
+    const res = await favoriteApi.check({ target_type: 'chapter', target_id: id })
+    chapterFavorited.value = !!res?.favorited
+    chapterFavoriteId.value = res?.favorite_id || 0
+  } catch (e) {
+    console.error('查询章节收藏状态失败:', e)
+  }
+}
+
+async function toggleChapterFavorite() {
+  const id = Number(chapterId.value)
+  if (!id) return
+  try {
+    if (chapterFavorited.value) {
+      await favoriteApi.remove(chapterFavoriteId.value)
+      chapterFavorited.value = false
+      chapterFavoriteId.value = 0
+      ElMessage.success('已取消收藏')
+    } else {
+      const res = await favoriteApi.add({ target_type: 'chapter', target_id: id })
+      chapterFavorited.value = true
+      chapterFavoriteId.value = res?.favorite_id || 0
+      ElMessage.success('已收藏')
+    }
+  } catch (e) {
+    console.error('章节收藏操作失败:', e)
+    /* 错误已由拦截器提示 */
+  }
+}
+
 watch(() => route.params.chapterId, (newVal) => {
   if (newVal) {
     loadChapterDetail()
+    loadChapterFavoriteState()
   }
 })
 
@@ -436,6 +479,7 @@ onMounted(() => {
   loadChapterDetail()
   loadCourseInfo()
   loadCourseLearningState()
+  loadChapterFavoriteState()
   document.addEventListener('visibilitychange', handleVisibilityChange)
   window.addEventListener('beforeunload', handleBeforeUnload)
 })

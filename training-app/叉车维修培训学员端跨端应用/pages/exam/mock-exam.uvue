@@ -213,7 +213,6 @@
 
     /* 题号导航条 */
     .palette-scroll {
-        white-space: nowrap;
         flex-direction: row;
         align-items: center;
         padding: 16rpx 24rpx;

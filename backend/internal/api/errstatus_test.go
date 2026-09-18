@@ -131,16 +131,19 @@ func assertTableSnapshot(t *testing.T, name string, got *errStatusTable, want []
 	}
 }
 
-// TestErrStatusTable_Snapshot_Points 积分域表快照（#610：已领取类 400、不存在类 404、兜底 400）。
+// TestErrStatusTable_Snapshot_Points 积分域表快照（#610：已领取类 400、不存在类 404、兜底 400；
+// #1098 追加：扣罚目标不存在 404、通知写失败 500）。
 func TestErrStatusTable_Snapshot_Points(t *testing.T) {
 	assertTableSnapshot(t, "pointsErrStatus", pointsErrStatus, []errStatusEntry{
 		{service.ErrTaskNotFound, http.StatusNotFound},
+		{service.ErrUserNotFound, http.StatusNotFound},
 		{service.ErrCourseNotFound, http.StatusBadRequest},
 		{service.ErrCourseNotRedeemable, http.StatusBadRequest},
 		{service.ErrAlreadyClaimed, http.StatusBadRequest},
 		{service.ErrDailyClaimLimit, http.StatusBadRequest},
 		{service.ErrInsufficientPoints, http.StatusBadRequest},
 		{service.ErrAlreadyRedeemed, http.StatusBadRequest},
+		{service.ErrPenaltyNotifyFailed, http.StatusInternalServerError},
 	}, http.StatusBadRequest)
 }
 

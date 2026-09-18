@@ -138,6 +138,18 @@ func TestEnvelopeDTOShapeLock(t *testing.T) {
 			dto: &WechatQRCodeInfoDTO{Enabled: false, Message: "微信授权暂未配置，请等待开放平台配置完成后使用", QRURL: ""},
 		},
 		{
+			// #1095：ContactRequestListResult 从「只服务 swagger 的类型」变真返回类型。
+			// 左边是改造前 handler 里的 gin.H（map 按 key 排序），右边是 typed page —— 字节必须相等。
+			name: "ContactRequestListResult（旧 gin.H ↔ typed page，键序 items/page/page_size/total）",
+			legacy: map[string]any{
+				"items":     []ContactRequestDTO{},
+				"page":      1,
+				"page_size": 20,
+				"total":     int64(0),
+			},
+			dto: &ContactRequestListResult{Items: []ContactRequestDTO{}, Page: 1, PageSize: 20, Total: 0},
+		},
+		{
 			name: "ForumTopicDetailDTO",
 			legacy: map[string]any{
 				"topic":   ForumTopicDTO{},

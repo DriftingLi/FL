@@ -48,5 +48,6 @@ var OptOuts = []OptOut{
 	{File: "pages/student/JobPlaza.vue", Count: 1, Reason: "招聘域职位广场不受证件过滤（#604 opt-out）"},
 	{File: "pages/student/MyApplications.vue", Count: 1, Reason: "招聘域投递记录不受证件过滤（#604 opt-out）"},
 	{File: "pages/student/PointsLedger.vue", Count: 1, Reason: "积分流水不按当前证件分区，切换后不重置页码（#604 opt-out）"},
+	{File: "pages/student/QuestionDetail.vue", Count: 1, Reason: "单题详情按 route id 装载，页内没有按当前证件分区的数据；切证件重装既无意义、也会打断正在阅读的题（#1101 收编三态时显式声明）"},
 	{File: "pages/student/TaskCenter.vue", Count: 1, Reason: "积分任务中心不按当前证件分区（#604 opt-out）"},
 }

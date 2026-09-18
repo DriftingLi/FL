@@ -8,7 +8,7 @@
     <UiAsyncSection
       :error="loadError"
       :loading="loading"
-      :empty="items.length === 0"
+      :empty="isEmpty"
       :retrying="retrying"
       error-title="职位加载失败"
       error-description="网络或服务端异常，可重试"
@@ -142,6 +142,7 @@ const {
   loading,
   loadError,
   retrying,
+  isEmpty,
   retry: handleRetry,
   total,
   page,
@@ -152,7 +153,7 @@ const {
   const res = await jobApi.listMyJobs({ page: page.value, page_size: pageSize.value })
   items.value = res?.items || []
   total.value = res?.total || 0
-})
+}, { itemsRef: items })
 
 function openCreate() {
   editing.value = false

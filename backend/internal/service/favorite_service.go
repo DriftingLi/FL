@@ -42,9 +42,13 @@ type FavoriteDTO struct {
 	FavoriteID int64  `json:"favorite_id"`
 	TargetType string `json:"target_type"`
 	TargetID   int    `json:"target_id"`
-	Title      string `json:"title"`
-	Cover      string `json:"cover"`
-	CreatedAt  string `json:"created_at"`
+	// CourseID 目标所属课程ID：**仅 target_type = chapter 有意义** —— 章节落点
+	// `chapter-view` 要 `course_id` + `chapter_id` 两个键（ADR-0014），而收藏表只存 target_id。
+	// 其余类型恒为 0（不适用，不是「未知」）；键恒在、非 null（0 哨兵口径见 #1089 Q2）。
+	CourseID  int    `json:"course_id"`
+	Title     string `json:"title"`
+	Cover     string `json:"cover"`
+	CreatedAt string `json:"created_at"`
 }
 
 // FavoritePageResult 收藏分页结果。
@@ -59,25 +63,33 @@ type FavoritePageResult struct {
 type favoriteTargetMeta struct {
 	Title string
 	Cover string
-	Found bool
+	// CourseID 目标所属课程（仅章节有意义，其余类型为 0）；与 FavoriteDTO.CourseID 同口径。
+	CourseID int
+	Found    bool
 }
 
 // validateFavoriteTarget 校验收藏目标类型合法且存在/可见。
 // 课程要求已发布且挂载（挂载不变式与学员端列表口径一致）；题目要求已发布；
-// 精选内容要求已发布；章节与帖子仅要求存在。
+// 精选内容要求已发布；**章节的可见性跟随所属课程**（已发布 + 挂载不变式，与搜索的章节分区同一
+// 谓词，见 #1132 —— course_mount_scope.go 的自述早已把「收藏目标校验」列为该谓词的消费方）；
+// 帖子仅要求存在。
+//
+// 读面（favoriteTargetsMeta / List）**保持快照口径不变**：写时校验、读到的是当时的快照，
+// 目标日后下架不会让收藏行消失（course 支的既有形状即如此）。
 func validateFavoriteTarget(db *gorm.DB, targetType string, targetID int) error {
 	switch targetType {
 	case FavoriteTargetCourse:
-		var cnt int64
-		MountedCourseScope(db.Model(&model.Course{}).Where("course_id = ? AND status = 1", targetID)).Count(&cnt)
-		if cnt == 0 {
+		// 复用学员可见性单点的 by-id 形态（ADR-0058），不在此手拼谓词。
+		if !CourseVisibleByID(db, targetID) {
 			return errors.New("课程不存在或不可收藏")
 		}
 	case FavoriteTargetChapter:
 		var cnt int64
-		db.Model(&model.Chapter{}).Where("chapter_id = ?", targetID).Count(&cnt)
+		// 章节可见性跟随课程：谓词复用挂载不变式单点，不手拼（#1132）。
+		mounted := MountedCourseScope(db.Model(&model.Course{}).Select("course_id").Where("status = 1"))
+		db.Model(&model.Chapter{}).Where("chapter_id = ? AND course_id IN (?)", targetID, mounted).Count(&cnt)
 		if cnt == 0 {
-			return errors.New("章节不存在")
+			return errors.New("章节不存在或不可收藏")
 		}
 	case FavoriteTargetQuestion:
 		var cnt int64
@@ -118,9 +130,10 @@ func favoriteTargetsMeta(db *gorm.DB, targetType string, ids []int) map[int]favo
 		}
 	case FavoriteTargetChapter:
 		var rows []model.Chapter
-		db.Select("chapter_id, title").Where("chapter_id IN ?", ids).Find(&rows)
+		// course_id 在**同一次查询**里一并取回（章节落点需要它，不新增往返）。
+		db.Select("chapter_id, course_id, title").Where("chapter_id IN ?", ids).Find(&rows)
 		for _, r := range rows {
-			result[r.ChapterID] = favoriteTargetMeta{Title: r.Title, Found: true}
+			result[r.ChapterID] = favoriteTargetMeta{Title: r.Title, CourseID: r.CourseID, Found: true}
 		}
 	case FavoriteTargetQuestion:
 		var rows []model.Question
@@ -168,7 +181,8 @@ func (s *FavoriteService) Add(userID int, targetType string, targetID int) (*Fav
 	}
 	dto := favoriteToDTO(&existing)
 	if meta, ok := favoriteTargetsMeta(s.db, targetType, []int{targetID})[targetID]; ok {
-		dto.Title, dto.Cover = meta.Title, meta.Cover
+		// Add / List 两条路径共用同一 meta ⇒ course_id 同口径，零额外查询（#1089 Q2）。
+		dto.Title, dto.Cover, dto.CourseID = meta.Title, meta.Cover, meta.CourseID
 	}
 	return &dto, nil
 }
@@ -186,28 +200,47 @@ func (s *FavoriteService) Remove(userID int, favoriteID int64) error {
 	return nil
 }
 
+// favoriteTargetSubquery 收藏目标的归属分区子查询：course → course_id / question → id。
+// 谓词由归属分区具名谓词给出（ADR-0056 §2）；credentialID 为 nil 时返回空串（调用方整支跳过，
+// 不生成半截 SQL）。
+func favoriteTargetSubquery(targetType string, credentialID *int) (string, []any) {
+	clause, args := entityOwnedByClause("credential_id", credentialID)
+	if clause == "" {
+		return "", nil
+	}
+	table, column := "question", "id"
+	if targetType == FavoriteTargetCourse {
+		table, column = "course", "course_id"
+	}
+	return "SELECT " + column + " FROM " + table + " WHERE " + clause, args
+}
+
 // List 我的收藏列表（targetType 可选过滤；目标已删除的条目跳过）。
-func (s *FavoriteService) List(userID int, targetType string, page, pageSize int, credentialID ...*int) (*FavoritePageResult, error) {
+func (s *FavoriteService) List(userID int, targetType string, page, pageSize int, credentialID *int) (*FavoritePageResult, error) {
 	targetType = strings.TrimSpace(targetType)
-	rows, total, page, pageSize := paging.QueryWithMax[model.Favorite](s.db, page, pageSize, 20, 100,
+	rows, total, page, pageSize, err := paging.QueryWithMax[model.Favorite](s.db, page, pageSize, 20, 100,
 		"created_at DESC, favorite_id DESC",
 		func(q *gorm.DB) *gorm.DB {
 			q = q.Where("user_id = ?", userID)
 			if targetType != "" {
 				q = q.Where("target_type = ?", targetType)
 			}
-			if len(credentialID) > 0 && credentialID[0] != nil && (targetType == FavoriteTargetCourse || targetType == FavoriteTargetQuestion) {
-				if targetType == FavoriteTargetCourse {
-					q = q.Where("target_id IN (SELECT course_id FROM course WHERE credential_id = ?)", *credentialID[0])
-				} else {
-					q = q.Where("target_id IN (SELECT id FROM question WHERE credential_id = ?)", *credentialID[0])
-				}
-			} else if len(credentialID) > 0 && credentialID[0] != nil && targetType == "" {
-				// 混合类型时，仅过滤 course/question 分区，其余类型保持
-				q = q.Where("(target_type NOT IN (?, ?) OR (target_type = ? AND target_id IN (SELECT course_id FROM course WHERE credential_id = ?)) OR (target_type = ? AND target_id IN (SELECT id FROM question WHERE credential_id = ?)))", FavoriteTargetCourse, FavoriteTargetQuestion, FavoriteTargetCourse, *credentialID[0], FavoriteTargetQuestion, *credentialID[0])
+			// 收藏目标的证件分区是**归属分区**（ADR-0056 §2）：读目标自身的证件列，nil = 不分区、看全部。
+			// 「混合类型」分支只过滤 course/question 两个分区，其余类型保持（既有语义）。
+			if credentialID != nil && (targetType == FavoriteTargetCourse || targetType == FavoriteTargetQuestion) {
+				sub, args := favoriteTargetSubquery(targetType, credentialID)
+				q = q.Where("target_id IN ("+sub+")", args...)
+			} else if credentialID != nil && targetType == "" {
+				courseSub, courseArgs := favoriteTargetSubquery(FavoriteTargetCourse, credentialID)
+				questionSub, questionArgs := favoriteTargetSubquery(FavoriteTargetQuestion, credentialID)
+				q = q.Where("(target_type NOT IN (?, ?) OR (target_type = ? AND target_id IN ("+courseSub+")) OR (target_type = ? AND target_id IN ("+questionSub+")))",
+					FavoriteTargetCourse, FavoriteTargetQuestion, FavoriteTargetCourse, courseArgs[0], FavoriteTargetQuestion, questionArgs[0])
 			}
 			return q
 		})
+	if err != nil {
+		return nil, err
+	}
 	items := make([]FavoriteDTO, 0, len(rows))
 	if len(rows) > 0 {
 		byType := make(map[string][]int)
@@ -221,7 +254,7 @@ func (s *FavoriteService) List(userID int, targetType string, page, pageSize int
 		for _, r := range rows {
 			dto := favoriteToDTO(&r)
 			if meta, ok := metas[r.TargetType][r.TargetID]; ok && meta.Found {
-				dto.Title, dto.Cover = meta.Title, meta.Cover
+				dto.Title, dto.Cover, dto.CourseID = meta.Title, meta.Cover, meta.CourseID
 				items = append(items, dto)
 			}
 		}

@@ -1,0 +1,90 @@
+/**
+ * 帮助中心展示纯函数（#1081）
+ *
+ * 页面与测试共用同一份口径；先例 `utils/searchDisplay.uts` / `utils/pointsDisplay.uts`
+ * （模块内纯函数 + jest 镜像测试）。把搜索/筛选/分组从页面抽出来，是为了让它们**可被单测断言行为**，
+ * 而不是只能在 `.uvue` 源码文本上做静态断言。
+ *
+ * 口径（#1079 定案，本模块只消费）：
+ *   - 搜索**端上过滤**：问题或答案命中即算，忽略大小写与首尾空白；不新增搜索接口、不进全局搜索域（ADR-0049）；
+ *   - 搜索时**跨分类**展示全部命中（命中项可能跨分类），分类 chip 只显示各分类的命中数；
+ *   - 只有一个分组有内容时**不重复显示分类标题**（同 Web 帮助中心）。
+ */
+import type { FaqCategory, FaqEntry, FaqGroup, FaqNavItem } from '../types/index'
+
+/** 是否处于搜索态（关键词去掉首尾空白后非空） */
+export function faqSearching(keyword : string) : boolean {
+    return keyword.trim().length > 0
+}
+
+/** 单条是否命中（问题或答案命中即算；空关键词 = 全命中） */
+export function faqMatches(entry : FaqEntry, keyword : string) : boolean {
+    const k = keyword.trim().toLowerCase()
+    if (k.length == 0) return true
+    if (entry.question.toLowerCase().indexOf(k) >= 0) return true
+    return entry.answer.toLowerCase().indexOf(k) >= 0
+}
+
+/** 一组条目的命中数（分类 chip 上的数字按它显示） */
+export function faqHitCount(entries : FaqEntry[], keyword : string) : number {
+    let n = 0
+    for (let i = 0; i < entries.length; i++) {
+        if (faqMatches(entries[i], keyword)) n = n + 1
+    }
+    return n
+}
+
+/**
+ * 分类 chip 行：首项「全部」，其后按后端 sort_order 顺序。
+ * 搜索态下**不标记任何选中**——此时筛选跨分类，芯片只承担「各分类命中数」的信息面。
+ */
+export function buildFaqNav(categories : FaqCategory[], keyword : string, activeCode : string) : FaqNavItem[] {
+    const nav : FaqNavItem[] = []
+    const searching = faqSearching(keyword)
+    let total = 0
+    for (let i = 0; i < categories.length; i++) {
+        total = total + faqHitCount(categories[i].entries, keyword)
+    }
+    nav.push({ code: '', label: '全部 (' + total.toString() + ')', active: activeCode.length == 0 && !searching } as FaqNavItem)
+    for (let i = 0; i < categories.length; i++) {
+        const c = categories[i]
+        nav.push({
+            code: c.code,
+            label: c.title + ' (' + faqHitCount(c.entries, keyword).toString() + ')',
+            active: activeCode == c.code && !searching,
+        } as FaqNavItem)
+    }
+    return nav
+}
+
+/** 展示分组：搜索时跨分类；否则只留选中分类（activeCode 为空 = 全部）；空分组被丢弃 */
+export function buildFaqGroups(categories : FaqCategory[], keyword : string, activeCode : string) : FaqGroup[] {
+    const searching = faqSearching(keyword)
+    const out : FaqGroup[] = []
+    for (let i = 0; i < categories.length; i++) {
+        const c = categories[i]
+        if (!searching && activeCode.length > 0 && c.code != activeCode) continue
+        const entries : FaqEntry[] = []
+        for (let j = 0; j < c.entries.length; j++) {
+            if (faqMatches(c.entries[j], keyword)) entries.push(c.entries[j])
+        }
+        if (entries.length == 0) continue
+        out.push({ code: c.code, title: c.title, entries: entries } as FaqGroup)
+    }
+    if (out.length == 1) {
+        return [{ code: out[0].code, title: '', entries: out[0].entries } as FaqGroup]
+    }
+    return out
+}
+
+/** 空态文案：搜索无命中 vs 内容未就绪——两种都会得到空列表，不能共用一句话 */
+export function faqEmptyText(keyword : string) : string {
+    if (faqSearching(keyword)) return '没有匹配的问题'
+    return '帮助内容正在准备中'
+}
+
+/** 空态图标（与 faqEmptyText 配对，避免「搜不到」配一个耳机图标） */
+export function faqEmptyIcon(keyword : string) : string {
+    if (faqSearching(keyword)) return '🔍'
+    return '🎧'
+}

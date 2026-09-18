@@ -3,7 +3,8 @@
  * 基于 uni.request，跨 4 端通用
  * - 自动注入 Authorization
  * - 统一解包 ApiResponse<T>（HTTP 状态码 + 业务 code 双重校验）
- * - 401 自动用 refresh_token 刷新并重试一次，失败则清空登录态并跳转登录页
+ * - 401 自动用 refresh_token 刷新并重试一次；**并发 401 共享同一次刷新**
+ *   （api/refreshGate.uts 单飞），只有刷新**真的**失败才清空登录态并跳转登录页
  * - X-Silent: 1 头关闭错误 toast
  * - 调试日志仅开发环境输出（ENABLE_DEBUG_LOG），且不打印请求头（避免泄漏 token）
  */
@@ -11,10 +12,15 @@ import { API_BASE_URL, REQUEST_TIMEOUT, ENABLE_DEBUG_LOG } from '../config/env'
 import { STORAGE_KEY_TOKEN } from '../constants/app'
 import { getStorage, removeStorage } from '../utils/storage'
 import { isContentUri, buildTempFilePath, UPLOAD_TMP_DIR } from '../utils/uploadPath'
+import { gateRefresh } from './refreshGate'
 // 注意：不能在此处 import useAuthStore（会导致循环依赖），改用全局回调
 
 /** 请求方法 */
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
+
+/** 鉴权头名与 scheme：buildHeader / buildUploadHeader / sentTokenOf 共用的唯一真源 */
+const HEADER_AUTHORIZATION = 'Authorization'
+const BEARER_PREFIX = 'Bearer '
 
 /** 请求配置 */
 export type RequestOptions = {
@@ -35,7 +41,7 @@ function buildHeader(custom : UTSJSONObject | null, silent : boolean) : UTSJSONO
 
     const token = getStorage(STORAGE_KEY_TOKEN)
     if (token.length > 0) {
-        header['Authorization'] = `Bearer ${token}`
+        header[HEADER_AUTHORIZATION] = `${BEARER_PREFIX}${token}`
     }
 
     if (silent) {
@@ -57,12 +63,26 @@ function buildUploadHeader(silent : boolean) : UTSJSONObject {
     const header : UTSJSONObject = {}
     const token = getStorage(STORAGE_KEY_TOKEN)
     if (token.length > 0) {
-        header['Authorization'] = `Bearer ${token}`
+        header[HEADER_AUTHORIZATION] = `${BEARER_PREFIX}${token}`
     }
     if (silent) {
         header['X-Silent'] = '1'
     }
     return header
+}
+
+/**
+ * 取出本次请求**实际发出**的 access token（'' = 未带凭据）
+ * 用途：401 刷新去重按「触发这次 401 的那个 token」认人 —— 同一次风暴的迟到成员
+ * 带的仍是那个**已被替换掉**的旧 token（#1124 真机日志里它们的 401 相隔可近 1 秒），
+ * 若改用「当前 storage 里的 token」或时间盒判定，都会把迟到成员误当成新一次刷新。
+ */
+function sentTokenOf(reqHeader : UTSJSONObject) : string {
+    const raw = reqHeader[HEADER_AUTHORIZATION]
+    if (raw == null) return ''
+    const s = raw as string
+    if (!s.startsWith(BEARER_PREFIX)) return ''
+    return s.substring(BEARER_PREFIX.length)
 }
 
 /** 拼接完整 URL（相对路径不拼接 baseURL） */
@@ -129,26 +149,16 @@ export function registerRefreshTokenHandler(handler : () => Promise<boolean>) : 
     _refreshTokenHandler = handler
 }
 
-/** 防重入标记：避免 refresh 和 handleUnauthorized 并发冲突 */
-let isRefreshing = false
-
 /**
  * 尝试用 refresh_token 自动刷新 access token
- * @returns true=刷新成功，false=刷新失败
+ * @param forToken 触发这次刷新的请求发出去时带的 access token
+ * @returns true=刷新成功，false=刷新**真的**失败（无刷新回调 / 刷新被拒 / 抛错）
+ * @note 并发 401 **共享同一次在飞刷新**（api/refreshGate.uts）：
+ *       「另一次刷新正在进行」不再被折成 false（#1124 根因 1）
  */
-async function tryAutoRefresh() : Promise<boolean> {
-    if (isRefreshing) return false
-    if (_refreshTokenHandler == null) return false
-    isRefreshing = true
-    try {
-        const success = await _refreshTokenHandler!()
-        return success
-    } catch (e) {
-        console.warn('[request] tryAutoRefresh failed:', e)
-        return false
-    } finally {
-        setTimeout(() => { isRefreshing = false }, 100)
-    }
+function tryAutoRefresh(forToken : string) : Promise<boolean> {
+    if (_refreshTokenHandler == null) return Promise.resolve(false)
+    return gateRefresh(_refreshTokenHandler!, forToken)
 }
 
 /**
@@ -325,7 +335,8 @@ function doSingleRequest(
                 return
             }
             // 401 自动刷新：刷新成功后带新 token 重试一次
-            tryAutoRefresh().then((refreshed : boolean) => {
+            // 注意：`false` 现在**只**代表刷新真的失败（并发者共享同一次刷新，不再是「别人在刷」）
+            tryAutoRefresh(sentTokenOf(reqHeader)).then((refreshed : boolean) => {
                 if (refreshed && getStorage(STORAGE_KEY_TOKEN).length > 0) {
                     doSingleRequest(url, method, data, buildHeader(options.header, silent), timeout, options, true, resolve, reject)
                 } else {

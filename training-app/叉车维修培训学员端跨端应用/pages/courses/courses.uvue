@@ -51,37 +51,41 @@
                 </view>
             </view>
 
-            <!-- 课程列表 -->
-            <view v-if="courses.length == 0 && !loading" class="empty-tip">
-                <text class="empty-text">暂无课程数据</text>
-            </view>
-            <view class="course-list">
-                <view v-for="(course, idx) in courses" :key="idx" class="course-item"
-                    @click="onCourseClick(course.course_id)">
-                    <view class="course-item-badge" :style="{ backgroundColor: getBadgeColor(course) }">
-                        <text class="course-item-badge-text">{{ getBadgeText(course) }}</text>
-                    </view>
-                    <view class="course-item-info">
-                        <text class="course-item-title">{{ course.title }}</text>
-                        <text class="course-item-meta">共{{ course.chapter_count > 0 ? course.chapter_count : 6 }}个课时</text>
+            <!-- 课程列表：uvue 原生端页面本身不滚动 ⇒ 内容区必须自持 scroll-view（见 docs/ui-spec.md）。
+                 f1ab2648 曾把该容器整段删掉 ⇒ 整页滑不动 + @scrolltolower 分页失效；
+                 回归锁见 utils/uvuePageScrollContract.test.js（#1134） -->
+            <scroll-view class="course-scroll" scroll-y="true" @scrolltolower="onLoadMore">
+                <view v-if="courses.length == 0 && !loading" class="empty-tip">
+                    <text class="empty-text">暂无课程数据</text>
+                </view>
+                <view class="course-list">
+                    <view v-for="(course, idx) in courses" :key="idx" class="course-item"
+                        @click="onCourseClick(course.course_id)">
+                        <view class="course-item-badge" :style="{ backgroundColor: getBadgeColor(course) }">
+                            <text class="course-item-badge-text">{{ getBadgeText(course) }}</text>
+                        </view>
+                        <view class="course-item-info">
+                            <text class="course-item-title">{{ course.title }}</text>
+                            <text class="course-item-meta">共{{ course.chapter_count > 0 ? course.chapter_count : 6 }}个课时</text>
+                        </view>
                     </view>
                 </view>
-            </view>
 
-            <!-- 加载更多 -->
-            <view v-if="loading" class="loading-more">
-                <text class="loading-text">加载中...</text>
-            </view>
-            <view v-if="noMore && courses.length > 0" class="loading-more">
-                <text class="loading-text">没有更多了</text>
-            </view>
-
-            <!-- 更多课程按钮 -->
-            <view v-if="courses.length > 0" class="more-btn-wrap">
-                <view class="more-btn" @click="onLoadMore">
-                    <text class="more-btn-text">更多课程</text>
+                <!-- 加载更多 -->
+                <view v-if="loading" class="loading-more">
+                    <text class="loading-text">加载中...</text>
                 </view>
-            </view>
+                <view v-if="noMore && courses.length > 0" class="loading-more">
+                    <text class="loading-text">没有更多了</text>
+                </view>
+
+                <!-- 更多课程按钮 -->
+                <view v-if="courses.length > 0" class="more-btn-wrap">
+                    <view class="more-btn" @click="onLoadMore">
+                        <text class="more-btn-text">更多课程</text>
+                    </view>
+                </view>
+            </scroll-view>
         </view>
     </view>
 </template>
@@ -97,18 +101,32 @@
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
-    // ---- 当前证件名称 ----
+    // ---- 当前证件（名称 + 分区参数）----
+    // `/courses` 是公开路由，服务端 CredentialScoped 兜底永不生效（见 api/course.uts 文件头、
+    // docs/agents/credential-scope.md）⇒ 页面必须显式下发当前证件，否则列出的是全证件课程。
     const currentCertName = ref<string>('')
+    /** 「浏览指定」证件：随请求下发的分区参数（自解释名，与 Web api/client 半边同口径 #1106） */
+    const browseCredentialId = ref<number>(0)
+    let credentialRefresh : Promise<void> | null = null
 
-    async function loadCredentialName() : Promise<void> {
+    async function loadBrowseCredential() : Promise<void> {
         try {
             const cred = await getCurrentCredentialApi()
             if (cred != null) {
                 currentCertName.value = cred!.name
+                browseCredentialId.value = cred!.id
             }
         } catch (e) {
             console.warn('[courses] load credential failed:', e)
         }
+    }
+
+    /** 取数前确认证件已解析（onShow 会重置它，以便跟随证件切换） */
+    function ensureBrowseCredential() : Promise<void> {
+        if (credentialRefresh == null) {
+            credentialRefresh = loadBrowseCredential()
+        }
+        return credentialRefresh!
     }
 
     // ---- 顶部分类 ----
@@ -144,7 +162,8 @@
 
         loading.value = true
         try {
-            const result = await getCourseListApi(page.value, pageSize, 0, 0)
+            await ensureBrowseCredential()
+            const result = await getCourseListApi(page.value, pageSize, 0, 0, browseCredentialId.value)
             if (reset) {
                 courses.value = result.items
             } else {
@@ -207,16 +226,16 @@
                 }
             }
         }
-        if (course.category == 'practice' || course.category == 'CATEGORY_03') return '实操'
-        if (course.category == 'safety' || course.category == 'CATEGORY_02') return '安全'
+        // #1087：旧 course.category 已退役（后端 /api/courses 不返回该字段 ⇒ 旧两条分支恒不命中）。
+        // 真实数据下 specialty_id / level_id 必有值（backend/internal/service/course_mount_scope.go 强制两者非空），
+        // 故此处仅剩 level/specialty 名称查不到时的兜底。
         return '基础'
     }
 
     function getBadgeColor(course : CourseItem) : string {
         const text = getBadgeText(course)
-        if (text == '入门' || text == '冲刺' || text == '安全') return '#2979ff'
+        if (text == '入门' || text == '冲刺') return '#2979ff'
         if (text == '进阶' || text == '专项') return '#e6a23c'
-        if (text == '实操') return '#67c23a'
         return '#909399'
     }
 
@@ -231,9 +250,15 @@
     }
 
     onShow(async () => {
-        loadCredentialName()
+        const prevCredentialId = browseCredentialId.value
+        credentialRefresh = loadBrowseCredential()
         await Promise.all([loadSpecialties(), loadLevels()])
-        if (courses.value.length == 0) {
+        await ensureBrowseCredential()
+        // 证件切换 ⇒ 受过滤视图立即按新证件重取（CONTEXT.md「当前证件」：切换立即生效、回到第一页）；
+        // 证件未变时保持既有行为（列表非空不重取，避免从课程详情返回时丢掉滚动位置）
+        if (browseCredentialId.value != prevCredentialId) {
+            loadCourses(true)
+        } else if (courses.value.length == 0) {
             loadCourses(true)
         }
     })
@@ -406,6 +431,13 @@
     }
 
     /* ---- 课程列表 ---- */
+    /* flex:1 + height:0 —— 在 flex 列容器里给 scroll-view 定高（f1ab2648 之前 .course-scroll 的同款写法）。
+       不设 padding：子块自带内边距（.course-list / .more-btn-wrap），重复设会改变横向留白 */
+    .course-scroll {
+        flex: 1;
+        height: 0;
+    }
+
     .course-list {
         padding: 0 32rpx;
     }

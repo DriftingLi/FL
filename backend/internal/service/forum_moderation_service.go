@@ -145,7 +145,7 @@ func (s *ForumModerationService) ListReports(page, pageSize int, status *int16) 
 		Status     int16
 		CreatedAt  time.Time
 	}
-	rows, total, page, pageSize := paging.QueryWithScan[reportRow](s.db, page, pageSize, 20, 100,
+	rows, total, page, pageSize, err := paging.QueryWithScan[reportRow](s.db, page, pageSize, 20, 100,
 		"r.created_at DESC, r.id DESC",
 		func(q *gorm.DB) *gorm.DB {
 			q = q.Table("forum_report AS r").
@@ -158,6 +158,9 @@ func (s *ForumModerationService) ListReports(page, pageSize int, status *int16) 
 			}
 			return q
 		})
+	if err != nil {
+		return nil, err
+	}
 	items := make([]ForumReportDTO, 0, len(rows))
 	for _, r := range rows {
 		items = append(items, ForumReportDTO{

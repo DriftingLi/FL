@@ -79,7 +79,10 @@ func (h *AuditHandler) List(c *gin.Context) {
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *auditLogListReq) (*AuditLogPageResult, error) {
-			logs, total, page, pageSize := h.svc.List(req.Page, req.PageSize, req.ActorID, req.Role, req.Keyword)
+			logs, total, page, pageSize, err := h.svc.List(req.Page, req.PageSize, req.ActorID, req.Role, req.Keyword)
+			if err != nil {
+				return nil, err
+			}
 			return &AuditLogPageResult{
 				Items: logs,
 				Page:  page,
@@ -87,7 +90,11 @@ func (h *AuditHandler) List(c *gin.Context) {
 				Total: total,
 			}, nil
 		},
-		Render: func(c *gin.Context, _ *auditLogListReq, resp *AuditLogPageResult, _ error) {
+		Render: func(c *gin.Context, _ *auditLogListReq, resp *AuditLogPageResult, err error) {
+			if err != nil {
+				response.ServerError(c, err.Error())
+				return
+			}
 			response.Success(c, resp)
 		},
 	}.Handle(c)

@@ -7,7 +7,7 @@
             </view>
             <text class="header-title">课程详情</text>
             <view class="header-right" @click="toggleFavorite">
-                <text class="favorite-icon">{{ isFavorited ? '❤️' : '' }}</text>
+                <text class="favorite-icon">{{ isFavorited ? '♥' : '♡' }}</text>
             </view>
         </view>
 
@@ -21,7 +21,7 @@
             <!-- 课程封面 -->
             <CourseCoverSection :title="detail!.title" :level-name="detail!.level_name"
                 :specialty-name="detail!.specialty_name" :certificate-name="detail!.certificate_name"
-                :description="detail!.description" :category-icon="coverIcon" :cover-color="coverColor" />
+                :description="detail!.description" :specialty-icon="specialtyIcon" :cover-color="coverColor" />
 
             <!-- 学习进度 -->
             <CourseProgressSection v-if="isEnrolled" :progress="learningProgress" :completed="learningCompleted"
@@ -58,7 +58,7 @@
 
 <script setup lang="uts">
     import { ref, computed } from 'vue'
-    import { onLoad } from '@dcloudio/uni-app'
+    import { onLoad, onShow } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
     import { getCourseDetailApi } from '../../api/course'
@@ -118,31 +118,29 @@
         }
     }
 
-    function getCategoryIcon(category : string) : string {
-        if (category == 'theory' || category == 'CATEGORY_01') return '📖'
-        if (category == 'safety' || category == 'CATEGORY_02') return '⚠️'
-        if (category == 'practice' || category == 'CATEGORY_03') return '🔧'
-        if (category == 'advanced' || category == 'CATEGORY_04') return '🚀'
-        if (category == 'structure') return '🏗️'
-        if (category == 'hydraulic') return '⚙️'
-        if (category == 'driving') return '🚜'
-        if (category == 'maintenance') return '🔨'
-        if (category == 'cargo') return '📦'
-        if (category == 'troubleshooting') return '🔍'
+    /**
+     * 专业方向 → 封面大图标。
+     * @1087 旧实现吃 detail.category（后端已退役 ⇒ 恒为 '' ⇒ 永远走默认分支，图标恒为同一枚）。
+     * 现按真实字段 specialty_id 映射，与 /api/catalog/tree 的 1=操作 / 2=维修 / 3=安全 / 4=电池 对齐。
+     * 字形必须是真字形（非空串、非孤立 U+FE0F），由 utils/coursesContract.test.js 落锁。
+     */
+    function getSpecialtyIcon(specialtyId : number) : string {
+        if (specialtyId == 1) return '🚜'
+        if (specialtyId == 2) return '🔧'
+        if (specialtyId == 3) return '⚠️'
+        if (specialtyId == 4) return '🔋'
         return '📚'
     }
 
-    function getCoverColor(category : string) : string {
-        if (category == 'theory' || category == 'CATEGORY_01') return '#e3f2fd'
-        if (category == 'safety' || category == 'CATEGORY_02') return '#fff3e0'
-        if (category == 'practice' || category == 'CATEGORY_03') return '#e8f5e9'
-        if (category == 'advanced' || category == 'CATEGORY_04') return '#f3e5f5'
-        if (category == 'structure') return '#fce4ec'
-        if (category == 'hydraulic') return '#e1f5fe'
-        if (category == 'driving') return '#fff8e1'
-        if (category == 'maintenance') return '#efebe9'
-        if (category == 'cargo') return '#e0f2f1'
-        if (category == 'troubleshooting') return '#fbe9e7'
+    /**
+     * 专业方向 → 封面底色。
+     * @1087 与 getSpecialtyIcon 同源（同一字段派生的两个展示面），一起从 category 迁到 specialty_id。
+     */
+    function getSpecialtyCoverColor(specialtyId : number) : string {
+        if (specialtyId == 1) return '#e3f2fd'
+        if (specialtyId == 2) return '#e8f5e9'
+        if (specialtyId == 3) return '#fff3e0'
+        if (specialtyId == 4) return '#f3e5f5'
         return '#f0f0f0'
     }
 
@@ -158,12 +156,12 @@
     // 同一事实两处持有属可派生状态；改 computed 后取值对同一 detail 完全一致，且去掉一处失效风险。
     const coverColor = computed<string>(() : string => {
         if (detail.value == null) return '#e3f2fd'
-        return getCoverColor(detail.value!.category)
+        return getSpecialtyCoverColor(detail.value!.specialty_id)
     })
 
-    const coverIcon = computed<string>(() : string => {
-        if (detail.value == null) return ''
-        return getCategoryIcon(detail.value!.category)
+    const specialtyIcon = computed<string>(() : string => {
+        if (detail.value == null) return '📚'
+        return getSpecialtyIcon(detail.value!.specialty_id)
     })
 
     const durationText = computed<string>(() : string => {
@@ -275,6 +273,19 @@
         const id = options['id']
         if (id != null) {
             courseId.value = parseInt(`${id}`)
+        }
+    })
+
+    /**
+     * 取数统一放 onShow（#1126）：从章节页 `navigateBack` 返回时，本页实例仍然存活、
+     * `onLoad` 不再触发 ⇒ 只挂 onLoad 会一直显示进入时的陈旧进度（真机实测：标记完成
+     * 后端已是 14.29%，返回后界面仍 0%）。
+     *
+     * onShow 在**首次进入时也会触发**（onLoad → onShow 相邻），故取数**只放这里**、
+     * onLoad 仅记 courseId，避免两个钩子各取一次造成首个请求翻倍（单一取数入口）。
+     */
+    onShow(() : void => {
+        if (courseId.value > 0) {
             loadDetail()
         } else {
             loading.value = false
@@ -391,7 +402,11 @@
     }
 
     /* ===== 收藏按钮 ===== */
+    /* 两态都渲染字形（♥ 已收藏 / ♡ 未收藏），靠**实心与空心**区分选中态 ——
+       与论坛 stat-like-icon（♥/♡ 同色）同一套先例。此前未收藏态渲染空串，
+       点击区虽在、却没有任何可点的视觉提示，观感等同「没有收藏功能」。 */
     .favorite-icon {
         font-size: 40rpx;
+        color: #ffffff;
     }
 </style>

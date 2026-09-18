@@ -110,6 +110,7 @@ uvue 原生端**只支持 class 选择器**，以下选择器均不可用：
 | `currentColor` | 具体颜色值 | 如 `#2979ff`、`#999999` |
 | `display: grid` / `grid-*` | flex 布局 | grid 布局不支持 |
 | `transition` / `animation` | uni-app API 动画 | 原生端不支持 CSS 动画 |
+| `white-space` 写在 `<text>` / `<button>` **之外**的元素上 | 横滑行改用 `flex-direction: row` + 子项 `flex-shrink: 0` 撑出溢出 | 该属性**只在 `<text>` / `<button>` 上有效**；写在 `<scroll-view>` 等元素上会被渲染层判错并**忽略**：真机日志原文 `style property white-space is only supported on <text>\|<button>. there is an error on <scroll-view …>`（2026-09-17 #1081 ①a 实测）。**承载是 `<text>` / `<button>` 的用法合法**，但必须在 `utils/uvueWhiteSpaceContract.test.js` 的 `LEGAL_CARRIER_SITES` 里**登记**（附理由）—— 正例：`pages/profile/personal-info.uvue` 的 `.code-btn-text`（承载是 `<text>`，「获取验证码」倒计时不换行，**不要删**）。存量 6 处非法写法（`favorites` / `records` / `practice-records` 的 `.filter-scroll`、`featured-list` 的 `.filter-scroll`、`ai-feature` 的 `.diag-chips`、`mock-exam` 的 `.palette-scroll`）已由 #1113 删除，同一守护已落锁 |
 
 #### `gap` 替换模式
 

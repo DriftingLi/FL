@@ -64,7 +64,9 @@ func explicitCredentialID(c *gin.Context) (int, bool) {
 }
 
 // CredentialIDPtr 读取本次请求生效的证件指针（未设置 = nil）。**指针形态是默认选择**：
-// 服务层的 credentialID ...*int 参数用 nil 表达「不分区」，指针能原样透传这一语义。
+// 服务层的 credentialID *int 形参用 nil 表达「未选证件」，指针能原样透传；
+// 该 nil 读作「看全部」还是「只取未选定那一桶」由**调用的具名谓词**决定（ADR-0056 §2：
+// RecordPartitionOf / PartitionBucket / EntityOwnedBy 三族，后者的 nil 语义相反）。
 // 语义与既有的 queryIDPtr 一致：
 // 「未声明」与「声明为 0」都表示不分区）。
 func CredentialIDPtr(c *gin.Context) *int {

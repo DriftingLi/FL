@@ -34,7 +34,7 @@ const CALLERS = [
  *  静默增删 token 等于静默改变门禁范围，必须留下显式痕迹。
  *  （`hxRun` 覆盖 hxRunContract，故不需要单独的 `hxRunContract` token。） */
 const EXPECTED_PATTERN =
-  'levelDetect|envCheck|testCompile|buildDeploy|autoScreenshot|screenshotDiff|evidenceGen|devFinish|hxBusyGate|hxRun|hxTimingBehavior|hxError|hxLaunchDetach|capabilitySurface|contractTestPattern';
+  'levelDetect|envCheck|testCompile|buildDeploy|autoScreenshot|screenshotDiff|evidenceGen|devFinish|hxBusyGate|hxRun|hxTimingBehavior|hxError|hxLaunchDetach|capabilitySurface|concurrent401Refresh|contractTestPattern';
 
 /** 每个 token 必须能真的选中套件（子串匹配，逐个独立验证，不靠另一个 token 顺带命中）。
  *  ⚠️ 注意最后一个 token：**pattern 必须自指** —— 本守护自己也要能被这个 pattern 选中，
@@ -54,6 +54,7 @@ const TOKENS_REQUIRED_TO_SELECT = [
   'hxError',
   'hxLaunchDetach',
   'capabilitySurface',
+  'concurrent401Refresh',
   'contractTestPattern',
 ];
 

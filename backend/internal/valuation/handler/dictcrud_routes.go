@@ -1,7 +1,8 @@
-// 描述符驱动管理端 CRUD 路由工厂（ADR-0008）：
-// 一个 Descriptor 声明实体名、路由段、字段、校验与失效标记，
-// POST/PUT/DELETE 骨架由同一工厂注册生成，不再逐实体手写。
-// 失效 pattern 仍来自 repository 缓存契约单点（PatternsOf），工厂不书写字面量。
+// 描述符驱动管理端 CRUD 骨架（ADR-0008）：
+// 一个 Descriptor 声明实体名、路由段、字段、校验与失效标记，POST/PUT/DELETE 的
+// 绑定/写库/失效/响应骨架由本文件的四个函数共用，不再逐实体手写。
+// 路由注册（具名分派表）在 dictcrud_dispatch.go；响应字段表的派生在 dictcrud/response.go。
+// 失效 pattern 仍来自 repository 缓存契约单点（PatternsOf），本文件不书写字面量。
 package handler
 
 import (
@@ -26,28 +27,6 @@ func dictInvalidationPatterns(d dictcrud.Descriptor) []string {
 		patterns = append(patterns, repository.ResultCachePattern)
 	}
 	return patterns
-}
-
-// registerDictCRUDRoutes 按描述符注册管理端 CRUD 路由：
-// Create.Fields 非空 → POST /path；Update.Fields 非空 → PUT /path/:id（UpdateKeyField 时 /:key）；
-// Delete=true → DELETE /path/:id。
-func (h *ConfigHandler) registerDictCRUDRoutes(group *gin.RouterGroup, reg *dictcrud.Registry) {
-	for _, d := range reg.All() {
-		d := d
-		if len(d.Create.Fields) > 0 {
-			group.POST("/"+d.Path, func(c *gin.Context) { h.createDict(c, d) })
-		}
-		if len(d.Update.Fields) > 0 {
-			param := "id"
-			if d.UpdateKeyField != "" {
-				param = d.UpdateKeyField
-			}
-			group.PUT("/"+d.Path+"/:"+param, func(c *gin.Context) { h.updateDict(c, d) })
-		}
-		if d.Delete {
-			group.DELETE("/"+d.Path+"/:id", func(c *gin.Context) { h.deleteDict(c, d) })
-		}
-	}
 }
 
 // createDict 描述符驱动创建骨架：

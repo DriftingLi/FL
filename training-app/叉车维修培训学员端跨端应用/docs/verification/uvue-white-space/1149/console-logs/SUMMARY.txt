@@ -1,0 +1,10 @@
+page|lines|style_property|page_identity|FAIL|Uncaught|Exception|TypeError
+01-favorites|32|0|进入页面:​pages/profile/favorites​|0
+02-records|150|0|进入页面:​pages/profile/records​|0
+03-practice-records|150|0|进入页面:​pages/profile/practice-records​|0
+04-featured-list|145|0|进入页面:​pages/featured/featured-list​|0
+05-ai-feature|144|0|进入页面:​pages/ai-assistant/ai-feature?featureKey=fault_diagnosis​|0
+06-mock-exam|161|0|进入页面:​pages/exam/mock-exam​|0
+# 判据：style property 列必须为 0（「uvue 只在 <text>/<button> 上支持该属性」那条错行）；
+#       page_identity 必须命中被请求的页（页身份 = 设备侧唯一证据）；FAIL|Uncaught|Exception|TypeError 合并列须为 0。
+# 生成：.ci-verify/wt1113-consol-logs.ps1（会话式脚本，不入库）；原始文件是本目录里的 *-<page>.nav.log。

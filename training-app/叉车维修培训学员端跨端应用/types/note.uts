@@ -1,0 +1,30 @@
+/**
+ * 学员笔记域类型（ADR-0055 笔记域泛化）
+ *
+ * 与后端契约同形：`backend/internal/service` 的 NoteDTO / NotePageDTO
+ * （Web 侧生成物 `frontend/src/api/generated/note.ts` 是同一份形状）。
+ *
+ * 两种形态在同一张表里，靠 question_id 区分：
+ * - `question_id != null` ⇒ 题目笔记（每题一条，老端点 /api/questions/:id/note 也在写它）
+ * - `question_id == null` ⇒ 独立笔记（与题目无关，可多条）
+ */
+export type NoteItem = {
+	/** 笔记 ID */
+	id : number
+	/** 正文（纯文本、原样换行；列表用首行当标题，不加 title 列） */
+	content : string
+	/** 挂靠的题目 ID；null = 独立笔记 */
+	question_id : number | null
+	/** 题干摘要（后端 LEFT JOIN 带回，供卡片显示「这条笔记挂在哪道题上」与跳题） */
+	question_content : string
+	/** 更新时间（RFC3339，后端按它倒序） */
+	updated_at : string
+}
+
+/** 我的笔记分页结果（GET /api/notes） */
+export type NoteListResult = {
+	items : NoteItem[]
+	total : number
+	page : number
+	page_size : number
+}

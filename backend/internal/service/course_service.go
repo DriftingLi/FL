@@ -228,20 +228,21 @@ func NewCourseService(db *gorm.DB, slideRenderer *SlideRenderer, logger *zap.Log
 	return &CourseService{db: db, slideRenderer: slideRenderer, logger: logger}
 }
 
-// GetCourses 课程列表（可额外按专业方向/课程等级/目标证件过滤；filter=hot|featured|all，热门默认）。
+// GetCourses 课程列表（可额外按专业方向/课程等级/目标证件过滤；filter=hot|featured|all，空串 = 全部）。
 // 未挂专业方向/等级/证件的课程不展示（与目录树口径统一，见挂载不变式）。
-func (s *CourseService) GetCourses(page, pageSize int, credentialID, specialtyID, levelID *int, filter ...string) CoursePageResult {
-	f := ""
-	if len(filter) > 0 {
-		f = filter[0]
-	}
+// 可选位一律**显式命名形参**（#1096：原 filter ...string 变参改为显式参数，arity 在签名处自明）。
+func (s *CourseService) GetCourses(page, pageSize int, credentialID, specialtyID, levelID *int, filter string) (CoursePageResult, error) {
 	return ListCourses(s.db, page, pageSize, CourseListOptions{
-		OnlyMounted: true, CredentialID: credentialID, SpecialtyID: specialtyID, LevelID: levelID, Filter: f, DefaultPageSize: 12,
+		OnlyMounted: true, CredentialID: credentialID, SpecialtyID: specialtyID, LevelID: levelID, Filter: filter, DefaultPageSize: 12,
 	})
 }
 
 // GetCourseDetail 课程详情（含学员学习位置与完成状态，ADR-0017）。
+// 可见性：按 id 读路径纳入学员可见性谓词（ADR-0058）——未发布 / 未挂载课程一律按「不存在」返回。
 func (s *CourseService) GetCourseDetail(courseID, studentID int) (*CourseDetailDTO, error) {
+	if !CourseVisibleByID(s.db, courseID) {
+		return nil, errors.New("课程不存在")
+	}
 	course, chapterList, err := loadCourseWithChapters(s.db, courseID)
 	if err != nil {
 		return nil, err
@@ -272,6 +273,8 @@ func (s *CourseService) GetCourseDetail(courseID, studentID int) (*CourseDetailD
 }
 
 // GetChapterDetail 章节详情（学员端路径回填 study_status）。
+// 可见性：章节可见性跟随所属课程（ADR-0058）——未发布 / 未挂载课程的章节按「不存在」返回，
+// 与搜索的章节分区、以及收藏的写时校验同一谓词。
 func (s *CourseService) GetChapterDetail(courseID, chapterID, studentID int) (*ChapterDetailDTO, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
@@ -280,15 +283,22 @@ func (s *CourseService) GetChapterDetail(courseID, chapterID, studentID int) (*C
 	if chapter.CourseID != courseID {
 		return nil, errors.New("章节不属于该课程")
 	}
+	if !CourseVisibleByID(s.db, chapter.CourseID) {
+		return nil, errors.New("章节不存在")
+	}
 	return chapterDetailShared(s.db, &chapter, true, studentID), nil
 }
 
 // GetChapterSlides 章节幻灯片。
 // 优先读取 DB 中持久化的 slide_urls；为空则从 PPT 文件下载并触发转图，
 // 转图成功后把 URL 列表回写 chapter.slide_urls。
+// 可见性：与章节详情同一谓词（ADR-0058）——否则幻灯片会成为未发布章节内容的旁路。
 func (s *CourseService) GetChapterSlides(chapterID int) (*ChapterSlidesDTO, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
+		return nil, errors.New("章节不存在")
+	}
+	if !CourseVisibleByID(s.db, chapter.CourseID) {
 		return nil, errors.New("章节不存在")
 	}
 

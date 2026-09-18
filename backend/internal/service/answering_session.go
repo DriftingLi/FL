@@ -87,9 +87,10 @@ type ResumeSetSpec struct {
 //     标签练习既有条件）时抽样固定顺序。
 func ResumeSet(db *gorm.DB, studentID int, credentialID *int, spec ResumeSetSpec) (ids []int, startIdx int, err error) {
 	var prog model.PracticeProgress
-	// #414：证件分区定位（nil → IS NULL，Postgres 不接受 IS 参数占位符）
-	clause, args := credentialClause(credentialID)
-	if err := db.Where("student_id = ? AND practice_mode = ? AND "+clause, append([]any{studentID, spec.Mode}, args...)...).Limit(1).Find(&prog).Error; err != nil {
+	// #414 / ADR-0056 §2：进度定位走 NULL 桶谓词——nil 只取「未选定证件」那一桶（不是看全部）。
+	q := PartitionBucket(db.Model(&model.PracticeProgress{}), "credential_id", credentialID).
+		Where("student_id = ? AND practice_mode = ?", studentID, spec.Mode)
+	if err := q.Limit(1).Find(&prog).Error; err != nil {
 		return nil, 0, err
 	}
 	ids = spec.FreshIDs
@@ -126,8 +127,10 @@ func ResumeSet(db *gorm.DB, studentID int, credentialID *int, spec ResumeSetSpec
 //     创建时落初始化空对象）。
 func SaveSet(db *gorm.DB, studentID int, mode string, credentialID *int, ids []int, startIdx, total int, answers json.RawMessage) error {
 	var prog model.PracticeProgress
-	clause, args := credentialClause(credentialID)
-	if err := db.Where("student_id = ? AND practice_mode = ? AND "+clause, append([]any{studentID, mode}, args...)...).Limit(1).Find(&prog).Error; err != nil {
+	// ADR-0056 §2：与 ResumeSet 同源——进度按证件分桶，nil 只取未选定证件那一桶。
+	q := PartitionBucket(db.Model(&model.PracticeProgress{}), "credential_id", credentialID).
+		Where("student_id = ? AND practice_mode = ?", studentID, mode)
+	if err := q.Limit(1).Find(&prog).Error; err != nil {
 		return err
 	}
 	if prog.ID == 0 {
@@ -182,14 +185,6 @@ func SaveSet(db *gorm.DB, studentID int, mode string, credentialID *int, ids []i
 		return db.Model(&prog).Updates(aux).Error
 	}
 	return nil
-}
-
-// credentialClause 证件分区 WHERE 片段（#414）：nil → `credential_id IS NULL`（PG 不支持 IS 参数占位）。
-func credentialClause(credentialID *int) (string, []any) {
-	if credentialID == nil {
-		return "credential_id IS NULL", nil
-	}
-	return "credential_id = ?", []any{*credentialID}
 }
 
 // marshalIDs 题目顺序序列化（失败落空数组——顺序仅是缓存态，空数组等价重新协商）。

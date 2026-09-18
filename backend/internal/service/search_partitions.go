@@ -57,10 +57,7 @@ var coursePartition = partitionSpec[model.Course]{
 	scope: func(s *SearchService, q *gorm.DB, p searchParams) *gorm.DB {
 		// 挂载不变式（ADR-0006 / ADR-0050 决策 1）叠加已发布；证件分区由读面给定。
 		q = MountedCourseScope(q.Where("status = 1"))
-		if p.cred != nil {
-			q = q.Where("credential_id = ?", *p.cred)
-		}
-		return q
+		return EntityOwnedBy(q, "credential_id", p.cred)
 	},
 	selects:   "course_id, name, cover_image, description",
 	titleHit:  searchCourseTitleHit,
@@ -93,9 +90,7 @@ var chapterPartition = partitionSpec[model.Chapter]{
 	scope: func(s *SearchService, q *gorm.DB, p searchParams) *gorm.DB {
 		// 章节可见性跟随课程：同一挂载不变式 scope（不是手拼谓词）。
 		mounted := MountedCourseScope(s.db.Model(&model.Course{}).Select("course_id").Where("status = 1"))
-		if p.cred != nil {
-			mounted = mounted.Where("credential_id = ?", *p.cred)
-		}
+		mounted = EntityOwnedBy(mounted, "credential_id", p.cred)
 		return q.Where("course_id IN (?)", mounted)
 	},
 	selects:   "chapter_id, course_id, title, content, description",

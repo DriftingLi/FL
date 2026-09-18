@@ -14,7 +14,7 @@
     <UiAsyncSection
       :error="loadError"
       :loading="loading"
-      :empty="chapters.length === 0"
+      :empty="isEmpty"
       :retrying="retrying"
       error-title="章节加载失败"
       error-description="未能获取该课程的章节列表，请检查网络后重试。"
@@ -96,13 +96,14 @@ const courseInfo = ref<TutorCourse | null>(null)
 const chapters = ref<ChapterRow[]>([])
 
 // 三态收编 useAsyncPage（#401）：错误详情由拦截器统一 toast，retry 防重入由 composable 提供
-const { loading, loadError, retrying, retry: handleRetry, run: loadChapters } = useAsyncPage(
+const { loading, loadError, retrying, isEmpty, retry: handleRetry, run: loadChapters } = useAsyncPage(
   async () => {
     const courseId = Number(route.params.id)
     const res = await tutorApi.getCourseChapters(courseId)
     courseInfo.value = res.course ?? null
     chapters.value = res.chapters || []
-  }
+  },
+  { itemsRef: chapters }
 )
 
 const pageTitle = computed(() =>

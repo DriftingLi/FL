@@ -60,17 +60,11 @@
 //   DELETE /valuation/admin/brands/{id}
 //   DELETE /valuation/admin/vehicle-types/{id}
 //   DELETE /valuation/admin/series/{id}
-//   PUT  /valuation/admin/tonnages/{id}
 //   DELETE /valuation/admin/tonnages/{id}
-//   PUT  /valuation/admin/mast-types/{id}
 //   DELETE /valuation/admin/mast-types/{id}
-//   PUT  /valuation/admin/mast-heights/{id}
 //   DELETE /valuation/admin/mast-heights/{id}
-//   PUT  /valuation/admin/battery-types/{id}
 //   DELETE /valuation/admin/battery-types/{id}
-//   PUT  /valuation/admin/transmission-types/{id}
 //   DELETE /valuation/admin/transmission-types/{id}
-//   PUT  /valuation/admin/engine-types/{id}
 //   DELETE /valuation/admin/engine-types/{id}
 //   DELETE /valuation/admin/condition-ratings/{id}
 //   DELETE /valuation/admin/region-coefficients/{id}

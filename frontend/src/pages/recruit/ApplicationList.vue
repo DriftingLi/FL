@@ -11,7 +11,7 @@
     <UiAsyncSection
       :error="loadError"
       :loading="loading"
-      :empty="items.length === 0"
+      :empty="isEmpty"
       :retrying="retrying"
       error-title="投递加载失败"
       error-description="网络或服务端异常，可重试"
@@ -33,7 +33,7 @@
             <div class="flex items-center gap-2">
               <span class="text-sm font-semibold text-ink">{{ item.student_real_name_masked || '匿名学员' }}</span>
               <UiTag v-if="!item.employer_viewed_at" tone="warning" size="small">未读</UiTag>
-              <UiTag :tone="tagType(item.status)" size="small">{{ statusLabel(item.status) }}</UiTag>
+              <UiTag :tone="describeApplication(item.status).tone" size="small">{{ describeApplication(item.status).label }}</UiTag>
             </div>
             <div class="mt-1 text-xs text-ink-3">投递于 {{ item.created_at }}</div>
             <div v-if="resumeUpdated(item)" class="mt-1 text-xs text-orange-500">该候选人自你收到投递后又更新过简历</div>
@@ -65,7 +65,7 @@
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
             <span class="font-semibold text-ink">{{ current.student_real_name_masked || '匿名学员' }}</span>
-            <UiTag :tone="tagType(current.status)" size="small">{{ statusLabel(current.status) }}</UiTag>
+            <UiTag :tone="describeApplication(current.status).tone" size="small">{{ describeApplication(current.status).label }}</UiTag>
           </div>
         </div>
         <div class="text-xs text-ink-3">投递于 {{ current.created_at }}</div>
@@ -97,6 +97,7 @@ import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { jobApi, type JobApplication } from '@/api/job'
+import { describeApplication } from '@/utils/applicationStatus'
 import { recruitApi } from '@/api/recruit'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
@@ -124,6 +125,7 @@ const {
   loading,
   loadError,
   retrying,
+  isEmpty,
   retry: handleRetry,
   total,
   page,
@@ -136,17 +138,7 @@ const {
   total.value = res?.total || 0
   unreadCount.value = res?.unread_count || 0
   jobTitle.value = res?.job_title || ''
-})
-
-function statusLabel(s: string) {
-  const m: Record<string, string> = { applied: '投递中', rejected: '不合适', withdrawn: '已撤回' }
-  return m[s] || s
-}
-function tagType(s: string) {
-  if (s === 'applied') return 'warning'
-  if (s === 'rejected') return 'danger'
-  return 'info'
-}
+}, { itemsRef: items })
 
 // 漂移提示：投递那一刻的简历更新时间 < 当前简历更新时间
 function resumeUpdated(item: JobApplication) {

@@ -419,6 +419,21 @@ describe('删除禁区「courses 不用删」：行为保持点逐项仍在', ()
     expect(src).toContain("{{ continueChapterId > 0 ? '继续学习' : '开始学习' }}");
   });
 
+  it('章节页：收藏三连接线在（#1140），且 target_type 是 chapter 不是 course', () => {
+    const src = read('pages/courses/chapter-view.uvue');
+    for (const t of ['checkFavoriteApi', 'addFavoriteApi', 'removeFavoriteApi']) {
+      expect(src).toContain(t);
+    }
+    // 目标类型必须逐字是 'chapter'：从 course-detail 抄接线而忘改 target_type 时，
+    // 页面「看起来能用」但收藏的是课程 —— 静态面必须拦下（行为面见
+    // utils/chapterFavoriteContract.test.js：一个守接线，一个守行为，两者都要）
+    expect(src).toMatch(/checkFavoriteApi\(\s*'chapter'/);
+    expect(src).toMatch(/addFavoriteApi\(\s*'chapter'/);
+    expect(src).toContain('removeFavoriteApi(favoriteId.value)');
+    // 模板仍把点击接线到控件（函数在、但没接 = 同样点不到）
+    expect(src).toContain('@click="toggleFavorite"');
+  });
+
   it('课程详情：章节点击跳转的 URL 形态逐字保持', () => {
     const src = read('pages/courses/course-detail.uvue');
     expect(src).toContain("'/pages/courses/chapter-view?course_id=' + courseId.value + '&chapter_id=' + chapterId");
@@ -459,7 +474,7 @@ describe('展示纯函数唯一实现（T03/T06 口径）：courses 模块零第
     expect(declFiles(name)).toHaveLength(1);
   });
 
-  it.each(['getCategoryIcon', 'getCoverColor'])('%s 全模块只有一处实现', (name) => {
+  it.each(['getSpecialtyIcon', 'getSpecialtyCoverColor'])('%s 全模块只有一处实现', (name) => {
     expect(declFiles(name)).toHaveLength(1);
   });
 
@@ -482,10 +497,10 @@ describe('展示纯函数唯一实现（T03/T06 口径）：courses 模块零第
 
   it('封面图标/底色的映射表仍只有页面那一份（组件只吃扁平 props）', () => {
     const comp = read('pages/courses/components/course-cover-section.uvue');
-    expect(comp).not.toContain('getCoverColor');
-    expect(comp).not.toContain('getCategoryIcon');
+    expect(comp).not.toContain('getSpecialtyCoverColor');
+    expect(comp).not.toContain('getSpecialtyIcon');
     expect(comp).toContain('coverColor');
-    expect(comp).toContain('categoryIcon');
+    expect(comp).toContain('specialtyIcon');
   });
 });
 
@@ -495,14 +510,163 @@ describe('页面侧派生状态（T05「同一事实不两处持有」）：封�
     expect(src).not.toContain("const coverColor = ref<string>");
     expect(src).not.toContain('coverColor.value =');
     expect(src).toMatch(/const coverColor = computed<string>\(/);
-    expect(src).toMatch(/const coverIcon = computed<string>\(/);
+    expect(src).toMatch(/const specialtyIcon = computed<string>\(/);
     expect(src).toMatch(/const durationText = computed<string>\(/);
   });
 
-  it('computed 的 detail 空值兜底与拆分前一致（#e3f2fd / 空图标 / -）', () => {
+  it('computed 的空值兜底：底色 #e3f2fd / 图标 📚（真字形）/ 时长 -', () => {
     const src = read('pages/courses/course-detail.uvue');
     expect(src).toContain("if (detail.value == null) return '#e3f2fd'");
-    expect(src).toContain("if (detail.value == null) return ''");
+    expect(src).toContain("if (detail.value == null) return '📚'");
     expect(src).toContain("if (detail.value == null) return '-'");
+  });
+});
+
+/**
+ * #1087 契约：封面分类语义由**真实字段**驱动，且退化不了。
+ *
+ * 票面成因是「函数吃 category（后端已退役 ⇒ 恒空）⇒ 永远走默认分支」，所以这里**断言产物**：
+ * 每个 specialty_id 各自解析出**互不相同**的真字形与真底色。旧实现下这 4 个断言会同时红
+ * （4 个 id 全落在同一个默认分支上）—— 这正是本票要防的回归形态。
+ *
+ * 边界如实声明：本文件是静态契约测试（node 环境，不跑 uvue 运行时），断言的是映射表的**取值为真**，
+ * 不是「真机上渲染出像素」。渲染面由 ①a 真机逐页截图取证。
+ */
+describe('#1087 封面分类语义由 specialty_id 驱动（真实字段，非退役 category）', () => {
+  const PAGE = 'pages/courses/course-detail.uvue';
+  const src = read(PAGE);
+
+  /**
+   * 取 `<marker>` 之后的第一个函数体（首个独立成行的 `}` 即为收尾）。
+   * 不复用下层 fnBody 的原因如实记：该 helper 靠 `indexOf('\n}', …)` 判尾，
+   * 只在「函数尾 `}` 后紧跟空行」的写法下正确；本页 `const x = computed<string>(() : string => {`
+   * 的收尾是 `\n    })`（无空行），会被截短。
+   */
+  const sliceBody = (marker) => {
+    const start = src.indexOf(marker);
+    // 找不到标记（函数被删/改名）时返回空串，让**测试逐条判红**并点名，
+    // 而不是在 describe 体里抛异常把整个 suite 变成 "failed to run"（那样红得没信息）。
+    if (start < 0) return '';
+    const end = src.indexOf('\n    }', start);
+    if (end < 0) return '';
+    return src.slice(start, end);
+  };
+
+  const iconBody = sliceBody('function getSpecialtyIcon');
+  const colorBody = sliceBody('function getSpecialtyCoverColor');
+
+  /** 解析 `if (<ident> == N) return 'X'` 形式的常量映射表 */
+  const parseMap = (body, ident) => {
+    const out = new Map();
+    for (const m of body.matchAll(new RegExp('if\\s*\\(\\s*' + ident + '\\s*==\\s*(\\d+)\\s*\\)\\s*return\\s*\'([^\']*)\'', 'g'))) {
+      out.set(Number(m[1]), m[2]);
+    }
+    return out;
+  };
+
+  const iconMap = parseMap(iconBody, 'specialtyId');
+  const colorMap = parseMap(colorBody, 'specialtyId');
+
+  it('四个专业方向（1 操作 / 2 维修 / 3 安全 / 4 电池）都有显式分支', () => {
+    for (const id of [1, 2, 3, 4]) {
+      expect(iconMap.has(id)).toBe(true);
+      expect(colorMap.has(id)).toBe(true);
+    }
+  });
+
+  it('每个方向解出的都是**真字形**：非空串、非孤立 U+FE0F、非 ASCII 占位', () => {
+    for (const id of [1, 2, 3, 4]) {
+      const glyph = iconMap.get(id);
+      expect(glyph.length).toBeGreaterThan(0);
+      // 不得只剩变体选择符（#1071 的第一族坏形态：孤立 U+FE0F）
+      expect(glyph.replace(/[\uFE0E\uFE0F]/g, '')).not.toBe('');
+      // 图标必须是非 ASCII 的真实字形（空串 / 纯 ASCII 占位属坏形态）
+      expect(/[^\x00-\x7F]/.test(glyph)).toBe(true);
+      expect(glyph).not.toContain('\uFFFD');
+      // 码位必须落在图标区（emoji / dingbat），挡掉"看着像图标其实是别的东西"
+      const cps = Array.from(glyph).map((c) => c.codePointAt(0));
+      expect(cps.some((cp) => (cp >= 0x2190 && cp <= 0x2BFF) || (cp >= 0x1F000 && cp <= 0x1FAFF))).toBe(true);
+    }
+  });
+
+  it('图标两两互不相同（旧实现下 4 个 id 恒等 ⇒ 此断言即本票的回归锁）', () => {
+    const glyphs = [1, 2, 3, 4].map((id) => iconMap.get(id));
+    expect(new Set(glyphs).size).toBe(4);
+  });
+
+  it('底色两两互不相同且都是合法十六进制色值', () => {
+    const colors = [1, 2, 3, 4].map((id) => colorMap.get(id));
+    expect(new Set(colors).size).toBe(4);
+    for (const c of colors) expect(c).toMatch(/^#[0-9a-fA-F]{6}$/);
+  });
+
+  it('未知 / 未设置方向有兜底，且兜底不返回空字形', () => {
+    // 末行兜底：`return '<非空字形>';`
+    const iconFallback = [...iconBody.matchAll(/return\s+'([^']*)'/g)].pop();
+    expect(iconFallback).toBeDefined();
+    expect(iconFallback[1].length).toBeGreaterThan(0);
+    expect(/[^\x00-\x7F]/.test(iconFallback[1])).toBe(true);
+    // 底色兜底必须是合法十六进制色值
+    expect(colorBody).toMatch(/return\s*'#[0-9a-fA-F]{6}'\s*;?\s*$/);
+  });
+
+  it('页面模板把图标与底色接到 specialty 派生的 computed 上（不是退役 category）', () => {
+    expect(src).toContain(':specialty-icon="specialtyIcon"');
+    expect(src).toContain(':cover-color="coverColor"');
+    // 接线不得回退到退役字段
+    expect(src).not.toContain('detail.value!.category');
+    expect(src).not.toContain('detail!.category');
+    expect(src).not.toContain('data.category');
+  });
+
+  it('旧 10 类枚举（theory/safety/practice/advanced/structure/hydraulic/driving/maintenance/cargo/troubleshooting）在本页彻底清零', () => {
+    const stale = [
+      'CATEGORY_01', 'CATEGORY_02', 'CATEGORY_03', 'CATEGORY_04',
+      "'theory'", "'safety'", "'practice'", "'advanced'", "'structure'",
+      "'hydraulic'", "'driving'", "'maintenance'", "'cargo'", "'troubleshooting'",
+    ];
+    for (const token of stale) expect(src).not.toContain(token);
+  });
+});
+
+/**
+ * #1087 Q3 裁定：退役残留的 category 字段面。
+ * 后端 CourseDTO 无 category（backend/internal/service/course_service.go 的 category 属 CredentialBriefDTO）
+ * ⇒ 前端映射吃空值。经全仓核对**无第二消费面**后退役；本组断言防它被重新引入。
+ */
+describe('#1087 Q3：课程域 category 残留面已退役', () => {
+  it('types/course.uts 无 category 字段、无 CourseCategory 类型', () => {
+    const src = read('types/course.uts');
+    expect(src).not.toMatch(/^\s*category\s*:/m);
+    expect(src).not.toContain('CourseCategory');
+  });
+
+  it('types/index.uts 不再导出 CourseCategory', () => {
+    expect(read('types/index.uts')).not.toContain('CourseCategory');
+  });
+
+  it('api/course.uts 不再读 / 写 category（含 mock 数据）', () => {
+    const src = read('api/course.uts');
+    expect(src).not.toContain("obj['category']");
+    expect(src).not.toContain("infoObj['category']");
+    expect(src).not.toMatch(/\bcategory\s*:/);
+  });
+
+  it('courses 模块页面与组件不再读 course.category（属性访问，非 CSS 类名 / 非注释）', () => {
+    // 只锁**可执行代码**里的属性访问形态：
+    // ① CSS 类名 `.category-row` 是本页合法的视觉元素，不是数据消费面；
+    // ② 说明退役原因的注释里会出现 `course.category` 字样，属解释、非消费。
+    //    注意：本仓既有的 stripComments 只吃 JS 注释，.uvue 的模板注释是 HTML 形态（<!-- -->），
+    //    故此处自带一个三形态都吃的剥离器（已有实测踩中：模板注释漏网导致假红）。
+    const stripAll = (s) =>
+      s
+        .replace(/<!--[\s\S]*?-->/g, '')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+    const consumers = ['course.category', 'detail.category', 'data.category', 'item.category'];
+    for (const f of coursesSourceFiles()) {
+      const code = stripAll(read(relOf(f)));
+      for (const c of consumers) expect(code).not.toContain(c);
+    }
   });
 });
