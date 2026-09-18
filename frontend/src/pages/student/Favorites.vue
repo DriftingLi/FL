@@ -140,12 +140,16 @@ const TYPE_LABELS: Record<string, string> = {
   topic: '帖子'
 }
 
-// #511：UiSegmentTabs 分类选项（顶部 tab 轴：全部/课程/题目/帖子）
+// #511：UiSegmentTabs 分类选项。**必须覆盖全部五种 target_type**（#1132 复审）：
+// 此前缺「章节」与「内容精选」两个 tab ⇒ 这两类收藏只能在「全部」里翻；
+// 而 Web 章节页已能创建章节收藏（入口），缺 tab 会让新产生的条目无处可筛。
 const typeTabOptions = [
   { label: '全部', value: 'all' },
   { label: '课程', value: 'course' },
+  { label: '章节', value: 'chapter' },
   { label: '题目', value: 'question' },
-  { label: '帖子', value: 'topic' }
+  { label: '帖子', value: 'topic' },
+  { label: '内容精选', value: 'featured' }
 ]
 
 const TYPE_COLORS: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = {

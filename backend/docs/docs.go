@@ -8885,7 +8885,12 @@ const docTemplate = `{
         },
         "/chapter/{chapter_id}/slides": {
             "get": {
-                "description": "公开访问，返回章节 PPT 转图片后的 slides",
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "需登录，返回章节 PPT 转图片后的 slides（#1132 复审：此前为公开访问）",
                 "consumes": [
                     "application/json"
                 ],
@@ -8922,6 +8927,12 @@ const docTemplate = `{
                                     }
                                 }
                             ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "404": {

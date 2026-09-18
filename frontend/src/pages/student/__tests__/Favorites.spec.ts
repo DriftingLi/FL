@@ -12,6 +12,7 @@ vi.mock('@/api/favorite', () => ({ favoriteApi: { list: vi.fn(), remove: vi.fn()
 
 import { favoriteApi } from '@/api/favorite'
 import Favorites from '../Favorites.vue'
+import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 
 /** 收藏条目（形状照生成物 FavoriteDTO；course_id 仅章节有意义，其余为 0） */
 function fav(over: Record<string, unknown> = {}) {
@@ -76,5 +77,33 @@ describe('我的收藏落点表（#1089）', () => {
   it('可点行仍带 pointer 样式（防"不可点"被写成恒真）', async () => {
     const w = await mountWith([fav({ target_type: 'chapter', target_id: 4, course_id: 3 })])
     expect(w.find('.stagger-in').classes()).toContain('cursor-pointer')
+  })
+})
+
+describe('我的收藏筛选 tab 覆盖五种类型（#1132 复审）', () => {
+  /** 选项表（原样读组件 props：tab 是数据驱动的，读渲染文本会被截断/换行干扰） */
+  function tabValues(w: ReturnType<typeof mount>): string[] {
+    return (w.findComponent(UiSegmentTabs).props('options') as Array<{ value: string }>).map((o) => o.value)
+  }
+
+  it('六个 tab = 全部 + 五种 target_type（章节与内容精选此前缺席）', async () => {
+    const w = await mountWith([fav()])
+    expect(tabValues(w)).toEqual(['all', 'course', 'chapter', 'question', 'topic', 'featured'])
+  })
+
+  it('切到「章节」tab 触发 target_type=chapter 并回到第一页', async () => {
+    const w = await mountWith([fav()])
+    vi.mocked(favoriteApi.list).mockClear()
+    await w.findComponent(UiSegmentTabs).vm.$emit('update:modelValue', 'chapter')
+    await flushPromises()
+    expect(favoriteApi.list).toHaveBeenCalledWith(expect.objectContaining({ target_type: 'chapter', page: 1 }))
+  })
+
+  it('切到「内容精选」tab 触发 target_type=featured', async () => {
+    const w = await mountWith([fav()])
+    vi.mocked(favoriteApi.list).mockClear()
+    await w.findComponent(UiSegmentTabs).vm.$emit('update:modelValue', 'featured')
+    await flushPromises()
+    expect(favoriteApi.list).toHaveBeenCalledWith(expect.objectContaining({ target_type: 'featured', page: 1 }))
   })
 })
