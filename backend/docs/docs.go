@@ -8885,7 +8885,12 @@ const docTemplate = `{
         },
         "/chapter/{chapter_id}/slides": {
             "get": {
-                "description": "公开访问，返回章节 PPT 转图片后的 slides",
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "需登录，返回章节 PPT 转图片后的 slides（#1132 复审：此前为公开访问）",
                 "consumes": [
                     "application/json"
                 ],
@@ -8922,6 +8927,12 @@ const docTemplate = `{
                                     }
                                 }
                             ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "404": {
@@ -9629,7 +9640,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "需登录，返回课程信息 + 章节 + 学员维度进度/是否已选/完成章节/最后位置（ADR-0017）；未登录时 last_* 为空",
+                "description": "需登录，返回课程信息 + 章节 + 学员维度进度/是否已选/完成章节/最后位置（ADR-0017）；未登录时 last_* 为空。可见性（ADR-0058）：未发布 / 未挂载课程按「不存在」返回",
                 "consumes": [
                     "application/json"
                 ],
@@ -9690,7 +9701,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "需登录，返回章节详情 + 相邻章节 + 学习状态",
+                "description": "需登录，返回章节详情 + 相邻章节 + 学习状态。可见性（ADR-0058）：章节跟随所属课程，未发布 / 未挂载一律按「不存在」返回",
                 "consumes": [
                     "application/json"
                 ],

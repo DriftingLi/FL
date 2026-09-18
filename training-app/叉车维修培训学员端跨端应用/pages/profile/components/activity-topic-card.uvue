@@ -8,16 +8,20 @@
         <text class="stat-text">{{ likesCount }} 赞</text>
         <text class="stat-text">{{ repliesCount }} 评论</text>
       </view>
-      <text v-if="tagText.length > 0" class="tag-text">{{ tagText }}</text>
       <text class="topic-time">{{ displayTime(createdDate) }}</text>
     </view>
   </view>
 </template>
 
 <script setup lang="uts">
-  // 个人动态列表卡（T03e #677）：七个 tab 变体共用（帖子/赞/收藏/疑问/回复/围观/浏览）。
+  // 个人动态列表卡（T03e #677）：六个 tab 变体共用（帖子/赞过/疑问/回复/围观/浏览）。
   // props 全部扁平原始值（#687 教训：可选对象 prop 成员直读 = Kotlin error18）；
   // 变体差异走显式布尔/字符串标志，footer 子节点渲染条件与旧内联版逐一对应。
+  //
+  // 原第七个变体「收藏」已于 2026-09-18 随「收藏的唯一列表承载面」裁定（根仓库 ADR-0018 补遗）
+  // **整体摘除**：个人动态不承载收藏，故 `tagText` prop 与 `.tag-text` 样式一并删除
+  // —— 它们当时的唯一消费方就是那一格。收藏条目的类型标签由 `pages/profile/favorites.uvue`
+  // 的 `getTypeLabel()` 独任，本卡不再承担。
   import { formatDateStr } from '../../../utils/format'
 
   const props = withDefaults(defineProps<{
@@ -26,7 +30,6 @@
     createdDate?: string
     likesCount?: number
     repliesCount?: number
-    tagText?: string
     showStats?: boolean
     refHeader?: boolean
     hasContent?: boolean
@@ -36,7 +39,6 @@
     createdDate: '',
     likesCount: 0,
     repliesCount: 0,
-    tagText: '',
     showStats: false,
     refHeader: false,
     hasContent: false
@@ -108,14 +110,6 @@
     font-size: 22rpx;
     color: #999999;
     margin-right: 16rpx;
-  }
-
-  .tag-text {
-    font-size: 22rpx;
-    color: #2979ff;
-    background-color: #f0f5ff;
-    padding: 4rpx 12rpx;
-    border-radius: 8rpx;
   }
 
   .topic-time {

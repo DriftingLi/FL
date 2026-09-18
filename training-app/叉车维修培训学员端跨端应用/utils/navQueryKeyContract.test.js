@@ -255,19 +255,21 @@ function navigations(files) {
 /**
  * 已知例外（expand 侧；清掉一条必须附带「已修」的证据，禁静默删除）。
  * 本仓既有纪律：存量违例走 allowlist，各票清自己范围，epic 收尾删机制（ADR-0007「静态守护与契约测试纪律」）。
+ *
+ * **现为空表（2026-09-18，#1089 PR-B 摘除唯一一条）**：原例外是
+ * `pages/profile/favorites.uvue` → `pages/courses/chapter-view` 传 camelCase `chapterId`。
+ * 摘除的「已修」证据（同时满足本守护的两面）：
+ *   ① 键名面：该处已改为 `?course_id=&chapter_id=`（与 ADR-0014 及
+ *      `pages/courses/course-detail.uvue` 的 `onChapterClick` / `onStartLearn` 同式），
+ *      本文件用例 ④ 在**无例外**时全仓全绿；
+ *   ② 数据面：`course_id` 已由后端随条目下发（PR #1133 生产核验）并经
+ *      `types/favorite.uts` + `api/favorite.uts` 的 `buildFavoriteItem` 落到
+ *      `FavoriteItem.course_id`（走 `toNumber`，缺省 ⇒ 0）—— 即「改键名不足以修复」
+ *      这个当时写进 `why` 的前提已经不再成立。
+ * 摘除后用例 ⑥ 的循环体不再执行（空表天然通过）；新落点契约见
+ * `utils/favoritesLandingContract.test.js`（补的正是本守护抓不到的「压根没分支」那一面）。
  */
-const GUARD_ALLOWLIST = [
-  {
-    file: 'pages/profile/favorites.uvue',
-    route: 'pages/courses/chapter-view',
-    why:
-      '章节收藏点不开章节学习：该处传 camelCase `chapterId`（唯一一处 camelCase query 键，' +
-      'ADR-0014 明载落点键为 `course_id` + `chapter_id`），而 `chapter-view` 必须要 `course_id`；' +
-      '**关键**：`FavoriteItem` / 后端 `FavoriteDTO` 只给 `target_id`（章节收藏时=章节 id），' +
-      '**响应里没有 course_id** ⇒ 前端无法拼出可用 URL，**改键名并不足以修复**，需后端按 ' +
-      'target_type 补 `course_id`（或产品改口径）。属跨栈改动，须另票决策，不在本票夹带。',
-  },
-];
+const GUARD_ALLOWLIST = [];
 
 /** 纯函数：给定页面键表与导航清单 → 违规清单 */
 function findUnreadQueryKeys(byRoute, readerKeys, navs) {

@@ -51,8 +51,9 @@
         </view>
         <!-- 记录列表 -->
         <scroll-view class="record-scroll" scroll-y="true" @scrolltolower="onLoadMore">
+            <!-- 空态说明证件分区：切到没练过的证件时为空是诚实结果，不是数据丢失（ADR-0051） -->
             <view v-if="records.length == 0 && !loading" class="empty-tip">
-                <text class="empty-text">暂无练习记录</text>
+                <text class="empty-text">当前证件下暂无练习记录</text>
             </view>
             <view class="record-list">
                 <view v-for="(item, idx) in records" :key="idx" class="record-card" @click="onRecordClick(item)">
@@ -279,7 +280,6 @@
     }
 
     .filter-scroll {
-        white-space: nowrap;
         flex-direction: row;
         align-items: center;
         padding: 20rpx 24rpx;

@@ -15,3 +15,11 @@ export function getTypeName(type : string) : string {
 export function isMultiChoice(type : string) : boolean {
     return type == 'multi' || type == 'multiple_choice' || type == 'multi_choice'
 }
+
+/**
+ * 折叠态「答案与解析」开关的按钮文案（#1083）
+ * 收起态 = 引导语，展开态 = 收起语；折叠态默认收起（初始 open=false ⇒ 返回引导语）
+ */
+export function answerFoldLabel(open : boolean) : string {
+    return open ? '收起答案' : '查看答案与解析'
+}

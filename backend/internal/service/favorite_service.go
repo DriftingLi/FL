@@ -70,20 +70,26 @@ type favoriteTargetMeta struct {
 
 // validateFavoriteTarget 校验收藏目标类型合法且存在/可见。
 // 课程要求已发布且挂载（挂载不变式与学员端列表口径一致）；题目要求已发布；
-// 精选内容要求已发布；章节与帖子仅要求存在。
+// 精选内容要求已发布；**章节的可见性跟随所属课程**（已发布 + 挂载不变式，与搜索的章节分区同一
+// 谓词，见 #1132 —— course_mount_scope.go 的自述早已把「收藏目标校验」列为该谓词的消费方）；
+// 帖子仅要求存在。
+//
+// 读面（favoriteTargetsMeta / List）**保持快照口径不变**：写时校验、读到的是当时的快照，
+// 目标日后下架不会让收藏行消失（course 支的既有形状即如此）。
 func validateFavoriteTarget(db *gorm.DB, targetType string, targetID int) error {
 	switch targetType {
 	case FavoriteTargetCourse:
-		var cnt int64
-		MountedCourseScope(db.Model(&model.Course{}).Where("course_id = ? AND status = 1", targetID)).Count(&cnt)
-		if cnt == 0 {
+		// 复用学员可见性单点的 by-id 形态（ADR-0058），不在此手拼谓词。
+		if !CourseVisibleByID(db, targetID) {
 			return errors.New("课程不存在或不可收藏")
 		}
 	case FavoriteTargetChapter:
 		var cnt int64
-		db.Model(&model.Chapter{}).Where("chapter_id = ?", targetID).Count(&cnt)
+		// 章节可见性跟随课程：谓词复用挂载不变式单点，不手拼（#1132）。
+		mounted := MountedCourseScope(db.Model(&model.Course{}).Select("course_id").Where("status = 1"))
+		db.Model(&model.Chapter{}).Where("chapter_id = ? AND course_id IN (?)", targetID, mounted).Count(&cnt)
 		if cnt == 0 {
-			return errors.New("章节不存在")
+			return errors.New("章节不存在或不可收藏")
 		}
 	case FavoriteTargetQuestion:
 		var cnt int64

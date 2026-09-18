@@ -419,6 +419,21 @@ describe('删除禁区「courses 不用删」：行为保持点逐项仍在', ()
     expect(src).toContain("{{ continueChapterId > 0 ? '继续学习' : '开始学习' }}");
   });
 
+  it('章节页：收藏三连接线在（#1140），且 target_type 是 chapter 不是 course', () => {
+    const src = read('pages/courses/chapter-view.uvue');
+    for (const t of ['checkFavoriteApi', 'addFavoriteApi', 'removeFavoriteApi']) {
+      expect(src).toContain(t);
+    }
+    // 目标类型必须逐字是 'chapter'：从 course-detail 抄接线而忘改 target_type 时，
+    // 页面「看起来能用」但收藏的是课程 —— 静态面必须拦下（行为面见
+    // utils/chapterFavoriteContract.test.js：一个守接线，一个守行为，两者都要）
+    expect(src).toMatch(/checkFavoriteApi\(\s*'chapter'/);
+    expect(src).toMatch(/addFavoriteApi\(\s*'chapter'/);
+    expect(src).toContain('removeFavoriteApi(favoriteId.value)');
+    // 模板仍把点击接线到控件（函数在、但没接 = 同样点不到）
+    expect(src).toContain('@click="toggleFavorite"');
+  });
+
   it('课程详情：章节点击跳转的 URL 形态逐字保持', () => {
     const src = read('pages/courses/course-detail.uvue');
     expect(src).toContain("'/pages/courses/chapter-view?course_id=' + courseId.value + '&chapter_id=' + chapterId");
