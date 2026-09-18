@@ -39,11 +39,17 @@
 
 Windows 本机（`E:\` 盘）上 worktree 可用，但有几处与 Linux 不同，照下面做：
 
-- **一 worktree 一分支一会话**：`git worktree add E:\wt-<task> -b feat/<task> origin/master`，全程在 `E:\wt-<task>` 内改、提交、push、开 PR；用完 `git worktree remove E:\wt-<task>` + `git branch -D feat/<task>`。放在 `E:\wt-<task>`（与主树同级）而非盘符根，便于一眼看清是哪个会话的目录。
+- **一 worktree 一分支一会话**：`git worktree add D:\FL\wt-<task> -b feat/<task> origin/master`（也可放与主树同级的 `D:\wt-<task>`），全程在该目录内改、提交、push、开 PR；用完 `git worktree remove <目录>` + `git branch -D feat/<task>`。放在主树同级而非盘符根，便于一眼看清是哪个会话的目录。**目录名不要以 `.` 开头**——理由与判据见下一条。
 
-- **worktree 目录名不要以 `.` 开头**（2026-09-17 实测，血账）：`jest` 的 haste-map 爬取**跳过点开头的目录** ⇒ 项目放在 `D:\FL\.wt-<task>` 时 `npm run test:unit` 报
+- **worktree 目录名不要以 `.` 开头**（2026-09-17 实测，血账；2026-09-18 补可机检判据 + 更正机制，见 #1144）：项目放在 `D:\FL\.wt-<task>` 时 `npm run test:unit` 报
   `No tests found … testMatch: … - 0 matches`（同一条命令在主树与 `D:\FL\wt-<task>` 下能列出全部 76 个套件；`git worktree move .wt-1082 wt-1082b` 后立刻恢复）。
   它**不报错、也不提示配置问题**，只是「一个测试都找不到」，很容易被读成「测试坏了」。⇒ 会话 worktree 用 `D:\FL\wt-<task>`（无点），**不要**用 `D:\FL\.wt-<task>`。
+  **判据（可机检，在该 worktree 的项目目录里跑，`node_modules` 按下一条备好）**：`npx jest --config jest.config.unit.js -i --listTests | Measure-Object` ⇒ **计数必须非 0**；为 0 就是踩了本条。
+  ⚠️ 它**静默**：点目录下 `--listTests` 空输出且 `exit 0`，只有带 `--testPathPattern` 真跑才报 `No tests found, exiting with code 1` ⇒ **别拿 exit code 当判据**。
+  **对照数字（2026-09-18 实测，base `7e2a8efb`，同一份内容 / 同一命令 / 只换目录名）**：`D:\FL\wt-1144` **97** 条 vs `D:\FL\.wt-1144probe` **0** 条；绝对值随 HEAD 走（#1134 会话读到 主树 79 / `.wt-1134` 0 / 改名后 96），**「点目录恒 0」才是结论**。
+  **机制更正（2026-09-18 定位到源码；旧记的「haste-map 爬取跳过点开头的目录」已被实测证伪）**：同目录把 `testMatch` 换成 `**/*.test.js` 立刻找到 **98** 个套件 ⇒ 文件全被扫到了，坏的是**绝对路径 glob 的匹配**：
+  `testMatch` 的 `<rootDir>` 展开成 Windows 绝对路径后要过 `jest-util` 的 `replacePathSepForGlob`（= `path.replace(/\\(?![{}()+?.^$])/g, '/')`，jest 27.5.1）——它**故意不转换**后跟 `{}()+?.^$` 的反斜杠（怕吃掉 glob 元字符）⇒ **点段前的分隔符被留成 `\`**（`--showConfig` 实测 `D:/FL\.wt-1144probe/…`，非点目录是干净的 `D:/FL/wt-1144/…`），picomatch 把 `\.` 读成「转义的 `.`」、**分隔符随之消失** ⇒ 永远匹配不上真实路径。同理**段首是 `{}()+?.^$` 之一的目录名也会踩**（`(wip)` 链式实测同为 0 命中）。POSIX 下 `path.sep` 是 `/`、该函数是空操作 ⇒ **Windows-only 的坑**。
+  现存点目录 worktree 还有 `.wt-1071` / `.wt-1087` / `.wt-1087b` / `.wt-1111` / `.wt-ai-feature` / `.wt-base` / `.wt-courses`（`git worktree list` 现测）⇒ 在里面跑 ③ 就是假绿/假红；**改名会牵动别会话正在用的 worktree，属破坏性操作，须协调后再做**（本票不做）。
 
 - **`node_modules` 不要每个 worktree 重装**：目录联接（junction）共享主树那一份，省掉每个 worktree 2–5 分钟的 `npm ci`：
   ```
