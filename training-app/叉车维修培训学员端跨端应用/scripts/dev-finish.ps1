@@ -268,7 +268,8 @@ try {
     else {
         . (Join-Path $PSScriptRoot 'lib\auto-screenshot.ps1')
         $screenshotResult = Invoke-AutoScreenshot -Device $Device -CliPath $envResult.CliPath `
-            -ProjectDir $ProjectDir -MaxPages $MaxScreenshotPages
+            -ProjectDir $ProjectDir -MaxPages $MaxScreenshotPages `
+            -RunStartedAt $started
         if ($screenshotResult.Ok) {
             Write-Result $true "$($screenshotResult.Screenshots.Count) 页截图完成（$($screenshotResult.Screenshots -join ', ')）"
         }
@@ -299,8 +300,12 @@ if ($detectedLevel -eq 'quick') {
 }
 else {
     . (Join-Path $PSScriptRoot 'lib\screenshot-diff.ps1')
+    # 「本轮产物」的起点 = **本脚本开头那一个** `$started`（与步骤 6 传下去的**同一个**值）。
+    # 不在这里另取 `Get-Date`：目录从不清理、文件名按页名固定，两个判据各取一次会漂 ——
+    # 早取的那次会把本轮刚落的截图误判成陈旧（issue #1158）。
     $diffResult = Compare-ScreenshotBaseline -ProjectDir $ProjectDir -UpdateBaseline:$UpdateBaseline `
-        -PixelThreshold $PixelThreshold -IgnoreTopRows $IgnoreTopRows -IgnoreBottomRows $IgnoreBottomRows
+        -PixelThreshold $PixelThreshold -IgnoreTopRows $IgnoreTopRows -IgnoreBottomRows $IgnoreBottomRows `
+        -RunStartedAt $started
     # 判据与文案的**单点真源**是 lib/screenshot-gate.ps1 的 Get-PngDiffVerdict（纯函数、被
     # utils/screenshotDiffBehavior.test.js 真跑并成对断言「无变化⇒绿 / 有变化⇒红」）。
     # 这里只负责**执行**它给出的动作 —— 2026-09-18（#1139）之前这段是 `Write-Host` 一行黄字就完事，
@@ -311,6 +316,17 @@ else {
     if (-not $diffResult.PixelRan -and $fallbackReasons.Count -gt 0) {
         # 像素层一次都没跑成（node 不在 / 全是非 PNG）⇒ 必须**说出来**，不许静默当 MD5 用
         Write-Host "  ⚠️ 本轮未走像素层（MD5 回退）：$($fallbackReasons -join '; ')" -ForegroundColor Yellow
+    }
+
+    # 被跳过的陈旧残留（issue #1158）：目录从不清理，上一轮失败运行的图会被算进「页数 / 变化数」。
+    # 跳过是**有意的**，但必须**可见** —— 静默丢弃 = 另一种假绿（照实打出来，且已进返回对象）。
+    $staleSkipped = @($diffResult.SkippedStale)
+    if ($staleSkipped.Count -gt 0) {
+        $staleNames = @($staleSkipped | ForEach-Object { $_.Name })
+        Write-Host "  ⏭️ 跳过 $($staleSkipped.Count) 张非本轮产物（早于本轮运行起点）：$($staleNames -join ', ')" -ForegroundColor DarkYellow
+        foreach ($s in $staleSkipped) {
+            Write-Host "     · $($s.Name)（$($s.Side) 侧陈旧）" -ForegroundColor DarkGray
+        }
     }
 
     # 首次运行 ⇒ 以本轮截图建立基线：这一条把「基线目录永远是空的」那个死循环直接掐掉

@@ -26,6 +26,92 @@
          diff 之后做，`-UpdateBaseline` 就是那个动作的载体；默认不阻塞会重演「配好了没人用」。
 #>
 
+function Select-ThisRunShots {
+    <#
+    .SYNOPSIS
+        「本轮产物」的判据（纯函数）：把 `.ci-verify/screenshots/` 里的**陈旧残留**挑出来，只把本轮的算进判据。
+
+    .DESCRIPTION
+        为什么需要它（2026-09-18，issue #1158）：步骤 7 原先遍历 `.ci-verify/screenshots/` 里**所有** PNG，
+        而该目录**从不清理**、文件名按页名固定 ⇒ 上一轮失败运行残留的图会被算进本轮的「页数 / 有变化数」
+        （ADR-0008 记的血账：evidence 写「3 页有变化」，其中只有 1 页是本次的）。
+
+        判据**不是新发明的** —— 步骤 6（`scripts/lib/auto-screenshot.ps1`）早就有同一条纪律：
+        「截图文件的时间戳必须晚于本次运行起点」，早于起点的记入 `StaleShots`。这里只是让它**成为共享真源**，
+        由调用方把**同一个**运行起点传进来（不重写第二份时间戳判据）。
+
+        规则（对目录里出现的每个文件名）：
+          当前存在 + 基线存在 且 **两个**都 ≥ 起点        ⇒ 在范围内（正常参与对比）
+          任一侧 < 起点                                   ⇒ **跳过**，理由 `stale`
+          当前存在、基线**不存在**                        ⇒ 在范围内（它会走「新增」那条，判据由调用方出）
+          当前不存在、基线存在                            ⇒ 在范围内（它会走「缺失」那条）
+          基线 < 起点 而当前不存在                        ⇒ **跳过**（否则会把上一轮的残留报成「缺失」）
+
+        ⇒ 一句话：**陈旧的一侧不参与判据，也不会替对方造出「缺失/有变化」。**
+
+    .OUTPUTS
+        [pscustomobject]：InScope（文件名数组）· Skipped（数组，每项 Name/Reason）· RunStartedAt
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][datetime]$RunStartedAt,
+        # 本轮的当前截图目录（读文件时间戳）
+        [string]$CurrentDir,
+        # 基线目录（读文件时间戳；不存在则视为全部「无基线」）
+        [string]$BaselineDir,
+        # 测试缝：直接给时间戳映射（Name → datetime）时**不碰文件系统**，行为完全一致
+        [hashtable]$CurrentTimes,
+        [hashtable]$BaselineTimes
+    )
+
+    if (-not $CurrentTimes -or -not $BaselineTimes) {
+        $CurrentTimes = @{}
+        $BaselineTimes = @{}
+        if ($CurrentDir -and (Test-Path -LiteralPath $CurrentDir)) {
+            foreach ($f in @(Get-ChildItem -Path $CurrentDir -Filter '*.png' -File)) {
+                $CurrentTimes[$f.Name] = $f.LastWriteTime
+            }
+        }
+        if ($BaselineDir -and (Test-Path -LiteralPath $BaselineDir)) {
+            foreach ($f in @(Get-ChildItem -Path $BaselineDir -Filter '*.png' -File)) {
+                $BaselineTimes[$f.Name] = $f.LastWriteTime
+            }
+        }
+    }
+
+    # 名字集合用 @() 包住：StrictMode 下 .Count 对标量会抛（本仓血账，见 screenshot-diff.ps1 的 D7）
+    $names = @(@($CurrentTimes.Keys) + @($BaselineTimes.Keys) | Sort-Object -Unique)
+
+    $inScope = @()
+    $skipped = @()
+    foreach ($name in $names) {
+        $hasCurrent = $CurrentTimes.ContainsKey($name)
+        $hasBaseline = $BaselineTimes.ContainsKey($name)
+        $currentStale = $hasCurrent -and ([datetime]$CurrentTimes[$name] -lt $RunStartedAt)
+        $baselineStale = $hasBaseline -and ([datetime]$BaselineTimes[$name] -lt $RunStartedAt)
+
+        if ($currentStale -or $baselineStale) {
+            $side = @()
+            if ($currentStale) { $side += 'current' }
+            if ($baselineStale) { $side += 'baseline' }
+            $skipped += [pscustomobject]@{
+                Name   = $name
+                Reason = 'stale'
+                Side   = ($side -join '+')
+            }
+            continue
+        }
+
+        $inScope += $name
+    }
+
+    return [pscustomobject]@{
+        InScope      = @($inScope)
+        Skipped      = @($skipped)
+        RunStartedAt = $RunStartedAt
+    }
+}
+
 function Get-PngDiffVerdict {
     <#
     .SYNOPSIS
