@@ -1,0 +1,29 @@
+# ①a 真机 logcat 摘录（窗口起点 = 设备自身时间戳 1789720049.588，取自 logcat -d -v epoch -t 1，未清缓冲）
+# 设备：b32d8398（Xiaomi 23049RAD8C / Android 15）· 树：feat/1140-chapter-favorite @ d47a9d4a
+# 提取命令：adb -s b32d8398 shell 'logcat -d -v epoch' | 过滤 epoch >= 1789720049.588
+
+## 页面进入行（页身份）
+进入页面:​pages/courses/chapter-view?course_id=1&chapter_id=1​ 。[{\
+进入页面:​pages/profile/favorites​ 。[{\
+进入页面:​/pages/courses/chapter-view?course_id=1&chapter_id=1​ 。[{\
+
+## 收藏接口调用（>>> 请求 / <<< 响应），按时间顺序
+>>>     https://www.gccsmile.com/api/favorites/check?target_type=chapter&target_id=1
+<<< 200 https://www.gccsmile.com/api/favorites/check?target_type=chapter&target_id=1
+>>>     https://www.gccsmile.com/api/favorites  body: target_type=chapter target_id=1
+<<< 201 https://www.gccsmile.com/api/favorites
+>>>     https://www.gccsmile.com/api/favorites?page=1&page_size=20
+<<< 200 https://www.gccsmile.com/api/favorites?page=1&page_size=20
+>>>     https://www.gccsmile.com/api/favorites/check?target_type=chapter&target_id=1
+<<< 200 https://www.gccsmile.com/api/favorites/check?target_type=chapter&target_id=1
+>>>     https://www.gccsmile.com/api/favorites/26
+<<< 200 https://www.gccsmile.com/api/favorites/26
+>>>     https://www.gccsmile.com/api/favorites?page=1&page_size=20
+<<< 200 https://www.gccsmile.com/api/favorites?page=1&page_size=20
+
+## 无新增错误行判据（本窗口）
+FATAL EXCEPTION = 0
+ANR in io.dcloud.uniappx = 0
+含 [chapter-view] 的告警/错误行 = 0
+含 Favorite failed 的行 = 0
+含 [ERROR] / Uncaught / TypeError / ReferenceError 的行 = 0
