@@ -1,0 +1,1 @@
+09-18 21:40:55.448 27735 31545 I console : [LOG]---BEGIN:CONSOLE---{"type":"string","value":"进入页面:​/pages/forum/forum-detail?id=20​ 。[{\"创建dom元素个数\":\"11个\",\"耗时\":\"7ms\"},{\"排版\":\"1次\",\"耗时\":\"19ms\"},{\"渲染\":\"1次\",\"耗时\":\"7ms\"},{\"跳转页面到onReady总耗时\":\"148ms\"}]"}---END:CONSOLE---
