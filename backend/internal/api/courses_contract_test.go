@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -167,5 +168,62 @@ func TestTutorCoursesListContract(t *testing.T) {
 	}
 	if item["student_count"] != float64(2) {
 		t.Fatalf("student_count 应为 2, got %v", item["student_count"])
+	}
+}
+
+// #1132 复审：章节幻灯片必须登录才能访问。
+// 此前它与 /api/courses 一起挂在「公开访问」段，任意章节 id 无凭证即可拉取 slides（含未发布 /
+// 未挂载课程的章节）。消费方只有 Web 章节页的 PptViewer（走已鉴权的请求层），故收紧为零破坏面。
+func TestChapterSlidesRequireAuthContract(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := testutil.NewMemoryDB(t)
+
+	ptr := func(v int) *int { return &v }
+	spec := model.Specialty{Code: "slides", Name: "幻灯片", SortOrder: 1, Status: 1}
+	if err := db.Create(&spec).Error; err != nil {
+		t.Fatalf("创建方向失败: %v", err)
+	}
+	lv := model.CourseLevel{Code: "slides-lv", Name: "入门", SortOrder: 1, Status: 1}
+	if err := db.Create(&lv).Error; err != nil {
+		t.Fatalf("创建等级失败: %v", err)
+	}
+	course := model.Course{Name: "幻灯片课程", Status: 1,
+		SpecialtyID: ptr(spec.SpecialtyID), LevelID: ptr(lv.LevelID), CreatedAt: testutil.Now()}
+	if err := db.Create(&course).Error; err != nil {
+		t.Fatalf("创建课程失败: %v", err)
+	}
+	ch := model.Chapter{CourseID: course.CourseID, Title: "幻灯片章节", OrderNum: 1, CreatedAt: testutil.Now()}
+	if err := db.Create(&ch).Error; err != nil {
+		t.Fatalf("创建章节失败: %v", err)
+	}
+	user := model.HrwaiUser{Account: "acct_slides", Phone: "13800000088", Username: "幻灯片", Status: 1, CreatedAt: testutil.Now()}
+	if err := db.Create(&user).Error; err != nil {
+		t.Fatalf("创建用户失败: %v", err)
+	}
+
+	cfg := &config.Config{JWTSecretKey: "contract-test-secret", AuthCookie: config.AuthCookieConfig{Name: "hrwai_token"}}
+	r := gin.New()
+	api := r.Group("/api")
+	deps := newContractDeps(t, db, cfg)
+	RegisterCoursesRoutes(api, deps.RouterDeps(), deps.CourseSvc)
+
+	path := "/api/chapter/" + strconv.Itoa(ch.ChapterID) + "/slides"
+
+	// 无凭证：401（本票收紧的判据）
+	if rec := performRequest(r, "GET", path); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("无凭证拉取章节幻灯片应 401, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// 已登录：200（确认收紧没有把正常链路一起关掉）
+	token, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).Issue(int(user.ID), user.Account, "hrwai_user")
+	if err != nil {
+		t.Fatalf("签发 token 失败: %v", err)
+	}
+	req, _ := http.NewRequest("GET", path, nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	authed := httptest.NewRecorder()
+	r.ServeHTTP(authed, req)
+	if authed.Code != http.StatusOK {
+		t.Fatalf("已登录拉取章节幻灯片应 200, got %d: %s", authed.Code, authed.Body.String())
 	}
 }

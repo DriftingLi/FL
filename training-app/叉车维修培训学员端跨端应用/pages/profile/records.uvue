@@ -283,7 +283,6 @@
     }
 
     .filter-scroll {
-        white-space: nowrap;
         flex-direction: row;
         align-items: center;
         padding: 20rpx 24rpx;

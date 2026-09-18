@@ -137,6 +137,7 @@ func TestFavoriteChapterVisibilityContract(t *testing.T) {
 			Total     int64 `json:"total"`
 			Favorites []struct {
 				TargetID int `json:"target_id"`
+				CourseID int `json:"course_id"`
 			} `json:"favorites"`
 		} `json:"data"`
 	}
@@ -145,5 +146,24 @@ func TestFavoriteChapterVisibilityContract(t *testing.T) {
 	}
 	if list.Data.Total != 1 || len(list.Data.Favorites) != 1 || list.Data.Favorites[0].TargetID != visibleCh.ChapterID {
 		t.Fatalf("章节收藏列表应只含可见章节一条, got %+v", list.Data)
+	}
+
+	// 不变量（#1132 复审）：章节收藏项**恒带有效课程 ID**，前端 `course_id > 0` 只能是纵深防御、
+	// 不可能是常态分支 —— 依据是结构而非假设：`chapter.course_id` 有外键 `chapter_course_id_fkey`
+	// （非 0、非孤立），且 List 只回 `meta.Found` 的行（章节被删则整行不出现）。
+	// 钉住它：任何让章节项带 `course_id = 0`（或串到别的课程）的实现改动都必须在这里变红。
+	var owningCourseID int
+	if err := db.Model(&model.Chapter{}).Where("chapter_id = ?", visibleCh.ChapterID).
+		Pluck("course_id", &owningCourseID).Error; err != nil {
+		t.Fatalf("读取章节所属课程失败: %v", err)
+	}
+	if owningCourseID <= 0 {
+		t.Fatalf("夹具失效：章节应有所属课程, got %d", owningCourseID)
+	}
+	if got := list.Data.Favorites[0].CourseID; got != owningCourseID {
+		t.Fatalf("章节收藏项应恒带所属课程 ID %d, got %d", owningCourseID, got)
+	}
+	if added.Data.CourseID != owningCourseID {
+		t.Fatalf("Add 路径应与 List 路径同口径（课程 ID %d）, got %d", owningCourseID, added.Data.CourseID)
 	}
 }
