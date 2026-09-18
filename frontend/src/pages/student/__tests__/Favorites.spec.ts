@@ -80,15 +80,20 @@ describe('我的收藏落点表（#1089）', () => {
   })
 })
 
-describe('我的收藏筛选 tab 覆盖五种类型（#1132 复审）', () => {
+describe('我的收藏筛选 tab（#1132 复审）', () => {
   /** 选项表（原样读组件 props：tab 是数据驱动的，读渲染文本会被截断/换行干扰） */
   function tabValues(w: ReturnType<typeof mount>): string[] {
     return (w.findComponent(UiSegmentTabs).props('options') as Array<{ value: string }>).map((o) => o.value)
   }
 
-  it('六个 tab = 全部 + 五种 target_type（章节与内容精选此前缺席）', async () => {
+  it('补上「章节」tab（此前章节收藏只能在「全部」里翻）', async () => {
     const w = await mountWith([fav()])
-    expect(tabValues(w)).toEqual(['all', 'course', 'chapter', 'question', 'topic', 'featured'])
+    expect(tabValues(w)).toEqual(['all', 'course', 'chapter', 'question', 'topic'])
+  })
+
+  it('**不补**「内容精选」tab（资讯阅读面在门户、门户无收藏；补了必然长期为空）', async () => {
+    const w = await mountWith([fav()])
+    expect(tabValues(w)).not.toContain('featured')
   })
 
   it('切到「章节」tab 触发 target_type=chapter 并回到第一页', async () => {
@@ -97,13 +102,5 @@ describe('我的收藏筛选 tab 覆盖五种类型（#1132 复审）', () => {
     await w.findComponent(UiSegmentTabs).vm.$emit('update:modelValue', 'chapter')
     await flushPromises()
     expect(favoriteApi.list).toHaveBeenCalledWith(expect.objectContaining({ target_type: 'chapter', page: 1 }))
-  })
-
-  it('切到「内容精选」tab 触发 target_type=featured', async () => {
-    const w = await mountWith([fav()])
-    vi.mocked(favoriteApi.list).mockClear()
-    await w.findComponent(UiSegmentTabs).vm.$emit('update:modelValue', 'featured')
-    await flushPromises()
-    expect(favoriteApi.list).toHaveBeenCalledWith(expect.objectContaining({ target_type: 'featured', page: 1 }))
   })
 })
