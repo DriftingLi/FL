@@ -27,9 +27,13 @@
  * 必须复现「章节跳到 camelCase 键」+「question / featured 静默无反应」两种形态。
  * 提取函数返回空串时，正向用例会**判红**（而不是空跑变绿）。
  *
- * ⚠️ 已知边界（如实声明）：本守护只覆盖 `favorites.uvue` 的 `onItemClick`。
- *   `pages/profile/personal-activity.uvue` 的 `onFavoriteClick` 是另一处同类落点表
- *   （它同样缺 chapter / question 分支）—— 不在本票范围，故本文件**不**对它做断言。
+ * ⚠️ 覆盖边界（2026-09-18 更新，#1159 改判后）：本守护覆盖**全仓唯一**的收藏落点表 ——
+ *   `favorites.uvue` 的 `onItemClick`。原先并存的第二处
+ *   （`pages/profile/personal-activity.uvue` 的 `onFavoriteClick`）已随「收藏的唯一列表承载面」
+ *   裁定（根仓库 `ADR-0018` 补遗）**整体摘除**；那一侧改由 `personalActivityContract.test.js`
+ *   反向钉住「收藏面不得回潮」。
+ *
+ *   ⇒ **新增 `target_type` 时必须改本文件**：这里是全仓唯一会因「缺分支」判红的地方。
  */
 const fs = require('fs');
 const path = require('path');
