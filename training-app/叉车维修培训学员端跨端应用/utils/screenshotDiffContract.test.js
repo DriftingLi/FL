@@ -63,4 +63,37 @@ describe('screenshot-diff.ps1 contract', () => {
     expect(code).toMatch(/\$currentFiles\s*=\s*@\(Get-ChildItem/);
     expect(code).toMatch(/\$baselineFiles\s*=\s*@\(Get-ChildItem/);
   });
+
+  // D8（2026-09-18，#1139）：像素层真的接进来了 —— 且 MD5 只作为**回退**存在。
+  //   行为面由 `screenshotDiffBehavior.test.js`（真跑 pwsh + 真 PNG）另钉：这里只钉**接线没断**。
+  //   （ADR-0008 的收束方向：文本守护证明「调用点还在」，行为守护证明「调用真的生效」。）
+  test('D8: 【2026-09-18】接入像素层（png-diff.mjs + --threshold）且保留 MD5 回退', () => {
+    expect(src).toContain('png-diff.mjs');
+    expect(src).toContain("'--threshold'");
+    expect(src).toContain("'--a'");
+    expect(src).toContain("'--b'");
+    // 阈值参数可调（0..1），并有忽略行（状态栏读数）
+    expect(src).toMatch(/\$PixelThreshold/);
+    expect(src).toMatch(/ValidateRange\(0\.0, 1\.0\)/);
+    expect(src).toMatch(/\$IgnoreTopRows/);
+    // MD5 仍在（D6 的回退路径），但只出现在**回退函数**里
+    expect(src).toContain('Compare-ScreenshotFileByMd5');
+    expect(src).toMatch(/function Compare-ScreenshotFileByMd5/);
+    // 判不了 !== 无变化：mode 必须如实进返回对象
+    expect(src).toMatch(/Mode\s*=/);
+    expect(src).toContain('unsupported');
+  });
+
+  // D9（2026-09-18，#1139）：判定与文案的单点真源在 `screenshot-gate.ps1` 的 Get-PngDiffVerdict
+  //   —— 步骤 7「永不 fail」的根因是判定散在 I/O 里、没人能真跑它。
+  test('D9: 【2026-09-18】门判定抽成纯函数 Get-PngDiffVerdict（可被真跑）', () => {
+    const gate = fs.readFileSync(path.join(ROOT, 'scripts', 'lib', 'screenshot-gate.ps1'), 'utf8');
+    expect(gate).toContain('function Get-PngDiffVerdict');
+    // 四态都在（判据预登记）：首次自动填基线 / 无变化 / 有变化要人裁决 / 刷新基线
+    ['write-baseline', 'none', 'request-decision', 'refresh-baseline'].forEach((a) => {
+      expect(gate).toContain(`'${a}'`);
+    });
+    // 有变化且未确认 ⇒ 必须给了非零退出码（这是本票的全部意义）
+    expect(gate).toContain('ExitCode = 1');
+  });
 });

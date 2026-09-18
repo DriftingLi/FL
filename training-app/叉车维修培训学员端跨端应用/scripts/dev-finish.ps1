@@ -47,6 +47,16 @@ param(
     [switch]$DryRun,
     [switch]$Distribute,
     [switch]$UpdateBaseline,
+    # ---- Q17（2026-09-18，#1139）：步骤 7 的像素判据参数 ----
+    # 截图噪声（字体栅格化 / 抗锯齿 / 状态栏读数）是**必然**的 ⇒ 无阈值等于每页恒红。
+    # 0..1 之外没有意义 ⇒ 参数级拒绝（不静默钳位）。
+    [ValidateRange(0.0, 1.0)]
+    [double]$PixelThreshold = 0.005,
+    # 忽略顶部/底部行数：真机建议取状态栏高度（时钟 / 网速读数是实时变化的）。
+    [ValidateRange(0, 10000)]
+    [int]$IgnoreTopRows = 0,
+    [ValidateRange(0, 10000)]
+    [int]$IgnoreBottomRows = 0,
     # Q-2 修正（2026-09-14 用户裁定）：🟢 quick **默认只做静态守护（Q-A）**，秒级、不占设备、不取锁。
     # 需要编译期诊断时显式加本开关 ⇒ Q-B（hx-run -CompileOnly；冷/失效缓存下实测 >901 秒，成本写实）。
     [switch]$Compile,
@@ -104,6 +114,9 @@ if ($DryRun) {
     Write-Host "  -Compile:             $Compile   # quick 下是否做编译期诊断（Q-B）"
     Write-Host "  -Distribute:          $Distribute"
     Write-Host "  -UpdateBaseline:      $UpdateBaseline"
+    Write-Host "  -PixelThreshold:      $PixelThreshold   # 步骤 7 像素差阈值（0.005 = 0.5%）；像素层判不了时回退 MD5"
+    Write-Host "  -IgnoreTopRows:       $IgnoreTopRows   # 步骤 7 忽略顶部行数（状态栏读数；真机建议取状态栏高度）"
+    Write-Host "  -IgnoreBottomRows:    $IgnoreBottomRows"
     Write-Host "  -MaxScreenshotPages:  $MaxScreenshotPages"
     Write-Host "  -HxWaitSeconds:       $HxWaitSeconds"
     Write-Host "  -HxRunTimeoutSeconds: $HxRunTimeoutSeconds"
@@ -286,23 +299,36 @@ if ($detectedLevel -eq 'quick') {
 }
 else {
     . (Join-Path $PSScriptRoot 'lib\screenshot-diff.ps1')
-    $diffResult = Compare-ScreenshotBaseline -ProjectDir $ProjectDir -UpdateBaseline:$UpdateBaseline
-    if ($diffResult.NewBaseline) {
-        # ⚠️ 不许再无条件写「已建立基线」：`Compare-ScreenshotBaseline` 只在 **-UpdateBaseline** 时才把本轮
-        #    截图拷进基线目录，否则只建了个**空目录**。原文案会把「空基线」说成「已建立」（2026-09-15 实测：
-        #    步骤 7 通过但下次运行仍会报「新增」）。文案据实分流。
-        if ($UpdateBaseline) {
-            Write-Result $true '首次运行，已建立基线（本轮截图已写入基线）'
-        }
-        else {
-            Write-Result $true '首次运行：基线目录为空，**未**建立基线（要以此为本轮基线请加 -UpdateBaseline）'
+    $diffResult = Compare-ScreenshotBaseline -ProjectDir $ProjectDir -UpdateBaseline:$UpdateBaseline `
+        -PixelThreshold $PixelThreshold -IgnoreTopRows $IgnoreTopRows -IgnoreBottomRows $IgnoreBottomRows
+    # 判据与文案的**单点真源**是 lib/screenshot-gate.ps1 的 Get-PngDiffVerdict（纯函数、被
+    # utils/screenshotDiffBehavior.test.js 真跑并成对断言「无变化⇒绿 / 有变化⇒红」）。
+    # 这里只负责**执行**它给出的动作 —— 2026-09-18（#1139）之前这段是 `Write-Host` 一行黄字就完事，
+    # 没有 Write-Result、没有 exit ⇒ **永不 fail**（本仓三个「永远绿」先例之一）。
+    $verdict = Get-PngDiffVerdict -DiffResult $diffResult -UpdateBaseline:$UpdateBaseline
+
+    $fallbackReasons = @($diffResult.Fallback | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+    if (-not $diffResult.PixelRan -and $fallbackReasons.Count -gt 0) {
+        # 像素层一次都没跑成（node 不在 / 全是非 PNG）⇒ 必须**说出来**，不许静默当 MD5 用
+        Write-Host "  ⚠️ 本轮未走像素层（MD5 回退）：$($fallbackReasons -join '; ')" -ForegroundColor Yellow
+    }
+
+    # 首次运行 ⇒ 以本轮截图建立基线：这一条把「基线目录永远是空的」那个死循环直接掐掉
+    # （ADR-0008:419 记的坑：旧实现只在 -UpdateBaseline 下填基线，于是每轮都把全部页面判成「新增」）。
+    if ($verdict.Action -eq 'write-baseline') {
+        $srcDir = Join-Path $ProjectDir '.ci-verify\screenshots'
+        $dstDir = Join-Path $ProjectDir '.ci-verify\baseline'
+        New-Item -ItemType Directory -Force -Path $dstDir | Out-Null
+        foreach ($png in @(Get-ChildItem -Path $srcDir -Filter '*.png' -File)) {
+            Copy-Item -LiteralPath $png.FullName -Destination (Join-Path $dstDir $png.Name) -Force
         }
     }
-    elseif ($diffResult.ChangedCount -eq 0) {
-        Write-Result $true '所有页面无变化'
-    }
-    else {
-        Write-Host "  ⚠️ $($diffResult.ChangedCount) 个文件有变化" -ForegroundColor Yellow
+
+    Write-Result $verdict.Ok $verdict.Message
+    if (-not $verdict.Ok) {
+        Write-Host '     出路①：确认是有意改动 ⇒ 重跑并加 -UpdateBaseline（刷新基线）' -ForegroundColor Yellow
+        Write-Host '     出路②：若是噪声/误改 ⇒ 修回后重跑；勿用 -UpdateBaseline 把红盖成绿' -ForegroundColor Yellow
+        exit $verdict.ExitCode
     }
 }
 
