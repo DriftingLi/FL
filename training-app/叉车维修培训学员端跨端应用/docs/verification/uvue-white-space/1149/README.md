@@ -1,6 +1,6 @@
 # 存量 uvue 页面 `scroll-view` 上的 `white-space` 死声明清零（#1113）—— ①a Android 真机截图取证
 
-- **PR**：#待补（按维护者裁定**先验后开**：本次取证先于 PR，目录名在开 PR 后即改为 PR 号）
+- **PR**：#1149（base `master`，head `fix/1113-uvue-white-space`；本目录**先按票号取证、开 PR 后即改名为 PR 号**）
 - **复测对象**：分支 `fix/1113-uvue-white-space` HEAD **`89daf017`**（其下为 `4f9b7933`；两次提交之后未再改运行时面，本目录随之入库）
 - **日期**：2026-09-18
 - **设备**：`b32d8398`（Xiaomi `23049RAD8C` / Android 15，USB）
