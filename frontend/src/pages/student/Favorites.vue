@@ -165,8 +165,9 @@ function typeTagColor(type: string) {
 }
 
 // 可跳转类型：课程 → 课程中心详情（query 打开），帖子 → 论坛详情，
-// 题目 / 内容精选 → ADR-0049 决策 4 的落点页（搜索结果与收藏页共用同一落点）。
-// **章节仍无落点**：收藏条目不带所属课程 ID，构造不出章节学习页的路径（不猜、不乱跳）。
+// 题目 / 内容精选 → ADR-0049 决策 4 的落点页（搜索结果与收藏页共用同一落点），
+// 章节 → 章节学习页（与 SearchPage.vue 同一落点：course_id + chapter_id 两个路径参数）。
+// 章节的所属课程 ID 由后端 FavoriteDTO.course_id 给出（#1089）；缺失时**不可点**（不猜、不乱跳）。
 function itemPath(item: FavoriteItem): string {
   if (item.target_type === 'course') {
     return `/training/courses?course_id=${item.target_id}`
@@ -179,6 +180,9 @@ function itemPath(item: FavoriteItem): string {
   }
   if (item.target_type === 'question') {
     return `/training/questions/${item.target_id}`
+  }
+  if (item.target_type === 'chapter') {
+    return item.course_id > 0 ? `/training/course/${item.course_id}/chapter/${item.target_id}` : ''
   }
   return ''
 }

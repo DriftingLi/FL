@@ -25670,6 +25670,10 @@ const docTemplate = `{
         "service.FavoriteDTO": {
             "type": "object",
             "properties": {
+                "course_id": {
+                    "description": "CourseID 目标所属课程ID：**仅 target_type = chapter 有意义** —— 章节落点\n` + "`" + `chapter-view` + "`" + ` 要 ` + "`" + `course_id` + "`" + ` + ` + "`" + `chapter_id` + "`" + ` 两个键（ADR-0014），而收藏表只存 target_id。\n其余类型恒为 0（不适用，不是「未知」）；键恒在、非 null（0 哨兵口径见 #1089 Q2）。",
+                    "type": "integer"
+                },
                 "cover": {
                     "type": "string"
                 },
