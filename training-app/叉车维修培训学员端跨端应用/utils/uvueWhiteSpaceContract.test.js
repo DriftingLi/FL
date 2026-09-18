@@ -18,8 +18,12 @@
  *      这一条必须跨「class → 承载标签」映射（票面坑位 1）：本仓有合法用法，只看 class 名判不出。
  *   ② **已登记**：该 (文件, class) 在 `LEGAL_CARRIER_SITES` 里有条目、且附了理由。
  *      登记是**活的**：登记点被删 / 承载标签变了 ⇒ 判红（照 `utils/navQueryKeyContract.test.js` 的
- *      `GUARD_ALLOWLIST` 先例）。**为什么「合法」也要登记**：这一位就是「防扫到就删」的锁 ——
- *      不登记直接写会判红，删掉登记点也会判红（`LEGAL_CARRIER_SITES` 那条 liveness 断言）。
+ *      `GUARD_ALLOWLIST` 先例）。**为什么「合法」也要登记**：这一位就是「扫到就删」的锁 ——
+ *      不登记直接写会判红，删掉登记点也会判红。
+ *      **强度（写实，别把注释读得比实现强）**：`<style>` 里**每一处** `white-space` 声明都要过 ②，
+ *      且该规则选择器里的**每个** class 都要有登记；另有一条计数断言 ——
+ *      「带 class 的 `white-space` 出现次数 == 登记条数」（多一处未登记、或多一条死登记，都判红）。
+ *      内联 `style="…"` 只过 ① 不过 ②（本仓现测 0 处）。
  *
  * 票面坑位 2：**必须先剥离 CSS 注释** —— 解释这个坑位的注释里本身写着 `white-space: nowrap`
  * （`pages/profile/help-center.uvue:248`、`pages/ai-assistant/ai-feature.uvue:538`），不剥注释就会把
@@ -27,12 +31,16 @@
  *
  * 形态沿用本仓既有全仓守护（先例 `utils/gradientSyntaxContract.test.js`，同为「uvue 不支持某 CSS 写法」）：
  * 先对**注入的违规样本**断言检测有效（防空跑假绿），再对**真实文件**断言零命中。
+ * （helper 与 `gradientSyntaxContract` / `navQueryKeyContract` 有重复 —— 本仓既有守护一律**自带**这层扫描
+ *  helper、不抽公共模块，故**照旧**；抽公共件是一次独立的跨守护重构。）
  *
  * 已知边界（写实，不宣称覆盖）：
- *   · 只判 `<style>` 块里的**规则**，且只判规则选择器的**最后一个 compound**（属性落在它指的元素上，
- *     后代 / 子选择器的祖先类不参与判定）—— 本仓 7 处全是单 class 规则。
+ *   · 只判 `<style>` 块里的**规则**，且只判规则选择器的**最后一个 compound** —— 属性落在它指的元素上，
+ *     后代 / 子选择器的祖先类不参与判定（本仓 7 处全是单 class 规则）。
  *   · 模板里的**内联** `style="…"` 只判承载标签是否合法，**不**要求登记（2026-09-18 现测 0 处）。
- *   · scss 的 `//` 行注释不剥（本仓样式块零使用）；`:class` 动态绑定按对象键 / 三元分支收集字面量。
+ *   · scss 的 `//` 行注释不剥（本仓样式块零使用）。
+ *   · `:class` 动态绑定按**对象键（带/不带引号）+ 三元分支字面量**收集；三元里的裸标识符
+ *     （`x ? a : b`）可能被收成「幻影承载」——只在恰有同名 class 且它带 `white-space` 时才影响判据。
  */
 const fs = require('fs');
 const path = require('path');
@@ -150,6 +158,10 @@ function classCarriers(tpl) {
         if (/(==|!=|===|!==)\s*$/.test(before)) continue;                    // 比较值
         add(raw, tag);
       }
+      // **未加引号**的对象键：`:class="{ active: cond }"` —— 本仓实测有 21 处（2026-09-18 `grep`）。
+      // 不收它们会让「承载不可判定」在合法用法上误判（假红）。代价：三元 `x ? a : b` 里的标识符
+      // 也可能被收成一个「幻影承载」—— 只有恰好存在同名 class 且它带 `white-space` 时才影响判据。
+      for (const k of expr.matchAll(/(?:^|[{,\s])([A-Za-z_][\w-]*)\s*:/g)) add(k[1], tag);
     }
   }
   return map;
@@ -403,6 +415,10 @@ describe('uvue `white-space` 承载面契约（#1113）', () => {
         uvue('<button :class="counting ? \'btn\' : \'\'">3s</button>', '.btn { white-space: nowrap; }'),
       ],
       [
+        '承载来自**未加引号**的 :class 对象键（本仓 21 处该写法；不收会假红）',
+        uvue('<text :class="{ tip: counting }">3s</text>', '.tip { white-space: nowrap; }'),
+      ],
+      [
         '文件里完全没有这个词',
         uvue('<view class="a"></view>', '.a { flex-direction: row; }'),
       ],
@@ -481,7 +497,8 @@ describe('uvue `white-space` 承载面契约（#1113）', () => {
       }
     });
 
-    it('登记表与真实命中一致：全部命中点都被覆盖，且至少有一条（守护不是空跑）', () => {
+    it('登记表与真实命中一一对应：带 class 的 `white-space` 出现次数 == 登记条数', () => {
+      // 这条是 ② 的**计数侧**判据（文件头「强度」那段）：多一处没登记、或多一条死登记，都判红。
       const legal = scanned.flatMap((s) => s.occurrences.filter((o) => o.classes.length > 0));
       expect(legal.length).toBe(LEGAL_CARRIER_SITES.length);
       for (const site of LEGAL_CARRIER_SITES) {
