@@ -327,7 +327,11 @@ function Invoke-AutoScreenshot {
         [int]$NavigateMinSeconds = 15,
         [int]$NavigateTimeoutSeconds = 420,
         [int]$PollSeconds = 5,
-        [double]$StableMaxDiffPercent = 0.5
+        [double]$StableMaxDiffPercent = 0.5,
+        # 本次运行的起点（issue #1158）：由调用方传入**同一个**值，好让步骤 7 的「本轮产物」过滤
+        # 与步骤 6 这里的陈旧截图判据用**同一把尺子**（不各取一次 `Get-Date`，那样两个判据会漂）。
+        # 不传 ⇒ 本函数自己取（旧行为，向后兼容）。
+        [Nullable[datetime]]$RunStartedAt = $null
     )
 
     if (-not $ProjectDir) {
@@ -455,7 +459,8 @@ function Invoke-AutoScreenshot {
 
     # 本次运行的起点：用于「截图必须是本次新落的」判据（见下方陈旧截图检查）。
     # ⚠️ 必须在**进入循环之前**取，否则每页各取一次会让判据退化成恒真。
-    $runStarted = Get-Date
+    # 调用方给了就用它（issue #1158：步骤 7 的「本轮产物」过滤必须与这里同源）。
+    $runStarted = if ($null -ne $RunStartedAt) { [datetime]$RunStartedAt } else { Get-Date }
 
     # 前置（fail-closed）：设备必须**亮屏**才能截图 —— 灭屏时 screencap 只会给全黑帧，
     # 而全黑帧天然「稳定」⇒ 会被当成本次证据（2026-09-15 实测踩到）。唤醒设备是**人**的动作，脚本不注入 input。
@@ -581,6 +586,9 @@ function Invoke-AutoScreenshot {
         HashConflicts = $hashConflicts
         StaleShots    = $staleShots
         TargetPages   = $targetPages
+        # 本次运行起点（issue #1158）：步骤 7 的「本轮产物」过滤要**同一个**值 —— 由本对象回传给调用方，
+        # 不各自 `Get-Date`（两个判据各取一次会漂，先取的那次会把后落的截图误判成陈旧）。
+        RunStartedAt  = $runStarted
         Error         = $errorMsg
     }
 }

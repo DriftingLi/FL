@@ -146,10 +146,94 @@ describe('WrongQuestionCard 接线契约', () => {
   it('展示纯函数收敛于 utils/wrongQuestionDisplay（页面与卡片 import 同一份，无第二实现）', () => {
     const card = read('pages/profile/components/wrong-question-card.uvue');
     expect(page).toContain("import { getTypeName, isMultiChoice } from '../../utils/wrongQuestionDisplay'");
-    expect(card).toContain("import { getTypeName, isMultiChoice } from '../../../utils/wrongQuestionDisplay'");
+    // #1083 扩展：卡片另取「答案与解析」开合文案（仍是同一份 utils，零第二实现）
+    expect(card).toContain("import { getTypeName, isMultiChoice, answerFoldLabel } from '../../../utils/wrongQuestionDisplay'");
     // 卡片内不得再有本地定义
     expect(card).not.toMatch(/\n\s*function getTypeName\(/);
     expect(card).not.toMatch(/\n\s*function isMultiChoice\(/);
+  });
+});
+
+describe('四项补展示（#1083：图 / 答案与解析 / 上次答案 / 最近错误时间）', () => {
+  const page = read('pages/profile/wrong-questions.uvue');
+  const card = read('pages/profile/components/wrong-question-card.uvue');
+
+  // ===== 取数面：api mapper 必须真把四个字段从后端 JSON 取出来 =====
+  // 反向自检：光在展示层加渲染，字段恒空 ⇒ 卡片永远「无作答记录 / 不敢显图」，是坏实现的超集。
+  it('api mapper 取 question.image_url / question.explanation / last_user_answer / last_wrong_at', () => {
+    const api = read('api/wrongQuestion.uts');
+    for (const key of [
+      "questionObj['image_url']",
+      "questionObj['explanation']",
+      "obj['last_user_answer']",
+      "obj['last_wrong_at']",
+    ]) {
+      expect(api).toContain(key);
+    }
+    // 后端顶层没有 user_answer 键（WrongQuestionDTO 无该字段）⇒ 不得再拿它充当「我上次选的答案」
+    expect(api).not.toContain("last_user_answer: toStr(obj['user_answer'])");
+    expect(api).toMatch(/last_user_answer: toStr\(obj\['last_user_answer'\]\)/);
+  });
+
+  it('WrongQuestionItem 契约含四个新字段（类型与 mapper 同步，缺一即编译期/运行期空值）', () => {
+    const t = read('types/exam.uts');
+    for (const f of ['image_url : string', 'explanation : string', 'last_user_answer : string', 'last_wrong_at : string']) {
+      expect(t).toContain(f);
+    }
+  });
+
+  // ===== 承载面：卡片与页面接线 =====
+  it('页面把四个字段扁平透传（沿用扁平 prop 纪律，零对象 prop）', () => {
+    for (const b of [':item-image-url="item.image_url"', ':item-answer="item.correct_answer"',
+      ':item-explanation="item.explanation"', ':last-user-answer="item.last_user_answer"',
+      ':last-wrong-at="item.last_wrong_at"']) {
+      expect(page).toContain(b);
+    }
+    expect(page).not.toContain(':item="item"');
+  });
+
+  it('卡片四项均落到模板（不是只加了 prop 没用）', () => {
+    // 1) 题干图片：无图零占位 —— v-if 与 <image> 同元素，空串时元素根本不建
+    expect(card).toMatch(/<image v-if="displayImageUrl\.length > 0" class="record-question-img"/);
+    expect(card).toContain(':src="displayImageUrl"');
+    // 2) 答案与解析：默认收起（answerOpen 初值 false）+ 无解析空态
+    expect(card).toMatch(/const answerOpen = ref<boolean>\(false\)/);
+    expect(card).toMatch(/<view v-if="!expanded && answerOpen" class="answer-section">/);
+    expect(card).toContain('暂无解析');
+    // 3) 我上次选的答案 + 正确答案对照
+    expect(card).toContain('我上次选的答案：{{ lastAnswerDisplay() }}');
+    expect(card).toContain('正确答案：{{ itemAnswer.length > 0 ? itemAnswer : \'—\' }}');
+    // 4) 最近错误时间
+    expect(card).toMatch(/<text v-if="displayLastWrongDate\.length > 0" class="record-date record-date-last">最近 \{\{ displayLastWrongDate \}\}<\/text>/);
+    expect(card).toMatch(/const displayLastWrongDate = computed<string>\(\(\) : string => \{\s*return formatDateTimeStr\(props\.lastWrongAt\)/);
+  });
+
+  it('答案与解析区在折叠态操作行之下（不抢「重做」的位置，且两态互斥不重影）', () => {
+    const iActions = card.indexOf('v-if="!expanded" class="card-actions"');
+    const iAnswer = card.indexOf('v-if="!expanded && answerOpen" class="answer-section"');
+    expect(iActions).toBeGreaterThan(-1);
+    expect(iAnswer).toBeGreaterThan(iActions);
+  });
+
+  it('开合按钮文案单一来源（utils 纯函数，收起/展开两态齐备）', () => {
+    const utils = read('utils/wrongQuestionDisplay.uts');
+    expect(utils).toMatch(/export function answerFoldLabel\(open : boolean\) : string \{\s*return open \? '收起答案' : '查看答案与解析'/);
+    // 模板必须经本地函数包装消费（模板直调 import 函数 = Kotlin error18 invoke，守护规则 S）
+    expect(card).toContain('{{ answerFoldText() }}');
+    const tpl = card.slice(card.indexOf('<template>'), card.indexOf('</template>'));
+    expect(tpl).not.toContain('answerFoldLabel(');
+    expect(card).toMatch(/function answerFoldText\(\) : string \{\s*return answerFoldLabel\(answerOpen\.value\)/);
+  });
+
+  it('uvue 样式约束：新样式只用 class 选择器 / 无 gap / 无 CSS 变量', () => {
+    const style = card.slice(card.indexOf('<style>'));
+    for (const cls of ['.record-question-img', '.record-date-last', '.answer-section', '.answer-line', '.answer-explain', '.answer-empty']) {
+      expect(style).toContain(cls);
+    }
+    expect(style).toContain('flex-direction: column;');   // uvue 无默认列向（img/块级元素会静默不撑开）
+    expect(style).not.toMatch(/\bgap\s*:/);
+    expect(style).not.toMatch(/var\(--/);
+    expect(style).not.toMatch(/^\s*(view|text|image)\s*\{/m);  // tag 选择器不支持
   });
 });
 

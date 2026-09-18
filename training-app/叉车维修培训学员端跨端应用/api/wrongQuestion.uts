@@ -39,15 +39,18 @@ function buildOptions(raw : any | null) : QuestionOption[] {
 
 /**
  * 从 UTSJSONObject 构造 WrongQuestionItem
- * @note 后端把题目信息嵌套在 question 字段中
+ * @note 后端把题目信息嵌套在 question 字段中；卡片四项补展示（#1083）的字段来源：
+ *   image_url / answer / explanation 在 question 内，last_user_answer / last_wrong_at 在顶层
  */
 function buildWrongQuestionItem(obj : UTSJSONObject) : WrongQuestionItem {
 	// 从嵌套的 question 对象中提取题目信息
 	let questionId = toNumber(obj['question_id'])
 	let qType = ''
 	let qTitle = ''
+	let qImageUrl = ''
 	let qOptions : QuestionOption[] = []
 	let qCorrectAnswer = ''
+	let qExplanation = ''
 
 	const questionRaw = obj['question']
 	if (questionRaw != null) {
@@ -55,19 +58,27 @@ function buildWrongQuestionItem(obj : UTSJSONObject) : WrongQuestionItem {
 		questionId = toNumber(questionObj['id'])           // 后端 id → question_id
 		qType = toStr(questionObj['type'])
 		qTitle = toStr(questionObj['content'])              // 后端 content → title
+		qImageUrl = toStr(questionObj['image_url'])        // 后端 image_url → image_url（相对路径，渲染前 resolveFileUrl）
 		qOptions = buildOptions(questionObj['options'])
 		qCorrectAnswer = toStr(questionObj['answer'])      // 后端 answer → correct_answer
+		qExplanation = toStr(questionObj['explanation'])   // 后端 explanation → explanation（学员侧 includeAnswer=true）
 	}
 
 	const item : WrongQuestionItem = {
 		question_id: questionId,
 		type: qType,
 		title: qTitle,
+		image_url: qImageUrl,
 		options: qOptions,
 		correct_answer: qCorrectAnswer,
+		explanation: qExplanation,
 		user_answer: toStr(obj['user_answer']),
+		// 后端顶层 last_user_answer（#1077 新增）才是「我上次选的答案」；
+		// 原读的 user_answer 在 WrongQuestionDTO 上不存在，恒空 ⇒ 卡片展示恒「未作答」。
+		last_user_answer: toStr(obj['last_user_answer']),
 		wrong_count: toNumber(obj['wrong_count']),
 		created_at: toStr(obj['created_at']),
+		last_wrong_at: toStr(obj['last_wrong_at']),
 		favorited: toBool(obj['favorited'], false),
 	} as WrongQuestionItem
 	return item

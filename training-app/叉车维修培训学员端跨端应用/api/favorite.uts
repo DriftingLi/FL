@@ -21,6 +21,10 @@ function buildFavoriteItem(obj : UTSJSONObject) : FavoriteItem {
 		favorite_id: toNumber(obj['favorite_id'], toNumber(obj['id'])),
 		target_type: toStr(obj['target_type']),
 		target_id: toNumber(obj['target_id']),
+		// 所属课程 ID（#1089）：chapter 落点要 course_id + chapter_id 两键；字段缺失/null ⇒ 0。
+		// 走现成 toNumber（`null → 0`），不要 `obj['course_id'] as number` —— 后者在字段缺省时
+		// 会抛 Kotlin NullPointerException（同 toNumberOrNull 的注释所述）。
+		course_id: toNumber(obj['course_id']),
 		title: toStr(obj['title']),
 		cover: toStr(obj['cover']),
 		created_at: toStr(obj['created_at']),

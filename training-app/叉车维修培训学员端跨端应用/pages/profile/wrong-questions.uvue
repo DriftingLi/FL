@@ -46,6 +46,9 @@
                 <view class="record-list">
                     <WrongQuestionCard v-for="(item, idx) in records" :key="idx"
                         :item-type="item.type" :item-title="item.title" :item-created-date="item.created_at"
+                        :item-image-url="item.image_url" :item-answer="item.correct_answer"
+                        :item-explanation="item.explanation" :last-user-answer="item.last_user_answer"
+                        :last-wrong-at="item.last_wrong_at"
                         :wrong-count="item.wrong_count" :favorited="item.favorited" :options="item.options"
                         :expanded="expandedId == item.question_id" :redo-result="expandedId == item.question_id ? redoResult : null"
                         :last-redo-answer="lastRedoAnswer" @toggle-expand="onToggleExpand(item.question_id)"
