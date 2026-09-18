@@ -7,6 +7,16 @@ export type FavoriteItem = {
     favorite_id : number
     target_type : string            // course / chapter / question / featured / topic
     target_id : number
+    /**
+     * 所属课程 ID（#1089）。
+     *
+     * **只对 `target_type == 'chapter'` 有意义** —— 章节页落点要两个键（ADR-0014），
+     * 而收藏表本身只存 `target_type` + `target_id`，故该值由后端按 target_type 补齐
+     * （PR #1133 已生产落地）。**非可空**：后端契约是「键恒在、非 null，其余类型恒 0」
+     * —— 用 `0` 哨兵而非 `number | null`，是为了避开 Kotlin 侧可空比较的坑
+     * （`<=`/`>` 对可空接收者会编译报错，见移动端 AGENTS.md 的 UTS 类型限制表）。
+     */
+    course_id : number
     title : string
     cover : string
     created_at : string
