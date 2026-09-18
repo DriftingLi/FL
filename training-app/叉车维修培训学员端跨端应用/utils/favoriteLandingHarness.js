@@ -8,10 +8,20 @@
  * 出处是本仓 PR #1147 的 `utils/favoritesLandingContract.test.js`（#1089 PR-B）里的本地实现，
  * #1159 把它提到 `utils/` 下成为**唯一实现**，两页共用同一把尺子。
  *
- * ⚠️ **待收口（#1159 如实声明）**：本模块出生时 #1147 尚未合并（它仍带文件内的一份本地副本）。
- * #1147 合并后应删除那份副本、改 `require('./favoriteLandingHarness')` ——
- * 本模块刻意保留与那份副本**同名的函数**（`fnBodyOf` / `stripUtsTypes` / `stripAs`，
- * 以及 `runLandingBody` 对应它的 `runOnItemClickBody`），故替换是机械的、零语义变化。
+ * ⚠️ **待收口（#1159 如实声明）**：本模块出生时 #1147 尚未合并（它的测试文件里仍带一份本地副本）。
+ * #1147 合并后应删掉那份副本、改 `require('./favoriteLandingHarness')`。
+ *
+ * **它不是 drop-in**（写实：`/code-review` 指出这里原先写的「同名 ⇒ 机械替换」是**过度声明**）
+ * —— 逐点改名如下，**语义一一对应、无行为变化**，但调用点要一并改写：
+ *
+ * | #1147 文件内的本地名 | 本模块导出名 |
+ * | --- | --- |
+ * | `read(rel)` | `readSource(rel)` |
+ * | `fnBodyOf` / `stripUtsTypes` / `stripAs` | **同名** |
+ * | `runOnItemClickBody(body, item)` | `runLandingBody(body, item)` |
+ * | `const click = (item) => …`（模块级、写死 `PAGE`） | `landingClick(pageRel, marker)` **工厂**（每次调用重读源码，故能服务多页） |
+ * | `fav(type, id, courseId)` | `favoriteFixture(type, id, courseId)` |
+ * | （无） | `fnFromSource(rel, marker, deps, argNames)` —— 本模块新增，「数据前提」那一组用 |
  *
  * ## 断言方式（照移动端 ADR-0008「守护从断言源码文本改为断言行为」）
  *
@@ -146,7 +156,6 @@ function favoriteFixture(targetType, targetId, courseId = 0) {
 }
 
 module.exports = {
-  ROOT,
   readSource,
   fnBodyOf,
   stripUtsTypes,

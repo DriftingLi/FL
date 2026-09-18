@@ -13,7 +13,8 @@
  *
  * `pages/profile/favorites.uvue` 的 `onItemClick` 是**同一族**形态，已由 PR #1147 修好；
  * 本页是「模块化之前的落点表被照抄」的第二处。故本守护：
- *   - **复用** `utils/favoriteLandingHarness.js`（拆自 #1147 的执行器，唯一实现，不写第二套）；
+ *   - **复用** `utils/favoriteLandingHarness.js`（把 #1147 的执行器提到 `utils/` 作共享实现，
+ *     不在此另写一套；#1147 合并后其文件内副本按 harness 头部的改名表切换过来）；
  *   - 额外拿 `utils/searchDisplay.uts` 的 `searchItemPath` 当**权威口径**做交叉断言 ——
  *     同一类条目在两个入口必须落到同一个 url（`featured` ↔ 搜索侧 `content` 只共用路径、
  *     不共用分支 key，故只对 `content` 的**路径形状**做断言，不照抄那边的 switch key）。
@@ -169,12 +170,17 @@ describe('#1159 落点的数据前提：FavoriteItem.course_id 真的从响应�
   const API = 'api/favorite.uts';
   const HELPERS = 'api/helpers.uts';
 
-  /** 真实的 toNumber / toStr（同样取源码函数体，不是镜像） */
-  const helper = (marker) => fnFromSource(HELPERS, marker, {}, ['v', 'defaultVal']);
-  const toNumberBody = helper('export function toNumber(').body;
-  const toStrBody = helper('export function toStr(').body;
-  const toNumber = (v, d = 0) => new Function('v', 'defaultVal', toNumberBody)(v, d); // eslint-disable-line no-new-func
-  const toStr = (v, d = '') => new Function('v', 'defaultVal', toStrBody)(v, d); // eslint-disable-line no-new-func
+  /**
+   * 真实的 toNumber / toStr（同样取源码函数体，不是镜像）。
+   * 求值**全部交给 harness 的 `fnFromSource`** —— 不在测试里再手搓一遍 `new Function`
+   * （那是 harness 自己的职责，重复一遍就是本仓最想避免的「第二套实现」）。
+   */
+  const toNumberFn = fnFromSource(HELPERS, 'export function toNumber(', {}, ['v', 'defaultVal']);
+  const toStrFn = fnFromSource(HELPERS, 'export function toStr(', {}, ['v', 'defaultVal']);
+  const toNumberBody = toNumberFn.body;
+  const toStrBody = toStrFn.body;
+  const toNumber = (v, d = 0) => toNumberFn.call(v, d);
+  const toStr = (v, d = '') => toStrFn.call(v, d);
 
   const build = fnFromSource(API, 'function buildFavoriteItem(', { toNumber, toStr }, ['obj']);
 
