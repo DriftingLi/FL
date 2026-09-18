@@ -96,4 +96,43 @@ describe('screenshot-diff.ps1 contract', () => {
     // 有变化且未确认 ⇒ 必须给了非零退出码（这是本票的全部意义）
     expect(gate).toContain('ExitCode = 1');
   });
+
+  // D10（2026-09-18，#1158）：步骤 7 的输入集必须与步骤 6 的「本轮产物」口径**同源**
+  //   —— 目录从不清理、文件名按页名固定 ⇒ 上一轮失败运行的残留会污染「页数 / 变化数」。
+  //   判据本体（`Select-ThisRunShots`）与场景 A/B 由 `screenshotDiffBehavior.test.js` G7–G9 真跑。
+  //   这里只钉**接线没断**：过滤被调用、起点是**注入的**（不是自己 Get-Date），跳过必须可见。
+  test('D10: 【2026-09-18】「本轮产物」过滤接线：注入起点 + 判据改调 Select-ThisRunShots + 跳过可见', () => {
+    expect(src).toContain('-RunStartedAt');
+    expect(src).toContain('Select-ThisRunShots');
+    // 起点必须是**参数注入**的：自己 Get-Date 会让两个判据漂（先取的那次把后落的截图误判成陈旧）
+    expect(src).not.toMatch(/\$RunStartedAt\s*=\s*Get-Date/);
+    // 跳过不得静默：结果里必须带着被跳过的清单
+    expect(src).toContain('SkippedStale');
+    expect(src).toMatch(/跳过（非本轮产物/);
+    const gate = fs.readFileSync(path.join(ROOT, 'scripts', 'lib', 'screenshot-gate.ps1'), 'utf8');
+    expect(gate).toContain('function Select-ThisRunShots');
+    expect(gate).toContain("Reason = 'stale'");
+  });
+
+  // D11（2026-09-18，#1158）：调用方必须把**同一个**运行起点同时交给步骤 6 与步骤 7。
+  //   ⚠️ 不能写成「文件里不许出现 `$started = Get-Date`」—— 开头那一次是**合法的**（整个 run 的起点）。
+  //   真正的判据是**次数**：起点只取一次，而它被**两次**消费。
+  test('D11: 【2026-09-18】dev-finish 把同一个 $started 交给步骤 6 与步骤 7（起点只取一次、消费两次）', () => {
+    const finish = fs.readFileSync(path.join(ROOT, 'scripts', 'dev-finish.ps1'), 'utf8');
+    // 起点只取一次（多取 = 两个判据会漂，先取的那次把后落的截图误判成陈旧）
+    const starts = finish.match(/\$started\s*=\s*Get-Date/g) || [];
+    expect(starts.length).toBe(1);
+    // 且被两次消费：步骤 6 的 Invoke-AutoScreenshot 与步骤 7 的 Compare-ScreenshotBaseline
+    const consumed = finish.match(/-RunStartedAt \$started/g) || [];
+    expect(consumed.length).toBe(2);
+    // 两个消费点必须在不同步骤里：步骤 6 那次紧邻截图调用、步骤 7 那次紧邻对比调用
+    // （不看方向 —— 参数在调用里的书写位置会随换行动，±600 字符的窗口足够且不脆）
+    const shotCall = finish.indexOf('-RunStartedAt $started');
+    const diffCall = finish.lastIndexOf('-RunStartedAt $started');
+    expect(shotCall).toBeGreaterThan(-1);
+    expect(diffCall).toBeGreaterThan(shotCall);
+    const near = (i) => finish.slice(Math.max(0, i - 600), i + 600);
+    expect(near(shotCall)).toContain('MaxScreenshotPages');
+    expect(near(diffCall)).toContain('Compare-ScreenshotBaseline');
+  });
 });

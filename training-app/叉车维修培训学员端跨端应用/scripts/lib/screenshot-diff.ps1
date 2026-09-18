@@ -195,7 +195,11 @@ function Compare-ScreenshotBaseline {
         [int]$IgnoreTopRows = 0,
         [ValidateRange(0, 10000)]
         [int]$IgnoreBottomRows = 0,
-        # auto（默认：像素优先、失败回退 MD5）| md5（强制回退路径）| pixel（强制像素层，判不了就按回退记）
+        # 「本轮产物」的起点（issue #1158）。**给值即启用过滤**：早于该时刻的截图（当前侧或基线侧）
+        # 一律不算本轮产物 —— 目录从不清理、文件名按页名固定 ⇒ 上一轮失败运行的残留会污染「页数 / 变化数」。
+        # 判据的真源是调用方（`dev:finish` 与步骤 6 **同一个**运行起点）；不传 = 不过滤（向后兼容）。
+        [Nullable[datetime]]$RunStartedAt = $null,
+        # 强制只走 MD5（对照实验 / 无 node 的极端场景）
         [ValidateSet('auto', 'md5', 'pixel')]
         [string]$Mode = 'auto'
     )
@@ -229,18 +233,42 @@ function Compare-ScreenshotBaseline {
         $currentFiles = @(Get-ChildItem -Path $CurrentDir -Filter '*.png' -File)
     }
 
+    # 「本轮产物」过滤（issue #1158）：判据不在这里重写 —— 它是 `Select-ThisRunShots`（纯函数，与步骤 6
+    # 的「截图时间戳必须晚于本次运行起点」同源），调用方把**同一个**运行起点传进来。
+    # 跳过必须**可见**：静默丢弃 = 另一种假绿。
+    $skippedStale = @()
+    $inScope = @()
+    $baselineFiles = @()
+    if (Test-Path -LiteralPath $BaselineDir) {
+        $baselineFiles = @(Get-ChildItem -Path $BaselineDir -Filter '*.png' -File)
+    }
+    if ($null -ne $RunStartedAt) {
+        $scope = Select-ThisRunShots -RunStartedAt $RunStartedAt -CurrentDir $CurrentDir -BaselineDir $BaselineDir
+        $skippedStale = @($scope.Skipped)
+        $inScope = @($scope.InScope)
+        $currentFiles = @($currentFiles | Where-Object { $inScope -contains $_.Name })
+        foreach ($s in $skippedStale) {
+            Write-Host "[screenshot-diff] ⏭️ $($s.Name) — 跳过（非本轮产物：$($s.Side) 侧早于本轮运行起点）" -ForegroundColor DarkYellow
+        }
+    }
+
     if ($currentFiles.Count -eq 0) {
         # 形状必须与正常路径**一致**：调用方以 StrictMode 跑，读一个不存在的属性会**直接抛**
         # （2026-09-18 实测：漏了 Fallback 就让整个探测脚本挂在这条早退分支上）。
+        $errText = '无当前截图可对比'
+        if ($skippedStale.Count -gt 0) {
+            $errText = "无本轮截图可对比（目录里有 $($skippedStale.Count) 张陈旧残留，已跳过）"
+        }
         return [pscustomobject]@{
             Diff         = @()
             ChangedCount = 0
             NewBaseline  = (-not $baselineExists)
-            Error        = '无当前截图可对比'
+            Error        = $errText
             Mode         = 'none'
             Detail       = @()
             PixelRan     = $false
             Fallback     = @()
+            SkippedStale = $skippedStale
         }
     }
 
@@ -278,9 +306,14 @@ function Compare-ScreenshotBaseline {
     }
 
     # 检查基线中有但当前没有的文件（缺失）
+    # ⚠️ 过滤生效时（#1158），**陈旧的一侧不参与判据、也不替对方造出「缺失」**：
+    #    上一轮失败运行留下的残留基线图，不得把本轮报成「缺失」（那正是 ADR-0008 记的那半岛）。
     if (Test-Path -LiteralPath $BaselineDir) {
         # 同上的 `@(...)` 理由：单文件时若退化成标量，后续任何 `.Count` 都会在 StrictMode 下抛错
         $baselineFiles = @(Get-ChildItem -Path $BaselineDir -Filter '*.png' -File)
+        if ($null -ne $RunStartedAt) {
+            $baselineFiles = @($baselineFiles | Where-Object { $inScope -contains $_.Name })
+        }
         foreach ($bFile in $baselineFiles) {
             $currentFile = Join-Path $CurrentDir $bFile.Name
             if (-not (Test-Path -LiteralPath $currentFile)) {
@@ -322,5 +355,7 @@ function Compare-ScreenshotBaseline {
         Detail       = $detail
         PixelRan     = $pixelRan
         Fallback     = @($fallbackReasons | Select-Object -Unique)
+        # 被跳过的陈旧残留（可见，不静默）—— 调用方与 evidence 都能引用
+        SkippedStale = $skippedStale
     }
 }

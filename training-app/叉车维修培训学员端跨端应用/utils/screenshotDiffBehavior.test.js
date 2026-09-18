@@ -124,6 +124,10 @@ function psQuote(s) {
  *   G4 40×40 像素不同（19.5% > 阈值）       ⇒ Ok=False / ExitCode=1（**它真的会红**）
  *   G5 同上 + -UpdateBaseline               ⇒ Ok=True / refresh-baseline（出路真的在）
  *   G6 零截图                               ⇒ 判不了 ⇒ Ok=False / ExitCode=1（不当「无变化」）
+ *   ── 以下三组是 #1158（2026-09-18）：目录**从不清理**，上一轮失败运行的残留不得算进本轮 ──
+ *   G7 陈旧残留 + 本轮 1 页                 ⇒ 只本轮那页在范围内，残留被**可见地**跳过（带理由与哪一侧）
+ *   G8 陈旧的那页只在基线里                 ⇒ **不得**被报成「缺失」（否则残留会把本轮报成缺图）
+ *   G9 一张本轮产物都没有（全是残留）        ⇒ 本轮范围为空、残留数可见（不静默成「无变化」）
  */
 function probe(ctx) {
   const script = [
@@ -175,6 +179,33 @@ function probe(ctx) {
     'New-Item -ItemType Directory -Force -Path (Join-Path $g6 "cur") | Out-Null',
     '$r6 = Compare-ScreenshotBaseline -CurrentDir (Join-Path $g6 "cur") -BaselineDir (Join-Path $g6 "base")',
     'Emit "G6" $r6 (Get-PngDiffVerdict -DiffResult $r6)',
+    // ---- G7–G9（issue #1158）：目录里混着上一轮失败运行的残留 ⇒ 只对**本轮产物**作结论 ----
+    // 用合成时间戳直接驱动纯函数（不碰文件系统）：判据本身被测，且不依赖 sleep、不受文件系统时间精度影响。
+    // 起点 = now-1h；「本轮」= now；「陈旧」= now-5h（与 2026-09-15 真机那次同款：上一轮的残留）。
+    '$now = Get-Date',
+    '$startPt = $now.AddHours(-1)',
+    '$fresh = $now; $old = $now.AddHours(-5)',
+    // G7（场景 A）：陈旧残留 + 本轮 1 页 ⇒ 本轮那页在范围内、残留被**可见地**跳过
+    '$s7 = Select-ThisRunShots -RunStartedAt $startPt `',
+    "  -CurrentTimes @{ 'stale.png' = \$old; 'fresh.png' = \$fresh } `",
+    "  -BaselineTimes @{ 'stale.png' = \$old; 'fresh.png' = \$fresh }",
+    'Write-Output ("G7_INSCOPE=" + (@($s7.InScope) -join ","))',
+    'Write-Output ("G7_SKIPPEDN=" + @($s7.Skipped).Count)',
+    'Write-Output ("G7_SKIPPEDNAME=" + (@($s7.Skipped | ForEach-Object { $_.Name }) -join ","))',
+    'Write-Output ("G7_SKIPPEDSIDE=" + (@($s7.Skipped | ForEach-Object { $_.Side }) -join ","))',
+    // G8（场景 B）：陈旧的那页只在基线里有（当前侧没有）⇒ **不得**被报成「缺失」
+    '$s8 = Select-ThisRunShots -RunStartedAt $startPt `',
+    "  -CurrentTimes @{ 'fresh.png' = \$fresh } `",
+    "  -BaselineTimes @{ 'stale.png' = \$old; 'fresh.png' = \$fresh }",
+    'Write-Output ("G8_INSCOPE=" + (@($s8.InScope) -join ","))',
+    'Write-Output ("G8_MISSINGCANDIDATES=" + (@($s8.InScope | Where-Object { $_ -eq "stale.png" }).Count))',
+    'Write-Output ("G8_SKIPPEDN=" + @($s8.Skipped).Count)',
+    // G9：一张本轮产物都没有（全是残留）⇒ 目录里**看着有图**但本轮为空 ⇒ 明报，不静默
+    '$s9 = Select-ThisRunShots -RunStartedAt $startPt `',
+    "  -CurrentTimes @{ 'stale.png' = \$old } `",
+    "  -BaselineTimes @{ 'stale.png' = \$old }",
+    'Write-Output ("G9_INSCOPEN=" + @($s9.InScope).Count)',
+    'Write-Output ("G9_SKIPPEDN=" + @($s9.Skipped).Count)',
     'Write-Output "PROBE_DONE=1"',
   ].join('\n');
 
@@ -290,5 +321,27 @@ describe('截图门（步骤 7）行为：一致⇒绿 / 有变化⇒红（#1139
     expect(v.G6.hasError).toBe('True');
     expect(v.G6.ok).toBe('False');
     expect(v.G6.exit).toBe('1');
+  });
+
+  // ---- G7–G9（issue #1158）：目录从不清理 ⇒ 上一轮失败运行的残留不得算进本轮 ----
+
+  test('G7: 场景 A —— 陈旧残留 + 本轮 1 页 ⇒ 只本轮那页在范围内，残留被**可见地**跳过', () => {
+    expect(field(probeResult.stdout, 'G7_INSCOPE')).toBe('fresh.png');
+    expect(field(probeResult.stdout, 'G7_SKIPPEDN')).toBe('1');
+    expect(field(probeResult.stdout, 'G7_SKIPPEDNAME')).toBe('stale.png');
+    // 跳过必须带**理由与哪一侧**（静默丢弃 = 另一种假绿）
+    expect(field(probeResult.stdout, 'G7_SKIPPEDSIDE')).toBe('current+baseline');
+  });
+
+  test('G8: 场景 B —— 陈旧的那页只在基线里 ⇒ 不得被报成「缺失」', () => {
+    expect(field(probeResult.stdout, 'G8_INSCOPE')).toBe('fresh.png');
+    // 「缺失」的候选集里不能出现陈旧页 —— 否则上一轮的残留会把本轮报成缺图
+    expect(field(probeResult.stdout, 'G8_MISSINGCANDIDATES')).toBe('0');
+    expect(field(probeResult.stdout, 'G8_SKIPPEDN')).toBe('1');
+  });
+
+  test('G9: 全是残留（本轮一张都没有）⇒ 本轮范围为空且残留数可见（不是「无变化」）', () => {
+    expect(field(probeResult.stdout, 'G9_INSCOPEN')).toBe('0');
+    expect(field(probeResult.stdout, 'G9_SKIPPEDN')).toBe('1');
   });
 });
