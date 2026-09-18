@@ -21,7 +21,19 @@ import (
 // 第一个章节挂一个 chapter_file 表条目；第三个章节带 legacy file_url（无 chapter_file 行）。
 func seedChapterWithMeta(t *testing.T, db *gorm.DB) (*model.Course, []model.Chapter) {
 	t.Helper()
-	course := model.Course{Name: "章节详情课程", Status: 1, CreatedAt: testutil.Now()}
+	// 课程必须是「已发布 + 已挂载」：按 id 取章节详情的读路径已纳入学员可见性谓词
+	// （ADR-0058），否则本夹具下的详情读取会按「不存在」返回。不可见面另由
+	// TestCourseReadVisibilityContract 覆盖（api 层）。
+	spec := model.Specialty{Code: "chapter-detail", Name: "章节详情", SortOrder: 1, Status: 1}
+	if err := db.Create(&spec).Error; err != nil {
+		t.Fatalf("创建方向失败: %v", err)
+	}
+	lv := model.CourseLevel{Code: "chapter-detail-lv", Name: "入门", SortOrder: 1, Status: 1}
+	if err := db.Create(&lv).Error; err != nil {
+		t.Fatalf("创建等级失败: %v", err)
+	}
+	course := model.Course{Name: "章节详情课程", Status: 1,
+		SpecialtyID: &spec.SpecialtyID, LevelID: &lv.LevelID, CreatedAt: testutil.Now()}
 	if err := db.Create(&course).Error; err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}
