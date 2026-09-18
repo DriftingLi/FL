@@ -108,9 +108,10 @@ describe('「我的」页面原型图契约', () => {
     }
   });
 
-  it('工具宫格条目与原型一致（含顺序）', () => {
+  it('工具宫格条目与原型一致（含顺序，#1011 新增第 9 项「练习记录」落在最后）', () => {
     expect(toolItems.map((i) => i.title)).toEqual([
       '学习记录', '收藏夹', '错题本', '笔记本', '学练计划', '学习资料', '就业在线', '任务中心',
+      '练习记录',
     ]);
   });
 
@@ -137,7 +138,9 @@ describe('「我的」页面原型图契约', () => {
   });
 
   it('每项入口都有图标与文案，签到胶囊保留今日签到状态', () => {
-    expect(allEntries.length).toBe(13);
+    // 8 项工具 + 5 项服务；#1011 起工具宫格为 9 项（+「练习记录」）
+    expect(toolItems.length).toBe(9);
+    expect(allEntries.length).toBe(14);
     for (const item of allEntries) {
       expect(item.icon.length).toBeGreaterThan(0);
       expect(item.title.length).toBeGreaterThan(0);
@@ -174,6 +177,21 @@ describe('「我的」页面跳转契约', () => {
     expect(notebook.available).toBe(true);
     expect(notebook.path).toBe('/pages/profile/notebook');
     expect(registeredPages.has(notebook.path.slice(1))).toBe(true);
+  });
+
+  it('#1011 练习记录已接线：宫格项存在 + 跳转目标已在 pages.json 注册', () => {
+    const route = 'pages/profile/practice-records';
+    const entry = toolItems.find((i) => i.key === 'practice-records');
+    expect(entry).toBeDefined();
+    expect(entry.title).toBe('练习记录');
+    expect(entry.available).toBe(true);
+    expect(entry.path).toBe('/' + route);
+    // 跳转目标必须已注册（死链 = 判红），且不是 tabBar 页（onEntryClick 走 navigateTo）
+    expect(registeredPages.has(route)).toBe(true);
+    expect(tabPages.has(route)).toBe(false);
+
+    // 判据自检：未注册路由不会被认作已注册（防「路由集合恒真」的假守护）
+    expect(registeredPages.has(route + '-typo')).toBe(false);
   });
 
   it('写死的跳转 url 均已注册，且区分 switchTab 与 navigateTo', () => {
