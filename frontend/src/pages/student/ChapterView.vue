@@ -37,15 +37,6 @@
           <UiButton v-else size="small" :loading="markingCompleted" @click="markCompleted">
             标记完成
           </UiButton>
-          <!-- 章节收藏（#1132）：收藏目标是章节本身；打开落点由后端 FavoriteDTO.course_id 给出（#1089） -->
-          <UiActionChip
-            icon="fav"
-            :label="chapterFavorited ? '已收藏' : '收藏'"
-            tone="fav"
-            borderless
-            :active="chapterFavorited"
-            @click="toggleChapterFavorite"
-          />
         </div>
       </div>
 
@@ -151,7 +142,6 @@ import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, ArrowRight, VideoCamera, Document, Picture } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { courseApi, type ChapterDetail } from '@/api/course'
-import { favoriteApi } from '@/api/favorite'
 import { studentApi, type StudentChapterProgress } from '@/api/student'
 import { useCourseStore } from '@/stores/course'
 import { useAsyncPage } from '@/composables/useAsyncPage'
@@ -167,7 +157,6 @@ import ImageViewer from '@/components/student/ImageViewer.vue'
 import ChapterDiscussion from '@/components/student/ChapterDiscussion.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiTag from '@/components/ui/UiTag.vue'
-import UiActionChip from '@/components/ui/UiActionChip.vue'
 import PublishMarkdown from '@/components/render/PublishMarkdown.vue'
 
 const route = useRoute()
@@ -410,51 +399,9 @@ async function markCompleted() {
   }
 }
 
-// 章节收藏（#1132）：入口此前两端都缺 —— 收藏表里 chapter 是「没有创建点的类型」，
-// 而收藏页早已把章节当一等公民（Web 的类型标签色、移动端的「章节」筛选 chip）。
-// 交互形状对齐 ForumDetail 的帖子收藏（同一 UiActionChip 写法）。
-const chapterFavorited = ref(false)
-const chapterFavoriteId = ref<number>(0)
-
-async function loadChapterFavoriteState() {
-  chapterFavorited.value = false
-  chapterFavoriteId.value = 0
-  const id = Number(chapterId.value)
-  if (!id) return
-  try {
-    const res = await favoriteApi.check({ target_type: 'chapter', target_id: id })
-    chapterFavorited.value = !!res?.favorited
-    chapterFavoriteId.value = res?.favorite_id || 0
-  } catch (e) {
-    console.error('查询章节收藏状态失败:', e)
-  }
-}
-
-async function toggleChapterFavorite() {
-  const id = Number(chapterId.value)
-  if (!id) return
-  try {
-    if (chapterFavorited.value) {
-      await favoriteApi.remove(chapterFavoriteId.value)
-      chapterFavorited.value = false
-      chapterFavoriteId.value = 0
-      ElMessage.success('已取消收藏')
-    } else {
-      const res = await favoriteApi.add({ target_type: 'chapter', target_id: id })
-      chapterFavorited.value = true
-      chapterFavoriteId.value = res?.favorite_id || 0
-      ElMessage.success('已收藏')
-    }
-  } catch (e) {
-    console.error('章节收藏操作失败:', e)
-    /* 错误已由拦截器提示 */
-  }
-}
-
 watch(() => route.params.chapterId, (newVal) => {
   if (newVal) {
     loadChapterDetail()
-    loadChapterFavoriteState()
   }
 })
 
@@ -479,7 +426,6 @@ onMounted(() => {
   loadChapterDetail()
   loadCourseInfo()
   loadCourseLearningState()
-  loadChapterFavoriteState()
   document.addEventListener('visibilitychange', handleVisibilityChange)
   window.addEventListener('beforeunload', handleBeforeUnload)
 })

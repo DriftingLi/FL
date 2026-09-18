@@ -18,11 +18,6 @@ vi.mock('@/api/student', () => ({
   studentApi: { getStudentCourseDetail: vi.fn() }
 }))
 
-// #1132：页面新增章节收藏入口 ⇒ 本 spec 也须挡住网络层（收藏行为的断言在 ChapterFavorite.spec.ts）
-vi.mock('@/api/favorite', () => ({
-  favoriteApi: { check: vi.fn(), add: vi.fn(), remove: vi.fn() }
-}))
-
 vi.mock('@/stores/course', () => ({
   useCourseStore: () => ({ loadCourse: vi.fn(), courseInfo: null, chapters: [] })
 }))
