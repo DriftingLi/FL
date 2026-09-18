@@ -79,9 +79,8 @@ type favoriteTargetMeta struct {
 func validateFavoriteTarget(db *gorm.DB, targetType string, targetID int) error {
 	switch targetType {
 	case FavoriteTargetCourse:
-		var cnt int64
-		MountedCourseScope(db.Model(&model.Course{}).Where("course_id = ? AND status = 1", targetID)).Count(&cnt)
-		if cnt == 0 {
+		// 复用学员可见性单点的 by-id 形态（ADR-0058），不在此手拼谓词。
+		if !CourseVisibleByID(db, targetID) {
 			return errors.New("课程不存在或不可收藏")
 		}
 	case FavoriteTargetChapter:
