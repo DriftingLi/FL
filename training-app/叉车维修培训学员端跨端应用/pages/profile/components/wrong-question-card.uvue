@@ -5,8 +5,13 @@
                         <text class="record-wrong-count">错 {{ wrongCount }} 次</text>
                         <text v-if="favorited" class="record-fav-tag">收藏</text>
                         <text class="record-date">{{ displayDate }}</text>
+                        <text v-if="displayLastWrongDate.length > 0" class="record-date record-date-last">最近 {{ displayLastWrongDate }}</text>
                     </view>
                     <text class="record-title">{{ itemTitle }}</text>
+
+                    <!-- 题干配图（#1083）：故障识图题的图此前在错题本完全不可见；无图时元素不渲染（零占位、不塌陷） -->
+                    <image v-if="displayImageUrl.length > 0" class="record-question-img"
+                        :src="displayImageUrl" mode="aspectFit"></image>
 
                     <!-- 展开态：重做交互 -->
                     <view v-if="expanded" class="redo-section">
@@ -48,12 +53,23 @@
 
                     <!-- 折叠态操作按钮 -->
                     <view v-if="!expanded" class="card-actions">
-                        <view class="card-action-btn" @click="onToggle">
+                        <view class="card-action-btn" @click="onToggleAnswer">
+                            <text class="card-action-text">{{ answerFoldText() }}</text>
+                        </view>
+                        <view class="card-action-btn card-action-primary" @click="onToggle">
                             <text class="card-action-text">重做</text>
                         </view>
                         <view class="card-action-btn card-action-danger" @click="onRemoveTap">
                             <text class="card-action-text card-action-danger-text">移出</text>
                         </view>
+                    </view>
+
+                    <!-- 折叠态「答案与解析」（#1083）：不重做也能复习。默认收起，卡片自持开合态 -->
+                    <view v-if="!expanded && answerOpen" class="answer-section">
+                        <text class="answer-line">我上次选的答案：{{ lastAnswerDisplay() }}</text>
+                        <text class="answer-line">正确答案：{{ itemAnswer.length > 0 ? itemAnswer : '—' }}</text>
+                        <text v-if="itemExplanation.length > 0" class="answer-explain">解析：{{ itemExplanation }}</text>
+                        <text v-else class="answer-empty">暂无解析</text>
                     </view>
                 </view>
 </template>
@@ -61,8 +77,8 @@
 <script setup lang="uts">
     import { ref, computed } from 'vue'
     import type { QuestionOption } from '../../../types/index'
-    import { getTypeName, isMultiChoice } from '../../../utils/wrongQuestionDisplay'
-    import { formatDateStr } from '../../../utils/format'
+    import { getTypeName, isMultiChoice, answerFoldLabel } from '../../../utils/wrongQuestionDisplay'
+    import { formatDateStr, formatDateTimeStr, resolveFileUrl } from '../../../utils/format'
 
     /** 错题卡片：展示 + 重做选项选中态（选中态属展示时态随卡片自持；提交结果由页面下发） */
     type RedoResult = {
@@ -76,6 +92,11 @@
         itemType?: string
         itemTitle?: string
         itemCreatedDate?: string
+        itemImageUrl?: string
+        itemAnswer?: string
+        itemExplanation?: string
+        lastUserAnswer?: string
+        lastWrongAt?: string
         wrongCount?: number
         favorited?: boolean
         options?: QuestionOption[]
@@ -86,6 +107,11 @@
         itemType: '',
         itemTitle: '',
         itemCreatedDate: '',
+        itemImageUrl: '',
+        itemAnswer: '',
+        itemExplanation: '',
+        lastUserAnswer: '',
+        lastWrongAt: '',
         wrongCount: 0,
         favorited: false,
         options: () => [] as QuestionOption[],
@@ -98,6 +124,9 @@
 
     /** 选项选中态（展示时态，页面 onToggleExpand 切换 expanded 时经 expose 的 resetSelection 重置） */
     const selectedKeys = ref<string[]>([])
+
+    /** 「答案与解析」开合态（#1083）：折叠态展示时态，随卡片自持；默认收起，不 emit 给页面 */
+    const answerOpen = ref<boolean>(false)
 
     function resetSelection() : void {
         selectedKeys.value = [] as string[]
@@ -226,6 +255,31 @@
         return formatDateStr(props.itemCreatedDate)
     })
 
+    /** 题干配图完整 URL（#1083）：模板中不调用 resolveFileUrl（UTS 模板函数解析不稳定，先例 forum-detail） */
+    const displayImageUrl = computed<string>(() : string => {
+        return resolveFileUrl(props.itemImageUrl)
+    })
+
+    /** 最近错误时间（#1083）：ISO → 'YYYY-MM-DD HH:mm'；空串不渲染，卡片不塌陷 */
+    const displayLastWrongDate = computed<string>(() : string => {
+        return formatDateTimeStr(props.lastWrongAt)
+    })
+
+    /** 「答案与解析」按钮文案（#1083；模板不得直调 import 函数，本地包装一层） */
+    function answerFoldText() : string {
+        return answerFoldLabel(answerOpen.value)
+    }
+
+    /** 「我上次选的答案」文案（#1083）：空 = 接口无作答记录，与「作答为空」同形 */
+    function lastAnswerDisplay() : string {
+        return props.lastUserAnswer.length > 0 ? props.lastUserAnswer : '（无作答记录）'
+    }
+
+    /** 切换「答案与解析」开合（#1083，折叠态内自持） */
+    function onToggleAnswer() : void {
+        answerOpen.value = !answerOpen.value
+    }
+
     /** 点击选项（多选切换 / 单选替换，与原页逻辑一致） */
     function onSelect(key : string) : void {
         if (redoVal() != null) return
@@ -306,11 +360,27 @@
         color: #cccccc;
     }
 
+    /* 最近错误时间（#1083）：与 created_at 区分，卡片窄屏下可换行不挤爆标题 */
+    .record-date-last {
+        margin-left: 12rpx;
+        flex-shrink: 0;
+    }
+
     .record-title {
         font-size: 30rpx;
         color: #333333;
         line-height: 1.5;
         margin-bottom: 16rpx;
+    }
+
+    /* 题干配图（#1083）：故障识图题的画面来源；无图时元素不渲染。
+       固定高 + aspectFit —— uvue 不支持高度上限（守护禁项），原图长宽比不受控 */
+    .record-question-img {
+        width: 100%;
+        height: 320rpx;
+        border-radius: 8rpx;
+        margin-bottom: 16rpx;
+        background-color: #f8f9fa;
     }
 
     /* 重做区域 */
@@ -481,8 +551,13 @@
     .card-action-btn {
         padding: 8rpx 24rpx;
         border-radius: 24rpx;
-        background-color: #2979ff;
+        background-color: #ffffff;
+        border: 1rpx solid #2979ff;
         margin-left: 16rpx;
+    }
+
+    .card-action-primary {
+        background-color: #2979ff;
     }
 
     .card-action-danger {
@@ -492,10 +567,33 @@
 
     .card-action-text {
         font-size: 24rpx;
+        color: #2979ff;
+    }
+
+    .card-action-primary .card-action-text {
         color: #ffffff;
     }
 
     .card-action-danger-text {
         color: #f44336;
+    }
+    /* 折叠态「答案与解析」（#1083）：默认收起，展开后与操作行留白分隔。
+       行文案与空态同字号 —— 合并为一条规则（空态只换色），避免重复声明 */
+    .answer-section {
+        flex-direction: column;
+        background-color: #f8f9fa;
+        border-radius: 8rpx;
+        padding: 16rpx;
+        margin-top: 16rpx;
+    }
+
+    .answer-line, .answer-explain, .answer-empty {
+        font-size: 24rpx;
+        line-height: 1.5;
+        color: #666666;
+    }
+
+    .answer-empty {
+        color: #999999;
     }
 </style>

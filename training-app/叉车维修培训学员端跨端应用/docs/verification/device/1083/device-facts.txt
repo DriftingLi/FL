@@ -1,0 +1,103 @@
+# #1083 第二轮取证：设备侧事实（只读实测）
+# 采集：2026-09-18 17:19-17:21（adb D:\android-sdk\platform-tools\adb.exe）
+# 设备：b32d8398 / 23049RAD8C / Android 15 / 应用 io.dcloud.uniappx（appid __UNI__1C1D180）
+
+## 1) 应用进程与会话（logcat 同进程，可归因同一构建）
+ps: 12682 io.dcloud.uniappx
+topResumedActivity: io.dcloud.uniappx/io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity
+17:19:40.436 I/console (12682): 进入页面:/pages/profile/profile  [86 dom / onReady 249ms]
+17:19:46.674 I/console (12682): 进入页面:/pages/profile/wrong-questions  [34 dom / onReady 176ms]
+
+## 2) 设备侧资源目录（部署事实，只读 stat）
+# /sdcard/Android/data/io.dcloud.uniappx/apps/__UNI__1C1D180/www
+www_before = 1789722659  (2026-09-18 17:10:59 +0800)
+www_after  = 1789722860  (2026-09-18 17:14:20 +0800)  advanced = true
+# 说明：这两次读数跨的是**另一会话**在同一设备上的重部署窗口（本会话 CLI 不可用，见 README）。
+#       本会话只读观测，未发起也未参与该次部署；该 mtime 前进**不能**归因到本会话。
+
+## 3) 设备侧按页产物（只读 sha256 + size + mtime）
+19de36232b1c31546c76eb0053a61c480180ff5cecac1089b379d6fdc4f92bbd  68156  2026-09-18 07:07  www/pages/profile/wrong-questions/classes.dex
+e17894242b2e99a1a30e153e1aabb783dc68fe78530daa730dc93ddad2b05fbb  53208  2026-09-18 07:07  www/pages/profile/components/wrong-question-card/classes.dex
+
+## 4) 内容判据：设备包里有没有 #1083 的卡片代码
+# 从设备拉回的 wrong-question-card/classes.dex 里逐字串判定（UTF-8 解出中文字面量）
+重做                = 1     （旧卡片折叠态操作行）
+查看答案与解析      = 0     （#1083 新增开合按钮文案 answerFoldLabel(false)）
+收起答案            = 0     （#1083 新增 answerFoldLabel(true)）
+我上次选的答案      = 0     （#1083 新增）
+最新/最近           = 0     （#1083 新增的最近错误时间前缀）
+暂无解析            = 0     （#1083 新增空态）
+解析：              = 0     （#1083 新增）
+record-question-img = 0     （#1083 新增题干图 class）
+正确答案            = 1     （旧卡片展开态重做结果里本来就有）
+# 结论：设备上跑的是**改动前**的卡片，#1083 的四项展示一项都不在包里。
+# 对照（本工作树 9/17 的本地编译产物）：
+#   unpackage/cache/.app-android/src/pages/profile/components/wrong-question-card.kt
+#   （30598 B, 2026-09-17 15:30:02）里「我上次选的答案」「暂无解析」「record-question-img」「最近」= True
+# ⇒ 本地树是对的、设备上是旧的。
+
+## 5) 一轮原始读数：截图里的卡片操作行（像素结构，PIL+numpy，非 OCR）
+# 10-groups-view.png（分组视图，默认态）
+blue  #2979ff  right(x>620)_px = 0     right_bands = 0   ⇒ 右半区没有卡片操作行
+red   #f44336  right(x>620)_px = 0     right_bands = 0
+# 11-card-list.png（点分组行 x=400,y=806 下钻之后）
+blue  #2979ff  total = 23896  right_px = 23562  right_bands = 6
+      y 1073-1144  h=72  x 708-844  px=7570   ⇒ 实心主按钮（重做）
+      y 1485-1556  h=72  x 708-844  px=7570   ⇒ 第 2 张卡
+      y 1962-2033  h=72  x 708-844  px=7570   ⇒ 第 3 张卡
+red   #f44336  total = 2883   right_px = 1830   right_bands = 18
+      y 1073 / 1144、1485 / 1556、1962 / 2033 各有 h=1 的上下描边（x 902-973 与 870-1005）
+# ⇒ 下钻后右半区出现**恰好 3 组**卡片操作行（3 张卡片），与无障碍树里的 3 张卡一一对应。
+
+## 6) 本会话 ④c 门的原始报错（npm run build:kotlin-all，2026-09-18 17:2x）
+[cli-open]     D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe
+[project-open] 与主程序的连接已中断，可能已关闭。请运行 cli open 重新启动后再试。
+[error] HBuilderX CLI 连不上主程序：受限/沙箱会话会阻断 CLI↔主程序的本地 IPC。
+KOTLIN_ALL_RESULT errors=env reason=cli-ipc-blocked
+# 独立复现（不依赖本仓脚本）：cli.exe project list / --help / listhost 的读数见 README「阻塞」节
+
+##############################################################################
+# 第三轮（2026-09-18 19:05-19:25，设备 b32d8398）—— ①a 通过；以下是本轮原始读数
+##############################################################################
+
+## 7) 部署判据（本树确实落到设备）
+# HX_RUN mode=incremental compile=170 deploy=0 total=188 exit=ok
+# HX_RUN_DEPLOY deployed=true www=.../__UNI__1C1D180/www=1789723424->1789729615
+#   pid_before=io.dcloud.uniappx=13446  pid_after=io.dcloud.uniappx=17165  foreground=io.dcloud.uniappx
+# ④c：KOTLIN_ALL_RESULT errors=0 classes=1400 files=108
+#   导出路径 D:\wt-1083\...\unpackage\resources\app-android（本工作树；HBuilderX 里另有 11 个同名项目）
+# ★ 首次 hx:run 判 deployed=false（www=...->none）：根因是 adb daemon 没在跑（device not found），
+#   拉起 daemon 后同一命令一次成功。判「部署失败」前先看 adb devices。
+
+## 8) 设备侧包内容（证明跑的是本树，而不是靠项目名推断）
+# 63076 B  www/pages/profile/components/wrong-question-card/classes.dex   （第二轮旧包 53208 B）
+# 逐字串：我上次选的答案=1  正确答案=1  解析：=1  暂无解析=1  最近=1  record-question-img=1
+# 说明：「查看答案与解析 / 收起答案」两个串不在本 dex 里 —— 它们由 utils/wrongQuestionDisplay.uts
+#       编译进各自的产物，故不能拿本 dex 的 0 命中反推「未部署」（第二轮 README 的同类判据要照此修正口径）。
+
+## 9) 机检行（structure-check.py，退出码 0，全文见 structure-check.txt）
+# [A] 分组视图右半区零操作行                            PASS
+# [B] 卡片列表：实心 #2979ff h=72 x3 / 描边 #f44336 x3  PASS（y 1073-1144 / 1485-1556 / 1962-2033）
+# [C] 答案面板 #f8f9fa y 1168-1473（h=306），其内 #666666 文字行 47 条   PASS
+# [D] 第 2 张卡操作行 y 1485 → 1814（delta=+329）       PASS
+# [E] 无高度 ≈493px 的 #f8f9fa 块                       INFO（本账号无带图错题 ⇒ 未主张）
+
+## 10) a11y 逐字（21/22-*-a11y-strings.txt）
+# 折叠态：查看答案与解析 / 重做 / 移出；最近 2026-09-17 16:16（另两张：09-11 20:22、09-10 22:11）
+# 展开后：收起答案 / 我上次选的答案：对 / 正确答案：错 / 解析：【答案：错误】…（题库第4题）
+
+## 11) 本轮未主张（写实）
+# ① 题干图片：判断题 3 卡 + 多选题 1 卡，a11y 无任何 ImageView 节点；单选题显示「该分组暂无错题」
+#    ⇒ 320rpx=493px 图块高度判据本批一帧未观察
+# ② 无解析空态「暂无解析」：三张卡都有解析 ⇒ 分支未观察
+# ③ 「最近 YYYY-MM-DD HH:mm」的格式/时区不主张与服务端一致
+
+## 12) 顺带留证（不属本票范围，未改）
+# 分组计数与列表条数不一致：页头 判断题4道/多选题2道/单选题2道，
+# 实际列表 判断题 3 张 / 多选题 1 张 / 单选题 0 张（「该分组暂无错题」）⇒ 属 #1007/#1011 口径面。
+
+## 13) 手法坑位
+# · 下钻是必需步骤（grouped 默认 true），不点分组行则卡片列表一帧不渲染（第一、二轮失败的真因）
+# · uiautomator dump 会间歇性返回 0 文本节点（同帧重试即正常）⇒ 像素断言为主判据
+# · input tap 前先 input keyevent KEYCODE_WAKEUP（屏幕超时会吞掉点击）
+# · a11y 里折叠按钮文案在 content-desc，不是 text
