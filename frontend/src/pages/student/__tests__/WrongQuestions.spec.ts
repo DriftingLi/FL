@@ -70,7 +70,8 @@ beforeEach(() => {
     target_id: 101,
     title: '',
     cover: '',
-    created_at: ''
+    created_at: '',
+    course_id: 0
   })
   vi.mocked(favoriteApi.remove).mockResolvedValue(null)
   vi.mocked(questionInteractionApi.listKnowledge).mockResolvedValue([])

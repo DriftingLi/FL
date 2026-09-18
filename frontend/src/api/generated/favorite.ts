@@ -28,6 +28,7 @@ export interface FavoriteCheckDTO {
 }
 
 export interface FavoriteDTO {
+  course_id: number
   cover: string
   created_at: string
   favorite_id: number
