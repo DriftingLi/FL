@@ -42,9 +42,13 @@ type FavoriteDTO struct {
 	FavoriteID int64  `json:"favorite_id"`
 	TargetType string `json:"target_type"`
 	TargetID   int    `json:"target_id"`
-	Title      string `json:"title"`
-	Cover      string `json:"cover"`
-	CreatedAt  string `json:"created_at"`
+	// CourseID 目标所属课程ID：**仅 target_type = chapter 有意义** —— 章节落点
+	// `chapter-view` 要 `course_id` + `chapter_id` 两个键（ADR-0014），而收藏表只存 target_id。
+	// 其余类型恒为 0（不适用，不是「未知」）；键恒在、非 null（0 哨兵口径见 #1089 Q2）。
+	CourseID  int    `json:"course_id"`
+	Title     string `json:"title"`
+	Cover     string `json:"cover"`
+	CreatedAt string `json:"created_at"`
 }
 
 // FavoritePageResult 收藏分页结果。
@@ -59,12 +63,19 @@ type FavoritePageResult struct {
 type favoriteTargetMeta struct {
 	Title string
 	Cover string
-	Found bool
+	// CourseID 目标所属课程（仅章节有意义，其余类型为 0）；与 FavoriteDTO.CourseID 同口径。
+	CourseID int
+	Found    bool
 }
 
 // validateFavoriteTarget 校验收藏目标类型合法且存在/可见。
 // 课程要求已发布且挂载（挂载不变式与学员端列表口径一致）；题目要求已发布；
-// 精选内容要求已发布；章节与帖子仅要求存在。
+// 精选内容要求已发布；**章节的可见性跟随所属课程**（已发布 + 挂载不变式，与搜索的章节分区同一
+// 谓词，见 #1132 —— course_mount_scope.go 的自述早已把「收藏目标校验」列为该谓词的消费方）；
+// 帖子仅要求存在。
+//
+// 读面（favoriteTargetsMeta / List）**保持快照口径不变**：写时校验、读到的是当时的快照，
+// 目标日后下架不会让收藏行消失（course 支的既有形状即如此）。
 func validateFavoriteTarget(db *gorm.DB, targetType string, targetID int) error {
 	switch targetType {
 	case FavoriteTargetCourse:
@@ -75,9 +86,11 @@ func validateFavoriteTarget(db *gorm.DB, targetType string, targetID int) error 
 		}
 	case FavoriteTargetChapter:
 		var cnt int64
-		db.Model(&model.Chapter{}).Where("chapter_id = ?", targetID).Count(&cnt)
+		// 章节可见性跟随课程：谓词复用挂载不变式单点，不手拼（#1132）。
+		mounted := MountedCourseScope(db.Model(&model.Course{}).Select("course_id").Where("status = 1"))
+		db.Model(&model.Chapter{}).Where("chapter_id = ? AND course_id IN (?)", targetID, mounted).Count(&cnt)
 		if cnt == 0 {
-			return errors.New("章节不存在")
+			return errors.New("章节不存在或不可收藏")
 		}
 	case FavoriteTargetQuestion:
 		var cnt int64
@@ -118,9 +131,10 @@ func favoriteTargetsMeta(db *gorm.DB, targetType string, ids []int) map[int]favo
 		}
 	case FavoriteTargetChapter:
 		var rows []model.Chapter
-		db.Select("chapter_id, title").Where("chapter_id IN ?", ids).Find(&rows)
+		// course_id 在**同一次查询**里一并取回（章节落点需要它，不新增往返）。
+		db.Select("chapter_id, course_id, title").Where("chapter_id IN ?", ids).Find(&rows)
 		for _, r := range rows {
-			result[r.ChapterID] = favoriteTargetMeta{Title: r.Title, Found: true}
+			result[r.ChapterID] = favoriteTargetMeta{Title: r.Title, CourseID: r.CourseID, Found: true}
 		}
 	case FavoriteTargetQuestion:
 		var rows []model.Question
@@ -168,7 +182,8 @@ func (s *FavoriteService) Add(userID int, targetType string, targetID int) (*Fav
 	}
 	dto := favoriteToDTO(&existing)
 	if meta, ok := favoriteTargetsMeta(s.db, targetType, []int{targetID})[targetID]; ok {
-		dto.Title, dto.Cover = meta.Title, meta.Cover
+		// Add / List 两条路径共用同一 meta ⇒ course_id 同口径，零额外查询（#1089 Q2）。
+		dto.Title, dto.Cover, dto.CourseID = meta.Title, meta.Cover, meta.CourseID
 	}
 	return &dto, nil
 }
@@ -240,7 +255,7 @@ func (s *FavoriteService) List(userID int, targetType string, page, pageSize int
 		for _, r := range rows {
 			dto := favoriteToDTO(&r)
 			if meta, ok := metas[r.TargetType][r.TargetID]; ok && meta.Found {
-				dto.Title, dto.Cover = meta.Title, meta.Cover
+				dto.Title, dto.Cover, dto.CourseID = meta.Title, meta.Cover, meta.CourseID
 				items = append(items, dto)
 			}
 		}

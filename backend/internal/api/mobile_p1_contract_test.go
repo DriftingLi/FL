@@ -163,6 +163,25 @@ func TestFavoritesContract(t *testing.T) {
 			t.Fatalf("收藏 %+v 期望 201, got %d: %s", body, rec.Code, rec.Body.String())
 		}
 	}
+	// 章节收藏必须携带所属课程 ID（#1089）：章节落点 chapter-view 要 course_id + chapter_id 两个键
+	// （ADR-0014），而收藏表只存 target_id ⇒ 由后端在同一 meta 查询里补出，两条路径同口径。
+	rec = p1Request(r, token, http.MethodPost, "/api/favorites", map[string]any{"target_type": "chapter", "target_id": 1})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("重复收藏章节应幂等 201, got %d", rec.Code)
+	}
+	var chapterAdded struct {
+		Data struct {
+			TargetType string `json:"target_type"`
+			CourseID   int    `json:"course_id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &chapterAdded); err != nil {
+		t.Fatalf("解析章节收藏响应失败: %v", err)
+	}
+	if chapterAdded.Data.CourseID != 1 {
+		t.Fatalf("章节收藏应带所属课程 ID 1, got %+v", chapterAdded.Data)
+	}
+
 	rec = p1Request(r, token, http.MethodGet, "/api/favorites", nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("收藏列表期望 200, got %d", rec.Code)
@@ -173,6 +192,7 @@ func TestFavoritesContract(t *testing.T) {
 			Favorites []struct {
 				TargetType string `json:"target_type"`
 				Title      string `json:"title"`
+				CourseID   int    `json:"course_id"`
 			} `json:"favorites"`
 		} `json:"data"`
 	}
@@ -181,6 +201,18 @@ func TestFavoritesContract(t *testing.T) {
 	}
 	if list.Data.Total != 5 || len(list.Data.Favorites) != 5 {
 		t.Fatalf("收藏总数应为 5, got %d/%d", list.Data.Total, len(list.Data.Favorites))
+	}
+	// 列表路径同带：章节 = 所属课程 ID，其余类型恒为 0（不适用；Add / List 共用同一 meta）。
+	for _, f := range list.Data.Favorites {
+		if f.TargetType == "chapter" {
+			if f.CourseID != 1 {
+				t.Fatalf("章节收藏列表项应带 course_id=1, got %+v", f)
+			}
+			continue
+		}
+		if f.CourseID != 0 {
+			t.Fatalf("非章节收藏项的 course_id 应为 0, got %+v", f)
+		}
 	}
 	rec = p1Request(r, token, http.MethodGet, "/api/favorites?target_type=topic", nil)
 	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil {
