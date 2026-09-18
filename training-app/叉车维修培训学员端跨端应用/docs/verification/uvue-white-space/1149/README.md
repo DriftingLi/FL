@@ -1,7 +1,7 @@
 # 存量 uvue 页面 `scroll-view` 上的 `white-space` 死声明清零（#1113）—— ①a Android 真机截图取证
 
 - **PR**：#1149（base `master`，head `fix/1113-uvue-white-space`；本目录**先按票号取证、开 PR 后即改名为 PR 号**）
-- **复测对象**：分支 `fix/1113-uvue-white-space` HEAD **`89daf017`**（其下为 `4f9b7933`；两次提交之后未再改运行时面，本目录随之入库）
+- **复测对象**：分支 `fix/1113-uvue-white-space` 的**运行时面最后一次改动** = `89daf017`（其下 `4f9b7933` 是 6 处声明删除；`89daf017` 是守护 + `AGENTS.md`）。取证之后的两次提交 `0e0765f0` / `246b0f76` **只动证据目录**（入库 + 改用 PR 号），**未再改运行时面**
 - **日期**：2026-09-18
 - **设备**：`b32d8398`（Xiaomi `23049RAD8C` / Android 15，USB）
 - **包名**：`io.dcloud.uniappx`（uni-app-x 调试基座）
@@ -47,24 +47,28 @@
 | 02 | `pages/profile/records` | `.filter-scroll` | `02-records-chips-after.jpg`（41 条） | **4 个 chip 全部 y=499..549** | 末个 `近90天` 右缘 809 ⇒ 无溢出 |
 | 03 | `pages/profile/practice-records` | `.filter-scroll` | `03-practice-records-chips-after.jpg`（25 条） | **4 个 chip 全部 y=506..556** | 末个 `判断题` 右缘 792 ⇒ 无溢出 |
 | 04 | `pages/featured/featured-list` | `.filter-scroll` | `04-featured-list-chips-after.jpg`（14 条） | **5 个 chip 全部 y=312..358** | 末个 `资讯` 右缘 986 ⇒ 无溢出 |
-| 05 | `pages/ai-assistant/ai-feature`（诊断，展开筛选后） | `.diag-chips` | `05-ai-feature-diagnosis-chips-after.jpg`（折叠态 7 条）+ `05b-…-model-row.content-desc.txt` | **品牌行 4 个 chip 全部 y=1847..1893**；车型行同 y=1847..1893 | 品牌行末个 `林德叉车 (Linde)` 右缘 **1045 触屏宽被裁**（后端品牌表不止 4 个）⇒ 溢出；横滑后可见项变为 `杭叉 / 林德 / 比亚迪 (BYD)`（见 `05c-…-swiped.content-desc.txt`，同一 y=1847..1893） |
+| 05 | `pages/ai-assistant/ai-feature`（诊断，展开筛选后） | `.diag-chips` | `05-ai-feature-diagnosis-chips-after.jpg`（折叠态 7 条）+ `05b-…-model-row.content-desc.txt` | **品牌行 4 个 chip 全部 y=1847..1893**；车型行 3 个 chip 同 y=1847..1893 | **品牌行**末个 `林德叉车 (Linde)` 右缘 1045 = 面板右缘（后端品牌表不止 4 个）⇒ **溢出**；横滑后可见项变为 `杭叉 / 林德 / 比亚迪 (BYD)`（`05c-…-swiped.content-desc.txt`，同一 y=1847..1893）。**车型行本次未横滑** ⇒ 不主张它溢出（它的末项右缘 1045 与品牌行相同，但未做位移对照） |
 | 06 | `pages/exam/mock-exam`（答题中分支） | `.palette-scroll` | `06-mock-exam-palette-after.jpg`（22 条） | **可见 chip 1..11 全部 y=370..416**（共 40 题） | 溢出（40 × ~98px ≫ 1080）；横滑 `input swipe 900 393 → 150 393` 后可见项由 **1..11 变为 12..23**（`06b-…-before-swipe` / `06c-…-after-swipe` 两份 dump 逐字对照），**y 仍恒为 370..416** |
 
 **「不换行 + 可横滑」的判据形态（写实）**：6 处横滑行里，**4 处 `.filter-scroll` 在本设备（1080px 宽）上 chip 行不溢出**
-（末个 chip 右缘 792–986 < 1080）⇒ 当前数据下**没有可滚动的内容**，「可横滑」在这 4 页上只到「不换行」这一半；
-**溢出与真实横滑位移**在 `ai-feature` 的两个 `.diag-chips`（品牌行 / 车型行）与 `mock-exam` 的 `.palette-scroll` 上都有实测证据。
+（末个 chip 右缘 792–986 < 1080）⇒ 当前数据下**没有可滚动的内容**，「可横滑」在这 4 页上只到「不换行」这一半。
+**「溢出 + 真实横滑位移」只证到 2 行**：`ai-feature` 的**品牌行**（1200→200 横滑后可见项换了一批）与 `mock-exam` 的 **`.palette-scroll`**（题号 1..11 → 12..23）；
+`ai-feature` 的**车型行本次只证到「该行渲染出来了且单行不换行」**，没有横滑位移对照。
 横滑本身与 `white-space` 无关（该属性被渲染层忽略），靠的是同一 class 上的 `flex-direction: row` + 子项 `flex-shrink: 0` —— 这两条在本票里**一行未动**。
 
 ## 应用控制台错误行（after，按 ADR-0012 口径在 launch 日志里找）
 
+**原始产物已随本目录入库**：`console-logs/<NN>-<页名>.nav.log`（6 份 launch 日志，逐字的原始文本）+
+`console-logs/SUMMARY.txt`（机检摘要，下面这张表就是它）。判据可逐条复核，不靠汇总结论。
+
 | 页面 | launch 日志行数 | `style property` 错行 | 页身份命中 | `FAIL` / `Uncaught` / `Exception` / `TypeError` |
 | --- | --- | --- | --- | --- |
-| favorites | 32 | **0** | 1 | 0 |
-| records | 150 | **0** | 1 | 0 |
-| practice-records | 150 | **0** | 1 | 0 |
-| featured-list | 145 | **0** | 1 | 0 |
-| ai-feature（含展开筛选） | 144 | **0** | 1 | 0 |
-| mock-exam（答题中） | 161 | **0** | 1 | 0 |
+| favorites | 32 | **0** | `进入页面:pages/profile/favorites` | 0 |
+| records | 150 | **0** | `进入页面:pages/profile/records` | 0 |
+| practice-records | 150 | **0** | `进入页面:pages/profile/practice-records` | 0 |
+| featured-list | 145 | **0** | `进入页面:pages/featured/featured-list` | 0 |
+| ai-feature（含展开筛选） | 144 | **0** | `进入页面:pages/ai-assistant/ai-feature?featureKey=fault_diagnosis` | 0 |
+| mock-exam（答题中） | 161 | **0** | `进入页面:pages/exam/mock-exam` | 0 |
 
 ## 两页「带状态」的取证细节（#1113 Q3 要求：不给态就是空跑假绿）
 
@@ -79,15 +83,18 @@
 1. **改前对照（红控制）本轮没做成，故「改前同页会打这条 error 行」在本目录里没有直接证据。**
    尝试过：`git checkout origin/master -- <6 文件>` 还原声明 → 重编译部署，但 **HBuilderX 的增量编译复用了旧产物**
    （实测 `unpackage/dist/build/.uvue/…/favorites.uvue` 与 `unpackage/cache/.app-android/src/…/favorites.kt` 里
-   `white-space` 计数恒为 0，与源文件里确有该声明不符；删掉这两处 per-page 产物后再跑、以及 `hx:run -Full`
+   `white-space` 计数恒为 0，与源文件里确有该声明不符；**同批 launch 日志里能读到它自己的原话
+   `检测到编译缓存有效，跳过编译`**（`console-logs/01-favorites.nav.log`）—— 这是**观察到的一条机制候选**，
+   不是定论：本会话只在其中一份日志里读到它）。删掉这两处 per-page 产物后再跑、以及 `hx:run -Full`
    （干净缓存重建，`compile=110`）之后，**设备侧 `www/pages/**/classes.dex` 里仍为 0**）。⇒ 本目录只主张
-   **「改后这 6 页的 launch 日志里该错行为 0，且改动的行确实渲染了」**；「改前为 ≥1」的依据是 **#1081 的同源实测**
-   （同一台设备族、同一属性、同一承载标签 `<scroll-view>`，日志原文见 #1110 的 `docs/verification/help-center/1110/README.md`）
-   与**本票改动集本身**（把这几处声明逐行删掉即该错行的唯一来源），**不是**本目录亲自跑出来的红控制。
+   **「改后这 6 页的 launch 日志里该错行为 0，且被删声明所在的行确实渲染了（chip 的 bounds 在案）」**；
+   「改前为 ≥1」的依据是 **#1081 的同源实测**（同一台设备族、同一属性、同一承载标签 `<scroll-view>`，
+   日志原文见 #1110 的 `docs/verification/help-center/1110/README.md`）与**本票改动集本身**
+   （把这几处声明逐行删掉即该错行的唯一来源），**不是**本目录亲自跑出来的红控制。
 2. **4 页 `.filter-scroll` 没有「真的横滑起来」的证据**（理由见上表的写实判据：当前数据下不溢出）。
    要造成溢出需要更窄的屏或更多筛选项，本次没造 —— 「不换行」这半有逐 chip 的 y 判据。
-3. **`ai-feature` 品牌行 / 车型行与 `mock-exam` 题号条的横滑位移只有 `content-desc` 判据，没有单独截图**：
-   截图是静态的，位移结论来自前后两份 dump 的逐字对照（`05c` / `06b` / `06c`）。
+3. **`ai-feature` 的车型行没做横滑位移对照**（只证到「渲染出该行 + 单行不换行」）；品牌行与 `mock-exam` 题号条的
+   横滑位移只有 `content-desc` 判据、没有单独截图：截图是静态的，位移结论来自前后两份 dump 的逐字对照（`05c` / `06b` / `06c`）。
 4. **截图内容 agent 不据此宣称已核对**：可核的是上面那份 `content-desc` 文本判据与日志判据；截图的视觉判断留给签收人。
 5. **H5 / 小程序端未验**：本仓该判据的对象是**原生端**（uvue 渲染器的行为），H5 端本次未实测、也不宣称。
 6. **`pages/profile/personal-info.uvue` 的合法点未上机**：本票**没动**该文件（Q1=(A)），它的 `<text>` 承载由
