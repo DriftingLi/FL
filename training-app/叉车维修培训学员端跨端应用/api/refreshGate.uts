@@ -1,0 +1,69 @@
+/**
+ * 401 刷新闸门（单飞 / single-flight）
+ *
+ * 不变量：**「另一次刷新正在进行」绝不等于「刷新失败」**。
+ *
+ * 修复前 `api/request.uts` 用一个布尔量 `isRefreshing` 表达「正在刷新」：
+ * 第一个 401 抢到标记去发 `POST /auth/refresh`，其余的看到标记为真就 `return false`，
+ * 调用方据此清空登录态 + 跳登录页并弹「登录已过期」——而那次刷新其实成功了。
+ * 冷启动时 dashboard `onShow` 并发发出多个过 `JWTAuth` 的请求，access 已过期即全体 401，
+ * 于是出现一次持续几百毫秒、能自我修复的**假登出**（#1124）。
+ *
+ * 本模块把它换成**共享同一个在飞 Promise**（对齐 Web 端 `frontend/src/api/client.ts`
+ * 的模块级 `refreshPromise`）：并发调用者拿到的是**同一次**刷新结果，
+ * 返回 `false` 只代表刷新**真的**失败（刷新被拒 / 抛错）。
+ *
+ * **去重认「触发这次 401 的那个 access token」，不认时间盒**：一次风暴成员的 401
+ * 会在不同时刻到达（#1124 真机日志里相隔可近 1 秒），但它们带的都是**同一个已被替换掉**
+ * 的旧 token ⇒ 一律并入那一次刷新的结果，不因「刷新已 settle」而另发第二次
+ * （服务端 refresh 轮换即旧令牌失效，一次风暴只许发一次刷新，见根仓库 `ADR-0016-双令牌会话`）。
+ * 时间盒做不到这点：窗口多长都是拍脑袋，短了漏、长了会把「重新登录后的新 401」误并进旧失败。
+ */
+
+/** 刷新执行体：真跑一次刷新，成功返回 true */
+export type RefreshRunner = () => Promise<boolean>
+
+/** 在飞刷新：并发调用者共享同一个 Promise */
+let inflight : Promise<boolean> | null = null
+
+/** 上一次刷新**替换掉**的那个 access token，及其结果 —— 供同一次风暴里迟到的 401 复用 */
+let settledForToken : string = ''
+let settledResult : Promise<boolean> | null = null
+
+/** 执行刷新；runner 抛错或 reject 一律折成「真失败」，不向上冒泡 */
+async function runGuarded(runner : RefreshRunner) : Promise<boolean> {
+    try {
+        return await runner()
+    } catch (e) {
+        console.warn('[refreshGate] refresh runner failed:', e)
+        return false
+    }
+}
+
+/**
+ * 单飞刷新
+ * @param runner 真跑一次刷新
+ * @param forToken 触发这次刷新的请求**发出去时**带的 access token（'' = 未带凭据）
+ * @returns true=刷新成功（调用方带新 token 重试自己的请求）；false=刷新**真的**失败（调用方登出）
+ * @note 只有 `runner` 真的失败才返回 false；「别人正在刷新」与「同一次风暴的迟到成员」
+ *       都由共享 Promise 承接
+ */
+export function gateRefresh(runner : RefreshRunner, forToken : string) : Promise<boolean> {
+    const existing = inflight
+    if (existing != null) return existing
+
+    // 迟到成员：带的仍是「上一次刷新已经替换掉」的那个旧 token ⇒ 并入那一次的结果，不再刷新
+    const settled = settledResult
+    if (forToken.length > 0 && forToken == settledForToken && settled != null) return settled!
+
+    settledForToken = forToken
+    const started = runGuarded(runner)
+    settledResult = started
+    inflight = started
+    started.then((_ok : boolean) : void => {
+        // 只放行下一次刷新。`settledForToken` / `settledResult` **故意不清**：
+        // 同一次风暴里迟到的 401 带的还是那个已被替换的旧 token，认它才算「一次风暴一次刷新」
+        inflight = null
+    })
+    return started
+}

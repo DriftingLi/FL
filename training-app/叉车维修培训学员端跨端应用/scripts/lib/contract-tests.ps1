@@ -44,6 +44,8 @@ function Get-ContractTestPattern {
     # hxError          → hxErrorLinesBehavior 的运行期守护（ADR-0012）
     # hxLaunchDetach   → hxLaunchDetachBehavior 的运行期守护（2026-09-15：派发形态不得泄漏句柄）
     # capabilitySurface → 能力面行为守护（ADR-0016 ①b：白名单判定 + 调用点扫描 + 与 PR 模板对齐）
+    # concurrent401Refresh → concurrent401RefreshBehavior / concurrent401RefreshContract
+    #                        （#1124：并发 401 只发一次刷新 + 空 storage 不弹回首页；行为与接线两层）
     # contractTestPattern → 本真源自身的运行期守护（**pattern 必须自指**，否则该守护永不执行）
-    return 'levelDetect|envCheck|testCompile|buildDeploy|autoScreenshot|screenshotDiff|evidenceGen|devFinish|hxBusyGate|hxRun|hxTimingBehavior|hxError|hxLaunchDetach|capabilitySurface|contractTestPattern'
+    return 'levelDetect|envCheck|testCompile|buildDeploy|autoScreenshot|screenshotDiff|evidenceGen|devFinish|hxBusyGate|hxRun|hxTimingBehavior|hxError|hxLaunchDetach|capabilitySurface|concurrent401Refresh|contractTestPattern'
 }
