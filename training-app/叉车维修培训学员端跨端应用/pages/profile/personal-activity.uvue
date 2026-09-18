@@ -347,13 +347,32 @@
         uni.navigateTo({ url: '/pages/forum/forum-detail?id=' + topicId })
     }
 
+    /**
+     * 收藏条目落点表（#1159）—— 与 `pages/profile/favorites.uvue` 的 `onItemClick` **同式**。
+     *
+     * 键名必须与**目标页 `onLoad` 实际读取的键**一致（ADR-0014：章节落点 =
+     * `chapter-view?course_id=&chapter_id=`；其余落点与 `utils/searchDisplay.uts` 的
+     * `searchItemPath` 同一份口径）—— ⚠️ 只复用**路径**，不复用那边的分支 key：
+     * 收藏侧的 `target_type` 是 `'featured'`，而搜索侧对应的类型名是 `'content'`。
+     */
     function onFavoriteClick(item : FavoriteItem) : void {
         if (item.target_type === 'topic') {
             uni.navigateTo({ url: '/pages/forum/forum-detail?id=' + item.target_id })
         } else if (item.target_type === 'course') {
             uni.navigateTo({ url: '/pages/courses/course-detail?id=' + item.target_id })
+        } else if (item.target_type === 'chapter') {
+            // 章节页要**两个键都在**（与 course-detail.uvue 的 onChapterClick / onStartLearn 同式）。
+            // `course_id <= 0` = 后端未随条目下发所属课程（哨兵值）⇒ **不跳转**并给可见提示：
+            // 「点了没反应」的静默 no-op 正是本缺陷的原始形态，不得复现。
+            if (item.course_id <= 0) {
+                uni.showToast({ title: '该章节缺少所属课程，暂时无法打开', icon: 'none' })
+                return
+            }
+            uni.navigateTo({ url: '/pages/courses/chapter-view?course_id=' + item.course_id + '&chapter_id=' + item.target_id })
         } else if (item.target_type === 'featured') {
             uni.navigateTo({ url: '/pages/featured/featured-detail?id=' + item.target_id })
+        } else if (item.target_type === 'question') {
+            uni.navigateTo({ url: '/pages/practice/practice-do?mode=single&question_id=' + item.target_id })
         }
     }
 
