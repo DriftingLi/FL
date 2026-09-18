@@ -9505,7 +9505,7 @@ paths:
     get:
       consumes:
       - application/json
-      description: 公开访问，返回章节 PPT 转图片后的 slides
+      description: 需登录，返回章节 PPT 转图片后的 slides（#1132 复审：此前为公开访问）
       parameters:
       - description: 章节ID
         in: path
@@ -9524,10 +9524,16 @@ paths:
                 data:
                   $ref: '#/definitions/service.ChapterSlidesDTO'
               type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
         "404":
           description: 章节不存在
           schema:
             $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
       summary: 章节幻灯片
       tags:
       - 学员端-课程

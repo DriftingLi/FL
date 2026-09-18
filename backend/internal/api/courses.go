@@ -32,12 +32,14 @@ func RegisterCoursesRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Cour
 
 	// 公开访问
 	g.GET("/courses", h.ListCourses)
-	g.GET("/chapter/:chapter_id/slides", h.GetChapterSlides)
 
 	// 需要登录
 	auth := g.Group("", middleware.JWTAuth(rd.Session))
 	auth.GET("/course/:course_id", h.GetCourseDetail)
 	auth.GET("/course/:course_id/chapter/:chapter_id", h.GetChapterDetail)
+	// 章节幻灯片：与章节详情**同一鉴权面**（#1132 复审）。此前它挂在公开组 ⇒ 任意章节 id 可无凭证
+	// 拉取 slides（含未发布 / 未挂载课程的章节）；消费方只有 Web 章节页的 PptViewer，走已鉴权请求层。
+	auth.GET("/chapter/:chapter_id/slides", h.GetChapterSlides)
 	auth.POST("/chapter/:chapter_id/slides/regenerate", h.RegenerateChapterSlides)
 	auth.POST("/course/:course_id/progress", h.UpdateStudyProgress)
 }
@@ -94,12 +96,14 @@ func (h *CourseHandler) ListCourses(c *gin.Context) {
 
 // GetChapterSlides 章节幻灯片
 // @Summary 章节幻灯片
-// @Description 公开访问，返回章节 PPT 转图片后的 slides
+// @Description 需登录，返回章节 PPT 转图片后的 slides（#1132 复审：此前为公开访问）
 // @Tags 学员端-课程
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param chapter_id path int true "章节ID"
 // @Success 200 {object} response.R{data=service.ChapterSlidesDTO} "success"
+// @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "章节不存在"
 // @Router /chapter/{chapter_id}/slides [get]
 func (h *CourseHandler) GetChapterSlides(c *gin.Context) {
