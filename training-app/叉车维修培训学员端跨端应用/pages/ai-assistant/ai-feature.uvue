@@ -535,9 +535,8 @@
 		margin-top: 12rpx;
 	}
 
-	/* 横滑行：scroll-view 上 white-space:nowrap + 子项 flex-shrink:0（同 featured-list 的 .filter-scroll） */
+	/* 横滑行：靠 flex-direction: row + 子项 flex-shrink: 0 撑出溢出；勿加 white-space（uvue 只在 <text> / <button> 上支持它，见 AGENTS.md） */
 	.diag-chips {
-		white-space: nowrap;
 		flex-direction: row;
 		align-items: center;
 		margin-bottom: 12rpx;

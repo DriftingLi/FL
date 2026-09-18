@@ -23,12 +23,25 @@
  *       改形态要同步改本锁，不要把 rowRe 放宽成模糊匹配（放宽 = 漏值不再被看见）。
  */
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const REPO = path.join(ROOT, '..', '..');
-const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
-const readRepo = (rel) => fs.readFileSync(path.join(REPO, rel), 'utf8');
+
+/**
+ * 工作树文本一律**经读者归一 EOL** 后再进断言面（#1143）。
+ *
+ * 为什么归一放在读者处：本仓 `*.uts` / `*.uvue` 没有被 `.gitattributes` 钉 LF（另票 #1137），
+ * Windows 检出（`core.autocrlf=true`）落到工作树的是 **CRLF**。而 `.*\n` 这类多行锚点里
+ * `.` **不匹配 `\r`**、`\n` 又必须紧跟其后 ⇒ 在 CRLF 行上**匹配 0 次**：变异根本没生效，
+ * 断言却照跑 —— 于是「防假绿」的自检**静默假绿**（实测：`archived` 行删不掉，18 例红 1 例）。
+ * 归一摆在这一处，对**任何原因**导致的 CRLF 都成立；逐处把锚点放宽成 `\r?\n` 只治好当前那条。
+ */
+const normalizeEol = (text) => text.replace(/\r\n/g, '\n');
+const readText = (abs) => normalizeEol(fs.readFileSync(abs, 'utf8'));
+const read = (rel) => readText(path.join(ROOT, rel));
+const readRepo = (rel) => readText(path.join(REPO, rel));
 
 const DESCRIPTOR_REL = 'utils/contributionStatus.uts';
 const CONSUMER_REL = 'pages/resources/my-uploads.uvue';
@@ -211,7 +224,7 @@ describe('零内联：投稿状态文案不再出现在任何消费面', () => {
         if (!/\.(uts|uvue)$/.test(e.name) || /\.test\./.test(e.name)) continue;
         const rel = path.relative(ROOT, p).replace(/\\/g, '/');
         if (INLINE_ALLOWLIST.has(rel)) continue;
-        const hits = scanInlineLabels(fs.readFileSync(p, 'utf8'));
+        const hits = scanInlineLabels(readText(p));
         if (hits.length > 0) offenders.push(`${rel} → ${hits.join('/')}`);
       }
     };
@@ -264,5 +277,27 @@ describe('锁自检：合成违规必须报红（防假绿）', () => {
     const reformatted = src
       .replace(/\{ status: 'pending',/, '{\n    status: "pending",');
     expect(parseDescriptorRows(reformatted).map((r) => r.status)).not.toContain('pending');
+  });
+});
+
+describe('读者自检：工作树 EOL 归一（Windows 检出恒红根因，#1143）', () => {
+  it('readText：CRLF 文本经读者后不含 \\r（合成源，与检出平台无关）', () => {
+    // 合成 CRLF 源是**唯一**与平台无关的判据：在 LF 检出（CI）上，真源本来就是 LF，
+    // 读者归一没了也照样绿 —— 那样这条守护的回归就只在 Windows 上才暴露（正是 #1143 的成因）。
+    const fixture = path.join(os.tmpdir(), `contributionStatus-eol-${process.pid}.uts`);
+    fs.writeFileSync(fixture, "x\r\n{ status: 'archived', label: '已下架' }\r\n");
+    try {
+      expect(readText(fixture)).toBe("x\n{ status: 'archived', label: '已下架' }\n");
+    } finally {
+      fs.unlinkSync(fixture);
+    }
+  });
+
+  it('真源经读者后不含 \\r（.uts / .uvue 在当前 Windows 工作树是 CRLF）', () => {
+    expect(read(DESCRIPTOR_REL)).not.toContain('\r');
+    expect(read(CONSUMER_REL)).not.toContain('\r');
+    // 仓外两个对账源由 .gitattributes 钉了 LF（`*.go` / `*.vue`），今天恒真；
+    // 留着是为了「半改一读」也被看见 —— readRepo 绕过归一就少一处出口。
+    expect(readRepo(GO_REL)).not.toContain('\r');
   });
 });
