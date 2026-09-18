@@ -55,6 +55,10 @@ function parseArgs(argv) {
     ws: 'ws://127.0.0.1:9420',
     requireRoot: '',
     targetRoute: 'pages/login/login',
+    // 期望模拟器**当前停留**在哪一页。导航 API 在本环境不可用（实测 reLaunch/navigateTo 恒报
+    // `Uncaught [object Object]`，见 ADR-0008:137）⇒ 探针**无法自行到位**，只能由调用方保证会话停在靶页。
+    // 缺省取 targetRoute；不匹配时页面相关的测量一律不作结论（见 computeVerdict）。
+    expectCurrentPage: '',
     classSelector: '.app-title',
     classExpectText: '叉车维修培训系统',
     tapSelector: '.pwd-toggle',
@@ -72,6 +76,7 @@ function parseArgs(argv) {
     if (a === '--ws') out.ws = val();
     else if (a === '--require-root') out.requireRoot = val();
     else if (a === '--target-route') out.targetRoute = val();
+    else if (a === '--expect-current-page') out.expectCurrentPage = val();
     else if (a === '--class-selector') out.classSelector = val();
     else if (a === '--class-expect-text') out.classExpectText = val();
     else if (a === '--tap-selector') out.tapSelector = val();
@@ -203,6 +208,11 @@ function readReadySidecar() {
 
 // ---------- 判据预登记（**唯一真源，事后不得挪门槛**）----------
 const VERDICT_IMPACT = {
+  // **页面无关**（最强的一条）：`view` 标签在任何页面上都存在 —— 它 8s 内没解析出来，就足以断定
+  // 「元素级 API 整体不可用」，**不需要**探针停在靶页上（导航不可用时它也到不了靶页）。
+  'element-api-unusable': 'Q15：元素级 API 整体不可用（页面无关判据：`view` 标签亦超时）⇒ 走 ③ + 撤销 Q5',
+  // 导航不可用 ⇒ 探针无法自行到位；会话没停在靶页时，类选择器的超时不可分辨 ⇒ 必须判不判。
+  'inconclusive-target-page-mismatch': 'Q15：**不判** —— 探针未停在靶页、且导航 API 不可用（无法自行到位）；让模拟器停在靶页再跑',
   'class-selector-and-tap-flow-usable': 'Q15：类选择器 + 点击流程可用 ⇒ mp-weixin 可作流程验证载体（Q5 改为「迁移到 mp-weixin 通道」，不撤销）',
   'class-selector-usable-text-read-failed': 'Q15：类选择器可解析但文本读取失败 ⇒ 元素级可用性存疑，需补测后再判',
   'class-selector-usable-tap-flow-unproven': 'Q15：类选择器可用、点击流程未证实 ⇒ 只能做 page 级断言；流程验证不成立 ⇒ 走 ③ + 撤销 Q5',
@@ -213,6 +223,11 @@ const VERDICT_IMPACT = {
 
 function computeVerdict(m, trust) {
   if (!trust.ok) return 'inconclusive-control-failed';
+  // 页面无关判据优先：`view` 在任何页面都存在，它超时即可断定元素级 API 整体不可用 ——
+  // 这条**不依赖**探针是否停在靶页（导航不可用时探针本就无法到位）。
+  if (m.tagSelect === 'timeout') return 'element-api-unusable';
+  // 未停在靶页 ⇒ 类选择器的超时既可能是「API 挂」也可能是「该页没这个 class」，不可分辨 ⇒ 判不判。
+  if (m.targetPageMatched === false) return 'inconclusive-target-page-mismatch';
   if (m.classResolve !== 'resolved') return 'class-selector-unusable';
   if (!m.textRead || m.textRead.matched !== true) return 'class-selector-usable-text-read-failed';
   if (!m.tapToggled || m.tapToggled.changed !== true) return 'class-selector-usable-tap-flow-unproven';
@@ -345,6 +360,15 @@ let page = null;
   }
 }
 
+// 靶页校验（**第一版的真缺陷**）：导航 API 在当前环境不可用 ⇒ 探针**无法自行到位**。
+// 不校验就会在「根本没有这个 class 的页面」上量出超时，把「API 挂」与「该页没这个元素」
+// 混为一谈 —— 第一版正是在 forum 页上量 .app-title 却报了 trustworthy=true。
+result.measurements.targetPageExpected = args.expectCurrentPage || args.targetRoute;
+result.measurements.targetPageMatched = result.measurements.currentPage === result.measurements.targetPageExpected;
+recorder.rec('targetPageCheck', 'env', result.measurements.targetPageExpected,
+  result.measurements.targetPageMatched ? 'resolved' : 'error',
+  { value: result.measurements.currentPage, note: result.measurements.targetPageMatched ? '停在靶页' : '未停在靶页（页面相关测量不作结论）' });
+
 // —— 对照项（反永绿）：不存在的 class 必须取不到元素 ——
 {
   const step = await recorder.run('control.absent', 'control', args.absentSelector, () => page.$(args.absentSelector));
@@ -438,7 +462,12 @@ if (classEl) {
   );
 }
 
-result.verdict = computeVerdict(result.measurements, { ok: result.trustworthy });
+// 把**页面无关**的对照结果一并喂给判据：`tagSelect` 决定「元素级 API 整体是否可用」，
+// `targetPageMatched` 决定页面相关的测量（class/text/tap）是否成立。
+result.verdict = computeVerdict(
+  { ...result.measurements, tagSelect: result.controls.tagSelect },
+  { ok: result.trustworthy },
+);
 result.channelImpact = VERDICT_IMPACT[result.verdict];
 console.log('[verdict] ' + result.verdict + ' | ' + result.channelImpact);
 finish(false);

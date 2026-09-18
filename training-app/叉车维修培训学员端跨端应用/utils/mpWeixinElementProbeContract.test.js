@@ -20,6 +20,10 @@
  *   E6 导航 API 的**原始错误串**必须被捕获（裁决 ADR「恒报 Uncaught [object Object]」要用原文，不能用归纳）
  *   E7 显式声明**非门证据**（`isGate: false` + 头部声明「spike 工具，不是门」）
  *   E8 `package.json` 注册入口 `probe:mp-weixin-element`（否则没人跑得到它）
+ *   E9 **靶页校验**（第一版的真缺陷，实测踩到）：导航 API 不可用 ⇒ 探针**无法自行到位**；
+ *      必须核对「当前页 == 期望页」，不匹配时页面相关的测量（class/text/tap）**不作结论** ——
+ *      否则会在「根本没有该 class 的页面」上量出超时，把「API 挂」与「该页没这个元素」混为一谈。
+ *      页面无关的判据（`view` 标签超时 ⇒ 元素级 API 整体不可用）不受此限。
  *
  * 设计沿用本仓既有守护测试的形态：先对「注入违规」的变形样本断言检测有效（防空跑假绿），
  * 再对真实文件断言零命中。
@@ -43,6 +47,8 @@ const MAX_STEP_TIMEOUT_MS = 15000;
 
 /** 判据预登记表：结论 → 该结论对 Q15 的处置（逐字在位，防止事后挪门槛）。 */
 const VERDICT_IMPACT = {
+  'element-api-unusable': 'Q15：元素级 API 整体不可用',
+  'inconclusive-target-page-mismatch': 'Q15：**不判** —— 探针未停在靶页',
   'class-selector-and-tap-flow-usable': 'Q15：类选择器 + 点击流程可用',
   'class-selector-usable-text-read-failed': 'Q15：类选择器可解析但文本读取失败',
   'class-selector-usable-tap-flow-unproven': 'Q15：类选择器可用、点击流程未证实',
@@ -147,6 +153,14 @@ function scanContract(sources) {
   must(pkg.includes('"probe:mp-weixin-element"'), 'E8', 'package.json 未注册 probe:mp-weixin-element 入口');
   must(pkg.includes('mp-weixin-element-probe.mjs'), 'E8', 'package.json 入口未指向本探针');
 
+  // E9 靶页校验（**第一版的真缺陷**）：导航 API 不可用 ⇒ 探针无法自行到位。
+  // 不核对当前页，就会在「根本没有该 class 的页面」上量出超时 = 把两件事混为一谈。
+  must(probe.includes("'targetPageCheck'"), 'E9', '缺靶页校验步骤（会在错误的页面上量选择器）');
+  must(probe.includes('targetPageMatched'), 'E9', '缺 targetPageMatched 判据');
+  must(probe.includes("if (m.targetPageMatched === false) return 'inconclusive-target-page-mismatch';"),
+    'E9', '未停在靶页时仍会产出页面相关的结论（假绿）');
+  must(probe.includes('expectCurrentPage'), 'E9', '缺 --expect-current-page（无法声明期望停留页）');
+
   return violations;
 }
 
@@ -156,7 +170,7 @@ const real = {
   pkg: readSource(PKG_REL),
 };
 
-describe('微信小程序元素级探针契约守护（E1–E8）', () => {
+describe('微信小程序元素级探针契约守护（E1–E9）', () => {
   it('真实文件：零违规', () => {
     expect(scanContract(real)).toEqual([]);
   });
@@ -180,6 +194,9 @@ describe('微信小程序元素级探针契约守护（E1–E8）', () => {
       ['E6', { ...real, probe: real.probe.replace(/stringified/g, 'stringifiedX') }],
       ['E7', { ...real, probe: real.probe.replace('isGate: false', 'isGate: true') }],
       ['E8', { ...real, pkg: real.pkg.replace('probe:mp-weixin-element', 'probe:mp-x') }],
+      ['E9', { ...real, probe: real.probe.replace("'targetPageCheck'", "'targetPageCheckX'") }],
+      ['E9', { ...real, probe: real.probe.replace("if (m.targetPageMatched === false) return 'inconclusive-target-page-mismatch';", 'if (false) return null;') }],
+      ['E9', { ...real, probe: real.probe.replace(/expectCurrentPage/g, 'expectPageX') }],
     ];
     cases.forEach(([rule, sources], caseIndex) => {
       const found = scanContract(sources);
@@ -203,8 +220,8 @@ describe('微信小程序元素级探针契约守护（E1–E8）', () => {
     expect(real.gateScript).toContain('scripts\\mp-weixin-probe.mjs');
   });
 
-  it('E4：结论集恰好是预登记的那 6 个（多一个少一个都算漂移）', () => {
-    const found = [...real.probe.matchAll(/'(class-selector-[a-z-]+|inconclusive-control-failed|env-unavailable)'/g)]
+  it('E4：结论集恰好是预登记的那一组（多一个少一个都算漂移）', () => {
+    const found = [...real.probe.matchAll(/'(class-selector-[a-z-]+|element-api-unusable|inconclusive-[a-z-]+|env-unavailable)'/g)]
       .map((m) => m[1]);
     const uniq = [...new Set(found)].sort();
     expect(uniq).toEqual(Object.keys(VERDICT_IMPACT).sort());
