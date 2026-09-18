@@ -1,0 +1,57 @@
+# #1083 第二轮取证：设备侧事实（只读实测）
+# 采集：2026-09-18 17:19-17:21（adb D:\android-sdk\platform-tools\adb.exe）
+# 设备：b32d8398 / 23049RAD8C / Android 15 / 应用 io.dcloud.uniappx（appid __UNI__1C1D180）
+
+## 1) 应用进程与会话（logcat 同进程，可归因同一构建）
+ps: 12682 io.dcloud.uniappx
+topResumedActivity: io.dcloud.uniappx/io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity
+17:19:40.436 I/console (12682): 进入页面:/pages/profile/profile  [86 dom / onReady 249ms]
+17:19:46.674 I/console (12682): 进入页面:/pages/profile/wrong-questions  [34 dom / onReady 176ms]
+
+## 2) 设备侧资源目录（部署事实，只读 stat）
+# /sdcard/Android/data/io.dcloud.uniappx/apps/__UNI__1C1D180/www
+www_before = 1789722659  (2026-09-18 17:10:59 +0800)
+www_after  = 1789722860  (2026-09-18 17:14:20 +0800)  advanced = true
+# 说明：这两次读数跨的是**另一会话**在同一设备上的重部署窗口（本会话 CLI 不可用，见 README）。
+#       本会话只读观测，未发起也未参与该次部署；该 mtime 前进**不能**归因到本会话。
+
+## 3) 设备侧按页产物（只读 sha256 + size + mtime）
+19de36232b1c31546c76eb0053a61c480180ff5cecac1089b379d6fdc4f92bbd  68156  2026-09-18 07:07  www/pages/profile/wrong-questions/classes.dex
+e17894242b2e99a1a30e153e1aabb783dc68fe78530daa730dc93ddad2b05fbb  53208  2026-09-18 07:07  www/pages/profile/components/wrong-question-card/classes.dex
+
+## 4) 内容判据：设备包里有没有 #1083 的卡片代码
+# 从设备拉回的 wrong-question-card/classes.dex 里逐字串判定（UTF-8 解出中文字面量）
+重做                = 1     （旧卡片折叠态操作行）
+查看答案与解析      = 0     （#1083 新增开合按钮文案 answerFoldLabel(false)）
+收起答案            = 0     （#1083 新增 answerFoldLabel(true)）
+我上次选的答案      = 0     （#1083 新增）
+最新/最近           = 0     （#1083 新增的最近错误时间前缀）
+暂无解析            = 0     （#1083 新增空态）
+解析：              = 0     （#1083 新增）
+record-question-img = 0     （#1083 新增题干图 class）
+正确答案            = 1     （旧卡片展开态重做结果里本来就有）
+# 结论：设备上跑的是**改动前**的卡片，#1083 的四项展示一项都不在包里。
+# 对照（本工作树 9/17 的本地编译产物）：
+#   unpackage/cache/.app-android/src/pages/profile/components/wrong-question-card.kt
+#   （30598 B, 2026-09-17 15:30:02）里「我上次选的答案」「暂无解析」「record-question-img」「最近」= True
+# ⇒ 本地树是对的、设备上是旧的。
+
+## 5) 一轮原始读数：截图里的卡片操作行（像素结构，PIL+numpy，非 OCR）
+# 10-groups-view.png（分组视图，默认态）
+blue  #2979ff  right(x>620)_px = 0     right_bands = 0   ⇒ 右半区没有卡片操作行
+red   #f44336  right(x>620)_px = 0     right_bands = 0
+# 11-card-list.png（点分组行 x=400,y=806 下钻之后）
+blue  #2979ff  total = 23896  right_px = 23562  right_bands = 6
+      y 1073-1144  h=72  x 708-844  px=7570   ⇒ 实心主按钮（重做）
+      y 1485-1556  h=72  x 708-844  px=7570   ⇒ 第 2 张卡
+      y 1962-2033  h=72  x 708-844  px=7570   ⇒ 第 3 张卡
+red   #f44336  total = 2883   right_px = 1830   right_bands = 18
+      y 1073 / 1144、1485 / 1556、1962 / 2033 各有 h=1 的上下描边（x 902-973 与 870-1005）
+# ⇒ 下钻后右半区出现**恰好 3 组**卡片操作行（3 张卡片），与无障碍树里的 3 张卡一一对应。
+
+## 6) 本会话 ④c 门的原始报错（npm run build:kotlin-all，2026-09-18 17:2x）
+[cli-open]     D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe
+[project-open] 与主程序的连接已中断，可能已关闭。请运行 cli open 重新启动后再试。
+[error] HBuilderX CLI 连不上主程序：受限/沙箱会话会阻断 CLI↔主程序的本地 IPC。
+KOTLIN_ALL_RESULT errors=env reason=cli-ipc-blocked
+# 独立复现（不依赖本仓脚本）：cli.exe project list / --help / listhost 的读数见 README「阻塞」节
