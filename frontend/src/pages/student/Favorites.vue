@@ -31,7 +31,7 @@
           :key="item.favorite_id"
           class="stagger-in flex items-center gap-3.5 border-b border-line px-5 py-3.5 last:border-b-0"
           :class="
-            itemPath(item)
+            itemTarget(item)
               ? 'cursor-pointer transition-[background,transform] duration-[var(--duration-tap)] ease-[var(--ease-default)] hover:bg-canvas active:scale-[0.995] active:bg-line'
               : ''
           "
@@ -90,6 +90,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { favoriteApi, type FavoriteItem, type FavoriteTargetType } from '@/api/favorite'
+import { contentObjectByKey, favoriteTabContentObjects, type ContentObjectTarget } from '@/config/contentObjects'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import { formatLocaleDateTime } from '@/utils/format'
 import { useAsyncPage } from '@/composables/useAsyncPage'
@@ -132,70 +133,32 @@ const {
 
 const staggerStyle = useStagger()
 
-const TYPE_LABELS: Record<string, string> = {
-  course: '课程',
-  chapter: '章节',
-  question: '题目',
-  featured: '内容精选',
-  topic: '帖子'
-}
-
-// #511：UiSegmentTabs 分类选项。本轮补「章节」（#1132 复审）：Web 章节页已能创建章节收藏，
-// 缺 tab 会让新产生的条目只能在「全部」里翻。
-// **「内容精选」刻意不补**（2026-09-18 裁定）：精选内容的阅读面在门户（hrwai-portal，导航即外链），
-// 门户无收藏实现，唯一创建点是移动端 ⇒ 此处补 tab 会得到一个长期为空的筛选项；
-// 资讯收藏要不要做、做在哪，属跨仓产品决定（留档见 #1132）。
+// 种类 → 称谓/标签色/tab/落点全部派生自内容对象声明表（票 2，#1168）。
+// 收藏 tab 的「内容精选刻意不补」裁定（#1132）住在表的 inFavoriteTab 槽（理由见 contentObjects.ts）。
 const typeTabOptions = [
   { label: '全部', value: 'all' },
-  { label: '课程', value: 'course' },
-  { label: '章节', value: 'chapter' },
-  { label: '题目', value: 'question' },
-  { label: '帖子', value: 'topic' }
+  ...favoriteTabContentObjects().map(o => ({ label: o.label, value: o.favoriteTargetType }))
 ]
 
-const TYPE_COLORS: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = {
-  course: 'primary',
-  chapter: 'success',
-  question: 'warning',
-  featured: 'info',
-  topic: 'danger'
-}
-
 function typeLabel(type: string) {
-  return TYPE_LABELS[type] || type
+  return contentObjectByKey(type)?.label || type
 }
 
 function typeTagColor(type: string) {
-  return TYPE_COLORS[type] || 'info'
+  return contentObjectByKey(type)?.tone || 'info'
 }
 
-// 可跳转类型：课程 → 课程中心详情（query 打开），帖子 → 论坛详情，
-// 题目 / 内容精选 → ADR-0049 决策 4 的落点页（搜索结果与收藏页共用同一落点），
-// 章节 → 章节学习页（与 SearchPage.vue 同一落点：course_id + chapter_id 两个路径参数）。
-// 章节的所属课程 ID 由后端 FavoriteDTO.course_id 给出（#1089）；缺失时**不可点**（不猜、不乱跳）。
-function itemPath(item: FavoriteItem): string {
-  if (item.target_type === 'course') {
-    return `/training/courses?course_id=${item.target_id}`
-  }
-  if (item.target_type === 'topic') {
-    return `/training/forum/${item.target_id}`
-  }
-  if (item.target_type === 'featured') {
-    return `/training/featured/${item.target_id}`
-  }
-  if (item.target_type === 'question') {
-    return `/training/questions/${item.target_id}`
-  }
-  if (item.target_type === 'chapter') {
-    return item.course_id > 0 ? `/training/course/${item.course_id}/chapter/${item.target_id}` : ''
-  }
-  return ''
+// 落点装配在表里（与 SearchPage 同一事实源）；章节的所属课程由 FavoriteDTO.course_id 给出（#1089），
+// 缺失即无落点 → 条目不可点（不猜、不乱跳）。
+function itemTarget(item: FavoriteItem): ContentObjectTarget | null {
+  const o = contentObjectByKey(item.target_type)
+  return o ? o.to({ id: item.target_id, parentId: item.course_id }) : null
 }
 
 function goItem(item: FavoriteItem) {
-  const path = itemPath(item)
-  if (path) {
-    router.push(path)
+  const target = itemTarget(item)
+  if (target) {
+    router.push(target)
   }
 }
 

@@ -84,7 +84,7 @@
                   v-for="item in section.data.items"
                   :key="item.type + '-' + item.id"
                   class="rounded-[6px] px-2.5 py-2 transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)]"
-                  :class="itemPath(item) ? 'cursor-pointer hover:bg-canvas' : ''"
+                  :class="itemTarget(item) ? 'cursor-pointer hover:bg-canvas' : ''"
                   @click="goItem(item)"
                 >
                   <SearchResultRow :item="item" :keyword="keyword" />
@@ -108,7 +108,7 @@
                 v-for="item in pageResult.items"
                 :key="item.type + '-' + item.id"
                 class="rounded-[6px] px-2.5 py-2 transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)]"
-                :class="itemPath(item) ? 'cursor-pointer hover:bg-canvas' : ''"
+                :class="itemTarget(item) ? 'cursor-pointer hover:bg-canvas' : ''"
                 @click="goItem(item)"
               >
                 <SearchResultRow :item="item" :keyword="keyword" />
@@ -142,6 +142,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Close, Search } from '@element-plus/icons-vue'
 import { searchApi, type SearchAllResult, type SearchItem, type SearchPageResult, type SearchType } from '@/api/search'
+import { contentObjectBySearchType, searchableContentObjects, type ContentObjectTarget } from '@/config/contentObjects'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useCredentialStore } from '@/stores/credential'
 import { clearSearchHistory, loadSearchHistory, pushSearchHistory, removeSearchHistory } from '@/utils/searchHistory'
@@ -205,16 +206,15 @@ const { loading, loadError, retrying, retry, page: currentPage, pageSize, total,
   }
 })
 
+// 分区与落点全部派生自内容对象声明表（票 2，#1168）——「种类→称谓/落点」不再在本页手抄。
 const sections = computed(() => {
   const r = allResult.value
   if (!r) return []
-  return [
-    { key: 'course' as SearchType, label: '课程', data: r.courses },
-    { key: 'chapter' as SearchType, label: '章节', data: r.chapters },
-    { key: 'question' as SearchType, label: '题目', data: r.questions },
-    { key: 'content' as SearchType, label: '内容精选', data: r.contents },
-    { key: 'topic' as SearchType, label: '帖子', data: r.topics }
-  ]
+  return searchableContentObjects().map(o => ({
+    key: o.searchType as SearchType,
+    label: o.label,
+    data: r[o.searchField!]
+  }))
 })
 
 // 类型 tab 计数：聚合响应本来就带每分区 total（候选 W5），不必额外请求。
@@ -223,11 +223,7 @@ const typeTabOptions = computed(() => {
   const count = (key: string) => (hasCounts ? '(' + (sectionTotals.value[key] ?? 0) + ')' : '')
   return [
     { label: '全部', value: 'all' },
-    { label: '课程' + count('course'), value: 'course' },
-    { label: '章节' + count('chapter'), value: 'chapter' },
-    { label: '题目' + count('question'), value: 'question' },
-    { label: '内容精选' + count('content'), value: 'content' },
-    { label: '帖子' + count('topic'), value: 'topic' }
+    ...searchableContentObjects().map(o => ({ label: o.label + count(o.searchType as string), value: o.searchType as SearchType }))
   ]
 })
 
@@ -239,27 +235,15 @@ const isAllEmpty = computed(() => {
     r.contents.items.length === 0 && r.topics.items.length === 0
 })
 
-/** 落点：每条结果都必须能打开（ADR-0049 决策 2 的落点判据） */
-function itemPath(item: SearchItem): string {
-  switch (item.type) {
-    case 'course':
-      return '/training/courses?course_id=' + item.id
-    case 'chapter':
-      return item.parent_id > 0 ? '/training/course/' + item.parent_id + '/chapter/' + item.id : ''
-    case 'question':
-      return '/training/questions/' + item.id
-    case 'content':
-      return '/training/featured/' + item.id
-    case 'topic':
-      return '/training/forum/' + item.id
-    default:
-      return ''
-  }
+/** 落点：每条结果都必须能打开（ADR-0049 决策 2 的落点判据）；装配在内容对象表（票 2） */
+function itemTarget(item: SearchItem): ContentObjectTarget | null {
+  const o = contentObjectBySearchType(item.type as SearchType)
+  return o ? o.to({ id: item.id, parentId: item.parent_id }) : null
 }
 
 function goItem(item: SearchItem) {
-  const path = itemPath(item)
-  if (path) void router.push(path)
+  const target = itemTarget(item)
+  if (target) void router.push(target)
 }
 
 function goPath(path: string) {
