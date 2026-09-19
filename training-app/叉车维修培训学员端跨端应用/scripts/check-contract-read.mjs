@@ -397,6 +397,28 @@ function reportAll() {
   return 1
 }
 
+/**
+ * 取相对 base 的 diff（`-U0`，路径限定本包）。
+ *
+ * **三点优先、浅历史退双点**（与 frontend-check「守卫增量门」注释里的 CI 口径一致）：
+ * CI 的 checkout 是单分支浅克隆，那条 `git fetch --depth=1` 只带回默认分支那**一个**提交，
+ * 于是 `base...HEAD` 因**没有共同祖先**直接报 `fatal: … no merge base`（实测，#1177 CI 首跑即红）。
+ * 浅历史下取不到 merge base，就退成 `git diff base HEAD`（两点）——它比的是两棵树，
+ * 不依赖祖先关系。两种都失败才 fail-closed。
+ */
+function diffAgainst(base) {
+  const args = (range) => ['-c', 'core.quotepath=false', 'diff', '-U0', range, '--', MOBILE_REL_PREFIX]
+  const opts = { cwd: REPO_ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }
+  try {
+    return execFileSync('git', args(`${base}...HEAD`), opts)
+  } catch (e) {
+    const msg = String(e.stderr ?? e.message ?? '')
+    if (!/no merge base/i.test(msg)) throw e
+    console.error(`[check-contract-read] ${base}...HEAD 无共同祖先（浅历史），退成两点 diff`)
+    return execFileSync('git', args(`${base} HEAD`), opts)
+  }
+}
+
 function reportDiff(base) {
   try {
     execFileSync('git', ['rev-parse', '--verify', base], { cwd: REPO_ROOT, stdio: 'ignore' })
@@ -406,12 +428,7 @@ function reportDiff(base) {
   }
   let diff
   try {
-    // -U0：只给变更行，新增行号由 hunk 头给出。路径限定在本包。
-    diff = execFileSync('git', ['-c', 'core.quotepath=false', 'diff', '-U0', `${base}...HEAD`, '--', MOBILE_REL_PREFIX], {
-      cwd: REPO_ROOT,
-      encoding: 'utf8',
-      maxBuffer: 64 * 1024 * 1024,
-    })
+    diff = diffAgainst(base)
   } catch (e) {
     console.error(`[check-contract-read] git diff 失败（fail-closed）：${e.message}`)
     return 2
