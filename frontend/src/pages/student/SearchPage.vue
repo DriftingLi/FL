@@ -143,6 +143,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Close, Search } from '@element-plus/icons-vue'
 import { searchApi, type SearchAllResult, type SearchItem, type SearchPageResult, type SearchType } from '@/api/search'
 import { contentObjectBySearchType, searchableContentObjects, type ContentObjectTarget } from '@/config/contentObjects'
+import { isEmptyValue } from '@/utils/listState'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useCredentialStore } from '@/stores/credential'
 import { clearSearchHistory, loadSearchHistory, pushSearchHistory, removeSearchHistory } from '@/utils/searchHistory'
@@ -231,8 +232,8 @@ const hasAnyResult = computed(() => allResult.value !== null || pageResult.value
 const isAllEmpty = computed(() => {
   const r = allResult.value
   if (!r) return false
-  return r.courses.items.length === 0 && r.chapters.items.length === 0 && r.questions.items.length === 0 &&
-    r.contents.items.length === 0 && r.topics.items.length === 0
+  // 空态判据复用 utils/listState.isEmptyValue（票 2：五份 `.items.length === 0` 不再手抄）
+  return searchableContentObjects().every(o => isEmptyValue(r[o.searchField!].items))
 })
 
 /** 落点：每条结果都必须能打开（ADR-0049 决策 2 的落点判据）；装配在内容对象表（票 2） */

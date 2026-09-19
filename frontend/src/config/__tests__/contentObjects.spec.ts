@@ -5,6 +5,7 @@
 //   3. 每个种类必须有落点装配（to 必填槽），章节缺父课程时降级为 null（不可点，不猜落点）；
 //   4. 称谓与标签色逐项锁定（搜索页/收藏页共用后，文案漂移只会红一次）。
 import { describe, it, expect } from 'vitest'
+import router from '@/router'
 import type { FavoriteTargetType } from '@/api/favorite'
 import type { SearchType } from '@/api/search'
 import { CONTENT_OBJECTS, contentObjectByKey, contentObjectBySearchType, favoriteTabContentObjects, searchableContentObjects, type ContentObjectKey } from '../contentObjects'
@@ -75,6 +76,16 @@ describe('内容对象表槽位', () => {
     }
     expect(contentObjectByKey('chapter')!.to({ id: 7 })).toBeNull()
     expect(contentObjectByKey('chapter')!.to({ id: 7, parentId: 0 })).toBeNull()
+  })
+
+  // 形态照 pages.spec「导航 routeName 都能在路由表找到」：落点写错路由名不再靠肉眼——编译期 RouteName union + 这里的路由表实锁
+  it('落点的路由名都能在路由表解析出非空 path（断链落点不可能上线）', () => {
+    for (const o of CONTENT_OBJECTS) {
+      const target = o.to({ id: 7, parentId: 3 })!
+      const resolved = router.resolve({ name: target.name, params: target.params, query: target.query })
+      expect(resolved.path, o.key + ' 落点路由 ' + target.name + ' 不在路由表').not.toBe('/')
+      expect(resolved.name).toBe(target.name)
+    }
   })
 
   it('表序 = 搜索分区序（课程/章节/题目/内容精选/帖子）', () => {

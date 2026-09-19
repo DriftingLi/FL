@@ -252,9 +252,11 @@ async function loadDicts() {
 
 async function loadQuestion() {
   const res = await questionBankApi.getQuestion(Number(route.query.id))
+  // status 在装载处剥离（票 6：写面不携带 status 通道，编辑装载整份 res 并入 form 是唯一带回路径）
+  const { status: _status, ...rest } = res as unknown as Record<string, unknown>
   form.value = {
     ...form.value,
-    ...res,
+    ...rest,
     options:
       (res.options as { A: string; B: string; C: string; D: string } | undefined) ??
       form.value.options,
@@ -321,8 +323,6 @@ async function submitForm() {
       ...form.value,
       options: form.value.options ?? undefined
     }
-    // 编辑装载把整份题目 res 并进了 form（含 status）——写面不携带 status 通道（票 6），提交前剥离
-    delete (data as unknown as Record<string, unknown>).status
     if (data.type === 'multi_choice') {
       data.answer = multiAnswer.value.sort().join(',')
     }

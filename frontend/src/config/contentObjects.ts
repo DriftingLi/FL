@@ -5,11 +5,13 @@
 // 该条目不得进可点面（ADR-0049 决策 2「搜到但打不开」的结构性防呆）。
 import type { FavoriteTargetType } from '@/api/favorite'
 import type { SearchType } from '@/api/search'
-import { routeNames } from './routeNames'
+import type { UiTagTone } from '@/components/ui/UiTag.vue'
+import { routeNames, type RouteName } from './routeNames'
 
 export type ContentObjectKey = 'course' | 'chapter' | 'question' | 'featured' | 'topic'
 
-export type ContentObjectTagTone = 'primary' | 'success' | 'warning' | 'info' | 'danger'
+// 标签色用 UiTag 导出的 UiTagTone 收窄（ui-conventions「剩余控件」条）；route name 用 RouteName union（ADR-0047 §2）。
+export type ContentObjectTagTone = UiTagTone
 
 export interface ContentObjectIds {
   id: number
@@ -18,7 +20,7 @@ export interface ContentObjectIds {
 }
 
 export interface ContentObjectTarget {
-  name: string
+  name: RouteName
   params?: Record<string, string>
   query?: Record<string, string>
 }
