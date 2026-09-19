@@ -248,11 +248,11 @@ function editQuestion(row: Question) {
   router.push({ name: 'TutorQuestionCreate', query: { id: row.id } })
 }
 
-// 提交审核：将 draft 题目状态改为 pending（后端会清空驳回理由）
+// 提交审核：显式动作端点（第十二波票 6）——写面已不携带 status 通道，状态迁移只走 submit/publish/reject
 async function submitForReview(row: Question) {
   try {
     await useConfirm().confirm('确定提交该题目给管理员审核？', '提示', { type: 'info' })
-    await questionBankApi.updateQuestion(row.id, { status: 'pending' })
+    await questionBankApi.submitQuestion(row.id)
     ElMessage.success('已提交审核')
     await loadData()
   } catch {

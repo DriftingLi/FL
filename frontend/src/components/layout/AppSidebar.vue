@@ -326,7 +326,8 @@ async function handleUserCommand(command: string) {
         cancelButtonText: '取消',
         type: 'warning'
       })
-      authStore.clearAuthData()
+      // 登出单点（票1）：revoke + 清本地都在 store.signOut 里，本页只管 confirm 与落点
+      await authStore.signOut()
       router.push('/login')
     } catch (e) {
       // 用户取消，不做任何操作

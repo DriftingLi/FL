@@ -45,25 +45,25 @@ beforeEach(() => {
   vi.mocked(favoriteApi.list).mockReset()
 })
 
-describe('我的收藏落点表（#1089）', () => {
+describe('我的收藏落点表（#1089；票 2 起断言「路由名+参数」形态）', () => {
   it.each([
-    { type: 'course', id: 7, courseId: 0, path: '/training/courses?course_id=7' },
-    { type: 'topic', id: 8, courseId: 0, path: '/training/forum/8' },
-    { type: 'featured', id: 9, courseId: 0, path: '/training/featured/9' },
-    { type: 'question', id: 10, courseId: 0, path: '/training/questions/10' },
-    { type: 'chapter', id: 11, courseId: 3, path: '/training/course/3/chapter/11' }
-  ])('$type 收藏点开落到 $path', async ({ type, id, courseId, path }) => {
+    { type: 'course', id: 7, courseId: 0, target: { name: 'CourseList', query: { course_id: '7' } } },
+    { type: 'topic', id: 8, courseId: 0, target: { name: 'ForumDetail', params: { topicId: '8' } } },
+    { type: 'featured', id: 9, courseId: 0, target: { name: 'StudentFeaturedDetail', params: { id: '9' } } },
+    { type: 'question', id: 10, courseId: 0, target: { name: 'StudentQuestionDetail', params: { id: '10' } } },
+    { type: 'chapter', id: 11, courseId: 3, target: { name: 'ChapterView', params: { courseId: '3', chapterId: '11' } } }
+  ])('$type 收藏点开落到 $target', async ({ type, id, courseId, target }) => {
     const w = await mountWith([fav({ target_type: type, target_id: id, course_id: courseId })])
     await w.find('.stagger-in').trigger('click')
-    expect(h.push).toHaveBeenCalledWith(path)
+    expect(h.push).toHaveBeenCalledWith(target)
   })
 
   it('章节落点消费后端下发的 course_id，不猜、不复用 target_id', async () => {
     const w = await mountWith([fav({ target_type: 'chapter', target_id: 4, course_id: 3 })])
     await w.find('.stagger-in').trigger('click')
     // 反例守卫：写成 target_id 会把章节 id 当课程 id（旧缺陷的形态）
-    expect(h.push).not.toHaveBeenCalledWith('/training/course/4/chapter/4')
-    expect(h.push).toHaveBeenCalledWith('/training/course/3/chapter/4')
+    expect(h.push).not.toHaveBeenCalledWith({ name: 'ChapterView', params: { courseId: '4', chapterId: '4' } })
+    expect(h.push).toHaveBeenCalledWith({ name: 'ChapterView', params: { courseId: '3', chapterId: '4' } })
   })
 
   it('章节缺 course_id 时是**不可点态**（无 pointer 样式、点击不跳转）', async () => {

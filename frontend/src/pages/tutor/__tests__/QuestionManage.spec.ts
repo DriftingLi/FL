@@ -4,7 +4,15 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { epLite } from '@/test/element-lite'
 
 vi.mock('@/api/questionBank', () => ({
-  questionBankApi: { getQuestions: vi.fn(), getQuestion: vi.fn() },
+  questionBankApi: {
+    getQuestions: vi.fn(),
+    getQuestion: vi.fn(),
+    submitQuestion: vi.fn(),
+    updateQuestion: vi.fn(),
+  },
+}))
+vi.mock('@/composables/useConfirm', () => ({
+  useConfirm: () => ({ confirm: vi.fn().mockResolvedValue(true) }),
 }))
 vi.mock('@/api/credential', () => ({
   credentialApi: { listCredentials: vi.fn() },
@@ -62,5 +70,21 @@ describe('QuestionManage 证件列与排序（#412）', () => {
     await flushPromises()
     const params = vi.mocked(questionBankApi.getQuestions).mock.calls[0][0]
     expect(params && params.sort).toBe('id_asc')
+  })
+})
+
+// 第十二波票 6 前端配套（#1168）：「提交审核」改接显式动作端点——
+// 写面已不携带 status 通道，review 动作必须走 POST /questions/:id/submit，不得再借 updateQuestion 回写 status。
+describe('提交审核改接显式端点（票 6）', () => {
+  it('下拉 review 走 submitQuestion(42)，不经 updateQuestion 写 status', async () => {
+    vi.mocked(questionBankApi.submitQuestion).mockResolvedValue({} as never)
+    const wrapper = mountPage()
+    await flushPromises()
+    const dropdown = wrapper.findComponent({ name: 'ElDropdown' })
+    expect(dropdown.exists()).toBe(true)
+    dropdown.vm.$emit('command', 'review')
+    await flushPromises()
+    expect(questionBankApi.submitQuestion).toHaveBeenCalledWith(42)
+    expect(questionBankApi.updateQuestion).not.toHaveBeenCalled()
   })
 })

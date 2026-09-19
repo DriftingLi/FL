@@ -285,3 +285,44 @@ test('CLI 正向：真实 admin 页四份档位登记在 --all 下全绿（守�
   const out = execFileSync('node', [path.join(ROOT, 'scripts/check-async-section.mjs'), '--all'], { cwd: ROOT, encoding: 'utf8' })
   assert.match(out, /档位登记齐备/)
 })
+
+// ===== 规则 ④：composables/ 的「失败置空列表」第三实现（第十二波票 3，#1168）=====
+
+test('正例：composable 里 catch 置空列表 ref → 违规（吞错的第三实现形态）', () => {
+  const src = [
+    "import { ref } from 'vue'",
+    'export function useThirdTable() {',
+    '  const list = ref([])',
+    '  async function load() {',
+    '    try { list.value = await api.fetch() } catch {',
+    '      list.value = []',
+    '    }',
+    '  }',
+    '  return { list, load }',
+    '}'
+  ].join('\n')
+  const v = scanSource(src, 'frontend/src/composables/useThirdTable.ts')
+  assert.equal(v.length, 1)
+  assert.match(v[0].message, /useAdminTable \/ useAsyncPage/)
+  assert.equal(v[0].line, 5)
+})
+
+test('反例：已登记的附属降级整体放行；未登记路径同形态仍报红', () => {
+  const src = 'try { tags.value = await api.list() } catch {\n  tags.value = []\n}'
+  assert.equal(scanSource(src, 'frontend/src/composables/useQuestionPeripherals.ts').length, 0)
+  assert.equal(scanSource(src, 'frontend/src/composables/useSomethingNew.ts').length, 1)
+})
+
+test('反例：非 composables 面的 .ts 不在守卫面；两档自身合法', () => {
+  const src = '} catch {\n  list.value = []\n}'
+  assert.equal(isGuardedPath('frontend/src/composables/useAdminTable.ts'), true)
+  assert.equal(isGuardedPath('frontend/src/utils/format.ts'), false)
+  assert.equal(isGuardedPath('frontend/src/main.ts'), false)
+  assert.equal(scanSource(src, 'frontend/src/utils/format.ts').length, 0)
+})
+
+test('CLI 正向：真实仓 --all 在规则④扩面后不假红', () => {
+  const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+  const out = execFileSync('node', [path.join(ROOT, 'scripts/check-async-section.mjs'), '--all'], { cwd: ROOT, encoding: 'utf8' })
+  assert.match(out, /composables\/ 无吞错的第三份列表实现/)
+})

@@ -122,7 +122,7 @@ const GREEN_CASES = [
     // 注：#1101 的 :empty= 规则只认 isEmpty（或已登记例外），样本必须用生产写法
     added: ['  <UiAsyncSection :error="loadError" :loading="loading" :empty="isEmpty" @retry="retry">'],
     source: '<template>\n  <UiAsyncSection :error="loadError" :loading="loading" :empty="isEmpty" @retry="retry">\n</template>',
-    ok: /\[check-async-section\] 新增行未手写四分支链，通过。/
+    ok: /\[check-async-section\] 新增行未手写四分支链、composables\/ 无吞错第三实现，通过。/
   }
 ]
 
@@ -160,7 +160,7 @@ test('负样本（必须跳过）：纯删除的 diff（文件在、新增行集
   ].join('\n')
   const r = probeDiff(asyncSection, delDiff)
   assert.equal(r.code, 0)
-  assert.match(r.stdout, /相对 origin\/master 无 \.vue 新增行，跳过。/)
+  assert.match(r.stdout, /相对 origin\/master 无 \.vue\/\.ts 新增行，跳过。/)
   assert.doesNotMatch(r.stdout, /通过。/)
 })
 
@@ -509,5 +509,5 @@ test('集成：三个守卫的 --all 在当前工作树上为绿（不假红）�
   assert.match(run('scripts/check-api-seam.mjs'), /无违规。[1-9][0-9]* 个文件均未直接引用请求层。/)
   assert.match(run('scripts/check-el-controls.mjs'), /无违规。[1-9][0-9]* 个单文件组件的模板均未裸用已收敛控件。/)
   // #1101/#1102 给 async-section 加了 :empty= 与 admin 两档两条规则，通过语随之扩展（措辞锁）
-  assert.equal(run('scripts/check-async-section.mjs'), '✓ 未发现手写四分支链；:empty= 判据均来自 isEmpty（或已登记例外）；admin 页两档档位登记齐备\n')
+  assert.equal(run('scripts/check-async-section.mjs'), '✓ 未发现手写四分支链；:empty= 判据均来自 isEmpty（或已登记例外）；admin 页两档档位登记齐备；composables/ 无吞错的第三份列表实现\n')
 })

@@ -15,6 +15,9 @@
  * ③ admin 页的两档档位**没写明归属**（第十一波 #1102，ADR-0056 §9）：同一页面里
  *    分页列表走 `useAdminTable`、只读/计数 section 走 `useAsyncPage`，两档在场的页面
  *    必须在文件顶部登记档位；登记行还要拿得出实据（见 `scanAdminTiers`）。
+ * ④ composables/ 里**吞错的第三份列表实现**（第十二波票 3 #1168，扫描面自本条起
+ *    扩到 `frontend/src/composables/` 下的 .ts）：`catch` 里把列表 ref 置空 = 装载失败
+ *    渲染成空表（useCrudTable 的退役根因）——列表档位只有两档，错误态走 `loadError`。
  *
  * 用法（runner 面单点在 `scripts/lib/guard.mjs`，ADR-0056 §5 / #1094；本文件只有判定面）：
  *   node scripts/check-async-section.mjs --all            全量扫描（CI 用）
@@ -48,6 +51,19 @@ export const ALLOWLIST = {}
  * @type {Record<string, string>}
  */
 export const EMPTY_EXCEPTIONS = {}
+
+/**
+ * 规则 ④「装载失败置空列表」的逐条登记例外（相对路径 → 理由）。
+ *
+ * 第十二波票 3 把守卫扫描面扩到 `frontend/src/composables/`：useCrudTable 那份
+ * 「catch ⇒ list=[]」的第三实现正是藏在 .vue 扫描射程外复发出来的形态。
+ * 附属信息（非主内容列表）的降级清空允许登记；主列表一律走两档的 loadError。
+ * @type {Record<string, string>}
+ */
+export const FAIL_OPEN_EXCEPTIONS = {
+  'frontend/src/composables/useQuestionPeripherals.ts':
+    '知识标签是题目详情的附属展示（空则整节隐藏），失败清空是有意降级，不是主列表'
+}
 
 /**
  * 空态判据的合法值：`isEmpty`（composable 的默认路径，或页面级同名派生）或已登记的
@@ -180,19 +196,51 @@ function rel(file) {
 export function isGuardedPath(file) {
   const r = rel(file)
   if (!r.startsWith('frontend/src/')) return false
+  // 第十二波票 3：composables/ 的 .ts 进扫描面——「第三份列表实现藏在 .vue 射程外」的复发路径封死
+  if (r.startsWith('frontend/src/composables/') && r.endsWith('.ts')) return true
   if (!r.endsWith('.vue')) return false
   if (r.startsWith('frontend/src/components/ui/')) return false
   return true
 }
 
 /**
+ * 规则 ④（第十二波票 3，#1168）：composables/ 里的 composable 不得自带第三份列表状态机。
+ * 「catch 把列表 ref 置空」= 装载失败渲染成空表的形态（useCrudTable 退役的根因；
+ * 装载/错误/重试状态机的合法档位只有 useAdminTable / useAsyncPage 两份）。
+ * 附属信息的有意降级走 FAIL_OPEN_EXCEPTIONS 逐条登记。
+ */
+const CATCH_BLOCK_RE = /\bcatch\s*(?:\([^)]*\))?\s*\{([^{}]*)\}/g
+
+export function scanFailOpenList(source, file) {
+  const r = rel(file)
+  if (!r.startsWith('frontend/src/composables/') || !r.endsWith('.ts')) return []
+  if (FAIL_OPEN_EXCEPTIONS[r]) return []
+  const violations = []
+  CATCH_BLOCK_RE.lastIndex = 0
+  let m
+  while ((m = CATCH_BLOCK_RE.exec(String(source))) !== null) {
+    if (/\.value\s*=\s*\[\s*\]/.test(m[1])) {
+      const line = String(source).slice(0, m.index).split('\n').length
+      violations.push({
+        line,
+        message: '装载失败被置成空列表（吞错的第三实现形态）—— 列表档位只有 useAdminTable / useAsyncPage，' +
+          '错误态走 loadError；附属信息确需有意降级请在 FAIL_OPEN_EXCEPTIONS 登记理由（票 3，#1168）'
+      })
+    }
+  }
+  return violations
+}
+
+/**
  * 扫一份源码，返回违规说明（1-based 行号 + message）。
- * 规则见文件头：① 手写四分支链；② `:empty=` 内联判据；③ admin 页两档档位登记。
+ * 规则见文件头：① 手写四分支链；② `:empty=` 内联判据；③ admin 页两档档位登记；
+ * ④ composables/ 的「失败置空列表」第三实现（第十二波票 3）。
  * （只 import 不使用的情况罕见且无害——按文本信号判定，与既有守卫同口径。）
  */
 export function scanSource(source, file) {
   if (!isGuardedPath(file)) return []
   const violations = []
+  violations.push(...scanFailOpenList(source, file))
   const lines = String(source).split('\n')
   const hits = { error: null, skeleton: null, empty: null }
   for (let i = 0; i < lines.length; i++) {
@@ -276,21 +324,21 @@ export const GUARD_SPEC = {
   cli: { noArgs: 'usage', helpFlag: true, scanDirArg: false, usageOnUnknown: false, usageStream: 'stdout' },
   all: {
     scanDir: 'frontend/src',
-    extensions: ['.vue'],
+    extensions: ['.vue', '.ts'],
     skipNodeModules: false,
     tolerateWalkErrors: false,
     stream: 'stderr',
-    ok: () => '✓ 未发现手写四分支链；:empty= 判据均来自 isEmpty（或已登记例外）；admin 页两档档位登记齐备',
+    ok: () => '✓ 未发现手写四分支链；:empty= 判据均来自 isEmpty（或已登记例外）；admin 页两档档位登记齐备；composables/ 无吞错的第三份列表实现',
     violation: (v) => '✗ ' + v.file + ':' + v.line + '\n  ' + v.message,
     footer: (ctx) => ['', '共 ' + ctx.count + ' 处违规。']
   },
   diff: {
-    pathspec: ['*.vue'],
+    pathspec: ['*.vue', '*.ts'],
     defaultBase: 'origin/master',
     stream: 'stderr',
-    empty: (base) => '[check-async-section] 相对 ' + base + ' 无 .vue 新增行，跳过。',
-    ok: () => '[check-async-section] 新增行未手写四分支链，通过。',
-    header: () => ['===== 新增行手写了四分支链（业务页面一律走 components/ui/UiAsyncSection.vue）====='],
+    empty: (base) => '[check-async-section] 相对 ' + base + ' 无 .vue/.ts 新增行，跳过。',
+    ok: () => '[check-async-section] 新增行未手写四分支链、composables/ 无吞错第三实现，通过。',
+    header: () => ['===== 新增行手写了四分支链 / 吞错的第三份列表实现（列表档位只有 UiAsyncSection + useAdminTable/useAsyncPage）====='],
     violation: (v) => '✗ ' + v.file + ':' + v.line + '\n  ' + v.message,
     footer: (ctx) => ['---', '共 ' + ctx.count + ' 处违规。']
   },

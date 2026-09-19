@@ -267,10 +267,11 @@ export function createHttpClient<O extends HttpClientOptions>(opts: O): Unwrappe
               ElMessage.error(data?.message || '没有权限访问')
               break
             case 404:
-              ElMessage.error('请求的资源不存在')
+              // 票 5 配套（#1168）：后端哨兵文案优先（「主题不存在」这类明确事实），硬编码只兜底缺失
+              ElMessage.error(data?.message || '请求的资源不存在')
               break
             case 500:
-              ElMessage.error('服务器错误，请稍后重试')
+              ElMessage.error(data?.message || '服务器错误，请稍后重试')
               break
             default: {
               const msg = data?.message || `请求失败 (${status})`

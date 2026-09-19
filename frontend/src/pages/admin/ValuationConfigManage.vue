@@ -6,10 +6,11 @@
 //                  每类独立保存，仅提交变更项（dirty 检测），不提供新增/删除
 // 000015：新增"车况修正项"区，按 key 前缀 kc_ 过滤 coefficient_configs 行单独展示
 //
-// 重构（2026-07）：抽出通用组合式函数消除重复
-//   - useCrudTable：Tab 1 原价表 CRUD（列表/弹窗/必填校验/删除确认/loading 态）
-//   - useDirtyDraft：Tab 2 各分区 dirty 检测 + 仅保存变更项 + 重置
-//     coefficients 分区共享一条 draft，global / kcModifiers 通过 filter 派生两个视图
+// 列表档位：useAdminTable（分页列表）—— 原价表（无分页、一次拉全量，本地筛选走 computed）
+// 列表档位：useAsyncPage（只读计数）—— 算法参数聚合装载（草稿供 useDirtyDraft，五分区保存侧不走本档）
+// 第十二波票 3（#1168，ADR-0056 §9）：两档归位——读面/错误态收进档位（此前 useCrudTable 与
+// 手写 loadAlgorithmParams 各吞一份错，DB 故障渲染成「空表」）；弹窗 CRUD 交互与
+// useDirtyDraft 五态（dirty 检测/仅存变更/重置/保存 loading/成功 reload）是页面专属，留页面。
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus, Refresh, Check, RefreshLeft, ArrowDown } from '@element-plus/icons-vue'
@@ -26,16 +27,28 @@ import {
   type AlgorithmParameters
 } from '@/api/valuation/admin'
 import type { CoefficientConfig } from '@/types/valuation/evaluation'
-import { useCrudTable, type FieldDef } from '@/composables/useCrudTable'
+import { useAdminTable } from '@/composables/useAdminTable'
+import { useAsyncPage } from '@/composables/useAsyncPage'
+import { useConfirm } from '@/composables/useConfirm'
 import { useDirtyDraft } from '@/composables/useDirtyDraft'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiSwitch from '@/components/ui/UiSwitch.vue'
 
 // ========== Tab 1: 原价表 ==========
-const ORIGINAL_PRICE_FIELDS: FieldDef[] = [
+interface OriginalPriceField {
+  prop: string
+  label: string
+  type: 'input' | 'number' | 'switch'
+  required?: boolean
+  width?: number
+  defaultValue?: string | number | boolean
+}
+
+const ORIGINAL_PRICE_FIELDS: OriginalPriceField[] = [
   { prop: 'brand', label: '品牌', type: 'input', required: true, width: 120 },
   { prop: 'vehicle_type', label: '车辆类型', type: 'input', required: true, width: 120 },
   { prop: 'series', label: '系列', type: 'input', width: 100 },
@@ -47,30 +60,97 @@ const ORIGINAL_PRICE_FIELDS: FieldDef[] = [
   { prop: 'original_price', label: '原价（万元）', type: 'number', required: true, width: 120 }
 ]
 
+// 档位一：列表装载与错误/重试态走 useAdminTable（吞错渲染成空表的旧形态随 useCrudTable 一起退役）
 const {
   loading: originalPriceLoading,
+  loadError: originalPriceLoadError,
+  retrying: originalPriceRetrying,
+  retry: retryOriginalPrices,
   list: originalPriceList,
-  dialogVisible,
-  dialogTitle,
-  editingRow,
-  formData,
-  submitting,
-  load: loadOriginalPrices,
-  openCreate,
-  openEdit,
-  submit: handleSubmit,
-  remove: handleDelete
-} = useCrudTable<AdminRow, AdminResourceId>(
-  {
-    fetch: () => adminResources.originalPrices.list(),
-    create: (p) => adminResources.originalPrices.create(p),
-    update: (id, p) => adminResources.originalPrices.update(id, p),
-    remove: (id) => adminResources.originalPrices.remove(id),
-    getId: (row) => adminResources.originalPrices.getIdOf(row)
-  },
-  ORIGINAL_PRICE_FIELDS,
-  '原价记录'
-)
+  load: loadOriginalPrices
+} = useAdminTable<AdminRow>({
+  fetch: async () => {
+    const rows = await adminResources.originalPrices.list()
+    return { list: rows, total: rows.length }
+  }
+})
+
+// 弹窗态与提交是页面专属（九列动态表单由 ORIGINAL_PRICE_FIELDS 驱动）
+const dialogVisible = ref(false)
+const dialogTitle = ref('')
+const editingRow = ref<AdminRow | null>(null)
+const formData = reactive<Record<string, any>>({})
+const submitting = ref(false)
+
+function resetForm() {
+  Object.keys(formData).forEach(k => delete formData[k])
+}
+
+function openCreate() {
+  editingRow.value = null
+  dialogTitle.value = '新增原价记录'
+  resetForm()
+  for (const f of ORIGINAL_PRICE_FIELDS) {
+    formData[f.prop] =
+      f.defaultValue !== undefined ? f.defaultValue : f.type === 'switch' ? true : f.type === 'number' ? 0 : ''
+  }
+  dialogVisible.value = true
+}
+
+function openEdit(row: AdminRow) {
+  editingRow.value = row
+  dialogTitle.value = '编辑原价记录'
+  resetForm()
+  Object.assign(formData, row)
+  dialogVisible.value = true
+}
+
+async function handleSubmit() {
+  for (const f of ORIGINAL_PRICE_FIELDS) {
+    if (f.required) {
+      const v = formData[f.prop]
+      if (v == null || v === '') {
+        ElMessage.warning(`请填写${f.label}`)
+        return
+      }
+    }
+  }
+  submitting.value = true
+  try {
+    const payload: Record<string, unknown> = { ...formData }
+    const id: AdminResourceId | null | undefined = adminResources.originalPrices.getIdOf(editingRow.value)
+    if (id != null) {
+      await adminResources.originalPrices.update(id, payload)
+      ElMessage.success('更新成功')
+    } else {
+      await adminResources.originalPrices.create(payload)
+      ElMessage.success('创建成功')
+    }
+    dialogVisible.value = false
+    await loadOriginalPrices()
+  } catch {
+    // 拦截器已提示
+  } finally {
+    submitting.value = false
+  }
+}
+
+async function handleDelete(row: AdminRow) {
+  const id = adminResources.originalPrices.getIdOf(row)
+  if (id == null) return
+  try {
+    await useConfirm().confirmDanger('确定删除该原价记录？', '删除确认')
+  } catch {
+    return
+  }
+  try {
+    await adminResources.originalPrices.remove(id)
+    ElMessage.success('已删除')
+    await loadOriginalPrices()
+  } catch {
+    // 拦截器已提示
+  }
+}
 
 // 操作下拉菜单统一入口（原价表）
 function handleAction(cmd: string, row: AdminRow) {
@@ -166,31 +246,36 @@ const brandsDraft = brands.draft
 const conditionRatingsDraft = conditionRatings.draft
 const regionCoefficientsDraft = regionCoefficients.draft
 
-const algorithmLoading = ref(false)
-// 各分区独立 saving 态，保留各按钮独立 loading 的精确行为
-const savingCoefficients = ref(false)
-const savingKcModifiers = ref(false)
-const savingBrands = ref(false)
-const savingConditionRatings = ref(false)
-const savingRegionCoefficients = ref(false)
-
-async function loadAlgorithmParams() {
-  algorithmLoading.value = true
+// 档位二：算法参数聚合装载走 useAsyncPage（错误/重试上档位通道，不再吞成空草稿）；
+// 失败仍清四份 draft（与旧行为一致：错误态与陈旧数据不同屏），保存侧维持 useDirtyDraft 五态。
+const {
+  loading: algorithmLoading,
+  loadError: algorithmLoadError,
+  retrying: algorithmRetrying,
+  retry: retryAlgorithmLoad,
+  run: loadAlgorithmParams
+} = useAsyncPage(async () => {
   try {
     const data: AlgorithmParameters = await listAlgorithmParameters()
     coefficients.setAll(data.coefficients)
     brands.setAll(data.brands)
     conditionRatings.setAll(data.condition_ratings)
     regionCoefficients.setAll(data.region_coefficients)
-  } catch {
+  } catch (e) {
     coefficients.clear()
     brands.clear()
     conditionRatings.clear()
     regionCoefficients.clear()
-  } finally {
-    algorithmLoading.value = false
+    throw e
   }
-}
+})
+
+// 各分区独立 saving 态，保留各按钮独立 loading 的精确行为
+const savingCoefficients = ref(false)
+const savingKcModifiers = ref(false)
+const savingBrands = ref(false)
+const savingConditionRatings = ref(false)
+const savingRegionCoefficients = ref(false)
 
 // ----- dirty 检测 -----
 // 注意：isCoefficientsDirty 沿用原实现的「全量比较」语义（整条 coefficients 数组任一项变更都点亮全局系数区），
@@ -414,6 +499,15 @@ function onRefresh() {
             <UiButton :icon="RefreshLeft" size="small" @click="resetOriginalPriceFilter">重置筛选</UiButton>
         </template>
       </UiFilterBar>
+          <UiAsyncSection
+            :error="originalPriceLoadError"
+            :loading="originalPriceLoading"
+            :retrying="originalPriceRetrying"
+            :skeleton="false"
+            error-title="原价表加载失败"
+            error-description="网络或服务端异常，可重试"
+            @retry="retryOriginalPrices"
+          >
           <el-table v-loading="originalPriceLoading"
             :data="filteredOriginalPrices"
             stripe
@@ -451,6 +545,7 @@ function onRefresh() {
               <UiEmptyState description="暂无数据" size="sm" />
             </template>
           </el-table>
+          </UiAsyncSection>
         </el-tab-pane>
 
         <!-- Tab 2: 算法参数 -->
@@ -461,6 +556,15 @@ function onRefresh() {
             </span>
           </div>
 
+          <UiAsyncSection
+            :error="algorithmLoadError"
+            :loading="algorithmLoading"
+            :retrying="algorithmRetrying"
+            :skeleton="false"
+            error-title="算法参数加载失败"
+            error-description="网络或服务端异常，可重试"
+            @retry="retryAlgorithmLoad"
+          >
           <el-collapse v-model="activeCollapse" v-loading="algorithmLoading">
             <!-- 1. 全局系数 -->
             <el-collapse-item name="coefficients">
@@ -668,6 +772,7 @@ function onRefresh() {
               </el-table>
             </el-collapse-item>
           </el-collapse>
+          </UiAsyncSection>
         </el-tab-pane>
       </el-tabs>
 
