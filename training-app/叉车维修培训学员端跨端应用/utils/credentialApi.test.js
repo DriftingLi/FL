@@ -6,10 +6,11 @@
  * 特种作业证件后端返回 level: null，`as number` 强转在 Kotlin 下即
  * NullPointerException（真机日志 2026-09-06 02:00:04 事故）。
  */
-const fs = require('fs');
 const path = require('path');
 
-const src = fs.readFileSync(path.join(__dirname, '..', 'api', 'credential.uts'), 'utf8');
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
+const src = readText(path.join(__dirname, '..', 'api', 'credential.uts'));
 
 function fnBody(name) {
   const start = src.indexOf(`function ${name}`);

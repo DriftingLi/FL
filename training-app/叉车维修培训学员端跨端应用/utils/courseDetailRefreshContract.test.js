@@ -18,12 +18,12 @@
  * 2. `onLoad` **不再**自己取数 —— 因为 `onShow` 首次进入同样触发，
  *    两个钩子都取数会让首个请求**翻倍**（单一取数入口）。
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
-/** 归一 CRLF（工作树里的 .uvue 是 CRLF，不归一则按行锚定的断言会失效） */
-const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8').replace(/\r\n/g, '\n');
+const read = (rel) => readText(path.join(ROOT, rel));
 
 const PAGE = 'pages/courses/course-detail.uvue';
 

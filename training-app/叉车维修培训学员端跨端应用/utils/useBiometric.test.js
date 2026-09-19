@@ -9,10 +9,11 @@
  * - APP / MP-WEIXIN：真实 SOTER；认证模式必须是 fingerPrint 或 facial 才算成功
  * - 其余平台（MP-ALIPAY 等）：恒不支持（凭据降级的判定源头）
  */
-const fs = require('fs');
 const path = require('path');
 
-const src = fs.readFileSync(path.join(__dirname, '..', 'composables', 'useBiometric.uts'), 'utf8');
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
+const src = readText(path.join(__dirname, '..', 'composables', 'useBiometric.uts'));
 
 function between(startMark, endMark) {
   const s = src.indexOf(startMark);

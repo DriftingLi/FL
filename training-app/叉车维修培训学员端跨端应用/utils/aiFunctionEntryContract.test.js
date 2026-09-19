@@ -20,9 +20,11 @@
 const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
-const PAGE = fs.readFileSync(path.join(ROOT, 'pages/ai-assistant/ai-assistant.uvue'), 'utf8');
-const FEATURE_PAGE = fs.readFileSync(path.join(ROOT, 'pages/ai-assistant/ai-feature.uvue'), 'utf8');
+const PAGE = readText(path.join(ROOT, 'pages/ai-assistant/ai-assistant.uvue'));
+const FEATURE_PAGE = readText(path.join(ROOT, 'pages/ai-assistant/ai-feature.uvue'));
 const SHEET_PATH = path.join(ROOT, 'components/ai-chat/ai-chat-function-sheet.uvue');
 
 /** 去掉模板/JS/CSS 注释 —— 「注释里提到某标识」不等于「代码里用了它」 */

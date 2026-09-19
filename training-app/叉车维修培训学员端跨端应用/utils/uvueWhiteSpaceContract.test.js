@@ -45,6 +45,8 @@
 const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 
 /** 允许承载 `white-space` 的标签 —— uvue 原生端只在这两个上支持该属性（真机日志口径） */
@@ -312,7 +314,7 @@ function collectUvue(dir, acc = []) {
 const FILES = collectUvue(ROOT)
   .map((p) => path.relative(ROOT, p).replace(/\\/g, '/'))
   .sort();
-const readSource = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+const readSource = (rel) => readText(path.join(ROOT, rel));
 const uvue = (tpl, css) => `<template>\n${tpl}\n</template>\n\n<style lang="scss">\n${css}\n</style>\n`;
 
 describe('uvue `white-space` 承载面契约（#1113）', () => {

@@ -16,8 +16,10 @@
 const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
-const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+const read = (rel) => readText(path.join(ROOT, rel));
 
 /** 提取 export function 函数体（从声明到顶层 "\n}"，先例 quickLoginContract） */
 function fnBodyOf(fileSrc, name) {
@@ -133,7 +135,7 @@ describe('600 行软预算机检（模块全量：pages/dashboard/** 全部源�
   it('模块全部源文件 ≤600 行（含 components/composables，达标后锁住防回潮，先例 profileContract）', () => {
     const over = dashboardSourceFiles().map((f) => ({
       file: path.relative(ROOT, f),
-      lines: fs.readFileSync(f, 'utf8').split('\n').length,
+      lines: readText(f).split('\n').length,
     })).filter((x) => x.lines > 600);
     expect(over).toEqual([]);
   });
@@ -188,7 +190,7 @@ describe('页面层零直发请求（网络一律经域 api 函数，#643 收紧
   it('pages/dashboard/** 无源文件 import api/request 或裸调 uni.request', () => {
     const hits = [];
     for (const f of dashboardSourceFiles()) {
-      const src = fs.readFileSync(f, 'utf8');
+      const src = readText(f);
       const rel = path.relative(ROOT, f);
       if (/from\s*'[^']*api\/request(\.uts)?'/.test(src)) hits.push(`${rel}: import api/request`);
       if (/uni\.request\s*\(/.test(src)) hits.push(`${rel}: uni.request 裸调`);
@@ -271,7 +273,7 @@ describe('行为保持点（手术偏离与回退风险的显式钉锁）', () =
   });
 
   it('死代码证书名回退映射表已删除（全模块零命中，消费面核对与删除说明见 composable 头注释）', () => {
-    const all = dashboardSourceFiles().map((f) => fs.readFileSync(f, 'utf8')).join('\n');
+    const all = dashboardSourceFiles().map((f) => readText(f)).join('\n');
     expect(all).not.toContain('certNameMap');
   });
 

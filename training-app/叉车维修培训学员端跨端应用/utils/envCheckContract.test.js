@@ -11,14 +11,15 @@
  *   E7 检测 HBuilderX CLI（Resolve-CliPathLocal）
  *   E8 复用 hx-busy.ps1 忙检测
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const SCRIPT_REL = 'scripts/lib/env-check.ps1';
 
 function readSource() {
-  return fs.readFileSync(path.join(ROOT, SCRIPT_REL), 'utf8');
+  return readText(path.join(ROOT, SCRIPT_REL));
 }
 
 describe('env-check.ps1 contract', () => {

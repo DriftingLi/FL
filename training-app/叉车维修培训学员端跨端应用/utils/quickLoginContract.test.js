@@ -5,10 +5,11 @@
  * 钉住的契约：refresh_token 每次轮换都必须同步回写加密凭据包络（updateSecureToken），
  * 否则包内 rt 立即过期，快捷登录在会话期内任意一次 401 自动刷新后即永久失效。
  */
-const fs = require('fs');
 const path = require('path');
 
-const src = fs.readFileSync(path.join(__dirname, '..', 'stores', 'auth.uts'), 'utf8');
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
+const src = readText(path.join(__dirname, '..', 'stores', 'auth.uts'));
 
 function fnBody(name) {
   const start = src.indexOf(`function ${name}`);

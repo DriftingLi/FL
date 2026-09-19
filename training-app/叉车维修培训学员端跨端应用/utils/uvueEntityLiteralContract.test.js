@@ -24,6 +24,8 @@
 const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 
 /** 实体字面量：十进制 `&#10022;` 与十六进制 `&#x2715;` 两种数字实体（同一类坑） */
@@ -219,7 +221,7 @@ describe('uvue `<script>` 实体字面量契约（#957 编译产物实测口径�
 
     const offenders = [];
     for (const f of files) {
-      const v = scanEntityLiterals(fs.readFileSync(f, 'utf8'));
+      const v = scanEntityLiterals(readText(f));
       if (v.length) offenders.push(path.relative(ROOT, f) + '\n    ' + v.join('\n    '));
     }
     expect(offenders.join('\n')).toBe('');
@@ -227,16 +229,14 @@ describe('uvue `<script>` 实体字面量契约（#957 编译产物实测口径�
 
   it('④ 范围自检：模板静态文本里的实体必须仍被允许（不许把范围切大到判它违规）', () => {
     // 这条是防「修反了」的守卫：#957 的修法是改数据，不是把这 11 处静态写法一起删掉。
-    const sheet = fs.readFileSync(
-      path.join(ROOT, 'components/ai-chat/ai-chat-pro-sheet.uvue'), 'utf8');
+    const sheet = readText(path.join(ROOT, 'components/ai-chat/ai-chat-pro-sheet.uvue'));
     expect(sheet).toMatch(/<text class="sheet-close"[^>]*>&#10005;<\/text>/);
   });
 
   it('⑤ 正向自检：能力清单三行图标是**真实图形码点**（不是 ASCII 降级、也不是实体）', () => {
     // ③ 只否证 `&#…;`。若没人正向钉住「图标是图形字符」，后续会话把 '✦' 误改成 'x'
     // （或留空、或写成多个字符）测试仍全绿 —— 而它屏上同样是坏的。这条补上正向那一半。
-    const sheet = fs.readFileSync(
-      path.join(ROOT, 'components/ai-chat/ai-chat-pro-sheet.uvue'), 'utf8');
+    const sheet = readText(path.join(ROOT, 'components/ai-chat/ai-chat-pro-sheet.uvue'));
     const icons = [...sheet.matchAll(/\{\s*icon:\s*'([^']*)'/g)].map((m) => m[1]);
 
     expect(icons.length).toBe(3);                 // 锚点：能力清单仍是三项（不是空跑）

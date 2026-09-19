@@ -19,9 +19,10 @@
  * 设计沿用本仓既有守护测试的形态（见 utils/utsAndroidCompile.test.js）：
  * 先对「注入违规」的变形样本断言检测有效（防空跑假绿），再对真实文件断言零命中。
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const SCRIPT_REL = 'scripts/kotlin-all-check.ps1';
 const COMPILE_SCRIPT_REL = 'scripts/compile-check.ps1';
@@ -29,7 +30,7 @@ const PKG_REL = 'package.json';
 const ADR_REL = 'docs/adr/0008-移动端验收门与证据.md';
 
 function readSource(rel) {
-  return fs.readFileSync(path.join(ROOT, rel), 'utf8');
+  return readText(path.join(ROOT, rel));
 }
 
 /** 纯函数：四份源码文本 → 违规清单 */

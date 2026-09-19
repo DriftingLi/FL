@@ -13,11 +13,12 @@
  * 用例里的样本取自 **2026-09-16 直连生产**的 `sources` 事件原文（`BMS` 一问，13 条来源），
  * 不是编造的格式。
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
-const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+const read = (rel) => readText(path.join(ROOT, rel));
 const SRC_REL = 'utils/aiSourcesDisplay.uts';
 const SRC = read(SRC_REL);
 

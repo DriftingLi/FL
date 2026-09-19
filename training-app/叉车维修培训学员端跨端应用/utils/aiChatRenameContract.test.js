@@ -9,11 +9,12 @@
  * 2) 请求体携带新标题
  * 3) 响应按 ADR-0003 手动 JSON 映射构造会话对象（buildSession 范式）
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const API_PATH = path.join(__dirname, '..', 'api', 'aiAssistant.uts');
-const src = fs.readFileSync(API_PATH, 'utf8');
+const src = readText(API_PATH);
 
 /**
  * 提取重命名函数体：兼容 `export function 名(` 声明。

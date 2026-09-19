@@ -19,11 +19,12 @@
  * 判据刻意**不**钉死具体码位（照 ADR-0007 先例：字形可因字体渲染再调整，守护不该拦这种改法），
  * 只钉住「两态都必须渲染出非空字形」这一条**行为**。
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
-const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+const read = (rel) => readText(path.join(ROOT, rel));
 
 const PAGE = 'pages/courses/course-detail.uvue';
 

@@ -10,15 +10,16 @@
  * 2) 保存/读取：结构完整（三字段齐全），clear 后 has 恒 false（幂等）
  * 3) 存储 key 唯一性：凭据写入只经 STORAGE_KEY_CREDENTIALS 常量
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const SEC_PATH = path.join(__dirname, 'secureStorage.uts');
 const APP_CONST_PATH = path.join(__dirname, '..', 'constants', 'app.uts');
 const STORAGE_PATH = path.join(__dirname, 'storage.uts');
 
-const src = fs.readFileSync(SEC_PATH, 'utf8');
-const appConst = fs.readFileSync(APP_CONST_PATH, 'utf8');
+const src = readText(SEC_PATH);
+const appConst = readText(APP_CONST_PATH);
 
 /** 提取函数体：从函数声明到顶层级 "\n}" */
 function fnBody(name) {
@@ -125,7 +126,7 @@ describe('存储 key 唯一性契约', () => {
   });
 
   it('底层存储封装存在（setStorageJSON/getStorageJSON/removeStorage）', () => {
-    const storageSrc = fs.readFileSync(STORAGE_PATH, 'utf8');
+    const storageSrc = readText(STORAGE_PATH);
     expect(storageSrc).toContain('export function setStorageJSON');
     expect(storageSrc).toContain('export function getStorageJSON');
     expect(storageSrc).toContain('export function removeStorage');

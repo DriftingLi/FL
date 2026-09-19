@@ -12,11 +12,12 @@
  * 4) 该标题在「创建会话时」传入（createAiSessionApi 参数），无事后 rename 额外往返
  *    （零额外请求语义——呼应 ADR-0001 SSE/零冗余；防 future 改为固定标题或改时序）
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const COMPOSE_PATH = path.join(__dirname, '..', 'composables', 'useAiChat.uts');
-const src = fs.readFileSync(COMPOSE_PATH, 'utf8');
+const src = readText(COMPOSE_PATH);
 
 /** 提取函数体：从 `function 名(` 到该函数的顶层 `\n\t}` */
 function fnBody(name) {

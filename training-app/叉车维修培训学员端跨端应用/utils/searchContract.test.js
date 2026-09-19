@@ -11,11 +11,12 @@
  * - M5 竞态与丢页：请求序号 + 只在成功时推进页码
  * - M6 口径：搜索是公开路由且**没有** OptionalAuth（router.go:89-91）⇒ 必须显式传 credential_id
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
-const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+const read = (rel) => readText(path.join(ROOT, rel));
 
 const SEARCH_PAGE = read('pages/search/search.uvue');
 const SEARCH_API = read('api/search.uts');

@@ -26,6 +26,8 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const LIB_REL = path.join('scripts', 'lib', 'capability-surface.ps1');
 const DEV_FINISH_REL = path.join('scripts', 'dev-finish.ps1');
@@ -255,7 +257,7 @@ describe('capability-surface.ps1 行为级守护（运行期）', () => {
     const cats = invokeCategories();
     expect(cats).toEqual(['指纹', '运行时权限弹窗', '真机上传', '厂商 ROM 交互']);
 
-    const template = fs.readFileSync(path.join(ROOT, TEMPLATE_REL), 'utf8');
+    const template = readText(path.join(ROOT, TEMPLATE_REL));
     cats.forEach((c) => expect(template).toContain(c));
     // 模板必须指向机检口径真源，否则「自报」与「白名单」各自漂移、互相解释不通
     expect(template).toContain('capability-surface.ps1');

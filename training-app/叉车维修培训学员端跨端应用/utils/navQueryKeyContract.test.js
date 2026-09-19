@@ -27,6 +27,8 @@
 const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const relOf = (p) => path.relative(ROOT, p).split(path.sep).join('/');
 
@@ -166,7 +168,7 @@ function bracketKeysIn(text) {
 function collectOptionReaderKeys(files) {
   const byFn = new Map();
   for (const f of files) {
-    const src = fs.readFileSync(f, 'utf8');
+    const src = readText(f);
     const re = /function\s+([A-Za-z_$][\w$]*)\s*\(\s*options\s*(?::\s*[^)]*)?\)/g;
     let m;
     while ((m = re.exec(src)) !== null) {
@@ -209,7 +211,7 @@ function pageOptionKeys(src, readerKeys) {
 
 /** pages.json → 路由 path → 页面源码 */
 function routeToSource(files) {
-  const pagesJson = JSON.parse(fs.readFileSync(path.join(ROOT, 'pages.json'), 'utf8'));
+  const pagesJson = JSON.parse(readText(path.join(ROOT, 'pages.json')));
   const byRoute = new Map();
   const index = new Map(files.map((f) => [relOf(f), f]));
   const all = [];
@@ -229,7 +231,7 @@ function navigations(files) {
   const out = [];
   const re = /(?:navigateTo|redirectTo|reLaunch|switchTab)\s*\(\s*\{[^}]*?url\s*:\s*(`[^`]*`|'[^']*'|"[^"]*")/g;
   for (const f of files) {
-    const src = fs.readFileSync(f, 'utf8');
+    const src = readText(f);
     let m;
     while ((m = re.exec(src)) !== null) {
       const raw = m[1].slice(1, -1);
@@ -278,7 +280,7 @@ function findUnreadQueryKeys(byRoute, readerKeys, navs) {
   for (const n of navs) {
     const src = byRoute.get(n.route);
     if (!src) { unresolved.push(n); continue; }
-    const declared = pageOptionKeys(fs.readFileSync(src, 'utf8'), readerKeys);
+    const declared = pageOptionKeys(readText(src), readerKeys);
     const bad = n.keys.filter((k) => !declared.has(k));
     if (bad.length > 0) {
       const allowed = GUARD_ALLOWLIST.some((a) => a.file === n.file && a.route === n.route);
@@ -301,7 +303,7 @@ describe('导航 query 键契约（传了但目标页不读 ⇒ 静默失效）'
     for (const r of ['pages/courses/course-detail', 'pages/courses/chapter-view']) {
       const src = BY_ROUTE.get(r);
       expect(src).toBeDefined();
-      expect(pageOptionKeys(fs.readFileSync(src, 'utf8'), READER_KEYS).size).toBeGreaterThan(0);
+      expect(pageOptionKeys(readText(src), READER_KEYS).size).toBeGreaterThan(0);
     }
   });
 
@@ -326,12 +328,12 @@ describe('导航 query 键契约（传了但目标页不读 ⇒ 静默失效）'
 
   it('③ 页面 onLoad 取参解析：直接取参与「委托给 composable」两种形态都要能解析', () => {
     // 直接取参：course-detail 读 id
-    expect([...pageOptionKeys(fs.readFileSync(BY_ROUTE.get('pages/courses/course-detail'), 'utf8'), READER_KEYS)])
+    expect([...pageOptionKeys(readText(BY_ROUTE.get('pages/courses/course-detail')), READER_KEYS)])
       .toContain('id');
     // 委托取参：exam 的 session.applyOptions(options) ⇒ mock_exam_id 必须被解析出来
     const exam = BY_ROUTE.get('pages/exam/mock-exam-result');
     if (exam) {
-      expect([...pageOptionKeys(fs.readFileSync(exam, 'utf8'), READER_KEYS)])
+      expect([...pageOptionKeys(readText(exam), READER_KEYS)])
         .toContain('mock_exam_id');
     }
   });
@@ -365,7 +367,7 @@ describe('导航 query 键契约（传了但目标页不读 ⇒ 静默失效）'
       const stillBad = navs.some((n) => {
         const src = BY_ROUTE.get(n.route);
         if (!src) return false;
-        const declared = pageOptionKeys(fs.readFileSync(src, 'utf8'), READER_KEYS);
+        const declared = pageOptionKeys(readText(src), READER_KEYS);
         return n.keys.some((k) => !declared.has(k));
       });
       expect(stillBad).toBe(true); // 例外仍然有存在的理由

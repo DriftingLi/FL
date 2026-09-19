@@ -8,11 +8,12 @@
  * 本文件断言的是**产物行为**（给定分类+关键词 → 出什么 chip、出什么分组），不是页面源码文本：
  * 页面对这层的接线由 `utils/helpCenterContract.test.js` 单独钉住。
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const SRC_PATH = path.join(__dirname, 'faqDisplay.uts');
-const src = fs.readFileSync(SRC_PATH, 'utf8');
+const src = readText(SRC_PATH);
 
 // ===== 镜像实现（与 faqDisplay.uts 保持一致）=====
 

@@ -24,11 +24,12 @@
  * 3) 取消采纳路径未被削弱（楼主 + 已采纳）
  * 4) 触发的仍是既有 acceptReply 事件（onAccept(item.id) 不失效）
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
-const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+const read = (rel) => readText(path.join(ROOT, rel));
 
 const DETAIL = 'pages/forum/forum-detail.uvue';
 const LIST = 'pages/forum/components/forum-reply-list.uvue';

@@ -12,11 +12,12 @@
  * 已知边界（如实声明）：本票**不含后端改动** ⇒ 服务端未按权益拒绝被锁能力的请求，
  * 验收标准第 3 条（未解锁时服务端拒绝）待后端落地；契约测试只能钉客户端这一半。
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
-const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
+const read = (p) => readText(path.join(ROOT, p));
 
 const PAGE = read('pages/ai-assistant/ai-assistant.uvue');
 const SHEET = read('components/ai-chat/ai-chat-pro-sheet.uvue');

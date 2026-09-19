@@ -42,6 +42,8 @@
 const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const SCAN_DIRS = ['pages', 'components', 'utils', 'composables', 'api', 'stores', 'constants', 'types', 'uni_modules'];
 const SKIP = new Set(['node_modules', 'unpackage', '.git', 'dist', 'hybrid']);
@@ -119,7 +121,7 @@ function scriptBlocks(text) {
 function allCodeUnits() {
   const units = [];
   for (const file of ALL_FILES) {
-    const text = fs.readFileSync(file, 'utf8');
+    const text = readText(file);
     if (file.endsWith('.uts')) units.push({ file, code: text });
     else for (const s of scriptBlocks(text)) units.push({ file, code: s.code });
   }
@@ -578,7 +580,7 @@ function scanImportedFnTemplateCall(raw) {
 function buildExportedTypeMap() {
   const exported = new Map();
   for (const file of ALL_FILES.filter((f) => f.endsWith('.uts'))) {
-    const clean = blank(fs.readFileSync(file, 'utf8'));
+    const clean = blank(readText(file));
     let m;
     const re = /export\s+(?:type|interface)\s+([A-Za-z_$][\w$]*)/g;
     while ((m = re.exec(clean)) !== null) {
@@ -628,12 +630,12 @@ function buildFunctionSignatureMap() {
   const arrowRe = /(?<![\w$])([A-Za-z_$][\w$]*)\s*:\s*\(([^)]*)\)\s*=>/g;
   let m;
   for (const file of ALL_FILES.filter((f) => f.endsWith('.uts'))) {
-    const clean = blank(fs.readFileSync(file, 'utf8'));
+    const clean = blank(readText(file));
     while ((m = fnRe.exec(clean)) !== null) consider(m[1], m[2]);
     while ((m = arrowRe.exec(clean)) !== null) consider(m[1], m[2]);
   }
   for (const file of ALL_FILES.filter((f) => f.endsWith('.uvue'))) {
-    for (const s of scriptBlocks(fs.readFileSync(file, 'utf8'))) {
+    for (const s of scriptBlocks(readText(file))) {
       const clean = blank(s.code);
       while ((m = fnRe.exec(clean)) !== null) consider(m[1], m[2]);
     }
@@ -724,7 +726,7 @@ function buildTypeFieldMap(files = ALL_FILES.filter((f) => f.endsWith('.uts'))) 
   const headRe = /(?:export\s+)?(?:type|interface)\s+([A-Za-z_$][\w$]*)[^{}\n]*\{/g;
   let m;
   for (const file of files) {
-    const clean = blank(fs.readFileSync(file, 'utf8'));
+    const clean = blank(readText(file));
     while ((m = headRe.exec(clean)) !== null) {
       if (!fields.has(m[1])) fields.set(m[1], extractTypeFieldSet(clean, m));
     }
@@ -1069,7 +1071,7 @@ describe('全工程守护：五类 Kotlin 编译地雷零命中', () => {
   it('A：无 script setup 顶层函数前向引用', () => {
     const violations = [];
     for (const file of ALL_FILES.filter((f) => f.endsWith('.uvue'))) {
-      const text = fs.readFileSync(file, 'utf8');
+      const text = readText(file);
       for (const s of scriptBlocks(text)) {
         if (!/setup/.test(s.tag)) continue;
         for (const name of scanUseBeforeDefine(s.code)) {
@@ -1085,7 +1087,7 @@ describe('全工程守护：五类 Kotlin 编译地雷零命中', () => {
     const violations = [];
     for (const file of ALL_FILES) {
       const isUts = file.endsWith('.uts');
-      const text = fs.readFileSync(file, 'utf8');
+      const text = readText(file);
       const blocks = isUts ? [{ code: text }] : scriptBlocks(text);
       for (const s of blocks) {
         const clean = blank(s.code);
@@ -1111,7 +1113,7 @@ describe('全工程守护：五类 Kotlin 编译地雷零命中', () => {
   it('C：无字符串 charset 传参', () => {
     const violations = [];
     for (const file of ALL_FILES.filter((f) => f.endsWith('.uts'))) {
-      for (const h of scanCharsetLiteral(fs.readFileSync(file, 'utf8'))) {
+      for (const h of scanCharsetLiteral(readText(file))) {
         violations.push(`${path.relative(ROOT, file)}: ${h}`);
       }
     }
@@ -1121,7 +1123,7 @@ describe('全工程守护：五类 Kotlin 编译地雷零命中', () => {
   it('D：interface.uts 无 ambient 函数声明', () => {
     const violations = [];
     for (const file of ALL_FILES.filter((f) => f.endsWith('interface.uts'))) {
-      for (const h of scanAmbientFunction(blank(fs.readFileSync(file, 'utf8')))) {
+      for (const h of scanAmbientFunction(blank(readText(file)))) {
         violations.push(`${path.relative(ROOT, file)}: ${h}`);
       }
     }
@@ -1132,7 +1134,7 @@ describe('全工程守护：五类 Kotlin 编译地雷零命中', () => {
     const violations = [];
     const isNativeFile = (f) => f.includes('utssdk') && (f.includes('app-android') || f.includes('app-ios') || f.includes('app-harmony'));
     for (const file of ALL_FILES.filter((f) => f.endsWith('.uts') && isNativeFile(f))) {
-      for (const h of scanUntypedNumericConst(blank(fs.readFileSync(file, 'utf8')))) {
+      for (const h of scanUntypedNumericConst(blank(readText(file)))) {
         violations.push(`${path.relative(ROOT, file)}: ${h}`);
       }
     }
@@ -1188,7 +1190,7 @@ describe('全工程守护：五类 Kotlin 编译地雷零命中', () => {
     const violations = [];
     const fieldMap = buildTypeFieldMap();
     for (const file of ALL_FILES.filter((f) => f.endsWith('.uvue'))) {
-      for (const h of scanTemplateFields(fs.readFileSync(file, 'utf8'), fieldMap)) violations.push(path.relative(ROOT, file) + ': ' + h);
+      for (const h of scanTemplateFields(readText(file), fieldMap)) violations.push(path.relative(ROOT, file) + ': ' + h);
     }
     expect(violations).toEqual([]);
   });
@@ -1404,7 +1406,7 @@ describe('全工程守护：五类 Kotlin 编译地雷零命中', () => {
   it('W：全工程模板裸 handler 均有 script 定义（error18 找不到名称）', () => {
     const violations = [];
     for (const file of ALL_FILES.filter((f) => f.endsWith('.uvue'))) {
-      for (const h of scanUndefinedTemplateHandler(fs.readFileSync(file, 'utf8'))) violations.push(path.relative(ROOT, file) + ': ' + h);
+      for (const h of scanUndefinedTemplateHandler(readText(file))) violations.push(path.relative(ROOT, file) + ': ' + h);
     }
     expect(violations).toEqual([]);
   });
@@ -1419,7 +1421,7 @@ describe('全工程守护：五类 Kotlin 编译地雷零命中', () => {
   it('O：模板无裸插值引用 function 名（uni-app x 不自动调用无参 function，静默渲染源码）', () => {
     const violations = [];
     for (const file of ALL_FILES.filter((f) => f.endsWith('.uvue'))) {
-      for (const h of scanBareFnInterpolation(fs.readFileSync(file, 'utf8'))) violations.push(path.relative(ROOT, file) + ': ' + h);
+      for (const h of scanBareFnInterpolation(readText(file))) violations.push(path.relative(ROOT, file) + ': ' + h);
     }
     expect(violations).toEqual([]);
   });
@@ -1427,7 +1429,7 @@ describe('全工程守护：五类 Kotlin 编译地雷零命中', () => {
   it('P：无可选对象 prop 成员直读（Kotlin error18 找不到名称；扁平原始 props 或局部 val+判空）', () => {
     const violations = [];
     for (const file of ALL_FILES.filter((f) => f.endsWith('.uvue'))) {
-      for (const h of scanOptionalObjectPropAccess(fs.readFileSync(file, 'utf8'))) violations.push(path.relative(ROOT, file) + ': ' + h);
+      for (const h of scanOptionalObjectPropAccess(readText(file))) violations.push(path.relative(ROOT, file) + ': ' + h);
     }
     expect(violations).toEqual([]);
   });
@@ -1451,7 +1453,7 @@ describe('全工程守护：五类 Kotlin 编译地雷零命中', () => {
   it('S：模板零直调 import 函数（uvue 模板 import 调用 = Kotlin error18 invoke；须 script 本地包装）', () => {
     const violations = [];
     for (const file of ALL_FILES.filter((f) => f.endsWith('.uvue'))) {
-      for (const h of scanImportedFnTemplateCall(fs.readFileSync(file, 'utf8'))) violations.push(path.relative(ROOT, file) + ': ' + h);
+      for (const h of scanImportedFnTemplateCall(readText(file))) violations.push(path.relative(ROOT, file) + ': ' + h);
     }
     expect(violations).toEqual([]);
   });

@@ -12,6 +12,8 @@
 const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const UTS = path.join(__dirname, 'notebookDisplay.uts');
 const WEB_NOTEBOOK = path.join(__dirname, '..', '..', '..', 'frontend', 'src', 'pages', 'student', 'Notebook.vue');
 
@@ -54,7 +56,7 @@ function hasTitleLock(src) {
   return src.includes('first.length > 40') && src.includes('first.substring(0, 40) + ');
 }
 
-const SRC = fs.readFileSync(UTS, 'utf8');
+const SRC = readText(UTS);
 
 // ===== 用例 =====
 
@@ -175,7 +177,7 @@ describe('镜像同步：notebookDisplay.uts 与本文件逐条一致', () => {
 const describeWeb = fs.existsSync(WEB_NOTEBOOK) ? describe : describe.skip;
 
 describeWeb('跨端同源：移动端 notebookDisplay.uts vs Web Notebook.vue', () => {
-  const web = fs.readFileSync(WEB_NOTEBOOK, 'utf8');
+  const web = readText(WEB_NOTEBOOK);
 
   it('三处截断长度两端逐字相同（40 / 80 / 18）', () => {
     expect(web).toContain('first.length > 40 ? first.slice(0, 40)');

@@ -44,14 +44,15 @@
  *       必须走 `Compare-ScreenFrames` 的宽容比较（差异像素占比 ≤ `-StableMaxDiffPercent`，默认 0.5%）。
  *       宽容比较本身的语义由 `autoScreenshotStabilityBehavior.test.js`（B1–B4）在运行期另钉。
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const SCRIPT_REL = 'scripts/lib/auto-screenshot.ps1';
 
 function readSource() {
-  return fs.readFileSync(path.join(ROOT, SCRIPT_REL), 'utf8');
+  return readText(path.join(ROOT, SCRIPT_REL));
 }
 
 describe('auto-screenshot.ps1 contract', () => {

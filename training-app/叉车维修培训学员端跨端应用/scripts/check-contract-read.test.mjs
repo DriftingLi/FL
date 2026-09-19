@@ -161,6 +161,95 @@ test('放行⑤：注释里的裸读不算', () => {
   assert.equal(scanSource(src, trackedOf(`${MOBILE}/api/request.uts`)).length, 0)
 })
 
+// ---------------------------------------------------------------- 判据：读者助手体（#1178 追加裁定）
+
+test('助手体①：`const read = (p) => fs.readFileSync(p, "utf8")` 的助手体未归一 ⇒ 违规（报在声明行）', () => {
+  const src = "const read = (p) => fs.readFileSync(p, 'utf8');"
+  const v = scanSource(src, trackedOf(`${MOBILE}/api/request.uts`))
+  assert.equal(v.length, 1, '助手体未归一必须报红 —— 与调用点目标能否解析无关')
+  assert.equal(v[0].line, 1, '违规点报在**助手声明行**（--diff 按新增行号筛）')
+  assert.match(v[0].target, /助手体/)
+})
+
+test('助手体②：带 `path.join(ROOT, p)` 实参的助手体未归一 ⇒ 违规', () => {
+  const src = "const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');"
+  const v = scanSource(src, trackedOf())
+  assert.equal(v.length, 1)
+  assert.equal(v[0].line, 1)
+})
+
+test('助手体③：助手体**已**归一（.replace）⇒ 放行（同一个助手，只差那一层）', () => {
+  const src = "const read = (p) => fs.readFileSync(p, 'utf8').replace(/\\r\\n/g, '\\n');"
+  assert.equal(scanSource(src, trackedOf()).length, 0)
+})
+
+test('助手体④：助手体建在共享读者 readText 上 ⇒ 放行（ADR-0019 的首选改法）', () => {
+  const src = [
+    "const { readText } = require('./utsHarness');",
+    'const read = (rel) => readText(path.join(ROOT, rel));',
+  ].join('\n')
+  assert.equal(scanSource(src, trackedOf()).length, 0)
+})
+
+test('助手体⑤：**多行**助手体里的裸读也被判红（形态不同、判据相同）', () => {
+  const src = [
+    'const read = (rel) =>',
+    "  fs.readFileSync(path.join(ROOT, rel), 'utf8');",
+  ].join('\n')
+  const v = scanSource(src, trackedOf())
+  assert.equal(v.length, 1)
+  assert.equal(v[0].line, 1)
+})
+
+test('助手体⑥：同一助手体多处裸读只报一次（不刷屏）', () => {
+  const src = [
+    'const read = (rel) => {',
+    "  const a = fs.readFileSync(path.join(ROOT, rel), 'utf8');",
+    "  return a + fs.readFileSync(path.join(ROOT, rel), 'utf8');",
+    '};',
+  ].join('\n')
+  const v = scanSource(src, trackedOf())
+  assert.equal(v.length, 1, `一个助手只报一次，实得 ${v.length}`)
+})
+
+test('助手体⑦：`function NAME() { return fs.readFileSync(…) }` 形态**不在**规则二内（写实边界）', () => {
+  const src = [
+    'function readSource() {',
+    "  return fs.readFileSync(path.join(ROOT, SCRIPT_REL), 'utf8');",
+    '}',
+  ].join('\n')
+  assert.equal(scanSource(src, trackedOf()).length, 0, '规则二只认 `const NAME = (…) =>` —— 不假装覆盖 function 形态')
+})
+
+test('助手体⑧（**已知并接受的代价**，非回归）：读者助手体的实参指向非仓内目标时也判红', () => {
+  // 这一条**故意**钉住规则二的假阳性面：判据只看「助手体未归一」，**不看**实参能否解析到仓根
+  // （#1178 追加裁定的原话就是「不再要求该调用点的目标能静态解析」）。所以一个只读临时产物的
+  // 读者助手也会被判红。为什么可以接受：全仓实测「体里有裸读的 `const … =>` 助手」共 26 个，
+  // **无一**只读临时/运行期产物（全部是 `path.join(ROOT|__dirname, …)` 的仓内源码），故这条
+  // 规则在**存量与现状**上零假阳性；真正的裸读临时产物走的是**非助手**形态（`function` 声明体、
+  // `.map((f) => …)` 这类回调、以及赋值右侧的内联读），规则二不碰它们 —— 见 `放行④` 与 `助手体⑦⑨`。
+  // 若日后真出现「只读临时产物的 `const … =>` 读者」，改法是**把它改成不做 `readFileSync` 的
+  // 普通函数/内联读**，而不是放宽本判据（放宽会让 26 个缺陷面重新漏掉）。
+  const src = [
+    "const readCapture = (capFile) => fs.readFileSync(capFile, 'utf8');",
+    'const out = readCapture(capFile);',
+  ].join('\n')
+  const v = scanSource(src, () => true)
+  assert.equal(v.length, 1)
+  assert.equal(v[0].line, 1)
+})
+
+test('助手体⑨：**非助手**的裸读临时产物仍放行（与上一条合起来才是完整的零误报口径）', () => {
+  const src = [
+    'function readLaunchOut(logDir) {',
+    "  return fs.readdirSync(logDir).map((f) => fs.readFileSync(path.join(logDir, f), 'utf8')).join('\\n');",
+    '}',
+    "const stdout = fs.existsSync(capFile) ? fs.readFileSync(capFile, 'utf8') : '';",
+    "const stderr = fs.readFileSync(capFile + '.err', 'utf8');",
+  ].join('\n')
+  assert.equal(scanSource(src, () => true).length, 0, '临时/运行期产物的裸读不得被判红（票 B 已实测的零误报面）')
+})
+
 // ---------------------------------------------------------------- diff 解析
 
 test('parseAddedLines：新增行号按新侧推进（含上下文行与删除行）', () => {

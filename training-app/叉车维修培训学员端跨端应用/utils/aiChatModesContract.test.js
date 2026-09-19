@@ -9,13 +9,14 @@
  * 2) 专业版页面消费 modes：将 normal/expert 并入模型展示（与 /models 并存）
  * 3) 选中某模式后，请求体以 model_source=admin 驱动并携带对应 config_id
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const API_PATH = path.join(__dirname, '..', 'api', 'aiAssistant.uts');
 const PAGE_PATH = path.join(__dirname, '..', 'pages', 'ai-assistant', 'ai-assistant.uvue');
-const apiSrc = fs.readFileSync(API_PATH, 'utf8');
-const pageSrc = fs.readFileSync(PAGE_PATH, 'utf8');
+const apiSrc = readText(API_PATH);
+const pageSrc = readText(PAGE_PATH);
 
 /** 兼容 `export function 名(` 的提取辅助 */
 function fnBody(src, name) {

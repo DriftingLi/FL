@@ -19,9 +19,10 @@
  * 与仓库先例 mpWeixinGateContract.test.js:143 一致；静默跳过等于假绿。
  */
 const { execFileSync } = require('child_process');
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const LIB_REL = path.join('scripts', 'lib', 'contract-tests.ps1');
 const CALLERS = [
@@ -149,7 +150,7 @@ describe('Q-A 契约测试 pattern 唯一真源（运行期）', () => {
 
   test('P4: 两个调用方都没有再抄一份自己的 pattern 字面量（漂移的来源）', () => {
     const offenders = CALLERS.filter((rel) => {
-      const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+      const src = readText(path.join(ROOT, rel));
       return /\$testPattern\s*=\s*'/.test(src);
     });
     expect(offenders).toEqual([]);
@@ -157,7 +158,7 @@ describe('Q-A 契约测试 pattern 唯一真源（运行期）', () => {
 
   test('P5: 两个调用方都真的用了真源（不是留着旧变量没人用）', () => {
     const missing = CALLERS.filter((rel) => {
-      const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+      const src = readText(path.join(ROOT, rel));
       return !src.includes('Get-ContractTestPattern');
     });
     expect(missing).toEqual([]);

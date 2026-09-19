@@ -30,6 +30,8 @@
 const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 
 /** 颜色值个数上限；uvue 只接受 color-start / color-stop 两个 */
@@ -216,7 +218,7 @@ describe('uvue 渐变语法契约（#937 真机实测口径）', () => {
 
     const offenders = [];
     for (const f of files) {
-      const v = scanGradients(fs.readFileSync(f, 'utf8'));
+      const v = scanGradients(readText(f));
       if (v.length) offenders.push(path.relative(ROOT, f) + '\n    ' + v.join('\n    '));
     }
     expect(offenders.join('\n')).toBe('');

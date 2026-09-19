@@ -29,9 +29,10 @@
  * 设计沿用本仓既有守护测试的形态（见 utils/emulatorSmokeContract.test.js）：
  * 先对「注入违规」的变形样本断言检测有效（防空跑假绿），再对真实文件断言零命中。
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const SCRIPT_REL = 'scripts/device-capture.ps1';
 const ADR_REL = 'docs/adr/0008-移动端验收门与证据.md';
@@ -57,7 +58,7 @@ const ADB_CLI_CHANNEL_PREREQ = 'cli open';
 const ADB_LAUNCH_STALE_CLAIM = '已知可用的替代切页机制是';
 
 function readSource(rel) {
-  return fs.readFileSync(path.join(ROOT, rel), 'utf8');
+  return readText(path.join(ROOT, rel));
 }
 
 /** 掩掉 <# ... #> 文档块（块内字符替换成空格，行号不变）——头部标注/禁令本来就允许写在文档块里 */

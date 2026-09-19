@@ -22,8 +22,10 @@
 const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
-const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+const read = (rel) => readText(path.join(ROOT, rel));
 
 const stripComments = (src) =>
   src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/[^\n]*/g, '$1');
@@ -115,7 +117,7 @@ describe('forum 资源入口改跳契约（#760：统一进 forum-create 资源 
         const p = path.join(dir, e.name);
         if (e.isDirectory()) { walk(p); continue; }
         if (!/\.(uts|uvue)$/.test(e.name) || /\.test\./.test(e.name)) continue;
-        if (fs.readFileSync(p, 'utf8').includes('/pages/resources/upload-resource')) {
+        if (readText(p).includes('/pages/resources/upload-resource')) {
           offenders.push(path.relative(ROOT, p));
         }
       }

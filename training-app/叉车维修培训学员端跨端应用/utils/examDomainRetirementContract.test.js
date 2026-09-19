@@ -25,8 +25,10 @@
 const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
-const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+const read = (rel) => readText(path.join(ROOT, rel));
 const exists = (rel) => fs.existsSync(path.join(ROOT, rel));
 
 /** 被锁 token：无 g 标志，避免 lastIndex 状态污染 */
@@ -70,7 +72,7 @@ describe('全域零命中（验收标准 §1）', () => {
 
   it('全工程源码/配置无 levelExam / LevelExam / level-exam 命中', () => {
     const hits = SCANNED_FILES
-      .filter((f) => RETIRED_TOKEN.test(fs.readFileSync(f, 'utf8')))
+      .filter((f) => RETIRED_TOKEN.test(readText(f)))
       .map((f) => path.relative(ROOT, f));
     expect(hits).toEqual([]);
   });

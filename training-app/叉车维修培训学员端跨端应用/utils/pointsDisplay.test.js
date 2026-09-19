@@ -10,6 +10,8 @@
 const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 // ===== 镜像实现（与 pointsDisplay.uts 保持一致）=====
 
 function normalizeDate(date) {
@@ -286,7 +288,7 @@ describe('ledgerIconClass / ledgerIconGlyph：ref_type → 图标（class 与字
   });
 
   it('.uts 内 class 与字形两张表按同一 ref_type 键成文（防只改一张）', () => {
-    const src = fs.readFileSync(path.join(__dirname, 'pointsDisplay.uts'), 'utf8');
+    const src = readText(path.join(__dirname, 'pointsDisplay.uts'));
     for (const key of Object.keys(CLASS_OF)) {
       if (key === '' || key === 'unknown_x') continue;
       expect(src).toMatch(new RegExp(`refType == '${key}'`));
@@ -296,13 +298,13 @@ describe('ledgerIconClass / ledgerIconGlyph：ref_type → 图标（class 与字
 
 describe('todayDateStr：客户端筛选基准日', () => {
   it('委托 utils/format.uts 的 formatDate（本文件不重抄日期数学）', () => {
-    const src = fs.readFileSync(path.join(__dirname, 'pointsDisplay.uts'), 'utf8');
+    const src = readText(path.join(__dirname, 'pointsDisplay.uts'));
     expect(src).toContain("import { formatDate } from './format'");
     expect(src).toContain("formatDate(Date.now(), 'YYYY-MM-DD')");
   });
 
   it('不再回退成手写 pad：todayDateStr 只留一行委托', () => {
-    const src = fs.readFileSync(path.join(__dirname, 'pointsDisplay.uts'), 'utf8');
+    const src = readText(path.join(__dirname, 'pointsDisplay.uts'));
     // 镜像侧行为已由 expiringWithinDays 用例覆盖（同一份日期口径）；此处锁委托形态
     const fn = src.slice(src.indexOf('export function todayDateStr'));
     expect(fn).not.toMatch(/getMonth\(\)/);
@@ -314,10 +316,10 @@ const WEB_TABLE = path.join(__dirname, '..', '..', '..', 'frontend', 'src', 'uti
 const describeWeb = fs.existsSync(WEB_TABLE) ? describe : describe.skip;
 
 describeWeb('跨端文案表不分叉：移动端 .uts vs Web pointsReason.ts', () => {
-  const utsSrc = fs.readFileSync(path.join(__dirname, 'pointsDisplay.uts'), 'utf8');
+  const utsSrc = readText(path.join(__dirname, 'pointsDisplay.uts'));
 
   it('Web 表内每个 reason 键，移动端文案必须逐字相同（改文案要两端同改）', () => {
-    const webSrc = fs.readFileSync(WEB_TABLE, 'utf8');
+    const webSrc = readText(WEB_TABLE);
     const from = webSrc.indexOf('const REASON_LABELS');
     const block = webSrc.slice(from, webSrc.indexOf('\n}', from));
     const pairs = [...block.matchAll(/(\w+):\s*\{\s*label:\s*'([^']+)'/g)];
@@ -335,7 +337,7 @@ describeWeb('跨端文案表不分叉：移动端 .uts vs Web pointsReason.ts', 
 });
 
 describe('镜像同步：pointsDisplay.uts 与本文件表逐键一致', () => {
-  const src = fs.readFileSync(path.join(__dirname, 'pointsDisplay.uts'), 'utf8');
+  const src = readText(path.join(__dirname, 'pointsDisplay.uts'));
 
   it.each(Object.entries(REASON_LABELS))('reason %s → %s 在 .uts 内成文', (reason, label) => {
     expect(src).toContain(`if (reason == '${reason}') return '${label}'`);

@@ -5,11 +5,12 @@
  * pointsDisplay.test.js）以镜像实现验证算法行为；文末的「镜像同步」用例把 .uts 源码
  * 与镜像逐条对齐，防止两份实现悄悄分叉。
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const SRC_PATH = path.join(__dirname, 'searchDisplay.uts');
-const src = fs.readFileSync(SRC_PATH, 'utf8');
+const src = readText(SRC_PATH);
 
 // ===== 镜像实现（与 searchDisplay.uts 保持一致）=====
 
@@ -222,7 +223,7 @@ describe('searchItemPath：落点（ADR-0049 决策 2「搜到但打不开不合
   });
 
   it('落点页面全部在 pages.json 注册（防幻影路由）', () => {
-    const pagesJson = fs.readFileSync(path.join(__dirname, '..', 'pages.json'), 'utf8');
+    const pagesJson = readText(path.join(__dirname, '..', 'pages.json'));
     const paths = ['course', 'chapter', 'question', 'content', 'topic'].map((t) =>
       searchItemPath({ type: t, id: 1, parent_id: 1 }),
     );
