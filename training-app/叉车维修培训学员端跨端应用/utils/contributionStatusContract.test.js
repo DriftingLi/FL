@@ -23,7 +23,6 @@
  *       改形态要同步改本锁，不要把 rowRe 放宽成模糊匹配（放宽 = 漏值不再被看见）。
  */
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
@@ -32,14 +31,16 @@ const REPO = path.join(ROOT, '..', '..');
 /**
  * 工作树文本一律**经读者归一 EOL** 后再进断言面（#1143）。
  *
- * 为什么归一放在读者处：本仓 `*.uts` / `*.uvue` 没有被 `.gitattributes` 钉 LF（另票 #1137），
- * Windows 检出（`core.autocrlf=true`）落到工作树的是 **CRLF**。而 `.*\n` 这类多行锚点里
- * `.` **不匹配 `\r`**、`\n` 又必须紧跟其后 ⇒ 在 CRLF 行上**匹配 0 次**：变异根本没生效，
- * 断言却照跑 —— 于是「防假绿」的自检**静默假绿**（实测：`archived` 行删不掉，18 例红 1 例）。
- * 归一摆在这一处，对**任何原因**导致的 CRLF 都成立；逐处把锚点放宽成 `\r?\n` 只治好当前那条。
+ * 读者真源在 `utils/utsHarness.js` 的 `readText` / `normalizeEol`（#1176 收成一份，别在本文件再抄）。
+ * 行为守护（喂合成 CRLF）见 `utils/contractReaderEolContract.test.js` —— 那条判据与检出平台无关。
+ *
+ * 为什么归一放在读者处：本仓的接线守护用**多行锚点**匹配源码文本，锚点里含 `\n`。Windows 检出
+ * （`core.autocrlf=true`）落到工作树的是 **CRLF** ⇒ `.*\n` 这类锚点里 `.` **不匹配 `\r`**、
+ * `\n` 又必须紧跟其后，于是在 CRLF 行上**匹配 0 次**：变异根本没生效，断言却照跑 —— 守护**静默失效**
+ * （实测：`archived` 行删不掉，18 例红 1 例）。归一摆在这一处，对**任何原因**导致的 CRLF 都成立；
+ * 逐处把锚点放宽成 `\r?\n` 只治好当前那条。决策见 `docs/adr/0019`。
  */
-const normalizeEol = (text) => text.replace(/\r\n/g, '\n');
-const readText = (abs) => normalizeEol(fs.readFileSync(abs, 'utf8'));
+const { readText } = require('./utsHarness');
 const read = (rel) => readText(path.join(ROOT, rel));
 const readRepo = (rel) => readText(path.join(REPO, rel));
 
@@ -281,19 +282,10 @@ describe('锁自检：合成违规必须报红（防假绿）', () => {
 });
 
 describe('读者自检：工作树 EOL 归一（Windows 检出恒红根因，#1143）', () => {
-  it('readText：CRLF 文本经读者后不含 \\r（合成源，与检出平台无关）', () => {
-    // 合成 CRLF 源是**唯一**与平台无关的判据：在 LF 检出（CI）上，真源本来就是 LF，
-    // 读者归一没了也照样绿 —— 那样这条守护的回归就只在 Windows 上才暴露（正是 #1143 的成因）。
-    const fixture = path.join(os.tmpdir(), `contributionStatus-eol-${process.pid}.uts`);
-    fs.writeFileSync(fixture, "x\r\n{ status: 'archived', label: '已下架' }\r\n");
-    try {
-      expect(readText(fixture)).toBe("x\n{ status: 'archived', label: '已下架' }\n");
-    } finally {
-      fs.unlinkSync(fixture);
-    }
-  });
+  // 合成 CRLF 的**行为**断言已收进共享读者的守护 `utils/contractReaderEolContract.test.js`（#1176）——
+  // 那里喂合成源、与检出平台无关，且覆盖任何读者调用方。本文件只留「本契约的真源读出来没有 \r」。
 
-  it('真源经读者后不含 \\r（.uts / .uvue 在当前 Windows 工作树是 CRLF）', () => {
+  it('真源经读者后不含 \\r（本仓 .uts / .uvue 由 .gitattributes 钉 LF，此处是纵深防御）', () => {
     expect(read(DESCRIPTOR_REL)).not.toContain('\r');
     expect(read(CONSUMER_REL)).not.toContain('\r');
     // 仓外两个对账源由 .gitattributes 钉了 LF（`*.go` / `*.vue`），今天恒真；

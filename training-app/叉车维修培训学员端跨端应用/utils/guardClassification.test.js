@@ -43,6 +43,10 @@ const ZERO_REF_WIRING_ALLOWED = [
   'checkinCalendar.test.js', // 纯镜像手抄、无源码锚点（改坏 .uts 不红：本机实测）
   'format.test.js',          // 纯镜像手抄、连「镜像同步」段都没有（改坏 .uts 不红：本机实测）
   'profileMetrics.test.js',  // 纯镜像，无任何文件引用
+  // 被测物是**共享读者**（utils/utsHarness.js 的 normalizeEol/readText），不是 .uts/.uvue 载体，
+  // 故 refs 天然为空；判据喂**合成** CRLF 文本（ADR-0019 §⑤ 的硬约束：不得读工作树真源）。
+  // 判别力已实测：拆掉归一 ⇒ 该文件两条「必红」面转红（#1176）。
+  'contractReaderEolContract.test.js',
 ];
 
 /** H5：点名的手抄镜像模块 —— 迁移前后都要能被这条断言区分 */

@@ -136,4 +136,35 @@ function loadUts(file, bindings) {
   return new Function('bindings', body)(bindings); // eslint-disable-line no-new-func
 }
 
-module.exports = { loadUts, importedNames, exportedNames };
+/**
+ * 工作树文本一律**经读者归一 EOL** 后再进断言面（#1143；决策 ADR-0019）。
+ *
+ * **这是全仓唯一的读取层归一真源** —— 别在测试文件里再抄一份 `normalizeEol`。
+ *
+ * 为什么归一放在读者处：本仓的接线守护用**多行锚点**匹配源码文本，而锚点里含 `\n`。
+ * Windows 检出（`core.autocrlf=true`）落到工作树的是 **CRLF** ⇒ `.*\n` 这类锚点里
+ * `.` **不匹配 `\r`**、`\n` 又必须紧跟其后，于是在 CRLF 行上**匹配 0 次**：变异根本没生效，
+ * 断言却照跑 —— 守护**静默失效**（以为在守，其实没守）。CI 跑在 ubuntu（默认关 autocrlf），
+ * 故这一类**在 CI 里结构性不可见**。
+ *
+ * 为什么放在这里而不是逐处放宽锚点：归一摆在这一处，对**任何原因**、**任何扩展名**导致的
+ * CRLF 都成立（读 `.txt` / `.yaml` / 无扩展名也一样）—— 这正是 ADR-0019 选「读取层归一」
+ * 而不是「继续给 .gitattributes 补钉扩展名」的理由：**归一之后，扩展名钉没钉完全不重要**。
+ *
+ * ⚠️ 判据必须与检出平台无关：断言要喂**合成** CRLF 文本，**不得**读工作树真源 ——
+ * 真源在 LF 检出上本来就是 LF，归一没了也照样绿，那样回归就只在 Windows 上才暴露
+ * （正是 #1143 的成因）。守护见 `utils/contractReaderEolContract.test.js`。
+ *
+ * @param {string} text 已读入的文本
+ * @returns {string} CRLF 归一为 LF 后的文本（孤立 `\r` 不参与，判据是 CRLF 而不是「任何 \r」）
+ */
+const normalizeEol = (text) => text.replace(/\r\n/g, '\n');
+
+/**
+ * 读一个文件并把 EOL 归一（契约测试的**唯一**源码读取入口）
+ * @param {string} abs 文件绝对路径
+ * @returns {string} 归一后的文本
+ */
+const readText = (abs) => normalizeEol(fs.readFileSync(abs, 'utf8'));
+
+module.exports = { loadUts, importedNames, exportedNames, normalizeEol, readText };
