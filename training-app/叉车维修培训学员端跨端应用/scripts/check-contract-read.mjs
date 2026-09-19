@@ -250,16 +250,34 @@ export function scanSource(src, isTracked) {
   return violations
 }
 
-/** 解析 git diff 的新增行 → Map<仓库相对路径, Set<行号>>（与 scripts/check-el-controls.mjs 同款） */
+/** 解码 git 引号路径里的八进制转义（`\345\217\211` → 中文）。本包目录名是中文，必然命中。 */
+export function decodeGitQuotedPath(p) {
+  const bytes = []
+  const s = String(p)
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === '\\' && /[0-7]/.test(s[i + 1] ?? '')) {
+      const oct = s.slice(i + 1, i + 4)
+      if (/^[0-7]{3}$/.test(oct)) { bytes.push(parseInt(oct, 8)); i += 3; continue }
+    }
+    bytes.push(...Buffer.from(s[i], 'utf8'))
+  }
+  return Buffer.from(bytes).toString('utf8')
+}
+
+/** 解析 git diff 的新增行 → Map<仓库相对路径, Set<行号>>（与 scripts/check-el-controls.mjs 同款）
+ *
+ *  ⚠️ **必须兼容被引号包起来、且八进制转义的路径**：本包目录名是中文，git 在 `+++` 行会写成
+ *  `"b/\345\217\211…"`（即便 `core.quotepath=false` 也会 —— 实测）。只认 `^\+\+\+ b/` 会
+ *  **完全匹配不到** ⇒ `--diff` 静默变空、门形同虚设（实测踩过）。 */
 export function parseAddedLines(diffText) {
   const added = new Map()
   let file = null
   let lineNo = 0
   let inHunk = false
   for (const line of String(diffText).split('\n')) {
-    const f = line.match(/^\+\+\+ b\/(.+)$/)
+    const f = line.match(/^\+\+\+\s+(?:"b\/(.+?)"|b\/(.+?))\s*$/)
     if (f) {
-      file = f[1]
+      file = decodeGitQuotedPath(f[1] ?? f[2])
       if (!added.has(file)) added.set(file, new Set())
       inHunk = false
       continue
@@ -354,7 +372,7 @@ function reportDiff(base) {
   let diff
   try {
     // -U0：只给变更行，新增行号由 hunk 头给出。路径限定在本包。
-    diff = execFileSync('git', ['diff', '-U0', `${base}...HEAD`, '--', MOBILE_REL_PREFIX], {
+    diff = execFileSync('git', ['-c', 'core.quotepath=false', 'diff', '-U0', `${base}...HEAD`, '--', MOBILE_REL_PREFIX], {
       cwd: REPO_ROOT,
       encoding: 'utf8',
       maxBuffer: 64 * 1024 * 1024,

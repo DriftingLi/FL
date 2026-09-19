@@ -14,6 +14,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import {
+  decodeGitQuotedPath,
   stripComments,
   matchParen,
   collectConsts,
@@ -176,6 +177,38 @@ test('parseAddedLines：新增行号按新侧推进（含上下文行与删除�
   ].join('\n')
   const map = parseAddedLines(diff)
   assert.deepEqual([...map.get('utils/x.test.js')].sort((a, b) => a - b), [2, 3])
+})
+
+test('parseAddedLines：非 ASCII 路径两种形态都能解析 —— 否则 --diff 静默变空', () => {
+  // 实测：本包目录名是中文。git 在某些环境下把 +++ 行写成**带引号且八进制转义**的形式，
+  // 直接 `^\+\+\+ b/` 匹配不到 ⇒ --diff 变空、门形同虚设。两种形态都钉住。
+  const cn = '叉车维修培训学员端跨端应用'
+  const rel = `training-app/${cn}/utils/coursesContract.test.js`
+  const octal = [...Buffer.from(rel, 'utf8')]
+    .map((b) => (b < 0x80 ? String.fromCharCode(b) : `\\${b.toString(8).padStart(3, '0')}`))
+    .join('')
+  const mk = (plusPath) => [
+    `--- a/${rel}`,
+    `+++ ${plusPath}`,
+    '@@ -1,0 +2,2 @@',
+    '+const a = 1;',
+    '+const b = 2;',
+  ].join('\n')
+
+  for (const [name, plusPath] of [
+    ['引号+八进制', `"b/${octal}"`],
+    ['不带引号（UTF-8 原样）', `b/${rel}`],
+  ]) {
+    const map = parseAddedLines(mk(plusPath))
+    const keys = [...map.keys()]
+    assert.equal(keys.length, 1, `${name}：应解析出 1 个文件，实得 ${JSON.stringify(keys)}`)
+    assert.equal(keys[0], rel, `${name}：路径应解码还原`)
+    assert.deepEqual([...map.get(keys[0])].sort((a, b) => a - b), [2, 3], `${name}：行号`)
+  }
+})
+
+test('decodeGitQuotedPath：纯 ASCII 路径原样返回', () => {
+  assert.equal(decodeGitQuotedPath('utils/x.test.js'), 'utils/x.test.js')
 })
 
 // ---------------------------------------------------------------- CLI 行为（fail-closed）
