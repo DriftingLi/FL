@@ -409,6 +409,18 @@ jobs:
           PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'true'
       - name: 单元测试（守护规则 + 各模块契约）
         run: npm run test:unit
+      # 契约测试「读取层归一」守卫（移动端 ADR-0019 票 B / #1177）：只判相对默认分支的**新增行**。
+      # 必须**显式写目标 ref**：checkout 是单分支浅克隆时，裸 `git fetch origin <branch>`
+      # 只写 FETCH_HEAD、不建 `origin/<branch>`，守卫会因 base 不可得而 fail-closed 判红
+      # （该坑位与 frontend-check 的「守卫增量门」同源，那段注释里有实测）。
+      - name: 契约测试读取层归一守卫（仅新增行）
+        run: |
+          DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
+          git fetch --no-tags --depth=1 origin "+refs/heads/$DEFAULT_BRANCH:refs/remotes/origin/$DEFAULT_BRANCH"
+          node scripts/check-contract-read.mjs --diff "origin/$DEFAULT_BRANCH"
+      # 守卫自身的可执行单测（判据形状 + fail-closed；与前端 scripts/*.test.mjs 同款）
+      - name: 读取层归一守卫自测
+        run: node scripts/check-contract-read.test.mjs
 
 
   # ============================================================
