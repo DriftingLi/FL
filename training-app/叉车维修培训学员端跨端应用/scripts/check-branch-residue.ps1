@@ -41,6 +41,8 @@
 .PARAMETER Execute
     真正删除 MERGED 残留分支（`gh api -X DELETE repos/<nwo>/git/refs/heads/<branch>`）。
     不带此开关一律 dry-run。**永不**删默认分支，**永不**删 OPEN / CLOSED / 无 PR 的分支。
+    删完只对**本次要删的那些**分支重新查 API 复核 —— 按设计不动的那几类本来就在远端，
+    拿它们当判据会得到假红（2026-09-19 实测）。
 
 .EXAMPLE
     pwsh scripts/check-branch-residue.ps1
@@ -238,6 +240,7 @@ if (-not $Execute) {
 # ── -Execute：只删 MERGED 残留
 Write-Host ''
 Write-Host '=== 执行：删除 MERGED 残留分支 ===' -ForegroundColor Cyan
+$toDelete = @($residue | ForEach-Object { $_.branch })
 $failed = @()
 foreach ($x in $residue) {
     if ($x.branch -eq $default) { Write-Host "SKIP  默认分支 $($x.branch)" -ForegroundColor Yellow; continue }
@@ -246,20 +249,26 @@ foreach ($x in $residue) {
     else { Write-Host "FAIL  删除 $($x.branch) :: $out" -ForegroundColor Red; $failed += $x.branch }
 }
 
-# ── 复核：不看命令回显，只信 API 的当场读数（gh 会打印假的 Deleted remote branch）
+# ── 复核：**只核本次要删的那些分支**，不看命令回显（gh 会打印假的 Deleted remote branch）。
+# ⚠️ 别拿「所有远端分支」去核：按设计不动的那几类（孤儿 / CLOSED 未合并 / 有活跃 PR）本来就在远端，
+#    那样会被报成「仍在远端」⇒ **假红 + exit 1**（2026-09-19 实测：13 个全删成功，却因一条孤儿分支
+#    打印 ❌ 并 exit 1，看上去像删除失败）。
 Write-Host ''
-Write-Host '── 复核（重新查 API，不信命令回显）──' -ForegroundColor Cyan
+Write-Host '── 复核（只核本次要删的分支；重新查 API，不信命令回显）──' -ForegroundColor Cyan
 $stillThere = @()
 $unknownBranches = @()
-foreach ($b in $branches) {
-    if ($b -eq $default -or $b -in $active) { continue }
+foreach ($b in $toDelete) {
     switch (Test-RemoteBranch $b) {
         'exists' { $stillThere += $b }
         'unknown' { $unknownBranches += $b }
     }
 }
 if ($stillThere.Count -eq 0 -and $unknownBranches.Count -eq 0) {
-    Write-Host "✅ 已合并 PR 的分支全部不在远端；待裁定项 $($needHuman.Count) 个仍留给人工。" -ForegroundColor Green
+    if ($toDelete.Count -eq 0) {
+        Write-Host "✅ 本次没有要删的 MERGED 残留（待裁定项 $($needHuman.Count) 个按设计未动）。" -ForegroundColor Green
+    } else {
+        Write-Host "✅ 本次要删的 $($toDelete.Count) 个已合并分支已不在远端；待裁定项 $($needHuman.Count) 个按设计未动。" -ForegroundColor Green
+    }
     exit 0
 }
 if ($stillThere.Count -gt 0) { Write-Host "❌ 仍在远端：$($stillThere -join ', ')" -ForegroundColor Red }
