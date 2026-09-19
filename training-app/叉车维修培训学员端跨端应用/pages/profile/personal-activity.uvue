@@ -17,10 +17,7 @@
             <!-- Tab 栏 -->
             <ActivityTabBar :keys="mainTabKeys" :labels="mainTabLabels" :active="currentTab" @switch="onSwitchTab" />
 
-            <!-- 赞/收藏 子 Tab -->
-            <ActivityTabBar v-if="currentTab === 'likes'" :sub="true" :keys="likesSubKeys" :labels="likesSubLabels" :active="likesSubTab" @switch="onSwitchLikesSubTab" />
-
-            <!-- 互动 子 Tab -->
+            <!-- 互动 子 Tab（「赞过」已收成平铺 tab，无子 tab 栏） -->
             <ActivityTabBar v-if="currentTab === 'interact'" :sub="true" :keys="interactSubKeys" :labels="interactSubLabels" :active="interactSubTab" @switch="onSwitchInteractSubTab" />
 
             <!-- ========= 我的帖子 ========= -->
@@ -37,27 +34,16 @@
                 </view>
             </view>
 
-            <!-- ========= 赞 / 收藏 ========= -->
+            <!-- ========= 赞过 ========= -->
+            <!-- 收藏**不**在此页承载：学员可见的收藏列表唯一在「我的 → 收藏夹」
+                 （ADR-0018「收藏的唯一列表承载面」；target_type 是开放的类型轴，本页不复制落点表）。 -->
             <view v-if="currentTab === 'likes'">
-                <!-- 赞 -->
-                <view v-if="likesSubTab === 'liked'">
-                    <view v-if="likedTopics.length === 0 && !loading" class="empty-state">
-                        <text class="empty-hint">还没有点赞过帖子</text>
-                    </view>
-                    <view class="list-section">
-                        <ActivityTopicCard v-for="(item, idx) in likedTopics" :key="idx" :title="item.title" :content="item.content" :has-content="true"
-                            :created-date="item.created_at" @tap="onTopicClick(item.id)" />
-                    </view>
+                <view v-if="likedTopics.length === 0 && !loading" class="empty-state">
+                    <text class="empty-hint">还没有点赞过帖子</text>
                 </view>
-                <!-- 收藏 -->
-                <view v-if="likesSubTab === 'favorited'">
-                    <view v-if="favoriteItems.length === 0 && !loading" class="empty-state">
-                        <text class="empty-hint">还没有收藏过内容</text>
-                    </view>
-                    <view class="list-section">
-                        <ActivityTopicCard v-for="(item, idx) in favoriteItems" :key="idx" :title="item.title" :tag-text="item.target_type"
-                            :created-date="item.created_at" @tap="onFavoriteClick(item)" />
-                    </view>
+                <view class="list-section">
+                    <ActivityTopicCard v-for="(item, idx) in likedTopics" :key="idx" :title="item.title" :content="item.content" :has-content="true"
+                        :created-date="item.created_at" @tap="onTopicClick(item.id)" />
                 </view>
             </view>
 
@@ -124,17 +110,15 @@
     import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
     import { getMyTopicsApi, getMyRepliesApi, getMyLikedTopicsApi, getMyObservedTopicsApi, getMyViewHistoryApi } from '../../api/forum'
-    import { getFavoritesApi } from '../../api/favorite'
-    import type { ForumTopic, ForumReply, FavoriteItem } from '../../types/index'
+    import type { ForumTopic, ForumReply } from '../../types/index'
     import ActivityUserCard from './components/activity-user-card.uvue'
     import ActivityTabBar from './components/activity-tab-bar.uvue'
     import ActivityTopicCard from './components/activity-topic-card.uvue'
 
-    // Tab 配置（值与手术前逐字一致；「游览记录」错别字按 UI 冻结保留）
+    // Tab 配置（值与手术前一致，唯「赞/收藏」按 ADR-0018 收成「赞过」；
+    // 「游览记录」错别字按 UI 冻结保留）
     const mainTabKeys : string[] = ['posts', 'likes', 'interact', 'views']
-    const mainTabLabels : string[] = ['我的帖子', '赞/收藏', '互动', '游览记录']
-    const likesSubKeys : string[] = ['liked', 'favorited']
-    const likesSubLabels : string[] = ['赞', '收藏']
+    const mainTabLabels : string[] = ['我的帖子', '赞过', '互动', '游览记录']
     const interactSubKeys : string[] = ['questions', 'replies', 'observed']
     const interactSubLabels : string[] = ['我的疑问', '我的回复', '我的围观']
 
@@ -168,13 +152,11 @@
 
     // ---- Tab 状态 ----
     const currentTab = ref<string>('posts') // posts | likes | interact | views
-    const likesSubTab = ref<string>('liked') // liked | favorited
     const interactSubTab = ref<string>('replies') // questions | replies | observed
 
     // ---- 数据 ----
     const topics = ref<ForumTopic[]>([])
     const likedTopics = ref<ForumTopic[]>([])
-    const favoriteItems = ref<FavoriteItem[]>([])
     const myReplies = ref<ForumReply[]>([])
     const myQuestions = ref<ForumReply[]>([])
     const observedTopics = ref<ForumTopic[]>([])
@@ -187,10 +169,7 @@
 
     const hasData = computed<boolean>(() : boolean => {
         if (currentTab.value === 'posts') return topics.value.length > 0
-        if (currentTab.value === 'likes') {
-            if (likesSubTab.value === 'liked') return likedTopics.value.length > 0
-            return favoriteItems.value.length > 0
-        }
+        if (currentTab.value === 'likes') return likedTopics.value.length > 0
         if (currentTab.value === 'interact') {
             if (interactSubTab.value === 'questions') return myQuestions.value.length > 0
             if (interactSubTab.value === 'replies') return myReplies.value.length > 0
@@ -224,16 +203,6 @@
             likedTopics.value = result.items
         } else {
             likedTopics.value = likedTopics.value.concat(result.items)
-        }
-        checkNoMore(result.items.length, result.total)
-    }
-
-    async function loadFavorites(reset : boolean) : Promise<void> {
-        const result = await getFavoritesApi('', page.value, pageSize)
-        if (reset) {
-            favoriteItems.value = result.items
-        } else {
-            favoriteItems.value = favoriteItems.value.concat(result.items)
         }
         checkNoMore(result.items.length, result.total)
     }
@@ -291,11 +260,7 @@
             if (currentTab.value === 'posts') {
                 await loadMyTopics(reset)
             } else if (currentTab.value === 'likes') {
-                if (likesSubTab.value === 'liked') {
-                    await loadLikedTopics(reset)
-                } else {
-                    await loadFavorites(reset)
-                }
+                await loadLikedTopics(reset)
             } else if (currentTab.value === 'interact') {
                 if (interactSubTab.value === 'replies') {
                     await loadMyReplies(reset)
@@ -322,12 +287,6 @@
         loadData(true)
     }
 
-    function onSwitchLikesSubTab(subTab : string) : void {
-        if (likesSubTab.value === subTab) return
-        likesSubTab.value = subTab
-        loadData(true)
-    }
-
     function onSwitchInteractSubTab(subTab : string) : void {
         if (interactSubTab.value === subTab) return
         interactSubTab.value = subTab
@@ -345,16 +304,6 @@
 
     function onTopicClick(topicId : number) : void {
         uni.navigateTo({ url: '/pages/forum/forum-detail?id=' + topicId })
-    }
-
-    function onFavoriteClick(item : FavoriteItem) : void {
-        if (item.target_type === 'topic') {
-            uni.navigateTo({ url: '/pages/forum/forum-detail?id=' + item.target_id })
-        } else if (item.target_type === 'course') {
-            uni.navigateTo({ url: '/pages/courses/course-detail?id=' + item.target_id })
-        } else if (item.target_type === 'featured') {
-            uni.navigateTo({ url: '/pages/featured/featured-detail?id=' + item.target_id })
-        }
     }
 
     onShow(() => {

@@ -6,7 +6,10 @@
                 <text class="back-icon">‹</text>
             </view>
             <text class="header-title">{{ detail != null ? detail!.title : '章节学习' }}</text>
-            <view class="header-right"></view>
+            <!-- 收藏 / 取消（#1140）：与课程详情同形；两态都必须有可见字形（空串观感上等于没有收藏功能） -->
+            <view class="header-right" @click="toggleFavorite">
+                <text class="favorite-icon">{{ isFavorited ? '♥' : '♡' }}</text>
+            </view>
         </view>
 
         <!-- 加载中 -->
@@ -69,6 +72,7 @@
     import { goBack } from '../../utils/navigation'
     import { parseMarkdown } from '../../utils/markdown'
     import { getCourseDetailApi, getChapterDetailApi } from '../../api/course'
+    import { checkFavoriteApi, addFavoriteApi, removeFavoriteApi } from '../../api/favorite'
     import ChapterMarkdown from './components/chapter-markdown.uvue'
     import ChapterFileList from './components/chapter-file-list.uvue'
     import ChapterNav from './components/chapter-nav.uvue'
@@ -82,6 +86,15 @@
     const chapterId = ref<number>(0)
     const detail = ref<ChapterDetail | null>(null)
     const loading = ref<boolean>(true)
+
+    /**
+     * 本章收藏态（#1140）。
+     *
+     * 与 `detail` 同层：进页 / 切章由 `loadFavoriteStatus` 从后端回填，
+     * 不另存一份「前端以为的收藏态」（照 T05「同一事实不两处持有」）。
+     */
+    const isFavorited = ref<boolean>(false)
+    const favoriteId = ref<number>(0)
 
     // 用于上下章标题显示
     const courseDetail = ref<CourseDetail | null>(null)
@@ -133,6 +146,61 @@
         }
     }
 
+    /**
+     * 查询本章收藏状态（#1140）。
+     *
+     * 与同域先例 `course-detail.uvue:91-100` 同式，两处差异是**刻意的**：
+     * ① `target_type` 是 `'chapter'`、`target_id` 用**章节 id**（不是课程 id）——
+     *    从课程详情抄接线而忘改这两处会「看起来能用」（有心形、点击有 toast），
+     *    但收藏落到**课程**上；
+     * ② 回写前比一次章号：上一章 / 下一章连点时会撞上「旧响应迟到」，
+     *    迟到的结果不得覆盖当前章节的状态（否则心形显示的是上一章的收藏态）。
+     *
+     * 失败只告警、**不回写状态** —— 收藏是页面的旁路，取不到就让控件停在「未收藏」，
+     * 绝不阻断正文渲染（调用点在 `loadDetail` 末尾，fire-and-forget）。
+     */
+    async function loadFavoriteStatus() : Promise<void> {
+        if (chapterId.value <= 0) return
+        const targetId = chapterId.value
+        try {
+            const result = await checkFavoriteApi('chapter', targetId)
+            if (chapterId.value != targetId) return
+            isFavorited.value = result.favorited
+            favoriteId.value = result.favorite_id
+        } catch (e) {
+            console.warn('[chapter-view] checkFavorite failed:', e)
+        }
+    }
+
+    /**
+     * 收藏 / 取消收藏（#1140）—— 形状对齐课程详情的 `toggleFavorite`。
+     *
+     * 失败**不得谎报成功**：只有 await 过了才翻状态与提示，catch 里一律「操作失败」。
+     * 章号在发出前先钉住：响应回来时用户可能已经切章，那时不再改写当前页的状态。
+     */
+    async function toggleFavorite() : Promise<void> {
+        const targetId = chapterId.value
+        if (targetId <= 0) return
+        try {
+            if (isFavorited.value) {
+                await removeFavoriteApi(favoriteId.value)
+                if (chapterId.value != targetId) return
+                isFavorited.value = false
+                favoriteId.value = 0
+                uni.showToast({ title: '已取消收藏', icon: 'none' })
+            } else {
+                const result = await addFavoriteApi('chapter', targetId)
+                if (chapterId.value != targetId) return
+                isFavorited.value = true
+                favoriteId.value = result.favorite_id
+                uni.showToast({ title: '收藏成功', icon: 'none' })
+            }
+        } catch (e) {
+            console.error('[chapter-view] toggleFavorite failed:', e)
+            uni.showToast({ title: '操作失败', icon: 'none' })
+        }
+    }
+
     // 看课上报积分的调用已删除：/points/course-view 后端从未注册（#662），看课计分待后端补
 
     async function loadDetail() : Promise<void> {
@@ -155,6 +223,8 @@
         } finally {
             loading.value = false
         }
+        // 进页 / 切章后都要重查收藏态（放在 try/finally 之后：查收藏失败不影响正文渲染）
+        loadFavoriteStatus()
     }
 
     function onBack() : void {
@@ -306,6 +376,14 @@
 
     .header-right {
         width: 60rpx;
+        align-items: flex-end;
+    }
+
+    /* 收藏位字形（#1140）：与 course-detail.uvue 的 .favorite-icon 同值（40rpx / 白），
+       未收藏态渲染 '♡' 而不是空串 —— 空串观感上等于「这页没有收藏功能」（#1087 的教训） */
+    .favorite-icon {
+        font-size: 40rpx;
+        color: #ffffff;
     }
 
     .content-scroll {

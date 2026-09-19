@@ -84,11 +84,19 @@ export type WrongQuestionItem = {
     question_id : number
     type : string
     title : string
+    /** 题干配图（后端 QuestionDTO.image_url，故障识图题的唯一画面来源）；无图为空串 */
+    image_url : string
     options : QuestionOption[]
     correct_answer : string
+    /** 答案与解析（后端 QuestionDTO.explanation，学员侧 includeAnswer=true 下发）；无解析为空串 */
+    explanation : string
     user_answer : string
+    /** 我上次选的答案（后端 WrongQuestionDTO.last_user_answer，取每题最近一条作答记录）；从未作答为空串 */
+    last_user_answer : string
     wrong_count : number
     created_at : string
+    /** 最近错误时间（后端 WrongQuestionDTO.last_wrong_at，列表排序依据） */
+    last_wrong_at : string
     favorited : boolean      // 是否已收藏（后端 JOIN favorite 回填）
 }
 
