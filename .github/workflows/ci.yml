@@ -400,13 +400,10 @@ jobs:
           node-version: '20'
           cache: npm
           cache-dependency-path: training-app/叉车维修培训学员端跨端应用/package-lock.json
-      # 单测是纯 node 环境（jest.config.unit.js: testEnvironment=node，只扫 utils/**），
-      # 不需要 Chromium；puppeteer 在 devDependencies 里默认会下载，故显式跳过。
-      - name: 安装依赖（跳过 puppeteer Chromium 下载）
+      # 单测是纯 node 环境（jest.config.unit.js: testEnvironment=node，只扫 utils/**），不需要浏览器。
+      # 曾经的两行 PUPPETEER_SKIP_* env 随 ADR-0020 一并移除（puppeteer 已不在 devDependencies）。
+      - name: 安装依赖
         run: npm ci
-        env:
-          PUPPETEER_SKIP_DOWNLOAD: 'true'
-          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'true'
       - name: 单元测试（守护规则 + 各模块契约）
         run: npm run test:unit
       # 契约测试「读取层归一」守卫（移动端 ADR-0019 票 B / #1177）：只判相对默认分支的**新增行**。
