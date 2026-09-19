@@ -98,6 +98,22 @@ export const useAuthStore = defineStore('auth', () => {
     clearLocalAuth()
   }
 
+  /**
+   * 登出单点（第十二波票 1，#1168）：revoke → 清本地 → 返回结果。
+   * 本地清除是无条件承诺：后端失败也清（网络不畅也退得出）。
+   * confirm、跳转落点与本页专属清理留在调用方 adapter，本接口不携带交互参数。
+   */
+  async function signOut(): Promise<{ revoked: boolean }> {
+    let revoked = true
+    try {
+      await authApi.logout()
+    } catch {
+      revoked = false
+    }
+    clearAuthData()
+    return { revoked }
+  }
+
   // 重新拉取 /auth/me 并合并到 userInfo（昵称/头像等资料更新后调用）
   async function refreshUserInfo() {
     try {
@@ -121,6 +137,7 @@ export const useAuthStore = defineStore('auth', () => {
     initialize,
     setAuthData,
     clearAuthData,
+    signOut,
     refreshUserInfo
   }
 })

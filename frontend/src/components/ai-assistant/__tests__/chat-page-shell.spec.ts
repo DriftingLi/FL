@@ -21,11 +21,9 @@ vi.mock('@/stores/aiAssistant', () => ({
 vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({
     userInfo: { username: 'tester' },
-    clearAuthData: vi.fn()
+    // 票1：登出单点——壳只调 signOut，不再各写 revoke+清理
+    signOut: vi.fn().mockResolvedValue({ revoked: true })
   })
-}))
-vi.mock('@/api/auth', () => ({
-  authApi: { logout: vi.fn().mockResolvedValue(undefined) }
 }))
 vi.mock('@/utils/subdomain', () => ({
   buildSubdomainUrl: vi.fn(() => '/')

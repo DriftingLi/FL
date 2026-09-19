@@ -393,7 +393,6 @@ import { useAIAssistantStore } from '@/stores/aiAssistant'
 import { useAuthStore } from '@/stores/auth'
 import ThemeToggle from '@/components/ui/ThemeToggle.vue'
 import SuggestionArrow from '@/components/ai-assistant/SuggestionArrow.vue'
-import { authApi } from '@/api/auth'
 import { buildSubdomainUrl } from '@/utils/subdomain'
 import { formatShortDateTime } from '@/utils/format'
 import UiButton from '@/components/ui/UiButton.vue'
@@ -617,12 +616,8 @@ async function handleUserCommand(cmd: string) {
     return
   }
   if (cmd === 'logout') {
-    try {
-      await authApi.logout()
-    } catch {
-      // 忽略后端错误
-    }
-    authStore.clearAuthData()
+    // 登出单点（票1）：revoke + 清本地走 store.signOut；本页专属清理（会话上下文）留在壳里
+    await authStore.signOut()
     // 状态变更走 store action（#620）：清消息/会话上下文，未登录 loadSessions 清空侧栏列表
     store.clearMessages()
     await store.loadSessions()
