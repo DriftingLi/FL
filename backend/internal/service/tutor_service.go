@@ -100,7 +100,7 @@ func (s *TutorService) UploadChapterFile(chapterID int, filename string, fileCon
 	}
 
 	contentType := fileContentType(filename)
-	fileURL, err := s.fileStore.Save(fileContent, filename, "chapters")
+	fileURL, err := s.fileStore.Save(fileContent, filename, ChapterFileDirPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("保存文件失败: %w", err)
 	}

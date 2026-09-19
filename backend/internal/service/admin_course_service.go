@@ -4,6 +4,7 @@ package service
 import (
 	"errors"
 	"fmt"
+	"strconv"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -245,7 +246,7 @@ func (s *AdminCourseService) DeleteChapter(chapterID int) (*DeleteChapterResult,
 	}
 	if s.fileSvc != nil {
 		s.fileSvc.DeleteFiles(s.fileSvc.List(fmt.Sprintf("slides/%d", chapterID)))
-		s.fileSvc.DeleteFiles(s.fileSvc.List(fmt.Sprintf("images/chapters/%d", chapterID)))
+		s.fileSvc.DeleteFiles(s.fileSvc.List(ChapterImageDirPrefix + "/" + strconv.Itoa(chapterID)))
 	}
 	return &DeleteChapterResult{ChapterID: chapterID}, nil
 }

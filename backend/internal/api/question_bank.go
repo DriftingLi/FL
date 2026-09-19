@@ -556,23 +556,17 @@ func (h *QuestionBankHandler) UploadImage(c *gin.Context) {
 		response.BadRequest(c, "未选择文件")
 		return
 	}
-	content, err := file.Open()
-	if err != nil {
-		response.ServerError(c, "图片上传失败")
-		return
-	}
-	defer content.Close()
-	buf := make([]byte, file.Size)
-	if _, err := content.Read(buf); err != nil {
-		response.ServerError(c, "图片上传失败")
-		return
-	}
 	ok, msg := h.fileSvc.ValidateImage(file.Filename, file.Size)
 	if !ok {
 		response.BadRequest(c, msg)
 		return
 	}
-	url, err := h.fileSvc.Save(buf, file.Filename, "images/questions")
+	buf, err := service.ReadMultipartFile(file)
+	if err != nil {
+		response.ServerError(c, "图片上传失败")
+		return
+	}
+	url, err := h.fileSvc.Save(buf, file.Filename, service.QuestionImageDirPrefix)
 	if err != nil {
 		response.ServerError(c, "图片上传失败: "+err.Error())
 		return

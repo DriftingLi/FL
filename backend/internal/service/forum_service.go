@@ -1118,7 +1118,7 @@ func validateForumImages(images []string, max int) error {
 		return errors.New("图片数量超出限制（最多 " + strconv.Itoa(max) + " 张）")
 	}
 	for _, u := range images {
-		if !isForumImageURL(u) {
+		if !IsSiteAttachmentURL(u, ForumImageDirPrefix) {
 			return errors.New("图片地址无效（仅支持本站上传的论坛图片）")
 		}
 	}

@@ -14,7 +14,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"mime/multipart"
 	"path/filepath"
 	"strings"
@@ -30,13 +29,10 @@ import (
 	"forklift-training/pkg/paging"
 )
 
-// 投稿域常量（单一事实源，调用侧不得另立）。
+// 投稿域常量（单一事实源，调用侧不得另立）。前缀登记归附件归属 module（attachment.go）：
+// 先传后交——文件先落 contributions/ 前缀，提交后由 user_contribution_file 行引用即转正式
+// （无物理搬移——引用即归属）；悬空文件由扫描守护按 ContributionOrphanTTL 回收（与论坛图片同模式）。
 const (
-	// ContributionFileDirPrefix 投稿文件前缀。先传后交：文件先落此前缀，提交后由
-	// user_contribution_file 行引用即转正式（无物理搬移——引用即归属）。
-	// 未引用的悬空文件由悬空扫描守护按 ContributionOrphanTTL 口径回收（与论坛图片同模式）。
-	ContributionFileDirPrefix = "contributions"
-
 	ContributionMaxFiles     = 5
 	ContributionMaxFileSize  = 20 * 1024 * 1024 // 单文件 20MB
 	ContributionMaxTotalSize = 50 * 1024 * 1024 // 合计 50MB
@@ -211,12 +207,7 @@ func (s *ContributionService) UploadFile(ctx context.Context, fileHeader *multip
 	if fileHeader.Size > ContributionMaxFileSize {
 		return nil, ErrContributionFileTooLarge
 	}
-	src, err := fileHeader.Open()
-	if err != nil {
-		return nil, fmt.Errorf("读取文件失败: %w", err)
-	}
-	defer src.Close()
-	content, err := io.ReadAll(src)
+	content, err := ReadMultipartFile(fileHeader)
 	if err != nil {
 		return nil, fmt.Errorf("读取文件失败: %w", err)
 	}
@@ -232,23 +223,13 @@ func (s *ContributionService) UploadFile(ctx context.Context, fileHeader *multip
 	}, nil
 }
 
-// contributionURLKey 提取 contributions/ 后的对象 key（兼容 local 与 R2 两种 URL 形态，
-// 与 forumImageKey 同手法）。用于悬空回收与归属校验。
-func contributionURLKey(u string) string {
-	idx := strings.Index(u, "contributions/")
-	if idx < 0 {
-		return ""
-	}
-	return u[idx:]
-}
-
 // collectReferencedContributionFiles 收集全部投稿引用文件 key 集合（悬空回收差集用）。
 func (s *ContributionService) collectReferencedContributionFiles() map[string]bool {
 	ref := map[string]bool{}
 	var urls []string
 	if err := s.db.Model(&model.UserContributionFile{}).Pluck("file_url", &urls).Error; err == nil {
 		for _, u := range urls {
-			if key := contributionURLKey(u); key != "" {
+			if key := AttachmentKey(u, ContributionFileDirPrefix); key != "" {
 				ref[key] = true
 			}
 		}
@@ -271,7 +252,7 @@ func (s *ContributionService) CleanupOrphanFiles(ctx context.Context) int {
 			return s.fileSvc.ListWithInfoWithContext(c, ContributionFileDirPrefix)
 		},
 		referenced: s.collectReferencedContributionFiles,
-		keyOf:      contributionURLKey,
+		keyOf:      func(u string) string { return AttachmentKey(u, ContributionFileDirPrefix) },
 		deleteFile: s.fileSvc.DeleteWithContext,
 		logger:     s.logger,
 	})

@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"errors"
-	"io"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -153,13 +152,7 @@ func (h *JobCardHandler) UploadPDF(c *gin.Context) {
 		response.BadRequest(c, "文件大小超出限制，最大允许50MB")
 		return
 	}
-	src, err := file.Open()
-	if err != nil {
-		response.ServerError(c, "文件读取失败")
-		return
-	}
-	defer src.Close()
-	content, err := io.ReadAll(src)
+	content, err := service.ReadMultipartFile(file)
 	if err != nil {
 		response.ServerError(c, "文件读取失败")
 		return
@@ -211,18 +204,12 @@ func (h *JobCardHandler) UploadImage(c *gin.Context) {
 		response.BadRequest(c, msg)
 		return
 	}
-	src, err := file.Open()
+	content, err := service.ReadMultipartFile(file)
 	if err != nil {
 		response.ServerError(c, "文件读取失败")
 		return
 	}
-	defer src.Close()
-	content, err := io.ReadAll(src)
-	if err != nil {
-		response.ServerError(c, "文件读取失败")
-		return
-	}
-	url, err := h.fileSvc.Save(content, file.Filename, "resumes/images")
+	url, err := h.fileSvc.Save(content, file.Filename, service.ResumeImageDirPrefix)
 	if err != nil {
 		response.ServerError(c, "保存失败: "+err.Error())
 		return
