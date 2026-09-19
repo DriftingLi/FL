@@ -2,8 +2,10 @@
 package service
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/rand"
 	"sort"
 	"strings"
@@ -17,6 +19,71 @@ import (
 
 // ErrQuestionNotFound 题目不存在（题库域哨兵，ADR-0024）：handler 以 errors.Is 映射 404。
 var ErrQuestionNotFound = errors.New("题目不存在")
+
+// 题库写面哨兵族（第十二波票 6，#1168）：形态照票 5 论坛域——业务事实各有哨兵，
+// api 域表按档渲染；未命中（DB 故障）一律 500，不再由 fallback 吞成 400。
+var (
+	ErrQuestionTypeInvalid        = errors.New("无效的题型")
+	ErrQuestionContentRequired    = errors.New("题干不能为空")
+	ErrQuestionAnswerRequired     = errors.New("答案不能为空")
+	ErrQuestionOptionsRequired    = errors.New("选项不能为空")
+	ErrQuestionCredentialNotFound = errors.New("所属证件不存在")
+	ErrSubmitNotDraft             = errors.New("仅待提交（draft）题目可提交审核")
+	ErrRejectReasonRequired       = errors.New("请填写驳回理由")
+)
+
+// QuestionCreateInput 创建题目的 typed 入参（票 6：字段类型不符即绑定失败，不再静默落零值）。
+// 不携带 status 通道——状态迁移只经显式动作（创建固定入 pending 队列）。
+type QuestionCreateInput struct {
+	Type            string          `json:"type"`
+	Content         string          `json:"content"`
+	Options         json.RawMessage `json:"options"`
+	Answer          json.RawMessage `json:"answer"`
+	Explanation     string          `json:"explanation"`
+	ImageURL        string          `json:"image_url"`
+	ReferenceAnswer string          `json:"reference_answer"`
+	ScoringCriteria string          `json:"scoring_criteria"`
+	Score           int             `json:"score"`
+	CredentialID    int             `json:"credential_id"`
+	TagIDs          []int           `json:"tag_ids"`
+}
+
+// QuestionUpdateInput 更新题目的 typed 入参（指针 = 「未提供」与「提供零值」可分，部分更新语义不变）。
+// 同样不携带 status 通道；credential_id 维持既有面（更新不改证件归属）。
+type QuestionUpdateInput struct {
+	Type            *string          `json:"type"`
+	Content         *string          `json:"content"`
+	Options         *json.RawMessage `json:"options"`
+	Answer          *json.RawMessage `json:"answer"`
+	Explanation     *string          `json:"explanation"`
+	ImageURL        *string          `json:"image_url"`
+	ReferenceAnswer *string          `json:"reference_answer"`
+	ScoringCriteria *string          `json:"scoring_criteria"`
+	Score           *int             `json:"score"`
+	TagIDs          *[]int           `json:"tag_ids"`
+}
+
+// QuestionBatchImportInput 批量导入的 typed body（票 6：swagger 面由 object 变 typed）。
+type QuestionBatchImportInput struct {
+	Questions []QuestionCreateInput `json:"questions"`
+}
+
+// stringifyAnswerJSON 把 typed 入参里的 answer 原始 JSON（字符串或数组）归一为存储字符串
+// （口径与旧 stringifyAnswer(any) 逐字一致：数组以逗号连接）。
+func stringifyAnswerJSON(raw json.RawMessage) (string, error) {
+	if len(raw) == 0 {
+		return "", nil
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		return s, nil
+	}
+	var arr []any
+	if err := json.Unmarshal(raw, &arr); err == nil {
+		return stringifyAnswer(arr), nil
+	}
+	return "", errors.New("answer 形态无效（仅支持字符串或数组）")
+}
 
 // 题型与课程分类常量（已取消等级制度）。
 var (
@@ -273,58 +340,53 @@ func NewQuestionBankService(db *gorm.DB, fileSvc *FileStore, logger *zap.Logger)
 	return &QuestionBankService{db: db, fileSvc: fileSvc, logger: logger}
 }
 
-// CreateQuestion 创建题目。
-func (s *QuestionBankService) CreateQuestion(data map[string]any, createdBy *int, createdByType string) (QuestionDTO, error) {
-	qType, _ := data["type"].(string)
-	if !containsString(validQuestionTypes, qType) {
-		return QuestionDTO{}, errors.New("无效的题型，支持的题型：" + strings.Join(validQuestionTypes, ", "))
+// CreateQuestion 创建题目（票 6 typed 面）：字段类型不符在绑定层即失败；status 通道不存在，
+// 创建固定入 pending 审核队列；证件校验遇 DB 故障如实上抛（旧实现 fail-open 吞错）。
+func (s *QuestionBankService) CreateQuestion(in QuestionCreateInput, createdBy *int, createdByType string) (QuestionDTO, error) {
+	if !containsString(validQuestionTypes, in.Type) {
+		return QuestionDTO{}, fmt.Errorf("%w，支持的题型：%s", ErrQuestionTypeInvalid, strings.Join(validQuestionTypes, ", "))
 	}
-	content, _ := data["content"].(string)
-	if content == "" {
-		return QuestionDTO{}, errors.New("题干不能为空")
+	if in.Content == "" {
+		return QuestionDTO{}, ErrQuestionContentRequired
 	}
-	answer := stringifyAnswer(data["answer"])
-	if answer == "" && qType != "short_answer" {
-		return QuestionDTO{}, errors.New("答案不能为空")
+	answer, err := stringifyAnswerJSON(in.Answer)
+	if err != nil {
+		return QuestionDTO{}, err
 	}
-	options := data["options"]
-	if qType == "single_choice" || qType == "multi_choice" || qType == "fault_image" {
-		if options == nil {
-			return QuestionDTO{}, errors.New("选项不能为空")
-		}
+	if answer == "" && in.Type != "short_answer" {
+		return QuestionDTO{}, ErrQuestionAnswerRequired
 	}
-	status, _ := data["status"].(string)
-	if status == "" {
-		status = "pending"
+	if (in.Type == "single_choice" || in.Type == "multi_choice" || in.Type == "fault_image") && len(in.Options) == 0 {
+		return QuestionDTO{}, ErrQuestionOptionsRequired
 	}
 	var credentialID *int
-	if v, ok := data["credential_id"]; ok {
-		if cid := toInt(v); cid > 0 {
-			var cnt int64
-			if err := s.db.Model(&model.Credential{}).Where("id = ?", cid).Count(&cnt).Error; err == nil && cnt == 0 {
-				return QuestionDTO{}, errors.New("所属证件不存在")
-			}
-			credentialID = &cid
+	if in.CredentialID > 0 {
+		var cnt int64
+		if err := s.db.Model(&model.Credential{}).Where("id = ?", in.CredentialID).Count(&cnt).Error; err != nil {
+			return QuestionDTO{}, err
 		}
+		if cnt == 0 {
+			return QuestionDTO{}, ErrQuestionCredentialNotFound
+		}
+		cid := in.CredentialID
+		credentialID = &cid
 	}
 	var optionsBytes model.JSONB
-	if options != nil {
-		if b, err := json.Marshal(options); err == nil {
-			optionsBytes = model.JSONB(b)
-		}
+	if len(in.Options) > 0 {
+		optionsBytes = model.JSONB(in.Options)
 	}
 	q := model.Question{
-		Type:            qType,
-		Content:         content,
+		Type:            in.Type,
+		Content:         in.Content,
 		Options:         optionsBytes,
 		Answer:          answer,
-		Explanation:     getString(data, "explanation"),
-		ImageURL:        getString(data, "image_url"),
-		ReferenceAnswer: getString(data, "reference_answer"),
-		ScoringCriteria: getString(data, "scoring_criteria"),
-		Score:           toIntDefault(data["score"], 0),
+		Explanation:     in.Explanation,
+		ImageURL:        in.ImageURL,
+		ReferenceAnswer: in.ReferenceAnswer,
+		ScoringCriteria: in.ScoringCriteria,
+		Score:           in.Score,
 		CredentialID:    credentialID,
-		Status:          status,
+		Status:          "pending",
 		CreatedBy:       createdBy,
 		CreatedByType:   orDefault(createdByType, "tutor"),
 		CreatedAt:       beijingNow(),
@@ -333,8 +395,8 @@ func (s *QuestionBankService) CreateQuestion(data map[string]any, createdBy *int
 	if err := s.db.Create(&q).Error; err != nil {
 		return QuestionDTO{}, err
 	}
-	if v, ok := data["tag_ids"]; ok {
-		if err := replaceQuestionTags(s.db, q.ID, toIntSlice(v)); err != nil {
+	if in.TagIDs != nil {
+		if err := replaceQuestionTags(s.db, q.ID, in.TagIDs); err != nil {
 			return QuestionDTO{}, err
 		}
 	}
@@ -370,23 +432,34 @@ func (s *QuestionBankService) GetQuestion(id int) (QuestionDTO, error) {
 	return d, nil
 }
 
-// UpdateQuestion 更新题目。
-// 特殊处理：当 status 由 draft 改为 pending（导师重新提交审核）时，清空驳回理由。
-func (s *QuestionBankService) UpdateQuestion(id int, data map[string]any) (QuestionDTO, error) {
+// UpdateQuestion 更新题目（票 6 typed 面）：写面不携带 status 通道；「编辑未改不动」——
+// 只有内容与计分字段（题型/题干/选项/答案/解析/分值）实际变化才触发审核不变式：
+//   - 讲师（非 admin）修改已发布题的内容 → 回 pending 重审（暂离题库池），并清驳回理由；
+//   - 管理员即审核者，修改保持原状态即时生效（自审无意义）；
+//   - 纯分区属性（标签）修改不动状态。
+func (s *QuestionBankService) UpdateQuestion(id int, in QuestionUpdateInput, actorType string) (QuestionDTO, error) {
 	var q model.Question
 	if err := s.db.First(&q, id).Error; err != nil {
 		return QuestionDTO{}, ErrQuestionNotFound
 	}
-	if t, ok := data["type"].(string); ok && !containsString(validQuestionTypes, t) {
-		return QuestionDTO{}, errors.New("无效的题型")
+	if in.Type != nil && !containsString(validQuestionTypes, *in.Type) {
+		return QuestionDTO{}, ErrQuestionTypeInvalid
 	}
-	if st, ok := data["status"].(string); ok && !containsString(validQuestionStatus, st) {
-		return QuestionDTO{}, errors.New("无效的状态")
+	answerChanged := false
+	if in.Answer != nil {
+		newAnswer, err := stringifyAnswerJSON(*in.Answer)
+		if err != nil {
+			return QuestionDTO{}, err
+		}
+		if newAnswer != q.Answer {
+			answerChanged = true
+		}
+		q.Answer = newAnswer
 	}
-	// 检测重新提交：原本 draft 状态，新状态为 pending → 视为导师修改后重新提交，清空驳回理由
-	resubmitting := q.Status == "draft" && data["status"] == "pending"
-	applyQuestionFields(&q, data)
-	if resubmitting {
+	contentChanged := questionContentTouched(&q, in, answerChanged)
+	applyQuestionUpdateFields(&q, in)
+	if contentChanged && q.Status == "published" && actorType != "admin" {
+		q.Status = "pending"
 		q.RejectReason = ""
 	}
 	q.UpdatedAt = beijingNow()
@@ -399,13 +472,115 @@ func (s *QuestionBankService) UpdateQuestion(id int, data map[string]any) (Quest
 	}); err != nil {
 		return QuestionDTO{}, err
 	}
-	if v, ok := data["tag_ids"]; ok {
-		if err := replaceQuestionTags(s.db, id, toIntSlice(v)); err != nil {
+	if in.TagIDs != nil {
+		if err := replaceQuestionTags(s.db, id, *in.TagIDs); err != nil {
 			return QuestionDTO{}, err
 		}
 	}
 	d := newQuestionDTO(&q, true)
 	d.Tags = s.loadTagsByQuestion(id)
+	return d, nil
+}
+
+// questionContentTouched 判定「内容与计分字段是否实际变化」（票 6 不变式谓词）：
+// 只比较请求提供的字段与库中现值；q 此刻尚未被本请求改写（answer 除外，由调用方传入判定结果）。
+func questionContentTouched(q *model.Question, in QuestionUpdateInput, answerChanged bool) bool {
+	touched := false
+	if in.Type != nil && *in.Type != q.Type {
+		touched = true
+	}
+	if in.Content != nil && *in.Content != q.Content {
+		touched = true
+	}
+	if in.Options != nil && !jsonEqualCompact(string(q.Options), *in.Options) {
+		touched = true
+	}
+	if answerChanged {
+		touched = true
+	}
+	if in.Explanation != nil && *in.Explanation != q.Explanation {
+		touched = true
+	}
+	if in.ReferenceAnswer != nil && *in.ReferenceAnswer != q.ReferenceAnswer {
+		touched = true
+	}
+	if in.ScoringCriteria != nil && *in.ScoringCriteria != q.ScoringCriteria {
+		touched = true
+	}
+	if in.Score != nil && *in.Score != q.Score {
+		touched = true
+	}
+	return touched
+}
+
+// jsonEqualCompact 比较两段 JSON 的紧凑形态是否语义相等（键序无关的字节比较近似：
+// 存储与请求都来自同一序列化链，紧凑化后按字节比即可）。
+func jsonEqualCompact(a string, b json.RawMessage) bool {
+	return compactJSON([]byte(a)) == compactJSON(b)
+}
+
+func compactJSON(raw []byte) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var buf bytes.Buffer
+	if err := json.Compact(&buf, raw); err != nil {
+		return string(raw)
+	}
+	return buf.String()
+}
+
+// applyQuestionUpdateFields 把 typed 入参中「已提供」的字段写入模型（与旧 map 版逐字段对应；
+// status 通道已删）。answer 由调用方先行处理（stringify 校验）。
+func applyQuestionUpdateFields(q *model.Question, in QuestionUpdateInput) {
+	if in.Type != nil {
+		q.Type = *in.Type
+	}
+	if in.Content != nil {
+		q.Content = *in.Content
+	}
+	if in.Options != nil {
+		if len(*in.Options) == 0 || string(*in.Options) == "null" {
+			q.Options = nil
+		} else {
+			q.Options = model.JSONB(*in.Options)
+		}
+	}
+	if in.Explanation != nil {
+		q.Explanation = *in.Explanation
+	}
+	if in.ImageURL != nil {
+		q.ImageURL = *in.ImageURL
+	}
+	if in.ReferenceAnswer != nil {
+		q.ReferenceAnswer = *in.ReferenceAnswer
+	}
+	if in.ScoringCriteria != nil {
+		q.ScoringCriteria = *in.ScoringCriteria
+	}
+	if in.Score != nil {
+		q.Score = *in.Score
+	}
+}
+
+// SubmitQuestion 显式「提交审核」动作（票 6）：draft → pending，清空驳回理由。
+// 取代旧「编辑时顺手把 status 传回去」的实现巧合（前端 QuestionManage 的提交按钮改接本端点）。
+func (s *QuestionBankService) SubmitQuestion(id int) (QuestionDTO, error) {
+	var q model.Question
+	if err := s.db.First(&q, id).Error; err != nil {
+		return QuestionDTO{}, ErrQuestionNotFound
+	}
+	if q.Status != "draft" {
+		return QuestionDTO{}, ErrSubmitNotDraft
+	}
+	q.Status = "pending"
+	q.RejectReason = ""
+	q.UpdatedAt = beijingNow()
+	if err := s.db.Save(&q).Error; err != nil {
+		return QuestionDTO{}, err
+	}
+	d := newQuestionDTO(&q, true)
+	d.Tags = s.loadTagsByQuestion(q.ID)
 	return d, nil
 }
 
@@ -594,7 +769,7 @@ func (s *QuestionBankService) BatchPublish(ids []int) *QuestionPublishResultDTO 
 // RejectQuestion 驳回题目（管理员审核）。状态回退为 draft，记录驳回理由供导师查看修改。
 func (s *QuestionBankService) RejectQuestion(id int, reason string) (QuestionDTO, error) {
 	if reason == "" {
-		return QuestionDTO{}, errors.New("请填写驳回理由")
+		return QuestionDTO{}, ErrRejectReasonRequired
 	}
 	var q model.Question
 	if err := s.db.First(&q, id).Error; err != nil {
@@ -612,7 +787,7 @@ func (s *QuestionBankService) RejectQuestion(id int, reason string) (QuestionDTO
 // BatchReject 批量驳回（管理员审核）。状态回退为 draft，统一记录同一驳回理由。
 func (s *QuestionBankService) BatchReject(ids []int, reason string) (*QuestionRejectResultDTO, error) {
 	if reason == "" {
-		return nil, errors.New("请填写驳回理由")
+		return nil, ErrRejectReasonRequired
 	}
 	if len(ids) == 0 {
 		return &QuestionRejectResultDTO{RejectedCount: 0}, nil
@@ -624,17 +799,11 @@ func (s *QuestionBankService) BatchReject(ids []int, reason string) (*QuestionRe
 	return &QuestionRejectResultDTO{RejectedCount: int(count64)}, nil
 }
 
-// BatchImport 批量导入题目。
-func (s *QuestionBankService) BatchImport(items []any, createdBy *int) *QuestionImportResultDTO {
+// BatchImport 批量导入题目（票 6 typed 面：逐条 QuestionCreateInput，类型不符整条计入 errors）。
+func (s *QuestionBankService) BatchImport(items []QuestionCreateInput, createdBy *int) *QuestionImportResultDTO {
 	success, errs := 0, make([]QuestionImportErrorDTO, 0)
 	for i, item := range items {
-		data, ok := item.(map[string]any)
-		if !ok {
-			errs = append(errs, QuestionImportErrorDTO{Index: i, Error: "无效数据"})
-			continue
-		}
-		data["status"] = "pending"
-		if _, err := s.CreateQuestion(data, createdBy, "tutor"); err != nil {
+		if _, err := s.CreateQuestion(item, createdBy, "tutor"); err != nil {
 			errs = append(errs, QuestionImportErrorDTO{Index: i, Error: err.Error()})
 			continue
 		}
@@ -669,43 +838,6 @@ func (s *QuestionBankService) GetStats(credentialID *int) *QuestionBankStatsDTO 
 	return &QuestionBankStatsDTO{Total: total, ByType: byt, ByStatus: bys}
 }
 
-func applyQuestionFields(q *model.Question, data map[string]any) {
-	if v, ok := data["type"]; ok {
-		q.Type, _ = v.(string)
-	}
-	if v, ok := data["content"]; ok {
-		q.Content, _ = v.(string)
-	}
-	if v, ok := data["options"]; ok {
-		if v == nil {
-			q.Options = nil
-		} else if b, err := json.Marshal(v); err == nil {
-			q.Options = model.JSONB(b)
-		}
-	}
-	if v, ok := data["answer"]; ok {
-		q.Answer = stringifyAnswer(v)
-	}
-	if v, ok := data["explanation"]; ok {
-		q.Explanation, _ = v.(string)
-	}
-	if v, ok := data["image_url"]; ok {
-		q.ImageURL, _ = v.(string)
-	}
-	if v, ok := data["reference_answer"]; ok {
-		q.ReferenceAnswer, _ = v.(string)
-	}
-	if v, ok := data["scoring_criteria"]; ok {
-		q.ScoringCriteria, _ = v.(string)
-	}
-	if v, ok := data["score"]; ok {
-		q.Score = toIntDefault(v, q.Score)
-	}
-	if v, ok := data["status"]; ok {
-		q.Status, _ = v.(string)
-	}
-}
-
 // toInt 将任意数值转为 int。
 func toInt(v interface{}) int {
 	switch n := v.(type) {
@@ -728,12 +860,6 @@ func toIntDefault(v interface{}, def int) int {
 		return def
 	}
 	return toInt(v)
-}
-
-// getString 从 map 取字符串。
-func getString(m map[string]any, key string) string {
-	v, _ := m[key].(string)
-	return v
 }
 
 func intToString(i int) string       { return toStringHelper(i) }

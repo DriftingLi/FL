@@ -3,6 +3,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"strconv"
 	"testing"
 
@@ -44,13 +45,9 @@ func seedPaper(t *testing.T, db *gorm.DB, qsvc *QuestionBankService, qContents .
 	}
 	ids := make([]int, 0, len(qContents))
 	for i, c := range qContents {
-		q, err := qsvc.CreateQuestion(map[string]any{
-			"type": "single_choice", "content": c,
-			"options": []string{"A", "B"}, "answer": "A", "status": "published",
-		}, nil, "tutor")
-		if err != nil {
-			t.Fatalf("建题失败: %v", err)
-		}
+		q := createQuestionAs(t, qsvc, db, QuestionCreateInput{
+			Type: "single_choice", Content: c, Options: json.RawMessage(`["A","B"]`), Answer: json.RawMessage(`"A"`),
+		}, "published")
 		ids = append(ids, q.ID)
 		if err := db.Create(&model.RealExamPaperQuestion{PaperID: paper.PaperID, QuestionID: q.ID, OrderNum: i + 1}).Error; err != nil {
 			t.Fatalf("建卷题关联失败: %v", err)
@@ -78,18 +75,14 @@ func TestRealPaperPoolIsolation(t *testing.T) {
 	normalTag, _ := catalogSvc.CreateQuestionTag(QuestionTagInput{Code: "regulation", Name: "法规"})
 
 	// 真题题（source 标签）+ 普通题
-	if _, err := qsvc.CreateQuestion(map[string]any{
-		"type": "single_choice", "content": "真题独有题", "options": []string{"A", "B"}, "answer": "A",
-		"status": "published", "tag_ids": []int{srcTag.ID},
-	}, nil, "tutor"); err != nil {
-		t.Fatalf("建真题题失败: %v", err)
-	}
-	if _, err := qsvc.CreateQuestion(map[string]any{
-		"type": "single_choice", "content": "普通题", "options": []string{"A", "B"}, "answer": "A",
-		"status": "published", "tag_ids": []int{normalTag.ID},
-	}, nil, "tutor"); err != nil {
-		t.Fatalf("建普通题失败: %v", err)
-	}
+	createQuestionAs(t, qsvc, db, QuestionCreateInput{
+		Type: "single_choice", Content: "真题独有题", Options: json.RawMessage(`["A","B"]`), Answer: json.RawMessage(`"A"`),
+		TagIDs: []int{srcTag.ID},
+	}, "published")
+	createQuestionAs(t, qsvc, db, QuestionCreateInput{
+		Type: "single_choice", Content: "普通题", Options: json.RawMessage(`["A","B"]`), Answer: json.RawMessage(`"A"`),
+		TagIDs: []int{normalTag.ID},
+	}, "published")
 
 	// 随机/专项抽题池不含真题题
 	psvc := NewPracticeModeService(db, nil, zap.NewNop())

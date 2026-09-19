@@ -5,6 +5,7 @@
 package service
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -129,12 +130,11 @@ func TestStartCredentialPartition(t *testing.T) {
 		t.Fatalf("建证件B失败: %v", err)
 	}
 	qsvc := NewQuestionBankService(db, nil, zap.NewNop())
-	if _, err := qsvc.CreateQuestion(map[string]any{
-		"type": "single_choice", "content": "A证件题", "options": []string{"A", "B"}, "answer": "A",
-		"status": "published", "credential_id": credA.ID,
-	}, nil, "tutor"); err != nil {
-		t.Fatalf("建题失败: %v", err)
-	}
+	cidA := credA.ID
+	createQuestionAs(t, qsvc, db, QuestionCreateInput{
+		Type: "single_choice", Content: "A证件题", Options: json.RawMessage(`["A","B"]`), Answer: json.RawMessage(`"A"`),
+		CredentialID: cidA,
+	}, "published")
 
 	got, err := svc.Start(student.ID, 10, 90, &credA.ID)
 	if err != nil {

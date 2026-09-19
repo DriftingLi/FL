@@ -204,11 +204,47 @@ func TestErrStatusTable_Snapshot_Job(t *testing.T) {
 	}, http.StatusBadRequest)
 }
 
-// TestErrStatusTable_Snapshot_QuestionBank 题库域表快照（#611）。
+// TestErrStatusTable_Snapshot_QuestionBank 题库域表快照（#611；第十二波票 6 补写面哨兵族并撤 fallback——未命中即 500）。
 func TestErrStatusTable_Snapshot_QuestionBank(t *testing.T) {
 	assertTableSnapshot(t, "questionBankErrStatus", questionBankErrStatus, []errStatusEntry{
 		{service.ErrQuestionNotFound, http.StatusNotFound},
-	}, http.StatusBadRequest)
+		{service.ErrQuestionCredentialNotFound, http.StatusNotFound},
+		{service.ErrQuestionTypeInvalid, http.StatusBadRequest},
+		{service.ErrQuestionContentRequired, http.StatusBadRequest},
+		{service.ErrQuestionAnswerRequired, http.StatusBadRequest},
+		{service.ErrQuestionOptionsRequired, http.StatusBadRequest},
+		{service.ErrSubmitNotDraft, http.StatusBadRequest},
+		{service.ErrRejectReasonRequired, http.StatusBadRequest},
+	}, 0)
+}
+
+// TestQuestionBankErrStatus_Spectrum 票 6：题库域表 400/404/500 档位断言（DB 故障未命中 → 500）。
+func TestQuestionBankErrStatus_Spectrum(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want int
+	}{
+		{"题目不存在 404", service.ErrQuestionNotFound, http.StatusNotFound},
+		{"证件不存在 404", service.ErrQuestionCredentialNotFound, http.StatusNotFound},
+		{"证件不存在 wrap 后仍命中 404", fmt.Errorf("ctx: %w", service.ErrQuestionCredentialNotFound), http.StatusNotFound},
+		{"非 draft 提交 400", service.ErrSubmitNotDraft, http.StatusBadRequest},
+		{"驳回缺理由 400", service.ErrRejectReasonRequired, http.StatusBadRequest},
+		{"题型无效含列表 400", fmt.Errorf("%w，支持的题型：%s", service.ErrQuestionTypeInvalid, "single_choice"), http.StatusBadRequest},
+		{"DB 故障未命中 500", errors.New("dial tcp: db down"), http.StatusInternalServerError},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			e := Endpoint[int, string]{
+				Invoke:    func(ctx context.Context, req *int) (*string, error) { return nil, c.err },
+				ErrStatus: questionBankErrStatus,
+			}
+			w := doEndpoint(t, e)
+			if w.Code != c.want {
+				t.Fatalf("状态码 = %d, 期望 %d（err=%v）", w.Code, c.want, c.err)
+			}
+		})
+	}
 }
 
 // TestErrStatusTable_Snapshot_Forum 第十二波票 5：论坛域表快照

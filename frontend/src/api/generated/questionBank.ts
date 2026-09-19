@@ -12,6 +12,7 @@
 //   DELETE /question-bank/questions/{question_id}
 //   POST /question-bank/questions/{question_id}/publish
 //   POST /question-bank/questions/{question_id}/reject
+//   POST /question-bank/questions/{question_id}/submit
 //   POST /question-bank/questions/batch-publish
 //   POST /question-bank/questions/batch-reject
 //   POST /question-bank/questions/batch-import
