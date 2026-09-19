@@ -222,7 +222,6 @@ const form = ref<{
   score: number
   tag_ids: number[]
   credential_id: number | null
-  status: string
 }>({
   type: 'single_choice',
   content: '',
@@ -234,8 +233,7 @@ const form = ref<{
   scoring_criteria: '',
   score: 3,
   tag_ids: [],
-  credential_id: null,
-  status: 'pending'
+  credential_id: null
 })
 
 async function loadDicts() {
@@ -323,6 +321,8 @@ async function submitForm() {
       ...form.value,
       options: form.value.options ?? undefined
     }
+    // 编辑装载把整份题目 res 并进了 form（含 status）——写面不携带 status 通道（票 6），提交前剥离
+    delete (data as unknown as Record<string, unknown>).status
     if (data.type === 'multi_choice') {
       data.answer = multiAnswer.value.sort().join(',')
     }
