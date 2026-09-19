@@ -122,6 +122,34 @@ describe('createHttpClient 信封解包', () => {
   })
 })
 
+// 第十二波票 5 前端配套（#1168）：404/500 的 toast 用后端 message（哨兵文案是用户可见事实），
+// 硬编码文案只在 message 缺失时兜底——「主题不存在」不再被盖成「请求的资源不存在」。
+describe('404/500 toast 用后端 message（票 5 配套）', () => {
+  it('HTTP 404：toast 用信封 message', async () => {
+    respond = () => ({ status: 404, body: { code: 404, message: '主题不存在', data: null } })
+    const client = makeClient()
+
+    await expect(client.get('/forum/1')).rejects.toBeTruthy()
+    expect(ElMessage.error).toHaveBeenCalledWith('主题不存在')
+  })
+
+  it('HTTP 500：toast 用信封 message', async () => {
+    respond = () => ({ status: 500, body: { code: 500, message: '查询失败，请重试', data: null } })
+    const client = makeClient()
+
+    await expect(client.get('/x')).rejects.toBeTruthy()
+    expect(ElMessage.error).toHaveBeenCalledWith('查询失败，请重试')
+  })
+
+  it('message 缺失时回落硬编码文案', async () => {
+    respond = () => ({ status: 404, body: {} })
+    const client = makeClient()
+
+    await expect(client.get('/x')).rejects.toBeTruthy()
+    expect(ElMessage.error).toHaveBeenCalledWith('请求的资源不存在')
+  })
+})
+
 describe('createDefaultUnauthorizedPolicy 统一 401 策略', () => {
   it('redirect=false（AI 助手）：仅清登录态，不跳转', async () => {
     const clearAuth = vi.fn()

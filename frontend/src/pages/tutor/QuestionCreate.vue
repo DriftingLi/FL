@@ -222,7 +222,6 @@ const form = ref<{
   score: number
   tag_ids: number[]
   credential_id: number | null
-  status: string
 }>({
   type: 'single_choice',
   content: '',
@@ -234,8 +233,7 @@ const form = ref<{
   scoring_criteria: '',
   score: 3,
   tag_ids: [],
-  credential_id: null,
-  status: 'pending'
+  credential_id: null
 })
 
 async function loadDicts() {
@@ -254,9 +252,11 @@ async function loadDicts() {
 
 async function loadQuestion() {
   const res = await questionBankApi.getQuestion(Number(route.query.id))
+  // status 在装载处剥离（票 6：写面不携带 status 通道，编辑装载整份 res 并入 form 是唯一带回路径）
+  const { status: _status, ...rest } = res as unknown as Record<string, unknown>
   form.value = {
     ...form.value,
-    ...res,
+    ...rest,
     options:
       (res.options as { A: string; B: string; C: string; D: string } | undefined) ??
       form.value.options,

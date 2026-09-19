@@ -52,7 +52,6 @@ import ValuationFooter from '@/components/valuation/ValuationFooter.vue'
 import { buildSubdomainUrl } from '@/utils/subdomain'
 import { useAuthStore } from '@/stores/auth'
 import ThemeToggle from '@/components/ui/ThemeToggle.vue'
-import { authApi } from '@/api/auth'
 import { displayNameOf } from '@/types/user'
 
 const router = useRouter()
@@ -64,17 +63,11 @@ const mainSiteUrl = computed(() => buildSubdomainUrl('main', '/'))
 // 估值用户显示名：昵称（username）
 const displayName = computed(() => displayNameOf(authStore.userInfo) || '评估用户')
 
-// 退出登录：调用后端写黑名单 → 清除本地登录态 → 跳回估值首页
+// 退出登录（票1 登出单点）：store.signOut 撤销 refresh 令牌并清本地（ADR-0016 后黑名单只管 refresh）→ 跳回估值首页
 async function handleLogout() {
-  try {
-    await authApi.logout()
-  } catch (e) {
-    // 即使后端调用失败也清除本地登录态，避免用户卡在已登录状态
-  } finally {
-    authStore.clearAuthData()
-    ElMessage.success('已退出登录')
-    router.push('/valuation')
-  }
+  await authStore.signOut()
+  ElMessage.success('已退出登录')
+  router.push('/valuation')
 }
 </script>
 

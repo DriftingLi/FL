@@ -69,7 +69,7 @@ admin 页里「三态 + 分页 + 筛选」**只有两档**，页面按 section �
 
 - 可写的只有上表三行（档位 + 形态）；**两档在场的页面必须逐档登记**——单档页面的归属由上表唯一确定，不必登记。
 - 登记行**要拿得出实据**（页面里真有 `useAdminTable(` / `useAsyncPage(`，行内形态真有 `isEmptyList(`）：登记了却对不上即报红，登记行不能退化成一句注释。
-- 扫描：`node scripts/check-async-section.mjs --all`（规则 ③；`--diff <base>` 只看新增行）。
+- 扫描：`node scripts/check-async-section.mjs --all`（规则 ③；`--diff <base>` 只看新增行）。**扫描面自第十二波票 3 起含 `frontend/src/composables/` 的 .ts**（规则 ④：composable 里「catch 把列表 ref 置空」= 吞错的第三实现形态，即 useCrudTable 的退役根因；附属降级清空须进脚本 `FAIL_OPEN_EXCEPTIONS` 逐条登记理由）。
 
 ### 已收敛控件的机械守卫（ADR-0035 备选转正 / spec #940）
 

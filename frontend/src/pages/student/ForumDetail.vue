@@ -7,6 +7,7 @@
     <UiAsyncSection
       :error="loadError"
       :loading="loading"
+      :empty="isEmpty"
       :retrying="retrying"
       error-title="帖子加载失败"
       error-description="网络或服务端异常，可重试"
@@ -15,6 +16,15 @@
       <template #skeleton>
         <UiSkeleton variant="card" :count="1" />
         <UiSkeleton variant="list" :count="4" />
+      </template>
+
+      <template #empty>
+        <UiEmptyState
+          title="主题不存在"
+          description="该帖子可能已被删除、驳回或作者撤回。"
+          action-text="返回论坛"
+          @action="goBack"
+        />
       </template>
 
     <template v-if="topic">
@@ -221,8 +231,13 @@ const replyImages = ref<string[]>([])
 const { sort: replySort, order: replyOrder, flipOrder: flipReplyOrder } = useForumSort('asc')
 
 // 三态收编（#388，详情页无分页）：loader 抛错即错误态
+// 票 5 配套（#1168）：判据区分「业务 404（主题不存在/已驳回）= 空态」与「其余错误 = 错误态 + retry」，
+// 与 QuestionDetail 的 #1101 形态同源（useAsyncPage.isEmpty，复用 ApiErrorKind）。
 // 论坛不受证件过滤，不随切换重装（#604 opt-out）
-const { loading, loadError, retrying, retry: retryLoad, run: loadDetail } = useAsyncPage(loadDetailOnce, { credentialScoped: false })
+const { loading, loadError, retrying, isEmpty, retry: retryLoad, run: loadDetail } = useAsyncPage(loadDetailOnce, {
+  credentialScoped: false,
+  itemsRef: topic
+})
 
 function handleReplySortChange() {
   // 热门默认逆序，最新默认正序

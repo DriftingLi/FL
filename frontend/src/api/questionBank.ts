@@ -56,7 +56,7 @@ export interface QuestionPayload {
   reference_answer?: string
   scoring_criteria?: string
   score?: number
-  status?: string
+  /** 写面不携带 status 通道（第十二波票 6）：状态迁移只走 submitQuestion / publishQuestion / rejectQuestion */
   credential_id?: number | null
   /** 题库标签（LH-28，创建/更新时全量替换） */
   tag_ids?: number[]
@@ -94,6 +94,11 @@ export const questionBankApi = {
   /** 单题发布：后端返回发布后的题目（此前被当成无载荷） */
   publishQuestion(id: number) {
     return unwrappedRequest.post<QuestionDTO>(`/question-bank/questions/${id}/publish`)
+  },
+
+  /** 显式「提交审核」（第十二波票 6）：draft → pending 并清驳回理由；写面已无 status 通道 */
+  submitQuestion(id: number) {
+    return unwrappedRequest.post<QuestionDTO>(`/question-bank/questions/${id}/submit`)
   },
 
   /** 单题驳回：后端返回驳回后的题目（此前被当成无载荷） */

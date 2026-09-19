@@ -7,10 +7,11 @@ import { authApi } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
 
 vi.mock('@/api/auth', () => ({
-  authApi: { getUserInfo: vi.fn() }
+  authApi: { getUserInfo: vi.fn(), logout: vi.fn() }
 }))
 
 const getUserInfo = vi.mocked(authApi.getUserInfo)
+const logoutApi = vi.mocked(authApi.logout)
 
 function setUrl(search: string) {
   window.history.replaceState({}, '', `/app${search}`)
@@ -178,6 +179,45 @@ describe('401 / 校验失败触发清理', () => {
 
     expect(store.isLoggedIn).toBe(false)
     expect(store.token).toBe('')
+    expect(localStorage.getItem('token')).toBeNull()
+  })
+})
+
+describe('signOut 登出单点（第十二波票 1，#1168）', () => {
+  function seedLogin() {
+    localStorage.setItem('token', 't1')
+    localStorage.setItem('refresh_token', 'r1')
+    localStorage.setItem('userInfo', JSON.stringify({ token: 't1', role: 'hrwai_user' }))
+  }
+
+  it('登出必 revoke：先调 /auth/logout，成功后清本地并返回 revoked', async () => {
+    seedLogin()
+    const store = useAuthStore()
+    store.initialize()
+    await flushPromises()
+    logoutApi.mockResolvedValue(null)
+
+    const result = await store.signOut()
+
+    expect(logoutApi).toHaveBeenCalledTimes(1)
+    expect(result.revoked).toBe(true)
+    expect(store.isLoggedIn).toBe(false)
+    expect(store.token).toBe('')
+    expect(localStorage.getItem('token')).toBeNull()
+    expect(localStorage.getItem('refresh_token')).toBeNull()
+  })
+
+  it('后端失败也清本地：revoke 抛错仍复位状态并返回 revoked=false', async () => {
+    seedLogin()
+    const store = useAuthStore()
+    store.initialize()
+    await flushPromises()
+    logoutApi.mockRejectedValue(new Error('network down'))
+
+    const result = await store.signOut()
+
+    expect(result.revoked).toBe(false)
+    expect(store.isLoggedIn).toBe(false)
     expect(localStorage.getItem('token')).toBeNull()
   })
 })

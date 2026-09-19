@@ -86,12 +86,13 @@ describe('SearchPage 全局搜索页', () => {
     const rows = w.findAllComponents(SearchResultRow)
     expect(rows.length).toBe(5)
     const titles = rows.map((r) => r.props('item').title)
+    // 落点出「路由名 + 参数」（票 2 内容对象表）；path 装配由路由描述符负责（ADR-0047 §2）
     await rows[titles.indexOf('标题7')].trigger('click')
-    expect(h.push).toHaveBeenCalledWith('/training/questions/7')
+    expect(h.push).toHaveBeenCalledWith({ name: 'StudentQuestionDetail', params: { id: '7' } })
     await rows[titles.indexOf('标题9')].trigger('click')
-    expect(h.push).toHaveBeenCalledWith('/training/featured/9')
+    expect(h.push).toHaveBeenCalledWith({ name: 'StudentFeaturedDetail', params: { id: '9' } })
     await rows[titles.indexOf('标题4')].trigger('click')
-    expect(h.push).toHaveBeenCalledWith('/training/course/3/chapter/4')
+    expect(h.push).toHaveBeenCalledWith({ name: 'ChapterView', params: { courseId: '3', chapterId: '4' } })
   })
 
   it('提交搜索把状态写进 URL，切分区同样同步', async () => {

@@ -91,7 +91,6 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowRight } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
-import { authApi } from '@/api/auth'
 import { resumeApi } from '@/api/resume'
 import AvatarEditDialog from '@/components/profile/AvatarEditDialog.vue'
 import NicknameEditDialog from '@/components/profile/NicknameEditDialog.vue'
@@ -144,8 +143,7 @@ async function handleLogout(){
   try {
     await useConfirm().confirm('确定要退出当前账号吗？', '提示', { type: 'warning' })
   } catch { return }
-  try { await authApi.logout() } catch {}
-  authStore.clearAuthData()
+  await authStore.signOut()
   router.push('/login')
 }
 
