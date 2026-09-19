@@ -425,35 +425,16 @@ src/
 
 ## 测试约定
 
-### 自动化测试（E2E）
-- 使用 uni-app 官方测试框架 `@dcloudio/uni-automator`
-- 测试文件命名：`*.test.js`，放在被测试文件同级目录
-- 测试脚本：`npm run test`（默认 H5）、`npm run test:mp-weixin`（微信小程序）
+### 单元测试与守护（本仓唯一在跑的验证层）
+- 入口：`npm run test:unit`（= `jest.config.unit.js`，`testEnvironment: node`，只扫 `utils/**/*.test.[jt]s?(x)`）；`npm test` 是它的等价别名
+- 它就是 **③ 门**（CI 的 `mobile-test` job，被 `ci-summary` 断言必过）。判据三条 —— ①「我故意弄坏被测物，它会不会红？」②「它测的是该测的那一支吗？」③「只跑通过的那一次，不算验收」—— 见 [`docs/agents/guards.md`](docs/agents/guards.md)，守护分类真源是 `node scripts/classify-guards.mjs`
+- **新增守护**时在 PR 正文回答 `guards.md` 末节那三问；**接线守护不构成 ③ 证据**
 
-### 测试配置
-- **jest.config.js**：Jest 配置文件，定义测试环境和平台参数
-- **env.js**：测试设备配置（H5/Android/iOS/微信小程序）
-- **示例测试**：`pages/index/index.test.js`
-
-### 测试覆盖要求
-- 工具函数：100% 覆盖
-- 组件：核心交互逻辑覆盖
-- API 模块：mock 测试覆盖
-
-### 运行测试
-```bash
-# 安装依赖
-npm install
-
-# 运行 H5 测试
-npm run test:h5
-
-# 运行微信小程序测试
-npm run test:mp-weixin
-
-# 运行 Android 测试
-npm run test:android
-```
+### 端到端（E2E）自动化测试：本仓**不做**
+- **已评估并否决，不要再按 uni-app 项目模板去接**：微信小程序通道只能做 page 级断言、不能做「点击 → 跳转 → 断言」的流程验证（PR #1136 裁决）；H5 通道在 `require` 阶段即炸；元素级与导航级 API 在本机组合下均不可用（ADR-0008 的 2026-09-18 实测）
+- 裁决、实测与**将来要重启的配方**见 [`docs/adr/0020-端到端测试通道裁决落锁与装配清退.md`](docs/adr/0020-端到端测试通道裁决落锁与装配清退.md)；通道裁决的原始出处是 [`docs/spec-永绿整改.md`](docs/spec-永绿整改.md) §②
+- 因此**没有** `jest.config.js` / `env.js` / `pages/**/*.test.js`，也**没有** `test:h5` / `test:android` / `test:ios` / `test:mp-weixin` 这些入口；`@dcloudio/uni-automator` 已移出依赖（ADR-0020）
+- 想补强验证层的正确方向是**把镜像实现迁到 `utils/utsHarness.js` 真执行**（`spec-永绿整改.md` §④ 的 S3 / S6a–S6c），不是引入 E2E
 
 ## 构建与发布
 
@@ -483,7 +464,7 @@ npm run test:android
 
 ### 发布流程
 1. **代码审查**：所有改动必须通过 PR 审查
-2. **测试验证**：单元测试 + E2E 测试全绿
+2. **测试验证**：`npm run test:unit` 全绿（E2E 通道本仓不做，见 ADR-0020）
 3. **构建验证**：生产构建无错误
 4. **平台审核**：微信小程序提交审核，Android/iOS 打包测试
 5. **灰度发布**：先小范围验证，再全量发布
@@ -508,12 +489,12 @@ npm run test:android
 
 1. **每次改动完成后，都必须创建一个对应的 git commit，以便后续追踪和回滚。**
 2. **每次改动后，都必须编写或更新相关测试，并在交互给用户前，确保所有测试和验证全部通过。**
-3. **提交前必须运行**：`npm run type-check`（类型检查）和 `npm test`（单元测试）
+3. **提交前必须运行**：`npm run test:unit`（单元测试 + 守护）。注意本仓**没有** `type-check` 脚本——那是 Web 前端栈（`frontend/`）的入口，别照搬
 4. **避免使用**：`setTimeout`/`setInterval` 等可能造成内存泄漏的 API，优先使用 uni-app 生命周期管理
 
 ## 相关文档
 
-- **ADRs（移动端独立编号）**：`docs/adr/` —— `0001`-`0006`：SSE 流式传输、轻量状态管理、手动 JSON 类型映射、生物识别门控、自研安全存储、改密不吊销会话缺口；与根仓库 `docs/adr/`（`ADR-0001`+ 编号）互不相关，引用时注意区分
+- **ADRs（移动端独立编号，现至 `0020`）**：`docs/adr/` —— 关键几条：`0008` 验收门与证据（四门判据）、`0016` 真机门的触发面与取证节奏、`0019` 契约测试读取层归一、`0020` 端到端通道裁决与装配清退；与根仓库 `docs/adr/`（`ADR-0001`+ 编号）互不相关，引用时注意区分
 - **Git 工作流**：`docs/GIT_WORKFLOW.md`
 - **UI 规范**：`docs/ui-spec.md`
 - **技术规范**：`docs/technical-spec.md`
