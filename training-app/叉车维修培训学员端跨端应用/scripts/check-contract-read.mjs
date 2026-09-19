@@ -407,15 +407,19 @@ function reportAll() {
  * 不依赖祖先关系。两种都失败才 fail-closed。
  */
 function diffAgainst(base) {
-  const args = (range) => ['-c', 'core.quotepath=false', 'diff', '-U0', range, '--', MOBILE_REL_PREFIX]
+  const baseArgs = ['-c', 'core.quotepath=false', 'diff', '-U0']
+  const tail = ['--', MOBILE_REL_PREFIX]
   const opts = { cwd: REPO_ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }
   try {
-    return execFileSync('git', args(`${base}...HEAD`), opts)
+    // 三点：一个 range 参数
+    return execFileSync('git', [...baseArgs, `${base}...HEAD`, ...tail], opts)
   } catch (e) {
     const msg = String(e.stderr ?? e.message ?? '')
     if (!/no merge base/i.test(msg)) throw e
     console.error(`[check-contract-read] ${base}...HEAD 无共同祖先（浅历史），退成两点 diff`)
-    return execFileSync('git', args(`${base} HEAD`), opts)
+    // ⚠️ 两点必须是**两个**参数：`git diff origin/master HEAD`。写成单个 'origin/master HEAD'
+    //    git 会当成一个 revision 解析 ⇒ `fatal: bad revision 'origin/master HEAD'`（实测踩过）。
+    return execFileSync('git', [...baseArgs, base, 'HEAD', ...tail], opts)
   }
 }
 
