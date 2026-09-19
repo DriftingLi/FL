@@ -7,14 +7,15 @@
  *   D3 Diff 数组每项格式正确（filename:status）
  *   D4 ChangedCount 与 Diff 中「有变化」数量一致
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const SCRIPT_REL = 'scripts/lib/screenshot-diff.ps1';
 
 function readSource() {
-  return fs.readFileSync(path.join(ROOT, SCRIPT_REL), 'utf8');
+  return readText(path.join(ROOT, SCRIPT_REL));
 }
 
 describe('screenshot-diff.ps1 contract', () => {
@@ -87,7 +88,7 @@ describe('screenshot-diff.ps1 contract', () => {
   // D9（2026-09-18，#1139）：判定与文案的单点真源在 `screenshot-gate.ps1` 的 Get-PngDiffVerdict
   //   —— 步骤 7「永不 fail」的根因是判定散在 I/O 里、没人能真跑它。
   test('D9: 【2026-09-18】门判定抽成纯函数 Get-PngDiffVerdict（可被真跑）', () => {
-    const gate = fs.readFileSync(path.join(ROOT, 'scripts', 'lib', 'screenshot-gate.ps1'), 'utf8');
+    const gate = readText(path.join(ROOT, 'scripts', 'lib', 'screenshot-gate.ps1'));
     expect(gate).toContain('function Get-PngDiffVerdict');
     // 四态都在（判据预登记）：首次自动填基线 / 无变化 / 有变化要人裁决 / 刷新基线
     ['write-baseline', 'none', 'request-decision', 'refresh-baseline'].forEach((a) => {
@@ -109,7 +110,7 @@ describe('screenshot-diff.ps1 contract', () => {
     // 跳过不得静默：结果里必须带着被跳过的清单
     expect(src).toContain('SkippedStale');
     expect(src).toMatch(/跳过（非本轮产物/);
-    const gate = fs.readFileSync(path.join(ROOT, 'scripts', 'lib', 'screenshot-gate.ps1'), 'utf8');
+    const gate = readText(path.join(ROOT, 'scripts', 'lib', 'screenshot-gate.ps1'));
     expect(gate).toContain('function Select-ThisRunShots');
     expect(gate).toContain("Reason = 'stale'");
   });
@@ -118,7 +119,7 @@ describe('screenshot-diff.ps1 contract', () => {
   //   ⚠️ 不能写成「文件里不许出现 `$started = Get-Date`」—— 开头那一次是**合法的**（整个 run 的起点）。
   //   真正的判据是**次数**：起点只取一次，而它被**两次**消费。
   test('D11: 【2026-09-18】dev-finish 把同一个 $started 交给步骤 6 与步骤 7（起点只取一次、消费两次）', () => {
-    const finish = fs.readFileSync(path.join(ROOT, 'scripts', 'dev-finish.ps1'), 'utf8');
+    const finish = readText(path.join(ROOT, 'scripts', 'dev-finish.ps1'));
     // 起点只取一次（多取 = 两个判据会漂，先取的那次把后落的截图误判成陈旧）
     const starts = finish.match(/\$started\s*=\s*Get-Date/g) || [];
     expect(starts.length).toBe(1);

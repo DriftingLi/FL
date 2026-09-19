@@ -10,11 +10,12 @@
  *    三字段发送前 trim（兜底，旧本地已存脏值也能救）
  * 2) 确认表单处（confirmCustomModel）对三字段归一化回写（trim 后入 refs，防脏值流入水合/落盘）
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const PAGE_PATH = path.join(__dirname, '..', 'pages', 'ai-assistant', 'ai-assistant.uvue');
-const src = fs.readFileSync(PAGE_PATH, 'utf8');
+const src = readText(PAGE_PATH);
 
 /**
  * 提取函数体：兼容两种声明形态——

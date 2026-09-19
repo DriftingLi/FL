@@ -45,7 +45,12 @@ const EXECUTION_MARKERS = [
   { re: /\bexecFileSync\s*\(/, why: 'execFileSync：同步起子进程' },
   { re: /\bspawnSync\s*\(/, why: 'spawnSync：同步起子进程' },
   { re: /\bexecSync\s*\(/, why: 'execSync：同步起子进程' },
-  { re: /utsHarness/, why: 'utsHarness：把 .uts 当 JS 真执行' },
+  // ⚠️ `utsHarness` 这条必须锚在**执行调用**上，不能只认模块名（#1178 实测踩过）：
+  // 读取层归一（ADR-0019）落地后，一批**接线守护**也 `require('./utsHarness')` 取共享读者 `readText` ——
+  // 但它们**并不执行** `.uts`，只是用它读文本。只认模块名会把 6 个接线守护误升成行为守护
+  // （H5「点名的手抄镜像仍是接线守护」当场转红，而它们的断言一行没改）。
+  // 故只认真正的执行出口：`loadUts(`（把 .uts 当 JS 跑）。
+  { re: /\bloadUts\s*\(/, why: 'utsHarness.loadUts：把 .uts 当 JS 真执行' },
   { re: /import\(\s*/, why: '动态 import()：真加载被执行物' },
 ];
 

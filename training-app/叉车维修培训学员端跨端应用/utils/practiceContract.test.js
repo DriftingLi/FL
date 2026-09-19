@@ -13,8 +13,10 @@
 const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
-const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+const read = (rel) => readText(path.join(ROOT, rel));
 
 const PRACTICE_PAGES = ['pages/practice/practice.uvue', 'pages/practice/practice-do.uvue'];
 
@@ -35,7 +37,7 @@ describe('600 行软预算机检（pages/practice/** 达标后锁定）', () => 
   it('practice 模块全部源文件 ≤600 行', () => {
     const over = practiceSourceFiles().map((f) => ({
       file: path.relative(ROOT, f),
-      lines: fs.readFileSync(f, 'utf8').split('\n').length,
+      lines: readText(f).split('\n').length,
     })).filter((x) => x.lines > 600);
     expect(over).toEqual([]);
   });

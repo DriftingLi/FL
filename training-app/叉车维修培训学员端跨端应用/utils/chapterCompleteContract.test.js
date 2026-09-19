@@ -23,18 +23,21 @@
  *
  * 刻意**不**钉死具体文案与样式类名（照 ADR-0007 先例：文案/外观可再调整，守护不该拦）。
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 /**
  * 读源码并**归一化换行**为 LF。
  *
- * ⚠️ 必须归一：本仓工作树里的 `.uvue` / `.uts` 是 **CRLF**，而 `bodyAfter` 的收尾判据
- * 是 `\n    }\n` —— 不归一就永远匹配不到 `\r\n    }\r\n`，提取器恒返回空串，
- * 于是断言拿到空串、看起来像「接线缺失」的假红（实测踩过：9 条假红）。
+ * ⚠️ 必须归一，理由是「**与检出平台无关**」：`readText`（`utils/utsHarness.js`，ADR-0019 的唯一
+ * 归一真源）对任何原因、任何扩展名落下的 CRLF 一律免疫 —— **不是**「本工作树是 CRLF」（`.uts` /
+ * `.uvue` 已由 `.gitattributes` 钉 LF，#1137）。不归一时，`bodyAfter` 的收尾判据 `\n    }\n`
+ * 在 CRLF 源上永远匹配不到，提取器恒返回空串 ⇒ 断言拿到空串、看起来像「接线缺失」的假红
+ * （Windows 检出实测踩过：9 条假红）。
  */
-const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8').replace(/\r\n/g, '\n');
+const read = (rel) => readText(path.join(ROOT, rel));
 
 const API = 'api/course.uts';
 const COMPOSABLE = 'pages/courses/composables/useChapterStudy.uts';
@@ -50,7 +53,7 @@ const PAGE = 'pages/courses/chapter-view.uvue';
  *   （实测把 `updateCourseProgressApi` 截在 `payload['completed'] = true` 处，尾部的
  *   `post(...)` 丢失 ⇒ 假红）。
  *
- * 故唯一稳的判据是数括号。调用方 `read()` 已把 CRLF 归一为 LF。
+ * 故唯一稳的判据是数括号。调用方 `read()` 已把换行归一为 LF（`readText`，与检出平台无关）。
  */
 function bodyAfter(src, marker) {
   const start = src.indexOf(marker);
@@ -154,10 +157,7 @@ describe('#1111 承载面：章节课有「标记完成」入口且接线正确'
 
 describe('#1111 兼容性：后端既有自动完成路径不得被本次改动破坏', () => {
   it('本次不触碰后端的时长阈值自动完成逻辑（改口径需另立票并改 Go 测试）', () => {
-    const backend = fs.readFileSync(
-      path.join(ROOT, '..', '..', 'backend', 'internal', 'service', 'course_service.go'),
-      'utf8'
-    );
+    const backend = readText(path.join(ROOT, '..', '..', 'backend', 'internal', 'service', 'course_service.go'));
     // 两条置 100 路径必须同时还在：① 学满时长自动 ② 显式 completed
     expect(backend).toMatch(/ch\.StudyDuration\s*>=\s*threshold\s*\|\|\s*in\.Completed/);
     expect(backend).toMatch(/duration\s*>=\s*threshold\s*\|\|\s*in\.Completed/);

@@ -13,9 +13,10 @@
  * 归一之后**扩展名钉没钉完全不重要**，对任何原因导致的 CRLF 一律免疫。本守卫是它的**结构半**：
  * 防止新写的契约测试又去裸读源码。
  *
- * ## 判据
+ * ## 判据（两条，取或）
  *
- * 在 `utils/*.test.js` 里遍历每个 `readFileSync(` 调用点，**同时**满足下列两条即违规：
+ * **规则一 —— 调用点**：在 `utils/*.test.js` 里遍历每个 `readFileSync(` 调用点，**同时**满足
+ * 下列两条即违规：
  *   ① 该取值**未**经归一（同一表达式上不接 `.replace(/\r\n/g, '\n')`）；
  *   ② 其读取目标**静态可解析**为**仓内已跟踪文件**
  *      （含 `path.join(ROOT|__dirname, …)`，含经该文件内读者助手参数绑定的字面量）。
@@ -25,6 +26,22 @@
  * 解不出目标的调用点**天然放行**，因此本守卫**不需要 allowlist**（ADR-0019 §②⑤ 的「免 allowlist」）。
  * 代价是**有假阴性**：目标是动态变量的裸读解析不出来就放行。这是有意偏向「不误报」的一侧 ——
  * 门若对现有合法代码判红，它就会被绕过。
+ *
+ * **规则二 —— 读者助手体（#1178 追加裁定，2026-09-19）**：`const NAME = (params) => …` 形态的
+ * 读者助手，**其体内出现 `readFileSync` 而未归一 ⇒ 违规**，**不要求**该调用点的目标能静态解析。
+ * 违规点报在**助手声明行**（不是体内那行）——`--diff` 按新增行号筛，改助手就是把声明行改掉。
+ *
+ * **为什么规则二不需要「目标可解析」这个前置**：票 B 收口后实测枚举了「有读者助手且未归一」的
+ * 全部 26 个文件，**每一个助手的实参都指向仓内源码**（23 个 `fs.readFileSync(path.join(ROOT, rel), 'utf8')`
+ * 形态、3 个 `path.join(ROOT, p)` 形态、2 个裸变量 `p` 形态——后两类的调用点传的也都是
+ * `path.join(__dirname, …)` 的仓内源码），**没有一个只读临时产物** ⇒ 这条规则**结构性不会引入误报**。
+ * 反过来说，规则一那 26 个文件的缺陷面正是靠规则二兜住的：助手体把「目标解析」和「是否归一」
+ * 两件事解耦了，而解耦后仍然只有仓内源码这一种被读物。
+ *
+ * **仍未覆盖（写实，勿当全量）**：`function NAME(params) { return fs.readFileSync(…) }`
+ * 形态的读者**不在规则二内**（规则二只认 `const NAME = (…) => …`），它们仍靠规则一在**调用点**
+ * 兜；读的是循环变量（`fs.readFileSync(f, 'utf8')`）这类解不出的裸读也仍只能靠人。这是
+ * 「不误报优先」的同一取舍，不是遗漏。
  *
  * ## 用法
  *
@@ -53,8 +70,36 @@ const UTILS_DIR = join(MOBILE_ROOT, 'utils')
 const MOBILE_REL_PREFIX = 'training-app/叉车维修培训学员端跨端应用'
 const UTILS_REL_PREFIX = MOBILE_REL_PREFIX + '/utils'
 
+/** 已跟踪文件清单与 basename 索引（`main` 之前由 `trackedSet()` / `buildBasenameIndex` 填好；
+ *  放在这里而不是文件末尾：`scanSource` → `resolveTargets` 会读它们，声明在使用之前可避免
+ *  「先被 import 调用、后初始化」的时序歧义）。 */
+let tracked = new Set()
+/** basename → 已跟踪路径列表（兜底解析用；同名多命中视为不可判定 ⇒ 放行） */
+let byBasename = new Map()
+
 /** 归一判据：`\r\n` → `\n`（与 utils/utsHarness.js 的 normalizeEol 同一语义） */
 const EOL_NORMALIZE_RE = /\.replace\(\s*\/\\r\\n\/g\s*,\s*['"]\\n['"]\s*\)/
+
+/** 读者助手形态：`const NAME = (params) => …`（规则二只认这一种；`function NAME()` 不在内） */
+const READER_HELPER_RE = /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*\(([^)]*)\)\s*=>/g
+
+/** 形如 `fs.readFileSync` / `require('fs').readFileSync` 的取值（裸 `readFileSync` 也算 —— 本仓
+ *  有 `const read = (abs) => readFileSync(abs, 'utf8')` 这种先解构 `fs` 的写法）。
+ *  ⚠️ 这里**不能**写「前缀不是 `.`」：那样会把最常见的 `fs.readFileSync` 一起排除掉 ——
+ *  实测踩过（规则二在改造前应当报 26 个助手，写成排除 `.` 后报 0 个，`--all` 假绿）。 */
+const RAW_READ_PREFIX = String.raw`(?:fs|require\(['"]fs['"]\))\.readFileSync|\breadFileSync`
+
+/** 助手体里出现裸读 —— 按实参形状分四条（每条都要求实参是 `…, 'utf8'` 收尾）：
+ *  ① 单个标识符 / 点号链   ② 字符串字面量   ③ 括号配平的调用（`path.join(ROOT, p)`）
+ *  ④ 含 `${…}` 的模板串。
+ *  刻意**不写**「贪婪到最后一个 `,'utf8'`」的兜底正则：多行写法下它会跨调用点吞掉中间代码，
+ *  把后面本已合规的读也判红 —— 那是**误报**，比漏报更坏。 */
+const RAW_READ_IN_BODY_RES = [
+  new RegExp(`${RAW_READ_PREFIX}\\s*\\(\\s*[A-Za-z_$][\\w$.]*\\s*,\\s*['"]utf8['"]\\s*\\)`),
+  new RegExp(`${RAW_READ_PREFIX}\\s*\\(\\s*['"][^'\\n]*['"][^)\\n]*,\\s*['"]utf8['"]\\s*\\)`),
+  new RegExp(`${RAW_READ_PREFIX}\\s*\\(\\s*(?:[A-Za-z_$][\\w$]*\\.)*[A-Za-z_$][\\w$]*\\s*\\((?:[^()]|\\([^()]*\\))*\\)\\s*,\\s*['"]utf8['"]\\s*\\)`),
+  new RegExp(`${RAW_READ_PREFIX}\\s*\\(\\s*\`[^\`\\n]*\`\\s*,\\s*['"]utf8['"]\\s*\\)`),
+]
 
 /** 指明「这段文本里出现了仓内源码文件的字面量路径」 */
 const SOURCE_EXT_RE = /\.(?:uts|uvue|ps1|mjs|json|md|ts|tsx|vue|js|go|sh|css)\b/i
@@ -130,13 +175,14 @@ function withRootSentinels(text) {
     .replace(/\bREPO\b/g, () => '@REPO@')
 }
 
-/** 调用点若落在 `const NAME = (params) => BODY` 里且 BODY 自身**未**归一，返回该助手信息。
- *  用途：把助手的**实参字面量**按位置绑到形参，从而解析 `read(p)` 里的 `p`。
+/** 调用点若落在 `const NAME = (params) => BODY` 里，返回该助手信息（含 BODY 自身是否已归一）。
+ *  用途一（规则一）：把助手的**实参字面量**按位置绑到形参，从而解析 `read(p)` 里的 `p`。
+ *  用途二（规则二）：**助手体本身**就是判据面 —— 体内裸读即违规，与实参能否解析无关。
  *
  *  实现要点：BODY 用**括号配对**界定（不是正则懒匹配 `;`）——否则 `const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');`
  *  这种「函数体里有分号前的 `)`」的写法会截断在第一个 `)` 上。 */
 export function enclosingHelper(src, idx) {
-  const re = /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*\(([^)]*)\)\s*=>/g
+  const re = new RegExp(READER_HELPER_RE.source, 'g')
   let m
   let last = null
   while ((m = re.exec(src)) !== null) if (m.index < idx) last = m
@@ -146,8 +192,14 @@ export function enclosingHelper(src, idx) {
   const bodyEnd = helperBodyEnd(src, bodyStart)
   if (bodyEnd < 0 || idx > bodyEnd) return null
   const body = src.slice(bodyStart, bodyEnd + 1)
-  if (EOL_NORMALIZE_RE.test(body)) return null
-  return { name: last[1], params: last[2].split(',').map((s) => s.trim()).filter(Boolean) }
+  return {
+    name: last[1],
+    params: last[2].split(',').map((s) => s.trim()).filter(Boolean),
+    /** 声明行行号（1-based）——规则二的违规点报在这里 */
+    line: src.slice(0, last.index).split('\n').length,
+    normalized: EOL_NORMALIZE_RE.test(body),
+    rawRead: RAW_READ_IN_BODY_RES.some((r) => r.test(body)),
+  }
 }
 
 /** 助手体结束位置：以 `{` 开头则按花括号配对，否则到第一个分号 */
@@ -238,6 +290,8 @@ export function scanSource(src, isTracked) {
   const code = blankComments(src)
   const consts = collectConsts(code)
   const violations = []
+  /** 已按规则一报过的**助手声明行** —— 规则二按它去重，一个助手只报一次 */
+  const reportedHelpers = new Set()
   const re = /readFileSync\s*\(/g
   let m
   while ((m = re.exec(code)) !== null) {
@@ -265,13 +319,48 @@ export function scanSource(src, isTracked) {
     // ③ 只对「读源码文本」的面报红：目标是源码类文件，或实参里出现了源码扩展名。
     //    （读 .json 但只做 JSON.parse 的也走读者，因为 parse 对 CRLF 不敏感——但归一无害，
     //      且统一走读者更简单；此处不额外放宽，避免规则出现第二套判据。）
+    if (helper && !helper.normalized) {
+      reportedHelpers.add(`${helper.name}@${helper.line}`)
+    }
     violations.push({
       line: lineNo,
       target,
       text: (code.split('\n')[lineNo - 1] ?? '').trim(),
     })
   }
+  // 规则二：读者助手体出现裸读而未归一 ⇒ 违规（**不要求**调用点的目标能静态解析）。
+  // 报在**助手声明行**：--diff 按新增行号筛，而改助手就是把那一行改掉。
+  for (const h of helpersIn(code)) {
+    if (h.normalized || !h.rawRead) continue
+    if (reportedHelpers.has(`${h.name}@${h.line}`)) continue
+    violations.push({
+      line: h.line,
+      target: `${h.name}() 助手体内裸读（未归一）`,
+      text: (code.split('\n')[h.line - 1] ?? '').trim(),
+    })
+  }
   return violations
+}
+
+/** 枚举源码里全部 `const NAME = (…) => …` 读者助手（体里有裸读的才算，避免把工具函数当成读者） */
+export function helpersIn(src) {
+  const re = new RegExp(READER_HELPER_RE.source, 'g')
+  const out = []
+  let m
+  while ((m = re.exec(src)) !== null) {
+    const bodyStart = m.index + m[0].length
+    const bodyEnd = helperBodyEnd(src, bodyStart)
+    if (bodyEnd < 0) continue
+    const body = src.slice(bodyStart, bodyEnd + 1)
+    if (!new RegExp(`${RAW_READ_PREFIX}\\s*\\(`).test(body)) continue
+    out.push({
+      name: m[1],
+      line: src.slice(0, m.index).split('\n').length,
+      normalized: EOL_NORMALIZE_RE.test(body),
+      rawRead: RAW_READ_IN_BODY_RES.some((r) => r.test(body)),
+    })
+  }
+  return out
 }
 
 /** 解码 git 引号路径里的八进制转义（`\345\217\211` → 中文）。本包目录名是中文，必然命中。 */
@@ -465,10 +554,6 @@ function reportDiff(base) {
   console.error('\n（本步只判**新增行**；存量的收敛见 #1178。）')
   return 1
 }
-
-let tracked = new Set()
-/** basename → 已跟踪路径列表（兜底解析用；同名多命中视为不可判定 ⇒ 放行） */
-let byBasename = new Map()
 
 function main(argv) {
   const mode = argv[0] ?? '--all'

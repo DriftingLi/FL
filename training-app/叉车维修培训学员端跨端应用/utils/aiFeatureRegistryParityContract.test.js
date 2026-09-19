@@ -24,11 +24,12 @@
  * 断言纪律（沿用 #921 评审修正）：每个判据都先用**注入违规的变形样本**证明检测器有效，
  * 再对真实文件断言合规 —— 否则「检测器空跑」会被读成绿。
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
-const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
+const read = (p) => readText(path.join(ROOT, p));
 
 const CONSTANTS_PATH = 'pages/ai-assistant/ai-assistant-constants.uts';
 const REGISTRY_PATH = '../../backend/internal/service/ai_feature_registry.go';

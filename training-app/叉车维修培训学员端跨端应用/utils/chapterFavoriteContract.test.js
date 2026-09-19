@@ -26,13 +26,13 @@
  * `utils/courseFavoriteAffordanceContract.test.js` 对课程详情守，章节页同形）。
  * 「真机上确实点了能收藏、列表里出现、点开渲染正文」由 ①a 真机取证承担。
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const PAGE = 'pages/courses/chapter-view.uvue';
-/** 归一 CRLF（工作树里的 .uvue 是 CRLF，不归一则按 `\n` 锚定的判据会错位） */
-const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8').replace(/\r\n/g, '\n');
+const read = (rel) => readText(path.join(ROOT, rel));
 
 /**
  * 取 `marker` 之后那个函数的**函数体**（花括号配平，与缩进风格 / 行尾无关）。

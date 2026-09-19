@@ -21,6 +21,8 @@
 const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 
 /** 变体选择符 U+FE0F：合法时**必须**紧跟在一个非空白基字符之后 */
@@ -334,7 +336,7 @@ describe('图标字形契约（#1071：全仓零空槽 + 零孤立 U+FE0F）', (
       const offenders = [];
       let count = 0;
       for (const f of files) {
-        const v = scanIconFnEmptyReturns(fs.readFileSync(f, 'utf8'));
+        const v = scanIconFnEmptyReturns(readText(f));
         if (v.length === 0) continue;
         count += v.length;
         offenders.push(relOf(f) + '\n    ' + v.join('\n    '));
@@ -347,7 +349,7 @@ describe('图标字形契约（#1071：全仓零空槽 + 零孤立 U+FE0F）', (
     it('模板里 class 含 icon 的 <text> 不再为空', () => {
       const offenders = [];
       for (const f of files) {
-        const v = scanEmptyTemplateIconSlots(fs.readFileSync(f, 'utf8'));
+        const v = scanEmptyTemplateIconSlots(readText(f));
         if (v.length) offenders.push(relOf(f) + '\n    ' + v.join('\n    '));
       }
       expect(offenders.join('\n')).toBe('');
@@ -356,7 +358,7 @@ describe('图标字形契约（#1071：全仓零空槽 + 零孤立 U+FE0F）', (
     it('全仓源码无孤立 U+FE0F（合法形态只剩「基字符 + FE0F」）', () => {
       const offenders = [];
       for (const f of files) {
-        const v = scanOrphanVariationSelectors(fs.readFileSync(f, 'utf8'));
+        const v = scanOrphanVariationSelectors(readText(f));
         if (v.length) offenders.push(relOf(f) + '\n    ' + v.join('\n    '));
       }
       expect(offenders.join('\n')).toBe('');

@@ -24,11 +24,12 @@
  * 已知边界（如实声明）：契约测试只钉客户端这一半；真机门与本地编译门（移动端 `docs/adr/0008`
  * 的 ① / ④）另行执行并在 PR 证据段如实记录。
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
-const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
+const read = (p) => readText(path.join(ROOT, p));
 
 const PAGE = read('pages/ai-assistant/ai-assistant.uvue');
 const CONSTANTS = read('pages/ai-assistant/ai-assistant-constants.uts');

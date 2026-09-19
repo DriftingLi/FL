@@ -11,13 +11,14 @@
  * 3) 消息体类型支持 images 承载（AiChatMessage 携带可选 images）——后端
  *    StreamChatReq.Messages[].Images 仅最后一条用户消息生效
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const API_PATH = path.join(__dirname, '..', 'api', 'aiAssistant.uts');
 const TYPES_PATH = path.join(__dirname, '..', 'types', 'ai.uts');
-const apiSrc = fs.readFileSync(API_PATH, 'utf8');
-const typesSrc = fs.readFileSync(TYPES_PATH, 'utf8');
+const apiSrc = readText(API_PATH);
+const typesSrc = readText(TYPES_PATH);
 
 /** 兼容 `export function 名(` 的提取辅助 */
 function fnBody(src, name) {

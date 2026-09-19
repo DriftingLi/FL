@@ -24,14 +24,15 @@
  *   B12 pages.json 还原逻辑保留
  *   B13 Full 参数透传给 hx-run
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const SCRIPT_REL = 'scripts/lib/build-deploy.ps1';
 
 function readSource() {
-  return fs.readFileSync(path.join(ROOT, SCRIPT_REL), 'utf8');
+  return readText(path.join(ROOT, SCRIPT_REL));
 }
 
 describe('build-deploy.ps1 contract', () => {

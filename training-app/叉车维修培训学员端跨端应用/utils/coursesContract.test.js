@@ -21,8 +21,10 @@
 const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
-const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+const read = (rel) => readText(path.join(ROOT, rel));
 const exists = (rel) => fs.existsSync(path.join(ROOT, rel));
 
 const COURSES_PAGES = [
@@ -135,7 +137,7 @@ describe('600 行软预算机检（pages/courses/** + 模块域 api 达标后锁
     const files = coursesSourceFiles().concat(path.join(ROOT, 'api/course.uts'));
     const over = files.map((f) => ({
       file: relOf(f),
-      lines: fs.readFileSync(f, 'utf8').split('\n').length,
+      lines: readText(f).split('\n').length,
     })).filter((x) => x.lines > 600);
     expect(over).toEqual([]);
   });
@@ -259,7 +261,7 @@ describe('allowlist 不回潮（courses 域违例清零的锁）', () => {
   it('courses 域源文件零 catch-any / 零 e.detail 直取（规则 H / I 全量执法）', () => {
     const files = coursesSourceFiles().concat([path.join(ROOT, 'api/course.uts')]);
     for (const f of files) {
-      const src = fs.readFileSync(f, 'utf8');
+      const src = readText(f);
       expect(src).not.toMatch(/catch\s*\(\s*\(?\s*[A-Za-z_$][\w$]*\s*:\s*any\b(?!\s*\|)/);
       expect(src).not.toContain('.detail');
     }

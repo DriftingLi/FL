@@ -13,19 +13,20 @@
  *   C3 `restoreFromStorage()` 判 storage 不可用时同步归零内存登录态
  *   C4「清理缓存」不丢 `auth_refresh_token` / `auth_login_provider`
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const REQUEST_UTS = path.join(ROOT, 'api', 'request.uts');
 const GATE_UTS = path.join(ROOT, 'api', 'refreshGate.uts');
 const AUTH_UTS = path.join(ROOT, 'stores', 'auth.uts');
 const SETTINGS_UVUE = path.join(ROOT, 'pages', 'profile', 'settings.uvue');
 
-const requestSrc = fs.readFileSync(REQUEST_UTS, 'utf8');
-const gateSrc = fs.readFileSync(GATE_UTS, 'utf8');
-const authSrc = fs.readFileSync(AUTH_UTS, 'utf8');
-const settingsSrc = fs.readFileSync(SETTINGS_UVUE, 'utf8');
+const requestSrc = readText(REQUEST_UTS);
+const gateSrc = readText(GATE_UTS);
+const authSrc = readText(AUTH_UTS);
+const settingsSrc = readText(SETTINGS_UVUE);
 
 /** 提取函数体：从函数声明到顶层 `\n}`（先例：utils/quickLoginContract.test.js） */
 function fnBody(src, name) {

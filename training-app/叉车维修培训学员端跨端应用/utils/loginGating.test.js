@@ -9,10 +9,11 @@
  * 5) 快捷登录：authenticate → loadSecureToken → auth.quickLogin → reLaunch；失败降级回填
  * 6) 孤儿凭据自愈：确定性不支持 + 完整凭据 → 降级仅账号；API 失败（definitive=false）不清理
  */
-const fs = require('fs');
 const path = require('path');
 
-const src = fs.readFileSync(path.join(__dirname, '..', 'pages', 'login', 'login.uvue'), 'utf8');
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
+const src = readText(path.join(__dirname, '..', 'pages', 'login', 'login.uvue'));
 
 const script = src.slice(src.indexOf('<script'), src.lastIndexOf('</script>'));
 

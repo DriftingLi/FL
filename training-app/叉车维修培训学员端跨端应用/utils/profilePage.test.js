@@ -9,11 +9,13 @@
 const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const PAGE_PATH = path.join(__dirname, '..', 'pages', 'profile', 'profile.uvue');
 const PAGES_JSON = path.join(__dirname, '..', 'pages.json');
 
-const src = fs.readFileSync(PAGE_PATH, 'utf8');
-const pagesConf = JSON.parse(fs.readFileSync(PAGES_JSON, 'utf8'));
+const src = readText(PAGE_PATH);
+const pagesConf = JSON.parse(readText(PAGES_JSON));
 const registeredPages = new Set(pagesConf.pages.map((p) => p.path));
 const tabPages = new Set(
   pagesConf.tabBar && pagesConf.tabBar.list ? pagesConf.tabBar.list.map((t) => t.pagePath) : []
@@ -35,13 +37,13 @@ function moduleFiles() {
 function section(name) {
   const files = moduleFiles();
   if (name === 'template') {
-    const pageSrc = fs.readFileSync(PAGE_PATH, 'utf8');
+    const pageSrc = readText(PAGE_PATH);
     const tpl = pageSrc.slice(pageSrc.indexOf('<template>'), pageSrc.lastIndexOf('</template>'));
     return inlineComponents(tpl);
   }
   const re = name === 'script' ? /<script[^>]*>([\s\S]*?)<\/script>/ : /<style[^>]*>([\s\S]*?)<\/style>/;
   return files.map((f) => {
-    const s = fs.readFileSync(f, 'utf8');
+    const s = readText(f);
     const m = re.exec(s);
     return m ? m[1] : '';
   }).join('\n');
@@ -56,7 +58,7 @@ function inlineComponents(tpl) {
     const kebab = tag.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
     const compPath = path.join(COMPONENT_DIR, kebab + '.uvue');
     if (!fs.existsSync(compPath)) return whole;
-    const csrc = fs.readFileSync(compPath, 'utf8');
+    const csrc = readText(compPath);
     const open = csrc.indexOf('<template>');
     const close = csrc.lastIndexOf('</template>');
     if (open === -1 || close === -1) return whole;
@@ -217,7 +219,7 @@ describe('「我的」页面跳转契约', () => {
 describe('「我的」页面 uvue 兼容性（逐编译单元：页面 + 各组件独立样式作用域）', () => {
   const units = moduleFiles();
   it.each(units.map((f) => [path.basename(f), f]))('%s 不使用 uvue 不支持的 CSS 属性与单位', (_name, file) => {
-    const s = fs.readFileSync(file, 'utf8');
+    const s = readText(file);
     const st = s.slice(s.indexOf('<style'), s.lastIndexOf('</style>'));
     expect(/(^|[;{\s])gap\s*:/.test(st)).toBe(false);
     expect(st.includes('row-gap')).toBe(false);
@@ -232,7 +234,7 @@ describe('「我的」页面 uvue 兼容性（逐编译单元：页面 + 各组�
   });
 
   it.each(units.map((f) => [path.basename(f), f]))('%s 只使用 class 选择器', (_name, file) => {
-    const s = fs.readFileSync(file, 'utf8');
+    const s = readText(file);
     const st = s.slice(s.indexOf('<style'), s.lastIndexOf('</style>'));
     expect(/:(hover|active|focus|first-child|last-child|nth-child|before|after)/.test(st)).toBe(false);
     expect(/^\s*(view|text|image|scroll-view|button)\s*\{/m.test(st)).toBe(false);
@@ -241,7 +243,7 @@ describe('「我的」页面 uvue 兼容性（逐编译单元：页面 + 各组�
   });
 
   it.each(units.map((f) => [path.basename(f), f]))('%s 模板与样式中的 class 一一对应（无死样式、无裸 class）', (_name, file) => {
-    const s = fs.readFileSync(file, 'utf8');
+    const s = readText(file);
     const tpl = s.slice(s.indexOf('<template>'), s.lastIndexOf('</template>'));
     const script = s.slice(s.indexOf('<script'), s.lastIndexOf('</script>'));
     const st = s.slice(s.indexOf('<style'), s.lastIndexOf('</style>'));

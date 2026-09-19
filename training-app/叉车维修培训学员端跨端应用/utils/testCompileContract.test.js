@@ -16,14 +16,15 @@
  *   T8  【结构层】编译期诊断非空 ⇒ Ok=false（fail-closed）
  *   T9  SkipTests 参数存在（dev-finish 已在步骤 3 跑过测试，步骤 4 不重复跑）
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const SCRIPT_REL = 'scripts/lib/test-compile.ps1';
 
 function readSource() {
-  return fs.readFileSync(path.join(ROOT, SCRIPT_REL), 'utf8');
+  return readText(path.join(ROOT, SCRIPT_REL));
 }
 
 describe('test-compile.ps1 contract', () => {

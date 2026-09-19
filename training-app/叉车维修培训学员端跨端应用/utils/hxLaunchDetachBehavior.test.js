@@ -28,6 +28,8 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const HX_RUN = path.join(ROOT, 'scripts', 'hx-run.ps1');
 /** 常驻子进程寿命（秒）。必须明显大于 D1 的阈值，才能区分「断开」与「被拖住」 */
@@ -101,14 +103,14 @@ function runHarness(ctx, cliExe) {
     status = e.status === undefined ? -1 : e.status;
     errText = String(e.message || '');
   }
-  const stdout = fs.existsSync(capFile) ? fs.readFileSync(capFile, 'utf8') : '';
-  const stderr = (fs.existsSync(capFile + '.err') ? fs.readFileSync(capFile + '.err', 'utf8') : '') + errText;
+  const stdout = fs.existsSync(capFile) ? readText(capFile) : '';
+  const stderr = (fs.existsSync(capFile + '.err') ? readText(capFile + '.err') : '') + errText;
   return { ok: status === 0, status, stdout, stderr, seconds: (Date.now() - sw) / 1000 };
 }
 
 function readLaunchOut(logDir) {
   const files = fs.existsSync(logDir) ? fs.readdirSync(logDir).filter((f) => /^launch-.*\.out$/.test(f)) : [];
-  return files.map((f) => fs.readFileSync(path.join(logDir, f), 'utf8')).join('\n');
+  return files.map((f) => readText(path.join(logDir, f))).join('\n');
 }
 
 describe('Start-CliLaunchDetached 派生形态（运行期，2026-09-15）', () => {
@@ -136,7 +138,7 @@ describe('Start-CliLaunchDetached 派生形态（运行期，2026-09-15）', () 
   });
 
   test('D3: launch 函数用新进程树（UseShellExecute）且日志由包装脚本自写（*>）', () => {
-    const src = fs.readFileSync(HX_RUN, 'utf8');
+    const src = readText(HX_RUN);
     // ⚠️ 必须**只取 Start-CliLaunchDetached 的函数体**再断言：
     //    `Invoke-CliStep`（open / project-open 两个短命步）**应该**继续用
     //    `Start-Process -NoNewWindow -RedirectStandard*` —— 那两步不会常驻，句柄泄漏不成立。

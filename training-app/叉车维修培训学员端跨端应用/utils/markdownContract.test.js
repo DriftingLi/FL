@@ -21,13 +21,14 @@
  * 跨仓文档（根 `docs/adr/ADR-0046-内容渲染口径.md` 与 `API.md`）**不 skip、fail-closed**：
  * 本仓是 monorepo，这两份文件缺席意味着「登记被删了」，静默跳过正是本票要防的假绿。
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const DIR = __dirname;
 const ROOT = path.join(DIR, '..');
 const REPO_ROOT = path.join(DIR, '..', '..', '..');
-const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+const read = (rel) => readText(path.join(ROOT, rel));
 const MD_SRC = read('utils/markdown.uts');
 /** 去掉注释后的源码：结构性断言（块产生点数量 / 字段形状）只看代码，不看解释性注释 */
 const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
@@ -502,8 +503,8 @@ describe('页面级契约：章节面渲染表格、内容精选面走交集', (
 describe('ADR-0046 / API.md 的移动端登记（本票的口径落点）', () => {
   const ADR_REL = path.join(REPO_ROOT, 'docs', 'adr', 'ADR-0046-内容渲染口径.md');
   const API_REL = path.join(REPO_ROOT, 'API.md');
-  const adr = fs.readFileSync(ADR_REL, 'utf8');
-  const api = fs.readFileSync(API_REL, 'utf8');
+  const adr = readText(ADR_REL);
+  const api = readText(API_REL);
 
   it('矩阵里移动端「表格」格已从破口改为补齐，并写清只补哪一面', () => {
     expect(adr).not.toContain('无（线上破口）');

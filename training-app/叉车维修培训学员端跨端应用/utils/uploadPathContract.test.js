@@ -15,11 +15,12 @@
  * 3) 纯函数：文件名提取、净化、哈希、目标路径（扩展名不可丢——后端白名单依赖它）
  * 4) 安全：中转路径不得含路径分隔符注入
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
-const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+const read = (rel) => readText(path.join(ROOT, rel));
 
 /**
  * 复刻 utils/uploadPath.uts 的纯函数（UTS 无法在 jest 下 require）。

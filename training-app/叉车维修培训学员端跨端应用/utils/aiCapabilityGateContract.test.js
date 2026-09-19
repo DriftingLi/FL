@@ -28,14 +28,15 @@
  *      （抽屉自身那两个**真机实测**踩到的坑 —— 类型名义重复导致的 `ClassCastException`、`<view>`
  *      承载文字样式 —— 由 `utils/aiChatDrawerContract.test.js` 守护。）
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const PAGE = path.join(__dirname, '..', 'pages', 'ai-assistant', 'ai-assistant.uvue');
 const CONSTS = path.join(__dirname, '..', 'pages', 'ai-assistant', 'ai-assistant-constants.uts');
 const ADAPTER = path.join(__dirname, '..', 'composables', 'useAiPro.uts');
 const SETTINGS = path.join(__dirname, '..', 'pages', 'ai-assistant', 'ai-settings.uvue');
-const read = (p) => fs.readFileSync(p, 'utf8');
+const read = (p) => readText(p);
 
 describe('AI 助手专业版能力门（proUnlocked）契约', () => {
   const page = read(PAGE);

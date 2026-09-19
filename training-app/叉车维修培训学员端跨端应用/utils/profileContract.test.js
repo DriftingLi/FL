@@ -10,8 +10,10 @@
 const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
-const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+const read = (rel) => readText(path.join(ROOT, rel));
 
 /** 提取 export function 函数体（从声明到顶层 "\n}"，先例 quickLoginContract） */
 function fnBodyOf(fileSrc, name) {
@@ -154,7 +156,7 @@ describe('600 行软预算机检（模块全量：pages/profile/** 全部源文�
   it('模块全部源文件 ≤600 行（含 components/**，达标后锁住防回潮，先例 mallPilot）', () => {
     const over = profileSourceFiles().map((f) => ({
       file: path.relative(ROOT, f),
-      lines: fs.readFileSync(f, 'utf8').split('\n').length,
+      lines: readText(f).split('\n').length,
     })).filter((x) => x.lines > 600);
     expect(over).toEqual([]);
   });
@@ -192,7 +194,7 @@ describe('组件接线汇总（T03 拆出物 8 组件 + 1 composable：显式 im
   it('拆出物零孤儿：components/ 与 composables/ 每个文件都被模块内源文件 import（新增拆出物必须接线）', () => {
     const pageSrcs = profileSourceFiles()
       .filter((f) => !f.includes(`${path.sep}components${path.sep}`) && !f.includes(`${path.sep}composables${path.sep}`))
-      .map((f) => fs.readFileSync(f, 'utf8'));
+      .map((f) => readText(f));
     const orphanOf = (dir, prefix) => fs.readdirSync(path.join(ROOT, 'pages/profile', dir))
       .filter((n) => /\.(uvue|uts)$/.test(n))
       .filter((n) => !pageSrcs.some((s) => s.includes(`${prefix}/${n}`)))
@@ -209,7 +211,7 @@ describe('页面层零直发请求（网络一律经域 api 函数，#641 收紧
   it('pages/profile/** 无源文件 import api/request 或裸调 uni.request', () => {
     const hits = [];
     for (const f of profileSourceFiles()) {
-      const src = fs.readFileSync(f, 'utf8');
+      const src = readText(f);
       const rel = path.relative(ROOT, f);
       if (/from\s*'[^']*api\/request(\.uts)?'/.test(src)) hits.push(`${rel}: import api/request`);
       if (/uni\.request\s*\(/.test(src)) hits.push(`${rel}: uni.request 裸调`);

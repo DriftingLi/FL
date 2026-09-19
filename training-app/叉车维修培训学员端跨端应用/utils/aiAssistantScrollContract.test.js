@@ -20,11 +20,12 @@
  * 设计沿用既有守护测试的形态：先对「注入违规」的变形样本断言检测有效（防空跑假绿），
  * 再对真实文件断言合规。
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
-const PAGE = fs.readFileSync(path.join(ROOT, 'pages/ai-assistant/ai-assistant.uvue'), 'utf8');
+const PAGE = readText(path.join(ROOT, 'pages/ai-assistant/ai-assistant.uvue'));
 
 /** 取某个 class 的规则体（从 `.name {` 切到大括号配平处） */
 function classRule(src, name) {

@@ -11,13 +11,14 @@
  *   1) api 层读 obj['balance']，不再有任何历史别名兜底；
  *   2) 页面消费 data.balance（读旧字名的写法一律视为回归）。
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
-const apiSrc = fs.readFileSync(path.join(ROOT, 'api', 'points.uts'), 'utf8');
-const profileSrc = fs.readFileSync(path.join(ROOT, 'pages', 'profile', 'profile.uvue'), 'utf8');
-const typesSrc = fs.readFileSync(path.join(ROOT, 'types', 'index.uts'), 'utf8');
+const apiSrc = readText(path.join(ROOT, 'api', 'points.uts'));
+const profileSrc = readText(path.join(ROOT, 'pages', 'profile', 'profile.uvue'));
+const typesSrc = readText(path.join(ROOT, 'types', 'index.uts'));
 
 function buildFnBody() {
   const start = apiSrc.indexOf('function buildPointsBalance');

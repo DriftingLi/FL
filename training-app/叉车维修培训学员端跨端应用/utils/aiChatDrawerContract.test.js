@@ -28,13 +28,14 @@
  *     它仍然存在 ⇒ 它只是**编译期诊断**（会让 hx-run 判红），**不是**点不开的原因。看到编译期诊断时，
  *     不要直接把它当成用户可见现象的根因。
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const RIGHT = path.join(__dirname, '..', 'components', 'ai-chat', 'ai-chat-drawer-right.uvue');
 const LEFT = path.join(__dirname, '..', 'components', 'ai-chat', 'ai-chat-drawer-left.uvue');
 const NAV = path.join(__dirname, '..', 'components', 'ai-chat', 'ai-chat-nav.uvue');
-const read = (p) => fs.readFileSync(p, 'utf8');
+const read = (p) => readText(p);
 
 describe('AI 助手抽屉契约（类型单一来源 / view 不承载文字样式）', () => {
   const right = read(RIGHT);

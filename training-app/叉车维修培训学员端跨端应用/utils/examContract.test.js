@@ -20,8 +20,10 @@
 const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
-const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+const read = (rel) => readText(path.join(ROOT, rel));
 const exists = (rel) => fs.existsSync(path.join(ROOT, rel));
 
 const EXAM_PAGES = ['pages/exam/mock-exam.uvue', 'pages/exam/mock-exam-result.uvue'];
@@ -87,7 +89,7 @@ describe('600 行软预算机检（pages/exam/** + 模块域 api 达标后锁定
     const files = examSourceFiles().concat(path.join(ROOT, 'api/mockExam.uts'));
     const over = files.map((f) => ({
       file: path.relative(ROOT, f),
-      lines: fs.readFileSync(f, 'utf8').split('\n').length,
+      lines: readText(f).split('\n').length,
     })).filter((x) => x.lines > 600);
     expect(over).toEqual([]);
   });
@@ -380,7 +382,7 @@ describe('删除禁区「exam 不用删」：行为保持点逐项仍在', () =>
 describe('展示纯函数唯一实现（T03/T06 口径）：exam 模块零题型判定第二实现', () => {
   it('exam 模块内不重新声明 getTypeName / isMultiChoice', () => {
     for (const f of examSourceFiles()) {
-      const src = fs.readFileSync(f, 'utf8');
+      const src = readText(f);
       expect(src).not.toContain('function getTypeName');
       expect(src).not.toContain('function isMultiChoice');
     }

@@ -50,6 +50,8 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const { execFileSync } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
@@ -79,7 +81,7 @@ const RESULT_MANDATORY = [
 const RESULT_OPTIONAL = ['navigationSkipReason'];
 
 function readSource(rel) {
-  return fs.readFileSync(path.join(ROOT, rel), 'utf8');
+  return readText(path.join(ROOT, rel));
 }
 
 /**

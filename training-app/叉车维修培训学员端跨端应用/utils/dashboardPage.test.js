@@ -12,13 +12,15 @@
 const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const PAGE_PATH = path.join(ROOT, 'pages', 'dashboard', 'dashboard.uvue');
 const COMPONENT_DIR = path.join(ROOT, 'pages', 'dashboard', 'components');
 const PAGES_JSON = path.join(ROOT, 'pages.json');
 
-const src = fs.readFileSync(PAGE_PATH, 'utf8');
-const pagesConf = JSON.parse(fs.readFileSync(PAGES_JSON, 'utf8'));
+const src = readText(PAGE_PATH);
+const pagesConf = JSON.parse(readText(PAGES_JSON));
 const registeredPages = new Set(pagesConf.pages.map((p) => p.path));
 const tabPages = new Set(
   pagesConf.tabBar && pagesConf.tabBar.list ? pagesConf.tabBar.list.map((t) => t.pagePath) : []
@@ -44,7 +46,7 @@ function inlineComponents(tpl) {
     const kebab = tag.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
     const compPath = path.join(COMPONENT_DIR, kebab + '.uvue');
     if (!fs.existsSync(compPath)) return whole;
-    const csrc = fs.readFileSync(compPath, 'utf8');
+    const csrc = readText(compPath);
     const open = csrc.indexOf('<template>');
     const close = csrc.lastIndexOf('</template>');
     if (open === -1 || close === -1) return whole;
@@ -54,19 +56,19 @@ function inlineComponents(tpl) {
 
 const template = inlineComponents(src.slice(src.indexOf('<template>'), src.lastIndexOf('</template>')));
 const script = moduleFiles().map((f) => {
-  const s = fs.readFileSync(f, 'utf8');
+  const s = readText(f);
   const m = /<script[^>]*>([\s\S]*?)<\/script>/.exec(s);
   return m ? m[1] : '';
 }).join('\n');
 const styleBlock = moduleFiles().map((f) => {
-  const s = fs.readFileSync(f, 'utf8');
+  const s = readText(f);
   const m = /<style[^>]*>([\s\S]*?)<\/style>/.exec(s);
   return m ? m[1] : '';
 }).join('\n');
 
 /** 解析形如 { key, title, icon, color, path, available } 的宫格条目数组（T05 手术后住 MenuGrid 组件） */
 function menuEntries() {
-  const menuSrc = fs.readFileSync(path.join(COMPONENT_DIR, 'dashboard-menu-grid.uvue'), 'utf8');
+  const menuSrc = readText(path.join(COMPONENT_DIR, 'dashboard-menu-grid.uvue'));
   const decl = menuSrc.indexOf('const menuItems :');
   if (decl === -1) throw new Error('未找到 menuItems');
   const blockStart = menuSrc.indexOf('[', decl);
@@ -171,7 +173,7 @@ describe('首页 uvue 兼容性（逐编译单元：页面 + 各组件独立样�
   const units = moduleFiles();
 
   it.each(units.map((f) => [path.basename(f), f]))('%s 不使用 uvue 不支持的 CSS 属性与单位', (_name, file) => {
-    const s = fs.readFileSync(file, 'utf8');
+    const s = readText(file);
     const st = s.slice(s.indexOf('<style'), s.lastIndexOf('</style>'));
     expect(/(^|[;{\s])gap\s*:/.test(st)).toBe(false);
     expect(st.includes('row-gap')).toBe(false);
@@ -185,7 +187,7 @@ describe('首页 uvue 兼容性（逐编译单元：页面 + 各组件独立样�
   });
 
   it.each(units.map((f) => [path.basename(f), f]))('%s 只使用 class 选择器（无标签/伪类/ID 选择器）', (_name, file) => {
-    const s = fs.readFileSync(file, 'utf8');
+    const s = readText(file);
     const st = s.slice(s.indexOf('<style'), s.lastIndexOf('</style>'));
     expect(/:(hover|active|focus|first-child|last-child|nth-child|before|after)/.test(st)).toBe(false);
     expect(/^\s*(view|text|image|scroll-view|button)\s*\{/m.test(st)).toBe(false);
@@ -193,7 +195,7 @@ describe('首页 uvue 兼容性（逐编译单元：页面 + 各组件独立样�
   });
 
   it.each(units.map((f) => [path.basename(f), f]))('%s 模板与样式中的 class 一一对应（无死样式、无裸 class）', (_name, file) => {
-    const s = fs.readFileSync(file, 'utf8');
+    const s = readText(file);
     const tpl = s.slice(s.indexOf('<template>'), s.lastIndexOf('</template>'));
     const st = s.slice(s.indexOf('<style'), s.lastIndexOf('</style>'));
     const used = new Set();

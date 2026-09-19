@@ -30,9 +30,10 @@
  *
  * 纯文件断言（不跑 pwsh、不连设备）⇒ Windows 本机与 CI 的 ubuntu runner 行为一致。
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const PROBE_REL = 'scripts/mp-weixin-element-probe.mjs';
 const GATE_SCRIPT_REL = 'scripts/mp-weixin-check.ps1';
@@ -58,7 +59,7 @@ const VERDICT_IMPACT = {
 };
 
 function readSource(rel) {
-  return fs.readFileSync(path.join(ROOT, rel), 'utf8');
+  return readText(path.join(ROOT, rel));
 }
 
 /** 注释行置空（保留行号）：判据只对**代码行**成立，注释里提 API 名不算违规。 */

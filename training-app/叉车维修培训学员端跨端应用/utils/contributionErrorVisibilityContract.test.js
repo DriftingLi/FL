@@ -12,11 +12,12 @@
  * 3) my-uploads 区分「加载失败」与「暂无数据」，失败给重试位
  * 4) 上传/建档请求的超时与端点不被顺手改动（回归锁）
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
-const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+const read = (rel) => readText(path.join(ROOT, rel));
 
 describe('#816 投稿表单失败必须可见', () => {
   const src = read('pages/forum/components/forum-contribution-form.uvue');

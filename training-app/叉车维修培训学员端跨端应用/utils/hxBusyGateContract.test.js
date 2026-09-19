@@ -29,9 +29,10 @@
  * （lock 占用 / 陈旧抢占 / -NoWait 立即 exit 2 三条路径已实测通过）；「维护者 GUI 正在编译时脚本是否真的等到/退出 2」
  * **需在维护者空出 HBuilderX 后再复测**（见 ADR-0008 与 PR 正文的「待跑」档）。
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const HELPER_REL = 'scripts/lib/hx-busy.ps1';
 const ADR_REL = 'docs/adr/0008-移动端验收门与证据.md';
@@ -39,7 +40,7 @@ const ADR_REL = 'docs/adr/0008-移动端验收门与证据.md';
 const HX_SCRIPTS = ['scripts/compile-check.ps1', 'scripts/kotlin-all-check.ps1', 'scripts/mp-weixin-check.ps1'];
 
 function readSource(rel) {
-  return fs.readFileSync(path.join(ROOT, rel), 'utf8');
+  return readText(path.join(ROOT, rel));
 }
 
 /** 纯函数：helper + 各门脚本 + ADR → 违规清单 */

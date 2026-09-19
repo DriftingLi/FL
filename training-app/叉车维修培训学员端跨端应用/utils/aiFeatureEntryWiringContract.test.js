@@ -29,11 +29,12 @@
  * 放宽的理由见 ADR-0013 ②：#921 的回归**不是「带了键」，而是「带了键却没有任何界面列它」**
  * ⇒ 该钉死的是这条不变式，不是「永不带键」这个手段（被否备选「带键建会话但不改守护」也在此列）。
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
-const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
+const read = (p) => readText(path.join(ROOT, p));
 
 const CONSTANTS = read('pages/ai-assistant/ai-assistant-constants.uts');
 const PAGE = read('pages/ai-assistant/ai-assistant.uvue');

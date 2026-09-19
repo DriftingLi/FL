@@ -36,6 +36,8 @@
 const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 
 /** 剥掉 HTML 注释与 CSS 注释：注释里写着 windowHeight / scroll-y 都不算实现 */
@@ -163,7 +165,7 @@ describe('uvue 内容页滚动容器契约（#1134 回归锁）', () => {
 
     const offenders = [];
     for (const f of files) {
-      const v = scanPageScroll(fs.readFileSync(f, 'utf8'));
+      const v = scanPageScroll(readText(f));
       if (v) {
         offenders.push(path.relative(ROOT, f).split(path.sep).join('/') + '\n    ' + v);
       }

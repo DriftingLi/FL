@@ -20,8 +20,10 @@
 const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
-const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+const read = (rel) => readText(path.join(ROOT, rel));
 
 const CHECKIN_PAGES = [
   'pages/forum/check-in.uvue',
@@ -63,7 +65,7 @@ describe('死路由清零契约（/forum/check-in 全域不得引用）', () => 
         if (!/\.(uts|uvue)$/.test(e.name) || /\.test\./.test(e.name)) continue;
         // 只抓请求调用形态：get('/forum/check-in…) / post('/forum/check-in…)；
         // 页面导航路径 /pages/forum/check-in 与历史注释不属违例
-        if (/(get|post)\s*\(\s*['"]\/forum\/check-in/.test(fs.readFileSync(p, 'utf8'))) offenders.push(path.relative(ROOT, p));
+        if (/(get|post)\s*\(\s*['"]\/forum\/check-in/.test(readText(p))) offenders.push(path.relative(ROOT, p));
       }
     };
     walk(path.join(ROOT, 'api'));

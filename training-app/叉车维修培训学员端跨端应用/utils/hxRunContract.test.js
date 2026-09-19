@@ -55,9 +55,10 @@
  * 故新增 **C11**，把「**编译成功 ≠ 运行成功**」这条锁死。
  */
 
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const SCRIPT_REL = 'scripts/hx-run.ps1';
 const DEPLOY_LIB_REL = 'scripts/lib/hx-deploy.ps1';
@@ -66,7 +67,7 @@ const ADR_REL = 'docs/adr/0008-移动端验收门与证据.md';
 const PKG_REL = 'package.json';
 
 function readSource(rel) {
-  return fs.readFileSync(path.join(ROOT, rel), 'utf8');
+  return readText(path.join(ROOT, rel));
 }
 
 /**

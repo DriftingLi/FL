@@ -12,11 +12,12 @@
  * 3) 失败传播：映射函数抛错不被静默吞掉，沿 Promise 链 reject
  * （切片 2/3 的契约用例随后续 commit 追加）
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const REQ_PATH = path.join(__dirname, '..', 'api', 'request.uts');
-const src = fs.readFileSync(REQ_PATH, 'utf8');
+const src = readText(REQ_PATH);
 
 /** 提取函数体：从函数声明到顶层级 "\n}"（先例：quickLoginContract） */
 function fnBody(name) {

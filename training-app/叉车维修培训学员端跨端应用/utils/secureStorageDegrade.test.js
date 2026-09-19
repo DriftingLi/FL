@@ -4,11 +4,12 @@
  * 降级语义（ADR-0004 决策 A）：生物识别不可用的平台只记住账号，密码不落盘。
  * 本文件先写期望契约（RED），再在 secureStorage / login 中实现（GREEN）。
  */
-const fs = require('fs');
 const path = require('path');
 
+/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
+const { readText } = require('./utsHarness');
 const SEC_PATH = path.join(__dirname, 'secureStorage.uts');
-const src = fs.readFileSync(SEC_PATH, 'utf8');
+const src = readText(SEC_PATH);
 
 describe('凭据降级契约（仅记住账号）', () => {
   it('存在账号降级保存函数 saveAccountOnly（新增 API，密码不入库）', () => {

@@ -14,15 +14,18 @@
  * ⇒ **不计入 ③ 门证据**。这一点由 ADR-0019 §②④ 裁定，是预期的，不是缺陷。
  *
  * ⚠️ 本文件**刻意不写出被 require 模块的字面文件名**（用 `'./uts' + 'Harness'` 拼出相对路径）。
- * 原因：分类器 `scripts/classify-guards.mjs` 的「真执行」判据里有一条 `/utsHarness/`（它想表达的
- * 是「用 harness 把 `.uts` 当 JS **真执行**」，即 `loadUts`），而该正则是**纯串匹配**，会连带命中
- * 任何 `require('./utsHarness')` 的测试 ⇒ 误判成**行为守护** ⇒ `guardClassification.test.js` 的
+ * 原因：分类器 `scripts/classify-guards.mjs` 的「真执行」判据曾有一条**纯串匹配**的 `/utsHarness/`
+ * （它想表达的是「用 harness 把 `.uts` 当 JS **真执行**」，即 `loadUts`），会连带命中任何
+ * `require('./utsHarness')` 的测试 ⇒ 误判成**行为守护** ⇒ `guardClassification.test.js` 的
  * H3（行为守护必须引用仓内载体）随即判红，而本测试的被测对象是**读者本身**、没有载体可引用。
  * 拼串是比「放宽 H3」或「塞一个假载体引用」都更小的改动 —— 不动共享守护的语义，也不伪造证据。
  *
+ * **#1178 已把根因修掉**：那条判据改为锚在**执行调用** `loadUts(` 上（只认模块名会把任何共享
+ * 读者的导入都误升成行为守护 —— 实测 6 个接线守护因此被误升级）。**新写的读者测试不再需要
+ * 拼串这一招**；本文件的拼串保留（它无害且继续是稳的），只是不再是**唯一**规避手段。
+ *
  * 判别力（ADR-0019 §⑥ 验收标准）：把 `utils/utsHarness.js` 里 `normalizeEol` 的
  * `.replace(/\r\n/g, '\n')` 拆掉 ⇒ 本文件必须**红**。成对取证见下方「必不红」两条。
- * （诊断记录：本文件名一律避开 `Harness` 这个词、require 走拼串 —— 理由见上一段。）
  */
 const fs = require('fs');
 const os = require('os');
