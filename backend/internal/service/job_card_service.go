@@ -146,6 +146,9 @@ func (s *JobCardService) Upsert(userID int, in JobCardInput) (*JobCardDTO, error
 	} else {
 		card.UpdatedAt = now
 	}
+	if err := validateAttachmentOwnership(&card, in); err != nil {
+		return nil, err
+	}
 	applyInput(&card, in)
 	if in.Visibility != nil {
 		v := strings.TrimSpace(*in.Visibility)
@@ -215,6 +218,65 @@ func ensureJSONBDefaults(card *model.JobCard) error {
 	}
 	if len(card.Photos) == 0 {
 		card.Photos = model.JSONB([]byte("[]"))
+	}
+	return nil
+}
+
+// validateAttachmentOwnership 简历面写时门禁（第十二波票 4）：工作照与证书原图的归属
+// 吃附件归属 module 单条判据（本站 resumes/images 前缀）。编辑未改不动——库中已有 URL
+// 放行（存量外链不被门禁开启惩罚），新出现 URL 必须本站；创建面全量即新增，天然全覆盖。
+func validateAttachmentOwnership(card *model.JobCard, in JobCardInput) error {
+	known := map[string]bool{}
+	var savedPhotos []string
+	if len(card.Photos) > 0 {
+		_ = json.Unmarshal(card.Photos, &savedPhotos)
+	}
+	for _, u := range savedPhotos {
+		known[u] = true
+	}
+	if len(card.ResumeCertifications) > 0 {
+		var rows []resumeCertificationRow
+		if err := json.Unmarshal(card.ResumeCertifications, &rows); err == nil {
+			for _, r := range rows {
+				for _, u := range r.ImageURLs {
+					known[u] = true
+				}
+			}
+		}
+	}
+	check := func(u string) error {
+		if u == "" || known[u] {
+			return nil
+		}
+		if !IsSiteAttachmentURL(u, ResumeImageDirPrefix) {
+			return errors.New("图片地址无效（仅支持本站上传的简历图片）")
+		}
+		return nil
+	}
+	// 形态不符即拒（不静默跳过）：无法解析的照片/证书载荷门禁吃不准，放行等于旁路。
+	if in.Photos != nil && len(*in.Photos) > 0 {
+		var arr []string
+		if err := json.Unmarshal(*in.Photos, &arr); err != nil {
+			return errors.New("工作照格式无效（需字符串数组）")
+		}
+		for _, u := range arr {
+			if err := check(u); err != nil {
+				return err
+			}
+		}
+	}
+	if in.ResumeCertifications != nil && len(*in.ResumeCertifications) > 0 {
+		var rows []resumeCertificationRow
+		if err := json.Unmarshal(*in.ResumeCertifications, &rows); err != nil {
+			return errors.New("证书信息格式无效")
+		}
+		for _, r := range rows {
+			for _, u := range r.ImageURLs {
+				if err := check(u); err != nil {
+					return err
+				}
+			}
+		}
 	}
 	return nil
 }
@@ -418,7 +480,7 @@ func (s *JobCardService) ValidateAndStorePDF(filename string, size int64, conten
 	if !validateFileSize(size, filename) {
 		return "", fmt.Errorf("文件大小超出限制，最大允许%dMB", maxFileSizes["default"]/(1024*1024))
 	}
-	url, err := s.fileSvc.Save(content, filename, "resumes")
+	url, err := s.fileSvc.Save(content, filename, ResumeFileDirPrefix)
 	if err != nil {
 		return "", err
 	}

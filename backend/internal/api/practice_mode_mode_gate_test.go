@@ -3,6 +3,7 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"testing"
 	"time"
@@ -29,11 +30,15 @@ func TestSearchQuestionExcludesSourceTagged(t *testing.T) {
 		t.Fatalf("置 source 标签失败: %v", err)
 	}
 	mk := func(tagIDs []int, content string) {
-		if _, err := qsvc.CreateQuestion(map[string]any{
-			"type": "single_choice", "content": content, "options": []string{"A", "B"}, "answer": "A",
-			"status": "published", "tag_ids": tagIDs,
-		}, nil, "tutor"); err != nil {
+		q, err := qsvc.CreateQuestion(service.QuestionCreateInput{
+			Type: "single_choice", Content: content, Options: json.RawMessage(`["A","B"]`), Answer: json.RawMessage(`"A"`),
+			TagIDs: tagIDs,
+		}, nil, "tutor")
+		if err != nil {
 			t.Fatalf("建题失败: %v", err)
+		}
+		if _, err := qsvc.PublishQuestion(q.ID); err != nil {
+			t.Fatalf("发布题失败: %v", err)
 		}
 	}
 	mk([]int{srcTag.ID}, "液压系统真题关键词")

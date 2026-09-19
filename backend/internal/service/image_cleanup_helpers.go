@@ -1,4 +1,5 @@
 // Package service 共享的文件清理辅助函数。
+// 本站图片归属判定已收编附件归属 module（attachment.go：IsSiteAttachmentURL）。
 package service
 
 import (
@@ -28,18 +29,4 @@ func markdownImageURLs(content string) []string {
 		urls = append(urls, u)
 	}
 	return urls
-}
-
-// isFeaturedImageURL 判断 URL 是否指向本站 featured/ 子目录。
-// local：/static/uploads/featured/xxx；R2：https://<domain>/featured/xxx。
-func isFeaturedImageURL(u string) bool {
-	u = strings.TrimSpace(u)
-	if u == "" {
-		return false
-	}
-	if strings.HasPrefix(u, "/static/uploads/featured/") {
-		return true
-	}
-	idx := strings.Index(u, "/featured/")
-	return idx > 0 && (strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://"))
 }

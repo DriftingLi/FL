@@ -3,6 +3,7 @@
 package service
 
 import (
+	"encoding/json"
 	"testing"
 
 	"go.uber.org/zap"
@@ -148,17 +149,14 @@ func TestQuestionPoolOptsUnified(t *testing.T) {
 		t.Fatalf("建证件失败: %v", err)
 	}
 	mk := func(credID *int, tagIDs []int, content string) int {
-		input := map[string]any{
-			"type": "single_choice", "content": content, "options": []string{"A", "B"}, "answer": "A",
-			"status": "published", "tag_ids": tagIDs,
+		in := QuestionCreateInput{
+			Type: "single_choice", Content: content, Options: json.RawMessage(`["A","B"]`), Answer: json.RawMessage(`"A"`),
+			TagIDs: tagIDs,
 		}
 		if credID != nil {
-			input["credential_id"] = *credID
+			in.CredentialID = *credID
 		}
-		q, err := qsvc.CreateQuestion(input, nil, "tutor")
-		if err != nil {
-			t.Fatalf("建题失败: %v", err)
-		}
+		q := createQuestionAs(t, qsvc, db, in, "published")
 		return q.ID
 	}
 	inCred := mk(&cred.ID, []int{tag.ID}, "证件内普通题")

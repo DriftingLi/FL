@@ -2,11 +2,14 @@
 package service
 
 import (
+	"encoding/json"
+	"errors"
 	"testing"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
 )
 
@@ -16,18 +19,47 @@ func newQuestionBankSvc(t *testing.T) (*QuestionBankService, *gorm.DB) {
 	return NewQuestionBankService(db, nil, zap.NewNop()), db
 }
 
-// --- CreateQuestion ---
+// createQuestionAs 测试 fixture 单点：经票 6 typed 写面创建（固定 pending），
+// 到达目标状态——published 走显式发布动作，draft 直接改列（写面已无 status 通道，
+// 造「被驳回回退」等历史状态形态必须绕面）。
+func createQuestionAs(t *testing.T, svc *QuestionBankService, db *gorm.DB, in QuestionCreateInput, status string) QuestionDTO {
+	t.Helper()
+	q, err := svc.CreateQuestion(in, nil, "tutor")
+	if err != nil {
+		t.Fatalf("fixture 创建题目失败: %v", err)
+	}
+	switch status {
+	case "", "pending":
+		return q
+	case "published":
+		q, err = svc.PublishQuestion(q.ID)
+		if err != nil {
+			t.Fatalf("fixture 发布题目失败: %v", err)
+		}
+		return q
+	case "draft":
+		if err := db.Model(&model.Question{}).Where("id = ?", q.ID).Update("status", "draft").Error; err != nil {
+			t.Fatalf("fixture 置 draft 失败: %v", err)
+		}
+		q.Status = "draft"
+		return q
+	}
+	t.Fatalf("未知 fixture 状态: %s", status)
+	return QuestionDTO{}
+}
+
+// --- CreateQuestion（票 6 typed 面）---
 
 func TestCreateQuestion_SingleChoice_Success(t *testing.T) {
 	svc, _ := newQuestionBankSvc(t)
 	createdBy := 1
-	data := map[string]any{
-		"type":    "single_choice",
-		"content": "叉车作业前应检查什么？",
-		"options": []string{"轮胎气压", "油位", "制动系统", "以上全部"},
-		"answer":  "D",
+	in := QuestionCreateInput{
+		Type:    "single_choice",
+		Content: "叉车作业前应检查什么？",
+		Options: json.RawMessage(`["轮胎气压","油位","制动系统","以上全部"]`),
+		Answer:  json.RawMessage(`"D"`),
 	}
-	result, err := svc.CreateQuestion(data, &createdBy, "tutor")
+	result, err := svc.CreateQuestion(in, &createdBy, "tutor")
 	if err != nil {
 		t.Fatalf("创建题目失败: %v", err)
 	}
@@ -44,55 +76,57 @@ func TestCreateQuestion_SingleChoice_Success(t *testing.T) {
 
 func TestCreateQuestion_InvalidType(t *testing.T) {
 	svc, _ := newQuestionBankSvc(t)
-	data := map[string]any{
-		"type":    "invalid_type",
-		"content": "test",
-		"answer":  "A",
-	}
-	_, err := svc.CreateQuestion(data, nil, "tutor")
-	if err == nil {
-		t.Fatal("应拒绝无效题型")
+	in := QuestionCreateInput{Type: "invalid_type", Content: "test", Answer: json.RawMessage(`"A"`)}
+	_, err := svc.CreateQuestion(in, nil, "tutor")
+	if !errors.Is(err, ErrQuestionTypeInvalid) {
+		t.Fatalf("应拒绝无效题型（哨兵 ErrQuestionTypeInvalid），got %v", err)
 	}
 }
 
 func TestCreateQuestion_EmptyContent(t *testing.T) {
 	svc, _ := newQuestionBankSvc(t)
-	data := map[string]any{
-		"type":    "single_choice",
-		"answer":  "A",
-		"options": []string{"A", "B"},
-	}
-	_, err := svc.CreateQuestion(data, nil, "tutor")
-	if err == nil {
-		t.Fatal("应拒绝空题干")
+	in := QuestionCreateInput{Type: "single_choice", Answer: json.RawMessage(`"A"`), Options: json.RawMessage(`["A","B"]`)}
+	_, err := svc.CreateQuestion(in, nil, "tutor")
+	if !errors.Is(err, ErrQuestionContentRequired) {
+		t.Fatalf("应拒绝空题干，got %v", err)
 	}
 }
 
 func TestCreateQuestion_MissingOptions(t *testing.T) {
 	svc, _ := newQuestionBankSvc(t)
-	data := map[string]any{
-		"type":    "single_choice",
-		"content": "test",
-		"answer":  "A",
-	}
-	_, err := svc.CreateQuestion(data, nil, "tutor")
-	if err == nil {
-		t.Fatal("单选题应要求选项")
+	in := QuestionCreateInput{Type: "single_choice", Content: "test", Answer: json.RawMessage(`"A"`)}
+	_, err := svc.CreateQuestion(in, nil, "tutor")
+	if !errors.Is(err, ErrQuestionOptionsRequired) {
+		t.Fatalf("单选题应要求选项，got %v", err)
 	}
 }
 
 func TestCreateQuestion_ShortAnswer_NoAnswer(t *testing.T) {
 	svc, _ := newQuestionBankSvc(t)
-	data := map[string]any{
-		"type":    "short_answer",
-		"content": "请描述液压系统工作原理",
-	}
-	result, err := svc.CreateQuestion(data, nil, "tutor")
+	in := QuestionCreateInput{Type: "short_answer", Content: "请描述液压系统工作原理"}
+	result, err := svc.CreateQuestion(in, nil, "tutor")
 	if err != nil {
 		t.Fatalf("简答题可不提供答案: %v", err)
 	}
 	if result.Type != "short_answer" {
 		t.Fatalf("题型应为 short_answer, got %v", result.Type)
+	}
+}
+
+func TestCreateQuestion_MultiChoice_AnswerArray(t *testing.T) {
+	svc, _ := newQuestionBankSvc(t)
+	in := QuestionCreateInput{
+		Type:    "multi_choice",
+		Content: "多选",
+		Options: json.RawMessage(`["A","B","C"]`),
+		Answer:  json.RawMessage(`["A","C"]`),
+	}
+	result, err := svc.CreateQuestion(in, nil, "tutor")
+	if err != nil {
+		t.Fatalf("数组答案创建失败: %v", err)
+	}
+	if result.Answer == nil || *result.Answer != "A,C" {
+		t.Fatalf("数组答案应逗号连接存储, got %v", result.Answer)
 	}
 }
 
@@ -103,14 +137,14 @@ func TestCreateQuestion_WithTagIDs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("创建标签失败: %v", err)
 	}
-	data := map[string]any{
-		"type":    "single_choice",
-		"content": "test",
-		"options": []string{"A", "B"},
-		"answer":  "A",
-		"tag_ids": []int{tag.ID},
+	in := QuestionCreateInput{
+		Type:    "single_choice",
+		Content: "test",
+		Options: json.RawMessage(`["A","B"]`),
+		Answer:  json.RawMessage(`"A"`),
+		TagIDs:  []int{tag.ID},
 	}
-	result, err := svc.CreateQuestion(data, nil, "tutor")
+	result, err := svc.CreateQuestion(in, nil, "tutor")
 	if err != nil {
 		t.Fatalf("带标签创建失败: %v", err)
 	}
@@ -142,15 +176,13 @@ func TestGetQuestion_NotFound(t *testing.T) {
 	}
 }
 
-// --- UpdateQuestion ---
+// --- UpdateQuestion（票 6：typed + 审核不变式）---
 
 func TestUpdateQuestion_Success(t *testing.T) {
 	svc, db := newQuestionBankSvc(t)
 	q := testutil.SeedQuestion(t, db, "single_choice", "旧题干", "A")
-	data := map[string]any{
-		"content": "新题干",
-	}
-	result, err := svc.UpdateQuestion(q.ID, data)
+	newContent := "新题干"
+	result, err := svc.UpdateQuestion(q.ID, QuestionUpdateInput{Content: &newContent}, "admin")
 	if err != nil {
 		t.Fatalf("更新失败: %v", err)
 	}
@@ -159,21 +191,141 @@ func TestUpdateQuestion_Success(t *testing.T) {
 	}
 }
 
-func TestUpdateQuestion_InvalidStatus(t *testing.T) {
-	svc, db := newQuestionBankSvc(t)
-	q := testutil.SeedQuestion(t, db, "single_choice", "test", "A")
-	data := map[string]any{"status": "invalid_status"}
-	_, err := svc.UpdateQuestion(q.ID, data)
-	if err == nil {
-		t.Fatal("应拒绝无效状态")
+func TestUpdateQuestion_NotFound(t *testing.T) {
+	svc, _ := newQuestionBankSvc(t)
+	x := "x"
+	_, err := svc.UpdateQuestion(9999, QuestionUpdateInput{Content: &x}, "tutor")
+	if !errors.Is(err, ErrQuestionNotFound) {
+		t.Fatalf("应返回题目不存在，got %v", err)
 	}
 }
 
-func TestUpdateQuestion_NotFound(t *testing.T) {
-	svc, _ := newQuestionBankSvc(t)
-	_, err := svc.UpdateQuestion(9999, map[string]any{"content": "x"})
-	if err == nil {
-		t.Fatal("应返回题目不存在")
+func TestUpdateQuestion_ReviewInvariant(t *testing.T) {
+	changed := "改过的题干"
+	same := "原题干"
+	score := 5
+	cases := []struct {
+		name       string
+		actor      string
+		in         QuestionUpdateInput
+		wantStatus string
+	}{
+		{"讲师改内容 → 回 pending 重审", "tutor", QuestionUpdateInput{Content: &changed}, "pending"},
+		{"讲师重提交相同内容 → 编辑未改不动，留在池内", "tutor", QuestionUpdateInput{Content: &same}, "published"},
+		{"管理员改内容 → 即时生效保持 published", "admin", QuestionUpdateInput{Content: &changed}, "published"},
+		{"讲师只改分值（计分字段）→ 回 pending", "tutor", QuestionUpdateInput{Score: &score}, "pending"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			svc, db := newQuestionBankSvc(t)
+			q := testutil.SeedQuestion(t, db, "single_choice", "原题干", "A")
+			q.RejectReason = "旧理由"
+			db.Save(q)
+			result, err := svc.UpdateQuestion(q.ID, c.in, c.actor)
+			if err != nil {
+				t.Fatalf("更新失败: %v", err)
+			}
+			if result.Status != c.wantStatus {
+				t.Fatalf("status = %q, want %q", result.Status, c.wantStatus)
+			}
+			if c.wantStatus == "pending" && result.RejectReason != "" {
+				t.Fatalf("回 pending 重审应清驳回理由, got %q", result.RejectReason)
+			}
+		})
+	}
+}
+
+func TestUpdateQuestion_TagOnlyKeepsStatus(t *testing.T) {
+	svc, db := newQuestionBankSvc(t)
+	catalogSvc := NewTrainingCatalogService(db, zap.NewNop())
+	tag, err := catalogSvc.CreateQuestionTag(QuestionTagInput{Code: "t5", Name: "标签五"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := testutil.SeedQuestion(t, db, "single_choice", "test", "A")
+	ids := []int{tag.ID}
+	result, err := svc.UpdateQuestion(q.ID, QuestionUpdateInput{TagIDs: &ids}, "tutor")
+	if err != nil {
+		t.Fatalf("纯标签更新失败: %v", err)
+	}
+	if result.Status != "published" {
+		t.Fatalf("纯分区属性（标签）修改不得动状态, got %q", result.Status)
+	}
+}
+
+// --- SubmitQuestion（票 6 显式动作）---
+
+func TestSubmitQuestion_DraftToPending(t *testing.T) {
+	svc, db := newQuestionBankSvc(t)
+	q := testutil.SeedQuestion(t, db, "single_choice", "待提交题", "A")
+	db.Model(q).UpdateColumns(map[string]any{"status": "draft", "reject_reason": "题干不完整"})
+	result, err := svc.SubmitQuestion(q.ID)
+	if err != nil {
+		t.Fatalf("提交审核失败: %v", err)
+	}
+	if result.Status != "pending" || result.RejectReason != "" {
+		t.Fatalf("提交后应 pending 且清理由, got %+v", result)
+	}
+}
+
+func TestSubmitQuestion_NonDraftRejected(t *testing.T) {
+	svc, db := newQuestionBankSvc(t)
+	q := testutil.SeedQuestion(t, db, "single_choice", "已发布题", "A")
+	if _, err := svc.SubmitQuestion(q.ID); !errors.Is(err, ErrSubmitNotDraft) {
+		t.Fatalf("published 提交应拒（状态前置），got %v", err)
+	}
+	if _, err := svc.SubmitQuestion(9999); !errors.Is(err, ErrQuestionNotFound) {
+		t.Fatalf("不存在应 404 哨兵，got %v", err)
+	}
+}
+
+// --- questionContentTouched（不变式谓词表驱动）---
+
+func TestQuestionContentTouched(t *testing.T) {
+	stored := &model.Question{Type: "single_choice", Content: "旧", Answer: "A", Explanation: "析", Score: 3, Options: model.JSONB(`["A","B"]`)}
+	same := "旧"
+	diff := "新"
+	sameAnswer := json.RawMessage(`"A"`)
+	diffAnswer := json.RawMessage(`"B"`)
+	arrAnswer := json.RawMessage(`["A"]`) // 数组形态 ["A"] stringify 后与 "A" 相等——不算变化
+	sameType := "single_choice"
+	diffType := "true_false"
+	sameOpts := json.RawMessage(`["B","A"]`) // 键序不同但序列化后…数组序有意义：不相等 → 变化
+	eqOpts := json.RawMessage(`["A","B"]`)
+	sameScore := 3
+	cases := []struct {
+		name string
+		in   QuestionUpdateInput
+		want bool
+	}{
+		{"无字段", QuestionUpdateInput{}, false},
+		{"题干相同", QuestionUpdateInput{Content: &same}, false},
+		{"题干变化", QuestionUpdateInput{Content: &diff}, true},
+		{"题型相同/变化", QuestionUpdateInput{Type: &sameType}, false},
+		{"题型变化", QuestionUpdateInput{Type: &diffType}, true},
+		{"答案字符串相同", QuestionUpdateInput{Answer: &sameAnswer}, false},
+		{"答案数组归一后相同", QuestionUpdateInput{Answer: &arrAnswer}, false},
+		{"答案变化", QuestionUpdateInput{Answer: &diffAnswer}, true},
+		{"选项同字节", QuestionUpdateInput{Options: &eqOpts}, false},
+		{"选项序变化即内容变化", QuestionUpdateInput{Options: &sameOpts}, true},
+		{"分值相同", QuestionUpdateInput{Score: &sameScore}, false},
+		{"仅标签不动内容", QuestionUpdateInput{TagIDs: ptr([]int{1})}, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			q := *stored
+			answerChanged := false
+			if c.in.Answer != nil {
+				s, err := stringifyAnswerJSON(*c.in.Answer)
+				if err != nil {
+					t.Fatal(err)
+				}
+				answerChanged = s != q.Answer
+			}
+			if got := questionContentTouched(&q, c.in, answerChanged); got != c.want {
+				t.Fatalf("questionContentTouched = %v, want %v", got, c.want)
+			}
+		})
 	}
 }
 
@@ -299,22 +451,13 @@ func TestBatchPublish_Empty(t *testing.T) {
 	}
 }
 
-// --- BatchImport ---
+// --- BatchImport（票 6：typed 条目）---
 
 func TestBatchImport_Success(t *testing.T) {
 	svc, _ := newQuestionBankSvc(t)
-	items := []any{
-		map[string]any{
-			"type":    "single_choice",
-			"content": "导入题1",
-			"options": []string{"A", "B"},
-			"answer":  "A",
-		},
-		map[string]any{
-			"type":    "true_false",
-			"content": "导入题2",
-			"answer":  "true",
-		},
+	items := []QuestionCreateInput{
+		{Type: "single_choice", Content: "导入题1", Options: json.RawMessage(`["A","B"]`), Answer: json.RawMessage(`"A"`)},
+		{Type: "true_false", Content: "导入题2", Answer: json.RawMessage(`"true"`)},
 	}
 	createdBy := 1
 	result := svc.BatchImport(items, &createdBy)
@@ -331,18 +474,10 @@ func TestBatchImport_Success(t *testing.T) {
 
 func TestBatchImport_WithErrors(t *testing.T) {
 	svc, _ := newQuestionBankSvc(t)
-	items := []any{
-		map[string]any{
-			"type":    "single_choice",
-			"content": "有效题",
-			"options": []string{"A", "B"},
-			"answer":  "A",
-		},
-		map[string]any{
-			"type":    "invalid_type",
-			"content": "无效题",
-		},
-		"not-a-map", // 无效数据
+	items := []QuestionCreateInput{
+		{Type: "single_choice", Content: "有效题", Options: json.RawMessage(`["A","B"]`), Answer: json.RawMessage(`"A"`)},
+		{Type: "invalid_type", Content: "无效题"},
+		{Type: "single_choice", Content: "缺选项题", Answer: json.RawMessage(`"A"`)},
 	}
 	result := svc.BatchImport(items, nil)
 	if result.SuccessCount != 1 {

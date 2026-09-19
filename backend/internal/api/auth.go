@@ -4,7 +4,6 @@ package api
 import (
 	"context"
 	"errors"
-	"io"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -390,19 +389,13 @@ func (h *AuthHandler) UploadAvatar(c *gin.Context) {
 		response.BadRequest(c, msg)
 		return
 	}
-	src, err := file.Open()
-	if err != nil {
-		response.ServerError(c, "文件上传失败")
-		return
-	}
-	defer src.Close()
-	content, err := io.ReadAll(src)
+	content, err := service.ReadMultipartFile(file)
 	if err != nil {
 		response.ServerError(c, "文件上传失败")
 		return
 	}
 
-	url, err := h.fileSvc.Save(content, file.Filename, "avatars")
+	url, err := h.fileSvc.Save(content, file.Filename, service.AvatarImageDirPrefix)
 	if err != nil {
 		response.ServerError(c, "头像保存失败: "+err.Error())
 		return

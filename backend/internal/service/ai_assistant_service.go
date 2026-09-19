@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"go.uber.org/zap"
-	"io"
 	"mime/multipart"
 	"strings"
 	"time"
@@ -23,9 +22,6 @@ import (
 
 // 功能系统提示词与 featureSystemPrompt 均为注册表派生面，单点在 ai_feature_registry.go
 // （ADR-0030 决策 1：功能声明知识 = 一张表）。
-
-// aiImageDirPrefix AI 助手图片存储子目录（URL/对象 key 前缀）。
-const aiImageDirPrefix = "images/ai-assistant"
 
 // UserModelDTO 用户自定义模型展示对象（api_key 脱敏）。
 type UserModelDTO struct {
@@ -629,7 +625,7 @@ func (s *AIAssistantService) buildImageUserMessage(ctx context.Context, content 
 	}
 	var loadFails []string
 	for _, u := range images {
-		if !isAIImageURL(u) {
+		if !IsSiteAttachmentURL(u, AIAssistantImageDirPrefix) {
 			loadFails = append(loadFails, u)
 			continue
 		}
@@ -670,32 +666,13 @@ func (s *AIAssistantService) UploadImage(ctx context.Context, fileHeader *multip
 	if ok, msg := s.fileSvc.ValidateImage(fileHeader.Filename, fileHeader.Size); !ok {
 		return "", errors.New(msg)
 	}
-	src, err := fileHeader.Open()
+	content, err := ReadMultipartFile(fileHeader)
 	if err != nil {
 		return "", errors.New("图片上传失败")
 	}
-	defer src.Close()
-	content, err := io.ReadAll(src)
-	if err != nil {
-		return "", errors.New("图片上传失败")
-	}
-	url, err := s.fileSvc.Save(content, fileHeader.Filename, aiImageDirPrefix)
+	url, err := s.fileSvc.Save(content, fileHeader.Filename, AIAssistantImageDirPrefix)
 	if err != nil {
 		return "", errors.New("图片上传失败: " + err.Error())
 	}
 	return url, nil
-}
-
-// isAIImageURL 判断 URL 是否指向本站 images/ai-assistant/ 子目录。
-// local：/static/uploads/images/ai-assistant/xxx；R2：https://<域名>/images/ai-assistant/xxx。
-func isAIImageURL(u string) bool {
-	u = strings.TrimSpace(u)
-	if u == "" {
-		return false
-	}
-	if strings.HasPrefix(u, "/static/uploads/images/ai-assistant/") {
-		return true
-	}
-	idx := strings.Index(u, "/images/ai-assistant/")
-	return idx > 0 && (strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://"))
 }

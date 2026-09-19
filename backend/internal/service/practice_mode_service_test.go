@@ -2,6 +2,7 @@
 package service
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -27,31 +28,22 @@ func TestStartTagPractice(t *testing.T) {
 	tag2, _ := catalogSvc.CreateQuestionTag(QuestionTagInput{Code: "hydraulic", Name: "液压", SortOrder: ptrInt(2)})
 
 	qsvc := NewQuestionBankService(db, nil, zap.NewNop())
-	q1, err := qsvc.CreateQuestion(map[string]any{
-		"type": "single_choice", "content": "法规已发布题", "options": []string{"A", "B"}, "answer": "A",
-		"status": "published", "tag_ids": []int{tag1.ID},
-	}, nil, "tutor")
-	if err != nil {
-		t.Fatalf("创建已发布题目失败: %v", err)
-	}
-	if _, err := qsvc.CreateQuestion(map[string]any{
-		"type": "single_choice", "content": "法规草稿题", "options": []string{"A", "B"}, "answer": "A",
-		"status": "draft", "tag_ids": []int{tag1.ID},
-	}, nil, "tutor"); err != nil {
-		t.Fatalf("创建草稿题目失败: %v", err)
-	}
-	if _, err := qsvc.CreateQuestion(map[string]any{
-		"type": "true_false", "content": "液压已发布题1", "answer": "true",
-		"status": "published", "tag_ids": []int{tag2.ID},
-	}, nil, "tutor"); err != nil {
-		t.Fatalf("创建已发布题目失败: %v", err)
-	}
-	if _, err := qsvc.CreateQuestion(map[string]any{
-		"type": "true_false", "content": "液压已发布题2", "answer": "false",
-		"status": "published", "tag_ids": []int{tag2.ID},
-	}, nil, "tutor"); err != nil {
-		t.Fatalf("创建已发布题目失败: %v", err)
-	}
+	q1 := createQuestionAs(t, qsvc, db, QuestionCreateInput{
+		Type: "single_choice", Content: "法规已发布题", Options: json.RawMessage(`["A","B"]`), Answer: json.RawMessage(`"A"`),
+		TagIDs: []int{tag1.ID},
+	}, "published")
+	createQuestionAs(t, qsvc, db, QuestionCreateInput{
+		Type: "single_choice", Content: "法规草稿题", Options: json.RawMessage(`["A","B"]`), Answer: json.RawMessage(`"A"`),
+		TagIDs: []int{tag1.ID},
+	}, "draft")
+	createQuestionAs(t, qsvc, db, QuestionCreateInput{
+		Type: "true_false", Content: "液压已发布题1", Answer: json.RawMessage(`"true"`),
+		TagIDs: []int{tag2.ID},
+	}, "published")
+	createQuestionAs(t, qsvc, db, QuestionCreateInput{
+		Type: "true_false", Content: "液压已发布题2", Answer: json.RawMessage(`"false"`),
+		TagIDs: []int{tag2.ID},
+	}, "published")
 
 	// 首次进入：抽该标签全部已发布题（草稿不出现），游标 0
 	got, err := svc.StartTagPractice(1, tag1.ID, 0, nil)

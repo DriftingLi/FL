@@ -3192,6 +3192,13 @@ definitions:
       total:
         type: integer
     type: object
+  service.QuestionBatchImportInput:
+    properties:
+      questions:
+        items:
+          $ref: '#/definitions/service.QuestionCreateInput'
+        type: array
+    type: object
   service.QuestionCommentDTO:
     properties:
       avatar_url:
@@ -3221,6 +3228,8 @@ definitions:
         type: integer
       total:
         type: integer
+    type: object
+  service.QuestionCreateInput:
     type: object
   service.QuestionDTO:
     properties:
@@ -3363,6 +3372,8 @@ definitions:
         items:
           type: integer
         type: array
+    type: object
+  service.QuestionUpdateInput:
     type: object
   service.RealExamPaperDTO:
     properties:
@@ -5997,11 +6008,15 @@ paths:
           schema:
             $ref: '#/definitions/response.R'
         "400":
-          description: 删除失败
+          description: 回复ID无效
           schema:
             $ref: '#/definitions/response.R'
         "401":
           description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 回复不存在（票5 存在性档）
           schema:
             $ref: '#/definitions/response.R'
       security:
@@ -6082,6 +6097,10 @@ paths:
             $ref: '#/definitions/response.R'
         "401":
           description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 举报不存在（票5 存在性档）
           schema:
             $ref: '#/definitions/response.R'
       security:
@@ -6174,11 +6193,15 @@ paths:
           schema:
             $ref: '#/definitions/response.R'
         "400":
-          description: 删除失败
+          description: 主题ID无效
           schema:
             $ref: '#/definitions/response.R'
         "401":
           description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 主题不存在（票5 存在性档）
           schema:
             $ref: '#/definitions/response.R'
       security:
@@ -6241,7 +6264,7 @@ paths:
                   $ref: '#/definitions/service.ForumTopicDTO'
               type: object
         "400":
-          description: 操作失败（主题不存在）
+          description: 主题ID无效
           schema:
             $ref: '#/definitions/response.R'
         "401":
@@ -6250,6 +6273,10 @@ paths:
             $ref: '#/definitions/response.R'
         "403":
           description: 需要管理员角色
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 主题不存在（票5 存在性档）
           schema:
             $ref: '#/definitions/response.R'
       security:
@@ -6278,7 +6305,7 @@ paths:
                   $ref: '#/definitions/service.ForumTopicDTO'
               type: object
         "400":
-          description: 认定失败（主题不存在）
+          description: 主题ID无效 / 已采纳帖须先取消采纳
           schema:
             $ref: '#/definitions/response.R'
         "401":
@@ -6287,6 +6314,10 @@ paths:
             $ref: '#/definitions/response.R'
         "403":
           description: 需要管理员角色
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 主题不存在（票5 存在性档）
           schema:
             $ref: '#/definitions/response.R'
       security:
@@ -6316,7 +6347,7 @@ paths:
                   $ref: '#/definitions/service.ForumTopicDTO'
               type: object
         "400":
-          description: 操作失败（主题不存在）
+          description: 主题ID无效 / 经验帖须先取消认定
           schema:
             $ref: '#/definitions/response.R'
         "401":
@@ -6325,6 +6356,10 @@ paths:
             $ref: '#/definitions/response.R'
         "403":
           description: 需要管理员角色
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 主题不存在（票5 存在性档）
           schema:
             $ref: '#/definitions/response.R'
       security:
@@ -6353,7 +6388,7 @@ paths:
                   $ref: '#/definitions/service.ForumTopicDTO'
               type: object
         "400":
-          description: 加精失败（主题不存在）
+          description: 主题ID无效
           schema:
             $ref: '#/definitions/response.R'
         "401":
@@ -6362,6 +6397,10 @@ paths:
             $ref: '#/definitions/response.R'
         "403":
           description: 需要管理员角色
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 主题不存在（票5 存在性档）
           schema:
             $ref: '#/definitions/response.R'
       security:
@@ -10637,6 +10676,14 @@ paths:
           description: 未认证
           schema:
             $ref: '#/definitions/response.R'
+        "403":
+          description: 非作者本人（票5 所有权档）
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 回复不存在
+          schema:
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 删除自己的回复
@@ -10671,6 +10718,10 @@ paths:
             $ref: '#/definitions/response.R'
         "401":
           description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 回复不存在（票5 存在性档）
           schema:
             $ref: '#/definitions/response.R'
       security:
@@ -10708,6 +10759,10 @@ paths:
           description: 未认证
           schema:
             $ref: '#/definitions/response.R'
+        "404":
+          description: 回复不存在（票5 存在性档）
+          schema:
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 点赞回复
@@ -10743,6 +10798,10 @@ paths:
             $ref: '#/definitions/response.R'
         "401":
           description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 回复不存在（票5 存在性档）
           schema:
             $ref: '#/definitions/response.R'
       security:
@@ -10852,6 +10911,10 @@ paths:
           description: 未认证
           schema:
             $ref: '#/definitions/response.R'
+        "404":
+          description: 章节不存在（票5 存在性档）
+          schema:
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 发帖
@@ -10881,6 +10944,14 @@ paths:
             $ref: '#/definitions/response.R'
         "401":
           description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 非作者本人（票5 所有权档）
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 主题不存在
           schema:
             $ref: '#/definitions/response.R'
       security:
@@ -11016,6 +11087,10 @@ paths:
           description: 无权限
           schema:
             $ref: '#/definitions/response.R'
+        "404":
+          description: 主题不存在（票5 存在性档）
+          schema:
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 取消采纳
@@ -11061,6 +11136,10 @@ paths:
           description: 无权限
           schema:
             $ref: '#/definitions/response.R'
+        "404":
+          description: 主题/回复不存在（票5 存在性档）
+          schema:
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 采纳回答
@@ -11097,6 +11176,10 @@ paths:
           description: 未认证
           schema:
             $ref: '#/definitions/response.R'
+        "404":
+          description: 主题不存在（票5 存在性档）
+          schema:
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 取消点赞帖子
@@ -11130,6 +11213,10 @@ paths:
             $ref: '#/definitions/response.R'
         "401":
           description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 主题不存在（票5 存在性档）
           schema:
             $ref: '#/definitions/response.R'
       security:
@@ -11174,6 +11261,10 @@ paths:
           description: 未认证
           schema:
             $ref: '#/definitions/response.R'
+        "404":
+          description: 主题/被回复的回复不存在（票5 存在性档）
+          schema:
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 回复帖子
@@ -11209,6 +11300,10 @@ paths:
             $ref: '#/definitions/response.R'
         "401":
           description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 主题不存在（票5 存在性档）
           schema:
             $ref: '#/definitions/response.R'
       security:
@@ -12727,14 +12822,15 @@ paths:
     post:
       consumes:
       - application/json
-      description: 创建题目（讲师/管理员，需 CapQuestionAuthor）
+      description: 创建题目（讲师/管理员，需 CapQuestionAuthor）；typed 入参，字段类型不符即 400；不携带 status
+        通道（新题固定入 pending 审核队列）
       parameters:
       - description: 题目
         in: body
         name: body
         required: true
         schema:
-          type: object
+          $ref: '#/definitions/service.QuestionCreateInput'
       produces:
       - application/json
       responses:
@@ -12748,11 +12844,15 @@ paths:
                   $ref: '#/definitions/service.QuestionDTO'
               type: object
         "400":
-          description: 参数错误
+          description: 参数错误（含类型不符、携带 status）
           schema:
             $ref: '#/definitions/response.R'
         "401":
           description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 所属证件不存在
           schema:
             $ref: '#/definitions/response.R'
       security:
@@ -12821,19 +12921,20 @@ paths:
     put:
       consumes:
       - application/json
-      description: 按 ID 更新题目字段（讲师/管理员，需 CapQuestionAuthor）
+      description: 按 ID 部分更新题目字段（讲师/管理员，需 CapQuestionAuthor）；typed 入参、拒收 status 通道；讲师改动内容与计分字段即回
+        pending 重审，管理员改动即时生效
       parameters:
       - description: 题目ID
         in: path
         name: question_id
         required: true
         type: integer
-      - description: 题目字段（部分更新）
+      - description: 题目字段（部分更新，不含 status）
         in: body
         name: body
         required: true
         schema:
-          type: object
+          $ref: '#/definitions/service.QuestionUpdateInput'
       produces:
       - application/json
       responses:
@@ -12847,7 +12948,7 @@ paths:
                   $ref: '#/definitions/service.QuestionDTO'
               type: object
         "400":
-          description: 参数错误
+          description: 参数错误（含类型不符、携带 status）
           schema:
             $ref: '#/definitions/response.R'
         "401":
@@ -12937,18 +13038,58 @@ paths:
       summary: 驳回题目
       tags:
       - 题库管理
+  /question-bank/questions/{question_id}/submit:
+    post:
+      consumes:
+      - application/json
+      description: 讲师把待提交（draft，含被驳回回退）题目提交进审核队列；非 draft 返回 400（需 CapQuestionAuthor）
+      parameters:
+      - description: 题目ID
+        in: path
+        name: question_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.QuestionDTO'
+              type: object
+        "400":
+          description: 仅 draft 题目可提交
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 题目不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 提交题目审核
+      tags:
+      - 题库管理
   /question-bank/questions/batch-import:
     post:
       consumes:
       - application/json
-      description: 批量导入题目，返回成功/失败条数与逐条失败原因
+      description: 批量导入题目（typed 逐条校验，不携带 status 通道），返回成功/失败条数与逐条失败原因
       parameters:
       - description: 题目数组
         in: body
         name: body
         required: true
         schema:
-          type: object
+          $ref: '#/definitions/service.QuestionBatchImportInput'
       produces:
       - application/json
       responses:
@@ -12962,7 +13103,7 @@ paths:
                   $ref: '#/definitions/service.QuestionImportResultDTO'
               type: object
         "400":
-          description: 参数错误
+          description: 参数错误（含类型不符、条目携带 status、导入数组为空）
           schema:
             $ref: '#/definitions/response.R'
         "401":
