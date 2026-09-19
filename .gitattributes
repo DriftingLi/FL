@@ -26,3 +26,11 @@ deploy/env.defaults text eol=lf
 # Windows 上 core.autocrlf=true 会把 *.ps1 检出成 CRLF ⇒ 锚点必然失配、契约测试在 Windows 上必红
 # （实测先例：emulatorSmokeContract 的「C3 注入点已失效」用例）。故 *.ps1 也钉 LF。
 *.ps1 text eol=lf
+
+# uni-app-x 源码统一 LF：与本文件其他条目同一类坑位 —— 多处契约测试读 *.uts / *.uvue 的
+# **源文本**做多行锚点匹配，Windows 上 core.autocrlf=true 会把它们检出成 CRLF ⇒ 锚点失配、
+# 契约测试在本机假红；更糟的是锚点永不命中时守护会**静默失效**（以为在守，其实没守）。
+# 实测先例：#1137（contributionStatusContract 的「漏一个取值」用例在本机恒红）。
+# 全仓 0 个 i/crlf / i/mixed，故本钉不改动已提交内容，只改检出行为（无 renormalize 风险）。
+*.uts text eol=lf
+*.uvue text eol=lf
