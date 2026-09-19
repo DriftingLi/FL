@@ -124,10 +124,14 @@ function psQuote(s) {
  *   G4 40×40 像素不同（19.5% > 阈值）       ⇒ Ok=False / ExitCode=1（**它真的会红**）
  *   G5 同上 + -UpdateBaseline               ⇒ Ok=True / refresh-baseline（出路真的在）
  *   G6 零截图                               ⇒ 判不了 ⇒ Ok=False / ExitCode=1（不当「无变化」）
- *   ── 以下三组是 #1158（2026-09-18）：目录**从不清理**，上一轮失败运行的残留不得算进本轮 ──
- *   G7 陈旧残留 + 本轮 1 页                 ⇒ 只本轮那页在范围内，残留被**可见地**跳过（带理由与哪一侧）
- *   G8 陈旧的那页只在基线里                 ⇒ **不得**被报成「缺失」（否则残留会把本轮报成缺图）
- *   G9 一张本轮产物都没有（全是残留）        ⇒ 本轮范围为空、残留数可见（不静默成「无变化」）
+ *   G10 基线来自上一轮 + 本轮确有真差异      ⇒ **真比出「有变化」**（不是退化成「判不了」）——
+ *                                             原实现把基线侧也按运行起点过滤 ⇒ 这里整轮跳过，
+ *                                             它就是那处回归的回归钉
+ *   ── 以下各组是 #1158（2026-09-18）：目录**从不清理**，上一轮失败运行的残留不得算进本轮 ──
+ *   G7  陈旧残留（也在基线里）+ 本轮 1 页     ⇒ 只本轮那页在范围内，残留被**可见地**跳过（理由+哪一侧）
+ *   G8  基线里有、本轮没截到的那页            ⇒ 是**缺失候选**（原实现把「缺失」变成了死代码）
+ *   G9  一张本轮产物都没有（全是残留）         ⇒ 本轮范围为空、残留数可见（不静默成「无变化」）
+ *   G11 多页稳态：当前全新鲜 + 基线全来自上轮  ⇒ InScope = 全部、Skipped = 0（原实现会整轮跳过）
  */
 function probe(ctx) {
   const script = [
@@ -179,7 +183,20 @@ function probe(ctx) {
     'New-Item -ItemType Directory -Force -Path (Join-Path $g6 "cur") | Out-Null',
     '$r6 = Compare-ScreenshotBaseline -CurrentDir (Join-Path $g6 "cur") -BaselineDir (Join-Path $g6 "base")',
     'Emit "G6" $r6 (Get-PngDiffVerdict -DiffResult $r6)',
-    // ---- G7–G9（issue #1158）：目录里混着上一轮失败运行的残留 ⇒ 只对**本轮产物**作结论 ----
+    // G10（生产真实形态 + 真文件 + 真入口）：基线来自**上一轮**（mtime 早于本轮起点）、
+    //   本轮截图新鲜、且与基线**确有差异** ⇒ 必须真的比出「有变化」，而不是退化成
+    //   「无本轮截图可对比（陈旧残留）⇒ 判不了」。这就是 #1158 修复自身踩的坑的回归钉。
+    "$g10 = Join-Path $root 'g10'",
+    'New-Item -ItemType Directory -Force -Path (Join-Path $g10 "cur") | Out-Null',
+    'New-Item -ItemType Directory -Force -Path (Join-Path $g10 "base") | Out-Null',
+    'Copy-Item (Join-Path $root "block.png") (Join-Path $g10 "cur\\a.png") -Force',
+    'Copy-Item (Join-Path $root "base.png")  (Join-Path $g10 "base\\a.png") -Force',
+    '$g10start = (Get-Date).AddMinutes(-1)',
+    '(Get-Item (Join-Path $g10 "cur\\a.png")).LastWriteTime  = (Get-Date).AddMinutes(2)',
+    '(Get-Item (Join-Path $g10 "base\\a.png")).LastWriteTime = (Get-Date).AddHours(-3)',
+    '$r10 = Compare-ScreenshotBaseline -CurrentDir (Join-Path $g10 "cur") -BaselineDir (Join-Path $g10 "base") -RunStartedAt $g10start',
+    'Emit "G10" $r10 (Get-PngDiffVerdict -DiffResult $r10)',
+    // ---- G7–G9 / G11（issue #1158）：目录里混着上一轮失败运行的残留 ⇒ 只对**本轮产物**作结论 ----
     // 用合成时间戳直接驱动纯函数（不碰文件系统）：判据本身被测，且不依赖 sleep、不受文件系统时间精度影响。
     // 起点 = now-1h；「本轮」= now；「陈旧」= now-5h（与 2026-09-15 真机那次同款：上一轮的残留）。
     '$now = Get-Date',
@@ -193,7 +210,8 @@ function probe(ctx) {
     'Write-Output ("G7_SKIPPEDN=" + @($s7.Skipped).Count)',
     'Write-Output ("G7_SKIPPEDNAME=" + (@($s7.Skipped | ForEach-Object { $_.Name }) -join ","))',
     'Write-Output ("G7_SKIPPEDSIDE=" + (@($s7.Skipped | ForEach-Object { $_.Side }) -join ","))',
-    // G8（场景 B）：陈旧的那页只在基线里有（当前侧没有）⇒ **不得**被报成「缺失」
+    // G8（2026-09-18 修正后的语义）：基线里有、本轮**没截到**的那页 ⇒ 它是**缺失候选**
+    //   （原实现把基线侧也按「≥ 起点」过滤 ⇒ 基线恒「陈旧」⇒ 缺失检测成了死代码，永远抓不到「整页没了」）
     '$s8 = Select-ThisRunShots -RunStartedAt $startPt `',
     "  -CurrentTimes @{ 'fresh.png' = \$fresh } `",
     "  -BaselineTimes @{ 'stale.png' = \$old; 'fresh.png' = \$fresh }",
@@ -206,6 +224,12 @@ function probe(ctx) {
     "  -BaselineTimes @{ 'stale.png' = \$old }",
     'Write-Output ("G9_INSCOPEN=" + @($s9.InScope).Count)',
     'Write-Output ("G9_SKIPPEDN=" + @($s9.Skipped).Count)',
+    // G11（生产真实稳态 —— 原实现在这里会**整轮跳过**）：多页，当前全新鲜、基线全来自上一轮
+    '$s11 = Select-ThisRunShots -RunStartedAt $startPt `',
+    "  -CurrentTimes @{ 'a.png' = \$fresh; 'b.png' = \$fresh; 'c.png' = \$fresh } `",
+    "  -BaselineTimes @{ 'a.png' = \$old; 'b.png' = \$old; 'c.png' = \$old }",
+    'Write-Output ("G11_INSCOPE=" + (@($s11.InScope) -join ","))',
+    'Write-Output ("G11_SKIPPEDN=" + @($s11.Skipped).Count)',
     'Write-Output "PROBE_DONE=1"',
   ].join('\n');
 
@@ -245,7 +269,7 @@ describe('截图门（步骤 7）行为：一致⇒绿 / 有变化⇒红（#1139
     fs.writeFileSync(path.join(ctx.tmp, 'block.png'), makePng(W, H, solid([[0, 0, 40, 40]])));
     probeResult = probe(ctx);
     if (probeResult.ok) {
-      ['G1', 'G2', 'G3', 'G4', 'G5', 'G6'].forEach((tag) => {
+      ['G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G10'].forEach((tag) => {
         v[tag] = {
           changed: field(probeResult.stdout, `${tag}_CHANGED`),
           isNew: field(probeResult.stdout, `${tag}_NEW`),
@@ -329,15 +353,31 @@ describe('截图门（步骤 7）行为：一致⇒绿 / 有变化⇒红（#1139
     expect(field(probeResult.stdout, 'G7_INSCOPE')).toBe('fresh.png');
     expect(field(probeResult.stdout, 'G7_SKIPPEDN')).toBe('1');
     expect(field(probeResult.stdout, 'G7_SKIPPEDNAME')).toBe('stale.png');
-    // 跳过必须带**理由与哪一侧**（静默丢弃 = 另一种假绿）
-    expect(field(probeResult.stdout, 'G7_SKIPPEDSIDE')).toBe('current+baseline');
+    // 跳过必须带**理由与哪一侧**（静默丢弃 = 另一种假绿）；只判当前侧 ⇒ side 只可能是 current
+    expect(field(probeResult.stdout, 'G7_SKIPPEDSIDE')).toBe('current');
   });
 
-  test('G8: 场景 B —— 陈旧的那页只在基线里 ⇒ 不得被报成「缺失」', () => {
-    expect(field(probeResult.stdout, 'G8_INSCOPE')).toBe('fresh.png');
-    // 「缺失」的候选集里不能出现陈旧页 —— 否则上一轮的残留会把本轮报成缺图
-    expect(field(probeResult.stdout, 'G8_MISSINGCANDIDATES')).toBe('0');
-    expect(field(probeResult.stdout, 'G8_SKIPPEDN')).toBe('1');
+  test('G10: 生产真实形态（基线来自上一轮 + 本轮确有差异）⇒ 必须真比出「有变化」', () => {
+    // 修好前：基线侧也被按运行起点过滤 ⇒ 整轮被判成「陈旧残留」、ChangedCount=0、
+    // 结论退化成「无本轮截图可对比」的**判不了** —— 变化被吞掉，而且错因写错。
+    expect(v.G10.changed).toBe('1');
+    expect(v.G10.hasError).toBe('False');
+    expect(v.G10.ok).toBe('False');
+    expect(v.G10.action).toBe('request-decision');
+    expect(v.G10.exit).toBe('1');
+  });
+
+  test('G8: 基线里有、本轮没截到的那页 ⇒ 是「缺失」候选（修正后的语义）', () => {
+    // 2026-09-18 修正：基线是上一轮的参考图，mtime **必然**早于本轮起点；按运行起点过滤基线
+    // ⇒ 「缺失」这条判据永远抓不到东西（死代码）。缺失只该由「基线有、本轮没有」决定。
+    expect(field(probeResult.stdout, 'G8_INSCOPE')).toBe('fresh.png,stale.png');
+    expect(field(probeResult.stdout, 'G8_MISSINGCANDIDATES')).toBe('1');
+    expect(field(probeResult.stdout, 'G8_SKIPPEDN')).toBe('0');
+  });
+
+  test('G11: 多页稳态（当前全新鲜 + 基线全来自上一轮）⇒ 全部在范围内、一张都不跳过', () => {
+    expect(field(probeResult.stdout, 'G11_INSCOPE')).toBe('a.png,b.png,c.png');
+    expect(field(probeResult.stdout, 'G11_SKIPPEDN')).toBe('0');
   });
 
   test('G9: 全是残留（本轮一张都没有）⇒ 本轮范围为空且残留数可见（不是「无变化」）', () => {

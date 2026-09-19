@@ -195,8 +195,10 @@ function Compare-ScreenshotBaseline {
         [int]$IgnoreTopRows = 0,
         [ValidateRange(0, 10000)]
         [int]$IgnoreBottomRows = 0,
-        # 「本轮产物」的起点（issue #1158）。**给值即启用过滤**：早于该时刻的截图（当前侧或基线侧）
-        # 一律不算本轮产物 —— 目录从不清理、文件名按页名固定 ⇒ 上一轮失败运行的残留会污染「页数 / 变化数」。
+        # 「本轮产物」的起点（issue #1158）。**给值即启用过滤**：**当前侧**早于该时刻的截图
+        # 不算本轮产物 —— 目录从不清理、文件名按页名固定 ⇒ 上一轮失败运行的残留会污染「页数 / 变化数」。
+        # ⚠️ **只过滤当前侧**（2026-09-18 修正）：基线是上一轮收口时的参考图，mtime **必然**早于本轮起点，
+        #    按起点过滤基线会把每个有基线的页面全部跳过（详见 lib/screenshot-gate.ps1 的 Select-ThisRunShots）。
         # 判据的真源是调用方（`dev:finish` 与步骤 6 **同一个**运行起点）；不传 = 不过滤（向后兼容）。
         [Nullable[datetime]]$RunStartedAt = $null,
         # 强制只走 MD5（对照实验 / 无 node 的极端场景）
