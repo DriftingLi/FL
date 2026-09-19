@@ -38,10 +38,13 @@
 > `hxRunContract` / `envCheckContract` / `testCompileContract` / `uvuePageScrollContract` 等 **9 个**
 > 文件被误判成行为守护（20/78）⇒ 修正后 **13 行为 / 86 接线**。**判据必须落在代码级调用上。**
 
-## 现状（2026-09-18，运行 `node scripts/classify-guards.mjs` 取现行值）
+## 现状（快照 2026-09-19；**真源永远是分类器**，不要照抄本节数字）
 
-- **行为守护 13 · 接线守护 86 · 合计 99**（实测下界，被 `utils/guardClassification.test.js` 的 H2 钉住；
-  迁移动镜像只会让它**上升**，下降就红）。
+- **实测：行为守护 15 · 接线守护 88 · 合计 103**（`node scripts/classify-guards.mjs`，origin/master `f0faff82`）。
+- **`utils/guardClassification.test.js` 的 H2 钉的是「下界」，不是「现值」**：`BEHAVIOR_MIN = 13` / `TOTAL_MIN = 99`
+  （2026-09-18 在 `bee21af4` + 本守护自身上的读数）。迁移镜像会让 behavior **上升**（**允许**），下降才红
+  ⇒ 本节的数字**本来就会随 master 前进而过期**（#1160 合并后即如此：master 又多了 4 个套件）。
+  **要现行值请跑分类器，别读这里。**
 - **点名：目前只是接线守护的 8 个手抄镜像模块**（迁移对象，spec §④ 的 S6 系列）：
   `aiSourcesDisplay` · `checkinCalendar` · `faqDisplay` · `format` · `notebookDisplay` · `pointsDisplay` ·
   `searchDisplay` · `secureStorage`。
