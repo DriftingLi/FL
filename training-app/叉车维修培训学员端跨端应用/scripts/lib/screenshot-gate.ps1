@@ -41,13 +41,20 @@ function Select-ThisRunShots {
         由调用方把**同一个**运行起点传进来（不重写第二份时间戳判据）。
 
         规则（对目录里出现的每个文件名）：
-          当前存在 + 基线存在 且 **两个**都 ≥ 起点        ⇒ 在范围内（正常参与对比）
-          任一侧 < 起点                                   ⇒ **跳过**，理由 `stale`
+          当前存在且 ≥ 起点                               ⇒ 在范围内（正常参与对比）
+          当前存在但 < 起点                               ⇒ **跳过**，理由 `stale`（当前侧残留）
           当前存在、基线**不存在**                        ⇒ 在范围内（它会走「新增」那条，判据由调用方出）
           当前不存在、基线存在                            ⇒ 在范围内（它会走「缺失」那条）
-          基线 < 起点 而当前不存在                        ⇒ **跳过**（否则会把上一轮的残留报成「缺失」）
+          **基线侧一律不按起点过滤**                      ⇒ 基线是上一轮收口时的参考图
 
-        ⇒ 一句话：**陈旧的一侧不参与判据，也不会替对方造出「缺失/有变化」。**
+        ⇒ 一句话：**只有「当前侧」判新鲜度；基线是参考图，只需要存在、不需要「新」。**
+
+        ⚠️ 为什么只判当前侧（2026-09-18 修正 —— 这是 #1158 修复自身踩的坑）：
+        基线目录由 `dev-finish.ps1` 在**上一轮收口时**从当前截图拷入（或在 `-UpdateBaseline` 下刷新），
+        它的 mtime **必然**早于本轮运行起点。原实现把基线侧也按「≥ 起点」过滤 ⇒ 每个有基线的页面
+        **全部**被判成陈旧 ⇒ `InScope` 恒为空 ⇒ 步骤 7 自第 2 轮起恒报「无本轮截图可对比」而
+        **从不比较任何东西**（恒红，且 `-UpdateBaseline` 也救不回来：早退发生在写基线之前）。
+        参考图不需要「新」—— 它只需要存在。
 
     .OUTPUTS
         [pscustomobject]：InScope（文件名数组）· Skipped（数组，每项 Name/Reason）· RunStartedAt
@@ -86,18 +93,14 @@ function Select-ThisRunShots {
     $skipped = @()
     foreach ($name in $names) {
         $hasCurrent = $CurrentTimes.ContainsKey($name)
-        $hasBaseline = $BaselineTimes.ContainsKey($name)
+        # 只判**当前侧**新鲜度；基线侧不判（见头顶 docstring 的 ⚠️：基线恒早于本轮起点）
         $currentStale = $hasCurrent -and ([datetime]$CurrentTimes[$name] -lt $RunStartedAt)
-        $baselineStale = $hasBaseline -and ([datetime]$BaselineTimes[$name] -lt $RunStartedAt)
 
-        if ($currentStale -or $baselineStale) {
-            $side = @()
-            if ($currentStale) { $side += 'current' }
-            if ($baselineStale) { $side += 'baseline' }
+        if ($currentStale) {
             $skipped += [pscustomobject]@{
                 Name   = $name
                 Reason = 'stale'
-                Side   = ($side -join '+')
+                Side   = 'current'
             }
             continue
         }
