@@ -69,6 +69,21 @@ export function stripComments(src) {
     .replace(/\/\/[^\n]*/g, '')
 }
 
+/**
+ * 把注释**内容换成等长空白**（换行原样保留）——用于**需要行号准确**的扫描。
+ *
+ * 为什么不能直接用 `stripComments`：它把整段注释删掉 ⇒ 注释之后的行**整体前移**。
+ * 实测血账：第 675 行的注入违规被判成第 **457** 行，而 `--diff` 是拿「新增行号集合」
+ * 去比 `v.line` ⇒ **永远命不中**、打印「通过」并 exit 0 —— **门形同虚设**。
+ * 而 `--all` 因为不看行号照样报红 ⇒ **只测 `--all` 发现不了这个 bug**。
+ */
+export function blankComments(src) {
+  const blank = (m) => m.replace(/[^\n]/g, ' ')
+  return String(src)
+    .replace(/\/\*[\s\S]*?\*\//g, blank)
+    .replace(/\/\/[^\n]*/g, blank)
+}
+
 /** 从 `(` 起做括号配对（跳过字符串字面量），返回匹配的 `)` 索引；失败返回 -1 */
 export function matchParen(src, openIdx) {
   let depth = 0
@@ -202,6 +217,14 @@ export function resolveTargets(argText, consts, paramBindings) {
     if (!/^(?:[a-z][\w.-]*\/){1,}/i.test(p)) continue
     cands.add(p)
   }
+  // 兜底：形如 `'request.uts'` 的**纯文件名**字面量。用途是那些**嵌套写法**
+  // （`require('path').join(__dirname, '..', 'api', 'request.uts')`）—— 上面的 `path.join`
+  // 提取在这种写法下匹配不到（`require('path').join` 不是 `path.join`）。
+  // 判据仍是「该名字能**唯一**命中一个**已跟踪**文件」，故临时夹具名不会被误判成仓内源码。
+  for (const m of expanded.matchAll(/'([^'\n\/]+\.(?:uts|uvue|ps1|mjs|json|md|ts|tsx|vue|go|sh|css))'/gi)) {
+    const b = byBasename.get(m[1])
+    if (b && b.length === 1) cands.add(b[0])
+  }
   return [...cands]
 }
 
@@ -211,7 +234,8 @@ export function resolveTargets(argText, consts, paramBindings) {
  * @param {(rel:string)=>boolean} isTracked 该仓库相对路径是否为已跟踪文件
  */
 export function scanSource(src, isTracked) {
-  const code = stripComments(src)
+  // 用 blankComments：**行号必须与原文件一致**（--diff 要按新增行号筛）。
+  const code = blankComments(src)
   const consts = collectConsts(code)
   const violations = []
   const re = /readFileSync\s*\(/g
@@ -306,6 +330,17 @@ function trackedSet() {
     maxBuffer: 64 * 1024 * 1024,
   })
   return new Set(out.split(/\r?\n/).filter(Boolean))
+}
+
+/** 以 basename 建索引（兜底解析用；同名多命中视为不可判定 ⇒ 放行） */
+function buildBasenameIndex(trackedFiles) {
+  const map = new Map()
+  for (const p of trackedFiles) {
+    const b = p.slice(p.lastIndexOf('/') + 1)
+    if (!map.has(b)) map.set(b, [])
+    map.get(b).push(p)
+  }
+  return map
 }
 
 /** 把仓库相对路径（git 输出）映射到本包内的相对路径；不属于本包 ⇒ null */
@@ -411,6 +446,8 @@ function reportDiff(base) {
 }
 
 let tracked = new Set()
+/** basename → 已跟踪路径列表（兜底解析用；同名多命中视为不可判定 ⇒ 放行） */
+let byBasename = new Map()
 
 function main(argv) {
   const mode = argv[0] ?? '--all'
@@ -420,6 +457,7 @@ function main(argv) {
   }
   try {
     tracked = trackedSet()
+    byBasename = buildBasenameIndex(tracked)
   } catch (e) {
     console.error(`[check-contract-read] 取不到已跟踪文件清单（fail-closed）：${e.message}`)
     return 2
