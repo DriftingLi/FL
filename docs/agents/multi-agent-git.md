@@ -41,6 +41,17 @@ Windows 本机（`E:\` 盘）上 worktree 可用，但有几处与 Linux 不同�
 
 - **一 worktree 一分支一会话**：`git worktree add D:\FL\wt-<task> -b feat/<task> origin/master`（也可放与主树同级的 `D:\wt-<task>`），全程在该目录内改、提交、push、开 PR；用完 `git worktree remove <目录>` + `git branch -D feat/<task>`。放在主树同级而非盘符根，便于一眼看清是哪个会话的目录。**目录名不要以 `.` 开头**——理由与判据见下一条。
 
+- **⚠️ 建 worktree 走闸门，不要裸 `git worktree add`**（2026-09-19 加，#1185）：用
+  `pwsh training-app/叉车维修培训学员端跨端应用/scripts/new-worktree.ps1 -Task <票号>`。
+  它在**创建处**做两件裸命令做不到的事：① 参数校验（`-Task` 不得含路径分隔符）；② **建完立刻实测判据** ——
+  在那个新目录里跑 `jest --listTests`，**必须真的列出套件**（计数 0 即失败并 `exit 3`，提示改名）。
+  为什么必须实测而不是「校验目录名」：下一条的机制是**段首**为 `.` 或 `{}()+?.^$` 才踩坑，而默认命名
+  `wt-<task>` 的段首恒为 `w` ⇒「枚举坏名字」在默认命名下是**恒不触发的死代码**；实测 `wt-(wip)1185` /
+  `wt-{wip}1185` 的 `--listTests` 分别列出 **104 / 104** 个套件（都正常）。**建完实测**对任何命名方案都成立。
+  它同时修掉一个我踩过的坑：仓库根从 `git rev-parse --git-common-dir` 取，**不**从脚本位置上溯 ——
+  否则在 worktree 里调它会算出**那个 worktree**，把新 worktree 嵌进另一个 worktree 里（实测建出
+  `D:\FL\wt-1185\wt-(wip)1185`）。
+
 - **worktree 目录名不要以 `.` 开头**（2026-09-17 实测，血账；2026-09-18 补可机检判据 + 更正机制，见 #1144）：项目放在 `D:\FL\.wt-<task>` 时 `npm run test:unit` 报
   `No tests found … testMatch: … - 0 matches`（同一条命令在主树与 `D:\FL\wt-<task>` 下能列出全部 76 个套件；`git worktree move .wt-1082 wt-1082b` 后立刻恢复）。
   它**不报错、也不提示配置问题**，只是「一个测试都找不到」，很容易被读成「测试坏了」。⇒ 会话 worktree 用 `D:\FL\wt-<task>`（无点），**不要**用 `D:\FL\.wt-<task>`。
