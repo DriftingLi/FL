@@ -26,6 +26,7 @@ var questionBankErrStatus = &errStatusTable{
 		{service.ErrQuestionContentRequired, http.StatusBadRequest},
 		{service.ErrQuestionAnswerRequired, http.StatusBadRequest},
 		{service.ErrQuestionOptionsRequired, http.StatusBadRequest},
+		{service.ErrQuestionAnswerInvalid, http.StatusBadRequest},
 		{service.ErrSubmitNotDraft, http.StatusBadRequest},
 		{service.ErrRejectReasonRequired, http.StatusBadRequest},
 	},
@@ -35,13 +36,21 @@ var questionBankErrStatus = &errStatusTable{
 // + status 通道拒收探针（状态迁移只经显式动作：submit / publish / reject）。
 func bindQuestionWriteReq[T any](c *gin.Context) (*T, error) {
 	var probe struct {
-		Status json.RawMessage `json:"status"`
+		Status    json.RawMessage `json:"status"`
+		Questions []struct {
+			Status json.RawMessage `json:"status"`
+		} `json:"questions"`
 	}
 	if err := c.ShouldBindBodyWith(&probe, binding.JSON); err != nil {
 		return nil, badRequest("请求数据无效")
 	}
 	if probe.Status != nil {
 		return nil, badRequest("写面不携带 status 通道，状态迁移请走显式动作（提交审核 / 发布 / 驳回）")
+	}
+	for _, item := range probe.Questions {
+		if item.Status != nil {
+			return nil, badRequest("写面不携带 status 通道，状态迁移请走显式动作（提交审核 / 发布 / 驳回）")
+		}
 	}
 	var req T
 	if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
@@ -309,7 +318,11 @@ func (h *QuestionBankHandler) BatchImport(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *batchImportReq) (*service.QuestionImportResultDTO, error) {
 			return h.svc.BatchImport(req.Questions, &req.UserID), nil
 		},
-		Render: func(c *gin.Context, _ *batchImportReq, resp *service.QuestionImportResultDTO, _ error) {
+		Render: func(c *gin.Context, _ *batchImportReq, resp *service.QuestionImportResultDTO, err error) {
+			if err != nil {
+				questionBankErrStatus.renderError(c, err) // 解析错误（含 status 探针/空数组）走域表，成功信封定制保留
+				return
+			}
 			response.SuccessWithMsg(c, "成功导入"+strconv.Itoa(resp.SuccessCount)+"道题目", *resp)
 		},
 	}.Handle(c)

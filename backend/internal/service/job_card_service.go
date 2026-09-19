@@ -253,24 +253,27 @@ func validateAttachmentOwnership(card *model.JobCard, in JobCardInput) error {
 		}
 		return nil
 	}
+	// 形态不符即拒（不静默跳过）：无法解析的照片/证书载荷门禁吃不准，放行等于旁路。
 	if in.Photos != nil && len(*in.Photos) > 0 {
 		var arr []string
-		if err := json.Unmarshal(*in.Photos, &arr); err == nil {
-			for _, u := range arr {
-				if err := check(u); err != nil {
-					return err
-				}
+		if err := json.Unmarshal(*in.Photos, &arr); err != nil {
+			return errors.New("工作照格式无效（需字符串数组）")
+		}
+		for _, u := range arr {
+			if err := check(u); err != nil {
+				return err
 			}
 		}
 	}
 	if in.ResumeCertifications != nil && len(*in.ResumeCertifications) > 0 {
 		var rows []resumeCertificationRow
-		if err := json.Unmarshal(*in.ResumeCertifications, &rows); err == nil {
-			for _, r := range rows {
-				for _, u := range r.ImageURLs {
-					if err := check(u); err != nil {
-						return err
-					}
+		if err := json.Unmarshal(*in.ResumeCertifications, &rows); err != nil {
+			return errors.New("证书信息格式无效")
+		}
+		for _, r := range rows {
+			for _, u := range r.ImageURLs {
+				if err := check(u); err != nil {
+					return err
 				}
 			}
 		}

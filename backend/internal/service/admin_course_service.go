@@ -245,7 +245,7 @@ func (s *AdminCourseService) DeleteChapter(chapterID int) (*DeleteChapterResult,
 		return nil, err
 	}
 	if s.fileSvc != nil {
-		s.fileSvc.DeleteFiles(s.fileSvc.List(fmt.Sprintf("slides/%d", chapterID)))
+		s.fileSvc.DeleteFiles(s.fileSvc.List(fmt.Sprintf("%s/%d", slideRenderDir, chapterID)))
 		s.fileSvc.DeleteFiles(s.fileSvc.List(ChapterImageDirPrefix + "/" + strconv.Itoa(chapterID)))
 	}
 	return &DeleteChapterResult{ChapterID: chapterID}, nil

@@ -90,6 +90,38 @@ func TestQuestionWriteTypedFieldMismatchFails(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("score 类型不符应 400, got %d %s", rec.Code, rec.Body.String())
 	}
+	// answer 传数字：形态哨兵 → 400（撤 fallback 后不得渲染成 500）
+	rec = doWithToken(t, r, tutor, http.MethodPost, "/api/question-bank/questions",
+		map[string]any{"type": "single_choice", "content": "答案形态不符", "options": map[string]string{"A": "甲"}, "answer": 123})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("answer 形态不符应 400, got %d %s", rec.Code, rec.Body.String())
+	}
+	// options 传 JSON null：归一入空选项桶，选择题必须 400（不得把 "null" 落库）
+	rec = doWithToken(t, r, tutor, http.MethodPost, "/api/question-bank/questions",
+		map[string]any{"type": "single_choice", "content": "选项为 null", "options": nil, "answer": "A"})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("options 为 null 应 400, got %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestQuestionBatchImportRejectsItemStatus(t *testing.T) {
+	r, cfg, _ := newQuestionWriteEnv(t)
+	tutor := qwriteIssue(t, cfg, "tutor")
+	rec := doWithToken(t, r, tutor, http.MethodPost, "/api/question-bank/questions/batch-import",
+		map[string]any{"questions": []any{
+			map[string]any{"type": "true_false", "content": "条目级 status 旁路探针", "answer": "true", "status": "published"},
+		}})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("导入条目携带 status 应 400, got %d %s", rec.Code, rec.Body.String())
+	}
+	// 不带 status 的合法导入不受影响
+	rec = doWithToken(t, r, tutor, http.MethodPost, "/api/question-bank/questions/batch-import",
+		map[string]any{"questions": []any{
+			map[string]any{"type": "true_false", "content": "合法导入题", "answer": "true"},
+		}})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("合法导入应 200, got %d %s", rec.Code, rec.Body.String())
+	}
 }
 
 func TestQuestionSubmitAction(t *testing.T) {

@@ -27,6 +27,7 @@ var (
 	ErrQuestionContentRequired    = errors.New("题干不能为空")
 	ErrQuestionAnswerRequired     = errors.New("答案不能为空")
 	ErrQuestionOptionsRequired    = errors.New("选项不能为空")
+	ErrQuestionAnswerInvalid      = errors.New("answer 形态无效（仅支持字符串或数组）")
 	ErrQuestionCredentialNotFound = errors.New("所属证件不存在")
 	ErrSubmitNotDraft             = errors.New("仅待提交（draft）题目可提交审核")
 	ErrRejectReasonRequired       = errors.New("请填写驳回理由")
@@ -82,7 +83,16 @@ func stringifyAnswerJSON(raw json.RawMessage) (string, error) {
 	if err := json.Unmarshal(raw, &arr); err == nil {
 		return stringifyAnswer(arr), nil
 	}
-	return "", errors.New("answer 形态无效（仅支持字符串或数组）")
+	return "", ErrQuestionAnswerInvalid
+}
+
+// effectiveOptions 归一 typed 写面的 options 原始 JSON：缺字段与 JSON null 都归入空选项桶。
+// RawMessage 面上 null 是 4 字节非空值，不归一会绕过「选项不能为空」校验并把 "null" 落库。
+func effectiveOptions(raw json.RawMessage) json.RawMessage {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil
+	}
+	return raw
 }
 
 // 题型与课程分类常量（已取消等级制度）。
@@ -356,7 +366,7 @@ func (s *QuestionBankService) CreateQuestion(in QuestionCreateInput, createdBy *
 	if answer == "" && in.Type != "short_answer" {
 		return QuestionDTO{}, ErrQuestionAnswerRequired
 	}
-	if (in.Type == "single_choice" || in.Type == "multi_choice" || in.Type == "fault_image") && len(in.Options) == 0 {
+	if (in.Type == "single_choice" || in.Type == "multi_choice" || in.Type == "fault_image") && len(effectiveOptions(in.Options)) == 0 {
 		return QuestionDTO{}, ErrQuestionOptionsRequired
 	}
 	var credentialID *int
@@ -372,8 +382,8 @@ func (s *QuestionBankService) CreateQuestion(in QuestionCreateInput, createdBy *
 		credentialID = &cid
 	}
 	var optionsBytes model.JSONB
-	if len(in.Options) > 0 {
-		optionsBytes = model.JSONB(in.Options)
+	if opts := effectiveOptions(in.Options); len(opts) > 0 {
+		optionsBytes = model.JSONB(opts)
 	}
 	q := model.Question{
 		Type:            in.Type,
@@ -492,7 +502,7 @@ func questionContentTouched(q *model.Question, in QuestionUpdateInput, answerCha
 	if in.Content != nil && *in.Content != q.Content {
 		touched = true
 	}
-	if in.Options != nil && !jsonEqualCompact(string(q.Options), *in.Options) {
+	if in.Options != nil && !jsonEqualCompact(string(q.Options), effectiveOptions(*in.Options)) {
 		touched = true
 	}
 	if answerChanged {
@@ -540,10 +550,10 @@ func applyQuestionUpdateFields(q *model.Question, in QuestionUpdateInput) {
 		q.Content = *in.Content
 	}
 	if in.Options != nil {
-		if len(*in.Options) == 0 || string(*in.Options) == "null" {
+		if eff := effectiveOptions(*in.Options); len(eff) == 0 {
 			q.Options = nil
 		} else {
-			q.Options = model.JSONB(*in.Options)
+			q.Options = model.JSONB(eff)
 		}
 	}
 	if in.Explanation != nil {

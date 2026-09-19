@@ -21,6 +21,9 @@ import (
 	"forklift-training/internal/storage"
 )
 
+// slideRenderDir PPT 渲染产物的存储目录前缀（slides/<chapterID>/），渲染与删章节清理共用单点。
+const slideRenderDir = "slides"
+
 // SlideRenderer PPT 转图 module。
 type SlideRenderer struct {
 	storage               storage.Storage
@@ -81,7 +84,7 @@ func (s *SlideRenderer) Render(pptContent []byte, chapterID int) []string {
 		if strings.HasSuffix(strings.ToLower(img.Name), ".webp") {
 			imgCT = "image/webp"
 		}
-		key := fmt.Sprintf("slides/%d/%s", chapterID, img.Name)
+		key := fmt.Sprintf("%s/%d/%s", slideRenderDir, chapterID, img.Name)
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		url, err := s.storage.Save(ctx, key, imgData, imgCT)
 		cancel()
@@ -263,7 +266,7 @@ func (s *SlideRenderer) uploadPlaceholder(chapterID int) string {
 		0x42, 0x60, 0x82,
 	}
 
-	key := fmt.Sprintf("slides/%d/slide_001.png", chapterID)
+	key := fmt.Sprintf("%s/%d/slide_001.png", slideRenderDir, chapterID)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	url, err := s.storage.Save(ctx, key, placeholderPNG, "image/png")

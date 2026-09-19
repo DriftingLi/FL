@@ -124,4 +124,12 @@ func TestJobCardAttachmentOwnershipGate(t *testing.T) {
 	if _, err := svc.Upsert(101, JobCardInput{ResumeCertifications: certsOwn}); err != nil {
 		t.Fatalf("证书本站原图应放行: %v", err)
 	}
+	// 畸形载荷 → 拒（不可解析即无法过门禁，静默跳过等于旁路）
+	malformed := func(s string) *json.RawMessage { rm := json.RawMessage(s); return &rm }
+	if _, err := svc.Upsert(103, JobCardInput{Photos: malformed(`{"url":"` + external + `"}`)}); err == nil {
+		t.Fatal("工作照非字符串数组应报错")
+	}
+	if _, err := svc.Upsert(103, JobCardInput{ResumeCertifications: malformed(`"not-rows"`)}); err == nil {
+		t.Fatal("证书信息形态不符应报错")
+	}
 }

@@ -236,7 +236,7 @@ func (h *ForumHandler) ListTopics(c *gin.Context) {
 		},
 		Render: func(c *gin.Context, _ *listTopicsReq, resp *service.ForumTopicPageResult, err error) {
 			if err != nil {
-				forumErrStatus.renderError(c, err) // 票5：哨兵族+域表（存在性404/所有权403/前置校验400/故障500）
+				forumErrStatus.renderError(c, err)
 				return
 			}
 			response.Success(c, resp)
@@ -296,7 +296,7 @@ func (h *ForumHandler) CreateTopic(c *gin.Context) {
 		},
 		Render: func(c *gin.Context, _ *createTopicReq, resp *service.ForumTopicDTO, err error) {
 			if err != nil {
-				forumErrStatus.renderError(c, err) // 票5：哨兵族+域表（存在性404/所有权403/前置校验400/故障500）
+				forumErrStatus.renderError(c, err)
 				return
 			}
 			response.Created(c, "发布成功", resp)
@@ -406,7 +406,7 @@ func (h *ForumHandler) ReplyTopic(c *gin.Context) {
 		},
 		Render: func(c *gin.Context, _ *replyTopicReq, resp *service.ForumReplyDTO, err error) {
 			if err != nil {
-				forumErrStatus.renderError(c, err) // 票5：哨兵族+域表（存在性404/所有权403/前置校验400/故障500）
+				forumErrStatus.renderError(c, err)
 				return
 			}
 			response.Created(c, "回复成功", resp)
@@ -465,7 +465,6 @@ func (h *ForumHandler) UpdateTopic(c *gin.Context) {
 		},
 		Render: func(c *gin.Context, _ *updateTopicReq, resp *service.ForumTopicDTO, err error) {
 			if err != nil {
-				// 票 5：#811 的两条手写 if-chain 收编进 forumErrStatus 域表（owner 403 / 不存在 404 / 其余按档）。
 				forumErrStatus.renderError(c, err)
 				return
 			}
@@ -507,7 +506,7 @@ func (h *ForumHandler) DeleteTopic(c *gin.Context) {
 		},
 		Render: func(c *gin.Context, _ *topicDeleteReq, _ *struct{}, err error) {
 			if err != nil {
-				forumErrStatus.renderError(c, err) // 票5：哨兵族+域表（存在性404/所有权403/前置校验400/故障500）
+				forumErrStatus.renderError(c, err)
 				return
 			}
 			response.SuccessWithMsg(c, "已删除", nil)
@@ -548,7 +547,7 @@ func (h *ForumHandler) DeleteReply(c *gin.Context) {
 		},
 		Render: func(c *gin.Context, _ *replyDeleteReq, _ *struct{}, err error) {
 			if err != nil {
-				forumErrStatus.renderError(c, err) // 票5：哨兵族+域表（存在性404/所有权403/前置校验400/故障500）
+				forumErrStatus.renderError(c, err)
 				return
 			}
 			response.SuccessWithMsg(c, "已删除", nil)
@@ -633,7 +632,7 @@ func (h *ForumHandler) AdminDeleteTopic(c *gin.Context) {
 		},
 		Render: func(c *gin.Context, _ *topicIDReq, _ *struct{}, err error) {
 			if err != nil {
-				forumErrStatus.renderError(c, err) // 票5：哨兵族+域表（存在性404/所有权403/前置校验400/故障500）
+				forumErrStatus.renderError(c, err)
 				return
 			}
 			response.SuccessWithMsg(c, "已删除", nil)
@@ -727,7 +726,7 @@ func (h *ForumHandler) handleExperience(c *gin.Context, designate bool) {
 		},
 		Render: func(c *gin.Context, _ *topicIDReq, resp *service.ForumTopicDTO, err error) {
 			if err != nil {
-				forumErrStatus.renderError(c, err) // 票5：哨兵族+域表（存在性404/所有权403/前置校验400/故障500）
+				forumErrStatus.renderError(c, err)
 				return
 			}
 			if designate {
@@ -754,7 +753,7 @@ func (h *ForumHandler) handleSetFeatured(c *gin.Context, featured bool) {
 		},
 		Render: func(c *gin.Context, _ *topicIDReq, resp *service.ForumTopicDTO, err error) {
 			if err != nil {
-				forumErrStatus.renderError(c, err) // 票5：哨兵族+域表（存在性404/所有权403/前置校验400/故障500）
+				forumErrStatus.renderError(c, err)
 				return
 			}
 			if featured {
@@ -796,7 +795,7 @@ func (h *ForumHandler) AdminDeleteReply(c *gin.Context) {
 		},
 		Render: func(c *gin.Context, _ *replyIDReq, _ *struct{}, err error) {
 			if err != nil {
-				forumErrStatus.renderError(c, err) // 票5：哨兵族+域表（存在性404/所有权403/前置校验400/故障500）
+				forumErrStatus.renderError(c, err)
 				return
 			}
 			response.SuccessWithMsg(c, "已删除", nil)
@@ -916,12 +915,12 @@ type replyIDReq struct {
 func (h *ForumHandler) LikeTopic(c *gin.Context) {
 	topicID, err := pathInt64(c, "id", "主题 ID 无效")
 	if err != nil {
-		forumErrStatus.renderError(c, err) // 票5：raw handler 同吃域表（ParseError→400 文案不变，业务错误按档）
+		forumErrStatus.renderError(c, err)
 		return
 	}
 	count, err := h.svc.LikeTopic(middleware.CurrentUserID(c), topicID)
 	if err != nil {
-		forumErrStatus.renderError(c, err) // 票5：raw handler 同吃域表（ParseError→400 文案不变，业务错误按档）
+		forumErrStatus.renderError(c, err)
 		return
 	}
 	response.SuccessWithMsg(c, "点赞成功", service.ForumLikeResultDTO{Liked: true, LikesCount: count})
@@ -943,12 +942,12 @@ func (h *ForumHandler) LikeTopic(c *gin.Context) {
 func (h *ForumHandler) UnlikeTopic(c *gin.Context) {
 	topicID, err := pathInt64(c, "id", "主题 ID 无效")
 	if err != nil {
-		forumErrStatus.renderError(c, err) // 票5：raw handler 同吃域表（ParseError→400 文案不变，业务错误按档）
+		forumErrStatus.renderError(c, err)
 		return
 	}
 	count, err := h.svc.UnlikeTopic(middleware.CurrentUserID(c), topicID)
 	if err != nil {
-		forumErrStatus.renderError(c, err) // 票5：raw handler 同吃域表（ParseError→400 文案不变，业务错误按档）
+		forumErrStatus.renderError(c, err)
 		return
 	}
 	response.SuccessWithMsg(c, "已取消点赞", service.ForumLikeResultDTO{Liked: false, LikesCount: count})
@@ -994,7 +993,7 @@ func (h *ForumHandler) ReportReply(c *gin.Context) {
 func (h *ForumHandler) report(c *gin.Context, kind string) {
 	id, err := pathInt64(c, "id", "目标 ID 无效")
 	if err != nil {
-		forumErrStatus.renderError(c, err) // 票5：raw handler 同吃域表（ParseError→400 文案不变，业务错误按档）
+		forumErrStatus.renderError(c, err)
 		return
 	}
 	var v int64 = id
@@ -1012,7 +1011,7 @@ func (h *ForumHandler) report(c *gin.Context, kind string) {
 		replyID = &v
 	}
 	if err := h.svc.CreateReport(middleware.CurrentUserID(c), topicID, replyID, body.Reason); err != nil {
-		forumErrStatus.renderError(c, err) // 票5：raw handler 同吃域表（ParseError→400 文案不变，业务错误按档）
+		forumErrStatus.renderError(c, err)
 		return
 	}
 	response.SuccessWithMsg(c, "举报已提交，等待处理", nil)
@@ -1034,7 +1033,7 @@ func (h *ForumHandler) MyTopics(c *gin.Context) {
 	resp, err := h.svc.MyTopics(middleware.CurrentUserID(c),
 		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 10))
 	if err != nil {
-		forumErrStatus.renderError(c, err) // 票5：raw handler 同吃域表（ParseError→400 文案不变，业务错误按档）
+		forumErrStatus.renderError(c, err)
 		return
 	}
 	response.Success(c, resp)
@@ -1056,7 +1055,7 @@ func (h *ForumHandler) MyReplies(c *gin.Context) {
 	resp, err := h.svc.MyReplies(middleware.CurrentUserID(c),
 		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 10))
 	if err != nil {
-		forumErrStatus.renderError(c, err) // 票5：raw handler 同吃域表（ParseError→400 文案不变，业务错误按档）
+		forumErrStatus.renderError(c, err)
 		return
 	}
 	response.Success(c, resp)
@@ -1078,7 +1077,7 @@ func (h *ForumHandler) MyLikedTopics(c *gin.Context) {
 	resp, err := h.svc.MyLikedTopics(middleware.CurrentUserID(c),
 		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 10))
 	if err != nil {
-		forumErrStatus.renderError(c, err) // 票5：个人动态五 handler 统一收进同一域表骨架（DB 故障→500 信封不变）
+		forumErrStatus.renderError(c, err)
 		return
 	}
 	response.Success(c, resp)
@@ -1100,7 +1099,7 @@ func (h *ForumHandler) MyObservedTopics(c *gin.Context) {
 	resp, err := h.svc.MyObservedTopics(middleware.CurrentUserID(c),
 		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 10))
 	if err != nil {
-		forumErrStatus.renderError(c, err) // 票5：个人动态五 handler 统一收进同一域表骨架（DB 故障→500 信封不变）
+		forumErrStatus.renderError(c, err)
 		return
 	}
 	response.Success(c, resp)
@@ -1122,7 +1121,7 @@ func (h *ForumHandler) MyViewHistory(c *gin.Context) {
 	resp, err := h.svc.MyViewHistory(middleware.CurrentUserID(c),
 		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 10))
 	if err != nil {
-		forumErrStatus.renderError(c, err) // 票5：个人动态五 handler 统一收进同一域表骨架（DB 故障→500 信封不变）
+		forumErrStatus.renderError(c, err)
 		return
 	}
 	response.Success(c, resp)
@@ -1154,7 +1153,7 @@ func (h *ForumHandler) ListReports(c *gin.Context) {
 	}
 	resp, err := h.modSvc.ListReports(atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 20), status)
 	if err != nil {
-		forumErrStatus.renderError(c, err) // 票5：raw handler 同吃域表（ParseError→400 文案不变，业务错误按档）
+		forumErrStatus.renderError(c, err)
 		return
 	}
 	response.Success(c, resp)
@@ -1178,7 +1177,7 @@ func (h *ForumHandler) ListReports(c *gin.Context) {
 func (h *ForumHandler) HandleReport(c *gin.Context) {
 	id, err := pathInt64(c, "id", "举报 ID 无效")
 	if err != nil {
-		forumErrStatus.renderError(c, err) // 票5：raw handler 同吃域表（ParseError→400 文案不变，业务错误按档）
+		forumErrStatus.renderError(c, err)
 		return
 	}
 	var body struct {
@@ -1189,7 +1188,7 @@ func (h *ForumHandler) HandleReport(c *gin.Context) {
 		return
 	}
 	if err := h.modSvc.HandleReport(id, body.Status); err != nil {
-		forumErrStatus.renderError(c, err) // 票5：raw handler 同吃域表（ParseError→400 文案不变，业务错误按档）
+		forumErrStatus.renderError(c, err)
 		return
 	}
 	response.SuccessWithMsg(c, "举报状态已更新", nil)
@@ -1211,12 +1210,12 @@ func (h *ForumHandler) HandleReport(c *gin.Context) {
 func (h *ForumHandler) LikeReply(c *gin.Context) {
 	replyID, err := pathInt64(c, "id", "回复 ID 无效")
 	if err != nil {
-		forumErrStatus.renderError(c, err) // 票5：raw handler 同吃域表（ParseError→400 文案不变，业务错误按档）
+		forumErrStatus.renderError(c, err)
 		return
 	}
 	count, err := h.svc.LikeReply(middleware.CurrentUserID(c), replyID)
 	if err != nil {
-		forumErrStatus.renderError(c, err) // 票5：raw handler 同吃域表（ParseError→400 文案不变，业务错误按档）
+		forumErrStatus.renderError(c, err)
 		return
 	}
 	response.SuccessWithMsg(c, "点赞成功", service.ForumLikeResultDTO{Liked: true, LikesCount: count})
@@ -1238,12 +1237,12 @@ func (h *ForumHandler) LikeReply(c *gin.Context) {
 func (h *ForumHandler) UnlikeReply(c *gin.Context) {
 	replyID, err := pathInt64(c, "id", "回复 ID 无效")
 	if err != nil {
-		forumErrStatus.renderError(c, err) // 票5：raw handler 同吃域表（ParseError→400 文案不变，业务错误按档）
+		forumErrStatus.renderError(c, err)
 		return
 	}
 	count, err := h.svc.UnlikeReply(middleware.CurrentUserID(c), replyID)
 	if err != nil {
-		forumErrStatus.renderError(c, err) // 票5：raw handler 同吃域表（ParseError→400 文案不变，业务错误按档）
+		forumErrStatus.renderError(c, err)
 		return
 	}
 	response.SuccessWithMsg(c, "已取消点赞", service.ForumLikeResultDTO{Liked: false, LikesCount: count})
@@ -1267,7 +1266,7 @@ func (h *ForumHandler) UnlikeReply(c *gin.Context) {
 func (h *ForumHandler) AcceptTopic(c *gin.Context) {
 	topicID, err := pathInt64(c, "id", "主题 ID 无效")
 	if err != nil {
-		forumErrStatus.renderError(c, err) // 票5：raw handler 同吃域表（ParseError→400 文案不变，业务错误按档）
+		forumErrStatus.renderError(c, err)
 		return
 	}
 	var body struct {
@@ -1301,7 +1300,7 @@ func (h *ForumHandler) AcceptTopic(c *gin.Context) {
 func (h *ForumHandler) CancelAccept(c *gin.Context) {
 	topicID, err := pathInt64(c, "id", "主题 ID 无效")
 	if err != nil {
-		forumErrStatus.renderError(c, err) // 票5：raw handler 同吃域表（ParseError→400 文案不变，业务错误按档）
+		forumErrStatus.renderError(c, err)
 		return
 	}
 	topic, err := h.svc.CancelAccept(middleware.CurrentUserID(c), topicID)

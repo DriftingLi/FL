@@ -213,6 +213,7 @@ func TestErrStatusTable_Snapshot_QuestionBank(t *testing.T) {
 		{service.ErrQuestionContentRequired, http.StatusBadRequest},
 		{service.ErrQuestionAnswerRequired, http.StatusBadRequest},
 		{service.ErrQuestionOptionsRequired, http.StatusBadRequest},
+		{service.ErrQuestionAnswerInvalid, http.StatusBadRequest},
 		{service.ErrSubmitNotDraft, http.StatusBadRequest},
 		{service.ErrRejectReasonRequired, http.StatusBadRequest},
 	}, 0)
