@@ -4,8 +4,6 @@
 package api
 
 import (
-	"io"
-
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/service"
@@ -33,13 +31,7 @@ func uploadVditorImage(c *gin.Context, fileSvc *service.FileStore, saver vditorU
 		c.JSON(200, vditorError("未选择文件", []string{}))
 		return
 	}
-	src, err := file.Open()
-	if err != nil {
-		c.JSON(200, vditorError("文件打开失败", []string{file.Filename}))
-		return
-	}
-	defer src.Close()
-	content, err := io.ReadAll(src)
+	content, err := service.ReadMultipartFile(file)
 	if err != nil {
 		c.JSON(200, vditorError("文件读取失败", []string{file.Filename}))
 		return

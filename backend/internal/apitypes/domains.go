@@ -396,6 +396,7 @@ var Domains = []Domain{
 			{Method: "DELETE", Path: "/question-bank/questions/{question_id}", NoData: true},
 			{Method: "POST", Path: "/question-bank/questions/{question_id}/publish"},
 			{Method: "POST", Path: "/question-bank/questions/{question_id}/reject"},
+			{Method: "POST", Path: "/question-bank/questions/{question_id}/submit"},
 			{Method: "POST", Path: "/question-bank/questions/batch-publish"},
 			{Method: "POST", Path: "/question-bank/questions/batch-reject"},
 			{Method: "POST", Path: "/question-bank/questions/batch-import"},

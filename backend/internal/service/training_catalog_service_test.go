@@ -291,21 +291,15 @@ func TestListQuestionTags_QuestionCount(t *testing.T) {
 	qsvc := NewQuestionBankService(db, nil, zap.NewNop())
 
 	// 1 道已发布 + 1 道草稿（未发布）
-	published, err := qsvc.CreateQuestion(map[string]any{
-		"type": "single_choice", "content": "已发布题", "options": []string{"A", "B"}, "answer": "A",
-		"status": "published", "tag_ids": []int{tag.ID},
-	}, nil, "tutor")
-	if err != nil {
-		t.Fatalf("创建已发布题目失败: %v", err)
-	}
+	published := createQuestionAs(t, qsvc, db, QuestionCreateInput{
+		Type: "single_choice", Content: "已发布题", Options: json.RawMessage(`["A","B"]`), Answer: json.RawMessage(`"A"`),
+		TagIDs: []int{tag.ID},
+	}, "published")
 	_ = published
-	draft, err := qsvc.CreateQuestion(map[string]any{
-		"type": "true_false", "content": "草稿题", "answer": "true",
-		"status": "draft", "tag_ids": []int{tag.ID},
-	}, nil, "tutor")
-	if err != nil {
-		t.Fatalf("创建草稿题目失败: %v", err)
-	}
+	draft := createQuestionAs(t, qsvc, db, QuestionCreateInput{
+		Type: "true_false", Content: "草稿题", Answer: json.RawMessage(`"true"`),
+		TagIDs: []int{tag.ID},
+	}, "draft")
 	_ = draft
 	// 另一个无题目标签
 	empty, _ := svc.CreateQuestionTag(QuestionTagInput{Code: "brake", Name: "制动"})
@@ -349,16 +343,14 @@ func TestListQuestionTags_CredentialPartition(t *testing.T) {
 
 	mkQ := func(content string, credID int) {
 		t.Helper()
-		in := map[string]any{
-			"type": "single_choice", "content": content, "options": []string{"A", "B"}, "answer": "A",
-			"status": "published", "tag_ids": []int{tag.ID},
+		in := QuestionCreateInput{
+			Type: "single_choice", Content: content, Options: json.RawMessage(`["A","B"]`), Answer: json.RawMessage(`"A"`),
+			TagIDs: []int{tag.ID},
 		}
 		if credID > 0 {
-			in["credential_id"] = credID
+			in.CredentialID = credID
 		}
-		if _, err := qsvc.CreateQuestion(in, nil, "tutor"); err != nil {
-			t.Fatalf("建题失败: %v", err)
-		}
+		createQuestionAs(t, qsvc, db, in, "published")
 	}
 	// A 证件 2 道、证件为空 1 道
 	mkQ("A证件题1", credA.ID)
@@ -879,16 +871,16 @@ func TestQuestionBank_Tags(t *testing.T) {
 	tag2, _ := svc.CreateQuestionTag(QuestionTagInput{Code: "hydraulic", Name: "液压", SortOrder: ptrInt(2)})
 
 	// 创建题目时打标
-	q1, err := qsvc.CreateQuestion(map[string]any{
-		"type": "single_choice", "content": "法规题", "options": []string{"A", "B"}, "answer": "A",
-		"tag_ids": []int{tag1.ID},
+	q1, err := qsvc.CreateQuestion(QuestionCreateInput{
+		Type: "single_choice", Content: "法规题", Options: json.RawMessage(`["A","B"]`), Answer: json.RawMessage(`"A"`),
+		TagIDs: []int{tag1.ID},
 	}, nil, "tutor")
 	if err != nil {
 		t.Fatalf("创建题目失败: %v", err)
 	}
-	q2, err := qsvc.CreateQuestion(map[string]any{
-		"type": "true_false", "content": "液压题", "answer": "true",
-		"tag_ids": []int{tag2.ID},
+	q2, err := qsvc.CreateQuestion(QuestionCreateInput{
+		Type: "true_false", Content: "液压题", Answer: json.RawMessage(`"true"`),
+		TagIDs: []int{tag2.ID},
 	}, nil, "tutor")
 	if err != nil {
 		t.Fatalf("创建题目失败: %v", err)
@@ -914,7 +906,8 @@ func TestQuestionBank_Tags(t *testing.T) {
 	}
 
 	// 更新题目时替换标签
-	updated, err := qsvc.UpdateQuestion(q1.ID, map[string]any{"tag_ids": []int{tag2.ID}})
+	tagIDs2 := []int{tag2.ID}
+	updated, err := qsvc.UpdateQuestion(q1.ID, QuestionUpdateInput{TagIDs: &tagIDs2}, "tutor")
 	if err != nil {
 		t.Fatalf("更新题目失败: %v", err)
 	}

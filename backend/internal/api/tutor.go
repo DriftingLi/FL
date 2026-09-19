@@ -3,8 +3,6 @@ package api
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -189,13 +187,7 @@ func (h *TutorHandler) UploadChapterFile(c *gin.Context) {
 		response.BadRequest(c, "未选择文件")
 		return
 	}
-	src, err := file.Open()
-	if err != nil {
-		response.ServerError(c, "文件上传失败")
-		return
-	}
-	defer src.Close()
-	content, err := io.ReadAll(src)
+	content, err := service.ReadMultipartFile(file)
 	if err != nil {
 		response.ServerError(c, "文件上传失败")
 		return
@@ -215,13 +207,13 @@ func (h *TutorHandler) UploadImage(c *gin.Context) {
 	// 按章节分目录存储，便于删除章节时按前缀清理（历史旧目录孤儿文件不处理）
 	// chapter_id 支持 query（Vditor 走 URL）与 form（直接 multipart）两种传递方式
 	uploadVditorImage(c, h.fileSvc, func(content []byte, filename string) (string, error) {
-		subfolder := "images/chapters"
+		subfolder := service.ChapterImageDirPrefix
 		chapterIDStr := c.Query("chapter_id")
 		if chapterIDStr == "" {
 			chapterIDStr = c.PostForm("chapter_id")
 		}
 		if chapterID, err := strconv.Atoi(chapterIDStr); err == nil && chapterID > 0 {
-			subfolder = fmt.Sprintf("images/chapters/%d", chapterID)
+			subfolder = service.ChapterImageDirPrefix + "/" + chapterIDStr
 		}
 		return h.fileSvc.Save(content, filename, subfolder)
 	})

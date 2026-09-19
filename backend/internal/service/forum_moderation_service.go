@@ -101,7 +101,7 @@ func (s *ForumModerationService) AdminDeleteReply(replyID int64) error {
 	var reply model.ForumReply
 	if err := s.db.First(&reply, replyID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("回复不存在")
+			return ErrReplyNotFound
 		}
 		return err
 	}
@@ -178,12 +178,12 @@ func (s *ForumModerationService) ListReports(page, pageSize int, status *int16) 
 // HandleReport 管理端处理举报（status: 0 待处理 / 1 已处理）；标记已处理时站内信通知举报人。
 func (s *ForumModerationService) HandleReport(reportID int64, status int16) error {
 	if status != 0 && status != 1 {
-		return errors.New("状态仅支持 0（待处理）/ 1（已处理）")
+		return ErrReportStatusValue
 	}
 	var report model.ForumReport
 	if err := s.db.First(&report, reportID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("举报不存在")
+			return ErrForumReportNotFound
 		}
 		return err
 	}
@@ -233,7 +233,7 @@ func (s *ForumModerationService) DesignateExperience(topicID int64) (*ForumTopic
 	// 逃生口是先取消采纳。库层 CHECK 兜底见迁移 000028。
 	// 只判「是否有采纳指针」而非意图——同一条规则也兜住历史遗留的悬挂行。
 	if topic.AcceptedReplyID != nil {
-		return nil, errors.New("已采纳的帖子不可认定为备考经验，请先取消采纳")
+		return nil, ErrDesignateAcceptedTopic
 	}
 	now := beijingNow()
 	err := s.db.Transaction(func(tx *gorm.DB) error {
@@ -305,7 +305,7 @@ func (s *ForumModerationService) SetFeatured(topicID int64, featured bool) (*For
 	// 逃生口是「先取消经验认定」——文案与 #811「已采纳的问答帖不能改类别，请先取消采纳」同构。
 	// 判定按认定事实（IsExperience），与意图 Category 无关。
 	if !featured && topic.IsExperience {
-		return nil, errors.New("备考经验帖蕴含精选位，请先取消经验认定")
+		return nil, ErrUnfeatureExperienceTopic
 	}
 	if topic.IsFeatured == featured {
 		// 幂等：状态已一致（重复加精/重复取消），不发分不改状态

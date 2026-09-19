@@ -132,8 +132,8 @@ func TestForumInteractionContract(t *testing.T) {
 		t.Fatalf("举报主题期望 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 	rec = do(token, http.MethodPost, "/api/forum/topics/99999/report", map[string]string{"reason": "不存在"})
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("举报不存在主题期望 400, got %d", rec.Code)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("举报不存在主题期望 404（票5 存在性档）, got %d", rec.Code)
 	}
 	rec = do(token, http.MethodPost, fmt.Sprintf("/api/forum/replies/%d/report", reply.ID), map[string]string{"reason": "人身攻击"})
 	if rec.Code != http.StatusOK {

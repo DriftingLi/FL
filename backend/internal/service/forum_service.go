@@ -69,7 +69,7 @@ func normalizeContentFormat(format string) (string, error) {
 	case ForumContentFormatText, ForumContentFormatMarkdown:
 		return format, nil
 	default:
-		return "", fmt.Errorf("正文格式无效: %s", format)
+		return "", fmt.Errorf("%w: %s", ErrContentFormatInvalid, format)
 	}
 }
 
@@ -84,7 +84,7 @@ func normalizeForumCategory(category string) (string, error) {
 	case ForumCategoryDiscussion, ForumCategoryQuestion:
 		return category, nil
 	default:
-		return "", fmt.Errorf("帖子类别无效: %s", category)
+		return "", fmt.Errorf("%w: %s", ErrCategoryInvalid, category)
 	}
 }
 
@@ -104,15 +104,87 @@ const (
 	ReasonFeaturedBonus = "featured_bonus" // 流水原因：帖子被加精
 )
 
-// ErrNotTopicOwner 只有楼主可采纳/取消/更换。
-var ErrNotTopicOwner = errors.New("只有楼主可以执行此操作")
+// 论坛错误哨兵族（第十二波票 5，#1168）：同一事实一个哨兵，api 侧 forumErrStatus 域表按档渲染——
+// 存在性→404、所有权→403、状态前置/校验→400；未命中域表的 error 一律 DB/未知故障 → 500。
+// 沿用积分域哨兵纪律（ADR-0024 / #611 形态）：handler 以 errors.Is 映射，不做 err.Error() 字符串比对。
+
+// —— 存在性一族（→404）——
 
 // ErrTopicNotFound 主题不存在（#811 收敛为哨兵：handler 以 errors.Is 映射 404，
 // 不做 err.Error() 字符串比对——沿用积分域哨兵纪律，CONTEXT.md「积分错误哨兵」同精神）。
 var ErrTopicNotFound = errors.New("主题不存在")
 
+// ErrReplyNotFound 回复不存在（票 5 前是五个读点各写的裸「回复不存在」×5 + 「被回复的回复不存在」，同一事实）。
+var ErrReplyNotFound = errors.New("回复不存在")
+
+// ErrForumReportNotFound 论坛举报记录不存在（名带 Forum 前缀避开求职举报域既有 ErrReportNotFound 的包级撞名）。
+var ErrForumReportNotFound = errors.New("举报不存在")
+
+// ErrChapterNotFound 发帖/筛选指向的章节不存在。
+var ErrChapterNotFound = errors.New("章节不存在")
+
+// —— 所有权（→403）——
+
+// ErrNotTopicOwner 只有楼主可采纳/取消/更换。
+var ErrNotTopicOwner = errors.New("只有楼主可以执行此操作")
+
+// ErrNotTopicAuthor 主题删除仅限作者本人。
+var ErrNotTopicAuthor = errors.New("只能删除自己发布的主题")
+
+// ErrNotReplyAuthor 回复删除仅限作者本人。
+var ErrNotReplyAuthor = errors.New("只能删除自己发布的回复")
+
+// —— 状态前置（→400）——
+
 // ErrAcceptOwnReply 楼主不能采纳自己的回答（自问自答禁止，ADR-0028）。
 var ErrAcceptOwnReply = errors.New("不能采纳自己的回答")
+
+// ErrAcceptNotQuestion 采纳动作只适用于问答帖。
+var ErrAcceptNotQuestion = errors.New("只有问答帖可采纳回答")
+
+// ErrCancelAcceptNotQuestion 取消采纳只适用于问答帖。
+var ErrCancelAcceptNotQuestion = errors.New("只有问答帖可取消采纳")
+
+// ErrAcceptExperienceTopic 经验帖不可被采纳（ADR-0040，与认定侧守卫互为镜像）。
+var ErrAcceptExperienceTopic = errors.New("备考经验帖不可被采纳，请先取消经验认定")
+
+// ErrDesignateAcceptedTopic 已采纳帖不可认定为经验（ADR-0040）。
+var ErrDesignateAcceptedTopic = errors.New("已采纳的帖子不可认定为备考经验，请先取消采纳")
+
+// ErrUnfeatureExperienceTopic 撤精须先取消经验认定（经验蕴含精选，ADR-0040）。
+var ErrUnfeatureExperienceTopic = errors.New("备考经验帖蕴含精选位，请先取消经验认定")
+
+// ErrCategoryLockedByAccept 已采纳问答帖改类别前须先取消采纳（#811）。
+var ErrCategoryLockedByAccept = errors.New("已采纳的问答帖不能改类别，请先取消采纳")
+
+// ErrQuestionChapterConflict 问答帖不得挂章节。
+var ErrQuestionChapterConflict = errors.New("问答帖不属于任何章节，不能指定 chapter_id")
+
+// ErrParentReplyMismatch 被回复的回复挂在别的主题下。
+var ErrParentReplyMismatch = errors.New("被回复的回复不属于该主题")
+
+// ErrReplyTopicMismatch 被采纳的回复挂在别的主题下。
+var ErrReplyTopicMismatch = errors.New("回复不属于该主题")
+
+// —— 参数/校验（→400，动态详情以 %w 包装哨兵，文案逐字保持）——
+
+var (
+	ErrContentFormatInvalid = errors.New("正文格式无效")
+	ErrCategoryInvalid      = errors.New("帖子类别无效")
+	ErrSolvedArgInvalid     = errors.New("solved 参数无效")
+	ErrFeaturedArgInvalid   = errors.New("featured 参数无效")
+	ErrExperienceArgInvalid = errors.New("is_experience 参数无效")
+	ErrSolvedFilterScope    = errors.New("solved 筛选仅对问答帖有意义，请同时指定 category=question")
+	ErrChapterIDRequired    = errors.New("查询章节讨论区需要有效的 chapter_id")
+	ErrTitleLength          = errors.New("标题长度需在 1-100 个字符之间")
+	ErrContentLength        = errors.New("内容长度需在 1-10000 个字符之间")
+	ErrReplyContentLength   = errors.New("回复内容长度需在 1-5000 个字符之间")
+	ErrImagesTooMany        = errors.New("图片数量超出限制")
+	ErrImageURLInvalid      = errors.New("图片地址无效（仅支持本站上传的论坛图片）")
+	ErrReportReasonLength   = errors.New("举报理由长度需在 1-500 个字符之间")
+	ErrReportTarget         = errors.New("举报对象必须为主题或回复之一")
+	ErrReportStatusValue    = errors.New("状态仅支持 0（待处理）/ 1（已处理）")
+)
 
 // 论坛发图限制。
 const (
@@ -322,7 +394,7 @@ func parseForumCategoryArg(category string) (string, error) {
 	case ForumCategoryDiscussion, ForumCategoryQuestion, ForumCategoryExperience:
 		return category, nil
 	default:
-		return "", fmt.Errorf("帖子类别无效: %s", category)
+		return "", fmt.Errorf("%w: %s", ErrCategoryInvalid, category)
 	}
 }
 
@@ -341,7 +413,7 @@ func parseSolvedArg(solved string) (string, error) {
 	case "unsolved":
 		return "unsolved", nil
 	default:
-		return "", fmt.Errorf("solved 参数无效: %s", solved)
+		return "", fmt.Errorf("%w: %s", ErrSolvedArgInvalid, solved)
 	}
 }
 
@@ -357,7 +429,7 @@ func parseForumFeaturedArg(featured string) (string, error) {
 	case "false":
 		return "false", nil
 	default:
-		return "", fmt.Errorf("featured 参数无效: %s", featured)
+		return "", fmt.Errorf("%w: %s", ErrFeaturedArgInvalid, featured)
 	}
 }
 
@@ -376,7 +448,7 @@ func parseForumExperienceArg(experience string) (string, error) {
 	case "false":
 		return "false", nil
 	default:
-		return "", fmt.Errorf("is_experience 参数无效: %s", experience)
+		return "", fmt.Errorf("%w: %s", ErrExperienceArgInvalid, experience)
 	}
 }
 
@@ -425,13 +497,13 @@ func (s *ForumService) ListTopics(in TopicListInput) (*ForumTopicPageResult, err
 	// solved 只对问答帖有意义（accepted_reply_id 只在 question 帖上非空）。
 	// 缺 category=question 时报 400 而非静默返回空列表——与 solved 非法值同口径。
 	if solved != "" && category != ForumCategoryQuestion {
-		return nil, errors.New("solved 筛选仅对问答帖有意义，请同时指定 category=question")
+		return nil, ErrSolvedFilterScope
 	}
 	if scope == "" {
 		scope = ForumScopeAll
 	}
 	if scope == ForumScopeChapter && chapterID <= 0 {
-		return nil, errors.New("查询章节讨论区需要有效的 chapter_id")
+		return nil, ErrChapterIDRequired
 	}
 	if sort != "hot" && sort != "created" {
 		sort = "latest"
@@ -747,10 +819,10 @@ func (s *ForumService) CreateTopic(in CreateTopicInput) (*ForumTopicDTO, error) 
 	title = strings.TrimSpace(title)
 	content = strings.TrimSpace(content)
 	if utf8.RuneCountInString(title) < 1 || utf8.RuneCountInString(title) > 100 {
-		return nil, errors.New("标题长度需在 1-100 个字符之间")
+		return nil, ErrTitleLength
 	}
 	if utf8.RuneCountInString(content) < 1 || utf8.RuneCountInString(content) > 10000 {
-		return nil, errors.New("内容长度需在 1-10000 个字符之间")
+		return nil, ErrContentLength
 	}
 	if err := validateForumImages(images, ForumTopicMaxImages); err != nil {
 		return nil, err
@@ -760,7 +832,7 @@ func (s *ForumService) CreateTopic(in CreateTopicInput) (*ForumTopicDTO, error) 
 	// 数据库层有同名 CHECK 作生产兜底（见迁移 000005），此处是能被契约测试守住的行为层。
 	// 注意只判 >0：chapter_id 传 0 或不传按既有语义归一为综合区，不得在此收紧。
 	if category == ForumCategoryQuestion && chapterID != nil && *chapterID > 0 {
-		return nil, errors.New("问答帖不属于任何章节，不能指定 chapter_id")
+		return nil, ErrQuestionChapterConflict
 	}
 
 	var cid *int
@@ -770,7 +842,7 @@ func (s *ForumService) CreateTopic(in CreateTopicInput) (*ForumTopicDTO, error) 
 			return nil, err
 		}
 		if cnt == 0 {
-			return nil, errors.New("章节不存在")
+			return nil, ErrChapterNotFound
 		}
 		cid = chapterID
 	}
@@ -870,10 +942,10 @@ func (s *ForumService) UpdateTopic(in UpdateTopicInput) (*ForumTopicDTO, error) 
 	title := strings.TrimSpace(in.Title)
 	content := strings.TrimSpace(in.Content)
 	if utf8.RuneCountInString(title) < 1 || utf8.RuneCountInString(title) > 100 {
-		return nil, errors.New("标题长度需在 1-100 个字符之间")
+		return nil, ErrTitleLength
 	}
 	if utf8.RuneCountInString(content) < 1 || utf8.RuneCountInString(content) > 10000 {
-		return nil, errors.New("内容长度需在 1-10000 个字符之间")
+		return nil, ErrContentLength
 	}
 	if err := validateForumImages(in.Images, ForumTopicMaxImages); err != nil {
 		return nil, err
@@ -882,7 +954,7 @@ func (s *ForumService) UpdateTopic(in UpdateTopicInput) (*ForumTopicDTO, error) 
 	// 编辑不迁移章节，故按既有行的 chapter_id 判定；数据库 CHECK 只在迁移 000005、
 	// 测试库 AutoMigrate 覆盖不到，行为层必须自己守住。
 	if category == ForumCategoryQuestion && topic.ChapterID != nil && *topic.ChapterID > 0 {
-		return nil, errors.New("问答帖不属于任何章节，不能指定 chapter_id")
+		return nil, ErrQuestionChapterConflict
 	}
 	// 已采纳的帖子禁止改类别（2026-09-11 维护者裁定）：采纳状态只在问答帖有意义，
 	// 迁移类别会把 accepted_reply_id/solved_at 留在非问答帖上（答主已发的分按既有政策
@@ -890,7 +962,7 @@ func (s *ForumService) UpdateTopic(in UpdateTopicInput) (*ForumTopicDTO, error) 
 	// 判定按采纳事实而非当前类别——同一条规则也兜住历史遗留的悬挂行。
 	// 逃生口：先取消采纳（CancelAccept 清空 accepted_reply_id）再改类别。
 	if topic.AcceptedReplyID != nil && category != ForumCategoryQuestion {
-		return nil, errors.New("已采纳的问答帖不能改类别，请先取消采纳")
+		return nil, ErrCategoryLockedByAccept
 	}
 
 	// 显式写全四字段（map 更新：category 归一后的非空值不受 GORM 零值跳过影响）
@@ -928,7 +1000,7 @@ func (s *ForumService) ReplyTopic(in ReplyTopicInput) (*ForumReplyDTO, error) {
 	userID, topicID, parentReplyID, images := in.UserID, in.TopicID, in.ParentReplyID, in.Images
 	content := strings.TrimSpace(in.Content)
 	if utf8.RuneCountInString(content) < 1 || utf8.RuneCountInString(content) > 5000 {
-		return nil, errors.New("回复内容长度需在 1-5000 个字符之间")
+		return nil, ErrReplyContentLength
 	}
 	// 回复与主题同口径：空串归一为 text（移动端旧契约不传该字段），非法值 400。
 	contentFormat, err := normalizeContentFormat(in.ContentFormat)
@@ -954,12 +1026,12 @@ func (s *ForumService) ReplyTopic(in ReplyTopicInput) (*ForumReplyDTO, error) {
 		var parent model.ForumReply
 		if err := s.db.First(&parent, *parentReplyID).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return nil, errors.New("被回复的回复不存在")
+				return nil, ErrReplyNotFound
 			}
 			return nil, err
 		}
 		if parent.TopicID != topicID {
-			return nil, errors.New("被回复的回复不属于该主题")
+			return nil, ErrParentReplyMismatch
 		}
 		parentAuthorID = parent.UserID
 		var pu model.HrwaiUser
@@ -1050,7 +1122,7 @@ func (s *ForumService) DeleteTopic(userID int, topicID int64) error {
 		return err
 	}
 	if topic.UserID != userID {
-		return errors.New("只能删除自己发布的主题")
+		return ErrNotTopicAuthor
 	}
 	// 巡检计数：楼主删除自己已解决的帖子时累加（不回滚积分，仅计数）
 	if topic.AcceptedReplyID != nil {
@@ -1084,12 +1156,12 @@ func (s *ForumService) DeleteReply(userID int, replyID int64) error {
 	var reply model.ForumReply
 	if err := s.db.First(&reply, replyID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("回复不存在")
+			return ErrReplyNotFound
 		}
 		return err
 	}
 	if reply.UserID != userID {
-		return errors.New("只能删除自己发布的回复")
+		return ErrNotReplyAuthor
 	}
 	return s.deleteReplyWithImages(replyID, reply.TopicID)
 }
@@ -1115,11 +1187,11 @@ func validateForumImages(images []string, max int) error {
 		return nil
 	}
 	if len(images) > max {
-		return errors.New("图片数量超出限制（最多 " + strconv.Itoa(max) + " 张）")
+		return fmt.Errorf("%w（最多 %d 张）", ErrImagesTooMany, max)
 	}
 	for _, u := range images {
-		if !isForumImageURL(u) {
-			return errors.New("图片地址无效（仅支持本站上传的论坛图片）")
+		if !IsSiteAttachmentURL(u, ForumImageDirPrefix) {
+			return ErrImageURLInvalid
 		}
 	}
 	return nil
@@ -1240,10 +1312,10 @@ func (s *ForumService) enrichReplyLikedByMe(replies []ForumReplyDTO, viewerID in
 func (s *ForumService) CreateReport(userID int, topicID, replyID *int64, reason string) error {
 	reason = strings.TrimSpace(reason)
 	if utf8.RuneCountInString(reason) < 1 || utf8.RuneCountInString(reason) > 500 {
-		return errors.New("举报理由长度需在 1-500 个字符之间")
+		return ErrReportReasonLength
 	}
 	if (topicID == nil) == (replyID == nil) {
-		return errors.New("举报对象必须为主题或回复之一")
+		return ErrReportTarget
 	}
 	if topicID != nil {
 		var cnt int64
@@ -1256,7 +1328,7 @@ func (s *ForumService) CreateReport(userID int, topicID, replyID *int64, reason 
 		var cnt int64
 		s.db.Model(&model.ForumReply{}).Where("id = ?", *replyID).Count(&cnt)
 		if cnt == 0 {
-			return errors.New("回复不存在")
+			return ErrReplyNotFound
 		}
 	}
 	return s.db.Create(&model.ForumReport{
@@ -1458,7 +1530,7 @@ func (s *ForumService) LikeReply(userID int, replyID int64) (int64, error) {
 		return 0, err
 	}
 	if cnt == 0 {
-		return 0, errors.New("回复不存在")
+		return 0, ErrReplyNotFound
 	}
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		var existing model.ForumReplyLike
@@ -1530,7 +1602,7 @@ func (s *ForumService) AcceptReply(userID int, topicID, replyID int64) (*ForumTo
 		return nil, ErrNotTopicOwner
 	}
 	if topic.Category != ForumCategoryQuestion {
-		return nil, errors.New("只有问答帖可采纳回答")
+		return nil, ErrAcceptNotQuestion
 	}
 	// 经验帖不可被采纳（ADR-0040）：认定不限制意图，管理员可以认定一篇 question 帖，
 	// 若不拦就会出现「经验 + 已采纳」的组合——它与领域边界冲突（一次性提问归问答、
@@ -1538,17 +1610,17 @@ func (s *ForumService) AcceptReply(userID int, topicID, replyID int64) (*ForumTo
 	// 逃生口：管理员先取消经验认定（与「经验帖撤精须先取消认定」互为镜像）。
 	// 库层另有 CHECK chk_forum_topics_experience_not_accepted 兜底（迁移 000028）。
 	if topic.IsExperience {
-		return nil, errors.New("备考经验帖不可被采纳，请先取消经验认定")
+		return nil, ErrAcceptExperienceTopic
 	}
 	var reply model.ForumReply
 	if err := s.db.First(&reply, replyID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("回复不存在")
+			return nil, ErrReplyNotFound
 		}
 		return nil, err
 	}
 	if reply.TopicID != topicID {
-		return nil, errors.New("回复不属于该主题")
+		return nil, ErrReplyTopicMismatch
 	}
 	// 禁止采纳自己（ADR-0028）：自问自答在交互层直接拒绝（替代旧「静默零分发」），
 	// 消除「采纳成功却 0 分」的误导；界面层对楼主自己的回答不呈现采纳入口。
@@ -1613,7 +1685,7 @@ func (s *ForumService) CancelAccept(userID int, topicID int64) (*ForumTopicDTO, 
 		return nil, ErrNotTopicOwner
 	}
 	if topic.Category != ForumCategoryQuestion {
-		return nil, errors.New("只有问答帖可取消采纳")
+		return nil, ErrCancelAcceptNotQuestion
 	}
 	if topic.AcceptedReplyID == nil {
 		return s.fetchTopicDTO(topicID, userID)

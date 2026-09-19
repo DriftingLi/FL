@@ -859,27 +859,6 @@ func applyCourseTrainingFields(db *gorm.DB, course *model.Course, in *CourseInpu
 	return nil
 }
 
-// toIntSlice 将任意值转为 int 切片（支持 []any / []float64 等 JSON 解码结果）。
-func toIntSlice(v any) []int {
-	switch vals := v.(type) {
-	case []any:
-		out := make([]int, 0, len(vals))
-		for _, item := range vals {
-			out = append(out, toInt(item))
-		}
-		return out
-	case []float64:
-		out := make([]int, 0, len(vals))
-		for _, item := range vals {
-			out = append(out, int(item))
-		}
-		return out
-	case []int:
-		return vals
-	}
-	return nil
-}
-
 // replaceCoursePrerequisites 全量替换课程前置课程关联。
 func replaceCoursePrerequisites(db *gorm.DB, courseID int, prereqIDs []int) error {
 	prereqIDs = dedupeInts(prereqIDs)

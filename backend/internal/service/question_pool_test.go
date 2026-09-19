@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"testing"
 
 	"go.uber.org/zap"
@@ -103,13 +104,10 @@ func TestQuestionPoolScopeCoversTagCountAndSearch(t *testing.T) {
 	}
 	mk := func(status string, tagIDs []int, content string) int {
 		t.Helper()
-		q, err := qsvc.CreateQuestion(map[string]any{
-			"type": "single_choice", "content": content, "options": []string{"A", "B"}, "answer": "A",
-			"status": status, "tag_ids": tagIDs, "credential_id": cred.ID,
-		}, nil, "tutor")
-		if err != nil {
-			t.Fatalf("建题失败: %v", err)
-		}
+		q := createQuestionAs(t, qsvc, db, QuestionCreateInput{
+			Type: "single_choice", Content: content, Options: json.RawMessage(`["A","B"]`), Answer: json.RawMessage(`"A"`),
+			TagIDs: tagIDs, CredentialID: cred.ID,
+		}, status)
 		return q.ID
 	}
 	inPool := mk("published", []int{tag.ID}, "液压泵池内题")

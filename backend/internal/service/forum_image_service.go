@@ -6,10 +6,8 @@ package service
 
 import (
 	"context"
-	"io"
 	"mime/multipart"
 	"net/http"
-	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -19,9 +17,8 @@ import (
 	"forklift-training/internal/storage"
 )
 
-// 论坛图片常量（模块契约，单一事实源）。
+// 论坛图片常量（模块契约，单一事实源）。前缀登记归附件归属 module（attachment.go）。
 const (
-	ForumImageDirPrefix = "images/forum"
 	ForumImageOrphanTTL = 24 * time.Hour // 悬空图片清理门槛（超过该时长未被引用才删）
 )
 
@@ -56,12 +53,7 @@ func (s *ForumImageService) Upload(ctx context.Context, fileHeader *multipart.Fi
 	if ok, msg := s.fileSvc.ValidateImage(fileHeader.Filename, fileHeader.Size); !ok {
 		return "", &ForumImageError{Status: http.StatusBadRequest, Message: msg}
 	}
-	src, err := fileHeader.Open()
-	if err != nil {
-		return "", &ForumImageError{Status: http.StatusInternalServerError, Message: "图片上传失败"}
-	}
-	defer src.Close()
-	content, err := io.ReadAll(src)
+	content, err := ReadMultipartFile(fileHeader)
 	if err != nil {
 		return "", &ForumImageError{Status: http.StatusInternalServerError, Message: "图片上传失败"}
 	}
@@ -87,22 +79,10 @@ func (s *ForumImageService) CleanupOrphans(ctx context.Context) int {
 			return s.fileSvc.ListWithInfoWithContext(c, ForumImageDirPrefix)
 		},
 		referenced: s.collectReferencedImages,
-		keyOf:      forumImageKey,
+		keyOf:      func(u string) string { return AttachmentKey(u, ForumImageDirPrefix) },
 		deleteFile: s.fileSvc.DeleteWithContext,
 		logger:     s.logger,
 	})
-}
-
-// forumImageKey 提取 images/forum/ 后的对象 key（兼容 local 与 R2 两种 URL 形态）
-// 例：/static/uploads/images/forum/a_1.webp → images/forum/a_1.webp
-//
-//	https://cdn.example.com/images/forum/a_1.webp → images/forum/a_1.webp
-func forumImageKey(u string) string {
-	idx := strings.Index(u, "images/forum/")
-	if idx < 0 {
-		return ""
-	}
-	return u[idx:]
 }
 
 // collectReferencedImages 收集全部主题与回复引用的图片 key 集合（归一化为 images/forum/...）。
@@ -112,7 +92,7 @@ func (s *ForumImageService) collectReferencedImages() map[string]bool {
 	if err := s.db.Model(&model.ForumTopic{}).Pluck("images", &rawList).Error; err == nil {
 		for _, raw := range rawList {
 			for _, u := range parseImageURLs(raw) {
-				if key := forumImageKey(u); key != "" {
+				if key := AttachmentKey(u, ForumImageDirPrefix); key != "" {
 					ref[key] = true
 				} else if u != "" {
 					ref[u] = true
@@ -124,7 +104,7 @@ func (s *ForumImageService) collectReferencedImages() map[string]bool {
 	if err := s.db.Model(&model.ForumReply{}).Pluck("images", &rawList).Error; err == nil {
 		for _, raw := range rawList {
 			for _, u := range parseImageURLs(raw) {
-				if key := forumImageKey(u); key != "" {
+				if key := AttachmentKey(u, ForumImageDirPrefix); key != "" {
 					ref[key] = true
 				} else if u != "" {
 					ref[u] = true
@@ -133,19 +113,4 @@ func (s *ForumImageService) collectReferencedImages() map[string]bool {
 		}
 	}
 	return ref
-}
-
-// isForumImageURL 判断 URL 是否指向本站 images/forum/ 子目录。
-func isForumImageURL(u string) bool {
-	u = strings.TrimSpace(u)
-	if u == "" {
-		return false
-	}
-	// local：/static/uploads/images/forum/xxx
-	if strings.HasPrefix(u, "/static/uploads/images/forum/") {
-		return true
-	}
-	// R2：https://<任意域名>/images/forum/xxx
-	idx := strings.Index(u, "/images/forum/")
-	return idx > 0 && (strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://"))
 }

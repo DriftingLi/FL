@@ -170,6 +170,9 @@ func (s *FeaturedService) Create(in FeaturedContentInput) (*FeaturedContentAdmin
 	if in.Category == "" || !s.IsValidCategory(in.Category) {
 		return nil, errors.New("分类无效")
 	}
+	if err := featuredImageGate("", "", in.CoverImage, in.Content); err != nil {
+		return nil, err
+	}
 	status := int16(0) // 默认草稿
 	if in.Status != nil {
 		status = *in.Status
@@ -210,6 +213,16 @@ func (s *FeaturedService) Update(id int, in FeaturedContentUpdateInput) (*Featur
 	var item model.FeaturedContent
 	if err := s.db.First(&item, id).Error; err != nil {
 		return nil, errors.New("内容不存在")
+	}
+	newCover, newContent := item.CoverImage, item.Content
+	if in.CoverImage != nil {
+		newCover = *in.CoverImage
+	}
+	if in.Content != nil {
+		newContent = *in.Content
+	}
+	if err := featuredImageGate(item.CoverImage, item.Content, newCover, newContent); err != nil {
+		return nil, err
 	}
 	if in.Title != nil && *in.Title != "" {
 		item.Title = *in.Title
@@ -284,11 +297,11 @@ func (s *FeaturedService) deleteFeaturedImages(cover, content string) {
 		return
 	}
 	var urls []string
-	if cover != "" && isFeaturedImageURL(cover) {
+	if cover != "" && IsSiteAttachmentURL(cover, FeaturedImageDirPrefix) {
 		urls = append(urls, cover)
 	}
 	for _, u := range markdownImageURLs(content) {
-		if isFeaturedImageURL(u) {
+		if IsSiteAttachmentURL(u, FeaturedImageDirPrefix) {
 			urls = append(urls, u)
 		}
 	}
@@ -344,7 +357,38 @@ func (s *FeaturedService) SaveImage(content []byte, filename string) (string, er
 	if s.fileSvc == nil {
 		return "", errors.New("文件服务未初始化")
 	}
-	return s.fileSvc.Save(content, filename, "featured")
+	return s.fileSvc.Save(content, filename, FeaturedImageDirPrefix)
+}
+
+// featuredImageGate 精选写面归属门禁（第十二波票 4，与论坛走同一条判据）：
+// 目标封面/正文内嵌图中**新出现**的 URL 必须是本站精选图片（featured 前缀）。
+// 库中已有的 URL 属「编辑未改不动」——存量外链不被门禁开启惩罚。
+func featuredImageGate(oldCover, oldContent, newCover, newContent string) error {
+	known := map[string]bool{}
+	if oldCover != "" {
+		known[oldCover] = true
+	}
+	for _, u := range markdownImageURLs(oldContent) {
+		known[u] = true
+	}
+	check := func(u string) error {
+		if u == "" || known[u] {
+			return nil
+		}
+		if !IsSiteAttachmentURL(u, FeaturedImageDirPrefix) {
+			return errors.New("图片地址无效（仅支持本站上传的精选图片）")
+		}
+		return nil
+	}
+	if err := check(newCover); err != nil {
+		return err
+	}
+	for _, u := range markdownImageURLs(newContent) {
+		if err := check(u); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // featuredCategoryLabel 返回分类中文标签。
