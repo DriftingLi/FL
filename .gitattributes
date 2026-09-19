@@ -27,10 +27,14 @@ deploy/env.defaults text eol=lf
 # （实测先例：emulatorSmokeContract 的「C3 注入点已失效」用例）。故 *.ps1 也钉 LF。
 *.ps1 text eol=lf
 
-# uni-app-x 源码统一 LF：与本文件其他条目同一类坑位 —— 多处契约测试读 *.uts / *.uvue 的
-# **源文本**做多行锚点匹配，Windows 上 core.autocrlf=true 会把它们检出成 CRLF ⇒ 锚点失配、
-# 契约测试在本机假红；更糟的是锚点永不命中时守护会**静默失效**（以为在守，其实没守）。
-# 实测先例：#1137（contributionStatusContract 的「漏一个取值」用例在本机恒红）。
+# uni-app-x 源码钉 LF：这是**纵深防御的第二层**，不再是主防线。主防线已改为**读取层无条件归一**
+# （ADR-0019 ②：共享读者 utils/utsHarness.js 的 normalizeEol / readText；由 scripts/check-contract-read.mjs
+# 增量门守护）—— 归一后「扩展名钉没钉」已不重要，本钉只是多兜一层。
+# 机制：多处契约测试读 *.uts / *.uvue 的**源文本**做多行锚点匹配，Windows 上 core.autocrlf=true 会把
+# 它们检出成 CRLF ⇒ 锚点失配、契约测试在本机假红；更糟的是锚点永不命中时守护会**静默失效**
+# （以为在守，其实没守）。实测先例：#1137 —— contributionStatusContract 的「漏一个取值」用例在本机恒红。
+# 照实记：*.uts / *.uvue 在 HBuilderX 编译链上是否有**独立**的 LF 理由，**未证实** —— 仓库里没有支持
+# 该理由的证据，ADR-0019 亦未追查（③「不动 .uts/.uvue 的编译链」）；不得据此断言该理由存在。
 # 全仓 0 个 i/crlf / i/mixed，故本钉不改动已提交内容，只改检出行为（无 renormalize 风险）。
 *.uts text eol=lf
 *.uvue text eol=lf
