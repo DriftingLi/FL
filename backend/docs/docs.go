@@ -3084,13 +3084,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "删除失败",
+                        "description": "回复ID无效",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "回复不存在（票5 存在性档）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -3220,6 +3226,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "举报不存在（票5 存在性档）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -3422,13 +3434,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "删除失败",
+                        "description": "主题ID无效",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "主题不存在（票5 存在性档）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -3480,7 +3498,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "认定失败（主题不存在）",
+                        "description": "主题ID无效 / 已采纳帖须先取消采纳",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -3493,6 +3511,12 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "需要管理员角色",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "主题不存在（票5 存在性档）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -3542,7 +3566,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "操作失败（主题不存在）",
+                        "description": "主题ID无效",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -3555,6 +3579,12 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "需要管理员角色",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "主题不存在（票5 存在性档）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -3606,7 +3636,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "加精失败（主题不存在）",
+                        "description": "主题ID无效",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -3619,6 +3649,12 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "需要管理员角色",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "主题不存在（票5 存在性档）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -3668,7 +3704,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "操作失败（主题不存在）",
+                        "description": "主题ID无效 / 经验帖须先取消认定",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -3681,6 +3717,12 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "需要管理员角色",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "主题不存在（票5 存在性档）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -10772,6 +10814,18 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "403": {
+                        "description": "非作者本人（票5 所有权档）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "回复不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             }
@@ -10830,6 +10884,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "回复不存在（票5 存在性档）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -10892,6 +10952,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "404": {
+                        "description": "回复不存在（票5 存在性档）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             }
@@ -10947,6 +11013,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "回复不存在（票5 存在性档）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -11118,6 +11190,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "章节不存在（票5 存在性档）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -11326,6 +11404,18 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "403": {
+                        "description": "非作者本人（票5 所有权档）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "主题不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             }
@@ -11402,6 +11492,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "404": {
+                        "description": "主题/回复不存在（票5 存在性档）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             },
@@ -11458,6 +11554,12 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "无权限",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "主题不存在（票5 存在性档）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -11522,6 +11624,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "404": {
+                        "description": "主题不存在（票5 存在性档）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             },
@@ -11578,6 +11686,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "主题不存在（票5 存在性档）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -11651,6 +11765,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "404": {
+                        "description": "主题/被回复的回复不存在（票5 存在性档）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             }
@@ -11706,6 +11826,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "主题不存在（票5 存在性档）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }

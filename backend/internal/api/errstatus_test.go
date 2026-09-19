@@ -210,3 +210,77 @@ func TestErrStatusTable_Snapshot_QuestionBank(t *testing.T) {
 		{service.ErrQuestionNotFound, http.StatusNotFound},
 	}, http.StatusBadRequest)
 }
+
+// TestErrStatusTable_Snapshot_Forum 第十二波票 5：论坛域表快照
+// （存在性 404 / 所有权 403 / 状态前置与校验 400 / 未设 fallback → 未命中即 500）。
+func TestErrStatusTable_Snapshot_Forum(t *testing.T) {
+	assertTableSnapshot(t, "forumErrStatus", forumErrStatus, []errStatusEntry{
+		{service.ErrTopicNotFound, http.StatusNotFound},
+		{service.ErrReplyNotFound, http.StatusNotFound},
+		{service.ErrForumReportNotFound, http.StatusNotFound},
+		{service.ErrChapterNotFound, http.StatusNotFound},
+		{service.ErrNotTopicOwner, http.StatusForbidden},
+		{service.ErrNotTopicAuthor, http.StatusForbidden},
+		{service.ErrNotReplyAuthor, http.StatusForbidden},
+		{service.ErrAcceptOwnReply, http.StatusBadRequest},
+		{service.ErrAcceptNotQuestion, http.StatusBadRequest},
+		{service.ErrCancelAcceptNotQuestion, http.StatusBadRequest},
+		{service.ErrAcceptExperienceTopic, http.StatusBadRequest},
+		{service.ErrDesignateAcceptedTopic, http.StatusBadRequest},
+		{service.ErrUnfeatureExperienceTopic, http.StatusBadRequest},
+		{service.ErrCategoryLockedByAccept, http.StatusBadRequest},
+		{service.ErrQuestionChapterConflict, http.StatusBadRequest},
+		{service.ErrParentReplyMismatch, http.StatusBadRequest},
+		{service.ErrReplyTopicMismatch, http.StatusBadRequest},
+		{service.ErrContentFormatInvalid, http.StatusBadRequest},
+		{service.ErrCategoryInvalid, http.StatusBadRequest},
+		{service.ErrSolvedArgInvalid, http.StatusBadRequest},
+		{service.ErrFeaturedArgInvalid, http.StatusBadRequest},
+		{service.ErrExperienceArgInvalid, http.StatusBadRequest},
+		{service.ErrSolvedFilterScope, http.StatusBadRequest},
+		{service.ErrChapterIDRequired, http.StatusBadRequest},
+		{service.ErrTitleLength, http.StatusBadRequest},
+		{service.ErrContentLength, http.StatusBadRequest},
+		{service.ErrReplyContentLength, http.StatusBadRequest},
+		{service.ErrImagesTooMany, http.StatusBadRequest},
+		{service.ErrImageURLInvalid, http.StatusBadRequest},
+		{service.ErrReportReasonLength, http.StatusBadRequest},
+		{service.ErrReportTarget, http.StatusBadRequest},
+		{service.ErrReportStatusValue, http.StatusBadRequest},
+	}, 0)
+}
+
+// TestForumErrStatus_Spectrum 票 5：域表 400/403/404/500 全谱表驱动断言——
+// 四档各有代表哨兵、%w 包装详情仍能命中、未命中（DB 故障形态）落 500。
+func TestForumErrStatus_Spectrum(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want int
+	}{
+		{"存在性：主题 404", service.ErrTopicNotFound, http.StatusNotFound},
+		{"存在性：回复 404", service.ErrReplyNotFound, http.StatusNotFound},
+		{"存在性：举报 404", service.ErrForumReportNotFound, http.StatusNotFound},
+		{"存在性：章节 404", service.ErrChapterNotFound, http.StatusNotFound},
+		{"所有权：楼主动作 403", service.ErrNotTopicOwner, http.StatusForbidden},
+		{"所有权：删主题 403", service.ErrNotTopicAuthor, http.StatusForbidden},
+		{"所有权：删回复 403", service.ErrNotReplyAuthor, http.StatusForbidden},
+		{"状态前置：自采纳 400", service.ErrAcceptOwnReply, http.StatusBadRequest},
+		{"状态前置：撤精镜像 400", service.ErrUnfeatureExperienceTopic, http.StatusBadRequest},
+		{"校验：包装详情命中 400", fmt.Errorf("%w: discussion2", service.ErrCategoryInvalid), http.StatusBadRequest},
+		{"校验：图片张数包装 400", fmt.Errorf("%w（最多 9 张）", service.ErrImagesTooMany), http.StatusBadRequest},
+		{"未命中：DB 故障 500", errors.New("dial tcp 127.0.0.1: db down"), http.StatusInternalServerError},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			e := Endpoint[int, string]{
+				Invoke:    func(ctx context.Context, req *int) (*string, error) { return nil, c.err },
+				ErrStatus: forumErrStatus,
+			}
+			w := doEndpoint(t, e)
+			if w.Code != c.want {
+				t.Fatalf("状态码 = %d, 期望 %d（err=%v）", w.Code, c.want, c.err)
+			}
+		})
+	}
+}

@@ -158,8 +158,9 @@ func renderStatus(c *gin.Context, status int, msg string) {
 //   - job_card.go GetJobCard：gorm.ErrRecordNotFound → 404「简历不存在」（固定文案）
 //
 // Render 闭包之外的手写映射（raw handler，非本骨架管辖）不在收编范围：auth.go RotateRefresh、
-// ai_assistant.go SSE 扣分事件、contact.go GetContact、forum.go AcceptReply/CancelAccept、
-// recruit.go ResumeCard、resume_pdf.go 两处、settings.go TestConfig。
+// ai_assistant.go SSE 扣分事件、contact.go GetContact、recruit.go ResumeCard、
+// resume_pdf.go 两处、settings.go TestConfig。
+// （第十二波票 5 收编：forum.go AcceptTopic/CancelAccept 的 owner→403 链已改吃 forumErrStatus 域表。）
 
 // errStatusEntry 域表条目：哨兵 → HTTP 状态码。
 type errStatusEntry struct {

@@ -444,10 +444,10 @@ func TestForumAcceptContract(t *testing.T) {
 		t.Fatalf("非楼主取消应 403, got %d", rec.Code)
 	}
 
-	// 8. 非法入参：reply 不属于该主题 / 主题不存在
+	// 8. 非法入参：reply 不存在（第十二波票 5：存在性事实 400→404）/ 主题不存在
 	rec = do(authorTok, http.MethodPost, fmt.Sprintf("/api/forum/topics/%d/accept", topicID), map[string]any{"reply_id": 999999})
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("非法 reply 应 400, got %d", rec.Code)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("不存在的 reply 应 404, got %d", rec.Code)
 	}
 	// 讨论帖不可采纳
 	rec = do(authorTok, http.MethodPost, "/api/forum/topics", map[string]any{"category": "discussion", "title": "讨论帖", "content": "闲聊"})

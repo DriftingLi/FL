@@ -466,12 +466,12 @@ func TestForumDesignationRequiresAdmin(t *testing.T) {
 		t.Fatalf("被拒的请求不得改动状态，实际 featured=%v experience=%v", featured, experience)
 	}
 
-	// 主题不存在 → 400（ErrTopicNotFound）
-	if rec := doWithToken(t, e.r, e.adminTok, http.MethodPost, "/api/admin/forum/topics/999999/experience", nil); rec.Code != http.StatusBadRequest {
-		t.Fatalf("不存在主题认定应 400，实际 %d %s", rec.Code, rec.Body.String())
+	// 主题不存在 → 404（ErrTopicNotFound，第十二波票 5：存在性事实 400→404）
+	if rec := doWithToken(t, e.r, e.adminTok, http.MethodPost, "/api/admin/forum/topics/999999/experience", nil); rec.Code != http.StatusNotFound {
+		t.Fatalf("不存在主题认定应 404，实际 %d %s", rec.Code, rec.Body.String())
 	}
 
-	fmt.Println("认定权限契约通过：学员 403 / 未认证 401 / 不存在 400，且不改状态")
+	fmt.Println("认定权限契约通过：学员 403 / 未认证 401 / 不存在 404，且不改状态")
 }
 
 // TestForumExperienceTopicNotAcceptable 经验帖不可被采纳（采纳之门只看意图 question）。
