@@ -864,14 +864,6 @@ func toInt(v interface{}) int {
 	return 0
 }
 
-// toIntDefault 将任意数值转为 int，失败返回 def。
-func toIntDefault(v interface{}, def int) int {
-	if v == nil {
-		return def
-	}
-	return toInt(v)
-}
-
 func intToString(i int) string       { return toStringHelper(i) }
 func floatToString(f float64) string { return toStringHelper(f) }
 
