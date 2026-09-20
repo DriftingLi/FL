@@ -1,21 +1,52 @@
 /**
- * 招聘者工作区 API（ADR-0021 ④ 线 4 / ADR-0022 ④ 步骤 P2）
+ * 招聘者工作区 API（ADR-0021 ④ 线 4 / ADR-0022 ④ 步骤 P2 = #1195 + P3 = #1196）
  *
- * 只覆盖本票（P2）的面：职位段、投递处置、交换段、我的。
- * 简历库与简历详情（`/recruit/resumes*`、`/recruit/resumes/{id}/contact`）属 P3（#1196），
- * 不在本文件 —— 两侧共用同一个文件会让叠放的 P2/P3 在合入时互相冲撞。
+ * 本文件是 **P2 与 P3 合一后的唯一一份**（两票并行从 P1 切出，各自 `add` 了这个文件，
+ * 合入时按「两侧函数都保留」解冲突，见 PR #1207 的收口提交）。分区如下：
  *
- * 手动 JSON 映射（ADR-0003）：`as UTSJSONObject` 不可跨端强转成 Kotlin data class，
- * 故每个端点都在这里显式构造 DTO，页面层只消费 DTO。
+ *   P2（#1195）：`GET /recruit/jobs`、`GET /recruit/jobs/{id}/applications`、
+ *                `POST /recruit/applications/{id}/reject`、`GET /recruit/me`、
+ *                `GET /recruit/contact-requests`（徽标 / 交换段共用同一份）
+ *   P3（#1196）：`GET /recruit/resumes`（8 维筛选）、`GET /recruit/resumes/{id}`、
+ *                `GET /recruit/resumes/{id}/pdf`、`GET /recruit/resumes/{id}/contact`、
+ *                `POST /recruit/contact-requests`（发起交换）
  *
- * 请求账本（ADR-0021 ② / ADR-0022 ⑥，**判据是行为**）：
- *   - 首屏批量请求恰好 2 个：`GET /recruit/jobs` + `GET /recruit/contact-requests`；
+ * ## 请求账本（ADR-0021 ② / ADR-0022 ⑥，**判据是行为**）
+ *   - 招聘者态首屏批量请求恰好 2 个：`GET /recruit/jobs` + `GET /recruit/contact-requests`；
  *   - `unread_count` **只**在 `GET /recruit/jobs/{id}/applications` 的响应里
  *     （`job_application_recruiter.go:49-52`；本端点不写已读，写已读在 `GET /recruit/applications/{id}`）
  *     ⇒ 逐职位拉它 = N+1，被 ADR-0021 ② 明令禁止；
  *   - `JobPostingDTO` 没有任何投递计数字段 ⇒ 首页**不得**显示「某职位有新投递」。
+ *
+ * ## 三条必须写明的口径差别（都是现测事实，别照抄成一套）
+ *   1. **脱敏字段清单的唯一真源是后端** `backend/internal/service/resume_projection.go`
+ *      （ADR-0053 §4 / spec #1051）的 `desensitize()`。移动端模型 / 映射 / 详情页**只渲染
+ *      清单内的字段**，不得增删：姓名（打码）/ 期望岗位 / 意向地区 / 薪资 / 到岗 / 用工性质 /
+ *      年限 / 自述 / 工作经历 / 持证（已去图）/ 更新时间。刻意**不含**真实姓名、现居地、电话、
+ *      微信、上传 PDF、工作照、证件原图 —— 那七项只在 approved 后经 `/contact` 的 **6 键**取得。
+ *   2. **两套分页行为不一致**：`/recruit/resumes` 的 `page_size` 超 50 **截断为 50**，且响应
+ *      **不回显** `page` / `page_size`（`RecruitListResult` 只有 `items` / `total`）⇒ 页码只能靠
+ *      请求侧自记；`/recruit/contact-requests` 走 `paging.QueryWithMax`，超 50 **回退 20** 且
+ *      **回显请求原值** ⇒ 这一条照实读回显。
+ *   3. **打码 PDF 是原始二进制、不是统一信封**（`application/pdf` + `inline`），当 JSON 信封解析
+ *      必失败 ⇒ 走 `uni.downloadFile` + `uni.openDocument` 的「下载后交系统打开」出路
+ *      （原生端无内嵌 PDF 能力，ADR-0021 ②）。上传 PDF（已授权后的 `resume_file_url`）是静态
+ *      文件 URL，走**同一个出路**。
+ *
+ * 手动 JSON 映射（ADR-0003）：`as UTSJSONObject` 不可跨端强转成 Kotlin data class，
+ * 故每个端点都在这里显式构造 DTO，页面层只消费 DTO。
  */
-import { get, post } from './request'
+import { get, post, FORBIDDEN_MESSAGE_PREFIX } from './request'
+// ⚠️ `API_BASE_URL` 来自 `config/env`，**不是** `./request`（`request.uts` 并不 export 它）。
+//    写错会在 ④a 编译期报 `找不到名称"API_BASE_URL"`（error18）—— 2026-09-20 编译门抓获。
+//    同款先例：`api/aiAssistant.uts:13`。
+import { API_BASE_URL } from '../config/env'
+import { toNumber, toNumberOrNull, toStr, errMsg } from './helpers'
+import { STORAGE_KEY_TOKEN } from '../constants/app'
+import { getStorage } from '../utils/storage'
+import type { RequestOptions } from './request'
+
+// ── P2 的类型（职位段 / 投递 / 我的）────────────────────────────────────────
 
 /** 招聘者我的职位（`GET /recruit/jobs`，`JobPostingService.List(MineOnly=true)`；含 closed 与强制下架历史） */
 export type RecruitJob = {
@@ -34,31 +65,6 @@ export type RecruitJob = {
 /** 我的职位列表结果（后端 `service.JobListResult`：只有 items / total，**没有任何投递计数**） */
 export type RecruitJobListResult = {
     items : RecruitJob[]
-    total : number
-}
-
-/**
- * 我发起的交换申请（`GET /recruit/contact-requests`，`ListForRecruiter`）
- *
- * ⚠️ 招聘者侧 DTO **不含学员姓名**（`contact_service.go:45-64` 只有 student_user_id）——
- * 列表与紧迫行都不得显示「某某学员」，做不到就不要写。
- * `status` 是服务端事实；`expires_at` 是 `created_at + 14 天`（`contact_service.go:183`）。
- * **服务端读取时不按 `expires_at` 判状态**（ADR-0022 已知缺口）⇒ 「已过期」由客户端算
- * （`utils/recruitDisplay.uts`），且过期项**不给任何操作入口**。
- */
-export type RecruitContactRequest = {
-    id : number
-    student_user_id : number
-    message : string
-    status : string
-    created_at : string
-    expires_at : string
-    source : string
-}
-
-/** 交换申请列表结果（后端 `ContactRequestListResult`） */
-export type RecruitContactListResult = {
-    items : RecruitContactRequest[]
     total : number
 }
 
@@ -92,6 +98,300 @@ export type RecruitMe = {
     account : string
     role : string
 }
+
+// ── P3 的类型（简历库 / 脱敏卡 / 明文联系方式）───────────────────────────────
+
+/** 打码卡里的一条工作经历（`resume_experiences` 元素，原样透出、无敏感字段）。 */
+export type RecruitExperience = {
+    company : string
+    position : string
+    start_date : string
+    end_date : string
+    description : string
+}
+
+/** 打码卡里的一条持证（`resume_certifications` 元素，后端白名单已去 `image_urls`）。 */
+export type RecruitCertification = {
+    credential_id : number
+    cert_no : string
+    expire_date : string
+}
+
+/**
+ * 脱敏简历卡 —— 字段清单 = `resume_projection.go` 的 `desensitize()`，**逐项对齐、不得增删**。
+ * 刻意没有：真实姓名 / 现居地（region）/ 电话 / 微信 / 上传 PDF / 工作照（photos）/ 证件原图。
+ */
+export type RecruitResumeCard = {
+    user_id : number
+    /** 已打码（后端 `MaskRealName`：1 字→*，2 字→首+*，≥3 字→首+中间*+尾） */
+    real_name : string
+    real_name_masked : string
+    expected_position_id : number | null
+    expected_position_extra : string
+    expected_regions : string[]
+    salary_min : number | null
+    salary_max : number | null
+    salary_negotiable : boolean
+    available_in : string
+    job_nature : string
+    experience_years : number
+    self_intro : string
+    resume_experiences : RecruitExperience[]
+    resume_certifications : RecruitCertification[]
+    updated_at : string
+    /** 企业视角联系状态：none / pending / approved（#489 回填） */
+    contact_state : string
+    /** 授权来源：recruiter / application */
+    contact_source : string
+}
+
+/** 简历库列表结果（后端 `RecruitListResult`：**只有 items / total**，无 page / page_size 回显）。 */
+export type RecruitResumeListResult = {
+    items : RecruitResumeCard[]
+    total : number
+}
+
+/**
+ * 简历库筛选参数 —— **只有这 8 维**（ADR-0022 ② 的可用维度清单，`api/recruit.go:60-88`）。
+ *
+ * 后端另有精确匹配与上限两维，**本轮不用**（ADR-0022 ②）⇒ 这里不承接。
+ *
+ * `region` 传**市名**（如「杭州市」/「杭州」）：后端 `applyFilters` 先 `RegionCityName` 归一
+ * 再按市名精确匹配 `expected_regions` 元素的第 2 段（直辖市一段）。
+ * 移动端与 web `Resumes.vue` 同源：web 用 `joinRegionPath` 拼出的两段串同样被 `RegionCityName`
+ * 取到第 2 段 ⇒ **归一是后端的职责，这里不自造格式**。
+ */
+export type RecruitResumeFilters = {
+    region : string
+    position_id : number | null
+    credential_id : number | null
+    salary_min : number | null
+    salary_max : number | null
+    experience_min : number | null
+    job_nature : string
+    available_in : string
+}
+
+/**
+ * 已授权后的明文联系方式 —— **恰好 6 键**，来自 `contact.go` 的 `GetContact` 响应
+ * （`real_name / contact_phone / wechat / resume_file_url / photos / resume_certifications`）。
+ *
+ * `photos` 与 `resume_certifications` 是**已授权后**才出现的原始值（含 image_urls / 原图），
+ * 与脱敏卡的 `resume_certifications`（已去图）**不是同一份东西**，类型上分开表达。
+ */
+export type RecruitContactPlain = {
+    real_name : string
+    contact_phone : string
+    wechat : string
+    resume_file_url : string
+    photos : string[]
+    resume_certifications : UTSJSONObject[]
+}
+
+// ── 交换申请：P2 与 P3 共用同一个 DTO 与同一个字符串端点 ──────────────────────
+
+/**
+ * 我发起的交换申请（`GET /recruit/contact-requests`，`ListForRecruiter`）
+ *
+ * ⚠️ 招聘者侧 DTO **不含学员姓名**（`contact_service.go:45-64` 只有 `student_user_id`）——
+ * 列表与紧迫行都不得显示「某某学员」，做不到就不要写。
+ * `status` 是服务端事实；`expires_at` 是 `created_at + 14 天`（`contact_service.go:183`）。
+ * **服务端读取时不按 `expires_at` 判状态**（ADR-0022 已知缺口）⇒ 「已过期」由客户端算
+ * （`utils/recruitDisplay.uts`），且过期项**不给任何操作入口**。
+ */
+export type RecruitContactRequest = {
+    id : number
+    student_user_id : number
+    message : string
+    status : string
+    created_at : string
+    updated_at : string
+    expires_at : string
+    source : string
+}
+
+/** 交换申请列表结果（后端 `ContactRequestListResult`，**回显 page / page_size**） */
+export type RecruitContactRequestListResult = {
+    items : RecruitContactRequest[]
+    page : number
+    page_size : number
+    total : number
+}
+
+/** 用工性质取值（后端注释 fulltime / parttime / contract，`recruit_service.go` applyFilters）。 */
+export const JOB_NATURE_OPTIONS : string[] = ['fulltime', 'parttime', 'contract']
+
+/** 到岗时间取值（与简历录入侧同源的自由串，取常用三档）。 */
+export const AVAILABLE_IN_OPTIONS : string[] = ['随时到岗', '一周内', '一个月内']
+
+/** 列表每页条数：一律 20（ADR-0022 ②「加载更多 page_size=20」） */
+export const RECRUIT_PAGE_SIZE : number = 20
+
+/**
+ * 未授权访问明文联系方式时后端返回 403（**不是 404**）。
+ * 挂在 Error 上供页面分流：403 ⇒ 提示「尚未授权」并给「发起交换」入口，而不是当请求失败。
+ */
+export const RECRUIT_STATUS_FORBIDDEN : number = 403
+
+/** 用工性质展示名（筛选抽屉的 chip 文案） */
+export function jobNatureLabel(v : string) : string {
+    if (v == 'fulltime') return '全职'
+    if (v == 'parttime') return '兼职'
+    if (v == 'contract') return '合同制'
+    return v
+}
+
+/** 判断错误是否为「无有效授权」（后端明文端点 403） */
+export function isContactForbidden(e : any | null) : boolean {
+    if (e == null) return false
+    if (!(e instanceof Error)) return false
+    // 403 由 `api/request.uts` 用**消息前缀**承载（见 FORBIDDEN_MESSAGE_PREFIX 的注释：
+    // 给 `any` 动态加 `statusCode` 在 UTS→Kotlin 下编不过，error18）。读写两端共用同一常量。
+    const msg = (e as Error).message
+    if (msg == null) return false
+    return msg.startsWith(FORBIDDEN_MESSAGE_PREFIX)
+}
+
+// ── 映射层（ADR-0003 手动 JSON 映射：Android 端不能 as 到 type 字面量）─────────
+
+function buildExperience(obj : UTSJSONObject) : RecruitExperience {
+    return {
+        company: toStr(obj['company']),
+        position: toStr(obj['position']),
+        start_date: toStr(obj['start_date']),
+        end_date: toStr(obj['end_date']),
+        description: toStr(obj['description']),
+    } as RecruitExperience
+}
+
+function buildCertification(obj : UTSJSONObject) : RecruitCertification {
+    return {
+        credential_id: toNumber(obj['credential_id']),
+        cert_no: toStr(obj['cert_no']),
+        expire_date: toStr(obj['expire_date']),
+    } as RecruitCertification
+}
+
+function buildStringArray(raw : any | null) : string[] {
+    const out : string[] = []
+    if (raw == null) return out
+    const arr = raw as Array<any>
+    for (let i = 0; i < arr.length; i++) {
+        const v = toStr(arr[i])
+        if (v.length > 0) out.push(v)
+    }
+    return out
+}
+
+function buildExperienceArray(raw : any | null) : RecruitExperience[] {
+    const out : RecruitExperience[] = []
+    if (raw == null) return out
+    const arr = raw as Array<UTSJSONObject>
+    for (let i = 0; i < arr.length; i++) {
+        out.push(buildExperience(arr[i]))
+    }
+    return out
+}
+
+function buildCertificationArray(raw : any | null) : RecruitCertification[] {
+    const out : RecruitCertification[] = []
+    if (raw == null) return out
+    const arr = raw as Array<UTSJSONObject>
+    for (let i = 0; i < arr.length; i++) {
+        out.push(buildCertification(arr[i]))
+    }
+    return out
+}
+
+/**
+ * 脱敏卡映射 —— **这是移动端的字段边界**：只读 `desensitize()` 清单里的键。
+ * 后端若把敏感键混进响应，这里也**读不出来**（没有对应的读取行），
+ * 于是「未授权态不可能渲染电话/微信」在结构上成立，而不是靠页面记得别去读。
+ */
+export function buildRecruitResumeCard(obj : UTSJSONObject) : RecruitResumeCard {
+    return {
+        user_id: toNumber(obj['user_id']),
+        real_name: toStr(obj['real_name']),
+        real_name_masked: toStr(obj['real_name_masked']),
+        expected_position_id: toNumberOrNull(obj['expected_position_id']),
+        expected_position_extra: toStr(obj['expected_position_extra']),
+        expected_regions: buildStringArray(obj['expected_regions']),
+        salary_min: toNumberOrNull(obj['salary_min']),
+        salary_max: toNumberOrNull(obj['salary_max']),
+        salary_negotiable: obj['salary_negotiable'] == true,
+        available_in: toStr(obj['available_in']),
+        job_nature: toStr(obj['job_nature']),
+        experience_years: toNumber(obj['experience_years']),
+        self_intro: toStr(obj['self_intro']),
+        resume_experiences: buildExperienceArray(obj['resume_experiences']),
+        resume_certifications: buildCertificationArray(obj['resume_certifications']),
+        updated_at: toStr(obj['updated_at']),
+        contact_state: toStr(obj['contact_state']),
+        contact_source: toStr(obj['contact_source']),
+    } as RecruitResumeCard
+}
+
+/** 交换申请单条映射（两个消费面——P2 的徽标/交换段与 P3 的列表——共用，避免两份漂移） */
+export function buildRecruitContactRequest(obj : UTSJSONObject) : RecruitContactRequest {
+    return {
+        id: toNumber(obj['id']),
+        student_user_id: toNumber(obj['student_user_id']),
+        message: toStr(obj['message']),
+        status: toStr(obj['status']),
+        created_at: toStr(obj['created_at']),
+        updated_at: toStr(obj['updated_at']),
+        expires_at: toStr(obj['expires_at']),
+        source: toStr(obj['source']),
+    } as RecruitContactRequest
+}
+
+/** 8 维筛选 → query 参数（空值**不发**该键，避免把「未筛选」写成空串筛选） */
+function buildFilterParams(filters : RecruitResumeFilters, page : number) : UTSJSONObject {
+    const params : UTSJSONObject = {} as UTSJSONObject
+    params['page'] = page.toString()
+    params['page_size'] = RECRUIT_PAGE_SIZE.toString()
+    const region = filters.region.trim()
+    if (region.length > 0) params['region'] = region
+    if (filters.position_id != null && filters.position_id! > 0) {
+        params['position_id'] = filters.position_id!.toString()
+    }
+    if (filters.credential_id != null && filters.credential_id! > 0) {
+        params['credential_id'] = filters.credential_id!.toString()
+    }
+    // 薪资 0 视为「未填」：后端拿到 `salary_min=0` 会生成一个恒真的筛选条件
+    // （`salary_min >= 0`）—— 语义上空转，但把「未筛选」写成了「筛过」，不发更诚实。
+    if (filters.salary_min != null && filters.salary_min! > 0) {
+        params['salary_min'] = filters.salary_min!.toString()
+    }
+    if (filters.salary_max != null && filters.salary_max! > 0) {
+        params['salary_max'] = filters.salary_max!.toString()
+    }
+    // 经验 0 是**有意义的筛选**（后端按「年限 >= 0」保留全部）⇒ 只挡负数
+    if (filters.experience_min != null && filters.experience_min! >= 0) {
+        params['experience_min'] = filters.experience_min!.toString()
+    }
+    const jobNature = filters.job_nature.trim()
+    if (jobNature.length > 0) params['job_nature'] = jobNature
+    const availableIn = filters.available_in.trim()
+    if (availableIn.length > 0) params['available_in'] = availableIn
+    return params
+}
+
+/** 空筛选（页面首次进入用） */
+export function emptyRecruitFilters() : RecruitResumeFilters {
+    return {
+        region: '',
+        position_id: null,
+        credential_id: null,
+        salary_min: null,
+        salary_max: null,
+        experience_min: null,
+        job_nature: '',
+        available_in: '',
+    } as RecruitResumeFilters
+}
+
+// ── P2 的端点：职位段 / 投递处置 / 我的 ──────────────────────────────────────
 
 /** 我的职位列表（企业侧；含 closed / 被平台强制下架的职位） */
 export function getRecruitJobsApi(page : number = 1, pageSize : number = 20) : Promise<RecruitJobListResult> {
@@ -133,25 +433,27 @@ export function getRecruitJobsApi(page : number = 1, pageSize : number = 20) : P
  * 我发起的交换申请列表
  * @note 这份响应同时喂「分段徽标」与「职位段顶部紧迫行」（ADR-0022 ②）——
  *       两处消费同一个结果，不得为了其中一处再发一次请求。
+ * @note 分页行为与简历库**不同**：超 50 回退 20，且**回显** page / page_size（照实读回显）。
  */
-export function getRecruitContactRequestsApi(page : number = 1, pageSize : number = 20) : Promise<RecruitContactListResult> {
-    const url = '/recruit/contact-requests?page=' + page.toString() + '&page_size=' + pageSize.toString()
-    return get(url).then((data : UTSJSONObject) : RecruitContactListResult => {
+export function getRecruitContactRequestsApi(page : number = 1, pageSize : number = 20) : Promise<RecruitContactRequestListResult> {
+    // query 走 `get(url, params)`（与同文件的 P3 端点同形）：`request.uts` 负责编码，
+    // 不在 URL 上手工拼串 —— 附言 / 筛选值里出现需要转义的字符时手工拼串会坏。
+    const params : UTSJSONObject = {
+        page: page.toString(),
+        page_size: pageSize.toString(),
+    } as UTSJSONObject
+    return get('/recruit/contact-requests', params).then((data : UTSJSONObject) : RecruitContactRequestListResult => {
         const raw = (data['items'] as UTSJSONObject[]) ?? []
         const items : RecruitContactRequest[] = []
         for (let i = 0; i < raw.length; i++) {
-            const obj = raw[i]
-            items.push({
-                id: obj['id'] as number,
-                student_user_id: (obj['student_user_id'] as number) ?? 0,
-                message: (obj['message'] as string) ?? '',
-                status: (obj['status'] as string) ?? '',
-                created_at: (obj['created_at'] as string) ?? '',
-                expires_at: (obj['expires_at'] as string) ?? '',
-                source: (obj['source'] as string) ?? '',
-            } as RecruitContactRequest)
+            items.push(buildRecruitContactRequest(raw[i]))
         }
-        return { items: items, total: (data['total'] as number) ?? 0 } as RecruitContactListResult
+        return {
+            items: items,
+            page: (data['page'] as number) ?? page,
+            page_size: (data['page_size'] as number) ?? pageSize,
+            total: (data['total'] as number) ?? 0,
+        } as RecruitContactRequestListResult
     })
 }
 
@@ -217,4 +519,156 @@ export function getRecruitMeApi() : Promise<RecruitMe> {
             role: (data['role'] as string) ?? '',
         } as RecruitMe
     })
+}
+
+// ── P3 的端点：简历库 / 简历详情 / 发起交换 / 明文联系方式 / 打码 PDF ──────────
+
+/**
+ * 简历库列表 `GET /recruit/resumes`
+ * @param filters 8 维筛选（空值不发键）
+ * @param page 页码，从 1 起（**响应不回显 page**，由调用方自记）
+ * @note 每页固定 `page_size=20`；后端超 50 截断为 50 且不回显 —— 我们不会用到那个区间。
+ */
+export function getRecruitResumesApi(filters : RecruitResumeFilters, page : number = 1) : Promise<RecruitResumeListResult> {
+    const params = buildFilterParams(filters, page)
+    return get('/recruit/resumes', params).then((data : UTSJSONObject) : RecruitResumeListResult => {
+        const items : RecruitResumeCard[] = []
+        const raw = data['items']
+        if (raw != null) {
+            const arr = raw as Array<UTSJSONObject>
+            for (let i = 0; i < arr.length; i++) {
+                items.push(buildRecruitResumeCard(arr[i]))
+            }
+        }
+        return {
+            items: items,
+            total: toNumber(data['total']),
+        } as RecruitResumeListResult
+    })
+}
+
+/**
+ * 简历详情 `GET /recruit/resumes/{id}`（与列表同一脱敏实现；非 open 或不存在 404）
+ */
+export function getRecruitResumeDetailApi(userId : number) : Promise<RecruitResumeCard> {
+    return get('/recruit/resumes/' + userId.toString()).then((data : UTSJSONObject) : RecruitResumeCard => {
+        return buildRecruitResumeCard(data)
+    })
+}
+
+/**
+ * 发起联系方式交换申请 `POST /recruit/contact-requests`
+ * @param message 附言（后端 1–200 字；空附言会被拒）
+ * @note 失败语义由后端给：pending 唯一 / 拒绝后 30 天冷却 / 日限 20 —— 一律当 400 文案透出，不本地预判。
+ */
+export function createRecruitContactRequestApi(studentUserId : number, message : string) : Promise<RecruitContactRequest> {
+    const payload : UTSJSONObject = {
+        student_user_id: studentUserId,
+        message: message,
+    } as UTSJSONObject
+    return post('/recruit/contact-requests', payload).then((data : UTSJSONObject) : RecruitContactRequest => {
+        return buildRecruitContactRequest(data)
+    })
+}
+
+/**
+ * 明文联系方式 `GET /recruit/resumes/{id}/contact` —— **仅 approved**。
+ *
+ * 未授权时后端返回 **403**（不是 404），本函数不吞掉它：错误对象带上
+ * `statusCode`，页面用 `isContactForbidden()` 分流成「尚未授权」而不是「请求失败」。
+ * `silent: true`：403 是**预期分支**（每个未授权简历都走它），不该弹错误 toast。
+ */
+export function getRecruitResumeContactApi(userId : number) : Promise<RecruitContactPlain> {
+    const opts : RequestOptions = { url: '/recruit/resumes/' + userId.toString() + '/contact', silent: true } as RequestOptions
+    return get(opts.url, null, opts).then((data : UTSJSONObject) : RecruitContactPlain => {
+        const photos : string[] = []
+        const photosRaw = data['photos']
+        if (photosRaw != null) {
+            const arr = photosRaw as Array<any>
+            for (let i = 0; i < arr.length; i++) {
+                const v = toStr(arr[i])
+                if (v.length > 0) photos.push(v)
+            }
+        }
+        const certs : UTSJSONObject[] = []
+        const certsRaw = data['resume_certifications']
+        if (certsRaw != null) {
+            const arr = certsRaw as Array<UTSJSONObject>
+            for (let i = 0; i < arr.length; i++) {
+                certs.push(arr[i])
+            }
+        }
+        return {
+            real_name: toStr(data['real_name']),
+            contact_phone: toStr(data['contact_phone']),
+            wechat: toStr(data['wechat']),
+            resume_file_url: toStr(data['resume_file_url']),
+            photos: photos,
+            resume_certifications: certs,
+        } as RecruitContactPlain
+    })
+}
+
+// ── 下载后交系统打开（打码 PDF 与上传 PDF 共用的**唯一**出路）──────────────
+
+/**
+ * 下载并打开一个**带鉴权**的文件（打码 PDF / 已授权后的上传 PDF 共用）
+ *
+ * @param path 以 `/` 开头的 API 相对路径（下载要带 Authorization，必须自己拼 baseURL：
+ *             `uni.downloadFile` 不走 `request.uts`，故不复用它的 `resolveURL`）
+ * @returns 空串 = 成功；非空 = 给用户看的失败原因（与 `material.uts` 的
+ *          `downloadAndOpenMaterialApi` 同形状，页面只做 toast）
+ *
+ * **为什么不解析响应体**：端点是 `application/pdf` 原始二进制（`inline`，非统一信封），
+ * 拿它当 JSON 信封解析必失败。鉴权仍走 Bearer（`recruit.resume_pdf` 能力位），
+ * 而不是 cookie —— 原生端不存在 cookie 通道。
+ */
+export function downloadAndOpenAuthedFile(path : string, unauthorizedHint : string) : Promise<string> {
+    const token = getStorage(STORAGE_KEY_TOKEN)
+    const header : UTSJSONObject = {
+        Authorization: 'Bearer ' + token,
+    } as UTSJSONObject
+    return new Promise<string>((resolve) => {
+        uni.downloadFile({
+            url: API_BASE_URL + path,
+            header: header,
+            success: (res) => {
+                const statusCode = res.statusCode
+                if (statusCode == 401) {
+                    resolve(unauthorizedHint)
+                    return
+                }
+                if (statusCode != 200) {
+                    resolve('文件下载失败（' + statusCode.toString() + '）')
+                    return
+                }
+                // 下载成功即打开：系统没有能打开 PDF 的应用时给明确提示，不静默
+                // ⚠️ **不得**传 `showMenu`：该参数在本仓 UTS/基座版本下不存在，编译期报
+                //    `No parameter with name 'showMenu' found.`（2026-09-20 编译门抓获）。
+                //    仓内两处先例（`api/material.uts:120`、`pages/courses/chapter-view.uvue:281`）都没有它。
+                uni.openDocument({
+                    filePath: res.tempFilePath,
+                    fileType: 'pdf',
+                    success: () : void => { resolve('') },
+                    fail: () : void => { resolve('无法打开此文件') },
+                })
+            },
+            fail: (err) => {
+                const errMsgText = err.errMsg
+                if (errMsgText != null && errMsgText.indexOf('timeout') >= 0) {
+                    resolve('文件下载超时，请稍后重试')
+                } else {
+                    resolve('文件下载失败，请检查网络后重试')
+                }
+            },
+        })
+    }).catch((e) : string => {
+        console.error('[downloadAndOpenAuthedFile] failed:', e)
+        return errMsg(e, '文件下载失败')
+    })
+}
+
+/** 打码版在线简历 PDF `GET /recruit/resumes/{id}/pdf`（**不要求 approved**，任意已登录招聘者可下） */
+export function downloadAndOpenMaskedResumePdfApi(userId : number) : Promise<string> {
+    return downloadAndOpenAuthedFile('/recruit/resumes/' + userId.toString() + '/pdf', '登录已过期，请重新登录')
 }

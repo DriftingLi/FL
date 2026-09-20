@@ -56,6 +56,13 @@
             }
         },
         {
+            "path": "pages/recruiter/resume-detail",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "简历详情"
+            }
+        },
+        {
             "path": "pages/register/register",
             "style": {
                 "navigationBarTitleText": "注册"
