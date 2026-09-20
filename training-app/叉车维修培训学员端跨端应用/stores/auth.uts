@@ -6,12 +6,13 @@
  * - token 过期时通过 refresh_token 自动刷新（回调注册，避免循环依赖）
  **/
 import { ref } from 'vue'
-import { loginApi, phoneLoginApi, emailLoginApi, mpWechatLoginApi, logoutApi, getUserInfoApi, refreshTokenApi } from '../api/auth'
+import { loginApi, phoneLoginApi, emailLoginApi, mpWechatLoginApi, logoutApi, getUserInfoApi, refreshTokenApi, recruiterLoginApi } from '../api/auth'
 import { registerRefreshTokenHandler } from '../api/request'
 import { setStorage, setStorageJSON, getStorage, getStorageJSON, removeStorage } from '../utils/storage'
 import { updateSecureToken } from '../utils/secureStorage'
+import { setActiveRole, clearActiveRole } from '../utils/authRole'
 import { errMsg } from '../api/helpers'
-import { STORAGE_KEY_TOKEN, STORAGE_KEY_REFRESH_TOKEN, STORAGE_KEY_USER, STORAGE_KEY_LOGIN_PROVIDER } from '../constants/app'
+import { STORAGE_KEY_TOKEN, STORAGE_KEY_REFRESH_TOKEN, STORAGE_KEY_USER, STORAGE_KEY_LOGIN_PROVIDER, STORAGE_KEY_CREDENTIALS, ACTIVE_ROLE_RECRUITER } from '../constants/app'
 import type { LoginParams, CodeLoginParams, UserInfo, AuthStore, UpdateProfileParams, WechatLoginResult } from '../types/index'
 
 const token = ref<string>('')
@@ -81,6 +82,56 @@ function clearAuthData() : void {
 
     // 安全凭据（STORAGE_KEY_CREDENTIALS）故意不移除：
     // 生物识别门控回填，退出登录不清理，下次登录时可通过生物识别恢复。
+}
+
+/**
+ * 身份互斥清槽（**专用函数，不复用 `clearAuthData()`** —— ADR-0022 ③）
+ *
+ * 为什么另立：`clearAuthData()` 讲的是「**同一身份**的退出」，它**故意保留**
+ * `auth_secure_credentials`（ADR-0004 生物识别快捷登录）与 `auth_refresh_token`（登出后仍可快捷续登）。
+ * 身份切换是另一件事：ADR-0021 ② 否掉的是**并存**身份，「复用单槽」意味着该槽不能同时留着
+ * 另一方的凭据 —— 学员的 refresh_token 与安全凭据在招聘者态下**必须一并清掉**，
+ * 否则登出后遗留的学员 refresh_token 会被 `/auth/refresh` 拿去**悄悄复活一个学员会话**
+ * （`tryRefreshToken` 只在内存 user 为空时拒绝，而招聘者态的内存 user 非空）。
+ *
+ * ⚠️ **不要**把这段逻辑并进 `clearAuthData()`：那会改动三条既有锁的语义
+ * （`utils/concurrent401RefreshContract.test.js` 的 C3、`loginGating`、`personalInfoContract`），
+ * 而 ADR-0022 ⑤ 要求学员路径行为逐条不变。
+ */
+function clearIdentityForSwitch() : void {
+    // 内存登录态归零（与 clearAuthData 共用单一重置点，防两处漂移）
+    resetAuthState()
+    // 学员三键（token / refresh_token / user）
+    removeStorage(STORAGE_KEY_TOKEN)
+    removeStorage(STORAGE_KEY_REFRESH_TOKEN)
+    removeStorage(STORAGE_KEY_USER)
+    // 上一重身份的登录来源与生物识别安全凭据：身份切换必须清
+    removeStorage(STORAGE_KEY_LOGIN_PROVIDER)
+    removeStorage(STORAGE_KEY_CREDENTIALS)
+    // 角色标记先清空，由调用方在落新凭据后显式重设（避免中途出现「新 token + 旧角色」）
+    clearActiveRole()
+}
+
+/**
+ * 招聘者登录（ADR-0022 ④ 步骤 P1）
+ *
+ * 顺序即语义：**先互斥清槽 → 再落凭据 → 最后设角色标记**。
+ * 若先落 token 再清槽，清槽会把刚拿到的招聘者 token 一起清掉。
+ */
+async function loginAsRecruiter(params : LoginParams) : Promise<void> {
+    try {
+        const result = await recruiterLoginApi(params)
+        if (result == null) {
+            throw new Error('登录响应为空')
+        }
+        clearIdentityForSwitch()
+        setAuthData(result.token, result.user, result.refresh_token, 'recruiter')
+        setActiveRole(ACTIVE_ROLE_RECRUITER)
+    } catch (e) {
+        console.error('[auth] loginAsRecruiter exception:', e)
+        const msg = errMsg(e, '登录失败（响应解析错误）')
+        throw new Error(msg)
+    }
 }
 
 function restoreFromStorage() : boolean {
@@ -383,6 +434,7 @@ export function useAuthStore() : AuthStore {
         login: (params : LoginParams) : Promise<void> => login(params),
         loginByCode: (params : CodeLoginParams) : Promise<void> => loginByCode(params),
         loginByWechat: () : Promise<WechatLoginResult> => loginByWechat(),
+        loginAsRecruiter: (params : LoginParams) : Promise<void> => loginAsRecruiter(params),
         logout: () : Promise<void> => logout(),
         updateUser: (patch : UpdateProfileParams) : void => updateUser(patch),
     } as AuthStore

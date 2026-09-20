@@ -136,6 +136,11 @@ export type AuthStore = {
      * @returns WechatLoginResult（含 isNew 提示字段）
      */
     loginByWechat : () => Promise<WechatLoginResult>
+    /**
+     * 招聘者登录（仅账号密码，POST /auth/recruiter-login）
+     * @note 落凭据前先做身份互斥清槽（含学员 refresh_token 与安全凭据），见 stores/auth.uts
+     */
+    loginAsRecruiter : (params : LoginParams) => Promise<void>
     logout : () => Promise<void>
     /** 更新本地用户信息（昵称/头像），并持久化到 storage */
     updateUser : (patch : UpdateProfileParams) => void
