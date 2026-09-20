@@ -6,12 +6,13 @@
  * - token 过期时通过 refresh_token 自动刷新（回调注册，避免循环依赖）
  **/
 import { ref } from 'vue'
-import { loginApi, phoneLoginApi, emailLoginApi, mpWechatLoginApi, logoutApi, getUserInfoApi, refreshTokenApi } from '../api/auth'
+import { loginApi, phoneLoginApi, emailLoginApi, mpWechatLoginApi, logoutApi, getUserInfoApi, refreshTokenApi, recruiterLoginApi } from '../api/auth'
 import { registerRefreshTokenHandler } from '../api/request'
 import { setStorage, setStorageJSON, getStorage, getStorageJSON, removeStorage } from '../utils/storage'
 import { updateSecureToken } from '../utils/secureStorage'
+import { setActiveRole, clearActiveRole } from '../utils/authRole'
 import { errMsg } from '../api/helpers'
-import { STORAGE_KEY_TOKEN, STORAGE_KEY_REFRESH_TOKEN, STORAGE_KEY_USER, STORAGE_KEY_LOGIN_PROVIDER } from '../constants/app'
+import { STORAGE_KEY_TOKEN, STORAGE_KEY_REFRESH_TOKEN, STORAGE_KEY_USER, STORAGE_KEY_LOGIN_PROVIDER, STORAGE_KEY_CREDENTIALS, ACTIVE_ROLE_RECRUITER } from '../constants/app'
 import type { LoginParams, CodeLoginParams, UserInfo, AuthStore, UpdateProfileParams, WechatLoginResult } from '../types/index'
 
 const token = ref<string>('')
@@ -81,6 +82,73 @@ function clearAuthData() : void {
 
     // 安全凭据（STORAGE_KEY_CREDENTIALS）故意不移除：
     // 生物识别门控回填，退出登录不清理，下次登录时可通过生物识别恢复。
+}
+
+/**
+ * 身份互斥清槽（**专用函数，不复用 `clearAuthData()`** —— ADR-0022 ③）
+ *
+ * 为什么另立：`clearAuthData()` 讲的是「**同一身份**的退出」，它**故意保留**
+ * `auth_secure_credentials`（ADR-0004 生物识别快捷登录）与 `auth_refresh_token`（登出后仍可快捷续登）。
+ * 身份切换是另一件事：ADR-0021 ② 否掉的是**并存**身份，「复用单槽」意味着该槽不能同时留着
+ * 另一方的凭据 —— 学员的 refresh_token 与安全凭据在招聘者态下**必须一并清掉**，
+ * 否则登出后遗留的学员 refresh_token 会被 `/auth/refresh` 拿去**悄悄复活一个学员会话**
+ * （`tryRefreshToken` 只在内存 user 为空时拒绝，而招聘者态的内存 user 非空）。
+ *
+ * ⚠️ **不要**把这段逻辑并进 `clearAuthData()`：那会改动三条既有锁的语义
+ * （`utils/concurrent401RefreshContract.test.js` 的 C3、`loginGating`、`personalInfoContract`），
+ * 而 ADR-0022 ⑤ 要求学员路径行为逐条不变。
+ */
+function clearIdentityForSwitch() : void {
+    // 内存登录态归零（与 clearAuthData 共用单一重置点，防两处漂移）
+    resetAuthState()
+    // 学员三键（token / refresh_token / user）
+    removeStorage(STORAGE_KEY_TOKEN)
+    removeStorage(STORAGE_KEY_REFRESH_TOKEN)
+    removeStorage(STORAGE_KEY_USER)
+    // 上一重身份的登录来源与生物识别安全凭据：身份切换必须清
+    removeStorage(STORAGE_KEY_LOGIN_PROVIDER)
+    removeStorage(STORAGE_KEY_CREDENTIALS)
+    // 角色标记先清空，由调用方在落新凭据后显式重设（避免中途出现「新 token + 旧角色」）
+    clearActiveRole()
+}
+
+/**
+ * 招聘者登录（ADR-0022 ④ 步骤 P1）
+ *
+ * 顺序即语义：**先互斥清槽 → 再落凭据 → 最后设角色标记**。
+ * 若先落 token 再清槽，清槽会把刚拿到的招聘者 token 一起清掉。
+ */
+async function loginAsRecruiter(params : LoginParams) : Promise<void> {
+    try {
+        const result = await recruiterLoginApi(params)
+        if (result == null) {
+            throw new Error('登录响应为空')
+        }
+        clearIdentityForSwitch()
+        setAuthData(result.token, result.user, result.refresh_token, 'recruiter')
+        setActiveRole(ACTIVE_ROLE_RECRUITER)
+    } catch (e) {
+        console.error('[auth] loginAsRecruiter exception:', e)
+        const msg = errMsg(e, '登录失败（响应解析错误）')
+        throw new Error(msg)
+    }
+}
+
+/**
+ * 招聘者退出登录（ADR-0022 ④ 步骤 P2）
+ *
+ * 为什么**不**复用 `logout()`：`logout()` 走的是 `clearAuthData()`，它按 ADR-0004
+ * **故意保留** `auth_secure_credentials` 与 `auth_refresh_token`（学员的快捷登录续期链）。
+ * 招聘者按 ADR-0021 ② 根本没有记住密码 / 生物识别 ⇒ 复用会把一个属于学员语义的
+ * refresh_token 槽留下，同时角色标记 `auth_active_role` 也会停在 `recruiter`，
+ * 让下一个学员态的 401 被送进招聘者登录页。
+ *
+ * 故招聘者退出 = **身份槽整体复位**（与 P1 的互斥清槽同一处实现：`clearIdentityForSwitch()`），
+ * 再回招聘者登录页。这里**不**改 `clearAuthData()` 的任何既有语义。
+ */
+function logoutRecruiter() : void {
+    clearIdentityForSwitch()
+    uni.reLaunch({ url: '/pages/recruiter/login' })
 }
 
 function restoreFromStorage() : boolean {
@@ -378,11 +446,17 @@ export function useAuthStore() : AuthStore {
         quickLogin: (rt : string) : Promise<string> => quickLogin(rt),
         setAuthData: (t : string, u : UserInfo, rt : string) : void => setAuthData(t, u, rt),
         clearAuthData: () : void => clearAuthData(),
+        // 身份互斥清槽（ADR-0022 ③）：招聘者登录前与**招聘者登录页回学员端的出口**共用同一份实现。
+        // 出口侧必须清 `auth_active_role`，否则带 recruiter 标记回到学员登录页后，下一次 401 仍会按角色分支
+        // 把人送回招聘者登录页（#1194 收口：真机复现的死胡同）。暴露的是**已有**函数，不新增清槽语义。
+        clearIdentityForSwitch: () : void => clearIdentityForSwitch(),
         restoreFromStorage: () : boolean => restoreFromStorage(),
         validateToken: () : Promise<void> => validateToken(),
         login: (params : LoginParams) : Promise<void> => login(params),
         loginByCode: (params : CodeLoginParams) : Promise<void> => loginByCode(params),
         loginByWechat: () : Promise<WechatLoginResult> => loginByWechat(),
+        loginAsRecruiter: (params : LoginParams) : Promise<void> => loginAsRecruiter(params),
+        logoutRecruiter: () : void => logoutRecruiter(),
         logout: () : Promise<void> => logout(),
         updateUser: (patch : UpdateProfileParams) : void => updateUser(patch),
     } as AuthStore

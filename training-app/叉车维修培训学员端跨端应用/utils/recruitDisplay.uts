@@ -1,0 +1,246 @@
+/**
+ * 招聘者工作区的**纯展示判定**单点（ADR-0021 ④ 线 4 / ADR-0022 ④ 步骤 P2）
+ *
+ * 这里放三样东西，别处一律只做投影：
+ *   ① 交换申请的**客户端过期判定**（服务端不按 `expires_at` 判状态，见下）；
+ *   ② 分段徽标 / 紧迫行的计数与文案；
+ *   ③ 招聘域状态词表（投递、交换申请、职位）——**两端同源**口径，见 ADR-0018
+ *      （同一后端契约在 web 与移动端出现两种词是漂移，不是端内差异）。
+ *
+ * ## 为什么「已过期」必须在客户端算（ADR-0022 ② 与「已知缺口」）
+ *
+ * `GET /recruit/contact-requests` 的 DTO 带 `status` 与 `expires_at`（`created_at + 14 天`，
+ * `contact_service.go:183`），但**读取路径不按 `expires_at` 判状态**：`contact-request-expire`
+ * 守护未被装配（`backend/cmd/server/main.go` 只装了 forum-image-cleanup 与
+ * contribution-file-cleanup），且全仓无可外部触发的过期端点 ⇒ 超期的 `pending` 记录
+ * **永久停在 `pending`**。所以「已过期」是客户端事实，而且过期项**不给任何操作入口**
+ * （#705 判据：看起来能用、用了必失败的入口比没有入口更贵）。
+ *
+ * ## 为什么不用 `new Date(isoString)` 解析
+ *
+ * 后端发的是 RFC3339 带偏移（`2026-10-01T12:00:00+08:00`）。UTS 里 `new Date(字符串)`
+ * 没有仓内先例（`format.uts` 只吃毫秒数、`checkinCalendar.uts` 只吃数字分量），跨端行为
+ * 不可预期 ⇒ 这里用纯算术解析（`parseIsoMs`），可被 `utils/recruitDisplayBehavior.test.js`
+ * 用 `loadUts` 真跑起来逐例验证，而不是只断言源码文本。
+ *
+ * @note 本模块**零 import 依赖**（只用 `import type`）：这样它既能被页面消费，
+ *       也能被 `utsHarness.loadUts` 直接执行，不需要注入任何绑定。
+ */
+import type { RecruitContactRequest } from '../api/recruit'
+
+/** 一天毫秒数（过期判定与剩余天数的唯一基数） */
+const MS_PER_DAY = 86400000
+
+/** 招聘域状态描述子：只放**状态事实**（label）。
+ *  配色不在这里 —— uvue 原生端的动态 `:style` 对象绑定没有仓内先例，配色改由各消费面
+ *  的静态 class（`.tag-<status>`）承担；「每个取值都有对应 class」由契约测试锁住。 */
+export type RecruitStatusDescriptor = {
+    status : string
+    label : string
+}
+
+/**
+ * 交换申请状态词表（**全仓唯一一份**）：取值与后端 `ContactGrantState` 五态对齐
+ * （`backend/internal/service/contact_authz.go`）。
+ *
+ * `expired` 一行有两重身份：服务端真发 `expired` 时命中它；服务端仍发 `pending` 而
+ * `expires_at` 已过时，也由客户端折到它（见 `describeRecruitContactStatus`）。
+ *
+ * label 逐字对齐 Web 侧的**同域单点** `frontend/src/utils/contactRequestStatus.ts`
+ * 的 `DESCRIPTORS`（`@/utils/contactRequestStatus`，ADR-0056 §8 / #1103 收编后的真源；
+ * 旧的 `MyRequests.vue` 内联 Record 已随那次收编消失）。两个方向都有锁：
+ * 取值 ←→ 后端 Go 常量表、label ←→ Web 描述子（`utils/recruitWorkspaceContract.test.js` 对照①②）。
+ */
+export const RECRUIT_CONTACT_STATUS_DESCRIPTORS : RecruitStatusDescriptor[] = [
+    { status: 'pending', label: '待同意' } as RecruitStatusDescriptor,
+    { status: 'approved', label: '已同意' } as RecruitStatusDescriptor,
+    { status: 'rejected', label: '已拒绝' } as RecruitStatusDescriptor,
+    { status: 'expired', label: '已过期' } as RecruitStatusDescriptor,
+    { status: 'revoked', label: '已撤回' } as RecruitStatusDescriptor,
+]
+
+/**
+ * 投递状态词表（**全仓唯一一份**）：取值与后端 `ApplicationStatus*` 三态对齐
+ * （`backend/internal/service/job_application_service.go`），label 逐字对齐 Web 单点
+ * `frontend/src/utils/applicationStatus.ts`。
+ */
+export const RECRUIT_APPLICATION_STATUS_DESCRIPTORS : RecruitStatusDescriptor[] = [
+    { status: 'applied', label: '投递中' } as RecruitStatusDescriptor,
+    { status: 'rejected', label: '不合适' } as RecruitStatusDescriptor,
+    { status: 'withdrawn', label: '已撤回' } as RecruitStatusDescriptor,
+]
+
+/**
+ * 职位状态徽标词表：**强制下架优先于 open/closed**（`forced_offline` 与 `offline_reason`
+ * 随 jobs 响应免费得到，且移动端不给处理入口 —— 不做职位编辑，ADR-0021 ③）
+ * @note `forced` 是**派生键**（由 `forced_offline` 布尔折算），不是后端枚举值；
+ *       它同时是消费面 class 名的后缀（`.tag-forced`），故不写成 `forced_offline`
+ *       —— uvue 的 class 选择器不欠一个下划线
+ */
+export const RECRUIT_JOB_STATUS_DESCRIPTORS : RecruitStatusDescriptor[] = [
+    { status: 'forced', label: '平台强制下架' } as RecruitStatusDescriptor,
+    { status: 'open', label: '招聘中' } as RecruitStatusDescriptor,
+    { status: 'closed', label: '已下架' } as RecruitStatusDescriptor,
+]
+
+/** 认不出的取值兜底（诚实呈现：不假装成某个已知状态；漏加取值由词表对账锁暴露） */
+const UNKNOWN_DESCRIPTOR : RecruitStatusDescriptor = { status: 'unknown', label: '状态未知' } as RecruitStatusDescriptor
+
+/** 词表查找（唯一判定路径；不以 if 链散落到消费面） */
+function findDescriptor(table : RecruitStatusDescriptor[], status : string) : RecruitStatusDescriptor {
+    for (let i = 0; i < table.length; i++) {
+        if (table[i].status == status) return table[i]
+    }
+    return UNKNOWN_DESCRIPTOR
+}
+
+/**
+ * 公历日期 → 距 1970-01-01 的天数（Howard Hinnant 的 days_from_civil）
+ * @note 纯整数算术：不依赖任何平台日期解析能力，跨端结果一致
+ */
+export function daysFromCivil(y : number, m : number, d : number) : number {
+    const yy = m <= 2 ? y - 1 : y
+    const era = Math.floor(yy / 400)
+    const yoe = yy - era * 400
+    const mp = m > 2 ? m - 3 : m + 9
+    const doy = Math.floor((153 * mp + 2) / 5) + d - 1
+    const doe = yoe * 365 + Math.floor(yoe / 4) - Math.floor(yoe / 100) + doy
+    return era * 146097 + doe - 719468
+}
+
+/**
+ * RFC3339 时间串 → epoch 毫秒
+ * @param iso 形如 `2026-10-01T12:00:00Z` / `2026-10-01T12:00:00+08:00`（后端 Go 的
+ *            `time.RFC3339` 只发这两种形态；日期与时间之间允许 `T` 或空格）
+ * @returns 无法解析返回 `-1`（**不是** 0：0 是合法时间点，会被误判成「已过期」）
+ * @note **小数秒被忽略**（`...T12:00:00.123Z` 按整秒算）：`time.RFC3339` 不带亚秒，
+ *       而一个 14 天的窗口用不着亚秒精度。这行为被 `recruitDisplayBehavior.test.js`
+ *       显式断言，免得读代码的人以为它被解析了。
+ */
+export function parseIsoMs(iso : string) : number {
+    if (iso == null || iso.length < 19) return -1
+    // 结构校验：只认 RFC3339 的分隔符位，不做模糊匹配
+    if (iso.substring(4, 5) != '-' || iso.substring(7, 8) != '-') return -1
+    const sep = iso.substring(10, 11)
+    if (sep != 'T' && sep != ' ') return -1
+    if (iso.substring(13, 14) != ':' || iso.substring(16, 17) != ':') return -1
+
+    const y = parseInt(iso.substring(0, 4))
+    const mo = parseInt(iso.substring(5, 7))
+    const d = parseInt(iso.substring(8, 10))
+    const h = parseInt(iso.substring(11, 13))
+    const mi = parseInt(iso.substring(14, 16))
+    const s = parseInt(iso.substring(17, 19))
+    if (mo < 1 || mo > 12 || d < 1 || d > 31) return -1
+
+    // 尾部：小数秒 / 'Z' / '±HH:MM'；偏移表示「本地时间 = UTC + 偏移」⇒ 求 UTC 要减回去
+    let offsetMin = 0
+    const tail = iso.substring(19)
+    if (tail.startsWith('+') || tail.startsWith('-')) {
+        const oh = parseInt(tail.substring(1, 3))
+        const om = parseInt(tail.substring(4, 6))
+        const signed = oh * 60 + om
+        offsetMin = tail.startsWith('-') ? -signed : signed
+    }
+
+    const days = daysFromCivil(y, mo, d)
+    return days * MS_PER_DAY + (h * 3600 + mi * 60 + s) * 1000 - offsetMin * 60000
+}
+
+/**
+ * 交换申请是否已过期（纯事实，与 `status` 无关）
+ * @param nowMs 当前毫秒（调用方传 `Date.now()`，便于测试注入固定时刻）
+ * @note 解析失败时返回 `false`：宁可让一条脏数据留在「未过期」里被看到，
+ *       也不要凭空把它标成「已过期」并连带从徽标里扣掉（误判的代价不对称）
+ */
+export function contactExpired(expiresAt : string, nowMs : number) : boolean {
+    const ms = parseIsoMs(expiresAt)
+    if (ms < 0) return false
+    return ms <= nowMs
+}
+
+/**
+ * 距过期还剩几天（向上取整，已过期或解析失败返回 0）
+ * @note 用整数算术 `floor((diff-1)/day)+1` 代替 `Math.ceil`：UTS 侧只保证 `Math.floor`
+ *       有仓内先例（`utils/format.uts`），少一个未验证的运行时能力
+ */
+export function remainingDays(expiresAt : string, nowMs : number) : number {
+    const ms = parseIsoMs(expiresAt)
+    if (ms < 0) return 0
+    const diff = ms - nowMs
+    if (diff <= 0) return 0
+    return Math.floor((diff - 1) / MS_PER_DAY) + 1
+}
+
+/**
+ * 分段徽标计数：**只计未过期的 pending**（ADR-0022 ②/⑥）
+ * @note 服务端仍会把过期记录发成 `pending` ⇒ 只按 `status` 数会多算，这正是本函数的理由
+ */
+export function unexpiredPendingCount(items : RecruitContactRequest[], nowMs : number) : number {
+    let n = 0
+    for (let i = 0; i < items.length; i++) {
+        const row = items[i]
+        if (row.status == 'pending' && !contactExpired(row.expires_at, nowMs)) {
+            n = n + 1
+        }
+    }
+    return n
+}
+
+/**
+ * 最近要过期的未过期 pending 的下标（紧迫行用；没有则 `-1`）
+ * @note 返回下标而不是整条记录：UTS 里「找不到」只能用哨兵表示，返回记录就得允许 null，
+ *       调用方多一层判空；下标是更窄的接口
+ * @note **解析不出时间的行一律跳过**（`parseIsoMs` 返回 -1）：这类脏行在
+ *       `unexpiredPendingCount` 里按「未过期」留着（不凭空扣数），但若让它参与「最近过期」的
+ *       比较，它的 -1 会恒为最小值 ⇒ 抢占紧迫行，且 `remainingDays` 给不出天数
+ *       ⇒ **整条紧迫行被它一间压掉**。两种处置刻意不同：计数失败偏保守，排序失败偏排除。
+ */
+export function soonestPendingIndex(items : RecruitContactRequest[], nowMs : number) : number {
+    let best = -1
+    let bestMs = 0
+    for (let i = 0; i < items.length; i++) {
+        const row = items[i]
+        if (row.status != 'pending' || contactExpired(row.expires_at, nowMs)) continue
+        const ms = parseIsoMs(row.expires_at)
+        if (ms < 0) continue
+        if (best < 0 || ms < bestMs) {
+            best = i
+            bestMs = ms
+        }
+    }
+    return best
+}
+
+/** 职位段顶部紧迫行文案（数量由分段徽标常驻承担，这里只补徽标给不了的时间维度） */
+export function contactUrgencyText(count : number, days : number) : string {
+    if (count <= 0 || days <= 0) return ''
+    return '交换申请有 ' + count.toString() + ' 条等待回应，最近 ' + days.toString() + ' 天后过期'
+}
+
+/** 交换段列表行的剩余天数徽标文案 */
+export function contactRemainingText(days : number) : string {
+    if (days <= 0) return ''
+    return '剩 ' + days.toString() + ' 天'
+}
+
+/**
+ * 交换申请 → 描述子
+ * @param expired 由 `contactExpired(row.expires_at, nowMs)` 算出；为真时**一律**折到「已过期」，
+ *                哪怕服务端仍写着 `pending`（服务端不按 expires_at 判状态，见文件头）
+ */
+export function describeRecruitContactStatus(status : string, expired : boolean) : RecruitStatusDescriptor {
+    if (expired) return findDescriptor(RECRUIT_CONTACT_STATUS_DESCRIPTORS, 'expired')
+    return findDescriptor(RECRUIT_CONTACT_STATUS_DESCRIPTORS, status)
+}
+
+/** 投递 → 描述子 */
+export function describeRecruitApplicationStatus(status : string) : RecruitStatusDescriptor {
+    return findDescriptor(RECRUIT_APPLICATION_STATUS_DESCRIPTORS, status)
+}
+
+/** 职位 → 描述子（`forced_offline` 优先于 `status`） */
+export function describeRecruitJobStatus(status : string, forcedOffline : boolean) : RecruitStatusDescriptor {
+    if (forcedOffline) return findDescriptor(RECRUIT_JOB_STATUS_DESCRIPTORS, 'forced')
+    return findDescriptor(RECRUIT_JOB_STATUS_DESCRIPTORS, status)
+}

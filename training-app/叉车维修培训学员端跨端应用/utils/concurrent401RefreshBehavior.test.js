@@ -17,23 +17,30 @@
  * `utils/utsHarness.js` 把 `.uts` 真正执行起来，`uni.request` 由测试驱动。
  */
 const path = require('path');
-const { loadUts } = require('./utsHarness');
+const { loadUts, readText } = require('./utsHarness');
 
 const ROOT = path.join(__dirname, '..');
 const GATE_UTS = path.join(ROOT, 'api', 'refreshGate.uts');
 const STORAGE_UTS = path.join(ROOT, 'utils', 'storage.uts');
+const AUTH_ROLE_UTS = path.join(ROOT, 'utils', 'authRole.uts');
 const REQUEST_UTS = path.join(ROOT, 'api', 'request.uts');
 const AUTH_UTS = path.join(ROOT, 'stores', 'auth.uts');
+const RECRUITER_LOGIN_UVUE = path.join(ROOT, 'pages', 'recruiter', 'login.uvue');
 
 const KEY_TOKEN = 'auth_token';
 const KEY_REFRESH = 'auth_refresh_token';
 const KEY_USER = 'auth_user';
 const KEY_PROVIDER = 'auth_login_provider';
+const KEY_CREDENTIALS = 'auth_secure_credentials';
+const KEY_ACTIVE_ROLE = 'auth_active_role';
+const ROLE_STUDENT = 'student';
+const ROLE_RECRUITER = 'recruiter';
 
 const EXPIRED = 'expired-access-token';
 const FRESH = 'fresh-access-token';
 const REFRESH_1 = 'refresh-token-1';
 const REFRESH_2 = 'refresh-token-2';
+const RECRUITER_ACCESS = 'recruiter-access-token';
 
 /** 假 `uni`：storage 用 Map 落地（语义与 `utils/storage.uts` 相同），request 只**捕获**不自动回应 */
 function makeUni() {
@@ -75,12 +82,24 @@ function buildApp(opts) {
 
   const storage = loadUts(STORAGE_UTS, { uni });
   const gate = loadUts(GATE_UTS, {});
+  // 身份角色真源（#1194）：`request.uts` 的 401 出口与 `auth.uts` 都从它取「当前是谁」。
+  // 用**真的** authRole.uts 而不是注桩 —— 否则「角色分支」这条判据就退化成了接线断言。
+  const authRole = loadUts(AUTH_ROLE_UTS, {
+    getStorage: storage.getStorage,
+    setStorage: storage.setStorage,
+    removeStorage: storage.removeStorage,
+    STORAGE_KEY_ACTIVE_ROLE: KEY_ACTIVE_ROLE,
+    ACTIVE_ROLE_STUDENT: ROLE_STUDENT,
+    ACTIVE_ROLE_RECRUITER: ROLE_RECRUITER,
+  });
   const request = loadUts(REQUEST_UTS, {
     gateRefresh: gate.gateRefresh,
     API_BASE_URL: 'http://127.0.0.1:8080',
     REQUEST_TIMEOUT: 15000,
     ENABLE_DEBUG_LOG: false,
     STORAGE_KEY_TOKEN: KEY_TOKEN,
+    STORAGE_KEY_USER: KEY_USER,
+    isRecruiterActive: authRole.isRecruiterActive,
     getStorage: storage.getStorage,
     removeStorage: storage.removeStorage,
     isContentUri: () => false,
@@ -91,6 +110,7 @@ function buildApp(opts) {
   });
 
   const refreshCalls = [];
+  const recruiterLoginCalls = [];
   const noopApi = () => Promise.resolve(null);
   const authMod = loadUts(AUTH_UTS, {
     ref: (v) => ({ value: v }),
@@ -101,6 +121,15 @@ function buildApp(opts) {
     mpWechatLoginApi: noopApi,
     logoutApi: () => Promise.resolve({}),
     getUserInfoApi: noopApi,
+    // 招聘者登录（#1194）：记录调用并返回与学员登录同构的响应
+    recruiterLoginApi: (params) => {
+      recruiterLoginCalls.push(params);
+      return Promise.resolve({
+        token: RECRUITER_ACCESS,
+        refresh_token: '',
+        user: { user_id: 11, username: params.username, name: params.username, role: ROLE_RECRUITER },
+      });
+    },
     refreshTokenApi: (rt) => {
       refreshCalls.push(rt);
       if (!refreshOk) return Promise.reject(new Error('refresh token 已失效'));
@@ -112,11 +141,15 @@ function buildApp(opts) {
     getStorageJSON: storage.getStorageJSON,
     removeStorage: storage.removeStorage,
     updateSecureToken: () => {},
+    setActiveRole: authRole.setActiveRole,
+    clearActiveRole: authRole.clearActiveRole,
     errMsg: (_e, fallback) => fallback,
     STORAGE_KEY_TOKEN: KEY_TOKEN,
     STORAGE_KEY_REFRESH_TOKEN: KEY_REFRESH,
     STORAGE_KEY_USER: KEY_USER,
     STORAGE_KEY_LOGIN_PROVIDER: KEY_PROVIDER,
+    STORAGE_KEY_CREDENTIALS: KEY_CREDENTIALS,
+    ACTIVE_ROLE_RECRUITER: ROLE_RECRUITER,
     uni,
   });
 
@@ -147,8 +180,11 @@ function buildApp(opts) {
   return {
     uni,
     store,
+    storage,
+    authRole,
     request,
     refreshCalls,
+    recruiterLoginCalls,
     respondWhere,
     /** 全部挂起请求一起回应（模拟「同一秒内一起到达的 401」，即一次风暴） */
     stormAll: () => respondWhere(() => true),
@@ -341,5 +377,274 @@ describe('并发 401（refresh_token 也无效）—— 恰好一次登出，登
     expect(app.store.token.value).toBe('');
     expect(app.store.user.value).toBe(null);
     expect(app.uni.relaunches.length).toBe(1); // 没有再弹回首页
+  });
+});
+
+/**
+ * #1194 招聘者身份面（移动端 ADR-0022 ④ 步骤 P1 / ⑥ 验收标准）
+ *
+ * 这些用例跑的是**真的** `stores/auth.uts` + `api/request.uts` + `utils/authRole.uts`：
+ * 身份互斥清槽有没有清干净、401 出口到底跳去了哪一页、招聘者态有没有去调 `/auth/refresh`，
+ * 都是行为事实而不是源码文本。学员路径的既有断言（上面 I2/I3/I4）**一行未改** —— 那正是
+ * ADR-0022 ⑤「学员路径行为逐条不变」的回归面。
+ */
+describe('招聘者身份面（#1194）：互斥清槽与角色化 401', () => {
+  test('R1: 招聘者登入后学员三键与安全凭据为空，auth_active_role = recruiter', async () => {
+    const app = buildApp({ refreshOk: true });
+    // 先把「上一重身份」摆满：学员凭据（refresh_token 已由 buildApp 的 setAuthData 写入）
+    // + 生物识别安全凭据槽
+    app.storage.setStorage(KEY_CREDENTIALS, '{"u":"u7","p":"p7","has":true}');
+    expect(app.uni.kv.has(KEY_CREDENTIALS)).toBe(true);
+    expect(app.storage.getStorage(KEY_REFRESH)).toBe(REFRESH_1);
+
+    await app.store.loginAsRecruiter({ username: 'hr001', password: 'pass1234' });
+
+    // 登录请求真的打到了招聘者登录入口（不是一个被 mock 掉的空转）
+    expect(app.recruiterLoginCalls.length).toBe(1);
+    expect(app.recruiterLoginCalls[0].username).toBe('hr001');
+
+    // 学员三键为空：token 被招聘者凭据顶替，refresh_token / user 必须清掉
+    expect(app.storage.getStorage(KEY_REFRESH)).toBe('');
+    expect(app.uni.kv.has(KEY_REFRESH)).toBe(false);
+    expect(app.storage.getStorage(KEY_USER)).not.toContain('"role":"student"');
+    // 安全凭据槽为空（ADR-0021 ②：复用单槽 ⇒ 不能留着另一方的凭据）
+    expect(app.uni.kv.has(KEY_CREDENTIALS)).toBe(false);
+    // 角色标记 = recruiter，且招聘者凭据已落到共用槽里
+    expect(app.storage.getStorage(KEY_ACTIVE_ROLE)).toBe(ROLE_RECRUITER);
+    expect(app.storage.getStorage(KEY_TOKEN)).toBe(RECRUITER_ACCESS);
+    expect(app.authRole.isRecruiterActive()).toBe(true);
+    // 内存态与 storage 一致（登录页 onLoad 的 isLoggedIn 守卫据此放行）
+    expect(app.store.isLoggedIn.value).toBe(true);
+  });
+
+  test('R2: 学员身份下招聘者态不可恢复（无角色标记 ⇒ 判定回落学员；清槽后无 refresh_token 可续）', async () => {
+    const app = buildApp({ refreshOk: true });
+    await app.store.loginAsRecruiter({ username: 'hr001', password: 'pass1234' });
+    expect(app.authRole.isRecruiterActive()).toBe(true);
+    // 招聘者态下 refresh_token 槽是空的 —— 这是「不调 /auth/refresh」的结构前提
+    expect(app.storage.getStorage(KEY_REFRESH)).toBe('');
+
+    // 回到学员缺省态（无角色标记）
+    app.authRole.clearActiveRole();
+    expect(app.authRole.isRecruiterActive()).toBe(false);
+    expect(app.authRole.getActiveRole()).toBe(ROLE_STUDENT);
+
+    // 脏值兜底：角色标记被写成非合法值时，判定必须是学员（宁可多跳一次学员登录页）
+    app.storage.setStorage(KEY_ACTIVE_ROLE, 'admin');
+    expect(app.authRole.getActiveRole()).toBe(ROLE_STUDENT);
+    expect(app.authRole.isRecruiterActive()).toBe(false);
+  });
+
+  test('R3: 401 学员态 → /pages/login/login，且只 reLaunch 一次（既有学员语义不变）', async () => {
+    const app = buildApp({ refreshOk: false });
+    expect(app.storage.getStorage(KEY_ACTIVE_ROLE)).toBe(''); // 学员是缺省身份
+
+    const p = app.request.get('/auth/me');
+    app.stormAll();
+    // 必须消费 reject：否则是未处理拒绝（既有 I2/I3/I4 用 Promise.allSettled 同理）
+    await expect(p).rejects.toThrow('登录已过期');
+    await sleep(30);
+
+    expect(app.uni.relaunches.length).toBe(1);
+    expect(app.uni.relaunches[0].url).toBe('/pages/login/login');
+  });
+
+  test('R4: 401 招聘者态 → /pages/recruiter/login，只 reLaunch 一次，且**不调** /auth/refresh', async () => {
+    const app = buildApp({ refreshOk: true }); // refresh 后端可用 —— 故意诱使「拿招聘者 token 去刷新」
+    await app.store.loginAsRecruiter({ username: 'hr001', password: 'pass1234' });
+    // 制造「招聘者 access token 已失效」的现场（结构前提：招聘者态没有 refresh_token）
+    expect(app.storage.getStorage(KEY_REFRESH)).toBe('');
+    app.storage.setStorage(KEY_TOKEN, EXPIRED);
+
+    const p = app.request.get('/api/recruit/jobs');
+    expect(app.stormAll()).toBe(1);
+    await expect(p).rejects.toThrow('登录已过期');
+    await sleep(30);
+
+    // 跳到招聘者登录页，且**恰好一次**
+    expect(app.uni.relaunches.length).toBe(1);
+    expect(app.uni.relaunches[0].url).toBe('/pages/recruiter/login');
+    // 招聘者态**禁用刷新链**：无 refresh token ⇒ 不得让闸门拿着招聘者 token 去调 /auth/refresh
+    expect(app.refreshCalls.length).toBe(0);
+  });
+});
+
+/**
+ * #1194 收口：**招聘者登录页的离开路径**（真机复现的死胡同 + 「取消即登出」语义纠正）
+ *
+ * 现测事实（真机，2026-09-20）：招聘者页守卫 `utils/recruitGuard.uts`（P2 分支）与
+ * `api/request.uts` 的 401 角色化出口都用 **`uni.reLaunch`** 进 `/pages/recruiter/login`
+ * ⇒ **页面栈被清空**，本页原有的 `uni.navigateBack()` 与「取消」分支都是死胡同，
+ * 人被困在本页（`pages/recruiter/contacts` → `/pages/recruiter/login` 反复出现）。
+ *
+ * 出口只做对了一半还不够 —— 另一半是**角色标记**：`auth_active_role` 只在
+ * `loginAsRecruiter()` 里被写，学员侧任何登录路径都不写它 ⇒ 不清槽就回学员端，下一次 401
+ * 仍按角色分支把人送回招聘者登录页（**来回弹**）。R5 拿**真的** `request.uts` 把这条链路走一遍；
+ * R7 是这条判断的**判别力对照**（不清槽 ⇒ 必红），不是为了凑绿。
+ *
+ * ⚠️ **反向的错法（本组用例的第二条不变量）**：把**所有**出口都接到「清槽 + reLaunch」上，
+ * 就把「点到招聘者入口又点取消」变成了「把当前学员登出」—— 本页 P1 的原始语义是
+ * 「取消 ⇒ `navigateBack()`，什么都不动」。所以出口必须**按页面栈分流**，且清槽的判据是
+ * **「当前身份是招聘者」**而不是「栈空」：栈空但身份是**学员**时（守卫把一个在册学员从招聘者页
+ * 弹到了这里）清槽就是**误登出**。R6 / R6b / R8 锁出口形状与分流接线，
+ * R9 在**真 store** 上锁「学员会话只在招聘者态才被清」这条行为。
+ *
+ * 分类（docs/agents/guards.md）：R6 / R6b / R8 是**接线守护**（读 `.uvue` 源文本；判别力靠注入取得，
+ * 读数见 PR 正文），它们的**行为兜底** = R5（清槽后 401 落回学员登录页）/ R7（不清槽 ⇒ 弹回）
+ * / R9（不清槽 ⇒ 学员三键与安全凭据逐键保留）。
+ */
+describe('#1194 收口：招聘者登录页的离开路径', () => {
+  const EXIT_FN = 'leaveRecruiterLogin';
+
+  /** 取出分流函数体（缩进锚定：函数闭合括号是 4 空格，体内最内层是 8 空格） */
+  function exitFnBody() {
+    const src = readText(RECRUITER_LOGIN_UVUE);
+    const hit = src.match(new RegExp(`function ${EXIT_FN}\\(\\)[\\s\\S]*?\\n {4}\\}`));
+    expect(hit).not.toBeNull();
+    return hit[0];
+  }
+
+  test('R6: 出口存在，且是学员登录页招聘者入口的镜像（纯文字 link，无说明性文案）', () => {
+    const src = readText(RECRUITER_LOGIN_UVUE);
+
+    expect(src).toContain('class="student-exit"');
+    expect(src).toContain('class="student-exit-link"');
+    expect(src).toContain(`@click="${EXIT_FN}"`);
+
+    // 复用既有 link 外观（与 `pages/login/login.uvue` 的 `.back-password-link` 逐属性同形）
+    expect(src).toContain('border-bottom-width: 1rpx;');
+    expect(src).toContain('border-bottom-color: #2979ff;');
+
+    // 无说明性 hint：出口块里只有那一行文字（多一段说明文案 = 违反「无说明性文案」）
+    const block = src.match(/<view class="student-exit"[\s\S]*?<\/view>/);
+    expect(block).not.toBeNull();
+    expect((block[0].match(/<text/g) || []).length).toBe(1);
+    expect(block[0]).toContain('返回学员登录');
+  });
+
+  test('R6b: 三个出口（左上「返回」/ 模态「取消」/ 底部文字）收敛到同一条分流', () => {
+    const src = readText(RECRUITER_LOGIN_UVUE);
+
+    // 模板两处 @click：左上「返回」与底部出口
+    expect((src.match(new RegExp(`@click="${EXIT_FN}"`, 'g')) || []).length).toBe(2);
+    // 模态「取消」分支也走同一条路；「确定」分支（退出当前账号）语义未动
+    const modal = src.match(/uni\.showModal\(\{[\s\S]*?\n {12}\}\)/);
+    expect(modal).not.toBeNull();
+    expect(modal[0]).toContain('auth.clearAuthData()');
+    expect(modal[0]).toContain(`${EXIT_FN}()`);
+    // 旧的「所有出口都清槽」形态必须消失（它正是「取消即登出」的实现）
+    expect(src).not.toContain('goStudentLogin');
+  });
+
+  test('R8: 按页面栈分流 —— 有页只回退（不清槽）；栈空且是招聘者态才清槽 + reLaunch', () => {
+    const body = exitFnBody();
+
+    // ① 判据是页面栈（与 `utils/navigation.uts` / `pages/search/search.uvue` 同形）
+    expect(body).toContain('getCurrentPages()');
+    expect(body).toContain('pages != null && pages.length > 1');
+
+    const backAt = body.indexOf('uni.navigateBack()');
+    const retAt = body.indexOf('return', backAt);
+    const roleAt = body.indexOf('isRecruiterActive()');
+    const clearAt = body.indexOf('clearIdentityForSwitch()');
+    const relaunchAt = body.indexOf("uni.reLaunch({ url: '/pages/login/login' })");
+    expect(backAt).toBeGreaterThan(-1);
+    expect(retAt).toBeGreaterThan(backAt);
+    // ② 清槽与 reLaunch 都在有页分支 `return` **之后** ⇒ 「有页 ⇒ 不清槽」由收口保证
+    expect(roleAt).toBeGreaterThan(retAt);
+    expect(clearAt).toBeGreaterThan(roleAt);
+    // ③ 顺序：清槽必须**先于** reLaunch（反了就留下「新页 + 旧角色」，401 仍会把人送回本页）
+    expect(relaunchAt).toBeGreaterThan(clearAt);
+
+    // ④ 整页只有这一个返回出口与这一个「学员登录页」跳转，且都在分流函数体内
+    const src = readText(RECRUITER_LOGIN_UVUE);
+    expect((src.match(/uni\.navigateBack\(/g) || []).length).toBe(1);
+    expect((src.match(/\/pages\/login\/login/g) || []).length).toBe(1);
+    expect(src).not.toContain('function goBack');
+  });
+
+  test('R5: 出口清槽之后，后续 401 落回学员登录页（不再弹回招聘者登录页）', async () => {
+    const app = buildApp({ refreshOk: true });
+    await app.store.loginAsRecruiter({ username: 'hr001', password: 'pass1234' });
+    expect(app.authRole.isRecruiterActive()).toBe(true);
+
+    // 复现「点出口」的**行为**（页面函数本身在 R6 里由源码断言钉住其形状）：
+    app.store.clearIdentityForSwitch();
+    app.uni.relaunches.length = 0;
+
+    // 出口之后进学员登录页：角色标记必须已经不在
+    expect(app.uni.kv.has(KEY_ACTIVE_ROLE)).toBe(false);
+    expect(app.authRole.isRecruiterActive()).toBe(false);
+    // 出口顺手清掉招聘者凭据（这正是清槽函数而非「只跳转」的理由）
+    expect(app.storage.getStorage(KEY_TOKEN)).toBe('');
+
+    // 学员登录页之后的第一次 401：必须落回**学员**登录页
+    const p = app.request.get('/auth/me');
+    app.stormAll();
+    await expect(p).rejects.toThrow('登录已过期');
+    await sleep(30);
+
+    expect(app.uni.relaunches.length).toBe(1);
+    expect(app.uni.relaunches[0].url).toBe('/pages/login/login');
+  });
+
+  test('R7（判别力对照）: 出口**只跳转不清槽**时，下一次 401 会把人弹回招聘者登录页', async () => {
+    const app = buildApp({ refreshOk: true });
+    await app.store.loginAsRecruiter({ username: 'hr001', password: 'pass1234' });
+
+    // 反事实：只跳转、不清槽（等价于「出口写成 uni.reLaunch 而不调 clearIdentityForSwitch」）
+    app.uni.relaunches.length = 0;
+    expect(app.authRole.isRecruiterActive()).toBe(true);
+
+    const p = app.request.get('/auth/me');
+    app.stormAll();
+    await expect(p).rejects.toThrow('登录已过期');
+    await sleep(30);
+
+    // 这就是真机上看到的那件事：来回弹
+    expect(app.uni.relaunches.length).toBe(1);
+    expect(app.uni.relaunches[0].url).toBe('/pages/recruiter/login');
+  });
+
+  /**
+   * R9 是**行为守护**（真跑 `stores/auth.uts` + `utils/authRole.uts`）：它锁的是分流**两条分支的后果**，
+   * 也就是接线守护 R8 的行为兜底 —— 「有页 ⇒ 不清槽」之所以必须成立，是因为清槽会让一个在册学员
+   * 被登出（乙面就是那个伤害面）；而「招聘者态 ⇒ 清槽」之所以必须成立，是因为不清就会来回弹（R7）。
+   */
+  test('R9（行为）: 学员会话只在招聘者态才被清 —— 「取消/返回」不得把学员登出（逐键对照）', async () => {
+    const KEYS = [KEY_TOKEN, KEY_REFRESH, KEY_USER, KEY_CREDENTIALS];
+
+    // 甲：身份是**学员**（出口的清槽条件 `isRecruiterActive()` 为假）⇒ 离开路径只 reLaunch，
+    //     认证槽逐键原样 —— 学员登录页的 onLoad 会因 isLoggedIn 直接把人送回工作区，不需要重新登录。
+    const keep = buildApp({ refreshOk: true });
+    keep.storage.setStorage(KEY_CREDENTIALS, '{"u":"u7","p":"p7","has":true}');
+    const before = KEYS.map((k) => keep.storage.getStorage(k));
+    expect(before.every((v) => v.length > 0)).toBe(true); // 前提：学员会话与安全凭据确实是「摆满」的
+    expect(keep.authRole.isRecruiterActive()).toBe(false);
+
+    keep.uni.reLaunch({ url: '/pages/login/login' }); // 学员态下出口只做这一步
+    expect(KEYS.map((k) => keep.storage.getStorage(k))).toEqual(before);
+    expect(keep.store.isLoggedIn.value).toBe(true);
+    expect(keep.store.restoreFromStorage()).toBe(true); // 回来还能接着用，没有被登出
+
+    // 乙（伤害面 / 判别力对照）：同一现场若**无条件**清槽 ⇒ 一个只是走错路的学员被登出。
+    //     这就是被纠正掉的语义；也是「清槽条件必须收窄到 isRecruiterActive()」的反例。
+    const harmed = buildApp({ refreshOk: true });
+    harmed.storage.setStorage(KEY_CREDENTIALS, '{"u":"u7","p":"p7","has":true}');
+    harmed.store.clearIdentityForSwitch();
+    expect(KEYS.map((k) => harmed.storage.getStorage(k))).toEqual(['', '', '', '']);
+    expect(harmed.store.isLoggedIn.value).toBe(false);
+    expect(harmed.authRole.isRecruiterActive()).toBe(false);
+
+    // 丙：身份是**招聘者**（栈空的死胡同）⇒ 这时才轮到清槽；角色标记必须一起没掉，
+    //     否则下一次 401 仍按角色分支把人送回招聘者登录页（R5 / R7 已锁这条链路）。
+    const recruiter = buildApp({ refreshOk: true });
+    recruiter.storage.setStorage(KEY_CREDENTIALS, '{"u":"hr","p":"p","has":true}');
+    await recruiter.store.loginAsRecruiter({ username: 'hr001', password: 'pass1234' });
+    expect(recruiter.authRole.isRecruiterActive()).toBe(true);
+    recruiter.store.clearIdentityForSwitch();
+    expect(recruiter.uni.kv.has(KEY_ACTIVE_ROLE)).toBe(false);
+    expect(recruiter.authRole.isRecruiterActive()).toBe(false);
+    expect(recruiter.storage.getStorage(KEY_CREDENTIALS)).toBe('');
   });
 });

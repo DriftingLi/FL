@@ -1,0 +1,40 @@
+20:51:28 === [1] 派发导航 launch: --pagePath pages/recruiter/login（分离派发，不等收口）===
+20:51:28 launch 日志：D:\wt-1194\training-app\叉车维修培训学员端跨端应用\.ci-verify\launch-nav-cd0244a6e2964cf8aa14ff2932ca92dd.out
+20:51:28 === [2] 轮询：等 a11y 树出现「返回学员登录」（= 目标页真的渲染出来了）===
+20:51:36   t=5 s  descs=获取验证码 | 招聘者登录
+20:51:43   t=10 s  descs=获取验证码 | 招聘者登录
+20:51:50   t=15 s  descs=获取验证码 | 招聘者登录
+20:51:59   t=20 s  descs=获取验证码 | 招聘者登录
+20:52:07   t=25 s  descs=获取验证码 | 招聘者登录
+20:52:16   t=30 s  descs=
+20:52:23   t=35 s  descs=招聘者登录 | 返回学员登录
+20:52:23 ✅ 目标页命中：「招聘者登录」页且含新出口「返回学员登录」
+20:52:23 === [3] 帧1：截图 + a11y 原文（成对取，agent 看不见截图，故文本是唯一可核判据）===
+20:52:24   帧1 截图=D:\wt-1194\training-app\叉车维修培训学员端跨端应用\.ci-verify\exit-1206\frame03-raw.png  64134 B；descs=返回 | 招聘者登录 | 显示 | 登 录 | 返回学员登录
+20:52:25   页身份行：09-20 20:50:09.158  ​/pages/login/login​ // 09-20 20:52:16.649  ​pages/recruiter/login​
+20:52:25 === [4] 取「返回学员登录」节点的 bounds（不按截图目测）===
+20:52:25   node=<node index="2" text="" resource-id="" class="android.view.View" package="io.dcloud.uniappx" content-desc="返回学员登录" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" password="false" selected="false" bounds="[429,2259][651,2313]" />
+20:52:25   bounds=[429,2259][651,2313]  中心=(540,2286)
+20:52:25 === [5] 唯一一次 input tap（= input 可用性现测 + 实际点按，一次两用）===
+20:52:27   $ adb shell "input tap 540 2286; echo TAP_RC=$?"
+20:52:27   TAP_RC=0 /
+20:52:27 === [6] 等落地页（最多 60s），并抓注入是否被系统拒绝 ===
+20:52:35   t=5 s  descs=获取验证码 | 账号密码登录 | 招聘者登录
+20:52:35   帧2 截图=D:\wt-1194\training-app\叉车维修培训学员端跨端应用\.ci-verify\exit-1206\frame04-raw.png  177528 B；descs=叉车维修培训系统 | +86 | 获取验证码 | 6 位数字验证码，5 分钟内有效 | 同意 | 《用户协议》 | 和 | 《用户隐私》 | 若手机号未注册， | 立即注册 | 登 录 | 手机验证码 | | | 邮箱验证码 | 账号密码登录 | 招聘者登录
+20:52:35 === [7] 注入可用性证据（logcat 最近 200 行里找 INJECT_EVENTS / SecurityException）===
+20:52:37   09-20 20:52:20.418  2552  3397 W SettingsProvider: java.lang.SecurityException: Failed to find provider settings for user 999; expected to find a valid ContentProvider for this authority
+20:52:37   09-20 20:52:21.457  2552  3397 W SettingsProvider: java.lang.SecurityException: Failed to find provider settings for user 999; expected to find a valid ContentProvider for this authority
+20:52:37   09-20 20:52:31.860  2552  3397 W SettingsProvider: java.lang.SecurityException: Failed to find provider settings for user 999; expected to find a valid ContentProvider for this authority
+20:52:37   09-20 20:52:31.869  2552  3397 W SettingsProvider: java.lang.SecurityException: Failed to find provider settings for user 999; expected to find a valid ContentProvider for this authority
+20:52:37   09-20 20:52:33.236  2552  3397 W SettingsProvider: java.lang.SecurityException: Failed to find provider settings for user 999; expected to find a valid ContentProvider for this authority
+20:52:37 === [8] 页身份时间线（本次 run 的全部进入页面行）===
+20:52:39   09-20 20:47:08.272  ​/pages/index/index​
+20:52:39   09-20 20:49:54.674  ​pages/recruiter/login​
+20:52:39   09-20 20:50:04.580  ​/pages/login/login​
+20:52:39   09-20 20:50:05.853  ​/pages/recruiter/login​
+20:52:39   09-20 20:50:07.903  ​/pages/index/index​
+20:52:39   09-20 20:50:09.158  ​/pages/login/login​
+20:52:39   09-20 20:52:16.649  ​pages/recruiter/login​
+20:52:39   09-20 20:52:26.822  ​/pages/login/login​
+20:52:39 帧前最后一条页身份：09-20 20:52:16.649  ​pages/recruiter/login​
+20:52:39 === DONE ===
