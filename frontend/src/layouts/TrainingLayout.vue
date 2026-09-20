@@ -38,6 +38,7 @@ import type { Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Search } from '@element-plus/icons-vue'
 import SidebarLayout from './SidebarLayout.vue'
+import { href } from '@/config/pages'
 import CredentialSwitcher from '@/components/credential/CredentialSwitcher.vue'
 import { roleNavigation } from '@/config/navigation'
 import { useCourseStore } from '@/stores/course'
@@ -54,7 +55,7 @@ function openSearch(): void {
     window.dispatchEvent(new Event('focus-global-search'))
     return
   }
-  void router.push({ path: '/training/search', query: { focus: '1' } })
+  void router.push({ ...href('StudentSearch'), query: { focus: '1' } })
 }
 
 /** 事件目标是不是可编辑元素（输入框 / 文本域 / 下拉 / contenteditable）。 */

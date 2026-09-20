@@ -12,6 +12,7 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { href } from '@/config/pages'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
 import UiDialog from '@/components/ui/UiDialog.vue'
@@ -36,7 +37,7 @@ async function confirm(){
     ElMessage.success('帐号已注销')
     authStore.clearAuthData()
     visible.value = false
-    router.push('/login')
+    router.push(href('Login'))
   } catch {}
   loading.value = false
 }

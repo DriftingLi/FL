@@ -13,10 +13,19 @@
 // （utils/listState.isEmptyList），loadErrorKind 与 useAsyncPage 同名同义（404 = 空态）。
 // 于是「分页列表 → useAdminTable；只读/计数 → useAsyncPage」两档的空态与错误语义一致，
 // 页面不必再为走本件的那一档手写 list.length === 0（同一条不变式的第二份实现）。
+//
+// 第十三波票 6（ADR-0060 决策 6）：分页容器归位到 api 侧——本件的 fetch 契约吃 `Page<T>`
+// （@/api/page），旧的 AdminTableListResult 副本随之删除。「这一页的行在响应里叫什么键」
+// （topics / questions / tutors / requests / list …）是各域 api 模块出口之前的事，页面只
+// `return someApi.listX(...)`。不读服务端分页的页面（岗位字典、原价表）在自己出口处
+// `toPage(rows, rows.length)` 造一个容器，本件不为它们开特例。
 import { computed, ref } from 'vue'
 import { useConfirm } from '@/composables/useConfirm'
 // 只取类型：client.ts 会建 axios 实例，不因这条依赖把网络侧带进 composable 的运行时
 import type { ApiErrorKind } from '@/api/client'
+// 分页容器的宿主在 api 侧（ADR-0060 决策 6 / 票 6）：composable 依赖 @/api/page 是**方向正确**
+// 的那一条边（反向的 api → composable 已被 ADR 否掉）。本件只吃 Page<T>，不再自带容器副本。
+import type { Page } from '@/api/page'
 import { isEmptyList } from '@/utils/listState'
 
 export interface AdminTablePaging {
@@ -24,13 +33,9 @@ export interface AdminTablePaging {
   pageSize: number
 }
 
-export interface AdminTableListResult<T> {
-  list: T[]
-  total: number
-}
-
 export interface AdminTableOptions<T> {
-  fetch: (paging: AdminTablePaging, filters: Record<string, unknown>) => Promise<AdminTableListResult<T>>
+  /** 页面只负责挑 api 模块里那条列表函数并透传分页/筛选参数，容器由 api 层出口给（票 6）。 */
+  fetch: (paging: AdminTablePaging, filters: Record<string, unknown>) => Promise<Page<T>>
   actions?: Record<string, (row: T) => void | Promise<void>>
   searchable?: boolean
   pageSize?: number
@@ -66,8 +71,10 @@ export function useAdminTable<T>(options: AdminTableOptions<T>) {
         payload.keyword = searchKeyword.value
       }
       const result = await options.fetch({ page: currentPage.value, pageSize: pageSize.value }, payload)
-      list.value = result.list || []
-      total.value = result.total || 0
+      // 容器已由 api 层出口保证（Page<T> 的 items/total 非空，兜底单点在 toPage，见 api/page.ts）；
+      // 这里再兜一层就是同一判据的第二宿主。
+      list.value = result.items
+      total.value = result.total
     } catch (error) {
       // 错误态由 loadError 承载（拦截器已统一 toast），不向上抛：调用点常不 await load()
       loadError.value = true

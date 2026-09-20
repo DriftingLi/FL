@@ -3,7 +3,7 @@
     <div class="mb-4 flex items-center justify-between gap-3">
       <h1 class="m-0 text-2xl font-semibold text-ink">每日打卡</h1>
       <RouterLink
-        to="/training/task-center/points"
+        :to="href('PointsLedger')"
         class="inline-flex items-center gap-1 rounded-pill border border-line-strong bg-panel px-3 py-1.5 text-xs font-semibold text-ink-2 transition-colors duration-150 hover:border-ui-300 hover:text-ui-600"
       >
         积分明细
@@ -142,6 +142,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowRight } from '@element-plus/icons-vue'
+import { href } from '@/config/pages'
 import { checkInApi, type CheckInDay, type CheckInRankItem } from '@/api/checkin'
 import { shanghaiDateStr } from '@/utils/format'
 import { computeDayStates, type CheckInDayState } from '@/utils/checkinCalendar'

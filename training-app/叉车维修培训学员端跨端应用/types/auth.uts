@@ -126,6 +126,11 @@ export type AuthStore = {
     quickLogin : (rt : string) => Promise<string>
     setAuthData : (t : string, u : UserInfo, rt : string) => void
     clearAuthData : () => void
+    /**
+     * 身份互斥清槽（ADR-0022 ③）：清学员三键 + 登录来源 + 安全凭据 + 角色标记，**不碰** `clearAuthData()` 的语义
+     * @note 调用方 = `loginAsRecruiter()`（落招聘者凭据前）与 `pages/recruiter/login.uvue` 的「返回学员登录」出口
+     */
+    clearIdentityForSwitch : () => void
     restoreFromStorage : () => boolean
     validateToken : () => Promise<void>
     login : (params : LoginParams) => Promise<void>

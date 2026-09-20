@@ -206,7 +206,8 @@ const {
   const params: any = { page: page.value, page_size: pageSize.value, sort: 'id_asc', ...filters.value }
   if (browseCredentialId.value) params.credential_id = browseCredentialId.value
   const res = await questionBankApi.getQuestions(params)
-  questions.value = res?.questions || []
+  // 票 6（ADR-0060 决策 6）：容器键中立化——本域的行不再叫 questions，一律 items
+  questions.value = res?.items || []
   total.value = res?.total || 0
 }, { itemsRef: questions })
 

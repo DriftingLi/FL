@@ -446,6 +446,10 @@ export function useAuthStore() : AuthStore {
         quickLogin: (rt : string) : Promise<string> => quickLogin(rt),
         setAuthData: (t : string, u : UserInfo, rt : string) : void => setAuthData(t, u, rt),
         clearAuthData: () : void => clearAuthData(),
+        // 身份互斥清槽（ADR-0022 ③）：招聘者登录前与**招聘者登录页回学员端的出口**共用同一份实现。
+        // 出口侧必须清 `auth_active_role`，否则带 recruiter 标记回到学员登录页后，下一次 401 仍会按角色分支
+        // 把人送回招聘者登录页（#1194 收口：真机复现的死胡同）。暴露的是**已有**函数，不新增清槽语义。
+        clearIdentityForSwitch: () : void => clearIdentityForSwitch(),
         restoreFromStorage: () : boolean => restoreFromStorage(),
         validateToken: () : Promise<void> => validateToken(),
         login: (params : LoginParams) : Promise<void> => login(params),

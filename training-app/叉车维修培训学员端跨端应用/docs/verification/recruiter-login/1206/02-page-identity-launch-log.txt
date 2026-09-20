@@ -1,0 +1,27 @@
+=== ①a 页身份证据：--pagePath 目标页 vs 应用日志「进入页面」行（唯一设备侧页身份证据）===
+来源：D:\wt-1194\training-app\叉车维修培训学员端跨端应用\.ci-verify\launch-nav-*.out（HBuilderX cli launch app-android --pagePath 的 stdout，UTF-8）
+
+--- auto-screenshot-nav.log（本次目标页清单）---
+>>> E:\HBuilderX.5.23.2026080626\HBuilderX\cli.exe launch app-android --pagePath pages/login/login --project D:\wt-1194\training-app\叉车维修培训学员端跨端应用 --deviceId b32d8398（分离派发，不等收口）
+>>> E:\HBuilderX.5.23.2026080626\HBuilderX\cli.exe launch app-android --pagePath pages/recruiter/login --project D:\wt-1194\training-app\叉车维修培训学员端跨端应用 --deviceId b32d8398（分离派发，不等收口）
+
+--- launch-nav-0629dfff85d44cae8feb322302910c28.out ---
+15:17:00.982 [0m进入页面:​pages/login/login​ 。
+15:17:01.614 [0m进入页面:​/pages/dashboard/dashboard​ 。
+
+--- launch-nav-a37be73e56b54530aca53eec5a31b4fb.out ---
+15:24:23.477 [0m进入页面:​pages/recruiter/login​ 。
+15:27:30.520 [0m进入页面:​/pages/index/index​ 。
+15:27:31.899 [0m进入页面:​/pages/login/login​ 。
+15:27:34.511 [0m进入页面:​/pages/recruiter/login​ 。
+15:27:37.689 [0m进入页面:​/pages/recruiter/login​ 。
+15:29:54.280 [0m进入页面:​/pages/dashboard/dashboard​ 。
+15:29:55.792 [0m进入页面:​/pages/profile/profile​ 。
+15:29:57.896 [0m进入页面:​/pages/jobs/job-list​ 。
+15:30:02.885 [0m进入页面:​/pages/forum/check-in​ 。
+15:30:05.761 [0m进入页面:​/pages/profile/settings​ 。
+15:30:08.170 [0m进入页面:​/pages/profile/settings​ 。
+15:30:10.106 [0m进入页面:​/pages/login/login​ 。
+15:30:16.893 [0m进入页面:​/pages/dashboard/dashboard​ 。
+15:30:17.932 [0m进入页面:​/pages/profile/profile​ 。
+

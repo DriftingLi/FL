@@ -15,7 +15,7 @@ import (
 // 正文校验类错误（空/超长）不是哨兵，走 fallback 400；删改他人笔记按「不存在」404。
 var noteErrStatus = &errStatusTable{
 	entries: []errStatusEntry{
-		{service.ErrNoteNotFound, http.StatusNotFound},
+		{sentinel: service.ErrNoteNotFound, status: http.StatusNotFound},
 	},
 	fallback: http.StatusBadRequest,
 }
@@ -125,11 +125,8 @@ func (h *NoteHandler) Create(c *gin.Context) {
 			return &dto, nil
 		},
 		// 201 定制成功信封保留；错误路径退表（照 job.go 先例）
-		Render: func(c *gin.Context, _ *createNoteReq, resp *service.NoteDTO, err error) {
-			if err != nil {
-				noteErrStatus.renderError(c, err)
-				return
-			}
+		ErrStatus: noteErrStatus,
+		Render: func(c *gin.Context, _ *createNoteReq, resp *service.NoteDTO) {
 			response.Created(c, "笔记已保存", *resp)
 		},
 	}.Handle(c)

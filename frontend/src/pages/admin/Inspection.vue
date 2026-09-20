@@ -275,8 +275,7 @@ const {
     if (domain.value) params.ref_type = domain.value
     if (reason.value) params.reason = reason.value
     if (userId.value) params.user_id = userId.value
-    const res = await inspectionApi.pointsLedger<LedgerItem>(params)
-    return { list: res?.items || [], total: res?.total ?? 0 }
+    return inspectionApi.pointsLedger<LedgerItem>(params)
   }
 })
 
@@ -345,10 +344,7 @@ const {
   retry: retryViews
 } = useAdminTable<TrailView>({
   pageSize: 20,
-  fetch: async (paging) => {
-    const res = await inspectionApi.resumeViews<TrailView>({ page: paging.page, page_size: paging.pageSize })
-    return { list: res?.items || [], total: res?.total ?? 0 }
-  }
+  fetch: (paging) => inspectionApi.resumeViews<TrailView>({ page: paging.page, page_size: paging.pageSize })
 })
 const {
   loading: requestsLoading,
@@ -362,10 +358,7 @@ const {
   retry: retryRequests
 } = useAdminTable<TrailRequest>({
   pageSize: 20,
-  fetch: async (paging) => {
-    const res = await inspectionApi.contactRequests<TrailRequest>({ page: paging.page, page_size: paging.pageSize })
-    return { list: res?.items || [], total: res?.total ?? 0 }
-  }
+  fetch: (paging) => inspectionApi.contactRequests<TrailRequest>({ page: paging.page, page_size: paging.pageSize })
 })
 
 interface TrailView {
@@ -399,11 +392,10 @@ const {
   retry: retryJobs
 } = useAdminTable<any>({
   pageSize: 20,
-  fetch: async (paging) => {
+  fetch: (paging) => {
     const params: PageParams = { page: paging.page, page_size: paging.pageSize }
     if (jobFilterRecruiter.value) params.recruiter_id = jobFilterRecruiter.value
-    const res = await inspectionApi.jobs<any>(params)
-    return { list: res?.items || [], total: res?.total ?? 0 }
+    return inspectionApi.jobs<any>(params)
   }
 })
 const {
@@ -418,10 +410,7 @@ const {
   retry: retryReports
 } = useAdminTable<any>({
   pageSize: 20,
-  fetch: async (paging) => {
-    const res = await inspectionApi.jobReports<any>({ page: paging.page, page_size: paging.pageSize })
-    return { list: res?.items || [], total: res?.total ?? 0 }
-  }
+  fetch: (paging) => inspectionApi.jobReports<any>({ page: paging.page, page_size: paging.pageSize })
 })
 const forceOfflineVisible = ref(false)
 const forceOfflineJob = ref<any>(null)

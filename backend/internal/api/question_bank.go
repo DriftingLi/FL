@@ -20,15 +20,15 @@ import (
 // 题目/证件不存在 → 404，写面校验与状态前置 → 400；未命中（DB 故障）一律 500，不再吞成 400。
 var questionBankErrStatus = &errStatusTable{
 	entries: []errStatusEntry{
-		{service.ErrQuestionNotFound, http.StatusNotFound},
-		{service.ErrQuestionCredentialNotFound, http.StatusNotFound},
-		{service.ErrQuestionTypeInvalid, http.StatusBadRequest},
-		{service.ErrQuestionContentRequired, http.StatusBadRequest},
-		{service.ErrQuestionAnswerRequired, http.StatusBadRequest},
-		{service.ErrQuestionOptionsRequired, http.StatusBadRequest},
-		{service.ErrQuestionAnswerInvalid, http.StatusBadRequest},
-		{service.ErrSubmitNotDraft, http.StatusBadRequest},
-		{service.ErrRejectReasonRequired, http.StatusBadRequest},
+		{sentinel: service.ErrQuestionNotFound, status: http.StatusNotFound},
+		{sentinel: service.ErrQuestionCredentialNotFound, status: http.StatusNotFound},
+		{sentinel: service.ErrQuestionTypeInvalid, status: http.StatusBadRequest},
+		{sentinel: service.ErrQuestionContentRequired, status: http.StatusBadRequest},
+		{sentinel: service.ErrQuestionAnswerRequired, status: http.StatusBadRequest},
+		{sentinel: service.ErrQuestionOptionsRequired, status: http.StatusBadRequest},
+		{sentinel: service.ErrQuestionAnswerInvalid, status: http.StatusBadRequest},
+		{sentinel: service.ErrSubmitNotDraft, status: http.StatusBadRequest},
+		{sentinel: service.ErrRejectReasonRequired, status: http.StatusBadRequest},
 	},
 }
 
@@ -142,14 +142,7 @@ func (h *QuestionBankHandler) ListQuestions(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *listQuestionsReq) (*service.QuestionPageDTO, error) {
 			return h.svc.ListQuestions(req.Page, req.PageSize, req.QType, req.Status, req.Keyword, req.TagID, req.CredentialID, req.Sort)
 		},
-		Render: func(c *gin.Context, _ *listQuestionsReq, resp *service.QuestionPageDTO, err error) {
-			if err != nil {
-				response.ServerError(c, err.Error())
-				return
-			}
-			response.Success(c, *resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // createQuestionReq 创建题目请求（票 6：body 由 map 直绑改 typed 入参）。
@@ -192,11 +185,8 @@ func (h *QuestionBankHandler) CreateQuestion(c *gin.Context) {
 			}
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *createQuestionReq, resp *service.QuestionDTO, err error) {
-			if err != nil {
-				questionBankErrStatus.renderError(c, err) // 票6：错误映射退表（吞错 400 收编），成功信封保留定制
-				return
-			}
+		ErrStatus: questionBankErrStatus,
+		Render: func(c *gin.Context, _ *createQuestionReq, resp *service.QuestionDTO) {
 			response.Created(c, "题目创建成功", deref(resp))
 		},
 	}.Handle(c)
@@ -234,7 +224,7 @@ func (h *QuestionBankHandler) BatchPublish(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *batchPublishReq) (*service.QuestionPublishResultDTO, error) {
 			return h.svc.BatchPublish(req.QuestionIDs), nil
 		},
-		Render: func(c *gin.Context, _ *batchPublishReq, resp *service.QuestionPublishResultDTO, _ error) {
+		Render: func(c *gin.Context, _ *batchPublishReq, resp *service.QuestionPublishResultDTO) {
 			response.SuccessWithMsg(c, "成功发布"+strconv.Itoa(resp.PublishedCount)+"道题目", *resp)
 		},
 	}.Handle(c)
@@ -273,11 +263,8 @@ func (h *QuestionBankHandler) BatchReject(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *batchRejectReq) (*service.QuestionRejectResultDTO, error) {
 			return h.svc.BatchReject(req.QuestionIDs, req.Reason)
 		},
-		Render: func(c *gin.Context, _ *batchRejectReq, resp *service.QuestionRejectResultDTO, err error) {
-			if err != nil {
-				questionBankErrStatus.renderError(c, err) // 票6：吞错 400 收编进域表
-				return
-			}
+		ErrStatus: questionBankErrStatus,
+		Render: func(c *gin.Context, _ *batchRejectReq, resp *service.QuestionRejectResultDTO) {
 			response.SuccessWithMsg(c, "成功驳回"+strconv.Itoa(resp.RejectedCount)+"道题目", *resp)
 		},
 	}.Handle(c)
@@ -318,11 +305,8 @@ func (h *QuestionBankHandler) BatchImport(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *batchImportReq) (*service.QuestionImportResultDTO, error) {
 			return h.svc.BatchImport(req.Questions, &req.UserID), nil
 		},
-		Render: func(c *gin.Context, _ *batchImportReq, resp *service.QuestionImportResultDTO, err error) {
-			if err != nil {
-				questionBankErrStatus.renderError(c, err) // 解析错误（含 status 探针/空数组）走域表，成功信封定制保留
-				return
-			}
+		ErrStatus: questionBankErrStatus,
+		Render: func(c *gin.Context, _ *batchImportReq, resp *service.QuestionImportResultDTO) {
 			response.SuccessWithMsg(c, "成功导入"+strconv.Itoa(resp.SuccessCount)+"道题目", *resp)
 		},
 	}.Handle(c)
@@ -368,11 +352,8 @@ func (h *QuestionBankHandler) GetQuestion(c *gin.Context) {
 			}
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *questionIDReq, resp *service.QuestionDTO, err error) {
-			if err != nil {
-				questionBankErrStatus.renderError(c, err) // 票6：吞错点收编（旧「任意错误→404」改按档，DB 故障 500）
-				return
-			}
+		ErrStatus: questionBankErrStatus,
+		Render: func(c *gin.Context, _ *questionIDReq, resp *service.QuestionDTO) {
 			response.Success(c, deref(resp))
 		},
 	}.Handle(c)
@@ -420,11 +401,8 @@ func (h *QuestionBankHandler) UpdateQuestion(c *gin.Context) {
 			}
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *updateQuestionReq, resp *service.QuestionDTO, err error) {
-			if err != nil {
-				questionBankErrStatus.renderError(c, err) // 票6：吞错 400 收编进域表
-				return
-			}
+		ErrStatus: questionBankErrStatus,
+		Render: func(c *gin.Context, _ *updateQuestionReq, resp *service.QuestionDTO) {
 			response.SuccessWithMsg(c, "题目更新成功", deref(resp))
 		},
 	}.Handle(c)
@@ -456,11 +434,8 @@ func (h *QuestionBankHandler) DeleteQuestion(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		Render: func(c *gin.Context, _ *questionIDReq, resp *struct{}, err error) {
-			if err != nil {
-				questionBankErrStatus.renderError(c, err) // 票6：吞错点收编
-				return
-			}
+		ErrStatus: questionBankErrStatus,
+		Render: func(c *gin.Context, _ *questionIDReq, resp *struct{}) {
 			response.SuccessWithMsg(c, "题目删除成功", nil)
 		},
 	}.Handle(c)
@@ -494,11 +469,8 @@ func (h *QuestionBankHandler) PublishQuestion(c *gin.Context) {
 			}
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *questionIDReq, resp *service.QuestionDTO, err error) {
-			if err != nil {
-				questionBankErrStatus.renderError(c, err) // 票6：吞错点收编
-				return
-			}
+		ErrStatus: questionBankErrStatus,
+		Render: func(c *gin.Context, _ *questionIDReq, resp *service.QuestionDTO) {
 			response.SuccessWithMsg(c, "题目发布成功", deref(resp))
 		},
 	}.Handle(c)
@@ -533,11 +505,8 @@ func (h *QuestionBankHandler) SubmitQuestion(c *gin.Context) {
 			}
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *questionIDReq, resp *service.QuestionDTO, err error) {
-			if err != nil {
-				questionBankErrStatus.renderError(c, err)
-				return
-			}
+		ErrStatus: questionBankErrStatus,
+		Render: func(c *gin.Context, _ *questionIDReq, resp *service.QuestionDTO) {
 			response.SuccessWithMsg(c, "已提交审核", deref(resp))
 		},
 	}.Handle(c)
@@ -584,11 +553,8 @@ func (h *QuestionBankHandler) RejectQuestion(c *gin.Context) {
 			}
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *rejectQuestionReq, resp *service.QuestionDTO, err error) {
-			if err != nil {
-				questionBankErrStatus.renderError(c, err) // #611：错误映射退表，成功文案保留定制
-				return
-			}
+		ErrStatus: questionBankErrStatus,
+		Render: func(c *gin.Context, _ *rejectQuestionReq, resp *service.QuestionDTO) {
 			response.SuccessWithMsg(c, "题目已驳回", deref(resp))
 		},
 	}.Handle(c)
@@ -609,9 +575,6 @@ func (h *QuestionBankHandler) GetStats(c *gin.Context) {
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.QuestionBankStatsDTO, error) {
 			// #413：总数按当前证件题库池口径（拦截器已注入 credential_id；缺省 = 不分区）。
 			return h.svc.GetStats(middleware.CredentialIDPtr(c)), nil
-		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.QuestionBankStatsDTO, _ error) {
-			response.Success(c, resp)
 		},
 	}.Handle(c)
 }

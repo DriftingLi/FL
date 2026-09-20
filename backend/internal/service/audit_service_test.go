@@ -36,7 +36,7 @@ func TestAuditService_DescribeAction(t *testing.T) {
 		{"post chapter", "POST", "/api/admin/chapters", "新增章节"},
 		{"post course", "POST", "/api/admin/courses", "新增课程"},
 		{"post grading", "POST", "/api/admin/grading", "新增阅卷"},
-		{"post tutor", "POST", "/api/admin/tutors", "新增导师"},
+		{"post tutor", "POST", "/api/admin/tutors", "新增讲师"},
 
 		// —— 长度降序：forum/replies（论坛回复）优先于 forum/topics（论坛帖子）——
 		{"forum replies", "POST", "/api/forum/replies", "新增论坛回复"},
@@ -46,7 +46,7 @@ func TestAuditService_DescribeAction(t *testing.T) {
 		{"put course", "PUT", "/api/admin/courses/3", "修改课程"},
 		{"patch course", "PATCH", "/api/admin/courses/3", "修改课程"},
 		{"delete question", "DELETE", "/api/admin/questions/7", "删除题目"},
-		{"delete tutor", "DELETE", "/api/admin/tutors/2", "删除导师"},
+		{"delete tutor", "DELETE", "/api/admin/tutors/2", "删除讲师"},
 
 		// —— 无匹配兜底：verb + 数据 ——
 		{"no-match post", "POST", "/api/admin/some-other-thing", "新增数据"},

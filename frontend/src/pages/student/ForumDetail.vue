@@ -134,12 +134,13 @@
             @accept="handleAccept"
             @cancel-accept="handleCancelAccept"
           />
-          <!-- 加载更多（ADR-0042）：追加下一页而非替换，保持阅读连续；到底显示结束态。
+          <!-- 加载更多（ADR-0042 / ADR-0060 §4）：追加下一页而非替换，保持阅读连续；到底显示结束态。
+               「还有没有下一批」由 useAsyncPage 的 append 档读服务端分页信封决定，页面不参与判断。
                深链 #reply-N 只由采纳通知生成（指向被采纳回复），而后端恒把被采纳回复放首页第一条，
                所以这里不需要「循环加载直到命中」的兜底。 -->
           <div v-if="hasMore" class="mt-3 flex justify-center">
             <UiButton :loading="loadingMore" @click="loadMore">
-              加载更多回复（剩余 {{ remainingReplies }} 条）
+              加载更多回复<template v-if="remainingReplies !== null">（剩余 {{ remainingReplies }} 条）</template>
             </UiButton>
           </div>
           <p v-else class="mt-3 mb-0 text-center text-xs text-ink-3">没有更多回复了</p>
@@ -187,14 +188,17 @@ import { ref, computed, nextTick, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, View, ChatDotRound, ArrowUp, ArrowDown } from '@element-plus/icons-vue'
-import { forumApi, toForumContentFormat, type ForumTopicItem, type ForumReplyItem, type ForumContentFormat } from '@/api/forum'
-import { favoriteApi } from '@/api/favorite'
+import { forumApi, toForumContentFormat, type ForumTopicItem, type ForumReplyItem, type ForumContentFormat, type ForumTopicDetailData } from '@/api/forum'
+import { useFavorite } from '@/composables/useFavorite'
 import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
 import ForumComposer from '@/components/student/ForumComposer.vue'
 import ForumReplyCard from '@/components/student/ForumReplyCard.vue'
 import ForumContent from '@/components/student/ForumContent.vue'
 import { formatRelativeTime } from '@/utils/format'
 import { displayName, authorLetter, regionLabel } from '@/utils/forumDisplay'
+// 空态判据的单点实现（#1101）：本页判据形状特殊（以 topic 为准，不以回复为准），
+// 具名派生时复用这一份而不是抄表达式
+import { isEmptyList } from '@/utils/listState'
 import { useAuthStore } from '@/stores/auth'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useForumSort } from '@/composables/useForumSort'
@@ -230,24 +234,60 @@ const replyImages = ref<string[]>([])
 // 排序双轴收编（#389）：详情回复口径为「热门逆序、最新正序」，切维度时按此映射
 const { sort: replySort, order: replyOrder, flipOrder: flipReplyOrder } = useForumSort('asc')
 
-// 三态收编（#388，详情页无分页）：loader 抛错即错误态
+// ===== 回复分页（ADR-0042 / ADR-0060 §4 票 4）=====
+// 回复列表的唯一读取形态是分页；被采纳回复由**后端**保证占首页第一条，前端不派生置顶
+// （旧 sortedReplies 已删——分页后前端只拿得到已累积的几批，派生必然失效）。
+// 本页唯一装载的就是这个回复窗口，故它整体住在 useAsyncPage 的 append 档里：
+// 批大小就是发出去的 page_size，「还有没有下一批」由服务端的分页信封回答
+// （getTopic 恒带 page/pages/total），页面不再自己按「本批满不满」猜。
+// 手写的 replyPage / hasMore / loadingMore / replyTotal 与逐页 for 循环重载一并退役。
+const REPLY_BATCH = 20
+
+// 三态收编（#388）：loader 抛错即错误态。
 // 票 5 配套（#1168）：判据区分「业务 404（主题不存在/已驳回）= 空态」与「其余错误 = 错误态 + retry」，
-// 与 QuestionDetail 的 #1101 形态同源（useAsyncPage.isEmpty，复用 ApiErrorKind）。
+// 与 QuestionDetail 的 #1101 形态同源（复用 utils/listState 的 isEmptyList + ApiErrorKind）。
 // 论坛不受证件过滤，不随切换重装（#604 opt-out）
-const { loading, loadError, retrying, isEmpty, retry: retryLoad, run: loadDetail } = useAsyncPage(loadDetailOnce, {
+const {
+  loading,
+  loadError,
+  loadErrorKind,
+  retrying,
+  retry: retryLoad,
+  run: loadFirstBatch,
+  reset: reloadReplies,
+  hasMore,
+  loadingMore,
+  loadMore,
+  total
+} = useAsyncPage(loadReplyBatch, {
   credentialScoped: false,
-  itemsRef: topic
+  mode: 'append',
+  batchSize: REPLY_BATCH,
+  itemsRef: replies,
+  // 列表键是 replies（同响应里还有非列表的 topic），默认的 res.items 读不到
+  pickItems: (res) => (res as ForumTopicDetailData).replies,
+  // 排序双轴（维度 / 方向）即筛选轴：任一变化 → 清空累积 + 回第 1 批重装，
+  // 页面不再手写「切排序要回第一页」
+  filterDeps: [replySort, replyOrder]
 })
 
+/**
+ * 空态判据：**主题对象没落地**才算空（业务 404 = 主题不存在/已驳回，或成功但无 topic）。
+ * append 档的 `itemsRef` 是 replies，直接拿 composable 的 `isEmpty` 会把「零回复的帖子」
+ * 渲染成「主题不存在」，故按 #1101 的口径具名派生、复用同一份 `isEmptyList` 实现。
+ */
+const isEmpty = computed(() =>
+  isEmptyList(topic.value, { error: loadError.value, kind: loadErrorKind.value })
+)
+
 function handleReplySortChange() {
-  // 热门默认逆序，最新默认正序
+  // 热门默认逆序，最新默认正序；写完这条轴后重装由 filterDeps 单点负责
   replyOrder.value = replySort.value === 'hot' ? 'desc' : 'asc'
-  loadDetail()
 }
 
 function toggleReplyOrder(){
+  // 方向轴同在 filterDeps 里，翻转即重装（清空累积 + 回第 1 批）
   flipReplyOrder()
-  loadDetail()
 }
 
 const isTopicOwner = computed(() => !!topic.value && topic.value.author.user_id === authStore.userInfo?.user_id)
@@ -260,16 +300,7 @@ function isOwnReply(reply: ForumReplyItem) {
   return reply.author.user_id === authStore.userInfo?.user_id
 }
 
-// ===== 回复分页（ADR-0042）=====
-// 回复列表的唯一读取形态是分页；被采纳回复由**后端**保证占首页第一条，
-// 前端不再派生置顶（旧 sortedReplies 已删）——分页后前端只拿得到一页，派生必然失效。
-const REPLY_PAGE_SIZE = 20
-const replyPage = ref(1)
-const hasMore = ref(false)
-const loadingMore = ref(false)
-// 分页总数以**响应里的 total** 为准（与 pages 同一来源），不读 topic.reply_count ——
-// 后者是列表页消费的反范式列，两者若漂移会让「剩余 N 条」与翻页行为自相矛盾。
-const replyTotal = ref(0)
+// ===== 回复窗口的装载（append 档，见上方 REPLY_BATCH 处的说明）=====
 
 /** 楼主视角：这条可被采纳（问答帖 + 非本人作答 + 尚未采纳） */
 function canAcceptReply(reply: ForumReplyItem) {
@@ -287,8 +318,14 @@ function canCancelAcceptReply(reply: ForumReplyItem) {
   return !!topic.value && topic.value.category === 'question' && isTopicOwner.value && !!reply.is_accepted
 }
 
-/** 尚未加载的回复条数（加载更多按钮上的剩余量）；与 pages/total 同源 */
-const remainingReplies = computed(() => Math.max(replyTotal.value - replies.value.length, 0))
+/**
+ * 尚未加载的回复条数（加载更多按钮上的剩余量）：以响应的 `total` 为准（与 pages 同源），
+ * 不读 `topic.reply_count` —— 后者是列表页消费的反范式列，两者漂移会让文案与翻页自相矛盾。
+ * `total` 尚未落地（响应没给）时返回 null：宁可不显示数字，也不显示一个凭累积数出来的 0。
+ */
+const remainingReplies = computed(() =>
+  total.value > 0 ? Math.max(total.value - replies.value.length, 0) : null
+)
 
 function scrollToHash() {
   const hash = route.hash || window.location.hash
@@ -300,60 +337,23 @@ function scrollToHash() {
   })
 }
 
-async function loadDetailOnce() {
-  const topicId = Number(route.params.topicId)
-  // 首次加载与「切排序 / 重试」都回到第 1 页并**替换**列表（分页语义：不是追加）
-  replyPage.value = 1
-  const res = await forumApi.getTopic(topicId, replySort.value, replyOrder.value, 1, REPLY_PAGE_SIZE)
-  topic.value = res.topic
-  replies.value = res.replies || []
-  replyTotal.value = res.total ?? replies.value.length
-  hasMore.value = (res.page ?? 1) < (res.pages ?? 1)
-  // 浏览记录走服务端（#701：详情访问即由后端 GetTopic 落浏览去重行），不再写本地 localStorage
-  await nextTick()
-  scrollToHash()
-}
-
 /**
- * 重载「用户当前已加载的页数」窗口（删回复后用）。
- * 逐页取回并覆盖 replies，页数不变 → 阅读位置不缩回第一页。
+ * 装载一批回复（append 档的唯一 loader）：页码推进与累积由 composable 负责，
+ * 这里只取「第 page 批」，并把同响应里的**非列表部分**（topic）落地。
+ * 浏览记录走服务端（#701：详情访问即由后端 GetTopic 落浏览去重行），不再写本地 localStorage。
  */
-async function reloadLoadedPages() {
-  const pagesLoaded = Math.max(replyPage.value, 1)
-  const topicId = Number(route.params.topicId)
-  const collected: ForumReplyItem[] = []
-  for (let p = 1; p <= pagesLoaded; p++) {
-    const res = await forumApi.getTopic(topicId, replySort.value, replyOrder.value, p, REPLY_PAGE_SIZE)
-    collected.push(...(res.replies || []))
-    topic.value = res.topic
-    replyTotal.value = res.total ?? collected.length
-    const lastPage = res.pages ?? p
-    hasMore.value = (res.page ?? p) < lastPage
-    // 删到最后一页空了：不必再往上取
-    if (!hasMore.value) break
+async function loadReplyBatch(page = 1) {
+  const res = await forumApi.getTopic(
+    Number(route.params.topicId), replySort.value, replyOrder.value, page, REPLY_BATCH
+  )
+  topic.value = res.topic
+  // 深链 #reply-N 只由采纳通知生成（指向被采纳回复），而后端恒把它放首页第一条，
+  // 故只在首页装载后滚动一次——加载更多/切排序不该把用户拽回置顶条。
+  if (page === 1) {
+    await nextTick()
+    scrollToHash()
   }
-  replies.value = collected
-}
-
-/** 加载更多：**追加**下一页（不替换），保持阅读连续；到底后入口消失。 */
-async function loadMore() {
-  if (loadingMore.value || !hasMore.value) return
-  loadingMore.value = true
-  try {
-    const next = replyPage.value + 1
-    const res = await forumApi.getTopic(
-      Number(route.params.topicId), replySort.value, replyOrder.value, next, REPLY_PAGE_SIZE
-    )
-    replies.value = [...replies.value, ...(res.replies || [])]
-    replyPage.value = res.page ?? next
-    replyTotal.value = res.total ?? replyTotal.value
-    hasMore.value = replyPage.value < (res.pages ?? replyPage.value)
-  } catch (e) {
-    console.error('加载更多回复失败:', e)
-    /* 错误已由拦截器提示 */
-  } finally {
-    loadingMore.value = false
-  }
+  return res
 }
 
 async function handleAccept(replyId: number) {
@@ -375,7 +375,8 @@ async function handleAccept(replyId: number) {
     if (updated) topic.value = { ...topic.value, ...updated } as ForumTopicItem
     // 必须重载而不是本地翻 is_accepted：置顶是**后端事实**（ADR-0042），
     // 本地翻标记会让「已采纳」停在原位，与「恒占首页第一条」自相矛盾。
-    await loadDetail()
+    // append 档的「刷新」入口是 reset：清空累积 + 回第 1 批（置顶换了人，累积窗口整体作废）。
+    await reloadReplies()
   } catch (e) {
     console.error('采纳失败:', e)
   }
@@ -393,7 +394,7 @@ async function handleCancelAccept() {
     ElMessage.success('已取消采纳')
     if (updated) topic.value = { ...topic.value, ...updated } as ForumTopicItem
     // 同 handleAccept：取消后该条回到自然排序位置，只能由后端重排
-    await loadDetail()
+    await reloadReplies()
   } catch (e) {
     console.error('取消采纳失败:', e)
   }
@@ -413,7 +414,8 @@ async function submitReply(payload: { contentFormat: ForumContentFormat }) {
     replyContent.value = ''
     replyImages.value = []
     replyingTo.value = null
-    loadDetail()
+    // 新回复要落进窗口：清空累积 + 回第 1 批（append 档的刷新入口）
+    await reloadReplies()
   } catch (e) {
     console.error('回复失败:', e)
     /* 错误已由拦截器提示 */
@@ -460,16 +462,14 @@ async function removeReply(replyId: number) {
     /* 错误已由拦截器提示 */
     return
   }
-  // 删除已成功，下面的刷新失败**不能**报成「删除失败」——单独兜底并置可重试的错误态
-  // （否则列表会停在「已删项还在」的状态且用户看不到任何出口）。
-  try {
-    // 删父回复会**级联删掉整棵楼中楼**（后端按子树大小减计数），本地 filter 一条是错的；
-    // 但也不该 loadDetail() 缩回第一页——按已加载的页数重载，保留阅读位置。
-    await reloadLoadedPages()
-  } catch (e) {
-    console.error('删除后刷新回复列表失败:', e)
-    loadError.value = true
-  }
+  // 删除已成功，随后的刷新**不能**报成「删除失败」——append 档自己把刷新失败收敛成
+  // 可重试的错误态（run 的 catch → loadError），页面这里不再手写 try/catch 兜底。
+  // 删父回复会**级联删掉整棵楼中楼**（后端按子树大小减计数），本地 filter 一条是错的，
+  // 必须回到服务端重取：清空累积 + 回第 1 批。
+  // ⚠️ 语义变化（ADR-0060 §4）：旧实现有个逐页 for 循环，按「已加载的页数」重载以保住阅读
+  // 位置；append 档不表达「保住 N 批」（为其加参数只服务一个调用方不值当），故删完回到
+  // 第 1 批，长帖需要再点「加载更多」走回原位。
+  await reloadReplies()
 }
 
 // ===== 帖子卡的 ⋯ 菜单（互动下沉后，治理动作的唯一入口）=====
@@ -500,41 +500,14 @@ function goBack() {
 const { toggle: toggleTopicLikeOnce } = useLike(forumApi.likeTopic, forumApi.unlikeTopic)
 const { toggle: toggleReplyLikeOnce } = useLike(forumApi.likeReply, forumApi.unlikeReply)
 
-// 收藏帖子
-const topicFavorited = ref(false)
-const topicFavoriteId = ref<number>(0)
-
-async function loadFavoriteState() {
-  topicFavorited.value = false
-  topicFavoriteId.value = 0
-  try {
-    const res = await favoriteApi.check({ target_type: 'topic', target_id: Number(route.params.topicId) })
-    topicFavorited.value = !!res?.favorited
-    topicFavoriteId.value = res?.favorite_id || 0
-  } catch (e) {
-    console.error('查询收藏状态失败:', e)
-  }
-}
-
-async function toggleFavorite() {
-  const topicId = Number(route.params.topicId)
-  try {
-    if (topicFavorited.value) {
-      await favoriteApi.remove(topicFavoriteId.value)
-      topicFavorited.value = false
-      topicFavoriteId.value = 0
-      ElMessage.success('已取消收藏')
-    } else {
-      const res = await favoriteApi.add({ target_type: 'topic', target_id: topicId })
-      topicFavorited.value = true
-      topicFavoriteId.value = res?.favorite_id || 0
-      ElMessage.success('已收藏')
-    }
-  } catch (e) {
-    console.error('收藏操作失败:', e)
-    /* 错误已由拦截器提示 */
-  }
-}
+// 收藏帖子：「查询—切换—提示—失败保持原态」的状态机在 useFavorite（ADR-0060 决策 3），
+// 页面只留「何时查」这一本地事实（onMounted 一次）。种类判据（target_type='topic'）
+// 由内容对象表给出，不再在本文件硬写。
+const {
+  favorited: topicFavorited,
+  load: loadFavoriteState,
+  toggle: toggleFavorite
+} = useFavorite('topic', () => Number(route.params.topicId))
 
 async function toggleTopicLike() {
   if (!topic.value) return
@@ -560,7 +533,7 @@ watch(
 )
 
 onMounted(() => {
-  loadDetail()
+  loadFirstBatch()
   loadFavoriteState()
 })
 </script>

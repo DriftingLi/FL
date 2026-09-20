@@ -6450,7 +6450,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "201": {
-                        "description": "导师添加成功",
+                        "description": "讲师添加成功",
                         "schema": {
                             "allOf": [
                                 {
@@ -6508,7 +6508,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "导师删除成功",
+                        "description": "讲师删除成功",
                         "schema": {
                             "allOf": [
                                 {
@@ -6532,7 +6532,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "导师不存在",
+                        "description": "讲师不存在",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -6623,7 +6623,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "导师已启用/已禁用",
+                        "description": "讲师已启用/已禁用",
                         "schema": {
                             "allOf": [
                                 {
@@ -6647,7 +6647,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "导师不存在",
+                        "description": "讲师不存在",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }

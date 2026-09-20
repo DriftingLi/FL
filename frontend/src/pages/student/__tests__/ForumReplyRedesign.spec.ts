@@ -1,4 +1,7 @@
 // #854 / #855 / #857 页面级契约：详情页回复分页（加载更多）+ 回复卡动作分层（ADR-0042）。
+// ADR-0060 §4（票 4）后回复窗口住在 `useAsyncPage` 的 append 档里：本文件守的是页面这一侧
+// 还能观察到的行为——追加而非替换、判据跟着服务端的 pages 走（首批短一格照样能翻）、
+// 删除后按第 1 批重装。
 //
 // seam 选在**页面组件层**（mount 页面 + 只 mock 网络层），理由同 ForumPage.spec：
 // 给 api 层写「参数有透传」的断言不可能失败，是无效测试。真正会被写坏的是
@@ -171,6 +174,30 @@ describe('详情页回复分页（#854）', () => {
     expect(getTopic).toHaveBeenLastCalledWith(1, 'latest', 'asc', 2, 20)
   })
 
+  it('首批短一格（19/20）仍能翻页：判据是服务端的页数，不是本批条数（ADR-0060 §4）', async () => {
+    // 置顶形态：后端把被采纳回复钉在首页第一条并给它留一格（forum_service.go 的
+    // `limit = pageSize - 1`）；被钉的那条自己取不出来时（答主已硬删除，详情读面的
+    // INNER JOIN 把它滤掉），首页就是 19 条。旧判据「满一批才算还有」在这里判 false，
+    // 用户就此翻不到长帖的末尾——本用例照这个真实形态造 fixture（19 而非凑手的 20）。
+    const first = Array.from({ length: 19 }, (_, i) => reply(i + 1))
+    const second = Array.from({ length: 19 }, (_, i) => reply(20 + i))
+    getTopic
+      .mockResolvedValueOnce({ topic: topic(38), replies: first, page: 1, pages: 2, total: 38 } as never)
+      .mockResolvedValueOnce({ topic: topic(38), replies: second, page: 2, pages: 2, total: 38 } as never)
+
+    const wrapper = await mountDetail()
+    expect(wrapper.findAll('.reply-item').length).toBe(19)
+    const more = wrapper.findAll('button').find((b) => b.text().includes('加载更多'))
+    expect(more, '首批短一格时「加载更多」必须还在').toBeTruthy()
+    expect(more!.text()).toContain('剩余 19 条')
+
+    await more!.trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('.reply-item').length).toBe(38)
+    expect(wrapper.text()).toContain('没有更多回复了')
+    expect(getTopic).toHaveBeenLastCalledWith(1, 'latest', 'asc', 2, 20)
+  })
+
   it('单页即到底：不渲染加载更多入口', async () => {
     getTopic.mockResolvedValue({
       topic: topic(3), replies: [reply(1), reply(2), reply(3)], page: 1, pages: 1, total: 3
@@ -318,7 +345,7 @@ describe('回复卡动作分层（#857）', () => {
   })
 })
 
-describe('删除回复后的刷新（#854 故事 2：不丢失已读位置）', () => {
+describe('删除回复后的刷新（ADR-0060 §4：回复窗口住在 append 档里）', () => {
   beforeEach(() => {
     // clearAllMocks 不清 mockResolvedValueOnce 队列，残留会泄漏到下一个用例；
     // 这里显式重置，保证每个用例从干净的 mock 出发。
@@ -326,17 +353,22 @@ describe('删除回复后的刷新（#854 故事 2：不丢失已读位置）', 
     getTopic.mockReset()
   })
 
-  it('删掉一条后按已加载页数重载，不缩回第 1 页', async () => {
+  it('删掉一条后回第 1 批重装：只发一次请求，累积窗口不叠加、入口照服务端页数留着', async () => {
+    // 旧实现在这里有个逐页 for 循环（按已加载页数重载，为的是保住阅读位置）。
+    // append 档不表达「保住已加载的 N 批」——为一个调用方给 composable 加参数不值当（ADR-0060 §4），
+    // 故删除后按 `reset` 的语义回到第 1 批。本用例守住迁移后的三件事：
+    // ① 只发一次首页请求（for 循环没有复活）；② 已删的那条不再出现；
+    // ③ 累积不叠加（旧窗口不会与新首页拼出重复条目），且服务端说还有下一页时入口仍在。
     const page1 = Array.from({ length: 20 }, (_, i) => reply(i + 1))
     const page2 = Array.from({ length: 5 }, (_, i) => reply(i + 21))
     getTopic
       .mockResolvedValueOnce({ topic: topic(25), replies: page1, page: 1, pages: 2, total: 25 } as never)
       .mockResolvedValueOnce({ topic: topic(25), replies: page2, page: 2, pages: 2, total: 25 } as never)
-      .mockResolvedValueOnce({ topic: topic(24), replies: page1, page: 1, pages: 2, total: 24 } as never)
       .mockResolvedValueOnce({
         topic: topic(24),
-        replies: page2.slice(0, 4),
-        page: 2,
+        // 删掉一条后服务端整体前移一格：第 1 批是回复 2..21
+        replies: [...page1.slice(1), reply(21)],
+        page: 1,
         pages: 2,
         total: 24
       } as never)
@@ -355,11 +387,16 @@ describe('删除回复后的刷新（#854 故事 2：不丢失已读位置）', 
     await new Promise((r) => setTimeout(r, 0))
     await flushPromises()
 
-    // 关键：重载的是已加载的 1、2 两页（不是只回第 1 页）
-    expect(getTopic).toHaveBeenCalledTimes(2)
-    expect(getTopic).toHaveBeenNthCalledWith(1, 1, 'latest', 'asc', 1, 20)
-    expect(getTopic).toHaveBeenNthCalledWith(2, 1, 'latest', 'asc', 2, 20)
-    expect(wrapper.findAll('.reply-item').length).toBe(24)
+    // 只回第 1 批（一次请求，不是逐页 for 循环）
+    expect(getTopic).toHaveBeenCalledTimes(1)
+    expect(getTopic).toHaveBeenLastCalledWith(1, 'latest', 'asc', 1, 20)
+    const ids = wrapper.findAll('.reply-item').map((n) => n.text())
+    expect(ids).toHaveLength(20)
+    // 旧累积（含被删的回复25）不残留、不叠加
+    expect(ids.some(t => t.includes('回复25'))).toBe(false)
+    // 服务端说还有第 2 页 ⇒ 入口留在，用户能继续翻
+    expect(wrapper.findAll('button').some((b) => b.text().includes('加载更多'))).toBe(true)
+    expect(wrapper.text()).toContain('剩余 4 条')
   })
 
   it('删除成功但刷新失败时报错误态，不停在「已删项还在」的列表', async () => {

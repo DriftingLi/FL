@@ -104,9 +104,6 @@ func (h *TrainingCatalogHandler) GetCatalogTree(c *gin.Context) {
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.CatalogTreeDTO, error) {
 			return h.svc.GetCatalogTree(queryIDPtr(c, "credential_id")), nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.CatalogTreeDTO, _ error) {
-			response.Success(c, resp)
-		},
 	}.Handle(c)
 }
 
@@ -123,7 +120,7 @@ func (h *TrainingCatalogHandler) ListPublicLevels(c *gin.Context) {
 			result := h.svc.ListLevels(true)
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *[]service.LevelDict, _ error) {
+		Render: func(c *gin.Context, _ *struct{}, resp *[]service.LevelDict) {
 			response.Success(c, service.LevelListDTO{Levels: *resp})
 		},
 	}.Handle(c)
@@ -143,7 +140,7 @@ func (h *TrainingCatalogHandler) ListPublicTags(c *gin.Context) {
 			result := h.svc.ListQuestionTags(true, false, queryIDPtr(c, "credential_id")) // 学员端专项练习：隐藏来源标记标签
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *[]service.QuestionTagDict, _ error) {
+		Render: func(c *gin.Context, _ *struct{}, resp *[]service.QuestionTagDict) {
 			response.Success(c, service.QuestionTagListDTO{Tags: *resp})
 		},
 	}.Handle(c)
@@ -163,9 +160,6 @@ func (h *TrainingCatalogHandler) GetAdminCatalogTree(c *gin.Context) {
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.CatalogTreeDTO, error) {
 			return h.svc.GetAdminCatalogTree(), nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.CatalogTreeDTO, _ error) {
-			response.Success(c, resp)
-		},
 	}.Handle(c)
 }
 
@@ -184,7 +178,7 @@ func (h *TrainingCatalogHandler) ListSpecialties(c *gin.Context) {
 			result := h.svc.ListSpecialties(false)
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *[]service.SpecialtyDict, _ error) {
+		Render: func(c *gin.Context, _ *struct{}, resp *[]service.SpecialtyDict) {
 			// 字节形状不变：{"specialties": [...]}，只是从内联 gin.H 换成具名 DTO（注解才能指认 data）
 			response.Success(c, service.SpecialtyListDTO{Specialties: *resp})
 		},
@@ -206,7 +200,7 @@ func (h *TrainingCatalogHandler) ListLevels(c *gin.Context) {
 			result := h.svc.ListLevels(false)
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *[]service.LevelDict, _ error) {
+		Render: func(c *gin.Context, _ *struct{}, resp *[]service.LevelDict) {
 			response.Success(c, service.LevelListDTO{Levels: *resp})
 		},
 	}.Handle(c)
@@ -227,7 +221,7 @@ func (h *TrainingCatalogHandler) ListCertificateTemplates(c *gin.Context) {
 			result := h.svc.ListCertificateTemplates(false)
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *[]service.CertificateTemplateDict, _ error) {
+		Render: func(c *gin.Context, _ *struct{}, resp *[]service.CertificateTemplateDict) {
 			response.Success(c, service.CertificateTemplateListDTO{CertificateTemplates: *resp})
 		},
 	}.Handle(c)
@@ -248,7 +242,7 @@ func (h *TrainingCatalogHandler) ListQuestionTags(c *gin.Context) {
 			result := h.svc.ListQuestionTags(false, true, nil) // 管理端：全部可见、不分区
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *[]service.QuestionTagDict, _ error) {
+		Render: func(c *gin.Context, _ *struct{}, resp *[]service.QuestionTagDict) {
 			response.Success(c, service.QuestionTagListDTO{Tags: *resp})
 		},
 	}.Handle(c)
@@ -330,10 +324,16 @@ func (h *TrainingCatalogHandler) CreateQuestionTag(c *gin.Context) {
 	}.WithSuccess(created("题库标签创建成功"), http.StatusBadRequest).Handle(c)
 }
 
-// specialtyUpdateReq 更新请求。
-type specialtyUpdateReq struct {
+// catalogUpdateReq 目录实体更新请求的公共容器（ID 来自路径，In 来自 body）。
+//
+// 六个目录实体（专业方向 / 课程等级 / 证书模板 / 题库标签 / 目标证件 / 岗位）的更新请求完全同形，
+// 只此一份声明（ADR-0060 决策 10）：实体差异只在 In 的 typed input 上，不进 wire
+// —— 本容器不经 JSON 绑定（body 由 Parse 里的 bindJSONMsg / ShouldBindJSON 绑成 service.XInput），
+// swagger 注解指认的请求体仍是 service.XInput，契约零变更。
+// 岗位一项的留痕：此前 ID 在 Invoke 里从 path 取，属越层的小样板，已收进本容器。
+type catalogUpdateReq[I any] struct {
 	ID int
-	In service.SpecialtyInput
+	In I
 }
 
 // UpdateSpecialty 更新专业方向
@@ -350,8 +350,8 @@ type specialtyUpdateReq struct {
 // @Failure 404 {object} response.R "专业方向不存在"
 // @Router /admin/specialty/{specialty_id} [put]
 func (h *TrainingCatalogHandler) UpdateSpecialty(c *gin.Context) {
-	Endpoint[specialtyUpdateReq, service.SpecialtyDict]{
-		Parse: func(c *gin.Context) (*specialtyUpdateReq, error) {
+	Endpoint[catalogUpdateReq[service.SpecialtyInput], service.SpecialtyDict]{
+		Parse: func(c *gin.Context) (*catalogUpdateReq[service.SpecialtyInput], error) {
 			id, err := strconv.Atoi(c.Param("specialty_id"))
 			if err != nil {
 				return nil, badRequest("专业方向ID无效")
@@ -360,18 +360,12 @@ func (h *TrainingCatalogHandler) UpdateSpecialty(c *gin.Context) {
 			if err := c.ShouldBindJSON(&in); err != nil {
 				return nil, badRequest("请求数据无效")
 			}
-			return &specialtyUpdateReq{ID: id, In: in}, nil
+			return &catalogUpdateReq[service.SpecialtyInput]{ID: id, In: in}, nil
 		},
-		Invoke: invoke(func(req specialtyUpdateReq) (service.SpecialtyDict, error) {
+		Invoke: invoke(func(req catalogUpdateReq[service.SpecialtyInput]) (service.SpecialtyDict, error) {
 			return h.svc.UpdateSpecialty(req.ID, req.In)
 		}),
 	}.WithSuccess(okMsg("专业方向更新成功"), http.StatusNotFound).Handle(c)
-}
-
-// levelUpdateReq 更新请求。
-type levelUpdateReq struct {
-	ID int
-	In service.LevelInput
 }
 
 // UpdateLevel 更新课程等级
@@ -388,8 +382,8 @@ type levelUpdateReq struct {
 // @Failure 404 {object} response.R "课程等级不存在"
 // @Router /admin/level/{level_id} [put]
 func (h *TrainingCatalogHandler) UpdateLevel(c *gin.Context) {
-	Endpoint[levelUpdateReq, service.LevelDict]{
-		Parse: func(c *gin.Context) (*levelUpdateReq, error) {
+	Endpoint[catalogUpdateReq[service.LevelInput], service.LevelDict]{
+		Parse: func(c *gin.Context) (*catalogUpdateReq[service.LevelInput], error) {
 			id, err := strconv.Atoi(c.Param("level_id"))
 			if err != nil {
 				return nil, badRequest("课程等级ID无效")
@@ -398,18 +392,12 @@ func (h *TrainingCatalogHandler) UpdateLevel(c *gin.Context) {
 			if err := c.ShouldBindJSON(&in); err != nil {
 				return nil, badRequest("请求数据无效")
 			}
-			return &levelUpdateReq{ID: id, In: in}, nil
+			return &catalogUpdateReq[service.LevelInput]{ID: id, In: in}, nil
 		},
-		Invoke: invoke(func(req levelUpdateReq) (service.LevelDict, error) {
+		Invoke: invoke(func(req catalogUpdateReq[service.LevelInput]) (service.LevelDict, error) {
 			return h.svc.UpdateLevel(req.ID, req.In)
 		}),
 	}.WithSuccess(okMsg("课程等级更新成功"), http.StatusNotFound).Handle(c)
-}
-
-// certificateTemplateUpdateReq 更新请求。
-type certificateTemplateUpdateReq struct {
-	ID int
-	In service.CertificateTemplateInput
 }
 
 // UpdateCertificateTemplate 更新证书模板
@@ -426,8 +414,8 @@ type certificateTemplateUpdateReq struct {
 // @Failure 404 {object} response.R "证书模板不存在"
 // @Router /admin/certificate-template/{id} [put]
 func (h *TrainingCatalogHandler) UpdateCertificateTemplate(c *gin.Context) {
-	Endpoint[certificateTemplateUpdateReq, service.CertificateTemplateDict]{
-		Parse: func(c *gin.Context) (*certificateTemplateUpdateReq, error) {
+	Endpoint[catalogUpdateReq[service.CertificateTemplateInput], service.CertificateTemplateDict]{
+		Parse: func(c *gin.Context) (*catalogUpdateReq[service.CertificateTemplateInput], error) {
 			id, err := strconv.Atoi(c.Param("id"))
 			if err != nil {
 				return nil, badRequest("证书模板ID无效")
@@ -436,18 +424,12 @@ func (h *TrainingCatalogHandler) UpdateCertificateTemplate(c *gin.Context) {
 			if err := c.ShouldBindJSON(&in); err != nil {
 				return nil, badRequest("请求数据无效")
 			}
-			return &certificateTemplateUpdateReq{ID: id, In: in}, nil
+			return &catalogUpdateReq[service.CertificateTemplateInput]{ID: id, In: in}, nil
 		},
-		Invoke: invoke(func(req certificateTemplateUpdateReq) (service.CertificateTemplateDict, error) {
+		Invoke: invoke(func(req catalogUpdateReq[service.CertificateTemplateInput]) (service.CertificateTemplateDict, error) {
 			return h.svc.UpdateCertificateTemplate(req.ID, req.In)
 		}),
 	}.WithSuccess(okMsg("证书模板更新成功"), http.StatusNotFound).Handle(c)
-}
-
-// questionTagUpdateReq 更新请求。
-type questionTagUpdateReq struct {
-	ID int
-	In service.QuestionTagInput
 }
 
 // UpdateQuestionTag 更新题库标签
@@ -464,8 +446,8 @@ type questionTagUpdateReq struct {
 // @Failure 404 {object} response.R "题库标签不存在"
 // @Router /admin/question-tag/{id} [put]
 func (h *TrainingCatalogHandler) UpdateQuestionTag(c *gin.Context) {
-	Endpoint[questionTagUpdateReq, service.QuestionTagDict]{
-		Parse: func(c *gin.Context) (*questionTagUpdateReq, error) {
+	Endpoint[catalogUpdateReq[service.QuestionTagInput], service.QuestionTagDict]{
+		Parse: func(c *gin.Context) (*catalogUpdateReq[service.QuestionTagInput], error) {
 			id, err := strconv.Atoi(c.Param("id"))
 			if err != nil {
 				return nil, badRequest("题库标签ID无效")
@@ -474,9 +456,9 @@ func (h *TrainingCatalogHandler) UpdateQuestionTag(c *gin.Context) {
 			if err := c.ShouldBindJSON(&in); err != nil {
 				return nil, badRequest("请求数据无效")
 			}
-			return &questionTagUpdateReq{ID: id, In: in}, nil
+			return &catalogUpdateReq[service.QuestionTagInput]{ID: id, In: in}, nil
 		},
-		Invoke: invoke(func(req questionTagUpdateReq) (service.QuestionTagDict, error) {
+		Invoke: invoke(func(req catalogUpdateReq[service.QuestionTagInput]) (service.QuestionTagDict, error) {
 			return h.svc.UpdateQuestionTag(req.ID, req.In)
 		}),
 	}.WithSuccess(okMsg("题库标签更新成功"), http.StatusNotFound).Handle(c)
@@ -606,10 +588,32 @@ func (h *TrainingCatalogHandler) DeleteQuestionTag(c *gin.Context) {
 	}.WithSuccess(okMsgNoData("题库标签删除成功"), http.StatusNotFound).Handle(c)
 }
 
-// swapSpecialtySortReq 交换排序请求。
-type swapSpecialtySortReq struct {
+// catalogSwapSortReq 交换排序请求（ID 来自路径，SwapWith 来自 body）。
+// 三个可排序的目录实体（专业方向 / 课程等级 / 目标证件）的 swap 请求完全同形，
+// 只此一份声明（ADR-0060 决策 10）；岗位的 swap 请求另有一份，见 positionSwapSortReq。
+type catalogSwapSortReq struct {
 	ID       int
 	SwapWith int
+}
+
+// catalogSwapSortParse 交换排序端点的 Parse 单点（ADR-0060 决策 10）：三处除「路径参数名 + ID
+// 无效文案」外逐字相同，实参按端点传入，不留第二份实现。
+// body 绑定形态仍是只带 swap_with 一个字段的匿名 struct（JSON 字段名不动，wire 契约零变更）；
+// swap_with <= 0 的前置校验照旧做在这里——岗位端点刻意不做（既有行为，见 positionSwapSortReqBody）。
+func catalogSwapSortParse(idParam, idMsg string) ParseFunc[catalogSwapSortReq] {
+	return func(c *gin.Context) (*catalogSwapSortReq, error) {
+		id, err := strconv.Atoi(c.Param(idParam))
+		if err != nil {
+			return nil, badRequest(idMsg)
+		}
+		var body struct {
+			SwapWith int `json:"swap_with"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil || body.SwapWith <= 0 {
+			return nil, badRequest("swap_with 参数无效")
+		}
+		return &catalogSwapSortReq{ID: id, SwapWith: body.SwapWith}, nil
+	}
 }
 
 // SwapSpecialtySort 交换专业方向排序
@@ -626,30 +630,12 @@ type swapSpecialtySortReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/specialty/{specialty_id}/sort [put]
 func (h *TrainingCatalogHandler) SwapSpecialtySort(c *gin.Context) {
-	Endpoint[swapSpecialtySortReq, struct{}]{
-		Parse: func(c *gin.Context) (*swapSpecialtySortReq, error) {
-			id, err := strconv.Atoi(c.Param("specialty_id"))
-			if err != nil {
-				return nil, badRequest("专业方向ID无效")
-			}
-			var body struct {
-				SwapWith int `json:"swap_with"`
-			}
-			if err := c.ShouldBindJSON(&body); err != nil || body.SwapWith <= 0 {
-				return nil, badRequest("swap_with 参数无效")
-			}
-			return &swapSpecialtySortReq{ID: id, SwapWith: body.SwapWith}, nil
-		},
-		Invoke: invoke(func(req swapSpecialtySortReq) (struct{}, error) {
+	Endpoint[catalogSwapSortReq, struct{}]{
+		Parse: catalogSwapSortParse("specialty_id", "专业方向ID无效"),
+		Invoke: invoke(func(req catalogSwapSortReq) (struct{}, error) {
 			return struct{}{}, h.svc.SwapSpecialtySort(req.ID, req.SwapWith)
 		}),
 	}.WithSuccess(okMsgNoData("排序已交换"), http.StatusBadRequest).Handle(c)
-}
-
-// swapLevelSortReq 交换排序请求。
-type swapLevelSortReq struct {
-	ID       int
-	SwapWith int
 }
 
 // SwapLevelSort 交换课程等级排序
@@ -666,21 +652,9 @@ type swapLevelSortReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/level/{level_id}/sort [put]
 func (h *TrainingCatalogHandler) SwapLevelSort(c *gin.Context) {
-	Endpoint[swapLevelSortReq, struct{}]{
-		Parse: func(c *gin.Context) (*swapLevelSortReq, error) {
-			id, err := strconv.Atoi(c.Param("level_id"))
-			if err != nil {
-				return nil, badRequest("课程等级ID无效")
-			}
-			var body struct {
-				SwapWith int `json:"swap_with"`
-			}
-			if err := c.ShouldBindJSON(&body); err != nil || body.SwapWith <= 0 {
-				return nil, badRequest("swap_with 参数无效")
-			}
-			return &swapLevelSortReq{ID: id, SwapWith: body.SwapWith}, nil
-		},
-		Invoke: invoke(func(req swapLevelSortReq) (struct{}, error) {
+	Endpoint[catalogSwapSortReq, struct{}]{
+		Parse: catalogSwapSortParse("level_id", "课程等级ID无效"),
+		Invoke: invoke(func(req catalogSwapSortReq) (struct{}, error) {
 			return struct{}{}, h.svc.SwapLevelSort(req.ID, req.SwapWith)
 		}),
 	}.WithSuccess(okMsgNoData("排序已交换"), http.StatusBadRequest).Handle(c)
@@ -747,7 +721,7 @@ func (h *TrainingCatalogHandler) ListPublicCredentials(c *gin.Context) {
 			result := h.svc.ListCredentials(true)
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *[]service.CredentialDict, _ error) {
+		Render: func(c *gin.Context, _ *struct{}, resp *[]service.CredentialDict) {
 			response.Success(c, service.CredentialListDTO{Credentials: *resp})
 		},
 	}.Handle(c)
@@ -768,9 +742,6 @@ func (h *TrainingCatalogHandler) ListGroupedCredentials(c *gin.Context) {
 			result := h.svc.ListGroupedCredentials()
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.GroupedCredentialsDTO, _ error) {
-			response.Success(c, *resp)
-		},
 	}.Handle(c)
 }
 
@@ -789,7 +760,7 @@ func (h *TrainingCatalogHandler) ListCredentials(c *gin.Context) {
 			result := h.svc.ListCredentials(false)
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *[]service.CredentialDict, _ error) {
+		Render: func(c *gin.Context, _ *struct{}, resp *[]service.CredentialDict) {
 			response.Success(c, service.CredentialListDTO{Credentials: *resp})
 		},
 	}.Handle(c)
@@ -814,12 +785,6 @@ func (h *TrainingCatalogHandler) CreateCredential(c *gin.Context) {
 	}.WithSuccess(created("证件创建成功"), http.StatusBadRequest).Handle(c)
 }
 
-// credentialUpdateReq 更新请求
-type credentialUpdateReq struct {
-	ID int
-	In service.CredentialInput
-}
-
 // UpdateCredential 更新目标证件
 // @Summary 更新证件
 // @Description 管理员更新目标证件字典项
@@ -834,8 +799,8 @@ type credentialUpdateReq struct {
 // @Failure 404 {object} response.R "证件不存在"
 // @Router /admin/credential/{id} [put]
 func (h *TrainingCatalogHandler) UpdateCredential(c *gin.Context) {
-	Endpoint[credentialUpdateReq, service.CredentialDict]{
-		Parse: func(c *gin.Context) (*credentialUpdateReq, error) {
+	Endpoint[catalogUpdateReq[service.CredentialInput], service.CredentialDict]{
+		Parse: func(c *gin.Context) (*catalogUpdateReq[service.CredentialInput], error) {
 			id, err := strconv.Atoi(c.Param("id"))
 			if err != nil {
 				return nil, badRequest("证件ID无效")
@@ -844,9 +809,9 @@ func (h *TrainingCatalogHandler) UpdateCredential(c *gin.Context) {
 			if err := c.ShouldBindJSON(&in); err != nil {
 				return nil, badRequest("请求数据无效")
 			}
-			return &credentialUpdateReq{ID: id, In: in}, nil
+			return &catalogUpdateReq[service.CredentialInput]{ID: id, In: in}, nil
 		},
-		Invoke: invoke(func(req credentialUpdateReq) (service.CredentialDict, error) {
+		Invoke: invoke(func(req catalogUpdateReq[service.CredentialInput]) (service.CredentialDict, error) {
 			return h.svc.UpdateCredential(req.ID, req.In)
 		}),
 	}.WithSuccess(okMsg("证件更新成功"), http.StatusNotFound).Handle(c)
@@ -883,12 +848,6 @@ func (h *TrainingCatalogHandler) DeleteCredential(c *gin.Context) {
 	}.WithSuccess(okMsgNoData("证件删除成功"), http.StatusNotFound).Handle(c)
 }
 
-// swapCredentialSortReq 交换排序请求
-type swapCredentialSortReq struct {
-	ID       int
-	SwapWith int
-}
-
 // SwapCredentialSort 交换目标证件排序
 // @Summary 交换证件排序
 // @Description 管理员交换两个目标证件的排序位置（body: {"swap_with": <id>}）；无返回载荷
@@ -903,21 +862,9 @@ type swapCredentialSortReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/credential/{id}/sort [put]
 func (h *TrainingCatalogHandler) SwapCredentialSort(c *gin.Context) {
-	Endpoint[swapCredentialSortReq, struct{}]{
-		Parse: func(c *gin.Context) (*swapCredentialSortReq, error) {
-			id, err := strconv.Atoi(c.Param("id"))
-			if err != nil {
-				return nil, badRequest("证件ID无效")
-			}
-			var body struct {
-				SwapWith int `json:"swap_with"`
-			}
-			if err := c.ShouldBindJSON(&body); err != nil || body.SwapWith <= 0 {
-				return nil, badRequest("swap_with 参数无效")
-			}
-			return &swapCredentialSortReq{ID: id, SwapWith: body.SwapWith}, nil
-		},
-		Invoke: invoke(func(req swapCredentialSortReq) (struct{}, error) {
+	Endpoint[catalogSwapSortReq, struct{}]{
+		Parse: catalogSwapSortParse("id", "证件ID无效"),
+		Invoke: invoke(func(req catalogSwapSortReq) (struct{}, error) {
 			return struct{}{}, h.svc.SwapCredentialSort(req.ID, req.SwapWith)
 		}),
 	}.WithSuccess(okMsgNoData("排序已交换"), http.StatusBadRequest).Handle(c)
@@ -1023,13 +970,6 @@ func (h *TrainingCatalogHandler) CreatePosition(c *gin.Context) {
 	}.WithSuccess(created("岗位创建成功"), http.StatusBadRequest).Handle(c)
 }
 
-// positionUpdateReq 更新岗位请求（ID 来自路径，In 来自 body）。
-// 与其它目录实体的 update 请求同形（此前 ID 在 Invoke 里从 path 取，属越层的小样板）。
-type positionUpdateReq struct {
-	ID int
-	In service.PositionInput
-}
-
 // UpdatePosition 更新岗位 PUT /api/admin/position/:position_id
 // @Summary 更新岗位
 // @Description 管理员更新岗位字典项
@@ -1044,8 +984,8 @@ type positionUpdateReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/position/{position_id} [put]
 func (h *TrainingCatalogHandler) UpdatePosition(c *gin.Context) {
-	Endpoint[positionUpdateReq, service.PositionDict]{
-		Parse: func(c *gin.Context) (*positionUpdateReq, error) {
+	Endpoint[catalogUpdateReq[service.PositionInput], service.PositionDict]{
+		Parse: func(c *gin.Context) (*catalogUpdateReq[service.PositionInput], error) {
 			// 先 body 后 path：与既有「Invoke 内先绑定 body、再取 path」的报错优先级逐字一致
 			in, err := bindJSONMsg[service.PositionInput](c, "请求数据无效")
 			if err != nil {
@@ -1055,9 +995,9 @@ func (h *TrainingCatalogHandler) UpdatePosition(c *gin.Context) {
 			if err != nil {
 				return nil, err
 			}
-			return &positionUpdateReq{ID: id, In: *in}, nil
+			return &catalogUpdateReq[service.PositionInput]{ID: id, In: *in}, nil
 		},
-		Invoke: invoke(func(req positionUpdateReq) (service.PositionDict, error) {
+		Invoke: invoke(func(req catalogUpdateReq[service.PositionInput]) (service.PositionDict, error) {
 			return h.svc.UpdatePosition(req.ID, req.In)
 		}),
 	}.WithSuccess(okMsg("岗位已更新"), http.StatusBadRequest).Handle(c)
@@ -1096,6 +1036,8 @@ func (h *TrainingCatalogHandler) SwapPositionSort(c *gin.Context) {
 }
 
 // positionSwapSortReq 交换岗位排序请求（ID 来自路径，SwapWith 来自 body）。
+// 字段与 catalogSwapSortReq 相同但不同源：岗位端点的 Parse 走 pathInt + bindJSONMsg（错误优先级与
+// 文案都不同，且不做 swap_with <= 0 的前置校验），是既有行为，不并进共用容器。
 type positionSwapSortReq struct {
 	ID       int
 	SwapWith int

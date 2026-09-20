@@ -20,7 +20,7 @@
         <span class="font-heading text-base font-extrabold text-ink">{{ points.totalEarned }}</span>
       </div>
       <RouterLink
-        to="/training/task-center/points"
+        :to="href('PointsLedger')"
         class="ml-auto inline-flex items-center gap-1 rounded-pill border border-line-strong bg-panel px-3 py-1.5 text-xs font-semibold text-ink-2 transition-colors duration-150 hover:border-ui-300 hover:text-ui-600"
       >
         积分明细
@@ -103,6 +103,7 @@
 import { computed, ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { CircleCheckFilled, Trophy, List, ArrowRight } from '@element-plus/icons-vue'
+import { href } from '@/config/pages'
 import { pointsApi, type PointsTaskItem } from '@/api/points'
 import { groupLabelMap, groupDescMap, claimDupMessage, isClaimExhausted } from '@/utils/taskCenter'
 import type { TaskGroup } from '@/utils/taskCenter'

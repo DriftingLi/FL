@@ -121,7 +121,7 @@
             v-model="rejectReason"
             type="textarea"
             :rows="4"
-            placeholder="请填写驳回理由，导师将看到此说明"
+            placeholder="请填写驳回理由，讲师将看到此说明"
             maxlength="500"
             show-word-limit
           />
@@ -170,10 +170,10 @@ const {
   retry: retryLoad
 } = useAdminTable<Question>({
   fetch: async (paging) => {
-    const res = await questionBankApi.getQuestions({ page: paging.page, page_size: paging.pageSize, ...filters.value })
+    const result = await questionBankApi.getQuestions({ page: paging.page, page_size: paging.pageSize, ...filters.value })
     // 加载待审核总数（仅当不是 pending 筛选时单独查询）
     await loadPendingCount()
-    return { list: res?.questions || [], total: res?.total || 0 }
+    return result
   }
 })
 

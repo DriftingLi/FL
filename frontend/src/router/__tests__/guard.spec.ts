@@ -12,7 +12,6 @@ import {
   type GuardInput,
   type GuardState
 } from '../guard'
-import { routeNames } from '@/config/routeNames'
 
 // ===== 构造器 =====
 
@@ -345,13 +344,13 @@ describe('credentialStep', () => {
   it('无证件访问 training 业务页 → 强制进 onboarding', () => {
     expect(
       resolveGuardDecision(input(), state({ credential: 'none' }))
-    ).toEqual({ action: 'redirect', to: { name: routeNames.CredentialOnboarding } })
+    ).toEqual({ action: 'redirect', to: { name: 'CredentialOnboarding' } })
   })
 
   it('无证件访问 onboarding 本身 → 放行', () => {
     expect(
       resolveGuardDecision(
-        input({ name: routeNames.CredentialOnboarding, path: '/training/onboarding/credential' }),
+        input({ name: 'CredentialOnboarding', path: '/training/onboarding/credential' }),
         state({ credential: 'none' })
       )
     ).toEqual({ action: 'allow' })
@@ -360,7 +359,7 @@ describe('credentialStep', () => {
   it('已有证件访问 onboarding → 回 /training', () => {
     expect(
       resolveGuardDecision(
-        input({ name: routeNames.CredentialOnboarding, path: '/training/onboarding/credential' }),
+        input({ name: 'CredentialOnboarding', path: '/training/onboarding/credential' }),
         state({ credential: 'present' })
       )
     ).toEqual({ action: 'redirect', to: '/training' })
@@ -369,7 +368,7 @@ describe('credentialStep', () => {
   it('证件加载失败 → orchestrator 映射为 none → 跳 onboarding（与既有行为一致）', () => {
     expect(resolveGuardDecision(input(), state({ credential: 'none' }))).toEqual({
       action: 'redirect',
-      to: { name: routeNames.CredentialOnboarding }
+      to: { name: 'CredentialOnboarding' }
     })
   })
 })

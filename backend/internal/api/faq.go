@@ -19,8 +19,8 @@ import (
 // response 单点与前端状态映射，那是独立一拍，不在本票范围。
 var faqErrStatus = &errStatusTable{
 	entries: []errStatusEntry{
-		{service.ErrFaqCategoryNotFound, http.StatusNotFound},
-		{service.ErrFaqEntryNotFound, http.StatusNotFound},
+		{sentinel: service.ErrFaqCategoryNotFound, status: http.StatusNotFound},
+		{sentinel: service.ErrFaqEntryNotFound, status: http.StatusNotFound},
 	},
 	fallback: http.StatusBadRequest,
 }

@@ -1,0 +1,113 @@
+# kotlin-all-check (④c) 开始 2026-09-20 15:02:43
+# project = D:\wt-1194\training-app\叉车维修培训学员端跨端应用
+# 输入 = unpackage\resources\app-android（appResource 产物）；严禁改用 unpackage\cache\.app-android（dev 缓存不是自洽编译单元）
+HX_BUSY wait=0 result=inherited
+
+>>> cli-open
+
+
+
+>>> project-open
+项目导入成功
+
+
+
+>>> publish-appresource
+15:02:45.401 项目 叉车维修培训学员端跨端应用 开始导出...
+15:03:02.289 编译器版本：5.23（uni-app x）VDOM模式
+15:03:02.292 当前样式隔离策略：2.0。详见：https://doc.dcloud.net.cn/uni-app-x/css/common/style-isolation.html
+15:03:02.294 正在编译中...
+15:03:02.297 编译会生成大量临时文件，杀毒软件监控时会影响编译速度，并造成CPU升高。推荐把项目目录添加到杀毒软件的监控排除名单中。[添加] [帮助]
+15:04:07.711 项目 叉车维修培训学员端跨端应用 编译成功。
+15:04:07.802 项目 叉车维修培训学员端跨端应用 正在导出...
+15:04:09.595 [33m项目 叉车维修培训学员端跨端应用 导出 android 成功，路径为：D:\wt-1194\training-app\叉车维修培训学员端跨端应用\unpackage\resources\app-android[39m
+15:04:09.599 wgt文件由HBuilderX 5.23 版本生成，运行的基座sdk也需配套相同版本，否则在手机端部分功能可能无法正常使用。详见 http://ask.dcloud.net.cn/article/35627 
+
+
+publish 产物 .kt = 109
+
+>>> kotlinc-all（整模块，109 个 .kt）
+unpackage\resources\app-android\uniappx\app-android\src\index.kt:8999:9: warning: identity equality for arguments of types 'Boolean' and 'Boolean' is deprecated.
+    if (env.has !== true) {
+        ^^^^^^^^^^^^^^^^
+unpackage\resources\app-android\uniappx\app-android\src\index.kt:9017:9: warning: identity equality for arguments of types 'Boolean' and 'Boolean' is deprecated.
+    if (env.has === true) {
+        ^^^^^^^^^^^^^^^^
+unpackage\resources\app-android\uniappx\app-android\src\index.kt:9031:9: warning: identity equality for arguments of types 'Boolean' and 'Boolean' is deprecated.
+    if (env.has !== true) {
+        ^^^^^^^^^^^^^^^^
+unpackage\resources\app-android\uniappx\app-android\src\index.kt:9044:9: warning: identity equality for arguments of types 'Boolean' and 'Boolean' is deprecated.
+    if (env.has !== true) {
+        ^^^^^^^^^^^^^^^^
+unpackage\resources\app-android\uniappx\app-android\src\index.kt:9057:24: warning: identity equality for arguments of types 'Boolean' and 'Boolean' is deprecated.
+    if (env == null || env.has !== true) {
+                       ^^^^^^^^^^^^^^^^
+unpackage\resources\app-android\uniappx\app-android\src\pages\forum\my-forum.kt:72:76: warning: identity equality for arguments of types 'Number' and 'Int' can be unstable because of implicit boxing.
+                                if (topics.value.length >= result.total || result.items.length === 0) {
+                                                                           ^^^^^^^^^^^^^^^^^^^^^^^^^
+unpackage\resources\app-android\uniappx\app-android\src\pages\forum\my-forum.kt:83:77: warning: identity equality for arguments of types 'Number' and 'Int' can be unstable because of implicit boxing.
+                                if (replies.value.length >= result.total || result.items.length === 0) {
+                                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^
+unpackage\resources\app-android\uniappx\app-android\src\pages\forum\my-forum.kt:165:44: warning: identity equality for arguments of types 'Number' and 'Int' can be unstable because of implicit boxing.
+                                if (isTrue(topics.value.length === 0 && !loading.value)) {
+                                           ^^^^^^^^^^^^^^^^^^^^^^^^^
+unpackage\resources\app-android\uniappx\app-android\src\pages\forum\my-forum.kt:221:44: warning: identity equality for arguments of types 'Number' and 'Int' can be unstable because of implicit boxing.
+                                if (isTrue(replies.value.length === 0 && !loading.value)) {
+                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+unpackage\resources\app-android\uniappx\app-android\src\pages\login\login.kt:394:63: warning: identity equality for arguments of types 'Boolean?' and 'Boolean' can be unstable because of implicit boxing.
+                                val isNew = result != null && result.isNew === true
+                                                              ^^^^^^^^^^^^^^^^^^^^^
+unpackage\resources\app-android\uniappx\app-android\src\pages\mall\components\mall-sort-bar.kt:42:47: warning: identity equality for arguments of types 'Number' and 'Int' can be unstable because of implicit boxing.
+                        _uM("sort-active" to (_ctx.activeSort === 0))
+                                              ^^^^^^^^^^^^^^^^^^^^^
+unpackage\resources\app-android\uniappx\app-android\src\pages\mall\components\mall-sort-bar.kt:49:56: warning: identity equality for arguments of types 'Number' and 'Int' can be unstable because of implicit boxing.
+                            _uM("sort-text-active" to (_ctx.activeSort === 0))
+                                                       ^^^^^^^^^^^^^^^^^^^^^
+unpackage\resources\app-android\uniappx\app-android\src\pages\mall\components\mall-sort-bar.kt:56:47: warning: identity equality for arguments of types 'Number' and 'Int' can be unstable because of implicit boxing.
+                        _uM("sort-active" to (_ctx.activeSort === 1))
+                                              ^^^^^^^^^^^^^^^^^^^^^
+unpackage\resources\app-android\uniappx\app-android\src\pages\mall\components\mall-sort-bar.kt:63:56: warning: identity equality for arguments of types 'Number' and 'Int' can be unstable because of implicit boxing.
+                            _uM("sort-text-active" to (_ctx.activeSort === 1))
+                                                       ^^^^^^^^^^^^^^^^^^^^^
+unpackage\resources\app-android\uniappx\app-android\src\pages\mall\components\mall-sort-bar.kt:71:47: warning: identity equality for arguments of types 'Number' and 'Int' can be unstable because of implicit boxing.
+                        _uM("sort-active" to (_ctx.activeSort === 2))
+                                              ^^^^^^^^^^^^^^^^^^^^^
+unpackage\resources\app-android\uniappx\app-android\src\pages\mall\components\mall-sort-bar.kt:78:56: warning: identity equality for arguments of types 'Number' and 'Int' can be unstable because of implicit boxing.
+                            _uM("sort-text-active" to (_ctx.activeSort === 2))
+                                                       ^^^^^^^^^^^^^^^^^^^^^
+unpackage\resources\app-android\uniappx\app-android\src\pages\mall\components\mall-sort-bar.kt:86:47: warning: identity equality for arguments of types 'Number' and 'Int' can be unstable because of implicit boxing.
+                        _uM("sort-active" to (_ctx.activeSort === 3))
+                                              ^^^^^^^^^^^^^^^^^^^^^
+unpackage\resources\app-android\uniappx\app-android\src\pages\mall\components\mall-sort-bar.kt:93:56: warning: identity equality for arguments of types 'Number' and 'Int' can be unstable because of implicit boxing.
+                            _uM("sort-text-active" to (_ctx.activeSort === 3))
+                                                       ^^^^^^^^^^^^^^^^^^^^^
+unpackage\resources\app-android\uniappx\app-android\src\pages\mall\mall.kt:73:33: warning: identity equality for arguments of types 'Number' and 'Int' can be unstable because of implicit boxing.
+                            if (activeCategory.value === 0 && reset) {
+                                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+unpackage\resources\app-android\uniappx\app-android\src\pages\mall\mall.kt:173:40: warning: identity equality for arguments of types 'Number' and 'Int' can be unstable because of implicit boxing.
+                            if (isTrue(activeCategory.value === 0 && mustBuyList.value.length > 0)) {
+                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+unpackage\resources\app-android\uniappx\app-android\src\pages\profile\personal-activity.kt:111:21: warning: identity equality for arguments of types 'Number' and 'Int' can be unstable because of implicit boxing.
+                if (itemsCount === 0 || (page.value * pageSize >= total && total > 0)) {
+                    ^^^^^^^^^^^^^^^^
+unpackage\resources\app-android\uniappx\app-android\src\pages\profile\personal-activity.kt:290:44: warning: identity equality for arguments of types 'Number' and 'Int' can be unstable because of implicit boxing.
+                                if (isTrue(topics.value.length === 0 && !loading.value)) {
+                                           ^^^^^^^^^^^^^^^^^^^^^^^^^
+unpackage\resources\app-android\uniappx\app-android\src\pages\profile\personal-activity.kt:321:44: warning: identity equality for arguments of types 'Number' and 'Int' can be unstable because of implicit boxing.
+                                if (isTrue(likedTopics.value.length === 0 && !loading.value)) {
+                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+unpackage\resources\app-android\uniappx\app-android\src\pages\profile\personal-activity.kt:349:52: warning: identity equality for arguments of types 'Number' and 'Int' can be unstable because of implicit boxing.
+                                        if (isTrue(myQuestions.value.length === 0 && !loading.value)) {
+                                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+unpackage\resources\app-android\uniappx\app-android\src\pages\profile\personal-activity.kt:374:52: warning: identity equality for arguments of types 'Number' and 'Int' can be unstable because of implicit boxing.
+                                        if (isTrue(myReplies.value.length === 0 && !loading.value)) {
+                                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+unpackage\resources\app-android\uniappx\app-android\src\pages\profile\personal-activity.kt:399:52: warning: identity equality for arguments of types 'Number' and 'Int' can be unstable because of implicit boxing.
+                                        if (isTrue(observedTopics.value.length === 0 && !loading.value)) {
+                                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+unpackage\resources\app-android\uniappx\app-android\src\pages\profile\personal-activity.kt:429:44: warning: identity equality for arguments of types 'Number' and 'Int' can be unstable because of implicit boxing.
+                                if (isTrue(viewHistory.value.length === 0 && !loading.value)) {
+                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+
+KOTLIN_ALL_RESULT errors=0 classes=1407 files=109 input=unpackage\resources\app-android log=D:\wt-1194\training-app\叉车维修培训学员端跨端应用\.ci-verify\kotlin-all.log

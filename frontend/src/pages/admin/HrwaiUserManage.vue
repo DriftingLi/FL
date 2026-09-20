@@ -73,14 +73,12 @@ async function handleDelete(row: HrwaiUser) {
 
 // admin 列表状态机：本页只声明 fetch 与行操作 adapter
 const table = useAdminTable<HrwaiUser>({
-  fetch: async (paging, filters) => {
-    const data = await adminApi.getHrwaiUsers({
+  fetch: (paging, filters) =>
+    adminApi.getHrwaiUsers({
       page: paging.page,
       page_size: paging.pageSize,
       keyword: filters.keyword ? String(filters.keyword) : undefined
-    })
-    return { list: data?.list ?? [], total: data?.total ?? 0 }
-  },
+    }),
   actions: {
     resetPwd: openResetPwdDialog,
     toggle: handleToggleStatus,
