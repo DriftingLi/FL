@@ -8,7 +8,7 @@
 // 约定：
 // - `path` 一律写**绝对路径**，派生子路由时按 layout 的 basePath 去掉前缀；
 // - `layout` 缺省 = 顶层记录（无布局外壳，如认证页与 AI 助手）；
-// - `requiresAuth` 缺省 true（与既有 router 逐字一致：公开页显式写 false）；
+// - `requiresAuth` **必填**（票8a：不写就编译报错；公开页 = 显式 false 的登记清单，见 pages.spec.ts）；
 // - `capability` 是**可见性判据**（角色资格），数据级不变式（所有权/证件作用域/状态前置）不进这里。
 //
 // 路由名单一事实源（ADR-0060 票8b，接替已删除的 config/routeNames.ts 常量表）：

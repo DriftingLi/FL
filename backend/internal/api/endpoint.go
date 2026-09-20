@@ -339,7 +339,7 @@ func successRenderer[Req, Resp any](ok *success) RenderFunc[Req, Resp] {
 //
 // 错误面是**无条件**的单一状态码（errStatusAll：解析错误与业务错误在该域共用同一个错误状态码、
 // 且不查域表）——与票1a 前 renderMsg 错误分支的写法逐字等价。
-// 需要真正定制渲染的端点是少数（见本文件末尾的清单），它们继续显式设置 Render（只写成功面）。
+// 需要真正定制渲染的端点是少数，它们继续显式设置 Render（只写成功面）。
 func (e Endpoint[Req, Resp]) WithSuccess(ok *success, errStatus int) Endpoint[Req, Resp] {
 	e.Render = successRenderer[Req, Resp](ok)
 	e.ErrStatus = errStatusAll(errStatus)

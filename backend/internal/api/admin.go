@@ -689,7 +689,7 @@ func (h *AdminHandler) CreateTutor(c *gin.Context) {
 // @Param tutor_id path int true "导师 ID"
 // @Success 200 {object} response.R{data=service.TutorDeletedDTO} "讲师删除成功"
 // @Failure 401 {object} response.R "未认证"
-// @Failure 404 {object} response.R "导师不存在"
+// @Failure 404 {object} response.R "讲师不存在"
 // @Router /admin/tutor/{tutor_id} [delete]
 // DeleteTutor 删除导师 DELETE /api/admin/tutor/:tutor_id
 func (h *AdminHandler) DeleteTutor(c *gin.Context) {
@@ -755,7 +755,7 @@ func (h *AdminHandler) ResetTutorPassword(c *gin.Context) {
 // @Param tutor_id path int true "导师 ID"
 // @Success 200 {object} response.R{data=service.StatusResultDTO} "讲师已启用/已禁用"
 // @Failure 401 {object} response.R "未认证"
-// @Failure 404 {object} response.R "导师不存在"
+// @Failure 404 {object} response.R "讲师不存在"
 // @Router /admin/tutor/{tutor_id}/status [put]
 // ToggleTutorStatus 切换导师启用/禁用状态 PUT /api/admin/tutor/:tutor_id/status
 func (h *AdminHandler) ToggleTutorStatus(c *gin.Context) {

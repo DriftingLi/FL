@@ -5,8 +5,7 @@
 //   2. 消费面不得内联称谓裸串——沿用 #1103 的模板编译扫描形态（ADR-0056 §8），
 //      把白名单从 status 维度扩到 role 维度。
 //
-// ⚠️ SCAN_PAGES 随收敛进度增长；全量收敛完成后应改为「扫 src 下所有 SFC」并删掉本清单
-// （清单式扫描的漏扫风险由「文件不存在即读取失败」兜住，但漏列文件兜不住）。
+// 扫描面是 src 下全部 SFC（见下方 allSfcFiles）——不留清单式白名单：漏列文件这种漏扫，清单本身兜不住。
 import { describe, it, expect } from 'vitest'
 import { readFileSync, readdirSync } from 'node:fs'
 import { relative, resolve } from 'node:path'
