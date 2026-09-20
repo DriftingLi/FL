@@ -237,6 +237,7 @@ import {
   VideoCamera, Document
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import { href } from '@/config/pages'
 import { tutorApi, type TutorChapter, type TutorChapterDetail } from '@/api/tutor'
 import type { ChapterFile } from '@/api/course'
 import MarkdownEditor from '@/components/tutor/MarkdownEditor.vue'
@@ -505,7 +506,7 @@ function navigateToChapter(chapterId?: number | null) {
 
 function goBackToChapters() {
   const courseId = route.params.courseId
-  router.push(`/training/tutor/course/${courseId}/chapters`)
+  router.push(href('TutorChapterManage', { id: String(courseId) }))
 }
 
 function formatSize(bytes: number) {

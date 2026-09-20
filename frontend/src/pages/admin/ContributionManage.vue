@@ -42,10 +42,7 @@ const {
   retry: retryPending
 } = useAdminTable<ContributionItem>({
   pageSize: 20,
-  fetch: async (paging) => {
-    const res = await adminContributionApi.listPending({ page: paging.page, page_size: paging.pageSize })
-    return { list: res.items || [], total: res.total || 0 }
-  }
+  fetch: (paging) => adminContributionApi.listPending({ page: paging.page, page_size: paging.pageSize })
 })
 
 // ===== 举报队列（档位一：分页列表 → useAdminTable，同页第二个实例）=====
@@ -64,14 +61,13 @@ const {
   retry: retryReports
 } = useAdminTable<ContributionReportItem>({
   pageSize: 20,
-  fetch: async (paging) => {
+  fetch: (paging) => {
     const st = reportStatus.value
-    const res = await adminContributionApi.listReports({
+    return adminContributionApi.listReports({
       status: st >= 0 ? st : undefined,
       page: paging.page,
       page_size: paging.pageSize
     })
-    return { list: res.items || [], total: res.total || 0 }
   }
 })
 

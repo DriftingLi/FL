@@ -4,13 +4,13 @@ package api
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
-	"forklift-training/pkg/response"
 )
 
 // ProfileReviewHandler 资料审核 handler。
@@ -73,13 +73,7 @@ func (h *ProfileReviewHandler) ListRequests(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *listRequestsReq) (*service.ProfileChangeRequestPageResult, error) {
 			return h.svc.ListRequests(req.Status, req.Page, req.PageSize)
 		},
-		Render: func(c *gin.Context, _ *listRequestsReq, resp *service.ProfileChangeRequestPageResult, err error) {
-			if err != nil {
-				response.ServerError(c, "查询失败: "+err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
+		ErrStatus: errStatusAllPrefix(http.StatusInternalServerError, "查询失败: "),
 	}.Handle(c)
 }
 
@@ -114,14 +108,7 @@ func (h *ProfileReviewHandler) Approve(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *approveReq) (*service.ProfileChangeRequestDTO, error) {
 			return h.svc.Approve(req.RequestID, req.ReviewerID)
 		},
-		Render: func(c *gin.Context, _ *approveReq, resp *service.ProfileChangeRequestDTO, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "已通过审核，修改已生效", resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("已通过审核，修改已生效"), http.StatusBadRequest).Handle(c)
 }
 
 // rejectReq 驳回请求（含路径 id、审核人 id 与 reason）。
@@ -164,13 +151,5 @@ func (h *ProfileReviewHandler) Reject(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *rejectReq) (*service.ProfileChangeRequestDTO, error) {
 			return h.svc.Reject(req.RequestID, req.ReviewerID, req.Reason)
 		},
-		Render: func(c *gin.Context, _ *rejectReq, resp *service.ProfileChangeRequestDTO, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			// 头像文件清理已下沉到审核模块内部（approve 清旧头像 / reject 清待审文件）
-			response.SuccessWithMsg(c, "已驳回", resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("已驳回"), http.StatusBadRequest).Handle(c)
 }

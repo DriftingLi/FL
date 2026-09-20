@@ -429,7 +429,7 @@ func TestRotateRefresh_RejectsAfterPasswordRevocation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("签发失败: %v", err)
 	}
-	if err := sess.RevokeUserRefresh(ctx, "hrwai_user", 7); err != nil {
+	if err := sess.RevokeIdentity(ctx, "hrwai_user", 7); err != nil {
 		t.Fatalf("写吊销标记失败: %v", err)
 	}
 	if _, _, err := sess.RotateRefresh(ctx, refresh); !errors.Is(err, ErrInvalidRefresh) {
@@ -440,7 +440,7 @@ func TestRotateRefresh_RejectsAfterPasswordRevocation(t *testing.T) {
 func TestPasswordRevocation_NewLoginSurvives(t *testing.T) {
 	sess := newTestSession(nil)
 	ctx := context.Background()
-	if err := sess.RevokeUserRefresh(ctx, "hrwai_user", 7); err != nil {
+	if err := sess.RevokeIdentity(ctx, "hrwai_user", 7); err != nil {
 		t.Fatalf("写吊销标记失败: %v", err)
 	}
 	// JWT iat 为秒精度且同秒一并拒绝（宁错杀防轮换洗白）：跨过标记所在秒后再签发
@@ -458,7 +458,7 @@ func TestPasswordRevocation_NewLoginSurvives(t *testing.T) {
 func TestPasswordRevocation_RoleNamespaced(t *testing.T) {
 	sess := newTestSession(nil)
 	ctx := context.Background()
-	if err := sess.RevokeUserRefresh(ctx, "hrwai_user", 7); err != nil {
+	if err := sess.RevokeIdentity(ctx, "hrwai_user", 7); err != nil {
 		t.Fatalf("写吊销标记失败: %v", err)
 	}
 	// recruiter_users 与 hrwai_users 两套 ID 空间：同号招聘员不受学员吊销误伤
@@ -474,7 +474,7 @@ func TestPasswordRevocation_RoleNamespaced(t *testing.T) {
 func TestPasswordRevocation_MarkerReadFailOpen(t *testing.T) {
 	sess := newTestSession(getFailStore{inner: newInmemoryBlacklistStore()})
 	ctx := context.Background()
-	if err := sess.RevokeUserRefresh(ctx, "hrwai_user", 7); err != nil {
+	if err := sess.RevokeIdentity(ctx, "hrwai_user", 7); err != nil {
 		t.Fatalf("标记写入应正常（仅读故障）: %v", err)
 	}
 	_, refresh, err := sess.IssuePair(7, "acct07", "hrwai_user")
@@ -490,7 +490,7 @@ func TestPasswordRevocation_MarkerReadFailOpen(t *testing.T) {
 func TestRevokeUserRefresh_TTLMatchesRefreshExpiry(t *testing.T) {
 	store := newRecordingBlacklistStore()
 	sess := newTestSession(store)
-	if err := sess.RevokeUserRefresh(context.Background(), "hrwai_user", 7); err != nil {
+	if err := sess.RevokeIdentity(context.Background(), "hrwai_user", 7); err != nil {
 		t.Fatalf("写吊销标记失败: %v", err)
 	}
 	ttl, ok := store.items["jwt:pwd_revoked:hrwai_user:7"]

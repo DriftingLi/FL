@@ -3,6 +3,7 @@ package api
 
 import (
 	"context"
+	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -81,14 +82,7 @@ func (h *TutorHandler) ListCourses(c *gin.Context) {
 			}
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *tutorCourseListReq, resp *service.CoursePageResult, err error) {
-			if err != nil {
-				response.ServerError(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // GetCourseChapters 课程章节列表（含文件）
@@ -115,14 +109,7 @@ func (h *TutorHandler) GetCourseChapters(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *idParam) (*service.TutorCourseChaptersDTO, error) {
 			return h.svc.GetCourseChapters(req.ID)
 		},
-		Render: func(c *gin.Context, _ *idParam, resp *service.TutorCourseChaptersDTO, err error) {
-			if err != nil {
-				response.NotFound(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
 }
 
 // GetChapterDetail 章节详情（含上下章ID + 文件列表）
@@ -149,14 +136,7 @@ func (h *TutorHandler) GetChapterDetail(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *idParam) (*service.ChapterDetailDTO, error) {
 			return h.svc.GetChapterDetail(req.ID)
 		},
-		Render: func(c *gin.Context, _ *idParam, resp *service.ChapterDetailDTO, err error) {
-			if err != nil {
-				response.NotFound(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
 }
 
 // UploadChapterFile 上传章节文件
@@ -248,14 +228,7 @@ func (h *TutorHandler) UpdateChapterInfo(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *chapterIDInput) (*service.ChapterDTO, error) {
 			return h.svc.UpdateChapterInfo(req.ID, req.Input)
 		},
-		Render: func(c *gin.Context, _ *chapterIDInput, resp *service.ChapterDTO, err error) {
-			if err != nil {
-				response.NotFound(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "章节更新成功", resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("章节更新成功"), http.StatusNotFound).Handle(c)
 }
 
 // DeleteChapterFile 删除章节文件
@@ -282,14 +255,7 @@ func (h *TutorHandler) DeleteChapterFile(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *idParam) (*service.DeleteFileResult, error) {
 			return h.svc.DeleteChapterFileByID(req.ID)
 		},
-		Render: func(c *gin.Context, _ *idParam, resp *service.DeleteFileResult, err error) {
-			if err != nil {
-				response.NotFound(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "文件删除成功", resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("文件删除成功"), http.StatusNotFound).Handle(c)
 }
 
 // BatchDeleteChapterFiles 批量删除文件
@@ -319,7 +285,7 @@ func (h *TutorHandler) BatchDeleteChapterFiles(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *batchDeleteFilesReq) (*service.BatchDeleteFilesResult, error) {
 			return h.svc.BatchDeleteChapterFiles(req.FileIDs), nil
 		},
-		Render: func(c *gin.Context, _ *batchDeleteFilesReq, resp *service.BatchDeleteFilesResult, _ error) {
+		Render: func(c *gin.Context, _ *batchDeleteFilesReq, resp *service.BatchDeleteFilesResult) {
 			response.SuccessWithMsg(c, "成功删除"+strconv.Itoa(resp.SuccessCount)+"个文件", resp)
 		},
 	}.Handle(c)

@@ -4,6 +4,7 @@ package api
 import (
 	"context"
 	"errors"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -57,12 +58,9 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *loginReq) (*service.LoginResult, error) {
 			return h.authSvc.HrwaiLogin(req.Username, req.Password)
 		},
-		Render: func(c *gin.Context, _ *loginReq, resp *service.LoginResult, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			setAuthCookie(c, h.session, resp.Token)
+		ErrStatus: errStatusAll(http.StatusBadRequest),
+		Render: func(c *gin.Context, _ *loginReq, resp *service.LoginResult) {
+			h.session.SetCookie(c.Writer, resp.Token)
 			response.SuccessWithMsg(c, "登录成功", resp)
 		},
 	}.Handle(c)
@@ -93,12 +91,9 @@ func (h *AuthHandler) AdminLogin(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *loginReq) (*service.LoginResult, error) {
 			return h.authSvc.AdminLogin(req.Username, req.Password)
 		},
-		Render: func(c *gin.Context, _ *loginReq, resp *service.LoginResult, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			setAuthCookie(c, h.session, resp.Token)
+		ErrStatus: errStatusAll(http.StatusBadRequest),
+		Render: func(c *gin.Context, _ *loginReq, resp *service.LoginResult) {
+			h.session.SetCookie(c.Writer, resp.Token)
 			response.SuccessWithMsg(c, "管理员登录成功", resp)
 		},
 	}.Handle(c)
@@ -129,13 +124,10 @@ func (h *AuthHandler) TutorLogin(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *loginReq) (*service.LoginResult, error) {
 			return h.authSvc.TutorLogin(req.Username, req.Password)
 		},
-		Render: func(c *gin.Context, _ *loginReq, resp *service.LoginResult, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			setAuthCookie(c, h.session, resp.Token)
-			response.SuccessWithMsg(c, "导师登录成功", resp)
+		ErrStatus: errStatusAll(http.StatusBadRequest),
+		Render: func(c *gin.Context, _ *loginReq, resp *service.LoginResult) {
+			h.session.SetCookie(c.Writer, resp.Token)
+			response.SuccessWithMsg(c, "讲师登录成功", resp)
 		},
 	}.Handle(c)
 }
@@ -165,12 +157,9 @@ func (h *AuthHandler) RecruiterLogin(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *loginReq) (*service.LoginResult, error) {
 			return h.authSvc.RecruiterLogin(req.Username, req.Password)
 		},
-		Render: func(c *gin.Context, _ *loginReq, resp *service.LoginResult, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			setRecruiterCookie(c, h.session, resp.Token)
+		ErrStatus: errStatusAll(http.StatusBadRequest),
+		Render: func(c *gin.Context, _ *loginReq, resp *service.LoginResult) {
+			h.session.SetRecruiterCookie(c.Writer, resp.Token)
 			response.SuccessWithMsg(c, "招聘者登录成功", resp)
 		},
 	}.Handle(c)
@@ -197,10 +186,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		RefreshToken string `json:"refresh_token"`
 	}
 	_ = c.ShouldBindJSON(&req) // refresh_token 缺失或解析失败时只清本地/Cookie，静默放行
-	if req.RefreshToken != "" {
-		_ = h.session.RevokeRefresh(c.Request.Context(), req.RefreshToken)
-	}
-	h.session.ClearCookie(c.Writer)
+	_ = h.session.SignOut(c.Request.Context(), c.Writer, "", req.RefreshToken)
 	response.SuccessWithMsg(c, "已登出", nil)
 }
 
@@ -264,9 +250,6 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *meReq) (*service.ProfileDTO, error) {
 			return h.authSvc.GetProfile(req.UserID, req.Role, req.Account), nil
 		},
-		Render: func(c *gin.Context, _ *meReq, resp *service.ProfileDTO, _ error) {
-			response.Success(c, resp)
-		},
 	}.Handle(c)
 }
 
@@ -311,16 +294,8 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 			}
 			return h.reviewSvc.CreateRequest(req.UID, service.ProfileFieldNickname, req.Nickname)
 		},
-		Render: func(c *gin.Context, _ *updateProfileReq, resp *service.ProfileChangeRequestDTO, err error) {
-			if err != nil {
-				var pe *ParseError
-				if asParseError(err, &pe) {
-					renderStatus(c, pe.Status, pe.Message)
-					return
-				}
-				response.BadRequest(c, err.Error())
-				return
-			}
+		ErrStatus: &errStatusTable{fallback: http.StatusBadRequest},
+		Render: func(c *gin.Context, _ *updateProfileReq, resp *service.ProfileChangeRequestDTO) {
 			if resp != nil && resp.ID == 0 {
 				response.SuccessWithMsg(c, "单位更新成功", resp)
 				return
@@ -351,6 +326,13 @@ func (h *AuthHandler) DeleteAccount(c *gin.Context) {
 	uid := middleware.CurrentUserID(c)
 	if uid <= 0 {
 		response.Unauthorized(c, "请先登录")
+		return
+	}
+	// 全会话吊销在先（ADR-0060 票2）：标记写失败即整体不生效。与改密/禁用的尽力而为
+	// 策略有意不同——那两处有已生效且不可回退的动作，注销没有；先删后吊销会留下
+	// 「资料已删、凭证仍活」（RotateRefresh 不查用户存在，旧 refresh 最长 7 天仍可签发 access）。
+	if err := h.session.RevokeIdentity(c.Request.Context(), "hrwai_user", uid); err != nil {
+		response.BadRequest(c, "注销失败：会话吊销未生效，请稍后重试")
 		return
 	}
 	if err := h.authSvc.DeleteAccount(uid); err != nil {

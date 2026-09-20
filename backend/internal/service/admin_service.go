@@ -291,7 +291,7 @@ func (s *AdminService) GetTutors(page, pageSize int, keyword string) (*TutorList
 func (s *AdminService) DeleteTutor(tutorID int) (*TutorDeletedDTO, error) {
 	var tutor model.Tutor
 	if err := s.db.First(&tutor, tutorID).Error; err != nil {
-		return nil, errors.New("导师不存在")
+		return nil, errors.New("讲师不存在")
 	}
 	if err := s.db.Delete(&tutor).Error; err != nil {
 		return nil, err
@@ -303,7 +303,7 @@ func (s *AdminService) DeleteTutor(tutorID int) (*TutorDeletedDTO, error) {
 func (s *AdminService) ResetTutorPassword(tutorID int, password string) error {
 	var tutor model.Tutor
 	if err := s.db.First(&tutor, tutorID).Error; err != nil {
-		return errors.New("导师不存在")
+		return errors.New("讲师不存在")
 	}
 	hashed, err := HashPassword(password)
 	if err != nil {
@@ -317,7 +317,7 @@ func (s *AdminService) ResetTutorPassword(tutorID int, password string) error {
 func (s *AdminService) ToggleTutorStatus(tutorID int) (int, error) {
 	var tutor model.Tutor
 	if err := s.db.First(&tutor, tutorID).Error; err != nil {
-		return 0, errors.New("导师不存在")
+		return 0, errors.New("讲师不存在")
 	}
 	next := 1
 	if tutor.Status == 1 {

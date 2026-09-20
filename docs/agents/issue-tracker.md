@@ -2,7 +2,8 @@
 
 这个 repo 的 issues 和 PRDs 存放在 GitHub issues 中。所有操作都使用 `gh` CLI。
 
-> **本机路径**：`gh` 由 bun 全局安装提供，位于 `~/.bun/bin/gh`（symlink → `gh-official`），**不在默认 PATH 里**。shell 报 `gh: command not found` 时用绝对路径 `~/.bun/bin/gh` 调用；已登录账号 `DriftingLi`（凭据在 `~/.config/gh/hosts.yml`）。
+> **`gh` 的路径与登录态按机器现测**，不要照抄任何一份记录：`command -v gh` + `gh auth status`。2026-09-20 在 `D:\FL` 这台机器实测 `gh` 就在 PATH 里（`C:\Program Files\GitHub CLI\gh.exe`），`~/.bun/bin` 下没有 gh、`~/.config/gh` 也不存在（Windows 的登录态落在别处）。
+> ⚠️ 另有一条与权限档相关的实测：`gh` 的**任何**子命令（含 `issue list` 这类只读）在 auto 权限档下会被 classifier 拦下 —— 需要发布时换档或由维护者自己跑。
 
 ## Conventions
 

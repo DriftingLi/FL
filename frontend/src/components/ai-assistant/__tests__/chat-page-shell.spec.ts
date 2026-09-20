@@ -3,8 +3,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { reactive, nextTick } from 'vue'
-import { createRouter, createMemoryHistory } from 'vue-router'
 import { epLite } from '@/test/element-lite'
+import { testRouter } from '@/test/router'
 
 // 壳在重试被拒时把原因弹给用户（断言用；epLite 走 element-plus/es 子路径，不受影响）
 const ElMessage = vi.hoisted(() => ({ warning: vi.fn(), error: vi.fn(), success: vi.fn() }))
@@ -71,10 +71,9 @@ function makeStore(overrides: Record<string, unknown> = {}) {
   })
 }
 
-const router = createRouter({
-  history: createMemoryHistory(),
-  routes: [{ path: '/:pathMatch(.*)*', component: { template: '<div/>' } }]
-})
+// 路由表从页面描述符派生：壳里的 href('StudentProfile') / href('Login') 是具名位置，
+// 通配 catch-all 只吃路径不吃名字。见 @/test/router。
+const router = testRouter()
 
 function mountShell(props: Record<string, unknown> = {}, slots: Record<string, any> = {}) {
   return mount(ChatPageShell, {

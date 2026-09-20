@@ -1,14 +1,15 @@
 // 内容对象表一致性锁（第十二波票 2，#1168；互等锁形态照页面描述符 spec 先例）。
-// 锁四件事：
+// 锁五件事：
 //   1. 表与后端契约枚举互等（搜索 type / 收藏 target_type 双向）——新增种类漏登记即红；
 //   2. 收藏 tab 集合钉到 2026-09-18 裁定（featured 刻意排除，理由在表注释）——派生不得顺手合并；
 //   3. 每个种类必须有落点装配（to 必填槽），章节缺父课程时降级为 null（不可点，不猜落点）；
-//   4. 称谓与标签色逐项锁定（搜索页/收藏页共用后，文案漂移只会红一次）。
+//   4. 称谓与标签色逐项锁定（搜索页/收藏页共用后，文案漂移只会红一次）；
+//   5. 可收藏种类投影与表 favoritable 槽互等（ADR-0060 决策 3：收藏开关的编译期收窄唯一来自表）。
 import { describe, it, expect } from 'vitest'
 import router from '@/router'
 import type { FavoriteTargetType } from '@/api/favorite'
 import type { SearchType } from '@/api/search'
-import { CONTENT_OBJECTS, contentObjectByKey, contentObjectBySearchType, favoriteTabContentObjects, searchableContentObjects, type ContentObjectKey } from '../contentObjects'
+import { CONTENT_OBJECTS, FAVORITABLE_CONTENT_OBJECT_KEYS, contentObjectByKey, contentObjectBySearchType, favoriteTabContentObjects, searchableContentObjects, type ContentObjectKey } from '../contentObjects'
 
 // 契约枚举的前端真源是 api/search.ts / api/favorite.ts 的 union；这里以穷尽 Record 保证
 // union 增员时本测试编译期失败（而不是悄悄少测一种）。
@@ -46,6 +47,19 @@ describe('内容对象表 ↔ 契约枚举', () => {
   it('可收藏种类的 favoriteTargetType 与收藏契约枚举互等', () => {
     const declared = CONTENT_OBJECTS.filter(o => o.favoritable).map(o => o.favoriteTargetType)
     expect([...declared].sort()).toEqual(Object.keys(FAVORITE_TYPE_EXHAUSTIVE).sort())
+  })
+
+  // 收藏开关（composables/useFavorite.ts）的 key 参数在类型层收窄到 FAVORITABLE_CONTENT_OBJECT_KEYS，
+  // 那个投影列表与表 favoritable 槽的互等由本条钉：表把某种类改成不可收藏而忘从投影剔除、
+  // 或新增可收藏种类漏进投影，都判红（编译期的 as const satisfies 只保证投影里的种类真实存在于表）。
+  it('可收藏种类投影 = 表 favoritable=true 那一档（收藏入口类型收窄的唯一来源）', () => {
+    const fromTable = CONTENT_OBJECTS.filter(o => o.favoritable).map(o => o.key)
+    expect([...FAVORITABLE_CONTENT_OBJECT_KEYS].sort()).toEqual([...fromTable].sort())
+    for (const key of FAVORITABLE_CONTENT_OBJECT_KEYS) {
+      const entry = contentObjectByKey(key)
+      expect(entry, key + ' 不在内容对象表里').toBeTruthy()
+      expect(entry!.favoritable, key + ' 被投影成可收藏，但表里 favoritable=false').toBe(true)
+    }
   })
 
   it('表 key 集合穷尽 ContentObjectKey', () => {

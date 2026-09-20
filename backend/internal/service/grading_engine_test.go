@@ -100,14 +100,14 @@ func TestGradingEngineGradeSet(t *testing.T) {
 			flow:   "mock_exam",
 			qType:  "short_answer",
 			answer: "作答",
-			aiRes:  &AIGradeResult{Score: 0, Comment: "AI评分暂不可用，请等待导师人工评分", Fallback: true},
+			aiRes:  &AIGradeResult{Score: 0, Comment: "AI评分暂不可用，请等待讲师人工评分", Fallback: true},
 			wantResult: GradeResult{
 				IsCorrect: nil,
 				Earned:    0,
 				MaxScore:  10,
 				ShortAnswer: &ShortAnswerGrade{
 					Score:    0,
-					Comment:  "[AI评分降级] AI评分暂不可用，请等待导师人工评分",
+					Comment:  "[AI评分降级] AI评分暂不可用，请等待讲师人工评分",
 					Fallback: true,
 					Passed:   false,
 				},

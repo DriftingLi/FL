@@ -82,4 +82,20 @@ describe('inspectionApi', () => {
     await inspectionApi.handleJobReport(3)
     expect(mockPost).toHaveBeenCalledWith('/admin/job-reports/3/handle')
   })
+
+  // ---- 票 6（ADR-0060 决策 6）：出口即中立容器，页面不再看到键名 ----
+
+  it('列表出口给中立容器 Page<T>：本域键在此消解，畸形载荷收成 [] 与 0', async () => {
+    mockGet.mockResolvedValue({ items: [{ id: 1 }], total: 7, page: 1, pages: 2 })
+    await expect(inspectionApi.resumeViews({ page: 1, page_size: 20 })).resolves.toEqual({
+      items: [{ id: 1 }],
+      total: 7
+    })
+
+    mockGet.mockResolvedValue(null)
+    await expect(inspectionApi.jobReports({ page: 1, page_size: 20 })).resolves.toEqual({
+      items: [],
+      total: 0
+    })
+  })
 })

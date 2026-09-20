@@ -28,6 +28,7 @@ import {
 } from '@/api/valuation/admin'
 import type { CoefficientConfig } from '@/types/valuation/evaluation'
 import { useAdminTable } from '@/composables/useAdminTable'
+import { toPage } from '@/api/page'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useConfirm } from '@/composables/useConfirm'
 import { useDirtyDraft } from '@/composables/useDirtyDraft'
@@ -71,7 +72,8 @@ const {
 } = useAdminTable<AdminRow>({
   fetch: async () => {
     const rows = await adminResources.originalPrices.list()
-    return { list: rows, total: rows.length }
+    // 原价表一次拉全量（无服务端分页）：容器仍走 api 侧构造器，total 就是行数（票 6 不开特例）
+    return toPage(rows, rows.length)
   }
 })
 

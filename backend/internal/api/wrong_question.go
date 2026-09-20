@@ -3,6 +3,7 @@ package api
 
 import (
 	"context"
+	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -91,14 +92,7 @@ func (h *WrongQuestionHandler) List(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *listWrongQuestionsReq) (*service.WrongQuestionPageDTO, error) {
 			return h.svc.GetWrongQuestions(req.StudentID, req.Page, req.PageSize, req.QType, req.MinWrongCount, req.Favorited, req.Sort, req.CredentialID)
 		},
-		Render: func(c *gin.Context, _ *listWrongQuestionsReq, resp *service.WrongQuestionPageDTO, err error) {
-			if err != nil {
-				response.ServerError(c, err.Error())
-				return
-			}
-			response.Success(c, *resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // redoWrongQuestionReq 重做错题请求。
@@ -142,11 +136,8 @@ func (h *WrongQuestionHandler) Redo(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *redoWrongQuestionReq) (*service.SubmitResultDTO, error) {
 			return h.svc.RedoWrongQuestion(req.StudentID, req.QuestionID, req.UserAnswer, req.CredentialID)
 		},
-		Render: func(c *gin.Context, _ *redoWrongQuestionReq, resp *service.SubmitResultDTO, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
+		ErrStatus: errStatusAll(http.StatusBadRequest),
+		Render: func(c *gin.Context, _ *redoWrongQuestionReq, resp *service.SubmitResultDTO) {
 			response.Success(c, deref(resp))
 		},
 	}.Handle(c)
@@ -184,14 +175,7 @@ func (h *WrongQuestionHandler) Remove(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *removeWrongQuestionReq) (*service.WrongQuestionRemoveResultDTO, error) {
 			return h.svc.RemoveWrongQuestion(req.StudentID, req.QuestionID)
 		},
-		Render: func(c *gin.Context, _ *removeWrongQuestionReq, resp *service.WrongQuestionRemoveResultDTO, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "已移出错题本", *resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("已移出错题本"), http.StatusBadRequest).Handle(c)
 }
 
 // BatchRemove 批量移出错题本
@@ -224,14 +208,7 @@ func (h *WrongQuestionHandler) BatchRemove(c *gin.Context) {
 			}
 			return &service.WrongQuestionBatchRemoveResultDTO{Removed: cnt}, nil
 		},
-		Render: func(c *gin.Context, _ *batchRemoveReq, resp *service.WrongQuestionBatchRemoveResultDTO, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "已批量移出", *resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("已批量移出"), http.StatusBadRequest).Handle(c)
 }
 
 type batchRemoveReq struct {
@@ -264,9 +241,6 @@ func (h *WrongQuestionHandler) GetStats(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *getWrongStatsReq) (*service.WrongQuestionStatsDTO, error) {
 			return h.svc.GetStats(req.StudentID), nil
 		},
-		Render: func(c *gin.Context, _ *getWrongStatsReq, resp *service.WrongQuestionStatsDTO, _ error) {
-			response.Success(c, resp)
-		},
 	}.Handle(c)
 }
 
@@ -298,7 +272,7 @@ func (h *WrongQuestionHandler) Export(c *gin.Context) {
 			c.Data(200, "text/plain; charset=utf-8", []byte(text))
 			return &struct{}{}, nil
 		},
-		Render: func(c *gin.Context, _ *exportWrongQuestionsReq, _ *struct{}, _ error) {
+		Render: func(c *gin.Context, _ *exportWrongQuestionsReq, _ *struct{}) {
 		},
 	}.Handle(c)
 }

@@ -4,17 +4,16 @@
 // 两处不同步 → 站外链接静默 404（无报错、无类型提示）。本文件就是那道闸门。
 import { describe, it, expect } from 'vitest'
 import router from '../index'
-import { routeNames } from '@/config/routeNames'
 import { FORUM_LINK_OUT_PATH } from '@/config/forumLinks'
 
 describe('外链中转页路由（#881）', () => {
   it('config 里的中转路径确实指向 LinkOut 路由', () => {
     const resolved = router.resolve(FORUM_LINK_OUT_PATH)
-    expect(resolved.name).toBe(routeNames.LinkOut)
+    expect(resolved.name).toBe('LinkOut')
   })
 
   it('中转页是独立页面：不挂布局外壳（无侧栏/主题入口），工作区与登录要求不丢', () => {
-    const resolved = router.resolve({ name: routeNames.LinkOut })
+    const resolved = router.resolve({ name: 'LinkOut' })
     expect(resolved.meta.workspace).toBe('training')
     expect(resolved.meta.requiresAuth).toBe(true)
     // 顶层记录：matched 只有自身一条 —— 没有布局外壳，也就没有侧栏与主题切换入口
@@ -25,7 +24,7 @@ describe('外链中转页路由（#881）', () => {
   })
 
   it('反查：LinkOut 路由的完整路径就是常量本身（改名漏改即红）', () => {
-    const byName = router.resolve({ name: routeNames.LinkOut })
+    const byName = router.resolve({ name: 'LinkOut' })
     expect(byName.path).toBe(FORUM_LINK_OUT_PATH)
   })
 })

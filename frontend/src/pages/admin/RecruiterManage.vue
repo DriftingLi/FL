@@ -303,14 +303,12 @@ async function handleToggle(row: AdminRecruiter) {
 
 // admin 列表状态机：只声明 fetch 与行操作 adapter
 const table = useAdminTable<AdminRecruiter>({
-  fetch: async (paging, filters) => {
-    const data = await adminApi.getRecruiters({
+  fetch: (paging, filters) =>
+    adminApi.getRecruiters({
       page: paging.page,
       page_size: paging.pageSize,
       keyword: filters.keyword ? String(filters.keyword) : undefined
-    })
-    return { list: data?.items || [], total: data?.total || 0 }
-  },
+    }),
   actions: {}
 })
 const { loading, list, total, currentPage, pageSize, searchKeyword, load, search } = table

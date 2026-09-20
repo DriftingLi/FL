@@ -1,6 +1,8 @@
 // useAsyncPage：学员端列表页三态 + 分页状态机（#388）+ 证件切换失效刷新（#604）的接口级测试。
 // seam：composable 接口——loader 用内存 fake（成功/失败/慢速），不触达 API 层；
 // 证件信号源用真实 pinia store（setActivePinia），与生产 watch 口径一致。
+// append 档（#1101 收编、ADR-0060 §4 换判据）：hasMore 只认响应里的分页信封，
+// 本文件按「服务端给的页数」造 fixture（含论坛置顶导致的首批短一格形态）。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ref, nextTick } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
@@ -369,16 +371,26 @@ describe('useAsyncPage 筛选轴与空态判据（#1054）', () => {
   })
 })
 
-describe('useAsyncPage append 形态（#1101，append 式分页的唯一入口）', () => {
+describe('useAsyncPage append 形态（#1101 唯一入口；ADR-0060 §4 判据换服务端事实）', () => {
   const BATCH = 20
 
-  it('run 装载第 1 批；满一批 hasMore 为真；loadMore 追加下一批并推进页码', async () => {
+  /** 造一批：`n` 条条目 + 服务端分页信封（page/pages/total 三者同源，照后端下发形态）。 */
+  function batch(page: number, pages: number, total: number, n: number) {
+    return {
+      items: Array.from({ length: n }, (_, i) => ({ id: page * 100 + i })),
+      page,
+      pages,
+      total
+    }
+  }
+
+  it('run 装载第 1 批；loadMore 追加下一批并推进页码；末页按服务端页数到底', async () => {
     const items = ref<Array<{ id: number }>>([])
     const seenPages: number[] = []
-    const { run, loadMore, hasMore, loadingMore, page } = useAsyncPage(
+    const { run, loadMore, hasMore, loadingMore, page, total } = useAsyncPage(
       async (p?: number) => {
         seenPages.push(p ?? 1)
-        return { items: Array.from({ length: p === 2 ? 5 : BATCH }, (_, i) => ({ id: (p ?? 1) * 100 + i })) }
+        return p === 2 ? batch(2, 2, 25, 5) : batch(1, 2, 25, BATCH)
       },
       { mode: 'append', batchSize: BATCH, itemsRef: items }
     )
@@ -387,23 +399,111 @@ describe('useAsyncPage append 形态（#1101，append 式分页的唯一入口�
     expect(seenPages).toEqual([1])
     expect(items.value).toHaveLength(BATCH)
     expect(hasMore.value).toBe(true)
+    // total 由响应写入（页面的「剩余 N 条」直接读它，不再自己数累积）
+    expect(total.value).toBe(25)
 
     await loadMore()
     expect(seenPages).toEqual([1, 2])
     expect(items.value).toHaveLength(BATCH + 5)
-    // 第二批不足一批 → 到底
+    // 第二批到底：判据是「第 2 批 = 总页数 2」，与这批几条无关
     expect(hasMore.value).toBe(false)
     expect(page.value).toBe(2)
     expect(loadingMore.value).toBe(false)
   })
 
-  it('不足一批的首页直接到底；到底后 loadMore 不发请求', async () => {
+  it('首批短一格仍可翻页（ADR-0060 锁的用例，照论坛置顶的真实形态）', async () => {
+    // 论坛详情把被采纳回复钉在首页第一条并给它在首页留一格（后端 forum_service.go），
+    // 置顶条没落位时首页就是 19/20 —— 旧判据「本批满一批」在此刻判 false，
+    // 「加载更多」直接消失、长帖再也翻不到底。服务端说有三页就必须还能翻。
+    const items = ref<Array<{ id: number }>>([])
+    const seenPages: number[] = []
+    const { run, loadMore, hasMore } = useAsyncPage(
+      async (p?: number) => {
+        seenPages.push(p ?? 1)
+        return p === 1 ? batch(1, 3, 55, 19) : batch(2, 3, 55, BATCH)
+      },
+      { mode: 'append', batchSize: BATCH, itemsRef: items }
+    )
+
+    await run()
+    expect(items.value).toHaveLength(19)
+    expect(hasMore.value).toBe(true)
+
+    await loadMore()
+    expect(seenPages).toEqual([1, 2])
+    expect(items.value).toHaveLength(39)
+    expect(hasMore.value).toBe(true)
+  })
+
+  it('末页恰好满批：服务端说没有下一页，就不给一个点下去是空批的入口', async () => {
+    // 旧判据的反向错处：total 恰为批大小整数倍时末页也满一批 ⇒ 按钮赖着不走，
+    // 点下去发一个返回空数组的请求（论坛的 offset 折算让这一下特别容易撞上）。
+    const items = ref<Array<{ id: number }>>([])
+    let calls = 0
+    const { run, loadMore, hasMore } = useAsyncPage(
+      async (p?: number) => {
+        calls++
+        return p === 2 ? batch(2, 2, 40, BATCH) : batch(1, 2, 40, BATCH)
+      },
+      { mode: 'append', batchSize: BATCH, itemsRef: items }
+    )
+
+    await run()
+    await loadMore()
+    expect(items.value).toHaveLength(40)
+    expect(hasMore.value).toBe(false)
+    await loadMore()
+    // 到底后不再发请求
+    expect(calls).toBe(2)
+  })
+
+  it('响应只给 total（职位广场/简历库形态）：按批大小换算总页数，同样不问批满不满', async () => {
+    const items = ref<Array<{ id: number }>>([])
+    const { run, loadMore, hasMore } = useAsyncPage(
+      async (p?: number) => {
+        const n = p === 2 ? 3 : BATCH
+        return { items: Array.from({ length: n }, (_, i) => ({ id: (p ?? 1) * 100 + i })), total: 23 }
+      },
+      { mode: 'append', batchSize: BATCH, itemsRef: items }
+    )
+
+    await run()
+    // ceil(23 / 20) = 2 页 ⇒ 第 1 批之后还有
+    expect(hasMore.value).toBe(true)
+    await loadMore()
+    expect(hasMore.value).toBe(false)
+    expect(items.value).toHaveLength(23)
+  })
+
+  it('分页信封整体缺失＝契约违规：记 error 并判到底，绝不退回「本批满一批」的旧猜测', async () => {
+    const items = ref<Array<{ id: number }>>([])
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    let calls = 0
+    const { run, loadMore, hasMore } = useAsyncPage(
+      async (p?: number) => {
+        calls++
+        // 满一批（旧判据会在这里说「还有下一批」），但响应既无 pages 也无 total
+        return { items: Array.from({ length: BATCH }, (_, i) => ({ id: (p ?? 1) * 100 + i })) }
+      },
+      { mode: 'append', batchSize: BATCH, itemsRef: items }
+    )
+
+    await run()
+    expect(hasMore.value).toBe(false)
+    await loadMore()
+    expect(calls).toBe(1)
+    expect(error).toHaveBeenCalledTimes(1)
+    expect(error.mock.calls[0][0]).toContain('既无 pages 也无 total')
+    error.mockRestore()
+  })
+
+  it('服务端说只有一页时直接到底；到底后 loadMore 不发请求', async () => {
     const items = ref<Array<{ id: number }>>([])
     let calls = 0
     const { run, loadMore, hasMore } = useAsyncPage(
       async () => {
         calls++
-        return { items: [{ id: 1 }] }
+        return batch(1, 1, 1, 1)
       },
       { mode: 'append', batchSize: BATCH, itemsRef: items }
     )
@@ -421,7 +521,7 @@ describe('useAsyncPage append 形态（#1101，append 式分页的唯一入口�
     const { run, reset, page } = useAsyncPage(
       async (p?: number) => {
         seen.push([p ?? 1, keyword.value])
-        return { items: Array.from({ length: BATCH }, (_, i) => ({ id: i })) }
+        return batch(p ?? 1, 3, 60, BATCH)
       },
       { mode: 'append', batchSize: BATCH, itemsRef: items, filterDeps: [keyword] }
     )
@@ -438,12 +538,14 @@ describe('useAsyncPage append 形态（#1101，append 式分页的唯一入口�
     expect(seen.at(-1)).toEqual([1, '叉车'])
     expect(items.value).toHaveLength(BATCH)
 
-    // 显式 reset（「刷新」按钮）同样是「清空 + 回第 1 批」
-    reset()
+    // 显式 reset（「刷新」按钮）同样是「清空 + 回第 1 批」，且 await 得到新批次落地
+    await reset()
     expect(seen.at(-1)).toEqual([1, '叉车'])
+    expect(items.value).toHaveLength(BATCH)
+    expect(page.value).toBe(1)
   })
 
-  it('本批失败即停：不覆盖已累积条目、页码不推进；再点一次即重试同一批', async () => {
+  it('本批失败即停：不覆盖已累积条目、页码不推进、入口不消失；再点一次即重试同一批', async () => {
     const items = ref<Array<{ id: number }>>([])
     let failSecond = true
     const pages: number[] = []
@@ -451,7 +553,7 @@ describe('useAsyncPage append 形态（#1101，append 式分页的唯一入口�
       async (p?: number) => {
         pages.push(p ?? 1)
         if ((p ?? 1) === 2 && failSecond) throw new Error('boom')
-        return { items: Array.from({ length: p === 1 ? BATCH : 3 }, (_, i) => ({ id: i })) }
+        return p === 1 ? batch(1, 2, 23, BATCH) : batch(2, 2, 23, 3)
       },
       { mode: 'append', batchSize: BATCH, itemsRef: items }
     )
@@ -463,13 +565,43 @@ describe('useAsyncPage append 形态（#1101，append 式分页的唯一入口�
     expect(loadError.value).toBe(false)
     expect(page.value).toBe(1)
     expect(pages).toEqual([1, 2])
+    // 失败不改动本批判据：入口留在原位（藏掉按钮就等于剥夺了那次重试）
+    expect(hasMore.value).toBe(true)
 
-    // 再点一次：重跑第 2 批（页码未推进），成功后继续累积
+    // 再点一次：重跑第 2 批（页码未推进），成功后继续累积并按服务端页数到底
     failSecond = false
-    hasMore.value = true
     await loadMore()
     expect(pages).toEqual([1, 2, 2])
     expect(items.value).toHaveLength(BATCH + 3)
     expect(page.value).toBe(2)
+    expect(hasMore.value).toBe(false)
+  })
+
+  it('loadMore 飞行中 hasMore 不翻转（按钮不被换成「没有更多」），loadingMore 防重入', async () => {
+    const items = ref<Array<{ id: number }>>([])
+    let release!: (res: unknown) => void
+    const gate = new Promise<unknown>(resolve => { release = resolve })
+    let calls = 0
+    const { run, loadMore, hasMore, loadingMore } = useAsyncPage(
+      async (p?: number) => {
+        calls++
+        if ((p ?? 1) === 1) return batch(1, 3, 60, BATCH)
+        return gate
+      },
+      { mode: 'append', batchSize: BATCH, itemsRef: items }
+    )
+
+    await run()
+    expect(hasMore.value).toBe(true)
+    const flight = loadMore()
+    expect(loadingMore.value).toBe(true)
+    // 在飞行中：入口不消失（页面据此渲染按钮的 loading 态），重复调用被防重入拦下
+    expect(hasMore.value).toBe(true)
+    await loadMore()
+    expect(calls).toBe(2)
+    release(batch(2, 3, 60, BATCH))
+    await flight
+    expect(loadingMore.value).toBe(false)
+    expect(items.value).toHaveLength(BATCH * 2)
   })
 })

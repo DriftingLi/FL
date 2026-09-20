@@ -94,6 +94,7 @@
 // 题干本身来自题库池口径的 by-id 读取（#981）：draft、源标记真题题、非当前证件一律 404，
 // 所以这里不会成为「真题题免费刷」的入口。
 import { computed, onMounted, ref } from 'vue'
+import { href } from '@/config/pages'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft } from '@element-plus/icons-vue'
@@ -216,7 +217,7 @@ function goBack() {
 }
 
 function goQuestionBank() {
-  void router.push('/training/question-bank')
+  void router.push(href('QuestionBank'))
 }
 
 onMounted(async () => {

@@ -31,7 +31,7 @@
           <div class="mb-1.5 flex items-center gap-2">
             <RouterLink
               v-if="n.question_id"
-              :to="`/training/questions/${n.question_id}`"
+              :to="href('StudentQuestionDetail', { id: String(n.question_id) })"
               class="inline-flex items-center"
             >
               <UiTag size="small">{{ questionLabel(n) }}</UiTag>
@@ -79,6 +79,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { href } from '@/config/pages'
 import { noteApi, type NoteItem, type NoteScope } from '@/api/note'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useConfirm } from '@/composables/useConfirm'

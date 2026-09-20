@@ -95,4 +95,15 @@ describe('adminContributionApi 管理端（#517）', () => {
     await adminContributionApi.handleReport(2, 'archive')
     expect(mockPost).toHaveBeenLastCalledWith('/admin/contributions/reports/2/handle', { action: 'archive' })
   })
+
+  it('两条队列的出口是中立容器 Page<T>（票 6）：分页元字段不出 api 层，缺载荷收成空容器', async () => {
+    mockGet.mockResolvedValue({ items: [{ id: 3 }], total: 9, page: 1, page_size: 20 })
+    await expect(adminContributionApi.listPending({ page: 1, page_size: 20 })).resolves.toEqual({
+      items: [{ id: 3 }],
+      total: 9
+    })
+
+    mockGet.mockResolvedValue(null)
+    await expect(adminContributionApi.listReports({ status: 0 })).resolves.toEqual({ items: [], total: 0 })
+  })
 })

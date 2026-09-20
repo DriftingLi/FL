@@ -2,7 +2,7 @@
   <ChatPageShell
     :logo-sub="`AI 叉车助手 · ${feature?.title || ''}`"
     :login-redirect="route.fullPath"
-    back-link-to="/ai-assistant"
+    :back-link-to="href('AIAssistant')"
     back-link-text="返回 AI 助手"
     :welcome-icon="feature?.icon || ChatDotRound"
     :welcome-title="feature?.title || ''"
@@ -167,6 +167,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { UploadFile } from 'element-plus'
 import { ChatDotRound, Picture, Close } from '@element-plus/icons-vue'
+import { href } from '@/config/pages'
 import ChatPageShell from '@/components/ai-assistant/ChatPageShell.vue'
 import { useAIAssistantStore, type SendOptions } from '@/stores/aiAssistant'
 import {
@@ -387,7 +388,7 @@ onMounted(() => {
       loadBrands()
     }
   } else {
-    router.replace('/ai-assistant')
+    router.replace(href('AIAssistant'))
   }
 })
 </script>

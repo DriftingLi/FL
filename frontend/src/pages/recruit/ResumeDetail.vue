@@ -1,7 +1,7 @@
 <template>
   <div class="flex flex-col gap-4">
     <div class="flex items-center gap-2">
-      <router-link to="/recruit/resumes" class="text-sm text-ui-600 hover:text-ui-700">← 返回简历库</router-link>
+      <router-link :to="href('RecruitResumes')" class="text-sm text-ui-600 hover:text-ui-700">← 返回简历库</router-link>
     </div>
 
     <UiAsyncSection
@@ -68,6 +68,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { href } from '@/config/pages'
 import { recruitApi, type RecruitResumeItem } from '@/api/recruit'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'

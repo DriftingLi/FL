@@ -17,8 +17,11 @@ import type { RouteLocationRaw } from 'vue-router'
 import type { SubdomainType } from '@/utils/subdomain'
 import { getTargetSubdomainForPath } from '@/utils/subdomain'
 import { resolveWorkspaceForRole } from '@/utils/authRedirect'
-import { routeNames } from '@/config/routeNames'
 import { hasCapability, type AuthzCapability, type AuthzRole } from '@/config/authz'
+import type { RouteName } from '@/config/pages'
+
+/** onboarding 预筛的落点：由页面描述符表派生的 RouteName 收窄（名单已无第二处手工表，写错即编译报错）。 */
+const CREDENTIAL_ONBOARDING: RouteName = 'CredentialOnboarding'
 
 /**
  * 工作区：产品区语义（≠子域名）。
@@ -199,9 +202,9 @@ export const credentialStep: GuardStep = (input, state) => {
   if (state.role !== 'hrwai_user' || state.ipDirect) return null
   if (workspaceOf(input) !== 'training') return null
   if (state.credential === 'unloaded') return { action: 'load-credential' }
-  const isOnboarding = input.name === routeNames.CredentialOnboarding
+  const isOnboarding = input.name === CREDENTIAL_ONBOARDING
   if (state.credential === 'none' && !isOnboarding) {
-    return { action: 'redirect', to: { name: routeNames.CredentialOnboarding } }
+    return { action: 'redirect', to: { name: CREDENTIAL_ONBOARDING } }
   }
   if (state.credential === 'present' && isOnboarding) {
     return { action: 'redirect', to: '/training' }

@@ -3,6 +3,7 @@ package api
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 
@@ -84,14 +85,7 @@ func (h *CourseHandler) ListCourses(c *gin.Context) {
 			}
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *courseListReq, resp *service.CoursePageResult, err error) {
-			if err != nil {
-				response.ServerError(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // GetChapterSlides 章节幻灯片
@@ -118,14 +112,7 @@ func (h *CourseHandler) GetChapterSlides(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *chapterSlidesReq) (*service.ChapterSlidesDTO, error) {
 			return h.svc.GetChapterSlides(req.ChapterID)
 		},
-		Render: func(c *gin.Context, _ *chapterSlidesReq, resp *service.ChapterSlidesDTO, err error) {
-			if err != nil {
-				response.NotFound(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
 }
 
 // GetCourseDetail 课程详情
@@ -154,14 +141,7 @@ func (h *CourseHandler) GetCourseDetail(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *courseDetailReq) (*service.CourseDetailDTO, error) {
 			return h.svc.GetCourseDetail(req.CourseID, req.StudentID)
 		},
-		Render: func(c *gin.Context, _ *courseDetailReq, resp *service.CourseDetailDTO, err error) {
-			if err != nil {
-				response.NotFound(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
 }
 
 // GetChapterDetail 章节详情
@@ -195,14 +175,7 @@ func (h *CourseHandler) GetChapterDetail(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *chapterDetailReq) (*service.ChapterDetailDTO, error) {
 			return h.svc.GetChapterDetail(req.CourseID, req.ChapterID, req.StudentID)
 		},
-		Render: func(c *gin.Context, _ *chapterDetailReq, resp *service.ChapterDetailDTO, err error) {
-			if err != nil {
-				response.NotFound(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
 }
 
 // RegenerateChapterSlides 重新生成幻灯片
@@ -229,14 +202,7 @@ func (h *CourseHandler) RegenerateChapterSlides(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *chapterSlidesReq) (*service.ChapterSlidesDTO, error) {
 			return h.svc.RegenerateChapterSlides(req.ChapterID)
 		},
-		Render: func(c *gin.Context, _ *chapterSlidesReq, resp *service.ChapterSlidesDTO, err error) {
-			if err != nil {
-				response.NotFound(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "幻灯片重新生成成功", resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("幻灯片重新生成成功"), http.StatusNotFound).Handle(c)
 }
 
 // UpdateStudyProgress 更新学习进度
@@ -292,11 +258,8 @@ func (h *CourseHandler) UpdateStudyProgress(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *studyProgressReq) (*service.StudyProgressDTO, error) {
 			return h.svc.UpdateStudyProgress(req.StudentID, req.CourseID, req.Input)
 		},
-		Render: func(c *gin.Context, _ *studyProgressReq, resp *service.StudyProgressDTO, err error) {
-			if err != nil {
-				response.ServerError(c, "更新进度失败: "+err.Error())
-				return
-			}
+		ErrStatus: errStatusAllPrefix(http.StatusInternalServerError, "更新进度失败: "),
+		Render: func(c *gin.Context, _ *studyProgressReq, resp *service.StudyProgressDTO) {
 			response.SuccessWithMsg(c, "学习进度更新成功", resp)
 		},
 	}.Handle(c)

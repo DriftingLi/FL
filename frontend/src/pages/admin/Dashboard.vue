@@ -47,7 +47,7 @@
         <span class="card-title">快捷操作</span>
       </template>
       <div class="quick-actions">
-        <div class="quick-action" v-for="action in quickActions" :key="action.label" @click="$router.push(action.path)">
+        <div class="quick-action" v-for="action in quickActions" :key="action.label" @click="$router.push(action.to)">
           <div class="action-icon-wrap" :style="{ background: action.bgColor }">
             <el-icon :size="20" :style="{ color: action.color }"><component :is="action.icon" /></el-icon>
           </div>
@@ -63,6 +63,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { User, UserFilled, Notebook, Timer, TrendCharts, MagicStick } from '@element-plus/icons-vue'
 import { adminApi } from '@/api/admin'
 import { useAuthStore } from '@/stores/auth'
+import { href } from '@/config/pages'
 import { useECharts } from '@/composables/useECharts'
 import { displayNameOf } from '@/types/user'
 import { formatDurationCompact } from '@/utils/format'
@@ -92,10 +93,10 @@ const statItems = ref([
 ])
 
 const quickActions = [
-  { label: '用户管理', path: '/admin/hrwai-users', icon: User, color: 'var(--color-primary-600)', bgColor: 'var(--color-primary-50)' },
-  { label: '课程管理', path: '/admin/course-catalog', icon: Notebook, color: 'var(--color-success)', bgColor: 'var(--color-success-light)' },
-  { label: '统计分析', path: '/admin/statistics', icon: TrendCharts, color: 'var(--color-warning)', bgColor: 'var(--color-warning-light)' },
-  { label: '内容生成', path: '/admin/content-generate', icon: MagicStick, color: 'var(--color-violet-500)', bgColor: 'var(--color-violet-50)' }
+  { label: '用户管理', to: href('HrwaiUserManage'), icon: User, color: 'var(--color-primary-600)', bgColor: 'var(--color-primary-50)' },
+  { label: '课程管理', to: href('CourseCatalog'), icon: Notebook, color: 'var(--color-success)', bgColor: 'var(--color-success-light)' },
+  { label: '统计分析', to: href('Statistics'), icon: TrendCharts, color: 'var(--color-warning)', bgColor: 'var(--color-warning-light)' },
+  { label: '内容生成', to: href('ContentGenerate'), icon: MagicStick, color: 'var(--color-violet-500)', bgColor: 'var(--color-violet-50)' }
 ]
 
 // 时长格式（紧凑）：抽到 utils/format（#796）——与 Statistics 的中文格式是同名不同语义

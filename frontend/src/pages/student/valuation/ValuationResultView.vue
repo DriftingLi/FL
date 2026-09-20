@@ -4,6 +4,7 @@
 // 刷新/直达恢复：路由带 id 时兜底 fetchDetail
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { href } from '@/config/pages'
 import { useEvaluationStore } from '@/stores/valuationEvaluation'
 import { Edit, Download } from '@element-plus/icons-vue'
 import PageHeader from '@/components/valuation/PageHeader.vue'
@@ -41,7 +42,7 @@ const r = computed(() => store.currentResult)
 const id = computed(() => store.currentId)
 
 function goEdit() {
-  router.push('/valuation/input')
+  router.push(href('ValuationHome'))
 }
 
 async function downloadPdf() {
