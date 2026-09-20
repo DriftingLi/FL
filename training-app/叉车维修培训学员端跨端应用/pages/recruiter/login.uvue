@@ -1,0 +1,242 @@
+<template>
+    <view class="recruiter-login-page">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+
+        <view class="nav-bar">
+            <view class="nav-back" @click="goBack">
+                <text class="nav-back-text">返回</text>
+            </view>
+        </view>
+
+        <scroll-view scroll-y class="body">
+            <view class="header">
+                <text class="page-title">招聘者登录</text>
+            </view>
+
+            <view class="form">
+                <view class="form-item">
+                    <view class="input-wrap">
+                        <input class="input-base" type="text" placeholder="招聘者账号" :maxlength="50" :value="username"
+                            @input="onUsernameInput" @confirm="onSubmit" />
+                    </view>
+                </view>
+                <view class="form-item">
+                    <view class="input-wrap">
+                        <input class="input-base" :password="!passwordVisible" placeholder="请输入密码" :maxlength="32"
+                            :value="password" @input="onPasswordInput" @confirm="onSubmit" />
+                        <text class="pwd-toggle" @click="togglePasswordVisible">{{ passwordVisible ? '隐藏' : '显示' }}</text>
+                    </view>
+                </view>
+
+                <button class="btn-login" :class="{ 'btn-login-disabled': loading }" :disabled="loading" @click="onSubmit">
+                    {{ btnText }}
+                </button>
+            </view>
+        </scroll-view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { onLoad } from '@dcloudio/uni-app'
+    import { ref, computed } from 'vue'
+    import { useAuthStore } from '../../stores/auth'
+    import { getActiveRole } from '../../utils/authRole'
+    import { ACTIVE_ROLE_STUDENT } from '../../constants/app'
+
+    const auth = useAuthStore()
+
+    const username = ref<string>('')
+    const password = ref<string>('')
+    const passwordVisible = ref<boolean>(false)
+    const loading = ref<boolean>(false)
+
+    const statusBarHeight = ref<number>(20)
+
+    onLoad((options : OnLoadOptions) => {
+        const sysInfo = uni.getSystemInfoSync()
+        statusBarHeight.value = sysInfo.statusBarHeight
+        // 身份互斥（ADR-0021 ②）：不允许「已登录学员」与招聘者并存于同一认证槽。
+        // 已持学员会话时**先问人**再清槽 —— 清槽是破坏性动作，不能由一次误点触发。
+        auth.restoreFromStorage()
+        if (auth.isLoggedIn.value && getActiveRole() == ACTIVE_ROLE_STUDENT) {
+            uni.showModal({
+                title: '退出当前账号',
+                content: '登录招聘者账号将退出当前学员账号',
+                // 形参不写类型：`res` 由 uni-app x 按 ShowModalSuccess 推导（对齐 ai-settings.uvue 的既有写法）
+                success: (res) => {
+                    if (res.confirm) {
+                        auth.clearAuthData()
+                    } else {
+                        uni.navigateBack()
+                    }
+                },
+            })
+        }
+    })
+
+    const btnText = computed<string>(() : string => {
+        if (loading.value) return '登录中...'
+        return '登 录'
+    })
+
+    function togglePasswordVisible() : void {
+        passwordVisible.value = !passwordVisible.value
+    }
+
+    function onUsernameInput(e : InputEvent) : void {
+        username.value = e.detail.value
+    }
+
+    function onPasswordInput(e : InputEvent) : void {
+        password.value = e.detail.value
+    }
+
+    function goBack() : void {
+        uni.navigateBack()
+    }
+
+    function validate() : string {
+        if (username.value.trim().length == 0) return '请输入招聘者账号'
+        if (password.value.length == 0) return '请输入密码'
+        return ''
+    }
+
+    /**
+     * 提交登录。
+     * @note 定义必须早于 `onConfirm`（UTS 无函数提升，Kotlin 侧是 error18 未解析的引用）
+     */
+    async function onSubmit() : Promise<void> {
+        if (loading.value) return
+        const err = validate()
+        if (err.length > 0) {
+            uni.showToast({ title: err, icon: 'none' })
+            return
+        }
+
+        loading.value = true
+        uni.showLoading({ title: '登录中...', mask: true })
+        try {
+            await auth.loginAsRecruiter({
+                username: username.value.trim(),
+                password: password.value,
+            })
+            uni.hideLoading()
+            uni.showToast({ title: '登录成功', icon: 'success', duration: 1000 })
+            setTimeout(() => {
+                uni.reLaunch({ url: '/pages/dashboard/dashboard' })
+            }, 500)
+        } catch (e) {
+            uni.hideLoading()
+            console.error('[recruiter-login] failed:', e)
+            let msg = '登录失败，请重试'
+            if (e instanceof Error) {
+                const errObj = e as Error
+                const m = errObj.message
+                if (m != null && m.length > 0) {
+                    msg = m
+                }
+            }
+            uni.showToast({ title: msg, icon: 'none' })
+        } finally {
+            loading.value = false
+        }
+    }
+
+    function onConfirm() : void {
+        onSubmit()
+    }
+</script>
+
+<style lang="scss">
+    .recruiter-login-page {
+        flex: 1;
+        background-color: #ffffff;
+    }
+
+    .status-bar {
+        background-color: #ffffff;
+    }
+
+    .nav-bar {
+        flex-direction: row;
+        align-items: center;
+        padding: 0 24rpx;
+        height: 88rpx;
+    }
+
+    .nav-back {
+        padding: 20rpx 16rpx;
+    }
+
+    .nav-back-text {
+        font-size: 30rpx;
+        color: #2979ff;
+    }
+
+    .body {
+        flex: 1;
+    }
+
+    .header {
+        align-items: center;
+        padding: 40rpx 0 60rpx 0;
+    }
+
+    .page-title {
+        font-size: 44rpx;
+        font-weight: bold;
+        color: #333333;
+        text-align: center;
+    }
+
+    .form {
+        padding: 0 56rpx;
+    }
+
+    .form-item {
+        margin-bottom: 28rpx;
+    }
+
+    .input-wrap {
+        flex-direction: row;
+        align-items: center;
+        background-color: #F5F6FA;
+        border-radius: 16rpx;
+        height: 96rpx;
+        padding: 0 28rpx;
+    }
+
+    .input-base {
+        flex: 1;
+        height: 96rpx;
+        border: none;
+        background-color: transparent;
+        padding: 0;
+        font-size: 30rpx;
+        color: #333333;
+    }
+
+    .pwd-toggle {
+        font-size: 26rpx;
+        color: #999999;
+        padding-left: 16rpx;
+    }
+
+    .btn-login {
+        margin-top: 24rpx;
+        width: 100%;
+        height: 96rpx;
+        line-height: 96rpx;
+        border-radius: 48rpx;
+        background-color: #2979ff;
+        color: #ffffff;
+        font-size: 34rpx;
+        font-weight: bold;
+        text-align: center;
+        border: none;
+    }
+
+    .btn-login-disabled {
+        opacity: 0.6;
+    }
+</style>

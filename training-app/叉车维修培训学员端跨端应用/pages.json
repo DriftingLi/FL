@@ -14,6 +14,13 @@
             }
         },
         {
+            "path": "pages/recruiter/login",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "招聘者登录"
+            }
+        },
+        {
             "path": "pages/register/register",
             "style": {
                 "navigationBarTitleText": "注册"
