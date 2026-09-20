@@ -8088,7 +8088,7 @@ paths:
           schema:
             $ref: '#/definitions/response.R'
         "404":
-          description: 导师不存在
+          description: 讲师不存在
           schema:
             $ref: '#/definitions/response.R'
       security:
@@ -8158,7 +8158,7 @@ paths:
           schema:
             $ref: '#/definitions/response.R'
         "404":
-          description: 导师不存在
+          description: 讲师不存在
           schema:
             $ref: '#/definitions/response.R'
       security:

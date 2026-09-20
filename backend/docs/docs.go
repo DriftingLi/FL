@@ -6532,7 +6532,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "导师不存在",
+                        "description": "讲师不存在",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -6647,7 +6647,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "导师不存在",
+                        "description": "讲师不存在",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
