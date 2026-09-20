@@ -170,6 +170,17 @@ export function toggleGroupExpanded(
 }
 
 /** 收集分组下的全部叶子项（最多两层一级子级，与侧栏结构一致；无 routeName/externalUrl 的容器跳过）。 */
+/**
+ * 该导航项是否「有落点」（可渲染成一行），还是只是一个分组标题。
+ *
+ * 判据的唯一宿主：侧栏父组件此前在 v-if 里各写一遍 `externalUrl || routeName`，
+ * 与 AppSidebarItem 的 kind 判别同源不同处（ADR-0060 票9：判定面只在 navigation.ts，
+ * 渲染只在 AppSidebarItem）。
+ */
+export function isNavItemRenderable(item: NavItem): boolean {
+  return !!(item.externalUrl || item.routeName)
+}
+
 export function flattenLeaves(item: NavItem): NavItem[] {
   const result: NavItem[] = []
   for (const child of item.children || []) {

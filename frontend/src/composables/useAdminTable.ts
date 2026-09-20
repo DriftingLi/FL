@@ -71,9 +71,10 @@ export function useAdminTable<T>(options: AdminTableOptions<T>) {
         payload.keyword = searchKeyword.value
       }
       const result = await options.fetch({ page: currentPage.value, pageSize: pageSize.value }, payload)
-      // 兜底口径不变（票 6 只搬容器宿主）：api 层的 toPage 已归一，这里对空/缺响应再兜一层
-      list.value = result.items || []
-      total.value = result.total || 0
+      // 容器已由 api 层出口保证（Page<T> 的 items/total 非空，兜底单点在 toPage，见 api/page.ts）；
+      // 这里再兜一层就是同一判据的第二宿主。
+      list.value = result.items
+      total.value = result.total
     } catch (error) {
       // 错误态由 loadError 承载（拦截器已统一 toast），不向上抛：调用点常不 await load()
       loadError.value = true
