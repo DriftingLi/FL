@@ -301,7 +301,7 @@ func (s *AuthService) TutorLogin(username, password string) (*LoginResult, error
 	var tutor model.Tutor
 	if err := s.db.Where("username = ?", username).First(&tutor).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("导师账号或密码错误")
+			return nil, errors.New("讲师账号或密码错误")
 		}
 		return nil, err
 	}
@@ -309,7 +309,7 @@ func (s *AuthService) TutorLogin(username, password string) (*LoginResult, error
 	return s.verifyAndIssue(password, loginCredentials{
 		id: tutor.TutorID, account: tutor.Username, username: tutor.Username,
 		password: tutor.Password, status: &status,
-	}, "tutor", "导师账号或密码错误")
+	}, "tutor", "讲师账号或密码错误")
 }
 
 // TutorRegisterResultDTO 导师建号结果（ADR-0009 §2 typed DTO / spec #940 片三）。
