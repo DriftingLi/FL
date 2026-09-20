@@ -48,6 +48,5 @@ function Get-ContractTestPattern {
     #                        （#1124：并发 401 只发一次刷新 + 空 storage 不弹回首页；行为与接线两层）
     # contractTestPattern → 本真源自身的运行期守护（**pattern 必须自指**，否则该守护永不执行）
     # contractReaderEol → contractReaderEolContract（ADR-0019 读取层归一的共享读者守护）
-    # resumeAttachment → resumeAttachmentContract（#1198：附件删除端点两端同源；错路径不得回归）
-    return 'levelDetect|envCheck|testCompile|buildDeploy|autoScreenshot|screenshotDiff|evidenceGen|devFinish|hxBusyGate|hxRun|hxTimingBehavior|hxError|hxLaunchDetach|capabilitySurface|concurrent401Refresh|contractTestPattern|contractReaderEol|resumeAttachment'
+    return 'levelDetect|envCheck|testCompile|buildDeploy|autoScreenshot|screenshotDiff|evidenceGen|devFinish|hxBusyGate|hxRun|hxTimingBehavior|hxError|hxLaunchDetach|capabilitySurface|concurrent401Refresh|contractTestPattern|contractReaderEol'
 }
