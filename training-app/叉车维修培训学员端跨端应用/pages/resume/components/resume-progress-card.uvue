@@ -1,0 +1,68 @@
+<template>
+    <!-- 简历完善度卡 —— T09 手术自 pages/resume/resume-edit.uvue 逐段搬出，类名与结构逐字不变 -->
+    <view class="progress-card">
+        <view class="progress-text-row">
+            <text class="progress-label">简历完善度</text>
+            <text class="progress-pct">{{ completion }}%</text>
+        </view>
+        <view class="progress-track">
+            <view class="progress-fill" :style="{ width: completion + '%' }"></view>
+        </view>
+        <text class="progress-tip">完善简历可增加企业推荐机会</text>
+    </view>
+</template>
+
+<script setup lang="uts">
+    // 纯展示块：只收原始值 prop，无事件面（T09 拆分准入判据：可给「原始值 prop + 单参事件」才抽组件）
+    const props = withDefaults(defineProps<{
+        completion? : number
+    }>(), {
+        completion: 0
+    })
+</script>
+
+<style>
+    .progress-card {
+        background-color: #ffffff;
+        border-radius: 20rpx;
+        padding: 28rpx;
+        margin-top: 24rpx;
+    }
+
+    .progress-text-row {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .progress-label {
+        font-size: 28rpx;
+        color: #333333;
+        font-weight: bold;
+    }
+
+    .progress-pct {
+        font-size: 28rpx;
+        color: #2979ff;
+        font-weight: bold;
+    }
+
+    .progress-track {
+        margin-top: 20rpx;
+        height: 12rpx;
+        border-radius: 6rpx;
+        background-color: #eef1f6;
+    }
+
+    .progress-fill {
+        height: 12rpx;
+        border-radius: 6rpx;
+        background-color: #2979ff;
+    }
+
+    .progress-tip {
+        margin-top: 12rpx;
+        font-size: 22rpx;
+        color: #999999;
+    }
+</style>
