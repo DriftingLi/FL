@@ -17,6 +17,15 @@ const ROOT = path.join(__dirname, '..');
 const RECRUIT = path.join(ROOT, 'api', 'recruit.uts');
 const REQUEST = path.join(ROOT, 'api', 'request.uts');
 
+/**
+ * 403 的**可识别消息前缀** —— 与 `api/request.uts` 的 `FORBIDDEN_MESSAGE_PREFIX` 同值。
+ *
+ * ⚠️ 为什么这里只能抄字面量：`utsHarness.loadUts` **不解析依赖模块**（依赖由 `bindings` 注入），
+ * 所以行为测试拿不到 request.uts 的常量。**两端不许漂移**由契约测试 E3 兜
+ * （它同时断言 request 的 `export const FORBIDDEN_MESSAGE_PREFIX = '403:'` 与 recruit 侧 `startsWith(...)`）。
+ */
+const FORBIDDEN_MESSAGE_PREFIX_FIXTURE = '403:';
+
 /** 8 维筛选的「全部留空」形态 */
 function emptyFilters() {
   return {
@@ -65,6 +74,9 @@ function loadRecruit(reply = {}) {
     get: (url, params) => respond(url, params),
     post: (url, data) => respond(url, data),
     API_BASE_URL: 'https://example.test/api',
+    // 403 的可识别前缀（真源 = `api/request.uts` 的 FORBIDDEN_MESSAGE_PREFIX）：
+    // 这里按 **相同字面量** 注入，与 request 出口对齐（契约测试 E3 同时钉住两端的单点真源）。
+    FORBIDDEN_MESSAGE_PREFIX: FORBIDDEN_MESSAGE_PREFIX_FIXTURE,
     toNumber: (v, d = 0) => (v == null ? d : (Number.isNaN(parseFloat(`${v}`)) ? d : parseFloat(`${v}`))),
     toNumberOrNull: (v) => (v == null ? null : (Number.isNaN(parseFloat(`${v}`)) ? null : parseFloat(`${v}`))),
     toStr: (v, d = '') => (v == null ? d : `${v}`),
@@ -225,14 +237,18 @@ describe('B. 明文联系方式：恰好 6 键 + 403 分流', () => {
 
   test('B3：403 被识别为「无有效授权」而不是普通失败', () => {
     const { mod } = loadRecruit();
-    const forbidden = new Error('无有效授权');
-    forbidden.statusCode = 403;
+    // 403 由 request 出口**前置消息前缀**承载（不再是 Error 上的动态 statusCode 属性：
+    // 那种写法在 UTS→Kotlin 下编不过，见 api/request.uts 的 FORBIDDEN_MESSAGE_PREFIX 注释）。
+    const forbidden = new Error(FORBIDDEN_MESSAGE_PREFIX_FIXTURE + '无有效授权');
     const other = new Error('请求失败 (500)');
-    other.statusCode = 500;
     expect(mod.isContactForbidden(forbidden)).toBe(true);
     expect(mod.isContactForbidden(other)).toBe(false);
     expect(mod.isContactForbidden(null)).toBe(false);
     expect(mod.isContactForbidden(new Error('网络连接失败'))).toBe(false);
+    // 非 Error 入参 fail-safe（不强转崩）
+    expect(mod.isContactForbidden({ statusCode: 403 })).toBe(false);
+    // 前缀只在**开头**才算（含「403:」字样但不在开头的消息不算）
+    expect(mod.isContactForbidden(new Error('无权限：403: 前缀不在开头'))).toBe(false);
   });
 
   test('B4：403 不触发登出 / 不 reLaunch（唯一出口是 401 的 handleUnauthorized）', () => {
@@ -244,8 +260,12 @@ describe('B. 明文联系方式：恰好 6 键 + 403 分流', () => {
     expect(body).not.toContain('logoutAndReject');
     expect(body).not.toContain('removeStorage');
     expect(body).not.toContain('reLaunch');
-    // 403 真值挂在 Error 上，供页面分流
-    expect(body).toContain('statusCode = 403');
+    // 403 真值经**消息前缀**交给调用方分流（不得再给 any 动态加 statusCode 属性）
+    expect(body).toContain('FORBIDDEN_MESSAGE_PREFIX + forbiddenMsg');
+    // 剥注释再判（403 分支前后的注释里正记着「编不过的旧写法」这句血账，不能误伤）
+    const code = body.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
+    expect(code).not.toMatch(/\.statusCode\s*=\s*403/);
+    expect(code).not.toMatch(/as any\)\.statusCode/);
   });
 });
 

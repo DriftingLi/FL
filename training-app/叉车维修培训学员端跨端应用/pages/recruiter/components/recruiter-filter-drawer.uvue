@@ -81,17 +81,39 @@
 
 <script setup lang="uts">
     import { ref } from 'vue'
-    import { JOB_NATURE_OPTIONS, AVAILABLE_IN_OPTIONS, jobNatureLabel } from '../../api/recruit'
-    import { toNumberOrNull } from '../../api/helpers'
-    import type { RecruitResumeFilters } from '../../api/recruit'
+    // ⚠️ 相对深度必须是**三层**：本文件在 `pages/recruiter/components/` 下，
+    //    两层 `'../../api/…'` 会解析到 `pages/api/…`（不存在）⇒ ④a 编译门报
+    //    `Could not resolve "../../api/recruit"`。仓内同构位置先例均为三层
+    //    （`pages/profile/components/activity-topic-card.uvue:25` → `'../../../utils/format'` 等）。
+    //    守护：`utils/recruiterResumeContract.test.js` 的 R6（静态形态锁）。
+    import { JOB_NATURE_OPTIONS, AVAILABLE_IN_OPTIONS, jobNatureLabel } from '../../../api/recruit'
+    import { toNumberOrNull } from '../../../api/helpers'
+    // ⚠️ `filters` 的 prop 类型**就地声明**，不从 `api/recruit.uts` 引 `import type`：
+    //    2026-09-20 ④a 实测，把一个**跨模块对象类型**直接挂进 `defineProps<{ … }>()`，
+    //    在组件层会逐个报 `error18 找不到名称"region"/"salary_min"…`
+    //    （`import type` 与值 import 两种形态都试过，同样报）；改成 `CredentialGroup[]`
+    //    那类先例（`pages/dashboard/components/dashboard-cert-dropdown.uvue:79`）是数组类型，形态不同。
+    //    ⇒ 就地声明结构上等价的类型。**字段清单必须与 `api/recruit.uts` 的
+    //    `RecruitResumeFilters` 逐字一致** —— 守护：`utils/recruiterResumeContract.test.js` 的 R7
+    //    （两处字段名逐字对账 + 不许删这里的类型）。
+    type RecruitResumeFiltersProp = {
+        region : string
+        position_id : number | null
+        credential_id : number | null
+        salary_min : number | null
+        salary_max : number | null
+        experience_min : number | null
+        job_nature : string
+        available_in : string
+    }
 
     const props = defineProps<{
         show : boolean
-        filters : RecruitResumeFilters
+        filters : RecruitResumeFiltersProp
     }>()
 
     const emit = defineEmits<{
-        (e : 'apply', filters : RecruitResumeFilters) : void
+        (e : 'apply', filters : RecruitResumeFiltersProp) : void
         (e : 'close') : void
     }>()
 
@@ -191,7 +213,7 @@
     }
 
     function onApply() : void {
-        const next : RecruitResumeFilters = {
+        const next : RecruitResumeFiltersProp = {
             region: region.value.trim(),
             position_id: parsePositive(positionIdText.value),
             credential_id: parsePositive(credentialIdText.value),
@@ -200,7 +222,7 @@
             experience_min: parseNonNegative(experienceMinText.value),
             job_nature: jobNature.value,
             available_in: availableIn.value,
-        } as RecruitResumeFilters
+        } as RecruitResumeFiltersProp
         emit('apply', next)
     }
 

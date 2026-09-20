@@ -346,4 +346,196 @@ describe('E. 403 分支在 request 出口里与 401 分开（不清态、不跳�
     // 401 仍是「返回 false 交给刷新/登出链」的那条
     expect(requestSrc).toContain('if (statusCode == 401) {\n        return false\n    }');
   });
+
+  test('E2：403 状态码**不得**再靠「给 any 动态加属性」承载（④a 编译门抓获的编不过写法）', () => {
+    // 原实现 `const forbiddenAny = forbiddenErr as any; forbiddenAny.statusCode = 403`
+    // 在 UTS→Kotlin 下报 error18「找不到名称 statusCode」，编译直接失败。
+    // 注意：注释里可以出现这句话（作为血账记录），所以先把注释剥掉再判。
+    const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
+    const code = stripComments(requestSrc) + '\n' + stripComments(recruitSrc);
+    expect(code).not.toMatch(/\.statusCode\s*=\s*\d/);
+    expect(code).not.toMatch(/as any\)\.statusCode/);
+  });
+
+  test('E3：403 用**消息前缀**承载，读写两端共用同一常量（单点真源）', () => {
+    // 写端：request.uts 定义常量并在 403 分支前置到消息
+    expect(requestSrc).toContain("export const FORBIDDEN_MESSAGE_PREFIX = '403:'");
+    expect(requestSrc).toContain('new Error(FORBIDDEN_MESSAGE_PREFIX + forbiddenMsg)');
+    // 读端：recruit.uts 从 request import 同一常量并 startsWith 判定（不得自写字面量）
+    expect(recruitSrc).toContain('FORBIDDEN_MESSAGE_PREFIX');
+    expect(recruitSrc).toContain('msg.startsWith(FORBIDDEN_MESSAGE_PREFIX)');
+    expect(recruitSrc).not.toContain("startsWith('403:')");
+  });
+
+  test('E4：`isContactForbidden` 的非 Error 入参走 false（fail-safe，不强转崩）', () => {
+    const start = recruitSrc.indexOf('export function isContactForbidden');
+    expect(start).toBeGreaterThan(-1);
+    const body = recruitSrc.slice(start, recruitSrc.indexOf('\n}', start));
+    expect(body).toContain('e == null');
+    expect(body).toContain('e instanceof Error');
+    expect(body).toContain('startsWith(FORBIDDEN_MESSAGE_PREFIX)');
+  });
+
+  test('E5：`uni.openDocument` 调用面不得出现 `showMenu`（该参数在本仓基座下不存在）', () => {
+    const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
+    for (const src of [recruitSrc, requestSrc]) {
+      const code = stripComments(src);
+      // 只覆盖「openDocument 的参数对象紧跟着 showMenu」这一种形态；注释血账不算
+      expect(code).not.toMatch(/openDocument\(\{[\s\S]{0,200}?showMenu\s*:/);
+    }
+  });
+
+  test('E6：`API_BASE_URL` 必须来自 `config/env`（`request.uts` 并不 export 它）', () => {
+    const line = recruitSrc.split('\n').find((l) => l.includes("from './request'") && l.includes('API_BASE_URL'));
+    expect(line).toBeUndefined();
+    expect(recruitSrc).toContain("import { API_BASE_URL } from '../config/env'");
+    // 反向：confirm request.uts 确实不导出它（否则本条锁的前提变了）
+    expect(requestSrc).not.toMatch(/export\s+const\s+API_BASE_URL/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R6. `pages/<x>/components/**` 的相对 import 深度（④a 编译门抓获的真缺陷的形态锁）
+// ---------------------------------------------------------------------------
+
+/**
+ * 背景（血账，别删）：`pages/recruiter/components/recruiter-filter-drawer.uvue` 曾写
+ *   `import { JOB_NATURE_OPTIONS, … } from '../../api/recruit'`
+ * 而该文件位于 `pages/recruiter/components/` ⇒ 两层只到 `pages/`，解析成 **`pages/api/recruit`（不存在）**；
+ * 正确深度是**三层** `'../../../api/recruit'`。真机/编译侧现象是 ④a 编译门直接报
+ *   `[plugin:uni:app-uvue] Could not resolve "../../api/recruit"  at …recruiter-filter-drawer.uvue:84:5`
+ * （本地 release 与 dev 编译都在**打包/编译期**炸，属「本该编译期就红」的那类，不该拖到真机）。
+ * 仓内同构位置先例全为三层：`pages/profile/components/activity-topic-card.uvue:25` → `'../../../utils/format'`、
+ * `pages/profile/components/profile-user-row.uvue:31` → `'../../../stores/auth'`。
+ *
+ * ⚠️ **为什么只能钉「形态」而不是跑一遍**：jest **不编译 `.uvue`**（解析器是 HBuilderX 的 uvue 插件），
+ *    所以这类路径错误在单测里既跑不出来、也不会 red —— 可机械核验的只有**源码形态**（相对深度）。
+ *    真正的判据仍是 ④a（`npm run build:compile`）。写这条只为把同族错误拦在**源码评审**这一步。
+ */
+describe('R6. components 下的相对 import 深度必须三层（④a 编译门抓获的形态锁）', () => {
+  const rel = (p) => path.relative(ROOT, p).replace(/\\/g, '/');
+
+  const walkUvue = (dir, acc = []) => {
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return acc;
+    }
+    for (const e of entries) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        if (e.name === 'node_modules' || e.name === 'unpackage') continue;
+        walkUvue(full, acc);
+      } else if (e.name.endsWith('.uvue')) {
+        acc.push(full);
+      }
+    }
+    return acc;
+  };
+
+  // 只扫 `pages/<x>/components/**` 这一层：这一层的相对根面恰好在项目根下 **三层** 处
+  const componentPages = walkUvue(path.join(ROOT, 'pages')).filter((p) =>
+    /\/pages\/[^/]+\/components\//.test(p.replace(/\\/g, '/')),
+  );
+
+  test('R6a：该层至少扫到文件（fail-closed：扫不到 = 锁失效，不是通过）', () => {
+    expect(componentPages.length).toBeGreaterThan(0);
+    // 本条锁的当事人必须在这批里（搬家要改锁，不要删锁）
+    expect(componentPages.map(rel)).toContain('pages/recruiter/components/recruiter-filter-drawer.uvue');
+  });
+
+  test('R6b：该层不得出现两层的 `../../api|utils|stores|types|constants` 相对 import', () => {
+    const BAD = /from\s+'(\.\.\/\.\.\/(?:api|utils|stores|types|constants)\/)/;
+    const offenders = [];
+    for (const file of componentPages) {
+      const src = readText(file);
+      src.split('\n').forEach((line, i) => {
+        if (BAD.test(line)) offenders.push(`${rel(file)}:${i + 1}  ${line.trim()}`);
+      });
+    }
+    // 失败时把「哪一行」打出来，别只给一个 false
+    expect(offenders).toEqual([]);
+  });
+
+  test('R6c：当事人现在是三层（回归锁）', () => {
+    expect(drawerSrc).toContain("from '../../../api/recruit'");
+    expect(drawerSrc).toContain("from '../../../api/helpers'");
+    expect(drawerSrc).not.toContain("from '../../api/recruit'");
+    expect(drawerSrc).not.toContain("from '../../api/helpers'");
+  });
+
+  test('R6d：锁自检 —— 合成坏样本必须被同一正则命中，好样本不命中', () => {
+    const BAD = /from\s+'(\.\.\/\.\.\/(?:api|utils|stores|types|constants)\/)/;
+    const GOOD = /from\s+'(\.\.\/\.\.\/\.\.\/(?:api|utils|stores|types|constants)\/)/;
+    expect(BAD.test("import { x } from '../../api/recruit'")).toBe(true);
+    expect(BAD.test("import { x } from '../../../api/recruit'")).toBe(false);
+    expect(GOOD.test("import { x } from '../../../api/recruit'")).toBe(true);
+  });
+
+  test('R6e：仓内先例仍是三层（先例搬家/改名要改锁）', () => {
+    const precedent = path.join(ROOT, 'pages', 'profile', 'components', 'activity-topic-card.uvue');
+    expect(fs.existsSync(precedent)).toBe(true);
+    expect(readText(precedent)).toContain("from '../../../utils/format'");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R7. 抽屉的 `filters` prop 用**就地类型**且与 api 层逐字对账
+// ---------------------------------------------------------------------------
+
+/**
+ * 背景（血账，别删）：把一个**跨模块对象类型**直接挂进 `defineProps<{ filters : X }>()`
+ * （`X` 来自 `api/recruit.uts`），组件层会逐个报
+ *   `error18 找不到名称"region"/"position_id"/…`
+ * —— `import type` 与值 import 两种形态都报（2026-09-20 ④a 实测两轮）。
+ * ⇒ 改为在组件内**就地声明结构等价的类型** `RecruitResumeFiltersProp`。
+ *
+ * 代价照实说：类型定义**有了第二份**，所以必须有一条锁把两份的**字段清单钉在一起**
+ * （否则 api 层加一维筛选、组件层漏跟，就会静默少一维 —— 正是 ADR-0008 反复记的那类假绿）。
+ * ⚠️ jest 不编译 `.uvue`，所以这里的**字段对账**是唯一机检面；真正的判据仍是 ④a。
+ */
+describe('R7. 抽屉 filters 就地类型与 api 层字段逐字对账（跨模块对象类型不能挂 defineProps）', () => {
+  const parseFields = (src, typeName) => {
+    const re = new RegExp(`type\\s+${typeName}\\s*=\\s*\\{([\\s\\S]*?)\\}`);
+    const m = src.match(re);
+    if (!m) return null;
+    return m[1]
+      .split('\n')
+      .map((l) => l.replace(/\/\/.*$/, '').trim())
+      .filter((l) => l.length > 0 && l.includes(':'))
+      .map((l) => l.split(':')[0].trim())
+      .filter((n) => /^[A-Za-z_$][\w$]*$/.test(n));
+  };
+
+  test('R7a：两处类型都解析得出来（fail-closed：解析不到 = 锁失效，不是通过）', () => {
+    expect(parseFields(recruitSrc, 'RecruitResumeFilters')).not.toBeNull();
+    expect(parseFields(drawerSrc, 'RecruitResumeFiltersProp')).not.toBeNull();
+  });
+
+  test('R7b：字段名集合**逐字相等**（顺序也一致：增删/改名/换序都会判红）', () => {
+    const api = parseFields(recruitSrc, 'RecruitResumeFilters');
+    const prop = parseFields(drawerSrc, 'RecruitResumeFiltersProp');
+    expect(prop).toEqual(api);
+    // 8 维的硬约束（后端 api/recruit.go 的参数面）—— 两处都必须是这 8 个
+    expect(api).toEqual([
+      'region', 'position_id', 'credential_id', 'salary_min',
+      'salary_max', 'experience_min', 'job_nature', 'available_in',
+    ]);
+  });
+
+  test('R7c：抽屉**不得**再从 api 层 import 这个类型（改回去就会重现 error18）', () => {
+    expect(drawerSrc).not.toMatch(/import\s+type\s*\{[^}]*RecruitResumeFilters\b/);
+    expect(drawerSrc).not.toMatch(/import\s*\{[^}]*\bRecruitResumeFilters\b[^}]*\}\s*from/);
+    // 就地类型必须真的挂在 defineProps 上
+    expect(drawerSrc).toContain('filters : RecruitResumeFiltersProp');
+  });
+
+  test('R7d：锁自检 —— 字段对账器能识别增删（合成样本）', () => {
+    const a = parseFields('export type T = {\n  x : string\n  y : number | null\n}', 'T');
+    const b = parseFields('type T2 = {\n  x : string\n}', 'T2');
+    expect(a).toEqual(['x', 'y']);
+    expect(b).toEqual(['x']);
+    expect(a).not.toEqual(b); // 少一维必须判不等
+  });
 });

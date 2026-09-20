@@ -36,7 +36,11 @@
  * 手动 JSON 映射（ADR-0003）：`as UTSJSONObject` 不可跨端强转成 Kotlin data class，
  * 故每个端点都在这里显式构造 DTO，页面层只消费 DTO。
  */
-import { get, post, API_BASE_URL } from './request'
+import { get, post, FORBIDDEN_MESSAGE_PREFIX } from './request'
+// ⚠️ `API_BASE_URL` 来自 `config/env`，**不是** `./request`（`request.uts` 并不 export 它）。
+//    写错会在 ④a 编译期报 `找不到名称"API_BASE_URL"`（error18）—— 2026-09-20 编译门抓获。
+//    同款先例：`api/aiAssistant.uts:13`。
+import { API_BASE_URL } from '../config/env'
 import { toNumber, toNumberOrNull, toStr, errMsg } from './helpers'
 import { STORAGE_KEY_TOKEN } from '../constants/app'
 import { getStorage } from '../utils/storage'
@@ -240,10 +244,12 @@ export function jobNatureLabel(v : string) : string {
 /** 判断错误是否为「无有效授权」（后端明文端点 403） */
 export function isContactForbidden(e : any | null) : boolean {
     if (e == null) return false
-    const err = e as Error
-    const code = (err as any).statusCode
-    if (code == null) return false
-    return (code as number) == RECRUIT_STATUS_FORBIDDEN
+    if (!(e instanceof Error)) return false
+    // 403 由 `api/request.uts` 用**消息前缀**承载（见 FORBIDDEN_MESSAGE_PREFIX 的注释：
+    // 给 `any` 动态加 `statusCode` 在 UTS→Kotlin 下编不过，error18）。读写两端共用同一常量。
+    const msg = (e as Error).message
+    if (msg == null) return false
+    return msg.startsWith(FORBIDDEN_MESSAGE_PREFIX)
 }
 
 // ── 映射层（ADR-0003 手动 JSON 映射：Android 端不能 as 到 type 字面量）─────────
@@ -637,10 +643,12 @@ export function downloadAndOpenAuthedFile(path : string, unauthorizedHint : stri
                     return
                 }
                 // 下载成功即打开：系统没有能打开 PDF 的应用时给明确提示，不静默
+                // ⚠️ **不得**传 `showMenu`：该参数在本仓 UTS/基座版本下不存在，编译期报
+                //    `No parameter with name 'showMenu' found.`（2026-09-20 编译门抓获）。
+                //    仓内两处先例（`api/material.uts:120`、`pages/courses/chapter-view.uvue:281`）都没有它。
                 uni.openDocument({
                     filePath: res.tempFilePath,
                     fileType: 'pdf',
-                    showMenu: true,
                     success: () : void => { resolve('') },
                     fail: () : void => { resolve('无法打开此文件') },
                 })
