@@ -62,8 +62,11 @@
                         <view class="job-action-btn job-action-detail" @click.stop="onJobDetail(job.id)">
                             <text class="job-action-text job-action-detail-text">查看详情</text>
                         </view>
-                        <view class="job-action-btn job-action-apply" @click.stop="onJobApply(job.id)">
+                        <view v-if="applyStateOf(job) == 'none'" class="job-action-btn job-action-apply" @click.stop="onJobApply(job.id)">
                             <text class="job-action-text job-action-apply-text">立即投递</text>
+                        </view>
+                        <view v-else class="job-action-btn job-action-disabled">
+                            <text class="job-action-text job-action-disabled-text">{{ applyLabelOf(job) }}</text>
                         </view>
                     </view>
                 </view>
@@ -195,6 +198,26 @@
     // ---- 导航 ----
     function onBack() : void {
         uni.navigateBack()
+    }
+
+    // ---- 投递态（#1199）----
+    // 列表项也按服务端 apply_state 收敛：可投才给「立即投递」，否则显示状态标签（不再是可点的伪按钮）。
+    // justAppliedIds 只覆盖"本页刚投递成功"的即时反馈；重进页面（或切筛选后重载）以服务端状态为准。
+    const justAppliedIds = ref<number[]>([])
+
+    /** 该职位当前投递态：'applied' / 'not_hired' / 'none' */
+    function applyStateOf(job : JobPosting) : string {
+        if (justAppliedIds.value.indexOf(job.id) >= 0) return 'applied'
+        if (job.apply_state != null && job.apply_state!.length > 0) return job.apply_state!
+        return 'none'
+    }
+
+    /** 不可投时的状态文案（冷却中带剩余天数） */
+    function applyLabelOf(job : JobPosting) : string {
+        if (applyStateOf(job) == 'applied') return '已投递'
+        // 可空字段参与比较/运算必须 ?? 兜底（AGENTS.md「Kotlin 编译期常见错误」：nullable receiver）
+        const days = job.cooldown_days ?? 0
+        return days > 0 ? (days.toString() + ' 天后可投') : '暂不可投递'
     }
 
     function onJobDetail(jobId : number) : void {
@@ -434,6 +457,15 @@
 
     .job-action-apply {
         background-color: #2979ff;
+    }
+
+    /* #1199：不可投时的状态标签（不是按钮，无点击） */
+    .job-action-disabled {
+        background-color: #f0f0f0;
+    }
+
+    .job-action-disabled-text {
+        color: #999999;
     }
 
     .job-action-text {

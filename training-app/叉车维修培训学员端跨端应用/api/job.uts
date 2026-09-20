@@ -18,6 +18,10 @@ export type JobPosting = {
     company_name : string
     status : string
     forced_offline : boolean
+    /** 学员视角投递态（#488）：'' 可投 / 'applied' 已投递 / 'not_hired' 未录用（冷却中）；'withdrawn' 后服务端不给状态（可立即重投） */
+    apply_state ?: string
+    /** 'not_hired' 时距可再投的天数（服务端向上取整；30 天冷却） */
+    cooldown_days ?: number
 }
 
 /** 职位列表查询参数 */
@@ -71,6 +75,8 @@ export function getJobDetailApi(jobId : number) : Promise<JobPosting> {
             company_name: (data['company_name'] as string) ?? '',
             status: (data['status'] as string) ?? 'open',
             forced_offline: (data['forced_offline'] as boolean) ?? false,
+            apply_state: (data['apply_state'] as string) ?? '',
+            cooldown_days: data['cooldown_days'] != null ? data['cooldown_days'] as number : null,
         } as JobPosting
     })
 }
@@ -137,6 +143,8 @@ export function getJobListApi(params : JobListParams = {}) : Promise<JobListResu
                 company_name: (obj['company_name'] as string) ?? '',
                 status: (obj['status'] as string) ?? 'open',
                 forced_offline: (obj['forced_offline'] as boolean) ?? false,
+                apply_state: (obj['apply_state'] as string) ?? '',
+                cooldown_days: obj['cooldown_days'] != null ? obj['cooldown_days'] as number : null,
             } as JobPosting
         })
         return {
