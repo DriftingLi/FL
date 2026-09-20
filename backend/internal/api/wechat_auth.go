@@ -7,6 +7,7 @@ package api
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 
@@ -59,14 +60,7 @@ func (h *WechatAuthHandler) MiniProgramLogin(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *wechatLoginReq) (*service.WxLoginResult, error) {
 			return h.svc.MiniProgramLogin(ctx, req.Code)
 		},
-		Render: func(c *gin.Context, _ *wechatLoginReq, resp *service.WxLoginResult, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "登录成功", resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("登录成功"), http.StatusBadRequest).Handle(c)
 }
 
 // GetQRCodeInfo 获取扫码登录二维码

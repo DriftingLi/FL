@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 
@@ -242,14 +243,7 @@ func (h *ProfileBindHandler) UpdateAccount(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *changeAccountReq) (*service.LoginResult, error) {
 			return h.codeSvc.ChangeAccount(ctx, h.phoneCh, middleware.CurrentUserID(c), req.Account, req.Code)
 		},
-		Render: func(c *gin.Context, _ *changeAccountReq, resp *service.LoginResult, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "账号修改成功", resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("账号修改成功"), http.StatusBadRequest).Handle(c)
 }
 
 // handleCodeChannelBind 绑定/修改目标字段的公共实现（通道注入）。

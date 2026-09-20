@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 
@@ -62,14 +63,7 @@ func (h *AdminRecruiterHandler) Create(c *gin.Context) {
 			dto := service.NewRecruiterCreatedDTO(rec)
 			return &dto, nil
 		},
-		Render: func(c *gin.Context, _ *service.RecruiterCreateInput, resp *service.RecruiterCreatedDTO, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.Created(c, "招聘者账号创建成功", resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(created("招聘者账号创建成功"), http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 切换招聘者启用/禁用状态
@@ -147,14 +141,7 @@ func (h *AdminRecruiterHandler) Edit(c *gin.Context) {
 			dto := service.NewRecruiterUpdatedDTO(rec)
 			return &dto, nil
 		},
-		Render: func(c *gin.Context, _ *idParam, resp *service.RecruiterUpdatedDTO, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "招聘者信息已更新", resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("招聘者信息已更新"), http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 重置招聘者密码
@@ -191,14 +178,7 @@ func (h *AdminRecruiterHandler) ResetPassword(c *gin.Context) {
 			}
 			return &service.RecruiterPasswordResetResult{}, nil
 		},
-		Render: func(c *gin.Context, _ *idParam, resp *service.RecruiterPasswordResetResult, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "密码已重置", resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("密码已重置"), http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 招聘者列表

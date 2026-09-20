@@ -142,14 +142,7 @@ func (h *QuestionBankHandler) ListQuestions(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *listQuestionsReq) (*service.QuestionPageDTO, error) {
 			return h.svc.ListQuestions(req.Page, req.PageSize, req.QType, req.Status, req.Keyword, req.TagID, req.CredentialID, req.Sort)
 		},
-		Render: func(c *gin.Context, _ *listQuestionsReq, resp *service.QuestionPageDTO, err error) {
-			if err != nil {
-				response.ServerError(c, err.Error())
-				return
-			}
-			response.Success(c, *resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // createQuestionReq 创建题目请求（票 6：body 由 map 直绑改 typed 入参）。

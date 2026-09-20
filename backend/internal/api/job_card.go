@@ -91,14 +91,7 @@ func (h *JobCardHandler) Upsert(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *resumeUpsertReq) (*service.JobCardDTO, error) {
 			return h.svc.Upsert(req.UserID, req.Input)
 		},
-		Render: func(c *gin.Context, _ *resumeUpsertReq, resp *service.JobCardDTO, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusBadRequest).Handle(c)
 }
 
 // UpdateVisibility 切换简历公开 PUT /api/resume/visibility

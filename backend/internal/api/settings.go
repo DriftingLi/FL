@@ -4,6 +4,7 @@ package api
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -198,14 +199,7 @@ func (h *AIConfigHandler) DeleteConfig(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		Render: func(c *gin.Context, _ *idParam, _ *struct{}, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "配置已删除", nil)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsgNoData("配置已删除"), http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 测试 AI 配置连通性
@@ -297,14 +291,7 @@ func (h *AIConfigHandler) SetBinding(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		Render: func(c *gin.Context, _ *setBindingReq, _ *struct{}, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "绑定已更新", nil)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsgNoData("绑定已更新"), http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 解除 AI 功能的多绑定单项
@@ -334,14 +321,7 @@ func (h *AIConfigHandler) UnbindConfig(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		Render: func(c *gin.Context, _ *unbindConfigReq, _ *struct{}, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "已解除绑定", nil)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsgNoData("已解除绑定"), http.StatusBadRequest).Handle(c)
 }
 
 // ===== Endpoint 请求类型 =====

@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 
@@ -149,14 +150,7 @@ func (h *NotificationHandler) MarkRead(c *gin.Context) {
 			}
 			return nil, nil
 		},
-		Render: func(c *gin.Context, _ *markReadReq, _ *struct{}, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "已标记为已读", nil)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsgNoData("已标记为已读"), http.StatusBadRequest).Handle(c)
 }
 
 // MarkAllRead 全部标记已读

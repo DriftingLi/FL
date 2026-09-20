@@ -4,6 +4,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 
@@ -76,14 +77,7 @@ func (h *PracticeModeHandler) GetFreeQuestions(c *gin.Context) {
 			}
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *freeQuestionsReq, resp *[]service.QuestionDTO, err error) {
-			if err != nil {
-				response.NotFound(c, err.Error())
-				return
-			}
-			response.Success(c, *resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
 }
 
 // tagPracticeReq 标签练习请求（tag_id 区分缺失/非法 + count）。
@@ -126,14 +120,7 @@ func (h *PracticeModeHandler) StartTagPractice(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *tagPracticeReq) (*service.PracticeStartResultDTO, error) {
 			return h.svc.StartTagPractice(req.StudentID, req.TagID, req.Count, req.CredentialID)
 		},
-		Render: func(c *gin.Context, _ *tagPracticeReq, resp *service.PracticeStartResultDTO, err error) {
-			if err != nil {
-				response.NotFound(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
 }
 
 // StartSequential 顺序练习
@@ -168,17 +155,7 @@ func (h *PracticeModeHandler) StartSequential(c *gin.Context) {
 		}) (*service.PracticeStartResultDTO, error) {
 			return h.svc.StartSequential(req.StudentID, req.CredentialID)
 		},
-		Render: func(c *gin.Context, _ *struct {
-			StudentID    int
-			CredentialID *int
-		}, resp *service.PracticeStartResultDTO, err error) {
-			if err != nil {
-				response.NotFound(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
 }
 
 // studentIDReq 仅携带学员 ID 的请求。
@@ -268,14 +245,7 @@ func (h *PracticeModeHandler) SaveProgress(c *gin.Context) {
 			}
 			return &service.ProgressSaveResultDTO{Index: req.Index, Saved: true}, nil
 		},
-		Render: func(c *gin.Context, _ *practiceSaveProgressReq, resp *service.ProgressSaveResultDTO, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusBadRequest).Handle(c)
 }
 
 // getProgressReq 查询练习进度请求（学员 ID + mode，默认 sequential）。
@@ -315,14 +285,7 @@ func (h *PracticeModeHandler) GetProgress(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *getProgressReq) (*service.ProgressResultDTO, error) {
 			return h.svc.GetProgress(req.StudentID, req.Mode, req.CredentialID), nil
 		},
-		Render: func(c *gin.Context, _ *getProgressReq, resp *service.ProgressResultDTO, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusBadRequest).Handle(c)
 }
 
 // submitAnswerReq 提交答案请求（学员 ID + body）。
@@ -374,14 +337,7 @@ func (h *PracticeModeHandler) SubmitAnswer(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *submitAnswerReq) (*service.SubmitResultDTO, error) {
 			return h.svc.SubmitAnswer(req.StudentID, req.QuestionID, req.UserAnswer, req.PracticeType, middleware.CredentialIDPtr(c))
 		},
-		Render: func(c *gin.Context, _ *submitAnswerReq, resp *service.SubmitResultDTO, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusBadRequest).Handle(c)
 }
 
 // GetPracticeStats 刷题数据展示
@@ -494,14 +450,7 @@ func (h *PracticeModeHandler) GetHistory(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *practiceHistoryReq) (*service.HistoryResultDTO, error) {
 			return h.svc.GetHistory(req.StudentID, req.CredentialID, req.Page, req.PageSize, req.QType, req.StartDate, req.EndDate)
 		},
-		Render: func(c *gin.Context, _ *practiceHistoryReq, resp *service.HistoryResultDTO, err error) {
-			if err != nil {
-				response.ServerError(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // parseStudentID 解析学员 ID（来自上下文）。

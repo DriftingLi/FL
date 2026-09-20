@@ -5,6 +5,7 @@ package api
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 
@@ -295,14 +296,7 @@ func (h *CodeChannelAuthHandler) ResetPassword(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		Render: func(c *gin.Context, _ *codeResetReq, _ *struct{}, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "密码已重置，请使用新密码登录", nil)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsgNoData("密码已重置，请使用新密码登录"), http.StatusBadRequest).Handle(c)
 }
 
 func (h *CodeChannelAuthHandler) parseResetReq(c *gin.Context) (*codeResetReq, error) {

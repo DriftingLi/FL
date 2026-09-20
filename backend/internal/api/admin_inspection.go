@@ -7,6 +7,7 @@ package api
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 
@@ -14,7 +15,6 @@ import (
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/paging"
-	"forklift-training/pkg/response"
 )
 
 // InspectionHandler 管理端巡检 handler（#1097：三条读路径归位 InspectionService，handler 只解析/渲染）。
@@ -58,14 +58,7 @@ func (h *InspectionHandler) DeletedAfterAcceptedCount(c *gin.Context) {
 		Invoke: func(_ context.Context, _ *struct{}) (*service.InspectionCountDTO, error) {
 			return h.svc.DeletedAfterAcceptedCount()
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.InspectionCountDTO, err error) {
-			if err != nil {
-				response.ServerError(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // pointsLedgerReq 积分流水查询参数（#411）。
@@ -108,14 +101,7 @@ func (h *InspectionHandler) PointsLedger(c *gin.Context) {
 		Invoke: func(_ context.Context, req *pointsLedgerReq) (*service.PointsLedgerResult, error) {
 			return h.pointsSvc.GetLedger(req.UserID, req.Page, req.PageSize, req.Reason, req.RefType)
 		},
-		Render: func(c *gin.Context, _ *pointsLedgerReq, resp *service.PointsLedgerResult, err error) {
-			if err != nil {
-				response.ServerError(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // @Summary 简历查看留痕列表
@@ -145,14 +131,7 @@ func (h *InspectionHandler) ListRecruitViews(c *gin.Context) {
 		Invoke: func(_ context.Context, req *service.InspectionViewsParams) (*paging.ItemsPage[service.RecruitResumeViewDTO], error) {
 			return h.svc.ListRecruitViews(*req)
 		},
-		Render: func(c *gin.Context, _ *service.InspectionViewsParams, resp *paging.ItemsPage[service.RecruitResumeViewDTO], err error) {
-			if err != nil {
-				response.ServerError(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // @Summary 联系方式交换申请列表
@@ -184,12 +163,5 @@ func (h *InspectionHandler) ListRecruitRequests(c *gin.Context) {
 		Invoke: func(_ context.Context, req *service.InspectionRequestsParams) (*paging.ItemsPage[service.ContactRequestRowDTO], error) {
 			return h.svc.ListRecruitRequests(*req)
 		},
-		Render: func(c *gin.Context, _ *service.InspectionRequestsParams, resp *paging.ItemsPage[service.ContactRequestRowDTO], err error) {
-			if err != nil {
-				response.ServerError(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
 }

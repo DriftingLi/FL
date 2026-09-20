@@ -3,13 +3,13 @@ package api
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
-	"forklift-training/pkg/response"
 )
 
 // MockExamHandler 模拟考试 handler。
@@ -91,14 +91,7 @@ func (h *MockExamHandler) Start(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *startReq) (*service.MockExamStartDTO, error) {
 			return h.svc.Start(req.StudentID, req.Count, req.Duration, req.CredentialID)
 		},
-		Render: func(c *gin.Context, _ *startReq, resp *service.MockExamStartDTO, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "模拟考试开始", resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("模拟考试开始"), http.StatusBadRequest).Handle(c)
 }
 
 // saveProgressReq 保存进度请求（路径 mock_exam_id + 学员 ID + body）。
@@ -151,14 +144,7 @@ func (h *MockExamHandler) SaveProgress(c *gin.Context) {
 			}
 			return nil, nil
 		},
-		Render: func(c *gin.Context, _ *saveProgressReq, _ *struct{}, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "进度保存成功", nil)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsgNoData("进度保存成功"), http.StatusBadRequest).Handle(c)
 }
 
 // mockExamIDReq 模拟考试请求（路径 mock_exam_id + 学员 ID）。
@@ -185,14 +171,7 @@ func (h *MockExamHandler) Resume(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *mockExamIDReq) (*service.MockExamResumeDTO, error) {
 			return h.svc.Resume(req.MockExamID, req.StudentID)
 		},
-		Render: func(c *gin.Context, _ *mockExamIDReq, resp *service.MockExamResumeDTO, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusBadRequest).Handle(c)
 }
 
 // Submit 模拟考试交卷
@@ -213,14 +192,7 @@ func (h *MockExamHandler) Submit(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *mockExamIDReq) (*service.MockExamSubmitDTO, error) {
 			return h.svc.Submit(req.MockExamID, req.StudentID)
 		},
-		Render: func(c *gin.Context, _ *mockExamIDReq, resp *service.MockExamSubmitDTO, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "交卷成功", resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("交卷成功"), http.StatusBadRequest).Handle(c)
 }
 
 // GetResult 模拟考试结果
@@ -241,14 +213,7 @@ func (h *MockExamHandler) GetResult(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *mockExamIDReq) (*service.MockExamResultDTO, error) {
 			return h.svc.GetResult(req.MockExamID, req.StudentID)
 		},
-		Render: func(c *gin.Context, _ *mockExamIDReq, resp *service.MockExamResultDTO, err error) {
-			if err != nil {
-				response.NotFound(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
 }
 
 // GetHistory 模拟考试历史
@@ -279,14 +244,7 @@ func (h *MockExamHandler) GetHistory(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *mockExamHistoryReq) (*service.MockExamHistoryDTO, error) {
 			return h.svc.GetHistory(req.StudentID, req.CredentialID, req.Page, req.PageSize)
 		},
-		Render: func(c *gin.Context, _ *mockExamHistoryReq, resp *service.MockExamHistoryDTO, err error) {
-			if err != nil {
-				response.ServerError(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // mockExamHistoryReq 历史列表请求（学员 ID + 当前证件 + 分页）。

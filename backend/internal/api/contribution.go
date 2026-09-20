@@ -221,14 +221,7 @@ func (h *ContributionHandler) ListPublic(c *gin.Context) {
 				CredentialID: req.CredentialID, Sort: req.Sort, Page: req.Page, PageSize: req.PageSize,
 			})
 		},
-		Render: func(c *gin.Context, _ *listPublicReq, resp *service.ContributionPageResult, err error) {
-			if err != nil {
-				response.ServerError(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // ListMine 我的投稿 GET /api/contributions/mine
@@ -252,14 +245,7 @@ func (h *ContributionHandler) ListMine(c *gin.Context) {
 			}
 			return h.svc.ListMine(userID, atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 20))
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.ContributionPageResult, err error) {
-			if err != nil {
-				response.ServerError(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // GetDetail 投稿详情 GET /api/contributions/:id
@@ -413,14 +399,7 @@ func (h *ContributionHandler) ListPending(c *gin.Context) {
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.ContributionPageResult, error) {
 			return h.svc.ListPending(atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 20))
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.ContributionPageResult, err error) {
-			if err != nil {
-				response.ServerError(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // reviewerID 从上下文取审核者 id（admin.id / tutor.tutor_id）。
@@ -569,14 +548,7 @@ func (h *ContributionHandler) ListReports(c *gin.Context) {
 			}
 			return h.svc.ListReports(atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 20), status)
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.ContributionReportPageResult, err error) {
-			if err != nil {
-				response.ServerError(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // handleReportReq 处置举报请求体。
@@ -612,12 +584,5 @@ func (h *ContributionHandler) HandleReport(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		Render: func(c *gin.Context, _ *handleReportReq, _ *struct{}, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "已处理", nil)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsgNoData("已处理"), http.StatusBadRequest).Handle(c)
 }

@@ -3,6 +3,7 @@ package api
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 
@@ -59,14 +60,7 @@ func (h *StudentHandler) GetProfile(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *studentUserIDReq) (*service.StudentProfileDTO, error) {
 			return h.svc.GetProfile(req.UserID)
 		},
-		Render: func(c *gin.Context, _ *studentUserIDReq, resp *service.StudentProfileDTO, err error) {
-			if err != nil {
-				response.NotFound(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
 }
 
 // GetRecords 学员学习记录分页
@@ -101,14 +95,7 @@ func (h *StudentHandler) GetRecords(c *gin.Context) {
 			}
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *studyRecordsReq, resp *service.StudyRecordPageResult, err error) {
-			if err != nil {
-				response.ServerError(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // studentUserIDReq 仅带学员 ID 的请求。
@@ -180,14 +167,7 @@ func (h *StudentHandler) GetStudentCourses(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *studentUserIDReq) (*service.StudentCoursesDTO, error) {
 			return h.svc.GetStudentCourses(req.UserID)
 		},
-		Render: func(c *gin.Context, _ *studentUserIDReq, resp *service.StudentCoursesDTO, err error) {
-			if err != nil {
-				response.NotFound(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
 }
 
 // GetStudentCourseDetail 单课程学习详情
@@ -214,12 +194,5 @@ func (h *StudentHandler) GetStudentCourseDetail(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *studentCourseReq) (*service.StudentCourseDetailDTO, error) {
 			return h.svc.GetStudentCourseDetail(req.UserID, req.CourseID)
 		},
-		Render: func(c *gin.Context, _ *studentCourseReq, resp *service.StudentCourseDetailDTO, err error) {
-			if err != nil {
-				response.NotFound(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
 }
