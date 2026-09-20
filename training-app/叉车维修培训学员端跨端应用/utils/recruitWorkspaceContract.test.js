@@ -891,3 +891,67 @@ describe('I. 锁自检：合成违规必须被判出来（否则本文件是空�
     expect(tag.test('\n.row-main { flex: 1; }')).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// J. 可缺省键必须「先判空再强转」（2026-09-20 真机 ①a 抓获的真缺陷的守护）
+// ---------------------------------------------------------------------------
+
+/**
+ * 背景（血账，别删）：`getRecruitJobsApi` 曾写
+ *   `offline_reason: (obj['offline_reason'] as string) ?? ''`
+ * 后端 `JobPostingDTO.OfflineReason` 带 `json:"offline_reason,omitempty"`
+ * （`backend/internal/service/job_posting_service.go:74`）⇒ 未强制下架时**该键根本不存在**。
+ * UTS 的 `as string` 编到 Kotlin 是**运行时非空断言**（ADR-0003）：
+ * 生成代码实测为 `(obj["offline_reason"] as String) ?: ""`
+ * （`unpackage/cache/.app-android/src/index.kt:10674`）⇒ 先抛
+ * `NullPointerException: null cannot be cast to non-null type kotlin.String`，`?:` / `?? ''` **兜不住**。
+ * 真机现象 = 页面 catch 后渲染成「**暂无职位**」的**假空态**（后端其实回了 200 + 列表）。
+ *
+ * ⚠️ **这一组为什么只能钉「读法形态」而不是跑一遍**：jest 跑的是 **JS 语义** ——
+ *    `(undefined ?? '')` 在 JS 里完全合法、永远不抛，所以**任何 jest 断言都复现不了这个 Kotlin 强转**。
+ *    可机械核验的那一半是**源码形态**（读法不再是裸 `as string`）＋**跨语言对账**（读的字段与
+ *    后端 tag 逐字对齐）。真正的判据仍是真机复验（①a：logcat 无 `load jobs failed`、职位段渲染真列表）。
+ *    守护只能到这层 —— 把它写成「jest 绿 ⇒ 真机没问题」就是本组要防的那种假绿。
+ */
+describe('J. 可缺省键先判空再强转（真机 NPE「假空态」缺陷的回归锁）', () => {
+  const api = read(API_RECRUIT);
+  const apiClean = stripComments(api);
+  const BACKEND_JOB_POSTING = path.join(REPO, 'backend', 'internal', 'service', 'job_posting_service.go');
+
+  it('`offline_reason` 走「先取值再判空」的可空安全形态（不再裸强转）', () => {
+    // 唯一真源：先落一个中间变量，再判空
+    expect(apiClean).toContain("const offlineReasonRaw = obj['offline_reason']");
+    expect(apiClean).toContain("offline_reason: offlineReasonRaw == null ? '' : offlineReasonRaw as string");
+  });
+
+  it('`offline_reason` 不得回退成「裸强转 + ?? 兜底」——`?? ` 兜不住 Kotlin 的 NPE', () => {
+    // 整条 `offline_reason: (obj['offline_reason'] as string) ?? ''` 的旧写法必须绝迹
+    expect(apiClean).not.toMatch(/offline_reason\s*:\s*\(obj\['offline_reason'\]\s+as\s+string\)/);
+  });
+
+  it('「先判空再强转」的样本能被本条判据识别（锁自检：否则本组是空跑）', () => {
+    // 与上面两条同源的正则，用合成样本各跑一次：好形态命中、坏形态命中
+    const NULL_SAFE = /offline_reason:\s*offlineReasonRaw\s*==\s*null\s*\?\s*''\s*:\s*offlineReasonRaw\s+as\s+string/;
+    const BARE_CAST = /offline_reason\s*:\s*\(obj\['offline_reason'\]\s+as\s+string\)/;
+    const good = "offline_reason: offlineReasonRaw == null ? '' : offlineReasonRaw as string";
+    const bad = "offline_reason: (obj['offline_reason'] as string) ?? ''";
+    expect(NULL_SAFE.test(good)).toBe(true);
+    expect(BARE_CAST.test(bad)).toBe(true);
+    // 交叉：好形态不得被坏形态判据命中，反之亦然（否则两条锁会互相抵消）
+    expect(BARE_CAST.test(good)).toBe(false);
+    expect(NULL_SAFE.test(bad)).toBe(false);
+  });
+
+  it('跨语言对账：后端 `OfflineReason` 确实带 `omitempty`（本锁的存在理由；后端改掉就重估）', () => {
+    // 读不到后端源码时 fail-closed 判红（不静默放行）
+    expect(fs.existsSync(BACKEND_JOB_POSTING)).toBe(true);
+    const go = readText(BACKEND_JOB_POSTING);
+    expect(go).toMatch(/OfflineReason\s+string\s+`json:"offline_reason,omitempty"/);
+  });
+
+  it('同族扫描：api/recruit.uts 里读 `offline_reason` 只有一处、且那一处就是守卫形态', () => {
+    expect((apiClean.match(/offline_reason/g) || []).length).toBeGreaterThan(0);
+    // 裸强转形态零命中（与上面第二条同源，但这里按「出现次数」再钉一遍，防止有人加第二个消费点绕过）
+    expect((apiClean.match(/\(\s*obj\['offline_reason'\]\s+as\s+string\s*\)/g) || []).length).toBe(0);
+  });
+});
