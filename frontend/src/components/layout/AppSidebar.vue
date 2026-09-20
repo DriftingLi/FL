@@ -44,7 +44,8 @@
     <!-- 分隔线 -->
     <div class="sidebar-divider"></div>
 
-    <!-- 导航菜单 -->
+    <!-- 导航菜单：每一行都由 AppSidebarItem 渲染（三层嵌套 × 外链/router-link 的 9 份 markup
+         收进那一个项级 module，票9 / ADR-0060 §9）；本组件只留分组编排与判定接线。 -->
     <nav class="sidebar-nav">
       <template v-for="item in menuItems" :key="item.key">
         <!-- 有子项的分组 -->
@@ -79,123 +80,45 @@
             <template v-for="child in item.children" :key="child.key">
               <!-- 二级嵌套：child 自身还有 children（如 题库练习 ┬ 真题练习） -->
               <template v-if="child.children && child.children.length">
-                <a
-                  v-if="child.externalUrl"
-                  :href="child.externalUrl"
-                  target="_blank"
-                  rel="noopener"
-                  class="nav-item"
-                >
-                  <div class="nav-item-icon">
-                    <el-icon><component :is="child.icon" /></el-icon>
-                  </div>
-                  <span v-if="!effectiveCollapsed" class="nav-item-label">{{ child.label }}</span>
-                </a>
-                <router-link
-                  v-else-if="child.routeName"
-                  :to="itemTo(child)"
-                  class="nav-item"
-                  :class="{ active: isRouteActive(child) }"
-                >
-                  <div class="nav-item-icon">
-                    <el-icon><component :is="child.icon" /></el-icon>
-                  </div>
-                  <span v-if="!effectiveCollapsed" class="nav-item-label">{{ child.label }}</span>
-                </router-link>
+                <AppSidebarItem
+                  v-if="child.externalUrl || child.routeName"
+                  :item="child"
+                  :collapsed="effectiveCollapsed"
+                  :active="isRouteActive(child)"
+                  :level="2"
+                />
                 <div v-else class="nav-group-label nav-sub-group-label" :class="{ 'is-active': isGroupActiveLocal(child) }">
                   <span>{{ child.label }}</span>
                 </div>
-                <template v-for="sub in child.children" :key="sub.key">
-                  <a
-                    v-if="sub.externalUrl"
-                    :href="sub.externalUrl"
-                    target="_blank"
-                    rel="noopener"
-                    class="nav-item nav-sub-item"
-                  >
-                    <div class="nav-item-icon">
-                      <el-icon><component :is="sub.icon" /></el-icon>
-                    </div>
-                    <span v-if="!effectiveCollapsed" class="nav-item-label">{{ sub.label }}</span>
-                  </a>
-                  <router-link
-                    v-else
-                    :to="itemTo(sub)"
-                    class="nav-item nav-sub-item"
-                    :class="{ active: isRouteActive(sub) }"
-                  >
-                    <div class="nav-item-icon">
-                      <el-icon><component :is="sub.icon" /></el-icon>
-                    </div>
-                    <span v-if="!effectiveCollapsed" class="nav-item-label">{{ sub.label }}</span>
-                  </router-link>
-                </template>
+                <AppSidebarItem
+                  v-for="sub in child.children"
+                  :key="sub.key"
+                  :item="sub"
+                  :collapsed="effectiveCollapsed"
+                  :active="isRouteActive(sub)"
+                  :level="3"
+                />
               </template>
-              <!-- 叶子 child -->
-              <a
-                v-else-if="child.externalUrl"
-                :href="child.externalUrl"
-                target="_blank"
-                rel="noopener"
-                class="nav-item"
-              >
-                <div class="nav-item-icon">
-                  <el-icon><component :is="child.icon" /></el-icon>
-                </div>
-                <span v-if="!effectiveCollapsed" class="nav-item-label">{{ child.label }}</span>
-              </a>
-              <router-link
-                v-else-if="child.routeName"
-                :to="itemTo(child)"
-                class="nav-item"
-                :class="{ active: isRouteActive(child) }"
-              >
-                <div class="nav-item-icon">
-                  <el-icon><component :is="child.icon" /></el-icon>
-                </div>
-                <span v-if="!effectiveCollapsed" class="nav-item-label">{{ child.label }}</span>
-              </router-link>
-              <a
+              <!-- 叶子 child：目标未就绪时出一行不可点的占位（fallback="inert"） -->
+              <AppSidebarItem
                 v-else
-                :href="'#'"
-                class="nav-item"
-                @click.prevent
-              >
-                <div class="nav-item-icon">
-                  <el-icon><component :is="child.icon" /></el-icon>
-                </div>
-                <span v-if="!effectiveCollapsed" class="nav-item-label">{{ child.label }}</span>
-              </a>
+                :item="child"
+                :collapsed="effectiveCollapsed"
+                :active="isRouteActive(child)"
+                :level="2"
+                fallback="inert"
+              />
             </template>
           </div>
         </template>
 
-        <!-- 外链 -->
-        <a
-          v-else-if="item.externalUrl"
-          :href="item.externalUrl"
-          target="_blank"
-          rel="noopener"
-          class="nav-item"
-        >
-          <div class="nav-item-icon">
-            <el-icon><component :is="item.icon" /></el-icon>
-          </div>
-          <span v-if="!effectiveCollapsed" class="nav-item-label">{{ item.label }}</span>
-        </a>
-
-        <!-- 无子项的顶级导航 -->
-        <router-link
-          v-else-if="item.routeName"
-          :to="itemTo(item)"
-          class="nav-item"
-          :class="{ active: isRouteActive(item) }"
-        >
-          <div class="nav-item-icon">
-            <el-icon><component :is="item.icon" /></el-icon>
-          </div>
-          <span v-if="!effectiveCollapsed" class="nav-item-label">{{ item.label }}</span>
-        </router-link>
+        <!-- 无子项的顶级导航（外链与路由项都在同一行形态里，差别由 AppSidebarItem 判） -->
+        <AppSidebarItem
+          v-else-if="item.externalUrl || item.routeName"
+          :item="item"
+          :collapsed="effectiveCollapsed"
+          :active="isRouteActive(item)"
+        />
       </template>
     </nav>
 
@@ -231,6 +154,7 @@ import {
   type NavItem
 } from '@/config/navigation'
 import NotificationPanel from '@/components/layout/NotificationPanel.vue'
+import AppSidebarItem from '@/components/layout/AppSidebarItem.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import UiTooltip from '@/components/ui/UiTooltip.vue'
 
@@ -309,11 +233,7 @@ const roleClass = computed(() => {
   return role || 'hrwai_user'
 })
 
-function itemTo(item: NavItem) {
-  return { name: item.routeName, params: item.routeParams || {} }
-}
-
-/** 匹配逻辑抽到 config/navigation.ts 的 isNavRouteActive（纯函数，可单测） */
+/** 匹配逻辑抽到 config/navigation.ts 的 isNavRouteActive（纯函数，可单测）；跳转目标由 AppSidebarItem 现算 */
 function isRouteActive(item: NavItem): boolean {
   return isNavRouteActive(item, route.name, route.params as Record<string, string | string[] | undefined>)
 }
@@ -558,14 +478,6 @@ async function handleUserCommand(command: string) {
   color: var(--color-primary-600);
 }
 
-.nav-sub-item {
-  padding-left: calc(var(--space-3) + 12px);
-}
-
-.app-sidebar.collapsed .nav-sub-item {
-  padding-left: var(--space-2);
-}
-
 .nav-group-tooltip-title {
   font-weight: var(--font-semibold);
   margin-bottom: 4px;
@@ -581,76 +493,6 @@ async function handleUserCommand(command: string) {
 .nav-group-tooltip-item.active {
   font-weight: var(--font-semibold);
   opacity: 1;
-}
-
-.nav-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
-  color: var(--color-text-secondary);
-  text-decoration: none;
-  transition: all var(--duration-fast) var(--ease-default);
-  white-space: nowrap;
-  position: relative;
-  cursor: pointer;
-  overflow: hidden;
-}
-
-.nav-item:hover {
-  color: var(--color-primary-600);
-  background: var(--color-bg-page);
-}
-
-.nav-item.active {
-  color: var(--color-primary-600);
-  background: var(--color-primary-50);
-  font-weight: var(--font-medium);
-}
-
-.nav-item.active::before {
-  content: '';
-  position: absolute;
-  left: calc(var(--space-2) * -1);
-  top: 50%;
-  transform: translateY(-50%);
-  width: 3px;
-  height: 18px;
-  background: var(--color-primary-500);
-  border-radius: 0 var(--radius-full) var(--radius-full) 0;
-}
-
-.app-sidebar.collapsed .nav-item {
-  justify-content: center;
-  padding: var(--space-3) var(--space-2);
-}
-
-.app-sidebar.collapsed .nav-item::before {
-  left: 0;
-}
-
-.nav-item-icon {
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.nav-item-icon .el-icon {
-  font-size: 18px;
-}
-
-.nav-item-label {
-  font-size: var(--text-sm);
-  font-weight: var(--font-normal);
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* 底部功能区 */
@@ -766,25 +608,6 @@ async function handleUserCommand(command: string) {
   background: rgba(45, 212, 191, 0.14);
 }
 
-.app-sidebar.is-dark .nav-item {
-  color: rgba(241, 245, 249, 0.72);
-}
-
-.app-sidebar.is-dark .nav-item:hover {
-  color: var(--color-primary-300);
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.app-sidebar.is-dark .nav-item.active {
-  color: var(--color-primary-300);
-  background: rgba(45, 212, 191, 0.14);
-}
-
-/* 激活指示条在暗底上要更亮才看得见 */
-.app-sidebar.is-dark .nav-item.active::before {
-  background: var(--color-primary-400);
-}
-
 .app-sidebar.is-dark .footer-btn {
   color: rgba(148, 163, 184, 0.85);
 }
@@ -801,9 +624,5 @@ async function handleUserCommand(command: string) {
 
 .app-sidebar.is-compact .nav-group-label {
   padding: var(--space-2) var(--space-3) var(--space-1);
-}
-
-.app-sidebar.is-compact .nav-item {
-  padding: 6px var(--space-3);
 }
 </style>

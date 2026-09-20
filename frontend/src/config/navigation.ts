@@ -151,8 +151,10 @@ export const roleNavigation: Record<string, NavItem[]> = {
 
 // ===== 侧栏分组判定（纯函数；ADR-0047 §2 / spec #930 决策 6）=====
 //
-// 这三条判定原先长在 AppSidebar.vue（826 行）内部，零测试。它们与 isNavRouteActive 是同
-// 一族：侧栏出过的两次线上问题都发生在「判定与编排混在一起」的地方，故一并抽成纯函数。
+// 这三条判定原先长在 AppSidebar.vue 的编排里（当时零测试）。它们与 isNavRouteActive 是同一族：
+// 侧栏出过的两次线上问题都发生在「判定与编排混在一起」的地方，故一并抽成纯函数。
+// 判定的测试面在 config/__tests__/navigation.spec.ts（两次故障 + 两层深度上限与分组高亮的
+// 结构性不对称，逐条钉住）；项级 markup 自第十三波 票9 起收在 components/layout/AppSidebarItem.vue。
 
 /** 分组展开态：默认展开，只有显式为 false 才收起（与组件原语义逐字一致）。 */
 export function isGroupExpanded(map: Record<string, boolean>, key: string): boolean {
