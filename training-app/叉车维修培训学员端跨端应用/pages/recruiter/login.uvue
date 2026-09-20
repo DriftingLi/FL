@@ -3,7 +3,7 @@
         <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
 
         <view class="nav-bar">
-            <view class="nav-back" @click="goStudentLogin">
+            <view class="nav-back" @click="leaveRecruiterLogin">
                 <text class="nav-back-text">返回</text>
             </view>
         </view>
@@ -35,12 +35,11 @@
         </scroll-view>
 
         <!-- 回学员端出口：纯文字链接，复用既有 link 样式（镜像 `pages/login/login.uvue` 的 `.recruiter-entry`）
-             ⚠️ 必须 `reLaunch`，**不能**用 `navigateBack`：进入本页的路径是
-             `utils/recruitGuard.uts` 的 `uni.reLaunch({ url: '/pages/recruiter/login' })` 与
-             `api/request.uts` 的 401 角色化出口 —— 两者都**清空页面栈**，栈里没有可返回的页。
-             （`recruitGuard.uts` 落在 P2 分支 `feat/mobile-1195-recruiter-workspace`，本分支尚未带过来，
-             但它的 `reLaunch` 语义在真机上已复现 ⇒ 本页必须自带出口，不得依赖返回栈。） -->
-        <view class="student-exit" @click="goStudentLogin">
+             ⚠️ 走 `leaveRecruiterLogin()` 的**分流**，不是无条件 reLaunch：正常入口（学员登录页
+             `navigateTo` 进来）栈里有上一页 ⇒ 只回退、不动认证槽；只有**栈空**的死胡同
+             （`utils/recruitGuard.uts` 与 `api/request.uts` 的 401 角色化出口都用 `uni.reLaunch`
+             ⇒ 页面栈被清空，真机已复现「退不出去」）才自带出口回学员登录页。 -->
+        <view class="student-exit" @click="leaveRecruiterLogin">
             <text class="student-exit-link">返回学员登录</text>
         </view>
     </view>
@@ -50,7 +49,7 @@
     import { onLoad } from '@dcloudio/uni-app'
     import { ref, computed } from 'vue'
     import { useAuthStore } from '../../stores/auth'
-    import { getActiveRole } from '../../utils/authRole'
+    import { getActiveRole, isRecruiterActive } from '../../utils/authRole'
     import { ACTIVE_ROLE_STUDENT } from '../../constants/app'
 
     const auth = useAuthStore()
@@ -63,22 +62,40 @@
     const statusBarHeight = ref<number>(20)
 
     /**
-     * 回学员端：**清角色标记与上一重身份的残留凭据**，再 reLaunch 到学员登录页。
+     * 离开招聘者登录页 —— **按「页面栈里有没有上一页」分流**，而不是所有出口都清槽。
      *
-     * 为什么用 reLaunch 而不是 navigateBack：进本页的两条路径都**清空页面栈**
-     * （`utils/recruitGuard.uts` 的 `ensureRecruiterSession()`、`api/request.uts` 的 401 角色化出口）
-     * ⇒ 栈里没有可返回的页，`navigateBack()` 是死胡同（真机已复现：人被困在本页）。
+     * 两条进入路径的语义完全不同，这正是「死胡同」的由来：
+     *   ① **正常入口**（`pages/login/login.uvue` 的 `goRecruiterLogin()` 走 `navigateTo`）⇒ 栈里有上一页。
+     *      此时「返回」/「取消」只应当**回退**，一个认证槽都不许动 —— 否则「点到招聘者入口又点取消」
+     *      会变成「把当前学员登出」（本页 P1 的原始语义就是 `navigateBack()`）。
+     *   ② **死胡同**（`utils/recruitGuard.uts` 的 `ensureRecruiterSession()` 与 `api/request.uts` 的
+     *      401 角色化出口，两者都用 `uni.reLaunch` ⇒ **页面栈被清空**）⇒ 栈里没有可返回的页。
+     *      真机已复现：人被困在本页（`pages/recruiter/contacts` → `/pages/recruiter/login` 反复出现）。
+     *      这时才必须自带出口：`reLaunch` 回学员登录页。
      *
-     * 为什么必须清槽（而不是只跳转）：`auth_active_role` 只有在 `loginAsRecruiter()` 里被写成
-     * recruiter，**学员侧任何登录路径都不会把它写回 student**（`stores/auth.uts` 的
-     * `login()` / `loginByCode()` / `loginByWechat()` 都不碰角色标记）⇒ 带着 recruiter 标记回到学员
-     * 登录页后，下一次 401 会按角色分支**再把人送回本页**（来回弹）——这正是 #1194 要消灭的死胡同。
-     * 复用身份切换的**既有**专用清槽函数（ADR-0022 ③），不另立新函数、不动 `clearAuthData()`。
+     * 判据用的是 UTS 全局 `getCurrentPages()`，与仓内既有同形写法一致
+     * （`utils/navigation.uts:14` / `pages/search/search.uvue:376` 的 `pages != null && pages.length > 1`）。
+     *
+     * **清槽的判据是「当前身份是招聘者」，不是「栈空」**：`auth_active_role` 只在 `loginAsRecruiter()`
+     * 里被写成 recruiter，学员侧任何登录路径都不写它 ⇒ 带着 recruiter 标记回学员端，下一次 401 仍按
+     * 角色分支把人送回本页（来回弹）。反过来，**栈空但身份是学员**时（守卫把一个在册学员从招聘者页
+     * 弹到了这里）**绝不能清槽** —— 那会把一个只是走错路的学员登出；不清槽时学员登录页的 `onLoad`
+     * 会因为 `isLoggedIn` 直接把人送回工作区。用**既有**专用清槽函数（ADR-0022 ③），
+     * 不另立清槽、不动 `clearAuthData()`。
      *
      * @note 定义必须早于 `onLoad` 与模板（UTS 无函数提升，Kotlin 侧是 error18 未解析的引用）
      */
-    function goStudentLogin() : void {
-        auth.clearIdentityForSwitch()
+    function leaveRecruiterLogin() : void {
+        const pages = getCurrentPages()
+        if (pages != null && pages.length > 1) {
+            // 正常入口：只回退，不动任何认证槽（保持 P1 原语义）
+            uni.navigateBack()
+            return
+        }
+        // 死胡同（栈空）：只有招聘者身份的残留才清，学员会话一个键都不碰
+        if (isRecruiterActive()) {
+            auth.clearIdentityForSwitch()
+        }
         uni.reLaunch({ url: '/pages/login/login' })
     }
 
@@ -97,8 +114,9 @@
                     if (res.confirm) {
                         auth.clearAuthData()
                     } else {
-                        // 取消 ⇒ 回学员端（同样不能走 navigateBack：见 `goStudentLogin` 的注释）
-                        goStudentLogin()
+                        // 取消 ⇒ 走同一个分流：栈里有页只回退（不清槽，学员会话不动）；
+                        // 栈空的死胡同才回学员登录页。见 `leaveRecruiterLogin` 的注释。
+                        leaveRecruiterLogin()
                     }
                 },
             })
