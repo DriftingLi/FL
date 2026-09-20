@@ -96,6 +96,20 @@ jobs:
           golangci-lint run --timeout=5m
         working-directory: backend
 
+      # 目录排序串第二源守卫（ADR-0060 决策 10 / 第十三波票 10）：目录读面（文件名含 catalog 的
+      # 非测试 .go）不得再出现与 catalog descriptor 的 OrderBy 声明逐字同串的裸排序串——排序串
+      # 只有一个宿主（spec 表），改一处即两面同效。用全量模式：收口后当前树实测 0 违规，
+      # 规则可以绝对化执行（同 frontend-check 里那几个 --all 守卫的口径）；判定逻辑的自检在
+      # el-controls-selftest job。
+      - name: Set up Node.js（守卫脚本用，无 npm 依赖）
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: 目录排序串第二源守卫（读面不得重抄 spec 声明）
+        working-directory: ${{ github.workspace }}
+        run: node scripts/check-catalog-sort.mjs --all
+
   # ============================================================
   # Stage 3: 后端 - 单元测试
   # ============================================================
@@ -462,6 +476,12 @@ jobs:
       # ADR-0056 §11 / #1100：消费面覆盖锁的判定面（嵌套泛型实参 / 变量路径 / 欠条销账 / 死条目）
       - name: 表驱动单测（契约消费面覆盖锁判定逻辑）
         run: node --test scripts/check-api-consumers.test.mjs
+
+      # ADR-0060 决策 10 / 第十三波票 10：目录排序串第二源守卫的判定面（第二源报红 / 收口形态与
+      # ADR 明记「不动」的三类形态不误伤 / 声明表与 spec 表互等锁 / 合成违规目录必须判红防恒绿）。
+      # 守卫本体跑在 backend-lint（扫的是 backend 的 .go）。
+      - name: 表驱动单测（目录排序串第二源守卫判定逻辑）
+        run: node --test scripts/check-catalog-sort.test.mjs
 
       # ADR-0056 §5 / #1094：三个守卫共用的 runner 单点（argv / 走查 / --diff / allowlist /
       # 报告与退出码）—— 表驱动自测用合成 diff 端到端驱动，正样本必须红、负样本必须绿；

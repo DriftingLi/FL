@@ -13,6 +13,7 @@
 - `golangci-lint run ./...`（errcheck 等静态检查）
 - `go test ./...`
 - 改了 handler 的 swagger 注解（`@Success` / `@Param` / `@Router` 等）后：`cd backend && make swagger` 再生成 `backend/docs/{docs.go,swagger.json,swagger.yaml}` 并一并提交 —— CI 的 backend-lint 有**新鲜度锁**（按钉住的 swag 版本再生成后要求工作树干净），生成物过期直接红
+- 目录排序串第二源守卫（第十三波 ADR-0060 决策 10 / 票 10）：`node scripts/check-catalog-sort.mjs --all`（本地可 `--diff origin/master` 只看新增行）—— 目录读面（文件名含 `catalog` 的非测试 `.go`）不得再出现与 catalog descriptor `OrderBy` 声明**逐字同串**的裸排序串，排序串的唯一宿主是 spec 表（`catalog_specs.go` / `position_catalog.go`），读面写 `q.Order(specialtyCatalogSpec().OrderBy)` 这类引用。判据窄是刻意的：带表别名的课程行 `course.sort_order ASC, course.course_id ASC` 与章节行 ADR 明记不动（收进射程就得给整个读面文件开 ALLOWLIST，`--all` 的例外是整文件放行，会连带盲掉真危险行）。自检：`node --test scripts/check-catalog-sort.test.mjs`（含「声明表与 spec 表互等」一致性锁与合成违规目录必须判红的防恒绿用例）；CI 在 backend-lint 跑 `--all`、判定逻辑自检在 el-controls-selftest
 
 **环境 A：Windows 本机（Git Bash）—— 2026-09-08 起实测可用，优先使用**
 
