@@ -129,6 +129,19 @@ function unlistenedEvents(pageSrc, compSrc, tag) {
   return defineEmitsNames(compSrc).map(normalizeName).filter((d) => !listened.includes(d));
 }
 
+/** 页面引用的 composable 成员名（`edit.<name>`，模板与 script 都算） */
+function composableMemberRefs(pageSrc, alias) {
+  const re = new RegExp('\\b' + alias + '\\.([A-Za-z_$][\\w$]*)', 'g');
+  return [...new Set([...pageSrc.matchAll(re)].map((m) => m[1]))];
+}
+
+/** composable 显式结果类型里声明的字段名（返回面的权威清单） */
+function declaredResultFields(src) {
+  const m = /export type UseResumeEditResult = \{([\s\S]*?)\n\}/.exec(src);
+  if (m === null) return [];
+  return [...m[1].matchAll(/^\s*([A-Za-z_$][\w$]*)\s*:/gm)].map((x) => x[1]);
+}
+
 function countLines(abs) {
   return readText(abs).split('\n').length;
 }
@@ -205,6 +218,20 @@ describe('composable 接线契约（T09 拆分：显式 import 模块私有 comp
     const page = read(EDIT_PAGE);
     expect(page).not.toContain('api/resume');
     expect(page).not.toContain('api/request');
+  });
+
+  it('页面引用的每个 composable 成员都在显式结果类型内（④c 编译门实测抓到的缺口，本锁防复发）', () => {
+    const refs = composableMemberRefs(read(EDIT_PAGE), 'edit');
+    const declared = declaredResultFields(read(composable));
+    expect(declared.length).toBeGreaterThan(30);
+    expect(refs.length).toBeGreaterThan(20);
+    expect(refs.filter((r) => !declared.includes(r))).toEqual([]);
+  });
+
+  it('成员存在性判据具备红能力（注入一个未声明的成员必须被抓到）', () => {
+    const page = read(EDIT_PAGE).replace('edit.completion.value', 'edit.completionX.value');
+    const declared = declaredResultFields(read(composable));
+    expect(composableMemberRefs(page, 'edit').filter((r) => !declared.includes(r))).toEqual(['completionX']);
   });
 });
 

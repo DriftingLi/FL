@@ -59,6 +59,8 @@ export type UseResumeEditResult = {
     salaryMin : Ref<string>
     salaryMax : Ref<string>
     salaryNegotiable : Ref<boolean>
+    jobNature : Ref<string>
+    availableIn : Ref<string>
     availableInLabel : ComputedRef<string>
     jobNatureLabel : ComputedRef<string>
     eduItems : Ref<ResumeEduItem[]>
@@ -546,6 +548,8 @@ export function useResumeEdit() : UseResumeEditResult {
         salaryMin,
         salaryMax,
         salaryNegotiable,
+        jobNature,
+        availableIn,
         availableInLabel,
         jobNatureLabel,
         eduItems,
