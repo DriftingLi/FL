@@ -47,13 +47,16 @@ const expandedTopicId = ref<number | null>(null)
 const expandedTopic = ref<ForumTopicItem | null>(null)
 const detailContent = ref('')
 const replies = ref<ForumReplyItem[]>([])
-// 章节讨论是内嵌面板、没有翻页交互，故一次取到页大小上限；
+// 章节讨论是内嵌面板、没有翻页交互，故一次取一页尽可能多的回复；
 // 超出时模板给一行可见提示 + 跳详情页入口（不静默丢弃尾部回复）。
 //
-// ⚠️ 这个 100 必须与后端 `service.ForumReplyMaxPageSize` 保持一致：
-// 后端对超上限的 page_size 是「回退默认值」而不是「截断到上限」（ClampMax 口径），
-// 一旦后端的 max 降到 100 以下，这里会**静默退回默认 20 条**而不是报错。
-const CHAPTER_REPLY_PAGE_SIZE = 100
+// 这个数**不需要和后端任何常量对齐**（ADR-0060 §4 删掉的就是这层耦合）：
+// 「这一页装不装得下」由服务端在响应里给的 `pages` 回答，取下面那条提示的
+// 判据（`replyPages > 1`）本来就是服务端事实。于是两种漂移都不必担心：
+// - 后端愿意给的页更大 → 这里一次取全，提示不出现；
+// - 后端把这次请求按它自己的口径缩水（超上限时它回退自己的默认页大小）→
+//   `pages` 立刻 > 1，提示如实显示「仅显示前 N 条」并给跳详情出口，不静默。
+const REPLY_PREVIEW_PAGE_SIZE = 100
 const replyPages = ref(1)
 const replyContent = ref('')
 const replyImages = ref<string[]>([])
@@ -102,9 +105,10 @@ async function loadDetail(topicId: number) {
   replies.value = []
   try {
     // ADR-0042：详情回复一律分页读取。章节讨论是内嵌预览面板、没有翻页交互，
-    // 故取页大小上限（100）以保持既有「展开即看全」的体验；超出 100 条的章节帖罕见，
-    // 真出现也只影响该帖的尾部回复（论坛详情页仍是完整的分页读取）。
-    const res = await forumApi.getTopic(topicId, undefined, undefined, 1, CHAPTER_REPLY_PAGE_SIZE)
+    // 故一次取一大页以保持既有「展开即看全」的体验；装不装得下由服务端的 `pages` 说
+    // （见 REPLY_PREVIEW_PAGE_SIZE 处的说明），真装不下只影响该帖的尾部回复，
+    // 且模板会给一行「仅显示前 N 条 + 查看全部」的可见出口（论坛详情页是完整的分页读取）。
+    const res = await forumApi.getTopic(topicId, undefined, undefined, 1, REPLY_PREVIEW_PAGE_SIZE)
     expandedTopic.value = res.topic || null
     detailContent.value = res.topic?.content || ''
     replies.value = res.replies || []
