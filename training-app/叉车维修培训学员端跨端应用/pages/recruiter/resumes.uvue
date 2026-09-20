@@ -1,0 +1,119 @@
+<template>
+    <view class="page" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+
+        <view class="nav-bar">
+            <view class="nav-side"></view>
+            <text class="nav-title">工作台</text>
+            <view class="nav-side nav-side-right" @click="onMe">
+                <text class="nav-action">我的</text>
+            </view>
+        </view>
+
+        <RecruiterTabBar :active="activeKey" :pending-count="pendingCount" @switch="onSwitchTab" />
+
+        <!-- 简历库**段**在本票（P2）只落骨架：分段件 + 徽标。
+             列表（8 维抽屉筛选）、简历详情（脱敏卡原生渲染 / 打码 PDF / 发起交换）
+             属 ADR-0022 ④ 步骤 P3（#1196）⇒ 本页正文区在此留空，而不是放一个
+             「功能开发中」式占位（ADR-0021 ③ 明令不做）或一排点不动的假条目。 -->
+        <scroll-view class="content-scroll" scroll-y="true"></scroll-view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    /**
+     * 招聘者工作区 · 简历库段（一级面骨架；ADR-0022 ④ 步骤 P2）
+     *
+     * 本票只负责让**第三个一级面存在**并挂上唯一的分段件 —— ADR-0022 ⑥ 的判据是
+     * 「三个一级面渲染同一个分段件；全仓仅此一份 + 三页各挂一次」，缺了这个面该判据
+     * 就只剩两个面。正文（列表 / 筛选 / 详情）属 P3。
+     *
+     * 徽标仍在此取一次 `GET /recruit/contact-requests`：ADR-0022 ② 定的是徽标
+     * **常驻、三段可见**，所以三个一级面各自算一次，而不是只有首页有。
+     * 这不影响首页的「首屏批量请求 = 2」（那是职位段的账）。
+     */
+    import { ref } from 'vue'
+    import { onLoad } from '@dcloudio/uni-app'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { getRecruitContactRequestsApi } from '../../api/recruit'
+    import { unexpiredPendingCount } from '../../utils/recruitDisplay'
+    import { ensureRecruiterSession } from '../../utils/recruitGuard'
+    import RecruiterTabBar from './components/recruiter-tab-bar.uvue'
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    const activeKey : string = 'resumes'
+
+    const pendingCount = ref<number>(0)
+
+    onLoad((_options : OnLoadOptions) => {
+        if (!ensureRecruiterSession()) return
+        getRecruitContactRequestsApi().then((result) : void => {
+            pendingCount.value = unexpiredPendingCount(result.items, Date.now())
+        }).catch((e) : void => {
+            console.error('[recruiter-resumes] load contact signals failed:', e)
+        })
+    })
+
+    function onSwitchTab(key : string) : void {
+        if (key == activeKey) return
+        if (key == 'jobs') {
+            uni.redirectTo({ url: '/pages/recruiter/jobs' })
+            return
+        }
+        if (key == 'contacts') {
+            uni.redirectTo({ url: '/pages/recruiter/contacts' })
+        }
+    }
+
+    function onMe() : void {
+        uni.navigateTo({ url: '/pages/recruiter/me' })
+    }
+</script>
+
+<style lang="scss">
+    .page {
+        background-color: #F5F6FA;
+    }
+
+    .status-bar {
+        background-color: #ffffff;
+    }
+
+    .nav-bar {
+        flex-direction: row;
+        align-items: center;
+        height: 88rpx;
+        padding: 0 24rpx;
+        background-color: #ffffff;
+    }
+
+    .nav-side {
+        width: 120rpx;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .nav-side-right {
+        justify-content: flex-end;
+    }
+
+    .nav-title {
+        flex: 1;
+        font-size: 34rpx;
+        font-weight: bold;
+        color: #333333;
+        text-align: center;
+    }
+
+    .nav-action {
+        font-size: 30rpx;
+        color: #2979ff;
+        padding: 16rpx 0;
+    }
+
+    .content-scroll {
+        flex: 1;
+    }
+</style>
