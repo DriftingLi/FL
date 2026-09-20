@@ -195,9 +195,9 @@
     <template #footer>
       <div class="form-footer" v-if="isStudentSubdomain">
         <span class="footer-text">还没有账号？</span>
-        <router-link to="/register" class="footer-link">立即注册</router-link>
+        <router-link :to="href('Register')" class="footer-link">立即注册</router-link>
         <span class="footer-sep mx-2.5 text-[var(--color-text-disabled)]">·</span>
-        <router-link to="/forgot-password" class="footer-link">忘记密码？</router-link>
+        <router-link :to="href('ForgotPassword')" class="footer-link">忘记密码？</router-link>
       </div>
     </template>
   </AuthPageShell>
@@ -206,6 +206,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { href } from '@/config/pages'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
 import { isSafeRedirect } from '@/utils/authRedirect'

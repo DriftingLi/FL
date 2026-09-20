@@ -151,7 +151,7 @@
             >
               {{ (authStore.userInfo?.username || '?').charAt(0) }}
             </div>
-            <router-link to="/training/profile" class="profile-link min-w-0 truncate text-[13px] font-medium text-ink-2 no-underline transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:text-ui-600">{{ displayName }}</router-link>
+            <router-link :to="href('StudentProfile')" class="profile-link min-w-0 truncate text-[13px] font-medium text-ink-2 no-underline transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:text-ui-600">{{ displayName }}</router-link>
             <el-dropdown trigger="click" @command="handleUserCommand">
               <button class="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-pill border-0 bg-transparent text-ink-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-panel hover:text-ink" title="更多">
                 <el-icon :size="14"><More /></el-icon>
@@ -369,7 +369,7 @@
 // 功能页图片队列（input-above/input-prefix）与快捷选项（welcome）。
 // 安全渲染单点：助手内容统一 markstream-vue + html-policy="escape"，AI 域不再有裸 v-html。
 import { ref, computed, useSlots, watch, nextTick, onMounted, onBeforeUnmount, type Component } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, type RouteLocationRaw } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
   Plus,
@@ -388,6 +388,7 @@ import {
 } from '@element-plus/icons-vue'
 import MarkdownRender from 'markstream-vue'
 import 'markstream-vue/index.css'
+import { href } from '@/config/pages'
 import { MARKSTREAM_MERMAID_PROPS } from '@/utils/markstreamRuntime'
 import { useAIAssistantStore } from '@/stores/aiAssistant'
 import { useAuthStore } from '@/stores/auth'
@@ -407,7 +408,7 @@ const props = withDefaults(
     /** 登录跳转目标（登录成功后回跳） */
     loginRedirect: string
     /** 顶部栏附加返回链接（功能页：返回 AI 助手） */
-    backLinkTo?: string
+    backLinkTo?: RouteLocationRaw
     backLinkText?: string
     /** 欢迎区图标/一句话标题（标题即功能介绍，无副标题） */
     welcomeIcon: Component
@@ -425,7 +426,6 @@ const props = withDefaults(
     canSend?: boolean
   }>(),
   {
-    backLinkTo: '',
     backLinkText: '',
     suggestions: () => [],
     enableRename: false,
@@ -607,12 +607,12 @@ async function handleDeleteSession(id: number) {
 
 // ===== 登录/退出 =====
 function goLogin() {
-  router.push({ path: '/login', query: { redirect: props.loginRedirect } })
+  router.push({ ...href('Login'), query: { redirect: props.loginRedirect } })
 }
 
 async function handleUserCommand(cmd: string) {
   if (cmd === 'profile') {
-    router.push('/training/profile')
+    router.push(href('StudentProfile'))
     return
   }
   if (cmd === 'logout') {

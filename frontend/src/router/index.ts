@@ -9,8 +9,7 @@ import {
 } from '@/utils/subdomain'
 import { resolveGuardDecision, type GuardInput, type GuardState } from './guard'
 import { resolveWorkspaceForRole } from '@/utils/authRedirect'
-import { routeNames } from '@/config/routeNames'
-import { layouts, pages, type LayoutKey, type PageDescriptor } from '@/config/pages'
+import { layouts, pages, href, type LayoutKey, type PageDescriptor } from '@/config/pages'
 
 // workspace（工作区）声明约定（#618）：「这条路由属于哪个工作区」单点写在各布局/页面路由的
 // meta.workspace（子路由经 vue-router meta 合并继承，无需逐条重复）；守卫与登录回跳读声明，
@@ -46,9 +45,9 @@ function routeMeta(page: PageDescriptor): Record<string, unknown> {
 /** 布局根的子路由重定向：没有对应页面描述符，但必须保留（URL 兼容）。 */
 const layoutRedirects: Partial<Record<LayoutKey, RouteRecordRaw[]>> = {
   // 管理端根路径进仪表盘
-  manage: [{ path: '', redirect: '/admin/dashboard' }],
+  manage: [{ path: '', redirect: href('AdminDashboard') }],
   // 设计稿把估值表单提升为首页：/valuation/input 等同于 /valuation
-  valuation: [{ path: 'input', redirect: { name: routeNames.ValuationHome } }]
+  valuation: [{ path: 'input', redirect: href('ValuationHome') }]
 }
 
 /** 描述符 → 布局子记录。 */

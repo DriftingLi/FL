@@ -6,6 +6,6 @@
  * ——没有报错、没有类型提示。
  *
  * 故此处是唯一字面量来源，并由 `router/__tests__/linkOutRoute.spec.ts` 断言
- * 「该路径确实解析到 routeNames.LinkOut」，改名漏改时测试直接红。
+ * 「该路径确实解析到路由 'LinkOut'」，改名漏改时测试直接红。
  */
 export const FORUM_LINK_OUT_PATH = "/training/link-out"

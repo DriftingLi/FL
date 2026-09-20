@@ -1,7 +1,7 @@
 <template>
   <div class="flex flex-col gap-4">
     <div class="flex items-center gap-2">
-      <router-link to="/recruit/jobs" class="text-sm text-ui-600 hover:text-ui-700">← 返回职位管理</router-link>
+      <router-link :to="href('RecruitJobManage')" class="text-sm text-ui-600 hover:text-ui-700">← 返回职位管理</router-link>
     </div>
     <div class="flex items-center justify-between">
       <h1 class="text-xl font-bold text-ink">投递列表{{ jobTitle ? `：${jobTitle}` : '' }}</h1>
@@ -96,6 +96,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { href } from '@/config/pages'
 import { jobApi, type JobApplication } from '@/api/job'
 import { describeApplication } from '@/utils/applicationStatus'
 import { recruitApi } from '@/api/recruit'

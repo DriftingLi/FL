@@ -41,7 +41,7 @@
             <div v-if="item.offline_reason" class="mt-1 text-xs text-red-500">下架原因：{{ item.offline_reason }}</div>
           </div>
           <div class="flex shrink-0 items-center gap-2">
-            <router-link :to="`/recruit/jobs/${item.id}/applications`" class="text-xs font-medium text-ui-600 hover:text-ui-700">投递列表</router-link>
+            <router-link :to="href('RecruitApplicationList', { id: String(item.id) })" class="text-xs font-medium text-ui-600 hover:text-ui-700">投递列表</router-link>
             <UiButton size="small" @click="openEdit(item)">编辑</UiButton>
             <UiButton
               v-if="!item.forced_offline"
@@ -104,6 +104,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { href } from '@/config/pages'
 import { jobApi, type JobPosting, type JobPostingInput } from '@/api/job'
 import { positionApi } from '@/api/position'
 import { useAsyncPage } from '@/composables/useAsyncPage'

@@ -60,6 +60,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft } from '@element-plus/icons-vue'
+import { href } from '@/config/pages'
 import { featuredApi } from '@/api/featured'
 import type { FeaturedContentDetailDTO } from '@/api/generated/featured'
 import { useAsyncPage } from '@/composables/useAsyncPage'
@@ -91,7 +92,7 @@ function goBack() {
 }
 
 function open(id: number) {
-  if (id > 0) void router.push('/training/featured/' + id)
+  if (id > 0) void router.push(href('StudentFeaturedDetail', { id: String(id) }))
 }
 
 onMounted(() => {

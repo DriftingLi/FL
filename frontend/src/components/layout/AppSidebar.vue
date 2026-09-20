@@ -144,6 +144,7 @@
 import { computed, reactive, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Expand, Fold, ArrowDown, SwitchButton } from '@element-plus/icons-vue'
+import { href } from '@/config/pages'
 import { useAuthStore } from '@/stores/auth'
 import {
   isNavRouteActive,
@@ -243,7 +244,7 @@ async function handleUserCommand(command: string) {
       })
       // 登出单点（票1）：revoke + 清本地都在 store.signOut 里，本页只管 confirm 与落点
       await authStore.signOut()
-      router.push('/login')
+      router.push(href('Login'))
     } catch (e) {
       // 用户取消，不做任何操作
     }

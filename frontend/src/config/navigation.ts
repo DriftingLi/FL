@@ -1,5 +1,5 @@
 import type { Component } from 'vue'
-import type { RouteName } from './routeNames'
+import type { RouteName } from './pages'
 import {
   navGroups,
   navPages,
@@ -12,7 +12,7 @@ import {
 export interface NavItem {
   key: string
   label: string
-  /** 目标路由的 name（见 routeNames.ts 常量表，而非硬编码字符串）。 */
+  /** 目标路由的 name（页面描述符表派生的 RouteName union，而非硬编码字符串）。 */
   routeName?: RouteName
   /**
    * 除 `routeName` 外，还应让本项高亮的路由 name。
@@ -23,7 +23,7 @@ export interface NavItem {
    * TutorQuestionManage → TutorQuestionCreate。
    * 不配的话，进入详情后侧栏整条（含父分组）都不高亮。
    */
-  activeRouteNames?: RouteName[]
+  activeRouteNames?: readonly RouteName[]
   /** 目标路由需要的动态参数（如章节页 ChapterView 需要 courseId/chapterId）。 */
   routeParams?: Record<string, string | number>
   icon?: Component

@@ -6,7 +6,7 @@
 import type { FavoriteTargetType } from '@/api/favorite'
 import type { SearchType } from '@/api/search'
 import type { UiTagTone } from '@/components/ui/UiTag.vue'
-import { routeNames, type RouteName } from './routeNames'
+import type { RouteName } from './pages'
 
 export type ContentObjectKey = 'course' | 'chapter' | 'question' | 'featured' | 'topic'
 
@@ -53,7 +53,7 @@ export const CONTENT_OBJECTS: readonly ContentObject[] = [
     favoritable: true,
     favoriteTargetType: 'course',
     inFavoriteTab: true,
-    to: ({ id }) => ({ name: routeNames.CourseList, query: { course_id: String(id) } })
+    to: ({ id }) => ({ name: 'CourseList', query: { course_id: String(id) } })
   },
   {
     key: 'chapter',
@@ -68,7 +68,7 @@ export const CONTENT_OBJECTS: readonly ContentObject[] = [
     // 缺所属课程即无落点（不猜、不乱跳，#1089）
     to: ({ id, parentId }) =>
       parentId && parentId > 0
-        ? { name: routeNames.ChapterView, params: { courseId: String(parentId), chapterId: String(id) } }
+        ? { name: 'ChapterView', params: { courseId: String(parentId), chapterId: String(id) } }
         : null
   },
   {
@@ -81,7 +81,7 @@ export const CONTENT_OBJECTS: readonly ContentObject[] = [
     favoritable: true,
     favoriteTargetType: 'question',
     inFavoriteTab: true,
-    to: ({ id }) => ({ name: routeNames.StudentQuestionDetail, params: { id: String(id) } })
+    to: ({ id }) => ({ name: 'StudentQuestionDetail', params: { id: String(id) } })
   },
   {
     key: 'featured',
@@ -94,7 +94,7 @@ export const CONTENT_OBJECTS: readonly ContentObject[] = [
     favoriteTargetType: 'featured',
     // 2026-09-18 裁定（#1132）：精选阅读面在门户、Web 无创建点，进 tab 只会长期为空——刻意不补。
     inFavoriteTab: false,
-    to: ({ id }) => ({ name: routeNames.StudentFeaturedDetail, params: { id: String(id) } })
+    to: ({ id }) => ({ name: 'StudentFeaturedDetail', params: { id: String(id) } })
   },
   {
     key: 'topic',
@@ -106,7 +106,7 @@ export const CONTENT_OBJECTS: readonly ContentObject[] = [
     favoritable: true,
     favoriteTargetType: 'topic',
     inFavoriteTab: true,
-    to: ({ id }) => ({ name: routeNames.ForumDetail, params: { topicId: String(id) } })
+    to: ({ id }) => ({ name: 'ForumDetail', params: { topicId: String(id) } })
   }
 ]
 

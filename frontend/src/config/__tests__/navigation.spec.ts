@@ -20,7 +20,7 @@ import {
   isGroupActive,
   type NavItem
 } from '../navigation'
-import type { RouteName } from '../routeNames'
+import type { RouteName } from '../pages'
 
 describe('isNavRouteActive', () => {
   it('routeName 精确相等时命中', () => {
