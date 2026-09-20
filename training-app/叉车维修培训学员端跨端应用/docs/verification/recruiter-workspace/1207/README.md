@@ -106,11 +106,31 @@ Kotlin 编译段。以下 4 处都由 ④a（`npm run build:compile`）在**编�
 修法 = 在组件内**就地声明结构等价的类型** `RecruitResumeFiltersProp`；
 代价是类型有了第二份 ⇒ 加 **R7 锁**把两处字段清单**逐字对账**（顺序也钉），防「api 加一维、组件漏跟」的静默少一维。
 
-**④a 判据盲区（如实记录，本轮不改工具链）**：`scripts/compile-check.ps1` 的错误行判据
-（`(^\s*e: )|(:\d+:\d+: *error:)`）**匹配不到** uvue/UTS 插件的两种报错形态 ——
-`[plugin:uni:app-uvue] Could not resolve "…"`（无 `error:` 字样）与 `⛔error: 找不到名称"…"`（中文引号 + `⛔` 前缀）。
-**实证**：P3 本轮 `build.log:24` 明明有 `Could not resolve` + 代码帧、尾部 `已停止运行...`，
-**`build.log:37` 照样打印 `COMPILE_RESULT errors=0 clean=True`**（`p3-4a-precheck.log:33` 还写「✅ 编译门通过」）。
+**④a 判据盲区（如实记录，本轮不改工具链）**：`scripts/compile-check.ps1:207-209` 的**真判据**是
+`(?i)\berror\b|unresolved reference|cannot infer type|找不到名称|类型不匹配|编译失败`
+（另有一条排除行 `(?i)0\s*error|errors?\s*[:=]\s*0|no errors?|error count\s*[:=]\s*0`）。
+⚠️ **订正（2026-09-20 现测）**：本节初版把判据写成 `(^\s*e: )|(:\d+:\d+: *error:)`、并把盲区说成
+「漏 `Could not resolve` 与 `⛔error:` **两种形态**」——**两处都不对**：
+那串正则**不是本脚本的判据**，而是 **④c** 的 `scripts/kotlin-all-check.ps1:64`（`$ErrorLinePattern`）；
+而 `⛔error:` / `找不到名称` / `编译失败` 这一类，**④a 的真判据本来就会命中**（不属盲区）。
+**准确口径只有一条**：④a 漏掉的是「**行内不含上述任何 token 的整族编译诊断**」，
+已实测复现的实例是 `[plugin:uni:app-uvue] Could not resolve "…"`。
+**同一批日志行对两条 pattern 的现测对照**（本会话重跑，源文件在 `wt-1196/.ci-verify/`）：
+
+| 日志行（原文） | ④a 判据 | ④c 判据 |
+| --- | --- | --- |
+| `p3-4a-precheck.log`：`[plugin:uni:app-uvue] Could not resolve "../../api/recruit"` | ❌ 不命中（无任何 token）⇒ **假绿成因** | ❌ 不命中 |
+| `p3-4a-precheck.log`：`已停止运行...` | ❌ 不命中（非错误行） | ❌ 不命中 |
+| `p3-4a-run2.log`：`[plugin:uni:app-uts] kotlin编译失败` | ✅ 命中（`编译失败`） | ❌ 不命中 |
+| `p3-4a-run2.log`：`error: 找不到名称“region”。…` | ✅ 命中（`\berror\b` 与 `找不到名称` 两侧都命中） | ❌ 不命中 |
+
+⇒ 手工 grep 保留 `plugin:uni:` / `error:` / `Could not resolve` / `kotlin编译失败` 对 ④a 是**零成本冗余**
+（后三类本就命中），**不是**「④a 脚本漏了它们」；反过来，④c 的那条 pattern 对上面两种插件形态
+**两行都不命中** ⇒ ④c 的 `errors=0` 同样必须配手工 grep 才有判别力。
+（`⛔error:` 这种「前缀 + `error`」形态由 `\berror\b` 捕获；本机存活的日志里没有它的实例
+—— 那一轮的日志已不在磁盘上，故此处以同类实测行替代，**不虚报读数**。）
+**假绿实证**：那一轮 `build.log` 明明有 `Could not resolve` + 代码帧、尾部 `已停止运行...`，
+却照样打印 `COMPILE_RESULT errors=0 clean=True`（`p3-4a-precheck.log` 尾部还写「✅ 编译门通过」）。
 ⇒ 本轮 ④a 的结论改为**三条件**（见第四节），已把这条反馈给维护者另行处理。
 **P1 / P2 未被该盲区污染**（逐文件扫 `build.log` / `hx-run.log` / `launch-*.out`：`wt-1194` 命中 0、`wt-1195` 命中 0；
 且两树都在真机上真的跑起来过）⇒ 那两份 `errors=0` 有独立佐证。
