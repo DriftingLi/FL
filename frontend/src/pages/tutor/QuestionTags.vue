@@ -202,7 +202,7 @@ async function loadTags() {
 
 // 题目列表状态机：tags 侧栏仍为局部状态，questions 表格收编到 useAdminTable
 const table = useAdminTable<Question>({
-  fetch: async (paging, filters) => {
+  fetch: (paging, filters) => {
     const params: QuestionsQuery = {
       page: paging.page,
       page_size: paging.pageSize
@@ -210,8 +210,7 @@ const table = useAdminTable<Question>({
     if (filters.tag_id) params.tag_id = Number(filters.tag_id)
     if (filters.keyword) params.keyword = String(filters.keyword)
     if (filters.type) params.type = String(filters.type)
-    const res = await questionBankApi.getQuestions(params)
-    return { list: res.questions || [], total: res.total || 0 }
+    return questionBankApi.getQuestions(params)
   },
   searchable: true
 })

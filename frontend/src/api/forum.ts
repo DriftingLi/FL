@@ -1,4 +1,8 @@
 import { unwrappedRequest } from './request'
+// 票 6（ADR-0060 决策 6）：管理端两条列表队列在出口处归一为中立容器 Page<T>。
+// 学员端 forumApi 的读取面（listTopics / my-topics / …）**不改**：那些走 useAsyncPage 的
+// append 档，需要响应上的 pages 字段（ADR-0060 决策 4 的判据），容不得容器收窄。
+import { toPage, type Page } from './page'
 import type {
   ForumImageUploadResultDTO,
   ForumLikeResultDTO,
@@ -302,8 +306,10 @@ export interface AdminForumListParams {
 }
 
 export const adminForumApi = {
-  listTopics(params: AdminForumListParams) {
-    return unwrappedRequest.get<ForumTopicPageResult>('/admin/forum/topics', { params })
+  /** 帖子列表（后端行键 = `topics`）。 */
+  async listTopics(params: AdminForumListParams): Promise<Page<AdminForumTopic>> {
+    const res = await unwrappedRequest.get<ForumTopicPageResult>('/admin/forum/topics', { params })
+    return toPage(res?.topics, res?.total)
   },
 
   /**
@@ -358,9 +364,10 @@ export const adminForumApi = {
 
   // ===== 举报管理（ADR-0018）=====
 
-  /** 举报列表（status 缺省全部；0 待处理 / 1 已处理） */
-  listReports(params: { status?: number; page?: number; page_size?: number }) {
-    return unwrappedRequest.get<AdminForumReportsData>('/admin/forum/reports', { params })
+  /** 举报列表（status 缺省全部；0 待处理 / 1 已处理。后端行键 = `reports`）。 */
+  async listReports(params: { status?: number; page?: number; page_size?: number }): Promise<Page<AdminForumReportItem>> {
+    const res = await unwrappedRequest.get<AdminForumReportsData>('/admin/forum/reports', { params })
+    return toPage(res?.reports, res?.total)
   },
 
   /** 处理举报（status: 0 待处理 / 1 已处理） */

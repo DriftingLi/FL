@@ -1,6 +1,8 @@
 import axios from 'axios'
 import { unwrappedRequest } from './request'
 import { getValidAccessToken } from './client'
+// 票 6（ADR-0060 决策 6）：管理端列表在出口处归一为中立容器 Page<T>
+import { toPage, type Page } from './page'
 import type {
   FeaturedContentAdminDetailDTO,
   FeaturedContentDetailDTO,
@@ -52,9 +54,10 @@ export const featuredApi = {
 
 /** 管理端接口 */
 export const adminFeaturedApi = {
-  /** 管理端列表（含草稿） */
-  getList(params: { page?: number; page_size?: number; category?: string; status?: string } = {}) {
-    return unwrappedRequest.get<FeaturedContentPageResult>('/admin/featured-contents', { params })
+  /** 管理端列表（含草稿；后端行键 = `items`）。 */
+  async getList(params: { page?: number; page_size?: number; category?: string; status?: string } = {}): Promise<Page<FeaturedContentDTO>> {
+    const res = await unwrappedRequest.get<FeaturedContentPageResult>('/admin/featured-contents', { params })
+    return toPage(res?.items, res?.total)
   },
 
   /** 管理端详情 */
