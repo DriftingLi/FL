@@ -425,11 +425,19 @@ describe('D. 标记不合适：二次确认（不可逆 + 30 天冷却），全�
     expect(offenders).toEqual([]);
   });
 
-  it('api 层只有一个写操作，且就是那个**无回退端点**的 reject', () => {
+  it('api 层的写操作恰好是两个具名 POST（reject + 发起交换），没有第三个写端点', () => {
+    // ⚠️ 收口（#1195 + #1196 叠加）后本断言由「恰好 1 个」改成「恰好 2 个」——这是**事实修正**，
+    // 不是放宽：P3（#1196）的「发起交换」`POST /recruit/contact-requests` 是本文件里第二个
+    // 合法写端点（两票并行各自写了自己的 `api/recruit.uts`，合一后两个都必须在）。
+    // 强制的部分（**没有多余的写端点 / 没有回退端点 / 没有 PUT|DELETE|PATCH**）一条未减，
+    // 且两条端点路径都逐字钉死 —— 笔误端点名或端点搬家都会被判红。
     const api = stripComments(read(API_RECRUIT));
     const posts = api.match(/\bpost\s*\(/g) || [];
-    expect(posts.length).toBe(1);
+    expect(posts.length).toBe(2);
+    // P2 的 reject：终态、且后端**无回退端点** ⇒ 全仓只有这一个写它的地方
     expect(api).toContain("'/recruit/applications/' + applicationId.toString() + '/reject'");
+    // P3 的发起交换（另见 `recruiterResumeBehavior` D1 的运行期断言）
+    expect(api).toContain("post('/recruit/contact-requests', payload)");
   });
 
   it('标记不合适的前置是 status == applied（后端只允许 applied 被拒）', () => {
@@ -471,7 +479,11 @@ describe('E. 移动端不存在职位发布入口，也不存在「功能开发�
     for (const rel of WORKSPACE_PAGES.concat([GUARD])) {
       for (const r of recruiterRoutesIn(read(rel))) routes.push(r);
     }
-    expect([...new Set(routes)].sort()).toEqual(['applications', 'contacts', 'jobs', 'login', 'me', 'resumes']);
+    // ⚠️ 收口（#1195 + #1196 叠加）后本集合由 6 个变成 7 个：`resume-detail` 是 P3 的**二级面**
+    // （简历详情，被简历库的列表项 `navigateTo` 推入），它把「简历库」这一级接成了一个完整的面。
+    // **判据方向未变**：仍然是「面内出现的招聘者路由**逐个列名**、不许多出编辑/发布类路由」——
+    // 加进白名单的是这个已被 ADR-0022 ④ 步骤 P3 明文授权的详情面，不是放宽。
+    expect([...new Set(routes)].sort()).toEqual(['applications', 'contacts', 'jobs', 'login', 'me', 'resume-detail', 'resumes']);
   });
 });
 
@@ -561,17 +573,31 @@ describe('F. 状态词单点 + 两端同源（ADR-0018 口径）', () => {
       ...APPLICATION_ROWS.map((r) => r.label),
       ...JOB_ROWS.map((r) => r.label),
     ];
+    /**
+     * 收口（#1195 + #1196 叠加）后的**唯一**豁免：P3 的 `resume-detail.uvue` 里有
+     * `'登录已过期，请重新登录'` —— 它是**带鉴权下载**在 401 时的失败文案（登录态过期），
+     * 与 `contact grant` 词表的 `expired` 标签「已过期」同字不同义。
+     * 豁免按**长串**扣掉这次出现，再逐词扫剩下的文本：这样 ① 该文件里任何**别的**状态词
+     * 内联仍然会被判红；② 词表自己漂移（label 不再包含于该串）也不会静默放过。
+     */
+    const LOGIN_EXPIRY_IN_DETAIL = '登录已过期，请重新登录';
     const offenders = [];
     for (const abs of collectFiles(path.join(ROOT, 'pages/recruiter'), (n) => n.endsWith('.uvue'))) {
       const rel = relOf(abs);
-      const clean = stripComments(readText(abs));
+      const raw = stripComments(readText(abs));
+      const clean = rel === 'pages/recruiter/resume-detail.uvue'
+        ? raw.split(LOGIN_EXPIRY_IN_DETAIL).join('')
+        : raw;
       for (const label of labels) {
         if (clean.includes(label)) offenders.push(`${rel} → ${label}`);
       }
     }
-    // 唯一允许的一处：投递列表的确认框必须原样说出学员会收到的结果名「不合适」，
+    // 允许的一处（P2 自有）：投递列表的确认框必须原样说出学员会收到的结果名「不合适」，
     // 而它同时是投递词表里 rejected 的 label —— 同一事实、同一措辞，不是漂移。
     expect(offenders).toEqual([`${PAGE_APPLICATIONS} → 不合适`]);
+    // 豁免的前提现测：该长串确实存在（否则上面那次 split 是空操作、豁免形同虚设）
+    expect(read('pages/recruiter/resume-detail.uvue')).toContain(LOGIN_EXPIRY_IN_DETAIL);
+    expect(CONTACT_ROWS.map((r) => r.label)).toContain('已过期');
   });
 });
 
@@ -619,10 +645,19 @@ describe('G. pages.json：新增路由注册闭环（无死链 / 无未注册页
 describe('H. 会话守卫与骨架边界', () => {
   it('本票 5 个工作区页面 onLoad 都先过守卫，且守卫返回 false 时**立即停止取数**', () => {
     for (const rel of FIRST_LEVEL.concat(SECOND_LEVEL)) {
-      const body = onLoadBody(read(rel));
+      const src = read(rel);
+      const body = onLoadBody(src);
       expect([rel, body.length > 0]).toEqual([rel, true]);
-      expect([rel, body.includes('if (!ensureRecruiterSession()) return')]).toEqual([rel, true]);
-      expect([rel, /from '\.\.\/\.\.\/utils\/recruitGuard'/.test(read(rel))]).toEqual([rel, true]);
+      // 守卫的**语义**是「onLoad 开头先判，false 即 return 停止取数」。直接内联调用
+      // `ensureRecruiterSession()`，或经本页一层命名包装（`guardRecruiter()`）都满足；
+      // 但**包装体里必须仍然调用 `ensureRecruiterSession()`** —— 见下面那条等价性断言，
+      // 它堵住「包装一个不看会话的弱守卫」这条绕过路径。
+      // （简历库一级面在收口后由 P2 壳 + P3 正文合成，其 onLoad 用的是命名包装。）
+      const inlineGuard = body.includes('if (!ensureRecruiterSession()) return');
+      const wrappedGuard = body.includes('if (!guardRecruiter()) return');
+      expect([rel, inlineGuard || wrappedGuard]).toEqual([rel, true]);
+      expect([rel, /from '\.\.\/\.\.\/utils\/recruitGuard'/.test(src)]).toEqual([rel, true]);
+      expect([rel, src.includes('ensureRecruiterSession')]).toEqual([rel, true]);
     }
   });
 
@@ -634,13 +669,40 @@ describe('H. 会话守卫与骨架边界', () => {
     expect(guard).toContain('STORAGE_KEY_TOKEN');
   });
 
-  it('简历库面本票只落骨架：不碰简历域端点（列表/详情/明文 PDF 属 P3 #1196）', () => {
-    const resumes = stripComments(read(PAGE_RESUMES));
-    expect(resumes).not.toContain('/recruit/resumes');
-    expect(resumes).not.toContain('getRecruitResumesApi');
-    expect(apiCallsIn(read(PAGE_RESUMES))).toEqual(['getRecruitContactRequestsApi']);
-    // 骨架里不留「功能开发中」式占位（上一组已全量扫过），也不放假条目
-    expect(templateOf(read(PAGE_RESUMES))).not.toContain('v-for');
+  it('命名的页面守卫（如有）必须仍以 `ensureRecruiterSession()` 收口，不是另立一套弱判定', () => {
+    // 上一条允许 onLoad 走 `guardRecruiter()` 这层包装；这一条钉住包装体不许**绕开**会话守卫。
+    // 现测面：收口后的简历库一级面（P3 的正文并入 P2 的壳时保留了 P3 的命名守卫）。
+    const src = read(PAGE_RESUMES);
+    if (!src.includes('guardRecruiter')) return;
+    const body = fnBody(src, 'guardRecruiter');
+    expect(body).toContain('ensureRecruiterSession()');
+    // 包装体只允许「角色判定 + 会话守卫」两件事：不得自己认识 HTTP 状态码或清凭据
+    expect(body).not.toMatch(/401|statusCode/);
+    expect(body).not.toContain('removeStorage');
+    expect(apiCallsIn(body)).toEqual([]);
+  });
+
+  it('简历库一级面（P2 壳 + P3 正文合一后）：壳的徽标 + 正文的简历域端点都在，且面子面唯一', () => {
+    // ⚠️ 本用例在收口前是「本票只落骨架、不碰简历域端点」。收口后 P3 的正文并入同一个面，
+    // 那句断言已与事实相反 ⇒ 换成**合一后**的判据：壳（徽标取数）与正文（列表取数）都在，
+    // 且没有第二个页面承担简历库这一级。
+    const resumesRaw = read(PAGE_RESUMES);
+    const resumes = stripComments(resumesRaw);
+    // 正文在：简历域列表端点 + 列表渲染 + 「加载更多」
+    expect(resumes).toContain('getRecruitResumesApi');
+    expect(templateOf(resumesRaw)).toContain('v-for');
+    expect(templateOf(resumesRaw)).toContain('@scrolltolower="onLoadMore"');
+    // 壳仍在：分段件 + 徽标（ADR-0022 ② 徽标常驻、三段可见）
+    expect(templateOf(resumesRaw)).toContain('<RecruiterTabBar');
+    expect(apiCallsIn(resumesRaw)).toEqual(['getRecruitContactRequestsApi', 'getRecruitResumesApi']);
+    // 徽标与紧迫行共用同一份 ⇒ 本页 `contact-requests` 只拉一次
+    expect((resumesRaw.match(/getRecruitContactRequestsApi\s*\(/g) || []).length).toBe(1);
+    // 「面子面唯一」：全仓不再有第二个页面承担简历库这一级
+    const libraryFaces = collectFiles(path.join(ROOT, 'pages/recruiter'), (n) => n.endsWith('.uvue'))
+      .map(relOf)
+      .filter((rel) => !rel.includes('/components/'))
+      .filter((rel) => templateOf(readText(path.join(ROOT, rel))).includes('<RecruiterTabBar'));
+    expect(libraryFaces.sort()).toEqual([...FIRST_LEVEL].sort());
   });
 
   it('「我的」推入页：复用招聘者专用退出，不用学员语义的 logout()', () => {

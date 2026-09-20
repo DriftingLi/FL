@@ -421,8 +421,13 @@ export function getRecruitJobsApi(page : number = 1, pageSize : number = 20) : P
  * @note 分页行为与简历库**不同**：超 50 回退 20，且**回显** page / page_size（照实读回显）。
  */
 export function getRecruitContactRequestsApi(page : number = 1, pageSize : number = 20) : Promise<RecruitContactRequestListResult> {
-    const url = '/recruit/contact-requests?page=' + page.toString() + '&page_size=' + pageSize.toString()
-    return get(url).then((data : UTSJSONObject) : RecruitContactRequestListResult => {
+    // query 走 `get(url, params)`（与同文件的 P3 端点同形）：`request.uts` 负责编码，
+    // 不在 URL 上手工拼串 —— 附言 / 筛选值里出现需要转义的字符时手工拼串会坏。
+    const params : UTSJSONObject = {
+        page: page.toString(),
+        page_size: pageSize.toString(),
+    } as UTSJSONObject
+    return get('/recruit/contact-requests', params).then((data : UTSJSONObject) : RecruitContactRequestListResult => {
         const raw = (data['items'] as UTSJSONObject[]) ?? []
         const items : RecruitContactRequest[] = []
         for (let i = 0; i < raw.length; i++) {

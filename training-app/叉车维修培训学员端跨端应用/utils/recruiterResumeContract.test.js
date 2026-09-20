@@ -30,7 +30,12 @@ const REPO_ROOT = path.join(ROOT, '..', '..');
 
 const RECRUIT_UTS = path.join(ROOT, 'api', 'recruit.uts');
 const REQUEST_UTS = path.join(ROOT, 'api', 'request.uts');
-const LIBRARY_UVUE = path.join(ROOT, 'pages', 'recruiter', 'resume-library.uvue');
+/**
+ * ⚠️ 收口（#1195 + #1196 叠加）后，简历库**一级面**的唯一页面是 P2 建的
+ * `pages/recruiter/resumes.uvue`（P3 原建的 `resume-library.uvue` 已并入它并删除）——
+ * 本常量指向那个合并后的面。**判据一字未改**，改的只是「正文住在哪个文件里」这一层。
+ */
+const LIBRARY_UVUE = path.join(ROOT, 'pages', 'recruiter', 'resumes.uvue');
 const DETAIL_UVUE = path.join(ROOT, 'pages', 'recruiter', 'resume-detail.uvue');
 const DRAWER_UVUE = path.join(ROOT, 'pages', 'recruiter', 'components', 'recruiter-filter-drawer.uvue');
 const PROJECTION_GO = path.join(REPO_ROOT, 'backend', 'internal', 'service', 'resume_projection.go');
