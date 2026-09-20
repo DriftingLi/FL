@@ -18,15 +18,15 @@ import (
 // 同域同判）；ErrPenaltyNotifyFailed → 500（强一致族下扣罚整笔回滚，管理端可见原因并可重试）。
 var pointsErrStatus = &errStatusTable{
 	entries: []errStatusEntry{
-		{service.ErrTaskNotFound, http.StatusNotFound},
-		{service.ErrUserNotFound, http.StatusNotFound},
-		{service.ErrCourseNotFound, http.StatusBadRequest},
-		{service.ErrCourseNotRedeemable, http.StatusBadRequest},
-		{service.ErrAlreadyClaimed, http.StatusBadRequest},
-		{service.ErrDailyClaimLimit, http.StatusBadRequest},
-		{service.ErrInsufficientPoints, http.StatusBadRequest},
-		{service.ErrAlreadyRedeemed, http.StatusBadRequest},
-		{service.ErrPenaltyNotifyFailed, http.StatusInternalServerError},
+		{sentinel: service.ErrTaskNotFound, status: http.StatusNotFound},
+		{sentinel: service.ErrUserNotFound, status: http.StatusNotFound},
+		{sentinel: service.ErrCourseNotFound, status: http.StatusBadRequest},
+		{sentinel: service.ErrCourseNotRedeemable, status: http.StatusBadRequest},
+		{sentinel: service.ErrAlreadyClaimed, status: http.StatusBadRequest},
+		{sentinel: service.ErrDailyClaimLimit, status: http.StatusBadRequest},
+		{sentinel: service.ErrInsufficientPoints, status: http.StatusBadRequest},
+		{sentinel: service.ErrAlreadyRedeemed, status: http.StatusBadRequest},
+		{sentinel: service.ErrPenaltyNotifyFailed, status: http.StatusInternalServerError},
 	},
 	fallback: http.StatusBadRequest,
 }

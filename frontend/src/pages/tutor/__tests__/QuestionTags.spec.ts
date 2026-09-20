@@ -51,7 +51,8 @@ beforeEach(() => {
   vi.mocked(trainingApi.createQuestionTag).mockResolvedValue(tagOf(2, '制动', 'brake'))
   vi.mocked(trainingApi.getTags).mockResolvedValue({ tags: [] })
   vi.mocked(trainingApi.setQuestionTags).mockResolvedValue({ tag_ids: [] })
-  vi.mocked(questionBankApi.getQuestions).mockResolvedValue({ questions: [], total: 0, page: 1, page_size: 20 })
+  // 票 6（ADR-0060 决策 6）：列表函数出口给的是中立容器 Page<T>，fixture 不再写域键
+  vi.mocked(questionBankApi.getQuestions).mockResolvedValue({ items: [], total: 0 })
   vi.mocked(questionBankApi.getStats).mockResolvedValue({ total: 0, by_type: {}, by_status: {} })
 })
 

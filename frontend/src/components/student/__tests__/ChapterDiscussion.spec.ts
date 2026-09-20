@@ -257,8 +257,17 @@ describe('章节讨论回复区对齐（#858）', () => {
     await new Promise((r) => setTimeout(r, 0))
     await flushPromises()
 
-    expect(wrapper.text()).toContain('仅显示前 1 条回复')
-    expect(wrapper.text()).toContain('查看全部')
+    // spec #1201 场景 4：尾部不是「只能跳详情页」——同一面板里就能翻完，
+    // 且判据是服务端的 pages/total（pages=2 / total=150），不是本批满不满。
+    const more = wrapper.findAll('button').find((b) => b.text().includes('加载更多回复'))
+    expect(more, '超过一页却没有翻页入口').toBeTruthy()
+    expect(more!.text()).toContain('剩余 149 条')
+    expect(getTopic).toHaveBeenLastCalledWith(1, undefined, undefined, 1, 20)
+
+    await more!.trigger('click')
+    await flushPromises()
+    expect(getTopic).toHaveBeenLastCalledWith(1, undefined, undefined, 2, 20)
+    expect(wrapper.findAllComponents(ForumReplyCard).length).toBe(2)
   })
 
   it('楼中楼显示被回复人', async () => {

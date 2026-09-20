@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -52,17 +51,10 @@ func (h *JobCardHandler) Get(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *resumeGetReq) (*service.JobCardDTO, error) {
 			return h.svc.Get(req.UserID)
 		},
-		Render: func(c *gin.Context, _ *resumeGetReq, resp *service.JobCardDTO, err error) {
-			if err != nil {
-				if errors.Is(err, gorm.ErrRecordNotFound) {
-					response.NotFound(c, "简历不存在")
-					return
-				}
-				response.ServerError(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
+		ErrStatus: &errStatusTable{entries: []errStatusEntry{
+			{sentinel: gorm.ErrRecordNotFound, status: http.StatusNotFound, message: "简历不存在"},
+			{sentinel: nil, status: http.StatusInternalServerError},
+		}},
 	}.Handle(c)
 }
 
@@ -91,14 +83,7 @@ func (h *JobCardHandler) Upsert(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *resumeUpsertReq) (*service.JobCardDTO, error) {
 			return h.svc.Upsert(req.UserID, req.Input)
 		},
-		Render: func(c *gin.Context, _ *resumeUpsertReq, resp *service.JobCardDTO, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusBadRequest).Handle(c)
 }
 
 // UpdateVisibility 切换简历公开 PUT /api/resume/visibility

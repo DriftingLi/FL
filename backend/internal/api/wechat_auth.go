@@ -7,11 +7,11 @@ package api
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/service"
-	"forklift-training/pkg/response"
 )
 
 // WechatAuthHandler 微信登录 handler。
@@ -59,14 +59,7 @@ func (h *WechatAuthHandler) MiniProgramLogin(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *wechatLoginReq) (*service.WxLoginResult, error) {
 			return h.svc.MiniProgramLogin(ctx, req.Code)
 		},
-		Render: func(c *gin.Context, _ *wechatLoginReq, resp *service.WxLoginResult, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "登录成功", resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("登录成功"), http.StatusBadRequest).Handle(c)
 }
 
 // GetQRCodeInfo 获取扫码登录二维码
@@ -81,9 +74,6 @@ func (h *WechatAuthHandler) GetQRCodeInfo(c *gin.Context) {
 	Endpoint[struct{}, service.WechatQRCodeInfoDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.WechatQRCodeInfoDTO, error) {
 			return h.svc.QRCodeInfo(), nil
-		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.WechatQRCodeInfoDTO, _ error) {
-			response.Success(c, *resp)
 		},
 	}.Handle(c)
 }
@@ -106,11 +96,9 @@ func (h *WechatAuthHandler) LoginWithQRCode(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *wechatLoginReq) (*service.LoginResult, error) {
 			return h.svc.LoginWithQRCode(req.Code)
 		},
-		Render: func(c *gin.Context, _ *wechatLoginReq, _ *service.LoginResult, err error) {
-			// 占位服务 err 一定非 nil，始终 BadRequest(err.Error())；成功（err==nil）无返回。
-			if err != nil {
-				response.BadRequest(c, err.Error())
-			}
+		// 占位服务：错误恒非 nil，一律 400 + err.Error()（成功面暂无返回内容）。
+		ErrStatus: errStatusAll(http.StatusBadRequest),
+		Render: func(c *gin.Context, _ *wechatLoginReq, _ *service.LoginResult) {
 		},
 	}.Handle(c)
 }

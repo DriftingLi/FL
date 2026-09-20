@@ -273,9 +273,9 @@ func (s *AuthService) UpdatePassword(ctx context.Context, userID int, password s
 	if err := s.db.Model(&model.HrwaiUser{}).Where("id = ?", userID).Update("password", hashed).Error; err != nil {
 		return err
 	}
-	// 改密吊销该用户全部 refresh（#622，移动端 ADR-0006 方向 2）：快捷登录的静默续登
+	// 改密吊销该用户全部 refresh（#622 → ADR-0060 票2 全会话吊销族）：快捷登录的静默续登
 	// 在改密后立即失效，回退密码登录。标记写入失败不阻断改密（密码已生效），记日志暴露缺口。
-	if err := s.session.RevokeUserRefresh(ctx, "hrwai_user", userID); err != nil {
+	if err := s.session.RevokeIdentity(ctx, "hrwai_user", userID); err != nil {
 		s.logger.Warn("改密后 refresh 吊销标记写入失败", zap.Int("user_id", userID), zap.Error(err))
 	}
 	return nil
@@ -301,7 +301,7 @@ func (s *AuthService) TutorLogin(username, password string) (*LoginResult, error
 	var tutor model.Tutor
 	if err := s.db.Where("username = ?", username).First(&tutor).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("导师账号或密码错误")
+			return nil, errors.New("讲师账号或密码错误")
 		}
 		return nil, err
 	}
@@ -309,7 +309,7 @@ func (s *AuthService) TutorLogin(username, password string) (*LoginResult, error
 	return s.verifyAndIssue(password, loginCredentials{
 		id: tutor.TutorID, account: tutor.Username, username: tutor.Username,
 		password: tutor.Password, status: &status,
-	}, "tutor", "导师账号或密码错误")
+	}, "tutor", "讲师账号或密码错误")
 }
 
 // TutorRegisterResultDTO 导师建号结果（ADR-0009 §2 typed DTO / spec #940 片三）。
@@ -530,7 +530,10 @@ func (s *AuthService) CreateRecruiter(in RecruiterCreateInput) (*model.Recruiter
 }
 
 // ToggleRecruiterStatus 切换招聘者启用/禁用状态（禁用后登录被 verifyAndIssue 拦截）。
-func (s *AuthService) ToggleRecruiterStatus(id int) (int16, error) {
+// 禁用同时吊销该身份全部 refresh（ADR-0060 票2，spec #1201 场景 29）：只改状态列
+// 不构成「停用真实生效」——手上仍持 refresh 的会话能继续换新 access。与改密同族，
+// 状态列已生效故吊销失败只记日志、不回退。
+func (s *AuthService) ToggleRecruiterStatus(ctx context.Context, id int) (int16, error) {
 	var r model.RecruiterUser
 	if err := s.db.First(&r, id).Error; err != nil {
 		return 0, errors.New("招聘者不存在")
@@ -541,6 +544,11 @@ func (s *AuthService) ToggleRecruiterStatus(id int) (int16, error) {
 	}
 	if err := s.db.Model(&model.RecruiterUser{}).Where("id = ?", id).Update("status", next).Error; err != nil {
 		return 0, err
+	}
+	if next == 0 {
+		if err := s.session.RevokeIdentity(ctx, "recruiter", id); err != nil {
+			s.logger.Warn("招聘员禁用后 refresh 吊销标记写入失败", zap.Int("recruiter_id", id), zap.Error(err))
+		}
 	}
 	return next, nil
 }
@@ -700,7 +708,7 @@ func (s *AuthService) ResetRecruiterPassword(ctx context.Context, id int, passwo
 	}
 	// 管理员强制重置凭证理应踢下线（#622 同口径）：吊销该招聘员全部 refresh。
 	// 角色命名空间键——与学员 ID 空间互不干扰。
-	if err := s.session.RevokeUserRefresh(ctx, "recruiter", id); err != nil {
+	if err := s.session.RevokeIdentity(ctx, "recruiter", id); err != nil {
 		s.logger.Warn("招聘员改密后 refresh 吊销标记写入失败", zap.Int("recruiter_id", id), zap.Error(err))
 	}
 	return nil
@@ -788,6 +796,9 @@ func (s *AuthService) UpdateCompany(userID int, company string) error {
 }
 
 // DeleteAccount 硬删除学员账号并级联清理相关数据，论坛内容匿名化。
+//
+// 全会话吊销不在此处：注销走「先 RevokeIdentity、标记失败即不调本方法」，
+// 由 handler 承担（会话终止两族归 security.Session，资料层删除归本方法）。ADR-0060 票2。
 func (s *AuthService) DeleteAccount(userID int) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		var user model.HrwaiUser

@@ -209,11 +209,11 @@ type RedisConfig struct {
 	Addr         string        // REDIS_ADDR，默认 "localhost:6379"
 	Password     string        // REDIS_PASSWORD，生产环境从环境变量注入
 	DB           int           // REDIS_DB，默认 0
-	PoolSize     int           // REDIS_POOL_SIZE，默认 10
+	PoolSize     int           // REDIS_POOL_SIZE，默认 20
 	MinIdleConns int           // REDIS_MIN_IDLE_CONNS，默认 3
 	MaxRetries   int           // REDIS_MAX_RETRIES，默认 3
 	Prefix       string        // REDIS_KEY_PREFIX，统一 key 前缀，默认 "fl:"
-	DialTimeout  time.Duration // REDIS_DIAL_TIMEOUT，默认 5s
+	DialTimeout  time.Duration // REDIS_DIAL_TIMEOUT，默认 2s
 	ReadTimeout  time.Duration // REDIS_READ_TIMEOUT，默认 3s
 	WriteTimeout time.Duration // REDIS_WRITE_TIMEOUT，默认 3s
 	PoolTimeout  time.Duration // REDIS_POOL_TIMEOUT，默认 4s
@@ -249,6 +249,11 @@ type SwaggerConfig struct {
 }
 
 // setDefaults 集中定义全部配置默认值。
+//
+// 一个键的默认值只许写一处：另有少数键把单点写在 Load 的读取回退里
+// （redis_pool_size / redis_dial_timeout，ADR-0060 票5 消掉的双写），
+// 两侧各写一遍正是 REDIS_POOL_SIZE 那次 20/10/20 漂移的形状。
+// 两侧形态都由 internal/deploy 的漂移锁对账（TestEnvDefaultsNoDrift）。
 func setDefaults() {
 	viper.SetDefault("app_env", "development")
 	viper.SetDefault("port", "8080")
@@ -281,11 +286,11 @@ func setDefaults() {
 	viper.SetDefault("redis_addr", "localhost:6379")
 	viper.SetDefault("redis_password", "")
 	viper.SetDefault("redis_db", 0)
-	viper.SetDefault("redis_pool_size", 20)
+	// redis_pool_size 的默认值单点在 Load 的 positiveInt 回退里（不双写，ADR-0060 票5）
 	viper.SetDefault("redis_min_idle_conns", 5)
 	viper.SetDefault("redis_max_retries", 3)
 	viper.SetDefault("redis_key_prefix", "fl:")
-	viper.SetDefault("redis_dial_timeout", "2s")
+	// redis_dial_timeout 的默认值单点在 Load 的 positiveDuration 回退里（不双写，ADR-0060 票5）
 	viper.SetDefault("redis_read_timeout", "2s")
 	viper.SetDefault("redis_write_timeout", "2s")
 	viper.SetDefault("redis_pool_timeout", "3s")
@@ -384,6 +389,7 @@ func Load() (*Config, error) {
 			DBConnMaxLifetime: positiveInt("valuation_db_conn_max_lifetime", 3600),
 		},
 		Redis: RedisConfig{
+			// PoolSize 与 DialTimeout 的默认值单点在这里（setDefaults 不再双写，ADR-0060 票5）
 			Addr:         viper.GetString("redis_addr"),
 			Password:     viper.GetString("redis_password"),
 			DB:           nonNegInt("redis_db", 0),

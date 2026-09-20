@@ -22,8 +22,8 @@ import (
 // 其余（被强制下架/超上限等业务校验）兜底 400。
 var jobErrStatus = &errStatusTable{
 	entries: []errStatusEntry{
-		{service.ErrJobNotFound, http.StatusNotFound},
-		{service.ErrJobNotYours, http.StatusForbidden},
+		{sentinel: service.ErrJobNotFound, status: http.StatusNotFound},
+		{sentinel: service.ErrJobNotYours, status: http.StatusForbidden},
 	},
 	fallback: http.StatusBadRequest,
 }
@@ -76,11 +76,8 @@ func (h *JobHandler) Create(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *service.JobPostingInput) (*service.JobPostingDTO, error) {
 			return h.svc.Create(middleware.CurrentUserID(c), req)
 		},
-		Render: func(c *gin.Context, _ *service.JobPostingInput, resp *service.JobPostingDTO, err error) {
-			if err != nil {
-				jobErrStatus.renderError(c, err) // #611：错误映射退表，201 定制成功信封保留
-				return
-			}
+		ErrStatus: jobErrStatus,
+		Render: func(c *gin.Context, _ *service.JobPostingInput, resp *service.JobPostingDTO) {
 			response.Created(c, "职位发布成功", *resp)
 		},
 	}.Handle(c)
@@ -116,11 +113,8 @@ func (h *JobHandler) Update(c *gin.Context) {
 			}
 			return h.svc.Update(middleware.CurrentUserID(c), id, req)
 		},
-		Render: func(c *gin.Context, _ *service.JobPostingInput, resp *service.JobPostingDTO, err error) {
-			if err != nil {
-				jobErrStatus.renderError(c, err) // #611：错误映射退表，成功文案保留定制
-				return
-			}
+		ErrStatus: jobErrStatus,
+		Render: func(c *gin.Context, _ *service.JobPostingInput, resp *service.JobPostingDTO) {
 			response.SuccessWithMsg(c, "职位已更新", *resp)
 		},
 	}.Handle(c)
@@ -147,11 +141,8 @@ func (h *JobHandler) ToggleStatus(c *gin.Context) {
 			}
 			return h.svc.ToggleStatus(middleware.CurrentUserID(c), id)
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.JobPostingDTO, err error) {
-			if err != nil {
-				jobErrStatus.renderError(c, err) // #611：错误映射退表，成功文案保留定制
-				return
-			}
+		ErrStatus: jobErrStatus,
+		Render: func(c *gin.Context, _ *struct{}, resp *service.JobPostingDTO) {
 			msg := "职位已下架"
 			if resp.Status == "open" {
 				msg = "职位已上架"

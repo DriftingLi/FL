@@ -20,7 +20,6 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 
-	"forklift-training/internal/authz"
 	"forklift-training/internal/cache"
 	"forklift-training/internal/config"
 )
@@ -128,6 +127,12 @@ func NewSessionWithRecruiterCookie(jwtSecret string, jwtExpiry, refreshExpiry ti
 
 // SessionFromConfig 从应用配置构造会话模块（黑名单固定为 Redis 存储，refresh 用配置值）。
 func SessionFromConfig(cfg *config.Config) *Session {
+	return SessionFromConfigWithBlacklist(cfg, RedisBlacklistStore{})
+}
+
+// SessionFromConfigWithBlacklist 同 SessionFromConfig，但黑名单存储可注入
+// （契约测试链路没有 Redis，而注销/登出/轮换都要真实写黑名单）。
+func SessionFromConfigWithBlacklist(cfg *config.Config, blacklist BlacklistStore) *Session {
 	hrwaiCookie := CookieConfig{
 		Name:   cfg.AuthCookie.Name,
 		Domain: cfg.AuthCookie.Domain,
@@ -141,7 +146,7 @@ func SessionFromConfig(cfg *config.Config) *Session {
 	if recruiterCookie.Name == "" {
 		recruiterCookie.Name = "recruiter_token"
 	}
-	return NewSessionWithRecruiterCookie(cfg.JWTSecretKey, cfg.JWTExpiry(), cfg.JWTRefreshExpiry(), hrwaiCookie, recruiterCookie, RedisBlacklistStore{})
+	return NewSessionWithRecruiterCookie(cfg.JWTSecretKey, cfg.JWTExpiry(), cfg.JWTRefreshExpiry(), hrwaiCookie, recruiterCookie, blacklist)
 }
 
 // Issue 签发 access token（双令牌会话：短生命周期、只供鉴权中间件，ADR-0012）。
@@ -218,10 +223,14 @@ func (s *Session) refreshRevocationKey(role string, userID int) string {
 	return fmt.Sprintf("jwt:pwd_revoked:%s:%d", role, userID)
 }
 
-// RevokeUserRefresh 改密成功后吊销该用户全部 refresh token：写入用户级吊销标记（时间戳），
-// TTL = refresh 有效期——改密前签发的任何 refresh 链（含轮换滑动续期）最长存活不超过它，
+// RevokeIdentity 全会话吊销（会话终止两族之二，ADR-0060 票2）：写入用户级吊销标记（时间戳），
+// 该身份名下所有 refresh 链一次性失效。改密、禁用招聘者、注销三处共用本动作。
+// TTL = refresh 有效期——标记之前签发的任何 refresh（含轮换滑动续期）最长存活不超过它，
 // 标记过期即自然失效，无需清理任务。
-func (s *Session) RevokeUserRefresh(ctx context.Context, role string, userID int) error {
+//
+// 失败策略由调用方决定，本动作只如实返回：改密/禁用是「已生效动作之后的补救」，调用方记日志
+// 不阻断；注销没有已生效动作，调用方据此让整体不生效（见 AuthService.DeleteAccount）。
+func (s *Session) RevokeIdentity(ctx context.Context, role string, userID int) error {
 	return s.blacklist.Set(ctx, s.refreshRevocationKey(role, userID),
 		strconv.FormatInt(time.Now().Unix(), 10), s.refreshExpiry)
 }
@@ -284,6 +293,23 @@ func (s *Session) RevokeRefresh(ctx context.Context, tokenStr string) error {
 		return nil
 	}
 	return s.revoke(ctx, tokenStr)
+}
+
+// SignOut 单会话终止（会话终止两族之一，ADR-0060 票2）：撤销手上这枚 refresh
+// （为空或无效即静默跳过）并清除主站登录态 Cookie。
+//
+// token 取自请求体还是 Bearer 头是**入口差异**，不是第三种语义——两条入口都收敛到本动作。
+// 没有角色形参：本仓只有主站这一条登出端点（招聘者面没有），留着那个分支就是一个实现
+// 撑起的假想 seam（ADR-0060 自己的判据）。
+// 吊销失败仍清 Cookie：本地登录态已不可用，凭证缺口由日志暴露（与既有登出口径一致）。
+// 终止该身份全部会话不在此处：那属 RevokeIdentity。
+func (s *Session) SignOut(ctx context.Context, w http.ResponseWriter, refreshToken string) error {
+	var err error
+	if refreshToken != "" {
+		err = s.RevokeRefresh(ctx, refreshToken)
+	}
+	s.ClearCookie(w)
+	return err
 }
 
 // verify 解析并校验 JWT（显式校验签名算法，拒绝非 HMAC 算法，防止 alg=none 攻击）。
@@ -388,38 +414,6 @@ func (s *Session) SetRecruiterCookie(w http.ResponseWriter, token string) {
 		Secure:   s.recruiterCookie.Secure,
 		SameSite: http.SameSiteLaxMode,
 	})
-}
-
-// ClearRecruiterCookie 清除招聘者登录 Cookie。
-func (s *Session) ClearRecruiterCookie(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     s.RecruiterCookieName(),
-		Value:    "",
-		Path:     "/",
-		Domain:   s.recruiterCookie.Domain,
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   s.recruiterCookie.Secure,
-		SameSite: http.SameSiteLaxMode,
-	})
-}
-
-// SetCookieForRole 按角色写 Cookie：recruiter 走 host-only 独立 cookie，其余走 hrwai 父域 cookie。
-func (s *Session) SetCookieForRole(w http.ResponseWriter, token, role string) {
-	if role == string(authz.RoleRecruiter) {
-		s.SetRecruiterCookie(w, token)
-		return
-	}
-	s.SetCookie(w, token)
-}
-
-// ClearCookieForRole 按角色清除 Cookie。
-func (s *Session) ClearCookieForRole(w http.ResponseWriter, role string) {
-	if role == string(authz.RoleRecruiter) {
-		s.ClearRecruiterCookie(w)
-		return
-	}
-	s.ClearCookie(w)
 }
 
 // randomJWTID 生成随机 jti（防重放/保证每次签发唯一；crypto/rand 失败时退化为时间戳）。

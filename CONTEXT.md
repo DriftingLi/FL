@@ -5,7 +5,8 @@
 ## 角色
 
 - **学员（hrwai_user）**：统一账号角色，学员端 / 残值评估 / AI 助手共用一张用户表（hrwai_users）与一套 JWT。
-- **讲师（tutor）**：独立账号表（tutor），管理章节内容、题库、阅卷；不建课（课程创建/编辑仅管理员，见 ADR-0006 后的领域约定）。
+- **讲师（tutor）**：独立账号表（tutor），管理章节内容、题库、阅卷；不建课（课程创建/编辑仅管理员，见 ADR-0006 后的领域约定）。**术语别名裁定**（2026-09-20）：「导师」是它在界面文案里的历史漂移叫法，**canonical 为「讲师」**——词表是仲裁者，运行期文案向它收敛（不是「本期不改」那类别名登记）。角色称谓是**单一词表**，不随 caller 视角分档：学员侧与管理侧叫同一个名字。
+  _Avoid_: 在同一屏里对同一角色混用两个称谓（侧栏「导师」+ 审计页「讲师」即此漂移的实测现场）；把「导师」当作带亲疏差分的第二称谓
 - **管理员（admin）**：独立账号表（admin），管理学员/讲师/课程/题库/残值配置/AI 配置。
 
 **授权（authorization）**——与角色区分的一层词汇：
@@ -19,7 +20,8 @@
 - **统一账号**：hrwai_users 表 + 统一 JWT（角色 hrwai_user）；支持用户名或手机号登录。
 - **验证码（code）**：邮箱/手机号注册、登录、绑定、改账号、找回/修改密码的 6 位数字验证码。用途六态：register / login / bind / account_change / reset_password / change_password。错误上限 5 次，发送节流 60 秒，TTL 5 分钟。**用途是这条状态机的分区键**：每个用途自带两项属性——**入口前置**（完成该用途的动作是否需要已登录会话）与**目标占用口径**（目标须未注册 / 须已注册 / 无需校验，后者适用于目标是当前用户自己账号的场景）。
 - **验证码通道（channel）**：邮箱（SMTP，开发降级日志）与短信（腾讯云 SMS SendSms，开发降级日志）是同一验证码状态机两侧的 adapter。
-- **会话（session）**：签发（issue）/ 校验（verify）/ 吊销（revoke）JWT 的生命周期。双令牌（ADR-0016）：access 2h（中间件仅收 access）+ refresh 7 天轮换；黑名单（`jwt:blacklist:`）只管理 refresh——刷新轮换即作废旧 refresh（防重放），登出撤销 refresh；access 生命周期短，不入黑名单、自然过期。
+- **会话（session）**：签发（issue）/ 校验（verify）/ 吊销（revoke）JWT 的生命周期。双令牌（ADR-0016）：access 2h（中间件仅收 access）+ refresh 7 天轮换；黑名单（`jwt:blacklist:`）只管理 refresh——刷新轮换即作废旧 refresh（防重放），登出撤销 refresh；access 生命周期短，不入黑名单、自然过期。终止会话有**两族**，语义由名字承担、不由同一个动作兼表：**单会话终止（sign-out）**——手上这一枚 refresh 失效 + 本角色登录态消失，其他设备不受影响；token 从请求体还是 Bearer 头取得是**入口差异**，不是第三种终止语义。**全会话吊销（identity revoke）**——该用户全部 refresh 失效（改密、被禁用、**注销**三处共用；注销此前只删资料不吊销，属缺口，2026-09-20 定案补齐）。两族的失败策略不同：改密的吊销**不阻断**（密码已生效，不能回退，记日志暴露缺口）；注销的吊销**先于删除**且失败即整体不生效（没有任何已生效的动作值得牺牲凭证失效）。
+  _Avoid_: 用「登出」同时指两族（那是单会话终止的专名）；把「注销」读成资料层动作（它同时是凭证层动作）
 - **登录态 Cookie**：父域名 httpOnly Cookie（hrwai_token），子域名间共享登录；Bearer 头优先于 Cookie。生产已启用 HTTPS（PR #254），Cookie 通道恢复、仅携带 access（不自动续期，见 ADR-0016）；HTTP 时期的历史约束见 ADR-0003（已解决）。
 - **微信小程序登录（wx-login）**：小程序端 uni.login 临时 code 换 openid 登录（POST /api/auth/wx-login，code2session）；openid 已绑定直接登录，未注册自动建号绑定（account 取 `wx_`+openid 前 12 位，昵称「微信学员」+openid 后 6 位，账号前缀冲突时追加后段或序号重试，唯一约束冲突与其它错误分类处理），复用统一登录骨架签发双令牌。凭证经 `WECHAT_MINI_PROGRAM_APP_ID`/`WECHAT_MINI_PROGRAM_APP_SECRET` 配置（GitHub Secrets 同名；与网页端扫码登录的开放平台凭证 `WECHAT_OPEN_PLATFORM_*` 严格区分，两套 AppID/AppSecret 不可混用）。契约见 `docs/docs/reference/微信小程序登录-文档说明.md`。
 - **认证页（auth page）**：登录/注册/找回密码三页共用认证页外壳（AuthPageShell，白底极简 + 主次分离——密码为主入口，邮箱/手机/微信收纳为「或使用以下方式登录」图标按钮；tutor/admin 仅密码入口）。三页提交流程共用 useAuthFlow 状态机；redirect 回跳白名单（isSafeRedirect）与「路径前缀→身份」表单点（authRedirect），见 ADR-0014。

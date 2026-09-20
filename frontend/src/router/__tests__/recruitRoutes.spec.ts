@@ -4,7 +4,9 @@ import router from '../index'
 describe('recruit routes', () => {
   it('存在 /recruit 布局路由且守卫要求 recruiter 角色', () => {
     const all = router.getRoutes()
-    const rec = all.find(r => r.path === '/recruit' && r.meta?.requiresAuth === true)
+    // 布局记录是**无 name** 的那条（子记录也落在 /recruit，且票8a 起每条都自带 requiresAuth，
+    // 故不能再用 requiresAuth 当区分判据——与 pages.spec.ts 的布局锁同一口径）。
+    const rec = all.find(r => r.path === '/recruit' && !r.name && r.meta?.requiresAuth === true)
     expect(rec).toBeDefined()
     expect(rec!.meta.requiresAuth).toBe(true)
     expect(rec!.meta.role).toBe('recruiter')

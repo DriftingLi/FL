@@ -138,14 +138,12 @@ function displayName(row: ProfileChangeRequest) {
 
 // admin 列表状态机：本页只声明 fetch 与行操作 adapter
 const table = useAdminTable<ProfileChangeRequest>({
-  fetch: async (paging, filters) => {
-    const data = await adminApi.listProfileReviews({
+  fetch: (paging, filters) =>
+    adminApi.listProfileReviews({
       status: String(filters.status || 'pending'),
       page: paging.page,
       page_size: paging.pageSize
-    })
-    return { list: data?.requests || [], total: data?.total || 0 }
-  },
+    }),
   actions: {
     approve,
     reject: openReject

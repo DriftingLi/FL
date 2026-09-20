@@ -33,11 +33,10 @@ beforeEach(() => {
   vi.mocked(credentialApi.listCredentials).mockResolvedValue({
     credentials: [{ id: 3, code: 'forklift_n1', name: '叉车司机N1证', description: '', category: 'special_operation', level: null, sort_order: 1, status: 1, created_at: '', updated_at: '' }],
   })
+  // 票 6（ADR-0060 决策 6）：列表函数出口给的是中立容器 Page<T>，fixture 不再写域键
   vi.mocked(questionBankApi.getQuestions).mockResolvedValue({
     total: 1,
-    page: 1,
-    page_size: 20,
-    questions: [
+    items: [
       {
         id: 42,
         type: 'single_choice',

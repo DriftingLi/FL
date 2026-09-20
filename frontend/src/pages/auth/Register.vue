@@ -240,7 +240,7 @@
     <template #footer>
       <div class="form-footer">
         <span class="footer-text">已有账号？</span>
-        <router-link to="/login" class="footer-link">返回登录</router-link>
+        <router-link :to="href('Login')" class="footer-link">返回登录</router-link>
       </div>
     </template>
   </AuthPageShell>
@@ -249,6 +249,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { href } from '@/config/pages'
 import { authApi } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
 import type { UserProfile } from '@/types/user'

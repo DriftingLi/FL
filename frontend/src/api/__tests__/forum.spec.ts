@@ -118,6 +118,21 @@ describe('adminForumApi 精选位（#742）', () => {
       params: { featured: 'false', page: 1 }
     })
   })
+
+  // ---- 票 6（ADR-0060 决策 6）：管理端两条队列的出口都是中立容器，键方言（topics / reports）
+  //      只在本模块内出现一次，页面 adapter 退化成 return ----
+
+  it('listTopics / listReports：出口把域键归一成 Page.items', async () => {
+    mockGet.mockResolvedValue({ topics: [{ id: 5 }], total: 21, page: 1, pages: 3 })
+    await expect(adminForumApi.listTopics({ page: 1 })).resolves.toEqual({ items: [{ id: 5 }], total: 21 })
+
+    mockGet.mockResolvedValue({ reports: [{ id: 2 }], total: 1 })
+    await expect(adminForumApi.listReports({ status: 0 })).resolves.toEqual({ items: [{ id: 2 }], total: 1 })
+
+    // 载荷整段缺失也不炸：容器恒为 { items: [], total: 0 }
+    mockGet.mockResolvedValue(null)
+    await expect(adminForumApi.listTopics({ page: 1 })).resolves.toEqual({ items: [], total: 0 })
+  })
 })
 
 // #364：Tab → 查询参数的映射。两端（学员 / 管理）共用这一份，

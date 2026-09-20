@@ -315,15 +315,13 @@ const {
   retry: retryLoad
 } = useAdminTable<AdminForumTopic>({
   pageSize: 10,
-  fetch: async (paging) => {
-    const res = await adminForumApi.listTopics({
+  fetch: (paging) =>
+    adminForumApi.listTopics({
       ...forumTabQuery(activeTab.value),
       page: paging.page,
       page_size: paging.pageSize,
       keyword: keyword.value || undefined
     })
-    return { list: res.topics || [], total: res.total || 0 }
-  }
 })
 
 /** 分页控件回调：useAdminTable 的 load 读取 currentPage，翻页后重装 */
@@ -379,14 +377,12 @@ const {
   retry: retryReports
 } = useAdminTable<AdminForumReportItem>({
   pageSize: 20,
-  fetch: async (paging) => {
-    const res = await adminForumApi.listReports({
+  fetch: (paging) =>
+    adminForumApi.listReports({
       status: reportStatus.value >= 0 ? reportStatus.value : undefined,
       page: paging.page,
       page_size: paging.pageSize
     })
-    return { list: res.reports || [], total: res.total || 0 }
-  }
 })
 
 function handleMainTabChange(tab: string | number) {

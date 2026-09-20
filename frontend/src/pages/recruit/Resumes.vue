@@ -85,7 +85,7 @@
             <div class="text-[10px] text-ink-3">更新于 {{ item.updated_at.slice(0, 10) }}</div>
           </div>
           <router-link
-            :to="`/recruit/resumes/${item.user_id}`"
+            :to="href('RecruitResumeDetail', { id: String(item.user_id) })"
             class="shrink-0 text-xs font-medium text-ui-600 hover:text-ui-700"
           >
             查看详情
@@ -105,6 +105,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
+import { href } from '@/config/pages'
 import { recruitApi, type RecruitResumeItem } from '@/api/recruit'
 import { contactBadge } from '@/utils/contactRequestStatus'
 import { buildCityLevelRegionOptions, joinRegionPath } from '@/utils/region'

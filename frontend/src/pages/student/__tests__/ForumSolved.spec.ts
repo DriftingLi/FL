@@ -215,7 +215,11 @@ describe('问答状态可见 #367', () => {
     const rSelf = reply(4, true, 1)
     getTopic.mockResolvedValue({
       topic: { id: 1, category: 'question', title: '问答', content: '内容', view_count: 0, reply_count: 1, created_at: '2026-08-01T10:00:00+08:00', author: { user_id: 1, username: '楼主', avatar_url: '' }, accepted_reply_id: 4, solved_at: '2026-08-02T10:00:00+08:00', reward_issued: false },
-      replies: [rSelf]
+      replies: [rSelf],
+      // 详情回复的分页信封恒在下发（append 档据此判「还有没有下一批」，ADR-0060 §4）
+      page: 1,
+      pages: 1,
+      total: 1
     } as never)
     const wrapper2 = mount(ForumDetail, {
       global: { plugins: [epLite()], stubs: { ForumImageGallery: true, UiEmptyState: true, UiErrorState: true, UiSkeleton: true } }

@@ -29,18 +29,10 @@ func doEndpoint(t *testing.T, e Endpoint[int, string]) *httptest.ResponseRecorde
 	return w
 }
 
-// renderAsDefault 测试用显式 Render：复刻默认信封语义（err==nil → 200；
-// *ParseError → 其状态码；其他 → 500）。用于对照断言「省略 Render 时默认信封行为一致」。
-func renderAsDefault[Resp any](c *gin.Context, _ *int, resp *Resp, err error) {
-	var pe *ParseError
-	switch {
-	case err == nil:
-		response.Success(c, deref(resp))
-	case asParseError(err, &pe):
-		renderStatus(c, pe.Status, pe.Message)
-	default:
-		response.ServerError(c, err.Error())
-	}
+// renderSuccessOnly 测试用显式 Render：只写成功面（票1b 后 err 不在签名上，错误面归骨架）。
+// 用于对照断言「挂 Render 与否，错误面与默认信封逐字节一致」。
+func renderSuccessOnly[Resp any](c *gin.Context, _ *int, resp *Resp) {
+	response.Success(c, deref(resp))
 }
 
 // TestEndpoint_ParseFailure_BadRequest parse 返回 badRequest → 400 + 原文案。
@@ -144,8 +136,9 @@ func TestEndpoint_NilParse_UsesZeroReq(t *testing.T) {
 	}
 }
 
-// TestEndpoint_DefaultRender_ByteEquivalent 默认信封与显式纯样板 Render 字节级等价（ADR-0024 C2）：
-// 成功 → 200 统一信封、*ParseError → 其状态码、其他错误 → 500，三种路径均逐字节一致。
+// TestEndpoint_DefaultRender_ByteEquivalent 默认信封与显式成功面 Render 字节级等价（ADR-0024 C2 + 票1b）：
+// 成功 → 200 统一信封由 Render 承载；*ParseError → 其状态码、其他错误 → 500 两条错误面**与挂没挂
+// Render 无关**（票1b 把 err 从签名上拿掉后，错误面只有骨架一个作者）。
 func TestEndpoint_DefaultRender_ByteEquivalent(t *testing.T) {
 	// 成功路径
 	okInvoke := func(ctx context.Context, req *int) (*string, error) {
@@ -154,7 +147,7 @@ func TestEndpoint_DefaultRender_ByteEquivalent(t *testing.T) {
 	}
 	explicit := Endpoint[int, string]{
 		Invoke: okInvoke,
-		Render: renderAsDefault[string],
+		Render: renderSuccessOnly[string],
 	}
 	implicit := Endpoint[int, string]{
 		Invoke: okInvoke,
@@ -168,7 +161,7 @@ func TestEndpoint_DefaultRender_ByteEquivalent(t *testing.T) {
 	errInvoke := func(ctx context.Context, req *int) (*string, error) {
 		return nil, errors.New("服务崩了")
 	}
-	explicit = Endpoint[int, string]{Invoke: errInvoke, Render: renderAsDefault[string]}
+	explicit = Endpoint[int, string]{Invoke: errInvoke, Render: renderSuccessOnly[string]}
 	implicit = Endpoint[int, string]{Invoke: errInvoke}
 	if a, b := doEndpoint(t, explicit).Body.String(), doEndpoint(t, implicit).Body.String(); a != b {
 		t.Fatalf("500 信封不一致:\n显式=%s\n默认=%s", a, b)
@@ -178,7 +171,7 @@ func TestEndpoint_DefaultRender_ByteEquivalent(t *testing.T) {
 	parseErr := func(c *gin.Context) (*int, error) {
 		return nil, badRequest("参数非法")
 	}
-	explicit = Endpoint[int, string]{Parse: parseErr, Render: renderAsDefault[string]}
+	explicit = Endpoint[int, string]{Parse: parseErr, Render: renderSuccessOnly[string]}
 	implicit = Endpoint[int, string]{Parse: parseErr}
 	if a, b := doEndpoint(t, explicit).Body.String(), doEndpoint(t, implicit).Body.String(); a != b {
 		t.Fatalf("400 信封不一致:\n显式=%s\n默认=%s", a, b)

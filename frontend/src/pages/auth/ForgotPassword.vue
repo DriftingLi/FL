@@ -196,7 +196,7 @@
     <template #footer>
       <div class="form-footer">
         <span class="footer-text">想起密码了？</span>
-        <router-link to="/login" class="footer-link">返回登录</router-link>
+        <router-link :to="href('Login')" class="footer-link">返回登录</router-link>
       </div>
     </template>
   </AuthPageShell>
@@ -205,6 +205,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { href } from '@/config/pages'
 import { authApi } from '@/api/auth'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Message } from '@element-plus/icons-vue'
@@ -238,7 +239,7 @@ const flow = useAuthFlow<ResetMode>({
   },
   afterSuccess: async () => {
     ElMessage.success('密码已重置，请使用新密码登录')
-    router.push('/login')
+    router.push(href('Login'))
   }
 })
 

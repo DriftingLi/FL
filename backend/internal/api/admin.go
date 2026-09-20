@@ -3,6 +3,7 @@ package api
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 
@@ -115,14 +116,7 @@ func (h *AdminHandler) ListCourses(c *gin.Context) {
 			}
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *adminCourseListReq, resp *service.CoursePageResult, err error) {
-			if err != nil {
-				response.ServerError(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // @Summary 创建课程
@@ -145,14 +139,7 @@ func (h *AdminHandler) CreateCourse(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *service.CourseInput) (*service.CourseDTO, error) {
 			return h.courseSvc.CreateCourse(req)
 		},
-		Render: func(c *gin.Context, _ *service.CourseInput, resp *service.CourseDTO, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.Created(c, "课程创建成功", resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(created("课程创建成功"), http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 管理端课程详情
@@ -178,14 +165,7 @@ func (h *AdminHandler) GetCourseDetail(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *idParam) (*service.AdminCourseDetailDTO, error) {
 			return h.courseSvc.GetCourseDetail(req.ID)
 		},
-		Render: func(c *gin.Context, _ *idParam, resp *service.AdminCourseDetailDTO, err error) {
-			if err != nil {
-				response.NotFound(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
 }
 
 // @Summary 更新课程
@@ -218,14 +198,7 @@ func (h *AdminHandler) UpdateCourse(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *courseIDInput) (*service.CourseDTO, error) {
 			return h.courseSvc.UpdateCourse(req.ID, req.Input)
 		},
-		Render: func(c *gin.Context, _ *courseIDInput, resp *service.CourseDTO, err error) {
-			if err != nil {
-				response.NotFound(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "课程更新成功", resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("课程更新成功"), http.StatusNotFound).Handle(c)
 }
 
 // @Summary 交换课程排序
@@ -262,14 +235,7 @@ func (h *AdminHandler) SwapCourseSort(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		Render: func(c *gin.Context, _ *swapCourseSortReq, _ *struct{}, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "排序已交换", nil)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsgNoData("排序已交换"), http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 删除课程
@@ -295,14 +261,7 @@ func (h *AdminHandler) DeleteCourse(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *idParam) (*service.DeleteCourseResult, error) {
 			return h.courseSvc.DeleteCourse(req.ID)
 		},
-		Render: func(c *gin.Context, _ *idParam, resp *service.DeleteCourseResult, err error) {
-			if err != nil {
-				response.NotFound(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "课程删除成功", resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("课程删除成功"), http.StatusNotFound).Handle(c)
 }
 
 // @Summary 创建章节
@@ -334,14 +293,7 @@ func (h *AdminHandler) CreateChapter(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *chapterIDInput) (*service.ChapterDTO, error) {
 			return h.courseSvc.CreateChapter(req.ID, req.Input)
 		},
-		Render: func(c *gin.Context, _ *chapterIDInput, resp *service.ChapterDTO, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.Created(c, "章节创建成功", resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(created("章节创建成功"), http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 更新章节
@@ -374,14 +326,7 @@ func (h *AdminHandler) UpdateChapter(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *chapterIDInput) (*service.ChapterDTO, error) {
 			return h.courseSvc.UpdateChapter(req.ID, req.Input)
 		},
-		Render: func(c *gin.Context, _ *chapterIDInput, resp *service.ChapterDTO, err error) {
-			if err != nil {
-				response.NotFound(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "章节更新成功", resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("章节更新成功"), http.StatusNotFound).Handle(c)
 }
 
 // @Summary 删除章节
@@ -407,14 +352,7 @@ func (h *AdminHandler) DeleteChapter(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *idParam) (*service.DeleteChapterResult, error) {
 			return h.courseSvc.DeleteChapter(req.ID)
 		},
-		Render: func(c *gin.Context, _ *idParam, resp *service.DeleteChapterResult, err error) {
-			if err != nil {
-				response.NotFound(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "章节删除成功", resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("章节删除成功"), http.StatusNotFound).Handle(c)
 }
 
 // @Summary 启动课程内容异步生成
@@ -451,14 +389,7 @@ func (h *AdminHandler) GenerateContent(c *gin.Context) {
 			}
 			return &service.GenerateContentResultDTO{TaskID: taskID}, nil
 		},
-		Render: func(c *gin.Context, _ *generateContentReq, resp *service.GenerateContentResultDTO, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.Created(c, "生成任务已启动", resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(created("生成任务已启动"), http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 查询内容生成任务状态
@@ -480,14 +411,7 @@ func (h *AdminHandler) GetGenerationTask(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *taskIDParam) (*service.GenTaskStatus, error) {
 			return h.contentGenSvc.GetTaskStatus(req.TaskID)
 		},
-		Render: func(c *gin.Context, _ *taskIDParam, resp *service.GenTaskStatus, err error) {
-			if err != nil {
-				response.NotFound(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
 }
 
 // @Summary HRWAI 用户列表
@@ -515,13 +439,7 @@ func (h *AdminHandler) ListHrwaiUsers(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *hrwaiUserListReq) (*service.HrwaiUserPageResult, error) {
 			return h.adminSvc.ListHrwaiUsers(req.Page, req.PageSize, req.Keyword)
 		},
-		Render: func(c *gin.Context, _ *hrwaiUserListReq, resp *service.HrwaiUserPageResult, err error) {
-			if err != nil {
-				response.BadRequest(c, "查询用户列表失败")
-				return
-			}
-			response.Success(c, resp)
-		},
+		ErrStatus: errStatusAllMsg(http.StatusBadRequest, "查询用户列表失败"),
 	}.Handle(c)
 }
 
@@ -550,14 +468,7 @@ func (h *AdminHandler) CreateHrwaiUser(c *gin.Context) {
 			dto := service.NewHrwaiUserCreatedDTO(u)
 			return &dto, nil
 		},
-		Render: func(c *gin.Context, _ *createHrwaiUserReq, resp *service.HrwaiUserCreatedDTO, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.Created(c, "用户添加成功", resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(created("用户添加成功"), http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 更新 HRWAI 用户资料
@@ -600,14 +511,7 @@ func (h *AdminHandler) UpdateHrwaiUser(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		Render: func(c *gin.Context, _ *updateHrwaiUserReq, _ *struct{}, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "用户资料已更新", nil)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsgNoData("用户资料已更新"), http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 重置 HRWAI 用户密码
@@ -647,14 +551,7 @@ func (h *AdminHandler) ResetHrwaiUserPassword(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		Render: func(c *gin.Context, _ *resetPasswordReq, _ *struct{}, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "密码已重置", nil)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsgNoData("密码已重置"), http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 切换 HRWAI 用户启用/禁用状态
@@ -684,11 +581,8 @@ func (h *AdminHandler) ToggleHrwaiUserStatus(c *gin.Context) {
 			}
 			return &service.StatusResultDTO{Status: int(next)}, nil
 		},
-		Render: func(c *gin.Context, _ *idParam, resp *service.StatusResultDTO, err error) {
-			if err != nil {
-				response.NotFound(c, err.Error())
-				return
-			}
+		ErrStatus: errStatusAll(http.StatusNotFound),
+		Render: func(c *gin.Context, _ *idParam, resp *service.StatusResultDTO) {
 			msg := "用户已启用"
 			if resp.Status == 0 {
 				msg = "用户已禁用"
@@ -724,14 +618,7 @@ func (h *AdminHandler) DeleteHrwaiUser(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		Render: func(c *gin.Context, _ *idParam, _ *struct{}, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "用户删除成功", nil)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsgNoData("用户删除成功"), http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 导师列表
@@ -758,14 +645,7 @@ func (h *AdminHandler) ListTutors(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *tutorListReq) (*service.TutorListDTO, error) {
 			return h.adminSvc.GetTutors(req.Page, req.PageSize, req.Keyword)
 		},
-		Render: func(c *gin.Context, _ *tutorListReq, resp *service.TutorListDTO, err error) {
-			if err != nil {
-				response.ServerError(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // @Summary 添加导师
@@ -775,7 +655,7 @@ func (h *AdminHandler) ListTutors(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param body body object false "建号请求 {username,password,name}"
-// @Success 201 {object} response.R{data=service.TutorRegisterResultDTO} "导师添加成功"
+// @Success 201 {object} response.R{data=service.TutorRegisterResultDTO} "讲师添加成功"
 // @Failure 400 {object} response.R "参数错误/用户名已被注册"
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/tutor [post]
@@ -795,14 +675,7 @@ func (h *AdminHandler) CreateTutor(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *createTutorReq) (*service.TutorRegisterResultDTO, error) {
 			return h.authSvc.TutorRegister(req.Username, req.Password, req.Name)
 		},
-		Render: func(c *gin.Context, _ *createTutorReq, resp *service.TutorRegisterResultDTO, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.Created(c, "导师添加成功", *resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(created("讲师添加成功"), http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 删除导师
@@ -811,15 +684,15 @@ func (h *AdminHandler) CreateTutor(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param tutor_id path int true "导师 ID"
-// @Success 200 {object} response.R{data=service.TutorDeletedDTO} "导师删除成功"
+// @Success 200 {object} response.R{data=service.TutorDeletedDTO} "讲师删除成功"
 // @Failure 401 {object} response.R "未认证"
-// @Failure 404 {object} response.R "导师不存在"
+// @Failure 404 {object} response.R "讲师不存在"
 // @Router /admin/tutor/{tutor_id} [delete]
 // DeleteTutor 删除导师 DELETE /api/admin/tutor/:tutor_id
 func (h *AdminHandler) DeleteTutor(c *gin.Context) {
 	Endpoint[idParam, service.TutorDeletedDTO]{
 		Parse: func(c *gin.Context) (*idParam, error) {
-			id, err := pathInt(c, "tutor_id", "导师ID无效")
+			id, err := pathInt(c, "tutor_id", "讲师ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -828,14 +701,7 @@ func (h *AdminHandler) DeleteTutor(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *idParam) (*service.TutorDeletedDTO, error) {
 			return h.adminSvc.DeleteTutor(req.ID)
 		},
-		Render: func(c *gin.Context, _ *idParam, resp *service.TutorDeletedDTO, err error) {
-			if err != nil {
-				response.NotFound(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "导师删除成功", resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("讲师删除成功"), http.StatusNotFound).Handle(c)
 }
 
 // @Summary 重置导师密码
@@ -854,7 +720,7 @@ func (h *AdminHandler) DeleteTutor(c *gin.Context) {
 func (h *AdminHandler) ResetTutorPassword(c *gin.Context) {
 	Endpoint[resetPasswordReq, struct{}]{
 		Parse: func(c *gin.Context) (*resetPasswordReq, error) {
-			id, err := pathInt(c, "tutor_id", "导师ID无效")
+			id, err := pathInt(c, "tutor_id", "讲师ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -875,14 +741,7 @@ func (h *AdminHandler) ResetTutorPassword(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		Render: func(c *gin.Context, _ *resetPasswordReq, _ *struct{}, err error) {
-			if err != nil {
-				response.NotFound(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "密码已重置", nil)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsgNoData("密码已重置"), http.StatusNotFound).Handle(c)
 }
 
 // @Summary 切换导师启用/禁用状态
@@ -891,15 +750,15 @@ func (h *AdminHandler) ResetTutorPassword(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param tutor_id path int true "导师 ID"
-// @Success 200 {object} response.R{data=service.StatusResultDTO} "导师已启用/已禁用"
+// @Success 200 {object} response.R{data=service.StatusResultDTO} "讲师已启用/已禁用"
 // @Failure 401 {object} response.R "未认证"
-// @Failure 404 {object} response.R "导师不存在"
+// @Failure 404 {object} response.R "讲师不存在"
 // @Router /admin/tutor/{tutor_id}/status [put]
 // ToggleTutorStatus 切换导师启用/禁用状态 PUT /api/admin/tutor/:tutor_id/status
 func (h *AdminHandler) ToggleTutorStatus(c *gin.Context) {
 	Endpoint[idParam, service.StatusResultDTO]{
 		Parse: func(c *gin.Context) (*idParam, error) {
-			id, err := pathInt(c, "tutor_id", "导师ID无效")
+			id, err := pathInt(c, "tutor_id", "讲师ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -912,14 +771,11 @@ func (h *AdminHandler) ToggleTutorStatus(c *gin.Context) {
 			}
 			return &service.StatusResultDTO{Status: next}, nil
 		},
-		Render: func(c *gin.Context, _ *idParam, resp *service.StatusResultDTO, err error) {
-			if err != nil {
-				response.NotFound(c, err.Error())
-				return
-			}
-			msg := "导师已启用"
+		ErrStatus: errStatusAll(http.StatusNotFound),
+		Render: func(c *gin.Context, _ *idParam, resp *service.StatusResultDTO) {
+			msg := "讲师已启用"
 			if resp.Status == 0 {
-				msg = "导师已禁用"
+				msg = "讲师已禁用"
 			}
 			response.SuccessWithMsg(c, msg, resp)
 		},
@@ -939,9 +795,6 @@ func (h *AdminHandler) GetStatistics(c *gin.Context) {
 	Endpoint[struct{}, service.AdminStatisticsDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.AdminStatisticsDTO, error) {
 			return h.adminSvc.GetStatistics(), nil
-		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.AdminStatisticsDTO, _ error) {
-			response.Success(c, resp)
 		},
 	}.Handle(c)
 }

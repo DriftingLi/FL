@@ -5,6 +5,7 @@ package api
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 
@@ -116,18 +117,10 @@ func (h *CodeChannelAuthHandler) parseSendReq(c *gin.Context) (*codeSendReq, err
 // @Router /auth/phone/send-code [post]
 func (h *CodeChannelAuthHandler) SendCode(c *gin.Context) {
 	Endpoint[codeSendReq, struct{}]{
-		Parse:  h.parseSendReq,
-		Invoke: h.invokeSendCode,
-		Render: func(c *gin.Context, _ *codeSendReq, _ *struct{}, err error) {
-			if err != nil {
-				var pe *ParseError
-				if asParseError(err, &pe) {
-					renderStatus(c, pe.Status, pe.Message)
-					return
-				}
-				response.BadRequest(c, err.Error())
-				return
-			}
+		Parse:     h.parseSendReq,
+		Invoke:    h.invokeSendCode,
+		ErrStatus: &errStatusTable{fallback: http.StatusBadRequest},
+		Render: func(c *gin.Context, _ *codeSendReq, _ *struct{}) {
 			response.SuccessWithMsg(c, h.sentMsg, nil)
 		},
 	}.Handle(c)
@@ -175,12 +168,9 @@ func (h *CodeChannelAuthHandler) Register(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *codeRegisterReq) (*service.LoginResult, error) {
 			return h.codeSvc.RegisterWithCode(ctx, h.ch, req.Target, req.Code, req.Nickname, req.Company, req.Password)
 		},
-		Render: func(c *gin.Context, _ *codeRegisterReq, resp *service.LoginResult, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			setAuthCookie(c, h.sess, resp.Token)
+		ErrStatus: errStatusAll(http.StatusBadRequest),
+		Render: func(c *gin.Context, _ *codeRegisterReq, resp *service.LoginResult) {
+			h.sess.SetCookie(c.Writer, resp.Token)
 			response.Created(c, "注册成功", resp)
 		},
 	}.Handle(c)
@@ -236,12 +226,9 @@ func (h *CodeChannelAuthHandler) Login(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *codeLoginReq) (*service.LoginResult, error) {
 			return h.codeSvc.LoginWithCode(ctx, h.ch, req.Target, req.Code)
 		},
-		Render: func(c *gin.Context, _ *codeLoginReq, resp *service.LoginResult, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			setAuthCookie(c, h.sess, resp.Token)
+		ErrStatus: errStatusAll(http.StatusBadRequest),
+		Render: func(c *gin.Context, _ *codeLoginReq, resp *service.LoginResult) {
+			h.sess.SetCookie(c.Writer, resp.Token)
 			response.SuccessWithMsg(c, "登录成功", resp)
 		},
 	}.Handle(c)
@@ -295,14 +282,7 @@ func (h *CodeChannelAuthHandler) ResetPassword(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		Render: func(c *gin.Context, _ *codeResetReq, _ *struct{}, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "密码已重置，请使用新密码登录", nil)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsgNoData("密码已重置，请使用新密码登录"), http.StatusBadRequest).Handle(c)
 }
 
 func (h *CodeChannelAuthHandler) parseResetReq(c *gin.Context) (*codeResetReq, error) {

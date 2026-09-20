@@ -138,3 +138,45 @@ describe('导航树 ↔ 路由表', () => {
     }
   })
 })
+
+// 公开页面清单锁（ADR-0060 票8a）。requiresAuth 改为必填后，「哪些页面匿名可达」第一次
+// 成为一份可逐名核对的清单，而不是一句「缺省即需登录」加上谁都可能漏写的一行：
+// 新增公开页必须同时改这张表（评审时看得见），忘写 requiresAuth 则根本编译不过。
+const PUBLIC_PAGES = [
+  'AIAssistant',
+  'AIAssistantFeature',
+  'ForgotPassword',
+  'Login',
+  'Register',
+  'ValuationBatteryInput',
+  'ValuationBatteryResult',
+  'ValuationForgotPassword',
+  'ValuationHome',
+  'ValuationLogin',
+  'ValuationRegister',
+  'ValuationReport',
+  'ValuationResult'
+]
+
+describe('公开页面清单与 requiresAuth 必填', () => {
+  it('匿名可达页面 = 登记清单，逐名相等（多一个少一个都算漂移）', () => {
+    const actual = pages
+      .filter(p => !p.requiresAuth)
+      .map(p => String(p.name))
+      .sort()
+    expect(actual, '匿名可达页面发生漂移').toEqual([...PUBLIC_PAGES].sort())
+  })
+
+  it('每条描述符都显式声明 requiresAuth，且路由 meta 与之一致', () => {
+    for (const page of pages) {
+      expect(typeof page.requiresAuth, page.name + ' 未显式声明 requiresAuth').toBe('boolean')
+      expect(routeByName.get(page.name)!.meta.requiresAuth, page.name + ' 的路由 meta 与描述符不一致').toBe(page.requiresAuth)
+    }
+  })
+
+  it('挂在公开布局下却要求登录的页面，只有显式写出来的那一条', () => {
+    const publicLayouts = new Set(layouts.filter(l => !l.requiresAuth).map(l => l.key))
+    const protectedUnderPublic = pages.filter(p => p.layout && publicLayouts.has(p.layout) && p.requiresAuth)
+    expect(protectedUnderPublic.map(p => String(p.name))).toEqual(['ValuationHistory'])
+  })
+})
