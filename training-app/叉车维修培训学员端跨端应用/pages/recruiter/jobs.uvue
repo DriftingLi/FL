@@ -1,0 +1,326 @@
+<template>
+    <view class="page" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+
+        <view class="nav-bar">
+            <view class="nav-side"></view>
+            <text class="nav-title">工作台</text>
+            <view class="nav-side nav-side-right" @click="onMe">
+                <text class="nav-action">我的</text>
+            </view>
+        </view>
+
+        <RecruiterTabBar :active="activeKey" :pending-count="pendingCount" @switch="onSwitchTab" />
+
+        <scroll-view class="content-scroll" scroll-y="true">
+            <!-- 紧迫行：只补分段徽标给不了的那一半（时间维度）；「平台强制下架」不在这里重复 —— 它就在下面几行的职位列表里 -->
+            <view v-if="urgencyText.length > 0" class="urgency-row" @click="onSwitchTab('contacts')">
+                <text class="urgency-text">{{ urgencyText }}</text>
+                <text class="urgency-arrow">›</text>
+            </view>
+
+            <view v-if="!loading && jobs.length == 0" class="empty-tip">
+                <text class="empty-text">暂无职位</text>
+            </view>
+
+            <view v-for="job in jobs" :key="job.id" class="job-row" @click="onOpenApplications(job)">
+                <view class="row-main">
+                    <view class="row-title-line">
+                        <text class="row-title">{{ job.title }}</text>
+                        <text class="tag" :class="jobTagClass(job)">{{ jobTagLabel(job) }}</text>
+                    </view>
+                    <text class="row-meta">{{ jobMeta(job) }}</text>
+                </view>
+                <text class="row-arrow">›</text>
+            </view>
+
+            <view v-if="loading" class="loading-tip">
+                <text class="loading-text">加载中...</text>
+            </view>
+        </scroll-view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    /**
+     * 招聘者工作区 · 职位段（一级面，首页；ADR-0021 ④ 线 4 / ADR-0022 ④ 步骤 P2）
+     *
+     * 形态来源：原型变体 D（`.scratch/prototype/recruiter-workspace.html`，
+     * 维护者 2026-09-20 裁定「要 B 的分段 + C 的紧迫条」）。本页 = B 的分段骨架原样，
+     * 加上职位段顶部一行紧迫行（C 的那一半：**只取徽标给不了的时间维度**）。
+     *
+     * ## 首屏批量请求恰好 2 个（ADR-0022 ⑥ 判据）
+     *   `GET /recruit/jobs`（职位段本身）+ `GET /recruit/contact-requests`（分段徽标与紧迫行**共用同一份**）。
+     *   **不逐职位拉 `unread_count`** —— 它在 `GET /recruit/jobs/{id}/applications` 的响应里，
+     *   逐职位拉就是 N+1，被 ADR-0021 ② 明令禁止。`JobPostingDTO` 也没有任何投递计数字段
+     *   ⇒ 本页**不得**出现「某职位有新投递」这类派生不出来的信号。
+     *
+     * ## 只读（ADR-0021 ③）
+     *   移动端**不存在**职位发布 / 编辑 / 上下架入口，也不存在任何「功能开发中」式占位。
+     */
+    import { ref } from 'vue'
+    import { onLoad } from '@dcloudio/uni-app'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { getRecruitJobsApi, getRecruitContactRequestsApi } from '../../api/recruit'
+    import {
+        unexpiredPendingCount,
+        soonestPendingIndex,
+        remainingDays,
+        contactUrgencyText,
+        describeRecruitJobStatus
+    } from '../../utils/recruitDisplay'
+    import { ensureRecruiterSession } from '../../utils/recruitGuard'
+    import RecruiterTabBar from './components/recruiter-tab-bar.uvue'
+    import type { RecruitJob, RecruitContactRequest } from '../../api/recruit'
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    // 本页是一级面中的「职位」段：分段件的 active 由页面显式给出（不靠路由猜）
+    const activeKey : string = 'jobs'
+
+    const jobs = ref<RecruitJob[]>([])
+    const loading = ref<boolean>(false)
+    const pendingCount = ref<number>(0)
+    const urgencyText = ref<string>('')
+
+    // ⚠️ 函数定义顺序是**契约**（`utils/utsAndroidCompile.test.js` 的 A 守护）：UTS 编译到 Kotlin
+    // 后没有函数提升 ⇒ 顶层调用点不得早于被调函数的定义。故本页把 `onLoad(...)` 放在**最后**。
+
+    /**
+     * 徽标与紧迫行共用同一份 contact-requests（第 2 个批量请求的消费端）
+     * @note 徽标只计**未过期**的 pending：服务端读取时不按 `expires_at` 判状态（ADR-0022 已知缺口），
+     *       只按 `status` 数会把过期记录算进去
+     */
+    function applyContactSignals(items : RecruitContactRequest[]) : void {
+        const now = Date.now()
+        const count = unexpiredPendingCount(items, now)
+        pendingCount.value = count
+        const idx = soonestPendingIndex(items, now)
+        if (idx < 0) {
+            urgencyText.value = ''
+            return
+        }
+        urgencyText.value = contactUrgencyText(count, remainingDays(items[idx].expires_at, now))
+    }
+
+    /** 分段徽标 + 紧迫行的取数（两处共用这一份响应，不额外发请求） */
+    function loadContactSignals() : void {
+        getRecruitContactRequestsApi().then((result) : void => {
+            applyContactSignals(result.items)
+        }).catch((e) : void => {
+            console.error('[recruiter-jobs] load contacts failed:', e)
+        })
+    }
+
+    /** 职位段本身（第 1 个批量请求） */
+    function loadJobs() : void {
+        loading.value = true
+        getRecruitJobsApi().then((result) : void => {
+            jobs.value = result.items
+            loading.value = false
+        }).catch((e) : void => {
+            console.error('[recruiter-jobs] load jobs failed:', e)
+            loading.value = false
+        })
+    }
+
+    /** 职位徽标（强制下架优先）；模板只消费本页薄包装，不直调 import 函数（守护规则 S） */
+    function jobTagLabel(job : RecruitJob) : string {
+        return describeRecruitJobStatus(job.status, job.forced_offline).label
+    }
+
+    function jobTagClass(job : RecruitJob) : string {
+        return 'tag-' + describeRecruitJobStatus(job.status, job.forced_offline).status
+    }
+
+    /** 职位副行：只拼后端真给了的字段，缺项不留空占位 */
+    function jobMeta(job : RecruitJob) : string {
+        const parts : string[] = []
+        if (job.region.length > 0) parts.push(job.region)
+        if (job.salary_text.length > 0) parts.push(job.salary_text)
+        if (job.experience_req.length > 0) parts.push(job.experience_req)
+        return parts.join(' · ')
+    }
+
+    /** 段切换：面间 `redirectTo` 替换（不堆栈），故一级面之间没有返回箭头 */
+    function onSwitchTab(key : string) : void {
+        if (key == activeKey) return
+        if (key == 'contacts') {
+            uni.redirectTo({ url: '/pages/recruiter/contacts' })
+            return
+        }
+        if (key == 'resumes') {
+            uni.redirectTo({ url: '/pages/recruiter/resumes' })
+        }
+    }
+
+    /** 「我的」= 导航栏右上角常驻入口 → 推入页（二级面，无分段） */
+    function onMe() : void {
+        uni.navigateTo({ url: '/pages/recruiter/me' })
+    }
+
+    /** 进某个职位的投递列表（`unread_count` 只有进到这里才拿得到） */
+    function onOpenApplications(job : RecruitJob) : void {
+        uni.navigateTo({ url: '/pages/recruiter/applications?jobId=' + job.id.toString() })
+    }
+
+    onLoad((options : OnLoadOptions) => {
+        // 守卫：不是招聘者会话就直接送回招聘者登录页，且**立即停止取数**
+        //（否则本页两个批量请求会各弹一次 401/403 toast）
+        if (!ensureRecruiterSession()) return
+        // 首屏批量请求恰好 2 个：职位段本身 + 分段徽标/紧迫行共用的那一份
+        loadJobs()
+        loadContactSignals()
+    })
+</script>
+
+<style lang="scss">
+    .page {
+        background-color: #F5F6FA;
+    }
+
+    .status-bar {
+        background-color: #ffffff;
+    }
+
+    .nav-bar {
+        flex-direction: row;
+        align-items: center;
+        height: 88rpx;
+        padding: 0 24rpx;
+        background-color: #ffffff;
+    }
+
+    .nav-side {
+        width: 120rpx;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .nav-side-right {
+        justify-content: flex-end;
+    }
+
+    .nav-title {
+        flex: 1;
+        font-size: 34rpx;
+        font-weight: bold;
+        color: #333333;
+        text-align: center;
+    }
+
+    .nav-action {
+        font-size: 30rpx;
+        color: #2979ff;
+        padding: 16rpx 0;
+    }
+
+    .content-scroll {
+        flex: 1;
+    }
+
+    .urgency-row {
+        flex-direction: row;
+        align-items: center;
+        margin: 16rpx 24rpx 0 24rpx;
+        padding: 20rpx 24rpx;
+        background-color: #EEF3FD;
+        border-radius: 12rpx;
+    }
+
+    .urgency-text {
+        flex: 1;
+        font-size: 26rpx;
+        color: #1f5fbf;
+    }
+
+    .urgency-arrow {
+        font-size: 30rpx;
+        color: #1f5fbf;
+        padding-left: 12rpx;
+    }
+
+    .job-row {
+        flex-direction: row;
+        align-items: center;
+        margin: 16rpx 24rpx 0 24rpx;
+        padding: 24rpx;
+        background-color: #ffffff;
+        border-radius: 12rpx;
+    }
+
+    .row-main {
+        flex: 1;
+    }
+
+    .row-title-line {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .row-title {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .row-meta {
+        margin-top: 8rpx;
+        font-size: 24rpx;
+        color: #999999;
+    }
+
+    .row-arrow {
+        font-size: 34rpx;
+        color: #cccccc;
+        padding-left: 12rpx;
+    }
+
+    .tag {
+        margin-left: 12rpx;
+        padding: 4rpx 12rpx;
+        border-radius: 8rpx;
+        font-size: 20rpx;
+    }
+
+    .tag-forced {
+        color: #E5484D;
+        background-color: #FFF0F0;
+    }
+
+    .tag-open {
+        color: #22A45D;
+        background-color: #F0FFF0;
+    }
+
+    .tag-closed {
+        color: #999999;
+        background-color: #F5F5F5;
+    }
+
+    .tag-unknown {
+        color: #999999;
+        background-color: #F5F5F5;
+    }
+
+    .empty-tip {
+        align-items: center;
+        padding: 120rpx 0;
+    }
+
+    .empty-text {
+        font-size: 28rpx;
+        color: #999999;
+    }
+
+    .loading-tip {
+        align-items: center;
+        padding: 40rpx 0;
+    }
+
+    .loading-text {
+        font-size: 26rpx;
+        color: #999999;
+    }
+</style>
