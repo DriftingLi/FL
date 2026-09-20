@@ -70,7 +70,7 @@ func (h *NotificationHandler) List(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *notificationListReq) (*service.NotificationListPageResult, error) {
 			return h.svc.List(req.UserID, req.Page, req.PageSize)
 		},
-		ErrStatus: errStatusAll(http.StatusInternalServerError),
+		ErrStatus: errStatusAllPrefix(http.StatusInternalServerError, "查询失败: "),
 		Render: func(c *gin.Context, _ *notificationListReq, resp *service.NotificationListPageResult) {
 			response.Success(c, resp)
 		},
@@ -99,7 +99,7 @@ func (h *NotificationHandler) UnreadCount(c *gin.Context) {
 			}
 			return &count, nil
 		},
-		ErrStatus: errStatusAll(http.StatusInternalServerError),
+		ErrStatus: errStatusAllPrefix(http.StatusInternalServerError, "查询失败: "),
 		Render: func(c *gin.Context, _ *notificationUserIDReq, resp *int64) {
 			response.Success(c, service.NotificationUnreadCountDTO{Count: *resp})
 		},
@@ -168,7 +168,7 @@ func (h *NotificationHandler) MarkAllRead(c *gin.Context) {
 			}
 			return nil, nil
 		},
-		ErrStatus: errStatusAll(http.StatusInternalServerError),
+		ErrStatus: errStatusAllPrefix(http.StatusInternalServerError, "操作失败: "),
 		Render: func(c *gin.Context, _ *notificationUserIDReq, _ *struct{}) {
 			response.SuccessWithMsg(c, "已全部标记为已读", nil)
 		},

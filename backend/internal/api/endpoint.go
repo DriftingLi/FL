@@ -163,14 +163,18 @@ func renderStatus(c *gin.Context, status int, msg string) {
 // 走 raw handler：auth.go RotateRefresh、ai_assistant.go SSE 扣分事件、contact.go GetContact、
 // recruit.go ResumeCard、resume_pdf.go 两处、settings.go TestConfig。
 
-// errStatusEntry 域表条目：哨兵 → HTTP 状态码（+ 可选固定文案）。
+// errStatusEntry 域表条目：哨兵 → HTTP 状态码（+ 可选固定文案 / 可选人读前缀）。
 // sentinel 为 nil = **无条件命中**，含 *ParseError 在内的一切错误都按本条渲染
 // （票1b 用它表达「整条错误面只有一个固定码」的收编端点，逐字等价于旧闭包的写法）。
 // message 非空 = 渲染这条固定文案，而不是 err.Error()。
+// errPrefix 非空 = 渲染「前缀 + err.Error()」——旧闭包 `response.Xxx(c, "查询失败: "+err.Error())`
+// 那一族；票1b 实测出这是第四种定制之外的**第五种**形态（ADR-0060 实施回记有账），
+// 没有这一格时收编会把人读前缀静默丢掉，即一处未登记的行为变更。
 type errStatusEntry struct {
-	sentinel error
-	status   int
-	message  string
+	sentinel  error
+	status    int
+	message   string
+	errPrefix string
 }
 
 // errStatusTable 域级「哨兵 → HTTP 状态码」映射表。
@@ -193,10 +197,19 @@ func errStatusAllMsg(status int, msg string) *errStatusTable {
 	return &errStatusTable{entries: []errStatusEntry{{sentinel: nil, status: status, message: msg}}}
 }
 
-// entryMsg 条目的响应文案：固定文案优先，否则错误自身文本。
+// errStatusAllPrefix 同 errStatusAll，但文案是「前缀 + err.Error()」——
+// 旧闭包 `response.ServerError(c, "查询失败: "+err.Error())` 那一族的等价收编（见 errStatusEntry.errPrefix）。
+func errStatusAllPrefix(status int, prefix string) *errStatusTable {
+	return &errStatusTable{entries: []errStatusEntry{{sentinel: nil, status: status, errPrefix: prefix}}}
+}
+
+// entryMsg 条目的响应文案：固定文案优先，其次「前缀 + 错误自身文本」，最后才是错误自身文本。
 func entryMsg(e errStatusEntry, err error) string {
 	if e.message != "" {
 		return e.message
+	}
+	if e.errPrefix != "" {
+		return e.errPrefix + err.Error()
 	}
 	return err.Error()
 }

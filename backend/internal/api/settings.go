@@ -61,7 +61,7 @@ func (h *AIConfigHandler) ListConfigs(c *gin.Context) {
 			}
 			return &list, nil
 		},
-		ErrStatus: errStatusAll(http.StatusInternalServerError),
+		ErrStatus: errStatusAllPrefix(http.StatusInternalServerError, "查询失败: "),
 		Render: func(c *gin.Context, _ *struct{}, resp *[]service.AIConfigDTO) {
 			response.Success(c, *resp)
 		},
@@ -101,7 +101,7 @@ func (h *AIConfigHandler) CreateConfig(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		ErrStatus: &errStatusTable{fallback: http.StatusInternalServerError},
+		ErrStatus: errStatusAllPrefix(http.StatusInternalServerError, "创建失败: "),
 		Render: func(c *gin.Context, _ *createConfigReq, _ *struct{}) {
 			response.SuccessWithMsg(c, "配置已创建", nil)
 		},
@@ -147,7 +147,7 @@ func (h *AIConfigHandler) UpdateConfig(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		ErrStatus: &errStatusTable{fallback: http.StatusInternalServerError},
+		ErrStatus: errStatusAllPrefix(http.StatusInternalServerError, "更新失败: "),
 		Render: func(c *gin.Context, _ *updateConfigReq, _ *struct{}) {
 			response.SuccessWithMsg(c, "配置已更新", nil)
 		},
@@ -231,7 +231,7 @@ func (h *AIConfigHandler) ListBindings(c *gin.Context) {
 			}
 			return &list, nil
 		},
-		ErrStatus: errStatusAll(http.StatusInternalServerError),
+		ErrStatus: errStatusAllPrefix(http.StatusInternalServerError, "查询失败: "),
 		Render: func(c *gin.Context, _ *struct{}, resp *[]service.FeatureBindingDTO) {
 			response.Success(c, *resp)
 		},
