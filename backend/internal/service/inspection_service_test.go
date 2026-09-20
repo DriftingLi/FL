@@ -24,7 +24,7 @@ func TestInspectionDTOShapeLock(t *testing.T) {
 	legacyView := model.RecruitResumeView{ID: 11, RecruiterID: 3, ResumeUserID: 7, ViewedAt: viewedAt}
 	legacyReq := model.ContactRequest{
 		ID: 21, RecruiterID: 3, StudentUserID: 7, Message: "巡检测试", Status: "pending", Source: "recruiter",
-		CreatedAt: createdAt, UpdatedAt: updatedAt, ExpiresAt: expiresAt,
+		CreatedAt: createdAt, UpdatedAt: updatedAt, ExpiresAt: &expiresAt,
 	}
 	legacyReqDecided := legacyReq
 	legacyReqDecided.ID = 22
@@ -33,7 +33,7 @@ func TestInspectionDTOShapeLock(t *testing.T) {
 	dtoView := RecruitResumeViewDTO{ID: 11, RecruiterID: 3, ResumeUserID: 7, ViewedAt: viewedAt}
 	dtoReq := ContactRequestRowDTO{
 		ID: 21, RecruiterID: 3, StudentUserID: 7, Message: "巡检测试", Status: "pending", Source: "recruiter",
-		CreatedAt: createdAt, UpdatedAt: updatedAt, ExpiresAt: expiresAt,
+		CreatedAt: createdAt, UpdatedAt: updatedAt, ExpiresAt: &expiresAt,
 	}
 	dtoReqDecided := dtoReq
 	dtoReqDecided.ID = 22

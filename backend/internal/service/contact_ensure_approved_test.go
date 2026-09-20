@@ -36,8 +36,8 @@ func TestEnsureApproved_NoPending_NewApproved(t *testing.T) {
 	if req.Message != "学员投递职位「叉车维修工」产生的联系方式授权" {
 		t.Fatalf("附言不符: %s", req.Message)
 	}
-	if !req.ExpiresAt.Equal(now.Add(14 * 24 * time.Hour)) {
-		t.Fatalf("ExpiresAt 应为 now+14 天，得到 %v", req.ExpiresAt)
+	if req.ExpiresAt != nil {
+		t.Fatalf("新建的 approved 不应带裁决窗口——窗口只属于 pending（ADR-0061 §2），得到 %v", *req.ExpiresAt)
 	}
 	if req.DecidedAt == nil || !req.DecidedAt.Equal(now) {
 		t.Fatalf("DecidedAt 应为 now，得到 %v", req.DecidedAt)
@@ -50,9 +50,11 @@ func TestEnsureApproved_PendingOverwrite(t *testing.T) {
 	svc := NewContactService(db, nil, nil, nil)
 	now := time.Date(2026, 9, 4, 10, 0, 0, 0, time.Local)
 
+	seedWindow := now.Add(-time.Hour).Add(contactDecisionWindow)
 	seed := model.ContactRequest{
 		RecruiterID: 101, StudentUserID: 202, Message: "原待决申请",
 		Status: "pending", Source: "recruiter", CreatedAt: now.Add(-time.Hour), UpdatedAt: now.Add(-time.Hour),
+		ExpiresAt: &seedWindow,
 	}
 	if err := db.Create(&seed).Error; err != nil {
 		t.Fatalf("seed pending 失败: %v", err)
@@ -77,6 +79,10 @@ func TestEnsureApproved_PendingOverwrite(t *testing.T) {
 	}
 	if reqs[0].DecidedAt == nil || !reqs[0].DecidedAt.Equal(now) {
 		t.Fatalf("DecidedAt 应为 now，得到 %v", reqs[0].DecidedAt)
+	}
+	// 覆盖分支只推进 status/decided_at/source，**保留原窗口值**作签发时留痕（ADR-0061 §2）。
+	if reqs[0].ExpiresAt == nil || !reqs[0].ExpiresAt.Equal(seedWindow) {
+		t.Fatalf("pending→approved 应保留原窗口值，得到 %v", reqs[0].ExpiresAt)
 	}
 }
 

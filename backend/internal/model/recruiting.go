@@ -91,7 +91,11 @@ type ContactRequest struct {
 	CreatedAt time.Time  `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt time.Time  `gorm:"column:updated_at" json:"updated_at"`
 	DecidedAt *time.Time `gorm:"column:decided_at" json:"decided_at,omitempty"`
-	ExpiresAt time.Time  `gorm:"column:expires_at" json:"expires_at"`
+	// ExpiresAt **裁决窗口的关闭时刻，只属于 pending**（ADR-0061 §2 / CONTEXT.md「裁决窗口」）：
+	// = 签发时刻 + 当时约定的窗口长度，是历史快照而非派生值（改窗口长度不回溯存量行）。
+	// 离开 pending 后本列不再被任何判据读取（approved 是永久授权，出口只有学员撤回与注销），
+	// 保留原值只作签发时的事实留痕。库层 CHECK 见迁移 000039。
+	ExpiresAt *time.Time `gorm:"column:expires_at" json:"expires_at,omitempty"`
 }
 
 func (ContactRequest) TableName() string { return "contact_requests" }

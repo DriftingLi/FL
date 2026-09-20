@@ -25092,7 +25092,9 @@
                     "x-optional": true
                 },
                 "expires_at": {
-                    "type": "string"
+                    "description": "ExpiresAt 裁决窗口的关闭时刻，**只对 pending 有意义**（ADR-0061 §2）：非 pending 行可能缺失，\n消费方不得把它读成「授权的到期时刻」（approved 是永久授权）。",
+                    "type": "string",
+                    "x-optional": true
                 },
                 "id": {
                     "type": "integer"
@@ -25155,7 +25157,9 @@
                     "x-optional": true
                 },
                 "expires_at": {
-                    "type": "string"
+                    "description": "ExpiresAt 裁决窗口，**仅 pending 有值**（ADR-0061 §2 / 迁移 000039 的 CHECK）。\n与 DecidedAt 同形：标量非空会让新产生的 approved 行输出 0001-01-01T00:00:00Z 的假日期。",
+                    "type": "string",
+                    "x-optional": true
                 },
                 "id": {
                     "type": "integer"

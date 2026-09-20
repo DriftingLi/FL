@@ -116,11 +116,12 @@ func TestContactGrant_ThreeFacesAgree(t *testing.T) {
 				}
 				created := now.Add(time.Duration(i) * time.Minute)
 				decided := created
+				expires := created.Add(contactDecisionWindow)
 				row := model.ContactRequest{
 					RecruiterID: recruiterID, StudentUserID: stu.ID, Message: "夹具",
 					Status: string(status), Source: string(src),
 					CreatedAt: created, UpdatedAt: created, DecidedAt: &decided,
-					ExpiresAt: created.Add(14 * 24 * time.Hour),
+					ExpiresAt: &expires,
 				}
 				if err := db.Create(&row).Error; err != nil {
 					t.Fatalf("seed 授权失败: %v", err)
@@ -184,7 +185,8 @@ func TestContactGrant_StudentGoneInvalidates(t *testing.T) {
 	approved := model.ContactRequest{
 		RecruiterID: recruiterID, StudentUserID: stu.ID, Message: "已批准",
 		Status: string(ContactGrantApproved), Source: string(ContactGrantSourceRecruiter),
-		CreatedAt: now, UpdatedAt: now, DecidedAt: &now, ExpiresAt: now.Add(14 * 24 * time.Hour),
+		// 无窗口：approved 是永久授权（ADR-0061 §2），本夹具顺带锁住「读面不看 expires_at」。
+		CreatedAt: now, UpdatedAt: now, DecidedAt: &now,
 	}
 	if err := db.Create(&approved).Error; err != nil {
 		t.Fatalf("seed 授权失败: %v", err)
