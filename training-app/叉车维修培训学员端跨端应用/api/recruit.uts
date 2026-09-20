@@ -1,0 +1,211 @@
+/**
+ * 招聘者工作区 API（ADR-0021 ④ 线 4 / ADR-0022 ④ 步骤 P2）
+ *
+ * 只覆盖本票（P2）的面：职位段、投递处置、交换段、我的。
+ * 简历库与简历详情（`/recruit/resumes*`、`/recruit/resumes/{id}/contact`）属 P3（#1196），
+ * 不在本文件 —— 两侧共用同一个文件会让叠放的 P2/P3 在合入时互相冲撞。
+ *
+ * 手动 JSON 映射（ADR-0003）：`as UTSJSONObject` 不可跨端强转成 Kotlin data class，
+ * 故每个端点都在这里显式构造 DTO，页面层只消费 DTO。
+ *
+ * 请求账本（ADR-0021 ② / ADR-0022 ⑥，**判据是行为**）：
+ *   - 首屏批量请求恰好 2 个：`GET /recruit/jobs` + `GET /recruit/contact-requests`；
+ *   - `unread_count` **只**在 `GET /recruit/jobs/{id}/applications` 的响应里
+ *     （`job_application_recruiter.go:49-52`；本端点不写已读，写已读在 `GET /recruit/applications/{id}`）
+ *     ⇒ 逐职位拉它 = N+1，被 ADR-0021 ② 明令禁止；
+ *   - `JobPostingDTO` 没有任何投递计数字段 ⇒ 首页**不得**显示「某职位有新投递」。
+ */
+import { get, post } from './request'
+
+/** 招聘者我的职位（`GET /recruit/jobs`，`JobPostingService.List(MineOnly=true)`；含 closed 与强制下架历史） */
+export type RecruitJob = {
+    id : number
+    title : string
+    region : string
+    salary_text : string
+    experience_req : string
+    status : string
+    forced_offline : boolean
+    offline_reason : string
+    published_at : string
+    updated_at : string
+}
+
+/** 我的职位列表结果（后端 `service.JobListResult`：只有 items / total，**没有任何投递计数**） */
+export type RecruitJobListResult = {
+    items : RecruitJob[]
+    total : number
+}
+
+/**
+ * 我发起的交换申请（`GET /recruit/contact-requests`，`ListForRecruiter`）
+ *
+ * ⚠️ 招聘者侧 DTO **不含学员姓名**（`contact_service.go:45-64` 只有 student_user_id）——
+ * 列表与紧迫行都不得显示「某某学员」，做不到就不要写。
+ * `status` 是服务端事实；`expires_at` 是 `created_at + 14 天`（`contact_service.go:183`）。
+ * **服务端读取时不按 `expires_at` 判状态**（ADR-0022 已知缺口）⇒ 「已过期」由客户端算
+ * （`utils/recruitDisplay.uts`），且过期项**不给任何操作入口**。
+ */
+export type RecruitContactRequest = {
+    id : number
+    student_user_id : number
+    message : string
+    status : string
+    created_at : string
+    expires_at : string
+    source : string
+}
+
+/** 交换申请列表结果（后端 `ContactRequestListResult`） */
+export type RecruitContactListResult = {
+    items : RecruitContactRequest[]
+    total : number
+}
+
+/** 投递（企业侧脱敏：`student_real_name_masked`，无手机/微信/PDF/证书原图） */
+export type RecruitApplication = {
+    id : number
+    job_posting_id : number
+    job_title : string
+    student_user_id : number
+    student_real_name_masked : string
+    status : string
+    employer_viewed_at : string
+    created_at : string
+    updated_at : string
+    resume_updated_at_snapshot : string
+}
+
+/** 按职位查看投递的结果（后端 `RecruiterApplicationListResult`，**unread_count 在这里**) */
+export type RecruitApplicationListResult = {
+    items : RecruitApplication[]
+    total : number
+    page : number
+    page_size : number
+    unread_count : number
+    job_title : string
+}
+
+/** 招聘者自助信息（`GET /recruit/me`，后端 `RecruitMeDTO` 只回 3 个字段） */
+export type RecruitMe = {
+    user_id : number
+    account : string
+    role : string
+}
+
+/** 我的职位列表（企业侧；含 closed / 被平台强制下架的职位） */
+export function getRecruitJobsApi(page : number = 1, pageSize : number = 20) : Promise<RecruitJobListResult> {
+    const url = '/recruit/jobs?page=' + page.toString() + '&page_size=' + pageSize.toString()
+    return get(url).then((data : UTSJSONObject) : RecruitJobListResult => {
+        // 数组一律先落 UTSJSONObject[] 再逐项取字段：Android 端把 JSON 元素直接
+        // `as` 成 Kotlin data class 会抛 ClassCastException（ADR-0015 / 先例 api/job.uts:124）
+        const raw = (data['items'] as UTSJSONObject[]) ?? []
+        const items : RecruitJob[] = []
+        for (let i = 0; i < raw.length; i++) {
+            const obj = raw[i]
+            items.push({
+                id: obj['id'] as number,
+                title: (obj['title'] as string) ?? '',
+                region: (obj['region'] as string) ?? '',
+                salary_text: (obj['salary_text'] as string) ?? '',
+                experience_req: (obj['experience_req'] as string) ?? '',
+                status: (obj['status'] as string) ?? '',
+                forced_offline: (obj['forced_offline'] as boolean) ?? false,
+                offline_reason: (obj['offline_reason'] as string) ?? '',
+                published_at: (obj['published_at'] as string) ?? '',
+                updated_at: (obj['updated_at'] as string) ?? '',
+            } as RecruitJob)
+        }
+        return { items: items, total: (data['total'] as number) ?? 0 } as RecruitJobListResult
+    })
+}
+
+/**
+ * 我发起的交换申请列表
+ * @note 这份响应同时喂「分段徽标」与「职位段顶部紧迫行」（ADR-0022 ②）——
+ *       两处消费同一个结果，不得为了其中一处再发一次请求。
+ */
+export function getRecruitContactRequestsApi(page : number = 1, pageSize : number = 20) : Promise<RecruitContactListResult> {
+    const url = '/recruit/contact-requests?page=' + page.toString() + '&page_size=' + pageSize.toString()
+    return get(url).then((data : UTSJSONObject) : RecruitContactListResult => {
+        const raw = (data['items'] as UTSJSONObject[]) ?? []
+        const items : RecruitContactRequest[] = []
+        for (let i = 0; i < raw.length; i++) {
+            const obj = raw[i]
+            items.push({
+                id: obj['id'] as number,
+                student_user_id: (obj['student_user_id'] as number) ?? 0,
+                message: (obj['message'] as string) ?? '',
+                status: (obj['status'] as string) ?? '',
+                created_at: (obj['created_at'] as string) ?? '',
+                expires_at: (obj['expires_at'] as string) ?? '',
+                source: (obj['source'] as string) ?? '',
+            } as RecruitContactRequest)
+        }
+        return { items: items, total: (data['total'] as number) ?? 0 } as RecruitContactListResult
+    })
+}
+
+/**
+ * 按职位查看投递（含 `unread_count`）
+ *
+ * ⚠️ **绝不可**在职位列表里逐职位调用它来凑未读数 —— 那是 N+1（ADR-0021 ②）。
+ * 本函数只允许被「进入某个职位之后的投递列表页」调用一次。
+ */
+export function getRecruitJobApplicationsApi(jobId : number, page : number = 1, pageSize : number = 20) : Promise<RecruitApplicationListResult> {
+    const url = '/recruit/jobs/' + jobId.toString() + '/applications?page=' + page.toString() + '&page_size=' + pageSize.toString()
+    return get(url).then((data : UTSJSONObject) : RecruitApplicationListResult => {
+        const raw = (data['items'] as UTSJSONObject[]) ?? []
+        const items : RecruitApplication[] = []
+        for (let i = 0; i < raw.length; i++) {
+            const obj = raw[i]
+            items.push({
+                id: obj['id'] as number,
+                job_posting_id: (obj['job_posting_id'] as number) ?? 0,
+                job_title: (obj['job_title'] as string) ?? '',
+                student_user_id: (obj['student_user_id'] as number) ?? 0,
+                student_real_name_masked: (obj['student_real_name_masked'] as string) ?? '',
+                status: (obj['status'] as string) ?? '',
+                employer_viewed_at: (obj['employer_viewed_at'] as string) ?? '',
+                created_at: (obj['created_at'] as string) ?? '',
+                updated_at: (obj['updated_at'] as string) ?? '',
+                resume_updated_at_snapshot: (obj['resume_updated_at_snapshot'] as string) ?? '',
+            } as RecruitApplication)
+        }
+        return {
+            items: items,
+            total: (data['total'] as number) ?? 0,
+            page: (data['page'] as number) ?? 1,
+            page_size: (data['page_size'] as number) ?? pageSize,
+            unread_count: (data['unread_count'] as number) ?? 0,
+            job_title: (data['job_title'] as string) ?? '',
+        } as RecruitApplicationListResult
+    })
+}
+
+/**
+ * 标记不合适（终态 `rejected`）
+ *
+ * ⚠️ **不可逆**：后端只有 `POST /recruit/applications/{id}/reject`，全仓 grep
+ * `revert|unreject|restore|undelete` 零命中，二次调用 400（`job_application_recruiter.go:118`）⇒
+ * 客户端**只能做确认摩擦**（`uni.showModal` 明示不可撤销 + 学员侧 30 天冷却），
+ * **不得**做任何「撤销 / 恢复」入口 —— 无回退端点的撤销按钮就是 #705 判的那类
+ * 「看起来能用、用了必失败」的入口。
+ */
+export function rejectRecruitApplicationApi(applicationId : number) : Promise<void> {
+    const url = '/recruit/applications/' + applicationId.toString() + '/reject'
+    return post(url).then(() : void => {
+        // 成功即终态，无后续动作
+    })
+}
+
+/** 招聘者自助信息（账号 / 角色；「我的」推入页用来显示身份事实） */
+export function getRecruitMeApi() : Promise<RecruitMe> {
+    return get('/recruit/me').then((data : UTSJSONObject) : RecruitMe => {
+        return {
+            user_id: (data['user_id'] as number) ?? 0,
+            account: (data['account'] as string) ?? '',
+            role: (data['role'] as string) ?? '',
+        } as RecruitMe
+    })
+}
