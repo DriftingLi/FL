@@ -1,0 +1,310 @@
+<template>
+    <view class="page" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+
+        <view class="nav-bar">
+            <view class="nav-side" @click="onBack">
+                <text class="nav-back">‹</text>
+            </view>
+            <text class="nav-title">{{ navTitle }}</text>
+            <view class="nav-side"></view>
+        </view>
+
+        <scroll-view class="content-scroll" scroll-y="true">
+            <view v-if="unreadCount > 0" class="unread-banner">
+                <text class="unread-text">{{ unreadCount }} 条未读</text>
+            </view>
+
+            <view v-if="!loading && items.length == 0" class="empty-tip">
+                <text class="empty-text">该职位暂无投递</text>
+            </view>
+
+            <view v-for="row in items" :key="row.id" class="application-row">
+                <view class="row-main">
+                    <view class="row-title-line">
+                        <text class="row-title">{{ rowName(row) }}</text>
+                        <text class="tag" :class="applicationTagClass(row)">{{ applicationTagLabel(row) }}</text>
+                    </view>
+                    <text class="row-meta">{{ rowMeta(row) }}</text>
+                </view>
+                <view v-if="row.status == 'applied'" class="reject-btn" @click="onReject(row)">
+                    <text class="reject-btn-text">标记不合适</text>
+                </view>
+            </view>
+
+            <view v-if="loading" class="loading-tip">
+                <text class="loading-text">加载中...</text>
+            </view>
+        </scroll-view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    /**
+     * 招聘者工作区 · 投递列表（二级面，**无分段件**；ADR-0022 ④ 步骤 P2）
+     *
+     * 二级面不带分段（ADR-0022 ②）：段切换与返回栈语义会打架。
+     *
+     * ## `unread_count` 只有这里拿得到，且**绝不可**用它去凑首页信号
+     *   它随本页响应返回（`job_application_recruiter.go:49-52`，判据 `employer_viewed_at IS NULL`）。
+     *   首页逐职位拉本端点 = N+1，被 ADR-0021 ② 明令禁止。
+     *   ⚠️ 本端点**不写已读**（写已读在 `GET /recruit/applications/{id}`）——
+     *   那个详情页不在本票范围内，故本票内未读数只减不增的路径尚未落地（见 PR 正文「待验证项」）。
+     *
+     * ## 标记不合适 = 只做确认摩擦，**不做撤销**（ADR-0022 ③）
+     *   后端只有 `POST /recruit/applications/{id}/reject`，**无回退端点**
+     *   （全后端 grep `revert|unreject|restore|undelete` 零命中；二次调用 400）⇒
+     *   确认框明示「不可撤销 + 学员侧 30 天冷却」（`job_application_service.go:151-158`，
+     *   冷却按**职位**计、30 天），执行后**不提供任何撤销入口**。
+     */
+    import { ref } from 'vue'
+    import { onLoad } from '@dcloudio/uni-app'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { getRecruitJobApplicationsApi, rejectRecruitApplicationApi } from '../../api/recruit'
+    import { formatDateStr } from '../../utils/format'
+    import { describeRecruitApplicationStatus } from '../../utils/recruitDisplay'
+    import { ensureRecruiterSession } from '../../utils/recruitGuard'
+    import type { RecruitApplication } from '../../api/recruit'
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    const jobId = ref<number>(0)
+    const navTitle = ref<string>('投递')
+    const items = ref<RecruitApplication[]>([])
+    const unreadCount = ref<number>(0)
+    const loading = ref<boolean>(false)
+    const rejecting = ref<boolean>(false)
+
+    // ⚠️ 函数定义顺序是**契约**（`utils/utsAndroidCompile.test.js` 的 A 守护）：UTS 编译到 Kotlin
+    // 后没有函数提升 ⇒ 顶层调用点不得早于被调函数的定义。故本页把 `onLoad(...)` 放在**最后**，
+    // 且 `doReject`（被 `onReject` 调）在 `onReject` 之前。
+
+    function loadApplications() : void {
+        loading.value = true
+        getRecruitJobApplicationsApi(jobId.value).then((result) : void => {
+            items.value = result.items
+            unreadCount.value = result.unread_count
+            if (result.job_title.length > 0) {
+                navTitle.value = result.job_title + ' · 投递'
+            }
+            loading.value = false
+        }).catch((e) : void => {
+            console.error('[recruiter-applications] load failed:', e)
+            loading.value = false
+        })
+    }
+
+    function doReject(row : RecruitApplication) : void {
+        rejecting.value = true
+        uni.showLoading({ title: '提交中...', mask: true })
+        rejectRecruitApplicationApi(row.id).then(() : void => {
+            uni.hideLoading()
+            rejecting.value = false
+            uni.showToast({ title: '已标记为不合适', icon: 'success' })
+            // 重新拉取：终态由服务端说了算，不靠本地改字段
+            //（本端点不写已读，故 unread_count 不会因此变化 —— 这是服务端语义，不是本地漏刷）
+            loadApplications()
+        }).catch((e) : void => {
+            uni.hideLoading()
+            rejecting.value = false
+            console.error('[recruiter-applications] reject failed:', e)
+        })
+    }
+
+    /** 二次确认：不可逆 + 学员侧 30 天冷却，**一个都不能省**（票面判据） */
+    function onReject(row : RecruitApplication) : void {
+        if (rejecting.value) return
+        uni.showModal({
+            title: '标记为不合适？',
+            content: '该学员将收到「不合适」结果，且 30 天内不能再次投递本职位。此操作不可撤销。',
+            // 形参不写类型：`res` 由 uni-app x 按 ShowModalSuccess 推导（对齐 pages/recruiter/login.uvue 的既有写法）
+            success: (res) => {
+                if (res.confirm) {
+                    doReject(row)
+                }
+            },
+        })
+    }
+
+    function onBack() : void {
+        uni.navigateBack()
+    }
+
+    /** 候选人姓名走后端唯一脱敏路径（`student_real_name_masked`）；缺了也不拿 user_id 顶替 */
+    function rowName(row : RecruitApplication) : string {
+        if (row.student_real_name_masked.length > 0) return row.student_real_name_masked
+        return '候选人'
+    }
+
+    function applicationTagLabel(row : RecruitApplication) : string {
+        return describeRecruitApplicationStatus(row.status).label
+    }
+
+    function applicationTagClass(row : RecruitApplication) : string {
+        return 'tag-' + describeRecruitApplicationStatus(row.status).status
+    }
+
+    function rowMeta(row : RecruitApplication) : string {
+        const at = formatDateStr(row.created_at)
+        if (at.length == 0) return '简历脱敏'
+        return '投递于 ' + at + ' · 简历脱敏'
+    }
+
+    onLoad((options : OnLoadOptions) => {
+        if (!ensureRecruiterSession()) return
+        const raw = options['jobId']
+        if (raw == null) {
+            navTitle.value = '投递'
+            return
+        }
+        jobId.value = parseInt(raw as string)
+        if (jobId.value <= 0) {
+            navTitle.value = '投递'
+            return
+        }
+        loadApplications()
+    })
+</script>
+
+<style lang="scss">
+    .page {
+        background-color: #F5F6FA;
+    }
+
+    .status-bar {
+        background-color: #ffffff;
+    }
+
+    .nav-bar {
+        flex-direction: row;
+        align-items: center;
+        height: 88rpx;
+        padding: 0 24rpx;
+        background-color: #ffffff;
+    }
+
+    .nav-side {
+        width: 120rpx;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .nav-back {
+        font-size: 44rpx;
+        color: #333333;
+        padding: 8rpx 16rpx 8rpx 0;
+    }
+
+    .nav-title {
+        flex: 1;
+        font-size: 34rpx;
+        font-weight: bold;
+        color: #333333;
+        text-align: center;
+    }
+
+    .content-scroll {
+        flex: 1;
+    }
+
+    .unread-banner {
+        margin: 16rpx 24rpx 0 24rpx;
+        padding: 16rpx 24rpx;
+        background-color: #FFF7E6;
+        border-radius: 12rpx;
+    }
+
+    .unread-text {
+        font-size: 26rpx;
+        color: #FF9800;
+    }
+
+    .application-row {
+        flex-direction: row;
+        align-items: center;
+        margin: 16rpx 24rpx 0 24rpx;
+        padding: 24rpx;
+        background-color: #ffffff;
+        border-radius: 12rpx;
+    }
+
+    .row-main {
+        flex: 1;
+    }
+
+    .row-title-line {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .row-title {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .row-meta {
+        margin-top: 8rpx;
+        font-size: 24rpx;
+        color: #999999;
+    }
+
+    .tag {
+        margin-left: 12rpx;
+        padding: 4rpx 12rpx;
+        border-radius: 8rpx;
+        font-size: 20rpx;
+    }
+
+    .tag-applied {
+        color: #2979ff;
+        background-color: #EEF3FD;
+    }
+
+    .tag-rejected {
+        color: #E5484D;
+        background-color: #FFF0F0;
+    }
+
+    .tag-withdrawn {
+        color: #999999;
+        background-color: #F5F5F5;
+    }
+
+    .tag-unknown {
+        color: #999999;
+        background-color: #F5F5F5;
+    }
+
+    .reject-btn {
+        padding: 16rpx 24rpx;
+        border-radius: 32rpx;
+        background-color: #FFF0F0;
+    }
+
+    .reject-btn-text {
+        font-size: 26rpx;
+        color: #E5484D;
+    }
+
+    .empty-tip {
+        align-items: center;
+        padding: 120rpx 0;
+    }
+
+    .empty-text {
+        font-size: 28rpx;
+        color: #999999;
+    }
+
+    .loading-tip {
+        align-items: center;
+        padding: 40rpx 0;
+    }
+
+    .loading-text {
+        font-size: 26rpx;
+        color: #999999;
+    }
+</style>

@@ -77,7 +77,9 @@ type ContactRequestRowDTO struct {
 	// DecidedAt 未决申请为 nil：**键整个不出现**（omitempty）→ x-optional；
 	// 漏标会让 swag 把它渲染成必填（ADR-0056 §11 / #1100 的契约撒谎面）。
 	DecidedAt *time.Time `json:"decided_at,omitempty" extensions:"x-optional"`
-	ExpiresAt time.Time  `json:"expires_at"`
+	// ExpiresAt 裁决窗口，**仅 pending 有值**（ADR-0061 §2 / 迁移 000039 的 CHECK）。
+	// 与 DecidedAt 同形：标量非空会让新产生的 approved 行输出 0001-01-01T00:00:00Z 的假日期。
+	ExpiresAt *time.Time `json:"expires_at,omitempty" extensions:"x-optional"`
 }
 
 // InspectionCountDTO 巡检单值计数（GET /admin/inspection/deleted-after-accepted）。

@@ -9,9 +9,10 @@
  * - 调试日志仅开发环境输出（ENABLE_DEBUG_LOG），且不打印请求头（避免泄漏 token）
  */
 import { API_BASE_URL, REQUEST_TIMEOUT, ENABLE_DEBUG_LOG } from '../config/env'
-import { STORAGE_KEY_TOKEN } from '../constants/app'
+import { STORAGE_KEY_TOKEN, STORAGE_KEY_USER } from '../constants/app'
 import { getStorage, removeStorage } from '../utils/storage'
 import { isContentUri, buildTempFilePath, UPLOAD_TMP_DIR } from '../utils/uploadPath'
+import { isRecruiterActive } from '../utils/authRole'
 import { gateRefresh } from './refreshGate'
 // 注意：不能在此处 import useAuthStore（会导致循环依赖），改用全局回调
 
@@ -110,21 +111,44 @@ function showError(msg : string, silent : boolean) {
 /** 防重入标记：避免多个并发 401 触发多次跳转 */
 let isHandlingUnauthorized = false
 
-/** 清空登录态并跳转登录页 */
+/**
+ * 401 终态该把用户送到哪个登录页 —— **按当前身份角色定向**（ADR-0022 ⑤）
+ *
+ * 招聘者与学员共用 `auth_token` 槽、却是两个独立的登录页：token 失效后必须回到
+ * **签发它的那一个**，否则会出现「拿招聘 token 去学员登录页」这种身份错配
+ * （招聘者工作区页面的 onLoad 守卫也会因此反复弹回）。
+ *
+ * 判定读 `utils/authRole.uts`（`auth_active_role`，缺省 = 学员）。
+ * 只改这**一个**出口内的目标，不新增 reLaunch 出口 —— `C2` 锁着「跳转只有一个出口」。
+ */
+function loginPathForActiveRole() : string {
+    if (isRecruiterActive()) return '/pages/recruiter/login'
+    return '/pages/login/login'
+}
+
+/**
+ * 清空登录态并跳转登录页
+ *
+ * ⚠️ 本函数是**全仓唯一**的 reLaunch 出口（`utils/concurrent401RefreshContract.test.js` 的 C2）。
+ * 角色差异只能在本函数**内部**分支，不得在别处另开一个 reLaunch。
+ */
 function handleUnauthorized() {
     // 防重入：并发请求同时 401 时只跳一次
     if (isHandlingUnauthorized) return
     isHandlingUnauthorized = true
 
     removeStorage(STORAGE_KEY_TOKEN)
-    removeStorage('auth_user')
-    // 避免在登录页时还跳登录页
+    removeStorage(STORAGE_KEY_USER)
+    // 按角色选目标：招聘者态 → 招聘者登录页；学员态 → 学员登录页（行为不变）
+    const target = loginPathForActiveRole()
+    // 避免已经在**目标**登录页时还跳一次（`getCurrentPages()` 的 route 不带前导 `/`）
+    const targetRoute = target.substring(1)
     const pages = getCurrentPages()
     if (pages.length > 0) {
         const current = pages[pages.length - 1]
         const route = current.route
-        if (route != 'pages/login/login') {
-            uni.reLaunch({ url: '/pages/login/login' })
+        if (route != targetRoute) {
+            uni.reLaunch({ url: target })
         }
     }
 

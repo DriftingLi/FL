@@ -1,0 +1,96 @@
+<template>
+    <view class="recruiter-tab-bar">
+        <view v-for="tab in tabs" :key="tab.key" class="recruiter-tab-item"
+            :class="{ 'recruiter-tab-item-active': tab.key == active }" @click="onTap(tab.key)">
+            <text class="recruiter-tab-text" :class="{ 'recruiter-tab-text-active': tab.key == active }">{{ tab.label }}</text>
+            <!-- 交换段徽标：只计**未过期**的 pending（数量由 utils/recruitDisplay.uts 算好传进来） -->
+            <text v-if="tab.key == 'contacts' && pendingCount > 0" class="recruiter-tab-badge">{{ pendingCount }}</text>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    /**
+     * 招聘者工作区分段件 —— **全仓唯一一份**（ADR-0022 ②）
+     *
+     * 三个一级面（职位 / 简历库 / 交换）各挂一次，面间 `redirectTo` 替换（不堆栈）；
+     * **二级面（投递列表、我的）不带分段** —— 否则段切换与返回栈语义打架。
+     * 先例形状：`pages/profile/components/activity-tab-bar.uvue`（被 3 页挂载，
+     * 由 `utils/personalActivityContract.test.js` 锁住挂载数）。
+     *
+     * ADR-0009 的病根是**两份手画的栏**，不是「面多」⇒ 三个面必须共用这一个文件，
+     * 而不是各自内联一份长得一样的 view。挂载数与唯一性由
+     * `utils/recruitWorkspaceContract.test.js` 锁住。
+     *
+     * 纯展示：零 api / store / 定时器，切换决策与取数留页面（emit `switch` 回传 key）。
+     */
+    type RecruiterTab = {
+        key : string
+        label : string
+    }
+
+    // 三段的 key 与文案是**冻结值**（ADR-0022 ②）：改这里 = 改三个面的路由契约
+    const tabs : RecruiterTab[] = [
+        { key: 'jobs', label: '职位' } as RecruiterTab,
+        { key: 'resumes', label: '简历库' } as RecruiterTab,
+        { key: 'contacts', label: '交换' } as RecruiterTab,
+    ]
+
+    const props = withDefaults(defineProps<{
+        active?: string
+        pendingCount?: number
+    }>(), {
+        active: 'jobs',
+        pendingCount: 0
+    })
+
+    const emit = defineEmits(['switch'])
+
+    function onTap(key : string) : void {
+        if (key == props.active) return
+        emit('switch', key)
+    }
+</script>
+
+<style lang="scss">
+    .recruiter-tab-bar {
+        flex-direction: row;
+        background-color: #ffffff;
+        border-bottom: 1rpx solid #eeeeee;
+    }
+
+    .recruiter-tab-item {
+        flex: 1;
+        height: 88rpx;
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
+        border-bottom: 4rpx solid transparent;
+    }
+
+    .recruiter-tab-item-active {
+        border-bottom-color: #2979ff;
+    }
+
+    .recruiter-tab-text {
+        font-size: 28rpx;
+        color: #666666;
+    }
+
+    .recruiter-tab-text-active {
+        color: #2979ff;
+        font-weight: bold;
+    }
+
+    .recruiter-tab-badge {
+        margin-left: 8rpx;
+        min-width: 30rpx;
+        height: 30rpx;
+        padding: 0 8rpx;
+        border-radius: 15rpx;
+        background-color: #E5484D;
+        color: #ffffff;
+        font-size: 20rpx;
+        text-align: center;
+    }
+</style>

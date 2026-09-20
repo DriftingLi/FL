@@ -126,6 +126,11 @@ export type AuthStore = {
     quickLogin : (rt : string) => Promise<string>
     setAuthData : (t : string, u : UserInfo, rt : string) => void
     clearAuthData : () => void
+    /**
+     * 身份互斥清槽（ADR-0022 ③）：清学员三键 + 登录来源 + 安全凭据 + 角色标记，**不碰** `clearAuthData()` 的语义
+     * @note 调用方 = `loginAsRecruiter()`（落招聘者凭据前）与 `pages/recruiter/login.uvue` 的「返回学员登录」出口
+     */
+    clearIdentityForSwitch : () => void
     restoreFromStorage : () => boolean
     validateToken : () => Promise<void>
     login : (params : LoginParams) => Promise<void>
@@ -136,6 +141,17 @@ export type AuthStore = {
      * @returns WechatLoginResult（含 isNew 提示字段）
      */
     loginByWechat : () => Promise<WechatLoginResult>
+    /**
+     * 招聘者登录（仅账号密码，POST /auth/recruiter-login）
+     * @note 落凭据前先做身份互斥清槽（含学员 refresh_token 与安全凭据），见 stores/auth.uts
+     */
+    loginAsRecruiter : (params : LoginParams) => Promise<void>
+    /**
+     * 招聘者退出登录：身份槽整体复位（复用互斥清槽）+ reLaunch 回招聘者登录页
+     * @note 与 `logout()` 的区别见 `stores/auth.uts` 的实现注释 —— 招聘者没有
+     *       ADR-0004 的生物识别快捷登录，不能沿用「登出不清凭据」的语义
+     */
+    logoutRecruiter : () => void
     logout : () => Promise<void>
     /** 更新本地用户信息（昵称/头像），并持久化到 storage */
     updateUser : (patch : UpdateProfileParams) => void

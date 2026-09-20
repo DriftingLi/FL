@@ -28,7 +28,8 @@ func TestContactContract_FullFlow(t *testing.T) {
 		AuthCookie:            config.AuthCookieConfig{Name: "hrwai_token", Domain: "example.com", Secure: false},
 		RecruiterCookie:       config.RecruiterCookieConfig{Name: "recruiter_token", Domain: "", Secure: false},
 	}
-	r := NewRouter(newContractDeps(t, db, cfg))
+	deps := newContractDeps(t, db, cfg)
+	r := NewRouter(deps)
 
 	// 学员与简历
 	pwd, _ := service.HashPassword("pass1234")
@@ -304,39 +305,84 @@ func TestContactContract_FullFlow(t *testing.T) {
 		t.Fatalf("日限文案应提及上限, 实际 %s", rec.Body.String())
 	}
 
-	// 10. 14 天过期：pending 14 天后自动过期
-	// 将 secondID 的 expires_at 设为过去，调用 ExpirePending
-	if err := db.Model(&model.ContactRequest{}).Where("id = ?", secondID).Updates(map[string]any{"expires_at": time.Now().Add(-time.Hour), "status": "pending"}).Error; err != nil {
-		t.Fatalf("update expires_at: %v", err)
+	// 10. 超期 pending 的三条收敛出口（#1197 / ADR-0061 §2）。
+	// 每一段都只断言「被测路径自己把状态推进了」：旧版在此写成
+	// `if status != "expired" { 现场 new 一个 ContactService 调 ExpirePending 再断言 }`，
+	// 机制不跑也恒绿——那正是守护漏装能静默存活三周的原因，不得复发。
+	setPastPending := func(id int64) {
+		t.Helper()
+		if err := db.Model(&model.ContactRequest{}).Where("id = ?", id).
+			Updates(map[string]any{"status": string(service.ContactGrantPending), "expires_at": time.Now().Add(-time.Hour)}).Error; err != nil {
+			t.Fatalf("置为超期 pending: %v", err)
+		}
 	}
-	// 直接调用 service 的 ExpirePending（通过 deps 获取）
-	// 这里通过 db 直接验证：调用 API 的过期检查会在 approve 时触发，但我们直接测试 service
-	// 通过查询 pending 数量
-	var pendingCnt int64
-	db.Model(&model.ContactRequest{}).Where("status = ?", "pending").Count(&pendingCnt)
-	// 手动触发过期（使用 ContactService 直接）
-	// 获取 service 实例 via new deps? 我们无法直接拿到 service，但可以通过 db 更新后检查 approve 是否会转 expired
+	// 每次都用**全新的 dest**：gorm 会把 dest 上已填的主键折进 WHERE，
+	// 复用同一个变量查第二条记录会得到 `id = 旧 AND id = 新` ⇒ 恒 record not found。
+	statusOf := func(id int64) string {
+		t.Helper()
+		var row model.ContactRequest
+		if err := db.First(&row, id).Error; err != nil {
+			t.Fatalf("find %d: %v", id, err)
+		}
+		return row.Status
+	}
+
+	// 出口一：学员点同意 → 按行当场落态并拒绝（窗口已闭的申请不可被裁决）。
+	setPastPending(secondID)
 	rec = doWithToken(t, r, studentToken, http.MethodPost, "/api/resume/contact-requests/"+strconv.Itoa(int(secondID))+"/approve", nil)
-	// 由于已过期，approve 应失败并提示过期
-	if rec.Code == http.StatusOK {
-		t.Fatalf("过期申请同意应失败, 实际 200")
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "已过期") {
+		t.Fatalf("超期同意应 400 且提示已过期, 实际 %d %s", rec.Code, rec.Body.String())
 	}
-	// 直接通过 DB 检查 status 已被标记为 expired（在 Approve 中会转为 expired）
-	var after model.ContactRequest
-	if err := db.First(&after, secondID).Error; err != nil {
-		t.Fatalf("find after: %v", err)
+	if got := statusOf(secondID); got != string(service.ContactGrantExpired) {
+		t.Fatalf("approve 的按行出口应把超期 pending 落为 expired, 实际 %s", got)
 	}
-	if after.Status != "expired" {
-		// 如果未自动过期，手动调用 ExpirePending via service（我们需要拿到 service）
-		// 通过 NewContactService 临时创建
-		svc := service.NewContactService(db, nil, nil, nil)
-		if _, err := svc.ExpirePending(time.Now()); err != nil {
-			t.Fatalf("expire pending: %v", err)
-		}
-		_ = db.First(&after, secondID).Error
-		if after.Status != "expired" {
-			t.Fatalf("过期后 status 应为 expired, 实际 %s", after.Status)
-		}
+
+	// 出口二·甲：expired 不进冷却（冷却只认 rejected/revoked）⇒ 学员不响应不该永久堵死企业。
+	rec = doWithToken(t, r, recruiterAToken, http.MethodPost, "/api/recruit/contact-requests", map[string]any{"student_user_id": stu.ID, "message": "闭窗后重发"})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("超期落 expired 后应可立即重发, 实际 %d %s", rec.Code, rec.Body.String())
+	}
+	var thirdReq struct {
+		Data struct {
+			ID int64 `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &thirdReq); err != nil {
+		t.Fatalf("parse thirdReq: %v", err)
+	}
+	thirdID := thirdReq.Data.ID
+
+	// 出口二·乙：Create 判唯一前的**定向落态**——不依赖守护 tick，重试当场拿到真结论。
+	setPastPending(thirdID)
+	rec = doWithToken(t, r, recruiterAToken, http.MethodPost, "/api/recruit/contact-requests", map[string]any{"student_user_id": stu.ID, "message": "闭窗未收敛时重发"})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("Create 应先定向落态再判唯一, 实际 %d %s", rec.Code, rec.Body.String())
+	}
+	if got := statusOf(thirdID); got != string(service.ContactGrantExpired) {
+		t.Fatalf("定向落态应把闭窗 pending 置 expired, 实际 %s", got)
+	}
+
+	// 出口三：守护的收敛动作本身，用**装配根里那个实例**（handler 真正持有的 deps.ContactSvc），
+	// 而不是现场 new 一个——否则测的就不是被接线的那条路径。
+	var fourthReq struct {
+		Data struct {
+			ID int64 `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &fourthReq); err != nil {
+		t.Fatalf("parse fourthReq: %v", err)
+	}
+	fourthID := fourthReq.Data.ID
+	setPastPending(fourthID)
+	affected, err := deps.ContactSvc.ExpirePending(time.Now())
+	if err != nil {
+		t.Fatalf("ExpirePending: %v", err)
+	}
+	if affected < 1 {
+		t.Fatalf("守护收敛应至少落 1 条, 实际 %d", affected)
+	}
+	if got := statusOf(fourthID); got != string(service.ContactGrantExpired) {
+		t.Fatalf("守护应把闭窗 pending 落为 expired, 实际 %s", got)
 	}
 
 	// 11. 学员注销后授权失效
@@ -370,9 +416,9 @@ func TestContactContract_FullFlow(t *testing.T) {
 		t.Fatalf("注销前明文应可读 200, 实际 %d", rec.Code)
 	}
 	// 注销学员
-	// 通过 AuthService 删除
-	deps := newContractDeps(t, db, cfg)
-	if err := deps.AuthSvc.DeleteAccount(stu2.ID); err != nil {
+	// 通过 AuthService 删除（另起一个装配实例，避免与 r 背后的 deps 混淆——路由仍指向旧实例）
+	deleteDeps := newContractDeps(t, db, cfg)
+	if err := deleteDeps.AuthSvc.DeleteAccount(stu2.ID); err != nil {
 		t.Fatalf("delete account: %v", err)
 	}
 	// 再次读取应失败
