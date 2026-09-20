@@ -303,18 +303,18 @@ const subtitleMap: Record<SubdomainType, string> = {
   main: '登录您的HRWAI账户',
   training: '登录您的HRWAI账户',
   valuation: '登录您的HRWAI账户',
-  tutor: '登录导师工作台',
+  tutor: '登录讲师工作台',
   admin: '登录管理后台',
   recruit: '登录企业招聘端'
 }
 const subtitleByRole = computed(() => subtitleMap[subdomain])
 
-// badge 角色色：学员=蓝/导师=青/管理=紫/企业=蓝（复用学员色，避免新增视觉分支）
+// badge 角色色：学员=蓝/讲师=青/管理=紫/企业=蓝（复用学员色，避免新增视觉分支）
 const badgeTone = computed<'student' | 'tutor' | 'admin'>(
   () => (currentRole === 'tutor' ? 'tutor' : currentRole === 'admin' ? 'admin' : 'student')
 )
 const roleLabel = computed(() =>
-  currentRole === 'tutor' ? '导师端' : currentRole === 'admin' ? '管理端' : currentRole === 'recruiter' ? '企业端' : '学员端'
+  currentRole === 'tutor' ? '讲师端' : currentRole === 'admin' ? '管理端' : currentRole === 'recruiter' ? '企业端' : '学员端'
 )
 
 const usernamePlaceholder = computed(() =>

@@ -63,7 +63,7 @@ import { displayNameOf } from '@/types/user'
 
 const authStore = useAuthStore()
 
-const userName = computed(() => displayNameOf(authStore.userInfo) || '导师')
+const userName = computed(() => displayNameOf(authStore.userInfo) || '讲师')
 
 const myCourses = ref<QuickCardItem[]>([])
 

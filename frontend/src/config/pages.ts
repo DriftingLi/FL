@@ -12,6 +12,7 @@
 // - `capability` 是**可见性判据**（角色资格），数据级不变式（所有权/证件作用域/状态前置）不进这里。
 import type { Component } from 'vue'
 import { routeNames, type RouteName } from './routeNames'
+import { describeRole } from '@/utils/roleWords'
 import type { AuthzCapability } from './authz'
 import { AI_FEATURE_SLUG_PATTERN } from './aiFeatures'
 import {
@@ -209,7 +210,7 @@ export const pages: PageDescriptor[] = [
   { name: routeNames.Statistics, path: '/admin/statistics', component: () => import('@/pages/admin/Statistics.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'admin.access', nav: { group: 'overview', label: '统计分析', icon: TrendCharts, order: 2 } },
   { name: routeNames.HrwaiUserManage, path: '/admin/hrwai-users', component: () => import('@/pages/admin/HrwaiUserManage.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'admin.access', nav: { group: 'user-content', label: '用户管理', icon: User, order: 1 } },
   { name: routeNames.ProfileReview, path: '/admin/profile-review', component: () => import('@/pages/admin/ProfileReview.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'profile.review', nav: { group: 'user-content', label: '资料审核', icon: CircleCheck, order: 2 } },
-  { name: routeNames.TutorManage, path: '/admin/tutors', component: () => import('@/pages/admin/TutorManage.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'admin.access', nav: { group: 'user-content', label: '导师管理', icon: UserFilled, order: 3 } },
+  { name: routeNames.TutorManage, path: '/admin/tutors', component: () => import('@/pages/admin/TutorManage.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'admin.access', nav: { group: 'user-content', label: `${describeRole('tutor')}管理`, icon: UserFilled, order: 3 } },
   { name: routeNames.RecruiterManage, path: '/admin/recruiters', component: () => import('@/pages/admin/RecruiterManage.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'recruiter.manage', nav: { group: 'user-content', label: '招聘者管理', icon: OfficeBuilding, order: 4 } },
   { name: routeNames.ForumManage, path: '/admin/forum-manage', component: () => import('@/pages/admin/ForumManage.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'forum.moderate', nav: { group: 'user-content', label: '论坛管理', icon: ChatDotRound, order: 5 } },
   { name: routeNames.ContributionManage, path: '/admin/contribution-manage', component: () => import('@/pages/admin/ContributionManage.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'contribution.review', nav: { group: 'user-content', label: '投稿管理', icon: Document, order: 6 } },

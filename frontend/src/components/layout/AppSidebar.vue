@@ -157,6 +157,7 @@ import NotificationPanel from '@/components/layout/NotificationPanel.vue'
 import AppSidebarItem from '@/components/layout/AppSidebarItem.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import UiTooltip from '@/components/ui/UiTooltip.vue'
+import { describeRole } from '@/utils/roleWords'
 
 const props = withDefaults(
   defineProps<{
@@ -219,14 +220,8 @@ function isGroupActiveLocal(item: NavItem): boolean {
   return isGroupActive(item, route.name, route.params as Record<string, string | string[] | undefined>)
 }
 
-const roleLabel = computed(() => {
-  const role = authStore.userInfo?.role
-  if (role === 'admin') return '管理员'
-  if (role === 'tutor') return '导师'
-  if (role === 'hrwai_user') return '学员'
-  if (role === 'recruiter') return '企业'
-  return '用户'
-})
+// 称谓来自角色词表单点（ADR-0060 票7）：canonical 为「讲师」，此处不再各写一份。
+const roleLabel = computed(() => describeRole(authStore.userInfo?.role))
 
 const roleClass = computed(() => {
   const role = authStore.userInfo?.role
