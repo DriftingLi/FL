@@ -124,9 +124,12 @@ func TestContactDecisionWindowOnPostgres(t *testing.T) {
 	}
 
 	// 5. 投递即授权的两条分支对窗口列的处置（ADR-0061 §2）：
-	//    新建 approved **不写**窗口；覆盖既有 pending 时保留原值作签发时留痕。
+	//    分支 2（无 pending → 新建 approved）**不写**窗口；
+	//    分支 1（有 pending → 覆盖为 approved）保留该行原值作签发时留痕。
+	//    `other` 此刻只有第 2 步手插的那条 approved、没有 pending ⇒ 走分支 2；
+	//    `student` 在第 4 步末尾留有一条 pending ⇒ 走分支 1。
 	if err := svc.EnsureApproved(db, recruiter.ID, other.ID, "投递即授权", time.Now()); err != nil {
-		t.Fatalf("EnsureApproved: %v", err)
+		t.Fatalf("EnsureApproved(other): %v", err)
 	}
 	var newApproved int64
 	if err := db.Raw(`SELECT count(*) FROM contact_requests
@@ -136,6 +139,9 @@ func TestContactDecisionWindowOnPostgres(t *testing.T) {
 	}
 	if newApproved == 0 {
 		t.Fatalf("投递新建的 approved 不应带窗口（旧代码在此写 now+14d，正是「给永久授权编造期限」的洞）")
+	}
+	if err := svc.EnsureApproved(db, recruiter.ID, student.ID, "投递即授权", time.Now()); err != nil {
+		t.Fatalf("EnsureApproved(student): %v", err)
 	}
 	var kept int64
 	if err := db.Raw(`SELECT count(*) FROM contact_requests
