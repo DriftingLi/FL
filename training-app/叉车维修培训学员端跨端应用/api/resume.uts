@@ -277,14 +277,17 @@ export function uploadResumePdfApi(filePath : string) : Promise<string> {
 }
 
 /**
- * 删除附件（工作照或 PDF）
- * DELETE /resume/attachment
- * @param type - "photo" 删除工作照 / "pdf" 删除 PDF
- * @note 保留此函数以兼容 resume-attach.uvue 的调用
+ * 删除附件简历（PDF）
+ * DELETE /resume/pdf
+ * @param type - **仅为兼容既有调用方保留**（唯一调用点 `pages/resume/resume-attach.uvue` 传 'pdf'）。
+ *               后端没有 `DELETE /resume/attachment`，也没有删除工作照的端点（工作照只能 POST /image 覆盖）
+ *               ⇒ 非 'pdf' 的取值一律按 PDF 处理。
+ * @note #1198：本行此前打的是 `DELETE /resume/attachment` —— 一个不存在的端点，真机必 404，
+ *             且 404 时调用方的 `.then()` 不执行（本地附件状态清不掉、服务端 PDF 也从未删除）。
  */
 export function deleteAttachmentApi(type : string) : Promise<void> {
-	const opts : RequestOptions = { url: '/resume/attachment', data: { type: type } } as RequestOptions
-	return del('/resume/attachment', opts).then(() : void => {
+	const opts : RequestOptions = { url: '/resume/pdf' } as RequestOptions
+	return del('/resume/pdf', opts).then(() : void => {
 		// 删除成功
 	})
 }
