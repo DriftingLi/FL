@@ -54,13 +54,16 @@
             </view>
         </scroll-view>
 
-        <!-- 底部投递按钮 -->
+        <!-- 底部投递按钮：三态由服务端 apply_state 决定（#1199） -->
         <view v-if="job != null && !loading" class="bottom-bar">
-            <view v-if="!hasApplied" class="apply-btn" @click="onApply">
+            <view v-if="applyState() == 'none'" class="apply-btn" @click="onApply">
                 <text class="apply-btn-text">立即投递</text>
             </view>
-            <view v-else class="apply-btn-disabled">
+            <view v-else-if="applyState() == 'applied'" class="apply-btn-disabled">
                 <text class="apply-btn-text-disabled">已投递</text>
+            </view>
+            <view v-else class="apply-btn-disabled">
+                <text class="apply-btn-text-disabled">{{ cooldownText() }}</text>
             </view>
         </view>
 
@@ -126,7 +129,28 @@
     const hasReported = ref<boolean>(false)
 
     // ---- 投递相关 ----
-    const hasApplied = ref<boolean>(false)
+    // #1199：投递态来自服务端的 apply_state（'' 可投 / applied 已投递 / not_hired 冷却中 + cooldown_days），
+    // **不再用页面本地布尔量**——本地量在页面重建后归零，会让投过的职位按钮复活、点了吃 400。
+    // justApplied 只覆盖"投递成功后还没离开本页"这一瞬间；重进页面由 loadJobDetail() 重新取服务端状态。
+    const justApplied = ref<boolean>(false)
+
+    /** 当前投递态：'applied' / 'not_hired' / 'none' */
+    function applyState() : string {
+        if (justApplied.value) return 'applied'
+        const j = job.value
+        if (j == null) return 'none'
+        if (j.apply_state != null && j.apply_state!.length > 0) return j.apply_state!
+        return 'none'
+    }
+
+    /** 冷却中文案：'not_hired' 时带剩余天数 */
+    function cooldownText() : string {
+        const j = job.value
+        if (j == null) return '暂不可投递'
+        // 可空字段参与比较/运算必须 ?? 兜底（AGENTS.md「Kotlin 编译期常见错误」：nullable receiver）
+        const days = j.cooldown_days ?? 0
+        return days > 0 ? (days.toString() + ' 天后可再次投递') : '暂不可投递'
+    }
 
     async function loadJobDetail() : Promise<void> {
         loading.value = true
@@ -230,11 +254,12 @@
 
     // ---- 投递 ----
     async function onApply() : Promise<void> {
-        if (hasApplied.value) return
+        // 只有可投态才发请求：本地守卫用服务端态判断，避免"按钮复活 → 点了吃 400"（#1199）
+        if (applyState() != 'none') return
         try {
             await applyJobApi(jobId.value)
             uni.showToast({ title: '投递成功', icon: 'none' })
-            hasApplied.value = true
+            justApplied.value = true
         } catch (e) {
             console.error('[job-detail] apply failed:', e)
             // 错误信息已由 request 层 toast
