@@ -161,11 +161,11 @@ func main() {
 	// 6.5 创建路由（维修培训业务 + 静态资源 + 健康检查）
 	router := api.NewRouter(deps)
 
-	// 7. 论坛悬空图片定期清理（每 6 小时扫描 images/forum/ 前缀，删除超 24h 未引用的图片）
+	// 7. 启动装配根登记的进程内守护（ADR-0061 §1：登记在 api.NewDeps 的 deps.Daemons，
+	// 这里只负责按 daemonCtx 起循环——加守护不必再回到本文件手写一次 start）。
 	daemonCtx, daemonCancel := context.WithCancel(context.Background())
 	defer daemonCancel()
-	startForumImageCleanup(daemonCtx, deps, logger)
-	startContributionCleanup(daemonCtx, deps, logger)
+	daemon.StartAll(daemonCtx, logger, deps.Daemons)
 
 	// 7.5 装配残值评估子模块（注册 /api/valuation/* 路由）
 	cleanup := setupValuation(router, cfg, deps.AuthSvc, deps.Session, vpool, st, logger, deps.AuditSvc)
@@ -269,36 +269,6 @@ func ensureUploadDirs(cfg *config.Config, logger *zap.Logger) {
 			logger.Warn("创建目录失败", zap.String("dir", d), zap.Error(err))
 		}
 	}
-}
-
-// startForumImageCleanup 启动论坛悬空图片清理定时任务：
-// 每 6 小时对 images/forum/ 前缀 List，与全量引用集做差集，删除超过 24h 未被引用的图片。
-// 由通用守护 runner 托管（panic 恢复 + jitter 错峰 + 可注入 ticker + context 取消贯穿存储）。
-func startForumImageCleanup(ctx context.Context, deps *api.Deps, logger *zap.Logger) {
-	const interval = 6 * time.Hour
-	runner := daemon.NewRunner("forum-image-cleanup", interval, logger, func(runCtx context.Context) {
-		cleaned := deps.ForumImageSvc.CleanupOrphans(runCtx)
-		if cleaned > 0 {
-			logger.Info("论坛悬空图片清理完成", zap.Int("cleaned", cleaned))
-		}
-	})
-	runner.Start(ctx)
-	logger.Info("论坛悬空图片清理任务已启动", zap.String("interval", interval.String()))
-}
-
-// startContributionCleanup 启动投稿悬空文件清理定时任务：
-// 每 6 小时对 contributions/ 前缀 List，与全量引用集做差集，删除超过 24h 未被引用的文件。
-// 由通用守护 runner 托管（与论坛图片清理同一模式）。
-func startContributionCleanup(ctx context.Context, deps *api.Deps, logger *zap.Logger) {
-	const interval = 6 * time.Hour
-	runner := daemon.NewRunner("contribution-file-cleanup", interval, logger, func(runCtx context.Context) {
-		cleaned := deps.ContributionSvc.CleanupOrphanFiles(runCtx)
-		if cleaned > 0 {
-			logger.Info("投稿悬空文件清理完成", zap.Int("cleaned", cleaned))
-		}
-	})
-	runner.Start(ctx)
-	logger.Info("投稿悬空文件清理任务已启动", zap.String("interval", interval.String()))
 }
 
 // createStorage 根据配置创建文件存储实例。

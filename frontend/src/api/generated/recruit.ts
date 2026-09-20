@@ -41,7 +41,7 @@ export interface ContactRequestDTO {
   contact_phone?: string
   created_at: string
   decided_at?: string
-  expires_at: string
+  expires_at?: string
   id: number
   message: string
   recruiter_id: number

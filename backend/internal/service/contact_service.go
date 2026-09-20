@@ -2,7 +2,6 @@
 package service
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -12,7 +11,6 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/clock"
-	"forklift-training/internal/daemon"
 	"forklift-training/internal/model"
 	"forklift-training/pkg/paging"
 )
@@ -24,6 +22,11 @@ var (
 	// ErrStudentGone 学员不存在或已注销。
 	ErrStudentGone = errors.New("学员不存在或已注销")
 )
+
+// contactDecisionWindow 裁决窗口长度：pending 等学员裁决的时限（ADR-0061 §2）。
+// **签发时快照的唯一来源**——改它只影响之后新签发的 pending，存量行的 expires_at 保持各自
+// 签发时的值（旧行的窗口是当时对学员做过的承诺，不被新常量追溯改写）。
+const contactDecisionWindow = 14 * 24 * time.Hour
 
 // ContactService 联系方式交换申请服务（L3）。
 type ContactService struct {
@@ -52,7 +55,9 @@ type ContactRequestDTO struct {
 	CreatedAt     string  `json:"created_at"`
 	UpdatedAt     string  `json:"updated_at"`
 	DecidedAt     *string `json:"decided_at,omitempty" extensions:"x-optional"`
-	ExpiresAt     string  `json:"expires_at"`
+	// ExpiresAt 裁决窗口的关闭时刻，**只对 pending 有意义**（ADR-0061 §2）：非 pending 行可能缺失，
+	// 消费方不得把它读成「授权的到期时刻」（approved 是永久授权）。
+	ExpiresAt *string `json:"expires_at,omitempty" extensions:"x-optional"`
 	// 企业信息（学员侧可见）
 	CompanyName string `json:"company_name,omitempty" extensions:"x-optional"`
 	ContactName string `json:"contact_name,omitempty" extensions:"x-optional"`
@@ -96,6 +101,12 @@ func (s *ContactService) toDTO(m *model.ContactRequest) ContactRequestDTO {
 		s := m.DecidedAt.Format(time.RFC3339)
 		decided = &s
 	}
+	// 窗口时刻可空：非 pending 行不再输出日期（旧代码会输出零值时间，见 ADR-0061 §2）。
+	var window *string
+	if m.ExpiresAt != nil {
+		w := m.ExpiresAt.Format(time.RFC3339)
+		window = &w
+	}
 	dto := ContactRequestDTO{
 		ID:            m.ID,
 		RecruiterID:   m.RecruiterID,
@@ -105,7 +116,7 @@ func (s *ContactService) toDTO(m *model.ContactRequest) ContactRequestDTO {
 		CreatedAt:     m.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:     m.UpdatedAt.Format(time.RFC3339),
 		DecidedAt:     decided,
-		ExpiresAt:     m.ExpiresAt.Format(time.RFC3339),
+		ExpiresAt:     window,
 	}
 	// 回填企业信息（尽力而为，不让查询失败阻塞）
 	// #487：仅已批准时透出联系信息——谓词单点在 contact_authz.go（GrantsPlaintext）
@@ -150,6 +161,12 @@ func (s *ContactService) Create(recruiterID, studentUserID int, message string) 
 	}
 	// 学员简历是否公开？（可选：不校验，允许向 hidden 发，但 L2 不可见时申请仍可发起？ spec 未限制，此处不拦）
 	now := clock.Now()
+	// 判唯一前先把这一对**已闭窗却仍挂 pending** 的行落态（ADR-0061 §2）：应用层计数与库层偏索引
+	// 都只认 status，不落态就会让窗口早已关闭的行把企业长期挡在「已存在待处理的申请」里，
+	// 唯一的出口是学员碰巧点开。守护只兜没人触碰的行，不兜正在重试的这一次。
+	if _, err := s.expireClosed(now, s.pairScope(recruiterID, studentUserID)); err != nil {
+		return nil, err
+	}
 	// pending 唯一：同一企业对同一学员在 pending 期间只能有一条
 	var pendingCnt int64
 	if err := s.db.Model(&model.ContactRequest{}).Where("recruiter_id = ? AND student_user_id = ? AND status = ?", recruiterID, studentUserID, string(ContactGrantPending)).Count(&pendingCnt).Error; err != nil {
@@ -182,7 +199,7 @@ func (s *ContactService) Create(recruiterID, studentUserID int, message string) 
 	if todayCnt >= int64(s.dailyLimit) {
 		return nil, errors.New("今日申请已达上限")
 	}
-	expiresAt := now.Add(14 * 24 * time.Hour)
+	expiresAt := now.Add(contactDecisionWindow)
 	mdl := model.ContactRequest{
 		RecruiterID:   recruiterID,
 		StudentUserID: studentUserID,
@@ -190,9 +207,19 @@ func (s *ContactService) Create(recruiterID, studentUserID int, message string) 
 		Status:        string(ContactGrantPending),
 		CreatedAt:     now,
 		UpdatedAt:     now,
-		ExpiresAt:     expiresAt,
+		ExpiresAt:     &expiresAt,
 	}
 	if err := s.db.Create(&mdl).Error; err != nil {
+		// 撞库层偏索引（迁移 000010:16 `WHERE status='pending'`）= 并发对手刚写入一条 pending。
+		// 这里**回读确认**再复用同一句文案，而不是按错误码分类：本仓 gorm 未开 TranslateError
+		// （拿到的是驱动原始错误），且 sqlite 测试库由 AutoMigrate 建表、根本没有这条索引。
+		// 回读为真时该文案与计数分支说的是同一件事——对手那条 pending 确实存在。
+		var loserCnt int64
+		if e := s.pairScope(recruiterID, studentUserID).
+			Where("status = ?", string(ContactGrantPending)).
+			Count(&loserCnt).Error; e == nil && loserCnt > 0 {
+			return nil, errors.New("已存在待处理的申请")
+		}
 		return nil, err
 	}
 	// 站内信通知学员（不含企业电话；尽力而为，接收器 nil 与失败均吞；ADR-0027 C1 收编）
@@ -208,7 +235,11 @@ func (s *ContactService) Create(recruiterID, studentUserID int, message string) 
 //  3. 已有 revoked 的授权 → 复活为 approved（学员重新投递即重新授权）。
 //
 // 与既有投递事务语义一致：三分支顺序执行（1/2 为互斥分支，3 独立判定），
-// ExpiresAt 统一为 now+14 天；仅在事务内调用（tx 传入，不带新事务边界）。
+// 仅在事务内调用（tx 传入，不带新事务边界）。
+//
+// 窗口列的处置（ADR-0061 §2）：分支 2 新建的 approved **不写** `expires_at`——裁决窗口只属于
+// pending，给永久授权写一个期限就是让它替不存在的事实说话；分支 1 覆盖 pending 时保留该行
+// 原窗口值，作为「它当初的期限是这天」的历史留痕，此后无人再读。
 func (s *ContactService) EnsureApproved(tx *gorm.DB, recruiterID, studentUserID int, message string, now time.Time) error {
 	// 1/2. pending 覆盖 or 新建 approved
 	var pending model.ContactRequest
@@ -233,7 +264,6 @@ func (s *ContactService) EnsureApproved(tx *gorm.DB, recruiterID, studentUserID 
 			CreatedAt:     now,
 			UpdatedAt:     now,
 			DecidedAt:     &now,
-			ExpiresAt:     now.Add(14 * 24 * time.Hour),
 		}
 		if err := tx.Create(&req).Error; err != nil {
 			return err
@@ -301,9 +331,10 @@ func (s *ContactService) Approve(studentUserID int, requestID int64) (*ContactRe
 	if req.Status != string(ContactGrantPending) {
 		return nil, errors.New("仅 pending 申请可同意")
 	}
-	if clock.Now().After(req.ExpiresAt) {
-		// 已过期，自动标记 expired
-		_ = s.db.Model(&model.ContactRequest{}).Where("id = ? AND status = ?", req.ID, string(ContactGrantPending)).Updates(map[string]any{"status": string(ContactGrantExpired), "updated_at": clock.Now()}).Error
+	// 窗口已闭：当场落态再拒（ADR-0061 §2 的按行出口）。pending 行必带窗口（迁移 000039 的 CHECK），
+	// 但列可空 ⇒ nil 只可能来自脏数据，此时按「未闭窗」放行、交给上面的状态判定兜，不 panic。
+	if req.ExpiresAt != nil && clock.Now().After(*req.ExpiresAt) {
+		_, _ = s.expireClosed(clock.Now(), s.db.Where("id = ?", req.ID))
 		return nil, errors.New("申请已过期")
 	}
 	now := clock.Now()
@@ -367,14 +398,32 @@ func (s *ContactService) Revoke(studentUserID int, requestID int64) (*ContactReq
 	return &dto, nil
 }
 
-// ExpirePending 将超时的 pending 申请标记为 expired（由守护 runner 周期调用）。
-// 返回本次过期的条数。
-func (s *ContactService) ExpirePending(now time.Time) (int64, error) {
+// pairScope 限定到某一对 (企业, 学员) 的查询起点。调用方拿到的是一条**未执行**的链，
+// 可继续叠加谓词——定向落态与冲突回读共用它，避免同一对关系的限定写两遍。
+func (s *ContactService) pairScope(recruiterID, studentUserID int) *gorm.DB {
+	return s.db.Where("recruiter_id = ? AND student_user_id = ?", recruiterID, studentUserID)
+}
+
+// expireClosed 落态的**唯一执行点**：把「窗口已关闭却仍挂 pending」的行置为 expired。
+// scope 为 nil = 全表（守护），否则由 caller 传入限定链（按对 / 按行）——三种收敛速度
+// （周期 / 企业重试 / 学员裁决）共用同一条语句，同一事实不再有三个写法。
+// 谓词自带 `status = pending` 且只向前推进，重复调用幂等。
+func (s *ContactService) expireClosed(now time.Time, scope *gorm.DB) (int64, error) {
 	if now.IsZero() {
 		now = clock.Now()
 	}
-	res := s.db.Model(&model.ContactRequest{}).Where("status = ? AND expires_at <= ?", string(ContactGrantPending), now).Updates(map[string]any{"status": string(ContactGrantExpired), "updated_at": now})
+	if scope == nil {
+		scope = s.db
+	}
+	res := scope.Model(&model.ContactRequest{}).
+		Where("status = ? AND expires_at <= ?", string(ContactGrantPending), now).
+		Updates(map[string]any{"status": string(ContactGrantExpired), "updated_at": now})
 	return res.RowsAffected, res.Error
+}
+
+// ExpirePending 全表收敛超时 pending（守护 runner 周期调用）。返回本次落态条数。
+func (s *ContactService) ExpirePending(now time.Time) (int64, error) {
+	return s.expireClosed(now, nil)
 }
 
 // GetContact 明文联系方式与 PDF 仅在有效授权下返回（存在已批准授权，实时校验，无缓存）。
@@ -409,20 +458,3 @@ func (s *ContactService) RevokeApplicationGrant(tx *gorm.DB, recruiterID, studen
 
 // SetDailyLimit 测试用：覆盖每日上限。
 func (s *ContactService) SetDailyLimit(n int) { s.dailyLimit = n }
-
-// StartExpireRunner 启动 pending 14 天过期守护（进程内定时任务、panic 恢复、jitter 错峰、context 取消贯穿）。
-func (s *ContactService) StartExpireRunner(ctx context.Context, interval time.Duration, logger *zap.Logger) *daemon.Runner {
-	if interval <= 0 {
-		interval = time.Hour
-	}
-	if logger == nil {
-		logger = s.logger
-	}
-	runner := daemon.NewRunner("contact-request-expire", interval, logger, func(runCtx context.Context) {
-		if _, err := s.ExpirePending(clock.Now()); err != nil && logger != nil {
-			logger.Warn("contact expire 失败", zap.Error(err))
-		}
-	}, daemon.WithJitter(interval/10))
-	runner.Start(ctx)
-	return runner
-}

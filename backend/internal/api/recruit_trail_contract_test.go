@@ -39,7 +39,9 @@ func assertRecruitTrail(t *testing.T, db *gorm.DB) {
 	if err := db.Create(&model.RecruitResumeView{RecruiterID: recruiter.ID, ResumeUserID: student.ID, ViewedAt: time.Now()}).Error; err != nil {
 		t.Fatalf(`seed view failed: %v`, err)
 	}
-	if err := db.Create(&model.ContactRequest{RecruiterID: recruiter.ID, StudentUserID: student.ID, Message: `想了解您的求职意向`, Status: `pending`, CreatedAt: time.Now(), UpdatedAt: time.Now(), ExpiresAt: time.Now().Add(14 * 24 * time.Hour)}).Error; err != nil {
+	// pending 必带裁决窗口（ADR-0061 §2）
+	trailWindow := time.Now().Add(14 * 24 * time.Hour)
+	if err := db.Create(&model.ContactRequest{RecruiterID: recruiter.ID, StudentUserID: student.ID, Message: `想了解您的求职意向`, Status: `pending`, CreatedAt: time.Now(), UpdatedAt: time.Now(), ExpiresAt: &trailWindow}).Error; err != nil {
 		t.Fatalf(`seed request failed: %v`, err)
 	}
 
