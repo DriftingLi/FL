@@ -10,9 +10,12 @@
 package api
 
 import (
+	"context"
 	"sort"
 	"testing"
+	"time"
 
+	"forklift-training/internal/daemon"
 	"forklift-training/internal/testutil"
 )
 
@@ -49,5 +52,25 @@ func TestDaemonRegistryLock(t *testing.T) {
 		if names[i] != expectedDaemonNames[i] {
 			t.Fatalf("守护登记表漂移：第 %d 条是 %q，期望 %q（全表 %v）", i, names[i], expectedDaemonNames[i], names)
 		}
+	}
+}
+
+// 锁「登记 → 启动」这条接线本身（复核后补：#1197 的 bug 类正是「有登记，没人启动」）。
+// 只锁条数——每个 tick 跑几次由 daemon 包自己锁（tasks_test.go），两层合起来才是全链。
+// 假时钟永不投递，故这里不会执行任何业务动作。
+func TestStartDaemonsStartsEveryRegisteredTask(t *testing.T) {
+	db := testutil.NewMemoryDB(t)
+	d := newContractDeps(t, db, nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runners := d.StartDaemons(ctx, daemon.WithJitter(0), daemon.WithTicker(func(time.Duration) (<-chan time.Time, func()) {
+		return make(chan time.Time), func() {}
+	}))
+	if len(runners) != len(d.Daemons) {
+		t.Fatalf("登记 %d 条守护、实际起了 %d 个 Runner（登记与启动之间又裂开了）", len(d.Daemons), len(runners))
+	}
+	if len(runners) == 0 {
+		t.Fatalf("一条都没起——本锁会因空集合恒绿")
 	}
 }

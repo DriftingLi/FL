@@ -19,6 +19,10 @@ import (
 var (
 	// ErrContactNoAuth 无有效授权（无 approved 授权或授权已失效）。
 	ErrContactNoAuth = errors.New("无有效授权")
+	// ErrContactPendingExists 同一企业对同一学员已挂一条 pending。两个出口共用：计数分支
+	// （读到自己上一条）与偏索引分支（并发对手刚写入）——撞索引时那条 pending 确实存在，
+	// 所以同一句文案在两处都为真（ADR-0061 §2）。
+	ErrContactPendingExists = errors.New("已存在待处理的申请")
 	// ErrStudentGone 学员不存在或已注销。
 	ErrStudentGone = errors.New("学员不存在或已注销")
 )
@@ -168,15 +172,16 @@ func (s *ContactService) Create(recruiterID, studentUserID int, message string) 
 		return nil, err
 	}
 	// pending 唯一：同一企业对同一学员在 pending 期间只能有一条
-	var pendingCnt int64
-	if err := s.db.Model(&model.ContactRequest{}).Where("recruiter_id = ? AND student_user_id = ? AND status = ?", recruiterID, studentUserID, string(ContactGrantPending)).Count(&pendingCnt).Error; err != nil {
+	pendingCnt, err := s.pendingCountFor(recruiterID, studentUserID)
+	if err != nil {
 		return nil, err
 	}
 	if pendingCnt > 0 {
 		var existing model.ContactRequest
-		_ = s.db.Where("recruiter_id = ? AND student_user_id = ? AND status = ?", recruiterID, studentUserID, string(ContactGrantPending)).First(&existing).Error
+		_ = s.pairScope(recruiterID, studentUserID).
+			Where("status = ?", string(ContactGrantPending)).First(&existing).Error
 		dto := s.toDTO(&existing)
-		return &dto, errors.New("已存在待处理的申请")
+		return &dto, ErrContactPendingExists
 	}
 	// 30 天冷却：被拒绝或被撤回后 30 天内不能再申请
 	var lastRejected *model.ContactRequest
@@ -214,11 +219,8 @@ func (s *ContactService) Create(recruiterID, studentUserID int, message string) 
 		// 这里**回读确认**再复用同一句文案，而不是按错误码分类：本仓 gorm 未开 TranslateError
 		// （拿到的是驱动原始错误），且 sqlite 测试库由 AutoMigrate 建表、根本没有这条索引。
 		// 回读为真时该文案与计数分支说的是同一件事——对手那条 pending 确实存在。
-		var loserCnt int64
-		if e := s.pairScope(recruiterID, studentUserID).
-			Where("status = ?", string(ContactGrantPending)).
-			Count(&loserCnt).Error; e == nil && loserCnt > 0 {
-			return nil, errors.New("已存在待处理的申请")
+		if cnt, e := s.pendingCountFor(recruiterID, studentUserID); e == nil && cnt > 0 {
+			return nil, ErrContactPendingExists
 		}
 		return nil, err
 	}
@@ -333,7 +335,9 @@ func (s *ContactService) Approve(studentUserID int, requestID int64) (*ContactRe
 	}
 	// 窗口已闭：当场落态再拒（ADR-0061 §2 的按行出口）。pending 行必带窗口（迁移 000039 的 CHECK），
 	// 但列可空 ⇒ nil 只可能来自脏数据，此时按「未闭窗」放行、交给上面的状态判定兜，不 panic。
-	if req.ExpiresAt != nil && clock.Now().After(*req.ExpiresAt) {
+	// 判定用 `not before`（即 now ≥ 窗口）与守护/定向落态的 SQL 谓词 `expires_at <= now` 同边界，
+	// 否则恰好在关闭那一刻，守护会落态而这里会放行。
+	if req.ExpiresAt != nil && !clock.Now().Before(*req.ExpiresAt) {
 		_, _ = s.expireClosed(clock.Now(), s.db.Where("id = ?", req.ID))
 		return nil, errors.New("申请已过期")
 	}
@@ -402,6 +406,19 @@ func (s *ContactService) Revoke(studentUserID int, requestID int64) (*ContactReq
 // 可继续叠加谓词——定向落态与冲突回读共用它，避免同一对关系的限定写两遍。
 func (s *ContactService) pairScope(recruiterID, studentUserID int) *gorm.DB {
 	return s.db.Where("recruiter_id = ? AND student_user_id = ?", recruiterID, studentUserID)
+}
+
+// pendingCountFor 这一对 (企业, 学员) 上挂着的 pending 条数——唯一性判据的唯一提问处
+// （计数分支与偏索引回读都问它）。
+//
+// `.Model()` 不可省：`Count` 的 dest 是 *int64，没有 Model 时 gorm 报「Table not set」，
+// 若调用方把错误咽掉就等于把「查不动」当成「没有 pending」——所以这里原样上抛，
+// 并有一条 service 层测试直接问它（缺 Model 当场红）。
+func (s *ContactService) pendingCountFor(recruiterID, studentUserID int) (int64, error) {
+	var cnt int64
+	err := s.pairScope(recruiterID, studentUserID).Model(&model.ContactRequest{}).
+		Where("status = ?", string(ContactGrantPending)).Count(&cnt).Error
+	return cnt, err
 }
 
 // expireClosed 落态的**唯一执行点**：把「窗口已关闭却仍挂 pending」的行置为 expired。

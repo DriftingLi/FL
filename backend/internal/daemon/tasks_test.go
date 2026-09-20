@@ -12,6 +12,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 func TestStartAllRunsEveryRegisteredTask(t *testing.T) {
@@ -47,7 +49,7 @@ func TestStartAllRunsEveryRegisteredTask(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	if got := StartAll(ctx, nil, tasks, WithJitter(0), WithTicker(tickerFn)); len(got) != n {
+	if got := StartAll(ctx, zap.NewNop(), tasks, WithJitter(0), WithTicker(tickerFn)); len(got) != n {
 		t.Fatalf("StartAll 应为每条登记各起一个 Runner, 实际 %d", len(got))
 	}
 

@@ -27,7 +27,6 @@ import (
 	"forklift-training/internal/api"
 	"forklift-training/internal/cache"
 	"forklift-training/internal/config"
-	"forklift-training/internal/daemon"
 	"forklift-training/internal/db"
 	"forklift-training/internal/geolocation"
 	applogger "forklift-training/internal/logger"
@@ -161,11 +160,11 @@ func main() {
 	// 6.5 创建路由（维修培训业务 + 静态资源 + 健康检查）
 	router := api.NewRouter(deps)
 
-	// 7. 启动装配根登记的进程内守护（ADR-0061 §1：登记在 api.NewDeps 的 deps.Daemons，
-	// 这里只负责按 daemonCtx 起循环——加守护不必再回到本文件手写一次 start）。
+	// 7. 启动装配根登记的进程内守护（ADR-0061 §1：登记表与启动方法都在 api 侧，
+	// 这里只交出生命周期 context——加守护不必再回到本文件手写一次 start）。
 	daemonCtx, daemonCancel := context.WithCancel(context.Background())
 	defer daemonCancel()
-	daemon.StartAll(daemonCtx, logger, deps.Daemons)
+	deps.StartDaemons(daemonCtx)
 
 	// 7.5 装配残值评估子模块（注册 /api/valuation/* 路由）
 	cleanup := setupValuation(router, cfg, deps.AuthSvc, deps.Session, vpool, st, logger, deps.AuditSvc)

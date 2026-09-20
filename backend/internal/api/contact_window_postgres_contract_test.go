@@ -131,9 +131,12 @@ func TestContactDecisionWindowOnPostgres(t *testing.T) {
 	if err := svc.EnsureApproved(db, recruiter.ID, other.ID, "投递即授权", time.Now()); err != nil {
 		t.Fatalf("EnsureApproved(other): %v", err)
 	}
+	// 分支 2 的断言必须带 `source='application'`：第 2 步手插的那条 approved 也是无窗口的
+	// （它的 source 走库默认值 recruiter），不加这个过滤就会白捡一次恒绿。
 	var newApproved int64
 	if err := db.Raw(`SELECT count(*) FROM contact_requests
-		WHERE recruiter_id = ? AND student_user_id = ? AND status = 'approved' AND expires_at IS NULL`,
+		WHERE recruiter_id = ? AND student_user_id = ? AND status = 'approved'
+		  AND source = 'application' AND expires_at IS NULL`,
 		recruiter.ID, other.ID).Scan(&newApproved).Error; err != nil {
 		t.Fatalf("查新建 approved: %v", err)
 	}

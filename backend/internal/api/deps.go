@@ -196,13 +196,12 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 	// 守护登记（ADR-0061 §1）：加守护 = 往这张表加一条，不需要在 cmd/server 里再手写一次 start。
 	// 闭包读 d 上的 service 字段（此刻已构造完），故登记排在 Deps 字面量之后。
 	d.Daemons = []daemon.Task{
-		// 论坛悬空图片：List images/forum/ 前缀，与全量引用集做差集，删除超 24h 未被引用的文件。
+		// 两个悬空文件清理都是 6 小时差集扫描（算法在各 service 里，这里只声明节奏）。
 		{Name: "forum-image-cleanup", Interval: 6 * time.Hour, Run: func(ctx context.Context) {
 			if cleaned := d.ForumImageSvc.CleanupOrphans(ctx); cleaned > 0 {
 				logger.Info("论坛悬空图片清理完成", zap.Int("cleaned", cleaned))
 			}
 		}},
-		// 投稿悬空文件：同一形状，前缀 contributions/。
 		{Name: "contribution-file-cleanup", Interval: 6 * time.Hour, Run: func(ctx context.Context) {
 			if cleaned := d.ContributionSvc.CleanupOrphanFiles(ctx); cleaned > 0 {
 				logger.Info("投稿悬空文件清理完成", zap.Int("cleaned", cleaned))
@@ -226,6 +225,13 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 	}
 	d.AuthH = NewAuthHandler(d.Session, authSvc, fileSvc, st, reviewSvc, logger)
 	return d
+}
+
+// StartDaemons 启动本装配根登记的全部守护（ADR-0061 §1）。
+// 登记与启动收在同一个方法上，「表里有、却没起」因此可被测试问到（daemons_contract_test.go）；
+// opts 透传给 Runner，测试用它换掉真时钟。
+func (d *Deps) StartDaemons(ctx context.Context, opts ...daemon.RunnerOption) []*daemon.Runner {
+	return daemon.StartAll(ctx, d.Logger, d.Daemons, opts...)
 }
 
 // RouterDeps 投影当前装配根的横切依赖，供 NewRouter 传给各蓝图注册（单一装配点）。

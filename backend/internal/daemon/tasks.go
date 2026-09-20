@@ -27,9 +27,7 @@ func StartAll(ctx context.Context, logger *zap.Logger, tasks []Task, opts ...Run
 	for _, t := range tasks {
 		r := NewRunner(t.Name, t.Interval, logger, t.Run, opts...)
 		r.Start(ctx)
-		if logger != nil {
-			logger.Info("守护任务已启动", zap.String("name", t.Name), zap.String("interval", t.Interval.String()))
-		}
+		logger.Info("守护任务已启动", zap.String("name", t.Name), zap.String("interval", t.Interval.String()))
 		out = append(out, r)
 	}
 	return out
