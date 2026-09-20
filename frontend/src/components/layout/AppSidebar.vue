@@ -81,7 +81,7 @@
               <!-- 二级嵌套：child 自身还有 children（如 题库练习 ┬ 真题练习） -->
               <template v-if="child.children && child.children.length">
                 <AppSidebarItem
-                  v-if="child.externalUrl || child.routeName"
+                  v-if="isNavItemRenderable(child)"
                   :item="child"
                   :collapsed="effectiveCollapsed"
                   :active="isRouteActive(child)"
@@ -114,7 +114,7 @@
 
         <!-- 无子项的顶级导航（外链与路由项都在同一行形态里，差别由 AppSidebarItem 判） -->
         <AppSidebarItem
-          v-else-if="item.externalUrl || item.routeName"
+          v-else-if="isNavItemRenderable(item)"
           :item="item"
           :collapsed="effectiveCollapsed"
           :active="isRouteActive(item)"
@@ -154,6 +154,7 @@ import {
   isGroupActive,
   type NavItem
 } from '@/config/navigation'
+import { isNavItemRenderable } from '@/config/navigation'
 import NotificationPanel from '@/components/layout/NotificationPanel.vue'
 import AppSidebarItem from '@/components/layout/AppSidebarItem.vue'
 import { useConfirm } from '@/composables/useConfirm'

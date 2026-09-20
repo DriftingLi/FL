@@ -8,7 +8,7 @@ vi.mock('@/composables/useConfirm', () => ({
   useConfirm: () => ({ confirm: confirmSpy, confirmDanger: confirmSpy, prompt: vi.fn() })
 }))
 
-import type { Page } from '@/api/page'
+import { toPage, type Page } from '@/api/page'
 import { useAdminTable } from '@/composables/useAdminTable'
 
 interface Row {
@@ -206,13 +206,13 @@ describe('useAdminTable（admin 列表状态机）', () => {
     expect(table.isEmpty.value).toBe(false)
   })
 
-  // ---- 票 6（ADR-0060 决策 6）：容器换成 api 侧的 Page<T> 后，畸形响应的兜底口径逐字不变 ----
+  // ---- 票 6（ADR-0060 决策 6）：容器由 api 侧 Page<T> 承载；兜底的唯一宿主是 toPage ----
 
-  it('fetch 给的容器缺 items / total：仍按 [] 与 0 装载（与归位前 `|| []` / `|| 0` 等价）', async () => {
+  it('后端整段不回负载（经 toPage 归一）：仍按 [] 与 0 装载，口径与归位前逐字一致', async () => {
     const table = useAdminTable<Row>({
-      // 越界入参：真实链路上后端可能整段不回负载（信封 data 为 null），此时 fetch 的产物
-      // 在运行期就没有这两个键；Page<T> 的类型面由 api 层的 toPage 保证，这里验兜底。
-      fetch: async () => ({ items: undefined, total: undefined }) as unknown as Page<Row>
+      // 真实链路上信封 data 可能为 null；那一层兜底只在 api/page.ts 的 toPage 里做一次，
+      // composable 信任 Page<T> 的声明面（再兜一层就是同一判据的第二宿主）。
+      fetch: async () => toPage(undefined, undefined)
     })
 
     await table.load()

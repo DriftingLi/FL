@@ -186,7 +186,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		RefreshToken string `json:"refresh_token"`
 	}
 	_ = c.ShouldBindJSON(&req) // refresh_token 缺失或解析失败时只清本地/Cookie，静默放行
-	_ = h.session.SignOut(c.Request.Context(), c.Writer, "", req.RefreshToken)
+	_ = h.session.SignOut(c.Request.Context(), c.Writer, req.RefreshToken)
 	response.SuccessWithMsg(c, "已登出", nil)
 }
 

@@ -20,7 +20,6 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 
-	"forklift-training/internal/authz"
 	"forklift-training/internal/cache"
 	"forklift-training/internal/config"
 )
@@ -297,19 +296,17 @@ func (s *Session) RevokeRefresh(ctx context.Context, tokenStr string) error {
 }
 
 // SignOut 单会话终止（会话终止两族之一，ADR-0060 票2）：撤销手上这枚 refresh
-// （为空或无效即静默跳过）并清除本角色登录态 Cookie。
+// （为空或无效即静默跳过）并清除主站登录态 Cookie。
 //
 // token 取自请求体还是 Bearer 头是**入口差异**，不是第三种语义——两条入口都收敛到本动作。
+// 没有角色形参：本仓只有主站这一条登出端点（招聘者面没有），留着那个分支就是一个实现
+// 撑起的假想 seam（ADR-0060 自己的判据）。
 // 吊销失败仍清 Cookie：本地登录态已不可用，凭证缺口由日志暴露（与既有登出口径一致）。
 // 终止该身份全部会话不在此处：那属 RevokeIdentity。
-func (s *Session) SignOut(ctx context.Context, w http.ResponseWriter, role, refreshToken string) error {
+func (s *Session) SignOut(ctx context.Context, w http.ResponseWriter, refreshToken string) error {
 	var err error
 	if refreshToken != "" {
 		err = s.RevokeRefresh(ctx, refreshToken)
-	}
-	if role == string(authz.RoleRecruiter) {
-		s.ClearRecruiterCookie(w)
-		return err
 	}
 	s.ClearCookie(w)
 	return err
@@ -413,20 +410,6 @@ func (s *Session) SetRecruiterCookie(w http.ResponseWriter, token string) {
 		Path:     "/",
 		Domain:   s.recruiterCookie.Domain,
 		MaxAge:   int(s.jwtExpiry.Seconds()),
-		HttpOnly: true,
-		Secure:   s.recruiterCookie.Secure,
-		SameSite: http.SameSiteLaxMode,
-	})
-}
-
-// ClearRecruiterCookie 清除招聘者登录 Cookie。
-func (s *Session) ClearRecruiterCookie(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     s.RecruiterCookieName(),
-		Value:    "",
-		Path:     "/",
-		Domain:   s.recruiterCookie.Domain,
-		MaxAge:   -1,
 		HttpOnly: true,
 		Secure:   s.recruiterCookie.Secure,
 		SameSite: http.SameSiteLaxMode,
