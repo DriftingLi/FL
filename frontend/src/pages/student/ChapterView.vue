@@ -151,10 +151,10 @@ import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, ArrowRight, VideoCamera, Document, Picture } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { courseApi, type ChapterDetail } from '@/api/course'
-import { favoriteApi } from '@/api/favorite'
 import { studentApi, type StudentChapterProgress } from '@/api/student'
 import { useCourseStore } from '@/stores/course'
 import { useAsyncPage } from '@/composables/useAsyncPage'
+import { useFavorite } from '@/composables/useFavorite'
 import { useStudyTracker } from '@/composables/useStudyTracker'
 import VideoPlayer from '@/components/student/VideoPlayer.vue'
 import DocumentViewer from '@/components/student/DocumentViewer.vue'
@@ -412,44 +412,14 @@ async function markCompleted() {
 
 // 章节收藏（#1132）：入口此前两端都缺 —— 收藏表里 chapter 是「没有创建点的类型」，
 // 而收藏页早已把章节当一等公民（Web 的类型标签色、移动端的「章节」筛选 chip）。
-// 交互形状对齐 ForumDetail 的帖子收藏（同一 UiActionChip 写法）。
-const chapterFavorited = ref(false)
-const chapterFavoriteId = ref<number>(0)
-
-async function loadChapterFavoriteState() {
-  chapterFavorited.value = false
-  chapterFavoriteId.value = 0
-  const id = Number(chapterId.value)
-  if (!id) return
-  try {
-    const res = await favoriteApi.check({ target_type: 'chapter', target_id: id })
-    chapterFavorited.value = !!res?.favorited
-    chapterFavoriteId.value = res?.favorite_id || 0
-  } catch (e) {
-    console.error('查询章节收藏状态失败:', e)
-  }
-}
-
-async function toggleChapterFavorite() {
-  const id = Number(chapterId.value)
-  if (!id) return
-  try {
-    if (chapterFavorited.value) {
-      await favoriteApi.remove(chapterFavoriteId.value)
-      chapterFavorited.value = false
-      chapterFavoriteId.value = 0
-      ElMessage.success('已取消收藏')
-    } else {
-      const res = await favoriteApi.add({ target_type: 'chapter', target_id: id })
-      chapterFavorited.value = true
-      chapterFavoriteId.value = res?.favorite_id || 0
-      ElMessage.success('已收藏')
-    }
-  } catch (e) {
-    console.error('章节收藏操作失败:', e)
-    /* 错误已由拦截器提示 */
-  }
-}
+// 交互形状对齐 ForumDetail 的帖子收藏（同一 UiActionChip 写法）；查询—切换—提示的状态机
+// 在 useFavorite（ADR-0060 决策 3），页面只留「何时查」这一本地事实：onMounted 与
+// 章节 id 变化各查一次（见下方 watch 与 onMounted）。
+const {
+  favorited: chapterFavorited,
+  load: loadChapterFavoriteState,
+  toggle: toggleChapterFavorite
+} = useFavorite('chapter', () => Number(chapterId.value))
 
 watch(() => route.params.chapterId, (newVal) => {
   if (newVal) {

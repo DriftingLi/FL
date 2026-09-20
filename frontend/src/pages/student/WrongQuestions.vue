@@ -145,13 +145,13 @@ import { ref, watch, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Star, StarFilled, SortDown, SortUp } from '@element-plus/icons-vue'
 import { wrongQuestionApi, type WrongQuestionItem } from '@/api/wrongQuestion'
-import { favoriteApi } from '@/api/favorite'
 import { typeMap } from '@/constants/question'
 import { downloadBlob } from '@/composables/useReportDownload'
 import { formatDateTime } from '@/utils/format'
 import type { Question } from '@/types/question'
 import { usePracticeSession } from '@/composables/usePracticeSession'
 import { useQuestionPeripherals, questionPeripheralAdapters } from '@/composables/useQuestionPeripherals'
+import { useFavoriteList } from '@/composables/useFavorite'
 import QuestionOptionPicker from '@/components/student/QuestionOptionPicker.vue'
 import AnswerResultCard from '@/components/practice/AnswerResultCard.vue'
 import AIExplanationCard from '@/components/practice/AIExplanationCard.vue'
@@ -358,20 +358,23 @@ function resetFilters() {
   loadData()
 }
 
+// 行内收藏：态由列表行携带（服务端随错题下发 favorited / favorite_id，ADR-0059 口径），
+// 本模块不查询；切换后把新态回填行。「只看收藏」筛选下取消收藏需重载列表（否则被取消的那条
+// 赖在列表里）——该判据在 useFavoriteList 内，页面只声明筛选事实与重载动作（ADR-0060 决策 3）。
+const rowFavorite = useFavoriteList('question', {
+  favoritedOnly: () => filterFavorited.value,
+  reload: loadData
+})
+
 async function toggleFavorite(item: WrongQuestionItem) {
-  try {
-    if (item.favorited) {
-      await favoriteApi.remove(item.favorite_id!)
-      item.favorited = false
-      item.favorite_id = 0
-      if (filterFavorited.value) await loadData()
-    } else {
-      const res = await favoriteApi.add({ target_type: 'question', target_id: item.question_id })
-      item.favorited = true
-      item.favorite_id = res?.favorite_id
-    }
-  } catch {
-    /* 错误已由拦截器提示 */
+  const next = await rowFavorite.toggle({
+    targetId: item.question_id,
+    favorited: item.favorited,
+    favorite_id: item.favorite_id
+  })
+  if (next) {
+    item.favorited = next.favorited
+    item.favorite_id = next.favorite_id
   }
 }
 
