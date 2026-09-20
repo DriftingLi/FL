@@ -1,50 +1,25 @@
-# #1194 招聘者身份面 —— 真机门（①）执行状态与取证计划
+# #1194 招聘者身份面 —— 真机门（①）执行状态
 
 - **PR**：#1206
 - **分支**：`feat/mobile-1194-recruiter-identity`
-- **写档时 HEAD**：`0d87a70c`
-- **状态：①a / ①b 本次未跑。本文件不是「已通过」的证据，是执行状态与计划的留痕。**
+- **状态更新（2026-09-20 15:25）**：**①a 已补跑（部分覆盖）**，取证记录与产物见同目录
+  [`README.md`](./README.md)（截图 `01-recruiter-login-after.jpg`、页身份日志 `02-…txt`、只读日志 `03-…txt`）。
+  **①b 仍未签**（P1 命中能力面 ⇒ 必做、由人给出原文）。
+- 本文件成档时的 HEAD：`0d87a70c`；①a 取证时 HEAD：`5157c844`（两者之间只有文档/测试与两处 Kotlin 类型修复）
 
-## 为什么没跑
+## ①a 结果摘要（详细见 README.md）
 
-移动端 `AGENTS.md`「会话时间预算与『先写代码、后集中上机』」（2026-09-15）：
+| 目标页 | 结果 |
+| --- | --- |
+| `pages/recruiter/login` | ✅ 截图入仓；同帧实拍到身份互斥模态「登录招聘者账号将退出当前学员账号」 |
+| `pages/login/login`（底部招聘者入口） | ❌ 未取截图 —— `--pagePath` 进去了，632 ms 后自跳到 `pages/dashboard/dashboard`（设备持有在册学员会话）⇒ 页身份判据 fail-closed |
 
-> **并行会话各自只写代码、都不进真机阶段；真机阶段按批集中到一个会话。**
-
-HBuilderX 是**单实例串行资源**，`scripts/lib/hx-busy.ps1` 的锁只保证**串行**、不保证**不阻塞** ——
-多个会话同时要跑编译门 / 真机步骤时只会在 `HX_BUSY wait=<秒>` 上排队，超时即 `exit 2`（环境不可用）。
-
-另据 ADR-0016，**①a 按「一次分支收口」跑一次**：不是 PR 内的每次微调，也不跨 PR 共用。
-本 PR 尚未收口，故此时不该跑 ①a。
-
-## 本轮该覆盖的复测对象（收口时按此逐页取证）
-
-| # | 页面 / 链路 | 要观测到什么 | 取证方式 |
-| --- | --- | --- | --- |
-| 1 | `pages/login/login` | 底部出现**纯文字**「招聘者登录」入口；页面其余部分与改动前一致 | `adb` 逐页截图 + logcat |
-| 2 | `pages/login/login` → 点该入口 | `navigateTo` 进入招聘者登录页，**可返回** | 同上 |
-| 3 | `pages/recruiter/login` | 仅账号密码两个输入 + 登录按钮；无多余说明性文案 | 同上 |
-| 4 | 招聘者登录成功 | 落到工作区入口（P2 前为 dashboard）；`auth_active_role = recruiter` | 截图 + 应用日志 |
-| 5 | 招聘者态 401 | 跳 `/pages/recruiter/login`，**恰好一次**；**不出现** `/auth/refresh` 请求 | logcat 网络日志 |
-| 6 | 学员态 401 | 跳 `/pages/login/login`，恰好一次（既有行为不回归） | 同上 |
-| 7 | **①b 能力面**：`pages/login/login` 指纹路径、`api/request.uts` 真机上传路径 | 人按手指 / 真机选文件上传，行为与改动前一致 | **由人执行并给出原文** |
-
-## 收口时的执行命令
-
-```powershell
-cd training-app/叉车维修培训学员端跨端应用
-npm run dev:finish        # 步骤 4–6：编译（④a/④c）→ 部署 → 截图
-npm run capture:device    # ①a 逐页截图 + logcat（只读、不抢焦点）
-```
-
-产物落点：`docs/verification/recruiter-login/1206/`（收口后由 ①a 自动/手动入库）。
-
-## 谁签
-
-- **①a**：agent 执行（ADR-0016 2026-09-16 修订允许「执行人」栏写「agent 执行」）。
-- **①b**：**人**给出原文；agent 只可代录，**不得自拟、不得写「已通过」**。
+机检行：`DEVICE_CAPTURE_RESULT=PASS`（前台 `io.dcloud.uniappx/io.dcloud.uniapp.UniAppActivity`，
+logcat 窗口 317 行 / `FATAL EXCEPTION=0` / `ANR in 包=0`），全程只读、未注入 `input`。
 
 ## 未验证项
 
-①a、①b、④a、④c **均未验**。本 PR 在 `pr-evidence` 上走**例外通道**；
-**补齐之前不得合并**，且例外通道下的合并必须由**人**执行。
+- **①a 的 `pages/login/login` 一页**：需一次**未登录态**（或人手动退出学员账号后）的批次补拍。
+- **①b 能力面人工门**：指纹路径（`pages/login/login.uvue`）、真机上传路径（`api/request.uts`）——
+  **必须由人**按手指 / 选文件后给出原文；**补齐前 ① 不算过**。
+- **④b release 云打包**：发版前置条款，正式发版前由人执行（非本 PR 合并前置）。
