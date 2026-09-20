@@ -62,7 +62,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 				response.BadRequest(c, err.Error())
 				return
 			}
-			setAuthCookie(c, h.session, resp.Token)
+			h.session.SetCookie(c.Writer, resp.Token)
 			response.SuccessWithMsg(c, "登录成功", resp)
 		},
 	}.Handle(c)
@@ -98,7 +98,7 @@ func (h *AuthHandler) AdminLogin(c *gin.Context) {
 				response.BadRequest(c, err.Error())
 				return
 			}
-			setAuthCookie(c, h.session, resp.Token)
+			h.session.SetCookie(c.Writer, resp.Token)
 			response.SuccessWithMsg(c, "管理员登录成功", resp)
 		},
 	}.Handle(c)
@@ -134,7 +134,7 @@ func (h *AuthHandler) TutorLogin(c *gin.Context) {
 				response.BadRequest(c, err.Error())
 				return
 			}
-			setAuthCookie(c, h.session, resp.Token)
+			h.session.SetCookie(c.Writer, resp.Token)
 			response.SuccessWithMsg(c, "导师登录成功", resp)
 		},
 	}.Handle(c)
@@ -170,7 +170,7 @@ func (h *AuthHandler) RecruiterLogin(c *gin.Context) {
 				response.BadRequest(c, err.Error())
 				return
 			}
-			setRecruiterCookie(c, h.session, resp.Token)
+			h.session.SetRecruiterCookie(c.Writer, resp.Token)
 			response.SuccessWithMsg(c, "招聘者登录成功", resp)
 		},
 	}.Handle(c)
@@ -197,10 +197,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		RefreshToken string `json:"refresh_token"`
 	}
 	_ = c.ShouldBindJSON(&req) // refresh_token 缺失或解析失败时只清本地/Cookie，静默放行
-	if req.RefreshToken != "" {
-		_ = h.session.RevokeRefresh(c.Request.Context(), req.RefreshToken)
-	}
-	h.session.ClearCookie(c.Writer)
+	_ = h.session.SignOut(c.Request.Context(), c.Writer, "", req.RefreshToken)
 	response.SuccessWithMsg(c, "已登出", nil)
 }
 
@@ -351,6 +348,13 @@ func (h *AuthHandler) DeleteAccount(c *gin.Context) {
 	uid := middleware.CurrentUserID(c)
 	if uid <= 0 {
 		response.Unauthorized(c, "请先登录")
+		return
+	}
+	// 全会话吊销在先（ADR-0060 票2）：标记写失败即整体不生效。与改密/禁用的尽力而为
+	// 策略有意不同——那两处有已生效且不可回退的动作，注销没有；先删后吊销会留下
+	// 「资料已删、凭证仍活」（RotateRefresh 不查用户存在，旧 refresh 最长 7 天仍可签发 access）。
+	if err := h.session.RevokeIdentity(c.Request.Context(), "hrwai_user", uid); err != nil {
+		response.BadRequest(c, "注销失败：会话吊销未生效，请稍后重试")
 		return
 	}
 	if err := h.authSvc.DeleteAccount(uid); err != nil {

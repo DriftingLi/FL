@@ -87,7 +87,7 @@ func (h *AdminRecruiterHandler) ToggleStatus(c *gin.Context) {
 			return &idParam{ID: id}, nil
 		},
 		Invoke: func(ctx context.Context, req *idParam) (*service.StatusResultDTO, error) {
-			next, err := h.authSvc.ToggleRecruiterStatus(req.ID)
+			next, err := h.authSvc.ToggleRecruiterStatus(ctx, req.ID)
 			if err != nil {
 				return nil, err
 			}
