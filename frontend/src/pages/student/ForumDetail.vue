@@ -189,7 +189,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, View, ChatDotRound, ArrowUp, ArrowDown } from '@element-plus/icons-vue'
 import { forumApi, toForumContentFormat, type ForumTopicItem, type ForumReplyItem, type ForumContentFormat, type ForumTopicDetailData } from '@/api/forum'
-import { favoriteApi } from '@/api/favorite'
+import { useFavorite } from '@/composables/useFavorite'
 import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
 import ForumComposer from '@/components/student/ForumComposer.vue'
 import ForumReplyCard from '@/components/student/ForumReplyCard.vue'
@@ -500,41 +500,14 @@ function goBack() {
 const { toggle: toggleTopicLikeOnce } = useLike(forumApi.likeTopic, forumApi.unlikeTopic)
 const { toggle: toggleReplyLikeOnce } = useLike(forumApi.likeReply, forumApi.unlikeReply)
 
-// 收藏帖子
-const topicFavorited = ref(false)
-const topicFavoriteId = ref<number>(0)
-
-async function loadFavoriteState() {
-  topicFavorited.value = false
-  topicFavoriteId.value = 0
-  try {
-    const res = await favoriteApi.check({ target_type: 'topic', target_id: Number(route.params.topicId) })
-    topicFavorited.value = !!res?.favorited
-    topicFavoriteId.value = res?.favorite_id || 0
-  } catch (e) {
-    console.error('查询收藏状态失败:', e)
-  }
-}
-
-async function toggleFavorite() {
-  const topicId = Number(route.params.topicId)
-  try {
-    if (topicFavorited.value) {
-      await favoriteApi.remove(topicFavoriteId.value)
-      topicFavorited.value = false
-      topicFavoriteId.value = 0
-      ElMessage.success('已取消收藏')
-    } else {
-      const res = await favoriteApi.add({ target_type: 'topic', target_id: topicId })
-      topicFavorited.value = true
-      topicFavoriteId.value = res?.favorite_id || 0
-      ElMessage.success('已收藏')
-    }
-  } catch (e) {
-    console.error('收藏操作失败:', e)
-    /* 错误已由拦截器提示 */
-  }
-}
+// 收藏帖子：「查询—切换—提示—失败保持原态」的状态机在 useFavorite（ADR-0060 决策 3），
+// 页面只留「何时查」这一本地事实（onMounted 一次）。种类判据（target_type='topic'）
+// 由内容对象表给出，不再在本文件硬写。
+const {
+  favorited: topicFavorited,
+  load: loadFavoriteState,
+  toggle: toggleFavorite
+} = useFavorite('topic', () => Number(route.params.topicId))
 
 async function toggleTopicLike() {
   if (!topic.value) return
