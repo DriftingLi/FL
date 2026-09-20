@@ -103,6 +103,15 @@ export function getRecruitJobsApi(page : number = 1, pageSize : number = 20) : P
         const items : RecruitJob[] = []
         for (let i = 0; i < raw.length; i++) {
             const obj = raw[i]
+            // ⚠️ `offline_reason` 必须**先判空再强转**（2026-09-20 真机 ①a 抓到的真缺陷）：
+            //   后端 `JobPostingDTO.OfflineReason` 带 `json:"offline_reason,omitempty"`
+            //   （backend/internal/service/job_posting_service.go:74）⇒ **未强制下架时该键根本不存在**。
+            //   而 UTS 的 `as string` 编到 Kotlin 是**运行时非空断言**（ADR-0003）：
+            //   对缺失键会先抛 `NullPointerException: null cannot be cast to non-null type kotlin.String`
+            //   —— `?? ''` **兜不住**（抛的是 Exception，不是 null；生成 Kotlin 实测见
+            //   unpackage/cache/.app-android/src/index.kt:10674）。
+            //   写法对齐仓内既有先例 `api/auth.uts:20-21`（先 `obj['x']` 取值 → `== null ? … : … as string`）。
+            const offlineReasonRaw = obj['offline_reason']
             items.push({
                 id: obj['id'] as number,
                 title: (obj['title'] as string) ?? '',
@@ -111,7 +120,7 @@ export function getRecruitJobsApi(page : number = 1, pageSize : number = 20) : P
                 experience_req: (obj['experience_req'] as string) ?? '',
                 status: (obj['status'] as string) ?? '',
                 forced_offline: (obj['forced_offline'] as boolean) ?? false,
-                offline_reason: (obj['offline_reason'] as string) ?? '',
+                offline_reason: offlineReasonRaw == null ? '' : offlineReasonRaw as string,
                 published_at: (obj['published_at'] as string) ?? '',
                 updated_at: (obj['updated_at'] as string) ?? '',
             } as RecruitJob)
