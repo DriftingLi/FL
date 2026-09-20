@@ -395,9 +395,6 @@ func (h *AIAssistantHandler) GetSessionMessages(c *gin.Context) {
 			{sentinel: gorm.ErrRecordNotFound, status: http.StatusNotFound, message: "会话不存在"},
 			{sentinel: nil, status: http.StatusInternalServerError},
 		}},
-		Render: func(c *gin.Context, _ *aiModelIDReq, resp *[]service.AIChatMessageDTO) {
-			response.Success(c, resp)
-		},
 	}.Handle(c)
 }
 

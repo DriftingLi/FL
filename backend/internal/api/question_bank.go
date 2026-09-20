@@ -576,9 +576,6 @@ func (h *QuestionBankHandler) GetStats(c *gin.Context) {
 			// #413：总数按当前证件题库池口径（拦截器已注入 credential_id；缺省 = 不分区）。
 			return h.svc.GetStats(middleware.CredentialIDPtr(c)), nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.QuestionBankStatsDTO) {
-			response.Success(c, resp)
-		},
 	}.Handle(c)
 }
 

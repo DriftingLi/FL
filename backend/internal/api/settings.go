@@ -62,9 +62,6 @@ func (h *AIConfigHandler) ListConfigs(c *gin.Context) {
 			return &list, nil
 		},
 		ErrStatus: errStatusAllPrefix(http.StatusInternalServerError, "查询失败: "),
-		Render: func(c *gin.Context, _ *struct{}, resp *[]service.AIConfigDTO) {
-			response.Success(c, *resp)
-		},
 	}.Handle(c)
 }
 
@@ -232,9 +229,6 @@ func (h *AIConfigHandler) ListBindings(c *gin.Context) {
 			return &list, nil
 		},
 		ErrStatus: errStatusAllPrefix(http.StatusInternalServerError, "查询失败: "),
-		Render: func(c *gin.Context, _ *struct{}, resp *[]service.FeatureBindingDTO) {
-			response.Success(c, *resp)
-		},
 	}.Handle(c)
 }
 

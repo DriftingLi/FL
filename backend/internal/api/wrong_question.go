@@ -241,9 +241,6 @@ func (h *WrongQuestionHandler) GetStats(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *getWrongStatsReq) (*service.WrongQuestionStatsDTO, error) {
 			return h.svc.GetStats(req.StudentID), nil
 		},
-		Render: func(c *gin.Context, _ *getWrongStatsReq, resp *service.WrongQuestionStatsDTO) {
-			response.Success(c, resp)
-		},
 	}.Handle(c)
 }
 

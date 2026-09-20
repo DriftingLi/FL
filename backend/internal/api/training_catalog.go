@@ -104,9 +104,6 @@ func (h *TrainingCatalogHandler) GetCatalogTree(c *gin.Context) {
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.CatalogTreeDTO, error) {
 			return h.svc.GetCatalogTree(queryIDPtr(c, "credential_id")), nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.CatalogTreeDTO) {
-			response.Success(c, resp)
-		},
 	}.Handle(c)
 }
 
@@ -162,9 +159,6 @@ func (h *TrainingCatalogHandler) GetAdminCatalogTree(c *gin.Context) {
 	Endpoint[struct{}, service.CatalogTreeDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.CatalogTreeDTO, error) {
 			return h.svc.GetAdminCatalogTree(), nil
-		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.CatalogTreeDTO) {
-			response.Success(c, resp)
 		},
 	}.Handle(c)
 }
@@ -747,9 +741,6 @@ func (h *TrainingCatalogHandler) ListGroupedCredentials(c *gin.Context) {
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.GroupedCredentialsDTO, error) {
 			result := h.svc.ListGroupedCredentials()
 			return &result, nil
-		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.GroupedCredentialsDTO) {
-			response.Success(c, *resp)
 		},
 	}.Handle(c)
 }

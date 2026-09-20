@@ -10,7 +10,6 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
-	"forklift-training/pkg/response"
 )
 
 // StudentHandler 学员端 handler。
@@ -136,9 +135,6 @@ func (h *StudentHandler) GetStudyStats(c *gin.Context) {
 		},
 		Invoke: func(ctx context.Context, req *studyStatsReq) (*service.StudyDailyStatsDTO, error) {
 			return h.svc.GetStudyStats(req.UserID, req.Days), nil
-		},
-		Render: func(c *gin.Context, _ *studyStatsReq, resp *service.StudyDailyStatsDTO) {
-			response.Success(c, resp)
 		},
 	}.Handle(c)
 }

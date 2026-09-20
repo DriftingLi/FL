@@ -55,9 +55,6 @@ func (h *JobCardHandler) Get(c *gin.Context) {
 			{sentinel: gorm.ErrRecordNotFound, status: http.StatusNotFound, message: "简历不存在"},
 			{sentinel: nil, status: http.StatusInternalServerError},
 		}},
-		Render: func(c *gin.Context, _ *resumeGetReq, resp *service.JobCardDTO) {
-			response.Success(c, resp)
-		},
 	}.Handle(c)
 }
 

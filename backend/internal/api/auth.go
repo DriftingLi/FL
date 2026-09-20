@@ -250,9 +250,6 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *meReq) (*service.ProfileDTO, error) {
 			return h.authSvc.GetProfile(req.UserID, req.Role, req.Account), nil
 		},
-		Render: func(c *gin.Context, _ *meReq, resp *service.ProfileDTO) {
-			response.Success(c, resp)
-		},
 	}.Handle(c)
 }
 

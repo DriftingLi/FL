@@ -11,7 +11,6 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
-	"forklift-training/pkg/response"
 )
 
 // PracticeModeHandler 题库练习 handler。
@@ -179,9 +178,6 @@ func (h *PracticeModeHandler) GetSequentialProgress(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *studentIDReq) (*service.ProgressResultDTO, error) {
 			// #413：透传证件参数，进度返回体附带实时池总数。
 			return h.svc.GetSequentialProgress(req.StudentID, middleware.CredentialIDPtr(c)), nil
-		},
-		Render: func(c *gin.Context, _ *studentIDReq, resp *service.ProgressResultDTO) {
-			response.Success(c, resp)
 		},
 	}.Handle(c)
 }
@@ -362,9 +358,6 @@ func (h *PracticeModeHandler) GetPracticeStats(c *gin.Context) {
 			return h.svc.GetPracticeStats(req.StudentID, req.CredentialID)
 		},
 		ErrStatus: errStatusAllMsg(http.StatusInternalServerError, "查询失败"),
-		Render: func(c *gin.Context, _ *practiceStatsReq, resp *service.PracticePracticeStatsDTO) {
-			response.Success(c, resp)
-		},
 	}.Handle(c)
 }
 
@@ -395,9 +388,6 @@ func (h *PracticeModeHandler) GetStats(c *gin.Context) {
 		},
 		Invoke: func(ctx context.Context, req *practiceStatsReq) (*service.PracticeStatsDTO, error) {
 			return h.svc.GetStats(req.StudentID, req.CredentialID), nil
-		},
-		Render: func(c *gin.Context, _ *practiceStatsReq, resp *service.PracticeStatsDTO) {
-			response.Success(c, resp)
 		},
 	}.Handle(c)
 }

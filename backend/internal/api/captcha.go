@@ -9,7 +9,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/captcha"
-	"forklift-training/pkg/response"
 )
 
 // GenerateCaptchaDTO 图形验证码生成结果的展示对象（shape-lock：顶层键集 {id, image}）。
@@ -53,8 +52,5 @@ func (h *CaptchaHandler) Generate(c *gin.Context) {
 			return &GenerateCaptchaDTO{ID: id, Image: imageURL}, nil
 		},
 		ErrStatus: errStatusAllMsg(http.StatusInternalServerError, "图形验证码生成失败，请重试"),
-		Render: func(c *gin.Context, _ *struct{}, resp *GenerateCaptchaDTO) {
-			response.Success(c, resp)
-		},
 	}.Handle(c)
 }

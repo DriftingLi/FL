@@ -71,9 +71,6 @@ func (h *NotificationHandler) List(c *gin.Context) {
 			return h.svc.List(req.UserID, req.Page, req.PageSize)
 		},
 		ErrStatus: errStatusAllPrefix(http.StatusInternalServerError, "查询失败: "),
-		Render: func(c *gin.Context, _ *notificationListReq, resp *service.NotificationListPageResult) {
-			response.Success(c, resp)
-		},
 	}.Handle(c)
 }
 

@@ -11,7 +11,6 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
-	"forklift-training/pkg/response"
 )
 
 // ProfileReviewHandler 资料审核 handler。
@@ -75,9 +74,6 @@ func (h *ProfileReviewHandler) ListRequests(c *gin.Context) {
 			return h.svc.ListRequests(req.Status, req.Page, req.PageSize)
 		},
 		ErrStatus: errStatusAllPrefix(http.StatusInternalServerError, "查询失败: "),
-		Render: func(c *gin.Context, _ *listRequestsReq, resp *service.ProfileChangeRequestPageResult) {
-			response.Success(c, resp)
-		},
 	}.Handle(c)
 }
 

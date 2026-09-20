@@ -235,9 +235,6 @@ func (h *ForumHandler) ListTopics(c *gin.Context) {
 			})
 		},
 		ErrStatus: forumErrStatus,
-		Render: func(c *gin.Context, _ *listTopicsReq, resp *service.ForumTopicPageResult) {
-			response.Success(c, resp)
-		},
 	}.Handle(c)
 }
 
@@ -336,9 +333,6 @@ func (h *ForumHandler) GetTopic(c *gin.Context) {
 			{sentinel: gorm.ErrRecordNotFound, status: http.StatusNotFound, message: "主题不存在"},
 			{sentinel: nil, status: http.StatusInternalServerError},
 		}},
-		Render: func(c *gin.Context, _ *topicGetReq, resp *service.ForumTopicDetailDTO) {
-			response.Success(c, resp)
-		},
 	}.Handle(c)
 }
 

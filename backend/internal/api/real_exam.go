@@ -10,7 +10,6 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
-	"forklift-training/pkg/response"
 )
 
 // RealExamHandler 真题套卷 handler。
@@ -70,9 +69,6 @@ func (h *RealExamHandler) ListPapers(c *gin.Context) {
 			result := h.svc.ListPapers(req.UserID, req.CredentialID)
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *listPapersReq, resp *[]service.RealExamPaperDTO) {
-			response.Success(c, *resp)
-		},
 	}.Handle(c)
 }
 
@@ -110,9 +106,6 @@ func (h *RealExamHandler) Redeem(c *gin.Context) {
 			return h.points.RedeemRealPaper(ctx, req.UserID, req.PaperID)
 		},
 		ErrStatus: errStatusAll(http.StatusNotFound),
-		Render: func(c *gin.Context, _ *paperActionReq, resp *service.RedeemResult) {
-			response.Success(c, resp)
-		},
 	}.Handle(c)
 }
 
@@ -134,9 +127,6 @@ func (h *RealExamHandler) StartPractice(c *gin.Context) {
 			return h.svc.StartPaperPractice(req.UserID, req.PaperID)
 		},
 		ErrStatus: errStatusAll(http.StatusNotFound),
-		Render: func(c *gin.Context, _ *paperActionReq, resp *service.PracticeStartResultDTO) {
-			response.Success(c, resp)
-		},
 	}.Handle(c)
 }
 
@@ -158,8 +148,5 @@ func (h *RealExamHandler) StartExam(c *gin.Context) {
 			return h.svc.StartPaperExam(req.UserID, req.PaperID)
 		},
 		ErrStatus: errStatusAll(http.StatusNotFound),
-		Render: func(c *gin.Context, _ *paperActionReq, resp *service.MockExamStartDTO) {
-			response.Success(c, resp)
-		},
 	}.Handle(c)
 }

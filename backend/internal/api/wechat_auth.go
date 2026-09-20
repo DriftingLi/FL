@@ -12,7 +12,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/service"
-	"forklift-training/pkg/response"
 )
 
 // WechatAuthHandler 微信登录 handler。
@@ -75,9 +74,6 @@ func (h *WechatAuthHandler) GetQRCodeInfo(c *gin.Context) {
 	Endpoint[struct{}, service.WechatQRCodeInfoDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.WechatQRCodeInfoDTO, error) {
 			return h.svc.QRCodeInfo(), nil
-		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.WechatQRCodeInfoDTO) {
-			response.Success(c, *resp)
 		},
 	}.Handle(c)
 }

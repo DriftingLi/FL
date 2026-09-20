@@ -440,9 +440,6 @@ func (h *AdminHandler) ListHrwaiUsers(c *gin.Context) {
 			return h.adminSvc.ListHrwaiUsers(req.Page, req.PageSize, req.Keyword)
 		},
 		ErrStatus: errStatusAllMsg(http.StatusBadRequest, "查询用户列表失败"),
-		Render: func(c *gin.Context, _ *hrwaiUserListReq, resp *service.HrwaiUserPageResult) {
-			response.Success(c, resp)
-		},
 	}.Handle(c)
 }
 
@@ -798,9 +795,6 @@ func (h *AdminHandler) GetStatistics(c *gin.Context) {
 	Endpoint[struct{}, service.AdminStatisticsDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.AdminStatisticsDTO, error) {
 			return h.adminSvc.GetStatistics(), nil
-		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.AdminStatisticsDTO) {
-			response.Success(c, resp)
 		},
 	}.Handle(c)
 }
