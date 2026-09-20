@@ -35,9 +35,14 @@ func TestContactDecisionWindowOnPostgres(t *testing.T) {
 	other := testutil.SeedStudent(t, db, "win_stu_other", "x")
 
 	// 1. 库层形状：偏索引仍在（唯一性仍由库兜），000039 的 CHECK 已生效。
+	//
+	// 两条目录查询都**必须按 schema 收窄**：`go test ./...` 并发跑多个包，它们共用同一个
+	// 测试库、各自建随机 schema，而 pg_indexes / pg_constraint 是全库视图——不收窄就会
+	// 数到别的包那份同名对象（本文件首跑正是因此判红：CHECK 数到 2 行）。
 	var indexDef string
 	if err := db.Raw(`SELECT indexdef FROM pg_indexes
-		WHERE tablename = 'contact_requests' AND indexname = 'idx_contact_requests_pending_unique'`).
+		WHERE schemaname = current_schema()
+		  AND tablename = 'contact_requests' AND indexname = 'idx_contact_requests_pending_unique'`).
 		Scan(&indexDef).Error; err != nil {
 		t.Fatalf("查偏索引: %v", err)
 	}
@@ -45,12 +50,15 @@ func TestContactDecisionWindowOnPostgres(t *testing.T) {
 		t.Fatalf("pending 偏索引不再是偏索引（应用层放宽后唯一性就没了兜底）：%s", indexDef)
 	}
 	var chkCount int64
-	if err := db.Raw(`SELECT count(*) FROM pg_constraint WHERE conname = 'chk_contact_requests_pending_window'`).
+	if err := db.Raw(`SELECT count(*) FROM pg_constraint c
+		JOIN pg_class t ON t.oid = c.conrelid
+		JOIN pg_namespace n ON n.oid = t.relnamespace
+		WHERE n.nspname = current_schema() AND c.conname = 'chk_contact_requests_pending_window'`).
 		Scan(&chkCount).Error; err != nil {
 		t.Fatalf("查 CHECK: %v", err)
 	}
 	if chkCount != 1 {
-		t.Fatalf("迁移 000039 的 CHECK 不存在（%d 行）", chkCount)
+		t.Fatalf("迁移 000039 的 CHECK 在本 schema 不存在（%d 行）", chkCount)
 	}
 
 	// 2. CHECK 的两面：pending 无窗口必须被拒；approved 无窗口必须可写。
