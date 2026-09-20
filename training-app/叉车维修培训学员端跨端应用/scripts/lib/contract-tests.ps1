@@ -49,5 +49,7 @@ function Get-ContractTestPattern {
     # contractTestPattern → 本真源自身的运行期守护（**pattern 必须自指**，否则该守护永不执行）
     # contractReaderEol → contractReaderEolContract（ADR-0019 读取层归一的共享读者守护）
     # resumeAttachment → resumeAttachmentContract（#1198：附件删除端点两端同源；错路径不得回归）
-    return 'levelDetect|envCheck|testCompile|buildDeploy|autoScreenshot|screenshotDiff|evidenceGen|devFinish|hxBusyGate|hxRun|hxTimingBehavior|hxError|hxLaunchDetach|capabilitySurface|concurrent401Refresh|contractTestPattern|contractReaderEol|resumeAttachment'
+    # recruiterResume → recruiterResumeContract / recruiterResumeBehavior（#1196：脱敏字段清单与后端
+    #                 resume_projection.go 逐项对账、未授权态不渲染敏感面、打码 PDF 出口、8 维筛选）
+    return 'levelDetect|envCheck|testCompile|buildDeploy|autoScreenshot|screenshotDiff|evidenceGen|devFinish|hxBusyGate|hxRun|hxTimingBehavior|hxError|hxLaunchDetach|capabilitySurface|concurrent401Refresh|contractTestPattern|contractReaderEol|resumeAttachment|recruiterResume'
 }

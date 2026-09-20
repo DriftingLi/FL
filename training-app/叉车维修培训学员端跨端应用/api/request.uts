@@ -197,6 +197,26 @@ function handleStatus(statusCode : number, body : UTSJSONObject, silent : boolea
         return false
     }
 
+    // 403：**已认证但无权限**（#1196）。与 401 的区别是「身份没问题、这一项不给」——
+    // 典型是招聘者读未授权学员的明文联系方式（后端 `GetContact` 返回 403，不是 404）。
+    // 它必须与 401 分开：**不清登录态、不跳登录页**（唯二的 reLaunch 出口是 handleUnauthorized，
+    // 见 `utils/concurrent401RefreshContract.test.js` 的 C2）。
+    // 错误对象挂 `statusCode`，让调用方能把「预期分支」（如详情页的未授权态）与真失败分开；
+    // 调用方不需要时它只是多了一个字段，行为与既有的「HTTP 错误」分支一致。
+    if (statusCode == 403) {
+        let forbiddenMsg = '无权限访问'
+        const forbiddenBodyMsg = body['message']
+        if (forbiddenBodyMsg != null) {
+            forbiddenMsg = forbiddenBodyMsg as string
+        }
+        showError(forbiddenMsg, silent)
+        const forbiddenErr = new Error(forbiddenMsg)
+        const forbiddenAny = forbiddenErr as any
+        forbiddenAny.statusCode = 403
+        reject(forbiddenErr)
+        return true
+    }
+
     // HTTP 错误
     if (statusCode < 200 || statusCode >= 300) {
         let msg = `请求失败 (${statusCode})`
