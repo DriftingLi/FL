@@ -134,6 +134,23 @@ async function loginAsRecruiter(params : LoginParams) : Promise<void> {
     }
 }
 
+/**
+ * 招聘者退出登录（ADR-0022 ④ 步骤 P2）
+ *
+ * 为什么**不**复用 `logout()`：`logout()` 走的是 `clearAuthData()`，它按 ADR-0004
+ * **故意保留** `auth_secure_credentials` 与 `auth_refresh_token`（学员的快捷登录续期链）。
+ * 招聘者按 ADR-0021 ② 根本没有记住密码 / 生物识别 ⇒ 复用会把一个属于学员语义的
+ * refresh_token 槽留下，同时角色标记 `auth_active_role` 也会停在 `recruiter`，
+ * 让下一个学员态的 401 被送进招聘者登录页。
+ *
+ * 故招聘者退出 = **身份槽整体复位**（与 P1 的互斥清槽同一处实现：`clearIdentityForSwitch()`），
+ * 再回招聘者登录页。这里**不**改 `clearAuthData()` 的任何既有语义。
+ */
+function logoutRecruiter() : void {
+    clearIdentityForSwitch()
+    uni.reLaunch({ url: '/pages/recruiter/login' })
+}
+
 function restoreFromStorage() : boolean {
     const t = getStorage(STORAGE_KEY_TOKEN)
     if (t.length == 0) {
@@ -439,6 +456,7 @@ export function useAuthStore() : AuthStore {
         loginByCode: (params : CodeLoginParams) : Promise<void> => loginByCode(params),
         loginByWechat: () : Promise<WechatLoginResult> => loginByWechat(),
         loginAsRecruiter: (params : LoginParams) : Promise<void> => loginAsRecruiter(params),
+        logoutRecruiter: () : void => logoutRecruiter(),
         logout: () : Promise<void> => logout(),
         updateUser: (patch : UpdateProfileParams) : void => updateUser(patch),
     } as AuthStore

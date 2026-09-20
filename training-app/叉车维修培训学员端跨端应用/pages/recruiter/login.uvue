@@ -168,7 +168,9 @@
             uni.hideLoading()
             uni.showToast({ title: '登录成功', icon: 'success', duration: 1000 })
             setTimeout(() => {
-                uni.reLaunch({ url: '/pages/dashboard/dashboard' })
+                // 落到招聘者工作区的首页 = 职位段（ADR-0022 ②「首页即职位段」）；
+                // P1 当时还不存在这个路由，故先指到学员 dashboard，P2 接线时改到本处
+                uni.reLaunch({ url: '/pages/recruiter/jobs' })
             }, 500)
         } catch (e) {
             uni.hideLoading()

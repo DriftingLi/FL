@@ -21,6 +21,41 @@
             }
         },
         {
+            "path": "pages/recruiter/jobs",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "工作台"
+            }
+        },
+        {
+            "path": "pages/recruiter/resumes",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "工作台"
+            }
+        },
+        {
+            "path": "pages/recruiter/contacts",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "工作台"
+            }
+        },
+        {
+            "path": "pages/recruiter/applications",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "投递"
+            }
+        },
+        {
+            "path": "pages/recruiter/me",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "我的"
+            }
+        },
+        {
             "path": "pages/register/register",
             "style": {
                 "navigationBarTitleText": "注册"
