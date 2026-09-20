@@ -1,7 +1,7 @@
-// 域级哨兵→状态码表（#610/#611）测试：
-//   - 骨架行为：查表命中 / 未命中走 fallback / 未命中无 fallback 走 500 / 自定义 Render 覆盖域表 /
-//     ParseError 优先于域表 / wrap 错误以 errors.Is 命中
-//   - 每域表内容快照：钉住哨兵身份、状态码、条数、顺序与 fallback，防漂移
+// 域级哨兵→状态码表（#610/#611；票1b 起为端点错误面唯一出口）测试：
+//   - 骨架行为：查表命中 / 未命中走 fallback / 未命中无 fallback 走 500 / Render 只写成功面 /
+//     ParseError 优先于域表 / 无条件条目优先于 ParseError / 固定文案槽 / wrap 错误以 errors.Is 命中
+//   - 每域表内容快照：钉住哨兵身份、状态码、固定文案、条数、顺序与 fallback，防漂移
 package api
 
 import (
@@ -25,7 +25,7 @@ var (
 
 // testTable 命中 A → 404，其余兜底 400。
 var testTable = &errStatusTable{
-	entries:  []errStatusEntry{{errSentinelA, http.StatusNotFound}},
+	entries:  []errStatusEntry{{sentinel: errSentinelA, status: http.StatusNotFound}},
 	fallback: http.StatusBadRequest,
 }
 
@@ -66,7 +66,7 @@ func TestEndpointErrStatus_TableMiss_NoFallback_500(t *testing.T) {
 		Invoke: func(ctx context.Context, req *int) (*string, error) {
 			return nil, errSentinelB
 		},
-		ErrStatus: &errStatusTable{entries: []errStatusEntry{{errSentinelA, http.StatusNotFound}}},
+		ErrStatus: &errStatusTable{entries: []errStatusEntry{{sentinel: errSentinelA, status: http.StatusNotFound}}},
 	}
 	w := doEndpoint(t, e)
 	if w.Code != http.StatusInternalServerError {
@@ -74,21 +74,40 @@ func TestEndpointErrStatus_TableMiss_NoFallback_500(t *testing.T) {
 	}
 }
 
-// TestEndpointErrStatus_CustomRender_OverridesTable 自定义 Render 优先级高于域表：
-// 表会判 404，但 Render 全权渲染时域表不生效。
-func TestEndpointErrStatus_CustomRender_OverridesTable(t *testing.T) {
-	e := Endpoint[int, string]{
+// TestEndpointErrStatus_RenderCannotOverrideTable 票1b（ADR-0060 §1）：Render 只写成功面。
+// 错误面归骨架查域表——自定义 Render 既看不到 err、也不得被调用；成功时 Render 说了算。
+func TestEndpointErrStatus_RenderCannotOverrideTable(t *testing.T) {
+	rendered := 0
+	render := func(c *gin.Context, _ *int, resp *string) {
+		rendered++
+		c.JSON(http.StatusTeapot, gin.H{"code": 418, "message": deref(resp)})
+	}
+	// 错误面：testTable 命中 404，Render 不参与
+	w := doEndpoint(t, Endpoint[int, string]{
+		Invoke:    func(ctx context.Context, req *int) (*string, error) { return nil, errSentinelA },
+		ErrStatus: testTable,
+		Render:    render,
+	})
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("状态码 = %d, 期望 404（错误面归域表）", w.Code)
+	}
+	if rendered != 0 {
+		t.Fatalf("错误面调用了 Render %d 次，期望 0（票1b：err 不在 Render 签名上）", rendered)
+	}
+	// 成功面：Render 全权
+	w = doEndpoint(t, Endpoint[int, string]{
 		Invoke: func(ctx context.Context, req *int) (*string, error) {
-			return nil, errSentinelA // 命中表内 404，但 Render 覆盖之
-		},
-		Render: func(c *gin.Context, _ *int, _ *string, err error) {
-			c.JSON(http.StatusTeapot, map[string]any{"code": 418, "message": err.Error()})
+			v := "ok"
+			return &v, nil
 		},
 		ErrStatus: testTable,
-	}
-	w := doEndpoint(t, e)
+		Render:    render,
+	})
 	if w.Code != http.StatusTeapot {
-		t.Fatalf("状态码 = %d, 期望 418（自定义 Render 覆盖域表）", w.Code)
+		t.Fatalf("状态码 = %d, 期望 418（成功面归 Render）", w.Code)
+	}
+	if rendered != 1 {
+		t.Fatalf("成功面 Render 调用 %d 次, 期望 1", rendered)
 	}
 }
 
@@ -107,7 +126,59 @@ func TestEndpointErrStatus_ParseError_PrecedesTable(t *testing.T) {
 	}
 }
 
-// assertTableSnapshot 钉住域表全集：条数、顺序、哨兵身份、状态码、fallback。
+// TestEndpointErrStatus_UnconditionalEntry_PrecedesParseError 票1b 优先级 1：
+// sentinel==nil 的无条件条目命中一切错误，含 *ParseError（保住旧闭包「一个固定码包打所有错误」的形状）。
+func TestEndpointErrStatus_UnconditionalEntry_PrecedesParseError(t *testing.T) {
+	e := Endpoint[int, string]{
+		Parse: func(c *gin.Context) (*int, error) {
+			return nil, &ParseError{Status: http.StatusNotFound, Message: "路径参数无效"}
+		},
+		ErrStatus: errStatusAll(http.StatusInternalServerError),
+	}
+	w := doEndpoint(t, e)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("状态码 = %d, 期望 500（无条件条目优先于 ParseError）", w.Code)
+	}
+}
+
+// TestEndpointErrStatus_FixedMessageEntry 票1b 的固定文案槽：message 非空即渲染该文案而非 err.Error()
+// （收编自旧闭包的 response.Xxx(c, "字面量") 与 gorm.ErrRecordNotFound → 404「主题不存在」两族）。
+func TestEndpointErrStatus_FixedMessageEntry(t *testing.T) {
+	// 「哨兵 + 尾部无条件条目」= 旧 if-chain 的形状：先命中先用，尾部 else 兜一切（含 ParseError）
+	tbl := &errStatusTable{entries: []errStatusEntry{
+		{sentinel: errSentinelA, status: http.StatusNotFound, message: "主题不存在"},
+		{sentinel: nil, status: http.StatusBadRequest, message: "查询用户列表失败"},
+	}}
+	w := doEndpoint(t, Endpoint[int, string]{
+		Invoke:    func(ctx context.Context, req *int) (*string, error) { return nil, errors.New("底层噪声") },
+		ErrStatus: tbl,
+	})
+	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "查询用户列表失败") {
+		t.Fatalf("未命中哨兵应落尾部无条件条目: %d %s", w.Code, w.Body.String())
+	}
+	// 哨兵命中 → 固定文案（err.Error() 不外泄）
+	w = doEndpoint(t, Endpoint[int, string]{
+		Invoke:    func(ctx context.Context, req *int) (*string, error) { return nil, fmt.Errorf("ctx: %w", errSentinelA) },
+		ErrStatus: tbl,
+	})
+	if w.Code != http.StatusNotFound || !strings.Contains(w.Body.String(), "主题不存在") {
+		t.Fatalf("哨兵条目应先于无条件条目命中: %d %s", w.Code, w.Body.String())
+	}
+	// 真哨兵仍优先于 fallback（无无条件条目时 *ParseError 才落到规则 2）
+	w = doEndpoint(t, Endpoint[int, string]{
+		Parse: func(c *gin.Context) (*int, error) {
+			return nil, &ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
+		},
+		ErrStatus: &errStatusTable{entries: []errStatusEntry{
+			{sentinel: errSentinelA, status: http.StatusNotFound},
+		}, fallback: http.StatusBadRequest},
+	})
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("状态码 = %d, 期望 401（表内无无条件条目时 ParseError 走规则 2）", w.Code)
+	}
+}
+
+// assertTableSnapshot 钉住域表全集：条数、顺序、哨兵身份、状态码、固定文案、fallback。
 // 表内容变更时本测试即红——须有意识地同步更新快照（防状态码语义漂移）。
 func assertTableSnapshot(t *testing.T, name string, got *errStatusTable, want []errStatusEntry, wantFallback int) {
 	t.Helper()
@@ -128,6 +199,13 @@ func assertTableSnapshot(t *testing.T, name string, got *errStatusTable, want []
 		if g.status != w.status {
 			t.Fatalf("%s entries[%d] %v 状态码 = %d, 期望 %d", name, i, g.sentinel, g.status, w.status)
 		}
+		if g.message != w.message {
+			t.Fatalf("%s entries[%d] %v 固定文案 = %q, 期望 %q", name, i, g.sentinel, g.message, w.message)
+		}
+		if g.sentinel == nil {
+			t.Fatalf("%s entries[%d] 为无条件条目（sentinel==nil）：域表不得放无条件条目，"+
+				"它会把 *ParseError 一并吞掉，只允许出现在端点自带的 errStatusAll 表里", name, i)
+		}
 	}
 }
 
@@ -135,87 +213,87 @@ func assertTableSnapshot(t *testing.T, name string, got *errStatusTable, want []
 // #1098 追加：扣罚目标不存在 404、通知写失败 500）。
 func TestErrStatusTable_Snapshot_Points(t *testing.T) {
 	assertTableSnapshot(t, "pointsErrStatus", pointsErrStatus, []errStatusEntry{
-		{service.ErrTaskNotFound, http.StatusNotFound},
-		{service.ErrUserNotFound, http.StatusNotFound},
-		{service.ErrCourseNotFound, http.StatusBadRequest},
-		{service.ErrCourseNotRedeemable, http.StatusBadRequest},
-		{service.ErrAlreadyClaimed, http.StatusBadRequest},
-		{service.ErrDailyClaimLimit, http.StatusBadRequest},
-		{service.ErrInsufficientPoints, http.StatusBadRequest},
-		{service.ErrAlreadyRedeemed, http.StatusBadRequest},
-		{service.ErrPenaltyNotifyFailed, http.StatusInternalServerError},
+		{sentinel: service.ErrTaskNotFound, status: http.StatusNotFound},
+		{sentinel: service.ErrUserNotFound, status: http.StatusNotFound},
+		{sentinel: service.ErrCourseNotFound, status: http.StatusBadRequest},
+		{sentinel: service.ErrCourseNotRedeemable, status: http.StatusBadRequest},
+		{sentinel: service.ErrAlreadyClaimed, status: http.StatusBadRequest},
+		{sentinel: service.ErrDailyClaimLimit, status: http.StatusBadRequest},
+		{sentinel: service.ErrInsufficientPoints, status: http.StatusBadRequest},
+		{sentinel: service.ErrAlreadyRedeemed, status: http.StatusBadRequest},
+		{sentinel: service.ErrPenaltyNotifyFailed, status: http.StatusInternalServerError},
 	}, http.StatusBadRequest)
 }
 
 // TestErrStatusTable_Snapshot_Contribution 投稿域表快照（#611：不存在 404、其余 400、未设 fallback → 500）。
 func TestErrStatusTable_Snapshot_Contribution(t *testing.T) {
 	assertTableSnapshot(t, "contributionErrStatus", contributionErrStatus, []errStatusEntry{
-		{service.ErrContributionNotFound, http.StatusNotFound},
-		{service.ErrContributionNotOwner, http.StatusBadRequest},
-		{service.ErrContributionNotPending, http.StatusBadRequest},
-		{service.ErrContributionNotApproved, http.StatusBadRequest},
-		{service.ErrContributionQuotaDaily, http.StatusBadRequest},
-		{service.ErrContributionQuotaPending, http.StatusBadRequest},
-		{service.ErrContributionNoCredential, http.StatusBadRequest},
-		{service.ErrContributionTitleRequired, http.StatusBadRequest},
-		{service.ErrContributionIntroRequired, http.StatusBadRequest},
-		{service.ErrContributionFilesRequired, http.StatusBadRequest},
-		{service.ErrContributionFilesTooMany, http.StatusBadRequest},
-		{service.ErrContributionFileTooLarge, http.StatusBadRequest},
-		{service.ErrContributionTotalTooLarge, http.StatusBadRequest},
-		{service.ErrContributionFileInvalid, http.StatusBadRequest},
-		{service.ErrContributionRejectReason, http.StatusBadRequest},
-		{service.ErrContributionArchiveReason, http.StatusBadRequest},
-		{service.ErrContributionInvalidReportReason, http.StatusBadRequest},
+		{sentinel: service.ErrContributionNotFound, status: http.StatusNotFound},
+		{sentinel: service.ErrContributionNotOwner, status: http.StatusBadRequest},
+		{sentinel: service.ErrContributionNotPending, status: http.StatusBadRequest},
+		{sentinel: service.ErrContributionNotApproved, status: http.StatusBadRequest},
+		{sentinel: service.ErrContributionQuotaDaily, status: http.StatusBadRequest},
+		{sentinel: service.ErrContributionQuotaPending, status: http.StatusBadRequest},
+		{sentinel: service.ErrContributionNoCredential, status: http.StatusBadRequest},
+		{sentinel: service.ErrContributionTitleRequired, status: http.StatusBadRequest},
+		{sentinel: service.ErrContributionIntroRequired, status: http.StatusBadRequest},
+		{sentinel: service.ErrContributionFilesRequired, status: http.StatusBadRequest},
+		{sentinel: service.ErrContributionFilesTooMany, status: http.StatusBadRequest},
+		{sentinel: service.ErrContributionFileTooLarge, status: http.StatusBadRequest},
+		{sentinel: service.ErrContributionTotalTooLarge, status: http.StatusBadRequest},
+		{sentinel: service.ErrContributionFileInvalid, status: http.StatusBadRequest},
+		{sentinel: service.ErrContributionRejectReason, status: http.StatusBadRequest},
+		{sentinel: service.ErrContributionArchiveReason, status: http.StatusBadRequest},
+		{sentinel: service.ErrContributionInvalidReportReason, status: http.StatusBadRequest},
 	}, 0)
 }
 
 // TestErrStatusTable_Snapshot_Application 投递域表快照（#611）。
 func TestErrStatusTable_Snapshot_Application(t *testing.T) {
 	assertTableSnapshot(t, "applicationErrStatus", applicationErrStatus, []errStatusEntry{
-		{service.ErrApplyJobInactive, http.StatusNotFound},
-		{service.ErrJobNotFound, http.StatusNotFound},
-		{service.ErrApplyNotYours, http.StatusForbidden},
+		{sentinel: service.ErrApplyJobInactive, status: http.StatusNotFound},
+		{sentinel: service.ErrJobNotFound, status: http.StatusNotFound},
+		{sentinel: service.ErrApplyNotYours, status: http.StatusForbidden},
 	}, http.StatusBadRequest)
 }
 
 // TestErrStatusTable_Snapshot_JobReport 举报治理域表快照（#611）。
 func TestErrStatusTable_Snapshot_JobReport(t *testing.T) {
 	assertTableSnapshot(t, "jobReportErrStatus", jobReportErrStatus, []errStatusEntry{
-		{service.ErrReportJobNotFound, http.StatusNotFound},
-		{service.ErrReportNotFound, http.StatusNotFound},
+		{sentinel: service.ErrReportJobNotFound, status: http.StatusNotFound},
+		{sentinel: service.ErrReportNotFound, status: http.StatusNotFound},
 	}, http.StatusBadRequest)
 }
 
 // TestErrStatusTable_Snapshot_RecruiterApplication 企业侧投递域表快照（#611）。
 func TestErrStatusTable_Snapshot_RecruiterApplication(t *testing.T) {
 	assertTableSnapshot(t, "recruiterApplicationErrStatus", recruiterApplicationErrStatus, []errStatusEntry{
-		{service.ErrJobNotFound, http.StatusNotFound},
-		{service.ErrApplyNotFound, http.StatusNotFound},
-		{service.ErrApplyNotYours, http.StatusForbidden},
+		{sentinel: service.ErrJobNotFound, status: http.StatusNotFound},
+		{sentinel: service.ErrApplyNotFound, status: http.StatusNotFound},
+		{sentinel: service.ErrApplyNotYours, status: http.StatusForbidden},
 	}, http.StatusBadRequest)
 }
 
 // TestErrStatusTable_Snapshot_Job 职位域表快照（#611）。
 func TestErrStatusTable_Snapshot_Job(t *testing.T) {
 	assertTableSnapshot(t, "jobErrStatus", jobErrStatus, []errStatusEntry{
-		{service.ErrJobNotFound, http.StatusNotFound},
-		{service.ErrJobNotYours, http.StatusForbidden},
+		{sentinel: service.ErrJobNotFound, status: http.StatusNotFound},
+		{sentinel: service.ErrJobNotYours, status: http.StatusForbidden},
 	}, http.StatusBadRequest)
 }
 
 // TestErrStatusTable_Snapshot_QuestionBank 题库域表快照（#611；第十二波票 6 补写面哨兵族并撤 fallback——未命中即 500）。
 func TestErrStatusTable_Snapshot_QuestionBank(t *testing.T) {
 	assertTableSnapshot(t, "questionBankErrStatus", questionBankErrStatus, []errStatusEntry{
-		{service.ErrQuestionNotFound, http.StatusNotFound},
-		{service.ErrQuestionCredentialNotFound, http.StatusNotFound},
-		{service.ErrQuestionTypeInvalid, http.StatusBadRequest},
-		{service.ErrQuestionContentRequired, http.StatusBadRequest},
-		{service.ErrQuestionAnswerRequired, http.StatusBadRequest},
-		{service.ErrQuestionOptionsRequired, http.StatusBadRequest},
-		{service.ErrQuestionAnswerInvalid, http.StatusBadRequest},
-		{service.ErrSubmitNotDraft, http.StatusBadRequest},
-		{service.ErrRejectReasonRequired, http.StatusBadRequest},
+		{sentinel: service.ErrQuestionNotFound, status: http.StatusNotFound},
+		{sentinel: service.ErrQuestionCredentialNotFound, status: http.StatusNotFound},
+		{sentinel: service.ErrQuestionTypeInvalid, status: http.StatusBadRequest},
+		{sentinel: service.ErrQuestionContentRequired, status: http.StatusBadRequest},
+		{sentinel: service.ErrQuestionAnswerRequired, status: http.StatusBadRequest},
+		{sentinel: service.ErrQuestionOptionsRequired, status: http.StatusBadRequest},
+		{sentinel: service.ErrQuestionAnswerInvalid, status: http.StatusBadRequest},
+		{sentinel: service.ErrSubmitNotDraft, status: http.StatusBadRequest},
+		{sentinel: service.ErrRejectReasonRequired, status: http.StatusBadRequest},
 	}, 0)
 }
 
@@ -252,38 +330,38 @@ func TestQuestionBankErrStatus_Spectrum(t *testing.T) {
 // （存在性 404 / 所有权 403 / 状态前置与校验 400 / 未设 fallback → 未命中即 500）。
 func TestErrStatusTable_Snapshot_Forum(t *testing.T) {
 	assertTableSnapshot(t, "forumErrStatus", forumErrStatus, []errStatusEntry{
-		{service.ErrTopicNotFound, http.StatusNotFound},
-		{service.ErrReplyNotFound, http.StatusNotFound},
-		{service.ErrForumReportNotFound, http.StatusNotFound},
-		{service.ErrChapterNotFound, http.StatusNotFound},
-		{service.ErrNotTopicOwner, http.StatusForbidden},
-		{service.ErrNotTopicAuthor, http.StatusForbidden},
-		{service.ErrNotReplyAuthor, http.StatusForbidden},
-		{service.ErrAcceptOwnReply, http.StatusBadRequest},
-		{service.ErrAcceptNotQuestion, http.StatusBadRequest},
-		{service.ErrCancelAcceptNotQuestion, http.StatusBadRequest},
-		{service.ErrAcceptExperienceTopic, http.StatusBadRequest},
-		{service.ErrDesignateAcceptedTopic, http.StatusBadRequest},
-		{service.ErrUnfeatureExperienceTopic, http.StatusBadRequest},
-		{service.ErrCategoryLockedByAccept, http.StatusBadRequest},
-		{service.ErrQuestionChapterConflict, http.StatusBadRequest},
-		{service.ErrParentReplyMismatch, http.StatusBadRequest},
-		{service.ErrReplyTopicMismatch, http.StatusBadRequest},
-		{service.ErrContentFormatInvalid, http.StatusBadRequest},
-		{service.ErrCategoryInvalid, http.StatusBadRequest},
-		{service.ErrSolvedArgInvalid, http.StatusBadRequest},
-		{service.ErrFeaturedArgInvalid, http.StatusBadRequest},
-		{service.ErrExperienceArgInvalid, http.StatusBadRequest},
-		{service.ErrSolvedFilterScope, http.StatusBadRequest},
-		{service.ErrChapterIDRequired, http.StatusBadRequest},
-		{service.ErrTitleLength, http.StatusBadRequest},
-		{service.ErrContentLength, http.StatusBadRequest},
-		{service.ErrReplyContentLength, http.StatusBadRequest},
-		{service.ErrImagesTooMany, http.StatusBadRequest},
-		{service.ErrImageURLInvalid, http.StatusBadRequest},
-		{service.ErrReportReasonLength, http.StatusBadRequest},
-		{service.ErrReportTarget, http.StatusBadRequest},
-		{service.ErrReportStatusValue, http.StatusBadRequest},
+		{sentinel: service.ErrTopicNotFound, status: http.StatusNotFound},
+		{sentinel: service.ErrReplyNotFound, status: http.StatusNotFound},
+		{sentinel: service.ErrForumReportNotFound, status: http.StatusNotFound},
+		{sentinel: service.ErrChapterNotFound, status: http.StatusNotFound},
+		{sentinel: service.ErrNotTopicOwner, status: http.StatusForbidden},
+		{sentinel: service.ErrNotTopicAuthor, status: http.StatusForbidden},
+		{sentinel: service.ErrNotReplyAuthor, status: http.StatusForbidden},
+		{sentinel: service.ErrAcceptOwnReply, status: http.StatusBadRequest},
+		{sentinel: service.ErrAcceptNotQuestion, status: http.StatusBadRequest},
+		{sentinel: service.ErrCancelAcceptNotQuestion, status: http.StatusBadRequest},
+		{sentinel: service.ErrAcceptExperienceTopic, status: http.StatusBadRequest},
+		{sentinel: service.ErrDesignateAcceptedTopic, status: http.StatusBadRequest},
+		{sentinel: service.ErrUnfeatureExperienceTopic, status: http.StatusBadRequest},
+		{sentinel: service.ErrCategoryLockedByAccept, status: http.StatusBadRequest},
+		{sentinel: service.ErrQuestionChapterConflict, status: http.StatusBadRequest},
+		{sentinel: service.ErrParentReplyMismatch, status: http.StatusBadRequest},
+		{sentinel: service.ErrReplyTopicMismatch, status: http.StatusBadRequest},
+		{sentinel: service.ErrContentFormatInvalid, status: http.StatusBadRequest},
+		{sentinel: service.ErrCategoryInvalid, status: http.StatusBadRequest},
+		{sentinel: service.ErrSolvedArgInvalid, status: http.StatusBadRequest},
+		{sentinel: service.ErrFeaturedArgInvalid, status: http.StatusBadRequest},
+		{sentinel: service.ErrExperienceArgInvalid, status: http.StatusBadRequest},
+		{sentinel: service.ErrSolvedFilterScope, status: http.StatusBadRequest},
+		{sentinel: service.ErrChapterIDRequired, status: http.StatusBadRequest},
+		{sentinel: service.ErrTitleLength, status: http.StatusBadRequest},
+		{sentinel: service.ErrContentLength, status: http.StatusBadRequest},
+		{sentinel: service.ErrReplyContentLength, status: http.StatusBadRequest},
+		{sentinel: service.ErrImagesTooMany, status: http.StatusBadRequest},
+		{sentinel: service.ErrImageURLInvalid, status: http.StatusBadRequest},
+		{sentinel: service.ErrReportReasonLength, status: http.StatusBadRequest},
+		{sentinel: service.ErrReportTarget, status: http.StatusBadRequest},
+		{sentinel: service.ErrReportStatusValue, status: http.StatusBadRequest},
 	}, 0)
 }
 

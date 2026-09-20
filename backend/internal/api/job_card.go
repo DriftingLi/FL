@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -52,15 +51,11 @@ func (h *JobCardHandler) Get(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *resumeGetReq) (*service.JobCardDTO, error) {
 			return h.svc.Get(req.UserID)
 		},
-		Render: func(c *gin.Context, _ *resumeGetReq, resp *service.JobCardDTO, err error) {
-			if err != nil {
-				if errors.Is(err, gorm.ErrRecordNotFound) {
-					response.NotFound(c, "简历不存在")
-					return
-				}
-				response.ServerError(c, err.Error())
-				return
-			}
+		ErrStatus: &errStatusTable{entries: []errStatusEntry{
+			{sentinel: gorm.ErrRecordNotFound, status: http.StatusNotFound, message: "简历不存在"},
+			{sentinel: nil, status: http.StatusInternalServerError},
+		}},
+		Render: func(c *gin.Context, _ *resumeGetReq, resp *service.JobCardDTO) {
 			response.Success(c, resp)
 		},
 	}.Handle(c)

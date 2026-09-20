@@ -285,7 +285,7 @@ func (h *TutorHandler) BatchDeleteChapterFiles(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *batchDeleteFilesReq) (*service.BatchDeleteFilesResult, error) {
 			return h.svc.BatchDeleteChapterFiles(req.FileIDs), nil
 		},
-		Render: func(c *gin.Context, _ *batchDeleteFilesReq, resp *service.BatchDeleteFilesResult, _ error) {
+		Render: func(c *gin.Context, _ *batchDeleteFilesReq, resp *service.BatchDeleteFilesResult) {
 			response.SuccessWithMsg(c, "成功删除"+strconv.Itoa(resp.SuccessCount)+"个文件", resp)
 		},
 	}.Handle(c)

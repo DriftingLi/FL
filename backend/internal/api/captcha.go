@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 
@@ -51,11 +52,8 @@ func (h *CaptchaHandler) Generate(c *gin.Context) {
 			}
 			return &GenerateCaptchaDTO{ID: id, Image: imageURL}, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *GenerateCaptchaDTO, err error) {
-			if err != nil {
-				response.ServerError(c, "图形验证码生成失败，请重试")
-				return
-			}
+		ErrStatus: errStatusAllMsg(http.StatusInternalServerError, "图形验证码生成失败，请重试"),
+		Render: func(c *gin.Context, _ *struct{}, resp *GenerateCaptchaDTO) {
 			response.Success(c, resp)
 		},
 	}.Handle(c)

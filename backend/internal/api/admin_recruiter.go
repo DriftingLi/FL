@@ -93,11 +93,8 @@ func (h *AdminRecruiterHandler) ToggleStatus(c *gin.Context) {
 			}
 			return &service.StatusResultDTO{Status: int(next)}, nil
 		},
-		Render: func(c *gin.Context, _ *idParam, resp *service.StatusResultDTO, err error) {
-			if err != nil {
-				response.NotFound(c, err.Error())
-				return
-			}
+		ErrStatus: errStatusAll(http.StatusNotFound),
+		Render: func(c *gin.Context, _ *idParam, resp *service.StatusResultDTO) {
 			msg := "招聘者已启用"
 			if resp.Status == 0 {
 				msg = "招聘者已禁用"

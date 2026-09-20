@@ -61,11 +61,8 @@ func (h *AIConfigHandler) ListConfigs(c *gin.Context) {
 			}
 			return &list, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *[]service.AIConfigDTO, err error) {
-			if err != nil {
-				response.ServerError(c, "查询失败: "+err.Error())
-				return
-			}
+		ErrStatus: errStatusAll(http.StatusInternalServerError),
+		Render: func(c *gin.Context, _ *struct{}, resp *[]service.AIConfigDTO) {
 			response.Success(c, *resp)
 		},
 	}.Handle(c)
@@ -104,16 +101,8 @@ func (h *AIConfigHandler) CreateConfig(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		Render: func(c *gin.Context, _ *createConfigReq, _ *struct{}, err error) {
-			if err != nil {
-				var pe *ParseError
-				if asParseError(err, &pe) {
-					renderStatus(c, pe.Status, pe.Message)
-					return
-				}
-				response.ServerError(c, "创建失败: "+err.Error())
-				return
-			}
+		ErrStatus: &errStatusTable{fallback: http.StatusInternalServerError},
+		Render: func(c *gin.Context, _ *createConfigReq, _ *struct{}) {
 			response.SuccessWithMsg(c, "配置已创建", nil)
 		},
 	}.Handle(c)
@@ -158,16 +147,8 @@ func (h *AIConfigHandler) UpdateConfig(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		Render: func(c *gin.Context, _ *updateConfigReq, _ *struct{}, err error) {
-			if err != nil {
-				var pe *ParseError
-				if asParseError(err, &pe) {
-					renderStatus(c, pe.Status, pe.Message)
-					return
-				}
-				response.ServerError(c, "更新失败: "+err.Error())
-				return
-			}
+		ErrStatus: &errStatusTable{fallback: http.StatusInternalServerError},
+		Render: func(c *gin.Context, _ *updateConfigReq, _ *struct{}) {
 			response.SuccessWithMsg(c, "配置已更新", nil)
 		},
 	}.Handle(c)
@@ -250,11 +231,8 @@ func (h *AIConfigHandler) ListBindings(c *gin.Context) {
 			}
 			return &list, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *[]service.FeatureBindingDTO, err error) {
-			if err != nil {
-				response.ServerError(c, "查询失败: "+err.Error())
-				return
-			}
+		ErrStatus: errStatusAll(http.StatusInternalServerError),
+		Render: func(c *gin.Context, _ *struct{}, resp *[]service.FeatureBindingDTO) {
 			response.Success(c, *resp)
 		},
 	}.Handle(c)

@@ -180,7 +180,7 @@ func (h *PracticeModeHandler) GetSequentialProgress(c *gin.Context) {
 			// #413：透传证件参数，进度返回体附带实时池总数。
 			return h.svc.GetSequentialProgress(req.StudentID, middleware.CredentialIDPtr(c)), nil
 		},
-		Render: func(c *gin.Context, _ *studentIDReq, resp *service.ProgressResultDTO, _ error) {
+		Render: func(c *gin.Context, _ *studentIDReq, resp *service.ProgressResultDTO) {
 			response.Success(c, resp)
 		},
 	}.Handle(c)
@@ -361,11 +361,8 @@ func (h *PracticeModeHandler) GetPracticeStats(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *practiceStatsReq) (*service.PracticePracticeStatsDTO, error) {
 			return h.svc.GetPracticeStats(req.StudentID, req.CredentialID)
 		},
-		Render: func(c *gin.Context, _ *practiceStatsReq, resp *service.PracticePracticeStatsDTO, err error) {
-			if err != nil {
-				response.ServerError(c, "查询失败")
-				return
-			}
+		ErrStatus: errStatusAllMsg(http.StatusInternalServerError, "查询失败"),
+		Render: func(c *gin.Context, _ *practiceStatsReq, resp *service.PracticePracticeStatsDTO) {
 			response.Success(c, resp)
 		},
 	}.Handle(c)
@@ -399,7 +396,7 @@ func (h *PracticeModeHandler) GetStats(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *practiceStatsReq) (*service.PracticeStatsDTO, error) {
 			return h.svc.GetStats(req.StudentID, req.CredentialID), nil
 		},
-		Render: func(c *gin.Context, _ *practiceStatsReq, resp *service.PracticeStatsDTO, _ error) {
+		Render: func(c *gin.Context, _ *practiceStatsReq, resp *service.PracticeStatsDTO) {
 			response.Success(c, resp)
 		},
 	}.Handle(c)

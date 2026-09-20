@@ -163,11 +163,8 @@ func (h *AIAssistantHandler) SaveUserModel(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		Render: func(c *gin.Context, _ *aiUserModelSaveReq, _ *struct{}, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
+		ErrStatus: errStatusAll(http.StatusBadRequest),
+		Render: func(c *gin.Context, _ *aiUserModelSaveReq, _ *struct{}) {
 			response.Success(c, nil)
 		},
 	}.Handle(c)
@@ -204,15 +201,11 @@ func (h *AIAssistantHandler) DeleteUserModel(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		Render: func(c *gin.Context, _ *aiModelIDReq, _ *struct{}, err error) {
-			if err != nil {
-				if err == gorm.ErrRecordNotFound {
-					response.NotFound(c, "模型不存在")
-					return
-				}
-				response.ServerError(c, err.Error())
-				return
-			}
+		ErrStatus: &errStatusTable{entries: []errStatusEntry{
+			{sentinel: gorm.ErrRecordNotFound, status: http.StatusNotFound, message: "模型不存在"},
+			{sentinel: nil, status: http.StatusInternalServerError},
+		}},
+		Render: func(c *gin.Context, _ *aiModelIDReq, _ *struct{}) {
 			response.Success(c, nil)
 		},
 	}.Handle(c)
@@ -310,15 +303,11 @@ func (h *AIAssistantHandler) DeleteSession(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		Render: func(c *gin.Context, _ *aiModelIDReq, _ *struct{}, err error) {
-			if err != nil {
-				if err == gorm.ErrRecordNotFound {
-					response.NotFound(c, "会话不存在")
-					return
-				}
-				response.ServerError(c, err.Error())
-				return
-			}
+		ErrStatus: &errStatusTable{entries: []errStatusEntry{
+			{sentinel: gorm.ErrRecordNotFound, status: http.StatusNotFound, message: "会话不存在"},
+			{sentinel: nil, status: http.StatusInternalServerError},
+		}},
+		Render: func(c *gin.Context, _ *aiModelIDReq, _ *struct{}) {
 			response.Success(c, nil)
 		},
 	}.Handle(c)
@@ -360,15 +349,11 @@ func (h *AIAssistantHandler) RenameSession(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		Render: func(c *gin.Context, _ *aiSessionRenameReq, _ *struct{}, err error) {
-			if err != nil {
-				if err == gorm.ErrRecordNotFound {
-					response.NotFound(c, "会话不存在")
-					return
-				}
-				response.BadRequest(c, err.Error())
-				return
-			}
+		ErrStatus: &errStatusTable{entries: []errStatusEntry{
+			{sentinel: gorm.ErrRecordNotFound, status: http.StatusNotFound, message: "会话不存在"},
+			{sentinel: nil, status: http.StatusBadRequest},
+		}},
+		Render: func(c *gin.Context, _ *aiSessionRenameReq, _ *struct{}) {
 			response.Success(c, service.AISessionRenameResultDTO{Message: "已更新会话标题"})
 		},
 	}.Handle(c)
@@ -406,15 +391,11 @@ func (h *AIAssistantHandler) GetSessionMessages(c *gin.Context) {
 			}
 			return &msgs, nil
 		},
-		Render: func(c *gin.Context, _ *aiModelIDReq, resp *[]service.AIChatMessageDTO, err error) {
-			if err != nil {
-				if err == gorm.ErrRecordNotFound {
-					response.NotFound(c, "会话不存在")
-					return
-				}
-				response.ServerError(c, err.Error())
-				return
-			}
+		ErrStatus: &errStatusTable{entries: []errStatusEntry{
+			{sentinel: gorm.ErrRecordNotFound, status: http.StatusNotFound, message: "会话不存在"},
+			{sentinel: nil, status: http.StatusInternalServerError},
+		}},
+		Render: func(c *gin.Context, _ *aiModelIDReq, resp *[]service.AIChatMessageDTO) {
 			response.Success(c, resp)
 		},
 	}.Handle(c)

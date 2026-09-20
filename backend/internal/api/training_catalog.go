@@ -104,7 +104,7 @@ func (h *TrainingCatalogHandler) GetCatalogTree(c *gin.Context) {
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.CatalogTreeDTO, error) {
 			return h.svc.GetCatalogTree(queryIDPtr(c, "credential_id")), nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.CatalogTreeDTO, _ error) {
+		Render: func(c *gin.Context, _ *struct{}, resp *service.CatalogTreeDTO) {
 			response.Success(c, resp)
 		},
 	}.Handle(c)
@@ -123,7 +123,7 @@ func (h *TrainingCatalogHandler) ListPublicLevels(c *gin.Context) {
 			result := h.svc.ListLevels(true)
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *[]service.LevelDict, _ error) {
+		Render: func(c *gin.Context, _ *struct{}, resp *[]service.LevelDict) {
 			response.Success(c, service.LevelListDTO{Levels: *resp})
 		},
 	}.Handle(c)
@@ -143,7 +143,7 @@ func (h *TrainingCatalogHandler) ListPublicTags(c *gin.Context) {
 			result := h.svc.ListQuestionTags(true, false, queryIDPtr(c, "credential_id")) // 学员端专项练习：隐藏来源标记标签
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *[]service.QuestionTagDict, _ error) {
+		Render: func(c *gin.Context, _ *struct{}, resp *[]service.QuestionTagDict) {
 			response.Success(c, service.QuestionTagListDTO{Tags: *resp})
 		},
 	}.Handle(c)
@@ -163,7 +163,7 @@ func (h *TrainingCatalogHandler) GetAdminCatalogTree(c *gin.Context) {
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.CatalogTreeDTO, error) {
 			return h.svc.GetAdminCatalogTree(), nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.CatalogTreeDTO, _ error) {
+		Render: func(c *gin.Context, _ *struct{}, resp *service.CatalogTreeDTO) {
 			response.Success(c, resp)
 		},
 	}.Handle(c)
@@ -184,7 +184,7 @@ func (h *TrainingCatalogHandler) ListSpecialties(c *gin.Context) {
 			result := h.svc.ListSpecialties(false)
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *[]service.SpecialtyDict, _ error) {
+		Render: func(c *gin.Context, _ *struct{}, resp *[]service.SpecialtyDict) {
 			// 字节形状不变：{"specialties": [...]}，只是从内联 gin.H 换成具名 DTO（注解才能指认 data）
 			response.Success(c, service.SpecialtyListDTO{Specialties: *resp})
 		},
@@ -206,7 +206,7 @@ func (h *TrainingCatalogHandler) ListLevels(c *gin.Context) {
 			result := h.svc.ListLevels(false)
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *[]service.LevelDict, _ error) {
+		Render: func(c *gin.Context, _ *struct{}, resp *[]service.LevelDict) {
 			response.Success(c, service.LevelListDTO{Levels: *resp})
 		},
 	}.Handle(c)
@@ -227,7 +227,7 @@ func (h *TrainingCatalogHandler) ListCertificateTemplates(c *gin.Context) {
 			result := h.svc.ListCertificateTemplates(false)
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *[]service.CertificateTemplateDict, _ error) {
+		Render: func(c *gin.Context, _ *struct{}, resp *[]service.CertificateTemplateDict) {
 			response.Success(c, service.CertificateTemplateListDTO{CertificateTemplates: *resp})
 		},
 	}.Handle(c)
@@ -248,7 +248,7 @@ func (h *TrainingCatalogHandler) ListQuestionTags(c *gin.Context) {
 			result := h.svc.ListQuestionTags(false, true, nil) // 管理端：全部可见、不分区
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *[]service.QuestionTagDict, _ error) {
+		Render: func(c *gin.Context, _ *struct{}, resp *[]service.QuestionTagDict) {
 			response.Success(c, service.QuestionTagListDTO{Tags: *resp})
 		},
 	}.Handle(c)
@@ -727,7 +727,7 @@ func (h *TrainingCatalogHandler) ListPublicCredentials(c *gin.Context) {
 			result := h.svc.ListCredentials(true)
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *[]service.CredentialDict, _ error) {
+		Render: func(c *gin.Context, _ *struct{}, resp *[]service.CredentialDict) {
 			response.Success(c, service.CredentialListDTO{Credentials: *resp})
 		},
 	}.Handle(c)
@@ -748,7 +748,7 @@ func (h *TrainingCatalogHandler) ListGroupedCredentials(c *gin.Context) {
 			result := h.svc.ListGroupedCredentials()
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.GroupedCredentialsDTO, _ error) {
+		Render: func(c *gin.Context, _ *struct{}, resp *service.GroupedCredentialsDTO) {
 			response.Success(c, *resp)
 		},
 	}.Handle(c)
@@ -769,7 +769,7 @@ func (h *TrainingCatalogHandler) ListCredentials(c *gin.Context) {
 			result := h.svc.ListCredentials(false)
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *[]service.CredentialDict, _ error) {
+		Render: func(c *gin.Context, _ *struct{}, resp *[]service.CredentialDict) {
 			response.Success(c, service.CredentialListDTO{Credentials: *resp})
 		},
 	}.Handle(c)

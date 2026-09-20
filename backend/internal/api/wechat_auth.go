@@ -76,7 +76,7 @@ func (h *WechatAuthHandler) GetQRCodeInfo(c *gin.Context) {
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.WechatQRCodeInfoDTO, error) {
 			return h.svc.QRCodeInfo(), nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.WechatQRCodeInfoDTO, _ error) {
+		Render: func(c *gin.Context, _ *struct{}, resp *service.WechatQRCodeInfoDTO) {
 			response.Success(c, *resp)
 		},
 	}.Handle(c)
@@ -100,11 +100,9 @@ func (h *WechatAuthHandler) LoginWithQRCode(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *wechatLoginReq) (*service.LoginResult, error) {
 			return h.svc.LoginWithQRCode(req.Code)
 		},
-		Render: func(c *gin.Context, _ *wechatLoginReq, _ *service.LoginResult, err error) {
-			// 占位服务 err 一定非 nil，始终 BadRequest(err.Error())；成功（err==nil）无返回。
-			if err != nil {
-				response.BadRequest(c, err.Error())
-			}
+		// 占位服务：错误恒非 nil，一律 400 + err.Error()（成功面暂无返回内容）。
+		ErrStatus: errStatusAll(http.StatusBadRequest),
+		Render: func(c *gin.Context, _ *wechatLoginReq, _ *service.LoginResult) {
 		},
 	}.Handle(c)
 }

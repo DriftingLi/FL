@@ -128,11 +128,8 @@ func (h *FeaturedHandler) IncrementViewCount(c *gin.Context) {
 			}
 			return &viewCountResp{ID: req.ID, Count: count}, nil
 		},
-		Render: func(c *gin.Context, _ *featuredIDReq, resp *viewCountResp, err error) {
-			if err != nil {
-				response.NotFound(c, err.Error())
-				return
-			}
+		ErrStatus: errStatusAll(http.StatusNotFound),
+		Render: func(c *gin.Context, _ *featuredIDReq, resp *viewCountResp) {
 			response.Success(c, gin.H{"content_id": resp.ID, "view_count": resp.Count})
 		},
 	}.Handle(c)

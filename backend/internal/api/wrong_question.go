@@ -136,11 +136,8 @@ func (h *WrongQuestionHandler) Redo(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *redoWrongQuestionReq) (*service.SubmitResultDTO, error) {
 			return h.svc.RedoWrongQuestion(req.StudentID, req.QuestionID, req.UserAnswer, req.CredentialID)
 		},
-		Render: func(c *gin.Context, _ *redoWrongQuestionReq, resp *service.SubmitResultDTO, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
+		ErrStatus: errStatusAll(http.StatusBadRequest),
+		Render: func(c *gin.Context, _ *redoWrongQuestionReq, resp *service.SubmitResultDTO) {
 			response.Success(c, deref(resp))
 		},
 	}.Handle(c)
@@ -244,7 +241,7 @@ func (h *WrongQuestionHandler) GetStats(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *getWrongStatsReq) (*service.WrongQuestionStatsDTO, error) {
 			return h.svc.GetStats(req.StudentID), nil
 		},
-		Render: func(c *gin.Context, _ *getWrongStatsReq, resp *service.WrongQuestionStatsDTO, _ error) {
+		Render: func(c *gin.Context, _ *getWrongStatsReq, resp *service.WrongQuestionStatsDTO) {
 			response.Success(c, resp)
 		},
 	}.Handle(c)
@@ -278,7 +275,7 @@ func (h *WrongQuestionHandler) Export(c *gin.Context) {
 			c.Data(200, "text/plain; charset=utf-8", []byte(text))
 			return &struct{}{}, nil
 		},
-		Render: func(c *gin.Context, _ *exportWrongQuestionsReq, _ *struct{}, _ error) {
+		Render: func(c *gin.Context, _ *exportWrongQuestionsReq, _ *struct{}) {
 		},
 	}.Handle(c)
 }

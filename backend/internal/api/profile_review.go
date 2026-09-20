@@ -74,11 +74,8 @@ func (h *ProfileReviewHandler) ListRequests(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *listRequestsReq) (*service.ProfileChangeRequestPageResult, error) {
 			return h.svc.ListRequests(req.Status, req.Page, req.PageSize)
 		},
-		Render: func(c *gin.Context, _ *listRequestsReq, resp *service.ProfileChangeRequestPageResult, err error) {
-			if err != nil {
-				response.ServerError(c, "查询失败: "+err.Error())
-				return
-			}
+		ErrStatus: errStatusAll(http.StatusInternalServerError),
+		Render: func(c *gin.Context, _ *listRequestsReq, resp *service.ProfileChangeRequestPageResult) {
 			response.Success(c, resp)
 		},
 	}.Handle(c)

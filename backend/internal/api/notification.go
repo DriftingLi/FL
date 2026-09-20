@@ -70,11 +70,8 @@ func (h *NotificationHandler) List(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *notificationListReq) (*service.NotificationListPageResult, error) {
 			return h.svc.List(req.UserID, req.Page, req.PageSize)
 		},
-		Render: func(c *gin.Context, _ *notificationListReq, resp *service.NotificationListPageResult, err error) {
-			if err != nil {
-				response.ServerError(c, "查询失败: "+err.Error())
-				return
-			}
+		ErrStatus: errStatusAll(http.StatusInternalServerError),
+		Render: func(c *gin.Context, _ *notificationListReq, resp *service.NotificationListPageResult) {
 			response.Success(c, resp)
 		},
 	}.Handle(c)
@@ -102,11 +99,8 @@ func (h *NotificationHandler) UnreadCount(c *gin.Context) {
 			}
 			return &count, nil
 		},
-		Render: func(c *gin.Context, _ *notificationUserIDReq, resp *int64, err error) {
-			if err != nil {
-				response.ServerError(c, "查询失败: "+err.Error())
-				return
-			}
+		ErrStatus: errStatusAll(http.StatusInternalServerError),
+		Render: func(c *gin.Context, _ *notificationUserIDReq, resp *int64) {
 			response.Success(c, service.NotificationUnreadCountDTO{Count: *resp})
 		},
 	}.Handle(c)
@@ -174,11 +168,8 @@ func (h *NotificationHandler) MarkAllRead(c *gin.Context) {
 			}
 			return nil, nil
 		},
-		Render: func(c *gin.Context, _ *notificationUserIDReq, _ *struct{}, err error) {
-			if err != nil {
-				response.ServerError(c, "操作失败: "+err.Error())
-				return
-			}
+		ErrStatus: errStatusAll(http.StatusInternalServerError),
+		Render: func(c *gin.Context, _ *notificationUserIDReq, _ *struct{}) {
 			response.SuccessWithMsg(c, "已全部标记为已读", nil)
 		},
 	}.Handle(c)

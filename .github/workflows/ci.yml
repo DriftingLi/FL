@@ -110,6 +110,10 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: node scripts/check-catalog-sort.mjs --all
 
+      - name: 端点错误面守卫（Render 闭包内不得渲染错误信封）
+        working-directory: ${{ github.workspace }}
+        run: node scripts/check-render-error-face.mjs --all
+
   # ============================================================
   # Stage 3: 后端 - 单元测试
   # ============================================================
@@ -482,6 +486,12 @@ jobs:
       # 守卫本体跑在 backend-lint（扫的是 backend 的 .go）。
       - name: 表驱动单测（目录排序串第二源守卫判定逻辑）
         run: node --test scripts/check-catalog-sort.test.mjs
+
+      # ADR-0060 决策 1 / 第十三波票 1b：端点错误面守卫的判定面（Render 闭包内的错误信封直写
+      # 与域表调用报红 / 骨架与 raw handler 不误伤 / 合成违规必须判红防恒绿）。
+      # 守卫本体跑在 backend-lint（扫 backend/internal/api 的 .go）。
+      - name: 表驱动单测（端点错误面守卫判定逻辑）
+        run: node --test scripts/check-render-error-face.test.mjs
 
       # ADR-0056 §5 / #1094：三个守卫共用的 runner 单点（argv / 走查 / --diff / allowlist /
       # 报告与退出码）—— 表驱动自测用合成 diff 端到端驱动，正样本必须红、负样本必须绿；

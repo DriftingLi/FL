@@ -81,23 +81,23 @@ func currentUserID(c *gin.Context) (int, error) {
 // 状态/校验/配额类 → 400；未命中（含解析错误已先行处理）走 500 默认信封。
 var contributionErrStatus = &errStatusTable{
 	entries: []errStatusEntry{
-		{service.ErrContributionNotFound, http.StatusNotFound},
-		{service.ErrContributionNotOwner, http.StatusBadRequest},
-		{service.ErrContributionNotPending, http.StatusBadRequest},
-		{service.ErrContributionNotApproved, http.StatusBadRequest},
-		{service.ErrContributionQuotaDaily, http.StatusBadRequest},
-		{service.ErrContributionQuotaPending, http.StatusBadRequest},
-		{service.ErrContributionNoCredential, http.StatusBadRequest},
-		{service.ErrContributionTitleRequired, http.StatusBadRequest},
-		{service.ErrContributionIntroRequired, http.StatusBadRequest},
-		{service.ErrContributionFilesRequired, http.StatusBadRequest},
-		{service.ErrContributionFilesTooMany, http.StatusBadRequest},
-		{service.ErrContributionFileTooLarge, http.StatusBadRequest},
-		{service.ErrContributionTotalTooLarge, http.StatusBadRequest},
-		{service.ErrContributionFileInvalid, http.StatusBadRequest},
-		{service.ErrContributionRejectReason, http.StatusBadRequest},
-		{service.ErrContributionArchiveReason, http.StatusBadRequest},
-		{service.ErrContributionInvalidReportReason, http.StatusBadRequest},
+		{sentinel: service.ErrContributionNotFound, status: http.StatusNotFound},
+		{sentinel: service.ErrContributionNotOwner, status: http.StatusBadRequest},
+		{sentinel: service.ErrContributionNotPending, status: http.StatusBadRequest},
+		{sentinel: service.ErrContributionNotApproved, status: http.StatusBadRequest},
+		{sentinel: service.ErrContributionQuotaDaily, status: http.StatusBadRequest},
+		{sentinel: service.ErrContributionQuotaPending, status: http.StatusBadRequest},
+		{sentinel: service.ErrContributionNoCredential, status: http.StatusBadRequest},
+		{sentinel: service.ErrContributionTitleRequired, status: http.StatusBadRequest},
+		{sentinel: service.ErrContributionIntroRequired, status: http.StatusBadRequest},
+		{sentinel: service.ErrContributionFilesRequired, status: http.StatusBadRequest},
+		{sentinel: service.ErrContributionFilesTooMany, status: http.StatusBadRequest},
+		{sentinel: service.ErrContributionFileTooLarge, status: http.StatusBadRequest},
+		{sentinel: service.ErrContributionTotalTooLarge, status: http.StatusBadRequest},
+		{sentinel: service.ErrContributionFileInvalid, status: http.StatusBadRequest},
+		{sentinel: service.ErrContributionRejectReason, status: http.StatusBadRequest},
+		{sentinel: service.ErrContributionArchiveReason, status: http.StatusBadRequest},
+		{sentinel: service.ErrContributionInvalidReportReason, status: http.StatusBadRequest},
 	},
 }
 
@@ -328,11 +328,8 @@ func (h *ContributionHandler) Withdraw(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, _ *struct{}, err error) {
-			if err != nil {
-				contributionErrStatus.renderError(c, err) // #611：错误映射退表，成功文案保留定制
-				return
-			}
+		ErrStatus: contributionErrStatus,
+		Render: func(c *gin.Context, _ *struct{}, _ *struct{}) {
 			response.SuccessWithMsg(c, "已撤回", nil)
 		},
 	}.Handle(c)
@@ -374,11 +371,8 @@ func (h *ContributionHandler) Report(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		Render: func(c *gin.Context, _ *reportContributionReq, _ *struct{}, err error) {
-			if err != nil {
-				contributionErrStatus.renderError(c, err) // #611：错误映射退表，成功文案保留定制
-				return
-			}
+		ErrStatus: contributionErrStatus,
+		Render: func(c *gin.Context, _ *reportContributionReq, _ *struct{}) {
 			response.SuccessWithMsg(c, "举报已提交", nil)
 		},
 	}.Handle(c)
@@ -435,11 +429,8 @@ func (h *ContributionHandler) Approve(c *gin.Context) {
 			}
 			return h.svc.Approve(rid, id)
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.ContributionItemDTO, err error) {
-			if err != nil {
-				contributionErrStatus.renderError(c, err) // #611：错误映射退表，成功文案保留定制
-				return
-			}
+		ErrStatus: contributionErrStatus,
+		Render: func(c *gin.Context, _ *struct{}, resp *service.ContributionItemDTO) {
 			response.SuccessWithMsg(c, "已通过", resp)
 		},
 	}.Handle(c)
@@ -476,11 +467,8 @@ func (h *ContributionHandler) Reject(c *gin.Context) {
 			}
 			return h.svc.Reject(rid, id, req.Reason)
 		},
-		Render: func(c *gin.Context, _ *contributionRejectReq, resp *service.ContributionItemDTO, err error) {
-			if err != nil {
-				contributionErrStatus.renderError(c, err) // #611：错误映射退表，成功文案保留定制
-				return
-			}
+		ErrStatus: contributionErrStatus,
+		Render: func(c *gin.Context, _ *contributionRejectReq, resp *service.ContributionItemDTO) {
 			response.SuccessWithMsg(c, "已驳回", resp)
 		},
 	}.Handle(c)
@@ -512,11 +500,8 @@ func (h *ContributionHandler) Archive(c *gin.Context) {
 			}
 			return h.svc.Archive(rid, id, req.Reason)
 		},
-		Render: func(c *gin.Context, _ *contributionRejectReq, resp *service.ContributionItemDTO, err error) {
-			if err != nil {
-				contributionErrStatus.renderError(c, err) // #611：错误映射退表，成功文案保留定制
-				return
-			}
+		ErrStatus: contributionErrStatus,
+		Render: func(c *gin.Context, _ *contributionRejectReq, resp *service.ContributionItemDTO) {
 			response.SuccessWithMsg(c, "已下架", resp)
 		},
 	}.Handle(c)

@@ -137,7 +137,7 @@ func (h *StudentHandler) GetStudyStats(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *studyStatsReq) (*service.StudyDailyStatsDTO, error) {
 			return h.svc.GetStudyStats(req.UserID, req.Days), nil
 		},
-		Render: func(c *gin.Context, _ *studyStatsReq, resp *service.StudyDailyStatsDTO, _ error) {
+		Render: func(c *gin.Context, _ *studyStatsReq, resp *service.StudyDailyStatsDTO) {
 			response.Success(c, resp)
 		},
 	}.Handle(c)
