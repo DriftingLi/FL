@@ -116,6 +116,9 @@ export function uploadForumImageApi(filePath : string) : Promise<string> {
  * @param images 图片 URL 数组（最多 9 张，先经 uploadForumImageApi 上传获取）
  * @param category 帖子意图（学员自述，ADR-0040 起只有 discussion / question 两值；
  *                 'experience' 写入后端直接 400——「备考经验」是管理端认定，不是自述类别）
+ * @note **本批不声明正文格式**（ADR-0025 ④：数据档位分段控件属 P3 输入区形态）：载荷不带
+ *       `content_format`，后端按缺省 `text` 落库 —— 这与「移动端发帖默认纯文本」是同一件事，
+ *       不是遗漏；P3 接上档位控件后才由作者显式声明。
  */
 export function createForumTopicApi(title : string, content : string, images : string[] = [], category : string = 'discussion') : Promise<ForumTopic> {
     const payload : UTSJSONObject = {
@@ -143,6 +146,10 @@ export function createForumTopicApi(title : string, content : string, images : s
  * @param category 帖子类别（可选）
  * @note 后端 PUT /forum/topics/:id 已落地（#811）：仅作者本人可改，非本人 403；
  *       载荷 title/content/images/category（chapter_id 不在契约内，编辑不迁移章节归属）
+ * @note **正文格式声明不进载荷**（ADR-0044 / ADR-0025；#1240 P1）：`content_format` 是作者自述位，
+ *       而编辑是**全量替换**语义 —— 载荷里按「缺省 = text」处理会把 Markdown 帖静默重置成纯文本，
+ *       故编辑路径**不写**该字段，原值由后端保持。守护见 `utils/forumContentFormatBehavior.test.js`
+ *       （行为级：断言 PUT 载荷的键集合里没有它，注入变异会判红）。
  */
 export function updateForumTopicApi(topicId : number, title : string, content : string, images : string[] = [], category : string = '') : Promise<ForumTopic> {
     const url = '/forum/topics/' + topicId.toString()

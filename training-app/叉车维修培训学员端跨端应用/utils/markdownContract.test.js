@@ -40,6 +40,23 @@ const TABLE = '| 故障码 | 含义 |\n| --- | --- |\n| E01 | 电压过低 |';
 
 const SUBSET_CHAPTER = 'chapter';
 const SUBSET_FEATURED = 'featured';
+const SUBSET_FORUM = 'forum';
+const MEMBER_HEADING = 'heading';
+const MEMBER_LIST = 'list';
+const MEMBER_QUOTE = 'quote';
+const MEMBER_CODE = 'code';
+const MEMBER_DIVIDER = 'divider';
+const MEMBER_IMAGE = 'image';
+const MEMBER_TABLE = 'table';
+const SUBSET_MEMBERS_CHAPTER = [MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE, MEMBER_CODE, MEMBER_DIVIDER, MEMBER_IMAGE, MEMBER_TABLE];
+const SUBSET_MEMBERS_FEATURED = [MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE, MEMBER_CODE, MEMBER_DIVIDER, MEMBER_IMAGE];
+const SUBSET_MEMBERS_FORUM = [MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE, MEMBER_CODE, MEMBER_DIVIDER];
+/** 镜像 `subsetMembers`：未知档位退到章节档（与 parseMarkdown 的缺省档同向） */
+function subsetMembers(subset) {
+  if (subset === SUBSET_FEATURED) return SUBSET_MEMBERS_FEATURED;
+  if (subset === SUBSET_FORUM) return SUBSET_MEMBERS_FORUM;
+  return SUBSET_MEMBERS_CHAPTER;
+}
 const TABLE_LEVEL_HEAD = 1;
 const TABLE_LEVEL_BODY = 0;
 const ESCAPED_PIPE = '\u0001';
@@ -145,7 +162,12 @@ function normalizeTableRow(raw, width) {
 function parseMarkdown(markdown, subset = SUBSET_CHAPTER) {
   const blocks = [];
   if (markdown.length === 0) return blocks;
-  const isFeatured = subset === SUBSET_FEATURED;
+  // 镜像的**范围**（写实，不假装全量）：chapter / featured 两档的解析语义。
+  // 这两档把除 table 之外的成员**全都声明了**，故逐点闸门里只有 table 这一处会改变结果；
+  // 「声明 ↔ 行为」的全量对账跑**真模块**（`utils/markdownSubsetBehavior.test.js`，含成对取证），
+  // 本文件的镜像只保证既有两档的行为没被改造动过。
+  const members = subsetMembers(subset);
+  const hasMember = (m) => members.indexOf(m) >= 0;
   const lines = markdown.split('\n');
   const push = (o) => blocks.push(Object.assign({ type: '', level: 0, text: '', items: [] }, o));
   const pushTableRow = (cells, isHead) =>
@@ -216,7 +238,7 @@ function parseMarkdown(markdown, subset = SUBSET_CHAPTER) {
       push({ type: 'paragraph', text: formulaLines.join('\n') });
       continue;
     }
-    if (!isFeatured && hasTablePipe(line) && !isTableDelimiterRow(line)
+    if (hasMember(MEMBER_TABLE) && hasTablePipe(line) && !isTableDelimiterRow(line)
       && i + 1 < lines.length && isTableDelimiterRow(trim(lines[i + 1]))) {
       flushList();
       flushQuote();
@@ -437,12 +459,28 @@ describe('镜像同步：utils/markdown.uts 与本文件镜像逐条一致', () 
     );
   });
 
-  it('表格块只有一个产生点（pushTableRow），且被 featured 档闸住', () => {
+  it('表格块只有一个产生点（pushTableRow），且被**声明表**闸住（论坛与精选两档都不声明 table）', () => {
     expect((MD_CODE.match(/type: 'table'/g) || []).length).toBe(1);
     expect(MD_SRC).toContain('function pushTableRow(cells : string[], isHead : boolean)');
-    expect(MD_SRC).toContain('if (!isFeatured && hasTablePipe(line) && !isTableDelimiterRow(line)');
+    expect(MD_SRC).toContain('if (hasMember(MEMBER_TABLE) && hasTablePipe(line) && !isTableDelimiterRow(line)');
     expect(MD_SRC).toContain('function isTableDelimiterRow(line : string) : boolean');
     expect(MD_SRC).toContain('cells[i].match(/^:?-+:?$/) == null');
+  });
+
+  it('子集声明表在 .uts 内成文，且七个可开关成员各有一处闸门（声明即行为）', () => {
+    expect(MD_SRC).toContain("export const SUBSET_FORUM = 'forum'");
+    expect(MD_SRC).toContain('export function subsetMembers(subset : string) : string[]');
+    expect(MD_SRC).toContain('export function subsetHasMember(subset : string, member : string) : boolean');
+    for (const name of ['CHAPTER', 'FEATURED', 'FORUM']) {
+      expect(MD_SRC).toContain(`export const SUBSET_MEMBERS_${name} : string[] = [`);
+    }
+    // 每个成员都必须真的被解析器问过；段落**不在**声明表里（它是降级可读的地板，不设闸门）
+    // 注意这里遍历的是**常量名**（不是它们的值）：断言的是 .uts 源码里的闸门写法
+    const memberNames = ['MEMBER_HEADING', 'MEMBER_LIST', 'MEMBER_QUOTE', 'MEMBER_CODE', 'MEMBER_DIVIDER', 'MEMBER_IMAGE', 'MEMBER_TABLE'];
+    for (const member of memberNames) {
+      expect([member, MD_CODE.includes(`hasMember(${member})`)]).toEqual([member, true]);
+    }
+    expect(MD_CODE).not.toContain('MEMBER_PARAGRAPH');
   });
 
   it('公式保护在 stripInline 内、纯剥离仍走 stripInlinePlain', () => {

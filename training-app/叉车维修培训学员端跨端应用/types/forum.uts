@@ -7,6 +7,13 @@ export type ForumTopic = {
     id : number
     title : string
     content : string
+    /**
+     * 正文格式声明（ADR-0044 / ADR-0025）：`text` | `markdown`，**缺省 `text`**（归一在
+     * `api/forumDto.normalizeContentFormat`）。移动端只**消费**它去选渲染子集（`SUBSET_FORUM`）；
+     * **编辑路径不写该字段** —— 原值由后端保持（照根 ADR-0044：全量替换语义下按缺省处理会把
+     * Markdown 帖静默重置成纯文本）。
+     */
+    content_format : string
     images : string[]
     author_id : number
     author_name : string
@@ -50,6 +57,8 @@ export type ForumReply = {
     topic_id : number
     topic_title : string
     content : string
+    /** 正文格式声明（ADR-0044 / ADR-0025）：`text` | `markdown`，缺省 `text`；口径同 `ForumTopic` */
+    content_format : string
     images : string[]
     author_id : number
     author_name : string
@@ -79,6 +88,8 @@ export type ForumTopicDetail = {
     id : number
     title : string
     content : string
+    /** 正文格式声明（ADR-0044 / ADR-0025）：`text` | `markdown`，缺省 `text`；口径同 `ForumTopic` */
+    content_format : string
     images : string[]
     author_id : number
     author_name : string

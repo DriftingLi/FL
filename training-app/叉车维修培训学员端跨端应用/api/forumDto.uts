@@ -22,9 +22,26 @@
  * 变更纪律：这些 builder 是**接口契约面** —— `utils/forumContract.test.js` 逐字段钉住
  * `is_featured` / `is_experience` / 分页三元组 / 被回复人两字段 / IP 属地两字段。
  * 字段名或映射语义一旦要改，必须同步那份契约测试，而不是只改这里。
+ *
+ * `content_format`（ADR-0044 / ADR-0025；#1240 P1）：三个 builder 都带它，归一单点是
+ * `normalizeContentFormat`（缺省与一切非 `markdown` 的取值 → `text`）。本层只做**消费**投影，
+ * 不参与渲染决策（选哪档子集是 P2 的页面接线）；契约与不变式的守护见
+ * `utils/forumContentFormatBehavior.test.js`。
  */
 import { toNumber, toStr, toBool } from './helpers'
 import type { ForumTopic, ForumTopicListResult, ForumTopicDetail, ForumReply, LikeTopicResult } from '../types/index'
+
+/**
+ * 正文格式声明的**归一**（ADR-0044 / ADR-0025；#1240 P1）。
+ *
+ * 只有 `markdown` 是显式声明，**其余一切取值（缺省 / 空串 / 脏值 / 未来新值）一律落 `text`** ——
+ * 与后端 `normalizeContentFormat` 同向，也与根 ADR-0044 的缺省语义一致：不带该字段的客户端
+ * （含尚未适配的历史移动端）天然落在纯文本分支，不会被 Markdown 规则擅自解释。
+ */
+export function normalizeContentFormat(value : any | null) : string {
+    if (value == null) return 'text'
+    return value.toString().trim() == 'markdown' ? 'markdown' : 'text'
+}
 
 /** 从 author 嵌套对象提取作者名（优先 nickname，其次 username） */
 export function extractAuthorName(obj : UTSJSONObject) : string {
@@ -119,6 +136,8 @@ export function buildReply(obj : UTSJSONObject, fallbackTopicId : number = 0) : 
         // IP 属地快照（ADR-0045）：只在发布时由服务端落库，客户端原样读，空串即无属地
         ip_province: toStr(obj['ip_province']),
         ip_city: toStr(obj['ip_city']),
+        // 正文格式声明（ADR-0044 / ADR-0025）：只消费，不在此处改写语义
+        content_format: normalizeContentFormat(obj['content_format']),
     } as ForumReply
 }
 
@@ -158,6 +177,8 @@ export function buildTopic(obj : UTSJSONObject) : ForumTopic {
         // IP 属地快照（ADR-0045）：列表卡片不展示，字段仍原样带上（DTO 契约单一，展示口径由组件决定）
         ip_province: toStr(obj['ip_province']),
         ip_city: toStr(obj['ip_city']),
+        // 正文格式声明（ADR-0044 / ADR-0025）：列表不渲染正文，但字段照样带上（详情/编辑回填要用）
+        content_format: normalizeContentFormat(obj['content_format']),
     } as ForumTopic
 }
 
@@ -246,6 +267,8 @@ export function buildTopicDetail(obj : UTSJSONObject) : ForumTopicDetail {
         // IP 属地快照（ADR-0045）：帖子作者行展示，空串整段不渲染
         ip_province: toStr(topicObj['ip_province']),
         ip_city: toStr(topicObj['ip_city']),
+        // 正文格式声明（ADR-0044 / ADR-0025）：详情页据此选渲染子集（`SUBSET_FORUM`）
+        content_format: normalizeContentFormat(topicObj['content_format']),
     } as ForumTopicDetail
     return detail
 }
