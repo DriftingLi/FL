@@ -485,11 +485,11 @@ const MODULES = {
 
   register: {
     extraDirs: [],
-    files: ['pages/register/register.uvue'],
-    extractDirs: [],
+    files: ['pages/register/composables/useRegisterForm.uts', 'pages/register/register.uvue'],
+    extractDirs: ['pages/register/composables'],
     crossModuleConsumers: [],
-    /** 超预算：register.uvue 723 */
-    budget: 'pending',
+    /** T11 手术（#649）：register.uvue 722→427（状态与动作下沉模块私有 composable）⇒ 执法面随之上线（原为「超预算 723」的 pending） */
+    budget: BUDGET,
     budgetOverrides: {},
     allowlistOwned: [],
     maxDepth: MAX_DEPTH,
