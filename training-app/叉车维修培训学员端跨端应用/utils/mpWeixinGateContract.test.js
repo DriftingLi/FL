@@ -80,6 +80,24 @@ const RESULT_MANDATORY = [
 ];
 const RESULT_OPTIONAL = ['navigationSkipReason'];
 
+/**
+ * 取一个 PowerShell 函数的函数体（花括号配对）。
+ * ⚠️ **不要用注释行当结束锚点**：这些判据跑在 stripCommentLines 之后的代码文本上，注释已变空行
+ * （#1209 实测：拿 `# ---------- 主流程 ----------` 当锚点 ⇒ 永远定位不到函数体、判据空跑）。
+ */
+function psFunctionBody(code, decl) {
+  const at = code.indexOf(decl);
+  if (at === -1) return '';
+  const open = code.indexOf('{', at);
+  if (open === -1) return '';
+  let depth = 0;
+  for (let i = open; i < code.length; i++) {
+    if (code[i] === '{') depth++;
+    else if (code[i] === '}') { depth--; if (depth === 0) return code.slice(open, i + 1); }
+  }
+  return '';
+}
+
 function readSource(rel) {
   return readText(path.join(ROOT, rel));
 }
@@ -495,6 +513,31 @@ function scanContract(sources) {
     must(n <= 1, 'C18', `调用点原文 ${literal} 在代码里出现了 ${n} 次 —— 只允许出现在门计划里一次（执行路径不得再写死一份）`);
   });
 
+  // C19 报告层不得毁掉门结论、也不得丢掉证据（#1209 血账）
+  //   事故：Publish-ScreenshotArchive 只有成功路径带 `Rel`，调用点在 Set-StrictMode 下读 `$archive.Rel`
+  //   ⇒ 「未入库」分支（如"工作树有本次之外的改动"）抛异常 ⇒ 贴 sha 绑定评论那步被打断：
+  //   门明明通过却 exit 1，PR 上也没有证据评论（#1199 的 ② 就是这么被手工绕过去的）。
+  const archiveBody = psFunctionBody(code, 'function Publish-ScreenshotArchive');
+  must(archiveBody.length > 0, 'C19', '定位不到 Publish-ScreenshotArchive 函数体（无法核对返回形状）');
+  if (archiveBody.length > 0) {
+    const returns = archiveBody.match(/return @\{[^}]*\}/g) || [];
+    must(returns.length >= 2, 'C19', `Publish-ScreenshotArchive 的 return 分支只有 ${returns.length} 个（判据可能已空跑）`);
+    returns.forEach((r, i) => {
+      must(/Rel\s*=/.test(r), 'C19',
+        `Publish-ScreenshotArchive 第 ${i + 1} 个 return 缺 Rel ⇒ 未入库分支返回不同形状（Set-StrictMode 下调用点读取即抛异常，曾把「门通过」变成 exit 1 且贴不出证据评论）`);
+    });
+  }
+  must(!/\$archive\.Rel\b/.test(code), 'C19', '调用点直接读 $archive.Rel（须走 Get-Prop，否则未入库分支抛异常）');
+  must(/Get-Prop \$archive 'Rel'/.test(code), 'C19', '调用点未用 Get-Prop 安全取 Rel');
+  must(/贴 ② 门评论失败（门结论不受影响/.test(code), 'C19', '贴评论失败时缺「不改结论」的响亮警告（报告层崩溃会静默吞掉证据）');
+  const commentCallIdx = code.indexOf('Publish-GateComment -PrNumber $PostToPr');
+  must(commentCallIdx !== -1, 'C19', '定位不到贴评论调用点（报告层是否受保护无法核对）');
+  if (commentCallIdx !== -1) {
+    const preWindow = code.slice(Math.max(0, commentCallIdx - 200), commentCallIdx);
+    must(/try\s*\{/.test(preWindow), 'C19', '贴评论调用没被 try 包住（报告层一崩就会把「门通过」变成 exit 1）');
+    must(/catch\s*\{/.test(code.slice(commentCallIdx, commentCallIdx + 1200)), 'C19', '贴评论调用缺 catch（崩了必须警告 + 记日志，不得静默）');
+  }
+
   // C10 注册与文档
   must(/"build:mp-weixin-check"\s*:\s*"[^"]*scripts\/mp-weixin-check\.ps1"/.test(pkg), 'C10', 'package.json 未注册 build:mp-weixin-check');
   must(adr.includes('半自动'), 'C10', 'ADR-0008 未把 ② 记为半自动门');
@@ -738,7 +781,13 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       ['C18', { ...real, script: real.script.replace("-Id 'automator-probe'", "-Id 'automator-probeX'") }],
       ['C18', { ...real, script: real.script + "\nInvoke-Process -FilePath $devTools -Arguments @('close', '--project', $dist) -TimeoutSeconds 120 -Tag 'x'\n" }],
       ['C18', { ...real, script: real.script.replace('-Arguments $readyStep.argv', '-Arguments $readyArgs') }],
-      ['C18', { ...real, script: real.script.replace('$portStep.waitSeconds', '180') }]
+      ['C18', { ...real, script: real.script.replace('$portStep.waitSeconds', '180') }],
+      // C19：报告层（归档形状统一 / 安全取值 / try-catch / 响亮警告）—— #1209 血账
+      ['C19', { ...real, script: real.script.replace("未入库：找不到 gh CLI'); Commands = @(); Rel = @() }", "未入库：找不到 gh CLI'); Commands = @() }") }],
+      ['C19', { ...real, script: real.script + "\n$relProbe = $archive.Rel\n" }],
+      ['C19', { ...real, script: real.script.replace("-ArchivedRel @(Get-Prop $archive 'Rel')", "-ArchivedRel @($archive.Rel)") }],
+      ['C19', { ...real, script: real.script.replace("try {\n        Publish-GateComment -PrNumber $PostToPr", "Publish-GateComment -PrNumber $PostToPr") }],
+      ['C19', { ...real, script: real.script.replace("贴 ② 门评论失败（门结论不受影响", "贴评论失败") }]
     ];
     cases.forEach(([rule, sources], caseIndex) => {
       const found = scanContract(sources);
@@ -756,6 +805,20 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
     expect(real.script).toContain('MP_WEIXIN_PROBE');
     expect(real.script).not.toMatch(/\$LASTEXITCODE/);
     expect(real.probe).toContain('probeOk');
+  });
+
+  it('C19：报告层不改门结论、不丢证据（归档形状统一 / Get-Prop 取值 / try-catch / 响亮警告）', () => {
+    const code = stripCommentLines(real.script).join('\n');
+    expect(code).toMatch(/Get-Prop \$archive 'Rel'/);
+    expect(code).not.toMatch(/\$archive\.Rel/);
+    expect(code).toContain('贴 ② 门评论失败（门结论不受影响');
+    const callIdx = code.indexOf('Publish-GateComment -PrNumber $PostToPr');
+    expect(callIdx).toBeGreaterThan(-1);
+    expect(code.slice(Math.max(0, callIdx - 200), callIdx)).toMatch(/try\s*\{/);
+    const body = psFunctionBody(code, 'function Publish-ScreenshotArchive');
+    const returns = body.match(/return @\{[^}]*\}/g) || [];
+    expect(returns.length).toBeGreaterThanOrEqual(2);
+    returns.forEach((r) => expect(r).toMatch(/Rel\s*=/));
   });
 
   it('C6：仅门通过（exit 0）分支贴 sha 绑定评论', () => {

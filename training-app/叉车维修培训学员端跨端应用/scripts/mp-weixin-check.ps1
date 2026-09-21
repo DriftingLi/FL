@@ -828,10 +828,15 @@ function Publish-ScreenshotArchive {
     param([int]$PrNumber, [string]$Module, [string]$ShotDir, $ProbeJson, [string]$RepoRoot)
     # 目标：docs/verification/<模块>/<PR号>/<页名>-after.<ext>；仅当「当前分支 = 该 PR 的 head」
     # 且「工作树除本次改动外无其他改动」时才提交；其余情况只警告 + 给命令。
+    #
+    # ⚠️ **每个 return 必须是同一形状**（本函数所有分支都要带 `Rel`，取值用 @() 兜底）——
+    #    #1209 血账：此前只有成功路径带 `Rel`，而调用点在 Set-StrictMode 下读 `$archive.Rel`，
+    #    于是「未入库」分支（如"工作树有本次之外的改动"）**抛异常**，把贴 sha 绑定评论那一步打断：
+    #    门明明通过却 exit 1，且证据评论根本没贴上。守护 C19 现在按「逐个 return 都带 Rel」拦它。
     $notes = [System.Collections.Generic.List[string]]::new()
     $cmdLines = [System.Collections.Generic.List[string]]::new()
-    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { return @{ Notes = @('未入库：找不到 gh CLI'); Commands = @() } }
-    if (-not (Get-Command git -ErrorAction SilentlyContinue)) { return @{ Notes = @('未入库：找不到 git'); Commands = @() } }
+    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { return @{ Notes = @('未入库：找不到 gh CLI'); Commands = @(); Rel = @() } }
+    if (-not (Get-Command git -ErrorAction SilentlyContinue)) { return @{ Notes = @('未入库：找不到 git'); Commands = @(); Rel = @() } }
 
     $root = $RepoRoot
     $branch = ''
@@ -841,15 +846,15 @@ function Publish-ScreenshotArchive {
 
     $prJson = $null
     try { $prJson = (& gh pr view $PrNumber --json headRefName,state 2>$null | Out-String | ConvertFrom-Json) } catch { }
-    if (-not $prJson) { return @{ Notes = @("未入库：取不到 PR #$PrNumber 的信息（gh 不可用/无权限）"); Commands = @() } }
-    if ($prJson.state -ne 'OPEN') { return @{ Notes = @("未入库：PR #$PrNumber 状态为 $($prJson.state)（非 OPEN）"); Commands = @() } }
+    if (-not $prJson) { return @{ Notes = @("未入库：取不到 PR #$PrNumber 的信息（gh 不可用/无权限）"); Commands = @(); Rel = @() } }
+    if ($prJson.state -ne 'OPEN') { return @{ Notes = @("未入库：PR #$PrNumber 状态为 $($prJson.state)（非 OPEN）"); Commands = @(); Rel = @() } }
     if ($branch -ne $prJson.headRefName) {
-        return @{ Notes = @("未入库：当前分支 '$branch' ≠ PR #$PrNumber 的 head 分支 '$($prJson.headRefName)'（避免把截图提到错的分支）"); Commands = @() }
+        return @{ Notes = @("未入库：当前分支 '$branch' ≠ PR #$PrNumber 的 head 分支 '$($prJson.headRefName)'（避免把截图提到错的分支）"); Commands = @(); Rel = @() }
     }
     $allowed = @("docs/verification/$Module/$PrNumber/")
     $blocking = @($dirty | Where-Object { $p = ($_ -replace '^..\s+', '').Trim('"'); -not ($allowed | Where-Object { $p.StartsWith($_) }) })
     if ($blocking.Count -gt 0) {
-        return @{ Notes = @("未入库：工作树有本次之外的改动（$($blocking.Count) 项），为免夹带不做提交"); Commands = @() }
+        return @{ Notes = @("未入库：工作树有本次之外的改动（$($blocking.Count) 项），为免夹带不做提交"); Commands = @(); Rel = @() }
     }
 
     $module = if ($Module) { $Module } else { 'mp-weixin' }
@@ -892,7 +897,7 @@ function Publish-ScreenshotArchive {
         $skipped += ([System.IO.Path]::GetFileName($biggest.Path) + "（超合计上限）")
         $made = @($made | Where-Object { $_.Path -ne $biggest.Path })
     }
-    if ($made.Count -eq 0) { return @{ Notes = @('未入库：压缩后没有任何图满足体积上限'); Commands = @() } }
+    if ($made.Count -eq 0) { return @{ Notes = @('未入库：压缩后没有任何图满足体积上限'); Commands = @(); Rel = @() } }
     if ($shots.Count -gt $script:ArchiveMaxCount) {
         $skipped += ($shots[$script:ArchiveMaxCount..($shots.Count - 1)] | ForEach-Object { $_.name })
     }
@@ -1327,10 +1332,22 @@ if ($exitCode -eq 0 -and $PostToPr -gt 0) {
     # ⚠️ 续行符一个都不能少：本调用此前在 `-ShotRelative … -ReproCommand …` 一行**漏了行尾反引号**，
     #    于是 `-ArchivedRel` / `-ArchiveNotes` 被解析成**一条新命令**（运行到贴评论后会 CommandNotFound），
     #    入库截图清单也就从来没进过评论。守护测试 C14 现在按「以 `-参数名` 单独起行」拦这类断链。
-    Publish-GateComment -PrNumber $PostToPr -ResultLine $resultLine -LogRelative $logRelative `
-        -ShotRelative ".ci-verify/$shotNames" -ReproCommand 'npm run build:mp-weixin-check' `
-        -ArchivedRel $(if ($archive -and $archive.Rel) { @($archive.Rel) } else { @() }) `
-        -ArchiveNotes $(if ($archive) { @($archive.Notes) } else { @() }) `
-        -NavSkipped ([bool]$navSkip) -NavReason $navReason
+    #
+    # ⚠️ #1209 两条纪律（守护 C19）：
+    #    (1) 归档结果一律用 **Get-Prop** 取值 —— Set-StrictMode 下访问不存在的属性会抛异常，
+    #        而归档函数「未入库」分支曾返回不带 `Rel` 的对象 ⇒ 这里抛异常 ⇒ **贴评论被打断**，
+    #        门明明通过却 exit 1、证据评论也没贴上（真实事故，本会话 #1199 就是这么绕过去的）；
+    #    (2) 整段贴评论包 try/catch：它是**报告层**，门结论在上面已经定了 ——
+    #        崩了要**响亮地警告 + 记日志**，但不得改变退出码、更不得让证据悄悄消失（禁止静默例外）。
+    try {
+        Publish-GateComment -PrNumber $PostToPr -ResultLine $resultLine -LogRelative $logRelative `
+            -ShotRelative ".ci-verify/$shotNames" -ReproCommand 'npm run build:mp-weixin-check' `
+            -ArchivedRel @(Get-Prop $archive 'Rel') `
+            -ArchiveNotes @(Get-Prop $archive 'Notes') `
+            -NavSkipped ([bool]$navSkip) -NavReason $navReason
+    } catch {
+        Write-Host "[warn] 贴 ② 门评论失败（门结论不受影响，退出码仍为 $exitCode）：$_" -ForegroundColor Yellow
+        Write-Log "MP_WEIXIN_RESULT comment=FAILED exit=$exitCode detail=$_"
+    }
 }
 exit $exitCode
