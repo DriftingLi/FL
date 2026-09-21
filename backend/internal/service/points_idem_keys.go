@@ -2,9 +2,10 @@
 // 本文件：积分幂等键构造器单点（#608，ADR-0023 幂等占坑）。
 // 全仓积分幂等键（points_entry_idem 主键）的格式字符串只在此处存在：直记键与回收键两类
 // 构造器，调用侧（points/forum/contribution/checkin 各域）一律经此构造，禁止手拼。
-// 键格式与 ADR-0023 收敛落地时的既有格式逐字一致，由 points_idem_keys_test.go 快照钉住；
-// 任何格式变更都会改变占坑唯一性（历史键失配 → 双发/双扣），必须是有意的口径决策
-// 并同步 CONTEXT.md 登记。
+// 键格式变更会改变占坑唯一性（历史键失配 → 双发/双扣），必须是有意的口径决策
+// 并同步 CONTEXT.md 登记。现行格式由 ADR-0062 票1 定案：**事件有主体的，主体必须在键里**
+// ——占坑表主键只有 idem_key 一列，主体既不在键里也不在主键里时，「每人一坑」的事件
+// 会被压成「全平台一坑」（第二个学员兑同一 SKU 必然撞坑）。
 package service
 
 import (
@@ -14,13 +15,17 @@ import (
 
 // ===== 直记键（赚取/消耗事件，一事件一坑）=====
 
-// RedeemIdemKey 兑换幂等键：`redeem:{sku}`。课程/真题卷/商城三胞胎共用 redeem 单管线
-// （CONTEXT.md「积分商城」口径 redeem:<sku>），占坑冲突映射为「已兑换」。
-func RedeemIdemKey(sku string) string { return "redeem:" + sku }
+// RedeemIdemKey 兑换幂等键：`redeem:{sku}:{userID}`。课程/真题卷/商城三胞胎共用 redeem 单管线
+// （CONTEXT.md「积分商城」口径），占坑冲突映射为「已兑换」。
+// 键含主体：兑换是「每人每 SKU」一个事件（ADR-0062 票1）。
+func RedeemIdemKey(sku string, userID int) string { return fmt.Sprintf("redeem:%s:%d", sku, userID) }
 
-// AITokensIdemKey AI 按 tokens 扣费幂等键：`ai_tokens:{requestID}`（CONTEXT.md「AI 计费」）。
-// requestID 由调用方传稳定请求标识，同请求重试/重放只扣一次。
-func AITokensIdemKey(requestID string) string { return "ai_tokens:" + requestID }
+// AITokensIdemKey AI 按 tokens 扣费幂等键：`ai_tokens:{userID}:{requestID}`（CONTEXT.md「AI 计费」）。
+// requestID 由服务端铸造——计量闸门不接受被计量方供给「这事发生过没有」的凭据（ADR-0062 票1）；
+// 键含主体，故不同用户即便请求标识相撞也各占各的坑。
+func AITokensIdemKey(userID int, requestID string) string {
+	return fmt.Sprintf("ai_tokens:%d:%s", userID, requestID)
+}
 
 // AcceptedBonusIdemKey 问答采纳答主奖励幂等键：`accepted_bonus:{topicID}`（ADR-0023）。
 // 「每帖只发一次」：取消/更换/并发均占同一坑，与状态 CAS 双保险。

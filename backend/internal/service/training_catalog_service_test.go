@@ -239,7 +239,7 @@ func TestQuestionTagCRUD(t *testing.T) {
 	if updated.Name != "液压系统" {
 		t.Fatalf("更新结果不匹配: %+v", updated)
 	}
-	active := svc.ListQuestionTags(true, true, nil)
+	active := mustListQuestionTags(t, svc, true, true, nil)
 	if len(active) != 1 {
 		t.Fatal("应看到 1 条标签")
 	}
@@ -304,7 +304,7 @@ func TestListQuestionTags_QuestionCount(t *testing.T) {
 	// 另一个无题目标签
 	empty, _ := svc.CreateQuestionTag(QuestionTagInput{Code: "brake", Name: "制动"})
 
-	studentTags := svc.ListQuestionTags(true, false, nil)
+	studentTags := mustListQuestionTags(t, svc, true, false, nil)
 	byID := map[int]QuestionTagDict{}
 	for _, d := range studentTags {
 		byID[d.ID] = d
@@ -316,7 +316,7 @@ func TestListQuestionTags_QuestionCount(t *testing.T) {
 		t.Fatalf("无题目标签应为 0, got %v", byID[empty.ID].QuestionCount)
 	}
 
-	adminTags := svc.ListQuestionTags(false, true, nil)
+	adminTags := mustListQuestionTags(t, svc, false, true, nil)
 	byID2 := map[int]QuestionTagDict{}
 	for _, d := range adminTags {
 		byID2[d.ID] = d
@@ -357,7 +357,7 @@ func TestListQuestionTags_CredentialPartition(t *testing.T) {
 	mkQ("A证件题2", credA.ID)
 	mkQ("无证件题", 0)
 
-	got := svc.ListQuestionTags(true, false, &credA.ID)
+	got := mustListQuestionTags(t, svc, true, false, &credA.ID)
 	byID := map[int]QuestionTagDict{}
 	for _, d := range got {
 		byID[d.ID] = d
@@ -365,13 +365,13 @@ func TestListQuestionTags_CredentialPartition(t *testing.T) {
 	if byID[tag.ID].QuestionCount == nil || *byID[tag.ID].QuestionCount != 2 {
 		t.Fatalf("A证件分区应统计 2 道, got %v", byID[tag.ID].QuestionCount)
 	}
-	gotB := svc.ListQuestionTags(true, false, &credB.ID)
+	gotB := mustListQuestionTags(t, svc, true, false, &credB.ID)
 	for _, d := range gotB {
 		if d.ID == tag.ID && (d.QuestionCount == nil || *d.QuestionCount != 0) {
 			t.Fatalf("B证件分区应为 0, got %v", d.QuestionCount)
 		}
 	}
-	global := svc.ListQuestionTags(true, false, nil)
+	global := mustListQuestionTags(t, svc, true, false, nil)
 	for _, d := range global {
 		if d.ID == tag.ID && (d.QuestionCount == nil || *d.QuestionCount != 3) {
 			t.Fatalf("不分区应统计全部 3 道, got %v", d.QuestionCount)
@@ -890,7 +890,7 @@ func TestQuestionBank_Tags(t *testing.T) {
 	}
 
 	// 按标签过滤
-	byTag, err := qsvc.ListQuestions(1, 20, "", "", "", ptrInt(tag2.ID), nil, "")
+	byTag, err := qsvc.ListQuestions(1, 20, "", "", "", ptrInt(tag2.ID), NewQuestionEditScope(nil), "")
 	if err != nil {
 		t.Fatalf("ListQuestions 失败: %v", err)
 	}
@@ -923,4 +923,15 @@ func TestQuestionBank_Tags(t *testing.T) {
 	if len(got.Tags.([]map[string]any)) != 1 {
 		t.Fatalf("详情应含标签: %+v", got.Tags)
 	}
+}
+
+// mustListQuestionTags 标签读面的测试内取用：该读面自 ADR-0062 票6 起带 error 出口，
+// 查不动即让测试失败，不得被读成「没有标签」。
+func mustListQuestionTags(t *testing.T, svc *TrainingCatalogService, activeOnly, includeSourceTags bool, credentialID *int) []QuestionTagDict {
+	t.Helper()
+	list, err := svc.ListQuestionTags(activeOnly, includeSourceTags, credentialID)
+	if err != nil {
+		t.Fatalf("标签列表查询失败: %v", err)
+	}
+	return list
 }

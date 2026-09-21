@@ -593,8 +593,8 @@ func (s *VerifyCodeService) RegisterWithCode(ctx context.Context, ch CodeChannel
 	if utf8.RuneCountInString(nickname) > 30 {
 		return nil, errors.New("昵称不能超过 30 个字符")
 	}
-	if len(password) < 6 || len(password) > 20 {
-		return nil, errors.New("密码长度需为 6-20 位")
+	if err := validatePasswordLength(password); err != nil {
+		return nil, err
 	}
 	if err := s.Verify(ctx, ch, CodePurposeRegister, target, code); err != nil {
 		return nil, err
@@ -655,14 +655,22 @@ func (s *VerifyCodeService) LoginWithCode(ctx context.Context, ch CodeChannel, t
 	}, HrwaiRole)
 }
 
-// ResetPasswordWithCode 忘记密码：验证码校验通过后重置密码（不自动登录，返回 nil）。
+// ResetPasswordWithCode 忘记密码（匿名、凭验证码认领账号）：验证码校验通过后落新口令，
+// 口令写面与全会话吊销都走 authSvc.SetNewPassword（ADR-0062 票7）。
+//
+// 吊销在这里不是可选项：忘记密码正是账号被盗后用户最常见的自救动作，只改哈希不吊销的话
+// 攻击者手上的 refresh 链最长 7 天仍可静默续登（RotateRefresh 不查账号），而用户以为改了
+// 密码就把人踢出去了。入口差异（登录态 vs 验证码）留在各自的入口处，不进那个动作。
+// 不自动登录，返回 nil。
 func (s *VerifyCodeService) ResetPasswordWithCode(ctx context.Context, ch CodeChannel, target, code, password string) error {
 	target, err := ch.Normalize(target)
 	if err != nil {
 		return err
 	}
-	if len(password) < 6 || len(password) > 20 {
-		return errors.New("密码长度需为 6-20 位")
+	// 长度前置校验（与 SetNewPassword 同一规则源）刻意在 Verify 之前：验证码是一次性资源，
+	// 不该被一个填错的口令烧掉（既有口径，见 TestPhoneResetPassword）。
+	if err := validatePasswordLength(password); err != nil {
+		return err
 	}
 	if err := s.Verify(ctx, ch, CodePurposeResetPassword, target, code); err != nil {
 		return err
@@ -671,11 +679,16 @@ func (s *VerifyCodeService) ResetPasswordWithCode(ctx context.Context, ch CodeCh
 	if err != nil {
 		return errors.New("该" + ch.Noun() + "尚未注册")
 	}
-	hashed, err := HashPassword(password)
+	revokeErr, err := s.authSvc.SetNewPassword(ctx, user.ID, password)
 	if err != nil {
-		return errors.New("密码重置失败，请稍后再试")
+		return err
 	}
-	return s.db.WithContext(ctx).Model(&model.HrwaiUser{}).Where("id = ?", user.ID).Update("password", hashed).Error
+	// 尽力而为族（与改密同族、与注销族有意不同）：口令已生效且不可回退，吊销标记写失败
+	// 只记日志暴露缺口——为吊销失败而拒绝落口令会让 Redis 抖动时用户找不回账号。
+	if revokeErr != nil {
+		s.logger.Warn("重置口令后 refresh 吊销标记写入失败", zap.Int("user_id", user.ID), zap.Error(revokeErr))
+	}
+	return nil
 }
 
 // Bind 校验验证码后绑定/修改当前用户目标字段（格式与唯一性双重校验）。
@@ -751,10 +764,12 @@ func (s *VerifyCodeService) SendChangePasswordCode(ctx context.Context, ch CodeC
 	return s.send(ctx, ch, CodePurposeChangePassword, phone, userID)
 }
 
-// ChangePassword 修改登录密码：短信验证码确认 + 密码长度校验（复用 authSvc.UpdatePassword）。
+// ChangePassword 修改登录密码：短信验证码确认 + 口令长度前置校验，落库与吊销复用
+// authSvc.UpdatePassword（即口令族的唯一动作 SetNewPassword，ADR-0062 票7）。
 func (s *VerifyCodeService) ChangePassword(ctx context.Context, ch CodeChannel, userID int, code, password string) error {
-	if len(password) < 6 || len(password) > 20 {
-		return errors.New("密码长度需为 6-20 位")
+	// 刻意在 Verify 之前拒掉非法口令：不烧一次性验证码（与 ResetPasswordWithCode 同口径）。
+	if err := validatePasswordLength(password); err != nil {
+		return err
 	}
 	phone, err := s.currentUserPhone(ctx, userID)
 	if err != nil {

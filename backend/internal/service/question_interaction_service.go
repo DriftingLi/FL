@@ -43,7 +43,13 @@ func NewQuestionCommentService(db *gorm.DB, logger *zap.Logger) *QuestionComment
 	return &QuestionCommentService{db: db, logger: logger}
 }
 
-func (s *QuestionCommentService) List(questionID, page, pageSize int) ([]QuestionCommentDTO, int64, error) {
+// List 某题的评论列表。scope 必传（ADR-0062 决策 4）：修复前这条查询**连题目存在性都不查**，
+// 直调任意 question_id 即可枚举池外题（draft / pending / 源标记真题题 / 非当前证件）的评论，
+// 等于给不可见题装了一个只读探针。池外一律按「不存在」上抛，与题目 by-id 读面同口径。
+func (s *QuestionCommentService) List(questionID, page, pageSize int, scope QuestionReadScope) ([]QuestionCommentDTO, int64, error) {
+	if !scope.VisibleByID(s.db, questionID) {
+		return nil, 0, ErrQuestionNotFound
+	}
 	type row struct {
 		model.QuestionComment
 		Username  string `gorm:"column:username"`
@@ -77,7 +83,9 @@ func (s *QuestionCommentService) List(questionID, page, pageSize int) ([]Questio
 	return items, total, nil
 }
 
-func (s *QuestionCommentService) Create(questionID, userID int, content string) (*QuestionCommentDTO, error) {
+// Create 发表评论。scope 必传（ADR-0062 决策 4）：只判「题存在」的旧写法允许把评论挂到
+// 学员根本看不见的题上（再由列表/计数收割），写面与读面必须同一口径。
+func (s *QuestionCommentService) Create(questionID, userID int, content string, scope QuestionReadScope) (*QuestionCommentDTO, error) {
 	content = strings.TrimSpace(content)
 	if content == "" {
 		return nil, errors.New("评论内容不能为空")
@@ -85,9 +93,8 @@ func (s *QuestionCommentService) Create(questionID, userID int, content string) 
 	if len(content) > 500 {
 		return nil, errors.New("评论不能超过500字")
 	}
-	var q model.Question
-	if err := s.db.First(&q, questionID).Error; err != nil {
-		return nil, errors.New("题目不存在")
+	if !scope.VisibleByID(s.db, questionID) {
+		return nil, ErrQuestionNotFound
 	}
 	c := model.QuestionComment{
 		QuestionID: questionID,

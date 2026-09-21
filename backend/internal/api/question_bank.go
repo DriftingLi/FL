@@ -93,17 +93,41 @@ func RegisterQuestionBankRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service
 	g.POST("/upload-image", middleware.CapabilityRequired(authz.CapQuestionAuthor), h.UploadImage)
 }
 
+// ===== scope 入口装配（ADR-0062 决策 4）=====
+//
+// 面向学员的题目读/写路径必须收 service.QuestionReadScope，编辑面收 QuestionEditScope。
+// 装配点要同时拿到两件事：**能力**（决定形态）与**当前证件**（决定分区轴），故集中在本文件——
+// service 侧从此不接受裸 *int 证件，「忘过池」在签名上过不去。
+
+// studentQuestionScope 装配学员题目读 scope：分区轴 = CredentialScoped 解析出的当前证件
+// （学员未选证件 → nil → 池不分区、看全部）。
+func studentQuestionScope(c *gin.Context) service.QuestionReadScope {
+	return service.NewQuestionReadScope(middleware.CredentialIDPtr(c))
+}
+
+// actsAsQuestionEditor 题库编辑面判定单点（题库作者 / 审核者），#981 的 by-id 分流同源。
+func actsAsQuestionEditor(c *gin.Context) bool {
+	return middleware.HasCapability(c, authz.CapQuestionAuthor) || middleware.HasCapability(c, authz.CapQuestionReview)
+}
+
+// editorQuestionScope 装配编辑面 scope：显式 credential_id 是**筛选轴**（不是可见性口径）。
+func editorQuestionScope(c *gin.Context) service.QuestionEditScope {
+	return service.NewQuestionEditScope(middleware.CredentialIDPtr(c))
+}
+
 // listQuestionsReq 题目列表查询参数。
 type listQuestionsReq struct {
-	Page         int
-	PageSize     int
-	QType        string
-	Status       string
-	Keyword      string
-	TagID        *int
-	CredentialID *int
+	Page     int
+	PageSize int
+	QType    string
+	Status   string
+	Keyword  string
+	TagID    *int
 	// Sort 排序口径（#412）：缺省 = 现状（最新提交优先）；讲师端显式传 id_asc。
 	Sort string
+	// Editor 决定走哪一半读面（能力分流，见 actsAsQuestionEditor）：
+	// true = 编辑面（draft/pending 全量 + 证件筛选轴），false = 学员面（题库池）。
+	Editor bool
 }
 
 // ListQuestions 题目列表分页
@@ -129,18 +153,26 @@ func (h *QuestionBankHandler) ListQuestions(c *gin.Context) {
 	Endpoint[listQuestionsReq, service.QuestionPageDTO]{
 		Parse: func(c *gin.Context) (*listQuestionsReq, error) {
 			return &listQuestionsReq{
-				Page:         atoiDefault(c.Query("page"), 1),
-				PageSize:     atoiDefault(c.Query("page_size"), 20),
-				QType:        c.Query("type"),
-				Status:       c.Query("status"),
-				Keyword:      c.Query("keyword"),
-				TagID:        queryIDPtr(c, "tag_id"),
-				CredentialID: middleware.CredentialIDPtr(c),
-				Sort:         c.Query("sort"),
+				Page:     atoiDefault(c.Query("page"), 1),
+				PageSize: atoiDefault(c.Query("page_size"), 20),
+				QType:    c.Query("type"),
+				Status:   c.Query("status"),
+				Keyword:  c.Query("keyword"),
+				TagID:    queryIDPtr(c, "tag_id"),
+				Sort:     c.Query("sort"),
+				Editor:   actsAsQuestionEditor(c),
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *listQuestionsReq) (*service.QuestionPageDTO, error) {
-			return h.svc.ListQuestions(req.Page, req.PageSize, req.QType, req.Status, req.Keyword, req.TagID, req.CredentialID, req.Sort)
+			// 两半不同源（ADR-0062 决策 4 的事实依据）：编辑面读全量含 draft 是它的本职；
+			// 学员面必须过池，且 status 入参对学员无效（池的「已发布」在 scope 里，不在入参里）。
+			// 学员支保留 2xx 而非 403：移动端学员端有消费者（training-app api/practice.uts 的
+			// listQuestions），「挂能力守卫」会直接打断它 —— 该端点进「学员可读面」台账的理由
+			// 由 ADR-0062 票 5 的台账逐条登记（本票只把它的读面收进池）。
+			if req.Editor {
+				return h.svc.ListQuestions(req.Page, req.PageSize, req.QType, req.Status, req.Keyword, req.TagID, editorQuestionScope(c), req.Sort)
+			}
+			return h.svc.ListPoolQuestions(req.Page, req.PageSize, req.QType, req.Keyword, req.TagID, studentQuestionScope(c), req.Sort)
 		},
 	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
 }
@@ -339,14 +371,15 @@ func (h *QuestionBankHandler) GetQuestion(c *gin.Context) {
 		},
 		Invoke: func(ctx context.Context, req *questionIDReq) (*service.QuestionDTO, error) {
 			// 分流读路径（#981）：题库作者/审核者走编辑面（可读 draft），其余（学员）走题库池口径。
-			if middleware.HasCapability(c, authz.CapQuestionAuthor) || middleware.HasCapability(c, authz.CapQuestionReview) {
+			// 两半各自的判据都由 scope 值对象承载（ADR-0062 决策 4），本处只负责按能力选形态。
+			if actsAsQuestionEditor(c) {
 				result, err := h.svc.GetQuestion(req.ID)
 				if err != nil {
 					return nil, err
 				}
 				return &result, nil
 			}
-			result, err := h.svc.GetQuestionForStudent(req.ID, middleware.CredentialIDPtr(c))
+			result, err := h.svc.GetQuestionForStudent(req.ID, studentQuestionScope(c))
 			if err != nil {
 				return nil, err
 			}

@@ -458,14 +458,20 @@ func (s *PracticeModeService) GetPracticeStats(studentID int, credentialID *int)
 //
 // credentialID 非空时按**记录上的分区列**过滤（写入时冻结，ADR-0051）：与 /practice-stats、/history 同口径。
 // 本端点的消费者（移动端「数据报告」页）把总览与 by_type 明细渲染在同一页 —— 口径不一致就是同页自相矛盾。
-func (s *PracticeModeService) GetStats(studentID int, credentialID *int) *PracticeStatsDTO {
+// 查询失败一律上抛 error：旧签名没有 error 出口，DB 抖动时返回「0 题、正确率 0%」的 200，
+// 而同页另一侧的 /practice-stats 却 500（ADR-0062 票6「查不动 ≠ 查得空」）。
+func (s *PracticeModeService) GetStats(studentID int, credentialID *int) (*PracticeStatsDTO, error) {
 	base := func() *gorm.DB {
 		return RecordPartitionOf(s.db.Model(&model.QuestionPracticeRecord{}), "question_practice_record.credential_id", credentialID).
 			Where("question_practice_record.student_id = ?", studentID)
 	}
 	var total, correct int64
-	base().Count(&total)
-	base().Where("question_practice_record.is_correct = ?", true).Count(&correct)
+	if err := base().Count(&total).Error; err != nil {
+		return nil, err
+	}
+	if err := base().Where("question_practice_record.is_correct = ?", true).Count(&correct).Error; err != nil {
+		return nil, err
+	}
 	wrong := total - correct
 	accuracy := 0.0
 	if total > 0 {
@@ -473,7 +479,10 @@ func (s *PracticeModeService) GetStats(studentID int, credentialID *int) *Practi
 	}
 	byTypeBase := base().
 		Joins("JOIN question ON question.id = question_practice_record.question_id")
-	all, filtered := groupByCountWithFilter(byTypeBase, "question.type", "CASE WHEN question_practice_record.is_correct THEN 1 ELSE 0 END")
+	all, filtered, err := groupByCountWithFilter(byTypeBase, "question.type", "CASE WHEN question_practice_record.is_correct THEN 1 ELSE 0 END")
+	if err != nil {
+		return nil, err
+	}
 	// 保留旧语义：by_type 对合法题型零填充；accuracy 为每题型正确率（加性新 key）。
 	byType := make(map[string]PracticeTypeStat, len(validQuestionTypes))
 	for _, t := range validQuestionTypes {
@@ -491,7 +500,7 @@ func (s *PracticeModeService) GetStats(studentID int, credentialID *int) *Practi
 		Wrong:    wrong,
 		Accuracy: accuracy,
 		ByType:   byType,
-	}
+	}, nil
 }
 
 type questionStatResult struct {

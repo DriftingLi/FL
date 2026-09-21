@@ -107,10 +107,12 @@ func (h *CourseHandler) GetChapterSlides(c *gin.Context) {
 			if err != nil {
 				return nil, err
 			}
-			return &chapterSlidesReq{ChapterID: id}, nil
+			uid, _ := c.Get(string(middleware.CtxUserID))
+			studentID, _ := uid.(int)
+			return &chapterSlidesReq{ChapterID: id, StudentID: studentID}, nil
 		},
 		Invoke: func(ctx context.Context, req *chapterSlidesReq) (*service.ChapterSlidesDTO, error) {
-			return h.svc.GetChapterSlides(req.ChapterID)
+			return h.svc.GetChapterSlides(req.ChapterID, req.StudentID)
 		},
 	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
 }
@@ -197,10 +199,12 @@ func (h *CourseHandler) RegenerateChapterSlides(c *gin.Context) {
 			if err != nil {
 				return nil, err
 			}
-			return &chapterSlidesReq{ChapterID: id}, nil
+			uid, _ := c.Get(string(middleware.CtxUserID))
+			studentID, _ := uid.(int)
+			return &chapterSlidesReq{ChapterID: id, StudentID: studentID}, nil
 		},
 		Invoke: func(ctx context.Context, req *chapterSlidesReq) (*service.ChapterSlidesDTO, error) {
-			return h.svc.RegenerateChapterSlides(req.ChapterID)
+			return h.svc.RegenerateChapterSlides(req.ChapterID, req.StudentID)
 		},
 	}.WithSuccess(okMsg("幻灯片重新生成成功"), http.StatusNotFound).Handle(c)
 }
@@ -258,7 +262,12 @@ func (h *CourseHandler) UpdateStudyProgress(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *studyProgressReq) (*service.StudyProgressDTO, error) {
 			return h.svc.UpdateStudyProgress(req.StudentID, req.CourseID, req.Input)
 		},
-		ErrStatus: errStatusAllPrefix(http.StatusInternalServerError, "更新进度失败: "),
+		ErrStatus: &errStatusTable{entries: []errStatusEntry{
+			// 不可读（未发布 / 未挂载 / 未兑换）按 404，与另外三条内容路径同判
+			// （ADR-0062 决策 3）；其余错误保持既有「更新进度失败: + 原文」500 形状。
+			{sentinel: service.ErrContentNotReadable, status: http.StatusNotFound},
+			{sentinel: nil, status: http.StatusInternalServerError, errPrefix: "更新进度失败: "},
+		}},
 		Render: func(c *gin.Context, _ *studyProgressReq, resp *service.StudyProgressDTO) {
 			response.SuccessWithMsg(c, "学习进度更新成功", resp)
 		},
@@ -268,6 +277,7 @@ func (h *CourseHandler) UpdateStudyProgress(c *gin.Context) {
 // chapterSlidesReq 章节幻灯片请求（chapter_id）。
 type chapterSlidesReq struct {
 	ChapterID int
+	StudentID int
 }
 
 // courseDetailReq 课程详情请求（course_id + studentID）。

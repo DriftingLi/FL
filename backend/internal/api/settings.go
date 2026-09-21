@@ -24,6 +24,14 @@ func NewAIConfigHandler(svc *service.AIConfigService) *AIConfigHandler {
 	return &AIConfigHandler{svc: svc}
 }
 
+// aiConfigUpdateErrStatus 「配置不存在」→ 404（具名哨兵，ADR-0062 票9）；其余错误保持既有的
+// 「更新失败: + 原文」500 形状——本票只收编那条不该出现在界面上的驱动原文，
+// 「一切错误同一个码」的整端点判定随票 8（错误码规则序）逐端点做。
+var aiConfigUpdateErrStatus = &errStatusTable{entries: []errStatusEntry{
+	{sentinel: service.ErrAIConfigNotFound, status: http.StatusNotFound},
+	{sentinel: nil, status: http.StatusInternalServerError, errPrefix: "更新失败: "},
+}}
+
 // registerAIConfigRoutes 注册 /admin/ai-configs/* 与 /admin/ai-feature-bindings/* 子路由组。
 // 必须挂在 admin 路由组下（已应用 JWTAuth + CapabilityRequired(authz.CapAdminAccess)）。
 func (h *AIConfigHandler) registerAIConfigRoutes(g *gin.RouterGroup) {
@@ -116,6 +124,7 @@ func (h *AIConfigHandler) CreateConfig(c *gin.Context) {
 // @Success 200 {object} response.R "配置已更新"
 // @Failure 400 {object} response.R "请求参数错误"
 // @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "配置不存在"
 // @Router /admin/ai-configs/{id} [put]
 // UpdateConfig 更新配置（api_key 为空表示不修改）PUT /api/admin/ai-configs/:id
 func (h *AIConfigHandler) UpdateConfig(c *gin.Context) {
@@ -144,7 +153,7 @@ func (h *AIConfigHandler) UpdateConfig(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		ErrStatus: errStatusAllPrefix(http.StatusInternalServerError, "更新失败: "),
+		ErrStatus: aiConfigUpdateErrStatus,
 		Render: func(c *gin.Context, _ *updateConfigReq, _ *struct{}) {
 			response.SuccessWithMsg(c, "配置已更新", nil)
 		},

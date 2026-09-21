@@ -72,14 +72,14 @@ func groupByCount(base *gorm.DB, dimension string) map[string]int64 {
 
 // groupByCountWithFilter 聚合引擎：按 dimension 一次 GROUP BY，同时统计维度总数与满足 filterExpr 的计数。
 // 返回两个字典 key→count 与 key→filteredCount；filterExpr 为聚合条件（如 is_correct 判定表达式）。
-func groupByCountWithFilter(base *gorm.DB, dimension, filterExpr string) (map[string]int64, map[string]int64) {
+func groupByCountWithFilter(base *gorm.DB, dimension, filterExpr string) (map[string]int64, map[string]int64, error) {
 	var rows []statGroupPairRow
-	base.Select(dimension + " AS key, COUNT(*) AS count, COALESCE(SUM(" + filterExpr + "), 0) AS pair_count").Group(dimension).Scan(&rows)
+	err := base.Select(dimension + " AS key, COUNT(*) AS count, COALESCE(SUM(" + filterExpr + "), 0) AS pair_count").Group(dimension).Scan(&rows).Error
 	all := make(map[string]int64, len(rows))
 	filtered := make(map[string]int64, len(rows))
 	for _, r := range rows {
 		all[r.Key] = r.Count
 		filtered[r.Key] = r.PairCount
 	}
-	return all, filtered
+	return all, filtered, err
 }

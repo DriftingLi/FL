@@ -13,6 +13,10 @@ import (
 	"forklift-training/internal/testutil"
 )
 
+// studentScope 测试用学员题目读 scope：未选证件（nil）= 池不分区、看全部。
+// 夹具题（testutil.SeedQuestion）是 published 且无证件、无源标记 ⇒ 恒在池内。
+func studentScope() QuestionReadScope { return NewQuestionReadScope(nil) }
+
 func newNoteSvc(t *testing.T) (*NoteService, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
@@ -28,7 +32,7 @@ func TestNoteStandaloneCanBeMultiple(t *testing.T) {
 			t.Fatalf("建独立笔记失败(%s): %v", c, err)
 		}
 	}
-	page, err := svc.List(1, NoteScopeStandalone, 1, 20)
+	page, err := svc.List(1, NoteScopeStandalone, 1, 20, studentScope())
 	if err != nil {
 		t.Fatalf("列独立笔记失败: %v", err)
 	}
@@ -46,10 +50,10 @@ func TestNoteStandaloneCanBeMultiple(t *testing.T) {
 func TestNoteQuestionNoteStaysSingle(t *testing.T) {
 	svc, db := newNoteSvc(t)
 	q := testutil.SeedQuestion(t, db, "single_choice", "题干", "A")
-	if _, err := svc.UpsertForQuestion(q.ID, 1, "第一版"); err != nil {
+	if _, err := svc.UpsertForQuestion(q.ID, 1, "第一版", studentScope()); err != nil {
 		t.Fatalf("首次保存失败: %v", err)
 	}
-	if _, err := svc.UpsertForQuestion(q.ID, 1, "第二版"); err != nil {
+	if _, err := svc.UpsertForQuestion(q.ID, 1, "第二版", studentScope()); err != nil {
 		t.Fatalf("二次保存失败: %v", err)
 	}
 	var cnt int64
@@ -57,7 +61,7 @@ func TestNoteQuestionNoteStaysSingle(t *testing.T) {
 	if cnt != 1 {
 		t.Fatalf("每题应恰一条, got %d", cnt)
 	}
-	got, err := svc.GetForQuestion(q.ID, 1)
+	got, err := svc.GetForQuestion(q.ID, 1, studentScope())
 	if err != nil || got == nil {
 		t.Fatalf("读取失败: %v", err)
 	}
@@ -79,11 +83,11 @@ func TestNoteListScopeAndOrder(t *testing.T) {
 		UpdateColumn("updated_at", time.Now().Add(-2*time.Hour)).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.UpsertForQuestion(q.ID, 1, "题目笔记较新"); err != nil {
+	if _, err := svc.UpsertForQuestion(q.ID, 1, "题目笔记较新", studentScope()); err != nil {
 		t.Fatal(err)
 	}
 
-	all, err := svc.List(1, NoteScopeAll, 1, 20)
+	all, err := svc.List(1, NoteScopeAll, 1, 20, studentScope())
 	if err != nil {
 		t.Fatalf("列全部失败: %v", err)
 	}
@@ -97,11 +101,11 @@ func TestNoteListScopeAndOrder(t *testing.T) {
 		t.Fatalf("题目笔记应带回题干摘要, got %q", all.Items[0].QuestionContent)
 	}
 
-	qs, _ := svc.List(1, NoteScopeQuestion, 1, 20)
+	qs, _ := svc.List(1, NoteScopeQuestion, 1, 20, studentScope())
 	if qs.Total != 1 || qs.Items[0].QuestionID == nil {
 		t.Fatalf("scope=question 应只 1 条题目笔记, got total=%d", qs.Total)
 	}
-	ss, _ := svc.List(1, NoteScopeStandalone, 1, 20)
+	ss, _ := svc.List(1, NoteScopeStandalone, 1, 20, studentScope())
 	if ss.Total != 1 || ss.Items[0].QuestionID != nil {
 		t.Fatalf("scope=standalone 应只 1 条独立笔记, got total=%d", ss.Total)
 	}
@@ -129,7 +133,7 @@ func TestNoteOwnershipIsolation(t *testing.T) {
 		t.Fatalf("甲的笔记不应被改, got %q", got.Content)
 	}
 	// 列表也只看得到自己的
-	page, _ := svc.List(2, NoteScopeAll, 1, 20)
+	page, _ := svc.List(2, NoteScopeAll, 1, 20, studentScope())
 	if page.Total != 0 {
 		t.Fatalf("乙应看不到甲的笔记, got total=%d", page.Total)
 	}

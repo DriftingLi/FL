@@ -109,7 +109,10 @@ func TestPracticeReadSurfacesCredentialPartition(t *testing.T) {
 		if overview.TotalCount != tc.want {
 			t.Fatalf("%s: practice-stats.total_count=%d, want %d", tc.name, overview.TotalCount, tc.want)
 		}
-		stats := svc.GetStats(student.ID, tc.cred)
+		stats, err := svc.GetStats(student.ID, tc.cred)
+		if err != nil {
+			t.Fatalf("%s: stats 查询失败: %v", tc.name, err)
+		}
 		if stats.Total != tc.want {
 			t.Fatalf("%s: stats.total=%d, want %d", tc.name, stats.Total, tc.want)
 		}

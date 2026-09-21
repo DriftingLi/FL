@@ -216,14 +216,19 @@ func (s *TrainingCatalogService) DeleteCertificateTemplate(id int) error {
 // 附带 question_count：学员端统计已发布题目数，管理端统计全部题目数。
 // credentialID 非 nil 时按目标证件分区（#702：学员端标签计数与抽题池同口径——
 // 已发布 + 排除来源标记标签 + 证件分区；nil = 不分区，保持管理端全局口径）。
-func (s *TrainingCatalogService) ListQuestionTags(activeOnly, includeSourceTags bool, credentialID *int) []QuestionTagDict {
+// 查询失败上抛 error（ADR-0062 票6）：旧写法把来源标签的排除查询失败咽掉 ⇒ 学员端
+// 专项练习里冒出「真题」标签，选了就是空池（判据被读成「没有要排除的标签」）。
+func (s *TrainingCatalogService) ListQuestionTags(activeOnly, includeSourceTags bool, credentialID *int) ([]QuestionTagDict, error) {
 	list := catalogList(s.db, questionTagCatalogSpec(), activeOnly)
 	if len(list) == 0 {
-		return list
+		return list, nil
 	}
 	if !includeSourceTags {
 		var sourceIDs []int
-		if err := s.db.Model(&model.QuestionTag{}).Where("is_source_tag = ?", true).Pluck("id", &sourceIDs).Error; err == nil && len(sourceIDs) > 0 {
+		if err := s.db.Model(&model.QuestionTag{}).Where("is_source_tag = ?", true).Pluck("id", &sourceIDs).Error; err != nil {
+			return nil, err
+		}
+		if len(sourceIDs) > 0 {
 			excluded := make(map[int]bool, len(sourceIDs))
 			for _, id := range sourceIDs {
 				excluded[id] = true
@@ -236,7 +241,7 @@ func (s *TrainingCatalogService) ListQuestionTags(activeOnly, includeSourceTags 
 			}
 			list = filtered
 			if len(list) == 0 {
-				return list
+				return list, nil
 			}
 		}
 	}
@@ -273,7 +278,9 @@ func (s *TrainingCatalogService) ListQuestionTags(activeOnly, includeSourceTags 
 		"LEFT JOIN question AS question ON question.id = qtr.question_id WHERE t.id IN ? GROUP BY t.id"
 	args = append(args, ids)
 	var rows []countRow
-	s.db.Raw(query, args...).Scan(&rows)
+	if err := s.db.Raw(query, args...).Scan(&rows).Error; err != nil {
+		return nil, err
+	}
 	counts := make(map[int]countRow, len(rows))
 	for i := range rows {
 		counts[rows[i].TagID] = rows[i]
@@ -289,7 +296,7 @@ func (s *TrainingCatalogService) ListQuestionTags(activeOnly, includeSourceTags 
 		}
 		list[i].QuestionCount = &count
 	}
-	return list
+	return list, nil
 }
 
 // CreateQuestionTag 创建题库标签。

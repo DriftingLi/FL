@@ -90,7 +90,12 @@ func normalizeNoteContent(content string) (string, error) {
 }
 
 // GetForQuestion 取本人对某题的笔记；没有则返回 (nil, nil)（不是错误）。
-func (s *NoteService) GetForQuestion(questionID, userID int) (*model.Note, error) {
+// 题目须在本 scope 内可见（ADR-0062 决策 4：题目维度的学员读面一律收 scope）——
+// 池外题按「不存在」处理，与题目 by-id 读面同口径（笔记行本身仍是本人的私有数据，列表照列）。
+func (s *NoteService) GetForQuestion(questionID, userID int, scope QuestionReadScope) (*model.Note, error) {
+	if !scope.VisibleByID(s.db, questionID) {
+		return nil, ErrQuestionNotFound
+	}
 	var n model.Note
 	if err := s.db.Where("question_id = ? AND user_id = ?", questionID, userID).First(&n).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -102,14 +107,15 @@ func (s *NoteService) GetForQuestion(questionID, userID int) (*model.Note, error
 }
 
 // UpsertForQuestion 保存本人对某题的笔记（每人每题一条，UNIQUE(question_id, user_id) 兜底）。
-func (s *NoteService) UpsertForQuestion(questionID, userID int, content string) (*model.Note, error) {
+// scope 必传（ADR-0062 决策 4）：**写**在题上的东西也要先证明这道题对这位学员可读——
+// 否则「挂到不可见题上」就成了绕过池的第二条通道（列表读面会把题干带回来）。
+func (s *NoteService) UpsertForQuestion(questionID, userID int, content string, scope QuestionReadScope) (*model.Note, error) {
 	content, err := normalizeNoteContent(content)
 	if err != nil {
 		return nil, err
 	}
-	var q model.Question
-	if err := s.db.First(&q, questionID).Error; err != nil {
-		return nil, errors.New("题目不存在")
+	if !scope.VisibleByID(s.db, questionID) {
+		return nil, ErrQuestionNotFound
 	}
 	var n model.Note
 	err = s.db.Where("question_id = ? AND user_id = ?", questionID, userID).First(&n).Error
@@ -133,7 +139,11 @@ func (s *NoteService) UpsertForQuestion(questionID, userID int, content string) 
 }
 
 // DeleteForQuestion 删除本人对某题的笔记（不存在时静默成功，与旧口径一致）。
-func (s *NoteService) DeleteForQuestion(questionID, userID int) error {
+// 题目维度同 GetForQuestion：池外题按「不存在」，判据由 scope 承载。
+func (s *NoteService) DeleteForQuestion(questionID, userID int, scope QuestionReadScope) error {
+	if !scope.VisibleByID(s.db, questionID) {
+		return ErrQuestionNotFound
+	}
 	return s.db.Where("question_id = ? AND user_id = ?", questionID, userID).Delete(&model.Note{}).Error
 }
 
@@ -183,10 +193,15 @@ func (s *NoteService) Delete(id, userID int) error {
 	return nil
 }
 
-// List 本人笔记分页（按 updated_at 倒序，同刻用 id 兜底）。scope 取 all / question /
+// List 本人笔记分页（按 updated_at 倒序，同刻用 id 兜底）。noteScope 取 all / question /
 // standalone（未知值按 all 处理）。题目笔记一并带回题干摘要：一次 LEFT JOIN 覆盖整页
 // （禁 N+1），供列表卡片显示「这条笔记挂在哪道题上」与跳题。
-func (s *NoteService) List(userID int, scope string, page, pageSize int) (*NotePageDTO, error) {
+//
+// qScope（题目读 scope，ADR-0062 决策 4）挂在那次 LEFT JOIN 上：**摘要只对池内题回填**。
+// 修复前 JOIN 不带池谓词 ⇒ 学员历史上（或经其他写面）挂在 draft / pending / 源标记真题题 /
+// 非当前证件题上的笔记，可以经这一条批量收割题干。笔记行本身是本人的私有数据，
+// 照常列出（摘要为空），与「题目已删除」同形态——不靠隐藏条目来判。
+func (s *NoteService) List(userID int, noteScope string, page, pageSize int, qScope QuestionReadScope) (*NotePageDTO, error) {
 	// 页大小上限保留既有「超上限截断到上限」语义（与 ClampMax 的「超上限回退默认」不同），
 	// 先归一化再交给 paging（其钳制对已归一化的值成为空操作）。
 	if page <= 0 {
@@ -200,7 +215,7 @@ func (s *NoteService) List(userID int, scope string, page, pageSize int) (*NoteP
 	}
 	base := func() *gorm.DB {
 		q := s.db.Model(&model.Note{}).Where("note.user_id = ?", userID)
-		switch scope {
+		switch noteScope {
 		case NoteScopeQuestion:
 			q = q.Where("note.question_id IS NOT NULL")
 		case NoteScopeStandalone:
@@ -208,6 +223,7 @@ func (s *NoteService) List(userID int, scope string, page, pageSize int) (*NoteP
 		}
 		return q
 	}
+	poolSQL, poolArgs := qScope.WhereSQL()
 	type row struct {
 		ID              int
 		QuestionID      *int
@@ -220,7 +236,7 @@ func (s *NoteService) List(userID int, scope string, page, pageSize int) (*NoteP
 		func(q *gorm.DB) *gorm.DB {
 			return base().
 				Select("note.id, note.question_id, note.content, note.updated_at, COALESCE(question.content, '') AS question_content").
-				Joins("LEFT JOIN question ON question.id = note.question_id")
+				Joins("LEFT JOIN question ON question.id = note.question_id AND "+poolSQL, poolArgs...)
 		})
 	if err != nil {
 		return nil, err

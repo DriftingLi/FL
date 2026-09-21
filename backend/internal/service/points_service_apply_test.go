@@ -195,7 +195,9 @@ func TestRedeemShopConcurrentDoubleSpend(t *testing.T) {
 	}
 }
 
-// TestDeductAIStableRequestIdempotent AI 扣费稳定键：同一 requestID 重复扣费只扣一次。
+// TestDeductAIStableRequestIdempotent AI 扣费同键幂等：同一 requestID 重复扣费只扣一次。
+// requestID 现由服务端逐请求铸造（ADR-0062 票1），故本例锁的是「一次请求内二次调用不双扣」
+// 这一道兜底，不再是「调用方可复用的稳定标识」。
 func TestDeductAIStableRequestIdempotent(t *testing.T) {
 	svc, db := newPointsSvc(t)
 	uid := seedUserWithBalance(t, db, 100)
@@ -219,8 +221,39 @@ func TestDeductAIStableRequestIdempotent(t *testing.T) {
 		t.Fatalf("ai_tokens 流水应恰一行, got %d", got)
 	}
 	var idemCnt int64
-	if err := db.Model(&model.PointsEntryIdem{}).Where("idem_key = ?", "ai_tokens:req-stable-1").Count(&idemCnt).Error; err != nil || idemCnt != 1 {
+	if err := db.Model(&model.PointsEntryIdem{}).Where("idem_key = ?", AITokensIdemKey(uid, "req-stable-1")).Count(&idemCnt).Error; err != nil || idemCnt != 1 {
 		t.Fatalf("ai_tokens 占坑行应存在: cnt=%d err=%v", idemCnt, err)
+	}
+}
+
+// TestDeductAIAcrossUsersSameRequestID 两个学员撞同一 requestID 时各自都扣一次：
+// 键含主体（ai_tokens:{userID}:{requestID}，ADR-0062 票1），旧写法下跳用户撞坑会被
+// 当作「已扣过」而静默免扣费。
+func TestDeductAIAcrossUsersSameRequestID(t *testing.T) {
+	svc, db := newPointsSvc(t)
+	seedAIUser := func(account string) int {
+		u := testutil.SeedStudent(t, db, account, "x")
+		if err := db.Model(&model.HrwaiUser{}).Where("id = ?", u.ID).UpdateColumn("points_balance", 100).Error; err != nil {
+			t.Fatalf("预置余额失败: %v", err)
+		}
+		return u.ID
+	}
+	uidA := seedAIUser("ai_rid_a")
+	uidB := seedAIUser("ai_rid_b")
+
+	resA, err := svc.DeductAI(context.Background(), uidA, "shared-rid", 0, 4000)
+	if err != nil {
+		t.Fatalf("甲扣费失败: %v", err)
+	}
+	resB, err := svc.DeductAI(context.Background(), uidB, "shared-rid", 0, 4000)
+	if err != nil {
+		t.Fatalf("乙扣费失败（同 requestID 不得跨用户共用一坑）: %v", err)
+	}
+	if resB.Points != resA.Points || resB.Balance != 100-resA.Points {
+		t.Fatalf("乙应被正常扣费: pA=%d pB=%d balB=%d", resA.Points, resB.Points, resB.Balance)
+	}
+	if got := ledgerCount(t, db, "reason = ?", "ai_tokens"); got != 2 {
+		t.Fatalf("两名学员各一笔 ai_tokens 流水, got %d", got)
 	}
 }
 

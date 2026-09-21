@@ -168,6 +168,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "404": {
+                        "description": "配置不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             },

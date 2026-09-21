@@ -364,12 +364,25 @@ func TestRequestID(t *testing.T) {
 		t.Error("应设置 X-Request-ID 响应头")
 	}
 
-	// 使用传入的 ID
-	req, _ = http.NewRequest("GET", "/", nil)
-	req.Header.Set("X-Request-ID", "custom-rid")
-	w = httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	if w.Body.String() != "custom-rid" {
-		t.Errorf("应使用传入的 ID，得到 %q", w.Body.String())
+	// 调用方供给的 X-Request-ID 不被采纳为请求身份（ADR-0062 票1）：计量闸门不接受
+	// 被计量方给出的「这事发生过没有」凭据，运行日志与审计也不收外部可控 ID。
+	supplied := "fixed-rid-from-client"
+	seen := map[string]bool{}
+	for i := 0; i < 2; i++ {
+		req, _ = http.NewRequest("GET", "/", nil)
+		req.Header.Set("X-Request-ID", supplied)
+		w = httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		got := w.Body.String()
+		if got == supplied {
+			t.Fatalf("第 %d 次：请求身份不得等于调用方供给的 %q", i+1, supplied)
+		}
+		if got == "" {
+			t.Fatalf("第 %d 次：应仍自动生成 request ID", i+1)
+		}
+		seen[got] = true
+	}
+	if len(seen) != 2 {
+		t.Errorf("同一固定请求头连打两次应得两个不同的服务端身份（否则固定值即免扣费通道），得到 %v", seen)
 	}
 }

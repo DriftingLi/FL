@@ -8,6 +8,7 @@ import (
 	"go.uber.org/zap"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -237,6 +238,41 @@ func (s *CourseService) GetCourses(page, pageSize int, credentialID, specialtyID
 	})
 }
 
+// ErrContentNotReadable 内容对当前学员不可读：未发布 / 未挂载 / 未兑换三态合一（同一句话、
+// 同一个状态码），不泄漏是哪一态——与 #981 的「越权按不存在」同判据。
+// 文案沿用收紧前的「章节不存在」（四条路径共用一个哨兵，不各写一份文案）。
+var ErrContentNotReadable = errors.New("章节不存在")
+
+// studentCanReadCourse 学员能否读这门课的内容：**可见性 ∧ 权益**（ADR-0062 决策 3）。
+// 权益是独立事实，经权益读面单点（entitlement_read.go）查，**不并进 CourseVisibleByID**——
+// 那条谓词有四个无主体的共用 caller（课程列表、全局搜索、收藏目标校验、章节可见性）。
+// 未定价课程对任何学员可读；定价课程须该学员已兑换（未登录 = 未兑换）。
+// 消费方 = 「内容读 + 进度写」一族：章节详情、幻灯片 GET/POST、学习进度上报
+// ——上报会在 study_record 上留下学习事实（喂给进度、完成态与「已拥有」判据），所以同样要拦。
+func (s *CourseService) studentCanReadCourse(courseID, studentID int) error {
+	if !CourseVisibleByID(s.db, courseID) {
+		return ErrContentNotReadable
+	}
+	var course model.Course
+	if err := s.db.Select("points_price").First(&course, courseID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrContentNotReadable // 课程行不在 = 真不存在，与「不可读」同判
+		}
+		return err // 查不动不得被读成「不可读」（ADR-0062 票6 同判据）
+	}
+	if course.PointsPrice == nil || *course.PointsPrice <= 0 {
+		return nil
+	}
+	entitled, err := holdsEntitlement(s.db, studentID, CourseSKU(courseID), strconv.Itoa(courseID))
+	if err != nil {
+		return err
+	}
+	if !entitled {
+		return ErrContentNotReadable
+	}
+	return nil
+}
+
 // GetCourseDetail 课程详情（含学员学习位置与完成状态，ADR-0017）。
 // 可见性：按 id 读路径纳入学员可见性谓词（ADR-0058）——未发布 / 未挂载课程一律按「不存在」返回。
 func (s *CourseService) GetCourseDetail(courseID, studentID int) (*CourseDetailDTO, error) {
@@ -283,8 +319,8 @@ func (s *CourseService) GetChapterDetail(courseID, chapterID, studentID int) (*C
 	if chapter.CourseID != courseID {
 		return nil, errors.New("章节不属于该课程")
 	}
-	if !CourseVisibleByID(s.db, chapter.CourseID) {
-		return nil, errors.New("章节不存在")
+	if err := s.studentCanReadCourse(chapter.CourseID, studentID); err != nil {
+		return nil, err
 	}
 	return chapterDetailShared(s.db, &chapter, true, studentID), nil
 }
@@ -292,14 +328,15 @@ func (s *CourseService) GetChapterDetail(courseID, chapterID, studentID int) (*C
 // GetChapterSlides 章节幻灯片。
 // 优先读取 DB 中持久化的 slide_urls；为空则从 PPT 文件下载并触发转图，
 // 转图成功后把 URL 列表回写 chapter.slide_urls。
-// 可见性：与章节详情同一谓词（ADR-0058）——否则幻灯片会成为未发布章节内容的旁路。
-func (s *CourseService) GetChapterSlides(chapterID int) (*ChapterSlidesDTO, error) {
+// 可见性：与章节详情同一谓词（ADR-0058）——否则幻灯片会成为未发布章节内容的旁路；
+// 付费课程的权益半边同经 studentCanReadCourse（ADR-0062 决策 3）。
+func (s *CourseService) GetChapterSlides(chapterID, studentID int) (*ChapterSlidesDTO, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
 		return nil, errors.New("章节不存在")
 	}
-	if !CourseVisibleByID(s.db, chapter.CourseID) {
-		return nil, errors.New("章节不存在")
+	if err := s.studentCanReadCourse(chapter.CourseID, studentID); err != nil {
+		return nil, err
 	}
 
 	// 1. 优先读 DB 持久化的 slide_urls
@@ -321,12 +358,17 @@ func (s *CourseService) GetChapterSlides(chapterID int) (*ChapterSlidesDTO, erro
 	return &ChapterSlidesDTO{ChapterID: chapterID, Slides: slideURLs}, nil
 }
 
-// RegenerateChapterSlides 重新生成幻灯片。
-// 总是重新下载 PPT 并转图，覆盖 chapter.slide_urls。
-func (s *CourseService) RegenerateChapterSlides(chapterID int) (*ChapterSlidesDTO, error) {
+// RegenerateChapterSlides 重新生成幻灯片（学员端 PptViewer 的刷新按钮也在调它 ⇒ 消费者不只是
+// 管理面，正解是同一条可读性判据，不是能力守卫）。旧写法一条判据都没有：任意登录学员按章节 id
+// 即可让服务端下载 PPT + 转图并把 URL 回给自己，等于未发布/未兑换章节正文幻灯片的旁路
+// （同文件 GET 半边早在 ADR-0058 堵过同一个洞）。
+func (s *CourseService) RegenerateChapterSlides(chapterID, studentID int) (*ChapterSlidesDTO, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
 		return nil, errors.New("章节不存在")
+	}
+	if err := s.studentCanReadCourse(chapter.CourseID, studentID); err != nil {
+		return nil, err
 	}
 	pptURL := resolveChapterPPTURL(s.db, &chapter, chapterID)
 	if pptURL == "" {
@@ -389,6 +431,11 @@ func downloadFile(url string) ([]byte, error) {
 // ADR-0017：支持秒级时长（DurationSecs 优先）、章节播放位置（VideoPosition）与
 // 显式完成（Completed）；带章节的上报同步刷新课程级记录 last_chapter_id / last_studied_at。
 func (s *CourseService) UpdateStudyProgress(studentID, courseID int, in StudyProgressInput) (*StudyProgressDTO, error) {
+	// 付费课程未兑换即不得写学习事实（ADR-0062 决策 3 列的第三处：进度写）。
+	// 不拦的话，白看的人照样能攒出进度、完成态与「已报名」判据。
+	if err := s.studentCanReadCourse(courseID, studentID); err != nil {
+		return nil, err
+	}
 	duration := in.Duration
 	if in.DurationSecs > 0 {
 		duration = (in.DurationSecs + 59) / 60

@@ -224,23 +224,25 @@ func (s *ContributionService) UploadFile(ctx context.Context, fileHeader *multip
 }
 
 // collectReferencedContributionFiles 收集全部投稿引用文件 key 集合（悬空回收差集用）。
-func (s *ContributionService) collectReferencedContributionFiles() map[string]bool {
+// 查不动即返回 error，sweep 据此整轮放弃（ADR-0062 票5，与论坛图片同一判据）。
+func (s *ContributionService) collectReferencedContributionFiles() (map[string]bool, error) {
 	ref := map[string]bool{}
 	var urls []string
-	if err := s.db.Model(&model.UserContributionFile{}).Pluck("file_url", &urls).Error; err == nil {
-		for _, u := range urls {
-			if key := AttachmentKey(u, ContributionFileDirPrefix); key != "" {
-				ref[key] = true
-			}
+	if err := s.db.Model(&model.UserContributionFile{}).Pluck("file_url", &urls).Error; err != nil {
+		return nil, fmt.Errorf("收集投稿文件引用失败: %w", err)
+	}
+	for _, u := range urls {
+		if key := AttachmentKey(u, ContributionFileDirPrefix); key != "" {
+			ref[key] = true
 		}
 	}
-	return ref
+	return ref, nil
 }
 
 // CleanupOrphanFiles 清理投稿悬空文件（薄配置壳，算法单点见 orphan_sweep.go / ADR-0027 C2）：
 // ListWithInfo(contributions/) 与全量引用集差集，仅删存储侧 LastModified 超过
 // ContributionOrphanTTL 且未被任何投稿文件行引用的文件。
-// 返回清理数（尽力而为，存储错误不中断）；ctx 取消语义贯穿到存储调用。
+// 返回清理数（存储错误不中断）；引用集查不动或为空时整轮不清理（ADR-0062 票5）；ctx 取消语义贯穿到存储调用。
 func (s *ContributionService) CleanupOrphanFiles(ctx context.Context) int {
 	if s.fileSvc == nil {
 		return 0
