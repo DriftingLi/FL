@@ -38,7 +38,7 @@ const GeneratedFile = "config/credentialScope.ts"
 // （职位/投递）、积分域（流水/任务中心/打卡）、以及「证件目录」本身（它装载的就是证件清单，
 // 自然不随当前证件变化）。任何「因为懒得重装」而加进来的条目都应被评审打回。
 var OptOuts = []OptOut{
-	{File: "components/student/ChapterDiscussion.vue", Count: 1, Reason: "章节讨论属论坛域，帖子不按证件分区（#604 opt-out）"},
+	{File: "components/student/ChapterDiscussion.vue", Count: 2, Reason: "章节讨论属论坛域，帖子不按证件分区（#604 opt-out）；两处=帖子列表 + 票4 场景4 新增的回复 append 档"},
 	{File: "pages/onboarding/CredentialOnboarding.vue", Count: 1, Reason: "本页装载的就是证件目录，不随当前证件变化（且页面只存在于未选证件时）"},
 	{File: "pages/student/ChapterView.vue", Count: 1, Reason: "章节页内嵌论坛域讨论区，随章节而非随证件装载（#604 opt-out）"},
 	{File: "pages/student/CheckInPage.vue", Count: 1, Reason: "打卡不按当前证件分区（ADR-0028 独立蓝图）"},

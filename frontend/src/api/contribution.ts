@@ -1,4 +1,6 @@
 import { unwrappedRequest } from './request'
+// 票 6（ADR-0060 决策 6）：管理端两条列表队列在出口处归一为中立容器 Page<T>
+import { toPage, type Page } from './page'
 import type {
   ContributionAuthor,
   ContributionFileDTO,
@@ -84,11 +86,12 @@ export const contributionApi = {
   }
 }
 
-/** 管理端投稿审核与举报（admin/tutor 鉴权；讲师端 UI 二期） */
+/** 管理端投稿审核与举报（admin/tutor 鉴权；讲师端 UI 二期）。列表出口给中立容器 Page<T>（票 6）。 */
 export const adminContributionApi = {
-  /** 待审核队列 */
-  listPending(params?: { page?: number; page_size?: number }) {
-    return unwrappedRequest.get<ContributionPageResult>('/admin/contributions/pending', { params })
+  /** 待审核队列（后端行键 = `items`）。 */
+  async listPending(params?: { page?: number; page_size?: number }): Promise<Page<ContributionItemDTO>> {
+    const res = await unwrappedRequest.get<ContributionPageResult>('/admin/contributions/pending', { params })
+    return toPage(res?.items, res?.total)
   },
   approve(id: number) {
     return unwrappedRequest.post<ContributionItemDTO>(`/admin/contributions/${id}/approve`)
@@ -99,9 +102,10 @@ export const adminContributionApi = {
   archive(id: number, reason: string) {
     return unwrappedRequest.post<ContributionItemDTO>(`/admin/contributions/${id}/archive`, { reason })
   },
-  /** 举报队列：status 0 待处理 / 1 已处理，缺省全部 */
-  listReports(params?: { status?: number; page?: number; page_size?: number }) {
-    return unwrappedRequest.get<ContributionReportPageResult>('/admin/contributions/reports', { params })
+  /** 举报队列：status 0 待处理 / 1 已处理，缺省全部（后端行键 = `items`）。 */
+  async listReports(params?: { status?: number; page?: number; page_size?: number }): Promise<Page<ContributionReportItemDTO>> {
+    const res = await unwrappedRequest.get<ContributionReportPageResult>('/admin/contributions/reports', { params })
+    return toPage(res?.items, res?.total)
   },
   handleReport(id: number, action: 'archive' | 'dismiss') {
     return unwrappedRequest.post(`/admin/contributions/reports/${id}/handle`, { action })

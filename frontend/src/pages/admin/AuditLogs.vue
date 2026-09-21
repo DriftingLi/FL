@@ -9,8 +9,8 @@
         <template #filters>
 
         <el-select v-model="query.role" placeholder="角色" clearable style="width: 130px" @change="search()">
-          <el-option label="管理员" value="admin" />
-          <el-option label="讲师" value="tutor" />
+          <el-option :label="describeRole('admin')" value="admin" />
+          <el-option :label="describeRole('tutor')" value="tutor" />
         </el-select>
         <el-input
           v-model="query.keyword"
@@ -44,7 +44,7 @@
         <el-table-column prop="actor_name" label="操作人" width="110" />
         <el-table-column label="角色" width="80" align="center">
           <template #default="{ row }">
-            {{ row.actor_role === 'admin' ? '管理员' : '讲师' }}
+            {{ describeRole(row.actor_role) }}
           </template>
         </el-table-column>
         <el-table-column prop="action" label="操作内容" min-width="200" show-overflow-tooltip />
@@ -76,6 +76,7 @@ import UiPagination from '@/components/ui/UiPagination.vue'
 import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import { useAdminTable } from '@/composables/useAdminTable'
+import { describeRole } from '@/utils/roleWords'
 
 const query = reactive<{ role: string; keyword: string }>({
   role: '',
@@ -96,15 +97,14 @@ const {
   retry: retryLoad
 } = useAdminTable<AuditLogItem>({
   pageSize: 20,
-  fetch: async (paging) => {
-    const data = await adminApi.listAuditLogs({
+  fetch: (paging) =>
+    // 票 6（ADR-0060 决策 6）：分页容器由 api 层出口给（Page<T>），页面不再手抄 `{ list, total }`
+    adminApi.listAuditLogs({
       page: paging.page,
       page_size: paging.pageSize,
       role: query.role || undefined,
       keyword: query.keyword || undefined
     })
-    return { list: data?.items || [], total: data?.total || 0 }
-  }
 })
 
 /** 查询 / 筛选变化：回第一页重装 */

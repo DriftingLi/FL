@@ -1,0 +1,34 @@
+/**
+ * 招聘者工作区的会话守卫（ADR-0022 ②「招聘者工作区页面的 onLoad 守卫」）
+ *
+ * 为什么需要它：招聘者页面已在 `pages.json` 注册（ADR-0022 ② 裁定**不开创** `pages.json`
+ * 条件编译，平台面隔离只靠源码级守卫 + 小程序端不发布），因此这些路径在学员态下也可能被
+ * 直接进入。进入时若身份槽里不是招聘者，页面上的每个批量请求都会 400/403，
+ * 用户看到的是一屏错误 toast 而不是「去登录」。
+ *
+ * 与 401 出口的分工（**不新增第二个 401 出口**，ADR-0022 ⑤）：
+ *   - 401（token 失效）仍由 `api/request.uts` 的 `handleUnauthorized()` 单点处置；
+ *   - 本守卫只管「**压根不是招聘者会话**」这一种进入态，是页面 onLoad 的前置判断，
+ *     不参与任何请求失败路径 —— 它不认识 HTTP 状态码，也不清任何凭据。
+ *
+ * 角色判定读 `utils/authRole.uts`（`auth_active_role`，缺省 = 学员），
+ * 不 import `stores/auth.uts`（那会与 `api/request.uts` 形成循环依赖，见 `authRole.uts` 头注）。
+ */
+import { getStorage } from './storage'
+import { isRecruiterActive } from './authRole'
+import { STORAGE_KEY_TOKEN } from '../constants/app'
+
+/** 身份槽里是否是「有 token 的招聘者」（两个条件缺一不可） */
+export function hasRecruiterSession() : boolean {
+    return getStorage(STORAGE_KEY_TOKEN).length > 0 && isRecruiterActive()
+}
+
+/**
+ * 页面 onLoad 前置守卫：不是招聘者会话就送回招聘者登录页
+ * @returns true = 放行；false = 已发起 reLaunch，调用方必须**立即停止**后续取数
+ */
+export function ensureRecruiterSession() : boolean {
+    if (hasRecruiterSession()) return true
+    uni.reLaunch({ url: '/pages/recruiter/login' })
+    return false
+}

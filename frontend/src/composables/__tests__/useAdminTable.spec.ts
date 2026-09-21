@@ -8,6 +8,7 @@ vi.mock('@/composables/useConfirm', () => ({
   useConfirm: () => ({ confirm: confirmSpy, confirmDanger: confirmSpy, prompt: vi.fn() })
 }))
 
+import { toPage, type Page } from '@/api/page'
 import { useAdminTable } from '@/composables/useAdminTable'
 
 interface Row {
@@ -21,7 +22,7 @@ function makeTable() {
     fetch: async (paging, filters) => {
       seen.push({ page: paging.page, pageSize: paging.pageSize, filters })
       return {
-        list: [{ id: paging.page, name: `row-${paging.page}` }],
+        items: [{ id: paging.page, name: `row-${paging.page}` }],
         total: 25
       }
     },
@@ -118,7 +119,7 @@ describe('useAdminTable（admin 列表状态机）', () => {
     const table = useAdminTable<Row>({
       fetch: async () => {
         if (fail) throw new Error('boom')
-        return { list: [{ id: 1, name: 'a' }], total: 1 }
+        return { items: [{ id: 1, name: 'a' }], total: 1 }
       }
     })
 
@@ -136,7 +137,7 @@ describe('useAdminTable（admin 列表状态机）', () => {
     const table = useAdminTable<Row>({
       fetch: async () => {
         if (fail) throw new Error('boom')
-        return { list: [{ id: 2, name: 'b' }], total: 1 }
+        return { items: [{ id: 2, name: 'b' }], total: 1 }
       }
     })
 
@@ -158,8 +159,8 @@ describe('useAdminTable（admin 列表状态机）', () => {
     const table = useAdminTable<Row>({
       fetch: () => {
         calls++
-        return new Promise<{ list: Row[]; total: number }>((resolve) => {
-          release = () => resolve({ list: [], total: 0 })
+        return new Promise<Page<Row>>((resolve) => {
+          release = () => resolve({ items: [], total: 0 })
         })
       }
     })
@@ -177,7 +178,7 @@ describe('useAdminTable（admin 列表状态机）', () => {
     const table = useAdminTable<Row>({
       fetch: async () => {
         if (fail) throw new Error('boom')
-        return { list: [], total: 0 }
+        return { items: [], total: 0 }
       },
       searchable: true
     })
@@ -195,7 +196,7 @@ describe('useAdminTable（admin 列表状态机）', () => {
 
   it('isEmpty：装载成功且没有条目为真，有条目为假', async () => {
     let rows: Row[] = []
-    const table = useAdminTable<Row>({ fetch: async () => ({ list: rows, total: rows.length }) })
+    const table = useAdminTable<Row>({ fetch: async () => ({ items: rows, total: rows.length }) })
 
     await table.load()
     expect(table.isEmpty.value).toBe(true)
@@ -203,6 +204,23 @@ describe('useAdminTable（admin 列表状态机）', () => {
     rows = [{ id: 1, name: 'a' }]
     await table.load()
     expect(table.isEmpty.value).toBe(false)
+  })
+
+  // ---- 票 6（ADR-0060 决策 6）：容器由 api 侧 Page<T> 承载；兜底的唯一宿主是 toPage ----
+
+  it('后端整段不回负载（经 toPage 归一）：仍按 [] 与 0 装载，口径与归位前逐字一致', async () => {
+    const table = useAdminTable<Row>({
+      // 真实链路上信封 data 可能为 null；那一层兜底只在 api/page.ts 的 toPage 里做一次，
+      // composable 信任 Page<T> 的声明面（再兜一层就是同一判据的第二宿主）。
+      fetch: async () => toPage(undefined, undefined)
+    })
+
+    await table.load()
+
+    expect(table.list.value).toEqual([])
+    expect(table.total.value).toBe(0)
+    expect(table.loadError.value).toBe(false)
+    expect(table.isEmpty.value).toBe(true)
   })
 
   it('loadErrorKind：404 归空态（isEmpty 仍为真）、其余错误是错误态', async () => {
@@ -230,7 +248,7 @@ describe('useAdminTable（admin 列表状态机）', () => {
     const table = useAdminTable<Row>({
       fetch: async () => {
         if (fail) throw Object.assign(new Error('boom'), { kind: 'server' })
-        return { list: [{ id: 1, name: 'a' }], total: 1 }
+        return { items: [{ id: 1, name: 'a' }], total: 1 }
       }
     })
 

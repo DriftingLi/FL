@@ -190,8 +190,8 @@ func TestTutorLogin_WrongPassword(t *testing.T) {
 	testutil.SeedTutor(t, tdb, "tutor1", hash)
 
 	_, err := svc.TutorLogin("tutor1", "wrong")
-	if err == nil || err.Error() != "导师账号或密码错误" {
-		t.Fatalf("应返回导师账号或密码错误, got %v", err)
+	if err == nil || err.Error() != "讲师账号或密码错误" {
+		t.Fatalf("应返回讲师账号或密码错误, got %v", err)
 	}
 }
 

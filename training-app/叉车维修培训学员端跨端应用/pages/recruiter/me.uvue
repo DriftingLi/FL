@@ -1,0 +1,203 @@
+<template>
+    <view class="page" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+
+        <view class="nav-bar">
+            <view class="nav-side" @click="onBack">
+                <text class="nav-back">‹</text>
+            </view>
+            <text class="nav-title">我的</text>
+            <view class="nav-side"></view>
+        </view>
+
+        <scroll-view class="content-scroll" scroll-y="true">
+            <view class="group">
+                <view class="kv-row">
+                    <text class="kv-key">招聘账号</text>
+                    <text class="kv-value">{{ account }}</text>
+                </view>
+                <view class="kv-row kv-row-last">
+                    <text class="kv-key">当前身份</text>
+                    <text class="kv-value">{{ roleLabel }}</text>
+                </view>
+            </view>
+
+            <view class="group">
+                <view class="kv-row">
+                    <text class="kv-key">记住密码</text>
+                    <text class="kv-value">不提供</text>
+                </view>
+                <view class="kv-row kv-row-last">
+                    <text class="kv-key">生物识别</text>
+                    <text class="kv-value">不提供</text>
+                </view>
+            </view>
+
+            <view class="logout-btn" @click="onLogout">
+                <text class="logout-btn-text">退出登录</text>
+            </view>
+        </scroll-view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    /**
+     * 招聘者工作区 · 我的（二级面推入页，**无分段件**；ADR-0022 ②/④ 步骤 P2）
+     *
+     * 由一级面导航栏右上角的常驻入口推入；内容 = 账号信息 + 凭据策略 + 退出登录。
+     * **不给「切换到学员登录」入口**（ADR-0022 ②）：身份互斥的价值是「不可能同时是两个身份」，
+     * 配一个切换按钮等于把互斥做成开关；学员侧入口只保留学员登录页底部那一个。
+     *
+     * 凭据策略两行是**功能性事实**而非说明文案：招聘者按 ADR-0021 ② 不提供记住密码 / 生物识别
+     * （企业账号可能多人共用，凭据不留个人设备），用户点到这里就该知道为什么没有这些开关。
+     *
+     * 企业名称**不显示**：`GET /recruit/me` 只回 `{user_id, account, role}`，
+     * 登录响应也不带 `company_name` ⇒ 拿不到就不编。
+     */
+    import { ref, computed } from 'vue'
+    import { onLoad } from '@dcloudio/uni-app'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { getRecruitMeApi } from '../../api/recruit'
+    import { useAuthStore } from '../../stores/auth'
+    import { ensureRecruiterSession } from '../../utils/recruitGuard'
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    const auth = useAuthStore()
+
+    const account = ref<string>('')
+    const role = ref<string>('')
+
+    const roleLabel = computed<string>(() : string => {
+        if (role.value == 'recruiter') return '企业招聘者'
+        if (role.value.length > 0) return role.value
+        return '—'
+    })
+
+    // ⚠️ 函数定义顺序是**契约**（`utils/utsAndroidCompile.test.js` 的 A 守护）：UTS 编译到 Kotlin
+    // 后没有函数提升 ⇒ 顶层调用点不得早于被调函数的定义，故 `onLoad(...)` 放在**最后**。
+
+    function loadMe() : void {
+        getRecruitMeApi().then((me) : void => {
+            account.value = me.account
+            role.value = me.role
+        }).catch((e) : void => {
+            console.error('[recruiter-me] load failed:', e)
+        })
+    }
+
+    function onBack() : void {
+        uni.navigateBack()
+    }
+
+    /**
+     * 退出登录 = **身份槽整体复位**，不是「同一身份的退出」
+     *
+     * `auth.logout()` 走的是 `clearAuthData()`，它**故意保留** `auth_secure_credentials`
+     * 与 `auth_refresh_token`（ADR-0004 生物识别快捷登录）。招聘者按 ADR-0021 ②
+     * 根本没有快捷登录 ⇒ 复用它会留下一个属于学员语义的 refresh_token 槽，
+     * 而且角色标记 `auth_active_role` 也会停在 `recruiter`，让下一个学员态的 401
+     * 被送进招聘者登录页。故用招聘者专用的 `logoutRecruiter()`
+     * （内部复用 `clearIdentityForSwitch()`，与 P1 的互斥清槽同一处实现）。
+     */
+    function onLogout() : void {
+        auth.logoutRecruiter()
+    }
+
+    onLoad((_options : OnLoadOptions) => {
+        if (!ensureRecruiterSession()) return
+        // 先用登录响应落下的账号顶上，再以 /recruit/me 的服务端事实覆盖（拿不到就保留本地值）
+        const u = auth.user.value
+        if (u != null && u.account != null) {
+            account.value = u.account!
+        }
+        loadMe()
+    })
+</script>
+
+<style lang="scss">
+    .page {
+        background-color: #F5F6FA;
+    }
+
+    .status-bar {
+        background-color: #ffffff;
+    }
+
+    .nav-bar {
+        flex-direction: row;
+        align-items: center;
+        height: 88rpx;
+        padding: 0 24rpx;
+        background-color: #ffffff;
+    }
+
+    .nav-side {
+        width: 120rpx;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .nav-back {
+        font-size: 44rpx;
+        color: #333333;
+        padding: 8rpx 16rpx 8rpx 0;
+    }
+
+    .nav-title {
+        flex: 1;
+        font-size: 34rpx;
+        font-weight: bold;
+        color: #333333;
+        text-align: center;
+    }
+
+    .content-scroll {
+        flex: 1;
+    }
+
+    .group {
+        margin: 16rpx 24rpx 0 24rpx;
+        background-color: #ffffff;
+        border-radius: 12rpx;
+    }
+
+    .kv-row {
+        flex-direction: row;
+        align-items: center;
+        padding: 28rpx 24rpx;
+        border-bottom: 1rpx solid #F0F0F0;
+    }
+
+    .kv-row-last {
+        border-bottom: none;
+    }
+
+    .kv-key {
+        width: 200rpx;
+        font-size: 28rpx;
+        color: #999999;
+    }
+
+    .kv-value {
+        flex: 1;
+        font-size: 28rpx;
+        color: #333333;
+        text-align: right;
+    }
+
+    .logout-btn {
+        margin: 48rpx 24rpx 0 24rpx;
+        height: 96rpx;
+        align-items: center;
+        justify-content: center;
+        background-color: #ffffff;
+        border-radius: 48rpx;
+    }
+
+    .logout-btn-text {
+        font-size: 32rpx;
+        color: #E5484D;
+    }
+</style>

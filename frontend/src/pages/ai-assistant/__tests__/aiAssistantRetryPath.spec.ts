@@ -9,7 +9,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { createRouter, createMemoryHistory } from 'vue-router'
+import { testRouter } from '@/test/router'
 import { epLite } from '@/test/element-lite'
 
 // streamChat 是真链路上的唯一网络面：捕获 handlers，用例内手动驱动 SSE 事件序
@@ -64,10 +64,7 @@ vi.mock('markstream-vue/index.css', () => ({}))
 
 import AIAssistantPage from '../AIAssistantPage.vue'
 
-const router = createRouter({
-  history: createMemoryHistory(),
-  routes: [{ path: '/:pathMatch(.*)*', component: { template: '<div/>' } }]
-})
+const router = testRouter()
 
 /** 第 n 次 streamChat 调用的 handlers（用例内手动驱动 SSE 事件序） */
 function handlersAt(index = 0) {

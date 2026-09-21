@@ -1,12 +1,16 @@
 package api
 
 import (
+	"context"
+	"time"
+
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/captcha"
 	"forklift-training/internal/clock"
 	"forklift-training/internal/config"
+	"forklift-training/internal/daemon"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/security"
 	"forklift-training/internal/service"
@@ -86,6 +90,12 @@ type Deps struct {
 	JobReportSvc         *service.JobReportService
 	InspectionSvc        *service.InspectionService
 	ContributionSvc      *service.ContributionService
+
+	// Daemons 进程内周期守护的**登记表**（ADR-0061 §1）：NewDeps 声明，cmd/server 经 daemon.StartAll 启动。
+	// 登记 ≠ 启动——契约测试构造 Deps 时不会拉起任何 goroutine，而漏登记会被 daemons_contract_test.go 判红。
+	// 口径：只有「跨服务、需要独立周期」的守护入表；middleware 自己构造时装配的（rate-limit-cleanup）不入表，
+	// 它的生命周期属于该组件，摘出来反而更容易漏。
+	Daemons []daemon.Task
 }
 
 // NewDeps 构建全部 service 单实例。进程启动早期由 main 调用一次。
@@ -183,6 +193,29 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		InspectionSvc:        service.NewInspectionService(db),
 		ContributionSvc:      service.NewContributionService(db, fileSvc, notificationSvc, pointsSvc, logger, clock.Real()),
 	}
+	// 守护登记（ADR-0061 §1）：加守护 = 往这张表加一条，不需要在 cmd/server 里再手写一次 start。
+	// 闭包读 d 上的 service 字段（此刻已构造完），故登记排在 Deps 字面量之后。
+	d.Daemons = []daemon.Task{
+		// 两个悬空文件清理都是 6 小时差集扫描（算法在各 service 里，这里只声明节奏）。
+		{Name: "forum-image-cleanup", Interval: 6 * time.Hour, Run: func(ctx context.Context) {
+			if cleaned := d.ForumImageSvc.CleanupOrphans(ctx); cleaned > 0 {
+				logger.Info("论坛悬空图片清理完成", zap.Int("cleaned", cleaned))
+			}
+		}},
+		{Name: "contribution-file-cleanup", Interval: 6 * time.Hour, Run: func(ctx context.Context) {
+			if cleaned := d.ContributionSvc.CleanupOrphanFiles(ctx); cleaned > 0 {
+				logger.Info("投稿悬空文件清理完成", zap.Int("cleaned", cleaned))
+			}
+		}},
+		// 联系方式交换的裁决窗口收敛（#1197）：把窗口已闭却仍挂 pending 的行落为 expired。
+		// 1 小时对 14 天窗口纯属精度余量；正在重试的企业由 Create 的定向落态当场兜住，
+		// 本守护只负责没人再触碰的那些行。
+		{Name: "contact-request-expire", Interval: time.Hour, Run: func(ctx context.Context) {
+			if _, err := d.ContactSvc.ExpirePending(clock.Now()); err != nil {
+				logger.Warn("contact expire 失败", zap.Error(err))
+			}
+		}},
+	}
 	// 投递通知与联系方式交换共用邮件单点（spec #449 决定 15）
 	if d.JobApplicationSvc != nil && mailSender != nil {
 		d.JobApplicationSvc.SetMailer(mailSender)
@@ -192,6 +225,13 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 	}
 	d.AuthH = NewAuthHandler(d.Session, authSvc, fileSvc, st, reviewSvc, logger)
 	return d
+}
+
+// StartDaemons 启动本装配根登记的全部守护（ADR-0061 §1）。
+// 登记与启动收在同一个方法上，「表里有、却没起」因此可被测试问到（daemons_contract_test.go）；
+// opts 透传给 Runner，测试用它换掉真时钟。
+func (d *Deps) StartDaemons(ctx context.Context, opts ...daemon.RunnerOption) []*daemon.Runner {
+	return daemon.StartAll(ctx, d.Logger, d.Daemons, opts...)
 }
 
 // RouterDeps 投影当前装配根的横切依赖，供 NewRouter 传给各蓝图注册（单一装配点）。

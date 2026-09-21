@@ -17,6 +17,22 @@ export const STORAGE_KEY_LOGIN_PROVIDER = 'auth_login_provider'
 /** 存储 key: 安全凭据（生物识别回填用，JSON 格式 { u, p, has }） */
 export const STORAGE_KEY_CREDENTIALS = 'auth_secure_credentials'
 
+/**
+ * 存储 key: 当前身份角色（`student` | `recruiter`）
+ *
+ * 认证槽只有 token / refresh_token / user / login_provider 四个 key，**没有招聘者槽**
+ * ⇒ 招聘者复用 `auth_token`，靠本 key 显式标记「这一槽里的凭据属于谁」（移动端 ADR-0022 ②）。
+ * 401 出口据此选跳转目标（ADR-0022 ⑤）。取值一律用 `utils/authRole.uts` 的
+ * `getActiveRole()` / `setActiveRole()`，不要在别处直接读写这个字面量。
+ */
+export const STORAGE_KEY_ACTIVE_ROLE = 'auth_active_role'
+
+/** 身份角色取值：学员（缺省）。未写入本 key 时按它兜底 */
+export const ACTIVE_ROLE_STUDENT = 'student'
+
+/** 身份角色取值：招聘者 */
+export const ACTIVE_ROLE_RECRUITER = 'recruiter'
+
 /** 存储 key: 在线简历草稿（JSON；后端 /resume 接口就绪前的本地落地） */
 export const STORAGE_KEY_RESUME = 'user_resume_draft'
 

@@ -54,7 +54,7 @@ function adminTopic(over: Record<string, unknown> = {}) {
 }
 
 async function mountManage(topic: ReturnType<typeof adminTopic>) {
-  listTopics.mockResolvedValue({ topics: [topic], total: 1 } as never);
+  listTopics.mockResolvedValue({ items: [topic], total: 1 } as never);
   getTopic.mockResolvedValue({
     topic,
     replies: [],
@@ -85,7 +85,7 @@ describe('管理端正文渲染（#880 / ADR-0044）', () => {
 
   it('markdown 回复在展开面板里也渲染（管理员同样要看实际展示效果）', async () => {
     const topic = adminTopic();
-    listTopics.mockResolvedValue({ topics: [topic], total: 1 } as never);
+    listTopics.mockResolvedValue({ items: [topic], total: 1 } as never);
     getTopic.mockResolvedValue({
       topic,
       replies: [

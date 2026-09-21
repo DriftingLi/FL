@@ -53,9 +53,19 @@ export interface UseAsyncPageOptions {
    *   `reset` 清空累积并回第 1 批（筛选变化走 `filterDeps`，语义等价）。
    *   此前 JobPlaza 与 Resumes 各手抄一份（含 loadingMore / hasMore / 页码推算 /
    *   筛选重置），现已收编到本分支。
+   *   ⚠️ 本档的「刷新 / 重装载」入口是 `reset` 而不是 `run`——`run` 装载的是**当前批并
+   *   追加**（重试语义），拿它刷新会把已累积的第 1 批再叠一遍。
+   *
+   * **服务端事实前置（ADR-0060 §4）**：本档的 `hasMore` 只认响应自带的分页信封（`pages`，
+   * 或只给 `total` 时按 `batchSize` 换算），两头都不给即判「没有下一批」并记一条 error——
+   * 旧的「本批满一批就算还有下一批」猜测已废除，且不留在缺省路径里兜底。
    */
   mode?: 'replace' | 'append'
-  /** append 形态的批大小（缺省 20）；replace 形态用 defaultPageSize。 */
+  /**
+   * append 形态的批大小（缺省 20）；replace 形态用 defaultPageSize。
+   * 本值同时是响应只给 `total` 时的换算除数（总页数 = ceil(total / batchSize)：分子来自
+   * 服务端、分母是本页自己发过去的 page_size，两头都不是猜）。
+   */
   batchSize?: number
   /** append 形态：从 `fetch` 的响应里取出本批条目（缺省读 `res.items`）。 */
   pickItems?: (res: unknown) => unknown[] | undefined
@@ -80,6 +90,11 @@ export interface UseAsyncPageOptions {
  *   **404 = 空态、其余 = 错误态**：notfound 时 `isEmpty` 亦为真，页面无需自建 404 分支；
  * - `mode: 'append'` 提供追加式分页的唯一入口（`loadMore` / `hasMore` / `loadingMore` / `reset`）。
  *
+ * 第十三波票 4（ADR-0060 §4，含行为变更）：append 档的 `hasMore` 改由**服务端事实**判定
+ * ——读响应的分页信封（`pages`，只有 `total` 时按批大小换算）而不是猜「本批满不满一批」，
+ * 信封整体缺失即记 error 并判「到底」。同时 `total` 在 append 档由响应写入（页面的
+ * 「剩余 N 条」直接读它，不再自己数累积）。
+ *
  * 不分页的页面（详情/聚合页）只解构三态部分即可，分页字段闲置无害。
  */
 export function useAsyncPage(load: (page?: number) => Promise<unknown>, options: UseAsyncPageOptions = {}) {
@@ -94,7 +109,10 @@ export function useAsyncPage(load: (page?: number) => Promise<unknown>, options:
 
   const append = options.mode === 'append'
   const batchSize = options.batchSize ?? pageSize.value
-  /** append 形态：还有下一批（本批未满一批即到底）。replace 形态恒 false。 */
+  /**
+   * append 形态：还有下一批。判据是**服务端给的总页数**（`serverPageCount`，ADR-0060 §4），
+   * 不是「本批满不满一批」。replace 形态恒 false。
+   */
   const hasMore = ref(false)
   /** append 形态：`loadMore` 在飞行中（按钮 loading 态 + 防重入）。 */
   const loadingMore = ref(false)
@@ -112,8 +130,25 @@ export function useAsyncPage(load: (page?: number) => Promise<unknown>, options:
     return Array.isArray(items) ? items : undefined
   }
 
-  /** append 形态写入一批：追加进 `itemsRef`，并按「本批是否满一批」定 `hasMore`。 */
-  function appendBatch(res: unknown): void {
+  /**
+   * 服务端给的**总页数**（append 形态 `hasMore` 的唯一事实来源）：
+   * 1. `pages` —— 服务端算好的总页数（论坛 / 收藏 / 通知等域直接下发）；
+   * 2. `total` —— 只给条目总数时按批大小换算（职位广场与简历库的 `{items,total}` 属这类）。
+   *
+   * 两头都没有返回 `undefined`，由调用方按契约违规处理（ADR-0060 §4 明令不得退回
+   * 「本批满一批」的旧猜测：那条规则两头都错——论坛首页给被采纳回复留一格而置顶条没落位时
+   * 只回 19/20，按钮就此消失、长帖翻不到底；末页恰好满批时它又该消失不消失，
+   * 点下去是空的一批）。
+   */
+  function serverPageCount(res: unknown): number | undefined {
+    const envelope = res as { pages?: unknown; total?: unknown } | null
+    if (typeof envelope?.pages === 'number') return envelope.pages
+    if (typeof envelope?.total === 'number') return Math.ceil(envelope.total / batchSize)
+    return undefined
+  }
+
+  /** append 形态写入一批：追加进 `itemsRef`，`hasMore` 与 `total` 均取响应的分页信封。 */
+  function appendBatch(res: unknown, requestedPage: number): void {
     const batch = pickBatch(res)
     if (!batch) {
       hasMore.value = false
@@ -121,7 +156,21 @@ export function useAsyncPage(load: (page?: number) => Promise<unknown>, options:
     }
     const target = options.itemsRef?.value
     if (Array.isArray(target)) target.push(...batch)
-    hasMore.value = batch.length >= batchSize
+    // 「剩余 N 条」这类人读文案要的条目总数：响应给了才写（没给就不动，页面无需自己数）
+    const totalFromRes = (res as { total?: unknown } | null)?.total
+    if (typeof totalFromRes === 'number') total.value = totalFromRes
+    const pages = serverPageCount(res)
+    if (pages === undefined) {
+      console.error(
+        `[useAsyncPage] append 形态：第 ${requestedPage} 批的响应既无 pages 也无 total，` +
+          '无法向服务端确认是否还有下一批 —— 按「没有下一批」处理（宁可不给「加载更多」入口，' +
+          '也不退回已废除的「本批满一批」猜测，ADR-0060 §4）。' +
+          '请给该列表端点补分页信封，或让本页改用 replace 形态。'
+      )
+      hasMore.value = false
+      return
+    }
+    hasMore.value = requestedPage < pages
   }
 
   /** 装载（首屏/翻页/筛选变化共用）：错误收敛为 loadError + loadErrorKind，绝不 reject */
@@ -132,7 +181,7 @@ export function useAsyncPage(load: (page?: number) => Promise<unknown>, options:
     if (append) hasMore.value = false
     try {
       const res = await load(page.value)
-      if (append) appendBatch(res)
+      if (append) appendBatch(res, page.value)
     } catch (error) {
       loadError.value = true
       loadErrorKind.value = kindOf(error)
@@ -162,12 +211,15 @@ export function useAsyncPage(load: (page?: number) => Promise<unknown>, options:
     void run()
   }
 
-  /** 清空累积并回第 1 批（append 形态的「刷新」/筛选重置）。 */
-  function reset(): void {
+  /**
+   * 清空累积并回第 1 批（append 形态的「刷新」/ 筛选重置 / 写操作后的重装载）。
+   * 返回重装载那条 promise，让写操作（采纳 / 删除 / 发帖）能 await 到新批次落地。
+   */
+  function reset(): Promise<void> {
     page.value = 1
     clearItems()
     hasMore.value = append
-    void run()
+    return run()
   }
 
   /** 就地清空 `itemsRef`（保持 ref 引用不变，页面无需换数组）。 */
@@ -178,31 +230,29 @@ export function useAsyncPage(load: (page?: number) => Promise<unknown>, options:
 
   /**
    * append 形态的「加载更多」：推进页码并追加下一批。`loadingMore` 防重入；
-   * 失败即停（拦截器已 toast）且**不推进页码**——已累积的条目原地保持，
-   * 再点一次就是对同一批的重试（本入口不把整页翻成错误态，避免把已看到的内容换掉）。
+   * 失败即停（拦截器已 toast）且**不推进页码**——已累积的条目原地保持、
+   * `hasMore` 维持原值（入口不消失），再点一次就是对同一批的重试
+   * （本入口不把整页翻成错误态，避免把已看到的内容换掉）。
    */
   async function loadMore(): Promise<void> {
     if (!append || loadingMore.value || loading.value || !hasMore.value) return
     loadingMore.value = true
-    hasMore.value = false
     try {
       const next = page.value + 1
-      appendBatch(await load(next))
+      appendBatch(await load(next), next)
       page.value = next
     } catch {
-      // 拦截器已统一 toast；页码不动，再点一次即重试同一批
+      // 拦截器已统一 toast；页码与本批判据都不动，再点一次即重试同一批
     } finally {
       loadingMore.value = false
     }
   }
 
   // #1054 筛选轴：任一变化 → 回第一页重装（声明式，单点取代每页手写）。
+  // append 形态下这条就是 `reset` 的语义（清空累积 + 回第 1 批），故直接复用而不是再抄一遍。
   if (options.filterDeps?.length) {
     watch(options.filterDeps as Array<Ref<unknown> | (() => unknown)>, () => {
-      page.value = 1
-      clearItems()
-      hasMore.value = append
-      void run()
+      void reset()
     })
   }
 
@@ -237,6 +287,9 @@ export function useAsyncPage(load: (page?: number) => Promise<unknown>, options:
         () => credentialStore.current?.id,
         () => {
           page.value = 1
+          // append 形态：累积窗口整体作废（不清就是把已看过的第 1 批再叠一遍）；
+          // replace 形态不动累积——loader 自己覆盖那个 ref，清了反而会让表格页闪一下空表。
+          if (append) clearItems()
           void run()
         }
       )

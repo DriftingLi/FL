@@ -8,6 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { ElMessage } from 'element-plus'
 import { epLite } from '@/test/element-lite'
+import { testRouter } from '@/test/router'
 
 vi.mock('@/api/note', () => ({
   noteApi: {
@@ -50,7 +51,9 @@ function mockList(items: unknown[], total = items.length) {
 }
 
 function mountPage() {
-  return mount(Notebook, { global: { plugins: [epLite()] } })
+  // 装真路由（表从描述符派生）：跳题落点是 href('StudentQuestionDetail', { id })，
+  // 断言的是**解析出来的 href**，比桩元素的 to 属性更接近用户实际点到的东西。
+  return mount(Notebook, { global: { plugins: [epLite(), testRouter()] } })
 }
 
 beforeEach(() => {

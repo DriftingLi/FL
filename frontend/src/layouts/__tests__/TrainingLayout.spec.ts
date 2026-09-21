@@ -54,13 +54,13 @@ describe('TrainingLayout 搜索入口', () => {
     const btn = w.findAll('button').find((b) => b.text().includes('搜索'))
     expect(btn).toBeTruthy()
     await btn!.trigger('click')
-    expect(h.push).toHaveBeenCalledWith({ path: '/training/search', query: { focus: '1' } })
+    expect(h.push).toHaveBeenCalledWith({ name: 'StudentSearch', query: { focus: '1' } })
   })
 
   it('⌘/Ctrl+K 走同一动作', async () => {
     wrapper = mountLayout()
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))
-    expect(h.push).toHaveBeenCalledWith({ path: '/training/search', query: { focus: '1' } })
+    expect(h.push).toHaveBeenCalledWith({ name: 'StudentSearch', query: { focus: '1' } })
   })
 
   it('已在搜索页时只发聚焦事件，不重复导航', async () => {

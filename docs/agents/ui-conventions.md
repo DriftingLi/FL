@@ -16,8 +16,9 @@
 | **表格** | `<el-table>` 走 `element-overrides.css` 的 `--el-table-*` 全局变量（ADR-0037），**不封装 UiTable**。两条硬边界：**不动行高与单元格内边距**；**禁用 `primary-*`/`accent-*` 做表格底色**（深色块未重定义这两个色阶，会出「暗底亮块」）。表格显式空态用 `UiEmptyState`，默认空态走全局文字色。 |
 | **剩余控件** | 标签一律 `UiTag` 的 `tone`（**不写 `type`**；新值 `brand/primary/success/info/warning/danger/neutral`，映射表用导出的 `UiTagTone` 类型收窄）；开关/多选/单选组/上传/提示气泡对应 `UiSwitch` / `UiCheckbox`（+`UiCheckboxGroup`）/ `UiRadioGroup` / `UiUpload` / `UiTooltip`。全部薄封装（attrs/事件/slot 全透传、**不设默认值**，ADR-0038）；`el-radio` / `el-radio-button` 保持原生（组内内容项）。 |
 | **溢出菜单** | `UiMoreMenu`，卡片/列表项右上角「⋯」触发的**治理动作收纳**（举报 / 删除等低频、破坏性、非互动类操作）。**互动动作不进菜单**——回复 / 点赞这类高频社交动作留在卡片底部主操作行，两者不可混放（ADR-0042 的回复区形态）。菜单项由调用方提供，**可见性判定也在调用方**（如自己的回复不出现「举报」）。 |
-| **管理端列表状态机** | admin **列表页**一律 `useAdminTable`（页面只声明 `fetch` adapter 与 `actions` adapter，内置三态 / 分页 / 搜索 / 行操作分发 / 删除确认；ADR-0015 + ADR-0039）。**非列表页不套**（详情/仪表盘/配置页用 `useAsyncPage` 的三态即可）。`useAsyncPage` 是服务全站 34 处的通用三态件，**不要为 admin 改它**。**同一页面里的第二档要写明归属**（第十一波）：分页列表 → `useAdminTable`；只读/计数 section（巡检计数、汇总卡）→ `useAsyncPage` + `UiAsyncSection`。两档都不得 `catch {}` 静默吞错，档位在文件顶部注释里登记——判定口径与登记格式见下「管理端列表两档归属」。 |
+| **管理端列表状态机** | admin **列表页**一律 `useAdminTable`（页面只声明 `fetch` adapter 与 `actions` adapter，内置三态 / 分页 / 搜索 / 行操作分发 / 删除确认；ADR-0015 + ADR-0039）。**`fetch` 的出口形状是 api 侧的 `Page<T>`（`api/page.ts`，ADR-0060 决策 6 / 票 6），页面不自搭分页容器**——见下「分页容器归 api 侧」。**非列表页不套**（详情/仪表盘/配置页用 `useAsyncPage` 的三态即可）。`useAsyncPage` 是服务全站 34 处的通用三态件，**不要为 admin 改它**。**同一页面里的第二档要写明归属**（第十一波）：分页列表 → `useAdminTable`；只读/计数 section（巡检计数、汇总卡）→ `useAsyncPage` + `UiAsyncSection`。两档都不得 `catch {}` 静默吞错，档位在文件顶部注释里登记——判定口径与登记格式见下「管理端列表两档归属」。 |
 | **状态词表** | 同一业务状态（联络授权 / 投递 / 题目状态…）的 **label 与 tone 各只有一个 descriptor**：输入 status，输出 `{ label, tone }`，列表、抽屉、角标、admin 留痕只消费它；status 收成 union（取值集合与后端常量表对齐），**模板里不得内联状态文案裸串**（第十一波）。已落地的两个域见下「状态词表（联络授权 / 投递）」——**状态词按「描述状态事实」取词**，同一个取值不得有两种文案。 |
+| **侧栏导航行** | 侧栏每一项由 `components/layout/AppSidebarItem.vue` **这一个**项级渲染 module 出行（行种类外链 `<a>` / `<router-link>` / 目标未就绪的不可点行，只在它的 `kind` 判据上分档），`AppSidebar.vue` 只管分组编排（分组标题、展开态、折叠态 tooltip）。**不得在任一层级里另抄一份 `<a>`/`<router-link>` markup**（第十三波 票9 前：三层嵌套各写两遍、共 9 份）。高亮与展开判定一律走 `config/navigation.ts` 的纯函数（`isNavRouteActive` / `isGroupExpanded` / `toggleGroupExpanded` / `flattenLeaves` / `isGroupActive`，测试面 `config/__tests__/navigation.spec.ts`），**组件里不自建匹配逻辑**。项级样式（`.nav-item` 一族）随组件下沉到 `AppSidebarItem.vue` 的 scoped 块——`scoped` 不穿子组件，祖先选择器（`.app-sidebar.collapsed|is-dark|is-compact`）仍照常命中。 |
 
 ### 状态词表（联络授权 / 投递）（第十一波 #1103 / ADR-0056 §8）
 
@@ -56,6 +57,23 @@ admin 页里「三态 + 分页 + 筛选」**只有两档**，页面按 section �
 3. 都不是（行内追加分页）→ 登记为**档位二的行内形态**：判据必须同源（`isEmptyList`），状态按行维护，页面上不得出现第二份 `length === 0`。
 
 **空态判据同源**：两档的 `isEmpty` 是同一份实现（`utils/listState.isEmptyList`），`loadErrorKind` 同名同义（**404 = 空态、其余 = 错误态**）。同页多实例用解构改名取具名判据 —— `const { isEmpty: isEmptyViews, … } = useAdminTable(…)`，模板里 `:empty="isEmptyViews"`；`:empty=` 不接受表达式与写死值（守卫 `check-async-section` 机械拦截）。
+
+**分页容器归 api 侧**（第十三波 ADR-0060 决策 6 / 票 6）：档位一的 `fetch` 契约吃 `api/page.ts` 的 `Page<T> = { items, total }`，**容器由 api 模块的出口给**——「这一页的行在响应里叫什么键」（`topics` / `questions` / `tutors` / `requests` / `list` / `items` …，后端同一概念 9+ 个键名）是各域 api 模块自己的事，那里本就写着生成物类型。于是页面的 adapter 只有一行合法形态：
+
+```ts
+// 页面：挑那条 api 列表函数、透传分页与筛选轴
+fetch: (paging) => adminForumApi.listTopics({ page: paging.page, page_size: paging.pageSize, keyword: keyword.value || undefined })
+
+// api 模块（src/api/forum.ts）：键方言在这里消解，只有一个构造器 toPage(items, total)
+async listTopics(params: AdminForumListParams): Promise<Page<AdminForumTopic>> {
+  const res = await unwrappedRequest.get<ForumTopicPageResult>('/admin/forum/topics', { params })
+  return toPage(res?.topics, res?.total)
+}
+```
+
+- 页面里**不得**再出现 `{ list: res.topics || [], total: res.total || 0 }` 这类手抄（归位前 11 页 17 处）；也不得换成中立键名绕过去（`{ items: … }` 同样判红）。锁：`src/api/__tests__/page.spec.ts`（按形状判、走 AST，解构改名的 `list:` 不误伤）。
+- 不读服务端分页的页面（岗位字典、原价表）在自己 adapter 出口 `toPage(rows, rows.length)` 造容器，**不给 `useAdminTable` 开特例**。
+- 不在 `client.ts` 嗅探键名、不让 api 层反向 import composable（ADR-0060 被否备选）。
 
 **两档都不得静默吞错**：失败必须有 error 态 + 重试入口，走各自档位的既有通道（`@retry` 接 `retry`），不得 `catch {}` 了事。
 
@@ -121,5 +139,5 @@ node scripts/check-el-controls.mjs --diff origin/master   # 只看新增行（�
 - **新增样式禁止硬编码色值**：深色模式是靠翻 CSS 变量实现的，只对走 `var()` 的声明生效；裸 hex 不参与变量链，暗色下保持亮色 → 「暗底亮块」崩坏。一律用 `design-tokens.css` 的变量或 Tailwind 原子类。
   CI 会对 PR 的新增行做检查（`scripts/check-bare-hex.sh --diff`），豁免 `var(--token, #fallback)` 防御写法、`#fff`/`#000`、注释行与 `<script>` 块（canvas 色板属合理存在）。存量进度自查：`bash scripts/check-bare-hex.sh --all frontend/src`。
 
-- **主题切换按钮要覆盖所有布局**：现装在 `SidebarLayout`（学员/导师/管理/招聘四端继承它）与 `ValuationLayout`。
+- **主题切换按钮要覆盖所有布局**：现装在 `SidebarLayout`（学员/讲师/管理/招聘四端继承它）与 `ValuationLayout`。
   认证布局 `AuthPageShell` 曾漏装，导致系统深色偏好的用户在登录页既看到崩坏画面、又无法切回浅色（#554）。**新增任何独立布局时，必须一并评估主题入口**——这条已踩两次（#432 补了 ValuationLayout，#554 补 AuthPageShell）。

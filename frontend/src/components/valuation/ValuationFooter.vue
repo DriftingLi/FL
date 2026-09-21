@@ -23,10 +23,10 @@
         <div class="footer-col">
           <h4 class="footer-title">快速入口</h4>
           <ul class="footer-list">
-            <li><router-link to="/valuation/battery">电池健康度评估</router-link></li>
-            <li v-if="isLoggedIn"><router-link to="/valuation/history">评估历史记录</router-link></li>
+            <li><router-link :to="href('ValuationBatteryInput')">电池健康度评估</router-link></li>
+            <li v-if="isLoggedIn"><router-link :to="href('ValuationHistory')">评估历史记录</router-link></li>
             <li v-else>
-              <router-link :to="{ path: '/login', query: { redirect: '/valuation/history' } }">
+              <router-link :to="{ ...href('Login'), query: { redirect: historyPath } }">
                 登录查看历史
               </router-link>
             </li>
@@ -85,11 +85,16 @@
 <script setup lang="ts">
 // 官网门户风格已迁移至独立 Nuxt 仓库（ADR-0001），此处仅保留同风格的深色多列布局
 import { onMounted, ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
+import { href } from '@/config/pages'
 import { useAuthStore } from '@/stores/auth'
 import { getEvaluationStats } from '@/api/valuation/evaluation'
 import { buildSubdomainUrl } from '@/utils/subdomain'
 
 const authStore = useAuthStore()
+const router = useRouter()
+/** 登录后的回跳目标：路径仍由描述符表派生（query 只能带字符串，故解析成 path） */
+const historyPath = computed(() => router.resolve(href('ValuationHistory')).path)
 const isLoggedIn = computed(() => {
   const u = authStore.userInfo as { role?: string } | null
   return !!(authStore.token && authStore.isLoggedIn && u?.role)

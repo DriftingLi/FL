@@ -458,7 +458,9 @@ func (s *TrainingCatalogService) getCatalogTree(activeOnly, withChapters bool, c
 		if activeOnly {
 			q = q.Where("status = ?", 1)
 		}
-		q.Order("sort_order ASC, specialty_id ASC").Find(&specialties)
+		// 排序串取自 catalog_specs.go 的 descriptor（ADR-0060 决策 10）：
+		// 本函数此前逐字抄了一份 spec 已声明的串，是同一判据的第二源。
+		q.Order(specialtyCatalogSpec().OrderBy).Find(&specialties)
 	}
 
 	var levels []model.CourseLevel
@@ -467,7 +469,8 @@ func (s *TrainingCatalogService) getCatalogTree(activeOnly, withChapters bool, c
 		if activeOnly {
 			q = q.Where("status = ?", 1)
 		}
-		q.Order("sort_order ASC, level_id ASC").Find(&levels)
+		// 同上：课程等级排序串的唯一声明处是 levelCatalogSpec（catalog_specs.go）。
+		q.Order(levelCatalogSpec().OrderBy).Find(&levels)
 	}
 
 	// 一次查询全部课程及其章节数（避免逐门查询的 N+1）

@@ -112,7 +112,7 @@ const filterStatus = ref<number | undefined>(undefined)
 
 // admin 列表状态机：本页只声明 fetch 与行操作 adapter
 const table = useAdminTable<FeaturedContentDTO>({
-  fetch: async (paging, filters) => {
+  fetch: (paging, filters) => {
     const params: { page?: number; page_size?: number; category?: string; status?: string } = {
       page: paging.page,
       page_size: paging.pageSize
@@ -121,8 +121,7 @@ const table = useAdminTable<FeaturedContentDTO>({
     if (filters.status !== undefined && filters.status !== null && filters.status !== '') {
       params.status = String(filters.status)
     }
-    const res = await adminFeaturedApi.getList(params)
-    return { list: res.items || [], total: res.total || 0 }
+    return adminFeaturedApi.getList(params)
   },
   actions: {
     edit: (row: FeaturedContentDTO) => goEdit(row.content_id),

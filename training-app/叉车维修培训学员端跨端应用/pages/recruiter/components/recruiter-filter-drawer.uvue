@@ -1,0 +1,372 @@
+<template>
+    <view v-if="show" class="drawer-mask" @click="onClose">
+        <view class="drawer-panel" @click.stop="onPanelTap">
+            <view class="drawer-header">
+                <text class="drawer-title">筛选简历</text>
+                <text class="drawer-close" @click="onClose">关闭</text>
+            </view>
+
+            <scroll-view class="drawer-body" scroll-y="true">
+                <view class="field">
+                    <text class="field-label">意向地区（市）</text>
+                    <input class="field-input" type="text" :maxlength="20" :value="region" placeholder="如：杭州"
+                        @input="onRegionInput" />
+                </view>
+
+                <view class="field">
+                    <text class="field-label">期望岗位 ID</text>
+                    <input class="field-input" type="number" :maxlength="10" :value="positionIdText" placeholder="留空不限"
+                        @input="onPositionIdInput" />
+                </view>
+
+                <view class="field">
+                    <text class="field-label">持证 ID</text>
+                    <input class="field-input" type="number" :maxlength="10" :value="credentialIdText" placeholder="留空不限"
+                        @input="onCredentialIdInput" />
+                </view>
+
+                <view class="field-row">
+                    <view class="field-half">
+                        <text class="field-label">薪资下限（元）</text>
+                        <input class="field-input" type="number" :maxlength="8" :value="salaryMinText" placeholder="不限"
+                            @input="onSalaryMinInput" />
+                    </view>
+                    <view class="field-half ml-16">
+                        <text class="field-label">薪资上限（元）</text>
+                        <input class="field-input" type="number" :maxlength="8" :value="salaryMaxText" placeholder="不限"
+                            @input="onSalaryMaxInput" />
+                    </view>
+                </view>
+
+                <view class="field">
+                    <text class="field-label">经验下限（年）</text>
+                    <input class="field-input" type="number" :maxlength="2" :value="experienceMinText" placeholder="留空不限"
+                        @input="onExperienceMinInput" />
+                </view>
+
+                <view class="field">
+                    <text class="field-label">用工性质</text>
+                    <view class="chip-row">
+                        <view v-for="(opt, idx) in jobNatureOptions" :key="opt"
+                            :class="{ 'chip': true, 'ml-16': idx > 0, 'chip-active': jobNature == opt }"
+                            @click="onJobNatureTap(opt)">
+                            <text class="chip-text" :class="{ 'chip-text-active': jobNature == opt }">{{ natureLabel(opt) }}</text>
+                        </view>
+                    </view>
+                </view>
+
+                <view class="field">
+                    <text class="field-label">到岗时间</text>
+                    <view class="chip-row">
+                        <view v-for="(opt, idx) in availableInOptions" :key="opt"
+                            :class="{ 'chip': true, 'ml-16': idx > 0, 'chip-active': availableIn == opt }"
+                            @click="onAvailableInTap(opt)">
+                            <text class="chip-text" :class="{ 'chip-text-active': availableIn == opt }">{{ opt }}</text>
+                        </view>
+                    </view>
+                </view>
+            </scroll-view>
+
+            <view class="drawer-footer">
+                <view class="btn-reset" @click="onReset">
+                    <text class="btn-reset-text">重置</text>
+                </view>
+                <view class="btn-apply ml-16" @click="onApply">
+                    <text class="btn-apply-text">应用筛选</text>
+                </view>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref } from 'vue'
+    // ⚠️ 相对深度必须是**三层**：本文件在 `pages/recruiter/components/` 下，
+    //    两层 `'../../api/…'` 会解析到 `pages/api/…`（不存在）⇒ ④a 编译门报
+    //    `Could not resolve "../../api/recruit"`。仓内同构位置先例均为三层
+    //    （`pages/profile/components/activity-topic-card.uvue:25` → `'../../../utils/format'` 等）。
+    //    守护：`utils/recruiterResumeContract.test.js` 的 R6（静态形态锁）。
+    import { JOB_NATURE_OPTIONS, AVAILABLE_IN_OPTIONS, jobNatureLabel } from '../../../api/recruit'
+    import { toNumberOrNull } from '../../../api/helpers'
+    // ⚠️ `filters` 的 prop 类型**就地声明**，不从 `api/recruit.uts` 引 `import type`：
+    //    2026-09-20 ④a 实测，把一个**跨模块对象类型**直接挂进 `defineProps<{ … }>()`，
+    //    在组件层会逐个报 `error18 找不到名称"region"/"salary_min"…`
+    //    （`import type` 与值 import 两种形态都试过，同样报）；改成 `CredentialGroup[]`
+    //    那类先例（`pages/dashboard/components/dashboard-cert-dropdown.uvue:79`）是数组类型，形态不同。
+    //    ⇒ 就地声明结构上等价的类型。**字段清单必须与 `api/recruit.uts` 的
+    //    `RecruitResumeFilters` 逐字一致** —— 守护：`utils/recruiterResumeContract.test.js` 的 R7
+    //    （两处字段名逐字对账 + 不许删这里的类型）。
+    type RecruitResumeFiltersProp = {
+        region : string
+        position_id : number | null
+        credential_id : number | null
+        salary_min : number | null
+        salary_max : number | null
+        experience_min : number | null
+        job_nature : string
+        available_in : string
+    }
+
+    const props = defineProps<{
+        show : boolean
+        filters : RecruitResumeFiltersProp
+    }>()
+
+    const emit = defineEmits<{
+        (e : 'apply', filters : RecruitResumeFiltersProp) : void
+        (e : 'close') : void
+    }>()
+
+    const jobNatureOptions = JOB_NATURE_OPTIONS
+    const availableInOptions = AVAILABLE_IN_OPTIONS
+
+    /**
+     * number | null → 输入框文本。
+     * @note 必须**定义在使用之前**：UTS 无函数提升，Kotlin 侧后置定义是 error18「未解析的引用」
+     *       （`pages/recruiter/login.uvue` 的 onSubmit 注释已记同一条）。
+     */
+    function numText(v : number | null) : string {
+        if (v == null) return ''
+        return v!.toString()
+    }
+
+    /**
+     * 用工性质展示名 —— 模板**不得直调 import 函数**（Kotlin error18 invoke），
+     * 故这里做一层本地包装（守护见 `utils/utsAndroidCompile.test.js` 的 S 组）。
+     */
+    function natureLabel(v : string) : string {
+        return jobNatureLabel(v)
+    }
+
+    // 抽屉内是**草稿**：改动只在「应用筛选」时上抛一次，中途不触发列表重载
+    const region = ref<string>(props.filters.region)
+    const positionIdText = ref<string>(numText(props.filters.position_id))
+    const credentialIdText = ref<string>(numText(props.filters.credential_id))
+    const salaryMinText = ref<string>(numText(props.filters.salary_min))
+    const salaryMaxText = ref<string>(numText(props.filters.salary_max))
+    const experienceMinText = ref<string>(numText(props.filters.experience_min))
+    const jobNature = ref<string>(props.filters.job_nature)
+    const availableIn = ref<string>(props.filters.available_in)
+
+    function onRegionInput(e : InputEvent) : void {
+        region.value = e.detail.value
+    }
+
+    function onPositionIdInput(e : InputEvent) : void {
+        positionIdText.value = e.detail.value
+    }
+
+    function onCredentialIdInput(e : InputEvent) : void {
+        credentialIdText.value = e.detail.value
+    }
+
+    function onSalaryMinInput(e : InputEvent) : void {
+        salaryMinText.value = e.detail.value
+    }
+
+    function onSalaryMaxInput(e : InputEvent) : void {
+        salaryMaxText.value = e.detail.value
+    }
+
+    function onExperienceMinInput(e : InputEvent) : void {
+        experienceMinText.value = e.detail.value
+    }
+
+    // 再点已选项即取消（chip 是开关，不是单选按钮）
+    function onJobNatureTap(v : string) : void {
+        jobNature.value = jobNature.value == v ? '' : v
+    }
+
+    function onAvailableInTap(v : string) : void {
+        availableIn.value = availableIn.value == v ? '' : v
+    }
+
+    /** 空串 / 非法 / <=0 一律折成 null（后端对 0 与缺省的处理不同，不要发 0） */
+    function parsePositive(text : string) : number | null {
+        const trimmed = text.trim()
+        if (trimmed.length == 0) return null
+        const n = toNumberOrNull(trimmed)
+        if (n == null) return null
+        if (n! <= 0) return null
+        return n
+    }
+
+    /** 经验下限：0 是**有意义**的取值（后端按「年限 >= 0」保留全部）⇒ 只挡负数 */
+    function parseNonNegative(text : string) : number | null {
+        const trimmed = text.trim()
+        if (trimmed.length == 0) return null
+        const n = toNumberOrNull(trimmed)
+        if (n == null) return null
+        if (n! < 0) return null
+        return n
+    }
+
+    function onReset() : void {
+        region.value = ''
+        positionIdText.value = ''
+        credentialIdText.value = ''
+        salaryMinText.value = ''
+        salaryMaxText.value = ''
+        experienceMinText.value = ''
+        jobNature.value = ''
+        availableIn.value = ''
+    }
+
+    function onApply() : void {
+        const next : RecruitResumeFiltersProp = {
+            region: region.value.trim(),
+            position_id: parsePositive(positionIdText.value),
+            credential_id: parsePositive(credentialIdText.value),
+            salary_min: parsePositive(salaryMinText.value),
+            salary_max: parsePositive(salaryMaxText.value),
+            experience_min: parseNonNegative(experienceMinText.value),
+            job_nature: jobNature.value,
+            available_in: availableIn.value,
+        } as RecruitResumeFiltersProp
+        emit('apply', next)
+    }
+
+    function onClose() : void {
+        emit('close')
+    }
+
+    /** 面板内点击不冒泡到遮罩（否则点输入框就把抽屉关了） */
+    function onPanelTap() : void {
+    }
+</script>
+
+<style lang="scss">
+    .drawer-mask {
+        position: fixed;
+        left: 0;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.45);
+        flex-direction: row;
+        justify-content: flex-end;
+    }
+
+    .drawer-panel {
+        width: 620rpx;
+        height: 100%;
+        background-color: #ffffff;
+        flex-direction: column;
+    }
+
+    .drawer-header {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        height: 96rpx;
+        padding: 0 28rpx;
+        border-bottom: 1rpx solid #f0f0f0;
+    }
+
+    .drawer-title {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .drawer-close {
+        font-size: 28rpx;
+        color: #2979ff;
+        padding: 12rpx 8rpx;
+    }
+
+    .drawer-body {
+        flex: 1;
+        padding: 8rpx 28rpx;
+    }
+
+    .field {
+        margin-top: 24rpx;
+    }
+
+    .field-row {
+        flex-direction: row;
+        margin-top: 24rpx;
+    }
+
+    .field-half {
+        flex: 1;
+    }
+
+    .field-label {
+        font-size: 26rpx;
+        color: #666666;
+        margin-bottom: 12rpx;
+    }
+
+    .field-input {
+        height: 80rpx;
+        background-color: #f5f6fa;
+        border-radius: 12rpx;
+        padding: 0 20rpx;
+        font-size: 28rpx;
+        color: #333333;
+    }
+
+    .chip-row {
+        flex-direction: row;
+    }
+
+    .chip {
+        padding: 12rpx 28rpx;
+        border-radius: 28rpx;
+        background-color: #f5f5f5;
+        border: 1rpx solid #e0e0e0;
+    }
+
+    .chip-active {
+        background-color: #e8f0fe;
+        border-color: #2979ff;
+    }
+
+    .chip-text {
+        font-size: 26rpx;
+        color: #666666;
+    }
+
+    .chip-text-active {
+        color: #2979ff;
+    }
+
+    .drawer-footer {
+        flex-direction: row;
+        padding: 20rpx 28rpx;
+        border-top: 1rpx solid #f0f0f0;
+    }
+
+    .btn-reset {
+        flex: 1;
+        height: 88rpx;
+        align-items: center;
+        justify-content: center;
+        border-radius: 44rpx;
+        background-color: #f5f5f5;
+    }
+
+    .btn-reset-text {
+        font-size: 30rpx;
+        color: #666666;
+    }
+
+    .btn-apply {
+        flex: 2;
+        height: 88rpx;
+        align-items: center;
+        justify-content: center;
+        border-radius: 44rpx;
+        background-color: #2979ff;
+    }
+
+    .btn-apply-text {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #ffffff;
+    }
+
+    .ml-16 { margin-left: 16rpx; }
+</style>

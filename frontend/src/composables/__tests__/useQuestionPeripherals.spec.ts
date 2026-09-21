@@ -1,15 +1,20 @@
 // useQuestionPeripherals：答题外围交互 module 的接口级测试。
-// 断言 external behavior：三 adapter（favorite/knowledge/duration）各自的加载回填、
-// 失败降级、切题重置时机（'result' 出结果查 vs 'enter' 进题预取两种知识点触发形态）、
-// 收藏切换返回值、未注入 adapter 的 no-op 语义。
+// 断言 external behavior：收藏的进题查态/切题重查/切换返回值，知识点的加载回填与失败降级
+// （'result' 出结果查 vs 'enter' 进题预取两种触发形态），作答计时的起表与重置，
+// 以及未注入 adapter / 未启用开关时的 no-op 语义。
 // seam：composable 接口——session 用真实 usePracticeSession + 内存 adapter（钩子机制
-// 端到端可见），外围 adapter 用 vi.fn() stub，不触达 API 层。
+// 端到端可见），知识点 adapter 用 vi.fn() stub。收藏自 ADR-0060 决策 3 起委托 useFavorite
+// （不再有可注入的 favorite adapter），故那一件在 favoriteApi 边界上观测（vi.mock）。
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { nextTick } from 'vue'
 import { usePracticeSession } from '@/composables/usePracticeSession'
 import type { PracticeSessionAdapters } from '@/composables/usePracticeSession'
 import { useQuestionPeripherals, questionPeripheralAdapters } from '@/composables/useQuestionPeripherals'
 import type { Question } from '@/types/question'
+
+vi.mock('element-plus', () => ({
+  ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() }
+}))
 
 vi.mock('@/api/favorite', () => ({
   favoriteApi: { check: vi.fn(), add: vi.fn(), remove: vi.fn(), list: vi.fn() }
@@ -19,6 +24,7 @@ vi.mock('@/api/questionInteraction', () => ({
   questionInteractionApi: { listKnowledge: vi.fn() }
 }))
 
+import { ElMessage } from 'element-plus'
 import { favoriteApi } from '@/api/favorite'
 import { questionInteractionApi } from '@/api/questionInteraction'
 
@@ -42,110 +48,123 @@ function makeSession(qs: Question[], overrides: Partial<PracticeSessionAdapters>
   })
 }
 
-function makeFavorite() {
-  return {
-    check: vi.fn().mockResolvedValue({ favorited: false, favorite_id: 0 }),
-    add: vi.fn().mockResolvedValue({ favorite_id: 9 }),
-    remove: vi.fn().mockResolvedValue(null)
-  }
-}
-
-describe('useQuestionPeripherals（favorite：进题查状态 + 切换）', () => {
+describe('useQuestionPeripherals（favorite：委托 useFavorite，进题查状态 + 切换）', () => {
   let qs: Question[]
-  beforeEach(() => { qs = [q(1), q(2)] })
+  beforeEach(() => {
+    qs = [q(1), q(2)]
+    vi.clearAllMocks()
+    vi.mocked(favoriteApi.check).mockResolvedValue({ favorited: false, favorite_id: 0 })
+    vi.mocked(favoriteApi.add).mockResolvedValue({ favorite_id: 9 } as never)
+    vi.mocked(favoriteApi.remove).mockResolvedValue(null)
+  })
 
-  it('进题查收藏状态并回填 favorited', async () => {
-    const favorite = makeFavorite()
-    favorite.check.mockResolvedValue({ favorited: true, favorite_id: 7 })
+  // 收藏委托 useFavorite 后，进题 → 回填 favorited 之间多了一层 async（load → query → check），
+  // 单次 nextTick 抽不干这条 Promise 链；用一个宏任务边界收干（不牵涉定时器语义，故 fake timers
+  // 只在 duration 那一组用）。
+  const settle = async () => {
+    await nextTick()
+    await new Promise<void>(resolve => setTimeout(resolve, 0))
+    await nextTick()
+  }
+
+  it('进题查收藏状态并回填 favorited（target_type 由内容对象表给出）', async () => {
+    vi.mocked(favoriteApi.check).mockResolvedValue({ favorited: true, favorite_id: 7 })
     const s = makeSession(qs)
-    const p = useQuestionPeripherals(s, { favorite })
+    const p = useQuestionPeripherals(s, {})
 
     await s.start('sequential')
-    await nextTick()
+    await settle()
 
-    expect(favorite.check).toHaveBeenCalledWith(1)
+    expect(favoriteApi.check).toHaveBeenCalledWith({ target_type: 'question', target_id: 1 })
     expect(p.favorited.value).toBe(true)
   })
 
   it('收藏查询失败降级为未收藏（不阻断）', async () => {
-    const favorite = makeFavorite()
-    favorite.check.mockRejectedValue(new Error('network'))
+    vi.mocked(favoriteApi.check).mockRejectedValue(new Error('network'))
     const s = makeSession(qs)
-    const p = useQuestionPeripherals(s, { favorite })
+    const p = useQuestionPeripherals(s, {})
 
     await s.start('sequential')
-    await nextTick()
+    await settle()
 
     expect(p.favorited.value).toBe(false)
   })
 
   it('toggleFavorite：未收藏 → add 并返回 added；已收藏 → remove 并返回 removed', async () => {
-    const favorite = makeFavorite()
-    favorite.check.mockResolvedValue({ favorited: true, favorite_id: 7 })
+    vi.mocked(favoriteApi.check).mockResolvedValue({ favorited: true, favorite_id: 7 })
     const s = makeSession(qs)
-    const p = useQuestionPeripherals(s, { favorite })
+    const p = useQuestionPeripherals(s, {})
     await s.start('sequential')
-    await nextTick()
+    await settle()
 
     expect(await p.toggleFavorite()).toBe('removed')
-    expect(favorite.remove).toHaveBeenCalledWith(7)
+    expect(favoriteApi.remove).toHaveBeenCalledWith(7)
     expect(p.favorited.value).toBe(false)
 
     expect(await p.toggleFavorite()).toBe('added')
-    expect(favorite.add).toHaveBeenCalledWith(1)
+    expect(favoriteApi.add).toHaveBeenCalledWith({ target_type: 'question', target_id: 1 })
     expect(p.favorited.value).toBe(true)
   })
 
-  it('toggleFavorite：add 失败返回 null 且状态不变', async () => {
-    const favorite = makeFavorite()
-    favorite.add.mockRejectedValue(new Error('fail'))
+  it('toggleFavorite：委托 useFavorite 后仍不提示（提示口径留给页面）', async () => {
     const s = makeSession(qs)
-    const p = useQuestionPeripherals(s, { favorite })
+    const p = useQuestionPeripherals(s, {})
     await s.start('sequential')
-    await nextTick()
+    await settle()
+
+    await p.toggleFavorite()
+    expect(ElMessage.success).not.toHaveBeenCalled()
+  })
+
+  it('toggleFavorite：add 失败返回 null 且状态不变', async () => {
+    vi.mocked(favoriteApi.add).mockRejectedValue(new Error('fail'))
+    const s = makeSession(qs)
+    const p = useQuestionPeripherals(s, {})
+    await s.start('sequential')
+    await settle()
 
     expect(await p.toggleFavorite()).toBeNull()
     expect(p.favorited.value).toBe(false)
   })
 
   it('切题重置并重查新题收藏', async () => {
-    const favorite = makeFavorite()
-    favorite.check
+    vi.mocked(favoriteApi.check)
       .mockResolvedValueOnce({ favorited: true, favorite_id: 7 })
       .mockResolvedValueOnce({ favorited: false, favorite_id: 0 })
     const s = makeSession(qs)
-    const p = useQuestionPeripherals(s, { favorite })
+    const p = useQuestionPeripherals(s, {})
     await s.start('sequential')
-    await nextTick()
+    await settle()
     expect(p.favorited.value).toBe(true)
 
     await s.nextQuestion()
-    await nextTick()
+    await settle()
 
-    expect(favorite.check).toHaveBeenLastCalledWith(2)
+    expect(favoriteApi.check).toHaveBeenLastCalledWith({ target_type: 'question', target_id: 2 })
     expect(p.favorited.value).toBe(false)
   })
 
   it('会话退出后无当前题：toggleFavorite 返回 null', async () => {
-    const favorite = makeFavorite()
     const s = makeSession(qs)
-    const p = useQuestionPeripherals(s, { favorite })
+    const p = useQuestionPeripherals(s, {})
     await s.start('sequential')
-    await nextTick()
+    await settle()
     await s.quit()
-    await nextTick()
+    await settle()
 
     expect(await p.toggleFavorite()).toBeNull()
   })
 
-  it('未注入 favorite adapter：toggleFavorite 为 no-op，favorited 恒 false', async () => {
+  it('未注入任何 adapter：收藏仍可用（无 favorite 槽可关），知识点/计时为 no-op', async () => {
     const s = makeSession(qs)
     const p = useQuestionPeripherals(s, {})
     await s.start('sequential')
-    await nextTick()
+    await settle()
 
-    expect(await p.toggleFavorite()).toBeNull()
-    expect(p.favorited.value).toBe(false)
+    expect(favoriteApi.check).toHaveBeenCalled()
+    expect(p.knowledgeTags.value).toEqual([])
+    p.recordDuration()
+    expect(p.lastDuration.value).toBeUndefined()
   })
 })
 
@@ -294,23 +313,13 @@ describe('useQuestionPeripherals（duration：进题起表 / 提交前取用时�
 })
 
 describe('questionPeripheralAdapters（question 域默认 adapter 工厂）', () => {
-  it('favorite/knowledge 绑定 question 域 API；knowledgeTrigger 可声明，默认 result', async () => {
+  it('knowledge 绑定 question 域 API；knowledgeTrigger 可声明，默认 result；不再携带 favorite 绑定', async () => {
     const adapters = questionPeripheralAdapters({ knowledgeTrigger: 'enter' })
     expect(adapters.duration).toBe(true)
     expect(adapters.knowledge?.trigger).toBe('enter')
     expect(questionPeripheralAdapters().knowledge?.trigger).toBe('result')
-
-    vi.mocked(favoriteApi.check).mockResolvedValue({ favorited: true, favorite_id: 3 })
-    await adapters.favorite!.check(11)
-    expect(favoriteApi.check).toHaveBeenCalledWith({ target_type: 'question', target_id: 11 })
-
-    vi.mocked(favoriteApi.add).mockResolvedValue({ favorite_id: 4, target_type: 'question', target_id: 11, title: '', cover: '', created_at: '', course_id: 0 })
-    await adapters.favorite!.add(11)
-    expect(favoriteApi.add).toHaveBeenCalledWith({ target_type: 'question', target_id: 11 })
-
-    vi.mocked(favoriteApi.remove).mockResolvedValue(null)
-    await adapters.favorite!.remove(4)
-    expect(favoriteApi.remove).toHaveBeenCalledWith(4)
+    // 收藏的绑定点已收进 useFavorite（ADR-0060 决策 3），工厂不再产出 favorite adapter
+    expect(adapters).not.toHaveProperty('favorite')
 
     vi.mocked(questionInteractionApi.listKnowledge).mockResolvedValue([])
     await adapters.knowledge!.list(12)

@@ -14,6 +14,8 @@ const path = require('path');
 const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const read = (rel) => readText(path.join(ROOT, rel));
+/** 豁免名单从单点读（ADR-0023 ⑧）：不再解析守护脚本源码文本取常量 */
+const { allowlistPaths } = require('./contractHarness');
 
 /** 模块目录下全部源文件（.uvue/.uts，排除测试） */
 function mallSourceFiles(dir = 'pages/mall') {
@@ -94,12 +96,8 @@ describe('600 行软预算机检（pages/mall/** 达标后锁定）', () => {
 });
 
 describe('allowlist 不回潮（mall 域违例清零的锁）', () => {
-  it('GUARD_ALLOWLIST 不含 mall 域文件', () => {
-    const guardSrc = read('utils/utsAndroidCompile.test.js');
-    const start = guardSrc.indexOf('const GUARD_ALLOWLIST');
-    expect(start).toBeGreaterThan(-1);
-    const block = guardSrc.slice(start, guardSrc.indexOf('};', start));
-    expect(block).not.toMatch(/pages[/\\]mall/);
-    expect(block).not.toMatch(/api[/\\]course\.uts/);
+  it('豁免面不含 mall 域文件', () => {
+    const hits = allowlistPaths().filter((p) => /pages[/\\]mall|api[/\\]course\.uts/.test(p));
+    expect(hits).toEqual([]);
   });
 });

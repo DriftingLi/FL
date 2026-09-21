@@ -9,7 +9,9 @@
 // （片一已知限制：注解层没有枚举词汇）；故列表响应用 `WithUIQuestions` 显式标注该替换点。
 // 题目 UI 模型的收口需要先补生成器的 enum 能力，另立片（ADR-0048 片一实施修订）。
 import { unwrappedRequest } from './request'
-import type { WithUIQuestions } from '@/types/question'
+// 票 6（ADR-0060 决策 6）：题目列表在出口处归一为中立容器 Page<T>（后端行键 = `questions`）
+import { toPage, type Page } from './page'
+import type { Question, WithUIQuestions } from '@/types/question'
 import type {
   QuestionBankStatsDTO,
   QuestionDTO,
@@ -69,10 +71,12 @@ export interface BatchRejectPayload {
 }
 
 export const questionBankApi = {
-  getQuestions(params: QuestionsQuery) {
+  /** 题目分页（后端行键 = `questions`）。行类型 = 页面层跨域共享的 UI 模型 Question（见文件头边界说明）。 */
+  async getQuestions(params: QuestionsQuery): Promise<Page<Question>> {
     // 证件分区走服务端 CredentialScoped 兜底（本组 JWT + 学员角色 ⇒ 不传即按登录学员当前证件；
     // 非学员/匿名不兜底，按不分区处理）；显式 credential_id 优先，导师端筛选栏即走这条。
-    return unwrappedRequest.get<WithUIQuestions<QuestionPageDTO>>('/question-bank/questions', { params })
+    const res = await unwrappedRequest.get<WithUIQuestions<QuestionPageDTO>>('/question-bank/questions', { params })
+    return toPage(res?.questions, res?.total)
   },
 
   createQuestion(data: QuestionPayload) {

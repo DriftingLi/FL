@@ -20,8 +20,8 @@ import (
 // 其余（原因为空等业务校验）兜底 400。
 var jobReportErrStatus = &errStatusTable{
 	entries: []errStatusEntry{
-		{service.ErrReportJobNotFound, http.StatusNotFound},
-		{service.ErrReportNotFound, http.StatusNotFound},
+		{sentinel: service.ErrReportJobNotFound, status: http.StatusNotFound},
+		{sentinel: service.ErrReportNotFound, status: http.StatusNotFound},
 	},
 	fallback: http.StatusBadRequest,
 }
@@ -78,11 +78,8 @@ func (h *JobReportHandler) Report(c *gin.Context) {
 			}
 			return h.svc.Report(middleware.CurrentUserID(c), id, req.Reason)
 		},
-		Render: func(c *gin.Context, _ *service.ReportInput, resp *service.ReportDTO, err error) {
-			if err != nil {
-				jobReportErrStatus.renderError(c, err) // #611：错误映射退表，201 定制成功信封保留
-				return
-			}
+		ErrStatus: jobReportErrStatus,
+		Render: func(c *gin.Context, _ *service.ReportInput, resp *service.ReportDTO) {
 			response.Created(c, "举报已提交，感谢你的反馈", *resp)
 		},
 	}.Handle(c)
@@ -166,11 +163,8 @@ func (h *JobReportHandler) MarkHandled(c *gin.Context) {
 			}
 			return h.svc.MarkHandled(id)
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.ReportDTO, err error) {
-			if err != nil {
-				jobReportErrStatus.renderError(c, err) // #611：错误映射退表，成功文案保留定制
-				return
-			}
+		ErrStatus: jobReportErrStatus,
+		Render: func(c *gin.Context, _ *struct{}, resp *service.ReportDTO) {
 			response.SuccessWithMsg(c, "举报已标记为已处理", *resp)
 		},
 	}.Handle(c)
@@ -207,11 +201,8 @@ func (h *JobReportHandler) ForceOffline(c *gin.Context) {
 			_ = c.ShouldBindJSON(&body)
 			return h.svc.ForceOffline(id, body.Reason)
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.JobPostingDTO, err error) {
-			if err != nil {
-				jobReportErrStatus.renderError(c, err) // #611：错误映射退表，成功文案保留定制
-				return
-			}
+		ErrStatus: jobReportErrStatus,
+		Render: func(c *gin.Context, _ *struct{}, resp *service.JobPostingDTO) {
 			response.SuccessWithMsg(c, "职位已强制下架", *resp)
 		},
 	}.Handle(c)

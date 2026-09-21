@@ -4,6 +4,7 @@ package api
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -60,13 +61,7 @@ func (h *AIConfigHandler) ListConfigs(c *gin.Context) {
 			}
 			return &list, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *[]service.AIConfigDTO, err error) {
-			if err != nil {
-				response.ServerError(c, "查询失败: "+err.Error())
-				return
-			}
-			response.Success(c, *resp)
-		},
+		ErrStatus: errStatusAllPrefix(http.StatusInternalServerError, "查询失败: "),
 	}.Handle(c)
 }
 
@@ -103,16 +98,8 @@ func (h *AIConfigHandler) CreateConfig(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		Render: func(c *gin.Context, _ *createConfigReq, _ *struct{}, err error) {
-			if err != nil {
-				var pe *ParseError
-				if asParseError(err, &pe) {
-					renderStatus(c, pe.Status, pe.Message)
-					return
-				}
-				response.ServerError(c, "创建失败: "+err.Error())
-				return
-			}
+		ErrStatus: errStatusAllPrefix(http.StatusInternalServerError, "创建失败: "),
+		Render: func(c *gin.Context, _ *createConfigReq, _ *struct{}) {
 			response.SuccessWithMsg(c, "配置已创建", nil)
 		},
 	}.Handle(c)
@@ -157,16 +144,8 @@ func (h *AIConfigHandler) UpdateConfig(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		Render: func(c *gin.Context, _ *updateConfigReq, _ *struct{}, err error) {
-			if err != nil {
-				var pe *ParseError
-				if asParseError(err, &pe) {
-					renderStatus(c, pe.Status, pe.Message)
-					return
-				}
-				response.ServerError(c, "更新失败: "+err.Error())
-				return
-			}
+		ErrStatus: errStatusAllPrefix(http.StatusInternalServerError, "更新失败: "),
+		Render: func(c *gin.Context, _ *updateConfigReq, _ *struct{}) {
 			response.SuccessWithMsg(c, "配置已更新", nil)
 		},
 	}.Handle(c)
@@ -198,14 +177,7 @@ func (h *AIConfigHandler) DeleteConfig(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		Render: func(c *gin.Context, _ *idParam, _ *struct{}, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "配置已删除", nil)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsgNoData("配置已删除"), http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 测试 AI 配置连通性
@@ -256,13 +228,7 @@ func (h *AIConfigHandler) ListBindings(c *gin.Context) {
 			}
 			return &list, nil
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *[]service.FeatureBindingDTO, err error) {
-			if err != nil {
-				response.ServerError(c, "查询失败: "+err.Error())
-				return
-			}
-			response.Success(c, *resp)
-		},
+		ErrStatus: errStatusAllPrefix(http.StatusInternalServerError, "查询失败: "),
 	}.Handle(c)
 }
 
@@ -297,14 +263,7 @@ func (h *AIConfigHandler) SetBinding(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		Render: func(c *gin.Context, _ *setBindingReq, _ *struct{}, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "绑定已更新", nil)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsgNoData("绑定已更新"), http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 解除 AI 功能的多绑定单项
@@ -334,14 +293,7 @@ func (h *AIConfigHandler) UnbindConfig(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		Render: func(c *gin.Context, _ *unbindConfigReq, _ *struct{}, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "已解除绑定", nil)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsgNoData("已解除绑定"), http.StatusBadRequest).Handle(c)
 }
 
 // ===== Endpoint 请求类型 =====

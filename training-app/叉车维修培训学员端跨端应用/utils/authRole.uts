@@ -1,0 +1,41 @@
+/**
+ * 身份角色标记（`auth_active_role`）的唯一读写入口
+ *
+ * 背景：认证槽只有 token / refresh_token / user / login_provider 四个 key，**没有招聘者槽**
+ * ⇒ 招聘者复用 `auth_token` 槽，另立一个显式角色标记区分「槽里的凭据属于谁」
+ * （移动端 `docs/adr/0022-招聘者工作区落地口径与角色化鉴权.md` ②）。
+ *
+ * 为什么单独成模块而不是塞进 `stores/auth.uts`：
+ *   `api/request.uts` 的 401 出口**必须在跳转那一刻**知道当前角色，而它不能 import
+ *   `stores/auth.uts`（循环依赖，见该文件顶部注释）。本模块只依赖 `utils/storage.uts` +
+ *   `constants/app.uts`，两边都能引，且是**唯一**的角色判定真源。
+ *
+ * 为什么判定用「显式等于 recruiter」而不是「不等于 student」：角色字符串只有两个合法取值
+ * （见 `constants/app.uts`），但存储里可能是历史/脏值 —— 只有显式等于 recruiter 才算招聘者，
+ * 其余一律当学员兜底，与 ADR-0022「学员是缺省身份」一致（宁可多跳一次学员登录页，也不把
+ * 身份不明的会话送进招聘者工作区）。
+ */
+import { getStorage, setStorage, removeStorage } from './storage'
+import { STORAGE_KEY_ACTIVE_ROLE, ACTIVE_ROLE_STUDENT, ACTIVE_ROLE_RECRUITER } from '../constants/app'
+
+/** 读取当前身份角色；未写入或值不合法时返回学员（缺省身份） */
+export function getActiveRole() : string {
+    const raw = getStorage(STORAGE_KEY_ACTIVE_ROLE)
+    if (raw == ACTIVE_ROLE_RECRUITER) return ACTIVE_ROLE_RECRUITER
+    return ACTIVE_ROLE_STUDENT
+}
+
+/** 当前身份是否为招聘者（401 出口据此选跳转目标） */
+export function isRecruiterActive() : boolean {
+    return getActiveRole() == ACTIVE_ROLE_RECRUITER
+}
+
+/** 写入身份角色标记（登录成功时由 `stores/auth.uts` 调用） */
+export function setActiveRole(role : string) : void {
+    setStorage(STORAGE_KEY_ACTIVE_ROLE, role)
+}
+
+/** 清除身份角色标记（身份互斥清槽 / 需要回到学员缺省态时） */
+export function clearActiveRole() : void {
+    removeStorage(STORAGE_KEY_ACTIVE_ROLE)
+}

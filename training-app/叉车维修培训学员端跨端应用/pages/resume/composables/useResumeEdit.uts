@@ -1,0 +1,516 @@
+/**
+ * 简历编辑页状态 composable（T09 resume 手术，parent #647 / ADR-0007）
+ *
+ * 逐段搬自 pages/resume/resume-edit.uvue 的 <script setup>，行为逐字保持：
+ * 草稿回填（含教育经历独立 key）→ 服务端回显（含 notfound 静默）→ 完善度 12 项计算
+ * → 选项选择（actionSheet）→ 多段经历增删/字段改写 → 保存（先落本地草稿再回列表）。
+ *
+ * 页面壳层只保留模板与薄包装 handler（照 T07 先例 pages/exam/composables/useMockExamSession.uts）。
+ * 数据所有权单一：本模块全部编辑态归此 composable，section 组件只收原始值 prop、只发单参事件
+ * （禁止跨组件 v-model 反向桥接，T04 已录 uvue 编译风险）。
+ */
+import { ref, computed } from 'vue'
+import type { Ref, ComputedRef } from 'vue'
+import { setStorage, getStorageJSON } from '../../../utils/storage'
+import { goBack } from '../../../utils/navigation'
+import { STORAGE_KEY_RESUME } from '../../../constants/app'
+import { toStr, toNumber, toBool, errMsg } from '../../../api/helpers'
+import { getResumeApi, saveResumeApi, getPositionsApi } from '../../../api/resume'
+import type { ResumeData, SaveResumeParams, ResumeExperience, PositionItem } from '../../../types/index'
+
+/** 教育经历表单项（纯本地，不提交后端，独立 storage key 冗余保存） */
+export type ResumeEduItem = {
+    school : string
+    major : string
+    degree : string
+    start : string
+    end : string
+}
+
+/** 工作经历表单项（保存时按 company/role 双空过滤后提交） */
+export type ResumeExpItem = {
+    company : string
+    role : string
+    start_month : string
+    end_month : string
+    desc : string
+}
+
+/** 本 composable 的显式返回类型（Kotlin error18 规避，先例 useMockExamSession / usePracticeSession / useTopicDetail） */
+export type UseResumeEditResult = {
+    realName : Ref<string>
+    contactPhone : Ref<string>
+    wechat : Ref<string>
+    region : Ref<string>
+    experienceYears : Ref<string>
+    expectedPositionExtra : Ref<string>
+    selectedPositionName : Ref<string>
+    expectedRegionsText : Ref<string>
+    salaryMin : Ref<string>
+    salaryMax : Ref<string>
+    salaryNegotiable : Ref<boolean>
+    jobNature : Ref<string>
+    availableIn : Ref<string>
+    availableInLabel : ComputedRef<string>
+    jobNatureLabel : ComputedRef<string>
+    eduItems : Ref<ResumeEduItem[]>
+    expItems : Ref<ResumeExpItem[]>
+    certs : Ref<string>
+    selfIntro : Ref<string>
+    completion : ComputedRef<number>
+    toggleSalaryNegotiable : () => void
+    onPositionTap : () => void
+    onJobNatureTap : () => void
+    onAvailableInTap : () => void
+    onDegreeTap : (idx : number) => void
+    addEdu : () => void
+    removeEdu : (idx : number) => void
+    addExp : () => void
+    removeExp : (idx : number) => void
+    boot : () => void
+    onSave : () => void
+}
+
+/** 教育经历独立存储 key（纯本地，不提交后端） */
+const STORAGE_KEY_RESUME_EDU = 'user_resume_edu_draft'
+
+export function useResumeEdit() : UseResumeEditResult {
+    // 基本信息
+    const realName = ref<string>('')
+    const contactPhone = ref<string>('')
+    const wechat = ref<string>('')
+    const region = ref<string>('')
+
+    // 求职期望
+    const experienceYears = ref<string>('')
+    const expectedPositionId = ref<number>(0)
+    const expectedPositionExtra = ref<string>('')
+    const selectedPositionName = ref<string>('')
+    const salaryMin = ref<string>('')
+    const salaryMax = ref<string>('')
+    const salaryNegotiable = ref<boolean>(false)
+    const availableIn = ref<string>('')
+    const jobNature = ref<string>('')
+
+    // 公开状态（新简历默认 hidden；保存时不硬编码 hidden，避免把已公开简历误置为隐藏）
+    const currentVisibility = ref<string>('hidden')
+
+    // 多段经历
+    const eduItems = ref<ResumeEduItem[]>([])
+    const expItems = ref<ResumeExpItem[]>([])
+
+    // 文本块
+    const certs = ref<string>('')
+    const selfIntro = ref<string>('')
+    const expectedRegionsText = ref<string>('')
+
+    // 岗位字典
+    const positions = ref<PositionItem[]>([])
+
+    // ---- 枚举选项 ----
+    const availableInOptions : string[] = ['随时', '1周内', '2周内', '1月内']
+    const availableInValues : string[] = ['immediate', '1w', '2w', '1m']
+    const jobNatureOptions : string[] = ['全职', '兼职', '合同']
+    const jobNatureValues : string[] = ['fulltime', 'parttime', 'contract']
+    const degreeOptions : string[] = ['初中及以下', '高中/中专/技校', '大专', '本科', '硕士及以上']
+
+    const availableInLabel = computed<string>(() : string => {
+        for (let i = 0; i < availableInValues.length; i++) {
+            if (availableInValues[i] == availableIn.value) return availableInOptions[i]
+        }
+        return ''
+    })
+
+    const jobNatureLabel = computed<string>(() : string => {
+        for (let i = 0; i < jobNatureValues.length; i++) {
+            if (jobNatureValues[i] == jobNature.value) return jobNatureOptions[i]
+        }
+        return ''
+    })
+
+    function hasEduContent() : boolean {
+        for (let i = 0; i < eduItems.value.length; i++) {
+            const e = eduItems.value[i]
+            if (e.school.trim().length > 0 || e.major.trim().length > 0) return true
+        }
+        return false
+    }
+
+    function hasExpContent() : boolean {
+        for (let i = 0; i < expItems.value.length; i++) {
+            const e = expItems.value[i]
+            if (e.company.trim().length > 0 || e.role.trim().length > 0) return true
+        }
+        return false
+    }
+
+    /** 完善度：12 项关键内容 */
+    const completion = computed<number>(() : number => {
+        let filled = 0
+        if (realName.value.trim().length > 0) filled += 1
+        if (contactPhone.value.length == 11) filled += 1
+        if (wechat.value.trim().length > 0) filled += 1
+        if (region.value.trim().length > 0) filled += 1
+        if (toNumber(experienceYears.value) > 0) filled += 1
+        if (expectedPositionId.value > 0 || expectedPositionExtra.value.trim().length > 0) filled += 1
+        if (toNumber(salaryMin.value) > 0 || toNumber(salaryMax.value) > 0 || salaryNegotiable.value) filled += 1
+        if (jobNature.value.length > 0) filled += 1
+        if (availableIn.value.length > 0) filled += 1
+        if (hasEduContent()) filled += 1
+        if (hasExpContent()) filled += 1
+        if (selfIntro.value.trim().length > 0) filled += 1
+        return Math.round(filled * 100 / 12)
+    })
+
+    // ---- 选项选择 ----
+    function pick(options : string[], onPick : (v : string) => void) : void {
+        uni.showActionSheet({
+            itemList: options,
+            success: (res) => {
+                onPick(options[res.tapIndex])
+            }
+        })
+    }
+
+    function onPositionTap() : void {
+        if (positions.value.length == 0) {
+            uni.showToast({ title: '岗位列表加载中', icon: 'none' })
+            return
+        }
+        const names : string[] = []
+        for (let i = 0; i < positions.value.length; i++) {
+            names.push(positions.value[i].name)
+        }
+        pick(names, (v : string) : void => {
+            selectedPositionName.value = v
+            for (let i = 0; i < positions.value.length; i++) {
+                if (positions.value[i].name == v) {
+                    expectedPositionId.value = positions.value[i].position_id
+                    break
+                }
+            }
+        })
+    }
+
+    function onAvailableInTap() : void {
+        pick(availableInOptions, (v : string) : void => {
+            for (let i = 0; i < availableInOptions.length; i++) {
+                if (availableInOptions[i] == v) {
+                    availableIn.value = availableInValues[i]
+                    break
+                }
+            }
+        })
+    }
+
+    function onJobNatureTap() : void {
+        pick(jobNatureOptions, (v : string) : void => {
+            for (let i = 0; i < jobNatureOptions.length; i++) {
+                if (jobNatureOptions[i] == v) {
+                    jobNature.value = jobNatureValues[i]
+                    break
+                }
+            }
+        })
+    }
+
+    function onDegreeTap(idx : number) : void {
+        pick(degreeOptions, (v : string) : void => {
+            if (idx < eduItems.value.length) {
+                eduItems.value[idx].degree = v
+            }
+        })
+    }
+
+    function toggleSalaryNegotiable() : void {
+        salaryNegotiable.value = !salaryNegotiable.value
+    }
+
+    // ---- 多段经历增删与字段改写 ----
+    function addEdu() : void {
+        eduItems.value.push({ school: '', major: '', degree: '', start: '', end: '' } as ResumeEduItem)
+    }
+
+    function removeEdu(idx : number) : void {
+        eduItems.value.splice(idx, 1)
+    }
+
+    function addExp() : void {
+        expItems.value.push({ company: '', role: '', start_month: '', end_month: '', desc: '' } as ResumeExpItem)
+    }
+
+    function removeExp(idx : number) : void {
+        expItems.value.splice(idx, 1)
+    }
+
+    // ---- 草稿加载 ----
+    function loadDraft() : void {
+        const saved = getStorageJSON(STORAGE_KEY_RESUME)
+        if (saved != null) {
+            realName.value = toStr(saved['real_name'])
+            contactPhone.value = toStr(saved['contact_phone'])
+            wechat.value = toStr(saved['wechat'])
+            region.value = toStr(saved['region'])
+            experienceYears.value = toStr(saved['experience_years'])
+            expectedPositionId.value = toNumber(saved['expected_position_id'])
+            expectedPositionExtra.value = toStr(saved['expected_position_extra'])
+            selectedPositionName.value = toStr(saved['selected_position_name'])
+            salaryMin.value = toStr(saved['salary_min'])
+            salaryMax.value = toStr(saved['salary_max'])
+            salaryNegotiable.value = toBool(saved['salary_negotiable'])
+            availableIn.value = toStr(saved['available_in'])
+            jobNature.value = toStr(saved['job_nature'])
+            certs.value = toStr(saved['certs'])
+            selfIntro.value = toStr(saved['self_intro'])
+            expectedRegionsText.value = toStr(saved['expected_regions_text'])
+            const expRaw = saved['resume_experiences']
+            if (expRaw != null) {
+                try {
+                    const arr = expRaw as Array<UTSJSONObject>
+                    for (let i = 0; i < arr.length; i++) {
+                        const o = arr[i]
+                        expItems.value.push({
+                            company: toStr(o['company']),
+                            role: toStr(o['role']),
+                            start_month: toStr(o['start_month']),
+                            end_month: toStr(o['end_month']),
+                            desc: toStr(o['desc']),
+                        } as ResumeExpItem)
+                    }
+                } catch (_e) {}
+            }
+        }
+        const eduSaved = getStorageJSON(STORAGE_KEY_RESUME_EDU)
+        if (eduSaved != null) {
+            const eduRaw = eduSaved['edu']
+            if (eduRaw != null) {
+                try {
+                    const arr = eduRaw as Array<UTSJSONObject>
+                    for (let i = 0; i < arr.length; i++) {
+                        const o = arr[i]
+                        eduItems.value.push({
+                            school: toStr(o['school']),
+                            major: toStr(o['major']),
+                            degree: toStr(o['degree']),
+                            start: toStr(o['start']),
+                            end: toStr(o['end']),
+                        } as ResumeEduItem)
+                    }
+                } catch (_e) {}
+            }
+        }
+    }
+
+    // ---- 从服务端回显 ----
+    function loadFromServer() : void {
+        getResumeApi().then((r : ResumeData) : void => {
+            realName.value = r.real_name
+            contactPhone.value = r.contact_phone
+            wechat.value = r.wechat
+            region.value = r.region
+            experienceYears.value = r.experience_years > 0 ? r.experience_years.toString() : ''
+            expectedPositionId.value = r.expected_position_id
+            expectedPositionExtra.value = r.expected_position_extra
+            salaryMin.value = r.salary_min > 0 ? r.salary_min.toString() : ''
+            salaryMax.value = r.salary_max > 0 ? r.salary_max.toString() : ''
+            salaryNegotiable.value = r.salary_negotiable
+            availableIn.value = r.available_in
+            jobNature.value = r.job_nature
+            selfIntro.value = r.self_intro
+            currentVisibility.value = r.visibility.length > 0 ? r.visibility : 'hidden'
+            // 意向地区回显
+            if (r.expected_regions.length > 0) {
+                expectedRegionsText.value = r.expected_regions.join(',')
+            }
+            // 工作经历回显
+            expItems.value = []
+            for (let i = 0; i < r.resume_experiences.length; i++) {
+                const e = r.resume_experiences[i]
+                expItems.value.push({
+                    company: e.company,
+                    role: e.role,
+                    start_month: e.start_month,
+                    end_month: e.end_month,
+                    desc: e.desc,
+                } as ResumeExpItem)
+            }
+            // 回填岗位名称
+            if (r.expected_position_id > 0) {
+                for (let i = 0; i < positions.value.length; i++) {
+                    if (positions.value[i].position_id == r.expected_position_id) {
+                        selectedPositionName.value = positions.value[i].name
+                        break
+                    }
+                }
+            }
+            if (expItems.value.length == 0) addExp()
+        }).catch((e) : void => {
+            let isNotFound = false
+            try {
+                const obj = e as UTSJSONObject
+                if (obj['kind'] != null && `${obj['kind']}` == 'notfound') {
+                    isNotFound = true
+                }
+            } catch (_ex) {}
+            if (!isNotFound) {
+                const msg = errMsg(e, '')
+                if (msg.length > 0) {
+                    uni.showToast({ title: '简历加载失败', icon: 'none' })
+                }
+            }
+        })
+    }
+
+    // ---- 保存 ----
+    function onSave() : void {
+        if (realName.value.trim().length == 0) {
+            uni.showToast({ title: '请填写姓名', icon: 'none' })
+            return
+        }
+        if (contactPhone.value.length != 11) {
+            uni.showToast({ title: '请填写11位手机号', icon: 'none' })
+            return
+        }
+        if (selfIntro.value.length > 1000) {
+            uni.showToast({ title: '自我介绍不超过1000字', icon: 'none' })
+            return
+        }
+        if (!salaryNegotiable.value) {
+            const sMin = toNumber(salaryMin.value)
+            const sMax = toNumber(salaryMax.value)
+            if (sMin < 0 || sMax < 0) {
+                uni.showToast({ title: '薪资不能为负数', icon: 'none' })
+                return
+            }
+            if (sMin > 0 && sMax > 0 && sMin > sMax) {
+                uni.showToast({ title: '最低薪资不能高于最高薪资', icon: 'none' })
+                return
+            }
+        }
+
+        const expList : ResumeExperience[] = []
+        for (let i = 0; i < expItems.value.length; i++) {
+            const e = expItems.value[i]
+            if (e.company.trim().length == 0 && e.role.trim().length == 0) continue
+            expList.push({
+                company: e.company,
+                role: e.role,
+                start_month: e.start_month,
+                end_month: e.end_month,
+                desc: e.desc,
+            })
+        }
+
+        // 意向地区拆分
+        const regions : string[] = []
+        const trimmed = expectedRegionsText.value.trim()
+        if (trimmed.length > 0) {
+            const parts = trimmed.split(',')
+            for (let i = 0; i < parts.length; i++) {
+                const s = parts[i].trim()
+                if (s.length > 0) regions.push(s)
+            }
+        }
+
+        const params : SaveResumeParams = {
+            real_name: realName.value.trim(),
+            contact_phone: contactPhone.value,
+            wechat: wechat.value.trim(),
+            region: region.value.trim(),
+            expected_position_id: expectedPositionId.value,
+            expected_position_extra: expectedPositionExtra.value.trim(),
+            expected_regions: regions,
+            salary_min: toNumber(salaryMin.value),
+            salary_max: toNumber(salaryMax.value),
+            salary_negotiable: salaryNegotiable.value,
+            available_in: availableIn.value,
+            job_nature: jobNature.value,
+            experience_years: toNumber(experienceYears.value),
+            self_intro: selfIntro.value,
+            resume_experiences: expList,
+            resume_certifications: [],
+            resume_file_url: '',
+            photos: [],
+            visibility: currentVisibility.value,
+        }
+
+        uni.showLoading({ title: '保存中' })
+        saveResumeApi(params).then((_r : ResumeData) : void => {
+            // 保存草稿到本地（含岗位名称显示值）
+            const draft : UTSJSONObject = {
+                real_name: params.real_name,
+                contact_phone: params.contact_phone,
+                wechat: params.wechat,
+                region: params.region,
+                experience_years: params.experience_years.toString(),
+                expected_position_id: params.expected_position_id,
+                expected_position_extra: params.expected_position_extra,
+                selected_position_name: selectedPositionName.value,
+                salary_min: params.salary_min.toString(),
+                salary_max: params.salary_max.toString(),
+                salary_negotiable: params.salary_negotiable,
+                available_in: params.available_in,
+                job_nature: params.job_nature,
+                self_intro: params.self_intro,
+                certs: certs.value,
+                expected_regions_text: expectedRegionsText.value,
+                resume_experiences: expItems.value as any,
+            } as UTSJSONObject
+            setStorage(STORAGE_KEY_RESUME, JSON.stringify(draft))
+            // 教育经历独立保存（纯本地）
+            const eduData : UTSJSONObject = { edu: eduItems.value } as UTSJSONObject
+            setStorage(STORAGE_KEY_RESUME_EDU, JSON.stringify(eduData))
+            uni.hideLoading()
+            uni.showToast({ title: '保存成功', icon: 'success', duration: 800 })
+            goBack('/pages/resume/resume')
+        }).catch((e) : void => {
+            uni.hideLoading()
+            uni.showToast({ title: errMsg(e, '保存失败'), icon: 'none' })
+        })
+    }
+
+    // ---- 启动 ----
+    function boot() : void {
+        loadDraft()
+        getPositionsApi().then((list : PositionItem[]) : void => {
+            positions.value = list
+        }).catch(() => {})
+        loadFromServer()
+        if (eduItems.value.length == 0) addEdu()
+        if (expItems.value.length == 0) addExp()
+    }
+
+    return {
+        realName,
+        contactPhone,
+        wechat,
+        region,
+        experienceYears,
+        expectedPositionExtra,
+        selectedPositionName,
+        expectedRegionsText,
+        salaryMin,
+        salaryMax,
+        salaryNegotiable,
+        jobNature,
+        availableIn,
+        availableInLabel,
+        jobNatureLabel,
+        eduItems,
+        expItems,
+        certs,
+        selfIntro,
+        completion,
+        toggleSalaryNegotiable: () => toggleSalaryNegotiable(),
+        onPositionTap: () => onPositionTap(),
+        onJobNatureTap: () => onJobNatureTap(),
+        onAvailableInTap: () => onAvailableInTap(),
+        onDegreeTap: (idx : number) => onDegreeTap(idx),
+        addEdu: () => addEdu(),
+        removeEdu: (idx : number) => removeEdu(idx),
+        addExp: () => addExp(),
+        removeExp: (idx : number) => removeExp(idx),
+        boot: () => boot(),
+        onSave: () => onSave(),
+    } as UseResumeEditResult
+}

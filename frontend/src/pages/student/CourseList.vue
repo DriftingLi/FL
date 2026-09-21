@@ -225,10 +225,10 @@ import { ArrowRight, Star, StarFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { courseApi, type CourseDetail, type CourseSummary } from '@/api/course'
 import { studentApi, type StudentCourseDetail } from '@/api/student'
-import { favoriteApi } from '@/api/favorite'
 import { trainingApi } from '@/api/training'
 import { pointsApi } from '@/api/points'
 import { useAsyncPage } from '@/composables/useAsyncPage'
+import { useFavorite } from '@/composables/useFavorite'
 import { useCourseCatalog, treeCatalogAdapter } from '@/composables/useCourseCatalog'
 import { useStagger } from '@/composables/useStagger'
 import { useCredentialStore } from '@/stores/credential'
@@ -351,9 +351,13 @@ const detailChapters = ref<{ chapter_id: number; title: string; duration?: numbe
 const courseLearning = ref<{ is_enrolled?: boolean; progress?: number; completed_chapters?: number; total_chapters?: number } | null>(null)
 const completedChapterIds = ref<Set<number>>(new Set())
 
-// 收藏状态（ADR-0018）
-const courseFavorited = ref(false)
-const courseFavoriteId = ref<number>(0)
+// 收藏状态（ADR-0018）：查询—切换—提示的状态机在 useFavorite（ADR-0060 决策 3），
+// 本页只留「抽屉打开时查」这一本地事实（见 openDetail / openDetailById 里的 load 调用）。
+const {
+  favorited: courseFavorited,
+  load: loadCourseFavorite,
+  toggle: toggleCourseFavorite
+} = useFavorite('course', () => detailCourse.value?.course_id ?? 0)
 
 const continueChapter = computed(() => {
   const learning = courseLearning.value
@@ -369,39 +373,6 @@ const learningDetail = ref<StudentCourseDetail | null>(null)
 
 function chapterCompleted(chapterId: number) {
   return completedChapterIds.value.has(chapterId)
-}
-
-async function loadCourseFavorite(courseId: number) {
-  courseFavorited.value = false
-  courseFavoriteId.value = 0
-  try {
-    const res = await favoriteApi.check({ target_type: 'course', target_id: courseId })
-    courseFavorited.value = !!res?.favorited
-    courseFavoriteId.value = res?.favorite_id || 0
-  } catch (error) {
-    console.error('查询收藏状态失败:', error)
-  }
-}
-
-async function toggleCourseFavorite() {
-  const courseId = detailCourse.value?.course_id
-  if (!courseId) return
-  try {
-    if (courseFavorited.value) {
-      await favoriteApi.remove(courseFavoriteId.value)
-      courseFavorited.value = false
-      courseFavoriteId.value = 0
-      ElMessage.success('已取消收藏')
-    } else {
-      const res = await favoriteApi.add({ target_type: 'course', target_id: courseId })
-      courseFavorited.value = true
-      courseFavoriteId.value = res?.favorite_id || 0
-      ElMessage.success('已收藏')
-    }
-  } catch (error) {
-    console.error('收藏操作失败:', error)
-    /* 错误已由拦截器提示 */
-  }
 }
 
 async function loadLearningState(courseId: number) {

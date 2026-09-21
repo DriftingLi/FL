@@ -40,7 +40,7 @@
               <el-icon><ArrowRight /></el-icon>
             </router-link>
             <router-link
-              to="/training/courses"
+              :to="href('CourseList')"
               class="inline-flex items-center gap-1 rounded-ctl border border-line-strong bg-panel px-4 py-2 text-sm text-ink-2 transition-colors duration-150 hover:border-ui-300 hover:text-ui-600"
             >
               浏览全部课程
@@ -89,7 +89,7 @@
           title="进行中的课程"
           :items="activeCourses"
           :max-items="5"
-          more-link="/training/courses"
+          :more-link="href('CourseList')"
           empty-text="暂无进行中的课程"
           variant="elevated"
         />
@@ -130,6 +130,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { ArrowRight } from '@element-plus/icons-vue'
+import type { RouteLocationRaw } from 'vue-router'
+import { href } from '@/config/pages'
 import { useAuthStore } from '@/stores/auth'
 import QuickCard from '@/components/dashboard/QuickCard.vue'
 import type { QuickCardItem } from '@/components/dashboard/QuickCard.vue'
@@ -159,11 +161,11 @@ const activeCourses = ref<QuickCardItem[]>([])
 // 继续学习（最后学习时间最新的课程，ADR-0017）
 // 若无 last_chapter_id（仅报名未学或历史数据缺失），回退至课程详情页以便开始学习
 const continueLearning = ref<StudentCourseItem | null>(null)
-const continueLearningPath = computed(() => {
+const continueLearningPath = computed<RouteLocationRaw>(() => {
   const cl = continueLearning.value
-  if (!cl) return ''
-  if (cl.last_chapter_id) return `/training/course/${cl.course_id}/chapter/${cl.last_chapter_id}`
-  return `/training/courses?course_id=${cl.course_id}`
+  if (!cl) return href('CourseList')
+  if (cl.last_chapter_id) return href('ChapterView', { courseId: cl.course_id, chapterId: cl.last_chapter_id })
+  return { ...href('CourseList'), query: { course_id: String(cl.course_id) } }
 })
 
 // 最近学习
@@ -227,9 +229,9 @@ async function loadCourses() {
           title: c.course_name || '未命名课程',
           subtitle: c.last_chapter_title || '',
           badge: `${Math.round(c.progress ?? 0)}%`,
-          path: c.last_chapter_id
-            ? `/training/course/${c.course_id}/chapter/${c.last_chapter_id}`
-            : `/training/courses?course_id=${c.course_id}`
+          to: c.last_chapter_id
+            ? href('ChapterView', { courseId: c.course_id, chapterId: c.last_chapter_id })
+            : { ...href('CourseList'), query: { course_id: String(c.course_id) } }
         }))
     }
   } catch (error) {
@@ -258,7 +260,7 @@ async function loadRecentLearning() {
         title: r.course_name || '未知课程',
         subtitle: r.chapter_title || `${r.study_duration || 0} 分钟`,
         badge: r.study_duration ? `${r.study_duration}分钟` : '',
-        path: `/training/courses`
+        to: href('CourseList')
       }))
     }
   } catch (error) {

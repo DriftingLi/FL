@@ -244,8 +244,9 @@ func TestForumRollbackContract(t *testing.T) {
 	if err := db.Create(&model.RecruitResumeView{RecruiterID: recruiter.ID, ResumeUserID: author.ID, ViewedAt: time.Now()}).Error; err != nil {
 		t.Fatalf("create view: %v", err)
 	}
-	// 创建 contact request
-	if err := db.Create(&model.ContactRequest{RecruiterID: recruiter.ID, StudentUserID: author.ID, Message: "巡检测试", Status: "pending", CreatedAt: time.Now(), UpdatedAt: time.Now(), ExpiresAt: time.Now().Add(14 * 24 * time.Hour)}).Error; err != nil {
+	// 创建 contact request（pending 必带裁决窗口，ADR-0061 §2）
+	window := time.Now().Add(14 * 24 * time.Hour)
+	if err := db.Create(&model.ContactRequest{RecruiterID: recruiter.ID, StudentUserID: author.ID, Message: "巡检测试", Status: "pending", CreatedAt: time.Now(), UpdatedAt: time.Now(), ExpiresAt: &window}).Error; err != nil {
 		t.Fatalf("create contact: %v", err)
 	}
 	rec = doWithToken(t, r, adminToken, http.MethodGet, "/api/admin/recruit/views", nil)

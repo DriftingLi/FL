@@ -26,7 +26,7 @@
           </div>
 
           <router-link
-            to="/training/tutor/courses"
+            :to="href('TutorCourses')"
             class="inline-flex items-center gap-1 rounded-ctl bg-ui-500 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-ui-600"
           >
             管理课程
@@ -41,7 +41,7 @@
           title="我的课程"
           :items="myCourses"
           :max-items="100"
-          more-link="/training/tutor/courses"
+          :more-link="href('TutorCourses')"
           empty-text="暂无课程"
         />
       </div>
@@ -52,6 +52,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { ArrowRight } from '@element-plus/icons-vue'
+import { href } from '@/config/pages'
 import { useAuthStore } from '@/stores/auth'
 import QuickCard from '@/components/dashboard/QuickCard.vue'
 import type { QuickCardItem } from '@/components/dashboard/QuickCard.vue'
@@ -63,7 +64,7 @@ import { displayNameOf } from '@/types/user'
 
 const authStore = useAuthStore()
 
-const userName = computed(() => displayNameOf(authStore.userInfo) || '导师')
+const userName = computed(() => displayNameOf(authStore.userInfo) || '讲师')
 
 const myCourses = ref<QuickCardItem[]>([])
 
@@ -81,7 +82,7 @@ const {
     myCourses.value = courses.map((c) => ({
       title: c.name || '未命名课程',
       subtitle: `${c.student_count ?? 0} 名学员`,
-      path: c.course_id ? `/training/tutor/course/${c.course_id}/chapters` : ''
+      to: c.course_id ? href('TutorChapterManage', { id: String(c.course_id) }) : undefined
     }))
   }
 })

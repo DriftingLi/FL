@@ -90,6 +90,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowRight } from '@element-plus/icons-vue'
+import { href } from '@/config/pages'
 import { useAuthStore } from '@/stores/auth'
 import { resumeApi } from '@/api/resume'
 import AvatarEditDialog from '@/components/profile/AvatarEditDialog.vue'
@@ -144,7 +145,7 @@ async function handleLogout(){
     await useConfirm().confirm('确定要退出当前账号吗？', '提示', { type: 'warning' })
   } catch { return }
   await authStore.signOut()
-  router.push('/login')
+  router.push(href('Login'))
 }
 
 onMounted(async ()=>{

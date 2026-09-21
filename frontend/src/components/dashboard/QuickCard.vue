@@ -12,7 +12,7 @@
         <router-link
           v-for="(item, index) in items.slice(0, maxItems)"
           :key="index"
-          :to="item.path || ''"
+          :to="item.to || ''"
           class="card-list-item"
         >
           <div class="item-main">
@@ -22,7 +22,7 @@
           <div v-if="item.badge" class="item-badge" :style="item.badgeStyle || {}">
             {{ item.badge }}
           </div>
-          <el-icon v-if="item.path" class="item-arrow"><ArrowRight /></el-icon>
+          <el-icon v-if="item.to" class="item-arrow"><ArrowRight /></el-icon>
         </router-link>
       </div>
       <div v-else class="card-empty">
@@ -34,20 +34,22 @@
 
 <script setup lang="ts">
 import { ArrowRight } from '@element-plus/icons-vue'
+import type { RouteLocationRaw } from 'vue-router'
 
 export interface QuickCardItem {
   title: string
   subtitle?: string
   badge?: string
   badgeStyle?: Record<string, string>
-  path?: string
+  /** 落点：由 config/pages.ts 的 href() 派生（不再手拼路径串） */
+  to?: RouteLocationRaw
 }
 
 const props = withDefaults(
   defineProps<{
     title: string
     items: QuickCardItem[]
-    moreLink?: string
+    moreLink?: RouteLocationRaw
     maxItems?: number
     emptyText?: string
     /**

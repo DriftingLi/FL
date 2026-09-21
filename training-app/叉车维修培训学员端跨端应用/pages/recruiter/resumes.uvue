@@ -1,0 +1,470 @@
+<template>
+    <view class="page" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+
+        <view class="nav-bar">
+            <view class="nav-side"></view>
+            <text class="nav-title">工作台</text>
+            <view class="nav-side nav-side-right">
+                <view class="filter-entry" @click="onOpenFilter">
+                    <text class="filter-entry-text">筛选</text>
+                    <view v-if="activeFilterCount > 0" class="filter-badge">
+                        <text class="filter-badge-text">{{ activeFilterCount }}</text>
+                    </view>
+                </view>
+                <view class="nav-action-wrap" @click="onMe">
+                    <text class="nav-action">我的</text>
+                </view>
+            </view>
+        </view>
+
+        <RecruiterTabBar :active="activeKey" :pending-count="pendingCount" @switch="onSwitchTab" />
+
+        <!-- 简历库**段**的正文（列表 + 8 维抽屉筛选 + 加载更多）来自 ADR-0022 ④ 步骤 P3（#1196）。
+             壳（分段件 + 徽标 + 会话守卫）属 P2（#1195）：一级面**只有这一页**，
+             P3 原建的 `pages/recruiter/resume-library.uvue` 已并入本页并删除（两页承担同一个面）。 -->
+        <scroll-view class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
+            <view v-if="!loading && items.length == 0" class="empty-tip">
+                <text class="empty-text">{{ activeFilterCount > 0 ? '没有符合条件的简历' : '暂无可浏览的简历' }}</text>
+            </view>
+
+            <view class="list">
+                <view v-for="card in items" :key="card.user_id" class="resume-card" @click="onOpenDetail(card.user_id)">
+                    <view class="card-head">
+                        <text class="resume-name">{{ card.real_name_masked.length > 0 ? card.real_name_masked : card.real_name }}</text>
+                        <text class="resume-updated">{{ shortTime(card.updated_at) }}</text>
+                    </view>
+
+                    <text class="resume-position">{{ positionText(card) }}</text>
+
+                    <view class="meta-row">
+                        <text class="meta-salary">{{ salaryText(card) }}</text>
+                        <text class="meta-experience ml-16">{{ experienceText(card) }}</text>
+                    </view>
+                    <view class="meta-row mt-8">
+                        <text class="meta-item">{{ regionsText(card) }}</text>
+                    </view>
+                    <view class="meta-row mt-8">
+                        <text class="meta-item">{{ jobNatureText(card) }}</text>
+                        <text class="meta-item ml-16">{{ availableText(card) }}</text>
+                    </view>
+
+                    <view class="card-foot">
+                        <text class="cert-text">{{ certText(card) }}</text>
+                        <text class="contact-state">{{ contactStateText(card.contact_state) }}</text>
+                    </view>
+                </view>
+            </view>
+
+            <view v-if="loading" class="loading-more">
+                <text class="loading-text">加载中...</text>
+            </view>
+            <view v-if="!loading && noMore && items.length > 0" class="loading-more">
+                <text class="loading-text">没有更多了</text>
+            </view>
+        </scroll-view>
+
+        <recruiter-filter-drawer :show="filterVisible" :filters="filters" @apply="onApplyFilter" @close="onCloseFilter" />
+    </view>
+</template>
+
+<script setup lang="uts">
+    /**
+     * 招聘者工作区 · 简历库段（一级面；ADR-0021 ④ 线 4 / ADR-0022 ④ 步骤 P2 + P3）
+     *
+     * ## 这一页为什么是两票的合体
+     *   ADR-0022 ⑥ 的判据是「三个一级面渲染**同一个**分段件；全仓仅此一份 + 三页各挂一次」，
+     *   而「简历库」这一级只有**一个**面 ⇒ 壳（分段件 + 徽标 + 会话守卫）来自 P2（#1195），
+     *   正文（列表 / 8 维抽屉筛选 / 加载更多）来自 P3（#1196）。
+     *   P3 原先自建的 `pages/recruiter/resume-library.uvue` 与 ESM 注册一并删除 ——
+     *   两个页面承担同一个面会让分段件挂载数与注册闭环两条锁同时失去意义。
+     *
+     * ## 徽标
+     *   仍在此取一次 `GET /recruit/contact-requests`：ADR-0022 ② 定的是徽标**常驻、三段可见**，
+     *   所以三个一级面各自算一次，而不是只有首页有。这不影响首页的「首屏批量请求 = 2」
+     *   （那是职位段的账）。
+     *
+     * ## 「加载更多」的到底判据
+     *   `GET /recruit/resumes` **不回显** page / page_size（后端 `RecruitListResult` 只有
+     *   items / total）⇒ 页码由本页自记，到底只看「本批不足一页」或「已够 total」。
+     */
+    import { ref, computed } from 'vue'
+    import { onLoad } from '@dcloudio/uni-app'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { getRecruitContactRequestsApi, getRecruitResumesApi, emptyRecruitFilters, jobNatureLabel, RECRUIT_PAGE_SIZE } from '../../api/recruit'
+    import { unexpiredPendingCount } from '../../utils/recruitDisplay'
+    import { ensureRecruiterSession } from '../../utils/recruitGuard'
+    import { isRecruiterActive } from '../../utils/authRole'
+    import RecruiterTabBar from './components/recruiter-tab-bar.uvue'
+    import RecruiterFilterDrawer from './components/recruiter-filter-drawer.uvue'
+    import type { RecruitResumeCard, RecruitResumeFilters } from '../../api/recruit'
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    const activeKey : string = 'resumes'
+
+    const pendingCount = ref<number>(0)
+
+    const items = ref<RecruitResumeCard[]>([])
+    const loading = ref<boolean>(false)
+    const noMore = ref<boolean>(false)
+    const page = ref<number>(1)
+    const filters = ref<RecruitResumeFilters>(emptyRecruitFilters())
+    const filterVisible = ref<boolean>(false)
+
+    /** 生效的筛选维数（0 = 未筛选），用于导航栏徽标与空态文案 */
+    const activeFilterCount = computed<number>(() : number => {
+        const f = filters.value
+        let n = 0
+        if (f.region.trim().length > 0) n += 1
+        if (f.position_id != null) n += 1
+        if (f.credential_id != null) n += 1
+        if (f.salary_min != null) n += 1
+        if (f.salary_max != null) n += 1
+        if (f.experience_min != null) n += 1
+        if (f.job_nature.length > 0) n += 1
+        if (f.available_in.length > 0) n += 1
+        return n
+    })
+
+    // ⚠️ 函数定义顺序是**契约**（`utils/utsAndroidCompile.test.js` 的 A 守护）：UTS 编译到 Kotlin
+    // 后没有函数提升 ⇒ 顶层调用点不得早于被调函数的定义，故 `onLoad(...)` 放在**最后**。
+
+    /**
+     * 页面级身份守卫的**唯一实现**（本页自持，不做第二套判定语义）。
+     *
+     * 只做两层读：`utils/authRole.uts` 的角色标记（真源）与 P2 的会话守卫
+     * `utils/recruitGuard.uts`（角色 + 非空 token）。**不新增 401 出口** ——
+     * token 失效仍由 `api/request.uts` 的 `handleUnauthorized()` 单点处置（ADR-0022 ⑤）。
+     * @returns true = 放行；false = 已发起 reLaunch，调用方必须**立即停止**后续取数
+     */
+    function guardRecruiter() : boolean {
+        if (!isRecruiterActive()) {
+            uni.reLaunch({ url: '/pages/recruiter/login' })
+            return false
+        }
+        return ensureRecruiterSession()
+    }
+
+    /** 徽标：与职位段 / 交换段同源的「只计未过期 pending」 */
+    function loadContactSignals() : void {
+        getRecruitContactRequestsApi().then((result) : void => {
+            pendingCount.value = unexpiredPendingCount(result.items, Date.now())
+        }).catch((e) : void => {
+            console.error('[recruiter-resumes] load contact signals failed:', e)
+        })
+    }
+
+    function loadResumes(reset : boolean = false) : void {
+        if (loading.value) return
+        if (noMore.value) return
+        if (reset) {
+            page.value = 1
+            noMore.value = false
+            items.value = []
+        }
+        loading.value = true
+        getRecruitResumesApi(filters.value, page.value).then((result) : void => {
+            if (reset) {
+                items.value = result.items
+            } else {
+                items.value = items.value.concat(result.items)
+            }
+            // 响应**不回显** page / page_size，故只能按「本批不足一页」或「已够 total」判到底
+            if (result.items.length < RECRUIT_PAGE_SIZE || items.value.length >= result.total) {
+                noMore.value = true
+            }
+            page.value = page.value + 1
+            loading.value = false
+        }).catch((e) : void => {
+            console.error('[recruiter-resumes] load failed:', e)
+            loading.value = false
+            uni.showToast({ title: '加载失败，请稍后重试', icon: 'none' })
+        })
+    }
+
+    function onLoadMore() : void {
+        loadResumes(false)
+    }
+
+    function onOpenFilter() : void {
+        filterVisible.value = true
+    }
+
+    function onCloseFilter() : void {
+        filterVisible.value = false
+    }
+
+    function onApplyFilter(next : RecruitResumeFilters) : void {
+        filters.value = next
+        filterVisible.value = false
+        loadResumes(true)
+    }
+
+    function onOpenDetail(userId : number) : void {
+        uni.navigateTo({ url: '/pages/recruiter/resume-detail?id=' + userId.toString() })
+    }
+
+    // ---- 展示口径 ----
+
+    function positionText(card : RecruitResumeCard) : string {
+        if (card.expected_position_extra.length > 0) return card.expected_position_extra
+        if (card.expected_position_id != null) return '岗位 #' + card.expected_position_id!.toString()
+        return '未填写期望岗位'
+    }
+
+    function salaryText(card : RecruitResumeCard) : string {
+        if (card.salary_negotiable) return '面议'
+        if (card.salary_min != null && card.salary_max != null) {
+            return card.salary_min!.toString() + '-' + card.salary_max!.toString() + ' 元/月'
+        }
+        if (card.salary_min != null) return card.salary_min!.toString() + ' 元/月起'
+        if (card.salary_max != null) return card.salary_max!.toString() + ' 元/月以内'
+        return '薪资未填'
+    }
+
+    function experienceText(card : RecruitResumeCard) : string {
+        if (card.experience_years <= 0) return '经验不限'
+        return '经验 ' + card.experience_years.toString() + ' 年'
+    }
+
+    function regionsText(card : RecruitResumeCard) : string {
+        if (card.expected_regions.length == 0) return '意向地区未填'
+        return '意向：' + card.expected_regions.join('、')
+    }
+
+    function jobNatureText(card : RecruitResumeCard) : string {
+        if (card.job_nature.length == 0) return '用工性质未填'
+        return jobNatureLabel(card.job_nature)
+    }
+
+    function availableText(card : RecruitResumeCard) : string {
+        if (card.available_in.length == 0) return '到岗时间未填'
+        return card.available_in
+    }
+
+    /** 持证只出「编号 + 有效期」（后端已按白名单去图，这里不再展示任何图片位） */
+    function certText(card : RecruitResumeCard) : string {
+        if (card.resume_certifications.length == 0) return '暂无持证'
+        return '持证 ' + card.resume_certifications.length.toString() + ' 项'
+    }
+
+    function contactStateText(state : string) : string {
+        if (state == 'approved') return '已授权'
+        if (state == 'pending') return '待授权'
+        return ''
+    }
+
+    /** `2026-09-20T10:00:00Z` → `09-20`（只做展示，不解析时区） */
+    function shortTime(raw : string) : string {
+        if (raw.length < 10) return ''
+        return raw.substring(5, 10)
+    }
+
+    function onSwitchTab(key : string) : void {
+        if (key == activeKey) return
+        if (key == 'jobs') {
+            uni.redirectTo({ url: '/pages/recruiter/jobs' })
+            return
+        }
+        if (key == 'contacts') {
+            uni.redirectTo({ url: '/pages/recruiter/contacts' })
+        }
+    }
+
+    function onMe() : void {
+        uni.navigateTo({ url: '/pages/recruiter/me' })
+    }
+
+    // onLoad 必须带 options 形参：Kotlin Function1<OnLoadOptions, Unit>，零参即 error17
+    // （本钩子放在全部顶层函数**之后**：UTS 无函数提升，Kotlin 侧前置调用是 error18）
+    onLoad((options : OnLoadOptions) => {
+        if (!guardRecruiter()) return
+        loadContactSignals()
+        loadResumes(true)
+    })
+</script>
+
+<style lang="scss">
+    .page {
+        background-color: #F5F6FA;
+    }
+
+    .status-bar {
+        background-color: #ffffff;
+    }
+
+    .nav-bar {
+        flex-direction: row;
+        align-items: center;
+        height: 88rpx;
+        padding: 0 24rpx;
+        background-color: #ffffff;
+    }
+
+    .nav-side {
+        width: 120rpx;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .nav-side-right {
+        width: 200rpx;
+        flex-direction: row;
+        align-items: center;
+        justify-content: flex-end;
+    }
+
+    .nav-title {
+        flex: 1;
+        font-size: 34rpx;
+        font-weight: bold;
+        color: #333333;
+        text-align: center;
+    }
+
+    .filter-entry {
+        flex-direction: row;
+        align-items: center;
+        padding: 16rpx 0;
+    }
+
+    .filter-entry-text {
+        font-size: 28rpx;
+        color: #2979ff;
+    }
+
+    .filter-badge {
+        min-width: 32rpx;
+        height: 32rpx;
+        border-radius: 16rpx;
+        background-color: #ff6b35;
+        align-items: center;
+        justify-content: center;
+        margin-left: 8rpx;
+        padding: 0 8rpx;
+    }
+
+    .filter-badge-text {
+        font-size: 20rpx;
+        color: #ffffff;
+    }
+
+    .nav-action-wrap {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .nav-action {
+        font-size: 30rpx;
+        color: #2979ff;
+        padding: 16rpx 0;
+        margin-left: 24rpx;
+    }
+
+    .content-scroll {
+        flex: 1;
+    }
+
+    .list {
+        flex-direction: column;
+        padding: 16rpx 24rpx;
+    }
+
+    .resume-card {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 24rpx;
+        margin-bottom: 16rpx;
+        border: 1rpx solid #eeeeee;
+        flex-direction: column;
+    }
+
+    .card-head {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .resume-name {
+        font-size: 34rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .resume-updated {
+        font-size: 22rpx;
+        color: #999999;
+    }
+
+    .resume-position {
+        font-size: 28rpx;
+        color: #2979ff;
+        margin-top: 8rpx;
+    }
+
+    .meta-row {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .mt-8 { margin-top: 8rpx; }
+
+    .meta-salary {
+        font-size: 28rpx;
+        font-weight: bold;
+        color: #ff6b35;
+    }
+
+    .meta-experience {
+        font-size: 26rpx;
+        color: #666666;
+    }
+
+    .meta-item {
+        font-size: 26rpx;
+        color: #666666;
+    }
+
+    .card-foot {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 16rpx;
+        padding-top: 16rpx;
+        border-top: 1rpx solid #f5f5f5;
+    }
+
+    .cert-text {
+        font-size: 24rpx;
+        color: #999999;
+    }
+
+    .contact-state {
+        font-size: 24rpx;
+        color: #2979ff;
+    }
+
+    .empty-tip {
+        align-items: center;
+        padding: 120rpx 0;
+    }
+
+    .empty-text {
+        font-size: 28rpx;
+        color: #999999;
+    }
+
+    .loading-more {
+        align-items: center;
+        padding: 24rpx 0;
+    }
+
+    .loading-text {
+        font-size: 24rpx;
+        color: #999999;
+    }
+
+    .ml-16 { margin-left: 16rpx; }
+</style>

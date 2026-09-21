@@ -3,13 +3,13 @@ package api
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
-	"forklift-training/pkg/response"
 )
 
 // RealExamHandler 真题套卷 handler。
@@ -69,9 +69,6 @@ func (h *RealExamHandler) ListPapers(c *gin.Context) {
 			result := h.svc.ListPapers(req.UserID, req.CredentialID)
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *listPapersReq, resp *[]service.RealExamPaperDTO, _ error) {
-			response.Success(c, *resp)
-		},
 	}.Handle(c)
 }
 
@@ -108,9 +105,7 @@ func (h *RealExamHandler) Redeem(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *paperActionReq) (*service.RedeemResult, error) {
 			return h.points.RedeemRealPaper(ctx, req.UserID, req.PaperID)
 		},
-		Render: func(c *gin.Context, _ *paperActionReq, resp *service.RedeemResult, err error) {
-			renderPaperResult(c, resp, err)
-		},
+		ErrStatus: errStatusAll(http.StatusNotFound),
 	}.Handle(c)
 }
 
@@ -131,9 +126,7 @@ func (h *RealExamHandler) StartPractice(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *paperActionReq) (*service.PracticeStartResultDTO, error) {
 			return h.svc.StartPaperPractice(req.UserID, req.PaperID)
 		},
-		Render: func(c *gin.Context, _ *paperActionReq, resp *service.PracticeStartResultDTO, err error) {
-			renderPaperResult(c, resp, err)
-		},
+		ErrStatus: errStatusAll(http.StatusNotFound),
 	}.Handle(c)
 }
 
@@ -154,17 +147,6 @@ func (h *RealExamHandler) StartExam(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *paperActionReq) (*service.MockExamStartDTO, error) {
 			return h.svc.StartPaperExam(req.UserID, req.PaperID)
 		},
-		Render: func(c *gin.Context, _ *paperActionReq, resp *service.MockExamStartDTO, err error) {
-			renderPaperResult(c, resp, err)
-		},
+		ErrStatus: errStatusAll(http.StatusNotFound),
 	}.Handle(c)
-}
-
-// renderPaperResult 统一渲染：未兑换/不存在类错误走 404 语义，其余成功。
-func renderPaperResult[T any](c *gin.Context, resp *T, err error) {
-	if err != nil {
-		response.NotFound(c, err.Error())
-		return
-	}
-	response.Success(c, resp)
 }

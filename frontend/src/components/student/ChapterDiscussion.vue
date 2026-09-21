@@ -47,17 +47,43 @@ const expandedTopicId = ref<number | null>(null)
 const expandedTopic = ref<ForumTopicItem | null>(null)
 const detailContent = ref('')
 const replies = ref<ForumReplyItem[]>([])
-// 章节讨论是内嵌面板、没有翻页交互，故一次取到页大小上限；
-// 超出时模板给一行可见提示 + 跳详情页入口（不静默丢弃尾部回复）。
-//
-// ⚠️ 这个 100 必须与后端 `service.ForumReplyMaxPageSize` 保持一致：
-// 后端对超上限的 page_size 是「回退默认值」而不是「截断到上限」（ClampMax 口径），
-// 一旦后端的 max 降到 100 以下，这里会**静默退回默认 20 条**而不是报错。
-const CHAPTER_REPLY_PAGE_SIZE = 100
+// 回复读取走 useAsyncPage 的 append 档（ADR-0060 票4 / spec #1201 场景 4）：
+// 此前这里是「一次取 100 条的内嵌预览」，尾部只能靠跳详情页看——同一个列表在
+// 论坛详情页能翻完、在章节讨论里翻不完。判据一律是服务端的 pages/total：
+// 本组件不再需要知道后端的页大小上限（原 `ForumReplyMaxPageSize` 那层耦合就此消失）。
+const REPLY_BATCH = 20
+const currentReplyTopicId = ref(0)
 const replyPages = ref(1)
+const replyTotal = ref(0)
+
+async function fetchReplyBatch(page?: number) {
+  const p = page ?? 1
+  const res = await forumApi.getTopic(currentReplyTopicId.value, undefined, undefined, p, REPLY_BATCH)
+  if (p === 1) {
+    expandedTopic.value = res.topic || null
+    detailContent.value = res.topic?.content || ''
+  }
+  replyPages.value = res.pages ?? 1
+  replyTotal.value = res.total ?? replies.value.length
+  return res
+}
 const replyContent = ref('')
 const replyImages = ref<string[]>([])
 const replyingTo = ref<{ id: number; username: string } | null>(null)
+
+// append 档接管回复累积、hasMore 与翻页（票4 建的机器，这里复用，不再各写一份）。
+const {
+  hasMore: replyHasMore,
+  loadingMore: replyLoadingMore,
+  loadMore: loadMoreReplies,
+  reset: resetReplies
+} = useAsyncPage(fetchReplyBatch, {
+  credentialScoped: false, // 论坛不受证件过滤（#604 opt-out），与上方列表同口径
+  mode: 'append',
+  batchSize: REPLY_BATCH,
+  itemsRef: replies,
+  pickItems: (res) => (res as { replies?: ForumReplyItem[] }).replies
+})
 
 // ===== 发帖对话框（复用 ForumPostForm，与论坛页同一套表单）=====
 const createVisible = ref(false)
@@ -99,20 +125,11 @@ async function toggleTopic(topicId: number) {
 async function loadDetail(topicId: number) {
   detailLoading.value = true
   detailContent.value = ''
-  replies.value = []
   try {
-    // ADR-0042：详情回复一律分页读取。章节讨论是内嵌预览面板、没有翻页交互，
-    // 故取页大小上限（100）以保持既有「展开即看全」的体验；超出 100 条的章节帖罕见，
-    // 真出现也只影响该帖的尾部回复（论坛详情页仍是完整的分页读取）。
-    const res = await forumApi.getTopic(topicId, undefined, undefined, 1, CHAPTER_REPLY_PAGE_SIZE)
-    expandedTopic.value = res.topic || null
-    detailContent.value = res.topic?.content || ''
-    replies.value = res.replies || []
-    // 截断要显式可见（见模板提示），不做静默丢弃
-    replyPages.value = res.pages ?? 1
-  } catch (e) {
-    console.error('加载帖子详情失败:', e)
-    /* 错误已由拦截器提示 */
+    // ADR-0042：详情回复一律分页读取。展开即从第 1 批起（append 档清空累积），
+    // 尾部靠「加载更多」在同一面板里翻完（spec #1201 场景 4）。
+    currentReplyTopicId.value = topicId
+    await resetReplies()
   } finally {
     detailLoading.value = false
   }
@@ -310,10 +327,15 @@ watch(() => props.chapterId, () => {
                 />
               </template>
               <UiEmptyState v-else description="还没有回复" />
-              <!-- 截断提示：面板无翻页交互，超出部分给一个明确去向而不是静默丢掉 -->
-              <p v-if="replyPages > 1" class="mt-2 mb-0 text-center text-xs text-ink-3">
-                仅显示前 {{ replies.length }} 条回复，
-                <UiButton variant="text" size="small" @click="goTopicDetail">查看全部</UiButton>
+              <!-- 翻页出口：判据是服务端的 pages/total，不是「本批满不满」（票4） -->
+              <p v-if="replyHasMore" class="mt-2 mb-0 text-center">
+                <UiButton variant="text" size="small" :disabled="replyLoadingMore" @click="loadMoreReplies">
+                  {{ replyLoadingMore ? '加载中…' : `加载更多回复（剩余 ${Math.max(replyTotal - replies.length, 0)} 条）` }}
+                </UiButton>
+              </p>
+              <p v-else-if="replyPages > 1" class="mt-2 mb-0 text-center text-xs text-ink-3">
+                已显示全部 {{ replies.length }} 条回复，
+                <UiButton variant="text" size="small" @click="goTopicDetail">在详情页查看</UiButton>
               </p>
             </div>
 

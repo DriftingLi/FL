@@ -37,7 +37,7 @@
       <router-link
         v-for="item in items"
         :key="String(item.id)"
-        :to="`/training/jobs/${item.id}`"
+        :to="href('JobDetail', { id: String(item.id) })"
         class="flex aspect-[4/3] flex-col rounded-card border border-line bg-panel p-4 hover:border-ui-200 hover:shadow-card transition-colors"
       >
         <div class="flex items-start justify-between gap-2">
@@ -70,6 +70,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { href } from '@/config/pages'
 import { jobApi, type JobPosting } from '@/api/job'
 import { positionApi } from '@/api/position'
 import { useAsyncPage } from '@/composables/useAsyncPage'
