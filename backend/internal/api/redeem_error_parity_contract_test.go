@@ -59,4 +59,3 @@ func TestRedeemErrorParityAcrossSurfaces(t *testing.T) {
 		t.Fatal("积分不足的响应文案不得为空")
 	}
 }
-
