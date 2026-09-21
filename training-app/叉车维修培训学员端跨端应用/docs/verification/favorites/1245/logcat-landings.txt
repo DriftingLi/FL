@@ -1,0 +1,10 @@
+# ①a 机检原文：我的 → 收藏夹 五类条目的落点（#1237，设备 23049RAD8C @192.168.0.212:43057）
+# 判据：每条「进入页面」各自带齐落点键（ADR-0014 章节双键；题目复用 searchDisplay 口径；featured 是收藏侧类型名）
+# 五条按时间序；chapter/question 见 02/03 图，featured/course/topic 见 04/05/06 图
+
+
+09-21 15:03:33.196 28706 32704 I console : [LOG]---BEGIN:CONSOLE---{"type":"string","value":"进入页面:​/pages/practice/practice-do?mode=single&question_id=3​ 。[{\"创建dom元素个数\":\"9个\",\"耗时\":\"3ms\"},{\"排版\":\"1次\",\"耗时\":\"14ms\"},{\"渲染\":\"1次\",\"耗时\":\"4ms\"},{\"跳转页面到onReady总耗时\":\"129ms\"}]"}---END:CONSOLE---
+09-21 15:04:26.463 28706 32704 I console : [LOG]---BEGIN:CONSOLE---{"type":"string","value":"进入页面:​/pages/courses/chapter-view?course_id=8&chapter_id=23​ 。[{\"创建dom元素个数\":\"10个\",\"耗时\":\"3ms\"},{\"排版\":\"1次\",\"耗时\":\"15ms\"},{\"渲染\":\"1次\",\"耗时\":\"3ms\"},{\"跳转页面到onReady总耗时\":\"120ms\"}]"}---END:CONSOLE---
+09-21 15:07:24.537 28706 32704 I console : [LOG]---BEGIN:CONSOLE---{"type":"string","value":"进入页面:​/pages/featured/featured-detail?id=1​ 。[{\"创建dom元素个数\":\"12个\",\"耗时\":\"3ms\"},{\"排版\":\"1次\",\"耗时\":\"11ms\"},{\"渲染\":\"1次\",\"耗时\":\"4ms\"},{\"跳转页面到onReady总耗时\":\"115ms\"}]"}---END:CONSOLE---
+09-21 15:07:36.634 28706 32704 I console : [LOG]---BEGIN:CONSOLE---{"type":"string","value":"进入页面:​/pages/courses/course-detail?id=8​ 。[{\"创建dom元素个数\":\"10个\",\"耗时\":\"2ms\"},{\"排版\":\"1次\",\"耗时\":\"8ms\"},{\"渲染\":\"1次\",\"耗时\":\"2ms\"},{\"跳转页面到onReady总耗时\":\"117ms\"}]"}---END:CONSOLE---
+09-21 15:07:54.635 28706 32704 I console : [LOG]---BEGIN:CONSOLE---{"type":"string","value":"进入页面:​/pages/forum/forum-detail?id=20​ 。[{\"创建dom元素个数\":\"11个\",\"耗时\":\"3ms\"},{\"排版\":\"1次\",\"耗时\":\"18ms\"},{\"渲染\":\"1次\",\"耗时\":\"4ms\"},{\"跳转页面到onReady总耗时\":\"126ms\"}]"}---END:CONSOLE---

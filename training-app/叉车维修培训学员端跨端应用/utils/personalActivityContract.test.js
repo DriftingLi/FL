@@ -249,12 +249,14 @@ describe('#1159 改判：个人动态不承载收藏（ADR-0018「收藏的唯�
     expect(page).toContain(`v-if="currentTab === 'interact'" :sub="true"`);
   });
 
-  it('摘除的前提仍成立：唯一承载面已注册、筛选入口未掏空', () => {
+  it('摘除的前提仍成立：唯一承载面已注册、筛选入口未掏空、落点实现存在', () => {
     // 「摘掉第二处」的前提是「第一处完整」。落点表的完整性（五类 + 章节双键 + 缺课程提示）
-    // 由 favoritesLandingContract.test.js 用行为断言守护 —— 此处**不复制第二套断言**
-    // （本族缺陷的成因正是两份落点表），只钉承载面的**筛选入口**这一面（那边未覆盖）。
+    // 由 utils/favoritesLandingContract.test.js 经共享执行器（loadUts）真跑 utils/favoriteLanding.uts
+    // 守护（**行为守护**，对 ③ 承重）—— 此处**不复制第二套断言**（本族缺陷的成因正是两份落点表），
+    // 只钉承载面的**筛选入口**这一面（那边未覆盖）。
     expect(read('pages.json')).toContain('pages/profile/favorites');
     expect(fs.existsSync(path.join(ROOT, 'utils/favoritesLandingContract.test.js'))).toBe(true);
+    expect(fs.existsSync(path.join(ROOT, 'utils/favoriteLanding.uts'))).toBe(true);
     const fav = read(FAVORITES);
     for (const t of ["value: 'course'", "value: 'chapter'", "value: 'topic'", "value: 'featured'", "value: 'question'"]) {
       expect(fav).toContain(t);
