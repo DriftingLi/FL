@@ -1,0 +1,163 @@
+<template>
+    <!-- 论坛正文 / 回复的 Markdown 块渲染（ADR-0025 P2）。
+         块由壳层**解析后下发**（本组件只渲染、不解析）—— 档位是页面侧决策，见 `utils/forumBody.uts`。
+         只持**论坛档声明的那几个成员**（heading / list / quote / code / divider）：table 与 image
+         都不在本档里（表格退回逐行原始文本、正文内嵌 `![alt](url)` 展开成 alt 文本，两者都落在
+         **段落地板**上由解析器处理）⇒ 本组件**不持**这两条分支，与 `featured-detail` 不持表格分支同例。 -->
+    <view class="md-body">
+        <view v-for="(block, idx) in blocks" :key="idx" class="md-block">
+            <!-- 标题 -->
+            <text v-if="block.type == 'heading'"
+                :class="['md-heading', 'md-h' + block.level]">{{ block.text }}</text>
+            <!-- 段落 -->
+            <text v-else-if="block.type == 'paragraph'" class="md-paragraph">{{ block.text }}</text>
+            <!-- 代码块 -->
+            <view v-else-if="block.type == 'code'" class="md-code-wrap">
+                <text class="md-code">{{ block.text }}</text>
+            </view>
+            <!-- 列表 -->
+            <view v-else-if="block.type == 'list'" class="md-list">
+                <view v-for="(item, li) in block.items" :key="li" class="md-list-item">
+                    <text class="md-list-bullet">•</text>
+                    <text class="md-list-text">{{ item }}</text>
+                </view>
+            </view>
+            <!-- 引用 -->
+            <view v-else-if="block.type == 'quote'" class="md-quote">
+                <text class="md-quote-text">{{ block.text }}</text>
+            </view>
+            <!-- 分隔线 -->
+            <view v-else-if="block.type == 'divider'" class="md-divider"></view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import type { MarkdownBlock } from '../../../types/index'
+
+    const props = withDefaults(defineProps<{
+        blocks? : MarkdownBlock[]
+    }>(), {
+        blocks: () => [] as MarkdownBlock[]
+    })
+</script>
+
+<style>
+    .md-body {
+        flex-direction: column;
+    }
+
+    .md-block {
+        margin-bottom: 24rpx;
+    }
+
+    /* 标题 */
+    .md-heading {
+        font-weight: bold;
+        color: #1a1a1a;
+        margin-top: 16rpx;
+        margin-bottom: 16rpx;
+    }
+
+    .md-h1 {
+        font-size: 40rpx;
+        padding-bottom: 16rpx;
+        border-bottom: 1rpx solid #eeeeee;
+    }
+
+    .md-h2 {
+        font-size: 36rpx;
+        padding-bottom: 12rpx;
+        border-bottom: 1rpx solid #f0f0f0;
+    }
+
+    .md-h3 {
+        font-size: 32rpx;
+    }
+
+    .md-h4 {
+        font-size: 30rpx;
+        color: #333333;
+    }
+
+    .md-h5 {
+        font-size: 28rpx;
+        color: #333333;
+    }
+
+    .md-h6 {
+        font-size: 26rpx;
+        color: #666666;
+    }
+
+    /* 段落 */
+    .md-paragraph {
+        font-size: 30rpx;
+        color: #333333;
+        line-height: 52rpx;
+    }
+
+    /* 代码块 */
+    .md-code-wrap {
+        background-color: #f6f8fa;
+        border-left: 6rpx solid #2979ff;
+        border-radius: 8rpx;
+        padding: 24rpx;
+        margin: 16rpx 0;
+    }
+
+    .md-code {
+        font-size: 26rpx;
+        color: #d63384;
+        line-height: 44rpx;
+        font-family: monospace;
+    }
+
+    /* 列表 */
+    .md-list {
+        flex-direction: column;
+        margin: 12rpx 0;
+    }
+
+    .md-list-item {
+        flex-direction: row;
+        align-items: flex-start;
+        margin-bottom: 12rpx;
+    }
+
+    .md-list-bullet {
+        font-size: 30rpx;
+        color: #2979ff;
+        margin-right: 16rpx;
+        line-height: 52rpx;
+    }
+
+    .md-list-text {
+        flex: 1;
+        font-size: 30rpx;
+        color: #333333;
+        line-height: 52rpx;
+    }
+
+    /* 引用 */
+    .md-quote {
+        background-color: #f0f7ff;
+        border-left: 6rpx solid #2979ff;
+        border-radius: 8rpx;
+        padding: 24rpx;
+        margin: 16rpx 0;
+    }
+
+    .md-quote-text {
+        font-size: 28rpx;
+        color: #555555;
+        line-height: 48rpx;
+    }
+
+    /* 分隔线 */
+    .md-divider {
+        height: 1rpx;
+        background-color: #e0e0e0;
+        margin: 24rpx 0;
+    }
+</style>
