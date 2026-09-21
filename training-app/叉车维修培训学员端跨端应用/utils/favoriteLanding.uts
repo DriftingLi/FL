@@ -1,0 +1,58 @@
+/**
+ * 收藏条目落点（多态 `target_type` → 目标页 url）—— 页面与守护共用的**唯一**一份口径
+ *
+ * 为什么单独成模块（#1237）：落点表原先内联在 `pages/profile/favorites.uvue` 的 `onItemClick` 里，
+ * 于是只能被「取出函数体 + `new Function`」那一类自搓执行器跑 —— 按 `docs/agents/guards.md` 的
+ * 分类器判据（只认 `loadUts(` 这一个执行调用，且明确防「只 require 模块名」的绕法），它落不进
+ * **行为守护** ⇒ 收藏落点这一面**不构成 ③ 门承重证据**。搬进 `.uts` 后由
+ * `utils/utsHarness.js` 的 `loadUts` 真跑本模块（同形先例：`utils/searchDisplay.uts` 的
+ * `searchItemPath`、`utils/wrongQuestionDisplay.uts`）。
+ *
+ * 口径来源：移动端 `ADR-0014`（章节落点要 `course_id` + `chapter_id` **两个键**）、
+ * 根仓库 `ADR-0018`（多态收藏五类；`target_type` 是**开放**的类型轴，新增类型要同步此处 +
+ * `favorites.uvue` 的 chips / `getTypeLabel`）。
+ */
+import type { FavoriteItem } from '../types/index'
+
+/** 落点决策：`url` 空 = 不跳转；`notice` 非空 = 必须给用户**可见**提示 */
+export type FavoriteLanding = {
+    url : string
+    notice : string
+}
+
+/**
+ * 收藏条目 → 落点决策。
+ *
+ * ⚠️ 空 `url` 有两种含义，**不得混为一谈**：
+ *   - `notice` 非空 ⇒ 该类型的落点**本应存在**但拿不到前提（章节缺 `course_id`）⇒ 必须可见提示；
+ *   - `notice` 为空 ⇒ 该类型**没有落点**（表外/未知类型）⇒ 静默不跳是对的，不是缺陷。
+ */
+export function favoriteLanding(item : FavoriteItem) : FavoriteLanding {
+    if (item.target_type == 'topic') {
+        return { url: '/pages/forum/forum-detail?id=' + item.target_id.toString(), notice: '' } as FavoriteLanding
+    }
+    if (item.target_type == 'course') {
+        return { url: '/pages/courses/course-detail?id=' + item.target_id.toString(), notice: '' } as FavoriteLanding
+    }
+    if (item.target_type == 'chapter') {
+        // 章节页要**两个键都在**（与 course-detail.uvue 的 onChapterClick / onStartLearn 同式）。
+        // `course_id <= 0` = 后端未随条目下发所属课程（0 哨兵）⇒ **不跳转**并给可见提示：
+        // 「点了没反应」的静默 no-op 正是 #1089 的原始缺陷形态，不得复现。
+        if (item.course_id <= 0) {
+            return { url: '', notice: '该章节缺少所属课程，暂时无法打开' } as FavoriteLanding
+        }
+        return {
+            url: '/pages/courses/chapter-view?course_id=' + item.course_id.toString() + '&chapter_id=' + item.target_id.toString(),
+            notice: '',
+        } as FavoriteLanding
+    }
+    if (item.target_type == 'featured') {
+        // 收藏侧的类型名是 `featured`，搜索侧对应的是 `content` —— 只共用路径，不共用分支 key
+        return { url: '/pages/featured/featured-detail?id=' + item.target_id.toString(), notice: '' } as FavoriteLanding
+    }
+    if (item.target_type == 'question') {
+        return { url: '/pages/practice/practice-do?mode=single&question_id=' + item.target_id.toString(), notice: '' } as FavoriteLanding
+    }
+    // 未知/表外类型：不猜落点，也不弹提示（没落点 ≠ 缺陷）
+    return { url: '', notice: '' } as FavoriteLanding
+}

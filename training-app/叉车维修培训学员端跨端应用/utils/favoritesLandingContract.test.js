@@ -1,5 +1,5 @@
 /**
- * 「我的收藏」落点契约（#1089 PR-B）—— 断言**行为**，不断言源码片段。
+ * 「我的收藏」落点契约（#1089 PR-B / #1237）—— 断言**行为**，不断言源码片段。
  *
  * ## 为什么需要这条守护
  *
@@ -11,42 +11,55 @@
  *      + `options['chapter_id']`（ADR-0014 明载的落点键）；`chapterId` 是全仓唯一的 camelCase query 键。
  *   ② 数据缺失 —— 即使键名改对也打不开：`chapter-view` 需要**两个键都在**，而收藏条目的
  *      `course_id` 当年根本不随响应下发（已由 PR #1133 在生产补齐，本票消费它）。
- *   ③ 分支缺失 —— `onItemClick` 只有 course / topic / chapter 三个分支，而筛选 chip 有六项
+ *   ③ 分支缺失 —— 落点表只有 course / topic / chapter 三个分支，而筛选 chip 有六项
  *      （「资讯」= `featured`、「题目」= `question`）⇒ 这两类**压根没有分支**，静默 no-op。
  *
  * 既有守护 `navQueryKeyContract.test.js` 只能抓「**传了**目标页不读的键」（方向①），
- * 抓不到方向③「压根没传、没有分支」。本文件补的正是这一面。
+ * 抓不到方向③「压根没传、没有分支」。
  *
- * ## 断言方式（照 ADR-0008「守护从断言源码文本改为断言行为」）
+ * ## 断言方式（#1237 起的口径）
  *
- * 从 `.uvue` 源码里**取出 `onItemClick` 的函数体**，注入桩 `uni` 后**真的执行**它，
- * 断言它对外做的事（navigateTo 的 url / showToast 的 title）—— 而不是断言源码里
- * 出现过某个字符串（那是坏实现的超集：写对字符串、接错分支照样绿）。
+ * 落点表已搬到 `utils/favoriteLanding.uts`（唯一实现），本守护经 `utils/utsHarness.js` 的
+ * **`loadUts` 真跑那个模块**、断言它的对外决策（`url` / `notice`）—— 不再是自己取出页面函数体
+ * 拿 `new Function` 求值的自搓执行器。
  *
- * 反向自检（防「提取失败即假绿」）：把**修复前**那段真实坏代码喂进同一个执行器，
- * 必须复现「章节跳到 camelCase 键」+「question / featured 静默无反应」两种形态。
- * 提取函数返回空串时，正向用例会**判红**（而不是空跑变绿）。
+ * 为什么必须搬（#1237）：`docs/agents/guards.md` 的分类器判据只看**代码级的执行调用**
+ * （`child_process` / `execFileSync` / `spawnSync` / **`loadUts(`** / 动态 `import()`），且明确防
+ * 「只 `require` 模块名」的绕法；而 `loadUts` 只吃 `.uts` 模块 —— 落点表住在 `.uvue` 里时
+ * **永远进不了那条判据**，本文件只能算**接线守护**（不构成 ③ 门承重证据）。
  *
- * ⚠️ 覆盖边界（2026-09-18 更新，#1159 改判后）：本守护覆盖**全仓唯一**的收藏落点表 ——
- *   `favorites.uvue` 的 `onItemClick`。原先并存的第二处
- *   （`pages/profile/personal-activity.uvue` 的 `onFavoriteClick`）已随「收藏的唯一列表承载面」
- *   裁定（根仓库 `ADR-0018` 补遗）**整体摘除**；那一侧改由 `personalActivityContract.test.js`
- *   反向钉住「收藏面不得回潮」。
+ * ## 回答 `guards.md` 末节三问（本文件）
  *
- *   ⇒ **新增 `target_type` 时必须改本文件**：这里是全仓唯一会因「缺分支」判红的地方。
+ * 1. **行为**守护（`node scripts/classify-guards.mjs` 判据：`loadUts(` + 引用仓内载体 `.uts`）。
+ * 2. 成对断言：**必不红** = 本套件在未改动树上全绿；**必红** = 把 `utils/favoriteLanding.uts` 的
+ *    chapter 分支改坏（如去掉 `course_id` 守卫、或回到 camelCase 键）⇒ 本套件判红。
+ *    该成对取证按 #1237 的要求逐次执行、每轮之间**逐字节还原**（收据在 PR 正文）。
+ * 3. 页面侧只剩**接线**：`favorites.uvue` 调用 `favoriteLanding(item)` 并把 `notice` → `showToast`、
+ *    `url` → `navigateTo`；这条接线由本文件的「唯一口径 + 应用决策」组守着（行为由上面那条兜底）。
+ *
+ * ⚠️ 覆盖边界（2026-09-18 #1159 改判后）：本守护覆盖**全仓唯一**的收藏落点表 —— 原先并存的第二处
+ *   （`pages/profile/personal-activity.uvue` 的 `onFavoriteClick`）已随「收藏的唯一列表承载面」裁定
+ *   （根仓库 `ADR-0018` 补遗）**整体摘除**。
+ *
+ *   ⇒ **新增 `target_type` 时必须改 `utils/favoriteLanding.uts` 与本文件**：这里是全仓唯一会因
+ *   「缺分支」判红的地方。
  */
 const path = require('path');
 
-/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
-const { readText } = require('./utsHarness');
+/** 读源码一律经共享读者归一 EOL（ADR-0019）；跑模块一律经共享执行器（#1237） */
+const { readText, loadUts } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const PAGE = 'pages/profile/favorites.uvue';
+/** 落点表的唯一实现（本守护的被测物） */
+const MODULE = 'utils/favoriteLanding.uts';
 const read = (rel) => readText(path.join(ROOT, rel));
 
 /**
  * 取 `marker` 之后那个函数的**函数体**（花括号配平，与缩进风格 / 行尾无关）。
  * 配平而非「找下一个行首 `}`」：本仓空格与制表符混用（先例 #1111 契约测试记的三个坑）。
  * 解析失败返回 `''` —— 调用方的正向用例随即判红，不静默放过。
+ *
+ * ⚠️ 仅**坐标映射那一组**（`buildFavoriteItem` 未 `export`，`loadUts` 只回读导出名）仍用它。
  */
 function fnBodyOf(src, marker) {
   const start = src.indexOf(marker);
@@ -65,30 +78,24 @@ function fnBodyOf(src, marker) {
   return '';
 }
 
-/**
- * 剥掉 UTS 的标量类型标注（`const url : string = …`），让函数体能在 Node 里直接跑。
- * 本仓 UTS 写法允许局部变量带标注 —— 不剥会在 `new Function` 里变成语法错误（判红，
- * 是安全方向），但会让守护变成「改个写法就红」的噪音源，故显式剥掉。
- */
+/** 剥掉 UTS 的标量类型标注（同样只服务坐标映射那一组的取体执行） */
 function stripUtsTypes(body) {
   return body.replace(/:\s*(string|number|boolean|UTSJSONObject|FavoriteItem)\b/g, '');
 }
 
-/** 在沙箱里执行一段 `onItemClick` 函数体，返回它对外做的事 */
-function runOnItemClickBody(body, item) {
-  const calls = { navigations: [], toasts: [] };
-  const uni = {
-    navigateTo: (o) => calls.navigations.push(o.url),
-    showToast: (o) => calls.toasts.push(o.title),
-  };
-  // 只跑从源码里取出的函数体；不引入被测页面的任何其它代码
-  new Function('item', 'uni', stripUtsTypes(body))(item, uni);
-  return calls;
+/** 真跑共享落点模块，返回对外决策（每次调用都是**全新模块实例**，互不串状态） */
+function landing(item) {
+  const mod = loadUts(path.join(ROOT, MODULE), {});
+  return mod.favoriteLanding(item);
 }
 
-/** 便捷：直接跑页面源码里的 `onItemClick` */
+/** 便捷：把决策投影成断言面 `{ navigations, toasts }`（与 #1089 的断言逐条同形） */
 function click(item) {
-  return runOnItemClickBody(fnBodyOf(read(PAGE), 'function onItemClick('), item);
+  const d = landing(item);
+  return {
+    navigations: d.url.length > 0 ? [d.url] : [],
+    toasts: d.notice.length > 0 ? [d.notice] : [],
+  };
 }
 
 /** 收藏条目夹具（`course_id` 是 0 哨兵：仅 chapter 有意义，其余类型后端恒给 0） */
@@ -100,6 +107,25 @@ const fav = (targetType, targetId, courseId = 0) => ({
   title: 't',
   cover: '',
   created_at: '',
+});
+
+describe('执行器自检：落点模块真的被 loadUts 跑起来了（防空跑假绿）', () => {
+  it('模块导出 `favoriteLanding` 且返回决策对象', () => {
+    const d = landing(fav('course', 7));
+    expect(typeof d).toBe('object');
+    expect(Object.prototype.hasOwnProperty.call(d, 'url')).toBe(true);
+    expect(Object.prototype.hasOwnProperty.call(d, 'notice')).toBe(true);
+    expect(d.url).toBe('/pages/courses/course-detail?id=7');
+  });
+
+  it('落点路径只出现在被测模块里（页面已无内联落点表）', () => {
+    const page = read(PAGE);
+    for (const seg of ['/pages/courses/course-detail', '/pages/courses/chapter-view',
+      '/pages/forum/forum-detail', '/pages/featured/featured-detail', '/pages/practice/practice-do']) {
+      expect(read(MODULE)).toContain(seg);
+      expect(page).not.toContain(seg);
+    }
+  });
 });
 
 describe('#1089 我的收藏落点：五类条目各有正确落点', () => {
@@ -163,16 +189,18 @@ describe('#1089 章节拿不到所属课程：不跳转 + 可见提示（不得�
     const c = click(fav('chapter', 31, 0));
     expect(c.toasts[0]).not.toMatch(/^\/pages\//);
   });
+
+  it('「没有落点」与「有落点但拿不到前提」不得混为一谈：前者静默、后者必提示', () => {
+    expect(click(fav('material', 1)).toasts).toEqual([]);          // 表外类型：没落点
+    expect(click(fav('chapter', 31, 0)).toasts.length).toBe(1);    // 章节缺课程：有落点但缺前提
+  });
 });
 
 describe('#1089 camelCase 死键 `chapterId` 已摘除', () => {
-  it('页面源码里不再把 `chapterId` 当 query 键传（只判键位，不误伤散文提及）', () => {
+  it('落点表与页面源码里都不再把 `chapterId` 当 query 键传（只判键位，不误伤散文提及）', () => {
     // 判据收紧到「出现在 query 键位」——写成 `/chapterId/` 会把日后注释里提到它也算红
+    expect(read(MODULE)).not.toMatch(/[?&]chapterId\b/);
     expect(read(PAGE)).not.toMatch(/[?&]chapterId\b/);
-  });
-
-  it('模板仍然把点击接线到 onItemClick（函数在、但没接 = 同样点不开）', () => {
-    expect(read(PAGE)).toContain('@click="onItemClick(item)"');
   });
 
   it('不再出现「传了目标页不读」的章节落点（与 navQueryKeyContract 同一判据面）', () => {
@@ -183,10 +211,37 @@ describe('#1089 camelCase 死键 `chapterId` 已摘除', () => {
   });
 });
 
+describe('#1237 落点口径唯一：页面只剩「应用决策」的接线', () => {
+  it('模板仍然把点击接线到 onItemClick（函数在、但没接 = 同样点不开）', () => {
+    expect(read(PAGE)).toContain('@click="onItemClick(item)"');
+  });
+
+  it('页面 import 共享落点模块并调用它', () => {
+    const page = read(PAGE);
+    expect(page).toContain("import { favoriteLanding } from '../../utils/favoriteLanding'");
+    expect(page).toContain('favoriteLanding(item)');
+  });
+
+  it('页面把决策应用到 uni：notice → showToast、url → navigateTo', () => {
+    const page = read(PAGE);
+    expect(page).toContain('uni.showToast({ title: landing.notice');
+    expect(page).toContain('uni.navigateTo({ url: landing.url })');
+  });
+
+  it('页面不再内联落点分支（`target_type` 的比较只应出现在被测模块里）', () => {
+    const page = read(PAGE);
+    expect(page).not.toMatch(/item\.target_type\s*==/);
+    expect(read(MODULE)).toMatch(/item\.target_type\s*==/);
+  });
+});
+
 describe('#1089 落点的数据前提：FavoriteItem.course_id 真的从响应映射进来', () => {
   // 为什么与落点放同一个文件：落点表再好，只要 `buildFavoriteItem` 不读 `course_id`，
   // 真机上 `item.course_id` 恒为 `undefined`/0 ⇒ 章节永远走「不跳 + 提示」。
   // 上面那组用例的夹具是**手写的**，天然测不到这一层 —— 这里补上，否则删掉映射行仍全绿。
+  //
+  // ⚠️ 这一组仍用取体执行：`buildFavoriteItem` **未 export**，而 `loadUts` 只回读导出名。
+  // 要把它也切到共享执行器，得先经 `getFavoritesApi` + 桩 `request` 间接测（另立票，不在 #1237）。
 
   const API = 'api/favorite.uts';
   const HELPERS = 'api/helpers.uts';
@@ -238,6 +293,14 @@ describe('#1089 落点的数据前提：FavoriteItem.course_id 真的从响应�
     expect(build.call({ target_type: 'course', target_id: 7, course_id: null }).course_id).toBe(0);
   });
 
+  it('映射出来的条目直接喂给落点模块 ⇒ 章节落点成立（数据前提与落点口径接得上）', () => {
+    const mapped = build.call({ target_type: 'chapter', target_id: 31, course_id: 7 });
+    expect(click(mapped).navigations).toEqual(['/pages/courses/chapter-view?course_id=7&chapter_id=31']);
+    const missing = build.call({ target_type: 'chapter', target_id: 31 });
+    expect(click(missing).navigations).toEqual([]);
+    expect(click(missing).toasts.length).toBe(1);
+  });
+
   it('类型声明里 `course_id` 是**非可空** number（可空会让 Kotlin 侧 `<=` 比较编译报错）', () => {
     const typeSrc = read('types/favorite.uts');
     // 取 FavoriteItem 这一段，避免误命中别的类型
@@ -247,41 +310,5 @@ describe('#1089 落点的数据前提：FavoriteItem.course_id 真的从响应�
     );
     expect(block).toMatch(/course_id\s*:\s*number\b/);
     expect(block).not.toMatch(/course_id\s*:\s*number\s*\|\s*null/);
-  });
-});
-
-describe('红能力自检：修复前的真实坏代码必须被同一执行器抓出来（防提取失败即假绿）', () => {
-  /** 修复前 favorites.uvue 的真实 `onItemClick` 函数体（抄自 #1089 正文） */
-  const OLD_BUGGY_BODY = `
-        if (item.target_type == 'course') {
-            uni.navigateTo({ url: '/pages/courses/course-detail?id=' + item.target_id })
-        } else if (item.target_type == 'topic') {
-            uni.navigateTo({ url: '/pages/forum/forum-detail?id=' + item.target_id })
-        } else if (item.target_type == 'chapter') {
-            uni.navigateTo({ url: '/pages/courses/chapter-view?chapterId=' + item.target_id })
-        }
-  `;
-
-  it('坏代码：章节落到 camelCase `chapterId`（缺 course_id）', () => {
-    const c = runOnItemClickBody(OLD_BUGGY_BODY, fav('chapter', 31, 7));
-    expect(c.navigations).toEqual(['/pages/courses/chapter-view?chapterId=31']);
-    expect(c.navigations[0]).toContain('chapterId');
-    expect(c.navigations[0]).not.toContain('course_id');
-  });
-
-  it('坏代码：question / featured 静默无反应（本票要修的形态同源）', () => {
-    expect(runOnItemClickBody(OLD_BUGGY_BODY, fav('question', 99)).navigations).toEqual([]);
-    expect(runOnItemClickBody(OLD_BUGGY_BODY, fav('featured', 12)).navigations).toEqual([]);
-  });
-
-  it('坏代码：course_id == 0 时仍然跳转（本票要求「不跳 + 提示」的反面）', () => {
-    const c = runOnItemClickBody(OLD_BUGGY_BODY, fav('chapter', 31, 0));
-    expect(c.navigations).toHaveLength(1);
-    expect(c.toasts).toEqual([]);
-  });
-
-  it('提取失败必须是**红**而非空跑：空函数体下正向用例不成立', () => {
-    expect(runOnItemClickBody('', fav('chapter', 31, 7)).navigations).toEqual([]);
-    expect(runOnItemClickBody('', fav('chapter', 31, 0)).toasts).toEqual([]);
   });
 });

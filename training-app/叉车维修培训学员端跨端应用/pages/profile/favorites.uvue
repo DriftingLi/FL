@@ -64,6 +64,7 @@
     import { getFavoritesApi, removeFavoriteApi } from '../../api/favorite'
     import type { FavoriteItem } from '../../types/index'
     import { formatDateStr } from '../../utils/format'
+    import { favoriteLanding } from '../../utils/favoriteLanding'
 
     /** 模板不可直调 import 函数（uvue 模板 import 调用编译为 .invoke() = Kotlin error18，先例 #677）；
      *  本地薄包装消费 utils/format 唯一实现（T03 口径：展示纯函数零第二实现） */
@@ -154,31 +155,22 @@
     }
 
     /**
-     * 条目落点表（#1089）。
+     * 条目点击 → **应用**落点决策（#1089 / #1237）。
      *
-     * 键名必须与**目标页 `onLoad` 实际读取的键**一致（ADR-0014：章节落点 =
-     * `chapter-view?course_id=&chapter_id=`；其余落点与 `utils/searchDisplay.uts` 的
-     * `searchItemPath` 同一份口径）—— ⚠️ 只复用**路径**，不复用那边的分支 key：
-     * 收藏侧的 `target_type` 是 `'featured'`，而搜索侧对应的类型名是 `'content'`。
+     * 落点口径**不在本页**：唯一实现在 `utils/favoriteLanding.uts` 的 `favoriteLanding()`，
+     * 由 `utils/favoritesLandingContract.test.js` 经共享执行器（`utils/utsHarness.js` 的 `loadUts`）
+     * **真跑那个模块**。页面这里只剩「应用决策」：`notice` 非空 → 可见提示；`url` 非空 → 跳转。
+     *
+     * 为什么搬出去（#1237）：落点表内联在本页时，只能被「取出函数体 + `new Function`」那类自搓执行器
+     * 跑 —— 按 `docs/agents/guards.md` 的分类器判据它落不进**行为守护**，这一面因此没有 ③ 承重证据。
      */
     function onItemClick(item : FavoriteItem) : void {
-        if (item.target_type == 'course') {
-            uni.navigateTo({ url: '/pages/courses/course-detail?id=' + item.target_id })
-        } else if (item.target_type == 'chapter') {
-            // 章节页要**两个键都在**（与 course-detail.uvue 的 onChapterClick / onStartLearn 同式）。
-            // `course_id <= 0` = 后端未随条目下发所属课程（哨兵值）⇒ **不跳转**并给可见提示：
-            // 「点了没反应」的静默 no-op 正是本缺陷的原始形态，不得复现。
-            if (item.course_id <= 0) {
-                uni.showToast({ title: '该章节缺少所属课程，暂时无法打开', icon: 'none' })
-                return
-            }
-            uni.navigateTo({ url: '/pages/courses/chapter-view?course_id=' + item.course_id + '&chapter_id=' + item.target_id })
-        } else if (item.target_type == 'topic') {
-            uni.navigateTo({ url: '/pages/forum/forum-detail?id=' + item.target_id })
-        } else if (item.target_type == 'featured') {
-            uni.navigateTo({ url: '/pages/featured/featured-detail?id=' + item.target_id })
-        } else if (item.target_type == 'question') {
-            uni.navigateTo({ url: '/pages/practice/practice-do?mode=single&question_id=' + item.target_id })
+        const landing = favoriteLanding(item)
+        if (landing.notice.length > 0) {
+            uni.showToast({ title: landing.notice, icon: 'none' })
+        }
+        if (landing.url.length > 0) {
+            uni.navigateTo({ url: landing.url })
         }
     }
 
