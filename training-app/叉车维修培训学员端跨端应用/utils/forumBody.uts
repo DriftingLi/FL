@@ -1,0 +1,42 @@
+/**
+ * 论坛正文的**格式轴**：把作者声明的 `content_format` 翻成「走哪一档渲染」（ADR-0025 P2）。
+ *
+ * 为什么单独成模块而不是写在 `.uvue` 里：这条**决策**落在模板里就只能靠读源码文本的接线守护去守，
+ * 而 `docs/agents/guards.md` 明说接线守护**不构成 ③ 门证据**（算法被改坏而字面量还在时不会红）。
+ * 抽到 `utils/` 后它可被 `utils/utsHarness.js` 的 `loadUts` **真执行**：`forumBodyBehavior.test.js`
+ * 断言的是**跑起来的产出物**（块数组 / 空数组），不是字面量（先例：`markdownSubsetBehavior.test.js`）。
+ *
+ * 口径（与 `api/forumDto.normalizeContentFormat` **同向**，但**不重复归一**）：
+ * - `markdown` ⇒ `parseMarkdown(content, SUBSET_FORUM)` —— 走 ADR-0025 的第三档；
+ * - **其余一切取值**（含 `text` 与契约外脏值）⇒ 返回**空数组**，壳层直出原串（`text` 档不解析）。
+ *
+ * 空数组是**哨兵**而不是「正文为空」：渲染层的二选一闸门是 {@link isMarkdownFormat}，
+ * 不看数组长度 —— 否则一个只有空行的 Markdown 帖会被渲染成「没有正文」。
+ *
+ * 归一单点在 DTO 层（`forumDto.normalizeContentFormat`，缺省与脏值都落 `text`）；
+ * 本模块只消费归一后的值，脏值在这里同样落「不解析」一侧 —— 两处的方向一致，缺省即纯文本。
+ *
+ * @note 不依赖 DOM API，跨端通用（App / 小程序 / H5）
+ */
+import { parseMarkdown, SUBSET_FORUM } from './markdown'
+import type { MarkdownBlock } from '../types/index'
+
+/** 正文格式：作者声明的 Markdown —— 唯一会走解析的取值（归一后只会是它或 `text`） */
+export const FORMAT_MARKDOWN = 'markdown'
+
+/** 该帖 / 该回复是否走 Markdown 解析（渲染层的二选一闸门：文本档直出原串） */
+export function isMarkdownFormat(format : string) : boolean {
+    return format == FORMAT_MARKDOWN
+}
+
+/**
+ * 正文的渲染块：Markdown 档按**论坛子集**解析，其余档返回空数组（壳层直出原串）。
+ *
+ * @param content 正文原文（后端 `content` 字段，未做任何预处理）
+ * @param format  `content_format` 归一后的取值（`markdown` / `text`）
+ */
+export function forumContentBlocks(content : string, format : string) : MarkdownBlock[] {
+    const empty : MarkdownBlock[] = []
+    if (!isMarkdownFormat(format)) return empty
+    return parseMarkdown(content, SUBSET_FORUM)
+}

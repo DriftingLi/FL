@@ -14,6 +14,8 @@ export type ForumReplyDisplay = {
     avatarColor : string
     createdAtText : string
     content : string
+    /** 正文格式（ADR-0025 P2）：`content_format` 归一后的取值 —— 回复卡的渲染档位由它决定 */
+    contentFormat : string
     imageUrls : string[]
     canDelete : boolean
     liked : boolean
