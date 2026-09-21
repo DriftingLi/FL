@@ -2,7 +2,7 @@
 
 面向叉车维修培训、学员就业对接与叉车残值评估的全栈系统。包含在线培训与考试练习、论坛问答、学员资料投稿、积分激励、AI 助手、企业招聘对接，以及叉车残值评估与电池剩余寿命（RUL）评估等模块。系统按角色划分工作区（学员 / 讲师 / 管理员 / 企业招聘者），前端以子域名承载独立工作区。
 
-领域术语以 [`CONTEXT.md`](./CONTEXT.md) 为准，架构决策记录在 [`docs/adr/`](./docs/adr/)（ADR-0001 ~ ADR-0026）。
+领域术语以 [`CONTEXT.md`](./CONTEXT.md) 为准，架构决策记录在 [`docs/adr/`](./docs/adr/)（`ADR-0001` ~ `ADR-0061`，61 篇）。
 
 ## 功能特性
 
@@ -20,7 +20,8 @@
 - **积分域**：统一账务（余额 + 流水 + 幂等占坑）。任务中心、问答采纳、AI 按 token 计费、兑换与管理员扣罚共用一套簿记（ADR-0023）
 - **在线简历**：学员维护简历，可导出 PDF，向企业投递并查看进度
 - **AI 助手**：大模型流式对话（DeepSeek 默认，OpenAI 兼容可换），按 tokens 计量扣积分
-- **全局搜索 / 收藏**：course / question / content / topic 四类聚合；多态收藏
+- **全局搜索**：course / question / content / topic 四类聚合
+- **收藏**：可收藏对象五类（course / chapter / question / featured / topic），前端清单与后端 `FavoriteTarget*` 由互等锁对齐（`config/contentObjects.ts` ↔ `favorite_service.go`）
 
 ### 招聘对接（企业招聘者 · `recruit.` / 学员端职位广场）
 
@@ -48,10 +49,11 @@
 
 - 章节内容编排与编辑、题库创建 / 维护 / 驳回、题库标签、投稿审核
 
-### 移动端（学员 App）
+### 移动端（学员 App + 招聘者端）
 
 - **uni-app x** 跨端应用（Android / iOS / H5 / 微信小程序）
-- 已落地：登录（含微信小程序 `wx-login`）、首页、课程、考试、我的；其余模块为占位
+- `training-app/叉车维修培训学员端跨端应用/pages/` 下已有 21 个页面模块（含 `recruiter` 招聘者端）
+- **落地范围与验收门不在本仓评审面**：移动端由 @zhengcookie 负责，其功能清单以该目录的 `pages.json` 与**移动端自己的 ADR 体系**（`training-app/…/docs/adr/`，编号与根仓库无关）为准，本处不复述功能状态
 
 ## 系统架构
 
@@ -70,7 +72,7 @@
 | `valuation.` | 残值评估 | 学员 `hrwai_user` | 整机残值、电池 RUL、评估报告 |
 | `recruit.` | 招聘工作区 | 企业招聘者 `recruiter` | 职位发布、简历库、投递管理 |
 
-生产环境登录态通过**父域名 httpOnly Cookie**（`hrwai_token` / `recruiter_token`）在子域名间共享；Cookie 不可用时降级为带一次性 `auth_token` 参数的跨子域名跳转交接。IP 直连模式（无 DNS 子域名）下不做跨域跳转，各工作区按路径在同一 origin 内访问。
+生产环境登录态用 httpOnly Cookie，但**两族的域作用域不同**（ADR-0022）：学员侧 `hrwai_token` 挂**父域名**以便各子域名共享，招聘者侧 `recruiter_token` 刻意收紧为 **host-only**（`Domain=""`）——否则已登录学员的静默恢复路径会拿到 recruiter token、串角色。Cookie 不可用时降级为带一次性 `auth_token` 参数的跨子域名跳转交接。IP 直连模式（无 DNS 子域名）下不做跨域跳转，各工作区按路径在同一 origin 内访问。
 
 ### 统一账号与双令牌（后端）
 
@@ -103,7 +105,7 @@
 - AI：CloudWeGo Eino + OpenAI 兼容接口（DeepSeek 默认）+ go-openai
 - 限流：golang.org/x/time
 - 文档：swaggo/gin-swagger
-- 测试：glebarez/sqlite（单元测试用 SQLite）
+- 测试：glebarez/sqlite（绝大多数单测与契约测试走内存 SQLite）+ `testutil.NewPostgresDB`（跑**真实 `migrations/`** 的库层契约测试，无 `DATABASE_URL` 时干净 skip，首跑在 CI）
 
 ### 前端（frontend）
 
@@ -130,7 +132,7 @@
 - 文档转换：LibreOffice sidecar（`libreoffice-sidecar/`）
 - 编排：Docker Compose
 - 反向代理 / 静态托管：Nginx（host-network 监听 80/443，SSL 终止 + `/api` 反代 + 静态托管 + 对象存储反代）
-- CI/CD：GitHub Actions（`ci.yml` / `cd.yml` / `testing-smoke.yml`），公网 SSH 部署到自托管服务器
+- CI/CD：GitHub Actions（`ci.yml` / `cd.yml` / `testing-smoke.yml` / `pr-evidence.yml`），公网 SSH 部署到自托管服务器
 - 备选：Cloudflare Pages（`frontend/wrangler.jsonc`）
 
 ## 项目结构
@@ -139,19 +141,21 @@
 叉车维修项目/
 ├── backend/                      # Go 后端（module: forklift-training）
 │   ├── cmd/
-│   │   ├── server/               # 服务入口（默认 :8080，启动自动迁移 + 建默认账号）
-│   │   ├── migrate/              # 数据库迁移 CLI（up | down | version）
-│   │   ├── import-reference-content/  # 参考资料导入工具
-│   │   └── backfill-evaluation-suggestions/  # 评估建议回填工具
+│   │   ├── server/               # 服务入口（默认 :8080；启动即跑 migrate up + 建默认账号）
+│   │   ├── migrate/              # 数据库迁移 CLI（up | down | version | force | check-columns）
+│   │   ├── gen-apitypes/ gen-authz/ gen-credscope/ gen-aifeatures/ gen-deploy/
+│   │   │                         # 代码生成：Go 注解 → 前端契约类型 / 授权表 / 证件作用域表 等
+│   │   └── import-reference-content/ backfill-evaluation-suggestions/
+│   │                                 # 一次性数据导入与回填工具
 │   ├── internal/
-│   │   ├── api/                  # 培训 / 招聘 / 投稿 / 积分等 Gin 路由与 handler
-│   │   ├── service/ model/ repository/ db/
-│   │   ├── config/ logger/ middleware/ cache/ captcha/ clock/
-│   │   ├── storage/              # 存储驱动（local / S3 兼容）
-│   │   ├── security/ daemon/ pdfutil/ migrate/ testutil/
-│   │   └── valuation/            # 残值评估 + 电池 RUL 子模块（独立 handler/repository/service/config）
+│   │   ├── api/                  # 各域 Gin 路由与 handler（端点骨架见 api/endpoint.go）
+│   │   ├── service/ model/ db/   # 业务层与实体——**没有 repository 层**，读写都在 service 里（勿再新增）
+│   │   ├── config/ logger/ middleware/ cache/ captcha/ clock/ security/ daemon/ storage/ pdfutil/ geolocation/
+│   │   ├── authz/ apitypes/ codegen/ credentialscope/ deploy/ migrate/ testutil/
+│   │   │                         # 授权矩阵 / 前端契约 codegen / 证件作用域覆盖锁 / 部署配置校验 / 迁移执行 / 测试基建
+│   │   └── valuation/            # 残值评估 + 电池 RUL 子模块（自带 handler/service/repository/config/model/pdf/report）
 │   ├── pkg/{paging,response}/    # 分页与统一响应
-│   ├── migrations/               # 迁移脚本（000001 ~ 000020，共 20 组）
+│   ├── migrations/               # 迁移脚本（000001 ~ 000039，共 39 组，up/down 成对）
 │   ├── docs/                     # Swagger 生成产物（docs.go / swagger.json|yaml）
 │   ├── Dockerfile / Makefile
 │   ├── docker-compose.yml        # 本地 postgres + redis + libreoffice + backend
@@ -159,7 +163,9 @@
 │   └── init-db.sql
 ├── frontend/                     # Vue3 前端（forklift-training-frontend）
 │   ├── src/                      # 源码（api / pages / components / layouts / stores / router /
-│   │                             #       composables / utils / config / types / constants / assets / icons）
+│   │                             #   composables / utils / config / types / constants / test /
+│   │                             #   assets / icons）
+│   ├── scripts/                  # 前端侧守卫与扫描器（scan-el-components.mjs 等）
 │   ├── Dockerfile
 │   ├── nginx-host.conf           # 生产 host 网络模式 Nginx（SSL + 反代 + 对象存储分流）
 │   ├── nginx.default.conf        # 镜像内置 Nginx 配置（template，envsubst 渲染）
@@ -171,13 +177,21 @@
 ├── libreoffice-sidecar/          # 文档转换服务镜像（PPT → WebP、简历 PDF）
 ├── viz/                          # 设计提案 / 设计系统静态原型（HTML，仅参考）
 ├── scripts/
-│   ├── deploy-remote.sh          # 服务器远程部署（支持 --rollback）
-│   ├── setup-server.sh           # 服务器初始化
+│   ├── deploy-remote.sh          # 服务器远程部署（支持 --rollback；迁移失败默认中止）
+│   ├── setup-server.sh           # 服务器初始化（含 /etc/cron.d/forklift-maintenance）
 │   ├── lxc-install-docker.sh / lxc-setup-ssh.sh   # LXC 容器初始化
-│   └── backup-daily.sh / rbd-snap-hourly.sh       # 定时备份与快照
-├── docs/                         # 协作文档（.gitignore 忽略 docs/*，仅 adr/ 入库）
-│   ├── adr/                      # 架构决策记录（ADR-0001 ~ ADR-0026，入库）
-│   └── plans/ reference/ archive/ agents/   # 方案、参考资料、归档、AI 约定（本地）
+│   ├── backup-daily.sh / rbd-snap-hourly.sh       # 定时备份与快照
+│   ├── check-*.mjs               # 七条静态守卫（api-seam / el-controls / async-section /
+│   │                             #   api-consumers / ai-assistant-send / render-error-face / catalog-sort）
+│   │                             #   每条配同名 .test.mjs 自检；runner 面在 lib/guard.mjs
+│   ├── guard.test.mjs / gate-predicates.test.mjs / deploy-migration-gate.test.mjs
+│   │                             # 守卫 runner、CD 门禁谓词、迁移门的可执行判据（CI 在跑）
+│   └── audit-api-annotations.mjs / ci-summary-status.sh   # 注解审计 / CI 汇总状态
+├── docs/                         # `.gitignore` 忽略 `docs/*`，四个例外入库：`adr/`、`agents/`、`README.md`、`verification/`
+│   ├── adr/                      # 架构决策记录 ADR-0001 ~ ADR-0061（入库，核心资产）
+│   ├── agents/                   # AI/agent 工作约定（入库，由根 AGENTS.md 导航；权威检查流程在 checks.md）
+│   ├── verification/             # 验收产物（真机截图等）——`pr-evidence.yml` 认的可核验路径之一
+│   └── plans/ reference/ archive/   # 方案、参考资料、归档（本地不入库）
 ├── .github/workflows/            # CI/CD（ci.yml / cd.yml / testing-smoke.yml）
 ├── deploy.sh                     # 本地 / 手动一键部署
 └── docker-compose.prod.yml       # 生产编排（PostgreSQL + Redis + LibreOffice + 后端 + Nginx 前端）
@@ -185,8 +199,8 @@
 
 ## 环境要求
 
-- Go ≥ 1.26
-- Node.js ≥ 18（推荐 20+）
+- Go ≥ 1.26（`go.mod` 与 CI 都钉 1.26；本机可以是更新的版本）
+- Node.js ≥ 20（CI 用 22）
 - Docker + Docker Compose（本地依赖与生产编排）
 - PostgreSQL 15、Redis 7（由 docker-compose 提供或已有实例）
 - HBuilderX（仅移动端开发需要）
@@ -279,9 +293,12 @@ npm run dev                   # 默认 :5173
 | --- | --- | --- |
 | `REDIS_ADDR` | Redis 地址 | localhost:6379 |
 | `REDIS_PASSWORD` | Redis 密码 | 空 |
-| `REDIS_DB` / `REDIS_POOL_SIZE` / `REDIS_MIN_IDLE_CONNS` | 库 / 连接池 / 最小空闲 | 0 / 20 / 5 |
+| `REDIS_DB` / `REDIS_POOL_SIZE` / `REDIS_MIN_IDLE_CONNS` | 库 / 连接池 / 最小空闲 | 0 / 20 / **3** |
 | `REDIS_KEY_PREFIX` | 键前缀 | fl: |
-| `REDIS_MAX_RETRIES` / `REDIS_POOL_TIMEOUT` / `REDIS_IDLE_TIMEOUT` | 重试 / 池超时 / 空闲超时 | 3 / 3s / 5m |
+| `REDIS_MAX_RETRIES` / `REDIS_POOL_TIMEOUT` / `REDIS_IDLE_TIMEOUT` | 重试 / 池超时 / 空闲超时 | 3 / **4s** / 5m |
+| `REDIS_DIAL_TIMEOUT` / `REDIS_READ_TIMEOUT` / `REDIS_WRITE_TIMEOUT` | 拨号 / 读 / 写超时 | 2s / 3s / 3s |
+
+> 默认值的**唯一宿主是 `backend/internal/config/config.go`**（第十三波 ADR-0060 票 5 起入漂移锁，代码内部不得再各写一份 fallback）。本表若与代码不一致，以代码为准并来改正这里——`REDIS_POOL_SIZE` 曾因两处各写一份而漂成 20/10/20，而本表当时也跟着写了个错值（旧版的 `MIN_IDLE 5` / `POOL_TIMEOUT 3s` 即是）。
 
 ### 存储与文档转换
 
@@ -367,47 +384,28 @@ npm test             # vitest 单元测试
 
 ## 数据库迁移
 
-迁移脚本位于 `backend/migrations/`，采用 `序号_名称.up.sql` / `.down.sql` 成对组织，当前共 **20 组**：
+迁移脚本位于 `backend/migrations/`，`序号_名称.up.sql` / `.down.sql` 成对组织，当前 **39 组**（`000001` baseline ~ `000039` 联系方式交换的裁决窗口）。
 
-| 序号 | 名称 | 说明 |
-| --- | --- | --- |
-| 000001 | baseline | 培训库基线 |
-| 000002 | points_system | 积分域 |
-| 000003 | forum_browse_dedup | 论坛浏览去重 |
-| 000004 | real_exam_paper | 真题套卷 |
-| 000005 | forum_topic_category | 论坛分类 |
-| 000006 | forum_accept | 问答采纳 |
-| 000007 | recruiter_users | 招聘者账号 |
-| 000008 | job_cards | 职位卡 |
-| 000009 | recruit_resume_views | 简历浏览 |
-| 000010 | contact_requests | 联系请求 |
-| 000011 | points_entry_idem | 积分幂等占坑 |
-| 000012 | points_claim_lifetime_index | 任务领取索引 |
-| 000013 | practice_progress_credential | 练习进度挂证件 |
-| 000014 | recruiter_credit_code_unique | 授信码唯一 |
-| 000015 | job_postings | 职位发布 |
-| 000016 | positions | 岗位字典 |
-| 000017 | region_city_level | 地区城市层级 |
-| 000018 | recruiter_wechat | 招聘者微信绑定 |
-| 000019 | practice_progress_orphan_merge | 孤立进度合并 |
-| 000020 | contribution | 学员资料投稿 |
+**这里不再逐项列表**——旧版列到 000020 后再没人更新，读它只会得到一个错误的现状。清单看目录本身，意图看每条迁移自己的头部注释（本仓惯例是每条都写明「为什么需要它、为什么是这个形状、回滚的有损性在哪」）：
 
-执行 / 回滚：`make migrate-up` / `make migrate-down`。
+```bash
+ls backend/migrations/*.up.sql | sed 's#.*/##'
+```
+
+配对性与真实可执行由 CI 的 `migration-check` 保证：空库 `migrate up` → `check-columns` 对账（模型期望的列 ⊆ 实际列）→ `migrate down` 回空库并**反向断言**对账报缺表。
+
+执行 / 回滚：`make migrate-up` / `make migrate-down`，或直接 `go run ./cmd/migrate up|down|version|force|check-columns`。**部署侧的迁移失败默认中止**（`ALLOW_MIGRATION_FAILURE=1` 才带已知风险继续，见 `docs/agents/checks.md`）。
 
 ## 测试与检查
 
-改动后**必须**跑完对应栈的检查，全绿才能提交：
+> **权威版本在 [`docs/agents/checks.md`](docs/agents/checks.md)**（含七条静态守卫、swagger 与 codegen 的生成链顺序、PG 契约测试纪律、两条环境的已知例外）。本节只留入口，不复述细节——过去这里就是靠抄写漂移的。
 
-- **后端（`backend/`）**：Go 工具链在 `~/go/bin`
-  - `gofmt -l .`（应无输出）
-  - `go vet ./...`
-  - `golangci-lint run ./...`
-  - `go test ./...`
-- **前端（`frontend/`）**
-  - `npm run type-check`（vue-tsc）
-  - `npm test`（vitest）
-- **部署配置**：改 `docker-compose*.yml` / `deploy.sh` 后可用 `docker compose -f docker-compose.prod.yml config -q` 做语法校验
-- **安全检测**：改动触及认证 / 授权 / 密钥 / DB 连接 / AI 生成代码时，跑 DeepSec（Shield）扫描，确认无新增 critical/high
+- **后端**（`backend/`）：`gofmt -l .` → `go vet ./...` → `golangci-lint run ./...` → `go test ./...`。
+  ⚠️ 本机（Windows）**目前跑不了 `golangci-lint`**：v1.64.8 构建于 go 1.26.4，面对本机 go 1.27.1 直接失败 ⇒ 本地三条 + CI 的 `backend-lint` 兜底。WSL 环境下 Go 工具链在 `~/go/bin`。
+- **守卫**：改前端 UI / api 消费面 / 端点错误面 / 目录排序后跑对应 `node scripts/check-*.mjs --all`（本地可用 `--diff origin/master` 只看新增行），自检 `node --test scripts/*.test.mjs`。
+- **前端**（`frontend/`）：`npm run type-check`（vue-tsc）、`npm test`（vitest）
+- **部署配置**：改 `docker-compose*.yml` / `deploy.sh` 后 `docker compose -f docker-compose.prod.yml config -q`
+- **安全检测**：触及认证 / 授权 / 密钥 / DB 连接 / AI 生成代码时跑 DeepSec（Shield），确认无新增 critical/high
 
 ## 部署
 
@@ -442,11 +440,12 @@ docker compose -f docker-compose.prod.yml up -d
 
 ### CI/CD（GitHub Actions）
 
-触发模型：**非 master 分支 push → 全量 CI →（CI 绿且分支有开启的 PR）testing 冒烟部署**；**PR 事件不触发流水线**（PR 页显示的是分支 push 的同 commit 检查，`ci-summary` 为合并必检）；**master 合并（push）不跑 CI，直接 CD 到 production**，前置由 `gate` job 回查来源 PR 的 `ci-summary` 结论与该 commit 的 testing 冒烟结论。
+触发模型：**非 master 分支 push → 全量 CI →（CI 绿且分支有开启的 PR）testing 冒烟部署**；**PR 事件默认不触发流水线**（PR 页显示的是分支 push 的同 commit 检查，`ci-summary` 为合并必检）——**唯一例外是 `pr-evidence.yml`**，它只读 PR 正文/评论/改动清单，不 checkout、不构建、不部署；**master 合并（push）不跑 CI，直接 CD 到 production**，前置由 `gate` job 回查来源 PR 的 `ci-summary` 结论与该 commit 的 testing 冒烟结论。
 
-- `ci.yml`：`changes`（变更检测）→ `backend-lint`（gofmt / go vet / golangci-lint）→ `backend-test`（race + cover）→ `frontend-check`（type-check + build + 单测）→ `security-scan` → `migration-check` → `ci-summary`（汇总并派发 testing 部署）
+- `ci.yml`：`changes`（变更检测，决定哪些 job 该跑）→ `backend-lint`（gofmt / go vet / golangci-lint / swagger 新鲜度 / 两条后端守卫 `--all`）→ `backend-test`（`-race` + cover，含 Postgres service）→ `frontend-check`（type-check + build + vitest + 五条前端守卫 `--all` 与增量门）→ `security-scan` → `migration-check`（真跑 up→列对账→down 到底）→ `mobile-test`（仅命中移动端面）→ `el-controls-selftest` / `pr-evidence-selftest`（守卫与门自身的判据自检）→ `ci-summary`（汇总并派发 testing 部署）
 - `cd.yml`：`gate`（解析目标环境 + 生产门禁）→ 构建并推送镜像（ghcr.io：backend / frontend / libreoffice，内容未变则跳过）→ 公网 SSH 部署 → 健康检查 → 失败自动回滚；testing 环境探活通过后停容器 → `notify`
 - `testing-smoke.yml`：PR 开启时，若该 commit 尚无冒烟记录则补发一次 testing 部署
+- `pr-evidence.yml`：验收证据段结构校验（只对命中运行时面的 PR 判红；产物路径认 `docs/verification/<模块>/<PR号>/`、GitHub 附件、sha 绑定门评论）
 
 合并门禁：ruleset「protect master」要求必检 `ci-summary` 通过且分支与 master 同步 —— squash 会在 master 生成从未跑过 CI 的新 SHA，生产 `gate` 靠回查来源 PR 的结论对齐。
 
@@ -457,8 +456,9 @@ docker compose -f docker-compose.prod.yml up -d
 | [`CONTEXT.md`](./CONTEXT.md) | 领域词汇表（canonical 术语与 Avoid 清单） |
 | [`API.md`](./API.md) | API 清单 |
 | [`AGENTS.md`](./AGENTS.md) | AI / agent 工作约定与发布流程 |
-| [`docs/adr/`](./docs/adr/) | 架构决策记录（ADR-0001 ~ ADR-0026） |
-| [`docs/agents/`](./docs/agents/) | issue tracker、triage labels、domain docs、security scan（本地） |
+| [`docs/adr/`](./docs/adr/) | 架构决策记录 `ADR-0001` ~ `ADR-0061`（61 篇，入库） |
+| [`docs/agents/`](./docs/agents/) | AI/agent 工作约定（**入库**，由根 `AGENTS.md` 导航）：issue-tracker / triage-labels / domain / security-scan / **ui-conventions** / **checks（测试与检查的权威版本）** / **release** / **multi-agent-git** / handoff-验收门 |
+| [`docs/README.md`](./docs/README.md) | `docs/` 自身的索引与入库 / 本地分层规则 |
 | [`student-api-docs.md`](./student-api-docs.md) | 学员端接口说明 |
 | [`THIRD_PARTY.md`](./THIRD_PARTY.md) | 第三方组件与许可 |
 
