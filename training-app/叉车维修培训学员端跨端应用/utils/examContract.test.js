@@ -2,45 +2,29 @@
  * exam 模块手术契约测试（T07，parent #645 / ADR-0007）
  *
  * 钉住 exam（模拟考）手术交付的契约：
- * 1) 600 行软预算：pages/exam/** 全部源文件 ≤600 行，**新建 composable 与 section 组件同样计入**
- *    （维护者裁定 B 硬化口径：防「把 905 行页面挪成 900 行 composable」的假达标）；api/mockExam.uts 一并纳入
- * 2) 模块目录 ≤2 层
- * 3) composable 接线：两个页面以显式 import 使用模块私有 composable
- * 4) 组件接线零孤儿：页面 import 的组件文件必须存在，组件文件必须被页面引用
+ * 1) 600 行软预算 / 模块目录 ≤2 层 / 必需源文件清单：**已由声明面执法**（`utils/modules.js` +
+ *    `utils/modulesDeclarationContract.test.js` 的 A3/A5/A10），本文件不再各写一遍（ADR-0023 票 C #1219）
+ * 2) composable 接线：两个页面以显式 import 使用模块私有 composable
+ * 3) 组件接线零孤儿：页面 import 的组件文件必须存在，组件文件必须被页面引用
  *    （#779 回归教训：practice.uvue 改为 import 四个组件却从未创建文件，master 编译中断）
- * 5) allowlist 不回潮：exam 域文件不得出现在 GUARD_ALLOWLIST
- * 6) 零直发请求：页面层不直接 uni.request
- * 7) 域 api 收紧：4 个 DTO 函数经 mapper-callback 出口，2 个 void 语义函数保持 raw 透传白名单
- * 8) 幻影路由锁（#662 口径）：api 层每条 /mock-exam 路由都落在后端 mock_exam.go 已注册清单内
- * 9) 删除禁区「exam 不用删」的行为保持点：随机组卷 / 进度保存 / 断点续考 / 未完成询问 /
+ * 4) allowlist 不回潮：exam 域文件不得出现在 GUARD_ALLOWLIST
+ * 5) 零直发请求：页面层不直接 uni.request
+ * 6) 域 api 收紧：4 个 DTO 函数经 mapper-callback 出口，2 个 void 语义函数保持 raw 透传白名单
+ * 7) 幻影路由锁（#662 口径）：api 层每条 /mock-exam 路由都落在后端 mock_exam.go 已注册清单内
+ * 8) 删除禁区「exam 不用删」的行为保持点：随机组卷 / 进度保存 / 断点续考 / 未完成询问 /
  *    计时（含超时自动交卷）/ 交卷（含未答题数提示）/ 成绩跳转 / 退出保存 / 失败重试逐项仍在，
  *    pages.json 两条路由与模块文件集合不减
- * 10) 展示纯函数唯一实现：exam 模块零 getTypeName / isMultiChoice 第二实现（消费 utils/wrongQuestionDisplay）
+ * 9) 展示纯函数唯一实现：exam 模块零 getTypeName / isMultiChoice 第二实现（消费 utils/wrongQuestionDisplay）
  */
-const fs = require('fs');
-const path = require('path');
-
-/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
-const { readText } = require('./utsHarness');
-const ROOT = path.join(__dirname, '..');
-const read = (rel) => readText(path.join(ROOT, rel));
+/** harness：读取层归一 + 模块归属面（ADR-0023 票 C 起，本文件不再自建 ROOT / read / walker） */
+const h = require('./contractHarness');
+const ROOT = h.ROOT;
+const read = h.read;
 /** 豁免名单从单点读（ADR-0023 ⑧）：不再解析守护脚本源码文本取常量 */
-const { allowlistPaths } = require('./contractHarness');
-const exists = (rel) => fs.existsSync(path.join(ROOT, rel));
+const allowlistPaths = h.allowlistPaths;
+const exists = h.exists;
 
 const EXAM_PAGES = ['pages/exam/mock-exam.uvue', 'pages/exam/mock-exam-result.uvue'];
-
-/** 模块必需源文件清单（删任一即红；新增文件不触发假红，但会被 count 下限兜住扫描面失效） */
-const REQUIRED_SOURCE_FILES = [
-  'pages/exam/mock-exam.uvue',
-  'pages/exam/mock-exam-result.uvue',
-  'pages/exam/composables/useMockExamSession.uts',
-  'pages/exam/composables/useMockExamResult.uts',
-  'pages/exam/components/exam-question-card.uvue',
-  'pages/exam/components/exam-action-bar.uvue',
-  'pages/exam/components/exam-result-summary.uvue',
-  'pages/exam/components/exam-result-detail-list.uvue',
-];
 
 /** 页面 ↔ 组件接口对账表（本票唯一新增接口面，改名必须红） */
 const WIRING = [
@@ -71,45 +55,6 @@ function usageAttrs(pageSrc, tag) {
 }
 
 const camelToKebab = (s) => s.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase());
-
-function examSourceFiles() {
-  const out = [];
-  const walk = (d) => {
-    if (!fs.existsSync(d)) return;
-    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
-      const p = path.join(d, e.name);
-      if (e.isDirectory()) { walk(p); continue; }
-      if (/\.(uvue|uts)$/.test(e.name) && !/\.test\./.test(e.name)) out.push(p);
-    }
-  };
-  walk(path.join(ROOT, 'pages/exam'));
-  return out;
-}
-
-describe('600 行软预算机检（pages/exam/** + 模块域 api 达标后锁定）', () => {
-  it('exam 模块全部源文件 ≤600 行（含新建 composable 与 section 组件）', () => {
-    const files = examSourceFiles().concat(path.join(ROOT, 'api/mockExam.uts'));
-    const over = files.map((f) => ({
-      file: path.relative(ROOT, f),
-      lines: readText(f).split('\n').length,
-    })).filter((x) => x.lines > 600);
-    expect(over).toEqual([]);
-  });
-
-  it('模块目录 ≤2 层', () => {
-    const deep = examSourceFiles().filter((f) => {
-      const rel = path.relative(path.join(ROOT, 'pages/exam'), f);
-      return rel.split(/[\\/]/).length > 2;
-    }).map((f) => path.relative(ROOT, f));
-    expect(deep).toEqual([]);
-  });
-
-  it('模块必需源文件清单完整（删任一文件即红，扫描面不靠数量下限兜底）', () => {
-    const missing = REQUIRED_SOURCE_FILES.filter((f) => !exists(f));
-    expect(missing).toEqual([]);
-    expect(examSourceFiles().length).toBeGreaterThanOrEqual(REQUIRED_SOURCE_FILES.length);
-  });
-});
 
 describe('页面 ↔ 组件接口对账（本票唯一新增接口面：prop/事件改名即红）', () => {
   it.each(WIRING.map((w) => [w.tag, w]))('%s：页面绑定的每个 prop 都在组件 defineProps 内', (tag, w) => {
@@ -186,19 +131,19 @@ describe('组件接线零孤儿（#779 回归锁：import 的组件文件必须�
       const re = /from\s+'\.\/components\/([^']+\.uvue)'/g;
       let m;
       while ((m = re.exec(src)) !== null) {
-        const target = path.join(ROOT, 'pages/exam/components', m[1]);
-        if (!fs.existsSync(target)) missing.push(page + ' -> components/' + m[1]);
+        if (!h.exists('pages/exam/components/' + m[1])) missing.push(page + ' -> components/' + m[1]);
       }
     }
     expect(missing).toEqual([]);
   });
 
   it('组件目录内不存在孤儿文件（每个 .uvue 都被某页面显式 import）', () => {
-    const dir = path.join(ROOT, 'pages/exam/components');
+    const relDir = 'pages/exam/components';
     // 目录整体消失不得静默通过（首版照抄 practice 先例的 `if (!existsSync) return`，是假绿通道）
-    expect(fs.existsSync(dir)).toBe(true);
+    expect(h.exists(relDir)).toBe(true);
     const pagesSrc = EXAM_PAGES.map((p) => read(p)).join('\n');
-    const orphans = fs.readdirSync(dir)
+    const orphans = h.sourceFilesIn(relDir)
+      .map((rel) => rel.split('/').pop())
       .filter((f) => f.endsWith('.uvue'))
       .filter((f) => !pagesSrc.includes('./components/' + f));
     expect(orphans).toEqual([]);
@@ -379,8 +324,8 @@ describe('删除禁区「exam 不用删」：行为保持点逐项仍在', () =>
 
 describe('展示纯函数唯一实现（T03/T06 口径）：exam 模块零题型判定第二实现', () => {
   it('exam 模块内不重新声明 getTypeName / isMultiChoice', () => {
-    for (const f of examSourceFiles()) {
-      const src = readText(f);
+    for (const rel of h.sourceFilesIn('pages/exam')) {
+      const src = read(rel);
       expect(src).not.toContain('function getTypeName');
       expect(src).not.toContain('function isMultiChoice');
     }

@@ -4,7 +4,7 @@
  * 沿用源码契约缝（.uvue/.uts 不可 jest import）。先例：profileContract（T03 模块汇总契约）、
  * forumContract（T04 五类锁 + 行为保持点）。本文件五类锁：
  * ① 本模块域 api 收紧（出口家族 + catch/降级保持 + 零裸 .then 残留）
- * ② 600 行软预算模块全量复检 + 目录 ≤2 层
+ * ② 页面预算落袋锁（模块全量预算 / 目录 ≤2 层已由声明面执法，见 ADR-0023 票 C #1219）
  * ③ 拆出物接线收口（显式 import + 模板挂载 + 零孤儿）
  * ④ 页面层零直发请求
  * ⑤ allowlist 模块级清零
@@ -13,15 +13,12 @@
  * 本票域 api 收紧口径（同 profileContract）：仅「有 DTO 映射」的函数经 *Mapped 出口家族；
  * 返回 void 的透传函数（viewFeaturedContentApi / markNotificationReadApi / markAllReadApi）不硬套 identity map。
  */
-const fs = require('fs');
-const path = require('path');
-
-/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
-const { readText } = require('./utsHarness');
-const ROOT = path.join(__dirname, '..');
-const read = (rel) => readText(path.join(ROOT, rel));
+/** harness：读取层归一 + 模块归属面（ADR-0023 票 C 起，本文件不再自建 ROOT / read / walker） */
+const h = require('./contractHarness');
+const ROOT = h.ROOT;
+const read = h.read;
 /** 豁免名单从单点读（ADR-0023 ⑧）：不再解析守护脚本源码文本取常量 */
-const { allowlistPaths } = require('./contractHarness');
+const allowlistPaths = h.allowlistPaths;
 
 /** 提取 export function 函数体（从声明到顶层 "\n}"，先例 quickLoginContract） */
 function fnBodyOf(fileSrc, name) {
@@ -29,20 +26,6 @@ function fnBodyOf(fileSrc, name) {
   if (start === -1) throw new Error(`未找到 ${name}`);
   const end = fileSrc.indexOf('\n}', start);
   return fileSrc.slice(start, end);
-}
-
-/** dashboard 模块全部源文件（.uvue/.uts，排除测试） */
-function dashboardSourceFiles() {
-  const out = [];
-  const walk = (d) => {
-    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
-      const p = path.join(d, e.name);
-      if (e.isDirectory()) { walk(p); continue; }
-      if (/\.(uvue|uts)$/.test(e.name) && !/\.test\./.test(e.name)) out.push(p);
-    }
-  };
-  walk(path.join(ROOT, 'pages/dashboard'));
-  return out;
 }
 
 /* ══ ① 本模块域 api 收紧（featured / notification / credential；student 域已由 T03 收紧，此处复检） ══ */
@@ -122,31 +105,16 @@ describe('raw .then 收紧完成度（本票域 DTO 函数零残留，student �
   });
 });
 
-/* ══ ② 600 行软预算 + 目录深度 ══ */
-describe('600 行软预算机检（模块全量：pages/dashboard/** 全部源文件）', () => {
+/* ══ ② 页面预算落袋锁（模块全量预算 / 目录深度已由声明面执法，#1219） ══ */
+describe('页面预算落袋锁（手术目标本身也断言，防「只挪注释」的假达标）', () => {
   it('走查范围非空（防路径断链导致空集合假绿：页面 + 5 组件 + 2 composable = 8）', () => {
-    expect(dashboardSourceFiles().length).toBe(8);
+    expect(h.sourceFilesIn('pages/dashboard').length).toBe(8);
   });
 
   it('主页面预算落袋锁（手术前 1423 行）', () => {
     const lines = read('pages/dashboard/dashboard.uvue').split('\n').length;
     expect(lines).toBeLessThanOrEqual(600);
     expect(lines).toBeLessThan(1000);
-  });
-
-  it('模块全部源文件 ≤600 行（含 components/composables，达标后锁住防回潮，先例 profileContract）', () => {
-    const over = dashboardSourceFiles().map((f) => ({
-      file: path.relative(ROOT, f),
-      lines: readText(f).split('\n').length,
-    })).filter((x) => x.lines > 600);
-    expect(over).toEqual([]);
-  });
-
-  it('模块目录 ≤2 层（pages/dashboard/<页 或 <子目录>/<文件>）', () => {
-    const deep = dashboardSourceFiles()
-      .filter((f) => path.relative(path.join(ROOT, 'pages/dashboard'), f).split(/[\\/]/).length > 2)
-      .map((f) => path.relative(ROOT, f));
-    expect(deep).toEqual([]);
   });
 });
 
@@ -175,8 +143,8 @@ describe('组件接线汇总（T05 拆出物 5 组件 + 2 composable：显式 im
 
   it('拆出物零孤儿：components/ 与 composables/ 每个文件都被页面 import（新增拆出物必须接线）', () => {
     const pageSrc = page;
-    const orphanOf = (dir, prefix) => fs.readdirSync(path.join(ROOT, 'pages/dashboard', dir))
-      .filter((n) => /\.(uvue|uts)$/.test(n))
+    const orphanOf = (dir, prefix) => h.sourceFilesIn(`pages/dashboard/${dir}`)
+      .map((rel) => rel.split('/').pop())
       .filter((n) => !pageSrc.includes(`${prefix}/${n}`))
       .sort();
     const orphans = [
@@ -191,9 +159,8 @@ describe('组件接线汇总（T05 拆出物 5 组件 + 2 composable：显式 im
 describe('页面层零直发请求（网络一律经域 api 函数，#643 收紧口径）', () => {
   it('pages/dashboard/** 无源文件 import api/request 或裸调 uni.request', () => {
     const hits = [];
-    for (const f of dashboardSourceFiles()) {
-      const src = readText(f);
-      const rel = path.relative(ROOT, f);
+    for (const rel of h.sourceFilesIn('pages/dashboard')) {
+      const src = read(rel);
       if (/from\s*'[^']*api\/request(\.uts)?'/.test(src)) hits.push(`${rel}: import api/request`);
       if (/uni\.request\s*\(/.test(src)) hits.push(`${rel}: uni.request 裸调`);
       if (/uni\.(upload|download)File\s*\(/.test(src)) hits.push(`${rel}: uni.uploadFile/downloadFile 裸调`);
@@ -268,7 +235,7 @@ describe('行为保持点（手术偏离与回退风险的显式钉锁）', () =
   });
 
   it('死代码证书名回退映射表已删除（全模块零命中，消费面核对与删除说明见 composable 头注释）', () => {
-    const all = dashboardSourceFiles().map((f) => readText(f)).join('\n');
+    const all = h.sourceFilesIn('pages/dashboard').map(read).join('\n');
     expect(all).not.toContain('certNameMap');
   });
 

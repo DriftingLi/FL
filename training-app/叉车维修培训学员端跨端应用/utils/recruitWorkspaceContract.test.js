@@ -24,11 +24,14 @@
 const fs = require('fs');
 const path = require('path');
 
-const { readText } = require('./utsHarness');
-const ROOT = path.join(__dirname, '..');
+/** harness：读取层归一 + 全仓/模块枚举（ADR-0023 票 C 起，本文件不再自建 ROOT / read / walker） */
+const h = require('./contractHarness');
+/** 读取层归一只有一份（ADR-0019）：这里取的就是 `utils/utsHarness.js#readText` 本体 */
+const { readText } = h;
+const ROOT = h.ROOT;
 const REPO = path.join(ROOT, '..', '..');
 
-const read = (rel) => readText(path.join(ROOT, rel));
+const read = h.read;
 
 // ---- 本票的面 ----
 const TAB_BAR = 'pages/recruiter/components/recruiter-tab-bar.uvue';
@@ -115,28 +118,6 @@ function balancedFrom(src, open) {
   }
   return '';
 }
-
-/** 递归收集文件（跳过依赖与构建产物） */
-function collectFiles(dir, predicate, acc = []) {
-  let entries;
-  try {
-    entries = fs.readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return acc;
-  }
-  for (const e of entries) {
-    const full = path.join(dir, e.name);
-    if (e.isDirectory()) {
-      if (['node_modules', 'unpackage', '.git', '.ci-verify', 'dist'].includes(e.name)) continue;
-      collectFiles(full, predicate, acc);
-    } else if (predicate(e.name)) {
-      acc.push(full);
-    }
-  }
-  return acc;
-}
-
-const relOf = (p) => path.relative(ROOT, p).split(path.sep).join('/');
 
 /** 面内出现的所有 `/pages/recruiter/<x>` 路由（去重排序） */
 function recruiterRoutesIn(src) {
@@ -247,11 +228,11 @@ function parseGoStatuses(absPath, namePrefix, typeName = '') {
 
 describe('A. 分段件：全仓唯一一份，且只被三个一级面各挂一次', () => {
   it(`${TAB_BAR} 存在`, () => {
-    expect(fs.existsSync(path.join(ROOT, TAB_BAR))).toBe(true);
+    expect(h.exists(TAB_BAR)).toBe(true);
   });
 
   it('全仓只有一个 recruiter-tab-bar.uvue（ADR-0022 ②「唯一一份」；ADR-0009 的病根是两份手画的栏）', () => {
-    const hits = collectFiles(ROOT, (n) => n === 'recruiter-tab-bar.uvue').map(relOf);
+    const hits = h.filesUnder('.', /^recruiter-tab-bar\.uvue$/);
     expect(hits).toEqual([TAB_BAR]);
   });
 
@@ -273,9 +254,9 @@ describe('A. 分段件：全仓唯一一份，且只被三个一级面各挂一�
   });
 
   it('分段件之外没有任何一处挂它（挂载面恰好 = 三个一级面）', () => {
-    const all = collectFiles(ROOT, (n) => n.endsWith('.uvue')).map(relOf);
+    const all = h.filesUnder('.', /\.uvue$/);
     const mounters = all
-      .filter((rel) => templateOf(readText(path.join(ROOT, rel))).includes('<RecruiterTabBar'))
+      .filter((rel) => templateOf(read(rel)).includes('<RecruiterTabBar'))
       .sort();
     expect(mounters).toEqual([...FIRST_LEVEL].sort());
   });
@@ -316,7 +297,7 @@ describe('B. 首屏批量请求 = 2；禁逐职位拉 unread_count（N+1）', ()
   });
 
   it('按职位的投递端点全仓只有一个消费面（投递列表页）', () => {
-    const sources = collectFiles(ROOT, (n) => /\.(uvue|uts)$/.test(n) && !/\.test\./.test(n)).map(relOf);
+    const sources = h.sourceFilesIn('.');
     const consumers = sources
       .filter((rel) => rel !== API_RECRUIT)
       .filter((rel) => read(rel).includes('getRecruitJobApplicationsApi'))
@@ -582,9 +563,8 @@ describe('F. 状态词单点 + 两端同源（ADR-0018 口径）', () => {
      */
     const LOGIN_EXPIRY_IN_DETAIL = '登录已过期，请重新登录';
     const offenders = [];
-    for (const abs of collectFiles(path.join(ROOT, 'pages/recruiter'), (n) => n.endsWith('.uvue'))) {
-      const rel = relOf(abs);
-      const raw = stripComments(readText(abs));
+    for (const rel of h.filesUnder('pages/recruiter', /\.uvue$/)) {
+      const raw = stripComments(read(rel));
       const clean = rel === 'pages/recruiter/resume-detail.uvue'
         ? raw.split(LOGIN_EXPIRY_IN_DETAIL).join('')
         : raw;
@@ -615,9 +595,9 @@ describe('G. pages.json：新增路由注册闭环（无死链 / 无未注册页
   });
 
   it('pages/recruiter 下每个页面文件都有对应注册（无死链），每条注册都有文件', () => {
-    const files = collectFiles(path.join(ROOT, 'pages/recruiter'), (n) => n.endsWith('.uvue'))
-      .filter((abs) => !abs.includes(`${path.sep}components${path.sep}`))
-      .map((abs) => relOf(abs).replace(/\.uvue$/, ''));
+    const files = h.filesUnder('pages/recruiter', /\.uvue$/)
+      .filter((rel) => !rel.includes('/components/'))
+      .map((rel) => rel.replace(/\.uvue$/, ''));
     const parsed = JSON.parse(pagesJson);
     const registered = parsed.pages
       .map((p) => p.path)
@@ -698,10 +678,9 @@ describe('H. 会话守卫与骨架边界', () => {
     // 徽标与紧迫行共用同一份 ⇒ 本页 `contact-requests` 只拉一次
     expect((resumesRaw.match(/getRecruitContactRequestsApi\s*\(/g) || []).length).toBe(1);
     // 「面子面唯一」：全仓不再有第二个页面承担简历库这一级
-    const libraryFaces = collectFiles(path.join(ROOT, 'pages/recruiter'), (n) => n.endsWith('.uvue'))
-      .map(relOf)
+    const libraryFaces = h.filesUnder('pages/recruiter', /\.uvue$/)
       .filter((rel) => !rel.includes('/components/'))
-      .filter((rel) => templateOf(readText(path.join(ROOT, rel))).includes('<RecruiterTabBar'));
+      .filter((rel) => templateOf(read(rel)).includes('<RecruiterTabBar'));
     expect(libraryFaces.sort()).toEqual([...FIRST_LEVEL].sort());
   });
 
@@ -803,7 +782,7 @@ describe('H2. uvue / UTS 硬约束（本票新增文件）', () => {
 
 describe('I. 锁自检：合成违规必须被判出来（否则本文件是空跑）', () => {
   it('分段件唯一性：判据是对全仓 basename 的**精确相等**（`toContain` 那种写法漏掉第二份）', () => {
-    const hits = collectFiles(ROOT, (n) => n === 'recruiter-tab-bar.uvue').map(relOf);
+    const hits = h.filesUnder('.', /^recruiter-tab-bar\.uvue$/);
     expect(hits).toEqual([TAB_BAR]);
     expect(hits.concat(['pages/other/components/recruiter-tab-bar.uvue'])).not.toEqual([TAB_BAR]);
   });
