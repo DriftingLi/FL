@@ -109,10 +109,10 @@
 | `pending` 模块 | 超预算文件（总行数） |
 | --- | --- |
 | ai-assistant | ai-assistant.uvue 839 · api/aiAssistant.uts 667 · ai-feature.uvue 629 · ai-settings.uvue 621 |
-| forum | **api/forum.uts 654**（票 B 的唯一活违例；页面侧最大 583 已达标） |
+| forum | **api/forum.uts 654**（票 B 的唯一活违例；页面侧最大 583 已达标）→ **票 B 已收口（见下）** |
 | login | login.uvue 977 |
 | register | register.uvue 723 |
-| resume | resume-edit.uvue 923（另一会话的 resume 手术会把它降到预算内） |
+| resume | resume-edit.uvue 923（#1205 的 resume 手术已把它降到 426，同期把本行翻成 `BUDGET`） |
 | recruiter | resume-detail.uvue 702 · api/recruit.uts 675 |
 | search | search.uvue 702 |
 | forgot-password | forgot-password.uvue 676 |
@@ -153,6 +153,123 @@ B 组是**成对取证的判别力**（13 条注入各自「改坏必红 + 真�
 **票 C 的入口**：`contractHarness` 已供给 `ROOT` / `read` / `readText` / `declaredFiles(key)` / `moduleOnDisk(key)` /
 `fileLines` / `moduleDepth` / `orphanExtracts` / `deadImports` / `allowlistPaths` / `reconcile()`；
 C 要删的 `path.join(__dirname`、自建 `read()`、自建 walk、写死 600、解析 allowlist 文本五类复写都有对应出口。
+
+### 票 C —— 13 个已达标模块的契约迁到声明（#1219，2026-09-21）
+
+**落地物**：改 **14 份测试文件**（13 个模块；`recruiter` 域有 `recruiterResumeContract` + `recruitWorkspaceContract` 两份）。
+删掉的复写：`path.join(__dirname…)` 自建 ROOT（14/14）、自建 `read()`（12 份）、模块 walker
+（`*SourceFiles()` / `collectFiles` / `walkUvue` / 内联 `walk`，共 11 处）、模块级 600 预算与目录深度断言（见下表）、
+以及随之变成死代码的硬编码模块文件清单（`courses` / `exam` 的 `REQUIRED_SOURCE_FILES`、`resume` 的
+`REQUIRED_SOURCE_FILES` + `BUDGET_FILES`）—— 后三者正是 ⑤ 禁的「第二份模块清单」。
+allowlist 断言不动（票 A 起已是数据读取）。
+
+**删掉的断言（逐条可复核，机器抽取 `it|test` 标题前后对照；共 18 条）**：
+
+| 文件 | 模块级预算（类 1） | 目录 ≤2 层（类 2） | 必需文件清单（类 3） |
+| --- | --- | --- | --- |
+| coursesContract | ✅ | ✅ | ✅ |
+| dashboardContract | ✅ | ✅ | — |
+| examContract | ✅ | ✅ | ✅ |
+| forumContract | **⚠️ 保留（见下）** | ✅ | — |
+| mallPilotContract | ✅ | ✅ | — |
+| practiceContract | ✅ | ✅ | — |
+| profileContract | ✅ | ✅ | — |
+| resumeContract | ✅ | ✅ | ✅ |
+
+（`jobsMineEntry` / `pointsRealApi` / `recruiterResume` / `recruitWorkspace` / `resources` / `search` 六份**本来就没有**这三类断言，故零删除。）
+
+**`forum` 的例外（本票唯一的判断，理由写实）**：`utils/modules.js` 里 forum 的预算是 `pending`（因为
+`api/forum.uts` 654 行还超着 —— 那是票 B #1218 的活）。声明面 A10 对 `pending` 模块**不判红**，
+所以此刻删掉 `forumContract` 那条 pages-only 预算检查，等于让已达标的 `pages/forum/**`（最大 583）
+**失去唯一的预算锁** ⇒ 保留该条（已换成 harness 出口），并在原位写了理由。**票 B 把 forum 翻成数字预算后，
+这条即为重复，应删**。同理核对过：`points` / `recruiter` / `search` 虽也是 `pending`，但它们没有类 1 断言，删无可删。
+（**合并票 D #1227 后复验**：forum 仍是 `pending`、`api/forum.uts` 仍是 654 ⇒ 该例外依然必要，不是过时判断。）
+
+**强度核对（为什么删了不弱化）**：数字预算模块的声明面 = 全部归属文件（目录内 + 域 api），
+比原来各文件只扫 `pages/<key>/**` **更宽**（例：`profile` 21 → 24、`practice` 11 → 13；`courses` / `exam` / `resume` 相等）；
+深度（A5）与必需文件（A3 双向对账）与预算是否 `pending` **无关**，故类 2 / 类 3 在任何模块都可安全删除。
+
+**写实的三处微小口径差**（都已逐条核对为等价，记录备查）：① 单目录 `fs.readdirSync` 换成
+`h.sourceFilesIn` 后，非源码杂项文件不再参与「目录里只剩 N 个文件」这类等式断言；
+② `recruitWorkspaceContract` 的全仓枚举由自建 `collectFiles` 换成 `h.filesUnder` —— 扫描面略窄
+（多跳过 `hybrid` / `.hbuilderx` / `.vscode` / `coverage` 等目录，本机实测这些目录**不存在**，故当前等价）；
+③ 单目录列表里 `*.test.*` 被剔除（这些目录里没有测试文件）。
+
+**门证据（本 PR）**：③ `npm run test:unit` = **112 suites / 2079 tests 全绿**（= 本票基线 **2086** − 删掉的 **18** 例
++ 票 D 并入的 E 组 **11** 例；2086 由本 worktree 实测：把 14 份文件 `git stash` 回改前逐文件比对得 **609 → 591**，
+差 **18** 恰等于上表删除条数 —— 没有连带丢用例）；
+`node scripts/classify-guards.mjs --json` = **112 总数 / 17 行为 / 95 接线**，与改动前**逐文件零变化**；
+`node scripts/check-contract-read.mjs --all` = **exit 0**（112 个测试文件无未归一的仓内源码裸读）。
+四门 **免（未命中运行时面）**：改动集只有 `utils/*.test.js` 与本文件。
+
+**与票 D 的并存**：两票都改本段（实施记录），合并时按 **A → C → D** 顺序保留双方原文，不删不改对方内容。
+
+### 票 D —— 全表对账：每个源文件都有归属（#1220，2026-09-21）
+
+**本票要治的是 A 留下的那条缝**：A 的对账只覆盖**模块归属面**（`pages/<键>/**` + 显式登记的目录外的家），
+于是**没进任何表的目录外文件是隐形的** —— `api/forum.uts` 当年正是这样躺在自称达标的 forum 模块里。
+A 把**已知**的域 api 逐个登记了，但「下一次有人加一个目录外文件」仍然不会红。
+
+**做法**：`utils/modules.js` 新增 `INFRA`（`dirs` 14 个 + `files` 6 个 + `oversized`），
+`utils/contractHarness.js` 新增 `infraFiles()` / `infraFacts(decls, infra)` 并把五面并入 `reconcile(decls, infra)`：
+`unregisteredSourceFiles`（**树上没归属的源文件**）· `infraPhantomDirs` / `infraPhantomFiles`（幽灵登记）·
+`infraOverlaps`（既归模块又登记为基础设施）· `infraOversizedDrift`（超预算的跨界文件**双向**对账）。
+判据：**树上的每个源文件，要么归某个模块、要么登记为基础设施，没有第三种** —— 实测 **218 个源文件 = 模块面 157 + 基础设施 61**。
+
+**登记不执法**：基础设施的行数**不进**任何模块的预算面（ADR-0023 ① 的边界：它们的预算归各自独立的票）。
+唯一一条超预算的跨界文件是 **`api/request.uts`（611 行）**，由 `INFRA.oversized` 显式登记、**本票不拆**
+（同模块 `pending` 的口径）—— 它从「没人看得见」变成了「表上一行」。
+
+**顺带的两处登记更正**（A 的归属规则当时只施加于域 api，漏了这两个）：`api/faq.uts`（帮助中心）与
+`api/note.uts`（笔记）的唯一消费方都是 `profile`，按归属规则②**归 profile**（不再算基础设施）。
+
+**规则适用面的澄清（写进 `modules.js` 文件头）**：归属规则①②③**只管域 api 与模块私有拆出物**；
+`utils/**` / `types/**` / `stores/**` / `constants/**` / `config/**` / `components/app-*` / `uni_modules/**` /
+`App.uvue` / `main.uts` 按**共享件**定位 —— 即使某个文件只有一个模块消费（例 `utils/forumDisplay.uts` 只被
+forum 用）也不归它，而是登记为基础设施（模块契约里的「展示纯函数唯一实现」断言正是把它们当共用的唯一实现面）。
+
+**「未达标」读法的延续**：票 A 把 ②⑥ 的「未达标模块」读作**预算未达标**（而不是「没有模块契约」），
+故 10 个无契约模块里已在预算内的 6 个被直接锁进 600、另 4 个（ai-assistant / forgot-password / login / register）
+登记 `pending`。本票维持该读法：**不**为这 6 个模块补写 `pending`（那等于白送一条不执法），并在票面记录了差异。
+
+**落锁**：`utils/modulesDeclarationContract.test.js` 新增 **E1–E11**（全表覆盖面非空 / 零隐形文件 / 幽灵与重叠 /
+超预算双向 / 6 条注入各自成对取证 / 报错信息指出文件）。**套件数不变**（只加用例、不加文件）。
+
+**门证据（本 PR）**：③ `112 suites / 2097 tests` 全绿（基线 112 / 2086，增量即 E 组 11 例）；
+分类计数 **112 / 17 行为 / 95 接线** 与改动前**逐项一致**。
+### 票 B —— `api/forum.uts` 拆分至 ≤600 并上线 forum 预算执法（#1218，2026-09-21）
+
+**落地物**：新增 `api/forumDto.uts`（DTO 构造层：`extract*` 4 + `build*` 5，共 9 个函数，**全部逐行照搬**，
+只加 `export ` 前缀）；`api/forum.uts` 从 **654 → 413** 行（请求形态段**逐字未动**：20 个导出函数、路由、查询参数、
+出口选择全原样）；`utils/modules.js` 的 forum 条目登记 `api/forumDto.uts` 并把预算从 `pending` 翻成 `600`（**执法上线**）。
+
+**拆缝**：`响应 shape 的构造` ／ `请求形态` 之间。判据是机械可复核的 —— 用脚本比对拆分前后：
+构造层 221 个非空行**逐行一致**（只差 `export ` 前缀），请求形态段 397 行**逐字未动**。
+`utils/forumContract.test.js` 的**字段级**断言（`is_featured` / `is_experience` / IP 属地两字段 / 分页三元组 /
+被回复人两字段 / `buildTopic` 各字段）改读 `api/forumDto.uts`（**等价强度**：同一条 `toContain` 换个读取目标），
+另加 4 条**拆分锁**（请求侧必须从 `./forumDto` 取构造层、请求侧不得再自带 `function build*|extract*`、
+构造侧九个函数都在且零请求出口、两个文件都 ≤600）。
+
+**收口票 C 留下的例外**：票 C 因 forum 预算是 `pending` 而保留了 `forumContract` 的 pages-only 预算检查
+（见票 C 段）。本票把 forum 翻成数字预算后，该条与声明面 A3/A10 完全重复 ⇒ **按票 C 自己写下的约定删除**。
+预算现由声明面对**声明全集**执法（`pages/forum/**` + `api/forum.uts` + `api/forumDto.uts`，最大 583），比原条更宽。
+
+**新坑位（本票实测，写给后来的预算执法面上线 PR）**：**「预算执法面上线」在结构上不可能拿低风险运行时面豁免**。
+原因有两条，同时成立：
+① 预算在 `utils/modules.js` 里，而它**不在** `pr-evidence` 的低风险白名单（`*.uts` / `*test.js` / `*.md` / `jest.config*.js`）里
+⇒ 只要 PR 带它，整单降级为**常规运行时面**（① 必过）。
+② 票 A 的 **A10** 判据要求「`pending` 模块必须真有一个超预算文件」⇒ 拆分把 654 降到 413 的那一刻，
+`pending` 就成了假命题、③ **必红**，所以拆分与翻预算**必须在同一个 PR 里**，不能拆成两单。
+⇒ 结论：这类 PR 按**常规运行时面**走门（本票即如此），**不要**按「仅 .uts 逻辑改动」估成本。
+
+**门证据（本 PR #1229）**：③ `112 suites / 2090 tests` 全绿（基线 112 / 2086，增量即 forum 的 4 条拆分锁）；
+④c `KOTLIN_ALL_RESULT errors=0 classes=1522 files=118`；①a 真机 `23049RAD8C` / Android 15 逐页截图
+（列表 / 详情 / 打卡三页，入仓 `docs/verification/forum/1229/`）+ logcat 本窗口 **0 FATAL / 0 ANR**，
+应用侧日志证明改后调用链真跑通（`getForumTopicsApi` 4 条列表、`getForumTopicDetailApi` 6 条回复，
+`is_featured` / `is_experience` / `ip_province` / `parent_name` 等由被搬走的 builder 映射的字段全部上屏）；
+② **免（未命中 MP-WEIXIN 面）**。分类计数 112 / 17 行为 / 95 接线，与改动前**逐项一致**。
+**①a 范围写实**：`buildLikeResult`（点赞/取消）未经 UI 触达（回复点赞节点未在可视区命中）⇒ 由「逐行一致」+
+模块契约的出口断言兜底；`forum-create` / `my-forum` 未逐页取图（本票是 API 层纯搬家，页面模板与样式零 diff）。
 
 ## 关联
 

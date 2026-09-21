@@ -2,56 +2,22 @@
  * practice 模块手术契约测试（T06，parent #644 / ADR-0007）
  *
  * 钉住 practice 手术交付的六类契约：
- * 1) 600 行软预算：pages/practice/** 全部源文件 ≤600 行
- * 2) 模块目录 ≤2 层
- * 3) composable 接线：practice-do.uvue / practice.uvue 以显式 import 使用 composable
- * 4) 组件接线零孤儿：页面 import 的组件文件必须存在，组件文件必须被页面引用
+ * 1) 600 行软预算 / 模块目录 ≤2 层：**已由声明面执法**（`utils/modules.js` +
+ *    `utils/modulesDeclarationContract.test.js` 的 A3/A5/A10），本文件不再各写一遍（ADR-0023 票 C #1219）
+ * 2) composable 接线：practice-do.uvue / practice.uvue 以显式 import 使用 composable
+ * 3) 组件接线零孤儿：页面 import 的组件文件必须存在，组件文件必须被页面引用
  *    （#779 回归教训：practice.uvue 改为 import 四个组件却从未创建文件，master 编译中断）
- * 5) allowlist 不回潮：practice 域文件不得出现在 GUARD_ALLOWLIST
- * 6) 零直发请求：页面层不直接 uni.request
+ * 4) allowlist 不回潮：practice 域文件不得出现在 GUARD_ALLOWLIST
+ * 5) 零直发请求：页面层不直接 uni.request
  */
-const fs = require('fs');
-const path = require('path');
-
-/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
-const { readText } = require('./utsHarness');
-const ROOT = path.join(__dirname, '..');
-const read = (rel) => readText(path.join(ROOT, rel));
+/** harness：读取层归一 + 模块归属面（ADR-0023 票 C 起，本文件不再自建 ROOT / read / walker） */
+const h = require('./contractHarness');
+const ROOT = h.ROOT;
+const read = h.read;
 /** 豁免名单从单点读（ADR-0023 ⑧）：不再解析守护脚本源码文本取常量 */
-const { allowlistPaths } = require('./contractHarness');
+const allowlistPaths = h.allowlistPaths;
 
 const PRACTICE_PAGES = ['pages/practice/practice.uvue', 'pages/practice/practice-do.uvue'];
-
-function practiceSourceFiles(dir = 'pages/practice') {
-  const out = [];
-  const walk = (d) => {
-    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
-      const p = path.join(d, e.name);
-      if (e.isDirectory()) { walk(p); continue; }
-      if (/\.(uvue|uts)$/.test(e.name) && !/\.test\./.test(e.name)) out.push(p);
-    }
-  };
-  walk(path.join(ROOT, dir));
-  return out;
-}
-
-describe('600 行软预算机检（pages/practice/** 达标后锁定）', () => {
-  it('practice 模块全部源文件 ≤600 行', () => {
-    const over = practiceSourceFiles().map((f) => ({
-      file: path.relative(ROOT, f),
-      lines: readText(f).split('\n').length,
-    })).filter((x) => x.lines > 600);
-    expect(over).toEqual([]);
-  });
-
-  it('模块目录 ≤2 层', () => {
-    const deep = practiceSourceFiles().filter((f) => {
-      const rel = path.relative(path.join(ROOT, 'pages/practice'), f);
-      return rel.split(/[\\/]/).length > 2;
-    }).map((f) => path.relative(ROOT, f));
-    expect(deep).toEqual([]);
-  });
-});
 
 describe('composable 接线契约（T06 拆分：显式 import composable）', () => {
   const doPage = read('pages/practice/practice-do.uvue');
@@ -82,18 +48,18 @@ describe('组件接线零孤儿（#779 回归锁：import 的组件文件必须�
       const re = /from\s+'\.\/components\/([^']+\.uvue)'/g;
       let m;
       while ((m = re.exec(src)) !== null) {
-        const target = path.join(ROOT, 'pages/practice/components', m[1]);
-        if (!fs.existsSync(target)) missing.push(page + ' -> components/' + m[1]);
+        if (!h.exists('pages/practice/components/' + m[1])) missing.push(page + ' -> components/' + m[1]);
       }
     }
     expect(missing).toEqual([]);
   });
 
   it('组件目录内不存在孤儿文件（每个 .uvue 都被某页面显式 import）', () => {
-    const dir = path.join(ROOT, 'pages/practice/components');
-    if (!fs.existsSync(dir)) return;
+    const relDir = 'pages/practice/components';
+    if (!h.exists(relDir)) return;
     const pagesSrc = PRACTICE_PAGES.map((p) => read(p)).join('\n');
-    const orphans = fs.readdirSync(dir)
+    const orphans = h.sourceFilesIn(relDir)
+      .map((rel) => rel.split('/').pop())
       .filter((f) => f.endsWith('.uvue'))
       .filter((f) => !pagesSrc.includes('./components/' + f));
     expect(orphans).toEqual([]);

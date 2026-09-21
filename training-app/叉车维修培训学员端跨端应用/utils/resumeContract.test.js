@@ -2,21 +2,20 @@
  * resume 模块手术契约测试（T09，parent #647 / ADR-0007）
  *
  * 钉住 resume（在线简历编辑）手术交付的契约：
- * 1) 600 行软预算：pages/resume/** 全部源文件 + api/resume.uts ≤600，**新建 composable 与 section 组件同样计入**
- *    （T07 维护者裁定 B 硬化口径：防「把 922 行页面挪成 900 行 composable」的假达标）
- * 2) 模块目录 ≤2 层
- * 3) 模块必需源文件清单完整（删任一文件即红，扫描面不靠数量下限兜底）
- * 4) composable 接线：resume-edit.uvue 以显式 import 使用模块私有 composable，且 composable 有显式结果类型
- * 5) 组件接线零孤儿：页面 import 的组件文件必须存在，组件文件必须被页面引用（#779 回归教训）
- * 6) 页面 ↔ 组件接口对账：prop / 事件双向无孤儿，`update:` 前缀按 kebab 归一（本票唯一新增接口面）
- * 7) allowlist 不回潮：resume 域文件不得出现在 GUARD_ALLOWLIST
- * 8) 零直发请求：pages/resume/** 不直接 uni.request；请求只经 api/resume.uts
- * 9) 域 api 收紧：5 个 DTO 出口经 mapper-callback 家族，3 个裸透传在白名单内（multipart 上传 ×2 + void 删除）
- * 10) 幻影路由锁（#662 口径）：api 层每条路由都落在后端已注册清单内（job_card.go / resume_view.go / training_catalog.go）
- * 11) 删除禁区「resume 不用删」的行为保持点：草稿回填 / 服务端回显 / 完善度 12 项 / 三处 actionSheet /
- *     教育·工作经历增删 / 保存四条校验 / 本地草稿双 key / 保存成功回列表 / 保存栏双入口逐项仍在
- * 12) 拆分判据锁（T09 新增）：页面壳层不得自持编辑态 ref；教育·工作列表（v-model 风险区）留在壳层
- * 13) 零消费出口白名单：setVisibility / getViewStats / uploadWorkPhoto 是既有零消费出口，保留决策入锁
+ * 1) 600 行软预算 / 模块目录 ≤2 层 / 必需源文件清单：**已由声明面执法**（`utils/modules.js` +
+ *    `utils/modulesDeclarationContract.test.js` 的 A3/A5/A10），本文件不再各写一遍（ADR-0023 票 C #1219）；
+ *    本文件只留「手术目标页 `resume-edit.uvue` 落袋」这一条（含它的红能力自检）
+ * 2) composable 接线：resume-edit.uvue 以显式 import 使用模块私有 composable，且 composable 有显式结果类型
+ * 3) 组件接线零孤儿：页面 import 的组件文件必须存在，组件文件必须被页面引用（#779 回归教训）
+ * 4) 页面 ↔ 组件接口对账：prop / 事件双向无孤儿，`update:` 前缀按 kebab 归一（本票唯一新增接口面）
+ * 5) allowlist 不回潮：resume 域文件不得出现在 GUARD_ALLOWLIST
+ * 6) 零直发请求：pages/resume/** 不直接 uni.request；请求只经 api/resume.uts
+ * 7) 域 api 收紧：5 个 DTO 出口经 mapper-callback 家族，3 个裸透传在白名单内（multipart 上传 ×2 + void 删除）
+ * 8) 幻影路由锁（#662 口径）：api 层每条路由都落在后端已注册清单内（job_card.go / resume_view.go / training_catalog.go）
+ * 9) 删除禁区「resume 不用删」的行为保持点：草稿回填 / 服务端回显 / 完善度 12 项 / 三处 actionSheet /
+ *    教育·工作经历增删 / 保存四条校验 / 本地草稿双 key / 保存成功回列表 / 保存栏双入口逐项仍在
+ * 10) 拆分判据锁（T09 新增）：页面壳层不得自持编辑态 ref；教育·工作列表（v-model 风险区）留在壳层
+ * 11) 零消费出口白名单：setVisibility / getViewStats / uploadWorkPhoto 是既有零消费出口，保留决策入锁
  *
  * 本套件是**接线守护**（源码文本 + 结构对账，不构成 ③ 门的行为证据）：它守的是「页面↔组件↔composable↔域 api」
  * 的接线，行为兜底 = ④ 编译门（Kotlin 形态）+ ①a 真机逐页冒烟；接口改名/漏绑由本套件在 CI 上先红。
@@ -24,28 +23,19 @@
 const fs = require('fs');
 const path = require('path');
 
-/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
-const { readText } = require('./utsHarness');
+/** harness：读取层归一 + 模块归属面（ADR-0023 票 C 起，本文件不再自建 ROOT / read / walker） */
+const h = require('./contractHarness');
+/** 读取层归一只有一份（ADR-0019）：本条同时要读后端的 Go 真源，故直接取 `readText` 本体 */
+const { readText } = h;
 
-const ROOT = path.join(__dirname, '..');
-const read = (rel) => readText(path.join(ROOT, rel));
-const exists = (rel) => fs.existsSync(path.join(ROOT, rel));
+const ROOT = h.ROOT;
+const read = h.read;
 
 const EDIT_PAGE = 'pages/resume/resume-edit.uvue';
 const MODULE_PAGES = [
   'pages/resume/resume.uvue',
   'pages/resume/resume-edit.uvue',
   'pages/resume/resume-attach.uvue',
-];
-
-/** 模块必需源文件清单（删任一即红） */
-const REQUIRED_SOURCE_FILES = [
-  'pages/resume/resume.uvue',
-  'pages/resume/resume-edit.uvue',
-  'pages/resume/resume-attach.uvue',
-  'pages/resume/composables/useResumeEdit.uts',
-  'pages/resume/components/resume-progress-card.uvue',
-  'api/resume.uts',
 ];
 
 /** 页面 ↔ 组件接口对账表（本票唯一新增接口面，改名必须红）
@@ -56,8 +46,7 @@ const WIRING = [
   { page: EDIT_PAGE, tag: 'ResumeProgressCard', comp: 'pages/resume/components/resume-progress-card.uvue' },
 ];
 
-/** T07 口径：新建 composable / section 组件同样计入预算 */
-const BUDGET_FILES = REQUIRED_SOURCE_FILES;
+/** 软预算口径（ADR-0007）：本文件只保留「手术目标页落袋」这一条，模块全量预算已由声明面执法（#1219） */
 const LINE_BUDGET = 600;
 
 const camelToKebab = (s) => s.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase());
@@ -141,60 +130,20 @@ function declaredResultFields(src) {
   return [...m[1].matchAll(/^\s*([A-Za-z_$][\w$]*)\s*:/gm)].map((x) => x[1]);
 }
 
-function countLines(abs) {
-  return readText(abs).split('\n').length;
-}
-
-function resumeSourceFiles() {
-  const out = [];
-  const walk = (d) => {
-    if (!fs.existsSync(d)) return;
-    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
-      const p = path.join(d, e.name);
-      if (e.isDirectory()) { walk(p); continue; }
-      if (/\.(uvue|uts)$/.test(e.name) && !/\.test\./.test(e.name)) out.push(p);
-    }
-  };
-  walk(path.join(ROOT, 'pages/resume'));
-  return out;
-}
-
 /** 抹掉注释（保留字符串）：`://` 例外，防误杀 URL 字面量 */
 function stripComments(s) {
   return s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
 }
 
-describe('600 行软预算机检（pages/resume/** + api/resume.uts）', () => {
-  it('resume 模块全部源文件 ≤600 行（含新建 composable 与 section 组件）', () => {
-    const over = BUDGET_FILES.map((rel) => ({
-      file: rel,
-      lines: countLines(path.join(ROOT, rel)),
-    })).filter((x) => x.lines > LINE_BUDGET);
-    expect(over).toEqual([]);
-  });
-
+describe('手术目标页落袋锁（模块全量预算 / 目录 ≤2 层 / 必需文件清单已由声明面执法，#1219）', () => {
   it('页面从 922 行落到软预算内（手术目标本身也断言，防「只挪注释」的假达标）', () => {
-    expect(countLines(path.join(ROOT, EDIT_PAGE))).toBeLessThanOrEqual(LINE_BUDGET);
-    expect(countLines(path.join(ROOT, EDIT_PAGE))).toBeLessThan(700);
+    expect(h.fileLines(EDIT_PAGE)).toBeLessThanOrEqual(LINE_BUDGET);
+    expect(h.fileLines(EDIT_PAGE)).toBeLessThan(700);
   });
 
   it('预算判据具备红能力（601 行合成输入必须被抓到，600 行放行）', () => {
     const probe = [{ file: 'synthetic-601', lines: LINE_BUDGET + 1 }, { file: 'synthetic-600', lines: LINE_BUDGET }];
     expect(probe.filter((x) => x.lines > LINE_BUDGET)).toEqual([{ file: 'synthetic-601', lines: 601 }]);
-  });
-
-  it('模块目录 ≤2 层', () => {
-    const deep = resumeSourceFiles().filter((f) => {
-      const rel = path.relative(path.join(ROOT, 'pages/resume'), f);
-      return rel.split(/[\\/]/).length > 2;
-    }).map((f) => path.relative(ROOT, f));
-    expect(deep).toEqual([]);
-  });
-
-  it('模块必需源文件清单完整', () => {
-    const missing = REQUIRED_SOURCE_FILES.filter((f) => !exists(f));
-    expect(missing).toEqual([]);
-    expect(resumeSourceFiles().length).toBeGreaterThanOrEqual(4);
   });
 });
 
@@ -242,7 +191,7 @@ describe('组件接线零孤儿（#779 回归锁：import 的组件文件必须�
       const re = /from\s+'\.\/components\/([^']+\.uvue)'/g;
       let m;
       while ((m = re.exec(src)) !== null) {
-        if (!fs.existsSync(path.join(ROOT, 'pages/resume/components', m[1]))) {
+        if (!h.exists('pages/resume/components/' + m[1])) {
           missing.push(page + ' -> components/' + m[1]);
         }
       }
@@ -251,10 +200,11 @@ describe('组件接线零孤儿（#779 回归锁：import 的组件文件必须�
   });
 
   it('组件目录内不存在孤儿文件（每个 .uvue 都被某页面显式 import）', () => {
-    const dir = path.join(ROOT, 'pages/resume/components');
-    expect(fs.existsSync(dir)).toBe(true);
+    const relDir = 'pages/resume/components';
+    expect(h.exists(relDir)).toBe(true);
     const pagesSrc = MODULE_PAGES.map((p) => read(p)).join('\n');
-    const orphans = fs.readdirSync(dir)
+    const orphans = h.sourceFilesIn(relDir)
+      .map((rel) => rel.split('/').pop())
       .filter((f) => f.endsWith('.uvue'))
       .filter((f) => !pagesSrc.includes('./components/' + f));
     expect(orphans).toEqual([]);
@@ -269,7 +219,7 @@ describe('组件接线零孤儿（#779 回归锁：import 的组件文件必须�
     const missing = [];
     let m;
     while ((m = re.exec(injected)) !== null) {
-      if (!fs.existsSync(path.join(ROOT, 'pages/resume/components', m[1]))) missing.push(m[1]);
+      if (!h.exists('pages/resume/components/' + m[1])) missing.push(m[1]);
     }
     expect(missing).toEqual(['resume-progress-card-missing.uvue']);
   });

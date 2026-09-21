@@ -23,9 +23,11 @@
 const fs = require('fs');
 const path = require('path');
 
-/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
-const { readText } = require('./utsHarness');
-const ROOT = path.join(__dirname, '..');
+/** harness：读取层归一 + 模块归属面（ADR-0023 票 C 起，本文件不再自建 ROOT / walker） */
+const h = require('./contractHarness');
+/** 读取层归一只有一份（ADR-0019）：这里取的就是 `utils/utsHarness.js#readText` 本体 */
+const { readText } = h;
+const ROOT = h.ROOT;
 const REPO_ROOT = path.join(ROOT, '..', '..');
 
 const RECRUIT_UTS = path.join(ROOT, 'api', 'recruit.uts');
@@ -413,45 +415,23 @@ describe('E. 403 分支在 request 出口里与 401 分开（不清态、不跳�
  *    真正的判据仍是 ④a（`npm run build:compile`）。写这条只为把同族错误拦在**源码评审**这一步。
  */
 describe('R6. components 下的相对 import 深度必须三层（④a 编译门抓获的形态锁）', () => {
-  const rel = (p) => path.relative(ROOT, p).replace(/\\/g, '/');
-
-  const walkUvue = (dir, acc = []) => {
-    let entries;
-    try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch {
-      return acc;
-    }
-    for (const e of entries) {
-      const full = path.join(dir, e.name);
-      if (e.isDirectory()) {
-        if (e.name === 'node_modules' || e.name === 'unpackage') continue;
-        walkUvue(full, acc);
-      } else if (e.name.endsWith('.uvue')) {
-        acc.push(full);
-      }
-    }
-    return acc;
-  };
-
   // 只扫 `pages/<x>/components/**` 这一层：这一层的相对根面恰好在项目根下 **三层** 处
-  const componentPages = walkUvue(path.join(ROOT, 'pages')).filter((p) =>
-    /\/pages\/[^/]+\/components\//.test(p.replace(/\\/g, '/')),
-  );
+  const componentPages = h.filesUnder('pages', /\.uvue$/)
+    .filter((p) => /\/pages\/[^/]+\/components\//.test(`/${p}`));
 
   test('R6a：该层至少扫到文件（fail-closed：扫不到 = 锁失效，不是通过）', () => {
     expect(componentPages.length).toBeGreaterThan(0);
     // 本条锁的当事人必须在这批里（搬家要改锁，不要删锁）
-    expect(componentPages.map(rel)).toContain('pages/recruiter/components/recruiter-filter-drawer.uvue');
+    expect(componentPages).toContain('pages/recruiter/components/recruiter-filter-drawer.uvue');
   });
 
   test('R6b：该层不得出现两层的 `../../api|utils|stores|types|constants` 相对 import', () => {
     const BAD = /from\s+'(\.\.\/\.\.\/(?:api|utils|stores|types|constants)\/)/;
     const offenders = [];
     for (const file of componentPages) {
-      const src = readText(file);
+      const src = readText(h.absOf(file));
       src.split('\n').forEach((line, i) => {
-        if (BAD.test(line)) offenders.push(`${rel(file)}:${i + 1}  ${line.trim()}`);
+        if (BAD.test(line)) offenders.push(`${file}:${i + 1}  ${line.trim()}`);
       });
     }
     // 失败时把「哪一行」打出来，别只给一个 false
