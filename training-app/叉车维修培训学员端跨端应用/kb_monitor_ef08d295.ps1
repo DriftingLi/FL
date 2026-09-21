@@ -1,7 +1,7 @@
 # KB Pipeline monitor (single-shot, scheduled task ef08d295, every 10 min)
 # 只读监控 pve-04 知识库流水线：解析→转换→嵌入→图注→重转换→重灌→完成
 # 不改服务器任何文件。输出写入 .kb-pipeline-monitor.log，供助手/用户查阅。
-# 2026-09-13：主树迁至 D:\FL（E:\FL 降为只读备胎）⇒ 绝对路径跟着改。**注意**：这脚本是遗留件——
+# 2026-09-13：主树迁至 D:\FL（原 E:\FL 备胎盘**现已废弃，E: 盘不存在**）⇒ 绝对路径跟着改。**注意**：这脚本是遗留件——
 # 计划任务 ef08d295 实测已不存在、E: 上也没有它写的日志 ⇒ 当前无人调用；要用需重新注册任务并指向本文件的新位置。
 $LogFile = 'D:\FL\training-app\叉车维修培训学员端跨端应用\.kb-pipeline-monitor.log'
 $FailFile = 'D:\FL\training-app\叉车维修培训学员端跨端应用\.kb-ssh-fail.count'
