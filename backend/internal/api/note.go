@@ -35,9 +35,12 @@ func NewNoteHandler(svc *service.NoteService) *NoteHandler { return &NoteHandler
 // 门禁与既有 /api/questions/:id/note **一致：只要求登录，不挂能力点**——笔记是纯用户私有
 // 数据，读写一律以 user_id 收口、越权按「不存在」处理；给同一资源的两条路径挂两套门才是
 // 真正的不一致（该观察记在 ADR-0055）。
+//
+// CredentialScoped 不是为了给笔记本身分区，而是为了装配题目读 scope（ADR-0062 决策 4）：
+// 列表回填的题干摘要属题目域，必须按当前证件过题库池。
 func RegisterNoteRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.NoteService) {
 	h := NewNoteHandler(svc)
-	g := rg.Group("/notes", middleware.JWTAuth(rd.Session))
+	g := rg.Group("/notes", middleware.JWTAuth(rd.Session), middleware.CredentialScoped(rd.CredentialScope))
 
 	// GET    /api/notes          我的笔记（分页 + scope 筛选）
 	g.GET("", h.List)
@@ -81,7 +84,8 @@ func (h *NoteHandler) List(c *gin.Context) {
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *listNotesReq) (*service.NotePageDTO, error) {
-			return h.svc.List(req.UserID, req.Scope, req.Page, req.PageSize)
+			// 题干摘要这一格属题目域读面：scope 在入口装配（ADR-0062 决策 4）。
+			return h.svc.List(req.UserID, req.Scope, req.Page, req.PageSize, studentQuestionScope(c))
 		},
 		ErrStatus: noteErrStatus,
 	}.Handle(c)

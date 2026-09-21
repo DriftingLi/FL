@@ -358,7 +358,7 @@ func TestListQuestions_Pagination(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		testutil.SeedQuestion(t, db, "single_choice", "题目前5", "A")
 	}
-	result, err := svc.ListQuestions(1, 2, "", "", "", nil, nil, "")
+	result, err := svc.ListQuestions(1, 2, "", "", "", nil, NewQuestionEditScope(nil), "")
 	if err != nil {
 		t.Fatalf("ListQuestions 失败: %v", err)
 	}
@@ -377,7 +377,7 @@ func TestListQuestions_FilterByType(t *testing.T) {
 	svc, db := newQuestionBankSvc(t)
 	testutil.SeedQuestion(t, db, "single_choice", "单选题", "A")
 	testutil.SeedQuestion(t, db, "true_false", "判断题", "true")
-	result, err := svc.ListQuestions(1, 20, "true_false", "", "", nil, nil, "")
+	result, err := svc.ListQuestions(1, 20, "true_false", "", "", nil, NewQuestionEditScope(nil), "")
 	if err != nil {
 		t.Fatalf("ListQuestions 失败: %v", err)
 	}
@@ -388,7 +388,7 @@ func TestListQuestions_FilterByType(t *testing.T) {
 
 func TestListQuestions_DefaultPage(t *testing.T) {
 	svc, _ := newQuestionBankSvc(t)
-	result, err := svc.ListQuestions(0, 0, "", "", "", nil, nil, "")
+	result, err := svc.ListQuestions(0, 0, "", "", "", nil, NewQuestionEditScope(nil), "")
 	if err != nil {
 		t.Fatalf("ListQuestions 失败: %v", err)
 	}

@@ -890,7 +890,7 @@ func TestQuestionBank_Tags(t *testing.T) {
 	}
 
 	// 按标签过滤
-	byTag, err := qsvc.ListQuestions(1, 20, "", "", "", ptrInt(tag2.ID), nil, "")
+	byTag, err := qsvc.ListQuestions(1, 20, "", "", "", ptrInt(tag2.ID), NewQuestionEditScope(nil), "")
 	if err != nil {
 		t.Fatalf("ListQuestions 失败: %v", err)
 	}

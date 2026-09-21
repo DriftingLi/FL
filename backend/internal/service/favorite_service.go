@@ -69,14 +69,18 @@ type favoriteTargetMeta struct {
 }
 
 // validateFavoriteTarget 校验收藏目标类型合法且存在/可见。
-// 课程要求已发布且挂载（挂载不变式与学员端列表口径一致）；题目要求已发布；
+// 课程要求已发布且挂载（挂载不变式与学员端列表口径一致）；题目要求**在题库池内**；
 // 精选内容要求已发布；**章节的可见性跟随所属课程**（已发布 + 挂载不变式，与搜索的章节分区同一
 // 谓词，见 #1132 —— course_mount_scope.go 的自述早已把「收藏目标校验」列为该谓词的消费方）；
 // 帖子仅要求存在。
 //
 // 读面（favoriteTargetsMeta / List）**保持快照口径不变**：写时校验、读到的是当时的快照，
 // 目标日后下架不会让收藏行消失（course 支的既有形状即如此）。
-func validateFavoriteTarget(db *gorm.DB, targetType string, targetID int) error {
+//
+// qScope（ADR-0062 决策 4）只在题目支生效：修复前这里手拼 `status = 'published'`，
+// 既不排源标记真题题也不分当前证件 ⇒ 收藏一道真题题后，经 GET /api/favorites 的题干快照
+// 就把「真题题只经真题卷出现」的口径破了。题目支的判据宿主从此在 question_pool_scope.go。
+func validateFavoriteTarget(db *gorm.DB, targetType string, targetID int, qScope QuestionReadScope) error {
 	switch targetType {
 	case FavoriteTargetCourse:
 		// 复用学员可见性单点的 by-id 形态（ADR-0058），不在此手拼谓词。
@@ -92,9 +96,8 @@ func validateFavoriteTarget(db *gorm.DB, targetType string, targetID int) error 
 			return errors.New("章节不存在或不可收藏")
 		}
 	case FavoriteTargetQuestion:
-		var cnt int64
-		db.Model(&model.Question{}).Where("id = ? AND status = ?", targetID, "published").Count(&cnt)
-		if cnt == 0 {
+		// 题目支：题库池 by-id 判定（published + 排源标记真题题 + 当前证件），单点复用不手拼。
+		if !qScope.VisibleByID(db, targetID) {
 			return errors.New("题目不存在或不可收藏")
 		}
 	case FavoriteTargetFeatured:
@@ -158,12 +161,13 @@ func favoriteTargetsMeta(db *gorm.DB, targetType string, ids []int) map[int]favo
 }
 
 // Add 收藏（幂等：已收藏直接返回既有条目）。
-func (s *FavoriteService) Add(userID int, targetType string, targetID int) (*FavoriteDTO, error) {
+// qScope 由入口装配（ADR-0062 决策 4）：只有题目支消费它，其余目标类型不读该参数。
+func (s *FavoriteService) Add(userID int, targetType string, targetID int, qScope QuestionReadScope) (*FavoriteDTO, error) {
 	targetType = strings.TrimSpace(targetType)
 	if targetID <= 0 {
 		return nil, errors.New("收藏目标 ID 无效")
 	}
-	if err := validateFavoriteTarget(s.db, targetType, targetID); err != nil {
+	if err := validateFavoriteTarget(s.db, targetType, targetID, qScope); err != nil {
 		return nil, err
 	}
 	var existing model.Favorite

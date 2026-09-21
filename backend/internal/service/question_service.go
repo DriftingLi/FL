@@ -415,14 +415,12 @@ func (s *QuestionBankService) CreateQuestion(in QuestionCreateInput, createdBy *
 	return d, nil
 }
 
-// GetQuestion 查询题目详情。
 // GetQuestionForStudent 学员侧按 id 取题（ADR-0049「题库池是可见性口径，覆盖每条读路径」）：
-// 过池口径（published + 排源标记真题题 + 当前证件）；不满足一律 ErrQuestionNotFound ——
+// 池口径由入参 scope 承载（ADR-0062 决策 4 的必传形态）；不满足一律 ErrQuestionNotFound ——
 // 404 而不是 403，避免把「这题存在但不能看」变成存在性泄露。
-func (s *QuestionBankService) GetQuestionForStudent(id int, credentialID *int) (QuestionDTO, error) {
+func (s *QuestionBankService) GetQuestionForStudent(id int, scope QuestionReadScope) (QuestionDTO, error) {
 	var q model.Question
-	err := poolFilter(s.db.Model(&model.Question{}), sampleQuestionsOpts{cred: credentialID}).
-		Where("id = ?", id).First(&q).Error
+	err := scope.Apply(s.db.Model(&model.Question{})).Where("id = ?", id).First(&q).Error
 	if err != nil {
 		return QuestionDTO{}, ErrQuestionNotFound
 	}
@@ -650,8 +648,11 @@ type QuestionRejectResultDTO struct {
 	RejectedCount int `json:"rejected_count"`
 }
 
-// ListQuestions 题目列表分页查询（可按标签 tagID 过滤，结果附带标签列表）。
-func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, status, keyword string, tagID *int, credentialID *int, sortBy string) (*QuestionPageDTO, error) {
+// ListQuestions 题目列表**编辑面**（题库作者 / 审核者）：draft / pending 都在射程内、
+// 不排源标记真题题，status 由调用方按需筛——这些正是审核队列与题目管理页的本职。
+// 编辑面 scope 必传（ADR-0062 决策 4）：证件轴是筛选而非可见性，形态与学员面不同名、不可互换。
+// 学员侧列表走 ListPoolQuestions（同一入口按能力分流，见 api/question_bank.go）。
+func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, status, keyword string, tagID *int, scope QuestionEditScope, sortBy string) (*QuestionPageDTO, error) {
 	// 排序口径（#412）：缺省保持现状「最新提交优先」（created_at DESC, id ASC）；
 	// 讲师端显式传 id_asc 请求按 ID 升序，翻页时 ID 单调推进、不再呈锯齿跳回。
 	// #1096：排序位由变参改显式命名参数（空串 = 缺省口径）。
@@ -672,12 +673,44 @@ func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, st
 		if tagID != nil {
 			q = q.Where("id IN (SELECT question_id FROM question_tag_relation WHERE tag_id = ?)", *tagID)
 		}
-		q = EntityOwnedBy(q, "credential_id", credentialID)
+		return scope.ApplyListFilter(q)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s.questionPage(list, page, pageSize, total), nil
+}
+
+// ListPoolQuestions 题目列表**学员面**（ADR-0062 决策 4）：池口径由 scope 承载，
+// 因此这里既没有 status 入参（池的「已发布」不在入参里可被绕开），也不接受裸证件。
+// 出口 DTO 形态与按 id 直取的学员面一致（含答案/解析——池内的题本就可以作答并看到解析），
+// 差异只在行集：draft / pending / 源标记真题题 / 非当前证件一律不出现在结果里。
+func (s *QuestionBankService) ListPoolQuestions(page, pageSize int, qType, keyword string, tagID *int, scope QuestionReadScope, sortBy string) (*QuestionPageDTO, error) {
+	order := "created_at DESC, id ASC"
+	if sortBy == "id_asc" {
+		order = "id ASC"
+	}
+	list, total, page, pageSize, err := paging.Query[model.Question](s.db, page, pageSize, 20, order, func(q *gorm.DB) *gorm.DB {
+		q = scope.Apply(q)
+		if qType != "" {
+			q = q.Where("type = ?", qType)
+		}
+		if keyword != "" {
+			q = q.Where("content LIKE ?", "%"+keyword+"%")
+		}
+		if tagID != nil {
+			q = q.Where("id IN (SELECT question_id FROM question_tag_relation WHERE tag_id = ?)", *tagID)
+		}
 		return q
 	})
 	if err != nil {
 		return nil, err
 	}
+	return s.questionPage(list, page, pageSize, total), nil
+}
+
+// questionPage 题目分页信封装配（两条列表路径共用：DTO 出口与标签批量附加只有一处实现）。
+func (s *QuestionBankService) questionPage(list []model.Question, page, pageSize int, total int64) *QuestionPageDTO {
 	out := make([]QuestionDTO, 0, len(list))
 	ids := make([]int, 0, len(list))
 	for i := range list {
@@ -690,7 +723,7 @@ func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, st
 		PageSize:  pageSize,
 		Questions: out,
 		Total:     total,
-	}, nil
+	}
 }
 
 // loadTagsByQuestion 加载单题标签列表。
