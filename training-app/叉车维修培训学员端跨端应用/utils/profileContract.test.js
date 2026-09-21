@@ -7,15 +7,12 @@
  * 本票域 api 收紧口径：仅「有 DTO 映射」的函数经 *Mapped 出口家族；
  * 返回 UTSJSONObject/void 的原样透传函数不硬套 identity map（避免无意义中间层）。
  */
-const fs = require('fs');
-const path = require('path');
-
-/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
-const { readText } = require('./utsHarness');
-const ROOT = path.join(__dirname, '..');
-const read = (rel) => readText(path.join(ROOT, rel));
+/** harness：读取层归一 + 模块归属面（ADR-0023 票 C 起，本文件不再自建 ROOT / read / walker） */
+const h = require('./contractHarness');
+const ROOT = h.ROOT;
+const read = h.read;
 /** 豁免名单从单点读（ADR-0023 ⑧）：不再解析守护脚本源码文本取常量 */
-const { allowlistPaths } = require('./contractHarness');
+const allowlistPaths = h.allowlistPaths;
 
 /** 提取 export function 函数体（从声明到顶层 "\n}"，先例 quickLoginContract） */
 function fnBodyOf(fileSrc, name) {
@@ -125,23 +122,9 @@ describe('raw .then 收紧完成度（本票四域 DTO 函数零残留）', () =
  * 「零直发请求」是 #641 模块 AC 的本模块锁；不新增全工程守护规则
  * （ADR-0007 明示该守护留待 #654 收尾票立项）。 */
 
-/** pages/profile/** 全部源文件（.uvue/.uts，排除测试） */
-function profileSourceFiles() {
-  const out = [];
-  const walk = (d) => {
-    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
-      const p = path.join(d, e.name);
-      if (e.isDirectory()) { walk(p); continue; }
-      if (/\.(uvue|uts)$/.test(e.name) && !/\.test\./.test(e.name)) out.push(p);
-    }
-  };
-  walk(path.join(ROOT, 'pages/profile'));
-  return out;
-}
-
-describe('600 行软预算机检（模块全量：pages/profile/** 全部源文件）', () => {
+describe('页面预算落袋锁（手术目标本身也断言，防「只挪注释」的假达标；模块全量预算 / 深度已由声明面执法，#1219）', () => {
   it('走查范围非空（防路径断链导致空集合假绿：四页 + 8 组件 + flows + 其余页 ≥14）', () => {
-    expect(profileSourceFiles().length).toBeGreaterThanOrEqual(14);
+    expect(h.sourceFilesIn('pages/profile').length).toBeGreaterThanOrEqual(14);
   });
 
   it('四超预算文件全部预算内复检（错题本 1137 / 个人信息 1011 / 个人动态 722 / 主页 687 的落袋锁）', () => {
@@ -153,21 +136,6 @@ describe('600 行软预算机检（模块全量：pages/profile/** 全部源文�
     ].map((rel) => ({ file: rel, lines: read(rel).split('\n').length }))
       .filter((x) => x.lines > 600);
     expect(over).toEqual([]);
-  });
-
-  it('模块全部源文件 ≤600 行（含 components/**，达标后锁住防回潮，先例 mallPilot）', () => {
-    const over = profileSourceFiles().map((f) => ({
-      file: path.relative(ROOT, f),
-      lines: readText(f).split('\n').length,
-    })).filter((x) => x.lines > 600);
-    expect(over).toEqual([]);
-  });
-
-  it('模块目录 ≤2 层（pages/profile/<页 或 <子目录>/<文件>）', () => {
-    const deep = profileSourceFiles()
-      .filter((f) => path.relative(path.join(ROOT, 'pages/profile'), f).split(/[\\/]/).length > 2)
-      .map((f) => path.relative(ROOT, f));
-    expect(deep).toEqual([]);
   });
 });
 
@@ -194,11 +162,11 @@ describe('组件接线汇总（T03 拆出物 8 组件 + 1 composable：显式 im
   });
 
   it('拆出物零孤儿：components/ 与 composables/ 每个文件都被模块内源文件 import（新增拆出物必须接线）', () => {
-    const pageSrcs = profileSourceFiles()
-      .filter((f) => !f.includes(`${path.sep}components${path.sep}`) && !f.includes(`${path.sep}composables${path.sep}`))
-      .map((f) => readText(f));
-    const orphanOf = (dir, prefix) => fs.readdirSync(path.join(ROOT, 'pages/profile', dir))
-      .filter((n) => /\.(uvue|uts)$/.test(n))
+    const pageSrcs = h.sourceFilesIn('pages/profile')
+      .filter((f) => !f.includes('/components/') && !f.includes('/composables/'))
+      .map(read);
+    const orphanOf = (dir, prefix) => h.sourceFilesIn(`pages/profile/${dir}`)
+      .map((rel) => rel.split('/').pop())
       .filter((n) => !pageSrcs.some((s) => s.includes(`${prefix}/${n}`)))
       .sort();
     const orphans = [
@@ -212,9 +180,8 @@ describe('组件接线汇总（T03 拆出物 8 组件 + 1 composable：显式 im
 describe('页面层零直发请求（网络一律经域 api 函数，#641 收紧口径）', () => {
   it('pages/profile/** 无源文件 import api/request 或裸调 uni.request', () => {
     const hits = [];
-    for (const f of profileSourceFiles()) {
-      const src = readText(f);
-      const rel = path.relative(ROOT, f);
+    for (const rel of h.sourceFilesIn('pages/profile')) {
+      const src = read(rel);
       if (/from\s*'[^']*api\/request(\.uts)?'/.test(src)) hits.push(`${rel}: import api/request`);
       if (/uni\.request\s*\(/.test(src)) hits.push(`${rel}: uni.request 裸调`);
       if (/uni\.(upload|download)File\s*\(/.test(src)) hits.push(`${rel}: uni.uploadFile/downloadFile 裸调`);

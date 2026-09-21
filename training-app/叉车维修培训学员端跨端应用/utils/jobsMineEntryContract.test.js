@@ -13,13 +13,10 @@
  * 零后端改动）；人口学 9 项不做（后端无字段）。Lv（学习时长推导）与收藏统计（已接
  * 真实 API、target_type 就绪前恒 0）是 resume 页既有功能，保留。
  */
-const fs = require('fs');
-const path = require('path');
-
-/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
-const { readText } = require('./utsHarness');
-const ROOT = path.join(__dirname, '..');
-const read = (rel) => readText(path.join(ROOT, rel));
+/** harness：读取层归一 + 模块归属面（ADR-0023 票 C 起，本文件不再自建 ROOT / read） */
+const h = require('./contractHarness');
+const ROOT = h.ROOT;
+const read = h.read;
 
 describe('就业在线导航链契约（#705 招聘→我的，单页合并版）', () => {
   const list = read('pages/jobs/job-list.uvue');
@@ -41,7 +38,7 @@ describe('就业在线导航链契约（#705 招聘→我的，单页合并版�
   });
 
   it('中间页 jobs-mine 已删除（文件与路由都不存在，两页合一）', () => {
-    expect(fs.existsSync(path.join(ROOT, 'pages/jobs/jobs-mine.uvue'))).toBe(false);
+    expect(h.exists('pages/jobs/jobs-mine.uvue')).toBe(false);
     expect(read('pages.json')).not.toContain('pages/jobs/jobs-mine');
   });
 

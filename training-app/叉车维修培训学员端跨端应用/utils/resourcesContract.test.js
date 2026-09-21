@@ -19,13 +19,10 @@
  * 5) 归一：forum-create 默认 discussion；URL scope=resource 进资源 tab，其余非法/历史归一；
  *    编辑回填 normalizeCategory（帖子永不回填 resource）
  */
-const fs = require('fs');
-const path = require('path');
-
-/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
-const { readText } = require('./utsHarness');
-const ROOT = path.join(__dirname, '..');
-const read = (rel) => readText(path.join(ROOT, rel));
+/** harness：读取层归一 + 模块归属面（ADR-0023 票 C 起，本文件不再自建 ROOT / read / walker） */
+const h = require('./contractHarness');
+const ROOT = h.ROOT;
+const read = h.read;
 
 const stripComments = (src) =>
   src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/[^\n]*/g, '$1');
@@ -112,17 +109,11 @@ describe('forum 资源入口改跳契约（#760：统一进 forum-create 资源 
   });
   it('已删页 upload-resource 全域零引用（源码）', () => {
     const offenders = [];
-    const walk = (dir) => {
-      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-        const p = path.join(dir, e.name);
-        if (e.isDirectory()) { walk(p); continue; }
-        if (!/\.(uts|uvue)$/.test(e.name) || /\.test\./.test(e.name)) continue;
-        if (readText(p).includes('/pages/resources/upload-resource')) {
-          offenders.push(path.relative(ROOT, p));
-        }
+    for (const d of ['api', 'pages', 'composables', 'utils', 'stores']) {
+      for (const rel of h.sourceFilesIn(d)) {
+        if (read(rel).includes('/pages/resources/upload-resource')) offenders.push(rel);
       }
-    };
-    for (const d of ['api', 'pages', 'composables', 'utils', 'stores']) walk(path.join(ROOT, d));
+    }
     expect(offenders).toEqual([]);
   });
   it('forum-create 资源 tab 绝不把 resource 发进发帖接口（按钮隐藏 + onSubmit 早退双守卫）', () => {
