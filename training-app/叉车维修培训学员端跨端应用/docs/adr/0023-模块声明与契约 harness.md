@@ -154,6 +154,40 @@ B 组是**成对取证的判别力**（13 条注入各自「改坏必红 + 真�
 `fileLines` / `moduleDepth` / `orphanExtracts` / `deadImports` / `allowlistPaths` / `reconcile()`；
 C 要删的 `path.join(__dirname`、自建 `read()`、自建 walk、写死 600、解析 allowlist 文本五类复写都有对应出口。
 
+### 票 D —— 全表对账：每个源文件都有归属（#1220，2026-09-21）
+
+**本票要治的是 A 留下的那条缝**：A 的对账只覆盖**模块归属面**（`pages/<键>/**` + 显式登记的目录外的家），
+于是**没进任何表的目录外文件是隐形的** —— `api/forum.uts` 当年正是这样躺在自称达标的 forum 模块里。
+A 把**已知**的域 api 逐个登记了，但「下一次有人加一个目录外文件」仍然不会红。
+
+**做法**：`utils/modules.js` 新增 `INFRA`（`dirs` 14 个 + `files` 6 个 + `oversized`），
+`utils/contractHarness.js` 新增 `infraFiles()` / `infraFacts(decls, infra)` 并把五面并入 `reconcile(decls, infra)`：
+`unregisteredSourceFiles`（**树上没归属的源文件**）· `infraPhantomDirs` / `infraPhantomFiles`（幽灵登记）·
+`infraOverlaps`（既归模块又登记为基础设施）· `infraOversizedDrift`（超预算的跨界文件**双向**对账）。
+判据：**树上的每个源文件，要么归某个模块、要么登记为基础设施，没有第三种** —— 实测 **218 个源文件 = 模块面 157 + 基础设施 61**。
+
+**登记不执法**：基础设施的行数**不进**任何模块的预算面（ADR-0023 ① 的边界：它们的预算归各自独立的票）。
+唯一一条超预算的跨界文件是 **`api/request.uts`（611 行）**，由 `INFRA.oversized` 显式登记、**本票不拆**
+（同模块 `pending` 的口径）—— 它从「没人看得见」变成了「表上一行」。
+
+**顺带的两处登记更正**（A 的归属规则当时只施加于域 api，漏了这两个）：`api/faq.uts`（帮助中心）与
+`api/note.uts`（笔记）的唯一消费方都是 `profile`，按归属规则②**归 profile**（不再算基础设施）。
+
+**规则适用面的澄清（写进 `modules.js` 文件头）**：归属规则①②③**只管域 api 与模块私有拆出物**；
+`utils/**` / `types/**` / `stores/**` / `constants/**` / `config/**` / `components/app-*` / `uni_modules/**` /
+`App.uvue` / `main.uts` 按**共享件**定位 —— 即使某个文件只有一个模块消费（例 `utils/forumDisplay.uts` 只被
+forum 用）也不归它，而是登记为基础设施（模块契约里的「展示纯函数唯一实现」断言正是把它们当共用的唯一实现面）。
+
+**「未达标」读法的延续**：票 A 把 ②⑥ 的「未达标模块」读作**预算未达标**（而不是「没有模块契约」），
+故 10 个无契约模块里已在预算内的 6 个被直接锁进 600、另 4 个（ai-assistant / forgot-password / login / register）
+登记 `pending`。本票维持该读法：**不**为这 6 个模块补写 `pending`（那等于白送一条不执法），并在票面记录了差异。
+
+**落锁**：`utils/modulesDeclarationContract.test.js` 新增 **E1–E11**（全表覆盖面非空 / 零隐形文件 / 幽灵与重叠 /
+超预算双向 / 6 条注入各自成对取证 / 报错信息指出文件）。**套件数不变**（只加用例、不加文件）。
+
+**门证据（本 PR）**：③ `112 suites / 2097 tests` 全绿（基线 112 / 2086，增量即 E 组 11 例）；
+分类计数 **112 / 17 行为 / 95 接线** 与改动前**逐项一致**。
+
 ## 关联
 
 - **0007-渐进式重构手册** —— 600 软预算、契约测试纪律、「禁删 / 弱化断言」、UI 冻结；本决策是它的**机制化**（把各自复写的事实收成一份声明）。0007 §#914 已对门脚本家族做过同一动作（`New-GatePlan` → `-DryRun` 断言计划 JSON），本决策把该手法扩到模块面。
