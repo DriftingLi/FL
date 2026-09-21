@@ -6,6 +6,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"mime/multipart"
 	"net/http"
 	"time"
@@ -67,7 +68,8 @@ func (s *ForumImageService) Upload(ctx context.Context, fileHeader *multipart.Fi
 // CleanupOrphans 清理论坛悬空图片（薄配置壳，算法单点见 orphan_sweep.go / ADR-0027 C2）：
 // ListWithInfo(images/forum/) 与全量引用集差集，仅删存储侧 LastModified 超过
 // ForumImageOrphanTTL 且未被任何主题/回复引用的文件。
-// 返回清理的文件数（尽力而为，存储错误不中断）；ctx 取消语义贯穿到存储调用。
+// 返回清理的文件数（存储错误不中断）；引用集查不动或为空时整轮不清理（ADR-0062 票5）；
+// ctx 取消语义贯穿到存储调用。
 func (s *ForumImageService) CleanupOrphans(ctx context.Context) int {
 	if s.fileSvc == nil {
 		return 0
@@ -86,31 +88,35 @@ func (s *ForumImageService) CleanupOrphans(ctx context.Context) int {
 }
 
 // collectReferencedImages 收集全部主题与回复引用的图片 key 集合（归一化为 images/forum/...）。
-func (s *ForumImageService) collectReferencedImages() map[string]bool {
+// 任一半查不动即返回 error：引用集不完整时无从判断谁还在被引用，sweep 据此整轮放弃
+// （ADR-0062 票5——「查不动」不得被读成「没人引用」）。
+func (s *ForumImageService) collectReferencedImages() (map[string]bool, error) {
 	ref := map[string]bool{}
 	var rawList []string
-	if err := s.db.Model(&model.ForumTopic{}).Pluck("images", &rawList).Error; err == nil {
-		for _, raw := range rawList {
-			for _, u := range parseImageURLs(raw) {
-				if key := AttachmentKey(u, ForumImageDirPrefix); key != "" {
-					ref[key] = true
-				} else if u != "" {
-					ref[u] = true
-				}
+	if err := s.db.Model(&model.ForumTopic{}).Pluck("images", &rawList).Error; err != nil {
+		return nil, fmt.Errorf("收集主题图片引用失败: %w", err)
+	}
+	for _, raw := range rawList {
+		for _, u := range parseImageURLs(raw) {
+			if key := AttachmentKey(u, ForumImageDirPrefix); key != "" {
+				ref[key] = true
+			} else if u != "" {
+				ref[u] = true
 			}
 		}
 	}
 	rawList = rawList[:0]
-	if err := s.db.Model(&model.ForumReply{}).Pluck("images", &rawList).Error; err == nil {
-		for _, raw := range rawList {
-			for _, u := range parseImageURLs(raw) {
-				if key := AttachmentKey(u, ForumImageDirPrefix); key != "" {
-					ref[key] = true
-				} else if u != "" {
-					ref[u] = true
-				}
+	if err := s.db.Model(&model.ForumReply{}).Pluck("images", &rawList).Error; err != nil {
+		return nil, fmt.Errorf("收集回复图片引用失败: %w", err)
+	}
+	for _, raw := range rawList {
+		for _, u := range parseImageURLs(raw) {
+			if key := AttachmentKey(u, ForumImageDirPrefix); key != "" {
+				ref[key] = true
+			} else if u != "" {
+				ref[u] = true
 			}
 		}
 	}
-	return ref
+	return ref, nil
 }
