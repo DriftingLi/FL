@@ -933,3 +933,120 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
     expect(s).toContain('Get-DoctorExitCode');
   });
 });
+
+/**
+ * C20（#1210）：② 门的**产物合法性**判据面。
+ *
+ * 票面病根：旧实现用**正则**从 `project.config.json` 抠 appid ⇒ **非法 JSON 也能通过 appid 校验**；
+ * 这类坏产物的症状（白屏 / `pageStack` 永不应答 / IDE 日志反复 `routeTo appLaunch timeout`）在门上
+ * 表现为**看起来像环境问题**的 `page-stack-not-answering`，把真正的病根藏起来。
+ *
+ * 本节的成对取证：
+ *   · 必不红 = 合法产物夹具 ⇒ `ok=true` 且 appid 由**解析后取值**；
+ *   · 必红 = 三条**各自定向**的坏产物（非法 JSON / 缺必需文件 / 缺页 `.js`）⇒ 各自命中对应的 `stage`。
+ *
+ * ⚠️ 判据库是**真执行**的（`pwsh` 跑 `scripts/lib/mp-weixin-product.ps1`），不是断言源码文本 ——
+ * 文本断言在「判据被摘掉、只留一句字面量」时照样绿。接线面（门脚本真的调它了 / 旧正则真的没了）
+ * 另由下面两条 wiring 用例守。
+ */
+describe('C20：产物合法性判据（#1210）', () => {
+  const LIB_REL = path.join('scripts', 'lib', 'mp-weixin-product.ps1');
+
+  /** 跑真判据库取报告（fail-closed：拿不到 pwsh 或输出不可解析即抛） */
+  function runProductReport(dist) {
+    const lib = path.join(ROOT, LIB_REL);
+    const cmd = `. '${lib}'; (Get-MpWeixinProductReport -Dist '${dist}') | ConvertTo-Json -Compress`;
+    const args = ['-NoProfile', '-NonInteractive'];
+    if (process.platform === 'win32') args.push('-ExecutionPolicy', 'Bypass');
+    args.push('-Command', cmd);
+    let stdout = '';
+    try {
+      stdout = execFileSync(powershellExe(), args, {
+        encoding: 'utf8', timeout: 120000, windowsHide: true, maxBuffer: 4 * 1024 * 1024
+      });
+    } catch (e) {
+      throw new Error(`产物判据库执行失败：${cmd}\n exit=${e.status}\n stdout=${e.stdout}\n stderr=${e.stderr}`);
+    }
+    const line = String(stdout).split(/\r?\n/).filter((l) => l.trim().startsWith('{')).pop();
+    if (!line) throw new Error(`产物判据库没有输出 JSON：${stdout}`);
+    return JSON.parse(line.trim());
+  }
+
+  /** 造一份产物夹具：{ 坏在哪儿 } ⇒ 临时目录 */
+  function makeProduct(mutate) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mp-weixin-product-'));
+    fs.writeFileSync(path.join(dir, 'project.config.json'), JSON.stringify({ appid: 'wxTESTAPPID' }));
+    fs.writeFileSync(path.join(dir, 'app.json'), JSON.stringify({ pages: ['pages/index/index'] }));
+    fs.writeFileSync(path.join(dir, 'app.js'), 'App({})');
+    fs.writeFileSync(path.join(dir, 'app.wxss'), '/* wxss */');
+    fs.mkdirSync(path.join(dir, 'pages', 'index'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'pages', 'index', 'index.js'), 'Page({})');
+    if (mutate) mutate(dir);
+    return dir;
+  }
+
+  const dirs = [];
+  const product = (mutate) => { const d = makeProduct(mutate); dirs.push(d); return d; };
+  afterAll(() => { dirs.forEach((d) => { try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) {} }); });
+
+  it('C20a（必不红）：合法产物 ⇒ ok=true，appid 由解析后取值（不是从坏文件里抠）', () => {
+    const r = runProductReport(product(null));
+    expect(r.ok).toBe(true);
+    expect(r.stage).toBe('product-ok');
+    expect(r.appid).toBe('wxTESTAPPID');
+    expect(r.pages).toBe(1);
+  });
+
+  it('C20b（必红①）：project.config.json 非法 JSON ⇒ fail-closed，且带出**位置原文**', () => {
+    // 夹具即票面形态：根对象正常闭合，**后面多出一段游离片段**
+    const dir = product((d) => {
+      fs.writeFileSync(path.join(d, 'project.config.json'), '{\n  "appid": "wxTESTAPPID"\n}\n  "miniprogram": {\n    "current": -1\n  }\n');
+    });
+    const r = runProductReport(dir);
+    expect(r.ok).toBe(false);
+    expect(r.stage).toBe('product-json');
+    expect(r.detail).toContain('project.config.json');
+    // 位置原文（System.Text.Json 的 `line N, position M`）必须原样带出 —— 这是「让人一眼看到病根」那条
+    expect(r.detail).toMatch(/line \d+/);
+    expect(r.detail).toMatch(/position \d+/);
+  });
+
+  it('C20c（必红②）：缺必需文件（app.wxss）⇒ 点名缺了哪个', () => {
+    const dir = product((d) => fs.rmSync(path.join(d, 'app.wxss')));
+    const r = runProductReport(dir);
+    expect(r.ok).toBe(false);
+    expect(r.stage).toBe('product-missing');
+    expect(r.detail).toContain('app.wxss');
+  });
+
+  it('C20d（必红③）：app.json.pages 声明的页面缺 .js ⇒ 点名缺哪个 .js', () => {
+    const dir = product((d) => {
+      fs.writeFileSync(path.join(d, 'app.json'), JSON.stringify({ pages: ['pages/index/index', 'pages/login/login'] }));
+    });
+    const r = runProductReport(dir);
+    expect(r.ok).toBe(false);
+    expect(r.stage).toBe('product-pages');
+    expect(r.detail).toContain('pages/login/login.js');
+  });
+
+  it('C20-wiring①：门脚本真的调判据库（dot-source + 调用），且旧正则抠 appid 已删', () => {
+    const s = readSource(SCRIPT_REL);
+    expect(s).toContain(`'lib\\mp-weixin-product.ps1'`);
+    expect(s).toContain('Get-MpWeixinProductReport -Dist $dist');
+    // 旧写法（正则从产物里抠 appid）不得复活；判据只在**代码行**上判，避免注释引例自命中
+    const code = stripCommentLines(s).join('\n');
+    expect(code).not.toContain('$projConfig = Join-Path $dist');
+    expect(code).not.toContain('[regex]::Match((Get-Content -LiteralPath $projConfig');
+    // 产物坏了 ⇒ exit 1（不是 exit 2：与「环境不可用」分开）
+    const idx = code.indexOf('if (-not $product.ok) {');
+    expect(idx).toBeGreaterThan(-1);
+    const block = code.slice(idx, code.indexOf('\n    }', idx));
+    expect(block).toContain('exit 1');
+    expect(block).not.toContain('exit 2');
+  });
+
+  it('C20-wiring②：ADR ② 段与 PR 模板都写明了新判据（决策回写纪律）', () => {
+    expect(readSource(ADR_REL)).toContain('产物合法性');
+    expect(readSource(PR_TEMPLATE_REL)).toContain('产物合法性');
+  });
+});

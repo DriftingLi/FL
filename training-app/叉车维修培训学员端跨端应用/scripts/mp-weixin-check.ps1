@@ -94,7 +94,9 @@
     须以全访问权限执行（同 ④a）。开发者工具需已登录（`cli.bat islogin` → `{"login":true}`），
     登录态过期时需人补扫一次码。
 
-    退出码：0 = ② 通过；1 = 门未过（console error / exception / 页面未打开 / 截图缺失）；2 = 环境不可用（缺 CLI / 连不上 / 超时）。
+    退出码：0 = ② 通过；1 = 门未过（**产物不合法**（#1210）/ console error / exception / 页面未打开 / 截图缺失）；
+    2 = 环境不可用（缺 CLI / 连不上 / 超时）。**产物坏了判 1、不判 2** —— 判 2 等于告诉调用方「重跑即可」，
+    而重跑会得到同一份坏产物（判据见 `scripts/lib/mp-weixin-product.ps1` 与 ADR-0008 的「② 产物合法性判据」段）。
 
 .PARAMETER Project
     项目根目录。缺省为本脚本上一级目录（scripts/ 位于项目根下）。
@@ -1017,14 +1019,29 @@ try {
         }
     }
 
-    # 3) 产物 appid 前置断言 —— 实测：产物 appid 一律取自 manifest.json 的 mp-weixin.appid；
-    #    manifest 缺该项时落成 touristappid（游客 appid）。CLI 的 --appid **不改**产物。
-    $productAppId = ''
-    $projConfig = Join-Path $dist 'project.config.json'
-    if (Test-Path -LiteralPath $projConfig) {
-        $m = [regex]::Match((Get-Content -LiteralPath $projConfig -Raw), '"appid"\s*:\s*"([^"]*)"')
-        if ($m.Success) { $productAppId = $m.Groups[1].Value }
+    # 3) **产物合法性 + appid 前置断言（#1210）** —— 判据面单点真源在 `scripts/lib/mp-weixin-product.ps1`。
+    #    票面病根：旧实现用**正则**从 `project.config.json` 抠 appid ⇒ **非法 JSON 也能通过 appid 校验**；
+    #    而这类坏产物会让开发者工具白屏 / `pageStack` 永不应答 / IDE 日志反复 `routeTo appLaunch timeout`，
+    #    门最终只报一个**看起来像环境问题**的 `page-stack-not-answering`，把真正的病根藏起来。
+    #    判据：必需文件齐（project.config.json / app.json / app.js / app.wxss）+ 两份 JSON 可解析
+    #    （非法即打印**位置原文**）+ appid 由**解析后取值** + `app.json.pages` 每页有 `<page>.js`。
+    #    失败 = **产物坏了 ⇒ 门未过（exit 1）**，与「环境不可用（exit 2）」严格分开。
+    . (Join-Path $PSScriptRoot 'lib\mp-weixin-product.ps1')
+    $product = Get-MpWeixinProductReport -Dist $dist
+    Write-Log "产物合法性 = $($product.detail)"
+    Write-Host "产物合法性 = $($product.detail)"
+    if (-not $product.ok) {
+        Write-Host "[error] 产物不合法（stage=$($product.stage)）：$($product.detail)" -ForegroundColor Red
+        Write-Host '        这是**产物坏了**（构建被中断 / 写盘不完整），不是环境不可用 ⇒ 判门未过（exit 1）。' -ForegroundColor Red
+        Write-Host '        处置：先 `Remove-Item -Recurse -Force <产物目录>` 干净重建（`npm run build:mp-weixin-check`），再重跑本门。' -ForegroundColor Red
+        Write-Host '        排查提示：产物坏掉时开发者工具常见白屏 + `routeTo appLaunch timeout`，那不是「环境/锁/端口」问题。' -ForegroundColor Red
+        Write-Log "MP_WEIXIN_RESULT errors=1 stage=$($product.stage) detail=$($product.detail)"
+        exit 1
     }
+
+    # 3.5) appid 断言 —— 实测：产物 appid 一律取自 manifest.json 的 mp-weixin.appid；
+    #      manifest 缺该项时落成 touristappid（游客 appid）。CLI 的 --appid **不改**产物。
+    $productAppId = [string]$product.appid
     Write-Log "产物 appid = '$productAppId'（期望 '$AppId'）"
     Write-Host "产物 appid = $productAppId（期望 $AppId）"
     if ($AppId -and $productAppId -ne $AppId) {
