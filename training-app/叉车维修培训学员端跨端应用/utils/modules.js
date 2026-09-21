@@ -256,6 +256,7 @@ const MODULES = {
     files: [
       'api/checkin.uts',
       'api/forum.uts',
+      'api/forumDto.uts',
       'composables/useReplyComposer.uts',
       'composables/useReport.uts',
       'composables/useResourcePoints.uts',
@@ -283,10 +284,11 @@ const MODULES = {
     extractDirs: ['pages/forum/components'],
     crossModuleConsumers: ['profile'],
     /**
-     * 超预算：`api/forum.uts` 654（唯一一处**活违例**，ADR-0023 的实证；票 B 收口到 ≤600 后本行改 `BUDGET`）。
-     * 注意 `pages/forum/**` 自身已全部达标（最大 583）—— 这正是「预算不覆盖域 api」的失效形态。
+     * T18 拆分（#1218）后**达标并上线执法**：请求形态 `api/forum.uts` 413 行、响应构造
+     * `api/forumDto.uts` 260 行（拆前是同一个 654 行的文件 —— 那是 ADR-0023 的活违例实证：
+     * `pages/forum/**` 自身早已达标（最大 583），但那时预算不覆盖域 api）。
      */
-    budget: 'pending',
+    budget: BUDGET,
     budgetOverrides: {},
     /** 规则 H 的存量豁免；归属理由：`pages/forum/check-in.uvue` 与它同属本模块（另一个消费者是 profile） */
     allowlistOwned: ['api/checkin.uts'],

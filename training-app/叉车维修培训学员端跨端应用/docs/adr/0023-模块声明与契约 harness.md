@@ -109,10 +109,10 @@
 | `pending` 模块 | 超预算文件（总行数） |
 | --- | --- |
 | ai-assistant | ai-assistant.uvue 839 · api/aiAssistant.uts 667 · ai-feature.uvue 629 · ai-settings.uvue 621 |
-| forum | **api/forum.uts 654**（票 B 的唯一活违例；页面侧最大 583 已达标） |
+| forum | **api/forum.uts 654**（票 B 的唯一活违例；页面侧最大 583 已达标）→ **票 B 已收口（见下）** |
 | login | login.uvue 977 |
 | register | register.uvue 723 |
-| resume | resume-edit.uvue 923（另一会话的 resume 手术会把它降到预算内） |
+| resume | resume-edit.uvue 923（#1205 的 resume 手术已把它降到 426，同期把本行翻成 `BUDGET`） |
 | recruiter | resume-detail.uvue 702 · api/recruit.uts 675 |
 | search | search.uvue 702 |
 | forgot-password | forgot-password.uvue 676 |
@@ -237,6 +237,39 @@ forum 用）也不归它，而是登记为基础设施（模块契约里的「�
 
 **门证据（本 PR）**：③ `112 suites / 2097 tests` 全绿（基线 112 / 2086，增量即 E 组 11 例）；
 分类计数 **112 / 17 行为 / 95 接线** 与改动前**逐项一致**。
+### 票 B —— `api/forum.uts` 拆分至 ≤600 并上线 forum 预算执法（#1218，2026-09-21）
+
+**落地物**：新增 `api/forumDto.uts`（DTO 构造层：`extract*` 4 + `build*` 5，共 9 个函数，**全部逐行照搬**，
+只加 `export ` 前缀）；`api/forum.uts` 从 **654 → 413** 行（请求形态段**逐字未动**：20 个导出函数、路由、查询参数、
+出口选择全原样）；`utils/modules.js` 的 forum 条目登记 `api/forumDto.uts` 并把预算从 `pending` 翻成 `600`（**执法上线**）。
+
+**拆缝**：`响应 shape 的构造` ／ `请求形态` 之间。判据是机械可复核的 —— 用脚本比对拆分前后：
+构造层 221 个非空行**逐行一致**（只差 `export ` 前缀），请求形态段 397 行**逐字未动**。
+`utils/forumContract.test.js` 的**字段级**断言（`is_featured` / `is_experience` / IP 属地两字段 / 分页三元组 /
+被回复人两字段 / `buildTopic` 各字段）改读 `api/forumDto.uts`（**等价强度**：同一条 `toContain` 换个读取目标），
+另加 4 条**拆分锁**（请求侧必须从 `./forumDto` 取构造层、请求侧不得再自带 `function build*|extract*`、
+构造侧九个函数都在且零请求出口、两个文件都 ≤600）。
+
+**收口票 C 留下的例外**：票 C 因 forum 预算是 `pending` 而保留了 `forumContract` 的 pages-only 预算检查
+（见票 C 段）。本票把 forum 翻成数字预算后，该条与声明面 A3/A10 完全重复 ⇒ **按票 C 自己写下的约定删除**。
+预算现由声明面对**声明全集**执法（`pages/forum/**` + `api/forum.uts` + `api/forumDto.uts`，最大 583），比原条更宽。
+
+**新坑位（本票实测，写给后来的预算执法面上线 PR）**：**「预算执法面上线」在结构上不可能拿低风险运行时面豁免**。
+原因有两条，同时成立：
+① 预算在 `utils/modules.js` 里，而它**不在** `pr-evidence` 的低风险白名单（`*.uts` / `*test.js` / `*.md` / `jest.config*.js`）里
+⇒ 只要 PR 带它，整单降级为**常规运行时面**（① 必过）。
+② 票 A 的 **A10** 判据要求「`pending` 模块必须真有一个超预算文件」⇒ 拆分把 654 降到 413 的那一刻，
+`pending` 就成了假命题、③ **必红**，所以拆分与翻预算**必须在同一个 PR 里**，不能拆成两单。
+⇒ 结论：这类 PR 按**常规运行时面**走门（本票即如此），**不要**按「仅 .uts 逻辑改动」估成本。
+
+**门证据（本 PR #1229）**：③ `112 suites / 2090 tests` 全绿（基线 112 / 2086，增量即 forum 的 4 条拆分锁）；
+④c `KOTLIN_ALL_RESULT errors=0 classes=1522 files=118`；①a 真机 `23049RAD8C` / Android 15 逐页截图
+（列表 / 详情 / 打卡三页，入仓 `docs/verification/forum/1229/`）+ logcat 本窗口 **0 FATAL / 0 ANR**，
+应用侧日志证明改后调用链真跑通（`getForumTopicsApi` 4 条列表、`getForumTopicDetailApi` 6 条回复，
+`is_featured` / `is_experience` / `ip_province` / `parent_name` 等由被搬走的 builder 映射的字段全部上屏）；
+② **免（未命中 MP-WEIXIN 面）**。分类计数 112 / 17 行为 / 95 接线，与改动前**逐项一致**。
+**①a 范围写实**：`buildLikeResult`（点赞/取消）未经 UI 触达（回复点赞节点未在可视区命中）⇒ 由「逐行一致」+
+模块契约的出口断言兜底；`forum-create` / `my-forum` 未逐页取图（本票是 API 层纯搬家，页面模板与样式零 diff）。
 
 ## 关联
 
