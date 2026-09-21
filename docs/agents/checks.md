@@ -6,20 +6,26 @@
 
 ## 后端（`backend/`）
 
-检查项四件套（两个环境任选其一，结果一致）：
+检查项四件套（两个环境任选其一；⚠️ **本机现在只能跑三条**——golangci-lint 与 go 1.27 不匹配，见「环境 A」，第四条由 CI `backend-lint` 兜）：
 
 - `gofmt -l .`（应无输出）
 - `go vet ./...`
 - `golangci-lint run ./...`（errcheck 等静态检查）
 - `go test ./...`
+- **Postgres 契约测试的两条纪律**（`testutil.NewPostgresDB`，先例见 `#1197` 的 `contact_window_postgres_contract_test.go`）：
+  1. 它为每个测试建**随机 schema** 并跑真实 `migrations/`，`DATABASE_URL` 未设时干净 `t.Skip` ⇒ 本机（无 PG）看到 `ok` **不等于测过**；这类测试的首跑在 CI（`backend-test` 带 PG 15 + `-race`，`migration-check` 真跑 up→列对账→down 到底），写的时候就按「CI 才第一次真跑」准备，别把 skip 当验证。
+  2. 目录类断言**必须按 schema 收窄**：`go test ./...` 并发跑多个包、共用同一个测试库，而 `pg_indexes` / `pg_constraint` / `information_schema.columns` 是**全库视图** ⇒ 不加 `schemaname = current_schema()`（或 join `pg_namespace` 后按 `nspname` 收窄）就会数到别的包那份同名对象（#1197 首跑正是「CHECK 数到 2 行」）。存量同类隐患：`internal/api/forum_experience_migration_contract_test.go` 的 `information_schema.columns` 查询未带 schema 条件。
 - 端点错误面守卫（第十三波 ADR-0060 决策 1 / 票 1b）：`node scripts/check-render-error-face.mjs --all`（本地可 `--diff origin/master` 只看新增行）—— `RenderFunc` 已不含 `err` 参数，错误面归端点骨架无条件渲染，所以 `backend/internal/api/` 的 `Render` 闭包内不得再出现 `response.ServerError/BadRequest/NotFound/Unauthorized/Forbidden`、`renderStatus(` 或 `xxxErrStatus.renderError(`；状态码与固定文案写进本端点的 `ErrStatus`（单码用 `errStatusAll` / `errStatusAllMsg`，哨兵用 `errStatusEntry`，`sentinel == nil` 表示无条件命中且抢在 `*ParseError` 规则之前）。需要非信封错误形状的面走 raw handler（不留逃生槽）。自检：`node --test scripts/check-render-error-face.test.mjs`；CI 在 backend-lint 跑 `--all`、判定逻辑自检在 el-controls-selftest
-- 改了 handler 的 swagger 注解（`@Success` / `@Param` / `@Router` 等）后：`cd backend && make swagger` 再生成 `backend/docs/{docs.go,swagger.json,swagger.yaml}` 并一并提交 —— CI 的 backend-lint 有**新鲜度锁**（按钉住的 swag 版本再生成后要求工作树干净），生成物过期直接红
+- 改了 handler 的 swagger 注解（`@Success` / `@Param` / `@Router` 等）或**任何进出响应 DTO 的字段**（含可空性）后：`cd backend && make swagger` 再生成 `backend/docs/{docs.go,swagger.json,swagger.yaml}`，**再** `go run ./cmd/gen-apitypes` 再生成 `frontend/src/api/generated/*.ts`，两者与改动一并提交 —— CI 的 backend-lint 有**新鲜度锁**（按钉住的 swag 版本再生成后要求工作树干净），生成物过期直接红。
+  ⚠️ **顺序是硬的**：`internal/apitypes/codegen_test.go` 把前端生成文件与 Go 注解渲染结果全等比对，所以「先跑 `go test ./...` 再 `make swagger`」会先给你一个绿、几秒后变红（2026-09-20 #1197 实测踩到：全量套件通过后再生成 swagger，`apitypes` 随即判红）。收口顺序固定为 gofmt/vet → 再生成（swagger → gen-apitypes）→ `go test ./...` → 前端检查。
 - 目录排序串第二源守卫（第十三波 ADR-0060 决策 10 / 票 10）：`node scripts/check-catalog-sort.mjs --all`（本地可 `--diff origin/master` 只看新增行）—— 目录读面（文件名含 `catalog` 的非测试 `.go`）不得再出现与 catalog descriptor `OrderBy` 声明**逐字同串**的裸排序串，排序串的唯一宿主是 spec 表（`catalog_specs.go` / `position_catalog.go`），读面写 `q.Order(specialtyCatalogSpec().OrderBy)` 这类引用。判据窄是刻意的：带表别名的课程行 `course.sort_order ASC, course.course_id ASC` 与章节行 ADR 明记不动（收进射程就得给整个读面文件开 ALLOWLIST，`--all` 的例外是整文件放行，会连带盲掉真危险行）。自检：`node --test scripts/check-catalog-sort.test.mjs`（含「声明表与 spec 表互等」一致性锁与合成违规目录必须判红的防恒绿用例）；CI 在 backend-lint 跑 `--all`、判定逻辑自检在 el-controls-selftest
 
 **环境 A：Windows 本机（Git Bash）—— 2026-09-08 起实测可用，优先使用**
 
-- 工具链已装在 Windows 本机并在 PATH：go 1.26.4 + golangci-lint v1.64.8，四项检查直接跑，**不依赖 WSL**。
-- 已知例外：`internal/logger` 的 `TestNew_FileOutput` / `TestRedactHook_AppliedByFactory` 在 Windows 下因 TempDir 文件锁失败（`unlinkat ... The process cannot access the file because it is being used by another process`），与改动无关，可忽略；CI（Linux）不受影响。
+- 工具链装在 Windows 本机并在 PATH：go **1.27.1** + golangci-lint v1.64.8；gofmt / go vet / go test 直接跑，**不依赖 WSL**。
+- ⚠️ **`golangci-lint` 本机目前跑不了**（2026-09-20 实测）：v1.64.8 是用 go 1.26.4 构建的，面对 1.27.1 的导出数据直接失败——`cannot decode "internal/goarch": export data version 4 is greater than maximum supported version 2`，且在**未改动的包**上报错，属环境性。四条检查本机实为三条 + CI 兜底（`backend-lint` job 跑 `golangci-lint run ./...`）。**补 CI 那条腿人工能做的**：删掉或重构 Go 代码后 grep 一遍被删符号的残留引用（历史上票6 残留的一个 `toIntDefault` 就是这么在 CI 才红的）。升级匹配本机 go 的 golangci-lint 前，别把「本地四件套全绿」当成事实。
+- 已知存量失败（与改动无关，可忽略；CI 为 Linux 不受影响）：`internal/logger` 的 `TestNew_FileOutput` / `TestRedactHook_AppliedByFactory`（Windows TempDir 文件锁）；`internal/deploy` 的 `TestDeployEnvChainPreservesProvidedValues`。
+- ⚠️ 全量 `go test ./...` 会在**仓库根**落下垃圾文件（形如 `C：Users...TestDeployEnvChain...deploy-env.sh`，其中的「：」是 U+F03A 私有区字符，按字面名 `rm` 删不掉）：每次跑完全量后用 `find . -maxdepth 1 -type f -name '*TestDeployEnvChain*' -delete` 清掉，别让它进 `git status` 或提交。
 
 **环境 B：WSL**
 
@@ -35,7 +41,7 @@
 - 新建 spec 一律用 `epLite()`（`src/test/element-lite.ts`）按需注册 EP 组件，**禁止全量挂载 `plugins: [ElementPlus]`** —— 全量挂载是 CourseCatalog flaky（CI 2 核下 import 争抢超时）的根因；组件清单可用 `node scripts/scan-el-components.mjs` 扫描
 - 已收敛控件守卫：`node scripts/check-el-controls.mjs --all`（CI 在 frontend-check 里跑全量；本地也可 `--diff origin/master` 只看新增行）。守卫判定逻辑的自检：`node --test scripts/check-el-controls.test.mjs`
 - api seam 守卫（ADR-0053 §7）：`node scripts/check-api-seam.mjs --all`（页面与业务组件不得直接引用 `@/api/request` / `@/api/client`；同样在 frontend-check 跑全量，本地可 `--diff origin/master`）。自检：`node --test scripts/check-api-seam.test.mjs`。逐条登记的例外写在脚本的 `ALLOWLIST`（每条带理由）
-- **守卫 runner 单点（第十一波）**：五个守卫（api-seam / el-controls / async-section / 契约消费面覆盖锁 / AI 助手发送编排）的 runner 面（argv 解析 / 走查 / `--diff` 取 diff 文本 / allowlist 放行 / 报告与退出码）收在 `scripts/lib/guard.mjs`，守卫文件只留判定面与措辞（`GUARDED_*` 常量 + `scanSource` + `GUARD_SPEC`；新增守卫只需实现 `scanSource`）。`--diff` 是 **fail-closed** 的：base 解析不了、`git diff` 失败、新增文件读不出来都报错并非零退出，不会静默判绿（历史上 `--diff` 曾因实参形态错而恒 0 违规、CI 只跑 `--all` 无人接住）。runner 自带表驱动自测：`node --test scripts/guard.test.mjs`（合成 diff 正/负样本 + 纯删除 diff 的「跳过」判据 + ALLOWLIST 行号级放行的正/负样本与缺基线 fail-closed + 真实 git 的 `--diff` 回归锁 + fail-closed 面 + 三个守卫的 CLI 面）；CI 在 frontend-check 里除 `--all` 全量外，另有增量门按 `--diff origin/<默认分支>` 跑五个守卫（含下面的消费面覆盖锁与 AI 助手发送编排守卫）
+- **守卫 runner 单点（第十一波）**：**七个**守卫（api-seam / el-controls / async-section / 契约消费面覆盖锁 / AI 助手发送编排 / 端点错误面 / 目录排序第二源）的 runner 面（argv 解析 / 走查 / `--diff` 取 diff 文本 / allowlist 放行 / 报告与退出码）收在 `scripts/lib/guard.mjs`，守卫文件只留判定面与措辞（`GUARDED_*` 常量 + `scanSource` + `GUARD_SPEC`；新增守卫只需实现 `scanSource`）。`--diff` 是 **fail-closed** 的：base 解析不了、`git diff` 失败、新增文件读不出来都报错并非零退出，不会静默判绿（历史上 `--diff` 曾因实参形态错而恒 0 违规、CI 只跑 `--all` 无人接住）。runner 自带表驱动自测：`node --test scripts/guard.test.mjs`（合成 diff 正/负样本 + 纯删除 diff 的「跳过」判据 + ALLOWLIST 行号级放行的正/负样本与缺基线 fail-closed + 真实 git 的 `--diff` 回归锁 + fail-closed 面 + 三个守卫的 CLI 面）；CI 在 frontend-check 里除 `--all` 全量外，另有增量门按 `--diff origin/<默认分支>` 跑**前端侧那五个**守卫（含下面的消费面覆盖锁与 AI 助手发送编排守卫）——第十三波新增的两条（端点错误面 / 目录排序第二源）判的是后端文件，由 `backend-lint` 跑 `--all`，不进这条增量门
   - **ALLOWLIST 在 `--diff` 下是行号级的（#1123 收掉上一版的已知洞）**：例外文件先取**基线内容**（默认 `git show <base>:<path>`，经注入面 `io.readBaseline`）跑一次 `scanSource` 得「基线违规行号集合」，只放行落在集合里的行 —— 往存量例外文件里新增违规、或把违规挪到别的行号，增量门照报（此前整文件放行，等于给例外文件开了永久后门）；**基线取不到即非零退出**，不静默退回整文件放行。例外文件必须仍在判定面内（`isGuardedPath` 不再吞 allowlist，豁免的唯一宿主是 runner；`guard.test.mjs` 有契约锁）。`--all` 仍是整体放行，逐字不变。
 - **契约消费面覆盖锁（第十一波 / ADR-0056 §11 / #1100）**：`node scripts/check-api-consumers.mjs --all`（本地可 `--diff origin/master` 只看新增行）—— `frontend/src/api/**` 里请求调用（`.get/.post/.put/.delete/.patch`，含嵌套泛型 `get<PagedResult<T>>`）的第一个实参路径字面量，归一后必须落在 `backend/internal/apitypes/domains.go` 的域端点集内（消费了未登记端点即红；路径由变量给出的**不判绿**，判「无法静态判定」）。自检：`node --test scripts/check-api-consumers.test.mjs`
   - 存量欠条逐条登记在脚本 `ALLOWLIST`（键 = `<仓库相对文件>::<METHOD> <归一模式>`，现状 **0 条** —— #1120 把 `valuation/admin.ts` 的 `createCrud` 动态拼装改成「显式资源 → 显式路径」的具名方法表后销清；历史留痕见下一行），**补一个销一个**：条目对应的端点一旦登记进域声明表，`--all` 会把它判红（销账信号），照脚本头部的「销账操作单」删行；条目挂在文件里已经没有的消费上，自测判红（不许有死条目）
