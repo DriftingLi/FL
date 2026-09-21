@@ -36,16 +36,6 @@ export type ResumeExpItem = {
     desc : string
 }
 
-/**
- * 多段经历字段改写事件负载（列表组件 → 页面 → 本 composable）
- * 单参对象而非多参 emit：全仓无多参 emit 先例，单参对象与既有 `e.detail.value` 形态同族。
- */
-export type ResumeListFieldChange = {
-    index : number
-    field : string
-    value : string
-}
-
 /** 本 composable 的显式返回类型（Kotlin error18 规避，先例 useMockExamSession / usePracticeSession / useTopicDetail） */
 export type UseResumeEditResult = {
     realName : Ref<string>
@@ -68,17 +58,6 @@ export type UseResumeEditResult = {
     certs : Ref<string>
     selfIntro : Ref<string>
     completion : ComputedRef<number>
-    setRealName : (v : string) => void
-    setContactPhone : (v : string) => void
-    setWechat : (v : string) => void
-    setRegion : (v : string) => void
-    setExperienceYears : (v : string) => void
-    setExpectedPositionExtra : (v : string) => void
-    setExpectedRegionsText : (v : string) => void
-    setSalaryMin : (v : string) => void
-    setSalaryMax : (v : string) => void
-    setCerts : (v : string) => void
-    setSelfIntro : (v : string) => void
     toggleSalaryNegotiable : () => void
     onPositionTap : () => void
     onJobNatureTap : () => void
@@ -86,10 +65,8 @@ export type UseResumeEditResult = {
     onDegreeTap : (idx : number) => void
     addEdu : () => void
     removeEdu : (idx : number) => void
-    setEduField : (p : ResumeListFieldChange) => void
     addExp : () => void
     removeExp : (idx : number) => void
-    setExpField : (p : ResumeListFieldChange) => void
     boot : () => void
     onSave : () => void
 }
@@ -185,19 +162,6 @@ export function useResumeEdit() : UseResumeEditResult {
         return Math.round(filled * 100 / 12)
     })
 
-    // ---- 字段写入（组件单值事件 → 状态，页面不再自持编辑态） ----
-    function setRealName(v : string) : void { realName.value = v }
-    function setContactPhone(v : string) : void { contactPhone.value = v }
-    function setWechat(v : string) : void { wechat.value = v }
-    function setRegion(v : string) : void { region.value = v }
-    function setExperienceYears(v : string) : void { experienceYears.value = v }
-    function setExpectedPositionExtra(v : string) : void { expectedPositionExtra.value = v }
-    function setExpectedRegionsText(v : string) : void { expectedRegionsText.value = v }
-    function setSalaryMin(v : string) : void { salaryMin.value = v }
-    function setSalaryMax(v : string) : void { salaryMax.value = v }
-    function setCerts(v : string) : void { certs.value = v }
-    function setSelfIntro(v : string) : void { selfIntro.value = v }
-
     // ---- 选项选择 ----
     function pick(options : string[], onPick : (v : string) => void) : void {
         uni.showActionSheet({
@@ -271,32 +235,12 @@ export function useResumeEdit() : UseResumeEditResult {
         eduItems.value.splice(idx, 1)
     }
 
-    function setEduField(p : ResumeListFieldChange) : void {
-        if (p.index < 0 || p.index >= eduItems.value.length) return
-        const item = eduItems.value[p.index]
-        if (p.field == 'school') item.school = p.value
-        else if (p.field == 'major') item.major = p.value
-        else if (p.field == 'degree') item.degree = p.value
-        else if (p.field == 'start') item.start = p.value
-        else if (p.field == 'end') item.end = p.value
-    }
-
     function addExp() : void {
         expItems.value.push({ company: '', role: '', start_month: '', end_month: '', desc: '' } as ResumeExpItem)
     }
 
     function removeExp(idx : number) : void {
         expItems.value.splice(idx, 1)
-    }
-
-    function setExpField(p : ResumeListFieldChange) : void {
-        if (p.index < 0 || p.index >= expItems.value.length) return
-        const item = expItems.value[p.index]
-        if (p.field == 'company') item.company = p.value
-        else if (p.field == 'role') item.role = p.value
-        else if (p.field == 'start_month') item.start_month = p.value
-        else if (p.field == 'end_month') item.end_month = p.value
-        else if (p.field == 'desc') item.desc = p.value
     }
 
     // ---- 草稿加载 ----
@@ -557,17 +501,6 @@ export function useResumeEdit() : UseResumeEditResult {
         certs,
         selfIntro,
         completion,
-        setRealName: (v : string) => setRealName(v),
-        setContactPhone: (v : string) => setContactPhone(v),
-        setWechat: (v : string) => setWechat(v),
-        setRegion: (v : string) => setRegion(v),
-        setExperienceYears: (v : string) => setExperienceYears(v),
-        setExpectedPositionExtra: (v : string) => setExpectedPositionExtra(v),
-        setExpectedRegionsText: (v : string) => setExpectedRegionsText(v),
-        setSalaryMin: (v : string) => setSalaryMin(v),
-        setSalaryMax: (v : string) => setSalaryMax(v),
-        setCerts: (v : string) => setCerts(v),
-        setSelfIntro: (v : string) => setSelfIntro(v),
         toggleSalaryNegotiable: () => toggleSalaryNegotiable(),
         onPositionTap: () => onPositionTap(),
         onJobNatureTap: () => onJobNatureTap(),
@@ -575,10 +508,8 @@ export function useResumeEdit() : UseResumeEditResult {
         onDegreeTap: (idx : number) => onDegreeTap(idx),
         addEdu: () => addEdu(),
         removeEdu: (idx : number) => removeEdu(idx),
-        setEduField: (p : ResumeListFieldChange) => setEduField(p),
         addExp: () => addExp(),
         removeExp: (idx : number) => removeExp(idx),
-        setExpField: (p : ResumeListFieldChange) => setExpField(p),
         boot: () => boot(),
         onSave: () => onSave(),
     } as UseResumeEditResult

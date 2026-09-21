@@ -45,16 +45,15 @@ const REQUIRED_SOURCE_FILES = [
   'pages/resume/resume-attach.uvue',
   'pages/resume/composables/useResumeEdit.uts',
   'pages/resume/components/resume-progress-card.uvue',
-  'pages/resume/components/resume-basic-card.uvue',
-  'pages/resume/components/resume-expectation-card.uvue',
   'api/resume.uts',
 ];
 
-/** 页面 ↔ 组件接口对账表（本票唯一新增接口面，改名必须红） */
+/** 页面 ↔ 组件接口对账表（本票唯一新增接口面，改名必须红）
+ *  ⚠️ 只有「纯展示且卡宽不随宿主变化」的 section 才允许抽组件：①a 真机实测
+ *  基本信息 / 求职期望卡抽成组件后卡宽 +70px（组件根撑满父容器 vs 页面级 view 按内容收缩）
+ *  ⇒ 已回退为页面级卡，锁见「拆分判据锁」节。 */
 const WIRING = [
   { page: EDIT_PAGE, tag: 'ResumeProgressCard', comp: 'pages/resume/components/resume-progress-card.uvue' },
-  { page: EDIT_PAGE, tag: 'ResumeBasicCard', comp: 'pages/resume/components/resume-basic-card.uvue' },
-  { page: EDIT_PAGE, tag: 'ResumeExpectationCard', comp: 'pages/resume/components/resume-expectation-card.uvue' },
 ];
 
 /** T07 口径：新建 composable / section 组件同样计入预算 */
@@ -223,7 +222,7 @@ describe('composable 接线契约（T09 拆分：显式 import 模块私有 comp
   it('页面引用的每个 composable 成员都在显式结果类型内（④c 编译门实测抓到的缺口，本锁防复发）', () => {
     const refs = composableMemberRefs(read(EDIT_PAGE), 'edit');
     const declared = declaredResultFields(read(composable));
-    expect(declared.length).toBeGreaterThan(30);
+    expect(declared.length).toBeGreaterThan(25);
     expect(refs.length).toBeGreaterThan(20);
     expect(refs.filter((r) => !declared.includes(r))).toEqual([]);
   });
@@ -263,8 +262,8 @@ describe('组件接线零孤儿（#779 回归锁：import 的组件文件必须�
 
   it('孤儿判据具备红能力（注入一个不存在的 import 必须被列出）', () => {
     const injected = read(EDIT_PAGE).replace(
-      "from './components/resume-basic-card.uvue'",
-      "from './components/resume-basic-card-missing.uvue'",
+      "from './components/resume-progress-card.uvue'",
+      "from './components/resume-progress-card-missing.uvue'",
     );
     const re = /from\s+'\.\/components\/([^']+\.uvue)'/g;
     const missing = [];
@@ -272,7 +271,7 @@ describe('组件接线零孤儿（#779 回归锁：import 的组件文件必须�
     while ((m = re.exec(injected)) !== null) {
       if (!fs.existsSync(path.join(ROOT, 'pages/resume/components', m[1]))) missing.push(m[1]);
     }
-    expect(missing).toEqual(['resume-basic-card-missing.uvue']);
+    expect(missing).toEqual(['resume-progress-card-missing.uvue']);
   });
 });
 
@@ -296,31 +295,33 @@ describe('页面 ↔ 组件接口对账（prop / 事件双向无孤儿）', () =
     expect(unlistenedEvents(read(w.page), read(w.comp), tag)).toEqual([]);
   });
 
-  it('对账表本身有效（3 个组件、16 prop、13 事件，防解析器静默失效）', () => {
+  it('对账表本身有效（1 个组件、1 prop、0 事件，防解析器静默失效）', () => {
     const props = WIRING.reduce((n, w) => n + definePropsNames(read(w.comp)).length, 0);
     const emits = WIRING.reduce((n, w) => n + defineEmitsNames(read(w.comp)).length, 0);
-    expect(props).toBe(16);
-    expect(emits).toBe(13);
+    expect(props).toBe(1);
+    expect(emits).toBe(0);
   });
 
-  it('对账锁具备红能力（注入 prop / 事件改名必须被抓到）', () => {
+  it('对账锁具备红能力（注入 prop 改名 / 注入孤儿事件必须被抓到）', () => {
     const page = read(EDIT_PAGE);
-    const basic = read('pages/resume/components/resume-basic-card.uvue');
-    const expectation = read('pages/resume/components/resume-expectation-card.uvue');
+    const progress = read('pages/resume/components/resume-progress-card.uvue');
 
-    // ① 页面侧把 :real-name 写错 → prop 对账必须红
-    const badPropPage = page.replace(':real-name="edit.realName.value"', ':real-names="edit.realName.value"');
-    expect(undeclaredProps(badPropPage, basic, 'ResumeBasicCard')).toEqual(['real-names']);
+    // ① 页面侧把 :completion 写错 → prop 对账必须红
+    const badPropPage = page.replace(':completion="edit.completion.value"', ':completions="edit.completion.value"');
+    expect(undeclaredProps(badPropPage, progress, 'ResumeProgressCard')).toEqual(['completions']);
     // 反向：组件侧声明改名而页面未改 → 孤儿 prop 必须红
-    const badPropComp = basic.replace('realName? : string', 'realNames? : string');
-    expect(unboundProps(page, badPropComp, 'ResumeBasicCard')).toEqual(['real-names']);
+    const badPropComp = progress.replace('completion? : number', 'completions? : number');
+    expect(unboundProps(page, badPropComp, 'ResumeProgressCard')).toEqual(['completions']);
 
-    // ② 页面侧把 @update:wechat 写错 → 事件对账必须红
-    const badEventPage = page.replace('@update:wechat="onWechatUpdate"', '@update:wechats="onWechatUpdate"');
-    expect(undeclaredEvents(badEventPage, basic, 'ResumeBasicCard')).toEqual(['update:wechats']);
-    // 反向：组件侧 emit 改名而页面未改 → 孤儿 emit 必须红
-    const badEventComp = expectation.replace("(e: 'jobNatureTap'): void", "(e: 'jobNatureTapped'): void");
-    expect(unlistenedEvents(page, badEventComp, 'ResumeExpectationCard')).toEqual(['job-nature-tapped']);
+    // ② 组件侧新增一个页面没监听的 emit → 孤儿 emit 必须红
+    const badEventComp = progress.replace(
+      'const props = withDefaults(',
+      "const emit = defineEmits<{ (e: 'progressTap'): void }>()\n    const props = withDefaults(",
+    );
+    expect(unlistenedEvents(page, badEventComp, 'ResumeProgressCard')).toEqual(['progress-tap']);
+    // 反向：页面监听了组件没声明的事件 → 必须红
+    const badEventPage = page.replace(' />', ' @progress-tap="onSave" />');
+    expect(undeclaredEvents(badEventPage, progress, 'ResumeProgressCard')).toEqual(['progress-tap']);
   });
 });
 
@@ -557,7 +558,7 @@ describe('删除禁区「resume 不用删」：行为保持点逐项仍在', () 
   });
 });
 
-describe('拆分判据锁（T09 新增）：壳层不自持编辑态，列表编辑留壳层', () => {
+describe('拆分判据锁（T09 新增）：壳层不自持编辑态，「卡宽随宿主变化」的卡一律留壳层', () => {
   const page = read(EDIT_PAGE);
 
   it('页面壳层零自持编辑态（不出现 ref< 声明，编辑态全归 useResumeEdit）', () => {
@@ -580,7 +581,25 @@ describe('拆分判据锁（T09 新增）：壳层不自持编辑态，列表编
     expect(page).toContain('v-model="item.desc"');
   });
 
-  it('组件只做「原始值 prop + 单参事件」：三个组件模板内不出现 v-model 绑定', () => {
+  it('基本信息 / 求职期望卡留在页面壳层（①a 实测：抽成组件后卡宽 +70px、下方内容上移 35px）', () => {
+    // 两张卡必须是**页面级** `<view class="card">`，且字段仍走 composable 的 v-model 透传
+    expect(page).toContain('<text class="card-title">基本信息</text>');
+    expect(page).toContain('<text class="card-title">求职期望</text>');
+    expect(page).toContain('v-model="edit.realName.value"');
+    expect(page).toContain('v-model="edit.expectedRegionsText.value"');
+    expect(page).toContain('@click="edit.onPositionTap()"');
+    // 不得存在把这两张卡抽走的组件文件（回退后仍在 = 有人重做但没跑 ①a）
+    const comps = fs.readdirSync(path.join(ROOT, 'pages/resume/components'));
+    expect(comps).toEqual(['resume-progress-card.uvue']);
+  });
+
+  it('几何判据具备红能力（把卡标记成组件形态必须被抓到）', () => {
+    const injected = page.replace('<text class="card-title">基本信息</text>', '<ResumeBasicCard />');
+    expect(injected).not.toContain('<text class="card-title">基本信息</text>');
+    expect(fs.readdirSync(path.join(ROOT, 'pages/resume/components'))).not.toContain('resume-basic-card.uvue');
+  });
+
+  it('组件只做「原始值 prop + 单参事件」：组件模板内不出现 v-model 绑定', () => {
     for (const w of WIRING) {
       const src = read(w.comp);
       const tpl = src.slice(src.indexOf('<template>'), src.indexOf('</template>'));

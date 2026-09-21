@@ -16,39 +16,87 @@
             <!-- 完善度 -->
             <ResumeProgressCard :completion="edit.completion.value" />
 
-            <!-- 基本信息 -->
-            <ResumeBasicCard
-                :real-name="edit.realName.value"
-                :contact-phone="edit.contactPhone.value"
-                :wechat="edit.wechat.value"
-                :region="edit.region.value"
-                @update:real-name="onRealNameUpdate"
-                @update:contact-phone="onContactPhoneUpdate"
-                @update:wechat="onWechatUpdate"
-                @update:region="onRegionUpdate" />
+            <!-- 基本信息：**页面级卡不抽组件** —— 实测组件根元素在本仓 uvue 里撑满父容器、
+                 页面级 view 按内容收缩，抽卡会让卡宽 +70px 并顶动下方内容（见文件尾「拆分判据」） -->
+            <view class="card">
+                <text class="card-title">基本信息</text>
+                <view class="field-row">
+                    <text class="field-label">姓名<text class="field-req">*</text></text>
+                    <input class="field-input" type="text" :maxlength="20" v-model="edit.realName.value" placeholder="请输入姓名" />
+                </view>
+                <view class="divider"></view>
+                <view class="field-row">
+                    <text class="field-label">手机号<text class="field-req">*</text></text>
+                    <input class="field-input" type="number" :maxlength="11" v-model="edit.contactPhone.value" placeholder="用于企业联系你" />
+                </view>
+                <view class="divider"></view>
+                <view class="field-row">
+                    <text class="field-label">微信</text>
+                    <input class="field-input" type="text" :maxlength="50" v-model="edit.wechat.value" placeholder="选填" />
+                </view>
+                <view class="divider"></view>
+                <view class="field-row">
+                    <text class="field-label">现居地</text>
+                    <input class="field-input" type="text" :maxlength="20" v-model="edit.region.value" placeholder="如：杭州" />
+                </view>
+            </view>
 
             <!-- 求职期望 -->
-            <ResumeExpectationCard
-                :experience-years="edit.experienceYears.value"
-                :selected-position-name="edit.selectedPositionName.value"
-                :expected-position-extra="edit.expectedPositionExtra.value"
-                :expected-regions-text="edit.expectedRegionsText.value"
-                :salary-min="edit.salaryMin.value"
-                :salary-max="edit.salaryMax.value"
-                :salary-negotiable="edit.salaryNegotiable.value"
-                :job-nature="edit.jobNature.value"
-                :job-nature-label="edit.jobNatureLabel.value"
-                :available-in="edit.availableIn.value"
-                :available-in-label="edit.availableInLabel.value"
-                @update:experience-years="onExperienceYearsUpdate"
-                @update:expected-position-extra="onExpectedPositionExtraUpdate"
-                @update:expected-regions-text="onExpectedRegionsTextUpdate"
-                @update:salary-min="onSalaryMinUpdate"
-                @update:salary-max="onSalaryMaxUpdate"
-                @position-tap="onPositionTap"
-                @job-nature-tap="onJobNatureTap"
-                @available-in-tap="onAvailableInTap"
-                @salary-negotiable-toggle="onSalaryNegotiableToggle" />
+            <view class="card">
+                <text class="card-title">求职期望</text>
+                <view class="field-row" @click="edit.onPositionTap()">
+                    <text class="field-label">意向岗位<text class="field-req">*</text></text>
+                    <view class="field-picker">
+                        <text :class="edit.selectedPositionName.value.length > 0 ? 'field-value' : 'field-ph'">{{ edit.selectedPositionName.value.length > 0 ? edit.selectedPositionName.value : '请选择' }}</text>
+                        <text class="field-arrow">›</text>
+                    </view>
+                </view>
+                <view class="divider"></view>
+                <view class="field-row">
+                    <text class="field-label">岗位补充</text>
+                    <input class="field-input" type="text" :maxlength="50" v-model="edit.expectedPositionExtra.value" placeholder="如：柴油叉车维修" />
+                </view>
+                <view class="divider"></view>
+                <view class="field-row">
+                    <text class="field-label">意向地区</text>
+                    <input class="field-input" type="text" :maxlength="50" v-model="edit.expectedRegionsText.value" placeholder="多个用逗号分隔，如：杭州,上海" />
+                </view>
+                <view class="divider"></view>
+                <view class="field-row">
+                    <text class="field-label">薪资(K)</text>
+                    <view class="field-range">
+                        <input class="field-range-input" type="number" v-model="edit.salaryMin.value" placeholder="最低" />
+                        <text class="field-range-sep">-</text>
+                        <input class="field-range-input" type="number" v-model="edit.salaryMax.value" placeholder="最高" />
+                    </view>
+                </view>
+                <view class="divider"></view>
+                <view class="field-row" @click="edit.toggleSalaryNegotiable()">
+                    <text class="field-label">薪资面议</text>
+                    <text :class="edit.salaryNegotiable.value ? 'field-value' : 'field-ph'">{{ edit.salaryNegotiable.value ? '是' : '否' }}</text>
+                </view>
+                <view class="divider"></view>
+                <view class="field-row" @click="edit.onJobNatureTap()">
+                    <text class="field-label">工作类型</text>
+                    <view class="field-picker">
+                        <text :class="edit.jobNature.value.length > 0 ? 'field-value' : 'field-ph'">{{ edit.jobNatureLabel.value.length > 0 ? edit.jobNatureLabel.value : '请选择' }}</text>
+                        <text class="field-arrow">›</text>
+                    </view>
+                </view>
+                <view class="divider"></view>
+                <view class="field-row" @click="edit.onAvailableInTap()">
+                    <text class="field-label">到岗时间</text>
+                    <view class="field-picker">
+                        <text :class="edit.availableIn.value.length > 0 ? 'field-value' : 'field-ph'">{{ edit.availableInLabel.value.length > 0 ? edit.availableInLabel.value : '请选择' }}</text>
+                        <text class="field-arrow">›</text>
+                    </view>
+                </view>
+                <view class="divider"></view>
+                <view class="field-row">
+                    <text class="field-label">工作年限</text>
+                    <input class="field-input" type="number" v-model="edit.experienceYears.value" placeholder="如：3" />
+                </view>
+            </view>
 
             <!-- 教育经历（纯本地，不提交后端）：列表编辑留页面壳层 —— 见文件尾「拆分判据」注释 -->
             <view class="card">
@@ -151,12 +199,14 @@
 
 <!--
   拆分判据（T09 新增，回写 ADR-0007）：
-  section 抽组件的**准入条件**是「接口面可以只有原始值 prop + 单参事件」。
-  ① 完善度卡（纯展示）、② 基本信息卡 / 求职期望卡（单值字段组 + actionSheet 触发面）满足 ⇒ 抽组件；
-  ③ 教育 / 工作经历列表 **不满足** —— 跨组件传行索引 + 逐字段改写只能用 `$event` 双参投递，
-  属 T04 已录的「跨组件 v-model / 事件面」uvue 编译风险区（那次处置就是「模板留壳层」）；
-  ④ 证书与技能 / 自我介绍是单 textarea 卡，抽出去只换来一个包装层 ⇒ 同样留壳层。
-  状态所有权仍单一：留壳层的编辑态也全部归 useResumeEdit（页面只做 v-model 透传，不自持 ref）。
+  section 抽组件的**准入条件**是「接口面可以只有原始值 prop + 单参事件」**且「卡宽不随宿主变化」**。
+  ① 完善度卡（纯展示，且术前就是宽卡）满足 ⇒ 抽组件；
+  ② 基本信息 / 求职期望卡：接口面满足，但**不满足第二条** —— 实测抽成组件后卡宽 +70px、下方内容整体上移 35px
+     （组件根元素在本仓 uvue 里撑满父容器，页面级 view 按内容收缩）⇒ **回退为页面级卡**；
+  ③ 教育 / 工作经历列表：跨组件传行索引 + 逐字段改写只能用 `$event` 双参投递，
+     属 T04 已录的「跨组件 v-model / 事件面」风险区 ⇒ 留壳层；
+  ④ 证书与技能 / 自我介绍是单 textarea 卡，抽出去只换来一个包装层 ⇒ 留壳层。
+  状态所有权仍单一：留壳层的编辑态全部归 useResumeEdit（页面只做 v-model 透传，不自持 ref）。
 -->
 
 <script setup lang="uts">
@@ -165,8 +215,6 @@
     import { goBack } from '../../utils/navigation'
     import { useResumeEdit } from './composables/useResumeEdit'
     import ResumeProgressCard from './components/resume-progress-card.uvue'
-    import ResumeBasicCard from './components/resume-basic-card.uvue'
-    import ResumeExpectationCard from './components/resume-expectation-card.uvue'
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
@@ -176,20 +224,6 @@
 
     function onBack() : void { goBack('/pages/resume/resume') }
     function onSave() : void { edit.onSave() }
-
-    function onRealNameUpdate(v : string) : void { edit.setRealName(v) }
-    function onContactPhoneUpdate(v : string) : void { edit.setContactPhone(v) }
-    function onWechatUpdate(v : string) : void { edit.setWechat(v) }
-    function onRegionUpdate(v : string) : void { edit.setRegion(v) }
-    function onExperienceYearsUpdate(v : string) : void { edit.setExperienceYears(v) }
-    function onExpectedPositionExtraUpdate(v : string) : void { edit.setExpectedPositionExtra(v) }
-    function onExpectedRegionsTextUpdate(v : string) : void { edit.setExpectedRegionsText(v) }
-    function onSalaryMinUpdate(v : string) : void { edit.setSalaryMin(v) }
-    function onSalaryMaxUpdate(v : string) : void { edit.setSalaryMax(v) }
-    function onPositionTap() : void { edit.onPositionTap() }
-    function onJobNatureTap() : void { edit.onJobNatureTap() }
-    function onAvailableInTap() : void { edit.onAvailableInTap() }
-    function onSalaryNegotiableToggle() : void { edit.toggleSalaryNegotiable() }
 
     // onLoad 必须带 options 形参：Kotlin Function1<OnLoadOptions, Unit>，零参即 error17
     onLoad((options : OnLoadOptions) => {
