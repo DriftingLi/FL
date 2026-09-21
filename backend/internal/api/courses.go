@@ -107,10 +107,12 @@ func (h *CourseHandler) GetChapterSlides(c *gin.Context) {
 			if err != nil {
 				return nil, err
 			}
-			return &chapterSlidesReq{ChapterID: id}, nil
+			uid, _ := c.Get(string(middleware.CtxUserID))
+			studentID, _ := uid.(int)
+			return &chapterSlidesReq{ChapterID: id, StudentID: studentID}, nil
 		},
 		Invoke: func(ctx context.Context, req *chapterSlidesReq) (*service.ChapterSlidesDTO, error) {
-			return h.svc.GetChapterSlides(req.ChapterID)
+			return h.svc.GetChapterSlides(req.ChapterID, req.StudentID)
 		},
 	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
 }
@@ -197,10 +199,12 @@ func (h *CourseHandler) RegenerateChapterSlides(c *gin.Context) {
 			if err != nil {
 				return nil, err
 			}
-			return &chapterSlidesReq{ChapterID: id}, nil
+			uid, _ := c.Get(string(middleware.CtxUserID))
+			studentID, _ := uid.(int)
+			return &chapterSlidesReq{ChapterID: id, StudentID: studentID}, nil
 		},
 		Invoke: func(ctx context.Context, req *chapterSlidesReq) (*service.ChapterSlidesDTO, error) {
-			return h.svc.RegenerateChapterSlides(req.ChapterID)
+			return h.svc.RegenerateChapterSlides(req.ChapterID, req.StudentID)
 		},
 	}.WithSuccess(okMsg("幻灯片重新生成成功"), http.StatusNotFound).Handle(c)
 }
@@ -268,6 +272,7 @@ func (h *CourseHandler) UpdateStudyProgress(c *gin.Context) {
 // chapterSlidesReq 章节幻灯片请求（chapter_id）。
 type chapterSlidesReq struct {
 	ChapterID int
+	StudentID int
 }
 
 // courseDetailReq 课程详情请求（course_id + studentID）。

@@ -779,7 +779,7 @@ func (s *PointsService) RedeemCourse(ctx context.Context, userID, courseID int) 
 	}
 	return s.redeem(ctx, userID, redeemOpts{
 		lockKey: fmt.Sprintf("shop:course:%d:%d", userID, courseID),
-		sku:     fmt.Sprintf("course:%d", courseID),
+		sku:     CourseSKU(courseID),
 		refID:   fmt.Sprintf("%d", courseID),
 		price:   *course.PointsPrice,
 		reason:  "redeem_course",
@@ -840,11 +840,9 @@ func (s *PointsService) RedeemShop(ctx context.Context, userID int, sku string) 
 	})
 }
 
-// HasEntitlement 校验是否已兑换
-func (s *PointsService) HasEntitlement(userID int, sku, refID string) bool {
-	var cnt int64
-	_ = s.db.Model(&model.UserEntitlement{}).Where("user_id = ? AND sku = ? AND ref_id = ?", userID, sku, refID).Count(&cnt).Error
-	return cnt > 0
+// HasEntitlement 校验是否已兑换（权益读面单点见 entitlement_read.go，ADR-0062 决策 3）。
+func (s *PointsService) HasEntitlement(userID int, sku, refID string) (bool, error) {
+	return holdsEntitlement(s.db, userID, sku, refID)
 }
 
 // ErrInsufficientPoints 积分余额不足（哨兵错误，ADR-0023）：调用方一律 errors.Is 判定，

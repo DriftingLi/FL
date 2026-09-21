@@ -85,6 +85,13 @@ func (s *RealExamService) ListPapers(userID, credentialID int) []RealExamPaperDT
 	price := s.points.realPaperPrice()
 	for i := range papers {
 		p := &papers[i]
+		entitled, entErr := s.points.HasEntitlement(userID, RealPaperSKU(p.PaperID), strconv.Itoa(p.PaperID))
+		if entErr != nil {
+			// 有意尽力而为（ADR-0062 票6 的声明式例外，故记日志）：列表上的「已解锁」徽标查不到
+			// 时按未解锁显示，只少一个标记；真正的门禁在 StartPractice / StartExam 两条读路径上
+			// 如实上抛，不在这里放行。
+			s.logger.Warn("查询真题卷兑换状态失败", zap.Int("paper_id", p.PaperID), zap.Error(entErr))
+		}
 		out = append(out, RealExamPaperDTO{
 			PaperID:         p.PaperID,
 			Title:           p.Title,
@@ -92,7 +99,7 @@ func (s *RealExamService) ListPapers(userID, credentialID int) []RealExamPaperDT
 			Source:          derefString(p.Source),
 			QuestionCount:   p.QuestionCount,
 			DurationMinutes: p.DurationMinutes,
-			Entitled:        s.points.HasEntitlement(userID, RealPaperSKU(p.PaperID), strconv.Itoa(p.PaperID)),
+			Entitled:        entitled,
 			Price:           price,
 		})
 	}
@@ -106,7 +113,11 @@ func (s *RealExamService) StartPaperPractice(studentID, paperID int) (*PracticeS
 	if err := s.db.Where("paper_id = ? AND status = 1", paperID).First(&paper).Error; err != nil {
 		return nil, ErrRealPaperUnavailable
 	}
-	if !s.points.HasEntitlement(studentID, RealPaperSKU(paperID), strconv.Itoa(paperID)) {
+	entitled, entErr := s.points.HasEntitlement(studentID, RealPaperSKU(paperID), strconv.Itoa(paperID))
+	if entErr != nil {
+		return nil, entErr
+	}
+	if !entitled {
 		return nil, errors.New("请先兑换该真题卷")
 	}
 	allIDs, all, err := s.paperQuestionIDs(paperID)
@@ -151,7 +162,11 @@ func (s *RealExamService) StartPaperExam(studentID, paperID int) (*MockExamStart
 	if err := s.db.Where("paper_id = ? AND status = 1", paperID).First(&paper).Error; err != nil {
 		return nil, ErrRealPaperUnavailable
 	}
-	if !s.points.HasEntitlement(studentID, RealPaperSKU(paperID), strconv.Itoa(paperID)) {
+	entitled, entErr := s.points.HasEntitlement(studentID, RealPaperSKU(paperID), strconv.Itoa(paperID))
+	if entErr != nil {
+		return nil, entErr
+	}
+	if !entitled {
 		return nil, errors.New("请先兑换该真题卷")
 	}
 	questionIDs, ordered, err := s.paperQuestionIDs(paperID)
