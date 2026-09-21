@@ -86,6 +86,74 @@
 
 > 口径说明：「模块契约」= `utils/` 里以该模块命名的契约套件（17 个文件名命中 13 个模块，`pointsRealApiContract` 之类自带限定词）。77 − 这套模块契约 − 守护/门脚本/域级契约 = 跨切面契约，**不在本决策的归属面内**，它们没有「模块」可声明。
 
+> **口径更正（2026-09-20，票 A #1217 实测，只增不删）**：上表「超 600 行的源文件」一行的数字是**非空行数**
+> （PowerShell `Get-Content | Measure-Object -Line` 的口径），而**既有模块契约的 600 预算判的是总行数**
+> （`readText(f).split('\n').length`，见 `coursesContract` 第 140 行一带）。两者在本仓差约 6%：
+> `api/forum.uts` 总行 **654** / 非空 **618**。⇒ **票 B 的目标是「总行数 ≤600」**（约等于非空 565 行），
+> 按 618 收工会留下 54 行的缺口。以 `utils/contractHarness.js#fileLines` 的口径为准。
+
+---
+
+## 实施记录
+
+### 票 A —— 声明与机制（#1217，2026-09-20）
+
+**落地物**：`utils/modules.js`（23 个模块的键 / 归属目录 / 必需文件 / 拆出物 / 消费者 / 预算 / 深度 / 豁免归属，纯数据）、
+`utils/contractHarness.js`（纯事实出口：枚举 / 行数 / 深度 / 接线对账 / 零孤儿 / 消费者对账 / 豁免查询 / `reconcile(decls?)`）、
+`utils/guardAllowlist.js`（`GUARD_ALLOWLIST` 的单一声明点）、`utils/modulesDeclarationContract.test.js`（自检 36 用例）。
+**本票不执法**：既有断言一条未删；`utsAndroidCompile.test.js` 的 20 条规则原样不动，只把常量本体挪走。
+
+**实测规模**：23 个模块 / 声明 **153** 个文件（目录内 **125** + 目录外的家 **37**，有重叠因共享件归主消费方）；
+数字预算 **14** 个模块已锁定，`pending`（登记不执法）**9** 个。
+
+| `pending` 模块 | 超预算文件（总行数） |
+| --- | --- |
+| ai-assistant | ai-assistant.uvue 839 · api/aiAssistant.uts 667 · ai-feature.uvue 629 · ai-settings.uvue 621 |
+| forum | **api/forum.uts 654**（票 B 的唯一活违例；页面侧最大 583 已达标） |
+| login | login.uvue 977 |
+| register | register.uvue 723 |
+| resume | resume-edit.uvue 923（另一会话的 resume 手术会把它降到预算内） |
+| recruiter | resume-detail.uvue 702 · api/recruit.uts 675 |
+| search | search.uvue 702 |
+| forgot-password | forgot-password.uvue 676 |
+| points | task-center.uvue 617 |
+
+**「未达标」的读法（本票的口径，供票 D 对齐）**：本票把 ②⑥ 的「未达标模块」读作**预算未达标**（声明面里存在超预算文件），
+而**不是**「没有模块契约」。理由：后一种读法会把 `exam-info` / `featured` / `guide` / `index` / `notifications` / `profile-setup`
+这 6 个**本来就在预算内**的模块也写成 `pending` —— 那是白送一条「不执法」，与 ②⑥ 要治的失效面同形。
+故这 6 个**无契约模块已被本票锁进 600**（票 D 若要按「无契约」清点，这 6 项的状态是「已锁」而不是「待补」）。
+
+**三处实测更正/发现**：
+
+1. **行数口径**：见上「口径更正」。ADR 附录与本票的执法口径不同，票后一切数字以 `fileLines`（总行数）为准。
+2. **③ 的 `search` 消费者未成立**：`components/ai-chat/**` 归 `ai-assistant` 已照做，但**实测 `pages/search/**`
+   未 import 该目录任何文件**（`search.uvue` 只 import `components/app-chip` 与 `components/app-empty-state`）⇒
+   登记面照实测写 `crossModuleConsumers: []`。**决策意图不以假声明保留**，改由对账兜底：
+   `consumerFacts().unregisteredConsumers` 会在 `search` 真接线那天判红并要求登记。
+3. **同名常量撞车**：`utils/navQueryKeyContract.test.js` 自有一份 `const GUARD_ALLOWLIST = []`（导航 query 键例外表，
+   与守护规则豁免无关）⇒ 已改名 `NAV_QUERY_ALLOWLIST`；否则「全仓只有一个声明点」是**假命题**。
+
+**边界写实（本票不处理，别当成已覆盖）**：跨切面基础设施**不在任何模块的归属面内** ⇒ 它们的行数不在预算面内。
+其中 `api/request.uts` **611 行**是全仓唯一一处「超 600 行且无人认领」的源文件（`api/auth.uts` 508 / `api/helpers.uts` 72 等未超）。
+归属面外的源文件共 58 个（`App.uvue` / `main.uts` / `types/**` / `utils/**` / `components/app-*`）。
+
+**归属规则（写给票 C / 票 D）**：键 = `pages/<目录名>`；目录外的家（域 api、共享组件、共享 composable）**归主消费方** ——
+① 该域有既有模块契约 ⇒ 归该契约模块；② 唯一消费者 ⇒ 归它；③ 多消费且无契约 ⇒ 归「页面所在模块」并在行内写理由。
+其余消费者登记在 `crossModuleConsumers`（`utils/modules.js` 文件头有全文）。
+
+**落锁**：`utils/modulesDeclarationContract.test.js` **A1–A12 / B1–B15 / C1–C5 / D1–D4**（36 用例）——
+A 组守真源与磁盘一致（模块键与文件**双向对账**、跨模块唯一、深度、拆出物零孤儿、零死引用、豁免归属、消费者双向、预算、覆盖合法性），
+B 组是**成对取证的判别力**（13 条注入各自「改坏必红 + 真实文件必不红」），C 组守 `GUARD_ALLOWLIST` 单点，D 组守 harness 自身约束。
+分类器判为 **接线守护**（读文件清单与源码文本，不执行被测物）⇒ **不构成 ③ 门证据**（`docs/agents/guards.md`），
+行为面由 B 组的注入自检自证。**未新增阻塞单点**：`mobile-test` 步骤清单与 `ci-summary.needs` 均未动，自检随 `npm run test:unit` 一起跑。
+
+**门证据（本 PR）**：③ `111 suites / 2028 tests` 全绿（基线 110 / 1992，新增即本套件 36 例）；
+`node scripts/classify-guards.mjs --json` = **17 行为 / 94 接线**（改动前 17 / 93）——**既有 110 个文件的分类零变化**，增量只有本守护。
+
+**票 C 的入口**：`contractHarness` 已供给 `ROOT` / `read` / `readText` / `declaredFiles(key)` / `moduleOnDisk(key)` /
+`fileLines` / `moduleDepth` / `orphanExtracts` / `deadImports` / `allowlistPaths` / `reconcile()`；
+C 要删的 `path.join(__dirname`、自建 `read()`、自建 walk、写死 600、解析 allowlist 文本五类复写都有对应出口。
+
 ## 关联
 
 - **0007-渐进式重构手册** —— 600 软预算、契约测试纪律、「禁删 / 弱化断言」、UI 冻结；本决策是它的**机制化**（把各自复写的事实收成一份声明）。0007 §#914 已对门脚本家族做过同一动作（`New-GatePlan` → `-DryRun` 断言计划 JSON），本决策把该手法扩到模块面。
