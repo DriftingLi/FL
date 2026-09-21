@@ -183,6 +183,7 @@ allowlist 断言不动（票 A 起已是数据读取）。
 所以此刻删掉 `forumContract` 那条 pages-only 预算检查，等于让已达标的 `pages/forum/**`（最大 583）
 **失去唯一的预算锁** ⇒ 保留该条（已换成 harness 出口），并在原位写了理由。**票 B 把 forum 翻成数字预算后，
 这条即为重复，应删**。同理核对过：`points` / `recruiter` / `search` 虽也是 `pending`，但它们没有类 1 断言，删无可删。
+（**合并票 D #1227 后复验**：forum 仍是 `pending`、`api/forum.uts` 仍是 654 ⇒ 该例外依然必要，不是过时判断。）
 
 **强度核对（为什么删了不弱化）**：数字预算模块的声明面 = 全部归属文件（目录内 + 域 api），
 比原来各文件只扫 `pages/<key>/**` **更宽**（例：`profile` 21 → 24、`practice` 11 → 13；`courses` / `exam` / `resume` 相等）；
@@ -194,11 +195,48 @@ allowlist 断言不动（票 A 起已是数据读取）。
 （多跳过 `hybrid` / `.hbuilderx` / `.vscode` / `coverage` 等目录，本机实测这些目录**不存在**，故当前等价）；
 ③ 单目录列表里 `*.test.*` 被剔除（这些目录里没有测试文件）。
 
-**门证据（本 PR）**：③ `npm run test:unit` = **112 suites / 2068 tests 全绿**（本 worktree 基线实测 **2086**：
-把 14 份文件 `git stash` 回改前逐文件比对得 **609 → 591**，差 **18** 恰等于上表删除条数 —— 没有连带丢用例）；
-`node scripts/classify-guards.mjs --json` = **17 行为 / 95 接线 / 112 总数**，与改动前**逐文件零变化**；
+**门证据（本 PR）**：③ `npm run test:unit` = **112 suites / 2079 tests 全绿**（= 本票基线 **2086** − 删掉的 **18** 例
++ 票 D 并入的 E 组 **11** 例；2086 由本 worktree 实测：把 14 份文件 `git stash` 回改前逐文件比对得 **609 → 591**，
+差 **18** 恰等于上表删除条数 —— 没有连带丢用例）；
+`node scripts/classify-guards.mjs --json` = **112 总数 / 17 行为 / 95 接线**，与改动前**逐文件零变化**；
 `node scripts/check-contract-read.mjs --all` = **exit 0**（112 个测试文件无未归一的仓内源码裸读）。
 四门 **免（未命中运行时面）**：改动集只有 `utils/*.test.js` 与本文件。
+
+**与票 D 的并存**：两票都改本段（实施记录），合并时按 **A → C → D** 顺序保留双方原文，不删不改对方内容。
+
+### 票 D —— 全表对账：每个源文件都有归属（#1220，2026-09-21）
+
+**本票要治的是 A 留下的那条缝**：A 的对账只覆盖**模块归属面**（`pages/<键>/**` + 显式登记的目录外的家），
+于是**没进任何表的目录外文件是隐形的** —— `api/forum.uts` 当年正是这样躺在自称达标的 forum 模块里。
+A 把**已知**的域 api 逐个登记了，但「下一次有人加一个目录外文件」仍然不会红。
+
+**做法**：`utils/modules.js` 新增 `INFRA`（`dirs` 14 个 + `files` 6 个 + `oversized`），
+`utils/contractHarness.js` 新增 `infraFiles()` / `infraFacts(decls, infra)` 并把五面并入 `reconcile(decls, infra)`：
+`unregisteredSourceFiles`（**树上没归属的源文件**）· `infraPhantomDirs` / `infraPhantomFiles`（幽灵登记）·
+`infraOverlaps`（既归模块又登记为基础设施）· `infraOversizedDrift`（超预算的跨界文件**双向**对账）。
+判据：**树上的每个源文件，要么归某个模块、要么登记为基础设施，没有第三种** —— 实测 **218 个源文件 = 模块面 157 + 基础设施 61**。
+
+**登记不执法**：基础设施的行数**不进**任何模块的预算面（ADR-0023 ① 的边界：它们的预算归各自独立的票）。
+唯一一条超预算的跨界文件是 **`api/request.uts`（611 行）**，由 `INFRA.oversized` 显式登记、**本票不拆**
+（同模块 `pending` 的口径）—— 它从「没人看得见」变成了「表上一行」。
+
+**顺带的两处登记更正**（A 的归属规则当时只施加于域 api，漏了这两个）：`api/faq.uts`（帮助中心）与
+`api/note.uts`（笔记）的唯一消费方都是 `profile`，按归属规则②**归 profile**（不再算基础设施）。
+
+**规则适用面的澄清（写进 `modules.js` 文件头）**：归属规则①②③**只管域 api 与模块私有拆出物**；
+`utils/**` / `types/**` / `stores/**` / `constants/**` / `config/**` / `components/app-*` / `uni_modules/**` /
+`App.uvue` / `main.uts` 按**共享件**定位 —— 即使某个文件只有一个模块消费（例 `utils/forumDisplay.uts` 只被
+forum 用）也不归它，而是登记为基础设施（模块契约里的「展示纯函数唯一实现」断言正是把它们当共用的唯一实现面）。
+
+**「未达标」读法的延续**：票 A 把 ②⑥ 的「未达标模块」读作**预算未达标**（而不是「没有模块契约」），
+故 10 个无契约模块里已在预算内的 6 个被直接锁进 600、另 4 个（ai-assistant / forgot-password / login / register）
+登记 `pending`。本票维持该读法：**不**为这 6 个模块补写 `pending`（那等于白送一条不执法），并在票面记录了差异。
+
+**落锁**：`utils/modulesDeclarationContract.test.js` 新增 **E1–E11**（全表覆盖面非空 / 零隐形文件 / 幽灵与重叠 /
+超预算双向 / 6 条注入各自成对取证 / 报错信息指出文件）。**套件数不变**（只加用例、不加文件）。
+
+**门证据（本 PR）**：③ `112 suites / 2097 tests` 全绿（基线 112 / 2086，增量即 E 组 11 例）；
+分类计数 **112 / 17 行为 / 95 接线** 与改动前**逐项一致**。
 
 ## 关联
 

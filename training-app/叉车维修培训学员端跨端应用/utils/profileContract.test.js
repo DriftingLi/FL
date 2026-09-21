@@ -122,14 +122,9 @@ describe('raw .then 收紧完成度（本票四域 DTO 函数零残留）', () =
  * 「零直发请求」是 #641 模块 AC 的本模块锁；不新增全工程守护规则
  * （ADR-0007 明示该守护留待 #654 收尾票立项）。 */
 
-/** pages/profile/** 全部源文件（.uvue/.uts，排除测试） */
-function profileSourceFiles() {
-  return h.sourceFilesIn('pages/profile');
-}
-
 describe('页面预算落袋锁（手术目标本身也断言，防「只挪注释」的假达标；模块全量预算 / 深度已由声明面执法，#1219）', () => {
   it('走查范围非空（防路径断链导致空集合假绿：四页 + 8 组件 + flows + 其余页 ≥14）', () => {
-    expect(profileSourceFiles().length).toBeGreaterThanOrEqual(14);
+    expect(h.sourceFilesIn('pages/profile').length).toBeGreaterThanOrEqual(14);
   });
 
   it('四超预算文件全部预算内复检（错题本 1137 / 个人信息 1011 / 个人动态 722 / 主页 687 的落袋锁）', () => {
@@ -167,7 +162,7 @@ describe('组件接线汇总（T03 拆出物 8 组件 + 1 composable：显式 im
   });
 
   it('拆出物零孤儿：components/ 与 composables/ 每个文件都被模块内源文件 import（新增拆出物必须接线）', () => {
-    const pageSrcs = profileSourceFiles()
+    const pageSrcs = h.sourceFilesIn('pages/profile')
       .filter((f) => !f.includes('/components/') && !f.includes('/composables/'))
       .map(read);
     const orphanOf = (dir, prefix) => h.sourceFilesIn(`pages/profile/${dir}`)
@@ -185,7 +180,7 @@ describe('组件接线汇总（T03 拆出物 8 组件 + 1 composable：显式 im
 describe('页面层零直发请求（网络一律经域 api 函数，#641 收紧口径）', () => {
   it('pages/profile/** 无源文件 import api/request 或裸调 uni.request', () => {
     const hits = [];
-    for (const rel of profileSourceFiles()) {
+    for (const rel of h.sourceFilesIn('pages/profile')) {
       const src = read(rel);
       if (/from\s*'[^']*api\/request(\.uts)?'/.test(src)) hits.push(`${rel}: import api/request`);
       if (/uni\.request\s*\(/.test(src)) hits.push(`${rel}: uni.request 裸调`);

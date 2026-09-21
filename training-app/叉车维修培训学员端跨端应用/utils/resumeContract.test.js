@@ -2,21 +2,20 @@
  * resume 模块手术契约测试（T09，parent #647 / ADR-0007）
  *
  * 钉住 resume（在线简历编辑）手术交付的契约：
- * 1) 600 行软预算：pages/resume/** 全部源文件 + api/resume.uts ≤600，**新建 composable 与 section 组件同样计入**
- *    （T07 维护者裁定 B 硬化口径：防「把 922 行页面挪成 900 行 composable」的假达标）
- * 2) 模块目录 ≤2 层
- * 3) 模块必需源文件清单完整（删任一文件即红，扫描面不靠数量下限兜底）
- * 4) composable 接线：resume-edit.uvue 以显式 import 使用模块私有 composable，且 composable 有显式结果类型
- * 5) 组件接线零孤儿：页面 import 的组件文件必须存在，组件文件必须被页面引用（#779 回归教训）
- * 6) 页面 ↔ 组件接口对账：prop / 事件双向无孤儿，`update:` 前缀按 kebab 归一（本票唯一新增接口面）
- * 7) allowlist 不回潮：resume 域文件不得出现在 GUARD_ALLOWLIST
- * 8) 零直发请求：pages/resume/** 不直接 uni.request；请求只经 api/resume.uts
- * 9) 域 api 收紧：5 个 DTO 出口经 mapper-callback 家族，3 个裸透传在白名单内（multipart 上传 ×2 + void 删除）
- * 10) 幻影路由锁（#662 口径）：api 层每条路由都落在后端已注册清单内（job_card.go / resume_view.go / training_catalog.go）
- * 11) 删除禁区「resume 不用删」的行为保持点：草稿回填 / 服务端回显 / 完善度 12 项 / 三处 actionSheet /
- *     教育·工作经历增删 / 保存四条校验 / 本地草稿双 key / 保存成功回列表 / 保存栏双入口逐项仍在
- * 12) 拆分判据锁（T09 新增）：页面壳层不得自持编辑态 ref；教育·工作列表（v-model 风险区）留在壳层
- * 13) 零消费出口白名单：setVisibility / getViewStats / uploadWorkPhoto 是既有零消费出口，保留决策入锁
+ * 1) 600 行软预算 / 模块目录 ≤2 层 / 必需源文件清单：**已由声明面执法**（`utils/modules.js` +
+ *    `utils/modulesDeclarationContract.test.js` 的 A3/A5/A10），本文件不再各写一遍（ADR-0023 票 C #1219）；
+ *    本文件只留「手术目标页 `resume-edit.uvue` 落袋」这一条（含它的红能力自检）
+ * 2) composable 接线：resume-edit.uvue 以显式 import 使用模块私有 composable，且 composable 有显式结果类型
+ * 3) 组件接线零孤儿：页面 import 的组件文件必须存在，组件文件必须被页面引用（#779 回归教训）
+ * 4) 页面 ↔ 组件接口对账：prop / 事件双向无孤儿，`update:` 前缀按 kebab 归一（本票唯一新增接口面）
+ * 5) allowlist 不回潮：resume 域文件不得出现在 GUARD_ALLOWLIST
+ * 6) 零直发请求：pages/resume/** 不直接 uni.request；请求只经 api/resume.uts
+ * 7) 域 api 收紧：5 个 DTO 出口经 mapper-callback 家族，3 个裸透传在白名单内（multipart 上传 ×2 + void 删除）
+ * 8) 幻影路由锁（#662 口径）：api 层每条路由都落在后端已注册清单内（job_card.go / resume_view.go / training_catalog.go）
+ * 9) 删除禁区「resume 不用删」的行为保持点：草稿回填 / 服务端回显 / 完善度 12 项 / 三处 actionSheet /
+ *    教育·工作经历增删 / 保存四条校验 / 本地草稿双 key / 保存成功回列表 / 保存栏双入口逐项仍在
+ * 10) 拆分判据锁（T09 新增）：页面壳层不得自持编辑态 ref；教育·工作列表（v-model 风险区）留在壳层
+ * 11) 零消费出口白名单：setVisibility / getViewStats / uploadWorkPhoto 是既有零消费出口，保留决策入锁
  *
  * 本套件是**接线守护**（源码文本 + 结构对账，不构成 ③ 门的行为证据）：它守的是「页面↔组件↔composable↔域 api」
  * 的接线，行为兜底 = ④ 编译门（Kotlin 形态）+ ①a 真机逐页冒烟；接口改名/漏绑由本套件在 CI 上先红。
