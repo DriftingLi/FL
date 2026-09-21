@@ -1,7 +1,13 @@
 /**
  * 简历模块 API（对齐后端 JobCardDTO / JobCardInput 契约）
+ *
+ * T09 resume 手术（parent #647 / ADR-0007）：DTO 出口收敛到 mapper-callback 家族
+ * （`getMapped` / `requestMapped`，T01 出口），拆包后的 `data` 一律经本文件的 `build*` 手动映射，
+ * 页面层只消费显式 DTO（ADR-0003 手动 JSON 映射同构）。
+ * 刻意保留裸透传的三类（白名单，理由在各自函数上）：multipart 上传（无 mapped 便捷面）、
+ * void 语义删除（#1198 端点已定，行为与错误传播逐字不变）。
  */
-import { get, put, del, uploadFile } from './request'
+import { getMapped, requestMapped, del, uploadFile } from './request'
 import type { RequestOptions } from './request'
 import { toStr, toNumber, toBool, errMsg } from './helpers'
 import type { ResumeData, SaveResumeParams, ResumeExperience, ResumeCertification, PositionItem } from '../types/index'
@@ -175,18 +181,36 @@ function buildSavePayload(p : SaveResumeParams) : UTSJSONObject {
 	return body
 }
 
+/** 岗位字典映射（GET /positions 的 data.positions） */
+function buildPositionList(data : UTSJSONObject) : PositionItem[] {
+	const list : PositionItem[] = []
+	const raw = data['positions']
+	if (raw != null) {
+		try {
+			const arr = raw as Array<UTSJSONObject>
+			for (let i = 0; i < arr.length; i++) {
+				list.push({
+					position_id: toNumber(arr[i]['position_id']),
+					code: toStr(arr[i]['code']),
+					name: toStr(arr[i]['name']),
+				})
+			}
+		} catch (_e) {}
+	}
+	return list
+}
+
 // ========== 对外 API 函数 ==========
 
 /**
  * 获取我的简历
  * GET /resume
- * 已建 → ResumeData；未建（404）→ throw {kind:'notfound'}
+ * 已建 → ResumeData；未建（404）→ Error（消息逐字保持，含 '不存在' / '404' 判据）
+ * @note `RESUME_NOT_FOUND` 语义与调用方的 notfound 判据是既有形态，本票逐字搬迁不改（缺陷另记 issue）
  */
 export function getResumeApi() : Promise<ResumeData> {
 	const opts : RequestOptions = { url: '/resume', silent: true } as RequestOptions
-	return get('/resume', null, opts).then((data : UTSJSONObject) : ResumeData => {
-		return buildResumeData(data)
-	}).catch((e) : ResumeData => {
+	return getMapped<ResumeData>('/resume', null, (data : UTSJSONObject) : ResumeData => buildResumeData(data), opts).catch((e) : ResumeData => {
 		const msg = errMsg(e, '')
 		if (msg.indexOf('不存在') >= 0 || msg.indexOf('404') >= 0) {
 			throw new Error('RESUME_NOT_FOUND: 简历不存在')
@@ -198,14 +222,14 @@ export function getResumeApi() : Promise<ResumeData> {
 /**
  * 保存简历（PUT /resume 整页 upsert）
  * @returns 服务端返回的最新简历数据
+ * @note 走 `requestMapped` + `opts.method` 赋值：与既有 `put()` 逐字同通路（同一 opts.data / method 形态）
  */
 export function saveResumeApi(params : SaveResumeParams) : Promise<ResumeData> {
 	// silent: 由调用方统一提示保存结果，避免 request 层与页面双重 toast
 	const opts : RequestOptions = { url: '/resume', silent: true } as RequestOptions
-	const body = buildSavePayload(params)
-	return put('/resume', body, opts).then((data : UTSJSONObject) : ResumeData => {
-		return buildResumeData(data)
-	})
+	opts.method = 'PUT'
+	opts.data = buildSavePayload(params)
+	return requestMapped<ResumeData>(opts, (data : UTSJSONObject) : ResumeData => buildResumeData(data))
 }
 
 /**
@@ -215,20 +239,19 @@ export function saveResumeApi(params : SaveResumeParams) : Promise<ResumeData> {
  */
 export function setVisibilityApi(visibility : string) : Promise<string> {
 	const opts : RequestOptions = { url: '/resume/visibility', silent: true } as RequestOptions
-	return put('/resume/visibility', { visibility: visibility }, opts).then((data : UTSJSONObject) : string => {
-		return toStr(data['visibility'])
-	})
+	opts.method = 'PUT'
+	opts.data = { visibility: visibility } as UTSJSONObject
+	return requestMapped<string>(opts, (data : UTSJSONObject) : string => toStr(data['visibility']))
 }
 
 /**
  * 获取简历被查看次数
  * GET /resume/view-stats
+ * @note 本函数在移动端**当前零消费**（调用面见契约测试的零消费白名单），保留出口不改消费面
  */
 export function getViewStatsApi() : Promise<number> {
 	const opts : RequestOptions = { url: '/resume/view-stats', silent: true } as RequestOptions
-	return get('/resume/view-stats', null, opts).then((data : UTSJSONObject) : number => {
-		return toNumber(data['count'])
-	})
+	return getMapped<number>('/resume/view-stats', null, (data : UTSJSONObject) : number => toNumber(data['count']), opts)
 }
 
 /**
@@ -237,28 +260,13 @@ export function getViewStatsApi() : Promise<number> {
  */
 export function getPositionsApi() : Promise<PositionItem[]> {
 	const opts : RequestOptions = { url: '/positions', silent: true } as RequestOptions
-	return get('/positions', null, opts).then((data : UTSJSONObject) : PositionItem[] => {
-		const list : PositionItem[] = []
-		const raw = data['positions']
-		if (raw != null) {
-			try {
-				const arr = raw as Array<UTSJSONObject>
-				for (let i = 0; i < arr.length; i++) {
-					list.push({
-						position_id: toNumber(arr[i]['position_id']),
-						code: toStr(arr[i]['code']),
-						name: toStr(arr[i]['name']),
-					})
-				}
-			} catch (_e) {}
-		}
-		return list
-	})
+	return getMapped<PositionItem[]>('/positions', null, (data : UTSJSONObject) : PositionItem[] => buildPositionList(data), opts)
 }
 
 /**
  * 上传工作照
  * POST /resume/image (multipart/form-data)
+ * @note 裸 `uploadFile` 白名单：mapper-callback 家族没有 multipart 出口，请求形态（表单字段名）不得改
  */
 export function uploadWorkPhotoApi(filePath : string) : Promise<string> {
 	return uploadFile('/resume/image', filePath, 'file').then((data : UTSJSONObject) : string => {
@@ -269,6 +277,7 @@ export function uploadWorkPhotoApi(filePath : string) : Promise<string> {
 /**
  * 上传简历 PDF
  * POST /resume/pdf (multipart/form-data)
+ * @note 裸 `uploadFile` 白名单：同上，multipart 无 mapped 便捷面
  */
 export function uploadResumePdfApi(filePath : string) : Promise<string> {
 	return uploadFile('/resume/pdf', filePath, 'file').then((data : UTSJSONObject) : string => {
@@ -284,6 +293,8 @@ export function uploadResumePdfApi(filePath : string) : Promise<string> {
  *               ⇒ 非 'pdf' 的取值一律按 PDF 处理。
  * @note #1198：本行此前打的是 `DELETE /resume/attachment` —— 一个不存在的端点，真机必 404，
  *             且 404 时调用方的 `.then()` 不执行（本地附件状态清不掉、服务端 PDF 也从未删除）。
+ * @note 裸 `del` 白名单：void 语义（无返回体可映射），且端点与调用点由 #1198 的
+ *       `resumeAttachmentContract` 逐字钉住 —— 改形态会让那条跨栈守护失配
  */
 export function deleteAttachmentApi(type : string) : Promise<void> {
 	const opts : RequestOptions = { url: '/resume/pdf' } as RequestOptions
