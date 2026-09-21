@@ -18,7 +18,18 @@ func newProgressTestEnv(t *testing.T) (*CourseService, *model.Course, *model.Cha
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
 	svc := NewCourseService(db, nil, zap.NewNop())
-	course := model.Course{Name: "换算课程", Status: 1, CreatedAt: testutil.Now()}
+	// 进度上报自 ADR-0062 决策 3 起与三条内容读路径共用同一条判据（可见性 ∧ 权益），
+	// 故本夹具必须造「已挂载」课程（有方向 + 等级）——不挂载的课程对学员本就不可见。
+	spec := model.Specialty{Code: "prog-mount", Name: "换算方向", SortOrder: 1, Status: 1}
+	if err := db.Create(&spec).Error; err != nil {
+		t.Fatalf("创建专业方向失败: %v", err)
+	}
+	lv := model.CourseLevel{Code: "prog-mount-lv", Name: "入门", SortOrder: 1, Status: 1}
+	if err := db.Create(&lv).Error; err != nil {
+		t.Fatalf("创建课程等级失败: %v", err)
+	}
+	course := model.Course{Name: "换算课程", Status: 1, SpecialtyID: &spec.SpecialtyID,
+		LevelID: &lv.LevelID, CreatedAt: testutil.Now()}
 	if err := db.Create(&course).Error; err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}

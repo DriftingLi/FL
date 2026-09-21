@@ -62,13 +62,23 @@ func TestPaidCourseEntitlementGate(t *testing.T) {
 
 	chapterURL := fmt.Sprintf("/api/course/%d/chapter/%d", course.CourseID, ch.ChapterID)
 	slidesURL := fmt.Sprintf("/api/chapter/%d/slides", ch.ChapterID)
+	progressURL := fmt.Sprintf("/api/course/%d/progress", course.CourseID)
+	progressBody := map[string]any{"chapter_id": ch.ChapterID, "duration_seconds": 120, "video_position": 60}
 
-	// 未兑换：两条内容读面都按「不存在」（不泄漏「这门课要钱」之外的信息）。
+	// 未兑换：三条路径（章节详情 / 幻灯片 / 进度上报）都按「不存在」。
 	// 断言必须命中信封 404 —— 路由写错时的 gin 裸 404 同样状态码，会伪装成通过。
-	for _, u := range []string{chapterURL, slidesURL} {
-		rec := doWithToken(t, r, token, http.MethodGet, u, nil)
+	for _, probe := range []struct {
+		method, url string
+		body        any
+	}{
+		{http.MethodGet, chapterURL, nil},
+		{http.MethodGet, slidesURL, nil},
+		{http.MethodPost, progressURL, progressBody},
+	} {
+		rec := doWithToken(t, r, token, probe.method, probe.url, probe.body)
 		if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), `"code":404`) {
-			t.Fatalf("未兑换读付费内容应命中信封 404: %s got %d %s", u, rec.Code, rec.Body.String())
+			t.Fatalf("未兑换不得读写付费课程内容: %s %s got %d %s",
+				probe.method, probe.url, rec.Code, rec.Body.String())
 		}
 	}
 
@@ -77,10 +87,17 @@ func TestPaidCourseEntitlementGate(t *testing.T) {
 		t.Fatalf("兑换付费课程应 200, got %d %s", rec.Code, rec.Body.String())
 	}
 
-	// 兑换后：权益即成为读面依据（服务端事实，不靠前端内存标记）
-	for _, u := range []string{chapterURL, slidesURL} {
-		if rec := doWithToken(t, r, token, http.MethodGet, u, nil); rec.Code != http.StatusOK {
-			t.Fatalf("兑换后读该章节内容应 200: %s got %d %s", u, rec.Code, rec.Body.String())
+	// 兑换后：权益即成为读写依据（服务端事实，不靠前端内存标记）
+	for _, probe := range []struct {
+		method, url string
+		body        any
+	}{
+		{http.MethodGet, chapterURL, nil},
+		{http.MethodGet, slidesURL, nil},
+		{http.MethodPost, progressURL, progressBody},
+	} {
+		if rec := doWithToken(t, r, token, probe.method, probe.url, probe.body); rec.Code != http.StatusOK {
+			t.Fatalf("兑换后 %s %s 应 200, got %d %s", probe.method, probe.url, rec.Code, rec.Body.String())
 		}
 	}
 }

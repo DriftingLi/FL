@@ -262,7 +262,12 @@ func (h *CourseHandler) UpdateStudyProgress(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *studyProgressReq) (*service.StudyProgressDTO, error) {
 			return h.svc.UpdateStudyProgress(req.StudentID, req.CourseID, req.Input)
 		},
-		ErrStatus: errStatusAllPrefix(http.StatusInternalServerError, "更新进度失败: "),
+		ErrStatus: &errStatusTable{entries: []errStatusEntry{
+			// 不可读（未发布 / 未挂载 / 未兑换）按 404，与另外三条内容路径同判
+			// （ADR-0062 决策 3）；其余错误保持既有「更新进度失败: + 原文」500 形状。
+			{sentinel: service.ErrContentNotReadable, status: http.StatusNotFound},
+			{sentinel: nil, status: http.StatusInternalServerError, errPrefix: "更新进度失败: "},
+		}},
 		Render: func(c *gin.Context, _ *studyProgressReq, resp *service.StudyProgressDTO) {
 			response.SuccessWithMsg(c, "学习进度更新成功", resp)
 		},
