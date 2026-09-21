@@ -21,6 +21,13 @@ const read = (rel) => readText(path.join(ROOT, rel));
 /** 豁免名单从单点读（ADR-0023 ⑧）：不再解析守护脚本源码文本取常量 */
 const { allowlistPaths } = require('./contractHarness');
 
+/**
+ * DTO 构造层（#1218 / ADR-0023 票 B 拆出）：`build*` / `extract*` 九个函数住在 `api/forumDto.uts`。
+ * **字段级断言一律读这个文件**（响应 shape 的构造在那边）；`api/forum.uts` 只剩请求形态
+ * （路由 / 参数 / 出口选择），所以「参数透传」「出口家族」那类断言仍读 forum.uts。
+ */
+const readForumDto = () => read('api/forumDto.uts');
+
 /** 模块目录下全部源文件（.uvue/.uts，排除测试） */
 function forumSourceFiles(dir = 'pages/forum') {
   const out = [];
@@ -246,7 +253,7 @@ describe('精选筛选契约（#742 批次三：三 Tab 通用精选筛选 + 列
   });
 
   it('api：buildTopic 回显后端 DTO 字段 is_featured（勿改名）', () => {
-    expect(src).toContain("is_featured: toBool(obj['is_featured'])");
+    expect(readForumDto()).toContain("is_featured: toBool(obj['is_featured'])");
   });
 
   it('types：ForumTopic 携带 is_featured', () => {
@@ -301,7 +308,7 @@ describe('备考经验认定契约（ADR-0040：is_experience 是管理端认定
   });
 
   it('api：buildTopic 映射后端 is_experience 字段（#836 收尾）', () => {
-    expect(src).toContain("is_experience: toBool(obj['is_experience'])");
+    expect(readForumDto()).toContain("is_experience: toBool(obj['is_experience'])");
   });
 
   it('列表项扁平下发 is_experience（#836 收尾）', () => {
@@ -466,10 +473,12 @@ describe('IP 属地契约（ADR-0045：发布那一刻的快照，市优先退�
   });
 
   it('api：三个 builder 原样映射两字段（列表 DTO 也带，但展示口径由组件决定）', () => {
-    expect((src.match(/ip_province: toStr\(obj\['ip_province'\]\)/g) || []).length).toBe(2);
-    expect(src).toContain("ip_province: toStr(topicObj['ip_province'])");
-    expect((src.match(/ip_city: toStr\(/g) || []).length).toBe(3);
+    const dto = readForumDto();
+    expect((dto.match(/ip_province: toStr\(obj\['ip_province'\]\)/g) || []).length).toBe(2);
+    expect(dto).toContain("ip_province: toStr(topicObj['ip_province'])");
+    expect((dto.match(/ip_city: toStr\(/g) || []).length).toBe(3);
     // 属地是服务端快照：客户端不得反写 / 重解析（发帖与回复载荷都不含这两个字段）
+    expect(dto).not.toMatch(/payload\['ip_(province|city)'\]/);
     expect(src).not.toMatch(/payload\['ip_(province|city)'\]/);
   });
 
@@ -543,14 +552,16 @@ describe('回复分页契约（ADR-0042 / #850：详情回复改分页读取 + �
   });
 
   it('api：buildTopicDetail 回显分页三元组（采纳接口无三元组时垫成「只有一页」，不退化成「还有更多」）', () => {
-    expect(src).toContain("page: toNumber(obj['page'], 1),");
-    expect(src).toContain("pages: toNumber(obj['pages'], 1),");
-    expect(src).toContain("total: toNumber(obj['total'], replies.length),");
+    const dto = readForumDto();
+    expect(dto).toContain("page: toNumber(obj['page'], 1),");
+    expect(dto).toContain("pages: toNumber(obj['pages'], 1),");
+    expect(dto).toContain("total: toNumber(obj['total'], replies.length),");
   });
 
   it('api：buildReply 映射被回复人 parent_name / parent_avatar_url（ADR-0042 一并新增，勿丢）', () => {
-    expect(src).toContain("parent_name: toStr(obj['parent_name']),");
-    expect(src).toContain("parent_avatar_url: toStr(obj['parent_avatar_url']),");
+    const dto = readForumDto();
+    expect(dto).toContain("parent_name: toStr(obj['parent_name']),");
+    expect(dto).toContain("parent_avatar_url: toStr(obj['parent_avatar_url']),");
   });
 
   it('types：ForumTopicDetail 携带分页三元组；ForumReply 携带被回复人两字段', () => {
@@ -624,5 +635,44 @@ describe('回复分页契约（ADR-0042 / #850：详情回复改分页读取 + �
     const cancelAt = detail.indexOf('await cancelAcceptApi(');
     expect(cancelAt).toBeGreaterThan(-1);
     expect(detail.slice(cancelAt, cancelAt + 600)).toContain('await loadDetail()');
+  });
+});
+
+/**
+ * DTO 构造层拆分锁（#1218 / ADR-0023 票 B）
+ *
+ * 拆出来是为了让 `api/forum.uts` 落回 600 行软预算内（拆前 654 行）；**拆缝本身要有人守**，
+ * 否则「顺手合并回一个文件」既能把预算顶回去、又让字段级契约断言失去目标。
+ * 两侧各一条：请求侧必须从 `./forumDto` 取构造层；构造侧必须只做映射（不许长出请求出口）。
+ */
+describe('DTO 构造层拆分锁（#1218：请求形态与响应构造分家）', () => {
+  it('api/forum.uts 从 ./forumDto 取构造层（5 个 builder 都在 import 里）', () => {
+    const src = read('api/forum.uts');
+    for (const name of ['buildReply', 'buildTopic', 'buildTopicListResult', 'buildTopicDetail', 'buildLikeResult']) {
+      expect(src).toMatch(new RegExp(`import\\s*\\{[^}]*\\b${name}\\b[^}]*\\}\\s*from\\s*'\\.\\/forumDto'`));
+    }
+  });
+
+  it('api/forum.uts 不再自带构造层（extract* / build* 的 `function` 定义一个都不留）', () => {
+    const src = read('api/forum.uts');
+    for (const name of ['extractAuthorName', 'extractAuthorId', 'extractAuthorAvatar', 'extractImages', 'buildReply', 'buildTopic', 'buildTopicListResult', 'buildTopicDetail', 'buildLikeResult']) {
+      expect(src).not.toMatch(new RegExp(`function\\s+${name}\\s*\\(`));
+    }
+  });
+
+  it('api/forumDto.uts 九个构造函数都在（extract 4 + build 5），且零请求出口', () => {
+    const dto = readForumDto();
+    for (const name of ['extractAuthorName', 'extractAuthorId', 'extractAuthorAvatar', 'extractImages', 'buildReply', 'buildTopic', 'buildTopicListResult', 'buildTopicDetail', 'buildLikeResult']) {
+      expect(dto).toContain(`export function ${name}(`);
+    }
+    // 构造层只碰响应对象：不 import request 层，也不出现任何请求出口调用
+    expect(dto).not.toMatch(/from\s*'\.\/request'/);
+    expect(dto).not.toMatch(/\b(getMapped|postMapped|requestMapped|uploadFile)\s*\(/);
+  });
+
+  it('拆后的两个文件都在 600 行以下（拆分的**目的**，别只看现状：这条同时是回潮锁）', () => {
+    const lines = (rel) => read(rel).split('\n').length;
+    expect(lines('api/forum.uts')).toBeLessThanOrEqual(600);
+    expect(lines('api/forumDto.uts')).toBeLessThanOrEqual(600);
   });
 });
