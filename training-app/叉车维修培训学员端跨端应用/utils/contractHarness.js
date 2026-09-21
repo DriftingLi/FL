@@ -30,7 +30,7 @@ const fs = require('fs');
 const path = require('path');
 
 const { readText } = require('./utsHarness');
-const { BUDGET, MAX_DEPTH, MODULES } = require('./modules');
+const { BUDGET, MAX_DEPTH, MODULES, INFRA } = require('./modules');
 const { GUARD_ALLOWLIST, allowlistPaths } = require('./guardAllowlist');
 
 /** 移动端工程根（= `utils/` 的上一级）。与既有契约测试的 `path.join(__dirname, '..')` 同值。 */
@@ -325,11 +325,56 @@ function invalidOverrides(key, decls = MODULES) {
 }
 
 /**
+ * 基础设施面：声明里 `dirs` 展开成源文件 + `files` 原样（排序、去重）。
+ * @param {object} infra 基础设施声明（默认 `INFRA`；注入自检传改坏过的副本）
+ */
+function infraFiles(infra = INFRA) {
+  const out = new Set();
+  for (const d of infra.dirs || []) {
+    for (const f of sourceFilesIn(d)) out.add(f);
+  }
+  for (const f of infra.files || []) out.add(f);
+  return [...out].sort();
+}
+
+/**
+ * 全表对账里基础设施那一侧的事实（票 D #1220）。**只出事实**，判红在测试里。
+ * @param {object} decls 模块声明集合
+ * @param {object} infra 基础设施声明
+ * @returns {{dirs:number,files:number,phantomDirs:string[],phantomFiles:string[],overlaps:string[],unregistered:string[],oversized:string[],oversizedDrift:string[]}}
+ *   - `unregistered`：树上有、既没归模块也没登记为 infra 的源文件（**这就是「隐形文件」的位置**）
+ *   - `overlaps`：既被模块声明、又登记为 infra（归属不唯一）
+ *   - `oversized` / `oversizedDrift`：超预算的 infra 文件；以及 `oversized` 登记的**双向**漂移
+ */
+function infraFacts(decls = MODULES, infra = INFRA) {
+  const owned = new Set(moduleKeys(decls).flatMap((k) => declaredFiles(k, decls)));
+  const inf = infraFiles(infra);
+  const infSet = new Set(inf);
+  const onDisk = filesUnder('.', SOURCE_RE, true);
+  const oversized = inf.filter((f) => exists(f) && fileLines(f) > BUDGET);
+  const declaredOversized = infra.oversized || [];
+  return {
+    dirs: (infra.dirs || []).length,
+    files: inf.length,
+    phantomDirs: (infra.dirs || []).filter((d) => !fs.existsSync(absOf(d))).sort(),
+    phantomFiles: (infra.files || []).filter((f) => !exists(f)).sort(),
+    overlaps: inf.filter((f) => owned.has(f)).sort(),
+    unregistered: onDisk.filter((f) => !owned.has(f) && !infSet.has(f)).sort(),
+    oversized,
+    oversizedDrift: [
+      ...oversized.filter((f) => !declaredOversized.includes(f)),
+      ...declaredOversized.filter((f) => !oversized.includes(f)),
+    ].sort(),
+  };
+}
+
+/**
  * 一次拿全：声明面自检的全部事实。
  * @param {object} decls 声明集合（默认真源 `MODULES`；注入自检传改坏过的副本）
+ * @param {object} infra 基础设施声明（同上，默认真源 `INFRA`）
  * @returns {object} 每一面一个违规清单 + `ok`（`pending` 是事实不是违规）
  */
-function reconcile(decls = MODULES) {
+function reconcile(decls = MODULES, infra = INFRA) {
   const keys = moduleKeys(decls);
   const missing = [];
   const missingDirs = [];
@@ -393,6 +438,7 @@ function reconcile(decls = MODULES) {
     .sort((a, b) => a.file.localeCompare(b.file));
 
   const consumers = consumerFacts(decls);
+  const infrastructure = infraFacts(decls, infra);
   const sortBy = (a, b) =>
     `${a.module}|${a.file || a.consumer || a.dir || ''}`.localeCompare(`${b.module}|${b.file || b.consumer || b.dir || ''}`);
 
@@ -415,11 +461,19 @@ function reconcile(decls = MODULES) {
     unregisteredConsumers: consumers.unregistered,
     staleConsumers: consumers.stale,
     pending,
+    // 全表对账（票 D）：基础设施那一侧
+    infraFiles: infrastructure.files,
+    unregisteredSourceFiles: infrastructure.unregistered,
+    infraPhantomDirs: infrastructure.phantomDirs,
+    infraPhantomFiles: infrastructure.phantomFiles,
+    infraOverlaps: infrastructure.overlaps,
+    infraOversizedDrift: infrastructure.oversizedDrift,
   };
   report.violations = [
     'undeclaredModules', 'phantomModules', 'missing', 'missingDirs', 'phantom', 'duplicates',
     'depth', 'budget', 'orphanExtracts', 'deadImports', 'allowlistUnregistered',
     'allowlistStaleOwned', 'invalidOverrides', 'unregisteredConsumers', 'staleConsumers',
+    'unregisteredSourceFiles', 'infraPhantomDirs', 'infraPhantomFiles', 'infraOverlaps', 'infraOversizedDrift',
   ].filter((k) => report[k].length > 0);
   report.ok = report.violations.length === 0;
   return report;
@@ -461,10 +515,14 @@ module.exports = {
   // 预算与总对账
   budgetViolations,
   invalidOverrides,
+  // 基础设施（全表对账，票 D）
+  infraFiles,
+  infraFacts,
   reconcile,
   // 常量透出（消费方不必再 require 两个文件）
   BUDGET,
   MAX_DEPTH,
   MODULES,
+  INFRA,
   GUARD_ALLOWLIST,
 };

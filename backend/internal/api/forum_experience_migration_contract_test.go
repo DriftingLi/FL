@@ -33,9 +33,15 @@ func TestForumExperienceDesignationOnPostgres(t *testing.T) {
 	author := testutil.SeedStudent(t, db, "desig_pg_author", "x")
 
 	// 1. 列存在且默认 false
+	//
+	// `table_schema = current_schema()` 不可省：`go test ./...` 并发跑多个包、共用同一个测试库，
+	// 每个包各建随机 schema，而 `information_schema` 是**全库视图** —— 不收窄就会命中别的包
+	// 那份同名 `forum_topics`，本断言从此与「本 schema 的迁移 000027 是否生效」脱钩。
+	// 同形状的收窄见 `internal/migrate/columns.go:41`（列对账）与 #1197 的 contact 窗口契约测试。
 	var colExists bool
 	if err := db.Raw(`SELECT EXISTS (SELECT 1 FROM information_schema.columns
-		WHERE table_name = 'forum_topics' AND column_name = 'is_experience')`).Scan(&colExists).Error; err != nil {
+		WHERE table_schema = current_schema()
+		  AND table_name = 'forum_topics' AND column_name = 'is_experience')`).Scan(&colExists).Error; err != nil {
 		t.Fatalf("查询列存在性失败: %v", err)
 	}
 	if !colExists {

@@ -307,3 +307,97 @@ describe('D. harness 自己的约束（ADR-0023 ②④ / ⑤）', () => {
     expect(code).not.toMatch(/\bfs\./);
   });
 });
+
+/**
+ * E 组 —— **全表对账**（票 D #1220）：把「隐形的目录外文件」这条缝堵死。
+ *
+ * A 组对账的是**模块归属面**（`pages/<键>/**` + 登记的目录外的家）；于是**没进任何表的目录外文件**
+ * 在 A 组眼下是隐形的 —— `api/forum.uts` 当年就是这样（654 行、躺在自称达标的 forum 模块里）。
+ * E 组要求：**树上的每个源文件，要么归某个模块、要么登记为基础设施**，没有第三种。
+ * 基础设施**登记不执法**（行数不进模块预算面），但「谁在表上」这件事本身是硬判据。
+ * 判别力同样成对取证（E4–E8：真实声明必不红 + 改坏必红）。
+ */
+describe('E. 全表对账：每个源文件都有归属（模块 或 基础设施）', () => {
+  it('E1: 全表覆盖面非空（模块面 / 基础设施面 / 全树源文件都成规模，防空集合假绿）', () => {
+    const onDisk = h.filesUnder('.', /\.(uvue|uts)$/, true);
+    const declared = h.moduleKeys().reduce((n, k) => n + h.declaredFiles(k).length, 0);
+    const infra = h.infraFiles();
+    expect(onDisk.length).toBeGreaterThan(200);
+    expect(declared).toBeGreaterThan(150);
+    expect(infra.length).toBeGreaterThan(50);
+    // 两面加起来的**去重并集**必须恰好等于全树源文件数（既不多也不少）
+    expect(new Set([...h.moduleKeys().flatMap((k) => h.declaredFiles(k)), ...infra]).size).toBe(onDisk.length);
+  });
+
+  it('E2: 零隐形文件：树上每个源文件都归了模块或登记为基础设施', () => {
+    expect(REAL.unregisteredSourceFiles).toEqual([]);
+  });
+
+  it('E3: 基础设施登记项都真实存在，且不与模块面重叠（归属唯一）', () => {
+    expect(REAL.infraPhantomDirs).toEqual([]);
+    expect(REAL.infraPhantomFiles).toEqual([]);
+    expect(REAL.infraOverlaps).toEqual([]);
+  });
+
+  it('E4: 超预算的跨界文件双向对账（登记不执法，但不许隐形、也不许留过期登记）', () => {
+    expect(REAL.infraOversizedDrift).toEqual([]);
+    // 事实可见：现在确实有一条（`api/request.uts`）—— 这条断言防「oversized 恒空 ⇒ 判据空跑」
+    const facts = h.infraFacts();
+    expect(facts.oversized.length).toBeGreaterThan(0);
+    expect(facts.oversized.every((f) => h.fileLines(f) > h.BUDGET)).toBe(true);
+  });
+
+  const INFRA_INJECTIONS = [
+    {
+      id: 'E5',
+      name: '整目录从基础设施面里漏登记（`utils`）',
+      key: 'unregisteredSourceFiles',
+      apply: (infra) => { infra.dirs = infra.dirs.filter((d) => d !== 'utils'); },
+    },
+    {
+      id: 'E6',
+      name: '幽灵登记：基础设施里写一个不存在的文件',
+      key: 'infraPhantomFiles',
+      apply: (infra) => { infra.files.push('api/ghost-api.uts'); },
+    },
+    {
+      id: 'E7',
+      name: '归属重叠：把一个已归模块的文件也登记成基础设施',
+      key: 'infraOverlaps',
+      apply: (infra) => { infra.files.push('api/course.uts'); },
+    },
+    {
+      id: 'E8',
+      name: '超预算跨界文件漏登记（清空 oversized）',
+      key: 'infraOversizedDrift',
+      apply: (infra) => { infra.oversized = []; },
+    },
+    {
+      id: 'E9',
+      name: '过期登记：oversized 里留一个没超预算的文件',
+      key: 'infraOversizedDrift',
+      apply: (infra) => { infra.oversized.push('api/auth.uts'); },
+    },
+    {
+      id: 'E10',
+      name: '幽灵基础设施目录',
+      key: 'infraPhantomDirs',
+      apply: (infra) => { infra.dirs.push('utils/ghost-dir'); },
+    },
+  ];
+
+  it.each(INFRA_INJECTIONS)('$id: $name ⇒ $key 判红（真实声明必不红）', ({ key, apply }) => {
+    expect(REAL[key]).toEqual([]); // 必不红一侧
+    const brokenInfra = JSON.parse(JSON.stringify(h.INFRA));
+    apply(brokenInfra);
+    expect(h.reconcile(h.MODULES, brokenInfra)[key].length).toBeGreaterThan(0); // 必红一侧
+  });
+
+  it('E11: 漏登记的信息能直接指出是哪个文件（可照抄进声明）', () => {
+    const brokenInfra = JSON.parse(JSON.stringify(h.INFRA));
+    brokenInfra.dirs = brokenInfra.dirs.filter((d) => d !== 'utils');
+    const missing = h.reconcile(h.MODULES, brokenInfra).unregisteredSourceFiles;
+    expect(missing).toContain('utils/format.uts');
+    expect(missing).toContain('utils/system.uts');
+  });
+});

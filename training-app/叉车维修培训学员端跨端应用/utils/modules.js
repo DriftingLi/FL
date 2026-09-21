@@ -8,14 +8,19 @@
  * ## 键与归属面
  *
  * - **键 = `pages/` 下的目录名**（23 个，一对一是默认规则）。
- * - `extraDirs` / `files` 里的目录外路径 = 「目录外的家」：域 api、共享组件与共享 composable。
+ * - `extraDirs` / `files` 里的目录外路径 = 「目录外的家」：**域 api** 与**模块私有拆出物**
+ *   （`components/**`、`composables/**`）。
  * - **归属规则（共享件归主消费方，ADR-0023 ③）**，按优先级：
  *   ① 该域有既有模块契约（`utils/*Contract.test.js`）⇒ 归该契约模块（例：`api/featured.uts` → `dashboard`）；
  *   ② 只有一个模块消费 ⇒ 归它（例：`api/job.uts` → `jobs`）；
  *   ③ 多消费且无契约 ⇒ 归「页面所在模块」并在行内写理由（例：`api/checkin.uts` → `forum`）。
  *   **多消费的其余模块登记在** `crossModuleConsumers`（消费者的登记面，不是所有权面）。
- * - 跨切面基础设施（`api/request.uts` / `api/auth.uts` / `api/helpers.uts` / `api/refreshGate.uts`）
- *   **不属于任何模块**，故不在本表内 —— 归属面只管「模块是什么」，不管全仓基础设施（ADR-0023 附录口径）。
+ * - **规则的适用面（票 D 澄清，别读成「全仓都要归模块」）**：上面三条只管**域 api 与模块私有拆出物**。
+ *   `utils/**` / `types/**` / `stores/**` / `constants/**` / `config/**` / `components/app-*` /
+ *   `uni_modules/**` / `App.uvue` / `main.uts` 是**跨切面基础设施**：即使某个文件只有一个模块消费
+ *   （例 `utils/forumDisplay.uts` 只被 forum 用），也**不**把它算成模块的私有物 —— 那些目录按**共享件**
+ *   定位（模块契约里的「展示纯函数唯一实现」断言正是把它们当模块共用的唯一实现面）。
+ *   它们在 `INFRA` 里**登记**（登记不执法），于是全表没有一个源文件是隐形的。
  *
  * ## 三个口径（读本表前必须先知道，否则数字对不上）
  *
@@ -24,11 +29,16 @@
  *    `api/forum.uts` 总行 **654** / 非空 **618** —— ADR-0023 附录用的是非空行数，故其数字**小于**执法口径。
  * 2. **`budget` 是「单文件行数上限」**，不是模块总行数；`BUDGET = 600` 沿用 ADR-0007 软预算。
  * 3. **`budget: 'pending'` = 登记不执法**（ADR-0023 ②⑥）：未达标模块照样入表，让进度变成表上一列，
- *    但不参与预算判红。本票（票 A）**不执法**，故 pending 是「现状照实登记」，不是豁免或买绿。
+ *    但不参与预算判红。票 A 时它是「现状照实登记」，不是豁免或买绿；**票 D 加了两向对账** ——
+ *    `pending` 必须是「**真有**超预算文件」的模块，且超预算文件必须有 `pending`（或数字预算判红）兜住，
+ *    于是这一列永远不会过期。
  *
  * ## 改这个文件的纪律
  *
  * - 在模块目录里**新增文件**必须同步登记（否则对账判红，信息里直接指出该加哪一行）。
+ * - **目录外新增的源文件**也必须落进表里：属于某模块（域 api / 拆出物）就写进那个模块的 `files`，
+ *   否则登记进 `INFRA`（`utils/modulesDeclarationContract.test.js` 的 E 组守这条 —— 树上的每个源文件
+ *   要么归模块、要么是基础设施，**没有第三种**）。
  * - 不得为已达标模块写 `budgetOverrides` 来买绿；每条覆盖必须带 `reason` + `issue`（缺一即登记非法）。
  * - 模块边界是显式决定；不得靠放宽对账消红（ADR-0023 ⑤）。
  */
@@ -38,6 +48,62 @@ const BUDGET = 600;
 
 /** 模块目录内最大相对层数：`<模块>/<文件>` = 1，`<模块>/<分组>/<文件>` = 2（不允许更深）。 */
 const MAX_DEPTH = 2;
+
+/**
+ * 跨切面基础设施（票 D #1220「全表对账」）：**不属于任何模块、但必须登记在表上**的源文件面。
+ *
+ * 为什么要有这一节：模块归属面只覆盖 `pages/<键>/**` 与显式登记的「目录外的家」，于是**新出现的
+ * 目录外文件在表上是隐形的** —— `api/forum.uts` 当年就是这样（654 行躺在自称「已达标」的 forum 模块里，
+ * 因为它的预算只扫 `pages/forum/**`，而那个文件**根本没进任何表**）。票价 A 把已知的域 api 逐个登记了，
+ * 但「**下一次**有人加一个目录外文件」仍不会红。
+ * 全表对账把这条堵死：**树上的每个源文件，要么归某个模块、要么在这里登记** —— 没有第三种。
+ *
+ * **登记不执法**：infra 的行数**不进**任何模块的预算面（ADR-0023 ① 的边界：它们的预算归各自独立的票），
+ * `oversized` 只把「已超 600 但本票不拆」的文件摆到表上（同模块 `pending` 的口径，且**双向**对账：
+ * 少登记会红，留过期的登记也会红）。
+ */
+const INFRA = {
+  /** 整目录都属基础设施：这些目录里的源文件不归任何模块（`uni_modules` 是 vendor 面） */
+  dirs: [
+    'components/app-badge',
+    'components/app-button',
+    'components/app-card',
+    'components/app-chip',
+    'components/app-empty-state',
+    'components/app-list-item',
+    'components/app-nav-bar',
+    'components/app-tabs',
+    'config',
+    'constants',
+    'stores',
+    'types',
+    'uni_modules',
+    'utils',
+  ],
+  /**
+   * 单个文件（`api/` 里**多消费、无单一主消费方**的那几个；有唯一消费方的域 api 归该模块，见 `MODULES`）。
+   * 逐条理由：
+   * - `App.uvue` / `main.uts` —— 应用入口，没有模块「拥有」它
+   * - `api/auth.uts` —— 鉴权域，5 个模块（forgot-password / login / profile / profile-setup / register）共用
+   * - `api/helpers.uts` —— api 层公共小工具（`toNumber` / `toStr` / `toBool` / `errMsg`），5 个模块共用
+   * - `api/refreshGate.uts` —— 401 刷新闸门，被 request 层调用，无模块级消费者
+   * - `api/request.uts` —— 请求层本体，被全仓 api 层调用，无模块级消费者（**611 行，见 `oversized`**）
+   */
+  files: [
+    'App.uvue',
+    'main.uts',
+    'api/auth.uts',
+    'api/helpers.uts',
+    'api/refreshGate.uts',
+    'api/request.uts',
+  ],
+  /**
+   * 基础设施里**已超 600 行、本票不拆**的文件（登记不执法；拆它需要独立票）。
+   * 双向对账：① 每个超预算的 infra 文件都必须在这里；② 这里的每一条都必须**真的**超预算 ——
+   * 于是它既不是藏身处，也不会留下过期的行（同 `pending` 的口径）。
+   */
+  oversized: ['api/request.uts'],
+};
 
 /**
  * 23 个 `pages/` 模块的声明。
@@ -346,6 +412,10 @@ const MODULES = {
     extraDirs: [],
     files: [
       'api/favorite.uts',
+      /** 票 D 补登记：唯一消费方是 profile（help-center），按归属规则②归本模块 —— 别漏进 INFRA */
+      'api/faq.uts',
+      /** 票 D 补登记：唯一消费方是 profile（notebook），同 api/faq.uts */
+      'api/note.uts',
       'api/student.uts',
       'api/wrongQuestion.uts',
       'pages/profile/components/activity-tab-bar.uvue',
@@ -476,4 +546,4 @@ const MODULES = {
   },
 };
 
-module.exports = { BUDGET, MAX_DEPTH, MODULES };
+module.exports = { BUDGET, MAX_DEPTH, MODULES, INFRA };
