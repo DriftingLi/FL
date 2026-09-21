@@ -27,6 +27,8 @@ const path = require('path');
 const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const read = (rel) => readText(path.join(ROOT, rel));
+/** 豁免名单从单点读（ADR-0023 ⑧）：不再解析守护脚本源码文本取常量 */
+const { allowlistPaths } = require('./contractHarness');
 
 const PAGE = 'pages/profile/personal-activity.uvue';
 const FAVORITES = 'pages/profile/favorites.uvue';
@@ -267,11 +269,8 @@ describe('#1159 改判：个人动态不承载收藏（ADR-0018「收藏的唯�
 });
 
 describe('allowlist 不回潮（个人动态域违例清零的锁）', () => {
-  it('GUARD_ALLOWLIST 不含 personal-activity 手术相关文件', () => {
-    const guardSrc = read('utils/utsAndroidCompile.test.js');
-    const start = guardSrc.indexOf('const GUARD_ALLOWLIST');
-    expect(start).toBeGreaterThan(-1);
-    const block = guardSrc.slice(start, guardSrc.indexOf('};', start));
-    expect(block).not.toMatch(/personal-activity|activity-tab|activity-user|activity-topic/);
+  it('豁免面不含 personal-activity 手术相关文件', () => {
+    const hits = allowlistPaths().filter((p) => /personal-activity|activity-tab|activity-user|activity-topic/.test(p));
+    expect(hits).toEqual([]);
   });
 });
