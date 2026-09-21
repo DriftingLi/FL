@@ -1,7 +1,16 @@
 /**
  * 认证相关 API
+ *
+ * 出口家族状态（T11 register 手术，parent #649 / ADR-0007）：
+ * - 注册两条（`registerApi` / `emailRegisterApi`）走 `postMapped` 出口 —— 显式 DTO `LoginResult` + 手工映射。
+ * - `getCaptchaApi` / `sendCodeApi` **仍是裸 `get` / `post`**（返回 `UTSJSONObject`）：本文件是 **5 个模块共用**的
+ *   鉴权域 api（forgot-password / login / profile / profile-setup / register），改它们的返回类型会波及
+ *   兄弟模块的**行为代码** —— 属本票「不碰其他模块行为代码」的边界；DTO 化留给 auth 三兄弟的联合票
+ *   （#650 / #651）或 #652 / #653 批量收紧。register 侧的消费面已把它们登记为白名单并写明理由
+ *   （`utils/registerContract.test.js` 的「域 api 出口」节）。
+ * - `sendPhoneCodeApi` 是 `sendCodeApi` 的 register 态薄包装（页面按 void 用法消费），同样留裸。
  */
-import { get, post, put, del, uploadFile } from './request'
+import { get, post, postMapped, put, del, uploadFile } from './request'
 import { toStr } from './helpers'
 import type { RequestOptions } from './request'
 import type { LoginParams, LoginResult, RegisterParams, EmailRegisterParams, UserInfo, UpdateProfileParams, UploadAvatarResult, ProfileChangeRequest, WechatLoginResult, RefreshTokenResult } from '../types/index'
@@ -182,7 +191,9 @@ export function registerApi(params : RegisterParams) : Promise<LoginResult> {
 		nickname: params.nickname,
 		password: params.password
 	} as UTSJSONObject
-	return post('/auth/phone/register', payload).then((data : UTSJSONObject) : LoginResult => {
+	// T11 register 手术：本模块域 api 收紧 —— 走 mapper-callback 出口
+	// （postMapped 与 post 逐字同通路：同 opts.url/method/data，只在拆包后接 mapper；映射函数逐字未改）
+	return postMapped<LoginResult>('/auth/phone/register', payload, (data : UTSJSONObject) : LoginResult => {
 		const token = data['token'] as string
 		const refreshToken = toStr(data['refresh_token'], '')
 		const user = buildUserInfo(data)
@@ -209,7 +220,8 @@ export function emailRegisterApi(params : EmailRegisterParams) : Promise<LoginRe
 	if (company != null && company.length > 0) {
 		payload['company'] = company
 	}
-	return post('/auth/email/register', payload).then((data : UTSJSONObject) : LoginResult => {
+	// T11 register 手术：本模块域 api 收紧 —— 走 mapper-callback 出口（同上，映射函数逐字未改）
+	return postMapped<LoginResult>('/auth/email/register', payload, (data : UTSJSONObject) : LoginResult => {
 		const token = data['token'] as string
 		const refreshToken = toStr(data['refresh_token'], '')
 		const user = buildUserInfo(data)
