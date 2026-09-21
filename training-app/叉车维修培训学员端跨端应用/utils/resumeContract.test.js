@@ -326,13 +326,18 @@ describe('页面 ↔ 组件接口对账（prop / 事件双向无孤儿）', () =
 });
 
 describe('allowlist 不回潮（resume 域违例清零的锁）', () => {
+  // ADR-0023 决策 ⑧：`GUARD_ALLOWLIST` 的唯一声明点是 `utils/guardAllowlist.js`，
+  // 消费方一律 require 取用 —— **不得再解析源码文本**（旧形态「indexOf + slice」的终止符缺失会静默扩扫全文）。
+  const { allowlistPaths } = require('./guardAllowlist');
+  const isResumePath = (p) => /^pages\/resume\//.test(p) || p === 'api/resume.uts';
+
   it('GUARD_ALLOWLIST 不含 resume 域文件', () => {
-    const guardSrc = read('utils/utsAndroidCompile.test.js');
-    const start = guardSrc.indexOf('const GUARD_ALLOWLIST');
-    expect(start).toBeGreaterThan(-1);
-    const block = guardSrc.slice(start, guardSrc.indexOf('};', start));
-    expect(block).not.toMatch(/pages[/\\]resume/);
-    expect(block).not.toMatch(/api[/\\]resume\.uts/);
+    expect(allowlistPaths().filter(isResumePath)).toEqual([]);
+  });
+
+  it('判据具备红能力（注入一条 resume 豁免必须被抓到）', () => {
+    const injected = allowlistPaths().concat(['pages/resume/resume-edit.uvue']);
+    expect(injected.filter(isResumePath)).toEqual(['pages/resume/resume-edit.uvue']);
   });
 });
 

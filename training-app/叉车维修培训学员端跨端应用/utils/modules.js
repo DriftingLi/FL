@@ -442,12 +442,19 @@ const MODULES = {
 
   resume: {
     extraDirs: [],
-    files: ['api/resume.uts', 'pages/resume/resume-attach.uvue', 'pages/resume/resume-edit.uvue', 'pages/resume/resume.uvue'],
-    extractDirs: [],
+    files: [
+      'api/resume.uts',
+      'pages/resume/components/resume-progress-card.uvue',
+      'pages/resume/composables/useResumeEdit.uts',
+      'pages/resume/resume-attach.uvue',
+      'pages/resume/resume-edit.uvue',
+      'pages/resume/resume.uvue',
+    ],
+    extractDirs: ['pages/resume/components', 'pages/resume/composables'],
     /** 消费 `profile` 的 `api/student.uts` / `api/favorite.uts`（登记在 profile 的消费者面） */
     crossModuleConsumers: [],
-    /** 超预算：resume-edit.uvue 923（另一会话正在做的 resume 手术会把它降到预算内，届时本行改 `BUDGET`） */
-    budget: 'pending',
+    /** T09 手术（#647）：resume-edit 922→460、模块 7 文件全 ≤600 ⇒ 执法面随之上线（原为「超预算 923」的 pending） */
+    budget: BUDGET,
     budgetOverrides: {},
     allowlistOwned: [],
     maxDepth: MAX_DEPTH,
