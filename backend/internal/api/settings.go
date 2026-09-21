@@ -124,6 +124,7 @@ func (h *AIConfigHandler) CreateConfig(c *gin.Context) {
 // @Success 200 {object} response.R "配置已更新"
 // @Failure 400 {object} response.R "请求参数错误"
 // @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "配置不存在"
 // @Router /admin/ai-configs/{id} [put]
 // UpdateConfig 更新配置（api_key 为空表示不修改）PUT /api/admin/ai-configs/:id
 func (h *AIConfigHandler) UpdateConfig(c *gin.Context) {

@@ -252,7 +252,10 @@ func (s *CourseService) studentCanReadChapter(courseID, studentID int) error {
 	}
 	var course model.Course
 	if err := s.db.Select("points_price").First(&course, courseID).Error; err != nil {
-		return errChapterNotReadable
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errChapterNotReadable // 课程行不在 = 真不存在，与「不可读」同判
+		}
+		return err // 查不动不得被读成「不可读」（ADR-0062 票6 同判据）
 	}
 	if course.PointsPrice == nil || *course.PointsPrice <= 0 {
 		return nil
