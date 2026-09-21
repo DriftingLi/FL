@@ -91,10 +91,13 @@ node_modules_old/
 # ===== 本地文档（不入库；ADRs 例外：架构决策记录是核心资产，必须版本化）=====
 # 2026-09-09 追加例外：docs/agents/（AI/agent 工作约定）随 AGENTS.md 导航拆分一并入库；
 # docs/README.md（docs 目录索引）同步入库
+# 2026-09-21 追加例外：docs/verification/（验收产物）。pr-evidence 认「仓库内 docs/verification/<模块>/<PR号>/」
+# 为可核验产物路径，但这里一直没有例外——存量 4 张图是靠 git add -f 进去的，下一个人照路径提交会被静默忽略。
 docs/*
 !docs/adr/
 !docs/agents/
 !docs/README.md
+!docs/verification/
 
 # ===== WorkBuddy 相关文件 =====
 .workbuddy/

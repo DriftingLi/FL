@@ -187,11 +187,10 @@
 │   ├── guard.test.mjs / gate-predicates.test.mjs / deploy-migration-gate.test.mjs
 │   │                             # 守卫 runner、CD 门禁谓词、迁移门的可执行判据（CI 在跑）
 │   └── audit-api-annotations.mjs / ci-summary-status.sh   # 注解审计 / CI 汇总状态
-├── docs/                         # `.gitignore` 忽略 `docs/*`，三个例外入库：`adr/`、`agents/`、`README.md`
+├── docs/                         # `.gitignore` 忽略 `docs/*`，四个例外入库：`adr/`、`agents/`、`README.md`、`verification/`
 │   ├── adr/                      # 架构决策记录 ADR-0001 ~ ADR-0061（入库，核心资产）
 │   ├── agents/                   # AI/agent 工作约定（入库，由根 AGENTS.md 导航；权威检查流程在 checks.md）
-│   ├── verification/             # 验收产物（真机截图等，pr-evidence 认的可核验路径）——
-│   │                             #   ⚠️ 存量文件已跟踪，但 `.gitignore` **没有**这一条例外，新增文件需 `git add -f`
+│   ├── verification/             # 验收产物（真机截图等）——`pr-evidence.yml` 认的可核验路径之一
 │   └── plans/ reference/ archive/   # 方案、参考资料、归档（本地不入库）
 ├── .github/workflows/            # CI/CD（ci.yml / cd.yml / testing-smoke.yml）
 ├── deploy.sh                     # 本地 / 手动一键部署
