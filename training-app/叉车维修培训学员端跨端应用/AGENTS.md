@@ -21,6 +21,11 @@ Issues 存放在 GitHub Issues（使用 `gh` CLI）。See `docs/agents/issue-tra
 
 五个 canonical triage roles，label 与 role 同名（`needs-triage` 等）。See `docs/agents/triage-labels.md`.
 
+### 技能供给与管线归属（仅移动端）
+
+技能的**生效面**（harness 扫描根止于 git 根 ⇒ 子树里的技能副本不生效）与四条约定：生成物不入库 / 第三方技能内容不入库 / 技能改动独立成 PR / 引用技能文档引小节名不引行号。See `docs/agents/skills.md`；决策与逐项实测见 `docs/adr/0024-技能供给与管线归属.md`.
+（**仅移动端**：前后端会话不读、不受约束；根 `D:\FL\.dsh\skills` 落点与根 `docs/agents/skills.md` 两项已裁定**不做**。）
+
 ### Domain docs
 
 Single-context：root `CONTEXT.md` + `docs/adr/`。See `docs/agents/domain.md`.
@@ -321,7 +326,7 @@ master 有仓库 ruleset「protect master」保护（直接 push 会被拒，`pu
 # 叉车维修培训学员端 - 移动端开发约定
 
 > 本文件为移动端（uni-app-x 跨端应用）的 AI agent 工作约定，覆盖开发、测试、构建、发布全流程。
-> 根目录 `D:\FL\AGENTS.md` 提供系统级全局约定，本文件补充移动端特有规范。（主树位置与搬迁记录见 `docs/agents/multi-agent-git.md` 开头的「主树位置」段；2026-09-13 起主树为 `D:\FL`，`E:\FL` 为只读备胎。）
+> 根目录 `D:\FL\AGENTS.md` 提供系统级全局约定，本文件补充移动端特有规范。（主树为 `D:\FL`；位置与搬迁记录见 `docs/agents/multi-agent-git.md` 开头的「主树位置」段。原备胎盘 `E:` 已废弃不存在 —— **别去找它、别照抄任何 `E:\FL` 路径**。）
 
 ## 项目概述
 
@@ -429,7 +434,7 @@ src/
 
 ## 相关文档
 
-- **ADRs（移动端独立编号，现至 `0020`）**：`docs/adr/` —— 关键几条：`0008` 验收门与证据（四门判据）、`0016` 真机门的触发面与取证节奏、`0019` 契约测试读取层归一、`0020` 端到端通道裁决与装配清退；与根仓库 `docs/adr/`（`ADR-0001`+ 编号）互不相关，引用时注意区分
+- **ADRs（移动端独立编号，现至 `0024`）**：`docs/adr/` —— 关键几条：`0008` 验收门与证据（四门判据）、`0016` 真机门的触发面与取证节奏、`0019` 契约测试读取层归一、`0020` 端到端通道裁决与装配清退、`0024` 技能供给与管线归属（死副本清退 + 四条约定）；与根仓库 `docs/adr/`（`ADR-0001`+ 编号）互不相关，引用时注意区分
 - **Git 工作流**：`docs/GIT_WORKFLOW.md`
 - **UI 规范**：`docs/ui-spec.md`
 - **技术规范**：`docs/technical-spec.md`
