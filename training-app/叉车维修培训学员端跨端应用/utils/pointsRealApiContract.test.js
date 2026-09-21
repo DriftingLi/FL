@@ -11,12 +11,10 @@
  *
  * .uvue/.uts 无法被 jest 直接 import，沿用仓库既有源码契约缝（见 mallPilotContract.test.js）。
  */
-const path = require('path');
-
-/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
-const { readText } = require('./utsHarness');
-const ROOT = path.join(__dirname, '..');
-const read = (rel) => readText(path.join(ROOT, rel));
+/** harness：读取层归一 + 模块归属面（ADR-0023 票 C 起，本文件不再自建 ROOT / read） */
+const h = require('./contractHarness');
+const ROOT = h.ROOT;
+const read = h.read;
 
 /**
  * 抹掉块注释与行注释（`://` 例外，防误杀 URL 字面量）。

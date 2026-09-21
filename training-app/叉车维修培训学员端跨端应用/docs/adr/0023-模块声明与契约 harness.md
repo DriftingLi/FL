@@ -154,6 +154,52 @@ B 组是**成对取证的判别力**（13 条注入各自「改坏必红 + 真�
 `fileLines` / `moduleDepth` / `orphanExtracts` / `deadImports` / `allowlistPaths` / `reconcile()`；
 C 要删的 `path.join(__dirname`、自建 `read()`、自建 walk、写死 600、解析 allowlist 文本五类复写都有对应出口。
 
+### 票 C —— 13 个已达标模块的契约迁到声明（#1219，2026-09-21）
+
+**落地物**：改 **14 份测试文件**（13 个模块；`recruiter` 域有 `recruiterResumeContract` + `recruitWorkspaceContract` 两份）。
+删掉的复写：`path.join(__dirname…)` 自建 ROOT（14/14）、自建 `read()`（12 份）、模块 walker
+（`*SourceFiles()` / `collectFiles` / `walkUvue` / 内联 `walk`，共 11 处）、模块级 600 预算与目录深度断言（见下表）、
+以及随之变成死代码的硬编码模块文件清单（`courses` / `exam` 的 `REQUIRED_SOURCE_FILES`、`resume` 的
+`REQUIRED_SOURCE_FILES` + `BUDGET_FILES`）—— 后三者正是 ⑤ 禁的「第二份模块清单」。
+allowlist 断言不动（票 A 起已是数据读取）。
+
+**删掉的断言（逐条可复核，机器抽取 `it|test` 标题前后对照；共 18 条）**：
+
+| 文件 | 模块级预算（类 1） | 目录 ≤2 层（类 2） | 必需文件清单（类 3） |
+| --- | --- | --- | --- |
+| coursesContract | ✅ | ✅ | ✅ |
+| dashboardContract | ✅ | ✅ | — |
+| examContract | ✅ | ✅ | ✅ |
+| forumContract | **⚠️ 保留（见下）** | ✅ | — |
+| mallPilotContract | ✅ | ✅ | — |
+| practiceContract | ✅ | ✅ | — |
+| profileContract | ✅ | ✅ | — |
+| resumeContract | ✅ | ✅ | ✅ |
+
+（`jobsMineEntry` / `pointsRealApi` / `recruiterResume` / `recruitWorkspace` / `resources` / `search` 六份**本来就没有**这三类断言，故零删除。）
+
+**`forum` 的例外（本票唯一的判断，理由写实）**：`utils/modules.js` 里 forum 的预算是 `pending`（因为
+`api/forum.uts` 654 行还超着 —— 那是票 B #1218 的活）。声明面 A10 对 `pending` 模块**不判红**，
+所以此刻删掉 `forumContract` 那条 pages-only 预算检查，等于让已达标的 `pages/forum/**`（最大 583）
+**失去唯一的预算锁** ⇒ 保留该条（已换成 harness 出口），并在原位写了理由。**票 B 把 forum 翻成数字预算后，
+这条即为重复，应删**。同理核对过：`points` / `recruiter` / `search` 虽也是 `pending`，但它们没有类 1 断言，删无可删。
+
+**强度核对（为什么删了不弱化）**：数字预算模块的声明面 = 全部归属文件（目录内 + 域 api），
+比原来各文件只扫 `pages/<key>/**` **更宽**（例：`profile` 21 → 24、`practice` 11 → 13；`courses` / `exam` / `resume` 相等）；
+深度（A5）与必需文件（A3 双向对账）与预算是否 `pending` **无关**，故类 2 / 类 3 在任何模块都可安全删除。
+
+**写实的三处微小口径差**（都已逐条核对为等价，记录备查）：① 单目录 `fs.readdirSync` 换成
+`h.sourceFilesIn` 后，非源码杂项文件不再参与「目录里只剩 N 个文件」这类等式断言；
+② `recruitWorkspaceContract` 的全仓枚举由自建 `collectFiles` 换成 `h.filesUnder` —— 扫描面略窄
+（多跳过 `hybrid` / `.hbuilderx` / `.vscode` / `coverage` 等目录，本机实测这些目录**不存在**，故当前等价）；
+③ 单目录列表里 `*.test.*` 被剔除（这些目录里没有测试文件）。
+
+**门证据（本 PR）**：③ `npm run test:unit` = **112 suites / 2068 tests 全绿**（本 worktree 基线实测 **2086**：
+把 14 份文件 `git stash` 回改前逐文件比对得 **609 → 591**，差 **18** 恰等于上表删除条数 —— 没有连带丢用例）；
+`node scripts/classify-guards.mjs --json` = **17 行为 / 95 接线 / 112 总数**，与改动前**逐文件零变化**；
+`node scripts/check-contract-read.mjs --all` = **exit 0**（112 个测试文件无未归一的仓内源码裸读）。
+四门 **免（未命中运行时面）**：改动集只有 `utils/*.test.js` 与本文件。
+
 ## 关联
 
 - **0007-渐进式重构手册** —— 600 软预算、契约测试纪律、「禁删 / 弱化断言」、UI 冻结；本决策是它的**机制化**（把各自复写的事实收成一份声明）。0007 §#914 已对门脚本家族做过同一动作（`New-GatePlan` → `-DryRun` 断言计划 JSON），本决策把该手法扩到模块面。

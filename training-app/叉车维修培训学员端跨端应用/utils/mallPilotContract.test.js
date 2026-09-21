@@ -4,32 +4,16 @@
  * 钉住试点交付的三类契约，采用项目既有源码契约缝（.uvue/.uts 不可被 jest import）：
  * 1) api 收紧：getCourseListApi 经 requestMapped mapper-callback 出口（#639 出口首个真实消费者）
  * 2) 组件接线：mall.uvue 以显式 import 使用三个模块私有组件（Q17 安置规则）
- * 3) 600 软预算机检：pages/mall/** 全部源文件 ≤600 行（达标后锁住防回潮，Q8）
+ * 3) 600 软预算 / 目录 ≤2 层：**已由声明面执法**（`utils/modules.js` +
+ *    `utils/modulesDeclarationContract.test.js` 的 A3/A5/A10），本文件不再各写一遍（ADR-0023 票 C #1219）
  * 4) allowlist 不回潮：mall 域文件不得出现在 GUARD_ALLOWLIST（试点验收「清零」的锁）
  */
-const fs = require('fs');
-const path = require('path');
-
-/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
-const { readText } = require('./utsHarness');
-const ROOT = path.join(__dirname, '..');
-const read = (rel) => readText(path.join(ROOT, rel));
+/** harness：读取层归一 + 模块归属面（ADR-0023 票 C 起，本文件不再自建 ROOT / read / walker） */
+const h = require('./contractHarness');
+const ROOT = h.ROOT;
+const read = h.read;
 /** 豁免名单从单点读（ADR-0023 ⑧）：不再解析守护脚本源码文本取常量 */
-const { allowlistPaths } = require('./contractHarness');
-
-/** 模块目录下全部源文件（.uvue/.uts，排除测试） */
-function mallSourceFiles(dir = 'pages/mall') {
-  const out = [];
-  const walk = (d) => {
-    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
-      const p = path.join(d, e.name);
-      if (e.isDirectory()) { walk(p); continue; }
-      if (/\.(uvue|uts)$/.test(e.name) && !/\.test\./.test(e.name)) out.push(p);
-    }
-  };
-  walk(path.join(ROOT, dir));
-  return out;
-}
+const allowlistPaths = h.allowlistPaths;
 
 describe('api 收紧契约（getCourseListApi 经 requestMapped 出口家族）', () => {
   const src = read('api/course.uts');
@@ -63,7 +47,7 @@ describe('模块私有组件接线契约（Q17 安置：pages/<module>/component
   const COMPONENTS = ['mall-sort-bar', 'mall-category-sidebar', 'mall-float-actions'];
 
   it.each(COMPONENTS)('组件文件存在于 pages/mall/components/%s.uvue', (name) => {
-    expect(fs.existsSync(path.join(ROOT, 'pages/mall/components', `${name}.uvue`))).toBe(true);
+    expect(h.exists(`pages/mall/components/${name}.uvue`)).toBe(true);
   });
 
   it.each(COMPONENTS)('mall.uvue 显式 import 组件 %s', (name) => {
@@ -74,24 +58,6 @@ describe('模块私有组件接线契约（Q17 安置：pages/<module>/component
     expect(page).toMatch(/<MallSortBar[\s/>]/);
     expect(page).toMatch(/<MallCategorySidebar[\s/>]/);
     expect(page).toMatch(/<MallFloatActions[\s/>]/);
-  });
-});
-
-describe('600 行软预算机检（pages/mall/** 达标后锁定）', () => {
-  it('mall 模块全部源文件 ≤600 行', () => {
-    const over = mallSourceFiles().map((f) => ({
-      file: path.relative(ROOT, f),
-      lines: readText(f).split('\n').length,
-    })).filter((x) => x.lines > 600);
-    expect(over).toEqual([]);
-  });
-
-  it('模块目录 ≤2 层（pages/mall/<file 或 components/<file >>>', () => {
-    const deep = mallSourceFiles().filter((f) => {
-      const rel = path.relative(path.join(ROOT, 'pages/mall'), f);
-      return rel.split(/[\\/]/).length > 2;
-    }).map((f) => path.relative(ROOT, f));
-    expect(deep).toEqual([]);
   });
 });
 

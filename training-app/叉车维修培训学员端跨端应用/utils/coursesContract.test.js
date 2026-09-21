@@ -2,52 +2,33 @@
  * courses 模块手术契约测试（T08，parent #646 / ADR-0007）
  *
  * 照 profile / forum / dashboard / practice / exam 先例的「模块汇总契约」口径，钉住 courses 手术交付：
- * 1) 600 行软预算：pages/courses/** 全部源文件 ≤600 行，**新建 section 组件与 composable 同样计入**
- *    （维护者裁定 B：防「把 872 行页面挪成 860 行 composable」的假达标）；api/course.uts 一并纳入
- * 2) 模块目录 ≤2 层；模块必需源文件清单完整（删任一即红）
- * 3) 页面 ↔ 组件接口对账：prop / 事件双向（改名即红，无孤儿 prop、无孤儿 emit）
- * 4) composable 接线：chapter-view 以显式 import 使用模块私有 composable，且该 composable 显式结果类型
- * 5) 组件接线零孤儿（#779 回归锁）：页面 import 的组件文件必须存在，组件目录不得有孤儿文件
- * 6) allowlist 不回潮：courses 域文件不得出现在 GUARD_ALLOWLIST
- * 7) 零直发请求：页面层不直接 uni.request
- * 8) 域 api 收紧：6 个 DTO 函数经 mapper-callback 出口（箭头包裹 build*），
+ * 1) 600 行软预算 / 模块目录 ≤2 层 / 必需源文件清单：**已由声明面执法**（`utils/modules.js` +
+ *    `utils/modulesDeclarationContract.test.js` 的 A3/A5/A10），本文件不再各写一遍（ADR-0023 票 C #1219）
+ * 2) 页面 ↔ 组件接口对账：prop / 事件双向（改名即红，无孤儿 prop、无孤儿 emit）
+ * 3) composable 接线：chapter-view 以显式 import 使用模块私有 composable，且该 composable 显式结果类型
+ * 4) 组件接线零孤儿（#779 回归锁）：页面 import 的组件文件必须存在，组件目录不得有孤儿文件
+ * 5) allowlist 不回潮：courses 域文件不得出现在 GUARD_ALLOWLIST
+ * 6) 零直发请求：页面层不直接 uni.request
+ * 7) 域 api 收紧：6 个 DTO 函数经 mapper-callback 出口（箭头包裹 build*），
  *    updateCourseProgressApi 保持 raw post 白名单；api 层 .catch 静默回退计数与术前一致（本票按删除禁区不退役回退）
- * 9) 幻影路由锁（#662 口径）：api/course.uts 的每条路由字面量都必须落在后端已注册清单内
- * 10) 删除禁区行为保持点：章节学习的计时/上报/切章补报/预览/附件下载、课程详情的收藏/学习状态/
- *     继续学习/章节跳转/失败重试逐项仍在；三条路由仍在 pages.json
- * 11) 展示纯函数唯一实现：文件图标三件套与课程分类图标/底色各只有一处实现；
+ * 8) 幻影路由锁（#662 口径）：api/course.uts 的每条路由字面量都必须落在后端已注册清单内
+ * 9) 删除禁区行为保持点：章节学习的计时/上报/切章补报/预览/附件下载、课程详情的收藏/学习状态/
+ *    继续学习/章节跳转/失败重试逐项仍在；三条路由仍在 pages.json
+ * 10) 展示纯函数唯一实现：文件图标三件套与课程分类图标/底色各只有一处实现；
  *     formatDuration 两处是**刻意不同语义**（空值兜底 '未知' vs '-'），锁住不被「顺手合并」
  */
-const fs = require('fs');
-const path = require('path');
-
-/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
-const { readText } = require('./utsHarness');
-const ROOT = path.join(__dirname, '..');
-const read = (rel) => readText(path.join(ROOT, rel));
+/** harness：读取层归一 + 模块归属面（ADR-0023 票 C 起，本文件不再自建 ROOT / read / walker） */
+const h = require('./contractHarness');
+const ROOT = h.ROOT;
+const read = h.read;
+const exists = h.exists;
 /** 豁免名单从单点读（ADR-0023 ⑧）：不再解析守护脚本源码文本取常量 */
-const { allowlistPaths } = require('./contractHarness');
-const exists = (rel) => fs.existsSync(path.join(ROOT, rel));
+const allowlistPaths = h.allowlistPaths;
 
 const COURSES_PAGES = [
   'pages/courses/chapter-view.uvue',
   'pages/courses/course-detail.uvue',
   'pages/courses/courses.uvue',
-];
-
-/** 模块必需源文件清单（删任一即红；新增文件不触发假红，但预算/守护仍覆盖到） */
-const REQUIRED_SOURCE_FILES = [
-  'pages/courses/courses.uvue',
-  'pages/courses/course-detail.uvue',
-  'pages/courses/chapter-view.uvue',
-  'pages/courses/components/chapter-markdown.uvue',
-  'pages/courses/components/chapter-file-list.uvue',
-  'pages/courses/components/chapter-nav.uvue',
-  'pages/courses/components/course-cover-section.uvue',
-  'pages/courses/components/course-progress-section.uvue',
-  'pages/courses/components/course-info-grid.uvue',
-  'pages/courses/components/course-chapter-list.uvue',
-  'pages/courses/composables/useChapterStudy.uts',
 ];
 
 /** 页面 ↔ 组件接口对账表（本票唯一新增接口面，改名必须红） */
@@ -107,22 +88,6 @@ function boundEvents(attrs) {
   return [...out];
 }
 
-function coursesSourceFiles() {
-  const out = [];
-  const walk = (d) => {
-    if (!fs.existsSync(d)) return;
-    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
-      const p = path.join(d, e.name);
-      if (e.isDirectory()) { walk(p); continue; }
-      if (/\.(uvue|uts)$/.test(e.name) && !/\.test\./.test(e.name)) out.push(p);
-    }
-  };
-  walk(path.join(ROOT, 'pages/courses'));
-  return out;
-}
-
-const relOf = (abs) => path.relative(ROOT, abs).split(path.sep).join('/');
-
 /** 取某个顶层导出函数的函数体（到下一个行首 `}` 为止，同 pointsRealApiContract 口径） */
 function fnBody(src, marker) {
   const start = src.indexOf(marker);
@@ -133,32 +98,6 @@ function fnBody(src, marker) {
 function stripComments(src) {
   return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
 }
-
-describe('600 行软预算机检（pages/courses/** + 模块域 api 达标后锁定）', () => {
-  it('courses 模块全部源文件 ≤600 行（含新建 composable 与 section 组件）', () => {
-    const files = coursesSourceFiles().concat(path.join(ROOT, 'api/course.uts'));
-    const over = files.map((f) => ({
-      file: relOf(f),
-      lines: readText(f).split('\n').length,
-    })).filter((x) => x.lines > 600);
-    expect(over).toEqual([]);
-  });
-
-  it('模块目录 ≤2 层', () => {
-    const deep = coursesSourceFiles().filter((f) => {
-      const rel = path.relative(path.join(ROOT, 'pages/courses'), f);
-      return rel.split(/[\\/]/).length > 2;
-    }).map(relOf);
-    expect(deep).toEqual([]);
-  });
-
-  it('模块必需源文件清单完整（删任一文件即红，扫描面不靠数量下限兜底）', () => {
-    for (const rel of REQUIRED_SOURCE_FILES) expect(exists(rel)).toBe(true);
-    // 扫描面有效性：目录遍历必须真的扫到全部必需文件（防 walker 静默失效）
-    const scanned = new Set(coursesSourceFiles().map(relOf));
-    for (const rel of REQUIRED_SOURCE_FILES) expect(scanned.has(rel)).toBe(true);
-  });
-});
 
 describe('页面 ↔ 组件接口对账（本票唯一新增接口面：prop/事件改名即红）', () => {
   it.each(WIRING)('$page ↔ $tag：页面绑定的每个 prop 都在组件 defineProps 内', ({ page, tag, comp }) => {
@@ -239,11 +178,12 @@ describe('组件接线零孤儿（#779 回归锁：import 的组件文件必须�
   });
 
   it('组件目录内不存在孤儿文件（每个 .uvue 都被某页面显式 import）', () => {
-    const dir = path.join(ROOT, 'pages/courses/components');
+    const relDir = 'pages/courses/components';
     // 目录不存在 ⇒ 直接判红（否则「目录没了」会让这条静默通过）
-    expect(fs.existsSync(dir)).toBe(true);
+    expect(h.exists(relDir)).toBe(true);
     const pagesSrc = COURSES_PAGES.map(read).join('\n');
-    for (const name of fs.readdirSync(dir)) {
+    for (const rel of h.sourceFilesIn(relDir)) {
+      const name = rel.split('/').pop();
       if (!/\.uvue$/.test(name)) continue;
       expect(pagesSrc).toMatch(new RegExp("'\\./components/" + name.replace(/\./g, '\\.') + "'"));
     }
@@ -257,9 +197,9 @@ describe('allowlist 不回潮（courses 域违例清零的锁）', () => {
   });
 
   it('courses 域源文件零 catch-any / 零 e.detail 直取（规则 H / I 全量执法）', () => {
-    const files = coursesSourceFiles().concat([path.join(ROOT, 'api/course.uts')]);
+    const files = h.sourceFilesIn('pages/courses').concat(['api/course.uts']);
     for (const f of files) {
-      const src = readText(f);
+      const src = read(f);
       expect(src).not.toMatch(/catch\s*\(\s*\(?\s*[A-Za-z_$][\w$]*\s*:\s*any\b(?!\s*\|)/);
       expect(src).not.toContain('.detail');
     }
@@ -466,9 +406,9 @@ describe('删除禁区「courses 不用删」：行为保持点逐项仍在', ()
 });
 
 describe('展示纯函数唯一实现（T03/T06 口径）：courses 模块零第二实现', () => {
-  const files = coursesSourceFiles();
+  const files = h.sourceFilesIn('pages/courses');
 
-  const declFiles = (name) => files.filter((f) => new RegExp('function\\s+' + name + '\\s*\\(').test(read(relOf(f)))).map(relOf);
+  const declFiles = (name) => files.filter((f) => new RegExp('function\\s+' + name + '\\s*\\(').test(read(f)));
 
   it.each(['getFileIcon', 'getFileIconClass', 'getFileTypeName'])('%s 全模块只有一处实现', (name) => {
     expect(declFiles(name)).toHaveLength(1);
@@ -664,8 +604,8 @@ describe('#1087 Q3：课程域 category 残留面已退役', () => {
         .replace(/\/\*[\s\S]*?\*\//g, '')
         .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
     const consumers = ['course.category', 'detail.category', 'data.category', 'item.category'];
-    for (const f of coursesSourceFiles()) {
-      const code = stripAll(read(relOf(f)));
+    for (const f of h.sourceFilesIn('pages/courses')) {
+      const code = stripAll(read(f));
       for (const c of consumers) expect(code).not.toContain(c);
     }
   });

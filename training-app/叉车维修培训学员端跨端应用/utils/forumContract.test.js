@@ -8,32 +8,16 @@
  * 3) 行为保持：手术不改像素与跳转语义——上传格子仍跳 forum-create（缺陷已登记 #662）、
  *    问答变体仍由 currentTab 驱动、
  *    回复栏 v-model 留壳层（uvue 跨组件 v-model 属编译风险区，composer 状态下沉即达预算）
- * 4) 600 软预算机检：pages/forum/** 全部源文件 ≤600 行 + 目录 ≤2 层（达标后锁住防回潮，Q8）
+ * 4) 600 软预算 / 目录 ≤2 层：**已由声明面执法**（`utils/modules.js` +
+ *    `utils/modulesDeclarationContract.test.js` 的 A3/A5/A10），本文件不再各写一遍（ADR-0023 票 C #1219）
  * 5) allowlist 不回潮：forum 页面文件不得出现在 GUARD_ALLOWLIST
  */
-const fs = require('fs');
-const path = require('path');
-
-/** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
-const { readText } = require('./utsHarness');
-const ROOT = path.join(__dirname, '..');
-const read = (rel) => readText(path.join(ROOT, rel));
+/** harness：读取层归一 + 模块归属面（ADR-0023 票 C 起，本文件不再自建 ROOT / read / walker） */
+const h = require('./contractHarness');
+const ROOT = h.ROOT;
+const read = h.read;
 /** 豁免名单从单点读（ADR-0023 ⑧）：不再解析守护脚本源码文本取常量 */
-const { allowlistPaths } = require('./contractHarness');
-
-/** 模块目录下全部源文件（.uvue/.uts，排除测试） */
-function forumSourceFiles(dir = 'pages/forum') {
-  const out = [];
-  const walk = (d) => {
-    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
-      const p = path.join(d, e.name);
-      if (e.isDirectory()) { walk(p); continue; }
-      if (/\.(uvue|uts)$/.test(e.name) && !/\.test\./.test(e.name)) out.push(p);
-    }
-  };
-  walk(path.join(ROOT, dir));
-  return out;
-}
+const allowlistPaths = h.allowlistPaths;
 
 const LIST_COMPONENTS = [
   'forum-tab-bar',
@@ -57,7 +41,7 @@ describe('列表页组件接线契约（Q17 安置：pages/forum/components/ 显
   const page = read('pages/forum/forum.uvue');
 
   it.each(LIST_COMPONENTS)('组件文件存在于 pages/forum/components/%s.uvue', (name) => {
-    expect(fs.existsSync(path.join(ROOT, 'pages/forum/components', `${name}.uvue`))).toBe(true);
+    expect(h.exists(`pages/forum/components/${name}.uvue`)).toBe(true);
   });
 
   it.each(LIST_COMPONENTS)('forum.uvue 显式 import 组件 %s', (name) => {
@@ -75,7 +59,7 @@ describe('详情页组件接线契约', () => {
   const page = read('pages/forum/forum-detail.uvue');
 
   it.each(DETAIL_COMPONENTS)('组件文件存在于 pages/forum/components/%s.uvue', (name) => {
-    expect(fs.existsSync(path.join(ROOT, 'pages/forum/components', `${name}.uvue`))).toBe(true);
+    expect(h.exists(`pages/forum/components/${name}.uvue`)).toBe(true);
   });
 
   it.each(DETAIL_COMPONENTS)('forum-detail.uvue 显式 import 组件 %s', (name) => {
@@ -337,8 +321,8 @@ describe('招聘 tab 退场契约（#705 退场部分先行；简历入口重挂
   });
 
   it('招聘死件文件已删除（不留未接线的组件与 composable）', () => {
-    expect(fs.existsSync(path.join(ROOT, 'pages/forum/components/forum-recruit-panel.uvue'))).toBe(false);
-    expect(fs.existsSync(path.join(ROOT, 'composables/useRecruitFeed.uts'))).toBe(false);
+    expect(h.exists('pages/forum/components/forum-recruit-panel.uvue')).toBe(false);
+    expect(h.exists('composables/useRecruitFeed.uts')).toBe(false);
   });
 });
 
@@ -431,21 +415,19 @@ describe('api 收紧契约（forum 域经 mapper-callback 出口家族，refs #6
   });
 });
 
-describe('600 行软预算机检（pages/forum/** 达标后锁定）', () => {
+/**
+ * ⚠️ 本条是**唯一被保留**的模块级预算检查（ADR-0023 票 C 的例外，理由写实）：
+ * `utils/modules.js` 的 forum 预算是 `pending`（登记不执法）—— 因为 `api/forum.uts` 654 行
+ * 还超着（票 B #1218 的活）。声明面 A10 对 `pending` 模块**不判红**，所以此刻删掉本条
+ * 就等于让 `pages/forum/**`（最大 583，全达标）**失去唯一的预算锁**。
+ * 票 B 把 forum 翻成数字预算后，本条即为重复，届时应删（见 ADR-0023 实施记录）。
+ */
+describe('600 行软预算机检（pages/forum/** 页面侧；模块全量预算面待票 B 接管）', () => {
   it('forum 模块全部源文件 ≤600 行', () => {
-    const over = forumSourceFiles().map((f) => ({
-      file: path.relative(ROOT, f),
-      lines: readText(f).split('\n').length,
-    })).filter((x) => x.lines > 600);
+    const over = h.sourceFilesIn('pages/forum')
+      .map((rel) => ({ file: rel, lines: h.fileLines(rel) }))
+      .filter((x) => x.lines > 600);
     expect(over).toEqual([]);
-  });
-
-  it('模块目录 ≤2 层（pages/forum/<file 或 components/<file>>）', () => {
-    const deep = forumSourceFiles().filter((f) => {
-      const rel = path.relative(path.join(ROOT, 'pages/forum'), f);
-      return rel.split(/[\\/]/).length > 2;
-    }).map((f) => path.relative(ROOT, f));
-    expect(deep).toEqual([]);
   });
 });
 
