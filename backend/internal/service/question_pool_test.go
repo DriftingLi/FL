@@ -126,7 +126,11 @@ func TestQuestionPoolScopeCoversTagCountAndSearch(t *testing.T) {
 		{"不带证件全局", nil},
 	} {
 		counts := map[int]int64{}
-		for _, d := range catalogSvc.ListQuestionTags(true, false, tc.cred) {
+		tags, err := catalogSvc.ListQuestionTags(true, false, tc.cred)
+		if err != nil {
+			t.Fatalf("%s：标签列表查询失败: %v", tc.name, err)
+		}
+		for _, d := range tags {
 			if d.QuestionCount != nil {
 				counts[d.ID] = *d.QuestionCount
 			}

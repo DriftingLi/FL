@@ -186,7 +186,12 @@ func (h *QuestionInteractionHandler) DeleteNote(c *gin.Context) {
 // @Router /questions/{question_id}/knowledge [get]
 func (h *QuestionInteractionHandler) ListKnowledge(c *gin.Context) {
 	qid, _ := strconv.Atoi(c.Param("question_id"))
-	tags, _ := h.knowledgeSvc.ListForQuestion(qid)
+	tags, err := h.knowledgeSvc.ListForQuestion(qid)
+	if err != nil {
+		// 「查不动」不得被读成「这题没有考点」（ADR-0062 票6）：旧写法把 error 丢给 _ 后照样 200。
+		response.ServerError(c, "查询考点失败")
+		return
+	}
 	response.Success(c, tags)
 }
 

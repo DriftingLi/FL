@@ -137,7 +137,10 @@ func (h *TrainingCatalogHandler) ListPublicLevels(c *gin.Context) {
 func (h *TrainingCatalogHandler) ListPublicTags(c *gin.Context) {
 	Endpoint[struct{}, []service.QuestionTagDict]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*[]service.QuestionTagDict, error) {
-			result := h.svc.ListQuestionTags(true, false, queryIDPtr(c, "credential_id")) // 学员端专项练习：隐藏来源标记标签
+			result, err := h.svc.ListQuestionTags(true, false, queryIDPtr(c, "credential_id")) // 学员端专项练习：隐藏来源标记标签
+			if err != nil {
+				return nil, err
+			}
 			return &result, nil
 		},
 		Render: func(c *gin.Context, _ *struct{}, resp *[]service.QuestionTagDict) {
@@ -239,7 +242,10 @@ func (h *TrainingCatalogHandler) ListCertificateTemplates(c *gin.Context) {
 func (h *TrainingCatalogHandler) ListQuestionTags(c *gin.Context) {
 	Endpoint[struct{}, []service.QuestionTagDict]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*[]service.QuestionTagDict, error) {
-			result := h.svc.ListQuestionTags(false, true, nil) // 管理端：全部可见、不分区
+			result, err := h.svc.ListQuestionTags(false, true, nil) // 管理端：全部可见、不分区
+			if err != nil {
+				return nil, err
+			}
 			return &result, nil
 		},
 		Render: func(c *gin.Context, _ *struct{}, resp *[]service.QuestionTagDict) {

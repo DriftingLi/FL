@@ -259,7 +259,9 @@ func (s *JobPostingService) GetForStudent(studentUserID, jobID int) (*JobPosting
 	dto := s.toDTO(&m)
 	if studentUserID > 0 {
 		list := []JobPostingDTO{dto}
-		s.fillApplyStates(studentUserID, list)
+		if err := s.fillApplyStates(studentUserID, list); err != nil {
+			return nil, err
+		}
 		dto = list[0]
 	}
 	return &dto, nil
@@ -334,15 +336,19 @@ func (s *JobPostingService) List(recruiterID int, p JobListParams) (*JobListResu
 		items = append(items, s.toDTO(&rows[i]))
 	}
 	// #488：学员视角批量回填投递状态
-	s.fillApplyStates(p.StudentUserID, items)
+	if err := s.fillApplyStates(p.StudentUserID, items); err != nil {
+		return nil, err
+	}
 	return &JobListResult{Items: items, Total: total}, nil
 }
 
 // fillApplyStates 批量回填学员视角投递状态（#488：单次批量 join，禁止 N+1）。
 // 入参 dtos 为学员可见的职位列表；对每个职位批量查该学员的投递记录判定状态。
-func (s *JobPostingService) fillApplyStates(studentUserID int, dtos []JobPostingDTO) {
+// 查不动即上抛 error（ADR-0062 票6）：咽掉错误会让整列表回成「可投递」（旧写法 `return` 一丢，
+// 前端按钮全绿，点了才 400）。
+func (s *JobPostingService) fillApplyStates(studentUserID int, dtos []JobPostingDTO) error {
 	if studentUserID <= 0 || len(dtos) == 0 {
-		return
+		return nil
 	}
 	ids := make([]int, 0, len(dtos))
 	for _, d := range dtos {
@@ -352,7 +358,7 @@ func (s *JobPostingService) fillApplyStates(studentUserID int, dtos []JobPosting
 	var apps []model.JobApplication
 	if err := s.db.Where("job_posting_id IN ? AND student_user_id = ?", ids, studentUserID).
 		Order("created_at DESC").Find(&apps).Error; err != nil {
-		return
+		return err
 	}
 	byJob := make(map[int][]model.JobApplication, len(dtos))
 	for _, a := range apps {
@@ -383,6 +389,7 @@ func (s *JobPostingService) fillApplyStates(studentUserID int, dtos []JobPosting
 			// 撤回后可立即重投：不设状态（none）
 		}
 	}
+	return nil
 }
 
 // Get 职位详情。recruiterID>0 表示企业侧（可看自己的 closed/强制下架历史），

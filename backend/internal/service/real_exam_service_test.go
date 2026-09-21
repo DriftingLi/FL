@@ -106,13 +106,13 @@ func TestRealPaperPoolIsolation(t *testing.T) {
 	}
 
 	// 学员端标签列表不出现 source 标签；管理端保留
-	studentTags := catalogSvc.ListQuestionTags(true, false, nil)
+	studentTags := mustListQuestionTags(t, catalogSvc, true, false, nil)
 	for _, tg := range studentTags {
 		if tg.Code == "real_exam" {
 			t.Fatal("学员端标签列表不应出现真题标签")
 		}
 	}
-	adminTags := catalogSvc.ListQuestionTags(true, true, nil)
+	adminTags := mustListQuestionTags(t, catalogSvc, true, true, nil)
 	found := false
 	for _, tg := range adminTags {
 		if tg.Code == "real_exam" {

@@ -387,7 +387,7 @@ func (h *PracticeModeHandler) GetStats(c *gin.Context) {
 			return &practiceStatsReq{StudentID: studentID, CredentialID: middleware.CredentialIDPtr(c)}, nil
 		},
 		Invoke: func(ctx context.Context, req *practiceStatsReq) (*service.PracticeStatsDTO, error) {
-			return h.svc.GetStats(req.StudentID, req.CredentialID), nil
+			return h.svc.GetStats(req.StudentID, req.CredentialID)
 		},
 	}.Handle(c)
 }
