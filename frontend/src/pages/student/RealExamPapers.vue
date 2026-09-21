@@ -144,16 +144,14 @@ async function redeem(p: RealExamPaper) {
   try {
     await realExamApi.redeemPaper(p.paper_id)
     ElMessage.success('兑换成功，已解锁本卷')
-    await loadPapers()
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
-    if (msg.includes('已兑换')) {
-      ElMessage.success('已解锁本卷')
-      await loadPapers()
-    } else {
-      ElMessage.error(msg || '兑换失败')
-    }
+    ElMessage.error(msg || '兑换失败')
   } finally {
+    // 无论成败都重取列表：兑换状态是服务端事实（entitled），不再靠文案猜「其实已解锁」。
+    // 旧写法在此判 msg.includes('已兑换') 并弹成功提示——那是 ADR-0024 禁的字符串比对
+    // 搬到消费侧，成因是本端点曾把积分族错误一律答成 404（ADR-0062 票9 已改回复用积分域表）。
+    await loadPapers()
     redeemingId.value = null
   }
 }

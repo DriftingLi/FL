@@ -104,7 +104,7 @@ func (s *RealExamService) ListPapers(userID, credentialID int) []RealExamPaperDT
 func (s *RealExamService) StartPaperPractice(studentID, paperID int) (*PracticeStartResultDTO, error) {
 	var paper model.RealExamPaper
 	if err := s.db.Where("paper_id = ? AND status = 1", paperID).First(&paper).Error; err != nil {
-		return nil, errors.New("真题卷不存在或已下架")
+		return nil, ErrRealPaperUnavailable
 	}
 	if !s.points.HasEntitlement(studentID, RealPaperSKU(paperID), strconv.Itoa(paperID)) {
 		return nil, errors.New("请先兑换该真题卷")
@@ -149,7 +149,7 @@ func (s *RealExamService) StartPaperPractice(studentID, paperID int) (*PracticeS
 func (s *RealExamService) StartPaperExam(studentID, paperID int) (*MockExamStartDTO, error) {
 	var paper model.RealExamPaper
 	if err := s.db.Where("paper_id = ? AND status = 1", paperID).First(&paper).Error; err != nil {
-		return nil, errors.New("真题卷不存在或已下架")
+		return nil, ErrRealPaperUnavailable
 	}
 	if !s.points.HasEntitlement(studentID, RealPaperSKU(paperID), strconv.Itoa(paperID)) {
 		return nil, errors.New("请先兑换该真题卷")

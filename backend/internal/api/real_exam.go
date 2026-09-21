@@ -105,7 +105,10 @@ func (h *RealExamHandler) Redeem(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *paperActionReq) (*service.RedeemResult, error) {
 			return h.points.RedeemRealPaper(ctx, req.UserID, req.PaperID)
 		},
-		ErrStatus: errStatusAll(http.StatusNotFound),
+		// 同域同判（ADR-0062 票9）：本端点抛的就是积分域那批哨兵（积分不足 / 已兑换 / 卷不可用），
+		// 故直接复用 pointsErrStatus——旧写法 errStatusAll(404) 让同一事件在
+		// /points/shop/course/:id/redeem 与这里给出两个码，消费端只能靠文案猜语义。
+		ErrStatus: pointsErrStatus,
 	}.Handle(c)
 }
 

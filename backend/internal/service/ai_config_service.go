@@ -22,6 +22,10 @@ import (
 // AI 功能键常量、AllAIFeatures / FeatureLabel / featureChatKeys / featureSystemPrompt
 // 均为注册表派生面，单点在 ai_feature_registry.go（ADR-0030 决策 1）。
 
+// ErrAIConfigNotFound AI 配置不存在（ADR-0062 票9）。旧写法在 RowsAffected==0 时返回裸
+// gorm.ErrRecordNotFound，经「更新失败: 」前缀把驱动原文（record not found）送进中文界面。
+var ErrAIConfigNotFound = errors.New("AI 配置不存在")
+
 // AIConfigDTO 返回给前端的配置对象（API Key 脱敏）。
 type AIConfigDTO struct {
 	ID          int       `json:"id"`
@@ -207,7 +211,7 @@ func (s *AIConfigService) UpdateConfig(ctx context.Context, id int, name, apiKey
 		return res.Error
 	}
 	if res.RowsAffected == 0 {
-		return gorm.ErrRecordNotFound
+		return ErrAIConfigNotFound
 	}
 	s.resolveCache.invalidate()
 	return nil
@@ -228,7 +232,7 @@ func (s *AIConfigService) DeleteConfig(ctx context.Context, id int) error {
 		return res.Error
 	}
 	if res.RowsAffected == 0 {
-		return gorm.ErrRecordNotFound
+		return ErrAIConfigNotFound
 	}
 	s.resolveCache.invalidate()
 	return nil
