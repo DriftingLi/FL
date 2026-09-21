@@ -16,6 +16,12 @@
 
 - 本票是 **issue**，不是 wayfinder 的 map/ticket。**本仓不用 wayfinder**（判据见文末）⇒ **不要去找 map、不要建 map、不要建 ticket 形态的东西**。
 - 票面若带 `needs-triage`：那是**前置步骤**，先诊断（见 §3），不许跳过直接实施。
+- **波级 issue（无票号的 `refactor epic:`）有两种形态，别按感觉挑**（2026-09-21 立，先例：`#1201` 第十三波 = spec 形；`#1221` 模块声明与契约 harness = 索引形）：
+  - **spec 形** —— 波级 issue **自己就是 spec**：`Problem Statement` / `Solution` / `User Stories` / `Implementation Decisions` / `Testing Decisions` / `Out of Scope`；落地后**不再维护**，学到的东西回写在 ADR 的「实施回记」段。
+  - **索引形** —— 波级 issue **只是索引**：正文首行写明「规范面 = `<ADR 路径>`」，不复制 ADR 的内容。
+  - **四问定形态**（都问「这一波长什么样」，不问偏好）：① 有**用户可感知**的故障吗？② 票能**独立开工**（各自 worktree / 各自会话）吗？③ 各票的**收口判据一样**吗？④ 会**一个 PR** 落地还是多个？
+    ① 有 ⇒ spec 形的 `Problem`/`User Stories` 才有真东西可写；① 无（纯结构税 / 维护性深化）⇒ 写出来只是把 ADR 的决策句换个主语，多出一份要与 ADR 对齐的第二文档 ⇒ 取**索引形**。
+    ③ 不一样（如某票命中运行时面走四门、其余免四门）⇒ 判据必须**下沉到票面**，波级 issue 不要复述。
 
 ## 1. 读现状
 
