@@ -83,6 +83,19 @@ Windows 本机（`E:\` 盘）上 worktree 可用，但有几处与 Linux 不同�
   **退路**：真的必须在同一会话里继续交付时，不要与锁硬碰 —— 证据文件仍可正常**读/复制**（只有改名与删除被拒），可用本文件下面「游离提交：完整配方」把产物按**正确入库路径**提交，交付不受影响；
   被卡住的 worktree 待旧会话退出后再 `改名 → git worktree remove` 收尾。
 
+  **2026-09-21 追加实测（#1240 P2 会话；两个新事实，本条只增不删）**：
+  ① **持锁者不止 `cli.exe`** —— 本会话跑完 ④c 与 ①a 真运行后，先 `cli.exe project close --path <项目>`
+  （回「项目关闭完成」，`cli project list` 随即不再列该项目），再 `cli.bat quit`（微信开发者工具进程归 0），
+  `Rename-Item` **仍**报 `Access denied`（对该目录做独占打开同样被拒），而 `Get-CimInstance Win32_Process`
+  里**一个 `cli.exe` 都没有** ⇒ 持锁者更可能是 **HBuilderX 的编译/语言服务子进程 + 它对该项目的文件监视**
+  （**猜测，未取证** —— 本机没有 `handle64` 之类的句柄枚举工具；`node.exe` 子进程确实在 HBuilderX 启动同秒成批出现）。
+  ⇒ **别把「再 close 一次」当解**：实测连试三次（含等待 60s 与 `cmd /c ren`）全部被拒。
+  ② **「游离提交」退路实测可交付、但不解除锁** —— 本会话据此用该配方提交了 P2 的 10 个源码文件与
+  13 个取证产物并推分支（全程只用临时索引 `GIT_INDEX_FILE`，未碰共享默认索引、未改写别人的分支），
+  交付不受影响；但 worktree 的项目目录**仍是改名后的名字**，`git status` 会把整棵树读成 ` D`。
+  **收尾只能等人**：在 HBuilderX GUI 里退出主程序（agent **不得** kill 它，ADR-0008 红线；本实例若由本会话启动同样适用）之后再 `改名 → git worktree remove`。
+  故**起 worktree 做 HBuilderX 步骤前，把「这个目录本轮结束时必须改回来」当成硬约束排进计划**。
+
 - **`stash` 是全仓共享的**：所有 worktree 共用同一个 stash 栈。别在多 worktree 之间长期留 stash，用完即 `pop`/`drop`；否则另一会话 `/clear` 后无法分辨哪条 stash 是自己的。
 
 - **worktree 元数据也在 `.git` 下**：`.git/worktrees/` 与 `git worktree list` 全局共享，不是每个 worktree 一份。
