@@ -20,9 +20,9 @@ import (
 // 其余（重复投递/冷却/日限/简历不完整等业务校验）兜底 400。
 var applicationErrStatus = &errStatusTable{
 	entries: []errStatusEntry{
-		{service.ErrApplyJobInactive, http.StatusNotFound},
-		{service.ErrJobNotFound, http.StatusNotFound},
-		{service.ErrApplyNotYours, http.StatusForbidden},
+		{sentinel: service.ErrApplyJobInactive, status: http.StatusNotFound},
+		{sentinel: service.ErrJobNotFound, status: http.StatusNotFound},
+		{sentinel: service.ErrApplyNotYours, status: http.StatusForbidden},
 	},
 	fallback: http.StatusBadRequest,
 }
@@ -70,11 +70,8 @@ func (h *ApplicationHandler) Apply(c *gin.Context) {
 			}
 			return h.svc.Apply(middleware.CurrentUserID(c), id)
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.ApplicationDTO, err error) {
-			if err != nil {
-				applicationErrStatus.renderError(c, err) // #611：错误映射退表，201 定制成功信封保留
-				return
-			}
+		ErrStatus: applicationErrStatus,
+		Render: func(c *gin.Context, _ *struct{}, resp *service.ApplicationDTO) {
 			response.Created(c, "投递成功，企业已可查看你的联系方式", *resp)
 		},
 	}.Handle(c)
@@ -136,11 +133,8 @@ func (h *ApplicationHandler) Withdraw(c *gin.Context) {
 			_ = c.ShouldBindJSON(&body)
 			return h.svc.Withdraw(middleware.CurrentUserID(c), id, body.RevokeContact)
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.ApplicationDTO, err error) {
-			if err != nil {
-				applicationErrStatus.renderError(c, err) // #611：错误映射退表，成功文案保留定制
-				return
-			}
+		ErrStatus: applicationErrStatus,
+		Render: func(c *gin.Context, _ *struct{}, resp *service.ApplicationDTO) {
 			response.SuccessWithMsg(c, "投递已撤回", *resp)
 		},
 	}.Handle(c)

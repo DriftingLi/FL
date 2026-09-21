@@ -1,0 +1,27 @@
+[device-capture] 非门（不替代 ①b：指纹等关键交互仍由人走）——仅真机只读取证，机械上无法替代指纹按压
+[device-capture] 运行时间：2026-09-20 15:24:59
+[device-capture] adb=D:\android-sdk\platform-tools\adb.exe  Device=b32d8398  Pages=pages/recruiter/login  切页=False
+[device-capture] 设备：serial=b32d8398 model=23049RAD8C
+[device-capture] logcat 窗口起点（设备时钟）= 1789889097.63（-LogcatSeconds=0）
+[device-capture] 前台 Activity：io.dcloud.uniappx/io.dcloud.uniapp.UniAppActivity（来源 topResumedActivity）
+[device-capture]   mResumedActivity/topResumedActivity 原始行：topResumedActivity=ActivityRecord{3fcc723 u0 io.dcloud.uniappx/io.dcloud.uniapp.UniAppActivity t26362}
+[device-capture] 目标包名：io.dcloud.uniappx（取自当前前台，即维护者正在调试的应用）
+[device-capture] 切页动作默认关闭：会打断维护者的调试会话（要切页请显式加 -AllowAppStart；-NoStartApp/-SkipAppStart 则永久禁止）
+[device-capture] 只读取证：不切页，仅对**当前前台**采 1 张图 -> pages-recruiter-login-current.png
+[device-capture] 截图：pages-recruiter-login-current.png（82.6 KB，sha256=32235E0FDBC88942…）
+[device-capture]   SKIP：pages/recruiter/login —— 未切页：切页默认关闭
+[device-capture] logcat 窗口：本次窗口行数=317（缓冲总行数=245369）
+[device-capture] 
+[device-capture] ── 真机只读取证汇总（非门，不替代 ①b 人工关键交互）──
+[device-capture] 设备：serial=b32d8398 model=23049RAD8C
+[device-capture] 前台 Activity：io.dcloud.uniappx/io.dcloud.uniapp.UniAppActivity（来源 topResumedActivity）
+[device-capture] 目标包名：io.dcloud.uniappx
+[device-capture] 切页：关闭（只读；未切页）
+[device-capture] logcat：窗口起点=1789889097.63 窗口行数=317  FATAL EXCEPTION=0  ANR in 包=0  ANR 合计=0  E AndroidRuntime=0  进程死亡=0
+[device-capture] 页面判定：PASS=0  FAIL=0  SKIP=1
+[device-capture] 截图：pages-recruiter-login-current.png=84612B/32235E0FDBC8
+[device-capture] 页身份断言：不适用（未切页）
+[device-capture] 目录=D:\wt-1194\training-app\叉车维修培训学员端跨端应用\.ci-verify  日志=D:\wt-1194\training-app\叉车维修培训学员端跨端应用\.ci-verify\device-capture.log
+[device-capture] DEVICE_CAPTURE_RESULT=PASS
+[device-capture]   页面 pages/recruiter/login=SKIP  前台=io.dcloud.uniappx/io.dcloud.uniapp.UniAppActivity  logcat窗口行数=317  FATAL=0  ANRin包=0
+[device-capture] 收尾完成：全程只读，未对设备做任何写操作

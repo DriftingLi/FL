@@ -56,6 +56,11 @@ const STATUS_LABELS = ['审核中', '已上架', '已驳回', '已撤回', '已�
 const INLINE_ALLOWLIST = new Map([
   ['utils/contributionStatus.uts', '唯一判定处（本锁的判据源）'],
   ['pages/profile/personal-info.uvue', '资料修改待审徽标（pending_profile_change）——另一个域的取值，与投稿无关'],
+  // 招聘域（#1195 P2）：交换申请与投递两张词表里**恰好**也有「已撤回」「已下架」两词
+  // （`rejected/revoked` 与职位 `closed` 的展示名），与投稿域是同一个中文词、不同的状态机。
+  // 它是招聘域自己的唯一判定处（两端同源对账在 utils/recruitWorkspaceContract.test.js），
+  // 不是投稿文案的回流 —— 故按本条既有机制登记，而不是放宽扫描器。
+  ['utils/recruitDisplay.uts', '招聘域状态词表单点：与投稿域共享「已撤回 / 已下架」两个中文词，属另一个域'],
 ]);
 
 const stripComments = (src) =>

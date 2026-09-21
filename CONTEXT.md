@@ -5,7 +5,8 @@
 ## 角色
 
 - **学员（hrwai_user）**：统一账号角色，学员端 / 残值评估 / AI 助手共用一张用户表（hrwai_users）与一套 JWT。
-- **讲师（tutor）**：独立账号表（tutor），管理章节内容、题库、阅卷；不建课（课程创建/编辑仅管理员，见 ADR-0006 后的领域约定）。
+- **讲师（tutor）**：独立账号表（tutor），管理章节内容、题库、阅卷；不建课（课程创建/编辑仅管理员，见 ADR-0006 后的领域约定）。**术语别名裁定**（2026-09-20）：「导师」是它在界面文案里的历史漂移叫法，**canonical 为「讲师」**——词表是仲裁者，运行期文案向它收敛（不是「本期不改」那类别名登记）。角色称谓是**单一词表**，不随 caller 视角分档：学员侧与管理侧叫同一个名字。
+  _Avoid_: 在同一屏里对同一角色混用两个称谓（侧栏「导师」+ 审计页「讲师」即此漂移的实测现场）；把「导师」当作带亲疏差分的第二称谓
 - **管理员（admin）**：独立账号表（admin），管理学员/讲师/课程/题库/残值配置/AI 配置。
 
 **授权（authorization）**——与角色区分的一层词汇：
@@ -19,7 +20,8 @@
 - **统一账号**：hrwai_users 表 + 统一 JWT（角色 hrwai_user）；支持用户名或手机号登录。
 - **验证码（code）**：邮箱/手机号注册、登录、绑定、改账号、找回/修改密码的 6 位数字验证码。用途六态：register / login / bind / account_change / reset_password / change_password。错误上限 5 次，发送节流 60 秒，TTL 5 分钟。**用途是这条状态机的分区键**：每个用途自带两项属性——**入口前置**（完成该用途的动作是否需要已登录会话）与**目标占用口径**（目标须未注册 / 须已注册 / 无需校验，后者适用于目标是当前用户自己账号的场景）。
 - **验证码通道（channel）**：邮箱（SMTP，开发降级日志）与短信（腾讯云 SMS SendSms，开发降级日志）是同一验证码状态机两侧的 adapter。
-- **会话（session）**：签发（issue）/ 校验（verify）/ 吊销（revoke）JWT 的生命周期。双令牌（ADR-0016）：access 2h（中间件仅收 access）+ refresh 7 天轮换；黑名单（`jwt:blacklist:`）只管理 refresh——刷新轮换即作废旧 refresh（防重放），登出撤销 refresh；access 生命周期短，不入黑名单、自然过期。
+- **会话（session）**：签发（issue）/ 校验（verify）/ 吊销（revoke）JWT 的生命周期。双令牌（ADR-0016）：access 2h（中间件仅收 access）+ refresh 7 天轮换；黑名单（`jwt:blacklist:`）只管理 refresh——刷新轮换即作废旧 refresh（防重放），登出撤销 refresh；access 生命周期短，不入黑名单、自然过期。终止会话有**两族**，语义由名字承担、不由同一个动作兼表：**单会话终止（sign-out）**——手上这一枚 refresh 失效 + 本角色登录态消失，其他设备不受影响；token 从请求体还是 Bearer 头取得是**入口差异**，不是第三种终止语义。**全会话吊销（identity revoke）**——该用户全部 refresh 失效（改密、被禁用、**注销**三处共用；注销此前只删资料不吊销，属缺口，2026-09-20 定案补齐）。两族的失败策略不同：改密的吊销**不阻断**（密码已生效，不能回退，记日志暴露缺口）；注销的吊销**先于删除**且失败即整体不生效（没有任何已生效的动作值得牺牲凭证失效）。
+  _Avoid_: 用「登出」同时指两族（那是单会话终止的专名）；把「注销」读成资料层动作（它同时是凭证层动作）
 - **登录态 Cookie**：父域名 httpOnly Cookie（hrwai_token），子域名间共享登录；Bearer 头优先于 Cookie。生产已启用 HTTPS（PR #254），Cookie 通道恢复、仅携带 access（不自动续期，见 ADR-0016）；HTTP 时期的历史约束见 ADR-0003（已解决）。
 - **微信小程序登录（wx-login）**：小程序端 uni.login 临时 code 换 openid 登录（POST /api/auth/wx-login，code2session）；openid 已绑定直接登录，未注册自动建号绑定（account 取 `wx_`+openid 前 12 位，昵称「微信学员」+openid 后 6 位，账号前缀冲突时追加后段或序号重试，唯一约束冲突与其它错误分类处理），复用统一登录骨架签发双令牌。凭证经 `WECHAT_MINI_PROGRAM_APP_ID`/`WECHAT_MINI_PROGRAM_APP_SECRET` 配置（GitHub Secrets 同名；与网页端扫码登录的开放平台凭证 `WECHAT_OPEN_PLATFORM_*` 严格区分，两套 AppID/AppSecret 不可混用）。契约见 `docs/docs/reference/微信小程序登录-文档说明.md`。
 - **认证页（auth page）**：登录/注册/找回密码三页共用认证页外壳（AuthPageShell，白底极简 + 主次分离——密码为主入口，邮箱/手机/微信收纳为「或使用以下方式登录」图标按钮；tutor/admin 仅密码入口）。三页提交流程共用 useAuthFlow 状态机；redirect 回跳白名单（isSafeRedirect）与「路径前缀→身份」表单点（authRedirect），见 ADR-0014。
@@ -124,6 +126,8 @@
 - **企业招聘者（recruiter）**：第四角色（`recruiter_users` 独立表，不进 `hrwai_users`；`status` 禁用位），邀约制（仅管理员创建，企业信息必填：`company_name`/`credit_code`/`business_scope`/`contact_name`/`contact_phone`/`contact_email`），独立子域 `recruit.` + 独立布局 `RecruitLayout` + `role=recruiter` 鉴权，登录态 `recruiter_token` host-only（与学员侧 `hrwai_token` 父域共享隔离，防静默恢复串角色），会话仍归 `security.Session` 单例。三层漏斗：L1 未登录不可见（无公开列表/详情/SEO，**职位本身同样不公开**——无 token 访问职位列表/详情一律 401，含搜索引擎爬虫）、L2 脱敏卡（岗位/地区/薪资/年限/经历/自评/持证标签可见，姓名打码，无手机/微信/精确现居地/上传 PDF/证书原图）+ **在线简历 PDF（打码版）**——后端按结构化字段实时渲染的单份 PDF（spec #484/#485：姓名打码、无电话/微信、现居地截断到市、无工作照与证书原图），招聘者未授权即可在详情页内嵌预览，学员预览页所见与招聘者同一份；上传的 PDF 附件（可能自带联系方式）归 L3 授权后才可见）、L3 交换后明文。
   **`visibility` 口径**：仅管控 L2 被动浏览面（简历库可被搜到与否），不是招聘可见性的总开关。投递是学员的主动点对点动作（最强的一次同意），`hidden` 简历同样可投递——同一个学员可能**在简历库里搜不到、却出现在某企业自己职位的投递列表中**；两条读路径的门禁条件不同（简历库按 `visibility=open`，投递列表按「投递即授权」）。
 - **联系方式交换（contact exchange）**：L3 闭环，招聘方带附言（1-200 字）发起 `contact_requests`（`pending`→`approved`/`rejected`/`expired`/`revoked`，`pending` 14 天过期、`rejected`/`revoked` 后 30 天冷却、同一企业对同一学员 `pending` 唯一、单企业日限 20），学员站内信收到申请（企业名/联系人/附言，不含企业电话，`link=/training/resume`）后可同意/拒绝/撤回（永久授权、撤回实时生效、明文不缓存现查 `approved` 状态）；**双向对等（spec #484/#487）**：授权 `approved` 后（无论来源 recruiter/application）学员侧申请列表/投递列表可见企业全量联系信息（企业名/联系人/**电话/邮箱/微信**，微信为 `recruiter_users.wechat` 可空列，管理员创建/编辑招聘者时录入），撤回后实时消失；pending/rejected/revoked/expired 一律不透出明文，招聘方同意后邮件通知并可在「我的申请」列表查看状态，学员注销时申请与授权一并失效。「企业」粒度与招聘者账号 1:1，由 `recruiter_users.credit_code` 唯一索引保证（spec #449 决定 4）。
+  **裁决窗口（decision window）**：`pending` 等学员回应的那 14 天——窗口关闭意味着这条申请**不能再被同意**（落 `expired`），与已批准的授权无关，`approved` 不受任何时限约束（出口只有学员撤回与学员注销）。落态前学员点「拒绝」仍然有效，且那是**更强**的表态：拒绝换来 30 天冷却，沉默什么都不罚——所以窗口关的是「同意」，不是「表态」。它是 `pending` 的属性，不是申请的属性。
+  _Avoid_: 授权有效期（一词之差与「授权有效态」相撞，且字面在承诺授权会自己过期，与「永久授权」口径冲突）；把 `expires_at` 读成 approved 的到期时刻（该列对 `approved` 行无意义）
   **授权双来源（`source`）**：`recruiter`（企业发起）与 `application`（投递产生）——投递在学员点下那一刻于同一事务写入/复活一条 `approved` 的授权，明文载体**仍然只有联系方式交换这一个**（GetContact 与授权撤回实现不变）；投递产生的授权不计入企业日限、不受冷却限制。撤回投递默认**不连带**收回授权（学员显式选择才置 `revoked`）。
 - **授权有效态（effective grant）**：某个 **(企业, 学员)** 关系上「可取对方明文联系方式」的资格——判据是存在一条经批准的授权，且双方账号均未注销（学员注销时授权一并失效）。**学员侧看企业明文与招聘方看学员明文共用这一条判据**（双向对等）；招聘方在简历库与投递列表上看到的「未授权 / 待确认 / 已授权」三值徽章是它的投影，不是另一套状态。
   _Avoid_: 把「已授权」说成招聘者账号的属性（它挂在 (企业, 学员) 这一对上，同一招聘者对不同学员的授权态不同）；把「撤回投递」等同于收回授权（撤回投递默认不连带收回，是否收回由学员显式选择，见「投递」）

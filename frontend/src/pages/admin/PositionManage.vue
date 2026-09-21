@@ -65,6 +65,7 @@ import { useAdminTable } from '@/composables/useAdminTable'
 import { Plus } from '@element-plus/icons-vue'
 import { ElMessage, type FormInstance } from 'element-plus'
 import { positionApi } from '@/api/position'
+import { toPage } from '@/api/page'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
@@ -102,7 +103,9 @@ const {
   fetch: async () => {
     const res = await positionApi.listAdmin({ silent: true })
     const positions: PositionItem[] = res?.positions || []
-    return { list: positions, total: positions.length }
+    // 岗位字典没有服务端分页（一次拉全量）：容器照旧由 api 侧的构造器给，total 就是行数。
+    // 票 6 不给这种页面在 composable 里开特例（ADR-0060 决策 6）。
+    return toPage(positions, positions.length)
   }
 })
 

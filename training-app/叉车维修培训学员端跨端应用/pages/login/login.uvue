@@ -109,19 +109,6 @@
             </template>
 
             <!-- 协议勾选 + 注册引导（手机号/邮箱/微信方式展示） -->
-
-
-            <!-- 角色选择：学习者 / 招聘者 -->
-            <view class="form-item role-selector">
-                <view class="role-btn" :class="{ 'role-btn-active': roleType == 'student' }"
-                    @click="switchRole('student')">
-                    <text class="role-btn-text" :class="{ 'role-btn-text-active': roleType == 'student' }">学习者</text>
-                </view>
-                <view class="role-btn" :class="{ 'role-btn-active': roleType == 'recruiter' }"
-                    @click="switchRole('recruiter')">
-                    <text class="role-btn-text" :class="{ 'role-btn-text-active': roleType == 'recruiter' }">招聘者</text>
-                </view>
-            </view>
             <view class="form-item agree-row" v-if="mode != 'password'" @click="toggleAgree">
                 <view class="checkbox" :class="{ 'checkbox-checked': agreed }">
                     <text v-if="agreed" class="check-mark">✓</text>
@@ -173,6 +160,11 @@
         <view class="back-password" v-if="mode != 'password'" @click="switchMode('password')">
             <text class="back-password-link">账号密码登录</text>
         </view>
+
+        <!-- 招聘者入口：纯文字链接，复用既有 link 样式（ADR-0022 ② / ④ 步骤 P1） -->
+        <view class="recruiter-entry" @click="goRecruiterLogin">
+            <text class="back-password-link">招聘者登录</text>
+        </view>
     </scroll-view>
 </template>
 
@@ -189,9 +181,6 @@
 
     // 登录方式：password（账号密码，默认） | phone（手机验证码） | wechat（微信一键） | email（邮箱验证码）
     const mode = ref<string>('phone')
-
-    // 用户角色：student（学员）| recruiter（招聘者）
-    const roleType = ref<string>('student')
 
     // 手机号 + 验证码
     const phone = ref<string>('')
@@ -316,10 +305,6 @@
         countdown.value = 0
         wrongAttempts.value = 0
         loadCaptcha()
-    }
-
-    function switchRole(role : string) : void {
-        roleType.value = role
     }
 
     function toggleAgree() : void {
@@ -643,6 +628,11 @@
         uni.navigateTo({ url: '/pages/forgot-password/forgot-password' })
     }
 
+    /** 招聘者入口：推入独立招聘者登录页（可返回，ADR-0022 ②） */
+    function goRecruiterLogin() : void {
+        uni.navigateTo({ url: '/pages/recruiter/login' })
+    }
+
     function onConfirm() : void {
         onSubmit()
     }
@@ -916,38 +906,6 @@
         color: #C8CDD8;
     }
 
-    /* 角色选择：学习者 / 招聘者 */
-    .role-selector {
-        flex-direction: row;
-        justify-content: center;
-        align-items: center;
-        margin-top: 20rpx;
-        margin-bottom: 20rpx;
-    }
-
-    .role-btn {
-        padding: 14rpx 44rpx;
-        margin: 0 12rpx;
-        border-radius: 48rpx;
-        border: 2rpx solid #E0E2EA;
-        background-color: #ffffff;
-    }
-
-    .role-btn-active {
-        border-color: #2979ff;
-        background-color: #E8F3FF;
-    }
-
-    .role-btn-text {
-        font-size: 28rpx;
-        color: #666666;
-    }
-
-    .role-btn-text-active {
-        color: #2979ff;
-        font-weight: bold;
-    }
-
     /* 登录按钮 */
     .btn-login {
         margin-top: 24rpx;
@@ -1000,6 +958,12 @@
     .back-password {
         align-items: center;
         padding: 20rpx 0 60rpx 0;
+    }
+
+    /* ===== 招聘者入口（纯文字链接，复用 .back-password-link 外观） ===== */
+    .recruiter-entry {
+        align-items: center;
+        padding: 0 0 60rpx 0;
     }
 
     .back-password-link {

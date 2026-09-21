@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 
@@ -81,16 +82,8 @@ func (h *ProfileBindHandler) SendCode(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		Render: func(c *gin.Context, _ *sendCodeReq, _ *struct{}, err error) {
-			if err != nil {
-				var pe *ParseError
-				if asParseError(err, &pe) {
-					renderStatus(c, pe.Status, pe.Message)
-					return
-				}
-				response.BadRequest(c, err.Error())
-				return
-			}
+		ErrStatus: &errStatusTable{fallback: http.StatusBadRequest},
+		Render: func(c *gin.Context, _ *sendCodeReq, _ *struct{}) {
 			response.SuccessWithMsg(c, "验证码已发送，请查收", nil)
 		},
 	}.Handle(c)
@@ -149,8 +142,7 @@ func (h *ProfileBindHandler) SendChangePasswordCode(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		Render: successMsgRenderer[profileUserIDReq]("验证码已发送，请查收"),
-	}.Handle(c)
+	}.WithSuccess(okMsgNoData("验证码已发送，请查收"), http.StatusBadRequest).Handle(c)
 }
 
 // profileUserIDReq 仅带登录用户 ID 的请求（发送验证码类）。
@@ -187,8 +179,7 @@ func (h *ProfileBindHandler) UpdatePassword(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		Render: successMsgRenderer[changePasswordReq]("密码设置成功"),
-	}.Handle(c)
+	}.WithSuccess(okMsgNoData("密码设置成功"), http.StatusBadRequest).Handle(c)
 }
 
 // SendAccountChangeCode 发送修改账号验证码
@@ -212,8 +203,7 @@ func (h *ProfileBindHandler) SendAccountChangeCode(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		Render: successMsgRenderer[profileUserIDReq]("验证码已发送，请查收"),
-	}.Handle(c)
+	}.WithSuccess(okMsgNoData("验证码已发送，请查收"), http.StatusBadRequest).Handle(c)
 }
 
 // changeAccountReq 修改登录账号请求 {account, code}。
@@ -242,14 +232,7 @@ func (h *ProfileBindHandler) UpdateAccount(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *changeAccountReq) (*service.LoginResult, error) {
 			return h.codeSvc.ChangeAccount(ctx, h.phoneCh, middleware.CurrentUserID(c), req.Account, req.Code)
 		},
-		Render: func(c *gin.Context, _ *changeAccountReq, resp *service.LoginResult, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "账号修改成功", resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("账号修改成功"), http.StatusBadRequest).Handle(c)
 }
 
 // handleCodeChannelBind 绑定/修改目标字段的公共实现（通道注入）。
@@ -266,11 +249,8 @@ func handleCodeChannelBind(c *gin.Context, codeSvc *service.VerifyCodeService, c
 			}
 			return &struct{}{}, nil
 		},
-		Render: func(c *gin.Context, _ *codeBindReq, _ *struct{}, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
+		ErrStatus: errStatusAll(http.StatusBadRequest),
+		Render: func(c *gin.Context, _ *codeBindReq, _ *struct{}) {
 			response.SuccessWithMsg(c, successMsg, nil)
 		},
 	}.Handle(c)
@@ -303,25 +283,4 @@ func parseCodeBindReq(c *gin.Context, targetField string) (*codeBindReq, error) 
 		return nil, badRequest("请求参数错误")
 	}
 	return &codeBindReq{Target: t.Email, Code: t.Code}, nil
-}
-
-// successMsgRenderer 渲染器：成功时输出自定义 message + nil data，失败委托 defaultRender。
-func successMsgRenderer[Req any](msg string) RenderFunc[Req, struct{}] {
-	return func(c *gin.Context, _ *Req, _ *struct{}, err error) {
-		renderNilOrError(c, err, msg)
-	}
-}
-
-// renderNilOrError 渲染 nil data 成功信封（msg）或错误信封（parse/serve 区分）。
-func renderNilOrError(c *gin.Context, err error, msg string) {
-	if err != nil {
-		var pe *ParseError
-		if asParseError(err, &pe) {
-			renderStatus(c, pe.Status, pe.Message)
-			return
-		}
-		response.BadRequest(c, err.Error())
-		return
-	}
-	response.SuccessWithMsg(c, msg, nil)
 }

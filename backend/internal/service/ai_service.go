@@ -45,7 +45,7 @@ func (s *AIService) GradeShortAnswer(questionContent, referenceAnswer, scoringCr
 		return &AIGradeResult{Score: 0, Comment: "未作答，得0分"}
 	}
 	if referenceAnswer == "" && scoringCriteria == "" {
-		return &AIGradeResult{Score: 0, Comment: "题目缺少参考答案和评分标准，无法AI评分，请等待导师人工评分", Fallback: true}
+		return &AIGradeResult{Score: 0, Comment: "题目缺少参考答案和评分标准，无法AI评分，请等待讲师人工评分", Fallback: true}
 	}
 	userPrompt := fmt.Sprintf("【题目】%s\n\n【参考答案】%s\n\n【评分标准】%s\n\n【满分】%g分\n\n【学员答案】%s\n\n请根据以上信息对学员答案进行评分，返回JSON格式。",
 		questionContent, orDefault(referenceAnswer, "无"), orDefault(scoringCriteria, "无"), maxScore, studentAnswer)
@@ -57,11 +57,11 @@ func (s *AIService) GradeShortAnswer(questionContent, referenceAnswer, scoringCr
 
 	if err != nil || content == "" {
 		s.logger.Error("AI grade_short_answer failed", zap.Error(err))
-		return &AIGradeResult{Score: 0, Comment: "AI评分暂不可用，请等待导师人工评分", Fallback: true}
+		return &AIGradeResult{Score: 0, Comment: "AI评分暂不可用，请等待讲师人工评分", Fallback: true}
 	}
 	result := parseGradingResponse(content, maxScore)
 	if result == nil {
-		return &AIGradeResult{Score: 0, Comment: "AI评分结果解析失败，请等待导师人工评分", Fallback: true}
+		return &AIGradeResult{Score: 0, Comment: "AI评分结果解析失败，请等待讲师人工评分", Fallback: true}
 	}
 	if userID != nil {
 		s.saveLog(*userID, "admin", "content", map[string]any{

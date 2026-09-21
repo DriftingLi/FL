@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -90,12 +91,5 @@ func (h *AuditHandler) List(c *gin.Context) {
 				Total: total,
 			}, nil
 		},
-		Render: func(c *gin.Context, _ *auditLogListReq, resp *AuditLogPageResult, err error) {
-			if err != nil {
-				response.ServerError(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
 }

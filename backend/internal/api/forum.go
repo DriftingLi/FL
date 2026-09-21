@@ -40,41 +40,41 @@ func NewForumHandler(svc *service.ForumService, modSvc *service.ForumModerationS
 var forumErrStatus = &errStatusTable{
 	entries: []errStatusEntry{
 		// 存在性 → 404
-		{service.ErrTopicNotFound, http.StatusNotFound},
-		{service.ErrReplyNotFound, http.StatusNotFound},
-		{service.ErrForumReportNotFound, http.StatusNotFound},
-		{service.ErrChapterNotFound, http.StatusNotFound},
+		{sentinel: service.ErrTopicNotFound, status: http.StatusNotFound},
+		{sentinel: service.ErrReplyNotFound, status: http.StatusNotFound},
+		{sentinel: service.ErrForumReportNotFound, status: http.StatusNotFound},
+		{sentinel: service.ErrChapterNotFound, status: http.StatusNotFound},
 		// 所有权 → 403
-		{service.ErrNotTopicOwner, http.StatusForbidden},
-		{service.ErrNotTopicAuthor, http.StatusForbidden},
-		{service.ErrNotReplyAuthor, http.StatusForbidden},
+		{sentinel: service.ErrNotTopicOwner, status: http.StatusForbidden},
+		{sentinel: service.ErrNotTopicAuthor, status: http.StatusForbidden},
+		{sentinel: service.ErrNotReplyAuthor, status: http.StatusForbidden},
 		// 状态前置 → 400
-		{service.ErrAcceptOwnReply, http.StatusBadRequest},
-		{service.ErrAcceptNotQuestion, http.StatusBadRequest},
-		{service.ErrCancelAcceptNotQuestion, http.StatusBadRequest},
-		{service.ErrAcceptExperienceTopic, http.StatusBadRequest},
-		{service.ErrDesignateAcceptedTopic, http.StatusBadRequest},
-		{service.ErrUnfeatureExperienceTopic, http.StatusBadRequest},
-		{service.ErrCategoryLockedByAccept, http.StatusBadRequest},
-		{service.ErrQuestionChapterConflict, http.StatusBadRequest},
-		{service.ErrParentReplyMismatch, http.StatusBadRequest},
-		{service.ErrReplyTopicMismatch, http.StatusBadRequest},
+		{sentinel: service.ErrAcceptOwnReply, status: http.StatusBadRequest},
+		{sentinel: service.ErrAcceptNotQuestion, status: http.StatusBadRequest},
+		{sentinel: service.ErrCancelAcceptNotQuestion, status: http.StatusBadRequest},
+		{sentinel: service.ErrAcceptExperienceTopic, status: http.StatusBadRequest},
+		{sentinel: service.ErrDesignateAcceptedTopic, status: http.StatusBadRequest},
+		{sentinel: service.ErrUnfeatureExperienceTopic, status: http.StatusBadRequest},
+		{sentinel: service.ErrCategoryLockedByAccept, status: http.StatusBadRequest},
+		{sentinel: service.ErrQuestionChapterConflict, status: http.StatusBadRequest},
+		{sentinel: service.ErrParentReplyMismatch, status: http.StatusBadRequest},
+		{sentinel: service.ErrReplyTopicMismatch, status: http.StatusBadRequest},
 		// 参数/校验 → 400
-		{service.ErrContentFormatInvalid, http.StatusBadRequest},
-		{service.ErrCategoryInvalid, http.StatusBadRequest},
-		{service.ErrSolvedArgInvalid, http.StatusBadRequest},
-		{service.ErrFeaturedArgInvalid, http.StatusBadRequest},
-		{service.ErrExperienceArgInvalid, http.StatusBadRequest},
-		{service.ErrSolvedFilterScope, http.StatusBadRequest},
-		{service.ErrChapterIDRequired, http.StatusBadRequest},
-		{service.ErrTitleLength, http.StatusBadRequest},
-		{service.ErrContentLength, http.StatusBadRequest},
-		{service.ErrReplyContentLength, http.StatusBadRequest},
-		{service.ErrImagesTooMany, http.StatusBadRequest},
-		{service.ErrImageURLInvalid, http.StatusBadRequest},
-		{service.ErrReportReasonLength, http.StatusBadRequest},
-		{service.ErrReportTarget, http.StatusBadRequest},
-		{service.ErrReportStatusValue, http.StatusBadRequest},
+		{sentinel: service.ErrContentFormatInvalid, status: http.StatusBadRequest},
+		{sentinel: service.ErrCategoryInvalid, status: http.StatusBadRequest},
+		{sentinel: service.ErrSolvedArgInvalid, status: http.StatusBadRequest},
+		{sentinel: service.ErrFeaturedArgInvalid, status: http.StatusBadRequest},
+		{sentinel: service.ErrExperienceArgInvalid, status: http.StatusBadRequest},
+		{sentinel: service.ErrSolvedFilterScope, status: http.StatusBadRequest},
+		{sentinel: service.ErrChapterIDRequired, status: http.StatusBadRequest},
+		{sentinel: service.ErrTitleLength, status: http.StatusBadRequest},
+		{sentinel: service.ErrContentLength, status: http.StatusBadRequest},
+		{sentinel: service.ErrReplyContentLength, status: http.StatusBadRequest},
+		{sentinel: service.ErrImagesTooMany, status: http.StatusBadRequest},
+		{sentinel: service.ErrImageURLInvalid, status: http.StatusBadRequest},
+		{sentinel: service.ErrReportReasonLength, status: http.StatusBadRequest},
+		{sentinel: service.ErrReportTarget, status: http.StatusBadRequest},
+		{sentinel: service.ErrReportStatusValue, status: http.StatusBadRequest},
 	},
 }
 
@@ -234,13 +234,7 @@ func (h *ForumHandler) ListTopics(c *gin.Context) {
 				Order:        req.Order,
 			})
 		},
-		Render: func(c *gin.Context, _ *listTopicsReq, resp *service.ForumTopicPageResult, err error) {
-			if err != nil {
-				forumErrStatus.renderError(c, err)
-				return
-			}
-			response.Success(c, resp)
-		},
+		ErrStatus: forumErrStatus,
 	}.Handle(c)
 }
 
@@ -294,11 +288,8 @@ func (h *ForumHandler) CreateTopic(c *gin.Context) {
 				ClientIP:      req.ClientIP,
 			})
 		},
-		Render: func(c *gin.Context, _ *createTopicReq, resp *service.ForumTopicDTO, err error) {
-			if err != nil {
-				forumErrStatus.renderError(c, err)
-				return
-			}
+		ErrStatus: forumErrStatus,
+		Render: func(c *gin.Context, _ *createTopicReq, resp *service.ForumTopicDTO) {
 			response.Created(c, "发布成功", resp)
 		},
 	}.Handle(c)
@@ -338,17 +329,10 @@ func (h *ForumHandler) GetTopic(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *topicGetReq) (*service.ForumTopicDetailDTO, error) {
 			return h.svc.GetTopic(req.toDetailInput())
 		},
-		Render: func(c *gin.Context, _ *topicGetReq, resp *service.ForumTopicDetailDTO, err error) {
-			if err != nil {
-				if errors.Is(err, gorm.ErrRecordNotFound) {
-					response.NotFound(c, "主题不存在")
-					return
-				}
-				response.ServerError(c, "查询失败: "+err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
+		ErrStatus: &errStatusTable{entries: []errStatusEntry{
+			{sentinel: gorm.ErrRecordNotFound, status: http.StatusNotFound, message: "主题不存在"},
+			{sentinel: nil, status: http.StatusInternalServerError},
+		}},
 	}.Handle(c)
 }
 
@@ -404,11 +388,8 @@ func (h *ForumHandler) ReplyTopic(c *gin.Context) {
 				ClientIP:      req.ClientIP,
 			})
 		},
-		Render: func(c *gin.Context, _ *replyTopicReq, resp *service.ForumReplyDTO, err error) {
-			if err != nil {
-				forumErrStatus.renderError(c, err)
-				return
-			}
+		ErrStatus: forumErrStatus,
+		Render: func(c *gin.Context, _ *replyTopicReq, resp *service.ForumReplyDTO) {
 			response.Created(c, "回复成功", resp)
 		},
 	}.Handle(c)
@@ -463,11 +444,8 @@ func (h *ForumHandler) UpdateTopic(c *gin.Context) {
 				Images:   req.Images,
 			})
 		},
-		Render: func(c *gin.Context, _ *updateTopicReq, resp *service.ForumTopicDTO, err error) {
-			if err != nil {
-				forumErrStatus.renderError(c, err)
-				return
-			}
+		ErrStatus: forumErrStatus,
+		Render: func(c *gin.Context, _ *updateTopicReq, resp *service.ForumTopicDTO) {
 			response.SuccessWithMsg(c, "修改成功", resp)
 		},
 	}.Handle(c)
@@ -504,11 +482,8 @@ func (h *ForumHandler) DeleteTopic(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		Render: func(c *gin.Context, _ *topicDeleteReq, _ *struct{}, err error) {
-			if err != nil {
-				forumErrStatus.renderError(c, err)
-				return
-			}
+		ErrStatus: forumErrStatus,
+		Render: func(c *gin.Context, _ *topicDeleteReq, _ *struct{}) {
 			response.SuccessWithMsg(c, "已删除", nil)
 		},
 	}.Handle(c)
@@ -545,11 +520,8 @@ func (h *ForumHandler) DeleteReply(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		Render: func(c *gin.Context, _ *replyDeleteReq, _ *struct{}, err error) {
-			if err != nil {
-				forumErrStatus.renderError(c, err)
-				return
-			}
+		ErrStatus: forumErrStatus,
+		Render: func(c *gin.Context, _ *replyDeleteReq, _ *struct{}) {
 			response.SuccessWithMsg(c, "已删除", nil)
 		},
 	}.Handle(c)
@@ -630,11 +602,8 @@ func (h *ForumHandler) AdminDeleteTopic(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		Render: func(c *gin.Context, _ *topicIDReq, _ *struct{}, err error) {
-			if err != nil {
-				forumErrStatus.renderError(c, err)
-				return
-			}
+		ErrStatus: forumErrStatus,
+		Render: func(c *gin.Context, _ *topicIDReq, _ *struct{}) {
 			response.SuccessWithMsg(c, "已删除", nil)
 		},
 	}.Handle(c)
@@ -724,11 +693,8 @@ func (h *ForumHandler) handleExperience(c *gin.Context, designate bool) {
 			}
 			return h.modSvc.RevokeExperience(req.TopicID)
 		},
-		Render: func(c *gin.Context, _ *topicIDReq, resp *service.ForumTopicDTO, err error) {
-			if err != nil {
-				forumErrStatus.renderError(c, err)
-				return
-			}
+		ErrStatus: forumErrStatus,
+		Render: func(c *gin.Context, _ *topicIDReq, resp *service.ForumTopicDTO) {
 			if designate {
 				response.SuccessWithMsg(c, "已认定为备考经验", resp)
 			} else {
@@ -751,11 +717,8 @@ func (h *ForumHandler) handleSetFeatured(c *gin.Context, featured bool) {
 		Invoke: func(ctx context.Context, req *topicIDReq) (*service.ForumTopicDTO, error) {
 			return h.modSvc.SetFeatured(req.TopicID, featured)
 		},
-		Render: func(c *gin.Context, _ *topicIDReq, resp *service.ForumTopicDTO, err error) {
-			if err != nil {
-				forumErrStatus.renderError(c, err)
-				return
-			}
+		ErrStatus: forumErrStatus,
+		Render: func(c *gin.Context, _ *topicIDReq, resp *service.ForumTopicDTO) {
 			if featured {
 				response.SuccessWithMsg(c, "加精成功", resp)
 			} else {
@@ -793,11 +756,8 @@ func (h *ForumHandler) AdminDeleteReply(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		Render: func(c *gin.Context, _ *replyIDReq, _ *struct{}, err error) {
-			if err != nil {
-				forumErrStatus.renderError(c, err)
-				return
-			}
+		ErrStatus: forumErrStatus,
+		Render: func(c *gin.Context, _ *replyIDReq, _ *struct{}) {
 			response.SuccessWithMsg(c, "已删除", nil)
 		},
 	}.Handle(c)

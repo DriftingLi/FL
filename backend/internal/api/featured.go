@@ -3,6 +3,7 @@ package api
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 
@@ -72,14 +73,7 @@ func (h *FeaturedHandler) GetPublicList(c *gin.Context) {
 			}
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *featuredListReq, resp *service.FeaturedContentPageResult, err error) {
-			if err != nil {
-				response.ServerError(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // GetPublicDetail 精选内容详情
@@ -105,14 +99,7 @@ func (h *FeaturedHandler) GetPublicDetail(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *featuredDetailReq) (*service.FeaturedContentDetailDTO, error) {
 			return h.svc.GetPublicDetail(req.ID, req.CountView)
 		},
-		Render: func(c *gin.Context, _ *featuredDetailReq, resp *service.FeaturedContentDetailDTO, err error) {
-			if err != nil {
-				response.NotFound(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
 }
 
 // IncrementViewCount 精选阅读量
@@ -141,11 +128,8 @@ func (h *FeaturedHandler) IncrementViewCount(c *gin.Context) {
 			}
 			return &viewCountResp{ID: req.ID, Count: count}, nil
 		},
-		Render: func(c *gin.Context, _ *featuredIDReq, resp *viewCountResp, err error) {
-			if err != nil {
-				response.NotFound(c, err.Error())
-				return
-			}
+		ErrStatus: errStatusAll(http.StatusNotFound),
+		Render: func(c *gin.Context, _ *featuredIDReq, resp *viewCountResp) {
 			response.Success(c, gin.H{"content_id": resp.ID, "view_count": resp.Count})
 		},
 	}.Handle(c)
@@ -181,14 +165,7 @@ func (h *FeaturedHandler) AdminList(c *gin.Context) {
 			}
 			return &result, nil
 		},
-		Render: func(c *gin.Context, _ *adminFeaturedListReq, resp *service.FeaturedContentPageResult, err error) {
-			if err != nil {
-				response.ServerError(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // @Summary 精选内容详情（管理端）
@@ -208,14 +185,7 @@ func (h *FeaturedHandler) AdminDetail(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *featuredIDReq) (*service.FeaturedContentAdminDetailDTO, error) {
 			return h.svc.AdminDetail(req.ID)
 		},
-		Render: func(c *gin.Context, _ *featuredIDReq, resp *service.FeaturedContentAdminDetailDTO, err error) {
-			if err != nil {
-				response.NotFound(c, err.Error())
-				return
-			}
-			response.Success(c, resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
 }
 
 // @Summary 创建精选内容
@@ -238,14 +208,7 @@ func (h *FeaturedHandler) Create(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *service.FeaturedContentInput) (*service.FeaturedContentAdminDetailDTO, error) {
 			return h.svc.Create(*req)
 		},
-		Render: func(c *gin.Context, _ *service.FeaturedContentInput, resp *service.FeaturedContentAdminDetailDTO, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.Created(c, "内容创建成功", resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(created("内容创建成功"), http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 更新精选内容
@@ -267,14 +230,7 @@ func (h *FeaturedHandler) Update(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *featuredUpdateReq) (*service.FeaturedContentAdminDetailDTO, error) {
 			return h.svc.Update(req.ID, req.Input)
 		},
-		Render: func(c *gin.Context, _ *featuredUpdateReq, resp *service.FeaturedContentAdminDetailDTO, err error) {
-			if err != nil {
-				response.BadRequest(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "内容更新成功", resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("内容更新成功"), http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 删除精选内容
@@ -294,14 +250,7 @@ func (h *FeaturedHandler) Delete(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *featuredIDReq) (*service.FeaturedDeleteResult, error) {
 			return h.svc.Delete(req.ID)
 		},
-		Render: func(c *gin.Context, _ *featuredIDReq, resp *service.FeaturedDeleteResult, err error) {
-			if err != nil {
-				response.NotFound(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "内容删除成功", resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("内容删除成功"), http.StatusNotFound).Handle(c)
 }
 
 // @Summary 发布精选内容
@@ -321,14 +270,7 @@ func (h *FeaturedHandler) Publish(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *featuredIDReq) (*service.FeaturedContentAdminDetailDTO, error) {
 			return h.svc.Publish(req.ID)
 		},
-		Render: func(c *gin.Context, _ *featuredIDReq, resp *service.FeaturedContentAdminDetailDTO, err error) {
-			if err != nil {
-				response.NotFound(c, err.Error())
-				return
-			}
-			response.SuccessWithMsg(c, "内容发布成功", resp)
-		},
-	}.Handle(c)
+	}.WithSuccess(okMsg("内容发布成功"), http.StatusNotFound).Handle(c)
 }
 
 // @Summary 上传精选内容图片

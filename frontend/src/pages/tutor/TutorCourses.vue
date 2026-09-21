@@ -130,6 +130,7 @@
 import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowRight } from '@element-plus/icons-vue'
+import { href } from '@/config/pages'
 import { tutorApi, type CourseDTO } from '@/api/tutor'
 import { trainingApi } from '@/api/training'
 import { credentialApi, type CredentialDict } from '@/api/credential'
@@ -249,7 +250,7 @@ function onCredentialChange() {
 }
 
 function goToChapters(courseId: number) {
-  router.push(`/training/tutor/course/${courseId}/chapters`)
+  router.push(href('TutorChapterManage', { id: String(courseId) }))
 }
 
 onMounted(() => {

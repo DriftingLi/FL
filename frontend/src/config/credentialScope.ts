@@ -23,7 +23,7 @@ export interface CredentialScopeOptOut {
 
 /** 例外登记表（按路径排序，生成序稳定）。 */
 export const CREDENTIAL_SCOPE_OPT_OUTS: readonly CredentialScopeOptOut[] = [
-  { file: 'components/student/ChapterDiscussion.vue', count: 1, reason: '章节讨论属论坛域，帖子不按证件分区（#604 opt-out）' },
+  { file: 'components/student/ChapterDiscussion.vue', count: 2, reason: '章节讨论属论坛域，帖子不按证件分区（#604 opt-out）；两处=帖子列表 + 票4 场景4 新增的回复 append 档' },
   { file: 'pages/onboarding/CredentialOnboarding.vue', count: 1, reason: '本页装载的就是证件目录，不随当前证件变化（且页面只存在于未选证件时）' },
   { file: 'pages/student/ChapterView.vue', count: 1, reason: '章节页内嵌论坛域讨论区，随章节而非随证件装载（#604 opt-out）' },
   { file: 'pages/student/CheckInPage.vue', count: 1, reason: '打卡不按当前证件分区（ADR-0028 独立蓝图）' },

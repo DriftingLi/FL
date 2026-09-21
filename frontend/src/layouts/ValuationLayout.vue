@@ -17,14 +17,14 @@
 
           <!-- 未登录：显示登录/注册入口 -->
           <template v-if="!authStore.isLoggedIn">
-            <router-link to="/valuation/register" class="btn-entry btn-register">注册</router-link>
-            <router-link to="/valuation/login" class="btn-entry btn-login">登录</router-link>
+            <router-link :to="href('ValuationRegister')" class="btn-entry btn-register">注册</router-link>
+            <router-link :to="href('ValuationLogin')" class="btn-entry btn-login">登录</router-link>
           </template>
 
           <!-- 已登录：显示用户名 + 退出 -->
           <template v-else>
             <span class="user-name" :title="displayName">{{ displayName }}</span>
-            <router-link to="/training/profile" class="btn-entry btn-profile">个人资料</router-link>
+            <router-link :to="href('StudentProfile')" class="btn-entry btn-profile">个人资料</router-link>
             <button type="button" class="btn-entry btn-logout" @click="handleLogout">退出</button>
           </template>
 
@@ -48,6 +48,7 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { href } from '@/config/pages'
 import ValuationFooter from '@/components/valuation/ValuationFooter.vue'
 import { buildSubdomainUrl } from '@/utils/subdomain'
 import { useAuthStore } from '@/stores/auth'
@@ -67,7 +68,7 @@ const displayName = computed(() => displayNameOf(authStore.userInfo) || '评估�
 async function handleLogout() {
   await authStore.signOut()
   ElMessage.success('已退出登录')
-  router.push('/valuation')
+  router.push(href('ValuationHome'))
 }
 </script>
 

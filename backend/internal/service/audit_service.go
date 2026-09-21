@@ -102,5 +102,5 @@ var auditResourceNames = []struct {
 	{"chapter", "章节"},
 	{"course", "课程"},
 	{"grading", "阅卷"},
-	{"tutor", "导师"},
+	{"tutor", "讲师"},
 }

@@ -64,6 +64,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { CircleCheckFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import { href } from '@/config/pages'
 import { useCredentialStore } from '@/stores/credential'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
@@ -105,7 +106,7 @@ async function handleConfirm() {
   try {
     await credentialStore.switchTo(selectedId.value)
     ElMessage.success('设置成功')
-    router.replace('/training')
+    router.replace(href('StudentDashboard'))
   } catch (e: any) {
     ElMessage.error(e?.message || '设置失败，请重试')
   } finally {

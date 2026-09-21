@@ -1,0 +1,298 @@
+<template>
+    <view class="page" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+
+        <view class="nav-bar">
+            <view class="nav-side"></view>
+            <text class="nav-title">工作台</text>
+            <view class="nav-side nav-side-right" @click="onMe">
+                <text class="nav-action">我的</text>
+            </view>
+        </view>
+
+        <RecruiterTabBar :active="activeKey" :pending-count="pendingCount" @switch="onSwitchTab" />
+
+        <scroll-view class="content-scroll" scroll-y="true">
+            <view v-if="!loading && items.length == 0" class="empty-tip">
+                <text class="empty-text">暂无交换申请</text>
+            </view>
+
+            <!-- 招聘者在交换段**没有可执行动作**（ADR-0022 ②）：只能等对方回应；
+                 过期项更是连入口都不给 —— 服务端不按 expires_at 判状态，给入口就是
+                 「看起来能用、用了必失败」（#705 判据）⇒ 行内零 @click、零按钮 -->
+            <view v-for="row in items" :key="row.id" class="contact-row">
+                <view class="row-main">
+                    <view class="row-title-line">
+                        <text class="row-title">{{ rowMessage(row) }}</text>
+                        <text class="tag" :class="contactTagClass(row)">{{ contactTagLabel(row) }}</text>
+                    </view>
+                    <text class="row-meta">{{ contactMeta(row) }}</text>
+                </view>
+                <text v-if="contactRemainText(row).length > 0" class="remain-text">{{ contactRemainText(row) }}</text>
+            </view>
+
+            <view v-if="loading" class="loading-tip">
+                <text class="loading-text">加载中...</text>
+            </view>
+        </scroll-view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    /**
+     * 招聘者工作区 · 交换段（一级面；ADR-0021 ④ 线 4 / ADR-0022 ④ 步骤 P2）
+     *
+     * 数据源 `GET /recruit/contact-requests`（`ListForRecruiter` = **我发起的**），
+     * DTO 带 `status` + `expires_at`（`created_at + 14 天`）。
+     * 与职位段**共用同一份**响应语义（那边拿它算徽标与紧迫行）。
+     *
+     * ## 「已过期」为什么是客户端算的
+     *   服务端读取路径**不按 `expires_at` 判状态**（`contact-request-expire` 守护未被装配，
+     *   全仓无可外部触发的过期端点）⇒ 超期记录永久停在 `pending`。
+     *   故本页把「`status == pending` 且 `expires_at` 已过」折成「已过期」展示，
+     *   并且**不给任何操作入口**（ADR-0022 ②/③ 与 #705 判据）。
+     *
+     * ## 徽标只计未过期 pending
+     *   分段徽标与（职位段的）紧迫行都用 `utils/recruitDisplay.uts` 的同一个计数函数。
+     *
+     * ## 招聘者侧 DTO 不含学员姓名
+     *   `ContactRequestDTO` 只有 `student_user_id`（`contact_service.go:45-64`）——
+     *   列表**不显示**「某某学员」，也不拿 ID 冒充名字。
+     */
+    import { ref } from 'vue'
+    import { onLoad } from '@dcloudio/uni-app'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { getRecruitContactRequestsApi } from '../../api/recruit'
+    import { formatDateStr } from '../../utils/format'
+    import {
+        unexpiredPendingCount,
+        remainingDays,
+        contactRemainingText,
+        contactExpired,
+        describeRecruitContactStatus
+    } from '../../utils/recruitDisplay'
+    import { ensureRecruiterSession } from '../../utils/recruitGuard'
+    import RecruiterTabBar from './components/recruiter-tab-bar.uvue'
+    import type { RecruitContactRequest } from '../../api/recruit'
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    const activeKey : string = 'contacts'
+
+    const items = ref<RecruitContactRequest[]>([])
+    const loading = ref<boolean>(false)
+    const pendingCount = ref<number>(0)
+    // 渲染期要用的「现在」：取数时落一次，避免每行各取一次时钟而出现行间不一致
+    const nowMs = ref<number>(0)
+
+    // ⚠️ 函数定义顺序是**契约**（`utils/utsAndroidCompile.test.js` 的 A 守护）：UTS 编译到 Kotlin
+    // 后没有函数提升 ⇒ 顶层调用点不得早于被调函数的定义，故 `onLoad(...)` 放在**最后**。
+
+    function loadItems() : void {
+        loading.value = true
+        getRecruitContactRequestsApi().then((result) : void => {
+            nowMs.value = Date.now()
+            items.value = result.items
+            pendingCount.value = unexpiredPendingCount(result.items, nowMs.value)
+            loading.value = false
+        }).catch((e) : void => {
+            console.error('[recruiter-contacts] load failed:', e)
+            loading.value = false
+        })
+    }
+
+    function rowExpired(row : RecruitContactRequest) : boolean {
+        return contactExpired(row.expires_at, nowMs.value)
+    }
+
+    /** 附言是发起时的必填项（后端「附言不能为空」）；万一缺失也不拿别的东西顶替 */
+    function rowMessage(row : RecruitContactRequest) : string {
+        if (row.message.length > 0) return row.message
+        return '未填写附言'
+    }
+
+    function contactTagLabel(row : RecruitContactRequest) : string {
+        return describeRecruitContactStatus(row.status, rowExpired(row)).label
+    }
+
+    function contactTagClass(row : RecruitContactRequest) : string {
+        return 'tag-' + describeRecruitContactStatus(row.status, rowExpired(row)).status
+    }
+
+    /** 剩余天数徽标：过期项为空串（事实由状态标签承担，不重复说两遍） */
+    function contactRemainText(row : RecruitContactRequest) : string {
+        if (rowExpired(row)) return ''
+        return contactRemainingText(remainingDays(row.expires_at, nowMs.value))
+    }
+
+    /**
+     * 副行：只补状态标签给不了的那个事实（有效期）。
+     * 状态词一律来自 `utils/recruitDisplay.uts` 的词表，本页不写第二份（契约测试扫内联）。
+     */
+    function contactMeta(row : RecruitContactRequest) : string {
+        if (row.status != 'pending' && !rowExpired(row)) return ''
+        const until = formatDateStr(row.expires_at)
+        if (until.length == 0) return ''
+        return '有效期至 ' + until
+    }
+
+    function onSwitchTab(key : string) : void {
+        if (key == activeKey) return
+        if (key == 'jobs') {
+            uni.redirectTo({ url: '/pages/recruiter/jobs' })
+            return
+        }
+        if (key == 'resumes') {
+            uni.redirectTo({ url: '/pages/recruiter/resumes' })
+        }
+    }
+
+    function onMe() : void {
+        uni.navigateTo({ url: '/pages/recruiter/me' })
+    }
+
+    onLoad((options : OnLoadOptions) => {
+        if (!ensureRecruiterSession()) return
+        loadItems()
+    })
+</script>
+
+<style lang="scss">
+    .page {
+        background-color: #F5F6FA;
+    }
+
+    .status-bar {
+        background-color: #ffffff;
+    }
+
+    .nav-bar {
+        flex-direction: row;
+        align-items: center;
+        height: 88rpx;
+        padding: 0 24rpx;
+        background-color: #ffffff;
+    }
+
+    .nav-side {
+        width: 120rpx;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .nav-side-right {
+        justify-content: flex-end;
+    }
+
+    .nav-title {
+        flex: 1;
+        font-size: 34rpx;
+        font-weight: bold;
+        color: #333333;
+        text-align: center;
+    }
+
+    .nav-action {
+        font-size: 30rpx;
+        color: #2979ff;
+        padding: 16rpx 0;
+    }
+
+    .content-scroll {
+        flex: 1;
+    }
+
+    .contact-row {
+        flex-direction: row;
+        align-items: center;
+        margin: 16rpx 24rpx 0 24rpx;
+        padding: 24rpx;
+        background-color: #ffffff;
+        border-radius: 12rpx;
+    }
+
+    .row-main {
+        flex: 1;
+    }
+
+    .row-title-line {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .row-title {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .row-meta {
+        margin-top: 8rpx;
+        font-size: 24rpx;
+        color: #999999;
+    }
+
+    .remain-text {
+        font-size: 24rpx;
+        color: #FF9800;
+        padding-left: 12rpx;
+    }
+
+    .tag {
+        margin-left: 12rpx;
+        padding: 4rpx 12rpx;
+        border-radius: 8rpx;
+        font-size: 20rpx;
+    }
+
+    .tag-pending {
+        color: #FF9800;
+        background-color: #FFF7E6;
+    }
+
+    .tag-approved {
+        color: #22A45D;
+        background-color: #F0FFF0;
+    }
+
+    .tag-rejected {
+        color: #E5484D;
+        background-color: #FFF0F0;
+    }
+
+    .tag-expired {
+        color: #999999;
+        background-color: #F5F5F5;
+    }
+
+    .tag-revoked {
+        color: #999999;
+        background-color: #F5F5F5;
+    }
+
+    .tag-unknown {
+        color: #999999;
+        background-color: #F5F5F5;
+    }
+
+    .empty-tip {
+        align-items: center;
+        padding: 120rpx 0;
+    }
+
+    .empty-text {
+        font-size: 28rpx;
+        color: #999999;
+    }
+
+    .loading-tip {
+        align-items: center;
+        padding: 40rpx 0;
+    }
+
+    .loading-text {
+        font-size: 26rpx;
+        color: #999999;
+    }
+</style>

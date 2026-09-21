@@ -9,9 +9,10 @@
  * - 调试日志仅开发环境输出（ENABLE_DEBUG_LOG），且不打印请求头（避免泄漏 token）
  */
 import { API_BASE_URL, REQUEST_TIMEOUT, ENABLE_DEBUG_LOG } from '../config/env'
-import { STORAGE_KEY_TOKEN } from '../constants/app'
+import { STORAGE_KEY_TOKEN, STORAGE_KEY_USER } from '../constants/app'
 import { getStorage, removeStorage } from '../utils/storage'
 import { isContentUri, buildTempFilePath, UPLOAD_TMP_DIR } from '../utils/uploadPath'
+import { isRecruiterActive } from '../utils/authRole'
 import { gateRefresh } from './refreshGate'
 // 注意：不能在此处 import useAuthStore（会导致循环依赖），改用全局回调
 
@@ -21,6 +22,24 @@ export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
 /** 鉴权头名与 scheme：buildHeader / buildUploadHeader / sentTokenOf 共用的唯一真源 */
 const HEADER_AUTHORIZATION = 'Authorization'
 const BEARER_PREFIX = 'Bearer '
+
+/**
+ * **403（已认证但无权限）错误的可识别前缀** —— 单点真源，不许在别处另写字面量。
+ *
+ * 为什么要这么绕（2026-09-20 ④a 编译门抓获的真缺陷）：原实现写
+ * `const forbiddenAny = forbiddenErr as any; forbiddenAny.statusCode = 403`
+ * —— UTS 编译到 Kotlin 时**不允许给 `any` 动态加属性**，报 `error18 找不到名称"statusCode"`，
+ * 编译直接失败（同理读取侧 `(err as any).statusCode` 也编不过）。
+ * 而本仓**没有** `extends Error` 的先例，UTS 的自定义类也没有构造器先例
+ * （唯一先例 `pages/profile/composables/personal-info-flows.uts:104` 的 `Countdown` 是字段初始化式、无构造器）
+ * ⇒ 不发明新语法：改用**消息前缀**承载状态码，读写两端都用这一个常量。
+ *
+ * 消费方：`api/recruit.uts` 的 `isContactForbidden()`（页面据此把 403 分流成「尚未授权」而非「请求失败」）。
+ * ⚠️ 边界（照实记）：这是**字符串协议**，弱于类型化错误对象；若日后 UTS 支持
+ * `extends Error` 且编译通过，应换成带 `statusCode` 字段的错误类并删除本常量。
+ */
+export const FORBIDDEN_MESSAGE_PREFIX = '403:'
+
 
 /** 请求配置 */
 export type RequestOptions = {
@@ -110,21 +129,44 @@ function showError(msg : string, silent : boolean) {
 /** 防重入标记：避免多个并发 401 触发多次跳转 */
 let isHandlingUnauthorized = false
 
-/** 清空登录态并跳转登录页 */
+/**
+ * 401 终态该把用户送到哪个登录页 —— **按当前身份角色定向**（ADR-0022 ⑤）
+ *
+ * 招聘者与学员共用 `auth_token` 槽、却是两个独立的登录页：token 失效后必须回到
+ * **签发它的那一个**，否则会出现「拿招聘 token 去学员登录页」这种身份错配
+ * （招聘者工作区页面的 onLoad 守卫也会因此反复弹回）。
+ *
+ * 判定读 `utils/authRole.uts`（`auth_active_role`，缺省 = 学员）。
+ * 只改这**一个**出口内的目标，不新增 reLaunch 出口 —— `C2` 锁着「跳转只有一个出口」。
+ */
+function loginPathForActiveRole() : string {
+    if (isRecruiterActive()) return '/pages/recruiter/login'
+    return '/pages/login/login'
+}
+
+/**
+ * 清空登录态并跳转登录页
+ *
+ * ⚠️ 本函数是**全仓唯一**的 reLaunch 出口（`utils/concurrent401RefreshContract.test.js` 的 C2）。
+ * 角色差异只能在本函数**内部**分支，不得在别处另开一个 reLaunch。
+ */
 function handleUnauthorized() {
     // 防重入：并发请求同时 401 时只跳一次
     if (isHandlingUnauthorized) return
     isHandlingUnauthorized = true
 
     removeStorage(STORAGE_KEY_TOKEN)
-    removeStorage('auth_user')
-    // 避免在登录页时还跳登录页
+    removeStorage(STORAGE_KEY_USER)
+    // 按角色选目标：招聘者态 → 招聘者登录页；学员态 → 学员登录页（行为不变）
+    const target = loginPathForActiveRole()
+    // 避免已经在**目标**登录页时还跳一次（`getCurrentPages()` 的 route 不带前导 `/`）
+    const targetRoute = target.substring(1)
     const pages = getCurrentPages()
     if (pages.length > 0) {
         const current = pages[pages.length - 1]
         const route = current.route
-        if (route != 'pages/login/login') {
-            uni.reLaunch({ url: '/pages/login/login' })
+        if (route != targetRoute) {
+            uni.reLaunch({ url: target })
         }
     }
 
@@ -171,6 +213,26 @@ function tryAutoRefresh(forToken : string) : Promise<boolean> {
 function handleStatus(statusCode : number, body : UTSJSONObject, silent : boolean, fallbackMsg : string, resolve : (v : UTSJSONObject) => void, reject : (e : Error) => void) : boolean {
     if (statusCode == 401) {
         return false
+    }
+
+    // 403：**已认证但无权限**（#1196）。与 401 的区别是「身份没问题、这一项不给」——
+    // 典型是招聘者读未授权学员的明文联系方式（后端 `GetContact` 返回 403，不是 404）。
+    // 它必须与 401 分开：**不清登录态、不跳登录页**（唯二的 reLaunch 出口是 handleUnauthorized，
+    // 见 `utils/concurrent401RefreshContract.test.js` 的 C2）。
+    // 错误对象挂 `statusCode`，让调用方能把「预期分支」（如详情页的未授权态）与真失败分开；
+    // 调用方不需要时它只是多了一个字段，行为与既有的「HTTP 错误」分支一致。
+    if (statusCode == 403) {
+        let forbiddenMsg = '无权限访问'
+        const forbiddenBodyMsg = body['message']
+        if (forbiddenBodyMsg != null) {
+            forbiddenMsg = forbiddenBodyMsg as string
+        }
+        showError(forbiddenMsg, silent)
+        // ⚠️ 状态码走**消息前缀**而不是动态属性：见 FORBIDDEN_MESSAGE_PREFIX 的注释
+        //    （`(err as any).statusCode = 403` 在 UTS→Kotlin 下编不过，error18）。
+        const forbiddenErr = new Error(FORBIDDEN_MESSAGE_PREFIX + forbiddenMsg)
+        reject(forbiddenErr)
+        return true
     }
 
     // HTTP 错误

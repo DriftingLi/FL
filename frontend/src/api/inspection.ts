@@ -8,6 +8,9 @@
 // 后者由 #1097 在 internal/api/admin_inspection.go 补齐 swagger 注解、并在 apitypes.Domains 新建
 // inspection 域登记，原先 4 条 ALLOWLIST 欠条已随之销账（见 scripts/check-api-consumers.mjs 头部留痕）。
 import { unwrappedRequest } from './request'
+// 票 6（ADR-0060 决策 6）：分页容器不再由本模块自备一份 `PagedResult` 副本，统一吃 api 侧的
+// `Page`；本模块的 5 条分页端点后端回的就是 items + total，故 `toPage` 只做兜底归一。
+import { toPage, type Page } from './page'
 import type {
   ContactRequestRowDTO,
   InspectionCountDTO,
@@ -18,12 +21,6 @@ import type { JobPostingDTO, ReportDTO } from '@/api/generated/job'
 
 /** X-Silent：巡检面多为轮询/汇总型加载，失败不弹全局 toast（由调用方自行分类呈现）。 */
 const SILENT = { headers: { 'X-Silent': '1' } }
-
-/** 分页信封要点（后端 items + total 约定）。 */
-export interface PagedResult<T> {
-  items: T[]
-  total: number
-}
 
 /** 单值计数信封（如「已受理后删除」计数）。 */
 export interface CountResult {
@@ -46,30 +43,42 @@ export interface PageParams {
   recruiter_id?: string
 }
 
+/**
+ * 本模块分页端点的**线格式**：后端回的行键就叫 items，总数是 total。
+ * 刻意不复用中立容器 `Page<T>` 当响应类型——那是 api 层的**出口**形状（已由 toPage 保证
+ * 两键非空），拿它当入参形状等于用类型面掩盖「后端可能整段不回负载」这件事（票 6 的兜底单点）。
+ */
+type ItemsWire<T> = { items?: T[] | null; total?: number | null }
+
 export const inspectionApi = {
-  /** 积分流水分页。行类型缺省 = 生成物的 PointsLedgerItem。 */
-  pointsLedger<T = PointsLedgerItem>(params: PointsLedgerParams) {
-    return unwrappedRequest.get<PagedResult<T>>('/admin/points/ledger', { params, ...SILENT })
+  /** 积分流水分页。行类型缺省 = 生成物的 PointsLedgerItem；出口 = 中立容器 Page<T>。 */
+  async pointsLedger<T = PointsLedgerItem>(params: PointsLedgerParams): Promise<Page<T>> {
+    const res = await unwrappedRequest.get<ItemsWire<T>>('/admin/points/ledger', { params, ...SILENT })
+    return toPage(res?.items, res?.total)
   },
   /** 「已受理后又被删除」计数。响应类型 = 生成物的 InspectionCountDTO（与 CountResult 同形）。 */
   deletedAfterAccepted() {
     return unwrappedRequest.get<InspectionCountDTO>('/admin/inspection/deleted-after-accepted', SILENT)
   },
   /** 简历查看留痕分页（#418，只呈现事实字段，不含学员明文联系方式）。行类型缺省 = RecruitResumeViewDTO。 */
-  resumeViews<T = RecruitResumeViewDTO>(params: PageParams) {
-    return unwrappedRequest.get<PagedResult<T>>('/admin/recruit/views', { params, ...SILENT })
+  async resumeViews<T = RecruitResumeViewDTO>(params: PageParams): Promise<Page<T>> {
+    const res = await unwrappedRequest.get<ItemsWire<T>>('/admin/recruit/views', { params, ...SILENT })
+    return toPage(res?.items, res?.total)
   },
   /** 联系方式交换申请分页（#418）。行类型缺省 = ContactRequestRowDTO。 */
-  contactRequests<T = ContactRequestRowDTO>(params: PageParams) {
-    return unwrappedRequest.get<PagedResult<T>>('/admin/recruit/requests', { params, ...SILENT })
+  async contactRequests<T = ContactRequestRowDTO>(params: PageParams): Promise<Page<T>> {
+    const res = await unwrappedRequest.get<ItemsWire<T>>('/admin/recruit/requests', { params, ...SILENT })
+    return toPage(res?.items, res?.total)
   },
   /** 职位巡检分页（#454，可按招聘者过滤）。行类型缺省 = 生成物的 JobPostingDTO。 */
-  jobs<T = JobPostingDTO>(params: PageParams) {
-    return unwrappedRequest.get<PagedResult<T>>('/admin/jobs', { params, ...SILENT })
+  async jobs<T = JobPostingDTO>(params: PageParams): Promise<Page<T>> {
+    const res = await unwrappedRequest.get<ItemsWire<T>>('/admin/jobs', { params, ...SILENT })
+    return toPage(res?.items, res?.total)
   },
   /** 职位举报队列分页（#454）。行类型缺省 = 生成物的 ReportDTO。 */
-  jobReports<T = ReportDTO>(params: PageParams) {
-    return unwrappedRequest.get<PagedResult<T>>('/admin/job-reports', { params, ...SILENT })
+  async jobReports<T = ReportDTO>(params: PageParams): Promise<Page<T>> {
+    const res = await unwrappedRequest.get<ItemsWire<T>>('/admin/job-reports', { params, ...SILENT })
+    return toPage(res?.items, res?.total)
   },
   /** 强制下架职位（带原因，邮件通知企业）。响应是下架后的职位行（生成物 JobPostingDTO）。 */
   forceOfflineJob(id: number, reason: string) {

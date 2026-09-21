@@ -6450,7 +6450,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "201": {
-                        "description": "导师添加成功",
+                        "description": "讲师添加成功",
                         "schema": {
                             "allOf": [
                                 {
@@ -6508,7 +6508,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "导师删除成功",
+                        "description": "讲师删除成功",
                         "schema": {
                             "allOf": [
                                 {
@@ -6532,7 +6532,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "导师不存在",
+                        "description": "讲师不存在",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -6623,7 +6623,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "导师已启用/已禁用",
+                        "description": "讲师已启用/已禁用",
                         "schema": {
                             "allOf": [
                                 {
@@ -6647,7 +6647,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "导师不存在",
+                        "description": "讲师不存在",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -25099,7 +25099,9 @@ const docTemplate = `{
                     "x-optional": true
                 },
                 "expires_at": {
-                    "type": "string"
+                    "description": "ExpiresAt 裁决窗口的关闭时刻，**只对 pending 有意义**（ADR-0061 §2）：非 pending 行可能缺失，\n消费方不得把它读成「授权的到期时刻」（approved 是永久授权）。",
+                    "type": "string",
+                    "x-optional": true
                 },
                 "id": {
                     "type": "integer"
@@ -25162,7 +25164,9 @@ const docTemplate = `{
                     "x-optional": true
                 },
                 "expires_at": {
-                    "type": "string"
+                    "description": "ExpiresAt 裁决窗口，**仅 pending 有值**（ADR-0061 §2 / 迁移 000039 的 CHECK）。\n与 DecidedAt 同形：标量非空会让新产生的 approved 行输出 0001-01-01T00:00:00Z 的假日期。",
+                    "type": "string",
+                    "x-optional": true
                 },
                 "id": {
                     "type": "integer"

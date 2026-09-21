@@ -1,9 +1,9 @@
 <template>
   <div class="tutor-manage-page">
     <div class="page-header">
-      <h2>导师管理</h2>
+      <h2>讲师管理</h2>
       <UiButton variant="primary" @click="openAddDialog">
-        <el-icon><Plus /></el-icon> 新增导师
+        <el-icon><Plus /></el-icon> 新增讲师
       </UiButton>
     </div>
 
@@ -73,7 +73,7 @@
 
     <UiDialog
       v-model="dialogVisible"
-      title="新增导师"
+      title="新增讲师"
       width="480px"
       destroy-on-close
      confirm-text="确认添加" :confirm-loading="submitting" @confirm="handleSubmit">
@@ -98,7 +98,7 @@
       destroy-on-close
      confirm-text="确认重置" :confirm-loading="pwdSubmitting" @confirm="handleResetPwd">
       <el-form ref="pwdFormRef" :model="pwdFormData" :rules="pwdFormRules" label-width="90px">
-        <el-form-item label="导师">
+        <el-form-item :label="describeRole('tutor')">
           <span>{{ pwdFormData.name }}</span>
         </el-form-item>
         <el-form-item label="新密码" prop="password">
@@ -123,6 +123,7 @@ import UiPagination from '@/components/ui/UiPagination.vue'
 import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiTag from '@/components/ui/UiTag.vue'
+import { describeRole } from '@/utils/roleWords'
 
 type TutorRow = AdminTutor
 
@@ -168,24 +169,22 @@ async function handleToggleStatus(row: TutorRow) {
 async function handleDelete(tutorId: number) {
   try {
     await adminApi.deleteTutor(tutorId)
-    ElMessage.success('导师已删除')
+    ElMessage.success('讲师已删除')
     load()
   } catch (error) {
-    console.error('删除导师失败:', error)
+    console.error('删除讲师失败:', error)
     /* 错误已由拦截器提示 */
   }
 }
 
 // admin 列表状态机：本页只声明 fetch 与行操作 adapter
 const table = useAdminTable<AdminTutor>({
-  fetch: async (paging, filters) => {
-    const data = await adminApi.getTutors({
+  fetch: (paging, filters) =>
+    adminApi.getTutors({
       page: paging.page,
       page_size: paging.pageSize,
       keyword: filters.keyword ? String(filters.keyword) : undefined
-    })
-    return { list: data?.tutors || [], total: data?.total || 0 }
-  },
+    }),
   actions: {
     resetPwd: openResetPwdDialog,
     toggle: handleToggleStatus,
@@ -197,7 +196,7 @@ const { loading, list, total, currentPage, pageSize, searchKeyword, load, search
 function deleteRow(row: AdminTutor): Promise<void> {
   return table.confirmDelete(row, async r => {
     await handleDelete(r.tutor_id)
-  }, '确定删除该导师？删除后不可恢复')
+  }, '确定删除该讲师？删除后不可恢复')
 }
 
 function openAddDialog() {
@@ -218,11 +217,11 @@ async function handleSubmit() {
       password: formData.password,
       name: formData.name
     })
-    ElMessage.success('导师添加成功')
+    ElMessage.success('讲师添加成功')
     dialogVisible.value = false
     load()
   } catch (error) {
-    console.error('添加导师失败:', error)
+    console.error('添加讲师失败:', error)
   } finally {
     submitting.value = false
   }

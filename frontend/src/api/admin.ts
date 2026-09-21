@@ -12,6 +12,9 @@
 // 别名规则（片一统一口径）：旧名与生成形状确实对应时保留旧名（响应形状一律取生成类型）；
 // 旧名对应错形状时删旧名、改出生成名（本片差异逐条记于片七字段级差异清单）。
 import { unwrappedRequest } from './request'
+// 票 6（ADR-0060 决策 6）：本模块的分页端点在**出口处**把后端的键名（list / tutors / requests /
+// items）消解成中立容器 Page<T>——页面因此不再需要知道「导师列表的键叫 tutors」。
+import { toPage, type Page } from './page'
 import type {
   AIConfigDTO,
   AdminCourseDetailDTO,
@@ -207,8 +210,10 @@ export interface AddRecruiterPayload {
 
 export const adminApi = {
   // ===== HRWAI 用户管理(统一) =====
-  getHrwaiUsers(params: AdminHrwaiUsersQuery) {
-    return unwrappedRequest.get<HrwaiUserPageResult>('/admin/hrwai-users', { params })
+  /** 列表（后端行键 = `list`）。 */
+  async getHrwaiUsers(params: AdminHrwaiUsersQuery): Promise<Page<HrwaiUserSummary>> {
+    const res = await unwrappedRequest.get<HrwaiUserPageResult>('/admin/hrwai-users', { params })
+    return toPage(res?.list, res?.total)
   },
 
   createHrwaiUser(data: CreateHrwaiUserPayload) {
@@ -232,8 +237,10 @@ export const adminApi = {
   },
 
   // ===== 导师管理 =====
-  getTutors(params: AdminTutorsQuery) {
-    return unwrappedRequest.get<TutorListDTO>('/admin/tutors', { params })
+  /** 列表（后端行键 = `tutors`）。 */
+  async getTutors(params: AdminTutorsQuery): Promise<Page<TutorDTO>> {
+    const res = await unwrappedRequest.get<TutorListDTO>('/admin/tutors', { params })
+    return toPage(res?.tutors, res?.total)
   },
 
   addTutor(data: AddTutorPayload) {
@@ -253,8 +260,10 @@ export const adminApi = {
   },
 
   // ===== 企业招聘者管理（#416） =====
-  getRecruiters(params: AdminRecruitersQuery) {
-    return unwrappedRequest.get<RecruiterListResult>('/admin/recruiters', { params })
+  /** 列表（后端行键 = `items`）。 */
+  async getRecruiters(params: AdminRecruitersQuery): Promise<Page<RecruiterListItem>> {
+    const res = await unwrappedRequest.get<RecruiterListResult>('/admin/recruiters', { params })
+    return toPage(res?.items, res?.total)
   },
 
   addRecruiter(data: AddRecruiterPayload) {
@@ -362,8 +371,10 @@ export const adminApi = {
   // ===== 资料审核 =====
   // 该组端点仅资料审核页使用
 
-  listProfileReviews(params: ProfileReviewsQuery) {
-    return unwrappedRequest.get<ProfileChangeRequestPageResult>('/admin/profile-reviews', { params })
+  /** 列表（后端行键 = `requests`）。 */
+  async listProfileReviews(params: ProfileReviewsQuery): Promise<Page<ProfileChangeRequestDTO>> {
+    const res = await unwrappedRequest.get<ProfileChangeRequestPageResult>('/admin/profile-reviews', { params })
+    return toPage(res?.requests, res?.total)
   },
 
   approveProfileReview(id: number) {
@@ -376,7 +387,9 @@ export const adminApi = {
 
   // ===== 审计日志 =====
 
-  listAuditLogs(params: AuditLogsQuery) {
-    return unwrappedRequest.get<AuditLogPageResult>('/admin/audit-logs', { params })
+  /** 列表（后端行键 = `items`，生成物标注可为 null）。 */
+  async listAuditLogs(params: AuditLogsQuery): Promise<Page<AuditLog>> {
+    const res = await unwrappedRequest.get<AuditLogPageResult>('/admin/audit-logs', { params })
+    return toPage(res?.items, res?.total)
   }
 }

@@ -55,7 +55,7 @@ func seedInspectionRows(t *testing.T, db *gorm.DB) {
 	}
 	if err := db.Create(&model.ContactRequest{
 		ID: 21, RecruiterID: 3, StudentUserID: 7, Message: "巡检测试", Status: "pending", Source: "recruiter",
-		CreatedAt: createdAt, UpdatedAt: updatedAt, ExpiresAt: expiresAt,
+		CreatedAt: createdAt, UpdatedAt: updatedAt, ExpiresAt: &expiresAt,
 	}).Error; err != nil {
 		t.Fatalf("seed request: %v", err)
 	}

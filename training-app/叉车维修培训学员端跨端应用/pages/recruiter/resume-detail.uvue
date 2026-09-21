@@ -1,0 +1,701 @@
+<template>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+
+        <view class="header">
+            <view class="header-left" @click="onBack">
+                <text class="back-icon">‹</text>
+            </view>
+            <text class="header-title">简历详情</text>
+            <view class="header-right"></view>
+        </view>
+
+        <scroll-view class="content-scroll" scroll-y="true">
+            <view v-if="loading" class="loading-block">
+                <text class="loading-text">加载中...</text>
+            </view>
+
+            <view v-if="!loading && card == null" class="empty-tip">
+                <text class="empty-icon">📄</text>
+                <text class="empty-text">简历不存在或未公开</text>
+            </view>
+
+            <view v-if="card != null" class="body">
+                <view class="card">
+                    <text class="name">{{ maskedName }}</text>
+                    <text class="position">{{ positionText }}</text>
+                    <view class="meta-row mt-12">
+                        <text class="meta-strong">{{ salaryText }}</text>
+                        <text class="meta-item ml-16">{{ experienceText }}</text>
+                    </view>
+                    <view class="meta-row mt-8">
+                        <text class="meta-item">{{ regionsText }}</text>
+                    </view>
+                    <view class="meta-row mt-8">
+                        <text class="meta-item">{{ jobNatureText }}</text>
+                        <text class="meta-item ml-16">{{ availableText }}</text>
+                    </view>
+                    <text class="updated-text mt-12">更新于 {{ emptyAsDash(updatedAtText) }}</text>
+                </view>
+
+                <view class="card">
+                    <text class="section-title">自述</text>
+                    <text class="paragraph">{{ emptyAsDash(selfIntro) }}</text>
+                </view>
+
+                <view class="card">
+                    <text class="section-title">工作经历</text>
+                    <view v-if="experiences.length == 0">
+                        <text class="paragraph">暂无工作经历</text>
+                    </view>
+                    <view v-for="(exp, idx) in experiences" :key="idx"
+                        :class="{ 'experience-item': true, 'mt-20': idx > 0 }">
+                        <view class="meta-row">
+                            <text class="exp-company">{{ emptyAsDash(exp.company) }}</text>
+                            <text class="exp-period ml-16">{{ periodText(exp) }}</text>
+                        </view>
+                        <text class="exp-position mt-8">{{ emptyAsDash(exp.position) }}</text>
+                        <text class="paragraph mt-8">{{ emptyAsDash(exp.description) }}</text>
+                    </view>
+                </view>
+
+                <view class="card">
+                    <text class="section-title">持证</text>
+                    <view v-if="certifications.length == 0">
+                        <text class="paragraph">暂无持证</text>
+                    </view>
+                    <view v-for="(cert, idx) in certifications" :key="idx"
+                        :class="{ 'cert-item': true, 'mt-20': idx > 0 }">
+                        <text class="cert-title">证书 #{{ cert.credential_id }}</text>
+                        <text class="cert-line mt-8">编号：{{ emptyAsDash(cert.cert_no) }}</text>
+                        <text class="cert-line mt-8">有效期至：{{ emptyAsDash(cert.expire_date) }}</text>
+                    </view>
+                </view>
+
+                <view class="card">
+                    <text class="section-title">联系方式</text>
+
+                    <view v-if="contactLoading" class="paragraph">
+                        <text class="meta-item">查询中...</text>
+                    </view>
+
+                    <!-- 未授权（后端 403）：只给「发起交换」这一条出口，不渲染任何明文 -->
+                    <view v-if="!contactLoading && contact == null">
+                        <text class="paragraph">{{ contactStateHint }}</text>
+                        <view class="btn-primary mt-16" @click="onCreateRequest">
+                            <text class="btn-primary-text">发起交换</text>
+                        </view>
+                    </view>
+
+                    <!-- 已授权：真实姓名 / 电话 / 微信原生渲染 -->
+                    <view v-if="!contactLoading && contact != null">
+                        <view class="contact-row">
+                            <text class="contact-label">真实姓名</text>
+                            <text class="contact-value">{{ emptyAsDash(plainName) }}</text>
+                        </view>
+                        <view class="contact-row mt-12">
+                            <text class="contact-label">电话</text>
+                            <text class="contact-value">{{ emptyAsDash(plainPhone) }}</text>
+                        </view>
+                        <view class="contact-row mt-12">
+                            <text class="contact-label">微信</text>
+                            <text class="contact-value">{{ emptyAsDash(plainWechat) }}</text>
+                        </view>
+
+                        <view v-if="photos.length > 0">
+                            <text class="contact-label mt-20">工作照</text>
+                            <view class="photo-row mt-12">
+                                <image v-for="(url, idx) in photos" :key="url" class="photo"
+                                    :class="{ 'ml-16': idx > 0 }" :src="url" mode="aspectFill"
+                                    @click="onPreviewPhoto(idx)" />
+                            </view>
+                        </view>
+
+                        <!-- 已授权后的持证含证件原图（脱敏卡刻意不含） -->
+                        <view v-if="plainCerts.length > 0">
+                            <text class="contact-label mt-20">证件</text>
+                            <view v-for="(cert, idx) in plainCerts" :key="idx" class="plain-cert mt-12">
+                                <text class="cert-line">证书 #{{ toText(cert['credential_id']) }}</text>
+                                <text class="cert-line mt-8">编号：{{ emptyAsDash(toText(cert['cert_no'])) }}</text>
+                                <text class="cert-line mt-8">有效期至：{{ emptyAsDash(toText(cert['expire_date'])) }}</text>
+                                <image v-for="(url, i2) in imagesOf(cert)" :key="url" class="cert-image mt-12"
+                                    :src="url" mode="aspectFit" @click="onPreviewCertImage(cert, i2)" />
+                            </view>
+                        </view>
+                    </view>
+                </view>
+
+                <view class="card">
+                    <view class="btn-secondary" @click="onDownloadMaskedPdf">
+                        <text class="btn-secondary-text">下载打码简历 PDF</text>
+                    </view>
+                    <view v-if="resumeFileUrl.length > 0" class="btn-secondary mt-12" @click="onDownloadUploadedPdf">
+                        <text class="btn-secondary-text">下载上传的简历 PDF</text>
+                    </view>
+                </view>
+            </view>
+        </scroll-view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref, computed } from 'vue'
+    import { onLoad } from '@dcloudio/uni-app'
+    import { useStatusBarHeight } from '../../utils/system'
+    import {
+        getRecruitResumeDetailApi,
+        getRecruitResumeContactApi,
+        createRecruitContactRequestApi,
+        downloadAndOpenMaskedResumePdfApi,
+        downloadAndOpenAuthedFile,
+        isContactForbidden,
+        jobNatureLabel,
+    } from '../../api/recruit'
+    import { isRecruiterActive } from '../../utils/authRole'
+    import { errMsg, toStr } from '../../api/helpers'
+    import type { RecruitResumeCard, RecruitExperience, RecruitCertification, RecruitContactPlain } from '../../api/recruit'
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    const userId = ref<number>(0)
+    const card = ref<RecruitResumeCard | null>(null)
+    const loading = ref<boolean>(true)
+
+    const contact = ref<RecruitContactPlain | null>(null)
+    const contactLoading = ref<boolean>(false)
+    const contactForbidden = ref<boolean>(false)
+    const requesting = ref<boolean>(false)
+
+    const experiences = computed<RecruitExperience[]>(() : RecruitExperience[] => {
+        const c = card.value
+        if (c == null) return [] as RecruitExperience[]
+        return c!.resume_experiences
+    })
+
+    const certifications = computed<RecruitCertification[]>(() : RecruitCertification[] => {
+        const c = card.value
+        if (c == null) return [] as RecruitCertification[]
+        return c!.resume_certifications
+    })
+
+    /** 顶部姓名只用打码值（`real_name` 也是打码值，但脱敏卡另有显式字段，优先它） */
+    const maskedName = computed<string>(() : string => {
+        const c = card.value
+        if (c == null) return ''
+        if (c!.real_name_masked.length > 0) return c!.real_name_masked
+        return c!.real_name
+    })
+
+    const updatedAtText = computed<string>(() : string => {
+        const c = card.value
+        if (c == null) return ''
+        return c!.updated_at
+    })
+
+    const selfIntro = computed<string>(() : string => {
+        const c = card.value
+        if (c == null) return ''
+        return c!.self_intro
+    })
+
+    const positionText = computed<string>(() : string => {
+        const c = card.value
+        if (c == null) return ''
+        if (c!.expected_position_extra.length > 0) return c!.expected_position_extra
+        if (c!.expected_position_id != null) return '岗位 #' + c!.expected_position_id!.toString()
+        return '期望岗位未填'
+    })
+
+    const salaryText = computed<string>(() : string => {
+        const c = card.value
+        if (c == null) return ''
+        if (c!.salary_negotiable) return '面议'
+        if (c!.salary_min != null && c!.salary_max != null) {
+            return c!.salary_min!.toString() + '-' + c!.salary_max!.toString() + ' 元/月'
+        }
+        if (c!.salary_min != null) return c!.salary_min!.toString() + ' 元/月起'
+        if (c!.salary_max != null) return c!.salary_max!.toString() + ' 元/月以内'
+        return '薪资未填'
+    })
+
+    const experienceText = computed<string>(() : string => {
+        const c = card.value
+        if (c == null) return ''
+        if (c!.experience_years <= 0) return '经验不限'
+        return '经验 ' + c!.experience_years.toString() + ' 年'
+    })
+
+    const regionsText = computed<string>(() : string => {
+        const c = card.value
+        if (c == null) return ''
+        if (c!.expected_regions.length == 0) return '意向地区未填'
+        return '意向：' + c!.expected_regions.join('、')
+    })
+
+    const jobNatureText = computed<string>(() : string => {
+        const c = card.value
+        if (c == null) return ''
+        if (c!.job_nature.length == 0) return '用工性质未填'
+        return jobNatureLabel(c!.job_nature)
+    })
+
+    const availableText = computed<string>(() : string => {
+        const c = card.value
+        if (c == null) return ''
+        if (c!.available_in.length == 0) return '到岗时间未填'
+        return c!.available_in
+    })
+
+    const contactStateHint = computed<string>(() : string => {
+        const c = card.value
+        if (c == null) return ''
+        if (c!.contact_state == 'pending') return '已发起交换申请，等待学员处理。'
+        return '需学员授权后才能查看联系方式。'
+    })
+
+    // ---- 明文（**只在 contact 非空时读数**：未授权态下这几个 computed 恒为空串）----
+    const plainName = computed<string>(() : string => {
+        const c = contact.value
+        if (c == null) return ''
+        return c!.real_name
+    })
+
+    const plainPhone = computed<string>(() : string => {
+        const c = contact.value
+        if (c == null) return ''
+        return c!.contact_phone
+    })
+
+    const plainWechat = computed<string>(() : string => {
+        const c = contact.value
+        if (c == null) return ''
+        return c!.wechat
+    })
+
+    const photos = computed<string[]>(() : string[] => {
+        const c = contact.value
+        if (c == null) return [] as string[]
+        return c!.photos
+    })
+
+    const plainCerts = computed<UTSJSONObject[]>(() : UTSJSONObject[] => {
+        const c = contact.value
+        if (c == null) return [] as UTSJSONObject[]
+        return c!.resume_certifications
+    })
+
+    /** 已授权后的上传 PDF 直链（未授权态恒空串 ⇒ 按钮不渲染） */
+    const resumeFileUrl = computed<string>(() : string => {
+        const c = contact.value
+        if (c == null) return ''
+        return c!.resume_file_url
+    })
+
+    // onLoad 见文件末（UTS 无函数提升：钩子必须放在它调用的全部顶层函数之后）
+
+    // ---- 展示辅助（放在调用它的函数之前：UTS 无函数提升）----
+
+    function emptyAsDash(v : string) : string {
+        if (v.length == 0) return '-'
+        return v
+    }
+
+    function toText(v : any | null) : string {
+        return toStr(v)
+    }
+
+    function periodText(exp : RecruitExperience) : string {
+        const start = emptyAsDash(exp.start_date)
+        const end = exp.end_date.length > 0 ? exp.end_date : '至今'
+        return start + ' ~ ' + end
+    }
+
+    function appendImages(out : string[], raw : any | null) : void {
+        if (raw == null) return
+        const arr = raw as Array<any>
+        for (let i = 0; i < arr.length; i++) {
+            const v = toStr(arr[i])
+            if (v.length > 0) out.push(v)
+        }
+    }
+
+    /** 已授权后的持证是**原始 JSON**（可能含 image_urls / imageUrls 两种历史键） */
+    function imagesOf(cert : UTSJSONObject) : string[] {
+        const out : string[] = []
+        appendImages(out, cert['image_urls'])
+        appendImages(out, cert['imageUrls'])
+        return out
+    }
+
+    /**
+     * 上传 PDF 的直链可能是绝对 URL，也可能已是 `/api/...` 相对路径。
+     * 下载出口统一拼 `API_BASE_URL`，故这里剥掉 base 前缀（避免 `…/api/api/…`）。
+     */
+    function extractApiPath(url : string) : string {
+        const marker = '/api/'
+        const at = url.indexOf(marker)
+        if (at >= 0) return url.substring(at + marker.length - 1)
+        if (url.startsWith('/')) return url
+        return url
+    }
+
+    async function loadContact() : Promise<void> {
+        if (contactLoading.value) return
+        contactLoading.value = true
+        contactForbidden.value = false
+        try {
+            const plain = await getRecruitResumeContactApi(userId.value)
+            contact.value = plain
+        } catch (e) {
+            contact.value = null
+            contactForbidden.value = isContactForbidden(e)
+        } finally {
+            contactLoading.value = false
+        }
+    }
+
+    async function loadDetail() : Promise<void> {
+        loading.value = true
+        try {
+            const dto = await getRecruitResumeDetailApi(userId.value)
+            card.value = dto
+            // 详情拿到后立刻探一次明文：403 是**预期分支**（未授权），不弹错、不改登录态
+            loadContact()
+        } catch (e) {
+            card.value = null
+            uni.showToast({ title: errMsg(e, '简历加载失败'), icon: 'none' })
+        } finally {
+            loading.value = false
+        }
+    }
+
+    function onBack() : void {
+        uni.navigateBack()
+    }
+
+    async function onCreateRequest() : Promise<void> {
+        if (requesting.value) return
+        requesting.value = true
+        try {
+            await createRecruitContactRequestApi(userId.value, '希望与您沟通岗位机会，期待回复。')
+            uni.showToast({ title: '交换申请已提交', icon: 'none' })
+            // 重新探一次：pending 唯一 / 冷却 / 日限都由后端裁决，本地不预判
+            loadDetail()
+        } catch (e) {
+            uni.showToast({ title: errMsg(e, '发起交换失败'), icon: 'none' })
+        } finally {
+            requesting.value = false
+        }
+    }
+
+    function onDownloadMaskedPdf() : void {
+        downloadAndOpenMaskedResumePdfApi(userId.value).then((message : string) : void => {
+            if (message.length > 0) {
+                uni.showToast({ title: message, icon: 'none' })
+            }
+        })
+    }
+
+    /** 上传 PDF 与打码 PDF 走**同一个**出路（下载后交系统打开；原生端无内嵌 PDF 能力） */
+    function onDownloadUploadedPdf() : void {
+        const url = resumeFileUrl.value
+        if (url.length == 0) return
+        const path = extractApiPath(url)
+        downloadAndOpenAuthedFile(path, '登录已过期，请重新登录').then((message : string) : void => {
+            if (message.length > 0) {
+                uni.showToast({ title: message, icon: 'none' })
+            }
+        })
+    }
+
+    function onPreviewPhoto(idx : number) : void {
+        const urls = photos.value
+        if (urls.length == 0) return
+        const target = urls[idx]
+        if (target == null || target!.length == 0) return
+        // `current` 传 URL 本身（先例 pages/courses/chapter-view.uvue 的 onImageClick）：
+        // 数字下标在原生端不如字符串稳定
+        uni.previewImage({
+            urls: urls,
+            current: target!,
+        })
+    }
+
+    function onPreviewCertImage(cert : UTSJSONObject, idx : number) : void {
+        const urls = imagesOf(cert)
+        if (urls.length == 0) return
+        const target = urls[idx]
+        if (target == null || target!.length == 0) return
+        uni.previewImage({
+            urls: urls,
+            current: target!,
+        })
+    }
+
+    // ---- 展示辅助（已上移到文件前部：定义必须先于调用）----
+
+    // onLoad 必须带 options 形参：Kotlin Function1<OnLoadOptions, Unit>，零参即 error17。
+    // 取参用 `options['id']` 索引形态：`utils/navQueryKeyContract.test.js` 的静态解析只认
+    // 直接取参（`options['x']`）与委托 composable 两种形态，`options.id` 属性形态会被判成「目标页从不读该键」。
+    // 钩子放在文件末：UTS 无函数提升，Kotlin 侧前置调用是 error18。
+    onLoad((options : OnLoadOptions) => {
+        if (!isRecruiterActive()) {
+            uni.reLaunch({ url: '/pages/recruiter/login' })
+            return
+        }
+        const raw = options['id']
+        if (raw != null && (raw as string).length > 0) {
+            userId.value = parseInt(raw as string)
+        }
+        if (userId.value <= 0) {
+            loading.value = false
+            uni.showToast({ title: '简历 ID 无效', icon: 'none' })
+            return
+        }
+        loadDetail()
+    })
+</script>
+
+<style lang="scss">
+    .container {
+        flex: 1;
+        background-color: #f8f8f8;
+        flex-direction: column;
+    }
+
+    .status-bar {
+        background-color: #ffffff;
+    }
+
+    .header {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        height: 88rpx;
+        padding: 0 24rpx;
+        background-color: #ffffff;
+        border-bottom: 1rpx solid #f0f0f0;
+    }
+
+    .header-left {
+        width: 96rpx;
+        height: 64rpx;
+        align-items: flex-start;
+        justify-content: center;
+    }
+
+    .back-icon {
+        font-size: 44rpx;
+        color: #333333;
+    }
+
+    .header-title {
+        font-size: 34rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .header-right {
+        width: 96rpx;
+    }
+
+    .content-scroll {
+        flex: 1;
+    }
+
+    .body {
+        flex-direction: column;
+        padding: 16rpx 24rpx 40rpx 24rpx;
+    }
+
+    .card {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 24rpx;
+        margin-bottom: 16rpx;
+        border: 1rpx solid #eeeeee;
+        flex-direction: column;
+    }
+
+    .name {
+        font-size: 40rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .position {
+        font-size: 28rpx;
+        color: #2979ff;
+        margin-top: 8rpx;
+    }
+
+    .section-title {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 16rpx;
+    }
+
+    .meta-row {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .mt-8 { margin-top: 8rpx; }
+    .mt-12 { margin-top: 12rpx; }
+    .mt-16 { margin-top: 16rpx; }
+    .mt-20 { margin-top: 20rpx; }
+
+    .meta-strong {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #ff6b35;
+    }
+
+    .meta-item {
+        font-size: 26rpx;
+        color: #666666;
+    }
+
+    .updated-text {
+        font-size: 22rpx;
+        color: #999999;
+    }
+
+    .paragraph {
+        font-size: 26rpx;
+        color: #666666;
+        line-height: 1.6;
+    }
+
+    .experience-item {
+        flex-direction: column;
+    }
+
+    .exp-company {
+        font-size: 28rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .exp-period {
+        font-size: 22rpx;
+        color: #999999;
+    }
+
+    .exp-position {
+        font-size: 26rpx;
+        color: #2979ff;
+    }
+
+    .cert-item {
+        flex-direction: column;
+    }
+
+    .plain-cert {
+        flex-direction: column;
+    }
+
+    .cert-title {
+        font-size: 28rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .cert-line {
+        font-size: 24rpx;
+        color: #666666;
+    }
+
+    .cert-image {
+        width: 320rpx;
+        height: 220rpx;
+        border-radius: 8rpx;
+        background-color: #f5f5f5;
+    }
+
+    .contact-row {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .contact-label {
+        font-size: 26rpx;
+        color: #999999;
+        width: 140rpx;
+    }
+
+    .contact-value {
+        font-size: 30rpx;
+        color: #333333;
+        font-weight: bold;
+    }
+
+    .photo-row {
+        flex-direction: row;
+    }
+
+    .photo {
+        width: 160rpx;
+        height: 160rpx;
+        border-radius: 8rpx;
+        background-color: #f5f5f5;
+    }
+
+    .btn-primary {
+        height: 88rpx;
+        border-radius: 44rpx;
+        background-color: #2979ff;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .btn-primary-text {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #ffffff;
+    }
+
+    .btn-secondary {
+        height: 88rpx;
+        border-radius: 44rpx;
+        background-color: #f5f6fa;
+        border: 1rpx solid #e0e0e0;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .btn-secondary-text {
+        font-size: 28rpx;
+        color: #333333;
+    }
+
+    .loading-block {
+        align-items: center;
+        padding: 120rpx 0;
+    }
+
+    .loading-text {
+        font-size: 26rpx;
+        color: #999999;
+    }
+
+    .empty-tip {
+        flex-direction: column;
+        align-items: center;
+        padding: 120rpx 0;
+    }
+
+    .empty-icon {
+        font-size: 80rpx;
+        margin-bottom: 24rpx;
+    }
+
+    .empty-text {
+        font-size: 28rpx;
+        color: #999999;
+    }
+
+    .ml-16 { margin-left: 16rpx; }
+</style>

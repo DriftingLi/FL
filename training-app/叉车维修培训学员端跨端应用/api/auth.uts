@@ -122,8 +122,49 @@ export function loginApi(params : LoginParams) : Promise<LoginResult> {
 	})
 }
 
-/** 发送短信验证码（注册用） POST /auth/phone/send-code {phone, purpose:'register'} */
-export function sendPhoneCodeApi(phone : string, captchaId : string, captchaValue : string) : Promise<UTSJSONObject> {
+/**
+ * 招聘者登录（仅账号密码） POST /auth/recruiter-login
+ *
+ * 后端第四角色：成功返回与学员登录同构的双令牌 + 用户信息（`role` 为招聘者角色），
+ * 并额外下发 host-only cookie —— 移动端不依赖 cookie，凭 `token` 走 Bearer。
+ *
+ * ⚠️ 与学员登录**共用 response 形状但不同角色域**：本页签发的 access token 只能访问招聘域端点。
+ * 调用方（`stores/auth.uts` 的 `loginAsRecruiter`）必须在落 token 前先做身份互斥清槽。
+ *
+ * @note 复用 `buildUserInfo`：招聘者响应字段名与学员一致，不另立映射（ADR-0022 不引入第二份契约）。
+ */
+export function recruiterLoginApi(params : LoginParams) : Promise<LoginResult> {
+	const payload : UTSJSONObject = {
+		username: params.username,
+		password: params.password
+	} as UTSJSONObject
+	return post('/auth/recruiter-login', payload).then((data : UTSJSONObject) : LoginResult => {
+		try {
+			const token = data['token'] as string
+			const refreshToken = toStr(data['refresh_token'], '')
+			const user = buildUserInfo(data)
+			const result : LoginResult = {
+				token: token,
+				user: user,
+				refresh_token: refreshToken,
+			} as LoginResult
+			return result
+		} catch (e) {
+			console.error('[recruiterLoginApi] parse exception:', e)
+			let msg = '招聘者登录响应解析失败'
+			if (e instanceof Error) {
+				const errObj = e as Error
+				const m = errObj.message
+				if (m != null && m.length > 0) {
+					msg = msg + ': ' + m
+				}
+			}
+			throw new Error(msg)
+		}
+	})
+}
+
+/** 发送短信验证码（注册用） POST /auth/phone/send-code {phone, purpose:'register'} */export function sendPhoneCodeApi(phone : string, captchaId : string, captchaValue : string) : Promise<UTSJSONObject> {
 	return sendCodeApi(phone, 'phone', 'register', captchaId, captchaValue)
 }
 

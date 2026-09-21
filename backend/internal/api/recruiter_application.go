@@ -21,9 +21,9 @@ import (
 // 非本企业投递 → 403，其余（状态不允许等业务校验）兜底 400。
 var recruiterApplicationErrStatus = &errStatusTable{
 	entries: []errStatusEntry{
-		{service.ErrJobNotFound, http.StatusNotFound},
-		{service.ErrApplyNotFound, http.StatusNotFound},
-		{service.ErrApplyNotYours, http.StatusForbidden},
+		{sentinel: service.ErrJobNotFound, status: http.StatusNotFound},
+		{sentinel: service.ErrApplyNotFound, status: http.StatusNotFound},
+		{sentinel: service.ErrApplyNotYours, status: http.StatusForbidden},
 	},
 	fallback: http.StatusBadRequest,
 }
@@ -122,11 +122,8 @@ func (h *RecruiterApplicationHandler) Reject(c *gin.Context) {
 			}
 			return h.svc.Reject(middleware.CurrentUserID(c), id)
 		},
-		Render: func(c *gin.Context, _ *struct{}, resp *service.ApplicationDTO, err error) {
-			if err != nil {
-				recruiterApplicationErrStatus.renderError(c, err) // #611：错误映射退表，成功文案保留定制
-				return
-			}
+		ErrStatus: recruiterApplicationErrStatus,
+		Render: func(c *gin.Context, _ *struct{}, resp *service.ApplicationDTO) {
 			response.SuccessWithMsg(c, "已标记为不合适", *resp)
 		},
 	}.Handle(c)
