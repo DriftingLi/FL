@@ -1,6 +1,9 @@
 <template>
     <view class="topic-content">
-        <text class="content-text">{{ content }}</text>
+        <!-- 纯文本档（`text`）：直出原串 —— 后端存的就是纯文本，没有可解析的语义（ADR-0025 决策②/⑧） -->
+        <text v-if="!isMarkdown" class="content-text">{{ content }}</text>
+        <!-- Markdown 档：按**论坛子集**解析后的块；渲染分支在 forum-markdown-blocks，本组件不持 -->
+        <ForumMarkdownBlocks v-else :blocks="blocks" />
         <view v-if="imageUrls.length > 0" class="img-grid">
             <view v-for="(img, idx) in imageUrls" :key="idx" class="img-cell"
                 @click="onPreview(idx)">
@@ -11,16 +14,29 @@
 </template>
 
 <script setup lang="uts">
+    import { computed } from 'vue'
     import { previewImages } from '../../../utils/forumDetailDisplay'
+    import { forumContentBlocks, isMarkdownFormat } from '../../../utils/forumBody'
+    import ForumMarkdownBlocks from './forum-markdown-blocks.uvue'
+    import type { MarkdownBlock } from '../../../types/index'
 
     // imageUrls 由壳层预解析（resolveFileUrl 幂等，预览传已解析列表与原行为一致）
     const props = withDefaults(defineProps<{
         content? : string
+        /** 正文格式：`content_format` 归一后的取值（`markdown` / `text`）；缺省 = 不解析（与 DTO 归一同向） */
+        format? : string
         imageUrls? : string[]
     }>(), {
         content: '',
+        format: '',
         imageUrls: () => [] as string[]
     })
+
+    /** 渲染档位的二选一闸门：看**格式声明**，不看块数组长度（空正文的 Markdown 帖不该变成「没正文」） */
+    const isMarkdown = computed<boolean>(() : boolean => isMarkdownFormat(props.format))
+
+    /** 论坛子集的渲染块：格式 → 档位的唯一点在 `utils/forumBody`（真执行守护见 forumBodyBehavior） */
+    const blocks = computed<MarkdownBlock[]>(() : MarkdownBlock[] => forumContentBlocks(props.content, props.format))
 
     function onPreview(index : number) : void {
         previewImages(props.imageUrls, index)

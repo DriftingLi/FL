@@ -43,7 +43,12 @@
                     <text class="reply-more-text">举报</text>
                 </view>
             </view>
-            <text class="reply-content">{{ item.content }}</text>
+            <!-- 正文：纯文本档直出原串；Markdown 档走**论坛子集**解析后的块（ADR-0025 P2）——
+                 样式与图墙保持原状，只有 Markdown 档多出一层块渲染 -->
+            <text v-if="!isMarkdownReply(item)" class="reply-content">{{ item.content }}</text>
+            <view v-else class="reply-md-body">
+                <ForumMarkdownBlocks :blocks="replyBlocks(item)" />
+            </view>
             <view v-if="item.imageUrls.length > 0" class="img-grid">
                 <view v-for="(img, i) in item.imageUrls" :key="i" class="img-cell small"
                     @click="onPreview(item, i)">
@@ -98,6 +103,9 @@
     import { computed } from 'vue'
     import { previewImages } from '../../../utils/forumDetailDisplay'
     import type { ForumReplyDisplay } from '../../../utils/forumDetailDisplay'
+    import { forumContentBlocks, isMarkdownFormat } from '../../../utils/forumBody'
+    import ForumMarkdownBlocks from './forum-markdown-blocks.uvue'
+    import type { MarkdownBlock } from '../../../types/index'
 
     // 展示模型数组由壳层映射（扁平下发：权限位/点赞态/URL 预解析全部完成于壳层）
     const props = withDefaults(defineProps<{
@@ -167,6 +175,18 @@
 
     function onCancelAccept() : void {
         emit('cancelAccept')
+    }
+
+    /**
+     * 回复正文的渲染档位（ADR-0025 P2）：本地薄包装，uvue 模板禁直调 import 函数（error18 先例）。
+     * 判据与帖子正文同源 —— 格式 → 档位的唯一点在 `utils/forumBody`（真执行守护见 forumBodyBehavior）。
+     */
+    function isMarkdownReply(item : ForumReplyDisplay) : boolean {
+        return isMarkdownFormat(item.contentFormat)
+    }
+
+    function replyBlocks(item : ForumReplyDisplay) : MarkdownBlock[] {
+        return forumContentBlocks(item.content, item.contentFormat)
     }
 
     function onPreview(item : ForumReplyDisplay, index : number) : void {
@@ -300,6 +320,11 @@
         font-size: 28rpx;
         color: #333333;
         line-height: 1.6;
+        padding-left: 72rpx;
+    }
+
+    /* Markdown 档回复的块渲染容器：与 .reply-content 同缩进（署名行对齐），块样式由组件自持 */
+    .reply-md-body {
         padding-left: 72rpx;
     }
 

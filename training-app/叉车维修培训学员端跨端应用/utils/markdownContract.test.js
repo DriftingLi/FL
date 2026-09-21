@@ -529,6 +529,46 @@ describe('页面级契约：章节面渲染表格、内容精选面走交集', (
     expect(featured).not.toContain('md-table');
   });
 
+  // ADR-0025 P2（#1240）：论坛面是第三档。档位**决策**已从页面收进 `utils/forumBody.uts`
+  // （行为面由 `utils/forumBodyBehavior.test.js` 真执行承重），这里只守**接线**：页面接的是那条
+  // 决策口，而不是自己重判一遍档位、更不是自持第二份子集声明。
+  it('论坛面：正文与回复卡都走 `utils/forumBody` 的格式轴，页面不自己判档', () => {
+    const topicBody = read('pages/forum/components/forum-topic-body.uvue');
+    const replyList = read('pages/forum/components/forum-reply-list.uvue');
+    for (const src of [topicBody, replyList]) {
+      expect(src).toContain('forumContentBlocks');
+      expect(src).toContain('isMarkdownFormat');
+      // 直连解析器 / 直引档位常量 = 绕过格式轴（文本档会被解析，或论坛档被换成别的档）
+      expect(src).not.toContain('parseMarkdown');
+      expect(src).not.toContain('SUBSET_');
+    }
+    // 纯文本档的**直出**分支必须在（否则文本档会渲染成空）
+    expect(topicBody).toContain('v-if="!isMarkdown"');
+    expect(replyList).toContain('v-if="!isMarkdownReply(item)"');
+  });
+
+  it('论坛面：块渲染组件只持论坛档声明的成员，不含 table / image 两条分支', () => {
+    const forumMd = read('pages/forum/components/forum-markdown-blocks.uvue');
+    for (const t of ["'heading'", "'paragraph'", "'code'", "'list'", "'quote'", "'divider'"]) {
+      expect(forumMd).toContain('block.type == ' + t);
+    }
+    // 论坛档不声明 table（退回逐行原始文本）、不声明 image（图文分离，图片走 images 数组）
+    expect(forumMd).not.toContain("block.type == 'table'");
+    expect(forumMd).not.toContain("block.type == 'image'");
+    expect(forumMd).not.toContain('md-table');
+  });
+
+  it('论坛面：格式由详情壳层扁平下发（组件不自行读 topic / 回复 DTO）', () => {
+    const detail = read('pages/forum/forum-detail.uvue');
+    expect(detail).toContain(':format="topicFormat"');
+    expect(detail).toContain('return t.content_format');
+    expect(detail).toContain('contentFormat: r.content_format');
+    const topicBody = read('pages/forum/components/forum-topic-body.uvue');
+    const replyList = read('pages/forum/components/forum-reply-list.uvue');
+    expect(topicBody).not.toMatch(/\.content_format/);
+    expect(replyList).not.toMatch(/\.content_format/);
+  });
+
   it('搜索投影不另建一套表格口径（吃 table 块的 text 投影）', () => {
     const search = read('utils/searchDisplay.uts');
     expect(search).not.toContain("== 'table'");

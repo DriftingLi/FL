@@ -34,7 +34,8 @@
                     :replies-count="tRepliesCount"
                     :views-count="tViewsCount" :can-delete="canDelete"
                     @toggle-like="onToggleLike" @toggle-favorite="onToggleFavorite" @delete="onDelete" />
-                <ForumTopicBody :content="topicContent" :image-urls="topicImages" />
+                <!-- 正文格式由壳层扁平下发（ADR-0025 P2）：组件不读 topic，档位决策在 utils/forumBody -->
+                <ForumTopicBody :content="topicContent" :format="topicFormat" :image-urls="topicImages" />
             </view>
 
             <!-- 回复列表 -->
@@ -188,6 +189,12 @@
         if (t == null) return ''
         return t.content
     })
+    /** 正文格式（ADR-0025 P2）：DTO 层已归一（缺省与脏值 → `text`），壳层只透传，不再二次判值 */
+    const topicFormat = computed<string>(() : string => {
+        const t = topic.value
+        if (t == null) return ''
+        return t.content_format
+    })
     const topicImages = computed<string[]>(() : string[] => {
         const t = topic.value
         if (t == null) return []
@@ -234,6 +241,8 @@
                 avatarColor: getAvatarColor(r.author_id),
                 createdAtText: formatDateTimeStr(r.created_at),
                 content: r.content,
+                // 回复正文格式（ADR-0025 P2）：与帖子正文同源同归一，回复卡据此选渲染档位
+                contentFormat: r.content_format,
                 imageUrls: urls,
                 canDelete: detail.canDeleteReply(r),
                 liked: detail.isReplyLiked(r),
