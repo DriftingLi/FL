@@ -14,7 +14,7 @@
 
 ## 0. 形态判定（先做，30 秒）
 
-- 本票是 **issue**，不是 wayfinder 的 map/ticket。**本仓不用 wayfinder**（判据见文末）⇒ **不要去找 map、不要建 map、不要建 ticket 形态的东西**。
+- 本票是 **issue**，不是 wayfinder 的 map/ticket。**本仓不用 wayfinder —— 这是「准入条件未命中」的判断，不是一条禁令**（三条准入门槛见文末）⇒ **不要去找 map、不要建 map、不要建 ticket 形态的东西**。
 - 票面若带 `needs-triage`：那是**前置步骤**，先诊断（见 §3），不许跳过直接实施。
 - **波级 issue（无票号的 `refactor epic:`）有两种形态，别按感觉挑**（2026-09-21 立，先例：`#1201` 第十三波 = spec 形；`#1221` 模块声明与契约 harness = 索引形）：
   - **spec 形** —— 波级 issue **自己就是 spec**：`Problem Statement` / `Solution` / `User Stories` / `Implementation Decisions` / `Testing Decisions` / `Out of Scope`；落地后**不再维护**，学到的东西回写在 ADR 的「实施回记」段。
@@ -67,7 +67,7 @@
 
 约定 / 决策进 `docs/adr/`、`docs/agents/`（**入库、只增不删**，过时用「取代」表达）；临时产物（handoff、探针、PR 正文草稿）进 `.scratch/`（不入库）。详见 `docs/agents/domain.md`。
 
-## 为什么不用 wayfinder（判据，防 reflex 回归）
+## 为什么不用 wayfinder：准入条件未命中（判据，防 reflex 回归）
 
 三条**同时**成立才值得启用：
 
