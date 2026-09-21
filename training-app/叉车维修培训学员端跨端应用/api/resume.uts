@@ -7,7 +7,7 @@
  * 刻意保留裸透传的三类（白名单，理由在各自函数上）：multipart 上传（无 mapped 便捷面）、
  * void 语义删除（#1198 端点已定，行为与错误传播逐字不变）。
  */
-import { getMapped, requestMapped, del, uploadFile } from './request'
+import { getMapped, requestMapped, del, uploadFile, NOT_FOUND_MESSAGE_PREFIX } from './request'
 import type { RequestOptions } from './request'
 import { toStr, toNumber, toBool, errMsg } from './helpers'
 import type { ResumeData, SaveResumeParams, ResumeExperience, ResumeCertification, PositionItem } from '../types/index'
@@ -205,18 +205,29 @@ function buildPositionList(data : UTSJSONObject) : PositionItem[] {
 /**
  * 获取我的简历
  * GET /resume
- * 已建 → ResumeData；未建（404）→ Error（消息逐字保持，含 '不存在' / '404' 判据）
- * @note `RESUME_NOT_FOUND` 语义与调用方的 notfound 判据是既有形态，本票逐字搬迁不改（缺陷另记 issue）
+ * 已建 → ResumeData；未建（后端 404）→ 错误对象带 `NOT_FOUND_MESSAGE_PREFIX`，由 `isResumeNotFound()` 判定。
+ * @note #1204：本函数此前把 404 折成 `new Error('RESUME_NOT_FOUND: 简历不存在')`（且**按中文文案**
+ *       `不存在` / `404` 匹配消息来识别 404）。那条路有两个病：① 语义依赖后端文案，文案一改静默失效；
+ *       ② 包装出的新 `Error` 不带任何结构信息，而两个页面按 `e['kind'] == 'notfound'` 判定 ⇒ 分支恒不命中。
+ *       现在 404 的**唯一出口**是 `api/request.uts` 的 404 分支（消息前缀），判定出口是 `isResumeNotFound()`。
  */
 export function getResumeApi() : Promise<ResumeData> {
 	const opts : RequestOptions = { url: '/resume', silent: true } as RequestOptions
-	return getMapped<ResumeData>('/resume', null, (data : UTSJSONObject) : ResumeData => buildResumeData(data), opts).catch((e) : ResumeData => {
-		const msg = errMsg(e, '')
-		if (msg.indexOf('不存在') >= 0 || msg.indexOf('404') >= 0) {
-			throw new Error('RESUME_NOT_FOUND: 简历不存在')
-		}
-		throw new Error(msg)
-	})
+	return getMapped<ResumeData>('/resume', null, (data : UTSJSONObject) : ResumeData => buildResumeData(data), opts)
+}
+
+/**
+ * 判断错误是否为「简历未建」（后端 `GET /resume` 对无简历用户返回 404）。
+ *
+ * 这是 notfound 语义的**唯一判定出口** —— 简历总览页与在线简历编辑页都消费本函数，
+ * 不许各自按错误对象的字段/文案再写一份判据（#1204 的病根正是两端各复制了一份 `obj['kind']` 死判据）。
+ *
+ * @param e `.catch` 收到的错误对象（类型未知，`any | null`）：非 Error 一律判 false。
+ */
+export function isResumeNotFound(e : any | null) : boolean {
+	// 404 由 `api/request.uts` 用消息前缀承载（读写两端共用同一常量，见 NOT_FOUND_MESSAGE_PREFIX 注释）。
+	// 非 Error / 空 message 经 `errMsg` 落到 fallback ''，不匹配前缀 ⇒ false。
+	return errMsg(e, '').startsWith(NOT_FOUND_MESSAGE_PREFIX)
 }
 
 /**

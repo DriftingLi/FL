@@ -15,7 +15,7 @@ import { setStorage, getStorageJSON } from '../../../utils/storage'
 import { goBack } from '../../../utils/navigation'
 import { STORAGE_KEY_RESUME } from '../../../constants/app'
 import { toStr, toNumber, toBool, errMsg } from '../../../api/helpers'
-import { getResumeApi, saveResumeApi, getPositionsApi } from '../../../api/resume'
+import { getResumeApi, isResumeNotFound, saveResumeApi, getPositionsApi } from '../../../api/resume'
 import type { ResumeData, SaveResumeParams, ResumeExperience, PositionItem } from '../../../types/index'
 
 /** 教育经历表单项（纯本地，不提交后端，独立 storage key 冗余保存） */
@@ -345,14 +345,9 @@ export function useResumeEdit() : UseResumeEditResult {
             }
             if (expItems.value.length == 0) addExp()
         }).catch((e) : void => {
-            let isNotFound = false
-            try {
-                const obj = e as UTSJSONObject
-                if (obj['kind'] != null && `${obj['kind']}` == 'notfound') {
-                    isNotFound = true
-                }
-            } catch (_ex) {}
-            if (!isNotFound) {
+            // notfound 判定走 `api/resume.uts` 的**唯一出口**（#1204：此前这里按 `e['kind']` 直读，恒不命中
+            // ⇒ 新用户进编辑页会误报「简历加载失败」）
+            if (!isResumeNotFound(e)) {
                 const msg = errMsg(e, '')
                 if (msg.length > 0) {
                     uni.showToast({ title: '简历加载失败', icon: 'none' })

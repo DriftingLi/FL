@@ -16,6 +16,8 @@
  *    教育·工作经历增删 / 保存四条校验 / 本地草稿双 key / 保存成功回列表 / 保存栏双入口逐项仍在
  * 10) 拆分判据锁（T09 新增）：页面壳层不得自持编辑态 ref；教育·工作列表（v-model 风险区）留在壳层
  * 11) 零消费出口白名单：setVisibility / getViewStats / uploadWorkPhoto 是既有零消费出口，保留决策入锁
+ * 12) #1204 notfound 单一出口：写端（request.uts 的 404 消息前缀）→ 判定出口（resume.uts 的
+ *     isResumeNotFound）→ 两个消费方（总览页 / 编辑页 composable）不再各抄一份 `obj['kind']` 死判据
  *
  * 本套件是**接线守护**（源码文本 + 结构对账，不构成 ③ 门的行为证据）：它守的是「页面↔组件↔composable↔域 api」
  * 的接线，行为兜底 = ④ 编译门（Kotlin 形态）+ ①a 真机逐页冒烟；接口改名/漏绑由本套件在 CI 上先红。
@@ -438,9 +440,15 @@ describe('删除禁区「resume 不用删」：行为保持点逐项仍在', () 
     expect(composable).toContain('selectedPositionName.value = positions.value[i].name');
   });
 
-  it('加载失败可见：既有 notfound 静默判据与「简历加载失败」提示仍在（缺陷另记 issue，不顺手改）', () => {
-    expect(composable).toContain("if (obj['kind'] != null && `${obj['kind']}` == 'notfound')");
+  it('加载失败可见：notfound 判定走 `api/resume.uts` 的**唯一出口**，页面/composable 不再各抄一份死判据', () => {
+    // #1204 之前，这里钉的是 `e['kind'] == 'notfound'` 的**复制判据** —— 而 `Error` 上没有 `kind`
+    // ⇒ 分支恒不命中（新用户编辑页误报「简历加载失败」）。现在两端都消费同一个 `isResumeNotFound()`。
+    expect(composable).toContain("import { getResumeApi, isResumeNotFound, saveResumeApi, getPositionsApi } from '../../../api/resume'");
+    expect(composable).toContain('if (!isResumeNotFound(e)) {');
     expect(composable).toContain("uni.showToast({ title: '简历加载失败', icon: 'none' })");
+    // 死判据不得复活：既不得再直读 `kind`，也不得再靠后端中文文案匹配
+    expect(composable).not.toContain("obj['kind']");
+    expect(composable).not.toContain("indexOf('不存在')");
   });
 
   it('完善度：12 项判据逐项仍在（含手机号 11 位、薪资三选一、教育/工作内容判空）', () => {
@@ -561,5 +569,75 @@ describe('拆分判据锁（T09 新增）：壳层不自持编辑态，「卡宽
       // 判**绑定形态**而非裸词：组件头注释里正当地写着「禁跨组件 v-model」（T05 已录的注释自命中坑位）
       expect(tpl).not.toMatch(/v-model[:=]/);
     }
+  });
+});
+
+/**
+ * #1204 notfound 单一出口：`api/request.uts`（写端）→ `api/resume.uts`（判定出口）→ 两个消费方。
+ *
+ * ⚠️ 本节的断言是**接线守护**（源码文本），**不构成 ③ 门的行为证据** —— 行为证据在本模块的
+ * `utils/resumeNotFoundBehavior.test.js`（真跑 request→resume→编辑页 composable，含变异必红侧）。
+ * 两节分工：行为测试会自己搭依赖（接线断了它照样绿），本节负责「接线没断」。
+ */
+describe('#1204 notfound 单一出口（写端前缀 → 判定出口 → 两个消费方）', () => {
+  const req = read('api/request.uts');
+  const api = read('api/resume.uts');
+  const overview = read('pages/resume/resume.uvue');
+  const composable = read('pages/resume/composables/useResumeEdit.uts');
+
+  it('写端：request.uts 有 404 分支，状态码经**消息前缀**承载（与 403 同构，不给 any 动态加属性）', () => {
+    expect(req).toContain("export const NOT_FOUND_MESSAGE_PREFIX = '404:'");
+    const start = req.indexOf('if (statusCode == 404) {');
+    expect(start).toBeGreaterThan(-1);
+    const body = req.slice(start, req.indexOf('\n    }', start));
+    expect(body).toContain('NOT_FOUND_MESSAGE_PREFIX + notFoundMsg');
+    // 404 是**预期分支**：与 401 分开（不清登录态、不跳登录页）
+    const code = stripComments(body);
+    expect(code).not.toContain('handleUnauthorized');
+    expect(code).not.toContain('logoutAndReject');
+    expect(code).not.toContain('removeStorage');
+    expect(code).not.toContain('reLaunch');
+    // 不得回到「给 any 动态加 statusCode」（UTS→Kotlin error18 的旧写法）
+    expect(code).not.toMatch(/\.statusCode\s*=\s*404/);
+    expect(code).not.toMatch(/as any\)\.statusCode/);
+  });
+
+  it('读端唯一出口：resume.uts 的 isResumeNotFound 只认 request 的常量，不再按后端中文文案匹配', () => {
+    expect(api).toMatch(/import\s*\{[^}]*NOT_FOUND_MESSAGE_PREFIX[^}]*\}\s*from\s*'\.\/request'/);
+    expect(api).toContain('export function isResumeNotFound(e : any | null) : boolean {');
+    expect(api).toContain("return errMsg(e, '').startsWith(NOT_FOUND_MESSAGE_PREFIX)");
+    // 旧判据与它包装出的假 `kind` 语义必须消失（后端改文案即静默失效的那条路）
+    const code = stripComments(api);
+    expect(code).not.toContain("indexOf('不存在')");
+    expect(code).not.toContain("indexOf('404')");
+    expect(code).not.toContain('RESUME_NOT_FOUND');
+  });
+
+  it('两个消费方都走同一实现，且都不再直读错误对象的 kind', () => {
+    for (const src of [overview, composable]) {
+      expect(src).not.toContain("obj['kind']");
+      expect(src).toContain('isResumeNotFound(e)');
+      expect(src).toMatch(/import \{[^}]*isResumeNotFound[^}]*\} from '[^']*api\/resume'/);
+    }
+    // 总览页：未建 ⇒ 0 项 + 标记「已加载」，引导卡判据仍是「已加载且未填满」
+    expect(overview).toContain('resumeFilledCount.value = 0');
+    expect(overview).toContain('resumeStatusLoaded.value = true');
+    expect(overview).toContain('return resumeStatusLoaded.value && resumeFilledCount.value < RESUME_FIELD_TOTAL');
+    expect(overview).toContain('<text class="resume-guide-text">去填写简历</text>');
+  });
+
+  it('判据具备红能力：把历史形态（`obj[\'kind\']` 死判据）注入回去必须被本节的断言抓到', () => {
+    const legacy = "            let isNotFound = false\n"
+      + "            try {\n"
+      + "                const obj = e as UTSJSONObject\n"
+      + "                if (obj['kind'] != null && `${obj['kind']}` == 'notfound') {\n"
+      + "                    isNotFound = true\n"
+      + "                }\n"
+      + "            } catch (_ex) {}\n"
+      + "            if (isNotFound) {";
+    const injected = overview.replace('if (isResumeNotFound(e)) {', legacy);
+    expect(injected).not.toBe(overview);
+    // 与上面「不再直读 kind」是**同一条判据**：注入后它必须命中（否则那条断言是恒真的空跑）
+    expect(injected).toContain("obj['kind']");
   });
 });

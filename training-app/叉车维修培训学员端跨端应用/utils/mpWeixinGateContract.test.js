@@ -80,6 +80,24 @@ const RESULT_MANDATORY = [
 ];
 const RESULT_OPTIONAL = ['navigationSkipReason'];
 
+/**
+ * 取一个 PowerShell 函数的函数体（花括号配对）。
+ * ⚠️ **不要用注释行当结束锚点**：这些判据跑在 stripCommentLines 之后的代码文本上，注释已变空行
+ * （#1209 实测：拿 `# ---------- 主流程 ----------` 当锚点 ⇒ 永远定位不到函数体、判据空跑）。
+ */
+function psFunctionBody(code, decl) {
+  const at = code.indexOf(decl);
+  if (at === -1) return '';
+  const open = code.indexOf('{', at);
+  if (open === -1) return '';
+  let depth = 0;
+  for (let i = open; i < code.length; i++) {
+    if (code[i] === '{') depth++;
+    else if (code[i] === '}') { depth--; if (depth === 0) return code.slice(open, i + 1); }
+  }
+  return '';
+}
+
 function readSource(rel) {
   return readText(path.join(ROOT, rel));
 }
@@ -495,6 +513,31 @@ function scanContract(sources) {
     must(n <= 1, 'C18', `调用点原文 ${literal} 在代码里出现了 ${n} 次 —— 只允许出现在门计划里一次（执行路径不得再写死一份）`);
   });
 
+  // C19 报告层不得毁掉门结论、也不得丢掉证据（#1209 血账）
+  //   事故：Publish-ScreenshotArchive 只有成功路径带 `Rel`，调用点在 Set-StrictMode 下读 `$archive.Rel`
+  //   ⇒ 「未入库」分支（如"工作树有本次之外的改动"）抛异常 ⇒ 贴 sha 绑定评论那步被打断：
+  //   门明明通过却 exit 1，PR 上也没有证据评论（#1199 的 ② 就是这么被手工绕过去的）。
+  const archiveBody = psFunctionBody(code, 'function Publish-ScreenshotArchive');
+  must(archiveBody.length > 0, 'C19', '定位不到 Publish-ScreenshotArchive 函数体（无法核对返回形状）');
+  if (archiveBody.length > 0) {
+    const returns = archiveBody.match(/return @\{[^}]*\}/g) || [];
+    must(returns.length >= 2, 'C19', `Publish-ScreenshotArchive 的 return 分支只有 ${returns.length} 个（判据可能已空跑）`);
+    returns.forEach((r, i) => {
+      must(/Rel\s*=/.test(r), 'C19',
+        `Publish-ScreenshotArchive 第 ${i + 1} 个 return 缺 Rel ⇒ 未入库分支返回不同形状（Set-StrictMode 下调用点读取即抛异常，曾把「门通过」变成 exit 1 且贴不出证据评论）`);
+    });
+  }
+  must(!/\$archive\.Rel\b/.test(code), 'C19', '调用点直接读 $archive.Rel（须走 Get-Prop，否则未入库分支抛异常）');
+  must(/Get-Prop \$archive 'Rel'/.test(code), 'C19', '调用点未用 Get-Prop 安全取 Rel');
+  must(/贴 ② 门评论失败（门结论不受影响/.test(code), 'C19', '贴评论失败时缺「不改结论」的响亮警告（报告层崩溃会静默吞掉证据）');
+  const commentCallIdx = code.indexOf('Publish-GateComment -PrNumber $PostToPr');
+  must(commentCallIdx !== -1, 'C19', '定位不到贴评论调用点（报告层是否受保护无法核对）');
+  if (commentCallIdx !== -1) {
+    const preWindow = code.slice(Math.max(0, commentCallIdx - 200), commentCallIdx);
+    must(/try\s*\{/.test(preWindow), 'C19', '贴评论调用没被 try 包住（报告层一崩就会把「门通过」变成 exit 1）');
+    must(/catch\s*\{/.test(code.slice(commentCallIdx, commentCallIdx + 1200)), 'C19', '贴评论调用缺 catch（崩了必须警告 + 记日志，不得静默）');
+  }
+
   // C10 注册与文档
   must(/"build:mp-weixin-check"\s*:\s*"[^"]*scripts\/mp-weixin-check\.ps1"/.test(pkg), 'C10', 'package.json 未注册 build:mp-weixin-check');
   must(adr.includes('半自动'), 'C10', 'ADR-0008 未把 ② 记为半自动门');
@@ -738,7 +781,13 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       ['C18', { ...real, script: real.script.replace("-Id 'automator-probe'", "-Id 'automator-probeX'") }],
       ['C18', { ...real, script: real.script + "\nInvoke-Process -FilePath $devTools -Arguments @('close', '--project', $dist) -TimeoutSeconds 120 -Tag 'x'\n" }],
       ['C18', { ...real, script: real.script.replace('-Arguments $readyStep.argv', '-Arguments $readyArgs') }],
-      ['C18', { ...real, script: real.script.replace('$portStep.waitSeconds', '180') }]
+      ['C18', { ...real, script: real.script.replace('$portStep.waitSeconds', '180') }],
+      // C19：报告层（归档形状统一 / 安全取值 / try-catch / 响亮警告）—— #1209 血账
+      ['C19', { ...real, script: real.script.replace("未入库：找不到 gh CLI'); Commands = @(); Rel = @() }", "未入库：找不到 gh CLI'); Commands = @() }") }],
+      ['C19', { ...real, script: real.script + "\n$relProbe = $archive.Rel\n" }],
+      ['C19', { ...real, script: real.script.replace("-ArchivedRel @(Get-Prop $archive 'Rel')", "-ArchivedRel @($archive.Rel)") }],
+      ['C19', { ...real, script: real.script.replace("try {\n        Publish-GateComment -PrNumber $PostToPr", "Publish-GateComment -PrNumber $PostToPr") }],
+      ['C19', { ...real, script: real.script.replace("贴 ② 门评论失败（门结论不受影响", "贴评论失败") }]
     ];
     cases.forEach(([rule, sources], caseIndex) => {
       const found = scanContract(sources);
@@ -756,6 +805,20 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
     expect(real.script).toContain('MP_WEIXIN_PROBE');
     expect(real.script).not.toMatch(/\$LASTEXITCODE/);
     expect(real.probe).toContain('probeOk');
+  });
+
+  it('C19：报告层不改门结论、不丢证据（归档形状统一 / Get-Prop 取值 / try-catch / 响亮警告）', () => {
+    const code = stripCommentLines(real.script).join('\n');
+    expect(code).toMatch(/Get-Prop \$archive 'Rel'/);
+    expect(code).not.toMatch(/\$archive\.Rel/);
+    expect(code).toContain('贴 ② 门评论失败（门结论不受影响');
+    const callIdx = code.indexOf('Publish-GateComment -PrNumber $PostToPr');
+    expect(callIdx).toBeGreaterThan(-1);
+    expect(code.slice(Math.max(0, callIdx - 200), callIdx)).toMatch(/try\s*\{/);
+    const body = psFunctionBody(code, 'function Publish-ScreenshotArchive');
+    const returns = body.match(/return @\{[^}]*\}/g) || [];
+    expect(returns.length).toBeGreaterThanOrEqual(2);
+    returns.forEach((r) => expect(r).toMatch(/Rel\s*=/));
   });
 
   it('C6：仅门通过（exit 0）分支贴 sha 绑定评论', () => {
@@ -868,5 +931,122 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
     expect(doctorExitIdx).toBeLessThan(s.indexOf('Publish-ScreenshotArchive -PrNumber'));
     expect(s).toContain('不产出 ② 门的通过结论');
     expect(s).toContain('Get-DoctorExitCode');
+  });
+});
+
+/**
+ * C20（#1210）：② 门的**产物合法性**判据面。
+ *
+ * 票面病根：旧实现用**正则**从 `project.config.json` 抠 appid ⇒ **非法 JSON 也能通过 appid 校验**；
+ * 这类坏产物的症状（白屏 / `pageStack` 永不应答 / IDE 日志反复 `routeTo appLaunch timeout`）在门上
+ * 表现为**看起来像环境问题**的 `page-stack-not-answering`，把真正的病根藏起来。
+ *
+ * 本节的成对取证：
+ *   · 必不红 = 合法产物夹具 ⇒ `ok=true` 且 appid 由**解析后取值**；
+ *   · 必红 = 三条**各自定向**的坏产物（非法 JSON / 缺必需文件 / 缺页 `.js`）⇒ 各自命中对应的 `stage`。
+ *
+ * ⚠️ 判据库是**真执行**的（`pwsh` 跑 `scripts/lib/mp-weixin-product.ps1`），不是断言源码文本 ——
+ * 文本断言在「判据被摘掉、只留一句字面量」时照样绿。接线面（门脚本真的调它了 / 旧正则真的没了）
+ * 另由下面两条 wiring 用例守。
+ */
+describe('C20：产物合法性判据（#1210）', () => {
+  const LIB_REL = path.join('scripts', 'lib', 'mp-weixin-product.ps1');
+
+  /** 跑真判据库取报告（fail-closed：拿不到 pwsh 或输出不可解析即抛） */
+  function runProductReport(dist) {
+    const lib = path.join(ROOT, LIB_REL);
+    const cmd = `. '${lib}'; (Get-MpWeixinProductReport -Dist '${dist}') | ConvertTo-Json -Compress`;
+    const args = ['-NoProfile', '-NonInteractive'];
+    if (process.platform === 'win32') args.push('-ExecutionPolicy', 'Bypass');
+    args.push('-Command', cmd);
+    let stdout = '';
+    try {
+      stdout = execFileSync(powershellExe(), args, {
+        encoding: 'utf8', timeout: 120000, windowsHide: true, maxBuffer: 4 * 1024 * 1024
+      });
+    } catch (e) {
+      throw new Error(`产物判据库执行失败：${cmd}\n exit=${e.status}\n stdout=${e.stdout}\n stderr=${e.stderr}`);
+    }
+    const line = String(stdout).split(/\r?\n/).filter((l) => l.trim().startsWith('{')).pop();
+    if (!line) throw new Error(`产物判据库没有输出 JSON：${stdout}`);
+    return JSON.parse(line.trim());
+  }
+
+  /** 造一份产物夹具：{ 坏在哪儿 } ⇒ 临时目录 */
+  function makeProduct(mutate) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mp-weixin-product-'));
+    fs.writeFileSync(path.join(dir, 'project.config.json'), JSON.stringify({ appid: 'wxTESTAPPID' }));
+    fs.writeFileSync(path.join(dir, 'app.json'), JSON.stringify({ pages: ['pages/index/index'] }));
+    fs.writeFileSync(path.join(dir, 'app.js'), 'App({})');
+    fs.writeFileSync(path.join(dir, 'app.wxss'), '/* wxss */');
+    fs.mkdirSync(path.join(dir, 'pages', 'index'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'pages', 'index', 'index.js'), 'Page({})');
+    if (mutate) mutate(dir);
+    return dir;
+  }
+
+  const dirs = [];
+  const product = (mutate) => { const d = makeProduct(mutate); dirs.push(d); return d; };
+  afterAll(() => { dirs.forEach((d) => { try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) {} }); });
+
+  it('C20a（必不红）：合法产物 ⇒ ok=true，appid 由解析后取值（不是从坏文件里抠）', () => {
+    const r = runProductReport(product(null));
+    expect(r.ok).toBe(true);
+    expect(r.stage).toBe('product-ok');
+    expect(r.appid).toBe('wxTESTAPPID');
+    expect(r.pages).toBe(1);
+  });
+
+  it('C20b（必红①）：project.config.json 非法 JSON ⇒ fail-closed，且带出**位置原文**', () => {
+    // 夹具即票面形态：根对象正常闭合，**后面多出一段游离片段**
+    const dir = product((d) => {
+      fs.writeFileSync(path.join(d, 'project.config.json'), '{\n  "appid": "wxTESTAPPID"\n}\n  "miniprogram": {\n    "current": -1\n  }\n');
+    });
+    const r = runProductReport(dir);
+    expect(r.ok).toBe(false);
+    expect(r.stage).toBe('product-json');
+    expect(r.detail).toContain('project.config.json');
+    // 位置原文（System.Text.Json 的 `line N, position M`）必须原样带出 —— 这是「让人一眼看到病根」那条
+    expect(r.detail).toMatch(/line \d+/);
+    expect(r.detail).toMatch(/position \d+/);
+  });
+
+  it('C20c（必红②）：缺必需文件（app.wxss）⇒ 点名缺了哪个', () => {
+    const dir = product((d) => fs.rmSync(path.join(d, 'app.wxss')));
+    const r = runProductReport(dir);
+    expect(r.ok).toBe(false);
+    expect(r.stage).toBe('product-missing');
+    expect(r.detail).toContain('app.wxss');
+  });
+
+  it('C20d（必红③）：app.json.pages 声明的页面缺 .js ⇒ 点名缺哪个 .js', () => {
+    const dir = product((d) => {
+      fs.writeFileSync(path.join(d, 'app.json'), JSON.stringify({ pages: ['pages/index/index', 'pages/login/login'] }));
+    });
+    const r = runProductReport(dir);
+    expect(r.ok).toBe(false);
+    expect(r.stage).toBe('product-pages');
+    expect(r.detail).toContain('pages/login/login.js');
+  });
+
+  it('C20-wiring①：门脚本真的调判据库（dot-source + 调用），且旧正则抠 appid 已删', () => {
+    const s = readSource(SCRIPT_REL);
+    expect(s).toContain(`'lib\\mp-weixin-product.ps1'`);
+    expect(s).toContain('Get-MpWeixinProductReport -Dist $dist');
+    // 旧写法（正则从产物里抠 appid）不得复活；判据只在**代码行**上判，避免注释引例自命中
+    const code = stripCommentLines(s).join('\n');
+    expect(code).not.toContain('$projConfig = Join-Path $dist');
+    expect(code).not.toContain('[regex]::Match((Get-Content -LiteralPath $projConfig');
+    // 产物坏了 ⇒ exit 1（不是 exit 2：与「环境不可用」分开）
+    const idx = code.indexOf('if (-not $product.ok) {');
+    expect(idx).toBeGreaterThan(-1);
+    const block = code.slice(idx, code.indexOf('\n    }', idx));
+    expect(block).toContain('exit 1');
+    expect(block).not.toContain('exit 2');
+  });
+
+  it('C20-wiring②：ADR ② 段与 PR 模板都写明了新判据（决策回写纪律）', () => {
+    expect(readSource(ADR_REL)).toContain('产物合法性');
+    expect(readSource(PR_TEMPLATE_REL)).toContain('产物合法性');
   });
 });

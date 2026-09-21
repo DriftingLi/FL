@@ -38,6 +38,10 @@ master 有 ruleset「protect master」，必检只有 ci-summary；pr-evidence �
 ② 自 2026-09-12 起是**半自动门**（#883 实测全链路无人值守，≈4.5 分钟/次）：跑
 `pwsh -NoProfile -File scripts/mp-weixin-check.ps1 -PostToPr <PR号>`（或 `npm run build:mp-weixin-check`），
 门通过时会贴 `<!-- gate-evidence:② -->` + `commit: <head sha>` 的评论，正文该行同样写「见评论 <链接>」。
+**自 2026-09-21 起（#1210）② 还含一道「产物合法性」前置断言**：必需文件（`project.config.json` / `app.json` /
+`app.js` / `app.wxss`）齐、两份 JSON 可解析（非法即打印 `line N, position M`）、appid 由解析后取值、
+`app.json.pages` 每页有 `.js`；**产物坏了判 `exit 1`（门未过）**，与「环境不可用 `exit 2`」分开 ——
+坏产物会让开发者工具白屏、`pageStack` 永不应答，别再把它当「环境 / 锁 / 端口」问题去查。
 **但「执行人」栏仍须由人签收**：agent 只产出证据（`MP_WEIXIN_RESULT` + 截图），不得代填执行人、不得写「已通过」。
 校验器只认「带 gate-evidence:④ / gate-evidence:② 注释标记 + commit 与 head 绑定」的评论，不校真伪：
 绑定 = `commit` **等于** head sha，**或**它是 head 的**祖先**且二者之间没有运行时面（`*.uvue` / `*.uts` / 三份 json）改动

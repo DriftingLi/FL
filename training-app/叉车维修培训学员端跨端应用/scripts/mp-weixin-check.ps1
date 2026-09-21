@@ -94,7 +94,9 @@
     须以全访问权限执行（同 ④a）。开发者工具需已登录（`cli.bat islogin` → `{"login":true}`），
     登录态过期时需人补扫一次码。
 
-    退出码：0 = ② 通过；1 = 门未过（console error / exception / 页面未打开 / 截图缺失）；2 = 环境不可用（缺 CLI / 连不上 / 超时）。
+    退出码：0 = ② 通过；1 = 门未过（**产物不合法**（#1210）/ console error / exception / 页面未打开 / 截图缺失）；
+    2 = 环境不可用（缺 CLI / 连不上 / 超时）。**产物坏了判 1、不判 2** —— 判 2 等于告诉调用方「重跑即可」，
+    而重跑会得到同一份坏产物（判据见 `scripts/lib/mp-weixin-product.ps1` 与 ADR-0008 的「② 产物合法性判据」段）。
 
 .PARAMETER Project
     项目根目录。缺省为本脚本上一级目录（scripts/ 位于项目根下）。
@@ -828,10 +830,15 @@ function Publish-ScreenshotArchive {
     param([int]$PrNumber, [string]$Module, [string]$ShotDir, $ProbeJson, [string]$RepoRoot)
     # 目标：docs/verification/<模块>/<PR号>/<页名>-after.<ext>；仅当「当前分支 = 该 PR 的 head」
     # 且「工作树除本次改动外无其他改动」时才提交；其余情况只警告 + 给命令。
+    #
+    # ⚠️ **每个 return 必须是同一形状**（本函数所有分支都要带 `Rel`，取值用 @() 兜底）——
+    #    #1209 血账：此前只有成功路径带 `Rel`，而调用点在 Set-StrictMode 下读 `$archive.Rel`，
+    #    于是「未入库」分支（如"工作树有本次之外的改动"）**抛异常**，把贴 sha 绑定评论那一步打断：
+    #    门明明通过却 exit 1，且证据评论根本没贴上。守护 C19 现在按「逐个 return 都带 Rel」拦它。
     $notes = [System.Collections.Generic.List[string]]::new()
     $cmdLines = [System.Collections.Generic.List[string]]::new()
-    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { return @{ Notes = @('未入库：找不到 gh CLI'); Commands = @() } }
-    if (-not (Get-Command git -ErrorAction SilentlyContinue)) { return @{ Notes = @('未入库：找不到 git'); Commands = @() } }
+    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { return @{ Notes = @('未入库：找不到 gh CLI'); Commands = @(); Rel = @() } }
+    if (-not (Get-Command git -ErrorAction SilentlyContinue)) { return @{ Notes = @('未入库：找不到 git'); Commands = @(); Rel = @() } }
 
     $root = $RepoRoot
     $branch = ''
@@ -841,15 +848,15 @@ function Publish-ScreenshotArchive {
 
     $prJson = $null
     try { $prJson = (& gh pr view $PrNumber --json headRefName,state 2>$null | Out-String | ConvertFrom-Json) } catch { }
-    if (-not $prJson) { return @{ Notes = @("未入库：取不到 PR #$PrNumber 的信息（gh 不可用/无权限）"); Commands = @() } }
-    if ($prJson.state -ne 'OPEN') { return @{ Notes = @("未入库：PR #$PrNumber 状态为 $($prJson.state)（非 OPEN）"); Commands = @() } }
+    if (-not $prJson) { return @{ Notes = @("未入库：取不到 PR #$PrNumber 的信息（gh 不可用/无权限）"); Commands = @(); Rel = @() } }
+    if ($prJson.state -ne 'OPEN') { return @{ Notes = @("未入库：PR #$PrNumber 状态为 $($prJson.state)（非 OPEN）"); Commands = @(); Rel = @() } }
     if ($branch -ne $prJson.headRefName) {
-        return @{ Notes = @("未入库：当前分支 '$branch' ≠ PR #$PrNumber 的 head 分支 '$($prJson.headRefName)'（避免把截图提到错的分支）"); Commands = @() }
+        return @{ Notes = @("未入库：当前分支 '$branch' ≠ PR #$PrNumber 的 head 分支 '$($prJson.headRefName)'（避免把截图提到错的分支）"); Commands = @(); Rel = @() }
     }
     $allowed = @("docs/verification/$Module/$PrNumber/")
     $blocking = @($dirty | Where-Object { $p = ($_ -replace '^..\s+', '').Trim('"'); -not ($allowed | Where-Object { $p.StartsWith($_) }) })
     if ($blocking.Count -gt 0) {
-        return @{ Notes = @("未入库：工作树有本次之外的改动（$($blocking.Count) 项），为免夹带不做提交"); Commands = @() }
+        return @{ Notes = @("未入库：工作树有本次之外的改动（$($blocking.Count) 项），为免夹带不做提交"); Commands = @(); Rel = @() }
     }
 
     $module = if ($Module) { $Module } else { 'mp-weixin' }
@@ -892,7 +899,7 @@ function Publish-ScreenshotArchive {
         $skipped += ([System.IO.Path]::GetFileName($biggest.Path) + "（超合计上限）")
         $made = @($made | Where-Object { $_.Path -ne $biggest.Path })
     }
-    if ($made.Count -eq 0) { return @{ Notes = @('未入库：压缩后没有任何图满足体积上限'); Commands = @() } }
+    if ($made.Count -eq 0) { return @{ Notes = @('未入库：压缩后没有任何图满足体积上限'); Commands = @(); Rel = @() } }
     if ($shots.Count -gt $script:ArchiveMaxCount) {
         $skipped += ($shots[$script:ArchiveMaxCount..($shots.Count - 1)] | ForEach-Object { $_.name })
     }
@@ -1012,14 +1019,29 @@ try {
         }
     }
 
-    # 3) 产物 appid 前置断言 —— 实测：产物 appid 一律取自 manifest.json 的 mp-weixin.appid；
-    #    manifest 缺该项时落成 touristappid（游客 appid）。CLI 的 --appid **不改**产物。
-    $productAppId = ''
-    $projConfig = Join-Path $dist 'project.config.json'
-    if (Test-Path -LiteralPath $projConfig) {
-        $m = [regex]::Match((Get-Content -LiteralPath $projConfig -Raw), '"appid"\s*:\s*"([^"]*)"')
-        if ($m.Success) { $productAppId = $m.Groups[1].Value }
+    # 3) **产物合法性 + appid 前置断言（#1210）** —— 判据面单点真源在 `scripts/lib/mp-weixin-product.ps1`。
+    #    票面病根：旧实现用**正则**从 `project.config.json` 抠 appid ⇒ **非法 JSON 也能通过 appid 校验**；
+    #    而这类坏产物会让开发者工具白屏 / `pageStack` 永不应答 / IDE 日志反复 `routeTo appLaunch timeout`，
+    #    门最终只报一个**看起来像环境问题**的 `page-stack-not-answering`，把真正的病根藏起来。
+    #    判据：必需文件齐（project.config.json / app.json / app.js / app.wxss）+ 两份 JSON 可解析
+    #    （非法即打印**位置原文**）+ appid 由**解析后取值** + `app.json.pages` 每页有 `<page>.js`。
+    #    失败 = **产物坏了 ⇒ 门未过（exit 1）**，与「环境不可用（exit 2）」严格分开。
+    . (Join-Path $PSScriptRoot 'lib\mp-weixin-product.ps1')
+    $product = Get-MpWeixinProductReport -Dist $dist
+    Write-Log "产物合法性 = $($product.detail)"
+    Write-Host "产物合法性 = $($product.detail)"
+    if (-not $product.ok) {
+        Write-Host "[error] 产物不合法（stage=$($product.stage)）：$($product.detail)" -ForegroundColor Red
+        Write-Host '        这是**产物坏了**（构建被中断 / 写盘不完整），不是环境不可用 ⇒ 判门未过（exit 1）。' -ForegroundColor Red
+        Write-Host '        处置：先 `Remove-Item -Recurse -Force <产物目录>` 干净重建（`npm run build:mp-weixin-check`），再重跑本门。' -ForegroundColor Red
+        Write-Host '        排查提示：产物坏掉时开发者工具常见白屏 + `routeTo appLaunch timeout`，那不是「环境/锁/端口」问题。' -ForegroundColor Red
+        Write-Log "MP_WEIXIN_RESULT errors=1 stage=$($product.stage) detail=$($product.detail)"
+        exit 1
     }
+
+    # 3.5) appid 断言 —— 实测：产物 appid 一律取自 manifest.json 的 mp-weixin.appid；
+    #      manifest 缺该项时落成 touristappid（游客 appid）。CLI 的 --appid **不改**产物。
+    $productAppId = [string]$product.appid
     Write-Log "产物 appid = '$productAppId'（期望 '$AppId'）"
     Write-Host "产物 appid = $productAppId（期望 $AppId）"
     if ($AppId -and $productAppId -ne $AppId) {
@@ -1327,10 +1349,22 @@ if ($exitCode -eq 0 -and $PostToPr -gt 0) {
     # ⚠️ 续行符一个都不能少：本调用此前在 `-ShotRelative … -ReproCommand …` 一行**漏了行尾反引号**，
     #    于是 `-ArchivedRel` / `-ArchiveNotes` 被解析成**一条新命令**（运行到贴评论后会 CommandNotFound），
     #    入库截图清单也就从来没进过评论。守护测试 C14 现在按「以 `-参数名` 单独起行」拦这类断链。
-    Publish-GateComment -PrNumber $PostToPr -ResultLine $resultLine -LogRelative $logRelative `
-        -ShotRelative ".ci-verify/$shotNames" -ReproCommand 'npm run build:mp-weixin-check' `
-        -ArchivedRel $(if ($archive -and $archive.Rel) { @($archive.Rel) } else { @() }) `
-        -ArchiveNotes $(if ($archive) { @($archive.Notes) } else { @() }) `
-        -NavSkipped ([bool]$navSkip) -NavReason $navReason
+    #
+    # ⚠️ #1209 两条纪律（守护 C19）：
+    #    (1) 归档结果一律用 **Get-Prop** 取值 —— Set-StrictMode 下访问不存在的属性会抛异常，
+    #        而归档函数「未入库」分支曾返回不带 `Rel` 的对象 ⇒ 这里抛异常 ⇒ **贴评论被打断**，
+    #        门明明通过却 exit 1、证据评论也没贴上（真实事故，本会话 #1199 就是这么绕过去的）；
+    #    (2) 整段贴评论包 try/catch：它是**报告层**，门结论在上面已经定了 ——
+    #        崩了要**响亮地警告 + 记日志**，但不得改变退出码、更不得让证据悄悄消失（禁止静默例外）。
+    try {
+        Publish-GateComment -PrNumber $PostToPr -ResultLine $resultLine -LogRelative $logRelative `
+            -ShotRelative ".ci-verify/$shotNames" -ReproCommand 'npm run build:mp-weixin-check' `
+            -ArchivedRel @(Get-Prop $archive 'Rel') `
+            -ArchiveNotes @(Get-Prop $archive 'Notes') `
+            -NavSkipped ([bool]$navSkip) -NavReason $navReason
+    } catch {
+        Write-Host "[warn] 贴 ② 门评论失败（门结论不受影响，退出码仍为 $exitCode）：$_" -ForegroundColor Yellow
+        Write-Log "MP_WEIXIN_RESULT comment=FAILED exit=$exitCode detail=$_"
+    }
 }
 exit $exitCode
