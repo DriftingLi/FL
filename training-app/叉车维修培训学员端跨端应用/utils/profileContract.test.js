@@ -14,6 +14,8 @@ const path = require('path');
 const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const read = (rel) => readText(path.join(ROOT, rel));
+/** 豁免名单从单点读（ADR-0023 ⑧）：不再解析守护脚本源码文本取常量 */
+const { allowlistPaths } = require('./contractHarness');
 
 /** 提取 export function 函数体（从声明到顶层 "\n}"，先例 quickLoginContract） */
 function fnBodyOf(fileSrc, name) {
@@ -222,22 +224,13 @@ describe('页面层零直发请求（网络一律经域 api 函数，#641 收紧
 });
 
 describe('allowlist 模块级清零（profile 域 catch/detail 违例豁免不存在）', () => {
-  /** GUARD_ALLOWLIST 源码块（豁免机制定义于守护文件，先例各切片 allowlist 锁） */
-  function guardAllowlistBlock() {
-    const guardSrc = read('utils/utsAndroidCompile.test.js');
-    const start = guardSrc.indexOf('const GUARD_ALLOWLIST');
-    expect(start).toBeGreaterThan(-1);
-    const end = guardSrc.indexOf('};', start);
-    // 终止符缺失时 indexOf 返回 -1、slice 会静默扩扫全文，必须显式失败
-    expect(end).toBeGreaterThan(start);
-    return guardSrc.slice(start, end);
-  }
-
-  it('GUARD_ALLOWLIST 不含任何 pages/profile 文件（模块全量，非逐切片正则）', () => {
-    expect(guardAllowlistBlock()).not.toMatch(/pages[/\\]profile/);
+  it('豁免面不含任何 pages/profile 文件（模块全量，非逐切片正则）', () => {
+    const hits = allowlistPaths().filter((p) => /pages[/\\]profile/.test(p));
+    expect(hits).toEqual([]);
   });
 
-  it.each(['student', 'wrongQuestion', 'favorite', 'points'])('本模块域 api %s.uts 无 allowlist 条目', (domain) => {
-    expect(guardAllowlistBlock()).not.toMatch(new RegExp(`api[/\\\\]${domain}\\.uts`));
+  it.each(['student', 'wrongQuestion', 'favorite', 'points'])('本模块域 api %s.uts 无豁免条目', (domain) => {
+    const hits = allowlistPaths().filter((p) => new RegExp(`api[/\\\\]${domain}\\.uts`).test(p));
+    expect(hits).toEqual([]);
   });
 });

@@ -18,6 +18,8 @@ const path = require('path');
 const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const read = (rel) => readText(path.join(ROOT, rel));
+/** 豁免名单从单点读（ADR-0023 ⑧）：不再解析守护脚本源码文本取常量 */
+const { allowlistPaths } = require('./contractHarness');
 
 /** 模块目录下全部源文件（.uvue/.uts，排除测试） */
 function forumSourceFiles(dir = 'pages/forum') {
@@ -519,13 +521,11 @@ describe('IP 属地契约（ADR-0045：发布那一刻的快照，市优先退�
 });
 
 describe('allowlist 不回潮（forum 域违例清零的锁）', () => {
-  it('GUARD_ALLOWLIST 不含 forum 域文件（页面与 api 双清零）', () => {
-    const guardSrc = read('utils/utsAndroidCompile.test.js');
-    const start = guardSrc.indexOf('const GUARD_ALLOWLIST');
-    expect(start).toBeGreaterThan(-1);
-    const block = guardSrc.slice(start, guardSrc.indexOf('};', start));
-    expect(block).not.toMatch(/pages[/\\]forum/);
-    expect(block).not.toMatch(/api[/\\]forum\.uts/);
+  it('豁免面不含 forum 域文件（页面与 api 双清零）', () => {
+    // ⚠️ `api/checkin.uts`（规则 H 存量豁免）由 `utils/modules.js` 登记在 forum 的 `allowlistOwned`；
+    //    本用例守的是「`pages/forum/**` 与 forum 域 api 都已清零」—— 与那条例外的归属是两件事。
+    const hits = allowlistPaths().filter((p) => /pages[/\\]forum|api[/\\]forum\.uts/.test(p));
+    expect(hits).toEqual([]);
   });
 });
 

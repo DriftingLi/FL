@@ -271,7 +271,13 @@ function navigations(files) {
  * 摘除后用例 ⑥ 的循环体不再执行（空表天然通过）；新落点契约见
  * `utils/favoritesLandingContract.test.js`（补的正是本守护抓不到的「压根没分支」那一面）。
  */
-const GUARD_ALLOWLIST = [];
+/**
+ * 本文件**自有**的导航 query 键豁免表（与「守护规则豁免」`GUARD_ALLOWLIST` 无关，别混淆）。
+ * 2026-09-20 原名也叫 `GUARD_ALLOWLIST` —— 与 `utils/guardAllowlist.js` 的同名常量撞名，
+ * 让「全仓 `GUARD_ALLOWLIST` 只有一个声明点」这条判据（ADR-0023 ⑧）变成假命题；改名区分。
+ * 摘除上一条后本表为空，用例 ⑥ 的循环体不再执行（空表天然通过）。
+ */
+const NAV_QUERY_ALLOWLIST = [];
 
 /** 纯函数：给定页面键表与导航清单 → 违规清单 */
 function findUnreadQueryKeys(byRoute, readerKeys, navs) {
@@ -283,7 +289,7 @@ function findUnreadQueryKeys(byRoute, readerKeys, navs) {
     const declared = pageOptionKeys(readText(src), readerKeys);
     const bad = n.keys.filter((k) => !declared.has(k));
     if (bad.length > 0) {
-      const allowed = GUARD_ALLOWLIST.some((a) => a.file === n.file && a.route === n.route);
+      const allowed = NAV_QUERY_ALLOWLIST.some((a) => a.file === n.file && a.route === n.route);
       if (!allowed) problems.push({ ...n, declared: [...declared], bad });
     }
   }
@@ -361,7 +367,7 @@ describe('导航 query 键契约（传了但目标页不读 ⇒ 静默失效）'
   it('⑥ 例外表必须是「活」的（防 allowlist 掩盖一条已失效的守护）', () => {
     // 每个例外都必须**真的**在命中：去掉 allowlist 后该导航会被判红。
     // 否则（例如 favorites 那处被修好了）这条例外就是死代码，必须删掉。
-    for (const a of GUARD_ALLOWLIST) {
+    for (const a of NAV_QUERY_ALLOWLIST) {
       const navs = NAVS.filter((n) => n.file === a.file && n.route === a.route);
       expect(navs.length).toBeGreaterThan(0); // 例外指向的导航仍存在
       const stillBad = navs.some((n) => {

@@ -37,13 +37,17 @@
  *      先例 useAiChat「规避类型推断问题」注释，14/14 满足）
  *   V. async 函数缺返回类型标注（Kotlin 推不出 UTSPromise 的 T，级联「expected Unit」错；须 Promise<T>）
  *   W. 模板裸 handler 未定义（error18 找不到名称；@click="裸标识符" 须在 script 有定义）
- * 存量违例走 GUARD_ALLOWLIST 豁免，由后续工单在各自范围清零（见常量注释）。
+ * 存量违例走 `GUARD_ALLOWLIST` 豁免，由后续工单在各自范围清零。
+ * **2026-09-20（ADR-0023 票 A）**：常量本体已搬到 `utils/guardAllowlist.js`（单一声明点）；
+ * 本文件与 12 份消费测试同源 `require` 取用，不再解析源码文本取常量。
  */
 const fs = require('fs');
 const path = require('path');
 
 /** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
 const { readText } = require('./utsHarness');
+/** 豁免名单的单一声明点（ADR-0023 ⑧）：本文件不再自带一份，见 `utils/guardAllowlist.js` */
+const { GUARD_ALLOWLIST } = require('./guardAllowlist');
 const ROOT = path.join(__dirname, '..');
 const SCAN_DIRS = ['pages', 'components', 'utils', 'composables', 'api', 'stores', 'constants', 'types', 'uni_modules'];
 const SKIP = new Set(['node_modules', 'unpackage', '.git', 'dist', 'hybrid']);
@@ -53,14 +57,12 @@ const SKIP = new Set(['node_modules', 'unpackage', '.git', 'dist', 'hybrid']);
  * 规则上线时已存在的违例按「规则 → 文件」豁免，由后续工单在各自范围清零；
  * 全部清零后由 epic 收尾票（#654）删除本机制。
  * 仅存量不为零的规则入表（F/G/I 在 master 树上实测零存量，全量执法无豁免）；
- * 键 = 规则标识，值 = 豁免文件的相对路径集合
+ * 键 = 规则标识，值 = 豁免文件的相对路径集合。
+ *
+ * ⚠️ **声明点已迁走**（2026-09-20，ADR-0023 ⑧）：本体在 `utils/guardAllowlist.js`，
+ * 本文件只是**消费方**。别在这里加回一份 —— 那会让「豁免只有一个声明点」变成假命题，
+ * 守护见 `utils/modulesDeclarationContract.test.js` 的 C1–C5。
  */
-const GUARD_ALLOWLIST = {
-  H: new Set([
-    'api/checkin.uts',
-    'pages/notifications/notifications.uvue',
-  ]),
-};
 
 function walk(dir, out = []) {
   if (!fs.existsSync(dir)) return out;

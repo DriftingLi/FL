@@ -25,6 +25,8 @@ const path = require('path');
 const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const read = (rel) => readText(path.join(ROOT, rel));
+/** 豁免名单从单点读（ADR-0023 ⑧）：不再解析守护脚本源码文本取常量 */
+const { allowlistPaths } = require('./contractHarness');
 const exists = (rel) => fs.existsSync(path.join(ROOT, rel));
 
 const COURSES_PAGES = [
@@ -249,13 +251,9 @@ describe('组件接线零孤儿（#779 回归锁：import 的组件文件必须�
 });
 
 describe('allowlist 不回潮（courses 域违例清零的锁）', () => {
-  it('GUARD_ALLOWLIST 不含 courses 域文件', () => {
-    const guardSrc = read('utils/utsAndroidCompile.test.js');
-    const start = guardSrc.indexOf('const GUARD_ALLOWLIST');
-    expect(start).toBeGreaterThan(-1);
-    const block = guardSrc.slice(start, guardSrc.indexOf('};', start));
-    expect(block).not.toMatch(/pages[/\\]courses/);
-    expect(block).not.toMatch(/api[/\\]course\.uts/);
+  it('豁免面不含 courses 域文件', () => {
+    const hits = allowlistPaths().filter((p) => /pages[/\\]courses|api[/\\]course\.uts/.test(p));
+    expect(hits).toEqual([]);
   });
 
   it('courses 域源文件零 catch-any / 零 e.detail 直取（规则 H / I 全量执法）', () => {
