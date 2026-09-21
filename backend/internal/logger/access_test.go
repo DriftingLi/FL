@@ -69,8 +69,10 @@ func TestAccessLog_Fields(t *testing.T) {
 	if entry["user_role"] != "admin" {
 		t.Errorf("user_role 应为 admin, got %v", entry["user_role"])
 	}
-	if entry["request_id"] != "rid-123" {
-		t.Errorf("request_id 应为 rid-123, got %v", entry["request_id"])
+	if rid, _ := entry["request_id"].(string); rid == "" || rid == "rid-123" {
+		// 请求身份由服务端铸造（ADR-0062 票1）：调用方供给的 X-Request-ID 不再进日志，
+		// 否则外部可控 ID 既污染排查面，又是 AI 计量「固定头即免扣费」通道的来源。
+		t.Errorf("request_id 应为服务端铸造值（非空且不等于调用方供给的头）, got %v", entry["request_id"])
 	}
 	if entry["path"] != "/api/ping" {
 		t.Errorf("path 应为 /api/ping, got %v", entry["path"])
