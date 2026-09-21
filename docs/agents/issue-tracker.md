@@ -38,7 +38,7 @@ GitHub 在 issues 和 PRs 之间共享一个 number space，因此裸 `#42` 可�
 
 ## Wayfinding operations
 
-> ⚠️ **本仓目前不用 wayfinder**：`wayfinder:map` label **不存在**、map 数为 **0**（2026-09-16 实测）。
+> ⚠️ **本仓不用 wayfinder —— 这是「准入条件未命中」的判断，不是一条禁令**：三条准入门槛**同时**成立才值得启用，判据的**唯一事实源**是 `training-app/叉车维修培训学员端跨端应用/docs/agents/issue-dispatch.md` §0 与文末（本仓三条都不成立；本块不复述判据，避免第二份事实源）。配套事实：`wayfinder:map` label **不存在**、map 数为 **0**（2026-09-16 实测）。
 > 本节**只是 tracker 能力说明**，不是待办 —— 接到 `/wayfinder` 式的票据指令时，**不要据此去找 map、不要建 map**
 > （`/wayfinder` skill 会把你引到本节，这就是那个空转的来源）。形态判定与判据（含「什么时候才真的需要 wayfinder」三条）见 `training-app/叉车维修培训学员端跨端应用/docs/agents/issue-dispatch.md` §0 与文末 —— **该文件属移动端层**，做其它栈的会话只需记住本块的一句：**本仓没有 map，不要去找**。
 
