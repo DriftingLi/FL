@@ -718,7 +718,7 @@ type redeemOpts struct {
 }
 
 // redeem 兑换唯一实现：锁 → 已拥有校验 → 余额预检 → 事务{权益 + 簿记核心}。
-// 幂等键 redeem:{sku}（ADR-0023）：占坑冲突映射为「已兑换」，整笔事务回滚；
+// 幂等键 redeem:{sku}:{userID}（ADR-0062 票1）：占坑冲突映射为「已兑换」，整笔事务回滚；
 // 余额扣减经 ApplyTx 守卫（`points_balance >= ?` + RowsAffected 校验），并发双花不击穿余额。
 func (s *PointsService) redeem(ctx context.Context, userID int, o redeemOpts) (*RedeemResult, error) {
 	release := s.tryLock(ctx, o.lockKey, 5*time.Second)
@@ -747,7 +747,7 @@ func (s *PointsService) redeem(ctx context.Context, userID int, o redeemOpts) (*
 		}
 		if _, err := ApplyTx(tx, PointsEntry{
 			UserID: userID, Delta: -o.price, Reason: o.reason, RefType: o.refType, RefID: o.refID,
-			IdemKey: RedeemIdemKey(o.sku),
+			IdemKey: RedeemIdemKey(o.sku, userID),
 		}); err != nil {
 			return err
 		}
@@ -900,10 +900,10 @@ func (s *PointsService) AIPreflight(userID int) error {
 	return nil
 }
 
-// DeductAI AI 按 tokens 后计量扣费（ADR-0023）。调用方只传事实（prompt/completion
-// 字符长度 + 稳定 requestID），tokens 估算、分桶换算、上下限与幂等全部内聚在积分域：
-// 估算见 estimateAITokens，积分换算见 aiPointsForTokens；幂等键 ai_tokens:{requestID}，
-// 同请求重试/重放只扣一次。成功返回 usage 事件所需的完整数据面。
+// DeductAI AI 按 tokens 后计量扣费（ADR-0062 票1）。调用方只传事实（prompt/completion
+// 字符长度 + 服务端铸造的 requestID），tokens 估算、分桶换算、上下限与幂等全部内聚在积分域：
+// 估算见 estimateAITokens，积分换算见 aiPointsForTokens；幂等键 ai_tokens:{userID}:{requestID}，
+// 一次服务端请求只扣一次（重放即新请求、新消费）。
 func (s *PointsService) DeductAI(ctx context.Context, userID int, requestID string, promptChars, completionChars int) (*AITokensResult, error) {
 	total, prompt, completion := estimateAITokens(promptChars, completionChars)
 	points := aiPointsForTokens(total)
@@ -925,10 +925,10 @@ func (s *PointsService) DeductAI(ctx context.Context, userID int, requestID stri
 		return nil, ErrInsufficientPoints
 	}
 	err := s.db.Transaction(func(tx *gorm.DB) error {
-		// 幂等键 ai_tokens:{requestID}（ADR-0023）：由调用方传稳定请求标识
+		// 幂等键 ai_tokens:{userID}:{requestID}（ADR-0062 票1）：requestID 由服务端铸造
 		_, err := ApplyTx(tx, PointsEntry{
 			UserID: userID, Delta: -points, Reason: "ai_tokens", RefType: "ai_chat", RefID: requestID,
-			IdemKey: AITokensIdemKey(requestID),
+			IdemKey: AITokensIdemKey(userID, requestID),
 		})
 		if errors.Is(err, ErrPointsProcessed) {
 			// 并发窗口同键已扣：与既有 isDuplicateError 分支语义一致，视为成功

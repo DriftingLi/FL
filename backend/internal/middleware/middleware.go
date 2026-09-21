@@ -31,13 +31,12 @@ const (
 // Claims JWT 声明（统一由 security 会话模块持有）。
 type Claims = security.Claims
 
-// RequestID 为每个请求注入唯一 ID。
+// RequestID 为每个请求注入唯一 ID，**始终由服务端铸造**（ADR-0062 票1）。
+// 调用方供给的 X-Request-ID 不被采纳：同一个 ID 既进 AI 计量的幂等键、又进访问与审计日志，
+// 采信外部值等于把「这次消费发生过没有」交给被计量方决定（固定一个头值即成免扣费通道）。
 func RequestID() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		rid := c.GetHeader("X-Request-ID")
-		if rid == "" {
-			rid = uuid.NewString()
-		}
+		rid := uuid.NewString()
 		c.Set(string(CtxRequestID), rid)
 		c.Header("X-Request-ID", rid)
 		c.Next()

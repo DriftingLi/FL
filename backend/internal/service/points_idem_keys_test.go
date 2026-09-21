@@ -19,8 +19,8 @@ func TestPointsIdemKeyFormats(t *testing.T) {
 		want string
 	}{
 		// ===== 直记键 =====
-		{"redeem", RedeemIdemKey("course:42"), "redeem:course:42"},
-		{"ai_tokens", AITokensIdemKey("req-abc-123"), "ai_tokens:req-abc-123"},
+		{"redeem", RedeemIdemKey("course:42", 7), "redeem:course:42:7"},
+		{"ai_tokens", AITokensIdemKey(7, "req-abc-123"), "ai_tokens:7:req-abc-123"},
 		{"accepted_bonus", AcceptedBonusIdemKey(101), "accepted_bonus:101"},
 		{"accept_action", AcceptActionIdemKey(101), "accept_action:101"},
 		{"contribution_approved", ContributionApprovedIdemKey(7), "contribution_approved:7"},
