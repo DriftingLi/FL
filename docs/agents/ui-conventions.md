@@ -139,5 +139,5 @@ node scripts/check-el-controls.mjs --diff origin/master   # 只看新增行（�
 - **新增样式禁止硬编码色值**：深色模式是靠翻 CSS 变量实现的，只对走 `var()` 的声明生效；裸 hex 不参与变量链，暗色下保持亮色 → 「暗底亮块」崩坏。一律用 `design-tokens.css` 的变量或 Tailwind 原子类。
   CI 会对 PR 的新增行做检查（`scripts/check-bare-hex.sh --diff`），豁免 `var(--token, #fallback)` 防御写法、`#fff`/`#000`、注释行与 `<script>` 块（canvas 色板属合理存在）。存量进度自查：`bash scripts/check-bare-hex.sh --all frontend/src`。
 
-- **主题切换按钮要覆盖所有布局**：现装在 `SidebarLayout`（学员/导师/管理/招聘四端继承它）与 `ValuationLayout`。
+- **主题切换按钮要覆盖所有布局**：现装在 `SidebarLayout`（学员/讲师/管理/招聘四端继承它）与 `ValuationLayout`。
   认证布局 `AuthPageShell` 曾漏装，导致系统深色偏好的用户在登录页既看到崩坏画面、又无法切回浅色（#554）。**新增任何独立布局时，必须一并评估主题入口**——这条已踩两次（#432 补了 ValuationLayout，#554 补 AuthPageShell）。
