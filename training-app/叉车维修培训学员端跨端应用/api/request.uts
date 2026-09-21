@@ -40,6 +40,23 @@ const BEARER_PREFIX = 'Bearer '
  */
 export const FORBIDDEN_MESSAGE_PREFIX = '403:'
 
+/**
+ * **404（资源不存在）错误的可识别前缀** —— 单点真源，不许在别处另写字面量。
+ *
+ * 与 `FORBIDDEN_MESSAGE_PREFIX` 同款理由（同一处坑位）：状态码只能走**消息前缀**承载，
+ * 因为 UTS→Kotlin 不允许给 `any` 动态加 `statusCode`（`error18`），而本仓没有 `extends Error` 的先例。
+ *
+ * 为什么 404 也要单独成一支（#1204）：**「未建」是预期分支，不是失败** ——
+ * 新用户的 `GET /resume` 就是 404，调用方要据此静默（不弹「加载失败」/展示完善度引导）。
+ * 旧实现没有这一支，调用方只能**按后端中文文案**（`不存在` / `404`）逐字匹配消息，
+ * 后端文案一改语义就静默改变，且两端各复制一份判据。
+ *
+ * 消费方：`api/resume.uts` 的 `isResumeNotFound()`（两个简历页面共用同一判定实现）。
+ * ⚠️ 边界（照实记，与 403 同）：这是**字符串协议**，弱于类型化错误对象
+ * （且前缀会出现在 `errMsg(e)` 的返回值里，直接展示该串的调用方会看到 `404:` 开头）。
+ */
+export const NOT_FOUND_MESSAGE_PREFIX = '404:'
+
 
 /** 请求配置 */
 export type RequestOptions = {
@@ -232,6 +249,21 @@ function handleStatus(statusCode : number, body : UTSJSONObject, silent : boolea
         //    （`(err as any).statusCode = 403` 在 UTS→Kotlin 下编不过，error18）。
         const forbiddenErr = new Error(FORBIDDEN_MESSAGE_PREFIX + forbiddenMsg)
         reject(forbiddenErr)
+        return true
+    }
+
+    // 404：**资源不存在**（#1204）。与 403 同构：走**消息前缀**承载状态码，而不是动态属性。
+    // 「未建」在很多端点是**预期分支**（新用户没有简历就是 404）⇒ 调用方要能把它与真失败分开；
+    // 不给这一支时，调用方只能按后端中文文案匹配消息（文案一改，语义静默改变）。
+    // 与「HTTP 错误」分支的区别只有错误对象的可识别前缀：toast 文案、退出码语义均不变。
+    if (statusCode == 404) {
+        let notFoundMsg = '资源不存在'
+        const notFoundBodyMsg = body['message']
+        if (notFoundBodyMsg != null) {
+            notFoundMsg = notFoundBodyMsg as string
+        }
+        showError(notFoundMsg, silent)
+        reject(new Error(NOT_FOUND_MESSAGE_PREFIX + notFoundMsg))
         return true
     }
 
