@@ -28,6 +28,69 @@ import type { MarkdownBlock } from '../types/index'
 export const SUBSET_CHAPTER = 'chapter'
 /** 子集档位：内容精选（三端交集——表格与公式都降级为原始文本） */
 export const SUBSET_FEATURED = 'featured'
+/**
+ * 子集档位：论坛正文（ADR-0025 第三档）。
+ *
+ * 与内容精选档**块集接近但不等同**，且两者是**各自的声明**：内容精选取三端交集是因为它面向门户
+ * 访客与搜索引擎；论坛档不含表格是因为移动端不做行内渲染与表格渲染，**不含 image** 是因为论坛
+ * 图文分离（正文内嵌图片与 Web 同口径展开成 alt 文本，图片走 `images` 数组）。
+ * 「按端分档」的含义就是：**两端可以不同，且各自声明**。
+ */
+export const SUBSET_FORUM = 'forum'
+
+/**
+ * 子集**成员名** —— 声明表与解析器共用的唯一词汇表（ADR-0025 决策⑤：声明与解析同源，
+ * 分家即两处事实；决策⑥把子集收成一份**可执法**的声明）。
+ *
+ * 解析器的每个块产生点都经 `subsetHasMember()` 闸门：**声明表里没有的成员，解析器不产对应块**。
+ * 于是「子集 = 本档声明的那几个成员」是代码里可枚举的真值，而不是注释里的一句散文 ——
+ * 给某档的声明表加一行而解析器产不出对应块，行为对账用例会判红（见
+ * `utils/markdownSubsetBehavior.test.js`）。
+ *
+ * ⚠️ **段落不入声明表**：它是**不可关闭的地板**。根 `CONTEXT.md` 的硬口径是「会让内容读不出来的
+ * 降级必须在每一端补齐」⇒ 任何未被本档声明的语法，只能**退回可见的段落文本**（表格退回逐行原始
+ * 文本、mermaid 退回围栏源码都是这个地板在承重），绝不允许「声明里没有 ⇒ 内容消失」。
+ */
+export const MEMBER_HEADING = 'heading'
+export const MEMBER_LIST = 'list'
+export const MEMBER_QUOTE = 'quote'
+export const MEMBER_CODE = 'code'
+export const MEMBER_DIVIDER = 'divider'
+export const MEMBER_IMAGE = 'image'
+export const MEMBER_TABLE = 'table'
+
+/** 章节档声明：可信面全集（唯一的含表格档） */
+export const SUBSET_MEMBERS_CHAPTER : string[] = [
+	MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE,
+	MEMBER_CODE, MEMBER_DIVIDER, MEMBER_IMAGE, MEMBER_TABLE,
+]
+/** 内容精选档声明：三端交集（不含表格） */
+export const SUBSET_MEMBERS_FEATURED : string[] = [
+	MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE,
+	MEMBER_CODE, MEMBER_DIVIDER, MEMBER_IMAGE,
+]
+/** 论坛档声明（ADR-0025）：比内容精选档**少一个 image** —— 论坛是图文分离，正文内嵌 `![alt](url)`
+ *  与 Web 同口径**展开成 alt 文本**（根 ADR-0044：图片一律走 `images` 数组），故不产 image 块；
+ *  该语法落在段落地板上，`stripInline` 把它剥成 alt 文本（可见、不丢）。 */
+export const SUBSET_MEMBERS_FORUM : string[] = [
+	MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE,
+	MEMBER_CODE, MEMBER_DIVIDER,
+]
+
+/**
+ * 取某档的成员声明表。未知档位退到**章节档** —— 与 `parseMarkdown` 的缺省档一致
+ * （缺省是 `SUBSET_CHAPTER`，故这里也必须同向，否则「缺省」在两处含义不同）。
+ */
+export function subsetMembers(subset : string) : string[] {
+	if (subset == SUBSET_FEATURED) return SUBSET_MEMBERS_FEATURED
+	if (subset == SUBSET_FORUM) return SUBSET_MEMBERS_FORUM
+	return SUBSET_MEMBERS_CHAPTER
+}
+
+/** 该档是否声明了某成员（解析器的块产生点一律经它闸门 —— 声明即行为） */
+export function subsetHasMember(subset : string, member : string) : boolean {
+	return subsetMembers(subset).indexOf(member) >= 0
+}
 
 /** 表格块的 level 取值：表头行（表格第一行） */
 export const TABLE_LEVEL_HEAD = 1
@@ -175,14 +238,20 @@ function normalizeTableRow(raw : string[], width : number) : string[] {
 /**
  * 解析 markdown 文本为块数组
  * @param markdown 原始 markdown 文本
- * @param subset 子集档位：`chapter`（缺省，章节正文）/ `featured`（内容精选，三端交集）
+ * @param subset 子集档位：`chapter`（缺省，章节正文）/ `featured`（内容精选，三端交集）/
+ *               `forum`（论坛正文，ADR-0025 第三档）
  * @returns MarkdownBlock[] 渲染块列表
  */
 export function parseMarkdown(markdown : string, subset : string = SUBSET_CHAPTER) : MarkdownBlock[] {
 	const blocks : MarkdownBlock[] = []
 	if (markdown.length == 0) return blocks
 
-	const isFeatured = subset == SUBSET_FEATURED
+	// 本档的成员声明表：下面每个**可开关**的块产生点都问一次（ADR-0025 决策⑤——声明与解析同源）。
+	// 段落兜底不问（它是地板，见 MEMBER_HEADING 上方那段注释）。
+	const members = subsetMembers(subset)
+	function hasMember(member : string) : boolean {
+		return members.indexOf(member) >= 0
+	}
 	const lines = markdown.split('\n')
 	let i = 0
 	let inCodeBlock = false
@@ -231,7 +300,7 @@ export function parseMarkdown(markdown : string, subset : string = SUBSET_CHAPTE
 		const line = trim(rawLine)
 
 		// 代码块开关
-		if (line.startsWith('```')) {
+		if (hasMember(MEMBER_CODE) && line.startsWith('```')) {
 			if (inCodeBlock) {
 				// 结束代码块
 				blocks.push({
@@ -292,9 +361,9 @@ export function parseMarkdown(markdown : string, subset : string = SUBSET_CHAPTE
 			continue
 		}
 
-		// 表格（仅章节档；内容精选档走三端交集，表格退回逐行原始文本）
+		// 表格（只在**声明了 table 的档**；未声明的档走下面的段落地板，退回逐行原始文本）
 		// 表头行本身不能是分隔行，否则孤立的 `| --- |` 会自成一格单列表
-		if (!isFeatured && hasTablePipe(line) && !isTableDelimiterRow(line)
+		if (hasMember(MEMBER_TABLE) && hasTablePipe(line) && !isTableDelimiterRow(line)
 			&& i + 1 < lines.length && isTableDelimiterRow(trim(lines[i + 1]))) {
 			flushList()
 			flushQuote()
@@ -314,7 +383,7 @@ export function parseMarkdown(markdown : string, subset : string = SUBSET_CHAPTE
 		}
 
 		// 分隔线
-		if (line == '---' || line == '***' || line == '___') {
+		if (hasMember(MEMBER_DIVIDER) && (line == '---' || line == '***' || line == '___')) {
 			flushList()
 			flushQuote()
 			blocks.push({
@@ -329,7 +398,7 @@ export function parseMarkdown(markdown : string, subset : string = SUBSET_CHAPTE
 
 		// 标题 # ~ ######
 		const headingMatch = line.match(/^(#{1,6})\s+(.*)$/)
-		if (headingMatch != null && headingMatch!.length >= 3) {
+		if (hasMember(MEMBER_HEADING) && headingMatch != null && headingMatch!.length >= 3) {
 			flushList()
 			flushQuote()
 			const levelStr = headingMatch![1] ?? ''
@@ -347,7 +416,7 @@ export function parseMarkdown(markdown : string, subset : string = SUBSET_CHAPTE
 		}
 
 		// 引用 >
-		if (line.startsWith('>')) {
+		if (hasMember(MEMBER_QUOTE) && line.startsWith('>')) {
 			flushList()
 			const content = trim(line.substring(1))
 			quoteLines.push(stripInline(content))
@@ -357,7 +426,7 @@ export function parseMarkdown(markdown : string, subset : string = SUBSET_CHAPTE
 
 		// 无序列表 - / * / +
 		const ulMatch = line.match(/^[-*+]\s+(.*)$/)
-		if (ulMatch != null && ulMatch!.length >= 2) {
+		if (hasMember(MEMBER_LIST) && ulMatch != null && ulMatch!.length >= 2) {
 			flushQuote()
 			if (listType != 'ul') {
 				flushList()
@@ -370,7 +439,7 @@ export function parseMarkdown(markdown : string, subset : string = SUBSET_CHAPTE
 
 		// 有序列表 1. 2.
 		const olMatch = line.match(/^\d+\.\s+(.*)$/)
-		if (olMatch != null && olMatch!.length >= 2) {
+		if (hasMember(MEMBER_LIST) && olMatch != null && olMatch!.length >= 2) {
 			flushQuote()
 			if (listType != 'ol') {
 				flushList()
@@ -383,7 +452,7 @@ export function parseMarkdown(markdown : string, subset : string = SUBSET_CHAPTE
 
 		// 图片 ![alt](url)
 		const imgMatch = line.match(/^!\[([^\]]*)\]\(([^)]+)\)$/)
-		if (imgMatch != null && imgMatch!.length >= 3) {
+		if (hasMember(MEMBER_IMAGE) && imgMatch != null && imgMatch!.length >= 3) {
 			flushList()
 			flushQuote()
 			blocks.push({

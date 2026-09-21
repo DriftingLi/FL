@@ -9,7 +9,7 @@
 | **封装层** | `components/ui/` 下的自建组件集合。业务页面**不得直接使用 Element Plus 控件**，一律经此层（ADR-0035）。例外：`el-table`（197 处，走全局样式覆盖，ADR-0037）与 `el-radio` / `el-radio-button`（组内内容项，ADR-0038）。 |
 | **分段控件** | `UiSegmentTabs`，带滑动指示条的选项卡。激活态必须用品牌语义色，**不可用 `bg-panel`** —— 与卡片同值会让滑块在卡片内彻底隐身（浅色 `#FFFFFF` on `#FFFFFF`、深色 `#1E293B` on `#1E293B`，两套主题都失效）。 |
 | **下划线 tab** | `UiUnderlineTabs`，**视图档位**用（临时切换看什么，如 编写/预览）。**数据档位**（会被保存的选择，如 纯文本/Markdown）仍用 `UiSegmentTabs`（胶囊 + 实心品牌色滑块）。两者**不可互换**：同一卡片里并排两组同款胶囊，用户分不清哪组会永久保存。激活下划线必须用品牌语义色 `--color-ui-*`，**不可 `bg-panel`**（与卡片同值会隐身，同分段控件的硬约束）；调用方给顶栏 1px 底边，组件用 `-mb-px` 压住它。 |
-| **图标工具栏** | `MarkdownToolbar`，一排图标按钮：**每个按钮都要有 `UiTooltip` 中文提示 + `aria-label`**（文案与图标名的唯一来源是命令表 `utils/markdownToolbar.ts`，不许在组件里另抄）。置灰用 `aria-disabled` + 视觉降透明度，**不用原生 `disabled`** —— 原生 disabled 的按钮不派发鼠标事件，提示气泡会整排消失。 |
+| **图标工具栏** | `MarkdownToolbar`，一排图标按钮：**每个按钮都要有 `UiTooltip` 中文提示 + `aria-label`**（文案与图标名的唯一来源是命令表 `utils/markdownToolbar.ts`，不许在组件里另抄）。置灰用 `aria-disabled` + 视觉降透明度，**不用原生 `disabled`** —— 原生 disabled 的按钮不派发鼠标事件，提示气泡会整排消失。**按钮承诺的判据**：按钮插进去的语法必须**在本端预览与发布所用的同一渲染单点上真能渲染**（不是「在某个 markdown 实例上能解析」——裸 `new MarkdownIt()` 与生产实例的插件集不同，结论会相反）；新增按钮逐条过**准入三判据**（频率 / 无对等轻量替代 / 渲染面无歧义降级），见 ADR-0052 的二次 grilling 补记。 |
 | **空态两级** | 独立占据内容区的空态（整页 / 列表 / 面板）用 `UiEmptyState`；**卡片正文内嵌**的一行提示保留纯文案（统一 `text-ink-3`），不塞组件 —— 后者换成组件会多出图标与整块留白，比问题本身更重。 |
 | **列表四段式** | `UiAsyncSection`：**空态 → 错误态（+ retry）→ 骨架 → 内容**的唯一编排实现（props `loading` / `error` / `empty` / `retrying`，slots `default` / `empty` / `error` / `skeleton`，`@retry`）。页面只提供 loader 与 slot，**不得再手写四分支链**。空态判据与「筛选变化回第一页」在 `useAsyncPage` 内，不再各页手写（ADR-0053）。**判据只认 `isEmpty`**（第十一波 #1101）：新增 `:empty=` 只允许 `isEmpty`（composable 返回的，或页面里 `const isEmpty = …` 具名派生的）或登记例外，不得再写 `x.length === 0` / `!data` / 写死 `false`——守卫 `check-async-section` 机械拦截。**404 = 空态、其余 = 错误态**：`useAsyncPage` 提供 `loadErrorKind`（复用 `api/client.ts` 的 `ApiErrorKind`），资源不存在时 `isEmpty` 同样为真，**详情页不再自建「未找到」布尔**；判据形状特殊（一个 loader 写两个列表、以 total 为准）的页面复用 `utils/listState.ts` 的 `isEmptyValue` / `isEmptyList`，不要再抄一份表达式。**追加式分页（「加载更多」）只有 `useAsyncPage({ mode: 'append' })` 一个入口**（`itemsRef` + `loadMore` / `hasMore` / `loadingMore` / `reset`），页面不得再手算页码与累积。**表格页是它的一档**（`skeleton="none"`）：`el-table` 保留自带 loading 遮罩，空态仍按本表「表格」行（ADR-0037）——不为统一观感把 10+ 个管理页的加载态换掉。展示型第 5 态（如章节不存在）用 `UiEmptyState` + action 表达，**不自造状态**。 |
 | **筛选栏** | `UiFilterBar`，只提供容器与 `#filters` / `#actions` 两个插槽，字段由各页自写；**不做 prop 化** —— 各页字段数与按钮语义不一致，prop 化会让组件持续膨胀。 |
@@ -109,6 +109,7 @@ node scripts/check-el-controls.mjs --diff origin/master   # 只看新增行（�
 
 1. 发帖 / 回复输入区的**属地披露提示**（「发布内容会显示 IP 属地」，文案单点 `frontend/src/utils/forumDisplay.ts` 的 `FORUM_REGION_NOTICE`）属于「必要的功能性提示」而非装饰——属地在点发布那一刻才产生，事前告知比事后解释便宜（ADR-0045）。
 2. Markdown 档的**能力与边界提示**（文案单点 `forumDisplay.FORUM_MARKDOWN_HINT`，由 `ForumMarkdownInput` 渲染在输入框底部）——它告知两条硬边界：**表格不渲染**、**图片要走粘贴区**（正文里的 `![]()` 会被展开成文字）。依据是 ADR-0046 自己的判据「判据放在作者看得见的地方（编辑器提示 + 预览里的越界说明）」，内容精选编辑器已有同款（ADR-0052）。
+   **能力清单改为由子集真值表派生（口径随 #1241 落档，实现随 #1253）**：今天这段文案把九项能力**手抄**成一句话（「支持 标题、加粗、斜体、引用、代码、链接、列表、任务列表、公式与图表；表格不渲染，图片请用下方粘贴区」），子集一变就成假话——它曾是四处手工同步点里的第四处。裁定后**能力清单由白名单真值表生成**（两条边界仍固定文案），因此落地后它不再是手工同步点，也不再是「第二事实源」；ADR-0052 评审补记里那条「能力提示补上公式与图表」的可发现性要求由此保住（不再靠人记得改）。
 
 按本条约定清理 hint 时**跳过这两条**。
 
