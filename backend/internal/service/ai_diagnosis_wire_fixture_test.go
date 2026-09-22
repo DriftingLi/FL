@@ -22,7 +22,7 @@ const wireNew20260921 = `{"code":200,"data":{
  {"image_id":"img_ee752a0879d6","url":"/assistant/static/fault_images/制动系统/1721219449286.png","file_path":"E:\\temp\\assistant_delivery_20260921\\knowledge\\static\\fault_images\\制动系统\\1721219449286.png","caption":"","source_type":"markdown_case","kind":"operation_photo","anchor_type":"strong_step","display":"inline_large","click_action":"preview","step_no":1,"doc_title":"B04_制动蓄能器压低","system":"制动系统","source_file":"B04_制动蓄能器压低.md"},
  {"image_id":"img_0fd6a1f4d3ab","url":"/assistant/static/manual/ep_linde_e_1286_01_manual/page_448_10052.png","file_path":"","caption":"液压原理图局部","source_type":"pdf_manual","kind":"diagram_page","anchor_type":"global_diagram","display":"inline_large","click_action":"open_pdf","step_no":null,"doc_title":"林德E1286","system":"","source_file":"ep_linde_e_1286_01_manual.pdf"}],
 "answer_sources":[
- {"id":"fault-136","text":"检查蓄能器压力。<<IMAGE:/assistant/static/manual/ep_linde_e_1286_01_manual/page_448_10052.png>>","metadata":{"source_url":"/assistant/static/manual/ep_linde_e_1286_01_manual/ep_linde_e_1286_01_manual.pdf#page=448","page_start":448,"page_end":448,"doc_title":"林德E1286","image_refs":[{"image_id":"img_0fd6a1f4d3ab","url":"/assistant/static/manual/ep_linde_e_1286_01_manual/page_448_10052.png"}]},"score":0.81,"dense_score":0.79,"bm25_score":12.4},
+ {"id":"fault-136","text":"检查蓄能器压力。<<IMAGE:/assistant/static/manual/ep_linde_e_1286_01_manual/page_448_10052.png>> [IMG:img_ee752a0879d6]","metadata":{"source_url":"/assistant/static/manual/ep_linde_e_1286_01_manual/ep_linde_e_1286_01_manual.pdf#page=448","page_start":448,"page_end":448,"doc_title":"林德E1286","image_refs":[{"image_id":"img_0fd6a1f4d3ab","url":"/assistant/static/manual/ep_linde_e_1286_01_manual/page_448_10052.png"},{"image_id":"img_ee752a0879d6","url":"/assistant/static/fault_images/制动系统/1721219449286.png"}]},"score":0.81,"dense_score":0.79,"bm25_score":12.4},
  {"id":"case-31","text":"更换制动片后复测。","metadata":{},"score":0.6,"dense_score":0.6,"bm25_score":3.1}],
 "delivery_contract":{},"delivery_mode":"full","evidence":[],"evidence_count":2,"exact_faults":[],
 "intent":"diagnose","is_llm_generated":true,"llm_error":null,"maintenance_intervals":[],
@@ -145,9 +145,19 @@ func TestDiagnosisWire_NewVersionTokensNormalized(t *testing.T) {
 	if strings.Join(chunks, "") != content {
 		t.Fatalf("切块拼接 != 归一后全文:\njoined=%q\ncontent=%q", strings.Join(chunks, ""), content)
 	}
-	// 来源面：标记与 PDF 锚点原样透传（strip 仍在前端），只是绝对前缀被归一
-	if len(sources) != 2 || !strings.Contains(sources[0].Text, "<<IMAGE:/assistant/static/manual/") {
-		t.Fatalf("sources 形状不符: %+v", sources)
+	// 来源面：历史标记透传，且**结构化来源正文里的 [IMG:] 令牌换成两端认得的 <<IMAGE:>> 形状**
+	// （实测 fault-* 来源 text 里带令牌，不换形学员会在来源卡片里看到内部标识）
+	if len(sources) != 2 {
+		t.Fatalf("sources 条数不符: %d", len(sources))
+	}
+	if !strings.Contains(sources[0].Text, "<<IMAGE:/assistant/static/manual/") {
+		t.Fatalf("既有 manual 标记应透传: %q", sources[0].Text)
+	}
+	if want := "<<IMAGE:/assistant/static/fault_images/制动系统/1721219449286.png>>"; !strings.Contains(sources[0].Text, want) {
+		t.Fatalf("来源令牌应换成 %s，got %q", want, sources[0].Text)
+	}
+	if strings.Contains(sources[0].Text, "[IMG:") {
+		t.Fatalf("来源正文不应残留裸令牌: %q", sources[0].Text)
 	}
 	if !strings.HasSuffix(sources[0].Metadata.SourceURL, ".pdf#page=448") {
 		t.Fatalf("source_url 的 #page 锚点应保留: %s", sources[0].Metadata.SourceURL)
@@ -215,20 +225,28 @@ func TestNormalizeDiagnosisImages(t *testing.T) {
 	}
 }
 
-// TestCanonicalizeDiagnosisSources /app/static/ 前缀归一（Web 与移动端只认 assistant 形状）。
+// TestCanonicalizeDiagnosisSources 来源面两件事：/app/static/ 前缀归一、[IMG:id] 换回
+// <<IMAGE:>> 形状（未知 id 丢令牌）。
 func TestCanonicalizeDiagnosisSources(t *testing.T) {
+	idx := map[string]diagnosisImageRef{
+		"img_a1": {path: "/api/ai-assistant/diagnosis/manual/fault_images/x/1.png", raw: "/assistant/static/fault_images/x/1.png"},
+	}
 	sources := []DiagnosisSource{
-		{Text: "见 <<IMAGE:/app/static/manual/ep/page_1.png>>", Metadata: struct {
-			SourceURL string `json:"source_url"`
-			PageStart int    `json:"page_start"`
-			PageEnd   int    `json:"page_end"`
-		}{SourceURL: "/app/static/manual/ep/ep.pdf#page=1"}},
+		{Text: "见 <<IMAGE:/app/static/manual/ep/page_1.png>> 与 [IMG:img_a1] 以及 [IMG:img_missing]", Metadata: DiagnosisSourceMetadata{
+			SourceURL: "/app/static/manual/ep/ep.pdf#page=1",
+		}},
 		{Text: "已正确 <<IMAGE:/assistant/static/manual/ep/page_2.png>>"},
 	}
-	got := canonicalizeDiagnosisSources(sources)
+	got := canonicalizeDiagnosisSources(sources, idx)
 	if !strings.Contains(got[0].Text, "/assistant/static/manual/ep/page_1.png") ||
 		strings.Contains(got[0].Text, "/app/static/") {
 		t.Fatalf("Text 前缀未归一: %q", got[0].Text)
+	}
+	if !strings.Contains(got[0].Text, "<<IMAGE:/assistant/static/fault_images/x/1.png>>") {
+		t.Fatalf("已知令牌未换成来源标记: %q", got[0].Text)
+	}
+	if strings.Contains(got[0].Text, "[IMG:") || strings.Contains(got[0].Text, "img_missing") {
+		t.Fatalf("令牌（含未知的）不应残留: %q", got[0].Text)
 	}
 	if got[0].Metadata.SourceURL != "/assistant/static/manual/ep/ep.pdf#page=1" {
 		t.Fatalf("SourceURL 前缀未归一: %q", got[0].Metadata.SourceURL)

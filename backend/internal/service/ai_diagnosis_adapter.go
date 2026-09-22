@@ -239,11 +239,13 @@ func (a *diagnosisAssistantAdapter) Stream(ctx context.Context, sel AIModelSelec
 
 	// 图片表达归一（20260921 的 [IMG:id] 令牌 / 旧内联 markdown）：必须在切块与写来源容器
 	// **之前**——切块拼接恒等于全文这条不变式，只有对归一后的正文成立才有意义。
-	content := normalizeDiagnosisImages(resp.Data.SOPText, diagnosisImageIndex(resp.Data.AnswerImages))
+	// 同一份索引正文与来源共用（来源里的令牌换回两端认得的 <<IMAGE:>> 标记）。
+	imageIdx := diagnosisImageIndex(resp.Data.AnswerImages)
+	content := normalizeDiagnosisImages(resp.Data.SOPText, imageIdx)
 
 	// 请求标识透传（计费闸门消费）；来源写入共享容器
 	if b, _ := ctx.Value(diagnosisSourcesCtxKey{}).(*diagnosisSourcesBox); b != nil {
-		b.set(canonicalizeDiagnosisSources(resp.Data.AnswerSources))
+		b.set(canonicalizeDiagnosisSources(resp.Data.AnswerSources, imageIdx))
 	}
 
 	// 伪流式切块：按空行段落切（正文 markdown 分段结构），段落间补分隔符——
@@ -627,9 +629,10 @@ var (
 	diagnosisAltSanitizer = regexp.MustCompile("[\r\n\\[\\]`]")
 )
 
-// diagnosisImageRef 归一所需的最小图片信息（本站代理路径 + 替代文本）。
+// diagnosisImageRef 归一所需的最小图片信息（本站代理路径 + 助手侧原始静态 URL + 替代文本）。
 type diagnosisImageRef struct {
-	path    string
+	path    string // 本站代理 URL（正文图片用）
+	raw     string // 助手侧 /assistant/static/… URL（来源标记用——两端自行 strip 后拼代理）
 	caption string
 }
 
@@ -642,14 +645,40 @@ func diagnosisImageIndex(imgs []diagnosisAnswerImage) map[string]diagnosisImageR
 		if id == "" {
 			continue
 		}
-		if path, ok := diagnosisStaticProxyPath(im.URL); ok {
-			idx[id] = diagnosisImageRef{path: path, caption: im.Caption}
+		path, ok := diagnosisStaticProxyPath(im.URL)
+		if !ok {
+			continue
 		}
+		raw, ok2 := diagnosisCanonicalStaticURL(im.URL)
+		if !ok2 {
+			continue
+		}
+		idx[id] = diagnosisImageRef{path: path, raw: raw, caption: im.Caption}
 	}
 	if len(idx) == 0 {
 		return nil
 	}
 	return idx
+}
+
+// diagnosisCanonicalStaticURL 把助手静态 URL 归成 `/assistant/static/<root>/…` 绝对形状。
+// 交付方入库代码有写 `/app/static/…` 的（pdf_manual_parser），也有写 `/assistant/static/…`
+// 的（markdown_fault_parser）—— 两者对客户端是同一资源，但两端的 strip 规则只认后者。
+func diagnosisCanonicalStaticURL(u string) (string, bool) {
+	s := strings.TrimSpace(u)
+	if s == "" {
+		return "", false
+	}
+	for _, prefix := range []string{"/app/static/", "app/static/"} {
+		if len(s) >= len(prefix) && strings.EqualFold(s[:len(prefix)], prefix) {
+			s = "/assistant/static/" + s[len(prefix):]
+			break
+		}
+	}
+	if !strings.HasPrefix(s, "/assistant/static/") {
+		return "", false
+	}
+	return s, true
 }
 
 // diagnosisStaticProxyPath 把助手内网静态路径转成本站代理 URL（逐段百分号转义，中文案例
@@ -745,16 +774,28 @@ func diagnosisMarkdownImage(alt, path string) string {
 	return "![" + clean + "](" + path + ")"
 }
 
-// canonicalizeDiagnosisSources 把来源文本里的助手内网绝对前缀统一成 /assistant/static/。
-// 实测 20260921 的 answer_sources 已经是这一形状（`/app/static/` 出现在同响应的其他兄弟
-// 字段里），但交付方 pdf_manual_parser 入库写的就是 `/app/static/…` —— 该形状一旦漂进
-// sources，Web 的 stripAssistantPrefix 与移动端 aiSourcesDisplay 都会拼出坏 URL。在此单点
-// 归一，两端不必各自加规则。
-func canonicalizeDiagnosisSources(sources []DiagnosisSource) []DiagnosisSource {
+// canonicalizeDiagnosisSources 把来源面收拢到两端已有的那一套形状：
+//   - `[IMG:id]` 令牌 → `<<IMAGE:/assistant/static/…>>` 标记。**实测必做**：结构化故障码来源
+//     （id 形如 fault-498）的 text 里就带着令牌（交付方 markdown parser 入库写的是 `[IMG:id]`），
+//     而 Web 的 IMAGE_RE 与移动端 aiSourcesDisplay 只认 `<<IMAGE:>>` ⇒ 不换形学员会在
+//     「资料来源」卡片里看到 img_120bc2b77e66；未知 image_id 同样丢令牌。
+//   - `/app/static/` 绝对前缀 → `/assistant/static/`：交付方 pdf_manual_parser 入库写的就是
+//     前者（实测当前 sources 已是后者），一旦漂进来两端都会拼出坏 URL。
+//
+// 两处都在此单点做，两端不必各自加规则。
+func canonicalizeDiagnosisSources(sources []DiagnosisSource, idx map[string]diagnosisImageRef) []DiagnosisSource {
 	for i := range sources {
-		if text := sources[i].Text; strings.Contains(text, "/app/static/") {
-			sources[i].Text = strings.ReplaceAll(text, "/app/static/", "/assistant/static/")
-		}
+		text := diagnosisIMGTokenRe.ReplaceAllStringFunc(sources[i].Text, func(m string) string {
+			g := diagnosisIMGTokenRe.FindStringSubmatch(m)
+			if len(g) < 2 {
+				return ""
+			}
+			if ref, ok := idx[g[1]]; ok {
+				return "<<IMAGE:" + ref.raw + ">>"
+			}
+			return ""
+		})
+		sources[i].Text = strings.ReplaceAll(text, "/app/static/", "/assistant/static/")
 		if src := sources[i].Metadata.SourceURL; strings.Contains(src, "/app/static/") {
 			sources[i].Metadata.SourceURL = strings.ReplaceAll(src, "/app/static/", "/assistant/static/")
 		}
