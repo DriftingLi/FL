@@ -241,11 +241,14 @@ const MODULES = {
 
   'forgot-password': {
     extraDirs: [],
-    files: ['pages/forgot-password/forgot-password.uvue'],
-    extractDirs: [],
+    files: [
+      'pages/forgot-password/composables/useForgotPasswordForm.uts',
+      'pages/forgot-password/forgot-password.uvue',
+    ],
+    extractDirs: ['pages/forgot-password/composables'],
     crossModuleConsumers: [],
-    /** 超预算：forgot-password.uvue 676 */
-    budget: 'pending',
+    /** T12 手术（#650）：forgot-password.uvue 675→437（状态与动作下沉模块私有 composable）⇒ 执法面随之上线（原为「超预算 676」的 pending） */
+    budget: BUDGET,
     budgetOverrides: {},
     allowlistOwned: [],
     maxDepth: MAX_DEPTH,
