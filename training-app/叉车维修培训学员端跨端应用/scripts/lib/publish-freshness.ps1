@@ -49,17 +49,22 @@ function Get-PublishVerdict {
 
 <#
  .SYNOPSIS
-     「什么算 appResource 产物」的**唯一定义**：导出目录下所有 `.kt`（排除 `\www\`）。
+     「什么算 appResource 产物」的**唯一定义**：导出目录下所有 `.kt`（排除 `www` 段下的）。
 
  .DESCRIPTION
      为什么单独成函数（评审发现，2026-09-22）：门脚本与 `Test-AppResourceFreshness` 原先各自抄了一遍
      「递归找 `.kt` + 排除 `\www\`」—— **只有库这一份**进了守护，门那份是没证据的复制品。
      收成一处后，「产物口径」变了不可能只改一方。门脚本收集 `.kt` 喂 kotlinc 也走它。
+
+     ⚠️ 排除用的正则**与路径分隔符无关**（`[\\/]www[\\/]`），这不是洁癖：原先是 Windows-only 的
+     `\www\`，而本库的守护在 **ubuntu CI** 上跑 —— 那里 `/tmp/.../www/Y.kt` 不命中 Windows 写法，
+     于是「`www` 下的 `.kt` 不算产物」这条口径当场判红（CI run 35709221297，新守护刚落地就抓到的
+     潜伏跨平台缺陷；此前没有任何用例在 Linux 上执行过这条过滤）。
 #>
 function Get-AppResourceKtFiles {
     param([string]$ExportDir)
     return @(Get-ChildItem -LiteralPath $ExportDir -Recurse -Filter *.kt -File -ErrorAction SilentlyContinue |
-        Where-Object { $_.FullName -notmatch '\\www\\' })
+        Where-Object { $_.FullName -notmatch '[\\/]www[\\/]' })
 }
 
 <#

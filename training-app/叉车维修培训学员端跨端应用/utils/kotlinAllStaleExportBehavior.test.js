@@ -156,7 +156,7 @@ describe('新鲜度判据：产物是否覆盖当前树（同一份产物给两�
     expect(pick(out, 'EMPTY')).toBe('False|no-kt|0');
   });
 
-  it('`\\www\\` 下的 .kt 不算产物（与本脚本收集口径一致）', () => {
+  it('`www` 段下的 .kt 不算产物 —— 且这条口径**与路径分隔符无关**（CI 在 ubuntu 上跑）', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kotlin-fresh-www-'));
     fs.mkdirSync(path.join(dir, 'www'), { recursive: true });
     const kt = path.join(dir, 'www', 'Y.kt');
