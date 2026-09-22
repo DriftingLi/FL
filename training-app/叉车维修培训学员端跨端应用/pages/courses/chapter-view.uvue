@@ -17,6 +17,12 @@
             <text class="loading-text">正在加载...</text>
         </view>
 
+        <!-- 未解锁（#1268）：后端对未兑换的付费章节返回 404 —— 不是加载失败，重试必然再 404，
+             故这一支**不给重试入口**（给了就是硬死胡同）；「去解锁」待移动端上课程兑换面后补（票内排后项） -->
+        <view v-else-if="chapterLocked" class="empty-wrap">
+            <text class="empty-text">该章节需先解锁</text>
+        </view>
+
         <!-- 加载失败 -->
         <view v-else-if="detail == null || detail!.chapter_id == 0" class="empty-wrap">
             <text class="empty-text">章节内容加载失败</text>
@@ -71,7 +77,7 @@
     import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
     import { parseMarkdown } from '../../utils/markdown'
-    import { getCourseDetailApi, getChapterDetailApi } from '../../api/course'
+    import { getCourseDetailApi, getChapterDetailApi, isChapterNotFound } from '../../api/course'
     import { checkFavoriteApi, addFavoriteApi, removeFavoriteApi } from '../../api/favorite'
     import ChapterMarkdown from './components/chapter-markdown.uvue'
     import ChapterFileList from './components/chapter-file-list.uvue'
@@ -86,6 +92,14 @@
     const chapterId = ref<number>(0)
     const detail = ref<ChapterDetail | null>(null)
     const loading = ref<boolean>(true)
+
+    /**
+     * 本章是否「未解锁」（#1268）—— 唯一判据是后端 404，走 `api/course.uts` 的 `isChapterNotFound()`。
+     *
+     * 与 `detail` 分开持有：404 时 `detail` 仍是 `null`，若靠它渲染就只剩「加载失败 + 重试」那一支
+     * （对未解锁是误报，且重试永远失败）。每次 `loadDetail` 开头归零，防切章后带着上一章的判定。
+     */
+    const chapterLocked = ref<boolean>(false)
 
     /**
      * 本章收藏态（#1140）。
@@ -207,6 +221,7 @@
         if (courseId.value <= 0 || chapterId.value <= 0) return
         loading.value = true
         detail.value = null
+        chapterLocked.value = false
         study.stopStudy()
         try {
             const data = await getChapterDetailApi(courseId.value, chapterId.value)
@@ -220,6 +235,8 @@
             study.beginStudy(courseId.value, data.chapter_id)
         } catch (e) {
             console.error('[chapter-view] load failed:', e)
+            // 404 = 后端鉴权收回的「未解锁」（#1268），不是加载失败：判定只走 `isChapterNotFound()` 这一个出口
+            chapterLocked.value = isChapterNotFound(e)
         } finally {
             loading.value = false
         }

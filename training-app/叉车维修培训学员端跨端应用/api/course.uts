@@ -21,8 +21,8 @@
  * @note catch-mock 静默回退保持 T02 试点的既有决策（utils/mallPilotContract.test.js 锁定
  *   getMockCourseList 保留）；退役回退属「改口径」，本票不做。
  */
-import { getMapped, post } from './request'
-import { toNumber, toStr } from './helpers'
+import { getMapped, post, NOT_FOUND_MESSAGE_PREFIX } from './request'
+import { toNumber, toStr, errMsg } from './helpers'
 import type { CourseListResult, CourseDetail, CourseItem, ChapterItem, ChapterDetail, ChapterFile, SpecialtyItem, LevelItem, TagItem, CoursePrereq } from '../types/index'
 
 
@@ -457,24 +457,31 @@ export function getCourseDetailApi(courseId : number) : Promise<CourseDetail> {
  * 章节详情（含图文内容、附件、上/下章导航、学习状态）
  * @param courseId 课程 ID
  * @param chapterId 章节 ID
+ * @note #1268：**本函数不再 catch**。原先它把所有错误折成 `chapter_id: 0` 的空详情，
+ *       页面据此显示「章节内容加载失败 + 重试」—— 而未兑换的付费章节后端返回 **404**
+ *       （第十四波 ADR-0062：正文与幻灯片开始鉴权，按「章节不存在」返回、不泄漏存在性），
+ *       那是「未解锁」不是「加载失败」，重试必然再 404 ⇒ 死胡同。现在错误一律向上抛，
+ *       由调用方经 `isChapterNotFound()` 分流（照 `getResumeApi()` 的 #1204 先例：api 层不 catch）。
+ * @note 空详情回退是**整体删除**而不是只对 404 例外：网络失败时它也落到页面同一个分支
+ *       （`detail == null` 与 `chapter_id == 0` 走一条 UI），删掉零行为变更，且不留「一条错误两条路」的歧义。
  */
 export function getChapterDetailApi(courseId : number, chapterId : number) : Promise<ChapterDetail> {
 	return getMapped<ChapterDetail>('/course/' + courseId + '/chapter/' + chapterId, null, (data : UTSJSONObject) : ChapterDetail => {
 		return buildChapterDetail(data)
-	}).catch((e) : ChapterDetail => {
-		console.warn('[getChapterDetailApi] network failed:', e)
-		// 返回空章节详情，UI 显示"加载失败"
-		return {
-			chapter_id: 0,
-			title: '',
-			content: '',
-			files: [] as ChapterFile[],
-			previous_chapter_id: 0,
-			next_chapter_id: 0,
-			study_status: '',
-			duration: 0,
-		} as ChapterDetail
 	})
+}
+
+/**
+ * 判断错误是否为「章节不存在 / 未解锁」（后端 `GET /course/:id/chapter/:id` 对未兑换的付费章节返回 404）。
+ *
+ * 这是该语义的**唯一判定出口** —— 与 `api/resume.uts` 的 `isResumeNotFound()` 同款（#1204：
+ * 判定不许在调用方各复制一份，也不许按后端中文文案匹配，文案一改语义就静默改变）。
+ *
+ * @param e `.catch` 收到的错误对象（类型未知，`any | null`）：非 Error 一律判 false。
+ */
+export function isChapterNotFound(e : any | null) : boolean {
+	// 404 由 `api/request.uts` 用消息前缀承载（读写两端共用同一常量，见 NOT_FOUND_MESSAGE_PREFIX 注释）
+	return errMsg(e, '').startsWith(NOT_FOUND_MESSAGE_PREFIX)
 }
 
 
