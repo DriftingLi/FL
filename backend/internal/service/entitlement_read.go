@@ -14,7 +14,8 @@ import (
 
 // CourseSKU 课程权益 sku（course:<courseID>，ref_id=<courseID>），与 RealPaperSKU 同形。
 // 兑换写入与门禁读取同取此处——sku 词汇表出现第二个源时，「写了没人读 / 读了写不中」
-// 就是本案 unlock_real_paper 那笔死端的成因。
+// 就是本案 unlock_real_paper 那笔死端的成因；该死端现由对账表封住（shop_sku_registry.go：
+// 一行商城商品必须显式声明它的权益读者，否则 RedeemShop 拒兑）。
 func CourseSKU(courseID int) string { return fmt.Sprintf("course:%d", courseID) }
 
 // holdsEntitlement 权益判据：按 (主体, sku, ref_id) 查存在性。

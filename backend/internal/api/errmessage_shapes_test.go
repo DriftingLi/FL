@@ -49,13 +49,28 @@ func TestErrTableMessageShapes(t *testing.T) {
 		t.Errorf("前缀形态应回 500 + 「查询失败: db down」，实际 %d %q", code, msg)
 	}
 
-	// 无条件条目必须抢在 *ParseError 规则之前（旧闭包对解析错误也回同一个码），
-	// 而 {fallback} 表不是无条件：解析错误回自己的状态码。两者不可互换。
+	// 无条件条目**不再**吃解析错误（ADR-0062 票8：*ParseError 恒优先）——它回自己的状态码与自己的文案，
+	// 三个无条件条目构造器（WithSuccess 用的就是 errStatusAll）一条规则全盖住：
+	// 固定文案槽与人读前缀都不参与解析错误的渲染。
 	pe := badRequest("参数错了")
-	if c, _ := renderWithTable(t, errStatusAll(http.StatusInternalServerError), pe); c != 500 {
-		t.Errorf("无条件条目应把解析错误也渲染成 500（与旧闭包逐字等价），实际 %d", c)
+	for name, tbl := range map[string]*errStatusTable{
+		"errStatusAll":       errStatusAll(http.StatusInternalServerError),
+		"errStatusAllMsg":    errStatusAllMsg(http.StatusNotFound, "会话不存在"),
+		"errStatusAllPrefix": errStatusAllPrefix(http.StatusInternalServerError, "查询失败: "),
+	} {
+		if c, m := renderWithTable(t, tbl, pe); c != http.StatusBadRequest || m != "参数错了" {
+			t.Errorf("%s 不得吞掉解析错误（应回 400 +「参数错了」），实际 %d %q", name, c, m)
+		}
 	}
+	// {fallback} 表一直是这个行为；两者现在只在「非解析错误」上分岔：无条件条目兜一切、fallback 只兜未命中。
 	if c, _ := renderWithTable(t, &errStatusTable{fallback: http.StatusInternalServerError}, pe); c != http.StatusBadRequest {
 		t.Errorf("fallback 表应让解析错误回自己的 400，实际 %d", c)
+	}
+	// 非解析错误：两种表各自的原形状（无条件条目 = 该条的状态码 + 该条的文案槽；fallback = 兜底码）
+	if c, _ := renderWithTable(t, errStatusAll(http.StatusInternalServerError), errors.New("db down")); c != http.StatusInternalServerError {
+		t.Errorf("无条件条目仍兜住业务/DB 错误，实际 %d", c)
+	}
+	if c, _ := renderWithTable(t, &errStatusTable{fallback: http.StatusInternalServerError}, errors.New("db down")); c != http.StatusInternalServerError {
+		t.Errorf("fallback 表仍兜住未命中错误，实际 %d", c)
 	}
 }
