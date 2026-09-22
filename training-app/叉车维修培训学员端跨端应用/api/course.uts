@@ -19,7 +19,10 @@
  * @note 唯一裸出口 = updateCourseProgressApi（确认型透传、无 DTO 可映射），理由见其函数注释，
  *   并由 utils/coursesContract.test.js 的白名单锁死「未误加 DTO」。
  * @note catch-mock 静默回退保持 T02 试点的既有决策（utils/mallPilotContract.test.js 锁定
- *   getMockCourseList 保留）；退役回退属「改口径」，本票不做。
+ *   getMockCourseList 保留）；退役回退属「改口径」，T08 本票不做。
+ *   ⚠️ 例外一处（#1268 已按 ADR-0007「掩盖面」判据退役）：`getChapterDetailApi` 的 `.catch`
+ *   已删除 —— 它把后端的 404（未兑换的付费章节 = 鉴权收回）折成 `chapter_id:0` 空详情，
+ *   正是「把真实缺口伪装成正常首屏」的形态。其余 4 处回退原样保留，计数由 coursesContract 钉。
  */
 import { getMapped, post, NOT_FOUND_MESSAGE_PREFIX } from './request'
 import { toNumber, toStr, errMsg } from './helpers'
