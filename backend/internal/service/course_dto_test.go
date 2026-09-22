@@ -81,6 +81,7 @@ func TestChapterDTOShapeLock(t *testing.T) {
 	)
 
 	// 章节详情：files 恒存在（含空数组）+ 上下章 ID（null 语义）+ study_status
+	// + resume_position（ADR-0062 决策 11 的加性新 key，契约只增不破 / ADR-0048）
 	detail := ChapterDetailDTO{
 		ChapterDTO:        ch,
 		Files:             []ChapterFileDTO{},
@@ -91,7 +92,7 @@ func TestChapterDTOShapeLock(t *testing.T) {
 	assertShapeLock(t, detail,
 		"chapter_id", "course_id", "title", "content",
 		"content_type", "file_url", "description", "duration", "order_num", "created_at",
-		"files", "previous_chapter_id", "next_chapter_id", "study_status",
+		"files", "previous_chapter_id", "next_chapter_id", "study_status", "resume_position",
 	)
 }
 

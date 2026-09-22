@@ -67,6 +67,7 @@ export interface ChapterDetailDTO {
   next_chapter_id: number | null
   order_num: number
   previous_chapter_id: number | null
+  resume_position: number
   study_status?: string
   title: string
 }
@@ -99,6 +100,7 @@ export interface CourseDTO {
   credential_id: number | null
   description: string
   duration: number
+  entitled?: boolean
   is_featured: boolean
   is_hot: boolean
   level?: LevelBriefDTO

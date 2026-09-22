@@ -49,22 +49,22 @@ const detailContent = ref('')
 const replies = ref<ForumReplyItem[]>([])
 // 回复读取走 useAsyncPage 的 append 档（ADR-0060 票4 / spec #1201 场景 4）：
 // 此前这里是「一次取 100 条的内嵌预览」，尾部只能靠跳详情页看——同一个列表在
-// 论坛详情页能翻完、在章节讨论里翻不完。判据一律是服务端的 pages/total：
-// 本组件不再需要知道后端的页大小上限（原 `ForumReplyMaxPageSize` 那层耦合就此消失）。
+// 论坛详情页能翻完、在章节讨论里翻不完。判据一律是服务端的分页信封，且**只住在
+// composable 一处**（hasMore / total；票 10 起本组件不再另抄一份 pages/total ref），
+// 本组件因此不需要知道后端的页大小上限（原 `ForumReplyMaxPageSize` 那层耦合就此消失）。
 const REPLY_BATCH = 20
 const currentReplyTopicId = ref(0)
-const replyPages = ref(1)
-const replyTotal = ref(0)
 
 async function fetchReplyBatch(page?: number) {
   const p = page ?? 1
   const res = await forumApi.getTopic(currentReplyTopicId.value, undefined, undefined, p, REPLY_BATCH)
+  // 第 1 批顺带把帖子本体与正文带回来（展开面板的头部用）；分页信封不在这里另抄一份
+  // —— total/pages 的唯一宿主是 useAsyncPage（票 10：旧写法抄成组件局部 ref，
+  // 于是「加载更多」飞行中切帖时旧帖的信封会改写新帖面板上的「剩余 N 条」）
   if (p === 1) {
     expandedTopic.value = res.topic || null
     detailContent.value = res.topic?.content || ''
   }
-  replyPages.value = res.pages ?? 1
-  replyTotal.value = res.total ?? replies.value.length
   return res
 }
 const replyContent = ref('')
@@ -76,7 +76,8 @@ const {
   hasMore: replyHasMore,
   loadingMore: replyLoadingMore,
   loadMore: loadMoreReplies,
-  reset: resetReplies
+  reset: resetReplies,
+  total: replyTotal
 } = useAsyncPage(fetchReplyBatch, {
   credentialScoped: false, // 论坛不受证件过滤（#604 opt-out），与上方列表同口径
   mode: 'append',
@@ -327,13 +328,13 @@ watch(() => props.chapterId, () => {
                 />
               </template>
               <UiEmptyState v-else description="还没有回复" />
-              <!-- 翻页出口：判据是服务端的 pages/total，不是「本批满不满」（票4） -->
+              <!-- 翻页出口：判据是服务端的分页信封（composable 的 hasMore / total），不是「本批满不满」（票4） -->
               <p v-if="replyHasMore" class="mt-2 mb-0 text-center">
                 <UiButton variant="text" size="small" :disabled="replyLoadingMore" @click="loadMoreReplies">
                   {{ replyLoadingMore ? '加载中…' : `加载更多回复（剩余 ${Math.max(replyTotal - replies.length, 0)} 条）` }}
                 </UiButton>
               </p>
-              <p v-else-if="replyPages > 1" class="mt-2 mb-0 text-center text-xs text-ink-3">
+              <p v-else-if="replyTotal > REPLY_BATCH" class="mt-2 mb-0 text-center text-xs text-ink-3">
                 已显示全部 {{ replies.length }} 条回复，
                 <UiButton variant="text" size="small" @click="goTopicDetail">在详情页查看</UiButton>
               </p>

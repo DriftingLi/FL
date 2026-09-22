@@ -140,6 +140,7 @@ export interface CourseDTO {
   credential_id: number | null
   description: string
   duration: number
+  entitled?: boolean
   is_featured: boolean
   is_hot: boolean
   level?: LevelBriefDTO

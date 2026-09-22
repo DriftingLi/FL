@@ -581,6 +581,10 @@ func (h *AdminHandler) ToggleHrwaiUserStatus(c *gin.Context) {
 			}
 			return &service.StatusResultDTO{Status: int(next)}, nil
 		},
+		// 判定不动（票8 逐端点判过）：AdminService.ToggleHrwaiUserStatus 的「用户不存在」是裸
+		// errors.New、UPDATE 失败则原样上抛驱动错误 ⇒ api 侧无具名哨兵可分档，改判会把真 404
+		// 也答成 500。正解在 service 侧升哨兵（admin_service.go 本批不在改动面）。
+		// 已归位的一半：路径参数非数字今天回它自己的 400（票8 翻转前被这条表吞成 404）。
 		ErrStatus: errStatusAll(http.StatusNotFound),
 		Render: func(c *gin.Context, _ *idParam, resp *service.StatusResultDTO) {
 			msg := "用户已启用"
@@ -771,6 +775,8 @@ func (h *AdminHandler) ToggleTutorStatus(c *gin.Context) {
 			}
 			return &service.StatusResultDTO{Status: next}, nil
 		},
+		// 与 ToggleHrwaiUserStatus 同一判定：admin_service 的「讲师不存在」是裸 errors.New，
+		// 无哨兵可名 ⇒ 本批不动（参数错误那半边已随票8 归位 400）。
 		ErrStatus: errStatusAll(http.StatusNotFound),
 		Render: func(c *gin.Context, _ *idParam, resp *service.StatusResultDTO) {
 			msg := "讲师已启用"

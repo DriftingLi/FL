@@ -788,6 +788,7 @@ func (s *PointsService) RedeemCourse(ctx context.Context, userID, courseID int) 
 }
 
 // realPaperUnlockSKU 商城里真题解锁项的 SKU（价格单点：管理员调整该项即调整全部卷价）。
+// 这一行**不是可兑换商品**——它只是价格；对账表与拒兑判据见 shop_sku_registry.go（ADR-0062 票2 D1）。
 const realPaperUnlockSKU = "unlock_real_paper"
 
 // realPaperPriceFallback 商城项缺失时的兜底单价。
@@ -797,6 +798,8 @@ const realPaperPriceFallback = 300
 func RealPaperSKU(paperID int) string { return fmt.Sprintf("real_paper:%d", paperID) }
 
 // realPaperPrice 读取真题解锁单价（商城项缺失/停用时回退兜底价）。
+// 只认 enabled=true 的行 ⇒ 停售这一行等于把卷价悄悄改回硬编码，管理员改的是一行读不到的数据：
+// 要停「解锁真题」的兑换请走对账表（ErrRealPaperUnlockNotRedeemable），别动 enabled。
 func (s *PointsService) realPaperPrice() int {
 	var item model.PointsShopItem
 	if err := s.db.Where("sku = ? AND enabled = true", realPaperUnlockSKU).First(&item).Error; err != nil {
@@ -824,16 +827,23 @@ func (s *PointsService) RedeemRealPaper(ctx context.Context, userID, paperID int
 	})
 }
 
-// RedeemShop 兑换商城物品（真题等）。
+// RedeemShop 兑换商城物品。
+// 放行判据 = 对账表（shop_sku_registry.go）：表里有一行 enabled=true 只说明「有这件商品」，
+// 不说明「兑出去的权益有人读」⇒ 未登记读者的 sku 一律拒兑，扣分为零
+// （ADR-0062 票2 的 unlock_real_paper 死端就是这么漏出来的）。
 func (s *PointsService) RedeemShop(ctx context.Context, userID int, sku string) (*RedeemResult, error) {
 	var item model.PointsShopItem
 	if err := s.db.Where("sku = ? AND enabled = true", sku).First(&item).Error; err != nil {
 		return nil, ErrShopItemUnavailable
 	}
+	entSKU, entRefID, err := shopRedeemEntitlementKey(sku)
+	if err != nil {
+		return nil, err
+	}
 	return s.redeem(ctx, userID, redeemOpts{
 		lockKey: fmt.Sprintf("shop:sku:%d:%s", userID, sku),
-		sku:     sku,
-		refID:   sku,
+		sku:     entSKU,
+		refID:   entRefID,
 		price:   item.Price,
 		reason:  "redeem_" + sku,
 		refType: "shop",

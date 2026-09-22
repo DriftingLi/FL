@@ -28,7 +28,17 @@
         <UiEmptyState description="暂无申请记录"  />
       </template>
     </UiAsyncSection>
-    <div v-if="total > 0" class="text-xs text-ink-3 text-center">共 {{ total }} 条</div>
+    <div v-if="total > 0" class="flex flex-wrap items-center justify-center gap-3">
+      <span class="text-xs text-ink-3">共 {{ total }} 条</span>
+      <UiPagination
+        v-model:current-page="page"
+        :page-size="pageSize"
+        :total="total"
+        :show-total="false"
+        small
+        @current-change="handlePageChange"
+      />
+    </div>
   </div>
 </template>
 
@@ -40,21 +50,28 @@ import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiPagination from '@/components/ui/UiPagination.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 
 const items = ref<RecruitContactRequest[]>([])
 
-// 三态收编 useAsyncPage（#439）：loader 纯装配，错误收敛 loadError
+// 三态收编 useAsyncPage（#439）：loader 纯装配，错误收敛 loadError。
+// 票 10（ADR-0062 决策 10）：此前 loader 把 `page: 1, page_size: 20` 硬编码当全量，
+// 页面却显示「共 {{ total }} 条」——服务端有 45 条时第 21 条永不可见（屏上的总数与手里的
+// 条目不同源）。页码归分页三件套，条目与 total 出自同一份响应信封。
 const {
   loading,
   loadError,
   retrying,
   isEmpty,
   retry: handleRetry,
+  page,
+  pageSize,
   total,
-  run: load
+  run: load,
+  handlePageChange
 } = useAsyncPage(async () => {
-  const res = await recruitApi.listMyRequests({ page: 1, page_size: 20 })
+  const res = await recruitApi.listMyRequests({ page: page.value, page_size: pageSize.value })
   items.value = res?.items || []
   total.value = res?.total || 0
 }, { itemsRef: items })
