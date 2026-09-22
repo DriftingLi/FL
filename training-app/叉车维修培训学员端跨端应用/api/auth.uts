@@ -1,16 +1,22 @@
 /**
  * 认证相关 API
  *
- * 出口家族状态（T11 register 手术，parent #649 / ADR-0007）：
- * - 注册两条（`registerApi` / `emailRegisterApi`）走 `postMapped` 出口 —— 显式 DTO `LoginResult` + 手工映射。
- * - `getCaptchaApi` / `sendCodeApi` **仍是裸 `get` / `post`**（返回 `UTSJSONObject`）：本文件是 **5 个模块共用**的
- *   鉴权域 api（forgot-password / login / profile / profile-setup / register），改它们的返回类型会波及
- *   兄弟模块的**行为代码** —— 属本票「不碰其他模块行为代码」的边界；DTO 化留给 auth 三兄弟的联合票
- *   （#650 / #651）或 #652 / #653 批量收紧。register 侧的消费面已把它们登记为白名单并写明理由
- *   （`utils/registerContract.test.js` 的「域 api 出口」节）。
- * - `sendPhoneCodeApi` 是 `sendCodeApi` 的 register 态薄包装（页面按 void 用法消费），同样留裸。
+ * 出口家族状态（T11 register #649 + T12 forgot-password #650，ADR-0007）：
+ * - 注册两条（`registerApi` / `emailRegisterApi`）走 `postMapped` 出口 —— 显式 DTO `LoginResult` + 手工映射（T11）。
+ * - `getCaptchaApi` 走 `getMapped` 出口 —— 显式 DTO `CaptchaResult`（T12 #650）。三个消费方
+ *   （forgot-password / login / register）原先各自在裸 `UTSJSONObject` 上做 `data['id']` 取值，是同一处类型空洞；
+ *   DTO 化把「响应字段名只有后端知道」收敛到本文件的 `buildCaptcha`，三个消费方**同 PR 机械迁移**
+ *   （取值形态 `data.id` / `data.image`，行为不变）。请求形态逐字保持：`getMapped` 与 `get` 是同一
+ *   finalURL 手动 query 序列化 + 同 `opts.url` / `opts.method` 通路，只在拆包后接 mapper。
+ *   —— 这是 T11 复盘 ④「共享出口的 DTO 化留给 auth 兄弟票 #650/#651」的兑现；register 侧原先那条
+ *   「getCaptchaApi 留裸」的白名单锁随之反转（`utils/registerContract.test.js`，引用本票）。
+ * - `sendCodeApi` / `sendPhoneCodeApi` / `resetPasswordApi` **仍是裸 `post`**（返回 `UTSJSONObject`）：
+ *   三者的返回值**没有任何消费方落地**（void 用法；`resetPasswordApi` 后端 apitypes 标 `NoData: true`）
+ *   ⇒ 按 T03/T09 口径（void 透传不硬套 identity map）留裸，理由登记在各模块契约的白名单节。
+ *   `sendPhoneCodeApi` 是 `sendCodeApi` 的 register 态薄包装。
+ * - 其余登录 / 资料类出口本轮不动（登录页出口归 T13 #651）。
  */
-import { get, post, postMapped, put, del, uploadFile } from './request'
+import { get, post, getMapped, postMapped, put, del, uploadFile } from './request'
 import { toStr } from './helpers'
 import type { RequestOptions } from './request'
 import type { LoginParams, LoginResult, RegisterParams, EmailRegisterParams, UserInfo, UpdateProfileParams, UploadAvatarResult, ProfileChangeRequest, WechatLoginResult, RefreshTokenResult } from '../types/index'
@@ -274,9 +280,26 @@ export function sendCodeApi(target : string, channel : string, purpose : string,
 	return post('/auth/phone/send-code', payload)
 }
 
-/** 获取图形验证码 GET /captcha（无需鉴权）→ { id, image(base64 data URL) } */
-export function getCaptchaApi() : Promise<UTSJSONObject> {
-	return get('/captcha')
+/** 图形验证码响应 DTO（T12 #650 收紧：此前三个消费方各自在裸 UTSJSONObject 上取 id/image） */
+export type CaptchaResult = {
+	id : string
+	image : string
+}
+
+/**
+ * 从 UTSJSONObject 构造 CaptchaResult（手动映射，ADR-0003）
+ * @note 沿用原消费方的 `as string` 强转形态（缺字段即抛、由调用方 catch 记录），不改成静默兜底 —— 行为逐字保持
+ */
+function buildCaptcha(obj : UTSJSONObject) : CaptchaResult {
+	const id = obj['id'] as string
+	const image = obj['image'] as string
+	return { id: id, image: image } as CaptchaResult
+}
+
+/** 获取图形验证码 GET /captcha（无需鉴权）→ CaptchaResult { id, image(base64 data URL) } */
+export function getCaptchaApi() : Promise<CaptchaResult> {
+	// T12 #650：走 mapper-callback 出口（映射函数箭头包裹 —— 规则 M：裸 build* 引用作 mapper 会 error17）
+	return getMapped<CaptchaResult>('/captcha', null, (data : UTSJSONObject) : CaptchaResult => buildCaptcha(data))
 }
 
 /** 手机号验证码登录 POST /auth/phone/login */
