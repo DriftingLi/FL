@@ -42,6 +42,7 @@ import ElEmpty from 'element-plus/es/components/empty/index.mjs'
 import { ElForm, ElFormItem } from 'element-plus/es/components/form/index.mjs'
 import ElIcon from 'element-plus/es/components/icon/index.mjs'
 import ElImage from 'element-plus/es/components/image/index.mjs'
+import ElImageViewer from 'element-plus/es/components/image-viewer/index.mjs'
 import ElInput from 'element-plus/es/components/input/index.mjs'
 import ElInputNumber from 'element-plus/es/components/input-number/index.mjs'
 import ElLink from 'element-plus/es/components/link/index.mjs'
@@ -66,7 +67,7 @@ export const EP_LITE_WHITELIST = [
   ElCheckbox, ElCheckboxGroup, ElCol, ElCollapse, ElCollapseItem, ElConfigProvider,
   ElDescriptions, ElDescriptionsItem, ElDialog, ElDivider, ElDrawer,
   ElDropdown, ElDropdownItem, ElDropdownMenu, ElEmpty, ElForm, ElFormItem,
-  ElIcon, ElImage, ElInput, ElInputNumber, ElLink, ElOption, ElOptionGroup,
+  ElIcon, ElImage, ElImageViewer, ElInput, ElInputNumber, ElLink, ElOption, ElOptionGroup,
   ElPagination, ElPopconfirm, ElPopover, ElProgress, ElRadio, ElRadioButton,
   ElRadioGroup, ElRow, ElSelect, ElSkeleton, ElSwitch, ElTabPane, ElTable,
   ElTableColumn, ElTabs, ElTag, ElTooltip, ElUpload

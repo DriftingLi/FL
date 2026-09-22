@@ -1,6 +1,6 @@
 # ADR-0032: 外部诊断 RAG 服务作为专项功能传输通道
 
-- 状态：已接受（2026-09-07）；「后果」第二条（历史不持久化 sources）已被 ADR-0033 取代，其余条目继续有效
+- 状态：已接受（2026-09-07）；「后果」第二条（历史不持久化 sources）已被 ADR-0033 取代；§决策5 的「手册子路径白名单」已被 ADR-0063 修订为双静态根 + 逐段白名单，其余条目继续有效
 - 领域：AI 域 / 外部服务接入（第二个 AIModelPort 生产 adapter + 功能下线 + 公网入口收口；承接 ADR-0029 单 port、ADR-0030 注册表、ADR-0031 计量闸门）
 
 ## 背景
@@ -31,7 +31,7 @@
 
 ## 相关
 
-- ADR：`ADR-0029-AI模型接入单port化`（端口单一化，本 ADR 是其第二实现接入点）、`ADR-0030-AI功能注册表与窄域codegen试点`（功能键 / freePreview 透出）、`ADR-0031-AI消费统一计量闸门`（billed 判定与限免放行）
+- ADR：`ADR-0029-AI模型接入单port化`（端口单一化，本 ADR 是其第二实现接入点）、`ADR-0030-AI功能注册表与窄域codegen试点`（功能键 / freePreview 透出）、`ADR-0031-AI消费统一计量闸门`（billed 判定与限免放行）、`ADR-0063-外部诊断助手图片令牌归一与静态根放宽`（修订本 ADR §决策5 的白名单）
 - 代码：`backend/internal/service/ai_diagnosis_adapter.go`、`backend/internal/service/ai_diagnosis_proxy.go`、`backend/internal/service/ai_feature_registry.go`、`backend/internal/api/diagnosis.go`、`frontend/nginx-host.conf`、`docker-compose.prod.yml`
 - 迁移：`backend/migrations/000022_retire_fault_ai_features.up.sql`
 - 契约事实：forklift-assistant 交付包 openapi 实测（2026-09-05），契约样本见 `.scratch/`
