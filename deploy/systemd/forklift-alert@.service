@@ -1,0 +1,12 @@
+# 通用「某单元挂了」告警投递器（#1277）。实例名 = 失败单元的全名，如
+# forklift-alert@forklift-watchdog.service。刻意不带 OnFailure= —— 告警投递再失败就该
+# 停在 journald 里，不允许递归成风暴。
+[Unit]
+Description=叉车生产巡检告警投递（失败单元：%i）
+Documentation=https://github.com/DriftingLi/FL/issues/1277
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/forklift-watchdog.sh --alert-failure %i
+StandardOutput=journal
+StandardError=journal
