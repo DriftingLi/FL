@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"go.uber.org/zap"
@@ -80,36 +81,71 @@ func TestDiagnosisProxy_FaultCodes(t *testing.T) {
 	}
 }
 
-// TestDiagnosisProxy_Manual 手册资源代理：合法路径返回内容与 Content-Type；非法路径拒绝。
+// TestDiagnosisProxy_Manual 静态资源代理（20260921 双根）：三种合法形状各自解析到正确上游
+// 路径（含中文案例目录的原样与百分号编码两态），SSRF/穿越/绝对形状一律拒绝。
 func TestDiagnosisProxy_Manual(t *testing.T) {
+	var mu sync.Mutex
+	var got []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/assistant/static/manual/ep_test/page_1.png" {
+		mu.Lock()
+		got = append(got, r.URL.Path)
+		mu.Unlock()
+		switch r.URL.Path {
+		case "/assistant/static/manual/ep_test/page_1.png",
+			"/assistant/static/fault_images/制动系统/图_1.png":
+			w.Header().Set("Content-Type", "image/png")
+			_, _ = w.Write([]byte("PNGDATA"))
+		default:
 			http.NotFound(w, r)
-			return
 		}
-		w.Header().Set("Content-Type", "image/png")
-		_, _ = w.Write([]byte("PNGDATA"))
 	}))
 	defer server.Close()
 	proxy := newProxyForTest(server)
 
-	body, ct, err := proxy.OpenManual(context.Background(), "ep_test/page_1.png")
-	if err != nil {
-		t.Fatalf("打开手册失败: %v", err)
+	upstream := func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]string(nil), got...)
 	}
-	defer body.Close()
-	data, _ := io.ReadAll(body)
-	if string(data) != "PNGDATA" || ct != "image/png" {
-		t.Fatalf("手册内容/类型不符: %q %q", data, ct)
+	// 无根旧形状恒归 manual（既有客户端与全部历史行的形状）；带根按原根透传。
+	for _, tc := range []struct{ in, want string }{
+		{"ep_test/page_1.png", "/assistant/static/manual/ep_test/page_1.png"},
+		{"manual/ep_test/page_1.png", "/assistant/static/manual/ep_test/page_1.png"},
+		{"/ep_test/page_1.png", "/assistant/static/manual/ep_test/page_1.png"},
+		{"fault_images/制动系统/图_1.png", "/assistant/static/fault_images/制动系统/图_1.png"},
+		{"fault_images/%E5%88%B6%E5%8A%A8%E7%B3%BB%E7%BB%9F/%E5%9B%BE_1.png",
+			"/assistant/static/fault_images/制动系统/图_1.png"},
+	} {
+		mu.Lock()
+		got = nil
+		mu.Unlock()
+		body, ct, err := proxy.OpenManual(context.Background(), tc.in)
+		if err != nil {
+			t.Fatalf("打开静态资源失败 %q: %v", tc.in, err)
+		}
+		data, _ := io.ReadAll(body)
+		_ = body.Close()
+		if string(data) != "PNGDATA" || ct != "image/png" {
+			t.Fatalf("%q 内容/类型不符: %q %q", tc.in, data, ct)
+		}
+		if paths := upstream(); len(paths) != 1 || paths[0] != tc.want {
+			t.Fatalf("%q 上游路径不符: got=%v want=%s", tc.in, paths, tc.want)
+		}
 	}
-	// SSRF/穿越与无扩展名拒绝
-	for _, bad := range []string{"../etc/passwd", "a/b", "/etc/passwd", "a;rm%20x.png", "?x=1/y.png"} {
+	// SSRF/穿越、无扩展名、空段与编码后穿越拒绝
+	for _, bad := range []string{
+		"../etc/passwd", "a/b", "/etc/passwd", "a;rm%20x.png", "?x=1/y.png",
+		"%2e%2e/x.png", `a\b.png`, "manual/", "", "ep_test/../x.png", "a\x00b.png",
+	} {
 		if _, _, err := proxy.OpenManual(context.Background(), bad); err == nil {
-			t.Fatalf("非法手册路径应拒绝: %q", bad)
+			t.Fatalf("非法静态路径应拒绝: %q", bad)
 		}
 	}
 	// 绝对路径必须被拒绝（strip 唯一在前端，后端收到即非法，不再兜底拼出双前缀）
-	for _, bad := range []string{"/assistant/static/ep_test/page_1.png", "assistant/static/ep_test/page_1.png"} {
+	for _, bad := range []string{
+		"/assistant/static/ep_test/page_1.png", "assistant/static/ep_test/page_1.png",
+		"/app/static/fault_images/制动系统/x.png",
+	} {
 		if _, _, err := proxy.OpenManual(context.Background(), bad); err == nil || err.Error() != "无效的手册资源路径" {
 			t.Fatalf("绝对路径应拒绝而非兜底 strip: %q err=%v", bad, err)
 		}
@@ -117,6 +153,14 @@ func TestDiagnosisProxy_Manual(t *testing.T) {
 	// 大写扩展名放行（白名单校验通过；远端 404 属资源不存在而非路径非法）
 	if _, _, err := proxy.OpenManual(context.Background(), "ep_test/PAGE_2.PNG"); err != nil && err.Error() == "无效的手册资源路径" {
 		t.Fatalf("大写扩展名应放行白名单: %v", err)
+	}
+	// 根名区分大小写：MANUAL/ 不是根 ⇒ 作为 manual 根下的子路径，不越界到别处
+	mu.Lock()
+	got = nil
+	mu.Unlock()
+	_, _, _ = proxy.OpenManual(context.Background(), "MANUAL/x.pdf")
+	if paths := upstream(); len(paths) != 1 || paths[0] != "/assistant/static/manual/MANUAL/x.pdf" {
+		t.Fatalf("非白名单根名应落在 manual 根下: got=%v", paths)
 	}
 }
 
