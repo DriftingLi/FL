@@ -330,9 +330,12 @@ func TestSlice6TutorEnvelopeKeys(t *testing.T) {
 
 	// 讲师端章节详情：study_status 是非指针 omitempty 字段且讲师路径不赋值，键不出现
 	// （非指针 omitempty 不在本片可空性口径内 —— 见 evidence 的残留缺口一节）。
+	// resume_position 出现在这里是有意的：它是「该学员在本章的位置」，无主体时为零值，
+	// 与 CourseDetailDTO.last_position 同口径（ADR-0062 决策 11；不选指针可空，避免
+	// 「无主体」与「在 0 秒」被压成两种表达 —— 票12 的同一课）。
 	chapterKeys := []string{
 		"chapter_id", "content", "content_type", "course_id", "created_at", "description", "duration",
-		"file_url", "files", "next_chapter_id", "order_num", "previous_chapter_id", "title",
+		"file_url", "files", "next_chapter_id", "order_num", "previous_chapter_id", "resume_position", "title",
 	}
 	rec = catalogRequest(t, r, token, "GET", fmt.Sprintf("/api/tutor/chapter/%d", chapter.ChapterID), "")
 	slice6AssertKeys(t, rec, 200, chapterKeys...)
