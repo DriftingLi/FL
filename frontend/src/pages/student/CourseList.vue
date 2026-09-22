@@ -149,7 +149,8 @@
             </UiTag>
           </div>
           <p class="detail-desc mb-4 text-sm text-ink-2">{{ detailCourse.description || '暂无简介' }}</p>
-          <div v-if="detailCourse?.points_price" class="detail-redeem">
+          <!-- 解锁入口按服务端事实 entitled 决定（ADR-0062 票2b）：已兑换即不再显示 -->
+          <div v-if="detailCourse?.points_price && detailCourse?.entitled === false" class="detail-redeem">
             <UiTag tone="warning" effect="plain">{{ detailCourse.points_price }} 积分解锁</UiTag>
             <UiButton variant="warning" size="small" @click="handleRedeem">兑换解锁</UiButton>
           </div>
@@ -219,7 +220,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowRight, Star, StarFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -304,7 +305,17 @@ const {
     courses.value = data.courses
     total.value = data.total
   },
-  { defaultPageSize: 12, itemsRef: courses }
+  {
+    defaultPageSize: 12,
+    itemsRef: courses,
+    // #594 存量缺口修复（起手写在页面里的证件 watch，第十四波票 10 收进 facet 声明槽）：
+    // 目录树按当前证件分区，切证件时随列表重载 —— 判据不住在页面第二处 watch 里。
+    // 不并入列表 loader：翻页/方向点选（onSelect 走 run）不应重复拉树；facets 只吃
+    // 「证件切换 / 筛选轴变化 / reset」这一批失效时机。仅本页树 adapter 受证件过滤；
+    // admin/tutor 的目录 adapter 走 /admin、/tutor 豁免域，且 credential store 对非学员
+    // 角色结构性为 null，不受这条槽影响。箭头形态是刻意的：fetchCatalog 在它下面才声明。
+    facets: [{ load: () => fetchCatalog() }]
+  }
 )
 
 const {
@@ -458,8 +469,10 @@ async function handleRedeem() {
   try {
     await pointsApi.redeemCourse(detailCourse.value.course_id)
     ElMessage.success('兑换成功，已解锁')
-    // 刷新详情以更新 points_price 仍显示但已可进入
-    detailCourse.value.points_price = null as unknown as number
+    // 重新拉详情取服务端的 entitled。旧写法是在内存里把 points_price 抹成 null 当「已解锁」
+    // —— 一刷新就丢，学员会被自己的刷新拦回「请先兑换」，再点兑换得 400「已兑换」。
+    const data = await courseApi.getCourseDetail(detailCourse.value.course_id)
+    detailCourse.value = { ...detailCourse.value, ...(data.course_info || {}) }
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
     ElMessage.error(msg || '兑换失败')
@@ -468,7 +481,7 @@ async function handleRedeem() {
 
 function goToChapter(ch: { chapter_id: number }) {
   if (!detailCourse.value) return
-  if (detailCourse.value.points_price) {
+  if (detailCourse.value.points_price && detailCourse.value.entitled === false) {
     ElMessage.warning('该课程需积分解锁，请先兑换')
     return
   }
@@ -479,21 +492,10 @@ function goToChapter(ch: { chapter_id: number }) {
   })
 }
 
-// #594 目录 facet 收敛（存量缺口修复：master 时代目录树同样只拉一次，切证件后
-// totalAll/scopedTotal/countOf* 停留旧证件口径）：目录树按当前证件分区（credential_id
-// 由拦截器注入），切证件时随装载流与列表并行重载。不并入 useAsyncPage loader——
-// 翻页/筛选变化不应重复拉树；与列表重载也不重复请求（两个 loader 各自恰好一次）。
-// 仅本页树 adapter 受证件过滤；admin/tutor 的目录 adapter 走 /admin、/tutor 豁免域，
-// 且 credential store 对非学员角色结构性为 null，不受此 watch 影响
-watch(
-  () => credentialStore.current?.id,
-  () => {
-    void fetchCatalog()
-  }
-)
+// #594 目录 facet 的证件联动已收进上面 useAsyncPage 的 facets 声明槽（第十四波票 10）：
+// 「随切证件重装」与列表同一条判据，页面不再自带第二处 watch。
 
 onMounted(() => {
-  fetchCatalog()
   loadCourses()
   // 搜索/收藏跳转：?course_id= 自动打开课程详情
   const queryCourseId = Number(route.query.course_id)
