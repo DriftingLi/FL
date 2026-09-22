@@ -2,12 +2,16 @@
  * forum 回复输入域（T04 手术：forum-detail.uvue script 回复域下沉）
  * 持有草稿内容/图片/上传与提交态；提交成功经 onPosted 回调上抛列表侧变更（禁反向桥接）。
  * 函数字段箭头包裹返回（UTS error18 先例，同 useAiChat）。
+ *
+ * P3 之后**图片流水线不再在本文件里**：选图 / 上传 / 删除 / 预览统一走
+ * `composables/useForumImagePicker.uts`（发帖面同一份实现），本文件只做域名映射与提交。
  */
 import { ref, computed } from 'vue'
 import type { Ref, ComputedRef } from 'vue'
-import { replyForumTopicApi, uploadForumImageApi } from '../api/forum'
-import { previewImages } from '../utils/forumDetailDisplay'
-import { resolveFileUrl } from '../utils/forumDisplay'
+import { replyForumTopicApi } from '../api/forum'
+import { useForumImagePicker } from './useForumImagePicker'
+import { normalizeAuthorFormat, readAuthorFormat, writeAuthorFormat } from '../utils/forumFormatPreference'
+import { FORUM_MAX_REPLY_IMAGES } from '../constants/app'
 import type { ForumReply } from '../types/index'
 
 export type UseReplyComposerResult = {
@@ -16,6 +20,16 @@ export type UseReplyComposerResult = {
     replyPreviewImages : ComputedRef<string[]>
     uploadingReplyImage : Ref<boolean>
     submitting : Ref<boolean>
+    /**
+     * 发送闸门（**trim 后**非空、且不在提交中）—— 模板的 `.disabled` 用它。
+     *
+     * 不要在模板里再写 `replyContent.length == 0`：`onSubmitReply` 是按 `trim()` 拦的，
+     * 两处口径不一致时「纯空白」会让按钮亮着却点了没反应（评审发现的那处静默 return）。
+     */
+    canSubmitReply : ComputedRef<boolean>
+    /** 回复的正文格式声明（ADR-0025 P3）：与发帖**共用**一个记忆位（`utils/forumFormatPreference`） */
+    replyFormat : Ref<string>
+    onFormatChange : (value : string) => void
     onSubmitReply : (topicId : number, onPosted : (reply : ForumReply) => void) => Promise<void>
     onAddReplyImage : () => void
     onRemoveReplyImage : (index : number) => void
@@ -24,20 +38,35 @@ export type UseReplyComposerResult = {
 
 export function useReplyComposer() : UseReplyComposerResult {
     const replyContent = ref<string>('')
-    const replyImages = ref<string[]>([])
     const submitting = ref<boolean>(false)
     /**
-     * 回复图片预览 URL（预解析：模板中不调用 import 的 resolveFileUrl，规避 error18；
-     * replyImages 仍保存原始路径用于提交后端）
+     * 回复的格式声明：初值取作者上次的选择（根 ADR-0044）。回复**没有编辑入口**，
+     * 故这里不存在「编辑态格式只读」那条约束 —— 档位控件在回复栏始终可见。
      */
-    const replyPreviewImages = computed<string[]>(() : string[] => {
-        const urls : string[] = []
-        for (let i = 0; i < replyImages.value.length; i++) {
-            urls.push(resolveFileUrl(replyImages.value[i]))
-        }
-        return urls
+    const replyFormat = ref<string>(readAuthorFormat())
+
+    /** 图片域整域取自共享流水线（限额由 `constants/app` 单点给出） */
+    const picker = useForumImagePicker(FORUM_MAX_REPLY_IMAGES)
+    const replyImages = picker.images
+    const replyPreviewImages = picker.previewImages
+    const uploadingReplyImage = picker.uploading
+
+    const canSubmitReply = computed<boolean>(() : boolean => {
+        return replyContent.value.trim().length > 0 && !submitting.value
     })
-    const uploadingReplyImage = ref<boolean>(false)
+
+    /**
+     * 档位切换：**先归一**再落本地值与记忆位。
+     *
+     * 为什么赋值前也要归一：本地值随后**直接进提交载荷**（`replyForumTopicApi` 的 `content_format`），
+     * 而契约外取值后端会 400 —— 归一只在存储侧做的话，脏值仍会从载荷漏出去
+     * （ADR P3 回记第 4 条：读与写两个方向都归一，契约外的取值既不进存储也不漏出来）。
+     */
+    function onFormatChange(value : string) : void {
+        const next = normalizeAuthorFormat(value)
+        replyFormat.value = next
+        writeAuthorFormat(next)
+    }
 
     /** 提交回复 */
     async function onSubmitReply(topicId : number, onPosted : (reply : ForumReply) => void) : Promise<void> {
@@ -48,7 +77,7 @@ export function useReplyComposer() : UseReplyComposerResult {
         if (submitting.value) return
         submitting.value = true
         try {
-            const reply = await replyForumTopicApi(topicId, replyContent.value.trim(), replyImages.value)
+            const reply = await replyForumTopicApi(topicId, replyContent.value.trim(), replyImages.value, replyFormat.value)
             onPosted(reply)
             replyContent.value = ''
             replyImages.value = []
@@ -61,74 +90,18 @@ export function useReplyComposer() : UseReplyComposerResult {
         }
     }
 
-    /** 逐张上传回复图片（声明在 onAddReplyImage 之前，避免 Kotlin 局部函数前向引用） */
-    async function uploadReplyImages(paths : string[]) : Promise<void> {
-        uploadingReplyImage.value = true
-        uni.showLoading({ title: '上传图片中...' })
-        let failed = 0
-        for (let i = 0; i < paths.length; i++) {
-            if (replyImages.value.length >= 3) break
-            try {
-                const url = await uploadForumImageApi(paths[i])
-                replyImages.value.push(url)
-            } catch (e) {
-                console.error('[forum-detail] upload reply image failed:', e)
-                failed = failed + 1
-            }
-        }
-        uni.hideLoading()
-        uploadingReplyImage.value = false
-        if (failed > 0) {
-            uni.showToast({ title: failed + ' 张图片上传失败，请重试', icon: 'none' })
-        }
-    }
-
-    /** 选择回复图片：批量选择并上传（最多 3 张） */
-    function onAddReplyImage() : void {
-        if (uploadingReplyImage.value) return
-        const remaining = 3 - replyImages.value.length
-        if (remaining <= 0) {
-            uni.showToast({ title: '最多上传 3 张图片', icon: 'none' })
-            return
-        }
-        uni.chooseImage({
-            count: remaining,
-            sizeType: ['compressed'],
-            sourceType: ['album', 'camera'],
-            success: (res) => {
-                const paths = res.tempFilePaths as string[]
-                if (paths.length == 0) return
-                uploadReplyImages(paths)
-            },
-            fail: (err) => {
-                console.log('[forum-detail] chooseImage canceled/failed:', err)
-            },
-        })
-    }
-
-    /** 删除已选回复图片 */
-    function onRemoveReplyImage(index : number) : void {
-        const next : string[] = []
-        for (let i = 0; i < replyImages.value.length; i++) {
-            if (i != index) next.push(replyImages.value[i])
-        }
-        replyImages.value = next
-    }
-
-    /** 预览已选回复图片 */
-    function onPreviewReplyImage(index : number) : void {
-        previewImages(replyImages.value, index)
-    }
-
     return {
         replyContent: replyContent,
         replyImages: replyImages,
         replyPreviewImages: replyPreviewImages,
         uploadingReplyImage: uploadingReplyImage,
         submitting: submitting,
+        canSubmitReply: canSubmitReply,
+        replyFormat: replyFormat,
+        onFormatChange: (value : string) => onFormatChange(value),
         onSubmitReply: (topicId : number, onPosted : (reply : ForumReply) => void) => onSubmitReply(topicId, onPosted),
-        onAddReplyImage: () => onAddReplyImage(),
-        onRemoveReplyImage: (index : number) => onRemoveReplyImage(index),
-        onPreviewReplyImage: (index : number) => onPreviewReplyImage(index),
+        onAddReplyImage: () => picker.onAddImage(),
+        onRemoveReplyImage: (index : number) => picker.onRemoveImage(index),
+        onPreviewReplyImage: (index : number) => picker.onPreviewImage(index),
     } as UseReplyComposerResult
 }

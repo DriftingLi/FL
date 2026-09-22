@@ -1,0 +1,29 @@
+# ①a 采数窗口的 logcat（先 adb logcat -c 再取数：窗口 = 进入相册选择 → 选 1 张 → 完成 → 回应用上传成功）
+# 取数：adb logcat -d（全量捕获，非 grep 后的残片）
+
+总行数 = 4743
+E 级行（全量，含系统噪声）= 106
+app 进程（pid=26625）E 级行 = 20
+其中命中本次改动关键词（forum|markdown|toolbar|image|picker|upload|input|textarea|chooseImage）的条数 = 0
+
+## app 进程 E 级行逐条
+09-22 16:38:35.650 26625 26625 E UniDomManager: batch--start--------
+09-22 16:38:35.653 26625 26625 E UniDomManager: batch--start-----midd---3
+09-22 16:38:35.653 26625 26625 E UniDomManager: layoutUpdateRecursive--耗时：0
+09-22 16:38:35.653 26625 26625 E UniDomManager: batch----time=3
+09-22 16:38:35.655 26625 26625 E UniDomManager: flushPendingBatches--tiem=2 task size=18
+09-22 16:38:35.717 26625 26625 E UniDomManager: batch--start--------
+09-22 16:38:35.718 26625 26625 E UniDomManager: batch--start-----midd---1
+09-22 16:38:35.719 26625 26625 E UniDomManager: layoutUpdateRecursive--耗时：1
+09-22 16:38:35.719 26625 26625 E UniDomManager: batch----time=2
+09-22 16:38:35.735 26625 26625 E UniDomManager: flushPendingBatches--tiem=16 task size=15
+09-22 16:38:36.601 26625 26625 E UniDomManager: batch--start--------
+09-22 16:38:36.604 26625 26625 E UniDomManager: batch--start-----midd---3
+09-22 16:38:36.605 26625 26625 E UniDomManager: layoutUpdateRecursive--耗时：1
+09-22 16:38:36.605 26625 26625 E UniDomManager: batch----time=4
+09-22 16:38:36.613 26625 26625 E UniDomManager: flushPendingBatches--tiem=8 task size=29
+09-22 16:38:36.620 26625 26625 E UniDomManager: flushPendingBatches--tiem=0 task size=5
+09-22 16:38:54.725 26625 26625 E .dcloud.uniappx: No package ID 96 found for resource ID 0x96481453.
+09-22 16:38:54.726 26625 26625 E .dcloud.uniappx: No package ID c4 found for resource ID 0xc4a60684.
+09-22 16:38:54.746 26625 26625 E .dcloud.uniappx: No package ID 96 found for resource ID 0x96481453.
+09-22 16:38:54.747 26625 26625 E .dcloud.uniappx: No package ID c4 found for resource ID 0xc4a60684.
