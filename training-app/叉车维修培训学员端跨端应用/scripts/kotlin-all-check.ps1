@@ -29,7 +29,21 @@
         产物，用 -SkipPublish 可让**受限会话**只跑 kotlinc 部分（这一步不依赖主程序）。
       - 判成败一律解析输出，**不看退出码**：HBuilderX CLI 退出码恒为 0（实测缺 --project 失败仍 0）。
 
-    退出码：0 = 通过；1 = 编译报错（或 publish 未成功）；2 = 环境不可用（缺 CLI/编译器、无产物、超时）。
+    退出码：0 = 通过；1 = 编译报错 / **导出未刷新**（含导出无产物）；2 = 环境不可用（缺 CLI/编译器、publish 未成立、超时）。
+
+    假绿的补丁（#1272，2026-09-22 实测）
+      - 旧版两条判据都漏：(a) publish 步只按 `与主程序的连接已中断|启动超时` 两条文案判失败，
+        于是 `-1:cli:命令'publish app-android'不存在或缺少参数`（**主程序忙/未就绪时的通用文案**）被放过；
+        (b) 后续「成败以产物为准」只看**有没有 .kt**、不看新鲜度 ⇒ 只要磁盘上留着一份旧导出就判 ✅。
+        实测的坏读数：`KOTLIN_ALL_RESULT errors=0 classes=1526 files=120` + ✅，而导出是第一棵树的
+        （工作树里当时的改动在导出里搜不到）⇒ 那次读数**不覆盖当次改动**。
+      - 现在两道判据都补上：publish 步要求输出里出现正向标记（`$PublishSuccessMarker`），
+        且导出目录里 .kt 的最新 mtime **必须晚于**本次 publish 的基准（`Test-AppResourceFreshness`）。
+        两者任一不成立 ⇒ **exit 非 0 且不打印 ✅**。
+      - **根因写实**：票面原写「publish 命令在 v5.24 已不存在」是**误诊** —— 实测该命令存在且可用
+        （同一台机成功导出 119 个 .kt）；这恰恰说明**不能靠文案猜命令是否存在**，只能判「这一步有没有成立」。
+      - `-SkipPublish` 是受限会话的逃生门，**不适用**新鲜度判据 ⇒ 结果行显式记
+        `freshness=skipped(skip-publish)`，不假装判过。
 
 .PARAMETER PostToPr
     > 0 时，**仅在门通过（exit 0）分支**把结果贴成 PR 评论（P1：编译门结果免手抄）。
@@ -64,6 +78,12 @@ $ErrorActionPreference = 'Stop'
 $ErrorLinePattern = '(?m)(^\s*e: )|(:\d+:\d+: *error:)'
 $AppResourceRelative = 'unpackage\resources\app-android'
 $DevCacheRelative = 'unpackage\cache\.app-android'
+
+# ---------- publish 步与新鲜度的判据 ----------
+# 两条判据（`Get-PublishVerdict` / `Test-AppResourceFreshness`）住在 `scripts/lib/publish-freshness.ps1`：
+# 那里零副作用（只有函数与常量），故 `utils/kotlinAllStaleExportBehavior.test.js` 可以 dot-source 它
+# 并**真执行**这两条判据 —— 判据留在本脚本里就只能读源码文本断言，而接线守护不构成 ③ 证据（#1272）。
+. (Join-Path $PSScriptRoot 'lib\publish-freshness.ps1')
 
 function Test-PeHeader {
     param([string]$Path)
@@ -162,8 +182,14 @@ function Write-Log { param([string]$Text) Add-Content -LiteralPath $logPath -Val
 
 # ---------- HBuilderX 忙检测（单实例串行资源，ADR-0008 坑位段）----------
 . (Join-Path $PSScriptRoot 'lib\hx-busy.ps1')
+# 新鲜度判据的结论（结果行带上它）。预置成**响亮**的值而不是 `skipped(skip-publish)`：后者只属于
+# `-SkipPublish` 分支；若将来有路径绕过裁决直接走到结果行，读出来是 `not-judged` —— 记账要 fail-closed
+# （评审发现：原先预置成 `skipped(skip-publish)`，等于让机器读的那一栏默认取「无害」值）。
+$freshnessVerdict = 'not-judged'
 if ($SkipPublish) {
+    $freshnessVerdict = 'skipped(skip-publish)'
     Write-Host '>>> -SkipPublish：不接 HBuilderX，跳过忙检测与互斥锁（kotlinc 段不依赖主程序）' -ForegroundColor Yellow
+    Write-Host '    ⚠️ 同时**跳过新鲜度判据**：本次编译的产物是否覆盖当前树，由调用方保证 —— 结果行记 freshness=skipped(skip-publish)。' -ForegroundColor Yellow
 } else {
     $hx = Wait-HxFree -CliExe (Join-Path (Resolve-HBuilderXRoot -Explicit $HBuilderX -ExplicitCli $Cli) 'cli.exe') -TimeoutSeconds $HxWaitSeconds -NoWait:$HxNoWait -LogPath $logPath
 }
@@ -177,14 +203,35 @@ if (-not $SkipPublish) {
         exit 2
     }
     $cliExe = Join-Path $hbxRoot 'cli.exe'
+    # 新鲜度判据的基准时刻：**发第一条 CLI 命令之前**（判据 = 导出目录里 .kt 的最新 mtime 必须晚于它）。
+    # 见 Test-AppResourceFreshness 的说明：实测 publish 是全量重写，故该判据不会误杀「没改动」的合法运行。
+    $publishStartedAt = Get-Date
+    $publishCommand = ''
+    # publish 步的输出/超时留到循环外统一裁决（见下面的 Get-PublishStageVerdict）。
+    # 初始值不是 null：StrictMode 下取 `$null.X` 会抛，而「压根没拿到 publish 输出」这件事
+    # 本来就等价于「没看到成功标记」⇒ 让它走 no-success-marker 那一支即可。
+    $publishResult = @{ Output = ''; TimedOut = $false; ExitCode = -1 }
     foreach ($step in @(
             @{ Tag = 'cli-open'; Args = @('open') },
             @{ Tag = 'project-open'; Args = @('project', 'open', '--path', $Project) },
             @{ Tag = 'publish-appresource'; Args = @('publish', 'app-android', '--type', 'appResource', '--project', $Project) })) {
         $r = Invoke-Process -FilePath $cliExe -Arguments $step.Args -TimeoutSeconds $PublishTimeoutSeconds -Tag $step.Tag
         Write-Log "`n>>> $($step.Tag)"
+        if ($step.Tag -eq 'publish-appresource') {
+            $publishCommand = "$cliExe $($step.Args -join ' ')"
+        }
         Write-Log $r.Output
         Write-Host $r.Output
+        # publish 步的成败**不在这一层判**：整段裁决收在循环外（`Get-PublishStageVerdict`），
+        # 为的是把「用了哪条命令 / 产物 mtime / 新鲜度判据」三件事**先写进日志再退** ——
+        # 失败路径才最需要这三行（评审发现：原先它们只在成功路径齐，失败路径什么都没有）。
+        if ($step.Tag -eq 'publish-appresource') {
+            $publishResult = $r
+            continue
+        }
+        # 注：这条字面量与库里的 `$PublishFailurePattern` **有意重复** ——
+        # `utils/kotlinAllGateContract.test.js` 的 C7 要求「门脚本文本里必须有 CLI↔主程序 IPC 阻断的判据」，
+        # 而库那份只服务于 publish 步的裁决；这条守的是前两步（cli-open / project-open）。
         if ($r.Output -match '与主程序的连接已中断|启动超时') {
             Write-Host '[error] HBuilderX CLI 连不上主程序：受限/沙箱会话会阻断 CLI↔主程序的本地 IPC。' -ForegroundColor Red
             Write-Host '        处置：以全访问权限重跑；或先由人执行 HBuilderX 发行 → 本地打包资源，再用 -SkipPublish 重跑本脚本。' -ForegroundColor Red
@@ -197,21 +244,44 @@ if (-not $SkipPublish) {
             exit 2
         }
     }
-    # 成败以**产物**为准（比匹配文案可靠）；导出可能是异步的，故轮询等待
-    $produced = 0
-    for ($i = 0; $i -lt 40; $i++) {
-        $produced = @(Get-ChildItem -LiteralPath (Join-Path $Project $AppResourceRelative) -Recurse -Filter *.kt -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.FullName -notmatch '\\www\\' }).Count
-        if ($produced -gt 0) { break }
-        Start-Sleep -Seconds 3
+    # 导出可能是异步的 ⇒ 有界轮询等它变新鲜。publish 本身没成立时**不必等**，
+    # 但下面仍会量一次导出目录 —— 失败日志同样需要 mtime 这一行。
+    $exportProbeDir = Join-Path $Project $AppResourceRelative
+    $publishPre = Get-PublishVerdict -Output $publishResult.Output -TimedOut $publishResult.TimedOut
+    if ($publishPre.Ok) {
+        for ($i = 0; $i -lt 40; $i++) {
+            if ((Test-AppResourceFreshness -ExportDir $exportProbeDir -Since $publishStartedAt).Fresh) { break }
+            Start-Sleep -Seconds 3
+        }
     }
-    if ($produced -eq 0) {
-        Write-Host '[error] appResource 导出未产出 .kt（见日志）：先解决导出失败，再跑 ④c。' -ForegroundColor Red
-        Write-Host '        提示：若 HBuilderX 中已导入同名项目，CLI 可能把 publish 指向那个目录（实测遇到）—— 请用唯一目录名，或先在 HBuilderX 里关闭同名项目。' -ForegroundColor Red
-        Write-Log 'KOTLIN_ALL_RESULT errors=1 stage=publish reason=no-artifact'
-        exit 1
+    # 整段裁决（门与守护**共用同一个函数** ⇒ 连「陈旧 ⇒ exit 1」这条决策序列本身也有证据）
+    $publishEval = Get-PublishStageVerdict -PublishOutput $publishResult.Output -PublishTimedOut $publishResult.TimedOut -ExportDir $exportProbeDir -Since $publishStartedAt
+    # 日志三件事：**所有路径都打**（成功与失败都要能看出「用了哪条命令 / 产物 mtime / 新鲜度判据结论」）
+    Write-Log "publish 命令 = $publishCommand"
+    Write-Log "publish 产物 mtime = $($publishEval.Newest)（.kt 数 = $($publishEval.KtCount)）"
+    Write-Log "新鲜度判据 = $($publishEval.Freshness)（基准 = $publishStartedAt；判据 = 最新 .kt mtime 晚于基准）"
+    Write-Log "publish 判据 = $($publishEval.Reason)（cli exitcode=$($publishResult.ExitCode)）"
+    if ($publishEval.ExitCode -ne 0) {
+        if ($publishEval.Reason -eq 'stale-export') {
+            Write-Host "[error] appResource 导出**未刷新**：导出目录里有 $($publishEval.KtCount) 个 .kt，但最新 mtime = $($publishEval.Newest) **不晚于**本次基准 $publishStartedAt。" -ForegroundColor Red
+            Write-Host '        ⇒ 这份产物**不覆盖当前树**，编译它得出的结论无意义（这正是 #1272 的假绿形态）。' -ForegroundColor Red
+            Write-Host '        处置：先确认上面「publish 判据」那一行；或删掉导出目录后重跑。' -ForegroundColor Red
+        } elseif ($publishEval.Reason -eq 'no-artifact') {
+            Write-Host '[error] appResource 导出未产出 .kt（见日志）：先解决导出失败，再跑 ④c。' -ForegroundColor Red
+            Write-Host '        提示：若 HBuilderX 中已导入同名项目，CLI 可能把 publish 指向那个目录（实测遇到）—— 请用唯一目录名，或先在 HBuilderX 里关闭同名项目。' -ForegroundColor Red
+        } else {
+            Write-Host "[error] publish 步**没有成立**（判据：$($publishEval.Reason)）⇒ ④c 不得据此判 ✅。" -ForegroundColor Red
+            Write-Host '        三种可能：① HBuilderX 忙 / 未就绪（重试即可）；② 命令或参数在本版本不可用（对照 `cli publish app-android --help`）；③ CLI↔主程序 IPC 被断。' -ForegroundColor Red
+            Write-Host '        若本版 CLI 的**成功文案**变了（正向标记未命中），改 scripts/lib/publish-freshness.ps1 的 $PublishSuccessMarker —— 判据是 fail-closed：宁可判红，不可假绿。' -ForegroundColor Red
+        }
+        # errors= 这一栏在失败路径写 `gate`（判据不成立）或 `env`（环境），**不写数字** ——
+        # 旧写法写 `errors=1`，读起来像「有 1 条编译错误」，而那条路径根本没跑到编译（评审发现）。
+        $errorTag = if ($publishEval.ExitCode -eq 1) { 'gate' } else { 'env' }
+        Write-Log "KOTLIN_ALL_RESULT errors=$errorTag stage=publish reason=$($publishEval.Reason) freshness=$($publishEval.Freshness)"
+        exit $publishEval.ExitCode
     }
-    Write-Log "publish 产物 .kt = $produced"
+    $freshnessVerdict = $publishEval.Freshness
+    Write-Log "publish 产物 .kt = $($publishEval.KtCount)（新鲜度 $($publishEval.Freshness)）"
 }
 
 # ---------- 2) 收集 appResource 产物里的 .kt ----------
@@ -222,8 +292,9 @@ if (-not (Test-Path -LiteralPath $appResourceDir)) {
     Write-Log 'KOTLIN_ALL_RESULT errors=env reason=no-appresource'
     exit 2
 }
-$ktFiles = @(Get-ChildItem -LiteralPath $appResourceDir -Recurse -Filter *.kt -File -ErrorAction SilentlyContinue |
-    Where-Object { $_.FullName -notmatch '\\www\\' } | ForEach-Object { $_.FullName })
+# 产物口径的**唯一定义**在 scripts/lib/publish-freshness.ps1 的 `Get-AppResourceKtFiles`
+# （评审发现：这里原先抄了一份「递归找 .kt + 排除 \www\」，而只有库那份进了守护）。
+$ktFiles = @(Get-AppResourceKtFiles -ExportDir $appResourceDir | ForEach-Object { $_.FullName })
 if ($ktFiles.Count -eq 0) {
     Write-Host "[error] $appResourceDir 下没有 .kt（导出物不完整）" -ForegroundColor Red
     Write-Log 'KOTLIN_ALL_RESULT errors=env reason=no-kt'
@@ -281,7 +352,7 @@ if ($result.TimedOut) {
 
 $errorLines = @([regex]::Matches($result.Output, $ErrorLinePattern) | ForEach-Object { $_.Value })
 $classCount = @(Get-ChildItem -LiteralPath $classOutDir -Recurse -Filter *.class -File -ErrorAction SilentlyContinue).Count
-$summary = "KOTLIN_ALL_RESULT errors=$($errorLines.Count) classes=$classCount files=$($ktFiles.Count) input=$AppResourceRelative log=$logPath"
+$summary = "KOTLIN_ALL_RESULT errors=$($errorLines.Count) classes=$classCount files=$($ktFiles.Count) input=$AppResourceRelative freshness=$freshnessVerdict log=$logPath"
 Write-Log "`n$summary"
 
 if ($errorLines.Count -gt 0) {
