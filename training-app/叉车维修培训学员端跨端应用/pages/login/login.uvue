@@ -213,8 +213,8 @@
         captchaLoading.value = true
         try {
             const data = await getCaptchaApi()
-            captchaId.value = data['id'] as string
-            captchaImage.value = data['image'] as string
+            captchaId.value = data.id
+            captchaImage.value = data.image
             captchaValue.value = ''
             captchaFailed.value = false
         } catch (e) {

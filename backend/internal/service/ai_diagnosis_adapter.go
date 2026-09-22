@@ -7,6 +7,9 @@
 //     不走管理端模型绑定（端口签名只传 selector，解析全在 adapter 内部）。
 //   - 图片路径：复用 StreamChat 的多模态消息重组（text + base64 image part），adapter 从
 //     part 还原字节后 re-post multipart 到 /chat/with-image（无需新增转发端点）。
+//   - 图片表达归一：20260921 起正文图片是 [IMG:image_id] 裸令牌、URL 另在 data.answer_images[]，
+//     出站前统一成 ![...](本站代理 URL)（normalizeDiagnosisImages，ADR-0063）——契约事实源
+//     2026-09-05 首次钉死于 lxc101 openapi，2026-09-22 按 20260904/20260921 两版实包复核。
 package service
 
 import (
@@ -20,6 +23,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -136,14 +140,25 @@ type diagnosisChatTurn struct {
 	Content string `json:"content"`
 }
 
-// diagnosisChatResponse 助手响应（data 仅取消费字段：sop_text + answer_sources）。
+// diagnosisChatResponse 助手响应（data 取消费字段：sop_text + answer_sources + answer_images）。
 // Code 容忍数字/字符串两态（外部服务实现漂移时 "200" 字符串仍放行）。
 type diagnosisChatResponse struct {
 	Code diagnosisCode `json:"code"`
 	Data struct {
-		SOPText       string            `json:"sop_text"`
-		AnswerSources []DiagnosisSource `json:"answer_sources"`
+		SOPText       string                 `json:"sop_text"`
+		AnswerSources []DiagnosisSource      `json:"answer_sources"`
+		AnswerImages  []diagnosisAnswerImage `json:"answer_images"`
 	} `json:"data"`
+}
+
+// diagnosisAnswerImage 助手 20260921 新增的 data.answer_images 条目（**仅供入站归一，绝不出站**
+// —— 不是 DTO、不进 swagger/codegen 面，见 ADR-0048 决策 6）。
+// 刻意不读 file_path：实测它是交付方构建机的 Windows 绝对路径（E:\temp\assistant_delivery_…），
+// 既不是 URL 也不可访问。
+type diagnosisAnswerImage struct {
+	ImageID string `json:"image_id"`
+	URL     string `json:"url"`
+	Caption string `json:"caption"`
 }
 
 // diagnosisCode 业务码：数字 0/200 与字符串 "0"/"200" 同视为成功。
@@ -222,16 +237,21 @@ func (a *diagnosisAssistantAdapter) Stream(ctx context.Context, sel AIModelSelec
 		return "", nil, err
 	}
 
+	// 图片表达归一（20260921 的 [IMG:id] 令牌 / 旧内联 markdown）：必须在切块与写来源容器
+	// **之前**——切块拼接恒等于全文这条不变式，只有对归一后的正文成立才有意义。
+	// 同一份索引正文与来源共用（来源里的令牌换回两端认得的 <<IMAGE:>> 标记）。
+	imageIdx := diagnosisImageIndex(resp.Data.AnswerImages)
+	content := normalizeDiagnosisImages(resp.Data.SOPText, imageIdx)
+
 	// 请求标识透传（计费闸门消费）；来源写入共享容器
 	if b, _ := ctx.Value(diagnosisSourcesCtxKey{}).(*diagnosisSourcesBox); b != nil {
-		b.set(resp.Data.AnswerSources)
+		b.set(canonicalizeDiagnosisSources(resp.Data.AnswerSources, imageIdx))
 	}
 
 	// 伪流式切块：按空行段落切（正文 markdown 分段结构），段落间补分隔符——
 	// 除末段外每段尾附 "\n\n"，各块拼接恒等于全文。空产出时至少落一个空块。
 	// 切块间加节奏间隔：外部助手阻塞返回整包，无间隔时全部 SSE 事件毫秒级到齐，
 	// 前端观感等同一次性出全文（伪流式形同虚设）。
-	content := resp.Data.SOPText
 	if strings.TrimSpace(content) == "" {
 		if onChunk != nil {
 			onChunk("")
@@ -581,6 +601,206 @@ func foldHistoryIntoQuery(history []diagnosisChatTurn, query string) string {
 	b.WriteString("[本轮问题]（请结合上文理解本轮追问；勿重复回答历史问题）\n")
 	b.WriteString(query)
 	return b.String()
+}
+
+// ---- 图片表达归一（20260921 契约，ADR-0063）----
+
+// 助手正文里的图片表达有三种历史/现行形状，本函数族把它们统一成 `![alt](本站代理 URL)`：
+//   - `[IMG:image_id]` —— 20260921 起唯一形态，URL 只在 data.answer_images[] 里；
+//   - `<<IMAGE:url|描述:caption>>` —— 手册页图的入库形状（旧版正文曾直接内联过）；
+//   - `![alt](/assistant|app/static/…)` —— 20260904 正文内联 markdown，指向公网不可达的
+//     助手内网路径（ADR-0032 已下线 assistant 子域），历史上在学员端本就是坏图。
+//
+// 归一发生在伪流式切块与落库之前 ⇒ SSE、历史回放、Web 与移动端读到的都是同一份归一后
+// 正文，三端零改动（移动端正文是纯文本渲染，尤其需要裸令牌被抹掉）。未知 image_id
+// **丢令牌**而不是原样透出：宁可少一张图，也不把 img_ab12cd34 这种内部标识露给学员。
+// diagnosisAssetRoute 是归一后正文里图片的本站路径前缀，与 api/diagnosis.go 注册的
+// `/api/ai-assistant/diagnosis/manual/*filepath` 同源（改路由要同时改这里，契约测试经真实
+// 路由命中该路径，会先红）。
+const diagnosisAssetRoute = "/api/ai-assistant/diagnosis/manual/"
+
+var (
+	diagnosisIMGTokenRe = regexp.MustCompile(`\[IMG:\s*([^\[\]]+?)\s*\]`)
+	// 手册页图的入库形状，可带 `| 描述:xxx` 后缀（url 段以空白截断，故后缀前允许空格）。
+	diagnosisLegacyImageRe = regexp.MustCompile(`<<IMAGE:\s*([^|>\s]+)\s*(?:\|\s*(?:描述|caption)[:：]\s*([^>]*))?>>`)
+	// 正文里的 markdown 图片一律过静态路径判定（见 normalizeDiagnosisImages 第 3 步）。
+	diagnosisMarkdownImgRe = regexp.MustCompile(`!\[([^\]]*)\]\(([^)\s]+)\)`)
+	// diagnosisAltSanitizer 剥掉会破坏 markdown 图片语法的字符。
+	diagnosisAltSanitizer = regexp.MustCompile("[\r\n\\[\\]`]")
+)
+
+// diagnosisImageRef 归一所需的最小图片信息（本站代理路径 + 助手侧原始静态 URL + 替代文本）。
+type diagnosisImageRef struct {
+	path    string // 本站代理 URL（正文图片用）
+	raw     string // 助手侧 /assistant/static/… URL（来源标记用——两端自行 strip 后拼代理）
+	caption string
+}
+
+// diagnosisImageIndex image_id → 图片引用；无法解析成合法静态路径的条目跳过。
+// 空索引返回 nil（调用侧按「无图」处理，比空 map 少一个分支）。
+func diagnosisImageIndex(imgs []diagnosisAnswerImage) map[string]diagnosisImageRef {
+	idx := make(map[string]diagnosisImageRef, len(imgs))
+	for _, im := range imgs {
+		id := strings.TrimSpace(im.ImageID)
+		if id == "" {
+			continue
+		}
+		path, ok := diagnosisStaticProxyPath(im.URL)
+		if !ok {
+			continue
+		}
+		raw, ok2 := diagnosisCanonicalStaticURL(im.URL)
+		if !ok2 {
+			continue
+		}
+		idx[id] = diagnosisImageRef{path: path, raw: raw, caption: im.Caption}
+	}
+	if len(idx) == 0 {
+		return nil
+	}
+	return idx
+}
+
+// diagnosisCanonicalStaticURL 把助手静态 URL 归成 `/assistant/static/<root>/…` 绝对形状。
+// 交付方入库代码有写 `/app/static/…` 的（pdf_manual_parser），也有写 `/assistant/static/…`
+// 的（markdown_fault_parser）—— 两者对客户端是同一资源，但两端的 strip 规则只认后者。
+func diagnosisCanonicalStaticURL(u string) (string, bool) {
+	s := strings.TrimSpace(u)
+	if s == "" {
+		return "", false
+	}
+	for _, prefix := range []string{"/app/static/", "app/static/"} {
+		if len(s) >= len(prefix) && strings.EqualFold(s[:len(prefix)], prefix) {
+			s = "/assistant/static/" + s[len(prefix):]
+			break
+		}
+	}
+	if !strings.HasPrefix(s, "/assistant/static/") {
+		return "", false
+	}
+	return s, true
+}
+
+// diagnosisStaticProxyPath 把助手内网静态路径转成本站代理 URL（逐段百分号转义，中文案例
+// 目录必此形）。接受 /assistant/static/<root>/… 、/app/static/<root>/… 与裸 <root>/…；
+// 首段不是已知静态根时归 manual（历史来源标记的既有形状）。静态根与段校验复用 proxy 侧
+// 同一套白名单（staticRoots / staticSegmentPattern / staticExtPattern），两端对「什么算
+// 合法静态路径」不可能漂移。
+func diagnosisStaticProxyPath(raw string) (string, bool) {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return "", false
+	}
+	if i := strings.IndexAny(s, "?#"); i >= 0 {
+		s = s[:i] // PDF 的 #page 锚点由 metadata 单独承载，不属于资源路径
+	}
+	for _, prefix := range []string{"/assistant/static/", "assistant/static/", "/app/static/", "app/static/"} {
+		if len(s) >= len(prefix) && strings.EqualFold(s[:len(prefix)], prefix) {
+			s = s[len(prefix):]
+			break
+		}
+	}
+	segs := strings.Split(strings.Trim(s, "/"), "/")
+	if len(segs) == 0 || segs[0] == "" {
+		return "", false
+	}
+	for _, seg := range segs {
+		if !staticSegmentPattern.MatchString(seg) {
+			return "", false
+		}
+	}
+	if !staticExtPattern.MatchString(segs[len(segs)-1]) {
+		return "", false
+	}
+	if !staticRoots[segs[0]] {
+		segs = append([]string{"manual"}, segs...)
+	}
+	for i, seg := range segs {
+		segs[i] = url.PathEscape(seg)
+	}
+	return diagnosisAssetRoute + strings.Join(segs, "/"), true
+}
+
+// normalizeDiagnosisImages 归一正文中的三种图片表达（见本节首注释）。idx 为空时令牌与
+// 旧形状全部删除，仅保留已是本站路径的 markdown 图。
+func normalizeDiagnosisImages(sop string, idx map[string]diagnosisImageRef) string {
+	if sop == "" {
+		return sop
+	}
+	out := diagnosisIMGTokenRe.ReplaceAllStringFunc(sop, func(m string) string {
+		g := diagnosisIMGTokenRe.FindStringSubmatch(m)
+		if len(g) < 2 {
+			return ""
+		}
+		if ref, ok := idx[g[1]]; ok {
+			return diagnosisMarkdownImage(ref.caption, ref.path)
+		}
+		return ""
+	})
+	out = diagnosisLegacyImageRe.ReplaceAllStringFunc(out, func(m string) string {
+		g := diagnosisLegacyImageRe.FindStringSubmatch(m)
+		if len(g) < 2 {
+			return ""
+		}
+		if path, ok := diagnosisStaticProxyPath(g[1]); ok {
+			return diagnosisMarkdownImage(g[2], path)
+		}
+		return ""
+	})
+	return diagnosisMarkdownImgRe.ReplaceAllStringFunc(out, func(m string) string {
+		g := diagnosisMarkdownImgRe.FindStringSubmatch(m)
+		if len(g) < 3 {
+			return ""
+		}
+		// 已归一的本站代理路径原样放行（防同一正文被二次改写）。
+		if strings.HasPrefix(g[2], diagnosisAssetRoute) {
+			return m
+		}
+		if path, ok := diagnosisStaticProxyPath(g[2]); ok {
+			return diagnosisMarkdownImage(g[1], path)
+		}
+		// 既不是助手静态资源、也不是本站代理 ⇒ 丢弃：AI 生成的正文不得驱动学员浏览器去
+		// 请求任意第三方主机（外链图 = 追踪面，且本站图片一律走代理，见 ADR-0032 收口）。
+		return ""
+	})
+}
+
+// diagnosisMarkdownImage 拼一张本站代理图；alt 清洗后为空时给固定文案。
+func diagnosisMarkdownImage(alt, path string) string {
+	clean := strings.TrimSpace(diagnosisAltSanitizer.ReplaceAllString(alt, ""))
+	if clean == "" {
+		clean = "诊断配图"
+	}
+	return "![" + clean + "](" + path + ")"
+}
+
+// canonicalizeDiagnosisSources 把来源面收拢到两端已有的那一套形状：
+//   - `[IMG:id]` 令牌 → `<<IMAGE:/assistant/static/…>>` 标记。**实测必做**：结构化故障码来源
+//     （id 形如 fault-498）的 text 里就带着令牌（交付方 markdown parser 入库写的是 `[IMG:id]`），
+//     而 Web 的 IMAGE_RE 与移动端 aiSourcesDisplay 只认 `<<IMAGE:>>` ⇒ 不换形学员会在
+//     「资料来源」卡片里看到 img_120bc2b77e66；未知 image_id 同样丢令牌。
+//   - `/app/static/` 绝对前缀 → `/assistant/static/`：交付方 pdf_manual_parser 入库写的就是
+//     前者（实测当前 sources 已是后者），一旦漂进来两端都会拼出坏 URL。
+//
+// 两处都在此单点做，两端不必各自加规则。
+func canonicalizeDiagnosisSources(sources []DiagnosisSource, idx map[string]diagnosisImageRef) []DiagnosisSource {
+	for i := range sources {
+		text := diagnosisIMGTokenRe.ReplaceAllStringFunc(sources[i].Text, func(m string) string {
+			g := diagnosisIMGTokenRe.FindStringSubmatch(m)
+			if len(g) < 2 {
+				return ""
+			}
+			if ref, ok := idx[g[1]]; ok {
+				return "<<IMAGE:" + ref.raw + ">>"
+			}
+			return ""
+		})
+		sources[i].Text = strings.ReplaceAll(text, "/app/static/", "/assistant/static/")
+		if src := sources[i].Metadata.SourceURL; strings.Contains(src, "/app/static/") {
+			sources[i].Metadata.SourceURL = strings.ReplaceAll(src, "/app/static/", "/assistant/static/")
+		}
+	}
+	return sources
 }
 
 // ---- routing adapter：按 FeatureKey 分发 ----

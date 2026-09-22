@@ -35,6 +35,10 @@
 
 用完 worktree 后记得清理：`git worktree remove <dir>` + `git branch -D <branch>`。
 
+- **⚠️ 删 worktree 之前，先把 gitignore 覆盖的证据产物拷出来**（2026-09-22 实测，血账）：`.ci-verify/`、`.scratch/` 这类目录被 `.gitignore` 覆盖 ⇒ **`git worktree remove` 不加 `--force` 也成功**（被忽略的未跟踪文件不使它判 dirty），**并把它们连同目录一起删掉**。实测代价：某票 ①a 真机取证的**判据输入**（原始 `screencap` PNG / `uiautomator` XML / launch 与 logcat 日志）只活在 `.ci-verify/` ⇒ 删树后永久丢失，而 README/PR 里「原始产物留在 `.ci-verify/x.png`」指向**不存在**的地方，结论文里的像素读数（`27090 / 17286 / 9804`）**不再可复算**（入库的 720w JPEG 是重编码件，**不是**判据输入）。
+  **纪律**：`git worktree remove` **之前**把判据输入拷到树外留存目录，或**直接入仓**（`uiautomator` XML 每份约 6.5 KB，远在截图入库纪律之内；PNG 超限时至少拷出并在 README 写明留存位置）。
+  **一般化**：凡在 README/PR 里写「产物留在 `.ci-verify/…`」，先问一句「**这棵树会被删吗**」——会被删的，要么入仓、要么写明留存位置。判据不是「我记得拷」，而是**留存位置写在证据文件里、且删树后仍在**。
+
 ## Windows 上用 worktree 的注意事项
 
 Windows 本机（`E:\` 盘）上 worktree 可用，但有几处与 Linux 不同，照下面做：

@@ -16,8 +16,9 @@
  * 6) 拆出物零孤儿 / 零死引用（#779 回归教训）—— 由 harness 的 orphanExtracts / deadImports 出事实
  * 7) allowlist 不回潮：register 模块文件不得出现在 GUARD_ALLOWLIST
  * 8) 零直发请求：页面不碰请求层与域 api，请求只经 composable → `api/auth.uts`
- * 9) 域 api 出口（T11 收紧）：注册两条（registerApi / emailRegisterApi）走 `postMapped` 出口；
- *    `getCaptchaApi` / `sendCodeApi` / `sendPhoneCodeApi` 留裸的**白名单与理由**在断言旁写死
+ * 9) 域 api 出口（T11 收紧 + T12 #650 反转一处旧锁）：注册两条（registerApi / emailRegisterApi）走 `postMapped` 出口；
+ *    `sendCodeApi` / `sendPhoneCodeApi` 留裸的**白名单与理由**在断言旁写死；`getCaptchaApi` 已按 T12（#650）
+ *    DTO 化（`getMapped` + `CaptchaResult`），本模块消费面随之机械迁移 —— 旧白名单反转见该节注释
  * 10) 行为保持点：双模式切换 / 图形验证码失败占位 / 倒计时禁用与文案 / 协议勾选与两入口 /
  *    提交按钮 loading 文案 / 密码两处显隐 / 成功路径三参 setAuthData + 跳 guide / 失败累计验证码错次 /
  *    六条校验规则 / 离页清定时器 —— 逐项仍在
@@ -281,16 +282,15 @@ describe('域 api 出口（T11 收紧）：DTO 出口走 mapper-callback 家族 
     expect(body).not.toMatch(/\.then\(/);
   });
 
-  // ── 白名单面：3 个裸透传出口的**理由**（保留是决策，不是惯性）──
-  // ① `getCaptchaApi` / `sendCodeApi`：本文件是 5 个模块共用的鉴权域 api
-  //    （forgot-password / login / profile / profile-setup / register），改返回类型会波及兄弟模块的**行为代码**
-  //    ⇒ 属票面「不碰其他模块行为代码」的边界，DTO 化留给 #650 / #651 或 #652 / #653 批量收紧。
-  // ② `sendPhoneCodeApi`：`sendCodeApi` 的 register 态薄包装，页面按 **void** 用法消费（返回值不落地）
-  //    ⇒ 按 T03/T09 口径不硬套 identity map。
-  it('getCaptchaApi 保留裸 get（白名单 ①：5 模块共用的鉴权域出口）', () => {
-    expect(fnBodyOf(api, 'getCaptchaApi')).toContain("return get('/captcha')");
-  });
-
+  // ── 白名单面：2 个裸透传出口的**理由**（保留是决策，不是惯性）──
+  // ① `sendCodeApi` / `sendPhoneCodeApi`：三个消费方（forgot-password / login / register）都按 **void** 用法
+  //    消费（返回值不落地）⇒ 按 T03/T09 口径不硬套 identity map；`sendPhoneCodeApi` 是 register 态薄包装。
+  // ② **`getCaptchaApi` 的白名单已于 T12（#650）反转**：它当时因「5 模块共用、改返回类型会波及兄弟模块」
+  //    留裸，而 T11 复盘 ④ 把 DTO 化明确留给「auth 兄弟票（#650/#651）」。#650 兑现了它 ——
+  //    `getCaptchaApi` 走 `getMapped` + 显式 DTO `CaptchaResult`，三个消费方（含本模块的 `useRegisterForm`）
+  //    同 PR 机械迁移为 `data.id` / `data.image`。**反转旧锁属改口径，不属于弱化断言**（先例 #709）：
+  //    判据由「留裸」改成「走 mapped 出口 + 消费方按 DTO 取值」，是**加强**，且与本文件第 8 节的
+  //    「请求只经 composable → api/auth.uts」断言同向。
   it('sendCodeApi 保留裸 post，两条路由逐字不变（白名单 ①）', () => {
     const body = fnBodyOf(api, 'sendCodeApi');
     expect(body).toContain("return post('/auth/email/send-code', payload)");
@@ -298,9 +298,25 @@ describe('域 api 出口（T11 收紧）：DTO 出口走 mapper-callback 家族 
     expect(body).not.toContain('postMapped');
   });
 
-  it('sendPhoneCodeApi 仍是 sendCodeApi 的 register 态薄包装（白名单 ②：void 用法）', () => {
+  it('sendPhoneCodeApi 仍是 sendCodeApi 的 register 态薄包装（白名单 ①：void 用法）', () => {
     const body = fnBodyOf(api, 'sendPhoneCodeApi');
     expect(body).toContain("return sendCodeApi(phone, 'phone', 'register', captchaId, captchaValue)");
+  });
+
+  it('getCaptchaApi 已 DTO 化（T12 #650 反转旧白名单）：走 getMapped + 显式 CaptchaResult', () => {
+    const body = fnBodyOf(api, 'getCaptchaApi');
+    expect(body).toContain('return getMapped<CaptchaResult>(');
+    expect(body).toContain("'/captcha'");
+    expect(body).not.toContain("return get('/captcha')");
+    expect(api).toMatch(/export type CaptchaResult = \{/);
+  });
+
+  it('register 侧消费面按 DTO 取值（T12 #650 同 PR 机械迁移；旧裸索引形态不得残留）', () => {
+    const compo = read(COMPOSABLE);
+    expect(compo).toContain('captchaId.value = data.id');
+    expect(compo).toContain('captchaImage.value = data.image');
+    expect(compo).not.toContain("data['id'] as string");
+    expect(compo).not.toContain("data['image'] as string");
   });
 
   it('出口判据具备判别力（把 postMapped 写回旧 post(...).then(...) 形态必须被判红）', () => {
@@ -339,8 +355,9 @@ describe('行为保持点（票面 ②：UI 像素级不变 / 行为逐字保持
 
   it('图形验证码：失败占位「加载失败 点击重试」+ 点击重试（两分支各一处）', () => {
     expect(src).toContain('captchaFailed.value = true');
-    expect(src).toContain("captchaId.value = data['id'] as string");
-    expect(src).toContain("captchaImage.value = data['image'] as string");
+    // T12（#650）把 getCaptchaApi DTO 化 ⇒ 本模块消费面随之机械迁移（裸索引 → DTO 字段，行为不变）
+    expect(src).toContain('captchaId.value = data.id');
+    expect(src).toContain('captchaImage.value = data.image');
     expect(src).toContain('captchaValue.value = \'\'');
     const hits = tpl.split('加载失败 点击重试').length - 1;
     expect(hits).toBe(2);

@@ -82,16 +82,18 @@ const IMAGE_RE = /<<IMAGE:([^>]+)>>/g
 function pdfProxyUrl(source: DiagnosisSource): string | undefined {
   const url = source.metadata?.source_url
   if (!url) return undefined
-  const m = url.match(/\/assistant\/static\/manual\/(.+?\.pdf)/i)
-  return m ? aiAssistantApi.manualUrl(m[1]) : url
+  const m = url.match(/\/assistant\/static\/manual\/(.+?\.pdf)(#page=\d+)?/i)
+  return m ? aiAssistantApi.manualUrl(m[1]) + (m[2] ?? '') : url
 }
 
+// 交付方入库的标记可带 `| 描述:xxx` 后缀（其 postprocess 按第一个 `|` 截断取 URL），
+// 故这里同样只取 `|` 之前的部分当路径。
 function sourceImages(text: string): string[] {
   const out: string[] = []
   IMAGE_RE.lastIndex = 0
   let m: RegExpExecArray | null
   while ((m = IMAGE_RE.exec(text))) {
-    const path = stripAssistantPrefix(m[1].trim())
+    const path = stripAssistantPrefix(m[1].split('|')[0].trim())
     if (path) out.push(path)
   }
   return out
