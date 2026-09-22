@@ -1,0 +1,9 @@
+# 点图片区 `＋` 之后 —— 弹出**含两个来源的选择器**（拍摄 / 从相册选择 / 取消）⇒ 不再直达相机
+# 源：未压缩 uiautomator dump（adb shell uiautomator dump + adb pull；**不用** --compressed）
+
+## text=
+
+## content-desc=
+拍摄
+从相册选择
+取消

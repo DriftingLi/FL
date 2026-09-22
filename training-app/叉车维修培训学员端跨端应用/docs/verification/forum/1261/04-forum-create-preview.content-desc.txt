@@ -1,5 +1,5 @@
-# 发帖页 · 预览档（源串 '### ' 消失，块渲染为 heading）
-# 源：未压缩 uiautomator dump（adb exec-out uiautomator dump /dev/tty）
+# 预览档（源串 `### ` 消失，块渲染出 `E01code`；工具栏收起）
+# 源：未压缩 uiautomator dump（adb shell uiautomator dump + adb pull；**不用** --compressed）
 
 ## text=
 请输入标题（1-100 字）
@@ -22,6 +22,6 @@ E01code
 11/10000
 发布内容会显示 IP 属地
 表格与图表显示原文；粗体、链接不出样式；图片用下方入口
-拍照
-相册
+＋
+0/9
 发布

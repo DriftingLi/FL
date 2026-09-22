@@ -1,32 +1,29 @@
-# ①a 机检原文：取证窗口内的 logcat 分级统计（设备 23049RAD8C / Android 15 / io.dcloud.uniappx）
-#
-# 窗口：adb logcat -c 之后依次驱动 —— 发帖页（纯文本档）→ 数据档位切 Markdown → 键入 E01code → 点工具栏 ### → 切「预览」→ 切回「编写」→ 点「拍照」
-# 命令：adb logcat -d -v brief
-#
-# 全量行 = 50113；带 E/ 的级行 = 2190；其中 **app 自身 tag**（.dcloud.uniappx / UniDomManager）= 75
-# 其余 E 级行来自 MIUI / 系统组件（含相机 app 与本机其它进程），与 app 无关。
-#
-# ⚠️ 本行**不写「E = 0」**：实测 app tag 有 75 条 E 级行，逐条列在下面。判定「与本次改动无关」的机检判据是：这些行里命中本次改动关键词
-#    （forum | markdown | toolbar | textarea | compose | input | picker | image）的条数 = **0**。
-#
-## app 自身 tag 的 E 级行（按形态归并）
-  11  E/UniDomManager(20137): batch--start--------
-  10  E/.dcloud.uniappx(20137): No package ID 96 found for resource ID 0x….
-  10  E/.dcloud.uniappx(20137): No package ID c4 found for resource ID 0x….
-   8  E/UniDomManager(20137): batch----time=3
-   8  E/UniDomManager(20137): layoutUpdateRecursive--耗时：1
-   7  E/UniDomManager(20137): flushPendingBatches--tiem=2 task size=12
-   6  E/UniDomManager(20137): batch--start-----midd---2
-   2  E/UniDomManager(20137): layoutUpdateRecursive--耗时：0
-   2  E/UniDomManager(20137): batch--start-----midd---3
-   1  E/UniDomManager(20137): flushPendingBatches--tiem=9 task size=53
-   1  E/UniDomManager(20137): flushPendingBatches--tiem=26 task size=78
-   1  E/UniDomManager(20137): flushPendingBatches--tiem=21 task size=85
-   1  E/UniDomManager(20137): batch--start-----midd---26
-   1  E/UniDomManager(20137): batch--start-----midd---30
-   1  E/UniDomManager(20137): batch--start-----midd---19
-   1  E/UniDomManager(20137): batch----time=32
-   1  E/UniDomManager(20137): batch----time=28
-   1  E/UniDomManager(20137): batch----time=21
-   1  E/UniDomManager(20137): flushPendingBatches--tiem=1 task size=12
-   1  E/UniDomManager(20137): layoutUpdateRecursive--耗时：2
+# ①a 采数窗口的 logcat（先 adb logcat -c 再取数：窗口 = 进入相册选择 → 选 1 张 → 完成 → 回应用上传成功）
+# 取数：adb logcat -d（全量捕获，非 grep 后的残片）
+
+总行数 = 4743
+E 级行（全量，含系统噪声）= 106
+app 进程（pid=26625）E 级行 = 20
+其中命中本次改动关键词（forum|markdown|toolbar|image|picker|upload|input|textarea|chooseImage）的条数 = 0
+
+## app 进程 E 级行逐条
+09-22 16:38:35.650 26625 26625 E UniDomManager: batch--start--------
+09-22 16:38:35.653 26625 26625 E UniDomManager: batch--start-----midd---3
+09-22 16:38:35.653 26625 26625 E UniDomManager: layoutUpdateRecursive--耗时：0
+09-22 16:38:35.653 26625 26625 E UniDomManager: batch----time=3
+09-22 16:38:35.655 26625 26625 E UniDomManager: flushPendingBatches--tiem=2 task size=18
+09-22 16:38:35.717 26625 26625 E UniDomManager: batch--start--------
+09-22 16:38:35.718 26625 26625 E UniDomManager: batch--start-----midd---1
+09-22 16:38:35.719 26625 26625 E UniDomManager: layoutUpdateRecursive--耗时：1
+09-22 16:38:35.719 26625 26625 E UniDomManager: batch----time=2
+09-22 16:38:35.735 26625 26625 E UniDomManager: flushPendingBatches--tiem=16 task size=15
+09-22 16:38:36.601 26625 26625 E UniDomManager: batch--start--------
+09-22 16:38:36.604 26625 26625 E UniDomManager: batch--start-----midd---3
+09-22 16:38:36.605 26625 26625 E UniDomManager: layoutUpdateRecursive--耗时：1
+09-22 16:38:36.605 26625 26625 E UniDomManager: batch----time=4
+09-22 16:38:36.613 26625 26625 E UniDomManager: flushPendingBatches--tiem=8 task size=29
+09-22 16:38:36.620 26625 26625 E UniDomManager: flushPendingBatches--tiem=0 task size=5
+09-22 16:38:54.725 26625 26625 E .dcloud.uniappx: No package ID 96 found for resource ID 0x96481453.
+09-22 16:38:54.726 26625 26625 E .dcloud.uniappx: No package ID c4 found for resource ID 0xc4a60684.
+09-22 16:38:54.746 26625 26625 E .dcloud.uniappx: No package ID 96 found for resource ID 0x96481453.
+09-22 16:38:54.747 26625 26625 E .dcloud.uniappx: No package ID c4 found for resource ID 0xc4a60684.

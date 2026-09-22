@@ -1,5 +1,5 @@
-# 发帖页 · Markdown 档（编写/预览 tab + 工具栏 5 枚 + 边界提示行）
-# 源：未压缩 uiautomator dump（adb exec-out uiautomator dump /dev/tty）
+# 发帖页 · Markdown 档（编写|预览 tab + 工具栏**恰好五枚** + 边界提示行；图片区仍是单个 `＋` + `n/9`）
+# 源：未压缩 uiautomator dump（adb shell uiautomator dump + adb pull；**不用** --compressed）
 
 ## text=
 请输入标题（1-100 字）
@@ -21,11 +21,11 @@ Markdown
 预览
 ###
 -
-&gt;
+>
 ```
 ---
 0/10000
 发布内容会显示 IP 属地
 表格与图表显示原文；粗体、链接不出样式；图片用下方入口
-拍照
-相册
+＋
+0/9

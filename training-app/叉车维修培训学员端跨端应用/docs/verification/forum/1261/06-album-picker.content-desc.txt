@@ -1,0 +1,10 @@
+# 选「从相册选择」后 —— uni-app x 图片选择器（`完成(0/9)`，额度 9 与 `count` 一致；**无应用内权限弹窗**）
+# 源：未压缩 uiautomator dump（adb shell uiautomator dump + adb pull；**不用** --compressed）
+
+## text=
+完成(0/9)
+选择图片
+所有图片
+预览(0)
+
+## content-desc=
