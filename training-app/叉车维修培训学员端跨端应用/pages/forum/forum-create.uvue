@@ -33,32 +33,18 @@
 
                 <view class="form-item">
                     <text class="form-label">{{ isResourceMode ? '简介' : '内容' }}</text>
-                    <textarea class="form-textarea"
+                    <!-- 输入区形态（ADR-0025 P3）：数据档位 / 编写预览 / 工具栏 / 图片双入口 / 提示行
+                         全在共享组件里（发帖与回复是**同一份**形态）；本页只接线与提交。 -->
+                    <ForumMarkdownInput :content="content" :preview-images="imagePreviewUrls"
+                        :image-count="images.length" variant="topic" :max-images="9"
+                        :maxlength="isResourceMode ? 2000 : 10000"
                         :placeholder="isResourceMode ? '介绍这份资料的内容与用途（≤2000 字）' : '请输入内容（1-10000 字）'"
-                        :maxlength="isResourceMode ? 2000 : 10000" v-model="content" />
-                    <text class="form-counter">{{ content.length }}/{{ isResourceMode ? 2000 : 10000 }}</text>
-                    <!-- 发布前披露（ADR-0045）：ui-conventions「不写说明性 hint 文本」的**明确例外**，
-                         文案单点在 utils/forumDisplay.FORUM_REGION_NOTICE —— 别在这里另抄一份，也别当装饰删掉。
-                         资源投稿走的是投稿接口（不落属地），故资源态不显示。 -->
-                    <text v-if="!isResourceMode" class="form-region-notice">{{ regionNotice }}</text>
-                </view>
-
-                <view v-if="!isResourceMode" class="form-item">
-                    <text class="form-label">图片</text>
-                    <view class="img-grid">
-                        <view v-for="(img, idx) in images" :key="idx" class="img-cell">
-                            <image class="img-thumb" :src="imgSrc(img)" mode="aspectFill"
-                                @click="onPreviewImage(idx)" />
-                            <view class="img-remove" @click.stop="onRemoveImage(idx)">
-                                <text class="img-remove-text">×</text>
-                            </view>
-                        </view>
-                        <view v-if="images.length < 9" class="img-add" @click="onAddImage">
-                            <text class="img-add-icon">{{ uploadingImage ? '…' : '＋' }}</text>
-                            <text class="img-add-text">{{ uploadingImage ? '上传中' : images.length + '/9'
-                            }}</text>
-                        </view>
-                    </view>
+                        :format="effectiveFormat" :show-format-switch="showFormatSwitch"
+                        :show-images="!isResourceMode" :show-region-notice="!isResourceMode"
+                        :uploading="uploadingImage"
+                        @update:content="onContentChange" @update:format="onFormatChange"
+                        @add-image="onAddImage" @remove-image="onRemoveImage"
+                        @preview-image="onPreviewImage" />
                 </view>
 
                 <!-- 资源投稿表单（#760）：私有组件承载，状态自持；primitive props 单向下发 -->
@@ -80,12 +66,14 @@
     import { onLoad, onShow } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
-    import { FORUM_REGION_NOTICE } from '../../utils/forumDisplay'
+    import { FORMAT_TEXT } from '../../utils/forumBody'
+    import { readAuthorFormat, writeAuthorFormat } from '../../utils/forumFormatPreference'
     import { createForumTopicApi, updateForumTopicApi, uploadForumImageApi, getForumTopicDetailApi } from '../../api/forum'
     import { getCurrentCredentialApi } from '../../api/credential'
     import { useAuthStore } from '../../stores/auth'
     import type { ForumTopicDetail } from '../../types/index'
     import ForumContributionForm from './components/forum-contribution-form.uvue'
+    import ForumMarkdownInput from './components/forum-markdown-input.uvue'
 
     /** 补全后端返回的相对文件 URL */
     function resolveFileUrl(url : string) : string {
@@ -99,9 +87,6 @@
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
     const authStore = useAuthStore()
-
-    /** 发布前披露文案单点在 utils/forumDisplay（ADR-0045）；模板不直调 import 函数，先落局部标识 */
-    const regionNotice : string = FORUM_REGION_NOTICE
 
     // ===== 分类选项（#760：资源 tab 承载投稿表单，为真模式非论坛类别） =====
     // ADR-0040：「备考经验」改为管理端认定，发布口不再提供 —— 分类行三段 = 广场/资源/知识问答
@@ -127,20 +112,54 @@
     const credentialId = ref<number>(0)
     const credentialName = ref<string>('')
 
+    // ===== 正文格式轴（ADR-0025 P3 输入区形态）=====
+    /** 新建态：作者上次声明的档位（根 ADR-0044「首次默认纯文本、之后记住上次选择」） */
+    const authorFormat = ref<string>(readAuthorFormat())
+    /** 编辑态：**帖子原格式**，只读 —— PUT 载荷按编辑不变式不带 `content_format`（P1 已落锁），
+        故编辑态不给档位控件，只按原格式决定给不给编写预览与工具栏 */
+    const editFormat = ref<string>(FORMAT_TEXT)
+
+    /** 图片预览 URL（组件只收预览地址；原始路径仍由本页持有用于提交） */
+    const imagePreviewUrls = computed<string[]>(() : string[] => {
+        const urls : string[] = []
+        for (let i = 0; i < images.value.length; i++) {
+            urls.push(resolveFileUrl(images.value[i]))
+        }
+        return urls
+    })
+
+    /** 档位切换：更新本地值并**记住**（发帖与回复共用一个记忆位，见 utils/forumFormatPreference） */
+    function onFormatChange(value : string) : void {
+        authorFormat.value = value
+        writeAuthorFormat(value)
+    }
+
+    /** 正文变更（组件上抛；工具栏插入也走这条回流，故草稿必须由页面持有） */
+    function onContentChange(value : string) : void {
+        content.value = value
+    }
+
     /** 资源 tab = 投稿模式；编辑态永不进资源（帖子无 resource 类别） */
     const isResourceMode = computed<boolean>(() : boolean => {
         return selectedCategory.value == 'resource' && !isEdit.value
     })
 
+    // ⚠️ 下面两条**必须**排在 `isResourceMode` 之后：UTS 编译到 Kotlin 后**没有变量提升**，
+    // 在前面的初始化式里引用后面声明的 computed 会直接 `unresolved reference`（④c 门实测，
+    // 见移动端 `AGENTS.md` 的 UTS 限制表最后几行）。
+    /** 实际生效的档位：资源投稿走投稿接口、**没有**格式契约 ⇒ 恒纯文本（不出现 tab / 工具栏） */
+    const effectiveFormat = computed<string>(() : string => {
+        if (isResourceMode.value) return FORMAT_TEXT
+        return isEdit.value ? editFormat.value : authorFormat.value
+    })
+
+    /** 档位控件只在**新建论坛帖**时出现：编辑态改不动、资源态存不下，控件留在那里就是承诺做不到的事 */
+    const showFormatSwitch = computed<boolean>(() : boolean => !isEdit.value && !isResourceMode.value)
+
     const headerTitle = computed<string>(() : string => {
         if (isEdit.value) return '编辑帖子'
         return isResourceMode.value ? '上传资源' : '发布新帖'
     })
-
-    /** 模板用：补全图片 URL */
-    function imgSrc(url : string) : string {
-        return resolveFileUrl(url)
-    }
 
     /** 提交按钮文案（资源模式提交在组件内，壳层按钮仅论坛态） */
     const submitLabel = computed<string>(() : string => {
@@ -201,6 +220,9 @@
             // 旧写法读 data.scope 恒为 buildTopicDetail 垫的 'general'，任何问答帖/经验帖
             // 一进编辑态就被归一成 discussion，保存即降级类别）
             selectedCategory.value = normalizeCategory(data.category)
+            // #1240 P3：编辑态把该帖的**原格式**读进来（只读）。它是「按原格式给不给编写预览与工具栏」
+            // 的判据；不写回任何载荷 —— 编辑不变式要求 PUT 不带 content_format（ADR-0044 / P1 已落锁）。
+            editFormat.value = data.content_format
         } catch (e) {
             console.error('[forum-create] loadTopicForEdit failed:', e)
             uni.showToast({ title: '加载帖子失败', icon: 'none' })
@@ -234,7 +256,8 @@
                 await updateForumTopicApi(editTopicId.value, title.value.trim(), content.value.trim(), images.value, selectedCategory.value)
                 uni.showToast({ title: '修改成功', icon: 'success' })
             } else {
-                await createForumTopicApi(title.value.trim(), content.value.trim(), images.value, selectedCategory.value)
+                // 新建：把作者的格式声明一并写入（P3 接上数据档位后，缺省不再靠「不带字段」表达）
+                await createForumTopicApi(title.value.trim(), content.value.trim(), images.value, selectedCategory.value, authorFormat.value)
                 uni.showToast({ title: '发布成功', icon: 'success' })
             }
             setTimeout(() => { goBack() }, 1000)
@@ -277,7 +300,12 @@
         }
     }
 
-    function onAddImage() : void {
+    /**
+     * 选图：**拍照 / 相册双入口**（ADR-0025 ⑦）—— 两个入口各自直达来源，不再共用系统选择器。
+     * uvue 侧粘贴 / 拖拽不可靠，故本端不做那两个入口（同 ⑦/ADR-0025 ③ 的具名不做）。
+     * @param source 'camera'（拍照，维修场景拍故障码 / 铭牌）| 'album'（相册）
+     */
+    function onAddImage(source : string) : void {
         if (uploadingImage.value) return
         const remaining = 9 - images.value.length
         if (remaining <= 0) {
@@ -287,7 +315,7 @@
         uni.chooseImage({
             count: remaining,
             sizeType: ['compressed'],
-            sourceType: ['album', 'camera'],
+            sourceType: [source],
             success: (res) => {
                 const paths = res.tempFilePaths as string[]
                 if (paths.length == 0) return
@@ -437,27 +465,10 @@
         border: 1rpx solid #e0e0e0;
     }
 
-    .form-textarea {
-        height: 400rpx;
-        background-color: #f8f9fa;
-        border-radius: 12rpx;
-        padding: 24rpx;
-        font-size: 30rpx;
-        color: #333333;
-        border: 1rpx solid #e0e0e0;
-    }
-
     .form-counter {
         font-size: 22rpx;
         color: #999999;
         text-align: right;
-        margin-top: 8rpx;
-    }
-
-    /* 发布前属地披露（ADR-0045 明确例外，勿清） */
-    .form-region-notice {
-        font-size: 22rpx;
-        color: #999999;
         margin-top: 8rpx;
     }
 
@@ -489,70 +500,6 @@
     .category-chip-text.active {
         color: #2979ff;
         font-weight: bold;
-    }
-
-    /* 图片选择区 */
-    .img-grid {
-        flex-direction: row;
-        flex-wrap: wrap;
-        margin-top: 16rpx;
-    }
-
-    .img-cell {
-        width: 180rpx;
-        height: 180rpx;
-        margin-right: 16rpx;
-        margin-bottom: 16rpx;
-        position: relative;
-    }
-
-    .img-thumb {
-        width: 180rpx;
-        height: 180rpx;
-        border-radius: 12rpx;
-        background-color: #f0f0f0;
-    }
-
-    .img-remove {
-        position: absolute;
-        top: 0;
-        right: 0;
-        width: 40rpx;
-        height: 40rpx;
-        border-radius: 0 0 0 12rpx;
-        background-color: rgba(0, 0, 0, 0.55);
-        align-items: center;
-        justify-content: center;
-    }
-
-    .img-remove-text {
-        font-size: 28rpx;
-        color: #ffffff;
-        line-height: 1;
-    }
-
-    .img-add {
-        width: 180rpx;
-        height: 180rpx;
-        margin-right: 16rpx;
-        margin-bottom: 16rpx;
-        border: 2rpx dashed #c0c4cc;
-        border-radius: 12rpx;
-        background-color: #fafbfc;
-        align-items: center;
-        justify-content: center;
-        flex-direction: column;
-    }
-
-    .img-add-icon {
-        font-size: 48rpx;
-        color: #909399;
-    }
-
-    .img-add-text {
-        font-size: 22rpx;
-        color: #909399;
-        margin-top: 8rpx;
     }
 
     /* 发布按钮区 */

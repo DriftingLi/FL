@@ -1,0 +1,453 @@
+<template>
+    <!-- 论坛**输入区形态**（ADR-0025 P3）：发帖表单与回复栏**共用一个**组件 —— 形态只有一份，
+         两处只接线（同根 ADR-0052 决策① 的目标）。档位轴三条互不混用：
+           · **数据档位**（纯文本 | Markdown）= 胶囊分段控件，**会永久保存**，编辑态不渲染（见下）；
+           · **视图档位**（编写 | 预览）= 下划线 tab，**临时**、只在 Markdown 档存在；
+           · 图片 = 拍照 / 相册**两个**直达入口（ADR-0025 ⑦）。
+         纯文本档**不出现** tab / 工具栏 / 边界提示行（ADR-0025 ⑥-5，照根 ADR-0052 决策⑧）：
+         没有可预览的渲染结果，摆一排按钮只会制造误解。 -->
+    <view class="md-input">
+        <!-- 数据档位（胶囊）。编辑态**不渲染**：PUT 载荷按编辑不变式不带 `content_format`（P1 已落锁），
+             控件留在那里就是承诺一件做不到的事 —— 与工具栏「按钮必须真能渲染」同一条纪律。 -->
+        <view v-if="showFormatSwitch" class="format-row">
+            <view v-for="(opt, idx) in formatOptions" :key="opt.value" class="format-chip"
+                :class="{ active: format == opt.value, 'ml-16': idx > 0 }"
+                @click="onSelectFormat(opt.value)">
+                <text class="format-chip-text" :class="{ active: format == opt.value }">{{ opt.label }}</text>
+            </view>
+        </view>
+
+        <!-- 视图档位（下划线 tab）。与数据档位**形态必须不同**：同卡片并排两组同款胶囊，
+             用户分不清哪组会永久保存（根 ADR-0052 决策②）。 -->
+        <view v-if="isMarkdown" class="view-tabs">
+            <view class="view-tab" :class="{ active: isEditView }" @click="onSelectView('edit')">
+                <text class="view-tab-text" :class="{ active: isEditView }">编写</text>
+            </view>
+            <view class="view-tab ml-32" :class="{ active: !isEditView }" @click="onSelectView('preview')">
+                <text class="view-tab-text" :class="{ active: !isEditView }">预览</text>
+            </view>
+        </view>
+
+        <!-- 预览档：**与发布同源** —— 同一个解析器（经 utils/forumBody 走论坛档声明）、
+             同一个块组件（forum-markdown-blocks），不另起一份预览渲染（根 ADR-0046）。 -->
+        <view v-if="isMarkdown && !isEditView" class="preview-box">
+            <text v-if="content.length == 0" class="preview-empty">还没有内容可预览</text>
+            <ForumMarkdownBlocks v-else :blocks="previewBlocks" />
+        </view>
+
+        <view v-else class="editor-box">
+            <!-- Markdown 档一律多行（结构语法要换行）；纯文本档的回复保持原来的单行输入形态（零回归） -->
+            <textarea v-if="isMarkdown || !isReply" class="md-textarea"
+                :class="isReply ? 'md-textarea-reply' : ''"
+                :value="content" :maxlength="maxlength" :placeholder="placeholder" @input="onContentInput" />
+            <input v-else class="md-input-line" type="text" :value="content" :maxlength="maxlength"
+                :placeholder="placeholder" @input="onContentInput" />
+
+            <!-- 视图档位为「编写」时的工具栏：一排可横滑的语法记号，**长按出中文提示**
+                 （手机没有 hover，长按是最接近的既有手势且不占版面 —— ADR-0025 决策⑥）。 -->
+            <scroll-view v-if="isMarkdown" class="toolbar-scroll" scroll-x="true">
+                <view class="toolbar-row">
+                    <view v-for="(btn, idx) in toolbarButtons" :key="btn.member" class="toolbar-item"
+                        @click="onToolbarTap(idx)" @longpress="onToolbarLongPress(idx)">
+                        <text class="toolbar-item-text">{{ btn.syntax }}</text>
+                    </view>
+                </view>
+            </scroll-view>
+        </view>
+
+        <!-- 发帖侧的字数计数（回复侧单行输入，不占这一行） -->
+        <text v-if="!isReply" class="counter-text">{{ content.length }}/{{ maxlength }}</text>
+
+        <!-- 两条功能提示都放在编辑/预览**之外**：预览档也要看得见（属地是发布前披露，不能只在编写档出现） -->
+        <text v-if="showRegionNotice" class="region-notice">{{ regionNotice }}</text>
+        <text v-if="isMarkdown" class="boundary-notice">{{ boundaryNotice }}</text>
+
+        <!-- 图片区：拍照 / 相册**双入口**（维修场景要拍故障码 / 铭牌；uvue 侧粘贴拖拽不可靠，故不提供） -->
+        <view v-if="showImages" class="image-row">
+            <view v-for="(img, idx) in previewImages" :key="idx" class="image-cell">
+                <image class="image-thumb" :src="img" mode="aspectFill" @click="onPreviewImage(idx)" />
+                <view class="image-remove" @click.stop="onRemoveImage(idx)">
+                    <text class="image-remove-text">×</text>
+                </view>
+            </view>
+            <view v-if="imageCount < maxImages" class="image-add" @click="onAddImage('camera')">
+                <text class="image-add-text">{{ uploading ? '…' : '拍照' }}</text>
+            </view>
+            <view v-if="imageCount < maxImages" class="image-add ml-16" @click="onAddImage('album')">
+                <text class="image-add-text">{{ uploading ? '…' : '相册' }}</text>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref, computed } from 'vue'
+    import { applyToolbarInsert, forumToolbarMembers, toolbarLabel, toolbarSyntax } from '../../../utils/markdownToolbar'
+    import { FORMAT_MARKDOWN, FORMAT_TEXT, forumContentBlocks, isMarkdownFormat } from '../../../utils/forumBody'
+    import { FORUM_MARKDOWN_BOUNDARY_NOTICE, FORUM_REGION_NOTICE } from '../../../utils/forumDisplay'
+    import type { MarkdownBlock } from '../../../types/index'
+    import ForumMarkdownBlocks from './forum-markdown-blocks.uvue'
+
+    /**
+     * 两条功能提示的文案**单点**在 `utils/forumDisplay`（模板不直调 import 函数，先落局部标识）。
+     * 它们都由本组件渲染 —— 发帖与回复两处共用同一份，页面上不再各留一份。
+     */
+    const regionNotice : string = FORUM_REGION_NOTICE
+    const boundaryNotice : string = FORUM_MARKDOWN_BOUNDARY_NOTICE
+
+    const props = withDefaults(defineProps<{
+        /** 正文（父层持有：工具栏插入要能把结果写回输入框，故不在此组件内自持草稿） */
+        content?: string
+        /** 已选图片的**预览 URL**（父层预解析；原始路径留在父层用于提交） */
+        previewImages?: string[]
+        /** 已选图片数量（只为限额判据，不读原始路径） */
+        imageCount?: number
+        /** 'topic'（发帖表单）/ 'reply'（底部回复栏）—— 两处形态的差异只在这个 prop 上 */
+        variant?: string
+        maxImages?: number
+        maxlength?: number
+        placeholder?: string
+        /** 当前声明的格式（`text` / `markdown`）；父层持有并持久化 */
+        format?: string
+        /** 是否给作者切换档位（**编辑态为 false**：PUT 不带该字段，控件不许承诺做不到的事） */
+        showFormatSwitch?: boolean
+        showImages?: boolean
+        showRegionNotice?: boolean
+        uploading?: boolean
+    }>(), {
+        content: '',
+        previewImages: () => [] as string[],
+        imageCount: 0,
+        variant: 'topic',
+        maxImages: 9,
+        maxlength: 10000,
+        placeholder: '',
+        format: '',
+        showFormatSwitch: true,
+        showImages: true,
+        showRegionNotice: true,
+        uploading: false
+    })
+
+    const emit = defineEmits<{
+        (e: 'update:content', value: string): void
+        (e: 'update:format', value: string): void
+        (e: 'add-image', source: string): void
+        (e: 'remove-image', index: number): void
+        (e: 'preview-image', index: number): void
+    }>()
+
+    /** 数据档位选项（胶囊分段控件）。文案与取值都是单点，页面不另抄 */
+    type FormatOption = { label : string, value : string }
+    const formatOptions : FormatOption[] = [
+        { label: '纯文本', value: FORMAT_TEXT },
+        { label: 'Markdown', value: FORMAT_MARKDOWN },
+    ]
+
+    /** 工具栏按钮（成员 / 长按文案 / 语法记号）—— 三项都取自 `utils/markdownToolbar` 的唯一实现 */
+    type ToolbarButton = { member : string, label : string, syntax : string }
+
+    /**
+     * 本档该出现的按钮：`forumToolbarMembers()` 与**成员声明表**求交的结果
+     * （`markdownToolbarBehavior.test.js` 的 round-trip 判据钉住「按钮承诺的语法真能渲染」）。
+     * 页面层**不直引档位常量与解析器** —— 那两样只经 `utils/markdownToolbar` 这一层进来
+     * （P2 立的接线口径：直引等于绕过格式轴自己判档）。
+     */
+    function buildToolbarButtons() : ToolbarButton[] {
+        const members = forumToolbarMembers()
+        const out : ToolbarButton[] = []
+        for (let i = 0; i < members.length; i++) {
+            out.push({
+                member: members[i],
+                label: toolbarLabel(members[i]),
+                syntax: toolbarSyntax(members[i]),
+            } as ToolbarButton)
+        }
+        return out
+    }
+    const toolbarButtons : ToolbarButton[] = buildToolbarButtons()
+
+    /** 视图档位（内部状态：编写 / 预览是临时视图，与持久化的数据档位分开） */
+    const viewMode = ref<string>('edit')
+
+    const isReply = computed<boolean>(() : boolean => props.variant == 'reply')
+    const isMarkdown = computed<boolean>(() : boolean => isMarkdownFormat(props.format))
+    /** 预览档只在 Markdown 档存在；纯文本档恒走编写（于是不会有「预览纯文本」这种无意义档） */
+    const isEditView = computed<boolean>(() : boolean => !isMarkdown.value || viewMode.value == 'edit')
+
+    /** 预览块：与发布同一条格式轴（真执行守护见 `utils/forumBodyBehavior.test.js`） */
+    const previewBlocks = computed<MarkdownBlock[]>(() : MarkdownBlock[] => forumContentBlocks(props.content, props.format))
+
+    /**
+     * 工具栏插入的落点（选区末端）。
+     *
+     * **已知偏差（如实登记，见 ADR-0025 实施回记 P3）**：插入后**不控制**输入框的光标落位 ——
+     * 全仓对 `<textarea :cursor>` 与 `selectionStart` 都是 **0 先例**，uvue 侧的光标控制无法在不
+     * 上真机的情况下判定，而 ADR-0025 只要求「工具栏可横滑 + 长按出中文提示」，未要求选区语义
+     * （选区语义是根 ADR-0052 决策⑩ 的 **Web** 机制）。纯函数 `applyToolbarInsert` **已完整支持
+     * 选区**（含落位返回），接线到选区只是把这里换成真实选区，属一次独立改动。
+     */
+    const caret = ref<number>(0)
+
+    function onContentInput(e : InputEvent) : void {
+        const value = e.detail.value
+        caret.value = value.length
+        emit('update:content', value)
+    }
+
+    function onSelectFormat(value : string) : void {
+        viewMode.value = 'edit'
+        emit('update:format', value)
+    }
+
+    function onSelectView(mode : string) : void {
+        viewMode.value = mode
+    }
+
+    function onToolbarTap(index : number) : void {
+        const btn = toolbarButtons[index]
+        const result = applyToolbarInsert(props.content, caret.value, caret.value, btn.member)
+        caret.value = result.start
+        emit('update:content', result.text)
+    }
+
+    /** 长按出中文提示（ADR-0025 决策⑥）。文案单点在 `utils/markdownToolbar.toolbarLabel`，不许另抄 */
+    function onToolbarLongPress(index : number) : void {
+        uni.showToast({ title: toolbarButtons[index].label, icon: 'none' })
+    }
+
+    /** 图片入口：`camera` 直达拍照 / `album` 直达相册（双入口，不再共用系统选择器） */
+    function onAddImage(source : string) : void {
+        emit('add-image', source)
+    }
+
+    function onRemoveImage(index : number) : void {
+        emit('remove-image', index)
+    }
+
+    function onPreviewImage(index : number) : void {
+        emit('preview-image', index)
+    }
+</script>
+
+<style lang="scss">
+    .md-input {
+        flex-direction: column;
+    }
+
+    /* ===== 数据档位（胶囊分段控件）===== */
+    .format-row {
+        flex-direction: row;
+        align-items: center;
+        margin-bottom: 16rpx;
+    }
+
+    .format-chip {
+        padding: 8rpx 24rpx;
+        border-radius: 28rpx;
+        background-color: #f5f5f5;
+        border: 1rpx solid #e0e0e0;
+    }
+
+    .format-chip.active {
+        background-color: #e8f0fe;
+        border: 1rpx solid #2979ff;
+    }
+
+    .format-chip-text {
+        font-size: 24rpx;
+        color: #666666;
+    }
+
+    .format-chip-text.active {
+        color: #2979ff;
+        font-weight: bold;
+    }
+
+    .ml-16 {
+        margin-left: 16rpx;
+    }
+
+    .ml-32 {
+        margin-left: 32rpx;
+    }
+
+    /* ===== 视图档位（下划线 tab）===== */
+    .view-tabs {
+        flex-direction: row;
+        align-items: center;
+        border-bottom: 1rpx solid #eeeeee;
+        margin-bottom: 16rpx;
+    }
+
+    .view-tab {
+        padding-bottom: 12rpx;
+        border-bottom: 4rpx solid #ffffff;
+    }
+
+    .view-tab.active {
+        border-bottom: 4rpx solid #2979ff;
+    }
+
+    .view-tab-text {
+        font-size: 28rpx;
+        color: #666666;
+    }
+
+    .view-tab-text.active {
+        color: #2979ff;
+        font-weight: bold;
+    }
+
+    /* ===== 编辑区 ===== */
+    .editor-box {
+        flex-direction: column;
+    }
+
+    .md-textarea {
+        height: 400rpx;
+        background-color: #f8f9fa;
+        border-radius: 12rpx;
+        padding: 24rpx;
+        font-size: 30rpx;
+        color: #333333;
+        border: 1rpx solid #e0e0e0;
+    }
+
+    /* 回复栏里的 Markdown 档：比发帖矮一档，别把回复栏顶到半屏 */
+    .md-textarea-reply {
+        height: 220rpx;
+        padding: 16rpx;
+        font-size: 28rpx;
+    }
+
+    /* 回复栏纯文本档的输入行：与改动前的 `.reply-input` 同口径（常见路径视觉零回归） */
+    .md-input-line {
+        height: 72rpx;
+        background-color: #f5f5f5;
+        border-radius: 36rpx;
+        padding: 0 28rpx;
+        font-size: 28rpx;
+        color: #333333;
+    }
+
+    .counter-text {
+        font-size: 22rpx;
+        color: #999999;
+        text-align: right;
+        margin-top: 8rpx;
+    }
+
+    /* ===== 工具栏（可横滑；溢出靠 flex-direction: row + 子项 flex-shrink: 0 撑出，
+           不写 white-space —— 它只在 <text> / <button> 上合法）===== */
+    .toolbar-scroll {
+        flex-direction: row;
+        margin-top: 16rpx;
+    }
+
+    .toolbar-row {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .toolbar-item {
+        flex-shrink: 0;
+        padding: 12rpx 28rpx;
+        margin-right: 16rpx;
+        border-radius: 8rpx;
+        background-color: #f5f7fa;
+        border: 1rpx solid #e4e7ed;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .toolbar-item-text {
+        font-size: 28rpx;
+        color: #2979ff;
+        font-family: monospace;
+    }
+
+    /* ===== 功能提示（两条都是 ui-conventions 的明确例外，别当装饰删）===== */
+    .region-notice {
+        font-size: 22rpx;
+        color: #999999;
+        margin-top: 12rpx;
+    }
+
+    .boundary-notice {
+        font-size: 22rpx;
+        color: #999999;
+        margin-top: 8rpx;
+    }
+
+    /* ===== 预览档 ===== */
+    .preview-box {
+        background-color: #f8f9fa;
+        border-radius: 12rpx;
+        padding: 24rpx;
+        border: 1rpx solid #e0e0e0;
+    }
+
+    .preview-empty {
+        font-size: 26rpx;
+        color: #999999;
+    }
+
+    /* ===== 图片区 ===== */
+    .image-row {
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        margin-top: 16rpx;
+    }
+
+    .image-cell {
+        width: 160rpx;
+        height: 160rpx;
+        margin-right: 16rpx;
+        margin-bottom: 16rpx;
+        position: relative;
+    }
+
+    .image-thumb {
+        width: 160rpx;
+        height: 160rpx;
+        border-radius: 12rpx;
+        background-color: #f0f0f0;
+    }
+
+    .image-remove {
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 40rpx;
+        height: 40rpx;
+        border-radius: 0 0 0 12rpx;
+        background-color: rgba(0, 0, 0, 0.55);
+        align-items: center;
+        justify-content: center;
+    }
+
+    .image-remove-text {
+        font-size: 28rpx;
+        color: #ffffff;
+        line-height: 1;
+    }
+
+    .image-add {
+        width: 160rpx;
+        height: 160rpx;
+        margin-right: 16rpx;
+        margin-bottom: 16rpx;
+        border: 2rpx dashed #c0c4cc;
+        border-radius: 12rpx;
+        background-color: #fafbfc;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .image-add-text {
+        font-size: 24rpx;
+        color: #909399;
+    }
+</style>

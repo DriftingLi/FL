@@ -268,6 +268,7 @@ const MODULES = {
       'pages/forum/components/forum-experience-sort-bar.uvue',
       'pages/forum/components/forum-featured-filter.uvue',
       'pages/forum/components/forum-markdown-blocks.uvue',
+      'pages/forum/components/forum-markdown-input.uvue',
       'pages/forum/components/forum-qa-header.uvue',
       'pages/forum/components/forum-reply-list.uvue',
       'pages/forum/components/forum-report-dialog.uvue',

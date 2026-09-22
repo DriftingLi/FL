@@ -7,7 +7,8 @@
  *    （招聘域已随 #705 退场部分整体删除，退场回归见「招聘 tab 退场契约」）
  * 3) 行为保持：手术不改像素与跳转语义——上传格子仍跳 forum-create（缺陷已登记 #662）、
  *    问答变体仍由 currentTab 驱动、
- *    回复栏 v-model 留壳层（uvue 跨组件 v-model 属编译风险区，composer 状态下沉即达预算）
+ *    回复栏**草稿仍由页面/composable 持有**，与输入区组件之间走**显式 prop + emit** 而非跨组件
+ *    `v-model`（uvue 跨组件 v-model 属编译风险区；#1240 P3 把输入区形态收进共享组件后这条不变）
  * 4) 600 软预算 / 目录 ≤2 层：**已由声明面执法**（`utils/modules.js` +
  *    `utils/modulesDeclarationContract.test.js` 的 A3/A5/A10），本文件不再各写一遍（ADR-0023 票 C #1219）
  * 5) allowlist 不回潮：forum 页面文件不得出现在 GUARD_ALLOWLIST
@@ -364,9 +365,15 @@ describe('行为保持契约（手术不改跳转、交互与乐观更新语义�
     expect(detailPage).toContain('v-if="!canDelete && !canEdit"');
   });
 
-  it('回复栏留壳层且 v-model 绑定不变（uvue 跨组件 v-model 风险区，composer 状态下沉即达预算）', () => {
-    expect(detailPage).toContain('v-model="replyContent"');
-    expect(detailPage).toContain('v-if="replyImages.length < 3"');
+  it('回复栏留壳层、草稿仍由页面持有（跨组件 v-model 属 uvue 编译风险区 ⇒ 走显式 prop + emit）', () => {
+    // 壳层（含发送按钮）仍在本页；草稿经显式 `:content` + `@update:content` 回流 ——
+    // **不用**跨组件 `v-model`，那正是本条要防的编译风险区（#1240 P3 收进共享组件后口径不变）
+    expect(detailPage).toContain('variant="reply"');
+    expect(detailPage).toContain(':content="replyContent"');
+    expect(detailPage).toContain('@update:content="onReplyContentChange"');
+    expect(detailPage).not.toContain('v-model="replyContent"');
+    expect(detailPage).toContain(':image-count="replyImages.length"');
+    expect(detailPage).toContain(':max-images="3"');
     expect(detailPage).toContain("{{ submitting ? '发送中' : '发送' }}");
   });
 
@@ -441,6 +448,8 @@ describe('IP 属地契约（ADR-0045：发布那一刻的快照，市优先退�
   const header = read('pages/forum/components/forum-topic-header.uvue');
   const createPage = read('pages/forum/forum-create.uvue');
   const card = read('pages/forum/components/forum-topic-card.uvue');
+  /** #1240 P3：两个输入区的**形态**收进共享组件 —— 披露提示的承载点也随之移到那里 */
+  const inputComponent = read('pages/forum/components/forum-markdown-input.uvue');
 
   it('types：帖子 / 回复 / 详情三处 DTO 都带 ip_province + ip_city（空串仍是字段，不是可空）', () => {
     expect((types.match(/ip_province : string/g) || []).length).toBe(3);
@@ -463,12 +472,16 @@ describe('IP 属地契约（ADR-0045：发布那一刻的快照，市优先退�
     expect(display).toMatch(/if \(city\.length > 0\) return city[\s\S]{0,40}return province/);
   });
 
-  it('披露文案单点导出，两个输入区都不另抄字面量', () => {
+  it('披露文案单点导出，输入区不另抄字面量（#1240 P3 起承载点是共享输入区组件）', () => {
     expect(display).toContain("export const FORUM_REGION_NOTICE : string = '发布内容会显示 IP 属地'");
+    // 两处页面都不再自持该文案（它随输入区形态一起收进了共享组件），也不直引常量
     for (const f of [detailPage, createPage]) {
-      expect(f).toContain('FORUM_REGION_NOTICE');
+      expect(f).not.toContain('FORUM_REGION_NOTICE');
       expect(f).not.toContain('发布内容会显示 IP 属地');
     }
+    // 唯一的承载点：组件引常量、不抄字面量
+    expect(inputComponent).toContain('FORUM_REGION_NOTICE');
+    expect(inputComponent).not.toContain('发布内容会显示 IP 属地');
   });
 
   it('详情壳层扁平下发属地：帖子作者行 + 每条回复（组件不自行拼口径）', () => {
@@ -491,12 +504,14 @@ describe('IP 属地契约（ADR-0045：发布那一刻的快照，市优先退�
     expect(header).toMatch(/v-if="regionText\.length > 0" class="post-region">· \{\{ regionText \}\}/);
   });
 
-  it('发布前披露在场：回复输入区与发帖表单各一行（ADR-0045 明确例外，勿清）', () => {
-    expect(detailPage).toContain('class="reply-region-notice">{{ regionNotice }}');
-    expect(createPage).toContain('class="form-region-notice">{{ regionNotice }}');
-    // 版面里那两行确实是渲染出来的节点，不是只留注释
-    expect(detailPage).toMatch(/<text class="reply-region-notice">/);
-    expect(createPage).toMatch(/<text v-if="!isResourceMode" class="form-region-notice">/);
+  it('发布前披露在场：两个输入区各一行（ADR-0045 明确例外，勿清）', () => {
+    // 承载点收进共享输入区组件（P3）；**渲染出来的节点**在组件里，两处页面各自决定显不显示：
+    expect(inputComponent).toContain('<text v-if="showRegionNotice" class="region-notice">{{ regionNotice }}</text>');
+    // 缺省 true ⇒ 回复栏不传该 prop 也照常显示（回复必落属地）
+    expect(inputComponent).toContain('showRegionNotice: true');
+    // 发帖表单在**资源态**不显示（资源走投稿接口、不落属地）
+    expect(createPage).toContain(':show-region-notice="!isResourceMode"');
+    expect(detailPage).toContain('variant="reply"');
   });
 
   it('列表卡片不加属地（ADR-0045：卡片信息密度已高）', () => {

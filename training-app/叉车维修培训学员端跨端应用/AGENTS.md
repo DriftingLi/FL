@@ -52,7 +52,12 @@ AI 安全审计用 DeepSec（Shield）。See `docs/agents/security-scan.md`.
 
 页面保持整洁：不要写冗余的小标题、装饰性提示与说明性 hint 文本，有的话就清理，仅保留必要的功能性提示。删除 hint 时同步删除对应的 CSS class 与 scoped style，避免残留死代码。
 
-**明确例外（不要清）**：论坛**发帖 / 回复输入区的属地披露提示**（「发布内容会显示 IP 属地」，文案单点 `utils/forumDisplay.uts` 的 `FORUM_REGION_NOTICE`）属「必要的功能性提示」而非装饰——属地在点发布那一刻才产生，事前告知比事后解释便宜（ADR-0045）。按本条约定清理 hint 时**跳过它**，并一并保留其 `.reply-region-notice` / `.form-region-notice` 样式。
+**明确例外（不要清）**：
+
+1. 论坛**发帖 / 回复输入区的属地披露提示**（「发布内容会显示 IP 属地」，文案单点 `utils/forumDisplay.uts` 的 `FORUM_REGION_NOTICE`）属「必要的功能性提示」而非装饰——属地在点发布那一刻才产生，事前告知比事后解释便宜（ADR-0045）。
+2. Markdown 档的**能力与边界提示行**（文案单点 `utils/forumDisplay.uts` 的 `FORUM_MARKDOWN_BOUNDARY_NOTICE`）—— 它**只讲边界、不讲能力清单**（移动端 ADR-0025 ⑥-5），依据是根 ADR-0046 的「判据放在作者看得见的地方（编辑器提示 + 预览里的越界说明）」；同一条例外在根 `docs/agents/ui-conventions.md` 里对应 Web 侧的 `FORUM_MARKDOWN_HINT`。
+
+两条都由共享输入区组件 `pages/forum/components/forum-markdown-input.uvue` 渲染（发帖与回复**同一份形态**，ADR-0025 P3），样式类是该组件的 `.region-notice` / `.boundary-notice`；页面侧原来的 `.reply-region-notice` / `.form-region-notice` 已随形态迁移删除。按本条约定清理 hint 时**跳过这两条**。
 
 ### Tailwind 增量共存四条边界规则
 

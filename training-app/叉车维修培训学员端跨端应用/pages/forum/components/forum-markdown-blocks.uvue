@@ -42,7 +42,7 @@
     })
 </script>
 
-<style>
+<style lang="scss">
     .md-body {
         flex-direction: column;
     }

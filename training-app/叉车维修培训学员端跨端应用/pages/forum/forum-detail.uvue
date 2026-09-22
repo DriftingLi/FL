@@ -51,23 +51,19 @@
                 @load-more="loadMoreReplies" />
         </scroll-view>
 
-        <!-- 底部回复输入栏 -->
+        <!-- 底部回复栏：与发帖表单**共用同一份输入区形态**（ADR-0025 P3）。
+             数据档位常驻一行（它是「Markdown 完全 opt-in」下唯一的入口，可发现性靠它）；
+             tab / 工具栏 / 边界提示行只在 Markdown 档出现（⑥-5）。 -->
         <view v-if="topic != null" class="reply-bar">
-            <!-- 发布前披露（ADR-0045）：ui-conventions「不写说明性 hint 文本」的**明确例外**，
-                 文案单点在 utils/forumDisplay.FORUM_REGION_NOTICE —— 别在这里另抄一份，也别当装饰删掉 -->
-            <text class="reply-region-notice">{{ regionNotice }}</text>
-            <view class="reply-bar-row">
-                <view v-for="(img, idx) in replyPreviewImages" :key="idx" class="reply-preview"
-                    @click="onPreviewReplyImage(idx)">
-                    <image class="reply-preview-img" :src="img" mode="aspectFill" />
-                    <view class="reply-preview-remove" @click.stop="onRemoveReplyImage(idx)">
-                        <text class="reply-preview-remove-text">×</text>
-                    </view>
-                </view>
-                <view v-if="replyImages.length < 3" class="reply-add" @click="onAddReplyImage">
-                    <text class="reply-add-text">{{ uploadingReplyImage ? '…' : '＋' }}</text>
-                </view>
-                <input class="reply-input" type="text" placeholder="写下你的回复..." v-model="replyContent" />
+            <ForumMarkdownInput :content="replyContent" :preview-images="replyPreviewImages"
+                :image-count="replyImages.length" variant="reply" :max-images="3"
+                :maxlength="10000" placeholder="写下你的回复..."
+                :format="replyFormat" :show-format-switch="true"
+                :uploading="uploadingReplyImage"
+                @update:content="onReplyContentChange" @update:format="onReplyFormatChange"
+                @add-image="onAddReplyImage" @remove-image="onRemoveReplyImage"
+                @preview-image="onPreviewReplyImage" />
+            <view class="reply-actions">
                 <view class="reply-btn" :class="{ disabled: replyContent.length == 0 || submitting }"
                     @click="onSubmitReply">
                     <text class="reply-btn-text">{{ submitting ? '发送中' : '发送' }}</text>
@@ -88,6 +84,7 @@
     import ForumTopicBody from './components/forum-topic-body.uvue'
     import ForumReplyList from './components/forum-reply-list.uvue'
     import ForumReportDialog from './components/forum-report-dialog.uvue'
+    import ForumMarkdownInput from './components/forum-markdown-input.uvue'
     import { useTopicDetail } from '../../composables/useTopicDetail'
     import { useReplyComposer } from '../../composables/useReplyComposer'
     import { useReport } from '../../composables/useReport'
@@ -95,11 +92,8 @@
     import { goBack } from '../../utils/navigation'
     import { formatDateTimeStr } from '../../utils/format'
     import type { ForumReplyDisplay } from '../../utils/forumDetailDisplay'
-    import { resolveFileUrl, getAuthorInitial, getAvatarColor, regionLabel, FORUM_REGION_NOTICE } from '../../utils/forumDisplay'
+    import { resolveFileUrl, getAuthorInitial, getAvatarColor, regionLabel } from '../../utils/forumDisplay'
     import type { ForumReply } from '../../types/index'
-
-    /** 发布前披露文案单点在 utils/forumDisplay（ADR-0045）；模板不直调 import 函数，先落局部标识 */
-    const regionNotice : string = FORUM_REGION_NOTICE
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
@@ -115,9 +109,15 @@
     } = detail
     const composer = useReplyComposer()
     const {
-        replyContent, replyImages, replyPreviewImages, uploadingReplyImage, submitting,
+        replyContent, replyImages, replyPreviewImages, uploadingReplyImage, submitting, replyFormat,
+        onFormatChange: onReplyFormatChange,
         onAddReplyImage, onRemoveReplyImage, onPreviewReplyImage,
     } = composer
+
+    /** 正文变更（组件上抛；工具栏插入也走这条回流，故草稿由 composable 持有） */
+    function onReplyContentChange(value : string) : void {
+        replyContent.value = value
+    }
     const report = useReport()
     const {
         showReportModal, reportTargetType, submittingReport, onReportReply, onCloseReport, onSubmitReport,
@@ -412,7 +412,7 @@
         margin-bottom: 24rpx;
     }
 
-    /* 底部回复栏 */
+    /* 底部回复栏（形态本身在 forum-markdown-input，本页只留外壳与发送按钮） */
     .reply-bar {
         flex-direction: column;
         padding: 12rpx 24rpx;
@@ -420,75 +420,11 @@
         border-top: 1rpx solid #eeeeee;
     }
 
-    /* 发布前属地披露（ADR-0045 明确例外，勿清） */
-    .reply-region-notice {
-        font-size: 20rpx;
-        color: #999999;
-    }
-
-    .reply-bar-row {
+    .reply-actions {
         flex-direction: row;
+        justify-content: flex-end;
         align-items: center;
         margin-top: 8rpx;
-    }
-
-    .reply-preview {
-        width: 56rpx;
-        height: 56rpx;
-        margin-right: 12rpx;
-        position: relative;
-    }
-
-    .reply-preview-img {
-        width: 56rpx;
-        height: 56rpx;
-        border-radius: 8rpx;
-        background-color: #f0f0f0;
-    }
-
-    .reply-preview-remove {
-        position: absolute;
-        top: -6rpx;
-        right: -6rpx;
-        width: 32rpx;
-        height: 32rpx;
-        border-radius: 16rpx;
-        background-color: rgba(0, 0, 0, 0.55);
-        align-items: center;
-        justify-content: center;
-    }
-
-    .reply-preview-remove-text {
-        font-size: 22rpx;
-        color: #ffffff;
-        line-height: 1;
-    }
-
-    .reply-add {
-        width: 56rpx;
-        height: 56rpx;
-        margin-right: 12rpx;
-        border: 1rpx solid #d0d0d0;
-        border-radius: 8rpx;
-        background-color: #f5f5f5;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .reply-add-text {
-        font-size: 36rpx;
-        color: #909399;
-        line-height: 1;
-    }
-
-    .reply-input {
-        flex: 1;
-        height: 72rpx;
-        background-color: #f5f5f5;
-        border-radius: 36rpx;
-        padding: 0 28rpx;
-        font-size: 28rpx;
-        margin-right: 16rpx;
     }
 
     .reply-btn {
