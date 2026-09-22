@@ -33,7 +33,7 @@
 
                 <view class="form-item">
                     <text class="form-label">{{ isResourceMode ? '简介' : '内容' }}</text>
-                    <!-- 输入区形态（ADR-0025 P3）：数据档位 / 编写预览 / 工具栏 / 图片双入口 / 提示行
+                    <!-- 输入区形态（ADR-0025 P3）：数据档位 / 编写预览 / 工具栏 / 图片单入口 / 提示行
                          全在共享组件里（发帖与回复是**同一份**形态）；本页只接线与提交。 -->
                     <ForumMarkdownInput :content="content" :preview-images="imagePreviewUrls"
                         :image-count="images.length" variant="topic" :max-images="topicImageLimit"

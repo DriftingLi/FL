@@ -40,7 +40,11 @@ const dto = () => loadUts(DTO_UTS, { ...helpers() });
 
 /**
  * `api/forum.uts` 的格式缺省取自 `utils/forumBody`（不写裸字面量 `'text'`）⇒ 注入**真执行**的常量。
- * 这顺带成了一条接线判据：谁把 api 里的缺省改回裸字面量，本套件会立刻因缺绑定而报错（fail-closed）。
+ *
+ * ⚠️ **据实更正（2026-09-22）**：这**不**构成「fail-closed 接线判据」（P3 复核回写的原表述把方向写反了）。
+ * `utils/utsHarness.js` 只在「被测文件 import 的名字没被注入」时抛缺绑定，而把缺省改回裸字面量会**同时删掉
+ * import 行** ⇒ 不会缺绑定，本套件照绿（且 `FORMAT_TEXT` 的真实值本就是 `'text'`）。真正 fail-closed 的方向
+ * 是反的：api 保留 import 而这里忘了注入，才会红。⇒「api 不写裸字面量」目前**没有**用例断言，属已登记缺口。
  */
 function formatBindings() {
   const md = loadUts(MD_UTS, {});

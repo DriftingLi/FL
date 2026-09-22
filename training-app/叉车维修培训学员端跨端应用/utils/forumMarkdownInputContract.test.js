@@ -1,10 +1,10 @@
 /**
- * 论坛**输入区形态**契约（#1240 P3；ADR-0025 ⑥-5/⑥-6、⑦，根 ADR-0052 决策①/②/⑧）
+ * 论坛**输入区形态**契约（#1240 P3；ADR-0025 ⑥-5/⑥-6、**⑨**，根 ADR-0052 决策①/②/⑧）
  *
  * ## 这是**接线守护**，不是 ③ 门证据（`docs/agents/guards.md`）
  *
  * 它守的是「形态接线没有被悄悄拆掉」：模板里那几条 `v-if` 闸门、两组控件没被换成同款、
- * 图片的两个入口还在、两个页面共用同一个组件。这些都是**源码结构**，node 里跑不出来
+ * 图片的入口还在、两个页面共用同一个组件。这些都是**源码结构**，node 里跑不出来
  * （`.uvue` 的模板/样式不参与 UTS 行为缝）。
  *
  * **行为面由谁承重**（缺了它本文件会假绿，故逐条点名）：
@@ -12,12 +12,13 @@
  *     含「加一枚未声明按钮」「代码块承诺落空」两种坏实现的必红取证）；
  *   · 「格式档位选哪一支」⇒ `utils/forumBodyBehavior.test.js`（真执行 `forumContentBlocks` 产出物）；
  *   · 「作者的声明真的进/不进载荷」⇒ `utils/forumContentFormatBehavior.test.js`（真执行 `api/forum.uts`，
- *     创建/回复**必须带**、编辑**必须不带**两个反方向）。
+ *     创建/回复**必须带**、编辑**必须不带**两个反方向）；
+ *   · 「图片入口交给选择器的来源与额度」⇒ `utils/forumImagePickerBehavior.test.js`（真执行 picker）。
  *
  * ## 判据来源（逐条对应票面验收标准，不自己加戏）
  *
- * ADR-0025 ⑥-5：编写/预览可切；工具栏可横滑；长按出中文提示；图片有拍照与相册两个入口；
- * **纯文本档不出现 tab / 工具栏 / 能力提示行**；能力提示行只讲边界、不讲能力清单。
+ * ADR-0025 ⑥-5：编写/预览可切；工具栏可横滑；长按出中文提示；**图片走单一入口**（⑨ 于 2026-09-22
+ * **取代 ⑦ 的双入口**）；**纯文本档不出现 tab / 工具栏 / 能力提示行**；能力提示行只讲边界、不讲能力清单。
  * 根 ADR-0052 决策②：**数据档位（会永久保存）与视图档位（临时）形态必须不同** ——
  * 同卡片并排两组同款胶囊，用户分不清哪组会永久保存。
  */
@@ -121,24 +122,29 @@ describe('数据档位与视图档位**形态不同**：前者胶囊（永久保
   });
 });
 
-// ===== ④ 图片：拍照 / 相册双入口（ADR-0025 ⑦）=====
+// ===== ④ 图片：单一入口 → 系统选择器（ADR-0025 ⑨，2026-09-22 取代 ⑦ 的双入口）=====
 
-describe('图片走拍照 / 相册**两个直达入口**（ADR-0025 ⑦ 对 Web 点击/粘贴/拖拽的替换）', () => {
-  it('组件渲染两个入口，各自把来源直接交给宿主的处理器', () => {
-    expect(input).toContain("@click=\"onAddImage('camera')\"");
-    expect(input).toContain("@click=\"onAddImage('album')\"");
-    expect(input).toContain("emit('add-image', source)");
-    // 两个入口的文案不同（否则用户分不清哪个是哪个）
-    expect(input).toContain("'拍照'");
-    expect(input).toContain("'相册'");
+describe('图片走**单一入口**：一个 `＋` 方块弹系统选择器（相册 / 相机由系统给）', () => {
+  it('组件只渲染一个入口，事件里不再带来源（双入口形态已退场）', () => {
+    expect(input).toContain('@click="onAddImage"');
+    expect(input).toContain("emit('add-image')");
+    // 双入口（两个常驻方块、各自传来源）与它的两份文案都已退场
+    expect(input).not.toContain("onAddImage('camera')");
+    expect(input).not.toContain("onAddImage('album')");
+    expect(input).not.toContain("'拍照'");
+    expect(input).not.toContain("'相册'");
+    // 方块上是回退前的形态：`＋` + 计数；回复侧沿用旧形态不出计数（`variant` 闸门）
+    expect(input).toContain("'＋'");
+    expect(input).toContain('imageCounter');
+    expect(input).toContain("variant != 'reply'");
   });
 
-  it('图片流水线只有一份：双入口的 `sourceType: [source]` 落在共享 picker 里，宿主不再各持 chooseImage', () => {
+  it('图片流水线只有一份：`sourceType: [\'album\', \'camera\']` 落在共享 picker 里，宿主不再各持 chooseImage', () => {
     const picker = read(PICKER_REL);
-    expect(picker).toContain('sourceType: [source]');
-    // 旧形态（两个来源共用系统选择器）在三个文件里都已退场
+    expect(picker).toContain("sourceType: ['album', 'camera']");
+    // 双入口的「来源直达」（`sourceType: [source]`）在三个文件里都已退场
     for (const [rel, src] of [[CREATE_REL, createPage], [COMPOSER_REL, composer], [PICKER_REL, picker]]) {
-      expect([rel, src.includes("sourceType: ['album', 'camera']")]).toEqual([rel, false]);
+      expect([rel, src.includes('sourceType: [source]')]).toEqual([rel, false]);
     }
     // 宿主不再自持流水线 —— 否则就是评审指出过的「形态只有一份、图片却是两份」
     for (const [rel, src] of [[CREATE_REL, createPage], [COMPOSER_REL, composer]]) {

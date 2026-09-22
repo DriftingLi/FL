@@ -5,7 +5,7 @@
  * 预览）当时仍在两个宿主里各留一份，只差 9 / 3 这个限额 —— 那正是「形态只有一份」这个论点自己
  * 打脸的地方。收进本件后：
  *   · 限额由 `maxImages` 参数表达（宿主各报一次；组件也不再自带第三个缺省值）；
- *   · 「拍照 / 相册**双入口**」的判据（`sourceType: [source]`）只有一处；
+ *   · 「单一方块 → 系统选择器」的判据（`sourceType: ['album', 'camera']`）只有一处；
  *   · 它可在 `utils/utsHarness.js` 里**真执行**（注入假 `uni` 与假上传出口）⇒
  *     `utils/forumImagePickerBehavior.test.js` 断言的是产出物（选图参数 / 上传次数 / 限额闸门 /
  *     失败计数），而不是「源码里出现过某个字面量」。
@@ -25,7 +25,7 @@ export type UseForumImagePickerResult = {
     /** 展示用 URL（预解析：模板不直调 import 函数，规避 error18） */
     previewImages : ComputedRef<string[]>
     uploading : Ref<boolean>
-    onAddImage : (source : string) => void
+    onAddImage : () => void
     onRemoveImage : (index : number) => void
     onPreviewImage : (index : number) => void
 }
@@ -65,10 +65,16 @@ export function useForumImagePicker(maxImages : number) : UseForumImagePickerRes
     }
 
     /**
-     * 选图：**拍照 / 相册双入口** —— 两个入口各自**直达**来源，不再共用系统选择器。
-     * @param source 'camera'（拍照，维修场景拍故障码 / 铭牌）| 'album'（相册）
+     * 选图：**单一入口** —— 弹系统选择器，相册 / 相机两个来源都由系统给（回退前的形态）。
+     * 2026-09-22 回退：原「`camera` / `album` 两个入口各自直达（来源数组里只写一个来源）」按维护者裁定
+     * 收成一个方块 ⇒ ADR-0025 **⑨ 取代 ⑦**（决策编号 ⑧ 已被「编辑路径不得写 `content_format`」占用，只增不改）。回退保留的是**流水线**（逐张上传 / 限额闸门 / 失败计数），
+     * 变的只有入口数与来源数组。
+     *
+     * ⚠️ 这段说明**故意不写出回退掉的那个写法本身**：`utils/forumMarkdownInputContract.test.js` 是**按文本判**
+     * 的接线守护（`.uvue` 模板与本地注释进不了行为缝），注释里带上那个字面量会让守卫替代码判红
+     * —— 与 #1030 同族的坑位（文本判据分不清代码与散文）。回退的完整叙述在 ADR-0025 的「⑨ 取代 ⑦」。
      */
-    function onAddImage(source : string) : void {
+    function onAddImage() : void {
         if (uploading.value) return
         const remaining = maxImages - images.value.length
         if (remaining <= 0) {
@@ -78,7 +84,7 @@ export function useForumImagePicker(maxImages : number) : UseForumImagePickerRes
         uni.chooseImage({
             count: remaining,
             sizeType: ['compressed'],
-            sourceType: [source],
+            sourceType: ['album', 'camera'],
             success: (res) => {
                 const paths = res.tempFilePaths as string[]
                 if (paths.length == 0) return
@@ -108,7 +114,7 @@ export function useForumImagePicker(maxImages : number) : UseForumImagePickerRes
         images: images,
         previewImages: previewList,
         uploading: uploading,
-        onAddImage: (source : string) => onAddImage(source),
+        onAddImage: () => onAddImage(),
         onRemoveImage: (index : number) => onRemoveImage(index),
         onPreviewImage: (index : number) => onPreviewImage(index),
     } as UseForumImagePickerResult

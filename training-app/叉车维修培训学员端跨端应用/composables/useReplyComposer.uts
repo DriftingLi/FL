@@ -31,7 +31,7 @@ export type UseReplyComposerResult = {
     replyFormat : Ref<string>
     onFormatChange : (value : string) => void
     onSubmitReply : (topicId : number, onPosted : (reply : ForumReply) => void) => Promise<void>
-    onAddReplyImage : (source : string) => void
+    onAddReplyImage : () => void
     onRemoveReplyImage : (index : number) => void
     onPreviewReplyImage : (index : number) => void
 }
@@ -100,7 +100,7 @@ export function useReplyComposer() : UseReplyComposerResult {
         replyFormat: replyFormat,
         onFormatChange: (value : string) => onFormatChange(value),
         onSubmitReply: (topicId : number, onPosted : (reply : ForumReply) => void) => onSubmitReply(topicId, onPosted),
-        onAddReplyImage: (source : string) => picker.onAddImage(source),
+        onAddReplyImage: () => picker.onAddImage(),
         onRemoveReplyImage: (index : number) => picker.onRemoveImage(index),
         onPreviewReplyImage: (index : number) => picker.onPreviewImage(index),
     } as UseReplyComposerResult

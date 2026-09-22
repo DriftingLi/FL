@@ -3,7 +3,8 @@
          两处只接线（同根 ADR-0052 决策① 的目标）。档位轴三条互不混用：
            · **数据档位**（纯文本 | Markdown）= 胶囊分段控件，**会永久保存**，编辑态不渲染（见下）；
            · **视图档位**（编写 | 预览）= 下划线 tab，**临时**、只在 Markdown 档存在；
-           · 图片 = 拍照 / 相册**两个**直达入口（ADR-0025 ⑦）。
+           · 图片 = **单一入口**（一个 `＋` 方块 → 系统选择器，相册 / 相机由系统给；
+             ADR-0025 **⑨** 于 2026-09-22 **取代 ⑦ 的双入口**）。
          纯文本档**不出现** tab / 工具栏 / 边界提示行（ADR-0025 ⑥-5，照根 ADR-0052 决策⑧）：
          没有可预览的渲染结果，摆一排按钮只会制造误解。 -->
     <view class="md-input">
@@ -62,19 +63,20 @@
         <text v-if="showRegionNotice" class="region-notice">{{ regionNotice }}</text>
         <text v-if="isMarkdown" class="boundary-notice">{{ boundaryNotice }}</text>
 
-        <!-- 图片区：拍照 / 相册**双入口**（维修场景要拍故障码 / 铭牌；uvue 侧粘贴拖拽不可靠，故不提供） -->
+        <!-- 图片区：**单一入口**（一个 `＋` 方块 → 系统选择器，相册 / 相机由系统给）。
+             2026-09-22 回退：原双入口（拍照 / 相册两个常驻方块）按维护者裁定收成一个 —— ADR-0025 ⑨ 取代 ⑦。
+             缩略图的 key 用**图片 URL 本身**（上传 URL 是服务端毫秒时间戳命名、逐张串行上传 ⇒ 不会重复；
+             同形状先例 `pages/resume/resume-detail.uvue` 的 photos 列表）。 -->
         <view v-if="showImages" class="image-row">
-            <view v-for="(img, idx) in previewImages" :key="idx" class="image-cell">
+            <view v-for="(img, idx) in previewImages" :key="img" class="image-cell">
                 <image class="image-thumb" :src="img" mode="aspectFill" @click="onPreviewImage(idx)" />
                 <view class="image-remove" @click.stop="onRemoveImage(idx)">
                     <text class="image-remove-text">×</text>
                 </view>
             </view>
-            <view v-if="imageCount < maxImages" class="image-add" @click="onAddImage('camera')">
-                <text class="image-add-text">{{ uploading ? '…' : '拍照' }}</text>
-            </view>
-            <view v-if="imageCount < maxImages" class="image-add ml-16" @click="onAddImage('album')">
-                <text class="image-add-text">{{ uploading ? '…' : '相册' }}</text>
+            <view v-if="imageCount < maxImages" class="image-add" @click="onAddImage">
+                <text class="image-add-icon">{{ uploading ? '…' : '＋' }}</text>
+                <text v-if="variant != 'reply'" class="image-add-text">{{ uploading ? '上传中' : imageCounter }}</text>
             </view>
         </view>
     </view>
@@ -135,7 +137,7 @@
     const emit = defineEmits<{
         (e: 'update:content', value: string): void
         (e: 'update:format', value: string): void
-        (e: 'add-image', source: string): void
+        (e: 'add-image'): void
         (e: 'remove-image', index: number): void
         (e: 'preview-image', index: number): void
     }>()
@@ -172,6 +174,12 @@
 
     /** 视图档位（内部状态：编写 / 预览是临时视图，与持久化的数据档位分开） */
     const viewMode = ref<string>('edit')
+
+    /**
+     * 图片方块上的计数（`n/9`）。发帖侧照回退前的形态显示；回复侧沿用旧形态**不出计数**（`variant` 闸门）。
+     * 拼串落在脚本里：模板侧不做 `number + string`（UTS 编译到 Kotlin 的类型口径，见 AGENTS.md 的 UTS 限制表）。
+     */
+    const imageCounter = computed<string>(() : string => props.imageCount.toString() + '/' + props.maxImages.toString())
 
     const isReply = computed<boolean>(() : boolean => props.variant == 'reply')
     const isMarkdown = computed<boolean>(() : boolean => isMarkdownFormat(props.format))
@@ -223,9 +231,9 @@
         uni.showToast({ title: toolbarButtons[index].label, icon: 'none' })
     }
 
-    /** 图片入口：`camera` 直达拍照 / `album` 直达相册（双入口，不再共用系统选择器） */
-    function onAddImage(source : string) : void {
-        emit('add-image', source)
+    /** 图片入口：**单一入口** —— 点击弹系统选择器（相册 / 相机由系统给；ADR-0025 ⑨ 取代 ⑦ 双入口） */
+    function onAddImage() : void {
+        emit('add-image')
     }
 
     function onRemoveImage(index : number) : void {
@@ -453,8 +461,14 @@
         justify-content: center;
     }
 
-    .image-add-text {
-        font-size: 24rpx;
+    .image-add-icon {
+        font-size: 44rpx;
         color: #909399;
+    }
+
+    .image-add-text {
+        font-size: 22rpx;
+        color: #909399;
+        margin-top: 8rpx;
     }
 </style>
