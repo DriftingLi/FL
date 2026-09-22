@@ -75,7 +75,7 @@ function makeStore(overrides: Record<string, unknown> = {}) {
 // 通配 catch-all 只吃路径不吃名字。见 @/test/router。
 const router = testRouter()
 
-function mountShell(props: Record<string, unknown> = {}, slots: Record<string, any> = {}) {
+function mountShell(props: Record<string, unknown> = {}, slots: Record<string, any> = {}, stubs: Record<string, any> = {}) {
   return mount(ChatPageShell, {
     props: {
       logoSub: 'AI 叉车助手 · 测试',
@@ -88,7 +88,8 @@ function mountShell(props: Record<string, unknown> = {}, slots: Record<string, a
     },
     slots,
     global: {
-      plugins: [epLite(), router]
+      plugins: [epLite(), router],
+      ...(Object.keys(stubs).length > 0 ? { stubs } : {})
     }
   })
 }
@@ -404,5 +405,64 @@ describe('ChatPageShell 登出（#620）', () => {
 
     expect(mocks.store.clearMessages).toHaveBeenCalledTimes(1)
     expect(mocks.store.loadSessions).toHaveBeenCalledTimes(1)
+  })
+})
+
+// 助手气泡图片点击放大：正文 markdown 图与来源面板缩略图共用一个预览器（移动端
+// ai-chat-sources 早就是 uni.previewImage，Web 两处此前都点不开 ⇒ 跨端不对称）。
+describe('ChatPageShell 助手图片预览', () => {
+  const viewerStub = {
+    name: 'ElImageViewer',
+    props: ['urlList', 'initialIndex'],
+    emits: ['close'],
+    template: '<div class="viewer-stub"/>'
+  }
+
+  function mountWithMessages(slots: Record<string, any> = {}) {
+    mocks.store.messages = [
+      { id: 1, role: 'assistant', content: '正文', created_at: '2026-09-22T00:00:00Z', images: null, sources: null },
+      { id: 2, role: 'user', content: '我问的', created_at: '2026-09-22T00:01:00Z', images: ['/uploads/mine.png'], sources: null }
+    ]
+    return mountShell({}, slots, { ElImageViewer: viewerStub })
+  }
+
+  it('点来源缩略图打开预览：列表取该气泡内全部图片、定位到被点那张', async () => {
+    const w = mountWithMessages({
+      'assistant-extra': '<div class="sources"><img src="/api/a.png"><img src="/api/b.png"></div>'
+    })
+    expect(w.find('.assistant-image-viewer').exists()).toBe(false)
+
+    await w.findAll('.sources img')[1].trigger('click')
+
+    const viewer = w.findComponent({ name: 'ElImageViewer' })
+    expect(viewer.exists()).toBe(true)
+    const urls = viewer.props('urlList') as string[]
+    // DOM 读出的 src 已被解析成绝对地址，判据同样从 DOM 取，别把 localhost 写进期望
+    const domSrcs = w.findAll('.sources img').map(i => (i.element as HTMLImageElement).src)
+    expect(urls).toEqual(domSrcs)
+    expect(viewer.props('initialIndex')).toBe(1)
+  })
+
+  it('点正文文字不打开预览；点用户消息的上传图片也不归本委托管', async () => {
+    const w = mountWithMessages()
+    await w.find('.message-item.assistant .message-text').trigger('click')
+    expect(w.find('.assistant-image-viewer').exists()).toBe(false)
+
+    const userImg = w.find('.message-item.user .message-images img')
+    expect(userImg.exists()).toBe(true)
+    await userImg.trigger('click')
+    expect(w.find('.assistant-image-viewer').exists()).toBe(false)
+  })
+
+  it('预览关闭后再次可开（不残留上一次列表）', async () => {
+    const w = mountWithMessages({
+      'assistant-extra': '<div class="sources"><img src="/api/only.png"></div>'
+    })
+    await w.find('.sources img').trigger('click')
+    const viewer = w.findComponent({ name: 'ElImageViewer' })
+    expect(viewer.props('urlList')).toHaveLength(1)
+    viewer.vm.$emit('close')
+    await nextTick()
+    expect(w.find('.assistant-image-viewer').exists()).toBe(false)
   })
 })

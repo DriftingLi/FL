@@ -262,7 +262,7 @@
               </div>
               <div v-if="msg.content" class="message-text break-words rounded-card bg-ui-600 px-4 py-3 text-sm leading-[1.7] text-white">{{ msg.content }}</div>
             </template>
-            <div v-else class="message-text markstream-vue break-words rounded-card border border-line bg-panel px-4 py-3 text-sm leading-[1.7] text-ink">
+            <div v-else class="message-text markstream-vue break-words rounded-card border border-line bg-panel px-4 py-3 text-sm leading-[1.7] text-ink" @click="openImagePreview">
               <MarkdownRender
                 mode="chat"
                 :content="msg.content"
@@ -282,7 +282,7 @@
             <el-icon :size="18"><ChatDotRound /></el-icon>
           </div>
           <div class="message-content max-w-[75%] max-[768px]:max-w-[85%]">
-            <div v-if="store.streamingContent" class="message-text markstream-vue break-words rounded-card border border-line bg-panel px-4 py-3 text-sm leading-[1.7] text-ink">
+            <div v-if="store.streamingContent" class="message-text markstream-vue break-words rounded-card border border-line bg-panel px-4 py-3 text-sm leading-[1.7] text-ink" @click="openImagePreview">
               <MarkdownRender
                 mode="chat"
                 :content="store.streamingContent"
@@ -360,6 +360,16 @@
         <slot name="input-extra" />
       </div>
     </main>
+
+    <el-image-viewer
+      v-if="previewUrls.length"
+      class="assistant-image-viewer"
+      :url-list="previewUrls"
+      :initial-index="previewIndex"
+      hide-on-click-modal
+      teleported
+      @close="closeImagePreview"
+    />
   </div>
 </template>
 
@@ -462,6 +472,33 @@ const canSend = computed(() => Boolean(props.canSend && store.canSend))
 const newSessionTitle = computed(() => (store.streaming ? '生成中，请先停止再开启新对话' : '开启新对话'))
 
 const messageListRef = ref<HTMLElement>()
+
+// ===== 助手气泡图片点击放大（正文 markdown 图 + 来源面板缩略图共用一个预览器）=====
+// markstream 的图片节点只给 cursor-pointer、不管预览，来源面板此前也只是普通 <img>
+// ⇒ Web 两处都点不开，而移动端 ai-chat-sources 已用 uni.previewImage，这是跨端不对称。
+// 事件委托挂在气泡容器上（库渲染的 <img> 我们插不进属性）；预览列表取当前气泡内全部
+// 图片，语义与移动端「打开一张、整列表可翻」一致。
+const previewUrls = ref<string[]>([])
+const previewIndex = ref(0)
+
+function openImagePreview(event: MouseEvent) {
+  const bubble = event.currentTarget as HTMLElement | null
+  const img = (event.target as HTMLElement | null)?.closest('img') as HTMLImageElement | null
+  if (!bubble || !img) return
+  const clicked = img.currentSrc || img.src
+  if (!clicked) return
+  const urls = Array.from(
+    new Set(Array.from(bubble.querySelectorAll('img')).map(node => node.currentSrc || node.src).filter(Boolean))
+  )
+  if (urls.length === 0) return
+  previewUrls.value = urls
+  previewIndex.value = Math.max(0, urls.indexOf(clicked))
+}
+
+function closeImagePreview() {
+  previewUrls.value = []
+  previewIndex.value = 0
+}
 
 // ===== 侧栏状态：桌面收起（localStorage 持久化）+ 移动端抽屉 =====
 const COLLAPSE_KEY = 'ai-sidebar-collapsed'
