@@ -11,7 +11,7 @@ OnFailure=forklift-alert@%n.service
 [Service]
 Type=oneshot
 ExecStart=/usr/local/bin/forklift-watchdog.sh
-# 五个探测面各带超时（curl 8-12s / ssh 8s），60s 足够；留 2 分钟余量防卡死占住 timer。
+# 六个探测面各带超时（curl 8-12s / ssh 8s），60s 足够；留 2 分钟余量防卡死占住 timer。
 TimeoutStartSec=120
 # 发信失败必须让单元非 0 退出（OnFailure 才会触发），不能被静默吞掉。
 SuccessExitStatus=0

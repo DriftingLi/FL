@@ -13,6 +13,7 @@
 #   chmod 600 /etc/forklift-watchdog.env
 #   systemctl daemon-reload && systemctl enable --now forklift-watchdog.timer
 # 自检（不发消息、不改状态）：/usr/local/bin/forklift-watchdog.sh --dry-run
+# 发信自检（真发一封、不改状态）：/usr/local/bin/forklift-watchdog.sh --test-mail  ← 装完必跑
 #
 # 配置（/etc/forklift-watchdog.env，root 600）：
 #   WATCH_TO_EMAIL   收件人，逗号分隔可多个
@@ -20,9 +21,28 @@
 #   可选覆盖：WATCH_FAIL_THRESHOLD(3) WATCH_COOLDOWN_MIN(60) WATCH_DISK_CRIT_PCT(85)
 #             WATCH_ASSISTANT_URL WATCH_PUBLIC_BRANDS_URL WATCH_REMOTE_HOST WATCH_REMOTE_LXC
 # 发信失败 = 本单元失败（timer 的 OnFailure= 会再走一封），绝不静默跳过。
+# 已知边界：env 文件本身缺失/缺必需键时，兜底投递器用的是同一个文件 ⇒ 也发不出，只剩 journald。
 set -euo pipefail
 
+TAG=forklift-watchdog
+log() { echo "[$TAG] $*"; }
+die_no_mail() { log "致命：$*"; exit 1; }
+
+# 先 source 再解析默认值：顺序反了会让 env 文件里的 WATCH_* 覆盖全部静默失效
+# （`${VAR:-默认}` 在 source 之前求值就取不到 env 文件的值）。演练 C 实测踩到。
 ENV_FILE=${ENV_FILE:-/etc/forklift-watchdog.env}
+[ -r "$ENV_FILE" ] || die_no_mail "读不到 $ENV_FILE（发信与收件配置是硬前提）"
+# set -a 是必需的而非风格：. 只设 shell 变量，send_mail 的 python 子进程读的是 os.environ。
+# 2026-09-22 演练 A 实测：漏掉 export ⇒ 每条告警 KeyError: 'SMTP_USERNAME'、监控自己瞎了。
+set -a
+# shellcheck source=/dev/null
+. "$ENV_FILE"
+set +a
+: "${WATCH_TO_EMAIL:?WATCH_TO_EMAIL 未设置}"
+: "${SMTP_HOST:?SMTP_HOST 未设置}"
+: "${SMTP_USERNAME:?SMTP_USERNAME 未设置}"
+: "${SMTP_PASSWORD:?SMTP_PASSWORD 未设置}"
+
 STATE_FILE=${STATE_FILE:-/var/lib/forklift-watchdog/state}
 FAIL_THRESHOLD=${WATCH_FAIL_THRESHOLD:-3}
 COOLDOWN_S=$(( ${WATCH_COOLDOWN_MIN:-60} * 60 ))
@@ -32,25 +52,15 @@ BRANDS_URL=${WATCH_PUBLIC_BRANDS_URL:-https://www.gccsmile.com/api/ai-assistant/
 REMOTE_HOST=${WATCH_REMOTE_HOST:-172.17.1.41}
 REMOTE_LXC=${WATCH_REMOTE_LXC:-101}
 EXPECT_CONTAINERS=(forklift-frontend-prod forklift-backend-prod forklift-pg-prod forklift-redis-prod forklift-libreoffice-prod)
-TAG=forklift-watchdog
 
 MODE=check
 DRY_RUN=0
 FAILED_UNIT=unknown
 case "${1:-}" in
   --dry-run) DRY_RUN=1 ;;
+  --test-mail) MODE=test-mail ;;
   --alert-failure) MODE=alert-failure; FAILED_UNIT=${2:-unknown} ;;
 esac
-
-log() { echo "[$TAG] $*"; }
-
-die_no_mail() { log "致命：$*"; exit 1; }
-
-[ -r "$ENV_FILE" ] || die_no_mail "读不到 $ENV_FILE（发信与收件配置是硬前提）"
-# shellcheck source=/dev/null
-. "$ENV_FILE"
-: "${WATCH_TO_EMAIL:?WATCH_TO_EMAIL 未设置}"
-: "${SMTP_HOST:?SMTP_HOST 未设置}"
 
 MAIL_FAILED=0
 
@@ -101,6 +111,9 @@ probe_containers() {
     state=${line#*|}
     if [ -z "$line" ]; then bad+=("$name 不存在")
     elif [[ $state == unhealthy* ]]; then bad+=("$name unhealthy")
+    # docker pause 后状态是「Up … (Paused)」：进程冻结、请求全挂，但 healthcheck 要等
+    # interval×retries 才翻转 ⇒ 只认 unhealthy 会漏掉整段故障窗口（演练 B 实测）。
+    elif [[ $state == *Paused* ]]; then bad+=("$name paused")
     elif [[ $state == Restarting* || $state == Exited* || $state == Created* || -z $state ]]; then bad+=("$name ${state% *}")
     fi
   done
@@ -219,6 +232,13 @@ journald：journalctl -u forklift-watchdog.service --since '-30 min'
 }
 
 case "$MODE" in
+  test-mail)
+    # --dry-run 不发信，抓不到发信路径上的 bug（演练 A 就是这么漏出 SMTP_* 未导出的）。
+    # 这一条是唯一能证明「告警通道真的通」的自检。
+    send_mail "【自检】叉车生产巡检发信通道正常：$(hostname)" \
+"这是一封 forklift-watchdog 安装自检信，不代表任何故障。
+收到即说明 SMTP 凭据、收件人与 send_mail 的变量传递三者都成立。"
+    ;;
   alert-failure)
     send_mail "【告警】叉车生产巡检自身失败：$FAILED_UNIT" \
 "$(hostname) 上 $FAILED_UNIT 执行失败 ⇒ 巡检本身可能已经瞎了（本次 4 小时盲区防的就是「静默失效」，包括监控自身）。
