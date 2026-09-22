@@ -59,3 +59,39 @@ func TestRedeemErrorParityAcrossSurfaces(t *testing.T) {
 		t.Fatal("积分不足的响应文案不得为空")
 	}
 }
+
+// TestRedeemShopSurfaceSameCodeFamily 补齐第三面（商城，ADR-0062 票9 / 回记 D2）：
+// 商城兑换的**业务拒绝**（sku 未登记读者 ⇒ sku 对账表 deny-by-default）也必须落 400，
+// 与课程、真题卷两面同一族。三面同判据的锁若只钉两面，第四面（未来新增 sku）就会重新漂。
+func TestRedeemShopSurfaceSameCodeFamily(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := testutil.NewMemoryDB(t)
+	cfg := &config.Config{
+		JWTSecretKey:    "redeem-parity-shop-secret",
+		JWTExpiresHours: 2,
+		AuthCookie:      config.AuthCookieConfig{Name: "hrwai_token"},
+	}
+	r := NewRouter(newContractDeps(t, db, cfg))
+	token := failureTestStudentToken(t, db, cfg, "redeem_parity_shop_stu")
+
+	item := model.PointsShopItem{SKU: "unlock_parity_probe", Title: "对账探针", Price: 100, Enabled: true}
+	if err := db.Create(&item).Error; err != nil {
+		t.Fatalf("建商城行失败: %v", err)
+	}
+
+	rec := doWithToken(t, r, token, http.MethodPost, "/api/points/shop/unlock_parity_probe/redeem", nil)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("未登记读者的商品须 400（与课程/真题卷同一族），got %d %s", rec.Code, rec.Body.String())
+	}
+	// 拒兑不得留下权益行也不得扣分：权益读面按同一对键查（写读同源由声明表保证）
+	var entCnt, ledgerCnt int64
+	if err := db.Model(&model.UserEntitlement{}).Where("sku = ?", "unlock_parity_probe").Count(&entCnt).Error; err != nil {
+		t.Fatalf("查权益失败: %v", err)
+	}
+	if err := db.Model(&model.PointsLedger{}).Where("reason = ?", "redeem_unlock_parity_probe").Count(&ledgerCnt).Error; err != nil {
+		t.Fatalf("查流水失败: %v", err)
+	}
+	if entCnt != 0 || ledgerCnt != 0 {
+		t.Fatalf("拒兑后不得留权益行或扣分: entitlement=%d ledger=%d", entCnt, ledgerCnt)
+	}
+}

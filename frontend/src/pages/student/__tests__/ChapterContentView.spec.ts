@@ -85,6 +85,8 @@ function mountPage() {
 beforeEach(() => {
   vi.mocked(courseApi.getChapterDetail).mockResolvedValue({
     chapter_id: 2,
+    // resume_position 是章节详情的必填新键（ADR-0062 决策 11：断点位置由后端下发）
+    resume_position: 0,
     title: '扭矩计算',
     content: CHAPTER_CONTENT,
     files: [],

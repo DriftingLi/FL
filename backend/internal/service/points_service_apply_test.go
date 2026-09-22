@@ -159,6 +159,12 @@ func TestRedeemShopConcurrentDoubleSpend(t *testing.T) {
 	if err := db.Create(&model.PointsShopItem{SKU: "unlock_gold", Title: "金牌", Price: 300, Enabled: true}).Error; err != nil {
 		t.Fatalf("建商城项失败: %v", err)
 	}
+	// 商城兑换的放行判据来自对账表（shop_sku_registry.go）：测试夹具商品在测试里登记读者，
+	// 与真实商品同一条路径（未登记的 sku 会被拒兑，见 TestRedeemShopRejectsUndeclaredSKU）。
+	withShopSKUDeclForTest(t, "unlock_gold", shopSKUDecl{
+		EntitlementSKU: func(refID string) string { return refID },
+		ReadBy:         "测试夹具：权益行 sku = 商城 sku 本身",
+	})
 
 	const attempts = 4
 	results := make(chan error, attempts)

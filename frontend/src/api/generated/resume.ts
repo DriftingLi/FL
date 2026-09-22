@@ -31,6 +31,7 @@
 // 需要更精确的形状时先在注解层补齐（先例见 spec #940 片五②的差集清单）。
 
 export interface ContactRequestDTO {
+  company_disabled?: boolean
   company_name?: string
   contact_email?: string
   contact_name?: string

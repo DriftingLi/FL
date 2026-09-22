@@ -41,22 +41,27 @@ type CourseDTO struct {
 	CredentialID          *int                    `json:"credential_id" extensions:"x-nullable"`
 	Description           string                  `json:"description"`
 	Duration              int                     `json:"duration"`
-	IsFeatured            bool                    `json:"is_featured"`
-	IsHot                 bool                    `json:"is_hot"`
-	Level                 *LevelBriefDTO          `json:"level,omitempty" extensions:"x-optional"`
-	LevelID               *int                    `json:"level_id" extensions:"x-nullable"`
-	Name                  string                  `json:"name"`
-	PointsPrice           *int                    `json:"points_price,omitempty" extensions:"x-optional"`
-	PracticeHours         int                     `json:"practice_hours"`
-	PrerequisiteCourseIDs *[]int                  `json:"prerequisite_course_ids,omitempty" extensions:"x-optional"`
-	Prerequisites         *[]CourseBriefDTO       `json:"prerequisites,omitempty" extensions:"x-optional"`
-	SortOrder             int                     `json:"sort_order"`
-	Specialty             *SpecialtyBriefDTO      `json:"specialty,omitempty" extensions:"x-optional"`
-	SpecialtyID           *int                    `json:"specialty_id" extensions:"x-nullable"`
-	Status                int16                   `json:"status"`
-	StudentCount          *int64                  `json:"student_count,omitempty" extensions:"x-optional"`
-	TheoryHours           int                     `json:"theory_hours"`
-	Chapters              *[]ChapterDTO           `json:"chapters,omitempty" extensions:"x-optional"`
+	// Entitled 权益投影（ADR-0062 决策 3）：该学员是否已持有本课程的读取资格。
+	// 只在**有主体**的读路径填（课程详情）——`GET /api/courses` 是公开面无主体，
+	// 列表上的这一格恒省略；非付费课程恒 true。缺省省略而非 false，避免把「没登录」
+	// 与「没解锁」压成同一个值（票12 同一课：可空性必须在 interface 上显式）。
+	Entitled              *bool              `json:"entitled,omitempty" extensions:"x-optional"`
+	IsFeatured            bool               `json:"is_featured"`
+	IsHot                 bool               `json:"is_hot"`
+	Level                 *LevelBriefDTO     `json:"level,omitempty" extensions:"x-optional"`
+	LevelID               *int               `json:"level_id" extensions:"x-nullable"`
+	Name                  string             `json:"name"`
+	PointsPrice           *int               `json:"points_price,omitempty" extensions:"x-optional"`
+	PracticeHours         int                `json:"practice_hours"`
+	PrerequisiteCourseIDs *[]int             `json:"prerequisite_course_ids,omitempty" extensions:"x-optional"`
+	Prerequisites         *[]CourseBriefDTO  `json:"prerequisites,omitempty" extensions:"x-optional"`
+	SortOrder             int                `json:"sort_order"`
+	Specialty             *SpecialtyBriefDTO `json:"specialty,omitempty" extensions:"x-optional"`
+	SpecialtyID           *int               `json:"specialty_id" extensions:"x-nullable"`
+	Status                int16              `json:"status"`
+	StudentCount          *int64             `json:"student_count,omitempty" extensions:"x-optional"`
+	TheoryHours           int                `json:"theory_hours"`
+	Chapters              *[]ChapterDTO      `json:"chapters,omitempty" extensions:"x-optional"`
 }
 
 // CredentialBriefDTO 目标证件简述（课程详情元数据）。
@@ -132,6 +137,11 @@ type ChapterDetailDTO struct {
 	NextChapterID     *int             `json:"next_chapter_id" extensions:"x-nullable"`
 	PreviousChapterID *int             `json:"previous_chapter_id" extensions:"x-nullable"`
 	StudyStatus       string           `json:"study_status,omitempty" extensions:"x-optional"`
+	// ResumePosition 该学员在本章节的最后播放位置（秒，契约只增不改 —— ADR-0048）。
+	// ADR-0062 决策 11：断点续播的位置由后端下发。旧形状是前端在章节详情装载里同步读
+	// 另一条并发请求填的 map，谁先回来全凭运气 ⇒ 多半读到 0，每次从片头重播
+	// （词表「学习位置」的承诺在最常用的入口上不成立）。
+	ResumePosition int `json:"resume_position"`
 }
 
 // CourseDetailDTO 学员端课程详情信封。
@@ -243,10 +253,18 @@ func (s *CourseService) GetCourses(page, pageSize int, credentialID, specialtyID
 // 文案沿用收紧前的「章节不存在」（四条路径共用一个哨兵，不各写一份文案）。
 var ErrContentNotReadable = errors.New("章节不存在")
 
+// courseEntitled 权益判据（唯一出处）：非付费课程恒 true；付费课程看该学员是否已兑换。
+// 只经权益读面单点（entitlement_read.go）查，不在调用侧手拼 user_entitlement 查询。
+func courseEntitled(db *gorm.DB, courseID, studentID int, pointsPrice *int) (bool, error) {
+	if pointsPrice == nil || *pointsPrice <= 0 {
+		return true, nil
+	}
+	return holdsEntitlement(db, studentID, CourseSKU(courseID), strconv.Itoa(courseID))
+}
+
 // studentCanReadCourse 学员能否读这门课的内容：**可见性 ∧ 权益**（ADR-0062 决策 3）。
-// 权益是独立事实，经权益读面单点（entitlement_read.go）查，**不并进 CourseVisibleByID**——
-// 那条谓词有四个无主体的共用 caller（课程列表、全局搜索、收藏目标校验、章节可见性）。
-// 未定价课程对任何学员可读；定价课程须该学员已兑换（未登录 = 未兑换）。
+// 权益这一半走 courseEntitled，**不并进 CourseVisibleByID**——那条谓词有四个无主体的
+// 共用 caller（课程列表、全局搜索、收藏目标校验、章节可见性）。
 // 消费方 = 「内容读 + 进度写」一族：章节详情、幻灯片 GET/POST、学习进度上报
 // ——上报会在 study_record 上留下学习事实（喂给进度、完成态与「已拥有」判据），所以同样要拦。
 func (s *CourseService) studentCanReadCourse(courseID, studentID int) error {
@@ -260,10 +278,7 @@ func (s *CourseService) studentCanReadCourse(courseID, studentID int) error {
 		}
 		return err // 查不动不得被读成「不可读」（ADR-0062 票6 同判据）
 	}
-	if course.PointsPrice == nil || *course.PointsPrice <= 0 {
-		return nil
-	}
-	entitled, err := holdsEntitlement(s.db, studentID, CourseSKU(courseID), strconv.Itoa(courseID))
+	entitled, err := courseEntitled(s.db, courseID, studentID, course.PointsPrice)
 	if err != nil {
 		return err
 	}
@@ -294,6 +309,16 @@ func (s *CourseService) GetCourseDetail(courseID, studentID int) (*CourseDetailD
 		lastStudiedAt = formatISO(*lp.LastStudiedAt)
 	}
 	detail := courseToDTO(course)
+	// 权益投影只在有主体的读路径填（见 CourseDTO.Entitled 的注释）：
+	// 此前「已解锁」只存在于前端内存（兑换成功后把 points_price 抹成 null），
+	// 刷新即被打回「请先兑换」⇒ 付过分的学员反而进不去。
+	if studentID > 0 {
+		entitled, err := courseEntitled(s.db, course.CourseID, studentID, course.PointsPrice)
+		if err != nil {
+			return nil, err
+		}
+		detail.Entitled = &entitled
+	}
 	fillChapterCount(s.db, course.CourseID, &detail)
 	fillCourseMeta(s.db, course, &detail)
 	return &CourseDetailDTO{
@@ -322,7 +347,7 @@ func (s *CourseService) GetChapterDetail(courseID, chapterID, studentID int) (*C
 	if err := s.studentCanReadCourse(chapter.CourseID, studentID); err != nil {
 		return nil, err
 	}
-	return chapterDetailShared(s.db, &chapter, true, studentID), nil
+	return chapterDetailShared(s.db, &chapter, true, studentID)
 }
 
 // GetChapterSlides 章节幻灯片。
@@ -777,7 +802,7 @@ func chapterStudyStatus(db *gorm.DB, studentID, courseID, chapterID int) string 
 // chapterDetailShared 章节详情共享实现：prev/next 计算、文件列表装载 + legacy 兼容、
 // 可选 study_status 回填（fillStudyStatus=true 且 studentID>0 时）。
 // 学员端与导师端详情响应 shape 零漂移；两端唯一差异是学员端回填 study_status。
-func chapterDetailShared(db *gorm.DB, chapter *model.Chapter, fillStudyStatus bool, studentID int) *ChapterDetailDTO {
+func chapterDetailShared(db *gorm.DB, chapter *model.Chapter, fillStudyStatus bool, studentID int) (*ChapterDetailDTO, error) {
 	var chapters []model.Chapter
 	db.Where("course_id = ?", chapter.CourseID).Order("order_num").Find(&chapters)
 	prevID, nextID := chapterPrevNext(chapters, chapter.ChapterID)
@@ -798,8 +823,27 @@ func chapterDetailShared(db *gorm.DB, chapter *model.Chapter, fillStudyStatus bo
 	}
 	if fillStudyStatus {
 		d.StudyStatus = chapterStudyStatus(db, studentID, chapter.CourseID, chapter.ChapterID)
+		if studentID > 0 {
+			pos, err := chapterResumePosition(db, studentID, chapter.ChapterID)
+			if err != nil {
+				return nil, err
+			}
+			d.ResumePosition = pos
+		}
 	}
-	return d
+	return d, nil
+}
+
+// chapterResumePosition 该学员在该章节的最后播放位置（秒）。
+// 查不动即上抛（ADR-0062 票6 同判据）：静默回 0 会被读成「没看过」，等于把人的进度抹掉。
+func chapterResumePosition(db *gorm.DB, studentID, chapterID int) (int, error) {
+	var pos int
+	if err := db.Model(&model.StudyRecord{}).
+		Where("student_id = ? AND chapter_id = ?", studentID, chapterID).
+		Select("COALESCE(MAX(video_position), 0)").Scan(&pos).Error; err != nil {
+		return 0, err
+	}
+	return pos, nil
 }
 
 // ===== 培训目录扩展辅助（课程等级/学时/前置课程/证书模板） =====
