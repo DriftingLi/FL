@@ -49,16 +49,70 @@ function Get-PublishVerdict {
 
 <#
  .SYNOPSIS
+     「什么算 appResource 产物」的**唯一定义**：导出目录下所有 `.kt`（排除 `\www\`）。
+
+ .DESCRIPTION
+     为什么单独成函数（评审发现，2026-09-22）：门脚本与 `Test-AppResourceFreshness` 原先各自抄了一遍
+     「递归找 `.kt` + 排除 `\www\`」—— **只有库这一份**进了守护，门那份是没证据的复制品。
+     收成一处后，「产物口径」变了不可能只改一方。门脚本收集 `.kt` 喂 kotlinc 也走它。
+#>
+function Get-AppResourceKtFiles {
+    param([string]$ExportDir)
+    return @(Get-ChildItem -LiteralPath $ExportDir -Recurse -Filter *.kt -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.FullName -notmatch '\\www\\' })
+}
+
+<#
+ .SYNOPSIS
      导出目录是否**覆盖当前树**：.kt 里最新的 mtime 必须晚于基准时刻。
  .OUTPUTS
      hashtable：`Fresh`（bool）/ `KtCount`（int）/ `Newest`（datetime|null）/ `Reason`（fresh | stale | no-kt）
 #>
 function Test-AppResourceFreshness {
     param([string]$ExportDir, [datetime]$Since)
-    $kt = @(Get-ChildItem -LiteralPath $ExportDir -Recurse -Filter *.kt -File -ErrorAction SilentlyContinue |
-        Where-Object { $_.FullName -notmatch '\\www\\' })
+    $kt = @(Get-AppResourceKtFiles -ExportDir $ExportDir)
     if ($kt.Count -eq 0) { return @{ Fresh = $false; KtCount = 0; Newest = $null; Reason = 'no-kt' } }
     $newest = ($kt | Sort-Object LastWriteTime -Descending | Select-Object -First 1).LastWriteTime
     if ($newest -gt $Since) { return @{ Fresh = $true; KtCount = $kt.Count; Newest = $newest; Reason = 'fresh' } }
     return @{ Fresh = $false; KtCount = $kt.Count; Newest = $newest; Reason = 'stale' }
+}
+
+<#
+ .SYNOPSIS
+     publish 段的**整段裁决**：给定三步的输出/超时与导出目录 → 该以什么码退出、reason 是什么、日志三件事的取值。
+
+ .DESCRIPTION
+     为什么把「裁决」也抽出来（评审发现，2026-09-22）：只抽两个叶子判据，门的**决策序列**（尤其
+     `stale-export` ⇒ exit 1 那一支）仍然没有任何用例真跑过 —— 那等于把新加的失败分支写成**没有证据的代码**。
+     收成纯函数后，门与守护**共用同一段裁决**：守护用合成的步骤输出驱动它，就能把四个退出路径全跑一遍。
+
+     次序是**先量后判**：即使 publish 没成立，也要量一次导出目录 —— 失败路径**更需要**日志里有 mtime。
+
+ .OUTPUTS
+     hashtable：
+       `ExitCode`（0 通过 / 1 判红：导出陈旧或无产物 / 2 环境：publish 未成立）
+       `Reason`（ok | stale-export | no-artifact | publish-timeout | publish-cli-ipc-blocked |
+                 publish-cli-command-failed | publish-no-success-marker）
+       `Freshness`（fresh | stale | no-kt | not-measured）—— publish 未成立时记 `not-measured`（**没判过就不假装判过**）
+       `KtCount` / `Newest`（导出目录的诊断读数；未成立时也给出，供失败日志使用）
+#>
+function Get-PublishStageVerdict {
+    param([string]$PublishOutput, [bool]$PublishTimedOut, [string]$ExportDir, [datetime]$Since)
+    # 先量（失败路径也要能打出 mtime），后判
+    $f = Test-AppResourceFreshness -ExportDir $ExportDir -Since $Since
+    $v = Get-PublishVerdict -Output $PublishOutput -TimedOut $PublishTimedOut
+    if (-not $v.Ok) {
+        # publish 没成立 ⇒ 新鲜度**没有判过**（不能把「量到陈旧」当成结论）⇒ 记 not-measured
+        return @{
+            ExitCode = 2; Reason = "publish-$($v.Reason)"; Freshness = 'not-measured'
+            KtCount = $f.KtCount; Newest = $f.Newest
+        }
+    }
+    if ($f.Fresh) {
+        return @{ ExitCode = 0; Reason = 'ok'; Freshness = 'fresh'; KtCount = $f.KtCount; Newest = $f.Newest }
+    }
+    if ($f.Reason -eq 'no-kt') {
+        return @{ ExitCode = 1; Reason = 'no-artifact'; Freshness = 'no-kt'; KtCount = 0; Newest = $null }
+    }
+    return @{ ExitCode = 1; Reason = 'stale-export'; Freshness = 'stale'; KtCount = $f.KtCount; Newest = $f.Newest }
 }

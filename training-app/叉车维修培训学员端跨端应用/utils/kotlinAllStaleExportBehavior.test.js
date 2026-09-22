@@ -208,7 +208,63 @@ describe('publish 判据：这一步是否成立（真实失败串必红 / 真�
   });
 });
 
-// ===== ③ 成对取证：判据被改坏时，上面的断言必须判红 =====
+// ===== ③ 整段裁决：门的**决策序列**也要被真执行 =====
+//
+// 评审发现（2026-09-22）：只抽两个叶子判据时，门的「陈旧 ⇒ exit 1」那条**决策分支**没有任何用例跑过 ——
+// 那等于把新加的失败分支写成没有证据的代码。故裁决本身也抽成 `Get-PublishStageVerdict`，门与守护**共用**它，
+// 下面把四个退出路径逐个真跑一遍。
+
+describe('整段裁决（`Get-PublishStageVerdict`）：四个退出路径都真跑过（含「陈旧 ⇒ exit 1」那一支）', () => {
+  it('必红 · 产物陈旧 ⇒ ExitCode=1 / reason=stale-export / freshness=stale', () => {
+    const stale = makeStaleExport();
+    const out = drive(REAL_LIB, [
+      `$e = Get-PublishStageVerdict -PublishOutput ${q(REAL_SUCCESS_OUTPUT)} -PublishTimedOut $false -ExportDir ${q(stale)} -Since (Get-Date)`,
+      'Write-Output ("STALE=" + $e.ExitCode + "|" + $e.Reason + "|" + $e.Freshness + "|" + $e.KtCount)',
+    ]);
+    expect(pick(out, 'STALE')).toBe('1|stale-export|stale|1');
+  });
+
+  it('必不红 · 刚导出 + 成功输出 ⇒ ExitCode=0 / reason=ok / freshness=fresh', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kotlin-fresh-ok-'));
+    fs.mkdirSync(path.join(dir, 'a'));
+    fs.writeFileSync(path.join(dir, 'a', 'X.kt'), 'class X');
+    const out = drive(REAL_LIB, [
+      `$e = Get-PublishStageVerdict -PublishOutput ${q(REAL_SUCCESS_OUTPUT)} -PublishTimedOut $false -ExportDir ${q(dir)} -Since (Get-Date).AddHours(-1)`,
+      'Write-Output ("OK=" + $e.ExitCode + "|" + $e.Reason + "|" + $e.Freshness)',
+    ]);
+    expect(pick(out, 'OK')).toBe('0|ok|fresh');
+  });
+
+  it('必红 · publish 未成立 ⇒ ExitCode=2 / freshness=**not-measured**（没判过就不假装判过），且仍带出 mtime/数量供失败日志', () => {
+    const stale = makeStaleExport();
+    const out = drive(REAL_LIB, [
+      `$e = Get-PublishStageVerdict -PublishOutput ${q(REAL_FAILURE_OUTPUT)} -PublishTimedOut $false -ExportDir ${q(stale)} -Since (Get-Date)`,
+      'Write-Output ("NOSUCCESS=" + $e.ExitCode + "|" + $e.Reason + "|" + $e.Freshness + "|" + $e.KtCount + "|" + ($e.Newest -ne $null))',
+    ]);
+    // 注意 freshness 是 not-measured 而**不是** stale：publish 都没成立，新鲜度就**没有判过**
+    expect(pick(out, 'NOSUCCESS')).toBe('2|publish-cli-command-failed|not-measured|1|True');
+  });
+
+  it('必红 · 成功输出但导出目录没有 .kt ⇒ ExitCode=1 / reason=no-artifact / freshness=no-kt（保住既有口径）', () => {
+    const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'kotlin-fresh-none-'));
+    const out = drive(REAL_LIB, [
+      `$e = Get-PublishStageVerdict -PublishOutput ${q(REAL_SUCCESS_OUTPUT)} -PublishTimedOut $false -ExportDir ${q(empty)} -Since (Get-Date)`,
+      'Write-Output ("NOART=" + $e.ExitCode + "|" + $e.Reason + "|" + $e.Freshness)',
+    ]);
+    expect(pick(out, 'NOART')).toBe('1|no-artifact|no-kt');
+  });
+
+  it('超时 ⇒ ExitCode=2 / reason=publish-timeout（原因可分辨，处置不同）', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kotlin-fresh-to-'));
+    const out = drive(REAL_LIB, [
+      `$e = Get-PublishStageVerdict -PublishOutput "" -PublishTimedOut $true -ExportDir ${q(dir)} -Since (Get-Date)`,
+      'Write-Output ("TO=" + $e.ExitCode + "|" + $e.Reason + "|" + $e.Freshness)',
+    ]);
+    expect(pick(out, 'TO')).toBe('2|publish-timeout|not-measured');
+  });
+});
+
+// ===== ④ 成对取证：判据被改坏时，上面的断言必须判红 =====
 
 describe('成对取证（必红）：把判据本身注入变异，证明上面的断言有牙', () => {
   it('变异「成功标记」⇒ 真实成功串会被判成未成立（H2 的必不红断言随之判红）', () => {
@@ -238,19 +294,30 @@ describe('成对取证（必红）：把判据本身注入变异，证明上面�
 describe('接线（本组是接线守护，不构成 ③ 证据）：门脚本确实消费这个库', () => {
   const gate = readText(path.join(ROOT, GATE_REL));
 
-  it('门脚本 dot-source 判据库，且两个判据都真被调用', () => {
+  it('门脚本 dot-source 判据库，且三个判据都真被调用（含整段裁决）', () => {
     expect(gate).toContain("lib\\publish-freshness.ps1");
-    expect(gate).toContain('Get-PublishVerdict -Output');
+    expect(gate).toContain('Get-PublishStageVerdict -PublishOutput');
     expect(gate).toContain('Test-AppResourceFreshness -ExportDir');
+    // 产物口径的唯一定义也被门脚本消费（评审发现：原先这里抄了一份没守护的收集）
+    expect(gate).toContain('Get-AppResourceKtFiles -ExportDir');
   });
 
   it('结果行带上新鲜度结论；`-SkipPublish` 显式记「跳过」而不是假装判过', () => {
     expect(gate).toContain('freshness=$freshnessVerdict');
     expect(gate).toContain("skipped(skip-publish)");
+    // 预置值是响亮的 not-judged（不是无害的 skipped）：绕过裁决的路径不许读成「无害」
+    expect(gate).toContain("'not-judged'");
   });
 
-  it('两个失败 reason 都留在门脚本里（陈旧 ⇒ stale-export；无产物 ⇒ 既有的 no-artifact）', () => {
-    expect(gate).toContain('reason=stale-export');
-    expect(gate).toContain('reason=no-artifact');
+  it('失败路径的 errors 栏写 gate/env 而不是数字（旧写法 errors=1 像「1 条编译错误」）', () => {
+    expect(gate).toContain("'gate'");
+    expect(gate).not.toContain('errors=1 stage=publish');
+  });
+
+  it('两个失败 reason 都由门脚本分支处理（陈旧 ⇒ stale-export；无产物 ⇒ 既有的 no-artifact）', () => {
+    // 裁决把 reason 交回来，门按它分流处置文案 —— 故判据是「门里出现这两个 reason 的分支」，
+    // 而不是结果行里的字面量（结果行由 `reason=$($publishEval.Reason)` 插值）。
+    expect(gate).toContain("'stale-export'");
+    expect(gate).toContain("'no-artifact'");
   });
 });
