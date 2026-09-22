@@ -35,6 +35,7 @@ export interface ContactPlainDTO {
 }
 
 export interface ContactRequestDTO {
+  company_disabled?: boolean
   company_name?: string
   contact_email?: string
   contact_name?: string

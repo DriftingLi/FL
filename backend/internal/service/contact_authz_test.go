@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"gorm.io/gorm"
+
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
 )
@@ -39,6 +41,19 @@ func TestContactGrantState_WireValues(t *testing.T) {
 	}
 	if !ContactGrantApproved.GrantsPlaintext() {
 		t.Error("已批准必须透出明文")
+	}
+}
+
+// seedRecruiter 建一条企业账号（授权有效态的另一侧：ADR-0062 决策 9 之后，
+// 成对判据会同时问「学员账号在不在」与「企业账号还有效吗」，故夹具必须真的有一行）。
+func seedRecruiter(t *testing.T, db *gorm.DB, id int, status int16) {
+	t.Helper()
+	rec := model.RecruiterUser{
+		ID: id, Username: "recAuthz", Password: "x", CompanyName: "授权测试企业",
+		ContactPhone: "13800000000", ContactEmail: "rec@example.com", Status: status,
+	}
+	if err := db.Create(&rec).Error; err != nil {
+		t.Fatalf("播种企业失败: %v", err)
 	}
 }
 
@@ -107,6 +122,8 @@ func TestContactGrant_ThreeFacesAgree(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			db := testutil.NewMemoryDB(t)
+			// 企业侧账号先要有效——三条消费面「结论一致」的前提是两侧都在册（ADR-0062 决策 9）。
+			seedRecruiter(t, db, recruiterID, 1)
 			stu := testutil.SeedStudent(t, db, "stuAuthz", "hash")
 
 			for i, status := range tc.statuses {
@@ -179,6 +196,7 @@ func TestContactGrant_ThreeFacesAgree(t *testing.T) {
 func TestContactGrant_StudentGoneInvalidates(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	const recruiterID = 101
+	seedRecruiter(t, db, recruiterID, 1)
 	stu := testutil.SeedStudent(t, db, "stuGone", "hash")
 	now := time.Date(2026, 9, 16, 10, 0, 0, 0, time.Local)
 
@@ -219,6 +237,92 @@ func TestContactGrant_StudentGoneInvalidates(t *testing.T) {
 	if grants[stu.ID].Effective() {
 		t.Fatal("学员注销后徽章不应再显示已授权（与明文门禁同口径）")
 	}
+}
+
+// TestContactGrant_CompanyDisabledInvalidates 不变式（ADR-0062 决策 9）：**企业被禁用 → 授权失效**。
+// 与上一例同形，只是把「哪一侧账号不成立」换成了企业侧——两例并排才叫「双向对称」，
+// 只有上一例时判据就只是学员侧那半边（本波的实测缺陷）。
+//
+// 禁用不是注销：授权事实不改写（徽章仍按 approved 投影，「授权存在 ≠ 授权可用」），
+// 改的是可用性；解禁后当场恢复（判据读当前状态，不读历史快照）。
+func TestContactGrant_CompanyDisabledInvalidates(t *testing.T) {
+	db := testutil.NewMemoryDB(t)
+	const recruiterID = 101
+	seedRecruiter(t, db, recruiterID, 1)
+	stu := testutil.SeedStudent(t, db, "stuCompanyDisabled", "hash")
+	now := time.Date(2026, 9, 21, 10, 0, 0, 0, time.Local)
+
+	approved := model.ContactRequest{
+		RecruiterID: recruiterID, StudentUserID: stu.ID, Message: "已批准",
+		Status: string(ContactGrantApproved), Source: string(ContactGrantSourceRecruiter),
+		CreatedAt: now, UpdatedAt: now, DecidedAt: &now,
+	}
+	if err := db.Create(&approved).Error; err != nil {
+		t.Fatalf("seed 授权失败: %v", err)
+	}
+	// 对照：启用中两侧都成立
+	if _, err := contactGrantEffectiveOf(db, recruiterID, stu.ID); err != nil {
+		t.Fatalf("启用中应判为有效授权: %v", err)
+	}
+
+	// 处置动作：禁用该企业（recruiter_users.status = 0，等价于 ToggleRecruiterStatus）
+	if err := db.Model(&model.RecruiterUser{}).Where("id = ?", recruiterID).
+		Update("status", int16(0)).Error; err != nil { // 0 = 禁用（ToggleRecruiterStatus 的落地值）
+		t.Fatalf("禁用企业失败: %v", err)
+	}
+
+	if _, err := contactGrantEffectiveOf(db, recruiterID, stu.ID); err != ErrCompanyUnavailable {
+		t.Fatalf("企业被禁用后应报 ErrCompanyUnavailable（不是笼统的无授权）, got %v", err)
+	}
+	// 授权事实仍在：徽章面（批量读面）按授权事实投影，不因处置而改写
+	grants, err := contactGrantOfManyEffective(db, recruiterID, []int{stu.ID})
+	if err != nil {
+		t.Fatalf("批量读取失败: %v", err)
+	}
+	if !grants[stu.ID].Effective() {
+		t.Fatal("徽章是授权事实的投影，企业被禁用不该改写它（可用性呈现在明文位置）")
+	}
+	// 行级装配：明文位置降级为「不可用 + 具名说明」
+	svc := NewContactService(db, nil, nil, nil)
+	row, err := toContactRowOf(db, recruiterID, stu.ID)
+	if err != nil {
+		t.Fatalf("取授权行失败: %v", err)
+	}
+	dto := svc.toDTO(row)
+	if dto.ContactPhone != "" || dto.ContactEmail != "" || dto.Wechat != "" {
+		t.Fatalf("企业被禁用后明文一律不得透出，实际 phone=%q email=%q wechat=%q",
+			dto.ContactPhone, dto.ContactEmail, dto.Wechat)
+	}
+	if dto.Status != string(ContactGrantApproved) || !dto.CompanyDisabled {
+		t.Fatalf("应保留 approved 并给出具名说明 company_disabled，实际 status=%q disabled=%v",
+			dto.Status, dto.CompanyDisabled)
+	}
+	if dto.CompanyName == "" {
+		t.Fatal("企业名不是 L3 明文，禁用后仍应回填")
+	}
+
+	// 解禁 ⇒ 当场恢复（同一份授权行，无重新授权）
+	if err := db.Model(&model.RecruiterUser{}).Where("id = ?", recruiterID).
+		Update("status", recruiterStatusActive).Error; err != nil {
+		t.Fatalf("解禁企业失败: %v", err)
+	}
+	if _, err := contactGrantEffectiveOf(db, recruiterID, stu.ID); err != nil {
+		t.Fatalf("解禁后应恢复有效授权: %v", err)
+	}
+	if dto := svc.toDTO(row); dto.ContactPhone == "" || dto.CompanyDisabled {
+		t.Fatalf("解禁后明文应恢复且不再报 company_disabled，实际 phone=%q disabled=%v",
+			dto.ContactPhone, dto.CompanyDisabled)
+	}
+}
+
+// toContactRowOf 取那一行 approved 授权（行级装配的输入）。
+func toContactRowOf(db *gorm.DB, recruiterID, studentUserID int) (*model.ContactRequest, error) {
+	var row model.ContactRequest
+	if err := db.Where("recruiter_id = ? AND student_user_id = ?", recruiterID, studentUserID).
+		First(&row).Error; err != nil {
+		return nil, err
+	}
+	return &row, nil
 }
 
 // TestContactAuthz_NoGrantLiterals 字面量清零锁：联络授权域的两个文件里不得再出现

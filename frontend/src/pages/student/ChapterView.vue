@@ -195,8 +195,10 @@ const { loading, loadError, retrying, isEmpty, retry: retryLoadChapter, run: loa
     // 拦截器已解包信封；章节不存在由后端 404 触发（归空态）
     const detail = await courseApi.getChapterDetail(Number(courseId.value), Number(chapterId.value))
     chapterDetail.value = detail
-    // 断点续播位置（学习状态缓存；无记录为 0）
-    chapterVideoPosition.value = chapterStateMap.value.get(detail.chapter_id)?.video_position || 0
+    // 断点续播位置取**后端下发**的权威值（ADR-0062 决策 11）。旧写法在这里同步读
+    // chapterStateMap —— 它由另一条并发请求填，谁先回来全凭运气，未落地即读到 0
+    // ⇒ 从课程列表点进看到一半的章节每次都从片头重播。
+    chapterVideoPosition.value = detail.resume_position || 0
     latestVideoPosition = chapterVideoPosition.value
     // 章节加载成功后启动学习计时
     studyTracker.begin()

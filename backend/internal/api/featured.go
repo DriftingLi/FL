@@ -128,6 +128,8 @@ func (h *FeaturedHandler) IncrementViewCount(c *gin.Context) {
 			}
 			return &viewCountResp{ID: req.ID, Count: count}, nil
 		},
+		// 判定不动（票8 逐端点判过）：FeaturedService.IncrementViewCount 的「内容不存在」是裸
+		// errors.New，自增失败的驱动错误原样上抛 ⇒ api 侧无哨兵可分档，改判会把真 404 变 500。
 		ErrStatus: errStatusAll(http.StatusNotFound),
 		Render: func(c *gin.Context, _ *featuredIDReq, resp *viewCountResp) {
 			response.Success(c, gin.H{"content_id": resp.ID, "view_count": resp.Count})

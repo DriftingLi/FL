@@ -77,7 +77,7 @@ func (s *TutorService) GetChapterDetail(chapterID int) (*ChapterDetailDTO, error
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
 		return nil, errors.New("章节不存在")
 	}
-	return chapterDetailShared(s.db, &chapter, false, 0), nil
+	return chapterDetailShared(s.db, &chapter, false, 0)
 }
 
 // UploadChapterFile 上传章节文件。

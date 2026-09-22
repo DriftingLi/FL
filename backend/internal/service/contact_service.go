@@ -25,6 +25,10 @@ var (
 	ErrContactPendingExists = errors.New("已存在待处理的申请")
 	// ErrStudentGone 学员不存在或已注销。
 	ErrStudentGone = errors.New("学员不存在或已注销")
+	// ErrCompanyUnavailable 企业账号已停用或已注销——授权仍在，但**不可用**
+	// （CONTEXT.md「授权有效态」的禁用那一半，ADR-0062 决策 9）。与 ErrContactNoAuth 分名，
+	// 因为两者的处置动作完全不同：前者是平台对企业的处置、解除即恢复，后者是学员从未/不再授权。
+	ErrCompanyUnavailable = errors.New("企业账号已停用或已注销")
 )
 
 // contactDecisionWindow 裁决窗口长度：pending 等学员裁决的时限（ADR-0061 §2）。
@@ -69,6 +73,11 @@ type ContactRequestDTO struct {
 	ContactPhone string `json:"contact_phone,omitempty" extensions:"x-optional"`
 	ContactEmail string `json:"contact_email,omitempty" extensions:"x-optional"`
 	Wechat       string `json:"wechat,omitempty" extensions:"x-optional"`
+	// CompanyDisabled 授权**在**而明文**不可用**的具名说明：该企业账号已被禁用（处置动作）或已注销，
+	// 于是上面三段明文一律缺失，但 status 仍是 approved（徽章按授权事实投影，处置不改写授权事实）。
+	// 词表依据：CONTEXT.md「授权有效态」——「授权存在 ≠ 授权可用，可用性问题呈现在明文位置」；
+	// 「企业招聘者」条的 status 禁用位（ADR-0062 决策 9）。缺席即企业可用。
+	CompanyDisabled bool `json:"company_disabled,omitempty" extensions:"x-optional"`
 	// Source 授权来源（recruiter 企业发起 / application 投递产生）
 	Source string `json:"source,omitempty" extensions:"x-optional"`
 }
@@ -98,12 +107,78 @@ type ContactPlainDTO struct {
 	ResumeCertifications JSONArray `json:"resume_certifications" swaggertype:"array,object"`
 }
 
-// toDTO 转换 DB 行为 DTO，带企业信息（学员侧用）。
+// contactCompany 一家企业在联系面读面上的投影：一次批量查询同时带回「名片三段」
+// （企业名/联系人）、「明文三段」（电话/邮箱/微信）与「企业账号是否仍有效」那一维。
+// 有效性不另开一次查询——它就是同一行上的 status，判据住在 recruiterRowUsable（联络域唯一读点）。
+type contactCompany struct {
+	found       bool
+	usable      bool
+	companyName string
+	contactName string
+	phone       string
+	email       string
+	wechat      string
+}
+
+// contactCompaniesOf 一次取回一批申请涉及的企业（列表装配用）。
+//
+// 手法与 contactGrantOfMany 的「一次批量存在性校验」同源：查询条数不随列表行数增长。
+// 原 toDTO 是**逐行** First(recruiter)，既是 N+1，也拿不到「整页」的企业状态来对称化判据。
+// 查询失败 ⇒ 上抛，由调用方按既有的「尽力而为」降级（企业信息取不到就不回填，不阻塞列表）。
+func contactCompaniesOf(db *gorm.DB, recruiterIDs []int) (map[int]contactCompany, error) {
+	out := make(map[int]contactCompany, len(recruiterIDs))
+	if len(recruiterIDs) == 0 {
+		return out, nil
+	}
+	var rows []model.RecruiterUser
+	if err := db.Where("id IN ?", recruiterIDs).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	for i := range rows {
+		rec := &rows[i]
+		out[rec.ID] = contactCompany{
+			found:       true,
+			usable:      recruiterRowUsable(rec),
+			companyName: rec.CompanyName,
+			contactName: rec.ContactName,
+			phone:       rec.ContactPhone,
+			email:       rec.ContactEmail,
+			wechat:      rec.Wechat,
+		}
+	}
+	return out, nil
+}
+
+// toDTO 转换 DB 行为 DTO，带企业信息（学员侧用）。单行形态（写侧出口：Create/Approve/Reject/Revoke）。
 func (s *ContactService) toDTO(m *model.ContactRequest) ContactRequestDTO {
+	return s.toDTOs([]model.ContactRequest{*m})[0]
+}
+
+// toDTOs 批量转换：整页涉及的企业**一次查完**，再逐行判明文门禁（不产生 N+1）。
+func (s *ContactService) toDTOs(ms []model.ContactRequest) []ContactRequestDTO {
+	ids := make([]int, 0, len(ms))
+	for i := range ms {
+		ids = append(ids, ms[i].RecruiterID)
+	}
+	companies, err := contactCompaniesOf(s.db, ids)
+	if err != nil {
+		// 尽力而为（与改造前一致）：企业信息回填失败不阻塞列表，退化为「一律不回填」。
+		companies = nil
+	}
+	out := make([]ContactRequestDTO, 0, len(ms))
+	for i := range ms {
+		out = append(out, s.toDTOWithCompany(&ms[i], companies[ms[i].RecruiterID]))
+	}
+	return out
+}
+
+// toDTOWithCompany 逐行装配：事实取回与判据分离——门禁谓词一律问 contact_authz.go（ADR-0053 §3），
+// 本函数只负责「把已取回的事实投影成 DTO」。
+func (s *ContactService) toDTOWithCompany(m *model.ContactRequest, rec contactCompany) ContactRequestDTO {
 	var decided *string
 	if m.DecidedAt != nil {
-		s := m.DecidedAt.Format(time.RFC3339)
-		decided = &s
+		v := m.DecidedAt.Format(time.RFC3339)
+		decided = &v
 	}
 	// 窗口时刻可空：非 pending 行不再输出日期（旧代码会输出零值时间，见 ADR-0061 §2）。
 	var window *string
@@ -121,20 +196,27 @@ func (s *ContactService) toDTO(m *model.ContactRequest) ContactRequestDTO {
 		UpdatedAt:     m.UpdatedAt.Format(time.RFC3339),
 		DecidedAt:     decided,
 		ExpiresAt:     window,
+		Source:        m.Source,
 	}
-	// 回填企业信息（尽力而为，不让查询失败阻塞）
-	// #487：仅已批准时透出联系信息——谓词单点在 contact_authz.go（GrantsPlaintext）
-	var rec model.RecruiterUser
-	if err := s.db.First(&rec, m.RecruiterID).Error; err == nil {
-		dto.CompanyName = rec.CompanyName
-		dto.ContactName = rec.ContactName
-		if ContactGrantState(m.Status).GrantsPlaintext() {
-			dto.ContactPhone = rec.ContactPhone
-			dto.ContactEmail = rec.ContactEmail
-			dto.Wechat = rec.Wechat
-		}
+	approved := ContactGrantState(m.Status).GrantsPlaintext()
+	if !rec.found {
+		// 企业行不存在：整段回填照旧跳过（含明文——没有行就没有明文可透出）。
+		return dto
 	}
-	dto.Source = m.Source
+	dto.CompanyName = rec.companyName
+	dto.ContactName = rec.contactName
+	// 明文门禁（#487 + ADR-0062 决策 9）：授权已批准 **且双方账号均有效** 才透出。
+	// 学员那一维在本条读路径上由 caller 身份承载——列表按 student_user_id 收口，且学员整链注销
+	// 会把授权行一并带走（auth_service.DeleteAccount），故不为此多查一次；企业那一维就是这里。
+	if contactPairUsable(approved, true, rec.usable) {
+		dto.ContactPhone = rec.phone
+		dto.ContactEmail = rec.email
+		dto.Wechat = rec.wechat
+	} else if approved {
+		// 授权存在 ≠ 授权可用：状态照旧是 approved（徽章按授权事实投影），
+		// 可用性缺失给**具名说明**，让明文位置显示「企业已停用」而不是静默空白。
+		dto.CompanyDisabled = true
+	}
 	return dto
 }
 
@@ -155,12 +237,12 @@ func (s *ContactService) Create(recruiterID, studentUserID int, message string) 
 	if err := s.db.First(&stu, studentUserID).Error; err != nil {
 		return nil, errors.New("学员不存在")
 	}
-	// 招聘者是否存在且启用
+	// 招聘者是否存在且启用（启停的读法单点在 recruiterRowUsable，本域不另手拼 status）
 	var rec model.RecruiterUser
 	if err := s.db.First(&rec, recruiterID).Error; err != nil {
 		return nil, errors.New("招聘者不存在")
 	}
-	if rec.Status != 1 {
+	if !recruiterRowUsable(&rec) {
 		return nil, errors.New("招聘者账号已禁用")
 	}
 	// 学员简历是否公开？（可选：不校验，允许向 hidden 发，但 L2 不可见时申请仍可发起？ spec 未限制，此处不拦）
@@ -298,11 +380,7 @@ func (s *ContactService) ListForRecruiter(recruiterID, page, pageSize int) ([]Co
 	if err != nil {
 		return nil, 0, err
 	}
-	dtos := make([]ContactRequestDTO, 0, len(rows))
-	for i := range rows {
-		dtos = append(dtos, s.toDTO(&rows[i]))
-	}
-	return dtos, total, nil
+	return s.toDTOs(rows), total, nil
 }
 
 // ListForStudent 学员侧查看收到的申请。
@@ -314,11 +392,7 @@ func (s *ContactService) ListForStudent(studentUserID, page, pageSize int) ([]Co
 	if err != nil {
 		return nil, 0, err
 	}
-	dtos := make([]ContactRequestDTO, 0, len(rows))
-	for i := range rows {
-		dtos = append(dtos, s.toDTO(&rows[i]))
-	}
-	return dtos, total, nil
+	return s.toDTOs(rows), total, nil
 }
 
 // Approve 学员同意申请。
@@ -443,8 +517,8 @@ func (s *ContactService) ExpirePending(now time.Time) (int64, error) {
 	return s.expireClosed(now, nil)
 }
 
-// GetContact 明文联系方式与 PDF 仅在有效授权下返回（存在已批准授权，实时校验，无缓存）。
-// 授权判据与「学员注销即失效」收口在 contact_authz.go（ADR-0053 §3）。
+// GetContact 明文联系方式与 PDF 仅在**授权有效**时返回（存在已批准授权 ∧ 双方账号均有效，
+// 实时校验、无缓存）。判据单点在 contact_authz.go：ADR-0053 §3 收成一条、ADR-0062 决策 9 补对称半边。
 // 返回的 JobCardDTO 包含明文 phone/wechat/real_name/resume_file_url。
 func (s *ContactService) GetContact(recruiterID, studentUserID int) (*JobCardDTO, error) {
 	if _, err := contactGrantEffectiveOf(s.db, recruiterID, studentUserID); err != nil {

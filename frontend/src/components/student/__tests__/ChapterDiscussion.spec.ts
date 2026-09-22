@@ -280,6 +280,94 @@ describe('章节讨论回复区对齐（#858）', () => {
   })
 })
 
+/**
+ * 第十四波 B 票 10（ADR-0062 决策 10）实测缺陷的组件侧证据：
+ * 「加载更多回复」飞行中点另一帖 ⇒ 上一帖的第 2 批不得落进新帖的面板，
+ * 连「剩余 N 条」这类人读文案也不得被旧信封改写（旧写法把 pages/total 另抄了一份
+ * 组件局部 ref —— 批次代数在 composable 里，那份镜像因此整体消失，total 只住一处）。
+ */
+describe('章节讨论：加载更多在飞时切帖（票 10 批次代数）', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  function topic(id: number, title: string) {
+    return {
+      id,
+      chapter_id: 1,
+      category: 'discussion',
+      title,
+      content: `${title}正文`,
+      view_count: 0,
+      reply_count: 0,
+      created_at: '2026-08-01T10:00:00+08:00',
+      author: { user_id: 2, username: '楼主', avatar_url: '' }
+    }
+  }
+
+  /** 每批只给 3 条：append 档的 hasMore 只认服务端信封（票4），批小不影响「还有下一页」的判据。 */
+  function batch(prefix: number, count: number) {
+    return Array.from({ length: count }, (_, i) => reply(prefix + i))
+  }
+
+  it('旧帖的第 2 批不落地，「剩余 N 条」读的是新帖的信封', async () => {
+    const a = topic(1, '甲帖')
+    const b = topic(2, '乙帖')
+    listTopics.mockResolvedValue({ topics: [a, b], total: 2 } as never)
+
+    let releaseStale!: (res: unknown) => void
+    const stale = new Promise<unknown>(resolve => { releaseStale = resolve })
+    getTopic.mockImplementation((async (id: number, _a2?: unknown, _b2?: unknown, page = 1) => {
+      if (id === 1 && page === 2) return stale
+      if (id === 1) return { topic: a, replies: batch(1, 3), page: 1, pages: 8, total: 150 }
+      return { topic: b, replies: batch(101, 3), page: 1, pages: 3, total: 60 }
+    }) as never)
+
+    const wrapper = mount(ChapterDiscussion, {
+      props: { chapterId: 1 },
+      global: {
+        plugins: [epLite()],
+        stubs: { ForumImageGallery: true, ForumPostForm: true, ForumComposer: true }
+      }
+    })
+    await flushPromises()
+
+    // 帖头才是可点的那一行（展开后回复卡也带 .cursor-pointer，故按 h4 认帖头）
+    const topicHeaders = () => wrapper.findAll('.cursor-pointer').filter(el => el.find('h4').exists())
+    expect(topicHeaders()).toHaveLength(2)
+
+    // 展开甲帖 → 点「加载更多」（第 2 批起飞后挂住）：甲帖的信封是 total 150
+    await topicHeaders()[0].trigger('click')
+    await flushPromises()
+    const more = wrapper.findAll('button').find(b => b.text().includes('加载更多回复'))
+    expect(more, '甲帖 150 条却没有翻页入口').toBeTruthy()
+    expect(more!.text()).toContain('剩余 147 条')
+    void more!.trigger('click')
+    await new Promise(r => setTimeout(r, 0))
+
+    // 飞行中点乙帖：面板整体换成乙帖的窗口（total 60，已累积 3 条）
+    await topicHeaders()[1].trigger('click')
+    await flushPromises()
+    await new Promise(r => setTimeout(r, 0))
+    await flushPromises()
+
+    releaseStale({ topic: a, replies: batch(4, 3), page: 2, pages: 8, total: 150 })
+    await flushPromises()
+    await new Promise(r => setTimeout(r, 0))
+    await flushPromises()
+
+    // 只有乙帖的第 1 批（回复101-103）；甲帖第 2 批（回复4-6）被整体丢弃
+    const cards = wrapper.findAllComponents(ForumReplyCard)
+    expect(cards).toHaveLength(3)
+    expect(cards[0].text()).toContain('回复101')
+    expect(wrapper.text()).not.toContain('回复5')
+    expect(wrapper.text()).not.toContain('回复6')
+    // 「剩余 N 条」= 乙帖的 60 - 3，不是甲帖信封给的 150 - 3
+    const bMore = wrapper.findAll('button').find(b => b.text().includes('加载更多回复'))
+    expect(bMore, '乙帖还有下一页却没有翻页入口').toBeTruthy()
+    expect(bMore!.text()).toContain('剩余 57 条')
+    expect(bMore!.text()).not.toContain('147')
+  })
+})
+
 describe('章节讨论的属地（#889 / ADR-0045）', () => {
   beforeEach(() => vi.clearAllMocks())
 

@@ -121,7 +121,10 @@ const materials = ref<MaterialItem[]>([])
 const courseFilter = ref<number | undefined>(undefined)
 const courses = ref<CourseSummary[]>([])
 
-// 三态 + 分页三件套收编（#388）
+// 三态 + 分页三件套收编（#388）。
+// 票 10（ADR-0062 决策 10）：课程筛选选项声明进 facets —— 「随切证件/筛选/reset 一起重装」
+// 只有一处判据。此前 loadCourses 只挂在 onMounted 上，切证件后选项仍是上一个证件的课程，
+// 拿旧证件的 course_id 去过滤新证件 = 空列表。翻页不重复拉它（facet 不并入列表 loader）。
 const {
   loading,
   loadError,
@@ -141,7 +144,7 @@ const {
   })
   materials.value = res.materials || []
   total.value = res.total || 0
-}, { itemsRef: materials })
+}, { itemsRef: materials, facets: [{ load: () => loadCourses() }] })
 
 const staggerStyle = useStagger()
 
@@ -164,11 +167,6 @@ function formatSize(bytes?: number): string {
   return `${(bytes / 1024 / 1024 / 1024).toFixed(1)}GB`
 }
 
-function handleFilterChange() {
-  currentPage.value = 1
-  loadMaterials()
-}
-
 async function loadCourses() {
   try {
     // 课程筛选选项（页大小取大值覆盖全部课程）
@@ -185,12 +183,15 @@ async function loadCourses() {
   }
 }
 
+function handleFilterChange() {
+  currentPage.value = 1
+  loadMaterials()
+}
+
 function download(item: MaterialItem) {
   window.open(resolveFileUrl(item.file_url), '_blank')
 }
 
-onMounted(() => {
-  loadCourses()
-  loadMaterials()
-})
+// 课程选项（facet）由 useAsyncPage 首装随列表一起拉起（票 10），页面这里只剩列表本体一条装载
+onMounted(loadMaterials)
 </script>

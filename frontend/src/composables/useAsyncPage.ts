@@ -21,7 +21,8 @@ export interface UseAsyncPageOptions {
    * admin/tutor/recruit 三端无需显式关闭：credential store 只对学员角色初始化
    * （路由守卫 + 学员侧栏切换器），current 恒为 null，watch 永不触发。
    * 切勿在调用方再自行 watch 证件变化重装本 loader——会构成本机制的双触发；
-   * 同页其他证件口径数据面（如课程目录 facet 由其所属装载流收敛）不在此限。
+   * 同页其他证件口径数据面（筛选选项、课程目录树、标签计数这类 facet）**声明进 `facets`**，
+   * 由本机制在同一时刻一起重装（第十四波票 10；此前它们游离在 seam 之外，只挂在 onMounted 上）。
    */
   credentialScoped?: boolean
   /**
@@ -33,6 +34,9 @@ export interface UseAsyncPageOptions {
    *
    * 元素可以是 ref，也可以是 getter（`() => filters.region`，用于 reactive 对象的
    * 单轴）——watch 源两种形态都收，页面无需自建 computed 数组。
+   *
+   * 第十四波票 10：`facets` 里声明的旁路装载流随这条轴一起重装（scoped facet），
+   * 于是「筛选项变化」既不会漏回第一页、也不会漏刷选项，页面不需要再写第二处判据。
    */
   filterDeps?: Array<Ref<unknown> | (() => unknown)>
   /**
@@ -69,6 +73,35 @@ export interface UseAsyncPageOptions {
   batchSize?: number
   /** append 形态：从 `fetch` 的响应里取出本批条目（缺省读 `res.items`）。 */
   pickItems?: (res: unknown) => unknown[] | undefined
+  /**
+   * facet 声明槽（第十四波 B 票 10，ADR-0062 决策 10）：**列表之外的旁路装载流**
+   * （筛选选项、目录树、标签计数这类跟着页面走的面）在这里声明，
+   * 于是「它什么时候该重装」这件事全仓只有一处判据 —— 与列表共享同一批失效时机：
+   * 筛选轴变化 / 切证件 / 显式 `reset`。首装跟随列表首装（第一次 `run`），
+   * 页面因此不必再自带一份 `onMounted(loadX)` 与一条手写 `watch(证件)`。
+   *
+   * 漏掉这一格的实测代价：7 个引用当前证件的文件里只有 2 个真在 watch 里重装，
+   * `QuestionBank.loadTags()` / `Materials.loadCourses()` 只挂在 `onMounted` 上
+   * ⇒ 切证件后选项仍是上一个证件的，拿旧证件的 tag_id/course_id 去过滤新证件 = 空列表。
+   *
+   * 本槽只管**何时重装**，不管写回：`load` 自己把结果写进页面的 ref（与 loader 同形态）。
+   * 在飞期间的失效按 facet 合流（跑完再补一次），故最终一定停在**最后那次**失效的状态上。
+   */
+  facets?: AsyncPageFacet[]
+}
+
+/**
+ * facet 声明条目（`UseAsyncPageOptions.facets`）。
+ *
+ * `scoped`（默认 `true`）= 本 facet 的数据按列表的失效轴分区（筛选轴变化 / 切证件即重装）；
+ * `scoped: false` = 全局字典类 facet，只随首装与显式 `reset` 重装
+ * （例：不区分证件、也不随筛选变化的常量表）。
+ */
+export interface AsyncPageFacet {
+  /** 装载并写回页面自己的 ref；抛错由本 composable 记 error，不占列表的 `loadError` 通道。 */
+  load: () => unknown
+  /** 是否随筛选轴/证件切换重装（默认 true）。 */
+  scoped?: boolean
 }
 
 /**
@@ -95,6 +128,15 @@ export interface UseAsyncPageOptions {
  * 信封整体缺失即记 error 并判「到底」。同时 `total` 在 append 档由响应写入（页面的
  * 「剩余 N 条」直接读它，不再自己数累积）。
  *
+ * 第十四波票 10（ADR-0062 决策 10）：装载流归位到本 composable，两格一起补上——
+ * - **批次代数**：`run` 递增、`loadMore` 发起时捕获、落地前比对，不等即整批作废
+ *   且**不回写 `page`/`total`/`hasMore`**（旧批写进新窗口就是把两个对象的批次混进同一面板）；
+ *   页面零改动，判据只在这一处。
+ * - **facet 声明槽**（`facets`）：列表之外的旁路装载流（筛选选项/目录树/标签计数）与列表
+ *   共享同一批失效时机（筛选轴变化 / 切证件 / reset），首装跟随列表首装。
+ *   「筛选项变化要回第一页」从此只有 `filterDeps` 一个入口 —— 页面不得再拿
+ *   `handlePageChange()` 处理筛选切换（那是假空态的成因，机检见 composables/__tests__/loadFlowLocks.spec.ts）。
+ *
  * 不分页的页面（详情/聚合页）只解构三态部分即可，分页字段闲置无害。
  */
 export function useAsyncPage(load: (page?: number) => Promise<unknown>, options: UseAsyncPageOptions = {}) {
@@ -116,6 +158,79 @@ export function useAsyncPage(load: (page?: number) => Promise<unknown>, options:
   const hasMore = ref(false)
   /** append 形态：`loadMore` 在飞行中（按钮 loading 态 + 防重入）。 */
   const loadingMore = ref(false)
+
+  /**
+   * 批次代数（第十四波 B 票 10，ADR-0062 决策 10）：`run` 递增、`loadMore` 发起时捕获、
+   * 落地前比对 —— 不等即整批作废（条目不追加、`page`/`total`/`hasMore` 都不回写）。
+   * 缺了它，「加载更多」飞行中切帖会把上一帖的第 2 批 push 进新帖已清空的列表
+   * （`components/student/ChapterDiscussion.vue` 的实测形态：同一面板混两帖回复）。
+   * 判据住在 composable 而不是页面：**否**「页面各自加 request-id 守卫」（那正是本波根因形状），
+   * 也**否** loader 收 `AbortSignal`（要改 loader 签名与 `client.ts` 透传，非本波量）。
+   */
+  let generation = 0
+
+  /** 一轮装载起飞前的作废动作：旧轮（含在飞的 append 批）就此不落地。 */
+  function invalidate(): number {
+    generation += 1
+    // 在飞批次的 loading 态由这一轮接管：作废了还不归零，按钮就悬在一个不会回来的 spinner 上
+    loadingMore.value = false
+    return generation
+  }
+
+  // ===== facet 声明槽（ADR-0062 决策 10）：旁路装载流与列表共享失效时机 =====
+  interface FacetRuntime {
+    facet: AsyncPageFacet
+    running: Promise<void> | null
+    queued: boolean
+  }
+  const facetRuntimes: FacetRuntime[] = (options.facets ?? []).map(facet => ({
+    facet,
+    running: null,
+    queued: false
+  }))
+  /** facet 首装跟随列表首装（第一次 `run`），页面不必再自带一份 `onMounted` 装载。 */
+  let facetsBooted = false
+
+  /**
+   * 装一个 facet：在飞时不并发第二份，只把这次失效**排队**成一次补跑 ——
+   * 于是「最后一次失效」的那次装载一定读到当时的证件/筛选值（不需要 loader 侧的取消语义）。
+   */
+  function runFacet(runtime: FacetRuntime): Promise<void> {
+    if (runtime.running) {
+      // 在飞：不并发第二份，记一次「还欠一趟」，由在飞那趟跑完补上（见下方 while 条件）
+      runtime.queued = true
+      return runtime.running
+    }
+    runtime.running = (async () => {
+      do {
+        runtime.queued = false
+        try {
+          await runtime.facet.load()
+        } catch (error) {
+          // facet 是选项/聚合面，不占列表的 loadError 通道（列表本体这一轮是好的）；
+          // 但不得静默吞错 —— 口径同本文件 append 信封缺失那条 console.error。
+          console.error(
+            '[useAsyncPage] facet 装载失败：该面降级为上一次的读数（不连带把列表打成错误态）。' +
+              '请给这条 facet 的端点补错误出口，或在页面里显式声明降级判据。',
+            error
+          )
+        }
+      } while (runtime.queued)
+      runtime.running = null
+    })()
+    return runtime.running
+  }
+
+  /**
+   * facet 重装入口：`'all'` = 首装与显式 `reset`（连全局字典一起重装）；
+   * `'scoped'` = 筛选轴变化 / 切证件（`scoped: false` 的不动）。
+   * 不返回给调用方 await —— 列表与 facet 是并行两条流，失效时机同源但互不阻塞。
+   */
+  function loadFacets(scope: 'all' | 'scoped'): void {
+    for (const runtime of facetRuntimes) {
+      if (scope === 'all' || runtime.facet.scoped !== false) void runFacet(runtime)
+    }
+  }
 
   /** 拦截器把 ApiErrorKind 挂在错误对象上（client.ts attachKind）；无 kind 视为未分类。 */
   function kindOf(error: unknown): ApiErrorKind | null {
@@ -175,21 +290,31 @@ export function useAsyncPage(load: (page?: number) => Promise<unknown>, options:
 
   /** 装载（首屏/翻页/筛选变化共用）：错误收敛为 loadError + loadErrorKind，绝不 reject */
   async function run(): Promise<void> {
+    const gen = invalidate()
+    if (!facetsBooted) {
+      facetsBooted = true
+      loadFacets('all')
+    }
     loading.value = true
     loadError.value = false
     loadErrorKind.value = null
     if (append) hasMore.value = false
     try {
       const res = await load(page.value)
+      // 更新的一轮已起飞（切证件 / 筛选变化 / 再翻页）：本轮结果整体作废
+      if (gen !== generation) return
       if (append) appendBatch(res, page.value)
     } catch (error) {
+      if (gen !== generation) return
       loadError.value = true
       loadErrorKind.value = kindOf(error)
       // append 形态：本批失败即停（不回退页码），由 retry 重跑同一批
       if (append) hasMore.value = false
     } finally {
-      loading.value = false
-      retrying.value = false
+      if (gen === generation) {
+        loading.value = false
+        retrying.value = false
+      }
     }
   }
 
@@ -212,14 +337,28 @@ export function useAsyncPage(load: (page?: number) => Promise<unknown>, options:
   }
 
   /**
-   * 清空累积并回第 1 批（append 形态的「刷新」/ 筛选重置 / 写操作后的重装载）。
-   * 返回重装载那条 promise，让写操作（采纳 / 删除 / 发帖）能 await 到新批次落地。
+   * 回第 1 批重装（facet 重装范围由调用方给：见 `loadFacets`）。
+   * `page.value = 1` + `clearItems()` + `run()` 这条序列就是「失效」的唯一种子。
    */
-  function reset(): Promise<void> {
+  function reload(scope: 'all' | 'scoped'): Promise<void> {
     page.value = 1
     clearItems()
     hasMore.value = append
+    // 首装判据一并结清：`reload` 作为页面挂载入口时不该让 facet 装两趟
+    facetsBooted = true
+    loadFacets(scope)
     return run()
+  }
+
+  /**
+   * 清空累积并回第 1 批（append 形态的「刷新」/ 筛选重置 / 写操作后的重装载）。
+   * 返回重装载那条 promise，让写操作（采纳 / 删除 / 发帖）能 await 到新批次落地。
+   *
+   * facet 声明槽（ADR-0062 决策 10）在这条入口上的语义：`reset` 是「整页重来」，
+   * 连 `scoped: false` 的全局字典 facet 也一起重装。
+   */
+  function reset(): Promise<void> {
+    return reload('all')
   }
 
   /** 就地清空 `itemsRef`（保持 ref 引用不变，页面无需换数组）。 */
@@ -236,23 +375,28 @@ export function useAsyncPage(load: (page?: number) => Promise<unknown>, options:
    */
   async function loadMore(): Promise<void> {
     if (!append || loadingMore.value || loading.value || !hasMore.value) return
+    const gen = generation // 发起时捕获批次代数：落地前比对，不等即整批作废（票 10）
     loadingMore.value = true
     try {
       const next = page.value + 1
-      appendBatch(await load(next), next)
+      const res = await load(next)
+      if (gen !== generation) return
+      appendBatch(res, next)
       page.value = next
     } catch {
       // 拦截器已统一 toast；页码与本批判据都不动，再点一次即重试同一批
+      // （已被更新的一轮作废时同样什么都不做 —— 那一轮自有它的判据）
     } finally {
-      loadingMore.value = false
+      if (gen === generation) loadingMore.value = false
     }
   }
 
   // #1054 筛选轴：任一变化 → 回第一页重装（声明式，单点取代每页手写）。
   // append 形态下这条就是 `reset` 的语义（清空累积 + 回第 1 批），故直接复用而不是再抄一遍。
+  // 票 10：facet 声明槽与列表共用这条判据（scoped facet 随轴一起重装）。
   if (options.filterDeps?.length) {
     watch(options.filterDeps as Array<Ref<unknown> | (() => unknown)>, () => {
-      void reset()
+      void reload('scoped')
     })
   }
 
@@ -290,6 +434,9 @@ export function useAsyncPage(load: (page?: number) => Promise<unknown>, options:
           // append 形态：累积窗口整体作废（不清就是把已看过的第 1 批再叠一遍）；
           // replace 形态不动累积——loader 自己覆盖那个 ref，清了反而会让表格页闪一下空表。
           if (append) clearItems()
+          // 票 10：证件这一轴与筛选轴同判据 —— 声明进 facets 的旁路装载流一起重装，
+          // 页面不再自带 `watch(证件, loadX)`（此前 7 个引用当前证件的文件里只有 2 个真在 watch 里重装）。
+          loadFacets('scoped')
           void run()
         }
       )
