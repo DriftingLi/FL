@@ -1,0 +1,15 @@
+# 每 2 分钟一次（#1277）。判据：同一面连续 3 次失败才发信 ⇒ 最慢约 6 分钟出声，
+# 而 curl 单次抖动/后端瞬时重启不会误报；恢复后再发一封，同一故障 60 分钟冷却。
+[Unit]
+Description=叉车生产链路存活巡检定时器
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+AccuracySec=15s
+# 宿主长时间停机后开机即补一次，别等下一个 2 分钟窗口。
+Persistent=true
+Unit=forklift-watchdog.service
+
+[Install]
+WantedBy=timers.target
