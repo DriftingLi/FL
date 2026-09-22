@@ -1,0 +1,25 @@
+# #650（T12 forgot-password）①a 设备侧机检原文（原样抄自 .ci-verify/ 日志，未改一字）
+
+## 1) 部署（两轮各一次；HX_RUN / HX_RUN_DEPLOY 机检行）
+HX_RUN_DEPLOY deployed=true www=/sdcard/Android/data/io.dcloud.uniappx/apps/__UNI__1C1D180/www=1790042197->1790057129 pid_before=io.dcloud.uniappx=20137 pid_after=io.dcloud.uniappx=23616 foreground=io.dcloud.uniappx reason=资源已落到设备：/sdcard/Android/data/io.dcloud.uniappx/apps/__UNI__1C1D180/www 的 mtime 相对基线前进
+HX_RUN mode=incremental compile=200 deploy=0 total=265 exit=ok
+HX_RUN_DEPLOY deployed=true www=/sdcard/Android/data/io.dcloud.uniappx/apps/__UNI__1C1D180/www=1790057336->1790058565 pid_before=io.dcloud.uniappx=25142 pid_after=io.dcloud.uniappx=556 foreground=io.dcloud.uniappx reason=资源已落到设备：/sdcard/Android/data/io.dcloud.uniappx/apps/__UNI__1C1D180/www 的 mtime 相对基线前进
+HX_RUN mode=incremental compile=200 deploy=0 total=284 exit=ok
+
+## 2) 页身份（cli launch --pagePath 深链；进入页面行原文）
+14:08:57.327 [0m进入页面:​pages/forgot-password/forgot-password​ 。[{"创建dom元素个数":"37个","耗时":"39ms"},{"排版":"1次","耗时":"58ms"},{"渲染":"1次","耗时":"152ms"},{"跳转页面到onReady总耗时":"387ms"}][0m
+14:33:52.660 [0m进入页面:​pages/forgot-password/forgot-password​ 。[{"创建dom元素个数":"37个","耗时":"36ms"},{"排版":"1次","耗时":"47ms"},{"渲染":"1次","耗时":"192ms"},{"跳转页面到onReady总耗时":"423ms"}][0m
+
+## 3) 渲染层报错（术前 / 术后同形 —— 该页 style 块逐字节未动；另立 #1269）
+14:08:56.927 [33m[0mstyle property `font-size|color` is only supported on `<text>|<button>|<input>|<textarea>`. there is an error on `<view class="mode-tab mode-tab-active">`.[0m[39m
+14:08:56.930 [33m[0mstyle property `font-weight` is only supported on `<text>|<button>|<input>|<textarea>|<loading>`. there is an error on `<view class="mode-tab mode-tab-active">`.[0m[39m
+14:08:56.936 [33m[0mstyle property `font-size|color` is only supported on `<text>|<button>|<input>|<textarea>`. there is an error on `<view class="mode-tab">`.[0m[39m
+14:33:52.221 [33m[0mstyle property `font-size|color` is only supported on `<text>|<button>|<input>|<textarea>`. there is an error on `<view class="mode-tab mode-tab-active">`.[0m[39m
+14:33:52.223 [33m[0mstyle property `font-weight` is only supported on `<text>|<button>|<input>|<textarea>|<loading>`. there is an error on `<view class="mode-tab mode-tab-active">`.[0m[39m
+14:33:52.225 [33m[0mstyle property `font-size|color` is only supported on `<text>|<button>|<input>|<textarea>`. there is an error on `<view class="mode-tab">`.[0m[39m
+
+## 4) 截图与 a11y 落盘（PHASE_CAPTURE / PHASE_FOREGROUND 机检行，6 次）
+见 README 的判据表；原始 PNG 在 .ci-verify/t12-*.png（1080×2400，未入库：超 ADR-0008 的 150KB/张）
+
+## 5) logcat 崩溃断言（adb logcat -d 全缓冲，只读）
+LOGCAT_RESULT lines=253901 fatal_exception=0 anr_in=0 anr_in_io.dcloud.uniappx=0
