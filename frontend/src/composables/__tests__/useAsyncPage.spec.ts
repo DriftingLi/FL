@@ -4,7 +4,7 @@
 // append 档（#1101 收编、ADR-0060 §4 换判据）：hasMore 只认响应里的分页信封，
 // 本文件按「服务端给的页数」造 fixture（含论坛置顶导致的首批短一格形态）。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { ref, nextTick } from 'vue'
+import { ref, nextTick, type Ref } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import { useAsyncPage } from '../useAsyncPage'
 import { useCredentialStore } from '@/stores/credential'
@@ -249,6 +249,44 @@ describe('useAsyncPage 筛选轴与空态判据（#1054）', () => {
     handleSizeChange()
     await run()
     expect(loads.at(-1)).toEqual([1, '叉车', 0])
+  })
+
+  it('filterDeps：非首页切筛选 ⇒ 回第一页重装（第十四波 B 票 10 的缺陷形态，照 PointsLedger 的真实 loader）', async () => {
+    // PointsLedger 的实测缺陷：全站唯一拿 handlePageChange() 处理筛选切换的页面 ——
+    // 翻到第 4 页再点「支出」，请求仍是第 4 页那个子集，屏上「暂无积分流水」而记录确实存在。
+    // 判据宿主在 filterDeps（本用例锁 composable 这一侧），页面侧的机检见 loadFlowLocks.spec.ts。
+    const direction = ref('')
+    const items = ref<number[]>([])
+    const requests: Array<{ page: number; direction: string }> = []
+    const { page, run, handlePageChange, isEmpty } = useAsyncPage(
+      async () => {
+        requests.push({ page: page.value, direction: direction.value })
+        // replace 档的条目由 loader 自己写回（这里照真实页形态：第 4 页那个子集本就是空的）
+        items.value = direction.value === 'out' && page.value === 1 ? [1, 2] : []
+        return null
+      },
+      { itemsRef: items, filterDeps: [direction] }
+    )
+
+    await run()
+    page.value = 4
+    handlePageChange()
+    await nextTick()
+    await Promise.resolve()
+    expect(requests.at(-1)).toEqual({ page: 4, direction: '' })
+
+    // 点「支出」：请求回到第 1 页，屏上不再是假空态
+    direction.value = 'out'
+    await nextTick()
+    await Promise.resolve()
+    expect(requests).toEqual([
+      { page: 1, direction: '' },
+      { page: 4, direction: '' },
+      { page: 1, direction: 'out' }
+    ])
+    expect(page.value).toBe(1)
+    expect(items.value).toEqual([1, 2])
+    expect(isEmpty.value).toBe(false)
   })
 
   it('filterDeps：同一同步块内多轴齐变只触发一次重装', async () => {
@@ -603,5 +641,287 @@ describe('useAsyncPage append 形态（#1101 唯一入口；ADR-0060 §4 判据�
     await flight
     expect(loadingMore.value).toBe(false)
     expect(items.value).toHaveLength(BATCH * 2)
+  })
+})
+
+/**
+ * 第十四波 B 票 10（ADR-0062 决策 10）：装载批次代数。
+ *
+ * 缺陷（实测，不是假想）：append 档 await 回来后**无条件**追加并回写 `page`，
+ * 于是「加载更多」飞行中点另一帖时，上一帖的第 2 批被 push 进已清空的新帖列表，
+ * `page`/`total`/`hasMore` 也被旧信封改写 —— 同一面板混两帖回复
+ * （`components/student/ChapterDiscussion.vue` 的回复分页）。
+ * 判据宿主在 composable（generation），页面零改动；**否**「页面各自加 request-id 守卫」
+ * （那正是本波根因形状），也**否** AbortSignal（要改 loader 签名与 client.ts 透传，非本波量）。
+ */
+describe('useAsyncPage 批次代数（ADR-0062 决策 10：旧批不落地）', () => {
+  const BATCH = 20
+
+  function rows(page: number, n: number) {
+    return Array.from({ length: n }, (_, i) => ({ id: page * 100 + i }))
+  }
+
+  it('append 在飞时 reset ⇒ 旧批不落地，page/total/hasMore 都不被旧信封改写', async () => {
+    const items = ref<Array<{ id: number }>>([])
+    let releaseStale!: (res: unknown) => void
+    const stale = new Promise<unknown>(resolve => { releaseStale = resolve })
+    // epoch 0 = 旧帖（3 页 60 条），epoch 1 = 新帖（1 页 5 条）：两批的信封刻意不同，
+    // 旧批一旦落地就会把新帖的 total/hasMore/page 改写成一个自相矛盾的混合态。
+    let epoch = 0
+    const { run, reset, loadMore, page, total, hasMore } = useAsyncPage(
+      async (p?: number) => {
+        const batchNo = p ?? 1
+        if (batchNo === 2 && epoch === 0) return stale
+        return epoch === 0
+          ? { items: rows(batchNo, batchNo === 1 ? BATCH : 5), page: batchNo, pages: 3, total: 60 }
+          : { items: rows(1, 5), page: 1, pages: 1, total: 5 }
+      },
+      { mode: 'append', batchSize: BATCH, itemsRef: items }
+    )
+
+    await run()
+    expect(items.value).toHaveLength(BATCH)
+
+    const flight = loadMore() // 旧帖第 2 批起飞，挂在那儿
+    await nextTick()
+    epoch = 1
+    await reset() // 点另一帖：清空累积 + 回第 1 批，新帖这一批已落地
+    expect(items.value).toHaveLength(5)
+    expect(page.value).toBe(1)
+    expect(total.value).toBe(5)
+    expect(hasMore.value).toBe(false)
+
+    releaseStale({ items: rows(2, BATCH), page: 2, pages: 3, total: 60 })
+    await flight
+
+    // 旧批整体作废：条目不追加、页码不回写（回写了就会跳过新帖的第 2 批）、
+    // total/hasMore 不被旧信封改写
+    expect(items.value).toHaveLength(5)
+    expect(items.value.every(i => i.id < 200)).toBe(true)
+    expect(page.value).toBe(1)
+    expect(total.value).toBe(5)
+    expect(hasMore.value).toBe(false)
+  })
+
+  it('首屏装载在飞时切证件 ⇒ 上一轮不落地、错误态也不被旧轮改写', async () => {
+    setActivePinia(createPinia())
+    const store = useCredentialStore()
+    const items = ref<Array<{ id: number }>>([])
+    let releaseFirst!: (res: unknown) => void
+    const first = new Promise<unknown>(resolve => { releaseFirst = resolve })
+    let calls = 0
+    const { run, loadError, loadMore, hasMore } = useAsyncPage(
+      async () => {
+        calls++
+        if (calls === 1) return first
+        return { items: rows(1, 3), page: 1, pages: 1, total: 3 }
+      },
+      { mode: 'append', batchSize: BATCH, itemsRef: items }
+    )
+
+    const flight = run()
+    store.current = { id: 2 } as never
+    await nextTick()
+    expect(calls).toBe(2)
+    releaseFirst({ items: rows(1, BATCH), page: 1, pages: 4, total: 80 })
+    await flight
+    await vi.waitFor(() => expect(items.value).toHaveLength(3))
+    // 旧轮的 hasMore=true（4 页）没有把新轮覆盖成「还能再翻」
+    expect(hasMore.value).toBe(false)
+    expect(loadError.value).toBe(false)
+    await loadMore()
+    expect(calls).toBe(2)
+  })
+
+  it('loadMore 的在飞批次被作废后，loadingMore 不悬干（新轮接管按钮态）', async () => {
+    const items = ref<Array<{ id: number }>>([])
+    let releaseStale!: (res: unknown) => void
+    const stale = new Promise<unknown>(resolve => { releaseStale = resolve })
+    let epoch = 0
+    const { run, reset, loadMore, loadingMore } = useAsyncPage(
+      async (p?: number) => {
+        const batchNo = p ?? 1
+        if (batchNo === 2 && epoch === 0) return stale
+        return { items: rows(batchNo, 2), page: batchNo, pages: 3, total: 6 }
+      },
+      { mode: 'append', batchSize: BATCH, itemsRef: items }
+    )
+
+    await run()
+    const flight = loadMore()
+    expect(loadingMore.value).toBe(true)
+    epoch = 1
+    await reset()
+    // 作废即在：旧批的 loading 态归零，不留下永不落地的 spinner
+    expect(loadingMore.value).toBe(false)
+    releaseStale({ items: rows(2, 2), page: 2, pages: 3, total: 6 })
+    await flight
+    expect(loadingMore.value).toBe(false)
+  })
+})
+
+/**
+ * 第十四波 B 票 10（ADR-0062 决策 10）：facet 声明槽。
+ *
+ * 「随筛选/切证件/reset 一起重装」这件事只留一处判据。此前旁路装载流游离在 seam 之外：
+ * 7 个引用当前证件的文件里只有 2 个真在 watch 里重装，`QuestionBank.loadTags()` 与
+ * `Materials.loadCourses()` 只挂在 `onMounted` 上 ⇒ 切证件后仍是上一个证件的选项，
+ * 拿旧证件的 tag_id/course_id 去过滤新证件 = 空列表。
+ * **否**「facet 另立独立小 module」（会与 useAsyncPage 在「失效时机」上重叠两个抽象）。
+ */
+describe('useAsyncPage facet 声明槽（ADR-0062 决策 10：旁路装载归位）', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  /** 造一个「读当前证件 + 读筛选轴」的 facet，记录每次装载读到的值。 */
+  function facetSpy(store: { current: { id: number } | null }, keyword: Ref<string>) {
+    const seen: Array<{ credential: number | null; keyword: string }> = []
+    return {
+      seen,
+      load: () => {
+        seen.push({ credential: store.current?.id ?? null, keyword: keyword.value })
+      }
+    }
+  }
+
+  it('facet 首装随列表首装恰好一次（页面不再自带第二份 onMounted 装载）', async () => {
+    const store = useCredentialStore()
+    const keyword = ref('')
+    const facet = facetSpy(store, keyword)
+    const list = vi.fn()
+    const { run } = useAsyncPage(list, { facets: [{ load: facet.load }] })
+
+    await run()
+    expect(list).toHaveBeenCalledTimes(1)
+    expect(facet.seen).toEqual([{ credential: null, keyword: '' }])
+
+    // 翻页不是失效时机：翻页只重装载列表
+    run()
+    await run()
+    expect(facet.seen).toHaveLength(1)
+  })
+
+  it('切证件 ⇒ scoped facet 与列表一起重装；scoped:false 的字典 facet 不动', async () => {
+    const store = useCredentialStore()
+    const keyword = ref('')
+    const scoped = facetSpy(store, keyword)
+    const global = facetSpy(store, keyword)
+    const { run } = useAsyncPage(async () => {}, {
+      facets: [{ load: scoped.load }, { load: global.load, scoped: false }]
+    })
+
+    await run()
+    expect(scoped.seen).toHaveLength(1)
+    expect(global.seen).toHaveLength(1)
+
+    store.current = { id: 7 } as never
+    await nextTick()
+    await Promise.resolve()
+    expect(scoped.seen).toEqual([
+      { credential: null, keyword: '' },
+      { credential: 7, keyword: '' }
+    ])
+    expect(global.seen).toHaveLength(1)
+  })
+
+  it('credentialScoped:false 的页面：facet 也不随证件重装（同一份失效判据，不开第二条 watch）', async () => {
+    const store = useCredentialStore()
+    const keyword = ref('')
+    const facet = facetSpy(store, keyword)
+    const { run } = useAsyncPage(async () => {}, {
+      credentialScoped: false,
+      facets: [{ load: facet.load }]
+    })
+
+    await run()
+    store.current = { id: 3 } as never
+    await nextTick()
+    await Promise.resolve()
+    expect(facet.seen).toEqual([{ credential: null, keyword: '' }])
+  })
+
+  it('筛选轴变化 ⇒ scoped facet 随列表重装（读到的就是新轴）；reset ⇒ 全部 facet 重装', async () => {
+    const keyword = ref('')
+    const scoped = facetSpy(useCredentialStore(), keyword)
+    const global = facetSpy(useCredentialStore(), keyword)
+    const { run, reset } = useAsyncPage(async () => {}, {
+      filterDeps: [keyword],
+      facets: [{ load: scoped.load }, { load: global.load, scoped: false }]
+    })
+
+    await run()
+    keyword.value = '液压'
+    await nextTick()
+    await Promise.resolve()
+    expect(scoped.seen).toEqual([
+      { credential: null, keyword: '' },
+      { credential: null, keyword: '液压' }
+    ])
+    expect(global.seen).toHaveLength(1)
+
+    // 显式 reset（写操作后的重装载 / 「刷新」）把所有 facet 一起重装，含 scoped:false
+    await reset()
+    expect(scoped.seen).toHaveLength(3)
+    expect(scoped.seen.at(-1)).toEqual({ credential: null, keyword: '液压' })
+    expect(global.seen).toHaveLength(2)
+  })
+
+  it('facet 在飞时又来一次失效 ⇒ 排队重跑一次，最终停在最后那次状态（不交错丢更新）', async () => {
+    const store = useCredentialStore()
+    const seen: Array<number | null> = []
+    let release!: () => void
+    const gate = new Promise<void>(resolve => { release = resolve })
+    let first = true
+    const { run } = useAsyncPage(async () => {}, {
+      facets: [
+        {
+          load: async () => {
+            seen.push(store.current?.id ?? null)
+            if (first) {
+              first = false
+              await gate
+            }
+          }
+        }
+      ]
+    })
+
+    const flight = run()
+    await vi.waitFor(() => expect(seen).toEqual([null]))
+    store.current = { id: 2 } as never
+    await nextTick()
+    store.current = { id: 3 } as never
+    await nextTick()
+    release()
+    await flight
+    await vi.waitFor(() => expect(seen).toEqual([null, 3]))
+    // 在飞的那次不被并发打断、也不叠加成三次：合流为「最后一次」一次重跑
+    expect(seen).toHaveLength(2)
+  })
+
+  it('facet 装载失败：记 error 日志，不把列表打成错误态（facet 不占列表的 loadError 通道）', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { run, loadError, isEmpty } = useAsyncPage(
+      async () => ({ items: [], page: 1, pages: 1, total: 0 }),
+      {
+        mode: 'append',
+        itemsRef: ref<unknown[]>([]),
+        facets: [
+          {
+            load: async () => {
+              throw new Error('facet boom')
+            }
+          }
+        ]
+      }
+    )
+
+    await run()
+    await vi.waitFor(() => expect(error).toHaveBeenCalled())
+    expect(error.mock.calls[0][0]).toContain('facet')
+    expect(loadError.value).toBe(false)
+    expect(isEmpty.value).toBe(true)
+    error.mockRestore()
   })
 })
