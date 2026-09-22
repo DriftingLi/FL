@@ -110,6 +110,24 @@ describe('反向对账：坛档声明的每个成员都要有按钮（或显式�
     for (const label of labels) expect(label.length).toBeGreaterThan(0);
     expect(new Set(labels).size).toBe(labels.length);
   });
+
+  it('长按提示的**具名映射**逐枚钉住（`###`→标题 …）：真机侧读不到 toast，判据只能落在这里', () => {
+    const t = toolbar();
+    const m = loadUts(MD_UTS, {});
+    // 这张表就是票面 / ADR 写下的判定式；改文案必须同步改这里（真机上 adb 看不见 toast，
+    // 见 docs/verification/forum/1261/README.md 未覆盖面 2 的对照实验）
+    expect(t.toolbarLabel(m.MEMBER_HEADING)).toBe('标题');
+    expect(t.toolbarLabel(m.MEMBER_LIST)).toBe('列表');
+    expect(t.toolbarLabel(m.MEMBER_QUOTE)).toBe('引用');
+    expect(t.toolbarLabel(m.MEMBER_CODE)).toBe('代码块');
+    expect(t.toolbarLabel(m.MEMBER_DIVIDER)).toBe('分隔线');
+    // 按钮上显示的那串记号同样逐枚钉住（长按前用户看到的就是它）
+    expect(t.toolbarSyntax(m.MEMBER_HEADING)).toBe('###');
+    expect(t.toolbarSyntax(m.MEMBER_LIST)).toBe('-');
+    expect(t.toolbarSyntax(m.MEMBER_QUOTE)).toBe('>');
+    expect(t.toolbarSyntax(m.MEMBER_CODE)).toBe('```');
+    expect(t.toolbarSyntax(m.MEMBER_DIVIDER)).toBe('---');
+  });
 });
 
 // ===== ③ round-trip：按钮承诺的语法必须真能渲染 =====
@@ -261,6 +279,15 @@ describe('成对取证（必红）：本套件的三条判据在坏实现上确�
     const noButton = m.SUBSET_MEMBERS_FORUM.filter((member) => broken.TOOLBAR_MEMBERS.indexOf(member) < 0);
     expect(noButton).toEqual(['divider']);           // 坏实现真的让一个声明成员没了入口
     expect(noButton.sort()).not.toEqual([]);         // ⇒ 第 ② 组的「等于 DECLARED_WITHOUT_BUTTON」判据判红
+  });
+
+  it('必红 · 换掉一枚长按文案（标题 → Heading）⇒ 具名映射判据必然判红', () => {
+    const broken = loadMutated([
+      ["if (member == MEMBER_HEADING) return '标题'", "if (member == MEMBER_HEADING) return 'Heading'"],
+    ]);
+    const m = loadUts(MD_UTS, {});
+    expect(broken.toolbarLabel(m.MEMBER_HEADING)).toBe('Heading'); // 坏实现真的换了文案
+    // ⇒ 「=== '标题'」的具名映射断言判红
   });
 
   it('必红 · 代码块按钮插入的语法渲染不出代码块（承诺落空）⇒ ③ round-trip 判据必然判红', () => {

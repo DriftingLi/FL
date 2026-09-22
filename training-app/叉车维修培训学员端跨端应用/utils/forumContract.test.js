@@ -339,6 +339,8 @@ describe('行为保持契约（手术不改跳转、交互与乐观更新语义�
   const detailPage = read('pages/forum/forum-detail.uvue');
   const detail = read('composables/useTopicDetail.uts');
   const composer = read('composables/useReplyComposer.uts');
+  /** P3：图片流水线已收进共享 picker（限额闸门与文案都在那里） */
+  const picker = read('composables/useForumImagePicker.uts');
 
   it('头像入口统一跳个人动态（招聘退场后无简历直达分支）', () => {
     expect(page).toMatch(/function onPersonalActivity\(\) : void \{/);
@@ -373,8 +375,10 @@ describe('行为保持契约（手术不改跳转、交互与乐观更新语义�
     expect(detailPage).toContain('@update:content="onReplyContentChange"');
     expect(detailPage).not.toContain('v-model="replyContent"');
     expect(detailPage).toContain(':image-count="replyImages.length"');
-    expect(detailPage).toContain(':max-images="3"');
+    expect(detailPage).toContain(':max-images="replyImageLimit"');
     expect(detailPage).toContain("{{ submitting ? '发送中' : '发送' }}");
+    // 发送闸门与 `onSubmitReply` 的 trim 口径一致（纯空白不许亮着按钮却静默 return）
+    expect(detailPage).toContain(':class="{ disabled: !canSubmitReply }"');
   });
 
   it('帖子/回复乐观更新与回滚逐字保留', () => {
@@ -383,7 +387,8 @@ describe('行为保持契约（手术不改跳转、交互与乐观更新语义�
     expect(detail).toContain('t.liked = wasLiked');
     expect(detail).toContain('setReplyLikeState(reply.id, wasLiked, oldCount)');
     expect(composer).toContain('if (replyContent.value.trim().length == 0)');
-    expect(composer).toContain('最多上传 3 张图片');
+    // 图片限额的文案与闸门都在共享 picker 里（限额本身单点在 constants/app）
+    expect(picker).toContain("'最多上传 ' + maxImages + ' 张图片'");
   });
 
   it('onLoad 参数解析与 loadDetail 时序保留', () => {

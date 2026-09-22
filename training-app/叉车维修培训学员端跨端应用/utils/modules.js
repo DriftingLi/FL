@@ -257,6 +257,7 @@ const MODULES = {
       'api/checkin.uts',
       'api/forum.uts',
       'api/forumDto.uts',
+      'composables/useForumImagePicker.uts',
       'composables/useReplyComposer.uts',
       'composables/useReport.uts',
       'composables/useResourcePoints.uts',

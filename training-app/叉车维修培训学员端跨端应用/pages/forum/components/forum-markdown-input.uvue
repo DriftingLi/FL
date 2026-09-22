@@ -104,7 +104,11 @@
         imageCount?: number
         /** 'topic'（发帖表单）/ 'reply'（底部回复栏）—— 两处形态的差异只在这个 prop 上 */
         variant?: string
-        maxImages?: number
+        /**
+         * 该面的图片限额。**必填**：限额的唯一来源是 `constants/app`，宿主各报自己那一档 ——
+         * 组件不持第三个缺省值（原先 9 在这里、发帖页与回复 composable 里各又写了一遍）。
+         */
+        maxImages: number
         maxlength?: number
         placeholder?: string
         /** 当前声明的格式（`text` / `markdown`）；父层持有并持久化 */
@@ -119,7 +123,6 @@
         previewImages: () => [] as string[],
         imageCount: 0,
         variant: 'topic',
-        maxImages: 9,
         maxlength: 10000,
         placeholder: '',
         format: '',
@@ -186,12 +189,16 @@
      * 上真机的情况下判定，而 ADR-0025 只要求「工具栏可横滑 + 长按出中文提示」，未要求选区语义
      * （选区语义是根 ADR-0052 决策⑩ 的 **Web** 机制）。纯函数 `applyToolbarInsert` **已完整支持
      * 选区**（含落位返回），接线到选区只是把这里换成真实选区，属一次独立改动。
+     *
+     * 名字取 `insertAt` 而不是 `caret`：它装的是**草稿末尾**（`value.length`），
+     * 从来没装过光标。叫 caret 会让下一个读代码的人以为选区语义已经接上了。
      */
-    const caret = ref<number>(0)
+    const insertAt = ref<number>(0)
 
     function onContentInput(e : InputEvent) : void {
         const value = e.detail.value
-        caret.value = value.length
+        // 无选区可读 ⇒ 插入落点只能取草稿末尾（工具条插入是「追加」而不是「在光标处插入」）
+        insertAt.value = value.length
         emit('update:content', value)
     }
 
@@ -206,8 +213,8 @@
 
     function onToolbarTap(index : number) : void {
         const btn = toolbarButtons[index]
-        const result = applyToolbarInsert(props.content, caret.value, caret.value, btn.member)
-        caret.value = result.start
+        const result = applyToolbarInsert(props.content, insertAt.value, insertAt.value, btn.member)
+        insertAt.value = result.start
         emit('update:content', result.text)
     }
 

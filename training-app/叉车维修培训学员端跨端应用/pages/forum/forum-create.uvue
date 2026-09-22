@@ -36,7 +36,7 @@
                     <!-- 输入区形态（ADR-0025 P3）：数据档位 / 编写预览 / 工具栏 / 图片双入口 / 提示行
                          全在共享组件里（发帖与回复是**同一份**形态）；本页只接线与提交。 -->
                     <ForumMarkdownInput :content="content" :preview-images="imagePreviewUrls"
-                        :image-count="images.length" variant="topic" :max-images="9"
+                        :image-count="images.length" variant="topic" :max-images="topicImageLimit"
                         :maxlength="isResourceMode ? 2000 : 10000"
                         :placeholder="isResourceMode ? '介绍这份资料的内容与用途（≤2000 字）' : '请输入内容（1-10000 字）'"
                         :format="effectiveFormat" :show-format-switch="showFormatSwitch"
@@ -67,22 +67,18 @@
     import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
     import { FORMAT_TEXT } from '../../utils/forumBody'
-    import { readAuthorFormat, writeAuthorFormat } from '../../utils/forumFormatPreference'
-    import { createForumTopicApi, updateForumTopicApi, uploadForumImageApi, getForumTopicDetailApi } from '../../api/forum'
+    import { normalizeAuthorFormat, readAuthorFormat, writeAuthorFormat } from '../../utils/forumFormatPreference'
+    import { useForumImagePicker } from '../../composables/useForumImagePicker'
+    import { FORUM_MAX_TOPIC_IMAGES } from '../../constants/app'
+    import { createForumTopicApi, updateForumTopicApi, getForumTopicDetailApi } from '../../api/forum'
     import { getCurrentCredentialApi } from '../../api/credential'
     import { useAuthStore } from '../../stores/auth'
     import type { ForumTopicDetail } from '../../types/index'
     import ForumContributionForm from './components/forum-contribution-form.uvue'
     import ForumMarkdownInput from './components/forum-markdown-input.uvue'
 
-    /** 补全后端返回的相对文件 URL */
-    function resolveFileUrl(url : string) : string {
-        if (url.length == 0) return ''
-        if (url.startsWith('http://') || url.startsWith('https://')) {
-            return url
-        }
-        return url
-    }
+    /** 发帖面的图片限额（`constants/app` 单点；组件不持缺省值，本页只报自己那一档） */
+    const topicImageLimit : number = FORUM_MAX_TOPIC_IMAGES
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
@@ -102,11 +98,18 @@
     const editTopicId = ref<number>(0)
     const title = ref<string>('')
     const content = ref<string>('')
-    const images = ref<string[]>([])
     const selectedCategory = ref<string>('discussion')
     const submitting = ref<boolean>(false)
-    const uploadingImage = ref<boolean>(false)
     const loadingDetail = ref<boolean>(false)
+    /**
+     * 图片域整域取自**共享流水线**（发帖与回复同一份实现：选图 / 逐张上传 / 删除 / 预览）。
+     * 解构后名字与页内既有引用（`images` / `imagePreviewUrls` / `uploadingImage` / 三个处理器）一一对应，
+     * 模板与提交路径无需改动。
+     */
+    const {
+        images, previewImages: imagePreviewUrls, uploading: uploadingImage,
+        onAddImage, onRemoveImage, onPreviewImage,
+    } = useForumImagePicker(FORUM_MAX_TOPIC_IMAGES)
     // 资源投稿态（#760）：证件由壳层持有（onShow 跟随证件切换刷新），
     // 文件列表与提交在 forum-contribution-form 组件内自持
     const credentialId = ref<number>(0)
@@ -119,19 +122,17 @@
         故编辑态不给档位控件，只按原格式决定给不给编写预览与工具栏 */
     const editFormat = ref<string>(FORMAT_TEXT)
 
-    /** 图片预览 URL（组件只收预览地址；原始路径仍由本页持有用于提交） */
-    const imagePreviewUrls = computed<string[]>(() : string[] => {
-        const urls : string[] = []
-        for (let i = 0; i < images.value.length; i++) {
-            urls.push(resolveFileUrl(images.value[i]))
-        }
-        return urls
-    })
-
-    /** 档位切换：更新本地值并**记住**（发帖与回复共用一个记忆位，见 utils/forumFormatPreference） */
+    /**
+     * 档位切换：**先归一**再落本地值与记忆位。
+     *
+     * 为什么赋值前也要归一：本地值随后**直接进发布载荷**（`createForumTopicApi` 的 `content_format`），
+     * 而契约外取值后端会 400 —— 归一只在存储侧做的话，脏值仍会从载荷漏出去
+     * （ADR P3 回记第 4 条：读与写两个方向都归一，契约外的取值既不进存储也不漏出来）。
+     */
     function onFormatChange(value : string) : void {
-        authorFormat.value = value
-        writeAuthorFormat(value)
+        const next = normalizeAuthorFormat(value)
+        authorFormat.value = next
+        writeAuthorFormat(next)
     }
 
     /** 正文变更（组件上抛；工具栏插入也走这条回流，故草稿必须由页面持有） */
@@ -278,73 +279,8 @@
         }
     }
 
-    // ===== 图片上传 =====
-    async function uploadImages(paths : string[]) : Promise<void> {
-        uploadingImage.value = true
-        uni.showLoading({ title: '上传图片中...' })
-        let failed = 0
-        for (let i = 0; i < paths.length; i++) {
-            if (images.value.length >= 9) break
-            try {
-                const url = await uploadForumImageApi(paths[i])
-                images.value.push(url)
-            } catch (e) {
-                console.error('[forum-create] upload image failed:', e)
-                failed = failed + 1
-            }
-        }
-        uni.hideLoading()
-        uploadingImage.value = false
-        if (failed > 0) {
-            uni.showToast({ title: failed + ' 张图片上传失败，请重试', icon: 'none' })
-        }
-    }
-
-    /**
-     * 选图：**拍照 / 相册双入口**（ADR-0025 ⑦）—— 两个入口各自直达来源，不再共用系统选择器。
-     * uvue 侧粘贴 / 拖拽不可靠，故本端不做那两个入口（同 ⑦/ADR-0025 ③ 的具名不做）。
-     * @param source 'camera'（拍照，维修场景拍故障码 / 铭牌）| 'album'（相册）
-     */
-    function onAddImage(source : string) : void {
-        if (uploadingImage.value) return
-        const remaining = 9 - images.value.length
-        if (remaining <= 0) {
-            uni.showToast({ title: '最多上传 9 张图片', icon: 'none' })
-            return
-        }
-        uni.chooseImage({
-            count: remaining,
-            sizeType: ['compressed'],
-            sourceType: [source],
-            success: (res) => {
-                const paths = res.tempFilePaths as string[]
-                if (paths.length == 0) return
-                uploadImages(paths)
-            },
-            fail: (err) => {
-                console.log('[forum-create] chooseImage canceled/failed:', err)
-            },
-        })
-    }
-
-    function onRemoveImage(index : number) : void {
-        const next : string[] = []
-        for (let i = 0; i < images.value.length; i++) {
-            if (i != index) next.push(images.value[i])
-        }
-        images.value = next
-    }
-
-    function onPreviewImage(index : number) : void {
-        const urls : string[] = []
-        for (let i = 0; i < images.value.length; i++) {
-            urls.push(resolveFileUrl(images.value[i]))
-        }
-        uni.previewImage({
-            urls: urls,
-            current: index,
-        })
-    }
+    // 图片域（选图 / 逐张上传 / 删除 / 预览）整域取自 `composables/useForumImagePicker.uts`
+    // —— 与回复栏**同一份实现**（限额只在 constants/app 单点声明），本页不再持第二份流水线。
 
     function onBack() : void {
         if (title.value.length > 0 || content.value.length > 0) {

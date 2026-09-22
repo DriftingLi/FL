@@ -1,0 +1,115 @@
+/**
+ * 论坛**图片选择 / 上传 / 预览**的唯一实现（发帖表单与回复栏共用；ADR-0025 P3）
+ *
+ * 为什么单独成件：P3 把输入区**形态**收进了一个共享组件，但图片流水线（选图 → 逐张上传 → 删除 →
+ * 预览）当时仍在两个宿主里各留一份，只差 9 / 3 这个限额 —— 那正是「形态只有一份」这个论点自己
+ * 打脸的地方。收进本件后：
+ *   · 限额由 `maxImages` 参数表达（宿主各报一次；组件也不再自带第三个缺省值）；
+ *   · 「拍照 / 相册**双入口**」的判据（`sourceType: [source]`）只有一处；
+ *   · 它可在 `utils/utsHarness.js` 里**真执行**（注入假 `uni` 与假上传出口）⇒
+ *     `utils/forumImagePickerBehavior.test.js` 断言的是产出物（选图参数 / 上传次数 / 限额闸门 /
+ *     失败计数），而不是「源码里出现过某个字面量」。
+ *
+ * @param maxImages 该面的图片限额（发帖 9 / 回复 3）—— **唯一来源**，别在别处再写字面量
+ * @note uvue 侧粘贴 / 拖拽不可靠，故本端不做那两个入口（ADR-0025 ③ 具名不做）
+ */
+import { ref, computed } from 'vue'
+import type { Ref, ComputedRef } from 'vue'
+import { uploadForumImageApi } from '../api/forum'
+import { previewImages } from '../utils/forumDetailDisplay'
+import { resolveFileUrl } from '../utils/forumDisplay'
+
+export type UseForumImagePickerResult = {
+    /** 已选图片的**原始**路径 / URL（提交时原样回传后端） */
+    images : Ref<string[]>
+    /** 展示用 URL（预解析：模板不直调 import 函数，规避 error18） */
+    previewImages : ComputedRef<string[]>
+    uploading : Ref<boolean>
+    onAddImage : (source : string) => void
+    onRemoveImage : (index : number) => void
+    onPreviewImage : (index : number) => void
+}
+
+export function useForumImagePicker(maxImages : number) : UseForumImagePickerResult {
+    const images = ref<string[]>([])
+    const uploading = ref<boolean>(false)
+
+    const previewList = computed<string[]>(() : string[] => {
+        const urls : string[] = []
+        for (let i = 0; i < images.value.length; i++) {
+            urls.push(resolveFileUrl(images.value[i]))
+        }
+        return urls
+    })
+
+    /** 逐张上传（声明在 onAddImage 之前，避免 Kotlin 局部函数前向引用） */
+    async function uploadPicked(paths : string[]) : Promise<void> {
+        uploading.value = true
+        uni.showLoading({ title: '上传图片中...' })
+        let failed = 0
+        for (let i = 0; i < paths.length; i++) {
+            if (images.value.length >= maxImages) break
+            try {
+                const url = await uploadForumImageApi(paths[i])
+                images.value.push(url)
+            } catch (e) {
+                console.error('[forum-image] upload failed:', e)
+                failed = failed + 1
+            }
+        }
+        uni.hideLoading()
+        uploading.value = false
+        if (failed > 0) {
+            uni.showToast({ title: failed + ' 张图片上传失败，请重试', icon: 'none' })
+        }
+    }
+
+    /**
+     * 选图：**拍照 / 相册双入口** —— 两个入口各自**直达**来源，不再共用系统选择器。
+     * @param source 'camera'（拍照，维修场景拍故障码 / 铭牌）| 'album'（相册）
+     */
+    function onAddImage(source : string) : void {
+        if (uploading.value) return
+        const remaining = maxImages - images.value.length
+        if (remaining <= 0) {
+            uni.showToast({ title: '最多上传 ' + maxImages + ' 张图片', icon: 'none' })
+            return
+        }
+        uni.chooseImage({
+            count: remaining,
+            sizeType: ['compressed'],
+            sourceType: [source],
+            success: (res) => {
+                const paths = res.tempFilePaths as string[]
+                if (paths.length == 0) return
+                uploadPicked(paths)
+            },
+            fail: (err) => {
+                console.log('[forum-image] chooseImage canceled/failed:', err)
+            },
+        })
+    }
+
+    /** 删除已选图片（按位置删，返回新数组而不是原地 splice —— 与既有写法同形） */
+    function onRemoveImage(index : number) : void {
+        const next : string[] = []
+        for (let i = 0; i < images.value.length; i++) {
+            if (i != index) next.push(images.value[i])
+        }
+        images.value = next
+    }
+
+    /** 预览已选图片（URL 解析幂等，口径单点在 `utils/forumDetailDisplay.previewImages`） */
+    function onPreviewImage(index : number) : void {
+        previewImages(images.value, index)
+    }
+
+    return {
+        images: images,
+        previewImages: previewList,
+        uploading: uploading,
+        onAddImage: (source : string) => onAddImage(source),
+        onRemoveImage: (index : number) => onRemoveImage(index),
+        onPreviewImage: (index : number) => onPreviewImage(index),
+    } as UseForumImagePickerResult
+}

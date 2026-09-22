@@ -56,7 +56,7 @@
              tab / 工具栏 / 边界提示行只在 Markdown 档出现（⑥-5）。 -->
         <view v-if="topic != null" class="reply-bar">
             <ForumMarkdownInput :content="replyContent" :preview-images="replyPreviewImages"
-                :image-count="replyImages.length" variant="reply" :max-images="3"
+                :image-count="replyImages.length" variant="reply" :max-images="replyImageLimit"
                 :maxlength="10000" placeholder="写下你的回复..."
                 :format="replyFormat" :show-format-switch="true"
                 :uploading="uploadingReplyImage"
@@ -64,7 +64,7 @@
                 @add-image="onAddReplyImage" @remove-image="onRemoveReplyImage"
                 @preview-image="onPreviewReplyImage" />
             <view class="reply-actions">
-                <view class="reply-btn" :class="{ disabled: replyContent.length == 0 || submitting }"
+                <view class="reply-btn" :class="{ disabled: !canSubmitReply }"
                     @click="onSubmitReply">
                     <text class="reply-btn-text">{{ submitting ? '发送中' : '发送' }}</text>
                 </view>
@@ -93,7 +93,11 @@
     import { formatDateTimeStr } from '../../utils/format'
     import type { ForumReplyDisplay } from '../../utils/forumDetailDisplay'
     import { resolveFileUrl, getAuthorInitial, getAvatarColor, regionLabel } from '../../utils/forumDisplay'
+    import { FORUM_MAX_REPLY_IMAGES } from '../../constants/app'
     import type { ForumReply } from '../../types/index'
+
+    /** 回复面的图片限额（`constants/app` 单点；组件不持缺省值，本页只报自己那一档） */
+    const replyImageLimit : number = FORUM_MAX_REPLY_IMAGES
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
@@ -110,6 +114,7 @@
     const composer = useReplyComposer()
     const {
         replyContent, replyImages, replyPreviewImages, uploadingReplyImage, submitting, replyFormat,
+        canSubmitReply,
         onFormatChange: onReplyFormatChange,
         onAddReplyImage, onRemoveReplyImage, onPreviewReplyImage,
     } = composer

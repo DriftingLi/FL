@@ -13,6 +13,7 @@ import type { RequestOptions } from './request'
 import { toNumber, toStr, toBool, errMsg } from './helpers'
 import type { ForumTopic, ForumTopicListResult, ForumTopicDetail, ForumReply, LikeTopicResult, MyRepliesResult } from '../types/index'
 import { buildReply, buildTopic, buildTopicListResult, buildTopicDetail, buildLikeResult } from './forumDto'
+import { FORMAT_TEXT } from '../utils/forumBody'
 
 /**
  * 获取帖子列表
@@ -116,14 +117,14 @@ export function uploadForumImageApi(filePath : string) : Promise<string> {
  * @param images 图片 URL 数组（最多 9 张，先经 uploadForumImageApi 上传获取）
  * @param category 帖子意图（学员自述，ADR-0040 起只有 discussion / question 两值；
  *                 'experience' 写入后端直接 400——「备考经验」是管理端认定，不是自述类别）
- * @param format 正文格式声明（`text` | `markdown`，缺省 `text`）。**P3 起由作者显式声明**：
+ * @param format 正文格式声明（`text` | `markdown`，缺省 `FORMAT_TEXT`）。**P3 起由作者显式声明**：
  *               数据档位分段控件的取值经 `utils/forumFormatPreference` 的记忆位下发，
  *               P1 时「载荷不带该字段、后端按缺省落 text」的临时口径到此结束。
- *               缺省值仍取 `text` —— 与后端缺省同向，不带该参数的旧调用方语义不变。
+ *               缺省取格式词汇表的常量，**不写裸字面量**（词汇表只有 `utils/forumBody` 一处）。
  * @note 后端 `normalizeContentFormat` 只认 `text` / `markdown`，其余取值 400；本合同内取值由
- *       `utils/forumFormatPreference.normalizeAuthorFormat` 在写入存储前就已归一。
+ *       `utils/forumFormatPreference.normalizeAuthorFormat` 在**赋值处**就已归一（不只存储侧）。
  */
-export function createForumTopicApi(title : string, content : string, images : string[] = [], category : string = 'discussion', format : string = 'text') : Promise<ForumTopic> {
+export function createForumTopicApi(title : string, content : string, images : string[] = [], category : string = 'discussion', format : string = FORMAT_TEXT) : Promise<ForumTopic> {
     const payload : UTSJSONObject = {
         title: title,
         content: content,
@@ -189,7 +190,7 @@ export function updateForumTopicApi(topicId : number, title : string, content : 
  *               回复也有自己的格式声明位，P3 起由回复栏的数据档位下发 —— 移动端因此不再出现
  *               「能渲染别人写的 Markdown 回复、自己写不出来」的单向畸形。
  */
-export function replyForumTopicApi(topicId : number, content : string, images : string[] = [], format : string = 'text') : Promise<ForumReply> {
+export function replyForumTopicApi(topicId : number, content : string, images : string[] = [], format : string = FORMAT_TEXT) : Promise<ForumReply> {
     const url = '/forum/topics/' + topicId + '/replies'
     const payload : UTSJSONObject = {
         content: content,

@@ -32,6 +32,7 @@ const INPUT_REL = 'pages/forum/components/forum-markdown-input.uvue';
 const CREATE_REL = 'pages/forum/forum-create.uvue';
 const DETAIL_REL = 'pages/forum/forum-detail.uvue';
 const COMPOSER_REL = 'composables/useReplyComposer.uts';
+const PICKER_REL = 'composables/useForumImagePicker.uts';
 const MY_FORUM_REL = 'pages/forum/my-forum.uvue';
 
 const input = read(INPUT_REL);
@@ -132,17 +133,29 @@ describe('图片走拍照 / 相册**两个直达入口**（ADR-0025 ⑦ 对 Web 
     expect(input).toContain("'相册'");
   });
 
-  it('宿主按来源**直达**：`sourceType` 只含该来源（旧的「两个来源共用系统选择器」已退场）', () => {
-    expect(createPage).toContain('sourceType: [source]');
-    expect(composer).toContain('sourceType: [source]');
-    for (const [rel, src] of [[CREATE_REL, createPage], [COMPOSER_REL, composer]]) {
+  it('图片流水线只有一份：双入口的 `sourceType: [source]` 落在共享 picker 里，宿主不再各持 chooseImage', () => {
+    const picker = read(PICKER_REL);
+    expect(picker).toContain('sourceType: [source]');
+    // 旧形态（两个来源共用系统选择器）在三个文件里都已退场
+    for (const [rel, src] of [[CREATE_REL, createPage], [COMPOSER_REL, composer], [PICKER_REL, picker]]) {
       expect([rel, src.includes("sourceType: ['album', 'camera']")]).toEqual([rel, false]);
+    }
+    // 宿主不再自持流水线 —— 否则就是评审指出过的「形态只有一份、图片却是两份」
+    for (const [rel, src] of [[CREATE_REL, createPage], [COMPOSER_REL, composer]]) {
+      expect([rel, src.includes('uni.chooseImage')]).toEqual([rel, false]);
+      expect([rel, src.includes('uploadForumImageApi')]).toEqual([rel, false]);
     }
   });
 
-  it('图片限额仍按面分档：发帖 ≤9、回复 ≤3', () => {
-    expect(createPage).toContain(':max-images="9"');
-    expect(detailPage).toContain(':max-images="3"');
+  it('图片限额只有一处来源（`constants/app`），宿主各报自己那一档、组件不持缺省值', () => {
+    const appConst = read('constants/app.uts');
+    expect(appConst).toContain('export const FORUM_MAX_TOPIC_IMAGES = 9');
+    expect(appConst).toContain('export const FORUM_MAX_REPLY_IMAGES = 3');
+    expect(createPage).toContain(':max-images="topicImageLimit"');
+    expect(detailPage).toContain(':max-images="replyImageLimit"');
+    // 组件不持第三个缺省值：`maxImages` 是**必填** prop
+    expect(input).toContain('maxImages: number');
+    expect(input).not.toContain('maxImages: 9');
   });
 });
 
@@ -164,11 +177,14 @@ describe('编辑态不给档位控件，只按帖子**原格式**决定形态（
     expect(createPage).not.toMatch(/updateForumTopicApi\([^)]*content_format/);
   });
 
-  it('新建态用作者记忆位（根 ADR-0044「记住上次选择」），切换即写回记忆', () => {
+  it('新建态用作者记忆位（根 ADR-0044「记住上次选择」），切换即**归一后**写回记忆与本地值', () => {
     expect(createPage).toContain('const authorFormat = ref<string>(readAuthorFormat())');
-    expect(createPage).toContain('writeAuthorFormat(value)');
     expect(composer).toContain('const replyFormat = ref<string>(readAuthorFormat())');
-    expect(composer).toContain('writeAuthorFormat(value)');
+    // 归一必须发生在**赋值处**：本地值随后直接进载荷，只归一存储侧会让脏值漏出去
+    expect(createPage).toContain('const next = normalizeAuthorFormat(value)');
+    expect(composer).toContain('const next = normalizeAuthorFormat(value)');
+    expect(createPage).toContain('writeAuthorFormat(next)');
+    expect(composer).toContain('writeAuthorFormat(next)');
   });
 });
 

@@ -47,3 +47,14 @@ export const STORAGE_KEY_AI_SELECTED_USER_MODEL = 'ai_selected_user_model'
 
 /** 占位入口点击提示文案 */
 export const UNAVAILABLE_TOAST = '功能开发中，敬请期待'
+
+/**
+ * 论坛图片限额（ADR-0025 P3）：**唯一来源** —— 发帖面 9 张 / 回复面 3 张。
+ *
+ * 为什么收到这里：加 P3 输入区时同一个数字在三个地方各写了一遍（发帖页、回复 composable、
+ * 组件的 prop 缺省值），而限额同时决定「选图 count」「闸门」「toast 文案」三处行为 ——
+ * 改一处漏一处就是静默的限流失配。现在：组件**不持**缺省值（`maxImages` 是必填 prop），
+ * 两个宿主各取自己那一档，文案从它派生。
+ */
+export const FORUM_MAX_TOPIC_IMAGES = 9
+export const FORUM_MAX_REPLY_IMAGES = 3

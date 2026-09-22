@@ -31,10 +31,26 @@ const HELPERS_UTS = path.join(API_DIR, 'helpers.uts');
 const DTO_UTS = path.join(API_DIR, 'forumDto.uts');
 const FORUM_UTS = path.join(API_DIR, 'forum.uts');
 const TYPES_FORUM = path.join(__dirname, '..', 'types', 'forum.uts');
+const MD_UTS = path.join(__dirname, 'markdown.uts');
+const BODY_UTS = path.join(__dirname, 'forumBody.uts');
 
 /** 真件：helpers（零 import，空绑定即可）与 DTO 构造层（依赖 helpers，注入真件） */
 const helpers = () => loadUts(HELPERS_UTS, {});
 const dto = () => loadUts(DTO_UTS, { ...helpers() });
+
+/**
+ * `api/forum.uts` 的格式缺省取自 `utils/forumBody`（不写裸字面量 `'text'`）⇒ 注入**真执行**的常量。
+ * 这顺带成了一条接线判据：谁把 api 里的缺省改回裸字面量，本套件会立刻因缺绑定而报错（fail-closed）。
+ */
+function formatBindings() {
+  const md = loadUts(MD_UTS, {});
+  const body = loadUts(BODY_UTS, {
+    parseMarkdown: md.parseMarkdown,
+    SUBSET_FORUM: md.SUBSET_FORUM,
+    SUBSET_CHAPTER: md.SUBSET_CHAPTER,
+  });
+  return { FORMAT_TEXT: body.FORMAT_TEXT };
+}
 
 /** request 出口的替身：记下**实际被调用的形态**，不真发网络 */
 function makeRequestMocks() {
@@ -54,7 +70,7 @@ function makeRequestMocks() {
 /** 载入真件 `api/forum.uts`（或变异副本），回读「载荷构造」这一层 */
 function loadForumApi(file = FORUM_UTS) {
   const mocks = makeRequestMocks();
-  const api = loadUts(file, { ...mocks, ...helpers(), ...dto() });
+  const api = loadUts(file, { ...mocks, ...helpers(), ...dto(), ...formatBindings() });
   return { api, captured: mocks.captured };
 }
 
