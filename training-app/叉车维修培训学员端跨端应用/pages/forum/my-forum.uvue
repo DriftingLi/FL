@@ -62,7 +62,13 @@
                     <view v-for="(item, idx) in replies" :key="idx" class="reply-card"
                         @click="onTopicClick(item.topic_id)">
                         <text class="reply-topic-title"> {{ item.topic_title }}</text>
-                        <text class="reply-content">{{ item.content }}</text>
+                        <!-- 回复**原文**属正文承载面（ADR-0025 P2 复核回写修正①的真实缺口，本批收口）：
+                             格式轴与详情页回复卡同口径 —— 纯文本档直出原串（视觉零 diff），
+                             Markdown 档走论坛子集的块渲染。`content_format` 由 `buildReply` 带回，无需改 DTO。 -->
+                        <text v-if="!isMarkdownReply(item)" class="reply-content">{{ item.content }}</text>
+                        <view v-else class="reply-md-body">
+                            <ForumMarkdownBlocks :blocks="replyBlocks(item)" />
+                        </view>
                         <view class="reply-footer">
                             <text class="reply-time">{{ displayTime(item.created_at) }}</text>
                         </view>
@@ -87,13 +93,25 @@
     import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
     import { getMyTopicsApi, getMyRepliesApi } from '../../api/forum'
-    import type { ForumTopic, ForumReply } from '../../types/index'
+    import type { ForumTopic, ForumReply, MarkdownBlock } from '../../types/index'
     import { formatDateStr } from '../../utils/format'
+    import { forumContentBlocks, isMarkdownFormat } from '../../utils/forumBody'
+    import ForumMarkdownBlocks from './components/forum-markdown-blocks.uvue'
 
     /** 模板不可直调 import 函数（uvue 模板 import 调用编译为 .invoke() = Kotlin error18，先例 #677）；
      *  本地薄包装消费 utils/format 唯一实现（T03 口径：展示纯函数零第二实现） */
     function displayTime(dateStr : string) : string {
         return formatDateStr(dateStr)
+    }
+
+    /** 回复格式轴（ADR-0025）：本地薄包装 —— 与 `forum-reply-list` 同形，模板不直调 import 函数 */
+    function isMarkdownReply(item : ForumReply) : boolean {
+        return isMarkdownFormat(item.content_format)
+    }
+
+    /** Markdown 档的渲染块：档位决策单点在 `utils/forumBody`（真执行守护见 forumBodyBehavior） */
+    function replyBlocks(item : ForumReply) : MarkdownBlock[] {
+        return forumContentBlocks(item.content, item.content_format)
     }
 
     const statusBarHeight = useStatusBarHeight()
@@ -369,6 +387,11 @@
         font-size: 28rpx;
         color: #333333;
         line-height: 1.6;
+        margin-bottom: 12rpx;
+    }
+
+    /* Markdown 档回复的块渲染容器（与 .reply-content 同外边距；块样式由组件自持） */
+    .reply-md-body {
         margin-bottom: 12rpx;
     }
 

@@ -1,0 +1,47 @@
+/**
+ * 作者格式声明的**记忆位**（根 ADR-0044「首次默认**纯文本**、之后记住该用户上次选择」；#1240 P3）
+ *
+ * 为什么单独一个模块而不写在页面里：根 ADR-0044 把「记住上次选择」与「首次默认纯文本」一起写成了
+ * 决策 —— 前者若留在 `.uvue` 里，就只能靠读源码文本的接线守护去守；抽到 `utils/` 后可被
+ * `utils/utsHarness.js` 的 `loadUts` **真执行**（`forumFormatPreferenceBehavior.test.js` 注入
+ * 一份假 `uni` 存储，断言「存进去的是什么、读出来的是什么」）。
+ *
+ * 两处口径都要写实：
+ *   - **发帖与回复共用同一个记忆位** —— 它们是同一个「作者偏好」，不是两个独立选择
+ *     （ADR-0044 说的是「记住该用户上次选择」，主语是人不是内容面）；
+ *   - **脏值一律归一到纯文本**，读与写两个方向都归一 —— 契约外的值不许进存储，也不许从存储漏出来。
+ *
+ * @note 归一方向与 `api/forumDto.normalizeContentFormat`（读取侧）**同向**：不含 `markdown` ⇒ `text`。
+ */
+import { getStorage, setStorage } from './storage'
+import { FORMAT_TEXT, FORMAT_MARKDOWN } from './forumBody'
+
+/**
+ * 存储键（单点）。发帖与回复两处**只能**经本模块读写，不许各自 `uni.setStorageSync`
+ * —— 键散落两处的那天，「共用一个记忆位」这条就名存实亡了。
+ */
+export const STORAGE_KEY_FORUM_AUTHOR_FORMAT = 'forum_author_content_format'
+
+/**
+ * 作者侧归一：**只有显式 `markdown` 是 markdown**，其余（缺省 / 空串 / 大小写不符 / 契约外新值）
+ * 一律纯文本 —— 与 DTO 层同向，也照 ADR-0044 的缺省语义（Markdown 完全 opt-in）。
+ */
+export function normalizeAuthorFormat(value : string) : string {
+    return value == FORMAT_MARKDOWN ? FORMAT_MARKDOWN : FORMAT_TEXT
+}
+
+/**
+ * 读作者上次声明的格式。从未选过（存储里没有该键）/ 存了脏值 ⇒ 纯文本。
+ * 于是「首次默认纯文本」不是页面里的一个初始值，而是**读不到就是纯文本**这条判据本身。
+ */
+export function readAuthorFormat() : string {
+    return normalizeAuthorFormat(getStorage(STORAGE_KEY_FORUM_AUTHOR_FORMAT))
+}
+
+/**
+ * 记住本次声明。写入前同样归一 —— 不让契约外的取值落进存储（否则下次读出来全靠 `readAuthorFormat`
+ * 兜底，等于把「脏值」永久留在设备上）。
+ */
+export function writeAuthorFormat(format : string) : void {
+    setStorage(STORAGE_KEY_FORUM_AUTHOR_FORMAT, normalizeAuthorFormat(format))
+}

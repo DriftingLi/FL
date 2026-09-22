@@ -21,6 +21,14 @@
 import { parseMarkdown, SUBSET_FORUM } from './markdown'
 import type { MarkdownBlock } from '../types/index'
 
+/**
+ * 正文格式：**纯文本**（缺省档）。归一后只会是它或 `markdown` 两者之一。
+ *
+ * 它在 P3 之前只是「归一后的另一个取值」，没有常量名；输入区形态落地后**作者侧**也需要这两个
+ * 取值（数据档位控件 + `utils/forumFormatPreference.uts` 的记忆位），故在此立名 ——
+ * 格式词汇表仍然只有这一处（别在页面里再写字面量 `'markdown'` / `'text'`）。
+ */
+export const FORMAT_TEXT = 'text'
 /** 正文格式：作者声明的 Markdown —— 唯一会走解析的取值（归一后只会是它或 `text`） */
 export const FORMAT_MARKDOWN = 'markdown'
 

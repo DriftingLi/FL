@@ -1,12 +1,15 @@
 /**
  * 论坛正文格式声明 `content_format` · **行为级**测试（ADR-0044 / ADR-0025；票 #1240 P1）
  *
- * 本票在移动端要买的两件事，一件一条判据：
+ * 本票在移动端要买的三件事，一件一条判据：
  *   ① **消费**：DTO 层把格式字段归一后带上 —— **只有显式 `markdown` 是 markdown**，
  *      缺省 / 空串 / 大小写不符 / 未来新值一律落 `text`（与后端 `normalizeContentFormat` 同向，
  *      也照根 ADR-0044 的缺省语义：不带该字段的客户端天然落纯文本分支，不被语法擅自解释）。
  *   ② **编辑不变式**：`updateForumTopicApi` 的 PUT 载荷**不含** `content_format` —— 编辑是全量替换
  *      语义，带上它就会把 Markdown 帖静默重置成纯文本（根 ADR-0044 的原话）。
+ *   ③ **写入（P3 输入区形态）**：`createForumTopicApi` / `replyForumTopicApi` 的载荷**带**作者的
+ *      声明 —— P1 时「创建不带该字段、后端按缺省落 text」是临时口径，数据档位接上后由作者显式声明。
+ *      两条方向相反的判据（② 不许带 / ③ 必须带）在同一个文件里，防的是「一刀切地带上或去掉」。
  *
  * 为什么是行为而不是源码文本：这两条都只有**跑起来**才看得见 —— 「键集合里没有它」与
  * 「归一结果是什么」都不是字面量断言能证明的。缝：`utils/utsHarness.js` 的 `loadUts`
@@ -28,10 +31,30 @@ const HELPERS_UTS = path.join(API_DIR, 'helpers.uts');
 const DTO_UTS = path.join(API_DIR, 'forumDto.uts');
 const FORUM_UTS = path.join(API_DIR, 'forum.uts');
 const TYPES_FORUM = path.join(__dirname, '..', 'types', 'forum.uts');
+const MD_UTS = path.join(__dirname, 'markdown.uts');
+const BODY_UTS = path.join(__dirname, 'forumBody.uts');
 
 /** 真件：helpers（零 import，空绑定即可）与 DTO 构造层（依赖 helpers，注入真件） */
 const helpers = () => loadUts(HELPERS_UTS, {});
 const dto = () => loadUts(DTO_UTS, { ...helpers() });
+
+/**
+ * `api/forum.uts` 的格式缺省取自 `utils/forumBody`（不写裸字面量 `'text'`）⇒ 注入**真执行**的常量。
+ *
+ * ⚠️ **据实更正（2026-09-22）**：这**不**构成「fail-closed 接线判据」（P3 复核回写的原表述把方向写反了）。
+ * `utils/utsHarness.js` 只在「被测文件 import 的名字没被注入」时抛缺绑定，而把缺省改回裸字面量会**同时删掉
+ * import 行** ⇒ 不会缺绑定，本套件照绿（且 `FORMAT_TEXT` 的真实值本就是 `'text'`）。真正 fail-closed 的方向
+ * 是反的：api 保留 import 而这里忘了注入，才会红。⇒「api 不写裸字面量」目前**没有**用例断言，属已登记缺口。
+ */
+function formatBindings() {
+  const md = loadUts(MD_UTS, {});
+  const body = loadUts(BODY_UTS, {
+    parseMarkdown: md.parseMarkdown,
+    SUBSET_FORUM: md.SUBSET_FORUM,
+    SUBSET_CHAPTER: md.SUBSET_CHAPTER,
+  });
+  return { FORMAT_TEXT: body.FORMAT_TEXT };
+}
 
 /** request 出口的替身：记下**实际被调用的形态**，不真发网络 */
 function makeRequestMocks() {
@@ -51,7 +74,7 @@ function makeRequestMocks() {
 /** 载入真件 `api/forum.uts`（或变异副本），回读「载荷构造」这一层 */
 function loadForumApi(file = FORUM_UTS) {
   const mocks = makeRequestMocks();
-  const api = loadUts(file, { ...mocks, ...helpers(), ...dto() });
+  const api = loadUts(file, { ...mocks, ...helpers(), ...dto(), ...formatBindings() });
   return { api, captured: mocks.captured };
 }
 
@@ -160,5 +183,52 @@ describe('成对取证（必红）：把 content_format 塞进编辑载荷后，
     const data = payloadOf(broken.captured).data;
     expect(data.content_format).toBe('markdown');                 // 坏实现真的会带上
     expect(Object.keys(data)).toContain('content_format');        // ⇒ 第 ③ 组的键集合断言判红
+  });
+});
+
+// ===== ⑤ 创建 / 回复载荷带上作者的格式声明（P3 输入区形态）=====
+
+/** 取一次 `postMapped` 调用的载荷（创建走 POST /forum/topics，回复走 POST …/replies） */
+const postPayloadOf = (captured, url) => {
+  const call = captured.find((c) => c.via === 'postMapped' && c.url === url);
+  expect(call).toBeDefined();
+  return call.data;
+};
+
+describe('创建 / 回复载荷带上作者的格式声明（P3：数据档位分段控件接上后，缺省不再是「不带字段」）', () => {
+  it('发帖：`format` 进载荷的 `content_format`；不传时缺省 `text`（与后端缺省同向）', async () => {
+    const a = loadForumApi();
+    await a.api.createForumTopicApi('标题', '正文', [], 'discussion', 'markdown');
+    expect(postPayloadOf(a.captured, '/forum/topics').content_format).toBe('markdown');
+
+    const b = loadForumApi();
+    await b.api.createForumTopicApi('标题', '正文', [], 'discussion');
+    expect(postPayloadOf(b.captured, '/forum/topics').content_format).toBe('text');
+  });
+
+  it('发帖：既有四字段一个不少（不是拿新增字段换来的）', async () => {
+    const { api, captured } = loadForumApi();
+    await api.createForumTopicApi('标题', '正文', ['https://e.com/a.png'], 'question', 'markdown');
+    const data = postPayloadOf(captured, '/forum/topics');
+    expect(Object.keys(data).sort()).toEqual(['category', 'content', 'content_format', 'images', 'title']);
+    expect([data.title, data.content, data.category, data.images]).toEqual(['标题', '正文', 'question', ['https://e.com/a.png']]);
+  });
+
+  it('回复：与主题同口径带 `content_format`（回复也有自己的格式声明位，ADR-0044）', async () => {
+    const { api, captured } = loadForumApi();
+    await api.replyForumTopicApi(7, '回复正文', [], 'markdown');
+    expect(postPayloadOf(captured, '/forum/topics/7/replies').content_format).toBe('markdown');
+
+    const plain = loadForumApi();
+    await plain.api.replyForumTopicApi(7, '回复正文');
+    expect(postPayloadOf(plain.captured, '/forum/topics/7/replies').content_format).toBe('text');
+  });
+
+  it('成对取证（必红）：拆掉创建载荷里的 `content_format` ⇒ 本组的判据必然判红', async () => {
+    const anchor = "        category: category,\n        content_format: format,\n    } as UTSJSONObject\n    return postMapped<ForumTopic>('/forum/topics'";
+    const broken = loadMutatedForumApi([[anchor, "        category: category,\n    } as UTSJSONObject\n    return postMapped<ForumTopic>('/forum/topics'"]]);
+    await broken.api.createForumTopicApi('标题', '正文', [], 'discussion', 'markdown');
+    // 坏实现真的把声明丢了 ⇒ 上面「缺省/显式都取到格式」的断言判红
+    expect('content_format' in postPayloadOf(broken.captured, '/forum/topics')).toBe(false);
   });
 });
