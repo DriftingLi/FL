@@ -5,7 +5,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { epLite } from '@/test/element-lite'
-import { createPinia } from 'pinia'
+import { createPinia, setActivePinia } from 'pinia'
 
 vi.mock('@/api/questionBank', () => ({
   questionBankApi: { getStats: vi.fn().mockResolvedValue({ total: 10 }) }
@@ -43,8 +43,15 @@ vi.mock('@/api/questionInteraction', () => ({
 import { practiceModeApi } from '@/api/practiceMode'
 import { favoriteApi } from '@/api/favorite'
 import { questionInteractionApi } from '@/api/questionInteraction'
+import { trainingApi } from '@/api/training'
+import { useCredentialStore } from '@/stores/credential'
+import type { CredentialDict } from '@/api/credential'
 import AnswerResultCard from '@/components/practice/AnswerResultCard.vue'
 import QuestionBank from '../QuestionBank.vue'
+
+function credentialOf(id: number): CredentialDict {
+  return { id, code: `C${id}`, name: `证件${id}`, description: '', category: 'special_operation', level: null, sort_order: 0, status: 1, created_at: '', updated_at: '' }
+}
 
 const QUESTIONS = [
   { id: 101, type: 'single_choice', content: '题101', options: { A: '选项A', B: '选项B' } },
@@ -123,5 +130,30 @@ describe('QuestionBank 外围交互接入（#616）', () => {
     await flushPromises()
 
     expect(favoriteApi.check).toHaveBeenCalledWith({ target_type: 'question', target_id: 102 })
+  })
+})
+
+/**
+ * 第十四波 B 票 10（ADR-0062 决策 10）：`loadTags()` 此前只挂在 `onMounted` 上
+ * —— 切证件后「考点标签」下拉仍是上一个证件的标签，拿旧证件的 tag_id 去抽新证件的题
+ * = 空列表。旁路装载流从此只有 `facets` 一个声明处（与列表共享失效时机）。
+ */
+describe('QuestionBank 标签 facet 随证件重装（票 10）', () => {
+  it('首装随列表装载一次；切证件后 facet 重装并读新证件', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const store = useCredentialStore()
+    store.current = credentialOf(3)
+    vi.mocked(trainingApi.getTags).mockClear()
+
+    mount(QuestionBank, { global: { plugins: [epLite(), pinia] } })
+    await flushPromises()
+    expect(trainingApi.getTags).toHaveBeenCalledTimes(1)
+    expect(trainingApi.getTags).toHaveBeenLastCalledWith(3)
+
+    store.current = credentialOf(4)
+    await flushPromises()
+    expect(trainingApi.getTags).toHaveBeenCalledTimes(2)
+    expect(trainingApi.getTags).toHaveBeenLastCalledWith(4)
   })
 })

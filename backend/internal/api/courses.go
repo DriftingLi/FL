@@ -114,6 +114,10 @@ func (h *CourseHandler) GetChapterSlides(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *chapterSlidesReq) (*service.ChapterSlidesDTO, error) {
 			return h.svc.GetChapterSlides(req.ChapterID, req.StudentID)
 		},
+		// 判定不动（票8 逐端点判过，与下面的章节详情同一理由）：可读性判据本身已具名
+		// （ErrContentNotReadable → 404），但「章节不存在」在 course_service.go 里是裸
+		// errors.New ⇒ 换成 regenerate 那张「哨兵 404 + 其余 500」的表会把真 404 答成 500。
+		// service 侧把这两条升成哨兵后一并换表（DB 故障今天仍被伪装成 404，登记为已知残留）。
 	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
 }
 
@@ -143,6 +147,8 @@ func (h *CourseHandler) GetCourseDetail(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *courseDetailReq) (*service.CourseDetailDTO, error) {
 			return h.svc.GetCourseDetail(req.CourseID, req.StudentID)
 		},
+		// 判定不动：GetCourseDetail 不看权益（详情是发现面，只判可见性），其「课程不存在」是裸
+		// errors.New ⇒ 本端点没有任何具名哨兵可映射，换表只会把真 404 与 DB 故障一起答成 500。
 	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
 }
 
@@ -177,6 +183,8 @@ func (h *CourseHandler) GetChapterDetail(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *chapterDetailReq) (*service.ChapterDetailDTO, error) {
 			return h.svc.GetChapterDetail(req.CourseID, req.ChapterID, req.StudentID)
 		},
+		// 判定不动：同上面幻灯片一处（「章节不存在」「章节不属于该课程」在 service 侧都是裸
+		// errors.New，前者该 404、后者该 400，现在都被这条表压成 404；升哨兵后一并换表）。
 	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
 }
 
@@ -190,7 +198,8 @@ func (h *CourseHandler) GetChapterDetail(c *gin.Context) {
 // @Param chapter_id path int true "章节ID"
 // @Success 200 {object} response.R{data=service.ChapterSlidesDTO} "success"
 // @Failure 401 {object} response.R "未认证"
-// @Failure 404 {object} response.R "章节不存在"
+// @Failure 404 {object} response.R "章节不存在或对本学员不可读（未发布/未挂载/未兑换）"
+// @Failure 500 {object} response.R "幻灯片生成失败（无 PPT 文件 / 转图失败 / 权益查询失败）"
 // @Router /chapter/{chapter_id}/slides/regenerate [post]
 func (h *CourseHandler) RegenerateChapterSlides(c *gin.Context) {
 	Endpoint[chapterSlidesReq, service.ChapterSlidesDTO]{
@@ -206,7 +215,17 @@ func (h *CourseHandler) RegenerateChapterSlides(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *chapterSlidesReq) (*service.ChapterSlidesDTO, error) {
 			return h.svc.RegenerateChapterSlides(req.ChapterID, req.StudentID)
 		},
-	}.WithSuccess(okMsg("幻灯片重新生成成功"), http.StatusNotFound).Handle(c)
+		// 只有「被可读性判据拦下」（未发布 / 未挂载 / 未兑换）才是「不存在」；下游失败
+		// （该章节没有 PPT、PPT 转图失败）与权益查询查不动一律 500。
+		// 旧形状 WithSuccess(ok, 404) 把门禁与下游故障压成同一个 404 ⇒ 门禁从外部不可分辨、
+		// 无测可建（ADR-0062 复核登记 #4），并把 DB 故障答成「这个章节不存在」。
+		ErrStatus: &errStatusTable{entries: []errStatusEntry{
+			{sentinel: service.ErrContentNotReadable, status: http.StatusNotFound},
+		}},
+		Render: func(c *gin.Context, _ *chapterSlidesReq, resp *service.ChapterSlidesDTO) {
+			response.SuccessWithMsg(c, "幻灯片重新生成成功", resp)
+		},
+	}.Handle(c)
 }
 
 // UpdateStudyProgress 更新学习进度

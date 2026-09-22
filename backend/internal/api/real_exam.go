@@ -129,6 +129,11 @@ func (h *RealExamHandler) StartPractice(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *paperActionReq) (*service.PracticeStartResultDTO, error) {
 			return h.svc.StartPaperPractice(req.UserID, req.PaperID)
 		},
+		// 判定不动（票8 逐端点判过的结论，别照着 regenerate 抄）：本端点的「未兑换」门禁与
+		// 「卷内无已发布题」「查卷题失败」在 service 侧都是裸 errors.New（只有
+		// ErrRealPaperUnavailable 是具名哨兵），api 侧无从分档——改成「哨兵 404 + 其余 500」
+		// 会把「请先兑换该真题卷」答成 500（学员看天书）。正解在 service 侧：给这两条升哨兵
+		// （real_exam_service.go 本批不在改动面），升完再换表。DB 故障今天仍被伪装成 404，登记为已知残留。
 		ErrStatus: errStatusAll(http.StatusNotFound),
 	}.Handle(c)
 }
@@ -150,6 +155,8 @@ func (h *RealExamHandler) StartExam(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *paperActionReq) (*service.MockExamStartDTO, error) {
 			return h.svc.StartPaperExam(req.UserID, req.PaperID)
 		},
+		// 与 StartPractice 同一判定（见那里的注释）：门禁与下游故障在 service 侧都是裸 errors.New，
+		// 无哨兵可名 ⇒ 本批不动，待 real_exam_service.go 升哨兵后一次换表。
 		ErrStatus: errStatusAll(http.StatusNotFound),
 	}.Handle(c)
 }

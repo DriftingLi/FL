@@ -1,6 +1,7 @@
 // 域级哨兵→状态码表（#610/#611；票1b 起为端点错误面唯一出口）测试：
 //   - 骨架行为：查表命中 / 未命中走 fallback / 未命中无 fallback 走 500 / Render 只写成功面 /
-//     ParseError 优先于域表 / 无条件条目优先于 ParseError / 固定文案槽 / wrap 错误以 errors.Is 命中
+//     ParseError 优先于域表 / **ParseError 优先于无条件条目**（ADR-0062 票8 翻转）/ 固定文案槽 /
+//     wrap 错误以 errors.Is 命中
 //   - 每域表内容快照：钉住哨兵身份、状态码、固定文案、条数、顺序与 fallback，防漂移
 package api
 
@@ -126,9 +127,11 @@ func TestEndpointErrStatus_ParseError_PrecedesTable(t *testing.T) {
 	}
 }
 
-// TestEndpointErrStatus_UnconditionalEntry_PrecedesParseError 票1b 优先级 1：
-// sentinel==nil 的无条件条目命中一切错误，含 *ParseError（保住旧闭包「一个固定码包打所有错误」的形状）。
-func TestEndpointErrStatus_UnconditionalEntry_PrecedesParseError(t *testing.T) {
+// TestEndpointErrStatus_ParseError_PrecedesUnconditionalEntry 票8（ADR-0062 决策 8）翻转后的优先级 1：
+// `*ParseError` 恒优先于 `sentinel == nil` 的无条件条目——「整条错误面只有一个固定码」不再把 400 类
+// 参数错误吞进那个固定码里（翻转前本例钉的是 500，钉法随票8 一并改）。
+// 无条件条目仍然命中**其余**一切错误（业务错误与 DB 故障保持该端点既有的单一码形状）。
+func TestEndpointErrStatus_ParseError_PrecedesUnconditionalEntry(t *testing.T) {
 	e := Endpoint[int, string]{
 		Parse: func(c *gin.Context) (*int, error) {
 			return nil, &ParseError{Status: http.StatusNotFound, Message: "路径参数无效"}
@@ -136,15 +139,45 @@ func TestEndpointErrStatus_UnconditionalEntry_PrecedesParseError(t *testing.T) {
 		ErrStatus: errStatusAll(http.StatusInternalServerError),
 	}
 	w := doEndpoint(t, e)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("状态码 = %d, 期望 404（*ParseError 恒优先于无条件条目）", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "路径参数无效") {
+		t.Fatalf("文案必须是解析错误自己的话: %s", w.Body.String())
+	}
+	// 同一张表的非解析错误仍是那个固定码（无条件条目没有被削弱，只是不再吃 ParseError）
+	w = doEndpoint(t, Endpoint[int, string]{
+		Invoke:    func(ctx context.Context, req *int) (*string, error) { return nil, errSentinelB },
+		ErrStatus: errStatusAll(http.StatusInternalServerError),
+	})
 	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("状态码 = %d, 期望 500（无条件条目优先于 ParseError）", w.Code)
+		t.Fatalf("状态码 = %d, 期望 500（无条件条目仍兜住其余错误）", w.Code)
+	}
+}
+
+// TestEndpointErrStatus_ParseError_PrecedesSentinelTableEntries 域表具名条目命中不了 *ParseError：
+// 解析错误不包装业务哨兵，故「ParseError 先判」与「表先扫」对具名条目逐字等价（本例锁住这一点，
+// 免得翻转被读成「域表语义变了」）。
+func TestEndpointErrStatus_ParseError_PrecedesSentinelTableEntries(t *testing.T) {
+	w := doEndpoint(t, Endpoint[int, string]{
+		Parse: func(c *gin.Context) (*int, error) {
+			return nil, badRequest("查询参数无效")
+		},
+		ErrStatus: &errStatusTable{entries: []errStatusEntry{
+			{sentinel: errSentinelA, status: http.StatusNotFound, message: "主题不存在"},
+			{sentinel: nil, status: http.StatusInternalServerError},
+		}},
+	})
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("状态码 = %d, 期望 400（解析错误既不进哨兵条目、也不进无条件条目）", w.Code)
 	}
 }
 
 // TestEndpointErrStatus_FixedMessageEntry 票1b 的固定文案槽：message 非空即渲染该文案而非 err.Error()
 // （收编自旧闭包的 response.Xxx(c, "字面量") 与 gorm.ErrRecordNotFound → 404「主题不存在」两族）。
 func TestEndpointErrStatus_FixedMessageEntry(t *testing.T) {
-	// 「哨兵 + 尾部无条件条目」= 旧 if-chain 的形状：先命中先用，尾部 else 兜一切（含 ParseError）
+	// 「哨兵 + 尾部无条件条目」= 旧 if-chain 的形状：先命中先用，尾部 else 兜一切
+	// （票8 起解析错误不再归它兜，见 TestEndpointErrStatus_ParseError_PrecedesUnconditionalEntry）
 	tbl := &errStatusTable{entries: []errStatusEntry{
 		{sentinel: errSentinelA, status: http.StatusNotFound, message: "主题不存在"},
 		{sentinel: nil, status: http.StatusBadRequest, message: "查询用户列表失败"},
@@ -164,7 +197,7 @@ func TestEndpointErrStatus_FixedMessageEntry(t *testing.T) {
 	if w.Code != http.StatusNotFound || !strings.Contains(w.Body.String(), "主题不存在") {
 		t.Fatalf("哨兵条目应先于无条件条目命中: %d %s", w.Code, w.Body.String())
 	}
-	// 真哨兵仍优先于 fallback（无无条件条目时 *ParseError 才落到规则 2）
+	// 真哨兵仍优先于 fallback（解析错误永远先判，不进 fallback）
 	w = doEndpoint(t, Endpoint[int, string]{
 		Parse: func(c *gin.Context) (*int, error) {
 			return nil, &ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
@@ -174,7 +207,7 @@ func TestEndpointErrStatus_FixedMessageEntry(t *testing.T) {
 		}, fallback: http.StatusBadRequest},
 	})
 	if w.Code != http.StatusUnauthorized {
-		t.Fatalf("状态码 = %d, 期望 401（表内无无条件条目时 ParseError 走规则 2）", w.Code)
+		t.Fatalf("状态码 = %d, 期望 401（ParseError 是规则 1，不进表也不进 fallback）", w.Code)
 	}
 }
 
@@ -203,8 +236,9 @@ func assertTableSnapshot(t *testing.T, name string, got *errStatusTable, want []
 			t.Fatalf("%s entries[%d] %v 固定文案 = %q, 期望 %q", name, i, g.sentinel, g.message, w.message)
 		}
 		if g.sentinel == nil {
-			t.Fatalf("%s entries[%d] 为无条件条目（sentinel==nil）：域表不得放无条件条目，"+
-				"它会把 *ParseError 一并吞掉，只允许出现在端点自带的 errStatusAll 表里", name, i)
+			t.Fatalf("%s entries[%d] 为无条件条目（sentinel==nil）：域表是「一语义一码」的具名集合，"+
+				"无条件条目会把不属于任何哨兵的错误（DB 故障在内）压成同一个码，"+
+				"只允许出现在端点自带的 errStatusAll / WithSuccess 表里", name, i)
 		}
 	}
 }

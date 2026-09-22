@@ -435,19 +435,17 @@ async function confirmQuit() {
   } catch (e) {}
 }
 
-onMounted(() => {
-  loadCardData()
-  loadTags()
-})
-
+// 标签选项是「随筛选轴 / 切证件一起重装」的旁路装载面：票 10（ADR-0062 决策 10）
+// 把它声明进 useAsyncPage 的 facets，于是「何时重装」全仓只有一处判据。
+// 此前它只挂在 onMounted 上 ⇒ 切证件后下拉里仍是上一个证件的标签，
+// 拿旧证件的 tag_id 去抽新证件的题 = 空列表。
+// 错误不再静默咽下：抛给 facet 运行时记一条 error（装载中态由 finally 结清）。
 async function loadTags() {
   tagsLoading.value = true
   try {
     // 证件作用域（ADR-0047 §4）：公开标签接口无登录上下文，显式传当前证件
     const data = await trainingApi.getTags(credentialStore.current?.id)
     tags.value = data.tags || []
-  } catch (e) {
-    // 静默失败，标签入口降级为不可用
   } finally {
     tagsLoading.value = false
   }
@@ -476,6 +474,14 @@ const { run: loadCardData } = useAsyncPage(async () => {
   if (practiceStatsLoading.value) {
     try { await loadPracticeStats() } catch {}
   }
+}, {
+  // 票 10：标签 facet 与卡片聚合装载共享同一批失效时机（首装 / 筛选变化 / 切证件 / reset）
+  facets: [{ load: () => loadTags() }]
 })
+
+// 入口只需拉起列表这一条流；标签 facet 由上面那条槽随首装一起装载（票 10）。
+// 位置在 useAsyncPage 之后是刻意的：`loadCardData` 是 const 解构，早于声明行取用会踩 TDZ。
+onMounted(loadCardData)
+
 </script>
 

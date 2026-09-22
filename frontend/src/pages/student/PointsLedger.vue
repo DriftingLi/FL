@@ -45,7 +45,7 @@
         <UiSegmentTabs
           :model-value="filter"
           :options="filterOptions"
-          @update:model-value="(v: string) => { filter = v as 'all' | 'in' | 'out'; handlePageChange() }"
+          @update:model-value="(v: string) => { filter = v as 'all' | 'in' | 'out' }"
         />
         <UiButton variant="ghost" size="small" class="ml-auto" :icon="QuestionFilled" @click="rulesVisible = true">积分规则</UiButton>
       </div>
@@ -149,7 +149,10 @@ const filterOptions = [
   { label: '支出', value: 'out' }
 ]
 
-// 三态 + 分页（#388 模式）
+// 三态 + 分页（#388 模式）。收支方向是**筛选轴**：声明进 filterDeps（#1054），
+// 「变化即回第一页重装」由 composable 单点负责 —— 此前本页是全站唯一拿
+// handlePageChange() 处理筛选切换的页面（ADR-0062 票 10 实测）：翻到第 4 页点「支出」
+// 仍请求第 4 页那个子集，屏上「暂无积分流水」而记录确实存在（假空态）。
 const {
   loading,
   loadError,
@@ -171,7 +174,10 @@ const {
     ledger.value = ledgerRes
     total.value = ledgerRes.total || 0
   },
-  { credentialScoped: false } // 积分不按当前证件分区，不随切换重置页码（#604 opt-out）
+  {
+    credentialScoped: false, // 积分不按当前证件分区，不随切换重置页码（#604 opt-out）
+    filterDeps: [filter] // 收支方向轴：变化即回第一页重装（票 10）
+  }
 )
 
 function ledgerReasonLabel(reason: string, delta: number): string {

@@ -344,7 +344,7 @@ func (r topicRow) toDTO(viewerID int) ForumTopicDTO {
 		ContentFormat:   r.ContentFormat,
 		IPProvince:      r.IPProvince,
 		IPCity:          r.IPCity,
-		Images:          parseImageURLs(r.Images),
+		Images:          imageURLsForWire(r.Images),
 		ViewCount:       r.ViewCount,
 		ReplyCount:      r.ReplyCount,
 		LikesCount:      r.LikesCount,
@@ -759,7 +759,7 @@ func (r replyRow) toDTO(viewerID int, acceptedReplyID *int64) ForumReplyDTO {
 		ParentName: r.ParentName, ParentAvatarURL: r.ParentAvatarURL,
 		Content: r.Content, ContentFormat: r.ContentFormat,
 		IPProvince: r.IPProvince, IPCity: r.IPCity,
-		Images: parseImageURLs(r.Images), CreatedAt: formatISO(r.CreatedAt),
+		Images: imageURLsForWire(r.Images), CreatedAt: formatISO(r.CreatedAt),
 		Author: ForumAuthor{
 			UserID: r.UserID, Username: r.Username, AvatarURL: r.AvatarURL,
 		},
@@ -888,7 +888,7 @@ func (s *ForumService) CreateTopic(in CreateTopicInput) (*ForumTopicDTO, error) 
 		ContentFormat: topic.ContentFormat,
 		IPProvince:    topic.IPProvince,
 		IPCity:        topic.IPCity,
-		Images:        images,
+		Images:        imagesForWire(images),
 		CreatedAt:     formatISO(topic.CreatedAt),
 		Author: ForumAuthor{
 			UserID: u.ID, Username: u.Username, AvatarURL: u.AvatarURL,
@@ -1104,7 +1104,7 @@ func (s *ForumService) ReplyTopic(in ReplyTopicInput) (*ForumReplyDTO, error) {
 		ID: reply.ID, TopicID: reply.TopicID, ParentID: reply.ParentID,
 		ParentName: parentName, Content: reply.Content, ContentFormat: reply.ContentFormat,
 		IPProvince: reply.IPProvince, IPCity: reply.IPCity,
-		Images: images, CreatedAt: formatISO(reply.CreatedAt),
+		Images: imagesForWire(images), CreatedAt: formatISO(reply.CreatedAt),
 		Author: ForumAuthor{
 			UserID: u.ID, Username: u.Username, AvatarURL: u.AvatarURL,
 		},
@@ -1198,6 +1198,7 @@ func validateForumImages(images []string, max int) error {
 }
 
 // parseImageURLs 将 JSONB 图片数组字符串解析为 URL 列表（无效 JSON 返回空列表）。
+// 只给「计数/差集/内部聚合」用；写进响应 DTO 的一律走 imageURLsForWire（票12 出口归一）。
 func parseImageURLs(raw string) []string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" || raw == "null" {
@@ -1206,6 +1207,24 @@ func parseImageURLs(raw string) []string {
 	var urls []string
 	if err := json.Unmarshal([]byte(raw), &urls); err != nil {
 		return nil
+	}
+	return urls
+}
+
+// imageURLsForWire 读面出口归一：无图即空数组，不是 null（ADR-0062 决策 12）。
+// 生成的契约（frontend/src/api/generated/forum.ts 的 `images: string[]`）承诺数组，
+// 而旧写法把 nil 序列化成 `"images": null` —— 今天只靠各页面手写 `|| []` / `&&` 存活，
+// 新消费者写 `topic.images.length` 类型全绿、运行时 TypeError。
+// 「无图」与「图片数据缺失」在本域是同一件事，所以不把它升成第二个值（不选 x-nullable）。
+func imageURLsForWire(raw string) []string {
+	return imagesForWire(parseImageURLs(raw))
+}
+
+// imagesForWire 同一归一判据的「已是切片」形态：写面回显请求体的图片数组时也走它
+// （客户端不发 `images` 键时 in.Images 是 nil，同样会序列化成 null）。
+func imagesForWire(urls []string) []string {
+	if urls == nil {
+		return []string{}
 	}
 	return urls
 }
@@ -1513,7 +1532,7 @@ func (s *ForumService) MyReplies(userID, page, pageSize int) (*MyReplyPageResult
 		items = append(items, MyReplyDTO{
 			ID: r.ID, TopicID: r.TopicID, TopicTitle: r.TopicTitle, ParentID: r.ParentID,
 			Content: r.Content, ContentFormat: r.ContentFormat,
-			Images: parseImageURLs(r.Images), CreatedAt: formatISO(r.CreatedAt),
+			Images: imageURLsForWire(r.Images), CreatedAt: formatISO(r.CreatedAt),
 			Author: ForumAuthor{UserID: r.UserID, Username: r.Username, AvatarURL: r.AvatarURL},
 		})
 	}

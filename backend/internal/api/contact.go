@@ -116,7 +116,11 @@ func (h *ContactHandler) GetContact(c *gin.Context) {
 	recruiterID := middleware.CurrentUserID(c)
 	dto, err := h.svc.GetContact(recruiterID, uid)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) || errors.Is(err, service.ErrContactNoAuth) || errors.Is(err, service.ErrStudentGone) {
+		// 三个失败原因一律答 403，但各按自己的具名哨兵给文案（ADR-0062 决策 9 对称化后新增第三态）：
+		// ErrContactNoAuth 从未授权 / ErrStudentGone 学员已注销 / ErrCompanyUnavailable 企业自身被停用。
+		// 「授权存在」与「授权可用」不混为一谈——被禁用的企业手上确有 approved，报的却是企业已停用。
+		if errors.Is(err, gorm.ErrRecordNotFound) || errors.Is(err, service.ErrContactNoAuth) ||
+			errors.Is(err, service.ErrStudentGone) || errors.Is(err, service.ErrCompanyUnavailable) {
 			response.Forbidden(c, err.Error())
 			return
 		}
