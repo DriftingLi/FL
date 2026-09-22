@@ -1,0 +1,24 @@
+# 发帖页 · 纯文本档（默认；无 tab / 无工具栏 / 无边界提示行）
+# 源：未压缩 uiautomator dump（adb exec-out uiautomator dump /dev/tty）
+
+## text=
+请输入标题（1-100 字）
+请输入内容（1-10000 字）
+
+## content-desc=
+‹
+发布新帖
+分类
+广场
+资源
+知识问答
+标题
+0/100
+内容
+纯文本
+Markdown
+0/10000
+发布内容会显示 IP 属地
+拍照
+相册
+发布

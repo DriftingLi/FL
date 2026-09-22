@@ -1,0 +1,29 @@
+# ①a 机检原文：取证窗口内的 logcat 分级统计（设备 23049RAD8C / Android 15 / io.dcloud.uniappx）
+#
+# 窗口：adb logcat -c 之后依次驱动 —— 论坛列表「发帖」入口 → 发帖页 → 数据档位切 Markdown → 点工具栏 ### → 切「预览」
+# 命令：adb logcat -d -v brief
+#
+# 全量行 = 8170；带 E/ 的级行 = 207；其中 **app 自身 tag**（.dcloud.uniappx / UniDomManager）= 40
+# 其余 E 级行全部来自 MIUI / 系统组件（PhoneAdapter / WifiClientModeImpl / lyra-* / ANDR-PERF / MiuiBooster / Keymaster / RemoteFillService …），与 app 无关。
+#
+# ⚠️ 本行**不写「E = 0」**：实测 app tag 有 40 条 E 级行，逐条列在下面。判定「与本次改动无关」的机检判据是：这些行里命中本次改动关键词
+#    （forum | markdown | toolbar | textarea | compose | input）的条数 = **0**。
+#
+## app 自身 tag 的 E 级行（按形态归并）
+  11  E/.dcloud.uniappx(  504): No package ID 96 found for resource ID 0x….
+  11  E/.dcloud.uniappx(  504): No package ID c4 found for resource ID 0x….
+   3  E/UniDomManager(  504): batch--start--------
+   2  E/UniDomManager(  504): layoutUpdateRecursive--耗时：1
+   1  E/.dcloud.uniappx(  504): No package ID 95 found for resource ID 0x….
+   1  E/UniDomManager(  504): flushPendingBatches--tiem=8 task size=53
+   1  E/UniDomManager(  504): flushPendingBatches--tiem=43 task size=169
+   1  E/UniDomManager(  504): flushPendingBatches--tiem=2 task size=12
+   1  E/UniDomManager(  504): flushPendingBatches--tiem=1 task size=2
+   1  E/UniDomManager(  504): batch--start-----midd---65
+   1  E/UniDomManager(  504): batch--start-----midd---14
+   1  E/UniDomManager(  504): batch----time=67
+   1  E/UniDomManager(  504): batch----time=5
+   1  E/UniDomManager(  504): batch----time=15
+   1  E/.dcloud.uniappx(  504): No package ID da found for resource ID 0x….
+   1  E/UniDomManager(  504): batch--start-----midd---4
+   1  E/UniDomManager(  504): layoutUpdateRecursive--耗时：2
