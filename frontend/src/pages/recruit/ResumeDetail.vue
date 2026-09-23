@@ -32,9 +32,12 @@
       <div class="mt-6">
         <!-- #489：按钮状态机 none/pending/approved -->
         <template v-if="!contact">
-          <UiButton v-if="data.contact_state !== 'pending'" variant="primary" :loading="contactLoading" @click="showDialog = true">申请交换联系方式</UiButton>
-          <UiButton v-else disabled>等待学员处理中</UiButton>
-          <p v-if="contactError" class="mt-2 text-xs text-red-500">{{ contactError }}</p>
+          <!-- 企业已被处置 ⇒ 明文当场取不到，「发起交换」是个必失败动作，不给（移动端 #705 铁律；
+               角标那一边仍按授权事实投影，两格各说各的事实，见 Resumes.vue 的同一格）。 -->
+          <UiButton v-if="data.contact_state !== 'pending' && !availability" variant="primary" :loading="contactLoading" @click="showDialog = true">申请交换联系方式</UiButton>
+          <UiButton v-else-if="data.contact_state === 'pending'" disabled>等待学员处理中</UiButton>
+          <p v-if="availability" class="mt-2 text-xs text-ink-3">{{ availability.label }}</p>
+          <p v-else-if="contactError" class="mt-2 text-xs text-red-500">{{ contactError }}</p>
           <p v-else-if="data.contact_state === 'pending'" class="mt-2 text-xs text-ink-3">申请已提交，学员处理后即可查看联系方式</p>
         </template>
         <div v-if="contact" class="mt-3 rounded border border-line bg-panel p-3 text-sm">
@@ -70,6 +73,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { href } from '@/config/pages'
 import { recruitApi, type RecruitResumeItem } from '@/api/recruit'
+import { companyAvailability } from '@/utils/contactRequestStatus'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
@@ -102,6 +106,10 @@ const {
   loadContact()
   startApprovedPolling()
 }, { itemsRef: data })
+
+// 授权在而明文不可用（企业自己账号被处置）那一格：措辞出自 descriptor 单点（ADR-0064 决策 5）。
+// 判据只认 company_disabled === true —— 缺席即无此态。
+const availability = computed(() => companyAvailability(data.value?.company_disabled))
 
 // #489：授权后透出的工作照与证书原图
 const contactPhotos = computed(() => {

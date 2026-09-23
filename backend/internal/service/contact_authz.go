@@ -206,8 +206,9 @@ func recruiterAccountUsable(db *gorm.DB, recruiterID int) error {
 // 「在册」判定对整批只查一次，不随卡片数增长。
 //
 // 这一维照 ADR-0053 §3 保留（徽章与明文门禁看到同一个事实）；但**不叠加企业那一维**——
-// 徽章是 caller（企业自己）看出去的投影，企业被禁用时该改的是明文位置而不是徽章
-// （ADR-0062 决策 9「授权存在 ≠ 授权可用」）。
+// 徽章是 caller（企业自己）看出去的投影，企业被禁用时该改的不是徽章而是明文位置
+// （ADR-0062 决策 9「授权存在 ≠ 授权可用」+ ADR-0064 决策 5：那一维由 fillContactStates 另用
+// company_disabled 一格说出，仍不降级徽章）。
 func contactGrantOfManyEffective(db *gorm.DB, recruiterID int, studentUserIDs []int) (map[int]contactGrant, error) {
 	grants, err := contactGrantOfMany(db, recruiterID, studentUserIDs)
 	if err != nil {

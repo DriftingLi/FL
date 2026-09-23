@@ -5,6 +5,7 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -67,6 +68,11 @@ type RecruitResumeCard struct {
 	// #489：企业视角联系状态（none/pending/approved，approved 带来源）
 	ContactState  string `json:"contact_state,omitempty" extensions:"x-optional"`
 	ContactSource string `json:"contact_source,omitempty" extensions:"x-optional"` // recruiter/application
+	// CompanyDisabled 与联系面明文位置**同键同措辞**的那一格：本企业账号已被禁用（处置动作）或
+	// 已注销 ⇒ 明文取不到，但 contact_state 仍按授权事实投影（授权存在 ≠ 授权可用，
+	// 词表「授权有效态」；ADR-0064 决策 5）。缺席即企业可用。
+	// 移动端 #1267 的退回诉求就是这一格：只挂在明文位置上，列表角标无从分辨。
+	CompanyDisabled bool `json:"company_disabled,omitempty" extensions:"x-optional"`
 }
 
 // RecruitListResult 列表结果。
@@ -91,10 +97,20 @@ func fillContactStates(db *gorm.DB, recruiterID int, cards []RecruitResumeCard) 
 	if err != nil {
 		return
 	}
+	// 企业自己那一维（ADR-0064 决策 5）：徽章**不**因此降级（授权事实不被处置改写），
+	// 只在「授权在、而明文当场取不到」时补一格具名说明，让列表页也能分辨。
+	// 「查不动」不猜成「已停用」（ADR-0062 票6）：宁可少说这一格，也不把 DB 故障报成处置事实。
+	companyUnavailable := false
+	if err := recruiterAccountUsable(db, recruiterID); errors.Is(err, ErrCompanyUnavailable) {
+		companyUnavailable = true
+	}
 	for i := range cards {
 		if g, ok := grants[cards[i].UserID]; ok && g.State != "" {
 			cards[i].ContactState = string(g.State)
 			cards[i].ContactSource = string(g.Source)
+			if companyUnavailable && g.State == ContactGrantApproved {
+				cards[i].CompanyDisabled = true
+			}
 		}
 	}
 }

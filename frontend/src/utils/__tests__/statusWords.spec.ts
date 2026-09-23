@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { CONTACT_REQUEST_STATUSES, contactBadge, describeContactRequest } from '../contactRequestStatus'
+import { companyAvailability, CONTACT_REQUEST_STATUSES, contactBadge, describeContactRequest } from '../contactRequestStatus'
 import { APPLICATION_STATUSES, describeApplication } from '../applicationStatus'
 
 /** 车道根（frontend/src/utils/__tests__ → frontend → 仓库根）。 */
@@ -70,5 +70,23 @@ describe('descriptor 的 label / tone 单点（#1103）', () => {
     expect(contactBadge('rejected')).toBeNull()
     expect(contactBadge('pending')?.label).toBe('待同意')
     expect(contactBadge('approved')).toEqual({ label: '已同意', tone: 'success' })
+  })
+})
+
+describe('company_disabled 那一格（ADR-0064 决策 5 / 移动端 #1267）', () => {
+  it('缺席即无此态：undefined / false 都不得给出说明', () => {
+    expect(companyAvailability(undefined)).toBeNull()
+    expect(companyAvailability(false)).toBeNull()
+  })
+
+  it('出现即恒 true：只认 === true，措辞与 tone 出自本单点', () => {
+    expect(companyAvailability(true)).toEqual({ label: '企业已停用，联系方式已收回', tone: 'warning' })
+  })
+
+  it('与徽章正交：企业被停用不得改变 contactBadge 的投影（授权事实不被处置改写）', () => {
+    // 这一条锁的是「两格各说各的事实」的实现形状：可用性只由 company_disabled 决定，
+    // 不得回头把 approved 降级成空/其它值（那会把「被禁用」与「从没授权」压回同值）。
+    expect(contactBadge('approved')).toEqual({ label: '已同意', tone: 'success' })
+    expect(companyAvailability(true)?.label).not.toBe(contactBadge('approved')?.label)
   })
 })
