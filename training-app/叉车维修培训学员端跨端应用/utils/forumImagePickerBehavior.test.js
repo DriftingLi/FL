@@ -19,9 +19,10 @@ const os = require('os');
 const path = require('path');
 
 const { loadUts, readText } = require('./utsHarness');
+/** `forumDisplay.uts` 自 #1273 起 import 格式轴 ⇒ 三层注入表收在链夹具里，不在本套件重抄 */
+const { forumDisplayModule } = require('./forumChainHarness');
 
 const PICKER_UTS = path.join(__dirname, '..', 'composables', 'useForumImagePicker.uts');
-const DISPLAY_UTS = path.join(__dirname, 'forumDisplay.uts');
 const DETAIL_DISPLAY_UTS = path.join(__dirname, 'forumDetailDisplay.uts');
 
 /**
@@ -55,7 +56,7 @@ function harness(opts = {}) {
     showLoading: (o) => { rec.loading.push(o.title); },
     hideLoading: () => { rec.hideLoading += 1; },
   };
-  const display = loadUts(DISPLAY_UTS, {});
+  const display = forumDisplayModule();
   const detailDisplay = loadUts(DETAIL_DISPLAY_UTS, { resolveFileUrl: display.resolveFileUrl, uni });
   const uploadFn = opts.upload || (() => Promise.resolve('https://e.com/ok.png'));
   const picker = loadUts(PICKER_UTS, {
@@ -201,7 +202,7 @@ function loadMutated(replacements, opts = {}) {
     showLoading: () => {},
     hideLoading: () => {},
   };
-  const display = loadUts(DISPLAY_UTS, {});
+  const display = forumDisplayModule();
   const detailDisplay = loadUts(DETAIL_DISPLAY_UTS, { resolveFileUrl: display.resolveFileUrl, uni });
   const m = loadUts(file, {
     ...vueStub(),

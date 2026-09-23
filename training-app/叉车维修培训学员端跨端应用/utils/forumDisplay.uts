@@ -4,6 +4,7 @@
  * 泛型格式化（formatDateStr / formatCountCompact / formatDateTimeStr）唯一实现在 utils/format，
  * 本文件不再持有第二实现（T03 口径；引用方直接 import utils/format）。
  */
+import { forumContentPlainText, FORMAT_TEXT } from './forumBody'
 
 /** 补全后端返回的相对文件 URL */
 export function resolveFileUrl(url : string) : string {
@@ -14,9 +15,20 @@ export function resolveFileUrl(url : string) : string {
     return url
 }
 
-/** 获取内容预览（截取前 80 字，去掉换行） */
-export function getContentPreview(content : string) : string {
-    const single = content.replace('\n', ' ')
+/**
+ * 列表正文预览（摘要）：**先按格式轴剥成纯文本，再去换行、截断 80 字**。
+ *
+ * `format` 带缺省值 `FORMAT_TEXT` ⇒ 不传格式的调用方语义不变（增量、可独立 revert）。口径出处是
+ * 根 `ADR-0044`「**列表摘要必须剥成纯文本**」：直出源串会让读者看到 `##` / `**` / `- ` 这些**记号**
+ * 而不是内容（根 `CONTEXT.md` 把「会让内容读不出来的降级必须在每一端补齐」定成硬口径 ⇒ 这是欠账）。
+ * 剥离走 `utils/forumBody.forumContentPlainText`（与详情页正文**同一条**格式轴、同一个解析器），
+ * 本模块**不写正则**去猜记号（ADR-0044 明列为被否决的做法）。
+ *
+ * ⚠️ 去换行必须是**全局**的：`replace('\n', ' ')` 那种字符串形态只替换**第一个**换行符，
+ * 多行帖的预览会留着换行把卡片撑高（#1273 顺手修的既有 bug）。
+ */
+export function getContentPreview(content : string, format : string = FORMAT_TEXT) : string {
+    const single = forumContentPlainText(content, format).replace(/\n/g, ' ')
     if (single.length <= 80) return single
     return single.substring(0, 80) + '...'
 }

@@ -31,7 +31,7 @@
                     <view v-for="(item, idx) in topics" :key="idx" class="topic-card">
                         <view class="topic-card-main" @click="onTopicClick(item.id)">
                             <text class="topic-title">{{ item.title }}</text>
-                            <text class="topic-content-preview">{{ getContentPreview(item.content) }}</text>
+                            <text class="topic-content-preview">{{ topicPreview(item) }}</text>
                         </view>
                         <view class="topic-footer">
                             <view class="topic-meta">
@@ -95,6 +95,7 @@
     import { getMyTopicsApi, getMyRepliesApi } from '../../api/forum'
     import type { ForumTopic, ForumReply, MarkdownBlock } from '../../types/index'
     import { formatDateStr } from '../../utils/format'
+    import { getContentPreview } from '../../utils/forumDisplay'
     import { forumContentBlocks, isMarkdownFormat } from '../../utils/forumBody'
     import ForumMarkdownBlocks from './components/forum-markdown-blocks.uvue'
 
@@ -114,6 +115,16 @@
         return forumContentBlocks(item.content, item.content_format)
     }
 
+    /**
+     * 「我的帖子」列表摘要（#1273）：本地薄包装，转发到唯一实现
+     * `utils/forumDisplay.getContentPreview` 并把该帖的格式轴喂进去（根 ADR-0044
+     * 「列表摘要必须剥成纯文本」）。原先这一处是 `utils/forumDisplay` 的**逐字副本**
+     * （第二实现，且完全不看格式）⇒ 已删（T03 口径：展示纯函数零第二实现）。
+     */
+    function topicPreview(item : ForumTopic) : string {
+        return getContentPreview(item.content, item.content_format)
+    }
+
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
@@ -125,12 +136,6 @@
     const total = ref<number>(0)
     const loading = ref<boolean>(false)
     const noMore = ref<boolean>(false)
-
-    function getContentPreview(content : string) : string {
-        const single = content.replace('\n', ' ')
-        if (single.length <= 80) return single
-        return single.substring(0, 80) + '...'
-    }
 
     async function loadData(reset : boolean = false) : Promise<void> {
         if (loading.value) return

@@ -162,6 +162,45 @@ describe('composable 下沉契约（列表两域 + 详情三域状态离开壳�
   });
 });
 
+/**
+ * #1273 的**接线**面（行为承重不在这里：`utils/forumBodyBehavior.test.js` 的 ④⑤ 组真执行投影与摘要）。
+ * 本组只防一件坏事：格式轴在**摘要这一条路径**上被拆掉接线 —— 那会让论坛首页 / 「我的帖子」
+ * 回到「卡片直出 `**故障码**` 源串」，而详情页仍然是对的（同一份数据两种读法，正是本族的畸形形态）。
+ */
+describe('列表摘要接格式轴（#1273：预览与正文同源，摘要不留第二实现）', () => {
+  const card = read('pages/forum/components/forum-topic-card.uvue');
+  const plaza = read('pages/forum/forum.uvue');
+  const mine = read('pages/forum/my-forum.uvue');
+  const display = read('utils/forumDisplay.uts');
+
+  it('卡片走扁平 `contentFormat` prop 转发到唯一实现，不自持截断（#687：可选对象 prop 成员直读 = error18）', () => {
+    expect(card).toContain('contentFormat? : string');
+    expect(card).toContain("contentFormat: ''"); // 缺省空串 ⇒ 没接格式的老调用点逐字不变
+    expect(card).toContain('getContentPreview(props.content, props.contentFormat)');
+    expect(card).not.toContain('substring(0, 80)');
+  });
+
+  it('广场壳层把该帖的 `content_format` 扁平下发（不下发 = 论坛首页仍直出源串）', () => {
+    expect(plaza).toContain(':content-format="item.content_format"');
+  });
+
+  it('「我的帖子」的第二实现已删：只剩薄包装 + 唯一实现 import（副本一回来，格式轴就补不到它）', () => {
+    expect(mine).toContain("import { getContentPreview } from '../../utils/forumDisplay'");
+    expect(mine).toContain('return getContentPreview(item.content, item.content_format)');
+    expect(mine).toContain('{{ topicPreview(item) }}'); // 模板不直调 import 函数（#677 编译门）
+    expect(mine).not.toContain('function getContentPreview(');
+    expect(mine).not.toContain('substring(0, 80)');
+  });
+
+  it('摘要层不自己解析、不自己判档 —— 只经 `utils/forumBody` 那一条格式轴口（投影与渲染同源）', () => {
+    expect(display).toContain("import { forumContentPlainText, FORMAT_TEXT } from './forumBody'");
+    expect(display).toContain('export function getContentPreview(content : string, format : string = FORMAT_TEXT)');
+    expect(display).toContain('forumContentPlainText(content, format)');
+    expect(display).not.toContain('parseMarkdown'); // 自己解析 = 第二份解析口径（根 ADR-0044 否决）
+    expect(display).not.toContain('SUBSET_');      // 自持档位 = 绕过「按端分档」
+  });
+});
+
 describe('备考经验 tab 接线契约（#706：第四 tab 进场，复用 TopicCard + experience 类别）', () => {
   const page = read('pages/forum/forum.uvue');
   const feed = read('composables/useTopicFeed.uts');

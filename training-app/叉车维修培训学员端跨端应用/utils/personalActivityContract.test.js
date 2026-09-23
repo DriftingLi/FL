@@ -183,12 +183,30 @@ describe('取数逻辑所有权留在页面（列表加载非组件职责）', (
     expect(read('utils/format.uts')).toContain('export function formatDateStr');
   });
 
-  it('contentPreview 唯一定义点在卡片（改名不改体，replace+80 截断逐字保留）', () => {
+  it('摘要唯一实现点在 utils/forumDisplay（#1273：第三处逐字副本已删，卡片只转发、不自己截断）', () => {
+    // 原来这里有**两份**「80 字截断 + 去换行」：`utils/forumDisplay.getContentPreview` 与卡片内的
+    // 本地函数。副本的代价不是重复几行，而是**格式轴永远补不到这一份上**（#1273 的判据面）。
+    // 于是口径收成：截断逻辑只在 utils/forumDisplay，卡片只留「模板不可直调 import」的薄包装。
     expect(page()).not.toContain('contentPreview');
-    const card = read(CARD);
-    expect(card).toContain('function contentPreview(text : string) : string');
-    expect(card).toContain("text.replace('\\n', ' ')");
-    expect(card).toContain('single.substring(0, 80)');
+    const card = stripComments(read(CARD));
+    expect(card).toContain("import { getContentPreview } from '../../../utils/forumDisplay'");
+    expect(card).toContain('return getContentPreview(text, format)');
+    // 格式轴走**扁平可选 prop**（#687 口径：不传对象），缺省空串 ⇒ 不传格式的老调用点行为逐字不变
+    expect(card).toContain('contentFormat?: string');
+    expect(card).toContain("contentFormat: ''");
+    expect(card).not.toContain('substring(0, 80)');
+    expect(card).not.toContain("replace('\\n'");
+    const display = read('utils/forumDisplay.uts');
+    expect(display).toContain('export function getContentPreview');
+    expect(display).toContain('substring(0, 80)');
+  });
+
+  it('格式轴下发到六个 tab（#1273：六个变体同口径，不许留「只有某几个 tab 认格式」的畸形）', () => {
+    const tpl = templateOf(page());
+    expect(tpl).toContain(':content-format="item.content_format"');
+    // 数量对账：卡片调用点与下发次数必须相等 ⇒ 漏接一个 tab 即红（漏的那个回到直出源串）
+    expect((tpl.match(/<ActivityTopicCard /g) || []).length).toBe(6);
+    expect((tpl.match(/:content-format="item\.content_format"/g) || []).length).toBe(6);
   });
 
   it('api 消费面：forum 五 API import 行逐字保留，收藏 API 零引用', () => {
