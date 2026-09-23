@@ -13,13 +13,22 @@ EXIT=0
 # ④c 复测对象 = feat/1273 @ 8eeea173（本目录取证提交只加 docs/verification/forum/1292/**，运行时面未变）
 # git status（跑完 HBuilderX 与 ④c 之后）：除本取证目录外零改动 ⇒ manifest.json / pages.json 未被回写
 
-# —— rebase 复核（2026-09-23 12:28）——
-# 分支为过 ruleset「须与 master 同步」再 rebase 到 origin/master 2872f8c7（#1291，courses 域）
+# —— rebase 谱系与复核（2026-09-23，两次）——
+# rebase ①：origin/master 2872f8c7（#1291，courses 域，18 files）
 #   运行时面 commit 8eeea173 -> 02b24345；取证 commit 48f48040 -> 6f09fbe8
-# ④c 在新树重跑（本目录 kotlin-all.txt = 12:28:31 那次）：KOTLIN_ALL_RESULT errors=0 classes=1498 files=120 input=unpackage\resources\app-android freshness=fresh
-#   与 12:05:39 那次读数逐字一致（同一结果行、同 27 条既存 warning），EXIT=0
-# ③ 由 CI mobile-test 在新 head 上跑（链接见 PR 正文 ③ 行；本机 8eeea173 那次为 124 suites / 2424 tests）
-# 本票 7 个运行时面文件 git blob 前后相同（8eeea173 == 02b24345，故 ①a 的图与设备载荷描述的就是 head 上这批字节）：
+#   ④c 在新树重跑（12:28:31 那次）：KOTLIN_ALL_RESULT errors=0 classes=1498 files=120 input=unpackage\resources\app-android freshness=fresh
+#     与 12:05:39 那次读数逐字一致（同一结果行、同 27 条既存 warning），EXIT=0
+#   git diff --name-only 48f48040 6f09fbe8 = 只有 #1291 的 18 个文件（api/course.uts、chapter-view.uvue、courses 取证目录、ADR-0007、三个 courses 套件）
+# rebase ②：origin/master bec91850（#1293，第十五波第②批）
+#   运行时面 commit 02b24345 -> 3dd3d3c7；取证 commit 6f09fbe8 -> 7219ca00；复核 commit 0b0bd062 -> 33d70583
+#   git diff --name-only 2872f8c7 bec91850 = 18 个文件，全部在 backend/** 与根 docs/adr/ADR-0064-*.md
+#     ⇒ 命中 training-app 的文件数 0（grep -cE '\.(uvue|uts)$|(manifest|pages|platformConfig)\.json$' 读数 0）⇒ 第二次 rebase 连移动端非运行时面都没碰
+#   ④c 第三次跑（12:48:53，复测对象 = 3dd3d3c7 树）：KOTLIN_ALL_RESULT errors=0 classes=1498 files=120 input=unpackage\resources\app-android freshness=fresh，EXIT=0
+#     本目录 kotlin-all.txt 存的就是这次；与前两次（12:05:39 / 12:28:31）diff 仅时间戳行不同，结果行与 27 条既存 warning 逐字一致
+#   ③ 由 CI mobile-test 在 head 33d70583 上跑：runs/35819362275 job 107047740956 = Test Suites 125 passed / Tests 2436 passed
+#   本机在同一棵树（含本目录复核改动前的运行时面）另跑 npm run test:unit，读数见本文件末行
+# 上表除 3dd3d3c7 / 7219ca00 / 33d70583 之外的 sha 都是 force-push 前的历史出处，squash 后在 master 上不可解析。
+# 这批证据的耐久身份是那 7 个 blob，三棵树逐字相同（8eeea173 == 02b24345 == 3dd3d3c7，本次现测每条 SAME）：
 #   utils/forumBody.uts  blob 4706185f6ebc
 #   utils/forumDisplay.uts  blob 7bd7fbfe24ad
 #   pages/forum/components/forum-topic-card.uvue  blob 60e47f1a2cd1
@@ -27,4 +36,5 @@ EXIT=0
 #   pages/forum/my-forum.uvue  blob 529649adf19b
 #   pages/profile/components/activity-topic-card.uvue  blob 919a37378acd
 #   pages/profile/personal-activity.uvue  blob 0edf19debe29
-# git diff --name-only 48f48040 6f09fbe8 = 只有 #1291 的 18 个文件（api/course.uts、chapter-view.uvue、courses 取证目录、ADR-0007、三个 courses 套件）
+# 判别器读数（本 head）：node scripts/classify-guards.mjs --json => total=125 behaviorCount=27 wiringCount=98
+# 本机 npm run test:unit @ 33d70583 树（2026-09-23 12:46，112.291s）：Test Suites: 125 passed, 125 total / Tests: 2436 passed, 2436 total ⇒ 与 CI mobile-test 同读数

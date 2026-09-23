@@ -3,16 +3,32 @@
 设备：Xiaomi `23049RAD8C`（`marble`），Android 15，HBuilderX 调试基座（包 `io.dcloud.uniappx`）——
 按移动端 `docs/adr/0008-移动端验收门与证据.md` 的 ① 门（**①a：agent 出证**）留档。
 
-**证据绑定的树**：运行时面 commit `8eeea173`（rebase 到 `origin/master` `ed39d854` 之后；本目录的取证提交只往
-`docs/verification/forum/1292/**` 加文件，运行时面一字未动）。
+**证据绑定的树**：取证那趟真机跑在运行时面 commit `8eeea173`（base = `origin/master` `ed39d854`）；本目录的取证提交
+只往 `docs/verification/forum/1292/**` 加文件，运行时面一字未动。
 
-**rebase 复核（2026-09-23 12:28）**：为过 ruleset 的「分支须与 master 同步」，分支再 rebase 到 `origin/master`
-`2872f8c7`（#1291，courses 域）⇒ 运行时面 commit 变为 `02b24345`、取证 commit 变为 `6f09fbe8`。
-**①a 的图与 logcat 产出自 rebase 之前的那棵树、本轮不重拍**，理由可核验而非自述：本票 **7 个运行时面文件**的 git blob
-在 `8eeea173` 与 `02b24345` 上**逐字相同**（blob 表见 `machine-lines.txt`），且 `git diff --name-only 48f48040 6f09fbe8`
-只有 #1291 那 18 个文件（courses 域 + 其取证目录）⇒ 设备上跑的那批文件与 head 上的完全一致，重拍不增加信息。
-**④c 与 ③ 都在新 head 上重跑**：④c = `KOTLIN_ALL_RESULT errors=0 classes=1498 files=120 freshness=fresh`（本目录
-`kotlin-all.txt` 即 12:28:31 那次，与 12:05:39 的读数逐字一致），③ 由 CI `mobile-test` 在 head 上跑（链接见 PR 正文）。
+**rebase 谱系（两次，2026-09-23）** —— 为过 ruleset 的「分支须与 master 同步」，分支两次 rebase：
+
+| 趟 | master base | 该趟从 master 带入 | 运行时面 commit | 取证 commit |
+| --- | --- | --- | --- | --- |
+| 取证原树 | `ed39d854` | — | `8eeea173` | `48f48040` |
+| rebase ① | `2872f8c7` | #1291（courses 域，18 files） | `02b24345` | `6f09fbe8` |
+| rebase ② | `bec91850` | #1293（`backend/**` + 根 `ADR-0064`，18 files） | `3dd3d3c7` | `7219ca00` |
+
+⇒ **表里除 `3dd3d3c7` / `7219ca00` 外的 sha 都是 force-push 前的历史出处**，squash 合并后在 `master` 上不可解析。
+这批证据的**耐久身份不是 commit sha，是那 7 个 git blob**（`machine-lines.txt` 的 blob 表）—— 三棵树上逐字相同
+（`8eeea173` == `02b24345` == `3dd3d3c7`，本次现测逐条打印 `SAME`），故 squash 后那个唯一 commit 里的字节
+与设备上跑过的字节仍是同一批。
+
+**①a 的图与 logcat 产出不重拍**，理由可核验而非自述：
+① 上述 blob 恒等 ⇒ 「图里的字节变了」这条重拍判据不成立；
+② `git diff --name-only 2872f8c7 bec91850` = #1293 那 18 个文件，**其中 `training-app` 文件数为 0**
+（`grep -cE '\.(uvue|uts)$|(manifest|pages|platformConfig)\.json$'` ⇒ `0`）⇒ 第二次 rebase 连移动端的非运行时面都没碰；
+③ 第一次 rebase 带入的 #1291 那 18 个文件全在 courses 域与其取证目录，与本票承载面无交集。
+
+**④c 与 ③ 都在新 head 上重跑**：④c 三次跑（取证原树 12:05:39 / rebase ① 后 12:28:31 / rebase ② 后 12:48:53）
+读数逐字一致 = `KOTLIN_ALL_RESULT errors=0 classes=1498 files=120 freshness=fresh`（本目录 `kotlin-all.txt` 存的是
+**最新那次** 12:48:53，与原树那次 `diff` 仅时间戳行不同）；③ 由 CI `mobile-test` 在 head `33d70583` 上跑
+（**125 suites / 2436 tests 全绿**，链接见 PR 正文 ③ 行），本机在同一棵树上另跑一次同读数，见 `machine-lines.txt` 末行。
 
 **改前基线** = 取证时设备上**既有**的构建（不含本票改动；`www` mtime `1790134791`，由并发会话于 11:39 部署）。
 「它不含本票改动」**不靠自述**，由判据 1 的「源串仍在」这一条实证。
