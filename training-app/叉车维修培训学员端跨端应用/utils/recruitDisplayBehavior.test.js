@@ -231,6 +231,24 @@ describe('状态词表投影：过期态覆盖 pending，未知取值诚实兜�
   });
 });
 
+describe('明文收回说明（#1267）：`company_disabled` 缺席式，判据只认真值', () => {
+  it('键缺席或为 false ⇒ 不产出说明（企业可用是常态，不给装饰性提示）', () => {
+    const { contactRevokedNotice } = display();
+    expect(contactRevokedNotice({ status: 'approved' })).toBe('');
+    expect(contactRevokedNotice({ status: 'approved', company_disabled: false })).toBe('');
+  });
+
+  it('键为 true ⇒ 产出「企业已停用，联系方式已收回」，且与 `status` 取值无关', () => {
+    const { contactRevokedNotice } = display();
+    expect(contactRevokedNotice({ status: 'approved', company_disabled: true }))
+      .toBe('企业已停用，联系方式已收回');
+    // 后端唯一赋值点是 `approved && !usable`（`contact_service.go:212-219`），
+    // 但本函数不得再叠一层 `status` 判据 —— 那是把服务端事实改成客户端推断
+    expect(contactRevokedNotice({ status: 'pending', company_disabled: true }))
+      .toBe('企业已停用，联系方式已收回');
+  });
+});
+
 describe('模块契约：零运行期依赖（loadUts 注入空绑定即可跑）', () => {
   it('同一个文件能被反复载入且互不污染（模块级常量不是可变状态）', () => {
     const a = display();

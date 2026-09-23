@@ -343,4 +343,37 @@ describe('D. 发起交换与我的交换申请', () => {
     expect(r.page).toBe(2);
     expect(r.page_size).toBe(20);
   });
+
+  // D3 / D4：`company_disabled` 是**缺席式**可选键（后端 `contact_service.go:80` 的
+  // `json:"company_disabled,omitempty"`，出现即恒 `true`）。映射层收不下它 = 后面所有
+  // 消费面都拿不到「授权在但明文已收回」这一维，故在读取层就归一成 boolean。
+  test('D3：交换申请行不带 `company_disabled` ⇒ 归一成 false（企业可用是常态，不是「未知」）', () => {
+    const { mod } = loadRecruit({ data: {} });
+    const row = mod.buildRecruitContactRequest({
+      id: 12, student_user_id: 7, message: '您好', status: 'approved',
+      created_at: '2026-09-20T10:00:00+08:00', updated_at: '2026-09-21T10:00:00+08:00',
+      expires_at: '2026-10-04T10:00:00+08:00', source: 'recruiter',
+    });
+    expect(row.company_disabled).toBe(false);
+  });
+
+  test('D4：行带 `company_disabled: true` ⇒ 逐字读出，且列表路径与单条路径同一映射', async () => {
+    const { mod } = loadRecruit({ data: {} });
+    const row = mod.buildRecruitContactRequest({
+      id: 13, student_user_id: 8, message: '您好', status: 'approved',
+      created_at: '2026-09-20T10:00:00+08:00', updated_at: '2026-09-21T10:00:00+08:00',
+      expires_at: '2026-10-04T10:00:00+08:00', source: 'recruiter', company_disabled: true,
+    });
+    expect(row.company_disabled).toBe(true);
+    // 后端**从不**发 false（`if approved && !usable { = true }` 是唯一赋值点）；
+    // 但若哪天发了 false，映射也不得把它折成 true。
+    const { mod: mod2 } = loadRecruit({ data: {} });
+    expect(mod2.buildRecruitContactRequest({ company_disabled: false }).company_disabled).toBe(false);
+    // 列表路径必须走同一个函数：否则两处消费会各自漂移
+    const { mod: mod3 } = loadRecruit({
+      data: { items: [{ id: 14, status: 'approved', company_disabled: true }], page: 1, page_size: 20, total: 1 },
+    });
+    const list = await mod3.getRecruitContactRequestsApi(1, 20);
+    expect(list.items[0].company_disabled).toBe(true);
+  });
 });

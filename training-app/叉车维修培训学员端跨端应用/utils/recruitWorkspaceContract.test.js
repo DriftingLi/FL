@@ -363,6 +363,20 @@ describe('C. 交换段：客户端判过期、过期项无操作入口', () => {
     expect(contacts).toContain('unexpiredPendingCount(result.items, nowMs.value)');
     expect(contacts).toContain('contactRemainingText(remainingDays(row.expires_at, nowMs.value))');
   });
+
+  it('明文收回说明（#1267）：判定与文案在 utils 单点，页面只做投影，且模板用的 class 真有样式', () => {
+    // 接线：本地薄包装 + 只此一处调用单点函数（语义由 recruitDisplayBehavior 的两条 it 兜底）
+    expect(contacts).toContain('function contactRevokedText(row : RecruitContactRequest) : string {');
+    expect(contacts).toContain('return contactRevokedNotice(row)');
+    // 守护规则 S：模板不直调 import 进来的函数
+    expect(templateOf(contacts)).toContain('contactRevokedText(row)');
+    expect(templateOf(contacts)).not.toMatch(/contactRevokedNotice\s*\(/);
+    // 文案单点：页面不得抄第二份「企业已停用…」（第二份就是漂移的起点）
+    expect(stripComments(contacts)).not.toContain('企业已停用');
+    // uvue 里 class 没定义 = 静默没样式（不报错）⇒ 用了就要钉住它存在
+    const style = styleBlocksOf(read(PAGE_CONTACTS)).map((b) => b.body).join('\n');
+    expect(style).toContain('.row-notice');
+  });
 });
 
 // ---------------------------------------------------------------------------

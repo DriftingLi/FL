@@ -224,6 +224,23 @@ export function contactRemainingText(days : number) : string {
     return '剩 ' + days.toString() + ' 天'
 }
 
+/** 「授权仍在、明文已收回」的说明文案（**全仓唯一一份**，措辞由本轮移动端定，第十五波第④批与 Web 对齐） */
+const COMPANY_DISABLED_NOTICE : string = '企业已停用，联系方式已收回'
+
+/**
+ * 交换段列表行的明文收回说明（#1267）
+ * @note **只认 `company_disabled` 的真值**，不得再叠一层 `status` 判据：后端唯一赋值点
+ *       已经是 `approved && !contactPairUsable`（`contact_service.go:212-219`），客户端重推
+ *       一遍就等于把服务端事实换成客户端推断（两个事实来源）。
+ * @note **不进状态词表**：`company_disabled` 不是 `ContactGrantState` 的取值，加第 6 行会同时
+ *       踩破 `recruitWorkspaceContract.test.js` 的三把同源锁（取值集合 == Go 常量表、
+ *       label 逐字 == Web `contactRequestStatus.ts`）。所以它是**行级附加说明**，不是徽章。
+ */
+export function contactRevokedNotice(row : RecruitContactRequest) : string {
+    if (row.company_disabled) return COMPANY_DISABLED_NOTICE
+    return ''
+}
+
 /**
  * 交换申请 → 描述子
  * @param expired 由 `contactExpired(row.expires_at, nowMs)` 算出；为真时**一律**折到「已过期」，

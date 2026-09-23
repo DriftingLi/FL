@@ -198,6 +198,13 @@ export type RecruitContactPlain = {
  * `status` 是服务端事实；`expires_at` 是 `created_at + 14 天`（`contact_service.go:183`）。
  * **服务端读取时不按 `expires_at` 判状态**（ADR-0022 已知缺口）⇒ 「已过期」由客户端算
  * （`utils/recruitDisplay.uts`），且过期项**不给任何操作入口**。
+ *
+ * `company_disabled` 是**缺席式可选键**（后端 `contact_service.go:80` 的
+ * `json:"company_disabled,omitempty"`，唯一赋值点 `:212-219` 是「授权在、明文已收回」）：
+ * 出现即恒为 `true`，故本层把它归一成 boolean，消费面只判 `=== true`。
+ * ⚠️ #1267 票面称该键随简历卡/明文端点下发 —— **不成立**：
+ * `ContactPlainDTO`（`contact_service.go:96-107`）无此键，`GET /recruit/resumes/:id/contact`
+ * 失败时是三态 403（`backend/internal/api/contact.go:98-140`）。移动端目前**只有本端点**带它。
  */
 export type RecruitContactRequest = {
     id : number
@@ -208,6 +215,7 @@ export type RecruitContactRequest = {
     updated_at : string
     expires_at : string
     source : string
+    company_disabled : boolean
 }
 
 /** 交换申请列表结果（后端 `ContactRequestListResult`，**回显 page / page_size**） */
@@ -342,6 +350,8 @@ export function buildRecruitContactRequest(obj : UTSJSONObject) : RecruitContact
         updated_at: toStr(obj['updated_at']),
         expires_at: toStr(obj['expires_at']),
         source: toStr(obj['source']),
+        // 缺席式可选键归一（同 `forced_offline` 的先例）：键不在 = 企业可用，不是「未知」
+        company_disabled: (obj['company_disabled'] as boolean) ?? false,
     } as RecruitContactRequest
 }
 
