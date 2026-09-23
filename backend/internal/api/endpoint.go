@@ -338,6 +338,23 @@ func successRenderer[Req, Resp any](ok *success) RenderFunc[Req, Resp] {
 	}
 }
 
+// WithSentinel 在已装配的错误面上**前置**一条具名哨兵分档，返回自身便于链式声明：
+//
+//	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).
+//		WithSentinel(service.ErrGenTaskNotFound, http.StatusNotFound).Handle(c)
+//
+// 存在的理由就是本仓的主判据（ADR-0064 决策 1）：service 层把「不存在」「不可读」「查不动」
+// 分开成具名事实之后，api 层要能把它们**分别**落码，而呈现层若仍要统一（例如未兑换与
+// 真不存在都答 404、不泄漏存在性）必须是一次显式调用，而不是只有一格可填。
+// 默认错误面（WithSuccess 第二参 / sentinel 为 nil 的条目）永远排在哨兵之后。
+func (e Endpoint[Req, Resp]) WithSentinel(sentinel error, status int) Endpoint[Req, Resp] {
+	if e.ErrStatus == nil {
+		e.ErrStatus = &errStatusTable{}
+	}
+	e.ErrStatus.entries = append([]errStatusEntry{{sentinel: sentinel, status: status}}, e.ErrStatus.entries...)
+	return e
+}
+
 // WithSuccess 按「成功描述 + 默认错误面」装配端点，返回自身便于链式声明：
 //
 //	Endpoint[In, Out]{

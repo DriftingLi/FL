@@ -399,8 +399,9 @@ func (h *AdminHandler) GenerateContent(c *gin.Context) {
 // @Security BearerAuth
 // @Param task_id path string true "任务 ID"
 // @Success 200 {object} response.R{data=service.GenTaskStatus} "success"
+// @Failure 400 {object} response.R "task_id 无效"
 // @Failure 401 {object} response.R "未认证"
-// @Failure 404 {object} response.R "任务不存在"
+// @Failure 404 {object} response.R "生成任务不存在"
 // @Router /admin/course/generate-content/{task_id} [get]
 // GetGenerationTask 查询生成任务状态（前端轮询）GET /api/admin/course/generate-content/:task_id
 func (h *AdminHandler) GetGenerationTask(c *gin.Context) {
@@ -411,7 +412,9 @@ func (h *AdminHandler) GetGenerationTask(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *taskIDParam) (*service.GenTaskStatus, error) {
 			return h.contentGenSvc.GetTaskStatus(req.TaskID)
 		},
-	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).
+		WithSentinel(service.ErrGenTaskNotFound, http.StatusNotFound).
+		WithSentinel(service.ErrGenTaskIDInvalid, http.StatusBadRequest).Handle(c)
 }
 
 // @Summary HRWAI 用户列表
@@ -525,6 +528,7 @@ func (h *AdminHandler) UpdateHrwaiUser(c *gin.Context) {
 // @Success 200 {object} response.R "密码已重置"
 // @Failure 400 {object} response.R "参数错误/密码长度非法"
 // @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "用户不存在"
 // @Router /admin/hrwai-users/{id}/password [put]
 // ResetHrwaiUserPassword 重置 HRWAI 用户密码 PUT /api/admin/hrwai-users/:id/password
 func (h *AdminHandler) ResetHrwaiUserPassword(c *gin.Context) {
@@ -546,12 +550,14 @@ func (h *AdminHandler) ResetHrwaiUserPassword(c *gin.Context) {
 			return &resetPasswordReq{ID: id, Password: body.Password}, nil
 		},
 		Invoke: func(ctx context.Context, req *resetPasswordReq) (*struct{}, error) {
-			if err := h.adminSvc.ResetHrwaiUserPassword(req.ID, req.Password); err != nil {
+			if err := h.adminSvc.ResetHrwaiUserPassword(ctx, req.ID, req.Password); err != nil {
 				return nil, err
 			}
 			return &struct{}{}, nil
 		},
-	}.WithSuccess(okMsgNoData("密码已重置"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(okMsgNoData("密码已重置"), http.StatusInternalServerError).
+		WithSentinel(service.ErrHrwaiUserNotFound, http.StatusNotFound).
+		WithSentinel(service.ErrInvalidHrwaiUserID, http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 切换 HRWAI 用户启用/禁用状态
@@ -575,17 +581,17 @@ func (h *AdminHandler) ToggleHrwaiUserStatus(c *gin.Context) {
 			return &idParam{ID: id}, nil
 		},
 		Invoke: func(ctx context.Context, req *idParam) (*service.StatusResultDTO, error) {
-			next, err := h.adminSvc.ToggleHrwaiUserStatus(req.ID)
+			next, err := h.adminSvc.ToggleHrwaiUserStatus(ctx, req.ID)
 			if err != nil {
 				return nil, err
 			}
 			return &service.StatusResultDTO{Status: int(next)}, nil
 		},
-		// 判定不动（票8 逐端点判过）：AdminService.ToggleHrwaiUserStatus 的「用户不存在」是裸
-		// errors.New、UPDATE 失败则原样上抛驱动错误 ⇒ api 侧无具名哨兵可分档，改判会把真 404
-		// 也答成 500。正解在 service 侧升哨兵（admin_service.go 本批不在改动面）。
-		// 已归位的一半：路径参数非数字今天回它自己的 400（票8 翻转前被这条表吞成 404）。
-		ErrStatus: errStatusAll(http.StatusNotFound),
+		ErrStatus: &errStatusTable{entries: []errStatusEntry{
+			{sentinel: service.ErrHrwaiUserNotFound, status: http.StatusNotFound},
+			{sentinel: service.ErrInvalidHrwaiUserID, status: http.StatusBadRequest},
+			{sentinel: nil, status: http.StatusInternalServerError},
+		}},
 		Render: func(c *gin.Context, _ *idParam, resp *service.StatusResultDTO) {
 			msg := "用户已启用"
 			if resp.Status == 0 {
@@ -705,7 +711,9 @@ func (h *AdminHandler) DeleteTutor(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *idParam) (*service.TutorDeletedDTO, error) {
 			return h.adminSvc.DeleteTutor(req.ID)
 		},
-	}.WithSuccess(okMsg("讲师删除成功"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("讲师删除成功"), http.StatusInternalServerError).
+		WithSentinel(service.ErrTutorNotFound, http.StatusNotFound).
+		WithSentinel(service.ErrInvalidTutorID, http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 重置导师密码
@@ -719,6 +727,7 @@ func (h *AdminHandler) DeleteTutor(c *gin.Context) {
 // @Success 200 {object} response.R "密码已重置"
 // @Failure 400 {object} response.R "参数错误/密码长度非法"
 // @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "讲师不存在"
 // @Router /admin/tutor/{tutor_id}/password [put]
 // ResetTutorPassword 重置导师密码 PUT /api/admin/tutor/:tutor_id/password
 func (h *AdminHandler) ResetTutorPassword(c *gin.Context) {
@@ -740,12 +749,14 @@ func (h *AdminHandler) ResetTutorPassword(c *gin.Context) {
 			return &resetPasswordReq{ID: id, Password: body.Password}, nil
 		},
 		Invoke: func(ctx context.Context, req *resetPasswordReq) (*struct{}, error) {
-			if err := h.adminSvc.ResetTutorPassword(req.ID, req.Password); err != nil {
+			if err := h.adminSvc.ResetTutorPassword(ctx, req.ID, req.Password); err != nil {
 				return nil, err
 			}
 			return &struct{}{}, nil
 		},
-	}.WithSuccess(okMsgNoData("密码已重置"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsgNoData("密码已重置"), http.StatusInternalServerError).
+		WithSentinel(service.ErrTutorNotFound, http.StatusNotFound).
+		WithSentinel(service.ErrInvalidTutorID, http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 切换导师启用/禁用状态
@@ -769,7 +780,7 @@ func (h *AdminHandler) ToggleTutorStatus(c *gin.Context) {
 			return &idParam{ID: id}, nil
 		},
 		Invoke: func(ctx context.Context, req *idParam) (*service.StatusResultDTO, error) {
-			next, err := h.adminSvc.ToggleTutorStatus(req.ID)
+			next, err := h.adminSvc.ToggleTutorStatus(ctx, req.ID)
 			if err != nil {
 				return nil, err
 			}
@@ -777,7 +788,11 @@ func (h *AdminHandler) ToggleTutorStatus(c *gin.Context) {
 		},
 		// 与 ToggleHrwaiUserStatus 同一判定：admin_service 的「讲师不存在」是裸 errors.New，
 		// 无哨兵可名 ⇒ 本批不动（参数错误那半边已随票8 归位 400）。
-		ErrStatus: errStatusAll(http.StatusNotFound),
+		ErrStatus: &errStatusTable{entries: []errStatusEntry{
+			{sentinel: service.ErrTutorNotFound, status: http.StatusNotFound},
+			{sentinel: service.ErrInvalidTutorID, status: http.StatusBadRequest},
+			{sentinel: nil, status: http.StatusInternalServerError},
+		}},
 		Render: func(c *gin.Context, _ *idParam, resp *service.StatusResultDTO) {
 			msg := "讲师已启用"
 			if resp.Status == 0 {

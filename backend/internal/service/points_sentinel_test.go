@@ -89,8 +89,8 @@ func TestPenaltySentinelSemantics(t *testing.T) {
 	if _, err := svc.AdminPenalty(context.Background(), 1, uid, 10, ""); !errors.Is(err, ErrEmptyPenaltyReason) {
 		t.Fatalf("事由为空应报 ErrEmptyPenaltyReason, got %v", err)
 	}
-	if _, err := svc.AdminPenalty(context.Background(), 1, 99999, 10, "理由"); !errors.Is(err, ErrUserNotFound) {
-		t.Fatalf("用户不存在应报 ErrUserNotFound, got %v", err)
+	if _, err := svc.AdminPenalty(context.Background(), 1, 99999, 10, "理由"); !errors.Is(err, ErrHrwaiUserNotFound) {
+		t.Fatalf("用户不存在应报 ErrHrwaiUserNotFound, got %v", err)
 	}
 }
 

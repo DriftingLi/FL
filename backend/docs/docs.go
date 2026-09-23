@@ -1406,6 +1406,12 @@ const docTemplate = `{
                             ]
                         }
                     },
+                    "400": {
+                        "description": "task_id 无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
                     "401": {
                         "description": "未认证",
                         "schema": {
@@ -1413,7 +1419,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "任务不存在",
+                        "description": "生成任务不存在",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -4021,6 +4027,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "404": {
+                        "description": "用户不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             }
@@ -6596,6 +6608,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "讲师不存在",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }

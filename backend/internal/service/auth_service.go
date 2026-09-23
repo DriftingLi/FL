@@ -91,7 +91,7 @@ func (s *AuthService) GetProfile(userID int, role, account string) *ProfileDTO {
 		if pending, err := s.reviewSvc.GetPendingForUser(userID); err == nil {
 			dto.PendingProfileChange = &pending
 		}
-	case "tutor":
+	case TutorRole:
 		var t model.Tutor
 		if err := s.db.First(&t, userID).Error; err == nil {
 			dto.Name = ptr(t.Name)
@@ -185,6 +185,16 @@ const HrwaiRole = "hrwai_user"
 
 // RecruiterRole 企业招聘者角色名（第四角色，独立表 recruiter_users，邀约制）。
 const RecruiterRole = "recruiter"
+
+// TutorRole 讲师角色名。**与 HrwaiRole/RecruiterRole 同住一处**（ADR-0064 判据）：这个字符串
+// 同时是 JWT 的角色 claim 与全会话吊销的命名空间键片段，此前只以字面量散在登录分派
+// （auth_service.go:94 / :307），吊销侧一用就得再抄一遍——同一个事实的两个住处。
+// 注意与 authz.RoleTutor 不是一回事：那一层是能力角色名，这一层是凭证命名空间。
+const TutorRole = "tutor"
+
+// ErrRecruiterNotFound 「招聘者账号不存在」这一事实的唯一载体（ADR-0064 决策 1/2）。
+// 与吊销命名空间 RecruiterRole 同处一地，api 侧据此把它与「查不动」分档。
+var ErrRecruiterNotFound = errors.New("招聘者不存在")
 
 // loginCredentials 登录骨架按角色差异点：查表结果（密码/禁用语义）。
 // status 为 nil 表示该角色无禁用语义（admin 表无 status 字段）。
@@ -304,7 +314,7 @@ func (s *AuthService) TutorLogin(username, password string) (*LoginResult, error
 	return s.verifyAndIssue(password, loginCredentials{
 		id: tutor.TutorID, account: tutor.Username, username: tutor.Username,
 		password: tutor.Password, status: &status,
-	}, "tutor", "讲师账号或密码错误")
+	}, TutorRole, "讲师账号或密码错误")
 }
 
 // TutorRegisterResultDTO 导师建号结果（ADR-0009 §2 typed DTO / spec #940 片三）。
@@ -531,7 +541,10 @@ func (s *AuthService) CreateRecruiter(in RecruiterCreateInput) (*model.Recruiter
 func (s *AuthService) ToggleRecruiterStatus(ctx context.Context, id int) (int16, error) {
 	var r model.RecruiterUser
 	if err := s.db.First(&r, id).Error; err != nil {
-		return 0, errors.New("招聘者不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return 0, ErrRecruiterNotFound
+		}
+		return 0, err
 	}
 	next := int16(1)
 	if r.Status == 1 {
@@ -541,7 +554,7 @@ func (s *AuthService) ToggleRecruiterStatus(ctx context.Context, id int) (int16,
 		return 0, err
 	}
 	if next == 0 {
-		if err := s.session.RevokeIdentity(ctx, "recruiter", id); err != nil {
+		if err := s.session.RevokeIdentity(ctx, RecruiterRole, id); err != nil {
 			s.logger.Warn("招聘员禁用后 refresh 吊销标记写入失败", zap.Int("recruiter_id", id), zap.Error(err))
 		}
 	}
@@ -635,7 +648,7 @@ func (s *AuthService) EditRecruiter(id int, in RecruiterEditInput) (*model.Recru
 	}
 	var r model.RecruiterUser
 	if err := s.db.First(&r, id).Error; err != nil {
-		return nil, errors.New("招聘者不存在")
+		return nil, ErrRecruiterNotFound
 	}
 	// #450：编辑把信用代码改成别家已占用的值 → 同样被拒（自己保持原值不算占用）。
 	credit := strings.TrimSpace(in.CreditCode)
@@ -688,25 +701,12 @@ type RecruiterPasswordResetResult struct{}
 // 招聘者写面在 recruiter 命名空间里自建（SetNewPassword 落的是 hrwai_users），但长度规则
 // 与吊销族策略同源：validatePasswordLength + 落库后尽力而为吊销。
 func (s *AuthService) ResetRecruiterPassword(ctx context.Context, id int, password string) error {
-	if err := validatePasswordLength(password); err != nil {
-		return err
-	}
-	var cnt int64
-	s.db.Model(&model.RecruiterUser{}).Where("id = ?", id).Count(&cnt)
-	if cnt == 0 {
-		return errors.New("招聘者不存在")
-	}
-	hashed, err := HashPassword(password)
+	revokeErr, err := applyNewPassword(ctx, s.db, s.session, recruiterPasswordSubject, id, password)
 	if err != nil {
 		return err
 	}
-	if err := s.db.Model(&model.RecruiterUser{}).Where("id = ?", id).Update("password", hashed).Error; err != nil {
-		return err
-	}
-	// 管理员强制重置凭证理应踢下线（#622 同口径）：吊销该招聘员全部 refresh。
-	// 角色命名空间键——与学员 ID 空间互不干扰。
-	if err := s.session.RevokeIdentity(ctx, "recruiter", id); err != nil {
-		s.logger.Warn("招聘员改密后 refresh 吊销标记写入失败", zap.Int("recruiter_id", id), zap.Error(err))
+	if revokeErr != nil {
+		s.logger.Warn("招聘员口令重置后 refresh 吊销标记写入失败", zap.Int("recruiter_id", id), zap.Error(revokeErr))
 	}
 	return nil
 }
