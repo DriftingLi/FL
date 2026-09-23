@@ -493,7 +493,7 @@ func (s *StudentService) GetStudentCourses(studentID int) (*StudentCoursesDTO, e
 func (s *StudentService) GetStudentCourseDetail(studentID, courseID int) (*StudentCourseDetailDTO, error) {
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
-		return nil, errors.New("课程不存在")
+		return nil, ErrCourseNotFound
 	}
 	lp := loadLearningPosition(s.db, studentID, courseID)
 

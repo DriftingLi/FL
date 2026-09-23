@@ -216,7 +216,7 @@ func validateMountedCourseInputUpdate(in *CourseInput) error {
 func loadCourseWithChapters(db *gorm.DB, courseID int) (*model.Course, []ChapterDTO, error) {
 	var course model.Course
 	if err := db.First(&course, courseID).Error; err != nil {
-		return nil, nil, errors.New("课程不存在")
+		return nil, nil, ErrCourseNotFound
 	}
 	var chapters []model.Chapter
 	db.Where("course_id = ?", courseID).Order("order_num").Find(&chapters)
@@ -248,10 +248,23 @@ func (s *CourseService) GetCourses(page, pageSize int, credentialID, specialtyID
 	})
 }
 
-// ErrContentNotReadable 内容对当前学员不可读：未发布 / 未挂载 / 未兑换三态合一（同一句话、
-// 同一个状态码），不泄漏是哪一态——与 #981 的「越权按不存在」同判据。
-// 文案沿用收紧前的「章节不存在」（四条路径共用一个哨兵，不各写一份文案）。
-var ErrContentNotReadable = errors.New("章节不存在")
+// 「这一份内容此刻读不到」是一个**外显结论**，不是事实（词表「不可读（unreadable）及其成因」）。
+// 底下四件事实必须各有**独立的 error value** —— 注意不能写成 `ErrCourseNotVisible = ErrChapterNotFound`
+// 这种别名：那在编译期与运行期都「对」，但 errors.Is 会把四态认成同一件，分档当场失效。
+// （本次就是这样写错、而 404 映射测试照样全绿，靠 TestCourseReadabilityFactsAreDistinct 才照出来。）
+//
+// 「真不存在」的两件复用全仓唯一载体：ErrCourseNotFound（points_service 侧原有，同对象，
+// 已移入本文件）、ErrChapterNotFound（forum_service 侧原有 —— 论坛发帖挂的也是课程章节，
+// 同一对象，不另立）。
+var (
+	// ErrChapterNotFound 课程章节行不存在的全仓唯一载体（论坛发帖挂的也是课程章节）。
+	ErrChapterNotFound = errors.New("章节不存在")
+	ErrCourseNotFound  = errors.New("课程不存在")
+	// ErrCourseNotVisible：不在平台上（未发布或未满足挂载不变式，判据见 ADR-0058）。
+	ErrCourseNotVisible = errors.New("章节不存在")
+	// ErrCourseLocked：在平台上、也可见，但这个学员没为它付过（权益，见词表「权益」）。
+	ErrCourseLocked = errors.New("章节不存在")
+)
 
 // courseEntitled 权益判据（唯一出处）：非付费课程恒 true；付费课程看该学员是否已兑换。
 // 只经权益读面单点（entitlement_read.go）查，不在调用侧手拼 user_entitlement 查询。
@@ -268,22 +281,25 @@ func courseEntitled(db *gorm.DB, courseID, studentID int, pointsPrice *int) (boo
 // 消费方 = 「内容读 + 进度写」一族：章节详情、幻灯片 GET/POST、学习进度上报
 // ——上报会在 study_record 上留下学习事实（喂给进度、完成态与「已拥有」判据），所以同样要拦。
 func (s *CourseService) studentCanReadCourse(courseID, studentID int) error {
-	if !CourseVisibleByID(s.db, courseID) {
-		return ErrContentNotReadable
-	}
+	// 先取行、再判可见性：反过来的话「这门课根本不存在」会先被 CourseVisibleByID 判成
+	// 「不在平台上」，ErrCourseNotFound 那一支永远走不到 —— 两件事实名义上分了档、实际不可达
+	// （TestStudentCanReadCoursePicksTheRightFact 第一次跑就照出了这个顺序问题）。
 	var course model.Course
 	if err := s.db.Select("points_price").First(&course, courseID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrContentNotReadable // 课程行不在 = 真不存在，与「不可读」同判
+			return ErrCourseNotFound
 		}
 		return err // 查不动不得被读成「不可读」（ADR-0062 票6 同判据）
+	}
+	if !CourseVisibleByID(s.db, courseID) {
+		return ErrCourseNotVisible
 	}
 	entitled, err := courseEntitled(s.db, courseID, studentID, course.PointsPrice)
 	if err != nil {
 		return err
 	}
 	if !entitled {
-		return ErrContentNotReadable
+		return ErrCourseLocked
 	}
 	return nil
 }
@@ -292,7 +308,7 @@ func (s *CourseService) studentCanReadCourse(courseID, studentID int) error {
 // 可见性：按 id 读路径纳入学员可见性谓词（ADR-0058）——未发布 / 未挂载课程一律按「不存在」返回。
 func (s *CourseService) GetCourseDetail(courseID, studentID int) (*CourseDetailDTO, error) {
 	if !CourseVisibleByID(s.db, courseID) {
-		return nil, errors.New("课程不存在")
+		return nil, ErrCourseNotFound
 	}
 	course, chapterList, err := loadCourseWithChapters(s.db, courseID)
 	if err != nil {
@@ -339,7 +355,7 @@ func (s *CourseService) GetCourseDetail(courseID, studentID int) (*CourseDetailD
 func (s *CourseService) GetChapterDetail(courseID, chapterID, studentID int) (*ChapterDetailDTO, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
-		return nil, errors.New("章节不存在")
+		return nil, ErrChapterNotFound
 	}
 	if chapter.CourseID != courseID {
 		return nil, errors.New("章节不属于该课程")
@@ -358,7 +374,7 @@ func (s *CourseService) GetChapterDetail(courseID, chapterID, studentID int) (*C
 func (s *CourseService) GetChapterSlides(chapterID, studentID int) (*ChapterSlidesDTO, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
-		return nil, errors.New("章节不存在")
+		return nil, ErrChapterNotFound
 	}
 	if err := s.studentCanReadCourse(chapter.CourseID, studentID); err != nil {
 		return nil, err
@@ -390,7 +406,7 @@ func (s *CourseService) GetChapterSlides(chapterID, studentID int) (*ChapterSlid
 func (s *CourseService) RegenerateChapterSlides(chapterID, studentID int) (*ChapterSlidesDTO, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
-		return nil, errors.New("章节不存在")
+		return nil, ErrChapterNotFound
 	}
 	if err := s.studentCanReadCourse(chapter.CourseID, studentID); err != nil {
 		return nil, err

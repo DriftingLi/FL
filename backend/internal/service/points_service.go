@@ -310,8 +310,6 @@ var (
 	ErrAlreadyRedeemed = errors.New("已兑换")
 	// ErrTaskNotFound 任务不存在。
 	ErrTaskNotFound = errors.New("任务不存在")
-	// ErrCourseNotFound 课程不存在。
-	ErrCourseNotFound = errors.New("课程不存在")
 	// ErrCourseNotRedeemable 该课程无需兑换。
 	ErrCourseNotRedeemable = errors.New("该课程无需兑换")
 	// ErrRealPaperUnavailable 真题卷不存在或已下架。

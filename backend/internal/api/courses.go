@@ -59,6 +59,20 @@ func RegisterCoursesRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Cour
 // @Param filter query string false "热门/精品筛选 hot|featured|all" default(all)
 // @Success 200 {object} response.R{data=service.CoursePageResult} "success"
 // @Router /courses [get]
+// unreadableFaces404 是「一份内容读不到」这件**外显结论**在呈现层的唯一落点
+// （ADR-0064 决策 1）：底下四件事实各有载体，这里显式把它们统一答 404 + 同一句话，
+// 保持 ADR-0062 决策 3 的「不泄漏是哪一态」。
+//
+// 与旧形状的区别不是码，而是旧的是「端点只有一格错误面，所以只能统一」，
+// 这里是「在 service 层分好档之后**选择**统一」。移动端 #1268 若要区分
+// 「未解锁 / 加载失败」，今后从这里删掉一行映射即可打开，不必回 service 层重做错误语义。
+var unreadableFaces404 = []error{
+	service.ErrCourseNotVisible, // 不在平台上：未发布 / 未挂载
+	service.ErrCourseLocked,     // 在平台上、可见，但这个人没兑换
+	service.ErrCourseNotFound,   // 课程行真不存在
+	service.ErrChapterNotFound,  // 章节行真不存在
+}
+
 func (h *CourseHandler) ListCourses(c *gin.Context) {
 	Endpoint[courseListReq, service.CoursePageResult]{
 		Parse: func(c *gin.Context) (*courseListReq, error) {
@@ -115,10 +129,11 @@ func (h *CourseHandler) GetChapterSlides(c *gin.Context) {
 			return h.svc.GetChapterSlides(req.ChapterID, req.StudentID)
 		},
 		// 判定不动（票8 逐端点判过，与下面的章节详情同一理由）：可读性判据本身已具名
-		// （ErrContentNotReadable → 404），但「章节不存在」在 course_service.go 里是裸
+		// （四条不可读事实 → 404），但「章节不存在」在 course_service.go 里曾是裸
 		// errors.New ⇒ 换成 regenerate 那张「哨兵 404 + 其余 500」的表会把真 404 答成 500。
 		// service 侧把这两条升成哨兵后一并换表（DB 故障今天仍被伪装成 404，登记为已知残留）。
-	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).
+		WithSentinels(http.StatusNotFound, unreadableFaces404...).Handle(c)
 }
 
 // GetCourseDetail 课程详情
@@ -149,7 +164,8 @@ func (h *CourseHandler) GetCourseDetail(c *gin.Context) {
 		},
 		// 判定不动：GetCourseDetail 不看权益（详情是发现面，只判可见性），其「课程不存在」是裸
 		// errors.New ⇒ 本端点没有任何具名哨兵可映射，换表只会把真 404 与 DB 故障一起答成 500。
-	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).
+		WithSentinels(http.StatusNotFound, unreadableFaces404...).Handle(c)
 }
 
 // GetChapterDetail 章节详情
@@ -185,7 +201,8 @@ func (h *CourseHandler) GetChapterDetail(c *gin.Context) {
 		},
 		// 判定不动：同上面幻灯片一处（「章节不存在」「章节不属于该课程」在 service 侧都是裸
 		// errors.New，前者该 404、后者该 400，现在都被这条表压成 404；升哨兵后一并换表）。
-	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).
+		WithSentinels(http.StatusNotFound, unreadableFaces404...).Handle(c)
 }
 
 // RegenerateChapterSlides 重新生成幻灯片
@@ -220,7 +237,11 @@ func (h *CourseHandler) RegenerateChapterSlides(c *gin.Context) {
 		// 旧形状 WithSuccess(ok, 404) 把门禁与下游故障压成同一个 404 ⇒ 门禁从外部不可分辨、
 		// 无测可建（ADR-0062 复核登记 #4），并把 DB 故障答成「这个章节不存在」。
 		ErrStatus: &errStatusTable{entries: []errStatusEntry{
-			{sentinel: service.ErrContentNotReadable, status: http.StatusNotFound},
+			// 「读不到」的四件事实统一答 404（呈现层显式决定，见 unreadableFaces404 注释）。
+			{sentinel: service.ErrCourseNotVisible, status: http.StatusNotFound},
+			{sentinel: service.ErrCourseLocked, status: http.StatusNotFound},
+			{sentinel: service.ErrCourseNotFound, status: http.StatusNotFound},
+			{sentinel: service.ErrChapterNotFound, status: http.StatusNotFound},
 		}},
 		Render: func(c *gin.Context, _ *chapterSlidesReq, resp *service.ChapterSlidesDTO) {
 			response.SuccessWithMsg(c, "幻灯片重新生成成功", resp)
@@ -284,7 +305,11 @@ func (h *CourseHandler) UpdateStudyProgress(c *gin.Context) {
 		ErrStatus: &errStatusTable{entries: []errStatusEntry{
 			// 不可读（未发布 / 未挂载 / 未兑换）按 404，与另外三条内容路径同判
 			// （ADR-0062 决策 3）；其余错误保持既有「更新进度失败: + 原文」500 形状。
-			{sentinel: service.ErrContentNotReadable, status: http.StatusNotFound},
+			// 「读不到」的四件事实统一答 404（呈现层显式决定，见 unreadableFaces404 注释）。
+			{sentinel: service.ErrCourseNotVisible, status: http.StatusNotFound},
+			{sentinel: service.ErrCourseLocked, status: http.StatusNotFound},
+			{sentinel: service.ErrCourseNotFound, status: http.StatusNotFound},
+			{sentinel: service.ErrChapterNotFound, status: http.StatusNotFound},
 			{sentinel: nil, status: http.StatusInternalServerError, errPrefix: "更新进度失败: "},
 		}},
 		Render: func(c *gin.Context, _ *studyProgressReq, resp *service.StudyProgressDTO) {

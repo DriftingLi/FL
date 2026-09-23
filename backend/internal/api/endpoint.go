@@ -376,6 +376,16 @@ func (e Endpoint[Req, Resp]) WithSentinel(sentinel error, status int) Endpoint[R
 	return e
 }
 
+// WithSentinels 一次前置多条具名哨兵、共用同一个状态码（形状同 WithSentinel）。
+// 用于「一组事实落在同一个呈现档」的情形——例如 course 域「读不到」的四件事实统一答 404；
+// 那种地方逐条抄 WithSentinel 会把「这是一组」这一层信息抹掉。
+func (e Endpoint[Req, Resp]) WithSentinels(status int, sentinels ...error) Endpoint[Req, Resp] {
+	for _, sent := range sentinels {
+		e = e.WithSentinel(sent, status)
+	}
+	return e
+}
+
 // WithSuccess 按「成功描述 + 默认错误面」装配端点，返回自身便于链式声明：
 //
 //	Endpoint[In, Out]{
