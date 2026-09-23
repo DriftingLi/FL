@@ -5813,11 +5813,15 @@ paths:
                   $ref: '#/definitions/service.FeaturedContentAdminDetailDTO'
               type: object
         "400":
-          description: 请求数据无效
+          description: 请求数据无效 / 标题不能为空 / 分类无效 / 图片地址无效
           schema:
             $ref: '#/definitions/response.R'
         "401":
           description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: 服务器内部错误（写库失败等真故障，不再冒充参数错误）
           schema:
             $ref: '#/definitions/response.R'
       security:
@@ -5920,11 +5924,19 @@ paths:
                   $ref: '#/definitions/service.FeaturedContentAdminDetailDTO'
               type: object
         "400":
-          description: 请求数据无效
+          description: 请求数据无效 / 分类无效 / 图片地址无效
           schema:
             $ref: '#/definitions/response.R'
         "401":
           description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 内容不存在
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: 服务器内部错误
           schema:
             $ref: '#/definitions/response.R'
       security:
@@ -9660,11 +9672,11 @@ paths:
           schema:
             $ref: '#/definitions/response.R'
         "404":
-          description: 章节不存在或对本学员不可读（未发布/未挂载/未兑换）
+          description: 章节不存在（未发布 / 未挂载 / 未兑换也按这一句答，不泄漏是哪一态）
           schema:
             $ref: '#/definitions/response.R'
         "500":
-          description: 幻灯片生成失败（无 PPT 文件 / 转图失败 / 权益查询失败）
+          description: 服务器内部错误（该章节没有 PPT、转图失败、权益查询查不动）
           schema:
             $ref: '#/definitions/response.R'
       security:
@@ -10162,6 +10174,14 @@ paths:
             $ref: '#/definitions/response.R'
         "401":
           description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 课程不存在（未发布 / 未挂载 / 未兑换也按这一句答）
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: 更新进度失败（写库故障等真故障；5xx 一律不外发下游原文）
           schema:
             $ref: '#/definitions/response.R'
       security:

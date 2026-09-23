@@ -165,7 +165,8 @@ func (h *AdminHandler) GetCourseDetail(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *idParam) (*service.AdminCourseDetailDTO, error) {
 			return h.courseSvc.GetCourseDetail(req.ID)
 		},
-	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).
+		WithSentinel(service.ErrCourseNotFound, http.StatusNotFound).Handle(c)
 }
 
 // @Summary 更新课程
@@ -198,7 +199,12 @@ func (h *AdminHandler) UpdateCourse(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *courseIDInput) (*service.CourseDTO, error) {
 			return h.courseSvc.UpdateCourse(req.ID, req.Input)
 		},
-	}.WithSuccess(okMsg("课程更新成功"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("课程更新成功"), http.StatusInternalServerError).
+		WithSentinel(service.ErrCourseNotFound, http.StatusNotFound).
+		// 第 3 族（输入不合法不再冒充服务端故障）：这两条「必填」在 service 侧刚具名，
+		// 之前落默认面 ⇒ 编辑课程时把方向清空会被答成 500（客户端以为服务端坏了）。
+		WithSentinel(service.ErrSpecialtyRequired, http.StatusBadRequest).
+		WithSentinel(service.ErrCourseLevelRequired, http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 交换课程排序
@@ -261,7 +267,8 @@ func (h *AdminHandler) DeleteCourse(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *idParam) (*service.DeleteCourseResult, error) {
 			return h.courseSvc.DeleteCourse(req.ID)
 		},
-	}.WithSuccess(okMsg("课程删除成功"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("课程删除成功"), http.StatusInternalServerError).
+		WithSentinel(service.ErrCourseNotFound, http.StatusNotFound).Handle(c)
 }
 
 // @Summary 创建章节
@@ -326,7 +333,8 @@ func (h *AdminHandler) UpdateChapter(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *chapterIDInput) (*service.ChapterDTO, error) {
 			return h.courseSvc.UpdateChapter(req.ID, req.Input)
 		},
-	}.WithSuccess(okMsg("章节更新成功"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("章节更新成功"), http.StatusInternalServerError).
+		WithSentinel(service.ErrChapterNotFound, http.StatusNotFound).Handle(c)
 }
 
 // @Summary 删除章节
@@ -352,7 +360,8 @@ func (h *AdminHandler) DeleteChapter(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *idParam) (*service.DeleteChapterResult, error) {
 			return h.courseSvc.DeleteChapter(req.ID)
 		},
-	}.WithSuccess(okMsg("章节删除成功"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("章节删除成功"), http.StatusInternalServerError).
+		WithSentinel(service.ErrChapterNotFound, http.StatusNotFound).Handle(c)
 }
 
 // @Summary 启动课程内容异步生成

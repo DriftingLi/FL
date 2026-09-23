@@ -88,6 +88,11 @@ type StudyRecordDTO struct {
 	ChapterTitle  *string `json:"chapter_title" extensions:"x-nullable"`
 }
 
+// ErrStudentNotFound 学员行不存在（与「用户不存在」的两个既有载体同对象？否——本域取的是
+// hrwai_users 的学员视角行，沿用独立名字以免与积分/口令域的判据互相牵动；下一波若合并需连
+// wire 文案一起对账，不在本波顺手做）。
+var ErrStudentNotFound = errors.New("学员不存在")
+
 // GetProfile 学员档案。
 func (s *StudentService) GetProfile(studentID int) (*StudentProfileDTO, error) {
 	return s.queryProfile(studentID)
@@ -97,7 +102,10 @@ func (s *StudentService) GetProfile(studentID int) (*StudentProfileDTO, error) {
 func (s *StudentService) queryProfile(studentID int) (*StudentProfileDTO, error) {
 	var student model.HrwaiUser
 	if err := s.db.First(&student, studentID).Error; err != nil {
-		return nil, errors.New("学员不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrStudentNotFound
+		}
+		return nil, err // 查不动不得被读成「不存在」（ADR-0064 决策 1）
 	}
 
 	// 总学习时长
@@ -493,7 +501,10 @@ func (s *StudentService) GetStudentCourses(studentID int) (*StudentCoursesDTO, e
 func (s *StudentService) GetStudentCourseDetail(studentID, courseID int) (*StudentCourseDetailDTO, error) {
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
-		return nil, errors.New("课程不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrCourseNotFound
+		}
+		return nil, err // 查不动不得被读成「不存在」（ADR-0064 决策 1）
 	}
 	lp := loadLearningPosition(s.db, studentID, courseID)
 

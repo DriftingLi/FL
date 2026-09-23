@@ -376,6 +376,25 @@ func (e Endpoint[Req, Resp]) WithSentinel(sentinel error, status int) Endpoint[R
 	return e
 }
 
+// WithSentinelsMsg 一次前置多条具名哨兵、共用同一个状态码与**同一句对外文案**
+// （形状同 WithSentinel，用于「一组事实在呈现层落同一档」）。
+//
+// 文案是参数，不是哨兵自己的 Error()：同一件「读不到」的事实在课程面与章节面上要说出
+// 不同的对象名，把统一的句子写进 service 层的哨兵里，就等于让「被哪个端点消费」决定
+// 「它叫什么」——那是把呈现决定沉到判据层，违反本波不变式（ADR-0064：统一只允许发生在
+// 呈现层，且必须是显式决定）。逐条抄 WithSentinel 同样会抹掉「这是一组」这一层信息。
+func (e Endpoint[Req, Resp]) WithSentinelsMsg(status int, message string, sentinels ...error) Endpoint[Req, Resp] {
+	if e.ErrStatus == nil {
+		e.ErrStatus = &errStatusTable{}
+	}
+	entries := make([]errStatusEntry, 0, len(sentinels))
+	for _, sent := range sentinels {
+		entries = append(entries, errStatusEntry{sentinel: sent, status: status, message: message})
+	}
+	e.ErrStatus.entries = append(entries, e.ErrStatus.entries...)
+	return e
+}
+
 // WithSuccess 按「成功描述 + 默认错误面」装配端点，返回自身便于链式声明：
 //
 //	Endpoint[In, Out]{
