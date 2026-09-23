@@ -45,7 +45,7 @@ type NoteDTO struct {
 
 // NotePageDTO 我的笔记分页（字段按 JSON key 字母序：items / page / page_size / total）。
 type NotePageDTO struct {
-	Items    []NoteDTO `json:"items"`
+	Items    []NoteDTO `json:"items" nullability:"nullable"`
 	Page     int       `json:"page"`
 	PageSize int       `json:"page_size"`
 	Total    int64     `json:"total"`

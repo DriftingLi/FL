@@ -73,6 +73,7 @@ export interface RecruitMeDTO {
 
 export interface RecruitResumeCard {
   available_in: string
+  company_disabled?: boolean
   contact_source?: string
   contact_state?: string
   expected_position_extra: string

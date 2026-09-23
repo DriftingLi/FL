@@ -15,8 +15,8 @@ import (
 // —— 该定义在片六随 questionBank 端点首次进入 swagger，随即把新鲜度锁变成随机红（CI 实测）。
 type QuestionBankStatsDTO struct {
 	Total    int64            `json:"total"`
-	ByType   map[string]int64 `json:"by_type" swaggertype:"object,integer"`
-	ByStatus map[string]int64 `json:"by_status" swaggertype:"object,integer"`
+	ByType   map[string]int64 `json:"by_type" swaggertype:"object,integer" nullability:"nullable"`
+	ByStatus map[string]int64 `json:"by_status" swaggertype:"object,integer" nullability:"nullable"`
 }
 
 // PracticeTypeStat 练习统计按题型明细（旧内层 map {total, correct}），accuracy 为加性新增 key（#226）。
@@ -32,7 +32,7 @@ type PracticeStatsDTO struct {
 	Correct  int64                       `json:"correct"`
 	Wrong    int64                       `json:"wrong"`
 	Accuracy float64                     `json:"accuracy"`
-	ByType   map[string]PracticeTypeStat `json:"by_type"`
+	ByType   map[string]PracticeTypeStat `json:"by_type" nullability:"nullable"`
 }
 
 // WrongQuestionStatsDTO 错题统计（旧 wrong_question GetStats map 输出）。
@@ -41,7 +41,7 @@ type PracticeStatsDTO struct {
 // 一边，正是它把「再生成后工作树必须干净」的新鲜度锁变成随机红）。钉住值类型即消除推断。
 type WrongQuestionStatsDTO struct {
 	Total  int64            `json:"total"`
-	ByType map[string]int64 `json:"by_type" swaggertype:"object,integer"`
+	ByType map[string]int64 `json:"by_type" swaggertype:"object,integer" nullability:"nullable"`
 }
 
 // statGroupRow GROUP BY 单维结果行（key=维度值，count=行数）。

@@ -87,7 +87,7 @@ type ContactRequestDTO struct {
 // 字段声明序 = 旧 gin.H map 输出的键序（encoding/json 对 map 按 key 排序：items < page < page_size < total），
 // 故换成 typed DTO 后响应字节逐字节不变（ADR-0009 §2；字节锁见 envelope_dto_shape_test.go 与信封登记表）。
 type ContactRequestListResult struct {
-	Items    []ContactRequestDTO `json:"items"`
+	Items    []ContactRequestDTO `json:"items" nullability:"nonnil"`
 	Page     int                 `json:"page"`
 	PageSize int                 `json:"page_size"`
 	Total    int64               `json:"total"`
@@ -103,8 +103,8 @@ type ContactPlainDTO struct {
 	ContactPhone         string    `json:"contact_phone"`
 	Wechat               string    `json:"wechat"`
 	ResumeFileURL        string    `json:"resume_file_url"`
-	Photos               JSONArray `json:"photos" swaggertype:"array,string"`
-	ResumeCertifications JSONArray `json:"resume_certifications" swaggertype:"array,object"`
+	Photos               JSONArray `json:"photos" swaggertype:"array,string" nullability:"nullable"`
+	ResumeCertifications JSONArray `json:"resume_certifications" swaggertype:"array,object" nullability:"nullable"`
 }
 
 // contactCompany 一家企业在联系面读面上的投影：一次批量查询同时带回「名片三段」
