@@ -50,14 +50,14 @@ func (s *AdminCourseService) GetCourseDetail(courseID int) (*AdminCourseDetailDT
 // 目标证件为可选（V1 兼容存量，未来收紧为必填），若携带则校验存在性。
 func (s *AdminCourseService) CreateCourse(in *CourseInput) (*CourseDTO, error) {
 	if in == nil || in.Name == nil || *in.Name == "" {
-		return nil, errors.New("课程名称不能为空")
+		return nil, ErrCourseNameRequired
 	}
 	// 挂载不变式：创建必填方向与等级
 	if in.SpecialtyID == nil || *in.SpecialtyID <= 0 {
-		return nil, errors.New("专业方向不能为空")
+		return nil, ErrSpecialtyRequired
 	}
 	if in.LevelID == nil || *in.LevelID <= 0 {
-		return nil, errors.New("课程等级不能为空")
+		return nil, ErrCourseLevelRequired
 	}
 	status := int16(1)
 	if in.Status != nil {

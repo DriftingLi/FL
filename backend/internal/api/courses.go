@@ -223,8 +223,8 @@ func (h *CourseHandler) GetChapterDetail(c *gin.Context) {
 // @Param chapter_id path int true "章节ID"
 // @Success 200 {object} response.R{data=service.ChapterSlidesDTO} "success"
 // @Failure 401 {object} response.R "未认证"
-// @Failure 404 {object} response.R "章节不存在或对本学员不可读（未发布/未挂载/未兑换）"
-// @Failure 500 {object} response.R "幻灯片生成失败（无 PPT 文件 / 转图失败 / 权益查询失败）"
+// @Failure 404 {object} response.R "章节不存在（未发布 / 未挂载 / 未兑换也按这一句答，不泄漏是哪一态）"
+// @Failure 500 {object} response.R "服务器内部错误（该章节没有 PPT、转图失败、权益查询查不动）"
 // @Router /chapter/{chapter_id}/slides/regenerate [post]
 func (h *CourseHandler) RegenerateChapterSlides(c *gin.Context) {
 	Endpoint[chapterSlidesReq, service.ChapterSlidesDTO]{
@@ -263,6 +263,8 @@ func (h *CourseHandler) RegenerateChapterSlides(c *gin.Context) {
 // @Success 200 {object} response.R{data=service.StudyProgressDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "课程不存在（未发布 / 未挂载 / 未兑换也按这一句答）"
+// @Failure 500 {object} response.R "更新进度失败（写库故障等真故障；5xx 一律不外发下游原文）"
 // @Router /course/{course_id}/progress [post]
 func (h *CourseHandler) UpdateStudyProgress(c *gin.Context) {
 	Endpoint[studyProgressReq, service.StudyProgressDTO]{
@@ -305,7 +307,7 @@ func (h *CourseHandler) UpdateStudyProgress(c *gin.Context) {
 			return h.svc.UpdateStudyProgress(req.StudentID, req.CourseID, req.Input)
 		},
 		// 不可读（未发布 / 未挂载 / 未兑换）按 404，与另外三条内容路径同判（ADR-0062 决策 3）；
-		// 其余错误保持既有「更新进度失败: + 原文」500 形状。
+		// 其余错误落 500，前缀「更新进度失败」保留、错误原文不再外发（ADR-0064 决策 9）。
 		ErrStatus: errStatusAllPrefix(http.StatusInternalServerError, "更新进度失败: "),
 		Render: func(c *gin.Context, _ *studyProgressReq, resp *service.StudyProgressDTO) {
 			response.SuccessWithMsg(c, "学习进度更新成功", resp)

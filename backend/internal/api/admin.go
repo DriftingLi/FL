@@ -200,7 +200,11 @@ func (h *AdminHandler) UpdateCourse(c *gin.Context) {
 			return h.courseSvc.UpdateCourse(req.ID, req.Input)
 		},
 	}.WithSuccess(okMsg("课程更新成功"), http.StatusInternalServerError).
-		WithSentinel(service.ErrCourseNotFound, http.StatusNotFound).Handle(c)
+		WithSentinel(service.ErrCourseNotFound, http.StatusNotFound).
+		// 第 3 族（输入不合法不再冒充服务端故障）：这两条「必填」在 service 侧刚具名，
+		// 之前落默认面 ⇒ 编辑课程时把方向清空会被答成 500（客户端以为服务端坏了）。
+		WithSentinel(service.ErrSpecialtyRequired, http.StatusBadRequest).
+		WithSentinel(service.ErrCourseLevelRequired, http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 交换课程排序

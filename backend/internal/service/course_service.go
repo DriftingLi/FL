@@ -198,14 +198,23 @@ type StudyProgressInput struct {
 
 // ===== 课程挂载不变式（唯一事实源）见 course_mount_scope.go（ADR-0050 决策 1）=====
 
-// validateMountedCourseInput 挂载不变式的写入校验（typed）：创建必填；编辑携带时不允许清空。
+// 挂载不变式的三个「必填」事实（ADR-0064 决策 2/3）：此前创建面与编辑面各写一遍同文案裸
+// errors.New（同一事实两份实现），且编辑面那两条落端点默认面 500（客户端以为服务端坏了）。
+// 「必填」（字段没给 / 给了非正数）与「给了但那个 id 不存在」是两件事，后者不在这三个里。
+var (
+	ErrCourseNameRequired  = errors.New("课程名称不能为空")
+	ErrSpecialtyRequired   = errors.New("专业方向不能为空")
+	ErrCourseLevelRequired = errors.New("课程等级不能为空")
+)
+
+// validateMountedCourseInputUpdate 挂载不变式的写入校验（typed）：创建必填；编辑携带时不允许清空。
 // 语义与旧 map 版一致：Create 由 CreateCourse 显式校验，此处收编「编辑携带 0/负数」分支。
 func validateMountedCourseInputUpdate(in *CourseInput) error {
 	if in.SpecialtyID != nil && *in.SpecialtyID <= 0 {
-		return errors.New("专业方向不能为空")
+		return ErrSpecialtyRequired
 	}
 	if in.LevelID != nil && *in.LevelID <= 0 {
-		return errors.New("课程等级不能为空")
+		return ErrCourseLevelRequired
 	}
 	return nil
 }

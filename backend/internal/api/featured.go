@@ -201,8 +201,9 @@ func (h *FeaturedHandler) AdminDetail(c *gin.Context) {
 // @Security BearerAuth
 // @Param body body object false "内容输入 {title,category,summary,cover_image,content,source,status,sort_order}"
 // @Success 201 {object} response.R{data=service.FeaturedContentAdminDetailDTO} "内容创建成功"
-// @Failure 400 {object} response.R "请求数据无效"
+// @Failure 400 {object} response.R "请求数据无效 / 标题不能为空 / 分类无效 / 图片地址无效"
 // @Failure 401 {object} response.R "未认证"
+// @Failure 500 {object} response.R "服务器内部错误（写库失败等真故障，不再冒充参数错误）"
 // @Router /admin/featured-content [post]
 // Create 创建内容精选 POST /api/admin/featured-content
 func (h *FeaturedHandler) Create(c *gin.Context) {
@@ -213,7 +214,12 @@ func (h *FeaturedHandler) Create(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *service.FeaturedContentInput) (*service.FeaturedContentAdminDetailDTO, error) {
 			return h.svc.Create(*req)
 		},
-	}.WithSuccess(created("内容创建成功"), http.StatusBadRequest).Handle(c)
+		// 默认面由 400 改 500：旧形状「一格 400」把写库故障也答成参数错误（与第 3 族
+		// 「输入不合法不再冒充服务端故障」互为镜像）。三条输入事实现已具名，各自落 400。
+	}.WithSuccess(created("内容创建成功"), http.StatusInternalServerError).
+		WithSentinel(service.ErrFeaturedTitleRequired, http.StatusBadRequest).
+		WithSentinel(service.ErrFeaturedCategoryInvalid, http.StatusBadRequest).
+		WithSentinel(service.ErrFeaturedImageInvalid, http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 更新精选内容
@@ -225,8 +231,10 @@ func (h *FeaturedHandler) Create(c *gin.Context) {
 // @Param id path int true "内容 ID"
 // @Param body body object false "内容输入 {title,category,summary,cover_image,content,source,status,sort_order}"
 // @Success 200 {object} response.R{data=service.FeaturedContentAdminDetailDTO} "内容更新成功"
-// @Failure 400 {object} response.R "请求数据无效"
+// @Failure 400 {object} response.R "请求数据无效 / 分类无效 / 图片地址无效"
 // @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "内容不存在"
+// @Failure 500 {object} response.R "服务器内部错误"
 // @Router /admin/featured-content/{id} [put]
 // Update 更新内容精选 PUT /api/admin/featured-content/:id
 func (h *FeaturedHandler) Update(c *gin.Context) {
@@ -235,7 +243,11 @@ func (h *FeaturedHandler) Update(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *featuredUpdateReq) (*service.FeaturedContentAdminDetailDTO, error) {
 			return h.svc.Update(req.ID, req.Input)
 		},
-	}.WithSuccess(okMsg("内容更新成功"), http.StatusBadRequest).Handle(c)
+		// 同 Create 一处：默认面 400 曾把「内容不存在」与写库故障一起答成参数错误。
+	}.WithSuccess(okMsg("内容更新成功"), http.StatusInternalServerError).
+		WithSentinel(service.ErrFeaturedContentNotFound, http.StatusNotFound).
+		WithSentinel(service.ErrFeaturedCategoryInvalid, http.StatusBadRequest).
+		WithSentinel(service.ErrFeaturedImageInvalid, http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 删除精选内容
