@@ -1,0 +1,99 @@
+# T13（#651）①a 真机取证机检行 · 2026-09-23 · 设备 marble/23049RAD8C 1080x2400 · adb 192.168.0.212:38345
+# 取证驱动：.scratch/t13-capture.ps1（只读：不 install / 不 force-stop / 不 input / 不 logcat -c）；术前树 = origin/master 的 login.uvue，术后树 = refactor/login@11bcdbf7
+
+## before-A
+T13_1A_LABEL=before
+T13_1A_HEAD=11bcdbf7
+T13_1A_PAGE_LINES=977
+T13_1A_PAGE_SHA256=FA1FFCA5594BA36EE683DA8F6D1C2D5A1016AF4619AF94F7AC0E396FEBC61F25
+T13_1A_PNG_SHA256=CA705F19DBEABE370671CCC0938331200852F6BCA599B056FB05A34BB6B70B75
+T13_1A_A11Y_SHA256=68EC5123C471A1B2C733DD4AB0327F0C05C20F081A6AC02B11C3694D8A406173
+T13_1A_LOGCAT_fatal=0 anr=0 windowStart=1790125157.757
+T13_1A_FOCUS=mCurrentFocus=Window{7e05650 u0 io.dcloud.uniappx/io.dcloud.uniapp.UniAppActivity}
+T13_1A_TOPACTIVITY=topResumedActivity=ActivityRecord{b8c7aaf u0 io.dcloud.uniappx/io.dcloud.uniapp.UniAppActivity t26530}
+T13_1A_SCREEN=1080x2400 (device)
+focus-before: mCurrentFocus=Window{1525751 u0 io.dcloud.uniappx/io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity}
+
+## before-B
+T13_1A_LABEL=before-B
+T13_1A_HEAD=11bcdbf7
+T13_1A_PAGE_LINES=977
+T13_1A_PAGE_SHA256=FA1FFCA5594BA36EE683DA8F6D1C2D5A1016AF4619AF94F7AC0E396FEBC61F25
+T13_1A_PNG_SHA256=23155C968006846EEE88F8BB7DD811FF50DCC792B1EEAD8CD72E7743DCFEF389
+T13_1A_A11Y_SHA256=0B956EEB0120D10BB9E0FCCBBD6778EF9F3A9AF3A7A0474004A8848BEEF42F4D
+T13_1A_LOGCAT_fatal=0 anr=0 windowStart=1790125476.98
+T13_1A_FOCUS=mCurrentFocus=Window{7e05650 u0 io.dcloud.uniappx/io.dcloud.uniapp.UniAppActivity}
+T13_1A_TOPACTIVITY=topResumedActivity=ActivityRecord{b8c7aaf u0 io.dcloud.uniappx/io.dcloud.uniapp.UniAppActivity t26530}
+T13_1A_SCREEN=1080x2400 (device)
+focus-before: mCurrentFocus=Window{7e05650 u0 io.dcloud.uniappx/io.dcloud.uniapp.UniAppActivity}
+
+## after-A-entry1
+
+## after-A
+T13_1A_LABEL=after-A
+T13_1A_HEAD=11bcdbf7
+T13_1A_PAGE_LINES=581
+T13_1A_PAGE_SHA256=806C0E0A12BB9044D48D008AF16DC736B16CAFE565033874F57723C25C9C3FD5
+T13_1A_PNG_SHA256=A537F75E3A6E9C6B768C2E8298D951341D2D15685809F43BA19AE020144285C4
+T13_1A_A11Y_SHA256=68EC5123C471A1B2C733DD4AB0327F0C05C20F081A6AC02B11C3694D8A406173
+T13_1A_LOGCAT_fatal=0 anr=0 windowStart=1790126299.43
+T13_1A_FOCUS=mCurrentFocus=Window{91a6422 u0 io.dcloud.uniappx/io.dcloud.uniapp.UniAppActivity}
+T13_1A_TOPACTIVITY=topResumedActivity=ActivityRecord{c6cff0c u0 io.dcloud.uniappx/io.dcloud.uniapp.UniAppActivity t26536}
+T13_1A_SCREEN=1080x2400 (device)
+focus-before: mCurrentFocus=Window{cbdf0f9 u0 io.dcloud.uniappx/io.dcloud.uniapp.UniAppActivity}
+
+## after-B
+T13_1A_LABEL=after-B
+T13_1A_HEAD=11bcdbf7
+T13_1A_PAGE_LINES=581
+T13_1A_PAGE_SHA256=806C0E0A12BB9044D48D008AF16DC736B16CAFE565033874F57723C25C9C3FD5
+T13_1A_PNG_SHA256=0D722B5984074607AD2912EBDE7528ADF0CC954ABBF5A98E35877AAF9DBDD1C9
+T13_1A_A11Y_SHA256=0B956EEB0120D10BB9E0FCCBBD6778EF9F3A9AF3A7A0474004A8848BEEF42F4D
+T13_1A_LOGCAT_fatal=0 anr=0 windowStart=1790127012.658
+T13_1A_FOCUS=mCurrentFocus=Window{91a6422 u0 io.dcloud.uniappx/io.dcloud.uniapp.UniAppActivity}
+T13_1A_TOPACTIVITY=topResumedActivity=ActivityRecord{c6cff0c u0 io.dcloud.uniappx/io.dcloud.uniapp.UniAppActivity t26536}
+T13_1A_SCREEN=1080x2400 (device)
+focus-before: mCurrentFocus=Window{91a6422 u0 io.dcloud.uniappx/io.dcloud.uniapp.UniAppActivity}
+
+## 对比判据（node scripts/lib/png-diff.mjs / .scratch/png-rows.mjs / .scratch/a11y-triples.mjs）
+
+### A 态（手机验证码，含随机图形验证码）
+-- 术前 ↔ 术后进页1 (ignore-top-rows 90)
+{"ok":true,"mode":"pixel","width":1080,"height":2400,"total":2494800,"different":27090,"ratio":0.010859,"threshold":0.005,"changed":true,"ignoredRows":{"top":90,"bottom":0}}
+-- 术前 ↔ 术后进页2
+{"ok":true,"mode":"pixel","width":1080,"height":2400,"total":2494800,"different":27090,"ratio":0.010859,"threshold":0.005,"changed":true,"ignoredRows":{"top":90,"bottom":0}}
+-- 噪声对照：术后进页1 ↔ 术后进页2（同一棵树、两次进页）
+{"ok":true,"mode":"pixel","width":1080,"height":2400,"total":2494800,"different":27090,"ratio":0.010859,"threshold":0.005,"changed":true,"ignoredRows":{"top":90,"bottom":0}}
+-- 差区归因（三组同）
+# login.png vs login.png  ignoreTop=90
+# different=27090 bbox=741,1083,998,1187
+  y1000-1099: 4386
+  y1100-1199: 22704
+-- 状态栏计入（ignore-top 0）：术前↔术后 / 术后↔术后
+# login.png vs login.png  ignoreTop=0
+# different=34495 bbox=67,28,1008,1187
+  y0-99: 7405
+  y1000-1099: 4386
+  y1100-1199: 22704
+
+### B 态（账号密码 + 生物识别快捷登录入口）
+-- 术前 ↔ 术后 (ignore-top-rows 90)
+{"ok":true,"mode":"pixel","width":1080,"height":2400,"total":2494800,"different":0,"ratio":0,"threshold":0.005,"changed":false,"ignoredRows":{"top":90,"bottom":0}}
+-- 状态栏计入（ignore-top 0）
+# login.png vs login.png  ignoreTop=0
+# different=6802 bbox=71,28,1012,71
+  y0-99: 6802
+
+### a11y 归一化三元组（值/class/bounds）
+# .ci-verify/t13/before-A/a11y-before.xml: nodes=21 rawSha=68ec5123c471a1b2 tripleSha=2586ce32568a8779
+# .ci-verify/t13/after-A-entry1/a11y-after-A.xml: nodes=21 rawSha=68ec5123c471a1b2 tripleSha=2586ce32568a8779
+# diff: onlyA=0 onlyB=0  identical=true
+# texts: A=19 B=19 onlyA=0 onlyB=0
+# .ci-verify/t13/after-A-entry1/a11y-after-A.xml: nodes=21 rawSha=68ec5123c471a1b2 tripleSha=2586ce32568a8779
+# .ci-verify/t13/after-A/a11y-after-A.xml: nodes=21 rawSha=68ec5123c471a1b2 tripleSha=2586ce32568a8779
+# diff: onlyA=0 onlyB=0  identical=true
+# texts: A=19 B=19 onlyA=0 onlyB=0
+# .ci-verify/t13/before-B/a11y-before-B.xml: nodes=17 rawSha=0b956eeb0120d10b tripleSha=753fe991d393928f
+# .ci-verify/t13/after-B/a11y-after-B.xml: nodes=17 rawSha=0b956eeb0120d10b tripleSha=753fe991d393928f
+# diff: onlyA=0 onlyB=0  identical=true
+# texts: A=15 B=15 onlyA=0 onlyB=0

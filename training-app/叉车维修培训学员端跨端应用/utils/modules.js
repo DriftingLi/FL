@@ -337,11 +337,16 @@ const MODULES = {
 
   login: {
     extraDirs: [],
-    files: ['composables/useBiometric.uts', 'pages/login/login.uvue'],
-    extractDirs: [],
+    files: [
+      'composables/useBiometric.uts',
+      'pages/login/composables/useBiometricGate.uts',
+      'pages/login/composables/useLoginForm.uts',
+      'pages/login/login.uvue',
+    ],
+    extractDirs: ['pages/login/composables'],
     crossModuleConsumers: [],
-    /** 超预算：login.uvue 977 */
-    budget: 'pending',
+    /** T13 手术（#651）：login.uvue 977→581（表单态下沉 useLoginForm、生物识别门控面单拆 useBiometricGate）⇒ 执法面随之上线（原为「超预算 977」的 pending） */
+    budget: BUDGET,
     budgetOverrides: {},
     allowlistOwned: [],
     maxDepth: MAX_DEPTH,
