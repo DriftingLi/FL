@@ -45,6 +45,24 @@ func RegisterCoursesRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Cour
 	auth.POST("/course/:course_id/progress", h.UpdateStudyProgress)
 }
 
+// unreadableFaces404 是「一份内容读不到」这件**外显结论**在呈现层的唯一落点
+// （ADR-0064 决策 1）：底下四件事实各有载体，这里显式把它们统一答 404 + 同一句话，
+// 保持 ADR-0062 决策 3 的「不泄漏是哪一态」。
+//
+// 与旧形状的区别不是码，而是旧的是「端点只有一格错误面，所以只能统一」，
+// 这里是「在 service 层分好档之后**选择**统一」。移动端 #1268 若要区分
+// 「未解锁 / 加载失败」，今后从这里删掉一行映射即可打开，不必回 service 层重做错误语义。
+//
+// **必须与本包任何 swagger 注解块隔开的函数声明体**：本 var 一度插在 ListCourses 的
+// @Router 与 func 之间，swag 于是把注解块挂给了这个 var ⇒ /courses 整条路由从
+// swagger.json 消失（CI 的 codegen_test 判红，本地只跑 api/service 三个包看不见）。
+var unreadableFaces404 = []error{
+	service.ErrCourseNotVisible, // 不在平台上：未发布 / 未挂载
+	service.ErrCourseLocked,     // 在平台上、可见，但这个人没兑换
+	service.ErrCourseNotFound,   // 课程行真不存在
+	service.ErrChapterNotFound,  // 章节行真不存在
+}
+
 // ListCourses 课程列表
 // @Summary 课程列表
 // @Description 公开访问，支持按专业方向 specialty_id / 等级 level_id / 目标证件 credential_id / 热门精品 filter=hot|featured|all 过滤，分页返回
@@ -59,20 +77,6 @@ func RegisterCoursesRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Cour
 // @Param filter query string false "热门/精品筛选 hot|featured|all" default(all)
 // @Success 200 {object} response.R{data=service.CoursePageResult} "success"
 // @Router /courses [get]
-// unreadableFaces404 是「一份内容读不到」这件**外显结论**在呈现层的唯一落点
-// （ADR-0064 决策 1）：底下四件事实各有载体，这里显式把它们统一答 404 + 同一句话，
-// 保持 ADR-0062 决策 3 的「不泄漏是哪一态」。
-//
-// 与旧形状的区别不是码，而是旧的是「端点只有一格错误面，所以只能统一」，
-// 这里是「在 service 层分好档之后**选择**统一」。移动端 #1268 若要区分
-// 「未解锁 / 加载失败」，今后从这里删掉一行映射即可打开，不必回 service 层重做错误语义。
-var unreadableFaces404 = []error{
-	service.ErrCourseNotVisible, // 不在平台上：未发布 / 未挂载
-	service.ErrCourseLocked,     // 在平台上、可见，但这个人没兑换
-	service.ErrCourseNotFound,   // 课程行真不存在
-	service.ErrChapterNotFound,  // 章节行真不存在
-}
-
 func (h *CourseHandler) ListCourses(c *gin.Context) {
 	Endpoint[courseListReq, service.CoursePageResult]{
 		Parse: func(c *gin.Context) (*courseListReq, error) {
