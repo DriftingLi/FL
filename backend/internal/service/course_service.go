@@ -256,14 +256,19 @@ func (s *CourseService) GetCourses(page, pageSize int, credentialID, specialtyID
 // 「真不存在」的两件复用全仓唯一载体：ErrCourseNotFound（points_service 侧原有，同对象，
 // 已移入本文件）、ErrChapterNotFound（forum_service 侧原有 —— 论坛发帖挂的也是课程章节，
 // 同一对象，不另立）。
+//
+// **文案各自的规矩**：Error() 说出的是「哪一件事实」，四件两两不同名（同一测试锁的就是这一点）。
+// 对外统一那句「课程不存在 / 章节不存在」不在这里——它由 api 层各端点经 WithSentinelsMsg
+// 给出。把它们写成同一句曾让「课程未兑换」在章节面上冒充「章节不存在」、又在课程面上说错对象，
+// 等于把呈现决定沉到判据层（ADR-0064 不变式）。
 var (
 	// ErrChapterNotFound 课程章节行不存在的全仓唯一载体（论坛发帖挂的也是课程章节）。
 	ErrChapterNotFound = errors.New("章节不存在")
 	ErrCourseNotFound  = errors.New("课程不存在")
 	// ErrCourseNotVisible：不在平台上（未发布或未满足挂载不变式，判据见 ADR-0058）。
-	ErrCourseNotVisible = errors.New("章节不存在")
+	ErrCourseNotVisible = errors.New("课程不在平台上")
 	// ErrCourseLocked：在平台上、也可见，但这个学员没为它付过（权益，见词表「权益」）。
-	ErrCourseLocked = errors.New("章节不存在")
+	ErrCourseLocked = errors.New("课程未兑换")
 )
 
 // courseEntitled 权益判据（唯一出处）：非付费课程恒 true；付费课程看该学员是否已兑换。

@@ -8,7 +8,7 @@
 // —— 编译通过、四条 404 映射测试全绿，但 errors.Is 把四态认成同一件，分档在运行期**完全没发生**。
 // 也就是说：只验「对外码一致」的测试对这项改动是无效验证。下面第一组断言钉的就是这个洞。
 //
-// 呈现层仍然统一：四件事实都由 courses.go 的 unreadableFaces404 显式映射成 404 + 同一句话
+// 呈现层仍然统一：四件事实由各消费端点显式映射成 404 + 该端点自己的那句话
 // （ADR-0062 决策 3 的不泄漏口径）。本文件验的是**类型层分开**，不是码不同。
 package service
 
@@ -23,7 +23,7 @@ import (
 	"forklift-training/internal/testutil"
 )
 
-// TestCourseReadabilityFactsAreDistinct 两两不可替换 + 文案仍一致（呈现层统一的证据）。
+// TestCourseReadabilityFactsAreDistinct 两两不可替换（error value 与文案各一层）。
 func TestCourseReadabilityFactsAreDistinct(t *testing.T) {
 	facts := map[string]error{
 		"真不存在(课程)": ErrCourseNotFound,
@@ -42,11 +42,17 @@ func TestCourseReadabilityFactsAreDistinct(t *testing.T) {
 			}
 		}
 	}
-	// 呈现层统一的另一半：四件事实对外仍是同一句话（改了就是跨端契约变更，须走同步）。
-	for _, n := range []string{"真不存在(章节)", "不在平台上", "无权益"} {
-		if msg := facts[n].Error(); msg != "章节不存在" {
-			t.Fatalf("「%s」的呈现文案变了（应为「章节不存在」，不泄漏是哪一态）: %s", n, msg)
+	// 文案那一层同判：四件事实必须各自说得出自己是谁。
+	// 拆分初稿把三件的 Error() 都写成「章节不存在」（为了让对外只有一句话），后果是
+	// 「未兑换」与「不可见」在日志里同名单、课程面与章节面说的对象名互串 —— 那是把呈现
+	// 决定写进判据层。对外统一的那句话改由端点给（api 层 WithSentinelsMsg）。
+	seen := map[string]string{}
+	for _, n := range names {
+		msg := facts[n].Error()
+		if prev, dup := seen[msg]; dup {
+			t.Fatalf("「%s」与「%s」文案同为「%s」⇒ 事实分档在可读面上又塌回一件", n, prev, msg)
 		}
+		seen[msg] = n
 	}
 }
 
