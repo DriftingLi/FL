@@ -1,0 +1,14 @@
+HX_BUSY wait=0 result=free
+>>> [deploy] 基线：/sdcard/Android/data/io.dcloud.uniappx/apps/__UNI__1C1D180/www=1790134791->1790134791
+>>> [deploy] 已等 60 秒（上限 900 秒），设备侧事实仍未前进…
+>>> [deploy] 已等 120 秒（上限 900 秒），设备侧事实仍未前进…
+>>> [deploy] 已等 180 秒（上限 900 秒），设备侧事实仍未前进…
+>>> [deploy] 已等 240 秒（上限 900 秒），设备侧事实仍未前进…
+HX_RUN_DEPLOY deployed=true www=/sdcard/Android/data/io.dcloud.uniappx/apps/__UNI__1C1D180/www=1790134791->1790135971 pid_before=io.dcloud.uniappx=14090 pid_after=io.dcloud.uniappx=18178 foreground=io.dcloud.uniappx reason=资源已落到设备…mtime 相对基线前进
+HX_RUN mode=incremental compile=250 deploy=0 total=358 exit=ok
+EXIT=0
+# ✓ ④c 通过：整模块编译无 error（原行见本目录 kotlin-all.txt 末行）KOTLIN_ALL_RESULT errors=0 classes=1498 files=120 input=unpackage\resources\app-android freshness=fresh
+# ③ npm run test:unit（本分支 head 全量重跑） Test Suites: 124 passed, 124 total
+# ③ npm run test:unit（本分支 head 全量重跑） Tests:       2424 passed, 2424 total
+# ④c 复测对象 = feat/1273 @ 8eeea173（本目录取证提交只加 docs/verification/forum/1292/**，运行时面未变）
+# git status（跑完 HBuilderX 与 ④c 之后）：除本取证目录外零改动 ⇒ manifest.json / pages.json 未被回写
