@@ -30,6 +30,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -263,7 +264,6 @@ func countNullableWithoutFlag(f *ast.File, curPkg string, named map[string]bool,
 // parsedPackage 一个目录里解析成功的文件（含其测试文件，供合成夹具用）。
 type parsedPackage struct {
 	files []*ast.File
-	paths []string
 }
 
 // parsePackage 解析目录下的 .go 文件；解析失败的文件直接跳过
@@ -283,13 +283,11 @@ func parsePackage(dir string, includeTests bool) (parsedPackage, error) {
 		if !includeTests && strings.HasSuffix(name, "_test.go") {
 			continue
 		}
-		path := filepath.Join(dir, name)
-		f, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
+		f, err := parser.ParseFile(fset, filepath.Join(dir, name), nil, parser.ParseComments)
 		if err != nil {
 			continue
 		}
 		out.files = append(out.files, f)
-		out.paths = append(out.paths, path)
 	}
 	return out, nil
 }
@@ -330,8 +328,24 @@ func TestResponseCollectionsMustDeclareNullability(t *testing.T) {
 	}
 }
 
-// 合成夹具：证明三条判据真的会报（第三组证明不误报）。
-// 这些类型**不在响应闭包里**，所以本文件对全仓的判定不受它们影响。
+// 合成夹具：证明三条判据真的会报、且不误报。
+//
+// 这些类型只被 AST 按名字查找时，Go 的死代码检查会把它们报成 unused（CI backend-lint 实测），
+// 而「按名字查找」本身也是个可被漂移的软连接。⇒ 做成一张表：类型在这里被真实引用，
+// 表里的名字再用 reflect 反查核对，**类型改名与表里的字符串必须一起改**，否则红。
+var nullabilityFixtures = []struct {
+	fixture any
+	wantMsg string // 空串 = 这组是反向例：已正确表态，不得被误报
+}{
+	{nullabilityFixtureUntagged{}, "未表态"},
+	{nullabilityFixtureContradictory{}, "同时出现"},
+	{nullabilityFixtureBadVerdict{}, "取值非法"},
+	// 具名集合别名（type X []string）这一组钉的是「按底层 kind 判」那条：
+	// 早先版本对跨包具名直接放过，于是 model.JSONB 那类字段成了活漏口。
+	{nullabilityFixtureNamedCollection{}, "未表态"},
+	{nullabilityFixtureDeclared{}, ""},
+}
+
 type nullabilityFixtureUntagged struct {
 	Items []string `json:"items"`
 }
@@ -355,17 +369,15 @@ type nullabilityFixtureNamedCollection struct {
 
 type nullabilityFixtureAlias []string
 
-// fixtureViolations 从测试自己的源码里解析出夹具类型再跑 checker——
-// 用真实 AST 而不是手搓节点，夹具被改名/删掉时这里会 Fatalf，而不是静默通过。
+// fixtureViolations 从测试自己的源码里解析出该类型再跑 checker——
+// 用真实 AST 而不是手搓节点；类型被改名或删掉时这里 Fatalf，而不是静默当成「无违规」。
 func fixtureViolations(t *testing.T, typeName string) []nullabilityViolation {
 	t.Helper()
 	self, err := parsePackage(".", true)
 	if err != nil {
 		t.Fatalf("读本包失败: %v", err)
 	}
-	named := map[string]bool{
-		"apitypes.nullabilityFixtureAlias": true,
-	}
+	named := map[string]bool{"apitypes.nullabilityFixtureAlias": true}
 	found := false
 	var out []nullabilityViolation
 	for _, f := range self.files {
@@ -384,37 +396,37 @@ func fixtureViolations(t *testing.T, typeName string) []nullabilityViolation {
 					t.Fatalf("夹具 %s 不是 struct，夹具被改过", typeName)
 				}
 				found = true
-				// inClosure 一律传 true：夹具要验的是 checker 本身的判据，不是射程。
+				// inClosure 一律传 true：夹具验的是 checker 的判据，不是射程。
 				out = append(out, checkStructType(typeName, true, st, "apitypes", named)...)
 			}
 		}
 	}
 	if !found {
-		t.Fatalf("夹具类型 %s 不在本包里——被删了还是改名了？（找不到夹具时不得当作『无违规』）", typeName)
+		t.Fatalf("夹具类型 %s 不在本包里——被删了还是改名了？（找不到夹具时不得当作「无违规」）", typeName)
 	}
 	return out
 }
 
 func TestNullabilityCheckerFires(t *testing.T) {
-	for _, c := range []struct {
-		typeName string
-		wantMsg  string
-	}{
-		{"nullabilityFixtureUntagged", "未表态"},
-		{"nullabilityFixtureContradictory", "同时出现"},
-		{"nullabilityFixtureBadVerdict", "取值非法"},
-		{"nullabilityFixtureNamedCollection", "未表态"},
-	} {
-		got := fixtureViolations(t, c.typeName)
-		if len(got) != 1 {
-			t.Fatalf("%s 应报 1 条违规，实际 %d 条（checker 空转？）", c.typeName, len(got))
+	for _, c := range nullabilityFixtures {
+		typeName := reflect.TypeOf(c.fixture).Name()
+		if typeName == "" {
+			t.Fatalf("夹具表里放了非具名类型：%v", c.fixture)
 		}
-		if !strings.Contains(got[0].msg, c.wantMsg) {
-			t.Fatalf("%s 的违规原因应含「%s」，实际 %s", c.typeName, c.wantMsg, got[0].msg)
-		}
-	}
-	// 反向：已正确表态的夹具不得被误报（否则锁会逼人乱打标）。
-	if got := fixtureViolations(t, "nullabilityFixtureDeclared"); len(got) != 0 {
-		t.Fatalf("已表态的夹具被误报: %s", got[0].msg)
+		t.Run(typeName, func(t *testing.T) {
+			got := fixtureViolations(t, typeName)
+			if c.wantMsg == "" {
+				if len(got) != 0 {
+					t.Fatalf("已正确表态的夹具被误报: %s", got[0].msg)
+				}
+				return
+			}
+			if len(got) != 1 {
+				t.Fatalf("%s 应报 1 条违规，实际 %d 条（checker 空转？）", typeName, len(got))
+			}
+			if !strings.Contains(got[0].msg, c.wantMsg) {
+				t.Fatalf("%s 的违规原因应含「%s」，实际 %s", typeName, c.wantMsg, got[0].msg)
+			}
+		})
 	}
 }
