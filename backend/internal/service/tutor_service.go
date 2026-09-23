@@ -53,7 +53,11 @@ func (s *TutorService) GetCourseChapters(courseID int) (*TutorCourseChaptersDTO,
 		return nil, err // 查不动不得被读成「不存在」（ADR-0064 决策 1）
 	}
 	var chapters []model.Chapter
-	s.db.Where("course_id = ?", courseID).Order("order_num").Find(&chapters)
+	// 「查不动」如实上抛（ADR-0062 票6）：原先不查 error ⇒ chapter 表读不动时讲师看到的是一个
+	// 空章节列表（200 假绿），而不是「这次没读到」。与课程域 loadCourseWithChapters 同一判据。
+	if err := s.db.Where("course_id = ?", courseID).Order("order_num").Find(&chapters).Error; err != nil {
+		return nil, err
+	}
 
 	filesByChapter := loadChapterFilesBulk(s.db, chapters)
 	resultChapters := make([]ChapterDTO, 0, len(chapters))

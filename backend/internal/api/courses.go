@@ -206,10 +206,10 @@ func (h *CourseHandler) GetChapterDetail(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *chapterDetailReq) (*service.ChapterDetailDTO, error) {
 			return h.svc.GetChapterDetail(req.CourseID, req.ChapterID, req.StudentID)
 		},
-		// 判定与上面幻灯片同一格（四条不可读事实 → 404 + 同一句话）。
-		// 「章节不属于该课程」在 service 侧仍是裸 errors.New ⇒ 落默认面 500（改造前也是 500，
-		// 本批不动它）；它按语义该 400，升哨兵要连带章节归属判据，登记为残留。
+		// 四条「读不到」的事实统一答 404 + 本节的外显文案（呈现层显式决定，见 unreadableFaces404）。
+		// 「章节不属于该课程」是输入冲突（路径里两个 id 互相矛盾），具名后归位 400。
 	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).
+		WithSentinel(service.ErrChapterNotInCourse, http.StatusBadRequest).
 		WithSentinelsMsg(http.StatusNotFound, "章节不存在", unreadableFaces404...).Handle(c)
 }
 
