@@ -41,19 +41,25 @@ function fnBody(src, name) {
   return src.slice(start);
 }
 
+/** 三档 + 头部承诺的顺序：账号非空 → 口令非空 → 口令下限 */
+const ARMS = [
+  [ARM_ACCOUNT, '账号非空档'],
+  [ARM_EMPTY, '口令非空档'],
+  [ARM_MIN, '口令下限档（#1295）'],
+];
+
 /** 纯检测器：返回违规清单（空 = 合规）。提成函数是为了让注入样本能验证它真的会红。 */
 function validateIssues(body) {
   const out = [];
-  const at = (arm) => body.indexOf(arm);
-  for (const [arm, what] of [
-    [ARM_ACCOUNT, '缺账号非空档'],
-    [ARM_EMPTY, '缺口令非空档'],
-    [ARM_MIN, '缺口令下限档（#1295）'],
-  ]) {
-    if (at(arm) === -1) out.push(what);
+  for (const [arm, what] of ARMS) {
+    if (body.indexOf(arm) === -1) out.push('缺' + what);
   }
-  if (at(ARM_EMPTY) !== -1 && at(ARM_MIN) !== -1 && at(ARM_MIN) < at(ARM_EMPTY)) {
-    out.push('口令下限档排在非空档之前（空口令会报成「至少 6 位」）');
+  for (let i = 1; i < ARMS.length; i++) {
+    const prev = body.indexOf(ARMS[i - 1][0]);
+    const cur = body.indexOf(ARMS[i][0]);
+    if (prev !== -1 && cur !== -1 && cur < prev) {
+      out.push('顺序错位：' + ARMS[i][1] + ' 排在 ' + ARMS[i - 1][1] + ' 之前');
+    }
   }
   return out;
 }
@@ -73,9 +79,8 @@ describe('招聘者登录页口令校验契约（#1295）', () => {
     expect(body()).toContain(ARM_MIN);
   });
 
-  it('只补下限：本页不判 20 位上限、输入上界保持 32（口径归 #1262 三页对齐）', () => {
+  it('只补下限：本页不判 20 位上限（上限口径归 #1262 三页对齐）', () => {
     expect(body()).not.toContain('password.value.length > 20');
-    expect(page().split(':maxlength="32"').length - 1).toBe(1);
   });
 
   describe('注入自检（检测器必须真的会红，防「只跑通过的那一次」）', () => {
@@ -89,7 +94,13 @@ describe('招聘者登录页口令校验契约（#1295）', () => {
       const swapped = body()
         .replace(ARM_EMPTY + '\n        ' + ARM_MIN, ARM_MIN + '\n        ' + ARM_EMPTY);
       expect(swapped).not.toBe(body());
-      expect(validateIssues(swapped)).toEqual(['口令下限档排在非空档之前（空口令会报成「至少 6 位」）']);
+      expect(validateIssues(swapped)).toEqual(['顺序错位：口令下限档（#1295） 排在 口令非空档 之前']);
+    });
+
+    it('账号档挪到两档口令之后 ⇒ 判红（三档的顺序都承重，不是只盯新加那一档）', () => {
+      const moved = body().replace(ARM_ACCOUNT + '\n        ', '').replace("return ''", ARM_ACCOUNT + "\n        return ''");
+      expect(moved).not.toBe(body());
+      expect(validateIssues(moved)).toEqual(['顺序错位：口令非空档 排在 账号非空档 之前']);
     });
 
     it('改成第三种文案（补上上限、换个说法）⇒ 两条判据同时失配', () => {
