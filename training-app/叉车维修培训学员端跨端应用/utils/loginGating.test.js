@@ -8,23 +8,35 @@
  * 4) 保存时机：仅账号密码登录成功后保存（含 refresh_token）；微信一键登录不触及凭据
  * 5) 快捷登录：authenticate → loadSecureToken → auth.quickLogin → reLaunch；失败降级回填
  * 6) 孤儿凭据自愈：确定性不支持 + 完整凭据 → 降级仅账号；API 失败（definitive=false）不清理
+ *
+ * **读取指向平移（#651 T13 login 手术）**：门控四个动作搬进
+ * `pages/login/composables/useBiometricGate.uts`、表单与提交搬进同目录
+ * `useLoginForm.uts`，模板与生命周期留在页面壳层。下面每条断言的**文本、顺序判据与
+ * 强度一字未改**，只把「从哪个文件读」指到函数现在所在的位置（ADR-0007：手术 PR 内
+ * 可更新路径指向，禁删/禁弱化）。唯一的额外收紧是 `secureStorage` 那条：抽象层导入
+ * 现在分布在两个 composable 里，故对**两个文件各判一次**，并把页面壳层一并纳入
+ * 「无 storage 直调」的反查面。
  */
 const path = require('path');
 
 /** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
 const { readText } = require('./utsHarness');
 const src = readText(path.join(__dirname, '..', 'pages', 'login', 'login.uvue'));
+/** 门控面（initBiometricGate / onBiometricUnlock / onQuickLogin / toggleRemember）现居此文件 */
+const gateSrc = readText(path.join(__dirname, '..', 'pages', 'login', 'composables', 'useBiometricGate.uts'));
+/** 表单与提交面（onSubmit 及其凭据落地）现居此文件 */
+const formSrc = readText(path.join(__dirname, '..', 'pages', 'login', 'composables', 'useLoginForm.uts'));
 
 const script = src.slice(src.indexOf('<script'), src.lastIndexOf('</script>'));
 
-function fnBody(name) {
-  const start = script.indexOf(`function ${name}`);
+function fnBody(text, name) {
+  const start = text.indexOf(`function ${name}`);
   if (start === -1) throw new Error(`未找到 ${name}`);
-  return script.slice(start, script.indexOf('\n    }', start));
+  return text.slice(start, text.indexOf('\n    }', start));
 }
 
 describe('登录页门控顺序契约（onBiometricUnlock）', () => {
-  const body = fnBody('onBiometricUnlock');
+  const body = fnBody(gateSrc, 'onBiometricUnlock');
 
   it('先认证后回填：authenticate 结果为 true 才 loadSecureCredentials', () => {
     const authIdx = body.indexOf('biometric.authenticate');
@@ -52,7 +64,7 @@ describe('登录页门控顺序契约（onBiometricUnlock）', () => {
 });
 
 describe('取消勾选清除契约（toggleRemember）', () => {
-  const body = fnBody('toggleRemember');
+  const body = fnBody(gateSrc, 'toggleRemember');
 
   it('取消勾选立即清除凭据', () => {
     const checkIdx = body.indexOf('if (!rememberMe.value)');
@@ -68,7 +80,7 @@ describe('取消勾选清除契约（toggleRemember）', () => {
 
 describe('保存时机契约（登录成功路径）', () => {
   it('仅勾选记住密码且账号非空才保存（密码在登录成功后落盘）', () => {
-    const body = fnBody('onSubmit');
+    const body = fnBody(formSrc, 'onSubmit');
     expect(body).toContain('rememberMe.value && uname.length > 0');
     const saveIdx = body.indexOf('saveSecureCredentials(uname, password.value, auth.getRefreshToken())');
     const clearIdx = body.indexOf('clearSecureCredentials()');
@@ -77,8 +89,8 @@ describe('保存时机契约（登录成功路径）', () => {
   });
 
   it('页面进入时按"存在凭据"决定脱敏入口显隐（onLoad/onShow 生命周期）', () => {
-    expect(script).toContain('hasStoredCredentials()');
-    expect(script).toMatch(/hasStoredCredentials\(\)[\s\S]{0,80}showedStored\.value = true/);
+    expect(gateSrc).toContain('hasStoredCredentials()');
+    expect(gateSrc).toMatch(/hasStoredCredentials\(\)[\s\S]{0,80}showedStored\.value = true/);
   });
 
   it('脱敏入口同时受设备生物识别能力门控', () => {
@@ -86,14 +98,19 @@ describe('保存时机契约（登录成功路径）', () => {
   });
 
   it('凭据存储只经 secureStorage 抽象层（无散落的 storage 直调）', () => {
-    expect(script).toContain("from '../../utils/secureStorage'");
+    expect(gateSrc).toContain("from '../../../utils/secureStorage'");
+    expect(formSrc).toContain("from '../../../utils/secureStorage'");
+    expect(gateSrc).not.toContain('uni.setStorageSync');
+    expect(gateSrc).not.toContain('uni.getStorageSync');
+    expect(formSrc).not.toContain('uni.setStorageSync');
+    expect(formSrc).not.toContain('uni.getStorageSync');
     expect(script).not.toContain('uni.setStorageSync');
     expect(script).not.toContain('uni.getStorageSync');
   });
 });
 
 describe('快捷登录契约（onQuickLogin，ADR-0004 增补）', () => {
-  const body = fnBody('onQuickLogin');
+  const body = fnBody(gateSrc, 'onQuickLogin');
 
   it('门控顺序：先 authenticate，通过后才 loadSecureToken', () => {
     const authIdx = body.indexOf('biometric.authenticate');
@@ -134,7 +151,7 @@ describe('快捷登录契约（onQuickLogin，ADR-0004 增补）', () => {
 });
 
 describe('孤儿凭据自愈契约（initBiometricGate，ADR-0004）', () => {
-  const body = fnBody('initBiometricGate');
+  const body = fnBody(gateSrc, 'initBiometricGate');
 
   it('先 await checkSupport 拿确定性结果，再做入口/回填判定（防 isSupported 初值误判）', () => {
     const supportIdx = body.indexOf('await biometric.checkSupport()');

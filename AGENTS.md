@@ -1,8 +1,14 @@
+# AGENTS.md
+
+This file provides guidance to Qoder (qoder.com) when working with code in this repository.
+
 # 叉车维修培训与残值评估系统
 
 面向叉车维修培训与叉车残值评估的全栈系统。**本文件只做导航**——工作约定按块拆在 `docs/agents/` 下，动手前先读对应块。
 
 ## 领域文件
+
+- **系统总览 / 技术栈 / 架构大图 / 运行与部署 / 全量命令**：`README.md`（第一次接触本仓先读它建立大图——子域名多工作区、统一账号双令牌、三部署面、CI 触发模型等——再回本文件读工作约定）
 
 - **领域词汇表**：`CONTEXT.md`（repo 根）
 
@@ -38,6 +44,21 @@ AI 安全审计用 DeepSec（Shield）。See `docs/agents/security-scan.md`.
 | [`docs/agents/multi-agent-git.md`](docs/agents/multi-agent-git.md) | 多 Agent 并发与 git 隔离：worktree 一会话一分支、游离提交取证、`git add` 纪律 | 多会话/自动化并发操作仓库时 |
 
 > **建 worktree 一律走闸门**：`pwsh training-app/叉车维修培训学员端跨端应用/scripts/new-worktree.ps1 -Task <票号>`（**别裸用 `git worktree add`**）。它在创建处校验参数、并在新目录里实测 `jest --listTests` 必须列出套件 —— 目录名不合规会让 ③ 门**静默匹配 0 个套件**（血账 #1144；闸门见 #1185）。
+
+## 命令速查（只补 README / checks.md 没写的「跑单个测试」）
+
+构建 / lint / 全量测试 / 生成链 / 迁移 / 部署的**权威命令**在 [`README.md`](README.md)（常用命令、快速开始）与 [`docs/agents/checks.md`](docs/agents/checks.md)（提交前四件套与守卫）。本处**不重复那些表**——它们靠指路而非抄写，抄过来正是历史上漂移的来源。这里只补一件两表都没写、又几乎每次会话都要用的：**如何只跑一个测试**。
+
+- **后端**（`backend/`；全量 `make test` = `go test ./... -race -cover`）
+  - 单包：`go test ./internal/service/ -race`
+  - 单用例：`go test ./internal/service/ -run TestXxx -race`（`-run` 接正则，可前缀匹配一簇）
+  - ⚠️ 命中 `testutil.NewPostgresDB` 的 Postgres 契约用例，本机无 `DATABASE_URL` 会**干净 skip** ⇒ 看到 `ok` ≠ 测过，首跑在 CI（详见 checks.md「两条纪律」）。
+- **前端**（`frontend/`；全量 `npm test` = `vitest run`）
+  - 单文件：`npx vitest run src/api/__tests__/page.spec.ts`
+  - 按名：`npx vitest run -t "用例名片段"`
+- **移动端**（`training-app/叉车维修培训学员端跨端应用/`；全量 `npm test` = `jest --config jest.config.unit.js -i`）
+  - 单文件：`npx jest --config jest.config.unit.js <相对路径>`；按名加 `-t "片段"`
+  - 运行时面（① 真机 / ② 微信开发者工具 / ③ 契约门）另走别处、需真机环境，不在本命令射程——见下方「验收门」与移动端 `training-app/…/AGENTS.md`。
 
 ## 验收门（合并前置）
 

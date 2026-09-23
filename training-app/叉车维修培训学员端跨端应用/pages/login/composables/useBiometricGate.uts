@@ -1,0 +1,168 @@
+/**
+ * 登录页生物识别门控 composable（T13 login 手术，parent #651 / ADR-0004 / ADR-0007）
+ *
+ * 票面硬约束：**这一面只读引用、零行为改动**。四个动作（门控初始化 / 门控回填 /
+ * 快捷登录 / 取消勾选清除）加入口显隐态与文案，全部逐字符搬自
+ * `pages/login/login.uvue`，函数体一行未改写 —— 连 `username.value = cred.u`、
+ * `saveAccountOnly(cred.u)` 这类字面量都保持原样，因为 `utils/loginGating.test.js`
+ * 断言的正是这些字面量**以及它们的先后顺序**。该测试的读取目标由页面平移到本文件，
+ * 断言集合与强度不变（ADR-0007：手术 PR 内可更新文件路径指向，禁删/弱化断言）。
+ *
+ * `biometric` 由页面壳层单例注入：`useBiometric()` 每次调用返回**新** ref，若本文件与
+ * `useLoginForm.onSubmit` 各取一份，`checkSupport()` 写入的实例与模板读取的实例就不是
+ * 同一个，快捷登录入口会**静默不显示**。故全页只持有一个实例、两处注入。
+ *
+ * uni 生命周期仍留壳层（照 T06/T07/T08 先例）；`onBiometricUnlock` 与 `quickLogging` 无页面
+ * 消费方（仅本文件内互调），故不进返回面。
+ */
+import { ref, computed } from 'vue'
+import type { Ref, ComputedRef } from 'vue'
+import { useAuthStore } from '../../../stores/auth'
+import { hasStoredCredentials, loadSecureCredentials, loadSecureToken, saveAccountOnly, loadSavedAccount, clearSecureCredentials } from '../../../utils/secureStorage'
+import type { UseBiometricResult } from '../../../composables/useBiometric'
+
+/** 本 composable 的显式返回类型（Kotlin error18 规避，先例 useRegisterForm） */
+export type UseBiometricGateResult = {
+    showedStored : Ref<boolean>
+    quickLoginLabel : ComputedRef<string>
+    initBiometricGate : () => Promise<void>
+    onQuickLogin : () => Promise<void>
+    toggleRemember : () => void
+}
+
+/**
+ * @param biometric    页面壳层持有的唯一生物识别实例
+ * @param username     回填写入的账号 ref（表单态归 useLoginForm 持有）
+ * @param password     回填写入的密码 ref
+ * @param rememberMe   「记住密码」勾选态 ref
+ */
+export function useBiometricGate(
+    biometric : UseBiometricResult,
+    username : Ref<string>,
+    password : Ref<string>,
+    rememberMe : Ref<boolean>
+) : UseBiometricGateResult {
+    const auth = useAuthStore()
+
+    // 生物识别回填入口：有已存凭据且验证通过才展示
+    const showedStored = ref<boolean>(false)
+
+    /**
+     * 生物门控初始化（onLoad 异步段，ADR-0004）：
+     * 检测支持性 → 孤儿凭据自愈 → 脱敏入口/账号回填。
+     * 入口显隐与回填必须等支持性结果确定性返回后再判定，
+     * 否则会拿 isSupported 初值 false 把正常凭据误判为孤儿。
+     * @note 定义前置（error18：UTS 无函数提升，onLoad 里的调用不能引用后声明的函数）
+     */
+    async function initBiometricGate() : Promise<void> {
+        const support = await biometric.checkSupport()
+        // 孤儿凭据自愈：确定性不支持 + 仍存完整凭据 → 降级为仅记住账号（密码密文销毁）
+        // definitive=false（API 调用失败）说明支持性未知，不清任何数据
+        if (!support.supported && support.definitive && hasStoredCredentials()) {
+            const cred = loadSecureCredentials()
+            if (cred != null) {
+                saveAccountOnly(cred.u)
+            }
+        }
+        if (hasStoredCredentials()) {
+            showedStored.value = true
+        } else {
+            // 凭据降级：生物识别不可用平台/设备仅记住账号（无门控回填），直接回显账号
+            const savedAccount = loadSavedAccount()
+            if (savedAccount.length > 0) {
+                username.value = savedAccount
+                rememberMe.value = true
+            }
+        }
+    }
+
+    /** 取消勾选立即清除已保存的安全凭据 */
+    function toggleRemember() : void {
+        rememberMe.value = !rememberMe.value
+        if (!rememberMe.value) {
+            clearSecureCredentials()
+            showedStored.value = false
+        }
+    }
+
+    /** 回填兜底：触发生物识别 → 成功则解密凭据回填表单（快捷登录降级路径复用） */
+    async function onBiometricUnlock() : Promise<void> {
+        const ok = await biometric.authenticate('验证身份以填充已保存的账号密码')
+        if (ok) {
+            const cred = loadSecureCredentials()
+            if (cred != null) {
+                username.value = cred.u
+                password.value = cred.p
+                rememberMe.value = true
+                showedStored.value = false
+            } else {
+                uni.showToast({ title: '未找到保存的凭据', icon: 'none' })
+            }
+        } else {
+            uni.showToast({ title: '认证未通过', icon: 'none' })
+        }
+    }
+
+    // 快捷登录进行中（防重入：refresh 是网络请求，连点会重复弹认证框）
+    const quickLogging = ref<boolean>(false)
+
+    // 入口文案按设备实际支持的认证方式动态生成（ADR-0004 单入口双轨）
+    const quickLoginLabel = computed<string>(() : string => {
+        const modes = biometric.supportModes.value
+        const hasFacial = modes.indexOf('facial') >= 0
+        const hasFinger = modes.indexOf('fingerPrint') >= 0
+        if (hasFacial && hasFinger) {
+            return '🔐 面容/指纹快捷登录'
+        }
+        if (hasFacial) {
+            return '🔐 面容快捷登录'
+        }
+        if (hasFinger) {
+            return '🔐 指纹快捷登录'
+        }
+        return '🔐 生物识别快捷登录'
+    })
+
+    /**
+     * 快捷登录（ADR-0004 增补）：生物验证 → 解密 refresh_token 静默续登 → 直接进 dashboard。
+     * 轮换令牌的包络回写在 auth store 内统一完成（tryRefreshToken/quickLogin 两个同步点）。
+     * 令牌失效（超 7 天未用/被互踢/后续改密吊销）或无令牌时，降级为回填流程（onBiometricUnlock，
+     * 会再次弹认证框确认身份——降级即退出快捷语义，回归门控回填）。
+     */
+    async function onQuickLogin() : Promise<void> {
+        if (quickLogging.value) {
+            return
+        }
+        const ok = await biometric.authenticate('验证身份以快捷登录')
+        if (!ok) {
+            uni.showToast({ title: '认证未通过', icon: 'none' })
+            return
+        }
+        const rt = loadSecureToken()
+        if (rt.length == 0) {
+            // 无令牌 = 包络产生于快捷登录上线前（或已降级）：一次密码登录即写入 rt 启用
+            uni.showToast({ title: '请先输入密码登录一次，之后可快捷登录', icon: 'none' })
+            onBiometricUnlock()
+            return
+        }
+        quickLogging.value = true
+        uni.showLoading({ title: '登录中' })
+        const newRt = await auth.quickLogin(rt)
+        uni.hideLoading()
+        quickLogging.value = false
+        if (newRt.length > 0) {
+            uni.reLaunch({ url: '/pages/dashboard/dashboard' })
+        } else {
+            uni.showToast({ title: '快捷登录已过期，请验证后登录', icon: 'none' })
+            onBiometricUnlock()
+        }
+    }
+
+    return {
+        showedStored,
+        quickLoginLabel,
+        initBiometricGate: () => initBiometricGate(),
+        onQuickLogin: () => onQuickLogin(),
+        toggleRemember: () => toggleRemember(),
+    } as UseBiometricGateResult
+}
