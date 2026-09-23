@@ -1419,7 +1419,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "任务不存在",
+                        "description": "生成任务不存在",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }

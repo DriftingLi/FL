@@ -246,6 +246,7 @@ func TestAdminResetTutorPasswordRevokesAllSessions(t *testing.T) {
 		t.Fatal("3 位讲师口令被动作接受 ⇒ 长度兜底没随动作一起到位")
 	}
 }
+
 // failOnSetBlacklist 吊销标记写不进、其余照常——用来钉「尽力而为」那一半。
 type failOnSetBlacklist struct{ setCalls int }
 
@@ -276,4 +277,71 @@ func TestDispositionRevokeFailureDoesNotRollBackAction(t *testing.T) {
 	if bl.setCalls == 0 {
 		t.Fatal("吊销标记一次都没尝试写 ⇒ 尽力而为退化成了不尝试")
 	}
+}
+
+// TestEnableTutorDoesNotRevoke 讲师侧同判：只有转成禁用态才吊销，恢复启用不动凭证。
+func TestEnableTutorDoesNotRevoke(t *testing.T) {
+	adminSvc, sess, db, tid := newTutorFixture(t, newValBlacklist())
+	if err := db.Model(&model.Tutor{}).Where("tutor_id = ?", tid).Update("status", 0).Error; err != nil {
+		t.Fatalf("预置禁用态失败: %v", err)
+	}
+	inHand := issueTutorRefresh(t, sess, tid)
+
+	next, err := adminSvc.ToggleTutorStatus(context.Background(), tid)
+	if err != nil {
+		t.Fatalf("恢复启用失败: %v", err)
+	}
+	if next != 1 {
+		t.Fatalf("恢复后状态应为 1，实际 %d", next)
+	}
+	if !rotationAccepted(sess, inHand) {
+		t.Fatal("恢复启用却吊销了会话 ⇒ 解除禁用应是恢复原状，不是二次惩罚")
+	}
+}
+
+// TestDispositionDoesNotRewriteHistory 处置的后果集**止于会话与联系面明文**：权益、积分、
+// 学习记录都是已发生的事实，禁用与恢复都不改写它们（ADR-0064 决策 4；ADR-0051 写入时冻结）。
+// 这条断言之所以要有：「补齐处置后果」最自然的过度修正是顺手冻结权益/回收积分，
+// 而那会把处置与退款合成一件事，并让「解除即恢复原状」失效。
+func TestDispositionDoesNotRewriteHistory(t *testing.T) {
+	adminSvc, _, db, uid := newDispositionFixture(t, newValBlacklist())
+	if err := db.Create(&model.UserEntitlement{UserID: uid, SKU: service.CourseSKU(1), RefID: "1"}).Error; err != nil {
+		t.Fatalf("播种权益行失败: %v", err)
+	}
+	beforeEnt, beforePts := countEntitlements(t, db, uid), sumPoints(t, db, uid)
+
+	if _, err := adminSvc.ToggleHrwaiUserStatus(context.Background(), uid); err != nil {
+		t.Fatalf("禁用失败: %v", err)
+	}
+	if _, err := adminSvc.ToggleHrwaiUserStatus(context.Background(), uid); err != nil {
+		t.Fatalf("恢复失败: %v", err)
+	}
+	if got := countEntitlements(t, db, uid); got != beforeEnt {
+		t.Fatalf("处置改写了权益行数：前 %d 后 %d", beforeEnt, got)
+	}
+	if got := sumPoints(t, db, uid); got != beforePts {
+		t.Fatalf("处置改写了积分余额：前 %d 后 %d", beforePts, got)
+	}
+}
+
+func countEntitlements(t *testing.T, db *gorm.DB, uid int) int64 {
+	t.Helper()
+	var n int64
+	if err := db.Model(&model.UserEntitlement{}).Where("user_id = ?", uid).Count(&n).Error; err != nil {
+		t.Fatalf("数权益行失败: %v", err)
+	}
+	return n
+}
+
+func sumPoints(t *testing.T, db *gorm.DB, uid int) int {
+	t.Helper()
+	var sum *int
+	if err := db.Model(&model.PointsLedger{}).Where("user_id = ?", uid).
+		Select("COALESCE(SUM(delta), 0)").Scan(&sum).Error; err != nil {
+		t.Fatalf("汇总积分流水失败: %v", err)
+	}
+	if sum == nil {
+		return 0
+	}
+	return *sum
 }

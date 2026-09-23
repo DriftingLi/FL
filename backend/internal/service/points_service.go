@@ -324,8 +324,6 @@ var (
 	ErrEmptyPenaltyReason = errors.New("扣罚事由不能为空")
 	// ErrTaskNotDone 行为未达成（Claim 前校验：todo 任务不可空领）。
 	ErrTaskNotDone = errors.New("任务未完成")
-	// ErrUserNotFound 用户不存在。
-	ErrUserNotFound = errors.New("用户不存在")
 	// ErrPenaltyNotifyFailed 扣罚站内信写入失败（#1098 强一致族）：通知与扣罚同事务，
 	// 写失败即扣罚整体不生效；管理端经 pointsErrStatus 看到 500 + 可见原因，可原样重试。
 	ErrPenaltyNotifyFailed = errors.New("扣罚未生效：站内信写入失败，请重试")
@@ -980,7 +978,7 @@ func (s *PointsService) AdminPenalty(ctx context.Context, adminID, userID, delta
 	defer release()
 	var user model.HrwaiUser
 	if err := s.db.First(&user, userID).Error; err != nil {
-		return 0, ErrUserNotFound
+		return 0, ErrHrwaiUserNotFound
 	}
 	actualDeduct := delta
 	if user.PointsBalance < delta {

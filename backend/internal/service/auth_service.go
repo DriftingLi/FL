@@ -554,7 +554,7 @@ func (s *AuthService) ToggleRecruiterStatus(ctx context.Context, id int) (int16,
 		return 0, err
 	}
 	if next == 0 {
-		if err := s.session.RevokeIdentity(ctx, "recruiter", id); err != nil {
+		if err := s.session.RevokeIdentity(ctx, RecruiterRole, id); err != nil {
 			s.logger.Warn("招聘员禁用后 refresh 吊销标记写入失败", zap.Int("recruiter_id", id), zap.Error(err))
 		}
 	}
@@ -701,25 +701,12 @@ type RecruiterPasswordResetResult struct{}
 // 招聘者写面在 recruiter 命名空间里自建（SetNewPassword 落的是 hrwai_users），但长度规则
 // 与吊销族策略同源：validatePasswordLength + 落库后尽力而为吊销。
 func (s *AuthService) ResetRecruiterPassword(ctx context.Context, id int, password string) error {
-	if err := validatePasswordLength(password); err != nil {
-		return err
-	}
-	var cnt int64
-	s.db.Model(&model.RecruiterUser{}).Where("id = ?", id).Count(&cnt)
-	if cnt == 0 {
-		return ErrRecruiterNotFound
-	}
-	hashed, err := HashPassword(password)
+	revokeErr, err := applyNewPassword(ctx, s.db, s.session, recruiterPasswordSubject, id, password)
 	if err != nil {
 		return err
 	}
-	if err := s.db.Model(&model.RecruiterUser{}).Where("id = ?", id).Update("password", hashed).Error; err != nil {
-		return err
-	}
-	// 管理员强制重置凭证理应踢下线（#622 同口径）：吊销该招聘员全部 refresh。
-	// 角色命名空间键——与学员 ID 空间互不干扰。
-	if err := s.session.RevokeIdentity(ctx, "recruiter", id); err != nil {
-		s.logger.Warn("招聘员改密后 refresh 吊销标记写入失败", zap.Int("recruiter_id", id), zap.Error(err))
+	if revokeErr != nil {
+		s.logger.Warn("招聘员口令重置后 refresh 吊销标记写入失败", zap.Int("recruiter_id", id), zap.Error(revokeErr))
 	}
 	return nil
 }

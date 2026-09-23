@@ -401,7 +401,7 @@ func (h *AdminHandler) GenerateContent(c *gin.Context) {
 // @Success 200 {object} response.R{data=service.GenTaskStatus} "success"
 // @Failure 400 {object} response.R "task_id 无效"
 // @Failure 401 {object} response.R "未认证"
-// @Failure 404 {object} response.R "任务不存在"
+// @Failure 404 {object} response.R "生成任务不存在"
 // @Router /admin/course/generate-content/{task_id} [get]
 // GetGenerationTask 查询生成任务状态（前端轮询）GET /api/admin/course/generate-content/:task_id
 func (h *AdminHandler) GetGenerationTask(c *gin.Context) {
@@ -556,7 +556,8 @@ func (h *AdminHandler) ResetHrwaiUserPassword(c *gin.Context) {
 			return &struct{}{}, nil
 		},
 	}.WithSuccess(okMsgNoData("密码已重置"), http.StatusInternalServerError).
-		WithSentinel(service.ErrHrwaiUserNotFound, http.StatusNotFound).Handle(c)
+		WithSentinel(service.ErrHrwaiUserNotFound, http.StatusNotFound).
+		WithSentinel(service.ErrInvalidHrwaiUserID, http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 切换 HRWAI 用户启用/禁用状态
@@ -586,12 +587,9 @@ func (h *AdminHandler) ToggleHrwaiUserStatus(c *gin.Context) {
 			}
 			return &service.StatusResultDTO{Status: int(next)}, nil
 		},
-		// 判定不动（票8 逐端点判过）：AdminService.ToggleHrwaiUserStatus 的「用户不存在」是裸
-		// errors.New、UPDATE 失败则原样上抛驱动错误 ⇒ api 侧无具名哨兵可分档，改判会把真 404
-		// 也答成 500。正解在 service 侧升哨兵（admin_service.go 本批不在改动面）。
-		// 已归位的一半：路径参数非数字今天回它自己的 400（票8 翻转前被这条表吞成 404）。
 		ErrStatus: &errStatusTable{entries: []errStatusEntry{
 			{sentinel: service.ErrHrwaiUserNotFound, status: http.StatusNotFound},
+			{sentinel: service.ErrInvalidHrwaiUserID, status: http.StatusBadRequest},
 			{sentinel: nil, status: http.StatusInternalServerError},
 		}},
 		Render: func(c *gin.Context, _ *idParam, resp *service.StatusResultDTO) {
@@ -714,7 +712,8 @@ func (h *AdminHandler) DeleteTutor(c *gin.Context) {
 			return h.adminSvc.DeleteTutor(req.ID)
 		},
 	}.WithSuccess(okMsg("讲师删除成功"), http.StatusInternalServerError).
-		WithSentinel(service.ErrTutorNotFound, http.StatusNotFound).Handle(c)
+		WithSentinel(service.ErrTutorNotFound, http.StatusNotFound).
+		WithSentinel(service.ErrInvalidTutorID, http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 重置导师密码
@@ -756,7 +755,8 @@ func (h *AdminHandler) ResetTutorPassword(c *gin.Context) {
 			return &struct{}{}, nil
 		},
 	}.WithSuccess(okMsgNoData("密码已重置"), http.StatusInternalServerError).
-		WithSentinel(service.ErrTutorNotFound, http.StatusNotFound).Handle(c)
+		WithSentinel(service.ErrTutorNotFound, http.StatusNotFound).
+		WithSentinel(service.ErrInvalidTutorID, http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 切换导师启用/禁用状态
@@ -790,6 +790,7 @@ func (h *AdminHandler) ToggleTutorStatus(c *gin.Context) {
 		// 无哨兵可名 ⇒ 本批不动（参数错误那半边已随票8 归位 400）。
 		ErrStatus: &errStatusTable{entries: []errStatusEntry{
 			{sentinel: service.ErrTutorNotFound, status: http.StatusNotFound},
+			{sentinel: service.ErrInvalidTutorID, status: http.StatusBadRequest},
 			{sentinel: nil, status: http.StatusInternalServerError},
 		}},
 		Render: func(c *gin.Context, _ *idParam, resp *service.StatusResultDTO) {

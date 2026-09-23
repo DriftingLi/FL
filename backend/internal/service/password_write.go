@@ -52,13 +52,9 @@ type passwordSubject struct {
 var (
 	hrwaiPasswordSubject = passwordSubject{dest: &model.HrwaiUser{}, key: "id", role: HrwaiRole, notFound: ErrHrwaiUserNotFound}
 	tutorPasswordSubject = passwordSubject{dest: &model.Tutor{}, key: "tutor_id", role: TutorRole, notFound: ErrTutorNotFound}
-)
-
-// ErrHrwaiUserNotFound / ErrTutorNotFound 是这两类账号**真不存在**这一件事的唯一载体
-// （ADR-0064 决策 1/2：一个事实一个哨兵，api 侧据此才能把它与「查不动」分档）。
-var (
-	ErrHrwaiUserNotFound = errors.New("用户不存在")
-	ErrTutorNotFound     = errors.New("讲师不存在")
+	// 招聘者写面此前是本动作之外的第三份哈希副本（自建 Count + 哈希 + 落库 + 吊销），
+	// 且那句 Count 的 error 没查 ⇒ 查不动会被读成「招聘者不存在」（ADR-0062 票6 的同形）。
+	recruiterPasswordSubject = passwordSubject{dest: &model.RecruiterUser{}, key: "id", role: RecruiterRole, notFound: ErrRecruiterNotFound}
 )
 
 // SetNewPassword 落新口令（学员口令写面的唯一动作）：长度校验 → bcrypt 哈希 → 落库 →

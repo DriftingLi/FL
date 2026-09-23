@@ -331,7 +331,7 @@ func (h *AuthHandler) DeleteAccount(c *gin.Context) {
 	// 全会话吊销在先（ADR-0060 票2）：标记写失败即整体不生效。与改密/禁用的尽力而为
 	// 策略有意不同——那两处有已生效且不可回退的动作，注销没有；先删后吊销会留下
 	// 「资料已删、凭证仍活」（RotateRefresh 不查用户存在，旧 refresh 最长 7 天仍可签发 access）。
-	if err := h.session.RevokeIdentity(c.Request.Context(), "hrwai_user", uid); err != nil {
+	if err := h.session.RevokeIdentity(c.Request.Context(), service.HrwaiRole, uid); err != nil {
 		response.BadRequest(c, "注销失败：会话吊销未生效，请稍后重试")
 		return
 	}

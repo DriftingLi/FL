@@ -14,6 +14,22 @@ import (
 	"forklift-training/pkg/paging"
 )
 
+// ErrHrwaiUserNotFound / ErrTutorNotFound 是这两类账号「真不存在」这一件事的**唯一载体**
+// （ADR-0064 决策 1/2）。住在本文件而非口令写面文件：它由禁用、删除、代重置三类动作共同
+// 发出，代重置只是其中一个 caller。积分域原有一个同文案的 ErrUserNotFound 指同一个对象
+// （hrwai_users 行），已并入此处 —— 同一个事实不得有两个载体。
+var (
+	ErrHrwaiUserNotFound = errors.New("用户不存在")
+	ErrTutorNotFound     = errors.New("讲师不存在")
+	// ErrRecruiterNotFound 见 auth_service.go 的 ToggleRecruiterStatus：招聘者账号不存在。
+	// ErrInvalidHrwaiUserID / ErrInvalidTutorID 是「id 根本不是个合法主体标识」，属输入不合法
+	// 一族（ADR-0064 决策 3，该族整批收口在后续批次）。本批先把分档建起来：此前这几处裸
+	// errors.New 撞上被改窄的默认错误面，会让 /admin/hrwai-users/-5/password 从 400 退成 500。
+	// 文案刻意与原字面量逐字相同，不改 wire 文本。
+	ErrInvalidHrwaiUserID = errors.New("用户 ID 非法")
+	ErrInvalidTutorID     = errors.New("讲师 ID 非法")
+)
+
 // AdminService 管理员服务。
 type AdminService struct {
 	db *gorm.DB
@@ -164,7 +180,7 @@ func (s *AdminService) CreateHrwaiUser(phone, password, account, username, email
 // UpdateHrwaiUser 管理员更新 HRWAI 用户资料(不含密码)。
 func (s *AdminService) UpdateHrwaiUser(id int, username, email, company string, status int16) error {
 	if id <= 0 {
-		return errors.New("用户 ID 非法")
+		return ErrInvalidHrwaiUserID
 	}
 	updates := map[string]interface{}{
 		"username": username,
@@ -183,7 +199,7 @@ func (s *AdminService) UpdateHrwaiUser(id int, username, email, company string, 
 // 代重置的失败策略同口令族：口令一落库即不可回退，吊销写失败不阻断（尽力而为）。
 func (s *AdminService) ResetHrwaiUserPassword(ctx context.Context, id int, newPassword string) error {
 	if id <= 0 {
-		return errors.New("用户 ID 非法")
+		return ErrInvalidHrwaiUserID
 	}
 	revokeErr, err := applyNewPassword(ctx, s.db, s.session, hrwaiPasswordSubject, id, newPassword)
 	if err != nil {
@@ -200,7 +216,7 @@ func (s *AdminService) ResetHrwaiUserPassword(ctx context.Context, id int, newPa
 // 收紧前这里自行查存在 → 哈希 → 落库，零吊销 ⇒ 讲师的旧 refresh 链在口令被换掉后照样续登。
 func (s *AdminService) ResetTutorPassword(ctx context.Context, tutorID int, password string) error {
 	if tutorID <= 0 {
-		return errors.New("讲师 ID 非法")
+		return ErrInvalidTutorID
 	}
 	revokeErr, err := applyNewPassword(ctx, s.db, s.session, tutorPasswordSubject, tutorID, password)
 	if err != nil {
@@ -215,7 +231,7 @@ func (s *AdminService) ResetTutorPassword(ctx context.Context, tutorID int, pass
 // DeleteHrwaiUser 管理员删除 HRWAI 用户。
 func (s *AdminService) DeleteHrwaiUser(id int) error {
 	if id <= 0 {
-		return errors.New("用户 ID 非法")
+		return ErrInvalidHrwaiUserID
 	}
 	return s.db.Delete(&model.HrwaiUser{}, id).Error
 }
@@ -237,7 +253,7 @@ type StatusResultDTO struct {
 // 只有转成禁用态才吊销：恢复启用不剥夺任何既有凭证，此时写标记等于二次惩罚。
 func (s *AdminService) ToggleHrwaiUserStatus(ctx context.Context, id int) (int16, error) {
 	if id <= 0 {
-		return 0, errors.New("用户 ID 非法")
+		return 0, ErrInvalidHrwaiUserID
 	}
 	var user model.HrwaiUser
 	if err := s.db.WithContext(ctx).First(&user, id).Error; err != nil {

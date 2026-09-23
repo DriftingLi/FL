@@ -248,7 +248,7 @@ func assertTableSnapshot(t *testing.T, name string, got *errStatusTable, want []
 func TestErrStatusTable_Snapshot_Points(t *testing.T) {
 	assertTableSnapshot(t, "pointsErrStatus", pointsErrStatus, []errStatusEntry{
 		{sentinel: service.ErrTaskNotFound, status: http.StatusNotFound},
-		{sentinel: service.ErrUserNotFound, status: http.StatusNotFound},
+		{sentinel: service.ErrHrwaiUserNotFound, status: http.StatusNotFound},
 		{sentinel: service.ErrCourseNotFound, status: http.StatusBadRequest},
 		{sentinel: service.ErrCourseNotRedeemable, status: http.StatusBadRequest},
 		{sentinel: service.ErrAlreadyClaimed, status: http.StatusBadRequest},
