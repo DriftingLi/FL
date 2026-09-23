@@ -29,6 +29,10 @@ func NewTutorService(db *gorm.DB, uploadFolder string, fileStore *FileStore, sli
 
 // GetCourses 导师课程列表（与学员端同口径：已上架 + 已挂载方向/等级/证件，ADR-0012 §2），
 // 附学习学员数；实现收敛到课程列表 module（ListCourses）。
+// ErrChapterFileNotFound 章节文件行不存在（课程章节的附件，与「章节不存在」是两件事）。
+// 本文件的「课程/章节不存在」直接用课程域的唯一载体 ErrCourseNotFound / ErrChapterNotFound。
+var ErrChapterFileNotFound = errors.New("文件不存在")
+
 func (s *TutorService) GetCourses(page, pageSize int, credentialID, specialtyID, levelID *int) (CoursePageResult, error) {
 	return ListCourses(s.db, page, pageSize, CourseListOptions{
 		OnlyMounted: true, CredentialID: credentialID, SpecialtyID: specialtyID, LevelID: levelID,
@@ -41,7 +45,10 @@ func (s *TutorService) GetCourses(page, pageSize int, credentialID, specialtyID,
 func (s *TutorService) GetCourseChapters(courseID int) (*TutorCourseChaptersDTO, error) {
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
-		return nil, errors.New("课程不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrCourseNotFound
+		}
+		return nil, err // 查不动不得被读成「不存在」（ADR-0064 决策 1）
 	}
 	var chapters []model.Chapter
 	s.db.Where("course_id = ?", courseID).Order("order_num").Find(&chapters)
@@ -75,7 +82,10 @@ func (s *TutorService) GetCourseChapters(courseID int) (*TutorCourseChaptersDTO,
 func (s *TutorService) GetChapterDetail(chapterID int) (*ChapterDetailDTO, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
-		return nil, errors.New("章节不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrChapterNotFound
+		}
+		return nil, err // 查不动不得被读成「不存在」（ADR-0064 决策 1）
 	}
 	return chapterDetailShared(s.db, &chapter, false, 0)
 }
@@ -84,7 +94,10 @@ func (s *TutorService) GetChapterDetail(chapterID int) (*ChapterDetailDTO, error
 func (s *TutorService) UploadChapterFile(chapterID int, filename string, fileContent []byte) (*ChapterFileDTO, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
-		return nil, errors.New("章节不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrChapterNotFound
+		}
+		return nil, err // 查不动不得被读成「不存在」（ADR-0064 决策 1）
 	}
 	if filename == "" {
 		return nil, errors.New("文件名不能为空")
@@ -140,7 +153,10 @@ func (s *TutorService) UploadChapterFile(chapterID int, filename string, fileCon
 func (s *TutorService) UpdateChapterInfo(chapterID int, in *ChapterInput) (*ChapterDTO, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
-		return nil, errors.New("章节不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrChapterNotFound
+		}
+		return nil, err // 查不动不得被读成「不存在」（ADR-0064 决策 1）
 	}
 	if in == nil {
 		in = &ChapterInput{}
@@ -171,7 +187,10 @@ func (s *TutorService) UpdateChapterInfo(chapterID int, in *ChapterInput) (*Chap
 func (s *TutorService) DeleteChapterFileByID(fileID int) (*DeleteFileResult, error) {
 	var chapterFile model.ChapterFile
 	if err := s.db.First(&chapterFile, fileID).Error; err != nil {
-		return nil, errors.New("文件不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrChapterFileNotFound
+		}
+		return nil, err // 查不动不得被读成「不存在」（ADR-0064 决策 1）
 	}
 	if s.fileStore != nil {
 		_ = s.fileStore.Delete(chapterFile.FileURL)

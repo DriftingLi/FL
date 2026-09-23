@@ -99,7 +99,8 @@ func (h *FeaturedHandler) GetPublicDetail(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *featuredDetailReq) (*service.FeaturedContentDetailDTO, error) {
 			return h.svc.GetPublicDetail(req.ID, req.CountView)
 		},
-	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).
+		WithSentinel(service.ErrFeaturedContentNotFound, http.StatusNotFound).Handle(c)
 }
 
 // IncrementViewCount 精选阅读量
@@ -128,9 +129,10 @@ func (h *FeaturedHandler) IncrementViewCount(c *gin.Context) {
 			}
 			return &viewCountResp{ID: req.ID, Count: count}, nil
 		},
-		// 判定不动（票8 逐端点判过）：FeaturedService.IncrementViewCount 的「内容不存在」是裸
-		// errors.New，自增失败的驱动错误原样上抛 ⇒ api 侧无哨兵可分档，改判会把真 404 变 500。
-		ErrStatus: errStatusAll(http.StatusNotFound),
+		ErrStatus: &errStatusTable{entries: []errStatusEntry{
+			{sentinel: service.ErrFeaturedContentNotFound, status: http.StatusNotFound},
+			{sentinel: nil, status: http.StatusInternalServerError},
+		}},
 		Render: func(c *gin.Context, _ *featuredIDReq, resp *viewCountResp) {
 			response.Success(c, gin.H{"content_id": resp.ID, "view_count": resp.Count})
 		},
@@ -187,7 +189,8 @@ func (h *FeaturedHandler) AdminDetail(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *featuredIDReq) (*service.FeaturedContentAdminDetailDTO, error) {
 			return h.svc.AdminDetail(req.ID)
 		},
-	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).
+		WithSentinel(service.ErrFeaturedContentNotFound, http.StatusNotFound).Handle(c)
 }
 
 // @Summary 创建精选内容
@@ -252,7 +255,8 @@ func (h *FeaturedHandler) Delete(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *featuredIDReq) (*service.FeaturedDeleteResult, error) {
 			return h.svc.Delete(req.ID)
 		},
-	}.WithSuccess(okMsg("内容删除成功"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("内容删除成功"), http.StatusInternalServerError).
+		WithSentinel(service.ErrFeaturedContentNotFound, http.StatusNotFound).Handle(c)
 }
 
 // @Summary 发布精选内容
@@ -272,7 +276,8 @@ func (h *FeaturedHandler) Publish(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *featuredIDReq) (*service.FeaturedContentAdminDetailDTO, error) {
 			return h.svc.Publish(req.ID)
 		},
-	}.WithSuccess(okMsg("内容发布成功"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("内容发布成功"), http.StatusInternalServerError).
+		WithSentinel(service.ErrFeaturedContentNotFound, http.StatusNotFound).Handle(c)
 }
 
 // @Summary 上传精选内容图片

@@ -33,6 +33,10 @@ var featuredCategoryLabels = map[string]string{
 	"news":     "政策法规",
 }
 
+// ErrFeaturedContentNotFound 「精选内容行不存在」的唯一载体（ADR-0064 决策 1/2）：
+// 此前 8 处各写一遍同文案裸 errors.New，且把「查不动」一起塌进来。
+var ErrFeaturedContentNotFound = errors.New("内容不存在")
+
 // CategoryLabel 返回分类的中文标签。
 func (s *FeaturedService) CategoryLabel(category string) string {
 	return featuredCategoryLabel(category)
@@ -79,10 +83,13 @@ func (s *FeaturedService) GetPublicList(page, pageSize int, category string, sor
 func (s *FeaturedService) GetPublicDetail(id int, countView bool) (*FeaturedContentDetailDTO, error) {
 	var item model.FeaturedContent
 	if err := s.db.First(&item, id).Error; err != nil {
-		return nil, errors.New("内容不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrFeaturedContentNotFound
+		}
+		return nil, err // 查不动不得被读成「不存在」（ADR-0064 决策 1）
 	}
 	if item.Status != 1 {
-		return nil, errors.New("内容不存在")
+		return nil, ErrFeaturedContentNotFound
 	}
 
 	if countView {
@@ -156,7 +163,10 @@ func (s *FeaturedService) AdminList(page, pageSize int, category, status string)
 func (s *FeaturedService) AdminDetail(id int) (*FeaturedContentAdminDetailDTO, error) {
 	var item model.FeaturedContent
 	if err := s.db.First(&item, id).Error; err != nil {
-		return nil, errors.New("内容不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrFeaturedContentNotFound
+		}
+		return nil, err // 查不动不得被读成「不存在」（ADR-0064 决策 1）
 	}
 	dto := featuredContentAdminDetailDTO(&item)
 	return &dto, nil
@@ -212,7 +222,10 @@ func (s *FeaturedService) Create(in FeaturedContentInput) (*FeaturedContentAdmin
 func (s *FeaturedService) Update(id int, in FeaturedContentUpdateInput) (*FeaturedContentAdminDetailDTO, error) {
 	var item model.FeaturedContent
 	if err := s.db.First(&item, id).Error; err != nil {
-		return nil, errors.New("内容不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrFeaturedContentNotFound
+		}
+		return nil, err // 查不动不得被读成「不存在」（ADR-0064 决策 1）
 	}
 	newCover, newContent := item.CoverImage, item.Content
 	if in.CoverImage != nil {
@@ -279,7 +292,10 @@ func (s *FeaturedService) Update(id int, in FeaturedContentUpdateInput) (*Featur
 func (s *FeaturedService) Delete(id int) (*FeaturedDeleteResult, error) {
 	var item model.FeaturedContent
 	if err := s.db.First(&item, id).Error; err != nil {
-		return nil, errors.New("内容不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrFeaturedContentNotFound
+		}
+		return nil, err // 查不动不得被读成「不存在」（ADR-0064 决策 1）
 	}
 	if err := s.db.Delete(&item).Error; err != nil {
 		return nil, err
@@ -312,7 +328,10 @@ func (s *FeaturedService) deleteFeaturedImages(cover, content string) {
 func (s *FeaturedService) Publish(id int) (*FeaturedContentAdminDetailDTO, error) {
 	var item model.FeaturedContent
 	if err := s.db.First(&item, id).Error; err != nil {
-		return nil, errors.New("内容不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrFeaturedContentNotFound
+		}
+		return nil, err // 查不动不得被读成「不存在」（ADR-0064 决策 1）
 	}
 	if item.Status == 1 {
 		dto := featuredContentAdminDetailDTO(&item)
@@ -337,10 +356,10 @@ func (s *FeaturedService) Publish(id int) (*FeaturedContentAdminDetailDTO, error
 func (s *FeaturedService) IncrementViewCount(id int) (int, error) {
 	var item model.FeaturedContent
 	if err := s.db.First(&item, id).Error; err != nil {
-		return 0, errors.New("内容不存在")
+		return 0, ErrFeaturedContentNotFound
 	}
 	if item.Status != 1 {
-		return 0, errors.New("内容不存在")
+		return 0, ErrFeaturedContentNotFound
 	}
 	newCount := item.ViewCount + 1
 	// 原子自增（并发安全），与 GetPublicDetail 计数路径一致

@@ -10169,55 +10169,6 @@ paths:
       summary: 上报学习进度
       tags:
       - 学员端-课程
-  /courses:
-    get:
-      consumes:
-      - application/json
-      description: 公开访问，支持按专业方向 specialty_id / 等级 level_id / 目标证件 credential_id /
-        热门精品 filter=hot|featured|all 过滤，分页返回
-      parameters:
-      - default: 1
-        description: 页码
-        in: query
-        name: page
-        type: integer
-      - default: 12
-        description: 每页条数
-        in: query
-        name: page_size
-        type: integer
-      - description: 专业方向ID
-        in: query
-        name: specialty_id
-        type: integer
-      - description: 等级ID
-        in: query
-        name: level_id
-        type: integer
-      - description: 目标证件ID
-        in: query
-        name: credential_id
-        type: integer
-      - default: all
-        description: 热门/精品筛选 hot|featured|all
-        in: query
-        name: filter
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: success
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.R'
-            - properties:
-                data:
-                  $ref: '#/definitions/service.CoursePageResult'
-              type: object
-      summary: 课程列表
-      tags:
-      - 学员端-课程
   /credentials:
     get:
       description: 学员端公开证件列表（目标证件，仅启用项）
