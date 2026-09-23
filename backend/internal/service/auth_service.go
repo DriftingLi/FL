@@ -274,14 +274,14 @@ func (s *AuthService) GetHrwaiUserByID(id int) (*model.HrwaiUser, error) {
 // UpdatePassword 登录态改密入口（账号密码登录用）：口令落库与全会话吊销都交给
 // SetNewPassword（ADR-0062 票7 两条口令写面合一），本方法只声明自己这一族的失败策略。
 func (s *AuthService) UpdatePassword(ctx context.Context, userID int, password string) error {
-	revokeErr, err := s.SetNewPassword(ctx, userID, password)
-	if err != nil {
-		return err
+	res := s.SetNewPassword(ctx, userID, password)
+	if !res.Applied() {
+		return res.Err
 	}
 	// 尽力而为族：快捷登录的静默续登在改密后立即失效，回退密码登录。
 	// 吊销标记写失败不阻断改密（密码已生效、不可回退），记日志暴露缺口。
-	if revokeErr != nil {
-		s.logger.Warn("改密后 refresh 吊销标记写入失败", zap.Int("user_id", userID), zap.Error(revokeErr))
+	if res.RevokeErr != nil {
+		s.logger.Warn("改密后 refresh 吊销标记写入失败", zap.Int("user_id", userID), zap.Error(res.RevokeErr))
 	}
 	return nil
 }
@@ -701,12 +701,12 @@ type RecruiterPasswordResetResult struct{}
 // 招聘者写面在 recruiter 命名空间里自建（SetNewPassword 落的是 hrwai_users），但长度规则
 // 与吊销族策略同源：validatePasswordLength + 落库后尽力而为吊销。
 func (s *AuthService) ResetRecruiterPassword(ctx context.Context, id int, password string) error {
-	revokeErr, err := applyNewPassword(ctx, s.db, s.session, recruiterPasswordSubject, id, password)
-	if err != nil {
-		return err
+	res := applyNewPassword(ctx, s.db, s.session, recruiterPasswordSubject, id, password)
+	if !res.Applied() {
+		return res.Err
 	}
-	if revokeErr != nil {
-		s.logger.Warn("招聘员口令重置后 refresh 吊销标记写入失败", zap.Int("recruiter_id", id), zap.Error(revokeErr))
+	if res.RevokeErr != nil {
+		s.logger.Warn("招聘员口令重置后 refresh 吊销标记写入失败", zap.Int("recruiter_id", id), zap.Error(res.RevokeErr))
 	}
 	return nil
 }

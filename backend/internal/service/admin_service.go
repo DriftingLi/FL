@@ -201,12 +201,12 @@ func (s *AdminService) ResetHrwaiUserPassword(ctx context.Context, id int, newPa
 	if id <= 0 {
 		return ErrInvalidHrwaiUserID
 	}
-	revokeErr, err := applyNewPassword(ctx, s.db, s.session, hrwaiPasswordSubject, id, newPassword)
-	if err != nil {
-		return err
+	res := applyNewPassword(ctx, s.db, s.session, hrwaiPasswordSubject, id, newPassword)
+	if !res.Applied() {
+		return res.Err
 	}
-	if revokeErr != nil {
-		s.logger.Warn("代重置后 refresh 吊销标记写入失败", zap.Int("user_id", id), zap.Error(revokeErr))
+	if res.RevokeErr != nil {
+		s.logger.Warn("代重置后 refresh 吊销标记写入失败", zap.Int("user_id", id), zap.Error(res.RevokeErr))
 	}
 	return nil
 }
@@ -218,12 +218,12 @@ func (s *AdminService) ResetTutorPassword(ctx context.Context, tutorID int, pass
 	if tutorID <= 0 {
 		return ErrInvalidTutorID
 	}
-	revokeErr, err := applyNewPassword(ctx, s.db, s.session, tutorPasswordSubject, tutorID, password)
-	if err != nil {
-		return err
+	res := applyNewPassword(ctx, s.db, s.session, tutorPasswordSubject, tutorID, password)
+	if !res.Applied() {
+		return res.Err
 	}
-	if revokeErr != nil {
-		s.logger.Warn("讲师口令重置后 refresh 吊销标记写入失败", zap.Int("tutor_id", tutorID), zap.Error(revokeErr))
+	if res.RevokeErr != nil {
+		s.logger.Warn("讲师口令重置后 refresh 吊销标记写入失败", zap.Int("tutor_id", tutorID), zap.Error(res.RevokeErr))
 	}
 	return nil
 }
