@@ -18,7 +18,7 @@ type CourseInput struct {
 	CertificateTemplateID *int    `json:"certificate_template_id"`
 	TheoryHours           *int    `json:"theory_hours"`
 	PracticeHours         *int    `json:"practice_hours"`
-	PrerequisiteCourseIDs []int   `json:"prerequisite_course_ids" nullability:"nullable"`
+	PrerequisiteCourseIDs []int   `json:"prerequisite_course_ids"`
 	IsHot                 *bool   `json:"is_hot"`
 	IsFeatured            *bool   `json:"is_featured"`
 }

@@ -59,8 +59,10 @@ export function contactBadge(state: ContactState | undefined): StatusDescriptor 
  *
  * 判据只写 `=== true`：`company_disabled` 是可选槽，缺席即「无此态」；
  * 若补一个 `=== false` 分支，就把「后端还没这个字段」读成了「企业可用」——那是把未知当结论。
- * 措辞在此单点判定（模板不得内联裸串，扫描见 __tests__/statusWordsTemplate.spec.ts）。
+ * 措辞在此单点判定（模板不得内联裸串，扫描见 __tests__/statusWordsTemplate.spec.ts），
+ * 且**首句与明文位置同一句话**（后端 ErrCompanyUnavailable = 「企业账号已停用或已注销」）：
+ * 决策 5 要的是「同键同措辞」，两处各自另起一句就等于把同一个事实说出两个名字。
  */
 export function companyAvailability(disabled: boolean | undefined): StatusDescriptor | null {
-  return disabled === true ? { label: '企业已停用，联系方式已收回', tone: 'warning' } : null
+  return disabled === true ? { label: '企业账号已停用或已注销，联系方式已收回', tone: 'warning' } : null
 }

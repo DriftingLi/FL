@@ -80,7 +80,8 @@ describe('company_disabled 那一格（ADR-0064 决策 5 / 移动端 #1267）', 
   })
 
   it('出现即恒 true：只认 === true，措辞与 tone 出自本单点', () => {
-    expect(companyAvailability(true)).toEqual({ label: '企业已停用，联系方式已收回', tone: 'warning' })
+    // 首句逐字对齐后端 ErrCompanyUnavailable 的文案（决策 5「同键同措辞」）。
+    expect(companyAvailability(true)).toEqual({ label: '企业账号已停用或已注销，联系方式已收回', tone: 'warning' })
   })
 
   it('与徽章正交：企业被停用不得改变 contactBadge 的投影（授权事实不被处置改写）', () => {

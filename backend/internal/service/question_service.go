@@ -46,7 +46,7 @@ type QuestionCreateInput struct {
 	ScoringCriteria string          `json:"scoring_criteria"`
 	Score           int             `json:"score"`
 	CredentialID    int             `json:"credential_id"`
-	TagIDs          []int           `json:"tag_ids" nullability:"nullable"`
+	TagIDs          []int           `json:"tag_ids"`
 }
 
 // QuestionUpdateInput 更新题目的 typed 入参（指针 = 「未提供」与「提供零值」可分，部分更新语义不变）。
@@ -61,12 +61,12 @@ type QuestionUpdateInput struct {
 	ReferenceAnswer *string          `json:"reference_answer"`
 	ScoringCriteria *string          `json:"scoring_criteria"`
 	Score           *int             `json:"score"`
-	TagIDs          *[]int           `json:"tag_ids" nullability:"nullable"`
+	TagIDs          *[]int           `json:"tag_ids"`
 }
 
 // QuestionBatchImportInput 批量导入的 typed body（票 6：swagger 面由 object 变 typed）。
 type QuestionBatchImportInput struct {
-	Questions []QuestionCreateInput `json:"questions" nullability:"nullable"`
+	Questions []QuestionCreateInput `json:"questions"`
 }
 
 // stringifyAnswerJSON 把 typed 入参里的 answer 原始 JSON（字符串或数组）归一为存储字符串

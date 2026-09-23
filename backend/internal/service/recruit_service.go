@@ -97,13 +97,7 @@ func fillContactStates(db *gorm.DB, recruiterID int, cards []RecruitResumeCard) 
 	if err != nil {
 		return
 	}
-	// 企业自己那一维（ADR-0064 决策 5）：徽章**不**因此降级（授权事实不被处置改写），
-	// 只在「授权在、而明文当场取不到」时补一格具名说明，让列表页也能分辨。
-	// 「查不动」不猜成「已停用」（ADR-0062 票6）：宁可少说这一格，也不把 DB 故障报成处置事实。
-	companyUnavailable := false
-	if err := recruiterAccountUsable(db, recruiterID); errors.Is(err, ErrCompanyUnavailable) {
-		companyUnavailable = true
-	}
+	companyUnavailable := companyUnavailableForCards(db, recruiterID)
 	for i := range cards {
 		if g, ok := grants[cards[i].UserID]; ok && g.State != "" {
 			cards[i].ContactState = string(g.State)
@@ -113,6 +107,14 @@ func fillContactStates(db *gorm.DB, recruiterID int, cards []RecruitResumeCard) 
 			}
 		}
 	}
+}
+
+// companyUnavailableForCards caller 企业自己那一维的可投影形态（ADR-0064 决策 5）：
+// 只有**确证**被禁用或已注销才返回 true；「查不动」返回 false——
+// 把 DB 故障报成一条处置事实，比少说一格更坏（ADR-0062 票6 同判据）。
+func companyUnavailableForCards(db *gorm.DB, recruiterID int) bool {
+	err := recruiterAccountUsable(db, recruiterID)
+	return errors.Is(err, ErrCompanyUnavailable)
 }
 
 // resumeHoldsCredential 简历持证筛选：简历卡的 resume_certifications JSONB 数组内含该 credential_id

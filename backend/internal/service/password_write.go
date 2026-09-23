@@ -1,5 +1,6 @@
 // Package service 实现业务服务层。
-// 本文件：学员口令写面的唯一动作（ADR-0062 决策 7）。
+// 本文件：口令写面的唯一动作，覆盖三个主体（学员 / 讲师 / 招聘者）。ADR-0062 决策 7 起、
+// ADR-0064 决策 4 参数化。
 //
 // 全会话吊销（identity revoke）有两族终止语义（CONTEXT.md「会话（session）」），两族的
 // **失败策略不同且不许互相顶替**，故本文件只提供口令族那一条：
@@ -85,13 +86,19 @@ func (s *AuthService) SetNewPassword(ctx context.Context, userID int, password s
 	return applyNewPassword(ctx, s.db, s.session, hrwaiPasswordSubject, userID, password)
 }
 
-// applyNewPassword 是「落新口令」这一动作的实现体。四个入口共用（ADR-0064 决策 4 把它从
+// applyNewPassword 是「落新口令」这一动作的实现体。五个入口共用（ADR-0064 决策 4 把它从
 // 「学员专属」扩成「按主体参数化」）：学员自助改密与验证码重置（经 SetNewPassword）、
 // 管理员代重置学员口令、管理员代重置讲师口令。
 //
 // 之所以是包内函数而不是某个服务的方法：它唯一的两个依赖（db、session）由 caller 各自持有，
 // 做成方法就会逼 AdminService 依赖 AuthService —— 那是两个服务之间的横向耦合，
 // 而这里要的只是同一条动作。subject 承载的正是「同一条动作、不同主体」这一维。
+//
+// 五个入口 / 六处调用（数错过一次，这里按实测写）：
+//
+//	AuthService.UpdatePassword、VerifyCodeService.ResetPasswordWithCode、
+//	AdminService.ResetHrwaiUserPassword、AdminService.ResetTutorPassword、
+//	AuthService.ResetRecruiterPassword；SetNewPassword 与 applyNewPassword 各是其中一条中转。
 func applyNewPassword(ctx context.Context, db *gorm.DB, session *security.Session,
 	subject passwordSubject, id int, password string) PasswordWriteResult {
 	if err := validatePasswordLength(password); err != nil {
