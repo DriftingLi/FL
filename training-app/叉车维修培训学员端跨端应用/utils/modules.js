@@ -260,6 +260,7 @@ const MODULES = {
       'api/checkin.uts',
       'api/forum.uts',
       'api/forumDto.uts',
+      'composables/useForumImagePicker.uts',
       'composables/useReplyComposer.uts',
       'composables/useReport.uts',
       'composables/useResourcePoints.uts',
@@ -271,6 +272,7 @@ const MODULES = {
       'pages/forum/components/forum-experience-sort-bar.uvue',
       'pages/forum/components/forum-featured-filter.uvue',
       'pages/forum/components/forum-markdown-blocks.uvue',
+      'pages/forum/components/forum-markdown-input.uvue',
       'pages/forum/components/forum-qa-header.uvue',
       'pages/forum/components/forum-reply-list.uvue',
       'pages/forum/components/forum-report-dialog.uvue',
@@ -335,11 +337,16 @@ const MODULES = {
 
   login: {
     extraDirs: [],
-    files: ['composables/useBiometric.uts', 'pages/login/login.uvue'],
-    extractDirs: [],
+    files: [
+      'composables/useBiometric.uts',
+      'pages/login/composables/useBiometricGate.uts',
+      'pages/login/composables/useLoginForm.uts',
+      'pages/login/login.uvue',
+    ],
+    extractDirs: ['pages/login/composables'],
     crossModuleConsumers: [],
-    /** 超预算：login.uvue 977 */
-    budget: 'pending',
+    /** T13 手术（#651）：login.uvue 977→581（表单态下沉 useLoginForm、生物识别门控面单拆 useBiometricGate）⇒ 执法面随之上线（原为「超预算 977」的 pending） */
+    budget: BUDGET,
     budgetOverrides: {},
     allowlistOwned: [],
     maxDepth: MAX_DEPTH,

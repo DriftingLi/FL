@@ -59,6 +59,20 @@ export function regionLabel(province : string, city : string) : string {
  */
 export const FORUM_REGION_NOTICE : string = '发布内容会显示 IP 属地'
 
+/**
+ * Markdown 档的**能力与边界提示**（ADR-0025 ⑥-5）。
+ *
+ * ⚠️ 这一行同样是「不写说明性 hint 文本」的**明确例外**（与上面那条并列登记在移动端 `AGENTS.md`
+ * 的「前端 UI 约定」里）—— 依据是 ADR-0046 自己的判据「判据放在作者看得见的地方」，
+ * 按约定清理 hint 时**跳过它**。
+ *
+ * 它**只讲边界、不讲能力清单**（ADR-0025 ⑥-5 的原话）：能力清单会随子集漂移、变成假话，
+ * 而这里的每条边界都是**本档当前的事实** —— 表格与 mermaid 退回原文、行内标记被剥离、
+ * 图片走独立入口。`forumMarkdownInputContract.test.js` 会核「这几条边界与成员声明表一致」，
+ * 声明表一变这条文案就必须同批改。
+ */
+export const FORUM_MARKDOWN_BOUNDARY_NOTICE : string = '表格与图表显示原文；粗体、链接不出样式；图片用下方入口'
+
 /** 基于 author_id 稳定生成头像背景色 */
 export function getAvatarColor(authorId : number) : string {
     const colors : string[] = ['#2979ff', '#4caf50', '#ff9800', '#9c27b0', '#e91e63', '#009688', '#795548', '#607d8b']

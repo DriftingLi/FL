@@ -1,0 +1,225 @@
+/**
+ * 论坛输入区**工具栏** —— 按钮模型 + 纯插入逻辑（ADR-0025 P3）
+ *
+ * 为什么单独成模块而不是写在 `.uvue` 里：工具栏的**内容**要能被机检 —— 根 ADR-0052 决策 3 把
+ * 「工具栏按钮集 = 已声明子集」定成硬约束（**按钮承诺的语法必须真能渲染出来**），而
+ * `docs/agents/guards.md` 明说接线守护不构成 ③ 门证据。抽到 `utils/` 后它可被 `utils/utsHarness.js`
+ * 的 `loadUts` **真执行**：`markdownToolbarBehavior.test.js` 断言的是**跑起来的产出物**
+ *   - 每枚按钮插入后的正文，交**真执行的解析器**跑一遍，必须产出该按钮承诺的块类型（round-trip）；
+ *   - 每枚按钮的成员必须**在本档的成员声明表里**（`SUBSET_MEMBERS_FORUM`）——
+ *     这一条就是 ADR-0025 ⑥-6 登记的「行内格式」差异：移动端本档不做行内渲染，
+ *     `**粗**` 会被 `stripInline` **剥成「粗」**（可见、但**不出加粗样式**），所以工具栏
+ *     **不放**加粗 / 斜体 / 链接 / 行内代码按钮 —— 放一枚就是承诺一个渲染不出来的效果。
+ *
+ * 按钮集与声明集的**双向对账**（见 `markdownToolbarBehavior.test.js`）：
+ *   ① 每枚按钮的成员必须在论坛档声明表里（不许承诺未声明的语法）；
+ *   ② 声明表里每个成员都得有按钮（或登记进 {@link DECLARED_WITHOUT_BUTTON} 并写明理由）——
+ *      否则「声明了却没入口」会静默漂过去。
+ *
+ * @note 不依赖 DOM API，跨端通用（App / 小程序 / H5）
+ */
+import { MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE, MEMBER_CODE, MEMBER_DIVIDER, SUBSET_FORUM, subsetMembers } from './markdown'
+
+/**
+ * 工具栏**按钮成员**（数组顺序 = 工具栏上的排列顺序）。
+ *
+ * 这五个恰好就是 ADR-0025 P1 定版的论坛档声明（`SUBSET_MEMBERS_FORUM`）——
+ * **不是巧合，是判据**：两者由双向对账钉住（见文件头）。
+ */
+export const TOOLBAR_MEMBERS : string[] = [
+    MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE, MEMBER_CODE, MEMBER_DIVIDER,
+]
+
+/**
+ * **声明了但故意不给按钮**的成员（今天为空）。
+ *
+ * 存在的意义是让第 ② 条对账有个显式的、活的出口：将来给论坛档加成员时，要么补一枚按钮，
+ * 要么在这里登记并写明为什么不给入口 —— 两条都不做则判红。空数组是「今天每个声明的成员都有按钮」。
+ */
+export const DECLARED_WITHOUT_BUTTON : string[] = []
+
+/** 插入结果：新正文 + 插入后应落的选区（`start == end` 即光标） */
+export type ToolbarInsert = {
+    text : string
+    start : number
+    end : number
+}
+
+/** 把下标夹进 `[lo, hi]`（越界的选区一律夹住，不让它变成 `substring` 的静默截断） */
+function clamp(value : number, lo : number, hi : number) : number {
+    if (value < lo) return lo
+    if (value > hi) return hi
+    return value
+}
+
+/**
+ * 某档下**该出现**的按钮成员：与声明表求交。
+ *
+ * 未知档位退到章节档（与 `subsetMembers` 同向）；`forum` 档返回 {@link TOOLBAR_MEMBERS} 全量。
+ */
+export function toolbarMembers(subset : string) : string[] {
+    const declared = subsetMembers(subset)
+    const out : string[] = []
+    for (let i = 0; i < TOOLBAR_MEMBERS.length; i++) {
+        if (declared.indexOf(TOOLBAR_MEMBERS[i]) >= 0) out.push(TOOLBAR_MEMBERS[i])
+    }
+    return out
+}
+
+/**
+ * **论坛档**该出现的按钮 —— 界面层的唯一入口。
+ *
+ * 为什么留这个不带参数的出口：档位常量（`SUBSET_FORUM`）与成员声明表都住在 `utils/markdown`，
+ * 而**页面层不得直引它们**（P2 的接线口径：页面只经格式轴那一层，直引等于绕过格式轴自己判档 ——
+ * 见 `utils/markdownContract.test.js` 的论坛面组）。于是「把本档声明翻成一排按钮」这件事收在这里，
+ * 组件只调本函数，不 import `utils/markdown`。
+ */
+export function forumToolbarMembers() : string[] {
+    return toolbarMembers(SUBSET_FORUM)
+}
+
+/**
+ * 按钮上显示的**语法记号**（就是该按钮插入的那串记号，短、横滑行里不等宽也挤不坏）。
+ *
+ * 为什么用记号而不是图标字形：① 它就是插入的东西，**自解释**（长按提示再补中文）；
+ * ② 避开了 `utils/iconGlyphContract.test.js` 守的那类「图标位降级成单个 ASCII 字母」的风险 ——
+ * 本函数返回的是**语法记号**、不是 emoji 图标位，故名字也不取 `*Icon*`（那正是该守护的**有意收窄**
+ * 边界：它只切「图标位」那一族函数）。已知 `###` / `-` / `>` / ` ``` ` / `---` 都是多字符或
+ * 非字母 ASCII，本身也过得了那条判据。
+ */
+export function toolbarSyntax(member : string) : string {
+    if (member == MEMBER_HEADING) return '###'
+    if (member == MEMBER_LIST) return '-'
+    if (member == MEMBER_QUOTE) return '>'
+    if (member == MEMBER_CODE) return '```'
+    if (member == MEMBER_DIVIDER) return '---'
+    return ''
+}
+
+/**
+ * 长按提示的中文文案 —— **单点**（ADR-0025 决策⑥：手机没有 hover，长按是最接近的既有手势）。
+ * 组件里不许再抄一份中文；`markdownToolbarBehavior.test.js` 钉住「非空且互不相同」。
+ */
+export function toolbarLabel(member : string) : string {
+    if (member == MEMBER_HEADING) return '标题'
+    if (member == MEMBER_LIST) return '列表'
+    if (member == MEMBER_QUOTE) return '引用'
+    if (member == MEMBER_CODE) return '代码块'
+    if (member == MEMBER_DIVIDER) return '分隔线'
+    return ''
+}
+
+/**
+ * 每枚按钮**承诺的块类型** —— round-trip 判据的期望值（插入 → 真执行解析 → 产出该类型）。
+ * 与 `parseMarkdown` 的 `MarkdownBlock.type` 同词汇；空串 = 「这枚按钮不承诺任何块」= 判红。
+ */
+export function toolbarBlockType(member : string) : string {
+    if (member == MEMBER_HEADING) return 'heading'
+    if (member == MEMBER_LIST) return 'list'
+    if (member == MEMBER_QUOTE) return 'quote'
+    if (member == MEMBER_CODE) return 'code'
+    if (member == MEMBER_DIVIDER) return 'divider'
+    return ''
+}
+
+/** 行前缀类成员的语法前缀（代码块走**包裹**，不在此列） */
+function linePrefix(member : string) : string {
+    if (member == MEMBER_HEADING) return '### '
+    if (member == MEMBER_LIST) return '- '
+    if (member == MEMBER_QUOTE) return '> '
+    return ''
+}
+
+/**
+ * **纯插入**：给定正文 + 选区 + 一枚按钮 → 新正文 + 新选区。无副作用、不碰 DOM/`uni`。
+ *
+ * 语义（三种形态，`markdownToolbarBehavior.test.js` 逐条钉住）：
+ *   - **行前缀类**（标题 / 列表 / 引用）：选区跨多行则**逐行**加前缀（空行跳过 —— 不给空白行
+ *     造一个孤立项目符号）；无选区则回退到光标所在**行首**再前缀；
+ *   - **代码块**：选区非空则整块包裹成围栏；无选区则插入空围栏并把光标放进块内空行；
+ *   - **分隔线**：独占一行，前后按需补换行（行首 / 行尾不重复补）。
+ *
+ * 未知成员**原样返回**（`text` 不变、选区夹住）—— 于是「工具栏里出现一枚没有插入语义的按钮」
+ * 在行为上表现为「点了没反应」，而 round-trip 判据会先一步判红（`toolbarBlockType` 返回空串）。
+ *
+ * @param content 正文原文
+ * @param start   选区起点（越界夹住）
+ * @param end     选区终点（越界夹住；小于起点时两者交换）
+ * @param member  工具栏成员名（`MEMBER_*`）
+ */
+export function applyToolbarInsert(content : string, start : number, end : number, member : string) : ToolbarInsert {
+    const len = content.length
+    let from = clamp(start, 0, len)
+    let to = clamp(end, 0, len)
+    if (to < from) {
+        const swap = from
+        from = to
+        to = swap
+    }
+    const before = content.substring(0, from)
+    const selected = content.substring(from, to)
+    const after = content.substring(to)
+
+    // 代码块：整块包裹
+    if (member == MEMBER_CODE) {
+        if (selected.length > 0) {
+            const block = '```\n' + selected + '\n```'
+            return {
+                text: before + block + after,
+                start: from + 4,
+                end: from + 4 + selected.length,
+            } as ToolbarInsert
+        }
+        const empty = '```\n\n```'
+        return {
+            text: before + empty + after,
+            start: from + 4,
+            end: from + 4,
+        } as ToolbarInsert
+    }
+
+    // 分隔线：独占一行。**选区内容原样保留**（推到分隔线之后）—— 丢字是这一支最容易犯的错，
+    // `markdownToolbarBehavior.test.js` 有一条专门盯它。
+    if (member == MEMBER_DIVIDER) {
+        const lead = (before.length == 0 || before.endsWith('\n')) ? '' : '\n'
+        // 选区非空时必须断行，否则 `---正文` 会被解析成段落（分隔线**必须独占一行**才成块）
+        const mid = selected.length > 0
+            ? '\n'
+            : ((after.length == 0 || after.startsWith('\n')) ? '' : '\n')
+        const ins = lead + '---' + mid
+        return {
+            text: before + ins + selected + after,
+            start: from + ins.length,
+            end: from + ins.length + selected.length,
+        } as ToolbarInsert
+    }
+
+    const prefix = linePrefix(member)
+    if (prefix.length == 0) {
+        return { text: content, start: from, end: to } as ToolbarInsert
+    }
+
+    // 有选区：逐行前缀（空行跳过）
+    if (selected.length > 0) {
+        const lines = selected.split('\n')
+        const out : string[] = []
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i]
+            out.push(line.length == 0 ? line : prefix + line)
+        }
+        const next = out.join('\n')
+        return { text: before + next + after, start: from, end: from + next.length } as ToolbarInsert
+    }
+
+    // 无选区：回退到本行行首前缀
+    let lineStart = from
+    while (lineStart > 0 && content.substring(lineStart - 1, lineStart) != '\n') {
+        lineStart--
+    }
+    const caret = lineStart + prefix.length
+    return {
+        text: content.substring(0, lineStart) + prefix + content.substring(lineStart),
+        start: caret,
+        end: caret,
+    } as ToolbarInsert
+}

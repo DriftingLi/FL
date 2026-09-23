@@ -318,6 +318,16 @@ func TestAIAssistantDiagnosisEnvelopeContract(t *testing.T) {
 	if strings.HasPrefix(strings.TrimSpace(rec.Body.String()), "{") {
 		t.Fatal("手册代理是文件流、不是统一信封：响应体不应是 JSON 对象")
 	}
+
+	// ---- 案例配图（fault_images 根 + 中文段，客户端按段 encodeURIComponent）----
+	rec = performRequest(r, http.MethodGet,
+		"/api/ai-assistant/diagnosis/manual/fault_images/%E5%88%B6%E5%8A%A8%E7%B3%BB%E7%BB%9F/%E5%9B%BE_1.jpg")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("案例图代理期望 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if rec.Body.String() != "CASE-JPG-BYTES" || rec.Header().Get("Content-Type") != "image/jpeg" {
+		t.Fatalf("案例图应原样透传字节与类型，got %q %q", rec.Body.String(), rec.Header().Get("Content-Type"))
+	}
 }
 
 // newDiagnosisStub 外部诊断助手替身：只覆盖 proxy 消费的 4 条只读路径。
@@ -335,13 +345,26 @@ func newDiagnosisStub(t *testing.T) *httptest.Server {
 		jsonBody(w, `{"code":0,"data":["CPCD30","CPD15"]}`)
 	})
 	mux.HandleFunc("/assistant/api/fault-codes", func(w http.ResponseWriter, _ *http.Request) {
+		// image_refs 是 20260921 新增列（fault_codes 变 SELECT * 后随 items 透出）：
+		// 我们出站形状必须不受它影响（下方 aiWantKeys 逐键锁）。
 		jsonBody(w, `{"code":0,"data":{"items":[{"id":15,"brand":"heli","brand_cn":"合力","model_series":"CPCD",
 			"fault_code":"E15","fault_name":"起升异常","symptom":"不起升","causes":"油路","sop_steps":"检查油路",
-			"safety_warning":"断电","part_numbers":"P-1","source_file":"manual.pdf","page_num":3}],"total":1}}`)
+			"safety_warning":"断电","part_numbers":"P-1","source_file":"manual.pdf","page_num":3,
+			"image_refs":[{"image_id":"img_a1","url":"/assistant/static/fault_images/制动系统/a1.png"}]}],"total":1}}`)
 	})
 	mux.HandleFunc("/assistant/static/manual/", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "image/png")
 		_, _ = w.Write([]byte("PNG-BYTES"))
+	})
+	// 20260921 新增静态根：图文案例配图，目录名是中文系统名。路径逐字匹配 ⇒ 同时钉住
+	// 「客户端百分号编码 → 真实路由 → 代理再转义」这条链上游拿到的是解码后的中文段。
+	mux.HandleFunc("/assistant/static/fault_images/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/assistant/static/fault_images/制动系统/图_1.jpg" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "image/jpeg")
+		_, _ = w.Write([]byte("CASE-JPG-BYTES"))
 	})
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)

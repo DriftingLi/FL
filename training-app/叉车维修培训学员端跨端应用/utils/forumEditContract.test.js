@@ -37,9 +37,11 @@ describe('论坛编辑链路契约（#811）', () => {
     expect(create).toMatch(
       /await updateForumTopicApi\(editTopicId\.value, title\.value\.trim\(\), content\.value\.trim\(\), images\.value, selectedCategory\.value\)/
     );
+    // #1240 P3 起新建路径**末位多带一个格式声明**（作者的档位）；编辑路径仍不带（编辑不变式）
     expect(create).toMatch(
-      /await createForumTopicApi\(title\.value\.trim\(\), content\.value\.trim\(\), images\.value, selectedCategory\.value\)/
+      /await createForumTopicApi\(title\.value\.trim\(\), content\.value\.trim\(\), images\.value, selectedCategory\.value, authorFormat\.value\)/
     );
+    expect(create).not.toMatch(/updateForumTopicApi\([^)]*authorFormat/);
   });
 
   it('updateForumTopicApi：PUT /forum/topics/{id}，载荷 title/content/images（category 非空才带）', () => {

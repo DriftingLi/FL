@@ -1,0 +1,19 @@
+# 生产链路存活巡检的一次执行（#1277）；节奏见 forklift-watchdog.timer。
+# 脚本以 root 跑：要读 /etc/forklift-watchdog.env、docker ps、以及跨机 ssh 到 pve-01。
+[Unit]
+Description=叉车生产链路存活巡检（助手/容器/公网链路/磁盘水位）
+Documentation=https://github.com/DriftingLi/FL/issues/1277
+After=network-online.target docker.service
+Wants=network-online.target
+# 巡检本身失活也要出声——本次 4 小时盲区防的就是「没人知道」，包括监控自己哑掉。
+OnFailure=forklift-alert@%n.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/forklift-watchdog.sh
+# 六个探测面各带超时（curl 8-12s / ssh 8s），60s 足够；留 2 分钟余量防卡死占住 timer。
+TimeoutStartSec=120
+# 发信失败必须让单元非 0 退出（OnFailure 才会触发），不能被静默吞掉。
+SuccessExitStatus=0
+StandardOutput=journal
+StandardError=journal

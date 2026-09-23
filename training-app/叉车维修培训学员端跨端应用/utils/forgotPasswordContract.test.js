@@ -35,7 +35,11 @@ const COMPOSABLE = 'pages/forgot-password/composables/useForgotPasswordForm.uts'
 const AUTH_API = 'api/auth.uts';
 /** T12 一并机械迁移的两个兄弟消费方（共享出口 DTO 化的连带面，见 `api/auth.uts` 文件头） */
 const REGISTER_CONSUMER = 'pages/register/composables/useRegisterForm.uts';
-const LOGIN_CONSUMER = 'pages/login/login.uvue';
+/**
+ * login 侧消费方：#651 T13 手术把 `loadCaptcha` 从页面搬进同模块 composable，
+ * 故这里的路径指向随之平移（**断言集合一字未改**：仍是 DTO 取值三连 + 裸索引不得残留）。
+ */
+const LOGIN_CONSUMER = 'pages/login/composables/useLoginForm.uts';
 
 /** 软预算口径（ADR-0007）。模块全量预算已由声明面执法（本模块的 budget 已从 pending 翻成 600） */
 const LINE_BUDGET = 600;
@@ -319,7 +323,7 @@ describe('域 api 出口（T12 收紧）：getCaptchaApi DTO 化 + 共享出口�
   it.each([
     ['forgot-password composable', COMPOSABLE],
     ['register composable', REGISTER_CONSUMER],
-    ['login 页', LOGIN_CONSUMER],
+    ['login composable（#651 后落点）', LOGIN_CONSUMER],
   ])('共享出口的三个消费方同 PR 机械迁移：%s 按 DTO 取值（data.id / data.image）', (_name, file) => {
     const src = read(file);
     expect(src).toContain('const data = await getCaptchaApi()');

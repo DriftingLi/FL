@@ -22,6 +22,7 @@ type fakeDiagnosisServer struct {
 	t            *testing.T
 	sopText      string
 	sources      []DiagnosisSource
+	raw          string // 非空则**原样回写这些字节**（绕开「用 Go 类型回编码」的盲区）
 	lastPath     string
 	lastJSON     string // /chat 的请求体原文
 	lastFormBody map[string]string
@@ -54,6 +55,12 @@ func (f *fakeDiagnosisServer) handler() http.Handler {
 			f.t.Fatalf("未预期的助手路径: %s", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
+		if f.raw != "" {
+			// 真实响应字节原样回写：厂商改键名时这条路径会红，而下面按 Go 类型回编码的
+			// 老路数只会让「解析不出字段」伪装成「字段为空」而恒绿（盲区见 ADR-0063）。
+			_, _ = w.Write([]byte(f.raw))
+			return
+		}
 		resp := diagnosisChatResponse{Code: 200}
 		resp.Data.SOPText = f.sopText
 		resp.Data.AnswerSources = f.sources

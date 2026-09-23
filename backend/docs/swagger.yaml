@@ -5225,12 +5225,16 @@ paths:
                 data:
                   $ref: '#/definitions/service.GenTaskStatus'
               type: object
+        "400":
+          description: task_id 无效
+          schema:
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
             $ref: '#/definitions/response.R'
         "404":
-          description: 任务不存在
+          description: 生成任务不存在
           schema:
             $ref: '#/definitions/response.R'
       security:
@@ -6622,6 +6626,10 @@ paths:
             $ref: '#/definitions/response.R'
         "401":
           description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 用户不存在
           schema:
             $ref: '#/definitions/response.R'
       security:
@@ -8170,6 +8178,10 @@ paths:
           description: 未认证
           schema:
             $ref: '#/definitions/response.R'
+        "404":
+          description: 讲师不存在
+          schema:
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 重置导师密码
@@ -8345,9 +8357,10 @@ paths:
       - 学员端-AI助手
   /ai-assistant/diagnosis/manual/{filepath}:
     get:
-      description: 可选认证；外部诊断助手手册文件的流式代理（**非统一信封**：原样字节流 + Content-Type），子路径白名单防 SSRF
+      description: 可选认证；外部诊断助手静态文件的流式代理（**非统一信封**：原样字节流 + Content-Type），静态根仅 manual
+        与 fault_images，子路径按段白名单防 SSRF
       parameters:
-      - description: 手册相对子路径（带扩展名，如 manual/xxx/page_1.png）
+      - description: 相对子路径（带扩展名，可带静态根；如 manual/xxx/page_1.png、fault_images/制动系统/图_1.png）
         in: path
         name: filepath
         required: true
@@ -8356,14 +8369,14 @@ paths:
       - application/octet-stream
       responses:
         "200":
-          description: 手册文件字节流（非统一信封）
+          description: 静态文件字节流（非统一信封）
           schema:
             type: string
         "404":
           description: 资源不存在
           schema:
             $ref: '#/definitions/response.R'
-      summary: 诊断手册静态资源（图片 / PDF）
+      summary: 诊断静态资源（手册图片/PDF 与图文案例配图）
       tags:
       - 学员端-AI助手
   /ai-assistant/diagnosis/models:

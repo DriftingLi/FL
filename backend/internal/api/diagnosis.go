@@ -101,17 +101,17 @@ func (h *DiagnosisHandler) ListFaultCodes(c *gin.Context) {
 	response.Success(c, resp)
 }
 
-// OpenManual 手册静态资源
-// @Summary 诊断手册静态资源（图片 / PDF）
-// @Description 可选认证；外部诊断助手手册文件的流式代理（**非统一信封**：原样字节流 + Content-Type），子路径白名单防 SSRF
+// OpenManual 助手静态资源
+// @Summary 诊断静态资源（手册图片/PDF 与图文案例配图）
+// @Description 可选认证；外部诊断助手静态文件的流式代理（**非统一信封**：原样字节流 + Content-Type），静态根仅 manual 与 fault_images，子路径按段白名单防 SSRF
 // @Tags 学员端-AI助手
 // @Produce application/octet-stream
-// @Param filepath path string true "手册相对子路径（带扩展名，如 manual/xxx/page_1.png）"
-// @Success 200 {string} binary "手册文件字节流（非统一信封）"
+// @Param filepath path string true "相对子路径（带扩展名，可带静态根；如 manual/xxx/page_1.png、fault_images/制动系统/图_1.png）"
+// @Success 200 {string} binary "静态文件字节流（非统一信封）"
 // @Failure 404 {object} response.R "资源不存在"
 // @Router /ai-assistant/diagnosis/manual/{filepath} [get]
-// OpenManual GET /diagnosis/manual/* 手册静态资源流式代理（溯源图片 <<IMAGE:...>> 渲染面）。
-// 子路径白名单（防 SSRF）在 proxy 层；可选认证可达，缓存 1 天（手册文件不可变）。
+// OpenManual GET /diagnosis/manual/* 静态资源流式代理（溯源图片 <<IMAGE:...>> 与案例图渲染面）。
+// 子路径白名单（防 SSRF）在 proxy 层；可选认证可达，缓存 1 天（静态文件不可变）。
 func (h *DiagnosisHandler) OpenManual(c *gin.Context) {
 	subpath := c.Param("filepath")
 	body, contentType, err := h.proxy.OpenManual(c.Request.Context(), subpath)
