@@ -740,7 +740,7 @@ func (h *AdminHandler) ResetTutorPassword(c *gin.Context) {
 			return &resetPasswordReq{ID: id, Password: body.Password}, nil
 		},
 		Invoke: func(ctx context.Context, req *resetPasswordReq) (*struct{}, error) {
-			if err := h.adminSvc.ResetTutorPassword(req.ID, req.Password); err != nil {
+			if err := h.adminSvc.ResetTutorPassword(ctx, req.ID, req.Password); err != nil {
 				return nil, err
 			}
 			return &struct{}{}, nil
@@ -769,7 +769,7 @@ func (h *AdminHandler) ToggleTutorStatus(c *gin.Context) {
 			return &idParam{ID: id}, nil
 		},
 		Invoke: func(ctx context.Context, req *idParam) (*service.StatusResultDTO, error) {
-			next, err := h.adminSvc.ToggleTutorStatus(req.ID)
+			next, err := h.adminSvc.ToggleTutorStatus(ctx, req.ID)
 			if err != nil {
 				return nil, err
 			}

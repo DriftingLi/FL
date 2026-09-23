@@ -185,12 +185,29 @@ func (s *AdminService) ResetHrwaiUserPassword(ctx context.Context, id int, newPa
 	if id <= 0 {
 		return errors.New("用户 ID 非法")
 	}
-	revokeErr, err := applyNewPassword(ctx, s.db, s.session, id, newPassword)
+	revokeErr, err := applyNewPassword(ctx, s.db, s.session, hrwaiPasswordSubject, id, newPassword)
 	if err != nil {
 		return err
 	}
 	if revokeErr != nil {
 		s.logger.Warn("代重置后 refresh 吊销标记写入失败", zap.Int("user_id", id), zap.Error(revokeErr))
+	}
+	return nil
+}
+
+// ResetTutorPassword 管理员代重置讲师口令。与学员侧同判（ADR-0064 决策 4）：走同一条
+// 「落新口令」动作，因此同时拿到长度兜底与全会话吊销。
+// 收紧前这里自行查存在 → 哈希 → 落库，零吊销 ⇒ 讲师的旧 refresh 链在口令被换掉后照样续登。
+func (s *AdminService) ResetTutorPassword(ctx context.Context, tutorID int, password string) error {
+	if tutorID <= 0 {
+		return errors.New("讲师 ID 非法")
+	}
+	revokeErr, err := applyNewPassword(ctx, s.db, s.session, tutorPasswordSubject, tutorID, password)
+	if err != nil {
+		return err
+	}
+	if revokeErr != nil {
+		s.logger.Warn("讲师口令重置后 refresh 吊销标记写入失败", zap.Int("tutor_id", tutorID), zap.Error(revokeErr))
 	}
 	return nil
 }
@@ -322,32 +339,26 @@ func (s *AdminService) DeleteTutor(tutorID int) (*TutorDeletedDTO, error) {
 	return &TutorDeletedDTO{TutorID: tutorID}, nil
 }
 
-// ResetTutorPassword 重置导师密码。
-func (s *AdminService) ResetTutorPassword(tutorID int, password string) error {
-	var tutor model.Tutor
-	if err := s.db.First(&tutor, tutorID).Error; err != nil {
-		return errors.New("讲师不存在")
-	}
-	hashed, err := HashPassword(password)
-	if err != nil {
-		return err
-	}
-	return s.db.Model(&model.Tutor{}).Where("tutor_id = ?", tutorID).
-		Update("password", hashed).Error
-}
-
 // ToggleTutorStatus 切换导师启用/禁用状态，返回切换后的新状态。
-func (s *AdminService) ToggleTutorStatus(tutorID int) (int, error) {
+// ToggleTutorStatus 切换讲师启用态。禁用即吊销其全部会话（ADR-0064 决策 4）——
+// 讲师走同一套双令牌链（登录角色 TutorRole），所以「禁用挡住进来、不挡住留下」这一族
+// 在学员侧修完时，讲师侧是它的另一半，不是一票新增。
+func (s *AdminService) ToggleTutorStatus(ctx context.Context, tutorID int) (int, error) {
 	var tutor model.Tutor
-	if err := s.db.First(&tutor, tutorID).Error; err != nil {
+	if err := s.db.WithContext(ctx).First(&tutor, tutorID).Error; err != nil {
 		return 0, errors.New("讲师不存在")
 	}
 	next := 1
 	if tutor.Status == 1 {
 		next = 0
 	}
-	if err := s.db.Model(&tutor).Update("status", next).Error; err != nil {
+	if err := s.db.WithContext(ctx).Model(&tutor).Update("status", next).Error; err != nil {
 		return 0, err
+	}
+	if next == 0 {
+		if err := s.session.RevokeIdentity(ctx, TutorRole, tutorID); err != nil {
+			s.logger.Warn("讲师禁用后 refresh 吊销标记写入失败", zap.Int("tutor_id", tutorID), zap.Error(err))
+		}
 	}
 	return next, nil
 }

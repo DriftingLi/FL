@@ -91,7 +91,7 @@ func (s *AuthService) GetProfile(userID int, role, account string) *ProfileDTO {
 		if pending, err := s.reviewSvc.GetPendingForUser(userID); err == nil {
 			dto.PendingProfileChange = &pending
 		}
-	case "tutor":
+	case TutorRole:
 		var t model.Tutor
 		if err := s.db.First(&t, userID).Error; err == nil {
 			dto.Name = ptr(t.Name)
@@ -185,6 +185,12 @@ const HrwaiRole = "hrwai_user"
 
 // RecruiterRole 企业招聘者角色名（第四角色，独立表 recruiter_users，邀约制）。
 const RecruiterRole = "recruiter"
+
+// TutorRole 讲师角色名。**与 HrwaiRole/RecruiterRole 同住一处**（ADR-0064 判据）：这个字符串
+// 同时是 JWT 的角色 claim 与全会话吊销的命名空间键片段，此前只以字面量散在登录分派
+// （auth_service.go:94 / :307），吊销侧一用就得再抄一遍——同一个事实的两个住处。
+// 注意与 authz.RoleTutor 不是一回事：那一层是能力角色名，这一层是凭证命名空间。
+const TutorRole = "tutor"
 
 // loginCredentials 登录骨架按角色差异点：查表结果（密码/禁用语义）。
 // status 为 nil 表示该角色无禁用语义（admin 表无 status 字段）。
@@ -304,7 +310,7 @@ func (s *AuthService) TutorLogin(username, password string) (*LoginResult, error
 	return s.verifyAndIssue(password, loginCredentials{
 		id: tutor.TutorID, account: tutor.Username, username: tutor.Username,
 		password: tutor.Password, status: &status,
-	}, "tutor", "讲师账号或密码错误")
+	}, TutorRole, "讲师账号或密码错误")
 }
 
 // TutorRegisterResultDTO 导师建号结果（ADR-0009 §2 typed DTO / spec #940 片三）。

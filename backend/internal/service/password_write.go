@@ -37,6 +37,19 @@ func validatePasswordLength(password string) error {
 	return nil
 }
 
+// passwordSubject 「落新口令」动作的主体参数：更新哪张表的哪一列，以及吊销时落在哪个
+// 命名空间。role 与 JWT 的角色 claim 同源（同一身份的两个名字会直接导致标记写对读不对）。
+type passwordSubject struct {
+	dest interface{}
+	key  string
+	role string
+}
+
+var (
+	hrwaiPasswordSubject = passwordSubject{dest: &model.HrwaiUser{}, key: "id", role: HrwaiRole}
+	tutorPasswordSubject = passwordSubject{dest: &model.Tutor{}, key: "tutor_id", role: TutorRole}
+)
+
 // SetNewPassword 落新口令（学员口令写面的唯一动作）：长度校验 → bcrypt 哈希 → 落库 →
 // 全会话吊销（RevokeIdentity，身份命名空间 hrwai_user）。
 //
@@ -47,14 +60,18 @@ func validatePasswordLength(password string) error {
 //     （记 zap 日志、不因吊销失败而拒绝口令），注销族的「先写标记、失败即整体不生效」
 //     刻意不在这里出现。
 func (s *AuthService) SetNewPassword(ctx context.Context, userID int, password string) (revokeErr error, err error) {
-	return applyNewPassword(ctx, s.db, s.session, userID, password)
+	return applyNewPassword(ctx, s.db, s.session, hrwaiPasswordSubject, userID, password)
 }
 
-// applyNewPassword 是「落新口令」这一动作的实现体，学员的两条自助入口（经 SetNewPassword）
-// 与管理员的代重置共用。之所以是包内函数而不是某个服务的方法：唯一的两个依赖（db、session）
-// 由 caller 各自持有，做成方法就会逼 AdminService 依赖 AuthService —— 那是两个服务之间的
-// 横向耦合，而这里要的只是同一条动作。
-func applyNewPassword(ctx context.Context, db *gorm.DB, session *security.Session, userID int, password string) (revokeErr error, err error) {
+// applyNewPassword 是「落新口令」这一动作的实现体。四个入口共用（ADR-0064 决策 4 把它从
+// 「学员专属」扩成「按主体参数化」）：学员自助改密与验证码重置（经 SetNewPassword）、
+// 管理员代重置学员口令、管理员代重置讲师口令。
+//
+// 之所以是包内函数而不是某个服务的方法：它唯一的两个依赖（db、session）由 caller 各自持有，
+// 做成方法就会逼 AdminService 依赖 AuthService —— 那是两个服务之间的横向耦合，
+// 而这里要的只是同一条动作。subject 承载的正是「同一条动作、不同主体」这一维。
+func applyNewPassword(ctx context.Context, db *gorm.DB, session *security.Session,
+	subject passwordSubject, id int, password string) (revokeErr error, err error) {
 	if err := validatePasswordLength(password); err != nil {
 		return nil, err
 	}
@@ -62,12 +79,12 @@ func applyNewPassword(ctx context.Context, db *gorm.DB, session *security.Sessio
 	if err != nil {
 		return nil, err
 	}
-	if err := db.WithContext(ctx).Model(&model.HrwaiUser{}).
-		Where("id = ?", userID).Update("password", hashed).Error; err != nil {
+	if err := db.WithContext(ctx).Model(subject.dest).
+		Where(subject.key+" = ?", id).Update("password", hashed).Error; err != nil {
 		return nil, err
 	}
 	// 落库后一律尝试吊销（#622 → ADR-0060 票2 → ADR-0062 票7 → ADR-0064 决策 4）：
 	// 只写哈希不吊销就是漏洞——RotateRefresh 只看令牌与吊销标记，攻击者手上的 refresh 链
-	// 最长 7 天仍可静默续登。管理员代重置同判：自救动作由谁发起不改变「旧链该死」。
-	return session.RevokeIdentity(ctx, HrwaiRole, userID), nil
+	// 最长 7 天仍可静默续登。代重置同判：自救动作由谁发起不改变「旧链该死」。
+	return session.RevokeIdentity(ctx, subject.role, id), nil
 }

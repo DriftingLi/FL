@@ -84,6 +84,41 @@ func storedPassword(t *testing.T, db *gorm.DB, uid int) string {
 	return u.Password
 }
 
+// newTutorFixture 讲师侧同形夹具（表 tutor，主键 tutor_id）。
+func newTutorFixture(t *testing.T, bl security.BlacklistStore) (*service.AdminService, *security.Session, *gorm.DB, int) {
+	t.Helper()
+	db := testutil.NewMemoryDB(t)
+	sess := security.NewSessionWithBlacklistAndRefresh("test-secret", time.Hour, 7*time.Hour,
+		security.CookieConfig{Name: "hrwai_token"}, bl)
+	hashed, err := service.HashPassword(disposeOldPassword)
+	if err != nil {
+		t.Fatalf("哈希种子口令失败: %v", err)
+	}
+	tu := model.Tutor{TutorID: 7100, Username: "disposeducator", Name: "待处置讲师", Password: hashed, Status: 1}
+	if err := db.Create(&tu).Error; err != nil {
+		t.Fatalf("播种讲师失败: %v", err)
+	}
+	return service.NewAdminService(db, sess, zap.NewNop()), sess, db, tu.TutorID
+}
+
+func issueTutorRefresh(t *testing.T, sess *security.Session, tid int) string {
+	t.Helper()
+	_, refresh, err := sess.IssuePair(tid, "disposeducator", service.TutorRole)
+	if err != nil {
+		t.Fatalf("签发讲师令牌对失败: %v", err)
+	}
+	return refresh
+}
+
+func storedTutorPassword(t *testing.T, db *gorm.DB, tid int) string {
+	t.Helper()
+	var tu model.Tutor
+	if err := db.First(&tu, tid).Error; err != nil {
+		t.Fatalf("取回讲师失败: %v", err)
+	}
+	return tu.Password
+}
+
 // mustRotateOK 先证明这枚 refresh 此刻**能**轮换（对照组：被拒的原因必须是吊销标记，
 // 不是令牌无效或装配没接好），并交出轮换后的「手上那一枚」——轮换本身作废旧值，
 // 所以处置之后的断言必须打在轮换后的令牌上，否则等于在断言一个已被消费的东西。
@@ -168,6 +203,49 @@ func TestAdminResetPasswordSharesLengthRule(t *testing.T) {
 	}
 }
 
+// TestDisableTutorRevokesAllSessions 讲师禁用同判：登录走同一条双令牌链
+// （auth_service.go 的 TutorRole 分支），所以「禁用不吊销」在讲师侧是学员侧的另一半，
+// 不是一票新增（ADR-0064 决策 4，维护者 2026-09-22 裁定并入第①批）。
+func TestDisableTutorRevokesAllSessions(t *testing.T) {
+	adminSvc, sess, db, tid := newTutorFixture(t, newValBlacklist())
+	inHand := mustRotateOK(t, sess, issueTutorRefresh(t, sess, tid))
+
+	next, err := adminSvc.ToggleTutorStatus(context.Background(), tid)
+	if err != nil {
+		t.Fatalf("禁用讲师失败: %v", err)
+	}
+	if next != 0 {
+		t.Fatalf("禁用后状态应为 0，实际 %d", next)
+	}
+	if rotationAccepted(sess, inHand) {
+		t.Fatal("讲师禁用后 refresh 仍可轮换")
+	}
+	var tu model.Tutor
+	if err := db.First(&tu, tid).Error; err != nil || tu.Status != 0 {
+		t.Fatalf("禁用应已落库，err=%v status=%d", err, tu.Status)
+	}
+}
+
+// TestAdminResetTutorPasswordRevokesAllSessions 代重置讲师口令 = 与学员代重置同一条动作。
+// 收紧前它自己 First→哈希→落库，零吊销，且长度规则只在 handler。
+func TestAdminResetTutorPasswordRevokesAllSessions(t *testing.T) {
+	adminSvc, sess, db, tid := newTutorFixture(t, newValBlacklist())
+	before := storedTutorPassword(t, db, tid)
+	inHand := mustRotateOK(t, sess, issueTutorRefresh(t, sess, tid))
+
+	if err := adminSvc.ResetTutorPassword(context.Background(), tid, disposeNewPassword); err != nil {
+		t.Fatalf("代重置讲师口令失败: %v", err)
+	}
+	if storedTutorPassword(t, db, tid) == before {
+		t.Fatal("没改动讲师口令")
+	}
+	if rotationAccepted(sess, inHand) {
+		t.Fatal("讲师口令被换后旧 refresh 仍可轮换")
+	}
+	if err := adminSvc.ResetTutorPassword(context.Background(), tid, "123"); err == nil {
+		t.Fatal("3 位讲师口令被动作接受 ⇒ 长度兜底没随动作一起到位")
+	}
+}
 // failOnSetBlacklist 吊销标记写不进、其余照常——用来钉「尽力而为」那一半。
 type failOnSetBlacklist struct{ setCalls int }
 
