@@ -143,6 +143,7 @@
     function validate() : string {
         if (username.value.trim().length == 0) return '请输入招聘者账号'
         if (password.value.length == 0) return '请输入密码'
+        if (password.value.length < 6) return '密码至少 6 位'
         return ''
     }
 
