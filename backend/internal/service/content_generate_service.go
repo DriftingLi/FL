@@ -3,6 +3,7 @@ package service
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go.uber.org/zap"
 	"time"
@@ -245,15 +246,27 @@ func (s *ContentGenerateService) CleanupInterruptedTasks() {
 }
 
 // GetTaskStatus 查询任务状态。返回前端轮询所需的 GenTaskStatus 结构。
+// ErrGenTaskNotFound 任务行不存在；ErrGenTaskIDInvalid task_id 不是数字（属「输入不合法」
+// 一族，ADR-0064 决策 3）。两者此前都是 fmt.Errorf：前者把驱动原文 %w 进消息 ⇒
+// "record not found" 原样出现在响应体里（与第十四波修掉的 ai-config 同一泄漏族），
+// 后者被端点默认答成 404。
+var (
+	ErrGenTaskNotFound  = errors.New("任务不存在")
+	ErrGenTaskIDInvalid = errors.New("task_id 无效")
+)
+
 func (s *ContentGenerateService) GetTaskStatus(taskID string) (*GenTaskStatus, error) {
 	var task model.AsyncTask
 	// taskID 为字符串形式，需解析为 int
 	var id int
 	if _, err := fmt.Sscanf(taskID, "%d", &id); err != nil {
-		return nil, fmt.Errorf("无效的 task_id: %s", taskID)
+		return nil, ErrGenTaskIDInvalid
 	}
 	if err := s.db.First(&task, id).Error; err != nil {
-		return nil, fmt.Errorf("任务不存在: %w", err)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrGenTaskNotFound
+		}
+		return nil, err
 	}
 
 	status := &GenTaskStatus{

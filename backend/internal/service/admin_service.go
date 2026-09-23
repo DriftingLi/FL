@@ -241,7 +241,10 @@ func (s *AdminService) ToggleHrwaiUserStatus(ctx context.Context, id int) (int16
 	}
 	var user model.HrwaiUser
 	if err := s.db.WithContext(ctx).First(&user, id).Error; err != nil {
-		return 0, errors.New("用户不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return 0, ErrHrwaiUserNotFound
+		}
+		return 0, err // 查不动不得被读成「不存在」（ADR-0064 决策 1，同 ADR-0062 票6 判据）
 	}
 	next := int16(1)
 	if user.Status == 1 {
@@ -331,7 +334,10 @@ func (s *AdminService) GetTutors(page, pageSize int, keyword string) (*TutorList
 func (s *AdminService) DeleteTutor(tutorID int) (*TutorDeletedDTO, error) {
 	var tutor model.Tutor
 	if err := s.db.First(&tutor, tutorID).Error; err != nil {
-		return nil, errors.New("讲师不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrTutorNotFound
+		}
+		return nil, err
 	}
 	if err := s.db.Delete(&tutor).Error; err != nil {
 		return nil, err
@@ -346,7 +352,10 @@ func (s *AdminService) DeleteTutor(tutorID int) (*TutorDeletedDTO, error) {
 func (s *AdminService) ToggleTutorStatus(ctx context.Context, tutorID int) (int, error) {
 	var tutor model.Tutor
 	if err := s.db.WithContext(ctx).First(&tutor, tutorID).Error; err != nil {
-		return 0, errors.New("讲师不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return 0, ErrTutorNotFound
+		}
+		return 0, err
 	}
 	next := 1
 	if tutor.Status == 1 {

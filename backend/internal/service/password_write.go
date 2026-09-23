@@ -37,17 +37,28 @@ func validatePasswordLength(password string) error {
 	return nil
 }
 
-// passwordSubject 「落新口令」动作的主体参数：更新哪张表的哪一列，以及吊销时落在哪个
-// 命名空间。role 与 JWT 的角色 claim 同源（同一身份的两个名字会直接导致标记写对读不对）。
+// passwordSubject 「落新口令」动作的主体参数：更新哪张表的哪一列、吊销时落在哪个命名空间、
+// 以及**该主体不存在时交出哪个哨兵**。role 与 JWT 的角色 claim 同源（同一身份的两个名字会
+// 直接导致标记「写得进、读不出」）。
+// 该类型**不导出、只在包内以两个常量实例出现**，故 key 不是可注入面：新增主体请在
+// 本文件加实例，不要从 caller 收列名。
 type passwordSubject struct {
-	dest interface{}
-	key  string
-	role string
+	dest     interface{}
+	key      string
+	role     string
+	notFound error
 }
 
 var (
-	hrwaiPasswordSubject = passwordSubject{dest: &model.HrwaiUser{}, key: "id", role: HrwaiRole}
-	tutorPasswordSubject = passwordSubject{dest: &model.Tutor{}, key: "tutor_id", role: TutorRole}
+	hrwaiPasswordSubject = passwordSubject{dest: &model.HrwaiUser{}, key: "id", role: HrwaiRole, notFound: ErrHrwaiUserNotFound}
+	tutorPasswordSubject = passwordSubject{dest: &model.Tutor{}, key: "tutor_id", role: TutorRole, notFound: ErrTutorNotFound}
+)
+
+// ErrHrwaiUserNotFound / ErrTutorNotFound 是这两类账号**真不存在**这一件事的唯一载体
+// （ADR-0064 决策 1/2：一个事实一个哨兵，api 侧据此才能把它与「查不动」分档）。
+var (
+	ErrHrwaiUserNotFound = errors.New("用户不存在")
+	ErrTutorNotFound     = errors.New("讲师不存在")
 )
 
 // SetNewPassword 落新口令（学员口令写面的唯一动作）：长度校验 → bcrypt 哈希 → 落库 →
@@ -79,9 +90,15 @@ func applyNewPassword(ctx context.Context, db *gorm.DB, session *security.Sessio
 	if err != nil {
 		return nil, err
 	}
-	if err := db.WithContext(ctx).Model(subject.dest).
-		Where(subject.key+" = ?", id).Update("password", hashed).Error; err != nil {
-		return nil, err
+	res := db.WithContext(ctx).Model(subject.dest).Where(subject.key+" = ?", id).Update("password", hashed)
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	if res.RowsAffected == 0 {
+		// 一行都没改动 ⇒ 这个主体不存在。此前它静默返回成功（讲师侧旧实现有一句 First 兜着，
+		// 抽成共用动作后丢了），于是「代重置了一个不存在的账号」在界面上是成功的。
+		// bcrypt 每次加盐，故同一口令重复落库也必然产生 1 行变更，不会误判成「不存在」。
+		return nil, subject.notFound
 	}
 	// 落库后一律尝试吊销（#622 → ADR-0060 票2 → ADR-0062 票7 → ADR-0064 决策 4）：
 	// 只写哈希不吊销就是漏洞——RotateRefresh 只看令牌与吊销标记，攻击者手上的 refresh 链

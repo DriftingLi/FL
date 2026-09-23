@@ -192,6 +192,10 @@ const RecruiterRole = "recruiter"
 // 注意与 authz.RoleTutor 不是一回事：那一层是能力角色名，这一层是凭证命名空间。
 const TutorRole = "tutor"
 
+// ErrRecruiterNotFound 「招聘者账号不存在」这一事实的唯一载体（ADR-0064 决策 1/2）。
+// 与吊销命名空间 RecruiterRole 同处一地，api 侧据此把它与「查不动」分档。
+var ErrRecruiterNotFound = errors.New("招聘者不存在")
+
 // loginCredentials 登录骨架按角色差异点：查表结果（密码/禁用语义）。
 // status 为 nil 表示该角色无禁用语义（admin 表无 status 字段）。
 type loginCredentials struct {
@@ -537,7 +541,10 @@ func (s *AuthService) CreateRecruiter(in RecruiterCreateInput) (*model.Recruiter
 func (s *AuthService) ToggleRecruiterStatus(ctx context.Context, id int) (int16, error) {
 	var r model.RecruiterUser
 	if err := s.db.First(&r, id).Error; err != nil {
-		return 0, errors.New("招聘者不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return 0, ErrRecruiterNotFound
+		}
+		return 0, err
 	}
 	next := int16(1)
 	if r.Status == 1 {
@@ -641,7 +648,7 @@ func (s *AuthService) EditRecruiter(id int, in RecruiterEditInput) (*model.Recru
 	}
 	var r model.RecruiterUser
 	if err := s.db.First(&r, id).Error; err != nil {
-		return nil, errors.New("招聘者不存在")
+		return nil, ErrRecruiterNotFound
 	}
 	// #450：编辑把信用代码改成别家已占用的值 → 同样被拒（自己保持原值不算占用）。
 	credit := strings.TrimSpace(in.CreditCode)
@@ -700,7 +707,7 @@ func (s *AuthService) ResetRecruiterPassword(ctx context.Context, id int, passwo
 	var cnt int64
 	s.db.Model(&model.RecruiterUser{}).Where("id = ?", id).Count(&cnt)
 	if cnt == 0 {
-		return errors.New("招聘者不存在")
+		return ErrRecruiterNotFound
 	}
 	hashed, err := HashPassword(password)
 	if err != nil {
