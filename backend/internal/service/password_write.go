@@ -11,18 +11,20 @@
 //
 // 共享的是动作，声明权留在调用方：SetNewPassword 把吊销的成败**如实返回**（照 Session.RevokeIdentity
 // 的既有约定「失败策略由调用方决定，本动作只如实返回」），由每条入口各自记日志。
-// 新增口令写面时走 SetNewPassword 即同时拿到落库与吊销，拿不到「只落哈希不吊销」的捷径：
-// 学员侧两条自助入口（登录态改密 AuthService.UpdatePassword、验证码重置口令
-// VerifyCodeService.ResetPasswordWithCode）都已收在此处。
-// 已知例外：AdminService.ResetHrwaiUserPassword（管理员代重置）仍自己哈希+落库、不吊销，
-// 属本动作之外的一条同形缺口，接它时改调 SetNewPassword，别再抄一遍哈希。
+// 新增口令写面时走 SetNewPassword / applyNewPassword 即同时拿到落库与吊销，拿不到
+// 「只落哈希不吊销」的捷径：学员侧两条自助入口（登录态改密 AuthService.UpdatePassword、
+// 验证码重置口令 VerifyCodeService.ResetPasswordWithCode）与管理员侧一条代重置
+// （AdminService.ResetHrwaiUserPassword，ADR-0064 决策 4 接进来）都收在此处。
 package service
 
 import (
 	"context"
 	"errors"
 
+	"gorm.io/gorm"
+
 	"forklift-training/internal/model"
+	"forklift-training/internal/security"
 )
 
 // validatePasswordLength 口令长度规则（6-20 位，包内唯一实现；学员与招聘者的口令写面共用）。
@@ -45,6 +47,14 @@ func validatePasswordLength(password string) error {
 //     （记 zap 日志、不因吊销失败而拒绝口令），注销族的「先写标记、失败即整体不生效」
 //     刻意不在这里出现。
 func (s *AuthService) SetNewPassword(ctx context.Context, userID int, password string) (revokeErr error, err error) {
+	return applyNewPassword(ctx, s.db, s.session, userID, password)
+}
+
+// applyNewPassword 是「落新口令」这一动作的实现体，学员的两条自助入口（经 SetNewPassword）
+// 与管理员的代重置共用。之所以是包内函数而不是某个服务的方法：唯一的两个依赖（db、session）
+// 由 caller 各自持有，做成方法就会逼 AdminService 依赖 AuthService —— 那是两个服务之间的
+// 横向耦合，而这里要的只是同一条动作。
+func applyNewPassword(ctx context.Context, db *gorm.DB, session *security.Session, userID int, password string) (revokeErr error, err error) {
 	if err := validatePasswordLength(password); err != nil {
 		return nil, err
 	}
@@ -52,11 +62,12 @@ func (s *AuthService) SetNewPassword(ctx context.Context, userID int, password s
 	if err != nil {
 		return nil, err
 	}
-	if err := s.db.WithContext(ctx).Model(&model.HrwaiUser{}).
+	if err := db.WithContext(ctx).Model(&model.HrwaiUser{}).
 		Where("id = ?", userID).Update("password", hashed).Error; err != nil {
 		return nil, err
 	}
-	// 落库后一律尝试吊销（#622 → ADR-0060 票2 → ADR-0062 票7）：只写哈希不吊销就是漏洞——
-	// RotateRefresh 只看令牌与吊销标记，攻击者手上的 refresh 链最长 7 天仍可静默续登。
-	return s.session.RevokeIdentity(ctx, "hrwai_user", userID), nil
+	// 落库后一律尝试吊销（#622 → ADR-0060 票2 → ADR-0062 票7 → ADR-0064 决策 4）：
+	// 只写哈希不吊销就是漏洞——RotateRefresh 只看令牌与吊销标记，攻击者手上的 refresh 链
+	// 最长 7 天仍可静默续登。管理员代重置同判：自救动作由谁发起不改变「旧链该死」。
+	return session.RevokeIdentity(ctx, HrwaiRole, userID), nil
 }

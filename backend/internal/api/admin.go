@@ -546,7 +546,7 @@ func (h *AdminHandler) ResetHrwaiUserPassword(c *gin.Context) {
 			return &resetPasswordReq{ID: id, Password: body.Password}, nil
 		},
 		Invoke: func(ctx context.Context, req *resetPasswordReq) (*struct{}, error) {
-			if err := h.adminSvc.ResetHrwaiUserPassword(req.ID, req.Password); err != nil {
+			if err := h.adminSvc.ResetHrwaiUserPassword(ctx, req.ID, req.Password); err != nil {
 				return nil, err
 			}
 			return &struct{}{}, nil
@@ -575,7 +575,7 @@ func (h *AdminHandler) ToggleHrwaiUserStatus(c *gin.Context) {
 			return &idParam{ID: id}, nil
 		},
 		Invoke: func(ctx context.Context, req *idParam) (*service.StatusResultDTO, error) {
-			next, err := h.adminSvc.ToggleHrwaiUserStatus(req.ID)
+			next, err := h.adminSvc.ToggleHrwaiUserStatus(ctx, req.ID)
 			if err != nil {
 				return nil, err
 			}

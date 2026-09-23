@@ -2,6 +2,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/security"
 	"forklift-training/pkg/paging"
 )
 
@@ -16,12 +18,16 @@ import (
 type AdminService struct {
 	db *gorm.DB
 
+	// session 只为「处置动作的后果集」而存在（ADR-0064 决策 4）：禁用学员必须与禁用招聘者
+	// 同样吊销其全部会话。管理面没有登录态，除吊销标记外不碰凭证生命周期。
+	session *security.Session
+
 	logger *zap.Logger
 }
 
 // NewAdminService 创建管理员服务实例。
-func NewAdminService(db *gorm.DB, logger *zap.Logger) *AdminService {
-	return &AdminService{db: db, logger: logger}
+func NewAdminService(db *gorm.DB, session *security.Session, logger *zap.Logger) *AdminService {
+	return &AdminService{db: db, session: session, logger: logger}
 }
 
 // ===== HRWAI 用户管理(统一) =====
@@ -170,18 +176,23 @@ func (s *AdminService) UpdateHrwaiUser(id int, username, email, company string, 
 }
 
 // ResetHrwaiUserPassword 管理员重置 HRWAI 用户密码。
-func (s *AdminService) ResetHrwaiUserPassword(id int, newPassword string) error {
+// ResetHrwaiUserPassword 管理员代重置学员口令。**与学员自助改密是同一条动作**
+// （ADR-0064 决策 4）：交由 applyNewPassword 做长度校验 + 哈希 + 落库 + 全会话吊销。
+// 收紧前这里自己 HashPassword + Update、零吊销，且长度规则只住在 handler
+// （admin.go 的 Parse）⇒ 动作层既没有兜底也没有终止语义。
+// 代重置的失败策略同口令族：口令一落库即不可回退，吊销写失败不阻断（尽力而为）。
+func (s *AdminService) ResetHrwaiUserPassword(ctx context.Context, id int, newPassword string) error {
 	if id <= 0 {
 		return errors.New("用户 ID 非法")
 	}
-	if newPassword == "" {
-		return errors.New("新密码不能为空")
-	}
-	hashed, err := HashPassword(newPassword)
+	revokeErr, err := applyNewPassword(ctx, s.db, s.session, id, newPassword)
 	if err != nil {
 		return err
 	}
-	return s.db.Model(&model.HrwaiUser{}).Where("id = ?", id).Update("password", hashed).Error
+	if revokeErr != nil {
+		s.logger.Warn("代重置后 refresh 吊销标记写入失败", zap.Int("user_id", id), zap.Error(revokeErr))
+	}
+	return nil
 }
 
 // DeleteHrwaiUser 管理员删除 HRWAI 用户。
@@ -200,20 +211,32 @@ type StatusResultDTO struct {
 }
 
 // ToggleHrwaiUserStatus 切换 HRWAI 用户启用/禁用状态,返回切换后的新状态。
-func (s *AdminService) ToggleHrwaiUserStatus(id int) (int16, error) {
+// ToggleHrwaiUserStatus 切换学员启用态。**禁用是一个处置动作，它的后果集必须齐全**
+// （ADR-0064 决策 4）：状态落库 + 全会话吊销，与 ToggleRecruiterStatus 同判。
+// 收紧前只有招聘者侧吊销 ⇒ issueLogin 会挡住被禁学员**重新登录**，却放过他手上已有的
+// refresh 链（最长 7 天静默续登）——「禁用挡住进来，不挡住留下」就是这么来的。
+// 失败策略沿用禁用族既有口径：吊销是「已生效处置之后的补救」⇒ 尽力而为，写不进只记日志
+// 不回退禁用本身（与注销族「先写标记、失败即整体不生效」有意不同）。
+// 只有转成禁用态才吊销：恢复启用不剥夺任何既有凭证，此时写标记等于二次惩罚。
+func (s *AdminService) ToggleHrwaiUserStatus(ctx context.Context, id int) (int16, error) {
 	if id <= 0 {
 		return 0, errors.New("用户 ID 非法")
 	}
 	var user model.HrwaiUser
-	if err := s.db.First(&user, id).Error; err != nil {
+	if err := s.db.WithContext(ctx).First(&user, id).Error; err != nil {
 		return 0, errors.New("用户不存在")
 	}
 	next := int16(1)
 	if user.Status == 1 {
 		next = 0
 	}
-	if err := s.db.Model(&user).Update("status", next).Error; err != nil {
+	if err := s.db.WithContext(ctx).Model(&user).Update("status", next).Error; err != nil {
 		return 0, err
+	}
+	if next == 0 {
+		if err := s.session.RevokeIdentity(ctx, HrwaiRole, id); err != nil {
+			s.logger.Warn("学员禁用后 refresh 吊销标记写入失败", zap.Int("user_id", id), zap.Error(err))
+		}
 	}
 	return next, nil
 }
