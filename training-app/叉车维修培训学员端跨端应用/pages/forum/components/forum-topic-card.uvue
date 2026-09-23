@@ -108,6 +108,7 @@
         status? : string // resolved | open（#736）
         isFeatured? : boolean // 精选位标识（#742 批次三）
         isExperience? : boolean // 备考经验认定（ADR-0040 #836）
+        contentFormat? : string // 正文格式轴（#1273；空串与非 markdown 都按纯文本投影）
     }>(), {
         topicId: 0,
         title: '',
@@ -123,12 +124,18 @@
         variant: 'square',
         status: 'open',
         isFeatured: false,
-        isExperience: false
+        isExperience: false,
+        contentFormat: ''
     })
 
     const emit = defineEmits(['click', 'reply'])
 
-    const contentPreview = computed<string>(() : string => getContentPreview(props.content))
+    /**
+     * 列表摘要走**格式轴**（#1273 / 根 ADR-0044「列表摘要必须剥成纯文本」）：Markdown 帖在卡片上
+     * 不再露出 `##` / `**` / `- `。缺省 `contentFormat` 为空串 ⇒ 与改前逐字同结果（`text` 档零回归）。
+     * 剥离与截断的单点都在 `utils/forumDisplay.getContentPreview`，本组件不再持第二实现。
+     */
+    const contentPreview = computed<string>(() : string => getContentPreview(props.content, props.contentFormat))
     const firstImages = computed<string[]>(() : string[] => getFirstImages(props.images))
     const moreImageUrl = computed<string>(() : string => props.images.length > 3 ? resolveFileUrl(props.images[3]) : '')
     const moreCount = computed<number>(() : number => props.images.length > 3 ? props.images.length - 3 : 0)

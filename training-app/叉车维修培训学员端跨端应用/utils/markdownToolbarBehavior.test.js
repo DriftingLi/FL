@@ -28,10 +28,10 @@ const os = require('os');
 const path = require('path');
 
 const { loadUts, importedNames, readText } = require('./utsHarness');
+const { forumDisplayModule, DISPLAY_UTS } = require('./forumChainHarness');
 
 const MD_UTS = path.join(__dirname, 'markdown.uts');
 const TOOLBAR_UTS = path.join(__dirname, 'markdownToolbar.uts');
-const DISPLAY_UTS = path.join(__dirname, 'forumDisplay.uts');
 
 /** 真源依赖注入表：成员常量与档位取值口都取自**真执行**出来的 `utils/markdown.uts` */
 function markdownBindings() {
@@ -329,8 +329,8 @@ describe('模块契约：工具栏只桥到 `utils/markdown.uts`，不自持子�
 
 // ===== ⑦ 能力提示行「只讲边界」不许变成假话（⑥-5/⑥-6）=====
 
-/** 真执行的提示行文案（`utils/forumDisplay.uts` 零 import，空绑定即可） */
-const boundaryNotice = () => loadUts(DISPLAY_UTS, {}).FORUM_MARKDOWN_BOUNDARY_NOTICE;
+/** 真执行的提示行文案（`utils/forumDisplay.uts` 自 #1273 起 import 格式轴 ⇒ 经链夹具取上游） */
+const boundaryNotice = () => forumDisplayModule().FORUM_MARKDOWN_BOUNDARY_NOTICE;
 
 describe('边界提示行：它claim的每条边界都必须**与成员声明表一致**（否则那行就是假话）', () => {
   it('三条边界都在文案里点名（表格 / 图表 / 行内格式 / 图片入口）', () => {
@@ -363,7 +363,8 @@ describe('边界提示行：它claim的每条边界都必须**与成员声明表
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'forum-notice-'));
     const file = path.join(dir, 'forumDisplay.uts');
     fs.writeFileSync(file, src);
-    const broken = loadUts(file, {}).FORUM_MARKDOWN_BOUNDARY_NOTICE;
+    // 上游三层取真源、只有被改坏的这一层用变异副本（成对取证要变的是**这一处**，不是整条链）
+    const broken = forumDisplayModule(undefined, file).FORUM_MARKDOWN_BOUNDARY_NOTICE;
     expect(broken).not.toContain('表格'); // ⇒ 关键词判据判红
   });
 
