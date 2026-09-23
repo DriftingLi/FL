@@ -3,8 +3,16 @@
 设备：Xiaomi `23049RAD8C`（`marble`），Android 15，HBuilderX 调试基座（包 `io.dcloud.uniappx`）——
 按移动端 `docs/adr/0008-移动端验收门与证据.md` 的 ① 门（**①a：agent 出证**）留档。
 
-**证据绑定的树**：分支 `feat/1273` 的 `8eeea173`（rebase 到 `origin/master` `ed39d854` 之后；
-本目录的取证提交只往 `docs/verification/forum/1292/**` 加文件，运行时面一字未动）。
+**证据绑定的树**：运行时面 commit `8eeea173`（rebase 到 `origin/master` `ed39d854` 之后；本目录的取证提交只往
+`docs/verification/forum/1292/**` 加文件，运行时面一字未动）。
+
+**rebase 复核（2026-09-23 12:28）**：为过 ruleset 的「分支须与 master 同步」，分支再 rebase 到 `origin/master`
+`2872f8c7`（#1291，courses 域）⇒ 运行时面 commit 变为 `02b24345`、取证 commit 变为 `6f09fbe8`。
+**①a 的图与 logcat 产出自 rebase 之前的那棵树、本轮不重拍**，理由可核验而非自述：本票 **7 个运行时面文件**的 git blob
+在 `8eeea173` 与 `02b24345` 上**逐字相同**（blob 表见 `machine-lines.txt`），且 `git diff --name-only 48f48040 6f09fbe8`
+只有 #1291 那 18 个文件（courses 域 + 其取证目录）⇒ 设备上跑的那批文件与 head 上的完全一致，重拍不增加信息。
+**④c 与 ③ 都在新 head 上重跑**：④c = `KOTLIN_ALL_RESULT errors=0 classes=1498 files=120 freshness=fresh`（本目录
+`kotlin-all.txt` 即 12:28:31 那次，与 12:05:39 的读数逐字一致），③ 由 CI `mobile-test` 在 head 上跑（链接见 PR 正文）。
 
 **改前基线** = 取证时设备上**既有**的构建（不含本票改动；`www` mtime `1790134791`，由并发会话于 11:39 部署）。
 「它不含本票改动」**不靠自述**，由判据 1 的「源串仍在」这一条实证。

@@ -1,4 +1,4 @@
-# kotlin-all-check (④c) 开始 2026-09-23 12:05:39
+# kotlin-all-check (④c) 开始 2026-09-23 12:28:31
 # project = D:\FL\wt-1273\training-app\叉车维修培训学员端跨端应用
 # 输入 = unpackage\resources\app-android（appResource 产物）；严禁改用 unpackage\cache\.app-android（dev 缓存不是自洽编译单元）
 HX_BUSY wait=0 result=free
@@ -13,20 +13,20 @@ HX_BUSY wait=0 result=free
 
 
 >>> publish-appresource
-12:05:41.263 项目 叉车维修培训学员端跨端应用 开始导出...
-12:05:43.839 编译器版本：5.24（uni-app x）VDOM模式
-12:05:43.843 当前样式隔离策略：2.0。详见：https://doc.dcloud.net.cn/uni-app-x/css/common/style-isolation.html
-12:05:43.847 正在编译中...
-12:05:43.852 编译会生成大量临时文件，杀毒软件监控时会影响编译速度，并造成CPU升高。推荐把项目目录添加到杀毒软件的监控排除名单中。[添加] [帮助]
-12:06:29.915 项目 叉车维修培训学员端跨端应用 编译成功。
-12:06:30.031 项目 叉车维修培训学员端跨端应用 正在导出...
-12:06:31.550 [33m项目 叉车维修培训学员端跨端应用 导出 android 成功，路径为：D:\FL\wt-1273\training-app\叉车维修培训学员端跨端应用\unpackage\resources\app-android[39m
-12:06:31.555 wgt文件由HBuilderX 5.24 版本生成，运行的基座sdk也需配套相同版本，否则在手机端部分功能可能无法正常使用。详见 http://ask.dcloud.net.cn/article/35627 
+12:28:32.647 项目 叉车维修培训学员端跨端应用 开始导出...
+12:28:34.984 编译器版本：5.24（uni-app x）VDOM模式
+12:28:34.988 当前样式隔离策略：2.0。详见：https://doc.dcloud.net.cn/uni-app-x/css/common/style-isolation.html
+12:28:34.991 正在编译中...
+12:28:34.995 编译会生成大量临时文件，杀毒软件监控时会影响编译速度，并造成CPU升高。推荐把项目目录添加到杀毒软件的监控排除名单中。[添加] [帮助]
+12:29:19.993 项目 叉车维修培训学员端跨端应用 编译成功。
+12:29:20.076 项目 叉车维修培训学员端跨端应用 正在导出...
+12:29:21.874 [33m项目 叉车维修培训学员端跨端应用 导出 android 成功，路径为：D:\FL\wt-1273\training-app\叉车维修培训学员端跨端应用\unpackage\resources\app-android[39m
+12:29:21.877 wgt文件由HBuilderX 5.24 版本生成，运行的基座sdk也需配套相同版本，否则在手机端部分功能可能无法正常使用。详见 http://ask.dcloud.net.cn/article/35627 
 
 
 publish 命令 = D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe publish app-android --type appResource --project D:\FL\wt-1273\training-app\叉车维修培训学员端跨端应用
-publish 产物 mtime = 09/23/2026 12:06:29（.kt 数 = 120）
-新鲜度判据 = fresh（基准 = 09/23/2026 12:05:40；判据 = 最新 .kt mtime 晚于基准）
+publish 产物 mtime = 09/23/2026 12:29:19（.kt 数 = 120）
+新鲜度判据 = fresh（基准 = 09/23/2026 12:28:31；判据 = 最新 .kt mtime 晚于基准）
 publish 判据 = ok（cli exitcode=0）
 publish 产物 .kt = 120（新鲜度 fresh）
 
