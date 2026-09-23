@@ -129,12 +129,15 @@ func (h *RealExamHandler) StartPractice(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *paperActionReq) (*service.PracticeStartResultDTO, error) {
 			return h.svc.StartPaperPractice(req.UserID, req.PaperID)
 		},
-		// 判定不动（票8 逐端点判过的结论，别照着 regenerate 抄）：本端点的「未兑换」门禁与
-		// 「卷内无已发布题」「查卷题失败」在 service 侧都是裸 errors.New（只有
-		// ErrRealPaperUnavailable 是具名哨兵），api 侧无从分档——改成「哨兵 404 + 其余 500」
-		// 会把「请先兑换该真题卷」答成 500（学员看天书）。正解在 service 侧：给这两条升哨兵
-		// （real_exam_service.go 本批不在改动面），升完再换表。DB 故障今天仍被伪装成 404，登记为已知残留。
-		ErrStatus: errStatusAll(http.StatusNotFound),
+		// A 批把这里登记为「正解在 service 侧升哨兵，升完再换表」——第②批 B 段做的正是那件事。
+		// 三件事各归其位：卷不可用=404；未兑换=400（真题卷的存在性是公开的，这里不套
+		// ADR-0062 决策 3 的「按不存在答」）；卷内无已发布题=400；其余（含查不动）=500。
+		ErrStatus: &errStatusTable{entries: []errStatusEntry{
+			{sentinel: service.ErrRealPaperUnavailable, status: http.StatusNotFound},
+			{sentinel: service.ErrRealPaperNotRedeemed, status: http.StatusBadRequest},
+			{sentinel: service.ErrRealPaperEmpty, status: http.StatusBadRequest},
+			{sentinel: nil, status: http.StatusInternalServerError},
+		}},
 	}.Handle(c)
 }
 
@@ -155,8 +158,12 @@ func (h *RealExamHandler) StartExam(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *paperActionReq) (*service.MockExamStartDTO, error) {
 			return h.svc.StartPaperExam(req.UserID, req.PaperID)
 		},
-		// 与 StartPractice 同一判定（见那里的注释）：门禁与下游故障在 service 侧都是裸 errors.New，
-		// 无哨兵可名 ⇒ 本批不动，待 real_exam_service.go 升哨兵后一次换表。
-		ErrStatus: errStatusAll(http.StatusNotFound),
+		// 与 StartPractice 同一判定（同一张表、同一理由，见 StartPractice 处注释）。
+		ErrStatus: &errStatusTable{entries: []errStatusEntry{
+			{sentinel: service.ErrRealPaperUnavailable, status: http.StatusNotFound},
+			{sentinel: service.ErrRealPaperNotRedeemed, status: http.StatusBadRequest},
+			{sentinel: service.ErrRealPaperEmpty, status: http.StatusBadRequest},
+			{sentinel: nil, status: http.StatusInternalServerError},
+		}},
 	}.Handle(c)
 }
