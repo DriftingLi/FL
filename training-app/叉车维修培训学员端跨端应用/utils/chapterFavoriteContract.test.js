@@ -86,6 +86,10 @@ function makePage(overrides = {}) {
     courseDetail: { value: null },
     isFavorited: { value: overrides.isFavorited === true },
     favoriteId: { value: overrides.favoriteId != null ? overrides.favoriteId : 0 },
+    // #1268：loadDetail 的 catch 现在会写这一格（未解锁态）。这里只是**让它能跑**的容器桩 ——
+    // 判据语义（只有 404 算未解锁）由 `utils/chapterNotFoundBehavior.test.js` 的 A 组在真实链路上钉，
+    // 不在本文件重复一份（重复一份判据 = 两处真相，#1204 的病根）。
+    chapterLocked: { value: false },
   };
 
   const deps = {
@@ -96,6 +100,9 @@ function makePage(overrides = {}) {
     courseDetail: state.courseDetail,
     isFavorited: state.isFavorited,
     favoriteId: state.favoriteId,
+    chapterLocked: state.chapterLocked,
+    // 桩恒判「不是 404」：本文件的用例都走「加载成功 / 收藏失败」两支，未解锁一支归 #1268 的守护
+    isChapterNotFound: () => false,
     checkFavoriteApi: (type, id) => {
       calls.checks.push([type, id]);
       return overrides.check != null
