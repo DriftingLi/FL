@@ -54,6 +54,22 @@
     （not-ready / unreachable / timeout / unknown）把两类失败分开报，**不得**再合并成一句
     「自动化端口连不上」——那正是本轮误诊把排查引向端口、多花了一轮实测的原因。
 
+    **时序坑位 6（2026-09-23 实测定位；② 的「第一枪常空、重跑即绿」就是这一条，已按整段重试处置）**：
+    `cli.bat auto` 回显 `√ auto` **不等于**自动化端口起来了。冷起点 / IDE 重启窗口下实测两种形态：
+    a) 端口在 `-PortWaitSeconds`（180s）内**始终不监听**；b) `auto` **直接挂住 >180s**。而**同一条命令**
+    等 IDE 稳定后重跑，**1–8s** 就监听（对照实测：`auto#1` 连跑 60s 不起 → 等 90s → `auto#2` t=1s 起）。
+    故 `auto → 端口` 段做成**整段重试**：`close → open → auto` 再来一遍，最多 `-AutoAttempts` 次，
+    两次之间等 `-AutoRetryDelaySeconds` 秒；全部用尽才判 `exit 2`（环境不可用）。
+    ⚠️ **不得只重试 `auto`**：实测只重跑 auto 会绑到一个**没加载项目的新 IDE 实例**上 —— 端口通了，
+    但 `Tool.getInfo` **没有 `SDKVersion`**、`App.getPageStack` **永不应答**（复现结果行
+    `reason=sdk-version-missing`），门会以为「会话已就绪」而实际什么都没有。判据始终是**协议级**
+    （SDKVersion + pageStack），**不是**「端口出现在 `Get-NetTCPConnection` 里」。
+    另照实记（**硬前提的补充**）：**受限沙箱下开发者工具 CLI 连自己的端口文件都写不了** ——
+    `× #initialize-error: Error: EPERM: operation not permitted, open '<User Data>\Default\.cli'`，
+    于是 close / open / auto **三步全废**、自动化根本起不来（表象与「工具没装」几乎一样：
+    `[error] Please ensure that the IDE has been properly installed`）。开发者工具 CLI 与 HBuilderX CLI
+    一样**须以全访问权限执行**。
+
     **导航不可用时诚实降级（2026-09-12 复测，**不许假绿**）**：本机 `miniprogram-automator@0.12.1` 下
     `mp.reLaunch` / `mp.navigateTo` **恒报 `Uncaught [object Object]`**，而 `mp.connect` / `mp.pageStack` /
     `mp.screenshot` 正常 ⇒ 「逐页导航 + 每页截图」这组断言在此环境**不可能成立**。处置是探针把这组记成
@@ -129,6 +145,14 @@
     跳过 `cli publish mp-weixin`（构建）。适用于已有新鲜产物、只想重跑自动化判定的场合。
     注意：跳过构建后开发者工具里打开的仍是上一次的产物，门结论只对那份产物成立。
 
+.PARAMETER AutoAttempts
+    `close → open → auto → 端口` 这一段的**整段**重试次数（默认 3）。实测冷起点 / IDE 重启窗口下
+    第一次 `auto` 会「回显 √ 但端口不起」或「直接挂住」⇒ 单发必红（见脚本头坑位 6）。
+    `-AutoAttempts 1` = 恢复单发语义（排障用）。**重试单元是整段**，不是只重试 `auto`（理由见坑位 6）。
+
+.PARAMETER AutoRetryDelaySeconds
+    两次整段尝试之间的等待秒数（默认 20）：让开发者工具把上一次的 IDE 实例/端口收干净再重来。
+
 .PARAMETER PostToPr
     > 0 时，**仅在门通过（exit 0）分支**把结果贴成 PR 评论（② 门结果免手抄，与 ④ 门同款）。
     评论正文严格形如 `<!-- gate-evidence:② -->` + 「② 微信开发者工具无报错（半自动，agent 执行）」
@@ -160,6 +184,8 @@ param(
     [switch]$SkipBuild,
     [int]$PublishTimeoutSeconds = 900,
     [int]$AutoTimeoutSeconds = 180,
+    [int]$AutoAttempts = 3,
+    [int]$AutoRetryDelaySeconds = 20,
     [int]$OpenTimeoutSeconds = 120,
     [int]$PortWaitSeconds = 180,
     [string]$Module = 'mp-weixin',
@@ -310,6 +336,8 @@ function New-GatePlan {
         [int]$Port,
         [int]$OpenTimeoutSeconds,
         [int]$AutoTimeoutSeconds,
+        [int]$AutoAttempts,
+        [int]$AutoRetryDelaySeconds,
         [int]$PortWaitSeconds,
         [int]$ReadyWaitSeconds,
         [int]$ProbeTimeoutMs,
@@ -351,25 +379,30 @@ function New-GatePlan {
     }
 
     # 3) auto：必须跑完 —— 中途 kill 会让端口永不监听；端口是延迟出现的，故后面还要轮询。
+    #    2026-09-23（坑位 6）：冷起点/IDE 重启窗口下第一次 auto 会「回显 √ 但端口不起」或「直接挂住」⇒
+    #    执行路径把 `close → open → auto → 端口` 当**一个可重试的单元**跑 attempts 次（不是只重试 auto）。
     $steps += [ordered]@{
         id = 'devtools-auto'
         tag = 'devtools-auto'
         exec = 'devToolsCli'
         argv = @('auto', '--project', $Dist, '--auto-port', "$Port", '--trust-project')
         timeoutSeconds = $AutoTimeoutSeconds
+        attempts = $AutoAttempts
+        retryDelaySeconds = $AutoRetryDelaySeconds
         awaitCompletion = $true
-        criteria = @('auto 必须等它跑完（中途 kill ⇒ 端口永不监听）', "自动化端口由 --auto-port $Port 指定（监听面由开发者工具决定，实测绑通配地址）", '仅超时判 exit 2')
+        criteria = @('auto 必须等它跑完（中途 kill ⇒ 端口永不监听）', "自动化端口由 --auto-port $Port 指定（监听面由开发者工具决定，实测绑通配地址）", '仅超时判 exit 2', "端口没起来时**整段**重试（close → open → auto，最多 $AutoAttempts 次；**不得**只重试 auto —— 实测只重试 auto 会绑到一个没加载项目的新 IDE 实例上：Tool.getInfo 缺 SDKVersion、pageStack 永不应答，见脚本头坑位 6）")
         exit2 = @([ordered]@{ on = 'timeout'; reason = 'auto-timeout' })
     }
 
-    # 4) 端口就绪：auto 返回 ≠ 端口已监听（实测延迟出现）。
+    # 4) 端口就绪：auto 返回 ≠ 端口已监听（实测延迟出现）。每次整段尝试各有一份本预算。
     $steps += [ordered]@{
         id = 'port-listening'
         tag = 'port-listening'
         exec = 'none'
         argv = @()
         waitSeconds = $PortWaitSeconds
-        criteria = @("端口 $Port 须在 $PortWaitSeconds 秒内进入 listening（auto 返回后端口是延迟出现的）", '未监听 ⇒ exit 2（环境不可用，不是门未过）')
+        attempts = $AutoAttempts
+        criteria = @("端口 $Port 须在 $PortWaitSeconds 秒内进入 listening（auto 返回后端口是延迟出现的）", '未监听 ⇒ 先重试整段（最多 attempts 次），全部用尽才 exit 2（环境不可用，不是门未过）', "两次尝试之间等 $AutoRetryDelaySeconds 秒（实测冷起点第 1 次 180s 不起、等 IDE 稳定后重跑 1–8s 即起）")
         exit2 = @([ordered]@{ on = 'not-listening'; reason = 'port-not-listening' })
     }
 
@@ -441,6 +474,8 @@ function New-GatePlan {
             publish = $PublishTimeoutSeconds
             open = $OpenTimeoutSeconds
             auto = $AutoTimeoutSeconds
+            autoAttempts = $AutoAttempts
+            autoRetryDelay = $AutoRetryDelaySeconds
             portWait = $PortWaitSeconds
             readyWait = $ReadyWaitSeconds
             readyGate = $ReadyWaitSeconds + 60
@@ -507,6 +542,7 @@ $routeList = @($Routes -split ',' | ForEach-Object { $_.Trim() } | Where-Object 
 $script:GatePlan = New-GatePlan -Project $Project -Dist $dist -ProbePath $probePath -ReadyPath $readyPath `
     -AutoRoot $autoRoot -LogDir $logDir -LogRelative $logRelative -RouteList $routeList -Port $Port `
     -OpenTimeoutSeconds $OpenTimeoutSeconds -AutoTimeoutSeconds $AutoTimeoutSeconds `
+    -AutoAttempts $AutoAttempts -AutoRetryDelaySeconds $AutoRetryDelaySeconds `
     -PortWaitSeconds $PortWaitSeconds -ReadyWaitSeconds $ReadyWaitSeconds -ProbeTimeoutMs $ProbeTimeoutMs `
     -ProbeTimeoutSeconds $ProbeTimeoutSeconds -ProbeAttempts $ProbeAttempts `
     -ProbeRetryDelaySeconds $ProbeRetryDelaySeconds -PublishTimeoutSeconds $PublishTimeoutSeconds `
@@ -1052,75 +1088,104 @@ try {
         exit 1
     }
 
-    # 4) 清残留自动化会话（坑位 1：不 close 会撞 pageStack 空 ⇒ page 级 API 全废且报误导错）
-    Invoke-DevToolsClose
-
-    # 4.5) **重新打开项目窗口**（时序坑位 4，2026-09-12 复测钉死的缺失步骤，勿删）：
-    #      `cli.bat close` 把项目窗口一起关掉，而 `cli.bat auto` **不会重开** ⇒ 少了这一步 pageStack 恒空。
-    #      故顺序写死 `close → open --project <dist> → auto`（守护测试 C12），本步为**显式步骤并写进日志**。
-    #      `-SkipBuild` 下同样定位构建产物目录：$dist 在上面两个分支里都已做过存在性校验（缺 app.json 即 exit 2）。
-    #      判据仍是输出/产物：本步只在**超时**时判环境不可用（窗口没重开就没法继续），其余一律记日志、
-    #      由探针的 pageStack 前置断言给出真正的门结论（开发者工具 cli.bat 的输出与退出码不作门结论）。
-    $openStep = Get-GateStep -Plan $script:GatePlan -Id 'devtools-open'
-    $open = Invoke-Process -FilePath $devTools -Arguments $openStep.argv `
-        -TimeoutSeconds $openStep.timeoutSeconds -Tag $openStep.tag
-    Write-Log "`n>>> $($openStep.tag)（close 之后 auto 之前重开项目窗口；缺这步 pageStack 恒空）`n$($open.Output)"
-    Write-Host $open.Output
-    # 体检行必须记在**各自那一步**上，不能攒到就绪闸门再记：早期 exit（超时 / 端口没起来）会让报告缺层，
-    # 而报告缺层恰恰发生在最需要它的时候（-Doctor 首跑实测抓到过这个形态）。
-    if ($Doctor) {
-        Add-DoctorRow -Layer 'L5 项目窗口' -Verdict $(if ($open.TimedOut) { 'FAIL' } else { 'OK' }) -Detail ("close → open 已执行；open 回显 = " + (($open.Output -replace '\s+', ' ').Trim()))
-    }
-    if ($open.TimedOut) {
-        Write-Host "[error] cli.bat open 超时（$OpenTimeoutSeconds 秒）：项目窗口未重开 ⇒ auto 不会替你重开 ⇒ pageStack 必为空格。" -ForegroundColor Red
-        Write-Log 'MP_WEIXIN_RESULT errors=env reason=devtools-open-timeout'
-        exit 2
-    }
-
-    # 5) 开自动化端口（无人值守，不需要人在 GUI 里点任何开关）
-    #    ⚠️ 2026-09-12 实测最要紧的一条：auto **必须跑完**（它会派生子进程去起自动化服务；
-    #    中途 kill 掉 auto 会让端口永远不监听），且跑完后端口是**延迟出现**的 ⇒ 之后必须轮询等待。
-    $autoStep = Get-GateStep -Plan $script:GatePlan -Id 'devtools-auto'
-    $auto = Invoke-Process -FilePath $devTools -Arguments $autoStep.argv `
-        -TimeoutSeconds $autoStep.timeoutSeconds -Tag $autoStep.tag
-    Write-Log "`n>>> $($autoStep.tag)`n$($auto.Output)"
-    Write-Host $auto.Output
-    if ($auto.TimedOut) {
-        if ($Doctor) { Add-DoctorRow -Layer 'L6 自动化端口' -Verdict 'FAIL' -Detail "cli.bat auto 超时（$AutoTimeoutSeconds 秒）：自动化端口没开起来（残留会话多时见过此形态）" }
-        Write-Host "[error] cli.bat auto 超时（$AutoTimeoutSeconds 秒）" -ForegroundColor Red
-        Write-Log 'MP_WEIXIN_RESULT errors=env reason=auto-timeout'
-        exit 2
-    }
-    $usingAppId = ''
-    $ma = [regex]::Match($auto.Output, 'Using AppID:\s*(\S+)')
-    if ($ma.Success) { $usingAppId = $ma.Groups[1].Value }
-    Write-Log "cli auto 回显 AppID = '$usingAppId'"
-    Write-Host "cli auto 回显 AppID = $usingAppId"
-    if ($AppId -and $usingAppId -and $usingAppId -ne $AppId) {
-        Write-Host "[error] cli.bat auto 使用的 AppID（$usingAppId）与期望（$AppId）不一致。" -ForegroundColor Red
-        Write-Log "MP_WEIXIN_RESULT errors=1 stage=auto-appid using=$usingAppId expected=$AppId"
-        exit 1
-    }
-
-    # 端口延迟出现：轮询到 listening（预算取自门计划的 port-listening 步骤）
-    $portStep = Get-GateStep -Plan $script:GatePlan -Id 'port-listening'
+    # 4) 清残留自动化会话 + 4.5) 重开项目窗口 + 5) 开自动化端口 —— **当作一个可重试的单元**（坑位 6）：
+    #    2026-09-23 实测：冷起点 / IDE 重启窗口下，第一次 `cli.bat auto` 会「回显 √ auto 但端口 180s 不起」
+    #    或「直接挂住 >180s」；**同一条命令**等 IDE 稳定后重跑 1–8s 即起。故整段
+    #    `close → open --project <dist> → auto → 端口` 重试 attempts 次（次数/间隔取自门计划的预算面）。
+    #    ⚠️ **不得只重试 auto**：实测只重跑 auto 会绑到一个**没加载项目的新 IDE 实例**上 —— 端口通了但
+    #    `Tool.getInfo` 缺 SDKVersion、`App.getPageStack` 永不应答（门会以为会话就绪而实际什么都没有）。
+    #    判据始终是协议级（SDKVersion + pageStack，见就绪闸门），不是「端口出现在 Get-NetTCPConnection 里」。
+    $attempts = [Math]::Max(1, [int]$script:GatePlan['timeouts']['autoAttempts'])
+    $retryDelaySeconds = [Math]::Max(0, [int]$script:GatePlan['timeouts']['autoRetryDelay'])
     $listening = $false
-    for ($i = 0; $i -lt $portStep.waitSeconds; $i++) {
-        if (@(Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue).Count -gt 0) { $listening = $true; break }
-        Start-Sleep -Seconds 1
-    }
-    $addrs = ''
-    if ($listening) {
-        $addrs = (@(Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue) |
-            ForEach-Object { "$($_.LocalAddress):$($_.LocalPort)" }) -join ','
-    }
-    Write-Log "端口 $Port listening=$listening addrs=$addrs"
-    Write-Host "端口 $Port listening=$listening addrs=$addrs"
-    if ($Doctor) {
-        Add-DoctorRow -Layer 'L6 自动化端口' -Verdict $(if ($listening) { 'OK' } else { 'FAIL' }) -Detail "port $Port listening=$listening（等 ${PortWaitSeconds}s）addrs=$addrs；auto 回显 Using AppID='$usingAppId'"
+    $usingAppId = ''
+    $lastReason = 'port-not-listening'
+    for ($attempt = 1; $attempt -le $attempts; $attempt++) {
+        if ($attempt -gt 1) {
+            Write-Host ">>> 整段重试第 $attempt/$attempts 次：先等 ${retryDelaySeconds}s 让开发者工具把上一次的 IDE 实例收干净（坑位 6）" -ForegroundColor Yellow
+            Write-Log "`n>>> 整段重试第 $attempt/$attempts 次（等 ${retryDelaySeconds}s 后重跑 close → open → auto）；上一轮 reason=$lastReason"
+            Start-Sleep -Seconds $retryDelaySeconds
+        }
+
+        # 4) 清残留自动化会话（坑位 1：不 close 会撞 pageStack 空 ⇒ page 级 API 全废且报误导错）。
+        #    重试要能再来一次 ⇒ 每轮先复位幂等标志；finally 那次 close 的「不重复收尾」语义不受影响
+        #    （本步 close 会把标志重新置 true）。
+        $script:closed = $false
+        Invoke-DevToolsClose
+
+        # 4.5) **重新打开项目窗口**（时序坑位 4，2026-09-12 复测钉死的缺失步骤，勿删）：
+        #      `cli.bat close` 把项目窗口一起关掉，而 `cli.bat auto` **不会重开** ⇒ 少了这一步 pageStack 恒空。
+        #      故顺序写死 `close → open --project <dist> → auto`（守护测试 C12），本步为**显式步骤并写进日志**。
+        #      `-SkipBuild` 下同样定位构建产物目录：$dist 在上面两个分支里都已做过存在性校验（缺 app.json 即 exit 2）。
+        #      判据仍是输出/产物：本步只在**超时**时判环境不可用（窗口没重开就没法继续），其余一律记日志、
+        #      由探针的 pageStack 前置断言给出真正的门结论（开发者工具 cli.bat 的输出与退出码不作门结论）。
+        $openStep = Get-GateStep -Plan $script:GatePlan -Id 'devtools-open'
+        $open = Invoke-Process -FilePath $devTools -Arguments $openStep.argv `
+            -TimeoutSeconds $openStep.timeoutSeconds -Tag $openStep.tag
+        Write-Log "`n>>> $($openStep.tag)（close 之后 auto 之前重开项目窗口；缺这步 pageStack 恒空）`n$($open.Output)"
+        Write-Host $open.Output
+        # 体检行必须记在**各自那一步**上，不能攒到就绪闸门再记：早期 exit（超时 / 端口没起来）会让报告缺层，
+        # 而报告缺层恰恰发生在最需要它的时候（-Doctor 首跑实测抓到过这个形态）。
+        if ($Doctor) {
+            Add-DoctorRow -Layer 'L5 项目窗口' -Verdict $(if ($open.TimedOut) { 'FAIL' } else { 'OK' }) -Detail ("第 $attempt/$attempts 次尝试：close → open 已执行；open 回显 = " + (($open.Output -replace '\s+', ' ').Trim()))
+        }
+        if ($open.TimedOut) {
+            $lastReason = 'devtools-open-timeout'
+            if ($attempt -lt $attempts) { continue }
+            Write-Host "[error] cli.bat open 超时（$OpenTimeoutSeconds 秒）：项目窗口未重开 ⇒ auto 不会替你重开 ⇒ pageStack 必为空格。" -ForegroundColor Red
+            Write-Log 'MP_WEIXIN_RESULT errors=env reason=devtools-open-timeout'
+            exit 2
+        }
+
+        # 5) 开自动化端口（无人值守，不需要人在 GUI 里点任何开关）
+        #    ⚠️ 2026-09-12 实测最要紧的一条：auto **必须跑完**（它会派生子进程去起自动化服务；
+        #    中途 kill 掉 auto 会让端口永远不监听），且跑完后端口是**延迟出现**的 ⇒ 之后必须轮询等待。
+        $autoStep = Get-GateStep -Plan $script:GatePlan -Id 'devtools-auto'
+        $auto = Invoke-Process -FilePath $devTools -Arguments $autoStep.argv `
+            -TimeoutSeconds $autoStep.timeoutSeconds -Tag $autoStep.tag
+        Write-Log "`n>>> $($autoStep.tag)`n$($auto.Output)"
+        Write-Host $auto.Output
+        if ($auto.TimedOut) {
+            $lastReason = 'auto-timeout'
+            if ($Doctor) { Add-DoctorRow -Layer 'L6 自动化端口' -Verdict 'FAIL' -Detail "第 $attempt/$attempts 次尝试：cli.bat auto 超时（$AutoTimeoutSeconds 秒）：自动化端口没开起来（残留会话多时见过此形态）" }
+            if ($attempt -lt $attempts) { continue }
+            Write-Host "[error] cli.bat auto 超时（$AutoTimeoutSeconds 秒，整段重试 $attempts 次用尽）" -ForegroundColor Red
+            Write-Log 'MP_WEIXIN_RESULT errors=env reason=auto-timeout'
+            exit 2
+        }
+        $usingAppId = ''
+        $ma = [regex]::Match($auto.Output, 'Using AppID:\s*(\S+)')
+        if ($ma.Success) { $usingAppId = $ma.Groups[1].Value }
+        Write-Log "cli auto 回显 AppID = '$usingAppId'"
+        Write-Host "cli auto 回显 AppID = $usingAppId"
+        if ($AppId -and $usingAppId -and $usingAppId -ne $AppId) {
+            Write-Host "[error] cli.bat auto 使用的 AppID（$usingAppId）与期望（$AppId）不一致。" -ForegroundColor Red
+            Write-Log "MP_WEIXIN_RESULT errors=1 stage=auto-appid using=$usingAppId expected=$AppId"
+            exit 1
+        }
+
+        # 端口延迟出现：轮询到 listening（预算取自门计划的 port-listening 步骤；每轮整段尝试各有一份本预算）
+        $portStep = Get-GateStep -Plan $script:GatePlan -Id 'port-listening'
+        $listening = $false
+        for ($i = 0; $i -lt $portStep.waitSeconds; $i++) {
+            if (@(Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue).Count -gt 0) { $listening = $true; break }
+            Start-Sleep -Seconds 1
+        }
+        $addrs = ''
+        if ($listening) {
+            $addrs = (@(Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue) |
+                ForEach-Object { "$($_.LocalAddress):$($_.LocalPort)" }) -join ','
+        }
+        Write-Log "端口 $Port listening=$listening addrs=$addrs（第 $attempt/$attempts 次尝试）"
+        Write-Host "端口 $Port listening=$listening addrs=$addrs（第 $attempt/$attempts 次尝试）"
+        if ($Doctor) {
+            Add-DoctorRow -Layer 'L6 自动化端口' -Verdict $(if ($listening) { 'OK' } else { 'FAIL' }) -Detail "第 $attempt/$attempts 次尝试：port $Port listening=$listening（等 ${PortWaitSeconds}s）addrs=$addrs；auto 回显 Using AppID='$usingAppId'"
+        }
+        if ($listening) { break }
+        $lastReason = 'port-not-listening'
     }
     if (-not $listening) {
-        Write-Host "[error] 自动化端口 $Port 未监听：cli.bat auto 未真正生效。" -ForegroundColor Red
+        Write-Host "[error] 自动化端口 $Port 未监听：cli.bat auto 未真正生效（整段 close → open → auto 重试 $attempts 次用尽）。" -ForegroundColor Red
         Write-Log 'MP_WEIXIN_RESULT errors=env reason=port-not-listening'
         exit 2
     }

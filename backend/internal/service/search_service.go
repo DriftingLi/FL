@@ -103,7 +103,7 @@ type SearchItemDTO struct {
 
 // SearchSectionDTO 分区结果（全部搜索时每类 top N）。
 type SearchSectionDTO struct {
-	Items []SearchItemDTO `json:"items"`
+	Items []SearchItemDTO `json:"items" nullability:"nullable"`
 	Total int64           `json:"total"`
 }
 
@@ -124,7 +124,7 @@ type SearchPageDTO struct {
 	Total   int64           `json:"total"`
 	Page    int             `json:"page"`
 	Pages   int             `json:"pages"`
-	Items   []SearchItemDTO `json:"items"`
+	Items   []SearchItemDTO `json:"items" nullability:"nullable"`
 }
 
 // ZeroResultKeywordDTO 零结果词（运营面，ADR-0049 决策 7）。
