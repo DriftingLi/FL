@@ -1,0 +1,86 @@
+#1268 ①a 机检行（agent 执行，2026-09-23，设备 23049RAD8C / adb 192.168.0.212:38345）
+
+## 各截图的 content-desc（uvue 文字在 a11y 树里走 content-desc，不走 text）
+01-chapter-view-free-before: n=27 sha256(xml)=8c4acc49212c257a
+  ["‹","第一章 叉车分类与型号","♡","第一章 叉车分类与型号","学习中","预计 40分钟"]
+01-chapter-view-free-after: n=27 sha256(xml)=8c4acc49212c257a
+  ["‹","第一章 叉车分类与型号","♡","第一章 叉车分类与型号","学习中","预计 40分钟"]
+02-chapter-view-locked-before: n=4 sha256(xml)=d7089c5b7170c166
+  ["‹","♡","章节内容加载失败","重试"]
+02-chapter-view-locked-after: n=4 sha256(xml)=995c778121477862
+  ["‹","章节学习","♡","该章节需先解锁"]
+03-chapter-view-free-after-merged: n=27 sha256(xml)=71f40b5f0731be4b
+  ["‹","第一章 叉车分类与型号","♡","第一章 叉车分类与型号","已完成","预计 40分钟"]
+
+## 部署段（hx-run.ps1 机检行，原文见 .scratch/1268-hxrun-before.log / -after2.log 与本轮 术后日志）
+术前: HX_RUN mode=incremental compile=170 deploy=0 total=226 exit=ok
+      HX_RUN_DEPLOY deployed=true www=/sdcard/Android/data/io.dcloud.uniappx/apps/__UNI__1C1D180/www=1790130335->1790130806 pid_before=io.dcloud.uniappx=29115 pid_after=io.dcloud.uniappx=32116 foreground=io.dcloud.uniappx reason=资源落地相对基线前进
+术后: HX_RUN mode=incremental compile=110 deploy=0 total=139 exit=ok
+术后@合并后 head f6bb233b: HX_RUN mode=incremental compile=150 deploy=0 total=244 exit=ok
+      ⇒ 两个对照面（dd9cb2ad 与 f6bb233b）的章件均已在真机跑过；`git diff dd9cb2ad f6bb233b -- api/course.uts pages/courses/chapter-view.uvue` 为空 ⇒ 本票的运行时面在两 sha 上逐字节相同
+
+## 404 支 · 术前（origin/master 的 api/course.uts + chapter-view.uvue）
+  10:43:49.930 [request] >>> GET https://www.gccsmile.com/api/course/1/chapter/999 data: null at api/request.uts:332
+  10:43:49.937 进入页面:pages/courses/chapter-view?course_id=1&chapter_id=999 。[{"创建dom元素个数":"10个","耗时":"15ms"},{"排版":"1次","耗时":"26ms"},{"渲染":"1次","耗时":"5ms"},{"跳转页面到onReady总耗时":"168ms"}]
+  10:43:50.093 [request] <<< [number] 404 https://www.gccsmile.com/api/course/1/chapter/999 at api/request.uts:411
+  10:43:50.702 [getChapterDetailApi] network failed: [⁠Error⁠] {"cause": null, "message": "404:章节不存在", "name": "Error"} at api/course.uts:465
+  => 页面渲染 content-desc = ["‹","♡","章节内容加载失败","重试"]
+
+## 404 支 · 术后（HEAD = dd9cb2ad，本票最后一个运行时面提交）
+  10:25:34.085 [request] >>> GET https://www.gccsmile.com/api/course/1/chapter/999 data: null at api/request.uts:332
+  10:25:34.369 进入页面:pages/courses/chapter-view?course_id=1&chapter_id=999 。[{"创建dom元素个数":"10个","耗时":"10ms"},{"排版":"1次","耗时":"33ms"},{"渲染":"1次","耗时":"7ms"},{"跳转页面到onReady总耗时":"169ms"}]
+  10:25:34.476 [request] <<< [number] 404 https://www.gccsmile.com/api/course/1/chapter/999 at api/request.uts:411
+  10:25:35.030 [chapter-view] load failed: [⁠Error⁠] {"cause": null, "message": "404:章节不存在", "name": "Error"} at pages/courses/chapter-view.uvue:237
+  => 页面渲染 content-desc = ["‹","章节学习","♡","该章节需先解锁"]
+
+## 404 支 · 术后（HEAD = f6bb233b，合并 master 后的最终 head，入库截图取这一轮）
+  11:39:50.541 [request] >>> GET https://www.gccsmile.com/api/course/1/chapter/999 data: null at api/request.uts:332
+  11:39:50.660 进入页面:pages/courses/chapter-view?course_id=1&chapter_id=999 。[{"创建dom元素个数":"10个","耗时":"10ms"},{"排版":"1次","耗时":"34ms"},{"渲染":"1次","耗时":"6ms"},{"跳转页面到onReady总耗时":"152ms"}]
+  11:39:50.850 [request] <<< [number] 404 https://www.gccsmile.com/api/course/1/chapter/999 at api/request.uts:411
+  11:39:51.355 [chapter-view] load failed: [⁠Error⁠] {"cause": null, "message": "404:章节不存在", "name": "Error"} at pages/courses/chapter-view.uvue:237
+  => 页面渲染 content-desc = ["‹","章节学习","♡","该章节需先解锁"]
+
+## 成功支 · 术后（HEAD = f6bb233b）
+  11:35:26.224 [request] >>> GET https://www.gccsmile.com/api/course/1/chapter/1 data: null at api/request.uts:332
+  11:35:26.385 进入页面:pages/courses/chapter-view?course_id=1&chapter_id=1 。[{"创建dom元素个数":"10个","耗时":"10ms"},{"排版":"1次","耗时":"33ms"},{"渲染":"1次","耗时":"16ms"},{"跳转页面到onReady总耗时":"170ms"}]
+  11:35:26.388 [request] <<< [number] 200 https://www.gccsmile.com/api/course/1/chapter/1 at api/request.uts:411
+  11:35:26.396 [request] <<< [number] 200 https://www.gccsmile.com/api/auth/me at api/request.uts:411
+  11:35:26.667 [request] <<< [number] 200 https://www.gccsmile.com/api/course/1 at api/request.uts:411
+  11:35:27.332 [request] <<< [number] 200 https://www.gccsmile.com/api/favorites/check?target_type=chapter&target_id=1 at api/request.uts:411
+  => 页面渲染 content-desc n=27，与 01-...-after 的差异只有第 5 个（下标 4）"学习中" → "已完成"（见下方「合并轮已知差异」）
+
+## 成功支 · 术前（origin/master 的两个文件）
+  本页进页即遇后端瞬断（下方 11:00:36 一组 FAIL）⇒ 术前页面落到「章节内容加载失败 + 重试」；
+  点「重试」（input tap 540 1347，坐标取自 a11y bounds [500,1320][580,1374] 中心）后同一请求取到 200 ⇒ 截图取的是这次渲染。
+  顺带证到：真失败那支的「重试」在术后仍然保留且有意义（瞬断可恢复），本票只在「未解锁」一支摘掉它。
+  11:00:36.773 [request] >>> GET https://www.gccsmile.com/api/course/1/chapter/1 data: null at api/request.uts:332
+  11:00:36.868 进入页面:pages/courses/chapter-view?course_id=1&chapter_id=1 。[{"创建dom元素个数":"10个","耗时":"11ms"},{"排版":"1次","耗时":"26ms"},{"渲染":"1次","耗时":"6ms"},{"跳转页面到onReady总耗时":"165ms"}]
+  11:00:36.872 [request] <<< FAIL errMsg= server system error at api/request.uts:442
+  11:00:37.498 [request] <<< FAIL errMsg= server system error at api/request.uts:442
+  11:00:37.500 [getChapterDetailApi] network failed: [⁠Error⁠] {"cause": null, "message": "server system error", "name": "Error"} at api/course.uts:465
+  11:00:37.507 [request] <<< FAIL errMsg= server system error at api/request.uts:442
+  11:00:37.597 [request] <<< FAIL errMsg= server system error at api/request.uts:442
+  11:02:55.301 [request] >>> GET https://www.gccsmile.com/api/course/1/chapter/1 data: null at api/request.uts:332
+  11:02:55.410 [request] <<< [number] 200 https://www.gccsmile.com/api/course/1/chapter/1 at api/request.uts:411
+  => 截图前 6s 的两帧 a11y/像素见下「逐行像素对照」；页面渲染 content-desc n=27
+
+## 逐行像素对照（LockBits，1080x2400；band = 差异行归并；Top=96 裁掉状态栏时钟带）
+  术前↔术后 成功支   Top=96 : rows_total=2304 different=0 ratio=0.000000  ⇒ 第 96 行以下逐像素相同
+  术前↔术后 成功支   Top=0  : different=40  band y28-67  ⇒ 差异只落在状态栏（时钟）
+  同 build 两帧(6s) Top=96  : different=0                  ⇒ 上面的 0 不是「图相同所以不比」
+  术前↔术后 404 支   Top=0  : different=258  bands y28-71(状态栏) / y158-201(标题位) / y1216-1254 + y1266-1396(文案 + 重试按钮位)
+  术后(dd9cb2ad)↔术后(f6bb233b) 404 支 Top=96 : different=0 ⇒ 合并 master 后本支渲染未变
+  术后(dd9cb2ad)↔术后(f6bb233b) 成功支 Top=96 : different=59 band y399-457 ⇒ 只有学习状态徽标一行
+
+## 合并轮已知差异（唯一一处，且不由本票引起）
+  01-...-after(dd9cb2ad) 与 03-...-after-merged(f6bb233b) 两份 a11y dump 各 27 个 content-desc、顺序一致，
+  逐位比对只差第 5 个（下标 4）："学习中" → "已完成"。
+  该文案由 pages/courses/chapter-view.uvue:40 的 `detail!.study_status == 'completed'` 直接渲染后端字段，
+  本票 diff 未触及该行（见 `git diff origin/master...HEAD` 的 4 个 hunk：模板加一支、import、声明 chapterLocked、catch 里赋值）。
+  同一份运行时面（该文件在两 sha 上逐字节相同）在 10:18 读出「学习中」、在 11:31 读出「已完成」
+  ⇒ 变量是服务端学习进度（取证期间反复进入本章，进度被推进），不是代码。
+  404 支两轮（dd9cb2ad / f6bb233b）content-desc 数组合成逐字相同：n=4 且 identical=true。
+
+## 术前 / 术后 成功支 a11y dump 逐字节相同
+  sha256(cap-before-ok/before-ok-ch1-110340.xml) = 8c4acc49212c257a4b28c72b4c492496529684cb9c1636cc1b6e9ffd0452dbcc
+  sha256(cap-after/ok-ch1-101853.xml)           = 8c4acc49212c257a4b28c72b4c492496529684cb9c1636cc1b6e9ffd0452dbcc
