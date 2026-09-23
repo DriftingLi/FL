@@ -46,7 +46,7 @@ type QuestionCreateInput struct {
 	ScoringCriteria string          `json:"scoring_criteria"`
 	Score           int             `json:"score"`
 	CredentialID    int             `json:"credential_id"`
-	TagIDs          []int           `json:"tag_ids"`
+	TagIDs          []int           `json:"tag_ids" nullability:"nullable"`
 }
 
 // QuestionUpdateInput 更新题目的 typed 入参（指针 = 「未提供」与「提供零值」可分，部分更新语义不变）。
@@ -61,12 +61,12 @@ type QuestionUpdateInput struct {
 	ReferenceAnswer *string          `json:"reference_answer"`
 	ScoringCriteria *string          `json:"scoring_criteria"`
 	Score           *int             `json:"score"`
-	TagIDs          *[]int           `json:"tag_ids"`
+	TagIDs          *[]int           `json:"tag_ids" nullability:"nullable"`
 }
 
 // QuestionBatchImportInput 批量导入的 typed body（票 6：swagger 面由 object 变 typed）。
 type QuestionBatchImportInput struct {
-	Questions []QuestionCreateInput `json:"questions"`
+	Questions []QuestionCreateInput `json:"questions" nullability:"nullable"`
 }
 
 // stringifyAnswerJSON 把 typed 入参里的 answer 原始 JSON（字符串或数组）归一为存储字符串
@@ -615,7 +615,7 @@ func (s *QuestionBankService) DeleteQuestion(id int) error {
 type QuestionPageDTO struct {
 	Page      int           `json:"page"`
 	PageSize  int           `json:"page_size"`
-	Questions []QuestionDTO `json:"questions"`
+	Questions []QuestionDTO `json:"questions" nullability:"nonnil"`
 	Total     int64         `json:"total"`
 }
 
@@ -629,7 +629,7 @@ type QuestionImportErrorDTO struct {
 // Errors 用非 nil 空切片初始化，保证无失败时序列化为 []（与旧 map 的 []map[string]any{} 同形）。
 type QuestionImportResultDTO struct {
 	ErrorCount   int                      `json:"error_count"`
-	Errors       []QuestionImportErrorDTO `json:"errors"`
+	Errors       []QuestionImportErrorDTO `json:"errors" nullability:"nonnil"`
 	SuccessCount int                      `json:"success_count"`
 }
 

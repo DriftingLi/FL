@@ -18,7 +18,7 @@ import (
 
 // AuditLogPageResult 审计日志分页结果。
 type AuditLogPageResult struct {
-	Items []model.AuditLog `json:"items" extensions:"x-nullable"`
+	Items []model.AuditLog `json:"items" extensions:"x-nullable" nullability:"nullable"`
 	Page  int              `json:"page"`
 	Pages int              `json:"pages"`
 	Total int64            `json:"total"`

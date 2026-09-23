@@ -58,8 +58,8 @@ type AIChatMessageDTO struct {
 	ID        int               `json:"id"`
 	Role      string            `json:"role"`
 	Content   string            `json:"content"`
-	Images    []string          `json:"images" extensions:"x-nullable"`  // 用户消息附带的图片 URL（无图时键在、值为 null）
-	Sources   []DiagnosisSource `json:"sources" extensions:"x-nullable"` // 助手消息的诊断来源（T5 历史回放；无来源时键在、值为 null）
+	Images    []string          `json:"images" extensions:"x-nullable" nullability:"nullable"`  // 用户消息附带的图片 URL（无图时键在、值为 null）
+	Sources   []DiagnosisSource `json:"sources" extensions:"x-nullable" nullability:"nullable"` // 助手消息的诊断来源（T5 历史回放；无来源时键在、值为 null）
 	CreatedAt time.Time         `json:"created_at"`
 }
 
@@ -106,7 +106,7 @@ type StreamChatReq struct {
 	// 经 ctx 透传到 diagnosis adapter（withDiagnosisParams），仅该功能消费；通用对话忽略。
 	Brand    string            `json:"brand,omitempty"`
 	Model    string            `json:"model,omitempty"`
-	Messages []AIStreamMessage `json:"messages"`
+	Messages []AIStreamMessage `json:"messages" nullability:"nullable"`
 }
 
 // AIStreamMessage 对话请求体里的一条消息（具名类型：计费口径的 DTO adapter 需要它，
@@ -114,7 +114,7 @@ type StreamChatReq struct {
 type AIStreamMessage struct {
 	Role    string   `json:"role"`
 	Content string   `json:"content"`
-	Images  []string `json:"images"` // 用户消息附带的图片 URL（仅最后一条用户消息生效）
+	Images  []string `json:"images" nullability:"nullable"` // 用户消息附带的图片 URL（仅最后一条用户消息生效）
 }
 
 // AIAssistantService AI 助手模块服务。

@@ -54,7 +54,7 @@ type RecruitResumeCard struct {
 	RealNameMasked        string    `json:"real_name_masked"` // 同上，兼容验收对打码字段的显式断言
 	ExpectedPositionID    *int      `json:"expected_position_id,omitempty" extensions:"x-optional"`
 	ExpectedPositionExtra string    `json:"expected_position_extra"`
-	ExpectedRegions       JSONArray `json:"expected_regions" swaggertype:"array,string"`
+	ExpectedRegions       JSONArray `json:"expected_regions" swaggertype:"array,string" nullability:"nullable"`
 	SalaryMin             *int      `json:"salary_min,omitempty" extensions:"x-optional"`
 	SalaryMax             *int      `json:"salary_max,omitempty" extensions:"x-optional"`
 	SalaryNegotiable      bool      `json:"salary_negotiable"`
@@ -62,8 +62,8 @@ type RecruitResumeCard struct {
 	JobNature             string    `json:"job_nature"`
 	ExperienceYears       int       `json:"experience_years"`
 	SelfIntro             string    `json:"self_intro"`
-	ResumeExperiences     JSONArray `json:"resume_experiences" swaggertype:"array,object"`
-	ResumeCertifications  JSONArray `json:"resume_certifications" swaggertype:"array,object"` // 已去 image_urls
+	ResumeExperiences     JSONArray `json:"resume_experiences" swaggertype:"array,object" nullability:"nullable"`
+	ResumeCertifications  JSONArray `json:"resume_certifications" swaggertype:"array,object" nullability:"nullable"` // 已去 image_urls
 	UpdatedAt             string    `json:"updated_at"`
 	// #489：企业视角联系状态（none/pending/approved，approved 带来源）
 	ContactState  string `json:"contact_state,omitempty" extensions:"x-optional"`
@@ -77,7 +77,7 @@ type RecruitResumeCard struct {
 
 // RecruitListResult 列表结果。
 type RecruitListResult struct {
-	Items []RecruitResumeCard `json:"items"`
+	Items []RecruitResumeCard `json:"items" nullability:"nonnil"`
 	Total int64               `json:"total"`
 }
 

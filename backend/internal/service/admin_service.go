@@ -64,7 +64,7 @@ type HrwaiUserSummary struct {
 
 // HrwaiUserPageResult HRWAI 用户分页结果（JSON 与既有契约一致，无 pages 字段）。
 type HrwaiUserPageResult struct {
-	List     []HrwaiUserSummary `json:"list"`
+	List     []HrwaiUserSummary `json:"list" nullability:"nullable"`
 	Page     int                `json:"page"`
 	PageSize int                `json:"page_size"`
 	Total    int64              `json:"total"`
@@ -292,7 +292,7 @@ type TutorDTO struct {
 type TutorListDTO struct {
 	Total  int64      `json:"total"`
 	Page   int        `json:"page"`
-	Tutors []TutorDTO `json:"tutors"`
+	Tutors []TutorDTO `json:"tutors" nullability:"nullable"`
 }
 
 // TutorDeletedDTO 删除导师结果。
@@ -320,7 +320,7 @@ type CourseStatDTO struct {
 // AdminStatisticsDTO 统计看板。
 type AdminStatisticsDTO struct {
 	Overview    AdminOverviewDTO `json:"overview"`
-	CourseStats []CourseStatDTO  `json:"course_stats"`
+	CourseStats []CourseStatDTO  `json:"course_stats" nullability:"nullable"`
 }
 
 // GetTutors 导师列表。
