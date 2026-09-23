@@ -362,7 +362,7 @@ func (s *TrainingCatalogService) GetCurrentCredential(userID int) (*CredentialDi
 func (s *TrainingCatalogService) SetCurrentCredential(userID int, credentialID int) (*CredentialDict, error) {
 	var c model.Credential
 	if err := s.db.First(&c, credentialID).Error; err != nil {
-		return nil, errors.New("证件不存在")
+		return nil, ErrCredentialNotFound
 	}
 	if c.Status != 1 {
 		return nil, errors.New("证件已停用")

@@ -371,7 +371,8 @@ func (h *TrainingCatalogHandler) UpdateSpecialty(c *gin.Context) {
 		Invoke: invoke(func(req catalogUpdateReq[service.SpecialtyInput]) (service.SpecialtyDict, error) {
 			return h.svc.UpdateSpecialty(req.ID, req.In)
 		}),
-	}.WithSuccess(okMsg("专业方向更新成功"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("专业方向更新成功"), http.StatusInternalServerError).
+		WithSentinel(service.ErrSpecialtyNotFound, http.StatusNotFound).Handle(c)
 }
 
 // UpdateLevel 更新课程等级
@@ -403,7 +404,8 @@ func (h *TrainingCatalogHandler) UpdateLevel(c *gin.Context) {
 		Invoke: invoke(func(req catalogUpdateReq[service.LevelInput]) (service.LevelDict, error) {
 			return h.svc.UpdateLevel(req.ID, req.In)
 		}),
-	}.WithSuccess(okMsg("课程等级更新成功"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("课程等级更新成功"), http.StatusInternalServerError).
+		WithSentinel(service.ErrCourseLevelNotFound, http.StatusNotFound).Handle(c)
 }
 
 // UpdateCertificateTemplate 更新证书模板
@@ -435,7 +437,8 @@ func (h *TrainingCatalogHandler) UpdateCertificateTemplate(c *gin.Context) {
 		Invoke: invoke(func(req catalogUpdateReq[service.CertificateTemplateInput]) (service.CertificateTemplateDict, error) {
 			return h.svc.UpdateCertificateTemplate(req.ID, req.In)
 		}),
-	}.WithSuccess(okMsg("证书模板更新成功"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("证书模板更新成功"), http.StatusInternalServerError).
+		WithSentinel(service.ErrCertificateTemplateNotFound, http.StatusNotFound).Handle(c)
 }
 
 // UpdateQuestionTag 更新题库标签
@@ -467,7 +470,8 @@ func (h *TrainingCatalogHandler) UpdateQuestionTag(c *gin.Context) {
 		Invoke: invoke(func(req catalogUpdateReq[service.QuestionTagInput]) (service.QuestionTagDict, error) {
 			return h.svc.UpdateQuestionTag(req.ID, req.In)
 		}),
-	}.WithSuccess(okMsg("题库标签更新成功"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("题库标签更新成功"), http.StatusInternalServerError).
+		WithSentinel(service.ErrQuestionTagNotFound, http.StatusNotFound).Handle(c)
 }
 
 // specialtyIDReq ID 路径参数请求。
@@ -498,7 +502,8 @@ func (h *TrainingCatalogHandler) DeleteSpecialty(c *gin.Context) {
 		Invoke: invoke(func(req specialtyIDReq) (struct{}, error) {
 			return struct{}{}, h.svc.DeleteSpecialty(req.ID)
 		}),
-	}.WithSuccess(okMsgNoData("专业方向删除成功"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsgNoData("专业方向删除成功"), http.StatusInternalServerError).
+		WithSentinel(service.ErrSpecialtyNotFound, http.StatusNotFound).Handle(c)
 }
 
 // levelIDReq ID 路径参数请求。
@@ -529,7 +534,8 @@ func (h *TrainingCatalogHandler) DeleteLevel(c *gin.Context) {
 		Invoke: invoke(func(req levelIDReq) (struct{}, error) {
 			return struct{}{}, h.svc.DeleteLevel(req.ID)
 		}),
-	}.WithSuccess(okMsgNoData("课程等级删除成功"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsgNoData("课程等级删除成功"), http.StatusInternalServerError).
+		WithSentinel(service.ErrCourseLevelNotFound, http.StatusNotFound).Handle(c)
 }
 
 // certificateTemplateIDReq ID 路径参数请求。
@@ -560,7 +566,8 @@ func (h *TrainingCatalogHandler) DeleteCertificateTemplate(c *gin.Context) {
 		Invoke: invoke(func(req certificateTemplateIDReq) (struct{}, error) {
 			return struct{}{}, h.svc.DeleteCertificateTemplate(req.ID)
 		}),
-	}.WithSuccess(okMsgNoData("证书模板删除成功"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsgNoData("证书模板删除成功"), http.StatusInternalServerError).
+		WithSentinel(service.ErrCertificateTemplateNotFound, http.StatusNotFound).Handle(c)
 }
 
 // questionTagIDReq ID 路径参数请求。
@@ -591,7 +598,8 @@ func (h *TrainingCatalogHandler) DeleteQuestionTag(c *gin.Context) {
 		Invoke: invoke(func(req questionTagIDReq) (struct{}, error) {
 			return struct{}{}, h.svc.DeleteQuestionTag(req.ID)
 		}),
-	}.WithSuccess(okMsgNoData("题库标签删除成功"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsgNoData("题库标签删除成功"), http.StatusInternalServerError).
+		WithSentinel(service.ErrQuestionTagNotFound, http.StatusNotFound).Handle(c)
 }
 
 // catalogSwapSortReq 交换排序请求（ID 来自路径，SwapWith 来自 body）。
@@ -820,7 +828,8 @@ func (h *TrainingCatalogHandler) UpdateCredential(c *gin.Context) {
 		Invoke: invoke(func(req catalogUpdateReq[service.CredentialInput]) (service.CredentialDict, error) {
 			return h.svc.UpdateCredential(req.ID, req.In)
 		}),
-	}.WithSuccess(okMsg("证件更新成功"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("证件更新成功"), http.StatusInternalServerError).
+		WithSentinel(service.ErrCredentialNotFound, http.StatusNotFound).Handle(c)
 }
 
 // credentialIDReq ID 路径参数
@@ -851,7 +860,8 @@ func (h *TrainingCatalogHandler) DeleteCredential(c *gin.Context) {
 		Invoke: invoke(func(req credentialIDReq) (struct{}, error) {
 			return struct{}{}, h.svc.DeleteCredential(req.ID)
 		}),
-	}.WithSuccess(okMsgNoData("证件删除成功"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsgNoData("证件删除成功"), http.StatusInternalServerError).
+		WithSentinel(service.ErrCredentialNotFound, http.StatusNotFound).Handle(c)
 }
 
 // SwapCredentialSort 交换目标证件排序
