@@ -267,6 +267,26 @@ function scanPlan(plan) {
     must((openStep.exit2 || []).some((e) => e.on === 'timeout'), 'C12', 'open 未声明「超时 ⇒ exit 2」（窗口没重开就没法继续）');
   }
 
+  // ---- C21：整段重试（2026-09-23 坑位 6）—— auto/端口起不来时**整段** close → open → auto 再来一遍 ----
+  // 为什么是「整段」而不是「只重试 auto」：实测只重跑 auto 会绑到一个**没加载项目的新 IDE 实例**上 ——
+  // 端口通了但 Tool.getInfo 缺 SDKVersion、App.getPageStack 永不应答（结果行 reason=sdk-version-missing）。
+  const portStep = step('port-listening');
+  if (autoStep) {
+    must(Number.isInteger(autoStep.attempts) && autoStep.attempts >= 2, 'C21',
+      `auto 未声明整段重试次数（attempts 须为 ≥2 的整数，实际 ${JSON.stringify(autoStep.attempts)}）—— 冷起点第一枪实测必空，单发会让门红在环境上`);
+    must(autoStep.attempts === T.autoAttempts, 'C21',
+      `auto 的 attempts（${autoStep.attempts}）与预算 timeouts.autoAttempts（${T.autoAttempts}）不一致 —— 预算与步骤分叉了`);
+    must(Number.isInteger(autoStep.retryDelaySeconds) && autoStep.retryDelaySeconds >= 0
+      && autoStep.retryDelaySeconds === T.autoRetryDelay, 'C21',
+      `auto 的 retryDelaySeconds（${autoStep.retryDelaySeconds}）与预算 timeouts.autoRetryDelay（${T.autoRetryDelay}）不一致`);
+    must((autoStep.criteria || []).join(' ').includes('整段'), 'C21',
+      'auto 的判据未写明「重试单元是整段 close → open → auto」（只重试 auto 会绑到没加载项目的新 IDE 实例上）');
+  }
+  if (portStep) {
+    must(portStep.attempts === T.autoAttempts, 'C21',
+      `port-listening 的 attempts（${portStep.attempts}）与预算 timeouts.autoAttempts（${T.autoAttempts}）不一致 —— 端口预算必须与整段尝试同源`);
+  }
+
   // ---- C15：auto 之后、探针之前跑就绪闸门；判据与预算写在计划里 ----
   const readyStep = step('ready-gate');
   must(at('devtools-auto') !== -1 && at('ready-gate') !== -1 && at('devtools-auto') < at('ready-gate'),
@@ -672,7 +692,14 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       ['C12', (p) => swap(p, 'devtools-open', 'devtools-auto')],
       ['C12', (p) => { p.steps = p.steps.filter((s) => s.id !== 'devtools-open'); return p; }],
       ['C18', (p) => { p.paths.distRelative = 'unpackage/dist/build/other'; return p; }],
-      ['C15', (p) => swap(p, 'devtools-auto', 'ready-gate')],
+      ['C21', (p) => editStep(p, 'devtools-auto', (s) => { s.attempts = 1; })],
+      ['C21', (p) => editStep(p, 'devtools-auto', (s) => { delete s.attempts; })],
+      ['C21', (p) => { p.timeouts.autoAttempts = 5; return p; }],
+      ['C21', (p) => editStep(p, 'devtools-auto', (s) => { s.retryDelaySeconds = 0; })],
+      ['C21', (p) => { p.timeouts.autoRetryDelay = 999; return p; }],
+      ['C21', (p) => editStep(p, 'devtools-auto', (s) => { s.criteria = ['auto 必须等它跑完']; })],
+      ['C21', (p) => editStep(p, 'port-listening', (s) => { s.attempts = 1; })],
+      ['C15', (p) => { swap(p, 'devtools-auto', 'ready-gate'); return p; }],
       ['C15', (p) => swap(p, 'ready-gate', 'automator-probe')],
       ['C15', (p) => editStep(p, 'ready-gate', (s) => { s.argv = s.argv.filter((a) => a !== '--require-stack'); })],
       ['C15', (p) => editStep(p, 'ready-gate', (s) => { s.criteria = ['等端口']; })],
