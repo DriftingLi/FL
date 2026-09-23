@@ -61,10 +61,18 @@ func TestNonNilDeclaredOutletsEmitEmptyArrays(t *testing.T) {
 		}
 	})
 
-	// ContactRequestListResult.items 与 QuestionImportResultDTO.errors 两条不在这里验：
-	// 前者的 items 由 api/contact.go 从 ListForStudent 的切片组装（切片那半边已由
-	// contact_company_disable_contract_test.go 覆盖），后者只在批量导入出口成形，
-	// 其非 nil 初始化在源码里有明示。剩下两条要补的是 HTTP 层空集例，不是把本表拉长。
+	// 五条 nonnil 表态里只剩 ContactRequestListResult.items 不在本文件验：它的 items 由
+	// api/contact.go 组装（构造点在 handler 层），由 api 包的 contact_list_items_shape_test.go
+	// 走真实路由补上。这里刻意不把表拉长去凑数——一条表态该由它所在的那一层证。
+
+	t.Run("QuestionImportResultDTO.errors（空导入）", func(t *testing.T) {
+		db := testutil.NewMemoryDB(t)
+		svc := NewQuestionBankService(db, nil, zap.NewNop())
+		res := svc.BatchImport(nil, nil)
+		if got := marshalKey(t, res, "errors"); got != "[]" {
+			t.Errorf("声明 nonnil 却发出 %s", got)
+		}
+	})
 
 	t.Run("CourseDetailDTO.chapters（无章节的可见课程）", func(t *testing.T) {
 		db := testutil.NewMemoryDB(t)
