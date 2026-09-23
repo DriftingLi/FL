@@ -95,10 +95,20 @@ func (s *PracticeModeService) SetClock(clk clock.Clock) {
 
 // GetFreeQuestions 随机练习抽题：从 published 题库按条件随机抽取 count 题。
 // count <= 0 时返回全部符合条件的题目（按 id 升序，不打乱）。
+// 专项练习的两条入参约束（ADR-0064 决策 1/2）：都是「这个请求本身不成立」，
+// 与「没有题」「查不动」是三件事，此前一起被 errStatusAll(404) 抹成 404。
+var (
+	ErrPracticeTagRequired    = errors.New("请指定题库标签")
+	ErrPracticeTagUnsupported = errors.New("该标签不支持专项练习")
+)
+
 func (s *PracticeModeService) GetFreeQuestions(qType string, count int, credentialID *int) ([]QuestionDTO, error) {
 	selected, err := sampleQuestions(s.db, qType, count, credentialID)
 	if err != nil {
-		return nil, errors.New("查询题目失败")
+		// 抽题查不动就是服务端故障，如实上抛。此前这里 errors.New("查询题目失败") 把真错误
+		// 换掉、再被端点那格 errStatusAll(404) 渲染成 404 —— 「查不动」被打扮成「没有题」，
+		// 学员看到的就是「题库空了」而不是「出错了，重试」（ADR-0064 决策 1，ADR-0062 票6 同判据）。
+		return nil, err
 	}
 	if len(selected) == 0 {
 		return nil, errors.New("没有符合条件的题目")
@@ -116,7 +126,7 @@ func (s *PracticeModeService) GetFreeQuestions(qType string, count int, credenti
 // 装配形态（#385）：抽题走池单点（sampleQuestionsByOpts），续练协商走 ResumeSet 单点。
 func (s *PracticeModeService) StartTagPractice(studentID, tagID, count int, credentialID *int) (*PracticeStartResultDTO, error) {
 	if tagID <= 0 {
-		return nil, errors.New("请指定题库标签")
+		return nil, ErrPracticeTagRequired
 	}
 	var tag model.QuestionTag
 	if err := s.db.Where("id = ? AND status = ?", tagID, 1).Limit(1).Find(&tag).Error; err != nil {
@@ -126,11 +136,14 @@ func (s *PracticeModeService) StartTagPractice(studentID, tagID, count int, cred
 		return nil, errors.New("题库标签不存在或已停用")
 	}
 	if tag.IsSourceTag {
-		return nil, errors.New("该标签不支持专项练习")
+		return nil, ErrPracticeTagUnsupported
 	}
 	all, err := sampleQuestionsByOpts(s.db, sampleQuestionsOpts{tagID: tagID, cred: credentialID})
 	if err != nil {
-		return nil, errors.New("查询题目失败")
+		// 抽题查不动就是服务端故障，如实上抛。此前这里 errors.New("查询题目失败") 把真错误
+		// 换掉、再被端点那格 errStatusAll(404) 渲染成 404 —— 「查不动」被打扮成「没有题」，
+		// 学员看到的就是「题库空了」而不是「出错了，重试」（ADR-0064 决策 1，ADR-0062 票6 同判据）。
+		return nil, err
 	}
 	if len(all) == 0 {
 		return nil, errors.New("该标签下暂无已发布题目")
@@ -174,7 +187,10 @@ func (s *PracticeModeService) StartTagPractice(studentID, tagID, count int, cred
 func (s *PracticeModeService) StartSequential(studentID int, credentialID *int) (*PracticeStartResultDTO, error) {
 	questions, err := sampleQuestionsByOpts(s.db, sampleQuestionsOpts{cred: credentialID})
 	if err != nil {
-		return nil, errors.New("查询题目失败")
+		// 抽题查不动就是服务端故障，如实上抛。此前这里 errors.New("查询题目失败") 把真错误
+		// 换掉、再被端点那格 errStatusAll(404) 渲染成 404 —— 「查不动」被打扮成「没有题」，
+		// 学员看到的就是「题库空了」而不是「出错了，重试」（ADR-0064 决策 1，ADR-0062 票6 同判据）。
+		return nil, err
 	}
 	if len(questions) == 0 {
 		return nil, errors.New("题库暂无题目")
@@ -330,7 +346,11 @@ func (s *PracticeModeService) SubmitAnswer(studentID, questionID int, userAnswer
 	var q model.Question
 	if err := poolFilter(s.db.Model(&model.Question{}), sampleQuestionsOpts{cred: credentialID}).
 		Where("id = ?", questionID).First(&q).Error; err != nil {
-		return nil, errors.New("题目不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// 池外与真不存在同判（按不存在答，不泄漏存在性）；用**已有**载体，不另立哨兵。
+			return nil, ErrQuestionNotFound
+		}
+		return nil, err // 查不动不得被读成「不存在」（ADR-0062 票6）
 	}
 
 	engine := newGradingEngine(s.db)

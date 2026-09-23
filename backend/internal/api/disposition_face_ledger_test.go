@@ -59,6 +59,20 @@ type endpointFaces struct {
 	cases []declaredFace
 }
 
+// leakyDriverText 认「驱动/ORM 原文进响应体」这一族（ADR-0064 决策 2）。
+// 第①批的台账原本只查 "record not found" 一条，那是**太窄的断言**：errStatusAll 的文案
+// 取 err.Error()，所以任何底层错误原文（SQLite 的 "no such table" / "SQL logic error"、
+// Postgres 的 driver 消息）都会原样出现在 message 里。第②批台账把这一条加宽后，
+// 反过来照出第①批自己那格的不足。
+func leakyDriverText(body string) bool {
+	for _, s := range []string{"record not found", "no such table", "SQL logic error", "pq:", "ERROR: ", "dial tcp"} {
+		if strings.Contains(body, s) {
+			return true
+		}
+	}
+	return false
+}
+
 func byStudent(s subjectIDs) int   { return s.student }
 func byTutor(s subjectIDs) int     { return s.tutor }
 func byRecruiter(s subjectIDs) int { return s.recruiter }
@@ -177,7 +191,7 @@ func TestDispositionFaceLedger(t *testing.T) {
 				if rec.Code != declared.want {
 					t.Fatalf("%s：声明档位 %d 打不出来，实得 %d，body=%s", ep.name, declared.want, rec.Code, rec.Body.String())
 				}
-				if body := rec.Body.String(); strings.Contains(body, "record not found") {
+				if body := rec.Body.String(); leakyDriverText(body) {
 					t.Fatalf("%s 把驱动原文吐进响应体（ADR-0064 决策 2 的泄漏族）: %s", ep.name, body)
 				}
 			})

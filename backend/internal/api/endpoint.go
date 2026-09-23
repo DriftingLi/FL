@@ -24,6 +24,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -206,15 +207,33 @@ func errStatusAllPrefix(status int, prefix string) *errStatusTable {
 	return &errStatusTable{entries: []errStatusEntry{{sentinel: nil, status: status, errPrefix: prefix}}}
 }
 
-// entryMsg 条目的响应文案：固定文案优先，其次「前缀 + 错误自身文本」，最后才是错误自身文本。
+// entryMsg 条目的响应文案。固定文案优先；其余走 clientErrorText（ADR-0064 决策 9）。
 func entryMsg(e errStatusEntry, err error) string {
 	if e.message != "" {
 		return e.message
 	}
-	if e.errPrefix != "" {
-		return e.errPrefix + err.Error()
+	return clientErrorText(e.status, err, e.errPrefix)
+}
+
+// clientErrorText 是「5xx 不外发驱动原文」这条规则的唯一落点（ADR-0064 决策 9）：
+//
+//	4xx —— 照旧回「前缀 + 错误自身文本」。4xx 的文案本来就是给调用方看的领域说明
+//	        （「证件不存在」「专业方向编码已存在」），收掉它会直接伤可用性。
+//	5xx —— 一律不回 err.Error()。驱动/ORM 原文（record not found、no such table、
+//	        SQL logic error、pq: …、dial tcp …）原样进 message 等于把实现细节交给外部，
+//	        而调用方在 5xx 上唯一需要的信息是「服务端失败了、可重试」这一个事实。
+//	        真实错误仍经 c.Error 记进 gin 上下文，日志面不丢；要给用户看原因的 5xx
+//	        必须改为抛**具名领域错误**（4xx 档）或显式声明固定文案（errStatusAllMsg），
+//	        即「说什么」是一次显式决定，而不是 err.Error() 的默认漏出。
+//	        有前缀时保留前缀本身（「更新进度失败: 」→「更新进度失败」），丢掉的是尾巴。
+func clientErrorText(status int, err error, prefix string) string {
+	if status < http.StatusInternalServerError {
+		return prefix + err.Error()
 	}
-	return err.Error()
+	if trimmed := strings.TrimRight(prefix, " :："); trimmed != "" {
+		return trimmed
+	}
+	return "服务器内部错误"
 }
 
 // renderError 渲染错误面（票1b 后是本端点错误渲染的唯一入口）。判定序（票8 / ADR-0062 决策 8 翻转）：
@@ -246,10 +265,12 @@ func (t *errStatusTable) renderError(c *gin.Context, err error) {
 		}
 	}
 	if t != nil && t.fallback != 0 {
-		renderStatus(c, t.fallback, err.Error())
+		renderStatus(c, t.fallback, clientErrorText(t.fallback, err, ""))
 		return
 	}
-	response.ServerError(c, err.Error())
+	// 未挂表的端点：真实错误记进 gin 上下文（日志面不丢），对外只给「服务器内部错误」。
+	c.Error(err) //nolint:errcheck // gin 的 Error 只记账，返回值是链式用的
+	response.ServerError(c, "服务器内部错误")
 }
 
 // ===== 常用解析器（吸收既有 handler 手写解析链） =====

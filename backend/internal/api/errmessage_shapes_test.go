@@ -33,9 +33,17 @@ func renderWithTable(t *testing.T, tbl *errStatusTable, err error) (int, string)
 func TestErrTableMessageShapes(t *testing.T) {
 	boom := errors.New("db down")
 
+	// 5xx 裸形态：固定文案，不外发 err 原文（ADR-0064 决策 9）。
 	code, msg := renderWithTable(t, errStatusAll(http.StatusInternalServerError), boom)
-	if code != 500 || msg != "db down" {
-		t.Errorf("裸形态应回 500 + 错误原文，实际 %d %q", code, msg)
+	if code != 500 || msg != "服务器内部错误" {
+		t.Errorf("5xx 裸形态应回 500 + 固定文案，实际 %d %q", code, msg)
+	}
+
+	// 4xx 裸形态：**照旧**回错误原文 —— 4xx 的文案本就是给调用方看的领域说明，
+	// 收掉它会直接伤可用性。这一档钉的是 4xx/5xx 那条边界，别把它连坐改掉。
+	code, msg = renderWithTable(t, errStatusAll(http.StatusBadRequest), boom)
+	if code != 400 || msg != "db down" {
+		t.Errorf("4xx 裸形态应回 400 + 错误原文，实际 %d %q", code, msg)
 	}
 
 	code, msg = renderWithTable(t, errStatusAllMsg(http.StatusNotFound, "会话不存在"), boom)
@@ -44,9 +52,10 @@ func TestErrTableMessageShapes(t *testing.T) {
 	}
 
 	// 第五种：前缀 + 错误原文（旧闭包 `response.ServerError(c, "查询失败: "+err.Error())` 的等价收编）
+	// 前缀形态在 5xx 上保留前缀本身、丢掉尾巴的原文：「为什么失败」还在，驱动细节不外发。
 	code, msg = renderWithTable(t, errStatusAllPrefix(http.StatusInternalServerError, "查询失败: "), boom)
-	if code != 500 || msg != "查询失败: db down" {
-		t.Errorf("前缀形态应回 500 + 「查询失败: db down」，实际 %d %q", code, msg)
+	if code != 500 || msg != "查询失败" {
+		t.Errorf("5xx 前缀形态应回 500 + 「查询失败」（不含原文），实际 %d %q", code, msg)
 	}
 
 	// 无条件条目**不再**吃解析错误（ADR-0062 票8：*ParseError 恒优先）——它回自己的状态码与自己的文案，

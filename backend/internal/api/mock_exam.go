@@ -213,7 +213,8 @@ func (h *MockExamHandler) GetResult(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *mockExamIDReq) (*service.MockExamResultDTO, error) {
 			return h.svc.GetResult(req.MockExamID, req.StudentID)
 		},
-	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).
+		WithSentinel(service.ErrMockExamNotFound, http.StatusNotFound).Handle(c)
 }
 
 // GetHistory 模拟考试历史

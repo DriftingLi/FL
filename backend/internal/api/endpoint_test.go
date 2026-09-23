@@ -64,8 +64,10 @@ func TestEndpoint_InvokeServiceError_ServerError(t *testing.T) {
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("状态码 = %d, 期望 500", w.Code)
 	}
-	if !strings.Contains(w.Body.String(), "服务崩了") {
-		t.Fatalf("文案不符: %s", w.Body.String())
+	// 5xx 不外发错误原文（ADR-0064 决策 9）：驱动/ORM 文本进 message 等于把实现细节交给外部，
+	// 调用方在 5xx 上唯一需要的答案是「服务端失败、可重试」。真实错误经 c.Error 记进上下文。
+	if msg := w.Body.String(); !strings.Contains(msg, "服务器内部错误") || strings.Contains(msg, "服务崩了") {
+		t.Fatalf("5xx 文案应为固定「服务器内部错误」且不含错误原文: %s", msg)
 	}
 }
 
