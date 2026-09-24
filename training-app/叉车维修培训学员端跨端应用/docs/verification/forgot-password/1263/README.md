@@ -1,7 +1,9 @@
 # #650（T12 forgot-password 模块手术）①a 真机取证
 
 - **PR**：#1263（base `master` `40cb8c12`，head `7a025b84`）
-- **页面**：`pages/forgot-password/forgot-password`（本票唯一改动页）
+- **页面**：`pages/forgot-password/forgot-password`（本票的**手术目标页**唯一 —— 分支另有 2 处共享出口的机械迁移，
+  即 `pages/login/login.uvue` 与 `pages/register/composables/useRegisterForm.uts` 各 2 行取值形态改写，**不在本轮取证射程**。
+  本行原写「本票唯一改动页」不准确，订正理由与判据见 ADR-0007:556；该缺口由 #1270 跟踪，其中 login 侧已由 #1288 的取证顺带闭合）
 - **设备**：小米 `23049RAD8C` / `marble` / Android 15 · adb `192.168.0.212:39183`（无线调试；**端口已从 T09/T11 的 `:43057` 轮换**，由 `adb mdns services` 现测得到）· 包 `io.dcloud.uniappx` · 前台 Activity `io.dcloud.uniappx/io.dcloud.uniapp.UniAppActivity`
 - **构建**：本 worktree（`D:\FL\wt-650\training-app\叉车维修培训学员端跨端应用`），分支 `refactor/forgot-password`
 - **日期**：2026-09-22

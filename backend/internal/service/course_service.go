@@ -904,11 +904,33 @@ func chapterResumePosition(db *gorm.DB, studentID, chapterID int) (int, error) {
 
 // applyCourseTrainingFields 应用课程培训扩展字段（目标证件/专业方向/等级/学时/证书模板，typed）。
 // credential_id / specialty_id / level_id / certificate_template_id 传 0 表示清空（置 NULL）。
+var (
+	// 第 3 族（ADR-0065 决策 3）：applyCourseTrainingFields 里 11 条裸 errors.New 的具名载体。
+	// 「ID 无效」与「不能为负」是本写面独有的输入形状；三条「引用对象不存在」**不自建**，
+	// 复用目录域同一载体（catalog_specs.go:15-17）—— 它们说的是同一行记录，两名即二实现。
+	ErrCourseCredentialIDInvalid    = errors.New("所属证件ID无效")
+	ErrCourseSpecialtyIDInvalid     = errors.New("专业方向ID无效")
+	ErrCourseLevelIDInvalid         = errors.New("课程等级ID无效")
+	ErrCertificateTemplateIDInvalid = errors.New("证书模板ID无效")
+	// ErrCourseCredentialRefNotFound 与题库域的 ErrQuestionCredentialNotFound
+	// （question_service.go:31）逐字同文案，但**有意不合并**：合并会把「题目挂在哪儿」与
+	// 「课程写面引用了谁」耦成一次改动，并连带改那条端点的默认码（ADR-0065 决策 9）。
+	ErrCourseCredentialRefNotFound = errors.New("所属证件不存在")
+	ErrCourseTheoryHoursNegative   = errors.New("理论学时不能为负数")
+	ErrCoursePracticeHoursNegative = errors.New("实操学时不能为负数")
+	ErrCourseSortOrderNegative     = errors.New("课程排序值不能为负数")
+	// 前置课程那一支同属第 3 族（登记时漏了这 3 条）：它们此前靠 Create 的 400 默认面遮着，
+	// 默认面翻成 500 后必须逐条点名，否则就是「修一处塌缩造三处新塌缩」。
+	ErrCoursePrerequisiteSelf     = errors.New("课程不能设置为自己的前置课程")
+	ErrCoursePrerequisiteNotFound = errors.New("前置课程不存在")
+	ErrCoursePrerequisiteCycle    = errors.New("前置课程关系存在循环依赖")
+)
+
 func applyCourseTrainingFields(db *gorm.DB, course *model.Course, in *CourseInput) error {
 	if in.CredentialID != nil {
 		id := *in.CredentialID
 		if id < 0 {
-			return errors.New("所属证件ID无效")
+			return ErrCourseCredentialIDInvalid
 		}
 		if id == 0 {
 			course.CredentialID = nil
@@ -918,7 +940,7 @@ func applyCourseTrainingFields(db *gorm.DB, course *model.Course, in *CourseInpu
 				return err
 			}
 			if count == 0 {
-				return errors.New("所属证件不存在")
+				return ErrCourseCredentialRefNotFound
 			}
 			course.CredentialID = ptrInt(id)
 		}
@@ -926,7 +948,7 @@ func applyCourseTrainingFields(db *gorm.DB, course *model.Course, in *CourseInpu
 	if in.SpecialtyID != nil {
 		id := *in.SpecialtyID
 		if id < 0 {
-			return errors.New("专业方向ID无效")
+			return ErrCourseSpecialtyIDInvalid
 		}
 		if id == 0 {
 			course.SpecialtyID = nil
@@ -936,7 +958,7 @@ func applyCourseTrainingFields(db *gorm.DB, course *model.Course, in *CourseInpu
 				return err
 			}
 			if count == 0 {
-				return errors.New("专业方向不存在")
+				return ErrSpecialtyNotFound
 			}
 			course.SpecialtyID = ptrInt(id)
 		}
@@ -944,7 +966,7 @@ func applyCourseTrainingFields(db *gorm.DB, course *model.Course, in *CourseInpu
 	if in.LevelID != nil {
 		id := *in.LevelID
 		if id < 0 {
-			return errors.New("课程等级ID无效")
+			return ErrCourseLevelIDInvalid
 		}
 		if id == 0 {
 			course.LevelID = nil
@@ -954,7 +976,7 @@ func applyCourseTrainingFields(db *gorm.DB, course *model.Course, in *CourseInpu
 				return err
 			}
 			if count == 0 {
-				return errors.New("课程等级不存在")
+				return ErrCourseLevelNotFound
 			}
 			course.LevelID = ptrInt(id)
 		}
@@ -962,7 +984,7 @@ func applyCourseTrainingFields(db *gorm.DB, course *model.Course, in *CourseInpu
 	if in.CertificateTemplateID != nil {
 		id := *in.CertificateTemplateID
 		if id < 0 {
-			return errors.New("证书模板ID无效")
+			return ErrCertificateTemplateIDInvalid
 		}
 		if id == 0 {
 			course.CertificateTemplateID = nil
@@ -972,26 +994,26 @@ func applyCourseTrainingFields(db *gorm.DB, course *model.Course, in *CourseInpu
 				return err
 			}
 			if count == 0 {
-				return errors.New("证书模板不存在")
+				return ErrCertificateTemplateNotFound
 			}
 			course.CertificateTemplateID = ptrInt(id)
 		}
 	}
 	if in.TheoryHours != nil {
 		if *in.TheoryHours < 0 {
-			return errors.New("理论学时不能为负数")
+			return ErrCourseTheoryHoursNegative
 		}
 		course.TheoryHours = *in.TheoryHours
 	}
 	if in.PracticeHours != nil {
 		if *in.PracticeHours < 0 {
-			return errors.New("实操学时不能为负数")
+			return ErrCoursePracticeHoursNegative
 		}
 		course.PracticeHours = *in.PracticeHours
 	}
 	if in.SortOrder != nil {
 		if *in.SortOrder < 0 {
-			return errors.New("课程排序值不能为负数")
+			return ErrCourseSortOrderNegative
 		}
 		course.SortOrder = *in.SortOrder
 	}
@@ -1010,14 +1032,14 @@ func replaceCoursePrerequisites(db *gorm.DB, courseID int, prereqIDs []int) erro
 	// 校验前置课程存在且不能指向自己
 	for _, id := range prereqIDs {
 		if id == courseID {
-			return errors.New("课程不能设置为自己的前置课程")
+			return ErrCoursePrerequisiteSelf
 		}
 		var count int64
 		if err := db.Model(&model.Course{}).Where("course_id = ?", id).Count(&count).Error; err != nil {
 			return err
 		}
 		if count == 0 {
-			return errors.New("前置课程不存在")
+			return ErrCoursePrerequisiteNotFound
 		}
 	}
 	if err := checkPrerequisiteCycle(db, courseID, prereqIDs); err != nil {
@@ -1059,7 +1081,7 @@ func checkPrerequisiteCycle(db *gorm.DB, courseID int, prereqIDs []int) error {
 		cur := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
 		if cur == courseID {
-			return errors.New("前置课程关系存在循环依赖")
+			return ErrCoursePrerequisiteCycle
 		}
 		if visited[cur] {
 			continue
