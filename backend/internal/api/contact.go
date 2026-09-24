@@ -2,7 +2,9 @@
 package api
 
 import (
+	"context"
 	"errors"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -40,6 +42,20 @@ func NewContactHandler(svc *service.ContactService) *ContactHandler {
 	return &ContactHandler{svc: svc}
 }
 
+// contactCreateBody 请求体的两段（键名即 wire 契约，不并入 Req：Req 还带会话身份，那不是我读的 body）。
+type contactCreateBody struct {
+	StudentUserID int    `json:"student_user_id"`
+	Message       string `json:"message"`
+}
+
+// contactCreateReq 发起交换申请的端点内请求：body 两段 + 从会话取出的招聘者身份。
+// 身份在 Parse 段读——Invoke 只拿得到 ctx，拿不到 gin.Context。
+type contactCreateReq struct {
+	RecruiterID   int
+	StudentUserID int
+	Message       string
+}
+
 // Create 企业发起交换申请 POST /api/recruit/contact-requests
 // @Summary 发起交换申请
 // @Description 企业招聘者带附言向学员发起联系方式交换申请（pending 唯一、30 天冷却、日限 20）
@@ -53,21 +69,29 @@ func NewContactHandler(svc *service.ContactService) *ContactHandler {
 // @Failure 401 {object} response.R "未认证"
 // @Router /recruit/contact-requests [post]
 func (h *ContactHandler) Create(c *gin.Context) {
-	var body struct {
-		StudentUserID int    `json:"student_user_id"`
-		Message       string `json:"message"`
-	}
-	if err := c.ShouldBindJSON(&body); err != nil {
-		response.BadRequest(c, "请求参数错误")
-		return
-	}
-	recruiterID := middleware.CurrentUserID(c)
-	dto, err := h.svc.Create(recruiterID, body.StudentUserID, body.Message)
-	if err != nil {
-		response.BadRequest(c, err.Error())
-		return
-	}
-	response.Created(c, "申请已提交", dto)
+	Endpoint[contactCreateReq, service.ContactRequestDTO]{
+		Parse: func(c *gin.Context) (*contactCreateReq, error) {
+			body, err := bindJSON[contactCreateBody](c)
+			if err != nil {
+				return nil, err
+			}
+			return &contactCreateReq{
+				RecruiterID:   middleware.CurrentUserID(c),
+				StudentUserID: body.StudentUserID,
+				Message:       body.Message,
+			}, nil
+		},
+		Invoke: func(ctx context.Context, req *contactCreateReq) (*service.ContactRequestDTO, error) {
+			return h.svc.Create(req.RecruiterID, req.StudentUserID, req.Message)
+		},
+		Render: func(c *gin.Context, _ *contactCreateReq, dto *service.ContactRequestDTO) {
+			response.Created(c, "申请已提交", dto)
+		},
+		// errStatusAll(400) 是**步 1 的保形**，不是本端点错误面的终态：旧裸 handler 对任何错误都答
+		// 400，所以「查不动」也被压成 400。步 2（ADR-0065 决策 4）换成具名哨兵表 + 500 兜底；
+		// 现在拆开会同时改两类东西（缝 与 档位），404 出现时就归因不到步 2（锁：本文件字节保形测）。
+		ErrStatus: errStatusAll(http.StatusBadRequest),
+	}.Handle(c)
 }
 
 // ListForRecruiter 招聘方我的申请列表 GET /api/recruit/contact-requests
