@@ -4,7 +4,6 @@ package api
 import (
 	"context"
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 
@@ -121,9 +120,9 @@ func (h *WrongQuestionHandler) Redo(c *gin.Context) {
 		Parse: func(c *gin.Context) (*redoWrongQuestionReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
-			questionID, err := strconv.Atoi(c.Param("question_id"))
+			questionID, err := pathInt(c, "question_id", "题目ID无效")
 			if err != nil {
-				return nil, badRequest("题目ID无效")
+				return nil, err
 			}
 			var req struct {
 				UserAnswer interface{} `json:"user_answer"`
@@ -166,9 +165,9 @@ func (h *WrongQuestionHandler) Remove(c *gin.Context) {
 		Parse: func(c *gin.Context) (*removeWrongQuestionReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
-			questionID, err := strconv.Atoi(c.Param("question_id"))
+			questionID, err := pathInt(c, "question_id", "题目ID无效")
 			if err != nil {
-				return nil, badRequest("题目ID无效")
+				return nil, err
 			}
 			return &removeWrongQuestionReq{StudentID: studentID, QuestionID: questionID}, nil
 		},

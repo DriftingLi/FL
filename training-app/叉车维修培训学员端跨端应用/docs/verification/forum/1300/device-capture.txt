@@ -1,0 +1,27 @@
+[device-capture] 非门（不替代 ①b：指纹等关键交互仍由人走）——仅真机只读取证，机械上无法替代指纹按压
+[device-capture] 运行时间：2026-09-23 19:55:39
+[device-capture] adb=D:\android-sdk\platform-tools\adb.exe  Device=192.168.10.60:40961  Pages=pages/forum/forum-detail  切页=False
+[device-capture] 设备：serial=192.168.10.60:40961 model=23049RAD8C
+[device-capture] logcat 窗口起点（设备时钟）= 1790164543.627（-LogcatSeconds=0）
+[device-capture] 前台 Activity：（来源 ）
+[device-capture] 目标包名：（取自当前前台，即维护者正在调试的应用）
+[device-capture] 切页动作默认关闭：会打断维护者的调试会话（要切页请显式加 -AllowAppStart；-NoStartApp/-SkipAppStart 则永久禁止）
+[device-capture] 只读取证：不切页，仅对**当前前台**采 1 张图 -> pages-forum-forum-detail-current.png
+[device-capture] 截图：pages-forum-forum-detail-current.png（15.2 KB，sha256=C35BACDB98B52220…）
+[device-capture]   SKIP：pages/forum/forum-detail —— 未切页：切页默认关闭
+[device-capture] logcat 窗口：本次窗口行数=1715（缓冲总行数=138327）
+[device-capture] 
+[device-capture] ── 真机只读取证汇总（非门，不替代 ①b 人工关键交互）──
+[device-capture] 设备：serial=192.168.10.60:40961 model=23049RAD8C
+[device-capture] 前台 Activity：（来源 ）
+[device-capture] 目标包名：
+[device-capture] 切页：关闭（只读；未切页）
+[device-capture] logcat：窗口起点=1790164543.627 窗口行数=1715  FATAL EXCEPTION=0  ANR in 包=0  ANR 合计=0  E AndroidRuntime=0  进程死亡=0
+[device-capture] 页面判定：PASS=0  FAIL=0  SKIP=1
+[device-capture] 截图：pages-forum-forum-detail-current.png=15580B/C35BACDB98B5
+[device-capture] 页身份断言：不适用（未切页）
+[device-capture] 目录=D:\FL\wt-forum-reply-collapse\training-app\叉车维修培训学员端跨端应用\.ci-verify  日志=D:\FL\wt-forum-reply-collapse\training-app\叉车维修培训学员端跨端应用\.ci-verify\device-capture.log
+[device-capture] 断言失败：取不到前台 Activity（dumpsys 无 mResumedActivity/topResumedActivity）
+[device-capture] DEVICE_CAPTURE_RESULT=FAIL
+[device-capture]   页面 pages/forum/forum-detail=SKIP  前台=  logcat窗口行数=1715  FATAL=0  ANRin包=0
+[device-capture] 收尾完成：全程只读，未对设备做任何写操作
