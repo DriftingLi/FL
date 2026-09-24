@@ -56,12 +56,12 @@ func renumberSortGroup(db *gorm.DB, entity any, idCol string, where map[string]a
 	return ids, nil
 }
 
-// swapGroupPositions 把组内两项交换位置：重编号后交换 a/b 在新序中的下标，再整体落库。
-// 即使两项 sort_order 相同（默认 0）也真实生效。
 // ErrSwapItemNotFound 是 `swap_with` 指向的那一行不在本组序列里（ADR-0065 决策 3）。
 // 它是输入不合法（400）而不是 404：404 说的是「路径里那个资源没有」，而路径资源在这里是好的。
 var ErrSwapItemNotFound = errors.New("待交换的项不存在")
 
+// swapGroupPositions 把组内两项交换位置：重编号后交换 a/b 在新序中的下标，再整体落库。
+// 即使两项 sort_order 相同（默认 0）也真实生效。
 func swapGroupPositions(db *gorm.DB, entity any, idCol string, idA, idB int, where map[string]any) error {
 	ids, err := renumberSortGroup(db, entity, idCol, where)
 	if err != nil {

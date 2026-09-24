@@ -145,9 +145,7 @@ func (s *AdminCourseService) UpdateCourse(courseID int, in *CourseInput) (*Cours
 	return &result, nil
 }
 
-// SwapCourseSort 交换两门课程的排序位置（限制在同一方向+等级组内，真实生效含同值默认）。
-
-// 交换排序的两件课程侧输入事实（ADR-0065 决策 3）。此前它们是裸 errors.New ⇒ 落在
+// 交换排序的三件课程侧输入事实（ADR-0065 决策 3）。此前它们是裸 errors.New ⇒ 落在
 // 端点默认面 400，与「查不动」「待交换的项不存在」挤成同一格；现在各自有名，两面共用一张表。
 var (
 	ErrCourseNotMountedForSort = errors.New("未挂载方向/等级的课程不能参与排序")
@@ -158,6 +156,7 @@ var (
 	ErrCourseSwapTargetNotFound = errors.New("待交换的课程不存在")
 )
 
+// SwapCourseSort 交换两门课程的排序位置（限制在同一方向+等级组内，真实生效含同值默认）。
 func (s *AdminCourseService) SwapCourseSort(a, b int) error {
 	var ca, cb model.Course
 	if err := s.db.First(&ca, a).Error; err != nil {

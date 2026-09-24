@@ -18,18 +18,7 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
-
-	"gorm.io/gorm"
 )
-
-// dropOrFail 删表注入「查不动」（与 catalog 台账的 dropTable 同一招，这里要的是「先跑完基础断言再删」
-// 的时序，所以不共用那个闭包）。
-func dropOrFail(t *testing.T, db *gorm.DB, table string) {
-	t.Helper()
-	if err := db.Exec("DROP TABLE " + table).Error; err != nil {
-		t.Fatalf("注入故障（删 %s 表）失败: %v", table, err)
-	}
-}
 
 // courseFactCase 一件「输入不合法」或「引用查不动」的事实，以及在两条面上要打的请求。
 type courseFactCase struct {
@@ -40,7 +29,7 @@ type courseFactCase struct {
 }
 
 // courseFactCases 是 `applyCourseTrainingFields`（service/course_service.go:907-1005）里
-// 11 条裸 `errors.New` 的逐条清点，加 4 条「查不动」：
+// 登记 11 条的逐条清点 + 4 条「查不动」+ 前置课程那支的 1 条对称可构造例：
 //
 //	证件 ID无效 :911 / 不存在 :921 / 查不动 :917
 //	方向 ID无效 :929 / 不存在 :939 / 查不动 :935
@@ -100,7 +89,7 @@ func TestCourseInvalidInputSameFaceOnCreateAndUpdate(t *testing.T) {
 			}
 
 			if tc.dropTable != "" {
-				dropOrFail(t, db, tc.dropTable)
+				dropTable(tc.dropTable)(t, db)
 			}
 
 			created := doWithToken(t, r, token, http.MethodPost, "/api/admin/course", body)
@@ -177,7 +166,7 @@ func TestCourseSwapSortFaces(t *testing.T) {
 			r, db, token := newAdminContractEnv(t)
 			ids := seedCourseDomain(t, db)
 			if tc.drop != "" {
-				dropOrFail(t, db, tc.drop)
+				dropTable(tc.drop)(t, db)
 			}
 			rec := doWithToken(t, r, token, http.MethodPut,
 				fmt.Sprintf("/api/admin/course/%d/sort", tc.pathID(ids)), tc.body)

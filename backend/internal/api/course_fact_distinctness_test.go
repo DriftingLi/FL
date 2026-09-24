@@ -3,7 +3,7 @@
 //
 // 为什么单独一把：第③批的教训是把哨兵拆成 `A = B` 别名时，编译通过、404 映射测试全绿，
 // 而 errors.Is 把几态认成同一件 ⇒ 验「对外码一致」的测试对「内部拆分」类改动是无效验证。
-// 本批一次新增 12 枚哨兵，其中「所属证件不存在」与题库域逐字同文案而**有意不合并**
+// 本批新增 16 枚哨兵（11 + 前置 3 + 交换 2 由裸串升名，另证件那枚与 swap_with 那枚是本批新立的事实），其中「所属证件不存在」与题库域逐字同文案而**有意不合并**
 // （合并会连带动那条端点的默认码）⇒ 需要一把锁同时钉住「不许别名回去」与「这对是同文案但不同事实」。
 package api
 
@@ -28,19 +28,28 @@ var courseWaveFacts = []error{
 	service.ErrEntityNotSortable, service.ErrSwapItemNotFound,
 	service.ErrCourseNotMountedForSort, service.ErrCourseSortGroupMismatch,
 	service.ErrCourseSwapTargetNotFound,
+	// 同文案对的**另一侧**也进表：只放一侧会让豁免分支永远走不到（本表内不出现第二次），
+	// 「登记过」就成了空话。题库域那枚与课程侧逐字同句而有意不合并（ADR-0065 决策 9）。
+	service.ErrQuestionCredentialNotFound,
 }
 
-// allowedSameText 是**登记过**的同文案不同事实对（ADR-0065 决策 9）。除此之外两两不得同句。
-var allowedSameText = [][2]string{
-	{"所属证件不存在", "所属证件不存在"}, // 课程写面 ↔ 题库域，见下条断言的理由
+// allowedSameText 是**登记过**的同文案不同事实（ADR-0065 决策 9）：同一句话确实地属于两件
+// 不同的事，且不许合并。下面的循环会查这张表 —— 不在表里的同句即红，在表里的还要额外钉
+// 「仍然同句、仍然不同值」（见函数末尾那条断言）。
+var allowedSameText = map[string]int{
+	"所属证件不存在": 2, // 课程写面 ErrCourseCredentialRefNotFound ↔ 题库域 ErrQuestionCredentialNotFound（两枚都在上面那张清单里）
 }
 
 func TestCourseWriteFactsArePairwiseDistinct(t *testing.T) {
 	seen := map[string]error{}
+	textCount := map[string]int{}
 	for i, a := range courseWaveFacts {
+		textCount[a.Error()]++
 		if prev, dup := seen[a.Error()]; dup {
-			t.Fatalf("%q 出现了两次（%v 与 %v）⇒ 同一句被两个载体说，或有人把两件事压成了一件；"+
-				"如属有意分裂，请登记进 allowedSameText 并写明理由", a.Error(), prev, a)
+			if allowedSameText[a.Error()] == 0 {
+				t.Fatalf("%q 出现了两次（%v 与 %v）⇒ 同一句被两个载体说，或有人把两件事压成了一件；"+
+					"如属有意分裂（ADR-0065 决策 9），请登记进 allowedSameText 并写明理由", a.Error(), prev, a)
+			}
 		}
 		seen[a.Error()] = a
 		for j, b := range courseWaveFacts {
@@ -61,7 +70,12 @@ func TestCourseWriteFactsArePairwiseDistinct(t *testing.T) {
 		t.Fatalf("证件那对同文案双载体现状变了（question=%q course=%q）⇒ 要么被合并了（决策 9 否掉），"+
 			"要么句子分家了（决策 5 的「同措辞」半边）", q, c)
 	}
-	if len(allowedSameText) != 1 {
-		t.Fatalf("同文案豁免表被改宽（%d 条）", len(allowedSameText))
+	// 豁免表必须**仍然对应现实**：登记的那一句确实出现两次（出现 0 次说明有一侧被改名或合并、
+	// 出现 3 次说明又长了第三个人），否则豁免就是白给的。
+	for text, want := range allowedSameText {
+		if got := textCount[text]; got != want {
+			t.Fatalf("登记的同文案对 %q 实际出现 %d 次（登记 %d）⇒ 要么被合并了，要么又长了第三个同句载体",
+				text, got, want)
+		}
 	}
 }
