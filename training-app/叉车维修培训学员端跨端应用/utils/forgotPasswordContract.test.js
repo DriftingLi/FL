@@ -44,10 +44,15 @@ const LOGIN_CONSUMER = 'pages/login/composables/useLoginForm.uts';
 /** 软预算口径（ADR-0007）。模块全量预算已由声明面执法（本模块的 budget 已从 pending 翻成 600） */
 const LINE_BUDGET = 600;
 /**
- * `<style>` 块的 sha256（术前 = 术后，逐字节）。**这不是「格式锁」而是 UI 冻结的证据锁**：
+ * `<style>` 块的 sha256。**这不是「格式锁」而是 UI 冻结的证据锁**：
  * 改它 = 改了这一页的像素面，必须是一次显式决定（并在 PR 里给出 ①a 前后对比）。
+ *
+ * 值在 #1269 重新基线（T12 术前的旧值 `80489de8…` 就此作废）：`.mode-tab` 系的
+ * `font-size` / `color` / `font-weight` 挪到新的 `.mode-tab-text` / `.mode-tab-text-active`（挂在 `<text>` 上）
+ * —— 原生渲染层只把文字类样式认给文字类元素，落在 `<view>` 上会被**静默忽略**（真机日志逐字点名）。
+ * 块内规则数 43 → 45，其余一字符未动；这一页自术后的像素面变化只有「标签字号/颜色真的生效了」这一项。
  */
-const STYLE_SHA256 = '80489de82ad55951232e1dc127886495ae77c4ebf61962c5ed6e31b3a4961af2';
+const STYLE_SHA256 = 'a5fbd0f8d4fa26fe7170ee4dd16cb81a145bac0b75fc5c0dc240966f9922525d';
 
 /** 页面块（template / script / style）。模板**有嵌套** `<template v-if>` ⇒ 闭合取最后一个 */
 function block(src, tag) {
@@ -148,9 +153,9 @@ describe('样式块逐字节冻结（UI 像素级不变的最强静态证据面�
     expect(sha256(style)).toBe(STYLE_SHA256);
   });
 
-  it('CSS 规则数守恒（43 条，与逐字节锁互为冗余判据）', () => {
+  it('CSS 规则数守恒（45 条，与逐字节锁互为冗余判据）', () => {
     const ruleCount = (s) => (s.match(/^\s*\.[a-zA-Z][\w-]*\s*\{/gm) || []).length;
-    expect(ruleCount(pageStyle())).toBe(43);
+    expect(ruleCount(pageStyle())).toBe(45);
   });
 
   it('判断力（改一处声明 / 删一条规则都必须与该 sha 不同）', () => {
@@ -158,7 +163,7 @@ describe('样式块逐字节冻结（UI 像素级不变的最强静态证据面�
     expect(sha256(style.replace('.footer-link {', '.footer-link-x {'))).not.toBe(STYLE_SHA256);
     expect(sha256(style.replace('#2979ff', '#2979fe'))).not.toBe(STYLE_SHA256);
     const ruleCount = (s) => (s.match(/^\s*\.[a-zA-Z][\w-]*\s*\{/gm) || []).length;
-    expect(ruleCount(style.replace('.footer-link {', ''))).toBe(42);
+    expect(ruleCount(style.replace('.footer-link {', ''))).toBe(44);
   });
 });
 
