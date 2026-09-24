@@ -119,6 +119,25 @@ func (h *AdminHandler) ListCourses(c *gin.Context) {
 	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
+// courseWriteFacts400 是课程两条写面（Create/Update）**共用**的「输入不合法」事实集
+// （ADR-0065 决策 3）。挂同一份表，为的是让「同一件输入错误按 HTTP 动词分家」不可能再发生：
+// 此前 Create 的默认面是 400（于是 `applyCourseTrainingFields` / `replaceCoursePrerequisites`
+// 里的「查不动」被答成参数错误，还连带把驱动原文 `SQL logic error: no such table: …` 外发出去），
+// 而 Update 的默认面是 500（于是 14 条输入不合法被答成服务端故障）——两面各错一半。
+//
+// 三条「引用对象不存在」复用目录域的同一载体（`catalog_specs.go:15-17`），不另起名字。
+var courseWriteFacts400 = []error{
+	service.ErrCourseNameRequired, service.ErrSpecialtyRequired, service.ErrCourseLevelRequired,
+	service.ErrCourseCredentialIDInvalid, service.ErrCourseSpecialtyIDInvalid,
+	service.ErrCourseLevelIDInvalid, service.ErrCertificateTemplateIDInvalid,
+	service.ErrCourseCredentialRefNotFound, service.ErrSpecialtyNotFound,
+	service.ErrCourseLevelNotFound, service.ErrCertificateTemplateNotFound,
+	service.ErrCourseTheoryHoursNegative, service.ErrCoursePracticeHoursNegative,
+	service.ErrCourseSortOrderNegative,
+	service.ErrCoursePrerequisiteSelf, service.ErrCoursePrerequisiteNotFound,
+	service.ErrCoursePrerequisiteCycle,
+}
+
 // @Summary 创建课程
 // @Description 管理员创建课程（含培训目录扩展字段）
 // @Tags 管理端-课程
@@ -127,8 +146,9 @@ func (h *AdminHandler) ListCourses(c *gin.Context) {
 // @Security BearerAuth
 // @Param body body object false "课程输入 {name,description,cover_image,duration,status,...}"
 // @Success 201 {object} response.R{data=service.CourseDTO} "课程创建成功"
-// @Failure 400 {object} response.R "请求数据无效"
+// @Failure 400 {object} response.R "输入不合法（挂载必填 / 引用ID无效或不存在 / 数值为负 / 前置课程冲突）"
 // @Failure 401 {object} response.R "未认证"
+// @Failure 500 {object} response.R "写库或查库失败"
 // @Router /admin/course [post]
 // CreateCourse 创建课程 POST /api/admin/course
 func (h *AdminHandler) CreateCourse(c *gin.Context) {
@@ -139,7 +159,8 @@ func (h *AdminHandler) CreateCourse(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *service.CourseInput) (*service.CourseDTO, error) {
 			return h.courseSvc.CreateCourse(req)
 		},
-	}.WithSuccess(created("课程创建成功"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(created("课程创建成功"), http.StatusInternalServerError).
+		WithSentinels(http.StatusBadRequest, courseWriteFacts400...).Handle(c)
 }
 
 // @Summary 管理端课程详情
@@ -181,6 +202,7 @@ func (h *AdminHandler) GetCourseDetail(c *gin.Context) {
 // @Failure 400 {object} response.R "请求数据无效"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "课程不存在"
+// @Failure 500 {object} response.R "写库或查库失败"
 // @Router /admin/course/{course_id} [put]
 // UpdateCourse 更新课程 PUT /api/admin/course/:course_id
 func (h *AdminHandler) UpdateCourse(c *gin.Context) {
@@ -201,11 +223,17 @@ func (h *AdminHandler) UpdateCourse(c *gin.Context) {
 		},
 	}.WithSuccess(okMsg("课程更新成功"), http.StatusInternalServerError).
 		WithSentinel(service.ErrCourseNotFound, http.StatusNotFound).
-		// 第 3 族（输入不合法不再冒充服务端故障）：这两条「必填」在 service 侧刚具名，
-		// 之前落默认面 ⇒ 编辑课程时把方向清空会被答成 500（客户端以为服务端坏了）。
-		WithSentinel(service.ErrSpecialtyRequired, http.StatusBadRequest).
-		WithSentinel(service.ErrCourseLevelRequired, http.StatusBadRequest).Handle(c)
+		// 与 Create 面共用同一份表（ADR-0065 决策 3）：此前这里只挂了「必填」两条，
+		// 于是「方向被引用成一张不存在的行」在编辑面上是 500。
+		WithSentinels(http.StatusBadRequest, courseWriteFacts400...).Handle(c)
 }
+
+// courseSortFacts400 是课程交换排序端的表：目录侧那两件（不支持排序 / 待交换的项不存在）
+// 加上课程侧独有的两件（未挂载、跨组）。用两次 append 而不是直接抄，是为了让目录侧那两条
+// 只有一份出处；第一个 append 落进新 backing array，不与 sortFacts400 共享底层数组。
+var courseSortFacts400 = append(append([]error{}, sortFacts400...),
+	service.ErrCourseNotMountedForSort, service.ErrCourseSortGroupMismatch,
+	service.ErrCourseSwapTargetNotFound)
 
 // @Summary 交换课程排序
 // @Description 同一方向+等级组内交换 sort_order，响应 data 为 null
@@ -218,6 +246,7 @@ func (h *AdminHandler) UpdateCourse(c *gin.Context) {
 // @Success 200 {object} response.R "排序已交换"
 // @Failure 400 {object} response.R "swap_with 参数无效"
 // @Failure 401 {object} response.R "未认证"
+// @Failure 500 {object} response.R "写库或查库失败"
 // @Router /admin/course/{course_id}/sort [put]
 // SwapCourseSort 交换课程排序 PUT /api/admin/course/:course_id/sort（同一方向+等级组内，body: {"swap_with": <id>}）
 func (h *AdminHandler) SwapCourseSort(c *gin.Context) {
@@ -241,7 +270,10 @@ func (h *AdminHandler) SwapCourseSort(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-	}.WithSuccess(okMsgNoData("排序已交换"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(okMsgNoData("排序已交换"), http.StatusInternalServerError).
+		// 路径那门课不存在 ⇒ 404（此前落默认面 400：「你换的这门课没有」被说成「参数错了」）。
+		WithSentinel(service.ErrCourseNotFound, http.StatusNotFound).
+		WithSentinels(http.StatusBadRequest, courseSortFacts400...).Handle(c)
 }
 
 // @Summary 删除课程
