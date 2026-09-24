@@ -23282,11 +23282,11 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "items": {
+                    "description": "Items 恒非 null：空表发出 []（pkg/paging 的 queryFind 走 gorm Find，零行给空切片）。",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/model.AuditLog"
-                    },
-                    "x-nullable": true
+                    }
                 },
                 "page": {
                     "type": "integer"
@@ -25185,10 +25185,12 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "slides": {
+                    "description": "Slides 可为 null：未注入 slideRenderer、或 PPT 转图失败时 generateSlides 返回 nil 切片。",
                     "type": "array",
                     "items": {
                         "type": "string"
-                    }
+                    },
+                    "x-nullable": true
                 }
             }
         },
@@ -25306,7 +25308,8 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "type": "string"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "real_name": {
                     "type": "string"
@@ -25315,7 +25318,8 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "type": "object"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "resume_file_url": {
                     "type": "string"
@@ -26036,7 +26040,8 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/service.DiagnosisFaultCodeItem"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "total": {
                     "type": "integer"
@@ -26900,7 +26905,8 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "type": "string"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "experience_years": {
                     "type": "integer"
@@ -26912,7 +26918,8 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "type": "string"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "real_name": {
                     "type": "string"
@@ -26924,13 +26931,15 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "type": "object"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "resume_experiences": {
                     "type": "array",
                     "items": {
                         "type": "object"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "resume_file_url": {
                     "type": "string"
@@ -27363,7 +27372,8 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/service.MockExamAnswerDetailDTO"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "max_score": {
                     "type": "number"
@@ -27445,7 +27455,8 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/service.MockExamAnswerDetailDTO"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "max_score": {
                     "type": "number"
@@ -28328,7 +28339,8 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "type": "integer"
-                    }
+                    },
+                    "x-nullable": true
                 }
             }
         },
@@ -28426,7 +28438,8 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "type": "string"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "experience_years": {
                     "type": "integer"
@@ -28453,7 +28466,8 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "type": "object"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "salary_max": {
                     "type": "integer",

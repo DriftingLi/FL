@@ -27,9 +27,9 @@
 
 export interface ContactPlainDTO {
   contact_phone: string
-  photos: string[]
+  photos: string[] | null
   real_name: string
-  resume_certifications: Record<string, unknown>[]
+  resume_certifications: Record<string, unknown>[] | null
   resume_file_url: string
   wechat: string
 }
@@ -78,13 +78,13 @@ export interface RecruitResumeCard {
   contact_state?: string
   expected_position_extra: string
   expected_position_id?: number
-  expected_regions: string[]
+  expected_regions: string[] | null
   experience_years: number
   job_nature: string
   real_name: string
   real_name_masked: string
   resume_certifications: Record<string, unknown>[]
-  resume_experiences: Record<string, unknown>[]
+  resume_experiences: Record<string, unknown>[] | null
   salary_max?: number
   salary_min?: number
   salary_negotiable: boolean

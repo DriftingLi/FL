@@ -35,6 +35,21 @@ var nonnilOutlets = map[string]func(t *testing.T) string{
 	"service.NotePageDTO.items":               notePageBody,
 	"service.QuestionCommentPageResult.items": commentPageBody,
 	"service.FavoritePageResult.favorites":    favoritePageBody,
+	// 反方向的谎：这一格从前声明 nullable 且契约上落了 x-nullable，而空审计表拉列表实测发的是
+	// `[]` —— 契约在承诺一个永远不来的 null。批①-B 把它改判 nonnil 并摘掉 x-nullable
+	//（判据 2 不许两者同在；摘掉后生成的 TS 从 `T[] | null` 收回 `T[]`，是收窄不是加负担）。
+	"api.AuditLogPageResult.items": auditLogPageBody,
+}
+
+// auditLogPageBody 空审计表拉列表的响应体。
+func auditLogPageBody(t *testing.T) string {
+	t.Helper()
+	r, _, adminToken := newAdminContractEnv(t)
+	rec := doWithToken(t, r, adminToken, http.MethodGet, "/api/admin/audit-logs?page_size=20", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("空审计表拉列表应 200，实际 %d %s", rec.Code, rec.Body.String())
+	}
+	return rec.Body.String()
 }
 
 // getJSON 打一次 GET 并要求 200，返回响应体。

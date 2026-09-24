@@ -3,10 +3,10 @@ definitions:
   api.AuditLogPageResult:
     properties:
       items:
+        description: Items 恒非 null：空表发出 []（pkg/paging 的 queryFind 走 gorm Find，零行给空切片）。
         items:
           $ref: '#/definitions/model.AuditLog'
         type: array
-        x-nullable: true
       page:
         type: integer
       pages:
@@ -1288,9 +1288,12 @@ definitions:
       chapter_id:
         type: integer
       slides:
+        description: Slides 可为 null：未注入 slideRenderer、或 PPT 转图失败时 generateSlides 返回
+          nil 切片。
         items:
           type: string
         type: array
+        x-nullable: true
     type: object
   service.CheckInCalendarResult:
     properties:
@@ -1369,12 +1372,14 @@ definitions:
         items:
           type: string
         type: array
+        x-nullable: true
       real_name:
         type: string
       resume_certifications:
         items:
           type: object
         type: array
+        x-nullable: true
       resume_file_url:
         type: string
       wechat:
@@ -1868,6 +1873,7 @@ definitions:
         items:
           $ref: '#/definitions/service.DiagnosisFaultCodeItem'
         type: array
+        x-nullable: true
       total:
         type: integer
     type: object
@@ -2451,6 +2457,7 @@ definitions:
         items:
           type: string
         type: array
+        x-nullable: true
       experience_years:
         type: integer
       job_nature:
@@ -2459,6 +2466,7 @@ definitions:
         items:
           type: string
         type: array
+        x-nullable: true
       real_name:
         type: string
       region:
@@ -2467,10 +2475,12 @@ definitions:
         items:
           type: object
         type: array
+        x-nullable: true
       resume_experiences:
         items:
           type: object
         type: array
+        x-nullable: true
       resume_file_url:
         type: string
       salary_max:
@@ -2767,6 +2777,7 @@ definitions:
         items:
           $ref: '#/definitions/service.MockExamAnswerDetailDTO'
         type: array
+        x-nullable: true
       max_score:
         type: number
       mock_exam_id:
@@ -2821,6 +2832,7 @@ definitions:
         items:
           $ref: '#/definitions/service.MockExamAnswerDetailDTO'
         type: array
+        x-nullable: true
       max_score:
         type: number
       total_questions:
@@ -3411,6 +3423,7 @@ definitions:
         items:
           type: integer
         type: array
+        x-nullable: true
     type: object
   service.QuestionUpdateInput:
     type: object
@@ -3482,6 +3495,7 @@ definitions:
         items:
           type: string
         type: array
+        x-nullable: true
       experience_years:
         type: integer
       job_nature:
@@ -3501,6 +3515,7 @@ definitions:
         items:
           type: object
         type: array
+        x-nullable: true
       salary_max:
         type: integer
         x-optional: true
