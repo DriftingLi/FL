@@ -87,7 +87,7 @@ type MockExamSubmitDTO struct {
 	CorrectCount   int                       `json:"correct_count"`
 	TotalQuestions int                       `json:"total_questions"`
 	Accuracy       float64                   `json:"accuracy"`
-	Details        []MockExamAnswerDetailDTO `json:"details" nullability:"nullable"`
+	Details        []MockExamAnswerDetailDTO `json:"details" extensions:"x-nullable" nullability:"nullable"`
 }
 
 // MockExamResultDTO 结果详情（交卷结果 + mock_exam_id + submit_time）。

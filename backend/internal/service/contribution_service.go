@@ -124,7 +124,7 @@ type ContributionItemDTO struct {
 	IsAnonymous    bool                  `json:"is_anonymous"`
 	DownloadsCount int                   `json:"downloads_count"`
 	RejectReason   string                `json:"reject_reason,omitempty" extensions:"x-optional"`
-	Files          []ContributionFileDTO `json:"files,omitempty" extensions:"x-optional" nullability:"nullable"`
+	Files          []ContributionFileDTO `json:"files,omitempty" extensions:"x-optional" nullability:"nonnil"`
 	// Author 的 omitempty 对结构体取值**无效**（encoding/json 不省略零值结构体）：key 恒在，
 	// 生成物按必填渲染是正确的，前端手写的 author? 属过时宽容。
 	Author    ContributionAuthor `json:"author,omitempty"`

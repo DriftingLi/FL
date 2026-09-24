@@ -172,8 +172,9 @@ type TutorCourseChaptersDTO struct {
 
 // ChapterSlidesDTO 章节幻灯片。
 type ChapterSlidesDTO struct {
-	ChapterID int      `json:"chapter_id"`
-	Slides    []string `json:"slides" nullability:"nullable"`
+	ChapterID int `json:"chapter_id"`
+	// Slides 可为 null：未注入 slideRenderer、或 PPT 转图失败时 generateSlides 返回 nil 切片。
+	Slides []string `json:"slides" extensions:"x-nullable" nullability:"nullable"`
 }
 
 // StudyProgressDTO 学习进度更新结果。
