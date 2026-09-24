@@ -580,7 +580,7 @@ type RecruiterListItem struct {
 type RecruiterListResult struct {
 	Total int64               `json:"total"`
 	Page  int                 `json:"page"`
-	Items []RecruiterListItem `json:"items" nullability:"nullable"`
+	Items []RecruiterListItem `json:"items" nullability:"nonnil"`
 }
 
 // ListRecruiters 招聘者列表（分页 + 关键字过滤企业名/账号；#416 真实现替换硬编码空数组桩）。

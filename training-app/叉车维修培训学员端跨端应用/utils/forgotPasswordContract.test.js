@@ -20,7 +20,8 @@
  *     **三个消费方同 PR 机械迁移**（forgot-password / register / login，引用 #650）；`sendCodeApi` /
  *     `resetPasswordApi` / `sendPhoneCodeApi` 留裸的**白名单与理由**写死在断言旁（void 用法 / 后端 NoData）
  * 11) 行为保持点：切换方式 / 双通道校验 / 图形验证码与验证码的**行序** / 60s 倒计时 / 提交与失败累计 /
- *     三档提示 / 六条校验规则 / 生命周期 / 六个输入面薄包装 —— 逐项仍在，并含与 register 的**四处刻意差异**
+ *     三档提示 / 六条校验规则 / 生命周期 / 六个输入面薄包装 —— 逐项仍在，并含与 register 的**三处刻意差异**
+ *     （原第四处「密码只判下限」已由 #1262 收口：口令档与注册页 / 后端规则源同为 6-20）
  *
  * 本套件是**接线守护**（源码文本 + harness 结构事实，不构成 ③ 门的行为证据，见 `docs/agents/guards.md`）：
  * 它守的是「页面 ↔ composable ↔ 域 api」的接线与模板形态；行为兜底 = ④ 编译门（Kotlin 形态）+ ①a 真机逐页冒烟。
@@ -475,11 +476,11 @@ describe('行为保持点（票面 ②：UI 像素级不变 / 行为逐字保持
     expect(hint).toContain("return '6 位数字验证码，5 分钟内有效'");
   });
 
-  it('六条表单校验规则逐条仍在（手机三档 / 邮箱两档 / 验证码两档 / 密码下限 / 两次一致）', () => {
+  it('六条表单校验规则逐条仍在（手机三档 / 邮箱两档 / 验证码两档 / 密码 6-20 / 两次一致）', () => {
     const v = fnBodyOf(src, 'validate');
     expect(v).toContain("if (code.length == 0) return '请输入验证码'");
     expect(v).toContain("if (code.length != 6) return '请输入 6 位验证码'");
-    expect(v).toContain("if (password.length < 6) return '密码至少 6 位'");
+    expect(v).toContain("if (password.length < 6 || password.length > 20) return '密码长度需为 6-20 位'");
     expect(v).toContain("if (password != confirmPassword) return '两次输入的密码不一致'");
     const p = fnBodyOf(src, 'validatePhone');
     expect(p).toContain("if (phone.length != 11) return '请输入 11 位手机号'");
@@ -489,10 +490,12 @@ describe('行为保持点（票面 ②：UI 像素级不变 / 行为逐字保持
     expect(e).toContain("if (t.indexOf('@') <= 0 || t.indexOf('.') <= 0) return '邮箱格式不正确'");
   });
 
-  it('密码校验缺上限 = 术前既有的文案/校验错配，原样保留并另立 #1262（本票不顺手改）', () => {
-    // 页面文案与 :maxlength 承诺 6-20，后端 code_service.go 也是 6-20，唯独客户端只判下限。
-    // 逐字搬迁 ⇒ 本票**保持**这个缺口，缺陷另立 https://github.com/DriftingLi/FL/issues/1262。
-    expect(fnBodyOf(src, 'validate')).not.toContain('password.length > 20');
+  it('#1262 已收口：口令档是 6-20 区间，而输入上界按裁定保持 32（反向锁翻正向）', () => {
+    // 术前：页面 placeholder 与后端唯一规则源（service.validatePasswordLength）都承诺 6-20，
+    // 唯独客户端只判下限 ⇒ 21–32 位要打到后端才拿 400。现已与注册页同形同文案。
+    // 行为兜底 = `utils/authPreRequestValidationBehavior.test.js`（真跑 composable 数请求次数）；本文件只锁文本与模板。
+    expect(fnBodyOf(src, 'validate')).toContain("if (password.length < 6 || password.length > 20) return '密码长度需为 6-20 位'");
+    // `:maxlength` 仍是 32 属 #1262 的显式裁定：改它要动 `.uvue` ⇒ 整批改动的免门口径随之作废
     expect(tpl).toContain('placeholder="新密码（6-20 位）"');
     expect(tpl.split(':maxlength="32"').length - 1).toBe(2);
   });
@@ -532,5 +535,11 @@ describe('行为保持点（票面 ②：UI 像素级不变 / 行为逐字保持
     const broken = src.replace('wrongAttempts.value += 1', '');
     expect(broken).not.toBe(src);
     expect(broken).not.toContain('wrongAttempts.value += 1');
+  });
+
+  it('#1262 翻正后的口令文本锁具备判别力（真源退回只判下限即抓空）', () => {
+    const broken = src.replace("if (password.length < 6 || password.length > 20) return '密码长度需为 6-20 位'", "if (password.length < 6) return '密码至少 6 位'");
+    expect(broken).not.toBe(src);
+    expect(fnBodyOf(broken, 'validate')).not.toContain('密码长度需为 6-20 位');
   });
 });
