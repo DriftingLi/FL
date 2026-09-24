@@ -1,8 +1,9 @@
 <template>
 	<view class="message-row" :class="role">
 		<view class="message-bubble">
-			<!-- 正文标记展开（#1279）：成形的 `<<IMAGE:…>>` 直出会把手册/案例图的内网路径逐字
-			     露给学员。纯文本面按 root ADR-0046 展开为图片说明；无标记的文本逐字节不变。 -->
+			<!-- 正文图片表达展开（#1279）：后端归一后的 `![alt](本站代理 URL)` 与历史行的
+			     `<<IMAGE:…>>` 直出都会把百分号编码的内网路径逐字露给学员（真机实测一条回答 11 处）。
+			     纯文本面按 root ADR-0046 展开为图片说明；不含图片表达的文本逐字节不变。 -->
 			<text class="message-text">{{ displayContent(content) }}</text>
 		</view>
 		<!-- 诊断来源资料（#988）：位置对齐 web 的 `#assistant-extra`（回答下方、操作按钮上方）。

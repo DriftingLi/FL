@@ -50,8 +50,9 @@
   `searchDisplay` · `secureStorage`。
   其中 **`format` / `checkinCalendar` / `profileMetrics`** 连仓内载体都不引用（纯镜像手抄），由 H4 显式登记。
   > **已迁走：`aiSourcesDisplay`（#1279，2026-09-24）** —— 镜像换成 `utsHarness.loadUts` 真执行
-  > `.uts` 本体，并按 spec §④ 更正 2 补了「逐条注入坏实现 ⇒ 红」四条；`guardClassification.test.js`
-  > 的 H5 台账同步划掉。**先例是 #1237**（收藏落点守护切到 utsHarness）：迁移**不必**等 S6a 单独开票，
+  > `.uts` 本体，并按 spec §④ 更正 2 补了「逐条注入坏实现 ⇒ 红」六条（其中一条的坏实现就是
+  > 修正**之前**的真实状态：只认历史 `<<IMAGE:>>`、不认后端归一后的正文 markdown 图）；
+  > `guardClassification.test.js` 的 H5 台账同步划掉。**先例是 #1237**（收藏落点守护切到 utsHarness）：迁移**不必**等 S6a 单独开票，
   > 谁的票的 ③ 承重证据落在这个模块上，谁就顺手迁。
 
 ## 新增守护时要回答的（写进 PR 正文即可）

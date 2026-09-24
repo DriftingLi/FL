@@ -13,8 +13,9 @@
  * 层次：本模块**不**拼 URL —— 解析只吐子路径，URL 由 `api/aiAssistant.uts` 的 `aiManualUrl()` 负责
  * （utils 不依赖 api）。
  *
- * `<<IMAGE:…>>` 解析**不用正则**：全仓 `.uts` 无 RegExp 字面量先例（Kotlin 目标下不可靠），
- * 按 `indexOf` / `substring` 走，与 `utils/markdown.uts` 同风格。
+ * 图片表达解析（来源面的 `<<IMAGE:…>>`、正文面的 `![alt](url)`）**不用正则**：全仓 `.uts`
+ * 无 RegExp 字面量先例（Kotlin 目标下不可靠），按 `indexOf` / `substring` 走，
+ * 与 `utils/markdown.uts` 同风格。
  *
  * 线上格式（2026-09-16 直连生产实测，`BMS` 一问的 `sources` 事件）：
  *   `<<IMAGE:/assistant/static/manual/ep_byd_pmw20_service_manual_en/page_85_643.png>>`
@@ -39,6 +40,15 @@ const MANUAL_PREFIX = 'manual/'
 
 /** 描述段分隔符（交付方按它截断，见文件头 20260921 段） */
 const MARKER_CAPTION_SEP = '|'
+
+/**
+ * markdown 图片的三个定界片段（`![alt](url)`）。后端 `normalizeDiagnosisImages` 把**正文**里
+ * 所有图片表达统一成这一形（root ADR-0063 决策 1），故正文面必须按它展开；alt 里不含 `]`
+ * （后端 `diagnosisAltSanitizer` 已剥），URL 里不含空白与 `)`，所以「先找 `](` 再找 `)`」够用。
+ */
+const MARKDOWN_IMG_OPEN = '!['
+const MARKDOWN_IMG_MID = ']('
+const MARKDOWN_IMG_CLOSE = ')'
 
 /** 无描述时的图片占位词（与后端 `normalizeDiagnosisImages` 的 alt 缺省同词，三端一致） */
 const IMAGE_ALT_FALLBACK = '诊断配图'
@@ -117,36 +127,64 @@ export function stripImageMarkers(text : string) : string {
 	return out.trim()
 }
 
+/** 两个候选下标里较近的那个（-1 表示不存在；都无则 -1） */
+function earlierAt(a : number, b : number) : number {
+	if (a < 0) return b
+	if (b < 0) return a
+	return a < b ? a : b
+}
+
 /**
- * 把**正文**里的 `<<IMAGE:…>>` 标记展开成人可读的图片说明（root ADR-0046「仍可读降级」：
- * 正文内嵌图展开为 alt，与 Web 论坛 / AI 助手那格矩阵同式）。
+ * 把**正文**里的图片表达展开成人可读的图片说明（root ADR-0046「仍可读降级」：
+ * 正文内嵌图展开为 alt，与 Web 论坛 / AI 助手那格矩阵同式）。覆盖两种形状：
+ *   - `![alt](url)` —— 后端归一后的**现行**形状（root ADR-0063 决策 1：三种历史形状在出站前
+ *     统一成它，SSE 与落库历史同一份）；
+ *   - `<<IMAGE:url| 描述:c>>` —— **历史**形状（根 ADR-0033 不回填 ⇒ 旧行的内联标记永存）。
  *
- * 为什么需要它（#1279）：正文是纯文本渲染（`ai-chat-bubble.uvue` 直出 `{{ content }}`），
- * 而标记成形的来源正文会把 `…/fault_images/制动系统/1721219449286.png` 这串路径逐字露给学员。
- * 与 `stripImageMarkers` 的区别是**这里不丢信息**：标记位置留下描述，读得出「讲的是什么图」。
+ * 为什么需要它（#1279 真机实测）：正文是纯文本渲染（`ai-chat-bubble.uvue` 的 `<text>`，
+ * 该页**不**过 `utils/markdown.uts`），学员在小米真机的无障碍树里看到的是
+ * `![诊断配图](/api/ai-assistant/diagnosis/manual/fault_images/%E7%94%B5%E6%B1%A0_BMS%E7%B3%BB%E7%BB%9F/1717077520211.png)`
+ * 这种百分号编码路径串，一条回答里 11 处 —— 「移动端零改动即安全」这条票面假设
+ * 在正文面不成立。展开后只留 alt（后端 alt 缺省词与 `IMAGE_ALT_FALLBACK` 同词）。
  *
- * 无描述（来源面的常态就是无描述）退回 `诊断配图` —— 与后端归一正文的 alt 缺省同词。
- * **不 trim 整体**：无标记的文本（每条用户消息、以及 20260921 之后的正文）逐字节不变。
+ * 与 `stripImageMarkers` 的区别是**这里不丢信息**：留下的是「讲的是什么图」而不是路径。
+ * **不 trim 整体**：不含图片表达的文本（每条用户消息、以及无图回答）逐字节不变。
+ * 不成形的 `![`（后面没有 `](`…`)`）原样保留 —— 宁可不展开，也不吞掉正文。
  */
 export function expandImageMarkers(text : string) : string {
 	let out = ''
 	let from = 0
 	while (true) {
-		const start = text.indexOf(IMAGE_OPEN, from)
+		const legacy = text.indexOf(IMAGE_OPEN, from)
+		const md = text.indexOf(MARKDOWN_IMG_OPEN, from)
+		const start = earlierAt(legacy, md)
 		if (start < 0) {
 			out += text.substring(from)
 			break
 		}
-		const end = text.indexOf(IMAGE_CLOSE, start + IMAGE_OPEN.length)
-		if (end < 0) {
-			out += text.substring(from)
-			break
+		if (start == legacy) {
+			const end = text.indexOf(IMAGE_CLOSE, start + IMAGE_OPEN.length)
+			if (end < 0) {
+				out += text.substring(from)
+				break
+			}
+			out += text.substring(from, start)
+			const caption = captionSegmentOf(text.substring(start + IMAGE_OPEN.length, end))
+			out += caption.length > 0 ? caption : IMAGE_ALT_FALLBACK
+			from = end + IMAGE_CLOSE.length
+			continue
+		}
+		const mid = text.indexOf(MARKDOWN_IMG_MID, start + MARKDOWN_IMG_OPEN.length)
+		const tail = mid < 0 ? -1 : text.indexOf(MARKDOWN_IMG_CLOSE, mid + MARKDOWN_IMG_MID.length)
+		if (tail < 0) {
+			out += text.substring(from, start + MARKDOWN_IMG_OPEN.length)
+			from = start + MARKDOWN_IMG_OPEN.length
+			continue
 		}
 		out += text.substring(from, start)
-		const inner = text.substring(start + IMAGE_OPEN.length, end)
-		const caption = captionSegmentOf(inner)
-		out += caption.length > 0 ? caption : IMAGE_ALT_FALLBACK
-		from = end + IMAGE_CLOSE.length
+		const alt = text.substring(start + MARKDOWN_IMG_OPEN.length, mid).trim()
+		out += alt.length > 0 ? alt : IMAGE_ALT_FALLBACK
+		from = tail + MARKDOWN_IMG_CLOSE.length
 	}
 	return out
 }

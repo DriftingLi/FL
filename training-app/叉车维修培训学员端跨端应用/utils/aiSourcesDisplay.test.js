@@ -13,13 +13,16 @@
  * 不再是接线守护而红 —— 那正是要的，迁移 PR 必须把它划掉）。
  *
  * ⚠️ 判据纪律（spec §④ 更正 2）：「改成真跑了」本身不是验收，**注入坏实现必红**才是 ⇒
- * 文末「成对取证」四条各对应一种**写得出来**的坏实现，另配真源对照组（必不红）。
+ * 文末「成对取证」六条各对应一种**写得出来**的坏实现，另配真源对照组（必不红）。
  *
  * 用例里的样本取自**一手实测**，不是编造的格式：
  *   ① `manual` 那串 = 2026-09-16 直连生产 `sources` 事件原文（`BMS` 一问，13 条来源）；
  *   ② `fault_images` 那串 = 2026-09-24 直连生产代理实测 HTTP 200 / image/png 的那张图，
  *      左串同时是后端 `canonicalizeDiagnosisSources` 换形后的来源正文原文
- *      （`backend/internal/service/ai_diagnosis_wire_fixture_test.go:156`）。
+ *      （`backend/internal/service/ai_diagnosis_wire_fixture_test.go:156`）；
+ *   ③ `DEVICE_MD_IMG` = 2026-09-24 小米真机（`192.168.0.212:37611`）`BMS` 一问**回答气泡**的
+ *      `content-desc` 原文（`uiautomator dump` 17,542 B / sha256 `da126982…`，同一条里这样的
+ *      串出现 **11 次**）—— 它证明「正文面移动端零改动即安全」这条票面假设不成立。
  */
 const fs = require('fs');
 const os = require('os');
@@ -51,6 +54,20 @@ const FAULT_PATH = 'fault_images/制动系统/1721219449286.png';
 /** 交付方入库形状可带 `| 描述:xxx` 后缀（其 postprocess 按第一个 `|` 截断取 URL） */
 const CAPTIONED_MARKER =
   '<<IMAGE:/assistant/static/fault_images/制动系统/1721219449286.png | 描述:蓄能器接口>>';
+/**
+ * 正文面的**现行**形状：后端 `normalizeDiagnosisImages` 出站前把三种图片表达统一成
+ * `![alt](本站代理 URL)`（root ADR-0063 决策 1），SSE 与落库历史同一份。
+ * 左串是真机无障碍树原文（见文件头 ③），alt 为后端缺省词「诊断配图」、URL 逐段百分号编码。
+ */
+const DEVICE_MD_IMG =
+  '![诊断配图](/api/ai-assistant/diagnosis/manual/fault_images/%E7%94%B5%E6%B1%A0_BMS%E7%B3%BB%E7%BB%9F/1717077520211.png)';
+/** 助手给了 caption 时后端把它放进 alt（清洗后不含 `[]`，见 `diagnosisAltSanitizer`） */
+const CAPTIONED_MD_IMG =
+  '![蓄能器接口](/api/ai-assistant/diagnosis/manual/fault_images/%E5%88%B6%E5%8A%A8%E7%B3%BB%E7%BB%9F/1721219449286.png)';
+/** alt 为空（`![ ]`）：后端 alt 缺省词兜不住的历史行形状，移动端自己兜 */
+const EMPTY_ALT_MD_IMG = '![](/api/ai-assistant/diagnosis/manual/doc/page_1.png)';
+/** 20260904 的历史正文形状（内联助手内网路径）：ADR-0033 不回填 ⇒ 旧行永存 */
+const LEGACY_MD_IMG = '![接线图](/assistant/static/manual/ep_byd_pmw20_service_manual_en/page_85_643.png)';
 /** 同一页三张图（实测 source#6 / page 85 就是这样） */
 const THREE_FIGURES =
   '见图：' + REAL_MARKER +
@@ -223,6 +240,46 @@ describe('aiSourcesDisplay：标记解析（真行为）', () => {
       expect(stripImageMarkers(CAPTIONED_MARKER)).toBe('');
       expect(expandImageMarkers(CAPTIONED_MARKER)).toBe('蓄能器接口');
     });
+
+    // ── #1279 自测点 3b：正文面的**现行**形状 = 后端归一后的 markdown 图片 ──────────
+    it('真机原文：`![诊断配图](/api/…%E7%94%B5%E6%B1%A0_BMS…png)` → 只留「诊断配图」', () => {
+      const out = expandImageMarkers('2. BMS 主板故障（如硬件损坏、晶振失效）\n\n' + DEVICE_MD_IMG);
+      expect(out).toBe('2. BMS 主板故障（如硬件损坏、晶振失效）\n\n诊断配图');
+      expect(out).not.toContain('/api/ai-assistant/');
+      expect(out).not.toContain('fault_images');
+      expect(out).not.toContain('%E7%94%B5%E6%B1%A0');
+      expect(out).not.toContain('1717077520211');
+      expect(out).not.toContain('![');
+    });
+    it('有 caption 的正文图 → 展开为 caption（信息不丢，与 Web 的 alt 同源）', () => {
+      expect(expandImageMarkers('先排空。' + CAPTIONED_MD_IMG + '再目视。'))
+        .toBe('先排空。蓄能器接口再目视。');
+    });
+    it('alt 为空 → 退回 `诊断配图`，不留一个空洞（正文里「这里有过一张图」仍读得出）', () => {
+      expect(expandImageMarkers('A' + EMPTY_ALT_MD_IMG + 'B')).toBe('A诊断配图B');
+    });
+    it('20260904 历史行的内联 markdown 图同样展开（ADR-0033 不回填 ⇒ 旧形状永存）', () => {
+      expect(expandImageMarkers(LEGACY_MD_IMG)).toBe('接线图');
+    });
+    it('一条回答里连排 11 张（真机实测的量）⇒ 11 段说明、零路径残留', () => {
+      const body = Array(11).fill(DEVICE_MD_IMG).join('\n\n');
+      const out = expandImageMarkers(body);
+      expect(out.split('诊断配图').length - 1).toBe(11);
+      expect(out).not.toContain('/api/');
+      expect(out).not.toContain('](');
+    });
+    it('两种形状混排各展开各的（历史行与新行同屏时不得互相干扰）', () => {
+      expect(expandImageMarkers(CAPTIONED_MARKER + ' 与 ' + CAPTIONED_MD_IMG))
+        .toBe('蓄能器接口 与 蓄能器接口');
+    });
+    it('不成形的 `![`（后面没有 `](`…`)`）原样保留，且不吞掉后文', () => {
+      expect(expandImageMarkers('价格 ![涨价 30% 元')).toBe('价格 ![涨价 30% 元');
+      expect(expandImageMarkers('a![b(c')).toBe('a![b(c');
+    });
+    it('markdown 图片语法**不被误伤**：链接 `[x](y)` 与加粗原样通过', () => {
+      expect(expandImageMarkers('详见 [手册第 85 页](/doc/85) 与 **断电**'))
+        .toBe('详见 [手册第 85 页](/doc/85) 与 **断电**');
+    });
   });
 
   describe('pageLabel：页码标签', () => {
@@ -266,7 +323,9 @@ describe('aiSourcesDisplay：结构约束（接线面，行为由上面各组真
   });
 
   it('正文展开的实现只在 utils 单点（组件/页面不得长出第二实现）', () => {
-    expect(SRC).toContain('const caption = captionSegmentOf(inner)');
+    expect(SRC).toContain('const caption = captionSegmentOf(');
+    // 两种形状共用**同一个**扫描循环（各写一个函数 = 两条展开口径会各自漂移）
+    expect(SRC.match(/export function expand/g)).toHaveLength(1);
     // 接线面（气泡有没有真的调用它）归 `aiDiagnosisSourcesContract.test.js` ⑥：
     // 那是契约缝的活，放这儿会变成「单测替接线背书」——而接线守护不算 ③ 证据。
   });
@@ -282,7 +341,7 @@ describe('aiSourcesDisplay：结构约束（接线面，行为由上面各组真
   });
 });
 
-// ===== ④ 成对取证（必红）：四种**写得出来**的坏实现，逐条注入真执行 =====
+// ===== ④ 成对取证（必红）：六种**写得出来**的坏实现，逐条注入真执行 =====
 
 /**
  * 读真源 → 注入变异 → 落到临时目录 → 返回变异副本并真执行（工作树不动）。
@@ -301,11 +360,13 @@ function loadMutated(replacements) {
 }
 
 describe('aiSourcesDisplay：成对取证（本套件的判据在坏实现上确实会红）', () => {
-  it('必不红（对照组）：真源上四条判据各自成立', () => {
+  it('必不红（对照组）：真源上这几条判据各自成立', () => {
     const m = display();
     expect(m.extractImagePaths(CAPTIONED_MARKER)).toEqual([FAULT_PATH]);
     expect(m.extractImagePaths(FAULT_MARKER)).toEqual([FAULT_PATH]);
     expect(m.expandImageMarkers(CAPTIONED_MARKER)).toBe('蓄能器接口');
+    expect(m.expandImageMarkers(DEVICE_MD_IMG)).toBe('诊断配图');
+    expect(m.expandImageMarkers(EMPTY_ALT_MD_IMG)).toBe('诊断配图');
     expect(m.expandImageMarkers('  纯文本  \n')).toBe('  纯文本  \n');
   });
 
@@ -334,18 +395,43 @@ describe('aiSourcesDisplay：成对取证（本套件的判据在坏实现上确
 
   it('必红 · 展开写成删除（把来源面口径抄进正文）⇒ 图片说明整段丢失', () => {
     const broken = loadMutated([[
-      "\t\tout += caption.length > 0 ? caption : IMAGE_ALT_FALLBACK\n",
+      "\t\t\tout += caption.length > 0 ? caption : IMAGE_ALT_FALLBACK\n",
       '',
     ]]);
     expect(broken.expandImageMarkers('先排空。' + CAPTIONED_MARKER + '再目视。')).toBe('先排空。再目视。');
     expect(broken.expandImageMarkers(FAULT_MARKER)).toBe('');
   });
 
+  it('必红 · 只认历史标记、不认后端归一后的 markdown 图 ⇒ 真机那 11 处路径串照旧露给学员', () => {
+    // 坏实现 = #1279 修正**之前**的真实状态（本票正文面的失效形态，不是假想敌）：
+    // 扫描只找 `<<IMAGE:`，正文里的 `![alt](/api/…)` 整串原样直出。
+    const broken = loadMutated([[
+      '\t\tconst md = text.indexOf(MARKDOWN_IMG_OPEN, from)',
+      '\t\tconst md = -1',
+    ]]);
+    expect(broken.expandImageMarkers(DEVICE_MD_IMG)).toBe(DEVICE_MD_IMG);
+    expect(broken.expandImageMarkers(CAPTIONED_MD_IMG)).toContain('/api/ai-assistant/');
+    // 历史标记那一支不受影响 —— 变异只坏在正文面的现行形状上
+    expect(broken.expandImageMarkers(CAPTIONED_MARKER)).toBe('蓄能器接口');
+  });
+
+  it('必红 · markdown 分支的 alt 为空时不退占位词 ⇒ 「这里有过一张图」的信息被抹平', () => {
+    const broken = loadMutated([[
+      '\t\tconst alt = text.substring(start + MARKDOWN_IMG_OPEN.length, mid).trim()',
+      '\t\tconst alt = text.substring(start + MARKDOWN_IMG_OPEN.length, mid)',
+    ], [
+      "\t\tout += alt.length > 0 ? alt : IMAGE_ALT_FALLBACK\n",
+      "\t\tout += alt\n",
+    ]]);
+    expect(broken.expandImageMarkers('A' + EMPTY_ALT_MD_IMG + 'B')).toBe('AB');
+    expect(broken.expandImageMarkers(CAPTIONED_MD_IMG)).toBe('蓄能器接口');
+  });
+
   it('必红 · 展开顺手 trim ⇒ 「无标记逐字节不变」的零 diff 判据落空', () => {
-    // 锚点带展开那一行的上下文：`\treturn out\n}` 在 `extractImagePaths` 里同形出现，
-    // 只写它会同时改掉两个函数（Array 上 `.trim()` 直接抛，取证就混进了别的坏）。
-    const ANCHOR = 'out += caption.length > 0 ? caption : IMAGE_ALT_FALLBACK\n'
-      + '\t\tfrom = end + IMAGE_CLOSE.length\n\t}\n\treturn out\n}';
+    // 锚点带展开那一支的上下文：`\treturn out\n}` 在 `extractImagePaths` 与
+    // `stripImageMarkers` 里同形出现，只写它会同时改掉多个函数（Array 上 `.trim()` 直接抛，
+    // 取证就混进了别的坏）。
+    const ANCHOR = 'from = tail + MARKDOWN_IMG_CLOSE.length\n\t}\n\treturn out\n}';
     const broken = loadMutated([[ANCHOR, ANCHOR.replace('return out\n}', 'return out.trim()\n}')]]);
     expect(broken.expandImageMarkers('  纯文本  \n')).toBe('纯文本');
   });
