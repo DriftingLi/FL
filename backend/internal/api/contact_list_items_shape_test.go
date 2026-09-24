@@ -20,6 +20,15 @@ import (
 	"forklift-training/internal/testutil"
 )
 
+// nonnilOutlets 本文件举证的 nonnil 键（判据 5 的**第二个证据源**）。
+//
+// 为什么要两个源：这条字段的组装发生在 handler 层（`contact.go` 拿 service 返回的切片直接组 DTO），
+// 服务层那张表跑不到它。apitypes 的锁按 AST 读这里的键，值本身不用——它要的是「有没有人跑过」
+// 这个集合，而跑的那件事是本文件的用例负责的。
+var nonnilOutlets = map[string]bool{
+	"service.ContactRequestListResult.items": true,
+}
+
 func TestContactRequestListEmptyOutlet(t *testing.T) {
 	r, db, _ := newAdminContractEnv(t)
 
