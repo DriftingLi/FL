@@ -79,9 +79,11 @@ type paperActionReq struct {
 }
 
 func parsePaperAction(c *gin.Context) (*paperActionReq, error) {
-	id, ok := requiredPositiveID(c.Param("paper_id"))
-	if !ok {
-		return nil, badRequest("真题卷ID无效")
+	// 走 pathInt 而不是 requiredPositiveID + 手写 badRequest：后者是查询参数侧的单点守卫，
+	// 用在这里等价但仍是第二份实现（ADR-0065 批⑤）。
+	id, err := pathInt(c, "paper_id", "真题卷ID无效")
+	if err != nil {
+		return nil, err
 	}
 	uid, _ := c.Get(string(middleware.CtxUserID))
 	userID, _ := uid.(int)

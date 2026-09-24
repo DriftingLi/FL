@@ -50,14 +50,14 @@ func (s *AdminCourseService) GetCourseDetail(courseID int) (*AdminCourseDetailDT
 // 目标证件为可选（V1 兼容存量，未来收紧为必填），若携带则校验存在性。
 func (s *AdminCourseService) CreateCourse(in *CourseInput) (*CourseDTO, error) {
 	if in == nil || in.Name == nil || *in.Name == "" {
-		return nil, errors.New("课程名称不能为空")
+		return nil, ErrCourseNameRequired
 	}
 	// 挂载不变式：创建必填方向与等级
 	if in.SpecialtyID == nil || *in.SpecialtyID <= 0 {
-		return nil, errors.New("专业方向不能为空")
+		return nil, ErrSpecialtyRequired
 	}
 	if in.LevelID == nil || *in.LevelID <= 0 {
-		return nil, errors.New("课程等级不能为空")
+		return nil, ErrCourseLevelRequired
 	}
 	status := int16(1)
 	if in.Status != nil {
@@ -101,7 +101,10 @@ func (s *AdminCourseService) CreateCourse(in *CourseInput) (*CourseDTO, error) {
 func (s *AdminCourseService) UpdateCourse(courseID int, in *CourseInput) (*CourseDTO, error) {
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
-		return nil, errors.New("课程不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrCourseNotFound
+		}
+		return nil, err // 查不动不得被读成「不存在」（ADR-0062 票6 / ADR-0064 决策 1）
 	}
 	if in == nil {
 		in = &CourseInput{}
@@ -146,10 +149,16 @@ func (s *AdminCourseService) UpdateCourse(courseID int, in *CourseInput) (*Cours
 func (s *AdminCourseService) SwapCourseSort(a, b int) error {
 	var ca, cb model.Course
 	if err := s.db.First(&ca, a).Error; err != nil {
-		return errors.New("课程不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrCourseNotFound
+		}
+		return err // 查不动不得被读成「不存在」（ADR-0062 票6 / ADR-0064 决策 1）
 	}
 	if err := s.db.First(&cb, b).Error; err != nil {
-		return errors.New("课程不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrCourseNotFound
+		}
+		return err // 查不动不得被读成「不存在」（ADR-0062 票6 / ADR-0064 决策 1）
 	}
 	if !CourseMounted(ca.SpecialtyID, ca.LevelID) || !CourseMounted(cb.SpecialtyID, cb.LevelID) {
 		return errors.New("未挂载方向/等级的课程不能参与排序")
@@ -165,7 +174,10 @@ func (s *AdminCourseService) SwapCourseSort(a, b int) error {
 func (s *AdminCourseService) DeleteCourse(courseID int) (*DeleteCourseResult, error) {
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
-		return nil, errors.New("课程不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrCourseNotFound
+		}
+		return nil, err // 查不动不得被读成「不存在」（ADR-0062 票6 / ADR-0064 决策 1）
 	}
 	if err := s.db.Delete(&course).Error; err != nil {
 		return nil, err
@@ -177,7 +189,10 @@ func (s *AdminCourseService) DeleteCourse(courseID int) (*DeleteCourseResult, er
 func (s *AdminCourseService) CreateChapter(courseID int, in *ChapterInput) (*ChapterDTO, error) {
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
-		return nil, errors.New("课程不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrCourseNotFound
+		}
+		return nil, err // 查不动不得被读成「不存在」（ADR-0062 票6 / ADR-0064 决策 1）
 	}
 	if in == nil || in.Title == nil || *in.Title == "" {
 		return nil, errors.New("章节标题不能为空")
@@ -210,7 +225,10 @@ func (s *AdminCourseService) CreateChapter(courseID int, in *ChapterInput) (*Cha
 func (s *AdminCourseService) UpdateChapter(chapterID int, in *ChapterInput) (*ChapterDTO, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
-		return nil, errors.New("章节不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrChapterNotFound
+		}
+		return nil, err // 查不动不得被读成「不存在」（ADR-0062 票6 / ADR-0064 决策 1）
 	}
 	if in == nil {
 		in = &ChapterInput{}
@@ -239,7 +257,10 @@ func (s *AdminCourseService) UpdateChapter(chapterID int, in *ChapterInput) (*Ch
 func (s *AdminCourseService) DeleteChapter(chapterID int) (*DeleteChapterResult, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
-		return nil, errors.New("章节不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrChapterNotFound
+		}
+		return nil, err // 查不动不得被读成「不存在」（ADR-0062 票6 / ADR-0064 决策 1）
 	}
 	if err := s.db.Delete(&chapter).Error; err != nil {
 		return nil, err

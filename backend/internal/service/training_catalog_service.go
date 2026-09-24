@@ -393,7 +393,7 @@ func (s *TrainingCatalogService) ListGroupedCredentials() GroupedCredentialsDTO 
 
 // QuestionTagsResultDTO 题目标签全量替换的响应 {"tag_ids": [...]}（#954 片二）。
 type QuestionTagsResultDTO struct {
-	TagIDs []int `json:"tag_ids"`
+	TagIDs []int `json:"tag_ids" nullability:"nullable"`
 }
 
 // ===== 题目-标签关联 =====
@@ -661,7 +661,7 @@ func credentialDict(c *model.Credential) CredentialDict {
 
 // CatalogTreeDTO 目录树响应契约。
 type CatalogTreeDTO struct {
-	Specialties []CatalogSpecialtyNode `json:"specialties"`
+	Specialties []CatalogSpecialtyNode `json:"specialties" nullability:"nullable"`
 }
 
 // CatalogSpecialtyNode 目录树专业方向节点。
@@ -669,7 +669,7 @@ type CatalogSpecialtyNode struct {
 	Code        string             `json:"code"`
 	CreatedAt   string             `json:"created_at"`
 	Description string             `json:"description"`
-	Levels      []CatalogLevelNode `json:"levels"`
+	Levels      []CatalogLevelNode `json:"levels" nullability:"nullable"`
 	Name        string             `json:"name"`
 	SortOrder   int                `json:"sort_order"`
 	SpecialtyID int                `json:"specialty_id"`
@@ -679,7 +679,7 @@ type CatalogSpecialtyNode struct {
 // CatalogLevelNode 目录树课程等级节点。
 type CatalogLevelNode struct {
 	Code        string      `json:"code"`
-	Courses     []CourseDTO `json:"courses"`
+	Courses     []CourseDTO `json:"courses" nullability:"nullable"`
 	CreatedAt   string      `json:"created_at"`
 	Description string      `json:"description"`
 	LevelID     int         `json:"level_id"`

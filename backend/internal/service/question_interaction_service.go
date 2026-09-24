@@ -27,7 +27,7 @@ type QuestionCommentDTO struct {
 // 字段按 JSON key 字母序声明（items / page / page_size / total）：旧形态是 gin.H，
 // encoding/json 对 map 按 key 排序输出，声明顺序即字节序（ADR-0009 §2）。
 type QuestionCommentPageResult struct {
-	Items    []QuestionCommentDTO `json:"items"`
+	Items    []QuestionCommentDTO `json:"items" nullability:"nullable"`
 	Page     int                  `json:"page"`
 	PageSize int                  `json:"page_size"`
 	Total    int64                `json:"total"`

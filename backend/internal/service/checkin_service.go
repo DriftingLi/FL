@@ -68,7 +68,7 @@ type CheckInDay struct {
 
 // CheckInCalendarResult 日历结果。
 type CheckInCalendarResult struct {
-	Days         []CheckInDay `json:"days"`
+	Days         []CheckInDay `json:"days" nullability:"nullable"`
 	Streak       int          `json:"streak"`
 	Total        int          `json:"total"`
 	TodayChecked bool         `json:"today_checked"`
@@ -85,7 +85,7 @@ type CheckInRankItem struct {
 
 // CheckInRankResult 排行榜分页结果。
 type CheckInRankResult struct {
-	Items []CheckInRankItem `json:"items"`
+	Items []CheckInRankItem `json:"items" nullability:"nullable"`
 	Total int64             `json:"total"`
 	Page  int               `json:"page"`
 	Pages int               `json:"pages"`

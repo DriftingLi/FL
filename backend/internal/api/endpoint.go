@@ -376,6 +376,25 @@ func (e Endpoint[Req, Resp]) WithSentinel(sentinel error, status int) Endpoint[R
 	return e
 }
 
+// WithSentinelsMsg 一次前置多条具名哨兵、共用同一个状态码与**同一句对外文案**
+// （形状同 WithSentinel，用于「一组事实在呈现层落同一档」）。
+//
+// 文案是参数，不是哨兵自己的 Error()：同一件「读不到」的事实在课程面与章节面上要说出
+// 不同的对象名，把统一的句子写进 service 层的哨兵里，就等于让「被哪个端点消费」决定
+// 「它叫什么」——那是把呈现决定沉到判据层，违反本波不变式（ADR-0064：统一只允许发生在
+// 呈现层，且必须是显式决定）。逐条抄 WithSentinel 同样会抹掉「这是一组」这一层信息。
+func (e Endpoint[Req, Resp]) WithSentinelsMsg(status int, message string, sentinels ...error) Endpoint[Req, Resp] {
+	if e.ErrStatus == nil {
+		e.ErrStatus = &errStatusTable{}
+	}
+	entries := make([]errStatusEntry, 0, len(sentinels))
+	for _, sent := range sentinels {
+		entries = append(entries, errStatusEntry{sentinel: sent, status: status, message: message})
+	}
+	e.ErrStatus.entries = append(entries, e.ErrStatus.entries...)
+	return e
+}
+
 // WithSuccess 按「成功描述 + 默认错误面」装配端点，返回自身便于链式声明：
 //
 //	Endpoint[In, Out]{
@@ -394,16 +413,27 @@ func (e Endpoint[Req, Resp]) WithSuccess(ok *success, errStatus int) Endpoint[Re
 	return e
 }
 
-// pathInt 解析路径参数为 int，失败返回 400 自定义文案。
+// pathInt 解析路径参数为正整数 id；非数字、0 与负数一律 400（带调用方给的那句文案）。
+//
+// 「路径上的整数 id 不是正整数」是一件**解析层**事实，与「这个资源不存在」无关：改之前这里只看
+// `strconv.Atoi` 的 err ⇒ 0 与负数被放行到 service，于是 `GET /course/0` 对外答 404「课程不存在」
+// （拿一个不存在的 id 冒充一个不存在的资源），而用户/讲师面因 service 有 `id <= 0` guard 答 400，
+// 且用的是另一句文案（「用户 ID 非法」）——同一件输入错误在三个地方说出三种话（ADR-0065 决策 1）。
+// `pathInt64` 一直是这里的形状，本函数向它对齐。
+//
+// service 层那 5 处 `id <= 0` guard **保留**：HTTP 面现在轮不到它触发，但 service 的契约不能依赖
+// 「调用方一定是这个 handler」（同一 guard 也管着来自 body 的 id）。被否备选见 ADR-0065。
 func pathInt(c *gin.Context, key, failMsg string) (int, error) {
 	v, err := strconv.Atoi(c.Param(key))
-	if err != nil {
+	if err != nil || v <= 0 {
 		return 0, badRequest(failMsg)
 	}
 	return v, nil
 }
 
-// pathInt64 解析路径参数为 int64，失败或 <=0 返回 400 自定义文案。
+// pathInt64 解析路径参数为正整数 id（int64 版），判定与 pathInt 逐字相同。
+// 两枚 helper 是**仅有的**两处路径整数解析点；由 ⑤b 把散在 9 个文件里的裸 `strconv.*(c.Param(...))`
+// 收进来，之后由 parse_point_drift_lock_test.go 钉住「不许再出现第三处」。
 func pathInt64(c *gin.Context, key, failMsg string) (int64, error) {
 	v, err := strconv.ParseInt(c.Param(key), 10, 64)
 	if err != nil || v <= 0 {

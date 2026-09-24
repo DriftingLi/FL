@@ -109,7 +109,8 @@ func (h *TutorHandler) GetCourseChapters(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *idParam) (*service.TutorCourseChaptersDTO, error) {
 			return h.svc.GetCourseChapters(req.ID)
 		},
-	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).
+		WithSentinel(service.ErrCourseNotFound, http.StatusNotFound).Handle(c)
 }
 
 // GetChapterDetail 章节详情（含上下章ID + 文件列表）
@@ -136,7 +137,8 @@ func (h *TutorHandler) GetChapterDetail(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *idParam) (*service.ChapterDetailDTO, error) {
 			return h.svc.GetChapterDetail(req.ID)
 		},
-	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).
+		WithSentinel(service.ErrChapterNotFound, http.StatusNotFound).Handle(c)
 }
 
 // UploadChapterFile 上传章节文件
@@ -153,9 +155,9 @@ func (h *TutorHandler) GetChapterDetail(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /tutor/chapter/{chapter_id}/upload [post]
 func (h *TutorHandler) UploadChapterFile(c *gin.Context) {
-	chapterID, err := strconv.Atoi(c.Param("chapter_id"))
+	chapterID, err := pathInt(c, "chapter_id", "章节ID无效")
 	if err != nil {
-		response.BadRequest(c, "章节ID无效")
+		response.BadRequest(c, err.Error())
 		return
 	}
 	file, err := c.FormFile("file")
@@ -228,7 +230,8 @@ func (h *TutorHandler) UpdateChapterInfo(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *chapterIDInput) (*service.ChapterDTO, error) {
 			return h.svc.UpdateChapterInfo(req.ID, req.Input)
 		},
-	}.WithSuccess(okMsg("章节更新成功"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("章节更新成功"), http.StatusInternalServerError).
+		WithSentinel(service.ErrChapterNotFound, http.StatusNotFound).Handle(c)
 }
 
 // DeleteChapterFile 删除章节文件
@@ -255,7 +258,8 @@ func (h *TutorHandler) DeleteChapterFile(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *idParam) (*service.DeleteFileResult, error) {
 			return h.svc.DeleteChapterFileByID(req.ID)
 		},
-	}.WithSuccess(okMsg("文件删除成功"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("文件删除成功"), http.StatusInternalServerError).
+		WithSentinel(service.ErrChapterFileNotFound, http.StatusNotFound).Handle(c)
 }
 
 // BatchDeleteChapterFiles 批量删除文件

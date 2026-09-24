@@ -265,7 +265,7 @@ func reviewStatusPayload(reviewStatus string) model.JSONB {
 
 // NotificationListPageResult 站内信分页结果（含未读数）。
 type NotificationListPageResult struct {
-	Items       []NotificationDTO `json:"items"`
+	Items       []NotificationDTO `json:"items" nullability:"nullable"`
 	Page        int               `json:"page"`
 	Pages       int               `json:"pages"`
 	Total       int64             `json:"total"`

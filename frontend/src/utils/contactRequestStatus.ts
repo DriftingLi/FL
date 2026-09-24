@@ -50,3 +50,19 @@ export function describeContactRequest(status: ContactRequestStatus): StatusDesc
 export function contactBadge(state: ContactState | undefined): StatusDescriptor | null {
   return state === 'pending' || state === 'approved' ? DESCRIPTORS[state] : null
 }
+
+/**
+ * 「授权在、明文取不到」那一维的展示（ADR-0064 决策 5 / 移动端 #1267）。
+ *
+ * 徽章（contactBadge）与它是**两格正交事实**：企业被禁用不改写授权事实，所以徽章仍按
+ * approved 投影；可用性另用同 key 的 `company_disabled` 说。二者不得互相顶替。
+ *
+ * 判据只写 `=== true`：`company_disabled` 是可选槽，缺席即「无此态」；
+ * 若补一个 `=== false` 分支，就把「后端还没这个字段」读成了「企业可用」——那是把未知当结论。
+ * 措辞在此单点判定（模板不得内联裸串，扫描见 __tests__/statusWordsTemplate.spec.ts），
+ * 且**首句与明文位置同一句话**（后端 ErrCompanyUnavailable = 「企业账号已停用或已注销」）：
+ * 决策 5 要的是「同键同措辞」，两处各自另起一句就等于把同一个事实说出两个名字。
+ */
+export function companyAvailability(disabled: boolean | undefined): StatusDescriptor | null {
+  return disabled === true ? { label: '企业账号已停用或已注销，联系方式已收回', tone: 'warning' } : null
+}

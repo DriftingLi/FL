@@ -120,8 +120,8 @@ var ErrReplyNotFound = errors.New("回复不存在")
 // ErrForumReportNotFound 论坛举报记录不存在（名带 Forum 前缀避开求职举报域既有 ErrReportNotFound 的包级撞名）。
 var ErrForumReportNotFound = errors.New("举报不存在")
 
-// ErrChapterNotFound 发帖/筛选指向的章节不存在。
-var ErrChapterNotFound = errors.New("章节不存在")
+// ErrChapterNotFound 的载体在 course_service.go（发帖/筛选挂的就是课程章节 —— 同一对象，
+// 不在论坛域另立一个同文案副本，ADR-0064 决策 2）。
 
 // —— 所有权（→403）——
 
@@ -220,7 +220,7 @@ type ForumTopicDTO struct {
 	Content      string `json:"content"`
 	// ContentFormat 正文格式声明（ADR-0044）：text | markdown。前端据此选渲染方式。
 	ContentFormat string   `json:"content_format"`
-	Images        []string `json:"images"`
+	Images        []string `json:"images" nullability:"nullable"`
 	// IPProvince / IPCity 发布那一刻的属地快照（ADR-0045）。空串 = 无属地，
 	// 展示侧据此**整段不渲染**（不显示「未知」、不留占位）。
 	// 位置在作者行：它是「这条帖子的作者当时在哪」，不是用户资料。
@@ -253,7 +253,7 @@ type ForumReplyDTO struct {
 	Content         string `json:"content"`
 	// ContentFormat 正文格式声明（ADR-0044）：text | markdown。与主题同口径。
 	ContentFormat string      `json:"content_format"`
-	Images        []string    `json:"images"`
+	Images        []string    `json:"images" nullability:"nullable"`
 	CreatedAt     string      `json:"created_at"`
 	Author        ForumAuthor `json:"author"`
 	CanDelete     bool        `json:"can_delete"`
@@ -365,7 +365,7 @@ func (r topicRow) toDTO(viewerID int) ForumTopicDTO {
 type ForumTopicPageResult struct {
 	Page   int             `json:"page"`
 	Pages  int             `json:"pages"`
-	Topics []ForumTopicDTO `json:"topics"`
+	Topics []ForumTopicDTO `json:"topics" nullability:"nullable"`
 	Total  int64           `json:"total"`
 }
 
@@ -377,7 +377,7 @@ type ForumTopicPageResult struct {
 type ForumTopicDetailDTO struct {
 	Page    int             `json:"page"`
 	Pages   int             `json:"pages"`
-	Replies []ForumReplyDTO `json:"replies"`
+	Replies []ForumReplyDTO `json:"replies" nullability:"nullable"`
 	Topic   ForumTopicDTO   `json:"topic"`
 	Total   int64           `json:"total"`
 }
@@ -1486,7 +1486,7 @@ type MyReplyDTO struct {
 	Content    string `json:"content"`
 	// ContentFormat 正文格式声明（ADR-0044）：列表摘要据此决定是否剥成纯文本。
 	ContentFormat string      `json:"content_format"`
-	Images        []string    `json:"images"`
+	Images        []string    `json:"images" nullability:"nullable"`
 	CreatedAt     string      `json:"created_at"`
 	Author        ForumAuthor `json:"author"`
 }
@@ -1496,7 +1496,7 @@ type MyReplyPageResult struct {
 	Page    int          `json:"page"`
 	Pages   int          `json:"pages"`
 	Total   int64        `json:"total"`
-	Replies []MyReplyDTO `json:"replies"`
+	Replies []MyReplyDTO `json:"replies" nullability:"nullable"`
 }
 
 // MyReplies 我的回复（主题被删时标题为空串，条目保留）。

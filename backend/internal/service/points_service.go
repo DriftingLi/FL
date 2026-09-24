@@ -39,7 +39,7 @@ type PointsLedgerItem struct {
 
 // PointsLedgerResult 流水分页
 type PointsLedgerResult struct {
-	Items []PointsLedgerItem `json:"items"`
+	Items []PointsLedgerItem `json:"items" nullability:"nullable"`
 	Total int64              `json:"total"`
 	Page  int                `json:"page"`
 	Pages int                `json:"pages"`
@@ -59,7 +59,7 @@ type PointsTaskItem struct {
 
 // PointsTasksResult 任务列表
 type PointsTasksResult struct {
-	Tasks []PointsTaskItem `json:"tasks"`
+	Tasks []PointsTaskItem `json:"tasks" nullability:"nullable"`
 }
 
 // taskMeta 行为判定需要的「聚合行为快照 + 用户资料」一次性取齐（GetTasks/Claim 共用）。
@@ -310,8 +310,6 @@ var (
 	ErrAlreadyRedeemed = errors.New("已兑换")
 	// ErrTaskNotFound 任务不存在。
 	ErrTaskNotFound = errors.New("任务不存在")
-	// ErrCourseNotFound 课程不存在。
-	ErrCourseNotFound = errors.New("课程不存在")
 	// ErrCourseNotRedeemable 该课程无需兑换。
 	ErrCourseNotRedeemable = errors.New("该课程无需兑换")
 	// ErrRealPaperUnavailable 真题卷不存在或已下架。
