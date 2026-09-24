@@ -87,11 +87,13 @@ type ContactRequestDTO struct {
 	ContactPhone string `json:"contact_phone,omitempty" extensions:"x-optional"`
 	ContactEmail string `json:"contact_email,omitempty" extensions:"x-optional"`
 	Wechat       string `json:"wechat,omitempty" extensions:"x-optional"`
-	// CompanyDisabled 授权**在**而明文**不可用**的具名说明：该企业账号已被禁用（处置动作）或已注销，
-	// 于是上面三段明文一律缺失，但 status 仍是 approved（徽章按授权事实投影，处置不改写授权事实）。
+	// CompanyDisabled 授权**在**而明文**不可用**的具名说明，那句可用性说的是「企业账号已停用或已注销」
+	// ——与明文门禁拒同一件事时返回的那句错误逐字同一句（禁用是处置动作、注销是账号行没了，
+	// 两者在联系面上的后果相同）。此时上面三段明文一律缺失，但 status 仍是 approved
+	// （徽章按授权事实投影，处置不改写授权事实）。
 	// 词表依据：CONTEXT.md「授权有效态」——「授权存在 ≠ 授权可用，可用性问题呈现在明文位置」；
-	// 「企业招聘者」条的 status 禁用位（ADR-0062 决策 9）。缺席即企业可用。
-	CompanyDisabled bool `json:"company_disabled,omitempty" extensions:"x-optional"`
+	// 「企业招聘者」条的 status 禁用位（ADR-0062 决策 9、ADR-0065 决策 8）。缺席即企业可用。
+	CompanyDisabled bool `json:"company_disabled,omitempty" extensions:"x-optional" fact:"company_unavailable"`
 	// Source 授权来源（recruiter 企业发起 / application 投递产生）
 	Source string `json:"source,omitempty" extensions:"x-optional"`
 }
