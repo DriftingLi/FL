@@ -70,6 +70,21 @@
     `[error] Please ensure that the IDE has been properly installed`）。开发者工具 CLI 与 HBuilderX CLI
     一样**须以全访问权限执行**。
 
+    **坑位 6 续（2026-09-23 深夜实测，两条，均已落锁）**：
+      a) **残留自动化服务会被静默复用**（本脚本已改：**换端口**，不再只 warning）。请求端口被占时
+         `cli.bat auto` 回显 `√ auto`、端口也在监听、ws 也接得上，但 `Tool.getInfo` **全程无应答**
+         （就绪闸门 `reason=sdk-version-missing`）—— 与 (1) 里「复用没加载项目的会话」同族。
+         实测处置：换一个空闲端口重跑，同一条命令立刻恢复（换成 9431 后 ② 一次通过）。守护：
+         `utils/mpWeixinGatePortFallbackBehavior.test.js`（必不红：被占 ⇒ 换；必红：空闲 ⇒ 沿用）。
+      b) **同一个工具版本可能是坏的**：本机 `2.01.2510290`（二进制 2026-03）上 `cli.bat auto` 会把 IDE
+         **一起带走**（`WeappLog\launch.log`：`监视到子进程(39428)退出, 共运行了79秒 / Dump Files: nothing`），
+         端口不起、连 `SDKVersion` 都没有，而 `close` / `open` / `auto` **全部回显成功** —— 命令行侧完全看不出坏。
+         换装 `2.02.2608070` 后，同一棵树 / 同一份产物 / 同一条命令 **② 一次通过**。
+         ⇒ 判据：`auto` 之后端口不起**且** `Tool.getInfo` 无 `SDKVersion` 时，**先核对工具版本**，别在产物/代码上找。
+      c) 顺带修掉一处真缺陷：无截图（失败路径）时 `Publish-ScreenshotArchive` 在 StrictMode 下抛
+         「在此对象上找不到属性"Sum"」（`Measure-Object` 对空管道不产出对象）⇒ 收成空安全的 `Get-MadeTotalBytes`；
+         它只 warning、不影响门结论，但会把整段入库打成异常。
+
     **导航不可用时诚实降级（2026-09-12 复测，**不许假绿**）**：本机 `miniprogram-automator@0.12.1` 下
     `mp.reLaunch` / `mp.navigateTo` **恒报 `Uncaught [object Object]`**，而 `mp.connect` / `mp.pageStack` /
     `mp.screenshot` 正常 ⇒ 「逐页导航 + 每页截图」这组断言在此环境**不可能成立**。处置是探针把这组记成
@@ -539,19 +554,56 @@ $autoRoot = Join-Path $tempRoot 'mp-weixin-automator'
 $routeList = @($Routes -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 # 入口页 = 第一个路由；它进了门计划（探针的 --entry-url），这里不再另存一份，免得两处取值分叉
 
-$script:GatePlan = New-GatePlan -Project $Project -Dist $dist -ProbePath $probePath -ReadyPath $readyPath `
-    -AutoRoot $autoRoot -LogDir $logDir -LogRelative $logRelative -RouteList $routeList -Port $Port `
-    -OpenTimeoutSeconds $OpenTimeoutSeconds -AutoTimeoutSeconds $AutoTimeoutSeconds `
-    -AutoAttempts $AutoAttempts -AutoRetryDelaySeconds $AutoRetryDelaySeconds `
-    -PortWaitSeconds $PortWaitSeconds -ReadyWaitSeconds $ReadyWaitSeconds -ProbeTimeoutMs $ProbeTimeoutMs `
-    -ProbeTimeoutSeconds $ProbeTimeoutSeconds -ProbeAttempts $ProbeAttempts `
-    -ProbeRetryDelaySeconds $ProbeRetryDelaySeconds -PublishTimeoutSeconds $PublishTimeoutSeconds `
-    -SkipBuild ([bool]$SkipBuild) -Doctor ([bool]$Doctor) -PostToPr $PostToPr
+# 门计划的**唯一构造点**收成函数：端口可能因「残留自动化会话」被换掉（见下面 `Get-FreeAutoPort` 段），
+# 换端口必须**重建计划** —— 计划是端点/argv 的唯一真源，不重建会让 `--auto-port`、就绪闸门 `--ws`、
+# 探针端点与真实端口分叉。收成函数是为了让 `New-GatePlan` 只有一个调用点（计划与执行不分叉）。
+function New-ThisGatePlan {
+    param([int]$UsePort)
+    return New-GatePlan -Project $Project -Dist $dist -ProbePath $probePath -ReadyPath $readyPath `
+        -AutoRoot $autoRoot -LogDir $logDir -LogRelative $logRelative -RouteList $routeList -Port $UsePort `
+        -OpenTimeoutSeconds $OpenTimeoutSeconds -AutoTimeoutSeconds $AutoTimeoutSeconds `
+        -AutoAttempts $AutoAttempts -AutoRetryDelaySeconds $AutoRetryDelaySeconds `
+        -PortWaitSeconds $PortWaitSeconds -ReadyWaitSeconds $ReadyWaitSeconds -ProbeTimeoutMs $ProbeTimeoutMs `
+        -ProbeTimeoutSeconds $ProbeTimeoutSeconds -ProbeAttempts $ProbeAttempts `
+        -ProbeRetryDelaySeconds $ProbeRetryDelaySeconds -PublishTimeoutSeconds $PublishTimeoutSeconds `
+        -SkipBuild ([bool]$SkipBuild) -Doctor ([bool]$Doctor) -PostToPr $PostToPr
+}
+$script:GatePlan = New-ThisGatePlan -UsePort $Port
 
 # -DryRun：打印门计划即退出。**这里之前不许有任何外部命令/写工作树/接 HBuilderX**（守护会断言这一点）。
 if ($DryRun) {
     Write-GatePlanJson -Plan $script:GatePlan
     exit 0
+}
+
+# ---------- 残留自动化会话：**换端口**（2026-09-23 实测，ADR-0008 坑位 6 续）----------
+# 为什么不能只 warning：残留的自动化服务会让 `cli.bat auto` **静默复用它** —— 端口在监听、ws 也接得上，
+# 但 `Tool.getInfo` **全程无应答**（就绪闸门 reason=sdk-version-missing），表象酷似「工具起不来 / 环境坏了」，
+# 于是排查被引向工具与产物。实测处置：换一个空闲端口重跑，同一条命令立刻恢复正常。
+# ⚠️ 只在**执行路径**做（`-DryRun` 已在上面退出）⇒ `-DryRun` 的门计划仍与机器状态无关（守护会断言它不跑外部命令）。
+function Get-FreeAutoPort {
+    param([int]$Start, [int]$Attempts = 20)
+    for ($i = 1; $i -le $Attempts; $i++) {
+        $candidate = $Start + $i
+        if ($candidate -gt 65535) { break }  # 端口号上界：越界值会被当成「没人监听」而蒙过判据
+        if (@(Get-NetTCPConnection -State Listen -LocalPort $candidate -ErrorAction SilentlyContinue).Count -eq 0) { return $candidate }
+    }
+    return 0
+}
+$portSwitchNote = ''
+$occupiedPorts = @(Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue)
+if ($occupiedPorts.Count -gt 0) {
+    $ownerPids = (($occupiedPorts | ForEach-Object { $_.OwningProcess }) | Sort-Object -Unique) -join ','
+    $freePort = Get-FreeAutoPort -Start $Port
+    if ($freePort -gt 0) {
+        $portSwitchNote = "端口 $Port 被 pid $ownerPids 占用（疑似残留自动化会话）：实测 auto 会**静默复用**它（Tool.getInfo 无应答）⇒ 本次改用端口 $freePort"
+        Write-Host ">>> $portSwitchNote" -ForegroundColor Yellow
+        $Port = $freePort
+        $script:GatePlan = New-ThisGatePlan -UsePort $Port
+    } else {
+        $portSwitchNote = "端口 $Port 被 pid $ownerPids 占用，但窗口内（+20）没有空闲端口 ⇒ 沿用该端口（残留会话复用会让本轮 auto 绑到死会话）"
+        Write-Host ">>> $portSwitchNote" -ForegroundColor Yellow
+    }
 }
 
 if (-not (Test-Path -LiteralPath (Join-Path $Project 'manifest.json'))) {
@@ -567,6 +619,8 @@ Set-Content -LiteralPath $logPath -Encoding utf8 -Value @(
     "# 门计划（GATE_PLAN）是步骤/参数/预算/结果行字段的唯一真源；见 New-GatePlan 与 -DryRun"
 )
 function Write-Log { param([string]$Text) Add-Content -LiteralPath $logPath -Value $Text -Encoding utf8 }
+# 端口被残留会话占用而换端口这条事实必须进日志（结果行字段清单是固定的，塞不进新字段）
+if ($portSwitchNote) { Write-Log "PORT_SWITCH $portSwitchNote" }
 
 # ---------- -Doctor：逐层体检的记录与报告（只读；结论只用于诊断，**不是门的通过结论**）----------
 $script:DoctorRows = [System.Collections.Generic.List[object]]::new()
@@ -651,12 +705,10 @@ if (-not $nodeExe) {
     exit 2
 }
 
-# 端口占用前置检查：残留会话会让 cli.bat auto 静默复用旧会话 ⇒ pageStack 空（坑位 1）
-$occupied = @(Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue)
-if ($occupied.Count -gt 0) {
-    Write-Host ">>> 端口 $Port 已被占用（疑似残留自动化会话），先 close 清理" -ForegroundColor Yellow
-    Write-Log "port $Port already listening by pid(s): $(($occupied.OwningProcess) -join ',')"
-}
+# 端口占用已在**门计划构造之前**处理掉（换空闲端口 + 重建计划）—— 见上面 `Get-FreeAutoPort` 段。
+# 这里不再判一次：残留会话会让 `cli.bat auto` **静默复用它**（端口在监听、ws 接得上，但 `Tool.getInfo`
+# 无应答 ⇒ 就绪闸门 reason=sdk-version-missing），只 warning 等于把「复用死会话」当成正常路径
+# （2026-09-23 实测定位，ADR-0008 坑位 6 续；ADR 坑位 1 讲的 pageStack 空是同一族的另一形态）。
 
 # ---------- -Doctor 的 L1–L4（静态面；在动 close/open/auto 之前先记下来）----------
 if ($Doctor) {
@@ -722,6 +774,9 @@ function Invoke-DevToolsClose {
 # 切片）。共享库头部写明了准入门槛：只有「逐字节相同」**且**「未被 utils/*Contract.test.js 作为字面量锚点
 # pin 住」的代码才允许搬进去 —— 本仓守护断言的是**源码文本**，搬走被 pin 的代码等于逼着后续放宽守护。
 . (Join-Path $PSScriptRoot 'lib\gate-common.ps1')
+# 截图入库的判据面（`Get-MadeTotalBytes` 的空安全）：**必须 dot-source 才可用**，
+# 而 `Publish-ScreenshotArchive` 在 main 流程里才被调用 ⇒ 这里（main 之前）是它唯一可靠的落点。
+. (Join-Path $PSScriptRoot 'lib\mp-weixin-archive.ps1')
 
 function Publish-GateComment {
     param(
@@ -862,6 +917,14 @@ function Export-ArchiveImage {
     } finally { $src.Dispose() }
 }
 
+<#
+ 入库图合计字节（`Get-MadeTotalBytes`）：判据面已抽到 `scripts/lib/mp-weixin-archive.ps1`（**空安全**）——
+ 为什么抽出去：`Measure-Object` 对空管道不产出对象，直接取 `.Sum` 在 StrictMode 下抛
+ 「在此对象上找不到属性"Sum"」，而这条路径要「真 git 仓库 + 真 PR + 干净工作树」才走得到 ⇒
+ 内联在这里就只能靠人眼；抽成库后由 `utils/mpWeixinArchiveSumBehavior.test.js` **真执行**它。
+ 本脚本在 main 流程里 dot-source 该库（见 `lib\mp-weixin-archive.ps1` 那行）。
+#>
+
 function Publish-ScreenshotArchive {
     param([int]$PrNumber, [string]$Module, [string]$ShotDir, $ProbeJson, [string]$RepoRoot)
     # 目标：docs/verification/<模块>/<PR号>/<页名>-after.<ext>；仅当「当前分支 = 该 PR 的 head」
@@ -925,11 +988,10 @@ function Publish-ScreenshotArchive {
             if ($r.Bytes -gt $script:ArchiveMaxBytes) { Remove-Item -LiteralPath $r.Path -Force -ErrorAction SilentlyContinue; continue }
             $made += $r
         }
-        $total = ($made | Measure-Object -Property Bytes -Sum).Sum
-        if ($total -le $script:ArchiveMaxTotal) { break }
+        if ((Get-MadeTotalBytes $made) -le $script:ArchiveMaxTotal) { break }
     }
     # 仍超上限的图（按字节从大到小丢），并记下省了哪几页
-    while ((($made | Measure-Object -Property Bytes -Sum).Sum) -gt $script:ArchiveMaxTotal -and $made.Count -gt 1) {
+    while ((Get-MadeTotalBytes $made) -gt $script:ArchiveMaxTotal -and $made.Count -gt 1) {
         $biggest = $made | Sort-Object -Property Bytes -Descending | Select-Object -First 1
         Remove-Item -LiteralPath $biggest.Path -Force -ErrorAction SilentlyContinue
         $skipped += ([System.IO.Path]::GetFileName($biggest.Path) + "（超合计上限）")

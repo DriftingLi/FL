@@ -18,7 +18,7 @@
             </view>
         </view>
 
-        <scroll-view class="content-scroll" scroll-y="true">
+        <scroll-view class="content-scroll" scroll-y="true" @scroll="onContentScroll">
             <!-- 加载中 -->
             <view v-if="loading && topic == null" class="loading-wrap">
                 <text class="loading-text">加载中...</text>
@@ -51,22 +51,35 @@
                 @load-more="loadMoreReplies" />
         </scroll-view>
 
-        <!-- 底部回复栏：与发帖表单**共用同一份输入区形态**（ADR-0025 P3）。
-             数据档位常驻一行（它是「Markdown 完全 opt-in」下唯一的入口，可发现性靠它）；
-             tab / 工具栏 / 边界提示行只在 Markdown 档出现（⑥-5）。 -->
+        <!-- 底部回复栏：默认收起为一条极简触发条，点开才展开完整输入区（「别一进来就摊开」）；
+             展开态与发帖表单**共用同一份输入区形态**（ADR-0025 P3）。数据档位常驻一行（它是
+             「Markdown 完全 opt-in」下唯一的入口，可发现性靠它）；tab / 工具栏 / 边界提示行只在
+             Markdown 档出现（⑥-5）。 -->
         <view v-if="topic != null" class="reply-bar">
-            <ForumMarkdownInput :content="replyContent" :preview-images="replyPreviewImages"
-                :image-count="replyImages.length" variant="reply" :max-images="replyImageLimit"
-                :maxlength="10000" placeholder="写下你的回复..."
-                :format="replyFormat" :show-format-switch="true"
-                :uploading="uploadingReplyImage"
-                @update:content="onReplyContentChange" @update:format="onReplyFormatChange"
-                @add-image="onAddReplyImage" @remove-image="onRemoveReplyImage"
-                @preview-image="onPreviewReplyImage" />
-            <view class="reply-actions">
-                <view class="reply-btn" :class="{ disabled: !canSubmitReply }"
-                    @click="onSubmitReply">
-                    <text class="reply-btn-text">{{ submitting ? '发送中' : '发送' }}</text>
+            <!-- 收起态：极简触发条，点一下展开（进详情页默认即此态） -->
+            <view v-if="!replyExpanded" class="reply-trigger" @click="onOpenReply">
+                <text class="reply-trigger-ph">写下你的回复...</text>
+                <text class="reply-trigger-act">回复</text>
+            </view>
+
+            <!-- 展开态：完整输入区 + 发送 / 收起（用并列 v-if，与本文件头部的互斥分支写法一致） -->
+            <view v-if="replyExpanded">
+                <ForumMarkdownInput :content="replyContent" :preview-images="replyPreviewImages"
+                    :image-count="replyImages.length" variant="reply" :max-images="replyImageLimit"
+                    :maxlength="10000" placeholder="写下你的回复..."
+                    :format="replyFormat" :show-format-switch="true"
+                    :uploading="uploadingReplyImage"
+                    @update:content="onReplyContentChange" @update:format="onReplyFormatChange"
+                    @add-image="onAddReplyImage" @remove-image="onRemoveReplyImage"
+                    @preview-image="onPreviewReplyImage" />
+                <view class="reply-actions">
+                    <view class="reply-collapse" @click="onCollapseReply">
+                        <text class="reply-collapse-text">收起</text>
+                    </view>
+                    <view class="reply-btn" :class="{ disabled: !canSubmitReply }"
+                        @click="onSubmitReply">
+                        <text class="reply-btn-text">{{ submitting ? '发送中' : '发送' }}</text>
+                    </view>
                 </view>
             </view>
         </view>
@@ -78,7 +91,7 @@
 </template>
 
 <script setup lang="uts">
-    import { computed } from 'vue'
+    import { computed, ref, nextTick } from 'vue'
     import { onLoad } from '@dcloudio/uni-app'
     import ForumTopicHeader from './components/forum-topic-header.uvue'
     import ForumTopicBody from './components/forum-topic-body.uvue'
@@ -118,6 +131,13 @@
         onFormatChange: onReplyFormatChange,
         onAddReplyImage, onRemoveReplyImage, onPreviewReplyImage,
     } = composer
+
+    /** 底部回复栏展开态（默认收起为极简触发条；点触发条 / @某人 时展开，发送成功后收起） */
+    const replyExpanded = ref<boolean>(false)
+    // 滑动收起用的非响应式游标：`lastScrollTop` 记录列表当前滚动位置，
+    // `expandAnchorTop` 锚定「展开那一刻」的位置，只有相对锚点下滑超阈值才收（挡键盘位移）。
+    const lastScrollTop = ref<number>(0)
+    const expandAnchorTop = ref<number>(0)
 
     /** 正文变更（组件上抛；工具栏插入也走这条回流，故草稿由 composable 持有） */
     function onReplyContentChange(value : string) : void {
@@ -306,11 +326,40 @@
         const r = replyById(id)
         if (r == null) return
         const name = r.author_name.length > 0 ? r.author_name : '匿名学员'
-        replyContent.value = '@' + name + ' '
+        // 先展开、等输入组件挂载完成再写草稿：收起态下组件未挂载，原生 <input> 的
+        // :value 不认「挂载那一帧之前」刚写的值（实测点回复后框是空的）。nextTick 后
+        // 再写，走的是「已挂载后 :value 反应式更新」这条与工具栏插入同源、已验证可用的路径。
+        expandAnchorTop.value = lastScrollTop.value
+        replyExpanded.value = true
+        nextTick(() => {
+            replyContent.value = '@' + name + ' '
+        })
+    }
+
+    /** 展开 / 收起底部回复栏（收起态见模板 `.reply-trigger`） */
+    function onOpenReply() : void {
+        expandAnchorTop.value = lastScrollTop.value
+        replyExpanded.value = true
+    }
+
+    function onCollapseReply() : void {
+        replyExpanded.value = false
+    }
+
+    /** 读回复时（相对展开锚点向下滑超阈值）自动收起展开的回复栏；向上滚/键盘位移不误收 */
+    function onContentScroll(e : UniScrollEvent) : void {
+        lastScrollTop.value = e.detail.scrollTop
+        if (replyExpanded.value && e.detail.scrollTop > expandAnchorTop.value + 60) {
+            replyExpanded.value = false
+        }
     }
 
     function onSubmitReply() : void {
-        composer.onSubmitReply(topicId.value, (reply : ForumReply) => afterReplyPosted(reply))
+        composer.onSubmitReply(topicId.value, (reply : ForumReply) => {
+            afterReplyPosted(reply)
+            // 发送成功后收起，回到极简触发条（onPosted 仅在提交成功路径触发，见 useReplyComposer）
+            replyExpanded.value = false
+        })
     }
 
     function onReportTopicClick() : void {
@@ -447,5 +496,40 @@
     .reply-btn-text {
         font-size: 28rpx;
         color: #ffffff;
+    }
+
+    /* 收起态：极简触发条（复刻输入行的胶囊形态，占位远小于展开态） */
+    .reply-trigger {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        height: 72rpx;
+        background-color: #f5f5f5;
+        border-radius: 36rpx;
+        padding: 0 28rpx;
+    }
+
+    .reply-trigger-ph {
+        font-size: 28rpx;
+        color: #999999;
+    }
+
+    .reply-trigger-act {
+        font-size: 28rpx;
+        color: #2979ff;
+        font-weight: bold;
+    }
+
+    /* 展开态：发送按钮左侧的「收起」 */
+    .reply-collapse {
+        padding: 16rpx 8rpx;
+        margin-right: 24rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .reply-collapse-text {
+        font-size: 28rpx;
+        color: #666666;
     }
 </style>
