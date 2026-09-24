@@ -67,7 +67,7 @@ type JobCardDTO struct {
 	Region                string    `json:"region"`
 	ExpectedPositionID    *int      `json:"expected_position_id,omitempty" extensions:"x-optional"`
 	ExpectedPositionExtra string    `json:"expected_position_extra"`
-	ExpectedRegions       JSONArray `json:"expected_regions" swaggertype:"array,string" nullability:"nullable"`
+	ExpectedRegions       JSONArray `json:"expected_regions" swaggertype:"array,string" extensions:"x-nullable" nullability:"nullable"`
 	SalaryMin             *int      `json:"salary_min,omitempty" extensions:"x-optional"`
 	SalaryMax             *int      `json:"salary_max,omitempty" extensions:"x-optional"`
 	SalaryNegotiable      bool      `json:"salary_negotiable"`
@@ -75,10 +75,10 @@ type JobCardDTO struct {
 	JobNature             string    `json:"job_nature"`
 	ExperienceYears       int       `json:"experience_years"`
 	SelfIntro             string    `json:"self_intro"`
-	ResumeExperiences     JSONArray `json:"resume_experiences" swaggertype:"array,object" nullability:"nullable"`
-	ResumeCertifications  JSONArray `json:"resume_certifications" swaggertype:"array,object" nullability:"nullable"`
+	ResumeExperiences     JSONArray `json:"resume_experiences" swaggertype:"array,object" extensions:"x-nullable" nullability:"nullable"`
+	ResumeCertifications  JSONArray `json:"resume_certifications" swaggertype:"array,object" extensions:"x-nullable" nullability:"nullable"`
 	ResumeFileURL         string    `json:"resume_file_url"`
-	Photos                JSONArray `json:"photos" swaggertype:"array,string" nullability:"nullable"`
+	Photos                JSONArray `json:"photos" swaggertype:"array,string" extensions:"x-nullable" nullability:"nullable"`
 	Visibility            string    `json:"visibility"`
 	CreatedAt             string    `json:"created_at"`
 	UpdatedAt             string    `json:"updated_at"`
