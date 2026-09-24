@@ -28,6 +28,37 @@ var nullableOutlets = map[string]func(t *testing.T) any{
 	"service.ChapterSlidesDTO.slides": outletChapterSlidesWithoutRenderer,
 }
 
+// nullableOutletTables 是若干张**分域 nullable 表**的汇总点，形状与 nonnil 那侧对称
+// （见 nonnil_declaration_test.go 的同名变量与理由：一条表态的证据住在它自己那一层，
+// 一个域一张表比把所有出口堆进一个巨型测试更好读）。
+//
+// 为什么必须有这张汇总点而不是各文件自带 runner：判据 4 的键由 apitypes 按变量名前缀
+// **从 AST 读**，而「读得到名字」不等于「跑过」——一张只有 AST 在看的表就是花名册
+// （HEAD 那笔 CI 修红修的就是 nonnil 那侧的这个洞）。这里的表被下面的 runner 逐条执行，
+// 所以新加一个 `nullableOutlets<域名>` 文件只需在自己的 init 里 append 一行。
+var nullableOutletTables []map[string]func(t *testing.T) any
+
+func init() {
+	nullableOutletTables = append(nullableOutletTables, nullableOutlets)
+}
+
+// allNullableOutlets 展开所有分表。同名键出现在两张表里即判红：一条事实两处举证，改一处另一处还在过。
+func allNullableOutlets(t *testing.T) map[string]func(t *testing.T) any {
+	t.Helper()
+	out := map[string]func(t *testing.T) any{}
+	owner := map[string]int{}
+	for i, tbl := range nullableOutletTables {
+		for k, v := range tbl {
+			if prev, dup := owner[k]; dup {
+				t.Fatalf("%s 被第 %d 张与第 %d 张表各自举证——一条事实一个证据，留一处", k, prev, i)
+			}
+			owner[k] = i
+			out[k] = v
+		}
+	}
+	return out
+}
+
 // outletChapterSlidesWithoutRenderer 真出口：章节挂了 PPT 但服务没注入 slideRenderer ⇒
 // generateSlides 直接返回 nil，DTO 的 slides 键发出 `null`（不是 `[]`）。
 func outletChapterSlidesWithoutRenderer(t *testing.T) any {
@@ -66,10 +97,11 @@ func outletChapterSlidesWithoutRenderer(t *testing.T) any {
 // 键名反推 json 键：表键最后一段就是要看的键；对不上（字段被改名、被 omitempty 掉、
 // 或整个类型不在射程里）一律判红，不留「找不到就当通过」的分支。
 func TestNullableDeclaredOutletsEmitNull(t *testing.T) {
-	if len(nullableOutlets) == 0 {
+	outlets := allNullableOutlets(t)
+	if len(outlets) == 0 {
 		t.Fatal("证据表是空的：判据 4 会因此空转，这里必须同步红")
 	}
-	for key, build := range nullableOutlets {
+	for key, build := range outlets {
 		t.Run(key, func(t *testing.T) {
 			jsonKey := key[strings.LastIndex(key, ".")+1:]
 			got := marshalKey(t, build(t), jsonKey)

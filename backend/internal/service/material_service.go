@@ -45,7 +45,7 @@ type MaterialPageResult struct {
 	Page      int           `json:"page"`
 	Pages     int           `json:"pages"`
 	Total     int64         `json:"total"`
-	Materials []MaterialDTO `json:"materials" nullability:"nullable"`
+	Materials []MaterialDTO `json:"materials" nullability:"nonnil"`
 }
 
 // materialScope 资料可见范围：章节挂载附件 + 归属课程已发布（legacy 无章节附件不含）。

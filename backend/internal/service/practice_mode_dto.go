@@ -6,7 +6,7 @@ package service
 // PracticeStartResultDTO 标签/顺序练习开始或续练结果
 // （旧 StartTagPractice/StartSequential map 输出）。
 type PracticeStartResultDTO struct {
-	Questions    []QuestionDTO `json:"questions" nullability:"nullable"`
+	Questions    []QuestionDTO `json:"questions" nullability:"nonnil"`
 	CurrentIndex int           `json:"current_index"`
 	Total        int           `json:"total"`
 	Completed    int           `json:"completed"`
@@ -59,7 +59,7 @@ type HistoryResultDTO struct {
 	Total    int64            `json:"total"`
 	Page     int              `json:"page"`
 	PageSize int              `json:"page_size"`
-	Records  []HistoryItemDTO `json:"records" nullability:"nullable"`
+	Records  []HistoryItemDTO `json:"records" nullability:"nonnil"`
 }
 
 // HistoryItemDTO 练习历史条目（旧 GetHistory items 内每条 map 输出；命中题目时追加 question）。

@@ -121,6 +121,7 @@ func (h *CourseHandler) ListCourses(c *gin.Context) {
 // @Success 200 {object} response.R{data=service.ChapterSlidesDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "章节不存在"
+// @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /chapter/{chapter_id}/slides [get]
 func (h *CourseHandler) GetChapterSlides(c *gin.Context) {
 	Endpoint[chapterSlidesReq, service.ChapterSlidesDTO]{
@@ -153,6 +154,7 @@ func (h *CourseHandler) GetChapterSlides(c *gin.Context) {
 // @Success 200 {object} response.R{data=service.CourseDetailDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "课程不存在"
+// @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /course/{course_id} [get]
 func (h *CourseHandler) GetCourseDetail(c *gin.Context) {
 	Endpoint[courseDetailReq, service.CourseDetailDTO]{
@@ -187,6 +189,7 @@ func (h *CourseHandler) GetCourseDetail(c *gin.Context) {
 // @Success 200 {object} response.R{data=service.ChapterDetailDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "章节不存在"
+// @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /course/{course_id}/chapter/{chapter_id} [get]
 func (h *CourseHandler) GetChapterDetail(c *gin.Context) {
 	Endpoint[chapterDetailReq, service.ChapterDetailDTO]{
