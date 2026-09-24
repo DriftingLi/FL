@@ -16023,13 +16023,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "参数错误/唯一/冷却/日限",
+                        "description": "附言为空 / 附言超 200 字 / 参数错误 / 学员不存在 / 招聘者不存在 / 招聘者账号已禁用 / 已存在待处理的申请 / 冷却期内 / 今日申请已达上限",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（DB 故障；不外发驱动原文）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
