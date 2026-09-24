@@ -1,7 +1,9 @@
 <template>
 	<view class="message-row" :class="role">
 		<view class="message-bubble">
-			<text class="message-text">{{ content }}</text>
+			<!-- 正文标记展开（#1279）：成形的 `<<IMAGE:…>>` 直出会把手册/案例图的内网路径逐字
+			     露给学员。纯文本面按 root ADR-0046 展开为图片说明；无标记的文本逐字节不变。 -->
+			<text class="message-text">{{ displayContent(content) }}</text>
 		</view>
 		<!-- 诊断来源资料（#988）：位置对齐 web 的 `#assistant-extra`（回答下方、操作按钮上方）。
 		     仅助手消息且有来源才出现；调用方不传 `sources` 时行为与从前完全一致。 -->
@@ -15,6 +17,7 @@
 
 <script setup lang="uts">
 	import AiChatSources from './ai-chat-sources.uvue'
+	import { expandImageMarkers } from '../../utils/aiSourcesDisplay'
 	import type { AiDiagnosisSource } from '../../types/index'
 
 	withDefaults(defineProps<{
@@ -32,6 +35,15 @@
 	})
 
 	const emit = defineEmits(['copy', 'retry'])
+
+	/**
+	 * 正文展开的**本地包装**（#1279）：模板里直调 import 函数会被 uni-app x 编成 `.invoke()`
+	 * ⇒ Kotlin `error18 找不到名称 invoke`（全工程守护 = `utils/utsAndroidCompile.test.js` S 组），
+	 * 故模板只调本地名；算法本体仍在 `utils/aiSourcesDisplay.uts`，本处不自行解析。
+	 */
+	function displayContent(value : string) : string {
+		return expandImageMarkers(value)
+	}
 
 	function onCopy() : void {
 		emit('copy')

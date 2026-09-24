@@ -49,9 +49,14 @@ const ZERO_REF_WIRING_ALLOWED = [
   'contractReaderEolContract.test.js',
 ];
 
-/** H5：点名的手抄镜像模块 —— 迁移前后都要能被这条断言区分 */
+/**
+ * H5：点名的手抄镜像模块 —— 迁移前后都要能被这条断言区分。
+ *
+ * **#1279 已迁走 `aiSourcesDisplay.test.js`**（改走 `loadUts` 真执行 `utils/aiSourcesDisplay.uts`，
+ * 并补「注入坏实现必红」四条 ⇒ 分类器现判 behavior）。迁走的模块从本表划掉 —— 留着它，
+ * H5 会替「迁移还没发生」的世界判绿，而那正是本守护挡的反面。
+ */
 const KNOWN_MIRROR_MODULES = [
-  'aiSourcesDisplay.test.js',
   'checkinCalendar.test.js',
   'faqDisplay.test.js',
   'format.test.js',

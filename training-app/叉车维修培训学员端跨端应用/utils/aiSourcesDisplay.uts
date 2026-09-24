@@ -5,8 +5,10 @@
  * 前缀剥离、页码标签），与组件生命周期无关。留在 `.uvue` 里它们就**不可测** —— jest 既不能 import
  * `.uts`、更不能 import `.uvue`，于是守护只能退化成「断言源码文本」（`expect(SOURCES).toContain(...)`），
  * 那正是本仓库反复踩过的假绿形态：改坏行为、文本还在，测试照样绿。
- * 抽到这里后，`utils/aiSourcesDisplay.test.js` 以**镜像实现**验证算法行为（先例：`pointsDisplay.test.js`
- * / `checkinCalendar.test.js`），并用「镜像同步」用例把源码与镜像钉在一起防分叉。
+ * 抽到这里后，`utils/aiSourcesDisplay.test.js` 经 `utils/utsHarness.js` 的 `loadUts` **真执行本文件**
+ * （#1279 起；此前是手抄镜像 —— 按 `docs/agents/guards.md` 那属**接线守护**，不构成 ③ 门证据）。
+ * 本模块因此必须保持「零运行期依赖」：只允许 `import type`，一旦 import 了真依赖，测试就得注入夹具
+ * （先例：`utils/recruitDisplay.uts` / `utils/forumBody.uts`）。
  *
  * 层次：本模块**不**拼 URL —— 解析只吐子路径，URL 由 `api/aiAssistant.uts` 的 `aiManualUrl()` 负责
  * （utils 不依赖 api）。
@@ -18,6 +20,12 @@
  *   `<<IMAGE:/assistant/static/manual/ep_byd_pmw20_service_manual_en/page_85_643.png>>`
  * 注意 `manual/` 段是**目录名的一部分**：剥掉 `assistant/static/` 与 `manual/` 后剩下的
  * `ep_byd_pmw20_service_manual_en/page_85_643.png` 才是代理端点的子路径。
+ *
+ * 助手 `20260921` 起新增第二根（#1279 / 根 ADR-0063）：
+ *   `<<IMAGE:/assistant/static/fault_images/制动系统/1721219449286.png>>`
+ * 中文案例目录**不在**可剥前缀里 —— 它就是要留给后端代理的那一段（后端 `resolveStaticSubpath`
+ * 认带根形状，静态根只有 `manual` / `fault_images`，且绝对形状一律拒）。标记内容还可能带
+ * `| 描述:xxx` 后缀（交付方 `postprocess.py` 按第一个 `|` 截断），两端同源，见 `pathSegmentOf`。
  */
 import type { AiDiagnosisSource } from '../types/index'
 
@@ -28,6 +36,35 @@ export const IMAGE_CLOSE = '>>'
 /** 助手内网前缀（按剥离顺序） */
 const ASSISTANT_STATIC_PREFIX = 'assistant/static/'
 const MANUAL_PREFIX = 'manual/'
+
+/** 描述段分隔符（交付方按它截断，见文件头 20260921 段） */
+const MARKER_CAPTION_SEP = '|'
+
+/** 无描述时的图片占位词（与后端 `normalizeDiagnosisImages` 的 alt 缺省同词，三端一致） */
+const IMAGE_ALT_FALLBACK = '诊断配图'
+
+/**
+ * 取标记内容 `|` 之前的路径段（对齐 Web `DiagnosisSources.vue` 的 `split('|')[0]`）。
+ * 后缀不截断会整段进 URL，被后端逐段白名单判非法 ⇒ 图静默消失。
+ */
+function pathSegmentOf(inner : string) : string {
+	const bar = inner.indexOf(MARKER_CAPTION_SEP)
+	return (bar < 0 ? inner : inner.substring(0, bar)).trim()
+}
+
+/**
+ * 取标记内容 `|` 之后的描述段，并剥掉厂商写的标签（入库形状是 `描述:xxx` / `caption:xxx`，
+ * 冒号半角/全角都有）—— 标签本身不是给人读的内容。无 `|` 时返回空串。
+ */
+function captionSegmentOf(inner : string) : string {
+	const bar = inner.indexOf(MARKER_CAPTION_SEP)
+	if (bar < 0) return ''
+	const tail = inner.substring(bar + 1)
+	const half = tail.indexOf(':')
+	const full = tail.indexOf('：')
+	const cut = half < 0 ? full : (full < 0 ? half : (half < full ? half : full))
+	return (cut < 0 ? tail : tail.substring(cut + 1)).trim()
+}
 
 /**
  * 剥掉助手内网前缀（对齐 web `stripAssistantPrefix`）：可选前导 `/` → `assistant/static/` → `manual/`。
@@ -52,7 +89,7 @@ export function extractImagePaths(text : string) : string[] {
 		if (start < 0) break
 		const end = text.indexOf(IMAGE_CLOSE, start + IMAGE_OPEN.length)
 		if (end < 0) break
-		const path = stripAssistantPrefix(text.substring(start + IMAGE_OPEN.length, end).trim())
+		const path = stripAssistantPrefix(pathSegmentOf(text.substring(start + IMAGE_OPEN.length, end)))
 		if (path.length > 0) out.push(path)
 		from = end + IMAGE_CLOSE.length
 	}
@@ -78,6 +115,40 @@ export function stripImageMarkers(text : string) : string {
 		from = end + IMAGE_CLOSE.length
 	}
 	return out.trim()
+}
+
+/**
+ * 把**正文**里的 `<<IMAGE:…>>` 标记展开成人可读的图片说明（root ADR-0046「仍可读降级」：
+ * 正文内嵌图展开为 alt，与 Web 论坛 / AI 助手那格矩阵同式）。
+ *
+ * 为什么需要它（#1279）：正文是纯文本渲染（`ai-chat-bubble.uvue` 直出 `{{ content }}`），
+ * 而标记成形的来源正文会把 `…/fault_images/制动系统/1721219449286.png` 这串路径逐字露给学员。
+ * 与 `stripImageMarkers` 的区别是**这里不丢信息**：标记位置留下描述，读得出「讲的是什么图」。
+ *
+ * 无描述（来源面的常态就是无描述）退回 `诊断配图` —— 与后端归一正文的 alt 缺省同词。
+ * **不 trim 整体**：无标记的文本（每条用户消息、以及 20260921 之后的正文）逐字节不变。
+ */
+export function expandImageMarkers(text : string) : string {
+	let out = ''
+	let from = 0
+	while (true) {
+		const start = text.indexOf(IMAGE_OPEN, from)
+		if (start < 0) {
+			out += text.substring(from)
+			break
+		}
+		const end = text.indexOf(IMAGE_CLOSE, start + IMAGE_OPEN.length)
+		if (end < 0) {
+			out += text.substring(from)
+			break
+		}
+		out += text.substring(from, start)
+		const inner = text.substring(start + IMAGE_OPEN.length, end)
+		const caption = captionSegmentOf(inner)
+		out += caption.length > 0 ? caption : IMAGE_ALT_FALLBACK
+		from = end + IMAGE_CLOSE.length
+	}
+	return out
 }
 
 /** 页码标签（对齐 web「第 N 页 / 第 N-M 页」）；起始页缺失或为 0 时不显示 */

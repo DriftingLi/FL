@@ -193,8 +193,9 @@ describe('#988 诊断来源资料消费契约', () => {
   describe('⑥ 渲染：来源组件 + 气泡接线 + 页面传参', () => {
     it('来源组件**不再自己解析**：纯函数走 utils/aiSourcesDisplay（ADR-0007 单点，禁第二实现）', () => {
       // 为什么这条是承重的：这些纯函数原先住在组件里 ⇒ jest 无法 import `.uvue` ⇒ 守护只能
-      // 断言**源码文本**（改坏行为、文本还在，测试照样绿）。抽到 utils 后行为由**真单测**执行
-      // （`utils/aiSourcesDisplay.test.js` 的镜像实现），本组只守「组件没有长出第二实现」。
+      // 断言**源码文本**（改坏行为、文本还在，测试照样绿）。抽到 utils 后行为由**真执行**的
+      // 单测守（`utils/aiSourcesDisplay.test.js` 经 `loadUts` 跑 `.uts` 本体），
+      // 本组只守「组件没有长出第二实现」。
       expect(SOURCES).toContain("import { extractImagePaths, stripImageMarkers, pageLabel } from '../../utils/aiSourcesDisplay'");
       expect(SOURCES).not.toContain('function stripAssistantPrefix');
       expect(SOURCES).not.toContain('function extractImagePaths');
@@ -203,12 +204,20 @@ describe('#988 诊断来源资料消费契约', () => {
       expect(SOURCES).not.toContain("const IMAGE_OPEN = '<<IMAGE:'");
     });
 
-    it('真单测在位（防「把镜像测试删掉、只留文本断言」的回潮）', () => {
-      // 锚点：`<<IMAGE:…>>` 的解析行为必须有一份**可执行**的测试在守。
+    it('真单测在位且**真执行**被测物（防「退回手抄镜像、只留文本断言」的回潮）', () => {
+      // 锚点：`<<IMAGE:…>>` 的解析行为必须由一份**执行 `.uts` 本体**的测试守（guards.md：
+      // 手抄镜像属接线守护、不构成 ③ 门证据）。判据落在执行调用上，不是「文件里有这些名字」。
       const displayTest = read('utils/aiSourcesDisplay.test.js');
-      expect(displayTest).toContain('function extractImagePaths');
-      expect(displayTest).toContain('function stripImageMarkers');
-      expect(displayTest).toContain("describe('aiSourcesDisplay：镜像同步");
+      expect(displayTest).toContain("require('./utsHarness')");
+      expect(displayTest).toContain("const SRC_REL = 'utils/aiSourcesDisplay.uts'");
+      for (const fn of ['extractImagePaths', 'stripImageMarkers', 'expandImageMarkers', 'pageLabel']) {
+        expect(displayTest).toContain(fn + '(');          // 四个函数都被**调用**过
+      }
+      // 反例防线：镜像手抄的形态不得回来（手抄一份函数体 = 本文件迁移前的样子）。
+      expect(displayTest).not.toMatch(/^function (extractImagePaths|stripImageMarkers|expandImageMarkers)\(/m);
+      // ⚠️ 这里**不**把执行调用写成字面量当锚点：分类器按文本扫「`loadUts` 紧跟左括号」，
+      // 写了就会把本文件这个接线守护**误判成行为守护**（实跑 `scripts/classify-guards.mjs` 复核过）。
+      // 「有没有真执行」由 `guardClassification.test.js`（H5 迁移台账）+ 分类器判，不归本文件。
     });
 
     it('子路径 → URL 走 aiManualUrl（组件不手拼 base）', () => {
@@ -220,6 +229,36 @@ describe('#988 诊断来源资料消费契约', () => {
     it('图片可点开大图（uni.previewImage）', () => {
       expect(SOURCES).toContain('uni.previewImage(');
       expect(SOURCES).toContain('current: url');
+    });
+
+    // ── #1279：正文标记展开（气泡是纯文本直出，标记成形即把内网路径露给学员）──────
+    it('气泡正文经**本地包装**调 `expandImageMarkers`，且**在插值处**（不是存着不用）', () => {
+      expect(BUBBLE).toContain("import { expandImageMarkers } from '../../utils/aiSourcesDisplay'");
+      // 断言**产物形状**：`{{ }}` 里真的调了包装函数。只断「import 在」会放过「import 了但模板
+      // 仍直出 `{{ content }}`」这种坏实现（本仓反复踩的「片段断言放过 404」同款）。
+      expect(BUBBLE).toMatch(/\{\{\s*displayContent\(content\)\s*\}\}/);
+      expect(BUBBLE).not.toMatch(/\{\{\s*content\s*\}\}/);
+      // 包装必须**真的转发**给 utils（否则「包一层」会变成「把展开悄悄丢掉」）。
+      expect(BUBBLE).toContain('return expandImageMarkers(value)');
+      // 模板**不得**直调 import 函数：uni-app x 编成 `.invoke()` ⇒ Kotlin error18（全工程判据在
+      // `utsAndroidCompile.test.js` S 组；本条钉的是「改成合规形状后仍然接得上」这半边）。
+      expect(BUBBLE).not.toMatch(/\{\{\s*expandImageMarkers\(/);
+    });
+
+    it('⑥c 检测器自检：插值改回直出、或包装不再转发，都必须判红', () => {
+      const reverted = BUBBLE.replace('{{ displayContent(content) }}', '{{ content }}');
+      expect(/\{\{\s*displayContent\(content\)\s*\}\}/.test(reverted)).toBe(false);
+      expect(/\{\{\s*content\s*\}\}/.test(reverted)).toBe(true);   // 反例形状确实长这样
+      const stubbed = BUBBLE.replace('return expandImageMarkers(value)', 'return value');
+      expect(stubbed).not.toContain('return expandImageMarkers(value)');
+    });
+
+    it('展开的实现没在组件里长出第二份（单点在 utils，ADR-0007）', () => {
+      for (const f of ['expandImageMarkers', 'pathSegmentOf', 'captionSegmentOf']) {
+        expect(BUBBLE).not.toContain(`function ${f}`);
+        expect(SOURCES).not.toContain(`function ${f}`);
+      }
+      expect(SOURCES).not.toContain('expandImageMarkers(');   // 来源面仍用 strip，不是 expand
     });
 
     it('气泡在助手消息且有来源时才渲染来源组件', () => {
@@ -299,6 +338,32 @@ describe('#988 诊断来源资料消费契约', () => {
       for (const l of lines) {
         expect(l).toMatch(/\?\?/);                          // 必须有非空兜底
       }
+    });
+
+    // ── #1279：20260921 第二根（中文案例目录）与 `| 描述:` 后缀的产物形状 ──────────
+    it('⑦d 产物形状：中文案例目录逐段转义后 == 2026-09-24 直连生产 200 的那条 URL', () => {
+      // 来源正文经后端换形后长这样（逐字取自 `ai_diagnosis_wire_fixture_test.go:156`）：
+      //   `<<IMAGE:/assistant/static/fault_images/制动系统/1721219449286.png>>`
+      // strip 之后留给代理的是**带根**形状 `fault_images/<中文目录>/<文件名>` —— 后端
+      // `resolveStaticSubpath` 的 staticRoots 认它（绝对形状一律拒）。
+      // strip 本身的行为面在 `aiSourcesDisplay.test.js`（真单测），这里只钉三片拼出的产物。
+      const BASE = 'https://www.gccsmile.com/api';
+      const SEGMENT = '/ai-assistant/diagnosis/manual/';
+      const SUBPATH = 'fault_images/制动系统/1721219449286.png';
+      const encoded = SUBPATH.split('/').map((s) => encodeURIComponent(s)).join('/');
+      // 实测值：HTTP 200 / image/png / 92,929 bytes（旧口径丢段 → 404）。
+      expect(BASE + SEGMENT + encoded).toBe(
+        'https://www.gccsmile.com/api/ai-assistant/diagnosis/manual/'
+        + 'fault_images/%E5%88%B6%E5%8A%A8%E7%B3%BB%E7%BB%9F/1721219449286.png');
+    });
+
+    it('⑦e 产物形状：`| 描述:xxx` 漏进路径就是越界形状（后端逐段白名单判非法）', () => {
+      // 钉「为什么必须截断」而不是「截断存在」：不截断时 `|`、空格、全角冒号会一起编进 URL，
+      // 后端 `^[\p{L}\p{N}][\p{L}\p{N}_\-.]*$` 直接拒 ⇒ 实测 `404 {"message":"无效的手册资源路径"}`
+      // ⇒ 图**静默消失**。截断的行为面见 `aiSourcesDisplay.test.js` 的 #1279 用例组。
+      const leaked = encodeURIComponent('1721219449286.png | 描述:蓄能器接口');
+      expect(leaked).toContain('%7C');                                  // `|` 进了 URL = 非法
+      expect(encodeURIComponent('1721219449286.png')).not.toContain('%7C');
     });
   });
 
