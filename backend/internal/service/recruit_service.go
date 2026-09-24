@@ -63,8 +63,14 @@ type RecruitResumeCard struct {
 	ExperienceYears       int       `json:"experience_years"`
 	SelfIntro             string    `json:"self_intro"`
 	ResumeExperiences     JSONArray `json:"resume_experiences" swaggertype:"array,object" nullability:"nullable"`
-	ResumeCertifications  JSONArray `json:"resume_certifications" swaggertype:"array,object" nullability:"nullable"` // 已去 image_urls
-	UpdatedAt             string    `json:"updated_at"`
+	// 三格同为 JSONArray，表态却**两样**，差别在投影有没有重建它：
+	//   - expected_regions / resume_experiences 只加了一道 `len(x)==0 → "[]"` 的守卫，
+	//     列里存着 4 字节的 JSON `null` 时原样透传 ⇒ 保持 nullable。
+	//   - 这一格走 maskCertificationsJSON：解码成 []map 再重建（解码失败或解出 null 都 return
+	//     make(...,0,n)），所以任何列内容下发出的都是 `[]` 或重建后的数组 ⇒ nonnil。
+	// 判据 5 只跑一次成功出口，分不出这两种——它是被读投影读出来的，不是被 marshal 试出来的。
+	ResumeCertifications JSONArray `json:"resume_certifications" swaggertype:"array,object" nullability:"nonnil"` // 已去 image_urls
+	UpdatedAt            string    `json:"updated_at"`
 	// #489：企业视角联系状态（none/pending/approved，approved 带来源）
 	ContactState  string `json:"contact_state,omitempty" extensions:"x-optional"`
 	ContactSource string `json:"contact_source,omitempty" extensions:"x-optional"` // recruiter/application

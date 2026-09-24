@@ -42,6 +42,16 @@ func marshalKey(t *testing.T, v any, key string) string {
 	return string(got)
 }
 
+// 一条本文件的用例测不到的边界，登记在此以免被下一个人重新踩：
+//
+//	marshalKey 只看「这一次出口发出了什么」，所以它**分不清**「代码保证非 null」与
+//	「列默认值恰好是 '[]'」。同一形状的三格 JSONArray（recruit_service.go 的脱敏卡）就是例子：
+//	重建过的那格恒 `[]`，只加 len==0 守卫的两格在列里存着 JSON `null` 时照样发出 null。
+//	⇒ 改判 JSONArray / JSONB 字段前必须去读它那条投影，而不是只跑一次出口。
+//	repository.AlgorithmParameters 那四格也在改判范围之外：判据 5 的证据源只扫 ../service 与
+//	../api（这两个包没有可脱离真库跑的出口），所以它们会一直留在判据 4 的账上——那是结构性
+//	的够不着，不是没人去举证。
+//
 // nonnilOutletTables 是**分域的若干张表**的汇总点。
 //
 // 为什么不是一张表：69 处改判一次写进一个文件会变成没人能读完的巨型测试，也无法并行推进。
@@ -117,9 +127,13 @@ func outletCourseDetailNoChapters(t *testing.T) any {
 	return res
 }
 
-// TestNonNilDeclaredOutletsEmitEmptyArrays 每条登记过的出口都必须发出 `[]`，不是 `null`。
-// 键名最后一段就是要看的 JSON 键；对不上（改名 / 被 omitempty 掉）由 marshalKey 判红。
-func TestNonNilDeclaredOutletsEmitEmptyArrays(t *testing.T) {
+// TestNonNilDeclaredOutletsNeverEmitNull 每条登记过的出口都必须发出**非 null**，键也必须在场。
+//
+// 判据原本写成「必须等于 `[]`」，那对切片是对的、对映射是错的：`map[K]V` 的恒非 null 形状是 `{}`，
+// 于是 4 条 map 字段被判据自己挡在举证之外——一条只认一种形状的锁会把它没覆盖的那一类留在原地，
+// 而那正是第②批 B 段与批⑤ 反复踩过的同一个坑。marshalKey 在键缺席时判红，所以
+// 「键在 + 值不是 null」两件事一起断言，改名或被 omitempty 掉都跑不掉。
+func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 	outlets := allNonNilOutlets(t)
 	if len(outlets) == 0 {
 		t.Fatal("证据表是空的：判据 5 会因此空转，这里必须同步红")
@@ -127,8 +141,8 @@ func TestNonNilDeclaredOutletsEmitEmptyArrays(t *testing.T) {
 	for key, build := range outlets {
 		t.Run(key, func(t *testing.T) {
 			jsonKey := key[strings.LastIndex(key, ".")+1:]
-			if got := marshalKey(t, build(t), jsonKey); got != "[]" {
-				t.Errorf("声明 nonnil 的 %s 实际发出 %s", key, got)
+			if got := marshalKey(t, build(t), jsonKey); got == "null" {
+				t.Errorf("声明 nonnil 的 %s 实际发出 null", key)
 			}
 		})
 	}

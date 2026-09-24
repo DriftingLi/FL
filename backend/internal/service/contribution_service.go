@@ -133,7 +133,7 @@ type ContributionItemDTO struct {
 
 // ContributionPageResult 分页结果。
 type ContributionPageResult struct {
-	Items    []ContributionItemDTO `json:"items" nullability:"nullable"`
+	Items    []ContributionItemDTO `json:"items" nullability:"nonnil"`
 	Total    int64                 `json:"total"`
 	Page     int                   `json:"page"`
 	PageSize int                   `json:"page_size"`
@@ -834,7 +834,7 @@ type ContributionReportItemDTO struct {
 
 // ContributionReportPageResult 举报分页结果。
 type ContributionReportPageResult struct {
-	Items    []ContributionReportItemDTO `json:"items" nullability:"nullable"`
+	Items    []ContributionReportItemDTO `json:"items" nullability:"nonnil"`
 	Total    int64                       `json:"total"`
 	Page     int                         `json:"page"`
 	PageSize int                         `json:"page_size"`

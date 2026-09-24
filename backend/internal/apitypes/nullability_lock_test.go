@@ -49,16 +49,19 @@ const (
 	verdictNonNil   = "nonnil"
 )
 
-// declaredNullableWithoutContractFlag 契约撒谎债务的实测值（文件头第 3 条）：
-// 91 处响应集合字段自己承认「可能为 null」，而 swagger/TS 还在对消费方承诺非 null。
-// （104 处表态 = 99 nullable + 5 nonnil；集合字段里 5 处早已带 x-nullable、另 3 处落在
+// declaredNullableWithoutContractFlag 契约撒谎债务的实测值（文件头第 3 条）。
 //
-//	2xx 响应闭包外 ⇒ 99 − 5 − 3 = 91。ADR-0064 原记的「8 处」由 ADR-0065 批③ 更正：
-//	那 3 处差额是把标量指针字段上的 x-nullable 也计了进来。）
+// 批①′ 立这条时是 91；批①-A 把 68 处**实测恒非 null** 的错标改判成 nonnil ⇒ 91 − 68 = 23。
+// 全程算式：99 处 nullable 声明 − 3 处落在 2xx 闭包外 = 96 在射程内；96 − 5 处已带 x-nullable
+// = 91（起点）。改判走的都是「出口实测发出 `[]` / `{}`」那条路，不是按目录猜的（ADR-0064
+// 原记「8 处早已带 x-nullable」由批③ 更正为 5 + 3——那 3 处差额是把标量指针字段上的
+// x-nullable 也计了进来）。
 //
-// 本波不做批量补 x-nullable（那会把每个消费点变成一次带类型错误的跨端改动）——
-// 这笔账交给下一波，常量的作用是让它只能变短。
-const declaredNullableWithoutContractFlag = 91
+// 剩下这 23 处是**真发得出 null** 或**结构性够不着举证**的两类，前者归批①-B 补 x-nullable
+// 并同步消费端，后者归下一波（判据 5 的证据源只扫 ../service 与 ../api，repository/model 两包
+// 没有可脱离真库跑的出口；`model.JSONArray` 那几格的非 null 靠 DDL 默认值而不是代码，
+// 见 recruit_service.go 里那段「同为 JSONArray 而表态两样」的注释）。
+const declaredNullableWithoutContractFlag = 23
 
 // outletSource 指出一处「正向证据」的来源：一个目录 + 一个变量名前缀。
 //
@@ -144,7 +147,7 @@ func outletEvidenceKeys(t *testing.T, sources []outletSource, what string) map[s
 // 这个数**只准减**：新增一句没有证据的 nullable 会把它顶上去，把证据补上会把它降下来——
 // 两种都要人来改常量，于是一次没有证据的声明和一次收口都留下痕迹。
 // 批①-A 会把其中约 69 处**改判 nonnil**（实测恒非 null，本就不该说可空），那时这条算式整条重写。
-const declaredNullableWithoutPositiveEvidence = 95
+const declaredNullableWithoutPositiveEvidence = 27
 
 // countWithoutEvidence 数「声明了某条表态、证据表里却没有它」的位置。
 func countWithoutEvidence(fields []string, evidence map[string]bool) []string {
@@ -387,7 +390,17 @@ func fieldsByVerdict(f *ast.File, curPkg string, named map[string]bool, closure 
 				if jsonName == nil {
 					continue
 				}
-				out = append(out, curPkg+"."+ts.Name.Name+"."+jsonName[1])
+				// 剥掉 `,omitempty` / `,string` 这类选项：键要的是**wire 上那个键名**，
+				// 带上选项会让同一族字段分成两种键形状（批①-A 委托时就是照着带选项的清单派发，
+				// 结果 5 条 `*[]T,omitempty` 的键没人认领）。
+				name := jsonName[1]
+				if i := strings.IndexByte(name, ','); i >= 0 {
+					name = name[:i]
+				}
+				if name == "" || name == "-" {
+					continue
+				}
+				out = append(out, curPkg+"."+ts.Name.Name+"."+name)
 			}
 		}
 	}

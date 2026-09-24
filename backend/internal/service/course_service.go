@@ -19,7 +19,7 @@ import (
 
 // CoursePageResult 课程分页结果（学员端/管理端/导师端共用）。
 type CoursePageResult struct {
-	Courses []CourseDTO `json:"courses" nullability:"nullable"`
+	Courses []CourseDTO `json:"courses" nullability:"nonnil"`
 	Page    int         `json:"page"`
 	Pages   int         `json:"pages"`
 	Total   int64       `json:"total"`
@@ -53,15 +53,15 @@ type CourseDTO struct {
 	Name                  string             `json:"name"`
 	PointsPrice           *int               `json:"points_price,omitempty" extensions:"x-optional"`
 	PracticeHours         int                `json:"practice_hours"`
-	PrerequisiteCourseIDs *[]int             `json:"prerequisite_course_ids,omitempty" extensions:"x-optional" nullability:"nullable"`
-	Prerequisites         *[]CourseBriefDTO  `json:"prerequisites,omitempty" extensions:"x-optional" nullability:"nullable"`
+	PrerequisiteCourseIDs *[]int             `json:"prerequisite_course_ids,omitempty" extensions:"x-optional" nullability:"nonnil"`
+	Prerequisites         *[]CourseBriefDTO  `json:"prerequisites,omitempty" extensions:"x-optional" nullability:"nonnil"`
 	SortOrder             int                `json:"sort_order"`
 	Specialty             *SpecialtyBriefDTO `json:"specialty,omitempty" extensions:"x-optional"`
 	SpecialtyID           *int               `json:"specialty_id" extensions:"x-nullable"`
 	Status                int16              `json:"status"`
 	StudentCount          *int64             `json:"student_count,omitempty" extensions:"x-optional"`
 	TheoryHours           int                `json:"theory_hours"`
-	Chapters              *[]ChapterDTO      `json:"chapters,omitempty" extensions:"x-optional" nullability:"nullable"`
+	Chapters              *[]ChapterDTO      `json:"chapters,omitempty" extensions:"x-optional" nullability:"nonnil"`
 }
 
 // CredentialBriefDTO 目标证件简述（课程详情元数据）。
@@ -116,7 +116,7 @@ type ChapterDTO struct {
 	FileURL     string            `json:"file_url"`
 	OrderNum    int               `json:"order_num"`
 	Title       string            `json:"title"`
-	Files       *[]ChapterFileDTO `json:"files,omitempty" extensions:"x-optional" nullability:"nullable"`
+	Files       *[]ChapterFileDTO `json:"files,omitempty" extensions:"x-optional" nullability:"nonnil"`
 }
 
 // ChapterFileDTO 章节文件（chapter_file 表条目与旧版 chapter.file_url 兼容条目同构）。
@@ -133,7 +133,7 @@ type ChapterFileDTO struct {
 // ChapterDetailDTO 章节详情（含上下章 ID 与文件列表；study_status 仅学员端路径填充）。
 type ChapterDetailDTO struct {
 	ChapterDTO
-	Files             []ChapterFileDTO `json:"files" nullability:"nullable"`
+	Files             []ChapterFileDTO `json:"files" nullability:"nonnil"`
 	NextChapterID     *int             `json:"next_chapter_id" extensions:"x-nullable"`
 	PreviousChapterID *int             `json:"previous_chapter_id" extensions:"x-nullable"`
 	StudyStatus       string           `json:"study_status,omitempty" extensions:"x-optional"`
@@ -161,13 +161,13 @@ type CourseDetailDTO struct {
 // AdminCourseDetailDTO 管理端课程详情（course 字段平铺 + chapters）。
 type AdminCourseDetailDTO struct {
 	CourseDTO
-	Chapters []ChapterDTO `json:"chapters" nullability:"nullable"`
+	Chapters []ChapterDTO `json:"chapters" nullability:"nonnil"`
 }
 
 // TutorCourseChaptersDTO 导师端课程章节列表信封。
 type TutorCourseChaptersDTO struct {
 	Course   CourseDTO    `json:"course"`
-	Chapters []ChapterDTO `json:"chapters" nullability:"nullable"`
+	Chapters []ChapterDTO `json:"chapters" nullability:"nonnil"`
 }
 
 // ChapterSlidesDTO 章节幻灯片。
