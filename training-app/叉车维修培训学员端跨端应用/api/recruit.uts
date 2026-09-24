@@ -41,7 +41,7 @@ import { get, post, FORBIDDEN_MESSAGE_PREFIX } from './request'
 //    写错会在 ④a 编译期报 `找不到名称"API_BASE_URL"`（error18）—— 2026-09-20 编译门抓获。
 //    同款先例：`api/aiAssistant.uts:13`。
 import { API_BASE_URL } from '../config/env'
-import { toNumber, toNumberOrNull, toStr, errMsg } from './helpers'
+import { toBool, toNumber, toNumberOrNull, toStr, errMsg } from './helpers'
 import { STORAGE_KEY_TOKEN } from '../constants/app'
 import { getStorage } from '../utils/storage'
 import type { RequestOptions } from './request'
@@ -346,7 +346,10 @@ export function buildRecruitResumeCard(obj : UTSJSONObject) : RecruitResumeCard 
         contact_source: toStr(obj['contact_source']),
         // 与 `buildRecruitContactRequest` 里同一个键逐字同形（F1 锁钉住两处）：一个键折成两种形状
         // = 在暗示它们不等价。缺席即企业可用，不是「未知」——见类型注释。
-        company_disabled: (obj['company_disabled'] as boolean) ?? false,
+        // 空安全走 `toBool`：键缺席时 `obj[...]` 是 null，直接 `as boolean` 在 Kotlin 里先抛
+        // `NullPointerException: null cannot be cast to non-null type kotlin.Boolean`
+        // （`as` 先于 `??` 求值 ⇒ `?? false` 兜不到；#1267 真机 ①a 实测，同 `toNumberOrNull` 的教训）。
+        company_disabled: toBool(obj['company_disabled']),
     } as RecruitResumeCard
 }
 
@@ -361,8 +364,9 @@ export function buildRecruitContactRequest(obj : UTSJSONObject) : RecruitContact
         updated_at: toStr(obj['updated_at']),
         expires_at: toStr(obj['expires_at']),
         source: toStr(obj['source']),
-        // 缺席式可选键归一（同 `forced_offline` 的先例）：键不在 = 企业可用，不是「未知」
-        company_disabled: (obj['company_disabled'] as boolean) ?? false,
+        // 缺席式可选键归一（`toBool` 空安全，与 `buildRecruitResumeCard` 逐字同形、F1 锁钉住两处）：
+        // 键不在 = 企业可用，不是「未知」（`as boolean` 的 NPE 坑位见上一处注释）
+        company_disabled: toBool(obj['company_disabled']),
     } as RecruitContactRequest
 }
 

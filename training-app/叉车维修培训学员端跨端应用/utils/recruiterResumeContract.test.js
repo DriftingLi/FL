@@ -554,7 +554,7 @@ describe('F. 卡面 company_disabled：字段边界只认真值 + 详情页「�
     const cardType = recruitSrc.slice(typeStart, recruitSrc.indexOf('}', typeStart));
     expect(cardType).toMatch(/company_disabled\s*:\s*boolean/);
     // 映射面：缺席式键在**两处边界**逐字同一个归一形状（一个键折成两种形状 = 暗示它们不等价）
-    const norm = "company_disabled: (obj['company_disabled'] as boolean) ?? false,";
+    const norm = "company_disabled: toBool(obj['company_disabled']),";
     expect((recruitSrc.match(new RegExp(norm.replace(/[?*()|[\]{}\\]/g, '\\$&'), 'g')) || []).length).toBe(2);
     // 出现即真 ⇒ 不得写 `== false` 分支：那等于把「后端还没这个键」读成「企业可用」
     const mapStart = recruitSrc.indexOf('export function buildRecruitResumeCard(');

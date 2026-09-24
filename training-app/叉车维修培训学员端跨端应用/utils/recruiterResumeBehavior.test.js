@@ -80,6 +80,14 @@ function loadRecruit(reply = {}) {
     toNumber: (v, d = 0) => (v == null ? d : (Number.isNaN(parseFloat(`${v}`)) ? d : parseFloat(`${v}`))),
     toNumberOrNull: (v) => (v == null ? null : (Number.isNaN(parseFloat(`${v}`)) ? null : parseFloat(`${v}`))),
     toStr: (v, d = '') => (v == null ? d : `${v}`),
+    // 与 `api/helpers.uts` 的 `toBool` 逐字同语义（缺席式键的空安全读取，#1267 真机 ①a 实测的 NPE 修复）
+    toBool: (v, d = false) => {
+      if (v == null) return d;
+      const s = `${v}`.toLowerCase();
+      if (s === 'true' || s === '1') return true;
+      if (s === 'false' || s === '0') return false;
+      return d;
+    },
     errMsg: (e, fallback) => (e instanceof Error && e.message ? e.message : fallback),
     STORAGE_KEY_TOKEN: 'auth_token',
     getStorage: () => 'recruiter-access-token',
