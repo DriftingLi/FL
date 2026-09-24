@@ -50,14 +50,14 @@ func (s *AdminCourseService) GetCourseDetail(courseID int) (*AdminCourseDetailDT
 // 目标证件为可选（V1 兼容存量，未来收紧为必填），若携带则校验存在性。
 func (s *AdminCourseService) CreateCourse(in *CourseInput) (*CourseDTO, error) {
 	if in == nil || in.Name == nil || *in.Name == "" {
-		return nil, errors.New("课程名称不能为空")
+		return nil, ErrCourseNameRequired
 	}
 	// 挂载不变式：创建必填方向与等级
 	if in.SpecialtyID == nil || *in.SpecialtyID <= 0 {
-		return nil, errors.New("专业方向不能为空")
+		return nil, ErrSpecialtyRequired
 	}
 	if in.LevelID == nil || *in.LevelID <= 0 {
-		return nil, errors.New("课程等级不能为空")
+		return nil, ErrCourseLevelRequired
 	}
 	status := int16(1)
 	if in.Status != nil {
@@ -101,7 +101,10 @@ func (s *AdminCourseService) CreateCourse(in *CourseInput) (*CourseDTO, error) {
 func (s *AdminCourseService) UpdateCourse(courseID int, in *CourseInput) (*CourseDTO, error) {
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
-		return nil, errors.New("课程不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrCourseNotFound
+		}
+		return nil, err // 查不动不得被读成「不存在」（ADR-0062 票6 / ADR-0064 决策 1）
 	}
 	if in == nil {
 		in = &CourseInput{}
@@ -142,20 +145,37 @@ func (s *AdminCourseService) UpdateCourse(courseID int, in *CourseInput) (*Cours
 	return &result, nil
 }
 
+// 交换排序的三件课程侧输入事实（ADR-0065 决策 3）。此前它们是裸 errors.New ⇒ 落在
+// 端点默认面 400，与「查不动」「待交换的项不存在」挤成同一格；现在各自有名，两面共用一张表。
+var (
+	ErrCourseNotMountedForSort = errors.New("未挂载方向/等级的课程不能参与排序")
+	ErrCourseSortGroupMismatch = errors.New("只能交换同一方向+等级组内的课程")
+	// ErrCourseSwapTargetNotFound 指 body 里 `swap_with` 指向的那门课不存在 —— 与「路径里那门课
+	// 不存在」（ErrCourseNotFound ⇒ 404）是两件事实。改之前两次 First 都回同一个哨兵，于是
+	// 「你要换的东西没有」对外答 404「课程不存在」，与前置课程那一支的 400 也不一致（ADR-0065 决策 3）。
+	ErrCourseSwapTargetNotFound = errors.New("待交换的课程不存在")
+)
+
 // SwapCourseSort 交换两门课程的排序位置（限制在同一方向+等级组内，真实生效含同值默认）。
 func (s *AdminCourseService) SwapCourseSort(a, b int) error {
 	var ca, cb model.Course
 	if err := s.db.First(&ca, a).Error; err != nil {
-		return errors.New("课程不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrCourseNotFound
+		}
+		return err // 查不动不得被读成「不存在」（ADR-0062 票6 / ADR-0064 决策 1）
 	}
 	if err := s.db.First(&cb, b).Error; err != nil {
-		return errors.New("课程不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrCourseSwapTargetNotFound // 坏引用是输入不合法(400)，不是「路径资源没有」(404)
+		}
+		return err // 查不动不得被读成「不存在」（ADR-0062 票6 / ADR-0064 决策 1）
 	}
 	if !CourseMounted(ca.SpecialtyID, ca.LevelID) || !CourseMounted(cb.SpecialtyID, cb.LevelID) {
-		return errors.New("未挂载方向/等级的课程不能参与排序")
+		return ErrCourseNotMountedForSort
 	}
 	if *ca.SpecialtyID != *cb.SpecialtyID || *ca.LevelID != *cb.LevelID {
-		return errors.New("只能交换同一方向+等级组内的课程")
+		return ErrCourseSortGroupMismatch
 	}
 	return swapGroupPositions(s.db, &model.Course{}, "course_id", a, b,
 		map[string]any{"specialty_id": *ca.SpecialtyID, "level_id": *ca.LevelID})
@@ -165,7 +185,10 @@ func (s *AdminCourseService) SwapCourseSort(a, b int) error {
 func (s *AdminCourseService) DeleteCourse(courseID int) (*DeleteCourseResult, error) {
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
-		return nil, errors.New("课程不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrCourseNotFound
+		}
+		return nil, err // 查不动不得被读成「不存在」（ADR-0062 票6 / ADR-0064 决策 1）
 	}
 	if err := s.db.Delete(&course).Error; err != nil {
 		return nil, err
@@ -177,7 +200,10 @@ func (s *AdminCourseService) DeleteCourse(courseID int) (*DeleteCourseResult, er
 func (s *AdminCourseService) CreateChapter(courseID int, in *ChapterInput) (*ChapterDTO, error) {
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
-		return nil, errors.New("课程不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrCourseNotFound
+		}
+		return nil, err // 查不动不得被读成「不存在」（ADR-0062 票6 / ADR-0064 决策 1）
 	}
 	if in == nil || in.Title == nil || *in.Title == "" {
 		return nil, errors.New("章节标题不能为空")
@@ -210,7 +236,10 @@ func (s *AdminCourseService) CreateChapter(courseID int, in *ChapterInput) (*Cha
 func (s *AdminCourseService) UpdateChapter(chapterID int, in *ChapterInput) (*ChapterDTO, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
-		return nil, errors.New("章节不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrChapterNotFound
+		}
+		return nil, err // 查不动不得被读成「不存在」（ADR-0062 票6 / ADR-0064 决策 1）
 	}
 	if in == nil {
 		in = &ChapterInput{}
@@ -239,7 +268,10 @@ func (s *AdminCourseService) UpdateChapter(chapterID int, in *ChapterInput) (*Ch
 func (s *AdminCourseService) DeleteChapter(chapterID int) (*DeleteChapterResult, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
-		return nil, errors.New("章节不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrChapterNotFound
+		}
+		return nil, err // 查不动不得被读成「不存在」（ADR-0062 票6 / ADR-0064 决策 1）
 	}
 	if err := s.db.Delete(&chapter).Error; err != nil {
 		return nil, err

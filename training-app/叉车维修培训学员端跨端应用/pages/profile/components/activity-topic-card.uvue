@@ -2,7 +2,7 @@
   <view class="topic-card" @click="onCardTap">
     <text v-if="refHeader" class="reply-ref-title">回复了 {{ title }}</text>
     <text v-else class="topic-title">{{ title }}</text>
-    <text v-if="hasContent" class="topic-preview">{{ contentPreview(content) }}</text>
+    <text v-if="hasContent" class="topic-preview">{{ contentPreview(content, contentFormat) }}</text>
     <view class="topic-footer">
       <view v-if="showStats" class="topic-stats">
         <text class="stat-text">{{ likesCount }} 赞</text>
@@ -23,6 +23,7 @@
   // —— 它们当时的唯一消费方就是那一格。收藏条目的类型标签由 `pages/profile/favorites.uvue`
   // 的 `getTypeLabel()` 独任，本卡不再承担。
   import { formatDateStr } from '../../../utils/format'
+  import { getContentPreview } from '../../../utils/forumDisplay'
 
   const props = withDefaults(defineProps<{
     title?: string
@@ -33,6 +34,7 @@
     showStats?: boolean
     refHeader?: boolean
     hasContent?: boolean
+    contentFormat?: string // 正文格式轴（#1273；空串与非 markdown 都按纯文本投影）
   }>(), {
     title: '',
     content: '',
@@ -41,7 +43,8 @@
     repliesCount: 0,
     showStats: false,
     refHeader: false,
-    hasContent: false
+    hasContent: false,
+    contentFormat: ''
   })
 
   const emit = defineEmits(['tap'])
@@ -52,10 +55,13 @@
     return formatDateStr(dateStr)
   }
 
-  function contentPreview(text : string) : string {
-    const single = text.replace('\n', ' ')
-    if (single.length <= 80) return single
-    return single.substring(0, 80) + '...'
+  /**
+   * 摘要：本地薄包装，转发到唯一实现 `utils/forumDisplay.getContentPreview`（#1273）。
+   * 原先这里是它的**逐字副本**（第三处实现，且不看格式）⇒ 已删（T03 口径：展示纯函数零第二实现）。
+   * Markdown 帖因此与广场 / 知识问答 / 我的帖子同口径**剥成纯文本**（根 ADR-0044）。
+   */
+  function contentPreview(text : string, format : string) : string {
+    return getContentPreview(text, format)
   }
 
   function onCardTap() : void {

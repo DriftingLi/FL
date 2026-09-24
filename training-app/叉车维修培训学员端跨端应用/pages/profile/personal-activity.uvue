@@ -29,7 +29,7 @@
                     </view>
                 </view>
                 <view class="list-section">
-                    <ActivityTopicCard v-for="(item, idx) in topics" :key="idx" :title="item.title" :content="item.content" :has-content="true"
+                    <ActivityTopicCard v-for="(item, idx) in topics" :key="idx" :title="item.title" :content="item.content" :content-format="item.content_format" :has-content="true"
                         :likes-count="item.likes_count" :replies-count="item.replies_count" :created-date="item.created_at" :show-stats="true" @tap="onTopicClick(item.id)" />
                 </view>
             </view>
@@ -42,7 +42,7 @@
                     <text class="empty-hint">还没有点赞过帖子</text>
                 </view>
                 <view class="list-section">
-                    <ActivityTopicCard v-for="(item, idx) in likedTopics" :key="idx" :title="item.title" :content="item.content" :has-content="true"
+                    <ActivityTopicCard v-for="(item, idx) in likedTopics" :key="idx" :title="item.title" :content="item.content" :content-format="item.content_format" :has-content="true"
                         :created-date="item.created_at" @tap="onTopicClick(item.id)" />
                 </view>
             </view>
@@ -55,7 +55,7 @@
                         <text class="empty-hint">还没有提出过疑问</text>
                     </view>
                     <view class="list-section">
-                        <ActivityTopicCard v-for="(item, idx) in myQuestions" :key="idx" :title="item.topic_title" :content="item.content" :has-content="true"
+                        <ActivityTopicCard v-for="(item, idx) in myQuestions" :key="idx" :title="item.topic_title" :content="item.content" :content-format="item.content_format" :has-content="true"
                             :created-date="item.created_at" @tap="onTopicClick(item.topic_id)" />
                     </view>
                 </view>
@@ -65,7 +65,7 @@
                         <text class="empty-hint">还没有回复过帖子</text>
                     </view>
                     <view class="list-section">
-                        <ActivityTopicCard v-for="(item, idx) in myReplies" :key="idx" :title="item.topic_title" :content="item.content" :has-content="true" :ref-header="true"
+                        <ActivityTopicCard v-for="(item, idx) in myReplies" :key="idx" :title="item.topic_title" :content="item.content" :content-format="item.content_format" :has-content="true" :ref-header="true"
                             :created-date="item.created_at" @tap="onTopicClick(item.topic_id)" />
                     </view>
                 </view>
@@ -75,7 +75,7 @@
                         <text class="empty-hint">还没有围观过帖子</text>
                     </view>
                     <view class="list-section">
-                        <ActivityTopicCard v-for="(item, idx) in observedTopics" :key="idx" :title="item.title" :content="item.content" :has-content="true"
+                        <ActivityTopicCard v-for="(item, idx) in observedTopics" :key="idx" :title="item.title" :content="item.content" :content-format="item.content_format" :has-content="true"
                             :created-date="item.created_at" @tap="onTopicClick(item.id)" />
                     </view>
                 </view>
@@ -87,7 +87,7 @@
                     <text class="empty-hint">还没有浏览记录</text>
                 </view>
                 <view class="list-section">
-                    <ActivityTopicCard v-for="(item, idx) in viewHistory" :key="idx" :title="item.title" :content="item.content" :has-content="true"
+                    <ActivityTopicCard v-for="(item, idx) in viewHistory" :key="idx" :title="item.title" :content="item.content" :content-format="item.content_format" :has-content="true"
                         :created-date="item.created_at" @tap="onTopicClick(item.id)" />
                 </view>
             </view>

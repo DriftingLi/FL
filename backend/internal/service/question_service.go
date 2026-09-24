@@ -615,7 +615,7 @@ func (s *QuestionBankService) DeleteQuestion(id int) error {
 type QuestionPageDTO struct {
 	Page      int           `json:"page"`
 	PageSize  int           `json:"page_size"`
-	Questions []QuestionDTO `json:"questions"`
+	Questions []QuestionDTO `json:"questions" nullability:"nonnil"`
 	Total     int64         `json:"total"`
 }
 
@@ -629,7 +629,7 @@ type QuestionImportErrorDTO struct {
 // Errors 用非 nil 空切片初始化，保证无失败时序列化为 []（与旧 map 的 []map[string]any{} 同形）。
 type QuestionImportResultDTO struct {
 	ErrorCount   int                      `json:"error_count"`
-	Errors       []QuestionImportErrorDTO `json:"errors"`
+	Errors       []QuestionImportErrorDTO `json:"errors" nullability:"nonnil"`
 	SuccessCount int                      `json:"success_count"`
 }
 
@@ -648,11 +648,15 @@ type QuestionRejectResultDTO struct {
 	RejectedCount int `json:"rejected_count"`
 }
 
-// ListQuestions 题目列表**编辑面**（题库作者 / 审核者）：draft / pending 都在射程内、
-// 不排源标记真题题，status 由调用方按需筛——这些正是审核队列与题目管理页的本职。
-// 编辑面 scope 必传（ADR-0062 决策 4）：证件轴是筛选而非可见性，形态与学员面不同名、不可互换。
-// 学员侧列表走 ListPoolQuestions（同一入口按能力分流，见 api/question_bank.go）。
-func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, status, keyword string, tagID *int, scope QuestionEditScope, sortBy string) (*QuestionPageDTO, error) {
+// listQuestions 两条列表路径的**一份实现**（ADR-0064 决策 6 / D6）。
+//
+// 之前两个方法各写一遍同样的排序口径与四条筛选轴 ⇒ 改一处忘一处（本仓「同一事实两份实现」
+// 的原始案例之一）。收成一份后，两轴的差异只剩两个入参：窄化谓词（scope）与 status。
+//
+// 为什么不把两个公开入口也合并成一个：「池的已发布不可被入参绕开」这道锁靠的是**签名差异**
+// ——学员面不收 status、编辑面收 QuestionEditScope（ADR-0062 决策 4）。合并入口就是把那道锁拆了。
+func (s *QuestionBankService) listQuestions(page, pageSize int, qType, status, keyword string, tagID *int,
+	narrow func(*gorm.DB) *gorm.DB, sortBy string) (*QuestionPageDTO, error) {
 	// 排序口径（#412）：缺省保持现状「最新提交优先」（created_at DESC, id ASC）；
 	// 讲师端显式传 id_asc 请求按 ID 升序，翻页时 ID 单调推进、不再呈锯齿跳回。
 	// #1096：排序位由变参改显式命名参数（空串 = 缺省口径）。
@@ -673,7 +677,7 @@ func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, st
 		if tagID != nil {
 			q = q.Where("id IN (SELECT question_id FROM question_tag_relation WHERE tag_id = ?)", *tagID)
 		}
-		return scope.ApplyListFilter(q)
+		return narrow(q)
 	})
 	if err != nil {
 		return nil, err
@@ -681,32 +685,20 @@ func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, st
 	return s.questionPage(list, page, pageSize, total), nil
 }
 
+// ListQuestions 题目列表**编辑面**（题库作者 / 审核者）：draft / pending 都在射程内、
+// 不排源标记真题题，status 由调用方按需筛——这些正是审核队列与题目管理页的本职。
+// 编辑面 scope 必传（ADR-0062 决策 4）：证件轴是筛选而非可见性，形态与学员面不同名、不可互换。
+// 学员侧列表走 ListPoolQuestions（同一入口按能力分流，见 api/question_bank.go）。
+func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, status, keyword string, tagID *int, scope QuestionEditScope, sortBy string) (*QuestionPageDTO, error) {
+	return s.listQuestions(page, pageSize, qType, status, keyword, tagID, scope.ApplyListFilter, sortBy)
+}
+
 // ListPoolQuestions 题目列表**学员面**（ADR-0062 决策 4）：池口径由 scope 承载，
 // 因此这里既没有 status 入参（池的「已发布」不在入参里可被绕开），也不接受裸证件。
 // 出口 DTO 形态与按 id 直取的学员面一致（含答案/解析——池内的题本就可以作答并看到解析），
 // 差异只在行集：draft / pending / 源标记真题题 / 非当前证件一律不出现在结果里。
 func (s *QuestionBankService) ListPoolQuestions(page, pageSize int, qType, keyword string, tagID *int, scope QuestionReadScope, sortBy string) (*QuestionPageDTO, error) {
-	order := "created_at DESC, id ASC"
-	if sortBy == "id_asc" {
-		order = "id ASC"
-	}
-	list, total, page, pageSize, err := paging.Query[model.Question](s.db, page, pageSize, 20, order, func(q *gorm.DB) *gorm.DB {
-		q = scope.Apply(q)
-		if qType != "" {
-			q = q.Where("type = ?", qType)
-		}
-		if keyword != "" {
-			q = q.Where("content LIKE ?", "%"+keyword+"%")
-		}
-		if tagID != nil {
-			q = q.Where("id IN (SELECT question_id FROM question_tag_relation WHERE tag_id = ?)", *tagID)
-		}
-		return q
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.questionPage(list, page, pageSize, total), nil
+	return s.listQuestions(page, pageSize, qType, "", keyword, tagID, scope.Apply, sortBy)
 }
 
 // questionPage 题目分页信封装配（两条列表路径共用：DTO 出口与标签批量附加只有一处实现）。

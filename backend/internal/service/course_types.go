@@ -45,8 +45,8 @@ type DeleteChapterResult struct {
 // GradingStatsDTO 阅卷统计（原 GetGradingStats map 的 typed 形态）。
 type GradingStatsDTO struct {
 	Days       int      `json:"days"`
-	Labels     []string `json:"labels"`
-	Data       []int64  `json:"data"`
+	Labels     []string `json:"labels" nullability:"nullable"`
+	Data       []int64  `json:"data" nullability:"nullable"`
 	TotalCount int64    `json:"total_count"`
 	ActiveDays int      `json:"active_days"`
 }
@@ -61,7 +61,7 @@ type DeleteFileResult struct {
 type BatchDeleteFilesResult struct {
 	SuccessCount int   `json:"success_count"`
 	FailedCount  int   `json:"failed_count"`
-	FailedIDs    []int `json:"failed_ids"`
+	FailedIDs    []int `json:"failed_ids" nullability:"nullable"`
 }
 
 // ptrStr 字符串指针辅助（测试与内部调用构造 typed 输入用）。

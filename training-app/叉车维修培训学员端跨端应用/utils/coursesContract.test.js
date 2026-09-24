@@ -240,8 +240,11 @@ describe('域 api 收紧（T08 / ADR-0007）：DTO 函数经 mapper-callback 出
   });
 
   it('api 层静默回退计数与术前一致（本票按删除禁区不退役 mock 回退）', () => {
-    // 5 处：courses 列表 / catalog 专业方向 / levels / 课程详情 / 章节详情（getTagsApi 本就无回退）
-    expect((src.match(/\.catch\(/g) || []).length).toBe(5);
+    // 4 处：courses 列表 / catalog 专业方向 / levels / 课程详情（getTagsApi 本就无回退）
+    // 第 5 处「章节详情」由 #1268 **主动摘除**（不是漏登记）：它折掉的不是 mock 而是 `chapter_id:0`
+    // 空详情，正是「把未解锁误报成加载失败」的成因。判据见 `utils/chapterNotFoundBehavior.test.js` 的 A1/C3。
+    expect((src.match(/\.catch\(/g) || []).length).toBe(4);
+    expect(fnBody(src, 'export function getChapterDetailApi')).not.toContain('.catch');
     // T02 试点锁定的那条回退保持原样（mallPilotContract 亦钉此点）
     expect(fnBody(src, 'export function getCourseListApi')).toContain('getMockCourseList()');
   });

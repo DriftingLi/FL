@@ -679,14 +679,14 @@ func (s *VerifyCodeService) ResetPasswordWithCode(ctx context.Context, ch CodeCh
 	if err != nil {
 		return errors.New("该" + ch.Noun() + "尚未注册")
 	}
-	revokeErr, err := s.authSvc.SetNewPassword(ctx, user.ID, password)
-	if err != nil {
-		return err
+	res := s.authSvc.SetNewPassword(ctx, user.ID, password)
+	if !res.Applied() {
+		return res.Err
 	}
 	// 尽力而为族（与改密同族、与注销族有意不同）：口令已生效且不可回退，吊销标记写失败
 	// 只记日志暴露缺口——为吊销失败而拒绝落口令会让 Redis 抖动时用户找不回账号。
-	if revokeErr != nil {
-		s.logger.Warn("重置口令后 refresh 吊销标记写入失败", zap.Int("user_id", user.ID), zap.Error(revokeErr))
+	if res.RevokeErr != nil {
+		s.logger.Warn("重置口令后 refresh 吊销标记写入失败", zap.Int("user_id", user.ID), zap.Error(res.RevokeErr))
 	}
 	return nil
 }

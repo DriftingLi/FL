@@ -48,3 +48,35 @@ export function forumContentBlocks(content : string, format : string) : Markdown
     if (!isMarkdownFormat(format)) return empty
     return parseMarkdown(content, SUBSET_FORUM)
 }
+
+/**
+ * 正文的**纯文本投影**：格式轴的第二条消费路径（列表摘要 —— 只要文字、不要记号）。
+ *
+ * - `text` 档 ⇒ **原样返回**（零回归：存量帖的预览一个字节都不变）；
+ * - `markdown` 档 ⇒ 取 {@link forumContentBlocks} 的**块投影**：每块优先用它的 `text`
+ *   （heading / paragraph / quote / code 都已是解析器算好的纯文本），`text` 为空的块
+ *   （list）退到 `items` 拼接，divider 两者都空 ⇒ 自然不贡献字符；块间以空格相连。
+ *
+ * **为什么投影走解析器而不写正则**（根 `ADR-0044` 原话）：「剥离走与渲染同一个解析器的 AST 投影，
+ * 不写正则 —— 正则与渲染器是两套规则，代码块内的符号、转义、嵌套标记都会与真实渲染不一致」。
+ * 附带两个结果：① 预览与详情页正文**同源**（同一条格式轴、同一份成员声明表）；② 论坛档将来加成员
+ * （例如把 `table` 收进来）预览**自动跟上**，不会多出第二处同步点 —— 故这里按**块形状**投影，
+ * 不再抄一遍 `block.type == '…'` 的分支（那是渲染组件的词汇表，抄过来就是第二处事实）。
+ *
+ * 论坛档不声明 `table` / `image` ⇒ 表格退回逐行原文（`|` 仍在、内容不丢）、`![alt](url)` 展开成
+ * alt —— 与详情页正文同口径（「降级仍可读」的段落地板在承重，见 `utils/markdown.uts` 的 `MEMBER_*`）。
+ *
+ * @param content 正文原文（后端 `content` 字段，未做任何预处理）
+ * @param format  `content_format` 归一后的取值（`markdown` / `text`）
+ */
+export function forumContentPlainText(content : string, format : string) : string {
+    if (!isMarkdownFormat(format)) return content
+    const blocks = forumContentBlocks(content, format)
+    const pieces : string[] = []
+    for (let i = 0; i < blocks.length; i++) {
+        const block = blocks[i]
+        const piece = block.text.length > 0 ? block.text : block.items.join(' ')
+        if (piece.length > 0) pieces.push(piece)
+    }
+    return pieces.join(' ')
+}

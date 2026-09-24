@@ -1,0 +1,308 @@
+# logcat · PR #1292 ①a 取证窗口（不清缓冲：设备与并发会话共用 logcat，`logcat -c` 会抹掉别人的崩溃输出）
+# 取法：adb shell logcat -d -v epoch（一次全量 dump），按**设备自己的**时间戳收窄到窗口
+# 窗口 = 部署完成（HX_RUN_DEPLOY 之后 app 新进程 pid=18178 起来）→ 最后一张取证图：1790136012 → 1790136205（约 193 秒）
+#
+# 实数（不写「E = 0」）：窗口内解析出 74099 行；E 级 428 行；app 进程（pid 18178）248 行，其中 E 级 96 行
+# app 进程 E 级逐条形态（去重计数）：
+#   30×  .dcloud.uniappx: No package ID XX found for resource ID 0x….
+#   13×  UniDomManager: batch--start--------
+#   4×  UniDomManager: layoutUpdateRecursive--耗时：1
+#   4×  UniDomManager: layoutUpdateRecursive--耗时：0
+#   3×  UniDomManager: flushPendingBatches--tiem=2 task size=10
+#   2×  UniDomManager: batch----time=1
+#   2×  UniDomManager: layoutUpdateRecursive--耗时：2
+#   2×  UniDomManager: batch--start-----midd---2
+#   2×  UniDomManager: layoutUpdateRecursive--耗时：4
+#   2×  UniDomManager: batch--start-----midd---35
+#   2×  UniDomManager: batch--start-----midd---3
+#   1×  UniDomManager: batch--start-----midd---0
+#   1×  UniDomManager: flushPendingBatches--tiem=10 task size=2
+#   1×  UniDomManager: batch--start-----midd---79
+#   1×  UniDomManager: batch----time=81
+#   1×  UniDomManager: flushPendingBatches--tiem=32 task size=160
+#   1×  UniDomManager: batch----time=3
+#   1×  UniDomManager: flushPendingBatches--tiem=2 task size=14
+#   1×  UniDomManager: batch--start-----midd---112
+#   1×  UniDomManager: batch----time=116
+#   1×  UniDomManager: flushPendingBatches--tiem=66 task size=300
+#   1×  UniDomManager: batch----time=36
+#   1×  UniDomManager: flushPendingBatches--tiem=14 task size=85
+#   1×  UniDomManager: batch----time=2
+#   1×  UniDomManager: flushPendingBatches--tiem=3 task size=14
+#   1×  UniDomManager: batch--start-----midd---25
+#   1×  UniDomManager: batch----time=26
+#   1×  UniDomManager: flushPendingBatches--tiem=9 task size=55
+#   1×  UniDomManager: batch--start-----midd---1
+#   1×  UniDomManager: flushPendingBatches--tiem=2 task size=6
+#   1×  UniDomManager: batch--start-----midd---4
+#   1×  UniDomManager: batch----time=5
+#   1×  UniDomManager: batch----time=4
+#   1×  UniDomManager: flushPendingBatches--tiem=1 task size=46
+#   1×  UniDomManager: batch--start-----midd---135
+#   1×  UniDomManager: batch----time=139
+#   1×  UniDomManager: flushPendingBatches--tiem=63 task size=430
+#   1×  UniDomManager: layoutUpdateRecursive--耗时：3
+#   1×  UniDomManager: batch----time=6
+#   1×  UniDomManager: batch----time=37
+#   1×  UniDomManager: flushPendingBatches--tiem=24 task size=202
+# 命中本次改动关键词（forum|markdown|content_format|plain|Topic）的 app 行数 = 19（其中 console 的 [request]/[getForumTopicsApi] 载荷行属**既存请求日志**，非报错）
+# 窗口内 FATAL / AndroidRuntime 崩溃 / NoSuchMethod / uni-app 侧 error：0 条（AndroidRuntime 那几条是本会话自己跑 uiautomator 的进程初始化日志）
+#
+# ---- app 进程（pid 18178）全部 248 行 ----
+1790136015.453 18178 18178 E .dcloud.uniappx: No package ID 8f found for resource ID 0x8fd3110f.
+1790136015.456 18178 18178 E .dcloud.uniappx: No package ID d4 found for resource ID 0xd4f5e73e.
+1790136015.462 18178 18178 E .dcloud.uniappx: No package ID 96 found for resource ID 0x96481451.
+1790136015.464 18178 18178 E .dcloud.uniappx: No package ID c4 found for resource ID 0xc4a60682.
+1790136033.678 18178 24685 I console : [LOG]---BEGIN:CONSOLE---[{"type":"string","value":"[request] >>>"},{"type":"string","value":"GET"},{"type":"string","value":"https://www.gccsmile.com/api/notifications/unread-count"},{"type":"string","value":"data:"},{"type":"null","value":"null"},{"type":"string","value":" at api/request.uts:332"}]---END:CONSOLE---
+1790136033.711 18178 24924 D TrafficStats: tagSocket(139) with statsTag=0xffffffff, statsUid=-1
+1790136033.759 18178 24685 I console : [LOG]---BEGIN:CONSOLE---[{"type":"string","value":"[request] <<<"},{"type":"number","subType":"number","value":"200"},{"type":"string","value":"https://www.gccsmile.com/api/notifications/unread-count"},{"type":"string","value":" at api/request.uts:411"}]---END:CONSOLE---
+1790136034.059 18178 18178 I MIUIInput: [MotionEvent] ViewRootImpl windowName 'io.dcloud.uniappx/io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity', { action=ACTION_DOWN, id[0]=0, pointerCount=1, eventTime=420634069, downTime=420634069, phoneEventTime=12:00:34.038 } moveCount:0
+1790136034.067 18178 18178 D VRI[UniPortraitPageActivity]: getMiuiFreeformStackInfo mTmpFrames.miuiFreeFormStackInfo: null
+1790136034.070 18178 18178 I MIUIInput: [MotionEvent] ViewRootImpl windowName 'io.dcloud.uniappx/io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity', { action=ACTION_UP, id[0]=0, pointerCount=1, eventTime=420634069, downTime=420634069, phoneEventTime=12:00:34.038 } moveCount:0
+1790136034.147 18178 18178 E UniDomManager: batch--start--------
+1790136034.147 18178 18178 E UniDomManager: batch--start-----midd---0
+1790136034.148 18178 18178 E UniDomManager: layoutUpdateRecursive--耗时：1
+1790136034.148 18178 18178 E UniDomManager: batch----time=1
+1790136034.158 18178 18178 E UniDomManager: flushPendingBatches--tiem=10 task size=2
+1790136034.168 18178 24685 I console : [LOG]---BEGIN:CONSOLE---[{"type":"string","value":"[request] >>>"},{"type":"string","value":"GET"},{"type":"string","value":"https://www.gccsmile.com/api/notifications/unread-count"},{"type":"string","value":"data:"},{"type":"null","value":"null"},{"type":"string","value":" at api/request.uts:332"}]---END:CONSOLE---
+1790136034.179 18178 24685 I console : [LOG]---BEGIN:CONSOLE---[{"type":"string","value":"[request] >>>"},{"type":"string","value":"GET"},{"type":"string","value":"https://www.gccsmile.com/api/check-in/calendar?year=2026&month=9"},{"type":"string","value":"data:"},{"type":"null","value":"null"},{"type":"string","value":" at api/request.uts:332"}]---END:CONSOLE---
+1790136034.183 18178 24936 D TrafficStats: tagSocket(166) with statsTag=0xffffffff, statsUid=-1
+1790136034.183 18178 24937 D TrafficStats: tagSocket(194) with statsTag=0xffffffff, statsUid=-1
+1790136034.184 18178 24685 I console : [LOG]---BEGIN:CONSOLE---[{"type":"string","value":"[request] >>>"},{"type":"string","value":"GET"},{"type":"string","value":"https://www.gccsmile.com/api/forum/topics?scope=general&sort=latest&order=desc&page=1&page_size=10&category=discussion"},{"type":"string","value":"data:"},{"type":"null","value":"null"},{"type":"string","value":" at api/request.uts:332"}]---END:CONSOLE---
+1790136034.186 18178 18178 E UniDomManager: batch--start--------
+1790136034.187 18178 24938 D TrafficStats: tagSocket(207) with statsTag=0xffffffff, statsUid=-1
+1790136034.265 18178 18178 E UniDomManager: batch--start-----midd---79
+1790136034.267 18178 18178 E UniDomManager: layoutUpdateRecursive--耗时：2
+1790136034.267 18178 18178 E UniDomManager: batch----time=81
+1790136034.272 18178 18178 D ScrollerOptimizationManager: registerConfigChangedListener
+1790136034.277 18178 18178 D UniBoxShadowUtil: Allocation memory for box-shadow: 22 KB
+1790136034.277 18178 18178 D UniBoxShadowOptions: Scaled BoxShadowOptions: [0.4] BoxShadowOptions{h-shadow=0.0, v-shadow=4.4, blur=8.8, spread=0.0, corner-radius=[27.648,27.648,27.648,27.648], color=#0000004c, inset=false}
+1790136034.299 18178 18178 E UniDomManager: flushPendingBatches--tiem=32 task size=160
+1790136034.305 18178 18178 E UniDomManager: batch--start--------
+1790136034.307 18178 18178 E UniDomManager: batch--start-----midd---2
+1790136034.307 18178 18178 E UniDomManager: layoutUpdateRecursive--耗时：0
+1790136034.308 18178 18178 E UniDomManager: batch----time=3
+1790136034.310 18178 18178 E UniDomManager: flushPendingBatches--tiem=2 task size=14
+1790136034.357 18178 24685 I console : [LOG]---BEGIN:CONSOLE---[{"type":"string","value":"[request] <<<"},{"type":"number","subType":"number","value":"200"},{"type":"string","value":"https://www.gccsmile.com/api/notifications/unread-count"},{"type":"string","value":" at api/request.uts:411"}]---END:CONSOLE---
+1790136034.358 18178 24685 I console : [LOG]---BEGIN:CONSOLE---[{"type":"string","value":"[request] <<<"},{"type":"number","subType":"number","value":"200"},{"type":"string","value":"https://www.gccsmile.com/api/check-in/calendar?year=2026&month=9"},{"type":"string","value":" at api/request.uts:411"}]---END:CONSOLE---
+1790136034.358 18178 24685 I console : [LOG]---BEGIN:CONSOLE---[{"type":"string","value":"[request] <<<"},{"type":"number","subType":"number","value":"200"},{"type":"string","value":"https://www.gccsmile.com/api/forum/topics?scope=general&sort=latest&order=desc&page=1&page_size=10&category=discussion"},{"type":"string","value":" at api/request.uts:411"}]---END:CONSOLE---
+1790136034.359 18178 24685 I console : [LOG]---BEGIN:CONSOLE---{"type":"string","value":"进入页面:​/pages/forum/forum​ 。[{\"创建dom元素个数\":\"54个\",\"耗时\":\"44ms\"},{\"排版\":\"2次\",\"耗时\":\"84ms\"},{\"渲染\":\"2次\",\"耗时\":\"34ms\"},{\"跳转页面到onReady总耗时\":\"272ms\"}]"}---END:CONSOLE---
+1790136034.369 18178 24685 I console : [LOG][___Connect_-730742862___]---BEGIN:CONSOLE---[{"type":"string","value":"[getForumTopicsApi] raw data:"},{"type":"string","value":"{\"page\":1,\"pages\":1,\"topics\":[{\"id\":59,\"chapter_id\":null,\"category\":\"discussion\",\"chapter_title\":\"\",\"title\":\"测试摄影拍照功能\",\"content\":\"### 拍照摄影\",\"content_format\":\"markdown\",\"images\":[\"https://www.gccsmile.com/images/forum/1790052147642_ev3_1790052148465.webp\",\"https://www.gccsmile.com/images/forum/1790052160212_1790052168825.jpg\"],\"ip_province\":\"广东省\",\"ip_city\":\"广州市\",\"view_count\":0,\"reply_count\":0,\"last_reply_at\":null,\"created_at\":\"2026-09-22T12:43:13.689969+08:00\",\"author\":{\"user_id\":8,\"username\":\"张三\",\"avatar_url\":\"\"},\"can_delete\":false,\"likes_count\":0,\"liked_by_me\":false,\"is_featured\":false,\"is_experience\":false,\"reward_issued\":false},{\"id\":58,\"chapter_id\":null,\"category\":\"discussion\",\"chapter_title\":\"\",\"title\":\"1\",\"content\":\"1\",\"content_format\":\"text\",\"images\":[],\"ip_province\":\"广东省
+1790136034.370 18178 24685 I console : [LOG][___Connect_-730742862___]\",\"ip_city\":\"广州市\",\"view_count\":1,\"reply_count\":0,\"last_reply_at\":null,\"created_at\":\"2026-09-17T11:03:43.406989+08:00\",\"author\":{\"user_id\":8,\"username\":\"张三\",\"avatar_url\":\"\"},\"can_delete\":false,\"likes_count\":0,\"liked_by_me\":false,\"is_featured\":false,\"is_experience\":false,\"reward_issued\":false},{\"id\":15,\"chapter_id\":null,\"category\":\"discussion\",\"chapter_title\":\"\",\"title\":\"1\",\"content\":\"1\",\"content_format\":\"text\",\"images\":[],\"ip_province\":\"\",\"ip_city\":\"\",\"view_count\":47,\"reply_count\":3,\"last_reply_at\":\"2026-09-15T15:11:47.694681+08:00\",\"created_at\":\"2026-09-09T08:58:25.920824+08:00\",\"author\":{\"user_id\":2,\"username\":\"沐泽子\",\"avatar_url\":\"https://storage.forklifttraining.asia/avatars/Nt8bDeazC8iEc3575ea264b7bf920e61742653d5dac1_1787878970438.webp\"},\"can_delete\":false,\"likes_count\":2,\"liked_by_me\":false,\"is_featured\":true,\"is_experience\":true,\"reward_issued\":false},{\"id\":20,\"chapter_i
+1790136034.372 18178 24685 I console : [LOG][___Connect_-730742862___]d\":null,\"category\":\"discussion\",\"chapter_title\":\"\",\"title\":\"测试markdown渲染\",\"content\":\"## 测试 Markdown 渲染\\n\\n- 无序列表\\n\\n---\\n\\n1. 有序列表\\n2. 你好\\n\\n---\\n\\n```python\\nprint(\\\"hello world\\\")\\n```\\n\\n---\",\"content_format\":\"markdown\",\"images\":[],\"ip_province\":\"\",\"ip_city\":\"\",\"view_count\":12,\"reply_count\":6,\"last_reply_at\":\"2026-09-14T11:12:55.973378+08:00\",\"created_at\":\"2026-09-12T11:33:55.527246+08:00\",\"author\":{\"user_id\":1,\"username\":\"张三十\",\"avatar_url\":\"https://www.gccsmile.com/avatars/wallhaven-w8ed3p_1788483557560.webp\"},\"can_delete\":false,\"likes_count\":2,\"liked_by_me\":false,\"is_featured\":false,\"is_experience\":false,\"reward_issued\":false},{\"id\":1,\"chapter_id\":null,\"category\":\"discussion\",\"chapter_title\":\"\",\"title\":\"测试帖子\",\"content\":\"这是一个测试帖子\",\"content_format\":\"text\",\"images\":[],\"ip_province\":\"\",\"ip_city\":\"\",\"view_count\":116,\"reply_count\":2,\"last_reply_at\":\"2026-09-03T0
+1790136034.374 18178 24685 I console : [LOG][___Connect_-730742862___]9:43:20.976038+08:00\",\"created_at\":\"2026-08-28T10:08:49.405520+08:00\",\"author\":{\"user_id\":1,\"username\":\"张三十\",\"avatar_url\":\"https://www.gccsmile.com/avatars/wallhaven-w8ed3p_1788483557560.webp\"},\"can_delete\":false,\"likes_count\":3,\"liked_by_me\":false,\"is_featured\":true,\"is_experience\":true,\"reward_issued\":false}],\"total\":5}"},{"type":"string","value":" at api/forum.uts:56"}]---END:CONSOLE---[___Connect_-730742862___END]
+1790136034.470 18178 18178 E UniDomManager: batch--start--------
+1790136034.537 18178 24551 I .dcloud.uniappx: This is sticky GC, maxfree is 8388608 minfree is 2097152
+1790136034.582 18178 18178 E UniDomManager: batch--start-----midd---112
+1790136034.586 18178 18178 E UniDomManager: layoutUpdateRecursive--耗时：4
+1790136034.586 18178 18178 E UniDomManager: batch----time=116
+1790136034.615 18178 24698 I SkJpegCodec: [mId: 41] skia-debug SkJpegCodec::+SkJpegCodec
+1790136034.616 18178 24698 I SkJpegCodec: [mId: 41] skia-debug SkJpegCodec::ReadHeader: width = 1080, height = 1438, color = 10
+1790136034.616 18178 24698 I SkJpegCodec: [mId: 41] skia-debug SkJpegCodec::ReadHeader: progressive_mode = 0, streamType: SkStreamRewindable
+1790136034.618 18178 24698 D nativeloader: Load /data/app/~~ilPbfDA45BKel7n-KKqqew==/io.dcloud.uniappx-R9j5PtFBIr0wnb-3pXnO2g==/lib/arm64/libnative-imagetranscoder.so using ns clns-8 from class loader (caller=/data/app/~~ilPbfDA45BKel7n-KKqqew==/io.dcloud.uniappx-R9j5PtFBIr0wnb-3pXnO2g==/base.apk!classes3.dex): ok
+1790136034.628 18178 24940 I SkJpegCodec: [mId: 43] skia-debug SkJpegCodec::+SkJpegCodec
+1790136034.628 18178 24940 I SkJpegCodec: [mId: 43] skia-debug SkJpegCodec::ReadHeader: width = 270, height = 360, color = 10
+1790136034.628 18178 24940 I SkJpegCodec: [mId: 43] skia-debug SkJpegCodec::ReadHeader: progressive_mode = 0, streamType: SkStreamRewindable
+1790136034.630 18178 24721 I SkJpegCodec: [mId: 46] skia-debug SkJpegCodec::+SkJpegCodec
+1790136034.631 18178 24721 I SkJpegCodec: [mId: 46] skia-debug SkJpegCodec::ReadHeader: width = 270, height = 360, color = 10
+1790136034.631 18178 24721 I SkJpegCodec: [mId: 46] skia-debug SkJpegCodec::ReadHeader: progressive_mode = 0, streamType: SkStreamRewindable
+1790136034.631 18178 24721 I SkJpegCodec: [mId: 48] skia-debug SkJpegCodec::+SkJpegCodec
+1790136034.632 18178 24721 I SkJpegCodec: [mId: 48] skia-debug SkJpegCodec::ReadHeader: width = 270, height = 360, color = 10
+1790136034.632 18178 24721 I SkJpegCodec: [mId: 48] skia-debug SkJpegCodec::ReadHeader: progressive_mode = 0, streamType: SkStreamRewindable
+1790136034.632 18178 24721 I SkJpegCodec: [mId: 48] skia-debug SkJpegCodec::onGetPixels: dstRowBytes = 1080,
+1790136034.632 18178 24721 I SkJpegCodec: dstInfo: SkImageInfo: {IsRGB = 1, ColorType = 4, AlphaType = 1, Dimensions.width = 270, Dimensions.height = 360};
+1790136034.638 18178 24721 I SkJpegCodec: [mId: 48] skia-debug SkJpegCodec::onGetPixels ends with rowsDecodec = 360
+1790136034.638 18178 24721 I SkJpegCodec: [mId: 48] skia-debug onGetGainmapInfo returns false
+1790136034.652 18178 18178 E UniDomManager: flushPendingBatches--tiem=66 task size=300
+1790136039.843 18178 18178 E .dcloud.uniappx: No package ID 8f found for resource ID 0x8fd3110f.
+1790136039.845 18178 18178 E .dcloud.uniappx: No package ID d4 found for resource ID 0xd4f5e73e.
+1790136039.854 18178 18178 E .dcloud.uniappx: No package ID 96 found for resource ID 0x96481452.
+1790136039.855 18178 18178 E .dcloud.uniappx: No package ID c4 found for resource ID 0xc4a60683.
+1790136067.557 18178 18178 I MIUIInput: [MotionEvent] ViewRootImpl windowName 'io.dcloud.uniappx/io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity', { action=ACTION_DOWN, id[0]=0, pointerCount=1, eventTime=420667582, downTime=420667582, phoneEventTime=12:01:07.551 } moveCount:0
+1790136067.558 18178 18178 D VRI[UniPortraitPageActivity]: getMiuiFreeformStackInfo mTmpFrames.miuiFreeFormStackInfo: null
+1790136067.931 18178 18178 W RenderThread: type=1400 audit(0.0:356475): avc:  denied  { getattr } for  path="/sys/module/metis/parameters/minor_window_app" dev="sysfs" ino=69317 scontext=u:r:untrusted_app_32:s0:c201,c257,c512,c768 tcontext=u:object_r:sysfs_migt:s0 tclass=file permissive=0 app=io.dcloud.uniappx
+1790136067.959 18178 18178 I MIUIInput: [MotionEvent] ViewRootImpl windowName 'io.dcloud.uniappx/io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity', { action=ACTION_UP, id[0]=0, pointerCount=1, eventTime=420667987, downTime=420667582, phoneEventTime=12:01:07.956 } moveCount:43
+1790136067.961 18178 18178 D SplineOverScroller: mFlingDuration: 1770,mFlingDistance: 1023.2557983398438,mVelocity: 2250
+1790136070.473 18178 18178 I MIUIInput: [MotionEvent] ViewRootImpl windowName 'io.dcloud.uniappx/io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity', { action=ACTION_DOWN, id[0]=0, pointerCount=1, eventTime=420670498, downTime=420670498, phoneEventTime=12:01:10.467 } moveCount:0
+1790136070.474 18178 18178 D VRI[UniPortraitPageActivity]: getMiuiFreeformStackInfo mTmpFrames.miuiFreeFormStackInfo: null
+1790136070.873 18178 18178 I MIUIInput: [MotionEvent] ViewRootImpl windowName 'io.dcloud.uniappx/io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity', { action=ACTION_UP, id[0]=0, pointerCount=1, eventTime=420670901, downTime=420670498, phoneEventTime=12:01:10.870 } moveCount:46
+1790136075.265 18178 18178 E .dcloud.uniappx: No package ID 8f found for resource ID 0x8fd3110f.
+1790136075.267 18178 18178 E .dcloud.uniappx: No package ID d4 found for resource ID 0xd4f5e73e.
+1790136075.272 18178 18178 E .dcloud.uniappx: No package ID 96 found for resource ID 0x96481452.
+1790136075.273 18178 18178 E .dcloud.uniappx: No package ID c4 found for resource ID 0xc4a60683.
+1790136117.095 18178 24551 I .dcloud.uniappx: This is non sticky GC, maxfree is 8388608 minfree is 2097152
+1790136125.916 18178 18178 I MIUIInput: [MotionEvent] ViewRootImpl windowName 'io.dcloud.uniappx/io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity', { action=ACTION_DOWN, id[0]=0, pointerCount=1, eventTime=420725936, downTime=420725936, phoneEventTime=12:02:05.905 } moveCount:0
+1790136125.916 18178 18178 D VRI[UniPortraitPageActivity]: getMiuiFreeformStackInfo mTmpFrames.miuiFreeFormStackInfo: null
+1790136125.923 18178 18178 I MIUIInput: [MotionEvent] ViewRootImpl windowName 'io.dcloud.uniappx/io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity', { action=ACTION_UP, id[0]=0, pointerCount=1, eventTime=420725936, downTime=420725936, phoneEventTime=12:02:05.905 } moveCount:0
+1790136125.986 18178 24608 I ContentCatcher: SettingTrigger : unregister status observer io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity
+1790136125.986 18178 24608 I ContentCatcher: SettingTrigger : unregisterUIAgentListener io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity, uid:10457
+1790136125.996 18178 24561 I ActivityThread: HardwareRenderer preload  done
+1790136126.005 18178 24608 D ViewContentFactory: initViewContentFetcherClass
+1790136126.005 18178 24608 I ContentCatcher: ViewContentFetcher : ViewContentFetcher
+1790136126.005 18178 24608 D ViewContentFactory: createInterceptor took 0ms
+1790136126.006 18178 24608 I ContentCatcher: Interceptor_Catcher : Catcher list invalid for io.dcloud.uniappx@io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity@32973426
+1790136126.006 18178 24608 I ContentCatcher: Interceptor_Catcher : Get featureInfo from config image_pick_mode
+1790136126.007 18178 24608 I ContentCatcher: Interceptor_Catcher : Get featureInfo from config pick_mode
+1790136126.020 18178 18178 D Activity: Activity = ActivityInfo{22df721 io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity}, Resume onConfigurationChanged = {1.0 460mcc7mnc [zh_CN] ldltr sw393dp w393dp h832dp 440dpi nrml long hdr widecg port finger -keyb/v/h -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2400) mAppBounds=Rect(0, 111 - 1080, 2400) mMaxBounds=Rect(0, 0 - 1080, 2400) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mActivityType=standard mAlwaysOnTop=undefined mRotation=ROTATION_0 mInSplitScreen=false letterBoxed=false foScaled=false isSpecificEmbedded=false} s.2 fontWeightAdjustment=0/d themeChanged=0 themeChangedFlags=0 display=0 extraData = Bundle[{}] screenType=0/0}
+1790136126.022 18178 18178 D SecurityManager: checkAccessControl flag1
+1790136126.022 18178 24608 I ContentCatcher: SettingTrigger : register screen QA status observer io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity
+1790136126.025 18178 24608 I ContentCatcher: SettingTrigger : register global collect status observer io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity
+1790136126.025 18178 24608 I ContentCatcher: SettingTrigger : registerUIAgentListener io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity, uid:10457
+1790136126.027 18178 24608 I ContentCatcher_TaplusBlackListHelper:  blackList size: 11 package is io.dcloud.uniappx isInTaplusWhiteList: true
+1790136126.031 18178 18178 D DecorViewImmersiveImpl: onAttachedToWindow:io.dcloud.uniappx/io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity
+1790136126.031 18178 18178 D DecorViewImmersiveImpl: getWindowType: 1 title:io.dcloud.uniappx/io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity
+1790136126.031 18178 18178 D DecorViewImmersiveImpl: window type: 1
+1790136126.031 18178 18178 D MiuiNBIManagerImpl: mRemote has create
+1790136126.031 18178 18178 D DecorViewImmersiveImpl: isNBIEnable=false
+1790136126.044 18178 18178 W libc    : Access denied finding property "ro.vendor.display.support_round_corner_decoration_composite"
+1790136126.039 18178 18178 W .dcloud.uniappx: type=1400 audit(0.0:356482): avc:  denied  { read } for  name="u:object_r:vendor_display_prop:s0" dev="tmpfs" ino=463 scontext=u:r:untrusted_app_32:s0:c201,c257,c512,c768 tcontext=u:object_r:vendor_display_prop:s0 tclass=file permissive=0 app=io.dcloud.uniappx
+1790136126.045 18178 18178 W libc    : Access denied finding property "vendor.display.enable_optimal_refresh_rate"
+1790136126.043 18178 18178 W .dcloud.uniappx: type=1400 audit(0.0:356483): avc:  denied  { read } for  name="u:object_r:vendor_display_prop:s0" dev="tmpfs" ino=463 scontext=u:r:untrusted_app_32:s0:c201,c257,c512,c768 tcontext=u:object_r:vendor_display_prop:s0 tclass=file permissive=0 app=io.dcloud.uniappx
+1790136126.045 18178 18178 I .dcloud.uniappx: 【MiuiBoosterUtils】package permission check disable.
+1790136126.045 18178 18178 I .dcloud.uniappx: 【MiuiBoosterUtils】get Service disable.
+1790136126.046 18178 25302 I .dcloud.uniappx: 【MiuiBoosterUtils】improve disable.
+1790136126.048 18178 18178 D VRI[UniPortraitPageActivity]: vri.reportNextDraw android.view.ViewRootImpl.performTraversals:5014 android.view.ViewRootImpl.doTraversal:3592 android.view.ViewRootImpl$TraversalRunnable.run:11667 android.view.Choreographer$CallbackRecord.run:1733 android.view.Choreographer$CallbackRecord.run:1742
+1790136126.048 18178 18178 D VRI[UniPortraitPageActivity]: vri.Setup new sync=wmsSync-VRI[UniPortraitPageActivity]#6
+1790136126.051 18178 18178 D VRI[UniPortraitPageActivity]: vri.reportDrawFinished
+1790136126.055 18178 18178 E UniDomManager: batch--start--------
+1790136126.090 18178 18178 E UniDomManager: batch--start-----midd---35
+1790136126.091 18178 18178 E UniDomManager: layoutUpdateRecursive--耗时：1
+1790136126.091 18178 18178 E UniDomManager: batch----time=36
+1790136126.093 18178 18178 D ScrollerOptimizationManager: registerConfigChangedListener
+1790136126.105 18178 18178 E UniDomManager: flushPendingBatches--tiem=14 task size=85
+1790136126.110 18178 24685 I console : [LOG]---BEGIN:CONSOLE---[{"type":"string","value":"[request] >>>"},{"type":"string","value":"GET"},{"type":"string","value":"https://www.gccsmile.com/api/forum/my-topics?page=1&page_size=10"},{"type":"string","value":"data:"},{"type":"null","value":"null"},{"type":"string","value":" at api/request.uts:332"}]---END:CONSOLE---
+1790136126.116 18178 18178 E UniDomManager: batch--start--------
+1790136126.118 18178 18178 E UniDomManager: batch--start-----midd---2
+1790136126.118 18178 18178 E UniDomManager: layoutUpdateRecursive--耗时：0
+1790136126.118 18178 18178 E UniDomManager: batch----time=2
+1790136126.121 18178 18178 E UniDomManager: flushPendingBatches--tiem=3 task size=14
+1790136126.141 18178 24685 I console : [LOG]---BEGIN:CONSOLE---{"type":"string","value":"进入页面:​/pages/profile/personal-activity​ 。[{\"创建dom元素个数\":\"30个\",\"耗时\":\"19ms\"},{\"排版\":\"2次\",\"耗时\":\"38ms\"},{\"渲染\":\"2次\",\"耗时\":\"17ms\"},{\"跳转页面到onReady总耗时\":\"209ms\"}]"}---END:CONSOLE---
+1790136126.141 18178 18178 I HandWritingStubImpl: refreshLastKeyboardType: 1
+1790136126.141 18178 18178 I HandWritingStubImpl: getCurrentKeyboardType: 1
+1790136126.193 18178 24689 D TrafficStats: tagSocket(232) with statsTag=0xffffffff, statsUid=-1
+1790136126.369 18178 18178 D VRI[UniPortraitPageActivity]: visibilityChanged oldVisibility=true newVisibility=false
+1790136126.402 18178 24685 I console : [LOG]---BEGIN:CONSOLE---[{"type":"string","value":"[request] <<<"},{"type":"number","subType":"number","value":"200"},{"type":"string","value":"https://www.gccsmile.com/api/forum/my-topics?page=1&page_size=10"},{"type":"string","value":" at api/request.uts:411"}]---END:CONSOLE---
+1790136126.430 18178 18178 E UniDomManager: batch--start--------
+1790136126.455 18178 18178 E UniDomManager: batch--start-----midd---25
+1790136126.456 18178 18178 E UniDomManager: layoutUpdateRecursive--耗时：1
+1790136126.456 18178 18178 E UniDomManager: batch----time=26
+1790136126.465 18178 18178 E UniDomManager: flushPendingBatches--tiem=9 task size=55
+1790136126.486 18178 18178 E UniDomManager: batch--start--------
+1790136126.487 18178 18178 E UniDomManager: batch--start-----midd---1
+1790136126.487 18178 18178 E UniDomManager: layoutUpdateRecursive--耗时：0
+1790136126.487 18178 18178 E UniDomManager: batch----time=1
+1790136126.489 18178 18178 E UniDomManager: flushPendingBatches--tiem=2 task size=6
+1790136130.774 18178 18178 E .dcloud.uniappx: No package ID 96 found for resource ID 0x96481453.
+1790136130.775 18178 18178 E .dcloud.uniappx: No package ID c4 found for resource ID 0xc4a60684.
+1790136147.802 18178 18178 I MIUIInput: [KeyEvent] ViewRootImpl windowName 'io.dcloud.uniappx/io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity', KeyEvent { action=ACTION_DOWN, keyCode=KEYCODE_BACK, scanCode=0, metaState=0, flags=0x0, repeatCount=0, eventTime=420747823000000, downTime=420747823000000, deviceId=-1, source=0x0, displayId=-1 }, phoneEventTime=12:02:27.792
+1790136147.820 18178 18178 I MIUIInput: [KeyEvent] ViewRootImpl windowName 'io.dcloud.uniappx/io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity', KeyEvent { action=ACTION_UP, keyCode=KEYCODE_BACK, scanCode=0, metaState=0, flags=0x0, repeatCount=0, eventTime=420747847000000, downTime=420747823000000, deviceId=-1, source=0x0, displayId=-1 }, phoneEventTime=12:02:27.816
+1790136147.835 18178 18178 W MIUIInput: Back key is intercepted by the app
+1790136147.837 18178 24608 I ContentCatcher: SettingTrigger : unregister status observer io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity
+1790136147.838 18178 24608 I ContentCatcher: SettingTrigger : unregisterUIAgentListener io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity, uid:10457
+1790136147.847 18178 24685 I console : [LOG]---BEGIN:CONSOLE---[{"type":"string","value":"[request] >>>"},{"type":"string","value":"GET"},{"type":"string","value":"https://www.gccsmile.com/api/notifications/unread-count"},{"type":"string","value":"data:"},{"type":"null","value":"null"},{"type":"string","value":" at api/request.uts:332"}]---END:CONSOLE---
+1790136147.852 18178 24685 I console : [LOG]---BEGIN:CONSOLE---[{"type":"string","value":"[request] >>>"},{"type":"string","value":"GET"},{"type":"string","value":"https://www.gccsmile.com/api/check-in/calendar?year=2026&month=9"},{"type":"string","value":"data:"},{"type":"null","value":"null"},{"type":"string","value":" at api/request.uts:332"}]---END:CONSOLE---
+1790136147.853 18178 24707 D TrafficStats: tagSocket(3) with statsTag=0xffffffff, statsUid=-1
+1790136147.856 18178 24711 D TrafficStats: tagSocket(199) with statsTag=0xffffffff, statsUid=-1
+1790136147.857 18178 24685 I console : [LOG]---BEGIN:CONSOLE---[{"type":"string","value":"[request] >>>"},{"type":"string","value":"GET"},{"type":"string","value":"https://www.gccsmile.com/api/forum/topics?scope=general&sort=latest&order=desc&page=1&page_size=10&category=discussion"},{"type":"string","value":"data:"},{"type":"null","value":"null"},{"type":"string","value":" at api/request.uts:332"}]---END:CONSOLE---
+1790136147.861 18178 24710 D TrafficStats: tagSocket(230) with statsTag=0xffffffff, statsUid=-1
+1790136147.861 18178 18178 D Activity: Activity = ActivityInfo{c9474cd io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity}, Resume onConfigurationChanged = {1.0 460mcc7mnc [zh_CN] ldltr sw393dp w393dp h832dp 440dpi nrml long hdr widecg port finger -keyb/v/h -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2400) mAppBounds=Rect(0, 111 - 1080, 2400) mMaxBounds=Rect(0, 0 - 1080, 2400) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mActivityType=standard mAlwaysOnTop=undefined mRotation=ROTATION_0 mInSplitScreen=false letterBoxed=false foScaled=false isSpecificEmbedded=false} s.2 fontWeightAdjustment=0/d themeChanged=0 themeChangedFlags=0 display=0 extraData = Bundle[{}] screenType=0/0}
+1790136147.862 18178 18178 D SecurityManager: checkAccessControl flag1
+1790136147.863 18178 24608 I ContentCatcher: SettingTrigger : register screen QA status observer io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity
+1790136147.865 18178 24608 I ContentCatcher: SettingTrigger : register global collect status observer io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity
+1790136147.866 18178 24608 I ContentCatcher: SettingTrigger : registerUIAgentListener io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity, uid:10457
+1790136147.867 18178 24608 I ContentCatcher_TaplusBlackListHelper:  mActivities isEmpty
+1790136147.867 18178 24608 I ContentCatcher_TaplusBlackListHelper:  blackList size: 11 package is io.dcloud.uniappx isInTaplusWhiteList: true
+1790136147.890 18178 18178 W libc    : Access denied finding property "ro.vendor.display.support_round_corner_decoration_composite"
+1790136147.887 18178 18178 W .dcloud.uniappx: type=1400 audit(0.0:356489): avc:  denied  { read } for  name="u:object_r:vendor_display_prop:s0" dev="tmpfs" ino=463 scontext=u:r:untrusted_app_32:s0:c201,c257,c512,c768 tcontext=u:object_r:vendor_display_prop:s0 tclass=file permissive=0 app=io.dcloud.uniappx
+1790136147.891 18178 18178 W libc    : Access denied finding property "vendor.display.enable_optimal_refresh_rate"
+1790136147.891 18178 18178 I .dcloud.uniappx: 【MiuiBoosterUtils】checkUtil disable.
+1790136147.891 18178 18178 I .dcloud.uniappx: 【MiuiBoosterUtils】package permission check disable.
+1790136147.891 18178 18178 I .dcloud.uniappx: 【MiuiBoosterUtils】get Service disable.
+1790136147.887 18178 18178 W .dcloud.uniappx: type=1400 audit(0.0:356490): avc:  denied  { read } for  name="u:object_r:vendor_display_prop:s0" dev="tmpfs" ino=463 scontext=u:r:untrusted_app_32:s0:c201,c257,c512,c768 tcontext=u:object_r:vendor_display_prop:s0 tclass=file permissive=0 app=io.dcloud.uniappx
+1790136147.892 18178 18178 D VRI[UniPortraitPageActivity]: vri.reportNextDraw android.view.ViewRootImpl.performTraversals:5014 android.view.ViewRootImpl.doTraversal:3592 android.view.ViewRootImpl$TraversalRunnable.run:11667 android.view.Choreographer$CallbackRecord.run:1733 android.view.Choreographer$CallbackRecord.run:1742
+1790136147.892 18178 18178 D VRI[UniPortraitPageActivity]: vri.Setup new sync=wmsSync-VRI[UniPortraitPageActivity]#8
+1790136147.892 18178 25382 I .dcloud.uniappx: 【MiuiBoosterUtils】improve disable.
+1790136147.974 18178 18178 D VRI[UniPortraitPageActivity]: vri.reportDrawFinished
+1790136147.975 18178 18178 E UniDomManager: batch--start--------
+1790136147.979 18178 18178 E UniDomManager: batch--start-----midd---4
+1790136147.979 18178 18178 E UniDomManager: layoutUpdateRecursive--耗时：0
+1790136147.980 18178 18178 E UniDomManager: batch----time=5
+1790136147.982 18178 18178 E UniDomManager: flushPendingBatches--tiem=2 task size=10
+1790136148.000 18178 18178 I HandWritingStubImpl: refreshLastKeyboardType: 1
+1790136148.000 18178 18178 I HandWritingStubImpl: getCurrentKeyboardType: 1
+1790136148.014 18178 24685 I console : [LOG]---BEGIN:CONSOLE---[{"type":"string","value":"[request] <<<"},{"type":"number","subType":"number","value":"200"},{"type":"string","value":"https://www.gccsmile.com/api/notifications/unread-count"},{"type":"string","value":" at api/request.uts:411"}]---END:CONSOLE---
+1790136148.023 18178 24685 I console : [LOG]---BEGIN:CONSOLE---[{"type":"string","value":"[request] <<<"},{"type":"number","subType":"number","value":"200"},{"type":"string","value":"https://www.gccsmile.com/api/check-in/calendar?year=2026&month=9"},{"type":"string","value":" at api/request.uts:411"}]---END:CONSOLE---
+1790136148.024 18178 24685 I console : [LOG]---BEGIN:CONSOLE---[{"type":"string","value":"[request] <<<"},{"type":"number","subType":"number","value":"200"},{"type":"string","value":"https://www.gccsmile.com/api/forum/topics?scope=general&sort=latest&order=desc&page=1&page_size=10&category=discussion"},{"type":"string","value":" at api/request.uts:411"}]---END:CONSOLE---
+1790136148.034 18178 24685 I console : [LOG][___Connect_-730742862___]---BEGIN:CONSOLE---[{"type":"string","value":"[getForumTopicsApi] raw data:"},{"type":"string","value":"{\"page\":1,\"pages\":1,\"topics\":[{\"id\":59,\"chapter_id\":null,\"category\":\"discussion\",\"chapter_title\":\"\",\"title\":\"测试摄影拍照功能\",\"content\":\"### 拍照摄影\",\"content_format\":\"markdown\",\"images\":[\"https://www.gccsmile.com/images/forum/1790052147642_ev3_1790052148465.webp\",\"https://www.gccsmile.com/images/forum/1790052160212_1790052168825.jpg\"],\"ip_province\":\"广东省\",\"ip_city\":\"广州市\",\"view_count\":0,\"reply_count\":0,\"last_reply_at\":null,\"created_at\":\"2026-09-22T12:43:13.689969+08:00\",\"author\":{\"user_id\":8,\"username\":\"张三\",\"avatar_url\":\"\"},\"can_delete\":false,\"likes_count\":0,\"liked_by_me\":false,\"is_featured\":false,\"is_experience\":false,\"reward_issued\":false},{\"id\":58,\"chapter_id\":null,\"category\":\"discussion\",\"chapter_title\":\"\",\"title\":\"1\",\"content\":\"1\",\"content_format\":\"text\",\"images\":[],\"ip_province\":\"广东省
+1790136148.035 18178 24685 I console : [LOG][___Connect_-730742862___]\",\"ip_city\":\"广州市\",\"view_count\":1,\"reply_count\":0,\"last_reply_at\":null,\"created_at\":\"2026-09-17T11:03:43.406989+08:00\",\"author\":{\"user_id\":8,\"username\":\"张三\",\"avatar_url\":\"\"},\"can_delete\":false,\"likes_count\":0,\"liked_by_me\":false,\"is_featured\":false,\"is_experience\":false,\"reward_issued\":false},{\"id\":15,\"chapter_id\":null,\"category\":\"discussion\",\"chapter_title\":\"\",\"title\":\"1\",\"content\":\"1\",\"content_format\":\"text\",\"images\":[],\"ip_province\":\"\",\"ip_city\":\"\",\"view_count\":47,\"reply_count\":3,\"last_reply_at\":\"2026-09-15T15:11:47.694681+08:00\",\"created_at\":\"2026-09-09T08:58:25.920824+08:00\",\"author\":{\"user_id\":2,\"username\":\"沐泽子\",\"avatar_url\":\"https://storage.forklifttraining.asia/avatars/Nt8bDeazC8iEc3575ea264b7bf920e61742653d5dac1_1787878970438.webp\"},\"can_delete\":false,\"likes_count\":2,\"liked_by_me\":false,\"is_featured\":true,\"is_experience\":true,\"reward_issued\":false},{\"id\":20,\"chapter_i
+1790136148.035 18178 24685 I console : [LOG][___Connect_-730742862___]d\":null,\"category\":\"discussion\",\"chapter_title\":\"\",\"title\":\"测试markdown渲染\",\"content\":\"## 测试 Markdown 渲染\\n\\n- 无序列表\\n\\n---\\n\\n1. 有序列表\\n2. 你好\\n\\n---\\n\\n```python\\nprint(\\\"hello world\\\")\\n```\\n\\n---\",\"content_format\":\"markdown\",\"images\":[],\"ip_province\":\"\",\"ip_city\":\"\",\"view_count\":12,\"reply_count\":6,\"last_reply_at\":\"2026-09-14T11:12:55.973378+08:00\",\"created_at\":\"2026-09-12T11:33:55.527246+08:00\",\"author\":{\"user_id\":1,\"username\":\"张三十\",\"avatar_url\":\"https://www.gccsmile.com/avatars/wallhaven-w8ed3p_1788483557560.webp\"},\"can_delete\":false,\"likes_count\":2,\"liked_by_me\":false,\"is_featured\":false,\"is_experience\":false,\"reward_issued\":false},{\"id\":1,\"chapter_id\":null,\"category\":\"discussion\",\"chapter_title\":\"\",\"title\":\"测试帖子\",\"content\":\"这是一个测试帖子\",\"content_format\":\"text\",\"images\":[],\"ip_province\":\"\",\"ip_city\":\"\",\"view_count\":116,\"reply_count\":2,\"last_reply_at\":\"2026-09-03T0
+1790136148.036 18178 24685 I console : [LOG][___Connect_-730742862___]9:43:20.976038+08:00\",\"created_at\":\"2026-08-28T10:08:49.405520+08:00\",\"author\":{\"user_id\":1,\"username\":\"张三十\",\"avatar_url\":\"https://www.gccsmile.com/avatars/wallhaven-w8ed3p_1788483557560.webp\"},\"can_delete\":false,\"likes_count\":3,\"liked_by_me\":false,\"is_featured\":true,\"is_experience\":true,\"reward_issued\":false}],\"total\":5}"},{"type":"string","value":" at api/forum.uts:56"}]---END:CONSOLE---[___Connect_-730742862___END]
+1790136148.059 18178 18178 E UniDomManager: batch--start--------
+1790136148.062 18178 18178 E UniDomManager: batch--start-----midd---3
+1790136148.063 18178 18178 E UniDomManager: layoutUpdateRecursive--耗时：1
+1790136148.063 18178 18178 E UniDomManager: batch----time=4
+1790136148.065 18178 18178 E UniDomManager: flushPendingBatches--tiem=2 task size=10
+1790136148.301 18178 18178 D VRI[UniPortraitPageActivity]: visibilityChanged oldVisibility=true newVisibility=false
+1790136148.313 18178 18178 D LeakCanary: Watching instance of androidx.fragment.app.FragmentManagerViewModel (androidx.fragment.app.FragmentManagerViewModel received ViewModel#onCleared() callback) with key bb5a6616-3e66-4b49-a82d-5ce7c11b10c4
+1790136148.314 18178 18178 D LeakCanary: Watching instance of leakcanary.internal.ViewModelClearedWatcher (leakcanary.internal.ViewModelClearedWatcher received ViewModel#onCleared() callback) with key cfa06cd0-b5da-4da3-9d08-ee250c430294
+1790136148.314 18178 18178 D LeakCanary: Watching instance of androidx.lifecycle.SavedStateHandlesVM (androidx.lifecycle.SavedStateHandlesVM received ViewModel#onCleared() callback) with key dec676ad-f7e2-476d-a0b6-e0b2a1b41077
+1790136148.314 18178 18178 D LeakCanary: Watching instance of androidx.lifecycle.ReportFragment (androidx.lifecycle.ReportFragment received Fragment#onDestroy() callback) with key bbac149e-26d3-4bcf-9d08-2040792afdb0
+1790136148.322 18178 18178 E UniDomManager: flushPendingBatches--tiem=1 task size=46
+1790136148.322 18178 18178 D LeakCanary: Watching instance of io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity (io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity [Page: @@@/pages/profile/personal-activity@@@] received Activity#onDestroy() callback) with key 371fd295-e108-4b71-9166-e37e4cd15e93
+1790136148.323 18178 18178 W WindowOnBackDispatcher: sendCancelIfRunning: isInProgress=false callback=android.view.ViewRootImpl$$ExternalSyntheticLambda12@6e0c1d2
+1790136148.324 18178 18178 D DecorViewImmersiveImpl: onDetachedFromWindow
+1790136150.396 18178 18178 I MIUIInput: [MotionEvent] ViewRootImpl windowName 'io.dcloud.uniappx/io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity', { action=ACTION_DOWN, id[0]=0, pointerCount=1, eventTime=420750422, downTime=420750422, phoneEventTime=12:02:30.390 } moveCount:0
+1790136150.397 18178 18178 D VRI[UniPortraitPageActivity]: getMiuiFreeformStackInfo mTmpFrames.miuiFreeFormStackInfo: null
+1790136150.407 18178 18178 I MIUIInput: [MotionEvent] ViewRootImpl windowName 'io.dcloud.uniappx/io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity', { action=ACTION_UP, id[0]=0, pointerCount=1, eventTime=420750422, downTime=420750422, phoneEventTime=12:02:30.391 } moveCount:0
+1790136150.492 18178 24685 I console : [LOG]---BEGIN:CONSOLE---[{"type":"string","value":"[request] >>>"},{"type":"string","value":"GET"},{"type":"string","value":"https://www.gccsmile.com/api/forum/topics?scope=all&sort=hot&order=desc&page=1&page_size=10&category=question"},{"type":"string","value":"data:"},{"type":"null","value":"null"},{"type":"string","value":" at api/request.uts:332"}]---END:CONSOLE---
+1790136150.500 18178 18178 E UniDomManager: batch--start--------
+1790136150.503 18178 24703 D TrafficStats: tagSocket(4) with statsTag=0xffffffff, statsUid=-1
+1790136150.585 18178 24551 I .dcloud.uniappx: This is non sticky GC, maxfree is 8388608 minfree is 2097152
+1790136150.635 18178 18178 E UniDomManager: batch--start-----midd---135
+1790136150.639 18178 18178 E UniDomManager: layoutUpdateRecursive--耗时：4
+1790136150.639 18178 18178 E UniDomManager: batch----time=139
+1790136150.645 18178 18178 W Bitmap  : Called hasAlpha() on a recycle()'d bitmap! This is undefined behavior!
+1790136150.646 18178 18178 W Bitmap  : Called hasAlpha() on a recycle()'d bitmap! This is undefined behavior!
+1790136150.702 18178 18178 E UniDomManager: flushPendingBatches--tiem=63 task size=430
+1790136150.785 18178 18178 I Choreographer: Skipped 33 frames!  The application may be doing too much work on its main thread.
+1790136150.785 18178 18178 E UniDomManager: batch--start--------
+1790136150.788 18178 18178 E UniDomManager: batch--start-----midd---3
+1790136150.791 18178 18178 E UniDomManager: layoutUpdateRecursive--耗时：3
+1790136150.791 18178 18178 E UniDomManager: batch----time=6
+1790136150.793 18178 18178 E UniDomManager: flushPendingBatches--tiem=2 task size=10
+1790136150.816 18178 24685 I console : [LOG]---BEGIN:CONSOLE---[{"type":"string","value":"[request] <<<"},{"type":"number","subType":"number","value":"200"},{"type":"string","value":"https://www.gccsmile.com/api/forum/topics?scope=all&sort=hot&order=desc&page=1&page_size=10&category=question"},{"type":"string","value":" at api/request.uts:411"}]---END:CONSOLE---
+1790136150.819 18178 24685 I console : [LOG][___Connect_-360558342___]---BEGIN:CONSOLE---[{"type":"string","value":"[getForumTopicsApi] raw data:"},{"type":"string","value":"{\"page\":1,\"pages\":1,\"topics\":[{\"id\":13,\"chapter_id\":null,\"category\":\"question\",\"chapter_title\":\"\",\"title\":\"1\",\"content\":\"1\",\"content_format\":\"text\",\"images\":[],\"ip_province\":\"\",\"ip_city\":\"\",\"view_count\":90,\"reply_count\":2,\"last_reply_at\":\"2026-09-10T10:46:16.505160+08:00\",\"created_at\":\"2026-09-01T21:29:39.474677+08:00\",\"author\":{\"user_id\":2,\"username\":\"沐泽子\",\"avatar_url\":\"https://storage.forklifttraining.asia/avatars/Nt8bDeazC8iEc3575ea264b7bf920e61742653d5dac1_1787878970438.webp\"},\"can_delete\":false,\"likes_count\":2,\"liked_by_me\":false,\"accepted_reply_id\":1,\"solved_at\":\"2026-09-11T15:07:20.602032+08:00\",\"is_featured\":false,\"is_experience\":false,\"reward_issued\":true},{\"id\":3,\"chapter_id\":null,\"category\":\"question\",\"chapter_title\":\"\",\"title\":\"这是一个问题\",\"content\":\"这是一份描述\",\"content_format\
+1790136150.820 18178 24685 I console : [LOG][___Connect_-360558342___]":\"text\",\"images\":[\"https://www.gccsmile.com/images/forum/wallhaven-vm785p_1788138436802.webp\"],\"ip_province\":\"\",\"ip_city\":\"\",\"view_count\":41,\"reply_count\":1,\"last_reply_at\":\"2026-09-03T13:32:56.712586+08:00\",\"created_at\":\"2026-08-31T09:07:24.802932+08:00\",\"author\":{\"user_id\":1,\"username\":\"张三十\",\"avatar_url\":\"https://www.gccsmile.com/avatars/wallhaven-w8ed3p_1788483557560.webp\"},\"can_delete\":false,\"likes_count\":2,\"liked_by_me\":false,\"is_featured\":false,\"is_experience\":false,\"reward_issued\":false}],\"total\":2}"},{"type":"string","value":" at api/forum.uts:56"}]---END:CONSOLE---[___Connect_-360558342___END]
+1790136150.846 18178 18178 E UniDomManager: batch--start--------
+1790136150.881 18178 18178 E UniDomManager: batch--start-----midd---35
+1790136150.883 18178 18178 E UniDomManager: layoutUpdateRecursive--耗时：2
+1790136150.883 18178 18178 E UniDomManager: batch----time=37
+1790136150.907 18178 18178 E UniDomManager: flushPendingBatches--tiem=24 task size=202
+1790136155.286 18178 18178 E .dcloud.uniappx: No package ID 8f found for resource ID 0x8fd3110f.
+1790136155.287 18178 18178 E .dcloud.uniappx: No package ID d4 found for resource ID 0xd4f5e73e.
+1790136155.288 18178 18178 E .dcloud.uniappx: No package ID 96 found for resource ID 0x96481452.
+1790136155.289 18178 18178 E .dcloud.uniappx: No package ID c4 found for resource ID 0xc4a60683.
+1790136155.300 18178 18178 E .dcloud.uniappx: No package ID 8f found for resource ID 0x8fd3110f.
+1790136155.300 18178 18178 E .dcloud.uniappx: No package ID d4 found for resource ID 0xd4f5e73e.
+1790136155.301 18178 18178 E .dcloud.uniappx: No package ID 96 found for resource ID 0x96481452.
+1790136155.301 18178 18178 E .dcloud.uniappx: No package ID c4 found for resource ID 0xc4a60683.
+1790136165.741 18178 18178 I MIUIInput: [MotionEvent] ViewRootImpl windowName 'io.dcloud.uniappx/io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity', { action=ACTION_DOWN, id[0]=0, pointerCount=1, eventTime=420765764, downTime=420765764, phoneEventTime=12:02:45.733 } moveCount:0
+1790136165.742 18178 18178 D VRI[UniPortraitPageActivity]: getMiuiFreeformStackInfo mTmpFrames.miuiFreeFormStackInfo: null
+1790136166.137 18178 18178 I MIUIInput: [MotionEvent] ViewRootImpl windowName 'io.dcloud.uniappx/io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity', { action=ACTION_UP, id[0]=0, pointerCount=1, eventTime=420766165, downTime=420765764, phoneEventTime=12:02:46.134 } moveCount:43
+1790136170.822 18178 18178 E .dcloud.uniappx: No package ID 8f found for resource ID 0x8fd3110f.
+1790136170.824 18178 18178 E .dcloud.uniappx: No package ID d4 found for resource ID 0xd4f5e73e.
+1790136170.827 18178 18178 E .dcloud.uniappx: No package ID 96 found for resource ID 0x96481452.
+1790136170.828 18178 18178 E .dcloud.uniappx: No package ID c4 found for resource ID 0xc4a60683.
+1790136170.845 18178 18178 E .dcloud.uniappx: No package ID 8f found for resource ID 0x8fd3110f.
+1790136170.846 18178 18178 E .dcloud.uniappx: No package ID d4 found for resource ID 0xd4f5e73e.
+1790136170.846 18178 18178 E .dcloud.uniappx: No package ID 96 found for resource ID 0x96481452.
+1790136170.847 18178 18178 E .dcloud.uniappx: No package ID c4 found for resource ID 0xc4a60683.
+#
+# ---- 列表接口载荷里的四个夹具（app 自己打出的 console 行，证明 content_format 与源串在设备侧的真实取值）----
+1790136034.369 18178 24685 I console : [LOG][___Connect_-730742862___]---BEGIN:CONSOLE---[{"type":"string","value":"[getForumTopicsApi] raw data:"},{"type":"string","value":"{\"page\":1,\"pages\":1,\"topics\":[{\"id\":59,\"chapter_id\":null,\"category\":\"discussion\",\"chapter_title\":\"\",\"title\":\"测试摄影拍照功能\",\"content\":\"### 拍照摄影\",\"content_format\":\"markdown\",\"images\":[\"https://www.gccsmile.com/images/forum/1790052147642_ev3_1790052148465.webp\",\"https://www.gccsmile.com/images/forum/1790052160212_1790052168825.jpg\"],\"ip_province\":\"广东省\",\"ip_city\":\"广州市\",\"view_count\":0,\"reply_count\":0,\"last_reply_at\":null,\"created_at\":\"2026-09-22T12:43:13.689969+08:00\",\"author\":{\"user_id\":8,\"username\":\"张三\",\"avatar_url\":\"\"},\"can_delete\":false,\"likes_count\":0,\"liked_by_me\":false,\"is_featured\":false,\"is_experience\":false,\"reward_issued\":false},{\"id\":58,\"chapter_id\":null,\"category\":\"discussion\",\"chapter_title\":\"\",\"title\":\"1\",\"content\":\"1\",\"content_format\":\"text\",\"images\":[],\"ip_province\":\"广东省
+1790136034.370 18178 24685 I console : [LOG][___Connect_-730742862___]\",\"ip_city\":\"广州市\",\"view_count\":1,\"reply_count\":0,\"last_reply_at\":null,\"created_at\":\"2026-09-17T11:03:43.406989+08:00\",\"author\":{\"user_id\":8,\"username\":\"张三\",\"avatar_url\":\"\"},\"can_delete\":false,\"likes_count\":0,\"liked_by_me\":false,\"is_featured\":false,\"is_experience\":false,\"reward_issued\":false},{\"id\":15,\"chapter_id\":null,\"category\":\"discussion\",\"chapter_title\":\"\",\"title\":\"1\",\"content\":\"1\",\"content_format\":\"text\",\"images\":[],\"ip_province\":\"\",\"ip_city\":\"\",\"view_count\":47,\"reply_count\":3,\"last_reply_at\":\"2026-09-15T15:11:47.694681+08:00\",\"created_at\":\"2026-09-09T08:58:25.920824+08:00\",\"author\":{\"user_id\":2,\"username\":\"沐泽子\",\"avatar_url\":\"https://storage.forklifttraining.asia/avatars/Nt8bDeazC8iEc3575ea264b7bf920e61742653d5dac1_1787878970438.webp\"},\"can_delete\":false,\"likes_count\":2,\"liked_by_me\":false,\"is_featured\":true,\"is_experience\":true,\"reward_issued\":false},{\"id\":20,\"chapter_i
+1790136034.372 18178 24685 I console : [LOG][___Connect_-730742862___]d\":null,\"category\":\"discussion\",\"chapter_title\":\"\",\"title\":\"测试markdown渲染\",\"content\":\"## 测试 Markdown 渲染\\n\\n- 无序列表\\n\\n---\\n\\n1. 有序列表\\n2. 你好\\n\\n---\\n\\n```python\\nprint(\\\"hello world\\\")\\n```\\n\\n---\",\"content_format\":\"markdown\",\"images\":[],\"ip_province\":\"\",\"ip_city\":\"\",\"view_count\":12,\"reply_count\":6,\"last_reply_at\":\"2026-09-14T11:12:55.973378+08:00\",\"created_at\":\"2026-09-12T11:33:55.527246+08:00\",\"author\":{\"user_id\":1,\"username\":\"张三十\",\"avatar_url\":\"https://www.gccsmile.com/avatars/wallhaven-w8ed3p_1788483557560.webp\"},\"can_delete\":false,\"likes_count\":2,\"liked_by_me\":false,\"is_featured\":false,\"is_experience\":false,\"reward_issued\":false},{\"id\":1,\"chapter_id\":null,\"category\":\"discussion\",\"chapter_title\":\"\",\"title\":\"测试帖子\",\"content\":\"这是一个测试帖子\",\"content_format\":\"text\",\"images\":[],\"ip_province\":\"\",\"ip_city\":\"\",\"view_count\":116,\"reply_count\":2,\"last_reply_at\":\"2026-09-03T0
+1790136148.034 18178 24685 I console : [LOG][___Connect_-730742862___]---BEGIN:CONSOLE---[{"type":"string","value":"[getForumTopicsApi] raw data:"},{"type":"string","value":"{\"page\":1,\"pages\":1,\"topics\":[{\"id\":59,\"chapter_id\":null,\"category\":\"discussion\",\"chapter_title\":\"\",\"title\":\"测试摄影拍照功能\",\"content\":\"### 拍照摄影\",\"content_format\":\"markdown\",\"images\":[\"https://www.gccsmile.com/images/forum/1790052147642_ev3_1790052148465.webp\",\"https://www.gccsmile.com/images/forum/1790052160212_1790052168825.jpg\"],\"ip_province\":\"广东省\",\"ip_city\":\"广州市\",\"view_count\":0,\"reply_count\":0,\"last_reply_at\":null,\"created_at\":\"2026-09-22T12:43:13.689969+08:00\",\"author\":{\"user_id\":8,\"username\":\"张三\",\"avatar_url\":\"\"},\"can_delete\":false,\"likes_count\":0,\"liked_by_me\":false,\"is_featured\":false,\"is_experience\":false,\"reward_issued\":false},{\"id\":58,\"chapter_id\":null,\"category\":\"discussion\",\"chapter_title\":\"\",\"title\":\"1\",\"content\":\"1\",\"content_format\":\"text\",\"images\":[],\"ip_province\":\"广东省
+1790136148.035 18178 24685 I console : [LOG][___Connect_-730742862___]\",\"ip_city\":\"广州市\",\"view_count\":1,\"reply_count\":0,\"last_reply_at\":null,\"created_at\":\"2026-09-17T11:03:43.406989+08:00\",\"author\":{\"user_id\":8,\"username\":\"张三\",\"avatar_url\":\"\"},\"can_delete\":false,\"likes_count\":0,\"liked_by_me\":false,\"is_featured\":false,\"is_experience\":false,\"reward_issued\":false},{\"id\":15,\"chapter_id\":null,\"category\":\"discussion\",\"chapter_title\":\"\",\"title\":\"1\",\"content\":\"1\",\"content_format\":\"text\",\"images\":[],\"ip_province\":\"\",\"ip_city\":\"\",\"view_count\":47,\"reply_count\":3,\"last_reply_at\":\"2026-09-15T15:11:47.694681+08:00\",\"created_at\":\"2026-09-09T08:58:25.920824+08:00\",\"author\":{\"user_id\":2,\"username\":\"沐泽子\",\"avatar_url\":\"https://storage.forklifttraining.asia/avatars/Nt8bDeazC8iEc3575ea264b7bf920e61742653d5dac1_1787878970438.webp\"},\"can_delete\":false,\"likes_count\":2,\"liked_by_me\":false,\"is_featured\":true,\"is_experience\":true,\"reward_issued\":false},{\"id\":20,\"chapter_i
+1790136148.035 18178 24685 I console : [LOG][___Connect_-730742862___]d\":null,\"category\":\"discussion\",\"chapter_title\":\"\",\"title\":\"测试markdown渲染\",\"content\":\"## 测试 Markdown 渲染\\n\\n- 无序列表\\n\\n---\\n\\n1. 有序列表\\n2. 你好\\n\\n---\\n\\n```python\\nprint(\\\"hello world\\\")\\n```\\n\\n---\",\"content_format\":\"markdown\",\"images\":[],\"ip_province\":\"\",\"ip_city\":\"\",\"view_count\":12,\"reply_count\":6,\"last_reply_at\":\"2026-09-14T11:12:55.973378+08:00\",\"created_at\":\"2026-09-12T11:33:55.527246+08:00\",\"author\":{\"user_id\":1,\"username\":\"张三十\",\"avatar_url\":\"https://www.gccsmile.com/avatars/wallhaven-w8ed3p_1788483557560.webp\"},\"can_delete\":false,\"likes_count\":2,\"liked_by_me\":false,\"is_featured\":false,\"is_experience\":false,\"reward_issued\":false},{\"id\":1,\"chapter_id\":null,\"category\":\"discussion\",\"chapter_title\":\"\",\"title\":\"测试帖子\",\"content\":\"这是一个测试帖子\",\"content_format\":\"text\",\"images\":[],\"ip_province\":\"\",\"ip_city\":\"\",\"view_count\":116,\"reply_count\":2,\"last_reply_at\":\"2026-09-03T0
+1790136150.819 18178 24685 I console : [LOG][___Connect_-360558342___]---BEGIN:CONSOLE---[{"type":"string","value":"[getForumTopicsApi] raw data:"},{"type":"string","value":"{\"page\":1,\"pages\":1,\"topics\":[{\"id\":13,\"chapter_id\":null,\"category\":\"question\",\"chapter_title\":\"\",\"title\":\"1\",\"content\":\"1\",\"content_format\":\"text\",\"images\":[],\"ip_province\":\"\",\"ip_city\":\"\",\"view_count\":90,\"reply_count\":2,\"last_reply_at\":\"2026-09-10T10:46:16.505160+08:00\",\"created_at\":\"2026-09-01T21:29:39.474677+08:00\",\"author\":{\"user_id\":2,\"username\":\"沐泽子\",\"avatar_url\":\"https://storage.forklifttraining.asia/avatars/Nt8bDeazC8iEc3575ea264b7bf920e61742653d5dac1_1787878970438.webp\"},\"can_delete\":false,\"likes_count\":2,\"liked_by_me\":false,\"accepted_reply_id\":1,\"solved_at\":\"2026-09-11T15:07:20.602032+08:00\",\"is_featured\":false,\"is_experience\":false,\"reward_issued\":true},{\"id\":3,\"chapter_id\":null,\"category\":\"question\",\"chapter_title\":\"\",\"title\":\"这是一个问题\",\"content\":\"这是一份描述\",\"content_format\

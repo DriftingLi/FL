@@ -45,6 +45,28 @@ func RegisterCoursesRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Cour
 	auth.POST("/course/:course_id/progress", h.UpdateStudyProgress)
 }
 
+// unreadableFaces404 是「一份内容读不到」背后的**四件事实**在呈现层的登记面
+// （ADR-0064 决策 1）：底下每件各有载体与自己的名字，五个消费端点显式把它们统一答 404，
+// 保持 ADR-0062 决策 3 的「不泄漏是哪一态」。
+//
+// 统一的**那句文案不在这里**：它由各端点经 WithSentinelsMsg 自己给出（课程面说「课程不存在」，
+// 章节面说「章节不存在」）。写进哨兵的 Error() 就是让「被哪个端点消费」决定「它叫什么」，
+// 那是把呈现决定沉到判据层——本波立的不变式管的正是这一格。
+//
+// 与旧形状的区别不是码，而是旧的是「端点只有一格错误面，所以只能统一」，
+// 这里是「在 service 层分好档之后**选择**统一」。移动端 #1268 若要区分
+// 「未解锁 / 加载失败」，今后从这里删掉一行映射即可打开，不必回 service 层重做错误语义。
+//
+// **不得夹在 swagger 注解块与它的函数声明之间**：本 var 一度插在 ListCourses 的
+// @Router 与 func 之间，swag 于是把注解块挂给了这个 var ⇒ /courses 整条路由从
+// swagger.json 消失（CI 的 codegen_test 判红，本地只跑 api/service 三个包看不见）。
+var unreadableFaces404 = []error{
+	service.ErrCourseNotVisible, // 不在平台上：未发布 / 未挂载
+	service.ErrCourseLocked,     // 在平台上、可见，但这个人没兑换
+	service.ErrCourseNotFound,   // 课程行真不存在
+	service.ErrChapterNotFound,  // 章节行真不存在
+}
+
 // ListCourses 课程列表
 // @Summary 课程列表
 // @Description 公开访问，支持按专业方向 specialty_id / 等级 level_id / 目标证件 credential_id / 热门精品 filter=hot|featured|all 过滤，分页返回
@@ -114,11 +136,10 @@ func (h *CourseHandler) GetChapterSlides(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *chapterSlidesReq) (*service.ChapterSlidesDTO, error) {
 			return h.svc.GetChapterSlides(req.ChapterID, req.StudentID)
 		},
-		// 判定不动（票8 逐端点判过，与下面的章节详情同一理由）：可读性判据本身已具名
-		// （ErrContentNotReadable → 404），但「章节不存在」在 course_service.go 里是裸
-		// errors.New ⇒ 换成 regenerate 那张「哨兵 404 + 其余 500」的表会把真 404 答成 500。
-		// service 侧把这两条升成哨兵后一并换表（DB 故障今天仍被伪装成 404，登记为已知残留）。
-	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
+		// 四条「读不到」的事实统一答 404 + 本节的外显文案（呈现层显式决定，见 unreadableFaces404）；
+		// 默认面 500 ⇒ 真故障不再像旧形状 WithSuccess(ok, 404) 那样被答成「这个章节不存在」。
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).
+		WithSentinelsMsg(http.StatusNotFound, "章节不存在", unreadableFaces404...).Handle(c)
 }
 
 // GetCourseDetail 课程详情
@@ -147,9 +168,11 @@ func (h *CourseHandler) GetCourseDetail(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *courseDetailReq) (*service.CourseDetailDTO, error) {
 			return h.svc.GetCourseDetail(req.CourseID, req.StudentID)
 		},
-		// 判定不动：GetCourseDetail 不看权益（详情是发现面，只判可见性），其「课程不存在」是裸
-		// errors.New ⇒ 本端点没有任何具名哨兵可映射，换表只会把真 404 与 DB 故障一起答成 500。
-	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
+		// 详情是发现面：只判可见性、不判权益（未发布 / 未挂载按「不存在」返回，ADR-0058），
+		// 故这里可达的只有「课程不存在」那一件；四件一起登记是因为它们共享同一张呈现表，
+		// 未兑换若在别处冒出来，也不会被默认面答成 500。
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).
+		WithSentinelsMsg(http.StatusNotFound, "课程不存在", unreadableFaces404...).Handle(c)
 }
 
 // GetChapterDetail 章节详情
@@ -183,9 +206,11 @@ func (h *CourseHandler) GetChapterDetail(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *chapterDetailReq) (*service.ChapterDetailDTO, error) {
 			return h.svc.GetChapterDetail(req.CourseID, req.ChapterID, req.StudentID)
 		},
-		// 判定不动：同上面幻灯片一处（「章节不存在」「章节不属于该课程」在 service 侧都是裸
-		// errors.New，前者该 404、后者该 400，现在都被这条表压成 404；升哨兵后一并换表）。
-	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
+		// 四条「读不到」的事实统一答 404 + 本节的外显文案（呈现层显式决定，见 unreadableFaces404）。
+		// 「章节不属于该课程」是输入冲突（路径里两个 id 互相矛盾），具名后归位 400。
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).
+		WithSentinel(service.ErrChapterNotInCourse, http.StatusBadRequest).
+		WithSentinelsMsg(http.StatusNotFound, "章节不存在", unreadableFaces404...).Handle(c)
 }
 
 // RegenerateChapterSlides 重新生成幻灯片
@@ -198,8 +223,8 @@ func (h *CourseHandler) GetChapterDetail(c *gin.Context) {
 // @Param chapter_id path int true "章节ID"
 // @Success 200 {object} response.R{data=service.ChapterSlidesDTO} "success"
 // @Failure 401 {object} response.R "未认证"
-// @Failure 404 {object} response.R "章节不存在或对本学员不可读（未发布/未挂载/未兑换）"
-// @Failure 500 {object} response.R "幻灯片生成失败（无 PPT 文件 / 转图失败 / 权益查询失败）"
+// @Failure 404 {object} response.R "章节不存在（未发布 / 未挂载 / 未兑换也按这一句答，不泄漏是哪一态）"
+// @Failure 500 {object} response.R "服务器内部错误（该章节没有 PPT、转图失败、权益查询查不动）"
 // @Router /chapter/{chapter_id}/slides/regenerate [post]
 func (h *CourseHandler) RegenerateChapterSlides(c *gin.Context) {
 	Endpoint[chapterSlidesReq, service.ChapterSlidesDTO]{
@@ -219,13 +244,11 @@ func (h *CourseHandler) RegenerateChapterSlides(c *gin.Context) {
 		// （该章节没有 PPT、PPT 转图失败）与权益查询查不动一律 500。
 		// 旧形状 WithSuccess(ok, 404) 把门禁与下游故障压成同一个 404 ⇒ 门禁从外部不可分辨、
 		// 无测可建（ADR-0062 复核登记 #4），并把 DB 故障答成「这个章节不存在」。
-		ErrStatus: &errStatusTable{entries: []errStatusEntry{
-			{sentinel: service.ErrContentNotReadable, status: http.StatusNotFound},
-		}},
+		ErrStatus: errStatusAll(http.StatusInternalServerError),
 		Render: func(c *gin.Context, _ *chapterSlidesReq, resp *service.ChapterSlidesDTO) {
 			response.SuccessWithMsg(c, "幻灯片重新生成成功", resp)
 		},
-	}.Handle(c)
+	}.WithSentinelsMsg(http.StatusNotFound, "章节不存在", unreadableFaces404...).Handle(c)
 }
 
 // UpdateStudyProgress 更新学习进度
@@ -240,6 +263,8 @@ func (h *CourseHandler) RegenerateChapterSlides(c *gin.Context) {
 // @Success 200 {object} response.R{data=service.StudyProgressDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "课程不存在（未发布 / 未挂载 / 未兑换也按这一句答）"
+// @Failure 500 {object} response.R "更新进度失败（写库故障等真故障；5xx 一律不外发下游原文）"
 // @Router /course/{course_id}/progress [post]
 func (h *CourseHandler) UpdateStudyProgress(c *gin.Context) {
 	Endpoint[studyProgressReq, service.StudyProgressDTO]{
@@ -281,16 +306,13 @@ func (h *CourseHandler) UpdateStudyProgress(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *studyProgressReq) (*service.StudyProgressDTO, error) {
 			return h.svc.UpdateStudyProgress(req.StudentID, req.CourseID, req.Input)
 		},
-		ErrStatus: &errStatusTable{entries: []errStatusEntry{
-			// 不可读（未发布 / 未挂载 / 未兑换）按 404，与另外三条内容路径同判
-			// （ADR-0062 决策 3）；其余错误保持既有「更新进度失败: + 原文」500 形状。
-			{sentinel: service.ErrContentNotReadable, status: http.StatusNotFound},
-			{sentinel: nil, status: http.StatusInternalServerError, errPrefix: "更新进度失败: "},
-		}},
+		// 不可读（未发布 / 未挂载 / 未兑换）按 404，与另外三条内容路径同判（ADR-0062 决策 3）；
+		// 其余错误落 500，前缀「更新进度失败」保留、错误原文不再外发（ADR-0064 决策 9）。
+		ErrStatus: errStatusAllPrefix(http.StatusInternalServerError, "更新进度失败: "),
 		Render: func(c *gin.Context, _ *studyProgressReq, resp *service.StudyProgressDTO) {
 			response.SuccessWithMsg(c, "学习进度更新成功", resp)
 		},
-	}.Handle(c)
+	}.WithSentinelsMsg(http.StatusNotFound, "课程不存在", unreadableFaces404...).Handle(c)
 }
 
 // chapterSlidesReq 章节幻灯片请求（chapter_id）。

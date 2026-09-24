@@ -5,6 +5,7 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -53,7 +54,7 @@ type RecruitResumeCard struct {
 	RealNameMasked        string    `json:"real_name_masked"` // 同上，兼容验收对打码字段的显式断言
 	ExpectedPositionID    *int      `json:"expected_position_id,omitempty" extensions:"x-optional"`
 	ExpectedPositionExtra string    `json:"expected_position_extra"`
-	ExpectedRegions       JSONArray `json:"expected_regions" swaggertype:"array,string"`
+	ExpectedRegions       JSONArray `json:"expected_regions" swaggertype:"array,string" nullability:"nullable"`
 	SalaryMin             *int      `json:"salary_min,omitempty" extensions:"x-optional"`
 	SalaryMax             *int      `json:"salary_max,omitempty" extensions:"x-optional"`
 	SalaryNegotiable      bool      `json:"salary_negotiable"`
@@ -61,17 +62,22 @@ type RecruitResumeCard struct {
 	JobNature             string    `json:"job_nature"`
 	ExperienceYears       int       `json:"experience_years"`
 	SelfIntro             string    `json:"self_intro"`
-	ResumeExperiences     JSONArray `json:"resume_experiences" swaggertype:"array,object"`
-	ResumeCertifications  JSONArray `json:"resume_certifications" swaggertype:"array,object"` // 已去 image_urls
+	ResumeExperiences     JSONArray `json:"resume_experiences" swaggertype:"array,object" nullability:"nullable"`
+	ResumeCertifications  JSONArray `json:"resume_certifications" swaggertype:"array,object" nullability:"nullable"` // 已去 image_urls
 	UpdatedAt             string    `json:"updated_at"`
 	// #489：企业视角联系状态（none/pending/approved，approved 带来源）
 	ContactState  string `json:"contact_state,omitempty" extensions:"x-optional"`
 	ContactSource string `json:"contact_source,omitempty" extensions:"x-optional"` // recruiter/application
+	// CompanyDisabled 与联系面明文位置**同键同措辞**的那一格：本企业账号已被禁用（处置动作）或
+	// 已注销 ⇒ 明文取不到，但 contact_state 仍按授权事实投影（授权存在 ≠ 授权可用，
+	// 词表「授权有效态」；ADR-0064 决策 5）。缺席即企业可用。
+	// 移动端 #1267 的退回诉求就是这一格：只挂在明文位置上，列表角标无从分辨。
+	CompanyDisabled bool `json:"company_disabled,omitempty" extensions:"x-optional"`
 }
 
 // RecruitListResult 列表结果。
 type RecruitListResult struct {
-	Items []RecruitResumeCard `json:"items"`
+	Items []RecruitResumeCard `json:"items" nullability:"nonnil"`
 	Total int64               `json:"total"`
 }
 
@@ -91,12 +97,24 @@ func fillContactStates(db *gorm.DB, recruiterID int, cards []RecruitResumeCard) 
 	if err != nil {
 		return
 	}
+	companyUnavailable := companyUnavailableForCards(db, recruiterID)
 	for i := range cards {
 		if g, ok := grants[cards[i].UserID]; ok && g.State != "" {
 			cards[i].ContactState = string(g.State)
 			cards[i].ContactSource = string(g.Source)
+			if companyUnavailable && g.State == ContactGrantApproved {
+				cards[i].CompanyDisabled = true
+			}
 		}
 	}
+}
+
+// companyUnavailableForCards caller 企业自己那一维的可投影形态（ADR-0064 决策 5）：
+// 只有**确证**被禁用或已注销才返回 true；「查不动」返回 false——
+// 把 DB 故障报成一条处置事实，比少说一格更坏（ADR-0062 票6 同判据）。
+func companyUnavailableForCards(db *gorm.DB, recruiterID int) bool {
+	err := recruiterAccountUsable(db, recruiterID)
+	return errors.Is(err, ErrCompanyUnavailable)
 }
 
 // resumeHoldsCredential 简历持证筛选：简历卡的 resume_certifications JSONB 数组内含该 credential_id

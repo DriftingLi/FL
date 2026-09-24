@@ -37,6 +37,21 @@ type RealExamPaperDTO struct {
 }
 
 // paperQuestionIDs 卷内题目 id（按 order_num 升序，仅 published）。
+// 按卷练习/开考链路上「三件不同的事」各自的载体（ADR-0064 决策 1/2）。此前它们与
+// ErrRealPaperUnavailable 混在一格 errStatusAll(404) 里，A 批在 real_exam.go 的注释里
+// 把这件事登记为「正解在 service 侧升哨兵」：
+//   - ErrRealPaperNotRedeemed：这份内容**在平台上、也可见**，只是当前主体没为它付过 ——
+//     与「不存在」是两件事；真题卷的可见性本来就是公开的（列表里能看见），所以这里不必
+//     套 ADR-0062 决策 3 那条「未兑换按不存在、不泄漏存在性」，直接如实回 4xx 与其文案。
+//   - ErrRealPaperEmpty：卷内暂无已发布题目 —— 域状态问题，既不是没找到也不是服务端故障。
+//
+// 两条都留在 4xx 侧，是因为 ADR-0064 决策 9 之后 5xx 不再外发原文：把它们做成 500
+// 会让学员看到天书（A 批注释点名的正是这一条）。
+var (
+	ErrRealPaperNotRedeemed = errors.New("请先兑换该真题卷")
+	ErrRealPaperEmpty       = errors.New("该卷暂无已发布题目")
+)
+
 func (s *RealExamService) paperQuestionIDs(paperID int) ([]int, []model.Question, error) {
 	var relIDs []int
 	if err := s.db.Model(&model.RealExamPaperQuestion{}).
@@ -118,14 +133,14 @@ func (s *RealExamService) StartPaperPractice(studentID, paperID int) (*PracticeS
 		return nil, entErr
 	}
 	if !entitled {
-		return nil, errors.New("请先兑换该真题卷")
+		return nil, ErrRealPaperNotRedeemed
 	}
 	allIDs, all, err := s.paperQuestionIDs(paperID)
 	if err != nil {
 		return nil, err
 	}
 	if len(allIDs) == 0 {
-		return nil, errors.New("该卷暂无已发布题目")
+		return nil, ErrRealPaperEmpty
 	}
 	byID := make(map[int]model.Question, len(all))
 	for i := range all {
@@ -167,14 +182,14 @@ func (s *RealExamService) StartPaperExam(studentID, paperID int) (*MockExamStart
 		return nil, entErr
 	}
 	if !entitled {
-		return nil, errors.New("请先兑换该真题卷")
+		return nil, ErrRealPaperNotRedeemed
 	}
 	questionIDs, ordered, err := s.paperQuestionIDs(paperID)
 	if err != nil {
 		return nil, err
 	}
 	if len(questionIDs) == 0 {
-		return nil, errors.New("该卷暂无已发布题目")
+		return nil, ErrRealPaperEmpty
 	}
 
 	// 清理废弃未交卷记录（与随机模拟考同口径）。

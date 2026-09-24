@@ -91,7 +91,7 @@ type ApplicationDTO struct {
 
 // ApplicationListResult 我的投递分页结果。
 type ApplicationListResult struct {
-	Items    []ApplicationDTO `json:"items"`
+	Items    []ApplicationDTO `json:"items" nullability:"nullable"`
 	Total    int64            `json:"total"`
 	Page     int              `json:"page"`
 	PageSize int              `json:"page_size"`

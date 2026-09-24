@@ -3,8 +3,10 @@ package service
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go.uber.org/zap"
+	"strconv"
 	"time"
 
 	"gorm.io/gorm"
@@ -27,7 +29,7 @@ type GenTaskStatus struct {
 	Status    string             `json:"status"` // "pending"|"processing"|"completed"|"failed"
 	Total     int                `json:"total"`
 	Completed int                `json:"completed"`
-	Results   []ChapterGenResult `json:"results" extensions:"x-nullable"`
+	Results   []ChapterGenResult `json:"results" extensions:"x-nullable" nullability:"nullable"`
 }
 
 // genTaskPayload async_task.payload 的结构。
@@ -244,16 +246,30 @@ func (s *ContentGenerateService) CleanupInterruptedTasks() {
 	}
 }
 
+// ErrGenTaskNotFound 生成任务行不存在。文案与积分域的「任务不存在」**刻意不同**：那是
+// 打卡/领取任务，这是内容生成任务，两类对象共用一句文案会让跨域同形看不出来
+// （ADR-0064 锁节「跨域文案锁」）。
+// ErrGenTaskIDInvalid task_id 不是数字，属「输入不合法」一族（ADR-0064 决策 3）。
+// 两者此前都是 fmt.Errorf：前者把驱动原文 %w 进消息 ⇒ "record not found" 原样出现在响应体
+// 里（与第十四波修掉的 ai-config 同一泄漏族），后者被端点默认面答成 404。
+var (
+	ErrGenTaskNotFound  = errors.New("生成任务不存在")
+	ErrGenTaskIDInvalid = errors.New("task_id 无效")
+)
+
 // GetTaskStatus 查询任务状态。返回前端轮询所需的 GenTaskStatus 结构。
 func (s *ContentGenerateService) GetTaskStatus(taskID string) (*GenTaskStatus, error) {
 	var task model.AsyncTask
-	// taskID 为字符串形式，需解析为 int
-	var id int
-	if _, err := fmt.Sscanf(taskID, "%d", &id); err != nil {
-		return nil, fmt.Errorf("无效的 task_id: %s", taskID)
+	// 严格解析：fmt.Sscanf("%d") 会接受 "12abc" 这类前缀并静默截成 12，把非法 id 当合法查询。
+	id, err := strconv.Atoi(taskID)
+	if err != nil || id <= 0 {
+		return nil, ErrGenTaskIDInvalid
 	}
 	if err := s.db.First(&task, id).Error; err != nil {
-		return nil, fmt.Errorf("任务不存在: %w", err)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrGenTaskNotFound
+		}
+		return nil, err
 	}
 
 	status := &GenTaskStatus{

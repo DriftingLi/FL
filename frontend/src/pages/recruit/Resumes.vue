@@ -64,7 +64,7 @@
       <!-- #493：响应式方形网格（手机 1 列 → 平板 2-3 列 → 桌面 4 列）；卡面仅核心字段 -->
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       <div
-        v-for="{ item, badge } in cards"
+        v-for="{ item, badge, avail } in cards"
         :key="String(item.user_id)"
         class="flex aspect-[4/3] flex-col rounded-card border border-line bg-panel p-4 transition-colors hover:border-ui-200 hover:shadow-card"
       >
@@ -74,6 +74,8 @@
           <UiTag v-if="badge" :tone="badge.tone" size="small">{{ badge.label }}</UiTag>
         </div>
         <div class="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-xs text-ink-3">
+          <!-- #1267：徽章说「已同意」而明文已收回时，这一格负责不让角标单独说谎 -->
+          <UiTag v-if="avail" :tone="avail.tone" size="small">{{ avail.label }}</UiTag>
           <span v-if="item.expected_position_extra">{{ item.expected_position_extra }}</span>
           <span v-if="item.expected_regions && item.expected_regions.length">意向：{{ (item.expected_regions as any).join('、') }}</span>
           <span v-if="item.salary_negotiable">薪资面议</span>
@@ -107,7 +109,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { href } from '@/config/pages'
 import { recruitApi, type RecruitResumeItem } from '@/api/recruit'
-import { contactBadge } from '@/utils/contactRequestStatus'
+import { companyAvailability, contactBadge } from '@/utils/contactRequestStatus'
 import { buildCityLevelRegionOptions, joinRegionPath } from '@/utils/region'
 import { positionApi } from '@/api/position'
 import { credentialApi } from '@/api/credential'
@@ -121,8 +123,16 @@ import UiTag from '@/components/ui/UiTag.vue'
 const BATCH = 20
 const items = ref<RecruitResumeItem[]>([])
 
-// 卡片 = 简历 + 其联系状态角标（角标文案与 tone 的唯一来源是 descriptor，页面不自写状态词）。
-const cards = computed(() => items.value.map((item) => ({ item, badge: contactBadge(item.contact_state) })))
+// 卡片 = 简历 + 其联系状态角标 + 「授权在而明文不可用」那一格（两者的文案与 tone 都只出自
+// descriptor 单点，页面不自写状态词）。徽章不因企业被停用而降级：那是两格正交事实
+// （ADR-0064 决策 5 / 移动端 #1267）。
+const cards = computed(() =>
+  items.value.map((item) => ({
+    item,
+    badge: contactBadge(item.contact_state),
+    avail: companyAvailability(item.company_disabled)
+  }))
+)
 
 // 筛选轴（#1101）：直接以 getter 形态喂给 useAsyncPage 的 filterDeps，
 // 任一轴变化即「清空累积 + 回第 1 批重装」，不再靠每个控件的 @change 回调兜底。

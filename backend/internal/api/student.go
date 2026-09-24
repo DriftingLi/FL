@@ -59,7 +59,8 @@ func (h *StudentHandler) GetProfile(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *studentUserIDReq) (*service.StudentProfileDTO, error) {
 			return h.svc.GetProfile(req.UserID)
 		},
-	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).
+		WithSentinel(service.ErrStudentNotFound, http.StatusNotFound).Handle(c)
 }
 
 // GetRecords 学员学习记录分页
@@ -163,7 +164,9 @@ func (h *StudentHandler) GetStudentCourses(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *studentUserIDReq) (*service.StudentCoursesDTO, error) {
 			return h.svc.GetStudentCourses(req.UserID)
 		},
-	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
+		// 不挂 ErrStudentNotFound：GetStudentCourses 只读 study_records/course，从不取 hrwai_users
+		// 行 ⇒ 那一档在本端点不可达（虚报档位会让台账的「声明了却测不出」反向锁失去意义）。
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // GetStudentCourseDetail 单课程学习详情
@@ -190,5 +193,6 @@ func (h *StudentHandler) GetStudentCourseDetail(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *studentCourseReq) (*service.StudentCourseDetailDTO, error) {
 			return h.svc.GetStudentCourseDetail(req.UserID, req.CourseID)
 		},
-	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).
+		WithSentinel(service.ErrCourseNotFound, http.StatusNotFound).Handle(c)
 }

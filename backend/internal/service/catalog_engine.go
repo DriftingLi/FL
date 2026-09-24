@@ -11,13 +11,16 @@ import (
 
 // CatalogEntitySpec 描述一个课程目录实体的持久化与字段差异。
 type CatalogEntitySpec[M any, I any, D any] struct {
-	Table       string
-	IDColumn    string
-	OrderBy     string
-	CodeErr     string
-	NameErr     string
-	DupMsg      string
-	NotFoundMsg string
+	Table    string
+	IDColumn string
+	OrderBy  string
+	CodeErr  string
+	NameErr  string
+	DupMsg   string
+	// NotFound 是该实体「行不存在」这一事实的具名哨兵（ADR-0064 决策 1/2）。
+	// 此前这里是一个 string：引擎只能 errors.New 出一个匿名错误 ⇒
+	// ①「查不动」与「不存在」在 api 层分不出档，②一处引擎缺陷同时污染全部目录实体。
+	NotFound error
 
 	// Sortable 为 false 时实体没有 sort_order（证书模板）。
 	Sortable bool
@@ -89,7 +92,10 @@ func catalogUpdate[M any, I any, D any](db *gorm.DB, spec CatalogEntitySpec[M, I
 	var zero D
 	var m M
 	if err := db.First(&m, id).Error; err != nil {
-		return zero, errors.New(spec.NotFoundMsg)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return zero, spec.NotFound
+		}
+		return zero, err
 	}
 	if err := validateStatus(spec.Status(in)); err != nil {
 		return zero, err
@@ -128,14 +134,17 @@ func catalogDelete[M any, I any, D any](db *gorm.DB, spec CatalogEntitySpec[M, I
 		return result.Error
 	}
 	if result.RowsAffected == 0 {
-		return errors.New(spec.NotFoundMsg)
+		return spec.NotFound
 	}
 	return nil
 }
 
+// ErrEntityNotSortable 对一张没开排序的目录表请求 swap（ADR-0065 决策 3：输入不合法，400）。
+var ErrEntityNotSortable = errors.New("该实体不支持排序交换")
+
 func catalogSwap[M any, I any, D any](db *gorm.DB, spec CatalogEntitySpec[M, I, D], a, b int) error {
 	if !spec.Sortable {
-		return errors.New("该实体不支持排序交换")
+		return ErrEntityNotSortable
 	}
 	return swapGroupPositions(db, spec.EmptyModel(), spec.IDColumn, a, b, nil)
 }

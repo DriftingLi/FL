@@ -24,6 +24,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -206,15 +207,33 @@ func errStatusAllPrefix(status int, prefix string) *errStatusTable {
 	return &errStatusTable{entries: []errStatusEntry{{sentinel: nil, status: status, errPrefix: prefix}}}
 }
 
-// entryMsg 条目的响应文案：固定文案优先，其次「前缀 + 错误自身文本」，最后才是错误自身文本。
+// entryMsg 条目的响应文案。固定文案优先；其余走 clientErrorText（ADR-0064 决策 9）。
 func entryMsg(e errStatusEntry, err error) string {
 	if e.message != "" {
 		return e.message
 	}
-	if e.errPrefix != "" {
-		return e.errPrefix + err.Error()
+	return clientErrorText(e.status, err, e.errPrefix)
+}
+
+// clientErrorText 是「5xx 不外发驱动原文」这条规则的唯一落点（ADR-0064 决策 9）：
+//
+//	4xx —— 照旧回「前缀 + 错误自身文本」。4xx 的文案本来就是给调用方看的领域说明
+//	        （「证件不存在」「专业方向编码已存在」），收掉它会直接伤可用性。
+//	5xx —— 一律不回 err.Error()。驱动/ORM 原文（record not found、no such table、
+//	        SQL logic error、pq: …、dial tcp …）原样进 message 等于把实现细节交给外部，
+//	        而调用方在 5xx 上唯一需要的信息是「服务端失败了、可重试」这一个事实。
+//	        真实错误仍经 c.Error 记进 gin 上下文，日志面不丢；要给用户看原因的 5xx
+//	        必须改为抛**具名领域错误**（4xx 档）或显式声明固定文案（errStatusAllMsg），
+//	        即「说什么」是一次显式决定，而不是 err.Error() 的默认漏出。
+//	        有前缀时保留前缀本身（「更新进度失败: 」→「更新进度失败」），丢掉的是尾巴。
+func clientErrorText(status int, err error, prefix string) string {
+	if status < http.StatusInternalServerError {
+		return prefix + err.Error()
 	}
-	return err.Error()
+	if trimmed := strings.TrimRight(prefix, " :："); trimmed != "" {
+		return trimmed
+	}
+	return "服务器内部错误"
 }
 
 // renderError 渲染错误面（票1b 后是本端点错误渲染的唯一入口）。判定序（票8 / ADR-0062 决策 8 翻转）：
@@ -246,10 +265,12 @@ func (t *errStatusTable) renderError(c *gin.Context, err error) {
 		}
 	}
 	if t != nil && t.fallback != 0 {
-		renderStatus(c, t.fallback, err.Error())
+		renderStatus(c, t.fallback, clientErrorText(t.fallback, err, ""))
 		return
 	}
-	response.ServerError(c, err.Error())
+	// 未挂表的端点：真实错误记进 gin 上下文（日志面不丢），对外只给「服务器内部错误」。
+	c.Error(err) //nolint:errcheck // gin 的 Error 只记账，返回值是链式用的
+	response.ServerError(c, "服务器内部错误")
 }
 
 // ===== 常用解析器（吸收既有 handler 手写解析链） =====
@@ -338,6 +359,62 @@ func successRenderer[Req, Resp any](ok *success) RenderFunc[Req, Resp] {
 	}
 }
 
+// WithSentinel 在已装配的错误面上**前置**一条具名哨兵分档，返回自身便于链式声明：
+//
+//	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).
+//		WithSentinel(service.ErrGenTaskNotFound, http.StatusNotFound).Handle(c)
+//
+// 存在的理由就是本仓的主判据（ADR-0064 决策 1）：service 层把「不存在」「不可读」「查不动」
+// 分开成具名事实之后，api 层要能把它们**分别**落码，而呈现层若仍要统一（例如未兑换与
+// 真不存在都答 404、不泄漏存在性）必须是一次显式调用，而不是只有一格可填。
+// 默认错误面（WithSuccess 第二参 / sentinel 为 nil 的条目）永远排在哨兵之后。
+func (e Endpoint[Req, Resp]) WithSentinel(sentinel error, status int) Endpoint[Req, Resp] {
+	if e.ErrStatus == nil {
+		e.ErrStatus = &errStatusTable{}
+	}
+	e.ErrStatus.entries = append([]errStatusEntry{{sentinel: sentinel, status: status}}, e.ErrStatus.entries...)
+	return e
+}
+
+// WithSentinels 一次挂多条具名哨兵、共用同一个状态码，但**文案仍由各错误自己说**。
+//
+// 它与 WithSentinelsMsg 的分工就是本波那条「统一必须是显式决定」的两半：
+//   - Msg 版：多条事实在呈现层被**刻意收敛成一句**（「读不到」的四件事实都答 404 + 那一句）；
+//   - 本版：同一档位、但每件的说明本就不同（证件/方向/等级/模板各自的「XXID无效」），
+//     压成一句会丢掉「是哪一个字段坏了」——那才是客户端真正需要的信息。
+//
+// 4xx 按 ADR-0064 决策 9 保留 `err.Error()`，故 entry 的 message 留空即等于「说自己的话」。
+func (e Endpoint[Req, Resp]) WithSentinels(status int, sentinels ...error) Endpoint[Req, Resp] {
+	if e.ErrStatus == nil {
+		e.ErrStatus = &errStatusTable{}
+	}
+	entries := make([]errStatusEntry, 0, len(sentinels))
+	for _, s := range sentinels {
+		entries = append(entries, errStatusEntry{sentinel: s, status: status})
+	}
+	e.ErrStatus.entries = append(entries, e.ErrStatus.entries...)
+	return e
+}
+
+// WithSentinelsMsg 一次前置多条具名哨兵、共用同一个状态码与**同一句对外文案**
+// （形状同 WithSentinel，用于「一组事实在呈现层落同一档」）。
+//
+// 文案是参数，不是哨兵自己的 Error()：同一件「读不到」的事实在课程面与章节面上要说出
+// 不同的对象名，把统一的句子写进 service 层的哨兵里，就等于让「被哪个端点消费」决定
+// 「它叫什么」——那是把呈现决定沉到判据层，违反本波不变式（ADR-0064：统一只允许发生在
+// 呈现层，且必须是显式决定）。逐条抄 WithSentinel 同样会抹掉「这是一组」这一层信息。
+func (e Endpoint[Req, Resp]) WithSentinelsMsg(status int, message string, sentinels ...error) Endpoint[Req, Resp] {
+	if e.ErrStatus == nil {
+		e.ErrStatus = &errStatusTable{}
+	}
+	entries := make([]errStatusEntry, 0, len(sentinels))
+	for _, sent := range sentinels {
+		entries = append(entries, errStatusEntry{sentinel: sent, status: status, message: message})
+	}
+	e.ErrStatus.entries = append(entries, e.ErrStatus.entries...)
+	return e
+}
+
 // WithSuccess 按「成功描述 + 默认错误面」装配端点，返回自身便于链式声明：
 //
 //	Endpoint[In, Out]{
@@ -356,16 +433,27 @@ func (e Endpoint[Req, Resp]) WithSuccess(ok *success, errStatus int) Endpoint[Re
 	return e
 }
 
-// pathInt 解析路径参数为 int，失败返回 400 自定义文案。
+// pathInt 解析路径参数为正整数 id；非数字、0 与负数一律 400（带调用方给的那句文案）。
+//
+// 「路径上的整数 id 不是正整数」是一件**解析层**事实，与「这个资源不存在」无关：改之前这里只看
+// `strconv.Atoi` 的 err ⇒ 0 与负数被放行到 service，于是 `GET /course/0` 对外答 404「课程不存在」
+// （拿一个不存在的 id 冒充一个不存在的资源），而用户/讲师面因 service 有 `id <= 0` guard 答 400，
+// 且用的是另一句文案（「用户 ID 非法」）——同一件输入错误在三个地方说出三种话（ADR-0065 决策 1）。
+// `pathInt64` 一直是这里的形状，本函数向它对齐。
+//
+// service 层那 5 处 `id <= 0` guard **保留**：HTTP 面现在轮不到它触发，但 service 的契约不能依赖
+// 「调用方一定是这个 handler」（同一 guard 也管着来自 body 的 id）。被否备选见 ADR-0065。
 func pathInt(c *gin.Context, key, failMsg string) (int, error) {
 	v, err := strconv.Atoi(c.Param(key))
-	if err != nil {
+	if err != nil || v <= 0 {
 		return 0, badRequest(failMsg)
 	}
 	return v, nil
 }
 
-// pathInt64 解析路径参数为 int64，失败或 <=0 返回 400 自定义文案。
+// pathInt64 解析路径参数为正整数 id（int64 版），判定与 pathInt 逐字相同。
+// 两枚 helper 是**仅有的**两处路径整数解析点；由 ⑤b 把散在 9 个文件里的裸 `strconv.*(c.Param(...))`
+// 收进来，之后由 parse_point_drift_lock_test.go 钉住「不许再出现第三处」。
 func pathInt64(c *gin.Context, key, failMsg string) (int64, error) {
 	v, err := strconv.ParseInt(c.Param(key), 10, 64)
 	if err != nil || v <= 0 {

@@ -156,7 +156,7 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		AIConfigSvc:          aiConfigSvc,
 		ContentGenSvc:        contentGenSvc,
 		CourseSvc:            service.NewCourseService(db, slideRenderer, logger),
-		AdminSvc:             service.NewAdminService(db, logger),
+		AdminSvc:             service.NewAdminService(db, sess, logger),
 		AdminCourseSvc:       service.NewAdminCourseService(db, fileSvc, logger),
 		ForumSvc:             service.NewForumService(db, fileSvc, notificationSvc, forumCnt, pointsSvc, logger),
 		ForumModSvc:          service.NewForumModerationService(db, fileSvc, notificationSvc, forumCnt, pointsSvc, logger),

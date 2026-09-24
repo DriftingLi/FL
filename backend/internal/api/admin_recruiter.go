@@ -95,7 +95,10 @@ func (h *AdminRecruiterHandler) ToggleStatus(c *gin.Context) {
 		},
 		// 判定不动（票8 逐端点判过，同 admin.go 的两处 Toggle）：AuthService.ToggleRecruiterStatus
 		// 的「招聘者不存在」是裸 errors.New、后面的 UPDATE/回写错误原样上抛 ⇒ 无哨兵可分档。
-		ErrStatus: errStatusAll(http.StatusNotFound),
+		ErrStatus: &errStatusTable{entries: []errStatusEntry{
+			{sentinel: service.ErrRecruiterNotFound, status: http.StatusNotFound},
+			{sentinel: nil, status: http.StatusInternalServerError},
+		}},
 		Render: func(c *gin.Context, _ *idParam, resp *service.StatusResultDTO) {
 			msg := "招聘者已启用"
 			if resp.Status == 0 {

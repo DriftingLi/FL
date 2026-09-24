@@ -119,6 +119,25 @@ func (h *AdminHandler) ListCourses(c *gin.Context) {
 	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
+// courseWriteFacts400 是课程两条写面（Create/Update）**共用**的「输入不合法」事实集
+// （ADR-0065 决策 3）。挂同一份表，为的是让「同一件输入错误按 HTTP 动词分家」不可能再发生：
+// 此前 Create 的默认面是 400（于是 `applyCourseTrainingFields` / `replaceCoursePrerequisites`
+// 里的「查不动」被答成参数错误，还连带把驱动原文 `SQL logic error: no such table: …` 外发出去），
+// 而 Update 的默认面是 500（于是 14 条输入不合法被答成服务端故障）——两面各错一半。
+//
+// 三条「引用对象不存在」复用目录域的同一载体（`catalog_specs.go:15-17`），不另起名字。
+var courseWriteFacts400 = []error{
+	service.ErrCourseNameRequired, service.ErrSpecialtyRequired, service.ErrCourseLevelRequired,
+	service.ErrCourseCredentialIDInvalid, service.ErrCourseSpecialtyIDInvalid,
+	service.ErrCourseLevelIDInvalid, service.ErrCertificateTemplateIDInvalid,
+	service.ErrCourseCredentialRefNotFound, service.ErrSpecialtyNotFound,
+	service.ErrCourseLevelNotFound, service.ErrCertificateTemplateNotFound,
+	service.ErrCourseTheoryHoursNegative, service.ErrCoursePracticeHoursNegative,
+	service.ErrCourseSortOrderNegative,
+	service.ErrCoursePrerequisiteSelf, service.ErrCoursePrerequisiteNotFound,
+	service.ErrCoursePrerequisiteCycle,
+}
+
 // @Summary 创建课程
 // @Description 管理员创建课程（含培训目录扩展字段）
 // @Tags 管理端-课程
@@ -127,8 +146,9 @@ func (h *AdminHandler) ListCourses(c *gin.Context) {
 // @Security BearerAuth
 // @Param body body object false "课程输入 {name,description,cover_image,duration,status,...}"
 // @Success 201 {object} response.R{data=service.CourseDTO} "课程创建成功"
-// @Failure 400 {object} response.R "请求数据无效"
+// @Failure 400 {object} response.R "输入不合法（挂载必填 / 引用ID无效或不存在 / 数值为负 / 前置课程冲突）"
 // @Failure 401 {object} response.R "未认证"
+// @Failure 500 {object} response.R "写库或查库失败"
 // @Router /admin/course [post]
 // CreateCourse 创建课程 POST /api/admin/course
 func (h *AdminHandler) CreateCourse(c *gin.Context) {
@@ -139,7 +159,8 @@ func (h *AdminHandler) CreateCourse(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *service.CourseInput) (*service.CourseDTO, error) {
 			return h.courseSvc.CreateCourse(req)
 		},
-	}.WithSuccess(created("课程创建成功"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(created("课程创建成功"), http.StatusInternalServerError).
+		WithSentinels(http.StatusBadRequest, courseWriteFacts400...).Handle(c)
 }
 
 // @Summary 管理端课程详情
@@ -165,7 +186,8 @@ func (h *AdminHandler) GetCourseDetail(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *idParam) (*service.AdminCourseDetailDTO, error) {
 			return h.courseSvc.GetCourseDetail(req.ID)
 		},
-	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).
+		WithSentinel(service.ErrCourseNotFound, http.StatusNotFound).Handle(c)
 }
 
 // @Summary 更新课程
@@ -180,6 +202,7 @@ func (h *AdminHandler) GetCourseDetail(c *gin.Context) {
 // @Failure 400 {object} response.R "请求数据无效"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "课程不存在"
+// @Failure 500 {object} response.R "写库或查库失败"
 // @Router /admin/course/{course_id} [put]
 // UpdateCourse 更新课程 PUT /api/admin/course/:course_id
 func (h *AdminHandler) UpdateCourse(c *gin.Context) {
@@ -198,8 +221,22 @@ func (h *AdminHandler) UpdateCourse(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *courseIDInput) (*service.CourseDTO, error) {
 			return h.courseSvc.UpdateCourse(req.ID, req.Input)
 		},
-	}.WithSuccess(okMsg("课程更新成功"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("课程更新成功"), http.StatusInternalServerError).
+		WithSentinel(service.ErrCourseNotFound, http.StatusNotFound).
+		// 与 Create 面共用同一份表（ADR-0065 决策 3）：此前这里只挂了「必填」两条，
+		// 于是「方向被引用成一张不存在的行」在编辑面上是 500。
+		WithSentinels(http.StatusBadRequest, courseWriteFacts400...).Handle(c)
 }
+
+// courseSortFacts400 是课程交换排序端的表：目录侧那两件（不支持排序 / 待交换的项不存在）
+// 加上课程侧独有的两件（未挂载、跨组）。用两次 append 而不是直接抄，是为了让目录侧那两条
+// 只有一份出处；第一个 append 落进新 backing array，不与 sortFacts400 共享底层数组。
+// 其中 ErrEntityNotSortable 与 ErrSwapItemNotFound 从课程这条链上**构造不出来**（课程开了排序；
+// 两行都在函数里先 First 过）——仍留在共用表里，是因为「这一族的输入事实」应该只有一份清单；
+// 真正可达性归零这件事写在这里，而不是靠测试去假装打过它。
+var courseSortFacts400 = append(append([]error{}, sortFacts400...),
+	service.ErrCourseNotMountedForSort, service.ErrCourseSortGroupMismatch,
+	service.ErrCourseSwapTargetNotFound)
 
 // @Summary 交换课程排序
 // @Description 同一方向+等级组内交换 sort_order，响应 data 为 null
@@ -210,8 +247,10 @@ func (h *AdminHandler) UpdateCourse(c *gin.Context) {
 // @Param course_id path int true "课程 ID"
 // @Param body body object false "交换请求 {swap_with}"
 // @Success 200 {object} response.R "排序已交换"
-// @Failure 400 {object} response.R "swap_with 参数无效"
+// @Failure 400 {object} response.R "输入不合法（swap_with 参数无效 / 待交换的课程不存在 / 未挂载 / 跨组）"
 // @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "课程不存在"
+// @Failure 500 {object} response.R "写库或查库失败"
 // @Router /admin/course/{course_id}/sort [put]
 // SwapCourseSort 交换课程排序 PUT /api/admin/course/:course_id/sort（同一方向+等级组内，body: {"swap_with": <id>}）
 func (h *AdminHandler) SwapCourseSort(c *gin.Context) {
@@ -235,7 +274,10 @@ func (h *AdminHandler) SwapCourseSort(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-	}.WithSuccess(okMsgNoData("排序已交换"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(okMsgNoData("排序已交换"), http.StatusInternalServerError).
+		// 路径那门课不存在 ⇒ 404（此前落默认面 400：「你换的这门课没有」被说成「参数错了」）。
+		WithSentinel(service.ErrCourseNotFound, http.StatusNotFound).
+		WithSentinels(http.StatusBadRequest, courseSortFacts400...).Handle(c)
 }
 
 // @Summary 删除课程
@@ -245,6 +287,7 @@ func (h *AdminHandler) SwapCourseSort(c *gin.Context) {
 // @Security BearerAuth
 // @Param course_id path int true "课程 ID"
 // @Success 200 {object} response.R{data=service.DeleteCourseResult} "课程删除成功"
+// @Failure 400 {object} response.R "课程ID无效"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "课程不存在"
 // @Router /admin/course/{course_id} [delete]
@@ -261,7 +304,8 @@ func (h *AdminHandler) DeleteCourse(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *idParam) (*service.DeleteCourseResult, error) {
 			return h.courseSvc.DeleteCourse(req.ID)
 		},
-	}.WithSuccess(okMsg("课程删除成功"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("课程删除成功"), http.StatusInternalServerError).
+		WithSentinel(service.ErrCourseNotFound, http.StatusNotFound).Handle(c)
 }
 
 // @Summary 创建章节
@@ -326,7 +370,8 @@ func (h *AdminHandler) UpdateChapter(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *chapterIDInput) (*service.ChapterDTO, error) {
 			return h.courseSvc.UpdateChapter(req.ID, req.Input)
 		},
-	}.WithSuccess(okMsg("章节更新成功"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("章节更新成功"), http.StatusInternalServerError).
+		WithSentinel(service.ErrChapterNotFound, http.StatusNotFound).Handle(c)
 }
 
 // @Summary 删除章节
@@ -352,7 +397,8 @@ func (h *AdminHandler) DeleteChapter(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *idParam) (*service.DeleteChapterResult, error) {
 			return h.courseSvc.DeleteChapter(req.ID)
 		},
-	}.WithSuccess(okMsg("章节删除成功"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("章节删除成功"), http.StatusInternalServerError).
+		WithSentinel(service.ErrChapterNotFound, http.StatusNotFound).Handle(c)
 }
 
 // @Summary 启动课程内容异步生成
@@ -399,8 +445,9 @@ func (h *AdminHandler) GenerateContent(c *gin.Context) {
 // @Security BearerAuth
 // @Param task_id path string true "任务 ID"
 // @Success 200 {object} response.R{data=service.GenTaskStatus} "success"
+// @Failure 400 {object} response.R "task_id 无效"
 // @Failure 401 {object} response.R "未认证"
-// @Failure 404 {object} response.R "任务不存在"
+// @Failure 404 {object} response.R "生成任务不存在"
 // @Router /admin/course/generate-content/{task_id} [get]
 // GetGenerationTask 查询生成任务状态（前端轮询）GET /api/admin/course/generate-content/:task_id
 func (h *AdminHandler) GetGenerationTask(c *gin.Context) {
@@ -411,7 +458,9 @@ func (h *AdminHandler) GetGenerationTask(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *taskIDParam) (*service.GenTaskStatus, error) {
 			return h.contentGenSvc.GetTaskStatus(req.TaskID)
 		},
-	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).
+		WithSentinel(service.ErrGenTaskNotFound, http.StatusNotFound).
+		WithSentinel(service.ErrGenTaskIDInvalid, http.StatusBadRequest).Handle(c)
 }
 
 // @Summary HRWAI 用户列表
@@ -525,6 +574,7 @@ func (h *AdminHandler) UpdateHrwaiUser(c *gin.Context) {
 // @Success 200 {object} response.R "密码已重置"
 // @Failure 400 {object} response.R "参数错误/密码长度非法"
 // @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "用户不存在"
 // @Router /admin/hrwai-users/{id}/password [put]
 // ResetHrwaiUserPassword 重置 HRWAI 用户密码 PUT /api/admin/hrwai-users/:id/password
 func (h *AdminHandler) ResetHrwaiUserPassword(c *gin.Context) {
@@ -546,12 +596,14 @@ func (h *AdminHandler) ResetHrwaiUserPassword(c *gin.Context) {
 			return &resetPasswordReq{ID: id, Password: body.Password}, nil
 		},
 		Invoke: func(ctx context.Context, req *resetPasswordReq) (*struct{}, error) {
-			if err := h.adminSvc.ResetHrwaiUserPassword(req.ID, req.Password); err != nil {
+			if err := h.adminSvc.ResetHrwaiUserPassword(ctx, req.ID, req.Password); err != nil {
 				return nil, err
 			}
 			return &struct{}{}, nil
 		},
-	}.WithSuccess(okMsgNoData("密码已重置"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(okMsgNoData("密码已重置"), http.StatusInternalServerError).
+		WithSentinel(service.ErrHrwaiUserNotFound, http.StatusNotFound).
+		WithSentinel(service.ErrInvalidHrwaiUserID, http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 切换 HRWAI 用户启用/禁用状态
@@ -575,17 +627,17 @@ func (h *AdminHandler) ToggleHrwaiUserStatus(c *gin.Context) {
 			return &idParam{ID: id}, nil
 		},
 		Invoke: func(ctx context.Context, req *idParam) (*service.StatusResultDTO, error) {
-			next, err := h.adminSvc.ToggleHrwaiUserStatus(req.ID)
+			next, err := h.adminSvc.ToggleHrwaiUserStatus(ctx, req.ID)
 			if err != nil {
 				return nil, err
 			}
 			return &service.StatusResultDTO{Status: int(next)}, nil
 		},
-		// 判定不动（票8 逐端点判过）：AdminService.ToggleHrwaiUserStatus 的「用户不存在」是裸
-		// errors.New、UPDATE 失败则原样上抛驱动错误 ⇒ api 侧无具名哨兵可分档，改判会把真 404
-		// 也答成 500。正解在 service 侧升哨兵（admin_service.go 本批不在改动面）。
-		// 已归位的一半：路径参数非数字今天回它自己的 400（票8 翻转前被这条表吞成 404）。
-		ErrStatus: errStatusAll(http.StatusNotFound),
+		ErrStatus: &errStatusTable{entries: []errStatusEntry{
+			{sentinel: service.ErrHrwaiUserNotFound, status: http.StatusNotFound},
+			{sentinel: service.ErrInvalidHrwaiUserID, status: http.StatusBadRequest},
+			{sentinel: nil, status: http.StatusInternalServerError},
+		}},
 		Render: func(c *gin.Context, _ *idParam, resp *service.StatusResultDTO) {
 			msg := "用户已启用"
 			if resp.Status == 0 {
@@ -705,7 +757,9 @@ func (h *AdminHandler) DeleteTutor(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *idParam) (*service.TutorDeletedDTO, error) {
 			return h.adminSvc.DeleteTutor(req.ID)
 		},
-	}.WithSuccess(okMsg("讲师删除成功"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("讲师删除成功"), http.StatusInternalServerError).
+		WithSentinel(service.ErrTutorNotFound, http.StatusNotFound).
+		WithSentinel(service.ErrInvalidTutorID, http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 重置导师密码
@@ -719,6 +773,7 @@ func (h *AdminHandler) DeleteTutor(c *gin.Context) {
 // @Success 200 {object} response.R "密码已重置"
 // @Failure 400 {object} response.R "参数错误/密码长度非法"
 // @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "讲师不存在"
 // @Router /admin/tutor/{tutor_id}/password [put]
 // ResetTutorPassword 重置导师密码 PUT /api/admin/tutor/:tutor_id/password
 func (h *AdminHandler) ResetTutorPassword(c *gin.Context) {
@@ -740,12 +795,14 @@ func (h *AdminHandler) ResetTutorPassword(c *gin.Context) {
 			return &resetPasswordReq{ID: id, Password: body.Password}, nil
 		},
 		Invoke: func(ctx context.Context, req *resetPasswordReq) (*struct{}, error) {
-			if err := h.adminSvc.ResetTutorPassword(req.ID, req.Password); err != nil {
+			if err := h.adminSvc.ResetTutorPassword(ctx, req.ID, req.Password); err != nil {
 				return nil, err
 			}
 			return &struct{}{}, nil
 		},
-	}.WithSuccess(okMsgNoData("密码已重置"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsgNoData("密码已重置"), http.StatusInternalServerError).
+		WithSentinel(service.ErrTutorNotFound, http.StatusNotFound).
+		WithSentinel(service.ErrInvalidTutorID, http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 切换导师启用/禁用状态
@@ -769,7 +826,7 @@ func (h *AdminHandler) ToggleTutorStatus(c *gin.Context) {
 			return &idParam{ID: id}, nil
 		},
 		Invoke: func(ctx context.Context, req *idParam) (*service.StatusResultDTO, error) {
-			next, err := h.adminSvc.ToggleTutorStatus(req.ID)
+			next, err := h.adminSvc.ToggleTutorStatus(ctx, req.ID)
 			if err != nil {
 				return nil, err
 			}
@@ -777,7 +834,11 @@ func (h *AdminHandler) ToggleTutorStatus(c *gin.Context) {
 		},
 		// 与 ToggleHrwaiUserStatus 同一判定：admin_service 的「讲师不存在」是裸 errors.New，
 		// 无哨兵可名 ⇒ 本批不动（参数错误那半边已随票8 归位 400）。
-		ErrStatus: errStatusAll(http.StatusNotFound),
+		ErrStatus: &errStatusTable{entries: []errStatusEntry{
+			{sentinel: service.ErrTutorNotFound, status: http.StatusNotFound},
+			{sentinel: service.ErrInvalidTutorID, status: http.StatusBadRequest},
+			{sentinel: nil, status: http.StatusInternalServerError},
+		}},
 		Render: func(c *gin.Context, _ *idParam, resp *service.StatusResultDTO) {
 			msg := "讲师已启用"
 			if resp.Status == 0 {

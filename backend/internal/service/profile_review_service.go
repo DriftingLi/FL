@@ -151,7 +151,7 @@ type reviewRequestRow struct {
 type ProfileChangeRequestPageResult struct {
 	Page     int                       `json:"page"`
 	Pages    int                       `json:"pages"`
-	Requests []ProfileChangeRequestDTO `json:"requests"`
+	Requests []ProfileChangeRequestDTO `json:"requests" nullability:"nullable"`
 	Total    int64                     `json:"total"`
 }
 

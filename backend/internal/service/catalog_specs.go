@@ -8,22 +8,33 @@ import (
 	"forklift-training/internal/model"
 )
 
+// 目录实体「行不存在」的具名哨兵（ADR-0064 决策 1/2）：文案与原 NotFoundMsg 逐字相同
+// （不改 wire 文本），换的是**载体**——api 侧据此才能把「不存在」与「查不动」分档。
+// 住在 descriptor 旁边：新增目录实体时必须在这里同时立一个名字，漏了就编译不过。
+var (
+	ErrSpecialtyNotFound           = errors.New("专业方向不存在")
+	ErrCourseLevelNotFound         = errors.New("课程等级不存在")
+	ErrCertificateTemplateNotFound = errors.New("证书模板不存在")
+	ErrQuestionTagNotFound         = errors.New("题库标签不存在")
+	ErrCredentialNotFound          = errors.New("证件不存在")
+)
+
 func specialtyCatalogSpec() CatalogEntitySpec[model.Specialty, SpecialtyInput, SpecialtyDict] {
 	return CatalogEntitySpec[model.Specialty, SpecialtyInput, SpecialtyDict]{
-		Table:       "specialty",
-		IDColumn:    "specialty_id",
-		OrderBy:     "sort_order ASC, specialty_id ASC",
-		CodeErr:     "专业方向编码不能为空",
-		NameErr:     "专业方向名称不能为空",
-		DupMsg:      "专业方向编码已存在",
-		NotFoundMsg: "专业方向不存在",
-		Sortable:    true,
-		Code:        func(in *SpecialtyInput) string { return in.Code },
-		ModelCode:   func(m *model.Specialty) string { return m.Code },
-		Name:        func(in *SpecialtyInput) string { return in.Name },
-		SortOrder:   func(in *SpecialtyInput) *int { return in.SortOrder },
-		Status:      func(in *SpecialtyInput) *int16 { return in.Status },
-		EmptyModel:  func() any { return &model.Specialty{} },
+		Table:      "specialty",
+		IDColumn:   "specialty_id",
+		OrderBy:    "sort_order ASC, specialty_id ASC",
+		CodeErr:    "专业方向编码不能为空",
+		NameErr:    "专业方向名称不能为空",
+		DupMsg:     "专业方向编码已存在",
+		NotFound:   ErrSpecialtyNotFound,
+		Sortable:   true,
+		Code:       func(in *SpecialtyInput) string { return in.Code },
+		ModelCode:  func(m *model.Specialty) string { return m.Code },
+		Name:       func(in *SpecialtyInput) string { return in.Name },
+		SortOrder:  func(in *SpecialtyInput) *int { return in.SortOrder },
+		Status:     func(in *SpecialtyInput) *int16 { return in.Status },
+		EmptyModel: func() any { return &model.Specialty{} },
 		NewModel: func(in *SpecialtyInput, sortOrder int) model.Specialty {
 			return model.Specialty{
 				Code:        in.Code,
@@ -53,20 +64,20 @@ func specialtyCatalogSpec() CatalogEntitySpec[model.Specialty, SpecialtyInput, S
 
 func levelCatalogSpec() CatalogEntitySpec[model.CourseLevel, LevelInput, LevelDict] {
 	return CatalogEntitySpec[model.CourseLevel, LevelInput, LevelDict]{
-		Table:       "course_level",
-		IDColumn:    "level_id",
-		OrderBy:     "sort_order ASC, level_id ASC",
-		CodeErr:     "课程等级编码不能为空",
-		NameErr:     "课程等级名称不能为空",
-		DupMsg:      "课程等级编码已存在",
-		NotFoundMsg: "课程等级不存在",
-		Sortable:    true,
-		Code:        func(in *LevelInput) string { return in.Code },
-		ModelCode:   func(m *model.CourseLevel) string { return m.Code },
-		Name:        func(in *LevelInput) string { return in.Name },
-		SortOrder:   func(in *LevelInput) *int { return in.SortOrder },
-		Status:      func(in *LevelInput) *int16 { return in.Status },
-		EmptyModel:  func() any { return &model.CourseLevel{} },
+		Table:      "course_level",
+		IDColumn:   "level_id",
+		OrderBy:    "sort_order ASC, level_id ASC",
+		CodeErr:    "课程等级编码不能为空",
+		NameErr:    "课程等级名称不能为空",
+		DupMsg:     "课程等级编码已存在",
+		NotFound:   ErrCourseLevelNotFound,
+		Sortable:   true,
+		Code:       func(in *LevelInput) string { return in.Code },
+		ModelCode:  func(m *model.CourseLevel) string { return m.Code },
+		Name:       func(in *LevelInput) string { return in.Name },
+		SortOrder:  func(in *LevelInput) *int { return in.SortOrder },
+		Status:     func(in *LevelInput) *int16 { return in.Status },
+		EmptyModel: func() any { return &model.CourseLevel{} },
 		NewModel: func(in *LevelInput, sortOrder int) model.CourseLevel {
 			return model.CourseLevel{
 				Code:        in.Code,
@@ -96,18 +107,18 @@ func levelCatalogSpec() CatalogEntitySpec[model.CourseLevel, LevelInput, LevelDi
 
 func certificateCatalogSpec() CatalogEntitySpec[model.CertificateTemplate, CertificateTemplateInput, CertificateTemplateDict] {
 	return CatalogEntitySpec[model.CertificateTemplate, CertificateTemplateInput, CertificateTemplateDict]{
-		Table:       "certificate_template",
-		IDColumn:    "id",
-		OrderBy:     "id ASC",
-		CodeErr:     "证书模板编码不能为空",
-		NameErr:     "证书模板名称不能为空",
-		DupMsg:      "证书模板编码已存在",
-		NotFoundMsg: "证书模板不存在",
-		Sortable:    false,
-		Code:        func(in *CertificateTemplateInput) string { return in.Code },
-		ModelCode:   func(m *model.CertificateTemplate) string { return m.Code },
-		Name:        func(in *CertificateTemplateInput) string { return in.Name },
-		Status:      func(in *CertificateTemplateInput) *int16 { return in.Status },
+		Table:     "certificate_template",
+		IDColumn:  "id",
+		OrderBy:   "id ASC",
+		CodeErr:   "证书模板编码不能为空",
+		NameErr:   "证书模板名称不能为空",
+		DupMsg:    "证书模板编码已存在",
+		NotFound:  ErrCertificateTemplateNotFound,
+		Sortable:  false,
+		Code:      func(in *CertificateTemplateInput) string { return in.Code },
+		ModelCode: func(m *model.CertificateTemplate) string { return m.Code },
+		Name:      func(in *CertificateTemplateInput) string { return in.Name },
+		Status:    func(in *CertificateTemplateInput) *int16 { return in.Status },
 		Validate: func(in *CertificateTemplateInput) error {
 			if in.ValidityDays != nil && *in.ValidityDays <= 0 {
 				return errors.New("证书有效期必须为正整数（天）")
@@ -151,20 +162,20 @@ func certificateCatalogSpec() CatalogEntitySpec[model.CertificateTemplate, Certi
 
 func questionTagCatalogSpec() CatalogEntitySpec[model.QuestionTag, QuestionTagInput, QuestionTagDict] {
 	return CatalogEntitySpec[model.QuestionTag, QuestionTagInput, QuestionTagDict]{
-		Table:       "question_tag",
-		IDColumn:    "id",
-		OrderBy:     "sort_order ASC, id ASC",
-		CodeErr:     "标签编码不能为空",
-		NameErr:     "标签名称不能为空",
-		DupMsg:      "标签编码已存在",
-		NotFoundMsg: "题库标签不存在",
-		Sortable:    true,
-		Code:        func(in *QuestionTagInput) string { return in.Code },
-		ModelCode:   func(m *model.QuestionTag) string { return m.Code },
-		Name:        func(in *QuestionTagInput) string { return in.Name },
-		SortOrder:   func(in *QuestionTagInput) *int { return in.SortOrder },
-		Status:      func(in *QuestionTagInput) *int16 { return in.Status },
-		EmptyModel:  func() any { return &model.QuestionTag{} },
+		Table:      "question_tag",
+		IDColumn:   "id",
+		OrderBy:    "sort_order ASC, id ASC",
+		CodeErr:    "标签编码不能为空",
+		NameErr:    "标签名称不能为空",
+		DupMsg:     "标签编码已存在",
+		NotFound:   ErrQuestionTagNotFound,
+		Sortable:   true,
+		Code:       func(in *QuestionTagInput) string { return in.Code },
+		ModelCode:  func(m *model.QuestionTag) string { return m.Code },
+		Name:       func(in *QuestionTagInput) string { return in.Name },
+		SortOrder:  func(in *QuestionTagInput) *int { return in.SortOrder },
+		Status:     func(in *QuestionTagInput) *int16 { return in.Status },
+		EmptyModel: func() any { return &model.QuestionTag{} },
 		NewModel: func(in *QuestionTagInput, sortOrder int) model.QuestionTag {
 			now := beijingNow()
 			return model.QuestionTag{
@@ -197,19 +208,19 @@ func questionTagCatalogSpec() CatalogEntitySpec[model.QuestionTag, QuestionTagIn
 
 func credentialCatalogSpec() CatalogEntitySpec[model.Credential, CredentialInput, CredentialDict] {
 	return CatalogEntitySpec[model.Credential, CredentialInput, CredentialDict]{
-		Table:       "credential",
-		IDColumn:    "id",
-		OrderBy:     "sort_order ASC, id ASC",
-		CodeErr:     "证件编码不能为空",
-		NameErr:     "证件名称不能为空",
-		DupMsg:      "证件编码已存在",
-		NotFoundMsg: "证件不存在",
-		Sortable:    true,
-		Code:        func(in *CredentialInput) string { return in.Code },
-		ModelCode:   func(m *model.Credential) string { return m.Code },
-		Name:        func(in *CredentialInput) string { return in.Name },
-		SortOrder:   func(in *CredentialInput) *int { return in.SortOrder },
-		Status:      func(in *CredentialInput) *int16 { return in.Status },
+		Table:     "credential",
+		IDColumn:  "id",
+		OrderBy:   "sort_order ASC, id ASC",
+		CodeErr:   "证件编码不能为空",
+		NameErr:   "证件名称不能为空",
+		DupMsg:    "证件编码已存在",
+		NotFound:  ErrCredentialNotFound,
+		Sortable:  true,
+		Code:      func(in *CredentialInput) string { return in.Code },
+		ModelCode: func(m *model.Credential) string { return m.Code },
+		Name:      func(in *CredentialInput) string { return in.Name },
+		SortOrder: func(in *CredentialInput) *int { return in.SortOrder },
+		Status:    func(in *CredentialInput) *int16 { return in.Status },
 		Validate: func(in *CredentialInput) error {
 			if in.Category != "" && in.Category != "special_operation" && in.Category != "skill_level" {
 				return errors.New("证件类别无效")

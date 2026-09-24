@@ -76,7 +76,7 @@ func (h *PracticeModeHandler) GetFreeQuestions(c *gin.Context) {
 			}
 			return &result, nil
 		},
-	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // tagPracticeReq 标签练习请求（tag_id 区分缺失/非法 + count）。
@@ -119,7 +119,9 @@ func (h *PracticeModeHandler) StartTagPractice(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *tagPracticeReq) (*service.PracticeStartResultDTO, error) {
 			return h.svc.StartTagPractice(req.StudentID, req.TagID, req.Count, req.CredentialID)
 		},
-	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).
+		WithSentinel(service.ErrPracticeTagRequired, http.StatusBadRequest).
+		WithSentinel(service.ErrPracticeTagUnsupported, http.StatusBadRequest).Handle(c)
 }
 
 // StartSequential 顺序练习
@@ -154,7 +156,7 @@ func (h *PracticeModeHandler) StartSequential(c *gin.Context) {
 		}) (*service.PracticeStartResultDTO, error) {
 			return h.svc.StartSequential(req.StudentID, req.CredentialID)
 		},
-	}.WithSuccess(okMsg("success"), http.StatusNotFound).Handle(c)
+	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // studentIDReq 仅携带学员 ID 的请求。

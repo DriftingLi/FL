@@ -49,7 +49,7 @@ type MockExamStartDTO struct {
 	TotalScore     int           `json:"total_score"`
 	TotalQuestions int           `json:"total_questions"`
 	RemainingTime  int           `json:"remaining_time"`
-	Questions      []QuestionDTO `json:"questions"`
+	Questions      []QuestionDTO `json:"questions" nullability:"nullable"`
 }
 
 // MockExamResumeDTO 恢复考试返回。
@@ -57,7 +57,7 @@ type MockExamResumeDTO struct {
 	MockExamID    int           `json:"mock_exam_id"`
 	Duration      int           `json:"duration"`
 	RemainingTime int           `json:"remaining_time"`
-	Questions     []QuestionDTO `json:"questions"`
+	Questions     []QuestionDTO `json:"questions" nullability:"nullable"`
 	Answers       any           `json:"answers"`
 	StartTime     string        `json:"start_time"`
 }
@@ -87,7 +87,7 @@ type MockExamSubmitDTO struct {
 	CorrectCount   int                       `json:"correct_count"`
 	TotalQuestions int                       `json:"total_questions"`
 	Accuracy       float64                   `json:"accuracy"`
-	Details        []MockExamAnswerDetailDTO `json:"details"`
+	Details        []MockExamAnswerDetailDTO `json:"details" nullability:"nullable"`
 }
 
 // MockExamResultDTO 结果详情（交卷结果 + mock_exam_id + submit_time）。
@@ -122,12 +122,16 @@ type MockExamHistoryDTO struct {
 	Total    int64                    `json:"total"`
 	Page     int                      `json:"page"`
 	PageSize int                      `json:"page_size"`
-	Exams    []MockExamHistoryItemDTO `json:"exams"`
+	Exams    []MockExamHistoryItemDTO `json:"exams" nullability:"nullable"`
 }
 
 // Start 生成模拟考试：从 published 题库随机抽 count 题（不分等级、不分题型）。
 // credentialID 非 nil 时按当前证件分区（#702：与练习池同口径——已发布 + 排真题 + 证件分区），
 // 并把该证件**落进记录**（#1003）：历史读面按记录上的分区过滤，抽题与落库共用同一个值，不两处各算。
+// ErrMockExamNotFound 模拟考卷行不存在这一事实的唯一载体（ADR-0064 决策 1/2）；
+// 此前是三个函数各写一遍同文案裸 errors.New，且把「查不动」一并塌进来。
+var ErrMockExamNotFound = errors.New("模拟考试不存在")
+
 func (s *MockExamService) Start(studentID, count, duration int, credentialID *int) (*MockExamStartDTO, error) {
 	if count <= 0 {
 		count = mockExamDefaultCount
@@ -217,7 +221,10 @@ func (s *MockExamService) SaveProgress(mockExamID, studentID int, answers map[st
 func (s *MockExamService) Resume(mockExamID, studentID int) (*MockExamResumeDTO, error) {
 	var mock model.MockExam
 	if err := s.db.First(&mock, mockExamID).Error; err != nil {
-		return nil, errors.New("模拟考试不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrMockExamNotFound
+		}
+		return nil, err
 	}
 	if err := guardOwnedInProgress(mock.StudentID, mock.Status, studentID, "无权操作此考试", "考试不在进行中"); err != nil {
 		return nil, err
@@ -251,7 +258,10 @@ func (s *MockExamService) Resume(mockExamID, studentID int) (*MockExamResumeDTO,
 func (s *MockExamService) Submit(mockExamID, studentID int) (*MockExamSubmitDTO, error) {
 	var mock model.MockExam
 	if err := s.db.First(&mock, mockExamID).Error; err != nil {
-		return nil, errors.New("模拟考试不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrMockExamNotFound
+		}
+		return nil, err
 	}
 	if err := guardOwnedInProgress(mock.StudentID, mock.Status, studentID, "无权操作此考试", "考试不在进行中"); err != nil {
 		return nil, err
@@ -342,7 +352,10 @@ func (s *MockExamService) Submit(mockExamID, studentID int) (*MockExamSubmitDTO,
 func (s *MockExamService) GetResult(mockExamID, studentID int) (*MockExamResultDTO, error) {
 	var mock model.MockExam
 	if err := s.db.First(&mock, mockExamID).Error; err != nil {
-		return nil, errors.New("模拟考试不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrMockExamNotFound
+		}
+		return nil, err
 	}
 	if mock.StudentID != studentID {
 		return nil, errors.New("无权查看此考试")

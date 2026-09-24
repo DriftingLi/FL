@@ -3,6 +3,8 @@
 package service
 
 import (
+	"errors"
+
 	"forklift-training/internal/model"
 )
 
@@ -32,26 +34,29 @@ type PositionDict struct {
 // 来源是 handler 里手工拼的 gin.H{"positions": …}（ADR-0053 §1 把这两个端点补进契约：
 // 注解要指认 data 类型就必须先有具名类型，故补此 DTO，字节形状不变）。
 type PositionListDTO struct {
-	Positions []PositionDict `json:"positions"`
+	Positions []PositionDict `json:"positions" nullability:"nullable"`
 }
 
 // positionCatalogSpec 岗位字典的 catalog descriptor。
+// ErrPositionNotFound 岗位行不存在（与 catalog_specs.go 那批同形，ADR-0064 决策 1/2）。
+var ErrPositionNotFound = errors.New("岗位不存在")
+
 func positionCatalogSpec() CatalogEntitySpec[model.Position, PositionInput, PositionDict] {
 	return CatalogEntitySpec[model.Position, PositionInput, PositionDict]{
-		Table:       "positions",
-		IDColumn:    "position_id",
-		OrderBy:     "sort_order ASC, position_id ASC",
-		CodeErr:     "岗位编码不能为空",
-		NameErr:     "岗位名称不能为空",
-		DupMsg:      "岗位编码已存在",
-		NotFoundMsg: "岗位不存在",
-		Sortable:    true,
-		Code:        func(in *PositionInput) string { return in.Code },
-		ModelCode:   func(m *model.Position) string { return m.Code },
-		Name:        func(in *PositionInput) string { return in.Name },
-		SortOrder:   func(in *PositionInput) *int { return in.SortOrder },
-		Status:      func(in *PositionInput) *int16 { return in.Status },
-		EmptyModel:  func() any { return &model.Position{} },
+		Table:      "positions",
+		IDColumn:   "position_id",
+		OrderBy:    "sort_order ASC, position_id ASC",
+		CodeErr:    "岗位编码不能为空",
+		NameErr:    "岗位名称不能为空",
+		DupMsg:     "岗位编码已存在",
+		NotFound:   ErrPositionNotFound,
+		Sortable:   true,
+		Code:       func(in *PositionInput) string { return in.Code },
+		ModelCode:  func(m *model.Position) string { return m.Code },
+		Name:       func(in *PositionInput) string { return in.Name },
+		SortOrder:  func(in *PositionInput) *int { return in.SortOrder },
+		Status:     func(in *PositionInput) *int16 { return in.Status },
+		EmptyModel: func() any { return &model.Position{} },
 		NewModel: func(in *PositionInput, sortOrder int) model.Position {
 			return model.Position{
 				Code:        in.Code,

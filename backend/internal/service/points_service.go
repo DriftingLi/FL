@@ -39,7 +39,7 @@ type PointsLedgerItem struct {
 
 // PointsLedgerResult 流水分页
 type PointsLedgerResult struct {
-	Items []PointsLedgerItem `json:"items"`
+	Items []PointsLedgerItem `json:"items" nullability:"nullable"`
 	Total int64              `json:"total"`
 	Page  int                `json:"page"`
 	Pages int                `json:"pages"`
@@ -59,7 +59,7 @@ type PointsTaskItem struct {
 
 // PointsTasksResult 任务列表
 type PointsTasksResult struct {
-	Tasks []PointsTaskItem `json:"tasks"`
+	Tasks []PointsTaskItem `json:"tasks" nullability:"nullable"`
 }
 
 // taskMeta 行为判定需要的「聚合行为快照 + 用户资料」一次性取齐（GetTasks/Claim 共用）。
@@ -310,8 +310,6 @@ var (
 	ErrAlreadyRedeemed = errors.New("已兑换")
 	// ErrTaskNotFound 任务不存在。
 	ErrTaskNotFound = errors.New("任务不存在")
-	// ErrCourseNotFound 课程不存在。
-	ErrCourseNotFound = errors.New("课程不存在")
 	// ErrCourseNotRedeemable 该课程无需兑换。
 	ErrCourseNotRedeemable = errors.New("该课程无需兑换")
 	// ErrRealPaperUnavailable 真题卷不存在或已下架。
@@ -324,8 +322,6 @@ var (
 	ErrEmptyPenaltyReason = errors.New("扣罚事由不能为空")
 	// ErrTaskNotDone 行为未达成（Claim 前校验：todo 任务不可空领）。
 	ErrTaskNotDone = errors.New("任务未完成")
-	// ErrUserNotFound 用户不存在。
-	ErrUserNotFound = errors.New("用户不存在")
 	// ErrPenaltyNotifyFailed 扣罚站内信写入失败（#1098 强一致族）：通知与扣罚同事务，
 	// 写失败即扣罚整体不生效；管理端经 pointsErrStatus 看到 500 + 可见原因，可原样重试。
 	ErrPenaltyNotifyFailed = errors.New("扣罚未生效：站内信写入失败，请重试")
@@ -980,7 +976,7 @@ func (s *PointsService) AdminPenalty(ctx context.Context, adminID, userID, delta
 	defer release()
 	var user model.HrwaiUser
 	if err := s.db.First(&user, userID).Error; err != nil {
-		return 0, ErrUserNotFound
+		return 0, ErrHrwaiUserNotFound
 	}
 	actualDeduct := delta
 	if user.PointsBalance < delta {

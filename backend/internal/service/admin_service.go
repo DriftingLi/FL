@@ -2,6 +2,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"time"
 
@@ -9,19 +10,40 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/security"
 	"forklift-training/pkg/paging"
+)
+
+// ErrHrwaiUserNotFound / ErrTutorNotFound 是这两类账号「真不存在」这一件事的**唯一载体**
+// （ADR-0064 决策 1/2）。住在本文件而非口令写面文件：它由禁用、删除、代重置三类动作共同
+// 发出，代重置只是其中一个 caller。积分域原有一个同文案的 ErrUserNotFound 指同一个对象
+// （hrwai_users 行），已并入此处 —— 同一个事实不得有两个载体。
+var (
+	ErrHrwaiUserNotFound = errors.New("用户不存在")
+	ErrTutorNotFound     = errors.New("讲师不存在")
+	// ErrRecruiterNotFound 见 auth_service.go 的 ToggleRecruiterStatus：招聘者账号不存在。
+	// ErrInvalidHrwaiUserID / ErrInvalidTutorID 是「id 根本不是个合法主体标识」，属输入不合法
+	// 一族（ADR-0064 决策 3，该族整批收口在后续批次）。本批先把分档建起来：此前这几处裸
+	// errors.New 撞上被改窄的默认错误面，会让 /admin/hrwai-users/-5/password 从 400 退成 500。
+	// 文案刻意与原字面量逐字相同，不改 wire 文本。
+	ErrInvalidHrwaiUserID = errors.New("用户 ID 非法")
+	ErrInvalidTutorID     = errors.New("讲师 ID 非法")
 )
 
 // AdminService 管理员服务。
 type AdminService struct {
 	db *gorm.DB
 
+	// session 只为「处置动作的后果集」而存在（ADR-0064 决策 4）：禁用学员必须与禁用招聘者
+	// 同样吊销其全部会话。管理面没有登录态，除吊销标记外不碰凭证生命周期。
+	session *security.Session
+
 	logger *zap.Logger
 }
 
 // NewAdminService 创建管理员服务实例。
-func NewAdminService(db *gorm.DB, logger *zap.Logger) *AdminService {
-	return &AdminService{db: db, logger: logger}
+func NewAdminService(db *gorm.DB, session *security.Session, logger *zap.Logger) *AdminService {
+	return &AdminService{db: db, session: session, logger: logger}
 }
 
 // ===== HRWAI 用户管理(统一) =====
@@ -42,7 +64,7 @@ type HrwaiUserSummary struct {
 
 // HrwaiUserPageResult HRWAI 用户分页结果（JSON 与既有契约一致，无 pages 字段）。
 type HrwaiUserPageResult struct {
-	List     []HrwaiUserSummary `json:"list"`
+	List     []HrwaiUserSummary `json:"list" nullability:"nullable"`
 	Page     int                `json:"page"`
 	PageSize int                `json:"page_size"`
 	Total    int64              `json:"total"`
@@ -158,7 +180,7 @@ func (s *AdminService) CreateHrwaiUser(phone, password, account, username, email
 // UpdateHrwaiUser 管理员更新 HRWAI 用户资料(不含密码)。
 func (s *AdminService) UpdateHrwaiUser(id int, username, email, company string, status int16) error {
 	if id <= 0 {
-		return errors.New("用户 ID 非法")
+		return ErrInvalidHrwaiUserID
 	}
 	updates := map[string]interface{}{
 		"username": username,
@@ -170,24 +192,46 @@ func (s *AdminService) UpdateHrwaiUser(id int, username, email, company string, 
 }
 
 // ResetHrwaiUserPassword 管理员重置 HRWAI 用户密码。
-func (s *AdminService) ResetHrwaiUserPassword(id int, newPassword string) error {
+// ResetHrwaiUserPassword 管理员代重置学员口令。**与学员自助改密是同一条动作**
+// （ADR-0064 决策 4）：交由 applyNewPassword 做长度校验 + 哈希 + 落库 + 全会话吊销。
+// 收紧前这里自己 HashPassword + Update、零吊销，且长度规则只住在 handler
+// （admin.go 的 Parse）⇒ 动作层既没有兜底也没有终止语义。
+// 代重置的失败策略同口令族：口令一落库即不可回退，吊销写失败不阻断（尽力而为）。
+func (s *AdminService) ResetHrwaiUserPassword(ctx context.Context, id int, newPassword string) error {
 	if id <= 0 {
-		return errors.New("用户 ID 非法")
+		return ErrInvalidHrwaiUserID
 	}
-	if newPassword == "" {
-		return errors.New("新密码不能为空")
+	res := applyNewPassword(ctx, s.db, s.session, hrwaiPasswordSubject, id, newPassword)
+	if !res.Applied() {
+		return res.Err
 	}
-	hashed, err := HashPassword(newPassword)
-	if err != nil {
-		return err
+	if res.RevokeErr != nil {
+		s.logger.Warn("代重置后 refresh 吊销标记写入失败", zap.Int("user_id", id), zap.Error(res.RevokeErr))
 	}
-	return s.db.Model(&model.HrwaiUser{}).Where("id = ?", id).Update("password", hashed).Error
+	return nil
+}
+
+// ResetTutorPassword 管理员代重置讲师口令。与学员侧同判（ADR-0064 决策 4）：走同一条
+// 「落新口令」动作，因此同时拿到长度兜底与全会话吊销。
+// 收紧前这里自行查存在 → 哈希 → 落库，零吊销 ⇒ 讲师的旧 refresh 链在口令被换掉后照样续登。
+func (s *AdminService) ResetTutorPassword(ctx context.Context, tutorID int, password string) error {
+	if tutorID <= 0 {
+		return ErrInvalidTutorID
+	}
+	res := applyNewPassword(ctx, s.db, s.session, tutorPasswordSubject, tutorID, password)
+	if !res.Applied() {
+		return res.Err
+	}
+	if res.RevokeErr != nil {
+		s.logger.Warn("讲师口令重置后 refresh 吊销标记写入失败", zap.Int("tutor_id", tutorID), zap.Error(res.RevokeErr))
+	}
+	return nil
 }
 
 // DeleteHrwaiUser 管理员删除 HRWAI 用户。
 func (s *AdminService) DeleteHrwaiUser(id int) error {
 	if id <= 0 {
-		return errors.New("用户 ID 非法")
+		return ErrInvalidHrwaiUserID
 	}
 	return s.db.Delete(&model.HrwaiUser{}, id).Error
 }
@@ -200,20 +244,35 @@ type StatusResultDTO struct {
 }
 
 // ToggleHrwaiUserStatus 切换 HRWAI 用户启用/禁用状态,返回切换后的新状态。
-func (s *AdminService) ToggleHrwaiUserStatus(id int) (int16, error) {
+// ToggleHrwaiUserStatus 切换学员启用态。**禁用是一个处置动作，它的后果集必须齐全**
+// （ADR-0064 决策 4）：状态落库 + 全会话吊销，与 ToggleRecruiterStatus 同判。
+// 收紧前只有招聘者侧吊销 ⇒ issueLogin 会挡住被禁学员**重新登录**，却放过他手上已有的
+// refresh 链（最长 7 天静默续登）——「禁用挡住进来，不挡住留下」就是这么来的。
+// 失败策略沿用禁用族既有口径：吊销是「已生效处置之后的补救」⇒ 尽力而为，写不进只记日志
+// 不回退禁用本身（与注销族「先写标记、失败即整体不生效」有意不同）。
+// 只有转成禁用态才吊销：恢复启用不剥夺任何既有凭证，此时写标记等于二次惩罚。
+func (s *AdminService) ToggleHrwaiUserStatus(ctx context.Context, id int) (int16, error) {
 	if id <= 0 {
-		return 0, errors.New("用户 ID 非法")
+		return 0, ErrInvalidHrwaiUserID
 	}
 	var user model.HrwaiUser
-	if err := s.db.First(&user, id).Error; err != nil {
-		return 0, errors.New("用户不存在")
+	if err := s.db.WithContext(ctx).First(&user, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return 0, ErrHrwaiUserNotFound
+		}
+		return 0, err // 查不动不得被读成「不存在」（ADR-0064 决策 1，同 ADR-0062 票6 判据）
 	}
 	next := int16(1)
 	if user.Status == 1 {
 		next = 0
 	}
-	if err := s.db.Model(&user).Update("status", next).Error; err != nil {
+	if err := s.db.WithContext(ctx).Model(&user).Update("status", next).Error; err != nil {
 		return 0, err
+	}
+	if next == 0 {
+		if err := s.session.RevokeIdentity(ctx, HrwaiRole, id); err != nil {
+			s.logger.Warn("学员禁用后 refresh 吊销标记写入失败", zap.Int("user_id", id), zap.Error(err))
+		}
 	}
 	return next, nil
 }
@@ -233,7 +292,7 @@ type TutorDTO struct {
 type TutorListDTO struct {
 	Total  int64      `json:"total"`
 	Page   int        `json:"page"`
-	Tutors []TutorDTO `json:"tutors"`
+	Tutors []TutorDTO `json:"tutors" nullability:"nullable"`
 }
 
 // TutorDeletedDTO 删除导师结果。
@@ -261,7 +320,7 @@ type CourseStatDTO struct {
 // AdminStatisticsDTO 统计看板。
 type AdminStatisticsDTO struct {
 	Overview    AdminOverviewDTO `json:"overview"`
-	CourseStats []CourseStatDTO  `json:"course_stats"`
+	CourseStats []CourseStatDTO  `json:"course_stats" nullability:"nullable"`
 }
 
 // GetTutors 导师列表。
@@ -291,7 +350,10 @@ func (s *AdminService) GetTutors(page, pageSize int, keyword string) (*TutorList
 func (s *AdminService) DeleteTutor(tutorID int) (*TutorDeletedDTO, error) {
 	var tutor model.Tutor
 	if err := s.db.First(&tutor, tutorID).Error; err != nil {
-		return nil, errors.New("讲师不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrTutorNotFound
+		}
+		return nil, err
 	}
 	if err := s.db.Delete(&tutor).Error; err != nil {
 		return nil, err
@@ -299,32 +361,29 @@ func (s *AdminService) DeleteTutor(tutorID int) (*TutorDeletedDTO, error) {
 	return &TutorDeletedDTO{TutorID: tutorID}, nil
 }
 
-// ResetTutorPassword 重置导师密码。
-func (s *AdminService) ResetTutorPassword(tutorID int, password string) error {
-	var tutor model.Tutor
-	if err := s.db.First(&tutor, tutorID).Error; err != nil {
-		return errors.New("讲师不存在")
-	}
-	hashed, err := HashPassword(password)
-	if err != nil {
-		return err
-	}
-	return s.db.Model(&model.Tutor{}).Where("tutor_id = ?", tutorID).
-		Update("password", hashed).Error
-}
-
 // ToggleTutorStatus 切换导师启用/禁用状态，返回切换后的新状态。
-func (s *AdminService) ToggleTutorStatus(tutorID int) (int, error) {
+// ToggleTutorStatus 切换讲师启用态。禁用即吊销其全部会话（ADR-0064 决策 4）——
+// 讲师走同一套双令牌链（登录角色 TutorRole），所以「禁用挡住进来、不挡住留下」这一族
+// 在学员侧修完时，讲师侧是它的另一半，不是一票新增。
+func (s *AdminService) ToggleTutorStatus(ctx context.Context, tutorID int) (int, error) {
 	var tutor model.Tutor
-	if err := s.db.First(&tutor, tutorID).Error; err != nil {
-		return 0, errors.New("讲师不存在")
+	if err := s.db.WithContext(ctx).First(&tutor, tutorID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return 0, ErrTutorNotFound
+		}
+		return 0, err
 	}
 	next := 1
 	if tutor.Status == 1 {
 		next = 0
 	}
-	if err := s.db.Model(&tutor).Update("status", next).Error; err != nil {
+	if err := s.db.WithContext(ctx).Model(&tutor).Update("status", next).Error; err != nil {
 		return 0, err
+	}
+	if next == 0 {
+		if err := s.session.RevokeIdentity(ctx, TutorRole, tutorID); err != nil {
+			s.logger.Warn("讲师禁用后 refresh 吊销标记写入失败", zap.Int("tutor_id", tutorID), zap.Error(err))
+		}
 	}
 	return next, nil
 }
