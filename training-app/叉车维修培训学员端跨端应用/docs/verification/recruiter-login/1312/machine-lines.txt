@@ -1,0 +1,108 @@
+# #1295 ①a 设备侧与三门机检原文（原样抄自 .ci-verify/ 日志，未改一字）
+
+归档：PR #1312 ｜ 分支 `fix/1295` ｜ 取证时 head `d323da3a` ｜ 分支收口 head `f5dc9ed2`
+
+## 1) 部署（先把本树推到手机，否则抓到的是旧代码）
+
+误用 `powershell`（5.1）那一次根本没编译、没部署（无 BOM UTF-8 中文注释被按 ANSI 读，118/240/247/321/334/346/362/450 行解析错），**不作证据**；下面是对仓内约定宿主 `pwsh`（7.6.6）那一次：
+
+```
+HX_BUSY wait=0 result=free
+HX_RUN_DEPLOY deployed=true www=/sdcard/Android/data/io.dcloud.uniappx/apps/__UNI__1C1D180/www=1790212808->1790221428 pid_before=io.dcloud.uniappx=29246 pid_after=io.dcloud.uniappx=27555 foreground=io.dcloud.uniappx reason=资源已落到设备：/sdcard/Android/data/io.dcloud.uniappx/apps/__UNI__1C1D180/www 的 mtime 相对基线前进
+HX_RUN mode=incremental compile=230 deploy=0 total=273 exit=ok
+```
+
+部署前设备侧基线（不依赖脚本自己的判定标签）：`lastUpdateTime=2026-09-24 09:20:00`、`pidof io.dcloud.uniappx=29246` ⇒ 部署后 pid 变为 27555。
+
+## 2) 产物直证：新校验档确实在被运行的 dex 里
+
+`D=/sdcard/Android/data/io.dcloud.uniappx/apps/__UNI__1C1D180/www/pages/recruiter/login`（uni-app-x「运行到手机」按页推 `classes.dex`）
+
+```
+ls -la $D            -> classes.dex 32140 B 2026-09-24 03:43（父目录 www/* mtime 11:43）
+grep -c -a '请输入招聘者账号' $D/classes.dex -> 1
+grep -c -a '请输入密码'       $D/classes.dex -> 1
+grep -c -a '密码至少'         $D/classes.dex -> 1   ← 本票新增档位
+grep -c -a '登录招聘者账号将退出当前学员账号' $D/classes.dex -> 1
+```
+
+## 3) 页身份（App 日志源 = cli launch 的 stdout `.out`，不是 logcat）
+
+`adb logcat -d` 全缓冲 261975 行里 `进入页面` 命中 **0** ⇒ 该日志不进 logcat。来源：`.ci-verify/launch-40c0a478fa3347e8b7d15be68312356c.out`
+
+```
+11:44:10.995 进入页面:pages/profile/settings
+11:44:15.792–11:44:17.502 进入页面:pages/login/login   （×6，同一入页记录重复打出）
+11:45:19.701 进入页面:pages/recruiter/login           ← 点「招聘者登录」入口后
+（其后直到取证结束再无任何「进入页面」行）
+```
+
+## 4) 注入可用性（每次现测，不默认可用）
+
+```
+adb -s 192.168.0.212:37611 shell "input tap 540 2045; echo TAP_RC=$?"   -> TAP_RC=0
+logcat 全缓冲 255916 行：INJECT_EVENTS=0 ／ injection denied 相关行=0
+```
+
+判据是「界面确实变了 + 日志出现 `进入页面:pages/recruiter/login`」，不是退出码。
+
+## 5) 三帧（每帧 = 同一条设备端命令里「点按 + 抓帧」，抢在 toast ≈2 秒窗口内）
+
+命令形态（三帧同形）：`adb -s <S> exec-out "input tap 540 926; screencap -p" > <帧>.png`
+
+| 帧 | 输入态（a11y 实测） | toast 实拍文案 | 原帧字节 / 原帧 sha256 | 入库件字节 / sha256 |
+| --- | --- | --- | --- | --- |
+| F1 | 账号空 + 口令空 | 请输入招聘者账号 | f1-empty-empty.png 74598 B `40ca9c42a513be23e964306297cbe7931a2c142065205d2f69b6ee76bcd1335a` | `01-toast-empty-account.jpg` 33632 B `e633291edc92d7089122f2bf33d7daeac5fd5633a1097ebca6088eaf0230bca9` |
+| F2 | 账号 `rec1234` + 口令空 | 请输入密码 | f2-user-only.png 143741 B `b126fa04f8941609ce16923113108cb72085c19265eedf143ad4bf0a11bd8c64` | `02-toast-empty-password.jpg` 58045 B `49dfc8123d7cd32704d219240b2a57c001edf7d40407d4a84f93cfc6d6bdcd3b` |
+| F3 | 账号 `rec1234` + 口令 5 位（a11y 显示 5 个圆点） | **密码至少 6 位** | f3-pwd5.png 145442 B `1ed0929f41b88468a60582c02d853d843a0d6d7b2afd76a2c53e7efe15e3a37f` | `03-toast-password-5digits.jpg` 61811 B `1435283da510e5768696456472e753f784fbd9363ba1d26413ae20c3dfc3ddf3` |
+
+三帧 sha256 互不相同 ⇒ 不是「同一张图冒充三态」。入库件 = 原帧 PIL 10.4.0 LANCZOS 1080×2400→720×1600、JPEG q80 optimize。
+
+## 6) ①a 机检行（`scripts/device-capture.ps1`，只读；`DEVICE_CAPTURE_RESULT=` 是唯一判据）
+
+```
+DEVICE_CAPTURE_RESULT=PASS
+  页面 pages/recruiter/login=SKIP  前台=io.dcloud.uniappx/io.dcloud.uniapp.appframe.activity.UniPortraitPageActivity  logcat窗口行数=3313  FATAL=0  ANRin包=0
+```
+
+同次运行全窗口另读数（`logcat窗口行数=3313`，全缓冲行数=249788）：`FATAL EXCEPTION=0  ANR in 包=0  ANR 合计=0  E AndroidRuntime=0  进程死亡=0`；`页面判定：PASS=0  FAIL=0  SKIP=1`（SKIP 原因照原文「未切页：切页默认关闭」⇒ 只读模式不切页，本页到达性由第 3 节的入页行承担）；只读帧 `pages-recruiter-login-current.png=56268B/67788DD808FB`。
+
+## 7) 能力面判定（①b 是否需要）
+
+在**收口 head `f5dc9ed2`** 上按最终改动集现测（`.github`/`scripts/lib/capability-surface.ps1` 在第二次合并里被 master 侧改过，故不沿用 `d323da3a` 那次读数）：
+
+```
+CAPABILITY_SURFACE touched=no whitelist_files=0 call_sites=0
+```
+
+## 8) ③ `npm run test:unit`（收口 head `f5dc9ed2` 本机全量）
+
+```
+Test Suites: 129 passed, 129 total
+Tests:       2451 passed, 2451 total
+NPM_EXIT=0
+```
+
+本地日志 `.scratch/suite-f5dc9ed2.log`；承重计数以 PR 正文 ③ 行引用的 CI run 为准。
+
+## 9) ④c 本地编译门（绑 `d323da3a`，`f5dc9ed2` 为其子且其间运行时面零改动）
+
+```
+KOTLIN_ALL_RESULT errors=0 classes=1501 files=120 input=unpackage\resources\app-android freshness=fresh log=D:\FL\wt-1295\training-app\叉车维修培训学员端跨端应用\.ci-verify\kotlin-all.log
+```
+
+`HX_BUSY wait=1 result=free`；日志头 `# kotlin-all-check (④c) 开始 2026-09-24 11:00:26`、`# project = D:\FL\wt-1295\training-app\叉车维修培训学员端跨端应用` ⇒ 编的确实是本 worktree 这棵树。全文归档在本目录 `04-kotlin-all-4c.txt`。
+
+## 10) ② 微信开发者工具（**本票免**，仅另附一次实跑作补充观察）
+
+```
+MP_WEIXIN_RESULT appid=wx38c3e31b16a7ced0 pageStack=1 entry=pages/index/index errorsTotal=0 exceptionsTotal=0 logsTotal=6 shots=1 navigation=skip(unsupported) ready=0s sdk=3.16.3 ide=2.02.2608070 navigationSkipReason=navigation-api-unsupported log=.ci-verify/mp-weixin.log
+```
+
+本票改动集不含 `manifest.json` / `platformConfig.json`、无条件编译指令行增删 ⇒ 按 `.github/workflows/pr-evidence.yml` 的 `hitsMpWeixinFace` 不触发第 ② 门；此行只作「未把崩溃带进小程序面」的旁证，**不作为门禁结论**。
+
+## 11) 守护分类（`node scripts/classify-guards.mjs`）
+
+```
+[接线] recruiterLoginContract.test.js
+```
