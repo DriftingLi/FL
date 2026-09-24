@@ -413,16 +413,27 @@ func (e Endpoint[Req, Resp]) WithSuccess(ok *success, errStatus int) Endpoint[Re
 	return e
 }
 
-// pathInt 解析路径参数为 int，失败返回 400 自定义文案。
+// pathInt 解析路径参数为正整数 id；非数字、0 与负数一律 400（带调用方给的那句文案）。
+//
+// 「路径上的整数 id 不是正整数」是一件**解析层**事实，与「这个资源不存在」无关：改之前这里只看
+// `strconv.Atoi` 的 err ⇒ 0 与负数被放行到 service，于是 `GET /course/0` 对外答 404「课程不存在」
+// （拿一个不存在的 id 冒充一个不存在的资源），而用户/讲师面因 service 有 `id <= 0` guard 答 400，
+// 且用的是另一句文案（「用户 ID 非法」）——同一件输入错误在三个地方说出三种话（ADR-0065 决策 1）。
+// `pathInt64` 一直是这里的形状，本函数向它对齐。
+//
+// service 层那 5 处 `id <= 0` guard **保留**：HTTP 面现在轮不到它触发，但 service 的契约不能依赖
+// 「调用方一定是这个 handler」（同一 guard 也管着来自 body 的 id）。被否备选见 ADR-0065。
 func pathInt(c *gin.Context, key, failMsg string) (int, error) {
 	v, err := strconv.Atoi(c.Param(key))
-	if err != nil {
+	if err != nil || v <= 0 {
 		return 0, badRequest(failMsg)
 	}
 	return v, nil
 }
 
-// pathInt64 解析路径参数为 int64，失败或 <=0 返回 400 自定义文案。
+// pathInt64 解析路径参数为正整数 id（int64 版），判定与 pathInt 逐字相同。
+// 两枚 helper 是**仅有的**两处路径整数解析点；由 ⑤b 把散在 9 个文件里的裸 `strconv.*(c.Param(...))`
+// 收进来，之后由 parse_point_drift_lock_test.go 钉住「不许再出现第三处」。
 func pathInt64(c *gin.Context, key, failMsg string) (int64, error) {
 	v, err := strconv.ParseInt(c.Param(key), 10, 64)
 	if err != nil || v <= 0 {

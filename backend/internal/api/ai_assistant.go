@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -189,9 +188,9 @@ func (h *AIAssistantHandler) DeleteUserModel(c *gin.Context) {
 			if uid == 0 {
 				return nil, &ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
 			}
-			id, _ := strconv.Atoi(c.Param("id"))
-			if id <= 0 {
-				return nil, badRequest("无效的模型 ID")
+			id, err := pathInt(c, "id", "无效的模型 ID")
+			if err != nil {
+				return nil, err
 			}
 			return &aiModelIDReq{UserID: uid, ID: id}, nil
 		},
@@ -291,9 +290,9 @@ func (h *AIAssistantHandler) DeleteSession(c *gin.Context) {
 			if uid == 0 {
 				return nil, &ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
 			}
-			id, _ := strconv.Atoi(c.Param("id"))
-			if id <= 0 {
-				return nil, badRequest("无效的会话 ID")
+			id, err := pathInt(c, "id", "无效的会话 ID")
+			if err != nil {
+				return nil, err
 			}
 			return &aiModelIDReq{UserID: uid, ID: id}, nil
 		},
@@ -333,9 +332,9 @@ func (h *AIAssistantHandler) RenameSession(c *gin.Context) {
 			if uid == 0 {
 				return nil, &ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
 			}
-			id, _ := strconv.Atoi(c.Param("id"))
-			if id <= 0 {
-				return nil, badRequest("无效的会话 ID")
+			id, err := pathInt(c, "id", "无效的会话 ID")
+			if err != nil {
+				return nil, err
 			}
 			req, err := bindJSONMsg[aiSessionRenameReqBody](c, "请求数据无效")
 			if err != nil {
@@ -378,9 +377,9 @@ func (h *AIAssistantHandler) GetSessionMessages(c *gin.Context) {
 			if uid == 0 {
 				return nil, &ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
 			}
-			id, _ := strconv.Atoi(c.Param("id"))
-			if id <= 0 {
-				return nil, badRequest("无效的会话 ID")
+			id, err := pathInt(c, "id", "无效的会话 ID")
+			if err != nil {
+				return nil, err
 			}
 			return &aiModelIDReq{UserID: uid, ID: id}, nil
 		},
