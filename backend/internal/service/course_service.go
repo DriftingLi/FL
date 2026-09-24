@@ -326,7 +326,11 @@ func (s *CourseService) studentCanReadCourse(courseID, studentID int) error {
 		}
 		return err // 查不动不得被读成「不可读」（ADR-0062 票6 同判据）
 	}
-	if !CourseVisibleByID(s.db, courseID) {
+	visible, err := CourseVisibleByID(s.db, courseID)
+	if err != nil {
+		return err // 问不出可见性不得被读成「不在平台上」（ADR-0065 决策 7）
+	}
+	if !visible {
 		return ErrCourseNotVisible
 	}
 	entitled, err := courseEntitled(s.db, courseID, studentID, course.PointsPrice)
@@ -342,10 +346,14 @@ func (s *CourseService) studentCanReadCourse(courseID, studentID int) error {
 // GetCourseDetail 课程详情（含学员学习位置与完成状态，ADR-0017）。
 // 可见性：按 id 读路径纳入学员可见性谓词（ADR-0058）——未发布 / 未挂载课程一律按「不存在」返回。
 func (s *CourseService) GetCourseDetail(courseID, studentID int) (*CourseDetailDTO, error) {
-	// 可见性谓词 fail-closed（查询失败按「不可见」，与 QuestionReadScope.VisibleByID 同形先例）：
-	// 平台不能证明它可见时不把它交出去。代价是这一格的「查不动」外显也是 404 而非 500
-	// ——档位台账据实只声明 404/400，不虚报 500 档。
-	if !CourseVisibleByID(s.db, courseID) {
+	// 可见性谓词仍 fail-closed（问不出可见性时不把内容交出去），但**把 err 交出去**：
+	// 旧写法把「读不动 courses」演成 404「课程不存在」，Web 的 `.catch(()=>null)` 会把它缓存成
+	// 「这门课没了」——故障被收成空态就再没人报警（ADR-0065 决策 7；档位台账从此声明 500 档）。
+	visible, err := CourseVisibleByID(s.db, courseID)
+	if err != nil {
+		return nil, err
+	}
+	if !visible {
 		return nil, ErrCourseNotFound
 	}
 	course, chapterList, err := loadCourseWithChapters(s.db, courseID)

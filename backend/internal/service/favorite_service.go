@@ -80,40 +80,72 @@ type favoriteTargetMeta struct {
 // qScope（ADR-0062 决策 4）只在题目支生效：修复前这里手拼 `status = 'published'`，
 // 既不排源标记真题题也不分当前证件 ⇒ 收藏一道真题题后，经 GET /api/favorites 的题干快照
 // 就把「真题题只经真题卷出现」的口径破了。题目支的判据宿主从此在 question_pool_scope.go。
+// 收藏域的业务事实（ADR-0065 决策 7 的连带件）：`validateFavoriteTarget` 的五条支从前都把
+// 查询错误丢在 Count 上，「问不出能不能收藏」对外与「不能收藏」同一形状。要让故障落 500，
+// 这五条必须各有名字——否则它们会跟故障一起被推到默认面上。
+var (
+	ErrFavTargetCourseUnreadable   = errors.New("课程不存在或不可收藏")
+	ErrFavTargetChapterUnreadable  = errors.New("章节不存在或不可收藏")
+	ErrFavTargetQuestionUnreadable = errors.New("题目不存在或不可收藏")
+	ErrFavTargetFeaturedUnreadable = errors.New("内容不存在或不可收藏")
+	ErrFavTargetTopicNotFound      = errors.New("帖子不存在")
+	ErrFavTargetTypeUnsupported    = errors.New("收藏类型仅支持 course/chapter/question/featured/topic")
+	ErrFavTargetIDInvalid          = errors.New("收藏目标 ID 无效")
+	ErrFavoriteNotFound            = errors.New("收藏不存在")
+)
+
 func validateFavoriteTarget(db *gorm.DB, targetType string, targetID int, qScope QuestionReadScope) error {
+	// 五条支的「查不动」一律上抛，不再被 `cnt == 0` 咽成「不存在」（ADR-0065 决策 7）。
+	// 这里原本是**同一个函数里五种漏法**：course/question 两支把错误丢在单点内部、
+	// chapter/featured/topic 三支把错误丢在 Count 的返回值上——只修其中两支，剩下三支仍会让
+	// 「问不出能不能收藏」对外长得像「不能收藏」，那把档位台账就是有缝的锁。
 	switch targetType {
 	case FavoriteTargetCourse:
 		// 复用学员可见性单点的 by-id 形态（ADR-0058），不在此手拼谓词。
-		if !CourseVisibleByID(db, targetID) {
-			return errors.New("课程不存在或不可收藏")
+		visible, err := CourseVisibleByID(db, targetID)
+		if err != nil {
+			return err
+		}
+		if !visible {
+			return ErrFavTargetCourseUnreadable
 		}
 	case FavoriteTargetChapter:
 		var cnt int64
 		// 章节可见性跟随课程：谓词复用挂载不变式单点，不手拼（#1132）。
 		mounted := MountedCourseScope(db.Model(&model.Course{}).Select("course_id").Where("status = 1"))
-		db.Model(&model.Chapter{}).Where("chapter_id = ? AND course_id IN (?)", targetID, mounted).Count(&cnt)
+		if err := db.Model(&model.Chapter{}).Where("chapter_id = ? AND course_id IN (?)", targetID, mounted).Count(&cnt).Error; err != nil {
+			return err
+		}
 		if cnt == 0 {
-			return errors.New("章节不存在或不可收藏")
+			return ErrFavTargetChapterUnreadable
 		}
 	case FavoriteTargetQuestion:
 		// 题目支：题库池 by-id 判定（published + 排源标记真题题 + 当前证件），单点复用不手拼。
-		if !qScope.VisibleByID(db, targetID) {
-			return errors.New("题目不存在或不可收藏")
+		visible, err := qScope.VisibleByID(db, targetID)
+		if err != nil {
+			return err
+		}
+		if !visible {
+			return ErrFavTargetQuestionUnreadable
 		}
 	case FavoriteTargetFeatured:
 		var cnt int64
-		db.Model(&model.FeaturedContent{}).Where("content_id = ? AND status = 1", targetID).Count(&cnt)
+		if err := db.Model(&model.FeaturedContent{}).Where("content_id = ? AND status = 1", targetID).Count(&cnt).Error; err != nil {
+			return err
+		}
 		if cnt == 0 {
-			return errors.New("内容不存在或不可收藏")
+			return ErrFavTargetFeaturedUnreadable
 		}
 	case FavoriteTargetTopic:
 		var cnt int64
-		db.Model(&model.ForumTopic{}).Where("id = ?", targetID).Count(&cnt)
+		if err := db.Model(&model.ForumTopic{}).Where("id = ?", targetID).Count(&cnt).Error; err != nil {
+			return err
+		}
 		if cnt == 0 {
-			return errors.New("帖子不存在")
+			return ErrFavTargetTopicNotFound
 		}
 	default:
-		return errors.New("收藏类型仅支持 course/chapter/question/featured/topic")
+		return ErrFavTargetTypeUnsupported
 	}
 	return nil
 }
@@ -165,7 +197,7 @@ func favoriteTargetsMeta(db *gorm.DB, targetType string, ids []int) map[int]favo
 func (s *FavoriteService) Add(userID int, targetType string, targetID int, qScope QuestionReadScope) (*FavoriteDTO, error) {
 	targetType = strings.TrimSpace(targetType)
 	if targetID <= 0 {
-		return nil, errors.New("收藏目标 ID 无效")
+		return nil, ErrFavTargetIDInvalid
 	}
 	if err := validateFavoriteTarget(s.db, targetType, targetID, qScope); err != nil {
 		return nil, err
@@ -199,7 +231,7 @@ func (s *FavoriteService) Remove(userID int, favoriteID int64) error {
 		return res.Error
 	}
 	if res.RowsAffected == 0 {
-		return errors.New("收藏不存在")
+		return ErrFavoriteNotFound
 	}
 	return nil
 }
@@ -279,7 +311,7 @@ type FavoriteCheckDTO struct {
 func (s *FavoriteService) Check(userID int, targetType string, targetID int) (*FavoriteCheckDTO, error) {
 	targetType = strings.TrimSpace(targetType)
 	if targetID <= 0 {
-		return nil, errors.New("收藏目标 ID 无效")
+		return nil, ErrFavTargetIDInvalid
 	}
 	var row model.Favorite
 	if err := s.db.Where("user_id = ? AND target_type = ? AND target_id = ?", userID, targetType, targetID).

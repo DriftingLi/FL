@@ -43,12 +43,24 @@ func NewQuestionCommentService(db *gorm.DB, logger *zap.Logger) *QuestionComment
 	return &QuestionCommentService{db: db, logger: logger}
 }
 
+// 题目互动域的输入与业务事实（ADR-0065 决策 7 的连带件）：本域 handler 还是裸闭包，
+// 对任何 err 都答 400/500 + err.Error()。要让「查不动」真的落 500，前提是其余几条**有名字**——
+// 否则它们会与故障一起被推给默认面（同批④ 那张表的存在理由）。
+var (
+	ErrCommentContentEmpty = errors.New("评论内容不能为空")
+	ErrCommentTooLong      = errors.New("评论不能超过500字")
+	// ErrCommentNotFound 与 ErrCommentNotOwned 共用一句呈现：不区分「没有」与「不是你的」，
+	// 与笔记那侧的 ErrNoteNotFound 同口径（不泄漏别人的评论是否存在）。
+	ErrCommentNotFound = errors.New("评论不存在")
+	ErrCommentNotOwned = errors.New("无权删除")
+)
+
 // List 某题的评论列表。scope 必传（ADR-0062 决策 4）：修复前这条查询**连题目存在性都不查**，
 // 直调任意 question_id 即可枚举池外题（draft / pending / 源标记真题题 / 非当前证件）的评论，
 // 等于给不可见题装了一个只读探针。池外一律按「不存在」上抛，与题目 by-id 读面同口径。
 func (s *QuestionCommentService) List(questionID, page, pageSize int, scope QuestionReadScope) ([]QuestionCommentDTO, int64, error) {
-	if !scope.VisibleByID(s.db, questionID) {
-		return nil, 0, ErrQuestionNotFound
+	if err := questionVisibleOrErr(scope, s.db, questionID); err != nil {
+		return nil, 0, err
 	}
 	type row struct {
 		model.QuestionComment
@@ -88,13 +100,13 @@ func (s *QuestionCommentService) List(questionID, page, pageSize int, scope Ques
 func (s *QuestionCommentService) Create(questionID, userID int, content string, scope QuestionReadScope) (*QuestionCommentDTO, error) {
 	content = strings.TrimSpace(content)
 	if content == "" {
-		return nil, errors.New("评论内容不能为空")
+		return nil, ErrCommentContentEmpty
 	}
 	if len(content) > 500 {
-		return nil, errors.New("评论不能超过500字")
+		return nil, ErrCommentTooLong
 	}
-	if !scope.VisibleByID(s.db, questionID) {
-		return nil, ErrQuestionNotFound
+	if err := questionVisibleOrErr(scope, s.db, questionID); err != nil {
+		return nil, err
 	}
 	c := model.QuestionComment{
 		QuestionID: questionID,
@@ -121,10 +133,10 @@ func (s *QuestionCommentService) Create(questionID, userID int, content string, 
 func (s *QuestionCommentService) Delete(commentID int, userID int) error {
 	var c model.QuestionComment
 	if err := s.db.First(&c, commentID).Error; err != nil {
-		return errors.New("评论不存在")
+		return ErrCommentNotFound
 	}
 	if c.UserID != userID {
-		return errors.New("无权删除")
+		return ErrCommentNotOwned
 	}
 	return s.db.Delete(&c).Error
 }

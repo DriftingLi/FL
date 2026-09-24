@@ -3,6 +3,8 @@
 package api
 
 import (
+	"errors"
+
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/authz"
@@ -73,6 +75,7 @@ func (h *FavoriteHandler) List(c *gin.Context) {
 // @Success 201 {object} response.R{data=service.FavoriteDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
+// @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /favorites [post]
 func (h *FavoriteHandler) Add(c *gin.Context) {
 	var body struct {
@@ -85,10 +88,38 @@ func (h *FavoriteHandler) Add(c *gin.Context) {
 	}
 	resp, err := h.svc.Add(middleware.CurrentUserID(c), body.TargetType, body.TargetID, studentQuestionScope(c))
 	if err != nil {
-		response.BadRequest(c, err.Error())
+		renderFavoriteError(c, err)
 		return
 	}
 	response.Created(c, "收藏成功", resp)
+}
+
+// favoriteFacts400 收藏域的业务事实全集。表里没有的一律按未具名库故障渲染 500
+// （ADR-0065 决策 7：`validateFavoriteTarget` 五条支从前都丢查询错误，「问不出能不能收藏」与
+// 「不能收藏」同一形状；故障要落 500 的前提是这几条各有名字，否则它们会跟故障一起被推上去）。
+var favoriteFacts400 = []error{
+	service.ErrFavTargetCourseUnreadable,
+	service.ErrFavTargetChapterUnreadable,
+	service.ErrFavTargetQuestionUnreadable,
+	service.ErrFavTargetFeaturedUnreadable,
+	service.ErrFavTargetTopicNotFound,
+	service.ErrFavTargetTypeUnsupported,
+	service.ErrFavTargetIDInvalid,
+	service.ErrFavoriteNotFound,
+}
+
+// renderFavoriteError 裸 handler 一侧的档位分流：业务事实 400 各说自己的句子，其余 500 且不带
+// 驱动原文。形状与 question_interaction.go 的 renderInteractionError 相同，两张表各归各域——
+// 事实集不同，合成一张会让「这道题不在池内」与「这条收藏不存在」共用一次遍历。
+func renderFavoriteError(c *gin.Context, err error) {
+	for _, f := range favoriteFacts400 {
+		if errors.Is(err, f) {
+			response.BadRequest(c, err.Error())
+			return
+		}
+	}
+	c.Error(err) //nolint:errcheck // gin 的 Error 只记账，返回值是链式用的
+	response.ServerError(c, "服务器内部错误")
 }
 
 // Remove 取消收藏

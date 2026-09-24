@@ -88,13 +88,14 @@ func (s QuestionReadScope) WhereSQL() (string, []any) {
 
 // VisibleByID 单题在本 scope 内是否对学员可见：by-id 读面与「往题上写」的挂载校验共用这一处
 // （形态照 course_mount_scope.go 的 CourseVisibleByID / ADR-0058；池内三元一条都不少）。
-// 查询失败按不可见处理（fail-closed）；调用方一律按「不存在」渲染 404，不泄漏存在性。
-func (s QuestionReadScope) VisibleByID(db *gorm.DB, questionID int) bool {
+// 查询失败仍按不可见处理（fail-closed 的保守方向不变），但**把 err 交出去**（ADR-0065 决策 7）：
+// 「问不出可见性」不是「证明它不可见」，二者对外必须分得开（404 vs 500）。
+func (s QuestionReadScope) VisibleByID(db *gorm.DB, questionID int) (bool, error) {
 	var cnt int64
 	if err := s.Apply(db.Model(&model.Question{})).Where("id = ?", questionID).Count(&cnt).Error; err != nil {
-		return false
+		return false, err
 	}
-	return cnt > 0
+	return cnt > 0, nil
 }
 
 // QuestionEditScope 编辑面（题库作者 / 审核者）scope：与学员面的差别是**具名**的——

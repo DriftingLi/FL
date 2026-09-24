@@ -41,6 +41,19 @@ func RegisterQuestionInteractionRoutes(rg *gin.RouterGroup, rd RouterDeps, comme
 	g.GET("/:question_id/knowledge", h.ListKnowledge)
 }
 
+// interactionFacts400 题目互动域（评论 + 题内笔记）的输入与业务事实全集。
+// 表里没有的 = 未具名的库故障，一律 500（ADR-0065 决策 7：VisibleByID 不再丢弃 .Error 之后，
+// 这些端点必须能把「问不出可见性」与「这道题不在池内」分开答，否则故障会冒充 404/400）。
+var interactionFacts400 = []error{
+	service.ErrCommentContentEmpty,
+	service.ErrCommentTooLong,
+	service.ErrCommentNotFound,
+	service.ErrCommentNotOwned,
+	service.ErrNoteContentEmpty,
+	service.ErrNoteContentTooLong,
+	service.ErrNoteNotFound,
+}
+
 // renderOutOfPoolQuestion 池外题的 HTTP 出口：命中 ErrQuestionNotFound 即渲染 404 并返回 true
 // （scope 判据的表现形式，越权按「不存在」不泄漏存在性）；其余错误交调用方按既有口径渲染。
 func renderOutOfPoolQuestion(c *gin.Context, err error) bool {
@@ -49,6 +62,28 @@ func renderOutOfPoolQuestion(c *gin.Context, err error) bool {
 	}
 	response.NotFound(c, "题目不存在")
 	return true
+}
+
+// renderInteractionError 本域裸 handler 的错误出口，三档顺序固定：池外题 404（不泄漏存在性）
+// → 业务事实 400（各说自己那句）→ 其余 500（真实错误记进 gin 上下文，对外不给驱动原文）。
+// 返回 true 表示已渲染。五处 handler 共用这一格，不各抄一遍 if-chain。
+//
+// 本域 handler 还没迁到 Endpoint 缝（登记：ErrStatus 表 + 骨架是那边的形状），这里的
+// 500 一档是决策 9「5xx 不外发驱动原文」在**裸 handler 一侧**的等价落点。
+// ErrNoteNotFound 在本域答 400、在 note.go 的「我的笔记」面答 404 —— 那是既有分歧，
+// 本批按实保留（改它是一次未登记的对外变更），登记给下一波连同域内两张表一起对账。
+func renderInteractionError(c *gin.Context, err error) {
+	if renderOutOfPoolQuestion(c, err) {
+		return
+	}
+	for _, f := range interactionFacts400 {
+		if errors.Is(err, f) {
+			response.BadRequest(c, err.Error())
+			return
+		}
+	}
+	c.Error(err) //nolint:errcheck // gin 的 Error 只记账，返回值是链式用的
+	response.ServerError(c, "服务器内部错误")
 }
 
 // ListComments 题目评论列表
@@ -63,6 +98,7 @@ func renderOutOfPoolQuestion(c *gin.Context, err error) bool {
 // @Param page_size query int false "每页条数" default(10)
 // @Success 200 {object} response.R{data=service.QuestionCommentPageResult} "success"
 // @Failure 400 {object} response.R "题目ID无效"
+// @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /questions/{question_id}/comments [get]
 func (h *QuestionInteractionHandler) ListComments(c *gin.Context) {
 	qid, err := pathInt(c, "question_id", "题目ID无效")
@@ -74,10 +110,7 @@ func (h *QuestionInteractionHandler) ListComments(c *gin.Context) {
 	pageSize := atoiDefault(c.Query("page_size"), 10)
 	items, total, err := h.commentSvc.List(qid, page, pageSize, studentQuestionScope(c))
 	if err != nil {
-		if renderOutOfPoolQuestion(c, err) {
-			return
-		}
-		response.ServerError(c, err.Error())
+		renderInteractionError(c, err)
 		return
 	}
 	response.Success(c, service.QuestionCommentPageResult{Items: items, Page: page, PageSize: pageSize, Total: total})
@@ -94,6 +127,7 @@ func (h *QuestionInteractionHandler) ListComments(c *gin.Context) {
 // @Param body body object true "内容" example({"content":"这题易错"})
 // @Success 201 {object} response.R{data=service.QuestionCommentDTO} "success"
 // @Failure 400 {object} response.R "题目ID无效"
+// @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /questions/{question_id}/comments [post]
 func (h *QuestionInteractionHandler) CreateComment(c *gin.Context) {
 	qid, err := pathInt(c, "question_id", "题目ID无效")
@@ -111,10 +145,7 @@ func (h *QuestionInteractionHandler) CreateComment(c *gin.Context) {
 	}
 	m, err := h.commentSvc.Create(qid, uid, req.Content, studentQuestionScope(c))
 	if err != nil {
-		if renderOutOfPoolQuestion(c, err) {
-			return
-		}
-		response.BadRequest(c, err.Error())
+		renderInteractionError(c, err)
 		return
 	}
 	response.Created(c, "评论成功", m)
@@ -127,6 +158,7 @@ func (h *QuestionInteractionHandler) CreateComment(c *gin.Context) {
 // @Param comment_id path int true "评论ID"
 // @Success 200 {object} response.R "success"
 // @Failure 400 {object} response.R "评论ID无效"
+// @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /questions/comments/{comment_id} [delete]
 func (h *QuestionInteractionHandler) DeleteComment(c *gin.Context) {
 	cid, err := pathInt(c, "comment_id", "评论ID无效")
@@ -149,6 +181,7 @@ func (h *QuestionInteractionHandler) DeleteComment(c *gin.Context) {
 // @Param question_id path int true "题目ID"
 // @Success 200 {object} response.R{data=model.Note} "success"
 // @Failure 400 {object} response.R "题目ID无效"
+// @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /questions/{question_id}/note [get]
 func (h *QuestionInteractionHandler) GetNote(c *gin.Context) {
 	qid, err := pathInt(c, "question_id", "题目ID无效")
@@ -159,10 +192,7 @@ func (h *QuestionInteractionHandler) GetNote(c *gin.Context) {
 	uid := middleware.CurrentUserID(c)
 	n, err := h.noteSvc.GetForQuestion(qid, uid, studentQuestionScope(c))
 	if err != nil {
-		if renderOutOfPoolQuestion(c, err) {
-			return
-		}
-		response.ServerError(c, err.Error())
+		renderInteractionError(c, err)
 		return
 	}
 	if n == nil {
@@ -182,6 +212,7 @@ func (h *QuestionInteractionHandler) GetNote(c *gin.Context) {
 // @Param body body object true "笔记" example({"content":"我的笔记"})
 // @Success 200 {object} response.R{data=model.Note} "success"
 // @Failure 400 {object} response.R "题目ID无效"
+// @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /questions/{question_id}/note [put]
 func (h *QuestionInteractionHandler) UpsertNote(c *gin.Context) {
 	qid, err := pathInt(c, "question_id", "题目ID无效")
@@ -199,10 +230,7 @@ func (h *QuestionInteractionHandler) UpsertNote(c *gin.Context) {
 	}
 	n, err := h.noteSvc.UpsertForQuestion(qid, uid, req.Content, studentQuestionScope(c))
 	if err != nil {
-		if renderOutOfPoolQuestion(c, err) {
-			return
-		}
-		response.BadRequest(c, err.Error())
+		renderInteractionError(c, err)
 		return
 	}
 	response.Success(c, n)
@@ -215,6 +243,7 @@ func (h *QuestionInteractionHandler) UpsertNote(c *gin.Context) {
 // @Param question_id path int true "题目ID"
 // @Success 200 {object} response.R "success"
 // @Failure 400 {object} response.R "题目ID无效"
+// @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /questions/{question_id}/note [delete]
 func (h *QuestionInteractionHandler) DeleteNote(c *gin.Context) {
 	qid, err := pathInt(c, "question_id", "题目ID无效")
@@ -224,10 +253,7 @@ func (h *QuestionInteractionHandler) DeleteNote(c *gin.Context) {
 	}
 	uid := middleware.CurrentUserID(c)
 	if err := h.noteSvc.DeleteForQuestion(qid, uid, studentQuestionScope(c)); err != nil {
-		if renderOutOfPoolQuestion(c, err) {
-			return
-		}
-		response.ServerError(c, err.Error())
+		renderInteractionError(c, err)
 		return
 	}
 	response.SuccessWithMsg(c, "已删除", nil)

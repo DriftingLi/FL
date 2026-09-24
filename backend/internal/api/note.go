@@ -72,6 +72,7 @@ type listNotesReq struct {
 // @Param page_size query int false "每页条数" default(20)
 // @Success 200 {object} response.R{data=service.NotePageDTO} "success"
 // @Failure 401 {object} response.R "未认证"
+// @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /notes [get]
 func (h *NoteHandler) List(c *gin.Context) {
 	Endpoint[listNotesReq, service.NotePageDTO]{
@@ -108,6 +109,7 @@ type createNoteReq struct {
 // @Success 201 {object} response.R{data=service.NoteDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
+// @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /notes [post]
 func (h *NoteHandler) Create(c *gin.Context) {
 	Endpoint[createNoteReq, service.NoteDTO]{
@@ -156,6 +158,7 @@ type updateNoteReq struct {
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "笔记不存在"
+// @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /notes/{id} [put]
 func (h *NoteHandler) Update(c *gin.Context) {
 	Endpoint[updateNoteReq, service.NoteDTO]{
@@ -200,6 +203,7 @@ type deleteNoteReq struct {
 // @Success 200 {object} response.R "success"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "笔记不存在"
+// @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /notes/{id} [delete]
 func (h *NoteHandler) Delete(c *gin.Context) {
 	Endpoint[deleteNoteReq, struct{}]{
