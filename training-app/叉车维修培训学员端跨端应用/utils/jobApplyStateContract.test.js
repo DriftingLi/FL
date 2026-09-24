@@ -66,9 +66,16 @@ describe('C1 职位 DTO 与映射都要补两字段（ADR-0003；#652 后类型�
     const builder = between(jobSrc, 'function buildJobPosting', '\n}');
     expect(builder).toMatch(/apply_state:\s*\(/);
     expect(builder).toMatch(/cooldown_days:/);
-    // 详情：getMapped<JobPosting> 直接 buildJobPosting；列表：buildJobListResult 复用 buildJobPosting
-    expect(jobSrc).toMatch(/getMapped<JobPosting>[\s\S]*buildJobPosting\(data\)/);
-    expect(jobSrc).toMatch(/function buildJobListResult[\s\S]*buildJobPosting\(obj\)/);
+    // 详情 / 列表**各自函数体内**都要见到 getMapped<…> 与 buildJobPosting 的调用。
+    // ⚠️ 不能用 `/getMapped<JobPosting>[\s\S]*buildJobPosting\(data\)/` 这种**全文件无界**匹配：
+    //    `api/job.uts` 的文件头注释里就写着「映射…收敛到 `buildJobPosting`」，无界匹配会被
+    //    「注释 + 别处的代码」凑满足 ⇒ 代码真被改坏也不红（假绿）。按体切开后注释不参与。
+    const detailFn = between(jobSrc, 'export function getJobDetailApi', '\n}');
+    expect(detailFn).toMatch(/getMapped<JobPosting>/);
+    expect(detailFn).toMatch(/buildJobPosting\(data\)/);
+    // 列表：buildJobListResult 复用 buildJobPosting（去重后单一映射覆盖两端，防「补详情漏列表」）
+    const listBuilder = between(jobSrc, 'function buildJobListResult', '\n}');
+    expect(listBuilder).toMatch(/buildJobPosting\(obj\)/);
   });
 });
 

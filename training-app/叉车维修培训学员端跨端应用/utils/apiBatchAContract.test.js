@@ -60,6 +60,12 @@ const RAW_GET = /\bget\s*\(/;
 const FIELD_READ = /\bdata\['/;
 
 /**
+ * 「DTO 类型经 `types/index` 消费」的判据。写成 `[^}]+` 会让 `import type { }` 这种**空花括号**
+ * 也算命中（本文件自检当场抓到），故要求花括号内至少有一个非空白字符。
+ */
+const TYPES_INDEX_IMPORT = /import\s+type\s*\{\s*[^}\s][^}]*\}\s*from\s*'\.\.\/types\/index'/;
+
+/**
  * 本票六域里**有 api 文件**的五域。第六域 guide 无 api 文件（后端无 guide 端点，
  * 见下方 ③-a 的登记），故不出现在这里的 it.each 里 —— 不是漏项。
  */
@@ -224,38 +230,54 @@ describe('points / featured / notification 域出口家族不回潮', () => {
   /** 票面 AC「六个域 api 全部导出显式 DTO 类型」的类型单一来源面 */
   it.each(DOMAINS)('api/%s.uts 的 DTO 来自 types/index，api 层零内联 `export type`', (domain) => {
     const src = stripComments(read(`api/${domain}.uts`));
-    expect(src).toMatch(/import\s+type\s*\{[^}]+\}\s*from\s*'\.\.\/types\/index'/);
+    expect(src).toMatch(TYPES_INDEX_IMPORT);
     expect(src).not.toMatch(/^export type /m);
   });
 });
 
 /* ══ ③-a guide 域零 api（登记 + 不回潮） ══ */
+/**
+ * guide 页面「不得触 api 层」的判据本体。抽出来给锁与注入自检**共用同一份**——
+ * 若自检里另写一遍正则，自检绿只证明自检那份正则没坏，证明不了锁没坏。
+ */
+const GUIDE_API_IMPORT = /from\s*'[^']*\/api\//;
+const GUIDE_BARE_REQUEST = /uni\.request\s*\(/;
+function guideApiHits(src) {
+  const hits = [];
+  if (GUIDE_API_IMPORT.test(src)) hits.push('import api/*');
+  if (GUIDE_BARE_REQUEST.test(src)) hits.push('uni.request 裸调');
+  return hits;
+}
+
 describe('guide 域零 api（无域 api 文件，页面不触 api 层）', () => {
   it('不存在 api/guide.uts（后端无 guide 端点，域本就无数据 api）', () => {
     expect(exists('api/guide.uts')).toBe(false);
   });
 
   it('pages/guide/** 无源文件 import api/ 或裸调 uni.request（不得回潮出隐性 api 面）', () => {
+    const files = h.sourceFilesIn('pages/guide');
+    // **下限断言**：目录空 / 路径写错时下面的循环零次执行、hits 恒为 [] ⇒ 假绿。
+    expect(files.length).toBeGreaterThan(0);
     const hits = [];
-    for (const rel of h.sourceFilesIn('pages/guide')) {
-      const src = stripComments(read(rel));
-      if (/from\s*'[^']*\/api\//.test(src)) hits.push(`${rel}: import api/*`);
-      if (/uni\.request\s*\(/.test(src)) hits.push(`${rel}: uni.request 裸调`);
+    for (const rel of files) {
+      for (const why of guideApiHits(stripComments(read(rel)))) hits.push(`${rel}: ${why}`);
     }
     expect(hits).toEqual([]);
   });
 });
 
 /* ══ ③-b api 层豁免（catch/detail）本票范围内清零，不回潮 ══ */
+/** 豁免名单命中判据本体（同样与注入自检共用，理由见上） */
+const apiEntryRe = (domain) => new RegExp(`api[/\\\\]${domain}\\.uts$`);
+
 describe('api 层 allowlist 不回潮（本批五域 api 文件均无豁免条目）', () => {
   it.each(DOMAINS)('%s.uts 不在任何豁免名单', (domain) => {
-    const hits = allowlistPaths().filter((p) => new RegExp(`api[/\\\\]${domain}\\.uts$`).test(p));
-    expect(hits).toEqual([]);
+    expect(allowlistPaths().filter((p) => apiEntryRe(domain).test(p))).toEqual([]);
   });
 });
 
 /* ══ 注入违规自检：证明上面每条判据真能判红（防正则失配导致假绿） ══ */
-describe('判据自检（red-capable）：三条判据各命中植入的违规、不误伤合法形态', () => {
+describe('判据自检（red-capable）：五条判据各命中植入的违规、不误伤合法形态', () => {
   it('RAW_THEN_TO_DTO：命中植入的裸 get(...).then → DTO 违规', () => {
     const planted = "export function foo() : Promise<Foo> {\n    return get('/x').then((data : UTSJSONObject) : Foo => buildFoo(data))\n}";
     expect(RAW_THEN_TO_DTO.test(planted)).toBe(true);
@@ -292,5 +314,40 @@ describe('判据自检（red-capable）：三条判据各命中植入的违规�
     expect(FIELD_READ.test("return getMapped<Foo>('/x', params, (data : UTSJSONObject) : Foo => buildFoo(data, keyword))")).toBe(false);
     // job 列表出口体里有 query['page'] 与 params.page!，都不是响应字段读取
     expect(FIELD_READ.test("if (params.page != null) query['page'] = params.page!.toString()")).toBe(false);
+  });
+
+  /**
+   * guide 判据的自检。植入的两条正是它要抓的两种回潮形态（显式 import 一个域 api、
+   * 或绕过 api 层直接 uni.request）；合法形态拿**真实页面**当样本，避免自说自话。
+   */
+  it('guideApiHits：命中植入的 api import 与裸 uni.request，不误伤 choose-cert 现状', () => {
+    expect(guideApiHits("import { searchAllApi } from '../../api/search'")).toEqual(['import api/*']);
+    expect(guideApiHits("uni.request({ url: '/x' })")).toEqual(['uni.request 裸调']);
+    expect(guideApiHits("import { getItemList } from '../../components/list'")).toEqual([]);
+    for (const rel of h.sourceFilesIn('pages/guide')) {
+      expect(guideApiHits(stripComments(read(rel)))).toEqual([]);
+    }
+  });
+
+  /**
+   * allowlist 判据的自检：`filter(...)` 命中空名单时**永远返回 []**，与「名单里有但没命中」长得一模一样。
+   * 于是本条先钉名单本身非空（读者活着），再钉判据对植入路径确实命中、对页面同名文件不命中。
+   */
+  it('apiEntryRe：名单非空、植入的 api/<域>.uts 条目确实命中、不误伤同名页面路径', () => {
+    expect(allowlistPaths().length).toBeGreaterThan(0);
+    expect(apiEntryRe('job').test('training-app/app/api/job.uts')).toBe(true);
+    expect(apiEntryRe('job').test('training-app\\api\\job.uts')).toBe(true);
+    expect(apiEntryRe('job').test('training-app/app/pages/jobs/job.uts')).toBe(false);
+    expect(apiEntryRe('job').test('training-app/app/api/jobby.uts')).toBe(false);
+  });
+
+  /** DTO 归位判据的自检：内联声明与「类型来自 types/index」两条各判一次 */
+  it('DTO 归位判据：植入的内联 export type 确实命中、合法 import type 形态确实命中、空花括号不算数', () => {
+    expect(/^export type /m.test("export function a() {}\nexport type JobPosting = {\n}")).toBe(true);
+    expect(/^export type /m.test("import type { JobPosting } from '../types/index'")).toBe(false);
+    expect(TYPES_INDEX_IMPORT.test("import type { JobPosting, JobListResult } from '../types/index'")).toBe(true);
+    // 空花括号（含带空格的 `{ }`）不满足判据 —— 旧写法 `[^}]+` 在这里会假绿
+    expect(TYPES_INDEX_IMPORT.test("import type { } from '../types/index'")).toBe(false);
+    expect(TYPES_INDEX_IMPORT.test("import type {} from '../types/index'")).toBe(false);
   });
 });
