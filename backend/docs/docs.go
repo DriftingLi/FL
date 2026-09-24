@@ -9078,6 +9078,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             }
@@ -9834,6 +9840,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             }
@@ -9899,6 +9911,12 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "章节不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -10303,6 +10321,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -13043,6 +13067,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             },
@@ -13101,6 +13131,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -13180,6 +13216,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             },
@@ -13221,6 +13263,12 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "笔记不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -15238,6 +15286,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             }
@@ -15307,6 +15361,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             },
@@ -15366,6 +15426,12 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "题目ID无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -15469,6 +15535,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             },
@@ -15530,6 +15602,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             },
@@ -15561,6 +15639,12 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "题目ID无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
