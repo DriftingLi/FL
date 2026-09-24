@@ -45,7 +45,11 @@ const (
 
 // declaredNullableWithoutContractFlag 契约撒谎债务的实测值（文件头第 3 条）：
 // 91 处响应集合字段自己承认「可能为 null」，而 swagger/TS 还在对消费方承诺非 null。
-// （104 处表态 = 99 nullable + 5 nonnil；其中 8 处早已带 x-nullable，故债务是 91 而不是 99。）
+// （104 处表态 = 99 nullable + 5 nonnil；集合字段里 5 处早已带 x-nullable、另 3 处落在
+//
+//	2xx 响应闭包外 ⇒ 99 − 5 − 3 = 91。ADR-0064 原记的「8 处」由 ADR-0065 批③ 更正：
+//	那 3 处差额是把标量指针字段上的 x-nullable 也计了进来。）
+//
 // 本波不做批量补 x-nullable（那会把每个消费点变成一次带类型错误的跨端改动）——
 // 这笔账交给下一波，常量的作用是让它只能变短。
 const declaredNullableWithoutContractFlag = 91

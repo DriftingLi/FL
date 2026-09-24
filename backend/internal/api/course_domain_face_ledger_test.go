@@ -31,6 +31,7 @@ import (
 // courseDomainIDs 本域台账要用的主键。missing 是一个必然不存在的 id。
 type courseDomainIDs struct {
 	course, chapter, file, featuredDraft, featuredPublished int
+	specialty, level                                        int
 	missing                                                 int
 }
 
@@ -113,7 +114,7 @@ func seedCourseDomain(t *testing.T, db *gorm.DB) courseDomainIDs {
 	if err := db.Create(&course).Error; err != nil {
 		t.Fatalf("播种课程失败: %v", err)
 	}
-	ids.course = course.CourseID
+	ids.course, ids.specialty, ids.level = course.CourseID, spec.SpecialtyID, lv.LevelID
 	ch := model.Chapter{CourseID: course.CourseID, Title: "台账章节", OrderNum: 1, CreatedAt: testutil.Now()}
 	if err := db.Create(&ch).Error; err != nil {
 		t.Fatalf("播种章节失败: %v", err)

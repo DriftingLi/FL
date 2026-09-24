@@ -1287,13 +1287,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "请求数据无效",
+                        "description": "输入不合法（挂载必填 / 引用ID无效或不存在 / 数值为负 / 前置课程冲突）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "写库或查库失败",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -1554,6 +1560,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "500": {
+                        "description": "写库或查库失败",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             },
@@ -1732,13 +1744,25 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "swap_with 参数无效",
+                        "description": "输入不合法（swap_with 参数无效 / 待交换的课程不存在 / 未挂载 / 跨组）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "课程不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "写库或查库失败",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -2064,6 +2088,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "写库或查库失败",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -4658,6 +4688,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "500": {
+                        "description": "写库或查库失败",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             }
@@ -5016,6 +5052,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "写库或查库失败",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -6412,6 +6454,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "写库或查库失败",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
