@@ -73,7 +73,9 @@ type outletSource struct {
 
 var (
 	nullableEvidenceSources = []outletSource{{"../service", "nullableOutlets"}}
-	nonNilEvidenceSources   = []outletSource{{"../service", "nonnilOutlets"}, {"../api", "nonnilOutlets"}}
+	// 前缀而非全名：分域文件各自声明 nonnilOutletsCore / nonnilOutletsCatalog / …，
+	// 由 init() 并进汇总表（见 service/nonnil_declaration_test.go）。新加一个域文件不必回来改这里。
+	nonNilEvidenceSources = []outletSource{{"../service", "nonnilOutlets"}, {"../api", "nonnilOutlets"}}
 )
 
 // outletEvidenceKeys 收集来源目录里所有名字以 prefix 开头的复合字面量变量的键。

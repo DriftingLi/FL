@@ -42,9 +42,38 @@ func marshalKey(t *testing.T, v any, key string) string {
 	return string(got)
 }
 
-// nonnilOutlets 键 = 包名.类型名.json键，值 = 走真实出口取到的结果。
+// nonnilOutletTables 是**分域的若干张表**的汇总点。
+//
+// 为什么不是一张表：69 处改判一次写进一个文件会变成没人能读完的巨型测试，也无法并行推进。
+// 每个域自己声明一张 `nonnilOutlets<域名>` 并在 init 里并进来；apitypes 那把锁按变量名前缀
+// 扫目录收键（见 nullability_lock_test.go 的 outletSource），所以「表在哪」由前缀决定，
+// 不需要在新加文件时回来改这里的一行清单——那正是一个会漏改的第二宿主。
+var nonnilOutletTables []map[string]func(t *testing.T) any
+
+func init() {
+	nonnilOutletTables = append(nonnilOutletTables, nonnilOutletsCore)
+}
+
+// allNonNilOutlets 展开所有分表。同名键出现在两张表里即判红：一条事实两处举证，改一处另一处还在过。
+func allNonNilOutlets(t *testing.T) map[string]func(t *testing.T) any {
+	t.Helper()
+	out := map[string]func(t *testing.T) any{}
+	owner := map[string]int{}
+	for i, tbl := range nonnilOutletTables {
+		for k, v := range tbl {
+			if prev, dup := owner[k]; dup {
+				t.Fatalf("%s 被第 %d 张与第 %d 张表各自举证——一条事实一个证据，留一处", k, prev, i)
+			}
+			owner[k] = i
+			out[k] = v
+		}
+	}
+	return out
+}
+
+// nonnilOutletsCore 键 = 包名.类型名.json键，值 = 走真实出口取到的结果。
 // 一条键对应一次真实调用；同一类型多条字段可以共用一次调用（各占一键、各自 marshal）。
-var nonnilOutlets = map[string]func(t *testing.T) any{
+var nonnilOutletsCore = map[string]func(t *testing.T) any{
 	"service.RecruitListResult.items":        outletRecruitListEmpty,
 	"service.QuestionPageDTO.questions":      outletQuestionPageEmptyPool,
 	"service.QuestionImportResultDTO.errors": outletQuestionImportEmpty,
@@ -91,10 +120,11 @@ func outletCourseDetailNoChapters(t *testing.T) any {
 // TestNonNilDeclaredOutletsEmitEmptyArrays 每条登记过的出口都必须发出 `[]`，不是 `null`。
 // 键名最后一段就是要看的 JSON 键；对不上（改名 / 被 omitempty 掉）由 marshalKey 判红。
 func TestNonNilDeclaredOutletsEmitEmptyArrays(t *testing.T) {
-	if len(nonnilOutlets) == 0 {
+	outlets := allNonNilOutlets(t)
+	if len(outlets) == 0 {
 		t.Fatal("证据表是空的：判据 5 会因此空转，这里必须同步红")
 	}
-	for key, build := range nonnilOutlets {
+	for key, build := range outlets {
 		t.Run(key, func(t *testing.T) {
 			jsonKey := key[strings.LastIndex(key, ".")+1:]
 			if got := marshalKey(t, build(t), jsonKey); got != "[]" {
