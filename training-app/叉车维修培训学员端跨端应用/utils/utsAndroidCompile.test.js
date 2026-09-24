@@ -912,6 +912,9 @@ describe('守护自检：检测逻辑对已知违规样本必须报出', () => {
       ['NotificationItem', ['id', 'type', 'title', 'content', 'link', 'is_read', 'created_at']],
       ['SearchItem', ['type', 'id', 'title', 'cover', 'summary']],
       ['ExamQuestion', ['question_id', 'type', 'title', 'options', 'score']],
+      // #652 T14：JobPosting 一族是本票新搬进 barrel 的（types/job.uts），同一条坑位的新面——
+      // apply_state / cooldown_days 是 #488 的载荷字段，被零字段先占就会让 job-detail 报假阳性
+      ['JobPosting', ['id', 'title', 'salary_min', 'forced_offline', 'apply_state', 'cooldown_days']],
     ]) {
       const set = forward.get(name);
       expect(set).toBeDefined();
