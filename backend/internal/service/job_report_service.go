@@ -45,7 +45,7 @@ func (s *JobReportService) SetMailer(m MailSender) { s.mailer = m }
 
 // ReportListResult 举报队列分页结果。
 type ReportListResult struct {
-	Items    []ReportDTO `json:"items"`
+	Items    []ReportDTO `json:"items" nullability:"nullable"`
 	Total    int64       `json:"total"`
 	Page     int         `json:"page"`
 	PageSize int         `json:"page_size"`

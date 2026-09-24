@@ -76,9 +76,9 @@ type EngineType struct {
 // SeriesConfigOptions 某 series 支持的配置维度及可选项
 // 每个维度为该 series 在该维度上可选的选项列表；列表为空表示该 series 不支持此维度
 type SeriesConfigOptions struct {
-	Transmission []string `json:"transmission"`
-	Engine       []string `json:"engine"`
-	Battery      []string `json:"battery"`
+	Transmission []string `json:"transmission" nullability:"nullable"`
+	Engine       []string `json:"engine" nullability:"nullable"`
+	Battery      []string `json:"battery" nullability:"nullable"`
 }
 
 // ConditionRating 车况评级

@@ -9,6 +9,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -61,7 +62,9 @@ func TestCourseReadVisibilityContract(t *testing.T) {
 	visibleCh := model.Chapter{CourseID: visible.CourseID, Title: "可见章节", OrderNum: 1, CreatedAt: testutil.Now()}
 	unpublishedCh := model.Chapter{CourseID: unpublished.CourseID, Title: "未发布课程的章节", OrderNum: 1, CreatedAt: testutil.Now()}
 	unmountedCh := model.Chapter{CourseID: unmounted.CourseID, Title: "未挂载课程的章节", OrderNum: 1, CreatedAt: testutil.Now()}
-	for _, ch := range []*model.Chapter{&visibleCh, &unpublishedCh, &unmountedCh} {
+	// 孤儿章节：章节行在、所属课程行不在（课程被删而章节未级联删的历史形状）。
+	orphanCh := model.Chapter{CourseID: 987654, Title: "孤儿章节", OrderNum: 1, CreatedAt: testutil.Now()}
+	for _, ch := range []*model.Chapter{&visibleCh, &unpublishedCh, &unmountedCh, &orphanCh} {
 		if err := db.Create(ch).Error; err != nil {
 			t.Fatalf("创建章节失败: %v", err)
 		}
@@ -92,25 +95,44 @@ func TestCourseReadVisibilityContract(t *testing.T) {
 	}
 
 	for _, tc := range []struct {
-		name string
-		path string
-		want int
+		name    string
+		path    string
+		want    int
+		wantMsg string // 非空 = 同时锁 404 面那句对外文案（呈现层统一的证据）
 	}{
 		// 可见：三个读面都必须照常 200（防「收紧成一律不可见」的假绿）
-		{"可见课程详情", fmt.Sprintf("/api/course/%d", visible.CourseID), http.StatusOK},
-		{"可见章节详情", fmt.Sprintf("/api/course/%d/chapter/%d", visible.CourseID, visibleCh.ChapterID), http.StatusOK},
-		{"可见章节幻灯片", fmt.Sprintf("/api/chapter/%d/slides", visibleCh.ChapterID), http.StatusOK},
+		{"可见课程详情", fmt.Sprintf("/api/course/%d", visible.CourseID), http.StatusOK, ""},
+		{"可见章节详情", fmt.Sprintf("/api/course/%d/chapter/%d", visible.CourseID, visibleCh.ChapterID), http.StatusOK, ""},
+		{"可见章节幻灯片", fmt.Sprintf("/api/chapter/%d/slides", visibleCh.ChapterID), http.StatusOK, ""},
 		// 未发布：三个读面一律 404
-		{"未发布课程详情", fmt.Sprintf("/api/course/%d", unpublished.CourseID), http.StatusNotFound},
-		{"未发布课程的章节详情", fmt.Sprintf("/api/course/%d/chapter/%d", unpublished.CourseID, unpublishedCh.ChapterID), http.StatusNotFound},
-		{"未发布课程的章节幻灯片", fmt.Sprintf("/api/chapter/%d/slides", unpublishedCh.ChapterID), http.StatusNotFound},
+		{"未发布课程详情", fmt.Sprintf("/api/course/%d", unpublished.CourseID), http.StatusNotFound, "课程不存在"},
+		{"未发布课程的章节详情", fmt.Sprintf("/api/course/%d/chapter/%d", unpublished.CourseID, unpublishedCh.ChapterID), http.StatusNotFound, "章节不存在"},
+		{"未发布课程的章节幻灯片", fmt.Sprintf("/api/chapter/%d/slides", unpublishedCh.ChapterID), http.StatusNotFound, "章节不存在"},
 		// 未挂载：三个读面一律 404
-		{"未挂载课程详情", fmt.Sprintf("/api/course/%d", unmounted.CourseID), http.StatusNotFound},
-		{"未挂载课程的章节详情", fmt.Sprintf("/api/course/%d/chapter/%d", unmounted.CourseID, unmountedCh.ChapterID), http.StatusNotFound},
-		{"未挂载课程的章节幻灯片", fmt.Sprintf("/api/chapter/%d/slides", unmountedCh.ChapterID), http.StatusNotFound},
+		{"未挂载课程详情", fmt.Sprintf("/api/course/%d", unmounted.CourseID), http.StatusNotFound, "课程不存在"},
+		{"未挂载课程的章节详情", fmt.Sprintf("/api/course/%d/chapter/%d", unmounted.CourseID, unmountedCh.ChapterID), http.StatusNotFound, "章节不存在"},
+		{"未挂载课程的章节幻灯片", fmt.Sprintf("/api/chapter/%d/slides", unmountedCh.ChapterID), http.StatusNotFound, "章节不存在"},
+		// 孤儿章节（章节在、所属课程行已不在）：底下那件事实是「课程不存在」，
+		// 但本章句端点对外的句子只由**这个端点问的是什么**决定 ⇒ 仍是「章节不存在」。
+		// 这一行锁的就是「统一发生在呈现层、由端点显式给出」（ADR-0064 决策 1）。
+		{"孤儿章节的幻灯片", fmt.Sprintf("/api/chapter/%d/slides", orphanCh.ChapterID), http.StatusNotFound, "章节不存在"},
 	} {
-		if rec := do(tc.path); rec.Code != tc.want {
+		rec := do(tc.path)
+		if rec.Code != tc.want {
 			t.Fatalf("%s 期望 %d, got %d: %s", tc.name, tc.want, rec.Code, rec.Body.String())
+		}
+		if tc.wantMsg == "" {
+			continue
+		}
+		var env struct {
+			Message string `json:"message"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+			t.Fatalf("%s 响应不是合法信封: %v (%s)", tc.name, err, rec.Body.String())
+		}
+		if env.Message != tc.wantMsg {
+			// Errorf 而非 Fatalf：一张表里多条文案各自漂移时要一次看全，不是只看第一条。
+			t.Errorf("%s 的 404 文案应是「%s」（对象名须与端点问的东西一致），实际「%s」", tc.name, tc.wantMsg, env.Message)
 		}
 	}
 }

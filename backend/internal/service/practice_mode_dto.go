@@ -6,7 +6,7 @@ package service
 // PracticeStartResultDTO 标签/顺序练习开始或续练结果
 // （旧 StartTagPractice/StartSequential map 输出）。
 type PracticeStartResultDTO struct {
-	Questions    []QuestionDTO `json:"questions"`
+	Questions    []QuestionDTO `json:"questions" nullability:"nullable"`
 	CurrentIndex int           `json:"current_index"`
 	Total        int           `json:"total"`
 	Completed    int           `json:"completed"`
@@ -21,7 +21,7 @@ type ProgressResultDTO struct {
 	// Total 语义退回「上次会话数组长度」，仅供断点续练游标使用（字段名不变，新增字段零 diff）。
 	PoolTotal int `json:"pool_total"`
 	// AnswersState 无进度时为 null（键仍在）→ x-nullable。
-	AnswersState map[string]any `json:"answers_state" extensions:"x-nullable"`
+	AnswersState map[string]any `json:"answers_state" extensions:"x-nullable" nullability:"nullable"`
 }
 
 // ProgressSaveResultDTO 保存练习进度的响应 {"index": N, "saved": true}。
@@ -59,7 +59,7 @@ type HistoryResultDTO struct {
 	Total    int64            `json:"total"`
 	Page     int              `json:"page"`
 	PageSize int              `json:"page_size"`
-	Records  []HistoryItemDTO `json:"records"`
+	Records  []HistoryItemDTO `json:"records" nullability:"nullable"`
 }
 
 // HistoryItemDTO 练习历史条目（旧 GetHistory items 内每条 map 输出；命中题目时追加 question）。

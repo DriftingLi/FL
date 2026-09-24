@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"errors"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 
@@ -63,9 +62,14 @@ func renderOutOfPoolQuestion(c *gin.Context, err error) bool {
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(10)
 // @Success 200 {object} response.R{data=service.QuestionCommentPageResult} "success"
+// @Failure 400 {object} response.R "题目ID无效"
 // @Router /questions/{question_id}/comments [get]
 func (h *QuestionInteractionHandler) ListComments(c *gin.Context) {
-	qid, _ := strconv.Atoi(c.Param("question_id"))
+	qid, err := pathInt(c, "question_id", "题目ID无效")
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
 	page := atoiDefault(c.Query("page"), 1)
 	pageSize := atoiDefault(c.Query("page_size"), 10)
 	items, total, err := h.commentSvc.List(qid, page, pageSize, studentQuestionScope(c))
@@ -89,9 +93,14 @@ func (h *QuestionInteractionHandler) ListComments(c *gin.Context) {
 // @Param question_id path int true "题目ID"
 // @Param body body object true "内容" example({"content":"这题易错"})
 // @Success 201 {object} response.R{data=service.QuestionCommentDTO} "success"
+// @Failure 400 {object} response.R "题目ID无效"
 // @Router /questions/{question_id}/comments [post]
 func (h *QuestionInteractionHandler) CreateComment(c *gin.Context) {
-	qid, _ := strconv.Atoi(c.Param("question_id"))
+	qid, err := pathInt(c, "question_id", "题目ID无效")
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
 	uid := middleware.CurrentUserID(c)
 	var req struct {
 		Content string `json:"content"`
@@ -117,9 +126,14 @@ func (h *QuestionInteractionHandler) CreateComment(c *gin.Context) {
 // @Security BearerAuth
 // @Param comment_id path int true "评论ID"
 // @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "评论ID无效"
 // @Router /questions/comments/{comment_id} [delete]
 func (h *QuestionInteractionHandler) DeleteComment(c *gin.Context) {
-	cid, _ := strconv.Atoi(c.Param("comment_id"))
+	cid, err := pathInt(c, "comment_id", "评论ID无效")
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
 	uid := middleware.CurrentUserID(c)
 	if err := h.commentSvc.Delete(cid, uid); err != nil {
 		response.BadRequest(c, err.Error())
@@ -134,9 +148,14 @@ func (h *QuestionInteractionHandler) DeleteComment(c *gin.Context) {
 // @Security BearerAuth
 // @Param question_id path int true "题目ID"
 // @Success 200 {object} response.R{data=model.Note} "success"
+// @Failure 400 {object} response.R "题目ID无效"
 // @Router /questions/{question_id}/note [get]
 func (h *QuestionInteractionHandler) GetNote(c *gin.Context) {
-	qid, _ := strconv.Atoi(c.Param("question_id"))
+	qid, err := pathInt(c, "question_id", "题目ID无效")
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
 	uid := middleware.CurrentUserID(c)
 	n, err := h.noteSvc.GetForQuestion(qid, uid, studentQuestionScope(c))
 	if err != nil {
@@ -162,9 +181,14 @@ func (h *QuestionInteractionHandler) GetNote(c *gin.Context) {
 // @Param question_id path int true "题目ID"
 // @Param body body object true "笔记" example({"content":"我的笔记"})
 // @Success 200 {object} response.R{data=model.Note} "success"
+// @Failure 400 {object} response.R "题目ID无效"
 // @Router /questions/{question_id}/note [put]
 func (h *QuestionInteractionHandler) UpsertNote(c *gin.Context) {
-	qid, _ := strconv.Atoi(c.Param("question_id"))
+	qid, err := pathInt(c, "question_id", "题目ID无效")
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
 	uid := middleware.CurrentUserID(c)
 	var req struct {
 		Content string `json:"content"`
@@ -190,9 +214,14 @@ func (h *QuestionInteractionHandler) UpsertNote(c *gin.Context) {
 // @Security BearerAuth
 // @Param question_id path int true "题目ID"
 // @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "题目ID无效"
 // @Router /questions/{question_id}/note [delete]
 func (h *QuestionInteractionHandler) DeleteNote(c *gin.Context) {
-	qid, _ := strconv.Atoi(c.Param("question_id"))
+	qid, err := pathInt(c, "question_id", "题目ID无效")
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
 	uid := middleware.CurrentUserID(c)
 	if err := h.noteSvc.DeleteForQuestion(qid, uid, studentQuestionScope(c)); err != nil {
 		if renderOutOfPoolQuestion(c, err) {
@@ -211,9 +240,14 @@ func (h *QuestionInteractionHandler) DeleteNote(c *gin.Context) {
 // @Security BearerAuth
 // @Param question_id path int true "题目ID"
 // @Success 200 {object} response.R{data=[]model.QuestionTag} "success"
+// @Failure 400 {object} response.R "题目ID无效"
 // @Router /questions/{question_id}/knowledge [get]
 func (h *QuestionInteractionHandler) ListKnowledge(c *gin.Context) {
-	qid, _ := strconv.Atoi(c.Param("question_id"))
+	qid, err := pathInt(c, "question_id", "题目ID无效")
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
 	tags, err := h.knowledgeSvc.ListForQuestion(qid)
 	if err != nil {
 		// 「查不动」不得被读成「这题没有考点」（ADR-0062 票6）：旧写法把 error 丢给 _ 后照样 200。

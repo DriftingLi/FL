@@ -29,7 +29,7 @@ type GenTaskStatus struct {
 	Status    string             `json:"status"` // "pending"|"processing"|"completed"|"failed"
 	Total     int                `json:"total"`
 	Completed int                `json:"completed"`
-	Results   []ChapterGenResult `json:"results" extensions:"x-nullable"`
+	Results   []ChapterGenResult `json:"results" extensions:"x-nullable" nullability:"nullable"`
 }
 
 // genTaskPayload async_task.payload 的结构。

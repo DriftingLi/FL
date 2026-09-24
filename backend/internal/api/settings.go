@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -202,9 +201,9 @@ func (h *AIConfigHandler) DeleteConfig(c *gin.Context) {
 // TestConfig 测试指定配置的连通性 POST /api/admin/ai-configs/:id/test
 // 建client/超时纪律在 AIConfigService.TestConfig 单点，handler 不再内联。
 func (h *AIConfigHandler) TestConfig(c *gin.Context) {
-	cfgID, err := strconv.Atoi(c.Param("id"))
+	cfgID, err := pathInt(c, "id", "无效的 id")
 	if err != nil {
-		response.BadRequest(c, "无效的 id")
+		response.BadRequest(c, err.Error())
 		return
 	}
 	if err := h.svc.TestConfig(c.Request.Context(), cfgID); err != nil {

@@ -58,8 +58,8 @@ type AIChatMessageDTO struct {
 	ID        int               `json:"id"`
 	Role      string            `json:"role"`
 	Content   string            `json:"content"`
-	Images    []string          `json:"images" extensions:"x-nullable"`  // 用户消息附带的图片 URL（无图时键在、值为 null）
-	Sources   []DiagnosisSource `json:"sources" extensions:"x-nullable"` // 助手消息的诊断来源（T5 历史回放；无来源时键在、值为 null）
+	Images    []string          `json:"images" extensions:"x-nullable" nullability:"nullable"`  // 用户消息附带的图片 URL（无图时键在、值为 null）
+	Sources   []DiagnosisSource `json:"sources" extensions:"x-nullable" nullability:"nullable"` // 助手消息的诊断来源（T5 历史回放；无来源时键在、值为 null）
 	CreatedAt time.Time         `json:"created_at"`
 }
 

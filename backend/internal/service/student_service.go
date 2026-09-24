@@ -63,14 +63,14 @@ type CourseProgressDTO struct {
 type StudentProfileDTO struct {
 	StudentInfo    StudentDTO          `json:"student_info"`
 	StudyStats     StudyStatsDTO       `json:"study_stats"`
-	CourseProgress []CourseProgressDTO `json:"course_progress"`
+	CourseProgress []CourseProgressDTO `json:"course_progress" nullability:"nullable"`
 }
 
 // StudyDailyStatsDTO 按天学习统计（学员仪表盘图表）。
 type StudyDailyStatsDTO struct {
 	Days         int      `json:"days"`
-	Labels       []string `json:"labels"`
-	Data         []int64  `json:"data"`
+	Labels       []string `json:"labels" nullability:"nullable"`
+	Data         []int64  `json:"data" nullability:"nullable"`
 	TotalMinutes int64    `json:"total_minutes"`
 	ActiveDays   int      `json:"active_days"`
 }
@@ -88,6 +88,11 @@ type StudyRecordDTO struct {
 	ChapterTitle  *string `json:"chapter_title" extensions:"x-nullable"`
 }
 
+// ErrStudentNotFound 学员行不存在（与「用户不存在」的两个既有载体同对象？否——本域取的是
+// hrwai_users 的学员视角行，沿用独立名字以免与积分/口令域的判据互相牵动；下一波若合并需连
+// wire 文案一起对账，不在本波顺手做）。
+var ErrStudentNotFound = errors.New("学员不存在")
+
 // GetProfile 学员档案。
 func (s *StudentService) GetProfile(studentID int) (*StudentProfileDTO, error) {
 	return s.queryProfile(studentID)
@@ -97,7 +102,10 @@ func (s *StudentService) GetProfile(studentID int) (*StudentProfileDTO, error) {
 func (s *StudentService) queryProfile(studentID int) (*StudentProfileDTO, error) {
 	var student model.HrwaiUser
 	if err := s.db.First(&student, studentID).Error; err != nil {
-		return nil, errors.New("学员不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrStudentNotFound
+		}
+		return nil, err // 查不动不得被读成「不存在」（ADR-0064 决策 1）
 	}
 
 	// 总学习时长
@@ -227,7 +235,7 @@ func (s *StudentService) queryStudyStats(studentID, days int) *StudyDailyStatsDT
 type StudyRecordPageResult struct {
 	Page    int              `json:"page"`
 	Pages   int              `json:"pages"`
-	Records []StudyRecordDTO `json:"records"`
+	Records []StudyRecordDTO `json:"records" nullability:"nullable"`
 	Total   int64            `json:"total"`
 }
 
@@ -334,7 +342,7 @@ type StudentCourseDTO struct {
 
 // StudentCoursesDTO 我的课程信封（continue_learning 为最后学习时间最新的课程）。
 type StudentCoursesDTO struct {
-	Courses          []StudentCourseDTO `json:"courses"`
+	Courses          []StudentCourseDTO `json:"courses" nullability:"nullable"`
 	ContinueLearning *StudentCourseDTO  `json:"continue_learning" extensions:"x-nullable"`
 }
 
@@ -350,7 +358,7 @@ type StudentCourseChapterDTO struct {
 // StudentCourseDetailDTO 单课程学习详情（我的课程条目 + 每章状态）。
 type StudentCourseDetailDTO struct {
 	StudentCourseDTO
-	Chapters []StudentCourseChapterDTO `json:"chapters"`
+	Chapters []StudentCourseChapterDTO `json:"chapters" nullability:"nullable"`
 }
 
 // GetStudentCourses 我的课程列表（按最后学习时间倒序）+ 继续学习 top1。
@@ -493,7 +501,10 @@ func (s *StudentService) GetStudentCourses(studentID int) (*StudentCoursesDTO, e
 func (s *StudentService) GetStudentCourseDetail(studentID, courseID int) (*StudentCourseDetailDTO, error) {
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
-		return nil, errors.New("课程不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrCourseNotFound
+		}
+		return nil, err // 查不动不得被读成「不存在」（ADR-0064 决策 1）
 	}
 	lp := loadLearningPosition(s.db, studentID, courseID)
 

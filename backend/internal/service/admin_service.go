@@ -64,7 +64,7 @@ type HrwaiUserSummary struct {
 
 // HrwaiUserPageResult HRWAI 用户分页结果（JSON 与既有契约一致，无 pages 字段）。
 type HrwaiUserPageResult struct {
-	List     []HrwaiUserSummary `json:"list"`
+	List     []HrwaiUserSummary `json:"list" nullability:"nullable"`
 	Page     int                `json:"page"`
 	PageSize int                `json:"page_size"`
 	Total    int64              `json:"total"`
@@ -201,12 +201,12 @@ func (s *AdminService) ResetHrwaiUserPassword(ctx context.Context, id int, newPa
 	if id <= 0 {
 		return ErrInvalidHrwaiUserID
 	}
-	revokeErr, err := applyNewPassword(ctx, s.db, s.session, hrwaiPasswordSubject, id, newPassword)
-	if err != nil {
-		return err
+	res := applyNewPassword(ctx, s.db, s.session, hrwaiPasswordSubject, id, newPassword)
+	if !res.Applied() {
+		return res.Err
 	}
-	if revokeErr != nil {
-		s.logger.Warn("代重置后 refresh 吊销标记写入失败", zap.Int("user_id", id), zap.Error(revokeErr))
+	if res.RevokeErr != nil {
+		s.logger.Warn("代重置后 refresh 吊销标记写入失败", zap.Int("user_id", id), zap.Error(res.RevokeErr))
 	}
 	return nil
 }
@@ -218,12 +218,12 @@ func (s *AdminService) ResetTutorPassword(ctx context.Context, tutorID int, pass
 	if tutorID <= 0 {
 		return ErrInvalidTutorID
 	}
-	revokeErr, err := applyNewPassword(ctx, s.db, s.session, tutorPasswordSubject, tutorID, password)
-	if err != nil {
-		return err
+	res := applyNewPassword(ctx, s.db, s.session, tutorPasswordSubject, tutorID, password)
+	if !res.Applied() {
+		return res.Err
 	}
-	if revokeErr != nil {
-		s.logger.Warn("讲师口令重置后 refresh 吊销标记写入失败", zap.Int("tutor_id", tutorID), zap.Error(revokeErr))
+	if res.RevokeErr != nil {
+		s.logger.Warn("讲师口令重置后 refresh 吊销标记写入失败", zap.Int("tutor_id", tutorID), zap.Error(res.RevokeErr))
 	}
 	return nil
 }
@@ -292,7 +292,7 @@ type TutorDTO struct {
 type TutorListDTO struct {
 	Total  int64      `json:"total"`
 	Page   int        `json:"page"`
-	Tutors []TutorDTO `json:"tutors"`
+	Tutors []TutorDTO `json:"tutors" nullability:"nullable"`
 }
 
 // TutorDeletedDTO 删除导师结果。
@@ -320,7 +320,7 @@ type CourseStatDTO struct {
 // AdminStatisticsDTO 统计看板。
 type AdminStatisticsDTO struct {
 	Overview    AdminOverviewDTO `json:"overview"`
-	CourseStats []CourseStatDTO  `json:"course_stats"`
+	CourseStats []CourseStatDTO  `json:"course_stats" nullability:"nullable"`
 }
 
 // GetTutors 导师列表。
