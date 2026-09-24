@@ -48,6 +48,12 @@ var factScanDirs = []struct{ dir, pkg string }{
 // 判据来源是 swagger 定义键的前缀集合，而不是再去抄一份目录清单——抄来的清单本身会漂，
 // 生成物不会（它由 handler 注解生成，且 CI 有新鲜度锁）。
 func TestFactScanDirsCoverTheContractUniverse(t *testing.T) {
+	// 先数清单：绊线比的是**前缀**，而 `../model` 与 `../valuation/model` 同前缀 ⇒ 删掉其中一枚
+	// 绊线看不出来。这条计数断言补的就是那一条（与批⑤「pathInt* 名字族必须恰好两枚」同形）。
+	if n := len(factScanDirs); n != 6 {
+		t.Fatalf("fact 扫描面应是 6 个包目录，实际 %d 个：%v —— 少一枚就是漏扫（同前缀的两枚之间绊线分不开），"+
+			"多一枚就回来把这条数与注释一起改。", n, factScanDirs)
+	}
 	defs := factDescriptions(t)
 	scanned := map[string]bool{}
 	for _, src := range factScanDirs {

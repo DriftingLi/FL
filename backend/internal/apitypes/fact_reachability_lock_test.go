@@ -42,6 +42,13 @@ var factScopeDirs = []string{
 }
 
 func TestFactProjectionsAreInResponseClosure(t *testing.T) {
+	// 数一遍目录：论域自检比的是**前缀**，删掉 `../valuation/model` 它看不出来（下一段写这条盲区），
+	// 所以这里补一条「清单本身有几枚」的断言——与批⑤ 那条「pathInt* 名字族必须恰好两枚」同形。
+	// 加一枚目录时这条会红，逼着回来一起改数并想清楚为什么加。
+	if n := len(factScopeDirs); n != 6 {
+		t.Fatalf("fact 射程应是 6 个包目录，实际 %d 个：%v —— 少了就是漏扫（前缀绊线抓不到同前缀的两个目录），"+
+			"多了就回来把这条数和上面的注释一起改。", n, factScopeDirs)
+	}
 	closure := responseDefinitions(t)
 	scanned := map[string]bool{}
 	found := 0
