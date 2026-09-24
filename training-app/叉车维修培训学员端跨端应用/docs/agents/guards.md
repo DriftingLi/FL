@@ -45,10 +45,14 @@
   （2026-09-18 在 `bee21af4` + 本守护自身上的读数）。迁移镜像会让 behavior **上升**（**允许**），下降才红
   ⇒ 本节的数字**本来就会随 master 前进而过期**（#1160 合并后即如此：master 又多了 4 个套件）。
   **要现行值请跑分类器，别读这里。**
-- **点名：目前只是接线守护的 8 个手抄镜像模块**（迁移对象，spec §④ 的 S6 系列）：
-  `aiSourcesDisplay` · `checkinCalendar` · `faqDisplay` · `format` · `notebookDisplay` · `pointsDisplay` ·
+- **点名：目前只是接线守护的 7 个手抄镜像模块**（迁移对象，spec §④ 的 S6 系列）：
+  `checkinCalendar` · `faqDisplay` · `format` · `notebookDisplay` · `pointsDisplay` ·
   `searchDisplay` · `secureStorage`。
   其中 **`format` / `checkinCalendar` / `profileMetrics`** 连仓内载体都不引用（纯镜像手抄），由 H4 显式登记。
+  > **已迁走：`aiSourcesDisplay`（#1279，2026-09-24）** —— 镜像换成 `utsHarness.loadUts` 真执行
+  > `.uts` 本体，并按 spec §④ 更正 2 补了「逐条注入坏实现 ⇒ 红」四条；`guardClassification.test.js`
+  > 的 H5 台账同步划掉。**先例是 #1237**（收藏落点守护切到 utsHarness）：迁移**不必**等 S6a 单独开票，
+  > 谁的票的 ③ 承重证据落在这个模块上，谁就顺手迁。
 
 ## 新增守护时要回答的（写进 PR 正文即可）
 
