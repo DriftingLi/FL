@@ -1,0 +1,183 @@
+# #1269（uvue 文字类样式的承载面）①a 设备侧机检原文
+# 除标注「按 gbk 解码」的行外，以下每一行都是从同名日志文件里逐字抄出、未改一字。
+# 取证日期 2026-09-24；设备 192.168.0.212:37611（Xiaomi 23049RAD8C / Android 15 / 无线 adb）
+# 屏 1080x2400 · density 440 ⇒ uni-app-x 的 750rpx 基准下 1rpx = 1.44px（28rpx = 40.32px）
+
+## 1) 部署（术后 / 术前各一次成功部署）HX_RUN / HX_RUN_DEPLOY 机检行
+
+### 术后（分支现状，含修复） —— .scratch/1269-hxrun-after.log
+HX_BUSY wait=0 result=free
+HX_RUN_DEPLOY deployed=true www=/sdcard/Android/data/io.dcloud.uniappx/apps/__UNI__1C1D180/www=1790221428->1790227845 pid_before=io.dcloud.uniappx=27555 pid_after=io.dcloud.uniappx=24994 foreground=io.dcloud.uniappx reason=资源已落到设备：/sdcard/Android/data/io.dcloud.uniappx/apps/__UNI__1C1D180/www 的 mtime 相对基线前进
+HX_RUN mode=incremental compile=230 deploy=0 total=285 exit=ok
+
+### 术前（把两个 .uvue 还原成 HEAD 版本后重编译部署） —— .scratch/1269-hxrun-before2.log
+# 「HEAD 版本」= **当时的** HEAD，即术前的 `e35ede17^`；本节标题是取证当时逐字写下的原样，保留不改。
+# 复现请按 `e35ede17^` 取（提交后 `HEAD` 已含修复，照 `HEAD` 取会拿到修好的文件）—— 同 §7 的口径。
+HX_BUSY wait=0 result=free
+HX_RUN_DEPLOY deployed=true www=/sdcard/Android/data/io.dcloud.uniappx/apps/__UNI__1C1D180/www=1790228357->1790228910 pid_before=io.dcloud.uniappx=8126 pid_after=io.dcloud.uniappx=9337 foreground=io.dcloud.uniappx reason=资源已落到设备：/sdcard/Android/data/io.dcloud.uniappx/apps/__UNI__1C1D180/www 的 mtime 相对基线前进
+HX_RUN mode=incremental compile=150 deploy=0 total=182 exit=ok
+
+### 术前第一轮失败（HBuilderX 锁被另一会话占用；未强杀任何进程，改用 -WaitSeconds 600 重跑） —— .scratch/1269-hxrun-before.log
+HX_BUSY wait=120 result=timeout
+
+> 判据是**设备侧事实相对基线前进**：两轮各自的 www mtime 都由旧值跳到新值
+> （术后 1790221428->1790227845；术前 1790228357->1790228910）。
+> `reason=` 后的中文在原始日志里是 GBK 控制台编码；本节按 gbk 解码后抄出，
+> ASCII 判据字段（deployed / mtime / pid / compile / exit）与按字节读取完全一致。
+
+## 2) 页身份（cli launch --pagePath 深链；进入页面行原文，4 次导航全落定）
+
+### 01-forgot-password-before.nav.txt:296
+13:52:12.261 [0m进入页面:​pages/forgot-password/forgot-password​ 。[{"创建dom元素个数":"37个","耗时":"53ms"},{"排版":"1次","耗时":"60ms"},{"渲染":"1次","耗时":"155ms"},{"跳转页面到onReady总耗时":"440ms"}][0m
+### 03-forgot-password-after.nav.txt:323
+13:35:19.870 [0m进入页面:​pages/forgot-password/forgot-password​ 。[{"创建dom元素个数":"37个","耗时":"56ms"},{"排版":"1次","耗时":"83ms"},{"渲染":"1次","耗时":"179ms"},{"跳转页面到onReady总耗时":"508ms"}][0m
+### 05-register-before.nav.txt:307
+13:55:52.407 [0m进入页面:​pages/register/register​ 。[{"创建dom元素个数":"48个","耗时":"64ms"},{"排版":"1次","耗时":"67ms"},{"渲染":"1次","耗时":"171ms"},{"跳转页面到onReady总耗时":"485ms"}][0m
+### 07-register-after.nav.txt:311
+13:39:15.993 [0m进入页面:​pages/register/register​ 。[{"创建dom元素个数":"48个","耗时":"63ms"},{"排版":"1次","耗时":"71ms"},{"渲染":"1次","耗时":"194ms"},{"跳转页面到onReady总耗时":"508ms"}][0m
+
+## 3) 渲染层报错行（本票的**核心对照判据**：术前每页 3 行 / 术后 0 行，两页同形）
+
+### 01-forgot-password-before.nav.txt —— 命中 3 行
+01-forgot-password-before.nav.txt:290: 13:52:12.225 [33m[0mstyle property `font-size|color` is only supported on `<text>|<button>|<input>|<textarea>`. there is an error on `<view class="mode-tab mode-tab-active">`.[0m[39m
+01-forgot-password-before.nav.txt:291: 13:52:12.232 [33m[0mstyle property `font-weight` is only supported on `<text>|<button>|<input>|<textarea>|<loading>`. there is an error on `<view class="mode-tab mode-tab-active">`.[0m[39m
+01-forgot-password-before.nav.txt:292: 13:52:12.238 [33m[0mstyle property `font-size|color` is only supported on `<text>|<button>|<input>|<textarea>`. there is an error on `<view class="mode-tab">`.[0m[39m
+
+### 03-forgot-password-after.nav.txt —— 命中 0 行
+（无 —— 该日志里 `is only supported on` 零命中）
+
+### 05-register-before.nav.txt —— 命中 3 行
+05-register-before.nav.txt:300: 13:55:52.128 [33m[0mstyle property `font-size|color` is only supported on `<text>|<button>|<input>|<textarea>`. there is an error on `<view class="mode-tab mode-tab-active">`.[0m[39m
+05-register-before.nav.txt:301: 13:55:52.131 [33m[0mstyle property `font-weight` is only supported on `<text>|<button>|<input>|<textarea>|<loading>`. there is an error on `<view class="mode-tab mode-tab-active">`.[0m[39m
+05-register-before.nav.txt:302: 13:55:52.133 [33m[0mstyle property `font-size|color` is only supported on `<text>|<button>|<input>|<textarea>`. there is an error on `<view class="mode-tab">`.[0m[39m
+
+### 07-register-after.nav.txt —— 命中 0 行
+（无 —— 该日志里 `is only supported on` 零命中）
+
+## 4) 其余错误类计数（launch 日志全量逐行匹配，0 为干净）
+
+| 日志 | 行数 | style property | FAIL | Uncaught | Exception | TypeError |
+| --- | --- | --- | --- | --- | --- | --- |
+| 01-forgot-password-before | 297 | 3 | 0 | 0 | 0 | 0 |
+| 03-forgot-password-after | 324 | 0 | 0 | 0 | 0 | 0 |
+| 05-register-before | 309 | 3 | 1 | 0 | 0 | 0 |
+| 07-register-after | 312 | 0 | 0 | 0 | 0 | 0 |
+
+`05-register-before` 的那 1 条 FAIL 与 UI 无关，原文：
+05-register-before.nav.txt:305: 13:55:52.400 [31m[0m[request] <<< FAIL errMsg=[0m [0mserver system error[0m at api/request.uts:442[39m
+它是**验证码图片接口**的一次请求失败，后果直接落在 a11y 树里 —— 术前 register 默认态比术后多出的正是这一条：
+before-02-register-01-default.content-desc.txt:7: 加载失败 点击重试	[742,1522][999,1564]
+⇒ 术前/术后 register 默认态 content-desc 条数 17 vs 16 差的就是这一条，与样式改动无关（本目录不掩盖该差异）。
+
+## 5) 截图落盘与稳定帧（.scratch/1269-capture-{after,before}.log，逐字）
+
+### .scratch/1269-capture-after.log
+[1269-after] === 01 pages/forgot-password/forgot-password ===
+>>> D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe launch app-android --pagePath pages/forgot-password/forgot-password --project D:\FL\wt-1269\training-app\叉车维修培训学员端跨端应用 --deviceId 192.168.0.212:37611
+[1269-after] settled=True reason=已进入目标页且画面稳定（相邻两次采样差异 0% ≤ 0.5%）
+[1269-after] state1 png sha=A7E217BB979E1679 content-desc 条数=10 第二标签命中=1
+[1269-after] tap 第二标签（实测 bounds 中心）= 723,825
+[1269-after] tap 回读：TAP_RC=True
+[1269-after] state2 png sha=07C735BC94779D7D content-desc 条数=9
+[1269-after] === 02 pages/register/register ===
+>>> D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe launch app-android --pagePath pages/register/register --project D:\FL\wt-1269\training-app\叉车维修培训学员端跨端应用 --deviceId 192.168.0.212:37611
+[1269-after] settled=True reason=已进入目标页且画面稳定（相邻两次采样差异 0% ≤ 0.5%）
+[1269-after] state1 png sha=BDA5865759A2C8C1 content-desc 条数=16 第二标签命中=1
+[1269-after] tap 第二标签（实测 bounds 中心）= 723,825
+[1269-after] tap 回读：TAP_RC=True
+[1269-after] state2 png sha=F0E315162AD2890E content-desc 条数=15
+[1269-after] === 汇总 ===
+[1269-after] {"png1":"A7E217BB979E1679","jpg":"01-forgot-password-01-default.jpg (62.9 KB) / 01-forgot-password-02-email.jpg (61.9 KB)","settled":true,"png2":"07C735BC94779D7D","desc1":10,"page":"pages/forgot-password/forgot-password","desc2":9}
+[1269-after] {"png1":"BDA5865759A2C8C1","jpg":"02-register-01-default.jpg (66.8 KB) / 02-register-02-email.jpg (65 KB)","settled":true,"png2":"F0E315162AD2890E","desc1":16,"page":"pages/register/register","desc2":15}
+
+### .scratch/1269-capture-before.log
+[1269-before] === 01 pages/forgot-password/forgot-password ===
+>>> D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe launch app-android --pagePath pages/forgot-password/forgot-password --project D:\FL\wt-1269\training-app\叉车维修培训学员端跨端应用 --deviceId 192.168.0.212:37611
+[1269-before] settled=True reason=已进入目标页且画面稳定（相邻两次采样差异 0% ≤ 0.5%）
+[1269-before] state1 png sha=0DAD520E8784069D content-desc 条数=10 第二标签命中=1
+[1269-before] tap 第二标签（实测 bounds 中心）= 733,828
+[1269-before] tap 回读：TAP_RC=True
+[1269-before] state2 png sha=101DAEC75669F014 content-desc 条数=9
+[1269-before] === 02 pages/register/register ===
+>>> D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe launch app-android --pagePath pages/register/register --project D:\FL\wt-1269\training-app\叉车维修培训学员端跨端应用 --deviceId 192.168.0.212:37611
+[1269-before] settled=True reason=已进入目标页且画面稳定（相邻两次采样差异 0% ≤ 0.5%）
+[1269-before] state1 png sha=28B4FE9EFA749763 content-desc 条数=17 第二标签命中=1
+[1269-before] tap 第二标签（实测 bounds 中心）= 733,828
+[1269-before] tap 回读：TAP_RC=True
+[1269-before] state2 png sha=713B189467E8A9B3 content-desc 条数=15
+[1269-before] === 汇总 ===
+[1269-before] {"page":"pages/forgot-password/forgot-password","png2":"101DAEC75669F014","desc2":9,"jpg":"01-forgot-password-01-default.jpg (62.8 KB) / 01-forgot-password-02-email.jpg (62 KB)","png1":"0DAD520E8784069D","settled":true,"desc1":10}
+[1269-before] {"page":"pages/register/register","png2":"713B189467E8A9B3","desc2":15,"jpg":"02-register-01-default.jpg (65.2 KB) / 02-register-02-email.jpg (64.9 KB)","png1":"28B4FE9EFA749763","settled":true,"desc1":17}
+
+> `TAP_RC=True` **不是**设备退出码 —— 那是 PowerShell 自己的 `$?`，故本次点击的生效性不取它，
+> 改取「点击后 content-desc 条数变化 + 两张 PNG sha 不同 + 选动态位移」三条。
+> `settled=True reason=` 后的中文同 §1，原始为 GBK 控制台编码。
+
+## 6) a11y bounds 对照（本票「字号真的生效」的可测判据）
+
+先给 8 份 dump 里两个 tab 文字节点的**原文**（行号即文件内行号）：
+before-01-forgot-password-01-default.content-desc.txt:3: 手机号找回	[258,798][478,857]
+before-01-forgot-password-01-default.content-desc.txt:4: 邮箱找回	[645,798][821,857]
+before-01-forgot-password-02-email.content-desc.txt:3: 手机号找回	[258,798][478,857]
+before-01-forgot-password-02-email.content-desc.txt:4: 邮箱找回	[645,798][821,857]
+before-02-register-01-default.content-desc.txt:2: 手机号注册，验证码通过后自动登录	[268,649][812,695]
+before-02-register-01-default.content-desc.txt:3: 手机号注册	[258,798][478,857]
+before-02-register-01-default.content-desc.txt:4: 邮箱注册	[645,798][821,857]
+before-02-register-02-email.content-desc.txt:2: 邮箱注册，验证码通过后自动登录	[285,649][795,695]
+before-02-register-02-email.content-desc.txt:3: 手机号注册	[258,798][478,857]
+before-02-register-02-email.content-desc.txt:4: 邮箱注册	[645,798][821,857]
+
+after-01-forgot-password-01-default.content-desc.txt:3: 手机号找回	[276,798][476,852]
+after-01-forgot-password-01-default.content-desc.txt:4: 邮箱找回	[643,798][803,852]
+after-01-forgot-password-02-email.content-desc.txt:3: 手机号找回	[276,798][476,852]
+after-01-forgot-password-02-email.content-desc.txt:4: 邮箱找回	[643,798][803,852]
+after-02-register-01-default.content-desc.txt:2: 手机号注册，验证码通过后自动登录	[268,649][812,695]
+after-02-register-01-default.content-desc.txt:3: 手机号注册	[276,798][476,852]
+after-02-register-01-default.content-desc.txt:4: 邮箱注册	[643,798][803,852]
+after-02-register-02-email.content-desc.txt:2: 邮箱注册，验证码通过后自动登录	[285,649][795,695]
+after-02-register-02-email.content-desc.txt:3: 手机号注册	[276,798][476,852]
+after-02-register-02-email.content-desc.txt:4: 邮箱注册	[643,798][803,852]
+
+| 节点 | 术前 bounds | 术后 bounds | 宽 | 高 |
+| --- | --- | --- | --- | --- |
+| 手机号找回 / 手机号注册 | [258,798][478,857] | [276,798][476,852] | 220 → 200（-20px） | 59 → 54（-5px） |
+| 邮箱找回 / 邮箱注册 | [645,798][821,857] | [643,798][803,852] | 176 → 160（-16px） | 59 → 54（-5px） |
+
+算术（1rpx = 1080/750 = 1.44px）：术前单字宽 220/5 = 44px ⇒ 44/1.44 ≈ 30.6rpx（声明被忽略、落到默认字号）；
+术后 200/5 = 40px ⇒ 40/1.44 ≈ 27.8rpx，取整即声明的 28rpx（28×1.44 = 40.32px → 40px）。
+⇒ 「字号从被忽略变为生效」在 bounds 上是**可测的**，不靠截图观感。
+并发效应：tab 行以下节点 y 一致**上移 5px**（`+86` 976→971、`重置密码` 1896→1891、`返回登录` 2103→2098），
+因 tab 容器高度随文字缩短 5px。这也是整屏像素差达 6.4%/7.0% 的主因（另两项：验证码随机图、§4 的失败节点），
+⇒ 本目录**不**主张「UI 像素级不变」，只主张「除这两个 tab 的文字与其下方 5px 让位外无其他布局变化」。
+
+## 7) 红控制（术前树上守护与冻结锁**必须**判红，证明绿灯不是假绿）
+
+把两个 .uvue 还原成 HEAD 版本（**当时的** HEAD = 术前的 `e35ede17^`；提交后 HEAD 已含修复，复现请按该父提交取）后跑三份相关套件，逐字（原文 .scratch/1269-guard-red-lines.txt）：
+● uvue 文字类样式的承载面契约（#1269） › ③ 真实文件（全仓 .uvue） › 本票改动点是「容器挂 <view>、文字挂 <text>」�
+● uvue 文字类样式的承载面契约（#1269） › ③ 真实文件（全仓 .uvue） › 本票改的两页零违规（`mode-tab` 系只剩布局与�
+● uvue 文字类样式的承载面契约（#1269） › ③ 真实文件（全仓 .uvue） › 除「已知存量」外全仓零违规（新写的文字类�
+● 手术目标页落袋锁（模块全量预算 / 目录 ≤2 层 / 必需文件清单已由声明面执法，#1219） › 样式块与手术前逐字节一
+● 样式块逐字节冻结（UI 像素级不变的最强静态证据面） › `<style>` 块 sha256 与术前一致（改一字符即红）
+● 样式块逐字节冻结（UI 像素级不变的最强静态证据面） › CSS 规则数守恒（45 条，与逐字节锁互为冗余判据）
+● 样式块逐字节冻结（UI 像素级不变的最强静态证据面） › 判断力（改一处声明 / 删一条规则都必须与该 sha 不同）
+Test Suites: 3 failed, 3 total
+Tests:       7 failed, 120 passed, 127 total
+
+重跑（同日，守护加了 1 条棘轮自检之后）：同一棵术前树 —— 两个 `.uvue` 由 `git show e35ede17^:<path>` 取回，
+sha256 前 20 位仍是 `f78f1c220b885343c076` / `15aff48366f96ecbddeb`（与上面那次逐字节同一棵树）。结果：
+红的仍是**同 7 条**（逐条标题与上面一致：新守护 ③ 节 3 条 + 落袋锁 1 条 + 样式块逐字节冻结 3 条），
+总数因新增自检 +1 ——
+
+    Test Suites: 3 failed, 3 total
+    Tests:       7 failed, 121 passed, 128 total
+
+跑完 `git checkout --` 还原两页，复核 sha256 前 20 位回到术后的 `c7aa27c9e90af3f3f848` /
+`5a05b273dd7aaf7ec580`（= 本目录取证所据的那棵树），三份套件 `Tests: 128 passed, 128 total` 全绿。
+
+## 8) ④c 本地编译门（全量 kotlin 编译）机检行
+
+KOTLIN_ALL_RESULT errors=0 classes=1501 files=120 input=unpackage\resources\app-android freshness=fresh log=D:\FL\wt-1269\training-app\叉车维修培训学员端跨端应用\.ci-verify\kotlin-all.log
+原文已随本目录入库为 `09-kotlin-all-4c.txt`。**行尾如实记**：源日志 11,507 字节（CRLF）、入库 blob
+11,394 字节（LF），差 113 个行尾；实测 `源.replace(CRLF,LF) == blob` 为真 ⇒ 内容逐行一致、只有行尾被
+git 归一。源日志 sha256 前 16 位 fc7abda91051ac31，**入库 blob** sha256 前 16 位 e47a64b45bcc5cba。
+改名入库的原因：根 `.gitignore` 有 `*.log`，原名 `git add` 会静默不收。
