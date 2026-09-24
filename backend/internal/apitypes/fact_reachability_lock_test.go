@@ -1,11 +1,10 @@
 // fact 投影位的**可达性**锁（ADR-0065 决策 8 的射程半边）。
 //
 // 为什么这一半住在 apitypes 而不是 internal/api：判据是「带 `fact:` tag 的字段所在的那个类型，
-// 必须真的出现在某个 2xx 响应的闭包里」——而 2xx 闭包与全仓 AST 遍历在表态锁那一侧已经各有一份
-// （responseDefinitions / sweptDirs / parsePackage），`nullability_lock_test.go` 的文件头明写
-// 「闭包用 codegen 自己那套，**不另写第二份 $ref 遍历**」。在 api 包里再正则扫一遍 swagger 会同时
-// 犯两件事：两份实现会漂，而且比那份窄——sweptDirs 还含 model 与 valuation/repository，
-// 投影位完全可能长在那边的类型上。
+// 必须真的出现在某个 2xx 响应的类型闭包里」——而 2xx 闭包与全仓 AST 遍历在表态锁那一侧已经各有一份
+// （responseDefinitions / parsePackage），`nullability_lock_test.go` 的文件头明写「闭包用 codegen
+// 自己那套，**不另写第二份 $ref 遍历**」。在 api 包里再拿正则扫一遍 swagger 会同时犯两件事：
+// 两份实现会漂，而且那份比这份窄。
 package apitypes
 
 import (
@@ -21,23 +20,41 @@ import (
 // 为一枚 tag 名造一个生产 API 更糟。改 tag 名时两把锁都要红，那正是想要的连带。
 const factTagKey = "fact"
 
+// factScopeDirs 是这把锁的扫描目录集。**定义键前缀取解析出来的包子句**，不取这里的名义，
+// 所以两个目录同前缀是允许的（下面 model 那两行就是实情）。
+//
+// 比 sweptDirs 多两枚：
+//   - `../valuation/model`：与 internal/model 同包子句 model，实测 17 个 `model.*` 定义里 13 个
+//     来自它、3 个来自前者。不加就是实打实的漏扫——残值侧的 DTO 上挂个 tag，这条锁一条也碰不到。
+//   - `../../pkg/response`：信封 `response.R`。它是 2xx 响应的外壳本身，属于「对外契约里的类型」。
+//
+// 为什么不干脆改 sweptDirs 把这两枚加进去：那份是**表态锁**的射程，加类型进去会改动一把已上生产
+// 的锁的判据（信封三个字段全是标量，对表态锁没有意义；残值 model 会新增一批要求表态的字段，
+// 那是另一件事、该另立一条决策）。两把锁的论域不同，就别共用一张清单——但两边各自加了什么，
+// 下面那条论域自检会把「闭包里有、清单里没扫」变成一条指名道姓的红。
+var factScopeDirs = []string{
+	"../api",
+	"../service",
+	"../model",
+	"../valuation/model",
+	"../valuation/repository",
+	"../../pkg/response",
+}
+
 func TestFactProjectionsAreInResponseClosure(t *testing.T) {
 	closure := responseDefinitions(t)
-	pkgs := map[string]parsedPackage{}
-	for pkgName, dir := range sweptDirs {
+	scanned := map[string]bool{}
+	found := 0
+	for _, dir := range factScopeDirs {
 		p, err := parsePackage(dir, false)
 		if err != nil {
-			t.Fatalf("读 %s 失败: %v", dir, err)
+			t.Fatalf("读 fact 可达性扫描面 %s 失败: %v", dir, err)
 		}
 		if len(p.files) == 0 {
-			t.Fatalf("扫描面 %s（%s）里一个非测试 .go 都没有——射程塌了不等于无违规", pkgName, dir)
+			t.Fatalf("扫描面 %s 里一个非测试 .go 都没有——射程塌了不等于无违规", dir)
 		}
-		pkgs[pkgName] = p
-	}
-
-	found := 0
-	for pkgName, p := range pkgs {
 		for _, f := range p.files {
+			scanned[f.Name.Name] = true
 			for _, d := range f.Decls {
 				gd, ok := d.(*ast.GenDecl)
 				if !ok || gd.Tok != token.TYPE {
@@ -62,7 +79,7 @@ func TestFactProjectionsAreInResponseClosure(t *testing.T) {
 							continue
 						}
 						found++
-						defName := pkgName + "." + ts.Name.Name
+						defName := f.Name.Name + "." + ts.Name.Name
 						if !closure[defName] {
 							t.Errorf("fact:%q 挂在 %s.%s 上，但 %s 不在任何 2xx 响应的类型闭包里："+
 								"这一格对外没人读得到，它不是消费点。tag 登记的是「消费点对齐」，"+
@@ -74,11 +91,23 @@ func TestFactProjectionsAreInResponseClosure(t *testing.T) {
 			}
 		}
 	}
-	// 与 api 那一侧同一条防空转判据，但**理由不同**：那边怕的是「登记表成了唯一声明方」，
-	// 这边怕的是「tag 写法变了，而这把射程锁一条都没扫到还报绿」。两条都留着，因为两者的
-	// 失效方式不一样（一处 tag 名改错，那边可能仍扫到 api/service 的字段而这里四个目录都扫空）。
+	// 论域自检：2xx 闭包里的定义键出现过哪些包名前缀，每一个都必须真的被扫到。判据来源是生成物
+	// 而不是这份目录清单——清单会漂，生成物不会（CI 对它还有新鲜度锁）。与 api 侧那条绊线同判据。
+	for defName := range closure {
+		pkg, _, ok := strings.Cut(defName, ".")
+		if !ok {
+			t.Errorf("闭包里的定义键 %q 不带包名前缀——投影位的键形状要重判", defName)
+			continue
+		}
+		if !scanned[pkg] {
+			t.Errorf("2xx 闭包出现了 %q 包的类型，但 factScopeDirs 没扫它：把目录补进去，"+
+				"否则那一类投影位这条锁一条也碰不到。", pkg)
+		}
+	}
+	// 与 api 那一侧同一条防空转判据，但**理由不同**：那边怕「登记表成了唯一的声明方」，
+	// 这边怕「tag 写法变了，而这把射程锁一条都没扫到还报绿」。两条都留，因为失效方式不一样。
 	if found == 0 {
-		t.Fatal("sweptDirs 四个包里一处 fact tag 都没有——是 tag 改名了，还是投影位全被删了？" +
+		t.Fatal("factScopeDirs 里一处 fact tag 都没有——是 tag 改名了，还是投影位全被删了？" +
 			"（扫不到时不得当作「无违规」）")
 	}
 }
