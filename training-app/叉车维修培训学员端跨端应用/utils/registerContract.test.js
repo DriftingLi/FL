@@ -27,6 +27,7 @@
  * 「页面 ↔ composable ↔ 域 api」的接线与模板形态，行为兜底 = ④ 编译门（Kotlin 形态）+ ①a 真机逐页冒烟；
  * 每条判据都带**注入自检**（成对取证：改坏必红 / 真源必不红），见各节末的「判别力」用例。
  */
+const crypto = require('crypto');
 const h = require('./contractHarness');
 const { readText } = h;
 const read = h.read;
@@ -38,6 +39,16 @@ const AUTH_API = 'api/auth.uts';
 /** 软预算口径（ADR-0007）。模块全量预算已由声明面执法（register 的 budget 已从 pending 翻成 600） */
 const LINE_BUDGET = 600;
 
+/**
+ * `<style>` 块的 sha256 = **UI 冻结的证据锁**（改一字符即红）：改它 = 改了这页的像素面，
+ * 必须是一次显式决定，并在 PR 里给出 ①a 前后对比。基线取 #1269 术后的那棵树（块内 39 条规则）。
+ * 值经 `h.read` → `readText` 归一 CRLF（ADR-0019），故检出端行尾不影响本值。
+ */
+const STYLE_SHA256 = '82b7e2250bfa7970f371ab4a4f963dfd96f12b11e12df9251d8ec64aa3cac41a';
+const sha256 = (s) => crypto.createHash('sha256').update(s, 'utf8').digest('hex');
+/** 块内 class 规则数 —— 与 sha256 互为冗余判据：数规则的锁漏属性值改动，sha 锁不漏 */
+const ruleCount = (s) => (s.match(/^\s*\.[a-zA-Z][\w-]*\s*\{/gm) || []).length;
+
 /** 页面块（template / script / style）。模板**有嵌套** `<template v-if>` ⇒ 闭合取最后一个 */
 function block(src, tag) {
   const open = src.indexOf(`<${tag}`);
@@ -47,6 +58,7 @@ function block(src, tag) {
 }
 const pageTemplate = () => block(read(PAGE), 'template');
 const pageScript = () => block(read(PAGE), 'script');
+const pageStyle = () => block(read(PAGE), 'style');
 
 /** 页面引用的 composable 成员名（`reg.<name>`；模板与 script 都算） */
 function composableMemberRefs(src, alias = 'reg') {
@@ -123,11 +135,26 @@ describe('手术目标页落袋锁（模块全量预算 / 目录 ≤2 层 / 必�
     // —— 原生渲染层只把文字类样式认给文字类元素，写在 `<view>` 上会被**静默忽略**（真机日志逐字点名）。
     // ⇒ 块内规则数 37 → 39（两条新规则）+ 一行解释性 CSS 注释（写成注释是为了让下一个读的人知道为什么分两位），
     // 除此之外未动。破冻后这条锁继续守「不顺手改样式」。
-    const style = block(read(PAGE), 'style');
+    //
+    // 用例名自 #649 起就这么写，而判据一直是 `ruleCount` 守恒（属性值改动改不掉规则数）⇒ 名字长期比
+    // 断言宽。#1313 把判据补成真的 sha256，**名字一字未动** —— §7 把该用例名逐字抄进了红控制凭据
+    // （那行截断在「…样式块与手术前逐字节一」，截断的正是前缀 ⇒ 前缀即凭据），改名会让它对不上。
+    // 历史记录不追改 ⇒ §7 仍写 `7 failed, 121 passed, 128 total`。但照 §7 的复现口径（两页取
+    // `e35ede17^`）在今天重跑是 `8 failed, 121 passed, 129 total`：多出的那一条就是本 describe 末的
+    // 「逐字节锁具备判别力」，它在术前树上必红（2026-09-24 于 wt-1313 实测）。下一个复现 §7 的人先知道。
+    const style = pageStyle();
     expect(style.length).toBeGreaterThan(2000);
-    // 反例自检：样式块内容被改动时必须与「未改动」判据不同（此处的判据是块内规则数守恒）
-    const ruleCount = (s) => (s.match(/^\s*\.[a-zA-Z][\w-]*\s*\{/gm) || []).length;
+    expect(sha256(style)).toBe(STYLE_SHA256);
+    // 规则数守恒留作冗余判据（sha 那条塌了它还在）；#1269 重定基线后是 39
     expect(ruleCount(style)).toBe(39);
+  });
+
+  it('逐字节锁具备判别力（改一字符 / 换一个 class 名 / 删一条规则都必须与该 sha 不同）', () => {
+    const style = pageStyle();
+    expect(sha256(style.replace('.footer-link {', '.footer-link-x {'))).not.toBe(STYLE_SHA256);
+    expect(sha256(style.replace('#2979ff', '#2979fe'))).not.toBe(STYLE_SHA256);
+    expect(sha256(style.replace('.footer-link {', ''))).not.toBe(STYLE_SHA256);
+    // 换 class 名那一条**同时**是规则数判据的盲区（39 → 39 数不出来）—— 这正是补 sha 的理由，留在原地当反例
     expect(ruleCount(style.replace('.footer-link {', '.footer-link-x {'))).toBe(39);
     expect(ruleCount(style.replace('.footer-link {', ''))).toBe(38);
   });
