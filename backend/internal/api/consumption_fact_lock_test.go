@@ -74,8 +74,8 @@ type factFieldInfo struct {
 
 // taggedFactFields 扫出「带 fact tag 的响应字段」，按 fact 值分组。
 //
-// 一条都扫不到时**由调用方判 Fatal**（判据 (e) 的第二半）：tag 改名、写成注释、或者被
-// go:generate 换掉写法，都会让这张表看起来「零违规」而其实是零覆盖。
+// 一条都扫不到时**由调用方判 Fatal**（判据 (e) 的第二半）：tag 改名、写成注释、或者被生成器
+// 换掉写法，都会让这张表看起来「零违规」而其实是零覆盖。
 func taggedFactFields(t *testing.T) map[string][]factFieldInfo {
 	t.Helper()
 	out := map[string][]factFieldInfo{}
