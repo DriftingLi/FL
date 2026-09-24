@@ -14,9 +14,20 @@
  *   三者的返回值**没有任何消费方落地**（void 用法；`resetPasswordApi` 后端 apitypes 标 `NoData: true`）
  *   ⇒ 按 T03/T09 口径（void 透传不硬套 identity map）留裸，理由登记在各模块契约的白名单节。
  *   `sendPhoneCodeApi` 是 `sendCodeApi` 的 register 态薄包装。
- * - 其余登录 / 资料类出口本轮不动（登录页出口归 T13 #651）。
+ * - `updateProfileApi` 走 `requestMapped` 出口（T15 批 B #653）：出口家族里没有 `putMapped` 便捷面，
+ *   故与 `put()` 逐字同通路（`opts.url` + `opts.method = 'PUT'` + `opts.data`），只把拆包后的
+ *   `.then()` 换成 mapper。显式 DTO `ProfileChangeRequest` 与 `buildReviewRequest` 术前已在位，
+ *   本票只收紧管道、签名一字未动 ⇒ 五处调用点（profile-setup 两处 + `personal-info-flows` 三处）
+ *   全部 `await` 后丢弃返回值，零页面适配。
+ * - **裸出口白名单（T15 批 B #653 登记）**：`uploadAvatarApi` 留裸 `uploadFile` —— multipart 上传在
+ *   T01 #639 的出口家族里没有 mapped 便捷面（只有 requestMapped / getMapped / postMapped），硬套需在
+ *   api 层自造拆包，反比裸通路多一份映射真相；其响应仍经 `buildReviewRequest` 组装，映射点只有一个。
+ * - 其余登录类出口本轮不动（登录页出口归 T13 #651）。`/auth/profile/*` 五条与 `/auth/account` 两条
+ *   （含同为裸 `put().then()` 形态的 `updateAccountApi`）唯一消费方是 profile 模块的
+ *   `personal-info-flows.uts`：其中六条返回 `UTSJSONObject` 且按 void 用法消费 ⇒ 按 T03/T09 口径留裸；
+ *   `updateAccountApi` 有载荷，但它属 profile 模块自己的手术面、不在批 B 四张面内（边界写在 #653）。
  */
-import { get, post, getMapped, postMapped, put, del, uploadFile } from './request'
+import { get, post, getMapped, postMapped, requestMapped, put, del, uploadFile } from './request'
 import { toStr } from './helpers'
 import type { RequestOptions } from './request'
 import type { LoginParams, LoginResult, RegisterParams, EmailRegisterParams, UserInfo, UpdateProfileParams, UploadAvatarResult, ProfileChangeRequest, WechatLoginResult, RefreshTokenResult } from '../types/index'
@@ -374,9 +385,11 @@ export function updateProfileApi(params : UpdateProfileParams) : Promise<Profile
 	if (company != null && company.length > 0) {
 		payload['company'] = company
 	}
-	return put('/auth/profile', payload).then((data : UTSJSONObject) : ProfileChangeRequest => {
-		return buildReviewRequest(data)
-	})
+	// PUT 在出口家族里没有便捷面：走通路本体，请求形态与 put() 逐字一致（同 opts.url / method / data）
+	const opts : RequestOptions = { url: '/auth/profile' } as RequestOptions
+	opts.method = 'PUT'
+	opts.data = payload
+	return requestMapped<ProfileChangeRequest>(opts, (data : UTSJSONObject) : ProfileChangeRequest => buildReviewRequest(data))
 }
 
 /** 从 UTSJSONObject 构造 ProfileChangeRequest（后端审核请求 DTO） */

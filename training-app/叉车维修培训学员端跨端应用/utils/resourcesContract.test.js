@@ -18,6 +18,8 @@
  * 4) 路由与类型：api/contribution.uts 三路由、字段对齐后端 json tag（守护规则 H）
  * 5) 归一：forum-create 默认 discussion；URL scope=resource 进资源 tab，其余非法/历史归一；
  *    编辑回填 normalizeCategory（帖子永不回填 resource）
+ * 6) 域 api 出口收紧（#653 T15 批 B）：material 域四个有载荷出口走 getMapped + build*；
+ *    无 mapped 便捷面的 multipart / 编排出口留裸并登记理由；本模块域 allowlist 不回潮
  */
 /** harness：读取层归一 + 模块归属面（ADR-0023 票 C 起，本文件不再自建 ROOT / read / walker） */
 const h = require('./contractHarness');
@@ -26,6 +28,18 @@ const read = h.read;
 
 const stripComments = (src) =>
   src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/[^\n]*/g, '$1');
+
+/**
+ * 取 `function <name>` 的函数体（到行首 `}` 收口，先例 utils/registerContract.test.js:96）。
+ * `api/material.uts` 全程制表符缩进 ⇒ 行首 `}` 只出现在函数闭合处，无需花括号配平。
+ * 名字不存在时返回 `''`：调用方的正向用例随即判红，不静默放过。
+ */
+function fnBodyOf(src, name) {
+  const start = src.indexOf('function ' + name + '(');
+  if (start === -1) return '';
+  const end = src.indexOf('\n}', start);
+  return end === -1 ? src.slice(start) : src.slice(start, end);
+}
 
 describe('提交链路契约（#760：forum-contribution-form 组件承载投稿）', () => {
   const src = read('pages/forum/components/forum-contribution-form.uvue');
@@ -182,5 +196,148 @@ describe('resources 列表页视觉语言对齐契约（#758）', () => {
     expect(itemRule).not.toContain('border:');
     expect(src).toContain('去商城逛逛');
     expect(src).toMatch(/reLaunch\(\{ url: '\/pages\/courses\/courses' \}\)/);
+  });
+});
+
+describe('material 域 api 出口收紧（#653 T15 批 B：有载荷出口全部走 getMapped）', () => {
+  const src = read('api/material.uts');
+  const code = stripComments(src);
+
+  it('出口家族 import：换成 getMapped，裸 get 通路不再引', () => {
+    expect(code).toMatch(/import\s*\{\s*getMapped\s*\}\s*from\s*'\.\/request'/);
+    expect(code).not.toMatch(/import\s*\{[^}]*\bget\b[^}]*\}\s*from\s*'\.\/request'/);
+  });
+
+  it.each([
+    ['getMaterialsApi', 'MaterialListResult', "'/materials', params"],
+    ['getMaterialDetailApi', 'MaterialItem', "'/materials/' + materialId.toString(), null"],
+    ['getMaterialDownloadApi', 'MaterialDownloadInfo', "'/materials/' + materialId.toString() + '/download', null"],
+    ['getStudentMaterialsApi', 'MaterialListResult', "'/student/materials', params"],
+  ])('%s 经 getMapped<%s> 且旧 get().then() 形态不回潮', (name, dto, callShape) => {
+    const body = fnBodyOf(code, name);
+    expect(body).not.toBe('');
+    expect(body).toContain(`return getMapped<${dto}>(${callShape}`);
+    expect(body).not.toMatch(/(?:^|[^A-Za-z0-9_$])get\(/);
+    expect(body).not.toContain('.then(');
+  });
+
+  it('mapper 一律箭头包裹 build*（守护规则 M：裸函数引用作 mapper 会 error17）', () => {
+    expect(code).toContain('(data : UTSJSONObject) : MaterialListResult => buildMaterialListResult(data)');
+    expect(code).toContain('(data : UTSJSONObject) : MaterialItem => buildMaterialItem(data)');
+    expect(code).toContain('(data : UTSJSONObject) : MaterialDownloadInfo => buildMaterialDownloadInfo(data)');
+    expect(code).not.toMatch(/Mapped<[^>]+>\([^()]*(?:,\s*[^()]*?)*?,\s*build[A-Za-z]*\s*[,)]/);
+  });
+
+  it('映射真相收在三个私有 builder（不对外暴露，页面只消费 DTO）', () => {
+    for (const [name, dto] of [
+      ['buildMaterialItem', 'MaterialItem'],
+      ['buildMaterialListResult', 'MaterialListResult'],
+      ['buildMaterialDownloadInfo', 'MaterialDownloadInfo'],
+    ]) {
+      expect(code).toMatch(new RegExp(`function\\s+${name}\\s*\\(\\s*\\w+\\s*:\\s*UTSJSONObject\\s*\\)\\s*:\\s*${dto}\\b`));
+      expect(code).not.toMatch(new RegExp(`export\\s+function\\s+${name}\\b`));
+    }
+  });
+
+  it('列表信封四个键只在 buildMaterialListResult 一处拆（两支列表出口共用同一真相）', () => {
+    const body = fnBodyOf(code, 'buildMaterialListResult');
+    expect(body).not.toBe('');
+    for (const k of ['materials', 'total', 'page', 'pages']) {
+      expect(body).toContain(`data['${k}']`);
+    }
+    // page 缺省 1 是行为保持点：转换前写在 getMaterialsApi 的 then 里，现在只能平移、不能改值
+    expect(body).toMatch(/toNumber\(data\['page'\],\s*1\)/);
+    expect(body).toContain('buildMaterialItem(arr[i])');
+  });
+
+  it('数值/字符串强转不再本地复制（api/helpers.uts 是唯一实现）', () => {
+    expect(code).toMatch(/import\s*\{\s*toNumber,\s*toStr\s*\}\s*from\s*'\.\/helpers'/);
+    expect(code).not.toMatch(/(^|\n)function\s+to(Number|Str)\s*\(/);
+  });
+
+  it('编排出口保持裸通路：downloadAndOpenMaterialApi 无响应载荷，错误通道就是 string', () => {
+    const body = fnBodyOf(code, 'downloadAndOpenMaterialApi');
+    expect(body).toContain('Promise<string>');
+    expect(body).not.toContain('Mapped<');
+    // 五条用户可见失败语义逐字保持（保留裸通路是决策，不是惯性：#653 票面 ②）
+    for (const msg of ['资料地址无效', '资料下载失败（', '无法打开此文件', '资料下载超时，请稍后重试', '资料下载失败']) {
+      expect(body).toContain(msg);
+    }
+    expect(body).toMatch(/encodeURI\(info\.file_url\)\s*\?\?\s*''/);
+    expect(body).toMatch(/\.catch\(\(e\)\s*:\s*string\s*=>/);
+    // 留裸 ≠ 留旧出口：它必须改调收紧后的 getMaterialDownloadApi
+    expect(body).toContain('getMaterialDownloadApi(materialId)');
+  });
+
+  it('出口判据具备判别力（把任一出写回 get().then() 必须被判红）', () => {
+    const regressed = code.replace(
+      "return getMapped<MaterialItem>('/materials/' + materialId.toString(), null, (data : UTSJSONObject) : MaterialItem => buildMaterialItem(data))",
+      "return get('/materials/' + materialId.toString()).then((data : UTSJSONObject) : MaterialItem => buildMaterialItem(data))",
+    );
+    expect(regressed).not.toBe(code);
+    const body = fnBodyOf(regressed, 'getMaterialDetailApi');
+    expect(body).not.toContain('getMapped<MaterialItem>(');
+    expect(/return getMapped<MaterialItem>/.test(body)).toBe(false);
+  });
+});
+
+describe('api/contribution.uts 裸出口白名单（#653：multipart 无 mapped 便捷面，保留须带理由）', () => {
+  const src = read('api/contribution.uts');
+  const code = stripComments(src);
+
+  it('uploadContributionFileApi 留裸 uploadFile 通路（出口家族只有 requestMapped/getMapped/postMapped）', () => {
+    const body = fnBodyOf(code, 'uploadContributionFileApi');
+    expect(body).toContain('uploadFile(');
+    expect(body).not.toContain('Mapped<');
+  });
+
+  it('留裸理由写进文件头（不是只写在 PR 里）', () => {
+    expect(src).toMatch(/@note 裸出口白名单（T15 批 B #653 登记）/);
+    expect(src).toContain('multipart');
+  });
+
+  it('有载荷的两条仍走 mapped 出口（白名单没有顺手扩大到整文件）', () => {
+    expect(code).toContain('postMapped<');
+    expect(code).toContain('getMapped<ContributionPageResult>');
+  });
+});
+
+describe('幻影路由锁（#662 口径）：material 域路由必须落在后端已注册清单内', () => {
+  /** 后端注册表：material.go 的 `g.METHOD("<path>")`（组前缀为空串，见该文件 rg.Group("")） */
+  function registeredRoutes() {
+    const go = stripComments(read('../../backend/internal/api/material.go'));
+    return [...go.matchAll(/\bg\.(?:GET|POST|PUT|DELETE|PATCH)\("([^"]+)"[^)]*\)/g)].map((m) => m[1]);
+  }
+
+  /** 前端路由：拼段的 `'/x/' + materialId.toString() + '/y'` 先归一成 `/x/:id/y`，再抽全部字面量 */
+  function apiRoutes() {
+    const normalized = stripComments(read('api/material.uts'))
+      .replace(/'((?:\/materials|\/student\/materials)\/[^']*)'\s*\+\s*materialId\.toString\(\)\s*\+\s*'([^']*)'/g, "'$1:id$2'")
+      .replace(/'((?:\/materials|\/student\/materials)\/[^']*)'\s*\+\s*materialId\.toString\(\)/g, "'$1:id'");
+    return [...normalized.matchAll(/'((?:\/materials|\/student\/materials)[^']*)'/g)].map((m) => m[1]);
+  }
+
+  it('四条路由全部命中 material.go 注册面（收紧只换出口、不改请求形态）', () => {
+    const registered = registeredRoutes();
+    expect(registered.length).toBeGreaterThan(3);
+    const used = apiRoutes();
+    expect(used.sort()).toEqual(['/materials', '/materials/:id', '/materials/:id/download', '/student/materials']);
+    expect(used.filter((u) => !registered.includes(u))).toEqual([]);
+  });
+});
+
+describe('allowlist 不回潮（#653 票面 ③：resources 域 catch/detail 条目清零）', () => {
+  // ADR-0023 决策 ⑧：GUARD_ALLOWLIST 的唯一声明点是 utils/guardAllowlist.js，消费方一律 require 取用。
+  const { allowlistPaths } = require('./guardAllowlist');
+  const isResourcesPath = (p) =>
+    /^pages[/\\]resources[/\\]/.test(p) || /^api[/\\](material|contribution)\.uts$/.test(p);
+
+  it('GUARD_ALLOWLIST 不含 resources 模块文件（术前即为零，故这是不回潮锁而非清零动作）', () => {
+    expect(allowlistPaths().filter(isResourcesPath)).toEqual([]);
+  });
+
+  it('判据具备判别力（注入一条 resources 豁免必须被抓到）', () => {
+    const injected = allowlistPaths().concat(['api/material.uts']);
+    expect(injected.filter(isResourcesPath)).toEqual(['api/material.uts']);
   });
 });
