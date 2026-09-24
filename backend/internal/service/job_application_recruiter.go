@@ -16,7 +16,7 @@ import (
 
 // RecruiterApplicationListResult 企业侧投递列表结果。
 type RecruiterApplicationListResult struct {
-	Items       []ApplicationDTO `json:"items" nullability:"nullable"`
+	Items       []ApplicationDTO `json:"items" nullability:"nonnil"`
 	Total       int64            `json:"total"`
 	Page        int              `json:"page"`
 	PageSize    int              `json:"page_size"`

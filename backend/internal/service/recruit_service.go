@@ -63,7 +63,7 @@ type RecruitResumeCard struct {
 	ExperienceYears       int       `json:"experience_years"`
 	SelfIntro             string    `json:"self_intro"`
 	ResumeExperiences     JSONArray `json:"resume_experiences" swaggertype:"array,object" nullability:"nullable"`
-	ResumeCertifications  JSONArray `json:"resume_certifications" swaggertype:"array,object" nullability:"nullable"` // 已去 image_urls
+	ResumeCertifications  JSONArray `json:"resume_certifications" swaggertype:"array,object" nullability:"nonnil"` // 已去 image_urls
 	UpdatedAt             string    `json:"updated_at"`
 	// #489：企业视角联系状态（none/pending/approved，approved 带来源）
 	ContactState  string `json:"contact_state,omitempty" extensions:"x-optional"`

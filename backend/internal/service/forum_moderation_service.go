@@ -50,7 +50,7 @@ type ForumReportPageResult struct {
 	Page    int              `json:"page"`
 	Pages   int              `json:"pages"`
 	Total   int64            `json:"total"`
-	Reports []ForumReportDTO `json:"reports" nullability:"nullable"`
+	Reports []ForumReportDTO `json:"reports" nullability:"nonnil"`
 }
 
 // AdminDeleteTopic 管理员删除任意主题（不校验作者）。图片一并清理；站内信通知作者。
