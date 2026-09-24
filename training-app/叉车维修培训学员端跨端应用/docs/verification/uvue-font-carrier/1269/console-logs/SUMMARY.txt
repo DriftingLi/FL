@@ -1,0 +1,23 @@
+# #1269 ①a 真机日志机检摘要（原始四份 launch 日志已随本目录入库，见 console-logs/*.nav.txt）
+
+设备 192.168.0.212:37611（Xiaomi 23049RAD8C / Android 15，无线 adb）· 2026-09-24 · 包 io.dcloud.uniappx
+
+| 日志 | 行数 | `style property` 错行 | FAIL | Uncaught | Exception | TypeError | 页身份命中 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 01-forgot-password-before.nav.txt | 297 | **3** | 0 | 0 | 0 | 0 | `pages/forgot-password/forgot-password` |
+| 03-forgot-password-after.nav.txt | 324 | **0** | 0 | 0 | 0 | 0 | `pages/forgot-password/forgot-password` |
+| 05-register-before.nav.txt | 309 | **3** | 1 | 0 | 0 | 0 | `pages/register/register` |
+| 07-register-after.nav.txt | 312 | **0** | 0 | 0 | 0 | 0 | `pages/register/register` |
+
+## 本目录主张什么、不主张什么
+
+- **主张**：术后两页的 launch 日志里 `is only supported on` **各 0 命中**；术前同页 **各 3 命中**，
+  且 3 行的 class 名恰是本票改掉的 `mode-tab` / `mode-tab mode-tab-active` —— 逐字原文见 `../machine-lines.txt` §3。
+- **主张**：术前/术后各是一次**独立真部署**（设备侧 www mtime 前进）+ 一次**独立深链进页**，
+  不是同一份日志切片对比；DOM 元素个数两轮**相同**（37 / 48），说明结构未变、只有文字层承载方式变了。
+- **不主张**：`05-register-before` 的 1 条 `FAIL` 属验证码图片接口请求失败（`api/request.uts:442`），
+  与样式无关；它使术前 register 默认态的 content-desc 比术后多 1 条（`加载失败 点击重试`）。该差异**列出而非抹平**。
+- **不主张**：日志里未出现 `Uncaught` / `Exception` / `TypeError` 只说明**这几类词**零命中，
+  不等于「无任何运行时错误」；本次也未跑 `adb logcat` 全缓冲崩溃断言（#1149 跑过，本票改动不涉及逻辑，故未做）。
+- **未验**：H5 端与小程序端（该判据的对象是 uvue **原生**渲染器）；② 微信开发者工具门另见 README。
+
