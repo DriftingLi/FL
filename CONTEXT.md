@@ -176,6 +176,6 @@
   _Avoid_: 把「契约」当成请求参数面（本词目前只覆盖响应形状）；把 `API.md` 当事实源。
 - **可空性表态（nullability verdict）**：响应里每个切片/映射字段都必须显式声明它在 JSON 里**可不可为 null**（struct tag `nullability:"nullable" | "nonnil"`，ADR-0064 决策 8）。`nullable` 一侧还要落 `extensions:"x-nullable"`，生成的 TS 才会写成 `T[] | null`；`nonnil` 一侧不落。
   _Avoid_: 把 `omitempty` 当成可空性的表达手段——它让**键缺席**，与「键在而值为 null」是两格（那件事由 `x-optional` 说）；拿 `nullable` 当挡箭牌（说了一句没人能举证的「可为 null」，等于让每个消费端为一条不存在的分支写 `?? []`）。
-- **消费点对齐（fact key）**：同一件事实在对外契约上可以有两种形状的载体——**明文面**（一条错误，只在这次请求失败时出现）与**投影位**（一个常驻响应字段）。两者说的是同一件事时挂同一个 `fact:"<key>"` tag，登记在 `internal/api/consumption_fact_registry.go`；对齐的判据是**句子逐字相同、字段键名相同**，由 `consumption_fact_lock_test.go` 机器核（ADR-0065 决策 8）。首例是 `company_unavailable`：一句 `企业账号已停用或已注销` 与两格 `company_disabled`。
-  _Avoid_: 靠注释互指（「与明文位置同键同措辞的那一格」不是锁，改一半不会红）；给只有单侧载体的事实挂 tag（单侧谈不上对齐）；用「把投影降级成错误面那句」来统一——那会把「曾授权但企业被处置」与「从没授权」压回同一个值。
+- **消费点对齐（fact key）**：同一件事实在对外契约上可以有两种形状的载体——**明文面**（一条错误，只在这次请求失败时出现）与**投影位**（一个常驻响应字段）。两者说的是同一件事时挂同一个 `fact:"<key>"` tag，登记在 `internal/api/consumption_fact_registry.go`（ADR-0065 决策 8）。机器核的判据是：同一事实的各个**投影位同名**、错误载体那句对外句子**逐字出现在每一个投影位的契约描述里**、投影位所在类型确实出现在某个 2xx 响应里（`internal/api/consumption_fact_lock_test.go` + `internal/apitypes/fact_reachability_lock_test.go`）。首例是 `company_unavailable`：一句 `企业账号已停用或已注销` 与两格 `company_disabled`。
+  _Avoid_: 靠注释互指（「与明文位置同键同措辞的那一格」不是锁，改一半不会红）；给只有单侧载体的事实挂 tag（单侧谈不上对齐）；用「把投影降级成错误面那句」来统一——那会把「曾授权但企业被处置」与「从没授权」压回同一个值；以为这把锁证明那句话**发得出去**（它读的是生成物的静态描述，那一半归 HTTP 级断言）。
 - **阅读量（view count）**：文章被真实浏览器访问的次数。门户侧详情接口带 `no_view=1` 时不计入（SSR/爬虫路径），由 hydration 后客户端计数端点累加——与「详情请求次数」语义区分；论坛侧为详情请求即计数（`GET /api/forum/topics/:id` 每次 +1），**已补防刷**：排除作者自访问、区分「详情请求次数」与「真实浏览」，口径照门户 `no_view` 先例——因为 `hot` 排序的第三键正是 `view_count`，不设防即可被自刷推热。

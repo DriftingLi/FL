@@ -3474,8 +3474,8 @@ definitions:
         type: string
       company_disabled:
         description: |-
-          CompanyDisabled 「企业账号已停用或已注销」——与学员侧那格（service.ContactRequestDTO）
-          以及明文门禁拒同一件事时返回的那句错误**同键同句**（对齐由消费点对齐锁管，ADR-0065 决策 8）：
+          CompanyDisabled 「企业账号已停用或已注销」——与学员侧那格（service.ContactRequestDTO 的
+          同键字段）以及明文门禁拒同一件事时返回的那句错误同键同句（ADR-0065 决策 8）：
           本企业被禁用（处置动作）或已注销 ⇒ 明文取不到，但 contact_state 仍按授权事实投影
           （授权存在 ≠ 授权可用，词表「授权有效态」；ADR-0064 决策 5）。缺席即企业可用。
           移动端 #1267 的退回诉求就是这一格：只挂在明文位置上时列表角标无从分辨。
