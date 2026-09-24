@@ -59,7 +59,7 @@
      *   分段徽标与（职位段的）紧迫行都用 `utils/recruitDisplay.uts` 的同一个计数函数。
      *
      * ## 招聘者侧 DTO 不含学员姓名
-     *   `ContactRequestDTO` 只有 `student_user_id`（`contact_service.go:45-64`）——
+     *   `ContactRequestDTO` 只有 `student_user_id`（`contact_service.go:57-83`）——
      *   列表**不显示**「某某学员」，也不拿 ID 冒充名字。
      */
     import { ref } from 'vue'

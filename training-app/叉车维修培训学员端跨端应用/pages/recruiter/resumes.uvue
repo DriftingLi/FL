@@ -457,8 +457,7 @@
         color: #2979ff;
     }
 
-    /* 可用性那一格：比角标重一档（这是「别再去联系这个人」的事实）。
-       告警色与交换段 `.row-notice` 同源 #E5484D；uvue 不支持 CSS 变量，故直接写色值 */
+    /* 可用性那一格：与交换段 `.row-notice` 同色同因（uvue 不支持 CSS 变量 ⇒ 色值逐字写） */
     .company-notice {
         margin-top: 8rpx;
         font-size: 24rpx;

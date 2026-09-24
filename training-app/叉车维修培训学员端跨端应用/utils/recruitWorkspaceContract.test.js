@@ -237,7 +237,7 @@ function parseMobileNoticeConst(src) {
 /**
  * 解析 Web 侧「企业可用性」那一格的措辞（`contactRequestStatus.ts` 的 `companyAvailability()`）。
  * @note 刻意**不**复用 `parseWebDescriptorModule`：这一格不在那张 `DESCRIPTORS` 表里
- *       （它不是 `ContactGrantState` 的取值，进表就会踩破 F 组的三把同源锁）。
+ *       （它不是 `ContactGrantState` 的取值，进表就会踩破 F 组前两把同源锁，见 ADR-0026 ③）。
  * @returns label 字面量；文件/函数形态解析不到返回 null（判红）
  */
 function parseWebAvailability(absPath) {

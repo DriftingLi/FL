@@ -200,18 +200,19 @@ export type RecruitContactPlain = {
 /**
  * 我发起的交换申请（`GET /recruit/contact-requests`，`ListForRecruiter`）
  *
- * ⚠️ 招聘者侧 DTO **不含学员姓名**（`contact_service.go:45-64` 只有 `student_user_id`）——
+ * ⚠️ 招聘者侧 DTO **不含学员姓名**（`contact_service.go:57-83` 只有 `student_user_id`）——
  * 列表与紧迫行都不得显示「某某学员」，做不到就不要写。
- * `status` 是服务端事实；`expires_at` 是 `created_at + 14 天`（`contact_service.go:183`）。
+ * `status` 是服务端事实；`expires_at` 是 `created_at + 14 天`（`contact_service.go:37` 常量，
+ * `:289` 签发处）。
  * **服务端读取时不按 `expires_at` 判状态**（ADR-0022 已知缺口）⇒ 「已过期」由客户端算
  * （`utils/recruitDisplay.uts`），且过期项**不给任何操作入口**。
  *
  * `company_disabled` 是**缺席式可选键**（后端 `contact_service.go:80` 的
- * `json:"company_disabled,omitempty"`，唯一赋值点 `:212-219` 是「授权在、明文已收回」）：
+ * `json:"company_disabled,omitempty"`，唯一赋值点 `:215-218` 是「授权在、明文已收回」）：
  * 出现即恒为 `true`，故本层把它归一成 boolean，消费面只判 `=== true`。
  * 端点覆盖：**本端点**与**简历卡**（`recruit_service.go:75`，#1298 补发）各有一格，两处同键同措辞；
- * `ContactPlainDTO`（`contact_service.go:101-107`）**仍无此键** —— 取明文失败时是三态 403
- * （`backend/internal/api/contact.go:98-140`），不是「200 但少一段」。
+ * `ContactPlainDTO`（`contact_service.go:101-108`）**仍无此键** —— 取明文失败时是三态 403
+ * （`backend/internal/api/contact.go:108-127`），不是「200 但少一段」。
  */
 export type RecruitContactRequest = {
     id : number
@@ -343,9 +344,8 @@ export function buildRecruitResumeCard(obj : UTSJSONObject) : RecruitResumeCard 
         updated_at: toStr(obj['updated_at']),
         contact_state: toStr(obj['contact_state']),
         contact_source: toStr(obj['contact_source']),
-        // 缺席式可选键：键不在 = 企业可用，不是「未知」。与**同一个键**在交换申请映射里的
-        // 写法逐字一致（`(x as boolean) ?? false`）—— 一个键在两处边界上折成两种形状，
-        // 就是在暗示它们可能不等价。消费面仍只判真值，不写 `== false` 分支。
+        // 与 `buildRecruitContactRequest` 里同一个键逐字同形（F1 锁钉住两处）：一个键折成两种形状
+        // = 在暗示它们不等价。缺席即企业可用，不是「未知」——见类型注释。
         company_disabled: (obj['company_disabled'] as boolean) ?? false,
     } as RecruitResumeCard
 }

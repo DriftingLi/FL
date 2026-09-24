@@ -84,8 +84,7 @@
                             入口（#705：看起来能用、用了必失败的入口比没有入口更贵），措辞出自 utils 单点；
                          ② 真的还没授权 —— 保留唯一出口「发起交换」。 -->
                     <view v-if="!contactLoading && contact == null">
-                        <text v-if="companyDisabled" class="contact-notice">{{ contactStateHint }}</text>
-                        <text v-else class="paragraph">{{ contactStateHint }}</text>
+                        <text :class="companyDisabled ? 'contact-notice' : 'paragraph'">{{ contactStateHint }}</text>
                         <view v-if="!companyDisabled" class="btn-primary mt-16" @click="onCreateRequest">
                             <text class="btn-primary-text">发起交换</text>
                         </view>
@@ -588,8 +587,7 @@
         line-height: 1.6;
     }
 
-    /* 可用性那一格：与 `contacts.uvue` 的 `.row-notice`、`resumes.uvue` 的 `.company-notice` 同色，
-       三处说的是同一件事（企业已停用），颜色不能各说一套 */
+    /* 可用性那一格：与 `contacts.uvue` 的 `.row-notice`、`resumes.uvue` 的 `.company-notice` 同色 */
     .contact-notice {
         font-size: 26rpx;
         color: #E5484D;

@@ -534,7 +534,12 @@ const RECRUIT_SERVICE_GO = path.join(REPO_ROOT, 'backend', 'internal', 'service'
  */
 function cardCompanyDisabledTagFromTruth() {
   if (!fs.existsSync(RECRUIT_SERVICE_GO)) return null;
-  const m = /CompanyDisabled\s+bool\s+`json:"([^"]+)"/.exec(readText(RECRUIT_SERVICE_GO));
+  return cardCompanyDisabledTagFrom(readText(RECRUIT_SERVICE_GO));
+}
+
+/** 同一套解析，暴露给自检（自检必须跑在锁真正用的那个解析器上，不是跑在它的手抄副本上） */
+function cardCompanyDisabledTagFrom(src) {
+  const m = /CompanyDisabled\s+bool\s+`json:"([^"]+)"/.exec(src);
   return m === null ? null : m[1];
 }
 
@@ -560,14 +565,12 @@ describe('F. 卡面 company_disabled：字段边界只认真值 + 详情页「�
     expect(recruitSrc.slice(crStart, recruitSrc.indexOf('\n}', crStart))).toContain(norm);
   });
 
-  test('F1 自检：tag 对账器认得 `omitempty` 的增删（合成样本）', () => {
-    const tagOf = (src) => {
-      const m = /CompanyDisabled\s+bool\s+`json:"([^"]+)"/.exec(src);
-      return m === null ? null : m[1];
-    };
-    expect(tagOf('CompanyDisabled bool `json:"company_disabled,omitempty"`')).toBe('company_disabled,omitempty');
+  test('F1 自检：tag 对账器认得 `omitempty` 的增删（合成样本，跑的是锁真正用的那个解析器）', () => {
+    expect(cardCompanyDisabledTagFrom('CompanyDisabled bool `json:"company_disabled,omitempty"`')).toBe('company_disabled,omitempty');
     // 真源哪天去掉 omitempty ⇒ 上面那条相等就会红（这里先证明解析器看得见那个变化）
-    expect(tagOf('CompanyDisabled bool `json:"company_disabled"`')).not.toBe('company_disabled,omitempty');
+    expect(cardCompanyDisabledTagFrom('CompanyDisabled bool `json:"company_disabled"`')).not.toBe('company_disabled,omitempty');
+    // 字段改名 / 搬家 ⇒ null（判红，而不是拿一个空字符串去比不相等）
+    expect(cardCompanyDisabledTagFrom('CompanyGone bool `json:"company_disabled,omitempty"`')).toBeNull();
   });
 
   test('F2：详情页措辞出自单点，且「已收回」优先于「未授权」两种成因（不互相顶替）', () => {
@@ -595,9 +598,11 @@ describe('F. 卡面 company_disabled：字段边界只认真值 + 详情页「�
     expect(tpl.split('\n')[btnIdx + 1]).toContain('发起交换');
     // 未授权（企业可用）那一支仍在：不能为了这一格把唯一出口整段删掉
     expect(detailClean).toContain('<text class="btn-primary-text">发起交换</text>');
-    // 两种成因分面渲染：停用走 `.contact-notice`，未授权走 `.paragraph`
-    expect(detailClean).toContain('<text v-if="companyDisabled" class="contact-notice">{{ contactStateHint }}</text>');
-    expect(detailClean).toContain('<text v-else class="paragraph">{{ contactStateHint }}</text>');
+    // 两种成因分面渲染：停用走 `.contact-notice`，未授权走 `.paragraph`（一行两态）
+    expect(detailClean).toContain(
+      '<text :class="companyDisabled ? \'contact-notice\' : \'paragraph\'">{{ contactStateHint }}</text>');
+    // 那句话只有一处渲染行：复制成两行 = 多一个会各自漂移的落点（v-if/v-else 的写法就属于这一类）
+    expect((detailClean.match(/\{\{ contactStateHint \}\}/g) || []).length).toBe(1);
     // uvue 里 class 没定义 = 静默没样式 ⇒ 用了就要钉住它存在
     expect(detailSrc.slice(detailSrc.indexOf('<style'))).toContain('.contact-notice');
   });
