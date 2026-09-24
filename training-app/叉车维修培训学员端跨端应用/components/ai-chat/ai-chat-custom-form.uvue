@@ -111,7 +111,9 @@
 	}
 
 	/* 容器与文字分成两位：原生端只把 font-size/color/text-align/font-weight 认给 <text>，落在 <view> 上会被判错并忽略（#1314）。
-	   line-height 留在容器不动：它不在 #1269 真机日志点名的四个属性里，挪进 <text> 会多出一条无法归因的像素差。 */
+	   `line-height` 无真机判据（守护按 AGENTS.md 只锁有日志判据的那四个属性），但拆出 <text> 后，挂在容器上的行距还管不管
+	   得到那段文字是不可知的 ⇒ 跟着文字走，与同族 .message-text（ai-chat-bubble.uvue）/ .source-text（ai-chat-sources.uvue）
+	   同形：两种假设下都不减损，留在容器上则在其中一种假设下变成第二条死声明 —— 那正是本票要消除的形态。 */
 	.picker-title {
 		margin-bottom: 24rpx;
 	}
@@ -124,7 +126,6 @@
 	}
 
 	.custom-hint {
-		line-height: 1.6;
 		margin-bottom: 24rpx;
 		background-color: #f5f6f8;
 		border-radius: 12rpx;
@@ -134,6 +135,7 @@
 	.custom-hint-text {
 		font-size: 24rpx;
 		color: #999999;
+		line-height: 1.6;
 	}
 
 	.form-item {

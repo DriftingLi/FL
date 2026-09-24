@@ -75,8 +75,9 @@
                 <view class="card">
                     <text class="section-title">联系方式</text>
 
-                    <!-- 加载态这一位不挂 `.paragraph`：它是 view，原生渲染层不把文字类样式认给非文字元素，
-                         挂了那三条声明本就死着（#1314）。"查询中..." 的字号字色由 `.meta-item` 自己给，同值。 -->
+                    <!-- 加载态这一位不挂 `.paragraph`：它是 view，那两条文字声明（`font-size: 26rpx` / `color: #666666`）本就死着，
+                         "查询中..." 的字号字色由 `.meta-item` 自己给、同值（#1314，票面批准的「删掉那一位的 class」改法）。
+                         `.paragraph` 的第三条 `line-height: 1.6` 无真机判据（守护不锁它）⇒ 唯一可能的差异是这一行的行盒高度，留给 ①a 术后确认。 -->
                     <view v-if="contactLoading">
                         <text class="meta-item">查询中...</text>
                     </view>

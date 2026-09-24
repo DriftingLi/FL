@@ -676,6 +676,9 @@ describe('uvue 文字类样式的承载面契约（#1269）', () => {
       expect(fresh.join('\n')).toBe('');
     });
 
+    // 清单为空时这条**today 恒绿**（`over` 要键命中、`stale` 要清单非空，两者都无从发生）。留着不删的理由：
+    // 它是「清单只减不增」对未来那次登记的执法 —— 今天它不证明任何事，别把它当证据（今天的判别力在上两条：
+    // `fresh` 等价于「全仓零违规」，三条判据的红样本由 ① 节合成登记表自证）。
     it('DEFERRED 每条的 occurrence 数必须与登记时相同（修好了就删条目 —— 这张清单只允许变短）', () => {
       const { over, stale } = ratchetFindings(violatingOccurrences(scanned));
       expect([over.join('\n'), stale.join('\n')].filter(Boolean).join('\n')).toBe('');
