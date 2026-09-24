@@ -12,14 +12,20 @@
 // 用同一个 tag 表态会把两种语义混成一格。
 // 也不靠类型名猜（「以 DTO 结尾」那种判据会漏会误伤）。
 //
-// 三条判据，都不需要跨函数推断数据流（那正是上一波否决假绿锁的理由）：
+// 四条判据，都不需要跨函数推断数据流（那正是上一波否决假绿锁的理由）：
 //  1. **漏标即红**：闭包内的集合字段没有 `nullability:"…"` tag。
 //  2. **自相矛盾即红**：`nonnil`（承诺出口恒非 null）与契约上的 `x-nullable`（说可为 null）同时出现。
 //  3. **债务只准减不准加**：标了 `nullable` 而契约里还没落 `x-nullable` 的位置数被钉成常量。
 //     新增 ⇒ 计数变大 ⇒ 红；真的修掉了 ⇒ 计数变小 ⇒ 也红（要人来改这个常量，
 //     于是收口动作留下痕迹，而不是悄悄漂过去）。
+//  4. **声明 `nullable` 要举得出一个真会发 `null` 的出口**（ADR-0065 决策 5，本波推论的直接形状）：
+//     第 3 条管「说了可空、契约有没有跟着改」，管不着「这句可空是不是真的」。一句没人能举证的
+//     `nullable` 与第 1 条那种漏标同级——它让每个消费端为一条不存在的分支写 `?? []`。
+//     正向证据住在 `../service/nullable_declaration_test.go` 的 `nullableOutlets` 那张表里
+//     （走真实出口 marshal 一次、断言发出的就是 `null`），本条只数「声明了却没进表的字段」，
+//     同样钉成只能减的常量。**表在这里、判据也在这里，但证据只有一份**——不另建第二张登记表。
 //
-// 锁自己先被验：TestNullabilityCheckerFires 用合成夹具证明三条判据真的会报、且不误报，
+// 锁自己先被验：TestNullabilityCheckerFires 用合成夹具证明四条判据真的会报、且不误报，
 // 再拿同一个 checker 去扫全仓——一把永不报红的锁就是本波点名要避开的那种摆设。
 package apitypes
 
@@ -45,10 +51,89 @@ const (
 
 // declaredNullableWithoutContractFlag 契约撒谎债务的实测值（文件头第 3 条）：
 // 91 处响应集合字段自己承认「可能为 null」，而 swagger/TS 还在对消费方承诺非 null。
-// （104 处表态 = 99 nullable + 5 nonnil；其中 8 处早已带 x-nullable，故债务是 91 而不是 99。）
+// （104 处表态 = 99 nullable + 5 nonnil；集合字段里 5 处早已带 x-nullable、另 3 处落在
+//
+//	2xx 响应闭包外 ⇒ 99 − 5 − 3 = 91。ADR-0064 原记的「8 处」由 ADR-0065 批③ 更正：
+//	那 3 处差额是把标量指针字段上的 x-nullable 也计了进来。）
+//
 // 本波不做批量补 x-nullable（那会把每个消费点变成一次带类型错误的跨端改动）——
 // 这笔账交给下一波，常量的作用是让它只能变短。
 const declaredNullableWithoutContractFlag = 91
+
+// nullableOutletsFile 与 nullableOutletsVar 指出「正向证据」那张表的位置（判据 4 的证据源）。
+// 键 = 包名.类型名.json键，与 nullableFields 给的形状同一格式。
+const (
+	nullableOutletsFile = "../service/nullable_declaration_test.go"
+	nullableOutletsVar  = "nullableOutlets"
+)
+
+// declaredNullableWithoutPositiveEvidence 判据 4 的实测债务（ADR-0065 批①′ 立这条时的数）：
+//
+//	99 处 nullable 声明 − 3 处落在 2xx 响应闭包外 = 96 处在射程内；其中走过真实出口、marshal 出过
+//	`null` 的只有 1 处（service.ChapterSlidesDTO.slides，未注入 slideRenderer 那一档）⇒ 96 − 1 = 95。
+//	注意这与判据 3 的 91 不是同一个分母：91 数的是「射程内且契约上还没落 x-nullable」，
+//	射程内的总数是 96（另 5 处已带 x-nullable）。
+//
+// 这个数**只准减**：新增一句没有证据的 nullable 会把它顶上去，把证据补上会把它降下来——
+// 两种都要人来改常量，于是一次没有证据的声明和一次收口都留下痕迹。
+// 批①-A 会把其中约 69 处**改判 nonnil**（实测恒非 null，本就不该说可空），那时这条算式整条重写。
+const declaredNullableWithoutPositiveEvidence = 95
+
+// outletEvidenceKeys 读那张证据表里的键字面量。文件缺失、变量找不到、或表是空的却声称有证据
+// 一律 Fatal——「找不到就当没有违规」正是本波点名要避开的那种空转。
+func outletEvidenceKeys(t *testing.T) map[string]bool {
+	t.Helper()
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, nullableOutletsFile, nil, parser.ParseComments)
+	if err != nil {
+		t.Fatalf("解析证据表 %s 失败: %v（判据 4 的证据源就是这个文件，读不到不得当作「无违规」）", nullableOutletsFile, err)
+	}
+	out := map[string]bool{}
+	ast.Inspect(f, func(n ast.Node) bool {
+		vs, ok := n.(*ast.ValueSpec)
+		if !ok || len(vs.Names) == 0 || vs.Names[0].Name != nullableOutletsVar {
+			return true
+		}
+		lit, ok := firstCompositeLit(vs)
+		if !ok {
+			t.Fatalf("%s 不是复合字面量，证据表被改成了运行期构造？", nullableOutletsVar)
+		}
+		for _, el := range lit.Elts {
+			kv, ok := el.(*ast.KeyValueExpr)
+			if !ok {
+				continue
+			}
+			key, ok := kv.Key.(*ast.BasicLit)
+			if !ok {
+				continue
+			}
+			out[strings.Trim(key.Value, `"`)] = true
+		}
+		return false
+	})
+	return out
+}
+
+// firstCompositeLit 取 ValueSpec 的第一个值表达式（`var x = map[K]V{...}` 与
+// `var x T = map[K]V{...}` 两种写法都落在这里）。不能给 ast 的类型加方法，故写成自由函数。
+func firstCompositeLit(vs *ast.ValueSpec) (*ast.CompositeLit, bool) {
+	if len(vs.Values) == 0 {
+		return nil, false
+	}
+	lit, ok := vs.Values[0].(*ast.CompositeLit)
+	return lit, ok
+}
+
+// countWithoutEvidence 数「声明了 nullable、证据表里却没有它」的位置。
+func countWithoutEvidence(fields []string, evidence map[string]bool) []string {
+	var out []string
+	for _, k := range fields {
+		if !evidence[k] {
+			out = append(out, k)
+		}
+	}
+	return out
+}
 
 // sweptDirs 扫哪些包目录。键 = 包名（swagger 的 definition 名前缀），值 = 目录。
 // 加新包就加一行；不在表里的包里的 DTO 不会被扫（因此也不会被误报）。
@@ -228,7 +313,15 @@ func checkFile(f *ast.File, curPkg string, named map[string]bool, closure map[st
 
 // countNullableWithoutFlag 数「字段表态可为 null、契约里却没写 x-nullable」的位置数。
 func countNullableWithoutFlag(f *ast.File, curPkg string, named map[string]bool, closure map[string]bool) int {
-	n := 0
+	return len(nullableFields(f, curPkg, named, closure, true))
+}
+
+// nullableFields 列出「集合字段且表态为 nullable」的位置，键 = 包名.类型名.json键。
+//
+// 两种筛法共用一次遍历（第 3 条要「契约上还没有 x-nullable」的那批，第 4 条要全量），
+// 不另写第二份字段遍历——两份独立实现正是漂移的住处。
+func nullableFields(f *ast.File, curPkg string, named map[string]bool, closure map[string]bool, onlyWithoutFlag bool) []string {
+	var out []string
 	for _, d := range f.Decls {
 		gd, ok := d.(*ast.GenDecl)
 		if !ok || gd.Tok != token.TYPE {
@@ -252,13 +345,21 @@ func countNullableWithoutFlag(f *ast.File, curPkg string, named map[string]bool,
 					continue
 				}
 				v := nullabilityRe.FindStringSubmatch(tag)
-				if v != nil && v[1] == verdictNullable && !xNullableTag.MatchString(tag) {
-					n++
+				if v == nil || v[1] != verdictNullable {
+					continue
 				}
+				if onlyWithoutFlag && xNullableTag.MatchString(tag) {
+					continue
+				}
+				jsonName := jsonTagRe.FindStringSubmatch(tag)
+				if jsonName == nil {
+					continue
+				}
+				out = append(out, curPkg+"."+ts.Name.Name+"."+jsonName[1])
 			}
 		}
 	}
-	return n
+	return out
 }
 
 // parsedPackage 一个目录里解析成功的文件（含其测试文件，供合成夹具用）。
@@ -307,10 +408,12 @@ func TestResponseCollectionsMustDeclareNullability(t *testing.T) {
 
 	var all []nullabilityViolation
 	debts := 0
+	var declaredNullable []string
 	for pkgName, p := range pkgs {
 		for _, f := range p.files {
 			all = append(all, checkFile(f, pkgName, named, closure)...)
 			debts += countNullableWithoutFlag(f, pkgName, named, closure)
+			declaredNullable = append(declaredNullable, nullableFields(f, pkgName, named, closure, false)...)
 		}
 	}
 	for _, v := range all {
@@ -325,6 +428,70 @@ func TestResponseCollectionsMustDeclareNullability(t *testing.T) {
 	if debts < declaredNullableWithoutContractFlag {
 		t.Errorf("债务降了（%d < %d）：这是好消息，把常量改成实测值，别让它停在虚高的数上。",
 			debts, declaredNullableWithoutContractFlag)
+	}
+
+	// 判据 4：声明 nullable 却拿不出一个真会发 null 的出口。
+	// 清单本身用 Logf 出（`-v` 或失败时可见）——它是**待清空的账**，不是一条永久的 Error；
+	// 真正的红由下面两条「数不对」的断言给。把 95 条写成 95 个 Errorf，等于让这条判据
+	// 从今天起就永久红，那既不阻塞新增也不推动收口，只是噪音。
+	noEvidence := countWithoutEvidence(declaredNullable, outletEvidenceKeys(t))
+	for _, k := range noEvidence {
+		t.Logf("判据 4 待举证: %s（补进 %s 的 %s，或按实测改判 nonnil）",
+			k, nullableOutletsFile, nullableOutletsVar)
+	}
+	if len(noEvidence) > declaredNullableWithoutPositiveEvidence {
+		t.Errorf("无证据的 nullable 从 %d 涨到 %d：新说了一句「可为 null」却举不出一个真发 null 的出口。",
+			declaredNullableWithoutPositiveEvidence, len(noEvidence))
+	}
+	if len(noEvidence) < declaredNullableWithoutPositiveEvidence {
+		t.Errorf("无证据的 nullable 降了（%d < %d）：好消息，把常量改成实测值并同步注释里的算式。",
+			len(noEvidence), declaredNullableWithoutPositiveEvidence)
+	}
+
+	// 判据 4 的反向半边：证据表里的每个键必须仍是一条**在射程内、且声明 nullable** 的字段。
+	// 少了这一半，把某条改判成 nonnil 却忘了删证据键时会一无所觉——那张表就成了幽灵登记。
+	inClosure := map[string]bool{}
+	for _, k := range declaredNullable {
+		inClosure[k] = true
+	}
+	for k := range outletEvidenceKeys(t) {
+		if !inClosure[k] {
+			t.Errorf("证据表里的 %s 不在「射程内声明 nullable」的字段集里：它被改判了、改名了、还是类型退出了 2xx 闭包？"+
+				"证据要跟着事实走，否则这张表在读的是历史。", k)
+		}
+	}
+}
+
+// TestNullableEvidenceMechanismFires 判据 4 自己的正向例（没有它，第 4 条就是一句装饰）：
+// 同一批字段配一张空表必须全点出来、配一张覆盖其中的表必须只点剩下的那些。
+func TestNullableEvidenceMechanismFires(t *testing.T) {
+	fields := []string{"service.A.items", "service.A.tags", "service.B.rows"}
+
+	if got := countWithoutEvidence(fields, map[string]bool{}); len(got) != 3 {
+		t.Fatalf("空证据表应把 3 条全点出来，实际 %d 条：%v（数不出来的判据就是空转）", len(got), got)
+	}
+	got := countWithoutEvidence(fields, map[string]bool{"service.A.items": true})
+	if len(got) != 2 || got[0] != "service.A.tags" || got[1] != "service.B.rows" {
+		t.Fatalf("已举证的字段被漏点、或顺序/内容变了：%v", got)
+	}
+	// 表里有、字段却没声明：这一半由主测的反向断言管，这里只确认 count 不会把它当成违规，
+	// 免得两条判据在同一处重复报红、把真正的失败消息挤掉。
+	if n := countWithoutEvidence(fields, map[string]bool{"service.A.items": true, "ghost.X.y": true}); len(n) != 2 {
+		t.Fatalf("幽灵键不应改变无证据数：%v", n)
+	}
+}
+
+// TestNullableOutletsTableIsReadable 证据源本身可读：AST 走不到那张表时，判据 4 会以为
+// 「一条证据都没有」而把全部字段点红——看着像严格，其实是空转的另一种形态（清单永远对不上）。
+func TestNullableOutletsTableIsReadable(t *testing.T) {
+	keys := outletEvidenceKeys(t)
+	if len(keys) == 0 {
+		t.Fatalf("%s 里读不到任何证据键：那张表被改名、挪走，还是写成了运行期构造？", nullableOutletsFile)
+	}
+	for k := range keys {
+		if !strings.Contains(k, ".") || strings.HasSuffix(k, ".") {
+			t.Fatalf("证据键 %q 不是「包名.类型名.json键」的形状，判据 4 与它对不上账", k)
+		}
 	}
 }
 

@@ -139,9 +139,12 @@ func catalogDelete[M any, I any, D any](db *gorm.DB, spec CatalogEntitySpec[M, I
 	return nil
 }
 
+// ErrEntityNotSortable 对一张没开排序的目录表请求 swap（ADR-0065 决策 3：输入不合法，400）。
+var ErrEntityNotSortable = errors.New("该实体不支持排序交换")
+
 func catalogSwap[M any, I any, D any](db *gorm.DB, spec CatalogEntitySpec[M, I, D], a, b int) error {
 	if !spec.Sortable {
-		return errors.New("该实体不支持排序交换")
+		return ErrEntityNotSortable
 	}
 	return swapGroupPositions(db, spec.EmptyModel(), spec.IDColumn, a, b, nil)
 }

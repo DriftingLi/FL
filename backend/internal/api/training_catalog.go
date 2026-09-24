@@ -601,6 +601,12 @@ func (h *TrainingCatalogHandler) DeleteQuestionTag(c *gin.Context) {
 		WithSentinel(service.ErrQuestionTagNotFound, http.StatusNotFound).Handle(c)
 }
 
+// sortFacts400 是「交换排序」这一族端点共用的输入不合法事实（ADR-0065 决策 3）。
+// 5 个端点挂同一份表，默认面一律 500：改之前它们是 `WithSuccess(…, 400)`，于是
+// 「写库/查库失败」与「不支持排序」「待交换的项不存在」挤在同一格，还把驱动原文
+// （`SQL logic error: no such table: …`）当 400 的说明发给客户端。
+var sortFacts400 = []error{service.ErrEntityNotSortable, service.ErrSwapItemNotFound}
+
 // catalogSwapSortReq 交换排序请求（ID 来自路径，SwapWith 来自 body）。
 // 三个可排序的目录实体（专业方向 / 课程等级 / 目标证件）的 swap 请求完全同形，
 // 只此一份声明（ADR-0060 决策 10）；岗位的 swap 请求另有一份，见 positionSwapSortReq。
@@ -641,6 +647,7 @@ func catalogSwapSortParse(idParam, idMsg string) ParseFunc[catalogSwapSortReq] {
 // @Success 200 {object} response.R "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
+// @Failure 500 {object} response.R "写库或查库失败"
 // @Router /admin/specialty/{specialty_id}/sort [put]
 func (h *TrainingCatalogHandler) SwapSpecialtySort(c *gin.Context) {
 	Endpoint[catalogSwapSortReq, struct{}]{
@@ -648,7 +655,8 @@ func (h *TrainingCatalogHandler) SwapSpecialtySort(c *gin.Context) {
 		Invoke: invoke(func(req catalogSwapSortReq) (struct{}, error) {
 			return struct{}{}, h.svc.SwapSpecialtySort(req.ID, req.SwapWith)
 		}),
-	}.WithSuccess(okMsgNoData("排序已交换"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(okMsgNoData("排序已交换"), http.StatusInternalServerError).
+		WithSentinels(http.StatusBadRequest, sortFacts400...).Handle(c)
 }
 
 // SwapLevelSort 交换课程等级排序
@@ -663,6 +671,7 @@ func (h *TrainingCatalogHandler) SwapSpecialtySort(c *gin.Context) {
 // @Success 200 {object} response.R "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
+// @Failure 500 {object} response.R "写库或查库失败"
 // @Router /admin/level/{level_id}/sort [put]
 func (h *TrainingCatalogHandler) SwapLevelSort(c *gin.Context) {
 	Endpoint[catalogSwapSortReq, struct{}]{
@@ -670,7 +679,8 @@ func (h *TrainingCatalogHandler) SwapLevelSort(c *gin.Context) {
 		Invoke: invoke(func(req catalogSwapSortReq) (struct{}, error) {
 			return struct{}{}, h.svc.SwapLevelSort(req.ID, req.SwapWith)
 		}),
-	}.WithSuccess(okMsgNoData("排序已交换"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(okMsgNoData("排序已交换"), http.StatusInternalServerError).
+		WithSentinels(http.StatusBadRequest, sortFacts400...).Handle(c)
 }
 
 // setQuestionTagsReq 全量替换题目标签请求。
@@ -875,6 +885,7 @@ func (h *TrainingCatalogHandler) DeleteCredential(c *gin.Context) {
 // @Success 200 {object} response.R "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
+// @Failure 500 {object} response.R "写库或查库失败"
 // @Router /admin/credential/{id}/sort [put]
 func (h *TrainingCatalogHandler) SwapCredentialSort(c *gin.Context) {
 	Endpoint[catalogSwapSortReq, struct{}]{
@@ -882,7 +893,8 @@ func (h *TrainingCatalogHandler) SwapCredentialSort(c *gin.Context) {
 		Invoke: invoke(func(req catalogSwapSortReq) (struct{}, error) {
 			return struct{}{}, h.svc.SwapCredentialSort(req.ID, req.SwapWith)
 		}),
-	}.WithSuccess(okMsgNoData("排序已交换"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(okMsgNoData("排序已交换"), http.StatusInternalServerError).
+		WithSentinels(http.StatusBadRequest, sortFacts400...).Handle(c)
 }
 
 // GetCurrentCredential 获取当前证件 GET /api/me/credential
@@ -1030,6 +1042,7 @@ func (h *TrainingCatalogHandler) UpdatePosition(c *gin.Context) {
 // @Success 200 {object} response.R "已交换"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
+// @Failure 500 {object} response.R "写库或查库失败"
 // @Router /admin/position/{position_id}/sort [put]
 func (h *TrainingCatalogHandler) SwapPositionSort(c *gin.Context) {
 	Endpoint[positionSwapSortReq, struct{}]{
@@ -1047,7 +1060,8 @@ func (h *TrainingCatalogHandler) SwapPositionSort(c *gin.Context) {
 		Invoke: invoke(func(req positionSwapSortReq) (struct{}, error) {
 			return struct{}{}, h.svc.SwapPositionSort(req.ID, req.SwapWith)
 		}),
-	}.WithSuccess(okMsgNoData("排序已更新"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(okMsgNoData("排序已更新"), http.StatusInternalServerError).
+		WithSentinels(http.StatusBadRequest, sortFacts400...).Handle(c)
 }
 
 // positionSwapSortReq 交换岗位排序请求（ID 来自路径，SwapWith 来自 body）。
