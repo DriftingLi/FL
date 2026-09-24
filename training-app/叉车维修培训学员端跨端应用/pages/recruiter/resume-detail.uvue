@@ -79,10 +79,14 @@
                         <text class="meta-item">查询中...</text>
                     </view>
 
-                    <!-- 未授权（后端 403）：只给「发起交换」这一条出口，不渲染任何明文 -->
+                    <!-- 「没有明文」有两种成因，分开说，别拿一种盖另一种（#1267）：
+                         ① 企业被停用/注销 —— 授权**在**，只是明文当场取不到。这一支**不给**「发起交换」
+                            入口（#705：看起来能用、用了必失败的入口比没有入口更贵），措辞出自 utils 单点；
+                         ② 真的还没授权 —— 保留唯一出口「发起交换」。 -->
                     <view v-if="!contactLoading && contact == null">
-                        <text class="paragraph">{{ contactStateHint }}</text>
-                        <view class="btn-primary mt-16" @click="onCreateRequest">
+                        <text v-if="companyDisabled" class="contact-notice">{{ contactStateHint }}</text>
+                        <text v-else class="paragraph">{{ contactStateHint }}</text>
+                        <view v-if="!companyDisabled" class="btn-primary mt-16" @click="onCreateRequest">
                             <text class="btn-primary-text">发起交换</text>
                         </view>
                     </view>
@@ -152,6 +156,7 @@
         jobNatureLabel,
     } from '../../api/recruit'
     import { isRecruiterActive } from '../../utils/authRole'
+    import { companyDisabledNotice } from '../../utils/recruitDisplay'
     import { errMsg, toStr } from '../../api/helpers'
     import type { RecruitResumeCard, RecruitExperience, RecruitCertification, RecruitContactPlain } from '../../api/recruit'
 
@@ -247,7 +252,21 @@
         return c!.available_in
     })
 
+    /**
+     * 可用性那一格（#1267）：卡面 `company_disabled` 为真 = **本企业账号被停用或已注销** ⇒ 授权仍在，
+     * 但明文当场取不到。判据只有这一处读取（缺席式键已在 `api/recruit.uts` 归一成 boolean），
+     * 且**不**去改 `contact_state` —— 徽章说授权事实，这一格说明文可用性，两格正交。
+     * 声明在 `contactStateHint` 之前：UTS 编译到 Kotlin 无提升。
+     */
+    const companyDisabled = computed<boolean>(() : boolean => {
+        const c = card.value
+        if (c == null) return false
+        return c!.company_disabled
+    })
+
     const contactStateHint = computed<string>(() : string => {
+        const notice = companyDisabledNotice(companyDisabled.value)
+        if (notice.length > 0) return notice
         const c = card.value
         if (c == null) return ''
         if (c!.contact_state == 'pending') return '已发起交换申请，等待学员处理。'
@@ -566,6 +585,14 @@
     .paragraph {
         font-size: 26rpx;
         color: #666666;
+        line-height: 1.6;
+    }
+
+    /* 可用性那一格：与 `contacts.uvue` 的 `.row-notice`、`resumes.uvue` 的 `.company-notice` 同色，
+       三处说的是同一件事（企业已停用），颜色不能各说一套 */
+    .contact-notice {
+        font-size: 26rpx;
+        color: #E5484D;
         line-height: 1.6;
     }
 

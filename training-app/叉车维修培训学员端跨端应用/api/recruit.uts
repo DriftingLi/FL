@@ -143,6 +143,13 @@ export type RecruitResumeCard = {
     contact_state : string
     /** 授权来源：recruiter / application */
     contact_source : string
+    /**
+     * 「授权在、明文已收回」那一格（ADR-0064 决策 5 / #1267）：**缺席式**可选键，
+     * 出现即恒 `true` ⇒ 这里归一成 boolean，消费面只判真值。
+     * 徽章那一格（`contact_state`）仍按授权事实投影，**不**因企业被停用而降级 ——
+     * 词表「授权有效态」：授权存在 ≠ 授权可用，可用性另开一格说。
+     */
+    company_disabled : boolean
 }
 
 /** 简历库列表结果（后端 `RecruitListResult`：**只有 items / total**，无 page / page_size 回显）。 */
@@ -202,9 +209,9 @@ export type RecruitContactPlain = {
  * `company_disabled` 是**缺席式可选键**（后端 `contact_service.go:80` 的
  * `json:"company_disabled,omitempty"`，唯一赋值点 `:212-219` 是「授权在、明文已收回」）：
  * 出现即恒为 `true`，故本层把它归一成 boolean，消费面只判 `=== true`。
- * ⚠️ #1267 票面称该键随简历卡/明文端点下发 —— **不成立**：
- * `ContactPlainDTO`（`contact_service.go:96-107`）无此键，`GET /recruit/resumes/:id/contact`
- * 失败时是三态 403（`backend/internal/api/contact.go:98-140`）。移动端目前**只有本端点**带它。
+ * 端点覆盖：**本端点**与**简历卡**（`recruit_service.go:75`，#1298 补发）各有一格，两处同键同措辞；
+ * `ContactPlainDTO`（`contact_service.go:101-107`）**仍无此键** —— 取明文失败时是三态 403
+ * （`backend/internal/api/contact.go:98-140`），不是「200 但少一段」。
  */
 export type RecruitContactRequest = {
     id : number
@@ -336,6 +343,10 @@ export function buildRecruitResumeCard(obj : UTSJSONObject) : RecruitResumeCard 
         updated_at: toStr(obj['updated_at']),
         contact_state: toStr(obj['contact_state']),
         contact_source: toStr(obj['contact_source']),
+        // 缺席式可选键：键不在 = 企业可用，不是「未知」。与**同一个键**在交换申请映射里的
+        // 写法逐字一致（`(x as boolean) ?? false`）—— 一个键在两处边界上折成两种形状，
+        // 就是在暗示它们可能不等价。消费面仍只判真值，不写 `== false` 分支。
+        company_disabled: (obj['company_disabled'] as boolean) ?? false,
     } as RecruitResumeCard
 }
 

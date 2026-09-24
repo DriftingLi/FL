@@ -53,6 +53,9 @@
                         <text class="cert-text">{{ certText(card) }}</text>
                         <text class="contact-state">{{ contactStateText(card.contact_state) }}</text>
                     </view>
+                    <!-- 角标说「授权在」，这行说「明文取不到」——两格正交事实，谁也不替谁（#1267）。
+                         徽章**不**因企业被停用而降级：降级会把「被禁用」与「从没授权」压回同一个值 -->
+                    <text v-if="companyDisabledText(card).length > 0" class="company-notice">{{ companyDisabledText(card) }}</text>
                 </view>
             </view>
 
@@ -92,7 +95,7 @@
     import { onLoad } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
     import { getRecruitContactRequestsApi, getRecruitResumesApi, emptyRecruitFilters, jobNatureLabel, RECRUIT_PAGE_SIZE } from '../../api/recruit'
-    import { unexpiredPendingCount } from '../../utils/recruitDisplay'
+    import { unexpiredPendingCount, companyDisabledNotice } from '../../utils/recruitDisplay'
     import { ensureRecruiterSession } from '../../utils/recruitGuard'
     import { isRecruiterActive } from '../../utils/authRole'
     import RecruiterTabBar from './components/recruiter-tab-bar.uvue'
@@ -254,6 +257,14 @@
         if (state == 'approved') return '已授权'
         if (state == 'pending') return '待授权'
         return ''
+    }
+
+    /**
+     * 可用性那一格（#1267）：判定与文案都在 `utils/recruitDisplay.uts`（单点），本页只做投影。
+     * 与上一行的角标**并排共存、互不覆盖**：角标说授权事实，这行说明文可用性。
+     */
+    function companyDisabledText(card : RecruitResumeCard) : string {
+        return companyDisabledNotice(card.company_disabled)
     }
 
     /** `2026-09-20T10:00:00Z` → `09-20`（只做展示，不解析时区） */
@@ -444,6 +455,14 @@
     .contact-state {
         font-size: 24rpx;
         color: #2979ff;
+    }
+
+    /* 可用性那一格：比角标重一档（这是「别再去联系这个人」的事实）。
+       告警色与交换段 `.row-notice` 同源 #E5484D；uvue 不支持 CSS 变量，故直接写色值 */
+    .company-notice {
+        margin-top: 8rpx;
+        font-size: 24rpx;
+        color: #E5484D;
     }
 
     .empty-tip {

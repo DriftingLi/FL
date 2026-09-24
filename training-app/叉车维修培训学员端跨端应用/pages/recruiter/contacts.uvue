@@ -29,7 +29,7 @@
                     <text class="row-meta">{{ contactMeta(row) }}</text>
                     <!-- 「授权在、明文已收回」不是第六种状态，是**行级附加说明**：
                          徽章语义由词表锁守着，这里只补一个徽章给不了的事实（#1267） -->
-                    <text v-if="contactRevokedText(row).length > 0" class="row-notice">{{ contactRevokedText(row) }}</text>
+                    <text v-if="companyDisabledText(row).length > 0" class="row-notice">{{ companyDisabledText(row) }}</text>
                 </view>
                 <text v-if="contactRemainText(row).length > 0" class="remain-text">{{ contactRemainText(row) }}</text>
             </view>
@@ -71,7 +71,7 @@
         unexpiredPendingCount,
         remainingDays,
         contactRemainingText,
-        contactRevokedNotice,
+        companyDisabledNotice,
         contactExpired,
         describeRecruitContactStatus
     } from '../../utils/recruitDisplay'
@@ -131,12 +131,13 @@
     }
 
     /**
-     * 明文收回说明：判定与文案都在 `utils/recruitDisplay.uts`（单点），本页只做投影。
+     * 可用性那一格：判定与文案都在 `utils/recruitDisplay.uts`（单点），本页只做投影。
      * 与 `contactRemainText` 不同源、不互顶：剩几天说的是**有效期**，这行说的是**企业已停用**，
      * 二者同时成立时两行都要在（一个说时间、一个说可用性，谁也不能替谁）。
+     * 命名刻意不叫「revoked」—— 那是 `ContactGrantState` 的取值（学员撤回授权），两回事。
      */
-    function contactRevokedText(row : RecruitContactRequest) : string {
-        return contactRevokedNotice(row)
+    function companyDisabledText(row : RecruitContactRequest) : string {
+        return companyDisabledNotice(row.company_disabled)
     }
 
     /**
