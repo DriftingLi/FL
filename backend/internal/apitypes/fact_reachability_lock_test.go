@@ -93,6 +93,12 @@ func TestFactProjectionsAreInResponseClosure(t *testing.T) {
 	}
 	// 论域自检：2xx 闭包里的定义键出现过哪些包名前缀，每一个都必须真的被扫到。判据来源是生成物
 	// 而不是这份目录清单——清单会漂，生成物不会（CI 对它还有新鲜度锁）。与 api 侧那条绊线同判据。
+	//
+	// **它有一条与生俱来的盲区，写下来而不是假装没有**：它比的是**前缀**，不是目录。
+	// `internal/model` 与 `internal/valuation/model` 共用 `model` 前缀（因为 swagger 定义键本身就
+	// 按包子句命名），所以把后者从清单里删掉，这条自检看不出来。这不是实现偷懒——判据只能读到
+	// 生成物，而生成物自己也分不开这两个包（swag 用同一个命名空间）。⇒ 那两个目录都得靠人守，
+	// 真要锁住得换一种键身份（比如把包路径编进投影位键），那会把投影位与 swagger 定义键的对应关系拆散。
 	for defName := range closure {
 		pkg, _, ok := strings.Cut(defName, ".")
 		if !ok {
