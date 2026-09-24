@@ -27,6 +27,10 @@ import (
 	"forklift-training/internal/testutil"
 )
 
+// contactCreateSecret 夹具会话的签名密钥：步 2 的档位测要用同一枚签发指向不存在学员的会话，
+// 所以它必须是常量而不是 newContactCreateEnv 里的局部字面量。
+const contactCreateSecret = "contact-create-shape-secret"
+
 // contactCreateEnv 是本表全部用例共用的真实链路：路由 + 两家企业（其一已被禁用）+ 学员面。
 type contactCreateEnv struct {
 	router       *gin.Engine
@@ -119,11 +123,12 @@ func mustJSON(v any) []byte {
 
 // TestContactCreateFace_BytesPreservedAcrossSeamMigration 是步 1 的保形锁。
 //
-// 两格**未覆盖**与原因（写成空白比假装全绿好）：
-//   - 「今日申请已达上限」：dailyLimit 是 ContactService 的私有字段（构造时钉死 20），api 包的测试
-//     改不了，要打就得先建 21 个学员。该格与冷却/pending 同形（业务串 → 400），缝迁移对它没有独立风险。
-//   - 「查不动」（DB 故障）：旧 handler 把它咽成 400 + **驱动原文**，字节随驱动版本而变，写不成字面量。
-//     这一格正是步 2 要改判的对象，由步 2 的行为测试接管。
+// 两格**本锁未覆盖**与原因（写成空白比假装全绿好）：
+//   - 「今日申请已达上限」：要打它得先建 21 个学员（dailyLimit 是 ContactService 的私有字段，
+//     api 包改不了）。它由 TestContactContract_FullFlow 覆盖——事实也正是那里红的第一格：
+//     我第一次装配表时漏了这条具名哨兵，它掉进 500 默认面，那条既有契约测当场判红。
+//   - 「查不动」（DB 故障）：旧 handler 把它咽成 400 + **驱动原文**，字节随驱动版本而变，写不成
+//     字面量。这一格正是步 2 要改判的对象，由 contact_create_fact_tier_test.go 接管。
 func TestContactCreateFace_BytesPreservedAcrossSeamMigration(t *testing.T) {
 	e := newContactCreateEnv(t)
 	long := strings.Repeat("叉", 201)

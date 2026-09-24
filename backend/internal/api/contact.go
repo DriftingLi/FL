@@ -42,7 +42,7 @@ func NewContactHandler(svc *service.ContactService) *ContactHandler {
 	return &ContactHandler{svc: svc}
 }
 
-// contactCreateBody 请求体的两段（键名即 wire 契约，不并入 Req：Req 还带会话身份，那不是我读的 body）。
+// contactCreateBody 请求体的两段（键名即 wire 契约，不并入 Req：Req 还带会话身份，那不是本请求的 body）。
 type contactCreateBody struct {
 	StudentUserID int    `json:"student_user_id"`
 	Message       string `json:"message"`
@@ -56,6 +56,27 @@ type contactCreateReq struct {
 	Message       string
 }
 
+// contactCreateFacts400 「发起交换申请」这一面的**输入不合法与业务事实**全集（ADR-0065 决策 3·4）。
+//
+// 档位口径（本波决策 3 已落码的那条，这里复述以免被下一波「顺手统一」）：
+//   - body 里的引用指向不存在的行 ⇒ 400。`ErrStudentNotFound` / `ErrRecruiterNotFound` 在本端点
+//     落 400，而在 `GET /student/profile` 落 404 —— **不是同一件事实的两种码，是两件事实**：
+//     404 说的是「被请求的那个资源没有」，而本端点被请求的资源（申请集合）在，坏的是 body 的引用。
+//     载体合一（一个事实一个哨兵）从来不要求档位合一（决策 4 原文的「400→404」由此更正）。
+//   - 其余 400 条各说一件事实，压成一句会丢掉「是哪一件」。
+//   - 表里没有的（`expireClosed` / 计数 / 写入 等 DB 故障）走端点默认面 500，不再冒充上面任何一句。
+var contactCreateFacts400 = []error{
+	service.ErrContactMessageEmpty,
+	service.ErrContactMessageTooLong,
+	service.ErrContactReqInvalid,
+	service.ErrStudentNotFound,
+	service.ErrRecruiterNotFound,
+	service.ErrRecruiterDisabled,
+	service.ErrContactPendingExists,
+	service.ErrContactInCooldown,
+	service.ErrContactDailyLimit,
+}
+
 // Create 企业发起交换申请 POST /api/recruit/contact-requests
 // @Summary 发起交换申请
 // @Description 企业招聘者带附言向学员发起联系方式交换申请（pending 唯一、30 天冷却、日限 20）
@@ -65,8 +86,9 @@ type contactCreateReq struct {
 // @Security BearerAuth
 // @Param body body object true "申请 {student_user_id, message(1-200)}"
 // @Success 201 {object} response.R{data=service.ContactRequestDTO} "申请已提交"
-// @Failure 400 {object} response.R "参数错误/唯一/冷却/日限"
+// @Failure 400 {object} response.R "附言空/超长、参数错、引用的学员或招聘者不存在或已禁用、pending 唯一、冷却期、日限"
 // @Failure 401 {object} response.R "未认证"
+// @Failure 500 {object} response.R "服务端内部错误（DB 故障；不外发驱动原文）"
 // @Router /recruit/contact-requests [post]
 func (h *ContactHandler) Create(c *gin.Context) {
 	Endpoint[contactCreateReq, service.ContactRequestDTO]{
@@ -84,14 +106,8 @@ func (h *ContactHandler) Create(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *contactCreateReq) (*service.ContactRequestDTO, error) {
 			return h.svc.Create(req.RecruiterID, req.StudentUserID, req.Message)
 		},
-		Render: func(c *gin.Context, _ *contactCreateReq, dto *service.ContactRequestDTO) {
-			response.Created(c, "申请已提交", dto)
-		},
-		// errStatusAll(400) 是**步 1 的保形**，不是本端点错误面的终态：旧裸 handler 对任何错误都答
-		// 400，所以「查不动」也被压成 400。步 2（ADR-0065 决策 4）换成具名哨兵表 + 500 兜底；
-		// 现在拆开会同时改两类东西（缝 与 档位），404 出现时就归因不到步 2（锁：本文件字节保形测）。
-		ErrStatus: errStatusAll(http.StatusBadRequest),
-	}.Handle(c)
+	}.WithSuccess(created("申请已提交"), http.StatusInternalServerError).
+		WithSentinels(http.StatusBadRequest, contactCreateFacts400...).Handle(c)
 }
 
 // ListForRecruiter 招聘方我的申请列表 GET /api/recruit/contact-requests

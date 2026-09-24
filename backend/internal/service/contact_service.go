@@ -29,6 +29,17 @@ var (
 	// （CONTEXT.md「授权有效态」的禁用那一半，ADR-0062 决策 9）。与 ErrContactNoAuth 分名，
 	// 因为两者的处置动作完全不同：前者是平台对企业的处置、解除即恢复，后者是学员从未/不再授权。
 	ErrCompanyUnavailable = errors.New("企业账号已停用或已注销")
+	// 以下是「发起交换申请」这一面的输入与业务事实（ADR-0065 决策 4 步 2）。原先它们是裸
+	// `errors.New`，而旧 handler 把**任何** error（含 DB 故障）都答成 400 ⇒ 「查不动」冒充
+	// 「参数错误」。具名之后 api 侧才能把它们与「查不动」分档（对外句子逐字未变，见步 1 的字节锁）。
+	ErrContactMessageEmpty   = errors.New("附言不能为空")
+	ErrContactMessageTooLong = errors.New("附言不能超过 200 字")
+	ErrContactReqInvalid     = errors.New("参数错误")
+	ErrRecruiterDisabled     = errors.New("招聘者账号已禁用")
+	// ErrContactInCooldown 覆盖「拒绝」与「撤回」两种前态——它们是同一格冷却判据的两个来源，
+	// 拆成两条哨兵会让客户端为同一件「现在还不能再发」写两个分支。
+	ErrContactInCooldown = errors.New("该学员 30 天内拒绝或撤回过申请，冷却期内不能重复申请")
+	ErrContactDailyLimit = errors.New("今日申请已达上限")
 )
 
 // contactDecisionWindow 裁决窗口长度：pending 等学员裁决的时限（ADR-0061 §2）。
@@ -221,29 +232,39 @@ func (s *ContactService) toDTOWithCompany(m *model.ContactRequest, rec contactCo
 }
 
 // Create 创建申请（招聘方发起）。
+//
+// 错误面的规矩（ADR-0065 决策 4）：业务事实一律抛**具名哨兵**，DB 故障原样上抛——端点据此
+// 把前者落 400、后者落 500。旧写法是「任何 err 都答 400 + err.Error()」，于是「库查不动」
+// 会以「学员不存在」的名义发出去，调用方怎么重试都不会等来那条学员行。
 func (s *ContactService) Create(recruiterID, studentUserID int, message string) (*ContactRequestDTO, error) {
 	msg := strings.TrimSpace(message)
 	if msg == "" {
-		return nil, errors.New("附言不能为空")
+		return nil, ErrContactMessageEmpty
 	}
 	if len([]rune(msg)) > 200 {
-		return nil, errors.New("附言不能超过 200 字")
+		return nil, ErrContactMessageTooLong
 	}
 	if recruiterID <= 0 || studentUserID <= 0 {
-		return nil, errors.New("参数错误")
+		return nil, ErrContactReqInvalid
 	}
-	// 学生是否存在（已注销则 fail）
+	// 学生是否存在（已注销则 fail）。「不存在」与「查不动」分两半（ADR-0064 决策 1）。
 	var stu model.HrwaiUser
 	if err := s.db.First(&stu, studentUserID).Error; err != nil {
-		return nil, errors.New("学员不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrStudentNotFound
+		}
+		return nil, err
 	}
 	// 招聘者是否存在且启用（启停的读法单点在 recruiterRowUsable，本域不另手拼 status）
 	var rec model.RecruiterUser
 	if err := s.db.First(&rec, recruiterID).Error; err != nil {
-		return nil, errors.New("招聘者不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrRecruiterNotFound
+		}
+		return nil, err
 	}
 	if !recruiterRowUsable(&rec) {
-		return nil, errors.New("招聘者账号已禁用")
+		return nil, ErrRecruiterDisabled
 	}
 	// 学员简历是否公开？（可选：不校验，允许向 hidden 发，但 L2 不可见时申请仍可发起？ spec 未限制，此处不拦）
 	now := clock.Now()
@@ -271,7 +292,7 @@ func (s *ContactService) Create(recruiterID, studentUserID int, message string) 
 	if err := s.db.Where("recruiter_id = ? AND student_user_id = ? AND status IN ?", recruiterID, studentUserID, []string{string(ContactGrantRejected), string(ContactGrantRevoked)}).Order("decided_at DESC").First(&last).Error; err == nil {
 		lastRejected = &last
 		if last.DecidedAt != nil && now.Sub(*last.DecidedAt) < 30*24*time.Hour {
-			return nil, errors.New("该学员 30 天内拒绝或撤回过申请，冷却期内不能重复申请")
+			return nil, ErrContactInCooldown
 		}
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
@@ -284,7 +305,7 @@ func (s *ContactService) Create(recruiterID, studentUserID int, message string) 
 		return nil, err
 	}
 	if todayCnt >= int64(s.dailyLimit) {
-		return nil, errors.New("今日申请已达上限")
+		return nil, ErrContactDailyLimit
 	}
 	expiresAt := now.Add(contactDecisionWindow)
 	mdl := model.ContactRequest{
