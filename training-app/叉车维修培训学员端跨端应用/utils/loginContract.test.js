@@ -32,7 +32,9 @@
  *
  * 本套件是**接线守护**（源码文本 + harness 结构事实，不构成 ③ 门的行为证据，见 `docs/agents/guards.md`）：
  * 它守的是「页面 ↔ 两个 composable ↔ 域 api」的接线与模板冻结；行为兜底 = ④ 编译门（Kotlin 形态）
- * + ①a 真机逐页冒烟（含生物识别入口态）。每条判据都带**注入自检**（成对取证：改坏必红 / 真源必不红）。
+ * + ①a 真机逐页冒烟（含生物识别入口态），而**本票那两处档位的行为证据另有承重件**：
+ * `utils/authPreRequestValidationBehavior.test.js`（真跑两个 composable、数请求层被调次数）——
+ * 本文件的文本锁只保证「字面量仍在」，「拦在任何请求之前」由它保证。每条判据都带**注入自检**（成对取证：改坏必红 / 真源必不红）。
  */
 const crypto = require('crypto');
 const h = require('./contractHarness');
@@ -431,10 +433,24 @@ describe('行为保持点（票面 ②：UI 像素级不变 / 表单行为逐字
     const v = fnBodyOf(form, 'validate');
     expect(v).toContain("if (phoneCode.value.length != 6) return '请输入 6 位验证码'");
     expect(v).toContain("if (username.value.length == 0) return '请输入用户名或手机号'");
-    expect(v).toContain("if (password.value.length < 6) return '密码至少 6 位'");
+    // #1262：口令档由「只判下限」翻成 6-20 区间，文案与注册页 / 后端唯一规则源逐字同形
+    expect(v).toContain("if (password.value.length < 6 || password.value.length > 20) return '密码长度需为 6-20 位'");
     expect(v).toContain("if (mode.value == 'wechat') {\n            return ''");
     expect(v).toContain("if (t.indexOf('@') <= 0 || t.indexOf('.') <= 0) return '邮箱格式不正确'");
-    expect(fnBodyOf(form, 'validatePhoneNum')).toContain("if (p.length != 11) return '请输入 11 位手机号'");
+    const pn = fnBodyOf(form, 'validatePhoneNum');
+    expect(pn).toContain("if (p.length != 11) return '请输入 11 位手机号'");
+    expect(pn).toContain("if (!p.startsWith('1')) return '手机号格式不正确'");
+    // #1286：数字档此前是注释态。与 register / forgot 同族形态（正则带反斜杠），不新写第三种
+    expect(pn).toContain("if (!/^\\d{11}$/.test(p)) return '手机号必须为数字'");
+  });
+
+  it('#1286：那行坏正则注释不得复活（照抄取消注释会把每个合法号码判成不合法）', () => {
+    // ⚠️ 本条**刻意不走** `stripComments()`（与 ADR-0007「零命中锁该剥注释」的口径相反，理由要写下防被"顺手统一"）：
+    // 那里被锁的 `captchaFailed` 是**解释另一件事**的合法注释，而 #1286 的交付物之一就是「删掉 `:177` 那行注释 ——
+    // 留着就是下一个人的陷阱」（票面「怎么改」第 1 条）。⇒ 对这个字面量而言，**它出现在注释里本身就是缺陷**，
+    // 注释在这里有红能力是判据而非误伤。行为侧另有双保险：`utils/authPreRequestValidationBehavior.test.js`
+    // 的 A 组与 describe D 把「正则写回坏形态」当必红样本真跑，不依赖本条文本锁。
+    expect(form).not.toContain('/^d{11}$/');
   });
 
   it('协议勾选：非 password 模式才拦截（账号密码登录不强制勾选）', () => {
@@ -501,5 +517,15 @@ describe('行为保持点（票面 ②：UI 像素级不变 / 表单行为逐字
     const broken = form.replace('if (biometric.isSupported.value) {', 'if (false) {');
     expect(broken).not.toBe(form);
     expect(fnBodyOf(broken, 'onSubmit')).not.toContain('if (biometric.isSupported.value) {');
+  });
+
+  it('#1262 / #1286 两处文本锁具备判别力（真源退回术前形态，两条锁必须抓空）', () => {
+    const preDigit = form.replace("if (!/^\\d{11}$/.test(p)) return '手机号必须为数字'", '// if (!/^d{11}$/.test(p))');
+    expect(preDigit).not.toBe(form);
+    expect(fnBodyOf(preDigit, 'validatePhoneNum')).not.toContain('手机号必须为数字');
+    expect(preDigit).toContain('/^d{11}$/');
+    const prePwd = form.replace("if (password.value.length < 6 || password.value.length > 20) return '密码长度需为 6-20 位'", "if (password.value.length < 6) return '密码至少 6 位'");
+    expect(prePwd).not.toBe(form);
+    expect(fnBodyOf(prePwd, 'validate')).not.toContain('密码长度需为 6-20 位');
   });
 });
