@@ -174,7 +174,7 @@ export function useLoginForm(biometric : UseBiometricResult) : UseLoginFormResul
     function validatePhoneNum(p : string) : string {
         if (p.length != 11) return '请输入 11 位手机号'
         if (!p.startsWith('1')) return '手机号格式不正确'
-        // if (!/^d{11}$/.test(p)) return '手机号必须为数字'
+        if (!/^\d{11}$/.test(p)) return '手机号必须为数字'
         return ''
     }
 
@@ -245,7 +245,8 @@ export function useLoginForm(biometric : UseBiometricResult) : UseLoginFormResul
         if (mode.value == 'password') {
             if (username.value.length == 0) return '请输入用户名或手机号'
             if (password.value.length == 0) return '请输入密码'
-            if (password.value.length < 6) return '密码至少 6 位'
+            // 上限 20 对齐后端唯一规则源 service.validatePasswordLength 与注册页；密码框 :maxlength 保持 32（#1262 裁定）
+            if (password.value.length < 6 || password.value.length > 20) return '密码长度需为 6-20 位'
             return ''
         }
         // 微信一键登录：无需输入表单，直接通过校验

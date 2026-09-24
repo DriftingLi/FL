@@ -431,10 +431,19 @@ describe('行为保持点（票面 ②：UI 像素级不变 / 表单行为逐字
     const v = fnBodyOf(form, 'validate');
     expect(v).toContain("if (phoneCode.value.length != 6) return '请输入 6 位验证码'");
     expect(v).toContain("if (username.value.length == 0) return '请输入用户名或手机号'");
-    expect(v).toContain("if (password.value.length < 6) return '密码至少 6 位'");
+    // #1262：口令档由「只判下限」翻成 6-20 区间，文案与注册页 / 后端唯一规则源逐字同形
+    expect(v).toContain("if (password.value.length < 6 || password.value.length > 20) return '密码长度需为 6-20 位'");
     expect(v).toContain("if (mode.value == 'wechat') {\n            return ''");
     expect(v).toContain("if (t.indexOf('@') <= 0 || t.indexOf('.') <= 0) return '邮箱格式不正确'");
-    expect(fnBodyOf(form, 'validatePhoneNum')).toContain("if (p.length != 11) return '请输入 11 位手机号'");
+    const pn = fnBodyOf(form, 'validatePhoneNum');
+    expect(pn).toContain("if (p.length != 11) return '请输入 11 位手机号'");
+    expect(pn).toContain("if (!p.startsWith('1')) return '手机号格式不正确'");
+    // #1286：数字档此前是注释态。与 register / forgot 同族形态（正则带反斜杠），不新写第三种
+    expect(pn).toContain("if (!/^\\d{11}$/.test(p)) return '手机号必须为数字'");
+  });
+
+  it('#1286：那行坏正则注释不得复活（照抄取消注释会把每个合法号码判成不合法）', () => {
+    expect(form).not.toContain('/^d{11}$/');
   });
 
   it('协议勾选：非 password 模式才拦截（账号密码登录不强制勾选）', () => {
@@ -501,5 +510,15 @@ describe('行为保持点（票面 ②：UI 像素级不变 / 表单行为逐字
     const broken = form.replace('if (biometric.isSupported.value) {', 'if (false) {');
     expect(broken).not.toBe(form);
     expect(fnBodyOf(broken, 'onSubmit')).not.toContain('if (biometric.isSupported.value) {');
+  });
+
+  it('#1262 / #1286 两处文本锁具备判别力（真源退回术前形态，两条锁必须抓空）', () => {
+    const preDigit = form.replace("if (!/^\\d{11}$/.test(p)) return '手机号必须为数字'", '// if (!/^d{11}$/.test(p))');
+    expect(preDigit).not.toBe(form);
+    expect(fnBodyOf(preDigit, 'validatePhoneNum')).not.toContain('手机号必须为数字');
+    expect(preDigit).toContain('/^d{11}$/');
+    const prePwd = form.replace("if (password.value.length < 6 || password.value.length > 20) return '密码长度需为 6-20 位'", "if (password.value.length < 6) return '密码至少 6 位'");
+    expect(prePwd).not.toBe(form);
+    expect(fnBodyOf(prePwd, 'validate')).not.toContain('密码长度需为 6-20 位');
   });
 });
