@@ -1599,6 +1599,12 @@ const docTemplate = `{
                             ]
                         }
                     },
+                    "400": {
+                        "description": "课程ID无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
                     "401": {
                         "description": "未认证",
                         "schema": {

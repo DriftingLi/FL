@@ -1,19 +1,24 @@
 // ADR-0065 批⑤（负数/零 path id 跨域同判）的行为锁。
 //
 // 开工前这一件事实「路径上的整数 id 不是正整数」有**三个**实现形状：
-//   - `pathInt64`（endpoint.go:426）：`err != nil || v <= 0` ⇒ 400 —— 已经是对的；
-//   - `pathInt`（endpoint.go:417）：只看 `strconv.Atoi` 的 err ⇒ 非数字 400，但 **0 与负数放行**
-//     到 service，于是同一枚 `-1` 在课程面被答成 404「课程不存在」、在用户面被答成 400；
-//   - 9 个文件里 33+ 处裸 `strconv.(Atoi|ParseInt)(c.Param(...))`：把 pathInt 的判定连文案各写一遍。
+//   - `pathInt64`（endpoint.go）：`err != nil || v <= 0` ⇒ 400 —— 已经是对的；
+//   - `pathInt`（endpoint.go）：只看 `strconv.Atoi` 的 err ⇒ 非数字 400，但 **0 与负数放行**
+//     到 service，于是 `GET /course/0` 对外答 404「课程不存在」（拿非法输入冒充不存在的资源），
+//     而用户/讲师面因 service 有 `id <= 0` guard 答 400、用的又是另一句文案（「用户 ID 非法」）；
+//   - 37 处自定义实现：36 处裸 `strconv.(Atoi|ParseInt)` 读 `c.Param`（散在 10 个文件），另 1 处
+//     把路径参数喂给查询侧守卫 `requiredPositiveID`。其中 `question_interaction.go` 那 7 处
+//     **整个丢弃解析错误**且无 `<= 0` ⇒ 非数字 id 以 `0` 进 service：6 个端点经
+//     `renderOutOfPoolQuestion` 答 404「题目不存在」，`GET /questions/:question_id/knowledge`
+//     更答 **200 + 空数组**（下面那三行就是钉这一格的）。
 //
-// 对比之下，**查询**参数侧早就有单点（`queryIDPtr` / `requiredPositiveID`，helpers.go:37,51 的
-// 注释自称「id>0 守卫的单点实现」）⇒ 同一类事实在两个入口上一个是单点、一个是三份实现，
-// 这正是本波判据要抓的形状。本批先把 `pathInt` 的判定补齐，解析点归一在 ⑤b。
+// 对比之下，**查询**参数侧早就有单点（`queryIDPtr` / `requiredPositiveID`，helpers.go 的注释自称
+// 「id>0 守卫的单点实现」）⇒ 同一类事实在两个入口上一个是单点、一个是三份实现，
+// 这正是本波判据要抓的形状。
 //
 // 两道断言各有分工：
 //   - 单元级：钉住 helper 自己的判定表（含 `-1/0/空串`），它不需要数据库，跑得快；
 //   - HTTP 级：钉住「与同一端点的非数字档**同码且同文案**」——不硬编码文案，而是拿 `abc` 那一次的
-//     响应当基准。基准取自同端点同参数，所以改文案不会误红，而「负数被咽成 404」必红。
+//     响应当基准。基准取自同端点同参数，所以改文案不会误红，而「非法输入被咽成 404 / 咽成 200 空集」必红。
 package api
 
 import (
@@ -79,10 +84,12 @@ type nonPositiveFaceCase struct {
 	body    any
 }
 
-// nonPositiveFaces 每个域只点一个代表，但**域要不同**（本批判的是跨域同判）：
-// 课程读面 / 管理端课程 / 管理端章节 / 目录实体 / 精选内容 / 讲师口令面。
-// 后两枚（hrwai-users、tutor）今天已经是 400（service 层有 guard），把它们放进来是
-// 为了钉住「补齐 pathInt 之后这两域不改变」——没有这两行，本批就是一堆改判而没有反证。
+// nonPositiveFaces 每域点一个代表，但**域要不同**（本批判的是跨域同判）：课程读面 / 管理端课程 /
+// 管理端章节 / 目录实体 / 精选内容 / 讲师口令面 / 用户处置面。
+// 后两枚（hrwai-users、tutor）今天已经是 400（service 层有 guard），把它们放进来是为了钉住
+// 「补齐 pathInt 之后这两域不改变」——没有这两行，本批就是一堆改判而没有反证。
+// 末三行是 `question_interaction.go`：那 7 处原本丢弃解析错误，非数字 id 以 0 进 service，
+// 对外分别是 404「题目不存在」与 200 + 空数组 —— 本批唯一的改判证据就在这三行里。
 var nonPositiveFaces = []nonPositiveFaceCase{
 	{name: "GET /course/:course_id", who: "student", method: http.MethodGet, pathFmt: "/api/course/%s"},
 	{name: "GET /admin/course/:course_id", who: "admin", method: http.MethodGet, pathFmt: "/api/admin/course/%s"},
@@ -92,6 +99,9 @@ var nonPositiveFaces = []nonPositiveFaceCase{
 	{name: "GET /admin/featured-content/:id", who: "admin", method: http.MethodGet, pathFmt: "/api/admin/featured-content/%s"},
 	{name: "PUT /admin/hrwai-users/:id/status", who: "admin", method: http.MethodPut, pathFmt: "/api/admin/hrwai-users/%s/status", body: map[string]any{"status": 0}},
 	{name: "PUT /admin/tutor/:id/password", who: "admin", method: http.MethodPut, pathFmt: "/api/admin/tutor/%s/password", body: map[string]any{"password": "validpass123"}},
+	{name: "GET /questions/:question_id/comments", who: "student", method: http.MethodGet, pathFmt: "/api/questions/%s/comments"},
+	{name: "GET /questions/:question_id/knowledge", who: "student", method: http.MethodGet, pathFmt: "/api/questions/%s/knowledge"},
+	{name: "DELETE /questions/comments/:comment_id", who: "student", method: http.MethodDelete, pathFmt: "/api/questions/comments/%s"},
 }
 
 // TestNonPositivePathIDMatchesNonNumericFace 同一端点上「0 / 负数」与「非数字」必须同码同文案。
