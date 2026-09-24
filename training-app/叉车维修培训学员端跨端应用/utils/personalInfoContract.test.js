@@ -85,6 +85,13 @@ describe('flows 纯函数契约（状态所有权留在页面）', () => {
     expect(p).toContain('authStore.clearAuthData()');
   });
 
+  it('改密 toast 文案钉为有空格形态「6-20 位」（与后端/注册页同串，#1297 半收口：placeholder 暂留无空格）', () => {
+    // 逐字锁照 registerContract 形态：正向钉有空格串，反向挡无空格回潮。
+    // 找回密码页 toast 是另一条规则「密码至少 6 位」（只判下限），故不纳入同串断言。
+    expect(flows()).toContain("uni.showToast({ title: '密码长度需为 6-20 位', icon: 'none' })");
+    expect(flows()).not.toContain('密码长度需为6-20位');
+  });
+
   it('倒计时收敛于 Countdown 类（单一实现）；页面 4 实例、onUnload 全停', () => {
     const f = flows();
     expect(f.match(/class Countdown/g)).toHaveLength(1);

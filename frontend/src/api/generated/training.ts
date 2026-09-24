@@ -217,7 +217,7 @@ export interface QuestionTagListDTO {
 }
 
 export interface QuestionTagsResultDTO {
-  tag_ids: number[]
+  tag_ids: number[] | null
 }
 
 export interface SpecialtyBriefDTO {
