@@ -3,7 +3,6 @@ package api
 
 import (
 	"errors"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -107,10 +106,9 @@ func (h *ContactHandler) ListForRecruiter(c *gin.Context) {
 // @Failure 403 {object} response.R "无有效授权"
 // @Router /recruit/resumes/{id}/contact [get]
 func (h *ContactHandler) GetContact(c *gin.Context) {
-	idStr := c.Param("id")
-	uid, err := strconv.Atoi(idStr)
-	if err != nil || uid <= 0 {
-		response.BadRequest(c, "学员 ID 无效")
+	uid, err := pathInt(c, "id", "学员 ID 无效")
+	if err != nil {
+		response.BadRequest(c, err.Error())
 		return
 	}
 	recruiterID := middleware.CurrentUserID(c)

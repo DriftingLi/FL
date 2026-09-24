@@ -5,7 +5,6 @@ package api
 import (
 	"context"
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 
@@ -358,9 +357,9 @@ type catalogUpdateReq[I any] struct {
 func (h *TrainingCatalogHandler) UpdateSpecialty(c *gin.Context) {
 	Endpoint[catalogUpdateReq[service.SpecialtyInput], service.SpecialtyDict]{
 		Parse: func(c *gin.Context) (*catalogUpdateReq[service.SpecialtyInput], error) {
-			id, err := strconv.Atoi(c.Param("specialty_id"))
+			id, err := pathInt(c, "specialty_id", "专业方向ID无效")
 			if err != nil {
-				return nil, badRequest("专业方向ID无效")
+				return nil, err
 			}
 			var in service.SpecialtyInput
 			if err := c.ShouldBindJSON(&in); err != nil {
@@ -391,9 +390,9 @@ func (h *TrainingCatalogHandler) UpdateSpecialty(c *gin.Context) {
 func (h *TrainingCatalogHandler) UpdateLevel(c *gin.Context) {
 	Endpoint[catalogUpdateReq[service.LevelInput], service.LevelDict]{
 		Parse: func(c *gin.Context) (*catalogUpdateReq[service.LevelInput], error) {
-			id, err := strconv.Atoi(c.Param("level_id"))
+			id, err := pathInt(c, "level_id", "课程等级ID无效")
 			if err != nil {
-				return nil, badRequest("课程等级ID无效")
+				return nil, err
 			}
 			var in service.LevelInput
 			if err := c.ShouldBindJSON(&in); err != nil {
@@ -424,9 +423,9 @@ func (h *TrainingCatalogHandler) UpdateLevel(c *gin.Context) {
 func (h *TrainingCatalogHandler) UpdateCertificateTemplate(c *gin.Context) {
 	Endpoint[catalogUpdateReq[service.CertificateTemplateInput], service.CertificateTemplateDict]{
 		Parse: func(c *gin.Context) (*catalogUpdateReq[service.CertificateTemplateInput], error) {
-			id, err := strconv.Atoi(c.Param("id"))
+			id, err := pathInt(c, "id", "证书模板ID无效")
 			if err != nil {
-				return nil, badRequest("证书模板ID无效")
+				return nil, err
 			}
 			var in service.CertificateTemplateInput
 			if err := c.ShouldBindJSON(&in); err != nil {
@@ -457,9 +456,9 @@ func (h *TrainingCatalogHandler) UpdateCertificateTemplate(c *gin.Context) {
 func (h *TrainingCatalogHandler) UpdateQuestionTag(c *gin.Context) {
 	Endpoint[catalogUpdateReq[service.QuestionTagInput], service.QuestionTagDict]{
 		Parse: func(c *gin.Context) (*catalogUpdateReq[service.QuestionTagInput], error) {
-			id, err := strconv.Atoi(c.Param("id"))
+			id, err := pathInt(c, "id", "题库标签ID无效")
 			if err != nil {
-				return nil, badRequest("题库标签ID无效")
+				return nil, err
 			}
 			var in service.QuestionTagInput
 			if err := c.ShouldBindJSON(&in); err != nil {
@@ -493,9 +492,9 @@ type specialtyIDReq struct {
 func (h *TrainingCatalogHandler) DeleteSpecialty(c *gin.Context) {
 	Endpoint[specialtyIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*specialtyIDReq, error) {
-			id, err := strconv.Atoi(c.Param("specialty_id"))
+			id, err := pathInt(c, "specialty_id", "专业方向ID无效")
 			if err != nil {
-				return nil, badRequest("专业方向ID无效")
+				return nil, err
 			}
 			return &specialtyIDReq{ID: id}, nil
 		},
@@ -525,9 +524,9 @@ type levelIDReq struct {
 func (h *TrainingCatalogHandler) DeleteLevel(c *gin.Context) {
 	Endpoint[levelIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*levelIDReq, error) {
-			id, err := strconv.Atoi(c.Param("level_id"))
+			id, err := pathInt(c, "level_id", "课程等级ID无效")
 			if err != nil {
-				return nil, badRequest("课程等级ID无效")
+				return nil, err
 			}
 			return &levelIDReq{ID: id}, nil
 		},
@@ -557,9 +556,9 @@ type certificateTemplateIDReq struct {
 func (h *TrainingCatalogHandler) DeleteCertificateTemplate(c *gin.Context) {
 	Endpoint[certificateTemplateIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*certificateTemplateIDReq, error) {
-			id, err := strconv.Atoi(c.Param("id"))
+			id, err := pathInt(c, "id", "证书模板ID无效")
 			if err != nil {
-				return nil, badRequest("证书模板ID无效")
+				return nil, err
 			}
 			return &certificateTemplateIDReq{ID: id}, nil
 		},
@@ -589,9 +588,9 @@ type questionTagIDReq struct {
 func (h *TrainingCatalogHandler) DeleteQuestionTag(c *gin.Context) {
 	Endpoint[questionTagIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*questionTagIDReq, error) {
-			id, err := strconv.Atoi(c.Param("id"))
+			id, err := pathInt(c, "id", "题库标签ID无效")
 			if err != nil {
-				return nil, badRequest("题库标签ID无效")
+				return nil, err
 			}
 			return &questionTagIDReq{ID: id}, nil
 		},
@@ -616,9 +615,9 @@ type catalogSwapSortReq struct {
 // swap_with <= 0 的前置校验照旧做在这里——岗位端点刻意不做（既有行为，见 positionSwapSortReqBody）。
 func catalogSwapSortParse(idParam, idMsg string) ParseFunc[catalogSwapSortReq] {
 	return func(c *gin.Context) (*catalogSwapSortReq, error) {
-		id, err := strconv.Atoi(c.Param(idParam))
+		id, err := pathInt(c, idParam, idMsg)
 		if err != nil {
-			return nil, badRequest(idMsg)
+			return nil, err
 		}
 		var body struct {
 			SwapWith int `json:"swap_with"`
@@ -696,9 +695,9 @@ type setQuestionTagsReq struct {
 func (h *TrainingCatalogHandler) SetQuestionTags(c *gin.Context) {
 	Endpoint[setQuestionTagsReq, service.QuestionTagsResultDTO]{
 		Parse: func(c *gin.Context) (*setQuestionTagsReq, error) {
-			id, err := strconv.Atoi(c.Param("question_id"))
+			id, err := pathInt(c, "question_id", "题目ID无效")
 			if err != nil {
-				return nil, badRequest("题目ID无效")
+				return nil, err
 			}
 			var req struct {
 				TagIDs []int `json:"tag_ids"`
@@ -815,9 +814,9 @@ func (h *TrainingCatalogHandler) CreateCredential(c *gin.Context) {
 func (h *TrainingCatalogHandler) UpdateCredential(c *gin.Context) {
 	Endpoint[catalogUpdateReq[service.CredentialInput], service.CredentialDict]{
 		Parse: func(c *gin.Context) (*catalogUpdateReq[service.CredentialInput], error) {
-			id, err := strconv.Atoi(c.Param("id"))
+			id, err := pathInt(c, "id", "证件ID无效")
 			if err != nil {
-				return nil, badRequest("证件ID无效")
+				return nil, err
 			}
 			var in service.CredentialInput
 			if err := c.ShouldBindJSON(&in); err != nil {
@@ -851,9 +850,9 @@ type credentialIDReq struct {
 func (h *TrainingCatalogHandler) DeleteCredential(c *gin.Context) {
 	Endpoint[credentialIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*credentialIDReq, error) {
-			id, err := strconv.Atoi(c.Param("id"))
+			id, err := pathInt(c, "id", "证件ID无效")
 			if err != nil {
-				return nil, badRequest("证件ID无效")
+				return nil, err
 			}
 			return &credentialIDReq{ID: id}, nil
 		},
