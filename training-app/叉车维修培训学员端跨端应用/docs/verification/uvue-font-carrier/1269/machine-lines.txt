@@ -11,6 +11,8 @@ HX_RUN_DEPLOY deployed=true www=/sdcard/Android/data/io.dcloud.uniappx/apps/__UN
 HX_RUN mode=incremental compile=230 deploy=0 total=285 exit=ok
 
 ### 术前（把两个 .uvue 还原成 HEAD 版本后重编译部署） —— .scratch/1269-hxrun-before2.log
+# 「HEAD 版本」= **当时的** HEAD，即术前的 `e35ede17^`；本节标题是取证当时逐字写下的原样，保留不改。
+# 复现请按 `e35ede17^` 取（提交后 `HEAD` 已含修复，照 `HEAD` 取会拿到修好的文件）—— 同 §7 的口径。
 HX_BUSY wait=0 result=free
 HX_RUN_DEPLOY deployed=true www=/sdcard/Android/data/io.dcloud.uniappx/apps/__UNI__1C1D180/www=1790228357->1790228910 pid_before=io.dcloud.uniappx=8126 pid_after=io.dcloud.uniappx=9337 foreground=io.dcloud.uniappx reason=资源已落到设备：/sdcard/Android/data/io.dcloud.uniappx/apps/__UNI__1C1D180/www 的 mtime 相对基线前进
 HX_RUN mode=incremental compile=150 deploy=0 total=182 exit=ok
