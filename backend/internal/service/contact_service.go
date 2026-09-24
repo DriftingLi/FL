@@ -119,8 +119,8 @@ type ContactPlainDTO struct {
 	ContactPhone         string    `json:"contact_phone"`
 	Wechat               string    `json:"wechat"`
 	ResumeFileURL        string    `json:"resume_file_url"`
-	Photos               JSONArray `json:"photos" swaggertype:"array,string" nullability:"nullable"`
-	ResumeCertifications JSONArray `json:"resume_certifications" swaggertype:"array,object" nullability:"nullable"`
+	Photos               JSONArray `json:"photos" swaggertype:"array,string" extensions:"x-nullable" nullability:"nullable"`
+	ResumeCertifications JSONArray `json:"resume_certifications" swaggertype:"array,object" extensions:"x-nullable" nullability:"nullable"`
 }
 
 // contactCompany 一家企业在联系面读面上的投影：一次批量查询同时带回「名片三段」

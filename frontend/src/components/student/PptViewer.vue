@@ -115,7 +115,7 @@ async function loadSlides() {
   loadError.value = false
   try {
     const res = await courseApi.getChapterSlides(Number(props.chapterId))
-    // 拦截器已解包信封，返回 { slides?: string[] }
+    // 拦截器已解包信封，返回 ChapterSlidesDTO；slides 在无渲染器或转图失败时是 null
     let rawSlides: string[] = []
     if (res && Array.isArray(res.slides)) {
       rawSlides = res.slides

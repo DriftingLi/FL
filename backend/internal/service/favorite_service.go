@@ -56,7 +56,7 @@ type FavoritePageResult struct {
 	Page      int           `json:"page"`
 	Pages     int           `json:"pages"`
 	Total     int64         `json:"total"`
-	Favorites []FavoriteDTO `json:"favorites" nullability:"nullable"`
+	Favorites []FavoriteDTO `json:"favorites" nullability:"nonnil"`
 }
 
 // favoriteTargetMeta 目标快照。

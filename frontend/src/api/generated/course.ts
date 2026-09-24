@@ -77,7 +77,7 @@ export interface ChapterFileDTO {
 
 export interface ChapterSlidesDTO {
   chapter_id: number
-  slides: string[]
+  slides: string[] | null
 }
 
 export interface CourseBriefDTO {

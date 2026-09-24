@@ -12,7 +12,7 @@
 // 用同一个 tag 表态会把两种语义混成一格。
 // 也不靠类型名猜（「以 DTO 结尾」那种判据会漏会误伤）。
 //
-// 四条判据，都不需要跨函数推断数据流（那正是上一波否决假绿锁的理由）：
+// 五条判据，都不需要跨函数推断数据流（那正是上一波否决假绿锁的理由）：
 //  1. **漏标即红**：闭包内的集合字段没有 `nullability:"…"` tag。
 //  2. **自相矛盾即红**：`nonnil`（承诺出口恒非 null）与契约上的 `x-nullable`（说可为 null）同时出现。
 //  3. **债务只准减不准加**：标了 `nullable` 而契约里还没落 `x-nullable` 的位置数被钉成常量。
@@ -24,9 +24,15 @@
 //     正向证据住在 `../service/nullable_declaration_test.go` 的 `nullableOutlets` 那张表里
 //     （走真实出口 marshal 一次、断言发出的就是 `null`），本条只数「声明了却没进表的字段」，
 //     同样钉成只能减的常量。**表在这里、判据也在这里，但证据只有一份**——不另建第二张登记表。
+//  5. **声明 `nonnil` 要举得出一个真发 `[]` / `{}` 的出口**（ADR-0064 决策 8）：与第 4 条同形、
+//     方向相反——一句没人跑过的 `nonnil` 向每个消费方承诺「这一格永远不为 null」。**零容忍、
+//     不设债务常量**（理由见下面判据 5 那段）。证据住在 `../service` 与 `../api` 的
+//     `nonnilOutlets*` 那张表里，同样是「表在此、判据在此，证据只有一份」。
 //
-// 锁自己先被验：TestNullabilityCheckerFires 用合成夹具证明四条判据真的会报、且不误报，
-// 再拿同一个 checker 去扫全仓——一把永不报红的锁就是本波点名要避开的那种摆设。
+// 锁自己先被验：TestNullabilityCheckerFires 用合成夹具证明 checker 那三条（漏标 / 取值非法 /
+// 自相矛盾）真的会报、且不误报，再拿同一个 checker 去扫全仓——一把永不报红的锁就是本波点名要
+// 避开的那种摆设。判据 3/4/5 数的是「声明与证据的对账」，它们自己的正向例在
+// TestNullableEvidenceMechanismFires 与 TestNullableOutletsTableIsReadable。
 package apitypes
 
 import (
@@ -51,17 +57,23 @@ const (
 
 // declaredNullableWithoutContractFlag 契约撒谎债务的实测值（文件头第 3 条）。
 //
-// 批①′ 立这条时是 91；批①-A 把 68 处**实测恒非 null** 的错标改判成 nonnil ⇒ 91 − 68 = 23。
-// 全程算式：99 处 nullable 声明 − 3 处落在 2xx 闭包外 = 96 在射程内；96 − 5 处已带 x-nullable
-// = 91（起点）。改判走的都是「出口实测发出 `[]` / `{}`」那条路，不是按目录猜的（ADR-0064
-// 原记「8 处早已带 x-nullable」由批③ 更正为 5 + 3——那 3 处差额是把标量指针字段上的
-// x-nullable 也计了进来）。
+//	99 处 nullable 声明 − 3 处落在 2xx 闭包外 = 96 在射程内；96 − 5 处已带 x-nullable = 91（批①′ 立时）
+//	    − 68（批①-A 把实测恒非 null 的错标改判成 nonnil）                    = 23
+//	    − 16（批①-B：12 处按实测补 x-nullable，另 4 处改判 nonnil）           = 7
+//	（ADR-0064 原记「8 处早已带 x-nullable」由批③ 更正为 5 + 3，那 3 处是把标量指针字段上的
+//	x-nullable 也计了进来。）
 //
-// 剩下这 23 处是**真发得出 null** 或**结构性够不着举证**的两类，前者归批①-B 补 x-nullable
-// 并同步消费端，后者归下一波（判据 5 的证据源只扫 ../service 与 ../api，repository/model 两包
-// 没有可脱离真库跑的出口；`model.JSONArray` 那几格的非 null 靠 DDL 默认值而不是代码，
-// 见 recruit_service.go 里那段「同为 JSONArray 而表态两样」的注释）。
-const declaredNullableWithoutContractFlag = 23
+// 那 12 处里有 1 处是这一批改判时**顺手捞出来的**：`service.ChapterSlidesDTO.slides` 的 null 出口
+// 早在批①′ 就举到了（当时全仓唯一一条正向证据），可它的 x-nullable 一直没落——因为这条判据
+// 历史上只报一个数、不点名，而批①-B 的清单是从判据 4 的「待举证」名单推出来的，它不在那份上。
+// ⇒ 下面 Scan 现在把欠账逐条 Logf 出来，与判据 4 对称。
+//
+// 剩下这 7 处全在 **valuation/repository**（AlgorithmParameters 四格 + SeriesConfigOptions 三格）。
+// 它们不是「没人去举证」，是**举证装置照不到**：判据 4/5 的证据源只有 ../service 与 ../api，
+// 而那个包只握 *pgxpool.Pool，没有可脱离真库跑的出口。留给下一波的选择是「给这两个包加证据源
+// （含一个能跑真库的测试装置）」或「把它们从判据 3/4 的分母里显式移出并写明理由」——继续留在
+// 这个数上，就等于让一个结构性事实看起来像一件没干完的活。
+const declaredNullableWithoutContractFlag = 7
 
 // outletSource 指出一处「正向证据」的来源：一个目录 + 一个变量名前缀。
 //
@@ -135,19 +147,18 @@ func outletEvidenceKeys(t *testing.T, sources []outletSource, what string) map[s
 	return out
 }
 
-// firstCompositeLit 取 ValueSpec 的第一个值表达式（`var x = map[K]V{...}` 与
-
-// declaredNullableWithoutPositiveEvidence 判据 4 的实测债务（ADR-0065 批①′ 立这条时的数）：
+// declaredNullableWithoutPositiveEvidence 判据 4 的实测债务（与判据 3 不是同一个分母：
+// 3 数的是「射程内且契约上还没落 x-nullable」，4 数的是「射程内的 nullable 声明里没走过真实
+// null 出口的那些」；射程内总数 96，其中 5 处当时已带 x-nullable）。
 //
-//	99 处 nullable 声明 − 3 处落在 2xx 响应闭包外 = 96 处在射程内；其中走过真实出口、marshal 出过
-//	`null` 的只有 1 处（service.ChapterSlidesDTO.slides，未注入 slideRenderer 那一档）⇒ 96 − 1 = 95。
-//	注意这与判据 3 的 91 不是同一个分母：91 数的是「射程内且契约上还没落 x-nullable」，
-//	射程内的总数是 96（另 5 处已带 x-nullable）。
+//	99 处 nullable 声明 − 3 处落在 2xx 响应闭包外 = 96 在射程内；当时走过真实出口、marshal 出过
+//	`null` 的只有 1 处（service.ChapterSlidesDTO.slides，未注入 slideRenderer 那一档） ⇒ 96 − 1 = 95
+//	    − 68（批①-A 改判 nonnil，它们本就不该说可空）  = 27
+//	    − 20（批①-B：15 处走真实出口 marshal 出 null 并进 nullableOutlets 表，5 处改判 nonnil） = 7
 //
 // 这个数**只准减**：新增一句没有证据的 nullable 会把它顶上去，把证据补上会把它降下来——
 // 两种都要人来改常量，于是一次没有证据的声明和一次收口都留下痕迹。
-// 批①-A 会把其中约 69 处**改判 nonnil**（实测恒非 null，本就不该说可空），那时这条算式整条重写。
-const declaredNullableWithoutPositiveEvidence = 27
+const declaredNullableWithoutPositiveEvidence = 7
 
 // countWithoutEvidence 数「声明了某条表态、证据表里却没有它」的位置。
 func countWithoutEvidence(fields []string, evidence map[string]bool) []string {
@@ -346,11 +357,6 @@ func checkFile(f *ast.File, curPkg string, named map[string]bool, closure map[st
 	return out
 }
 
-// countNullableWithoutFlag 数「字段表态可为 null、契约里却没写 x-nullable」的位置数。
-func countNullableWithoutFlag(f *ast.File, curPkg string, named map[string]bool, closure map[string]bool) int {
-	return len(fieldsByVerdict(f, curPkg, named, closure, verdictNullable, true))
-}
-
 // fieldsByVerdict 列出「集合字段且表态为 verdict」的位置，键 = 包名.类型名.json键。
 //
 // 判据 3/4/5 共用这一次遍历（3 要「契约上还没落 x-nullable」的那批 nullable，4 要 nullable 全量，
@@ -452,15 +458,21 @@ func TestResponseCollectionsMustDeclareNullability(t *testing.T) {
 	named := namedCollections(pkgs)
 
 	var all []nullabilityViolation
-	debts := 0
-	var declaredNullable, declaredNonNil []string
+	var declaredNullable, declaredNonNil, withoutFlag []string
 	for pkgName, p := range pkgs {
 		for _, f := range p.files {
 			all = append(all, checkFile(f, pkgName, named, closure)...)
-			debts += countNullableWithoutFlag(f, pkgName, named, closure)
+			withoutFlag = append(withoutFlag, fieldsByVerdict(f, pkgName, named, closure, verdictNullable, true)...)
 			declaredNullable = append(declaredNullable, fieldsByVerdict(f, pkgName, named, closure, verdictNullable, false)...)
 			declaredNonNil = append(declaredNonNil, fieldsByVerdict(f, pkgName, named, closure, verdictNonNil, false)...)
 		}
+	}
+	debts := len(withoutFlag)
+	// 与判据 4 一样点名：只报一个数的判据，漏下来的那一处没人看得见——`ChapterSlidesDTO.slides`
+	// 带着「有 null 出口的正向证据、契约上却没落 x-nullable」的状态穿过了整批①-B，
+	// 因为这张表历史上只被加过、没被读过。
+	for _, k := range withoutFlag {
+		t.Logf("判据 3 待落 x-nullable: %s（把 extensions:\"x-nullable\" 补上并同步消费端）", k)
 	}
 	for _, v := range all {
 		t.Errorf("表态锁: %s", v.msg)
