@@ -1,8 +1,8 @@
 // 保形锁（ADR-0065 决策 4 步 1）：`POST /api/recruit/contact-requests` 的 handler 从裸闭包迁到
 // Endpoint 缝，**这一步不许有任何行为变更**——所以断言的是响应**字节**，不是状态码。
 //
-// 为什么必须先有这条锁：步 2 要把「学员不存在」从 400 改成 404。没有字节锁，步 1 与步 2 混在
-// 一次改动里，404 出现时就无法归因它是「缝迁移带出来的」还是「改判带出来的」（第十五波第④批
+// 为什么必须先有这条锁：步 2 会把「库读不动」从 400 挪到 500。没有字节锁，缝迁移与改判挤在同
+// 一次改动里，500 出现时就无法归因它是「装配缝时带出来的」还是「分档带出来的」（第十五波第④批
 // 「只认一种漏法的锁等于没有锁」的同一条判据）。
 //
 // 期望字节取自**迁移前**的实测响应（旧 handler 对任何 err 都走 response.BadRequest）；
@@ -40,6 +40,9 @@ type contactCreateEnv struct {
 	recruiterID  int
 	recruiterTok string
 	disabledTok  string
+	// vanishedTok 属于一行已被删除的招聘者：会话仍认（撤销不住在这张表上），库里的行没了。
+	vanishedTok string
+	adminTok    string
 }
 
 func newContactCreateEnv(t *testing.T) *contactCreateEnv {
@@ -47,7 +50,7 @@ func newContactCreateEnv(t *testing.T) *contactCreateEnv {
 	gin.SetMode(gin.TestMode)
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
-		JWTSecretKey:          "contact-create-shape-secret",
+		JWTSecretKey:          contactCreateSecret,
 		JWTExpiresHours:       2,
 		JWTRefreshExpiresDays: 7,
 		AuthCookie:            config.AuthCookieConfig{Name: "hrwai_token", Domain: "example.com", Secure: false},
@@ -95,10 +98,17 @@ func newContactCreateEnv(t *testing.T) *contactCreateEnv {
 	if err := db.Model(&model.RecruiterUser{}).Where("id = ?", disID).Update("status", 0).Error; err != nil {
 		t.Fatalf("禁用招聘者失败: %v", err)
 	}
+	// 第三家：登录**之后**把行删掉 ⇒ 会话仍有效（撤销走的是另一条命名空间），而 service 的
+	// 那次 First 会命中 ErrRecordNotFound。这是「招聘者不存在」那一格唯一的到达方式。
+	goneID, goneTok := mkRecruiter("recruitCreateVanish", "注销测试企业")
+	if err := db.Where("id = ?", goneID).Delete(&model.RecruiterUser{}).Error; err != nil {
+		t.Fatalf("删除招聘者行失败: %v", err)
+	}
 
 	return &contactCreateEnv{
 		router: r, db: db, studentID: stu.ID, missingID: 999999,
 		recruiterID: recID, recruiterTok: recTok, disabledTok: disTok,
+		vanishedTok: goneTok, adminTok: adminToken,
 	}
 }
 
@@ -123,12 +133,13 @@ func mustJSON(v any) []byte {
 
 // TestContactCreateFace_BytesPreservedAcrossSeamMigration 是步 1 的保形锁。
 //
-// 两格**本锁未覆盖**与原因（写成空白比假装全绿好）：
-//   - 「今日申请已达上限」：要打它得先建 21 个学员（dailyLimit 是 ContactService 的私有字段，
-//     api 包改不了）。它由 TestContactContract_FullFlow 覆盖——事实也正是那里红的第一格：
-//     我第一次装配表时漏了这条具名哨兵，它掉进 500 默认面，那条既有契约测当场判红。
-//   - 「查不动」（DB 故障）：旧 handler 把它咽成 400 + **驱动原文**，字节随驱动版本而变，写不成
-//     字面量。这一格正是步 2 要改判的对象，由 contact_create_fact_tier_test.go 接管。
+// 覆盖面按实报（写成空白比假装全绿好）：
+//   - 表里九条业务事实中**八条**在本锁有逐字节断言；「今日申请已达上限」没有——打它要先建 21 个
+//     学员（dailyLimit 是 ContactService 的私有字段，api 包改不了）。它由
+//     TestContactContract_FullFlow 覆盖，且正是那里红的第一格：我第一版装配漏了这条哨兵，
+//     它掉进 500 默认面，那条既有契约测当场判红。⇒ 九条事实**合计**有证据，但不是本锁给的。
+//   - 「查不动」（DB 故障）不在本锁：旧 handler 把它咽成 400 + **驱动原文**，字节随驱动版本而变，
+//     写不成字面量。它正是步 2 要改判的对象，由 contact_create_fact_tier_test.go 接管。
 func TestContactCreateFace_BytesPreservedAcrossSeamMigration(t *testing.T) {
 	e := newContactCreateEnv(t)
 	long := strings.Repeat("叉", 201)
@@ -157,6 +168,7 @@ func TestContactCreateFace_BytesPreservedAcrossSeamMigration(t *testing.T) {
 			{"学员 id 为 0", e.recruiterTok, map[string]any{"student_user_id": 0, "message": "想聊聊岗位"}, contactBody(400, "参数错误")},
 			{"学员 id 为负", e.recruiterTok, map[string]any{"student_user_id": -1, "message": "想聊聊岗位"}, contactBody(400, "参数错误")},
 			{"学员不存在", e.recruiterTok, map[string]any{"student_user_id": e.missingID, "message": "想聊聊岗位"}, contactBody(400, "学员不存在")},
+			{"招聘者行已删除", e.vanishedTok, map[string]any{"student_user_id": e.studentID, "message": "想聊聊岗位"}, contactBody(400, "招聘者不存在")},
 			{"招聘者已禁用", e.disabledTok, map[string]any{"student_user_id": e.studentID, "message": "想聊聊岗位"}, contactBody(400, "招聘者账号已禁用")},
 			{"冷却期内", e.recruiterTok, map[string]any{"student_user_id": cooldownStu.ID, "message": "再试一次"}, contactBody(400, "该学员 30 天内拒绝或撤回过申请，冷却期内不能重复申请")},
 		} {

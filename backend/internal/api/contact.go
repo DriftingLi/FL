@@ -86,7 +86,7 @@ var contactCreateFacts400 = []error{
 // @Security BearerAuth
 // @Param body body object true "申请 {student_user_id, message(1-200)}"
 // @Success 201 {object} response.R{data=service.ContactRequestDTO} "申请已提交"
-// @Failure 400 {object} response.R "附言空/超长、参数错、引用的学员或招聘者不存在或已禁用、pending 唯一、冷却期、日限"
+// @Failure 400 {object} response.R "附言为空 / 附言超 200 字 / 参数错误 / 学员不存在 / 招聘者不存在 / 招聘者账号已禁用 / 已存在待处理的申请 / 冷却期内 / 今日申请已达上限"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 500 {object} response.R "服务端内部错误（DB 故障；不外发驱动原文）"
 // @Router /recruit/contact-requests [post]

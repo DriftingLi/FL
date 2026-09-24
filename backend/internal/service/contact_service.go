@@ -34,8 +34,11 @@ var (
 	// 「参数错误」。具名之后 api 侧才能把它们与「查不动」分档（对外句子逐字未变，见步 1 的字节锁）。
 	ErrContactMessageEmpty   = errors.New("附言不能为空")
 	ErrContactMessageTooLong = errors.New("附言不能超过 200 字")
-	ErrContactReqInvalid     = errors.New("参数错误")
-	ErrRecruiterDisabled     = errors.New("招聘者账号已禁用")
+	// ErrContactReqInvalid 一条盖两件（招聘者会话 id 非正 / body 里的 student_user_id 非正）。
+	// 按决策 3 应当各说一句，但拆任何一半都要改写 wire 文本，而本端点上一条测试刚把字节钉死
+	// ⇒ 留作登记残项（见 ADR-0065 实施回记 批④）；招聘者那一半自批⑤ 起在解析层就进不来。
+	ErrContactReqInvalid = errors.New("参数错误")
+	ErrRecruiterDisabled = errors.New("招聘者账号已禁用")
 	// ErrContactInCooldown 覆盖「拒绝」与「撤回」两种前态——它们是同一格冷却判据的两个来源，
 	// 拆成两条哨兵会让客户端为同一件「现在还不能再发」写两个分支。
 	ErrContactInCooldown = errors.New("该学员 30 天内拒绝或撤回过申请，冷却期内不能重复申请")
@@ -236,6 +239,7 @@ func (s *ContactService) toDTOWithCompany(m *model.ContactRequest, rec contactCo
 // 错误面的规矩（ADR-0065 决策 4）：业务事实一律抛**具名哨兵**，DB 故障原样上抛——端点据此
 // 把前者落 400、后者落 500。旧写法是「任何 err 都答 400 + err.Error()」，于是「库查不动」
 // 会以「学员不存在」的名义发出去，调用方怎么重试都不会等来那条学员行。
+// 这一分档不是本域新造的判据，与 student_service.go 的 queryProfile 同源（ADR-0064 决策 1·2）。
 func (s *ContactService) Create(recruiterID, studentUserID int, message string) (*ContactRequestDTO, error) {
 	msg := strings.TrimSpace(message)
 	if msg == "" {

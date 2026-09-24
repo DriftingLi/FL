@@ -88,9 +88,13 @@ type StudyRecordDTO struct {
 	ChapterTitle  *string `json:"chapter_title" extensions:"x-nullable"`
 }
 
-// ErrStudentNotFound 学员行不存在（与「用户不存在」的两个既有载体同对象？否——本域取的是
-// hrwai_users 的学员视角行，沿用独立名字以免与积分/口令域的判据互相牵动；下一波若合并需连
-// wire 文案一起对账，不在本波顺手做）。
+// ErrStudentNotFound 学员行不存在——**这一事实的唯一载体**（ADR-0065 决策 4 收的正是这里：
+// `ContactService.Create` 原先另发一枚同文案的裸 `errors.New("学员不存在")`，两处 `First` 都把
+// 「查不动」咽进同一句，现已并到本哨兵并按各自端点分档）。
+// 与「用户不存在」的两个既有载体仍不同对象：本域取的是 hrwai_users 的学员视角行。
+// 档位分歧是显式决定，不是漂移：GET /student/profile 答 404（被请求的资源就是它），
+// POST /recruit/contact-requests 答 400（坏的是请求带来的引用）——两半同时成立由
+// api 侧 TestContactCreate_BadReferenceIsNotMissingResource 钉住。
 var ErrStudentNotFound = errors.New("学员不存在")
 
 // GetProfile 学员档案。
