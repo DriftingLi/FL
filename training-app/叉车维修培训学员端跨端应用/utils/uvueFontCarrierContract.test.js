@@ -26,7 +26,8 @@
  *   ③ **合规形态唯一：把声明挪到合法承载上**。与 `white-space` 那条的差别是这里**没有「合法位」登记表**
  *      —— 本仓 `<text>` 上的文字样式有 **1100+ 处**且全部合法，逐位登记没有意义。
  *      但**有**一张「已知存量」清单（`DEFERRED`）：票面写了「本票不顺手扩大范围」，全仓现扫出的 9 条规则里
- *      有 4 条属 ai-chat 面、1 条属招募面 ⇒ 那 5 位登记为存量，**只减不增**（详见 `DEFERRED` 的注释）。
+ *      有 4 条属 ai-chat 面、1 条属招募面 ⇒ 那 5 位登记为存量，**只减不增**（那 5 位 / 7 条已由 #1314
+ *      全部收口，清单自那以后为空；机制与各条改法见 `DEFERRED` 的注释）。
  *
  * 形态沿用本仓既有全仓守护（先例 `utils/uvueWhiteSpaceContract.test.js` / `utils/gradientSyntaxContract.test.js`）：
  * 先对**注入的违规样本**断言检测有效（防空跑假绿），再对真实文件断言零命中。
@@ -358,53 +359,27 @@ function collectUvue(dir, acc = []) {
 /* ------------------------------------------------ 已知存量（棘轮：只减不增） */
 
 /**
- * 票面写明「**本票不顺手扩大范围**」⇒ 全仓扫出来但**不在本票射程**的违规位逐条登记在此，各附理由。
+ * 立锁当时（#1269）票面写明「**本票不顺手扩大范围**」⇒ 全仓扫出来但不在该票射程的违规位逐条登记在此，各附理由。
  *
  * 这**不是豁免清单**，与 `uvueWhiteSpaceContract` 的 `LEGAL_CARRIER_SITES` 也不是一回事（那份登记的是
  * 「已核过的合法位」，这份登记的是「**已知仍坏着**的位」）。它的两条性质：
- *   · **上界**：不在这里的新违规一律判红 ⇒ 全仓锁死，新页面加不出第 6 处（现清单 5 位 / **7** 条
- *     occurrence，2026-09-24 实测）。**判据是条数而不是「这个键命中过」** —— 键取「文件 + class」，
- *     一个 class 在两个属性组上非法就是 2 条（`picker-title` 两位各 2 条），所以同一位**再加一条**
- *     同键违规会被键吞掉；登记每条的 occurrence 数（`occurrences` 字段）才真的锁得住。
+ *   · **上界**：不在这里的新违规一律判红 ⇒ 全仓锁死，新页面加不出下一处。**判据是条数而不是「这个键命中过」**
+ *     —— 键取「文件 + class」，一个 class 在两个属性组上非法就是 2 条（登记时的 `picker-title` 两位各 2 条），
+ *     所以同一位**再加一条**同键违规会被键吞掉；登记每条的 occurrence 数（`occurrences` 字段）才真的锁得住。
  *   · **自净**：条目对应的 occurrence 数一旦**变小**（有人顺手修了那一页，全修或部分修），判据立刻判红，
  *     逼改的人回来更新数字或删条目 ⇒ 清单只会变短，不会长成一永久豁免区。
- * 收口方式：谁改到那一页，谁在同一个 PR 里删掉该页的文字并落进 `<text>`（改法见每条 `why`）。
- * 三条判据（新位 / 同位加条 / 修好）都由 `ratchetFindings` 承载，并在 ① 节用注入样本自检。
+ *
+ * **现清单为空**：登记时的 5 位 / 7 条（ai-chat 两组件的 `.picker-title` / `.custom-hint` / `.picker-empty`
+ * + 招募面 `.paragraph` 的加载态那一位）已由 #1314 全部收口。⇒ 自此 `除已知存量外全仓零违规` 那条判据
+ * 等价于「**全仓零违规**」，这是它最强的形态。将来若真有需要延后收口的位，按「文件 + class + occurrence 数
+ * + why」加条目，并在同一张票里写明为什么不在当次收口 —— 而**不是**把已修好的位留在这儿当豁免。
+ *
+ * 收口改法（#1269 与 #1314 两轮同一个形态）：容器与文字分成两位，文字挪进 `<text>`、四条声明跟着过去且
+ * **字面值一条不改**；只有「该 class 在别处已全部落在合法承载上」时才可以走「删掉那一位的 class」这条捷径。
+ * 三条判据（新位 / 同位加条 / 修好）都由 `ratchetFindings` 承载，并在 ① 节用**合成登记表**自检
+ * （不拿这份真实清单当样本 —— 它会随收口变短乃至清空，那种自检会静默空跑）。
  */
-const DEFERRED = [
-  {
-    file: 'components/ai-chat/ai-chat-custom-form.uvue',
-    className: 'picker-title',
-    occurrences: 2, // 两个属性组各一条（`font-size/color/text-align` + `font-weight`）
-    why: 'ai-chat 面，不在本票射程。改法：标题文字挪进 <text>，`font-size/color/text-align/font-weight` 跟过去',
-  },
-  {
-    file: 'components/ai-chat/ai-chat-custom-form.uvue',
-    className: 'custom-hint',
-    occurrences: 1,
-    why: 'ai-chat 面，不在本票射程。改法同上（`font-size/color`）',
-  },
-  {
-    file: 'components/ai-chat/ai-chat-model-picker.uvue',
-    className: 'picker-title',
-    occurrences: 2,
-    why: 'ai-chat 面，不在本票射程。改法同 custom-form 的同名 class',
-  },
-  {
-    file: 'components/ai-chat/ai-chat-model-picker.uvue',
-    className: 'picker-empty',
-    occurrences: 1,
-    why: 'ai-chat 面，不在本票射程。改法：空态文案挪进 <text>（`text-align/font-size/color`）',
-  },
-  {
-    file: 'pages/recruiter/resume-detail.uvue',
-    className: 'paragraph',
-    occurrences: 1,
-    why: '招募面，不在本票射程。该 class 另有 5 处落在 <text> 上（合法），只有加载态那一位挂在 <view> 上'
-      + ' ⇒ 改法是**删掉那一位的 class**：那一位里唯一的文字是 <text class="meta-item">，它自己声明了同值的'
-      + ' `26rpx / #666666` ⇒ 删了零视觉变化，比其余四条都便宜',
-  },
-];
+const DEFERRED = [];
 const deferredKey = (d) => d.file + '#' + d.className;
 
 /**
@@ -572,23 +547,29 @@ describe('uvue 文字类样式的承载面契约（#1269）', () => {
     });
 
     it('棘轮三条判据都要能被抓到：新位 / 登记位再加一条 / 登记位被修好', () => {
+      // 自检拿**合成登记表**，不拿真实 `DEFERRED`：真实清单会随收口变短乃至清空（#1314 就把它清空了），
+      // 依赖它内容的自检会跟着退化成空跑 —— 判据还在、样本已经没了。`ratchetFindings` 的第二个参数就是这条缝。
+      const REG = [
+        { file: 'pages/a.uvue', className: 'two-groups', occurrences: 2 },
+        { file: 'pages/b.uvue', className: 'one-group', occurrences: 1 },
+      ];
       // 输入用「按登记表原样长出来的」违规清单：先证明它自身不判红（否则下面三条红是空跑假绿），
       // 再逐条加/减，看对应的判据是否真的响。
       const at = (key, n) => Array.from({ length: n }, () => ({ key, message: key + ' 承载非法' }));
-      const asRegistered = DEFERRED.flatMap((d) => at(deferredKey(d), d.occurrences));
-      expect(ratchetFindings(asRegistered)).toEqual({ fresh: [], over: [], stale: [] });
+      const asRegistered = REG.flatMap((d) => at(deferredKey(d), d.occurrences));
+      expect(ratchetFindings(asRegistered, REG)).toEqual({ fresh: [], over: [], stale: [] });
 
-      const added = (key) => ratchetFindings(asRegistered.concat(at(key, 1)));
+      const added = (key) => ratchetFindings(asRegistered.concat(at(key, 1)), REG);
       // ① 没登记过的位 ⇒ fresh
       expect(added('pages/x.uvue#brand-new-tab').fresh).toHaveLength(1);
       // ② **登记过的位**上再来一条 —— 这条正是「键命中就放行」会吞掉的方向
-      const dup = added(deferredKey(DEFERRED[0]));
+      const dup = added(deferredKey(REG[0]));
       expect(dup.over).toHaveLength(1);
       expect(dup.over[0]).toMatch(/登记时 2 条，现测 3 条/);
       expect(dup.fresh).toEqual([]); // 也不能被当成新位重复报
       // ③ 修好了（部分 / 全部）⇒ stale
-      expect(ratchetFindings(asRegistered.slice(1)).stale).toHaveLength(1);
-      const fixed = ratchetFindings(asRegistered.filter((o) => o.key !== deferredKey(DEFERRED[4])));
+      expect(ratchetFindings(asRegistered.slice(1), REG).stale).toHaveLength(1);
+      const fixed = ratchetFindings(asRegistered.filter((o) => o.key !== deferredKey(REG[1])), REG);
       expect(fixed.stale).toHaveLength(1);
       expect(fixed.stale[0]).toMatch(/现测 0 条[\s\S]*删条目/);
     });
@@ -661,6 +642,26 @@ describe('uvue 文字类样式的承载面契约（#1269）', () => {
         ['pages/register/register.uvue', 'mode-tab', ['view']],
         ['pages/register/register.uvue', 'mode-tab-text', ['text']],
         ['pages/register/register.uvue', 'mode-tab-text-active', ['text']],
+      ];
+      for (const [file, cls, want] of pairs) expect([file, cls, carriersOf(file, cls)]).toEqual([file, cls, want]);
+    });
+
+    it('#1314 收口的五位同形：容器 class 只剩 view、新文字 class 的承载必须是 text', () => {
+      const carriersOf = (file, cls) => {
+        const src = readSource(file);
+        return [...(classCarriers(stripHtmlComments(templateOf(src))).get(cls) || [])].sort();
+      };
+      const pairs = [
+        ['components/ai-chat/ai-chat-custom-form.uvue', 'picker-title', ['view']],
+        ['components/ai-chat/ai-chat-custom-form.uvue', 'picker-title-text', ['text']],
+        ['components/ai-chat/ai-chat-custom-form.uvue', 'custom-hint', ['view']],
+        ['components/ai-chat/ai-chat-custom-form.uvue', 'custom-hint-text', ['text']],
+        ['components/ai-chat/ai-chat-model-picker.uvue', 'picker-title', ['view']],
+        ['components/ai-chat/ai-chat-model-picker.uvue', 'picker-title-text', ['text']],
+        ['components/ai-chat/ai-chat-model-picker.uvue', 'picker-empty', ['view']],
+        ['components/ai-chat/ai-chat-model-picker.uvue', 'picker-empty-text', ['text']],
+        // 加载态那一位走另一条改法：class 整个摘掉 ⇒ `.paragraph` 在该文件只剩 text 承载（原先 view + text 混挂）
+        ['pages/recruiter/resume-detail.uvue', 'paragraph', ['text']],
       ];
       for (const [file, cls, want] of pairs) expect([file, cls, carriersOf(file, cls)]).toEqual([file, cls, want]);
     });

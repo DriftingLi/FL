@@ -75,7 +75,9 @@
                 <view class="card">
                     <text class="section-title">联系方式</text>
 
-                    <view v-if="contactLoading" class="paragraph">
+                    <!-- 加载态这一位不挂 `.paragraph`：它是 view，原生渲染层不把文字类样式认给非文字元素，
+                         挂了那三条声明本就死着（#1314）。"查询中..." 的字号字色由 `.meta-item` 自己给，同值。 -->
+                    <view v-if="contactLoading">
                         <text class="meta-item">查询中...</text>
                     </view>
 
