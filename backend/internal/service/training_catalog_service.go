@@ -398,7 +398,7 @@ func (s *TrainingCatalogService) ListGroupedCredentials() GroupedCredentialsDTO 
 
 // QuestionTagsResultDTO 题目标签全量替换的响应 {"tag_ids": [...]}（#954 片二）。
 type QuestionTagsResultDTO struct {
-	TagIDs []int `json:"tag_ids" nullability:"nullable"`
+	TagIDs []int `json:"tag_ids" extensions:"x-nullable" nullability:"nullable"`
 }
 
 // ===== 题目-标签关联 =====

@@ -9,6 +9,7 @@ package api
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -28,6 +29,38 @@ import (
 // 红过一次）。而那恰好也是这张表该有的形状——**证据必须真的被跑过**，不是一个供人查名字的花名册。
 var nonnilOutlets = map[string]func(t *testing.T) string{
 	"service.ContactRequestListResult.items": contactRequestListBody,
+	// 三条分页壳：service 侧的切片由 gorm 的 Find 填，恒非 null，但「整份响应里 items /
+	// favorites 这一格」是 handler 拼出来的 ⇒ 举证必须在路由这一层（批①-A 委托时也确认过一次：
+	// 同一个 items，服务层跑不到）。
+	"service.NotePageDTO.items":               notePageBody,
+	"service.QuestionCommentPageResult.items": commentPageBody,
+	"service.FavoritePageResult.favorites":    favoritePageBody,
+}
+
+// getJSON 打一次 GET 并要求 200，返回响应体。
+func getJSON(t *testing.T, f *poolLeakFixture, path string) string {
+	t.Helper()
+	code, body := doAndBody(t, f, f.studentToken, http.MethodGet, path, nil)
+	if code != http.StatusOK {
+		t.Fatalf("GET %s 应 200，实际 %d：%s", path, code, body)
+	}
+	return body
+}
+
+func notePageBody(t *testing.T) string {
+	t.Helper()
+	return getJSON(t, newPoolLeakFixture(t), "/api/notes?page_size=10")
+}
+
+func commentPageBody(t *testing.T) string {
+	t.Helper()
+	f := newPoolLeakFixture(t)
+	return getJSON(t, f, "/api/questions/"+strconv.Itoa(f.poolQ.ID)+"/comments?page_size=10")
+}
+
+func favoritePageBody(t *testing.T) string {
+	t.Helper()
+	return getJSON(t, newPoolLeakFixture(t), "/api/favorites?page_size=10")
 }
 
 func TestNonNilOutletsNeverEmitNull(t *testing.T) {
