@@ -15,7 +15,11 @@
  * @note 裸出口白名单（T15 批 B #653 登记）：`downloadAndOpenMaterialApi` 是**编排出口**，留裸 ——
  *   它没有自己的响应载荷（组合上一条 download 出口 + `uni.downloadFile` + `uni.openDocument`），
  *   返回 `Promise<string>`（空串=成功，非空=给用户看的失败原因）；mapper 只能映射「拆包后的 data」，
- *   套上去等于把四条失败语义挪进一个永远拿不到 reject 的位置 ⇒ 留裸，映射面已由本文件收齐。
+ *   套上去等于把六条失败语义挪进一个永远拿不到 reject 的位置 ⇒ 留裸，映射面已由本文件收齐。
+ * @note 三个 DTO 的**家不在本文件**：`MaterialItem` / `MaterialListResult` / `MaterialDownloadInfo`
+ *   声明在 `types/course.uts`（资料是 chapter_file 的聚合视图，属课程类型族），经 `types/index` re-export。
+ *   #653 票面「域 api 导出显式 DTO」在此按「引用既有共享 DTO」满足：把类型搬进域 api 会同时改
+ *   `pages/resources/materials.uvue` 的 import 面（票面要求页面零改动）并拆散课程类型族 ⇒ 不搬。
  * @note catch 参数零 `: any` 注解（守护规则 H，同 forum.uts）
  */
 import { getMapped } from './request'

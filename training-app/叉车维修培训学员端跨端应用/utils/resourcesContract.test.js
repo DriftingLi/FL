@@ -200,8 +200,19 @@ describe('resources 列表页视觉语言对齐契约（#758）', () => {
 });
 
 describe('material 域 api 出口收紧（#653 T15 批 B：有载荷出口全部走 getMapped）', () => {
-  const src = read('api/material.uts');
-  const code = stripComments(src);
+  const code = stripComments(read('api/material.uts'));
+
+  /**
+   * 判据本体（一处定义、两支用例共用）：一条「有载荷出口」的函数体若退回裸通路，这里列出违例。
+   * 下面的注入自检跑的是**同一个函数** —— 判据被改坏到失去判别力时，注入用例立刻红。
+   */
+  function outletViolations(body, dto) {
+    const v = [];
+    if (!body.includes(`getMapped<${dto}>(`)) v.push(`未走 getMapped<${dto}>`);
+    if (/(?:^|[^A-Za-z0-9_$])get\(/.test(body)) v.push('仍有裸 get( 调用');
+    if (body.includes('.then(')) v.push('仍有 .then() 拆包');
+    return v;
+  }
 
   it('出口家族 import：换成 getMapped，裸 get 通路不再引', () => {
     expect(code).toMatch(/import\s*\{\s*getMapped\s*\}\s*from\s*'\.\/request'/);
@@ -217,15 +228,13 @@ describe('material 域 api 出口收紧（#653 T15 批 B：有载荷出口全部
     const body = fnBodyOf(code, name);
     expect(body).not.toBe('');
     expect(body).toContain(`return getMapped<${dto}>(${callShape}`);
-    expect(body).not.toMatch(/(?:^|[^A-Za-z0-9_$])get\(/);
-    expect(body).not.toContain('.then(');
+    expect(outletViolations(body, dto)).toEqual([]);
   });
 
-  it('mapper 一律箭头包裹 build*（守护规则 M：裸函数引用作 mapper 会 error17）', () => {
+  it('mapper 一律箭头包裹 build*（守护规则 M 的形态面；M 本身由 utsAndroidCompile 全工程执法，此处不复述判据）', () => {
     expect(code).toContain('(data : UTSJSONObject) : MaterialListResult => buildMaterialListResult(data)');
     expect(code).toContain('(data : UTSJSONObject) : MaterialItem => buildMaterialItem(data)');
     expect(code).toContain('(data : UTSJSONObject) : MaterialDownloadInfo => buildMaterialDownloadInfo(data)');
-    expect(code).not.toMatch(/Mapped<[^>]+>\([^()]*(?:,\s*[^()]*?)*?,\s*build[A-Za-z]*\s*[,)]/);
   });
 
   it('映射真相收在三个私有 builder（不对外暴露，页面只消费 DTO）', () => {
@@ -259,25 +268,55 @@ describe('material 域 api 出口收紧（#653 T15 批 B：有载荷出口全部
     const body = fnBodyOf(code, 'downloadAndOpenMaterialApi');
     expect(body).toContain('Promise<string>');
     expect(body).not.toContain('Mapped<');
-    // 五条用户可见失败语义逐字保持（保留裸通路是决策，不是惯性：#653 票面 ②）
-    for (const msg of ['资料地址无效', '资料下载失败（', '无法打开此文件', '资料下载超时，请稍后重试', '资料下载失败']) {
+    // 六条用户可见失败串逐字保持（保留裸通路是决策，不是惯性：#653 票面「调用方零行为改动」）
+    for (const msg of [
+      '资料地址无效',
+      '资料下载失败（',
+      '无法打开此文件',
+      '资料下载超时，请稍后重试',
+      '资料下载失败，请检查网络后重试',
+      '资料下载失败',
+    ]) {
       expect(body).toContain(msg);
     }
+    // 终态出口计数（实测 7 条 = 六条带文案的失败 + 一条成功态 resolve('')）：
+    // 「留裸」指的是不换出口通路，不是这段可以随便重写 —— 多一条静默分支这里就红。
+    expect((body.match(/resolve\(/g) || []).length).toBe(6);
+    expect((body.match(/return '/g) || []).length).toBe(1);
     expect(body).toMatch(/encodeURI\(info\.file_url\)\s*\?\?\s*''/);
     expect(body).toMatch(/\.catch\(\(e\)\s*:\s*string\s*=>/);
     // 留裸 ≠ 留旧出口：它必须改调收紧后的 getMaterialDownloadApi
     expect(body).toContain('getMaterialDownloadApi(materialId)');
   });
 
-  it('出口判据具备判别力（把任一出写回 get().then() 必须被判红）', () => {
+  it('出口判据具备判别力（把一条出口写回 get().then()，必须被同一条判据抓到）', () => {
     const regressed = code.replace(
       "return getMapped<MaterialItem>('/materials/' + materialId.toString(), null, (data : UTSJSONObject) : MaterialItem => buildMaterialItem(data))",
       "return get('/materials/' + materialId.toString()).then((data : UTSJSONObject) : MaterialItem => buildMaterialItem(data))",
     );
+    // 注入必须真的落地（否则「替换失败」会让下面的判据空转）
     expect(regressed).not.toBe(code);
-    const body = fnBodyOf(regressed, 'getMaterialDetailApi');
-    expect(body).not.toContain('getMapped<MaterialItem>(');
-    expect(/return getMapped<MaterialItem>/.test(body)).toBe(false);
+    // 同一判据跑注入体：三条违例一条都不能少
+    expect(outletViolations(fnBodyOf(regressed, 'getMaterialDetailApi'), 'MaterialItem')).toEqual([
+      '未走 getMapped<MaterialItem>',
+      '仍有裸 get( 调用',
+      '仍有 .then() 拆包',
+    ]);
+    // 对照组：真源跑同一判据必须零违例（防判据退化成「永远报三条」）
+    expect(outletViolations(fnBodyOf(code, 'getMaterialDetailApi'), 'MaterialItem')).toEqual([]);
+  });
+});
+
+describe('调用方零适配的前提锁（#653 票面「页面零改动」的实测依据）', () => {
+  it('materials 页只从域 api 引函数、类型一律走 types/index ⇒ 收紧出口不触碰 import 面', () => {
+    const page = read('pages/resources/materials.uvue');
+    expect(page).toMatch(/import type \{ MaterialItem \} from '\.\.\/\.\.\/types\/index'/);
+    const clause = page.match(/import \{([^}]*)\} from '\.\.\/\.\.\/api\/material'/);
+    expect(clause).not.toBeNull();
+    const names = clause[1].split(',').map((s) => s.trim()).filter((s) => s.length > 0);
+    expect(names.length).toBeGreaterThan(0);
+    // 任何一个非 `…Api` 的名字跨过这条缝，都意味着页面开始从 api 文件取类型（本票口径：类型在 types/index）
+    expect(names.filter((n) => !/Api$/.test(n))).toEqual([]);
   });
 });
 

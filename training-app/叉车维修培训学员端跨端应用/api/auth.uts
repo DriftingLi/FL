@@ -17,15 +17,21 @@
  * - `updateProfileApi` 走 `requestMapped` 出口（T15 批 B #653）：出口家族里没有 `putMapped` 便捷面，
  *   故与 `put()` 逐字同通路（`opts.url` + `opts.method = 'PUT'` + `opts.data`），只把拆包后的
  *   `.then()` 换成 mapper。显式 DTO `ProfileChangeRequest` 与 `buildReviewRequest` 术前已在位，
- *   本票只收紧管道、签名一字未动 ⇒ 五处调用点（profile-setup 两处 + `personal-info-flows` 三处）
- *   全部 `await` 后丢弃返回值，零页面适配。
+ *   本票只收紧管道、签名一字未动 ⇒ **七个调用点、三个文件**（`profile-setup.uvue:125/143`、
+ *   `personal-info-flows.uts:92/141/316`、`profile.uvue:231/274`）全部 `await` 后丢弃返回值，零页面适配。
  * - **裸出口白名单（T15 批 B #653 登记）**：`uploadAvatarApi` 留裸 `uploadFile` —— multipart 上传在
  *   T01 #639 的出口家族里没有 mapped 便捷面（只有 requestMapped / getMapped / postMapped），硬套需在
  *   api 层自造拆包，反比裸通路多一份映射真相；其响应仍经 `buildReviewRequest` 组装，映射点只有一个。
- * - 其余登录类出口本轮不动（登录页出口归 T13 #651）。`/auth/profile/*` 五条与 `/auth/account` 两条
- *   （含同为裸 `put().then()` 形态的 `updateAccountApi`）唯一消费方是 profile 模块的
- *   `personal-info-flows.uts`：其中六条返回 `UTSJSONObject` 且按 void 用法消费 ⇒ 按 T03/T09 口径留裸；
- *   `updateAccountApi` 有载荷，但它属 profile 模块自己的手术面、不在批 B 四张面内（边界写在 #653）。
+ * - **本文件仍未收紧的两面（写清楚，别让指针烂在这里）**：
+ *   - 甲：`/auth/profile/*` 五条与 `/auth/account` 两条路由共**八个函数**，其中**七条**返回
+ *     `Promise<UTSJSONObject>`、唯一消费方是 profile 模块的 `personal-info-flows.uts` ⇒ 按 T03/T09
+ *     「void 透传不硬套 identity map」留裸；第八条 `updateAccountApi` 有载荷（`LoginResult`），属
+ *     profile 模块自己的手术面、不在批 B 四张面内（边界写在 #653 的范围评论里）。
+ *   - 乙：登录族八条有载荷出口（`loginApi` / `recruiterLoginApi` / `phoneLoginApi` / `emailLoginApi` /
+ *     `refreshTokenApi` / `getUserInfoApi` / `mpWechatLoginApi` / `updateAccountApi`）仍是裸
+ *     `get|post|put().then()`。T13 #651 已 CLOSED，且它票面对「本模块域 api 收紧」的定义是**承接 + 锁形**
+ *     （承接 #650 的 `getCaptchaApi`，不换算 login 自己的出口）⇒ 这八条**现无 open 票覆盖**，随本票
+ *     登记为独立后续票：读到这里别把票面「全项目 api 契约一致」当成已成立。
  */
 import { get, post, getMapped, postMapped, requestMapped, put, del, uploadFile } from './request'
 import { toStr } from './helpers'
