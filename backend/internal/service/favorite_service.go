@@ -84,14 +84,14 @@ type favoriteTargetMeta struct {
 // 查询错误丢在 Count 上，「问不出能不能收藏」对外与「不能收藏」同一形状。要让故障落 500，
 // 这五条必须各有名字——否则它们会跟故障一起被推到默认面上。
 var (
-	ErrFavTargetCourseUnreadable   = errors.New("课程不存在或不可收藏")
-	ErrFavTargetChapterUnreadable  = errors.New("章节不存在或不可收藏")
-	ErrFavTargetQuestionUnreadable = errors.New("题目不存在或不可收藏")
-	ErrFavTargetFeaturedUnreadable = errors.New("内容不存在或不可收藏")
-	ErrFavTargetTopicNotFound      = errors.New("帖子不存在")
-	ErrFavTargetTypeUnsupported    = errors.New("收藏类型仅支持 course/chapter/question/featured/topic")
-	ErrFavTargetIDInvalid          = errors.New("收藏目标 ID 无效")
-	ErrFavoriteNotFound            = errors.New("收藏不存在")
+	ErrFavTargetCourseRejected   = errors.New("课程不存在或不可收藏")
+	ErrFavTargetChapterRejected  = errors.New("章节不存在或不可收藏")
+	ErrFavTargetQuestionRejected = errors.New("题目不存在或不可收藏")
+	ErrFavTargetFeaturedRejected = errors.New("内容不存在或不可收藏")
+	ErrFavTargetTopicNotFound    = errors.New("帖子不存在")
+	ErrFavTargetTypeUnsupported  = errors.New("收藏类型仅支持 course/chapter/question/featured/topic")
+	ErrFavTargetIDInvalid        = errors.New("收藏目标 ID 无效")
+	ErrFavoriteNotFound          = errors.New("收藏不存在")
 )
 
 func validateFavoriteTarget(db *gorm.DB, targetType string, targetID int, qScope QuestionReadScope) error {
@@ -107,7 +107,7 @@ func validateFavoriteTarget(db *gorm.DB, targetType string, targetID int, qScope
 			return err
 		}
 		if !visible {
-			return ErrFavTargetCourseUnreadable
+			return ErrFavTargetCourseRejected
 		}
 	case FavoriteTargetChapter:
 		var cnt int64
@@ -117,7 +117,7 @@ func validateFavoriteTarget(db *gorm.DB, targetType string, targetID int, qScope
 			return err
 		}
 		if cnt == 0 {
-			return ErrFavTargetChapterUnreadable
+			return ErrFavTargetChapterRejected
 		}
 	case FavoriteTargetQuestion:
 		// 题目支：题库池 by-id 判定（published + 排源标记真题题 + 当前证件），单点复用不手拼。
@@ -126,7 +126,7 @@ func validateFavoriteTarget(db *gorm.DB, targetType string, targetID int, qScope
 			return err
 		}
 		if !visible {
-			return ErrFavTargetQuestionUnreadable
+			return ErrFavTargetQuestionRejected
 		}
 	case FavoriteTargetFeatured:
 		var cnt int64
@@ -134,7 +134,7 @@ func validateFavoriteTarget(db *gorm.DB, targetType string, targetID int, qScope
 			return err
 		}
 		if cnt == 0 {
-			return ErrFavTargetFeaturedUnreadable
+			return ErrFavTargetFeaturedRejected
 		}
 	case FavoriteTargetTopic:
 		var cnt int64

@@ -253,16 +253,3 @@ func (s *NoteService) List(userID int, noteScope string, page, pageSize int, qSc
 	}
 	return &NotePageDTO{Items: items, Page: page, PageSize: pageSize, Total: total}, nil
 }
-
-// questionVisibleOrErr 把 scope 的 by-id 判定翻成错误：读不动 ⇒ 原样上抛（调用方渲染 500），
-// 真不可见 ⇒ ErrQuestionNotFound（404）。三处笔记面共用这一格，不各抄一遍两分支。
-func questionVisibleOrErr(scope QuestionReadScope, db *gorm.DB, questionID int) error {
-	visible, err := scope.VisibleByID(db, questionID)
-	if err != nil {
-		return err
-	}
-	if !visible {
-		return ErrQuestionNotFound
-	}
-	return nil
-}

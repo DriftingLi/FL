@@ -3,7 +3,7 @@
 package api
 
 import (
-	"errors"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 
@@ -88,38 +88,30 @@ func (h *FavoriteHandler) Add(c *gin.Context) {
 	}
 	resp, err := h.svc.Add(middleware.CurrentUserID(c), body.TargetType, body.TargetID, studentQuestionScope(c))
 	if err != nil {
-		renderFavoriteError(c, err)
+		favoriteErrStatus.renderError(c, err)
 		return
 	}
 	response.Created(c, "收藏成功", resp)
 }
 
-// favoriteFacts400 收藏域的业务事实全集。表里没有的一律按未具名库故障渲染 500
-// （ADR-0065 决策 7：`validateFavoriteTarget` 五条支从前都丢查询错误，「问不出能不能收藏」与
-// 「不能收藏」同一形状；故障要落 500 的前提是这几条各有名字，否则它们会跟故障一起被推上去）。
-var favoriteFacts400 = []error{
-	service.ErrFavTargetCourseUnreadable,
-	service.ErrFavTargetChapterUnreadable,
-	service.ErrFavTargetQuestionUnreadable,
-	service.ErrFavTargetFeaturedUnreadable,
-	service.ErrFavTargetTopicNotFound,
-	service.ErrFavTargetTypeUnsupported,
-	service.ErrFavTargetIDInvalid,
-	service.ErrFavoriteNotFound,
-}
-
-// renderFavoriteError 裸 handler 一侧的档位分流：业务事实 400 各说自己的句子，其余 500 且不带
-// 驱动原文。形状与 question_interaction.go 的 renderInteractionError 相同，两张表各归各域——
-// 事实集不同，合成一张会让「这道题不在池内」与「这条收藏不存在」共用一次遍历。
-func renderFavoriteError(c *gin.Context, err error) {
-	for _, f := range favoriteFacts400 {
-		if errors.Is(err, f) {
-			response.BadRequest(c, err.Error())
-			return
-		}
-	}
-	c.Error(err) //nolint:errcheck // gin 的 Error 只记账，返回值是链式用的
-	response.ServerError(c, "服务器内部错误")
+// favoriteErrStatus 收藏域的写面错误表（复用 Endpoint 缝那张表，不重写第二份扫表算法）。
+//
+// fallback 500 的理由同批⑥：`validateFavoriteTarget` 五条支从前各自把查询错误丢在 Count 上，
+// 「问不出能不能收藏」对外与「不能收藏」同一形状。默认面收窄到 500 的前提是那几条业务事实
+// 各有名字——否则它们会跟故障一起被推上去。
+// ErrFavTargetIDInvalid 不在本表：Add 的 handler 在进 service 之前就把 target_id <= 0 挡成
+// 「请求参数错误」，那条哨兵只有 Check 走得到——而 Check 是另一张面。本批第一版把它登记进来过，
+// 反向那半条锁（fact_face_producible_contract_test.go）当场判它「登记了却打不出」。
+var favoriteErrStatus = &errStatusTable{
+	entries: []errStatusEntry{
+		{sentinel: service.ErrFavTargetCourseRejected, status: http.StatusBadRequest},
+		{sentinel: service.ErrFavTargetChapterRejected, status: http.StatusBadRequest},
+		{sentinel: service.ErrFavTargetQuestionRejected, status: http.StatusBadRequest},
+		{sentinel: service.ErrFavTargetFeaturedRejected, status: http.StatusBadRequest},
+		{sentinel: service.ErrFavTargetTopicNotFound, status: http.StatusBadRequest},
+		{sentinel: service.ErrFavTargetTypeUnsupported, status: http.StatusBadRequest},
+	},
+	fallback: http.StatusInternalServerError,
 }
 
 // Remove 取消收藏

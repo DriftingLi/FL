@@ -12,12 +12,18 @@ import (
 )
 
 // noteErrStatus 笔记域哨兵→状态码表（ADR-0024 口径：按哨兵映射，不比对文案）。
-// 正文校验类错误（空/超长）不是哨兵，走 fallback 400；删改他人笔记按「不存在」404。
+//
+// fallback 由 400 改 500（ADR-0065 决策 7）：旧形状是「正文校验类错误不是哨兵，所以兜在 400」，
+// 而那同时把**未具名的库故障**咽成 400 + 驱动原文。要让故障落 500，前提是那两条校验事实先有名字
+// ⇒ 不是二选一，是必须同时做（本文件第一次提交时只加了 swagger 的 500 档而没改这张表，
+// 由双轴评审按实测抓回——「文档说的档位」与「代码打得出的档位」之间今天仍没有锁，见 ADR-0065 批⑤ 残留缺口）。
 var noteErrStatus = &errStatusTable{
 	entries: []errStatusEntry{
 		{sentinel: service.ErrNoteNotFound, status: http.StatusNotFound},
+		{sentinel: service.ErrNoteContentEmpty, status: http.StatusBadRequest},
+		{sentinel: service.ErrNoteContentTooLong, status: http.StatusBadRequest},
 	},
-	fallback: http.StatusBadRequest,
+	fallback: http.StatusInternalServerError,
 }
 
 // NoteHandler 学员笔记 handler（ADR-0055）：题目笔记的汇集读面 + 独立笔记 CRUD。

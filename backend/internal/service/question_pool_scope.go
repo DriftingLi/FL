@@ -118,3 +118,20 @@ func NewQuestionEditScope(credFilter *int) QuestionEditScope {
 func (s QuestionEditScope) ApplyListFilter(q *gorm.DB) *gorm.DB {
 	return EntityOwnedBy(q, "credential_id", s.credFilter)
 }
+
+// questionVisibleOrErr 把 scope 的 by-id 判定翻成错误：读不动 ⇒ 原样上抛（调用方渲染 500），
+// 真不可见 ⇒ ErrQuestionNotFound（404）。三处笔记面共用这一格，不各抄一遍两分支。
+// questionVisibleOrErr 把 scope 的 by-id 判定翻成错误：读不动 ⇒ 原样上抛（调用方渲染 500），
+// 真不可见 ⇒ ErrQuestionNotFound（404）。宿主住在 question_pool_scope.go：它包装的就是本文件的
+// VisibleByID，favorite / note / 评论三域共用这一格（favorite_service.go 自述「题目支的判据宿主
+// 从此在 question_pool_scope.go」）。
+func questionVisibleOrErr(scope QuestionReadScope, db *gorm.DB, questionID int) error {
+	visible, err := scope.VisibleByID(db, questionID)
+	if err != nil {
+		return err
+	}
+	if !visible {
+		return ErrQuestionNotFound
+	}
+	return nil
+}

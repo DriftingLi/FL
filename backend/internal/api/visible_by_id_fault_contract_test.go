@@ -69,8 +69,39 @@ func TestOutOfPoolQuestionIsStillNotFound(t *testing.T) {
 	}
 }
 
+// TestFaultFacesAllSayFault 逐个端点注故障：凡本批新声明 @Failure 500 的面，都必须真打得出 500。
+// 判据 8 的「登记的档必须打得出」在这一半上的形状——文档里写一档而代码出不来，就是本批第一版
+// 被双轴评审抓到的那件事（/notes 四个面当时只加了 swagger 行，fallback 仍是 400）。
+func TestFaultFacesAllSayFault(t *testing.T) {
+	f := newPoolLeakFixture(t)
+	dropTable("question")(t, f.db)
+	dropTable("note")(t, f.db)
+	dropTable("question_comment")(t, f.db)
+
+	for _, tc := range []struct {
+		name, method, path string
+		body               any
+	}{
+		{"笔记列表", http.MethodGet, "/api/notes?page_size=10", nil},
+		{"新建笔记", http.MethodPost, "/api/notes", map[string]any{"question_id": f.poolQ.ID, "content": "正文"}},
+		{"改笔记", http.MethodPut, "/api/notes/1", map[string]any{"content": "正文"}},
+		{"删笔记", http.MethodDelete, "/api/notes/1", nil},
+		{"删评论", http.MethodDelete, "/api/questions/comments/1", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			code, body := doAndBody(t, f, f.studentToken, tc.method, tc.path, tc.body)
+			if code != http.StatusInternalServerError {
+				t.Fatalf("本面已在 swagger 声明 500 档，实际却答 %d ⇒ 那一行是对消费方的空头承诺：%s", code, body)
+			}
+			if leakyDriverText(body) {
+				t.Fatalf("500 的 message 带着驱动/ORM 原文：%s", body)
+			}
+		})
+	}
+}
+
 // TestFavoriteTargetFactsStillSayThemselves 收藏域被本批改了签名的那条链上，业务事实必须仍各说自己的句子
-// （表里八条若被默认面吞成 500，这里第一条就红）。
+// （表里每条若被默认面吞成 500，这里就红）。
 func TestFavoriteTargetFactsStillSayThemselves(t *testing.T) {
 	f := newPoolLeakFixture(t)
 	for _, tc := range []struct{ name, want string }{

@@ -133,7 +133,10 @@ func (s *QuestionCommentService) Create(questionID, userID int, content string, 
 func (s *QuestionCommentService) Delete(commentID int, userID int) error {
 	var c model.QuestionComment
 	if err := s.db.First(&c, commentID).Error; err != nil {
-		return ErrCommentNotFound
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrCommentNotFound
+		}
+		return err // 读不动 question_comment 不得被折成「评论不存在」（ADR-0065 决策 7）
 	}
 	if c.UserID != userID {
 		return ErrCommentNotOwned
