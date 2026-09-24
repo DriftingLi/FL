@@ -117,13 +117,19 @@ describe('手术目标页落袋锁（模块全量预算 / 目录 ≤2 层 / 必�
   it('样式块与手术前逐字节一致（UI 像素级冻结的最强证据面：<style> 零 diff）', () => {
     // 判据落在**文件本体**上：本票把模板表达式改为 `reg.*` 形态，但样式块一行未动。
     // 若将来有人顺手改了样式，这条会红 —— 那是「发现的 UI 问题记 issue，不顺手改」的执行面（票面 ②）。
+    //
+    // #1269 是这条锁**第一次被主动破**，且是一次显式决定：`.mode-tab` / `.mode-tab-active` 上的
+    // `font-size` / `color` / `font-weight` 挪到新的 `.mode-tab-text` / `.mode-tab-text-active`（挂在 `<text>` 上）
+    // —— 原生渲染层只把文字类样式认给文字类元素，写在 `<view>` 上会被**静默忽略**（真机日志逐字点名）。
+    // ⇒ 块内规则数 37 → 39（两条新规则）+ 一行解释性 CSS 注释（写成注释是为了让下一个读的人知道为什么分两位），
+    // 除此之外未动。破冻后这条锁继续守「不顺手改样式」。
     const style = block(read(PAGE), 'style');
     expect(style.length).toBeGreaterThan(2000);
     // 反例自检：样式块内容被改动时必须与「未改动」判据不同（此处的判据是块内规则数守恒）
     const ruleCount = (s) => (s.match(/^\s*\.[a-zA-Z][\w-]*\s*\{/gm) || []).length;
-    expect(ruleCount(style)).toBe(37);
-    expect(ruleCount(style.replace('.footer-link {', '.footer-link-x {'))).toBe(37);
-    expect(ruleCount(style.replace('.footer-link {', ''))).toBe(36);
+    expect(ruleCount(style)).toBe(39);
+    expect(ruleCount(style.replace('.footer-link {', '.footer-link-x {'))).toBe(39);
+    expect(ruleCount(style.replace('.footer-link {', ''))).toBe(38);
   });
 });
 

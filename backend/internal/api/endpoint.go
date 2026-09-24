@@ -376,6 +376,26 @@ func (e Endpoint[Req, Resp]) WithSentinel(sentinel error, status int) Endpoint[R
 	return e
 }
 
+// WithSentinels 一次挂多条具名哨兵、共用同一个状态码，但**文案仍由各错误自己说**。
+//
+// 它与 WithSentinelsMsg 的分工就是本波那条「统一必须是显式决定」的两半：
+//   - Msg 版：多条事实在呈现层被**刻意收敛成一句**（「读不到」的四件事实都答 404 + 那一句）；
+//   - 本版：同一档位、但每件的说明本就不同（证件/方向/等级/模板各自的「XXID无效」），
+//     压成一句会丢掉「是哪一个字段坏了」——那才是客户端真正需要的信息。
+//
+// 4xx 按 ADR-0064 决策 9 保留 `err.Error()`，故 entry 的 message 留空即等于「说自己的话」。
+func (e Endpoint[Req, Resp]) WithSentinels(status int, sentinels ...error) Endpoint[Req, Resp] {
+	if e.ErrStatus == nil {
+		e.ErrStatus = &errStatusTable{}
+	}
+	entries := make([]errStatusEntry, 0, len(sentinels))
+	for _, s := range sentinels {
+		entries = append(entries, errStatusEntry{sentinel: s, status: status})
+	}
+	e.ErrStatus.entries = append(entries, e.ErrStatus.entries...)
+	return e
+}
+
 // WithSentinelsMsg 一次前置多条具名哨兵、共用同一个状态码与**同一句对外文案**
 // （形状同 WithSentinel，用于「一组事实在呈现层落同一档」）。
 //

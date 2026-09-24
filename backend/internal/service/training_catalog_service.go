@@ -56,6 +56,10 @@ func renumberSortGroup(db *gorm.DB, entity any, idCol string, where map[string]a
 	return ids, nil
 }
 
+// ErrSwapItemNotFound 是 `swap_with` 指向的那一行不在本组序列里（ADR-0065 决策 3）。
+// 它是输入不合法（400）而不是 404：404 说的是「路径里那个资源没有」，而路径资源在这里是好的。
+var ErrSwapItemNotFound = errors.New("待交换的项不存在")
+
 // swapGroupPositions 把组内两项交换位置：重编号后交换 a/b 在新序中的下标，再整体落库。
 // 即使两项 sort_order 相同（默认 0）也真实生效。
 func swapGroupPositions(db *gorm.DB, entity any, idCol string, idA, idB int, where map[string]any) error {
@@ -73,7 +77,8 @@ func swapGroupPositions(db *gorm.DB, entity any, idCol string, idA, idB int, whe
 		}
 	}
 	if ia < 0 || ib < 0 {
-		return errors.New("待交换的项不存在")
+		// 与「前置课程不存在」同判（都指向 body 里给的一枚坏引用 ⇒ 400），不是「路径上那个对象没有」。
+		return ErrSwapItemNotFound
 	}
 	if ia == ib {
 		return nil
@@ -393,7 +398,7 @@ func (s *TrainingCatalogService) ListGroupedCredentials() GroupedCredentialsDTO 
 
 // QuestionTagsResultDTO 题目标签全量替换的响应 {"tag_ids": [...]}（#954 片二）。
 type QuestionTagsResultDTO struct {
-	TagIDs []int `json:"tag_ids" nullability:"nullable"`
+	TagIDs []int `json:"tag_ids" extensions:"x-nullable" nullability:"nullable"`
 }
 
 // ===== 题目-标签关联 =====
@@ -661,7 +666,7 @@ func credentialDict(c *model.Credential) CredentialDict {
 
 // CatalogTreeDTO 目录树响应契约。
 type CatalogTreeDTO struct {
-	Specialties []CatalogSpecialtyNode `json:"specialties" nullability:"nullable"`
+	Specialties []CatalogSpecialtyNode `json:"specialties" nullability:"nonnil"`
 }
 
 // CatalogSpecialtyNode 目录树专业方向节点。
@@ -669,7 +674,7 @@ type CatalogSpecialtyNode struct {
 	Code        string             `json:"code"`
 	CreatedAt   string             `json:"created_at"`
 	Description string             `json:"description"`
-	Levels      []CatalogLevelNode `json:"levels" nullability:"nullable"`
+	Levels      []CatalogLevelNode `json:"levels" nullability:"nonnil"`
 	Name        string             `json:"name"`
 	SortOrder   int                `json:"sort_order"`
 	SpecialtyID int                `json:"specialty_id"`
@@ -679,7 +684,7 @@ type CatalogSpecialtyNode struct {
 // CatalogLevelNode 目录树课程等级节点。
 type CatalogLevelNode struct {
 	Code        string      `json:"code"`
-	Courses     []CourseDTO `json:"courses" nullability:"nullable"`
+	Courses     []CourseDTO `json:"courses" nullability:"nonnil"`
 	CreatedAt   string      `json:"created_at"`
 	Description string      `json:"description"`
 	LevelID     int         `json:"level_id"`

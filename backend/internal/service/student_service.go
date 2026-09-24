@@ -63,14 +63,14 @@ type CourseProgressDTO struct {
 type StudentProfileDTO struct {
 	StudentInfo    StudentDTO          `json:"student_info"`
 	StudyStats     StudyStatsDTO       `json:"study_stats"`
-	CourseProgress []CourseProgressDTO `json:"course_progress" nullability:"nullable"`
+	CourseProgress []CourseProgressDTO `json:"course_progress" nullability:"nonnil"`
 }
 
 // StudyDailyStatsDTO 按天学习统计（学员仪表盘图表）。
 type StudyDailyStatsDTO struct {
 	Days         int      `json:"days"`
-	Labels       []string `json:"labels" nullability:"nullable"`
-	Data         []int64  `json:"data" nullability:"nullable"`
+	Labels       []string `json:"labels" nullability:"nonnil"`
+	Data         []int64  `json:"data" nullability:"nonnil"`
 	TotalMinutes int64    `json:"total_minutes"`
 	ActiveDays   int      `json:"active_days"`
 }
@@ -88,9 +88,13 @@ type StudyRecordDTO struct {
 	ChapterTitle  *string `json:"chapter_title" extensions:"x-nullable"`
 }
 
-// ErrStudentNotFound 学员行不存在（与「用户不存在」的两个既有载体同对象？否——本域取的是
-// hrwai_users 的学员视角行，沿用独立名字以免与积分/口令域的判据互相牵动；下一波若合并需连
-// wire 文案一起对账，不在本波顺手做）。
+// ErrStudentNotFound 学员行不存在——**这一事实的唯一载体**（ADR-0065 决策 4 收的正是这里：
+// `ContactService.Create` 原先另发一枚同文案的裸 `errors.New("学员不存在")`，两处 `First` 都把
+// 「查不动」咽进同一句，现已并到本哨兵并按各自端点分档）。
+// 与「用户不存在」的两个既有载体仍不同对象：本域取的是 hrwai_users 的学员视角行。
+// 档位分歧是显式决定，不是漂移：GET /student/profile 答 404（被请求的资源就是它），
+// POST /recruit/contact-requests 答 400（坏的是请求带来的引用）——两半同时成立由
+// api 侧 TestContactCreate_BadReferenceIsNotMissingResource 钉住。
 var ErrStudentNotFound = errors.New("学员不存在")
 
 // GetProfile 学员档案。
@@ -235,7 +239,7 @@ func (s *StudentService) queryStudyStats(studentID, days int) *StudyDailyStatsDT
 type StudyRecordPageResult struct {
 	Page    int              `json:"page"`
 	Pages   int              `json:"pages"`
-	Records []StudyRecordDTO `json:"records" nullability:"nullable"`
+	Records []StudyRecordDTO `json:"records" nullability:"nonnil"`
 	Total   int64            `json:"total"`
 }
 
@@ -342,7 +346,7 @@ type StudentCourseDTO struct {
 
 // StudentCoursesDTO 我的课程信封（continue_learning 为最后学习时间最新的课程）。
 type StudentCoursesDTO struct {
-	Courses          []StudentCourseDTO `json:"courses" nullability:"nullable"`
+	Courses          []StudentCourseDTO `json:"courses" nullability:"nonnil"`
 	ContinueLearning *StudentCourseDTO  `json:"continue_learning" extensions:"x-nullable"`
 }
 
@@ -358,7 +362,7 @@ type StudentCourseChapterDTO struct {
 // StudentCourseDetailDTO 单课程学习详情（我的课程条目 + 每章状态）。
 type StudentCourseDetailDTO struct {
 	StudentCourseDTO
-	Chapters []StudentCourseChapterDTO `json:"chapters" nullability:"nullable"`
+	Chapters []StudentCourseChapterDTO `json:"chapters" nullability:"nonnil"`
 }
 
 // GetStudentCourses 我的课程列表（按最后学习时间倒序）+ 继续学习 top1。

@@ -54,13 +54,14 @@ function Get-CapabilitySurfaceRules {
         [pscustomobject]@{
             Category  = '运行时权限弹窗'
             Paths     = @(
+                'composables/useForumImagePicker.uts',
                 'composables/useReplyComposer.uts',
                 'pages/forum/forum-create.uvue',
                 'pages/profile-setup/profile-setup.uvue',
                 'pages/profile/personal-info.uvue',
                 'pages/profile/profile.uvue'
             )
-            Rationale = 'uni.chooseImage 在真机上会拉起相册/相机的系统权限弹窗；弹窗本身与拒绝后的行为只有人能观测'
+            Rationale = 'uni.chooseImage 在真机上会拉起相册/相机的系统权限弹窗；弹窗本身与拒绝后的行为只有人能观测。useForumImagePicker.uts 是 uni.chooseImage 全树唯一调用点（#1240 P3 把图片流水线从发帖/回复两宿主抽出为共享 picker），改它即改选图/上传能力面；另两条旧宿主路径承接其流程，profile 系页面各自直接调 chooseImage'
         }
         [pscustomobject]@{
             Category  = '真机上传'

@@ -45,7 +45,7 @@ type DiagnosisFaultCodeItem struct {
 
 // DiagnosisFaultCodePage 故障码分页（items + total）。
 type DiagnosisFaultCodePage struct {
-	Items []DiagnosisFaultCodeItem `json:"items" nullability:"nullable"`
+	Items []DiagnosisFaultCodeItem `json:"items" extensions:"x-nullable" nullability:"nullable"`
 	Total int                      `json:"total"`
 }
 

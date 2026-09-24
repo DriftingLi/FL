@@ -1287,13 +1287,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "请求数据无效",
+                        "description": "输入不合法（挂载必填 / 引用ID无效或不存在 / 数值为负 / 前置课程冲突）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "写库或查库失败",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -1554,6 +1560,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "500": {
+                        "description": "写库或查库失败",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             },
@@ -1732,13 +1744,25 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "swap_with 参数无效",
+                        "description": "输入不合法（swap_with 参数无效 / 待交换的课程不存在 / 未挂载 / 跨组）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "课程不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "写库或查库失败",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -2064,6 +2088,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "写库或查库失败",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -4658,6 +4688,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "500": {
+                        "description": "写库或查库失败",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             }
@@ -5016,6 +5052,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "写库或查库失败",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -6412,6 +6454,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "写库或查库失败",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -9030,6 +9078,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             }
@@ -9786,6 +9840,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             }
@@ -9851,6 +9911,12 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "章节不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -10255,6 +10321,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -12995,6 +13067,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             },
@@ -13053,6 +13131,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -13132,6 +13216,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             },
@@ -13173,6 +13263,12 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "笔记不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -15190,6 +15286,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             }
@@ -15259,6 +15361,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             },
@@ -15318,6 +15426,12 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "题目ID无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -15421,6 +15535,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             },
@@ -15482,6 +15602,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             },
@@ -15513,6 +15639,12 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "题目ID无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -15975,13 +16107,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "参数错误/唯一/冷却/日限",
+                        "description": "附言为空 / 附言超 200 字 / 参数错误 / 学员不存在 / 招聘者不存在 / 招聘者账号已禁用 / 已存在待处理的申请 / 冷却期内 / 今日申请已达上限",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（DB 故障；不外发驱动原文）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -23144,11 +23282,11 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "items": {
+                    "description": "Items 恒非 null：空表发出 []（pkg/paging 的 queryFind 走 gorm Find，零行给空切片）。",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/model.AuditLog"
-                    },
-                    "x-nullable": true
+                    }
                 },
                 "page": {
                     "type": "integer"
@@ -25047,10 +25185,12 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "slides": {
+                    "description": "Slides 可为 null：未注入 slideRenderer、或 PPT 转图失败时 generateSlides 返回 nil 切片。",
                     "type": "array",
                     "items": {
                         "type": "string"
-                    }
+                    },
+                    "x-nullable": true
                 }
             }
         },
@@ -25168,7 +25308,8 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "type": "string"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "real_name": {
                     "type": "string"
@@ -25177,7 +25318,8 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "type": "object"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "resume_file_url": {
                     "type": "string"
@@ -25898,7 +26040,8 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/service.DiagnosisFaultCodeItem"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "total": {
                     "type": "integer"
@@ -26762,7 +26905,8 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "type": "string"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "experience_years": {
                     "type": "integer"
@@ -26774,7 +26918,8 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "type": "string"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "real_name": {
                     "type": "string"
@@ -26786,13 +26931,15 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "type": "object"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "resume_experiences": {
                     "type": "array",
                     "items": {
                         "type": "object"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "resume_file_url": {
                     "type": "string"
@@ -27225,7 +27372,8 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/service.MockExamAnswerDetailDTO"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "max_score": {
                     "type": "number"
@@ -27307,7 +27455,8 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/service.MockExamAnswerDetailDTO"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "max_score": {
                     "type": "number"
@@ -28190,7 +28339,8 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "type": "integer"
-                    }
+                    },
+                    "x-nullable": true
                 }
             }
         },
@@ -28288,7 +28438,8 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "type": "string"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "experience_years": {
                     "type": "integer"
@@ -28315,7 +28466,8 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "type": "object"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "salary_max": {
                     "type": "integer",

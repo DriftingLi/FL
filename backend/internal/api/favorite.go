@@ -3,6 +3,8 @@
 package api
 
 import (
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/authz"
@@ -73,6 +75,7 @@ func (h *FavoriteHandler) List(c *gin.Context) {
 // @Success 201 {object} response.R{data=service.FavoriteDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
+// @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /favorites [post]
 func (h *FavoriteHandler) Add(c *gin.Context) {
 	var body struct {
@@ -85,10 +88,30 @@ func (h *FavoriteHandler) Add(c *gin.Context) {
 	}
 	resp, err := h.svc.Add(middleware.CurrentUserID(c), body.TargetType, body.TargetID, studentQuestionScope(c))
 	if err != nil {
-		response.BadRequest(c, err.Error())
+		favoriteErrStatus.renderError(c, err)
 		return
 	}
 	response.Created(c, "收藏成功", resp)
+}
+
+// favoriteErrStatus 收藏域的写面错误表（复用 Endpoint 缝那张表，不重写第二份扫表算法）。
+//
+// fallback 500 的理由同批⑥：`validateFavoriteTarget` 五条支从前各自把查询错误丢在 Count 上，
+// 「问不出能不能收藏」对外与「不能收藏」同一形状。默认面收窄到 500 的前提是那几条业务事实
+// 各有名字——否则它们会跟故障一起被推上去。
+// ErrFavTargetIDInvalid 不在本表：Add 的 handler 在进 service 之前就把 target_id <= 0 挡成
+// 「请求参数错误」，那条哨兵只有 Check 走得到——而 Check 是另一张面。本批第一版把它登记进来过，
+// 反向那半条锁（fact_face_producible_contract_test.go）当场判它「登记了却打不出」。
+var favoriteErrStatus = &errStatusTable{
+	entries: []errStatusEntry{
+		{sentinel: service.ErrFavTargetCourseRejected, status: http.StatusBadRequest},
+		{sentinel: service.ErrFavTargetChapterRejected, status: http.StatusBadRequest},
+		{sentinel: service.ErrFavTargetQuestionRejected, status: http.StatusBadRequest},
+		{sentinel: service.ErrFavTargetFeaturedRejected, status: http.StatusBadRequest},
+		{sentinel: service.ErrFavTargetTopicNotFound, status: http.StatusBadRequest},
+		{sentinel: service.ErrFavTargetTypeUnsupported, status: http.StatusBadRequest},
+	},
+	fallback: http.StatusInternalServerError,
 }
 
 // Remove 取消收藏
