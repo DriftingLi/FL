@@ -155,9 +155,9 @@ func (h *TutorHandler) GetChapterDetail(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /tutor/chapter/{chapter_id}/upload [post]
 func (h *TutorHandler) UploadChapterFile(c *gin.Context) {
-	chapterID, err := strconv.Atoi(c.Param("chapter_id"))
+	chapterID, err := pathInt(c, "chapter_id", "章节ID无效")
 	if err != nil {
-		response.BadRequest(c, "章节ID无效")
+		response.BadRequest(c, err.Error())
 		return
 	}
 	file, err := c.FormFile("file")

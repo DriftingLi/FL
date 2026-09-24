@@ -168,10 +168,11 @@ var courseDomainFaces = []courseEndpointFaces{
 	{
 		name: "DELETE /admin/course/:course_id", who: "admin",
 		cases: []courseDeclaredFace{
-			// 负数 id 在本域按「不存在」答：课程面没有 `id <= 0` 的服务层 guard，
-			// 而第①批的用户/讲师面有（ErrInvalidHrwaiUserID / ErrInvalidTutorID ⇒ 400）。
-			// 这条**跨域不同判**登记在 ADR-0064 实施回记，收第 3 族余量时统一，不在本批顺手改判。
-			{http.StatusNotFound, courseFaceCase{method: http.MethodDelete, path: func(d courseDomainIDs) string { return "/api/admin/course" + negID }}},
+			// 负数 id 归 400（ADR-0065 批⑤）：改之前这一格是 404「课程不存在」——拿一枚非法输入
+			// 冒充一个不存在的资源，而同样的输入在第①批的用户/讲师面答 400、且用的是另一句文案
+			// （「用户 ID 非法」）。⇒ 同一件输入错误在三个地方说出三种话。现在 `pathInt` 单点
+			// 挡下 `<= 0`，本域与那两域**同码同文案**（`path_int_face_contract_test.go` 钉住）。
+			{http.StatusBadRequest, courseFaceCase{method: http.MethodDelete, path: func(d courseDomainIDs) string { return "/api/admin/course" + negID }}},
 			{http.StatusNotFound, courseFaceCase{method: http.MethodDelete, path: func(d courseDomainIDs) string { return "/api/admin/course/" + missingID(d) }}},
 			{http.StatusInternalServerError, courseFaceCase{method: http.MethodDelete, path: func(d courseDomainIDs) string { return "/api/admin/course/" + id(d.course) }, setup: dropTable("course")}},
 		},

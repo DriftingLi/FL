@@ -7,7 +7,6 @@ package api
 
 import (
 	"errors"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -74,10 +73,9 @@ func (h *ResumePDFHandler) serveResumePDF(c *gin.Context, card *model.JobCard, c
 // @Failure 404 {object} response.R "简历不存在"
 // @Router /recruit/resumes/{id}/pdf [get]
 func (h *ResumePDFHandler) RecruiterResumePDF(c *gin.Context) {
-	idStr := c.Param("id")
-	uid, err := strconv.Atoi(idStr)
-	if err != nil || uid <= 0 {
-		response.BadRequest(c, "学员 ID 无效")
+	uid, err := pathInt(c, "id", "学员 ID 无效")
+	if err != nil {
+		response.BadRequest(c, err.Error())
 		return
 	}
 	card, err := h.recruitSvc.GetRaw(uid)

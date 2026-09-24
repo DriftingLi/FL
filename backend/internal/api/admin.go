@@ -251,6 +251,7 @@ func (h *AdminHandler) SwapCourseSort(c *gin.Context) {
 // @Security BearerAuth
 // @Param course_id path int true "课程 ID"
 // @Success 200 {object} response.R{data=service.DeleteCourseResult} "课程删除成功"
+// @Failure 400 {object} response.R "课程ID无效"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "课程不存在"
 // @Router /admin/course/{course_id} [delete]

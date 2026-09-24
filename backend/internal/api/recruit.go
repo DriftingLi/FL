@@ -5,7 +5,6 @@ package api
 import (
 	"context"
 	"errors"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -119,10 +118,9 @@ func (h *RecruitHandler) ListResumes(c *gin.Context) {
 // @Router /recruit/resumes/{id} [get]
 // 与列表共用同一脱敏实现（service 层 desensitize），不存在两套逻辑；隐藏卡 404。
 func (h *RecruitHandler) GetResume(c *gin.Context) {
-	idStr := c.Param("id")
-	uid, err := strconv.Atoi(idStr)
-	if err != nil || uid <= 0 {
-		response.BadRequest(c, "简历 ID 无效")
+	uid, err := pathInt(c, "id", "简历 ID 无效")
+	if err != nil {
+		response.BadRequest(c, err.Error())
 		return
 	}
 	card, err := h.svc.GetForRecruiter(uid, middleware.CurrentUserID(c))

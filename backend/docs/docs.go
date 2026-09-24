@@ -1599,6 +1599,12 @@ const docTemplate = `{
                             ]
                         }
                     },
+                    "400": {
+                        "description": "课程ID无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
                     "401": {
                         "description": "未认证",
                         "schema": {
@@ -15178,6 +15184,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "400": {
+                        "description": "评论ID无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             }
@@ -15241,6 +15253,12 @@ const docTemplate = `{
                                 }
                             ]
                         }
+                    },
+                    "400": {
+                        "description": "题目ID无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             },
@@ -15297,6 +15315,12 @@ const docTemplate = `{
                                 }
                             ]
                         }
+                    },
+                    "400": {
+                        "description": "题目ID无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             }
@@ -15343,6 +15367,12 @@ const docTemplate = `{
                                 }
                             ]
                         }
+                    },
+                    "400": {
+                        "description": "题目ID无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             }
@@ -15384,6 +15414,12 @@ const docTemplate = `{
                                     }
                                 }
                             ]
+                        }
+                    },
+                    "400": {
+                        "description": "题目ID无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -15440,6 +15476,12 @@ const docTemplate = `{
                                 }
                             ]
                         }
+                    },
+                    "400": {
+                        "description": "题目ID无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             },
@@ -15465,6 +15507,12 @@ const docTemplate = `{
                 "responses": {
                     "200": {
                         "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "题目ID无效",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }

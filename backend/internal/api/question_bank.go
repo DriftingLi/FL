@@ -363,9 +363,9 @@ type questionIDReq struct {
 func (h *QuestionBankHandler) GetQuestion(c *gin.Context) {
 	Endpoint[questionIDReq, service.QuestionDTO]{
 		Parse: func(c *gin.Context) (*questionIDReq, error) {
-			id, err := strconv.Atoi(c.Param("question_id"))
+			id, err := pathInt(c, "question_id", "题目ID无效")
 			if err != nil {
-				return nil, badRequest("题目ID无效")
+				return nil, err
 			}
 			return &questionIDReq{ID: id}, nil
 		},
@@ -415,9 +415,9 @@ type updateQuestionReq struct {
 func (h *QuestionBankHandler) UpdateQuestion(c *gin.Context) {
 	Endpoint[updateQuestionReq, service.QuestionDTO]{
 		Parse: func(c *gin.Context) (*updateQuestionReq, error) {
-			id, err := strconv.Atoi(c.Param("question_id"))
+			id, err := pathInt(c, "question_id", "题目ID无效")
 			if err != nil {
-				return nil, badRequest("题目ID无效")
+				return nil, err
 			}
 			input, err := bindQuestionWriteReq[service.QuestionUpdateInput](c)
 			if err != nil {
@@ -455,9 +455,9 @@ func (h *QuestionBankHandler) UpdateQuestion(c *gin.Context) {
 func (h *QuestionBankHandler) DeleteQuestion(c *gin.Context) {
 	Endpoint[questionIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*questionIDReq, error) {
-			id, err := strconv.Atoi(c.Param("question_id"))
+			id, err := pathInt(c, "question_id", "题目ID无效")
 			if err != nil {
-				return nil, badRequest("题目ID无效")
+				return nil, err
 			}
 			return &questionIDReq{ID: id}, nil
 		},
@@ -489,9 +489,9 @@ func (h *QuestionBankHandler) DeleteQuestion(c *gin.Context) {
 func (h *QuestionBankHandler) PublishQuestion(c *gin.Context) {
 	Endpoint[questionIDReq, service.QuestionDTO]{
 		Parse: func(c *gin.Context) (*questionIDReq, error) {
-			id, err := strconv.Atoi(c.Param("question_id"))
+			id, err := pathInt(c, "question_id", "题目ID无效")
 			if err != nil {
-				return nil, badRequest("题目ID无效")
+				return nil, err
 			}
 			return &questionIDReq{ID: id}, nil
 		},
@@ -525,9 +525,9 @@ func (h *QuestionBankHandler) PublishQuestion(c *gin.Context) {
 func (h *QuestionBankHandler) SubmitQuestion(c *gin.Context) {
 	Endpoint[questionIDReq, service.QuestionDTO]{
 		Parse: func(c *gin.Context) (*questionIDReq, error) {
-			id, err := strconv.Atoi(c.Param("question_id"))
+			id, err := pathInt(c, "question_id", "题目ID无效")
 			if err != nil {
-				return nil, badRequest("题目ID无效")
+				return nil, err
 			}
 			return &questionIDReq{ID: id}, nil
 		},
@@ -567,9 +567,9 @@ type rejectQuestionReq struct {
 func (h *QuestionBankHandler) RejectQuestion(c *gin.Context) {
 	Endpoint[rejectQuestionReq, service.QuestionDTO]{
 		Parse: func(c *gin.Context) (*rejectQuestionReq, error) {
-			id, err := strconv.Atoi(c.Param("question_id"))
+			id, err := pathInt(c, "question_id", "题目ID无效")
 			if err != nil {
-				return nil, badRequest("题目ID无效")
+				return nil, err
 			}
 			var req struct {
 				Reason string `json:"reason"`

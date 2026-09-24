@@ -5009,6 +5009,10 @@ paths:
                 data:
                   $ref: '#/definitions/service.DeleteCourseResult'
               type: object
+        "400":
+          description: 课程ID无效
+          schema:
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
@@ -13372,6 +13376,10 @@ paths:
                 data:
                   $ref: '#/definitions/service.QuestionCommentPageResult'
               type: object
+        "400":
+          description: 题目ID无效
+          schema:
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 题目评论列表
@@ -13405,6 +13413,10 @@ paths:
                 data:
                   $ref: '#/definitions/service.QuestionCommentDTO'
               type: object
+        "400":
+          description: 题目ID无效
+          schema:
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 发表评论
@@ -13431,6 +13443,10 @@ paths:
                     $ref: '#/definitions/model.QuestionTag'
                   type: array
               type: object
+        "400":
+          description: 题目ID无效
+          schema:
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 考点标签
@@ -13447,6 +13463,10 @@ paths:
       responses:
         "200":
           description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 题目ID无效
           schema:
             $ref: '#/definitions/response.R'
       security:
@@ -13471,6 +13491,10 @@ paths:
                 data:
                   $ref: '#/definitions/model.Note'
               type: object
+        "400":
+          description: 题目ID无效
+          schema:
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 获取笔记
@@ -13503,6 +13527,10 @@ paths:
                 data:
                   $ref: '#/definitions/model.Note'
               type: object
+        "400":
+          description: 题目ID无效
+          schema:
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 保存笔记
@@ -13519,6 +13547,10 @@ paths:
       responses:
         "200":
           description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 评论ID无效
           schema:
             $ref: '#/definitions/response.R'
       security:
