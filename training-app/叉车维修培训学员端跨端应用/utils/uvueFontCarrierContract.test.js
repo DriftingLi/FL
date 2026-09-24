@@ -278,7 +278,7 @@ function scanFontCarrier(file, source) {
       for (const r of cssRules(css)) {
         for (const group of PROPERTY_RULES) {
           const decls = r.decls.filter((d) => group.props.includes(d.prop));
-          if (decls.length > 0) out.push({ selector: r.selector, line: r.line, decls, carriers: group.carriers, props: group.props });
+          if (decls.length > 0) out.push({ selector: r.selector, line: r.line, decls, carriers: group.carriers });
         }
       }
       return out;
@@ -317,7 +317,7 @@ function scanFontCarrier(file, source) {
           for (const group of PROPERTY_RULES) {
             const hit = decls.filter((d) => group.props.includes(d.prop));
             if (hit.length > 0) {
-              out.push({ selector: tag, line: lineAt(tpl, index), decls: hit, carriers: group.carriers, props: group.props, tag });
+              out.push({ selector: tag, line: lineAt(tpl, index), decls: hit, carriers: group.carriers, tag });
             }
           }
         }
@@ -327,7 +327,7 @@ function scanFontCarrier(file, source) {
     (group) => ({ tags: [group.tag], badClasses: [] })
   );
 
-  return { occurrences, violations, carriers };
+  return { occurrences, violations };
 }
 
 /** 递归收集项目内 `.uvue`（跳过构建产物、依赖与第三方原生插件面） */
@@ -341,6 +341,11 @@ function collectUvue(dir, acc = []) {
   for (const e of entries) {
     const full = path.join(dir, e.name);
     if (e.isDirectory()) {
+      // 点目录一律跳。承重的是 `.scratch/`：①a 取证的复现命令会把**术前** `.uvue` 副本写到那儿
+      // （见 `docs/verification/uvue-font-carrier/1269/README.md` 复现段），而它已被 gitignore ⇒
+      // 扫进来会让「全仓零违规」被本机产物判红，门的含义退化成「本机恰好干净才绿」。
+      // `.git` / `.ci-verify` 同族（先例 `navQueryKeyContract.test.js` 的跳过表）。
+      if (e.name.startsWith('.')) continue;
       if (e.name === 'unpackage' || e.name === 'node_modules' || e.name === 'uni_modules') continue;
       collectUvue(full, acc);
     } else if (e.name.endsWith('.uvue')) {
@@ -357,35 +362,44 @@ function collectUvue(dir, acc = []) {
  *
  * 这**不是豁免清单**，与 `uvueWhiteSpaceContract` 的 `LEGAL_CARRIER_SITES` 也不是一回事（那份登记的是
  * 「已核过的合法位」，这份登记的是「**已知仍坏着**的位」）。它的两条性质：
- *   · **上界**：不在这里的新违规一律判红 ⇒ 全仓锁死，新页面加不出第 6 处（现清单 5 条，2026-09-24 实测）；
- *   · **自净**：条目对应的违规一旦消失（有人顺手修了那一页），「每条仍命中」的断言立刻判红，
- *     逼改的人回来删条目 ⇒ 清单只会变短，不会长成一永久豁免区。
+ *   · **上界**：不在这里的新违规一律判红 ⇒ 全仓锁死，新页面加不出第 6 处（现清单 5 位 / **7** 条
+ *     occurrence，2026-09-24 实测）。**判据是条数而不是「这个键命中过」** —— 键取「文件 + class」，
+ *     一个 class 在两个属性组上非法就是 2 条（`picker-title` 两位各 2 条），所以同一位**再加一条**
+ *     同键违规会被键吞掉；登记每条的 occurrence 数（`occurrences` 字段）才真的锁得住。
+ *   · **自净**：条目对应的 occurrence 数一旦**变小**（有人顺手修了那一页，全修或部分修），判据立刻判红，
+ *     逼改的人回来更新数字或删条目 ⇒ 清单只会变短，不会长成一永久豁免区。
  * 收口方式：谁改到那一页，谁在同一个 PR 里删掉该页的文字并落进 `<text>`（改法见每条 `why`）。
+ * 三条判据（新位 / 同位加条 / 修好）都由 `ratchetFindings` 承载，并在 ① 节用注入样本自检。
  */
 const DEFERRED = [
   {
     file: 'components/ai-chat/ai-chat-custom-form.uvue',
     className: 'picker-title',
+    occurrences: 2, // 两个属性组各一条（`font-size/color/text-align` + `font-weight`）
     why: 'ai-chat 面，不在本票射程。改法：标题文字挪进 <text>，`font-size/color/text-align/font-weight` 跟过去',
   },
   {
     file: 'components/ai-chat/ai-chat-custom-form.uvue',
     className: 'custom-hint',
+    occurrences: 1,
     why: 'ai-chat 面，不在本票射程。改法同上（`font-size/color`）',
   },
   {
     file: 'components/ai-chat/ai-chat-model-picker.uvue',
     className: 'picker-title',
+    occurrences: 2,
     why: 'ai-chat 面，不在本票射程。改法同 custom-form 的同名 class',
   },
   {
     file: 'components/ai-chat/ai-chat-model-picker.uvue',
     className: 'picker-empty',
+    occurrences: 1,
     why: 'ai-chat 面，不在本票射程。改法：空态文案挪进 <text>（`text-align/font-size/color`）',
   },
   {
     file: 'pages/recruiter/resume-detail.uvue',
     className: 'paragraph',
+    occurrences: 1,
     why: '招募面，不在本票射程。该 class 另有 5 处落在 <text> 上（合法），只有加载态那一位挂在 <view> 上'
       + ' ⇒ 改法是**删掉那一位的 class**：那一位里唯一的文字是 <text class="meta-item">，它自己声明了同值的'
       + ' `26rpx / #666666` ⇒ 删了零视觉变化，比其余四条都便宜',
@@ -434,6 +448,33 @@ function violatingOccurrences(scanned) {
     }
   }
   return out;
+}
+
+/**
+ * 棘轮判定（纯函数）：输入违规 occurrence 清单（真实扫描或注入样本），输出三条红的文案。
+ *
+ * 三条各对一种失效方向，缺一条就会长成假锁：
+ *   · `fresh` —— 出现了没登记的新位（新 class / 新文件）；
+ *   · `over` —— **登记位又长出一条**同键违规。键是「文件 + class」，只看「命中与否」会把它吞掉，
+ *     故比对的是 occurrence 条数（见 `DEFERRED` 注释）；
+ *   · `stale` —— 登记位的条数变小或归零（有人修好了那一页，全修或部分修）⇒ 逼回来更新/删条目。
+ */
+function ratchetFindings(viol, deferred = DEFERRED) {
+  const byKey = new Map(deferred.map((d) => [deferredKey(d), d]));
+  const counts = new Map();
+  for (const o of viol) counts.set(o.key, (counts.get(o.key) || 0) + 1);
+  const numberOf = (d) => counts.get(deferredKey(d)) || 0;
+  return {
+    fresh: viol.filter((o) => !byKey.has(o.key)).map((o) => o.message),
+    over: [...counts.entries()]
+      .filter(([key, n]) => byKey.has(key) && n > byKey.get(key).occurrences)
+      .map(([key, n]) => key + ' —— 登记时 ' + byKey.get(key).occurrences + ' 条，现测 ' + n
+        + ' 条：同一个登记位又长出违规。登记表只减不增 ⇒ 把它挪进 `<text>`，'
+        + '或在本 PR 里显式说明为什么这处不算红'),
+    stale: deferred.filter((d) => numberOf(d) < d.occurrences).map((d) => deferredKey(d)
+      + ' —— 登记 ' + d.occurrences + ' 条，现测 ' + numberOf(d) + ' 条：该位已被部分或全部修好'
+      + ' ⇒ 删条目或把 `occurrences` 改小（这张清单只允许变短）'),
+  };
 }
 
 /* ------------------------------------------------------------------ 测试 */
@@ -529,6 +570,28 @@ describe('uvue 文字类样式的承载面契约（#1269）', () => {
       // 只点名**该规则真写了**的属性：把整组的三个都念一遍，读者会去删没写的声明
       expect(violationsOf('<view class="t">甲</view>', '.t { font-size: 28rpx; }')).not.toMatch(/`text-align`/);
     });
+
+    it('棘轮三条判据都要能被抓到：新位 / 登记位再加一条 / 登记位被修好', () => {
+      // 输入用「按登记表原样长出来的」违规清单：先证明它自身不判红（否则下面三条红是空跑假绿），
+      // 再逐条加/减，看对应的判据是否真的响。
+      const at = (key, n) => Array.from({ length: n }, () => ({ key, message: key + ' 承载非法' }));
+      const asRegistered = DEFERRED.flatMap((d) => at(deferredKey(d), d.occurrences));
+      expect(ratchetFindings(asRegistered)).toEqual({ fresh: [], over: [], stale: [] });
+
+      const added = (key) => ratchetFindings(asRegistered.concat(at(key, 1)));
+      // ① 没登记过的位 ⇒ fresh
+      expect(added('pages/x.uvue#brand-new-tab').fresh).toHaveLength(1);
+      // ② **登记过的位**上再来一条 —— 这条正是「键命中就放行」会吞掉的方向
+      const dup = added(deferredKey(DEFERRED[0]));
+      expect(dup.over).toHaveLength(1);
+      expect(dup.over[0]).toMatch(/登记时 2 条，现测 3 条/);
+      expect(dup.fresh).toEqual([]); // 也不能被当成新位重复报
+      // ③ 修好了（部分 / 全部）⇒ stale
+      expect(ratchetFindings(asRegistered.slice(1)).stale).toHaveLength(1);
+      const fixed = ratchetFindings(asRegistered.filter((o) => o.key !== deferredKey(DEFERRED[4])));
+      expect(fixed.stale).toHaveLength(1);
+      expect(fixed.stale[0]).toMatch(/现测 0 条[\s\S]*删条目/);
+    });
   });
 
   /* ---------------- ② 合规样本不能判红（防误报） ---------------- */
@@ -541,7 +604,7 @@ describe('uvue 文字类样式的承载面契约（#1269）', () => {
       [
         '<view> 上的**边框 / 背景**色不是文字样式（正则扫块会把 `-color` 后缀误伤）',
         '<view class="tab">甲</view>',
-        '.tab { background-color: #F0F1F5; border: 2rpx solid transparent; border-bottom-color: #2979ff; border-color: #2979ff; color: transparent; }'.replace(' color: transparent;', ''),
+        '.tab { background-color: #F0F1F5; border: 2rpx solid transparent; border-bottom-color: #2979ff; border-color: #2979ff; }',
       ],
       [
         '祖先类是 <view>、载体类是 <text> —— 后代选择器只看最后一段',
@@ -608,15 +671,13 @@ describe('uvue 文字类样式的承载面契约（#1269）', () => {
     });
 
     it('除「已知存量」外全仓零违规（新写的文字类样式必须落对承载）', () => {
-      const registered = new Set(DEFERRED.map(deferredKey));
-      const fresh = violatingOccurrences(scanned).filter((o) => !registered.has(o.key));
-      expect(fresh.map((o) => o.message).join('\n')).toBe('');
+      const { fresh } = ratchetFindings(violatingOccurrences(scanned));
+      expect(fresh.join('\n')).toBe('');
     });
 
-    it('DEFERRED 每条仍必须命中（修好了就删条目 —— 这张清单只允许变短）', () => {
-      const keys = new Set(violatingOccurrences(scanned).map((o) => o.key));
-      const stale = DEFERRED.filter((d) => !keys.has(deferredKey(d))).map((d) => deferredKey(d));
-      expect(stale).toEqual([]);
+    it('DEFERRED 每条的 occurrence 数必须与登记时相同（修好了就删条目 —— 这张清单只允许变短）', () => {
+      const { over, stale } = ratchetFindings(violatingOccurrences(scanned));
+      expect([over.join('\n'), stale.join('\n')].filter(Boolean).join('\n')).toBe('');
     });
   });
 });

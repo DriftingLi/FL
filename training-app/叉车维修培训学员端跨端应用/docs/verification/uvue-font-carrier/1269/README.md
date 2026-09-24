@@ -1,17 +1,17 @@
 # uvue 文字类样式落在 `<view>` 上被静默忽略 —— 本票改动点修复 + 全仓机检落锁（#1269）· ①a Android 真机术前/术后对照取证
 
 - **票**：#1269（同族先例 #1113 / `white-space`，PR #1149）
-- **PR**：本目录**先按票号取证**；开 PR 后按仓内约定改名为 PR 号（改名只动 `docs/verification/**` ⇒ 非运行时面，不影响 ①a 证据的 sha 绑定）
-- **分支 / 复测对象**：`fix/1269`，运行时面落在提交 **`e35ede17`**（本目录的截图/日志即对这一棵树取证）。取证时的两个 `.uvue` 内容 sha256 前 20 位：`forgot-password.uvue` `c7aa27c9e90af3f3f848`、`register.uvue` `5a05b273dd7aaf7ec580`（二者**工作区与 git blob 同 sha**，已核）；术前对照 = 二者 `HEAD` 版本 `f78f1c220b885343c076` / `15aff48366f96ecbddeb`
+- **PR / 目录名**：本目录按**票号 `1269`** 命名，**不**改名成 PR 号。理由写实：① 校验器只认数字段（`.github/workflows/pr-evidence.yml` 的 `REPO_VERIFICATION`），两种编号都判得过；② 仓内两种先例都有（`docs/verification/ai-assistant/911/`、`docs/verification/resume/1204/` 经核 **不是** PR 号，是票号）；③ 改名要搬 26 个文件，并让 `machine-lines.txt` 里引用自身路径的逐字记录当场失效 —— **证据完整性优先于命名一致**。ADR-0008 写的是 `<PR号>`，本条是**有意偏离**并在此具名；PR 号见本 PR 正文页眉
+- **分支 / 复测对象**：`fix/1269`，运行时面落在提交 **`e35ede17`**（本目录的截图/日志即对这一棵树取证）。取证时的两个 `.uvue` 内容 sha256 前 20 位：`forgot-password.uvue` `c7aa27c9e90af3f3f848`、`register.uvue` `5a05b273dd7aaf7ec580`（二者**工作区与 git blob 同 sha**，已核）；术前对照 = 二者在 **`e35ede17^`**（本分支的 merge-base，也就是取证当时的 `HEAD`）上的版本 `f78f1c220b885343c076` / `15aff48366f96ecbddeb`。**这里刻意不写「`HEAD` 版本」**：提交之后 `HEAD` 已经是**术后**树，照 `HEAD` 取术前会拿到修好的文件（复现命令同此）
 - **日期**：2026-09-24
 - **设备**：`192.168.0.212:37611`（Xiaomi `23049RAD8C` / Android 15，**无线** adb）
 - **屏 / 密度**：`1080x2400` · density 440 ⇒ uvue 的 750rpx 基准下 **1rpx = 1.44px**，`28rpx` 的设计值应为 **40.32px**（本目录用它反推字号是否真的生效）
 - **包名**：`io.dcloud.uniappx`（uni-app-x 调试基座）
-- **执行人**：agent 执行（本目录只承载 **①a**。**①b 未命中能力面** —— 本票改动是模板结构与 CSS 声明，不含指纹 / 运行时权限弹窗 / 真机上传 / 厂商 ROM 交互，故无人工签收项。**② 免** —— 未命中 MP-WEIXIN 面：改动集无 `manifest.json` / `platformConfig.json`，`.uvue` 的 diff 增删行里也没有 `#ifdef MP-WEIXIN` 系指令行，判据见根 `AGENTS.md` 与移动端 `docs/adr/0008` 的「② 触发判据的可机检口径」）
+- **执行人**：agent 执行（本目录只承载 **①a**。**①b 未命中能力面** —— 本票改动是模板结构与 CSS 声明，不含指纹 / 运行时权限弹窗 / 真机上传 / 厂商 ROM 交互，故无人工签收项。**② 免** —— 未命中 MP-WEIXIN 面：改动集无 `manifest.json` / `platformConfig.json`，`.uvue` 的 diff 增删行里也没有 `#ifdef MP-WEIXIN` 系指令行，判据见移动端 `docs/adr/0008` 的「② 触发判据的可机检口径」（根 `AGENTS.md` 里那条讲的是**低风险运行时面逐文件豁免** —— 另一条轴，不是 ② 的触发判据，别拿它当依据））
 
 ## 被验的改动（本票全部运行时面）
 
-票面点名 `.mode-tab` / `.mode-tab-active`：uvue 原生端只把 `font-size` / `color` / `text-align` 认给 `<text>|<button>|<input>|<textarea>`（`font-weight` 另多一个 `<loading>`），落在 `<view>` 上会被渲染层**判错并忽略** ⇒ 设计稿的 `28rpx / #666666` 与选中态 `#2979ff + bold` 在 Android 端**从未生效过**，且**每进一次页打 3 条 error**。修法取「**容器与文字分成两位**」（票面「二选一」里的第二项）：`<view>` 只留 padding / background / border，文字挪进 `<text>` 子元素并让那四条声明跟到 `<text>` 的 class 上。
+票面点名 `.mode-tab` / `.mode-tab-active`：uvue 原生端只把 `font-size` / `color` / `text-align` 认给 `<text>|<button>|<input>|<textarea>`（`font-weight` 另多一个 `<loading>`），落在 `<view>` 上会被渲染层**判错并忽略** ⇒ 设计稿的 `28rpx / #666666` 与选中态 `#2979ff + bold` 在 Android 端**从未生效过**，且**每进一次页打 3 条 error**。修法取「**容器与文字分成两位**」= 票面「二选一」的**第一项**（改模板、把文字挪进 `<text>`，字号/色/字重的**声明字面值全部保留**；第二项是「把这些属性移除」，未采 —— 理由见票面「二选一」段）：`<view>` 只留 padding / background / border，文字挪进 `<text>` 子元素并让那四条声明跟到 `<text>` 的 class 上。
 
 | # | 文件 | 改前 | 改后 |
 | --- | --- | --- | --- |
@@ -24,11 +24,11 @@
 
 ## 新增的全仓机检（票面「考虑」项 → 已落）
 
-`utils/uvueFontCarrierContract.test.js` —— 30 用例，形态沿用本仓既有全仓守护（`uvueWhiteSpaceContract` / `gradientSyntaxContract`）：纯函数读源码文本 + **注入违规自检**（防空跑假绿）+ **合规样本**（防假红）+ 全仓断言 + 活性断言；helper 自带重复、不抽公共模块（与全部先例一致）。
+`utils/uvueFontCarrierContract.test.js` —— 31 用例（① 注入违规 15 · ② 合规样本 11 · ③ 真实文件 5），形态沿用本仓既有全仓守护（`uvueWhiteSpaceContract` / `gradientSyntaxContract`）：纯函数读源码文本 + **注入违规自检**（防空跑假绿）+ **合规样本**（防假红）+ 全仓断言 + 活性断言；helper 自带重复、不抽公共模块（与全部先例一致）。扫描面**跳过点目录**：`.scratch/` 放的是取证会话的本机副本（本 README 的复现命令就会往那儿写术前 `.uvue`），扫进来会让「全仓零违规」被本机产物判红。
 
 - **判据**：一条 `<style>` 规则里的文字类样式，其选择器**最后一个 compound** 的每个 class，在**模板里**的所有承载标签都必须在白名单内。同一 class 既挂合法又挂非法 ⇒ 仍判违规（非法那一位的声明同样是死的）。
 - **只锁有真机日志判据的四个属性**：`font-size` / `color` / `text-align` / `font-weight`。`line-height` / `font-family` **不锁** —— 仓内没有它们被判错的日志，写了就是替渲染器编规则（实测：把这两个加进判定，现扫违规**一条不增**）。
-- **`DEFERRED` 不是豁免清单**：上界（不在清单里的新违规一律判红 ⇒ 新页面加不出第 6 处）+ 自净（条目对应违规一旦消失，「每条仍命中」的断言立刻判红，逼删条目）⇒ 清单只允许变短。
+- **`DEFERRED` 不是豁免清单**：登记粒度是**每条的 occurrence 数**（5 位 / 7 条，2026-09-24 实测），不是「这个键命中过」⇒ 上界（新位一律判红；**同一个登记位再加一条**也判红，键是「文件 + class」，只看命中会把它吞掉）+ 自净（条数变小或归零立刻判红，逼回来更新数字或删条目）⇒ 清单只允许变短。三条判据（新位 / 同位加条 / 修好）都由纯函数 `ratchetFindings` 承载，并在 ① 节用注入样本自检；「同位加条」另有端到端实测（在 `ai-chat-custom-form.uvue` 临时加一条 `.picker-title { color: … }` ⇒ 该断言判红，随即还原）。
 - **具名盲区**：`class` 在模板里找不到承载（全局样式 / `.uts` 常量动态挂的 class）**不判** —— 现测全仓 1577 个 occurrence 里 71 个属此类，判它们会 mass 假红；代价由 ③ 节的「已判定数 ≥ `JUDGED_MIN`=1200」兜住。`App.uvue`（应用根组件，按设计无 `<template>`）是另一条静默盲区，具名登记在 `NO_TEMPLATE_OK` 并由 ③ 节按**相等**断言 —— 新增第二处无模板文件必须先改那张清单。该文件的三条带文字类样式的 class 现测使用点全在合法承载上 ⇒ 这条盲区目前**无已知受害位**。
 - **分类 = [接线] 守护**（`node scripts/classify-guards.mjs` 2026-09-24 实测：行为 **30** · 接线 **99** · 合计 129）。按 `docs/agents/guards.md`，接线守护**不构成 ③ 门证据** ⇒ 本票这条接线的**行为兜底是 ①a 真机门本身**（本目录 §「术前/术后对照」），不是某个单测。守护自己的判别力另有**两层**红控制：套件内注入样本必红（① 节）+ **术前真实树上必红**（见下文「红控制」）。
 
@@ -39,7 +39,7 @@
 - **进页**：`.scratch/1269-capture.ps1` 复用 `scripts/lib/auto-screenshot.ps1` 的 `Start-NavLaunchDetached` + `Wait-NavSettled`，**`--pagePath` 深链直达**（不经首页导航），4 次导航**全部落定**（`settled=True`，相邻帧差异 0% ≤ 0.5%），页身份逐次命中请求页。
 - **截页**：`adb exec-out screencap -p`（经 `cmd.exe /c` 重定向；PowerShell 的 `>` 会破坏二进制）→ PNG 1080×2400，转 **JPEG q75 / 宽 720** 入库（每张 63,402–68,441 字节，≤ 150 KB 上限）；每张旁配一份 `<同名>.content-desc.txt` —— uvue 的文字在 a11y 树里走 **`content-desc`** 不走 `text`。
 - **两个状态**：默认态（手机号 tab 选中）+ `input tap` 第二标签后的态（邮箱 tab 选中）。坐标取 dump 的 bounds 中心。
-- **术前对照怎么来的**：把两个 `.uvue` **还原成 `HEAD` 版本**（`.scratch/1269-before/`）→ 重编译 → 重部署 → 同一脚本同一参数再跑一轮 → 把术后版本从 `.scratch/1269-fixed-backup/` 放回。**同一台设备、同一密度、同一会话序列**，唯一变量是那 4 个承载位。
+- **术前对照怎么来的**：把两个 `.uvue` **还原成 `e35ede17^` 版本**（暂存于 `.scratch/1269-before/`；取证当时那棵树就是 `HEAD`，术后已提交 ⇒ 现在 `HEAD` 含修复，复现别再取 `HEAD`）→ 重编译 → 重部署 → 同一脚本同一参数再跑一轮 → 把术后版本从 `.scratch/1269-fixed-backup/` 放回。**同一台设备、同一密度、同一会话序列**，唯一变量是那 4 个承载位。
 
 ## 术前 / 术后对照（本目录的核心判据）
 
@@ -102,16 +102,16 @@
 
 ## 红控制（成对取证：只跑通过的那一次不算验收）
 
-术前树（把两个 `.uvue` 换回 `HEAD`）上跑三份相关套件 ⇒ **7 红**（`Tests: 7 failed, 120 passed, 127 total`；`Test Suites: 3 failed, 3 total`），逐字见 `machine-lines.txt` §7：
+术前树（把两个 `.uvue` 换回 `e35ede17^`，即取证当时的 `HEAD`）上跑三份相关套件 ⇒ **7 红**。守护后来加了 1 条自检（棘轮三条判据），**已在同一棵术前树上重跑**：红的还是**同 7 条**（逐字比对见 `machine-lines.txt` §7），总数从 127 → **128**：`Tests: 7 failed, 121 passed, 128 total`；`Test Suites: 3 failed, 3 total`。
 
 - **新守护 3 红**：③ 节的「改动点映射」「两页零违规」「除已知存量外全仓零违规」—— 后两条的失败消息**点名 4 个违规位的 `文件:行` + 选择器 + 具体死掉的声明**，不是泛泛「违规」；
-- **两页各自的 `<style>` 逐字节冻结锁 4 红**（`forgotPasswordContract` / `registerContract` 的 sha256 锁 + 规则数守恒 + 判断力断言）⇒ 已按术后实况重定基线（`forgot-password` 规则数 43→45、判断力 42→44；`register` 37→39、36→38）。
+- **两页样式块冻结断言 4 红**：`forgotPasswordContract` 的 3 条（`<style>` sha256 锁 / 规则数守恒 / 判断力断言）+ `registerContract` 的 1 条（挂在 #1219「手术目标页落袋锁」describe 下的规则数守恒）⇒ 已按术后实况重定基线（`forgot-password` 规则数 43→45、判断力 42→44；`register` 37→39、36→38）。
 
 ⇒ 「术后全绿」不是恒真：同一套断言在**未修的树上必须红**，且红的文案可执行。
 
 ## 门结论（③ / ④）
 
-- **③ `npm run test:unit`**：全量 **129 suites / 2474 tests 全绿**（`Time: 160s`）。三份直接相关套件单跑 **127 tests 全绿**（`uvueFontCarrierContract` 30 + 两页 contract 锁）。
+- **③ `npm run test:unit`**：全量 **129 suites / 2475 tests 全绿**（`Time: 178s`）。三份直接相关套件单跑 **128 tests 全绿**（`uvueFontCarrierContract` 31 + 两页 contract 锁）。两次计数都记在 `/code-review` 之后：审查抓出「登记位再加一条会被键吞掉」与「扫描面把 gitignore 的取证副本算进全仓」，守护各加一条自检 ⇒ 用例 30→31、全量 2474→2475（红控制同 7 条，见上节）。
 - **④c `npm run build:kotlin-all`**：`KOTLIN_ALL_RESULT errors=0 classes=1501 files=120 input=unpackage\resources\app-android freshness=fresh log=D:\FL\wt-1269\training-app\叉车维修培训学员端跨端应用\.ci-verify\kotlin-all.log`。原文入库为本目录 `09-kotlin-all-4c.txt`。根 `.gitignore` 有 `*.log` ⇒ 按仓内先例改名入库，正文里仍保留 `.ci-verify/kotlin-all.log` 字面量供 ④ 判据匹配。
   - **该副本的行尾被 git 归一了，如实记**：源日志 11,507 字节（CRLF），入库 blob 11,394 字节（LF），差 113 个行尾；实测 `源.replace(CRLF,LF) == blob` 为真 ⇒ **内容逐行一致、只有行尾不同**。源日志 sha256 前 16 位 `fc7abda91051ac31`，**入库 blob** sha256 前 16 位 `e47a64b45bcc5cba`（先例 `docs/verification/recruiter-login/1206/04-kotlin-all-4c.txt` 同样是 LF 化的 blob，本目录不例外，但把两个 sha 都写出来，免得有人拿工作区 sha 去对 GitHub 上的）。
 - **②**：本票**未命中触发面 ⇒ 免**（理由见页眉）。另跑了一次 `build:mp-weixin-check` 作为**补充**观察，其结论**不进**本票的门判据 —— 且**不要**把它当成本票改动的证据：那次运行的导航被降级，被改两页未被访问（详见「诚实声明」第 2 条）。
@@ -137,7 +137,7 @@
 | `console-logs/SUMMARY.txt` | 机检摘要表 + 主张/不主张清单 |
 | `machine-lines.txt` | 全部机检行逐字汇编（§1 部署 / §2 页身份 / §3 错行 / §4 错误类计数 / §5 截图落盘 / §6 bounds / §7 红控制 / §8 ④c） |
 | `09-kotlin-all-4c.txt` | ④c 编译日志原文（内容同 `.ci-verify/kotlin-all.log`，行尾被 git 归一为 LF ⇒ 见「门结论」的两个 sha） |
-| `10-/11-forgot-password-captcha-band-{before,after}.png` | 验证码行 1133–1237 的放大裁切（各 1020×220，≈13.5 KB）—— 用来独立复核「未塌的那一带 = 随机验证码图」这条归因 |
+| `10-/11-forgot-password-captcha-band-{before,after}.png` | 验证码行 1133–1237 的放大裁切（各 1020×220，各 ~13.5 KB）—— 用来独立复核「未塌的那一带 = 随机验证码图」这条归因。**宽度超 ADR-0008 的 ≤720px 是有意的**：那条上限管的是**门截图**入库（本目录 8 张门截图按 720×1600 合规），这两张是**派生分析图**，压到 720 会把要看的逐像素差异抹平；两张合计 27 KB，未触及同条的 ≤150KB / ≤1.5MB 上限 |
 
 > **编码照实记**：`.scratch/` 下的取证日志（`1269-hxrun-*.log`、`1269-capture-*.log`）由 PowerShell 以 **GBK 控制台编码**写出，含中文的字段（`reason=`、`settled=True reason=`）按 UTF-8 读是乱码、按 GBK 读通顺。`machine-lines.txt` 里的这些行是**按 GBK 解码后抄出**的；ASCII 判据字段（`deployed` / mtime / `compile=` / `exit=` / sha）与按字节读取完全一致。
 
@@ -147,16 +147,18 @@
 
 ```powershell
 # 0) 术前/术后各一轮：换树 → 部署 → 取证（同一台设备、同一脚本、同一参数）
-#    术后 = 工作树现状；术前 = 把两个 .uvue 还原成 HEAD
-git -C D:\FL\wt-1269 show "HEAD:training-app/叉车维修培训学员端跨端应用/pages/register/register.uvue" > .scratch\1269-before\register.uvue
+#    术后 = 工作树现状；术前 = 把两个 .uvue 还原成 e35ede17^（**不要写 HEAD**：HEAD 已含本次修复）
+git -C D:\FL\wt-1269 show "e35ede17^:training-app/叉车维修培训学员端跨端应用/pages/register/register.uvue" > .scratch\1269-before\register.uvue
+git -C D:\FL\wt-1269 show "e35ede17^:training-app/叉车维修培训学员端跨端应用/pages/forgot-password/forgot-password.uvue" > .scratch\1269-before\forgot-password.uvue
+#    再把这两份覆盖到 pages/ 下对应路径 → npm run hx:run → 取证；跑完 git checkout -- 那两页还原
 npm run hx:run                 # 看 HX_RUN_DEPLOY deployed=true … mtime 相对基线前进 + HX_RUN … exit=ok
 pwsh -NoProfile -ExecutionPolicy Bypass -File .scratch\1269-capture.ps1 -Tag after    # 或 -Tag before
 
-# 1) 红控制：在术前树上跑三份相关套件，必红 7 条
+# 1) 红控制：在术前树上跑三份相关套件，必红 7 条（期望 `7 failed, 121 passed, 128 total`）
 npx jest --config jest.config.unit.js utils/uvueFontCarrierContract.test.js utils/forgotPasswordContract.test.js utils/registerContract.test.js
 
 # 2) 收口：把术后版本放回，跑 ③ 全量与 ④c
-npx jest --config jest.config.unit.js          # 期望 129 suites / 2474 tests 全绿
+npx jest --config jest.config.unit.js          # 期望 129 suites / 2475 tests 全绿
 npm run build:kotlin-all                       # 读 .ci-verify/kotlin-all.log 的 KOTLIN_ALL_RESULT 行（勿用管道退出码）
 
 # 3) 守护分类（写 PR 正文的 guards.md 三问要用）

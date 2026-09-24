@@ -150,7 +150,7 @@ after-02-register-02-email.content-desc.txt:4: 邮箱注册	[643,798][803,852]
 
 ## 7) 红控制（术前树上守护与冻结锁**必须**判红，证明绿灯不是假绿）
 
-把两个 .uvue 还原成 HEAD 版本后跑三份相关套件，逐字（原文 .scratch/1269-guard-red-lines.txt）：
+把两个 .uvue 还原成 HEAD 版本（**当时的** HEAD = 术前的 `e35ede17^`；提交后 HEAD 已含修复，复现请按该父提交取）后跑三份相关套件，逐字（原文 .scratch/1269-guard-red-lines.txt）：
 ● uvue 文字类样式的承载面契约（#1269） › ③ 真实文件（全仓 .uvue） › 本票改动点是「容器挂 <view>、文字挂 <text>」�
 ● uvue 文字类样式的承载面契约（#1269） › ③ 真实文件（全仓 .uvue） › 本票改的两页零违规（`mode-tab` 系只剩布局与�
 ● uvue 文字类样式的承载面契约（#1269） › ③ 真实文件（全仓 .uvue） › 除「已知存量」外全仓零违规（新写的文字类�
@@ -160,6 +160,17 @@ after-02-register-02-email.content-desc.txt:4: 邮箱注册	[643,798][803,852]
 ● 样式块逐字节冻结（UI 像素级不变的最强静态证据面） › 判断力（改一处声明 / 删一条规则都必须与该 sha 不同）
 Test Suites: 3 failed, 3 total
 Tests:       7 failed, 120 passed, 127 total
+
+重跑（同日，守护加了 1 条棘轮自检之后）：同一棵术前树 —— 两个 `.uvue` 由 `git show e35ede17^:<path>` 取回，
+sha256 前 20 位仍是 `f78f1c220b885343c076` / `15aff48366f96ecbddeb`（与上面那次逐字节同一棵树）。结果：
+红的仍是**同 7 条**（逐条标题与上面一致：新守护 ③ 节 3 条 + 落袋锁 1 条 + 样式块逐字节冻结 3 条），
+总数因新增自检 +1 ——
+
+    Test Suites: 3 failed, 3 total
+    Tests:       7 failed, 121 passed, 128 total
+
+跑完 `git checkout --` 还原两页，复核 sha256 前 20 位回到术后的 `c7aa27c9e90af3f3f848` /
+`5a05b273dd7aaf7ec580`（= 本目录取证所据的那棵树），三份套件 `Tests: 128 passed, 128 total` 全绿。
 
 ## 8) ④c 本地编译门（全量 kotlin 编译）机检行
 
