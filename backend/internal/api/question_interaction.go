@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -51,6 +50,8 @@ func RegisterQuestionInteractionRoutes(rg *gin.RouterGroup, rd RouterDeps, comme
 //
 // ErrQuestionNotFound 带 message：呈现层要说「题目不存在」（越权不泄漏存在性），不是哨兵自己那句；
 // 这正是 errStatusEntry.message 这一格存在的理由（WithSentinelsMsg 的同形规则在裸 handler 一侧）。
+// 旧的那枚 helper `renderOutOfPoolQuestion` 被本表第一条 entry 完整取代，随本批删除——留在文件里
+// 就是一处「两个宿主说同一件事」，而且 CI 的 unused 检查也当场把它点了出来。
 var interactionErrStatus = &errStatusTable{
 	entries: []errStatusEntry{
 		{sentinel: service.ErrQuestionNotFound, status: http.StatusNotFound, message: "题目不存在"},
@@ -62,16 +63,6 @@ var interactionErrStatus = &errStatusTable{
 		{sentinel: service.ErrNoteContentTooLong, status: http.StatusBadRequest},
 	},
 	fallback: http.StatusInternalServerError,
-}
-
-// renderOutOfPoolQuestion 池外题的 HTTP 出口：命中 ErrQuestionNotFound 即渲染 404 并返回 true。
-// 保留给本文件里那条不过 scope 的读面（knowledge）沿用；评论/笔记两支已归进 interactionErrStatus。
-func renderOutOfPoolQuestion(c *gin.Context, err error) bool {
-	if !errors.Is(err, service.ErrQuestionNotFound) {
-		return false
-	}
-	response.NotFound(c, "题目不存在")
-	return true
 }
 
 // ListComments 题目评论列表
