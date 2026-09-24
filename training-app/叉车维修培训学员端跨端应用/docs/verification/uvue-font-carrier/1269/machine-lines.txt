@@ -164,5 +164,7 @@ Tests:       7 failed, 120 passed, 127 total
 ## 8) ④c 本地编译门（全量 kotlin 编译）机检行
 
 KOTLIN_ALL_RESULT errors=0 classes=1501 files=120 input=unpackage\resources\app-android freshness=fresh log=D:\FL\wt-1269\training-app\叉车维修培训学员端跨端应用\.ci-verify\kotlin-all.log
-原文已随本目录入库为 `09-kotlin-all-4c.txt`，与 `.ci-verify/kotlin-all.log` **逐字节一致**
-（sha256 前 16 位 fc7abda91051ac31）。改名入库的原因：根 `.gitignore` 有 `*.log`，原名 `git add` 会静默不收。
+原文已随本目录入库为 `09-kotlin-all-4c.txt`。**行尾如实记**：源日志 11,507 字节（CRLF）、入库 blob
+11,394 字节（LF），差 113 个行尾；实测 `源.replace(CRLF,LF) == blob` 为真 ⇒ 内容逐行一致、只有行尾被
+git 归一。源日志 sha256 前 16 位 fc7abda91051ac31，**入库 blob** sha256 前 16 位 e47a64b45bcc5cba。
+改名入库的原因：根 `.gitignore` 有 `*.log`，原名 `git add` 会静默不收。

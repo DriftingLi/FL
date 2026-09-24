@@ -2,7 +2,7 @@
 
 - **票**：#1269（同族先例 #1113 / `white-space`，PR #1149）
 - **PR**：本目录**先按票号取证**；开 PR 后按仓内约定改名为 PR 号（改名只动 `docs/verification/**` ⇒ 非运行时面，不影响 ①a 证据的 sha 绑定）
-- **分支 / 复测对象**：`fix/1269`，取证时的运行时面 = 工作树内容（`forgot-password.uvue` sha256 前 20 位 `c7aa27c9e90af3f3f848`、`register.uvue` `5a05b273dd7aaf7ec580`；术前对照 = 二者 `HEAD` 版本 `f78f1c220b885343c076` / `15aff48366f96ecbddeb`）
+- **分支 / 复测对象**：`fix/1269`，运行时面落在提交 **`e35ede17`**（本目录的截图/日志即对这一棵树取证）。取证时的两个 `.uvue` 内容 sha256 前 20 位：`forgot-password.uvue` `c7aa27c9e90af3f3f848`、`register.uvue` `5a05b273dd7aaf7ec580`（二者**工作区与 git blob 同 sha**，已核）；术前对照 = 二者 `HEAD` 版本 `f78f1c220b885343c076` / `15aff48366f96ecbddeb`
 - **日期**：2026-09-24
 - **设备**：`192.168.0.212:37611`（Xiaomi `23049RAD8C` / Android 15，**无线** adb）
 - **屏 / 密度**：`1080x2400` · density 440 ⇒ uvue 的 750rpx 基准下 **1rpx = 1.44px**，`28rpx` 的设计值应为 **40.32px**（本目录用它反推字号是否真的生效）
@@ -112,7 +112,8 @@
 ## 门结论（③ / ④）
 
 - **③ `npm run test:unit`**：全量 **129 suites / 2474 tests 全绿**（`Time: 160s`）。三份直接相关套件单跑 **127 tests 全绿**（`uvueFontCarrierContract` 30 + 两页 contract 锁）。
-- **④c `npm run build:kotlin-all`**：`KOTLIN_ALL_RESULT errors=0 classes=1501 files=120 input=unpackage\resources\app-android freshness=fresh log=D:\FL\wt-1269\training-app\叉车维修培训学员端跨端应用\.ci-verify\kotlin-all.log`。原文入库为本目录 `09-kotlin-all-4c.txt`，与 `.ci-verify/kotlin-all.log` **逐字节一致**（sha256 前 16 位 `fc7abda91051ac31`；根 `.gitignore` 有 `*.log` ⇒ 按仓内先例改名入库，正文里仍保留 `.ci-verify/kotlin-all.log` 字面量供 ④ 判据匹配）。
+- **④c `npm run build:kotlin-all`**：`KOTLIN_ALL_RESULT errors=0 classes=1501 files=120 input=unpackage\resources\app-android freshness=fresh log=D:\FL\wt-1269\training-app\叉车维修培训学员端跨端应用\.ci-verify\kotlin-all.log`。原文入库为本目录 `09-kotlin-all-4c.txt`。根 `.gitignore` 有 `*.log` ⇒ 按仓内先例改名入库，正文里仍保留 `.ci-verify/kotlin-all.log` 字面量供 ④ 判据匹配。
+  - **该副本的行尾被 git 归一了，如实记**：源日志 11,507 字节（CRLF），入库 blob 11,394 字节（LF），差 113 个行尾；实测 `源.replace(CRLF,LF) == blob` 为真 ⇒ **内容逐行一致、只有行尾不同**。源日志 sha256 前 16 位 `fc7abda91051ac31`，**入库 blob** sha256 前 16 位 `e47a64b45bcc5cba`（先例 `docs/verification/recruiter-login/1206/04-kotlin-all-4c.txt` 同样是 LF 化的 blob，本目录不例外，但把两个 sha 都写出来，免得有人拿工作区 sha 去对 GitHub 上的）。
 - **②**：本票**未命中触发面 ⇒ 免**（理由见页眉）。另跑了一次 `build:mp-weixin-check` 作为**补充**观察，其结论**不进**本票的门判据 —— 且**不要**把它当成本票改动的证据：那次运行的导航被降级，被改两页未被访问（详见「诚实声明」第 2 条）。
 
 ## 诚实声明（本目录**没有**验证到的面）
@@ -135,7 +136,7 @@
 | `console-logs/0{1,3,5,7}-*.nav.txt` | 4 份原始 launch 日志（297 / 324 / 309 / 312 行） |
 | `console-logs/SUMMARY.txt` | 机检摘要表 + 主张/不主张清单 |
 | `machine-lines.txt` | 全部机检行逐字汇编（§1 部署 / §2 页身份 / §3 错行 / §4 错误类计数 / §5 截图落盘 / §6 bounds / §7 红控制 / §8 ④c） |
-| `09-kotlin-all-4c.txt` | ④c 编译日志原文（与 `.ci-verify/kotlin-all.log` 逐字节一致） |
+| `09-kotlin-all-4c.txt` | ④c 编译日志原文（内容同 `.ci-verify/kotlin-all.log`，行尾被 git 归一为 LF ⇒ 见「门结论」的两个 sha） |
 | `10-/11-forgot-password-captcha-band-{before,after}.png` | 验证码行 1133–1237 的放大裁切（各 1020×220，≈13.5 KB）—— 用来独立复核「未塌的那一带 = 随机验证码图」这条归因 |
 
 > **编码照实记**：`.scratch/` 下的取证日志（`1269-hxrun-*.log`、`1269-capture-*.log`）由 PowerShell 以 **GBK 控制台编码**写出，含中文的字段（`reason=`、`settled=True reason=`）按 UTF-8 读是乱码、按 GBK 读通顺。`machine-lines.txt` 里的这些行是**按 GBK 解码后抄出**的；ASCII 判据字段（`deployed` / mtime / `compile=` / `exit=` / sha）与按字节读取完全一致。
