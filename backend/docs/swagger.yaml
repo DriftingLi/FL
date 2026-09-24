@@ -9683,6 +9683,10 @@ paths:
           description: 章节不存在
           schema:
             $ref: '#/definitions/response.R'
+        "500":
+          description: 服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）
+          schema:
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 章节幻灯片
@@ -10137,6 +10141,10 @@ paths:
           description: 课程不存在
           schema:
             $ref: '#/definitions/response.R'
+        "500":
+          description: 服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）
+          schema:
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 课程详情（含学习进度）
@@ -10176,6 +10184,10 @@ paths:
             $ref: '#/definitions/response.R'
         "404":
           description: 章节不存在
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: 服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）
           schema:
             $ref: '#/definitions/response.R'
       security:
@@ -10416,6 +10428,10 @@ paths:
             $ref: '#/definitions/response.R'
         "401":
           description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: 服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）
           schema:
             $ref: '#/definitions/response.R'
       security:
@@ -12088,6 +12104,10 @@ paths:
           description: 未认证
           schema:
             $ref: '#/definitions/response.R'
+        "500":
+          description: 服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）
+          schema:
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 我的笔记
@@ -12124,6 +12144,10 @@ paths:
           description: 未认证
           schema:
             $ref: '#/definitions/response.R'
+        "500":
+          description: 服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）
+          schema:
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 新建独立笔记
@@ -12151,6 +12175,10 @@ paths:
             $ref: '#/definitions/response.R'
         "404":
           description: 笔记不存在
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: 服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）
           schema:
             $ref: '#/definitions/response.R'
       security:
@@ -12196,6 +12224,10 @@ paths:
             $ref: '#/definitions/response.R'
         "404":
           description: 笔记不存在
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: 服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）
           schema:
             $ref: '#/definitions/response.R'
       security:
@@ -13412,6 +13444,10 @@ paths:
           description: 题目ID无效
           schema:
             $ref: '#/definitions/response.R'
+        "500":
+          description: 服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）
+          schema:
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 题目评论列表
@@ -13447,6 +13483,10 @@ paths:
               type: object
         "400":
           description: 题目ID无效
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: 服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）
           schema:
             $ref: '#/definitions/response.R'
       security:
@@ -13501,6 +13541,10 @@ paths:
           description: 题目ID无效
           schema:
             $ref: '#/definitions/response.R'
+        "500":
+          description: 服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）
+          schema:
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 删除笔记
@@ -13525,6 +13569,10 @@ paths:
               type: object
         "400":
           description: 题目ID无效
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: 服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）
           schema:
             $ref: '#/definitions/response.R'
       security:
@@ -13563,6 +13611,10 @@ paths:
           description: 题目ID无效
           schema:
             $ref: '#/definitions/response.R'
+        "500":
+          description: 服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）
+          schema:
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 保存笔记
@@ -13583,6 +13635,10 @@ paths:
             $ref: '#/definitions/response.R'
         "400":
           description: 评论ID无效
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: 服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）
           schema:
             $ref: '#/definitions/response.R'
       security:
