@@ -377,3 +377,39 @@ describe('D. 发起交换与我的交换申请', () => {
     expect(list.items[0].company_disabled).toBe(true);
   });
 });
+
+// E1 / E2：同一格键现在也挂在**驱动角标的简历卡面**（后端第十五波第④批 = PR #1298，
+// `recruit_service.go` 的 `RecruitResumeCard.CompanyDisabled`，与明文位置同一装配点
+// `fillContactStates`）。票面 #1267 的列表角标那半此前被这条契约卡住：卡面收不到这一维，
+// 列表页就只能显示一个说谎的「已授权」。
+describe('E. 简历卡面的可用性那一格（#1267 后半）', () => {
+  /** 卡面响应：只写本组关心的键（其余键缺席即映射成零值，不影响判据） */
+  function cardReply(extra) {
+    return {
+      data: {
+        items: [Object.assign({ user_id: 7, contact_state: 'approved', contact_source: 'recruiter' }, extra)],
+        total: 1,
+      },
+    };
+  }
+
+  test('E1：卡面不带 `company_disabled` ⇒ 归一成 false（企业可用是常态，不是「未知」）', async () => {
+    const { mod } = loadRecruit(cardReply({}));
+    const list = await mod.getRecruitResumesApi(emptyFilters(), 1);
+    expect(list.items[0].company_disabled).toBe(false);
+  });
+
+  test('E2：卡面带 `company_disabled: true` ⇒ 逐字读出，且详情卡与列表卡同一映射', async () => {
+    const { mod } = loadRecruit(cardReply({ company_disabled: true }));
+    const list = await mod.getRecruitResumesApi(emptyFilters(), 1);
+    expect(list.items[0].company_disabled).toBe(true);
+    // 详情卡（`GET /recruit/resumes/:id`）必须走同一个函数：后端两处共用 `fillContactStates`，
+    // 移动端若分两份映射就会造出「列表有、详情没有」的半态
+    const { mod: detail } = loadRecruit({ data: {} });
+    expect(detail.buildRecruitResumeCard({ user_id: 7, company_disabled: true }).company_disabled).toBe(true);
+    // 后端**从不**发 false（唯一赋值点是 `approved && 企业确证不可用`）；
+    // 但万一发了 false，映射层也不得把它折成 true
+    const { mod: explicitFalse } = loadRecruit({ data: {} });
+    expect(explicitFalse.buildRecruitResumeCard({ company_disabled: false }).company_disabled).toBe(false);
+  });
+});
