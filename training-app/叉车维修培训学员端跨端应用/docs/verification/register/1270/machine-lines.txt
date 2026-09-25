@@ -1,0 +1,102 @@
+## T1270 (#1270) register 页 ①a 机检行原样 —— 术前(before)/术后(after) 两轮
+## 采集: pwsh -File .scratch/t1270-capture.ps1 -Label <before|after>（worktree wt-1270, HEAD 7c7537b3）
+
+### round=before
+T1270_HEAD=7c7537b3
+T1270_AUTH_SHA256=0B5960C3913DCF362FB4AD9D70731A17EF5F35753E750C210D4DBE72C52C7996
+T1270_REGFORM_SHA256=97CCFE5162C6FD427A533FFF5BD58E5FB40A839480124D4EB43CE4615C41BFFF
+T1270_DIRTY= M "training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/api/auth.uts"; M "training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/docs/verification/login/1288/README.md"; M "training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/forgot-password/composables/useForgotPasswordForm.uts"; M "training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/login/composables/useLoginForm.uts"; M "training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/register/composables/useRegisterForm.uts";?? "training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/docs/verification/login/1288/a11y-after-A-entry1.xml";?? "training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/docs/verification/login/1288/a11y-after-A.xml";?? "training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/docs/verification/login/1288/a11y-after-B.xml";?? "training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/docs/verification/login/1288/a11y-before-A.xml";?? "training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/docs/verification/login/1288/a11y-before-B.xml"
+T1270_LOGWIN_START=1790353772.555
+T1270_ENTERED=00:30:25.419 [0m进入页面:​pages/register/register​ 。[{"创建dom元素个数":"48个","耗时":"61ms"},{"排版":"1次","耗时":"73ms"},{"渲染":"1次","耗时":"183ms"},{"跳转页面到onReady总耗时":"492ms"}][0m
+T1270_PNG_BASE_SHA256=32A86966641F9BD7C4AB2CCC37760ECD3C26F40F2EF6E755F03AC7F1702E0D68
+T1270_A11Y_SHA256=5E68D977A0984D7FE827E96F91E7A58688B8111AC7B070E8783383E5D320102D
+T1270_PNG_STAB_SHA256=FF05869BE98058B6B7DFA3BA54F7D8B62066C5145AA408D8733AD1DE6633898A
+T1270_TAP_TARGET=captcha-input-anchor[851,1538] (851,1538)
+T1270_TAP_RESULT=
+T1270_PNG_TAP_SHA256=8BBFBCC43D28990989521C2D165DBC8240480154834225ECF578A72C4F9E30F2
+T1270_PNG_REENTRY_SHA256=203F781F87891A56E5D2AED2B4E64E6BE739369A118B66A2E2C9094CDA1584D5
+T1270_LOGCAT_fatal=0 anr=0 captchaLines=6 captcha200=3 windowStart=1790353772.555
+T1270_CAPTCHA_LINE=1790353830.036 17121 24680 I console : [LOG]---BEGIN:CONSOLE---[{"type":"string","value":"[request] >>>"},{"type":"string","value":"GET"},{"type":"string","value":"https://www.gccsmile.com/api/captcha"},{"type":"string","value":"data:"},{"type":"null","value":"null"},{"type":"string","value":" at api/request.uts:332"}]---END:CONSOLE---
+T1270_CAPTCHA_LINE=1790353830.418 17121 24680 I console : [LOG]---BEGIN:CONSOLE---[{"type":"string","value":"[request] <<<"},{"type":"number","subType":"number","value":"200"},{"type":"string","value":"https://www.gccsmile.com/api/captcha"},{"type":"string","value":" at api/request.uts:411"}]---END:CONSOLE---
+T1270_CAPTCHA_LINE=1790353851.236 17121 24680 I console : [LOG]---BEGIN:CONSOLE---[{"type":"string","value":"[request] >>>"},{"type":"string","value":"GET"},{"type":"string","value":"https://www.gccsmile.com/api/captcha"},{"type":"string","value":"data:"},{"type":"null","value":"null"},{"type":"string","value":" at api/request.uts:332"}]---END:CONSOLE---
+T1270_CAPTCHA_LINE=1790353851.375 17121 24680 I console : [LOG]---BEGIN:CONSOLE---[{"type":"string","value":"[request] <<<"},{"type":"number","subType":"number","value":"200"},{"type":"string","value":"https://www.gccsmile.com/api/captcha"},{"type":"string","value":" at api/request.uts:411"}]---END:CONSOLE---
+T1270_CAPTCHA_LINE=1790353909.422 19829 25932 I console : [LOG]---BEGIN:CONSOLE---[{"type":"string","value":"[request] >>>"},{"type":"string","value":"GET"},{"type":"string","value":"https://www.gccsmile.com/api/captcha"},{"type":"string","value":"data:"},{"type":"null","value":"null"},{"type":"string","value":" at api/request.uts:332"}]---END:CONSOLE---
+T1270_CAPTCHA_LINE=1790353909.810 19829 25932 I console : [LOG]---BEGIN:CONSOLE---[{"type":"string","value":"[request] <<<"},{"type":"number","subType":"number","value":"200"},{"type":"string","value":"https://www.gccsmile.com/api/captcha"},{"type":"string","value":" at api/request.uts:411"}]---END:CONSOLE---
+T1270_FOCUS=mCurrentFocus=Window{1d75493 u0 io.dcloud.uniappx/io.dcloud.uniapp.UniAppActivity}
+T1270_TOPACTIVITY=topResumedActivity=ActivityRecord{eec61f u0 io.dcloud.uniappx/io.dcloud.uniapp.UniAppActivity t26656}
+T1270_SCREEN=1080x2400 (device)
+
+### round=after
+T1270_HEAD=7c7537b3
+T1270_AUTH_SHA256=D6865DA505D07CBD8F31CCDB9A78C0EAA1D157D59C7B7BFEC0E590D6651339A6
+T1270_REGFORM_SHA256=0F954FD2B0B32291FCEC210F55F86ABB4247957B1292B29564BE5D67DCB7931A
+T1270_DIRTY= M "training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/docs/verification/login/1288/README.md";?? "training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/docs/verification/login/1288/a11y-after-A-entry1.xml";?? "training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/docs/verification/login/1288/a11y-after-A.xml";?? "training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/docs/verification/login/1288/a11y-after-B.xml";?? "training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/docs/verification/login/1288/a11y-before-A.xml";?? "training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/docs/verification/login/1288/a11y-before-B.xml"
+T1270_LOGWIN_START=1790354134.56
+T1270_ENTERED=00:38:17.283 [0m进入页面:​pages/register/register​ 。[{"创建dom元素个数":"48个","耗时":"65ms"},{"排版":"1次","耗时":"76ms"},{"渲染":"1次","耗时":"175ms"},{"跳转页面到onReady总耗时":"488ms"}][0m
+T1270_PNG_BASE_SHA256=CCD75139B8A2F8085DD1DF9FB0044700C4E522DC7D287AE46C4345F5333A9CFB
+T1270_A11Y_SHA256=5E68D977A0984D7FE827E96F91E7A58688B8111AC7B070E8783383E5D320102D
+T1270_PNG_STAB_SHA256=246FD067B232B59FE78174D2F0136DEE0350D4EC85A300C8AC95DAD63804A5EE
+T1270_TAP_TARGET=captcha-input-anchor[851,1538] (851,1538)
+T1270_TAP_RESULT=
+T1270_PNG_TAP_SHA256=DB6C6363225616A99C981C46D3794CB3107237C76131D0AB8C66439432000845
+T1270_PNG_REENTRY_SHA256=0A93D9BBA301A5AB331B1E88D5B863E57314F00F6E6F85B0E74D689697B96E84
+T1270_LOGCAT_fatal=0 anr=0 captchaLines=6 captcha200=3 windowStart=1790354134.56
+T1270_CAPTCHA_LINE=1790354301.932 24601 31248 I console : [LOG]---BEGIN:CONSOLE---[{"type":"string","value":"[request] >>>"},{"type":"string","value":"GET"},{"type":"string","value":"https://www.gccsmile.com/api/captcha"},{"type":"string","value":"data:"},{"type":"null","value":"null"},{"type":"string","value":" at api/request.uts:332"}]---END:CONSOLE---
+T1270_CAPTCHA_LINE=1790354302.312 24601 31248 I console : [LOG]---BEGIN:CONSOLE---[{"type":"string","value":"[request] <<<"},{"type":"number","subType":"number","value":"200"},{"type":"string","value":"https://www.gccsmile.com/api/captcha"},{"type":"string","value":" at api/request.uts:411"}]---END:CONSOLE---
+T1270_CAPTCHA_LINE=1790354322.283 24601 31248 I console : [LOG]---BEGIN:CONSOLE---[{"type":"string","value":"[request] >>>"},{"type":"string","value":"GET"},{"type":"string","value":"https://www.gccsmile.com/api/captcha"},{"type":"string","value":"data:"},{"type":"null","value":"null"},{"type":"string","value":" at api/request.uts:332"}]---END:CONSOLE---
+T1270_CAPTCHA_LINE=1790354322.334 24601 31248 I console : [LOG]---BEGIN:CONSOLE---[{"type":"string","value":"[request] <<<"},{"type":"number","subType":"number","value":"200"},{"type":"string","value":"https://www.gccsmile.com/api/captcha"},{"type":"string","value":" at api/request.uts:411"}]---END:CONSOLE---
+T1270_CAPTCHA_LINE=1790354384.094 25878 32721 I console : [LOG]---BEGIN:CONSOLE---[{"type":"string","value":"[request] >>>"},{"type":"string","value":"GET"},{"type":"string","value":"https://www.gccsmile.com/api/captcha"},{"type":"string","value":"data:"},{"type":"null","value":"null"},{"type":"string","value":" at api/request.uts:332"}]---END:CONSOLE---
+T1270_CAPTCHA_LINE=1790354384.493 25878 32721 I console : [LOG]---BEGIN:CONSOLE---[{"type":"string","value":"[request] <<<"},{"type":"number","subType":"number","value":"200"},{"type":"string","value":"https://www.gccsmile.com/api/captcha"},{"type":"string","value":" at api/request.uts:411"}]---END:CONSOLE---
+T1270_FOCUS=mCurrentFocus=Window{95897ce u0 io.dcloud.uniappx/io.dcloud.uniapp.UniAppActivity}
+T1270_TOPACTIVITY=topResumedActivity=ActivityRecord{80ab128 u0 io.dcloud.uniappx/io.dcloud.uniapp.UniAppActivity t26662}
+T1270_SCREEN=1080x2400 (device)
+
+### judges (raw)
+# ==== a11y-triples before after ====
+# D:\FL\wt-1270\training-app\叉车维修培训学员端跨端应用\.ci-verify\t1270\before\a11y-before.xml: nodes=27 rawSha=5e68d977a0984d7f tripleSha=a374dc25694682bc
+# D:\FL\wt-1270\training-app\叉车维修培训学员端跨端应用\.ci-verify\t1270\after\a11y-after.xml: nodes=27 rawSha=5e68d977a0984d7f tripleSha=a374dc25694682bc
+# diff: onlyA=0 onlyB=0  identical=true
+# texts: A=23 B=23 onlyA=0 onlyB=0
+# ==== png-diff cross-round base_before vs base_after ====
+{"ok":true,"mode":"pixel","width":1080,"height":2400,"total":2494800,"different":27090,"ratio":0.010859,"threshold":0.005,"changed":true,"ignoredRows":{"top":90,"bottom":0}}
+# ==== slot-check cross-round ====
+# slot[741,1469][999,1607] D:\FL\wt-1270\training-app\叉车维修培训学员端跨端应用\.ci-verify\t1270\before\register-before-base.png: nonWhite=35260/35604 (99.0%)
+# slot[741,1469][999,1607] D:\FL\wt-1270\training-app\叉车维修培训学员端跨端应用\.ci-verify\t1270\after\register-after-base.png: nonWhite=35260/35604 (99.0%)
+# ignoreTop=90  diff inSlot=27090 bbox=741,1485,998,1589
+# diff outSlot=0
+# different=27090  attribution=all-in-slot
+# ==== png-rows cross-round bands ====
+# register-before-base.png vs register-after-base.png  ignoreTop=90
+# different=27090 bbox=741,1485,998,1589
+  y1400-1499: 3870
+  y1500-1599: 23220
+# ==== png-diff before stability ====
+{"ok":true,"mode":"pixel","width":1080,"height":2400,"total":2494800,"different":0,"ratio":0,"threshold":0.005,"changed":false,"ignoredRows":{"top":90,"bottom":0}}
+# ==== png-diff before tap-refresh ====
+{"ok":true,"mode":"pixel","width":1080,"height":2400,"total":2494800,"different":27090,"ratio":0.010859,"threshold":0.005,"changed":true,"ignoredRows":{"top":90,"bottom":0}}
+# ==== png-diff before reentry ====
+{"ok":true,"mode":"pixel","width":1080,"height":2400,"total":2494800,"different":27090,"ratio":0.010859,"threshold":0.005,"changed":true,"ignoredRows":{"top":90,"bottom":0}}
+# ==== png-diff after stability ====
+{"ok":true,"mode":"pixel","width":1080,"height":2400,"total":2494800,"different":0,"ratio":0,"threshold":0.005,"changed":false,"ignoredRows":{"top":90,"bottom":0}}
+# ==== png-diff after tap-refresh ====
+{"ok":true,"mode":"pixel","width":1080,"height":2400,"total":2494800,"different":27090,"ratio":0.010859,"threshold":0.005,"changed":true,"ignoredRows":{"top":90,"bottom":0}}
+# ==== png-diff after reentry ====
+{"ok":true,"mode":"pixel","width":1080,"height":2400,"total":2494800,"different":27090,"ratio":0.010859,"threshold":0.005,"changed":true,"ignoredRows":{"top":90,"bottom":0}}
+# ==== slot-check before stability ====
+# slot[741,1469][999,1607] D:\FL\wt-1270\training-app\叉车维修培训学员端跨端应用\.ci-verify\t1270\before\register-before-base.png: nonWhite=35260/35604 (99.0%)
+# slot[741,1469][999,1607] D:\FL\wt-1270\training-app\叉车维修培训学员端跨端应用\.ci-verify\t1270\before\register-before-stab.png: nonWhite=35260/35604 (99.0%)
+# ignoreTop=90  diff inSlot=0
+# diff outSlot=0
+# different=0  attribution=all-in-slot
+# ==== slot-check before tap-refresh ====
+# slot[741,1469][999,1607] D:\FL\wt-1270\training-app\叉车维修培训学员端跨端应用\.ci-verify\t1270\before\register-before-base.png: nonWhite=35260/35604 (99.0%)
+# slot[741,1469][999,1607] D:\FL\wt-1270\training-app\叉车维修培训学员端跨端应用\.ci-verify\t1270\before\register-before-tap.png: nonWhite=35260/35604 (99.0%)
+# ignoreTop=90  diff inSlot=27090 bbox=741,1485,998,1589
+# diff outSlot=0
+# different=27090  attribution=all-in-slot
+# ==== slot-check after tap-refresh ====
+# slot[741,1469][999,1607] D:\FL\wt-1270\training-app\叉车维修培训学员端跨端应用\.ci-verify\t1270\after\register-after-base.png: nonWhite=35260/35604 (99.0%)
+# slot[741,1469][999,1607] D:\FL\wt-1270\training-app\叉车维修培训学员端跨端应用\.ci-verify\t1270\after\register-after-tap.png: nonWhite=35260/35604 (99.0%)
+# ignoreTop=90  diff inSlot=27090 bbox=741,1485,998,1589
+# diff outSlot=0
+# different=27090  attribution=all-in-slot

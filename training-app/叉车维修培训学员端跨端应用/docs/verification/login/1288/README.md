@@ -55,6 +55,8 @@ a11y 面（比像素更强的结构面）：A 态三份、B 态两份原始 XML 
 - `01-login-A-before.jpg` / `02-login-A-after.jpg` — A 态（手机验证码）术前 / 术后，720w JPEG（q82，≈70 KB）
 - `03-login-B-before.jpg` / `04-login-B-after.jpg` — B 态（账号密码 + 指纹快捷登录入口）术前 / 术后
 - `machine-lines.txt` — 五轮机检行（树身份 sha / PNG sha / a11y sha / logcat 计数 / focus）+ 全部对比判据原文
+- `a11y-before-A.xml` / `a11y-after-A.xml` / `a11y-after-A-entry1.xml` / `a11y-before-B.xml` / `a11y-after-B.xml`
+  — 五轮 a11y 原始 XML（**判据输入**，随 #1270 收口入仓；sha256 前缀与 `machine-lines.txt` 的 `rawSha` 逐条一致）
 
 原始 1080×2400 PNG、a11y XML、logcat 全文**取证时**落在取证 worktree 的 `.ci-verify/t13/<轮次>/`（未入仓：
 logcat 单轮 40 MB，且 `.ci-verify/` 是 gitignore 的本地产物面）。该 worktree 与 `refactor/login` 分支已于收尾时删除
@@ -63,8 +65,11 @@ logcat 单轮 40 MB，且 `.ci-verify/` 是 gitignore 的本地产物面）。�
 `t13-capture.ps1`，24 MB，2026-09-24 现测）。原件身份已机检对上：5 份 a11y XML 的 sha256 前缀与
 `machine-lines.txt` 的 `rawSha` 逐条一致（`68ec5123c471a1b2` ×3 / `0b956eeb0120d10b` ×2）⇒ 本 README 的
 `27090` 等像素读数**可复算**，复算脚本就在上述归档的 `scratch/` 下。
-⚠️ 但 `.scratch/` 同属 gitignore ⇒ 留存只在**本机**，换机器即不可复算；a11y XML 每份约 6.5 KB，
-远在截图入库纪律射程内，宜随下一次收口入仓（跟踪于 #1270）。
+⚠️ `.scratch/` 同属 gitignore ⇒ 上述归档只在**本机**，换机器即不可复算 —— 其中**最小且承重的判据输入
+（5 份 a11y XML）已随 #1270 收口入仓**（本目录 `a11y-*.xml` 五份；2026-09-25 复核 sha256 前缀仍与
+`machine-lines.txt` 的 `rawSha` 逐条一致：`68ec5123c471a1b2` ×3 / `0b956eeb0120d10b` ×2）。原始
+1080×2400 PNG 与 logcat 全文（单轮 40 MB，超截图入库纪律）仍留本机归档；`27090` 像素读数的复算脚本
+在归档 `scratch/` 下 —— 该半边属本机面，换机器不可复算（写实）。
 
 ## 设备侧写操作声明
 
