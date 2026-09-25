@@ -110,7 +110,7 @@
     import { onLoad } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
     import { getJobDetailApi, reportJobApi, applyJobApi, REPORT_REASONS } from '../../api/job'
-    import type { JobPosting, ReportReason } from '../../api/job'
+    import type { JobPosting, ReportReason } from '../../types/index'
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
