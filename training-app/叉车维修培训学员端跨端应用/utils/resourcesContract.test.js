@@ -19,7 +19,7 @@
  * 5) 归一：forum-create 默认 discussion；URL scope=resource 进资源 tab，其余非法/历史归一；
  *    编辑回填 normalizeCategory（帖子永不回填 resource）
  * 6) 域 api 出口收紧（#653 T15 批 B）：material 域四个有载荷出口走 getMapped + build*；
- *    无 mapped 便捷面的 multipart / 编排出口留裸并登记理由；本模块域 allowlist 不回潮
+ *    无 mapped 便捷面的 multipart / 编排出口留裸并登记理由；机械坑位由全工程守护执法（#654 起无豁免）
  */
 /** harness：读取层归一 + 模块归属面（ADR-0023 票 C 起，本文件不再自建 ROOT / read / walker） */
 const h = require('./contractHarness');
@@ -362,21 +362,5 @@ describe('幻影路由锁（#662 口径）：material 域路由必须落在后�
     const used = apiRoutes();
     expect(used.sort()).toEqual(['/materials', '/materials/:id', '/materials/:id/download', '/student/materials']);
     expect(used.filter((u) => !registered.includes(u))).toEqual([]);
-  });
-});
-
-describe('allowlist 不回潮（#653 票面 ③：resources 域 catch/detail 条目清零）', () => {
-  // ADR-0023 决策 ⑧：GUARD_ALLOWLIST 的唯一声明点是 utils/guardAllowlist.js，消费方一律 require 取用。
-  const { allowlistPaths } = require('./guardAllowlist');
-  const isResourcesPath = (p) =>
-    /^pages[/\\]resources[/\\]/.test(p) || /^api[/\\](material|contribution)\.uts$/.test(p);
-
-  it('GUARD_ALLOWLIST 不含 resources 模块文件（术前即为零，故这是不回潮锁而非清零动作）', () => {
-    expect(allowlistPaths().filter(isResourcesPath)).toEqual([]);
-  });
-
-  it('判据具备判别力（注入一条 resources 豁免必须被抓到）', () => {
-    const injected = allowlistPaths().concat(['api/material.uts']);
-    expect(injected.filter(isResourcesPath)).toEqual(['api/material.uts']);
   });
 });

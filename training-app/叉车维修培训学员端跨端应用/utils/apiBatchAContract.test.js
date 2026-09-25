@@ -13,25 +13,24 @@
  *      stores/auth + utils/storage + utils/navigation（切证件后 uni.reLaunch 到 dashboard / login），
  *      不触 api 层；后端亦无 guide 端点。⇒ 钉「零 api + 页面零 api import」防隐性回潮，不新建空文件。
  *    - **api 层豁免在本票范围内早已清零**（既成事实，不是本票动作）。票面写的「catch/detail 条目」
- *      = GUARD_ALLOWLIST 的规则 H（`catch (e : any)`）与规则 I（`: any` 参数访问 `.detail`，见
+ *      = 守护规则 H（`catch (e : any)`）与规则 I（`: any` 参数访问 `.detail`，见
  *      AGENTS.md 坑位表），两者现状：规则 I 键已不存在，规则 H 只剩两条 ——
  *      api/checkin.uts（归 forum）与 pages/notifications/notifications.uvue —— 后者**确属本票六域
  *      之一**（notifications），但它是**页面**豁免，不在这条 AC「api/ 层」的射程内，故六域 **api 文件**
- *      对 allowlist 的净贡献是 0，本票无需删除动作，只钉「五域 api 文件永不出现在豁免名单里」防回潮。
- *      （那两条 H 项实测规则命中数已为 0，属**过期豁免**；删除要动 guardAllowlist.js + modules.js
- *      且跨两个模块，其中 modules.js 的 `allowlistOwned` 与模块归属面同批变 ⇒ 归 **#654**（T16 epic 收尾
- *      的票面就是「删除 allowlist 机制、四条规则无豁免全量执法」），不在本票顺手动。）
+ *      对豁免面的净贡献是 0，本票无需删除动作。
+ *      （#654 回记：那两条 H 项实测命中数已为 0、属过期豁免，其机制与其登记位已随 T16 一并删除，
+ *      四条规则现无豁免全量执法。本票当时钉的「五域 api 永不出现在豁免名单里」在名单为空时恒真
+ *      ⇒ 该锁随机制退场，防回潮改由 `modulesDeclarationContract.test.js` C 组在全仓面上执法。）
  *
  * void 透传出口（reportJobApi / applyJobApi / viewFeaturedContentApi / mark* 等）按 ADR-0007
  * 「两问判据」保持裸 post，不硬套 identity map —— 本锁显式承认其为合法留裸，不算未收紧。
  *
  * .uvue/.uts 无法被 jest 直接 import，沿用仓库既有源码契约缝（先例 pointsRealApiContract / dashboardContract）。
  */
-/** harness：读取层归一 + 模块归属面 + 豁免名单单点（本文件不自建 ROOT / read / walker） */
+/** harness：读取层归一 + 模块归属面（本文件不自建 ROOT / read / walker） */
 const h = require('./contractHarness');
 const read = h.read;
 const exists = h.exists;
-const allowlistPaths = h.allowlistPaths;
 
 /**
  * 抹掉块注释与行注释（`://` 例外，防误杀 URL 字面量）。
@@ -267,15 +266,6 @@ describe('guide 域零 api（无域 api 文件，页面不触 api 层）', () =>
   });
 });
 
-/* ══ ③-b api 层豁免（catch/detail）本票范围内清零，不回潮 ══ */
-/** 豁免名单命中判据本体（同样与注入自检共用，理由见上） */
-const apiEntryRe = (domain) => new RegExp(`api[/\\\\]${domain}\\.uts$`);
-
-describe('api 层 allowlist 不回潮（本批五域 api 文件均无豁免条目）', () => {
-  it.each(DOMAINS)('%s.uts 不在任何豁免名单', (domain) => {
-    expect(allowlistPaths().filter((p) => apiEntryRe(domain).test(p))).toEqual([]);
-  });
-});
 
 /* ══ 注入违规自检：证明上面每条判据真能判红（防正则失配导致假绿） ══ */
 describe('判据自检（red-capable）：五条判据各命中植入的违规、不误伤合法形态', () => {
@@ -328,18 +318,6 @@ describe('判据自检（red-capable）：五条判据各命中植入的违规�
     for (const rel of h.sourceFilesIn('pages/guide')) {
       expect(guideApiHits(stripComments(read(rel)))).toEqual([]);
     }
-  });
-
-  /**
-   * allowlist 判据的自检：`filter(...)` 命中空名单时**永远返回 []**，与「名单里有但没命中」长得一模一样。
-   * 于是本条先钉名单本身非空（读者活着），再钉判据对植入路径确实命中、对页面同名文件不命中。
-   */
-  it('apiEntryRe：名单非空、植入的 api/<域>.uts 条目确实命中、不误伤同名页面路径', () => {
-    expect(allowlistPaths().length).toBeGreaterThan(0);
-    expect(apiEntryRe('job').test('training-app/app/api/job.uts')).toBe(true);
-    expect(apiEntryRe('job').test('training-app\\api\\job.uts')).toBe(true);
-    expect(apiEntryRe('job').test('training-app/app/pages/jobs/job.uts')).toBe(false);
-    expect(apiEntryRe('job').test('training-app/app/api/jobby.uts')).toBe(false);
   });
 
   /** DTO 归位判据的自检：内联声明与「类型来自 types/index」两条各判一次 */

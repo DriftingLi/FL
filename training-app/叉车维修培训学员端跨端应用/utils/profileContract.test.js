@@ -11,8 +11,6 @@
 const h = require('./contractHarness');
 const ROOT = h.ROOT;
 const read = h.read;
-/** 豁免名单从单点读（ADR-0023 ⑧）：不再解析守护脚本源码文本取常量 */
-const allowlistPaths = h.allowlistPaths;
 
 /** 提取 export function 函数体（从声明到顶层 "\n}"，先例 quickLoginContract） */
 function fnBodyOf(fileSrc, name) {
@@ -115,10 +113,12 @@ describe('raw .then 收紧完成度（本票四域 DTO 函数零残留）', () =
   });
 });
 
-/* ══ T03f 模块级汇总（refs #678）：预算复检 / 接线收口 / 零直发请求 / allowlist 清零 ══
+/* ══ T03f 模块级汇总（refs #678）：预算复检 / 接线收口 / 零直发请求 ══
  * 前置票（#675/#676/#677 及主页面/api 收紧）已各自切片机检；
  * 本块是模块口径的总锁——预算按 pages/profile/** 全量走查（不止四手术文件），
- * 接线按「拆出物全挂载 + components/composables 零孤儿」收口，allowlist 覆盖整个模块与四域 api。
+ * 接线按「拆出物全挂载 + components/composables 零孤儿」收口。
+ * （原第四类「allowlist 模块级清零」随 #654 删除豁免机制退场：名单为空时该断言恒真，
+ *   执法点收回 `utsAndroidCompile.test.js` 的无豁免全量断言。）
  * 「零直发请求」是 #641 模块 AC 的本模块锁；不新增全工程守护规则
  * （ADR-0007 明示该守护留待 #654 收尾票立项）。 */
 
@@ -186,18 +186,6 @@ describe('页面层零直发请求（网络一律经域 api 函数，#641 收紧
       if (/uni\.request\s*\(/.test(src)) hits.push(`${rel}: uni.request 裸调`);
       if (/uni\.(upload|download)File\s*\(/.test(src)) hits.push(`${rel}: uni.uploadFile/downloadFile 裸调`);
     }
-    expect(hits).toEqual([]);
-  });
-});
-
-describe('allowlist 模块级清零（profile 域 catch/detail 违例豁免不存在）', () => {
-  it('豁免面不含任何 pages/profile 文件（模块全量，非逐切片正则）', () => {
-    const hits = allowlistPaths().filter((p) => /pages[/\\]profile/.test(p));
-    expect(hits).toEqual([]);
-  });
-
-  it.each(['student', 'wrongQuestion', 'favorite', 'points'])('本模块域 api %s.uts 无豁免条目', (domain) => {
-    const hits = allowlistPaths().filter((p) => new RegExp(`api[/\\\\]${domain}\\.uts`).test(p));
     expect(hits).toEqual([]);
   });
 });

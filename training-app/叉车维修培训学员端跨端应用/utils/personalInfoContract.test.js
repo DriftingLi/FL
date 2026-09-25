@@ -3,7 +3,7 @@
  *
  * 沿用源码契约缝（.uvue 不可 jest import）。先例：wrongQuestionsContract、mallPilotContract。
  * 钉住：拆出物存在与接线、状态所有权（页面持 ref / flows 零可变状态）、
- * auth 触点回调注入、UI 像素结构、600 预算机检、allowlist 不回潮。
+ * auth 触点回调注入、UI 像素结构、600 预算机检（机械坑位零命中由全工程守护执法，#654 起无豁免）。
  */
 const fs = require('fs');
 const path = require('path');
@@ -12,8 +12,6 @@ const path = require('path');
 const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const read = (rel) => readText(path.join(ROOT, rel));
-/** 豁免名单从单点读（ADR-0023 ⑧）：不再解析守护脚本源码文本取常量 */
-const { allowlistPaths } = require('./contractHarness');
 
 const PAGE = 'pages/profile/personal-info.uvue';
 const SHELL = 'pages/profile/components/info-dialog.uvue';
@@ -162,12 +160,5 @@ describe('600 行软预算机检（personal-info 手术文件）', () => {
       .map((rel) => ({ file: rel, lines: read(rel).split('\n').length }))
       .filter((x) => x.lines > 600);
     expect(over).toEqual([]);
-  });
-});
-
-describe('allowlist 不回潮（个人信息域违例清零的锁）', () => {
-  it('豁免面不含 personal-info 手术相关文件', () => {
-    const hits = allowlistPaths().filter((p) => /personal-info|info-dialog|personal-info-flows/.test(p));
-    expect(hits).toEqual([]);
   });
 });

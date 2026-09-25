@@ -7,7 +7,8 @@
  * 2) composable 接线：两个页面以显式 import 使用模块私有 composable
  * 3) 组件接线零孤儿：页面 import 的组件文件必须存在，组件文件必须被页面引用
  *    （#779 回归教训：practice.uvue 改为 import 四个组件却从未创建文件，master 编译中断）
- * 4) allowlist 不回潮：exam 域文件不得出现在 GUARD_ALLOWLIST
+ * 4) 域文件机械坑位（catch : any / .detail 直取）：本文件不再写这类锁——#654 起豁免面已删，
+ *    执法点只有全工程守护 `utils/utsAndroidCompile.test.js` 规则 H/I 一处
  * 5) 零直发请求：页面层不直接 uni.request
  * 6) 域 api 收紧：4 个 DTO 函数经 mapper-callback 出口，2 个 void 语义函数保持 raw 透传白名单
  * 7) 幻影路由锁（#662 口径）：api 层每条 /mock-exam 路由都落在后端 mock_exam.go 已注册清单内
@@ -20,8 +21,6 @@
 const h = require('./contractHarness');
 const ROOT = h.ROOT;
 const read = h.read;
-/** 豁免名单从单点读（ADR-0023 ⑧）：不再解析守护脚本源码文本取常量 */
-const allowlistPaths = h.allowlistPaths;
 const exists = h.exists;
 
 const EXAM_PAGES = ['pages/exam/mock-exam.uvue', 'pages/exam/mock-exam-result.uvue'];
@@ -147,13 +146,6 @@ describe('组件接线零孤儿（#779 回归锁：import 的组件文件必须�
       .filter((f) => f.endsWith('.uvue'))
       .filter((f) => !pagesSrc.includes('./components/' + f));
     expect(orphans).toEqual([]);
-  });
-});
-
-describe('allowlist 不回潮（exam 域违例清零的锁）', () => {
-  it('豁免面不含 exam 域文件', () => {
-    const hits = allowlistPaths().filter((p) => /pages[/\\]exam|api[/\\]mockExam\.uts/.test(p));
-    expect(hits).toEqual([]);
   });
 });
 

@@ -14,14 +14,14 @@
  * 2) `uploadAvatarApi` 留裸 `uploadFile`，**理由写在文件头**（multipart 无 mapped 便捷面）
  * 3) 消费面零改动：五处调用点全部 `await` 后丢弃返回值 ⇒ 收紧管道不需要任何页面适配（票面 ②）
  * 4) `api/auth.uts` 文件头那句「其余资料类出口本轮不动」已被本票推翻，必须与实现同批更新
- * 5) api/ 层豁免面棘轮：整层只剩 `api/checkin.uts`（forum 域，退役面在 #654），只减不增
+ * 5) api/ 层豁免面棘轮（#654 回记：机制已删除 ⇒ 名单为空时「只减不增」恒真，该锁随机制退场，
+ *    防回潮改由 `modulesDeclarationContract.test.js` C 组在全仓面上执法）
  * 6) 批 B 四模块零直发请求不回潮：`pages/<模块>/**` 无 `uni.request` 裸调、无 `api/request` import
  *
  * 本套件是**接线守护**（源码文本判据，不构成 ③ 门的行为证据）；每条判据带注入自检。
  */
 const h = require('./contractHarness');
 const read = h.read;
-const { allowlistPaths } = require('./guardAllowlist');
 
 const AUTH_API = 'api/auth.uts';
 const PROFILE_SETUP = 'pages/profile-setup/profile-setup.uvue';
@@ -149,32 +149,6 @@ describe('消费面零改动（票面「调用方仅机械适配」的实测：�
     const injected = src.replace('await updateProfileApi(patch)', 'const req = await updateProfileApi(patch)');
     expect(injected).not.toBe(src);
     expect(nonVoidCallLines(injected)).toEqual(['const req = await updateProfileApi(patch)']);
-  });
-});
-
-/** 批 B 四域名下的路径（域 api 只有 resources 那两个；index / exam-info / profile-setup 无域 api 文件） */
-const isBatchBPath = (p) =>
-  /^pages[/\\](index|exam-info|profile-setup|resources)[/\\]/.test(p) ||
-  /^api[/\\](material|contribution)\.uts$/.test(p);
-
-describe('api/ 层豁免面棘轮（票面 ③：整层零豁免，唯一残挂 #654）', () => {
-  /** 术前实测（`utils/guardAllowlist.js`）：api/ 层只剩这一条，摘除动作在 #654 的射程里 */
-  const API_LAYER_RESIDUAL = ['api/checkin.uts'];
-  const apiExemptions = () => allowlistPaths().filter((p) => /^api[/\\]/.test(p));
-
-  it('批 B 四域名下零豁免（术前即为零 ⇒ 不回潮锁；resources 侧另有同向锁）', () => {
-    expect(allowlistPaths().filter(isBatchBPath)).toEqual([]);
-  });
-
-  it('api/ 层豁免集合恰好等于登记的残表面（只减不增，增须同批改这一行）', () => {
-    expect(apiExemptions().sort()).toEqual(API_LAYER_RESIDUAL);
-  });
-
-  it('判据具备判别力（注入一条批 B 域豁免，两条锁必须各自抓到它）', () => {
-    const injected = allowlistPaths().concat(['api/material.uts']);
-    expect(injected.filter(isBatchBPath)).toEqual(['api/material.uts']);
-    expect(injected.filter((p) => /^api[/\\]/.test(p)).sort())
-      .toEqual([...API_LAYER_RESIDUAL, 'api/material.uts'].sort());
   });
 });
 
