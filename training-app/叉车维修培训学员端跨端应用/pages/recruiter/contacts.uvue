@@ -27,6 +27,9 @@
                         <text class="tag" :class="contactTagClass(row)">{{ contactTagLabel(row) }}</text>
                     </view>
                     <text class="row-meta">{{ contactMeta(row) }}</text>
+                    <!-- 「授权在、明文已收回」不是第六种状态，是**行级附加说明**：
+                         徽章语义由词表锁守着，这里只补一个徽章给不了的事实（#1267） -->
+                    <text v-if="companyDisabledText(row).length > 0" class="row-notice">{{ companyDisabledText(row) }}</text>
                 </view>
                 <text v-if="contactRemainText(row).length > 0" class="remain-text">{{ contactRemainText(row) }}</text>
             </view>
@@ -56,7 +59,7 @@
      *   分段徽标与（职位段的）紧迫行都用 `utils/recruitDisplay.uts` 的同一个计数函数。
      *
      * ## 招聘者侧 DTO 不含学员姓名
-     *   `ContactRequestDTO` 只有 `student_user_id`（`contact_service.go:45-64`）——
+     *   `ContactRequestDTO` 只有 `student_user_id`（`contact_service.go:57-83`）——
      *   列表**不显示**「某某学员」，也不拿 ID 冒充名字。
      */
     import { ref } from 'vue'
@@ -68,6 +71,7 @@
         unexpiredPendingCount,
         remainingDays,
         contactRemainingText,
+        companyDisabledNotice,
         contactExpired,
         describeRecruitContactStatus
     } from '../../utils/recruitDisplay'
@@ -124,6 +128,16 @@
     function contactRemainText(row : RecruitContactRequest) : string {
         if (rowExpired(row)) return ''
         return contactRemainingText(remainingDays(row.expires_at, nowMs.value))
+    }
+
+    /**
+     * 可用性那一格：判定与文案都在 `utils/recruitDisplay.uts`（单点），本页只做投影。
+     * 与 `contactRemainText` 不同源、不互顶：剩几天说的是**有效期**，这行说的是**企业已停用**，
+     * 二者同时成立时两行都要在（一个说时间、一个说可用性，谁也不能替谁）。
+     * 命名刻意不叫「revoked」—— 那是 `ContactGrantState` 的取值（学员撤回授权），两回事。
+     */
+    function companyDisabledText(row : RecruitContactRequest) : string {
+        return companyDisabledNotice(row.company_disabled)
     }
 
     /**
@@ -231,6 +245,14 @@
         margin-top: 8rpx;
         font-size: 24rpx;
         color: #999999;
+    }
+
+    /* 收回说明：比副行更重一档（这是「别再去联系这个人」的事实），复用页内既有告警色 #E5484D，
+       不引入新色值；uvue 不支持 CSS 变量，故直接写色值 */
+    .row-notice {
+        margin-top: 8rpx;
+        font-size: 24rpx;
+        color: #E5484D;
     }
 
     .remain-text {
