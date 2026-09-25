@@ -1,0 +1,8 @@
+# ①a logcat 摘要（feat/1267 @ f07d9b0e，取证 2026-09-25 11:20-11:28 本地时）
+设备: Redmi 23049RAD8C（无线调试 192.168.10.54:40999）
+载体: scripts/lib/auto-screenshot.ps1（--pagePath 逐页导航 + 页身份 fail-closed + SHA256 互异判据）
+logcat 总行数（-d 全缓冲，不清缓存）: 272705
+FATAL EXCEPTION / beginning of crash: 0
+修复目标 NPE（null cannot be cast to non-null type kotlin.Boolean）: 0（修复前 2026-09-24 22:40-22:47 三页各 1-2 条，修复后复测为零 ⇒ toBool 修复真机生效）
+既有缺陷（另票追踪，非本分支引入，drawer 文件与 master 逐字相同）: RecruitResumeFiltersReactiveObject cannot be cast to RecruitResumeFiltersProp = 1
+进程 died 事件均为 HX launch 的 force-stop 换页机制（Fatal 信号为零）。

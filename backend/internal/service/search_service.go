@@ -103,7 +103,7 @@ type SearchItemDTO struct {
 
 // SearchSectionDTO 分区结果（全部搜索时每类 top N）。
 type SearchSectionDTO struct {
-	Items []SearchItemDTO `json:"items" nullability:"nullable"`
+	Items []SearchItemDTO `json:"items" nullability:"nonnil"`
 	Total int64           `json:"total"`
 }
 

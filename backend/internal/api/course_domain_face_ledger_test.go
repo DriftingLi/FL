@@ -266,9 +266,10 @@ var courseDomainFaces = []courseEndpointFaces{
 		cases: []courseDeclaredFace{
 			{http.StatusBadRequest, courseFaceCase{method: http.MethodGet, path: func(d courseDomainIDs) string { return "/api/course" + badID }}},
 			{http.StatusNotFound, courseFaceCase{method: http.MethodGet, path: func(d courseDomainIDs) string { return "/api/course/" + missingID(d) }}},
-			// 本端点**不声明 500 档**：入口第一道是 CourseVisibleByID，它 fail-closed（查不动按
-			// 「不可见」，与 QuestionReadScope.VisibleByID 同形先例）⇒ 删表注入在这里必然答 404。
-			// 据实不声明，是为了将来把它改成 500 时这一格必须经过这里，而不是悄悄多出一档。
+			// 这一格从前**故意不声明**：入口第一道 CourseVisibleByID 把「查不动」咽成「不可见」，
+			// 删表注入必然答 404，据实不声明是为了「将来改成 500 时这一格必须经过这里」。
+			// 第十六波批⑥ 就是那次「将来」：谓词改为把 err 交出去 ⇒ 500 档现在打得出，按实登记。
+			{http.StatusInternalServerError, courseFaceCase{method: http.MethodGet, path: func(d courseDomainIDs) string { return "/api/course/" + id(d.course) }, setup: dropTable("course")}},
 		},
 	},
 	{
@@ -279,6 +280,7 @@ var courseDomainFaces = []courseEndpointFaces{
 			// 章节在、课程行不在 ⇒ 底下事实是「课程不存在」，端点对外仍答「章节不存在」。
 			{http.StatusBadRequest, courseFaceCase{method: http.MethodGet, path: func(d courseDomainIDs) string { return "/api/course/" + missingID(d) + "/chapter/" + id(d.chapter) }}},
 			{http.StatusInternalServerError, courseFaceCase{method: http.MethodGet, path: func(d courseDomainIDs) string { return "/api/course/" + id(d.course) + "/chapter/" + id(d.chapter) }, setup: dropTable("chapter")}},
+			{http.StatusInternalServerError, courseFaceCase{method: http.MethodGet, path: func(d courseDomainIDs) string { return "/api/course/" + id(d.course) + "/chapter/" + id(d.chapter) }, setup: dropTable("course")}},
 		},
 	},
 	{
@@ -287,6 +289,7 @@ var courseDomainFaces = []courseEndpointFaces{
 			{http.StatusBadRequest, courseFaceCase{method: http.MethodGet, path: func(d courseDomainIDs) string { return "/api/chapter" + badID + "/slides" }}},
 			{http.StatusNotFound, courseFaceCase{method: http.MethodGet, path: func(d courseDomainIDs) string { return "/api/chapter/" + missingID(d) + "/slides" }}},
 			{http.StatusInternalServerError, courseFaceCase{method: http.MethodGet, path: func(d courseDomainIDs) string { return "/api/chapter/" + id(d.chapter) + "/slides" }, setup: dropTable("chapter")}},
+			{http.StatusInternalServerError, courseFaceCase{method: http.MethodGet, path: func(d courseDomainIDs) string { return "/api/chapter/" + id(d.chapter) + "/slides" }, setup: dropTable("course")}},
 		},
 	},
 	{
@@ -295,6 +298,7 @@ var courseDomainFaces = []courseEndpointFaces{
 			{http.StatusBadRequest, courseFaceCase{method: http.MethodPost, path: func(d courseDomainIDs) string { return "/api/chapter" + badID + "/slides/regenerate" }}},
 			{http.StatusNotFound, courseFaceCase{method: http.MethodPost, path: func(d courseDomainIDs) string { return "/api/chapter/" + missingID(d) + "/slides/regenerate" }}},
 			{http.StatusInternalServerError, courseFaceCase{method: http.MethodPost, path: func(d courseDomainIDs) string { return "/api/chapter/" + id(d.chapter) + "/slides/regenerate" }, setup: dropTable("chapter")}},
+			{http.StatusInternalServerError, courseFaceCase{method: http.MethodPost, path: func(d courseDomainIDs) string { return "/api/chapter/" + id(d.chapter) + "/slides/regenerate" }, setup: dropTable("course")}},
 		},
 	},
 	{
@@ -303,6 +307,7 @@ var courseDomainFaces = []courseEndpointFaces{
 			{http.StatusBadRequest, courseFaceCase{method: http.MethodPost, path: func(d courseDomainIDs) string { return "/api/course" + badID + "/progress" }, body: map[string]any{"chapter_id": 1, "duration_seconds": 60}}},
 			{http.StatusNotFound, courseFaceCase{method: http.MethodPost, path: func(d courseDomainIDs) string { return "/api/course/" + missingID(d) + "/progress" }, body: map[string]any{"chapter_id": 1, "duration_seconds": 60}}},
 			{http.StatusInternalServerError, courseFaceCase{method: http.MethodPost, path: func(d courseDomainIDs) string { return "/api/course/" + id(d.course) + "/progress" }, body: map[string]any{"chapter_id": 1, "duration_seconds": 60}, setup: dropTable("study_record")}},
+			{http.StatusInternalServerError, courseFaceCase{method: http.MethodPost, path: func(d courseDomainIDs) string { return "/api/course/" + id(d.course) + "/progress" }, body: map[string]any{"chapter_id": 1, "duration_seconds": 60}, setup: dropTable("course")}},
 		},
 	},
 	{
