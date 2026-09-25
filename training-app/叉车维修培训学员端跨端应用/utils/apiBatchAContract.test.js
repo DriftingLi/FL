@@ -15,11 +15,12 @@
  *    - **api 层豁免在本票范围内早已清零**（既成事实，不是本票动作）。票面写的「catch/detail 条目」
  *      = GUARD_ALLOWLIST 的规则 H（`catch (e : any)`）与规则 I（`: any` 参数访问 `.detail`，见
  *      AGENTS.md 坑位表），两者现状：规则 I 键已不存在，规则 H 只剩两条 ——
- *      api/checkin.uts（归 forum）与 pages/notifications/notifications.uvue（归 notifications），
- *      **都不在本票五域里**。⇒ 六域 api 文件对 allowlist 的净贡献是 0，本票无需删除动作，
- *      只钉「五域 api 文件永不出现在豁免名单里」防回潮。
+ *      api/checkin.uts（归 forum）与 pages/notifications/notifications.uvue —— 后者**确属本票六域
+ *      之一**（notifications），但它是**页面**豁免，不在这条 AC「api/ 层」的射程内，故六域 **api 文件**
+ *      对 allowlist 的净贡献是 0，本票无需删除动作，只钉「五域 api 文件永不出现在豁免名单里」防回潮。
  *      （那两条 H 项实测规则命中数已为 0，属**过期豁免**；删除要动 guardAllowlist.js + modules.js
- *      且跨两个模块，由各自模块的清票处理 —— 塞进本票还会把 PR 从「低风险运行时面」升级为必过 ①②。）
+ *      且跨两个模块，其中 modules.js 的 `allowlistOwned` 与模块归属面同批变 ⇒ 归 **#654**（T16 epic 收尾
+ *      的票面就是「删除 allowlist 机制、四条规则无豁免全量执法」），不在本票顺手动。）
  *
  * void 透传出口（reportJobApi / applyJobApi / viewFeaturedContentApi / mark* 等）按 ADR-0007
  * 「两问判据」保持裸 post，不硬套 identity map —— 本锁显式承认其为合法留裸，不算未收紧。
