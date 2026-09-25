@@ -1,6 +1,6 @@
 # #652 ①a 真机取证（T14 域 api 批量收紧 A · 术前↔术后对照）
 
-- **PR**：#1325 · **issue**：#652 · **分支**：`refactor/api-batch-a` @ `d3e6cd2b`
+- **PR**：#1327 · **issue**：#652 · **分支**：`refactor/api-batch-a` @ `d3e6cd2b`
 - **执行人**：agent 执行 · **日期**：2026-09-25
 - **设备**：`192.168.10.54:40999`（Xiaomi `23049RAD8C` / Android 15），ADB `D:\android-sdk\platform-tools\adb.exe`
 - **取证驱动**：`.ci-verify/t14/652-capture.ps1`（v2；`.ci-verify/` 不入库，故本 README 承载方法与机检行）
