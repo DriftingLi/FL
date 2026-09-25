@@ -3,7 +3,7 @@
  *
  * 沿用源码契约缝（.uvue 不可 jest import）。先例：personalInfoContract、wrongQuestionsContract。
  * 钉住：三组件存在与接线、tab 值逐字冻结、卡片扁平 props、
- * 取数逻辑所有权留页面、600 预算机检、allowlist 不回潮。
+ * 取数逻辑所有权留页面、600 预算机检（机械坑位零命中由全工程守护执法，#654 起无豁免）。
  *
  * ## #1159 改判（2026-09-18，维护者裁定 C）
  *
@@ -27,8 +27,6 @@ const path = require('path');
 const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const read = (rel) => readText(path.join(ROOT, rel));
-/** 豁免名单从单点读（ADR-0023 ⑧）：不再解析守护脚本源码文本取常量 */
-const { allowlistPaths } = require('./contractHarness');
 
 const PAGE = 'pages/profile/personal-activity.uvue';
 const FAVORITES = 'pages/profile/favorites.uvue';
@@ -285,12 +283,5 @@ describe('#1159 改判：个人动态不承载收藏（ADR-0018「收藏的唯�
     const pageSrc = read(PAGE);
     expect(pageSrc).not.toMatch(/function on(ItemClick|FavoriteClick)/);
     expect(read(FAVORITES)).toContain('function onItemClick(');
-  });
-});
-
-describe('allowlist 不回潮（个人动态域违例清零的锁）', () => {
-  it('豁免面不含 personal-activity 手术相关文件', () => {
-    const hits = allowlistPaths().filter((p) => /personal-activity|activity-tab|activity-user|activity-topic/.test(p));
-    expect(hits).toEqual([]);
   });
 });

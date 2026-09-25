@@ -14,7 +14,7 @@
  * 5) 成员存在性锁：页面引用的每个 `reg.<成员>` 都在显式结果类型内；`reg.form.value.<字段>` 都在 `RegisterForm` 内
  *    （T09 ④c 编译门实测抓到的缺口「composable 返回面漏字段」的复发锁）
  * 6) 拆出物零孤儿 / 零死引用（#779 回归教训）—— 由 harness 的 orphanExtracts / deadImports 出事实
- * 7) allowlist 不回潮：register 模块文件不得出现在 GUARD_ALLOWLIST
+ * 7) 机械坑位（规则 H/I）本模块零命中：#654 起守护无豁免面，执法点只有 utsAndroidCompile 一处
  * 8) 零直发请求：页面不碰请求层与域 api，请求只经 composable → `api/auth.uts`
  * 9) 域 api 出口（T11 收紧 + T12 #650 反转一处旧锁）：注册两条（registerApi / emailRegisterApi）走 `postMapped` 出口；
  *    `sendCodeApi` / `sendPhoneCodeApi` 留裸的**白名单与理由**在断言旁写死；`getCaptchaApi` 已按 T12（#650）
@@ -257,21 +257,6 @@ describe('页面壳层零自持状态 + 模板取值形态锁（T09 口径 + 本
     const page = read(PAGE).replace('reg.form.value.email', 'reg.form.value.emailX');
     const declared = declaredFormFields(read(COMPOSABLE));
     expect(formFieldRefs(page).filter((f) => !declared.includes(f))).toEqual(['emailX']);
-  });
-});
-
-describe('allowlist 不回潮（register 模块违例清零的锁）', () => {
-  // ADR-0023 决策 ⑧：`GUARD_ALLOWLIST` 的唯一声明点是 `utils/guardAllowlist.js`，消费方一律 require 取用。
-  const { allowlistPaths } = require('./guardAllowlist');
-  const isRegisterPath = (p) => /^pages\/register\//.test(p);
-
-  it('GUARD_ALLOWLIST 不含 register 模块文件（票面「本模块 allowlist 条目（catch/detail）清零」）', () => {
-    expect(allowlistPaths().filter(isRegisterPath)).toEqual([]);
-  });
-
-  it('判据具备判别力（注入一条 register 豁免必须被抓到）', () => {
-    const injected = allowlistPaths().concat(['pages/register/register.uvue']);
-    expect(injected.filter(isRegisterPath)).toEqual(['pages/register/register.uvue']);
   });
 });
 

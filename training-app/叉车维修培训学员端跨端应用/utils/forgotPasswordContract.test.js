@@ -13,8 +13,8 @@
  *    `v-if` / `:disabled` **恒真**，编译不报、jest 不报（T11 先例，本票照搬）
  * 6) 成员存在性锁：页面引用的每个 `fp.<成员>` 都在显式结果类型内；`fp.form.value.<字段>` 都在 `ForgotPasswordForm` 内
  * 7) 拆出物零孤儿 / 零死引用（#779「import 了但文件不存在」回归锁）
- * 8) allowlist 不回潮：本模块文件不得出现在 `GUARD_ALLOWLIST`（票面「本模块 allowlist 条目（catch/detail）清零」；
- *    规则 H = catch 参数显式 `: any`、规则 I = `: any` 参数访问 `.detail`）
+ * 8) 机械坑位（规则 H = catch 参数显式 `: any`、规则 I = `: any` 参数访问 `.detail`）本模块零命中：
+ *    票面「本模块条目清零」术前即成立，且 #654 起守护无豁免面 ⇒ 执法点只有 utsAndroidCompile 一处
  * 9) 零直发请求：页面不碰请求层与域 api，请求只经 composable → `api/auth.uts`
  * 10) 域 api 出口（T12 收紧）：`getCaptchaApi` 由裸 `get` 改为 `getMapped` + 显式 DTO `CaptchaResult`，
  *     **三个消费方同 PR 机械迁移**（forgot-password / register / login，引用 #650）；`sendCodeApi` /
@@ -265,21 +265,6 @@ describe('页面壳层零自持状态 + 模板取值形态锁（T09/T11 口径�
     const page = read(PAGE).replace('fp.form.value.email', 'fp.form.value.emailX');
     const declared = declaredFormFields(read(COMPOSABLE));
     expect(formFieldRefs(page).filter((f) => !declared.includes(f))).toEqual(['emailX']);
-  });
-});
-
-describe('allowlist 不回潮（票面：本模块 allowlist 条目（catch/detail）清零）', () => {
-  // ADR-0023 决策 ⑧：`GUARD_ALLOWLIST` 的唯一声明点是 `utils/guardAllowlist.js`，消费方一律 require 取用。
-  const { allowlistPaths } = require('./guardAllowlist');
-  const isModulePath = (p) => /^pages\/forgot-password\//.test(p);
-
-  it('GUARD_ALLOWLIST 不含本模块文件（规则 H catch : any / 规则 I .detail 直取 均零存量）', () => {
-    expect(allowlistPaths().filter(isModulePath)).toEqual([]);
-  });
-
-  it('判据具备判别力（注入一条本模块豁免必须被抓到）', () => {
-    const injected = allowlistPaths().concat(['pages/forgot-password/forgot-password.uvue']);
-    expect(injected.filter(isModulePath)).toEqual(['pages/forgot-password/forgot-password.uvue']);
   });
 });
 

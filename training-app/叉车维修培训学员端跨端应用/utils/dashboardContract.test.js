@@ -7,7 +7,8 @@
  * ② 页面预算落袋锁（模块全量预算 / 目录 ≤2 层已由声明面执法，见 ADR-0023 票 C #1219）
  * ③ 拆出物接线收口（显式 import + 模板挂载 + 零孤儿）
  * ④ 页面层零直发请求
- * ⑤ allowlist 模块级清零
+ * ⑤ 机械坑位零命中：执法点在全工程守护（`utils/utsAndroidCompile.test.js` 规则 H/I，#654 起无豁免），
+ *    本文件不再各写一遍
  * 外加行为保持点锁（轮询/乐观回滚/存储同步/静态数据/筛选抽屉）。
  *
  * 本票域 api 收紧口径（同 profileContract）：仅「有 DTO 映射」的函数经 *Mapped 出口家族；
@@ -17,8 +18,6 @@
 const h = require('./contractHarness');
 const ROOT = h.ROOT;
 const read = h.read;
-/** 豁免名单从单点读（ADR-0023 ⑧）：不再解析守护脚本源码文本取常量 */
-const allowlistPaths = h.allowlistPaths;
 
 /** 提取 export function 函数体（从声明到顶层 "\n}"，先例 quickLoginContract） */
 function fnBodyOf(fileSrc, name) {
@@ -165,19 +164,6 @@ describe('页面层零直发请求（网络一律经域 api 函数，#643 收紧
       if (/uni\.request\s*\(/.test(src)) hits.push(`${rel}: uni.request 裸调`);
       if (/uni\.(upload|download)File\s*\(/.test(src)) hits.push(`${rel}: uni.uploadFile/downloadFile 裸调`);
     }
-    expect(hits).toEqual([]);
-  });
-});
-
-/* ══ ⑤ allowlist 模块级清零（dashboard 手术前即零豁免，本锁防回潮 + 域 api 口径） ══ */
-describe('allowlist 模块级清零（dashboard 域 catch/detail 违例豁免不存在）', () => {
-  it('豁免面不含任何 pages/dashboard 文件（模块全量，先例 profileContract）', () => {
-    const hits = allowlistPaths().filter((p) => /pages[/\\]dashboard/.test(p));
-    expect(hits).toEqual([]);
-  });
-
-  it.each(['featured', 'notification', 'credential', 'student'])('本模块域 api %s.uts 无豁免条目', (domain) => {
-    const hits = allowlistPaths().filter((p) => new RegExp(`api[/\\\\]${domain}\\.uts`).test(p));
     expect(hits).toEqual([]);
   });
 });

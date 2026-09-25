@@ -21,8 +21,8 @@
  *    `utils/loginGating.test.js` 原样守着，本文件只锁「归属唯一 + 页面不再自持」），
  *    表单与提交面位于 `useLoginForm.uts`
  * 7) 拆出物零孤儿 / 零死引用（#779 回归锁）
- * 8) allowlist 不回潮：login 模块文件不得出现在 `GUARD_ALLOWLIST`（票面 ⑦「本模块 allowlist
- *    条目清零」—— 手术前本模块就是零，故此条是**不回潮**锁而非清零动作）
+ * 8) 机械坑位（规则 H catch `: any` / 规则 I `.detail` 直取）本模块零命中：手术前就是零，
+ *    且 #654 起守护无豁免面 ⇒ 执法点只有 `utils/utsAndroidCompile.test.js` 一处，本文件不再写第二遍
  * 9) 零直发请求 + 域 api 出口：页面不碰 api 层；`useLoginForm` 只经 `api/auth.uts`；
  *    `getCaptchaApi` 的 DTO 化与 `sendCodeApi` 的裸透传白名单**理由**在 `#650` 已落锁
  *    （`utils/forgotPasswordContract.test.js` / `registerContract.test.js`），本文件只补登录侧消费面
@@ -330,21 +330,6 @@ describe('门控面归属唯一（票面 ③「生物识别门控行为零改动
     expect(page).not.toContain('secureStorage');
     expect(read(GATE)).toContain("from '../../../utils/secureStorage'");
     expect(read(FORM)).toContain("from '../../../utils/secureStorage'");
-  });
-});
-
-describe('allowlist 不回潮（login 模块违例清零的锁）', () => {
-  // ADR-0023 决策 ⑧：`GUARD_ALLOWLIST` 的唯一声明点是 `utils/guardAllowlist.js`，消费方一律 require 取用。
-  const { allowlistPaths } = require('./guardAllowlist');
-  const isLoginPath = (p) => /^pages\/login\//.test(p);
-
-  it('GUARD_ALLOWLIST 不含 login 模块文件（票面 ⑦「本模块 allowlist 条目（catch/detail）清零」）', () => {
-    expect(allowlistPaths().filter(isLoginPath)).toEqual([]);
-  });
-
-  it('判据具备判别力（注入一条 login 豁免必须被抓到）', () => {
-    const injected = allowlistPaths().concat(['pages/login/composables/useLoginForm.uts']);
-    expect(injected.filter(isLoginPath)).toEqual(['pages/login/composables/useLoginForm.uts']);
   });
 });
 

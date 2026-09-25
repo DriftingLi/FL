@@ -1,21 +1,21 @@
 /**
  * practice 模块手术契约测试（T06，parent #644 / ADR-0007）
  *
- * 钉住 practice 手术交付的六类契约：
+ * 钉住 practice 手术交付的契约（编号是类别不是 describe 数；1) 与 4) 不是本文件的锁，
+ * 是「执法点在别处」的口径登记）：
  * 1) 600 行软预算 / 模块目录 ≤2 层：**已由声明面执法**（`utils/modules.js` +
  *    `utils/modulesDeclarationContract.test.js` 的 A3/A5/A10），本文件不再各写一遍（ADR-0023 票 C #1219）
  * 2) composable 接线：practice-do.uvue / practice.uvue 以显式 import 使用 composable
  * 3) 组件接线零孤儿：页面 import 的组件文件必须存在，组件文件必须被页面引用
  *    （#779 回归教训：practice.uvue 改为 import 四个组件却从未创建文件，master 编译中断）
- * 4) allowlist 不回潮：practice 域文件不得出现在 GUARD_ALLOWLIST
+ * 4) 域文件机械坑位（catch : any / .detail 直取）：本文件不再写这类锁——#654 起豁免面已删，
+ *    执法点只有全工程守护 `utils/utsAndroidCompile.test.js` 规则 H/I 一处
  * 5) 零直发请求：页面层不直接 uni.request
  */
 /** harness：读取层归一 + 模块归属面（ADR-0023 票 C 起，本文件不再自建 ROOT / read / walker） */
 const h = require('./contractHarness');
 const ROOT = h.ROOT;
 const read = h.read;
-/** 豁免名单从单点读（ADR-0023 ⑧）：不再解析守护脚本源码文本取常量 */
-const allowlistPaths = h.allowlistPaths;
 
 const PRACTICE_PAGES = ['pages/practice/practice.uvue', 'pages/practice/practice-do.uvue'];
 
@@ -63,13 +63,6 @@ describe('组件接线零孤儿（#779 回归锁：import 的组件文件必须�
       .filter((f) => f.endsWith('.uvue'))
       .filter((f) => !pagesSrc.includes('./components/' + f));
     expect(orphans).toEqual([]);
-  });
-});
-
-describe('allowlist 不回潮（practice 域违例清零的锁）', () => {
-  it('豁免面不含 practice 域文件', () => {
-    const hits = allowlistPaths().filter((p) => /pages[/\\]practice|api[/\\]practice\.uts/.test(p));
-    expect(hits).toEqual([]);
   });
 });
 

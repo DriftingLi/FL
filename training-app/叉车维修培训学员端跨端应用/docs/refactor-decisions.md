@@ -20,6 +20,24 @@ UI 重设计、性能优化、新增组件级测试、状态管理改造、拆�
 ## 拆分步骤（* = 可与主线并行）
 PR-0(#639)✅ → mall(#640)✅ → profile(#641)✅ → forum(T04，600 预算第三复评) → dashboard → practice → exam → courses → resume → ai-assistant → auth 三兄弟（login pin 在生物识别 PR 后）；*#652/#653 域 api 批量收紧；*#654 allowlist 退役收尾。
 
+> **收尾现测（2026-09-25，#654 / T16 落地 ⇒ epic #638 结题）**：
+> ① 上面点名的收口三件 **#652 / #653 / #654 全部合并**（T01–T16 逐票台账与代价见 ADR-0007 各复盘节）；
+> ② **600 软预算的最终判定**（`node -e` 走 `utils/contractHarness.js` 现测，非回忆）：声明面 23 个模块里
+> **19 个已翻成执法**（`budgetViolations()` 返回空），**4 个仍 `budget: 'pending'`** =
+> `ai-assistant` / `points` / `recruiter` / `search`；全仓 231 份 `.uts` + `.uvue` 现测 **9 份 >600**
+> （839 / 727 / 702 / 700 / 667 / 643 / 629 / 621 / 617），其中 8 份落在那 4 个 pending 模块内、
+> 1 份是登记在基础设施面的共享件 `api/request.uts`（643，`INFRA.oversized` 且 drift 为空）；
+> 本文件「目标与范围」记的开工基线是 **20 份 >600** ⇒ 收口到 9 份。
+> ③ **pending 分两类，别混成一句「都达标了」**：`points` / `recruiter` / `search` 不在这串手术步骤里
+> （本文「明确不做」= 不动非手术模块的页面结构），其 pending 属**设计内**；而 `ai-assistant` 是 T10（#648）
+> 的正靶，该票按 **「进度：50%」关闭**（2026-09-10），其表内写 `ai-assistant.uvue` 486 行，**现测 839**
+> ⇒ 关闭后无人执法、已回潮（连同 `ai-feature` 629 / `ai-settings` 621 / `api/aiAssistant.uts` 667）。
+> 这笔登记给后续票，**不写进本 epic 的完成账**。
+> ④ allowlist 机制（expand 侧）已删除：删除时名单里只剩规则 H 两条过期条目，摘除后 **F/G/H/I/J 五条**
+> 机械坑位规则一律无豁免全量执法（票面写「四条」是 T01 立项时表里只有 F/G/H/I，J 是后来按遭遇加的）；
+> 「不许把机制带回来」由 `utils/modulesDeclarationContract.test.js` C 组守；⑤ 「全项目 api 契约一致」至今仍不成立，
+> 残表（`api/auth.uts` 登录族八条出口）由 **#1324 / T21** 承接。
+
 ## 约束
 - 冻结：uni-secure-storage、main.uts、App.uvue、manifest.json、config/、残值域 valuation 模块。
 - API 兼容：请求形态不得变（GET 走手动 query 序列化）；既有 request/get/post 原样保留（expand–contract）。
