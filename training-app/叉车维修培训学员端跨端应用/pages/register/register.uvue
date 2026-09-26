@@ -11,8 +11,12 @@
 
 		<!-- 注册方式切换：手机号 / 邮箱 -->
 		<view class="mode-tabs">
-			<view class="mode-tab" :class="{ 'mode-tab-active': reg.mode.value == 'phone' }" @click="reg.switchMode('phone')">手机号注册</view>
-			<view class="mode-tab" :class="{ 'mode-tab-active': reg.mode.value == 'email' }" @click="reg.switchMode('email')">邮箱注册</view>
+			<view class="mode-tab" :class="{ 'mode-tab-active': reg.mode.value == 'phone' }" @click="reg.switchMode('phone')">
+				<text class="mode-tab-text" :class="{ 'mode-tab-text-active': reg.mode.value == 'phone' }">手机号注册</text>
+			</view>
+			<view class="mode-tab" :class="{ 'mode-tab-active': reg.mode.value == 'email' }" @click="reg.switchMode('email')">
+				<text class="mode-tab-text" :class="{ 'mode-tab-text-active': reg.mode.value == 'email' }">邮箱注册</text>
+			</view>
 		</view>
 
 		<view class="form">
@@ -215,11 +219,10 @@
 		margin: 8rpx 0 40rpx 0;
 	}
 
+	/* 容器与文字分成两位：原生端只把 font-size/color/font-weight 认给 <text>，落在 <view> 上会被判错并忽略（#1269） */
 	.mode-tab {
 		padding: 14rpx 44rpx;
 		margin: 0 12rpx;
-		font-size: 28rpx;
-		color: #666666;
 		background-color: #F0F1F5;
 		border-radius: 48rpx;
 		border: 2rpx solid transparent;
@@ -227,8 +230,16 @@
 
 	.mode-tab-active {
 		background-color: #E8F3FF;
-		color: #2979ff;
 		border-color: #2979ff;
+	}
+
+	.mode-tab-text {
+		font-size: 28rpx;
+		color: #666666;
+	}
+
+	.mode-tab-text-active {
+		color: #2979ff;
 		font-weight: bold;
 	}
 

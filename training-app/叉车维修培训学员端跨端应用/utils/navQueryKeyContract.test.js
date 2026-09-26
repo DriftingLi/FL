@@ -276,6 +276,8 @@ function navigations(files) {
  * 2026-09-20 原名也叫 `GUARD_ALLOWLIST` —— 与 `utils/guardAllowlist.js` 的同名常量撞名，
  * 让「全仓 `GUARD_ALLOWLIST` 只有一个声明点」这条判据（ADR-0023 ⑧）变成假命题；改名区分。
  * 摘除上一条后本表为空，用例 ⑥ 的循环体不再执行（空表天然通过）。
+ * （#654 回记：上面记的撞名对象 `utils/guardAllowlist.js` 已随 epic #638 收尾删除，
+ *   「只有一个声明点」那条判据也随之换成「零声明点」；本表的名字与它自有的判据不受影响。）
  */
 const NAV_QUERY_ALLOWLIST = [];
 

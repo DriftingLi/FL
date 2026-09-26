@@ -2,8 +2,11 @@
  * 模块声明面自检（ADR-0023 票 A / epic #1221）
  *
  * 这个套件守的是**声明本身**，不是模块里的业务：`utils/modules.js` 说「模块由哪些文件组成、
- * 预算多少、拆出物接没接线、豁免归谁」，本文件负责证明**那份声明与磁盘一致**，而且
+ * 预算多少、拆出物接没接线」，本文件负责证明**那份声明与磁盘一致**，而且
  * **这份一致性判据有判别力**（改坏一处必红 —— 只跑通过的那一次不算验收，ADR-0008 的 ③ 判据）。
+ *
+ * C 组还守第二件事：**存量豁免机制不得被带回来**（#654 删掉的不仅是那份文件，还有那条「允许存在
+ * 豁免」的口径；口径活在注释与登记位里，所以锁的是代码面形态而不是文件存在性）。
  *
  * 守护分类（`node scripts/classify-guards.mjs`）：**接线守护** —— 读源码文本与文件清单，
  * 不执行被测物。所以它**不构成 ③ 门证据**（`docs/agents/guards.md`）；它守的接线是
@@ -16,7 +19,6 @@ const path = require('path');
 
 const h = require('./contractHarness');
 const { MODULES } = h;
-const { GUARD_ALLOWLIST, allowlistPaths } = require('./guardAllowlist');
 const utsHarness = require('./utsHarness');
 
 /** 声明集合的深拷贝：注入自检用的「改坏版」，绝不动真源 */
@@ -38,14 +40,54 @@ function codeOnly(src) {
 
 /** 全仓扫描面：源码 + 脚本 + 测试（跳过 node_modules / unpackage / .scratch 等） */
 const SCAN = h.filesUnder('.', /\.(js|mjs|ts|uts|uvue|ps1)$/);
-/** 声明行的形态：`const GUARD_ALLOWLIST = …`（let / var 同罪） */
-const DECL_RE = /(?:const|let|var)\s+GUARD_ALLOWLIST\s*=/;
 /**
- * 被点名禁止的形态：**在源码文本里定位那个常量**（`indexOf` + 字面量）。
- * ⚠️ 本文件自己要扫这个 needle，所以**拼出来**而不是写成连续字面量 ——
- * 否则守护会命中自己（本仓 `contractTestPatternBehavior` 的 pattern 自指是同一类坑）。
+ * 那个常量的名字。⚠️ 标识符一律**拼出来**：本文件要被自己的扫描面扫，
+ * 写成连续字面量就是守护命中自己（同一类坑见本仓 `contractTestPatternBehavior` 的 pattern 自指）。
  */
-const TEXT_PARSE_NEEDLE = 'indexOf(' + "'const " + 'GUARD_ALLOWLIST' + "'";
+const MECH = 'GUARD_' + 'ALLOWLIST';
+/** 豁免机制的登记面形态：`utils/modules.js` 的 `allowlistOwned` 字段（键或赋值都算） */
+const OWNED_RE = /allowlistOwned\s*[:=]/;
+/** 豁免名单那份文件本身（路径也拼开，理由同上） */
+const MECH_FILE = 'utils/' + 'guardAllowlist.js';
+/**
+ * 被点名禁止的三种形态：**声明它**、**读它那份文件**、**在源码文本里抠它的字面量**。
+ *
+ * - `NEEDLES` = 判据（扫代码面用的探针）；
+ * - `FORMS` = 该形态**真会长什么样**的样本，只喂给 C3 的注入自检。
+ *
+ * ⚠️ 两者必须分开：C3 若直接把 `NEEDLES[k]` 拼进被测文本，那一步等于断言「文本里含有我刚刚放进去的子串」，
+ * **恒过**、换不来任何判别力（#654 首版就栽在这里）。分开之后 C3 多出一条**真可失败**的断言：
+ * `FORMS[k]` 必须包含 `NEEDLES[k]` —— 探针被写歪（改成一个现实中不存在的前缀）当场判红。
+ */
+const NEEDLES = {
+  decl: MECH,
+  file: 'utils/' + 'guardAllowlist',
+  textParse: "indexOf('" + 'const ' + MECH + "'",
+};
+const FORMS = {
+  decl: 'const ' + MECH + ' = { H: new Set([\'api/checkin.uts\']) };',
+  file: "require('./" + 'guardAllowlist' + "'); // 见 utils/" + 'guardAllowlist' + '.js',
+  textParse: "if (src.indexOf('" + 'const ' + MECH + "') >= 0) throw new Error('dup');",
+};
+/** 判据本体：给定「文件 → 代码面」表与探针，返回命中文件。C2 走真表、C3 走污染表，**同一条判据**。 */
+const hitsIn = (codeMap, needle) => [...codeMap.keys()].filter((f) => codeMap.get(f).includes(needle));
+/** 命中 needle 的文件（只看代码面，注释不算） */
+const hitting = (needle) => hitsIn(SCAN_CODE, needle);
+/** 判别力自检用的**必不红对照**：合法的分写形态（本文件自己就是这种写法）不得被探针抓到 */
+const SPLIT_FORM = "'GUARD_' + 'ALLOWLIST'";
+/**
+ * 取守护脚本里某条规则的用例体（`it('F：…` 到该 `it` 的收尾 `});`）。
+ * ⚠️ 终止符必须显式验：`slice` 拿到 `-1` 会静默扫到文件末尾 —— 那是本仓点过名的老坑
+ * （ADR-0023 决策 ⑧ 当年正是「抠源码文本」的形态栽在这上面），判据会宽到看不见。
+ */
+function ruleBody(src, id) {
+  const start = src.indexOf("it('" + id + "：");
+  if (start < 0) throw new Error('rule ' + id + ' 的用例体找不到');
+  const terminator = '\n  });';
+  const end = src.indexOf(terminator, start);
+  if (end < 0) throw new Error('规则 ' + id + ' 的用例体没有收尾终止符');
+  return src.slice(start, end + terminator.length);
+}
 
 /** 扫描面的代码面全文（只读一次：C 组要在这张表上跑多轮，重复读 200+ 个文件不值当） */
 const SCAN_CODE = new Map(SCAN.map((f) => [f, codeOnly(h.read(f))]));
@@ -53,7 +95,7 @@ const SCAN_CODE = new Map(SCAN.map((f) => [f, codeOnly(h.read(f))]));
 /** 真源对账**只算一次**（每次对账要读全量源码；注入用例各算各的） */
 const REAL = h.reconcile();
 
-describe('A. 真源声明与磁盘一致（双向对账 / 跨模块唯一 / 接线 / 豁免归属 / 消费者 / 预算）', () => {
+describe('A. 真源声明与磁盘一致（双向对账 / 跨模块唯一 / 接线 / 消费者 / 预算）', () => {
   it('A1: 扫描面非空（防空集合假绿：声明 23 个、目录 23 个、枚举到的文件成规模）', () => {
     expect(h.moduleKeys()).toHaveLength(23);
     expect(h.pagesModuleDirs()).toHaveLength(23);
@@ -64,7 +106,6 @@ describe('A. 真源声明与磁盘一致（双向对账 / 跨模块唯一 / 接�
     // 接线扫描面确实抓到了接线（否则「零孤儿 / 零死引用」是空跑）
     const wiring = h.moduleKeys().reduce((n, k) => n + h.modulePrivateImports(k).length, 0);
     expect(wiring).toBeGreaterThan(20);
-    expect(allowlistPaths().length).toBeGreaterThan(0);
   });
 
   it('A2: 模块键双向对账：`pages/` 目录枚举 ⊆ 声明，声明 ⊆ 目录（漏登记 / 幽灵声明各一侧）', () => {
@@ -95,14 +136,8 @@ describe('A. 真源声明与磁盘一致（双向对账 / 跨模块唯一 / 接�
     expect(REAL.deadImports).toEqual([]);
   });
 
-  it('A8: 豁免归属：模块面内出现的 `GUARD_ALLOWLIST` 条目都已登记，登记的都还在名单里', () => {
-    expect(REAL.allowlistUnregistered).toEqual([]);
-    expect(REAL.allowlistStaleOwned).toEqual([]);
-    // 非空性：名单里确实有条目落在模块面内，A8 不是空跑
-    const owned = h.moduleKeys().flatMap((k) => h.allowlistOwnedBy(k));
-    expect(owned).toEqual(allowlistPaths());
-  });
-
+  // A8（豁免归属对账）已随 #654 删除豁免机制一并摘除；A9 起编号不重排 ——
+  // 历史 ③ 门输出与 ADR 引用里的用例名要继续查得到（同一口径见 ADR-0007「不可改名的用例名」）。
   it('A9: 消费者登记面与实测面一致（新消费者必须登记；不得留假登记）', () => {
     expect(REAL.unregisteredConsumers).toEqual([]);
     expect(REAL.staleConsumers).toEqual([]);
@@ -190,18 +225,7 @@ describe('B. 判别力：注入违规必须判红（成对取证：改坏必红 
       apply: (d) => { d.forum.extraDirs = ['pages/forum/ghost-dir']; },
     },
     {
-      id: 'B10',
-      name: '豁免未登记：模块面内的 `GUARD_ALLOWLIST` 条目被清掉',
-      key: 'allowlistUnregistered',
-      apply: (d) => { d.forum.allowlistOwned = []; },
-    },
-    {
-      id: 'B11',
-      name: '假登记豁免：登记一个不在 `GUARD_ALLOWLIST` 里的文件',
-      key: 'allowlistStaleOwned',
-      apply: (d) => { d.courses.allowlistOwned = ['api/course.uts']; },
-    },
-    {
+      // B10 / B11（两条豁免注入自检）随 #654 删除机制一并摘除；B12 起编号不重排，理由同 A8 处注释。
       id: 'B12',
       name: '预算覆盖非法：缺 reason / issue',
       key: 'invalidOverrides',
@@ -240,41 +264,107 @@ describe('B. 判别力：注入违规必须判红（成对取证：改坏必红 
   });
 });
 
-describe('C. `GUARD_ALLOWLIST` 单点（ADR-0023 ⑧）', () => {
-  it('C1: 扫描面本身非空（防路径断链导致空集合假绿）', () => {
-    expect(SCAN.length).toBeGreaterThan(200);
+/**
+ * C 组 —— **存量豁免机制不得回来**（#654 / T16 的收口锁）。
+ *
+ * 原 C 组（ADR-0023 决策 ⑧，其「单一声明点」判据已被 #654 的收尾节取代）守的是「那份名单只有一个声明点、
+ * 消费方一律 `require` 取用」。名单清空后这条判据**反过来才有牙**：名单一旦为空，17 份模块契约里
+ * 那 27 条「本域不在豁免名单里」的用例声明（三条是 `it.each`，展开 **37 例**）同时变恒真 ——
+ * `filter` 命中空名单永远返回 `[]`，与「名单里有但没命中」长得一模一样。于是「机制已退役」不能只靠
+ * 删掉那个文件来保证 —— 有人加回一份**空**名单，整套不回潮锁就能静默复活成空判据。
+ * 所以这里锁的是**代码面形态**：声明它、读它那份文件、抠它的字面量，三者各自判红；
+ * 再加上登记位（`allowlistOwned`）与「规则体内不许有跳过某文件的查询」两格。
+ *
+ * 判据一律落在**代码面**（`codeOnly`）：注释里提到它不算引用 —— 历史 ADR 与 `navQueryKeyContract`
+ * 的撞名说明都还要写这个名字，一条会因为解释自己为什么存在而判红的锁活不过下一次改写。
+ * 名字（`MECH` / `NEEDLES` / `FORMS`）在本文件里也是拼出来的，否则守护命中自己。
+ *
+ * ⚠️ 本组的**残留射程**（有意不覆盖，写明白而不是假装没有）：
+ * ① **改名绕开**：另起一套 `EXEMPT_PATHS` / 换一份文件名，C2 的三支探针抓不到。C 组锁的是**这个机制的名字**，
+ *    不是「任何形似豁免的东西」—— 后者文本判据做不到，靠评审与注入自检兜。
+ * ② 规则体内**手写常量比较**跳过某文件（`if (f === 'x') continue`）不在 C4 的判据里；
+ *    但**路径片段式**跳过（`u.file.includes('…')`）自 #654 起被 C4 逐条枚举钉住：全表只许 `app-ios` 一处
+ *    （`app-ios` 目录走 Swift 编译，是既有旁路，不是本次新开的豁免面）。
+ */
+describe('C. 存量豁免机制零声明点（#654 退役后不许回来）', () => {
+  /** C3 注入用的靶文件：真实存在、在扫描面内、且不属于任何判据的豁免位 */
+  const VICTIM = 'utils/format.uts';
+  /** 把 `VICTIM` 在内存里污染成「含该真实形态」，再走**同一条判据**（不落盘 ⇒ 不动工作树） */
+  const contaminatedHits = (form, needle) => {
+    const polluted = new Map(SCAN_CODE);
+    polluted.set(VICTIM, form + '\n' + SCAN_CODE.get(VICTIM));
+    return hitsIn(polluted, needle);
+  };
+  /**
+   * 规则体内「按文件跳过」的判据本体（C4 与 C5 共用同一条，注入自检因此真在测判据而不是测自己）。
+   * 返回违规清单：空 = 干净。
+   */
+  function skipViolations(body, id) {
+    const v = [];
+    for (const m of body.match(/\.has\s*\(/g) || []) v.push('集合式跳过 .has(');
+    for (const m of body.matchAll(/\.includes\(\s*'([^']*)'\s*\)/g)) {
+      if (id !== 'F' || m[1] !== 'app-ios') v.push(`路径式跳过 includes('${m[1]}')`);
+    }
+    return v;
+  }
+
+  it('C1: 扫描面本身非空且不塌方（防路径断链导致的空集合假绿）', () => {
+    // 2026-09-25 现测：整面 409 份、顶层 17 个目录。取整写死阈值：宁可红一次让人重测，不可静默少扫半棵树
+    expect(SCAN.length).toBeGreaterThan(300);
+    expect(new Set(SCAN.map((f) => f.split(/[\\/]/)[0])).size).toBeGreaterThan(12);
     expect(SCAN).toContain('utils/utsAndroidCompile.test.js');
-    expect(SCAN).toContain('utils/guardAllowlist.js');
+    expect(SCAN).toContain('utils/modulesDeclarationContract.test.js');
+    expect(SCAN).toContain(VICTIM);
   });
 
-  it('C2: 全仓只有一个声明点（`utils/guardAllowlist.js`）', () => {
-    const decls = SCAN.filter((f) => DECL_RE.test(SCAN_CODE.get(f)));
-    expect(decls).toEqual(['utils/guardAllowlist.js']);
+  it('C2: 全仓代码面零声明点 —— 声明它 / 读它那份文件 / 抠它的字面量，三种形态各一侧', () => {
+    expect(hitting(NEEDLES.decl)).toEqual([]);
+    expect(hitting(NEEDLES.file)).toEqual([]);
+    expect(hitting(NEEDLES.textParse)).toEqual([]);
+    expect(h.exists(MECH_FILE)).toBe(false);
   });
 
-  it('C3: 全仓不再有解析该常量源码文本的读取', () => {
-    const parsing = SCAN.filter((f) => SCAN_CODE.get(f).includes(TEXT_PARSE_NEEDLE));
-    expect(parsing).toEqual([]);
+  it.each(Object.keys(NEEDLES))('C3: 判别力 —— 注入「%s」的真实形态必被抓到，合法分写形态必不红', (which) => {
+    // ① 探针与真实形态的覆盖关系：探针被写歪（改成现实中不存在的前缀）这一条就先红
+    expect(FORMS[which]).toContain(NEEDLES[which]);
+    // ② 必红一侧：把**真实写法**植进去，判据必须抓到
+    expect(contaminatedHits(FORMS[which], NEEDLES[which])).toContain(VICTIM);
+    // ③ 必不红一侧（对照组）：本文件自用的分写形态不得命中，否则是守护抓自己
+    expect(contaminatedHits(SPLIT_FORM, NEEDLES[which])).not.toContain(VICTIM);
+    expect(hitting(NEEDLES[which])).toEqual([]);
   });
 
-  it('C4: 守护脚本从单点取用（不再自带一份）', () => {
+  it('C4: 五条机械坑位规则判的是产物为空，体内既无集合式豁免跳过、路径式跳过也只有 app-ios 一处', () => {
     const src = codeOnly(h.read('utils/utsAndroidCompile.test.js'));
-    expect(src).toMatch(/require\(['"]\.\/guardAllowlist['"]\)/);
-    expect(DECL_RE.test(src)).toBe(false);
+    for (const id of ['F', 'G', 'H', 'I', 'J']) {
+      const body = ruleBody(src, id);
+      expect(body).toContain('expect(violations).toEqual([])'); // 判据 = 扫描产物
+      expect(skipViolations(body, id)).toEqual([]);
+    }
   });
 
-  it('C5: 提到该常量的测试一律从单点 / harness 取用（不再各抠一份文本）', () => {
-    const self = ['utils/modulesDeclarationContract.test.js'];
-    // 只看**代码面**：注释里提到它（例如「别与 GUARD_ALLOWLIST 混淆」）不算引用
-    const testFiles = SCAN.filter((f) => f.endsWith('.test.js') && SCAN_CODE.get(f));
-    const mention = testFiles.filter((f) => SCAN_CODE.get(f).includes('GUARD_ALLOWLIST'));
-    const offenders = mention.filter((f) => {
-      if (self.includes(f)) return false;
-      return !/require\(['"]\.\/(guardAllowlist|contractHarness)['"]\)/.test(SCAN_CODE.get(f));
-    });
-    expect(offenders).toEqual([]);
-    expect(mention.length).toBeGreaterThan(0); // 非空性：确实有测试在代码面引用它
-    expect(testFiles.length).toBeGreaterThan(50); // 扫描面本身非空
+  it.each(['集合式', '路径式'])('C5: 判别力 —— 往规则 H 体内注入一条%s跳过，C4 的判据必红', (which) => {
+    const src = codeOnly(h.read('utils/utsAndroidCompile.test.js'));
+    // 注的是「整行」而不是函数调用片段：植入物得长得像真会提交的那种代码，否则自检只证明替换发生了
+    const anchor = '      for (const h of scanCatchAnyParam(u.code)';
+    const implant =
+      which === '集合式'
+        ? '      if (exempt.has(u.file)) continue;\n'
+        : "      if (u.file.includes('pages/notifications/notifications')) continue;\n";
+    const broken = src.replace(anchor, implant + anchor);
+    expect(broken).not.toBe(src); // 锚点真的在（防判据因拼错而空跑）
+    expect(skipViolations(ruleBody(broken, 'H'), 'H')).toEqual(
+      which === '集合式' ? ['集合式跳过 .has('] : [`路径式跳过 includes('pages/notifications/notifications')`]
+    );
+  });
+
+  it('C6: 登记位也不许回来：`utils/modules.js` 代码面不含 `allowlistOwned` 字段', () => {
+    const decl = codeOnly(h.read('utils/modules.js'));
+    expect(decl).not.toMatch(OWNED_RE);
+    // 必红一侧：把字段加回一份声明的副本里，判据抓得到（含空数组形态 —— 空名单正是静默复活的样子）
+    const broken = decl.replace('maxDepth: MAX_DEPTH,', 'allowlistOwned: [],\n    maxDepth: MAX_DEPTH,');
+    expect(broken).not.toBe(decl);
+    expect(broken).toMatch(OWNED_RE);
   });
 });
 

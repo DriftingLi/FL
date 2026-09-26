@@ -54,7 +54,7 @@ type RecruitResumeCard struct {
 	RealNameMasked        string    `json:"real_name_masked"` // 同上，兼容验收对打码字段的显式断言
 	ExpectedPositionID    *int      `json:"expected_position_id,omitempty" extensions:"x-optional"`
 	ExpectedPositionExtra string    `json:"expected_position_extra"`
-	ExpectedRegions       JSONArray `json:"expected_regions" swaggertype:"array,string" nullability:"nullable"`
+	ExpectedRegions       JSONArray `json:"expected_regions" swaggertype:"array,string" extensions:"x-nullable" nullability:"nullable"`
 	SalaryMin             *int      `json:"salary_min,omitempty" extensions:"x-optional"`
 	SalaryMax             *int      `json:"salary_max,omitempty" extensions:"x-optional"`
 	SalaryNegotiable      bool      `json:"salary_negotiable"`
@@ -62,17 +62,18 @@ type RecruitResumeCard struct {
 	JobNature             string    `json:"job_nature"`
 	ExperienceYears       int       `json:"experience_years"`
 	SelfIntro             string    `json:"self_intro"`
-	ResumeExperiences     JSONArray `json:"resume_experiences" swaggertype:"array,object" nullability:"nullable"`
-	ResumeCertifications  JSONArray `json:"resume_certifications" swaggertype:"array,object" nullability:"nullable"` // 已去 image_urls
+	ResumeExperiences     JSONArray `json:"resume_experiences" swaggertype:"array,object" extensions:"x-nullable" nullability:"nullable"`
+	ResumeCertifications  JSONArray `json:"resume_certifications" swaggertype:"array,object" nullability:"nonnil"` // 已去 image_urls
 	UpdatedAt             string    `json:"updated_at"`
 	// #489：企业视角联系状态（none/pending/approved，approved 带来源）
 	ContactState  string `json:"contact_state,omitempty" extensions:"x-optional"`
 	ContactSource string `json:"contact_source,omitempty" extensions:"x-optional"` // recruiter/application
-	// CompanyDisabled 与联系面明文位置**同键同措辞**的那一格：本企业账号已被禁用（处置动作）或
-	// 已注销 ⇒ 明文取不到，但 contact_state 仍按授权事实投影（授权存在 ≠ 授权可用，
-	// 词表「授权有效态」；ADR-0064 决策 5）。缺席即企业可用。
-	// 移动端 #1267 的退回诉求就是这一格：只挂在明文位置上，列表角标无从分辨。
-	CompanyDisabled bool `json:"company_disabled,omitempty" extensions:"x-optional"`
+	// CompanyDisabled 「企业账号已停用或已注销」——与学员侧那格（service.ContactRequestDTO 的
+	// 同键字段）以及明文门禁拒同一件事时返回的那句错误同键同句（ADR-0065 决策 8）：
+	// 本企业被禁用（处置动作）或已注销 ⇒ 明文取不到，但 contact_state 仍按授权事实投影
+	// （授权存在 ≠ 授权可用，词表「授权有效态」；ADR-0064 决策 5）。缺席即企业可用。
+	// 移动端 #1267 的退回诉求就是这一格：只挂在明文位置上时列表角标无从分辨。
+	CompanyDisabled bool `json:"company_disabled,omitempty" extensions:"x-optional" fact:"company_unavailable"`
 }
 
 // RecruitListResult 列表结果。

@@ -88,13 +88,14 @@ func (s QuestionReadScope) WhereSQL() (string, []any) {
 
 // VisibleByID 单题在本 scope 内是否对学员可见：by-id 读面与「往题上写」的挂载校验共用这一处
 // （形态照 course_mount_scope.go 的 CourseVisibleByID / ADR-0058；池内三元一条都不少）。
-// 查询失败按不可见处理（fail-closed）；调用方一律按「不存在」渲染 404，不泄漏存在性。
-func (s QuestionReadScope) VisibleByID(db *gorm.DB, questionID int) bool {
+// 查询失败仍按不可见处理（fail-closed 的保守方向不变），但**把 err 交出去**（ADR-0065 决策 7）：
+// 「问不出可见性」不是「证明它不可见」，二者对外必须分得开（404 vs 500）。
+func (s QuestionReadScope) VisibleByID(db *gorm.DB, questionID int) (bool, error) {
 	var cnt int64
 	if err := s.Apply(db.Model(&model.Question{})).Where("id = ?", questionID).Count(&cnt).Error; err != nil {
-		return false
+		return false, err
 	}
-	return cnt > 0
+	return cnt > 0, nil
 }
 
 // QuestionEditScope 编辑面（题库作者 / 审核者）scope：与学员面的差别是**具名**的——
@@ -116,4 +117,21 @@ func NewQuestionEditScope(credFilter *int) QuestionEditScope {
 // ApplyListFilter 叠上证件筛选轴（归属分区谓词的编辑面用法：nil → 不筛，看全部）。
 func (s QuestionEditScope) ApplyListFilter(q *gorm.DB) *gorm.DB {
 	return EntityOwnedBy(q, "credential_id", s.credFilter)
+}
+
+// questionVisibleOrErr 把 scope 的 by-id 判定翻成错误：读不动 ⇒ 原样上抛（调用方渲染 500），
+// 真不可见 ⇒ ErrQuestionNotFound（404）。三处笔记面共用这一格，不各抄一遍两分支。
+// questionVisibleOrErr 把 scope 的 by-id 判定翻成错误：读不动 ⇒ 原样上抛（调用方渲染 500），
+// 真不可见 ⇒ ErrQuestionNotFound（404）。宿主住在 question_pool_scope.go：它包装的就是本文件的
+// VisibleByID，favorite / note / 评论三域共用这一格（favorite_service.go 自述「题目支的判据宿主
+// 从此在 question_pool_scope.go」）。
+func questionVisibleOrErr(scope QuestionReadScope, db *gorm.DB, questionID int) error {
+	visible, err := scope.VisibleByID(db, questionID)
+	if err != nil {
+		return err
+	}
+	if !visible {
+		return ErrQuestionNotFound
+	}
+	return nil
 }

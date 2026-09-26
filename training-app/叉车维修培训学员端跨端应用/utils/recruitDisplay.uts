@@ -10,7 +10,7 @@
  * ## 为什么「已过期」必须在客户端算（ADR-0022 ② 与「已知缺口」）
  *
  * `GET /recruit/contact-requests` 的 DTO 带 `status` 与 `expires_at`（`created_at + 14 天`，
- * `contact_service.go:183`），但**读取路径不按 `expires_at` 判状态**：`contact-request-expire`
+ * `contact_service.go:37` 常量、`:289` 签发处），但**读取路径不按 `expires_at` 判状态**：`contact-request-expire`
  * 守护未被装配（`backend/cmd/server/main.go` 只装了 forum-image-cleanup 与
  * contribution-file-cleanup），且全仓无可外部触发的过期端点 ⇒ 超期的 `pending` 记录
  * **永久停在 `pending`**。所以「已过期」是客户端事实，而且过期项**不给任何操作入口**
@@ -222,6 +222,32 @@ export function contactUrgencyText(count : number, days : number) : string {
 export function contactRemainingText(days : number) : string {
     if (days <= 0) return ''
     return '剩 ' + days.toString() + ' 天'
+}
+
+/**
+ * 可用性那一格的说明文案 —— **全仓唯一一份**，且与 Web 单点逐字同源：
+ * `frontend/src/utils/contactRequestStatus.ts` 的 `companyAvailability().label`。
+ * 逐字对账见 `recruitWorkspaceContract.test.js` 的「对照③」（改词或搬家即红，不靠人记）。
+ */
+const COMPANY_DISABLED_NOTICE : string = '企业账号已停用或已注销，联系方式已收回'
+
+/**
+ * 「授权仍在、明文已收回」那一格（#1267）—— 三个消费面共用：交换段列表行、简历库卡片、
+ * 简历详情明文区。入参已是读取层归一后的 boolean（缺席式键在 `api/recruit.uts` 折成 false），
+ * 所以这里是**全仓唯一**一处判据。
+ * @note **只认这个真值**，不得再叠一层 `status` / `contact_state` 判据：后端两处赋值点
+ *       都已经是「approved 且企业不可用」（`contact_service.go:215-218` 与
+ *       `recruit_service.go:106`，后者在 `fillContactStates` 里），
+ *       客户端重推一遍就等于把服务端事实换成客户端推断（两个事实来源）。
+ * @note **不进状态词表**：它不是 `ContactGrantState` 的取值。徽章那一格按**授权事实**投影，
+ *       可用性另开一格说（词表「授权有效态」/ 根 ADR-0064 决策 5）—— 拿它降级徽章会把
+ *       「被禁用的企业」与「从没授权」压回同一个值。给词表加行还会踩破
+ *       `recruitWorkspaceContract.test.js` F 组三把同源锁里的前两把（取值集合 == Go 常量表、
+ *       label 逐字 == Web；承重件，见 ADR-0026 ③），第三把（`.tag-<status>` 样式齐全）也要跟着补 class。
+ */
+export function companyDisabledNotice(disabled : boolean) : string {
+    if (disabled) return COMPANY_DISABLED_NOTICE
+    return ''
 }
 
 /**

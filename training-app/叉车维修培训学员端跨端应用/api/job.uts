@@ -1,51 +1,18 @@
 /**
  * 职位相关 API
+ *
+ * ## 出口收紧（#652 T14）
+ *
+ * 两个有载荷的 GET 出口（详情 / 列表）由裸 `get(...).then(...)` 收紧至 mapper-callback
+ * 便捷面 `getMapped<T>`（#639 出口家族）：请求形态与字段读取逐行不变，只是出口签名带 DTO、
+ * 映射从内联 `.then` 收敛到 `buildJobPosting`（此前详情与列表各复制一份同形映射，一并去重）。
+ * DTO 类型迁至 `types/job.uts`（经 `types/index` 消费），本文件只留映射与出口。
+ *
+ * 留裸 `post` 的两条（void 透传，按 ADR-0007「两问判据」）：`reportJobApi` / `applyJobApi`
+ * 后端无 data 载荷、调用方只 await 成败，硬套 identity map 属过度设计 ⇒ 保持原 `post` 通路。
  */
-import { get, post } from './request'
-
-/** 职位详情 */
-export type JobPosting = {
-    id : number
-    title : string
-    region : string
-    salary_min ?: number
-    salary_max ?: number
-    salary_text : string
-    experience_req : string
-    description : string
-    specialty_id ?: number
-    published_at : string
-    company_name : string
-    status : string
-    forced_offline : boolean
-    /** 学员视角投递态（#488）：'' 可投 / 'applied' 已投递 / 'not_hired' 未录用（冷却中）；'withdrawn' 后服务端不给状态（可立即重投） */
-    apply_state ?: string
-    /** 'not_hired' 时距可再投的天数（服务端向上取整；30 天冷却） */
-    cooldown_days ?: number
-}
-
-/** 职位列表查询参数 */
-export type JobListParams = {
-    page ?: number
-    page_size ?: number
-    specialty_id ?: number
-    region ?: string
-    salary_min ?: number
-    salary_max ?: number
-    experience ?: string
-}
-
-/** 职位列表查询结果 */
-export type JobListResult = {
-    items : JobPosting[]
-    total : number
-}
-
-/** 举报原因预设选项 */
-export type ReportReason = {
-    key : string
-    label : string
-}
+import { getMapped, post } from './request'
+import type { JobPosting, JobListParams, JobListResult, ReportReason } from '../types/index'
 
 /** 预设举报原因列表 */
 export const REPORT_REASONS : ReportReason[] = [
@@ -55,30 +22,43 @@ export const REPORT_REASONS : ReportReason[] = [
     { key: 'other', label: '其他' },
 ]
 
+/** 从 UTSJSONObject 构造 JobPosting（详情与列表共用；字段读取与收紧前逐行一致） */
+function buildJobPosting(obj : UTSJSONObject) : JobPosting {
+    return {
+        id: obj['id'] as number,
+        title: (obj['title'] as string) ?? '',
+        region: (obj['region'] as string) ?? '',
+        salary_min: obj['salary_min'] != null ? obj['salary_min'] as number : null,
+        salary_max: obj['salary_max'] != null ? obj['salary_max'] as number : null,
+        salary_text: (obj['salary_text'] as string) ?? '',
+        experience_req: (obj['experience_req'] as string) ?? '',
+        description: (obj['description'] as string) ?? '',
+        specialty_id: obj['specialty_id'] != null ? obj['specialty_id'] as number : null,
+        published_at: (obj['published_at'] as string) ?? '',
+        company_name: (obj['company_name'] as string) ?? '',
+        status: (obj['status'] as string) ?? 'open',
+        forced_offline: (obj['forced_offline'] as boolean) ?? false,
+        apply_state: (obj['apply_state'] as string) ?? '',
+        cooldown_days: obj['cooldown_days'] != null ? obj['cooldown_days'] as number : null,
+    } as JobPosting
+}
+
+/** 从 UTSJSONObject 构造 JobListResult（items 逐条走 buildJobPosting，total 直读） */
+function buildJobListResult(data : UTSJSONObject) : JobListResult {
+    const itemsRaw = (data['items'] as UTSJSONObject[]) ?? []
+    const items : JobPosting[] = itemsRaw.map((obj : UTSJSONObject) : JobPosting => buildJobPosting(obj))
+    return {
+        items: items,
+        total: data['total'] as number,
+    } as JobListResult
+}
+
 /**
  * 获取职位详情
  * @param jobId 职位 ID
  */
 export function getJobDetailApi(jobId : number) : Promise<JobPosting> {
-    return get('/jobs/' + jobId).then((data : UTSJSONObject) : JobPosting => {
-        return {
-            id: data['id'] as number,
-            title: (data['title'] as string) ?? '',
-            region: (data['region'] as string) ?? '',
-            salary_min: data['salary_min'] != null ? data['salary_min'] as number : null,
-            salary_max: data['salary_max'] != null ? data['salary_max'] as number : null,
-            salary_text: (data['salary_text'] as string) ?? '',
-            experience_req: (data['experience_req'] as string) ?? '',
-            description: (data['description'] as string) ?? '',
-            specialty_id: data['specialty_id'] != null ? data['specialty_id'] as number : null,
-            published_at: (data['published_at'] as string) ?? '',
-            company_name: (data['company_name'] as string) ?? '',
-            status: (data['status'] as string) ?? 'open',
-            forced_offline: (data['forced_offline'] as boolean) ?? false,
-            apply_state: (data['apply_state'] as string) ?? '',
-            cooldown_days: data['cooldown_days'] != null ? data['cooldown_days'] as number : null,
-        } as JobPosting
-    })
+    return getMapped<JobPosting>('/jobs/' + jobId, null, (data : UTSJSONObject) : JobPosting => buildJobPosting(data))
 }
 
 /**
@@ -126,30 +106,5 @@ export function getJobListApi(params : JobListParams = {}) : Promise<JobListResu
     const qs = qsParts.join('&')
     const url = '/jobs' + (qs.length > 0 ? '?' + qs : '')
 
-    return get(url).then((data : UTSJSONObject) : JobListResult => {
-        const itemsRaw = (data['items'] as UTSJSONObject[]) ?? []
-        const items : JobPosting[] = itemsRaw.map((obj : UTSJSONObject) : JobPosting => {
-            return {
-                id: obj['id'] as number,
-                title: (obj['title'] as string) ?? '',
-                region: (obj['region'] as string) ?? '',
-                salary_min: obj['salary_min'] != null ? obj['salary_min'] as number : null,
-                salary_max: obj['salary_max'] != null ? obj['salary_max'] as number : null,
-                salary_text: (obj['salary_text'] as string) ?? '',
-                experience_req: (obj['experience_req'] as string) ?? '',
-                description: (obj['description'] as string) ?? '',
-                specialty_id: obj['specialty_id'] != null ? obj['specialty_id'] as number : null,
-                published_at: (obj['published_at'] as string) ?? '',
-                company_name: (obj['company_name'] as string) ?? '',
-                status: (obj['status'] as string) ?? 'open',
-                forced_offline: (obj['forced_offline'] as boolean) ?? false,
-                apply_state: (obj['apply_state'] as string) ?? '',
-                cooldown_days: obj['cooldown_days'] != null ? obj['cooldown_days'] as number : null,
-            } as JobPosting
-        })
-        return {
-            items: items,
-            total: data['total'] as number,
-        } as JobListResult
-    })
+    return getMapped<JobListResult>(url, null, (data : UTSJSONObject) : JobListResult => buildJobListResult(data))
 }

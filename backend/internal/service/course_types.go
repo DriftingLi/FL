@@ -61,7 +61,7 @@ type DeleteFileResult struct {
 type BatchDeleteFilesResult struct {
 	SuccessCount int   `json:"success_count"`
 	FailedCount  int   `json:"failed_count"`
-	FailedIDs    []int `json:"failed_ids" nullability:"nullable"`
+	FailedIDs    []int `json:"failed_ids" nullability:"nonnil"`
 }
 
 // ptrStr 字符串指针辅助（测试与内部调用构造 typed 输入用）。

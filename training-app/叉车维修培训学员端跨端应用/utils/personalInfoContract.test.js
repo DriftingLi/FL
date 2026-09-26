@@ -3,7 +3,7 @@
  *
  * 沿用源码契约缝（.uvue 不可 jest import）。先例：wrongQuestionsContract、mallPilotContract。
  * 钉住：拆出物存在与接线、状态所有权（页面持 ref / flows 零可变状态）、
- * auth 触点回调注入、UI 像素结构、600 预算机检、allowlist 不回潮。
+ * auth 触点回调注入、UI 像素结构、600 预算机检（机械坑位零命中由全工程守护执法，#654 起无豁免）。
  */
 const fs = require('fs');
 const path = require('path');
@@ -12,8 +12,6 @@ const path = require('path');
 const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const read = (rel) => readText(path.join(ROOT, rel));
-/** 豁免名单从单点读（ADR-0023 ⑧）：不再解析守护脚本源码文本取常量 */
-const { allowlistPaths } = require('./contractHarness');
 
 const PAGE = 'pages/profile/personal-info.uvue';
 const SHELL = 'pages/profile/components/info-dialog.uvue';
@@ -83,6 +81,13 @@ describe('flows 纯函数契约（状态所有权留在页面）', () => {
     const p = page();
     expect(p).toContain('authStore.setAuthData(r.token, r.user, r.refresh_token)');
     expect(p).toContain('authStore.clearAuthData()');
+  });
+
+  it('改密 toast 文案钉为有空格形态「6-20 位」（与后端/注册页同串，#1297 半收口：placeholder 暂留无空格）', () => {
+    // 逐字锁照 registerContract 形态：正向钉有空格串，反向挡无空格回潮。
+    // 找回密码页 toast 是另一条规则「密码至少 6 位」（只判下限），故不纳入同串断言。
+    expect(flows()).toContain("uni.showToast({ title: '密码长度需为 6-20 位', icon: 'none' })");
+    expect(flows()).not.toContain('密码长度需为6-20位');
   });
 
   it('倒计时收敛于 Countdown 类（单一实现）；页面 4 实例、onUnload 全停', () => {
@@ -155,12 +160,5 @@ describe('600 行软预算机检（personal-info 手术文件）', () => {
       .map((rel) => ({ file: rel, lines: read(rel).split('\n').length }))
       .filter((x) => x.lines > 600);
     expect(over).toEqual([]);
-  });
-});
-
-describe('allowlist 不回潮（个人信息域违例清零的锁）', () => {
-  it('豁免面不含 personal-info 手术相关文件', () => {
-    const hits = allowlistPaths().filter((p) => /personal-info|info-dialog|personal-info-flows/.test(p));
-    expect(hits).toEqual([]);
   });
 });

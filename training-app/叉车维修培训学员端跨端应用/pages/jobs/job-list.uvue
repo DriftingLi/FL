@@ -90,7 +90,7 @@
     import { getJobListApi } from '../../api/job'
     import { getCatalogTreeSpecialties } from '../../api/course'
     import { useAuthStore } from '../../stores/auth'
-    import type { JobPosting } from '../../api/job'
+    import type { JobPosting } from '../../types/index'
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight

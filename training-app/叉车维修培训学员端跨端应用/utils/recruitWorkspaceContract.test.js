@@ -11,6 +11,8 @@
  *   B. 首屏批量请求 = **2**（`/recruit/jobs` + `/recruit/contact-requests`）；
  *      **不逐职位拉 `unread_count`**（N+1，ADR-0021 ② 禁令）；
  *   C. 交换段：过期由客户端判、**过期项无任何操作入口**；徽标只计未过期 pending（行为在行为测试）；
+ *   C2. 企业可用性那一格（#1267）：措辞与 Web / 后端具名错误**同源**、全仓**单点**、
+ *       列表卡面与徽章**并排**投影且徽章**不降级**；
  *   D. 标记不合适：二次确认 + **不可逆**提示 + 学员侧 30 天冷却；**无任何「撤销」入口**；
  *   E. 移动端**不存在**职位发布/编辑/上下架入口，也**不存在**任何「功能开发中」式占位；
  *   F. 状态词**两端同源**（与 Web 的两张 Record 逐字对账）+ 每个取值在消费面都有 `.tag-<status>`。
@@ -222,6 +224,51 @@ function parseGoStatuses(absPath, namePrefix, typeName = '') {
   return out.length > 0 ? out : null;
 }
 
+/**
+ * 解析移动端单点里的「企业可用性」措辞（`utils/recruitDisplay.uts` 的模块级常量）。
+ * 本文件**不抄第二份**：抄了就凭空多出第三个事实来源，锁会变成「测试自己说什么」而不是「单点什么」。
+ * @returns 字面量；解析不到返回 null（判红，不静默放行）
+ */
+function parseMobileNoticeConst(src) {
+  const m = /const COMPANY_DISABLED_NOTICE\s*:\s*string\s*=\s*'([^']*)'/.exec(src);
+  return m === null ? null : m[1];
+}
+
+/**
+ * 解析 Web 侧「企业可用性」那一格的措辞（`contactRequestStatus.ts` 的 `companyAvailability()`）。
+ * @note 刻意**不**复用 `parseWebDescriptorModule`：这一格不在那张 `DESCRIPTORS` 表里
+ *       （它不是 `ContactGrantState` 的取值，进表就会踩破 F 组前两把同源锁，见 ADR-0026 ③）。
+ * @returns label 字面量；文件/函数形态解析不到返回 null（判红）
+ */
+function parseWebAvailability(absPath) {
+  if (!fs.existsSync(absPath)) return null;
+  return availabilityLabelFrom(readText(absPath));
+}
+
+/** 同一套解析，暴露给自检（真源搬家 ⇒ 解析出 null ⇒ 判红，而不是静默跳过对账） */
+function availabilityLabelFrom(src) {
+  const head = src.indexOf('export function companyAvailability(');
+  if (head === -1) return null;
+  const body = src.slice(head, src.indexOf('\n}', head));
+  const m = /label:\s*'([^']*)'/.exec(body);
+  return m === null ? null : m[1];
+}
+
+/** 解析后端具名错误的字面量（`var Err… = errors.New("…")`）；读不到返回 null（判红） */
+function parseGoErrorText(absPath, name) {
+  if (!fs.existsSync(absPath)) return null;
+  return goErrorFrom(readText(absPath), name);
+}
+
+/** 同一套解析，暴露给自检 */
+function goErrorFrom(src, name) {
+  const m = new RegExp(name + '\\s*=\\s*errors\\.New\\("([^"]*)"\\)').exec(src);
+  return m === null ? null : m[1];
+}
+
+/** 措辞单点：可用性那句话在移动端唯一的那一份（真源仍是 `utils/recruitDisplay.uts`） */
+const AVAIL_NOTICE = parseMobileNoticeConst(read(DISPLAY));
+
 // ---------------------------------------------------------------------------
 // A. 分段件的唯一性
 // ---------------------------------------------------------------------------
@@ -362,6 +409,85 @@ describe('C. 交换段：客户端判过期、过期项无操作入口', () => {
   it('徽标计数走同一个函数（徽标只计未过期 pending 的语义在行为测试里验）', () => {
     expect(contacts).toContain('unexpiredPendingCount(result.items, nowMs.value)');
     expect(contacts).toContain('contactRemainingText(remainingDays(row.expires_at, nowMs.value))');
+  });
+
+  it('明文收回说明（#1267）：判定与文案在 utils 单点，页面只做投影，且模板用的 class 真有样式', () => {
+    // 接线：本地薄包装 + 只此一处调用单点函数（语义由 recruitDisplayBehavior 的两条 it 兜底）
+    expect(contacts).toContain('function companyDisabledText(row : RecruitContactRequest) : string {');
+    expect(contacts).toContain('return companyDisabledNotice(row.company_disabled)');
+    // 守护规则 S：模板不直调 import 进来的函数
+    expect(templateOf(contacts)).toContain('companyDisabledText(row)');
+    expect(templateOf(contacts)).not.toMatch(/companyDisabledNotice\s*\(/);
+    // 文案单点：页面不得抄第二份可用性措辞（第二份就是漂移的起点）——判据用**单点自己**的值
+    expect(AVAIL_NOTICE).not.toBeNull();
+    expect(stripComments(contacts)).not.toContain(String(AVAIL_NOTICE));
+    // uvue 里 class 没定义 = 静默没样式（不报错）⇒ 用了就要钉住它存在
+    const style = styleBlocksOf(read(PAGE_CONTACTS)).map((b) => b.body).join('\n');
+    expect(style).toContain('.row-notice');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// C2. 企业可用性那一格（#1267 后半）：措辞三端同源 + 全仓单点 + 列表卡面投影
+// ---------------------------------------------------------------------------
+
+describe('C2. 可用性那一格：与 Web/后端同源、全仓单点、列表卡面并排投影', () => {
+  const WEB_CONTACT = path.join(REPO, 'frontend/src/utils/contactRequestStatus.ts');
+  const GO_CONTACT_SERVICE = path.join(REPO, 'backend/internal/service/contact_service.go');
+
+  it('对照③：措辞与 Web `companyAvailability()` 逐字相等，首句等于后端具名错误（同键同措辞）', () => {
+    // 三端各自 fail-closed：任何一端搬家/改名 ⇒ 解析出 null ⇒ 判红，而不是静默跳过对账
+    expect(AVAIL_NOTICE).not.toBeNull();
+    const web = parseWebAvailability(WEB_CONTACT);
+    expect(web).not.toBeNull();
+    expect(web).toBe(AVAIL_NOTICE);
+    const goErr = parseGoErrorText(GO_CONTACT_SERVICE, 'ErrCompanyUnavailable');
+    expect(goErr).not.toBeNull();
+    // 后端那句是错误文本（不带「联系方式已收回」的下半句），故只比对得上半句
+    expect(String(AVAIL_NOTICE).startsWith(goErr)).toBe(true);
+  });
+
+  it('对照③ 自检：三端对账器认得漂移与搬家（合成样本）——「解析不到」必须是 null，不是通过', () => {
+    const web = "export function companyAvailability(d : boolean) {\n  return d === true ? { label: '甲', tone: 'warning' } : null\n}\n";
+    expect(availabilityLabelFrom(web)).toBe('甲');
+    // 措辞漂移 ⇒ 值变 ⇒ 上面那条 `toBe(AVAIL_NOTICE)` 就会红
+    expect(availabilityLabelFrom(web.replace("'甲'", "'乙'"))).toBe('乙');
+    // 函数搬家/改名 ⇒ null（判红）
+    expect(availabilityLabelFrom('export function somethingElse() {\n  return null\n}\n')).toBeNull();
+    expect(goErrorFrom('var ErrCompanyUnavailable = errors.New("甲")', 'ErrCompanyUnavailable')).toBe('甲');
+    expect(goErrorFrom('var ErrCompanyUnavailable = errors.New("乙")', 'ErrCompanyUnavailable')).toBe('乙');
+    expect(goErrorFrom('var ErrRenamed = errors.New("甲")', 'ErrCompanyUnavailable')).toBeNull();
+    expect(parseMobileNoticeConst("const COMPANY_DISABLED_NOTICE : string = '甲'")).toBe('甲');
+    expect(parseMobileNoticeConst("const COMPANY_DISABLED_NOTICE : string = '乙'")).toBe('乙');
+    expect(parseMobileNoticeConst("const RENAMED_AWAY : string = '甲'")).toBeNull();
+  });
+
+  it('全仓单点：这句话只住在 `utils/recruitDisplay.uts`，任何 `.uvue` / `.uts` 内联即红', () => {
+    expect(AVAIL_NOTICE).not.toBeNull();
+    const owners = h.filesUnder('.', /\.(uts|uvue)$/, true)
+      .filter((rel) => read(rel).includes(String(AVAIL_NOTICE)));
+    expect(owners).toEqual([DISPLAY]);
+  });
+
+  it('列表卡面：说明与徽章**并排且互不覆盖**，徽章仍只按 `contact_state` 投影（#1267 不降级）', () => {
+    const src = read(PAGE_RESUMES);
+    // 接线：薄包装喂给单点的判据**只有**卡面那个键
+    expect(src).toContain('function companyDisabledText(card : RecruitResumeCard) : string {');
+    expect(src).toContain('return companyDisabledNotice(card.company_disabled)');
+    // 守护规则 S：模板只调本地包装；缺席即不渲染（缺席式键不给装饰性提示）
+    const tpl = templateOf(src);
+    expect(tpl).not.toMatch(/companyDisabledNotice\s*\(/);
+    expect(tpl).toContain('v-if="companyDisabledText(card).length > 0" class="company-notice"');
+    // 「每页一行说完」：说明线唯一，且排在徽章之后（同一张卡片内的下一行）
+    const lines = tpl.split('\n').filter((l) => l.includes('companyDisabledText(card)'));
+    expect(lines.length).toBe(1);
+    expect(tpl.indexOf('companyDisabledText(card)')).toBeGreaterThan(tpl.indexOf('class="contact-state"'));
+    // 徽章那条链必须**不认识** company_disabled：把可用性喂进徽章就是「降级」，
+    // 会把「被禁用」与「从没授权」压回同一个值（ADR-0064 决策 5）
+    expect(tpl).toContain('<text class="contact-state">{{ contactStateText(card.contact_state) }}</text>');
+    expect(fnBody(src, 'contactStateText')).not.toContain('company_disabled');
+    // uvue class 没定义 = 静默没样式
+    expect(styleBlocksOf(src).map((b) => b.body).join('\n')).toContain('.company-notice');
   });
 });
 

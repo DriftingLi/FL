@@ -15,7 +15,6 @@
  * - 度量：`fileLines` / `moduleDepth`
  * - 接线：`importSpecifiers` / `resolveSpecifier` / `modulePrivateImports` / `orphanExtracts` / `deadImports`
  * - 消费者：`outOfDirFiles` / `consumerIndex` / `measuredConsumers` / `consumerFacts`
- * - 豁免：`allowlistPaths` / `allowlistOwnedBy`
  * - 预算：`BUDGET` / `MAX_DEPTH` / `budgetViolations` / `invalidOverrides`
  * - **一次拿全**：`reconcile(decls?)` —— 上面每一面的违规清单 + `ok`；`decls` 可注入
  *   （注入自检就是这么做的：把声明改坏一处，看对应对账是否判红）
@@ -31,7 +30,6 @@ const path = require('path');
 
 const { readText } = require('./utsHarness');
 const { BUDGET, MAX_DEPTH, MODULES, INFRA } = require('./modules');
-const { GUARD_ALLOWLIST, allowlistPaths } = require('./guardAllowlist');
 
 /** 移动端工程根（= `utils/` 的上一级）。与既有契约测试的 `path.join(__dirname, '..')` 同值。 */
 const ROOT = path.join(__dirname, '..');
@@ -40,7 +38,7 @@ const SOURCE_RE = /\.(uvue|uts)$/;
 const TEST_FILE_RE = /\.test\./;
 /**
  * 依赖 / 构建产物 / 本地工具目录：枚举一律不进入（否则 `unpackage` 会把预算判红）。
- * ⚠️ 刻意**不含** `uni_modules` —— 它是 vendor 面（实测 5 个源文件），但「全仓只有一个声明点」
+ * ⚠️ 刻意**不含** `uni_modules` —— 它是 vendor 面（实测 5 个源文件），但「全仓零声明点」
  * 这类判据要扫的是**整仓**，漏一个目录就是给假绿留门缝；模块归属面本来也不会指向它。
  */
 const SKIP_DIRS = new Set([
@@ -282,12 +280,6 @@ function consumerFacts(decls = MODULES, index = consumerIndex(decls)) {
   return { unregistered, stale };
 }
 
-/** 归属本模块的豁免文件（原样） */
-function allowlistOwnedBy(key, decls = MODULES) {
-  const d = decls[key];
-  return d ? [...(d.allowlistOwned || [])].sort() : [];
-}
-
 /**
  * 预算违规（只对**数字**预算；`'pending'` = 登记不执法，ADR-0023 ②⑥）。
  * 逐文件判定：文件行数 > （`budgetOverrides[file].budget` ?? `budget`）即违规。
@@ -383,8 +375,6 @@ function reconcile(decls = MODULES, infra = INFRA) {
   const budget = [];
   const orphan = [];
   const dead = [];
-  const allowlistUnregistered = [];
-  const allowlistStaleOwned = [];
   const invalid = [];
   const pending = [];
   const owners = new Map();
@@ -421,15 +411,6 @@ function reconcile(decls = MODULES, infra = INFRA) {
     const priv = modulePrivateImports(key, decls);
     for (const f of orphanExtracts(key, decls, priv)) orphan.push({ module: key, file: f });
     dead.push(...deadImports(key, decls, priv));
-
-    const owned = new Set(allowlistOwnedBy(key, decls));
-    const surface = declared;
-    for (const p of allowlistPaths()) {
-      if (surface.has(p) && !owned.has(p)) allowlistUnregistered.push({ module: key, file: p });
-    }
-    for (const p of owned) {
-      if (!allowlistPaths().includes(p)) allowlistStaleOwned.push({ module: key, file: p });
-    }
   }
 
   const duplicates = [...owners.entries()]
@@ -455,8 +436,6 @@ function reconcile(decls = MODULES, infra = INFRA) {
     budget: budget.sort(sortBy),
     orphanExtracts: orphan.sort(sortBy),
     deadImports: dead,
-    allowlistUnregistered: allowlistUnregistered.sort(sortBy),
-    allowlistStaleOwned: allowlistStaleOwned.sort(sortBy),
     invalidOverrides: invalid.sort(sortBy),
     unregisteredConsumers: consumers.unregistered,
     staleConsumers: consumers.stale,
@@ -471,8 +450,8 @@ function reconcile(decls = MODULES, infra = INFRA) {
   };
   report.violations = [
     'undeclaredModules', 'phantomModules', 'missing', 'missingDirs', 'phantom', 'duplicates',
-    'depth', 'budget', 'orphanExtracts', 'deadImports', 'allowlistUnregistered',
-    'allowlistStaleOwned', 'invalidOverrides', 'unregisteredConsumers', 'staleConsumers',
+    'depth', 'budget', 'orphanExtracts', 'deadImports', 'invalidOverrides',
+    'unregisteredConsumers', 'staleConsumers',
     'unregisteredSourceFiles', 'infraPhantomDirs', 'infraPhantomFiles', 'infraOverlaps', 'infraOversizedDrift',
   ].filter((k) => report[k].length > 0);
   report.ok = report.violations.length === 0;
@@ -509,9 +488,6 @@ module.exports = {
   consumerIndex,
   measuredConsumers,
   consumerFacts,
-  // 豁免
-  allowlistPaths,
-  allowlistOwnedBy,
   // 预算与总对账
   budgetViolations,
   invalidOverrides,
@@ -519,10 +495,9 @@ module.exports = {
   infraFiles,
   infraFacts,
   reconcile,
-  // 常量透出（消费方不必再 require 两个文件）
+  // 常量透出（消费方只 require 本文件即可拿到声明）
   BUDGET,
   MAX_DEPTH,
   MODULES,
   INFRA,
-  GUARD_ALLOWLIST,
 };

@@ -134,35 +134,10 @@ function Resolve-HBuilderXRoot {
     return $null
 }
 
-function Invoke-Process {
-    param(
-        [string]$FilePath,
-        [string[]]$Arguments,
-        [int]$TimeoutSeconds,
-        [string]$Tag
-    )
-    $psi = [System.Diagnostics.ProcessStartInfo]::new()
-    $psi.FileName = $FilePath
-    $psi.UseShellExecute = $false
-    $psi.RedirectStandardOutput = $true
-    $psi.RedirectStandardError = $true
-    $psi.CreateNoWindow = $true
-    $psi.StandardOutputEncoding = [System.Text.Encoding]::UTF8
-    $psi.StandardErrorEncoding = [System.Text.Encoding]::UTF8
-    foreach ($a in $Arguments) { [void]$psi.ArgumentList.Add($a) }
-
-    Write-Host ">>> [$Tag] $FilePath"
-    $p = [System.Diagnostics.Process]::Start($psi)
-    $stdout = $p.StandardOutput.ReadToEndAsync()
-    $stderr = $p.StandardError.ReadToEndAsync()
-    $exited = $p.WaitForExit($TimeoutSeconds * 1000)
-    if (-not $exited) {
-        try { $p.Kill($true) } catch { }
-        return @{ Output = "[timeout] $Tag 超过 $TimeoutSeconds 秒未返回，已终止"; ExitCode = -1; TimedOut = $true }
-    }
-    $out = $stdout.Result + $stderr.Result
-    return @{ Output = $out; ExitCode = $p.ExitCode; TimedOut = $false }
-}
+# 采集层（`Invoke-Process`）住在 `scripts/lib/process-capture.ps1`：那里零副作用（只有函数定义），
+# 故 `utils/kotlinAllProcessCaptureBehavior.test.js` 可以 dot-source 它并**真执行**采集契约 ——
+# 采集留在本脚本里就只能读源码文本断言，而接线守护不构成 ③ 证据（#1285）。
+. (Join-Path $PSScriptRoot 'lib\process-capture.ps1')
 
 # ---------- 项目与日志 ----------
 if (-not $Project) { $Project = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path }
@@ -271,6 +246,11 @@ if (-not $SkipPublish) {
             Write-Host '        提示：若 HBuilderX 中已导入同名项目，CLI 可能把 publish 指向那个目录（实测遇到）—— 请用唯一目录名，或先在 HBuilderX 里关闭同名项目。' -ForegroundColor Red
         } else {
             Write-Host "[error] publish 步**没有成立**（判据：$($publishEval.Reason)）⇒ ④c 不得据此判 ✅。" -ForegroundColor Red
+            if ($publishEval.Freshness -eq 'fresh') {
+                Write-Host '        freshness=fresh：导出目录**其实已刷新** ⇒ 这是「导出成功但成功文案没读到」的方向（采集层 / 文案判据，#1285）——不是没导出。' -ForegroundColor Red
+            } else {
+                Write-Host "        freshness=$($publishEval.Freshness)：导出目录**没有刷新** ⇒ 根本没导出（环境方向）—— 先解决导出，再跑 ④c（这一探是 publish 未成立时的**单次读数**，不轮询；若导出其实是异步晚到，重跑一次即可分辨）。" -ForegroundColor Red
+            }
             Write-Host '        三种可能：① HBuilderX 忙 / 未就绪（重试即可）；② 命令或参数在本版本不可用（对照 `cli publish app-android --help`）；③ CLI↔主程序 IPC 被断。' -ForegroundColor Red
             Write-Host '        若本版 CLI 的**成功文案**变了（正向标记未命中），改 scripts/lib/publish-freshness.ps1 的 $PublishSuccessMarker —— 判据是 fail-closed：宁可判红，不可假绿。' -ForegroundColor Red
         }

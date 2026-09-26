@@ -13,14 +13,15 @@
  *    `v-if` / `:disabled` **恒真**，编译不报、jest 不报（T11 先例，本票照搬）
  * 6) 成员存在性锁：页面引用的每个 `fp.<成员>` 都在显式结果类型内；`fp.form.value.<字段>` 都在 `ForgotPasswordForm` 内
  * 7) 拆出物零孤儿 / 零死引用（#779「import 了但文件不存在」回归锁）
- * 8) allowlist 不回潮：本模块文件不得出现在 `GUARD_ALLOWLIST`（票面「本模块 allowlist 条目（catch/detail）清零」；
- *    规则 H = catch 参数显式 `: any`、规则 I = `: any` 参数访问 `.detail`）
+ * 8) 机械坑位（规则 H = catch 参数显式 `: any`、规则 I = `: any` 参数访问 `.detail`）本模块零命中：
+ *    票面「本模块条目清零」术前即成立，且 #654 起守护无豁免面 ⇒ 执法点只有 utsAndroidCompile 一处
  * 9) 零直发请求：页面不碰请求层与域 api，请求只经 composable → `api/auth.uts`
  * 10) 域 api 出口（T12 收紧）：`getCaptchaApi` 由裸 `get` 改为 `getMapped` + 显式 DTO `CaptchaResult`，
  *     **三个消费方同 PR 机械迁移**（forgot-password / register / login，引用 #650）；`sendCodeApi` /
  *     `resetPasswordApi` / `sendPhoneCodeApi` 留裸的**白名单与理由**写死在断言旁（void 用法 / 后端 NoData）
  * 11) 行为保持点：切换方式 / 双通道校验 / 图形验证码与验证码的**行序** / 60s 倒计时 / 提交与失败累计 /
- *     三档提示 / 六条校验规则 / 生命周期 / 六个输入面薄包装 —— 逐项仍在，并含与 register 的**四处刻意差异**
+ *     三档提示 / 六条校验规则 / 生命周期 / 六个输入面薄包装 —— 逐项仍在，并含与 register 的**三处刻意差异**
+ *     （原第四处「密码只判下限」已由 #1262 收口：口令档与注册页 / 后端规则源同为 6-20）
  *
  * 本套件是**接线守护**（源码文本 + harness 结构事实，不构成 ③ 门的行为证据，见 `docs/agents/guards.md`）：
  * 它守的是「页面 ↔ composable ↔ 域 api」的接线与模板形态；行为兜底 = ④ 编译门（Kotlin 形态）+ ①a 真机逐页冒烟。
@@ -44,10 +45,16 @@ const LOGIN_CONSUMER = 'pages/login/composables/useLoginForm.uts';
 /** 软预算口径（ADR-0007）。模块全量预算已由声明面执法（本模块的 budget 已从 pending 翻成 600） */
 const LINE_BUDGET = 600;
 /**
- * `<style>` 块的 sha256（术前 = 术后，逐字节）。**这不是「格式锁」而是 UI 冻结的证据锁**：
+ * `<style>` 块的 sha256。**这不是「格式锁」而是 UI 冻结的证据锁**：
  * 改它 = 改了这一页的像素面，必须是一次显式决定（并在 PR 里给出 ①a 前后对比）。
+ *
+ * 值在 #1269 重新基线（T12 术前的旧值 `80489de8…` 就此作废）：`.mode-tab` 系的
+ * `font-size` / `color` / `font-weight` 挪到新的 `.mode-tab-text` / `.mode-tab-text-active`（挂在 `<text>` 上）
+ * —— 原生渲染层只把文字类样式认给文字类元素，落在 `<view>` 上会被**静默忽略**（真机日志逐字点名）。
+ * 块内规则数 43 → 45（两条新规则）+ 一行解释性 CSS 注释（该注释在 `<style>` 内 ⇒ 已含在下面这个 sha256 里），
+ * 除此之外未动；这一页自术后的像素面变化只有「标签字号/颜色真的生效了」这一项。
  */
-const STYLE_SHA256 = '80489de82ad55951232e1dc127886495ae77c4ebf61962c5ed6e31b3a4961af2';
+const STYLE_SHA256 = 'a5fbd0f8d4fa26fe7170ee4dd16cb81a145bac0b75fc5c0dc240966f9922525d';
 
 /** 页面块（template / script / style）。模板**有嵌套** `<template v-if>` ⇒ 闭合取最后一个 */
 function block(src, tag) {
@@ -148,9 +155,9 @@ describe('样式块逐字节冻结（UI 像素级不变的最强静态证据面�
     expect(sha256(style)).toBe(STYLE_SHA256);
   });
 
-  it('CSS 规则数守恒（43 条，与逐字节锁互为冗余判据）', () => {
+  it('CSS 规则数守恒（45 条，与逐字节锁互为冗余判据）', () => {
     const ruleCount = (s) => (s.match(/^\s*\.[a-zA-Z][\w-]*\s*\{/gm) || []).length;
-    expect(ruleCount(pageStyle())).toBe(43);
+    expect(ruleCount(pageStyle())).toBe(45);
   });
 
   it('判断力（改一处声明 / 删一条规则都必须与该 sha 不同）', () => {
@@ -158,7 +165,7 @@ describe('样式块逐字节冻结（UI 像素级不变的最强静态证据面�
     expect(sha256(style.replace('.footer-link {', '.footer-link-x {'))).not.toBe(STYLE_SHA256);
     expect(sha256(style.replace('#2979ff', '#2979fe'))).not.toBe(STYLE_SHA256);
     const ruleCount = (s) => (s.match(/^\s*\.[a-zA-Z][\w-]*\s*\{/gm) || []).length;
-    expect(ruleCount(style.replace('.footer-link {', ''))).toBe(42);
+    expect(ruleCount(style.replace('.footer-link {', ''))).toBe(44);
   });
 });
 
@@ -258,21 +265,6 @@ describe('页面壳层零自持状态 + 模板取值形态锁（T09/T11 口径�
     const page = read(PAGE).replace('fp.form.value.email', 'fp.form.value.emailX');
     const declared = declaredFormFields(read(COMPOSABLE));
     expect(formFieldRefs(page).filter((f) => !declared.includes(f))).toEqual(['emailX']);
-  });
-});
-
-describe('allowlist 不回潮（票面：本模块 allowlist 条目（catch/detail）清零）', () => {
-  // ADR-0023 决策 ⑧：`GUARD_ALLOWLIST` 的唯一声明点是 `utils/guardAllowlist.js`，消费方一律 require 取用。
-  const { allowlistPaths } = require('./guardAllowlist');
-  const isModulePath = (p) => /^pages\/forgot-password\//.test(p);
-
-  it('GUARD_ALLOWLIST 不含本模块文件（规则 H catch : any / 规则 I .detail 直取 均零存量）', () => {
-    expect(allowlistPaths().filter(isModulePath)).toEqual([]);
-  });
-
-  it('判据具备判别力（注入一条本模块豁免必须被抓到）', () => {
-    const injected = allowlistPaths().concat(['pages/forgot-password/forgot-password.uvue']);
-    expect(injected.filter(isModulePath)).toEqual(['pages/forgot-password/forgot-password.uvue']);
   });
 });
 
@@ -469,11 +461,11 @@ describe('行为保持点（票面 ②：UI 像素级不变 / 行为逐字保持
     expect(hint).toContain("return '6 位数字验证码，5 分钟内有效'");
   });
 
-  it('六条表单校验规则逐条仍在（手机三档 / 邮箱两档 / 验证码两档 / 密码下限 / 两次一致）', () => {
+  it('六条表单校验规则逐条仍在（手机三档 / 邮箱两档 / 验证码两档 / 密码 6-20 / 两次一致）', () => {
     const v = fnBodyOf(src, 'validate');
     expect(v).toContain("if (code.length == 0) return '请输入验证码'");
     expect(v).toContain("if (code.length != 6) return '请输入 6 位验证码'");
-    expect(v).toContain("if (password.length < 6) return '密码至少 6 位'");
+    expect(v).toContain("if (password.length < 6 || password.length > 20) return '密码长度需为 6-20 位'");
     expect(v).toContain("if (password != confirmPassword) return '两次输入的密码不一致'");
     const p = fnBodyOf(src, 'validatePhone');
     expect(p).toContain("if (phone.length != 11) return '请输入 11 位手机号'");
@@ -483,10 +475,12 @@ describe('行为保持点（票面 ②：UI 像素级不变 / 行为逐字保持
     expect(e).toContain("if (t.indexOf('@') <= 0 || t.indexOf('.') <= 0) return '邮箱格式不正确'");
   });
 
-  it('密码校验缺上限 = 术前既有的文案/校验错配，原样保留并另立 #1262（本票不顺手改）', () => {
-    // 页面文案与 :maxlength 承诺 6-20，后端 code_service.go 也是 6-20，唯独客户端只判下限。
-    // 逐字搬迁 ⇒ 本票**保持**这个缺口，缺陷另立 https://github.com/DriftingLi/FL/issues/1262。
-    expect(fnBodyOf(src, 'validate')).not.toContain('password.length > 20');
+  it('#1262 已收口：口令档是 6-20 区间，而输入上界按裁定保持 32（反向锁翻正向）', () => {
+    // 术前：页面 placeholder 与后端唯一规则源（service.validatePasswordLength）都承诺 6-20，
+    // 唯独客户端只判下限 ⇒ 21–32 位要打到后端才拿 400。现已与注册页同形同文案。
+    // 行为兜底 = `utils/authPreRequestValidationBehavior.test.js`（真跑 composable 数请求次数）；本文件只锁文本与模板。
+    expect(fnBodyOf(src, 'validate')).toContain("if (password.length < 6 || password.length > 20) return '密码长度需为 6-20 位'");
+    // `:maxlength` 仍是 32 属 #1262 的显式裁定：改它要动 `.uvue` ⇒ 整批改动的免门口径随之作废
     expect(tpl).toContain('placeholder="新密码（6-20 位）"');
     expect(tpl.split(':maxlength="32"').length - 1).toBe(2);
   });
@@ -526,5 +520,11 @@ describe('行为保持点（票面 ②：UI 像素级不变 / 行为逐字保持
     const broken = src.replace('wrongAttempts.value += 1', '');
     expect(broken).not.toBe(src);
     expect(broken).not.toContain('wrongAttempts.value += 1');
+  });
+
+  it('#1262 翻正后的口令文本锁具备判别力（真源退回只判下限即抓空）', () => {
+    const broken = src.replace("if (password.length < 6 || password.length > 20) return '密码长度需为 6-20 位'", "if (password.length < 6) return '密码至少 6 位'");
+    expect(broken).not.toBe(src);
+    expect(fnBodyOf(broken, 'validate')).not.toContain('密码长度需为 6-20 位');
   });
 });
