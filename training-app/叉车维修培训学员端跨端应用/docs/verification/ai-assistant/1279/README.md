@@ -37,9 +37,10 @@
 
 | 门 | 状态 | 机检行 / 产物 |
 | --- | --- | --- |
-| ③ `npm run test:unit` | 🟢 合并 master 后全绿：135 suites / 2628 tests；判别力实测见上表自测点 2 | `.ci-verify/test-unit-1279-postmerge.txt` |
-| ④c `npm run build:kotlin-all` | 见 PR 正文（本会话重跑） | `.ci-verify/kotlin-all.log` |
-| ② `build:mp-weixin-check` | ⏳ 上一会话 2026-09-24 15:50 判 `errors=env reason=automation-not-ready`（非门不过，是自动化端口未就绪） | `.ci-verify/mp-weixin.log` |
+| ③ `npm run test:unit` | 🟢 2026-09-26 合并 master 后全绿：**135 suites / 2628 tests**；判别力实测见上表自测点 2 | `.ci-verify/test-unit-1279-postmerge.txt` |
+| ④c `npm run build:kotlin-all` | 🟢 2026-09-26 重跑通过 | `KOTLIN_ALL_RESULT errors=0 classes=1504 files=120 freshness=fresh`（`.ci-verify/kotlin-all.log`） |
+| ② `build:mp-weixin-check` | 🟢 2026-09-26 重跑通过（**可验证子集**；逐页导航组 = SKIP，reason=navigation-api-unsupported，按 ADR-0008 ② 段降级不计门失败） | `MP_WEIXIN_RESULT appid=wx38c3e31b16a7ced0 pageStack=1 errorsTotal=0 exceptionsTotal=0 navigation=skip(unsupported)`（`.ci-verify/mp-weixin.log` + `.ci-verify/current.png`） |
+| 分支 CI | 🟢 push `d3f940ba` 的 CI run 36220519542 success | GitHub Actions |
 | ①a 真机逐页取证 | ⏳ **设备不在线**（2026-09-26 实测）；维护者裁定「先收口其余，①a 留下会话」 | 本 README |
 | ①b 能力面 | 不命中（无指纹/权限弹窗/上传/厂商 ROM 交互） | — |
 
@@ -51,5 +52,4 @@
 ## 待办（下一会话接手时从这里开始）
 
 1. 真机上线 → 部署 `fix/1279` → 同一问复拍 after（正文 0 路径串 + 来源案例图渲染 + 复拍作废的 05）；
-2. ② 门重跑（微信开发者工具需已登录）；
-3. 证据入仓后开 PR（`## 验收证据` 按 ADR-0008 四门填，① 行执行人可写「agent 执行」）→ CI 绿 → 合并 → 关票。
+2. 证据入仓后开 PR（`## 验收证据` 按 ADR-0008 四门填；① 行执行人可写「agent 执行」，**② 行执行人栏须维护者原文**，agent 不得代填）→ CI 绿 → 合并 → 关票。
