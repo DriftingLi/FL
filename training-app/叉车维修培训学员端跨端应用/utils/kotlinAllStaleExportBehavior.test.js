@@ -235,14 +235,15 @@ describe('整段裁决（`Get-PublishStageVerdict`）：四个退出路径都真
     expect(pick(out, 'OK')).toBe('0|ok|fresh');
   });
 
-  it('必红 · publish 未成立 ⇒ ExitCode=2 / freshness=**not-measured**（没判过就不假装判过），且仍带出 mtime/数量供失败日志', () => {
+  it('必红 · publish 未成立 ⇒ ExitCode=2 / freshness=**实测量**（#1285：不短路成 not-measured），且仍带出 mtime/数量供失败日志', () => {
     const stale = makeStaleExport();
     const out = drive(REAL_LIB, [
       `$e = Get-PublishStageVerdict -PublishOutput ${q(REAL_FAILURE_OUTPUT)} -PublishTimedOut $false -ExportDir ${q(stale)} -Since (Get-Date)`,
       'Write-Output ("NOSUCCESS=" + $e.ExitCode + "|" + $e.Reason + "|" + $e.Freshness + "|" + $e.KtCount + "|" + ($e.Newest -ne $null))',
     ]);
-    // 注意 freshness 是 not-measured 而**不是** stale：publish 都没成立，新鲜度就**没有判过**
-    expect(pick(out, 'NOSUCCESS')).toBe('2|publish-cli-command-failed|not-measured|1|True');
+    // #1285：freshness 是**实测量**（这份产物 3 小时前导出 ⇒ stale）—— publish 未成立只改 ExitCode/Reason，
+    // 不把新鲜度糊成 not-measured：否则「导出已刷新但文案没读到」与「根本没导出」共用同一条红
+    expect(pick(out, 'NOSUCCESS')).toBe('2|publish-cli-command-failed|stale|1|True');
   });
 
   it('必红 · 成功输出但导出目录没有 .kt ⇒ ExitCode=1 / reason=no-artifact / freshness=no-kt（保住既有口径）', () => {
@@ -254,13 +255,34 @@ describe('整段裁决（`Get-PublishStageVerdict`）：四个退出路径都真
     expect(pick(out, 'NOART')).toBe('1|no-artifact|no-kt');
   });
 
-  it('超时 ⇒ ExitCode=2 / reason=publish-timeout（原因可分辨，处置不同）', () => {
+  it('超时 ⇒ ExitCode=2 / reason=publish-timeout（原因可分辨，处置不同；freshness 照实报）', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kotlin-fresh-to-'));
     const out = drive(REAL_LIB, [
       `$e = Get-PublishStageVerdict -PublishOutput "" -PublishTimedOut $true -ExportDir ${q(dir)} -Since (Get-Date)`,
       'Write-Output ("TO=" + $e.ExitCode + "|" + $e.Reason + "|" + $e.Freshness)',
     ]);
-    expect(pick(out, 'TO')).toBe('2|publish-timeout|not-measured');
+    expect(pick(out, 'TO')).toBe('2|publish-timeout|no-kt');
+  });
+
+  it('期望(b) 区分对：同是「无成功标记」，fresh 导出 ⇒ 文案没读到（采集方向）/ stale、no-kt ⇒ 根本没导出（环境方向）', () => {
+    // #1285 的字段症状：导出目录其实已刷新（freshness=fresh），只是成功文案没读到 ——
+    // 旧写法这里记 not-measured，与「压根没导出」糊成同一条红，处置完全不同却分不开。
+    const fresh = fs.mkdtempSync(path.join(os.tmpdir(), 'kotlin-fresh-b-diff-'));
+    fs.mkdirSync(path.join(fresh, 'a'));
+    fs.writeFileSync(path.join(fresh, 'a', 'X.kt'), 'class X');
+    const stale = makeStaleExport();
+    const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'kotlin-fresh-b-none-'));
+    const out = drive(REAL_LIB, [
+      `$a = Get-PublishStageVerdict -PublishOutput '正在编译中...' -PublishTimedOut $false -ExportDir ${q(fresh)} -Since (Get-Date).AddHours(-1)`,
+      'Write-Output ("FRESHCASE=" + $a.ExitCode + "|" + $a.Reason + "|" + $a.Freshness)',
+      `$b = Get-PublishStageVerdict -PublishOutput '正在编译中...' -PublishTimedOut $false -ExportDir ${q(stale)} -Since (Get-Date)`,
+      'Write-Output ("STALECASE=" + $b.ExitCode + "|" + $b.Reason + "|" + $b.Freshness)',
+      `$c = Get-PublishStageVerdict -PublishOutput '正在编译中...' -PublishTimedOut $false -ExportDir ${q(empty)} -Since (Get-Date)`,
+      'Write-Output ("NONECASE=" + $c.ExitCode + "|" + $c.Reason + "|" + $c.Freshness)',
+    ]);
+    expect(pick(out, 'FRESHCASE')).toBe('2|publish-no-success-marker|fresh');
+    expect(pick(out, 'STALECASE')).toBe('2|publish-no-success-marker|stale');
+    expect(pick(out, 'NONECASE')).toBe('2|publish-no-success-marker|no-kt');
   });
 });
 
@@ -286,6 +308,21 @@ describe('成对取证（必红）：把判据本身注入变异，证明上面�
       'Write-Output ("MUT=" + $r.Fresh + "|" + $r.Reason)',
     ]);
     expect(pick(out, 'MUT')).toBe('True|fresh');
+  });
+
+  it('变异「未成立 ⇒ freshness 照实报」⇒ 期望(b) 的区分对与实测钉随之判红（断言有牙）', () => {
+    const broken = mutatedLib([[
+      'ExitCode = 2; Reason = "publish-$($v.Reason)"; Freshness = $f.Reason',
+      'ExitCode = 2; Reason = "publish-$($v.Reason)"; Freshness = \'not-measured\'',
+    ]]);
+    const fresh = fs.mkdtempSync(path.join(os.tmpdir(), 'kotlin-fresh-b-mut-'));
+    fs.mkdirSync(path.join(fresh, 'a'));
+    fs.writeFileSync(path.join(fresh, 'a', 'X.kt'), 'class X');
+    const out = drive(broken, [
+      `$a = Get-PublishStageVerdict -PublishOutput '正在编译中...' -PublishTimedOut $false -ExportDir ${q(fresh)} -Since (Get-Date).AddHours(-1)`,
+      'Write-Output ("MUT=" + $a.ExitCode + "|" + $a.Reason + "|" + $a.Freshness)',
+    ]);
+    expect(pick(out, 'MUT')).toBe('2|publish-no-success-marker|not-measured');
   });
 });
 
@@ -319,5 +356,10 @@ describe('接线（本组是接线守护，不构成 ③ 证据）：门脚本�
     // 而不是结果行里的字面量（结果行由 `reason=$($publishEval.Reason)` 插值）。
     expect(gate).toContain("'stale-export'");
     expect(gate).toContain("'no-artifact'");
+  });
+
+  it('失败提示按 freshness 分流两种处置（#1285 期望 b：文案没读到 ≠ 没导出）', () => {
+    expect(gate).toContain('freshness=fresh');
+    expect(gate).toContain('根本没导出（环境方向）');
   });
 });
