@@ -22,18 +22,24 @@
  * - **裸出口白名单（T15 批 B #653 登记）**：`uploadAvatarApi` 留裸 `uploadFile` —— multipart 上传在
  *   T01 #639 的出口家族里没有 mapped 便捷面（只有 requestMapped / getMapped / postMapped），硬套需在
  *   api 层自造拆包，反比裸通路多一份映射真相；其响应仍经 `buildReviewRequest` 组装，映射点只有一个。
- * - **本文件仍未收紧的两面（写清楚，别让指针烂在这里）**：
- *   - 甲：`/auth/profile/*` 五条与 `/auth/account` 两条路由共**八个函数**，其中**七条**返回
+ * - **本文件仍未收紧的面（写清楚，别让指针烂在这里）**：
+ *   - 甲：`/auth/profile/*` 五条与 `/auth/account` 两条路由共**七个函数**，全部返回
  *     `Promise<UTSJSONObject>`、唯一消费方是 profile 模块的 `personal-info-flows.uts` ⇒ 按 T03/T09
- *     「void 透传不硬套 identity map」留裸；第八条 `updateAccountApi` 有载荷（`LoginResult`），属
- *     profile 模块自己的手术面、不在批 B 四张面内（边界写在 #653 的范围评论里）。
- *   - 乙：登录族八条有载荷出口（`loginApi` / `recruiterLoginApi` / `phoneLoginApi` / `emailLoginApi` /
- *     `refreshTokenApi` / `getUserInfoApi` / `mpWechatLoginApi` / `updateAccountApi`）仍是裸
- *     `get|post|put().then()`。T13 #651 已 CLOSED，且它票面对「本模块域 api 收紧」的定义是**承接 + 锁形**
- *     （承接 #650 的 `getCaptchaApi`，不换算 login 自己的出口）⇒ 这八条**现无 open 票覆盖**，随本票
- *     登记为独立后续票：读到这里别把票面「全项目 api 契约一致」当成已成立。
+ *     「void 透传不硬套 identity map」留裸（白名单理由登记在各模块契约）。原第八条
+ *     `updateAccountApi`（有载荷 `LoginResult`）已由 #1324 收紧走 `requestMapped`，见下条。
+ * - **登录族八条有载荷出口：已由 #1324（T15 补票）收紧** ——
+ *   `loginApi` / `recruiterLoginApi` / `phoneLoginApi` / `emailLoginApi` / `refreshTokenApi` /
+ *   `getUserInfoApi` / `mpWechatLoginApi` / `updateAccountApi` 全部走 mapper-callback 家族
+ *   （`postMapped` / `getMapped` / `requestMapped` + `opts.method = 'PUT'`，PUT 无便捷面沿
+ *   `updateProfileApi` 先例）；签名与返回类型一字未动 ⇒ 十处调用点零适配。两处非机械决策：
+ *   ① `loginApi` 外层双层 `.catch`（request 层 `showError` 之外的第二处用户可见文案源）**保留是决策**
+ *   —— 按 ADR-0007「静默回退去留按是否掩盖面 + 本票禁区双判」：最终仍 reject、非静默回退，且退役属
+ *   文案变更须另立票 ⇒ 留，形态与文案模板锁在 `utils/authLoginOutletsContract.test.js`；
+ *   ② `phoneLoginApi` / `emailLoginApi` / `updateAccountApi` 映射体实测逐行相同 ⇒ 合一
+ *   `buildLoginResult`（逐字节保形先测后合；`loginApi`/`recruiterLoginApi` 的带文案 try-catch 与
+ *   `mpWechatLoginApi` 的 `isNew` 透传各自保形不并入）。
  */
-import { get, post, getMapped, postMapped, requestMapped, put, del, uploadFile } from './request'
+import { post, getMapped, postMapped, requestMapped, del, uploadFile } from './request'
 import { toStr } from './helpers'
 import type { RequestOptions } from './request'
 import type { LoginParams, LoginResult, RegisterParams, EmailRegisterParams, UserInfo, UpdateProfileParams, UploadAvatarResult, ProfileChangeRequest, WechatLoginResult, RefreshTokenResult } from '../types/index'
@@ -109,6 +115,19 @@ function buildUserInfo(obj : UTSJSONObject) : UserInfo {
 	}
 }
 
+/**
+ * 登录族双令牌响应 → LoginResult（#1324 Q2-B：三体合一）
+ * @note 合并的是 `phoneLoginApi` / `emailLoginApi` / `updateAccountApi` 三条 —— 实测三处 `.then()`
+ *       映射体逐行相同（token/refresh_token/user 四行）才合；`loginApi` / `recruiterLoginApi` 带
+ *       try/catch 解析失败文案包裹、`mpWechatLoginApi` 多 `isNew` 透传，各自保形不并入。
+ */
+function buildLoginResult(data : UTSJSONObject) : LoginResult {
+	const token = data['token'] as string
+	const refreshToken = toStr(data['refresh_token'], '')
+	const user = buildUserInfo(data)
+	return { token: token, user: user, refresh_token: refreshToken } as LoginResult
+}
+
 /** 学员登录（用户名或手机号 + 密码） */
 export function loginApi(params : LoginParams) : Promise<LoginResult> {
 	// Android 端 uni.request 的 data 必须是 UTSJSONObject，不接受 type 字面量（编译为 Kotlin data class）
@@ -116,7 +135,7 @@ export function loginApi(params : LoginParams) : Promise<LoginResult> {
 		username: params.username,
 		password: params.password
 	} as UTSJSONObject
-	return post('/auth/login', payload).then((data : UTSJSONObject) : LoginResult => {
+	return postMapped<LoginResult>('/auth/login', payload, (data : UTSJSONObject) : LoginResult => {
 		try {
 			const token = data['token'] as string
 			const refreshToken = toStr(data['refresh_token'], '')
@@ -170,7 +189,7 @@ export function recruiterLoginApi(params : LoginParams) : Promise<LoginResult> {
 		username: params.username,
 		password: params.password
 	} as UTSJSONObject
-	return post('/auth/recruiter-login', payload).then((data : UTSJSONObject) : LoginResult => {
+	return postMapped<LoginResult>('/auth/recruiter-login', payload, (data : UTSJSONObject) : LoginResult => {
 		try {
 			const token = data['token'] as string
 			const refreshToken = toStr(data['refresh_token'], '')
@@ -325,12 +344,7 @@ export function phoneLoginApi(phone : string, code : string) : Promise<LoginResu
 		phone: phone,
 		code: code
 	} as UTSJSONObject
-	return post('/auth/phone/login', payload).then((data : UTSJSONObject) : LoginResult => {
-		const token = data['token'] as string
-		const refreshToken = toStr(data['refresh_token'], '')
-		const user = buildUserInfo(data)
-		return { token: token, user: user, refresh_token: refreshToken } as LoginResult
-	})
+	return postMapped<LoginResult>('/auth/phone/login', payload, (data : UTSJSONObject) : LoginResult => buildLoginResult(data))
 }
 
 /** 邮箱验证码登录 POST /auth/email/login */
@@ -339,12 +353,7 @@ export function emailLoginApi(email : string, code : string) : Promise<LoginResu
 		email: email,
 		code: code
 	} as UTSJSONObject
-	return post('/auth/email/login', payload).then((data : UTSJSONObject) : LoginResult => {
-		const token = data['token'] as string
-		const refreshToken = toStr(data['refresh_token'], '')
-		const user = buildUserInfo(data)
-		return { token: token, user: user, refresh_token: refreshToken } as LoginResult
-	})
+	return postMapped<LoginResult>('/auth/email/login', payload, (data : UTSJSONObject) : LoginResult => buildLoginResult(data))
 }
 
 /** 登出（token SHA256 写入 Redis 黑名单） */
@@ -359,7 +368,7 @@ export function refreshTokenApi(refreshToken : string) : Promise<RefreshTokenRes
 	const payload : UTSJSONObject = {
 		refresh_token: refreshToken,
 	} as UTSJSONObject
-	return post('/auth/refresh', payload).then((data : UTSJSONObject) : RefreshTokenResult => {
+	return postMapped<RefreshTokenResult>('/auth/refresh', payload, (data : UTSJSONObject) : RefreshTokenResult => {
 		const result : RefreshTokenResult = {
 			token: data['token'] as string,
 			refresh_token: data['refresh_token'] as string,
@@ -369,9 +378,7 @@ export function refreshTokenApi(refreshToken : string) : Promise<RefreshTokenRes
 }
 /** 获取当前用户信息 */
 export function getUserInfoApi() : Promise<UserInfo> {
-	return get('/auth/me').then((data : UTSJSONObject) : UserInfo => {
-		return buildUserInfo(data)
-	})
+	return getMapped<UserInfo>('/auth/me', null, (data : UTSJSONObject) : UserInfo => buildUserInfo(data))
 	// 不再 catch 并回退 mock 数据：
 	// - 401 由 request 层 handleUnauthorized() 处理（清 storage + 跳登录页），此处直接传播 reject
 	// - 网络错误也应传播，由 validateToken() 区分处理（保留登录态 vs 清空）
@@ -465,7 +472,7 @@ export function mpWechatLoginApi(code : string) : Promise<WechatLoginResult> {
 	const payload : UTSJSONObject = {
 		code: code
 	} as UTSJSONObject
-	return post('/auth/wx-login', payload).then((data : UTSJSONObject) : WechatLoginResult => {
+	return postMapped<WechatLoginResult>('/auth/wx-login', payload, (data : UTSJSONObject) : WechatLoginResult => {
 		const token = data['token'] as string
 		const refreshToken = toStr(data['refresh_token'], '')
 		const user = buildUserInfo(data)
@@ -546,12 +553,12 @@ export function updateAccountApi(account : string, code : string) : Promise<Logi
 		account: account,
 		code: code
 	} as UTSJSONObject
-	return put('/auth/account', payload).then((data : UTSJSONObject) : LoginResult => {
-		const token = data['token'] as string
-		const refreshToken = toStr(data['refresh_token'], '')
-		const user = buildUserInfo(data)
-		return { token: token, user: user, refresh_token: refreshToken } as LoginResult
-	})
+	// PUT 在出口家族里没有便捷面：走通路本体，请求形态与 put() 逐字一致（同 opts.url / method / data）
+	// —— 同 updateProfileApi 先例（#653），#1324 收紧
+	const opts : RequestOptions = { url: '/auth/account' } as RequestOptions
+	opts.method = 'PUT'
+	opts.data = payload
+	return requestMapped<LoginResult>(opts, (data : UTSJSONObject) : LoginResult => buildLoginResult(data))
 }
 
 /** 注销账号 DELETE /auth/account（硬删，不可恢复；成功后本地需 clearAuthData） */
