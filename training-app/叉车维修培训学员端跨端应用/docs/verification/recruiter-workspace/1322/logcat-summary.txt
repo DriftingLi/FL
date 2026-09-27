@@ -1,0 +1,56 @@
+#1322 真机 logcat 证据摘要（①a）
+============================================================
+分支: fix/1322-filter-drawer-cce
+提交: 1a308509 fix(mobile) 抽屉对象 prop 拍平 + 载荷同源 / b649a04b docs(mobile) ADR-0007 回写
+设备: Redmi 23049RAD8C (marble) 192.168.10.54:43211
+构建: uni-app x debug 基座，cli launch app-android --pagePath pages/recruiter/resumes（worktree wt-1322）
+判据串（票面 #1322）: "cannot be cast to" 且指向 RecruitResumeFiltersProp / ClassCastException
+执行人: agent 执行（zhengcookie 会话代录）    日期: 2026-09-27
+
+------------------------------------------------------------
+窗口 1（轮 1：修复后构建首次进入验证）
+  19:19:14 -> 19:23:00  行数 42210  （logcat -c 于 19:19:14，-v epoch）
+  cannot be cast to（票面串） = 0
+  ClassCastException（全部）  = 0
+  FATAL EXCEPTION（应用进程）  = 0
+  E AndroidRuntime            = 0
+  进入页面 pages/recruiter/resumes = 1（19:22:42）
+  注 1: 1× "[recruiter-resumes] load failed: UTSError request system error" —— 瞬时网络错误，
+        与本票无关（非 CCE、非本 PR 改动面；轮 2 同参数下 loadFailed = 0）。
+  注 2: 窗口外 19:29 的 FATAL EXCEPTION = uiautomator dump 工具自身崩溃
+        （IllegalStateException "UiAutomationService ... already registered!"，pid shell），非应用崩溃。
+  注 3: 窗口外 19:27 起另一并发会话占用同机（主树分支 fix/1331-course-catch-mock），其 launch/进入页面
+        均不落入本窗口；本窗口以其清窗时刻为界，归因不受污染。
+
+------------------------------------------------------------
+窗口 2（轮 2：抽屉全链路 = 最终证据窗口）
+  20:32:21 -> 20:34:31  行数 24017  （logcat -c 于 20:32:15，-v epoch）
+  cannot be cast to（票面串） = 0
+  ClassCastException（全部）  = 0
+  FATAL EXCEPTION（应用进程）  = 0
+  E AndroidRuntime            = 0
+  进入页面 pages/recruiter/resumes = 1（20:33:43）；其他页面进入 = 0（无并发外席进入行）
+  GET /api/recruit/resumes?page=1 = 2
+      = 进入加载 1 次 + 「应用筛选」后 loadFirstPage 重载 1 次 ⇒ 列表重载成立（AC2）
+  load failed = 0
+  抽屉全链路（与截图逐张对应，uiautomator dump 逐态断言）:
+    开抽屉（props 代理无 CCE，setup 通过）
+      -> resumes-drawer.png（默认回显：region 空占位「如：杭州」、薪資占位「留空不限」）
+    输入 region=shanghai、salary_min=8000
+      -> resumes-typed.png（dump 断言 text="shanghai" 与 text="8000" 同时在场）
+    BACK 关闭输入法（抽屉保持打开，dump 断言仍在）
+    点「应用筛选」-> 抽屉关闭（emit 载荷已上抛，onApplyFilter 执行）
+      -> resumes-applied.png（含上方 1 次列表重载请求）
+    重开抽屉 -> resumes-echo.png（回显 shanghai / 8000，与父页 filters 状态一致）
+
+------------------------------------------------------------
+两轮合计: 票面 CCE = 0（≥2 轮，AC1）；应用 FATAL = 0（AC5）；抽屉级开/输/用/回显四态齐（AC2）
+
+外席活动归因声明:
+  同机另一会话于 19:27-20:28 在主树（fix/1331-course-catch-mock，抽屉仍为旧 RecruitResumeFiltersProp 形态）
+  运行课程/招聘页证据（mall、courses、course-detail、jobs、applications、resume-detail、contacts、me）。
+  上述两个证据窗口均以独立 logcat -c 开窗，窗口 2 内无任何外席进入行 ⇒ 判据不受外席污染。
+  另: 两窗口之间的 20:12-20:13 外席 sweep 曾两次进入 recruiter/resumes，当时设备上运行的是本分支构建
+  （20:09-20:12 我方部署），该两次进入票面 CCE = 0 —— 仅作旁证，不计入两轮判据。
+  该外席窗口内出现 1× [recruiter-applications] "null cannot be cast to non-null type kotlin.String"
+  （applications.uvue:93 数据字段解析，改动集不含该文件，属既有/另票面，不在本 PR 范围）。

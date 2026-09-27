@@ -88,32 +88,36 @@
     //    守护：`utils/recruiterResumeContract.test.js` 的 R6（静态形态锁）。
     import { JOB_NATURE_OPTIONS, AVAILABLE_IN_OPTIONS, jobNatureLabel } from '../../../api/recruit'
     import { toNumberOrNull } from '../../../api/helpers'
-    // ⚠️ `filters` 的 prop 类型**就地声明**，不从 `api/recruit.uts` 引 `import type`：
-    //    2026-09-20 ④a 实测，把一个**跨模块对象类型**直接挂进 `defineProps<{ … }>()`，
-    //    在组件层会逐个报 `error18 找不到名称"region"/"salary_min"…`
-    //    （`import type` 与值 import 两种形态都试过，同样报）；改成 `CredentialGroup[]`
-    //    那类先例（`pages/dashboard/components/dashboard-cert-dropdown.uvue:79`）是数组类型，形态不同。
-    //    ⇒ 就地声明结构上等价的类型。**字段清单必须与 `api/recruit.uts` 的
-    //    `RecruitResumeFilters` 逐字一致** —— 守护：`utils/recruiterResumeContract.test.js` 的 R7
-    //    （两处字段名逐字对账 + 不许删这里的类型）。
-    type RecruitResumeFiltersProp = {
-        region : string
-        position_id : number | null
-        credential_id : number | null
-        salary_min : number | null
-        salary_max : number | null
-        experience_min : number | null
-        job_nature : string
-        available_in : string
-    }
-
+    // emit 载荷的类型 = **api 层那个类本身**（与父页 handler 参数同一个类 ⇒ 名义兼容，反向不 CCE）。
+    //    ⚠️ error18 的适用面是 **defineProps 的类型展开**（#1207 实测），不是「组件里用 import type」：
+    //    组件内 `import type` 注解的生产先例 `pages/forum/components/forum-contribution-form.uvue:61`。
+    //    守护：`utils/recruiterResumeContract.test.js` 的 R7d（载荷同源锁）。
+    import type { RecruitResumeFilters } from '../../../api/recruit'
+    // ⚠️ `filters` **对象不作为 prop 下发**（#1322 血账）：对象 prop 在编译产物里会裂成两个互不相关的
+    //    open class —— 父页传入值的运行时类是 `RecruitResumeFiltersReactiveObject : RecruitResumeFilters`，
+    //    props 代理按**声明类型**强转 ⇒ 任何重复声明的就地类型都是 `ClassCastException`
+    //    （抽屉 setup 首读即断，`apply` 载荷反向同理）。两条历史弯路都别再走：
+    //    ① 跨模块对象类型直接挂 defineProps ⇒ #1207 实测 `error18 找不到名称"region"/…`
+    //       （`import type` 与值 import 两形态同报）；
+    //    ② 组件内就地声明结构等价类型 ⇒ #1322 实测运行期 CCE（结构等价 ≠ 名义兼容）。
+    //    现行形态 = **拍平成 8 个标量 props**（ADR-0007 规则 N/P 全仓先例：forum-topic-card /
+    //    wrong-question-card），声明 camelCase、父页按 Vue 惯例绑 kebab；字段与 `RecruitResumeFilters`
+    //    逐字对账 —— 守护：`utils/recruiterResumeContract.test.js` 的 R7
+    //    （R7b 平铺对账 + R7c CCE 回归锁 + R7e 父页逐维绑定锁）。
     const props = defineProps<{
         show : boolean
-        filters : RecruitResumeFiltersProp
+        region : string
+        positionId : number | null
+        credentialId : number | null
+        salaryMin : number | null
+        salaryMax : number | null
+        experienceMin : number | null
+        jobNature : string
+        availableIn : string
     }>()
 
     const emit = defineEmits<{
-        (e : 'apply', filters : RecruitResumeFiltersProp) : void
+        (e : 'apply', filters : RecruitResumeFilters) : void
         (e : 'close') : void
     }>()
 
@@ -139,14 +143,15 @@
     }
 
     // 抽屉内是**草稿**：改动只在「应用筛选」时上抛一次，中途不触发列表重载
-    const region = ref<string>(props.filters.region)
-    const positionIdText = ref<string>(numText(props.filters.position_id))
-    const credentialIdText = ref<string>(numText(props.filters.credential_id))
-    const salaryMinText = ref<string>(numText(props.filters.salary_min))
-    const salaryMaxText = ref<string>(numText(props.filters.salary_max))
-    const experienceMinText = ref<string>(numText(props.filters.experience_min))
-    const jobNature = ref<string>(props.filters.job_nature)
-    const availableIn = ref<string>(props.filters.available_in)
+    // （初值来自平铺标量 props —— #1322 起不再读对象 prop，首读不会 CCE）
+    const region = ref<string>(props.region)
+    const positionIdText = ref<string>(numText(props.positionId))
+    const credentialIdText = ref<string>(numText(props.credentialId))
+    const salaryMinText = ref<string>(numText(props.salaryMin))
+    const salaryMaxText = ref<string>(numText(props.salaryMax))
+    const experienceMinText = ref<string>(numText(props.experienceMin))
+    const jobNature = ref<string>(props.jobNature)
+    const availableIn = ref<string>(props.availableIn)
 
     function onRegionInput(e : InputEvent) : void {
         region.value = e.detail.value
@@ -213,7 +218,9 @@
     }
 
     function onApply() : void {
-        const next : RecruitResumeFiltersProp = {
+        // 载荷 = api 层的 `RecruitResumeFilters`（import type 同源）—— 父页 handler 参数是同一个类，
+        // 桥接强转不会像 #1322 那样反向 CCE；8 个键的落位由 R7d / D1 锁住
+        const next : RecruitResumeFilters = {
             region: region.value.trim(),
             position_id: parsePositive(positionIdText.value),
             credential_id: parsePositive(credentialIdText.value),
@@ -222,7 +229,7 @@
             experience_min: parseNonNegative(experienceMinText.value),
             job_nature: jobNature.value,
             available_in: availableIn.value,
-        } as RecruitResumeFiltersProp
+        } as RecruitResumeFilters
         emit('apply', next)
     }
 

@@ -67,7 +67,13 @@
             </view>
         </scroll-view>
 
-        <recruiter-filter-drawer :show="filterVisible" :filters="filters" @apply="onApplyFilter" @close="onCloseFilter" />
+        <!-- 平铺标量 props 下发（#1322：对象 prop 在编译产物里是两个 nominal class ⇒ CCE）；
+             声明 camelCase、模板绑 kebab；字段与 `RecruitResumeFilters` 逐字对账（R7b/R7e 锁） -->
+        <recruiter-filter-drawer :show="filterVisible" :region="filters.region"
+            :position-id="filters.position_id" :credential-id="filters.credential_id"
+            :salary-min="filters.salary_min" :salary-max="filters.salary_max"
+            :experience-min="filters.experience_min" :job-nature="filters.job_nature"
+            :available-in="filters.available_in" @apply="onApplyFilter" @close="onCloseFilter" />
     </view>
 </template>
 
