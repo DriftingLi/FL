@@ -1,0 +1,42 @@
+#1279 ①a after 机检行（2026-09-26 22:5x–23:2x 实测）
+
+设备: Redmi 23049RAD8C (marble, serial b32d8398), 无线调试 192.168.10.54:41077
+构建: 分支 fix/1279 (head 5019d86d) 经 `npm run hx:run` 增量部署，设备侧 www mtime 前进、pid 16556
+页面: pages/ai-assistant/ai-assistant (智能维修诊断专项页)
+问句: 「电动叉车制动系统异响，踩刹车时声音很大，请给出排查步骤」（人手工输入；adb `input text` 对中文抛 NPE，现测不可用）
+
+## 自测点 2 + 正文面（判据：路径串 0 处）
+
+1. 首轮 BMS 一问（历史会话重开 + 新发 BMS）:
+   - a11y dump: `诊断配图` = 11, `/api/ai-assistant|%E7%94%B5%E6%B1%A0|\.png|\[IMG:|<<IMAGE:` = 0
+   - before 对照: 04-before-answer-a11y-dump.xml 同一问 = 11 处百分号编码路径串
+2. 制动异响一问（票面复现问句，本轮）:
+   - a11y dump: `诊断配图` = 3, 路径串 pattern = 0, `[IMG:`/`<<IMAGE:` = 0, 无「思考中」（回答完结）
+   - dump 见 `after-05-answer-a11y-dump.xml`；截图 `after-01-answer-bubble.png`
+3. 两次回答的来源区均为「资料来源（N 条）+ 展开/收起」，来源标记不出现在任何 a11y 文本中（strip 后形态）。
+
+## 自测点 1（判据：fault_images 案例图真机渲染）
+
+- 来源卡展开（`after-02-sources-expanded.png`，head=资料来源（16 条））→ 点图进 `uni.previewImage`。
+- 组件 `onPreview` 对空 urls 直接 return ⇒ 预览能打开 = `extractImagePaths` 真机解析出 ≥1 条路径（行为判据）。
+- 预览计数: `1 / 3` → `2 / 3` → `3 / 3`（截图 after-03*），即该来源卡渲染 3 张溯源图。
+- **指纹定身份**: 预览第 1 页裁剪（密度法取主体，1080×866, aspect 1.249, sat 0.0）与生产直取的
+  `GET /api/ai-assistant/diagnosis/manual/fault_images/%E5%88%B6%E5%8A%A8%E7%B3%BB%E7%BB%9F/1721219449286.png`
+  （907×727 PNG, 92,929 B, aspect 1.249）32×32 零均值归一化相关 = **0.997**
+  （同法对照: manual_linde = -0.003, manual_byd = 0.122 ⇒ 排除）。
+- 结论: `<<IMAGE:/assistant/static/fault_images/制动系统/…>>` 形状的标记在真机上完成
+  「解析 → 拼代理 URL → 拉取 → 渲染 → 全屏预览」全链路。
+- 参照: 后端直连同 URL 生产实测 200（根 ADR-0063 订正块）；单测锁 `stripAssistantPrefix`
+  不剥 `fault_images/` 根（`aiSourcesDisplay.test.js` + 突变9红取证）。
+
+## 运行时面
+
+- logcat 近 3000 行: FATAL / AndroidRuntime / `.invoke` / error18 命中 = **0**（displayContent 包装守护未触发）。
+- ②/③/④ 门状态见本目录 README。
+
+## 过程备注（如实）
+
+- `05-before-source-cards-a11y-dump.xml` 实为专项页表单态（非会话页），当时来源区不存在 ⇒ 作废，由 after-02 取代。
+- 会话在 BACK 导航后曾丢失内存态（「最近对话」对该会话不可见的已知形态），制动问句由人重发一次。
+- a11y 对消息节点的 content-desc 在多次滚动后会间歇性吐空（uni-app-x 惰性发布），重进会话可恢复；
+  所有计数均取自 desc 存活的 dump。
