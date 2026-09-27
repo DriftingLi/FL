@@ -463,21 +463,35 @@ describe('R6. components 下的相对 import 深度必须三层（④a 编译门
 });
 
 // ---------------------------------------------------------------------------
-// R7. 抽屉的 `filters` prop 用**就地类型**且与 api 层逐字对账
+// R7. 抽屉 ↔ api 层 filters：平铺标量 props（下行）+ 同源 emit 载荷（上行）
 // ---------------------------------------------------------------------------
 
 /**
- * 背景（血账，别删）：把一个**跨模块对象类型**直接挂进 `defineProps<{ filters : X }>()`
- * （`X` 来自 `api/recruit.uts`），组件层会逐个报
- *   `error18 找不到名称"region"/"position_id"/…`
- * —— `import type` 与值 import 两种形态都报（2026-09-20 ④a 实测两轮）。
- * ⇒ 改为在组件内**就地声明结构等价的类型** `RecruitResumeFiltersProp`。
+ * 背景（血账 #1207 → #1322，别删）：
+ * - **#1207（编译期）**：把跨模块对象类型挂进 `defineProps<{ filters : RecruitResumeFilters }>()`
+ *   组件层逐个报 `error18 找不到名称"region"/"position_id"/…`（`import type` 与值 import 两种
+ *   形态 ④a 实测都报）⇒ 当时在组件内就地声明结构等价的 `RecruitResumeFiltersProp` 绕过去。
+ * - **#1322（运行期，就地类型的代价）**：编译产物 `index.kt` 里 `RecruitResumeFilters` 与
+ *   `RecruitResumeFiltersProp` 是**两个互不相关的 open class**（各带自己的 `…ReactiveObject`）；
+ *   父页传入值的运行时类是 `RecruitResumeFiltersReactiveObject : RecruitResumeFilters`
+ *   ⇒ props 代理按声明类型强转即 `ClassCastException`，抽屉 setup 在第一处 `props.filters.*` 中断；
+ *   `apply` 载荷反向同理（父页 handler 参数是 `RecruitResumeFilters`）。
+ *   **结构等价 ≠ 名义兼容** —— 就地声明等于把编译期错误换成运行期错误。
  *
- * 代价照实说：类型定义**有了第二份**，所以必须有一条锁把两份的**字段清单钉在一起**
- * （否则 api 层加一维筛选、组件层漏跟，就会静默少一维 —— 正是 ADR-0008 反复记的那类假绿）。
- * ⚠️ jest 不编译 `.uvue`，所以这里的**字段对账**是唯一机检面；真正的判据仍是 ④a。
+ * 现行形态（两半各治一边）：
+ * - **下行（props）**：对象拍平成 8 个标量 props（ADR-0007 规则 N/P 全仓先例：
+ *   `forum-topic-card` / `wrong-question-card`），声明 camelCase、父页按 Vue 惯例绑 kebab
+ *   （先例 `:pending-count`→`pendingCount`、`:item-answer`→`itemAnswer`）；名字 camel→snake
+ *   归一后与 `RecruitResumeFilters` 逐字对账（R7b），`show` 是 UI 开关不参与对账。
+ * - **上行（emit）**：载荷用 `import type` 进来的**同一个 api 类型**构造对象字面量 —— 与父页
+ *   `onApplyFilter(next : RecruitResumeFilters)` 的参数同一个类，名义兼容（R7d）。
+ *   error18 的适用面是 **defineProps 的类型展开**，不是「组件里用 import type」：
+ *   `forum-contribution-form.uvue:61,248` 有组件内 `import type` 注解的生产先例。
+ *
+ * ⚠️ jest 不编译 `.uvue`：这里锁的是**源码形态**；真正判据仍是 ④a（`npm run build:compile`）
+ * 与 ①a 真机（`cannot be cast to …` 计数 = 0）。
  */
-describe('R7. 抽屉 filters 就地类型与 api 层字段逐字对账（跨模块对象类型不能挂 defineProps）', () => {
+describe('R7. 抽屉 filters 平铺标量 props 与 api 层逐字对账 + emit 载荷同源（#1322 CCE 血账）', () => {
   const parseFields = (src, typeName) => {
     const re = new RegExp(`type\\s+${typeName}\\s*=\\s*\\{([\\s\\S]*?)\\}`);
     const m = src.match(re);
@@ -490,35 +504,98 @@ describe('R7. 抽屉 filters 就地类型与 api 层字段逐字对账（跨模�
       .filter((n) => /^[A-Za-z_$][\w$]*$/.test(n));
   };
 
-  test('R7a：两处类型都解析得出来（fail-closed：解析不到 = 锁失效，不是通过）', () => {
+  /** defineProps 里允许出现的标量类型；对象 / 本地重复类型出现在 props = #1322 同族违规 */
+  const SCALAR_PROP_TYPE = /^(?:string|number|boolean|string \| null|number \| null)$/;
+
+  const camelToSnake = (s) => s.replace(/[A-Z]/g, (c) => '_' + c.toLowerCase());
+
+  /**
+   * 解析抽屉的 `defineProps<{ … }>()` 块：
+   * `names` 保序（只收标量行），`nonScalar` 收违规行（对象类型 / 解析不了的行）。
+   * 解析不到块本身 ⇒ null（fail-closed：由 R7a 判红，不是静默通过）。
+   */
+  const parseDrawerProps = (src) => {
+    const m = src.match(/defineProps<\{([\s\S]*?)\}\s*>\(\)/);
+    if (!m) return null;
+    const names = [];
+    const nonScalar = [];
+    m[1].split('\n')
+      .map((l) => l.replace(/\/\/.*$/, '').trim())
+      .filter((l) => l.length > 0)
+      .forEach((l) => {
+        const fm = /^([A-Za-z_$][\w$]*)\s*:\s*(.+)$/.exec(l);
+        if (fm === null || !SCALAR_PROP_TYPE.test(fm[2].trim())) { nonScalar.push(l); return; }
+        names.push(fm[1]);
+      });
+    return { names, nonScalar };
+  };
+
+  test('R7a：两面都解析得出来（fail-closed：解析不到 = 锁失效，不是通过）', () => {
     expect(parseFields(recruitSrc, 'RecruitResumeFilters')).not.toBeNull();
-    expect(parseFields(drawerSrc, 'RecruitResumeFiltersProp')).not.toBeNull();
+    expect(parseDrawerProps(drawerSrc)).not.toBeNull();
   });
 
-  test('R7b：字段名集合**逐字相等**（顺序也一致：增删/改名/换序都会判红）', () => {
+  test('R7b：defineProps 标量 props（除 show）↔ api 层 8 维逐字对账（camel→snake 归一、保序）', () => {
     const api = parseFields(recruitSrc, 'RecruitResumeFilters');
-    const prop = parseFields(drawerSrc, 'RecruitResumeFiltersProp');
-    expect(prop).toEqual(api);
+    const dp = parseDrawerProps(drawerSrc);
+    expect(dp.nonScalar).toEqual([]);
+    expect(camelToSnake('positionId')).toBe('position_id'); // 归一器自检（归一错 ⇒ 对账全盘失真）
+    const dims = dp.names.filter((n) => n !== 'show').map(camelToSnake);
+    expect(dims).toEqual(api);
     // 8 维的硬约束（后端 api/recruit.go 的参数面）—— 两处都必须是这 8 个
     expect(api).toEqual([
       'region', 'position_id', 'credential_id', 'salary_min',
       'salary_max', 'experience_min', 'job_nature', 'available_in',
     ]);
+    expect(dp.names).toContain('show'); // UI 开关在，且不冒充筛选维
   });
 
-  test('R7c：抽屉**不得**再从 api 层 import 这个类型（改回去就会重现 error18）', () => {
-    expect(drawerSrc).not.toMatch(/import\s+type\s*\{[^}]*RecruitResumeFilters\b/);
-    expect(drawerSrc).not.toMatch(/import\s*\{[^}]*\bRecruitResumeFilters\b[^}]*\}\s*from/);
-    // 就地类型必须真的挂在 defineProps 上
-    expect(drawerSrc).toContain('filters : RecruitResumeFiltersProp');
+  test('R7c：CCE 回归锁 —— 对象 prop 与就地重复类型都不许回来（#1322）', () => {
+    const dp = parseDrawerProps(drawerSrc);
+    expect(dp.nonScalar).toEqual([]); // defineProps 出现对象类型 = 名义分裂回归
+    expect(drawerSrc).not.toContain('RecruitResumeFiltersProp'); // 当事人：编译产物里的第二个 open class
+    expect(drawerSrc).not.toMatch(/^\s*type\s+RecruitResumeFilters\w*\s*=/m); // 同族就地类型
+    // 锁自检：历史违规形态必须被同一解析器揪出来（否则本锁是恒真空转）
+    const bad = parseDrawerProps('defineProps<{\n  show : boolean\n  filters : RecruitResumeFiltersProp\n}>()');
+    expect(bad.nonScalar).toEqual(['filters : RecruitResumeFiltersProp']);
+    expect(bad.names).toEqual(['show']);
   });
 
-  test('R7d：锁自检 —— 字段对账器能识别增删（合成样本）', () => {
+  test('R7d：emit 载荷同源 —— 两端参数是 api 层同一个类（名义兼容，反向 CCE 一并消除）', () => {
+    expect(drawerSrc).toMatch(/import\s+type\s*\{\s*RecruitResumeFilters\s*\}\s*from\s*'\.\.\/\.\.\/\.\.\/api\/recruit'/);
+    const apply = drawerSrc.slice(drawerSrc.indexOf('function onApply'), drawerSrc.indexOf('function onClose'));
+    expect(apply).toContain('const next : RecruitResumeFilters =');
+    expect(apply).toContain('} as RecruitResumeFilters');
+    expect(apply).toContain("emit('apply', next)");
+    // 父页 handler 的参数类型就是它（两端同一个类 ⇒ 桥接强转不会 CCE）
+    expect(librarySrc).toContain('function onApplyFilter(next : RecruitResumeFilters)');
+  });
+
+  test('R7e：父页逐维绑定 8 个 props（漏绑一维 = undefined 下发，运行期才炸），且旧对象下发不回来', () => {
+    const start = librarySrc.indexOf('<recruiter-filter-drawer');
+    expect(start).toBeGreaterThan(-1);
+    const tag = librarySrc.slice(start, librarySrc.indexOf('/>', start));
+    const api = parseFields(recruitSrc, 'RecruitResumeFilters');
+    api.forEach((f) => {
+      // 声明 camelCase、模板绑 kebab（Vue 归一；先例 :item-answer → itemAnswer）
+      expect(tag).toContain(`:${f.replace(/_/g, '-')}="filters.${f}"`);
+    });
+    expect(tag).not.toContain(':filters=');
+    expect(tag).toContain('@apply="onApplyFilter"'); // 上行接线仍在
+  });
+
+  test('R7f：锁自检 —— 字段对账器能识别增删（合成样本）', () => {
     const a = parseFields('export type T = {\n  x : string\n  y : number | null\n}', 'T');
     const b = parseFields('type T2 = {\n  x : string\n}', 'T2');
     expect(a).toEqual(['x', 'y']);
     expect(b).toEqual(['x']);
     expect(a).not.toEqual(b); // 少一维必须判不等
+    // 对账面同样自检：模拟抽屉漏掉 salaryMax 一维，必须与 api 判不等
+    const api = parseFields(recruitSrc, 'RecruitResumeFilters');
+    const drawerLike = ['show', 'region', 'positionId', 'credentialId', 'salaryMin', 'salaryMax', 'experienceMin', 'jobNature', 'availableIn'];
+    const dims = (ns) => ns.filter((n) => n !== 'show').map(camelToSnake);
+    expect(dims(drawerLike)).toEqual(api);
+    expect(dims(drawerLike.filter((n) => n !== 'salaryMax'))).not.toEqual(api);
   });
 });
 
