@@ -418,7 +418,7 @@ describe('行为保持点（票面 ②：UI 像素级不变 / 表单行为逐字
     const v = fnBodyOf(form, 'validate');
     expect(v).toContain("if (phoneCode.value.length != 6) return '请输入 6 位验证码'");
     expect(v).toContain("if (username.value.length == 0) return '请输入用户名或手机号'");
-    // #1262：口令档由「只判下限」翻成 6-20 区间，文案与注册页 / 后端唯一规则源逐字同形
+    // #1262：口令档由「只判下限」翻成 6-20 区间，文案与注册页 / 后端规则源逐字同形（同规则在 auth_service.go:401 另有一份内联判据）
     expect(v).toContain("if (password.value.length < 6 || password.value.length > 20) return '密码长度需为 6-20 位'");
     expect(v).toContain("if (mode.value == 'wechat') {\n            return ''");
     expect(v).toContain("if (t.indexOf('@') <= 0 || t.indexOf('.') <= 0) return '邮箱格式不正确'");

@@ -6,7 +6,7 @@
  *      且注释里的正则写作 `/^d{11}$/`（匹配「字母 d 重复 11 次」）而非 `/^\d{11}$/`
  *      ⇒ 「顺手取消注释」会把每一个真实手机号判成不合法，手机验证码登录整条模式不可用。
  *   ② #1262：登录页 / 找回密码页的口令档只判下限（`< 6`），21–32 位放行到后端才被 400 拒回；
- *      注册页与后端唯一规则源（`service.validatePasswordLength`）都是 6-20。
+ *      注册页与后端规则源（`service.validatePasswordLength`；同规则在 `auth_service.go:401` 另有一份内联判据）都是 6-20。
  *
  * 本文件钉住的不变量：
  *   I1 数字档**只在真实手机号之外生效**：`'1abcdefghij'`（11 位、以 1 开头、含字母）⇒ 本地拦下、
@@ -33,9 +33,11 @@
  *
  * 边界（照实记）：`.uvue` 的模板与样式在 node 里跑不了 ⇒ 页面壳层不在本文件执行面内。
  *   模板面的三个属性按 #1262 裁定**都不改**，但「不改」的执法强度两页不同，别把它当成一处：
- *   找回密码页有锁（`utils/forgotPasswordContract.test.js` 的「输入上界按裁定保持 32」用例数 `:maxlength="32"`
- *   出现 2 次），**登录页的三个属性（`pages/login/login.uvue` 的 `:maxlength="11"` / `:maxlength="32"` /
- *   `type="number"`）全仓零锁** —— 改它不会有任何守护判红，只能靠票面与本注。`uni` 的 toast 出口、`vue` 的
+ *   找回密码页是**专项计数锁**（`utils/forgotPasswordContract.test.js` 的「输入上界按裁定保持 32」用例数
+ *   `:maxlength="32"` 出现 2 次 —— 文案级：改上界会红），登录页的三个属性（`pages/login/login.uvue` 的
+ *   `:maxlength="11"` / `:maxlength="32"` / `type="number"`）则落在**整块逐字节锁**里（该页模板 sha256：
+ *   `utils/loginContract.test.js:143` 同值断言 + `:156` 的反向自检 —— 字节级：改注释、改空格都红）。
+ *   两句的含义与改法成本不同：前者只盯那 2 次计数，后者「这页模板一行都不许动」。`uni` 的 toast 出口、`vue` 的
  *   `ref` / `computed`、`stores/auth` 与 `api/auth.uts` 都是**非被测依赖**，按最小 fake 注入。
  */
 const fs = require('fs');
